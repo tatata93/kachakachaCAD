@@ -19,8 +19,9 @@
 1. `docs/product-principles.md`
 2. `docs/roadmap.md`
 3. `docs/workplane-spec.md`
-4. `docs/development-workflow.md`
-5. `docs/adr/0001-main-technology-stack.md`
+4. `docs/wire-and-sketch-spec.md`
+5. `docs/development-workflow.md`
+6. `docs/adr/0001-main-technology-stack.md`
 
 ## 実装の優先順位
 
@@ -51,4 +52,3 @@
 - ユーザーが直接編集する対象は何か。
 - 出力や実製作にどうつながるか。
 - メッシュ編集中心に寄っていないか。
-

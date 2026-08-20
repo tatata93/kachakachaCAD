@@ -10,6 +10,8 @@ option(KACHACAD_BUILD_TESTS "Build kachakachaCAD tests" ON)
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
+    src/core/kachakacha/model/Sketch.cpp
+    src/core/kachakacha/model/Wire.cpp
     src/core/kachakacha/model/WorkPlane.cpp
 )
 
@@ -29,15 +31,25 @@ endif()
 if(KACHACAD_BUILD_TESTS)
     enable_testing()
 
-    add_executable(kachakacha_core_tests
+    add_executable(kachakacha_workplane_tests
         tests/workplane_tests.cpp
     )
 
-    target_link_libraries(kachakacha_core_tests
+    target_link_libraries(kachakacha_workplane_tests
         PRIVATE
             kachakacha_core
     )
 
-    add_test(NAME workplane_tests COMMAND kachakacha_core_tests)
-endif()
+    add_test(NAME workplane_tests COMMAND kachakacha_workplane_tests)
 
+    add_executable(kachakacha_sketch_wire_tests
+        tests/sketch_wire_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_sketch_wire_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME sketch_wire_tests COMMAND kachakacha_sketch_wire_tests)
+endif()

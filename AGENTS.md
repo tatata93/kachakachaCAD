@@ -20,8 +20,9 @@
 2. `docs/roadmap.md`
 3. `docs/workplane-spec.md`
 4. `docs/wire-and-sketch-spec.md`
-5. `docs/development-workflow.md`
-6. `docs/adr/0001-main-technology-stack.md`
+5. `docs/project-script-format.md`
+6. `docs/development-workflow.md`
+7. `docs/adr/0001-main-technology-stack.md`
 
 ## 実装の優先順位
 

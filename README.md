@@ -56,6 +56,12 @@ PowerShell で以下を実行します。
 
 表示された画面では、`1`、`2`、`3` でサンプルを切り替え、マウスドラッグで回転、ホイールでズームできます。
 
+数値で定義したプロジェクトを開く場合:
+
+```powershell
+.\scripts\run-viewer.ps1 -Project examples\first-check.kcd
+```
+
 画像だけ確認する場合:
 
 ```powershell

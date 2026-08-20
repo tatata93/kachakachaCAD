@@ -1,7 +1,9 @@
+#include "kachakacha/io/ProjectScript.h"
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
 #include "kachakacha/model/Sketch.h"
+#include "kachakacha/model/Project.h"
 #include "kachakacha/model/Wire.h"
 #include "kachakacha/model/WorkPlane.h"
 
@@ -11,20 +13,24 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
 using kachakacha::geometry::Vector3;
+using kachakacha::io::LoadProjectScript;
+using kachakacha::model::NamedWire;
+using kachakacha::model::NamedWorkPlane;
+using kachakacha::model::Project;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
 using kachakacha::model::WorkPlane;
 
 namespace {
-
-constexpr double Pi = 3.14159265358979323846;
 
 struct Camera {
     double yaw = -0.72;
@@ -62,6 +68,7 @@ struct Scene {
 struct AppState {
     Camera camera;
     int sceneIndex = 0;
+    std::vector<Scene> scenes;
     bool dragging = false;
     POINT lastMouse = {};
 };
@@ -264,6 +271,64 @@ std::vector<Scene> BuildScenes()
     return scenes;
 }
 
+COLORREF PickWireColor(std::size_t index)
+{
+    constexpr COLORREF palette[] = {
+        RGB(34, 108, 214),
+        RGB(203, 86, 48),
+        RGB(25, 128, 91),
+        RGB(181, 77, 119),
+        RGB(112, 76, 164),
+        RGB(160, 112, 32),
+    };
+
+    return palette[index % std::size(palette)];
+}
+
+Scene BuildSceneFromProject(const Project& project, const std::filesystem::path& projectPath)
+{
+    Scene scene;
+    scene.title = L"KCD project: " + projectPath.filename().wstring();
+
+    for (const NamedWorkPlane& workPlane : project.WorkPlanes()) {
+        scene.planes.push_back({
+            workPlane.plane,
+            7.0,
+            RGB(160, 190, 218),
+            RGB(224, 234, 244),
+        });
+        scene.points.push_back(workPlane.plane.Origin());
+    }
+
+    std::size_t wireIndex = 0;
+    for (const NamedWire& wire : project.Wires()) {
+        scene.wires.push_back({
+            wire.wire,
+            PickWireColor(wireIndex),
+            3,
+        });
+
+        for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
+            scene.points.push_back(controlPoint);
+        }
+
+        ++wireIndex;
+    }
+
+    return scene;
+}
+
+std::vector<Scene> LoadScenesFromProjectFile(const std::filesystem::path& projectPath)
+{
+    std::ifstream input(projectPath);
+    if (!input) {
+        throw std::runtime_error("Could not open project file.");
+    }
+
+    const Project project = LoadProjectScript(input, projectPath.string());
+    return {BuildSceneFromProject(project, projectPath)};
+}
+
 void DrawAxes(HDC hdc, const Camera& camera, int width, int height)
 {
     WithPen(hdc, RGB(205, 55, 55), 2, [&]() {
@@ -279,8 +344,12 @@ void DrawAxes(HDC hdc, const Camera& camera, int width, int height)
 
 void DrawScene(HDC hdc, int width, int height, const AppState& state)
 {
-    const std::vector<Scene> scenes = BuildScenes();
-    const Scene& scene = scenes[static_cast<std::size_t>(std::clamp(state.sceneIndex, 0, static_cast<int>(scenes.size() - 1)))];
+    if (state.scenes.empty()) {
+        return;
+    }
+
+    const Scene& scene = state.scenes[
+        static_cast<std::size_t>(std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)))];
 
     RECT background = {0, 0, width, height};
     HBRUSH backgroundBrush = CreateSolidBrush(RGB(255, 255, 255));
@@ -309,7 +378,7 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 
     DrawTextLine(hdc, 18, 16, L"kachakachaCAD viewer");
     DrawTextLine(hdc, 18, 40, scene.title);
-    DrawTextLine(hdc, 18, 66, L"1/2/3 scene  |  drag rotate  |  wheel zoom  |  R reset");
+    DrawTextLine(hdc, 18, 66, L"1-9 scene  |  drag rotate  |  wheel zoom  |  R reset");
 
     SelectObject(hdc, oldFont);
     DeleteObject(font);
@@ -360,7 +429,7 @@ bool SaveBitmap(std::wstring_view path, int width, int height, const void* pixel
     return out.good();
 }
 
-int WriteSnapshot(std::wstring_view path)
+int WriteSnapshot(std::wstring_view path, std::vector<Scene> scenes)
 {
     constexpr int width = 1280;
     constexpr int height = 800;
@@ -383,7 +452,8 @@ int WriteSnapshot(std::wstring_view path)
     HGDIOBJ oldBitmap = SelectObject(hdc, bitmap);
 
     AppState state;
-    state.sceneIndex = 2;
+    state.scenes = std::move(scenes);
+    state.sceneIndex = state.scenes.size() > 2 ? 2 : 0;
     DrawScene(hdc, width, height, state);
 
     const bool saved = SaveBitmap(path, width, height, pixels);
@@ -444,12 +514,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_KEYDOWN:
         if (state != nullptr) {
-            if (wParam == '1') {
-                state->sceneIndex = 0;
-            } else if (wParam == '2') {
-                state->sceneIndex = 1;
-            } else if (wParam == '3') {
-                state->sceneIndex = 2;
+            if (wParam >= '1' && wParam <= '9') {
+                const int requestedIndex = static_cast<int>(wParam - '1');
+                if (requestedIndex < static_cast<int>(state->scenes.size())) {
+                    state->sceneIndex = requestedIndex;
+                }
             } else if (wParam == 'R') {
                 state->camera = Camera{};
             } else if (wParam == VK_LEFT) {
@@ -499,9 +568,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 }
 
-int RunWindow()
+int RunWindow(std::vector<Scene> scenes)
 {
     AppState state;
+    state.scenes = std::move(scenes);
+    if (state.scenes.empty()) {
+        state.scenes = BuildScenes();
+    }
 
     HINSTANCE instance = GetModuleHandleW(nullptr);
     const wchar_t* className = L"KachakachaCadViewerWindow";
@@ -552,11 +625,35 @@ int RunWindow()
 int wmain(int argc, wchar_t** argv)
 {
     try {
-        if (argc == 3 && std::wstring_view(argv[1]) == L"--snapshot") {
-            return WriteSnapshot(argv[2]);
+        std::optional<std::filesystem::path> snapshotPath;
+        std::optional<std::filesystem::path> projectPath;
+
+        for (int i = 1; i < argc; ++i) {
+            const std::wstring_view argument = argv[i];
+            if (argument == L"--snapshot") {
+                if (i + 1 >= argc) {
+                    return 6;
+                }
+                snapshotPath = std::filesystem::path(argv[++i]);
+            } else if (argument == L"--project") {
+                if (i + 1 >= argc) {
+                    return 7;
+                }
+                projectPath = std::filesystem::path(argv[++i]);
+            } else {
+                return 8;
+            }
         }
 
-        return RunWindow();
+        std::vector<Scene> scenes = projectPath.has_value()
+            ? LoadScenesFromProjectFile(*projectPath)
+            : BuildScenes();
+
+        if (snapshotPath.has_value()) {
+            return WriteSnapshot(snapshotPath->wstring(), std::move(scenes));
+        }
+
+        return RunWindow(std::move(scenes));
     } catch (const std::exception&) {
         return 1;
     }

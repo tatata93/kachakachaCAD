@@ -1,7 +1,8 @@
 param(
     [string]$BuildDir = "build-msvc2022-x64",
     [string]$Config = "Debug",
-    [string]$OutputPath = "out\kachakacha-viewer-preview.bmp"
+    [string]$OutputPath = "out\kachakacha-viewer-preview.bmp",
+    [string]$Project = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,11 @@ if (-not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
 }
 
-Invoke-Checked $ViewerPath @("--snapshot", $ResolvedOutputPath)
-Write-Host $ResolvedOutputPath
+$Arguments = @("--snapshot", $ResolvedOutputPath)
+if ($Project -ne "") {
+    $ProjectPath = Resolve-Path $Project
+    $Arguments += @("--project", $ProjectPath)
+}
 
+Invoke-Checked $ViewerPath $Arguments
+Write-Host $ResolvedOutputPath

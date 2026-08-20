@@ -30,6 +30,12 @@ PowerShell で以下を実行する。
 .\scripts\run-viewer.ps1
 ```
 
+数値入力プロジェクトを確認する場合:
+
+```powershell
+.\scripts\run-viewer.ps1 -Project examples\first-check.kcd
+```
+
 ## Definition of Done
 
 - 何を作ったか説明できる。

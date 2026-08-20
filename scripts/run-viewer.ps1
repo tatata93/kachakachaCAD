@@ -1,6 +1,7 @@
 param(
     [string]$BuildDir = "build-msvc2022-x64",
-    [string]$Config = "Debug"
+    [string]$Config = "Debug",
+    [string]$Project = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,5 +16,10 @@ if (-not (Test-Path $ViewerPath)) {
     throw "Viewer executable was not found: $ViewerPath"
 }
 
-Start-Process -FilePath $ViewerPath
+$Arguments = @()
+if ($Project -ne "") {
+    $ProjectPath = Resolve-Path $Project
+    $Arguments += @("--project", $ProjectPath)
+}
 
+Start-Process -FilePath $ViewerPath -ArgumentList $Arguments

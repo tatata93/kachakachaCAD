@@ -10,6 +10,17 @@
 
 namespace kachakacha::model {
 
+enum class WirePlanePolicy {
+    Free3D,
+    ReferenceOnly,
+    LockedToPlane,
+};
+
+struct WireMetadata {
+    std::optional<std::string> sourcePlaneName;
+    WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
+};
+
 struct NamedWorkPlane {
     std::string name;
     WorkPlane plane;
@@ -18,12 +29,13 @@ struct NamedWorkPlane {
 struct NamedWire {
     std::string name;
     Wire wire;
+    WireMetadata metadata;
 };
 
 class Project {
 public:
     void AddWorkPlane(std::string name, WorkPlane plane);
-    void AddWire(std::string name, Wire wire);
+    void AddWire(std::string name, Wire wire, WireMetadata metadata = {});
 
     [[nodiscard]] const std::vector<NamedWorkPlane>& WorkPlanes() const noexcept { return workPlanes_; }
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }
@@ -36,4 +48,3 @@ private:
 };
 
 } // namespace kachakacha::model
-

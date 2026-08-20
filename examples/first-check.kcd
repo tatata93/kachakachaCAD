@@ -10,8 +10,8 @@
 # plane_offset NAME SOURCE distance
 # plane_rotate NAME SOURCE ax ay az dx dy dz angleDegrees
 # line3d NAME sx sy sz ex ey ez
-# sketch_line NAME PLANE su sv eu ev
-# sketch_bezier NAME PLANE su sv c1u c1v c2u c2v eu ev
+# sketch_line NAME PLANE su sv eu ev [free|reference|locked]
+# sketch_bezier NAME PLANE su sv c1u c1v c2u c2v eu ev [free|reference|locked]
 
 plane_three floor 0 0 0  1 0 0  0 1 0
 plane_point_normal front 10 0 0  1 0 0  0 1 0
@@ -24,10 +24,9 @@ line3d origin_to_point 0 0 0  2 7 4
 
 # Lines and curves drawn on the X=10 front work plane.
 sketch_line front_window_bottom front 1.5 2.0  7.0 2.0
-sketch_line front_window_top front 1.5 5.0  7.0 5.0
+sketch_line front_window_top front 1.5 5.0  7.0 5.0 locked
 sketch_bezier front_nose_curve front 0.0 0.0  1.0 4.0  6.0 4.0  7.0 0.0
 
 # A line and curve drawn on an arbitrary plane created from three selected points.
 sketch_line free_plane_line free_paper -4 -2  5 3
 sketch_bezier free_plane_curve free_paper -4 3  -1 6  3 -2  5 1
-

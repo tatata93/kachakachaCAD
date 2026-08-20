@@ -28,6 +28,7 @@ using kachakacha::model::NamedWorkPlane;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
+using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 
 namespace {
@@ -305,7 +306,7 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
         scene.wires.push_back({
             wire.wire,
             PickWireColor(wireIndex),
-            3,
+            wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane ? 4 : 3,
         });
 
         for (const Vector3& controlPoint : wire.wire.ControlPoints()) {

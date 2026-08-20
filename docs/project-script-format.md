@@ -63,13 +63,21 @@ bezier3d NAME sx sy sz c1x c1y c1z c2x c2y c2z ex ey ez
 ### 作業平面上の直線
 
 ```text
-sketch_line NAME PLANE su sv eu ev
+sketch_line NAME PLANE su sv eu ev [free|reference|locked]
 ```
 
 ### 作業平面上の Cubic Bezier
 
 ```text
-sketch_bezier NAME PLANE su sv c1u c1v c2u c2v eu ev
+sketch_bezier NAME PLANE su sv c1u c1v c2u c2v eu ev [free|reference|locked]
+```
+
+省略時は `reference`。作業平面を編集基準として記録するが、3Dワイヤー自体を平面へ閉じ込めない。
+
+```text
+free       作成元平面は記録するが、3D自由ワイヤーとして扱う
+reference  作成元平面を2D編集の基準として使う
+locked     作成元平面上に固定する
 ```
 
 ## 実行
@@ -83,4 +91,3 @@ sketch_bezier NAME PLANE su sv c1u c1v c2u c2v eu ev
 ```powershell
 .\scripts\snapshot-viewer.ps1 -Project examples\first-check.kcd
 ```
-

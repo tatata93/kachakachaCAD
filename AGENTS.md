@@ -23,6 +23,7 @@
 5. `docs/project-script-format.md`
 6. `docs/development-workflow.md`
 7. `docs/adr/0001-main-technology-stack.md`
+8. `docs/adr/0003-wire-plane-policy.md`
 
 ## 実装の優先順位
 
@@ -43,6 +44,8 @@
 - まず小さく検証できるC++コアを作り、後からQt UIとOCCT連携を足す。
 - 数値誤差を前提に、比較には許容誤差を使う。
 - 新機能には、最低限のテストか検証手順を添える。
+- ワイヤーを作業平面の所有物として閉じ込めない。
+- 面上ワイヤー、曲面投影ワイヤー、ライト穴境界は実装前にユーザーへ確認する。
 
 ## 迷走防止チェック
 

@@ -14,6 +14,8 @@ using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
+using kachakacha::model::WireMetadata;
+using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 
 namespace {
@@ -74,6 +76,35 @@ void EnsureLineEnded(std::istringstream& stream, std::string_view sourceName, in
     if (stream >> extra) {
         ThrowLineError(sourceName, lineNumber, "Unexpected extra token: " + extra);
     }
+}
+
+WirePlanePolicy ParseWirePlanePolicy(const std::string& token, std::string_view sourceName, int lineNumber)
+{
+    if (token == "free" || token == "free3d" || token == "none") {
+        return WirePlanePolicy::Free3D;
+    }
+
+    if (token == "reference" || token == "reference_only" || token == "ref") {
+        return WirePlanePolicy::ReferenceOnly;
+    }
+
+    if (token == "locked" || token == "locked_to_plane" || token == "fixed") {
+        return WirePlanePolicy::LockedToPlane;
+    }
+
+    ThrowLineError(sourceName, lineNumber, "Unknown wire plane policy: " + token);
+}
+
+WirePlanePolicy ReadOptionalSketchPolicy(std::istringstream& stream, std::string_view sourceName, int lineNumber)
+{
+    std::string token;
+    if (!(stream >> token)) {
+        return WirePlanePolicy::ReferenceOnly;
+    }
+
+    const WirePlanePolicy policy = ParseWirePlanePolicy(token, sourceName, lineNumber);
+    EnsureLineEnded(stream, sourceName, lineNumber);
+    return policy;
 }
 
 Vector3 ReadVector3(std::istringstream& stream, std::string_view sourceName, int lineNumber, const char* label)
@@ -176,8 +207,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
                 const Vector2 start = ReadVector2(stream, sourceName, lineNumber, "start");
                 const Vector2 end = ReadVector2(stream, sourceName, lineNumber, "end");
-                EnsureLineEnded(stream, sourceName, lineNumber);
-                project.AddWire(name, Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeLine(start, end));
+                const WirePlanePolicy policy = ReadOptionalSketchPolicy(stream, sourceName, lineNumber);
+                project.AddWire(
+                    name,
+                    Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeLine(start, end),
+                    WireMetadata{planeName, policy});
             } else if (command == "sketch_bezier") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -185,11 +219,12 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector2 control1 = ReadVector2(stream, sourceName, lineNumber, "control 1");
                 const Vector2 control2 = ReadVector2(stream, sourceName, lineNumber, "control 2");
                 const Vector2 end = ReadVector2(stream, sourceName, lineNumber, "end");
-                EnsureLineEnded(stream, sourceName, lineNumber);
+                const WirePlanePolicy policy = ReadOptionalSketchPolicy(stream, sourceName, lineNumber);
                 project.AddWire(
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber))
-                        .MakeCubicBezier(start, control1, control2, end));
+                        .MakeCubicBezier(start, control1, control2, end),
+                    WireMetadata{planeName, policy});
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
             }
@@ -202,4 +237,3 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
 }
 
 } // namespace kachakacha::io
-

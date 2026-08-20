@@ -15,7 +15,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -32,6 +34,8 @@ using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 
 namespace {
+
+constexpr int InfoPanelWidth = 360;
 
 struct Camera {
     double yaw = -0.72;
@@ -64,6 +68,7 @@ struct Scene {
     std::vector<DrawablePlane> planes;
     std::vector<DrawableWire> wires;
     std::vector<Vector3> points;
+    std::vector<std::wstring> infoLines;
 };
 
 struct AppState {
@@ -120,6 +125,63 @@ void DrawTextLine(HDC hdc, int x, int y, std::wstring_view text)
     TextOutW(hdc, x, y, text.data(), static_cast<int>(text.size()));
 }
 
+std::wstring ToWide(std::string_view text)
+{
+    std::wstring output;
+    output.reserve(text.size());
+    for (char character : text) {
+        output.push_back(static_cast<unsigned char>(character));
+    }
+
+    return output;
+}
+
+std::wstring FormatDouble(double value)
+{
+    std::wostringstream output;
+    output << std::fixed << std::setprecision(2) << value;
+    return output.str();
+}
+
+std::wstring FormatVector(const Vector3& value)
+{
+    return L"X " + FormatDouble(value.x)
+        + L"  Y " + FormatDouble(value.y)
+        + L"  Z " + FormatDouble(value.z);
+}
+
+std::wstring WireKindName(kachakacha::model::WireKind kind)
+{
+    switch (kind) {
+    case kachakacha::model::WireKind::Line:
+        return L"Line";
+    case kachakacha::model::WireKind::Polyline:
+        return L"Polyline";
+    case kachakacha::model::WireKind::CubicBezier:
+        return L"Cubic Bezier";
+    case kachakacha::model::WireKind::Circle:
+        return L"Circle";
+    case kachakacha::model::WireKind::CircularArc:
+        return L"Circular Arc";
+    }
+
+    return L"Wire";
+}
+
+std::wstring PlanePolicyName(WirePlanePolicy policy)
+{
+    switch (policy) {
+    case WirePlanePolicy::Free3D:
+        return L"free";
+    case WirePlanePolicy::ReferenceOnly:
+        return L"reference";
+    case WirePlanePolicy::LockedToPlane:
+        return L"locked";
+    }
+
+    return L"unknown";
+}
+
 void DrawWire(HDC hdc, const Camera& camera, int width, int height, const DrawableWire& drawable)
 {
     WithPen(hdc, drawable.color, drawable.width, [&]() {
@@ -134,6 +196,75 @@ void DrawWire(HDC hdc, const Camera& camera, int width, int height, const Drawab
             previous = current;
         }
     });
+}
+
+void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene)
+{
+    const int panelLeft = std::max(0, width - InfoPanelWidth);
+    RECT panelRect = {panelLeft, 0, width, height};
+    HBRUSH panelBrush = CreateSolidBrush(RGB(247, 249, 251));
+    FillRect(hdc, &panelRect, panelBrush);
+    DeleteObject(panelBrush);
+
+    WithPen(hdc, RGB(210, 218, 226), 1, [&]() {
+        MoveToEx(hdc, panelLeft, 0, nullptr);
+        LineTo(hdc, panelLeft, height);
+    });
+
+    HFONT titleFont = CreateFontW(
+        17,
+        0,
+        0,
+        0,
+        FW_SEMIBOLD,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_OUTLINE_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        VARIABLE_PITCH,
+        L"Segoe UI");
+    HGDIOBJ oldFont = SelectObject(hdc, titleFont);
+    SetTextColor(hdc, RGB(36, 45, 55));
+    DrawTextLine(hdc, panelLeft + 16, 18, L"Project");
+    SelectObject(hdc, oldFont);
+    DeleteObject(titleFont);
+
+    HFONT bodyFont = CreateFontW(
+        14,
+        0,
+        0,
+        0,
+        FW_NORMAL,
+        FALSE,
+        FALSE,
+        FALSE,
+        DEFAULT_CHARSET,
+        OUT_OUTLINE_PRECIS,
+        CLIP_DEFAULT_PRECIS,
+        CLEARTYPE_QUALITY,
+        VARIABLE_PITCH,
+        L"Segoe UI");
+    oldFont = SelectObject(hdc, bodyFont);
+    SetTextColor(hdc, RGB(62, 72, 84));
+
+    int y = 48;
+    const int lineHeight = 19;
+    const int maxY = height - 24;
+    for (const std::wstring& line : scene.infoLines) {
+        if (y > maxY) {
+            DrawTextLine(hdc, panelLeft + 16, y, L"...");
+            break;
+        }
+
+        DrawTextLine(hdc, panelLeft + 16, y, line);
+        y += lineHeight;
+    }
+
+    SelectObject(hdc, oldFont);
+    DeleteObject(bodyFont);
 }
 
 void DrawPoint(HDC hdc, const Camera& camera, int width, int height, const Vector3& point, COLORREF color)
@@ -301,6 +432,15 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
         scene.points.push_back(workPlane.plane.Origin());
     }
 
+    scene.infoLines.push_back(L"Work planes");
+    for (const NamedWorkPlane& workPlane : project.WorkPlanes()) {
+        scene.infoLines.push_back(L"  " + ToWide(workPlane.name));
+        scene.infoLines.push_back(L"    O " + FormatVector(workPlane.plane.Origin()));
+    }
+
+    scene.infoLines.push_back(L"");
+    scene.infoLines.push_back(L"Wires");
+
     std::size_t wireIndex = 0;
     for (const NamedWire& wire : project.Wires()) {
         scene.wires.push_back({
@@ -312,6 +452,17 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
         for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
             scene.points.push_back(controlPoint);
         }
+
+        std::wstring label = L"  " + ToWide(wire.name)
+            + L"  " + WireKindName(wire.wire.Kind())
+            + L"  " + PlanePolicyName(wire.metadata.planePolicy);
+        if (wire.metadata.sourcePlaneName.has_value()) {
+            label += L"  @" + ToWide(*wire.metadata.sourcePlaneName);
+        }
+
+        scene.infoLines.push_back(label);
+        scene.infoLines.push_back(L"    S " + FormatVector(wire.wire.Start()));
+        scene.infoLines.push_back(L"    E " + FormatVector(wire.wire.End()));
 
         ++wireIndex;
     }
@@ -351,6 +502,7 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 
     const Scene& scene = state.scenes[
         static_cast<std::size_t>(std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)))];
+    const int viewportWidth = std::max(320, width - InfoPanelWidth);
 
     RECT background = {0, 0, width, height};
     HBRUSH backgroundBrush = CreateSolidBrush(RGB(255, 255, 255));
@@ -384,19 +536,21 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
     SelectObject(hdc, oldFont);
     DeleteObject(font);
 
-    DrawAxes(hdc, state.camera, width, height);
+    DrawAxes(hdc, state.camera, viewportWidth, height);
 
     for (const DrawablePlane& plane : scene.planes) {
-        DrawPlane(hdc, state.camera, width, height, plane);
+        DrawPlane(hdc, state.camera, viewportWidth, height, plane);
     }
 
     for (const DrawableWire& wire : scene.wires) {
-        DrawWire(hdc, state.camera, width, height, wire);
+        DrawWire(hdc, state.camera, viewportWidth, height, wire);
     }
 
     for (const Vector3& point : scene.points) {
-        DrawPoint(hdc, state.camera, width, height, point, RGB(25, 25, 25));
+        DrawPoint(hdc, state.camera, viewportWidth, height, point, RGB(25, 25, 25));
     }
+
+    DrawInfoPanel(hdc, width, height, scene);
 }
 
 bool SaveBitmap(std::wstring_view path, int width, int height, const void* pixels)

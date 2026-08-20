@@ -16,11 +16,13 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using kachakacha::geometry::Vector3;
@@ -50,13 +52,34 @@ struct ScreenPoint {
     double depth = 0.0;
 };
 
+enum class SelectionKind {
+    None,
+    WorkPlane,
+    Wire,
+};
+
+struct Selection {
+    SelectionKind kind = SelectionKind::None;
+    std::size_t index = 0;
+};
+
+struct PanelRow {
+    std::wstring text;
+    Selection selection;
+    bool selectable = false;
+};
+
 struct DrawableWire {
+    std::wstring name;
     Wire wire;
+    WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
+    std::optional<std::wstring> sourcePlaneName;
     COLORREF color = RGB(0, 0, 0);
     int width = 2;
 };
 
 struct DrawablePlane {
+    std::wstring name;
     WorkPlane plane;
     double halfSize = 6.0;
     COLORREF color = RGB(190, 205, 220);
@@ -68,14 +91,16 @@ struct Scene {
     std::vector<DrawablePlane> planes;
     std::vector<DrawableWire> wires;
     std::vector<Vector3> points;
-    std::vector<std::wstring> infoLines;
 };
 
 struct AppState {
     Camera camera;
     int sceneIndex = 0;
     std::vector<Scene> scenes;
+    Selection selection;
     bool dragging = false;
+    bool movedWhileDragging = false;
+    POINT mouseDown = {};
     POINT lastMouse = {};
 };
 
@@ -136,6 +161,36 @@ std::wstring ToWide(std::string_view text)
     return output;
 }
 
+std::optional<std::wstring> ToWideOptional(const std::optional<std::string>& text)
+{
+    if (!text.has_value()) {
+        return std::nullopt;
+    }
+
+    return ToWide(*text);
+}
+
+std::wstring Ellipsize(std::wstring_view text, std::size_t maxCharacters)
+{
+    if (text.size() <= maxCharacters) {
+        return std::wstring(text);
+    }
+
+    if (maxCharacters <= 3) {
+        return std::wstring(text.substr(0, maxCharacters));
+    }
+
+    std::wstring output(text.substr(0, maxCharacters - 3));
+    output += L"...";
+    return output;
+}
+
+void DrawPanelLine(HDC hdc, int x, int y, std::wstring_view text, std::size_t maxCharacters = 43)
+{
+    const std::wstring clipped = Ellipsize(text, maxCharacters);
+    DrawTextLine(hdc, x, y, clipped);
+}
+
 std::wstring FormatDouble(double value)
 {
     std::wostringstream output;
@@ -182,23 +237,212 @@ std::wstring PlanePolicyName(WirePlanePolicy policy)
     return L"unknown";
 }
 
-void DrawWire(HDC hdc, const Camera& camera, int width, int height, const DrawableWire& drawable)
+double ApproximateWireLength(const Wire& wire)
 {
-    WithPen(hdc, drawable.color, drawable.width, [&]() {
-        constexpr int steps = 72;
-        ScreenPoint previous = ProjectPoint(drawable.wire.Evaluate(0.0), camera, width, height);
+    constexpr int steps = 96;
 
-        for (int i = 1; i <= steps; ++i) {
-            const double t = static_cast<double>(i) / static_cast<double>(steps);
-            const ScreenPoint current = ProjectPoint(drawable.wire.Evaluate(t), camera, width, height);
-            MoveToEx(hdc, previous.x, previous.y, nullptr);
-            LineTo(hdc, current.x, current.y);
-            previous = current;
+    double length = 0.0;
+    Vector3 previous = wire.Evaluate(0.0);
+    for (int i = 1; i <= steps; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(steps);
+        const Vector3 current = wire.Evaluate(t);
+        length += (current - previous).Length();
+        previous = current;
+    }
+
+    return length;
+}
+
+bool IsSelectionValid(const Scene& scene, Selection selection)
+{
+    if (selection.kind == SelectionKind::WorkPlane) {
+        return selection.index < scene.planes.size();
+    }
+    if (selection.kind == SelectionKind::Wire) {
+        return selection.index < scene.wires.size();
+    }
+
+    return false;
+}
+
+void DrawWire(HDC hdc, const Camera& camera, int width, int height, const DrawableWire& drawable, bool selected)
+{
+    const auto drawSegments = [&](COLORREF color, int penWidth) {
+        WithPen(hdc, color, penWidth, [&]() {
+            constexpr int steps = 72;
+            ScreenPoint previous = ProjectPoint(drawable.wire.Evaluate(0.0), camera, width, height);
+
+            for (int i = 1; i <= steps; ++i) {
+                const double t = static_cast<double>(i) / static_cast<double>(steps);
+                const ScreenPoint current = ProjectPoint(drawable.wire.Evaluate(t), camera, width, height);
+                MoveToEx(hdc, previous.x, previous.y, nullptr);
+                LineTo(hdc, current.x, current.y);
+                previous = current;
+            }
+        });
+    };
+
+    if (selected) {
+        drawSegments(RGB(255, 210, 72), drawable.width + 5);
+        drawSegments(RGB(190, 38, 63), drawable.width + 2);
+        return;
+    }
+
+    drawSegments(drawable.color, drawable.width);
+}
+
+void DrawPoint(HDC hdc, const Camera& camera, int width, int height, const Vector3& point, COLORREF color)
+{
+    const ScreenPoint projected = ProjectPoint(point, camera, width, height);
+    HBRUSH brush = CreateSolidBrush(color);
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+
+    Ellipse(hdc, projected.x - 4, projected.y - 4, projected.x + 5, projected.y + 5);
+
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(brush);
+}
+
+void DrawSelectedPoint(HDC hdc, const Camera& camera, int width, int height, const Vector3& point)
+{
+    const ScreenPoint projected = ProjectPoint(point, camera, width, height);
+    HBRUSH brush = CreateSolidBrush(RGB(255, 210, 72));
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+    HPEN pen = CreatePen(PS_SOLID, 2, RGB(190, 38, 63));
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+
+    Ellipse(hdc, projected.x - 6, projected.y - 6, projected.x + 7, projected.y + 7);
+
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(brush);
+}
+
+void DrawWireControlPoints(HDC hdc, const Camera& camera, int width, int height, const DrawableWire& drawable)
+{
+    for (const Vector3& controlPoint : drawable.wire.ControlPoints()) {
+        DrawSelectedPoint(hdc, camera, width, height, controlPoint);
+    }
+}
+
+void DrawPlane(HDC hdc, const Camera& camera, int width, int height, const DrawablePlane& drawable, bool selected)
+{
+    const WorkPlane& plane = drawable.plane;
+    const double s = drawable.halfSize;
+
+    const std::vector<Vector3> corners = {
+        plane.ToWorld(-s, -s),
+        plane.ToWorld(s, -s),
+        plane.ToWorld(s, s),
+        plane.ToWorld(-s, s),
+    };
+
+    POINT polygon[4] = {};
+    for (std::size_t i = 0; i < corners.size(); ++i) {
+        const ScreenPoint projected = ProjectPoint(corners[i], camera, width, height);
+        polygon[i] = {projected.x, projected.y};
+    }
+
+    HBRUSH brush = CreateSolidBrush(selected ? RGB(255, 249, 226) : RGB(248, 250, 252));
+    HGDIOBJ oldBrush = SelectObject(hdc, brush);
+    HPEN outlinePen = CreatePen(PS_SOLID, selected ? 3 : 1, selected ? RGB(216, 139, 27) : drawable.color);
+    HGDIOBJ oldPen = SelectObject(hdc, outlinePen);
+    Polygon(hdc, polygon, 4);
+    SelectObject(hdc, oldPen);
+    DeleteObject(outlinePen);
+    SelectObject(hdc, oldBrush);
+    DeleteObject(brush);
+
+    WithPen(hdc, drawable.gridColor, 1, [&]() {
+        for (int i = -static_cast<int>(s); i <= static_cast<int>(s); ++i) {
+            const double d = static_cast<double>(i);
+            DrawLine3D(hdc, camera, width, height, plane.ToWorld(-s, d), plane.ToWorld(s, d));
+            DrawLine3D(hdc, camera, width, height, plane.ToWorld(d, -s), plane.ToWorld(d, s));
         }
+    });
+
+    WithPen(hdc, selected ? RGB(216, 139, 27) : RGB(80, 112, 150), selected ? 3 : 2, [&]() {
+        DrawLine3D(hdc, camera, width, height, plane.Origin(), plane.ToWorld(2.0, 0.0));
+        DrawLine3D(hdc, camera, width, height, plane.Origin(), plane.ToWorld(0.0, 2.0));
     });
 }
 
-void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene)
+bool SameSelection(Selection lhs, Selection rhs)
+{
+    return lhs.kind == rhs.kind && lhs.index == rhs.index;
+}
+
+std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
+{
+    std::vector<PanelRow> rows;
+
+    const auto add = [&](std::wstring text) {
+        rows.push_back({std::move(text), {}, false});
+    };
+    const auto addSelectable = [&](std::wstring text, Selection rowSelection) {
+        rows.push_back({std::move(text), rowSelection, true});
+    };
+
+    add(L"Selected");
+    if (IsSelectionValid(scene, selection)) {
+        if (selection.kind == SelectionKind::WorkPlane) {
+            const DrawablePlane& plane = scene.planes[selection.index];
+            add(L"  work plane  " + plane.name);
+            add(L"  O " + FormatVector(plane.plane.Origin()));
+            add(L"  U " + FormatVector(plane.plane.UAxis()));
+            add(L"  V " + FormatVector(plane.plane.VAxis()));
+            add(L"  N " + FormatVector(plane.plane.Normal()));
+        } else if (selection.kind == SelectionKind::Wire) {
+            const DrawableWire& wire = scene.wires[selection.index];
+            add(L"  wire  " + wire.name);
+            add(L"  kind  " + WireKindName(wire.wire.Kind()));
+            add(L"  policy  " + PlanePolicyName(wire.planePolicy));
+            if (wire.sourcePlaneName.has_value()) {
+                add(L"  plane  " + *wire.sourcePlaneName);
+            }
+            add(L"  start  " + FormatVector(wire.wire.Start()));
+            add(L"  end    " + FormatVector(wire.wire.End()));
+            add(L"  length about  " + FormatDouble(ApproximateWireLength(wire.wire)));
+            add(L"  points  " + std::to_wstring(wire.wire.ControlPoints().size()));
+        }
+    } else {
+        add(L"  click a wire, plane, or list row");
+    }
+
+    add(L"");
+    add(L"Work planes");
+    for (std::size_t i = 0; i < scene.planes.size(); ++i) {
+        const DrawablePlane& plane = scene.planes[i];
+        const Selection rowSelection{SelectionKind::WorkPlane, i};
+        const std::wstring prefix = SameSelection(selection, rowSelection) ? L"> " : L"  ";
+        addSelectable(prefix + plane.name, rowSelection);
+        add(L"    O " + FormatVector(plane.plane.Origin()));
+    }
+
+    add(L"");
+    add(L"Wires");
+    for (std::size_t i = 0; i < scene.wires.size(); ++i) {
+        const DrawableWire& wire = scene.wires[i];
+        const Selection rowSelection{SelectionKind::Wire, i};
+        const std::wstring prefix = SameSelection(selection, rowSelection) ? L"> " : L"  ";
+        std::wstring label = prefix + wire.name
+            + L"  " + WireKindName(wire.wire.Kind())
+            + L"  " + PlanePolicyName(wire.planePolicy);
+        if (wire.sourcePlaneName.has_value()) {
+            label += L"  @" + *wire.sourcePlaneName;
+        }
+        addSelectable(label, rowSelection);
+    }
+
+    return rows;
+}
+
+void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene, Selection selection)
 {
     const int panelLeft = std::max(0, width - InfoPanelWidth);
     RECT panelRect = {panelLeft, 0, width, height};
@@ -228,7 +472,7 @@ void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene)
         L"Segoe UI");
     HGDIOBJ oldFont = SelectObject(hdc, titleFont);
     SetTextColor(hdc, RGB(36, 45, 55));
-    DrawTextLine(hdc, panelLeft + 16, 18, L"Project");
+    DrawTextLine(hdc, panelLeft + 16, 18, L"Inspector");
     SelectObject(hdc, oldFont);
     DeleteObject(titleFont);
 
@@ -250,79 +494,25 @@ void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene)
     oldFont = SelectObject(hdc, bodyFont);
     SetTextColor(hdc, RGB(62, 72, 84));
 
+    const std::vector<PanelRow> rows = BuildPanelRows(scene, selection);
+
     int y = 48;
     const int lineHeight = 19;
     const int maxY = height - 24;
-    for (const std::wstring& line : scene.infoLines) {
+    for (const PanelRow& row : rows) {
         if (y > maxY) {
-            DrawTextLine(hdc, panelLeft + 16, y, L"...");
+            DrawPanelLine(hdc, panelLeft + 16, y, L"...");
             break;
         }
 
-        DrawTextLine(hdc, panelLeft + 16, y, line);
+        const bool selectedRow = row.selectable && SameSelection(row.selection, selection);
+        SetTextColor(hdc, selectedRow ? RGB(190, 38, 63) : RGB(62, 72, 84));
+        DrawPanelLine(hdc, panelLeft + 16, y, row.text);
         y += lineHeight;
     }
 
     SelectObject(hdc, oldFont);
     DeleteObject(bodyFont);
-}
-
-void DrawPoint(HDC hdc, const Camera& camera, int width, int height, const Vector3& point, COLORREF color)
-{
-    const ScreenPoint projected = ProjectPoint(point, camera, width, height);
-    HBRUSH brush = CreateSolidBrush(color);
-    HGDIOBJ oldBrush = SelectObject(hdc, brush);
-    HPEN pen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
-    HGDIOBJ oldPen = SelectObject(hdc, pen);
-
-    Ellipse(hdc, projected.x - 4, projected.y - 4, projected.x + 5, projected.y + 5);
-
-    SelectObject(hdc, oldPen);
-    DeleteObject(pen);
-    SelectObject(hdc, oldBrush);
-    DeleteObject(brush);
-}
-
-void DrawPlane(HDC hdc, const Camera& camera, int width, int height, const DrawablePlane& drawable)
-{
-    const WorkPlane& plane = drawable.plane;
-    const double s = drawable.halfSize;
-
-    const std::vector<Vector3> corners = {
-        plane.ToWorld(-s, -s),
-        plane.ToWorld(s, -s),
-        plane.ToWorld(s, s),
-        plane.ToWorld(-s, s),
-    };
-
-    POINT polygon[4] = {};
-    for (std::size_t i = 0; i < corners.size(); ++i) {
-        const ScreenPoint projected = ProjectPoint(corners[i], camera, width, height);
-        polygon[i] = {projected.x, projected.y};
-    }
-
-    HBRUSH brush = CreateSolidBrush(RGB(248, 250, 252));
-    HGDIOBJ oldBrush = SelectObject(hdc, brush);
-    HPEN outlinePen = CreatePen(PS_SOLID, 1, drawable.color);
-    HGDIOBJ oldPen = SelectObject(hdc, outlinePen);
-    Polygon(hdc, polygon, 4);
-    SelectObject(hdc, oldPen);
-    DeleteObject(outlinePen);
-    SelectObject(hdc, oldBrush);
-    DeleteObject(brush);
-
-    WithPen(hdc, drawable.gridColor, 1, [&]() {
-        for (int i = -static_cast<int>(s); i <= static_cast<int>(s); ++i) {
-            const double d = static_cast<double>(i);
-            DrawLine3D(hdc, camera, width, height, plane.ToWorld(-s, d), plane.ToWorld(s, d));
-            DrawLine3D(hdc, camera, width, height, plane.ToWorld(d, -s), plane.ToWorld(d, s));
-        }
-    });
-
-    WithPen(hdc, RGB(80, 112, 150), 2, [&]() {
-        DrawLine3D(hdc, camera, width, height, plane.Origin(), plane.ToWorld(2.0, 0.0));
-        DrawLine3D(hdc, camera, width, height, plane.Origin(), plane.ToWorld(0.0, 2.0));
-    });
 }
 
 std::vector<Scene> BuildScenes()
@@ -349,9 +539,12 @@ std::vector<Scene> BuildScenes()
 
     scenes.push_back({
         L"3D wire: origin to X2 Y7 Z4",
-        {{xyPlane, 8.0, RGB(180, 195, 210), RGB(232, 237, 242)}},
+        {{L"floor", xyPlane, 8.0, RGB(180, 195, 210), RGB(232, 237, 242)}},
         {{
+            L"origin_to_point",
             Wire::Line({0.0, 0.0, 0.0}, {2.0, 7.0, 4.0}),
+            WirePlanePolicy::Free3D,
+            std::nullopt,
             RGB(34, 108, 214),
             3,
         }},
@@ -361,17 +554,23 @@ std::vector<Scene> BuildScenes()
     scenes.push_back({
         L"Sketch on X=10 work plane",
         {
-            {xyPlane, 8.0, RGB(198, 207, 218), RGB(236, 240, 244)},
-            {verticalPlane, 7.0, RGB(160, 190, 218), RGB(222, 235, 246)},
+            {L"floor", xyPlane, 8.0, RGB(198, 207, 218), RGB(236, 240, 244)},
+            {L"front", verticalPlane, 7.0, RGB(160, 190, 218), RGB(222, 235, 246)},
         },
         {
             {
+                L"front_window_bottom",
                 verticalSketch.MakeLine({2.0, 1.0}, {5.0, 6.0}),
+                WirePlanePolicy::ReferenceOnly,
+                std::optional<std::wstring>{L"front"},
                 RGB(25, 128, 91),
                 3,
             },
             {
+                L"front_nose_curve",
                 verticalSketch.MakeCubicBezier({0.0, 0.0}, {1.0, 4.0}, {5.0, 4.0}, {6.0, 0.0}),
+                WirePlanePolicy::ReferenceOnly,
+                std::optional<std::wstring>{L"front"},
                 RGB(203, 86, 48),
                 3,
             },
@@ -382,17 +581,23 @@ std::vector<Scene> BuildScenes()
     scenes.push_back({
         L"Tilted plane from three selected points",
         {
-            {xyPlane, 8.0, RGB(205, 210, 217), RGB(238, 240, 243)},
-            {tiltedPlane, 7.0, RGB(183, 162, 214), RGB(233, 225, 244)},
+            {L"floor", xyPlane, 8.0, RGB(205, 210, 217), RGB(238, 240, 243)},
+            {L"free_paper", tiltedPlane, 7.0, RGB(183, 162, 214), RGB(233, 225, 244)},
         },
         {
             {
+                L"free_plane_line",
                 tiltedSketch.MakeLine({-4.0, -2.0}, {5.0, 3.0}),
+                WirePlanePolicy::ReferenceOnly,
+                std::optional<std::wstring>{L"free_paper"},
                 RGB(43, 103, 169),
                 3,
             },
             {
+                L"free_plane_curve",
                 tiltedSketch.MakeCubicBezier({-4.0, 3.0}, {-1.0, 6.0}, {3.0, -2.0}, {5.0, 1.0}),
+                WirePlanePolicy::ReferenceOnly,
+                std::optional<std::wstring>{L"free_paper"},
                 RGB(181, 77, 119),
                 3,
             },
@@ -424,6 +629,7 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
 
     for (const NamedWorkPlane& workPlane : project.WorkPlanes()) {
         scene.planes.push_back({
+            ToWide(workPlane.name),
             workPlane.plane,
             7.0,
             RGB(160, 190, 218),
@@ -432,19 +638,13 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
         scene.points.push_back(workPlane.plane.Origin());
     }
 
-    scene.infoLines.push_back(L"Work planes");
-    for (const NamedWorkPlane& workPlane : project.WorkPlanes()) {
-        scene.infoLines.push_back(L"  " + ToWide(workPlane.name));
-        scene.infoLines.push_back(L"    O " + FormatVector(workPlane.plane.Origin()));
-    }
-
-    scene.infoLines.push_back(L"");
-    scene.infoLines.push_back(L"Wires");
-
     std::size_t wireIndex = 0;
     for (const NamedWire& wire : project.Wires()) {
         scene.wires.push_back({
+            ToWide(wire.name),
             wire.wire,
+            wire.metadata.planePolicy,
+            ToWideOptional(wire.metadata.sourcePlaneName),
             PickWireColor(wireIndex),
             wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane ? 4 : 3,
         });
@@ -452,17 +652,6 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
         for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
             scene.points.push_back(controlPoint);
         }
-
-        std::wstring label = L"  " + ToWide(wire.name)
-            + L"  " + WireKindName(wire.wire.Kind())
-            + L"  " + PlanePolicyName(wire.metadata.planePolicy);
-        if (wire.metadata.sourcePlaneName.has_value()) {
-            label += L"  @" + ToWide(*wire.metadata.sourcePlaneName);
-        }
-
-        scene.infoLines.push_back(label);
-        scene.infoLines.push_back(L"    S " + FormatVector(wire.wire.Start()));
-        scene.infoLines.push_back(L"    E " + FormatVector(wire.wire.End()));
 
         ++wireIndex;
     }
@@ -502,6 +691,7 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 
     const Scene& scene = state.scenes[
         static_cast<std::size_t>(std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)))];
+    const Selection selection = IsSelectionValid(scene, state.selection) ? state.selection : Selection{};
     const int viewportWidth = std::max(320, width - InfoPanelWidth);
 
     RECT background = {0, 0, width, height};
@@ -511,6 +701,30 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, RGB(38, 45, 53));
+
+    DrawAxes(hdc, state.camera, viewportWidth, height);
+
+    for (std::size_t i = 0; i < scene.planes.size(); ++i) {
+        const bool selected = selection.kind == SelectionKind::WorkPlane && selection.index == i;
+        DrawPlane(hdc, state.camera, viewportWidth, height, scene.planes[i], selected);
+    }
+
+    for (std::size_t i = 0; i < scene.wires.size(); ++i) {
+        if (selection.kind == SelectionKind::Wire && selection.index == i) {
+            continue;
+        }
+        DrawWire(hdc, state.camera, viewportWidth, height, scene.wires[i], false);
+    }
+
+    for (const Vector3& point : scene.points) {
+        DrawPoint(hdc, state.camera, viewportWidth, height, point, RGB(25, 25, 25));
+    }
+
+    if (selection.kind == SelectionKind::Wire) {
+        const DrawableWire& wire = scene.wires[selection.index];
+        DrawWire(hdc, state.camera, viewportWidth, height, wire, true);
+        DrawWireControlPoints(hdc, state.camera, viewportWidth, height, wire);
+    }
 
     HFONT font = CreateFontW(
         18,
@@ -531,26 +745,192 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 
     DrawTextLine(hdc, 18, 16, L"kachakachaCAD viewer");
     DrawTextLine(hdc, 18, 40, scene.title);
-    DrawTextLine(hdc, 18, 66, L"1-9 scene  |  drag rotate  |  wheel zoom  |  R reset");
+    DrawTextLine(hdc, 18, 66, L"click select  |  drag rotate  |  wheel zoom  |  Tab next  |  Esc clear  |  R reset");
 
     SelectObject(hdc, oldFont);
     DeleteObject(font);
 
-    DrawAxes(hdc, state.camera, viewportWidth, height);
+    DrawInfoPanel(hdc, width, height, scene, selection);
+}
 
-    for (const DrawablePlane& plane : scene.planes) {
-        DrawPlane(hdc, state.camera, viewportWidth, height, plane);
+const Scene* CurrentScene(const AppState& state)
+{
+    if (state.scenes.empty()) {
+        return nullptr;
     }
 
-    for (const DrawableWire& wire : scene.wires) {
-        DrawWire(hdc, state.camera, viewportWidth, height, wire);
+    const auto index = static_cast<std::size_t>(
+        std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)));
+    return &state.scenes[index];
+}
+
+double DistanceToSegment(POINT point, ScreenPoint a, ScreenPoint b)
+{
+    const double px = static_cast<double>(point.x);
+    const double py = static_cast<double>(point.y);
+    const double ax = static_cast<double>(a.x);
+    const double ay = static_cast<double>(a.y);
+    const double bx = static_cast<double>(b.x);
+    const double by = static_cast<double>(b.y);
+
+    const double dx = bx - ax;
+    const double dy = by - ay;
+    const double lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 1.0e-9) {
+        const double sx = px - ax;
+        const double sy = py - ay;
+        return std::sqrt(sx * sx + sy * sy);
     }
 
-    for (const Vector3& point : scene.points) {
-        DrawPoint(hdc, state.camera, viewportWidth, height, point, RGB(25, 25, 25));
+    const double t = std::clamp(((px - ax) * dx + (py - ay) * dy) / lengthSquared, 0.0, 1.0);
+    const double cx = ax + t * dx;
+    const double cy = ay + t * dy;
+    const double sx = px - cx;
+    const double sy = py - cy;
+    return std::sqrt(sx * sx + sy * sy);
+}
+
+bool IsInsidePolygon(POINT point, const std::vector<POINT>& polygon)
+{
+    if (polygon.size() < 3) {
+        return false;
     }
 
-    DrawInfoPanel(hdc, width, height, scene);
+    bool inside = false;
+    for (std::size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+        const POINT a = polygon[i];
+        const POINT b = polygon[j];
+        const bool crosses = (a.y > point.y) != (b.y > point.y);
+        if (!crosses) {
+            continue;
+        }
+
+        const double x = static_cast<double>(b.x - a.x) * static_cast<double>(point.y - a.y)
+                / static_cast<double>(b.y - a.y)
+            + static_cast<double>(a.x);
+        if (static_cast<double>(point.x) < x) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
+Selection HitTestScene(const Scene& scene, const Camera& camera, int viewportWidth, int height, POINT point)
+{
+    if (point.x < 0 || point.y < 0 || point.x >= viewportWidth || point.y >= height) {
+        return {};
+    }
+
+    constexpr double wirePickDistance = 10.0;
+    double bestDistance = wirePickDistance;
+    Selection bestSelection;
+
+    for (std::size_t i = 0; i < scene.wires.size(); ++i) {
+        const DrawableWire& wire = scene.wires[i];
+        constexpr int steps = 96;
+        ScreenPoint previous = ProjectPoint(wire.wire.Evaluate(0.0), camera, viewportWidth, height);
+        for (int step = 1; step <= steps; ++step) {
+            const double t = static_cast<double>(step) / static_cast<double>(steps);
+            const ScreenPoint current = ProjectPoint(wire.wire.Evaluate(t), camera, viewportWidth, height);
+            const double distance = DistanceToSegment(point, previous, current);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestSelection = {SelectionKind::Wire, i};
+            }
+            previous = current;
+        }
+    }
+
+    if (bestSelection.kind != SelectionKind::None) {
+        return bestSelection;
+    }
+
+    double bestDepth = -std::numeric_limits<double>::infinity();
+    for (std::size_t i = 0; i < scene.planes.size(); ++i) {
+        const DrawablePlane& plane = scene.planes[i];
+        const double s = plane.halfSize;
+        const std::vector<Vector3> corners = {
+            plane.plane.ToWorld(-s, -s),
+            plane.plane.ToWorld(s, -s),
+            plane.plane.ToWorld(s, s),
+            plane.plane.ToWorld(-s, s),
+        };
+
+        std::vector<POINT> polygon;
+        polygon.reserve(corners.size());
+        double depth = 0.0;
+        for (const Vector3& corner : corners) {
+            const ScreenPoint projected = ProjectPoint(corner, camera, viewportWidth, height);
+            polygon.push_back({projected.x, projected.y});
+            depth += projected.depth;
+        }
+        depth /= static_cast<double>(corners.size());
+
+        if (IsInsidePolygon(point, polygon) && depth > bestDepth) {
+            bestDepth = depth;
+            bestSelection = {SelectionKind::WorkPlane, i};
+        }
+    }
+
+    return bestSelection;
+}
+
+std::optional<Selection> HitTestInfoPanel(
+    const Scene& scene,
+    Selection selection,
+    int width,
+    int height,
+    POINT point)
+{
+    const int panelLeft = std::max(0, width - InfoPanelWidth);
+    if (point.x < panelLeft || point.x >= width || point.y < 48 || point.y >= height) {
+        return std::nullopt;
+    }
+
+    constexpr int lineHeight = 19;
+    const int maxY = height - 24;
+    if (point.y > maxY) {
+        return std::nullopt;
+    }
+
+    const Selection validSelection = IsSelectionValid(scene, selection) ? selection : Selection{};
+    const std::vector<PanelRow> rows = BuildPanelRows(scene, validSelection);
+    const std::size_t rowIndex = static_cast<std::size_t>((point.y - 48) / lineHeight);
+    if (rowIndex >= rows.size() || !rows[rowIndex].selectable) {
+        return std::nullopt;
+    }
+
+    return rows[rowIndex].selection;
+}
+
+void SelectNext(AppState& state)
+{
+    const Scene* scene = CurrentScene(state);
+    if (scene == nullptr) {
+        state.selection = {};
+        return;
+    }
+
+    const std::size_t total = scene->wires.size() + scene->planes.size();
+    if (total == 0) {
+        state.selection = {};
+        return;
+    }
+
+    std::size_t current = total - 1;
+    if (state.selection.kind == SelectionKind::Wire && state.selection.index < scene->wires.size()) {
+        current = state.selection.index;
+    } else if (state.selection.kind == SelectionKind::WorkPlane && state.selection.index < scene->planes.size()) {
+        current = scene->wires.size() + state.selection.index;
+    }
+
+    const std::size_t next = (current + 1) % total;
+    if (next < scene->wires.size()) {
+        state.selection = {SelectionKind::Wire, next};
+    } else {
+        state.selection = {SelectionKind::WorkPlane, next - scene->wires.size()};
+    }
 }
 
 bool SaveBitmap(std::wstring_view path, int width, int height, const void* pixels)
@@ -634,13 +1014,39 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_LBUTTONDOWN:
         if (state != nullptr) {
             state->dragging = true;
-            state->lastMouse = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            state->movedWhileDragging = false;
+            state->mouseDown = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            state->lastMouse = state->mouseDown;
             SetCapture(hwnd);
         }
         return 0;
 
     case WM_LBUTTONUP:
         if (state != nullptr) {
+            const POINT current = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (!state->movedWhileDragging) {
+                RECT client = {};
+                GetClientRect(hwnd, &client);
+                const int width = client.right - client.left;
+                const int height = client.bottom - client.top;
+                const int panelLeft = std::max(0, width - InfoPanelWidth);
+                const int viewportWidth = std::max(320, width - InfoPanelWidth);
+                const Scene* scene = CurrentScene(*state);
+                if (scene != nullptr) {
+                    if (current.x >= panelLeft) {
+                        const std::optional<Selection> panelSelection =
+                            HitTestInfoPanel(*scene, state->selection, width, height, current);
+                        if (panelSelection.has_value()) {
+                            state->selection = *panelSelection;
+                        }
+                    } else {
+                        state->selection = HitTestScene(*scene, state->camera, viewportWidth, height, current);
+                    }
+                } else {
+                    state->selection = {};
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
             state->dragging = false;
             ReleaseCapture();
         }
@@ -651,6 +1057,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             const POINT current = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             const int dx = current.x - state->lastMouse.x;
             const int dy = current.y - state->lastMouse.y;
+            const int totalDx = current.x - state->mouseDown.x;
+            const int totalDy = current.y - state->mouseDown.y;
+            if (totalDx * totalDx + totalDy * totalDy <= 9 && !state->movedWhileDragging) {
+                return 0;
+            }
+
+            state->movedWhileDragging = true;
             state->camera.yaw += static_cast<double>(dx) * 0.008;
             state->camera.pitch = std::clamp(state->camera.pitch + static_cast<double>(dy) * 0.008, -1.25, 1.25);
             state->lastMouse = current;
@@ -673,9 +1086,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 const int requestedIndex = static_cast<int>(wParam - '1');
                 if (requestedIndex < static_cast<int>(state->scenes.size())) {
                     state->sceneIndex = requestedIndex;
+                    state->selection = {};
                 }
             } else if (wParam == 'R') {
                 state->camera = Camera{};
+            } else if (wParam == VK_TAB) {
+                SelectNext(*state);
+            } else if (wParam == VK_ESCAPE) {
+                state->selection = {};
             } else if (wParam == VK_LEFT) {
                 state->camera.yaw -= 0.1;
             } else if (wParam == VK_RIGHT) {

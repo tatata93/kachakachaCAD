@@ -13,6 +13,8 @@ Windows では Visual Studio 2022 Build Tools の C++ 開発環境を想定す�
 - Visual Studio Build Tools に「C++ によるデスクトップ開発」を追加する。
 - Developer PowerShell / Developer Command Prompt から作業する。
 
+環境変数に `Path` と `PATH` が重複していると、MSBuild が `CL.exe` の起動に失敗する場合がある。開発スクリプトは起動時にプロセス内の `Path` を正規化する。
+
 ## 後で必要になるもの
 
 - Qt 6
@@ -40,3 +42,5 @@ Windows では Visual Studio 2022 Build Tools の C++ 開発環境を想定す�
 ```powershell
 .\scripts\check.ps1
 ```
+
+既定のビルド先は `build-msvc2022-x64`。Visual Studio Build Tools 2022 が入っていれば、自動で `Visual Studio 17 2022` を使う。

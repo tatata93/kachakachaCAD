@@ -1,4 +1,4 @@
-build/
+build*/
 out/
 .vs/
 .vscode/
@@ -15,4 +15,3 @@ CMakeUserPresets.json
 *.dll
 *.lib
 *.log
-

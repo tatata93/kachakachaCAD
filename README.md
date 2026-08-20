@@ -42,5 +42,4 @@ PowerShell で以下を実行します。
 .\scripts\check.ps1
 ```
 
-`check.ps1` は構成、ビルド、テストをまとめて実行します。
-
+`check.ps1` は構成、ビルド、テストをまとめて実行します。Windows では Visual Studio Build Tools 2022 を優先して使います。

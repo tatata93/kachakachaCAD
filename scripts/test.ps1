@@ -1,5 +1,5 @@
 param(
-    [string]$BuildDir = "build",
+    [string]$BuildDir = "build-msvc2022-x64",
     [string]$Config = "Debug"
 )
 

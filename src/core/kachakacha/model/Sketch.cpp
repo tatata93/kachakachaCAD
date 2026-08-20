@@ -45,10 +45,21 @@ Wire Sketch::MakeCubicBezier(Vector2 start, Vector2 control1, Vector2 control2, 
         ToWorld(end));
 }
 
+Wire Sketch::MakeCircle(Vector2 center, double radius) const
+{
+    RequireFinite(center);
+    return Wire::Circle(ToWorld(center), plane_.UAxis(), plane_.VAxis(), radius);
+}
+
+Wire Sketch::MakeCircularArc(Vector2 center, double radius, double startAngleRadians, double sweepAngleRadians) const
+{
+    RequireFinite(center);
+    return Wire::CircularArc(ToWorld(center), plane_.UAxis(), plane_.VAxis(), radius, startAngleRadians, sweepAngleRadians);
+}
+
 Vector3 Sketch::ToWorld(Vector2 point) const noexcept
 {
     return plane_.ToWorld(point.x, point.y);
 }
 
 } // namespace kachakacha::model
-

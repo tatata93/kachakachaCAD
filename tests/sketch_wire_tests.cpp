@@ -15,6 +15,8 @@ using kachakacha::model::WorkPlane;
 
 namespace {
 
+constexpr double Pi = 3.14159265358979323846;
+
 void Require(bool condition, const char* message)
 {
     if (!condition) {
@@ -90,6 +92,37 @@ void SketchBezierOnWorkPlaneBecomesWorldWire()
     RequireNear(wire.End(), {2.0, 0.0, 2.0}, "sketch bezier end");
 }
 
+void CircleWireEvaluatesOnPlane()
+{
+    const Wire wire = Wire::Circle(
+        {1.0, 2.0, 3.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        2.0);
+
+    Require(wire.Kind() == WireKind::Circle, "circle kind");
+    Require(wire.IsClosed(), "circle is closed");
+    RequireNear(wire.Evaluate(0.0), {1.0, 4.0, 3.0}, "circle start");
+    RequireNear(wire.Evaluate(0.25), {1.0, 2.0, 5.0}, "circle quarter");
+    RequireNear(wire.Evaluate(0.5), {1.0, 0.0, 3.0}, "circle half");
+}
+
+void SketchArcOnWorkPlaneBecomesWorldWire()
+{
+    const WorkPlane plane = WorkPlane::FromPointNormal(
+        {10.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0});
+
+    const Sketch sketch(plane);
+    const Wire wire = sketch.MakeCircularArc({2.0, 3.0}, 1.5, 0.0, Pi / 2.0);
+
+    Require(wire.Kind() == WireKind::CircularArc, "arc kind");
+    Require(!wire.IsClosed(), "arc is open");
+    RequireNear(wire.Start(), {10.0, 3.5, 3.0}, "arc start");
+    RequireNear(wire.End(), {10.0, 2.0, 4.5}, "arc end");
+}
+
 } // namespace
 
 int main()
@@ -99,6 +132,8 @@ int main()
         CubicBezierWireUsesControlPoints();
         SketchLineOnWorkPlaneBecomesWorldWire();
         SketchBezierOnWorkPlaneBecomesWorldWire();
+        CircleWireEvaluatesOnPlane();
+        SketchArcOnWorkPlaneBecomesWorldWire();
     } catch (const std::exception& error) {
         std::cerr << "sketch_wire_tests failed: " << error.what() << '\n';
         return 1;
@@ -107,4 +142,3 @@ int main()
     std::cout << "sketch_wire_tests passed\n";
     return 0;
 }
-

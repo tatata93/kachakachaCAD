@@ -60,10 +60,38 @@ line3d NAME sx sy sz ex ey ez
 bezier3d NAME sx sy sz c1x c1y c1z c2x c2y c2z ex ey ez
 ```
 
+### 3D円
+
+```text
+circle3d NAME cx cy cz ux uy uz vx vy vz radius
+```
+
+`(ux, uy, uz)` と `(vx, vy, vz)` は円を置く平面の方向を指定する。
+
+### 3D円弧
+
+```text
+arc3d NAME cx cy cz ux uy uz vx vy vz radius startDegrees sweepDegrees
+```
+
+角度は度数法。`startDegrees` は開始角、`sweepDegrees` はそこから進む角度。
+
 ### 作業平面上の直線
 
 ```text
 sketch_line NAME PLANE su sv eu ev [free|reference|locked]
+```
+
+### 作業平面上の円
+
+```text
+sketch_circle NAME PLANE cu cv radius [free|reference|locked]
+```
+
+### 作業平面上の円弧
+
+```text
+sketch_arc NAME PLANE cu cv radius startDegrees sweepDegrees [free|reference|locked]
 ```
 
 ### 作業平面上の Cubic Bezier

@@ -1,14 +1,18 @@
 #include "kachakacha/model/Wire.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace kachakacha::model {
 
 using kachakacha::geometry::AlmostEqual;
+using kachakacha::geometry::Cross;
 using kachakacha::geometry::Vector3;
 
 namespace {
+
+constexpr double TwoPi = 6.28318530717958647692;
 
 void RequireFinite(const std::vector<Vector3>& points)
 {
@@ -24,10 +28,77 @@ Vector3 Lerp(const Vector3& start, const Vector3& end, double t)
     return start * (1.0 - t) + end * t;
 }
 
+struct ArcFrame {
+    Vector3 uAxis;
+    Vector3 vAxis;
+};
+
+ArcFrame MakeArcFrame(Vector3 uAxisHint, Vector3 vAxisHint)
+{
+    if (!uAxisHint.IsFinite() || !vAxisHint.IsFinite()) {
+        throw std::invalid_argument("Arc axes contain a non-finite value.");
+    }
+
+    const Vector3 uAxis = uAxisHint.Normalized();
+    const Vector3 normal = Cross(uAxis, vAxisHint);
+    if (normal.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Arc axes must not be parallel.");
+    }
+
+    const Vector3 normalUnit = normal.Normalized();
+    const Vector3 vAxis = Cross(normalUnit, uAxis).Normalized();
+    return {uAxis, vAxis};
+}
+
+void RequireArcValues(Vector3 center, double radius, double startAngleRadians, double sweepAngleRadians)
+{
+    if (!center.IsFinite() || !std::isfinite(radius) || !std::isfinite(startAngleRadians) || !std::isfinite(sweepAngleRadians)) {
+        throw std::invalid_argument("Arc value contains a non-finite value.");
+    }
+
+    if (radius <= 1.0e-9) {
+        throw std::invalid_argument("Arc radius must be positive.");
+    }
+
+    if (std::abs(sweepAngleRadians) <= 1.0e-9) {
+        throw std::invalid_argument("Arc sweep angle must not be zero.");
+    }
+}
+
+Vector3 EvaluateArcPoint(
+    const Vector3& center,
+    const Vector3& uAxis,
+    const Vector3& vAxis,
+    double radius,
+    double angleRadians)
+{
+    return center + uAxis * (std::cos(angleRadians) * radius) + vAxis * (std::sin(angleRadians) * radius);
+}
+
 } // namespace
 
 Wire::Wire(WireKind kind, std::vector<Vector3> controlPoints)
     : kind_(kind), controlPoints_(std::move(controlPoints))
+{
+}
+
+Wire::Wire(
+    WireKind kind,
+    std::vector<Vector3> controlPoints,
+    Vector3 arcCenter,
+    Vector3 arcUAxis,
+    Vector3 arcVAxis,
+    double arcRadius,
+    double arcStartAngleRadians,
+    double arcSweepAngleRadians)
+    : kind_(kind),
+      controlPoints_(std::move(controlPoints)),
+      arcCenter_(arcCenter),
+      arcUAxis_(arcUAxis),
+      arcVAxis_(arcVAxis),
+      arcRadius_(arcRadius),
+      arcStartAngleRadians_(arcStartAngleRadians),
+      arcSweepAngleRadians_(arcSweepAngleRadians)
 {
 }
 
@@ -66,6 +137,41 @@ Wire Wire::CubicBezier(Vector3 start, Vector3 control1, Vector3 control2, Vector
     return {WireKind::CubicBezier, std::move(points)};
 }
 
+Wire Wire::Circle(Vector3 center, Vector3 uAxisHint, Vector3 vAxisHint, double radius)
+{
+    return CircularArc(center, uAxisHint, vAxisHint, radius, 0.0, TwoPi);
+}
+
+Wire Wire::CircularArc(
+    Vector3 center,
+    Vector3 uAxisHint,
+    Vector3 vAxisHint,
+    double radius,
+    double startAngleRadians,
+    double sweepAngleRadians)
+{
+    RequireArcValues(center, radius, startAngleRadians, sweepAngleRadians);
+    const ArcFrame frame = MakeArcFrame(uAxisHint, vAxisHint);
+    const Vector3 start = EvaluateArcPoint(center, frame.uAxis, frame.vAxis, radius, startAngleRadians);
+    const Vector3 end = EvaluateArcPoint(center, frame.uAxis, frame.vAxis, radius, startAngleRadians + sweepAngleRadians);
+
+    std::vector<Vector3> points = {center, start, end};
+    const WireKind kind = AlmostEqual(std::abs(sweepAngleRadians), TwoPi, 1.0e-9)
+        ? WireKind::Circle
+        : WireKind::CircularArc;
+
+    return {
+        kind,
+        std::move(points),
+        center,
+        frame.uAxis,
+        frame.vAxis,
+        radius,
+        startAngleRadians,
+        sweepAngleRadians,
+    };
+}
+
 Vector3 Wire::Evaluate(double t) const
 {
     if (!std::isfinite(t)) {
@@ -94,6 +200,15 @@ Vector3 Wire::Evaluate(double t) const
             + controlPoints_[2] * (3.0 * oneMinusT * clamped * clamped)
             + controlPoints_[3] * (clamped * clamped * clamped);
     }
+
+    case WireKind::Circle:
+    case WireKind::CircularArc:
+        return EvaluateArcPoint(
+            arcCenter_,
+            arcUAxis_,
+            arcVAxis_,
+            arcRadius_,
+            arcStartAngleRadians_ + arcSweepAngleRadians_ * clamped);
     }
 
     throw std::logic_error("Unknown wire kind.");
@@ -101,8 +216,11 @@ Vector3 Wire::Evaluate(double t) const
 
 bool Wire::IsClosed(double epsilon) const noexcept
 {
+    if (kind_ == WireKind::Circle) {
+        return true;
+    }
+
     return AlmostEqual(Start(), End(), epsilon);
 }
 
 } // namespace kachakacha::model
-

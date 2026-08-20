@@ -202,6 +202,32 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector3 end = ReadVector3(stream, sourceName, lineNumber, "end");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddWire(name, Wire::CubicBezier(start, control1, control2, end));
+            } else if (command == "circle3d") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const Vector3 center = ReadVector3(stream, sourceName, lineNumber, "center");
+                const Vector3 uAxis = ReadVector3(stream, sourceName, lineNumber, "u axis");
+                const Vector3 vAxis = ReadVector3(stream, sourceName, lineNumber, "v axis");
+                const double radius = ReadDouble(stream, sourceName, lineNumber, "radius");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWire(name, Wire::Circle(center, uAxis, vAxis, radius));
+            } else if (command == "arc3d") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const Vector3 center = ReadVector3(stream, sourceName, lineNumber, "center");
+                const Vector3 uAxis = ReadVector3(stream, sourceName, lineNumber, "u axis");
+                const Vector3 vAxis = ReadVector3(stream, sourceName, lineNumber, "v axis");
+                const double radius = ReadDouble(stream, sourceName, lineNumber, "radius");
+                const double startDegrees = ReadDouble(stream, sourceName, lineNumber, "start angle degrees");
+                const double sweepDegrees = ReadDouble(stream, sourceName, lineNumber, "sweep angle degrees");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWire(
+                    name,
+                    Wire::CircularArc(
+                        center,
+                        uAxis,
+                        vAxis,
+                        radius,
+                        startDegrees * Pi / 180.0,
+                        sweepDegrees * Pi / 180.0));
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -211,6 +237,29 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 project.AddWire(
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeLine(start, end),
+                    WireMetadata{planeName, policy});
+            } else if (command == "sketch_circle") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
+                const Vector2 center = ReadVector2(stream, sourceName, lineNumber, "center");
+                const double radius = ReadDouble(stream, sourceName, lineNumber, "radius");
+                const WirePlanePolicy policy = ReadOptionalSketchPolicy(stream, sourceName, lineNumber);
+                project.AddWire(
+                    name,
+                    Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeCircle(center, radius),
+                    WireMetadata{planeName, policy});
+            } else if (command == "sketch_arc") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
+                const Vector2 center = ReadVector2(stream, sourceName, lineNumber, "center");
+                const double radius = ReadDouble(stream, sourceName, lineNumber, "radius");
+                const double startDegrees = ReadDouble(stream, sourceName, lineNumber, "start angle degrees");
+                const double sweepDegrees = ReadDouble(stream, sourceName, lineNumber, "sweep angle degrees");
+                const WirePlanePolicy policy = ReadOptionalSketchPolicy(stream, sourceName, lineNumber);
+                project.AddWire(
+                    name,
+                    Sketch(RequirePlane(project, planeName, sourceName, lineNumber))
+                        .MakeCircularArc(center, radius, startDegrees * Pi / 180.0, sweepDegrees * Pi / 180.0),
                     WireMetadata{planeName, policy});
             } else if (command == "sketch_bezier") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");

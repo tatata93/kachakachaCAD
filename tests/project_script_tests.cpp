@@ -36,24 +36,34 @@ void LoadsPlanesAndWires()
         plane_offset roof base 2.5
         plane_point_normal front 10 0 0  1 0 0  0 1 0
         line3d diagonal 0 0 0  2 7 4
+        circle3d coupler 0 0 0  1 0 0  0 1 0  2
+        arc3d roof_arc 0 0 2.5  1 0 0  0 1 0  1 0 90
         sketch_line window front 2 3  5 7
+        sketch_circle light front 4 4  1.25 reference
+        sketch_arc rounded_corner front 6 6  0.75 180 90 locked
         sketch_bezier nose roof 0 0  1 3  4 3  5 0 locked
     )");
 
     const auto project = LoadProjectScript(input, "test");
 
     Require(project.WorkPlanes().size() == 3, "plane count");
-    Require(project.Wires().size() == 3, "wire count");
+    Require(project.Wires().size() == 7, "wire count");
     RequireNear(project.Wires()[0].wire.End(), {2.0, 7.0, 4.0}, "3d line end");
     Require(project.Wires()[0].metadata.planePolicy == WirePlanePolicy::Free3D, "3d line is free");
     Require(!project.Wires()[0].metadata.sourcePlaneName.has_value(), "3d line has no source plane");
-    RequireNear(project.Wires()[1].wire.Start(), {10.0, 2.0, 3.0}, "sketch line start");
-    RequireNear(project.Wires()[1].wire.End(), {10.0, 5.0, 7.0}, "sketch line end");
-    Require(project.Wires()[1].metadata.sourcePlaneName == "front", "sketch line source plane");
-    Require(project.Wires()[1].metadata.planePolicy == WirePlanePolicy::ReferenceOnly, "sketch line defaults to reference");
-    RequireNear(project.Wires()[2].wire.Start(), {0.0, 0.0, 2.5}, "offset sketch bezier start");
-    Require(project.Wires()[2].metadata.sourcePlaneName == "roof", "sketch bezier source plane");
-    Require(project.Wires()[2].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "sketch bezier can be locked");
+    RequireNear(project.Wires()[1].wire.Evaluate(0.25), {0.0, 2.0, 0.0}, "3d circle quarter");
+    RequireNear(project.Wires()[2].wire.End(), {0.0, 1.0, 2.5}, "3d arc end");
+    RequireNear(project.Wires()[3].wire.Start(), {10.0, 2.0, 3.0}, "sketch line start");
+    RequireNear(project.Wires()[3].wire.End(), {10.0, 5.0, 7.0}, "sketch line end");
+    Require(project.Wires()[3].metadata.sourcePlaneName == "front", "sketch line source plane");
+    Require(project.Wires()[3].metadata.planePolicy == WirePlanePolicy::ReferenceOnly, "sketch line defaults to reference");
+    RequireNear(project.Wires()[4].wire.Start(), {10.0, 5.25, 4.0}, "sketch circle start");
+    Require(project.Wires()[4].metadata.planePolicy == WirePlanePolicy::ReferenceOnly, "sketch circle reference");
+    RequireNear(project.Wires()[5].wire.End(), {10.0, 6.0, 5.25}, "sketch arc end");
+    Require(project.Wires()[5].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "sketch arc can be locked");
+    RequireNear(project.Wires()[6].wire.Start(), {0.0, 0.0, 2.5}, "offset sketch bezier start");
+    Require(project.Wires()[6].metadata.sourcePlaneName == "roof", "sketch bezier source plane");
+    Require(project.Wires()[6].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "sketch bezier can be locked");
 }
 
 void UnknownPlaneIsRejected()

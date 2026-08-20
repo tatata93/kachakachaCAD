@@ -28,6 +28,21 @@ else()
     target_compile_options(kachakacha_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(WIN32)
+    add_executable(kachakacha_viewer
+        src/apps/viewer/main.cpp
+    )
+
+    target_link_libraries(kachakacha_viewer
+        PRIVATE
+            kachakacha_core
+            user32
+            gdi32
+    )
+
+    target_compile_features(kachakacha_viewer PRIVATE cxx_std_20)
+endif()
+
 if(KACHACAD_BUILD_TESTS)
     enable_testing()
 
@@ -52,4 +67,11 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME sketch_wire_tests COMMAND kachakacha_sketch_wire_tests)
+
+    if(WIN32)
+        add_test(
+            NAME viewer_snapshot
+            COMMAND $<TARGET_FILE:kachakacha_viewer> --snapshot "${CMAKE_BINARY_DIR}/viewer-smoke.bmp"
+        )
+    endif()
 endif()

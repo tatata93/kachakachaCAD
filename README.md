@@ -45,3 +45,19 @@ PowerShell で以下を実行します。
 ```
 
 `check.ps1` は構成、ビルド、テストをまとめて実行します。Windows では Visual Studio Build Tools 2022 を優先して使います。
+
+## 画面で確認
+
+最小ビューアを起動します。
+
+```powershell
+.\scripts\run-viewer.ps1
+```
+
+表示された画面では、`1`、`2`、`3` でサンプルを切り替え、マウスドラッグで回転、ホイールでズームできます。
+
+画像だけ確認する場合:
+
+```powershell
+.\scripts\snapshot-viewer.ps1
+```

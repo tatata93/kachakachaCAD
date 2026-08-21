@@ -86,5 +86,15 @@ if(KACHACAD_BUILD_TESTS)
             NAME viewer_snapshot
             COMMAND $<TARGET_FILE:kachakacha_viewer> --snapshot "${CMAKE_BINARY_DIR}/viewer-smoke.bmp"
         )
+
+        add_test(
+            NAME viewer_edit_smoke
+            COMMAND $<TARGET_FILE:kachakacha_viewer> --self-test-edits
+        )
+
+        add_test(
+            NAME viewer_project_edit_smoke
+            COMMAND $<TARGET_FILE:kachakacha_viewer> --self-test-edits --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd"
+        )
     endif()
 endif()

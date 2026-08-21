@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -26,6 +27,7 @@
 #include <vector>
 
 using kachakacha::geometry::Vector3;
+using kachakacha::geometry::AlmostEqual;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::model::NamedWire;
 using kachakacha::model::NamedWorkPlane;
@@ -38,6 +40,7 @@ using kachakacha::model::WorkPlane;
 namespace {
 
 constexpr int InfoPanelWidth = 360;
+constexpr std::size_t MaxUndoSteps = 64;
 
 struct Camera {
     double yaw = -0.72;
@@ -93,11 +96,20 @@ struct Scene {
     std::vector<Vector3> points;
 };
 
+struct EditorSnapshot {
+    int sceneIndex = 0;
+    std::vector<Scene> scenes;
+    Selection selection;
+};
+
 struct AppState {
     Camera camera;
     int sceneIndex = 0;
     std::vector<Scene> scenes;
     Selection selection;
+    std::vector<EditorSnapshot> undoStack;
+    std::vector<EditorSnapshot> redoStack;
+    std::wstring statusLine = L"Ready";
     bool dragging = false;
     bool movedWhileDragging = false;
     POINT mouseDown = {};
@@ -394,6 +406,7 @@ std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
             const DrawablePlane& plane = scene.planes[selection.index];
             add(L"  work plane  " + plane.name);
             add(L"  move  A/D X  W/S Y  Q/E Z");
+            add(L"  C copy  Delete remove");
             add(L"  O " + FormatVector(plane.plane.Origin()));
             add(L"  U " + FormatVector(plane.plane.UAxis()));
             add(L"  V " + FormatVector(plane.plane.VAxis()));
@@ -402,6 +415,7 @@ std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
             const DrawableWire& wire = scene.wires[selection.index];
             add(L"  wire  " + wire.name);
             add(L"  move  A/D X  W/S Y  Q/E Z");
+            add(L"  C copy  Delete remove");
             add(L"  kind  " + WireKindName(wire.wire.Kind()));
             add(L"  policy  " + PlanePolicyName(wire.planePolicy));
             if (wire.sourcePlaneName.has_value()) {
@@ -444,7 +458,23 @@ std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
     return rows;
 }
 
-void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene, Selection selection)
+std::vector<PanelRow> BuildInfoPanelRows(const Scene& scene, const AppState& state, Selection selection)
+{
+    std::vector<PanelRow> rows;
+    rows.push_back({L"Edit", {}, false});
+    rows.push_back({L"  " + state.statusLine, {}, false});
+    rows.push_back({L"  undo " + std::wstring(state.undoStack.empty() ? L"no" : L"yes")
+            + L"  redo " + std::wstring(state.redoStack.empty() ? L"no" : L"yes"),
+        {},
+        false});
+    rows.push_back({L"", {}, false});
+
+    const std::vector<PanelRow> inspectorRows = BuildPanelRows(scene, selection);
+    rows.insert(rows.end(), inspectorRows.begin(), inspectorRows.end());
+    return rows;
+}
+
+void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene, const AppState& state, Selection selection)
 {
     const int panelLeft = std::max(0, width - InfoPanelWidth);
     RECT panelRect = {panelLeft, 0, width, height};
@@ -496,7 +526,7 @@ void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene, Selection
     oldFont = SelectObject(hdc, bodyFont);
     SetTextColor(hdc, RGB(62, 72, 84));
 
-    const std::vector<PanelRow> rows = BuildPanelRows(scene, selection);
+    const std::vector<PanelRow> rows = BuildInfoPanelRows(scene, state, selection);
 
     int y = 48;
     const int lineHeight = 19;
@@ -528,6 +558,13 @@ void RefreshScenePoints(Scene& scene)
         for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
             scene.points.push_back(controlPoint);
         }
+    }
+}
+
+void RefreshAllScenePoints(std::vector<Scene>& scenes)
+{
+    for (Scene& scene : scenes) {
+        RefreshScenePoints(scene);
     }
 }
 
@@ -758,11 +795,12 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
     DrawTextLine(hdc, 18, 40, scene.title);
     DrawTextLine(hdc, 18, 66, L"click select  |  drag rotate  |  wheel zoom  |  Tab next  |  Esc clear  |  R reset");
     DrawTextLine(hdc, 18, 90, L"move selected: A/D X  W/S Y  Q/E Z  |  Shift 5mm  |  Ctrl 0.1mm");
+    DrawTextLine(hdc, 18, 114, L"edit selected: C copy  |  Delete remove  |  Ctrl+Z undo  |  Ctrl+Y redo");
 
     SelectObject(hdc, oldFont);
     DeleteObject(font);
 
-    DrawInfoPanel(hdc, width, height, scene, selection);
+    DrawInfoPanel(hdc, width, height, scene, state, selection);
 }
 
 const Scene* CurrentScene(const AppState& state)
@@ -785,6 +823,64 @@ Scene* CurrentScene(AppState& state)
     const auto index = static_cast<std::size_t>(
         std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)));
     return &state.scenes[index];
+}
+
+EditorSnapshot CaptureSnapshot(const AppState& state)
+{
+    return {state.sceneIndex, state.scenes, state.selection};
+}
+
+void RestoreSnapshot(AppState& state, EditorSnapshot snapshot)
+{
+    state.sceneIndex = snapshot.sceneIndex;
+    state.scenes = std::move(snapshot.scenes);
+    state.selection = snapshot.selection;
+    RefreshAllScenePoints(state.scenes);
+
+    const Scene* scene = CurrentScene(state);
+    if (scene == nullptr || !IsSelectionValid(*scene, state.selection)) {
+        state.selection = {};
+    }
+}
+
+void PushUndo(AppState& state)
+{
+    if (state.undoStack.size() >= MaxUndoSteps) {
+        state.undoStack.erase(state.undoStack.begin());
+    }
+
+    state.undoStack.push_back(CaptureSnapshot(state));
+    state.redoStack.clear();
+}
+
+bool UndoEdit(AppState& state)
+{
+    if (state.undoStack.empty()) {
+        state.statusLine = L"Nothing to undo";
+        return false;
+    }
+
+    state.redoStack.push_back(CaptureSnapshot(state));
+    EditorSnapshot snapshot = std::move(state.undoStack.back());
+    state.undoStack.pop_back();
+    RestoreSnapshot(state, std::move(snapshot));
+    state.statusLine = L"Undo";
+    return true;
+}
+
+bool RedoEdit(AppState& state)
+{
+    if (state.redoStack.empty()) {
+        state.statusLine = L"Nothing to redo";
+        return false;
+    }
+
+    state.undoStack.push_back(CaptureSnapshot(state));
+    EditorSnapshot snapshot = std::move(state.redoStack.back());
+    state.redoStack.pop_back();
+    RestoreSnapshot(state, std::move(snapshot));
+    state.statusLine = L"Redo";
+    return true;
 }
 
 double DistanceToSegment(POINT point, ScreenPoint a, ScreenPoint b)
@@ -901,7 +997,7 @@ Selection HitTestScene(const Scene& scene, const Camera& camera, int viewportWid
 
 std::optional<Selection> HitTestInfoPanel(
     const Scene& scene,
-    Selection selection,
+    const AppState& state,
     int width,
     int height,
     POINT point)
@@ -917,8 +1013,8 @@ std::optional<Selection> HitTestInfoPanel(
         return std::nullopt;
     }
 
-    const Selection validSelection = IsSelectionValid(scene, selection) ? selection : Selection{};
-    const std::vector<PanelRow> rows = BuildPanelRows(scene, validSelection);
+    const Selection validSelection = IsSelectionValid(scene, state.selection) ? state.selection : Selection{};
+    const std::vector<PanelRow> rows = BuildInfoPanelRows(scene, state, validSelection);
     const std::size_t rowIndex = static_cast<std::size_t>((point.y - 48) / lineHeight);
     if (rowIndex >= rows.size() || !rows[rowIndex].selectable) {
         return std::nullopt;
@@ -972,13 +1068,16 @@ bool NudgeSelection(AppState& state, Vector3 delta)
 {
     Scene* scene = CurrentScene(state);
     if (scene == nullptr || !IsSelectionValid(*scene, state.selection)) {
+        state.statusLine = L"Select an object before moving";
         return false;
     }
 
+    PushUndo(state);
     if (state.selection.kind == SelectionKind::Wire) {
         DrawableWire& wire = scene->wires[state.selection.index];
         wire.wire = wire.wire.Translated(delta);
         RefreshScenePoints(*scene);
+        state.statusLine = L"Moved wire " + wire.name;
         return true;
     }
 
@@ -986,10 +1085,227 @@ bool NudgeSelection(AppState& state, Vector3 delta)
         DrawablePlane& plane = scene->planes[state.selection.index];
         plane.plane = plane.plane.Translated(delta);
         RefreshScenePoints(*scene);
+        state.statusLine = L"Moved plane " + plane.name;
         return true;
     }
 
     return false;
+}
+
+bool NameExists(const Scene& scene, SelectionKind kind, const std::wstring& name)
+{
+    if (kind == SelectionKind::Wire) {
+        return std::any_of(scene.wires.begin(), scene.wires.end(), [&](const DrawableWire& wire) {
+            return wire.name == name;
+        });
+    }
+
+    if (kind == SelectionKind::WorkPlane) {
+        return std::any_of(scene.planes.begin(), scene.planes.end(), [&](const DrawablePlane& plane) {
+            return plane.name == name;
+        });
+    }
+
+    return false;
+}
+
+std::wstring MakeCopyName(const Scene& scene, SelectionKind kind, const std::wstring& originalName)
+{
+    const std::wstring base = originalName.empty() ? L"copy" : originalName + L"_copy";
+    if (!NameExists(scene, kind, base)) {
+        return base;
+    }
+
+    for (int suffix = 2; suffix < 10000; ++suffix) {
+        const std::wstring candidate = base + std::to_wstring(suffix);
+        if (!NameExists(scene, kind, candidate)) {
+            return candidate;
+        }
+    }
+
+    return base + L"_many";
+}
+
+Vector3 DuplicateOffsetForWire(const Scene& scene, const DrawableWire& wire)
+{
+    if (wire.sourcePlaneName.has_value()) {
+        for (const DrawablePlane& plane : scene.planes) {
+            if (plane.name == *wire.sourcePlaneName) {
+                return (plane.plane.UAxis() + plane.plane.VAxis()) * 0.5;
+            }
+        }
+    }
+
+    return {0.5, 0.5, 0.0};
+}
+
+Selection SelectionAfterErase(SelectionKind kind, std::size_t erasedIndex, std::size_t remainingCount)
+{
+    if (remainingCount == 0) {
+        return {};
+    }
+
+    return {kind, std::min(erasedIndex, remainingCount - 1)};
+}
+
+bool DuplicateSelection(AppState& state)
+{
+    Scene* scene = CurrentScene(state);
+    if (scene == nullptr || !IsSelectionValid(*scene, state.selection)) {
+        state.statusLine = L"Select an object before copying";
+        return false;
+    }
+
+    PushUndo(state);
+    if (state.selection.kind == SelectionKind::Wire) {
+        const DrawableWire source = scene->wires[state.selection.index];
+        DrawableWire copy = source;
+        copy.name = MakeCopyName(*scene, SelectionKind::Wire, source.name);
+        copy.wire = copy.wire.Translated(DuplicateOffsetForWire(*scene, source));
+        scene->wires.push_back(std::move(copy));
+        state.selection = {SelectionKind::Wire, scene->wires.size() - 1};
+        RefreshScenePoints(*scene);
+        state.statusLine = L"Copied wire " + scene->wires.back().name;
+        return true;
+    }
+
+    if (state.selection.kind == SelectionKind::WorkPlane) {
+        const DrawablePlane source = scene->planes[state.selection.index];
+        DrawablePlane copy = source;
+        copy.name = MakeCopyName(*scene, SelectionKind::WorkPlane, source.name);
+        copy.plane = copy.plane.Translated(copy.plane.Normal() * 0.75);
+        scene->planes.push_back(std::move(copy));
+        state.selection = {SelectionKind::WorkPlane, scene->planes.size() - 1};
+        RefreshScenePoints(*scene);
+        state.statusLine = L"Copied plane " + scene->planes.back().name;
+        return true;
+    }
+
+    return false;
+}
+
+bool DeleteSelection(AppState& state)
+{
+    Scene* scene = CurrentScene(state);
+    if (scene == nullptr || !IsSelectionValid(*scene, state.selection)) {
+        state.statusLine = L"Select an object before deleting";
+        return false;
+    }
+
+    PushUndo(state);
+    if (state.selection.kind == SelectionKind::Wire) {
+        const std::wstring deletedName = scene->wires[state.selection.index].name;
+        scene->wires.erase(scene->wires.begin() + static_cast<std::ptrdiff_t>(state.selection.index));
+        state.selection = SelectionAfterErase(SelectionKind::Wire, state.selection.index, scene->wires.size());
+        RefreshScenePoints(*scene);
+        state.statusLine = L"Deleted wire " + deletedName;
+        return true;
+    }
+
+    if (state.selection.kind == SelectionKind::WorkPlane) {
+        const std::wstring deletedName = scene->planes[state.selection.index].name;
+        scene->planes.erase(scene->planes.begin() + static_cast<std::ptrdiff_t>(state.selection.index));
+        state.selection = SelectionAfterErase(SelectionKind::WorkPlane, state.selection.index, scene->planes.size());
+        RefreshScenePoints(*scene);
+        state.statusLine = L"Deleted plane " + deletedName + L"  wires kept";
+        return true;
+    }
+
+    return false;
+}
+
+int RunEditSelfTest(std::vector<Scene> scenes)
+{
+    AppState state;
+    state.scenes = std::move(scenes);
+    if (state.scenes.empty()) {
+        state.scenes = BuildScenes();
+    }
+
+    state.sceneIndex = 0;
+    Scene* scene = CurrentScene(state);
+    if (scene == nullptr || scene->wires.empty() || scene->planes.empty()) {
+        return 20;
+    }
+
+    state.selection = {SelectionKind::Wire, 0};
+    const std::size_t originalWireCount = scene->wires.size();
+    const Vector3 originalWireStart = scene->wires[0].wire.Start();
+    if (!NudgeSelection(state, {1.0, 0.0, 0.0})) {
+        return 21;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || !AlmostEqual(scene->wires[0].wire.Start(), originalWireStart + Vector3{1.0, 0.0, 0.0})) {
+        return 22;
+    }
+
+    if (!UndoEdit(state)) {
+        return 23;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || !AlmostEqual(scene->wires[0].wire.Start(), originalWireStart)) {
+        return 24;
+    }
+
+    if (!RedoEdit(state)) {
+        return 25;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || !AlmostEqual(scene->wires[0].wire.Start(), originalWireStart + Vector3{1.0, 0.0, 0.0})) {
+        return 26;
+    }
+
+    if (!DuplicateSelection(state)) {
+        return 27;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || scene->wires.size() != originalWireCount + 1 || state.selection.kind != SelectionKind::Wire) {
+        return 28;
+    }
+
+    if (!DeleteSelection(state)) {
+        return 29;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || scene->wires.size() != originalWireCount) {
+        return 30;
+    }
+
+    if (!UndoEdit(state)) {
+        return 31;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || scene->wires.size() != originalWireCount + 1) {
+        return 32;
+    }
+
+    state.selection = {SelectionKind::WorkPlane, 0};
+    const std::size_t originalPlaneCount = scene->planes.size();
+    if (!DuplicateSelection(state)) {
+        return 33;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || scene->planes.size() != originalPlaneCount + 1 || state.selection.kind != SelectionKind::WorkPlane) {
+        return 34;
+    }
+
+    if (!DeleteSelection(state)) {
+        return 35;
+    }
+
+    scene = CurrentScene(state);
+    if (scene == nullptr || scene->planes.size() != originalPlaneCount) {
+        return 36;
+    }
+
+    return 0;
 }
 
 bool SaveBitmap(std::wstring_view path, int width, int height, const void* pixels)
@@ -1094,7 +1410,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 if (scene != nullptr) {
                     if (current.x >= panelLeft) {
                         const std::optional<Selection> panelSelection =
-                            HitTestInfoPanel(*scene, state->selection, width, height, current);
+                            HitTestInfoPanel(*scene, *state, width, height, current);
                         if (panelSelection.has_value()) {
                             state->selection = *panelSelection;
                         }
@@ -1142,19 +1458,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     case WM_KEYDOWN:
         if (state != nullptr) {
             bool handled = true;
+            const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
             const double step = CurrentNudgeStep();
-            if (wParam >= '1' && wParam <= '9') {
+            if (ctrlDown && wParam == 'Z') {
+                handled = shiftDown ? RedoEdit(*state) : UndoEdit(*state);
+            } else if (ctrlDown && wParam == 'Y') {
+                handled = RedoEdit(*state);
+            } else if (wParam >= '1' && wParam <= '9') {
                 const int requestedIndex = static_cast<int>(wParam - '1');
                 if (requestedIndex < static_cast<int>(state->scenes.size())) {
                     state->sceneIndex = requestedIndex;
                     state->selection = {};
+                    state->statusLine = L"Scene changed";
                 }
             } else if (wParam == 'R') {
                 state->camera = Camera{};
+                state->statusLine = L"Camera reset";
             } else if (wParam == VK_TAB) {
                 SelectNext(*state);
+                state->statusLine = L"Selected next";
             } else if (wParam == VK_ESCAPE) {
                 state->selection = {};
+                state->statusLine = L"Selection cleared";
+            } else if (wParam == 'C') {
+                handled = DuplicateSelection(*state);
+            } else if (wParam == VK_DELETE || wParam == VK_BACK) {
+                handled = DeleteSelection(*state);
             } else if (wParam == 'A') {
                 handled = NudgeSelection(*state, {-step, 0.0, 0.0});
             } else if (wParam == 'D') {
@@ -1278,6 +1608,7 @@ int wmain(int argc, wchar_t** argv)
     try {
         std::optional<std::filesystem::path> snapshotPath;
         std::optional<std::filesystem::path> projectPath;
+        bool selfTestEdits = false;
 
         for (int i = 1; i < argc; ++i) {
             const std::wstring_view argument = argv[i];
@@ -1291,6 +1622,8 @@ int wmain(int argc, wchar_t** argv)
                     return 7;
                 }
                 projectPath = std::filesystem::path(argv[++i]);
+            } else if (argument == L"--self-test-edits") {
+                selfTestEdits = true;
             } else {
                 return 8;
             }
@@ -1299,6 +1632,10 @@ int wmain(int argc, wchar_t** argv)
         std::vector<Scene> scenes = projectPath.has_value()
             ? LoadScenesFromProjectFile(*projectPath)
             : BuildScenes();
+
+        if (selfTestEdits) {
+            return RunEditSelfTest(std::move(scenes));
+        }
 
         if (snapshotPath.has_value()) {
             return WriteSnapshot(snapshotPath->wstring(), std::move(scenes));

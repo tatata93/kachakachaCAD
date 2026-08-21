@@ -393,6 +393,7 @@ std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
         if (selection.kind == SelectionKind::WorkPlane) {
             const DrawablePlane& plane = scene.planes[selection.index];
             add(L"  work plane  " + plane.name);
+            add(L"  move  A/D X  W/S Y  Q/E Z");
             add(L"  O " + FormatVector(plane.plane.Origin()));
             add(L"  U " + FormatVector(plane.plane.UAxis()));
             add(L"  V " + FormatVector(plane.plane.VAxis()));
@@ -400,6 +401,7 @@ std::vector<PanelRow> BuildPanelRows(const Scene& scene, Selection selection)
         } else if (selection.kind == SelectionKind::Wire) {
             const DrawableWire& wire = scene.wires[selection.index];
             add(L"  wire  " + wire.name);
+            add(L"  move  A/D X  W/S Y  Q/E Z");
             add(L"  kind  " + WireKindName(wire.wire.Kind()));
             add(L"  policy  " + PlanePolicyName(wire.planePolicy));
             if (wire.sourcePlaneName.has_value()) {
@@ -513,6 +515,20 @@ void DrawInfoPanel(HDC hdc, int width, int height, const Scene& scene, Selection
 
     SelectObject(hdc, oldFont);
     DeleteObject(bodyFont);
+}
+
+void RefreshScenePoints(Scene& scene)
+{
+    scene.points.clear();
+    for (const DrawablePlane& plane : scene.planes) {
+        scene.points.push_back(plane.plane.Origin());
+    }
+
+    for (const DrawableWire& wire : scene.wires) {
+        for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
+            scene.points.push_back(controlPoint);
+        }
+    }
 }
 
 std::vector<Scene> BuildScenes()
@@ -635,7 +651,6 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
             RGB(160, 190, 218),
             RGB(224, 234, 244),
         });
-        scene.points.push_back(workPlane.plane.Origin());
     }
 
     std::size_t wireIndex = 0;
@@ -648,14 +663,10 @@ Scene BuildSceneFromProject(const Project& project, const std::filesystem::path&
             PickWireColor(wireIndex),
             wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane ? 4 : 3,
         });
-
-        for (const Vector3& controlPoint : wire.wire.ControlPoints()) {
-            scene.points.push_back(controlPoint);
-        }
-
         ++wireIndex;
     }
 
+    RefreshScenePoints(scene);
     return scene;
 }
 
@@ -746,6 +757,7 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
     DrawTextLine(hdc, 18, 16, L"kachakachaCAD viewer");
     DrawTextLine(hdc, 18, 40, scene.title);
     DrawTextLine(hdc, 18, 66, L"click select  |  drag rotate  |  wheel zoom  |  Tab next  |  Esc clear  |  R reset");
+    DrawTextLine(hdc, 18, 90, L"move selected: A/D X  W/S Y  Q/E Z  |  Shift 5mm  |  Ctrl 0.1mm");
 
     SelectObject(hdc, oldFont);
     DeleteObject(font);
@@ -754,6 +766,17 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
 }
 
 const Scene* CurrentScene(const AppState& state)
+{
+    if (state.scenes.empty()) {
+        return nullptr;
+    }
+
+    const auto index = static_cast<std::size_t>(
+        std::clamp(state.sceneIndex, 0, static_cast<int>(state.scenes.size() - 1)));
+    return &state.scenes[index];
+}
+
+Scene* CurrentScene(AppState& state)
 {
     if (state.scenes.empty()) {
         return nullptr;
@@ -933,6 +956,42 @@ void SelectNext(AppState& state)
     }
 }
 
+double CurrentNudgeStep()
+{
+    if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+        return 5.0;
+    }
+    if ((GetKeyState(VK_CONTROL) & 0x8000) != 0) {
+        return 0.1;
+    }
+
+    return 0.5;
+}
+
+bool NudgeSelection(AppState& state, Vector3 delta)
+{
+    Scene* scene = CurrentScene(state);
+    if (scene == nullptr || !IsSelectionValid(*scene, state.selection)) {
+        return false;
+    }
+
+    if (state.selection.kind == SelectionKind::Wire) {
+        DrawableWire& wire = scene->wires[state.selection.index];
+        wire.wire = wire.wire.Translated(delta);
+        RefreshScenePoints(*scene);
+        return true;
+    }
+
+    if (state.selection.kind == SelectionKind::WorkPlane) {
+        DrawablePlane& plane = scene->planes[state.selection.index];
+        plane.plane = plane.plane.Translated(delta);
+        RefreshScenePoints(*scene);
+        return true;
+    }
+
+    return false;
+}
+
 bool SaveBitmap(std::wstring_view path, int width, int height, const void* pixels)
 {
     BITMAPFILEHEADER fileHeader = {};
@@ -1082,6 +1141,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_KEYDOWN:
         if (state != nullptr) {
+            bool handled = true;
+            const double step = CurrentNudgeStep();
             if (wParam >= '1' && wParam <= '9') {
                 const int requestedIndex = static_cast<int>(wParam - '1');
                 if (requestedIndex < static_cast<int>(state->scenes.size())) {
@@ -1094,6 +1155,18 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 SelectNext(*state);
             } else if (wParam == VK_ESCAPE) {
                 state->selection = {};
+            } else if (wParam == 'A') {
+                handled = NudgeSelection(*state, {-step, 0.0, 0.0});
+            } else if (wParam == 'D') {
+                handled = NudgeSelection(*state, {step, 0.0, 0.0});
+            } else if (wParam == 'S') {
+                handled = NudgeSelection(*state, {0.0, -step, 0.0});
+            } else if (wParam == 'W') {
+                handled = NudgeSelection(*state, {0.0, step, 0.0});
+            } else if (wParam == 'Q') {
+                handled = NudgeSelection(*state, {0.0, 0.0, -step});
+            } else if (wParam == 'E') {
+                handled = NudgeSelection(*state, {0.0, 0.0, step});
             } else if (wParam == VK_LEFT) {
                 state->camera.yaw -= 0.1;
             } else if (wParam == VK_RIGHT) {
@@ -1102,8 +1175,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 state->camera.pitch = std::clamp(state->camera.pitch + 0.1, -1.25, 1.25);
             } else if (wParam == VK_DOWN) {
                 state->camera.pitch = std::clamp(state->camera.pitch - 0.1, -1.25, 1.25);
+            } else {
+                handled = false;
             }
-            InvalidateRect(hwnd, nullptr, FALSE);
+
+            if (handled) {
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
         }
         return 0;
 

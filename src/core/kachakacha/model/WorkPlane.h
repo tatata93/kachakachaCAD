@@ -33,6 +33,7 @@ public:
     [[nodiscard]] const geometry::Vector3& Normal() const noexcept { return normal_; }
 
     [[nodiscard]] WorkPlane Offset(double distance) const;
+    [[nodiscard]] WorkPlane Translated(geometry::Vector3 delta) const;
     [[nodiscard]] WorkPlane RotateAroundAxis(
         geometry::Vector3 axisPoint,
         geometry::Vector3 axisDirection,
@@ -55,4 +56,3 @@ private:
 };
 
 } // namespace kachakacha::model
-

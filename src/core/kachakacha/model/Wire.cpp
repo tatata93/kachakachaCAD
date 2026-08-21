@@ -223,4 +223,32 @@ bool Wire::IsClosed(double epsilon) const noexcept
     return AlmostEqual(Start(), End(), epsilon);
 }
 
+Wire Wire::Translated(Vector3 delta) const
+{
+    if (!delta.IsFinite()) {
+        throw std::invalid_argument("Wire translation contains a non-finite value.");
+    }
+
+    std::vector<Vector3> translatedPoints;
+    translatedPoints.reserve(controlPoints_.size());
+    for (const Vector3& point : controlPoints_) {
+        translatedPoints.push_back(point + delta);
+    }
+
+    if (kind_ == WireKind::Circle || kind_ == WireKind::CircularArc) {
+        return {
+            kind_,
+            std::move(translatedPoints),
+            arcCenter_ + delta,
+            arcUAxis_,
+            arcVAxis_,
+            arcRadius_,
+            arcStartAngleRadians_,
+            arcSweepAngleRadians_,
+        };
+    }
+
+    return {kind_, std::move(translatedPoints)};
+}
+
 } // namespace kachakacha::model

@@ -49,6 +49,7 @@ public:
     [[nodiscard]] geometry::Vector3 End() const { return Evaluate(1.0); }
 
     [[nodiscard]] geometry::Vector3 Evaluate(double t) const;
+    [[nodiscard]] Wire Translated(geometry::Vector3 delta) const;
     [[nodiscard]] bool IsClosed(double epsilon = 1.0e-9) const noexcept;
 
 private:

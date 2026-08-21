@@ -123,6 +123,33 @@ void SketchArcOnWorkPlaneBecomesWorldWire()
     RequireNear(wire.End(), {10.0, 2.0, 4.5}, "arc end");
 }
 
+void TranslatedLineKeepsShape()
+{
+    const Wire wire = Wire::Line({1.0, 2.0, 3.0}, {4.0, 6.0, 8.0});
+    const Wire moved = wire.Translated({10.0, -2.0, 0.5});
+
+    Require(moved.Kind() == WireKind::Line, "translated line kind");
+    RequireNear(moved.Start(), {11.0, 0.0, 3.5}, "translated line start");
+    RequireNear(moved.End(), {14.0, 4.0, 8.5}, "translated line end");
+    RequireNear(moved.Evaluate(0.5), {12.5, 2.0, 6.0}, "translated line midpoint");
+}
+
+void TranslatedArcKeepsFrameAndRadius()
+{
+    const Wire wire = Wire::CircularArc(
+        {1.0, 2.0, 3.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0},
+        2.0,
+        0.0,
+        Pi / 2.0);
+    const Wire moved = wire.Translated({5.0, 0.5, -1.0});
+
+    Require(moved.Kind() == WireKind::CircularArc, "translated arc kind");
+    RequireNear(moved.Start(), {6.0, 4.5, 2.0}, "translated arc start");
+    RequireNear(moved.End(), {6.0, 2.5, 4.0}, "translated arc end");
+}
+
 } // namespace
 
 int main()
@@ -134,6 +161,8 @@ int main()
         SketchBezierOnWorkPlaneBecomesWorldWire();
         CircleWireEvaluatesOnPlane();
         SketchArcOnWorkPlaneBecomesWorldWire();
+        TranslatedLineKeepsShape();
+        TranslatedArcKeepsFrameAndRadius();
     } catch (const std::exception& error) {
         std::cerr << "sketch_wire_tests failed: " << error.what() << '\n';
         return 1;

@@ -68,6 +68,22 @@ void OffsetMovesAlongNormal()
     RequireNear(shifted.Normal(), {0.0, 0.0, 1.0}, "offset normal");
 }
 
+void TranslationMovesOriginAndKeepsAxes()
+{
+    const WorkPlane base = WorkPlane::FromPointNormal(
+        {10.0, 0.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0});
+
+    const WorkPlane moved = base.Translated({2.0, 3.0, 4.0});
+
+    RequireNear(moved.Origin(), {12.0, 3.0, 4.0}, "translated origin");
+    RequireNear(moved.UAxis(), base.UAxis(), "translated u axis");
+    RequireNear(moved.VAxis(), base.VAxis(), "translated v axis");
+    RequireNear(moved.Normal(), base.Normal(), "translated normal");
+    RequireNear(moved.ToWorld(2.0, 3.0), {12.0, 5.0, 7.0}, "translated to world");
+}
+
 void RotationAroundEdgeKeepsAxisAndTiltsPlane()
 {
     const WorkPlane base = WorkPlane::FromThreePoints(
@@ -123,6 +139,7 @@ int main()
     try {
         ThreePointPlaneUsesSelectedPoints();
         OffsetMovesAlongNormal();
+        TranslationMovesOriginAndKeepsAxes();
         RotationAroundEdgeKeepsAxisAndTiltsPlane();
         PointNormalPlaneProjectsAndRestoresCoordinates();
         CollinearThreePointPlaneIsRejected();
@@ -134,4 +151,3 @@ int main()
     std::cout << "workplane_tests passed\n";
     return 0;
 }
-

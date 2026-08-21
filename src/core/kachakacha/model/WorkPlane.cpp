@@ -84,6 +84,15 @@ WorkPlane WorkPlane::Offset(double distance) const
     return FromOriginAxes(origin_ + normal_ * distance, uAxis_, normal_);
 }
 
+WorkPlane WorkPlane::Translated(Vector3 delta) const
+{
+    if (!delta.IsFinite()) {
+        throw std::invalid_argument("WorkPlane translation contains a non-finite value.");
+    }
+
+    return FromOriginAxes(origin_ + delta, uAxis_, normal_);
+}
+
 WorkPlane WorkPlane::RotateAroundAxis(Vector3 axisPoint, Vector3 axisDirection, double angleRadians) const
 {
     if (!axisPoint.IsFinite() || !axisDirection.IsFinite() || !std::isfinite(angleRadians)) {
@@ -114,4 +123,3 @@ PlaneCoordinates WorkPlane::Project(Vector3 point) const noexcept
 }
 
 } // namespace kachakacha::model
-

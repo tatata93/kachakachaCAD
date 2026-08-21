@@ -29,11 +29,13 @@
 using kachakacha::geometry::Vector3;
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::WriteProjectScript;
 using kachakacha::model::NamedWire;
 using kachakacha::model::NamedWorkPlane;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
+using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 
@@ -109,6 +111,7 @@ struct AppState {
     Selection selection;
     std::vector<EditorSnapshot> undoStack;
     std::vector<EditorSnapshot> redoStack;
+    std::filesystem::path savePath;
     std::wstring statusLine = L"Ready";
     bool dragging = false;
     bool movedWhileDragging = false;
@@ -168,6 +171,21 @@ std::wstring ToWide(std::string_view text)
     output.reserve(text.size());
     for (char character : text) {
         output.push_back(static_cast<unsigned char>(character));
+    }
+
+    return output;
+}
+
+std::string ToNarrow(std::wstring_view text)
+{
+    std::string output;
+    output.reserve(text.size());
+    for (wchar_t character : text) {
+        if (character >= 0 && character <= 0x7f) {
+            output.push_back(static_cast<char>(character));
+        } else {
+            output.push_back('_');
+        }
     }
 
     return output;
@@ -467,6 +485,9 @@ std::vector<PanelRow> BuildInfoPanelRows(const Scene& scene, const AppState& sta
             + L"  redo " + std::wstring(state.redoStack.empty() ? L"no" : L"yes"),
         {},
         false});
+    if (!state.savePath.empty()) {
+        rows.push_back({L"  save  " + state.savePath.filename().wstring(), {}, false});
+    }
     rows.push_back({L"", {}, false});
 
     const std::vector<PanelRow> inspectorRows = BuildPanelRows(scene, selection);
@@ -795,7 +816,7 @@ void DrawScene(HDC hdc, int width, int height, const AppState& state)
     DrawTextLine(hdc, 18, 40, scene.title);
     DrawTextLine(hdc, 18, 66, L"click select  |  drag rotate  |  wheel zoom  |  Tab next  |  Esc clear  |  R reset");
     DrawTextLine(hdc, 18, 90, L"move selected: A/D X  W/S Y  Q/E Z  |  Shift 5mm  |  Ctrl 0.1mm");
-    DrawTextLine(hdc, 18, 114, L"edit selected: C copy  |  Delete remove  |  Ctrl+Z undo  |  Ctrl+Y redo");
+    DrawTextLine(hdc, 18, 114, L"edit selected: C copy  |  Delete remove  |  Ctrl+Z undo  |  Ctrl+Y redo  |  Ctrl+S save");
 
     SelectObject(hdc, oldFont);
     DeleteObject(font);
@@ -1214,6 +1235,81 @@ bool DeleteSelection(AppState& state)
     return false;
 }
 
+bool SceneHasPlane(const Scene& scene, std::wstring_view name)
+{
+    return std::any_of(scene.planes.begin(), scene.planes.end(), [&](const DrawablePlane& plane) {
+        return plane.name == name;
+    });
+}
+
+Project ProjectFromScene(const Scene& scene)
+{
+    Project project;
+    for (const DrawablePlane& plane : scene.planes) {
+        project.AddWorkPlane(ToNarrow(plane.name), plane.plane);
+    }
+
+    for (const DrawableWire& wire : scene.wires) {
+        WireMetadata metadata;
+        metadata.planePolicy = wire.planePolicy;
+        if (wire.sourcePlaneName.has_value() && SceneHasPlane(scene, *wire.sourcePlaneName)) {
+            metadata.sourcePlaneName = ToNarrow(*wire.sourcePlaneName);
+        }
+
+        project.AddWire(ToNarrow(wire.name), wire.wire, std::move(metadata));
+    }
+
+    return project;
+}
+
+bool WriteSceneProjectScript(const Scene& scene, const std::filesystem::path& path, std::wstring& errorMessage)
+{
+    try {
+        if (path.has_parent_path()) {
+            std::filesystem::create_directories(path.parent_path());
+        }
+
+        std::ofstream output(path);
+        if (!output) {
+            errorMessage = L"Could not open save file";
+            return false;
+        }
+
+        WriteProjectScript(output, ProjectFromScene(scene));
+        if (!output.good()) {
+            errorMessage = L"Could not write save file";
+            return false;
+        }
+
+        return true;
+    } catch (const std::exception& error) {
+        errorMessage = ToWide(error.what());
+        return false;
+    }
+}
+
+bool SaveCurrentScene(AppState& state)
+{
+    const Scene* scene = CurrentScene(state);
+    if (scene == nullptr) {
+        state.statusLine = L"Nothing to save";
+        return false;
+    }
+
+    if (state.savePath.empty()) {
+        state.savePath = std::filesystem::current_path() / "out" / "kachakacha-edited.kcd";
+    }
+
+    std::wstring errorMessage;
+    if (!WriteSceneProjectScript(*scene, state.savePath, errorMessage)) {
+        state.statusLine = L"Save failed: " + errorMessage;
+        return false;
+    }
+
+    state.statusLine = L"Saved " + state.savePath.filename().wstring();
+    return true;
+}
+
 int RunEditSelfTest(std::vector<Scene> scenes)
 {
     AppState state;
@@ -1303,6 +1399,14 @@ int RunEditSelfTest(std::vector<Scene> scenes)
     scene = CurrentScene(state);
     if (scene == nullptr || scene->planes.size() != originalPlaneCount) {
         return 36;
+    }
+
+    std::ostringstream output;
+    WriteProjectScript(output, ProjectFromScene(*scene));
+    std::istringstream input(output.str());
+    const Project savedProject = LoadProjectScript(input, "viewer self test save");
+    if (savedProject.Wires().size() != scene->wires.size() || savedProject.WorkPlanes().size() != scene->planes.size()) {
+        return 37;
     }
 
     return 0;
@@ -1465,6 +1569,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
                 handled = shiftDown ? RedoEdit(*state) : UndoEdit(*state);
             } else if (ctrlDown && wParam == 'Y') {
                 handled = RedoEdit(*state);
+            } else if (ctrlDown && wParam == 'S') {
+                handled = SaveCurrentScene(*state);
             } else if (wParam >= '1' && wParam <= '9') {
                 const int requestedIndex = static_cast<int>(wParam - '1');
                 if (requestedIndex < static_cast<int>(state->scenes.size())) {
@@ -1549,10 +1655,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
     }
 }
 
-int RunWindow(std::vector<Scene> scenes)
+std::filesystem::path DefaultSavePath(const std::optional<std::filesystem::path>& projectPath)
+{
+    std::filesystem::path filename = "kachakacha-edited.kcd";
+    if (projectPath.has_value() && !projectPath->stem().empty()) {
+        filename = projectPath->stem().wstring() + L"-edited.kcd";
+    }
+
+    return std::filesystem::current_path() / "out" / filename;
+}
+
+int RunWindow(std::vector<Scene> scenes, std::filesystem::path savePath)
 {
     AppState state;
     state.scenes = std::move(scenes);
+    state.savePath = std::move(savePath);
     if (state.scenes.empty()) {
         state.scenes = BuildScenes();
     }
@@ -1608,6 +1725,7 @@ int wmain(int argc, wchar_t** argv)
     try {
         std::optional<std::filesystem::path> snapshotPath;
         std::optional<std::filesystem::path> projectPath;
+        std::optional<std::filesystem::path> exportPath;
         bool selfTestEdits = false;
 
         for (int i = 1; i < argc; ++i) {
@@ -1622,6 +1740,11 @@ int wmain(int argc, wchar_t** argv)
                     return 7;
                 }
                 projectPath = std::filesystem::path(argv[++i]);
+            } else if (argument == L"--export") {
+                if (i + 1 >= argc) {
+                    return 9;
+                }
+                exportPath = std::filesystem::path(argv[++i]);
             } else if (argument == L"--self-test-edits") {
                 selfTestEdits = true;
             } else {
@@ -1637,11 +1760,20 @@ int wmain(int argc, wchar_t** argv)
             return RunEditSelfTest(std::move(scenes));
         }
 
+        if (exportPath.has_value()) {
+            if (scenes.empty()) {
+                return 10;
+            }
+
+            std::wstring errorMessage;
+            return WriteSceneProjectScript(scenes.front(), *exportPath, errorMessage) ? 0 : 11;
+        }
+
         if (snapshotPath.has_value()) {
             return WriteSnapshot(snapshotPath->wstring(), std::move(scenes));
         }
 
-        return RunWindow(std::move(scenes));
+        return RunWindow(std::move(scenes), DefaultSavePath(projectPath));
     } catch (const std::exception&) {
         return 1;
     }

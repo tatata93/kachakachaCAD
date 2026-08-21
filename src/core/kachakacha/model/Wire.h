@@ -14,6 +14,15 @@ enum class WireKind {
     CircularArc,
 };
 
+struct WireArcData {
+    geometry::Vector3 center;
+    geometry::Vector3 uAxis;
+    geometry::Vector3 vAxis;
+    double radius = 0.0;
+    double startAngleRadians = 0.0;
+    double sweepAngleRadians = 0.0;
+};
+
 class Wire {
 public:
     [[nodiscard]] static Wire Line(
@@ -48,6 +57,7 @@ public:
     [[nodiscard]] geometry::Vector3 Start() const { return Evaluate(0.0); }
     [[nodiscard]] geometry::Vector3 End() const { return Evaluate(1.0); }
 
+    [[nodiscard]] WireArcData ArcData() const;
     [[nodiscard]] geometry::Vector3 Evaluate(double t) const;
     [[nodiscard]] Wire Translated(geometry::Vector3 delta) const;
     [[nodiscard]] bool IsClosed(double epsilon = 1.0e-9) const noexcept;

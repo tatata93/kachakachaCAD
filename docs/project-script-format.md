@@ -54,6 +54,14 @@ plane_rotate NAME SOURCE ax ay az dx dy dz angleDegrees
 line3d NAME sx sy sz ex ey ez
 ```
 
+### 3Dポリライン
+
+```text
+polyline3d NAME x1 y1 z1 x2 y2 z2 [x3 y3 z3 ...]
+```
+
+最低2点が必要。
+
 ### 3D Cubic Bezier
 
 ```text
@@ -75,6 +83,14 @@ arc3d NAME cx cy cz ux uy uz vx vy vz radius startDegrees sweepDegrees
 ```
 
 角度は度数法。`startDegrees` は開始角、`sweepDegrees` はそこから進む角度。
+
+### 直接3Dワイヤーの平面メタ情報
+
+```text
+wire_meta NAME PLANE|none|- free|reference|locked
+```
+
+`line3d`、`polyline3d`、`bezier3d`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
 
 ### 作業平面上の直線
 
@@ -118,4 +134,10 @@ locked     作成元平面上に固定する
 
 ```powershell
 .\scripts\snapshot-viewer.ps1 -Project examples\first-check.kcd
+```
+
+ビューアで編集した内容は `Ctrl+S` で `out` フォルダへ保存できる。コマンドだけで書き出す場合:
+
+```powershell
+.\scripts\export-project.ps1 -Project examples\first-check.kcd -OutputPath out\first-check-export.kcd
 ```

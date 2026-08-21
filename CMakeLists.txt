@@ -96,5 +96,10 @@ if(KACHACAD_BUILD_TESTS)
             NAME viewer_project_edit_smoke
             COMMAND $<TARGET_FILE:kachakacha_viewer> --self-test-edits --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd"
         )
+
+        add_test(
+            NAME viewer_export_project
+            COMMAND $<TARGET_FILE:kachakacha_viewer> --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd" --export "${CMAKE_BINARY_DIR}/viewer-export.kcd"
+        )
     endif()
 endif()

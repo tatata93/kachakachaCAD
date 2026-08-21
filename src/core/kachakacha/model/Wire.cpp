@@ -172,6 +172,22 @@ Wire Wire::CircularArc(
     };
 }
 
+WireArcData Wire::ArcData() const
+{
+    if (kind_ != WireKind::Circle && kind_ != WireKind::CircularArc) {
+        throw std::logic_error("Wire is not an arc or circle.");
+    }
+
+    return {
+        arcCenter_,
+        arcUAxis_,
+        arcVAxis_,
+        arcRadius_,
+        arcStartAngleRadians_,
+        arcSweepAngleRadians_,
+    };
+}
+
 Vector3 Wire::Evaluate(double t) const
 {
     if (!std::isfinite(t)) {

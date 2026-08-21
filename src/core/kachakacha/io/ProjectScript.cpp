@@ -3,9 +3,14 @@
 #include "kachakacha/model/Sketch.h"
 
 #include <cmath>
+#include <iomanip>
+#include <optional>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace kachakacha::io {
 
@@ -14,6 +19,8 @@ using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
+using kachakacha::model::WireArcData;
+using kachakacha::model::WireKind;
 using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
@@ -107,6 +114,47 @@ WirePlanePolicy ReadOptionalSketchPolicy(std::istringstream& stream, std::string
     return policy;
 }
 
+std::string WirePlanePolicyToken(WirePlanePolicy policy)
+{
+    switch (policy) {
+    case WirePlanePolicy::Free3D:
+        return "free";
+    case WirePlanePolicy::ReferenceOnly:
+        return "reference";
+    case WirePlanePolicy::LockedToPlane:
+        return "locked";
+    }
+
+    return "free";
+}
+
+bool IsScriptNameSafe(std::string_view name)
+{
+    if (name.empty()) {
+        return false;
+    }
+
+    for (char character : name) {
+        if (std::isspace(static_cast<unsigned char>(character)) || character == '#') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void RequireScriptNameSafe(std::string_view name, const char* label)
+{
+    if (!IsScriptNameSafe(name)) {
+        throw std::invalid_argument(std::string(label) + " name cannot be empty or contain whitespace/#.");
+    }
+}
+
+void WriteVector3(std::ostream& output, const Vector3& value)
+{
+    output << value.x << ' ' << value.y << ' ' << value.z;
+}
+
 Vector3 ReadVector3(std::istringstream& stream, std::string_view sourceName, int lineNumber, const char* label)
 {
     const double x = ReadDouble(stream, sourceName, lineNumber, label);
@@ -194,6 +242,18 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector3 end = ReadVector3(stream, sourceName, lineNumber, "end");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddWire(name, Wire::Line(start, end));
+            } else if (command == "polyline3d") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                std::vector<Vector3> points;
+                while (true) {
+                    stream >> std::ws;
+                    if (stream.eof()) {
+                        break;
+                    }
+
+                    points.push_back(ReadVector3(stream, sourceName, lineNumber, "polyline point"));
+                }
+                project.AddWire(name, Wire::Polyline(std::move(points)));
             } else if (command == "bezier3d") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const Vector3 start = ReadVector3(stream, sourceName, lineNumber, "start");
@@ -228,6 +288,23 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                         radius,
                         startDegrees * Pi / 180.0,
                         sweepDegrees * Pi / 180.0));
+            } else if (command == "wire_meta") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const std::string sourcePlaneName = ReadName(stream, sourceName, lineNumber, "source plane");
+                const std::string policyToken = ReadName(stream, sourceName, lineNumber, "wire plane policy");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+
+                std::optional<std::string> sourcePlane;
+                if (sourcePlaneName != "-" && sourcePlaneName != "none") {
+                    sourcePlane = sourcePlaneName;
+                }
+
+                project.SetWireMetadata(
+                    name,
+                    WireMetadata{
+                        std::move(sourcePlane),
+                        ParseWirePlanePolicy(policyToken, sourceName, lineNumber),
+                    });
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -283,6 +360,102 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
     }
 
     return project;
+}
+
+void WriteProjectScript(std::ostream& output, const Project& project)
+{
+    output << std::setprecision(17);
+    output << "# kachakachaCAD project script\n";
+    output << "# Units are millimeters.\n\n";
+
+    for (const auto& workPlane : project.WorkPlanes()) {
+        RequireScriptNameSafe(workPlane.name, "Work plane");
+        output << "plane_point_normal " << workPlane.name << ' ';
+        WriteVector3(output, workPlane.plane.Origin());
+        output << "  ";
+        WriteVector3(output, workPlane.plane.Normal());
+        output << "  ";
+        WriteVector3(output, workPlane.plane.UAxis());
+        output << '\n';
+    }
+
+    if (!project.WorkPlanes().empty() && !project.Wires().empty()) {
+        output << '\n';
+    }
+
+    for (const auto& namedWire : project.Wires()) {
+        RequireScriptNameSafe(namedWire.name, "Wire");
+        const Wire& wire = namedWire.wire;
+        const std::vector<Vector3>& points = wire.ControlPoints();
+
+        switch (wire.Kind()) {
+        case WireKind::Line:
+            output << "line3d " << namedWire.name << ' ';
+            WriteVector3(output, wire.Start());
+            output << "  ";
+            WriteVector3(output, wire.End());
+            output << '\n';
+            break;
+
+        case WireKind::Polyline:
+            output << "polyline3d " << namedWire.name;
+            for (const Vector3& point : points) {
+                output << ' ';
+                WriteVector3(output, point);
+            }
+            output << '\n';
+            break;
+
+        case WireKind::CubicBezier:
+            output << "bezier3d " << namedWire.name;
+            for (const Vector3& point : points) {
+                output << ' ';
+                WriteVector3(output, point);
+            }
+            output << '\n';
+            break;
+
+        case WireKind::Circle: {
+            const WireArcData arc = wire.ArcData();
+            output << "circle3d " << namedWire.name << ' ';
+            WriteVector3(output, arc.center);
+            output << "  ";
+            WriteVector3(output, arc.uAxis);
+            output << "  ";
+            WriteVector3(output, arc.vAxis);
+            output << ' ' << arc.radius << '\n';
+            break;
+        }
+
+        case WireKind::CircularArc: {
+            const WireArcData arc = wire.ArcData();
+            output << "arc3d " << namedWire.name << ' ';
+            WriteVector3(output, arc.center);
+            output << "  ";
+            WriteVector3(output, arc.uAxis);
+            output << "  ";
+            WriteVector3(output, arc.vAxis);
+            output << ' ' << arc.radius
+                   << ' ' << arc.startAngleRadians * 180.0 / Pi
+                   << ' ' << arc.sweepAngleRadians * 180.0 / Pi
+                   << '\n';
+            break;
+        }
+        }
+
+        const bool hasMetadata = namedWire.metadata.sourcePlaneName.has_value()
+            || namedWire.metadata.planePolicy != WirePlanePolicy::Free3D;
+        if (hasMetadata) {
+            output << "wire_meta " << namedWire.name << ' ';
+            if (namedWire.metadata.sourcePlaneName.has_value()) {
+                RequireScriptNameSafe(*namedWire.metadata.sourcePlaneName, "Wire source plane");
+                output << *namedWire.metadata.sourcePlaneName;
+            } else {
+                output << '-';
+            }
+            output << ' ' << WirePlanePolicyToken(namedWire.metadata.planePolicy) << '\n';
+        }
+    }
 }
 
 } // namespace kachakacha::io

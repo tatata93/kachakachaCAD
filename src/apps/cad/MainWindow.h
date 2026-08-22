@@ -77,6 +77,8 @@ private:
     void ProjectSelectedWiresToSurface();
     void CreatePlateFromSurface();
     void UpdateSelectedPlate();
+    void AddSelectedPlateOpenings();
+    void RemoveSelectedPlateOpenings();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshActiveWorkPlane();
@@ -196,6 +198,7 @@ private:
     QDoubleSpinBox* plateThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QComboBox* plateMaterial_ = nullptr;
+    QLabel* plateOpeningSelectionLabel_ = nullptr;
 
     QComboBox* exportPlane_ = nullptr;
     QComboBox* exportScope_ = nullptr;

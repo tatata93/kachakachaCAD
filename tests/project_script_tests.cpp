@@ -128,17 +128,57 @@ void SurfacesAndProjectedWiresRoundTrip()
         sketch_circle light_plan plan 6 0 1.25 reference
         surface_ruled nose_skin section_a section_b
         wire_project light_on_skin light_plan nose_skin 0 0 -1
+        plate nose_plate nose_skin 0.5 centered styrene
+        plate_opening nose_plate light_on_skin
     )");
     auto project = LoadProjectScript(input, "surface-test");
     Require(project.Surfaces().size() == 1, "surface count");
     Require(project.Wires().size() == 4, "projected wire count");
     Require(project.Wires()[3].projection.has_value(), "projection relation exists");
     Require(project.Wires()[3].wire.IsClosed(), "projected light remains closed");
+    Require(project.Plates().size() == 1, "plate with opening count");
+    Require(project.Plates()[0].openingWireNames == std::vector<std::string>{"light_on_skin"}, "plate opening relation exists");
+
+    bool unprojectedOpeningRejected = false;
+    try {
+        project.AddPlateOpening("nose_plate", "light_plan");
+    } catch (const std::invalid_argument&) {
+        unprojectedOpeningRejected = true;
+    }
+    Require(unprojectedOpeningRejected, "unprojected drawing cannot be used directly as a plate opening");
+
+    bool usedSectionRejected = false;
+    try {
+        project.RemoveWire("section_a");
+    } catch (const std::invalid_argument&) {
+        usedSectionRejected = true;
+    }
+    Require(usedSectionRejected, "surface section wire cannot be deleted while in use");
+
+    bool projectionSourceRejected = false;
+    try {
+        project.RemoveWire("light_plan");
+    } catch (const std::invalid_argument&) {
+        projectionSourceRejected = true;
+    }
+    Require(projectionSourceRejected, "projection source wire cannot be deleted while in use");
 
     const Vector3 beforeUpdate = project.Wires()[3].wire.Evaluate(0.25);
     project.UpdateWire("section_b", Wire::CubicBezier(
         {12.0, -6.0, 0.0}, {12.0, -2.0, 7.0}, {12.0, 2.0, 7.0}, {12.0, 6.0, 0.0}));
     Require(!AlmostEqual(beforeUpdate, project.Wires()[3].wire.Evaluate(0.25), 1.0e-6), "projection rebuilds after section edit");
+    Require(project.Plates()[0].openingWireNames[0] == "light_on_skin", "opening relation survives section edit");
+
+    bool usedOpeningRejected = false;
+    try {
+        project.RemoveWire("light_on_skin");
+    } catch (const std::invalid_argument&) {
+        usedOpeningRejected = true;
+    }
+    Require(usedOpeningRejected, "opening wire cannot be deleted while in use");
+    project.RemovePlateOpening("nose_plate", "light_on_skin");
+    Require(project.Plates()[0].openingWireNames.empty(), "remove plate opening relation");
+    project.AddPlateOpening("nose_plate", "light_on_skin");
 
     const Vector3 sectionBeforeRejectedEdit = project.Wires()[1].wire.Start();
     const Vector3 projectionBeforeRejectedEdit = project.Wires()[3].wire.Evaluate(0.25);
@@ -159,6 +199,8 @@ void SurfacesAndProjectedWiresRoundTrip()
     const auto roundTripped = LoadProjectScript(roundTripInput, "surface-roundtrip");
     Require(roundTripped.Surfaces().size() == 1, "roundtrip surface count");
     Require(roundTripped.Wires().size() == 4, "roundtrip projected wire count");
+    Require(roundTripped.Plates().size() == 1, "roundtrip plate with opening");
+    Require(roundTripped.Plates()[0].openingWireNames == std::vector<std::string>{"light_on_skin"}, "roundtrip plate opening");
     Require(roundTripped.Wires()[3].projection->sourceWireName == "light_plan", "roundtrip projection source");
     RequireNear(roundTripped.Wires()[3].wire.Evaluate(0.5), project.Wires()[3].wire.Evaluate(0.5), "roundtrip projected geometry");
 }

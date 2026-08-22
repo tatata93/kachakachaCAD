@@ -53,6 +53,7 @@ struct NamedPlate {
     Plate plate;
     std::string sourceSurfaceName;
     std::string material;
+    std::vector<std::string> openingWireNames;
     bool visible = true;
 };
 
@@ -87,6 +88,8 @@ public:
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
     void SetPlateVisible(std::string_view name, bool visible);
+    void AddPlateOpening(std::string_view plateName, std::string wireName);
+    void RemovePlateOpening(std::string_view plateName, std::string_view wireName);
     bool RemoveWorkPlane(std::string_view name);
     bool RemoveWire(std::string_view name);
     bool RemoveSurface(std::string_view name);

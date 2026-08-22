@@ -31,6 +31,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QShortcut>
 #include <QSizePolicy>
@@ -61,6 +62,7 @@ using kachakacha::io::WritePlanarDxf;
 using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::Project;
+using kachakacha::model::PlateDevelopability;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::SurfaceKind;
@@ -1086,8 +1088,33 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
     connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
     layout->addWidget(plateUpdateButton);
+
+    auto* openingTitle = new QLabel(QStringLiteral("板材に開口"));
+    openingTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(openingTitle);
+    plateOpeningSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 閉じた投影輪郭0本"));
+    plateOpeningSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(plateOpeningSelectionLabel_);
+
+    auto* openingButtons = new QWidget;
+    auto* openingButtonLayout = new QHBoxLayout(openingButtons);
+    openingButtonLayout->setContentsMargins(0, 0, 0, 0);
+    openingButtonLayout->setSpacing(6);
+    auto* addOpeningButton = new QPushButton(QStringLiteral("開口に追加"));
+    addOpeningButton->setObjectName("primaryButton");
+    connect(addOpeningButton, &QPushButton::clicked, this, &MainWindow::AddSelectedPlateOpenings);
+    auto* removeOpeningButton = new QPushButton(QStringLiteral("開口から外す"));
+    connect(removeOpeningButton, &QPushButton::clicked, this, &MainWindow::RemoveSelectedPlateOpenings);
+    openingButtonLayout->addWidget(addOpeningButton, 1);
+    openingButtonLayout->addWidget(removeOpeningButton, 1);
+    layout->addWidget(openingButtons);
     layout->addStretch(1);
-    return panel;
+
+    auto* scrollArea = new QScrollArea;
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidget(panel);
+    return scrollArea;
 }
 
 QWidget* MainWindow::BuildOutputPanel()
@@ -2348,6 +2375,82 @@ void MainWindow::UpdateSelectedPlate()
     }
 }
 
+void MainWindow::AddSelectedPlateOpenings()
+{
+    try {
+        const std::vector<CadSelection> selections = viewport_->Selections();
+        int plateIndex = -1;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : selections) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                if (plateIndex >= 0 && plateIndex != selection.index) {
+                    throw std::invalid_argument("開口を作る板材は1枚だけ選択してください。");
+                }
+                plateIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (plateIndex < 0 || wireIndices.empty()) {
+            throw std::invalid_argument("板材1枚と、その面へ投影した閉じた輪郭を選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = candidate.Plates()[plateIndex].name;
+        for (int wireIndex : wireIndices) {
+            candidate.AddPlateOpening(plateName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(QStringLiteral("板材へ%1個の開口を追加しました").arg(wireIndices.size()), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::RemoveSelectedPlateOpenings()
+{
+    try {
+        const std::vector<CadSelection> selections = viewport_->Selections();
+        int plateIndex = -1;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : selections) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                if (plateIndex >= 0 && plateIndex != selection.index) {
+                    throw std::invalid_argument("開口を外す板材は1枚だけ選択してください。");
+                }
+                plateIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (plateIndex < 0 || wireIndices.empty()) {
+            throw std::invalid_argument("板材1枚と、開口から外す輪郭を選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = candidate.Plates()[plateIndex].name;
+        for (int wireIndex : wireIndices) {
+            candidate.RemovePlateOpening(plateName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(QStringLiteral("板材から%1個の開口を外しました").arg(wireIndices.size()), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::ApplyMeetSelectedLines()
 {
     try {
@@ -2891,6 +2994,7 @@ bool MainWindow::RunCreationSelfTest()
         || !project_.Wires()[projectedLightIndex].projection.has_value()) {
         return fail("redo surface projection");
     }
+    const std::string projectedLightName = project_.Wires()[projectedLightIndex].name;
 
     plateSurface_->setCurrentText("__ui_nose_skin");
     plateName_->setText("__ui_nose_plate");
@@ -2933,6 +3037,41 @@ bool MainWindow::RunCreationSelfTest()
         return fail("redo plate property update");
     }
 
+    UpdateSelections({
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
+    }, true);
+    AddSelectedPlateOpenings();
+    if (project_.Plates()[plateStart].openingWireNames
+        != std::vector<std::string>{projectedLightName}) {
+        return fail("add selected plate opening");
+    }
+    Undo();
+    if (!project_.Plates()[plateStart].openingWireNames.empty()) {
+        return fail("undo plate opening");
+    }
+    Redo();
+    if (project_.Plates()[plateStart].openingWireNames.size() != 1) {
+        return fail("redo plate opening");
+    }
+    UpdateSelections({
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
+    }, true);
+    RemoveSelectedPlateOpenings();
+    if (!project_.Plates()[plateStart].openingWireNames.empty()) {
+        return fail("remove selected plate opening");
+    }
+    Undo();
+    if (project_.Plates()[plateStart].openingWireNames.size() != 1) {
+        return fail("undo removing plate opening");
+    }
+    UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
+    if (!infoLabel_->text().contains(QStringLiteral("工作判定"))
+        || !infoLabel_->text().contains(QStringLiteral("開口"))) {
+        return fail("plate opening and forming information");
+    }
+
     UpdateSelection({CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)}, true);
     HideSelected();
     if (project_.Wires()[projectedLightIndex].visible) {
@@ -2964,6 +3103,8 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Loft
         || reloadedProject.Plates().size() != project_.Plates().size()
         || reloadedProject.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
+        || reloadedProject.Plates()[plateStart].openingWireNames
+            != std::vector<std::string>{projectedLightName}
         || !reloadedProject.Wires()[projectedLightIndex].projection.has_value()
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
@@ -3713,11 +3854,16 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
 
     std::size_t selectedWireCount = 0;
     std::size_t selectedSurfaceCount = 0;
+    std::size_t selectedPlateCount = 0;
+    std::size_t selectedClosedProjectedWireCount = 0;
     for (const CadSelection& item : selections) {
         if (item.kind == CadSelectionKind::Wire && item.index >= 0
             && item.index < static_cast<int>(project_.Wires().size())) {
             ++selectedWireCount;
             const auto& wire = project_.Wires()[item.index];
+            if (wire.projection.has_value() && wire.wire.IsClosed()) {
+                ++selectedClosedProjectedWireCount;
+            }
             if (!wire.projection.has_value() && wire.metadata.sourcePlaneName.has_value() && projectionPlane_ != nullptr) {
                 const int planeIndex = projectionPlane_->findText(ToQString(*wire.metadata.sourcePlaneName));
                 if (planeIndex >= 0) {
@@ -3739,6 +3885,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     plateSurface_->setCurrentIndex(surfaceIndex);
                 }
             }
+        } else if (item.kind == CadSelectionKind::Plate && item.index >= 0
+            && item.index < static_cast<int>(project_.Plates().size())) {
+            ++selectedPlateCount;
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
@@ -3748,6 +3897,11 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     }
     if (projectionSelectionLabel_ != nullptr) {
         projectionSelectionLabel_->setText(QStringLiteral("投影するワイヤー: %1本").arg(selectedWireCount));
+    }
+    if (plateOpeningSelectionLabel_ != nullptr) {
+        plateOpeningSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 閉じた投影輪郭%2本")
+                .arg(selectedPlateCount)
+                .arg(selectedClosedProjectedWireCount));
     }
 
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
@@ -3832,10 +3986,26 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             : named.material == "paper" ? QStringLiteral("紙・厚紙")
             : named.material == "brass" ? QStringLiteral("真鍮板")
             : QStringLiteral("その他");
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 板材<br>元の面: %2<br>板厚: %3 mm<br>厚み方向: %4<br>材質: %5")
+        const auto developability = named.plate.AnalyzeDevelopability();
+        const QString forming = developability.classification == PlateDevelopability::Planar
+            ? QStringLiteral("平面板: そのまま切り出せます")
+            : developability.classification == PlateDevelopability::Developable
+            ? QStringLiteral("一方向曲げ: 展開できる可能性が高いです")
+            : QStringLiteral("二方向曲面: 分割または成形が必要です");
+        QString openings;
+        for (const std::string& openingName : named.openingWireNames) {
+            if (!openings.isEmpty()) {
+                openings += QStringLiteral(" / ");
+            }
+            openings += ToQString(openingName);
+        }
+        if (openings.isEmpty()) {
+            openings = QStringLiteral("なし");
+        }
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 板材<br>元の面: %2<br>板厚: %3 mm<br>厚み方向: %4<br>材質: %5<br>開口: %6<br><br>工作判定: %7")
                 .arg(ToQString(named.name), ToQString(named.sourceSurfaceName))
                 .arg(named.plate.Thickness())
-                .arg(direction, material));
+                .arg(direction, material, openings, forming));
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
     }

@@ -415,6 +415,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlate(name, sourceSurface, thickness,
                     ParsePlateDirection(directionToken, sourceName, lineNumber), material);
+            } else if (command == "plate_opening") {
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlateOpening(plateName, wireName);
             } else if (command == "visibility") {
                 const std::string objectKind = ReadName(stream, sourceName, lineNumber, "object kind");
                 const std::string name = ReadName(stream, sourceName, lineNumber, "object");
@@ -596,6 +601,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         output << "plate " << namedPlate.name << ' ' << namedPlate.sourceSurfaceName << ' '
                << namedPlate.plate.Thickness() << ' ' << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
                << namedPlate.material << '\n';
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        for (const std::string& openingWireName : namedPlate.openingWireNames) {
+            RequireScriptNameSafe(openingWireName, "Plate opening wire");
+            output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
+        }
     }
 
     const bool hasHiddenObjects = std::any_of(project.WorkPlanes().begin(), project.WorkPlanes().end(), [](const auto& plane) {

@@ -180,6 +180,7 @@ void Project::AddPlate(
         Plate(*surface, thickness, direction),
         std::move(sourceSurfaceName),
         std::move(material),
+        {},
     });
 }
 
@@ -272,6 +273,13 @@ void Project::UpdatePlate(
     Plate replacement(*sourceSurface, thickness, direction);
     for (NamedPlate& plate : plates_) {
         if (plate.name == name) {
+            for (const std::string& openingName : plate.openingWireNames) {
+                const NamedWire& opening = RequireWire(openingName);
+                if (!opening.projection.has_value()
+                    || opening.projection->targetSurfaceName != sourceSurfaceName) {
+                    throw std::invalid_argument("Remove plate openings before changing the source surface.");
+                }
+            }
             plate.plate = std::move(replacement);
             plate.sourceSurfaceName = std::move(sourceSurfaceName);
             plate.material = std::move(material);
@@ -341,6 +349,48 @@ void Project::SetPlateVisible(std::string_view name, bool visible)
     throw std::invalid_argument("Plate name does not exist: " + std::string(name));
 }
 
+void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
+{
+    NamedPlate* plate = nullptr;
+    for (NamedPlate& candidate : plates_) {
+        if (candidate.name == plateName) {
+            plate = &candidate;
+            break;
+        }
+    }
+    if (plate == nullptr) {
+        throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
+    }
+    const NamedWire& wire = RequireWire(wireName);
+    if (!wire.wire.IsClosed()) {
+        throw std::invalid_argument("Plate opening wire must be closed: " + wireName);
+    }
+    if (!wire.projection.has_value() || wire.projection->targetSurfaceName != plate->sourceSurfaceName) {
+        throw std::invalid_argument("Plate opening must be a wire projected to the plate source surface: " + wireName);
+    }
+    if (std::find(plate->openingWireNames.begin(), plate->openingWireNames.end(), wireName)
+        != plate->openingWireNames.end()) {
+        throw std::invalid_argument("Wire is already a plate opening: " + wireName);
+    }
+    plate->openingWireNames.push_back(std::move(wireName));
+}
+
+void Project::RemovePlateOpening(std::string_view plateName, std::string_view wireName)
+{
+    for (NamedPlate& plate : plates_) {
+        if (plate.name != plateName) {
+            continue;
+        }
+        const auto position = std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), wireName);
+        if (position == plate.openingWireNames.end()) {
+            throw std::invalid_argument("Wire is not an opening of this plate: " + std::string(wireName));
+        }
+        plate.openingWireNames.erase(position);
+        return;
+    }
+    throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
+}
+
 bool Project::RemoveWorkPlane(std::string_view name)
 {
     const auto position = std::find_if(workPlanes_.begin(), workPlanes_.end(), [&](const NamedWorkPlane& plane) {
@@ -369,13 +419,20 @@ bool Project::RemoveWire(std::string_view name)
     }
 
     for (const NamedSurface& surface : surfaces_) {
-        if (std::find(surface.sourceWireNames.begin(), surface.sourceWireNames.end(), name) != surface.sourceWireNames.end()) {
+        if (std::find(surface.sourceWireNames.begin(), surface.sourceWireNames.end(), name)
+            != surface.sourceWireNames.end()) {
             throw std::invalid_argument("Wire is used by surface: " + surface.name);
         }
     }
     for (const NamedWire& wire : wires_) {
         if (wire.projection.has_value() && wire.projection->sourceWireName == name) {
             throw std::invalid_argument("Wire is used as a projection drawing: " + wire.name);
+        }
+    }
+    for (const NamedPlate& plate : plates_) {
+        if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), name)
+            != plate.openingWireNames.end()) {
+            throw std::invalid_argument("Wire is used as a plate opening: " + plate.name);
         }
     }
 

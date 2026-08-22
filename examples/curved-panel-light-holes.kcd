@@ -23,6 +23,8 @@ wire_project light_right_on_panel light_right_plan nose_panel 0 0 1
 
 # Turn the reference surface into a centered 0.5 mm styrene sheet.
 plate nose_shell nose_panel 0.5 centered styrene
+plate_opening nose_shell light_left_on_panel
+plate_opening nose_shell light_right_on_panel
 
 # Keep construction drawings available in the model tree, but out of the way.
 visibility workplane section_a_plane hidden

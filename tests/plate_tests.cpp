@@ -7,6 +7,7 @@
 
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::model::Plate;
+using kachakacha::model::PlateDevelopability;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Surface;
 using kachakacha::model::Wire;
@@ -53,6 +54,21 @@ int main()
             invalidDirectionRejected = true;
         }
         Require(invalidDirectionRejected, "invalid plate direction is rejected");
+
+        const auto planarAnalysis = centered.AnalyzeDevelopability();
+        Require(planarAnalysis.classification == PlateDevelopability::Planar, "planar sheet is classified as planar");
+
+        const Surface cylinder = Surface::Ruled(
+            Wire::Circle({0.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}, 8.0),
+            Wire::Circle({20.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}, 8.0));
+        const auto cylinderAnalysis = Plate(cylinder, 0.5, PlateThicknessDirection::Centered).AnalyzeDevelopability();
+        Require(cylinderAnalysis.classification == PlateDevelopability::Developable, "cylindrical sheet is developable");
+
+        const Surface saddle = Surface::Ruled(
+            Wire::Line({0.0, -5.0, 0.0}, {0.0, 5.0, 0.0}),
+            Wire::Line({10.0, -5.0, -4.0}, {10.0, 5.0, 4.0}));
+        const auto saddleAnalysis = Plate(saddle, 0.5, PlateThicknessDirection::Centered).AnalyzeDevelopability();
+        Require(saddleAnalysis.classification == PlateDevelopability::DoubleCurved, "twisted ruled sheet is double curved");
     } catch (const std::exception& error) {
         std::cerr << "plate_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

@@ -704,6 +704,32 @@ void CadViewport::paintEvent(QPaintEvent*)
                 fill = QColor(230, 159, 0, 168);
             }
             const QColor edge = selected ? QColor("#b66700") : QColor("#586970");
+            std::vector<QPainterPath> openingPaths;
+            for (const std::string& openingName : namedPlate.openingWireNames) {
+                const auto opening = std::find_if(project_->Wires().begin(), project_->Wires().end(), [&](const auto& wire) {
+                    return wire.name == openingName;
+                });
+                if (opening == project_->Wires().end()) {
+                    continue;
+                }
+                QPainterPath path(ProjectPoint(opening->wire.Evaluate(0.0)));
+                for (int sample = 1; sample <= 128; ++sample) {
+                    path.lineTo(ProjectPoint(opening->wire.Evaluate(static_cast<double>(sample) / 128.0)));
+                }
+                path.closeSubpath();
+                openingPaths.push_back(std::move(path));
+            }
+
+            painter.save();
+            if (!openingPaths.empty()) {
+                QPainterPath clipPath;
+                clipPath.addRect(QRectF(rect()));
+                for (const QPainterPath& openingPath : openingPaths) {
+                    clipPath.addPath(openingPath);
+                }
+                clipPath.setFillRule(Qt::OddEvenFill);
+                painter.setClipPath(clipPath);
+            }
             painter.setPen(QPen(edge, selected ? 2.2 : 1.0));
 
             if (source.Kind() == kachakacha::model::SurfaceKind::Planar) {
@@ -781,6 +807,12 @@ void CadViewport::paintEvent(QPaintEvent*)
                         }
                     }
                 }
+            }
+            painter.restore();
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(edge, selected ? 2.8 : 1.6));
+            for (const QPainterPath& openingPath : openingPaths) {
+                painter.drawPath(openingPath);
             }
         }
 
@@ -1102,6 +1134,26 @@ CadSelection CadViewport::HitTest(QPointF position) const
         }
         const auto& plate = namedPlate.plate;
         const auto& surface = plate.SourceSurface();
+        bool insideOpening = false;
+        for (const std::string& openingName : namedPlate.openingWireNames) {
+            const auto opening = std::find_if(project_->Wires().begin(), project_->Wires().end(), [&](const auto& wire) {
+                return wire.name == openingName;
+            });
+            if (opening == project_->Wires().end()) {
+                continue;
+            }
+            QPolygonF openingPolygon;
+            for (int sample = 0; sample < 128; ++sample) {
+                openingPolygon << ProjectPoint(opening->wire.Evaluate(static_cast<double>(sample) / 128.0));
+            }
+            if (openingPolygon.containsPoint(position, Qt::OddEvenFill)) {
+                insideOpening = true;
+                break;
+            }
+        }
+        if (insideOpening) {
+            continue;
+        }
         if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
             const Vector3 normal = surface.Normal(0.5, 0.5);
             QPolygonF polygon;

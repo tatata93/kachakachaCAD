@@ -162,6 +162,14 @@ plate NAME SOURCE_SURFACE thickness positive|centered|negative MATERIAL
 
 `thickness` はmm。厚み方向は元の面から外側、面を中央、元の面から内側のいずれか。`MATERIAL` は `styrene`、`paper`、`brass` などの製作材料名を保持する。
 
+### 板材へ開口を追加
+
+```text
+plate_opening PLATE PROJECTED_CLOSED_WIRE
+```
+
+板材の元の面へ投影した閉じたワイヤーを、板材の開口境界として関連付ける。元の平面図や断面を編集すると投影ワイヤーと開口が追従する。
+
 ### 表示・非表示
 
 ```text

@@ -10,6 +10,18 @@ enum class PlateThicknessDirection {
     Negative,
 };
 
+enum class PlateDevelopability {
+    Planar,
+    Developable,
+    DoubleCurved,
+};
+
+struct PlateDevelopabilityAnalysis {
+    PlateDevelopability classification = PlateDevelopability::DoubleCurved;
+    double maximumAbsoluteGaussianCurvature = 0.0;
+    double maximumNormalAngleRadians = 0.0;
+};
+
 class Plate {
 public:
     Plate(Surface sourceSurface, double thickness, PlateThicknessDirection direction);
@@ -20,6 +32,9 @@ public:
     [[nodiscard]] double MinimumOffset() const noexcept;
     [[nodiscard]] double MaximumOffset() const noexcept;
     [[nodiscard]] geometry::Vector3 Evaluate(double u, double v, double throughThickness) const;
+    [[nodiscard]] PlateDevelopabilityAnalysis AnalyzeDevelopability(
+        int uSamples = 10,
+        int vSamples = 10) const;
 
 private:
     Surface sourceSurface_;

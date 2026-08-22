@@ -35,6 +35,7 @@ private:
     QWidget* BuildPlanePanel();
     QWidget* BuildWirePanel();
     QWidget* BuildEditPanel();
+    QWidget* BuildMachiningPanel();
     QWidget* BuildInfoPanel();
     void BuildMenusAndToolbar();
     void NewProject();
@@ -44,6 +45,7 @@ private:
     void AddWorkPlane();
     void AddWire();
     void ApplySelectedEdit();
+    void ApplyLineChamfer();
     void DeleteSelection();
     void Undo();
     void Redo();
@@ -51,6 +53,7 @@ private:
     void UpdateHistoryActions();
     void RefreshModelViews(bool fitView = false);
     void RefreshPlaneChoices();
+    void RefreshWireChoices();
     void UpdateSelection(CadSelection selection, bool updateTree);
     void PopulateEditPanel(CadSelection selection);
     void PopulateWirePointTable(const kachakacha::model::NamedWire& wire);
@@ -58,6 +61,7 @@ private:
     bool ConfirmDiscardChanges();
     QString SuggestedPlaneName() const;
     QString SuggestedWireName() const;
+    QString SuggestedChamferName() const;
 
     kachakacha::model::Project project_;
     QString currentPath_;
@@ -87,6 +91,14 @@ private:
     QDoubleSpinBox* editArcRadius_ = nullptr;
     QDoubleSpinBox* editArcStartAngle_ = nullptr;
     QDoubleSpinBox* editArcSweepAngle_ = nullptr;
+
+    QLineEdit* chamferName_ = nullptr;
+    QComboBox* chamferFirstWire_ = nullptr;
+    QComboBox* chamferSecondWire_ = nullptr;
+    QComboBox* chamferFirstBranch_ = nullptr;
+    QComboBox* chamferSecondBranch_ = nullptr;
+    QDoubleSpinBox* chamferFirstDistance_ = nullptr;
+    QDoubleSpinBox* chamferSecondDistance_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

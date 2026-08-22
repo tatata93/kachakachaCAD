@@ -2,6 +2,7 @@
 
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Sketch.h"
+#include "kachakacha/model/WireOperations.h"
 
 #include <QAction>
 #include <QAbstractItemView>
@@ -51,6 +52,8 @@ using kachakacha::model::WireKind;
 using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
+using kachakacha::model::ChamferIntersectingLines;
+using kachakacha::model::RetainedLineEnd;
 
 namespace {
 
@@ -257,6 +260,7 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
     toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("ワイヤー"));
     toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
+    toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
     toolsDock->setWidget(toolsTabs_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
@@ -537,6 +541,49 @@ QWidget* MainWindow::BuildEditPanel()
     return panel;
 }
 
+QWidget* MainWindow::BuildMachiningPanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    auto* title = new QLabel(QStringLiteral("C面取り"));
+    title->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(title);
+
+    auto* form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    chamferName_ = new QLineEdit("chamfer_1");
+    chamferFirstWire_ = new QComboBox;
+    chamferSecondWire_ = new QComboBox;
+    chamferFirstBranch_ = new QComboBox;
+    chamferSecondBranch_ = new QComboBox;
+    const QStringList branchChoices = {QStringLiteral("自動"), QStringLiteral("始点側"), QStringLiteral("終点側")};
+    chamferFirstBranch_->addItems(branchChoices);
+    chamferSecondBranch_->addItems(branchChoices);
+    chamferFirstDistance_ = MakePositiveField(1.0);
+    chamferSecondDistance_ = MakePositiveField(1.0);
+    chamferFirstDistance_->setSuffix(QStringLiteral(" mm"));
+    chamferSecondDistance_->setSuffix(QStringLiteral(" mm"));
+
+    form->addRow(QStringLiteral("面取り線の名前"), chamferName_);
+    form->addRow(QStringLiteral("直線 A"), chamferFirstWire_);
+    form->addRow(QStringLiteral("A の残す側"), chamferFirstBranch_);
+    form->addRow(QStringLiteral("A の切戻し"), chamferFirstDistance_);
+    form->addRow(QStringLiteral("直線 B"), chamferSecondWire_);
+    form->addRow(QStringLiteral("B の残す側"), chamferSecondBranch_);
+    form->addRow(QStringLiteral("B の切戻し"), chamferSecondDistance_);
+    layout->addLayout(form);
+
+    auto* applyButton = new QPushButton(QStringLiteral("C面取りを作成"));
+    applyButton->setObjectName("primaryButton");
+    connect(applyButton, &QPushButton::clicked, this, &MainWindow::ApplyLineChamfer);
+    layout->addWidget(applyButton);
+    layout->addStretch(1);
+    return panel;
+}
+
 QWidget* MainWindow::BuildInfoPanel()
 {
     auto* panel = new QWidget;
@@ -760,16 +807,36 @@ bool MainWindow::RunCreationSelfTest()
     sketchLineEnd_[1]->setValue(6.0);
     AddWire();
 
-    if (project_.Wires().size() != initialWireCount + 2) {
+    wireName_->setText("__ui_test_lineB");
+    wireKind_->setCurrentIndex(0);
+    lineStart_[0]->setValue(0.0);
+    lineStart_[1]->setValue(0.0);
+    lineStart_[2]->setValue(0.0);
+    lineEnd_[0]->setValue(0.0);
+    lineEnd_[1]->setValue(10.0);
+    lineEnd_[2]->setValue(0.0);
+    AddWire();
+
+    chamferName_->setText("__ui_test_chamfer");
+    chamferFirstWire_->setCurrentIndex(chamferFirstWire_->findText("__ui_test_line3d"));
+    chamferSecondWire_->setCurrentIndex(chamferSecondWire_->findText("__ui_test_lineB"));
+    chamferFirstBranch_->setCurrentIndex(0);
+    chamferSecondBranch_->setCurrentIndex(0);
+    chamferFirstDistance_->setValue(0.5);
+    chamferSecondDistance_->setValue(0.75);
+    ApplyLineChamfer();
+
+    if (project_.Wires().size() != initialWireCount + 4) {
         return false;
     }
     const auto& line3d = project_.Wires()[initialWireCount];
     const auto& sketchLine = project_.Wires()[initialWireCount + 1];
+    const auto& chamfer = project_.Wires()[initialWireCount + 3];
     const bool result = kachakacha::geometry::AlmostEqual(line3d.wire.End(), {3.0, 8.0, 5.0})
         && sketchLine.metadata.sourcePlaneName == "__ui_test_plane"
-        && sketchLine.metadata.planePolicy == WirePlanePolicy::ReferenceOnly;
-    toolsTabs_->setCurrentIndex(2);
-    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount)}, true);
+        && sketchLine.metadata.planePolicy == WirePlanePolicy::ReferenceOnly
+        && chamfer.name == "__ui_test_chamfer";
+    toolsTabs_->setCurrentIndex(3);
     return result;
 }
 
@@ -983,6 +1050,62 @@ void MainWindow::ApplySelectedEdit()
     }
 }
 
+void MainWindow::ApplyLineChamfer()
+{
+    try {
+        ValidateObjectName(chamferName_->text());
+        if (chamferFirstWire_->currentIndex() < 0 || chamferSecondWire_->currentIndex() < 0) {
+            throw std::invalid_argument("面取りする2本の直線を選択してください。");
+        }
+
+        const int firstIndex = chamferFirstWire_->currentData().toInt();
+        const int secondIndex = chamferSecondWire_->currentData().toInt();
+        if (firstIndex == secondIndex) {
+            throw std::invalid_argument("異なる2本の直線を選択してください。");
+        }
+        if (firstIndex < 0 || secondIndex < 0
+            || firstIndex >= static_cast<int>(project_.Wires().size())
+            || secondIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("選択した直線が見つかりません。");
+        }
+
+        const auto first = project_.Wires()[firstIndex];
+        const auto second = project_.Wires()[secondIndex];
+        const std::string chamferName = ToName(chamferName_->text());
+        for (const auto& existingWire : project_.Wires()) {
+            if (existingWire.name == chamferName) {
+                throw std::invalid_argument("同じ名前のワイヤーがあります。");
+            }
+        }
+
+        const auto result = ChamferIntersectingLines(
+            first.wire,
+            static_cast<RetainedLineEnd>(chamferFirstBranch_->currentIndex()),
+            chamferFirstDistance_->value(),
+            second.wire,
+            static_cast<RetainedLineEnd>(chamferSecondBranch_->currentIndex()),
+            chamferSecondDistance_->value());
+
+        WireMetadata chamferMetadata;
+        if (first.metadata.sourcePlaneName == second.metadata.sourcePlaneName
+            && first.metadata.planePolicy == second.metadata.planePolicy) {
+            chamferMetadata = first.metadata;
+        }
+
+        RecordUndo();
+        project_.UpdateWire(first.name, result.trimmedFirst);
+        project_.UpdateWire(second.name, result.trimmedSecond);
+        project_.AddWire(chamferName, result.chamfer, chamferMetadata);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
+        chamferName_->setText(SuggestedChamferName());
+        statusBar()->showMessage(QStringLiteral("C面取りを作成しました"), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("C面取りを作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
 void MainWindow::Undo()
 {
     if (undoStack_.empty()) {
@@ -1087,6 +1210,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     modelTree_->blockSignals(false);
 
     RefreshPlaneChoices();
+    RefreshWireChoices();
     viewport_->SetProject(&project_);
     if (!fitView) {
         viewport_->update();
@@ -1119,6 +1243,28 @@ void MainWindow::RefreshPlaneChoices()
     }
     const int previousEditIndex = editWireSourcePlane_->findText(previousEditSource);
     editWireSourcePlane_->setCurrentIndex(previousEditIndex >= 0 ? previousEditIndex : 0);
+}
+
+void MainWindow::RefreshWireChoices()
+{
+    const auto refresh = [this](QComboBox* combo) {
+        const QString previous = combo->currentText();
+        combo->clear();
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].wire.Kind() == WireKind::Line) {
+                combo->addItem(ToQString(project_.Wires()[index].name), index);
+            }
+        }
+        const int previousIndex = combo->findText(previous);
+        if (previousIndex >= 0) {
+            combo->setCurrentIndex(previousIndex);
+        }
+    };
+    refresh(chamferFirstWire_);
+    refresh(chamferSecondWire_);
+    if (chamferSecondWire_->count() > 1 && chamferSecondWire_->currentIndex() == chamferFirstWire_->currentIndex()) {
+        chamferSecondWire_->setCurrentIndex(1);
+    }
 }
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
@@ -1298,6 +1444,23 @@ QString MainWindow::SuggestedWireName() const
         ++number;
     }
     return QStringLiteral("wire_%1").arg(number);
+}
+
+QString MainWindow::SuggestedChamferName() const
+{
+    int number = 1;
+    const auto exists = [this](const std::string& name) {
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    while (exists(QStringLiteral("chamfer_%1").arg(number).toStdString())) {
+        ++number;
+    }
+    return QStringLiteral("chamfer_%1").arg(number);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

@@ -19,6 +19,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Sketch.cpp
     src/core/kachakacha/model/Wire.cpp
+    src/core/kachakacha/model/WireOperations.cpp
     src/core/kachakacha/model/WorkPlane.cpp
 )
 
@@ -132,6 +133,17 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME project_script_tests COMMAND kachakacha_project_script_tests)
+
+    add_executable(kachakacha_wire_operations_tests
+        tests/wire_operations_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_wire_operations_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME wire_operations_tests COMMAND kachakacha_wire_operations_tests)
 
     if(WIN32)
         add_test(

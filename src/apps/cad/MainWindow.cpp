@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "PlatePdfExport.h"
 
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
@@ -69,6 +70,9 @@ using kachakacha::io::WritePlateFlatPatternSvg;
 using kachakacha::io::WritePlanarDxf;
 using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
+using kachakacha::qtio::CalculatePlatePdfLayout;
+using kachakacha::qtio::PlatePdfOptions;
+using kachakacha::qtio::WritePlateFlatPatternPdf;
 using kachakacha::model::Project;
 using kachakacha::model::PlateDevelopability;
 using kachakacha::model::PlateSplitAxis;
@@ -1233,14 +1237,36 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
     layout->addWidget(plateFlatPatternSummary_);
 
+    auto* pdfForm = new QFormLayout;
+    pdfForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    platePdfPaper_ = new QComboBox;
+    platePdfPaper_->addItem(QStringLiteral("A4（自動向き）"), static_cast<int>(QPageSize::A4));
+    platePdfPaper_->addItem(QStringLiteral("A3（自動向き）"), static_cast<int>(QPageSize::A3));
+    platePdfOverlap_ = MakeNumberField(5.0);
+    platePdfOverlap_->setRange(0.0, 20.0);
+    platePdfOverlap_->setDecimals(1);
+    platePdfOverlap_->setSingleStep(1.0);
+    platePdfOverlap_->setSuffix(QStringLiteral(" mm"));
+    pdfForm->addRow(QStringLiteral("PDF用紙"), platePdfPaper_);
+    pdfForm->addRow(QStringLiteral("ページ重なり"), platePdfOverlap_);
+    layout->addLayout(pdfForm);
+
+    auto* platePdfButton = new QPushButton(QStringLiteral("1:1 PDFを保存"));
+    platePdfButton->setObjectName("primaryButton");
+    platePdfButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    platePdfButton->setProperty("platePdfAction", true);
+
     auto* plateSvgButton = new QPushButton(QStringLiteral("展開SVGを保存"));
-    plateSvgButton->setObjectName("primaryButton");
     plateSvgButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     plateSvgButton->setProperty("plateFlatPatternAction", true);
     auto* plateDxfButton = new QPushButton(QStringLiteral("展開DXFを保存"));
     plateDxfButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(platePdfButton, &QPushButton::clicked, this, &MainWindow::ExportSelectedPlatePdf);
     connect(plateSvgButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(false); });
     connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
+    connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
+    connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    layout->addWidget(platePdfButton);
     layout->addWidget(plateSvgButton);
     layout->addWidget(plateDxfButton);
     layout->addStretch(1);
@@ -1532,43 +1558,53 @@ void MainWindow::ExportPlanar(bool dxf)
     }
 }
 
+int MainWindow::SelectedPlateIndexForExport() const
+{
+    std::vector<int> plateIndices;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            plateIndices.push_back(selection.index);
+        }
+    }
+    std::sort(plateIndices.begin(), plateIndices.end());
+    plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
+    if (plateIndices.size() != 1) {
+        throw std::invalid_argument("展開する板材を1枚だけ選択してください。");
+    }
+    return plateIndices.front();
+}
+
+bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlatPattern& pattern)
+{
+    constexpr double warningToleranceMillimeters = 0.1;
+    const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
+    if (pattern.analysis.classification != PlateDevelopability::DoubleCurved
+        && estimatedError <= warningToleranceMillimeters) {
+        return true;
+    }
+    const QString reason = pattern.analysis.classification == PlateDevelopability::DoubleCurved
+        ? QStringLiteral("この板材は二方向に曲がるため、平面へ正確には展開できません。")
+        : QStringLiteral("推定ずれが工作許容値 0.10 mm を超えています。");
+    return QMessageBox::warning(
+        this,
+        QStringLiteral("展開精度の確認"),
+        QStringLiteral("%1\n\n最大推定ずれ: %2 mm\n分割または成形代を検討してください。\n\nこのまま近似図を保存しますか？")
+            .arg(reason)
+            .arg(estimatedError, 0, 'f', 3),
+        QMessageBox::Yes | QMessageBox::Cancel,
+        QMessageBox::Cancel) == QMessageBox::Yes;
+}
+
 void MainWindow::ExportSelectedPlate(bool dxf)
 {
     try {
-        std::vector<int> plateIndices;
-        for (const CadSelection& selection : viewport_->Selections()) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                plateIndices.push_back(selection.index);
-            }
-        }
-        std::sort(plateIndices.begin(), plateIndices.end());
-        plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
-        if (plateIndices.size() != 1) {
-            throw std::invalid_argument("展開する板材を1枚だけ選択してください。");
-        }
-
-        const auto& plate = project_.Plates()[plateIndices.front()];
+        const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
         const auto pattern = BuildPlateFlatPattern(project_, plate);
-        constexpr double warningToleranceMillimeters = 0.1;
-        const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
-        if (pattern.analysis.classification == PlateDevelopability::DoubleCurved
-            || estimatedError > warningToleranceMillimeters) {
-            const QString reason = pattern.analysis.classification == PlateDevelopability::DoubleCurved
-                ? QStringLiteral("この板材は二方向に曲がるため、平面へ正確には展開できません。")
-                : QStringLiteral("推定ずれが工作許容値 0.10 mm を超えています。");
-            const auto answer = QMessageBox::warning(
-                this,
-                QStringLiteral("展開精度の確認"),
-                QStringLiteral("%1\n\n最大推定ずれ: %2 mm\n分割または成形代を検討してください。\n\nこのまま近似図を保存しますか？")
-                    .arg(reason)
-                    .arg(estimatedError, 0, 'f', 3),
-                QMessageBox::Yes | QMessageBox::Cancel,
-                QMessageBox::Cancel);
-            if (answer != QMessageBox::Yes) {
-                return;
-            }
+        if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
+            return;
         }
+        const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
 
         const QString extension = dxf ? QStringLiteral(".dxf") : QStringLiteral(".svg");
         const QString filter = dxf ? QStringLiteral("DXF展開図 (*.dxf)") : QStringLiteral("SVG展開図 (*.svg)");
@@ -1608,6 +1644,53 @@ void MainWindow::ExportSelectedPlate(bool dxf)
                 .arg(pattern.openings.size())
                 .arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("板材の1:1展開図を保存しました: %1").arg(path), 5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ExportSelectedPlatePdf()
+{
+    try {
+        const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
+        const auto pattern = BuildPlateFlatPattern(project_, plate);
+        if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
+            return;
+        }
+
+        PlatePdfOptions options;
+        options.pageSize = static_cast<QPageSize::PageSizeId>(platePdfPaper_->currentData().toInt());
+        options.overlapMillimeters = platePdfOverlap_->value();
+        const auto pdfLayout = CalculatePlatePdfLayout(pattern, options);
+
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            QStringLiteral("板材の1:1印刷PDFを保存"),
+            suggestedDirectory + ToQString(plate.name) + QStringLiteral("_flat.pdf"),
+            QStringLiteral("PDF図面 (*.pdf)"));
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(QStringLiteral(".pdf"), Qt::CaseInsensitive)) {
+            path += QStringLiteral(".pdf");
+        }
+
+        WritePlateFlatPatternPdf(path, pattern, options);
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("%1 | 最大推定ずれ %2 mm | 開口 %3個 | PDF %4ページ")
+                .arg(ToQString(plate.name))
+                .arg(pattern.analysis.MaximumEstimatedErrorMillimeters(), 0, 'f', 3)
+                .arg(pattern.openings.size())
+                .arg(pdfLayout.PageCount()));
+        statusBar()->showMessage(
+            QStringLiteral("1:1印刷PDFを保存しました: %1（%2ページ）")
+                .arg(path)
+                .arg(pdfLayout.PageCount()),
+            5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
@@ -2742,7 +2825,9 @@ bool MainWindow::RunCreationSelfTest()
         || toolsTabs_->tabText(5) != QStringLiteral("面")
         || toolsTabs_->tabText(6) != QStringLiteral("出力")
         || activePlaneCombo_->count() == 0
-        || plateFlatPatternSummary_ == nullptr) {
+        || plateFlatPatternSummary_ == nullptr
+        || platePdfPaper_ == nullptr
+        || platePdfOverlap_ == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -3349,6 +3434,9 @@ bool MainWindow::RunCreationSelfTest()
         selfTestOptions.openingSamples = 48;
         const auto firstPattern = BuildPlateFlatPattern(project_, project_.Plates()[plateStart], selfTestOptions);
         const auto secondPattern = BuildPlateFlatPattern(project_, project_.Plates()[plateStart + 1], selfTestOptions);
+        PlatePdfOptions pdfOptions;
+        pdfOptions.overlapMillimeters = platePdfOverlap_->value();
+        const auto pdfLayout = CalculatePlatePdfLayout(secondPattern, pdfOptions);
         std::ostringstream flatSvg;
         std::ostringstream flatDxf;
         WritePlateFlatPatternSvg(flatSvg, secondPattern, selfTestOptions);
@@ -3356,7 +3444,8 @@ bool MainWindow::RunCreationSelfTest()
         if (firstPattern.openings.size() + secondPattern.openings.size() != 1
             || flatSvg.str().find("CUT_OUTER") == std::string::npos
             || flatSvg.str().find("CUT_OPENING") == std::string::npos
-            || flatDxf.str().find("$INSUNITS\n70\n4") == std::string::npos) {
+            || flatDxf.str().find("$INSUNITS\n70\n4") == std::string::npos
+            || pdfLayout.PageCount() < 1) {
             return fail("split plate flat-pattern output");
         }
     } catch (const std::exception&) {
@@ -3405,25 +3494,25 @@ bool MainWindow::RunCreationSelfTest()
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->FitAll();
-    toolsTabs_->setCurrentIndex(5);
-    UpdateSelections({
-        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
-        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
-        {CadSelectionKind::Plate, static_cast<int>(plateStart + 1)},
-    }, true);
-    if (auto* surfaceScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(5))) {
-        surfaceScrollArea->widget()->adjustSize();
+    toolsTabs_->setCurrentIndex(6);
+    UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart + 1)}, true);
+    if (!plateFlatPatternSummary_->text().contains(QStringLiteral("PDF"))) {
+        return fail("plate PDF output summary");
+    }
+    if (auto* outputScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(6))) {
+        outputScrollArea->widget()->adjustSize();
         QApplication::processEvents();
-        const auto buttons = surfaceScrollArea->findChildren<QPushButton*>();
-        const auto splitButton = std::find_if(buttons.begin(), buttons.end(), [](const QPushButton* button) {
-            return button->property("plateSplitAction").toBool();
+        const auto buttons = outputScrollArea->findChildren<QPushButton*>();
+        const auto pdfButton = std::find_if(buttons.begin(), buttons.end(), [](const QPushButton* button) {
+            return button->property("platePdfAction").toBool();
         });
-        if (splitButton != buttons.end()) {
-            QPushButton* splitButtonPointer = *splitButton;
-            QTimer::singleShot(0, surfaceScrollArea, [surfaceScrollArea, splitButtonPointer] {
-                surfaceScrollArea->ensureWidgetVisible(splitButtonPointer, 0, 12);
-            });
+        if (pdfButton == buttons.end()) {
+            return fail("plate PDF output button");
         }
+        QPushButton* pdfButtonPointer = *pdfButton;
+        QTimer::singleShot(0, outputScrollArea, [outputScrollArea, pdfButtonPointer] {
+            outputScrollArea->ensureWidgetVisible(pdfButtonPointer, 0, 12);
+        });
     }
     return true;
 }
@@ -4150,6 +4239,10 @@ void MainWindow::RefreshExportSummary()
         previewOptions.includeOpenings = false;
         const auto& namedPlate = project_.Plates()[plateIndices.front()];
         const auto pattern = BuildPlateFlatPattern(project_, namedPlate, previewOptions);
+        PlatePdfOptions pdfOptions;
+        pdfOptions.pageSize = static_cast<QPageSize::PageSizeId>(platePdfPaper_->currentData().toInt());
+        pdfOptions.overlapMillimeters = platePdfOverlap_->value();
+        const auto pdfLayout = CalculatePlatePdfLayout(pattern, pdfOptions);
         const QString shape = pattern.analysis.classification == PlateDevelopability::Planar
             ? QStringLiteral("平面板")
             : pattern.analysis.classification == PlateDevelopability::Developable
@@ -4159,10 +4252,11 @@ void MainWindow::RefreshExportSummary()
             || pattern.analysis.MaximumEstimatedErrorMillimeters() > 0.1;
         plateFlatPatternSummary_->setStyleSheet(warning ? "color: #a32734;" : "color: #35664a;");
         plateFlatPatternSummary_->setText(
-            QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4個")
+            QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4個 | PDF %5ページ")
                 .arg(ToQString(namedPlate.name), shape)
                 .arg(pattern.analysis.MaximumEstimatedErrorMillimeters(), 0, 'f', 3)
-                .arg(namedPlate.openingWireNames.size()));
+                .arg(namedPlate.openingWireNames.size())
+                .arg(pdfLayout.PageCount()));
     } catch (const std::exception& error) {
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));

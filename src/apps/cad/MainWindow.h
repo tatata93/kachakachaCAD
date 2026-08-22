@@ -23,6 +23,10 @@ class QTabWidget;
 class QTableWidget;
 class QTreeWidget;
 
+namespace kachakacha::io {
+struct PlateFlatPattern;
+}
+
 class MainWindow final : public QMainWindow {
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -52,6 +56,9 @@ private:
     void SaveProjectAs();
     void ExportPlanar(bool dxf);
     void ExportSelectedPlate(bool dxf);
+    void ExportSelectedPlatePdf();
+    [[nodiscard]] int SelectedPlateIndexForExport() const;
+    bool ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlatPattern& pattern);
     void AddWorkPlane();
     [[nodiscard]] kachakacha::model::WorkPlane WorkPlaneFromInputs() const;
     void AlignViewportFromPlaneInputs();
@@ -212,6 +219,8 @@ private:
     QComboBox* exportScope_ = nullptr;
     QLabel* exportSummary_ = nullptr;
     QLabel* plateFlatPatternSummary_ = nullptr;
+    QComboBox* platePdfPaper_ = nullptr;
+    QDoubleSpinBox* platePdfOverlap_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

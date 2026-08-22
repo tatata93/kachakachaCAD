@@ -66,6 +66,8 @@ if(WIN32)
                 src/apps/cad/CadViewport.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
+                src/apps/cad/PlatePdfExport.cpp
+                src/apps/cad/PlatePdfExport.h
                 src/apps/cad/main.cpp
             )
 
@@ -106,6 +108,28 @@ if(WIN32)
                         $<TARGET_FILE:kachakacha_cad>
                         --project "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
                         --snapshot "${CMAKE_CURRENT_BINARY_DIR}/surface-sample-smoke.png"
+                )
+
+                add_executable(kachakacha_plate_pdf_tests
+                    src/apps/cad/PlatePdfExport.cpp
+                    src/apps/cad/PlatePdfExport.h
+                    tests/plate_pdf_tests.cpp
+                )
+                target_include_directories(kachakacha_plate_pdf_tests PRIVATE src/apps/cad)
+                target_link_libraries(kachakacha_plate_pdf_tests PRIVATE kachakacha_core Qt6::Gui)
+                target_compile_features(kachakacha_plate_pdf_tests PRIVATE cxx_std_20)
+                if(MSVC)
+                    target_compile_options(kachakacha_plate_pdf_tests PRIVATE /W4 /permissive- /utf-8)
+                endif()
+                add_test(
+                    NAME plate_pdf_tests
+                    COMMAND ${CMAKE_COMMAND} -E env
+                        "QT_QPA_PLATFORM=offscreen"
+                        "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}"
+                        $<TARGET_FILE:kachakacha_plate_pdf_tests>
+                        "${CMAKE_CURRENT_BINARY_DIR}/plate-pdf-test.pdf"
+                        "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
                 )
             endif()
         else()

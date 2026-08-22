@@ -127,10 +127,10 @@ wire_coincident ANCHOR_WIRE start|end FOLLOWER_WIRE start|end
 ### 端点の接線拘束
 
 ```text
-wire_tangent ANCHOR_WIRE start|end FOLLOWER_BEZIER start|end
+wire_tangent ANCHOR_WIRE start|end FOLLOWER_CURVE start|end
 ```
 
-同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェの端点ハンドルを回転してG1接続を維持する。ハンドル長は保持する。
+同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェの端点ハンドル、または追従側円弧の向きを更新してG1接続を維持する。ベジェのハンドル長、円弧の半径と中心角は保持する。
 
 ### 作業平面上の直線
 

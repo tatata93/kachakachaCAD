@@ -520,7 +520,7 @@ void MainWindow::BuildDrawingActions()
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
-    tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェ端点の順に3D画面で指定"));
+    tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェまたは円弧端点の順に3D画面で指定"));
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
     removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーの接線関係を解除し、端点一致は残す"));
     measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
@@ -2449,7 +2449,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         statusBar()->showMessage(QStringLiteral("端点一致: 動かさない固定側、追従させる側の順に端点をクリック"), 5000);
         break;
     case ViewportTool::Tangent:
-        statusBar()->showMessage(QStringLiteral("接線接続: 固定側の端点、追従するベジェ端点の順にクリック"), 5000);
+        statusBar()->showMessage(QStringLiteral("接線接続: 固定側の端点、追従するベジェまたは円弧端点の順にクリック"), 5000);
         break;
     case ViewportTool::Measure:
         statusBar()->showMessage(
@@ -2532,7 +2532,7 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     case ViewportTool::Tangent:
         state = viewport_ != nullptr && viewport_->CoincidencePicks().empty()
             ? QStringLiteral("接線接続 · 固定側をクリック")
-            : QStringLiteral("接線接続 · 追従ベジェをクリック");
+            : QStringLiteral("接線接続 · 追従曲線をクリック");
         break;
     case ViewportTool::Measure:
         state = QStringLiteral("測定");
@@ -3068,8 +3068,9 @@ void MainWindow::ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick
         }
         const auto& anchorWire = project_.Wires()[anchor.wireIndex];
         const auto& followerWire = project_.Wires()[follower.wireIndex];
-        if (followerWire.wire.Kind() != WireKind::CubicBezier) {
-            throw std::invalid_argument("追従側にはベジェ曲線の端点を指定してください。");
+        if (followerWire.wire.Kind() != WireKind::CubicBezier
+            && followerWire.wire.Kind() != WireKind::CircularArc) {
+            throw std::invalid_argument("追従側にはベジェ曲線または円弧の端点を指定してください。");
         }
         const std::string anchorName = anchorWire.name;
         const std::string followerName = followerWire.name;
@@ -4055,6 +4056,29 @@ bool MainWindow::RunCreationSelfTest()
     if (viewport_->CoincidencePicks().size() != 1
         || viewport_->CoincidencePicks().front().wireIndex != static_cast<int>(directStart)) {
         return fail("direct tangent anchor pick");
+    }
+    const std::size_t tangentCountBeforeArc = project_.TangentConstraints().size();
+    const std::size_t coincidenceCountBeforeArc = project_.CoincidentConstraints().size();
+    const Wire arcBeforeTangent = project_.Wires()[directStart + 4].wire;
+    click(center + QPointF(-20.0, 70.0));
+    if (project_.TangentConstraints().size() != tangentCountBeforeArc + 1
+        || project_.CoincidentConstraints().size() != coincidenceCountBeforeArc + 1
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart].wire.End(),
+            project_.Wires()[directStart + 4].wire.Start(), 1.0e-8)
+        || kachakacha::geometry::Dot(
+            MeasureWireTangent(project_.Wires()[directStart].wire, 1.0),
+            MeasureWireTangent(project_.Wires()[directStart + 4].wire, 0.0)) < 0.999999) {
+        return fail("direct arc tangent connection");
+    }
+    Undo();
+    if (project_.TangentConstraints().size() != tangentCountBeforeArc
+        || project_.CoincidentConstraints().size() != coincidenceCountBeforeArc
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart + 4].wire.Start(), arcBeforeTangent.Start(), 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart + 4].wire.End(), arcBeforeTangent.End(), 1.0e-8)) {
+        return fail("undo direct arc tangent connection");
     }
     viewport_->ClearCoincidencePicks();
 
@@ -5344,7 +5368,7 @@ void MainWindow::RefreshModelViews(bool fitView)
                 .arg(ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
                     ToQString(constraint.follower.wireName), endpointText(constraint.follower.endpoint)),
         });
-        item->setToolTip(0, QStringLiteral("右側のベジェ曲線が左側の接線方向へ追従"));
+        item->setToolTip(0, QStringLiteral("右側のベジェ曲線または円弧が左側の接線方向へ追従"));
     }
     auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
     for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {

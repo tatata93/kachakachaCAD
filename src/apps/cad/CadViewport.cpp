@@ -643,7 +643,8 @@ std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
             continue;
         }
         if (tool_ == ViewportTool::Tangent && !coincidencePicks_.empty()
-            && namedWire.wire.Kind() != WireKind::CubicBezier) {
+            && namedWire.wire.Kind() != WireKind::CubicBezier
+            && namedWire.wire.Kind() != WireKind::CircularArc) {
             continue;
         }
         for (const auto endpoint : {kachakacha::model::WireEndpoint::Start, kachakacha::model::WireEndpoint::End}) {
@@ -1671,7 +1672,7 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::Tangent:
         modeText = coincidencePicks_.empty()
             ? QStringLiteral("接線 · 固定側の端点")
-            : QStringLiteral("接線 · 追従ベジェの端点");
+            : QStringLiteral("接線 · 追従曲線の端点");
         break;
     case ViewportTool::Measure:
         modeText = measurementMode_ == MeasurementMode::TwoPoints

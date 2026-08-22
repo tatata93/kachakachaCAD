@@ -112,6 +112,88 @@ Wire AlignBezierEndpointTangent(
     return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
 }
 
+Wire AlignArcEndpointTangent(
+    const Wire& wire,
+    WireEndpoint endpoint,
+    geometry::Vector3 interiorDirection,
+    std::optional<geometry::Vector3> requiredPlaneNormal)
+{
+    if (wire.Kind() != WireKind::CircularArc) {
+        throw std::invalid_argument("Arc tangent followers must be open circular arcs.");
+    }
+    const WireArcData arc = wire.ArcData();
+    const geometry::Vector3 endpointPoint = EndpointPoint(wire, endpoint);
+    const geometry::Vector3 parameterTangent =
+        (endpoint == WireEndpoint::Start ? interiorDirection : -interiorDirection).Normalized();
+    const geometry::Vector3 oldNormal = geometry::Cross(arc.uAxis, arc.vAxis).Normalized();
+
+    geometry::Vector3 normal;
+    if (requiredPlaneNormal.has_value()) {
+        normal = requiredPlaneNormal->Normalized();
+    } else {
+        normal = oldNormal - parameterTangent * geometry::Dot(oldNormal, parameterTangent);
+        if (normal.LengthSquared() <= 1.0e-18) {
+            const geometry::Vector3 oldRadial = (endpointPoint - arc.center).Normalized();
+            normal = oldRadial - parameterTangent * geometry::Dot(oldRadial, parameterTangent);
+        }
+        normal = normal.Normalized();
+    }
+    if (geometry::Dot(normal, oldNormal) < 0.0) {
+        normal = -normal;
+    }
+
+    const double sweepOrientation = arc.sweepAngleRadians >= 0.0 ? 1.0 : -1.0;
+    const geometry::Vector3 radial =
+        geometry::Cross(parameterTangent, normal).Normalized() * sweepOrientation;
+    const geometry::Vector3 vAxis = geometry::Cross(normal, radial).Normalized();
+    const double startAngle = endpoint == WireEndpoint::Start ? 0.0 : -arc.sweepAngleRadians;
+    return Wire::CircularArc(
+        endpointPoint - radial * arc.radius,
+        radial,
+        vAxis,
+        arc.radius,
+        startAngle,
+        arc.sweepAngleRadians);
+}
+
+Wire AlignWireEndpointTangent(
+    const Wire& wire,
+    WireEndpoint endpoint,
+    geometry::Vector3 interiorDirection,
+    std::optional<geometry::Vector3> requiredPlaneNormal)
+{
+    if (wire.Kind() == WireKind::CubicBezier) {
+        return AlignBezierEndpointTangent(wire, endpoint, interiorDirection);
+    }
+    if (wire.Kind() == WireKind::CircularArc) {
+        return AlignArcEndpointTangent(
+            wire, endpoint, interiorDirection, std::move(requiredPlaneNormal));
+    }
+    throw std::invalid_argument("Tangent followers must be cubic Bezier wires or circular arcs.");
+}
+
+bool TangentAlignmentMatches(const Wire& first, const Wire& second, WireEndpoint endpoint)
+{
+    if (first.Kind() != second.Kind()) {
+        return false;
+    }
+    if (first.Kind() == WireKind::CubicBezier) {
+        const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
+        return geometry::AlmostEqual(
+            first.ControlPoints()[handleIndex], second.ControlPoints()[handleIndex], 1.0e-9);
+    }
+    const WireArcData firstArc = first.ArcData();
+    const WireArcData secondArc = second.ArcData();
+    return geometry::AlmostEqual(firstArc.center, secondArc.center, 1.0e-9)
+        && geometry::AlmostEqual(firstArc.uAxis, secondArc.uAxis, 1.0e-9)
+        && geometry::AlmostEqual(firstArc.vAxis, secondArc.vAxis, 1.0e-9)
+        && geometry::AlmostEqual(firstArc.radius, secondArc.radius, 1.0e-9)
+        && geometry::AlmostEqual(
+            firstArc.startAngleRadians, secondArc.startAngleRadians, 1.0e-9)
+        && geometry::AlmostEqual(
+            firstArc.sweepAngleRadians, secondArc.sweepAngleRadians, 1.0e-9);
+}
+
 Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vector3 point)
 {
     if (!point.IsFinite()) {
@@ -140,9 +222,10 @@ Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vect
         }
         return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
     }
-    case WireKind::Circle:
     case WireKind::CircularArc:
-        throw std::invalid_argument("Circle and arc endpoints cannot be coincidence followers yet.");
+        return wire.Translated(point - EndpointPoint(wire, endpoint));
+    case WireKind::Circle:
+        throw std::invalid_argument("Closed circles do not have editable endpoints.");
     }
     throw std::logic_error("Unknown wire kind.");
 }
@@ -523,10 +606,6 @@ void Project::AddWireCoincidentConstraint(
     if (anchorWire.wire.IsClosed() || followerWire.wire.IsClosed()) {
         throw std::invalid_argument("Coincident endpoint constraints require open wires.");
     }
-    if (followerWire.wire.Kind() == WireKind::Circle
-        || followerWire.wire.Kind() == WireKind::CircularArc) {
-        throw std::invalid_argument("Circle and arc endpoints cannot be coincidence followers yet.");
-    }
     if (!followerWire.metadata.lineConstraints.Empty()) {
         throw std::invalid_argument("Remove the follower line dimensions before adding endpoint coincidence.");
     }
@@ -580,8 +659,9 @@ void Project::AddWireTangentConstraint(
         || anchorWire.wire.IsClosed() || followerWire.wire.IsClosed()) {
         throw std::invalid_argument("Tangent endpoint constraints require open, editable wires.");
     }
-    if (followerWire.wire.Kind() != WireKind::CubicBezier) {
-        throw std::invalid_argument("The tangent follower must be a cubic Bezier wire.");
+    if (followerWire.wire.Kind() != WireKind::CubicBezier
+        && followerWire.wire.Kind() != WireKind::CircularArc) {
+        throw std::invalid_argument("The tangent follower must be a cubic Bezier wire or circular arc.");
     }
     const bool hasCoincidence = std::any_of(
         coincidentConstraints_.begin(), coincidentConstraints_.end(),
@@ -1008,6 +1088,7 @@ void Project::ApplyTangentConstraints()
 
             const geometry::Vector3 desiredInterior =
                 EndpointInteriorDirection(anchor->wire, constraint.anchor.endpoint) * -1.0;
+            std::optional<geometry::Vector3> requiredPlaneNormal;
             if (follower->metadata.planePolicy == WirePlanePolicy::LockedToPlane
                 && follower->metadata.sourcePlaneName.has_value()) {
                 const std::optional<WorkPlane> plane = FindWorkPlane(*follower->metadata.sourcePlaneName);
@@ -1015,15 +1096,16 @@ void Project::ApplyTangentConstraints()
                     || std::abs(geometry::Dot(desiredInterior, plane->Normal())) > 1.0e-7) {
                     throw std::invalid_argument("Tangent direction would leave the follower work plane.");
                 }
+                requiredPlaneNormal = plane->Normal();
             }
 
-            const Wire aligned = AlignBezierEndpointTangent(
-                follower->wire, constraint.follower.endpoint, desiredInterior);
-            const std::size_t handleIndex = constraint.follower.endpoint == WireEndpoint::Start ? 1 : 2;
-            if (geometry::AlmostEqual(
-                    follower->wire.ControlPoints()[handleIndex],
-                    aligned.ControlPoints()[handleIndex],
-                    1.0e-9)) {
+            const Wire aligned = AlignWireEndpointTangent(
+                follower->wire,
+                constraint.follower.endpoint,
+                desiredInterior,
+                requiredPlaneNormal);
+            if (TangentAlignmentMatches(
+                    follower->wire, aligned, constraint.follower.endpoint)) {
                 continue;
             }
             follower->wire = aligned;

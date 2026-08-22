@@ -202,6 +202,71 @@ void TangentEndpointsRoundTripAndDriveBezierHandle()
     Require(roundTripped.RemoveWireCoincidentConstraints("follower") == 1, "remove remaining coincidence");
 }
 
+void TangentEndpointsDriveCircularArc()
+{
+    std::istringstream input(R"(
+        line3d anchor 0 0 0  10 0 0
+        arc3d follower 20 5 0  1 0 0  0 1 0  3 0 90
+        wire_radius_constraint follower 3
+        wire_coincident anchor end follower start
+        wire_tangent anchor end follower start
+    )");
+    auto project = LoadProjectScript(input, "arc-tangent-test");
+    Require(project.TangentConstraints().size() == 1, "arc tangent loaded");
+    RequireNear(project.Wires()[1].wire.Start(), {10.0, 0.0, 0.0},
+        "arc tangent follower coincident");
+    RequireNear(project.Wires()[1].wire.ArcData().center, {10.0, 3.0, 0.0},
+        "arc tangent center aligned");
+    RequireNear(project.Wires()[1].wire.End(), {13.0, 3.0, 0.0},
+        "arc tangent keeps radius and sweep");
+
+    project.UpdateWire("anchor", Wire::Line({0.0, 0.0, 0.0}, {0.0, 10.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.Start(), {0.0, 10.0, 0.0},
+        "arc tangent endpoint tracks anchor");
+    RequireNear(project.Wires()[1].wire.ArcData().center, {-3.0, 10.0, 0.0},
+        "arc tangent rotates around endpoint");
+    RequireNear(project.Wires()[1].wire.End(), {-3.0, 13.0, 0.0},
+        "rotated arc keeps sweep");
+
+    project.UpdateWire("follower", Wire::CircularArc(
+        {40.0, 50.0, 6.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 9.0, 0.5, 1.0));
+    RequireNear(project.Wires()[1].wire.Start(), {0.0, 10.0, 0.0},
+        "edited arc remains coincident");
+    Require(std::abs(project.Wires()[1].wire.ArcData().radius - 3.0) <= 1.0e-12,
+        "edited arc keeps fixed radius");
+    Require(std::abs(project.Wires()[1].wire.ArcData().sweepAngleRadians - 1.0) <= 1.0e-12,
+        "edited arc keeps editable sweep");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "arc-tangent-roundtrip");
+    Require(roundTripped.TangentConstraints().size() == 1, "arc tangent roundtrip count");
+    RequireNear(roundTripped.Wires()[1].wire.Start(), roundTripped.Wires()[0].wire.End(),
+        "arc tangent roundtrip coincidence");
+
+    std::istringstream lockedInput(R"(
+        plane_point_normal top 0 0 0  0 0 1  1 0 0
+        line3d locked_anchor -10 0 0  0 0 0
+        arc3d locked_arc 0 3 0  1 0 0  0 1 0  3 180 90
+        wire_meta locked_arc top locked
+        wire_coincident locked_anchor end locked_arc start
+        wire_tangent locked_anchor end locked_arc start
+    )");
+    auto lockedProject = LoadProjectScript(lockedInput, "locked-arc-tangent");
+    const Wire lockedArcBefore = lockedProject.Wires()[1].wire;
+    bool outOfPlaneRejected = false;
+    try {
+        lockedProject.UpdateWire(
+            "locked_anchor", Wire::Line({0.0, 0.0, -10.0}, {0.0, 0.0, 0.0}));
+    } catch (const std::invalid_argument&) {
+        outOfPlaneRejected = true;
+    }
+    Require(outOfPlaneRejected, "locked arc rejects out-of-plane tangent");
+    RequireNear(lockedProject.Wires()[1].wire.ArcData().center, lockedArcBefore.ArcData().center,
+        "rejected locked arc edit is atomic");
+}
+
 void WrittenProjectRoundTrips()
 {
     std::istringstream input(R"(
@@ -622,6 +687,7 @@ int main()
         ConstructionWiresRoundTripAndStayOutOfSurfaces();
         CoincidentEndpointsRoundTripAndDriveGeometry();
         TangentEndpointsRoundTripAndDriveBezierHandle();
+        TangentEndpointsDriveCircularArc();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         RadiusConstraintsRoundTripAndDriveGeometry();

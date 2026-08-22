@@ -2,7 +2,8 @@ param(
     [string]$BuildDir = "build-qt",
     [string]$Config = "Debug",
     [string]$Project = "examples\first-check.kcd",
-    [string]$OutputPath = "out\cad-preview.png"
+    [string]$OutputPath = "out\cad-preview.png",
+    [switch]$SelfTest
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,7 +27,11 @@ $PreviousPlatform = $env:QT_QPA_PLATFORM
 try {
     $env:Path = "$QtBin;$PreviousPath"
     $env:QT_QPA_PLATFORM = "offscreen"
-    $SnapshotProcess = Start-Process -FilePath $CadPath -ArgumentList @("--project", $ProjectPath, "--snapshot", $ResolvedOutput) -Wait -PassThru
+    $SnapshotArguments = @("--project", $ProjectPath, "--snapshot", $ResolvedOutput)
+    if ($SelfTest) {
+        $SnapshotArguments += "--self-test"
+    }
+    $SnapshotProcess = Start-Process -FilePath $CadPath -ArgumentList $SnapshotArguments -Wait -PassThru
     if ($SnapshotProcess.ExitCode -ne 0) {
         throw "kachakacha_cad failed with exit code $($SnapshotProcess.ExitCode)"
     }

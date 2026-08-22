@@ -9,6 +9,7 @@ using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::WriteProjectScript;
+using kachakacha::model::Wire;
 using kachakacha::model::WirePlanePolicy;
 
 namespace {
@@ -148,6 +149,27 @@ void RemovingPlaneKeepsWireIn3D()
     Require(project.Wires().empty(), "wire was removed");
 }
 
+void UpdatingPlaneMovesOnlyLockedWires()
+{
+    std::istringstream input(R"(
+        plane_point_normal front 10 0 0  1 0 0  0 1 0
+        sketch_line locked_line front 2 3  5 7 locked
+        sketch_line reference_line front 2 3  5 7 reference
+        sketch_circle locked_circle front 4 4  1.25 locked
+    )");
+    auto project = LoadProjectScript(input, "test");
+    const auto movedPlane = project.FindWorkPlane("front")->Translated({3.0, 4.0, 5.0});
+
+    project.UpdateWorkPlane("front", movedPlane);
+
+    RequireNear(project.Wires()[0].wire.Start(), {13.0, 6.0, 8.0}, "locked line follows plane");
+    RequireNear(project.Wires()[1].wire.Start(), {10.0, 2.0, 3.0}, "reference line stays in 3d");
+    RequireNear(project.Wires()[2].wire.ArcData().center, {13.0, 8.0, 9.0}, "locked circle follows plane");
+
+    project.UpdateWire("reference_line", Wire::Line({0.0, 0.0, 0.0}, {2.0, 7.0, 4.0}));
+    RequireNear(project.Wires()[1].wire.End(), {2.0, 7.0, 4.0}, "wire update replaces geometry");
+}
+
 } // namespace
 
 int main()
@@ -158,6 +180,7 @@ int main()
         WrittenProjectRoundTrips();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
+        UpdatingPlaneMovesOnlyLockedWires();
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

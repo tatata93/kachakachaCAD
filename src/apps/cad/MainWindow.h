@@ -6,13 +6,17 @@
 #include <QMainWindow>
 
 #include <array>
+#include <vector>
 
 class QCloseEvent;
+class QAction;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QStackedWidget;
+class QTabWidget;
+class QTableWidget;
 class QTreeWidget;
 
 class MainWindow final : public QMainWindow {
@@ -30,6 +34,7 @@ private:
     void BuildUi();
     QWidget* BuildPlanePanel();
     QWidget* BuildWirePanel();
+    QWidget* BuildEditPanel();
     QWidget* BuildInfoPanel();
     void BuildMenusAndToolbar();
     void NewProject();
@@ -38,10 +43,17 @@ private:
     void SaveProjectAs();
     void AddWorkPlane();
     void AddWire();
+    void ApplySelectedEdit();
     void DeleteSelection();
+    void Undo();
+    void Redo();
+    void RecordUndo();
+    void UpdateHistoryActions();
     void RefreshModelViews(bool fitView = false);
     void RefreshPlaneChoices();
     void UpdateSelection(CadSelection selection, bool updateTree);
+    void PopulateEditPanel(CadSelection selection);
+    void PopulateWirePointTable(const kachakacha::model::NamedWire& wire);
     void MarkModified();
     bool ConfirmDiscardChanges();
     QString SuggestedPlaneName() const;
@@ -50,10 +62,31 @@ private:
     kachakacha::model::Project project_;
     QString currentPath_;
     bool modified_ = false;
+    std::vector<kachakacha::model::Project> undoStack_;
+    std::vector<kachakacha::model::Project> redoStack_;
+    QAction* undoAction_ = nullptr;
+    QAction* redoAction_ = nullptr;
 
     CadViewport* viewport_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;
+    QTabWidget* toolsTabs_ = nullptr;
     QLabel* infoLabel_ = nullptr;
+
+    QLabel* editSelectionLabel_ = nullptr;
+    QStackedWidget* editParameters_ = nullptr;
+    std::array<QDoubleSpinBox*, 3> editPlaneOrigin_{};
+    std::array<QDoubleSpinBox*, 3> editPlaneNormal_{};
+    std::array<QDoubleSpinBox*, 3> editPlaneUAxis_{};
+    QComboBox* editWireSourcePlane_ = nullptr;
+    QComboBox* editWirePolicy_ = nullptr;
+    QStackedWidget* editWireGeometry_ = nullptr;
+    QTableWidget* editWirePointTable_ = nullptr;
+    std::array<QDoubleSpinBox*, 3> editArcCenter_{};
+    std::array<QDoubleSpinBox*, 3> editArcUAxis_{};
+    std::array<QDoubleSpinBox*, 3> editArcVAxis_{};
+    QDoubleSpinBox* editArcRadius_ = nullptr;
+    QDoubleSpinBox* editArcStartAngle_ = nullptr;
+    QDoubleSpinBox* editArcSweepAngle_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

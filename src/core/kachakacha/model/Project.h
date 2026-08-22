@@ -36,6 +36,8 @@ class Project {
 public:
     void AddWorkPlane(std::string name, WorkPlane plane);
     void AddWire(std::string name, Wire wire, WireMetadata metadata = {});
+    void UpdateWorkPlane(std::string_view name, WorkPlane plane);
+    void UpdateWire(std::string_view name, Wire wire);
     void SetWireMetadata(std::string_view name, WireMetadata metadata);
     bool RemoveWorkPlane(std::string_view name);
     bool RemoveWire(std::string_view name);

@@ -4,6 +4,7 @@
 #include "kachakacha/model/Sketch.h"
 
 #include <QAction>
+#include <QAbstractItemView>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDockWidget>
@@ -26,6 +27,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -113,6 +115,19 @@ Vector3 ReadVector3(const std::array<QDoubleSpinBox*, 3>& fields)
 Vector2 ReadVector2(const std::array<QDoubleSpinBox*, 2>& fields)
 {
     return {fields[0]->value(), fields[1]->value()};
+}
+
+Vector3 ReadTablePoint(const QTableWidget* table, int row)
+{
+    std::array<double, 3> values{};
+    for (int column = 0; column < 3; ++column) {
+        const auto* field = qobject_cast<QDoubleSpinBox*>(table->cellWidget(row, column));
+        if (field == nullptr) {
+            throw std::logic_error("Wire point editor is incomplete.");
+        }
+        values[column] = field->value();
+    }
+    return {values[0], values[1], values[2]};
 }
 
 QWidget* MakeFormPage(QFormLayout*& form)
@@ -238,11 +253,12 @@ void MainWindow::BuildUi()
     auto* toolsDock = new QDockWidget(QStringLiteral("作成と情報"), this);
     toolsDock->setObjectName("toolsDock");
     toolsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    auto* tabs = new QTabWidget;
-    tabs->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
-    tabs->addTab(BuildWirePanel(), QStringLiteral("ワイヤー"));
-    tabs->addTab(BuildInfoPanel(), QStringLiteral("情報"));
-    toolsDock->setWidget(tabs);
+    toolsTabs_ = new QTabWidget;
+    toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
+    toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("ワイヤー"));
+    toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
+    toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
+    toolsDock->setWidget(toolsTabs_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
     toolsDock->setMinimumWidth(380);
     toolsDock->setMaximumWidth(460);
@@ -447,6 +463,80 @@ QWidget* MainWindow::BuildWirePanel()
     return panel;
 }
 
+QWidget* MainWindow::BuildEditPanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    editSelectionLabel_ = new QLabel(QStringLiteral("選択なし"));
+    editSelectionLabel_->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(editSelectionLabel_);
+
+    editParameters_ = new QStackedWidget;
+    editParameters_->addWidget(new QLabel(QStringLiteral("選択なし")));
+
+    QFormLayout* planeForm = nullptr;
+    QWidget* planePage = MakeFormPage(planeForm);
+    planeForm->addRow(QStringLiteral("原点"), MakeVector3Editor(editPlaneOrigin_));
+    planeForm->addRow(QStringLiteral("法線"), MakeVector3Editor(editPlaneNormal_, {0.0, 0.0, 1.0}));
+    planeForm->addRow(QStringLiteral("平面内 X"), MakeVector3Editor(editPlaneUAxis_, {1.0, 0.0, 0.0}));
+    editParameters_->addWidget(planePage);
+
+    auto* wirePage = new QWidget;
+    auto* wireLayout = new QVBoxLayout(wirePage);
+    wireLayout->setContentsMargins(0, 6, 0, 6);
+    auto* metadataForm = new QFormLayout;
+    editWireSourcePlane_ = new QComboBox;
+    editWirePolicy_ = new QComboBox;
+    editWirePolicy_->addItems({
+        QStringLiteral("平面拘束なし"),
+        QStringLiteral("作業平面を編集基準に使用"),
+        QStringLiteral("作業平面に固定"),
+    });
+    metadataForm->addRow(QStringLiteral("作成元平面"), editWireSourcePlane_);
+    metadataForm->addRow(QStringLiteral("平面との関係"), editWirePolicy_);
+    wireLayout->addLayout(metadataForm);
+
+    editWireGeometry_ = new QStackedWidget;
+    editWirePointTable_ = new QTableWidget;
+    editWirePointTable_->setColumnCount(3);
+    editWirePointTable_->setHorizontalHeaderLabels({"X", "Y", "Z"});
+    editWirePointTable_->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    editWirePointTable_->verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    editWirePointTable_->setSelectionMode(QAbstractItemView::NoSelection);
+    editWirePointTable_->setMinimumHeight(190);
+    editWireGeometry_->addWidget(editWirePointTable_);
+
+    QFormLayout* arcForm = nullptr;
+    QWidget* arcPage = MakeFormPage(arcForm);
+    editArcRadius_ = MakePositiveField(1.0);
+    editArcRadius_->setSuffix(QStringLiteral(" mm"));
+    editArcStartAngle_ = MakeNumberField(0.0);
+    editArcStartAngle_->setSuffix(QStringLiteral(" °"));
+    editArcSweepAngle_ = MakeNumberField(90.0);
+    editArcSweepAngle_->setRange(-360.0, 360.0);
+    editArcSweepAngle_->setSuffix(QStringLiteral(" °"));
+    arcForm->addRow(QStringLiteral("中心"), MakeVector3Editor(editArcCenter_));
+    arcForm->addRow(QStringLiteral("円の X 軸"), MakeVector3Editor(editArcUAxis_, {1.0, 0.0, 0.0}));
+    arcForm->addRow(QStringLiteral("円の Y 軸"), MakeVector3Editor(editArcVAxis_, {0.0, 1.0, 0.0}));
+    arcForm->addRow(QStringLiteral("半径"), editArcRadius_);
+    arcForm->addRow(QStringLiteral("開始角"), editArcStartAngle_);
+    arcForm->addRow(QStringLiteral("中心角"), editArcSweepAngle_);
+    editWireGeometry_->addWidget(arcPage);
+    wireLayout->addWidget(editWireGeometry_);
+    editParameters_->addWidget(wirePage);
+    layout->addWidget(editParameters_);
+
+    auto* applyButton = new QPushButton(QStringLiteral("変更を適用"));
+    applyButton->setObjectName("primaryButton");
+    connect(applyButton, &QPushButton::clicked, this, &MainWindow::ApplySelectedEdit);
+    layout->addWidget(applyButton);
+    layout->addStretch(1);
+    return panel;
+}
+
 QWidget* MainWindow::BuildInfoPanel()
 {
     auto* panel = new QWidget;
@@ -470,12 +560,16 @@ void MainWindow::BuildMenusAndToolbar()
     QAction* fitAction = new QAction(QStringLiteral("全体表示"), this);
     QAction* deleteAction = new QAction(style()->standardIcon(QStyle::SP_TrashIcon), QStringLiteral("削除"), this);
     QAction* exitAction = new QAction(QStringLiteral("終了"), this);
+    undoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowBack), QStringLiteral("元に戻す"), this);
+    redoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), QStringLiteral("やり直す"), this);
 
     newAction->setShortcut(QKeySequence::New);
     openAction->setShortcut(QKeySequence::Open);
     saveAction->setShortcut(QKeySequence::Save);
     saveAsAction->setShortcut(QKeySequence::SaveAs);
     deleteAction->setShortcut(QKeySequence::Delete);
+    undoAction_->setShortcut(QKeySequence::Undo);
+    redoAction_->setShortcut(QKeySequence::Redo);
 
     connect(newAction, &QAction::triggered, this, &MainWindow::NewProject);
     connect(openAction, &QAction::triggered, this, &MainWindow::OpenProject);
@@ -484,6 +578,8 @@ void MainWindow::BuildMenusAndToolbar()
     connect(fitAction, &QAction::triggered, viewport_, &CadViewport::FitAll);
     connect(deleteAction, &QAction::triggered, this, &MainWindow::DeleteSelection);
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
+    connect(undoAction_, &QAction::triggered, this, &MainWindow::Undo);
+    connect(redoAction_, &QAction::triggered, this, &MainWindow::Redo);
 
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル"));
     fileMenu->addAction(newAction);
@@ -495,6 +591,9 @@ void MainWindow::BuildMenusAndToolbar()
     fileMenu->addAction(exitAction);
 
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("編集"));
+    editMenu->addAction(undoAction_);
+    editMenu->addAction(redoAction_);
+    editMenu->addSeparator();
     editMenu->addAction(deleteAction);
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
@@ -506,8 +605,12 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(openAction);
     toolbar->addAction(saveAction);
     toolbar->addSeparator();
+    toolbar->addAction(undoAction_);
+    toolbar->addAction(redoAction_);
+    toolbar->addSeparator();
     toolbar->addAction(fitAction);
     toolbar->addAction(deleteAction);
+    UpdateHistoryActions();
 }
 
 void MainWindow::NewProject()
@@ -522,6 +625,9 @@ void MainWindow::NewProject()
     project_.AddWorkPlane("side_YZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     currentPath_.clear();
     modified_ = false;
+    undoStack_.clear();
+    redoStack_.clear();
+    UpdateHistoryActions();
     RefreshModelViews(true);
     setWindowTitle(QStringLiteral("kachakachaCAD - 無題"));
     statusBar()->showMessage(QStringLiteral("新しいプロジェクト"), 3000);
@@ -549,6 +655,9 @@ bool MainWindow::LoadProjectFile(const QString& path)
         project_ = LoadProjectScript(input, nativePath.string());
         currentPath_ = path;
         modified_ = false;
+        undoStack_.clear();
+        redoStack_.clear();
+        UpdateHistoryActions();
         RefreshModelViews(true);
         setWindowTitle(QStringLiteral("kachakachaCAD - %1").arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("読み込みました: %1").arg(path), 4000);
@@ -625,6 +734,23 @@ bool MainWindow::RunCreationSelfTest()
     lineEnd_[2]->setValue(4.0);
     AddWire();
 
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount)}, false);
+    qobject_cast<QDoubleSpinBox*>(editWirePointTable_->cellWidget(1, 0))->setValue(3.0);
+    qobject_cast<QDoubleSpinBox*>(editWirePointTable_->cellWidget(1, 1))->setValue(8.0);
+    qobject_cast<QDoubleSpinBox*>(editWirePointTable_->cellWidget(1, 2))->setValue(5.0);
+    ApplySelectedEdit();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {3.0, 8.0, 5.0})) {
+        return false;
+    }
+    Undo();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {2.0, 7.0, 4.0})) {
+        return false;
+    }
+    Redo();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {3.0, 8.0, 5.0})) {
+        return false;
+    }
+
     wireName_->setText("__ui_test_sketch_line");
     wireKind_->setCurrentIndex(2);
     wirePlane_->setCurrentText("__ui_test_plane");
@@ -639,9 +765,12 @@ bool MainWindow::RunCreationSelfTest()
     }
     const auto& line3d = project_.Wires()[initialWireCount];
     const auto& sketchLine = project_.Wires()[initialWireCount + 1];
-    return kachakacha::geometry::AlmostEqual(line3d.wire.End(), {2.0, 7.0, 4.0})
+    const bool result = kachakacha::geometry::AlmostEqual(line3d.wire.End(), {3.0, 8.0, 5.0})
         && sketchLine.metadata.sourcePlaneName == "__ui_test_plane"
         && sketchLine.metadata.planePolicy == WirePlanePolicy::ReferenceOnly;
+    toolsTabs_->setCurrentIndex(2);
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount)}, true);
+    return result;
 }
 
 void MainWindow::AddWorkPlane()
@@ -689,7 +818,12 @@ void MainWindow::AddWorkPlane()
         if (std::abs(planeTilt_->value()) > 1.0e-12) {
             finalPlane = finalPlane.RotateAroundAxis(finalPlane.Origin(), finalPlane.UAxis(), planeTilt_->value() * kPi / 180.0);
         }
-        project_.AddWorkPlane(ToName(planeName_->text()), finalPlane);
+        const std::string newName = ToName(planeName_->text());
+        if (project_.FindWorkPlane(newName).has_value()) {
+            throw std::invalid_argument("同じ名前の作業平面があります。");
+        }
+        RecordUndo();
+        project_.AddWorkPlane(newName, finalPlane);
         MarkModified();
         RefreshModelViews(false);
         UpdateSelection({CadSelectionKind::WorkPlane, static_cast<int>(project_.WorkPlanes().size()) - 1}, true);
@@ -748,7 +882,14 @@ void MainWindow::AddWire()
             metadata.planePolicy = WirePlanePolicy::LockedToPlane;
             break;
         }
-        project_.AddWire(ToName(wireName_->text()), *wire, metadata);
+        const std::string newName = ToName(wireName_->text());
+        for (const auto& existingWire : project_.Wires()) {
+            if (existingWire.name == newName) {
+                throw std::invalid_argument("同じ名前のワイヤーがあります。");
+            }
+        }
+        RecordUndo();
+        project_.AddWire(newName, *wire, metadata);
         MarkModified();
         RefreshModelViews(false);
         UpdateSelection({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
@@ -756,6 +897,137 @@ void MainWindow::AddWire()
         statusBar()->showMessage(QStringLiteral("ワイヤーを追加しました"), 3000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this, QStringLiteral("ワイヤーを作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::ApplySelectedEdit()
+{
+    const CadSelection selection = viewport_->Selection();
+    try {
+        if (selection.kind == CadSelectionKind::WorkPlane
+            && selection.index >= 0
+            && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+            const auto& namedPlane = project_.WorkPlanes()[selection.index];
+            const WorkPlane replacement = WorkPlane::FromOriginAxes(
+                ReadVector3(editPlaneOrigin_),
+                ReadVector3(editPlaneUAxis_),
+                ReadVector3(editPlaneNormal_));
+            RecordUndo();
+            project_.UpdateWorkPlane(namedPlane.name, replacement);
+        } else if (selection.kind == CadSelectionKind::Wire
+            && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            const auto& namedWire = project_.Wires()[selection.index];
+            std::optional<Wire> replacement;
+            switch (namedWire.wire.Kind()) {
+            case WireKind::Line:
+                replacement = Wire::Line(ReadTablePoint(editWirePointTable_, 0), ReadTablePoint(editWirePointTable_, 1));
+                break;
+            case WireKind::Polyline: {
+                std::vector<Vector3> points;
+                points.reserve(editWirePointTable_->rowCount());
+                for (int row = 0; row < editWirePointTable_->rowCount(); ++row) {
+                    points.push_back(ReadTablePoint(editWirePointTable_, row));
+                }
+                replacement = Wire::Polyline(std::move(points));
+                break;
+            }
+            case WireKind::CubicBezier:
+                replacement = Wire::CubicBezier(
+                    ReadTablePoint(editWirePointTable_, 0),
+                    ReadTablePoint(editWirePointTable_, 1),
+                    ReadTablePoint(editWirePointTable_, 2),
+                    ReadTablePoint(editWirePointTable_, 3));
+                break;
+            case WireKind::Circle:
+                replacement = Wire::Circle(
+                    ReadVector3(editArcCenter_),
+                    ReadVector3(editArcUAxis_),
+                    ReadVector3(editArcVAxis_),
+                    editArcRadius_->value());
+                break;
+            case WireKind::CircularArc:
+                replacement = Wire::CircularArc(
+                    ReadVector3(editArcCenter_),
+                    ReadVector3(editArcUAxis_),
+                    ReadVector3(editArcVAxis_),
+                    editArcRadius_->value(),
+                    editArcStartAngle_->value() * kPi / 180.0,
+                    editArcSweepAngle_->value() * kPi / 180.0);
+                break;
+            }
+
+            WireMetadata metadata;
+            if (editWireSourcePlane_->currentIndex() > 0) {
+                metadata.sourcePlaneName = ToName(editWireSourcePlane_->currentText());
+                if (!project_.FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
+                    throw std::invalid_argument("作成元平面を選択してください。");
+                }
+            }
+            metadata.planePolicy = static_cast<WirePlanePolicy>(editWirePolicy_->currentIndex());
+
+            RecordUndo();
+            project_.UpdateWire(namedWire.name, *replacement);
+            project_.SetWireMetadata(namedWire.name, metadata);
+        } else {
+            statusBar()->showMessage(QStringLiteral("編集する項目を選択してください"), 2500);
+            return;
+        }
+
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(selection, true);
+        statusBar()->showMessage(QStringLiteral("数値変更を適用しました"), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("変更を適用できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::Undo()
+{
+    if (undoStack_.empty()) {
+        return;
+    }
+    redoStack_.push_back(project_);
+    project_ = std::move(undoStack_.back());
+    undoStack_.pop_back();
+    MarkModified();
+    RefreshModelViews(false);
+    UpdateHistoryActions();
+    statusBar()->showMessage(QStringLiteral("元に戻しました"), 2000);
+}
+
+void MainWindow::Redo()
+{
+    if (redoStack_.empty()) {
+        return;
+    }
+    undoStack_.push_back(project_);
+    project_ = std::move(redoStack_.back());
+    redoStack_.pop_back();
+    MarkModified();
+    RefreshModelViews(false);
+    UpdateHistoryActions();
+    statusBar()->showMessage(QStringLiteral("やり直しました"), 2000);
+}
+
+void MainWindow::RecordUndo()
+{
+    undoStack_.push_back(project_);
+    if (undoStack_.size() > 100) {
+        undoStack_.erase(undoStack_.begin());
+    }
+    redoStack_.clear();
+    UpdateHistoryActions();
+}
+
+void MainWindow::UpdateHistoryActions()
+{
+    if (undoAction_ != nullptr) {
+        undoAction_->setEnabled(!undoStack_.empty());
+    }
+    if (redoAction_ != nullptr) {
+        redoAction_->setEnabled(!redoStack_.empty());
     }
 }
 
@@ -783,8 +1055,10 @@ void MainWindow::DeleteSelection()
         return;
     }
     if (selection.kind == CadSelectionKind::WorkPlane) {
+        RecordUndo();
         project_.RemoveWorkPlane(ToName(name));
     } else {
+        RecordUndo();
         project_.RemoveWire(ToName(name));
     }
     MarkModified();
@@ -836,6 +1110,15 @@ void MainWindow::RefreshPlaneChoices()
     refresh(offsetSourcePlane_);
     refresh(rotateSourcePlane_);
     refresh(wirePlane_);
+
+    const QString previousEditSource = editWireSourcePlane_->currentText();
+    editWireSourcePlane_->clear();
+    editWireSourcePlane_->addItem(QStringLiteral("なし"));
+    for (const auto& plane : project_.WorkPlanes()) {
+        editWireSourcePlane_->addItem(ToQString(plane.name));
+    }
+    const int previousEditIndex = editWireSourcePlane_->findText(previousEditSource);
+    editWireSourcePlane_->setCurrentIndex(previousEditIndex >= 0 ? previousEditIndex : 0);
 }
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
@@ -869,6 +1152,94 @@ void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
             .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End())));
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
+    }
+    PopulateEditPanel(selection);
+}
+
+void MainWindow::PopulateEditPanel(CadSelection selection)
+{
+    if (selection.kind == CadSelectionKind::WorkPlane
+        && selection.index >= 0
+        && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+        const auto& namedPlane = project_.WorkPlanes()[selection.index];
+        editSelectionLabel_->setText(ToQString(namedPlane.name));
+        const std::array<Vector3, 3> values = {namedPlane.plane.Origin(), namedPlane.plane.Normal(), namedPlane.plane.UAxis()};
+        const std::array<std::array<QDoubleSpinBox*, 3>*, 3> editors = {&editPlaneOrigin_, &editPlaneNormal_, &editPlaneUAxis_};
+        for (int group = 0; group < 3; ++group) {
+            (*editors[group])[0]->setValue(values[group].x);
+            (*editors[group])[1]->setValue(values[group].y);
+            (*editors[group])[2]->setValue(values[group].z);
+        }
+        editParameters_->setCurrentIndex(1);
+        return;
+    }
+
+    if (selection.kind == CadSelectionKind::Wire
+        && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Wires().size())) {
+        const auto& namedWire = project_.Wires()[selection.index];
+        editSelectionLabel_->setText(ToQString(namedWire.name));
+        if (namedWire.metadata.sourcePlaneName.has_value()) {
+            const int sourceIndex = editWireSourcePlane_->findText(ToQString(*namedWire.metadata.sourcePlaneName));
+            editWireSourcePlane_->setCurrentIndex(sourceIndex >= 0 ? sourceIndex : 0);
+        } else {
+            editWireSourcePlane_->setCurrentIndex(0);
+        }
+        editWirePolicy_->setCurrentIndex(static_cast<int>(namedWire.metadata.planePolicy));
+
+        if (namedWire.wire.Kind() == WireKind::Circle || namedWire.wire.Kind() == WireKind::CircularArc) {
+            const auto arc = namedWire.wire.ArcData();
+            const std::array<Vector3, 3> values = {arc.center, arc.uAxis, arc.vAxis};
+            const std::array<std::array<QDoubleSpinBox*, 3>*, 3> editors = {&editArcCenter_, &editArcUAxis_, &editArcVAxis_};
+            for (int group = 0; group < 3; ++group) {
+                (*editors[group])[0]->setValue(values[group].x);
+                (*editors[group])[1]->setValue(values[group].y);
+                (*editors[group])[2]->setValue(values[group].z);
+            }
+            editArcRadius_->setValue(arc.radius);
+            editArcStartAngle_->setValue(arc.startAngleRadians * 180.0 / kPi);
+            editArcSweepAngle_->setValue(arc.sweepAngleRadians * 180.0 / kPi);
+            const bool circle = namedWire.wire.Kind() == WireKind::Circle;
+            editArcStartAngle_->setEnabled(!circle);
+            editArcSweepAngle_->setEnabled(!circle);
+            editWireGeometry_->setCurrentIndex(1);
+        } else {
+            PopulateWirePointTable(namedWire);
+            editWireGeometry_->setCurrentIndex(0);
+        }
+        editParameters_->setCurrentIndex(2);
+        return;
+    }
+
+    editSelectionLabel_->setText(QStringLiteral("選択なし"));
+    editParameters_->setCurrentIndex(0);
+}
+
+void MainWindow::PopulateWirePointTable(const kachakacha::model::NamedWire& namedWire)
+{
+    const auto& points = namedWire.wire.ControlPoints();
+    editWirePointTable_->clearContents();
+    editWirePointTable_->setRowCount(static_cast<int>(points.size()));
+
+    QStringList rowLabels;
+    if (namedWire.wire.Kind() == WireKind::Line) {
+        rowLabels = {QStringLiteral("始点"), QStringLiteral("終点")};
+    } else if (namedWire.wire.Kind() == WireKind::CubicBezier) {
+        rowLabels = {QStringLiteral("始点"), QStringLiteral("制御点 1"), QStringLiteral("制御点 2"), QStringLiteral("終点")};
+    } else {
+        for (int index = 0; index < static_cast<int>(points.size()); ++index) {
+            rowLabels.append(QStringLiteral("点 %1").arg(index + 1));
+        }
+    }
+    editWirePointTable_->setVerticalHeaderLabels(rowLabels);
+
+    for (int row = 0; row < static_cast<int>(points.size()); ++row) {
+        const std::array<double, 3> values = {points[row].x, points[row].y, points[row].z};
+        for (int column = 0; column < 3; ++column) {
+            QDoubleSpinBox* field = MakeNumberField(values[column]);
+            field->setFrame(false);
+            editWirePointTable_->setCellWidget(row, column, field);
+        }
     }
 }
 

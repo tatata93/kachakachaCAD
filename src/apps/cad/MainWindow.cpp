@@ -426,6 +426,7 @@ void MainWindow::BuildUi()
         QPushButton:hover { background: #e8edef; }
         QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
         QPushButton#primaryButton:hover { background: #09666e; }
+        QPushButton#primaryButton:disabled { background: #d7dcdf; color: #7c868d; border-color: #bcc4c9; }
         QToolButton#drawingToolButton { min-height: 38px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 3px 8px; }
         QToolButton#drawingToolButton:hover { background: #e8edef; }
         QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
@@ -462,6 +463,9 @@ void MainWindow::BuildDrawingActions()
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
     clearReferenceAction_->setToolTip(QStringLiteral("現在の基準線を解除する"));
+    lineToolAction_->setToolTip(QStringLiteral("始点と終点を指定。Shiftで作図面の水平・垂直へ固定"));
+    polylineToolAction_->setToolTip(QStringLiteral("点を続けて指定。Shiftで次の辺を水平・垂直へ固定"));
+    rectangleToolAction_->setToolTip(QStringLiteral("対角2点を指定。Shiftで正方形へ固定"));
     clearReferenceAction_->setEnabled(false);
 
     selectToolAction_->setShortcut(Qt::Key_V);
@@ -565,6 +569,52 @@ QWidget* MainWindow::BuildDrawingPanel()
     addToolButton(bezierToolAction_, 3, 0, 2);
     layout->addLayout(toolGrid);
 
+    drawingDimensionSection_ = new QWidget;
+    auto* dimensionLayout = new QVBoxLayout(drawingDimensionSection_);
+    dimensionLayout->setContentsMargins(0, 2, 0, 0);
+    dimensionLayout->setSpacing(6);
+    auto* dimensionLabel = new QLabel(QStringLiteral("実寸で確定"));
+    dimensionLabel->setStyleSheet("font-weight: 600; color: #26323a;");
+    dimensionLayout->addWidget(dimensionLabel);
+
+    drawingDimensionStack_ = new QStackedWidget;
+    QFormLayout* dimensionForm = nullptr;
+
+    QWidget* segmentPage = MakeFormPage(dimensionForm);
+    drawingLengthField_ = MakePositiveField(10.0);
+    drawingLengthField_->setSuffix(QStringLiteral(" mm"));
+    drawingAngleField_ = MakeNumberField(0.0);
+    drawingAngleField_->setRange(-360.0, 360.0);
+    drawingAngleField_->setDecimals(2);
+    drawingAngleField_->setSuffix(QStringLiteral(" °"));
+    drawingAngleField_->setToolTip(QStringLiteral("作図面の横方向を0°、縦方向を90°とする角度"));
+    dimensionForm->addRow(QStringLiteral("長さ"), drawingLengthField_);
+    dimensionForm->addRow(QStringLiteral("角度"), drawingAngleField_);
+    drawingDimensionStack_->addWidget(segmentPage);
+
+    QWidget* rectanglePage = MakeFormPage(dimensionForm);
+    drawingWidthField_ = MakePositiveField(10.0);
+    drawingWidthField_->setSuffix(QStringLiteral(" mm"));
+    drawingHeightField_ = MakePositiveField(10.0);
+    drawingHeightField_->setSuffix(QStringLiteral(" mm"));
+    dimensionForm->addRow(QStringLiteral("幅"), drawingWidthField_);
+    dimensionForm->addRow(QStringLiteral("高さ"), drawingHeightField_);
+    drawingDimensionStack_->addWidget(rectanglePage);
+
+    QWidget* circlePage = MakeFormPage(dimensionForm);
+    drawingRadiusField_ = MakePositiveField(5.0);
+    drawingRadiusField_->setSuffix(QStringLiteral(" mm"));
+    dimensionForm->addRow(QStringLiteral("半径"), drawingRadiusField_);
+    drawingDimensionStack_->addWidget(circlePage);
+    dimensionLayout->addWidget(drawingDimensionStack_);
+
+    drawingDimensionCommitButton_ = new QPushButton(QStringLiteral("寸法で確定"));
+    drawingDimensionCommitButton_->setObjectName("primaryButton");
+    drawingDimensionCommitButton_->setEnabled(false);
+    drawingDimensionCommitButton_->setToolTip(QStringLiteral("始点を基準に入力した実寸で形を作成"));
+    dimensionLayout->addWidget(drawingDimensionCommitButton_);
+    layout->addWidget(drawingDimensionSection_);
+
     auto* snapRow = new QWidget;
     auto* snapLayout = new QHBoxLayout(snapRow);
     snapLayout->setContentsMargins(0, 2, 0, 0);
@@ -603,6 +653,12 @@ QWidget* MainWindow::BuildDrawingPanel()
         viewport_->AlignToActiveWorkPlane();
     });
     connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
+    connect(drawingDimensionCommitButton_, &QPushButton::clicked, this, &MainWindow::CommitDrawingDimensions);
+    for (const QKeySequence key : {QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)}) {
+        auto* shortcut = new QShortcut(key, drawingDimensionSection_);
+        shortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(shortcut, &QShortcut::activated, this, &MainWindow::CommitDrawingDimensions);
+    }
     UpdateDrawingPanel(ViewportTool::Select, 0);
     return panel;
 }
@@ -2008,6 +2064,73 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     if (cancelDrawingAction_ != nullptr) {
         cancelDrawingAction_->setEnabled(pointCount > 0);
     }
+
+    if (drawingDimensionSection_ == nullptr || drawingDimensionStack_ == nullptr
+        || drawingDimensionCommitButton_ == nullptr) {
+        return;
+    }
+
+    int dimensionPage = -1;
+    if (tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline) {
+        dimensionPage = 0;
+    } else if (tool == ViewportTool::DrawRectangle) {
+        dimensionPage = 1;
+    } else if (tool == ViewportTool::DrawCircle) {
+        dimensionPage = 2;
+    }
+    drawingDimensionSection_->setVisible(dimensionPage >= 0);
+    if (dimensionPage < 0) {
+        return;
+    }
+    drawingDimensionStack_->setCurrentIndex(dimensionPage);
+    drawingDimensionCommitButton_->setEnabled(pointCount > 0);
+    drawingDimensionCommitButton_->setText(
+        pointCount > 0 ? QStringLiteral("寸法で確定") : QStringLiteral("始点を指定"));
+
+    const DrawingMeasurements measurements = viewport_->CurrentDrawingMeasurements();
+    if (!measurements.available) {
+        return;
+    }
+    const auto updateField = [](QDoubleSpinBox* field, double value) {
+        if (field == nullptr || field->hasFocus()) {
+            return;
+        }
+        const QSignalBlocker blocker(field);
+        field->setValue(value);
+    };
+    if (dimensionPage == 0) {
+        updateField(drawingLengthField_, measurements.lengthMillimeters);
+        updateField(drawingAngleField_, measurements.angleDegrees);
+    } else if (dimensionPage == 1) {
+        updateField(drawingWidthField_, measurements.widthMillimeters);
+        updateField(drawingHeightField_, measurements.heightMillimeters);
+    } else {
+        updateField(drawingRadiusField_, measurements.radiusMillimeters);
+    }
+}
+
+void MainWindow::CommitDrawingDimensions()
+{
+    if (viewport_ == nullptr || drawingDimensionCommitButton_ == nullptr
+        || !drawingDimensionCommitButton_->isEnabled()) {
+        return;
+    }
+
+    bool committed = false;
+    if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline) {
+        committed = viewport_->CommitDrawingDimensions(
+            drawingLengthField_->value(), drawingAngleField_->value());
+    } else if (viewport_->Tool() == ViewportTool::DrawRectangle) {
+        committed = viewport_->CommitDrawingDimensions(
+            drawingWidthField_->value(), drawingHeightField_->value());
+    } else if (viewport_->Tool() == ViewportTool::DrawCircle) {
+        committed = viewport_->CommitDrawingDimensions(drawingRadiusField_->value());
+    }
+
+    if (!committed) {
+        statusBar()->showMessage(QStringLiteral("始点を3D画面で指定してください"), 3000);
+    }
+    viewport_->setFocus();
 }
 
 void MainWindow::RefreshActiveWorkPlane()
@@ -2958,9 +3081,14 @@ bool MainWindow::RunCreationSelfTest()
     snapAction_->setChecked(true);
     snapStepField_->setValue(1.0);
 
-    const auto sendMouse = [this](QEvent::Type type, QPointF position, Qt::MouseButton button, Qt::MouseButtons buttons) {
+    const auto sendMouse = [this](
+                               QEvent::Type type,
+                               QPointF position,
+                               Qt::MouseButton button,
+                               Qt::MouseButtons buttons,
+                               Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
         const QPointF globalPosition(viewport_->mapToGlobal(position.toPoint()));
-        QMouseEvent event(type, position, globalPosition, button, buttons, Qt::NoModifier);
+        QMouseEvent event(type, position, globalPosition, button, buttons, modifiers);
         QApplication::sendEvent(viewport_, &event);
     };
     const auto click = [&](QPointF position) {
@@ -3054,6 +3182,69 @@ bool MainWindow::RunCreationSelfTest()
                    << "rectangle" << afterRectangle
                    << "circle" << project_.Wires().size();
         return fail("direct drawing result");
+    }
+
+    const std::size_t exactStart = project_.Wires().size();
+    SetViewportTool(ViewportTool::DrawLine);
+    click(center + QPointF(-205.0, 135.0));
+    drawingLengthField_->setValue(12.5);
+    drawingAngleField_->setValue(30.0);
+    CommitDrawingDimensions();
+
+    SetViewportTool(ViewportTool::DrawRectangle);
+    const QPointF exactRectangleStart = center + QPointF(155.0, -120.0);
+    click(exactRectangleStart);
+    sendMouse(QEvent::MouseMove, exactRectangleStart + QPointF(-45.0, 30.0), Qt::NoButton, Qt::NoButton);
+    drawingWidthField_->setValue(8.0);
+    drawingHeightField_->setValue(4.0);
+    CommitDrawingDimensions();
+
+    SetViewportTool(ViewportTool::DrawCircle);
+    click(center + QPointF(175.0, 125.0));
+    drawingRadiusField_->setValue(3.25);
+    CommitDrawingDimensions();
+
+    SetViewportTool(ViewportTool::DrawLine);
+    const QPointF constrainedStart = center + QPointF(-205.0, -135.0);
+    const QPointF constrainedEnd = constrainedStart + QPointF(65.0, 25.0);
+    click(constrainedStart);
+    sendMouse(QEvent::MouseMove, constrainedEnd, Qt::NoButton, Qt::NoButton, Qt::ShiftModifier);
+    sendMouse(QEvent::MouseButtonPress, constrainedEnd, Qt::LeftButton, Qt::LeftButton, Qt::ShiftModifier);
+    sendMouse(QEvent::MouseButtonRelease, constrainedEnd, Qt::LeftButton, Qt::NoButton, Qt::ShiftModifier);
+
+    const std::optional<WorkPlane> exactPlane = project_.FindWorkPlane(drawingPlaneName);
+    kachakacha::model::PlaneCoordinates constrainedStartCoordinates;
+    kachakacha::model::PlaneCoordinates constrainedEndCoordinates;
+    if (exactPlane.has_value() && project_.Wires().size() == exactStart + 4) {
+        constrainedStartCoordinates = exactPlane->Project(project_.Wires()[exactStart + 3].wire.Start());
+        constrainedEndCoordinates = exactPlane->Project(project_.Wires()[exactStart + 3].wire.End());
+    }
+    if (project_.Wires().size() != exactStart + 4
+        || !kachakacha::geometry::AlmostEqual(
+            (project_.Wires()[exactStart].wire.End() - project_.Wires()[exactStart].wire.Start()).Length(),
+            12.5, 1.0e-8)
+        || project_.Wires()[exactStart + 1].wire.Kind() != WireKind::Polyline
+        || !kachakacha::geometry::AlmostEqual(
+            (project_.Wires()[exactStart + 1].wire.ControlPoints()[1]
+                - project_.Wires()[exactStart + 1].wire.ControlPoints()[0]).Length(),
+            8.0, 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            (project_.Wires()[exactStart + 1].wire.ControlPoints()[2]
+                - project_.Wires()[exactStart + 1].wire.ControlPoints()[1]).Length(),
+            4.0, 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[exactStart + 2].wire.ArcData().radius, 3.25, 1.0e-8)
+        || !exactPlane.has_value()
+        || (std::abs(constrainedEndCoordinates.u - constrainedStartCoordinates.u) > 1.0e-8
+            && std::abs(constrainedEndCoordinates.v - constrainedStartCoordinates.v) > 1.0e-8)) {
+        return fail("dimension-driven direct drawing");
+    }
+    Undo();
+    Undo();
+    Undo();
+    Undo();
+    if (project_.Wires().size() != exactStart) {
+        return fail("undo dimension-driven drawing");
     }
 
     SetViewportTool(ViewportTool::Select);

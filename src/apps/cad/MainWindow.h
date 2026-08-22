@@ -92,6 +92,7 @@ private:
     void UpdatePlateSplitPreview();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
+    void CommitDrawingDimensions();
     void RefreshActiveWorkPlane();
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
     void AddViewportPolyline(const std::vector<kachakacha::geometry::Vector3>& points);
@@ -159,6 +160,14 @@ private:
     QComboBox* activePlaneCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QLabel* drawingStateLabel_ = nullptr;
+    QWidget* drawingDimensionSection_ = nullptr;
+    QStackedWidget* drawingDimensionStack_ = nullptr;
+    QDoubleSpinBox* drawingLengthField_ = nullptr;
+    QDoubleSpinBox* drawingAngleField_ = nullptr;
+    QDoubleSpinBox* drawingWidthField_ = nullptr;
+    QDoubleSpinBox* drawingHeightField_ = nullptr;
+    QDoubleSpinBox* drawingRadiusField_ = nullptr;
+    QPushButton* drawingDimensionCommitButton_ = nullptr;
 
     CadViewport* viewport_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;

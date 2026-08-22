@@ -40,6 +40,15 @@ enum class ViewportTool {
     SplitWire,
 };
 
+struct DrawingMeasurements {
+    bool available = false;
+    double lengthMillimeters = 0.0;
+    double angleDegrees = 0.0;
+    double widthMillimeters = 0.0;
+    double heightMillimeters = 0.0;
+    double radiusMillimeters = 0.0;
+};
+
 class CadViewport final : public QWidget {
 public:
     explicit CadViewport(QWidget* parent = nullptr);
@@ -74,6 +83,8 @@ public:
     [[nodiscard]] kachakacha::geometry::Vector3 ViewDirection() const;
     void FinishDrawing();
     void CancelDrawing();
+    [[nodiscard]] DrawingMeasurements CurrentDrawingMeasurements() const;
+    bool CommitDrawingDimensions(double primaryMillimeters, double secondaryValue = 0.0);
     [[nodiscard]] std::size_t DrawingPointCount() const noexcept { return drawingPoints_.size(); }
     void FitAll();
 
@@ -93,6 +104,9 @@ private:
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
     [[nodiscard]] std::optional<double> NearestWireParameter(int wireIndex, QPointF position, double maximumDistance = 12.0) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
+    [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
+        kachakacha::geometry::Vector3 point,
+        Qt::KeyboardModifiers modifiers) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
     void NotifyDrawingState();
     void NotifySelection();

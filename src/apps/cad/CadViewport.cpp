@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 using kachakacha::geometry::Vector3;
 using kachakacha::geometry::AlmostEqual;
@@ -302,6 +303,80 @@ void CadViewport::CancelDrawing()
     update();
 }
 
+DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
+{
+    DrawingMeasurements measurements;
+    if (!activePlane_.has_value() || drawingPoints_.empty() || !hoverDrawingPoint_.has_value()) {
+        return measurements;
+    }
+
+    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+        ? drawingPoints_.back()
+        : drawingPoints_.front();
+    const auto start = activePlane_->Project(anchor);
+    const auto hover = activePlane_->Project(*hoverDrawingPoint_);
+    const double deltaU = hover.u - start.u;
+    const double deltaV = hover.v - start.v;
+
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
+        measurements.lengthMillimeters = std::hypot(deltaU, deltaV);
+        measurements.angleDegrees = std::atan2(deltaV, deltaU) * 180.0 / std::numbers::pi;
+        measurements.available = measurements.lengthMillimeters > 1.0e-9;
+    } else if (tool_ == ViewportTool::DrawRectangle) {
+        measurements.widthMillimeters = std::abs(deltaU);
+        measurements.heightMillimeters = std::abs(deltaV);
+        measurements.available = measurements.widthMillimeters > 1.0e-9
+            && measurements.heightMillimeters > 1.0e-9;
+    } else if (tool_ == ViewportTool::DrawCircle) {
+        measurements.radiusMillimeters = std::hypot(deltaU, deltaV);
+        measurements.available = measurements.radiusMillimeters > 1.0e-9;
+    }
+    return measurements;
+}
+
+bool CadViewport::CommitDrawingDimensions(double primaryMillimeters, double secondaryValue)
+{
+    if (!activePlane_.has_value() || drawingPoints_.empty()
+        || !std::isfinite(primaryMillimeters) || primaryMillimeters <= 1.0e-9
+        || !std::isfinite(secondaryValue)) {
+        return false;
+    }
+
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
+        const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+            ? drawingPoints_.back()
+            : drawingPoints_.front();
+        const auto coordinates = activePlane_->Project(anchor);
+        const double angleRadians = secondaryValue * std::numbers::pi / 180.0;
+        CommitDrawingPoint(activePlane_->ToWorld(
+            coordinates.u + primaryMillimeters * std::cos(angleRadians),
+            coordinates.v + primaryMillimeters * std::sin(angleRadians)));
+        return true;
+    }
+
+    if (tool_ == ViewportTool::DrawRectangle && secondaryValue > 1.0e-9) {
+        const auto start = activePlane_->Project(drawingPoints_.front());
+        double directionU = 1.0;
+        double directionV = 1.0;
+        if (hoverDrawingPoint_.has_value()) {
+            const auto hover = activePlane_->Project(*hoverDrawingPoint_);
+            directionU = hover.u < start.u ? -1.0 : 1.0;
+            directionV = hover.v < start.v ? -1.0 : 1.0;
+        }
+        CommitDrawingPoint(activePlane_->ToWorld(
+            start.u + directionU * primaryMillimeters,
+            start.v + directionV * secondaryValue));
+        return true;
+    }
+
+    if (tool_ == ViewportTool::DrawCircle) {
+        const auto center = activePlane_->Project(drawingPoints_.front());
+        CommitDrawingPoint(activePlane_->ToWorld(center.u + primaryMillimeters, center.v));
+        return true;
+    }
+    return false;
+}
+
 bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
 {
     return std::any_of(selections_.begin(), selections_.end(), [&](const CadSelection& selection) {
@@ -507,6 +582,39 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
     const double snappedU = std::round(coordinates.u / snapStep_) * snapStep_;
     const double snappedV = std::round(coordinates.v / snapStep_) * snapStep_;
     return activePlane_->ToWorld(snappedU, snappedV);
+}
+
+Vector3 CadViewport::ApplyDrawingConstraint(Vector3 point, Qt::KeyboardModifiers modifiers) const
+{
+    if (!activePlane_.has_value() || drawingPoints_.empty()
+        || !modifiers.testFlag(Qt::ShiftModifier)) {
+        return point;
+    }
+
+    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+        ? drawingPoints_.back()
+        : drawingPoints_.front();
+    const auto start = activePlane_->Project(anchor);
+    auto target = activePlane_->Project(point);
+    const double deltaU = target.u - start.u;
+    const double deltaV = target.v - start.v;
+
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
+        if (std::abs(deltaU) >= std::abs(deltaV)) {
+            target.v = start.v;
+        } else {
+            target.u = start.u;
+        }
+        return activePlane_->ToWorld(target.u, target.v);
+    }
+
+    if (tool_ == ViewportTool::DrawRectangle) {
+        const double side = std::max(std::abs(deltaU), std::abs(deltaV));
+        target.u = start.u + (deltaU < 0.0 ? -side : side);
+        target.v = start.v + (deltaV < 0.0 ? -side : side);
+        return activePlane_->ToWorld(target.u, target.v);
+    }
+    return point;
 }
 
 void CadViewport::CommitDrawingPoint(Vector3 point)
@@ -1330,8 +1438,10 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
     } else if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
-            ? std::optional<Vector3>(SnapPoint(*point, event->position()))
+            ? std::optional<Vector3>(ApplyDrawingConstraint(
+                  SnapPoint(*point, event->position()), event->modifiers()))
             : std::nullopt;
+        NotifyDrawingState();
         update();
     }
 
@@ -1414,7 +1524,8 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         if (event->button() == Qt::LeftButton && activePlane_.has_value()) {
             const auto point = PointOnActivePlane(event->position());
             if (point.has_value()) {
-                CommitDrawingPoint(SnapPoint(*point, event->position()));
+                CommitDrawingPoint(ApplyDrawingConstraint(
+                    SnapPoint(*point, event->position()), event->modifiers()));
             }
         } else if (!mouseMoved_ && event->button() == Qt::RightButton) {
             if (tool_ == ViewportTool::DrawPolyline && drawingPoints_.size() >= 2) {

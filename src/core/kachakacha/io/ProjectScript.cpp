@@ -18,8 +18,12 @@ namespace kachakacha::io {
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
+using kachakacha::model::DimensionReference;
+using kachakacha::model::DimensionReferenceKind;
 using kachakacha::model::PlateSurfaceRange;
 using kachakacha::model::PlateThicknessDirection;
+using kachakacha::model::ReferenceDimension;
+using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
 using kachakacha::model::WireArcData;
@@ -168,6 +172,102 @@ model::WireEndpoint ParseWireEndpoint(
 const char* WireEndpointToken(model::WireEndpoint endpoint)
 {
     return endpoint == model::WireEndpoint::Start ? "start" : "end";
+}
+
+void RequireScriptNameSafe(std::string_view name, const char* label);
+void WriteVector3(std::ostream& output, const Vector3& value);
+
+ReferenceDimensionKind ParseReferenceDimensionKind(
+    const std::string& token,
+    std::string_view sourceName,
+    int lineNumber)
+{
+    if (token == "point_distance") return ReferenceDimensionKind::PointDistance;
+    if (token == "wire_length") return ReferenceDimensionKind::WireLength;
+    if (token == "wire_radius") return ReferenceDimensionKind::WireRadius;
+    if (token == "wire_distance") return ReferenceDimensionKind::WireDistance;
+    if (token == "wire_angle") return ReferenceDimensionKind::WireAngle;
+    if (token == "point_wire_distance") return ReferenceDimensionKind::PointWireDistance;
+    if (token == "point_plane_distance") return ReferenceDimensionKind::PointPlaneDistance;
+    if (token == "wire_plane_angle") return ReferenceDimensionKind::WirePlaneAngle;
+    if (token == "plane_angle") return ReferenceDimensionKind::PlaneAngle;
+    if (token == "plane_distance") return ReferenceDimensionKind::PlaneDistance;
+    ThrowLineError(sourceName, lineNumber, "Unknown reference dimension kind: " + token);
+}
+
+const char* ReferenceDimensionKindToken(ReferenceDimensionKind kind)
+{
+    switch (kind) {
+    case ReferenceDimensionKind::PointDistance: return "point_distance";
+    case ReferenceDimensionKind::WireLength: return "wire_length";
+    case ReferenceDimensionKind::WireRadius: return "wire_radius";
+    case ReferenceDimensionKind::WireDistance: return "wire_distance";
+    case ReferenceDimensionKind::WireAngle: return "wire_angle";
+    case ReferenceDimensionKind::PointWireDistance: return "point_wire_distance";
+    case ReferenceDimensionKind::PointPlaneDistance: return "point_plane_distance";
+    case ReferenceDimensionKind::WirePlaneAngle: return "wire_plane_angle";
+    case ReferenceDimensionKind::PlaneAngle: return "plane_angle";
+    case ReferenceDimensionKind::PlaneDistance: return "plane_distance";
+    }
+    return "point_distance";
+}
+
+DimensionReference ReadDimensionReference(
+    std::istringstream& stream,
+    std::string_view sourceName,
+    int lineNumber)
+{
+    const std::string kind = ReadName(stream, sourceName, lineNumber, "dimension reference kind");
+    if (kind == "none" || kind == "-") {
+        return {};
+    }
+    if (kind == "point") {
+        return {
+            DimensionReferenceKind::FixedPoint,
+            {},
+            {
+                ReadDouble(stream, sourceName, lineNumber, "point x"),
+                ReadDouble(stream, sourceName, lineNumber, "point y"),
+                ReadDouble(stream, sourceName, lineNumber, "point z"),
+            },
+            0.0,
+        };
+    }
+    if (kind == "wire") {
+        DimensionReference result;
+        result.kind = DimensionReferenceKind::Wire;
+        result.objectName = ReadName(stream, sourceName, lineNumber, "dimension wire");
+        result.wireParameter = ReadDouble(stream, sourceName, lineNumber, "wire parameter");
+        return result;
+    }
+    if (kind == "plane") {
+        DimensionReference result;
+        result.kind = DimensionReferenceKind::WorkPlane;
+        result.objectName = ReadName(stream, sourceName, lineNumber, "dimension plane");
+        return result;
+    }
+    ThrowLineError(sourceName, lineNumber, "Unknown dimension reference kind: " + kind);
+}
+
+void WriteDimensionReference(std::ostream& output, const DimensionReference& reference)
+{
+    switch (reference.kind) {
+    case DimensionReferenceKind::None:
+        output << "none";
+        return;
+    case DimensionReferenceKind::FixedPoint:
+        output << "point ";
+        WriteVector3(output, reference.point);
+        return;
+    case DimensionReferenceKind::Wire:
+        RequireScriptNameSafe(reference.objectName, "Dimension wire reference");
+        output << "wire " << reference.objectName << ' ' << reference.wireParameter;
+        return;
+    case DimensionReferenceKind::WorkPlane:
+        RequireScriptNameSafe(reference.objectName, "Dimension plane reference");
+        output << "plane " << reference.objectName;
+        return;
+    }
 }
 
 PlateThicknessDirection ParsePlateDirection(const std::string& token, std::string_view sourceName, int lineNumber)
@@ -461,6 +561,17 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 project.AddWireTangentConstraint(
                     {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
                     {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)});
+            } else if (command == "reference_dimension") {
+                ReferenceDimension dimension;
+                dimension.name = ReadName(stream, sourceName, lineNumber, "reference dimension");
+                dimension.kind = ParseReferenceDimensionKind(
+                    ReadName(stream, sourceName, lineNumber, "reference dimension kind"),
+                    sourceName,
+                    lineNumber);
+                dimension.first = ReadDimensionReference(stream, sourceName, lineNumber);
+                dimension.second = ReadDimensionReference(stream, sourceName, lineNumber);
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddReferenceDimension(std::move(dimension));
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -574,8 +685,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     project.SetSurfaceVisible(name, visible);
                 } else if (objectKind == "plate") {
                     project.SetPlateVisible(name, visible);
+                } else if (objectKind == "dimension") {
+                    project.SetReferenceDimensionVisible(name, visible);
                 } else {
-                    throw std::invalid_argument("Visibility object kind must be workplane, wire, surface, or plate.");
+                    throw std::invalid_argument(
+                        "Visibility object kind must be workplane, wire, surface, plate, or dimension.");
                 }
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
@@ -766,6 +880,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                << constraint.anchor.wireName << ' ' << WireEndpointToken(constraint.anchor.endpoint) << ' '
                << constraint.follower.wireName << ' ' << WireEndpointToken(constraint.follower.endpoint) << '\n';
     }
+    for (const auto& dimension : project.ReferenceDimensions()) {
+        RequireScriptNameSafe(dimension.name, "Reference dimension");
+        output << "reference_dimension " << dimension.name << ' '
+               << ReferenceDimensionKindToken(dimension.kind) << ' ';
+        WriteDimensionReference(output, dimension.first);
+        output << ' ';
+        WriteDimensionReference(output, dimension.second);
+        output << '\n';
+    }
 
     if (!project.Plates().empty()) {
         output << '\n';
@@ -802,6 +925,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         return !surface.visible;
     }) || std::any_of(project.Plates().begin(), project.Plates().end(), [](const auto& plate) {
         return !plate.visible;
+    }) || std::any_of(project.ReferenceDimensions().begin(), project.ReferenceDimensions().end(), [](const auto& dimension) {
+        return !dimension.visible;
     });
     if (hasHiddenObjects) {
         output << '\n';
@@ -824,6 +949,11 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     for (const auto& plate : project.Plates()) {
         if (!plate.visible) {
             output << "visibility plate " << plate.name << " hidden\n";
+        }
+    }
+    for (const auto& dimension : project.ReferenceDimensions()) {
+        if (!dimension.visible) {
+            output << "visibility dimension " << dimension.name << " hidden\n";
         }
     }
 }

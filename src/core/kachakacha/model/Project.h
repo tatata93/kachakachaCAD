@@ -38,6 +38,47 @@ struct WireTangentConstraint {
     WireEndpointReference follower;
 };
 
+enum class ReferenceDimensionKind {
+    PointDistance,
+    WireLength,
+    WireRadius,
+    WireDistance,
+    WireAngle,
+    PointWireDistance,
+    PointPlaneDistance,
+    WirePlaneAngle,
+    PlaneAngle,
+    PlaneDistance,
+};
+
+enum class DimensionReferenceKind {
+    None,
+    FixedPoint,
+    Wire,
+    WorkPlane,
+};
+
+struct DimensionReference {
+    DimensionReferenceKind kind = DimensionReferenceKind::None;
+    std::string objectName;
+    geometry::Vector3 point;
+    double wireParameter = 0.0;
+};
+
+struct ReferenceDimension {
+    std::string name;
+    ReferenceDimensionKind kind = ReferenceDimensionKind::PointDistance;
+    DimensionReference first;
+    DimensionReference second;
+    bool visible = true;
+};
+
+struct ReferenceDimensionResult {
+    geometry::Vector3 firstPoint;
+    geometry::Vector3 secondPoint;
+    double value = 0.0;
+};
+
 struct WireMetadata {
     std::optional<std::string> sourcePlaneName;
     WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
@@ -117,6 +158,11 @@ public:
         WireEndpointReference anchor,
         WireEndpointReference follower);
     [[nodiscard]] std::size_t RemoveWireTangentConstraints(std::string_view wireName);
+    void AddReferenceDimension(ReferenceDimension dimension);
+    [[nodiscard]] bool RemoveReferenceDimension(std::string_view name);
+    void SetReferenceDimensionVisible(std::string_view name, bool visible);
+    [[nodiscard]] ReferenceDimensionResult EvaluateReferenceDimension(
+        std::string_view name) const;
     void SetWorkPlaneVisible(std::string_view name, bool visible);
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
@@ -147,6 +193,10 @@ public:
     {
         return tangentConstraints_;
     }
+    [[nodiscard]] const std::vector<ReferenceDimension>& ReferenceDimensions() const noexcept
+    {
+        return referenceDimensions_;
+    }
 
     [[nodiscard]] std::optional<WorkPlane> FindWorkPlane(std::string_view name) const;
     [[nodiscard]] std::optional<Surface> FindSurface(std::string_view name) const;
@@ -164,6 +214,7 @@ private:
     std::vector<NamedPlate> plates_;
     std::vector<WireCoincidentConstraint> coincidentConstraints_;
     std::vector<WireTangentConstraint> tangentConstraints_;
+    std::vector<ReferenceDimension> referenceDimensions_;
 };
 
 } // namespace kachakacha::model

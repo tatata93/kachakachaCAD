@@ -17,6 +17,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
+class QListWidget;
 class QPushButton;
 class QSlider;
 class QStackedWidget;
@@ -80,6 +81,9 @@ private:
     void RemoveSelectedCoincidences();
     void RemoveSelectedTangencies();
     void UpdateMeasurement(const std::vector<MeasurementPick>& picks);
+    void SaveCurrentMeasurement();
+    void DeleteSelectedReferenceDimension();
+    void RefreshReferenceDimensions();
     void JoinSelectedWires();
     void ApplyMeetSelectedLines();
     void UpdateWireOffsetPreview();
@@ -135,6 +139,7 @@ private:
     QString SuggestedFilletName() const;
     QString SuggestedSurfaceName() const;
     QString SuggestedPlateName() const;
+    QString SuggestedDimensionName() const;
 
     kachakacha::model::Project project_;
     QString currentPath_;
@@ -191,6 +196,12 @@ private:
     QLabel* measurementStateLabel_ = nullptr;
     QLabel* measurementResultLabel_ = nullptr;
     QPushButton* measurementClearButton_ = nullptr;
+    QComboBox* measurementMetric_ = nullptr;
+    QLineEdit* measurementName_ = nullptr;
+    QPushButton* measurementSaveButton_ = nullptr;
+    QListWidget* referenceDimensionList_ = nullptr;
+    QPushButton* referenceDimensionDeleteButton_ = nullptr;
+    std::vector<MeasurementPick> lastMeasurementPicks_;
 
     QLabel* editSelectionLabel_ = nullptr;
     QLabel* transformReferenceLabel_ = nullptr;

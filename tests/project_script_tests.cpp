@@ -1,6 +1,7 @@
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/geometry/Vector3.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -373,6 +374,69 @@ void RadiusConstraintsRoundTripAndDriveGeometry()
         "arc fixed radius roundtrip");
 }
 
+void ReferenceDimensionsRoundTripAndFollowGeometry()
+{
+    std::istringstream input(R"(
+        plane_point_normal base 0 0 0  0 0 1  1 0 0
+        plane_point_normal roof 0 0 5  0 0 1  1 0 0
+        line3d rail 0 0 0  10 0 0
+        line3d diagonal 0 4 0  10 14 0
+        circle3d lamp 4 3 0  1 0 0  0 1 0  2
+        reference_dimension point_gap point_distance point 0 3 0 wire rail 0.5
+        reference_dimension rail_length wire_length wire rail 0.25 none
+        reference_dimension lamp_radius wire_radius wire lamp 0.25 none
+        reference_dimension wire_gap wire_distance wire rail 0.5 wire diagonal 0.5
+        reference_dimension wire_angle wire_angle wire rail 0.5 wire diagonal 0.5
+        reference_dimension point_wire point_wire_distance point 5 3 0 wire rail 0.5
+        reference_dimension point_plane point_plane_distance point 2 3 7 plane base
+        reference_dimension wire_plane wire_plane_angle wire diagonal 0.5 plane base
+        reference_dimension plane_angle plane_angle plane base plane roof
+        reference_dimension plane_gap plane_distance plane base plane roof
+        visibility dimension lamp_radius hidden
+    )");
+    auto project = LoadProjectScript(input, "reference-dimension-test");
+    Require(project.ReferenceDimensions().size() == 10, "reference dimension count");
+    Require(std::abs(project.EvaluateReferenceDimension("rail_length").value - 10.0) <= 1.0e-12,
+        "wire length dimension");
+    Require(std::abs(project.EvaluateReferenceDimension("lamp_radius").value - 2.0) <= 1.0e-12,
+        "wire radius dimension");
+    Require(!project.ReferenceDimensions()[2].visible, "dimension visibility loaded");
+    Require(std::abs(project.EvaluateReferenceDimension("plane_gap").value - 5.0) <= 1.0e-12,
+        "parallel plane distance dimension");
+    Require(std::abs(project.EvaluateReferenceDimension("wire_angle").value - 45.0) <= 1.0e-9,
+        "wire angle dimension");
+
+    project.UpdateWire("rail", Wire::Line({0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}));
+    Require(std::abs(project.EvaluateReferenceDimension("rail_length").value - 20.0) <= 1.0e-12,
+        "wire length dimension follows edit");
+    Require(std::abs(project.EvaluateReferenceDimension("point_gap").value - std::sqrt(109.0)) <= 1.0e-9,
+        "wire point dimension follows edit");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("reference_dimension point_gap point_distance") != std::string::npos,
+        "reference dimension written");
+    Require(output.str().find("visibility dimension lamp_radius hidden") != std::string::npos,
+        "dimension visibility written");
+    std::istringstream roundTripInput(output.str());
+    auto roundTripped = LoadProjectScript(roundTripInput, "reference-dimension-roundtrip");
+    Require(roundTripped.ReferenceDimensions().size() == 10,
+        "reference dimension roundtrip count");
+    Require(std::abs(roundTripped.EvaluateReferenceDimension("rail_length").value - 20.0) <= 1.0e-12,
+        "reference dimension roundtrip value");
+    Require(roundTripped.RemoveReferenceDimension("point_gap"), "remove reference dimension");
+    Require(roundTripped.RemoveWire("rail"), "remove dimensioned wire");
+    Require(std::none_of(
+        roundTripped.ReferenceDimensions().begin(), roundTripped.ReferenceDimensions().end(),
+        [](const auto& dimension) {
+            return (dimension.first.kind == kachakacha::model::DimensionReferenceKind::Wire
+                       && dimension.first.objectName == "rail")
+                || (dimension.second.kind == kachakacha::model::DimensionReferenceKind::Wire
+                    && dimension.second.objectName == "rail");
+        }),
+        "removing wire removes its reference dimensions");
+}
+
 void SurfacesAndProjectedWiresRoundTrip()
 {
     std::istringstream input(R"(
@@ -691,6 +755,7 @@ int main()
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         RadiusConstraintsRoundTripAndDriveGeometry();
+        ReferenceDimensionsRoundTripAndFollowGeometry();
         SurfacesAndProjectedWiresRoundTrip();
         LoftSurfacesRoundTrip();
         PlateSplitsRoundTrip();

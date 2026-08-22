@@ -218,10 +218,33 @@ plate_range PLATE minimumU maximumU minimumV maximumV
 
 曲面板材を手動分割した各部品が、元の面のどの範囲を使うかを0から1の正規化座標で保持する。`U` は断面内、`V` は断面間・車体長手方向。通常の未分割板材は `0 1 0 1` であり、このコマンドを省略する。
 
+### 参照寸法
+
+```text
+reference_dimension NAME KIND FIRST_REFERENCE SECOND_REFERENCE
+```
+
+`KIND` は次のいずれか。
+
+```text
+point_distance wire_length wire_radius wire_distance wire_angle
+point_wire_distance point_plane_distance wire_plane_angle plane_angle plane_distance
+```
+
+参照対象は `point x y z`、`wire WIRE_NAME PARAMETER`、`plane PLANE_NAME`、未使用位置の `none` で表す。`PARAMETER` はワイヤーの始点0から終点1までの位置で、円では0から1周する位置になる。例:
+
+```text
+reference_dimension lamp_radius wire_radius wire lamp_circle 0.25 none
+reference_dimension window_gap wire_distance wire window_top 0.5 wire window_bottom 0.5
+reference_dimension floor_gap point_plane_distance point 12 4 7 plane floor
+```
+
+参照寸法は形状を動かさず、参照元を編集したときに表示値を再計算する。
+
 ### 表示・非表示
 
 ```text
-visibility workplane|wire|surface|plate NAME shown|hidden
+visibility workplane|wire|surface|plate|dimension NAME shown|hidden
 ```
 
 非表示の作図用断面や平面図もプロジェクトから削除せず、依存関係を保ったままモデル一覧へ残す。

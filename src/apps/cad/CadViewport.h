@@ -63,6 +63,12 @@ struct MeasurementPick {
     double wireParameter = 0.0;
 };
 
+struct ReferenceDimensionOverlay {
+    kachakacha::geometry::Vector3 firstPoint;
+    kachakacha::geometry::Vector3 secondPoint;
+    QString text;
+};
+
 struct WireEndpointPick {
     int wireIndex = -1;
     kachakacha::model::WireEndpoint endpoint = kachakacha::model::WireEndpoint::Start;
@@ -126,6 +132,11 @@ public:
         std::optional<kachakacha::geometry::Vector3> firstPoint,
         std::optional<kachakacha::geometry::Vector3> secondPoint,
         QString text);
+    void SetReferenceDimensionOverlays(std::vector<ReferenceDimensionOverlay> overlays);
+    [[nodiscard]] std::size_t ReferenceDimensionOverlayCount() const noexcept
+    {
+        return referenceDimensionOverlays_.size();
+    }
     [[nodiscard]] const std::vector<MeasurementPick>& MeasurementPicks() const noexcept { return measurementPicks_; }
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
@@ -213,6 +224,7 @@ private:
     std::optional<kachakacha::geometry::Vector3> measurementOverlayFirst_;
     std::optional<kachakacha::geometry::Vector3> measurementOverlaySecond_;
     QString measurementOverlayText_;
+    std::vector<ReferenceDimensionOverlay> referenceDimensionOverlays_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

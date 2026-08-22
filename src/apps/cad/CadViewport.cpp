@@ -131,6 +131,7 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     measurementOverlayFirst_.reset();
     measurementOverlaySecond_.reset();
     measurementOverlayText_.clear();
+    referenceDimensionOverlays_.clear();
     if (measurementChanged_) {
         measurementChanged_(measurementPicks_);
     }
@@ -327,6 +328,12 @@ void CadViewport::SetMeasurementOverlay(
     measurementOverlayFirst_ = firstPoint;
     measurementOverlaySecond_ = secondPoint;
     measurementOverlayText_ = std::move(text);
+    update();
+}
+
+void CadViewport::SetReferenceDimensionOverlays(std::vector<ReferenceDimensionOverlay> overlays)
+{
+    referenceDimensionOverlays_ = std::move(overlays);
     update();
 }
 
@@ -1569,6 +1576,51 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawEllipse(splitPoint, 6.0, 6.0);
             painter.drawLine(splitPoint + QPointF(-9.0, 0.0), splitPoint + QPointF(9.0, 0.0));
         }
+    }
+
+    if (!referenceDimensionOverlays_.empty()) {
+        painter.save();
+        const QColor dimensionColor("#256b63");
+        const QRectF viewportBounds = QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0);
+        for (std::size_t index = 0; index < referenceDimensionOverlays_.size(); ++index) {
+            const ReferenceDimensionOverlay& overlay = referenceDimensionOverlays_[index];
+            const QPointF first = ProjectPoint(overlay.firstPoint);
+            const QPointF second = ProjectPoint(overlay.secondPoint);
+            painter.setPen(QPen(dimensionColor, 1.6, Qt::DashLine));
+            painter.drawLine(first, second);
+            painter.setBrush(QColor("#ffffff"));
+            painter.drawEllipse(first, 3.5, 3.5);
+            painter.drawEllipse(second, 3.5, 3.5);
+
+            const QFontMetrics metrics = painter.fontMetrics();
+            const QRect textBounds = metrics.boundingRect(overlay.text);
+            const QPointF midpoint = (first + second) * 0.5;
+            const QPointF labelAnchor = midpoint
+                + QPointF(8.0, -8.0 - static_cast<double>(index % 4) * 15.0);
+            QRectF labelBox(
+                labelAnchor.x(),
+                labelAnchor.y() - textBounds.height() - 7.0,
+                textBounds.width() + 14.0,
+                textBounds.height() + 10.0);
+            if (labelBox.right() > viewportBounds.right()) {
+                labelBox.moveRight(viewportBounds.right());
+            }
+            if (labelBox.left() < viewportBounds.left()) {
+                labelBox.moveLeft(viewportBounds.left());
+            }
+            if (labelBox.top() < viewportBounds.top()) {
+                labelBox.moveTop(viewportBounds.top());
+            }
+            if (labelBox.bottom() > viewportBounds.bottom()) {
+                labelBox.moveBottom(viewportBounds.bottom());
+            }
+            painter.setPen(QPen(dimensionColor, 1.0));
+            painter.setBrush(QColor(248, 255, 253, 238));
+            painter.drawRoundedRect(labelBox, 3.0, 3.0);
+            painter.setPen(dimensionColor);
+            painter.drawText(labelBox, Qt::AlignCenter, overlay.text);
+        }
+        painter.restore();
     }
 
     if (!measurementPicks_.empty() || measurementOverlayFirst_.has_value()) {

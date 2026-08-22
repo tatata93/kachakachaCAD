@@ -4,6 +4,7 @@
 #include "kachakacha/model/WireOperations.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -693,6 +694,164 @@ std::size_t Project::RemoveWireTangentConstraints(std::string_view wireName)
     return before - tangentConstraints_.size();
 }
 
+void Project::AddReferenceDimension(ReferenceDimension dimension)
+{
+    if (dimension.name.empty()) {
+        throw std::invalid_argument("Reference dimension name must not be empty.");
+    }
+    if (std::any_of(referenceDimensions_.begin(), referenceDimensions_.end(),
+            [&](const ReferenceDimension& existing) { return existing.name == dimension.name; })) {
+        throw std::invalid_argument("Reference dimension name already exists: " + dimension.name);
+    }
+
+    Project candidate = *this;
+    const std::string name = dimension.name;
+    candidate.referenceDimensions_.push_back(std::move(dimension));
+    (void)candidate.EvaluateReferenceDimension(name);
+    *this = std::move(candidate);
+}
+
+bool Project::RemoveReferenceDimension(std::string_view name)
+{
+    const auto position = std::find_if(
+        referenceDimensions_.begin(), referenceDimensions_.end(),
+        [&](const ReferenceDimension& dimension) { return dimension.name == name; });
+    if (position == referenceDimensions_.end()) {
+        return false;
+    }
+    referenceDimensions_.erase(position);
+    return true;
+}
+
+void Project::SetReferenceDimensionVisible(std::string_view name, bool visible)
+{
+    for (ReferenceDimension& dimension : referenceDimensions_) {
+        if (dimension.name == name) {
+            dimension.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Reference dimension name does not exist: " + std::string(name));
+}
+
+ReferenceDimensionResult Project::EvaluateReferenceDimension(std::string_view name) const
+{
+    const auto position = std::find_if(
+        referenceDimensions_.begin(), referenceDimensions_.end(),
+        [&](const ReferenceDimension& dimension) { return dimension.name == name; });
+    if (position == referenceDimensions_.end()) {
+        throw std::invalid_argument("Reference dimension name does not exist: " + std::string(name));
+    }
+    const ReferenceDimension& dimension = *position;
+    const auto wire = [&](const DimensionReference& reference) -> const Wire& {
+        if (reference.kind != DimensionReferenceKind::Wire
+            || !std::isfinite(reference.wireParameter)
+            || reference.wireParameter < 0.0 || reference.wireParameter > 1.0) {
+            throw std::invalid_argument("Reference dimension requires a valid wire reference.");
+        }
+        return RequireWire(reference.objectName).wire;
+    };
+    const auto plane = [&](const DimensionReference& reference) -> WorkPlane {
+        if (reference.kind != DimensionReferenceKind::WorkPlane) {
+            throw std::invalid_argument("Reference dimension requires a work plane reference.");
+        }
+        const std::optional<WorkPlane> found = FindWorkPlane(reference.objectName);
+        if (!found.has_value()) {
+            throw std::invalid_argument("Reference dimension work plane does not exist: "
+                + reference.objectName);
+        }
+        return *found;
+    };
+    const auto point = [&](const DimensionReference& reference) -> geometry::Vector3 {
+        if (reference.kind == DimensionReferenceKind::FixedPoint) {
+            if (!reference.point.IsFinite()) {
+                throw std::invalid_argument("Reference dimension point must be finite.");
+            }
+            return reference.point;
+        }
+        if (reference.kind == DimensionReferenceKind::Wire) {
+            return wire(reference).Evaluate(reference.wireParameter);
+        }
+        throw std::invalid_argument("Reference dimension requires a point or wire position.");
+    };
+
+    switch (dimension.kind) {
+    case ReferenceDimensionKind::PointDistance: {
+        const geometry::Vector3 first = point(dimension.first);
+        const geometry::Vector3 second = point(dimension.second);
+        return {first, second, (second - first).Length()};
+    }
+    case ReferenceDimensionKind::WireLength: {
+        const Wire& measured = wire(dimension.first);
+        return {measured.Start(), measured.End(), MeasureWireLength(measured)};
+    }
+    case ReferenceDimensionKind::WireRadius: {
+        const Wire& measured = wire(dimension.first);
+        const std::optional<double> radius = MeasureWireRadius(measured);
+        if (!radius.has_value()) {
+            throw std::invalid_argument("Radius dimensions require a circle or circular arc.");
+        }
+        return {measured.ArcData().center,
+            measured.Evaluate(dimension.first.wireParameter), *radius};
+    }
+    case ReferenceDimensionKind::WireDistance: {
+        const DistanceMeasurement measured = MeasureWireToWireDistance(
+            wire(dimension.first), wire(dimension.second));
+        return {measured.firstPoint, measured.secondPoint, measured.distanceMillimeters};
+    }
+    case ReferenceDimensionKind::WireAngle: {
+        const Wire& firstWire = wire(dimension.first);
+        const Wire& secondWire = wire(dimension.second);
+        return {
+            firstWire.Evaluate(dimension.first.wireParameter),
+            secondWire.Evaluate(dimension.second.wireParameter),
+            MeasureDirectionsAngle(
+                MeasureWireTangent(firstWire, dimension.first.wireParameter),
+                MeasureWireTangent(secondWire, dimension.second.wireParameter)).directedDegrees,
+        };
+    }
+    case ReferenceDimensionKind::PointWireDistance: {
+        const DistanceMeasurement measured = MeasurePointToWireDistance(
+            point(dimension.first), wire(dimension.second));
+        return {measured.firstPoint, measured.secondPoint, measured.distanceMillimeters};
+    }
+    case ReferenceDimensionKind::PointPlaneDistance: {
+        const geometry::Vector3 measuredPoint = point(dimension.first);
+        const WorkPlane measuredPlane = plane(dimension.second);
+        const double signedDistance = MeasureSignedPointToPlaneDistance(measuredPoint, measuredPlane);
+        return {measuredPoint, measuredPoint - measuredPlane.Normal() * signedDistance,
+            std::abs(signedDistance)};
+    }
+    case ReferenceDimensionKind::WirePlaneAngle: {
+        const Wire& measuredWire = wire(dimension.first);
+        const WorkPlane measuredPlane = plane(dimension.second);
+        const geometry::Vector3 measuredPoint = measuredWire.Evaluate(dimension.first.wireParameter);
+        const double signedDistance = MeasureSignedPointToPlaneDistance(measuredPoint, measuredPlane);
+        return {measuredPoint, measuredPoint - measuredPlane.Normal() * signedDistance,
+            MeasureDirectionToPlaneAngleDegrees(
+                MeasureWireTangent(measuredWire, dimension.first.wireParameter), measuredPlane)};
+    }
+    case ReferenceDimensionKind::PlaneAngle: {
+        const WorkPlane firstPlane = plane(dimension.first);
+        const WorkPlane secondPlane = plane(dimension.second);
+        return {firstPlane.Origin(), secondPlane.Origin(),
+            MeasurePlaneToPlaneAngleDegrees(firstPlane, secondPlane)};
+    }
+    case ReferenceDimensionKind::PlaneDistance: {
+        const WorkPlane firstPlane = plane(dimension.first);
+        const WorkPlane secondPlane = plane(dimension.second);
+        if (MeasurePlaneToPlaneAngleDegrees(firstPlane, secondPlane) > 1.0e-7) {
+            throw std::invalid_argument("Plane distance dimensions require parallel work planes.");
+        }
+        const double signedDistance = MeasureSignedPointToPlaneDistance(
+            firstPlane.Origin(), secondPlane);
+        return {firstPlane.Origin(), firstPlane.Origin() - secondPlane.Normal() * signedDistance,
+            std::abs(signedDistance)};
+    }
+    }
+    throw std::logic_error("Unknown reference dimension kind.");
+}
+
 void Project::SetWorkPlaneVisible(std::string_view name, bool visible)
 {
     for (NamedWorkPlane& plane : workPlanes_) {
@@ -910,6 +1069,12 @@ bool Project::RemoveWorkPlane(std::string_view name)
     }
 
     workPlanes_.erase(position);
+    std::erase_if(referenceDimensions_, [&](const ReferenceDimension& dimension) {
+        return (dimension.first.kind == DimensionReferenceKind::WorkPlane
+                   && dimension.first.objectName == name)
+            || (dimension.second.kind == DimensionReferenceKind::WorkPlane
+                && dimension.second.objectName == name);
+    });
     for (NamedWire& wire : wires_) {
         if (wire.metadata.sourcePlaneName.has_value() && *wire.metadata.sourcePlaneName == name) {
             wire.metadata.sourcePlaneName.reset();
@@ -956,6 +1121,12 @@ bool Project::RemoveWire(std::string_view name)
     }
 
     wires_.erase(position);
+    std::erase_if(referenceDimensions_, [&](const ReferenceDimension& dimension) {
+        return (dimension.first.kind == DimensionReferenceKind::Wire
+                   && dimension.first.objectName == name)
+            || (dimension.second.kind == DimensionReferenceKind::Wire
+                && dimension.second.objectName == name);
+    });
     return true;
 }
 

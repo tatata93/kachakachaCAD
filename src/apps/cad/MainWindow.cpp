@@ -29,6 +29,7 @@
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -76,6 +77,8 @@ using kachakacha::io::WriteProjectScript;
 using kachakacha::qtio::CalculatePlatePdfLayout;
 using kachakacha::qtio::PlatePdfOptions;
 using kachakacha::qtio::WritePlateFlatPatternPdf;
+using kachakacha::model::DimensionReference;
+using kachakacha::model::DimensionReferenceKind;
 using kachakacha::model::Project;
 using kachakacha::model::PlateDevelopability;
 using kachakacha::model::PlateSplitAxis;
@@ -101,12 +104,15 @@ using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::OffsetPlanarWire;
+using kachakacha::model::ReferenceDimension;
+using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::RetainedLineEnd;
 
 namespace {
 
 constexpr int kSelectionKindRole = Qt::UserRole;
 constexpr int kSelectionIndexRole = Qt::UserRole + 1;
+constexpr int kDimensionNameRole = Qt::UserRole + 2;
 constexpr double kPi = 3.14159265358979323846;
 
 QDoubleSpinBox* MakeNumberField(double value = 0.0)
@@ -215,6 +221,51 @@ void ValidateObjectName(const QString& name)
 QString Number(double value)
 {
     return QString::number(value, 'f', 3);
+}
+
+QString ReferenceDimensionKindText(ReferenceDimensionKind kind)
+{
+    switch (kind) {
+    case ReferenceDimensionKind::PointDistance:
+        return QStringLiteral("2点間");
+    case ReferenceDimensionKind::WireLength:
+        return QStringLiteral("ワイヤー全長");
+    case ReferenceDimensionKind::WireRadius:
+        return QStringLiteral("半径");
+    case ReferenceDimensionKind::WireDistance:
+        return QStringLiteral("ワイヤー間距離");
+    case ReferenceDimensionKind::WireAngle:
+        return QStringLiteral("接線角");
+    case ReferenceDimensionKind::PointWireDistance:
+        return QStringLiteral("点・ワイヤー間");
+    case ReferenceDimensionKind::PointPlaneDistance:
+        return QStringLiteral("点・平面間");
+    case ReferenceDimensionKind::WirePlaneAngle:
+        return QStringLiteral("ワイヤー・平面角");
+    case ReferenceDimensionKind::PlaneAngle:
+        return QStringLiteral("平面角");
+    case ReferenceDimensionKind::PlaneDistance:
+        return QStringLiteral("平面間距離");
+    }
+    return QStringLiteral("参照寸法");
+}
+
+bool IsAngleDimension(ReferenceDimensionKind kind)
+{
+    return kind == ReferenceDimensionKind::WireAngle
+        || kind == ReferenceDimensionKind::WirePlaneAngle
+        || kind == ReferenceDimensionKind::PlaneAngle;
+}
+
+QString ReferenceDimensionValueText(ReferenceDimensionKind kind, double value)
+{
+    if (kind == ReferenceDimensionKind::WireRadius) {
+        return QStringLiteral("R %1 mm").arg(Number(value));
+    }
+    if (IsAngleDimension(kind)) {
+        return QStringLiteral("%1°").arg(Number(value));
+    }
+    return QStringLiteral("%1 mm").arg(Number(value));
 }
 
 QString VectorText(Vector3 value)
@@ -1518,18 +1569,70 @@ QWidget* MainWindow::BuildInfoPanel()
     measurementResultLabel_->setWordWrap(true);
     measurementResultLabel_->setMinimumHeight(118);
     measurementResultLabel_->setStyleSheet("background: #f5f7f8; border: 1px solid #d4dade; padding: 8px;");
+    measurementMetric_ = new QComboBox;
+    measurementMetric_->setEnabled(false);
+    measurementName_ = new QLineEdit(SuggestedDimensionName());
+    measurementName_->setPlaceholderText(QStringLiteral("寸法名"));
+    measurementSaveButton_ = new QPushButton(QStringLiteral("寸法を残す"));
+    measurementSaveButton_->setEnabled(false);
     measurementClearButton_ = new QPushButton(QStringLiteral("測定を消去"));
+    auto* saveRow = new QWidget;
+    auto* saveRowLayout = new QHBoxLayout(saveRow);
+    saveRowLayout->setContentsMargins(0, 0, 0, 0);
+    saveRowLayout->setSpacing(6);
+    saveRowLayout->addWidget(measurementName_, 1);
+    saveRowLayout->addWidget(measurementSaveButton_);
     measurementLayout->addWidget(measurementMode_);
     measurementLayout->addWidget(measurementStateLabel_);
     measurementLayout->addWidget(measurementResultLabel_);
+    measurementLayout->addWidget(measurementMetric_);
+    measurementLayout->addWidget(saveRow);
     measurementLayout->addWidget(measurementClearButton_);
     layout->addWidget(measurementBox);
+
+    auto* savedBox = new QGroupBox(QStringLiteral("残した参照寸法"));
+    auto* savedLayout = new QVBoxLayout(savedBox);
+    savedLayout->setContentsMargins(10, 10, 10, 10);
+    savedLayout->setSpacing(7);
+    referenceDimensionList_ = new QListWidget;
+    referenceDimensionList_->setSelectionMode(QAbstractItemView::SingleSelection);
+    referenceDimensionList_->setMinimumHeight(130);
+    referenceDimensionDeleteButton_ = new QPushButton(
+        style()->standardIcon(QStyle::SP_TrashIcon), QStringLiteral("選択した寸法を削除"));
+    referenceDimensionDeleteButton_->setEnabled(false);
+    savedLayout->addWidget(referenceDimensionList_);
+    savedLayout->addWidget(referenceDimensionDeleteButton_);
+    layout->addWidget(savedBox);
 
     connect(measurementMode_, &QComboBox::currentIndexChanged, this, [this](int index) {
         viewport_->SetMeasurementMode(index == 0 ? MeasurementMode::TwoPoints : MeasurementMode::Elements);
         SetViewportTool(ViewportTool::Measure);
     });
     connect(measurementClearButton_, &QPushButton::clicked, viewport_, &CadViewport::ClearMeasurement);
+    connect(measurementName_, &QLineEdit::textChanged, this, [this] {
+        measurementSaveButton_->setEnabled(
+            measurementMetric_->count() > 0 && !measurementName_->text().trimmed().isEmpty());
+    });
+    connect(measurementSaveButton_, &QPushButton::clicked, this, &MainWindow::SaveCurrentMeasurement);
+    connect(referenceDimensionDeleteButton_, &QPushButton::clicked,
+        this, &MainWindow::DeleteSelectedReferenceDimension);
+    connect(referenceDimensionList_, &QListWidget::currentRowChanged, this, [this](int row) {
+        referenceDimensionDeleteButton_->setEnabled(row >= 0);
+    });
+    connect(referenceDimensionList_, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
+        const std::string name = ToName(item->data(kDimensionNameRole).toString());
+        const bool visible = item->checkState() == Qt::Checked;
+        const auto position = std::find_if(
+            project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(),
+            [&](const ReferenceDimension& dimension) { return dimension.name == name; });
+        if (position == project_.ReferenceDimensions().end() || position->visible == visible) {
+            return;
+        }
+        RecordUndo();
+        project_.SetReferenceDimensionVisible(name, visible);
+        MarkModified();
+        RefreshModelViews(false);
+    });
 
     auto* selectionLabel = new QLabel(QStringLiteral("選択情報"));
     selectionLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 5px;");
@@ -2009,9 +2112,20 @@ void MainWindow::SetReferenceFromSelection()
 
 void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
 {
-    if (measurementStateLabel_ == nullptr || measurementResultLabel_ == nullptr) {
+    if (measurementStateLabel_ == nullptr || measurementResultLabel_ == nullptr
+        || measurementMetric_ == nullptr || measurementSaveButton_ == nullptr) {
         return;
     }
+
+    lastMeasurementPicks_ = picks;
+    measurementMetric_->clear();
+    measurementMetric_->setEnabled(false);
+    measurementSaveButton_->setEnabled(false);
+    const auto addMetric = [this](QString text, ReferenceDimensionKind kind) {
+        measurementMetric_->addItem(std::move(text), static_cast<int>(kind));
+        measurementMetric_->setEnabled(true);
+        measurementSaveButton_->setEnabled(!measurementName_->text().trimmed().isEmpty());
+    };
 
     const bool pointMode = viewport_->CurrentMeasurementMode() == MeasurementMode::TwoPoints;
     if (picks.empty()) {
@@ -2075,6 +2189,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             }
             measurementStateLabel_->setText(QStringLiteral("2点間"));
             measurementResultLabel_->setText(result.join('\n'));
+            addMetric(QStringLiteral("残す値: 3D距離"), ReferenceDimensionKind::PointDistance);
             viewport_->SetMeasurementOverlay(
                 picks[0].point,
                 picks[1].point,
@@ -2110,6 +2225,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             };
             const std::optional<double> radius = MeasureWireRadius(wire);
             if (radius.has_value()) {
+                addMetric(QStringLiteral("残す値: 半径"), ReferenceDimensionKind::WireRadius);
                 result << QStringLiteral("半径  %1 mm").arg(Number(*radius));
                 result << QStringLiteral("直径  %1 mm").arg(Number(*radius * 2.0));
                 result << QStringLiteral("中心角  %1°")
@@ -2119,6 +2235,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                 .arg(Number(MeasureDirectionsAngle(tangent, {1.0, 0.0, 0.0}).directedDegrees))
                 .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 1.0, 0.0}).directedDegrees))
                 .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 0.0, 1.0}).directedDegrees));
+            addMetric(QStringLiteral("残す値: ワイヤー全長"), ReferenceDimensionKind::WireLength);
             measurementResultLabel_->setText(result.join('\n'));
             if (radius.has_value()) {
                 viewport_->SetMeasurementOverlay(
@@ -2150,6 +2267,8 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                 QStringLiteral("クリック位置の接線角  %1°").arg(Number(angle.directedDegrees)),
                 QStringLiteral("最小交角  %1°").arg(Number(angle.acuteDegrees)),
             }.join('\n'));
+            addMetric(QStringLiteral("残す値: 最短距離"), ReferenceDimensionKind::WireDistance);
+            addMetric(QStringLiteral("残す値: クリック位置の接線角"), ReferenceDimensionKind::WireAngle);
             viewport_->SetMeasurementOverlay(
                 distance.firstPoint,
                 distance.secondPoint,
@@ -2163,6 +2282,8 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                 QStringLiteral("点からワイヤーの最短距離  %1 mm").arg(Number(distance.distanceMillimeters)),
                 QStringLiteral("クリック点間  %1 mm").arg(Number((wirePick.point - pointPick.point).Length())),
             }.join('\n'));
+            addMetric(QStringLiteral("残す値: 点からワイヤーの最短距離"),
+                ReferenceDimensionKind::PointWireDistance);
             viewport_->SetMeasurementOverlay(
                 distance.firstPoint,
                 distance.secondPoint,
@@ -2187,6 +2308,10 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                 QStringLiteral("線・接線と平面の角度  %1°").arg(Number(angle)),
                 QStringLiteral("クリック位置から平面  %1 mm").arg(Number(std::abs(signedDistance))),
             }.join('\n'));
+            addMetric(QStringLiteral("残す値: 線・接線と平面の角度"),
+                ReferenceDimensionKind::WirePlaneAngle);
+            addMetric(QStringLiteral("残す値: クリック位置から平面"),
+                ReferenceDimensionKind::PointPlaneDistance);
             viewport_->SetMeasurementOverlay(
                 wirePick.point,
                 wirePick.point - plane.Normal() * signedDistance,
@@ -2206,6 +2331,8 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             const double signedDistance = MeasureSignedPointToPlaneDistance(pointPick.point, plane);
             measurementResultLabel_->setText(QStringLiteral("点から平面  %1 mm")
                 .arg(Number(std::abs(signedDistance))));
+            addMetric(QStringLiteral("残す値: 点から平面の距離"),
+                ReferenceDimensionKind::PointPlaneDistance);
             viewport_->SetMeasurementOverlay(
                 pointPick.point,
                 pointPick.point - plane.Normal() * signedDistance,
@@ -2231,6 +2358,10 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                     .arg(Number(std::abs(MeasureSignedPointToPlaneDistance(firstPlane.Origin(), secondPlane))));
             }
             measurementResultLabel_->setText(result.join('\n'));
+            addMetric(QStringLiteral("残す値: 平面同士の角度"), ReferenceDimensionKind::PlaneAngle);
+            if (angle <= 1.0e-7) {
+                addMetric(QStringLiteral("残す値: 平行間隔"), ReferenceDimensionKind::PlaneDistance);
+            }
             viewport_->SetMeasurementOverlay(
                 firstPlane.Origin(),
                 secondPlane.Origin(),
@@ -2243,6 +2374,182 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
         measurementResultLabel_->setText(QString::fromUtf8(error.what()));
         viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
     }
+}
+
+void MainWindow::SaveCurrentMeasurement()
+{
+    try {
+        ValidateObjectName(measurementName_->text());
+        if (measurementMetric_->currentIndex() < 0) {
+            throw std::invalid_argument("残す測定値を選択してください。");
+        }
+
+        ReferenceDimension dimension;
+        dimension.name = ToName(measurementName_->text());
+        dimension.kind = static_cast<ReferenceDimensionKind>(measurementMetric_->currentData().toInt());
+
+        const auto makeReference = [this](const MeasurementPick& pick) {
+            DimensionReference reference;
+            reference.wireParameter = pick.wireParameter;
+            if (pick.kind == MeasurementPickKind::Wire
+                || (pick.kind == MeasurementPickKind::Point && pick.index >= 0)) {
+                if (pick.index < 0 || pick.index >= static_cast<int>(project_.Wires().size())) {
+                    throw std::invalid_argument("寸法が参照するワイヤーが見つかりません。");
+                }
+                reference.kind = DimensionReferenceKind::Wire;
+                reference.objectName = project_.Wires()[pick.index].name;
+                return reference;
+            }
+            if (pick.kind == MeasurementPickKind::WorkPlane) {
+                if (pick.index < 0 || pick.index >= static_cast<int>(project_.WorkPlanes().size())) {
+                    throw std::invalid_argument("寸法が参照する作業平面が見つかりません。");
+                }
+                reference.kind = DimensionReferenceKind::WorkPlane;
+                reference.objectName = project_.WorkPlanes()[pick.index].name;
+                return reference;
+            }
+            reference.kind = DimensionReferenceKind::FixedPoint;
+            reference.point = pick.point;
+            return reference;
+        };
+        const auto findPick = [&](MeasurementPickKind kind) -> const MeasurementPick& {
+            const auto position = std::find_if(
+                lastMeasurementPicks_.begin(), lastMeasurementPicks_.end(),
+                [&](const MeasurementPick& pick) { return pick.kind == kind; });
+            if (position == lastMeasurementPicks_.end()) {
+                throw std::invalid_argument("測定対象が不足しています。もう一度測定してください。");
+            }
+            return *position;
+        };
+        const auto findOtherThan = [&](MeasurementPickKind kind) -> const MeasurementPick& {
+            const auto position = std::find_if(
+                lastMeasurementPicks_.begin(), lastMeasurementPicks_.end(),
+                [&](const MeasurementPick& pick) { return pick.kind != kind; });
+            if (position == lastMeasurementPicks_.end()) {
+                throw std::invalid_argument("測定対象が不足しています。もう一度測定してください。");
+            }
+            return *position;
+        };
+        const auto requireTwoPicks = [&] {
+            if (lastMeasurementPicks_.size() < 2) {
+                throw std::invalid_argument("測定対象が不足しています。もう一度測定してください。");
+            }
+        };
+
+        switch (dimension.kind) {
+        case ReferenceDimensionKind::PointDistance:
+            requireTwoPicks();
+            dimension.first = makeReference(lastMeasurementPicks_[0]);
+            dimension.second = makeReference(lastMeasurementPicks_[1]);
+            break;
+        case ReferenceDimensionKind::WireLength:
+        case ReferenceDimensionKind::WireRadius:
+            dimension.first = makeReference(findPick(MeasurementPickKind::Wire));
+            break;
+        case ReferenceDimensionKind::WireDistance:
+        case ReferenceDimensionKind::WireAngle:
+            requireTwoPicks();
+            dimension.first = makeReference(lastMeasurementPicks_[0]);
+            dimension.second = makeReference(lastMeasurementPicks_[1]);
+            break;
+        case ReferenceDimensionKind::PointWireDistance:
+            dimension.first = makeReference(findPick(MeasurementPickKind::Point));
+            dimension.second = makeReference(findPick(MeasurementPickKind::Wire));
+            break;
+        case ReferenceDimensionKind::PointPlaneDistance:
+            dimension.first = makeReference(findOtherThan(MeasurementPickKind::WorkPlane));
+            dimension.second = makeReference(findPick(MeasurementPickKind::WorkPlane));
+            break;
+        case ReferenceDimensionKind::WirePlaneAngle:
+            dimension.first = makeReference(findPick(MeasurementPickKind::Wire));
+            dimension.second = makeReference(findPick(MeasurementPickKind::WorkPlane));
+            break;
+        case ReferenceDimensionKind::PlaneAngle:
+        case ReferenceDimensionKind::PlaneDistance:
+            requireTwoPicks();
+            dimension.first = makeReference(lastMeasurementPicks_[0]);
+            dimension.second = makeReference(lastMeasurementPicks_[1]);
+            break;
+        }
+
+        Project candidate = project_;
+        candidate.AddReferenceDimension(dimension);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        measurementName_->setText(SuggestedDimensionName());
+        statusBar()->showMessage(
+            QStringLiteral("参照寸法を残しました: %1").arg(ToQString(dimension.name)), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("参照寸法"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::DeleteSelectedReferenceDimension()
+{
+    QListWidgetItem* item = referenceDimensionList_->currentItem();
+    if (item == nullptr) {
+        statusBar()->showMessage(QStringLiteral("削除する参照寸法を選択してください"), 2500);
+        return;
+    }
+    const std::string name = ToName(item->data(kDimensionNameRole).toString());
+    const auto position = std::find_if(
+        project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(),
+        [&](const ReferenceDimension& dimension) { return dimension.name == name; });
+    if (position == project_.ReferenceDimensions().end()) {
+        return;
+    }
+    RecordUndo();
+    (void)project_.RemoveReferenceDimension(name);
+    MarkModified();
+    RefreshModelViews(false);
+    statusBar()->showMessage(QStringLiteral("参照寸法を削除しました: %1").arg(ToQString(name)), 2500);
+}
+
+void MainWindow::RefreshReferenceDimensions()
+{
+    if (referenceDimensionList_ == nullptr || viewport_ == nullptr) {
+        return;
+    }
+
+    const QString selectedName = referenceDimensionList_->currentItem() != nullptr
+        ? referenceDimensionList_->currentItem()->data(kDimensionNameRole).toString()
+        : QString();
+    const QSignalBlocker blocker(referenceDimensionList_);
+    referenceDimensionList_->clear();
+    std::vector<ReferenceDimensionOverlay> overlays;
+    for (const ReferenceDimension& dimension : project_.ReferenceDimensions()) {
+        try {
+            const auto result = project_.EvaluateReferenceDimension(dimension.name);
+            const QString value = ReferenceDimensionValueText(dimension.kind, result.value);
+            auto* item = new QListWidgetItem(
+                QStringLiteral("%1   %2   %3")
+                    .arg(ToQString(dimension.name), ReferenceDimensionKindText(dimension.kind), value),
+                referenceDimensionList_);
+            item->setData(kDimensionNameRole, ToQString(dimension.name));
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(dimension.visible ? Qt::Checked : Qt::Unchecked);
+            if (ToQString(dimension.name) == selectedName) {
+                referenceDimensionList_->setCurrentItem(item);
+            }
+            if (dimension.visible) {
+                overlays.push_back({
+                    result.firstPoint,
+                    result.secondPoint,
+                    QStringLiteral("%1  %2").arg(ToQString(dimension.name), value),
+                });
+            }
+        } catch (const std::exception& error) {
+            auto* item = new QListWidgetItem(
+                QStringLiteral("%1   [参照切れ]").arg(ToQString(dimension.name)),
+                referenceDimensionList_);
+            item->setData(kDimensionNameRole, ToQString(dimension.name));
+            item->setToolTip(QString::fromUtf8(error.what()));
+        }
+    }
+    referenceDimensionDeleteButton_->setEnabled(referenceDimensionList_->currentRow() >= 0);
+    viewport_->SetReferenceDimensionOverlays(std::move(overlays));
 }
 
 void MainWindow::ClearReference()
@@ -3760,6 +4067,7 @@ bool MainWindow::RunCreationSelfTest()
     };
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
+    const std::size_t initialDimensionCount = project_.ReferenceDimensions().size();
     if (toolsTabs_->count() != 8
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
         || toolsTabs_->tabText(5) != QStringLiteral("面")
@@ -3770,6 +4078,11 @@ bool MainWindow::RunCreationSelfTest()
         || platePdfOverlap_ == nullptr
         || measurementMode_ == nullptr
         || measurementResultLabel_ == nullptr
+        || measurementMetric_ == nullptr
+        || measurementName_ == nullptr
+        || measurementSaveButton_ == nullptr
+        || referenceDimensionList_ == nullptr
+        || referenceDimensionDeleteButton_ == nullptr
         || measureToolAction_ == nullptr
         || coincidentToolAction_ == nullptr
         || tangentToolAction_ == nullptr
@@ -4693,6 +5006,47 @@ bool MainWindow::RunCreationSelfTest()
     if (!measurementResultLabel_->text().contains(QStringLiteral("半径"))) {
         return fail("measure circle radius");
     }
+    const int radiusMetric = measurementMetric_->findData(
+        static_cast<int>(ReferenceDimensionKind::WireRadius));
+    if (radiusMetric < 0 || measurementMetric_->findData(
+            static_cast<int>(ReferenceDimensionKind::WireLength)) < 0) {
+        return fail("offer persistent circle dimensions");
+    }
+    measurementMetric_->setCurrentIndex(radiusMetric);
+    measurementName_->setText(QStringLiteral("__ui_radius_dimension"));
+    SaveCurrentMeasurement();
+    if (project_.ReferenceDimensions().size() != initialDimensionCount + 1
+        || referenceDimensionList_->count() != static_cast<int>(initialDimensionCount + 1)
+        || viewport_->ReferenceDimensionOverlayCount() != initialDimensionCount + 1
+        || std::abs(project_.EvaluateReferenceDimension("__ui_radius_dimension").value
+            - project_.Wires()[directStart + 2].wire.ArcData().radius) > 1.0e-9) {
+        return fail("save persistent radius dimension");
+    }
+    Undo();
+    if (project_.ReferenceDimensions().size() != initialDimensionCount) {
+        return fail("undo persistent dimension");
+    }
+    Redo();
+    if (project_.ReferenceDimensions().size() != initialDimensionCount + 1
+        || viewport_->ReferenceDimensionOverlayCount() != initialDimensionCount + 1) {
+        return fail("redo persistent dimension");
+    }
+    for (int row = 0; row < referenceDimensionList_->count(); ++row) {
+        QListWidgetItem* item = referenceDimensionList_->item(row);
+        if (item->data(kDimensionNameRole).toString() == QStringLiteral("__ui_radius_dimension")) {
+            item->setCheckState(Qt::Unchecked);
+            break;
+        }
+    }
+    if (project_.ReferenceDimensions().back().visible
+        || viewport_->ReferenceDimensionOverlayCount() != initialDimensionCount) {
+        return fail("hide persistent dimension");
+    }
+    Undo();
+    if (!project_.ReferenceDimensions().back().visible
+        || viewport_->ReferenceDimensionOverlayCount() != initialDimensionCount + 1) {
+        return fail("undo hidden persistent dimension");
+    }
     UpdateMeasurement({
         {MeasurementPickKind::Wire, static_cast<int>(directStart), project_.Wires()[directStart].wire.Start(), 0.0},
         {MeasurementPickKind::Wire, static_cast<int>(meetStart), project_.Wires()[meetStart].wire.Start(), 0.0},
@@ -4707,8 +5061,21 @@ bool MainWindow::RunCreationSelfTest()
         {MeasurementPickKind::Point, -1, {3.0, 4.0, 12.0}, 0.0},
     });
     if (!measurementResultLabel_->text().contains(QStringLiteral("13.000 mm"))
-        || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))) {
+        || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))
+        || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0) {
         return fail("measure two points");
+    }
+    for (int row = 0; row < referenceDimensionList_->count(); ++row) {
+        if (referenceDimensionList_->item(row)->data(kDimensionNameRole).toString()
+            == QStringLiteral("__ui_radius_dimension")) {
+            referenceDimensionList_->setCurrentRow(row);
+            break;
+        }
+    }
+    DeleteSelectedReferenceDimension();
+    if (project_.ReferenceDimensions().size() != initialDimensionCount
+        || viewport_->ReferenceDimensionOverlayCount() != initialDimensionCount) {
+        return fail("delete persistent dimension");
     }
 
     const std::size_t coincidenceCount = project_.CoincidentConstraints().size();
@@ -5297,6 +5664,8 @@ void MainWindow::ShowAllObjects()
         return !surface.visible;
     }) || std::any_of(project_.Plates().begin(), project_.Plates().end(), [](const auto& plate) {
         return !plate.visible;
+    }) || std::any_of(project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(), [](const auto& dimension) {
+        return !dimension.visible;
     });
     if (!hasHiddenObjects) {
         statusBar()->showMessage(QStringLiteral("すべて表示されています"), 2000);
@@ -5315,6 +5684,9 @@ void MainWindow::ShowAllObjects()
     }
     for (const auto& plate : project_.Plates()) {
         project_.SetPlateVisible(plate.name, true);
+    }
+    for (const auto& dimension : project_.ReferenceDimensions()) {
+        project_.SetReferenceDimensionVisible(dimension.name, true);
     }
     MarkModified();
     RefreshModelViews(false);
@@ -5370,6 +5742,20 @@ void MainWindow::RefreshModelViews(bool fitView)
         });
         item->setToolTip(0, QStringLiteral("右側のベジェ曲線または円弧が左側の接線方向へ追従"));
     }
+    auto* dimensionRoot = new QTreeWidgetItem(
+        modelTree_, {QStringLiteral("参照寸法 (%1)").arg(project_.ReferenceDimensions().size())});
+    for (const ReferenceDimension& dimension : project_.ReferenceDimensions()) {
+        QString label = ToQString(dimension.name);
+        try {
+            const auto result = project_.EvaluateReferenceDimension(dimension.name);
+            label = QStringLiteral("%1  %2")
+                .arg(label, ReferenceDimensionValueText(dimension.kind, result.value));
+        } catch (const std::exception&) {
+            label += QStringLiteral("  [参照切れ]");
+        }
+        auto* item = new QTreeWidgetItem(dimensionRoot, {label});
+        item->setToolTip(0, ReferenceDimensionKindText(dimension.kind));
+    }
     auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
     for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
         auto* item = new QTreeWidgetItem(surfaceRoot, {ToQString(project_.Surfaces()[index].name)});
@@ -5390,6 +5776,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     wireRoot->setExpanded(true);
     coincidenceRoot->setExpanded(true);
     tangentRoot->setExpanded(true);
+    dimensionRoot->setExpanded(true);
     surfaceRoot->setExpanded(true);
     plateRoot->setExpanded(true);
     modelTree_->blockSignals(false);
@@ -5398,6 +5785,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     RefreshWireChoices();
     RefreshSurfaceChoices();
     viewport_->SetProject(&project_, fitView);
+    RefreshReferenceDimensions();
     RefreshActiveWorkPlane();
     RefreshReference();
     UpdateSelection({}, false);
@@ -6147,6 +6535,20 @@ QString MainWindow::SuggestedPlateName() const
         ++number;
     }
     return QStringLiteral("plate_%1").arg(number);
+}
+
+QString MainWindow::SuggestedDimensionName() const
+{
+    int number = static_cast<int>(project_.ReferenceDimensions().size()) + 1;
+    const auto exists = [this](const std::string& name) {
+        return std::any_of(
+            project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(),
+            [&](const ReferenceDimension& dimension) { return dimension.name == name; });
+    };
+    while (exists(ToName(QStringLiteral("dim_%1").arg(number)))) {
+        ++number;
+    }
+    return QStringLiteral("dim_%1").arg(number);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

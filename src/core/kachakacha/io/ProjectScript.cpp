@@ -151,6 +151,25 @@ std::string WirePlanePolicyToken(WirePlanePolicy policy)
     return "free";
 }
 
+model::WireEndpoint ParseWireEndpoint(
+    const std::string& token,
+    std::string_view sourceName,
+    int lineNumber)
+{
+    if (token == "start" || token == "first") {
+        return model::WireEndpoint::Start;
+    }
+    if (token == "end" || token == "last") {
+        return model::WireEndpoint::End;
+    }
+    ThrowLineError(sourceName, lineNumber, "Unknown wire endpoint: " + token);
+}
+
+const char* WireEndpointToken(model::WireEndpoint endpoint)
+{
+    return endpoint == model::WireEndpoint::Start ? "start" : "end";
+}
+
 PlateThicknessDirection ParsePlateDirection(const std::string& token, std::string_view sourceName, int lineNumber)
 {
     if (token == "positive" || token == "outside") {
@@ -406,6 +425,15 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     ThrowLineError(sourceName, lineNumber, "Unknown wire role: " + role);
                 }
                 project.SetWireMetadata(name, std::move(metadata));
+            } else if (command == "wire_coincident") {
+                const std::string anchorWire = ReadName(stream, sourceName, lineNumber, "anchor wire");
+                const std::string anchorEndpoint = ReadName(stream, sourceName, lineNumber, "anchor endpoint");
+                const std::string followerWire = ReadName(stream, sourceName, lineNumber, "follower wire");
+                const std::string followerEndpoint = ReadName(stream, sourceName, lineNumber, "follower endpoint");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWireCoincidentConstraint(
+                    {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
+                    {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)});
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -674,7 +702,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     const bool hasProjectedWires = std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
         return wire.projection.has_value();
     });
-    if (hasProjectedWires) {
+    if (hasProjectedWires || !project.CoincidentConstraints().empty()) {
         output << '\n';
     }
     for (const auto& namedWire : project.Wires()) {
@@ -692,6 +720,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         if (namedWire.metadata.construction) {
             output << "wire_role " << namedWire.name << " construction\n";
         }
+    }
+    for (const auto& constraint : project.CoincidentConstraints()) {
+        RequireScriptNameSafe(constraint.anchor.wireName, "Coincidence anchor wire");
+        RequireScriptNameSafe(constraint.follower.wireName, "Coincidence follower wire");
+        output << "wire_coincident "
+               << constraint.anchor.wireName << ' ' << WireEndpointToken(constraint.anchor.endpoint) << ' '
+               << constraint.follower.wireName << ' ' << WireEndpointToken(constraint.follower.endpoint) << '\n';
     }
 
     if (!project.Plates().empty()) {

@@ -40,6 +40,7 @@ enum class ViewportTool {
     MirrorSelection,
     RotateSelection,
     SplitWire,
+    Coincident,
     Measure,
 };
 
@@ -59,6 +60,12 @@ struct MeasurementPick {
     int index = -1;
     kachakacha::geometry::Vector3 point;
     double wireParameter = 0.0;
+};
+
+struct WireEndpointPick {
+    int wireIndex = -1;
+    kachakacha::model::WireEndpoint endpoint = kachakacha::model::WireEndpoint::Start;
+    kachakacha::geometry::Vector3 point;
 };
 
 struct DrawingMeasurements {
@@ -92,6 +99,8 @@ public:
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
     void SetSplitRequestedCallback(std::function<void(int, double)> callback);
+    void SetCoincidenceRequestedCallback(
+        std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetMeasurementChangedCallback(std::function<void(const std::vector<MeasurementPick>&)> callback);
     void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
     void SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
@@ -105,6 +114,11 @@ public:
     void SetMeasurementMode(MeasurementMode mode);
     [[nodiscard]] MeasurementMode CurrentMeasurementMode() const noexcept { return measurementMode_; }
     void ClearMeasurement();
+    void ClearCoincidencePicks();
+    [[nodiscard]] const std::vector<WireEndpointPick>& CoincidencePicks() const noexcept
+    {
+        return coincidencePicks_;
+    }
     void SetMeasurementOverlay(
         std::optional<kachakacha::geometry::Vector3> firstPoint,
         std::optional<kachakacha::geometry::Vector3> secondPoint,
@@ -142,12 +156,16 @@ private:
         QPointF position,
         double maximumDistance = 12.0,
         bool allowEndpoints = false) const;
+    [[nodiscard]] std::optional<WireEndpointPick> NearestWireEndpoint(
+        QPointF position,
+        double maximumDistance = 12.0) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
     void CommitMeasurementPick(QPointF position);
+    void CommitCoincidencePick(QPointF position);
     void UpdateHover(QPointF position);
     void ClearHover();
     void NotifyDrawingState();
@@ -169,6 +187,7 @@ private:
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;
     std::function<void(int, double)> splitRequested_;
+    std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(const std::vector<MeasurementPick>&)> measurementChanged_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
@@ -181,6 +200,7 @@ private:
     std::optional<double> hoveredWireParameter_;
     QPoint hoverScreenPosition_;
     std::optional<double> splitPreviewParameter_;
+    std::vector<WireEndpointPick> coincidencePicks_;
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;

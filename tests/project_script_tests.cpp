@@ -115,6 +115,58 @@ void ConstructionWiresRoundTripAndStayOutOfSurfaces()
     Require(rejected, "construction wire rejected as surface source");
 }
 
+void CoincidentEndpointsRoundTripAndDriveGeometry()
+{
+    std::istringstream input(R"(
+        line3d anchor 0 0 0  10 0 0
+        line3d follower 20 5 0  20 10 0
+        line3d tail 30 20 0  30 30 0
+        wire_coincident anchor end follower start
+        wire_coincident follower end tail start
+    )");
+    auto project = LoadProjectScript(input, "coincident-test");
+    RequireNear(project.Wires()[1].wire.Start(), {10.0, 0.0, 0.0}, "follower initially coincident");
+    RequireNear(project.Wires()[2].wire.Start(), {20.0, 10.0, 0.0}, "coincidence chain initially solved");
+
+    project.UpdateWire("anchor", Wire::Line({2.0, 3.0, 0.0}, {12.0, 3.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.Start(), {12.0, 3.0, 0.0}, "follower tracks anchor edit");
+    RequireNear(project.Wires()[2].wire.Start(), {20.0, 10.0, 0.0}, "tail remains attached to follower end");
+
+    project.UpdateWire("follower", Wire::Line({99.0, 99.0, 0.0}, {25.0, 12.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.Start(), {12.0, 3.0, 0.0}, "follower endpoint cannot leave anchor");
+    RequireNear(project.Wires()[2].wire.Start(), {25.0, 12.0, 0.0}, "chain follows edited follower end");
+
+    auto conflictingMetadata = project.Wires()[1].metadata;
+    conflictingMetadata.lineConstraints.lengthMillimeters = 8.0;
+    bool rejectedConflictingDimension = false;
+    try {
+        project.SetWireMetadata("follower", conflictingMetadata);
+    } catch (const std::invalid_argument&) {
+        rejectedConflictingDimension = true;
+    }
+    Require(rejectedConflictingDimension, "follower dimension conflicts are rejected");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_coincident anchor end follower start") != std::string::npos,
+        "coincidence written");
+    std::istringstream roundTripInput(output.str());
+    auto roundTripped = LoadProjectScript(roundTripInput, "coincident-roundtrip");
+    Require(roundTripped.CoincidentConstraints().size() == 2, "coincidence roundtrip count");
+    RequireNear(roundTripped.Wires()[1].wire.Start(), {12.0, 3.0, 0.0}, "coincidence roundtrip point");
+
+    bool protectedFromRemoval = false;
+    try {
+        (void)roundTripped.RemoveWire("anchor");
+    } catch (const std::invalid_argument&) {
+        protectedFromRemoval = true;
+    }
+    Require(protectedFromRemoval, "coincidence protects referenced wire");
+    Require(roundTripped.RemoveWireCoincidentConstraints("anchor") == 1, "remove anchor coincidence");
+    Require(roundTripped.RemoveWireCoincidentConstraints("follower") == 1, "remove follower chain coincidence");
+    Require(roundTripped.RemoveWire("anchor"), "wire removable after coincidence removal");
+}
+
 void WrittenProjectRoundTrips()
 {
     std::istringstream input(R"(
@@ -496,6 +548,7 @@ int main()
         LoadsPlanesAndWires();
         LoadsWireMetadataForDirectWires();
         ConstructionWiresRoundTripAndStayOutOfSurfaces();
+        CoincidentEndpointsRoundTripAndDriveGeometry();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         SurfacesAndProjectedWiresRoundTrip();

@@ -126,6 +126,7 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     hoveredSelection_ = {};
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
+    coincidencePicks_.clear();
     measurementPicks_.clear();
     measurementOverlayFirst_.reset();
     measurementOverlaySecond_.reset();
@@ -217,6 +218,12 @@ void CadViewport::SetSplitRequestedCallback(std::function<void(int, double)> cal
     splitRequested_ = std::move(callback);
 }
 
+void CadViewport::SetCoincidenceRequestedCallback(
+    std::function<void(WireEndpointPick, WireEndpointPick)> callback)
+{
+    coincidenceRequested_ = std::move(callback);
+}
+
 void CadViewport::SetMeasurementChangedCallback(
     std::function<void(const std::vector<MeasurementPick>&)> callback)
 {
@@ -238,11 +245,14 @@ void CadViewport::SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane>
 
 void CadViewport::SetTool(ViewportTool tool)
 {
+    if (tool_ != tool) {
+        coincidencePicks_.clear();
+    }
     tool_ = tool;
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
-                || tool_ == ViewportTool::SplitWire)
+                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
@@ -292,6 +302,13 @@ void CadViewport::ClearMeasurement()
     if (measurementChanged_) {
         measurementChanged_(measurementPicks_);
     }
+    update();
+}
+
+void CadViewport::ClearCoincidencePicks()
+{
+    coincidencePicks_.clear();
+    NotifyDrawingState();
     update();
 }
 
@@ -604,6 +621,34 @@ std::optional<double> CadViewport::NearestWireParameter(
     return bestParameter;
 }
 
+std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
+    QPointF position,
+    double maximumDistance) const
+{
+    if (project_ == nullptr || !std::isfinite(maximumDistance) || maximumDistance <= 0.0) {
+        return std::nullopt;
+    }
+    double bestDistance = maximumDistance;
+    std::optional<WireEndpointPick> best;
+    for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+        const NamedWire& namedWire = project_->Wires()[index];
+        if (!namedWire.visible || namedWire.projection.has_value() || namedWire.wire.IsClosed()) {
+            continue;
+        }
+        for (const auto endpoint : {kachakacha::model::WireEndpoint::Start, kachakacha::model::WireEndpoint::End}) {
+            const Vector3 point = endpoint == kachakacha::model::WireEndpoint::Start
+                ? namedWire.wire.Start()
+                : namedWire.wire.End();
+            const double distance = QLineF(position, ProjectPoint(point)).length();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = WireEndpointPick{index, endpoint, point};
+            }
+        }
+    }
+    return best;
+}
+
 void CadViewport::CommitMeasurementPick(QPointF position)
 {
     if (project_ == nullptr) {
@@ -674,6 +719,29 @@ void CadViewport::CommitMeasurementPick(QPointF position)
     if (measurementChanged_) {
         measurementChanged_(measurementPicks_);
     }
+    update();
+}
+
+void CadViewport::CommitCoincidencePick(QPointF position)
+{
+    const std::optional<WireEndpointPick> pick = NearestWireEndpoint(position, 14.0);
+    if (!pick.has_value()) {
+        return;
+    }
+    if (!coincidencePicks_.empty()
+        && coincidencePicks_.front().wireIndex == pick->wireIndex) {
+        return;
+    }
+    coincidencePicks_.push_back(*pick);
+    if (coincidencePicks_.size() == 2) {
+        const WireEndpointPick anchor = coincidencePicks_[0];
+        const WireEndpointPick follower = coincidencePicks_[1];
+        coincidencePicks_.clear();
+        if (coincidenceRequested_) {
+            coincidenceRequested_(anchor, follower);
+        }
+    }
+    NotifyDrawingState();
     update();
 }
 
@@ -852,7 +920,13 @@ void CadViewport::UpdateHover(QPointF position)
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
 
-    if (project_ != nullptr) {
+    if (project_ != nullptr && tool_ == ViewportTool::Coincident) {
+        const std::optional<WireEndpointPick> endpoint = NearestWireEndpoint(position, 8.0);
+        if (endpoint.has_value()) {
+            hoveredSelection_ = {CadSelectionKind::Wire, endpoint->wireIndex};
+            hoveredWirePoint_ = endpoint->point;
+        }
+    } else if (project_ != nullptr) {
         double bestPointDistance = 8.0;
         int bestPointWire = -1;
         Vector3 bestPoint;
@@ -895,7 +969,7 @@ void CadViewport::UpdateHover(QPointF position)
 
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
-                || tool_ == ViewportTool::SplitWire)
+                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
@@ -1218,6 +1292,49 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
         }
 
+        painter.save();
+        const auto findWire = [this](const std::string& name) {
+            return std::find_if(project_->Wires().begin(), project_->Wires().end(), [&](const NamedWire& wire) {
+                return wire.name == name;
+            });
+        };
+        const auto endpointPoint = [](const NamedWire& wire, kachakacha::model::WireEndpoint endpoint) {
+            return endpoint == kachakacha::model::WireEndpoint::Start
+                ? wire.wire.Start()
+                : wire.wire.End();
+        };
+        for (const auto& constraint : project_->CoincidentConstraints()) {
+            const auto anchorWire = findWire(constraint.anchor.wireName);
+            const auto followerWire = findWire(constraint.follower.wireName);
+            if (anchorWire == project_->Wires().end() || followerWire == project_->Wires().end()
+                || !anchorWire->visible || !followerWire->visible) {
+                continue;
+            }
+            const Vector3 point = endpointPoint(*anchorWire, constraint.anchor.endpoint);
+            const QPointF screenPoint = ProjectPoint(point);
+            const int anchorIndex = static_cast<int>(std::distance(project_->Wires().begin(), anchorWire));
+            const int followerIndex = static_cast<int>(std::distance(project_->Wires().begin(), followerWire));
+            const bool emphasized = tool_ == ViewportTool::Coincident
+                || IsSelected(CadSelectionKind::Wire, anchorIndex)
+                || IsSelected(CadSelectionKind::Wire, followerIndex);
+            painter.setBrush(QColor(255, 255, 255, 235));
+            painter.setPen(QPen(QColor("#0b7f78"), emphasized ? 2.6 : 1.8));
+            painter.drawEllipse(screenPoint + QPointF(-3.0, 0.0), 4.0, 4.0);
+            painter.drawEllipse(screenPoint + QPointF(3.0, 0.0), 4.0, 4.0);
+            if (emphasized) {
+                painter.setPen(QColor("#075f59"));
+                painter.drawText(screenPoint + QPointF(9.0, -8.0), QStringLiteral("一致"));
+            }
+        }
+        if (!coincidencePicks_.empty()) {
+            const QPointF screenPoint = ProjectPoint(coincidencePicks_.front().point);
+            painter.setBrush(QColor("#ffffff"));
+            painter.setPen(QPen(QColor("#0b7f78"), 2.8));
+            painter.drawRect(QRectF(screenPoint - QPointF(6.0, 6.0), QSizeF(12.0, 12.0)));
+            painter.drawText(screenPoint + QPointF(10.0, -9.0), QStringLiteral("固定側"));
+        }
+        painter.restore();
+
         if (hoveredSelection_.kind == CadSelectionKind::Wire
             && hoveredSelection_.index >= 0
             && hoveredSelection_.index < static_cast<int>(project_->Wires().size())) {
@@ -1517,6 +1634,11 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::SplitWire:
         modeText = QStringLiteral("分割");
         break;
+    case ViewportTool::Coincident:
+        modeText = coincidencePicks_.empty()
+            ? QStringLiteral("一致 · 固定側の端点")
+            : QStringLiteral("一致 · 追従側の端点");
+        break;
     case ViewportTool::Measure:
         modeText = measurementMode_ == MeasurementMode::TwoPoints
             ? QStringLiteral("測定 · 2点間")
@@ -1748,6 +1870,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::SplitWire
         && tool_ != ViewportTool::Measure
+        && tool_ != ViewportTool::Coincident
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -1801,6 +1924,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         update();
     } else if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::Measure
+        && tool_ != ViewportTool::Coincident
         && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
@@ -1881,6 +2005,16 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (tool_ == ViewportTool::Coincident) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_) {
+            CommitCoincidencePick(event->position());
+        } else if (event->button() == Qt::RightButton && !mouseMoved_) {
+            ClearCoincidencePicks();
+        }
+        dragButton_ = Qt::NoButton;
+        return;
+    }
+
     if (tool_ == ViewportTool::SplitWire) {
         if (event->button() == Qt::LeftButton && !mouseMoved_ && splitPreviewParameter_.has_value()) {
             const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
@@ -1945,6 +2079,8 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
     if (event->key() == Qt::Key_Escape) {
         if (tool_ == ViewportTool::Measure) {
             ClearMeasurement();
+        } else if (tool_ == ViewportTool::Coincident) {
+            ClearCoincidencePicks();
         } else {
             CancelDrawing();
         }

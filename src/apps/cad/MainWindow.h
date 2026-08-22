@@ -75,6 +75,8 @@ private:
         kachakacha::geometry::Vector3 axisDirection,
         double angleRadians);
     void ApplySplitWire(int wireIndex, double parameter);
+    void ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointPick follower);
+    void RemoveSelectedCoincidences();
     void UpdateMeasurement(const std::vector<MeasurementPick>& picks);
     void JoinSelectedWires();
     void ApplyMeetSelectedLines();
@@ -153,6 +155,8 @@ private:
     QAction* mirrorToolAction_ = nullptr;
     QAction* rotateToolAction_ = nullptr;
     QAction* splitToolAction_ = nullptr;
+    QAction* coincidentToolAction_ = nullptr;
+    QAction* removeCoincidentAction_ = nullptr;
     QAction* measureToolAction_ = nullptr;
     QAction* joinWiresAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;

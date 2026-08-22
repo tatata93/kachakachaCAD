@@ -108,6 +108,14 @@ wire_role NAME construction|model
 
 `construction` はスナップや寸法基準に使う補助線で、面・投影・開口・切断出力の形状には使われない。省略時は `model`。
 
+### 端点の一致拘束
+
+```text
+wire_coincident ANCHOR_WIRE start|end FOLLOWER_WIRE start|end
+```
+
+固定側ワイヤーの端点へ追従側ワイヤーの端点を一致させ、編集後も関係を保持する。閉じたワイヤーと投影ワイヤーは対象外。現在は競合を避けるため、追従側の直線へ長さ・角度拘束を同時設定できない。
+
 ### 作業平面上の直線
 
 ```text

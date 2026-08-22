@@ -92,9 +92,22 @@ function Invoke-Checked {
         throw "Command not found: $Command"
     }
 
-    Repair-PathEnvironment
-    & $resolvedCommand.Source @Arguments
-    $exitCode = $LASTEXITCODE
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $resolvedCommand.Source
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in $Arguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+
+    $cleanEnvironment = Get-CleanProcessEnvironment
+    $startInfo.Environment.Clear()
+    foreach ($entry in $cleanEnvironment.GetEnumerator()) {
+        $startInfo.Environment[[string]$entry.Key] = [string]$entry.Value
+    }
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
     if ($exitCode -ne 0) {
         throw "$Command failed with exit code $exitCode"
     }

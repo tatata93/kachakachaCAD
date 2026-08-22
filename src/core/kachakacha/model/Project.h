@@ -18,6 +18,21 @@ enum class WirePlanePolicy {
     LockedToPlane,
 };
 
+enum class WireEndpoint {
+    Start,
+    End,
+};
+
+struct WireEndpointReference {
+    std::string wireName;
+    WireEndpoint endpoint = WireEndpoint::Start;
+};
+
+struct WireCoincidentConstraint {
+    WireEndpointReference anchor;
+    WireEndpointReference follower;
+};
+
 struct WireMetadata {
     std::optional<std::string> sourcePlaneName;
     WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
@@ -88,6 +103,10 @@ public:
         PlateThicknessDirection direction,
         std::string material);
     void SetWireMetadata(std::string_view name, WireMetadata metadata);
+    void AddWireCoincidentConstraint(
+        WireEndpointReference anchor,
+        WireEndpointReference follower);
+    [[nodiscard]] std::size_t RemoveWireCoincidentConstraints(std::string_view wireName);
     void SetWorkPlaneVisible(std::string_view name, bool visible);
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
@@ -110,6 +129,10 @@ public:
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }
     [[nodiscard]] const std::vector<NamedSurface>& Surfaces() const noexcept { return surfaces_; }
     [[nodiscard]] const std::vector<NamedPlate>& Plates() const noexcept { return plates_; }
+    [[nodiscard]] const std::vector<WireCoincidentConstraint>& CoincidentConstraints() const noexcept
+    {
+        return coincidentConstraints_;
+    }
 
     [[nodiscard]] std::optional<WorkPlane> FindWorkPlane(std::string_view name) const;
     [[nodiscard]] std::optional<Surface> FindSurface(std::string_view name) const;
@@ -117,12 +140,14 @@ public:
 
 private:
     [[nodiscard]] const NamedWire& RequireWire(std::string_view name) const;
+    void ApplyCoincidentConstraints();
     void RebuildDependentGeometry();
 
     std::vector<NamedWorkPlane> workPlanes_;
     std::vector<NamedWire> wires_;
     std::vector<NamedSurface> surfaces_;
     std::vector<NamedPlate> plates_;
+    std::vector<WireCoincidentConstraint> coincidentConstraints_;
 };
 
 } // namespace kachakacha::model

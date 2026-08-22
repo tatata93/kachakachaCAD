@@ -354,6 +354,9 @@ void MainWindow::BuildUi()
     viewport_->SetSplitRequestedCallback([this](int wireIndex, double parameter) {
         ApplySplitWire(wireIndex, parameter);
     });
+    viewport_->SetCoincidenceRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
+        ApplyEndpointCoincidence(anchor, follower);
+    });
     viewport_->SetMeasurementChangedCallback([this](const std::vector<MeasurementPick>& picks) {
         UpdateMeasurement(picks);
     });
@@ -499,6 +502,8 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
     rotateToolAction_ = new QAction(QStringLiteral("回転"), this);
     splitToolAction_ = new QAction(QStringLiteral("分割"), this);
+    coincidentToolAction_ = new QAction(QStringLiteral("端点一致"), this);
+    removeCoincidentAction_ = new QAction(QStringLiteral("一致解除"), this);
     measureToolAction_ = new QAction(QStringLiteral("測定"), this);
     joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
     meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
@@ -509,6 +514,8 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
+    coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
+    removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーに関係する端点一致を解除"));
     measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
     joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
@@ -526,6 +533,7 @@ void MainWindow::BuildDrawingActions()
     circleToolAction_->setShortcut(Qt::Key_C);
     arcToolAction_->setShortcut(Qt::Key_A);
     bezierToolAction_->setShortcut(Qt::Key_B);
+    coincidentToolAction_->setShortcut(Qt::Key_I);
     measureToolAction_->setShortcut(Qt::Key_M);
 
     auto* toolGroup = new QActionGroup(this);
@@ -534,7 +542,7 @@ void MainWindow::BuildDrawingActions()
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
-             measureToolAction_}) {
+             coincidentToolAction_, measureToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -552,6 +560,8 @@ void MainWindow::BuildDrawingActions()
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
     connect(rotateToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::RotateSelection); });
     connect(splitToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::SplitWire); });
+    connect(coincidentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Coincident); });
+    connect(removeCoincidentAction_, &QAction::triggered, this, &MainWindow::RemoveSelectedCoincidences);
     connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
     connect(joinWiresAction_, &QAction::triggered, this, &MainWindow::JoinSelectedWires);
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
@@ -972,7 +982,9 @@ QWidget* MainWindow::BuildEditPanel()
     addDirectButton(mirrorToolAction_, 1, 1);
     addDirectButton(splitToolAction_, 2, 0);
     addDirectButton(joinWiresAction_, 2, 1);
-    addDirectButton(meetLinesAction_, 3, 0, 2);
+    addDirectButton(coincidentToolAction_, 3, 0);
+    addDirectButton(removeCoincidentAction_, 3, 1);
+    addDirectButton(meetLinesAction_, 4, 0, 2);
     layout->addLayout(directGrid);
 
     auto* offsetLabel = new QLabel(QStringLiteral("平行オフセット複製"));
@@ -1568,6 +1580,8 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(rotateToolAction_);
     editMenu->addAction(mirrorToolAction_);
     editMenu->addAction(splitToolAction_);
+    editMenu->addAction(coincidentToolAction_);
+    editMenu->addAction(removeCoincidentAction_);
     editMenu->addAction(joinWiresAction_);
     editMenu->addAction(meetLinesAction_);
     editMenu->addAction(setReferenceAction_);
@@ -1632,6 +1646,8 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->addAction(rotateToolAction_);
     transformToolbar->addAction(mirrorToolAction_);
     transformToolbar->addAction(splitToolAction_);
+    transformToolbar->addAction(coincidentToolAction_);
+    transformToolbar->addAction(removeCoincidentAction_);
     transformToolbar->addAction(joinWiresAction_);
     transformToolbar->addAction(meetLinesAction_);
     transformToolbar->addSeparator();
@@ -2288,7 +2304,8 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         || tool == ViewportTool::MirrorSelection
         || tool == ViewportTool::RotateSelection;
     const bool isSplit = tool == ViewportTool::SplitWire;
-    if (tool != ViewportTool::Select && !isSplit && tool != ViewportTool::Measure) {
+    const bool isCoincident = tool == ViewportTool::Coincident;
+    if (tool != ViewportTool::Select && !isSplit && !isCoincident && tool != ViewportTool::Measure) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
             selectToolAction_->setChecked(true);
@@ -2365,6 +2382,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
     rotateToolAction_->setChecked(tool == ViewportTool::RotateSelection);
     splitToolAction_->setChecked(tool == ViewportTool::SplitWire);
+    coincidentToolAction_->setChecked(tool == ViewportTool::Coincident);
     measureToolAction_->setChecked(tool == ViewportTool::Measure);
     switch (tool) {
     case ViewportTool::Select:
@@ -2402,6 +2420,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::SplitWire:
         statusBar()->showMessage(QStringLiteral("分割: 選択したワイヤー上の分けたい位置をクリック"), 4000);
+        break;
+    case ViewportTool::Coincident:
+        statusBar()->showMessage(QStringLiteral("端点一致: 動かさない固定側、追従させる側の順に端点をクリック"), 5000);
         break;
     case ViewportTool::Measure:
         statusBar()->showMessage(
@@ -2475,6 +2496,11 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::SplitWire:
         state = QStringLiteral("分割 · ワイヤー上をクリック");
+        break;
+    case ViewportTool::Coincident:
+        state = viewport_ != nullptr && viewport_->CoincidencePicks().empty()
+            ? QStringLiteral("端点一致 · 固定側をクリック")
+            : QStringLiteral("端点一致 · 追従側をクリック");
         break;
     case ViewportTool::Measure:
         state = QStringLiteral("測定");
@@ -2584,10 +2610,13 @@ void MainWindow::RefreshActiveWorkPlane()
     mirrorToolAction_->setEnabled(canDraw);
     rotateToolAction_->setEnabled(canDraw);
     splitToolAction_->setEnabled(!project_.Wires().empty());
+    coincidentToolAction_->setEnabled(project_.Wires().size() >= 2);
+    removeCoincidentAction_->setEnabled(!project_.CoincidentConstraints().empty());
     joinWiresAction_->setEnabled(project_.Wires().size() >= 2);
     RefreshReference();
     if (!canDraw && viewport_->Tool() != ViewportTool::Select
         && viewport_->Tool() != ViewportTool::SplitWire
+        && viewport_->Tool() != ViewportTool::Coincident
         && viewport_->Tool() != ViewportTool::Measure) {
         SetViewportTool(ViewportTool::Select);
     }
@@ -2951,6 +2980,85 @@ void MainWindow::ApplySplitWire(int wireIndex, double parameter)
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
     }
+}
+
+void MainWindow::ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointPick follower)
+{
+    try {
+        if (anchor.wireIndex < 0 || follower.wireIndex < 0
+            || anchor.wireIndex >= static_cast<int>(project_.Wires().size())
+            || follower.wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("一致させる端点が見つかりません。");
+        }
+
+        const auto& anchorWire = project_.Wires()[anchor.wireIndex];
+        const auto& followerWire = project_.Wires()[follower.wireIndex];
+        const std::string anchorName = anchorWire.name;
+        const std::string followerName = followerWire.name;
+        Project candidate = project_;
+        candidate.AddWireCoincidentConstraint(
+            {anchorName, anchor.endpoint},
+            {followerName, follower.endpoint});
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections({
+            {CadSelectionKind::Wire, anchor.wireIndex},
+            {CadSelectionKind::Wire, follower.wireIndex},
+        }, true);
+        const auto endpointText = [](kachakacha::model::WireEndpoint endpoint) {
+            return endpoint == kachakacha::model::WireEndpoint::Start
+                ? QStringLiteral("始点")
+                : QStringLiteral("終点");
+        };
+        statusBar()->showMessage(
+            QStringLiteral("%1の%2へ、%3の%4を追従させました")
+                .arg(ToQString(anchorName), endpointText(anchor.endpoint),
+                    ToQString(followerName), endpointText(follower.endpoint)),
+            4500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::RemoveSelectedCoincidences()
+{
+    std::vector<std::string> wireNames;
+    std::vector<CadSelection> selections;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            continue;
+        }
+        const std::string& name = project_.Wires()[selection.index].name;
+        if (std::find(wireNames.begin(), wireNames.end(), name) == wireNames.end()) {
+            wireNames.push_back(name);
+            selections.push_back(selection);
+        }
+    }
+    if (wireNames.empty()) {
+        statusBar()->showMessage(QStringLiteral("一致を解除するワイヤーを3D画面で選択してください"), 4000);
+        return;
+    }
+
+    Project candidate = project_;
+    std::size_t removed = 0;
+    for (const std::string& name : wireNames) {
+        removed += candidate.RemoveWireCoincidentConstraints(name);
+    }
+    if (removed == 0) {
+        statusBar()->showMessage(QStringLiteral("選択したワイヤーには端点一致がありません"), 3000);
+        return;
+    }
+
+    RecordUndo();
+    project_ = std::move(candidate);
+    MarkModified();
+    RefreshModelViews(false);
+    UpdateSelections(std::move(selections), true);
+    statusBar()->showMessage(QStringLiteral("端点一致を%1件解除しました").arg(removed), 3500);
 }
 
 void MainWindow::JoinSelectedWires()
@@ -3529,6 +3637,8 @@ bool MainWindow::RunCreationSelfTest()
         || measurementMode_ == nullptr
         || measurementResultLabel_ == nullptr
         || measureToolAction_ == nullptr
+        || coincidentToolAction_ == nullptr
+        || removeCoincidentAction_ == nullptr
         || drawingConstruction_ == nullptr
         || editWireConstruction_ == nullptr) {
         return fail("drawing workbench is primary");
@@ -3792,6 +3902,17 @@ bool MainWindow::RunCreationSelfTest()
     if (viewport_->HoveredSelection().kind != CadSelectionKind::Wire
         || viewport_->HoveredSelection().index != static_cast<int>(directStart)) {
         return fail("wire hover hit");
+    }
+    SetViewportTool(ViewportTool::Coincident);
+    click(center + QPointF(-60.0, 90.0));
+    if (viewport_->CoincidencePicks().size() != 1
+        || viewport_->CoincidencePicks().front().wireIndex != static_cast<int>(directStart)
+        || viewport_->CoincidencePicks().front().endpoint != kachakacha::model::WireEndpoint::End) {
+        return fail("direct endpoint coincidence pick");
+    }
+    viewport_->ClearCoincidencePicks();
+    if (!viewport_->CoincidencePicks().empty()) {
+        return fail("clear endpoint coincidence pick");
     }
 
     const std::size_t exactStart = project_.Wires().size();
@@ -4399,6 +4520,26 @@ bool MainWindow::RunCreationSelfTest()
         || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))) {
         return fail("measure two points");
     }
+
+    const std::size_t coincidenceCount = project_.CoincidentConstraints().size();
+    ApplyEndpointCoincidence(
+        {static_cast<int>(directStart), kachakacha::model::WireEndpoint::End, project_.Wires()[directStart].wire.End()},
+        {static_cast<int>(meetStart), kachakacha::model::WireEndpoint::Start, project_.Wires()[meetStart].wire.Start()});
+    if (project_.CoincidentConstraints().size() != coincidenceCount + 1
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart].wire.End(), project_.Wires()[meetStart].wire.Start(), 1.0e-8)) {
+        return fail("apply endpoint coincidence");
+    }
+    Undo();
+    if (project_.CoincidentConstraints().size() != coincidenceCount) {
+        return fail("undo endpoint coincidence");
+    }
+    Redo();
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(meetStart)}, true);
+    RemoveSelectedCoincidences();
+    if (project_.CoincidentConstraints().size() != coincidenceCount) {
+        return fail("remove endpoint coincidence");
+    }
     toolsTabs_->setCurrentIndex(7);
     QApplication::processEvents();
     return true;
@@ -4978,6 +5119,21 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, project_.Wires()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
+    auto* coincidenceRoot = new QTreeWidgetItem(
+        modelTree_, {QStringLiteral("端点一致 (%1)").arg(project_.CoincidentConstraints().size())});
+    const auto endpointText = [](kachakacha::model::WireEndpoint endpoint) {
+        return endpoint == kachakacha::model::WireEndpoint::Start
+            ? QStringLiteral("始点")
+            : QStringLiteral("終点");
+    };
+    for (const auto& constraint : project_.CoincidentConstraints()) {
+        auto* item = new QTreeWidgetItem(coincidenceRoot, {
+            QStringLiteral("%1:%2  =  %3:%4")
+                .arg(ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
+                    ToQString(constraint.follower.wireName), endpointText(constraint.follower.endpoint)),
+        });
+        item->setToolTip(0, QStringLiteral("左が固定側、右が追従側"));
+    }
     auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
     for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
         auto* item = new QTreeWidgetItem(surfaceRoot, {ToQString(project_.Surfaces()[index].name)});
@@ -4996,6 +5152,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     }
     planeRoot->setExpanded(true);
     wireRoot->setExpanded(true);
+    coincidenceRoot->setExpanded(true);
     surfaceRoot->setExpanded(true);
     plateRoot->setExpanded(true);
     modelTree_->blockSignals(false);
@@ -5327,6 +5484,15 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     details += QStringLiteral("<br>平面内角度: %1° （固定中）")
                         .arg(Number(*named.metadata.lineConstraints.angleDegrees));
                 }
+            }
+            const std::size_t coincidenceCount = std::count_if(
+                project_.CoincidentConstraints().begin(), project_.CoincidentConstraints().end(),
+                [&](const auto& constraint) {
+                    return constraint.anchor.wireName == named.name
+                        || constraint.follower.wireName == named.name;
+                });
+            if (coincidenceCount > 0) {
+                details += QStringLiteral("<br>端点一致: %1件").arg(coincidenceCount);
             }
             infoLabel_->setText(details);
         }

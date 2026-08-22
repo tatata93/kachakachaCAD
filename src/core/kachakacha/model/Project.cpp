@@ -71,6 +71,46 @@ Wire ConstrainWire(const Project& project, const Wire& wire, const WireMetadata&
     return ApplyWireLineConstraints(wire, ConstraintPlane(project, metadata), metadata.lineConstraints);
 }
 
+geometry::Vector3 EndpointPoint(const Wire& wire, WireEndpoint endpoint)
+{
+    return endpoint == WireEndpoint::Start ? wire.Start() : wire.End();
+}
+
+Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vector3 point)
+{
+    if (!point.IsFinite()) {
+        throw std::invalid_argument("Coincident endpoint must be finite.");
+    }
+    switch (wire.Kind()) {
+    case WireKind::Line:
+        return endpoint == WireEndpoint::Start
+            ? Wire::Line(point, wire.End())
+            : Wire::Line(wire.Start(), point);
+    case WireKind::Polyline: {
+        std::vector<geometry::Vector3> points = wire.ControlPoints();
+        (endpoint == WireEndpoint::Start ? points.front() : points.back()) = point;
+        return Wire::Polyline(std::move(points));
+    }
+    case WireKind::CubicBezier: {
+        std::vector<geometry::Vector3> points = wire.ControlPoints();
+        if (endpoint == WireEndpoint::Start) {
+            const geometry::Vector3 delta = point - points[0];
+            points[0] = point;
+            points[1] = points[1] + delta;
+        } else {
+            const geometry::Vector3 delta = point - points[3];
+            points[3] = point;
+            points[2] = points[2] + delta;
+        }
+        return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+    }
+    case WireKind::Circle:
+    case WireKind::CircularArc:
+        throw std::invalid_argument("Circle and arc endpoints cannot be coincidence followers yet.");
+    }
+    throw std::logic_error("Unknown wire kind.");
+}
+
 void RequireConstructionWireHasNoModelDependencies(const Project& project, std::string_view wireName)
 {
     for (const NamedSurface& surface : project.Surfaces()) {
@@ -349,6 +389,14 @@ void Project::UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetada
         if (metadata.construction) {
             RequireConstructionWireHasNoModelDependencies(candidate, name);
         }
+        if (!metadata.lineConstraints.Empty()
+            && std::any_of(
+                candidate.coincidentConstraints_.begin(), candidate.coincidentConstraints_.end(),
+                [&](const WireCoincidentConstraint& constraint) {
+                    return constraint.follower.wireName == name;
+                })) {
+            throw std::invalid_argument("Remove endpoint coincidence before adding follower line dimensions.");
+        }
         namedWire.wire = ConstrainWire(candidate, wire, metadata);
         namedWire.metadata = std::move(metadata);
         candidate.RebuildDependentGeometry();
@@ -405,6 +453,14 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
             if (metadata.construction) {
                 RequireConstructionWireHasNoModelDependencies(candidate, name);
             }
+            if (!metadata.lineConstraints.Empty()
+                && std::any_of(
+                    candidate.coincidentConstraints_.begin(), candidate.coincidentConstraints_.end(),
+                    [&](const WireCoincidentConstraint& constraint) {
+                        return constraint.follower.wireName == name;
+                    })) {
+                throw std::invalid_argument("Remove endpoint coincidence before adding follower line dimensions.");
+            }
             wire.wire = ConstrainWire(candidate, wire.wire, metadata);
             wire.metadata = std::move(metadata);
             candidate.RebuildDependentGeometry();
@@ -414,6 +470,65 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
     }
 
     throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+}
+
+void Project::AddWireCoincidentConstraint(
+    WireEndpointReference anchor,
+    WireEndpointReference follower)
+{
+    if (anchor.wireName == follower.wireName) {
+        throw std::invalid_argument("Coincident endpoints must belong to different wires.");
+    }
+    const NamedWire& anchorWire = RequireWire(anchor.wireName);
+    const NamedWire& followerWire = RequireWire(follower.wireName);
+    if (anchorWire.projection.has_value() || followerWire.projection.has_value()) {
+        throw std::invalid_argument("Projected wires cannot own endpoint coincidence constraints.");
+    }
+    if (anchorWire.wire.IsClosed() || followerWire.wire.IsClosed()) {
+        throw std::invalid_argument("Coincident endpoint constraints require open wires.");
+    }
+    if (followerWire.wire.Kind() == WireKind::Circle
+        || followerWire.wire.Kind() == WireKind::CircularArc) {
+        throw std::invalid_argument("Circle and arc endpoints cannot be coincidence followers yet.");
+    }
+    if (!followerWire.metadata.lineConstraints.Empty()) {
+        throw std::invalid_argument("Remove the follower line dimensions before adding endpoint coincidence.");
+    }
+    const auto sameEndpoint = [](const WireEndpointReference& first, const WireEndpointReference& second) {
+        return first.wireName == second.wireName && first.endpoint == second.endpoint;
+    };
+    for (const WireCoincidentConstraint& existing : coincidentConstraints_) {
+        if (sameEndpoint(existing.follower, follower)) {
+            throw std::invalid_argument("The follower endpoint already has a coincidence constraint.");
+        }
+    }
+
+    std::vector<std::string> reachable{follower.wireName};
+    for (std::size_t cursor = 0; cursor < reachable.size(); ++cursor) {
+        if (reachable[cursor] == anchor.wireName) {
+            throw std::invalid_argument("Endpoint coincidence constraints cannot form a cycle.");
+        }
+        for (const WireCoincidentConstraint& existing : coincidentConstraints_) {
+            if (existing.anchor.wireName == reachable[cursor]
+                && std::find(reachable.begin(), reachable.end(), existing.follower.wireName) == reachable.end()) {
+                reachable.push_back(existing.follower.wireName);
+            }
+        }
+    }
+
+    Project candidate = *this;
+    candidate.coincidentConstraints_.push_back({std::move(anchor), std::move(follower)});
+    candidate.RebuildDependentGeometry();
+    *this = std::move(candidate);
+}
+
+std::size_t Project::RemoveWireCoincidentConstraints(std::string_view wireName)
+{
+    const std::size_t before = coincidentConstraints_.size();
+    std::erase_if(coincidentConstraints_, [&](const WireCoincidentConstraint& constraint) {
+        return constraint.anchor.wireName == wireName || constraint.follower.wireName == wireName;
+    });
+    return before - coincidentConstraints_.size();
 }
 
 void Project::SetWorkPlaneVisible(std::string_view name, bool visible)
@@ -667,6 +782,11 @@ bool Project::RemoveWire(std::string_view name)
             throw std::invalid_argument("Wire is used as a plate opening: " + plate.name);
         }
     }
+    for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
+        if (constraint.anchor.wireName == name || constraint.follower.wireName == name) {
+            throw std::invalid_argument("Wire is used by an endpoint coincidence constraint.");
+        }
+    }
 
     wires_.erase(position);
     return true;
@@ -748,8 +868,45 @@ const NamedWire& Project::RequireWire(std::string_view name) const
     return *wire;
 }
 
+void Project::ApplyCoincidentConstraints()
+{
+    for (std::size_t pass = 0; pass <= coincidentConstraints_.size(); ++pass) {
+        bool changed = false;
+        for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
+            const auto anchor = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == constraint.anchor.wireName;
+            });
+            const auto follower = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == constraint.follower.wireName;
+            });
+            if (anchor == wires_.end() || follower == wires_.end()) {
+                throw std::logic_error("Endpoint coincidence wire is missing.");
+            }
+            const geometry::Vector3 target = EndpointPoint(anchor->wire, constraint.anchor.endpoint);
+            if (geometry::AlmostEqual(
+                    EndpointPoint(follower->wire, constraint.follower.endpoint), target, 1.0e-9)) {
+                continue;
+            }
+            if (follower->metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                && follower->metadata.sourcePlaneName.has_value()) {
+                const std::optional<WorkPlane> plane = FindWorkPlane(*follower->metadata.sourcePlaneName);
+                if (!plane.has_value() || std::abs(plane->Project(target).w) > 1.0e-7) {
+                    throw std::invalid_argument("Coincident endpoint would leave its locked work plane.");
+                }
+            }
+            follower->wire = ReplaceWireEndpoint(follower->wire, constraint.follower.endpoint, target);
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+    }
+    throw std::logic_error("Endpoint coincidence constraints did not converge.");
+}
+
 void Project::RebuildDependentGeometry()
 {
+    ApplyCoincidentConstraints();
     for (NamedSurface& surface : surfaces_) {
         if (surface.surface.Kind() == SurfaceKind::Planar) {
             surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);

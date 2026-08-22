@@ -57,6 +57,9 @@ private:
     void RefreshPlaneChoices();
     void RefreshWireChoices();
     void UpdateSelection(CadSelection selection, bool updateTree);
+    void UpdateSelections(std::vector<CadSelection> selections, bool updateTree);
+    void SyncMachiningSelection(const std::vector<CadSelection>& selections);
+    void BeginMachiningPick(int slot);
     void PopulateEditPanel(CadSelection selection);
     void PopulateWirePointTable(const kachakacha::model::NamedWire& wire);
     void MarkModified();
@@ -99,6 +102,8 @@ private:
     QComboBox* machiningType_ = nullptr;
     QStackedWidget* machiningValues_ = nullptr;
     QPushButton* machiningApplyButton_ = nullptr;
+    QPushButton* machiningPickFirstButton_ = nullptr;
+    QPushButton* machiningPickSecondButton_ = nullptr;
     QComboBox* chamferFirstWire_ = nullptr;
     QComboBox* chamferSecondWire_ = nullptr;
     QComboBox* chamferFirstBranch_ = nullptr;
@@ -106,6 +111,7 @@ private:
     QDoubleSpinBox* chamferFirstDistance_ = nullptr;
     QDoubleSpinBox* chamferSecondDistance_ = nullptr;
     QDoubleSpinBox* filletRadius_ = nullptr;
+    int pendingMachiningPickSlot_ = -1;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

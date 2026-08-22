@@ -16,6 +16,7 @@
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
+#include <QItemSelectionModel>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
@@ -34,6 +35,7 @@
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -227,8 +229,8 @@ void MainWindow::BuildUi()
 {
     viewport_ = new CadViewport;
     setCentralWidget(viewport_);
-    viewport_->SetSelectionChangedCallback([this](CadSelection selection) {
-        UpdateSelection(selection, true);
+    viewport_->SetSelectionChangedCallback([this](const std::vector<CadSelection>& selections) {
+        UpdateSelections(selections, true);
     });
 
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
@@ -237,6 +239,7 @@ void MainWindow::BuildUi()
     modelTree_ = new QTreeWidget;
     modelTree_->setHeaderHidden(true);
     modelTree_->setAlternatingRowColors(true);
+    modelTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     modelTree_->header()->setStretchLastSection(true);
     modelDock->setWidget(modelTree_);
     addDockWidget(Qt::LeftDockWidgetArea, modelDock);
@@ -244,14 +247,28 @@ void MainWindow::BuildUi()
 
     connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
         const QList<QTreeWidgetItem*> items = modelTree_->selectedItems();
-        if (items.isEmpty() || !items.front()->parent()) {
-            UpdateSelection({}, false);
-            return;
+        std::vector<CadSelection> selections;
+        for (QTreeWidgetItem* item : items) {
+            if (item->parent() == nullptr) {
+                continue;
+            }
+            selections.push_back({
+                static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt()),
+                item->data(0, kSelectionIndexRole).toInt(),
+            });
         }
-        CadSelection selection;
-        selection.kind = static_cast<CadSelectionKind>(items.front()->data(0, kSelectionKindRole).toInt());
-        selection.index = items.front()->data(0, kSelectionIndexRole).toInt();
-        UpdateSelection(selection, false);
+        QTreeWidgetItem* current = modelTree_->currentItem();
+        if (current != nullptr && current->parent() != nullptr) {
+            const CadSelection currentSelection = {
+                static_cast<CadSelectionKind>(current->data(0, kSelectionKindRole).toInt()),
+                current->data(0, kSelectionIndexRole).toInt(),
+            };
+            std::erase_if(selections, [&](const CadSelection& selection) {
+                return selection.kind == currentSelection.kind && selection.index == currentSelection.index;
+            });
+            selections.push_back(currentSelection);
+        }
+        UpdateSelections(std::move(selections), false);
     });
 
     auto* toolsDock = new QDockWidget(QStringLiteral("作成と情報"), this);
@@ -556,6 +573,12 @@ QWidget* MainWindow::BuildMachiningPanel()
     machiningType_->addItems({QStringLiteral("C面取り"), QStringLiteral("R丸め")});
     chamferFirstWire_ = new QComboBox;
     chamferSecondWire_ = new QComboBox;
+    machiningPickFirstButton_ = new QPushButton(QStringLiteral("3D選択"));
+    machiningPickSecondButton_ = new QPushButton(QStringLiteral("3D選択"));
+    machiningPickFirstButton_->setCheckable(true);
+    machiningPickSecondButton_->setCheckable(true);
+    connect(machiningPickFirstButton_, &QPushButton::clicked, this, [this] { BeginMachiningPick(0); });
+    connect(machiningPickSecondButton_, &QPushButton::clicked, this, [this] { BeginMachiningPick(1); });
     chamferFirstBranch_ = new QComboBox;
     chamferSecondBranch_ = new QComboBox;
     const QStringList branchChoices = {QStringLiteral("自動"), QStringLiteral("始点側"), QStringLiteral("終点側")};
@@ -564,9 +587,21 @@ QWidget* MainWindow::BuildMachiningPanel()
 
     form->addRow(QStringLiteral("加工種類"), machiningType_);
     form->addRow(QStringLiteral("加工線の名前"), chamferName_);
-    form->addRow(QStringLiteral("直線 A"), chamferFirstWire_);
+    auto* firstPicker = new QWidget;
+    auto* firstPickerLayout = new QHBoxLayout(firstPicker);
+    firstPickerLayout->setContentsMargins(0, 0, 0, 0);
+    firstPickerLayout->setSpacing(5);
+    firstPickerLayout->addWidget(chamferFirstWire_, 1);
+    firstPickerLayout->addWidget(machiningPickFirstButton_);
+    form->addRow(QStringLiteral("直線 A"), firstPicker);
     form->addRow(QStringLiteral("A の残す側"), chamferFirstBranch_);
-    form->addRow(QStringLiteral("直線 B"), chamferSecondWire_);
+    auto* secondPicker = new QWidget;
+    auto* secondPickerLayout = new QHBoxLayout(secondPicker);
+    secondPickerLayout->setContentsMargins(0, 0, 0, 0);
+    secondPickerLayout->setSpacing(5);
+    secondPickerLayout->addWidget(chamferSecondWire_, 1);
+    secondPickerLayout->addWidget(machiningPickSecondButton_);
+    form->addRow(QStringLiteral("直線 B"), secondPicker);
     form->addRow(QStringLiteral("B の残す側"), chamferSecondBranch_);
     layout->addLayout(form);
 
@@ -842,8 +877,14 @@ bool MainWindow::RunCreationSelfTest()
     AddWire();
 
     chamferName_->setText("__ui_test_chamfer");
-    chamferFirstWire_->setCurrentIndex(chamferFirstWire_->findText("__ui_test_line3d"));
-    chamferSecondWire_->setCurrentIndex(chamferSecondWire_->findText("__ui_test_lineB"));
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(initialWireCount)},
+        {CadSelectionKind::Wire, static_cast<int>(initialWireCount + 2)},
+    }, true);
+    if (chamferFirstWire_->currentText() != "__ui_test_line3d"
+        || chamferSecondWire_->currentText() != "__ui_test_lineB") {
+        return false;
+    }
     chamferFirstBranch_->setCurrentIndex(0);
     chamferSecondBranch_->setCurrentIndex(0);
     chamferFirstDistance_->setValue(0.5);
@@ -860,8 +901,14 @@ bool MainWindow::RunCreationSelfTest()
     Undo();
     machiningType_->setCurrentIndex(1);
     chamferName_->setText("__ui_test_fillet");
-    chamferFirstWire_->setCurrentIndex(chamferFirstWire_->findText("__ui_test_line3d"));
-    chamferSecondWire_->setCurrentIndex(chamferSecondWire_->findText("__ui_test_lineB"));
+    machiningPickFirstButton_->click();
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount)}, true);
+    machiningPickSecondButton_->click();
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount + 2)}, true);
+    if (chamferFirstWire_->currentText() != "__ui_test_line3d"
+        || chamferSecondWire_->currentText() != "__ui_test_lineB") {
+        return false;
+    }
     filletRadius_->setValue(0.5);
     ApplyLineFillet();
 
@@ -877,6 +924,10 @@ bool MainWindow::RunCreationSelfTest()
         && fillet.name == "__ui_test_fillet"
         && fillet.wire.Kind() == WireKind::CircularArc;
     toolsTabs_->setCurrentIndex(3);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(initialWireCount)},
+        {CadSelectionKind::Wire, static_cast<int>(initialWireCount + 2)},
+    }, true);
     return result;
 }
 
@@ -1364,22 +1415,57 @@ void MainWindow::RefreshWireChoices()
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
 {
-    viewport_->SetSelection(selection);
+    if (selection.kind == CadSelectionKind::None) {
+        UpdateSelections({}, updateTree);
+    } else {
+        UpdateSelections({selection}, updateTree);
+    }
+}
+
+void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool updateTree)
+{
+    viewport_->SetSelections(selections);
     if (updateTree) {
         modelTree_->blockSignals(true);
         modelTree_->clearSelection();
+        QTreeWidgetItem* lastSelectedItem = nullptr;
         QTreeWidgetItemIterator iterator(modelTree_);
         while (*iterator) {
             QTreeWidgetItem* item = *iterator;
-            if (item->data(0, kSelectionKindRole).toInt() == static_cast<int>(selection.kind)
-                && item->data(0, kSelectionIndexRole).toInt() == selection.index) {
+            const auto matching = std::find_if(selections.begin(), selections.end(), [&](const CadSelection& selection) {
+                return item->data(0, kSelectionKindRole).toInt() == static_cast<int>(selection.kind)
+                    && item->data(0, kSelectionIndexRole).toInt() == selection.index;
+            });
+            if (matching != selections.end()) {
                 item->setSelected(true);
-                modelTree_->scrollToItem(item);
-                break;
+                if (matching == selections.end() - 1) {
+                    lastSelectedItem = item;
+                }
             }
             ++iterator;
         }
+        if (lastSelectedItem != nullptr) {
+            modelTree_->setCurrentItem(lastSelectedItem, 0, QItemSelectionModel::NoUpdate);
+            modelTree_->scrollToItem(lastSelectedItem);
+        }
         modelTree_->blockSignals(false);
+    }
+
+    const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
+    if (pendingMachiningPickSlot_ >= 0 && selection.kind == CadSelectionKind::Wire
+        && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
+        && project_.Wires()[selection.index].wire.Kind() == WireKind::Line) {
+        QComboBox* target = pendingMachiningPickSlot_ == 0 ? chamferFirstWire_ : chamferSecondWire_;
+        const int comboIndex = target->findData(selection.index);
+        if (comboIndex >= 0) {
+            target->setCurrentIndex(comboIndex);
+            pendingMachiningPickSlot_ = -1;
+            machiningPickFirstButton_->setChecked(false);
+            machiningPickSecondButton_->setChecked(false);
+            statusBar()->showMessage(QStringLiteral("加工する直線を設定しました"), 2000);
+        }
+    } else if (pendingMachiningPickSlot_ < 0) {
+        SyncMachiningSelection(selections);
     }
 
     if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0 && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
@@ -1395,6 +1481,47 @@ void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
     PopulateEditPanel(selection);
+}
+
+void MainWindow::SyncMachiningSelection(const std::vector<CadSelection>& selections)
+{
+    std::vector<int> lineIndices;
+    for (const CadSelection& selection : selections) {
+        if (selection.kind == CadSelectionKind::Wire
+            && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())
+            && project_.Wires()[selection.index].wire.Kind() == WireKind::Line) {
+            lineIndices.push_back(selection.index);
+        }
+    }
+    if (lineIndices.size() != 2) {
+        return;
+    }
+
+    const int firstComboIndex = chamferFirstWire_->findData(lineIndices[0]);
+    const int secondComboIndex = chamferSecondWire_->findData(lineIndices[1]);
+    if (firstComboIndex >= 0 && secondComboIndex >= 0) {
+        chamferFirstWire_->setCurrentIndex(firstComboIndex);
+        chamferSecondWire_->setCurrentIndex(secondComboIndex);
+        statusBar()->showMessage(QStringLiteral("選択した2本を加工対象に設定しました"), 2500);
+    }
+}
+
+void MainWindow::BeginMachiningPick(int slot)
+{
+    QPushButton* requestedButton = slot == 0 ? machiningPickFirstButton_ : machiningPickSecondButton_;
+    if (!requestedButton->isChecked()) {
+        pendingMachiningPickSlot_ = -1;
+        machiningPickFirstButton_->setChecked(false);
+        machiningPickSecondButton_->setChecked(false);
+        statusBar()->showMessage(QStringLiteral("3D選択を解除しました"), 1500);
+        return;
+    }
+
+    pendingMachiningPickSlot_ = slot;
+    machiningPickFirstButton_->setChecked(slot == 0);
+    machiningPickSecondButton_->setChecked(slot == 1);
+    statusBar()->showMessage(slot == 0 ? QStringLiteral("直線Aを3Dで選択") : QStringLiteral("直線Bを3Dで選択"));
 }
 
 void MainWindow::PopulateEditPanel(CadSelection selection)

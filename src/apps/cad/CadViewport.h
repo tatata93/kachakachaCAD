@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <vector>
 
 enum class CadSelectionKind {
     None,
@@ -24,8 +25,10 @@ public:
 
     void SetProject(const kachakacha::model::Project* project);
     void SetSelection(CadSelection selection);
+    void SetSelections(std::vector<CadSelection> selections);
     [[nodiscard]] CadSelection Selection() const noexcept { return selection_; }
-    void SetSelectionChangedCallback(std::function<void(CadSelection)> callback);
+    [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
+    void SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback);
     void FitAll();
 
 protected:
@@ -38,11 +41,13 @@ protected:
 private:
     [[nodiscard]] QPointF ProjectPoint(kachakacha::geometry::Vector3 point) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
+    [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
     void NotifySelection();
 
     const kachakacha::model::Project* project_ = nullptr;
     CadSelection selection_;
-    std::function<void(CadSelection)> selectionChanged_;
+    std::vector<CadSelection> selections_;
+    std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

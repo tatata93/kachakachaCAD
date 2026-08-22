@@ -59,18 +59,36 @@ void CadViewport::SetProject(const kachakacha::model::Project* project)
 {
     project_ = project;
     selection_ = {};
+    selections_.clear();
     FitAll();
 }
 
 void CadViewport::SetSelection(CadSelection selection)
 {
-    selection_ = selection;
+    if (selection.kind == CadSelectionKind::None) {
+        SetSelections({});
+    } else {
+        SetSelections({selection});
+    }
+}
+
+void CadViewport::SetSelections(std::vector<CadSelection> selections)
+{
+    selections_ = std::move(selections);
+    selection_ = selections_.empty() ? CadSelection{} : selections_.back();
     update();
 }
 
-void CadViewport::SetSelectionChangedCallback(std::function<void(CadSelection)> callback)
+void CadViewport::SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback)
 {
     selectionChanged_ = std::move(callback);
+}
+
+bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
+{
+    return std::any_of(selections_.begin(), selections_.end(), [&](const CadSelection& selection) {
+        return selection.kind == kind && selection.index == index;
+    });
 }
 
 QPointF CadViewport::ProjectPoint(Vector3 point) const
@@ -155,7 +173,7 @@ void CadViewport::paintEvent(QPaintEvent*)
                     << ProjectPoint(plane.ToWorld(kPlaneHalfSize, -kPlaneHalfSize))
                     << ProjectPoint(plane.ToWorld(kPlaneHalfSize, kPlaneHalfSize))
                     << ProjectPoint(plane.ToWorld(-kPlaneHalfSize, kPlaneHalfSize));
-            const bool selected = selection_.kind == CadSelectionKind::WorkPlane && selection_.index == index;
+            const bool selected = IsSelected(CadSelectionKind::WorkPlane, index);
             painter.setBrush(selected ? QColor(241, 178, 54, 52) : QColor(69, 132, 142, 24));
             painter.setPen(QPen(selected ? QColor("#c47a13") : QColor("#7d9aa0"), selected ? 2.2 : 1.0, Qt::DashLine));
             painter.drawPolygon(polygon);
@@ -168,7 +186,7 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
-            const bool selected = selection_.kind == CadSelectionKind::Wire && selection_.index == index;
+            const bool selected = IsSelected(CadSelectionKind::Wire, index);
             painter.setPen(QPen(selected ? QColor("#e69f00") : WireColor(namedWire.wire.Kind()), selected ? 3.2 : 2.0));
             QPainterPath path(ProjectPoint(namedWire.wire.Evaluate(0.0)));
             const int samples = namedWire.wire.Kind() == WireKind::Line ? 1 : 64;
@@ -283,7 +301,25 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && !mouseMoved_) {
-        selection_ = HitTest(event->position());
+        const CadSelection hit = HitTest(event->position());
+        const bool extendSelection = event->modifiers().testFlag(Qt::ControlModifier)
+            || event->modifiers().testFlag(Qt::ShiftModifier);
+        if (!extendSelection) {
+            selections_.clear();
+            if (hit.kind != CadSelectionKind::None) {
+                selections_.push_back(hit);
+            }
+        } else if (hit.kind != CadSelectionKind::None) {
+            const auto existing = std::find_if(selections_.begin(), selections_.end(), [&](const CadSelection& selection) {
+                return selection.kind == hit.kind && selection.index == hit.index;
+            });
+            if (existing == selections_.end()) {
+                selections_.push_back(hit);
+            } else {
+                selections_.erase(existing);
+            }
+        }
+        selection_ = selections_.empty() ? CadSelection{} : selections_.back();
         NotifySelection();
         update();
     }
@@ -300,6 +336,6 @@ void CadViewport::wheelEvent(QWheelEvent* event)
 void CadViewport::NotifySelection()
 {
     if (selectionChanged_) {
-        selectionChanged_(selection_);
+        selectionChanged_(selections_);
     }
 }

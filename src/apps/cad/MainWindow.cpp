@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Sketch.h"
 #include "kachakacha/model/WireOperations.h"
@@ -55,6 +56,9 @@
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::WireLiesOnWorkPlane;
+using kachakacha::io::WritePlanarDxf;
+using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
@@ -65,6 +69,7 @@ using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
+using kachakacha::model::JoinLineChain;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::RetainedLineEnd;
 
@@ -280,6 +285,12 @@ void MainWindow::BuildUi()
     viewport_->SetMirrorRequestedCallback([this](Vector3 linePoint, Vector3 lineDirection, Vector3 planeNormal) {
         ApplyViewportMirror(linePoint, lineDirection, planeNormal);
     });
+    viewport_->SetRotationRequestedCallback([this](Vector3 axisPoint, Vector3 axisDirection, double angleRadians) {
+        ApplyViewportRotation(axisPoint, axisDirection, angleRadians);
+    });
+    viewport_->SetSplitRequestedCallback([this](int wireIndex, double parameter) {
+        ApplySplitWire(wireIndex, parameter);
+    });
     BuildDrawingActions();
     viewport_->SetDrawingStateChangedCallback([this](ViewportTool tool, std::size_t pointCount) {
         UpdateDrawingPanel(tool, pointCount);
@@ -332,6 +343,7 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("数値入力"));
     toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
     toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
+    toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
     toolsDock->setWidget(toolsTabs_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
@@ -372,12 +384,18 @@ void MainWindow::BuildDrawingActions()
     moveToolAction_ = new QAction(QStringLiteral("移動"), this);
     copyToolAction_ = new QAction(QStringLiteral("コピー"), this);
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
+    rotateToolAction_ = new QAction(QStringLiteral("回転"), this);
+    splitToolAction_ = new QAction(QStringLiteral("分割"), this);
+    joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
     meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
     setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
     clearReferenceAction_ = new QAction(QStringLiteral("基準解除"), this);
     moveToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で移動"));
     copyToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で複製"));
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
+    rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
+    splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
+    joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
     clearReferenceAction_->setToolTip(QStringLiteral("現在の基準線を解除する"));
@@ -396,7 +414,7 @@ void MainWindow::BuildDrawingActions()
     for (QAction* action : {
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_,
-             moveToolAction_, copyToolAction_, mirrorToolAction_}) {
+             moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -412,6 +430,9 @@ void MainWindow::BuildDrawingActions()
     connect(moveToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MoveSelection); });
     connect(copyToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::CopySelection); });
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
+    connect(rotateToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::RotateSelection); });
+    connect(splitToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::SplitWire); });
+    connect(joinWiresAction_, &QAction::triggered, this, &MainWindow::JoinSelectedWires);
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
     connect(setReferenceAction_, &QAction::triggered, this, &MainWindow::SetReferenceFromSelection);
     connect(clearReferenceAction_, &QAction::triggered, this, &MainWindow::ClearReference);
@@ -760,18 +781,21 @@ QWidget* MainWindow::BuildEditPanel()
     directGrid->setContentsMargins(0, 0, 0, 0);
     directGrid->setHorizontalSpacing(6);
     directGrid->setVerticalSpacing(6);
-    const auto addDirectButton = [&](QAction* action, int row, int column) {
+    const auto addDirectButton = [&](QAction* action, int row, int column, int columnSpan = 1) {
         auto* button = new QToolButton;
         button->setObjectName("drawingToolButton");
         button->setDefaultAction(action);
         button->setToolButtonStyle(Qt::ToolButtonTextOnly);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        directGrid->addWidget(button, row, column);
+        directGrid->addWidget(button, row, column, 1, columnSpan);
     };
     addDirectButton(moveToolAction_, 0, 0);
     addDirectButton(copyToolAction_, 0, 1);
-    addDirectButton(mirrorToolAction_, 1, 0);
-    addDirectButton(meetLinesAction_, 1, 1);
+    addDirectButton(rotateToolAction_, 1, 0);
+    addDirectButton(mirrorToolAction_, 1, 1);
+    addDirectButton(splitToolAction_, 2, 0);
+    addDirectButton(joinWiresAction_, 2, 1);
+    addDirectButton(meetLinesAction_, 3, 0, 2);
     layout->addLayout(directGrid);
 
     auto* numericLabel = new QLabel(QStringLiteral("選択内容の数値編集"));
@@ -929,6 +953,44 @@ QWidget* MainWindow::BuildMachiningPanel()
     return panel;
 }
 
+QWidget* MainWindow::BuildOutputPanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    auto* title = new QLabel(QStringLiteral("1:1 板材図面"));
+    title->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(title);
+
+    auto* form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    exportPlane_ = new QComboBox;
+    exportScope_ = new QComboBox;
+    exportScope_->addItems({QStringLiteral("出力面上の全ワイヤー"), QStringLiteral("選択したワイヤーのみ")});
+    form->addRow(QStringLiteral("出力面"), exportPlane_);
+    form->addRow(QStringLiteral("対象"), exportScope_);
+    form->addRow(QStringLiteral("寸法"), new QLabel(QStringLiteral("mm / 1:1")));
+    layout->addLayout(form);
+
+    exportSummary_ = new QLabel(QStringLiteral("0本"));
+    exportSummary_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(exportSummary_);
+
+    auto* svgButton = new QPushButton(QStringLiteral("SVGを保存"));
+    svgButton->setObjectName("primaryButton");
+    auto* dxfButton = new QPushButton(QStringLiteral("DXFを保存"));
+    connect(svgButton, &QPushButton::clicked, this, [this] { ExportPlanar(false); });
+    connect(dxfButton, &QPushButton::clicked, this, [this] { ExportPlanar(true); });
+    connect(exportPlane_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
+    connect(exportScope_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
+    layout->addWidget(svgButton);
+    layout->addWidget(dxfButton);
+    layout->addStretch(1);
+    return panel;
+}
+
 QWidget* MainWindow::BuildInfoPanel()
 {
     auto* panel = new QWidget;
@@ -988,7 +1050,10 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addSeparator();
     editMenu->addAction(moveToolAction_);
     editMenu->addAction(copyToolAction_);
+    editMenu->addAction(rotateToolAction_);
     editMenu->addAction(mirrorToolAction_);
+    editMenu->addAction(splitToolAction_);
+    editMenu->addAction(joinWiresAction_);
     editMenu->addAction(meetLinesAction_);
     editMenu->addAction(setReferenceAction_);
     editMenu->addAction(clearReferenceAction_);
@@ -1041,7 +1106,10 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
     transformToolbar->addAction(moveToolAction_);
     transformToolbar->addAction(copyToolAction_);
+    transformToolbar->addAction(rotateToolAction_);
     transformToolbar->addAction(mirrorToolAction_);
+    transformToolbar->addAction(splitToolAction_);
+    transformToolbar->addAction(joinWiresAction_);
     transformToolbar->addAction(meetLinesAction_);
     transformToolbar->addSeparator();
     transformToolbar->addAction(setReferenceAction_);
@@ -1126,6 +1194,72 @@ void MainWindow::SaveProjectAs()
     const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("プロジェクトを保存"), suggested, QStringLiteral("kachakachaCAD (*.kcd)"));
     if (!path.isEmpty()) {
         SaveProjectFile(path.endsWith(".kcd", Qt::CaseInsensitive) ? path : path + ".kcd");
+    }
+}
+
+void MainWindow::ExportPlanar(bool dxf)
+{
+    try {
+        const QString planeText = exportPlane_->currentText();
+        const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(planeText));
+        if (!plane.has_value()) {
+            throw std::invalid_argument("出力する作業平面を選択してください。");
+        }
+
+        std::vector<kachakacha::model::NamedWire> wires;
+        if (exportScope_->currentIndex() == 0) {
+            for (const auto& wire : project_.Wires()) {
+                if (WireLiesOnWorkPlane(wire.wire, *plane)) {
+                    wires.push_back(wire);
+                }
+            }
+        } else {
+            for (const CadSelection& selection : viewport_->Selections()) {
+                if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Wires().size())) {
+                    wires.push_back(project_.Wires()[selection.index]);
+                }
+            }
+        }
+        if (wires.empty()) {
+            throw std::invalid_argument(exportScope_->currentIndex() == 0
+                    ? "この出力面上にワイヤーがありません。"
+                    : "出力するワイヤーを3D画面で選択してください。");
+        }
+
+        const QString extension = dxf ? QStringLiteral(".dxf") : QStringLiteral(".svg");
+        const QString filter = dxf ? QStringLiteral("DXF図面 (*.dxf)") : QStringLiteral("SVG図面 (*.svg)");
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        const QString suggested = suggestedDirectory + planeText + extension;
+        QString path = QFileDialog::getSaveFileName(this, QStringLiteral("1:1板材図面を保存"), suggested, filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(extension, Qt::CaseInsensitive)) {
+            path += extension;
+        }
+
+        const std::filesystem::path nativePath(path.toStdWString());
+        std::ofstream output(nativePath, std::ios::binary);
+        if (!output) {
+            throw std::runtime_error("出力ファイルを開けませんでした。");
+        }
+        if (dxf) {
+            WritePlanarDxf(output, *plane, wires);
+        } else {
+            WritePlanarSvg(output, *plane, wires);
+        }
+        output.close();
+        if (!output) {
+            throw std::runtime_error("出力ファイルの保存に失敗しました。");
+        }
+        exportSummary_->setText(QStringLiteral("%1本を保存: %2").arg(wires.size()).arg(QFileInfo(path).fileName()));
+        statusBar()->showMessage(QStringLiteral("1:1図面を保存しました: %1").arg(path), 5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
 }
 
@@ -1251,8 +1385,10 @@ void MainWindow::SetViewportTool(ViewportTool tool)
 {
     const bool isTransform = tool == ViewportTool::MoveSelection
         || tool == ViewportTool::CopySelection
-        || tool == ViewportTool::MirrorSelection;
-    if (tool != ViewportTool::Select) {
+        || tool == ViewportTool::MirrorSelection
+        || tool == ViewportTool::RotateSelection;
+    const bool isSplit = tool == ViewportTool::SplitWire;
+    if (tool != ViewportTool::Select && !isSplit) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
             selectToolAction_->setChecked(true);
@@ -1261,16 +1397,30 @@ void MainWindow::SetViewportTool(ViewportTool tool)
             return;
         }
     }
-    if (isTransform) {
-        const bool hasSelectedWire = std::any_of(
-            viewport_->Selections().begin(), viewport_->Selections().end(), [this](const CadSelection& selection) {
-                return selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                    && selection.index < static_cast<int>(project_.Wires().size());
-            });
-        if (!hasSelectedWire) {
+    if (isTransform || isSplit) {
+        std::vector<int> selectedWires;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                selectedWires.push_back(selection.index);
+            }
+        }
+        if (selectedWires.empty()) {
             selectToolAction_->setChecked(true);
             viewport_->SetTool(ViewportTool::Select);
-            statusBar()->showMessage(QStringLiteral("3D画面で変形するワイヤーを選択してください"), 3500);
+            statusBar()->showMessage(QStringLiteral("3D画面で操作するワイヤーを選択してください"), 3500);
+            return;
+        }
+        if (isSplit && selectedWires.size() != 1) {
+            selectToolAction_->setChecked(true);
+            viewport_->SetTool(ViewportTool::Select);
+            statusBar()->showMessage(QStringLiteral("分割するワイヤーを1本だけ選択してください"), 3500);
+            return;
+        }
+        if (isSplit && project_.Wires()[selectedWires.front()].wire.Kind() == WireKind::Circle) {
+            selectToolAction_->setChecked(true);
+            viewport_->SetTool(ViewportTool::Select);
+            statusBar()->showMessage(QStringLiteral("円の分割は2点指定が必要です。現在は直線・ポリライン・円弧・ベジェを分割できます"), 5000);
             return;
         }
         toolsTabs_->setCurrentIndex(3);
@@ -1310,6 +1460,8 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     moveToolAction_->setChecked(tool == ViewportTool::MoveSelection);
     copyToolAction_->setChecked(tool == ViewportTool::CopySelection);
     mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
+    rotateToolAction_->setChecked(tool == ViewportTool::RotateSelection);
+    splitToolAction_->setChecked(tool == ViewportTool::SplitWire);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -1340,6 +1492,12 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::MirrorSelection:
         statusBar()->showMessage(QStringLiteral("ミラー複製: 軸の1点目と2点目を3D画面で指定"), 3500);
+        break;
+    case ViewportTool::RotateSelection:
+        statusBar()->showMessage(QStringLiteral("回転: 中心、角度の基準点、回転先の順に3D画面で指定"), 4500);
+        break;
+    case ViewportTool::SplitWire:
+        statusBar()->showMessage(QStringLiteral("分割: 選択したワイヤー上の分けたい位置をクリック"), 4000);
         break;
     }
 }
@@ -1397,6 +1555,16 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
             .arg(pointCount == 0 ? QStringLiteral("軸の1点目") : QStringLiteral("軸の2点目"))
             .arg(pointCount);
         break;
+    case ViewportTool::RotateSelection:
+        state = QStringLiteral("回転 · %1  %2 / 3点")
+            .arg(pointCount == 0 ? QStringLiteral("中心")
+                : pointCount == 1 ? QStringLiteral("角度の基準")
+                                  : QStringLiteral("回転先"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::SplitWire:
+        state = QStringLiteral("分割 · ワイヤー上をクリック");
+        break;
     }
     if (drawingStateLabel_ != nullptr) {
         drawingStateLabel_->setText(state);
@@ -1426,8 +1594,11 @@ void MainWindow::RefreshActiveWorkPlane()
     moveToolAction_->setEnabled(canDraw);
     copyToolAction_->setEnabled(canDraw);
     mirrorToolAction_->setEnabled(canDraw);
+    rotateToolAction_->setEnabled(canDraw);
+    splitToolAction_->setEnabled(!project_.Wires().empty());
+    joinWiresAction_->setEnabled(project_.Wires().size() >= 2);
     RefreshReference();
-    if (!canDraw && viewport_->Tool() != ViewportTool::Select) {
+    if (!canDraw && viewport_->Tool() != ViewportTool::Select && viewport_->Tool() != ViewportTool::SplitWire) {
         SetViewportTool(ViewportTool::Select);
     }
 }
@@ -1673,6 +1844,162 @@ void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, V
     }
 }
 
+void MainWindow::ApplyViewportRotation(Vector3 axisPoint, Vector3 axisDirection, double angleRadians)
+{
+    try {
+        if (!axisPoint.IsFinite() || !axisDirection.IsFinite() || axisDirection.LengthSquared() <= 1.0e-18
+            || !std::isfinite(angleRadians) || std::abs(angleRadians) <= 1.0e-12) {
+            throw std::invalid_argument("回転の中心と角度を指定してください。");
+        }
+
+        std::vector<int> indices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                indices.push_back(selection.index);
+            }
+        }
+        if (indices.empty()) {
+            throw std::invalid_argument("回転するワイヤーを選択してください。");
+        }
+
+        std::vector<kachakacha::model::NamedWire> sources;
+        std::vector<Wire> rotated;
+        sources.reserve(indices.size());
+        rotated.reserve(indices.size());
+        for (int index : indices) {
+            const auto source = project_.Wires()[index];
+            const Wire result = source.wire.RotatedAroundAxis(axisPoint, axisDirection, angleRadians);
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+                if (!source.metadata.sourcePlaneName.has_value()) {
+                    throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
+                }
+                const auto sourcePlane = project_.FindWorkPlane(*source.metadata.sourcePlaneName);
+                if (!sourcePlane.has_value() || !WireLiesOnPlane(result, *sourcePlane)) {
+                    throw std::invalid_argument("この回転では、固定されたワイヤーが作業平面外へ出ます。");
+                }
+            }
+            sources.push_back(source);
+            rotated.push_back(result);
+        }
+
+        RecordUndo();
+        std::vector<CadSelection> resultingSelections;
+        for (std::size_t index = 0; index < sources.size(); ++index) {
+            project_.UpdateWire(sources[index].name, rotated[index]);
+            resultingSelections.push_back({CadSelectionKind::Wire, indices[index]});
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(std::move(resultingSelections), true);
+        statusBar()->showMessage(
+            QStringLiteral("%1本を %2 度回転しました")
+                .arg(sources.size())
+                .arg(angleRadians * 180.0 / kPi, 0, 'f', 2),
+            3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
+void MainWindow::ApplySplitWire(int wireIndex, double parameter)
+{
+    try {
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("分割するワイヤーが見つかりません。");
+        }
+        if (!std::isfinite(parameter) || parameter <= 1.0e-8 || parameter >= 1.0 - 1.0e-8) {
+            throw std::invalid_argument("端点から離れた分割位置を指定してください。");
+        }
+
+        const auto source = project_.Wires()[wireIndex];
+        const auto parts = source.wire.SplitAt(parameter);
+        const QString groupName = SuggestedDirectGroupName(ToQString(source.name) + QStringLiteral("_part"));
+        const std::string firstName = ToName(groupName + QStringLiteral("_1"));
+        const std::string secondName = ToName(groupName + QStringLiteral("_2"));
+
+        RecordUndo();
+        if (referenceWireName_.has_value() && *referenceWireName_ == source.name) {
+            referenceWireName_.reset();
+        }
+        project_.RemoveWire(source.name);
+        project_.AddWire(firstName, parts.first, source.metadata);
+        const int firstIndex = static_cast<int>(project_.Wires().size() - 1);
+        project_.AddWire(secondName, parts.second, source.metadata);
+        const int secondIndex = static_cast<int>(project_.Wires().size() - 1);
+
+        MarkModified();
+        RefreshModelViews(false);
+        SetViewportTool(ViewportTool::Select);
+        UpdateSelections({
+            {CadSelectionKind::Wire, firstIndex},
+            {CadSelectionKind::Wire, secondIndex},
+        }, true);
+        statusBar()->showMessage(QStringLiteral("ワイヤーを2本に分割しました"), 3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+    }
+}
+
+void MainWindow::JoinSelectedWires()
+{
+    try {
+        std::vector<int> indices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                indices.push_back(selection.index);
+            }
+        }
+        if (indices.size() < 2) {
+            throw std::invalid_argument("端点がつながる直線またはポリラインを2本以上選択してください。");
+        }
+
+        std::vector<kachakacha::model::NamedWire> sources;
+        std::vector<Wire> wires;
+        sources.reserve(indices.size());
+        wires.reserve(indices.size());
+        for (int index : indices) {
+            const auto source = project_.Wires()[index];
+            if (source.wire.Kind() != WireKind::Line && source.wire.Kind() != WireKind::Polyline) {
+                throw std::invalid_argument("結合できるのは直線とポリラインです。");
+            }
+            if (!sources.empty()
+                && (source.metadata.planePolicy != sources.front().metadata.planePolicy
+                    || source.metadata.sourcePlaneName != sources.front().metadata.sourcePlaneName)) {
+                throw std::invalid_argument("平面との関係が同じワイヤー同士を選択してください。");
+            }
+            sources.push_back(source);
+            wires.push_back(source.wire);
+        }
+
+        const Wire joined = JoinLineChain(wires);
+        const QString name = SuggestedDirectGroupName(ToQString(sources.front().name) + QStringLiteral("_joined"));
+        const bool removesReference = referenceWireName_.has_value()
+            && std::any_of(sources.begin(), sources.end(), [this](const auto& source) {
+                   return source.name == *referenceWireName_;
+               });
+
+        RecordUndo();
+        if (removesReference) {
+            referenceWireName_.reset();
+        }
+        for (const auto& source : sources) {
+            project_.RemoveWire(source.name);
+        }
+        project_.AddWire(ToName(name), joined, sources.front().metadata);
+        const int joinedIndex = static_cast<int>(project_.Wires().size() - 1);
+
+        MarkModified();
+        RefreshModelViews(false);
+        SetViewportTool(ViewportTool::Select);
+        UpdateSelection({CadSelectionKind::Wire, joinedIndex}, true);
+        statusBar()->showMessage(QStringLiteral("%1本を1本のポリラインに結合しました").arg(sources.size()), 3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+    }
+}
+
 void MainWindow::ApplyMeetSelectedLines()
 {
     try {
@@ -1715,8 +2042,9 @@ bool MainWindow::RunCreationSelfTest()
     };
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
-    if (toolsTabs_->count() != 6
+    if (toolsTabs_->count() != 7
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
+        || toolsTabs_->tabText(5) != QStringLiteral("出力")
         || activePlaneCombo_->count() == 0) {
         return fail("drawing workbench is primary");
     }
@@ -1978,6 +2306,31 @@ bool MainWindow::RunCreationSelfTest()
         {CadSelectionKind::Wire, static_cast<int>(directStart)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
     }, true);
+    const Wire beforeRotation = project_.Wires()[directStart].wire;
+    SetViewportTool(ViewportTool::RotateSelection);
+    click(center + QPointF(5.0, 145.0));
+    click(center + QPointF(75.0, 145.0));
+    click(center + QPointF(5.0, 75.0));
+    if (kachakacha::geometry::AlmostEqual(project_.Wires()[directStart].wire.Start(), beforeRotation.Start(), 1.0e-8)
+        || std::abs((project_.Wires()[directStart].wire.End() - project_.Wires()[directStart].wire.Start()).Length()
+                - (beforeRotation.End() - beforeRotation.Start()).Length())
+            > 1.0e-8) {
+        return fail("direct rotation geometry");
+    }
+    const Wire afterRotation = project_.Wires()[directStart].wire;
+    Undo();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[directStart].wire.Start(), beforeRotation.Start(), 1.0e-8)) {
+        return fail("undo direct rotation");
+    }
+    Redo();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[directStart].wire.Start(), afterRotation.Start(), 1.0e-8)) {
+        return fail("redo direct rotation");
+    }
+
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(directStart)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
+    }, true);
     const std::size_t copyStart = project_.Wires().size();
     SetViewportTool(ViewportTool::CopySelection);
     click(center + QPointF(-170.0, 145.0));
@@ -2055,6 +2408,74 @@ bool MainWindow::RunCreationSelfTest()
         return fail("mirror from explicit reference line");
     }
 
+    const QPointF splitLineStart = center + QPointF(20.0, 145.0);
+    const QPointF splitLineEnd = center + QPointF(140.0, 145.0);
+    const std::size_t splitStart = project_.Wires().size();
+    SetViewportTool(ViewportTool::DrawLine);
+    click(splitLineStart);
+    click(splitLineEnd);
+    if (project_.Wires().size() != splitStart + 1) {
+        return fail("create line for direct split");
+    }
+    const Wire splitSource = project_.Wires()[splitStart].wire;
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(splitStart)}, true);
+    SetViewportTool(ViewportTool::SplitWire);
+    click((splitLineStart + splitLineEnd) * 0.5);
+    if (project_.Wires().size() != splitStart + 2
+        || !kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart].wire.End(), project_.Wires()[splitStart + 1].wire.Start(), 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart].wire.Start(), splitSource.Start(), 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart + 1].wire.End(), splitSource.End(), 1.0e-8)) {
+        return fail("direct split geometry");
+    }
+    Undo();
+    if (project_.Wires().size() != splitStart + 1
+        || !kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart].wire.Start(), splitSource.Start(), 1.0e-8)) {
+        return fail("undo direct split");
+    }
+    Redo();
+    if (project_.Wires().size() != splitStart + 2) {
+        return fail("redo direct split");
+    }
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(splitStart)},
+        {CadSelectionKind::Wire, static_cast<int>(splitStart + 1)},
+    }, true);
+    joinWiresAction_->trigger();
+    if (project_.Wires().size() != splitStart + 1
+        || project_.Wires()[splitStart].wire.Kind() != WireKind::Polyline
+        || (!kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart].wire.Start(), splitSource.Start(), 1.0e-8)
+            && !kachakacha::geometry::AlmostEqual(project_.Wires()[splitStart].wire.End(), splitSource.Start(), 1.0e-8))) {
+        return fail("join selected split parts");
+    }
+    Undo();
+    if (project_.Wires().size() != splitStart + 2) {
+        return fail("undo direct join");
+    }
+    Redo();
+    if (project_.Wires().size() != splitStart + 1) {
+        return fail("redo direct join");
+    }
+
+    const auto exportPlane = project_.FindWorkPlane(drawingPlaneName);
+    if (!exportPlane.has_value()) {
+        return fail("find planar export workplane");
+    }
+    std::vector<kachakacha::model::NamedWire> exportWires;
+    for (const auto& wire : project_.Wires()) {
+        if (WireLiesOnWorkPlane(wire.wire, *exportPlane)) {
+            exportWires.push_back(wire);
+        }
+    }
+    std::ostringstream svgOutput;
+    std::ostringstream dxfOutput;
+    WritePlanarSvg(svgOutput, *exportPlane, exportWires);
+    WritePlanarDxf(dxfOutput, *exportPlane, exportWires);
+    if (svgOutput.str().find("mm\" height=") == std::string::npos
+        || svgOutput.str().find("<polyline") == std::string::npos
+        || dxfOutput.str().find("$INSUNITS\n70\n4") == std::string::npos) {
+        return fail("planar output from UI project");
+    }
+
     std::ostringstream directDrawingScript;
     WriteProjectScript(directDrawingScript, project_);
     std::istringstream directDrawingInput(directDrawingScript.str());
@@ -2063,11 +2484,12 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
         || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
         || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
+        || reloadedProject.Wires()[splitStart].wire.Kind() != WireKind::Polyline
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
     }
 
-    toolsTabs_->setCurrentIndex(3);
+    toolsTabs_->setCurrentIndex(5);
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(mirrorStart)},
         {CadSelectionKind::Wire, static_cast<int>(mirrorStart + 1)},
@@ -2075,6 +2497,7 @@ bool MainWindow::RunCreationSelfTest()
     SetViewportTool(ViewportTool::MoveSelection);
     click(center + QPointF(-25.0, -135.0));
     sendMouse(QEvent::MouseMove, center + QPointF(45.0, -105.0), Qt::NoButton, Qt::NoButton);
+    toolsTabs_->setCurrentIndex(5);
     return true;
 }
 
@@ -2529,6 +2952,9 @@ void MainWindow::RefreshModelViews(bool fitView)
 void MainWindow::RefreshPlaneChoices()
 {
     const auto refresh = [this](QComboBox* combo) {
+        if (combo == nullptr) {
+            return;
+        }
         const QSignalBlocker blocker(combo);
         const QString previous = combo->currentText();
         combo->clear();
@@ -2544,6 +2970,7 @@ void MainWindow::RefreshPlaneChoices()
     refresh(rotateSourcePlane_);
     refresh(wirePlane_);
     refresh(activePlaneCombo_);
+    refresh(exportPlane_);
 
     const QString previousEditSource = editWireSourcePlane_->currentText();
     editWireSourcePlane_->clear();
@@ -2553,6 +2980,7 @@ void MainWindow::RefreshPlaneChoices()
     }
     const int previousEditIndex = editWireSourcePlane_->findText(previousEditSource);
     editWireSourcePlane_->setCurrentIndex(previousEditIndex >= 0 ? previousEditIndex : 0);
+    RefreshExportSummary();
 }
 
 void MainWindow::RefreshWireChoices()
@@ -2575,6 +3003,31 @@ void MainWindow::RefreshWireChoices()
     if (chamferSecondWire_->count() > 1 && chamferSecondWire_->currentIndex() == chamferFirstWire_->currentIndex()) {
         chamferSecondWire_->setCurrentIndex(1);
     }
+}
+
+void MainWindow::RefreshExportSummary()
+{
+    if (exportPlane_ == nullptr || exportScope_ == nullptr || exportSummary_ == nullptr || viewport_ == nullptr) {
+        return;
+    }
+    const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(exportPlane_->currentText()));
+    if (!plane.has_value()) {
+        exportSummary_->setText(QStringLiteral("出力面なし"));
+        return;
+    }
+
+    std::size_t count = 0;
+    if (exportScope_->currentIndex() == 0) {
+        count = static_cast<std::size_t>(std::count_if(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
+            return WireLiesOnWorkPlane(wire.wire, *plane);
+        }));
+    } else {
+        count = static_cast<std::size_t>(std::count_if(viewport_->Selections().begin(), viewport_->Selections().end(), [this](const auto& selection) {
+            return selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size());
+        }));
+    }
+    exportSummary_->setText(QStringLiteral("出力対象: %1本").arg(count));
 }
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)
@@ -2667,6 +3120,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
         editApplyButton_->setEnabled(selection.kind != CadSelectionKind::None);
     }
+    RefreshExportSummary();
 }
 
 void MainWindow::SyncMachiningSelection(const std::vector<CadSelection>& selections)

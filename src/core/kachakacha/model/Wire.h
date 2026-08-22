@@ -2,6 +2,7 @@
 
 #include "kachakacha/geometry/Vector3.h"
 
+#include <utility>
 #include <vector>
 
 namespace kachakacha::model {
@@ -69,6 +70,11 @@ public:
         geometry::Vector3 linePoint,
         geometry::Vector3 lineDirection,
         geometry::Vector3 planeNormal) const;
+    [[nodiscard]] Wire RotatedAroundAxis(
+        geometry::Vector3 axisPoint,
+        geometry::Vector3 axisDirection,
+        double angleRadians) const;
+    [[nodiscard]] std::pair<Wire, Wire> SplitAt(double parameter) const;
     [[nodiscard]] bool IsClosed(double epsilon = 1.0e-9) const noexcept;
 
 private:

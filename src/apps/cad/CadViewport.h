@@ -34,6 +34,8 @@ enum class ViewportTool {
     MoveSelection,
     CopySelection,
     MirrorSelection,
+    RotateSelection,
+    SplitWire,
 };
 
 class CadViewport final : public QWidget {
@@ -55,6 +57,8 @@ public:
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetTranslationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, bool)> callback);
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
+    void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
+    void SetSplitRequestedCallback(std::function<void(int, double)> callback);
     void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
     void SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
     void SetTool(ViewportTool tool);
@@ -84,6 +88,7 @@ private:
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
+    [[nodiscard]] std::optional<double> NearestWireParameter(int wireIndex, QPointF position, double maximumDistance = 12.0) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
     void NotifyDrawingState();
@@ -102,6 +107,8 @@ private:
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
     std::function<void(kachakacha::geometry::Vector3, bool)> translationRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
+    std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;
+    std::function<void(int, double)> splitRequested_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
     ViewportTool tool_ = ViewportTool::Select;
@@ -109,6 +116,7 @@ private:
     double snapStep_ = 1.0;
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
+    std::optional<double> splitPreviewParameter_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

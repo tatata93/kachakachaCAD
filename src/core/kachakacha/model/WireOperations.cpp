@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <iterator>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -124,7 +126,82 @@ Wire MeetLineAtIntersection(
     return Wire::Line(intersection, retainedPoint);
 }
 
+std::vector<Vector3> ChainPoints(const Wire& wire)
+{
+    if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
+        return wire.ControlPoints();
+    }
+    throw std::invalid_argument("Join currently supports line and polyline wires.");
+}
+
 } // namespace
+
+Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
+{
+    if (wires.size() < 2) {
+        throw std::invalid_argument("Join requires at least two wires.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        throw std::invalid_argument("Join tolerance must be positive.");
+    }
+
+    std::vector<std::vector<Vector3>> sourcePoints;
+    sourcePoints.reserve(wires.size());
+    for (const Wire& wire : wires) {
+        if (wire.IsClosed(tolerance)) {
+            throw std::invalid_argument("Join requires open wires.");
+        }
+        sourcePoints.push_back(ChainPoints(wire));
+    }
+
+    std::vector<bool> used(wires.size(), false);
+    std::vector<Vector3> joined;
+    std::function<bool(std::size_t)> appendRemaining = [&](std::size_t usedCount) {
+        if (usedCount == wires.size()) {
+            return true;
+        }
+        for (std::size_t index = 0; index < sourcePoints.size(); ++index) {
+            if (used[index]) {
+                continue;
+            }
+            for (int reverse = 0; reverse < 2; ++reverse) {
+                const auto& points = sourcePoints[index];
+                const Vector3 candidateStart = reverse == 0 ? points.front() : points.back();
+                if (!geometry::AlmostEqual(joined.back(), candidateStart, tolerance)) {
+                    continue;
+                }
+                const std::size_t oldSize = joined.size();
+                if (reverse == 0) {
+                    joined.insert(joined.end(), points.begin() + 1, points.end());
+                } else {
+                    joined.insert(joined.end(), std::next(points.rbegin()), points.rend());
+                }
+                used[index] = true;
+                if (appendRemaining(usedCount + 1)) {
+                    return true;
+                }
+                used[index] = false;
+                joined.resize(oldSize);
+            }
+        }
+        return false;
+    };
+
+    for (std::size_t startIndex = 0; startIndex < sourcePoints.size(); ++startIndex) {
+        for (int reverse = 0; reverse < 2; ++reverse) {
+            std::fill(used.begin(), used.end(), false);
+            joined = sourcePoints[startIndex];
+            if (reverse != 0) {
+                std::reverse(joined.begin(), joined.end());
+            }
+            used[startIndex] = true;
+            if (appendRemaining(1)) {
+                return Wire::Polyline(std::move(joined));
+            }
+        }
+    }
+    throw std::invalid_argument("Selected wires do not form one endpoint-connected chain.");
+}
 
 LineIntersectionEditResult MeetLinesAtIntersection(
     const Wire& first,

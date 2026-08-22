@@ -195,6 +195,16 @@ void CadViewport::SetMirrorRequestedCallback(std::function<void(Vector3, Vector3
     mirrorRequested_ = std::move(callback);
 }
 
+void CadViewport::SetRotationRequestedCallback(std::function<void(Vector3, Vector3, double)> callback)
+{
+    rotationRequested_ = std::move(callback);
+}
+
+void CadViewport::SetSplitRequestedCallback(std::function<void(int, double)> callback)
+{
+    splitRequested_ = std::move(callback);
+}
+
 void CadViewport::SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback)
 {
     drawingStateChanged_ = std::move(callback);
@@ -278,6 +288,7 @@ void CadViewport::CancelDrawing()
 {
     drawingPoints_.clear();
     hoverDrawingPoint_.reset();
+    splitPreviewParameter_.reset();
     NotifyDrawingState();
     update();
 }
@@ -387,6 +398,36 @@ std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
     return rayPoint + viewDirection * distance;
 }
 
+std::optional<double> CadViewport::NearestWireParameter(int wireIndex, QPointF position, double maximumDistance) const
+{
+    if (project_ == nullptr || wireIndex < 0 || wireIndex >= static_cast<int>(project_->Wires().size())) {
+        return std::nullopt;
+    }
+    const Wire& wire = project_->Wires()[wireIndex].wire;
+    const int samples = wire.Kind() == WireKind::Line ? 1 : 256;
+    double bestDistance = maximumDistance;
+    double bestParameter = 0.0;
+    QPointF previous = ProjectPoint(wire.Evaluate(0.0));
+    for (int sample = 0; sample < samples; ++sample) {
+        const QPointF current = ProjectPoint(wire.Evaluate(static_cast<double>(sample + 1) / samples));
+        const QPointF segment = current - previous;
+        const double lengthSquared = QPointF::dotProduct(segment, segment);
+        const double local = lengthSquared <= 1.0e-12
+            ? 0.0
+            : std::clamp(QPointF::dotProduct(position - previous, segment) / lengthSquared, 0.0, 1.0);
+        const double distance = QLineF(position, previous + segment * local).length();
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestParameter = (static_cast<double>(sample) + local) / samples;
+        }
+        previous = current;
+    }
+    if (bestDistance >= maximumDistance || bestParameter <= 1.0e-6 || bestParameter >= 1.0 - 1.0e-6) {
+        return std::nullopt;
+    }
+    return bestParameter;
+}
+
 Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
 {
     if (!activePlane_.has_value() || !snapEnabled_) {
@@ -459,6 +500,20 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
         drawingPoints_.clear();
         if (mirrorRequested_) {
             mirrorRequested_(linePoint, lineDirection, planeNormal);
+        }
+    } else if (tool_ == ViewportTool::RotateSelection && drawingPoints_.size() == 3) {
+        const Vector3 from = drawingPoints_[1] - drawingPoints_[0];
+        const Vector3 to = drawingPoints_[2] - drawingPoints_[0];
+        if (from.LengthSquared() <= 1.0e-18 || to.LengthSquared() <= 1.0e-18) {
+            drawingPoints_.pop_back();
+            return;
+        }
+        const Vector3 normal = activePlane_->Normal();
+        const double angle = std::atan2(Dot(Cross(from, to), normal), Dot(from, to));
+        const Vector3 axisPoint = drawingPoints_[0];
+        drawingPoints_.clear();
+        if (rotationRequested_) {
+            rotationRequested_(axisPoint, normal, angle);
         }
     } else if (tool_ == ViewportTool::DrawLine && drawingPoints_.size() == 2) {
         const Vector3 start = drawingPoints_[0];
@@ -681,6 +736,25 @@ void CadViewport::paintEvent(QPaintEvent*)
                     }
                 } catch (const std::exception&) {
                 }
+            } else if (tool_ == ViewportTool::RotateSelection && project_ != nullptr) {
+                painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
+                if (drawingPoints_.size() == 2) {
+                    painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(drawingPoints_[1]));
+                    const Vector3 from = drawingPoints_[1] - drawingPoints_[0];
+                    const Vector3 to = *hoverDrawingPoint_ - drawingPoints_[0];
+                    if (from.LengthSquared() > 1.0e-18 && to.LengthSquared() > 1.0e-18) {
+                        const Vector3 normal = activePlane_->Normal();
+                        const double angle = std::atan2(Dot(Cross(from, to), normal), Dot(from, to));
+                        for (const CadSelection& selection : selections_) {
+                            if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+                                || selection.index >= static_cast<int>(project_->Wires().size())) {
+                                continue;
+                            }
+                            drawPreviewWire(project_->Wires()[selection.index].wire.RotatedAroundAxis(
+                                drawingPoints_[0], normal, angle));
+                        }
+                    }
+                }
             }
         }
         painter.setBrush(QColor("#ffffff"));
@@ -688,6 +762,20 @@ void CadViewport::paintEvent(QPaintEvent*)
         painter.drawEllipse(ProjectPoint(*hoverDrawingPoint_), 4.0, 4.0);
         for (const Vector3& point : drawingPoints_) {
             painter.drawEllipse(ProjectPoint(point), 4.0, 4.0);
+        }
+    }
+
+    if (tool_ == ViewportTool::SplitWire && splitPreviewParameter_.has_value() && project_ != nullptr) {
+        const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
+            return selection.kind == CadSelectionKind::Wire;
+        });
+        if (selectedWire != selections_.end() && selectedWire->index >= 0
+            && selectedWire->index < static_cast<int>(project_->Wires().size())) {
+            const QPointF splitPoint = ProjectPoint(project_->Wires()[selectedWire->index].wire.Evaluate(*splitPreviewParameter_));
+            painter.setBrush(QColor("#ffffff"));
+            painter.setPen(QPen(QColor("#c0392b"), 2.5));
+            painter.drawEllipse(splitPoint, 6.0, 6.0);
+            painter.drawLine(splitPoint + QPointF(-9.0, 0.0), splitPoint + QPointF(9.0, 0.0));
         }
     }
 
@@ -736,6 +824,12 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::MirrorSelection:
         modeText = QStringLiteral("ミラー複製");
         break;
+    case ViewportTool::RotateSelection:
+        modeText = QStringLiteral("回転");
+        break;
+    case ViewportTool::SplitWire:
+        modeText = QStringLiteral("分割");
+        break;
     }
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
         const auto coordinates = activePlane_->Project(*hoverDrawingPoint_);
@@ -766,6 +860,14 @@ void CadViewport::paintEvent(QPaintEvent*)
             } else if (tool_ == ViewportTool::MirrorSelection) {
                 modeText += QStringLiteral("   軸長 %1 mm")
                     .arg((*hoverDrawingPoint_ - drawingPoints_.front()).Length(), 0, 'f', 3);
+            } else if (tool_ == ViewportTool::RotateSelection && drawingPoints_.size() == 2) {
+                const Vector3 from = drawingPoints_[1] - drawingPoints_[0];
+                const Vector3 to = *hoverDrawingPoint_ - drawingPoints_[0];
+                if (from.LengthSquared() > 1.0e-18 && to.LengthSquared() > 1.0e-18) {
+                    const double angle = std::atan2(
+                        Dot(Cross(from, to), activePlane_->Normal()), Dot(from, to));
+                    modeText += QStringLiteral("   角度 %1 °").arg(angle * 180.0 / 3.14159265358979323846, 0, 'f', 2);
+                }
             }
         }
     }
@@ -843,6 +945,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         return;
     }
     if (tool_ != ViewportTool::Select
+        && tool_ != ViewportTool::SplitWire
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -878,7 +981,16 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         update();
     }
 
-    if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
+    if (tool_ == ViewportTool::SplitWire) {
+        splitPreviewParameter_.reset();
+        const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
+            return selection.kind == CadSelectionKind::Wire;
+        });
+        if (selectedWire != selections_.end()) {
+            splitPreviewParameter_ = NearestWireParameter(selectedWire->index, event->position());
+        }
+        update();
+    } else if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
             ? std::optional<Vector3>(SnapPoint(*point, event->position()))
@@ -943,6 +1055,21 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
                 : Qt::PointingHandCursor);
         event->accept();
+        return;
+    }
+
+    if (tool_ == ViewportTool::SplitWire) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_ && splitPreviewParameter_.has_value()) {
+            const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
+                return selection.kind == CadSelectionKind::Wire;
+            });
+            if (selectedWire != selections_.end() && splitRequested_) {
+                splitRequested_(selectedWire->index, *splitPreviewParameter_);
+            }
+        } else if (event->button() == Qt::RightButton && !mouseMoved_) {
+            CancelDrawing();
+        }
+        dragButton_ = Qt::NoButton;
         return;
     }
 

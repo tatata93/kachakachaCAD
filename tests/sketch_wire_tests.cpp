@@ -210,6 +210,57 @@ void MirrorArcKeepsExactCurve()
     RequireNear(mirrored.ArcData().center, {-3.0, 2.0, 0.0}, "mirrored arc center");
 }
 
+void RotateWireAroundArbitraryAxis()
+{
+    const Wire wire = Wire::Line({2.0, 0.0, 3.0}, {4.0, 0.0, 3.0});
+    const Wire rotated = wire.RotatedAroundAxis(
+        {1.0, 0.0, 3.0},
+        {0.0, 0.0, 1.0},
+        Pi / 2.0);
+
+    RequireNear(rotated.Start(), {1.0, 1.0, 3.0}, "rotated line start");
+    RequireNear(rotated.End(), {1.0, 3.0, 3.0}, "rotated line end");
+}
+
+void SplitBezierPreservesExactShape()
+{
+    const Wire wire = Wire::CubicBezier(
+        {0.0, 0.0, 0.0},
+        {2.0, 5.0, 0.0},
+        {7.0, -3.0, 0.0},
+        {10.0, 1.0, 0.0});
+    constexpr double splitParameter = 0.35;
+    const auto [first, second] = wire.SplitAt(splitParameter);
+
+    RequireNear(first.End(), wire.Evaluate(splitParameter), "split bezier first end");
+    RequireNear(second.Start(), wire.Evaluate(splitParameter), "split bezier second start");
+    for (int sample = 0; sample <= 10; ++sample) {
+        const double local = static_cast<double>(sample) / 10.0;
+        RequireNear(first.Evaluate(local), wire.Evaluate(splitParameter * local), "split bezier first shape");
+        RequireNear(
+            second.Evaluate(local),
+            wire.Evaluate(splitParameter + (1.0 - splitParameter) * local),
+            "split bezier second shape");
+    }
+}
+
+void SplitArcPreservesSweep()
+{
+    const Wire wire = Wire::CircularArc(
+        {0.0, 0.0, 2.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        4.0,
+        0.2,
+        2.4);
+    const auto [first, second] = wire.SplitAt(0.25);
+
+    RequireNear(first.End(), second.Start(), "split arc shared point");
+    RequireNear(first.End(), wire.Evaluate(0.25), "split arc original point");
+    Require(AlmostEqual(first.ArcData().sweepAngleRadians, 0.6, 1.0e-9), "split arc first sweep");
+    Require(AlmostEqual(second.ArcData().sweepAngleRadians, 1.8, 1.0e-9), "split arc second sweep");
+}
+
 } // namespace
 
 int main()
@@ -227,6 +278,9 @@ int main()
         TranslatedArcKeepsFrameAndRadius();
         MirrorLineAcrossWorkPlaneAxis();
         MirrorArcKeepsExactCurve();
+        RotateWireAroundArbitraryAxis();
+        SplitBezierPreservesExactShape();
+        SplitArcPreservesSweep();
     } catch (const std::exception& error) {
         std::cerr << "sketch_wire_tests failed: " << error.what() << '\n';
         return 1;

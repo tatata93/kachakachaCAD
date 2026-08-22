@@ -15,6 +15,7 @@ endif()
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
+    src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Sketch.cpp
@@ -144,6 +145,17 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME wire_operations_tests COMMAND kachakacha_wire_operations_tests)
+
+    add_executable(kachakacha_planar_export_tests
+        tests/planar_export_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_planar_export_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME planar_export_tests COMMAND kachakacha_planar_export_tests)
 
     if(WIN32)
         add_test(

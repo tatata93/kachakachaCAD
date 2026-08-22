@@ -41,12 +41,14 @@ private:
     QWidget* BuildWirePanel();
     QWidget* BuildEditPanel();
     QWidget* BuildMachiningPanel();
+    QWidget* BuildOutputPanel();
     QWidget* BuildInfoPanel();
     void BuildMenusAndToolbar();
     void NewProject();
     void OpenProject();
     void SaveProject();
     void SaveProjectAs();
+    void ExportPlanar(bool dxf);
     void AddWorkPlane();
     [[nodiscard]] kachakacha::model::WorkPlane WorkPlaneFromInputs() const;
     void AlignViewportFromPlaneInputs();
@@ -57,6 +59,12 @@ private:
         kachakacha::geometry::Vector3 linePoint,
         kachakacha::geometry::Vector3 lineDirection,
         kachakacha::geometry::Vector3 planeNormal);
+    void ApplyViewportRotation(
+        kachakacha::geometry::Vector3 axisPoint,
+        kachakacha::geometry::Vector3 axisDirection,
+        double angleRadians);
+    void ApplySplitWire(int wireIndex, double parameter);
+    void JoinSelectedWires();
     void ApplyMeetSelectedLines();
     void SetReferenceFromSelection();
     void ClearReference();
@@ -81,6 +89,7 @@ private:
     void RefreshModelViews(bool fitView = false);
     void RefreshPlaneChoices();
     void RefreshWireChoices();
+    void RefreshExportSummary();
     void UpdateSelection(CadSelection selection, bool updateTree);
     void UpdateSelections(std::vector<CadSelection> selections, bool updateTree);
     void SyncMachiningSelection(const std::vector<CadSelection>& selections);
@@ -112,6 +121,9 @@ private:
     QAction* moveToolAction_ = nullptr;
     QAction* copyToolAction_ = nullptr;
     QAction* mirrorToolAction_ = nullptr;
+    QAction* rotateToolAction_ = nullptr;
+    QAction* splitToolAction_ = nullptr;
+    QAction* joinWiresAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;
     QAction* setReferenceAction_ = nullptr;
     QAction* clearReferenceAction_ = nullptr;
@@ -160,6 +172,10 @@ private:
     QDoubleSpinBox* chamferSecondDistance_ = nullptr;
     QDoubleSpinBox* filletRadius_ = nullptr;
     int pendingMachiningPickSlot_ = -1;
+
+    QComboBox* exportPlane_ = nullptr;
+    QComboBox* exportScope_ = nullptr;
+    QLabel* exportSummary_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

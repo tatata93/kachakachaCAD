@@ -2,6 +2,8 @@
 
 #include "kachakacha/model/Wire.h"
 
+#include <vector>
+
 namespace kachakacha::model {
 
 enum class RetainedLineEnd {
@@ -41,6 +43,10 @@ struct LineIntersectionEditResult {
     RetainedLineEnd retainedFirst,
     const Wire& second,
     RetainedLineEnd retainedSecond,
+    double tolerance = 1.0e-8);
+
+[[nodiscard]] Wire JoinLineChain(
+    const std::vector<Wire>& wires,
     double tolerance = 1.0e-8);
 
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(

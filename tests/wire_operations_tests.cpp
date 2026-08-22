@@ -9,6 +9,7 @@ using kachakacha::geometry::Vector3;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::JoinLineChain;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
 
@@ -145,6 +146,38 @@ void TrimsCrossingLinesToChosenBranches()
     RequireNear(result.second.End(), {0.0, 7.0, 0.0}, "trimmed second retained branch");
 }
 
+void JoinsUnorderedLineChain()
+{
+    const std::vector<Wire> wires = {
+        Wire::Line({4.0, 2.0, 0.0}, {7.0, 2.0, 0.0}),
+        Wire::Line({4.0, 0.0, 0.0}, {0.0, 0.0, 0.0}),
+        Wire::Polyline({{4.0, 0.0, 0.0}, {4.0, 1.0, 0.0}, {4.0, 2.0, 0.0}}),
+    };
+    const Wire joined = JoinLineChain(wires);
+
+    Require(joined.Kind() == kachakacha::model::WireKind::Polyline, "joined wire is polyline");
+    Require(joined.ControlPoints().size() == 5, "joined control point count");
+    const bool forward = AlmostEqual(joined.Start(), {0.0, 0.0, 0.0}, 1.0e-8)
+        && AlmostEqual(joined.End(), {7.0, 2.0, 0.0}, 1.0e-8);
+    const bool backward = AlmostEqual(joined.Start(), {7.0, 2.0, 0.0}, 1.0e-8)
+        && AlmostEqual(joined.End(), {0.0, 0.0, 0.0}, 1.0e-8);
+    Require(forward || backward, "joined chain endpoints");
+}
+
+void RejectsDisconnectedJoin()
+{
+    bool rejected = false;
+    try {
+        (void)JoinLineChain({
+            Wire::Line({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}),
+            Wire::Line({2.0, 0.0, 0.0}, {3.0, 0.0, 0.0}),
+        });
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    Require(rejected, "disconnected join rejected");
+}
+
 } // namespace
 
 int main()
@@ -157,6 +190,8 @@ int main()
         FilletsCornerInArbitrary3DPlane();
         ExtendsSeparatedLinesToTheirIntersection();
         TrimsCrossingLinesToChosenBranches();
+        JoinsUnorderedLineChain();
+        RejectsDisconnectedJoin();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

@@ -352,4 +352,100 @@ Wire Wire::Mirrored(Vector3 linePoint, Vector3 lineDirection, Vector3 planeNorma
     return {kind_, std::move(mirroredPoints)};
 }
 
+Wire Wire::RotatedAroundAxis(Vector3 axisPoint, Vector3 axisDirection, double angleRadians) const
+{
+    if (!axisPoint.IsFinite() || !axisDirection.IsFinite() || !std::isfinite(angleRadians)) {
+        throw std::invalid_argument("Wire rotation definition contains a non-finite value.");
+    }
+    const Vector3 axis = axisDirection.Normalized();
+    const double cosine = std::cos(angleRadians);
+    const double sine = std::sin(angleRadians);
+    const auto rotateDirection = [&](Vector3 direction) {
+        return direction * cosine
+            + Cross(axis, direction) * sine
+            + axis * (Dot(axis, direction) * (1.0 - cosine));
+    };
+    const auto rotatePoint = [&](Vector3 point) {
+        return axisPoint + rotateDirection(point - axisPoint);
+    };
+
+    std::vector<Vector3> rotatedPoints;
+    rotatedPoints.reserve(controlPoints_.size());
+    for (const Vector3& point : controlPoints_) {
+        rotatedPoints.push_back(rotatePoint(point));
+    }
+
+    if (kind_ == WireKind::Circle || kind_ == WireKind::CircularArc) {
+        return {
+            kind_,
+            std::move(rotatedPoints),
+            rotatePoint(arcCenter_),
+            rotateDirection(arcUAxis_),
+            rotateDirection(arcVAxis_),
+            arcRadius_,
+            arcStartAngleRadians_,
+            arcSweepAngleRadians_,
+        };
+    }
+    return {kind_, std::move(rotatedPoints)};
+}
+
+std::pair<Wire, Wire> Wire::SplitAt(double parameter) const
+{
+    if (!std::isfinite(parameter) || parameter <= 1.0e-9 || parameter >= 1.0 - 1.0e-9) {
+        throw std::invalid_argument("Wire split parameter must be inside the wire.");
+    }
+
+    switch (kind_) {
+    case WireKind::Line: {
+        const Vector3 split = Evaluate(parameter);
+        return {Line(Start(), split), Line(split, End())};
+    }
+    case WireKind::Polyline: {
+        const double scaled = parameter * static_cast<double>(controlPoints_.size() - 1);
+        const std::size_t segment = std::min(
+            static_cast<std::size_t>(scaled), controlPoints_.size() - 2);
+        const double local = scaled - static_cast<double>(segment);
+        const Vector3 split = Lerp(controlPoints_[segment], controlPoints_[segment + 1], local);
+        std::vector<Vector3> first(controlPoints_.begin(), controlPoints_.begin() + segment + 1);
+        std::vector<Vector3> second;
+        if (!AlmostEqual(first.back(), split)) {
+            first.push_back(split);
+        }
+        second.push_back(split);
+        auto remaining = controlPoints_.begin() + segment + 1;
+        if (remaining != controlPoints_.end() && AlmostEqual(*remaining, split)) {
+            ++remaining;
+        }
+        second.insert(second.end(), remaining, controlPoints_.end());
+        return {Polyline(std::move(first)), Polyline(std::move(second))};
+    }
+    case WireKind::CubicBezier: {
+        const Vector3 ab = Lerp(controlPoints_[0], controlPoints_[1], parameter);
+        const Vector3 bc = Lerp(controlPoints_[1], controlPoints_[2], parameter);
+        const Vector3 cd = Lerp(controlPoints_[2], controlPoints_[3], parameter);
+        const Vector3 abbc = Lerp(ab, bc, parameter);
+        const Vector3 bccd = Lerp(bc, cd, parameter);
+        const Vector3 split = Lerp(abbc, bccd, parameter);
+        return {
+            CubicBezier(controlPoints_[0], ab, abbc, split),
+            CubicBezier(split, bccd, cd, controlPoints_[3]),
+        };
+    }
+    case WireKind::CircularArc:
+        return {
+            CircularArc(
+                arcCenter_, arcUAxis_, arcVAxis_, arcRadius_,
+                arcStartAngleRadians_, arcSweepAngleRadians_ * parameter),
+            CircularArc(
+                arcCenter_, arcUAxis_, arcVAxis_, arcRadius_,
+                arcStartAngleRadians_ + arcSweepAngleRadians_ * parameter,
+                arcSweepAngleRadians_ * (1.0 - parameter)),
+        };
+    case WireKind::Circle:
+        throw std::invalid_argument("A circle requires two split points.");
+    }
+    throw std::logic_error("Unknown wire kind.");
+}
+
 } // namespace kachakacha::model

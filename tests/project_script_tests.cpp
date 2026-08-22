@@ -1,6 +1,7 @@
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/geometry/Vector3.h"
 
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -162,6 +163,80 @@ void SurfacesAndProjectedWiresRoundTrip()
     RequireNear(roundTripped.Wires()[3].wire.Evaluate(0.5), project.Wires()[3].wire.Evaluate(0.5), "roundtrip projected geometry");
 }
 
+void LoftSurfacesRoundTrip()
+{
+    std::istringstream input(R"(
+        bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+        bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+        bezier3d section_c 12 -6 0  12 -2 4  12 2 4  12 6 0
+        surface_loft carbody section_a section_b section_c
+        plate shell carbody 0.5 centered styrene
+    )");
+    auto project = LoadProjectScript(input, "loft-test");
+    Require(project.Surfaces().size() == 1, "loft surface count");
+    Require(project.Surfaces()[0].surface.Kind() == kachakacha::model::SurfaceKind::Loft, "loft surface kind");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 3, "loft section dependency count");
+    Require(project.Plates().size() == 1, "loft plate count");
+
+    const auto platePointBeforeUpdate = project.Plates()[0].plate.SourceSurface().Evaluate(0.5, 0.5);
+    project.UpdateWire("section_b", Wire::CubicBezier(
+        {6.0, -6.0, 0.0}, {6.0, -2.0, 8.0}, {6.0, 2.0, 8.0}, {6.0, 6.0, 0.0}));
+    Require(!kachakacha::geometry::AlmostEqual(
+        platePointBeforeUpdate, project.Plates()[0].plate.SourceSurface().Evaluate(0.5, 0.5), 1.0e-8),
+        "plate rebuilds after loft section edit");
+
+    project.UpdatePlate("shell", "carbody", 0.7, kachakacha::model::PlateThicknessDirection::Positive, "paper");
+    Require(std::abs(project.Plates()[0].plate.Thickness() - 0.7) <= 1.0e-12, "update plate thickness");
+    Require(project.Plates()[0].material == "paper", "update plate material");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("surface_loft carbody section_a section_b section_c") != std::string::npos, "write loft command");
+    Require(output.str().find("plate shell carbody ") != std::string::npos
+            && output.str().find(" positive paper") != std::string::npos,
+        "write updated plate command");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "loft-roundtrip");
+    Require(roundTripped.Surfaces()[0].surface.Kind() == kachakacha::model::SurfaceKind::Loft, "roundtrip loft kind");
+    Require(roundTripped.Plates().size() == 1, "roundtrip loft plate");
+    Require(std::abs(roundTripped.Plates()[0].plate.Thickness() - 0.7) <= 1.0e-12, "roundtrip updated plate thickness");
+    Require(roundTripped.Plates()[0].material == "paper", "roundtrip updated plate material");
+    RequireNear(roundTripped.Surfaces()[0].surface.Evaluate(0.5, 0.5),
+        project.Surfaces()[0].surface.Evaluate(0.5, 0.5), "roundtrip loft geometry");
+}
+
+void VisibilityRoundTrips()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        sketch_circle boundary drawing 0 0 5 reference
+        surface_planar panel boundary
+        plate side_sheet panel 0.5 centered styrene
+        visibility workplane drawing hidden
+        visibility wire boundary hidden
+        visibility surface panel hidden
+        visibility plate side_sheet hidden
+    )");
+    const auto project = LoadProjectScript(input, "visibility-test");
+    Require(!project.WorkPlanes()[0].visible, "load hidden workplane");
+    Require(!project.Wires()[0].visible, "load hidden wire");
+    Require(!project.Surfaces()[0].visible, "load hidden surface");
+    Require(project.Plates().size() == 1, "load plate");
+    Require(project.Plates()[0].material == "styrene", "load plate material");
+    Require(std::abs(project.Plates()[0].plate.Thickness() - 0.5) <= 1.0e-12, "load plate thickness");
+    Require(!project.Plates()[0].visible, "load hidden plate");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "visibility-roundtrip");
+    Require(!roundTripped.WorkPlanes()[0].visible, "roundtrip hidden workplane");
+    Require(!roundTripped.Wires()[0].visible, "roundtrip hidden wire");
+    Require(!roundTripped.Surfaces()[0].visible, "roundtrip hidden surface");
+    Require(roundTripped.Plates().size() == 1, "roundtrip plate");
+    Require(!roundTripped.Plates()[0].visible, "roundtrip hidden plate");
+}
+
 void UnknownPlaneIsRejected()
 {
     std::istringstream input("sketch_line bad missing 0 0 1 1");
@@ -223,6 +298,8 @@ int main()
         LoadsWireMetadataForDirectWires();
         WrittenProjectRoundTrips();
         SurfacesAndProjectedWiresRoundTrip();
+        LoftSurfacesRoundTrip();
+        VisibilityRoundTrips();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

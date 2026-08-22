@@ -75,6 +75,8 @@ private:
     void ApplyLineFillet();
     void CreateSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
+    void CreatePlateFromSurface();
+    void UpdateSelectedPlate();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshActiveWorkPlane();
@@ -85,6 +87,8 @@ private:
     void AddViewportArc(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 through, kachakacha::geometry::Vector3 end);
     void AddViewportBezier(const std::array<kachakacha::geometry::Vector3, 4>& points);
     void DeleteSelection();
+    void HideSelected();
+    void ShowAllObjects();
     void Undo();
     void Redo();
     void RecordUndo();
@@ -108,6 +112,7 @@ private:
     QString SuggestedChamferName() const;
     QString SuggestedFilletName() const;
     QString SuggestedSurfaceName() const;
+    QString SuggestedPlateName() const;
 
     kachakacha::model::Project project_;
     QString currentPath_;
@@ -116,6 +121,8 @@ private:
     std::vector<kachakacha::model::Project> redoStack_;
     QAction* undoAction_ = nullptr;
     QAction* redoAction_ = nullptr;
+    QAction* hideSelectedAction_ = nullptr;
+    QAction* showAllObjectsAction_ = nullptr;
     QAction* selectToolAction_ = nullptr;
     QAction* lineToolAction_ = nullptr;
     QAction* polylineToolAction_ = nullptr;
@@ -184,6 +191,11 @@ private:
     QComboBox* projectionSurface_ = nullptr;
     QComboBox* projectionPlane_ = nullptr;
     QLabel* projectionSelectionLabel_ = nullptr;
+    QLineEdit* plateName_ = nullptr;
+    QComboBox* plateSurface_ = nullptr;
+    QDoubleSpinBox* plateThickness_ = nullptr;
+    QComboBox* plateDirection_ = nullptr;
+    QComboBox* plateMaterial_ = nullptr;
 
     QComboBox* exportPlane_ = nullptr;
     QComboBox* exportScope_ = nullptr;

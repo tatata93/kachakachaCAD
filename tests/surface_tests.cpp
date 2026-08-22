@@ -52,6 +52,13 @@ int main()
     Require(ruled.Kind() == SurfaceKind::Ruled, "create ruled section surface");
     Require(AlmostEqual(ruled.Evaluate(0.0, 1.0), sectionB.Start(), 1.0e-8), "automatically orient second section");
 
+    const Wire sectionMiddle = Wire::CubicBezier(
+        {6.0, -6.0, 0.0}, {6.0, -2.0, 6.0}, {6.0, 2.0, 6.0}, {6.0, 6.0, 0.0});
+    const Surface loft = Surface::Loft({sectionA, sectionMiddle.Reversed(), sectionB});
+    Require(loft.Kind() == SurfaceKind::Loft, "create multi-section loft surface");
+    Require(AlmostEqual(loft.Evaluate(0.0, 0.5), sectionMiddle.Start(), 1.0e-8), "loft keeps selected section order");
+    Require(AlmostEqual(loft.Evaluate(1.0, 1.0), sectionB.End(), 1.0e-8), "loft reaches last section");
+
     const Wire lightDrawing = Wire::Circle({6.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25);
     const Wire projectedLight = ruled.ProjectWireAlongDirection(lightDrawing, {0.0, 0.0, -1.0});
     Require(projectedLight.Kind() == WireKind::Polyline && projectedLight.IsClosed(), "project closed light drawing to surface");
@@ -59,6 +66,9 @@ int main()
         const auto check = ruled.ProjectPointAlongDirection({point.x, point.y, 12.0}, {0.0, 0.0, -1.0});
         Require(std::abs(check.point.z - point.z) <= 1.0e-5, "projected light points remain on surface");
     }
+
+    const Wire loftProjectedLight = loft.ProjectWireAlongDirection(lightDrawing, {0.0, 0.0, -1.0});
+    Require(loftProjectedLight.IsClosed(), "project light drawing to loft surface");
 
     std::cout << "surface tests passed\n";
     return EXIT_SUCCESS;

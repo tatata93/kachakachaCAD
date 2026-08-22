@@ -1,12 +1,16 @@
-# kachakachaCAD curved panel and projected light holes
+# kachakachaCAD multi-section body shell and projected light holes
 # Units: millimeters
 
-# Two section drawings define a ruled curved panel.
+# Four transverse drawings define the changing roof curvature.
 plane_point_normal section_a_plane 0 0 0  1 0 0  0 1 0
-plane_point_normal section_b_plane 12 0 0  1 0 0  0 1 0
-sketch_bezier section_a section_a_plane -6 0  -2 3  2 3  6 0 reference
-sketch_bezier section_b section_b_plane -6 0  -2 5  2 5  6 0 reference
-surface_ruled nose_panel section_a section_b
+plane_point_normal section_b_plane 4 0 0  1 0 0  0 1 0
+plane_point_normal section_c_plane 8 0 0  1 0 0  0 1 0
+plane_point_normal section_d_plane 12 0 0  1 0 0  0 1 0
+sketch_bezier section_a section_a_plane -6 0  -2 2.5  2 2.5  6 0 reference
+sketch_bezier section_b section_b_plane -6 0  -2 5.5  2 5.5  6 0 reference
+sketch_bezier section_c section_c_plane -6 0  -2 5  2 5  6 0 reference
+sketch_bezier section_d section_d_plane -6 0  -2 3.8  2 3.8  6 0 reference
+surface_loft nose_panel section_a section_b section_c section_d
 
 # The light-hole drawing stays on a separate planar sheet.
 plane_point_normal light_plan 0 0 12  0 0 1  1 0 0
@@ -16,3 +20,20 @@ sketch_circle light_right_plan light_plan 8 0 0.85 reference
 # Project both circles through the panel along the sheet normal.
 wire_project light_left_on_panel light_left_plan nose_panel 0 0 1
 wire_project light_right_on_panel light_right_plan nose_panel 0 0 1
+
+# Turn the reference surface into a centered 0.5 mm styrene sheet.
+plate nose_shell nose_panel 0.5 centered styrene
+
+# Keep construction drawings available in the model tree, but out of the way.
+visibility workplane section_a_plane hidden
+visibility workplane section_b_plane hidden
+visibility workplane section_c_plane hidden
+visibility workplane section_d_plane hidden
+visibility workplane light_plan hidden
+visibility wire section_a hidden
+visibility wire section_b hidden
+visibility wire section_c hidden
+visibility wire section_d hidden
+visibility wire light_left_plan hidden
+visibility wire light_right_plan hidden
+visibility surface nose_panel hidden

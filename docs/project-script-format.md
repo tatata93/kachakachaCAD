@@ -2,7 +2,7 @@
 
 ## 目的
 
-`.kcd` は、Qt UIを作る前に数値入力のCAD操作を検証するための小さなプロジェクト記述である。
+`.kcd` は、Qt UIで作成した作業平面、ワイヤー、面、板材とその依存関係を保存するプロジェクト記述である。
 
 ユーザーはテキストで作業平面やワイヤーを定義し、ビューアで確認できる。
 
@@ -138,6 +138,14 @@ surface_ruled NAME SECTION_WIRE_A SECTION_WIRE_B
 
 断面ワイヤーの向きが逆の場合は、端点の対応が短くなる向きへ自動でそろえる。
 
+### 3断面以上からロフト面
+
+```text
+surface_loft NAME SECTION_WIRE_A SECTION_WIRE_B SECTION_WIRE_C [...]
+```
+
+断面は車体の前から後ろの順に並べる。現段階では隣接断面を直線的に補間する。断面ワイヤーを編集すると面を再計算する。
+
 ### 平面図ワイヤーを面へ投影
 
 ```text
@@ -145,6 +153,22 @@ wire_project NAME SOURCE_WIRE TARGET_SURFACE dx dy dz
 ```
 
 投影元の平面図、対象面、投影方向を関係として保持する。断面または元の平面図を編集すると、面と投影ワイヤーを再計算する。
+
+### 面から板材
+
+```text
+plate NAME SOURCE_SURFACE thickness positive|centered|negative MATERIAL
+```
+
+`thickness` はmm。厚み方向は元の面から外側、面を中央、元の面から内側のいずれか。`MATERIAL` は `styrene`、`paper`、`brass` などの製作材料名を保持する。
+
+### 表示・非表示
+
+```text
+visibility workplane|wire|surface|plate NAME shown|hidden
+```
+
+非表示の作図用断面や平面図もプロジェクトから削除せず、依存関係を保ったままモデル一覧へ残す。
 
 ## 実行
 

@@ -128,6 +128,61 @@ void Project::AddRuledSurface(std::string name, std::string firstSectionName, st
     });
 }
 
+void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionNames)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    if (sectionNames.size() < 3) {
+        throw std::invalid_argument("Loft surface requires at least three section wires.");
+    }
+
+    std::vector<Wire> sections;
+    sections.reserve(sectionNames.size());
+    for (const std::string& sectionName : sectionNames) {
+        if (std::count(sectionNames.begin(), sectionNames.end(), sectionName) != 1) {
+            throw std::invalid_argument("Loft section wires must not be repeated: " + sectionName);
+        }
+        const NamedWire& section = RequireWire(sectionName);
+        if (section.projection.has_value()) {
+            throw std::invalid_argument("Projected wire cannot be used as a loft section.");
+        }
+        sections.push_back(section.wire);
+    }
+    surfaces_.push_back({std::move(name), Surface::Loft(std::move(sections)), std::move(sectionNames)});
+}
+
+void Project::AddPlate(
+    std::string name,
+    std::string sourceSurfaceName,
+    double thickness,
+    PlateThicknessDirection direction,
+    std::string material)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Plate name must not be empty.");
+    }
+    if (FindPlate(name).has_value()) {
+        throw std::invalid_argument("Plate name already exists: " + name);
+    }
+    if (material.empty()) {
+        throw std::invalid_argument("Plate material must not be empty.");
+    }
+    const std::optional<Surface> surface = FindSurface(sourceSurfaceName);
+    if (!surface.has_value()) {
+        throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
+    }
+    plates_.push_back({
+        std::move(name),
+        Plate(*surface, thickness, direction),
+        std::move(sourceSurfaceName),
+        std::move(material),
+    });
+}
+
 void Project::AddProjectedWire(
     std::string name,
     std::string sourceWireName,
@@ -200,6 +255,32 @@ void Project::UpdateWire(std::string_view name, Wire wire)
     throw std::invalid_argument("Wire name does not exist: " + std::string(name));
 }
 
+void Project::UpdatePlate(
+    std::string_view name,
+    std::string sourceSurfaceName,
+    double thickness,
+    PlateThicknessDirection direction,
+    std::string material)
+{
+    if (material.empty()) {
+        throw std::invalid_argument("Plate material must not be empty.");
+    }
+    const std::optional<Surface> sourceSurface = FindSurface(sourceSurfaceName);
+    if (!sourceSurface.has_value()) {
+        throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
+    }
+    Plate replacement(*sourceSurface, thickness, direction);
+    for (NamedPlate& plate : plates_) {
+        if (plate.name == name) {
+            plate.plate = std::move(replacement);
+            plate.sourceSurfaceName = std::move(sourceSurfaceName);
+            plate.material = std::move(material);
+            return;
+        }
+    }
+    throw std::invalid_argument("Plate name does not exist: " + std::string(name));
+}
+
 void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
 {
     if (metadata.sourcePlaneName.has_value() && !FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
@@ -214,6 +295,50 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
     }
 
     throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+}
+
+void Project::SetWorkPlaneVisible(std::string_view name, bool visible)
+{
+    for (NamedWorkPlane& plane : workPlanes_) {
+        if (plane.name == name) {
+            plane.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Work plane name does not exist: " + std::string(name));
+}
+
+void Project::SetWireVisible(std::string_view name, bool visible)
+{
+    for (NamedWire& wire : wires_) {
+        if (wire.name == name) {
+            wire.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+}
+
+void Project::SetSurfaceVisible(std::string_view name, bool visible)
+{
+    for (NamedSurface& surface : surfaces_) {
+        if (surface.name == name) {
+            surface.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Surface name does not exist: " + std::string(name));
+}
+
+void Project::SetPlateVisible(std::string_view name, bool visible)
+{
+    for (NamedPlate& plate : plates_) {
+        if (plate.name == name) {
+            plate.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Plate name does not exist: " + std::string(name));
 }
 
 bool Project::RemoveWorkPlane(std::string_view name)
@@ -271,7 +396,24 @@ bool Project::RemoveSurface(std::string_view name)
             throw std::invalid_argument("Surface is used by projected wire: " + wire.name);
         }
     }
+    for (const NamedPlate& plate : plates_) {
+        if (plate.sourceSurfaceName == name) {
+            throw std::invalid_argument("Surface is used by plate: " + plate.name);
+        }
+    }
     surfaces_.erase(position);
+    return true;
+}
+
+bool Project::RemovePlate(std::string_view name)
+{
+    const auto position = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& plate) {
+        return plate.name == name;
+    });
+    if (position == plates_.end()) {
+        return false;
+    }
+    plates_.erase(position);
     return true;
 }
 
@@ -296,6 +438,16 @@ std::optional<Surface> Project::FindSurface(std::string_view name) const
     return std::nullopt;
 }
 
+std::optional<Plate> Project::FindPlate(std::string_view name) const
+{
+    for (const NamedPlate& plate : plates_) {
+        if (plate.name == name) {
+            return plate.plate;
+        }
+    }
+    return std::nullopt;
+}
+
 const NamedWire& Project::RequireWire(std::string_view name) const
 {
     const auto wire = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& candidate) {
@@ -312,10 +464,17 @@ void Project::RebuildDependentGeometry()
     for (NamedSurface& surface : surfaces_) {
         if (surface.surface.Kind() == SurfaceKind::Planar) {
             surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);
-        } else {
+        } else if (surface.surface.Kind() == SurfaceKind::Ruled) {
             surface.surface = Surface::Ruled(
                 RequireWire(surface.sourceWireNames.at(0)).wire,
                 RequireWire(surface.sourceWireNames.at(1)).wire);
+        } else {
+            std::vector<Wire> sections;
+            sections.reserve(surface.sourceWireNames.size());
+            for (const std::string& sourceName : surface.sourceWireNames) {
+                sections.push_back(RequireWire(sourceName).wire);
+            }
+            surface.surface = Surface::Loft(std::move(sections));
         }
     }
     for (NamedWire& wire : wires_) {
@@ -328,6 +487,13 @@ void Project::RebuildDependentGeometry()
             throw std::logic_error("Projected wire target surface is missing.");
         }
         wire.wire = surface->ProjectWireAlongDirection(source.wire, wire.projection->direction);
+    }
+    for (NamedPlate& plate : plates_) {
+        const std::optional<Surface> sourceSurface = FindSurface(plate.sourceSurfaceName);
+        if (!sourceSurface.has_value()) {
+            throw std::logic_error("Plate source surface is missing.");
+        }
+        plate.plate = Plate(*sourceSurface, plate.plate.Thickness(), plate.plate.Direction());
     }
 }
 

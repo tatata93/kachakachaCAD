@@ -17,6 +17,7 @@ enum class CadSelectionKind {
     WorkPlane,
     Wire,
     Surface,
+    Plate,
 };
 
 struct CadSelection {

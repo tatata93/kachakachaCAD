@@ -18,6 +18,7 @@ namespace kachakacha::io {
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
+using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
 using kachakacha::model::WireArcData;
@@ -127,6 +128,33 @@ std::string WirePlanePolicyToken(WirePlanePolicy policy)
     }
 
     return "free";
+}
+
+PlateThicknessDirection ParsePlateDirection(const std::string& token, std::string_view sourceName, int lineNumber)
+{
+    if (token == "positive" || token == "outside") {
+        return PlateThicknessDirection::Positive;
+    }
+    if (token == "centered" || token == "center") {
+        return PlateThicknessDirection::Centered;
+    }
+    if (token == "negative" || token == "inside") {
+        return PlateThicknessDirection::Negative;
+    }
+    ThrowLineError(sourceName, lineNumber, "Unknown plate thickness direction: " + token);
+}
+
+const char* PlateDirectionToken(PlateThicknessDirection direction)
+{
+    switch (direction) {
+    case PlateThicknessDirection::Positive:
+        return "positive";
+    case PlateThicknessDirection::Centered:
+        return "centered";
+    case PlateThicknessDirection::Negative:
+        return "negative";
+    }
+    return "positive";
 }
 
 bool IsScriptNameSafe(std::string_view name)
@@ -363,6 +391,14 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string secondSection = ReadName(stream, sourceName, lineNumber, "second section wire");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddRuledSurface(name, firstSection, secondSection);
+            } else if (command == "surface_loft") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                std::vector<std::string> sections;
+                std::string sectionName;
+                while (stream >> sectionName) {
+                    sections.push_back(sectionName);
+                }
+                project.AddLoftSurface(name, std::move(sections));
             } else if (command == "wire_project") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "projected wire");
                 const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source drawing wire");
@@ -370,6 +406,35 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector3 direction = ReadVector3(stream, sourceName, lineNumber, "projection direction");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddProjectedWire(name, sourceWire, targetSurface, direction);
+            } else if (command == "plate") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string sourceSurface = ReadName(stream, sourceName, lineNumber, "source surface");
+                const double thickness = ReadDouble(stream, sourceName, lineNumber, "plate thickness");
+                const std::string directionToken = ReadName(stream, sourceName, lineNumber, "thickness direction");
+                const std::string material = ReadName(stream, sourceName, lineNumber, "material");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlate(name, sourceSurface, thickness,
+                    ParsePlateDirection(directionToken, sourceName, lineNumber), material);
+            } else if (command == "visibility") {
+                const std::string objectKind = ReadName(stream, sourceName, lineNumber, "object kind");
+                const std::string name = ReadName(stream, sourceName, lineNumber, "object");
+                const std::string state = ReadName(stream, sourceName, lineNumber, "visibility state");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                if (state != "shown" && state != "hidden") {
+                    throw std::invalid_argument("Visibility state must be shown or hidden.");
+                }
+                const bool visible = state == "shown";
+                if (objectKind == "workplane") {
+                    project.SetWorkPlaneVisible(name, visible);
+                } else if (objectKind == "wire") {
+                    project.SetWireVisible(name, visible);
+                } else if (objectKind == "surface") {
+                    project.SetSurfaceVisible(name, visible);
+                } else if (objectKind == "plate") {
+                    project.SetPlateVisible(name, visible);
+                } else {
+                    throw std::invalid_argument("Visibility object kind must be workplane, wire, surface, or plate.");
+                }
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
             }
@@ -489,9 +554,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
         if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
             output << "surface_planar " << namedSurface.name << ' ' << namedSurface.sourceWireNames.at(0) << '\n';
-        } else {
+        } else if (namedSurface.surface.Kind() == model::SurfaceKind::Ruled) {
             output << "surface_ruled " << namedSurface.name << ' '
                    << namedSurface.sourceWireNames.at(0) << ' ' << namedSurface.sourceWireNames.at(1) << '\n';
+        } else {
+            output << "surface_loft " << namedSurface.name;
+            for (const std::string& sectionName : namedSurface.sourceWireNames) {
+                output << ' ' << sectionName;
+            }
+            output << '\n';
         }
     }
 
@@ -513,6 +584,51 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                << namedWire.projection->targetSurfaceName << ' ';
         WriteVector3(output, namedWire.projection->direction);
         output << '\n';
+    }
+
+    if (!project.Plates().empty()) {
+        output << '\n';
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        RequireScriptNameSafe(namedPlate.name, "Plate");
+        RequireScriptNameSafe(namedPlate.sourceSurfaceName, "Plate source surface");
+        RequireScriptNameSafe(namedPlate.material, "Plate material");
+        output << "plate " << namedPlate.name << ' ' << namedPlate.sourceSurfaceName << ' '
+               << namedPlate.plate.Thickness() << ' ' << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
+               << namedPlate.material << '\n';
+    }
+
+    const bool hasHiddenObjects = std::any_of(project.WorkPlanes().begin(), project.WorkPlanes().end(), [](const auto& plane) {
+        return !plane.visible;
+    }) || std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
+        return !wire.visible;
+    }) || std::any_of(project.Surfaces().begin(), project.Surfaces().end(), [](const auto& surface) {
+        return !surface.visible;
+    }) || std::any_of(project.Plates().begin(), project.Plates().end(), [](const auto& plate) {
+        return !plate.visible;
+    });
+    if (hasHiddenObjects) {
+        output << '\n';
+    }
+    for (const auto& plane : project.WorkPlanes()) {
+        if (!plane.visible) {
+            output << "visibility workplane " << plane.name << " hidden\n";
+        }
+    }
+    for (const auto& wire : project.Wires()) {
+        if (!wire.visible) {
+            output << "visibility wire " << wire.name << " hidden\n";
+        }
+    }
+    for (const auto& surface : project.Surfaces()) {
+        if (!surface.visible) {
+            output << "visibility surface " << surface.name << " hidden\n";
+        }
+    }
+    for (const auto& plate : project.Plates()) {
+        if (!plate.visible) {
+            output << "visibility plate " << plate.name << " hidden\n";
+        }
     }
 }
 

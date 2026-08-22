@@ -4,12 +4,14 @@
 #include "kachakacha/model/WorkPlane.h"
 
 #include <optional>
+#include <vector>
 
 namespace kachakacha::model {
 
 enum class SurfaceKind {
     Planar,
     Ruled,
+    Loft,
 };
 
 struct SurfaceProjection {
@@ -23,10 +25,11 @@ class Surface {
 public:
     [[nodiscard]] static Surface Planar(Wire closedBoundary, double tolerance = 1.0e-7);
     [[nodiscard]] static Surface Ruled(Wire firstSection, Wire secondSection);
+    [[nodiscard]] static Surface Loft(std::vector<Wire> sections);
 
     [[nodiscard]] SurfaceKind Kind() const noexcept { return kind_; }
-    [[nodiscard]] const Wire& FirstBoundary() const noexcept { return firstBoundary_; }
-    [[nodiscard]] const std::optional<Wire>& SecondBoundary() const noexcept { return secondBoundary_; }
+    [[nodiscard]] const Wire& FirstBoundary() const noexcept { return boundaries_.front(); }
+    [[nodiscard]] const std::vector<Wire>& Boundaries() const noexcept { return boundaries_; }
     [[nodiscard]] const std::optional<WorkPlane>& PlanarWorkPlane() const noexcept { return planarWorkPlane_; }
     [[nodiscard]] geometry::Vector3 Evaluate(double u, double v) const;
     [[nodiscard]] geometry::Vector3 Normal(double u, double v) const;
@@ -43,8 +46,7 @@ public:
 private:
     Surface(
         SurfaceKind kind,
-        Wire firstBoundary,
-        std::optional<Wire> secondBoundary,
+        std::vector<Wire> boundaries,
         std::optional<WorkPlane> planarWorkPlane,
         double minimumU,
         double minimumV,
@@ -54,8 +56,7 @@ private:
     [[nodiscard]] bool ContainsPlanarPoint(double u, double v, double tolerance) const;
 
     SurfaceKind kind_;
-    Wire firstBoundary_;
-    std::optional<Wire> secondBoundary_;
+    std::vector<Wire> boundaries_;
     std::optional<WorkPlane> planarWorkPlane_;
     double minimumU_ = 0.0;
     double minimumV_ = 0.0;

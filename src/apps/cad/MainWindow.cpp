@@ -61,6 +61,7 @@ using kachakacha::io::WritePlanarDxf;
 using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::Project;
+using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::SurfaceKind;
 using kachakacha::model::Wire;
@@ -333,6 +334,48 @@ void MainWindow::BuildUi()
             selections.push_back(currentSelection);
         }
         UpdateSelections(std::move(selections), false);
+    });
+    connect(modelTree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int) {
+        if (item == nullptr || item->parent() == nullptr) {
+            return;
+        }
+        const CadSelectionKind kind = static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt());
+        const int index = item->data(0, kSelectionIndexRole).toInt();
+        const bool visible = item->checkState(0) == Qt::Checked;
+        bool currentVisibility = visible;
+        if (kind == CadSelectionKind::WorkPlane && index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+            currentVisibility = project_.WorkPlanes()[index].visible;
+        } else if (kind == CadSelectionKind::Wire && index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+            currentVisibility = project_.Wires()[index].visible;
+        } else if (kind == CadSelectionKind::Surface && index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+            currentVisibility = project_.Surfaces()[index].visible;
+        } else if (kind == CadSelectionKind::Plate && index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+            currentVisibility = project_.Plates()[index].visible;
+        } else {
+            return;
+        }
+        if (currentVisibility == visible) {
+            return;
+        }
+
+        RecordUndo();
+        if (kind == CadSelectionKind::WorkPlane) {
+            project_.SetWorkPlaneVisible(project_.WorkPlanes()[index].name, visible);
+        } else if (kind == CadSelectionKind::Wire) {
+            project_.SetWireVisible(project_.Wires()[index].name, visible);
+        } else if (kind == CadSelectionKind::Surface) {
+            project_.SetSurfaceVisible(project_.Surfaces()[index].name, visible);
+        } else {
+            project_.SetPlateVisible(project_.Plates()[index].name, visible);
+        }
+        MarkModified();
+        RefreshPlaneChoices();
+        viewport_->SetProject(&project_, false);
+        RefreshActiveWorkPlane();
+        RefreshReference();
+        UpdateSelection({}, true);
+        RefreshExportSummary();
+        statusBar()->showMessage(visible ? QStringLiteral("再表示しました") : QStringLiteral("非表示にしました"), 2000);
     });
 
     auto* toolsDock = new QDockWidget(QStringLiteral("作図と編集"), this);
@@ -969,7 +1012,11 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* createForm = new QFormLayout;
     createForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     surfaceType_ = new QComboBox;
-    surfaceType_->addItems({QStringLiteral("閉じた1本から平面"), QStringLiteral("2断面から曲面")});
+    surfaceType_->addItems({
+        QStringLiteral("閉じた1本から平面"),
+        QStringLiteral("2断面から曲面"),
+        QStringLiteral("3断面以上からロフト"),
+    });
     surfaceName_ = new QLineEdit(QStringLiteral("surface_1"));
     createForm->addRow(QStringLiteral("作り方"), surfaceType_);
     createForm->addRow(QStringLiteral("面の名前"), surfaceName_);
@@ -1004,6 +1051,41 @@ QWidget* MainWindow::BuildSurfacePanel()
     projectButton->setObjectName("primaryButton");
     connect(projectButton, &QPushButton::clicked, this, &MainWindow::ProjectSelectedWiresToSurface);
     layout->addWidget(projectButton);
+
+    auto* plateTitle = new QLabel(QStringLiteral("面を板材にする"));
+    plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(plateTitle);
+
+    auto* plateForm = new QFormLayout;
+    plateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    plateName_ = new QLineEdit(QStringLiteral("plate_1"));
+    plateSurface_ = new QComboBox;
+    plateThickness_ = MakePositiveField(0.5);
+    plateThickness_->setSuffix(QStringLiteral(" mm"));
+    plateDirection_ = new QComboBox;
+    plateDirection_->addItem(QStringLiteral("面から外側へ"), static_cast<int>(PlateThicknessDirection::Positive));
+    plateDirection_->addItem(QStringLiteral("面を中央に"), static_cast<int>(PlateThicknessDirection::Centered));
+    plateDirection_->addItem(QStringLiteral("面から内側へ"), static_cast<int>(PlateThicknessDirection::Negative));
+    plateMaterial_ = new QComboBox;
+    plateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("styrene"));
+    plateMaterial_->addItem(QStringLiteral("紙・厚紙"), QStringLiteral("paper"));
+    plateMaterial_->addItem(QStringLiteral("真鍮板"), QStringLiteral("brass"));
+    plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
+    plateForm->addRow(QStringLiteral("板の名前"), plateName_);
+    plateForm->addRow(QStringLiteral("元の面"), plateSurface_);
+    plateForm->addRow(QStringLiteral("板厚"), plateThickness_);
+    plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
+    plateForm->addRow(QStringLiteral("材質"), plateMaterial_);
+    layout->addLayout(plateForm);
+
+    auto* plateButton = new QPushButton(QStringLiteral("この面を板材にする"));
+    plateButton->setObjectName("primaryButton");
+    connect(plateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSurface);
+    layout->addWidget(plateButton);
+
+    auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
+    connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
+    layout->addWidget(plateUpdateButton);
     layout->addStretch(1);
     return panel;
 }
@@ -1071,6 +1153,8 @@ void MainWindow::BuildMenusAndToolbar()
     QAction* exitAction = new QAction(QStringLiteral("終了"), this);
     undoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowBack), QStringLiteral("元に戻す"), this);
     redoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), QStringLiteral("やり直す"), this);
+    hideSelectedAction_ = new QAction(QStringLiteral("隠す"), this);
+    showAllObjectsAction_ = new QAction(QStringLiteral("全て表示"), this);
 
     newAction->setShortcut(QKeySequence::New);
     openAction->setShortcut(QKeySequence::Open);
@@ -1079,6 +1163,10 @@ void MainWindow::BuildMenusAndToolbar()
     deleteAction->setShortcut(QKeySequence::Delete);
     undoAction_->setShortcut(QKeySequence::Undo);
     redoAction_->setShortcut(QKeySequence::Redo);
+    hideSelectedAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+H")));
+    showAllObjectsAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+H")));
+    hideSelectedAction_->setToolTip(QStringLiteral("選択した作業平面・ワイヤー・面・板材を隠す"));
+    showAllObjectsAction_->setToolTip(QStringLiteral("隠した作業平面・ワイヤー・面・板材をすべて表示"));
 
     connect(newAction, &QAction::triggered, this, &MainWindow::NewProject);
     connect(openAction, &QAction::triggered, this, &MainWindow::OpenProject);
@@ -1089,6 +1177,8 @@ void MainWindow::BuildMenusAndToolbar()
     connect(exitAction, &QAction::triggered, this, &QWidget::close);
     connect(undoAction_, &QAction::triggered, this, &MainWindow::Undo);
     connect(redoAction_, &QAction::triggered, this, &MainWindow::Redo);
+    connect(hideSelectedAction_, &QAction::triggered, this, &MainWindow::HideSelected);
+    connect(showAllObjectsAction_, &QAction::triggered, this, &MainWindow::ShowAllObjects);
 
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル"));
     fileMenu->addAction(newAction);
@@ -1116,6 +1206,9 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(deleteAction);
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
+    viewMenu->addSeparator();
+    viewMenu->addAction(hideSelectedAction_);
+    viewMenu->addAction(showAllObjectsAction_);
 
     QMenu* drawMenu = menuBar()->addMenu(QStringLiteral("作図"));
     drawMenu->addAction(selectToolAction_);
@@ -1140,6 +1233,8 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(redoAction_);
     toolbar->addSeparator();
     toolbar->addAction(fitAction);
+    toolbar->addAction(hideSelectedAction_);
+    toolbar->addAction(showAllObjectsAction_);
     toolbar->addAction(deleteAction);
 
     QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
@@ -1637,7 +1732,14 @@ void MainWindow::RefreshActiveWorkPlane()
     if (activePlaneCombo_ == nullptr) {
         return;
     }
-    const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+    std::optional<WorkPlane> plane;
+    const std::string selectedName = ToName(activePlaneCombo_->currentText());
+    for (const auto& namedPlane : project_.WorkPlanes()) {
+        if (namedPlane.name == selectedName && namedPlane.visible) {
+            plane = namedPlane.plane;
+            break;
+        }
+    }
     viewport_->SetActiveWorkPlane(plane);
     const bool canDraw = plane.has_value();
     lineToolAction_->setEnabled(canDraw);
@@ -2067,22 +2169,35 @@ void MainWindow::CreateSurfaceFromSelection()
             }
         }
 
-        const bool planar = surfaceType_->currentIndex() == 0;
-        if ((planar && wireIndices.size() != 1) || (!planar && wireIndices.size() != 2)) {
-            throw std::invalid_argument(planar
-                    ? "閉じたワイヤーを1本だけ選択してください。"
-                    : "断面ワイヤーを2本選択してください。");
+        const int surfaceMode = surfaceType_->currentIndex();
+        if ((surfaceMode == 0 && wireIndices.size() != 1)
+            || (surfaceMode == 1 && wireIndices.size() != 2)
+            || (surfaceMode == 2 && wireIndices.size() < 3)) {
+            if (surfaceMode == 0) {
+                throw std::invalid_argument("閉じたワイヤーを1本だけ選択してください。");
+            }
+            if (surfaceMode == 1) {
+                throw std::invalid_argument("断面ワイヤーを2本選択してください。");
+            }
+            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを3本以上選択してください。");
         }
 
         Project candidate = project_;
         const std::string name = ToName(surfaceName_->text());
-        if (planar) {
+        if (surfaceMode == 0) {
             candidate.AddPlanarSurface(name, candidate.Wires()[wireIndices[0]].name);
-        } else {
+        } else if (surfaceMode == 1) {
             candidate.AddRuledSurface(
                 name,
                 candidate.Wires()[wireIndices[0]].name,
                 candidate.Wires()[wireIndices[1]].name);
+        } else {
+            std::vector<std::string> sectionNames;
+            sectionNames.reserve(wireIndices.size());
+            for (int index : wireIndices) {
+                sectionNames.push_back(candidate.Wires()[index].name);
+            }
+            candidate.AddLoftSurface(name, std::move(sectionNames));
         }
 
         RecordUndo();
@@ -2093,10 +2208,12 @@ void MainWindow::CreateSurfaceFromSelection()
         UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
         toolsTabs_->setCurrentIndex(5);
         surfaceName_->setText(SuggestedSurfaceName());
-        statusBar()->showMessage(planar
-                ? QStringLiteral("閉じたワイヤーから平面を作成しました")
-                : QStringLiteral("2断面から曲面を作成しました"),
-            3500);
+        const QString message = surfaceMode == 0
+            ? QStringLiteral("閉じたワイヤーから平面を作成しました")
+            : surfaceMode == 1
+            ? QStringLiteral("2断面から曲面を作成しました")
+            : QStringLiteral("%1断面からロフト面を作成しました").arg(wireIndices.size());
+        statusBar()->showMessage(message, 3500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
@@ -2161,6 +2278,71 @@ void MainWindow::ProjectSelectedWiresToSurface()
         UpdateSelections(std::move(resultingSelections), true);
         toolsTabs_->setCurrentIndex(5);
         statusBar()->showMessage(QStringLiteral("%1本の平面図ワイヤーを面へ投影しました").arg(createdNames.size()), 4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreatePlateFromSurface()
+{
+    try {
+        ValidateObjectName(plateName_->text());
+        const std::string sourceSurfaceName = ToName(plateSurface_->currentText());
+        if (!project_.FindSurface(sourceSurfaceName).has_value()) {
+            throw std::invalid_argument("板材にする面を3D画面または一覧で選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string name = ToName(plateName_->text());
+        const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
+        candidate.AddPlate(
+            name,
+            sourceSurfaceName,
+            plateThickness_->value(),
+            direction,
+            ToName(plateMaterial_->currentData().toString()));
+        candidate.SetSurfaceVisible(sourceSurfaceName, false);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const int plateIndex = static_cast<int>(project_.Plates().size() - 1);
+        UpdateSelection({CadSelectionKind::Plate, plateIndex}, true);
+        toolsTabs_->setCurrentIndex(5);
+        plateName_->setText(SuggestedPlateName());
+        statusBar()->showMessage(QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value()), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::UpdateSelectedPlate()
+{
+    try {
+        const CadSelection selection = viewport_->Selection();
+        if (selection.kind != CadSelectionKind::Plate || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Plates().size())) {
+            throw std::invalid_argument("変更する板材を3D画面またはモデル一覧で選択してください。");
+        }
+        const std::string sourceSurfaceName = ToName(plateSurface_->currentText());
+        const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
+
+        Project candidate = project_;
+        candidate.UpdatePlate(
+            candidate.Plates()[selection.index].name,
+            sourceSurfaceName,
+            plateThickness_->value(),
+            direction,
+            ToName(plateMaterial_->currentData().toString()));
+        candidate.SetSurfaceVisible(sourceSurfaceName, false);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(selection, true);
+        statusBar()->showMessage(QStringLiteral("板材の板厚・方向・材質を更新しました"), 3500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
@@ -2331,8 +2513,8 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     int drawingPlaneIndex = activePlaneCombo_->findText(QStringLiteral("top_XY"));
-    if (drawingPlaneIndex < 0 && activePlaneCombo_->count() > 0) {
-        drawingPlaneIndex = 0;
+    if (drawingPlaneIndex < 0 && activePlaneCombo_->count() > 1) {
+        drawingPlaneIndex = 1;
     }
     if (drawingPlaneIndex < 0) {
         return fail("find drawing workplane");
@@ -2645,12 +2827,17 @@ bool MainWindow::RunCreationSelfTest()
 
     const std::size_t surfaceWireStart = project_.Wires().size();
     const std::size_t surfaceStart = project_.Surfaces().size();
+    const std::size_t plateStart = project_.Plates().size();
     project_.AddWorkPlane("__ui_section_a_plane", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
+    project_.AddWorkPlane("__ui_section_mid_plane", WorkPlane::FromPointNormal({6.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     project_.AddWorkPlane("__ui_section_b_plane", WorkPlane::FromPointNormal({12.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     project_.AddWorkPlane("__ui_light_plan", WorkPlane::FromPointNormal({0.0, 0.0, 12.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
     project_.AddWire("__ui_section_a", Wire::CubicBezier(
         {0.0, -6.0, 0.0}, {0.0, -2.0, 3.0}, {0.0, 2.0, 3.0}, {0.0, 6.0, 0.0}),
         WireMetadata{"__ui_section_a_plane", WirePlanePolicy::ReferenceOnly});
+    project_.AddWire("__ui_section_mid", Wire::CubicBezier(
+        {6.0, -6.0, 0.0}, {6.0, -2.0, 6.0}, {6.0, 2.0, 6.0}, {6.0, 6.0, 0.0}),
+        WireMetadata{"__ui_section_mid_plane", WirePlanePolicy::ReferenceOnly});
     project_.AddWire("__ui_section_b", Wire::CubicBezier(
         {12.0, -6.0, 0.0}, {12.0, -2.0, 5.0}, {12.0, 2.0, 5.0}, {12.0, 6.0, 0.0}),
         WireMetadata{"__ui_section_b_plane", WirePlanePolicy::ReferenceOnly});
@@ -2659,49 +2846,109 @@ bool MainWindow::RunCreationSelfTest()
         WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly});
     RefreshModelViews(false);
 
-    surfaceType_->setCurrentIndex(1);
+    surfaceType_->setCurrentIndex(2);
     surfaceName_->setText("__ui_nose_skin");
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
     }, true);
     CreateSurfaceFromSelection();
     if (project_.Surfaces().size() != surfaceStart + 1
-        || project_.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Ruled
+        || project_.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Loft
         || viewport_->Selection().kind != CadSelectionKind::Surface) {
-        return fail("create ruled surface from selected sections");
+        return fail("create loft surface from selected sections");
     }
     Undo();
     if (project_.Surfaces().size() != surfaceStart) {
-        return fail("undo ruled surface");
+        return fail("undo loft surface");
     }
     Redo();
     if (project_.Surfaces().size() != surfaceStart + 1) {
-        return fail("redo ruled surface");
+        return fail("redo loft surface");
     }
 
     projectionSurface_->setCurrentText("__ui_nose_skin");
     projectionPlane_->setCurrentText("__ui_light_plan");
     UpdateSelections({
-        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 3)},
         {CadSelectionKind::Surface, static_cast<int>(surfaceStart)},
     }, true);
     ProjectSelectedWiresToSurface();
-    const std::size_t projectedLightIndex = surfaceWireStart + 3;
-    if (project_.Wires().size() != surfaceWireStart + 4
+    const std::size_t projectedLightIndex = surfaceWireStart + 4;
+    if (project_.Wires().size() != surfaceWireStart + 5
         || !project_.Wires()[projectedLightIndex].projection.has_value()
         || project_.Wires()[projectedLightIndex].projection->sourceWireName != "__ui_light_plan_circle"
         || !project_.Wires()[projectedLightIndex].wire.IsClosed()) {
         return fail("project planar light drawing to selected surface");
     }
     Undo();
-    if (project_.Wires().size() != surfaceWireStart + 3) {
+    if (project_.Wires().size() != surfaceWireStart + 4) {
         return fail("undo surface projection");
     }
     Redo();
-    if (project_.Wires().size() != surfaceWireStart + 4
+    if (project_.Wires().size() != surfaceWireStart + 5
         || !project_.Wires()[projectedLightIndex].projection.has_value()) {
         return fail("redo surface projection");
+    }
+
+    plateSurface_->setCurrentText("__ui_nose_skin");
+    plateName_->setText("__ui_nose_plate");
+    plateThickness_->setValue(0.5);
+    plateDirection_->setCurrentIndex(1);
+    plateMaterial_->setCurrentIndex(0);
+    CreatePlateFromSurface();
+    if (project_.Plates().size() != plateStart + 1
+        || project_.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
+        || std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.5) > 1.0e-12
+        || project_.Surfaces()[surfaceStart].visible
+        || viewport_->Selection().kind != CadSelectionKind::Plate) {
+        return fail("create plate from loft surface");
+    }
+    Undo();
+    if (project_.Plates().size() != plateStart || !project_.Surfaces()[surfaceStart].visible) {
+        return fail("undo plate creation");
+    }
+    Redo();
+    if (project_.Plates().size() != plateStart + 1 || project_.Surfaces()[surfaceStart].visible) {
+        return fail("redo plate creation");
+    }
+
+    UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
+    plateThickness_->setValue(0.7);
+    plateDirection_->setCurrentIndex(0);
+    plateMaterial_->setCurrentIndex(1);
+    UpdateSelectedPlate();
+    if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12
+        || project_.Plates()[plateStart].plate.Direction() != PlateThicknessDirection::Positive
+        || project_.Plates()[plateStart].material != "paper") {
+        return fail("update selected plate properties");
+    }
+    Undo();
+    if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.5) > 1.0e-12) {
+        return fail("undo plate property update");
+    }
+    Redo();
+    if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12) {
+        return fail("redo plate property update");
+    }
+
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)}, true);
+    HideSelected();
+    if (project_.Wires()[projectedLightIndex].visible) {
+        return fail("hide selected projected wire");
+    }
+    Undo();
+    if (!project_.Wires()[projectedLightIndex].visible) {
+        return fail("undo hide selected");
+    }
+    Redo();
+    if (project_.Wires()[projectedLightIndex].visible) {
+        return fail("redo hide selected");
+    }
+    ShowAllObjects();
+    if (!project_.Wires()[projectedLightIndex].visible || !project_.Surfaces()[surfaceStart].visible) {
+        return fail("show all objects");
     }
 
     std::ostringstream directDrawingScript;
@@ -2714,6 +2961,9 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
         || reloadedProject.Wires()[splitStart].wire.Kind() != WireKind::Polyline
         || reloadedProject.Surfaces().size() != project_.Surfaces().size()
+        || reloadedProject.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Loft
+        || reloadedProject.Plates().size() != project_.Plates().size()
+        || reloadedProject.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
         || !reloadedProject.Wires()[projectedLightIndex].projection.has_value()
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
@@ -2723,7 +2973,7 @@ bool MainWindow::RunCreationSelfTest()
     viewport_->SetIsometricView();
     viewport_->FitAll();
     UpdateSelections({
-        {CadSelectionKind::Surface, static_cast<int>(surfaceStart)},
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
         {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
     }, true);
     toolsTabs_->setCurrentIndex(5);
@@ -3140,7 +3390,11 @@ void MainWindow::DeleteSelection()
     } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
         && selection.index < static_cast<int>(project_.Surfaces().size())) {
         name = ToQString(project_.Surfaces()[selection.index].name);
-        detail = QStringLiteral("面を削除します。先に面上の投影ワイヤーを削除してください。");
+        detail = QStringLiteral("面を削除します。先に面上の投影ワイヤーと板材を削除してください。");
+    } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Plates().size())) {
+        name = ToQString(project_.Plates()[selection.index].name);
+        detail = QStringLiteral("板材を削除します。元の面は残ります。");
     } else {
         return;
     }
@@ -3154,8 +3408,10 @@ void MainWindow::DeleteSelection()
             candidate.RemoveWorkPlane(ToName(name));
         } else if (selection.kind == CadSelectionKind::Wire) {
             candidate.RemoveWire(ToName(name));
-        } else {
+        } else if (selection.kind == CadSelectionKind::Surface) {
             candidate.RemoveSurface(ToName(name));
+        } else {
+            candidate.RemovePlate(ToName(name));
         }
         RecordUndo();
         project_ = std::move(candidate);
@@ -3167,6 +3423,85 @@ void MainWindow::DeleteSelection()
     }
 }
 
+void MainWindow::HideSelected()
+{
+    const std::vector<CadSelection> selections = viewport_->Selections();
+    bool hasVisibleSelection = false;
+    for (const CadSelection& selection : selections) {
+        if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
+            && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.WorkPlanes()[selection.index].visible;
+        } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.Wires()[selection.index].visible;
+        } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Surfaces().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.Surfaces()[selection.index].visible;
+        } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.Plates()[selection.index].visible;
+        }
+    }
+    if (!hasVisibleSelection) {
+        statusBar()->showMessage(QStringLiteral("隠す対象を3D画面またはモデル一覧で選択してください"), 3000);
+        return;
+    }
+
+    RecordUndo();
+    for (const CadSelection& selection : selections) {
+        if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
+            && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+            project_.SetWorkPlaneVisible(project_.WorkPlanes()[selection.index].name, false);
+        } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            project_.SetWireVisible(project_.Wires()[selection.index].name, false);
+        } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Surfaces().size())) {
+            project_.SetSurfaceVisible(project_.Surfaces()[selection.index].name, false);
+        } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            project_.SetPlateVisible(project_.Plates()[selection.index].name, false);
+        }
+    }
+    MarkModified();
+    RefreshModelViews(false);
+    statusBar()->showMessage(QStringLiteral("選択した%1個を隠しました").arg(selections.size()), 2500);
+}
+
+void MainWindow::ShowAllObjects()
+{
+    const bool hasHiddenObjects = std::any_of(project_.WorkPlanes().begin(), project_.WorkPlanes().end(), [](const auto& plane) {
+        return !plane.visible;
+    }) || std::any_of(project_.Wires().begin(), project_.Wires().end(), [](const auto& wire) {
+        return !wire.visible;
+    }) || std::any_of(project_.Surfaces().begin(), project_.Surfaces().end(), [](const auto& surface) {
+        return !surface.visible;
+    }) || std::any_of(project_.Plates().begin(), project_.Plates().end(), [](const auto& plate) {
+        return !plate.visible;
+    });
+    if (!hasHiddenObjects) {
+        statusBar()->showMessage(QStringLiteral("すべて表示されています"), 2000);
+        return;
+    }
+
+    RecordUndo();
+    for (const auto& plane : project_.WorkPlanes()) {
+        project_.SetWorkPlaneVisible(plane.name, true);
+    }
+    for (const auto& wire : project_.Wires()) {
+        project_.SetWireVisible(wire.name, true);
+    }
+    for (const auto& surface : project_.Surfaces()) {
+        project_.SetSurfaceVisible(surface.name, true);
+    }
+    for (const auto& plate : project_.Plates()) {
+        project_.SetPlateVisible(plate.name, true);
+    }
+    MarkModified();
+    RefreshModelViews(false);
+    statusBar()->showMessage(QStringLiteral("すべて再表示しました"), 2500);
+}
+
 void MainWindow::RefreshModelViews(bool fitView)
 {
     modelTree_->blockSignals(true);
@@ -3176,22 +3511,37 @@ void MainWindow::RefreshModelViews(bool fitView)
         auto* item = new QTreeWidgetItem(planeRoot, {ToQString(project_.WorkPlanes()[index].name)});
         item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::WorkPlane));
         item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.WorkPlanes()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
     auto* wireRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("ワイヤー (%1)").arg(project_.Wires().size())});
     for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
         auto* item = new QTreeWidgetItem(wireRoot, {ToQString(project_.Wires()[index].name)});
         item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Wire));
         item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.Wires()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
     auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
     for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
         auto* item = new QTreeWidgetItem(surfaceRoot, {ToQString(project_.Surfaces()[index].name)});
         item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Surface));
         item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.Surfaces()[index].visible ? Qt::Checked : Qt::Unchecked);
+    }
+    auto* plateRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("板材 (%1)").arg(project_.Plates().size())});
+    for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
+        auto* item = new QTreeWidgetItem(plateRoot, {ToQString(project_.Plates()[index].name)});
+        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Plate));
+        item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.Plates()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
     planeRoot->setExpanded(true);
     wireRoot->setExpanded(true);
     surfaceRoot->setExpanded(true);
+    plateRoot->setExpanded(true);
     modelTree_->blockSignals(false);
 
     RefreshPlaneChoices();
@@ -3223,9 +3573,26 @@ void MainWindow::RefreshPlaneChoices()
     refresh(offsetSourcePlane_);
     refresh(rotateSourcePlane_);
     refresh(wirePlane_);
-    refresh(activePlaneCombo_);
     refresh(exportPlane_);
     refresh(projectionPlane_);
+
+    if (activePlaneCombo_ != nullptr) {
+        const QSignalBlocker blocker(activePlaneCombo_);
+        const QString previous = activePlaneCombo_->currentText();
+        activePlaneCombo_->clear();
+        activePlaneCombo_->addItem(QStringLiteral("作図面なし"));
+        for (const auto& plane : project_.WorkPlanes()) {
+            if (plane.visible) {
+                activePlaneCombo_->addItem(ToQString(plane.name));
+            }
+        }
+        const int previousIndex = activePlaneCombo_->findText(previous);
+        if (previousIndex >= 0) {
+            activePlaneCombo_->setCurrentIndex(previousIndex);
+        } else if (activePlaneCombo_->count() > 1) {
+            activePlaneCombo_->setCurrentIndex(1);
+        }
+    }
 
     const QString previousEditSource = editWireSourcePlane_->currentText();
     editWireSourcePlane_->clear();
@@ -3262,19 +3629,23 @@ void MainWindow::RefreshWireChoices()
 
 void MainWindow::RefreshSurfaceChoices()
 {
-    if (projectionSurface_ == nullptr) {
-        return;
-    }
-    const QSignalBlocker blocker(projectionSurface_);
-    const QString previous = projectionSurface_->currentText();
-    projectionSurface_->clear();
-    for (const auto& surface : project_.Surfaces()) {
-        projectionSurface_->addItem(ToQString(surface.name));
-    }
-    const int previousIndex = projectionSurface_->findText(previous);
-    if (previousIndex >= 0) {
-        projectionSurface_->setCurrentIndex(previousIndex);
-    }
+    const auto refresh = [this](QComboBox* combo) {
+        if (combo == nullptr) {
+            return;
+        }
+        const QSignalBlocker blocker(combo);
+        const QString previous = combo->currentText();
+        combo->clear();
+        for (const auto& surface : project_.Surfaces()) {
+            combo->addItem(ToQString(surface.name));
+        }
+        const int previousIndex = combo->findText(previous);
+        if (previousIndex >= 0) {
+            combo->setCurrentIndex(previousIndex);
+        }
+    };
+    refresh(projectionSurface_);
+    refresh(plateSurface_);
 }
 
 void MainWindow::RefreshExportSummary()
@@ -3362,6 +3733,12 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     projectionSurface_->setCurrentIndex(surfaceIndex);
                 }
             }
+            if (plateSurface_ != nullptr) {
+                const int surfaceIndex = plateSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
+                if (surfaceIndex >= 0) {
+                    plateSurface_->setCurrentIndex(surfaceIndex);
+                }
+            }
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
@@ -3416,7 +3793,11 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
         && selection.index < static_cast<int>(project_.Surfaces().size())) {
         const auto& named = project_.Surfaces()[selection.index];
-        const QString kind = named.surface.Kind() == SurfaceKind::Planar ? QStringLiteral("平面") : QStringLiteral("2断面の曲面");
+        const QString kind = named.surface.Kind() == SurfaceKind::Planar
+            ? QStringLiteral("平面")
+            : named.surface.Kind() == SurfaceKind::Ruled
+            ? QStringLiteral("2断面の曲面")
+            : QStringLiteral("複数断面のロフト面");
         QString sources;
         for (const std::string& sourceName : named.sourceWireNames) {
             if (!sources.isEmpty()) {
@@ -3426,6 +3807,35 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
         infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元ワイヤー: %3")
                 .arg(ToQString(named.name), kind, sources));
+    } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Plates().size())) {
+        const auto& named = project_.Plates()[selection.index];
+        if (plateSurface_ != nullptr) {
+            plateSurface_->setCurrentText(ToQString(named.sourceSurfaceName));
+        }
+        if (plateThickness_ != nullptr) {
+            plateThickness_->setValue(named.plate.Thickness());
+        }
+        if (plateDirection_ != nullptr) {
+            plateDirection_->setCurrentIndex(plateDirection_->findData(static_cast<int>(named.plate.Direction())));
+        }
+        if (plateMaterial_ != nullptr) {
+            const int materialIndex = plateMaterial_->findData(ToQString(named.material));
+            plateMaterial_->setCurrentIndex(materialIndex >= 0 ? materialIndex : plateMaterial_->count() - 1);
+        }
+        const QString direction = named.plate.Direction() == PlateThicknessDirection::Positive
+            ? QStringLiteral("面から外側へ")
+            : named.plate.Direction() == PlateThicknessDirection::Centered
+            ? QStringLiteral("面を中央に")
+            : QStringLiteral("面から内側へ");
+        const QString material = named.material == "styrene" ? QStringLiteral("プラ板")
+            : named.material == "paper" ? QStringLiteral("紙・厚紙")
+            : named.material == "brass" ? QStringLiteral("真鍮板")
+            : QStringLiteral("その他");
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 板材<br>元の面: %2<br>板厚: %3 mm<br>厚み方向: %4<br>材質: %5")
+                .arg(ToQString(named.name), ToQString(named.sourceSurfaceName))
+                .arg(named.plate.Thickness())
+                .arg(direction, material));
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
@@ -3450,6 +3860,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 label->setText(QStringLiteral("投影ワイヤーは元の平面図を編集します"));
             } else if (selection.kind == CadSelectionKind::Surface) {
                 label->setText(QStringLiteral("面は元の境界・断面ワイヤーを編集します"));
+            } else if (selection.kind == CadSelectionKind::Plate) {
+                label->setText(QStringLiteral("板材は元の面と板材欄から作り直します"));
             } else {
                 label->setText(QStringLiteral("選択なし"));
             }
@@ -3709,6 +4121,15 @@ QString MainWindow::SuggestedSurfaceName() const
         ++number;
     }
     return QStringLiteral("surface_%1").arg(number);
+}
+
+QString MainWindow::SuggestedPlateName() const
+{
+    int number = static_cast<int>(project_.Plates().size()) + 1;
+    while (project_.FindPlate(ToName(QStringLiteral("plate_%1").arg(number))).has_value()) {
+        ++number;
+    }
+    return QStringLiteral("plate_%1").arg(number);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

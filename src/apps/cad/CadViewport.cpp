@@ -358,11 +358,17 @@ void CadViewport::FitAll()
     };
 
     for (const auto& wire : project_->Wires()) {
+        if (!wire.visible) {
+            continue;
+        }
         for (int sample = 0; sample <= 32; ++sample) {
             include(wire.wire.Evaluate(static_cast<double>(sample) / 32.0));
         }
     }
     for (const auto& surface : project_->Surfaces()) {
+        if (!surface.visible) {
+            continue;
+        }
         for (int uIndex = 0; uIndex <= 24; ++uIndex) {
             for (int vIndex = 0; vIndex <= 8; ++vIndex) {
                 include(surface.surface.Evaluate(
@@ -371,8 +377,23 @@ void CadViewport::FitAll()
             }
         }
     }
+    for (const auto& plate : project_->Plates()) {
+        if (!plate.visible) {
+            continue;
+        }
+        for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+            for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                const double u = static_cast<double>(uIndex) / 24.0;
+                const double v = static_cast<double>(vIndex) / 8.0;
+                include(plate.plate.Evaluate(u, v, 0.0));
+                include(plate.plate.Evaluate(u, v, 1.0));
+            }
+        }
+    }
     for (const auto& plane : project_->WorkPlanes()) {
-        include(plane.plane.Origin());
+        if (plane.visible) {
+            include(plane.plane.Origin());
+        }
     }
 
     if (!hasPoint) {
@@ -409,7 +430,8 @@ std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
 
 std::optional<double> CadViewport::NearestWireParameter(int wireIndex, QPointF position, double maximumDistance) const
 {
-    if (project_ == nullptr || wireIndex < 0 || wireIndex >= static_cast<int>(project_->Wires().size())) {
+    if (project_ == nullptr || wireIndex < 0 || wireIndex >= static_cast<int>(project_->Wires().size())
+        || !project_->Wires()[wireIndex].visible) {
         return std::nullopt;
     }
     const Wire& wire = project_->Wires()[wireIndex].wire;
@@ -447,6 +469,9 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
         double bestDistance = 10.0;
         std::optional<Vector3> bestEndpoint;
         for (const auto& namedWire : project_->Wires()) {
+            if (!namedWire.visible) {
+                continue;
+            }
             std::vector<Vector3> snapPoints;
             if (namedWire.wire.Kind() == WireKind::Polyline) {
                 snapPoints = namedWire.wire.ControlPoints();
@@ -588,7 +613,7 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawLine(ProjectPoint(activePlane_->ToWorld(coordinate, -extent)), ProjectPoint(activePlane_->ToWorld(coordinate, extent)));
             painter.drawLine(ProjectPoint(activePlane_->ToWorld(-extent, coordinate)), ProjectPoint(activePlane_->ToWorld(extent, coordinate)));
         }
-    } else {
+    } else if (project_ == nullptr || project_->WorkPlanes().empty()) {
         for (int coordinate = -50; coordinate <= 50; coordinate += 5) {
             painter.drawLine(ProjectPoint({static_cast<double>(coordinate), -50.0, 0.0}), ProjectPoint({static_cast<double>(coordinate), 50.0, 0.0}));
             painter.drawLine(ProjectPoint({-50.0, static_cast<double>(coordinate), 0.0}), ProjectPoint({50.0, static_cast<double>(coordinate), 0.0}));
@@ -598,6 +623,9 @@ void CadViewport::paintEvent(QPaintEvent*)
     if (project_ != nullptr) {
         for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {
             const auto& namedPlane = project_->WorkPlanes()[index];
+            if (!namedPlane.visible) {
+                continue;
+            }
             const auto& plane = namedPlane.plane;
             QPolygonF polygon;
             polygon << ProjectPoint(plane.ToWorld(-kPlaneHalfSize, -kPlaneHalfSize))
@@ -620,7 +648,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
 
         for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
-            const auto& surface = project_->Surfaces()[index].surface;
+            const auto& namedSurface = project_->Surfaces()[index];
+            if (!namedSurface.visible) {
+                continue;
+            }
+            const auto& surface = namedSurface.surface;
             const bool selected = IsSelected(CadSelectionKind::Surface, index);
             const QColor fill = selected ? QColor(230, 159, 0, 90) : QColor(31, 132, 138, 66);
             const QColor edge = selected ? QColor("#c47a13") : QColor("#277b80");
@@ -657,8 +689,106 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
         }
 
+        for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
+            const auto& namedPlate = project_->Plates()[index];
+            if (!namedPlate.visible) {
+                continue;
+            }
+            const auto& plate = namedPlate.plate;
+            const auto& source = plate.SourceSurface();
+            const bool selected = IsSelected(CadSelectionKind::Plate, index);
+            QColor fill = namedPlate.material == "brass" ? QColor(188, 156, 72, 150)
+                : namedPlate.material == "paper" ? QColor(208, 193, 142, 150)
+                : QColor(178, 194, 203, 158);
+            if (selected) {
+                fill = QColor(230, 159, 0, 168);
+            }
+            const QColor edge = selected ? QColor("#b66700") : QColor("#586970");
+            painter.setPen(QPen(edge, selected ? 2.2 : 1.0));
+
+            if (source.Kind() == kachakacha::model::SurfaceKind::Planar) {
+                const Vector3 normal = source.Normal(0.5, 0.5);
+                const auto drawLayer = [&](double offset, int alpha) {
+                    QPainterPath path(ProjectPoint(source.FirstBoundary().Evaluate(0.0) + normal * offset));
+                    for (int sample = 1; sample <= 128; ++sample) {
+                        path.lineTo(ProjectPoint(source.FirstBoundary().Evaluate(static_cast<double>(sample) / 128.0) + normal * offset));
+                    }
+                    path.closeSubpath();
+                    QColor layerFill = fill;
+                    layerFill.setAlpha(alpha);
+                    painter.setBrush(layerFill);
+                    painter.drawPath(path);
+                };
+                drawLayer(plate.MinimumOffset(), std::max(40, fill.alpha() - 42));
+                drawLayer(plate.MaximumOffset(), fill.alpha());
+                painter.setBrush(fill.darker(108));
+                for (int sample = 0; sample < 64; ++sample) {
+                    const double t0 = static_cast<double>(sample) / 64.0;
+                    const double t1 = static_cast<double>(sample + 1) / 64.0;
+                    QPolygonF side;
+                    side << ProjectPoint(source.FirstBoundary().Evaluate(t0) + normal * plate.MinimumOffset())
+                         << ProjectPoint(source.FirstBoundary().Evaluate(t1) + normal * plate.MinimumOffset())
+                         << ProjectPoint(source.FirstBoundary().Evaluate(t1) + normal * plate.MaximumOffset())
+                         << ProjectPoint(source.FirstBoundary().Evaluate(t0) + normal * plate.MaximumOffset());
+                    painter.drawPolygon(side);
+                }
+            } else {
+                for (int layer = 0; layer < 2; ++layer) {
+                    QColor layerFill = fill;
+                    if (layer == 0) {
+                        layerFill.setAlpha(std::max(36, fill.alpha() - 50));
+                    }
+                    painter.setBrush(layerFill);
+                    for (int uIndex = 0; uIndex < 32; ++uIndex) {
+                        for (int vIndex = 0; vIndex < 10; ++vIndex) {
+                            const double u0 = static_cast<double>(uIndex) / 32.0;
+                            const double u1 = static_cast<double>(uIndex + 1) / 32.0;
+                            const double v0 = static_cast<double>(vIndex) / 10.0;
+                            const double v1 = static_cast<double>(vIndex + 1) / 10.0;
+                            QPolygonF patch;
+                            patch << ProjectPoint(plate.Evaluate(u0, v0, static_cast<double>(layer)))
+                                  << ProjectPoint(plate.Evaluate(u1, v0, static_cast<double>(layer)))
+                                  << ProjectPoint(plate.Evaluate(u1, v1, static_cast<double>(layer)))
+                                  << ProjectPoint(plate.Evaluate(u0, v1, static_cast<double>(layer)));
+                            painter.drawPolygon(patch);
+                        }
+                    }
+                }
+                painter.setBrush(fill.darker(108));
+                for (int uIndex = 0; uIndex < 32; ++uIndex) {
+                    const double u0 = static_cast<double>(uIndex) / 32.0;
+                    const double u1 = static_cast<double>(uIndex + 1) / 32.0;
+                    for (double v : {0.0, 1.0}) {
+                        QPolygonF side;
+                        side << ProjectPoint(plate.Evaluate(u0, v, 0.0))
+                             << ProjectPoint(plate.Evaluate(u1, v, 0.0))
+                             << ProjectPoint(plate.Evaluate(u1, v, 1.0))
+                             << ProjectPoint(plate.Evaluate(u0, v, 1.0));
+                        painter.drawPolygon(side);
+                    }
+                }
+                if (!source.FirstBoundary().IsClosed()) {
+                    for (int vIndex = 0; vIndex < 16; ++vIndex) {
+                        const double v0 = static_cast<double>(vIndex) / 16.0;
+                        const double v1 = static_cast<double>(vIndex + 1) / 16.0;
+                        for (double u : {0.0, 1.0}) {
+                            QPolygonF side;
+                            side << ProjectPoint(plate.Evaluate(u, v0, 0.0))
+                                 << ProjectPoint(plate.Evaluate(u, v1, 0.0))
+                                 << ProjectPoint(plate.Evaluate(u, v1, 1.0))
+                                 << ProjectPoint(plate.Evaluate(u, v0, 1.0));
+                            painter.drawPolygon(side);
+                        }
+                    }
+                }
+            }
+        }
+
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
+            if (!namedWire.visible) {
+                continue;
+            }
             const bool selected = IsSelected(CadSelectionKind::Wire, index);
             const bool reference = reference_.kind == CadSelectionKind::Wire && reference_.index == index;
             painter.setPen(QPen(
@@ -944,7 +1074,11 @@ CadSelection CadViewport::HitTest(QPointF position) const
     double bestDistance = 9.0;
     CadSelection best;
     for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
-        const auto& wire = project_->Wires()[index].wire;
+        const auto& namedWire = project_->Wires()[index];
+        if (!namedWire.visible) {
+            continue;
+        }
+        const auto& wire = namedWire.wire;
         QPointF previous = ProjectPoint(wire.Evaluate(0.0));
         const int samples = wire.Kind() == WireKind::Line ? 1 : 48;
         for (int sample = 1; sample <= samples; ++sample) {
@@ -961,8 +1095,49 @@ CadSelection CadViewport::HitTest(QPointF position) const
         return best;
     }
 
+    for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
+        const auto& namedPlate = project_->Plates()[index];
+        if (!namedPlate.visible) {
+            continue;
+        }
+        const auto& plate = namedPlate.plate;
+        const auto& surface = plate.SourceSurface();
+        if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
+            const Vector3 normal = surface.Normal(0.5, 0.5);
+            QPolygonF polygon;
+            for (int sample = 0; sample < 128; ++sample) {
+                polygon << ProjectPoint(surface.FirstBoundary().Evaluate(static_cast<double>(sample) / 128.0)
+                    + normal * plate.MaximumOffset());
+            }
+            if (polygon.containsPoint(position, Qt::OddEvenFill)) {
+                return {CadSelectionKind::Plate, index};
+            }
+            continue;
+        }
+        for (int uIndex = 0; uIndex < 24; ++uIndex) {
+            for (int vIndex = 0; vIndex < 8; ++vIndex) {
+                const double u0 = static_cast<double>(uIndex) / 24.0;
+                const double u1 = static_cast<double>(uIndex + 1) / 24.0;
+                const double v0 = static_cast<double>(vIndex) / 8.0;
+                const double v1 = static_cast<double>(vIndex + 1) / 8.0;
+                QPolygonF patch;
+                patch << ProjectPoint(plate.Evaluate(u0, v0, 1.0))
+                      << ProjectPoint(plate.Evaluate(u1, v0, 1.0))
+                      << ProjectPoint(plate.Evaluate(u1, v1, 1.0))
+                      << ProjectPoint(plate.Evaluate(u0, v1, 1.0));
+                if (patch.containsPoint(position, Qt::OddEvenFill)) {
+                    return {CadSelectionKind::Plate, index};
+                }
+            }
+        }
+    }
+
     for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
-        const auto& surface = project_->Surfaces()[index].surface;
+        const auto& namedSurface = project_->Surfaces()[index];
+        if (!namedSurface.visible) {
+            continue;
+        }
+        const auto& surface = namedSurface.surface;
         if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
             QPolygonF polygon;
             for (int sample = 0; sample < 128; ++sample) {
@@ -992,7 +1167,11 @@ CadSelection CadViewport::HitTest(QPointF position) const
     }
 
     for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {
-        const auto& plane = project_->WorkPlanes()[index].plane;
+        const auto& namedPlane = project_->WorkPlanes()[index];
+        if (!namedPlane.visible) {
+            continue;
+        }
+        const auto& plane = namedPlane.plane;
         const std::array<QPointF, 4> corners = {
             ProjectPoint(plane.ToWorld(-kPlaneHalfSize, -kPlaneHalfSize)),
             ProjectPoint(plane.ToWorld(kPlaneHalfSize, -kPlaneHalfSize)),

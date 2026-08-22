@@ -87,20 +87,50 @@ int ProjectionSampleCount(const Wire& wire, int requested)
     return std::clamp(std::max(requested, minimum), 8, 2048);
 }
 
+std::vector<Wire> PrepareSections(std::vector<Wire> sections, std::size_t requiredCount)
+{
+    if (sections.size() < requiredCount) {
+        throw std::invalid_argument(requiredCount == 2
+                ? "Ruled surface requires two sections."
+                : "Loft surface requires at least three sections.");
+    }
+    const bool closed = sections.front().IsClosed();
+    for (std::size_t index = 1; index < sections.size(); ++index) {
+        if (sections[index].IsClosed() != closed) {
+            throw std::invalid_argument("Surface sections must all be open or all be closed.");
+        }
+        const double sameDirection = (sections[index - 1].Start() - sections[index].Start()).LengthSquared()
+            + (sections[index - 1].End() - sections[index].End()).LengthSquared();
+        const double reversedDirection = (sections[index - 1].Start() - sections[index].End()).LengthSquared()
+            + (sections[index - 1].End() - sections[index].Start()).LengthSquared();
+        if (reversedDirection + 1.0e-12 < sameDirection) {
+            sections[index] = sections[index].Reversed();
+        }
+
+        double separation = 0.0;
+        for (int sample = 0; sample <= 32; ++sample) {
+            const double u = static_cast<double>(sample) / 32.0;
+            separation = std::max(separation, (sections[index - 1].Evaluate(u) - sections[index].Evaluate(u)).Length());
+        }
+        if (separation <= 1.0e-8) {
+            throw std::invalid_argument("Adjacent surface sections must be separated.");
+        }
+    }
+    return sections;
+}
+
 } // namespace
 
 Surface::Surface(
     SurfaceKind kind,
-    Wire firstBoundary,
-    std::optional<Wire> secondBoundary,
+    std::vector<Wire> boundaries,
     std::optional<WorkPlane> planarWorkPlane,
     double minimumU,
     double minimumV,
     double maximumU,
     double maximumV)
     : kind_(kind),
-      firstBoundary_(std::move(firstBoundary)),
-      secondBoundary_(std::move(secondBoundary)),
+      boundaries_(std::move(boundaries)),
       planarWorkPlane_(std::move(planarWorkPlane)),
       minimumU_(minimumU),
       minimumV_(minimumV),
@@ -148,31 +178,22 @@ Surface Surface::Planar(Wire closedBoundary, double tolerance)
     if (maximumU - minimumU <= tolerance || maximumV - minimumV <= tolerance) {
         throw std::invalid_argument("Planar surface boundary must enclose an area.");
     }
-    return {SurfaceKind::Planar, std::move(closedBoundary), std::nullopt, plane, minimumU, minimumV, maximumU, maximumV};
+    std::vector<Wire> boundaries;
+    boundaries.push_back(std::move(closedBoundary));
+    return {SurfaceKind::Planar, std::move(boundaries), plane, minimumU, minimumV, maximumU, maximumV};
 }
 
 Surface Surface::Ruled(Wire firstSection, Wire secondSection)
 {
-    if (firstSection.IsClosed() != secondSection.IsClosed()) {
-        throw std::invalid_argument("Ruled surface sections must both be open or both be closed.");
-    }
-    const double sameDirection = (firstSection.Start() - secondSection.Start()).LengthSquared()
-        + (firstSection.End() - secondSection.End()).LengthSquared();
-    const double reversedDirection = (firstSection.Start() - secondSection.End()).LengthSquared()
-        + (firstSection.End() - secondSection.Start()).LengthSquared();
-    if (reversedDirection + 1.0e-12 < sameDirection) {
-        secondSection = secondSection.Reversed();
-    }
+    std::vector<Wire> sections;
+    sections.push_back(std::move(firstSection));
+    sections.push_back(std::move(secondSection));
+    return {SurfaceKind::Ruled, PrepareSections(std::move(sections), 2), std::nullopt, 0.0, 0.0, 1.0, 1.0};
+}
 
-    double separation = 0.0;
-    for (int sample = 0; sample <= 32; ++sample) {
-        const double u = static_cast<double>(sample) / 32.0;
-        separation = std::max(separation, (firstSection.Evaluate(u) - secondSection.Evaluate(u)).Length());
-    }
-    if (separation <= 1.0e-8) {
-        throw std::invalid_argument("Ruled surface sections must be separated.");
-    }
-    return {SurfaceKind::Ruled, std::move(firstSection), std::move(secondSection), std::nullopt, 0.0, 0.0, 1.0, 1.0};
+Surface Surface::Loft(std::vector<Wire> sections)
+{
+    return {SurfaceKind::Loft, PrepareSections(std::move(sections), 3), std::nullopt, 0.0, 0.0, 1.0, 1.0};
 }
 
 Vector3 Surface::Evaluate(double u, double v) const
@@ -187,9 +208,14 @@ Vector3 Surface::Evaluate(double u, double v) const
             minimumU_ + (maximumU_ - minimumU_) * clampedU,
             minimumV_ + (maximumV_ - minimumV_) * clampedV);
     }
-    const Vector3 first = firstBoundary_.Evaluate(clampedU);
-    const Vector3 second = secondBoundary_->Evaluate(clampedU);
-    return first * (1.0 - clampedV) + second * clampedV;
+    const double scaledV = clampedV * static_cast<double>(boundaries_.size() - 1);
+    const std::size_t segment = static_cast<std::size_t>(std::min(
+        scaledV,
+        static_cast<double>(boundaries_.size() - 2)));
+    const double localV = scaledV - static_cast<double>(segment);
+    const Vector3 first = boundaries_[segment].Evaluate(clampedU);
+    const Vector3 second = boundaries_[segment + 1].Evaluate(clampedU);
+    return first * (1.0 - localV) + second * localV;
 }
 
 Vector3 Surface::Normal(double u, double v) const
@@ -206,9 +232,9 @@ bool Surface::ContainsPlanarPoint(double u, double v, double tolerance) const
 {
     const auto point = planarWorkPlane_->ToWorld(u, v);
     bool inside = false;
-    auto previous = planarWorkPlane_->Project(firstBoundary_.Evaluate(1.0));
+    auto previous = planarWorkPlane_->Project(boundaries_.front().Evaluate(1.0));
     for (int sample = 0; sample <= 256; ++sample) {
-        const auto current = planarWorkPlane_->Project(firstBoundary_.Evaluate(static_cast<double>(sample) / 256.0));
+        const auto current = planarWorkPlane_->Project(boundaries_.front().Evaluate(static_cast<double>(sample) / 256.0));
         const Vector3 segmentStart = planarWorkPlane_->ToWorld(previous.u, previous.v);
         const Vector3 segmentEnd = planarWorkPlane_->ToWorld(current.u, current.v);
         const Vector3 segment = segmentEnd - segmentStart;

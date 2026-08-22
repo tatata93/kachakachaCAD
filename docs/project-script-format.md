@@ -92,6 +92,14 @@ wire_meta NAME PLANE|none|- free|reference|locked
 
 `line3d`、`polyline3d`、`bezier3d`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
 
+### 直線の寸法拘束
+
+```text
+wire_constraint NAME LENGTH|- ANGLE_DEGREES|-
+```
+
+直線の始点を固定端として、長さと作業平面内の角度を保持する。`-` はその項目を拘束しない。角度は作成元平面のU方向を0度、V方向を90度とするため、角度を指定する場合は先に `wire_meta` で作成元平面を設定する。長さだけなら自由な3D直線にも使用できる。
+
 ### 作業平面上の直線
 
 ```text

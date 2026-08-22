@@ -1,5 +1,7 @@
 #include "kachakacha/model/Project.h"
 
+#include "kachakacha/model/WireOperations.h"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -56,6 +58,19 @@ Wire ReframeWire(const Wire& wire, const WorkPlane& oldPlane, const WorkPlane& n
     throw std::logic_error("Unknown wire kind.");
 }
 
+std::optional<WorkPlane> ConstraintPlane(const Project& project, const WireMetadata& metadata)
+{
+    if (!metadata.sourcePlaneName.has_value()) {
+        return std::nullopt;
+    }
+    return project.FindWorkPlane(*metadata.sourcePlaneName);
+}
+
+Wire ConstrainWire(const Project& project, const Wire& wire, const WireMetadata& metadata)
+{
+    return ApplyWireLineConstraints(wire, ConstraintPlane(project, metadata), metadata.lineConstraints);
+}
+
 bool OpeningLiesWithinRange(
     const Surface& surface,
     const NamedWire& opening,
@@ -109,6 +124,7 @@ void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
         throw std::invalid_argument("Wire source plane does not exist: " + *metadata.sourcePlaneName);
     }
 
+    wire = ConstrainWire(*this, wire, metadata);
     wires_.push_back({std::move(name), std::move(wire), std::move(metadata), std::nullopt});
 }
 
@@ -248,7 +264,8 @@ void Project::UpdateWorkPlane(std::string_view name, WorkPlane plane)
         const WorkPlane oldPlane = namedPlane.plane;
         namedPlane.plane = plane;
         for (NamedWire& wire : candidate.wires_) {
-            if (wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane
+            if ((wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                    || wire.metadata.lineConstraints.angleDegrees.has_value())
                 && wire.metadata.sourcePlaneName.has_value()
                 && *wire.metadata.sourcePlaneName == name) {
                 wire.wire = ReframeWire(wire.wire, oldPlane, plane);
@@ -269,11 +286,35 @@ void Project::UpdateWire(std::string_view name, Wire wire)
             if (namedWire.projection.has_value()) {
                 throw std::invalid_argument("Projected wire must be edited through its source drawing.");
             }
-            namedWire.wire = std::move(wire);
+            namedWire.wire = ConstrainWire(candidate, wire, namedWire.metadata);
             candidate.RebuildDependentGeometry();
             *this = std::move(candidate);
             return;
         }
+    }
+    throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+}
+
+void Project::UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetadata metadata)
+{
+    Project candidate = *this;
+    if (metadata.sourcePlaneName.has_value()
+        && !candidate.FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
+        throw std::invalid_argument("Wire source plane does not exist: " + *metadata.sourcePlaneName);
+    }
+
+    for (NamedWire& namedWire : candidate.wires_) {
+        if (namedWire.name != name) {
+            continue;
+        }
+        if (namedWire.projection.has_value()) {
+            throw std::invalid_argument("Projected wire must be edited through its source drawing.");
+        }
+        namedWire.wire = ConstrainWire(candidate, wire, metadata);
+        namedWire.metadata = std::move(metadata);
+        candidate.RebuildDependentGeometry();
+        *this = std::move(candidate);
+        return;
     }
     throw std::invalid_argument("Wire name does not exist: " + std::string(name));
 }
@@ -315,13 +356,17 @@ void Project::UpdatePlate(
 
 void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
 {
-    if (metadata.sourcePlaneName.has_value() && !FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
+    Project candidate = *this;
+    if (metadata.sourcePlaneName.has_value() && !candidate.FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
         throw std::invalid_argument("Wire source plane does not exist: " + *metadata.sourcePlaneName);
     }
 
-    for (NamedWire& wire : wires_) {
+    for (NamedWire& wire : candidate.wires_) {
         if (wire.name == name) {
+            wire.wire = ConstrainWire(candidate, wire.wire, metadata);
             wire.metadata = std::move(metadata);
+            candidate.RebuildDependentGeometry();
+            *this = std::move(candidate);
             return;
         }
     }
@@ -532,6 +577,14 @@ bool Project::RemoveWorkPlane(std::string_view name)
     });
     if (position == workPlanes_.end()) {
         return false;
+    }
+
+    for (const NamedWire& wire : wires_) {
+        if (wire.metadata.sourcePlaneName.has_value()
+            && *wire.metadata.sourcePlaneName == name
+            && wire.metadata.lineConstraints.angleDegrees.has_value()) {
+            throw std::invalid_argument("Work plane is used by an angle-constrained wire: " + wire.name);
+        }
     }
 
     workPlanes_.erase(position);

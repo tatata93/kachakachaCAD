@@ -11,6 +11,7 @@
 #include <QActionGroup>
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDockWidget>
@@ -249,6 +250,39 @@ bool WireLiesOnPlane(const Wire& wire, const WorkPlane& plane, double tolerance 
         }
     }
     return true;
+}
+
+WireMetadata RetargetLineConstraints(
+    const Project& project,
+    WireMetadata metadata,
+    const Wire& wire,
+    bool updateLength)
+{
+    if (metadata.lineConstraints.Empty()) {
+        return metadata;
+    }
+    if (wire.Kind() != WireKind::Line) {
+        metadata.lineConstraints = {};
+        return metadata;
+    }
+    if (updateLength && metadata.lineConstraints.lengthMillimeters.has_value()) {
+        metadata.lineConstraints.lengthMillimeters = (wire.End() - wire.Start()).Length();
+    }
+    if (!metadata.lineConstraints.angleDegrees.has_value()) {
+        return metadata;
+    }
+    if (!metadata.sourcePlaneName.has_value()) {
+        throw std::invalid_argument("角度拘束の基準作業平面がありません。");
+    }
+    const auto plane = project.FindWorkPlane(*metadata.sourcePlaneName);
+    if (!plane.has_value() || !WireLiesOnPlane(wire, *plane)) {
+        throw std::invalid_argument("角度拘束された直線は基準作業平面の外へ移動できません。");
+    }
+    const auto start = plane->Project(wire.Start());
+    const auto end = plane->Project(wire.End());
+    metadata.lineConstraints.angleDegrees =
+        std::atan2(end.v - start.v, end.u - start.u) * 180.0 / kPi;
+    return metadata;
 }
 
 } // namespace
@@ -972,6 +1006,53 @@ QWidget* MainWindow::BuildEditPanel()
     metadataForm->addRow(QStringLiteral("作成元平面"), editWireSourcePlane_);
     metadataForm->addRow(QStringLiteral("平面との関係"), editWirePolicy_);
     wireLayout->addLayout(metadataForm);
+
+    editWireConstraintPanel_ = new QGroupBox(QStringLiteral("直線の寸法を保持"));
+    auto* constraintLayout = new QFormLayout(editWireConstraintPanel_);
+    constraintLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    constraintLayout->setContentsMargins(8, 8, 8, 8);
+
+    auto* lengthRow = new QWidget;
+    auto* lengthLayout = new QHBoxLayout(lengthRow);
+    lengthLayout->setContentsMargins(0, 0, 0, 0);
+    lengthLayout->setSpacing(6);
+    editWireLockLength_ = new QCheckBox(QStringLiteral("固定"));
+    editWireConstraintLength_ = MakePositiveField(10.0);
+    editWireConstraintLength_->setSuffix(QStringLiteral(" mm"));
+    lengthLayout->addWidget(editWireLockLength_);
+    lengthLayout->addWidget(editWireConstraintLength_, 1);
+    constraintLayout->addRow(QStringLiteral("長さ"), lengthRow);
+
+    auto* angleRow = new QWidget;
+    auto* angleLayout = new QHBoxLayout(angleRow);
+    angleLayout->setContentsMargins(0, 0, 0, 0);
+    angleLayout->setSpacing(5);
+    editWireLockAngle_ = new QCheckBox(QStringLiteral("固定"));
+    editWireConstraintAngle_ = MakeNumberField(0.0);
+    editWireConstraintAngle_->setRange(-360.0, 360.0);
+    editWireConstraintAngle_->setSuffix(QStringLiteral(" °"));
+    editWireConstraintAngle_->setToolTip(QStringLiteral("作業平面のU方向が0°、V方向が90°"));
+    auto* horizontalButton = new QPushButton(QStringLiteral("水平 0°"));
+    auto* verticalButton = new QPushButton(QStringLiteral("垂直 90°"));
+    angleLayout->addWidget(editWireLockAngle_);
+    angleLayout->addWidget(editWireConstraintAngle_, 1);
+    angleLayout->addWidget(horizontalButton);
+    angleLayout->addWidget(verticalButton);
+    constraintLayout->addRow(QStringLiteral("平面内角度"), angleRow);
+    wireLayout->addWidget(editWireConstraintPanel_);
+
+    connect(editWireLockLength_, &QCheckBox::toggled, editWireConstraintLength_, &QWidget::setEnabled);
+    connect(editWireLockAngle_, &QCheckBox::toggled, editWireConstraintAngle_, &QWidget::setEnabled);
+    connect(horizontalButton, &QPushButton::clicked, this, [this] {
+        editWireLockAngle_->setChecked(true);
+        editWireConstraintAngle_->setValue(0.0);
+    });
+    connect(verticalButton, &QPushButton::clicked, this, [this] {
+        editWireLockAngle_->setChecked(true);
+        editWireConstraintAngle_->setValue(90.0);
+    });
+    editWireConstraintLength_->setEnabled(false);
+    editWireConstraintAngle_->setEnabled(false);
 
     editWireGeometry_ = new QStackedWidget;
     editWirePointTable_ = new QTableWidget;
@@ -2351,7 +2432,8 @@ void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
         for (int index : indices) {
             const auto source = project_.Wires()[index];
             const Wire result = source.wire.Translated(delta);
-            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                || source.metadata.lineConstraints.angleDegrees.has_value()) {
                 if (!source.metadata.sourcePlaneName.has_value()) {
                     throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
                 }
@@ -2411,7 +2493,8 @@ void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, V
         for (int index : indices) {
             const auto source = project_.Wires()[index];
             const Wire result = source.wire.Mirrored(linePoint, lineDirection, planeNormal);
-            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                || source.metadata.lineConstraints.angleDegrees.has_value()) {
                 if (!source.metadata.sourcePlaneName.has_value()) {
                     throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
                 }
@@ -2428,7 +2511,10 @@ void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, V
         std::vector<CadSelection> resultingSelections;
         for (std::size_t index = 0; index < sources.size(); ++index) {
             const QString name = SuggestedDirectGroupName(ToQString(sources[index].name) + QStringLiteral("_mirror"));
-            project_.AddWire(ToName(name), mirrored[index], sources[index].metadata);
+            project_.AddWire(
+                ToName(name),
+                mirrored[index],
+                RetargetLineConstraints(project_, sources[index].metadata, mirrored[index], false));
             resultingSelections.push_back({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size() - 1)});
         }
         MarkModified();
@@ -2466,7 +2552,8 @@ void MainWindow::ApplyViewportRotation(Vector3 axisPoint, Vector3 axisDirection,
         for (int index : indices) {
             const auto source = project_.Wires()[index];
             const Wire result = source.wire.RotatedAroundAxis(axisPoint, axisDirection, angleRadians);
-            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                || source.metadata.lineConstraints.angleDegrees.has_value()) {
                 if (!source.metadata.sourcePlaneName.has_value()) {
                     throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
                 }
@@ -2482,7 +2569,10 @@ void MainWindow::ApplyViewportRotation(Vector3 axisPoint, Vector3 axisDirection,
         RecordUndo();
         std::vector<CadSelection> resultingSelections;
         for (std::size_t index = 0; index < sources.size(); ++index) {
-            project_.UpdateWire(sources[index].name, rotated[index]);
+            project_.UpdateWireAndMetadata(
+                sources[index].name,
+                rotated[index],
+                RetargetLineConstraints(project_, sources[index].metadata, rotated[index], false));
             resultingSelections.push_back({CadSelectionKind::Wire, indices[index]});
         }
         MarkModified();
@@ -2519,9 +2609,15 @@ void MainWindow::ApplySplitWire(int wireIndex, double parameter)
             referenceWireName_.reset();
         }
         project_.RemoveWire(source.name);
-        project_.AddWire(firstName, parts.first, source.metadata);
+        project_.AddWire(
+            firstName,
+            parts.first,
+            RetargetLineConstraints(project_, source.metadata, parts.first, true));
         const int firstIndex = static_cast<int>(project_.Wires().size() - 1);
-        project_.AddWire(secondName, parts.second, source.metadata);
+        project_.AddWire(
+            secondName,
+            parts.second,
+            RetargetLineConstraints(project_, source.metadata, parts.second, true));
         const int secondIndex = static_cast<int>(project_.Wires().size() - 1);
 
         MarkModified();
@@ -2583,7 +2679,9 @@ void MainWindow::JoinSelectedWires()
         for (const auto& source : sources) {
             project_.RemoveWire(source.name);
         }
-        project_.AddWire(ToName(name), joined, sources.front().metadata);
+        WireMetadata joinedMetadata = sources.front().metadata;
+        joinedMetadata.lineConstraints = {};
+        project_.AddWire(ToName(name), joined, std::move(joinedMetadata));
         const int joinedIndex = static_cast<int>(project_.Wires().size() - 1);
 
         MarkModified();
@@ -2682,6 +2780,7 @@ void MainWindow::ApplyWireOffset()
             if (metadata.planePolicy == WirePlanePolicy::Free3D) {
                 metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
             }
+            metadata = RetargetLineConstraints(project_, std::move(metadata), offset, false);
             const QString name = SuggestedDirectGroupName(
                 ToQString(source.name) + QStringLiteral("_offset"));
             project_.AddWire(ToName(name), std::move(offset), std::move(metadata));
@@ -3063,8 +3162,14 @@ void MainWindow::ApplyMeetSelectedLines()
             second.wire, RetainedLineEnd::Automatic);
 
         RecordUndo();
-        project_.UpdateWire(first.name, result.first);
-        project_.UpdateWire(second.name, result.second);
+        project_.UpdateWireAndMetadata(
+            first.name,
+            result.first,
+            RetargetLineConstraints(project_, first.metadata, result.first, true));
+        project_.UpdateWireAndMetadata(
+            second.name,
+            result.second,
+            RetargetLineConstraints(project_, second.metadata, result.second, true));
         MarkModified();
         RefreshModelViews(false);
         UpdateSelections({
@@ -3148,6 +3253,29 @@ bool MainWindow::RunCreationSelfTest()
     sketchLineEnd_[0]->setValue(5.0);
     sketchLineEnd_[1]->setValue(6.0);
     AddWire();
+
+    const std::size_t constrainedLineIndex = initialWireCount + 1;
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(constrainedLineIndex)}, false);
+    editWireLockLength_->setChecked(true);
+    editWireConstraintLength_->setValue(8.0);
+    editWireLockAngle_->setChecked(true);
+    editWireConstraintAngle_->setValue(0.0);
+    ApplySelectedEdit();
+    if (project_.Wires()[constrainedLineIndex].metadata.lineConstraints.lengthMillimeters != 8.0
+        || project_.Wires()[constrainedLineIndex].metadata.lineConstraints.angleDegrees != 0.0
+        || std::abs((project_.Wires()[constrainedLineIndex].wire.End()
+                - project_.Wires()[constrainedLineIndex].wire.Start()).Length() - 8.0) > 1.0e-8) {
+        return fail("apply line dimensions");
+    }
+    Undo();
+    if (!project_.Wires()[constrainedLineIndex].metadata.lineConstraints.Empty()) {
+        return fail("undo line dimensions");
+    }
+    Redo();
+    if (project_.Wires()[constrainedLineIndex].metadata.lineConstraints.lengthMillimeters != 8.0
+        || project_.Wires()[constrainedLineIndex].metadata.lineConstraints.angleDegrees != 0.0) {
+        return fail("redo line dimensions");
+    }
 
     wireName_->setText("__ui_test_lineB");
     wireKind_->setCurrentIndex(0);
@@ -3839,6 +3967,8 @@ bool MainWindow::RunCreationSelfTest()
     const Project reloadedProject = LoadProjectScript(directDrawingInput, "direct-editing-self-test");
     if (reloadedProject.Wires().size() != project_.Wires().size()
         || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
+        || reloadedProject.Wires()[constrainedLineIndex].metadata.lineConstraints.lengthMillimeters != 8.0
+        || reloadedProject.Wires()[constrainedLineIndex].metadata.lineConstraints.angleDegrees != 0.0
         || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
         || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
         || reloadedProject.Wires()[splitStart].wire.Kind() != WireKind::Polyline
@@ -3887,6 +4017,11 @@ bool MainWindow::RunCreationSelfTest()
     UpdateWireOffsetPreview();
     if (viewport_->WireOffsetPreviewCount() != 2) {
         return fail("final offset preview state");
+    }
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(constrainedLineIndex)}, true);
+    if (auto* editScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(3))) {
+        editScrollArea->widget()->adjustSize();
+        editScrollArea->ensureWidgetVisible(editWireConstraintPanel_, 0, 12);
     }
     QApplication::processEvents();
     return true;
@@ -4094,18 +4229,31 @@ void MainWindow::ApplySelectedEdit()
                 break;
             }
 
-            WireMetadata metadata;
+            WireMetadata metadata = namedWire.metadata;
             if (editWireSourcePlane_->currentIndex() > 0) {
                 metadata.sourcePlaneName = ToName(editWireSourcePlane_->currentText());
                 if (!project_.FindWorkPlane(*metadata.sourcePlaneName).has_value()) {
                     throw std::invalid_argument("作成元平面を選択してください。");
                 }
+            } else {
+                metadata.sourcePlaneName.reset();
             }
             metadata.planePolicy = static_cast<WirePlanePolicy>(editWirePolicy_->currentIndex());
+            metadata.lineConstraints = {};
+            if (namedWire.wire.Kind() == WireKind::Line) {
+                if (editWireLockLength_->isChecked()) {
+                    metadata.lineConstraints.lengthMillimeters = editWireConstraintLength_->value();
+                }
+                if (editWireLockAngle_->isChecked()) {
+                    if (!metadata.sourcePlaneName.has_value()) {
+                        throw std::invalid_argument("角度を固定する作業平面を選択してください。");
+                    }
+                    metadata.lineConstraints.angleDegrees = editWireConstraintAngle_->value();
+                }
+            }
 
             RecordUndo();
-            project_.UpdateWire(wireName, *replacement);
-            project_.SetWireMetadata(wireName, metadata);
+            project_.UpdateWireAndMetadata(wireName, *replacement, std::move(metadata));
         } else {
             statusBar()->showMessage(QStringLiteral("編集する項目を選択してください"), 2500);
             return;
@@ -4161,10 +4309,17 @@ void MainWindow::ApplyLineChamfer()
             && first.metadata.planePolicy == second.metadata.planePolicy) {
             chamferMetadata = first.metadata;
         }
+        chamferMetadata.lineConstraints = {};
 
         RecordUndo();
-        project_.UpdateWire(first.name, result.trimmedFirst);
-        project_.UpdateWire(second.name, result.trimmedSecond);
+        project_.UpdateWireAndMetadata(
+            first.name,
+            result.trimmedFirst,
+            RetargetLineConstraints(project_, first.metadata, result.trimmedFirst, true));
+        project_.UpdateWireAndMetadata(
+            second.name,
+            result.trimmedSecond,
+            RetargetLineConstraints(project_, second.metadata, result.trimmedSecond, true));
         project_.AddWire(chamferName, result.chamfer, chamferMetadata);
         MarkModified();
         RefreshModelViews(false);
@@ -4216,10 +4371,17 @@ void MainWindow::ApplyLineFillet()
             && first.metadata.planePolicy == second.metadata.planePolicy) {
             filletMetadata = first.metadata;
         }
+        filletMetadata.lineConstraints = {};
 
         RecordUndo();
-        project_.UpdateWire(first.name, result.trimmedFirst);
-        project_.UpdateWire(second.name, result.trimmedSecond);
+        project_.UpdateWireAndMetadata(
+            first.name,
+            result.trimmedFirst,
+            RetargetLineConstraints(project_, first.metadata, result.trimmedFirst, true));
+        project_.UpdateWireAndMetadata(
+            second.name,
+            result.trimmedSecond,
+            RetargetLineConstraints(project_, second.metadata, result.trimmedSecond, true));
         project_.AddWire(filletName, result.fillet, filletMetadata);
         MarkModified();
         RefreshModelViews(false);
@@ -4768,8 +4930,19 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                         VectorText(named.wire.Start()),
                         VectorText(named.wire.End())));
         } else {
-            infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>平面との関係: %3<br>作成元平面: %4<br><br>始点<br>%5<br><br>終点<br>%6")
-                    .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End())));
+            QString details = QStringLiteral("<b>%1</b><br><br>種類: %2<br>平面との関係: %3<br>作成元平面: %4<br><br>始点<br>%5<br><br>終点<br>%6")
+                .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End()));
+            if (named.wire.Kind() == WireKind::Line) {
+                const double length = (named.wire.End() - named.wire.Start()).Length();
+                details += QStringLiteral("<br><br>長さ: %1 mm%2")
+                    .arg(Number(length), named.metadata.lineConstraints.lengthMillimeters.has_value()
+                            ? QStringLiteral(" （固定中）") : QString());
+                if (named.metadata.lineConstraints.angleDegrees.has_value()) {
+                    details += QStringLiteral("<br>平面内角度: %1° （固定中）")
+                        .arg(Number(*named.metadata.lineConstraints.angleDegrees));
+                }
+            }
+            infoLabel_->setText(details);
         }
     } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
         && selection.index < static_cast<int>(project_.Surfaces().size())) {
@@ -4961,6 +5134,30 @@ void MainWindow::PopulateEditPanel(CadSelection selection)
             editWireSourcePlane_->setCurrentIndex(0);
         }
         editWirePolicy_->setCurrentIndex(static_cast<int>(namedWire.metadata.planePolicy));
+        const bool isLine = namedWire.wire.Kind() == WireKind::Line;
+        editWireConstraintPanel_->setEnabled(isLine);
+        editWireLockLength_->setChecked(
+            isLine && namedWire.metadata.lineConstraints.lengthMillimeters.has_value());
+        editWireLockAngle_->setChecked(
+            isLine && namedWire.metadata.lineConstraints.angleDegrees.has_value());
+        if (isLine) {
+            const double currentLength = (namedWire.wire.End() - namedWire.wire.Start()).Length();
+            editWireConstraintLength_->setValue(
+                namedWire.metadata.lineConstraints.lengthMillimeters.value_or(currentLength));
+
+            double currentAngle = 0.0;
+            if (namedWire.metadata.lineConstraints.angleDegrees.has_value()) {
+                currentAngle = *namedWire.metadata.lineConstraints.angleDegrees;
+            } else if (namedWire.metadata.sourcePlaneName.has_value()) {
+                const auto plane = project_.FindWorkPlane(*namedWire.metadata.sourcePlaneName);
+                if (plane.has_value()) {
+                    const auto start = plane->Project(namedWire.wire.Start());
+                    const auto end = plane->Project(namedWire.wire.End());
+                    currentAngle = std::atan2(end.v - start.v, end.u - start.u) * 180.0 / kPi;
+                }
+            }
+            editWireConstraintAngle_->setValue(currentAngle);
+        }
 
         if (namedWire.wire.Kind() == WireKind::Circle || namedWire.wire.Kind() == WireKind::CircularArc) {
             const auto arc = namedWire.wire.ArcData();

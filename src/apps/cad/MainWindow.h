@@ -12,6 +12,7 @@
 
 class QCloseEvent;
 class QAction;
+class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -185,6 +186,11 @@ private:
     std::array<QDoubleSpinBox*, 3> editPlaneUAxis_{};
     QComboBox* editWireSourcePlane_ = nullptr;
     QComboBox* editWirePolicy_ = nullptr;
+    QWidget* editWireConstraintPanel_ = nullptr;
+    QCheckBox* editWireLockLength_ = nullptr;
+    QDoubleSpinBox* editWireConstraintLength_ = nullptr;
+    QCheckBox* editWireLockAngle_ = nullptr;
+    QDoubleSpinBox* editWireConstraintAngle_ = nullptr;
     QStackedWidget* editWireGeometry_ = nullptr;
     QTableWidget* editWirePointTable_ = nullptr;
     std::array<QDoubleSpinBox*, 3> editArcCenter_{};

@@ -120,6 +120,42 @@ void WrittenProjectRoundTrips()
     Require(roundTripped.Wires()[4].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "roundtrip arc policy");
 }
 
+void LineConstraintsRoundTripAndDriveGeometry()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        line3d bracket 2 3 0  5 7 0
+        wire_meta bracket drawing locked
+        wire_constraint bracket 10 30
+    )");
+    auto project = LoadProjectScript(input, "test");
+
+    const auto& constrained = project.Wires()[0];
+    Require(constrained.metadata.lineConstraints.lengthMillimeters == 10.0, "fixed length loaded");
+    Require(constrained.metadata.lineConstraints.angleDegrees == 30.0, "fixed angle loaded");
+    RequireNear(
+        constrained.wire.End(),
+        {2.0 + 5.0 * std::sqrt(3.0), 8.0, 0.0},
+        "constraints drive loaded geometry");
+
+    project.UpdateWire("bracket", Wire::Line({4.0, 6.0, 0.0}, {5.0, 6.0, 0.0}));
+    RequireNear(
+        project.Wires()[0].wire.End(),
+        {4.0 + 5.0 * std::sqrt(3.0), 11.0, 0.0},
+        "constraints survive direct geometry edit");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_constraint bracket 10 30") != std::string::npos,
+        "constraints written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "roundtrip");
+    Require(roundTripped.Wires()[0].metadata.lineConstraints.lengthMillimeters == 10.0,
+        "fixed length roundtrip");
+    Require(roundTripped.Wires()[0].metadata.lineConstraints.angleDegrees == 30.0,
+        "fixed angle roundtrip");
+}
+
 void SurfacesAndProjectedWiresRoundTrip()
 {
     std::istringstream input(R"(
@@ -403,6 +439,27 @@ void UpdatingPlaneMovesOnlyLockedWires()
     RequireNear(project.Wires()[1].wire.End(), {2.0, 7.0, 4.0}, "wire update replaces geometry");
 }
 
+void AngleConstraintTracksAndProtectsItsWorkPlane()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        sketch_line dimensioned drawing 2 3  6 3 reference
+        wire_constraint dimensioned 4 0
+    )");
+    auto project = LoadProjectScript(input, "test");
+    project.UpdateWorkPlane("drawing", project.FindWorkPlane("drawing")->Translated({5.0, 7.0, 2.0}));
+    RequireNear(project.Wires()[0].wire.Start(), {7.0, 10.0, 2.0}, "angle-constrained line follows plane");
+    RequireNear(project.Wires()[0].wire.End(), {11.0, 10.0, 2.0}, "angle and length survive plane move");
+
+    bool removalRejected = false;
+    try {
+        (void)project.RemoveWorkPlane("drawing");
+    } catch (const std::invalid_argument&) {
+        removalRejected = true;
+    }
+    Require(removalRejected, "angle constraint protects source plane");
+}
+
 } // namespace
 
 int main()
@@ -411,6 +468,7 @@ int main()
         LoadsPlanesAndWires();
         LoadsWireMetadataForDirectWires();
         WrittenProjectRoundTrips();
+        LineConstraintsRoundTripAndDriveGeometry();
         SurfacesAndProjectedWiresRoundTrip();
         LoftSurfacesRoundTrip();
         PlateSplitsRoundTrip();
@@ -418,6 +476,7 @@ int main()
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();
+        AngleConstraintTracksAndProtectsItsWorkPlane();
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

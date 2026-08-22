@@ -24,6 +24,7 @@ using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
 using kachakacha::model::WireArcData;
 using kachakacha::model::WireKind;
+using kachakacha::model::WireLineConstraints;
 using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
@@ -77,6 +78,25 @@ std::string ReadName(std::istringstream& stream, std::string_view sourceName, in
         ThrowLineError(sourceName, lineNumber, std::string("Expected name for ") + label + ".");
     }
 
+    return value;
+}
+
+std::optional<double> ReadOptionalNumberToken(
+    std::istringstream& stream,
+    std::string_view sourceName,
+    int lineNumber,
+    const char* label)
+{
+    const std::string token = ReadName(stream, sourceName, lineNumber, label);
+    if (token == "-" || token == "none") {
+        return std::nullopt;
+    }
+    std::istringstream valueStream(token);
+    const double value = ReadDouble(valueStream, sourceName, lineNumber, label);
+    std::string extra;
+    if (valueStream >> extra) {
+        ThrowLineError(sourceName, lineNumber, "Invalid number for " + std::string(label) + ".");
+    }
     return value;
 }
 
@@ -329,12 +349,38 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     sourcePlane = sourcePlaneName;
                 }
 
-                project.SetWireMetadata(
-                    name,
-                    WireMetadata{
-                        std::move(sourcePlane),
-                        ParseWirePlanePolicy(policyToken, sourceName, lineNumber),
-                    });
+                WireMetadata metadata;
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        metadata = wire.metadata;
+                        break;
+                    }
+                }
+                metadata.sourcePlaneName = std::move(sourcePlane);
+                metadata.planePolicy = ParseWirePlanePolicy(policyToken, sourceName, lineNumber);
+                project.SetWireMetadata(name, std::move(metadata));
+            } else if (command == "wire_constraint") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const WireLineConstraints constraints{
+                    ReadOptionalNumberToken(stream, sourceName, lineNumber, "fixed length"),
+                    ReadOptionalNumberToken(stream, sourceName, lineNumber, "fixed angle"),
+                };
+                EnsureLineEnded(stream, sourceName, lineNumber);
+
+                bool found = false;
+                WireMetadata metadata;
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        metadata = wire.metadata;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    ThrowLineError(sourceName, lineNumber, "Wire does not exist: " + name);
+                }
+                metadata.lineConstraints = constraints;
+                project.SetWireMetadata(name, std::move(metadata));
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -557,6 +603,21 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                 output << '-';
             }
             output << ' ' << WirePlanePolicyToken(namedWire.metadata.planePolicy) << '\n';
+        }
+        if (!namedWire.metadata.lineConstraints.Empty()) {
+            output << "wire_constraint " << namedWire.name << ' ';
+            if (namedWire.metadata.lineConstraints.lengthMillimeters.has_value()) {
+                output << *namedWire.metadata.lineConstraints.lengthMillimeters;
+            } else {
+                output << '-';
+            }
+            output << ' ';
+            if (namedWire.metadata.lineConstraints.angleDegrees.has_value()) {
+                output << *namedWire.metadata.lineConstraints.angleDegrees;
+            } else {
+                output << '-';
+            }
+            output << '\n';
         }
     }
 

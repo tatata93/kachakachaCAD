@@ -2,6 +2,7 @@
 
 #include "kachakacha/model/Plate.h"
 #include "kachakacha/model/Wire.h"
+#include "kachakacha/model/WireConstraints.h"
 #include "kachakacha/model/WorkPlane.h"
 
 #include <optional>
@@ -20,6 +21,7 @@ enum class WirePlanePolicy {
 struct WireMetadata {
     std::optional<std::string> sourcePlaneName;
     WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
+    WireLineConstraints lineConstraints;
 };
 
 struct NamedWorkPlane {
@@ -77,6 +79,7 @@ public:
         geometry::Vector3 direction);
     void UpdateWorkPlane(std::string_view name, WorkPlane plane);
     void UpdateWire(std::string_view name, Wire wire);
+    void UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetadata metadata);
     void UpdatePlate(
         std::string_view name,
         std::string sourceSurfaceName,

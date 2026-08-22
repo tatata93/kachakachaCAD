@@ -391,6 +391,65 @@ Wire OffsetPlanarWire(
         arc.sweepAngleRadians);
 }
 
+Wire ApplyWireLineConstraints(
+    const Wire& wire,
+    const std::optional<WorkPlane>& plane,
+    const WireLineConstraints& constraints,
+    double tolerance)
+{
+    if (constraints.Empty()) {
+        return wire;
+    }
+    if (wire.Kind() != WireKind::Line) {
+        throw std::invalid_argument("Line constraints can only be applied to a line wire.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        throw std::invalid_argument("Line constraint tolerance must be positive.");
+    }
+    if (constraints.lengthMillimeters.has_value()
+        && (!std::isfinite(*constraints.lengthMillimeters)
+            || *constraints.lengthMillimeters <= tolerance)) {
+        throw std::invalid_argument("Line constraint length must be positive.");
+    }
+    if (constraints.angleDegrees.has_value() && !std::isfinite(*constraints.angleDegrees)) {
+        throw std::invalid_argument("Line constraint angle must be finite.");
+    }
+
+    const Vector3 start = wire.Start();
+    const Vector3 direction = wire.End() - start;
+    const double currentLength = direction.Length();
+    if (currentLength <= tolerance) {
+        throw std::invalid_argument("Line constraints require a non-zero line.");
+    }
+
+    if (!constraints.angleDegrees.has_value()) {
+        return Wire::Line(
+            start,
+            start + direction * (*constraints.lengthMillimeters / currentLength));
+    }
+    if (!plane.has_value()) {
+        throw std::invalid_argument("An angle constraint requires a source work plane.");
+    }
+
+    const PlaneCoordinates startCoordinates = plane->Project(start);
+    const PlaneCoordinates endCoordinates = plane->Project(wire.End());
+    const double planarLength = std::hypot(
+        endCoordinates.u - startCoordinates.u,
+        endCoordinates.v - startCoordinates.v);
+    if (planarLength <= tolerance) {
+        throw std::invalid_argument("An angle-constrained line must have planar length.");
+    }
+
+    constexpr double pi = 3.14159265358979323846;
+    const double angleRadians = *constraints.angleDegrees * pi / 180.0;
+    const double constrainedLength = constraints.lengthMillimeters.value_or(planarLength);
+    return Wire::Line(
+        plane->ToWorld(startCoordinates.u, startCoordinates.v),
+        plane->ToWorld(
+            startCoordinates.u + constrainedLength * std::cos(angleRadians),
+            startCoordinates.v + constrainedLength * std::sin(angleRadians)));
+}
+
 LineIntersectionEditResult MeetLinesAtIntersection(
     const Wire& first,
     RetainedLineEnd retainedFirst,

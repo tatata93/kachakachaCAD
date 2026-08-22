@@ -1,18 +1,21 @@
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/model/WireOperations.h"
 
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::ChamferIntersectingLines;
+using kachakacha::model::ApplyWireLineConstraints;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
+using kachakacha::model::WireLineConstraints;
 using kachakacha::model::WorkPlane;
 
 namespace {
@@ -252,6 +255,45 @@ void OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs()
     Require(rejected, "Bezier offset rejected instead of approximated");
 }
 
+void AppliesPersistentLineConstraints()
+{
+    const WorkPlane plane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0});
+    const Wire constrained = ApplyWireLineConstraints(
+        Wire::Line({2.0, 3.0, 0.0}, {5.0, 7.0, 0.0}),
+        plane,
+        WireLineConstraints{10.0, 30.0});
+    RequireNear(constrained.Start(), {2.0, 3.0, 0.0}, "constrained line anchor");
+    RequireNear(
+        constrained.End(),
+        {2.0 + 5.0 * std::sqrt(3.0), 8.0, 0.0},
+        "constrained line length and angle");
+
+    const Wire snappedToPlane = ApplyWireLineConstraints(
+        Wire::Line({2.0, 3.0, 0.002}, {5.0, 7.0, -0.003}),
+        plane,
+        WireLineConstraints{std::nullopt, 0.0});
+    RequireNear(snappedToPlane.Start(), {2.0, 3.0, 0.0}, "angle constraint snaps anchor to plane");
+    Require(std::abs(snappedToPlane.End().z) <= 1.0e-8, "angle constraint snaps end to plane");
+
+    const Wire threeDimensional = ApplyWireLineConstraints(
+        Wire::Line({1.0, 2.0, 3.0}, {3.0, 5.0, 9.0}),
+        std::nullopt,
+        WireLineConstraints{14.0, std::nullopt});
+    Require(std::abs((threeDimensional.End() - threeDimensional.Start()).Length() - 14.0) <= 1.0e-8,
+        "free 3d line length constraint");
+
+    bool missingPlaneRejected = false;
+    try {
+        (void)ApplyWireLineConstraints(
+            Wire::Line({}, {1.0, 1.0, 0.0}),
+            std::nullopt,
+            WireLineConstraints{std::nullopt, 45.0});
+    } catch (const std::invalid_argument&) {
+        missingPlaneRejected = true;
+    }
+    Require(missingPlaneRejected, "angle constraint without plane rejected");
+}
+
 } // namespace
 
 int main()
@@ -268,6 +310,7 @@ int main()
         RejectsDisconnectedJoin();
         OffsetsPlanarDrawingWires();
         OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs();
+        AppliesPersistentLineConstraints();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

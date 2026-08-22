@@ -1,8 +1,10 @@
 #pragma once
 
 #include "kachakacha/model/Wire.h"
+#include "kachakacha/model/WireConstraints.h"
 #include "kachakacha/model/WorkPlane.h"
 
+#include <optional>
 #include <vector>
 
 namespace kachakacha::model {
@@ -54,6 +56,12 @@ struct LineIntersectionEditResult {
     const Wire& wire,
     const WorkPlane& plane,
     double signedDistance,
+    double tolerance = 1.0e-8);
+
+[[nodiscard]] Wire ApplyWireLineConstraints(
+    const Wire& wire,
+    const std::optional<WorkPlane>& plane,
+    const WireLineConstraints& constraints,
     double tolerance = 1.0e-8);
 
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(

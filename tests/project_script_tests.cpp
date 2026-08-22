@@ -135,8 +135,10 @@ void ConstructionWiresRoundTripAndStayOutOfSurfaces()
 void CoincidentEndpointsRoundTripAndDriveGeometry()
 {
     std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
         line3d anchor 0 0 0  10 0 0
         line3d follower 20 5 0  20 10 0
+        wire_meta follower drawing reference
         line3d tail 30 20 0  30 30 0
         wire_coincident anchor end follower start
         wire_coincident follower end tail start
@@ -153,15 +155,29 @@ void CoincidentEndpointsRoundTripAndDriveGeometry()
     RequireNear(project.Wires()[1].wire.Start(), {12.0, 3.0, 0.0}, "follower endpoint cannot leave anchor");
     RequireNear(project.Wires()[2].wire.Start(), {25.0, 12.0, 0.0}, "chain follows edited follower end");
 
-    auto conflictingMetadata = project.Wires()[1].metadata;
-    conflictingMetadata.lineConstraints.lengthMillimeters = 8.0;
-    bool rejectedConflictingDimension = false;
+    auto constrainedMetadata = project.Wires()[1].metadata;
+    constrainedMetadata.lineConstraints.lengthMillimeters = 8.0;
+    constrainedMetadata.lineConstraints.angleDegrees = 0.0;
+    project.SetWireMetadata("follower", constrainedMetadata);
+    RequireNear(project.Wires()[1].wire.Start(), {12.0, 3.0, 0.0},
+        "dimensioned follower remains coincident");
+    RequireNear(project.Wires()[1].wire.End(), {20.0, 3.0, 0.0},
+        "dimensioned follower keeps length and angle");
+    RequireNear(project.Wires()[2].wire.Start(), {20.0, 3.0, 0.0},
+        "coincidence chain follows dimension solve");
+
+    project.AddWire("fixed_end", Wire::Line({30.0, 3.0, 0.0}, {35.0, 3.0, 0.0}));
+    bool rejectedConflict = false;
     try {
-        project.SetWireMetadata("follower", conflictingMetadata);
-    } catch (const std::invalid_argument&) {
-        rejectedConflictingDimension = true;
+        project.AddWireCoincidentConstraint(
+            {"fixed_end", kachakacha::model::WireEndpoint::Start},
+            {"follower", kachakacha::model::WireEndpoint::End});
+    } catch (const std::invalid_argument& error) {
+        rejectedConflict = std::string(error.what()).find("follower") != std::string::npos;
     }
-    Require(rejectedConflictingDimension, "follower dimension conflicts are rejected");
+    Require(rejectedConflict, "conflicting endpoint dimensions identify the follower");
+    Require(project.CoincidentConstraints().size() == 2,
+        "conflicting endpoint dimension is transactional");
 
     std::ostringstream output;
     WriteProjectScript(output, project);
@@ -182,6 +198,37 @@ void CoincidentEndpointsRoundTripAndDriveGeometry()
     Require(roundTripped.RemoveWireCoincidentConstraints("anchor") == 1, "remove anchor coincidence");
     Require(roundTripped.RemoveWireCoincidentConstraints("follower") == 1, "remove follower chain coincidence");
     Require(roundTripped.RemoveWire("anchor"), "wire removable after coincidence removal");
+}
+
+void CompatibleEndpointAndDimensionConstraintsSolveTogether()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        line3d anchor 0 0 0  10 0 0
+        line3d end_anchor 18 0 0  18 5 0
+        line3d follower 50 10 0  55 12 0
+        wire_meta follower drawing reference
+        wire_constraint follower 8 0
+        wire_coincident anchor end follower start
+        wire_coincident end_anchor start follower end
+    )");
+    auto project = LoadProjectScript(input, "combined-constraint-test");
+    RequireNear(project.Wires()[2].wire.Start(), {10.0, 0.0, 0.0},
+        "combined constraints solve start");
+    RequireNear(project.Wires()[2].wire.End(), {18.0, 0.0, 0.0},
+        "combined constraints solve end");
+
+    bool rejectedAnchorEdit = false;
+    try {
+        project.UpdateWire("anchor", Wire::Line({0.0, 0.0, 0.0}, {12.0, 0.0, 0.0}));
+    } catch (const std::invalid_argument& error) {
+        rejectedAnchorEdit = std::string(error.what()).find("follower") != std::string::npos;
+    }
+    Require(rejectedAnchorEdit, "incompatible anchor edit reports constrained follower");
+    RequireNear(project.Wires()[0].wire.End(), {10.0, 0.0, 0.0},
+        "failed combined solve preserves anchor");
+    RequireNear(project.Wires()[2].wire.End(), {18.0, 0.0, 0.0},
+        "failed combined solve preserves follower");
 }
 
 void TangentEndpointsRoundTripAndDriveBezierHandle()
@@ -822,6 +869,7 @@ int main()
         LoadsWireMetadataForDirectWires();
         ConstructionWiresRoundTripAndStayOutOfSurfaces();
         CoincidentEndpointsRoundTripAndDriveGeometry();
+        CompatibleEndpointAndDimensionConstraintsSolveTogether();
         TangentEndpointsRoundTripAndDriveBezierHandle();
         TangentEndpointsDriveCircularArc();
         CurvatureEndpointsDriveBezierHandles();

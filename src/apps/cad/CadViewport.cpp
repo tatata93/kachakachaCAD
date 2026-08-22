@@ -30,6 +30,7 @@ enum class ViewCubeFace {
     Front,
     Right,
     Isometric,
+    Selection,
 };
 
 struct ViewCubeGeometry {
@@ -37,6 +38,7 @@ struct ViewCubeGeometry {
     QPolygonF front;
     QPolygonF right;
     QPolygonF isometric;
+    QRectF selection;
     QRectF bounds;
 };
 
@@ -59,7 +61,8 @@ ViewCubeGeometry MakeViewCubeGeometry(int viewportWidth)
             QPointF(centerX + 24.0, 96.0),
             QPointF(centerX, 108.0),
             QPointF(centerX - 24.0, 96.0)},
-        QRectF(centerX - 36.0, 10.0, 72.0, 104.0),
+        QRectF(centerX - 50.0, 116.0, 100.0, 28.0),
+        QRectF(centerX - 54.0, 10.0, 108.0, 140.0),
     };
 }
 
@@ -76,6 +79,9 @@ ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
     }
     if (cube.isometric.containsPoint(position, Qt::OddEvenFill)) {
         return ViewCubeFace::Isometric;
+    }
+    if (cube.selection.contains(position)) {
+        return ViewCubeFace::Selection;
     }
     return ViewCubeFace::None;
 }
@@ -356,6 +362,195 @@ void CadViewport::AlignToWorkPlane(const kachakacha::model::WorkPlane& plane)
     target_ = plane.Origin();
     alignedViewBasis_ = std::array<Vector3, 3>{plane.Normal(), plane.UAxis(), plane.VAxis()};
     update();
+}
+
+bool CadViewport::AlignToSelection()
+{
+    if (project_ == nullptr || selection_.kind == CadSelectionKind::None) {
+        return false;
+    }
+
+    std::vector<Vector3> points;
+    Vector3 origin;
+    Vector3 normal;
+    Vector3 uAxisHint;
+    const Vector3 previousViewDirection = ViewDirection();
+
+    const auto sampleWire = [&](const Wire& wire) {
+        const int samples = wire.Kind() == WireKind::Line ? 1 : 64;
+        for (int sample = 0; sample <= samples; ++sample) {
+            points.push_back(wire.Evaluate(static_cast<double>(sample) / samples));
+        }
+    };
+    const auto sampleSurface = [&](const kachakacha::model::Surface& surface) {
+        for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+            for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                points.push_back(surface.Evaluate(
+                    static_cast<double>(uIndex) / 24.0,
+                    static_cast<double>(vIndex) / 8.0));
+            }
+        }
+    };
+    const auto surfaceUAxis = [](const kachakacha::model::Surface& surface, double u, double v) {
+        const double before = std::max(0.0, u - 0.01);
+        const double after = std::min(1.0, u + 0.01);
+        Vector3 tangent = surface.Evaluate(after, v) - surface.Evaluate(before, v);
+        if (tangent.LengthSquared() <= 1.0e-18) {
+            const double vBefore = std::max(0.0, v - 0.01);
+            const double vAfter = std::min(1.0, v + 0.01);
+            tangent = surface.Evaluate(u, vAfter) - surface.Evaluate(u, vBefore);
+        }
+        return tangent;
+    };
+
+    try {
+        if (selection_.kind == CadSelectionKind::WorkPlane
+            && selection_.index >= 0
+            && selection_.index < static_cast<int>(project_->WorkPlanes().size())) {
+            const auto& plane = project_->WorkPlanes()[selection_.index].plane;
+            origin = plane.Origin();
+            normal = plane.Normal();
+            uAxisHint = plane.UAxis();
+            points = {
+                origin + plane.UAxis() * kPlaneHalfSize + plane.VAxis() * kPlaneHalfSize,
+                origin + plane.UAxis() * kPlaneHalfSize - plane.VAxis() * kPlaneHalfSize,
+                origin - plane.UAxis() * kPlaneHalfSize + plane.VAxis() * kPlaneHalfSize,
+                origin - plane.UAxis() * kPlaneHalfSize - plane.VAxis() * kPlaneHalfSize,
+            };
+        } else if (selection_.kind == CadSelectionKind::Surface
+            && selection_.index >= 0
+            && selection_.index < static_cast<int>(project_->Surfaces().size())) {
+            const auto& surface = project_->Surfaces()[selection_.index].surface;
+            origin = surface.Evaluate(0.5, 0.5);
+            normal = surface.Normal(0.5, 0.5);
+            uAxisHint = surfaceUAxis(surface, 0.5, 0.5);
+            sampleSurface(surface);
+        } else if (selection_.kind == CadSelectionKind::Plate
+            && selection_.index >= 0
+            && selection_.index < static_cast<int>(project_->Plates().size())) {
+            const auto& plate = project_->Plates()[selection_.index].plate;
+            const double sourceU = plate.SourceU(0.5);
+            const double sourceV = plate.SourceV(0.5);
+            origin = plate.Evaluate(0.5, 0.5, 0.5);
+            normal = plate.SourceSurface().Normal(sourceU, sourceV);
+            uAxisHint = surfaceUAxis(plate.SourceSurface(), sourceU, sourceV);
+            for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+                for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                    const double u = static_cast<double>(uIndex) / 24.0;
+                    const double v = static_cast<double>(vIndex) / 8.0;
+                    points.push_back(plate.Evaluate(u, v, 0.0));
+                    points.push_back(plate.Evaluate(u, v, 1.0));
+                }
+            }
+        } else if (selection_.kind == CadSelectionKind::Wire
+            && selection_.index >= 0
+            && selection_.index < static_cast<int>(project_->Wires().size())) {
+            const auto& namedWire = project_->Wires()[selection_.index];
+            const Wire& wire = namedWire.wire;
+            sampleWire(wire);
+            for (const Vector3& point : points) {
+                origin = origin + point;
+            }
+            origin = origin / static_cast<double>(points.size());
+
+            bool usedSourcePlane = false;
+            if (namedWire.metadata.sourcePlaneName.has_value()) {
+                const auto sourcePlane = project_->FindWorkPlane(*namedWire.metadata.sourcePlaneName);
+                if (sourcePlane.has_value()) {
+                    const bool liesOnPlane = std::all_of(points.begin(), points.end(), [&](Vector3 point) {
+                        return std::abs(sourcePlane->Project(point).w) <= 1.0e-6;
+                    });
+                    if (liesOnPlane) {
+                        normal = sourcePlane->Normal();
+                        uAxisHint = sourcePlane->UAxis();
+                        usedSourcePlane = true;
+                    }
+                }
+            }
+            if (!usedSourcePlane && namedWire.projection.has_value()) {
+                const auto targetSurface = project_->FindSurface(namedWire.projection->targetSurfaceName);
+                if (targetSurface.has_value()) {
+                    normal = targetSurface->Normal(0.5, 0.5);
+                    uAxisHint = surfaceUAxis(*targetSurface, 0.5, 0.5);
+                    usedSourcePlane = true;
+                }
+            }
+            if (!usedSourcePlane
+                && (wire.Kind() == WireKind::Circle || wire.Kind() == WireKind::CircularArc)) {
+                const auto arc = wire.ArcData();
+                normal = Cross(arc.uAxis, arc.vAxis);
+                uAxisHint = arc.uAxis;
+                usedSourcePlane = true;
+            }
+            if (!usedSourcePlane) {
+                double bestCrossLengthSquared = 0.0;
+                for (std::size_t first = 0; first < points.size(); ++first) {
+                    for (std::size_t second = first + 1; second < points.size(); ++second) {
+                        const Vector3 candidate = Cross(points[first] - origin, points[second] - origin);
+                        if (candidate.LengthSquared() > bestCrossLengthSquared) {
+                            bestCrossLengthSquared = candidate.LengthSquared();
+                            normal = candidate;
+                        }
+                    }
+                }
+                uAxisHint = wire.End() - wire.Start();
+                if (uAxisHint.LengthSquared() <= 1.0e-18 && points.size() > 1) {
+                    uAxisHint = points[1] - points[0];
+                }
+                if (bestCrossLengthSquared <= 1.0e-18) {
+                    const Vector3 lineDirection = uAxisHint.Normalized();
+                    normal = previousViewDirection
+                        - lineDirection * Dot(previousViewDirection, lineDirection);
+                    if (normal.LengthSquared() <= 1.0e-18) {
+                        const Vector3 fallback = std::abs(lineDirection.z) < 0.9
+                            ? Vector3{0.0, 0.0, 1.0}
+                            : Vector3{0.0, 1.0, 0.0};
+                        normal = fallback - lineDirection * Dot(fallback, lineDirection);
+                    }
+                }
+            }
+        } else {
+            return false;
+        }
+
+        if (points.empty() || normal.LengthSquared() <= 1.0e-18
+            || uAxisHint.LengthSquared() <= 1.0e-18) {
+            return false;
+        }
+        normal = normal.Normalized();
+        if (Dot(normal, previousViewDirection) < 0.0) {
+            normal = -normal;
+        }
+        AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(origin, normal, uAxisHint));
+
+        const auto basis = CurrentViewBasis();
+        Vector3 minimum{
+            Dot(points.front(), basis[0]),
+            Dot(points.front(), basis[1]),
+            Dot(points.front(), basis[2])};
+        Vector3 maximum = minimum;
+        for (const Vector3& point : points) {
+            const Vector3 coordinates{
+                Dot(point, basis[0]),
+                Dot(point, basis[1]),
+                Dot(point, basis[2])};
+            minimum.x = std::min(minimum.x, coordinates.x);
+            minimum.y = std::min(minimum.y, coordinates.y);
+            minimum.z = std::min(minimum.z, coordinates.z);
+            maximum.x = std::max(maximum.x, coordinates.x);
+            maximum.y = std::max(maximum.y, coordinates.y);
+            maximum.z = std::max(maximum.z, coordinates.z);
+        }
+        const Vector3 middle = (minimum + maximum) * 0.5;
+        target_ = basis[0] * middle.x + basis[1] * middle.y + basis[2] * middle.z;
+        const double span = std::max({maximum.y - minimum.y, maximum.z - minimum.z, 10.0});
+        const double available = std::max(160, std::min(width() - 150, height() - 80));
+        pixelsPerMillimeter_ = std::clamp(available / (span * 1.25), 1.0, 80.0);
+        update();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 void CadViewport::SetIsometricView()
@@ -1813,6 +2008,21 @@ void CadViewport::paintEvent(QPaintEvent*)
     drawCubeFace(cube.front, ViewCubeFace::Front, QColor("#d6e6e7"), QStringLiteral("正"));
     drawCubeFace(cube.right, ViewCubeFace::Right, QColor("#dfe4e8"), QStringLiteral("右"));
     drawCubeFace(cube.isometric, ViewCubeFace::Isometric, QColor("#f3d9a5"), QStringLiteral("3D"));
+    const bool canAlignSelection = project_ != nullptr && selection_.kind != CadSelectionKind::None;
+    const bool selectionHovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Selection);
+    painter.setBrush(canAlignSelection
+            ? (selectionHovered ? QColor("#c9e8e5") : QColor("#e3f1ef"))
+            : QColor("#eceff0"));
+    painter.setPen(QPen(
+        canAlignSelection ? QColor("#39777a") : QColor("#aeb7bc"),
+        selectionHovered ? 2.0 : 1.0));
+    painter.drawRoundedRect(cube.selection, 3.0, 3.0);
+    const QPointF targetCenter(cube.selection.left() + 14.0, cube.selection.center().y());
+    painter.drawEllipse(targetCenter, 6.0, 6.0);
+    painter.drawLine(targetCenter + QPointF(-9.0, 0.0), targetCenter + QPointF(9.0, 0.0));
+    painter.drawLine(targetCenter + QPointF(0.0, -9.0), targetCenter + QPointF(0.0, 9.0));
+    painter.setPen(canAlignSelection ? QColor("#174d50") : QColor("#8c969b"));
+    painter.drawText(cube.selection.adjusted(27.0, 0.0, -4.0, 0.0), Qt::AlignCenter, QStringLiteral("選択に正対"));
 }
 
 CadSelection CadViewport::HitTestWire(QPointF position, double maximumDistance) const
@@ -2015,9 +2225,34 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
     const int hoveredFace = static_cast<int>(HitViewCube(MakeViewCubeGeometry(width()), event->position()));
     if (hoveredFace != hoveredViewCubeFace_) {
         hoveredViewCubeFace_ = hoveredFace;
+        const bool unavailableSelection = hoveredFace == static_cast<int>(ViewCubeFace::Selection)
+            && selection_.kind == CadSelectionKind::None;
         setCursor(hoveredFace == static_cast<int>(ViewCubeFace::None)
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
-                : Qt::PointingHandCursor);
+                : unavailableSelection ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+        QString tooltip;
+        switch (static_cast<ViewCubeFace>(hoveredFace)) {
+        case ViewCubeFace::Top:
+            tooltip = QStringLiteral("上面に正対");
+            break;
+        case ViewCubeFace::Front:
+            tooltip = QStringLiteral("正面に正対");
+            break;
+        case ViewCubeFace::Right:
+            tooltip = QStringLiteral("右面に正対");
+            break;
+        case ViewCubeFace::Isometric:
+            tooltip = QStringLiteral("3D表示");
+            break;
+        case ViewCubeFace::Selection:
+            tooltip = unavailableSelection
+                ? QStringLiteral("線・面・板材・作業平面を先に選択")
+                : QStringLiteral("選択対象に正対して中央表示");
+            break;
+        case ViewCubeFace::None:
+            break;
+        }
+        setToolTip(tooltip);
         update();
     }
 
@@ -2094,6 +2329,9 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                 break;
             case ViewCubeFace::Isometric:
                 SetIsometricView();
+                break;
+            case ViewCubeFace::Selection:
+                (void)AlignToSelection();
                 break;
             case ViewCubeFace::None:
                 break;

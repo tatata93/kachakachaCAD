@@ -3384,7 +3384,9 @@ void MainWindow::ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointP
                     ToQString(followerName), endpointText(follower.endpoint)),
             4500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(
+            QStringLiteral("端点一致を適用できません: %1").arg(QString::fromUtf8(error.what())),
+            6000);
     }
 }
 
@@ -4286,6 +4288,14 @@ bool MainWindow::RunCreationSelfTest()
     }
     activePlaneCombo_->setCurrentIndex(drawingPlaneIndex);
     const std::string drawingPlaneName = ToName(activePlaneCombo_->currentText());
+    const auto selectedPlaneIterator = std::find_if(
+        project_.WorkPlanes().begin(), project_.WorkPlanes().end(),
+        [&](const auto& plane) { return plane.name == drawingPlaneName; });
+    if (selectedPlaneIterator == project_.WorkPlanes().end()) {
+        return fail("find selected drawing workplane");
+    }
+    const int selectedPlaneIndex = static_cast<int>(
+        std::distance(project_.WorkPlanes().begin(), selectedPlaneIterator));
     viewport_->AlignToActiveWorkPlane();
     snapAction_->setChecked(true);
     snapStepField_->setValue(1.0);
@@ -4314,6 +4324,7 @@ bool MainWindow::RunCreationSelfTest()
     const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
     const QPointF cubeTop(viewport_->width() - 60.0, 24.0);
     const QPointF cube3d(viewport_->width() - 60.0, 96.0);
+    const QPointF cubeSelection(viewport_->width() - 60.0, 130.0);
     const std::size_t beforeViewCube = project_.Wires().size();
     SetViewportTool(ViewportTool::DrawLine);
     click(cubeTop);
@@ -4327,6 +4338,20 @@ bool MainWindow::RunCreationSelfTest()
         || project_.Wires().size() != beforeViewCube
         || viewport_->DrawingPointCount() != 0) {
         return fail("view cube drag without drawing");
+    }
+    const Vector3 viewBeforeSelectionAlignment = viewport_->ViewDirection();
+    const Vector3 selectedPlaneNormal = selectedPlaneIterator->plane.Normal();
+    const Vector3 expectedSelectionView = kachakacha::geometry::Dot(
+            selectedPlaneNormal, viewBeforeSelectionAlignment) < 0.0
+        ? -selectedPlaneNormal
+        : selectedPlaneNormal;
+    UpdateSelection({CadSelectionKind::WorkPlane, selectedPlaneIndex}, true);
+    click(cubeSelection);
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), expectedSelectionView, 1.0e-8)
+        || project_.Wires().size() != beforeViewCube
+        || viewport_->DrawingPointCount() != 0) {
+        return fail("view cube align selected workplane");
     }
     viewport_->AlignToActiveWorkPlane();
     const std::size_t directStart = project_.Wires().size();

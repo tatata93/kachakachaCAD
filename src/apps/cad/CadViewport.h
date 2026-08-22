@@ -143,6 +143,7 @@ public:
     [[nodiscard]] const std::vector<MeasurementPick>& MeasurementPicks() const noexcept { return measurementPicks_; }
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
+    [[nodiscard]] bool AlignToSelection();
     void SetIsometricView();
     [[nodiscard]] kachakacha::geometry::Vector3 ViewDirection() const;
     void FinishDrawing();

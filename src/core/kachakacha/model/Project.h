@@ -37,6 +37,8 @@ public:
     void AddWorkPlane(std::string name, WorkPlane plane);
     void AddWire(std::string name, Wire wire, WireMetadata metadata = {});
     void SetWireMetadata(std::string_view name, WireMetadata metadata);
+    bool RemoveWorkPlane(std::string_view name);
+    bool RemoveWire(std::string_view name);
 
     [[nodiscard]] const std::vector<NamedWorkPlane>& WorkPlanes() const noexcept { return workPlanes_; }
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }

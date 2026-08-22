@@ -1,5 +1,6 @@
 #include "kachakacha/model/Project.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -50,6 +51,37 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
     }
 
     throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+}
+
+bool Project::RemoveWorkPlane(std::string_view name)
+{
+    const auto position = std::find_if(workPlanes_.begin(), workPlanes_.end(), [&](const NamedWorkPlane& plane) {
+        return plane.name == name;
+    });
+    if (position == workPlanes_.end()) {
+        return false;
+    }
+
+    workPlanes_.erase(position);
+    for (NamedWire& wire : wires_) {
+        if (wire.metadata.sourcePlaneName.has_value() && *wire.metadata.sourcePlaneName == name) {
+            wire.metadata.sourcePlaneName.reset();
+        }
+    }
+    return true;
+}
+
+bool Project::RemoveWire(std::string_view name)
+{
+    const auto position = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+        return wire.name == name;
+    });
+    if (position == wires_.end()) {
+        return false;
+    }
+
+    wires_.erase(position);
+    return true;
 }
 
 std::optional<WorkPlane> Project::FindWorkPlane(std::string_view name) const

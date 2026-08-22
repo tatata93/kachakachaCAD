@@ -48,6 +48,30 @@ PowerShell で以下を実行します。
 
 ## 画面で確認
 
+本命のQtデスクトップ版を起動します。
+
+```powershell
+.\scripts\run-cad.ps1
+```
+
+既存プロジェクトを開いて起動する場合:
+
+```powershell
+.\scripts\run-cad.ps1 -Project examples\first-check.kcd
+```
+
+Qt版では、画面からプロジェクトの新規作成・読み込み・保存、作業平面の数値作成、3Dワイヤーと平面上ワイヤーの数値作成、選択と削除ができます。
+
+単体で起動できる配布フォルダを作る場合:
+
+```powershell
+.\scripts\package-cad.ps1
+```
+
+作成後は `out\kachakachaCAD\kachakacha_cad.exe` を直接起動できます。
+
+## 開発用ビューア
+
 最小ビューアを起動します。
 
 ```powershell

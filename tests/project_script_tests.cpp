@@ -131,6 +131,23 @@ void UnknownPlaneIsRejected()
     Require(rejected, "unknown plane should be rejected");
 }
 
+void RemovingPlaneKeepsWireIn3D()
+{
+    std::istringstream input(R"(
+        plane_point_normal front 10 0 0  1 0 0  0 1 0
+        sketch_line window front 2 3  5 7 locked
+    )");
+    auto project = LoadProjectScript(input, "test");
+
+    Require(project.RemoveWorkPlane("front"), "plane removal");
+    Require(project.WorkPlanes().empty(), "plane was removed");
+    Require(project.Wires().size() == 1, "wire remains after plane removal");
+    Require(!project.Wires()[0].metadata.sourcePlaneName.has_value(), "removed source reference is cleared");
+    RequireNear(project.Wires()[0].wire.Start(), {10.0, 2.0, 3.0}, "remaining wire keeps 3d position");
+    Require(project.RemoveWire("window"), "wire removal");
+    Require(project.Wires().empty(), "wire was removed");
+}
+
 } // namespace
 
 int main()
@@ -140,6 +157,7 @@ int main()
         LoadsWireMetadataForDirectWires();
         WrittenProjectRoundTrips();
         UnknownPlaneIsRejected();
+        RemovingPlaneKeepsWireIn3D();
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

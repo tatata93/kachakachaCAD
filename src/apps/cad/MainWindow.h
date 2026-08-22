@@ -76,7 +76,9 @@ private:
         double angleRadians);
     void ApplySplitWire(int wireIndex, double parameter);
     void ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointPick follower);
+    void ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick follower);
     void RemoveSelectedCoincidences();
+    void RemoveSelectedTangencies();
     void UpdateMeasurement(const std::vector<MeasurementPick>& picks);
     void JoinSelectedWires();
     void ApplyMeetSelectedLines();
@@ -156,7 +158,9 @@ private:
     QAction* rotateToolAction_ = nullptr;
     QAction* splitToolAction_ = nullptr;
     QAction* coincidentToolAction_ = nullptr;
+    QAction* tangentToolAction_ = nullptr;
     QAction* removeCoincidentAction_ = nullptr;
+    QAction* removeTangentAction_ = nullptr;
     QAction* measureToolAction_ = nullptr;
     QAction* joinWiresAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;
@@ -208,6 +212,7 @@ private:
     std::array<QDoubleSpinBox*, 3> editArcCenter_{};
     std::array<QDoubleSpinBox*, 3> editArcUAxis_{};
     std::array<QDoubleSpinBox*, 3> editArcVAxis_{};
+    QCheckBox* editWireLockRadius_ = nullptr;
     QDoubleSpinBox* editArcRadius_ = nullptr;
     QDoubleSpinBox* editArcStartAngle_ = nullptr;
     QDoubleSpinBox* editArcSweepAngle_ = nullptr;

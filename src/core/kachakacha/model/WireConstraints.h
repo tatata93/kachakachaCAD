@@ -14,4 +14,13 @@ struct WireLineConstraints {
     }
 };
 
+struct WireCurveConstraints {
+    std::optional<double> radiusMillimeters;
+
+    [[nodiscard]] bool Empty() const noexcept
+    {
+        return !radiusMillimeters.has_value();
+    }
+};
+
 } // namespace kachakacha::model

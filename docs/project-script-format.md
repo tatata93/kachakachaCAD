@@ -100,6 +100,14 @@ wire_constraint NAME LENGTH|- ANGLE_DEGREES|-
 
 直線の始点を固定端として、長さと作業平面内の角度を保持する。`-` はその項目を拘束しない。角度は作成元平面のU方向を0度、V方向を90度とするため、角度を指定する場合は先に `wire_meta` で作成元平面を設定する。長さだけなら自由な3D直線にも使用できる。
 
+### 円・円弧の半径拘束
+
+```text
+wire_radius_constraint NAME RADIUS
+```
+
+円または円弧の中心や向き、円弧の開始角・中心角を編集しても、指定した半径を保持する。
+
 ### 補助線
 
 ```text
@@ -115,6 +123,14 @@ wire_coincident ANCHOR_WIRE start|end FOLLOWER_WIRE start|end
 ```
 
 固定側ワイヤーの端点へ追従側ワイヤーの端点を一致させ、編集後も関係を保持する。閉じたワイヤーと投影ワイヤーは対象外。現在は競合を避けるため、追従側の直線へ長さ・角度拘束を同時設定できない。
+
+### 端点の接線拘束
+
+```text
+wire_tangent ANCHOR_WIRE start|end FOLLOWER_BEZIER start|end
+```
+
+同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェの端点ハンドルを回転してG1接続を維持する。ハンドル長は保持する。
 
 ### 作業平面上の直線
 

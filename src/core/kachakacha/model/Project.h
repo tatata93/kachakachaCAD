@@ -33,10 +33,16 @@ struct WireCoincidentConstraint {
     WireEndpointReference follower;
 };
 
+struct WireTangentConstraint {
+    WireEndpointReference anchor;
+    WireEndpointReference follower;
+};
+
 struct WireMetadata {
     std::optional<std::string> sourcePlaneName;
     WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
     WireLineConstraints lineConstraints;
+    WireCurveConstraints curveConstraints;
     bool construction = false;
 };
 
@@ -107,6 +113,10 @@ public:
         WireEndpointReference anchor,
         WireEndpointReference follower);
     [[nodiscard]] std::size_t RemoveWireCoincidentConstraints(std::string_view wireName);
+    void AddWireTangentConstraint(
+        WireEndpointReference anchor,
+        WireEndpointReference follower);
+    [[nodiscard]] std::size_t RemoveWireTangentConstraints(std::string_view wireName);
     void SetWorkPlaneVisible(std::string_view name, bool visible);
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
@@ -133,6 +143,10 @@ public:
     {
         return coincidentConstraints_;
     }
+    [[nodiscard]] const std::vector<WireTangentConstraint>& TangentConstraints() const noexcept
+    {
+        return tangentConstraints_;
+    }
 
     [[nodiscard]] std::optional<WorkPlane> FindWorkPlane(std::string_view name) const;
     [[nodiscard]] std::optional<Surface> FindSurface(std::string_view name) const;
@@ -141,6 +155,7 @@ public:
 private:
     [[nodiscard]] const NamedWire& RequireWire(std::string_view name) const;
     void ApplyCoincidentConstraints();
+    void ApplyTangentConstraints();
     void RebuildDependentGeometry();
 
     std::vector<NamedWorkPlane> workPlanes_;
@@ -148,6 +163,7 @@ private:
     std::vector<NamedSurface> surfaces_;
     std::vector<NamedPlate> plates_;
     std::vector<WireCoincidentConstraint> coincidentConstraints_;
+    std::vector<WireTangentConstraint> tangentConstraints_;
 };
 
 } // namespace kachakacha::model

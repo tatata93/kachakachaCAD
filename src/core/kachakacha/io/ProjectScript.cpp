@@ -400,6 +400,24 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 }
                 metadata.lineConstraints = constraints;
                 project.SetWireMetadata(name, std::move(metadata));
+            } else if (command == "wire_radius_constraint") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const double radius = ReadDouble(stream, sourceName, lineNumber, "fixed radius");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                bool found = false;
+                WireMetadata metadata;
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        metadata = wire.metadata;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    ThrowLineError(sourceName, lineNumber, "Wire does not exist: " + name);
+                }
+                metadata.curveConstraints.radiusMillimeters = radius;
+                project.SetWireMetadata(name, std::move(metadata));
             } else if (command == "wire_role") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string role = ReadName(stream, sourceName, lineNumber, "wire role");
@@ -432,6 +450,15 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string followerEndpoint = ReadName(stream, sourceName, lineNumber, "follower endpoint");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddWireCoincidentConstraint(
+                    {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
+                    {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)});
+            } else if (command == "wire_tangent") {
+                const std::string anchorWire = ReadName(stream, sourceName, lineNumber, "anchor wire");
+                const std::string anchorEndpoint = ReadName(stream, sourceName, lineNumber, "anchor endpoint");
+                const std::string followerWire = ReadName(stream, sourceName, lineNumber, "follower wire");
+                const std::string followerEndpoint = ReadName(stream, sourceName, lineNumber, "follower endpoint");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWireTangentConstraint(
                     {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
                     {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)});
             } else if (command == "sketch_line") {
@@ -672,6 +699,10 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             }
             output << '\n';
         }
+        if (namedWire.metadata.curveConstraints.radiusMillimeters.has_value()) {
+            output << "wire_radius_constraint " << namedWire.name << ' '
+                   << *namedWire.metadata.curveConstraints.radiusMillimeters << '\n';
+        }
         if (namedWire.metadata.construction) {
             output << "wire_role " << namedWire.name << " construction\n";
         }
@@ -725,6 +756,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         RequireScriptNameSafe(constraint.anchor.wireName, "Coincidence anchor wire");
         RequireScriptNameSafe(constraint.follower.wireName, "Coincidence follower wire");
         output << "wire_coincident "
+               << constraint.anchor.wireName << ' ' << WireEndpointToken(constraint.anchor.endpoint) << ' '
+               << constraint.follower.wireName << ' ' << WireEndpointToken(constraint.follower.endpoint) << '\n';
+    }
+    for (const auto& constraint : project.TangentConstraints()) {
+        RequireScriptNameSafe(constraint.anchor.wireName, "Tangent anchor wire");
+        RequireScriptNameSafe(constraint.follower.wireName, "Tangent follower wire");
+        output << "wire_tangent "
                << constraint.anchor.wireName << ' ' << WireEndpointToken(constraint.anchor.endpoint) << ' '
                << constraint.follower.wireName << ' ' << WireEndpointToken(constraint.follower.endpoint) << '\n';
     }

@@ -450,6 +450,36 @@ Wire ApplyWireLineConstraints(
             startCoordinates.v + constrainedLength * std::sin(angleRadians)));
 }
 
+Wire ApplyWireCurveConstraints(
+    const Wire& wire,
+    const WireCurveConstraints& constraints,
+    double tolerance)
+{
+    if (constraints.Empty()) {
+        return wire;
+    }
+    if (wire.Kind() != WireKind::Circle && wire.Kind() != WireKind::CircularArc) {
+        throw std::invalid_argument("Radius constraints can only be applied to circles and circular arcs.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0
+        || !std::isfinite(*constraints.radiusMillimeters)
+        || *constraints.radiusMillimeters <= tolerance) {
+        throw std::invalid_argument("Radius constraint must be positive.");
+    }
+    const WireArcData arc = wire.ArcData();
+    if (wire.Kind() == WireKind::Circle) {
+        return Wire::Circle(
+            arc.center, arc.uAxis, arc.vAxis, *constraints.radiusMillimeters);
+    }
+    return Wire::CircularArc(
+        arc.center,
+        arc.uAxis,
+        arc.vAxis,
+        *constraints.radiusMillimeters,
+        arc.startAngleRadians,
+        arc.sweepAngleRadians);
+}
+
 LineIntersectionEditResult MeetLinesAtIntersection(
     const Wire& first,
     RetainedLineEnd retainedFirst,

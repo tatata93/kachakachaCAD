@@ -7,6 +7,7 @@
 
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
+using kachakacha::model::ApplyWireCurveConstraints;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::ApplyWireLineConstraints;
 using kachakacha::model::FilletIntersectingLines;
@@ -15,6 +16,7 @@ using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
+using kachakacha::model::WireCurveConstraints;
 using kachakacha::model::WireLineConstraints;
 using kachakacha::model::WorkPlane;
 
@@ -294,6 +296,34 @@ void AppliesPersistentLineConstraints()
     Require(missingPlaneRejected, "angle constraint without plane rejected");
 }
 
+void AppliesPersistentRadiusConstraints()
+{
+    const Wire circle = ApplyWireCurveConstraints(
+        Wire::Circle({1.0, 2.0, 3.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0),
+        WireCurveConstraints{4.5});
+    Require(std::abs(circle.ArcData().radius - 4.5) <= 1.0e-12, "circle radius constraint");
+    RequireNear(circle.ArcData().center, {1.0, 2.0, 3.0}, "circle radius keeps center");
+
+    const Wire arc = ApplyWireCurveConstraints(
+        Wire::CircularArc(
+            {}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0, 0.25, 1.75),
+        WireCurveConstraints{7.25});
+    Require(std::abs(arc.ArcData().radius - 7.25) <= 1.0e-12, "arc radius constraint");
+    Require(std::abs(arc.ArcData().startAngleRadians - 0.25) <= 1.0e-12,
+        "arc radius keeps start angle");
+    Require(std::abs(arc.ArcData().sweepAngleRadians - 1.75) <= 1.0e-12,
+        "arc radius keeps sweep angle");
+
+    bool lineRejected = false;
+    try {
+        (void)ApplyWireCurveConstraints(
+            Wire::Line({}, {1.0, 0.0, 0.0}), WireCurveConstraints{1.0});
+    } catch (const std::invalid_argument&) {
+        lineRejected = true;
+    }
+    Require(lineRejected, "radius constraint rejects non-circular wire");
+}
+
 } // namespace
 
 int main()
@@ -311,6 +341,7 @@ int main()
         OffsetsPlanarDrawingWires();
         OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs();
         AppliesPersistentLineConstraints();
+        AppliesPersistentRadiusConstraints();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

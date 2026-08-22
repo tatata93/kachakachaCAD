@@ -64,6 +64,11 @@ struct LineIntersectionEditResult {
     const WireLineConstraints& constraints,
     double tolerance = 1.0e-8);
 
+[[nodiscard]] Wire ApplyWireCurveConstraints(
+    const Wire& wire,
+    const WireCurveConstraints& constraints,
+    double tolerance = 1.0e-8);
+
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(
     const Wire& first,
     RetainedLineEnd retainedFirst,

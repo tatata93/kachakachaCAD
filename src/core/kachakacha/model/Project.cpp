@@ -1,5 +1,6 @@
 #include "kachakacha/model/Project.h"
 
+#include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/WireOperations.h"
 
 #include <algorithm>
@@ -68,12 +69,47 @@ std::optional<WorkPlane> ConstraintPlane(const Project& project, const WireMetad
 
 Wire ConstrainWire(const Project& project, const Wire& wire, const WireMetadata& metadata)
 {
-    return ApplyWireLineConstraints(wire, ConstraintPlane(project, metadata), metadata.lineConstraints);
+    return ApplyWireCurveConstraints(
+        ApplyWireLineConstraints(wire, ConstraintPlane(project, metadata), metadata.lineConstraints),
+        metadata.curveConstraints);
 }
 
 geometry::Vector3 EndpointPoint(const Wire& wire, WireEndpoint endpoint)
 {
     return endpoint == WireEndpoint::Start ? wire.Start() : wire.End();
+}
+
+bool SameEndpointReference(
+    const WireEndpointReference& first,
+    const WireEndpointReference& second)
+{
+    return first.wireName == second.wireName && first.endpoint == second.endpoint;
+}
+
+geometry::Vector3 EndpointInteriorDirection(const Wire& wire, WireEndpoint endpoint)
+{
+    const geometry::Vector3 parameterTangent = MeasureWireTangent(
+        wire, endpoint == WireEndpoint::Start ? 0.0 : 1.0);
+    return endpoint == WireEndpoint::Start ? parameterTangent : parameterTangent * -1.0;
+}
+
+Wire AlignBezierEndpointTangent(
+    const Wire& wire,
+    WireEndpoint endpoint,
+    geometry::Vector3 interiorDirection)
+{
+    if (wire.Kind() != WireKind::CubicBezier) {
+        throw std::invalid_argument("Tangent followers must be cubic Bezier wires.");
+    }
+    std::vector<geometry::Vector3> points = wire.ControlPoints();
+    const std::size_t endpointIndex = endpoint == WireEndpoint::Start ? 0 : 3;
+    const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
+    const double handleLength = (points[handleIndex] - points[endpointIndex]).Length();
+    if (handleLength <= 1.0e-9) {
+        throw std::invalid_argument("Tangent follower handle must have a non-zero length.");
+    }
+    points[handleIndex] = points[endpointIndex] + interiorDirection.Normalized() * handleLength;
+    return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
 }
 
 Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vector3 point)
@@ -494,11 +530,8 @@ void Project::AddWireCoincidentConstraint(
     if (!followerWire.metadata.lineConstraints.Empty()) {
         throw std::invalid_argument("Remove the follower line dimensions before adding endpoint coincidence.");
     }
-    const auto sameEndpoint = [](const WireEndpointReference& first, const WireEndpointReference& second) {
-        return first.wireName == second.wireName && first.endpoint == second.endpoint;
-    };
     for (const WireCoincidentConstraint& existing : coincidentConstraints_) {
-        if (sameEndpoint(existing.follower, follower)) {
+        if (SameEndpointReference(existing.follower, follower)) {
             throw std::invalid_argument("The follower endpoint already has a coincidence constraint.");
         }
     }
@@ -528,7 +561,56 @@ std::size_t Project::RemoveWireCoincidentConstraints(std::string_view wireName)
     std::erase_if(coincidentConstraints_, [&](const WireCoincidentConstraint& constraint) {
         return constraint.anchor.wireName == wireName || constraint.follower.wireName == wireName;
     });
+    std::erase_if(tangentConstraints_, [&](const WireTangentConstraint& constraint) {
+        return constraint.anchor.wireName == wireName || constraint.follower.wireName == wireName;
+    });
     return before - coincidentConstraints_.size();
+}
+
+void Project::AddWireTangentConstraint(
+    WireEndpointReference anchor,
+    WireEndpointReference follower)
+{
+    const NamedWire& anchorWire = RequireWire(anchor.wireName);
+    const NamedWire& followerWire = RequireWire(follower.wireName);
+    if (anchor.wireName == follower.wireName) {
+        throw std::invalid_argument("Tangent endpoints must belong to different wires.");
+    }
+    if (anchorWire.projection.has_value() || followerWire.projection.has_value()
+        || anchorWire.wire.IsClosed() || followerWire.wire.IsClosed()) {
+        throw std::invalid_argument("Tangent endpoint constraints require open, editable wires.");
+    }
+    if (followerWire.wire.Kind() != WireKind::CubicBezier) {
+        throw std::invalid_argument("The tangent follower must be a cubic Bezier wire.");
+    }
+    const bool hasCoincidence = std::any_of(
+        coincidentConstraints_.begin(), coincidentConstraints_.end(),
+        [&](const WireCoincidentConstraint& constraint) {
+            return SameEndpointReference(constraint.anchor, anchor)
+                && SameEndpointReference(constraint.follower, follower);
+        });
+    if (!hasCoincidence) {
+        throw std::invalid_argument("Tangent endpoints must have a matching coincidence constraint.");
+    }
+    for (const WireTangentConstraint& existing : tangentConstraints_) {
+        if (SameEndpointReference(existing.follower, follower)) {
+            throw std::invalid_argument("The follower endpoint already has a tangent constraint.");
+        }
+    }
+
+    Project candidate = *this;
+    candidate.tangentConstraints_.push_back({std::move(anchor), std::move(follower)});
+    candidate.RebuildDependentGeometry();
+    *this = std::move(candidate);
+}
+
+std::size_t Project::RemoveWireTangentConstraints(std::string_view wireName)
+{
+    const std::size_t before = tangentConstraints_.size();
+    std::erase_if(tangentConstraints_, [&](const WireTangentConstraint& constraint) {
+        return constraint.anchor.wireName == wireName || constraint.follower.wireName == wireName;
+    });
+    return before - tangentConstraints_.size();
 }
 
 void Project::SetWorkPlaneVisible(std::string_view name, bool visible)
@@ -787,6 +869,11 @@ bool Project::RemoveWire(std::string_view name)
             throw std::invalid_argument("Wire is used by an endpoint coincidence constraint.");
         }
     }
+    for (const WireTangentConstraint& constraint : tangentConstraints_) {
+        if (constraint.anchor.wireName == name || constraint.follower.wireName == name) {
+            throw std::invalid_argument("Wire is used by an endpoint tangent constraint.");
+        }
+    }
 
     wires_.erase(position);
     return true;
@@ -904,9 +991,55 @@ void Project::ApplyCoincidentConstraints()
     throw std::logic_error("Endpoint coincidence constraints did not converge.");
 }
 
+void Project::ApplyTangentConstraints()
+{
+    for (std::size_t pass = 0; pass <= tangentConstraints_.size(); ++pass) {
+        bool changed = false;
+        for (const WireTangentConstraint& constraint : tangentConstraints_) {
+            const auto anchor = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == constraint.anchor.wireName;
+            });
+            const auto follower = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == constraint.follower.wireName;
+            });
+            if (anchor == wires_.end() || follower == wires_.end()) {
+                throw std::logic_error("Endpoint tangent wire is missing.");
+            }
+
+            const geometry::Vector3 desiredInterior =
+                EndpointInteriorDirection(anchor->wire, constraint.anchor.endpoint) * -1.0;
+            if (follower->metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                && follower->metadata.sourcePlaneName.has_value()) {
+                const std::optional<WorkPlane> plane = FindWorkPlane(*follower->metadata.sourcePlaneName);
+                if (!plane.has_value()
+                    || std::abs(geometry::Dot(desiredInterior, plane->Normal())) > 1.0e-7) {
+                    throw std::invalid_argument("Tangent direction would leave the follower work plane.");
+                }
+            }
+
+            const Wire aligned = AlignBezierEndpointTangent(
+                follower->wire, constraint.follower.endpoint, desiredInterior);
+            const std::size_t handleIndex = constraint.follower.endpoint == WireEndpoint::Start ? 1 : 2;
+            if (geometry::AlmostEqual(
+                    follower->wire.ControlPoints()[handleIndex],
+                    aligned.ControlPoints()[handleIndex],
+                    1.0e-9)) {
+                continue;
+            }
+            follower->wire = aligned;
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+    }
+    throw std::logic_error("Endpoint tangent constraints did not converge.");
+}
+
 void Project::RebuildDependentGeometry()
 {
     ApplyCoincidentConstraints();
+    ApplyTangentConstraints();
     for (NamedSurface& surface : surfaces_) {
         if (surface.surface.Kind() == SurfaceKind::Planar) {
             surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);

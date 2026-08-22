@@ -167,6 +167,41 @@ void CoincidentEndpointsRoundTripAndDriveGeometry()
     Require(roundTripped.RemoveWire("anchor"), "wire removable after coincidence removal");
 }
 
+void TangentEndpointsRoundTripAndDriveBezierHandle()
+{
+    std::istringstream input(R"(
+        line3d anchor 0 0 0  10 0 0
+        bezier3d follower 20 2 0  20 5 0  26 4 0  30 0 0
+        wire_coincident anchor end follower start
+        wire_tangent anchor end follower start
+    )");
+    auto project = LoadProjectScript(input, "tangent-test");
+    Require(project.TangentConstraints().size() == 1, "tangent loaded");
+    RequireNear(project.Wires()[1].wire.Start(), {10.0, 0.0, 0.0}, "tangent follower coincident");
+    RequireNear(project.Wires()[1].wire.ControlPoints()[1], {13.0, 0.0, 0.0}, "bezier handle tangent to line");
+
+    project.UpdateWire("anchor", Wire::Line({0.0, 0.0, 0.0}, {0.0, 10.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.Start(), {0.0, 10.0, 0.0}, "tangent follower tracks anchor point");
+    RequireNear(project.Wires()[1].wire.ControlPoints()[1], {0.0, 13.0, 0.0}, "bezier handle tracks anchor direction");
+
+    project.UpdateWire("follower", Wire::CubicBezier(
+        {50.0, 50.0, 0.0}, {55.0, 55.0, 0.0}, {26.0, 4.0, 0.0}, {30.0, 0.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.Start(), {0.0, 10.0, 0.0}, "edited tangent endpoint remains coincident");
+    const Vector3 handle = project.Wires()[1].wire.ControlPoints()[1] - project.Wires()[1].wire.Start();
+    Require(std::abs(handle.x) <= 1.0e-9 && handle.y > 0.0, "edited bezier handle remains tangent");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_tangent anchor end follower start") != std::string::npos,
+        "tangent written");
+    std::istringstream roundTripInput(output.str());
+    auto roundTripped = LoadProjectScript(roundTripInput, "tangent-roundtrip");
+    Require(roundTripped.TangentConstraints().size() == 1, "tangent roundtrip count");
+    Require(roundTripped.RemoveWireTangentConstraints("follower") == 1, "remove tangent only");
+    Require(roundTripped.CoincidentConstraints().size() == 1, "coincidence remains after tangent removal");
+    Require(roundTripped.RemoveWireCoincidentConstraints("follower") == 1, "remove remaining coincidence");
+}
+
 void WrittenProjectRoundTrips()
 {
     std::istringstream input(R"(
@@ -234,6 +269,43 @@ void LineConstraintsRoundTripAndDriveGeometry()
         "fixed length roundtrip");
     Require(roundTripped.Wires()[0].metadata.lineConstraints.angleDegrees == 30.0,
         "fixed angle roundtrip");
+}
+
+void RadiusConstraintsRoundTripAndDriveGeometry()
+{
+    std::istringstream input(R"(
+        circle3d lamp 1 2 3  1 0 0  0 1 0  2
+        wire_radius_constraint lamp 4.5
+        arc3d corner 0 0 0  1 0 0  0 1 0  3 15 120
+        wire_radius_constraint corner 6.25
+    )");
+    auto project = LoadProjectScript(input, "radius-test");
+    Require(project.Wires()[0].metadata.curveConstraints.radiusMillimeters == 4.5,
+        "circle fixed radius loaded");
+    Require(std::abs(project.Wires()[0].wire.ArcData().radius - 4.5) <= 1.0e-12,
+        "circle radius constraint drives loaded geometry");
+    Require(std::abs(project.Wires()[1].wire.ArcData().radius - 6.25) <= 1.0e-12,
+        "arc radius constraint drives loaded geometry");
+
+    project.UpdateWire("lamp", Wire::Circle(
+        {8.0, 9.0, 10.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 12.0));
+    RequireNear(project.Wires()[0].wire.ArcData().center, {8.0, 9.0, 10.0},
+        "radius-constrained circle center remains editable");
+    Require(std::abs(project.Wires()[0].wire.ArcData().radius - 4.5) <= 1.0e-12,
+        "fixed radius survives direct geometry edit");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_radius_constraint lamp 4.5") != std::string::npos,
+        "circle radius constraint written");
+    Require(output.str().find("wire_radius_constraint corner 6.25") != std::string::npos,
+        "arc radius constraint written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "radius-roundtrip");
+    Require(roundTripped.Wires()[0].metadata.curveConstraints.radiusMillimeters == 4.5,
+        "circle fixed radius roundtrip");
+    Require(roundTripped.Wires()[1].metadata.curveConstraints.radiusMillimeters == 6.25,
+        "arc fixed radius roundtrip");
 }
 
 void SurfacesAndProjectedWiresRoundTrip()
@@ -549,8 +621,10 @@ int main()
         LoadsWireMetadataForDirectWires();
         ConstructionWiresRoundTripAndStayOutOfSurfaces();
         CoincidentEndpointsRoundTripAndDriveGeometry();
+        TangentEndpointsRoundTripAndDriveBezierHandle();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
+        RadiusConstraintsRoundTripAndDriveGeometry();
         SurfacesAndProjectedWiresRoundTrip();
         LoftSurfacesRoundTrip();
         PlateSplitsRoundTrip();

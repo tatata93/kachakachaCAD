@@ -13,6 +13,7 @@ using kachakacha::io::LoadProjectScript;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::PlateSplitAxis;
 using kachakacha::model::Wire;
+using kachakacha::model::WireContinuity;
 using kachakacha::model::WirePlanePolicy;
 
 namespace {
@@ -32,6 +33,21 @@ void RequireNear(const Vector3& actual, const Vector3& expected, const char* mes
                   << " expected=(" << expected.x << ", " << expected.y << ", " << expected.z << ")\n";
         throw std::runtime_error(message);
     }
+}
+
+Vector3 BezierEndpointCurvature(const Wire& wire, bool start)
+{
+    const auto& points = wire.ControlPoints();
+    const Vector3 endpoint = start ? points[0] : points[3];
+    const Vector3 firstInterior = start ? points[1] : points[2];
+    const Vector3 secondInterior = start ? points[2] : points[1];
+    const Vector3 derivative = (firstInterior - endpoint) * 3.0;
+    const double speedSquared = derivative.LengthSquared();
+    const Vector3 tangent = derivative / std::sqrt(speedSquared);
+    const Vector3 secondDerivative =
+        (secondInterior - firstInterior * 2.0 + endpoint) * 6.0;
+    return (secondDerivative - tangent * kachakacha::geometry::Dot(secondDerivative, tangent))
+        / speedSquared;
 }
 
 void LoadsPlanesAndWires()
@@ -266,6 +282,62 @@ void TangentEndpointsDriveCircularArc()
     Require(outOfPlaneRejected, "locked arc rejects out-of-plane tangent");
     RequireNear(lockedProject.Wires()[1].wire.ArcData().center, lockedArcBefore.ArcData().center,
         "rejected locked arc edit is atomic");
+}
+
+void CurvatureEndpointsDriveBezierHandles()
+{
+    constexpr double pi = 3.14159265358979323846;
+    std::istringstream input(R"(
+        arc3d anchor 0 0 0  1 0 0  0 1 0  5 -90 90
+        bezier3d follower 8 2 0  9 5 0  15 4 0  20 0 0
+        wire_coincident anchor end follower start
+        wire_curvature anchor end follower start
+    )");
+    auto project = LoadProjectScript(input, "curvature-test");
+    Require(project.TangentConstraints().size() == 1, "curvature loaded");
+    Require(project.TangentConstraints()[0].continuity == WireContinuity::G2Curvature,
+        "curvature continuity kind");
+    RequireNear(project.Wires()[1].wire.Start(), {5.0, 0.0, 0.0},
+        "curvature follower coincident");
+    RequireNear(BezierEndpointCurvature(project.Wires()[1].wire, true), {-0.2, 0.0, 0.0},
+        "bezier follows arc curvature");
+    RequireNear(project.Wires()[1].wire.End(), {20.0, 0.0, 0.0},
+        "curvature keeps opposite endpoint");
+
+    project.UpdateWire("anchor", Wire::CircularArc(
+        {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 10.0, -pi / 2.0, pi / 2.0));
+    RequireNear(project.Wires()[1].wire.Start(), {10.0, 0.0, 0.0},
+        "curvature endpoint follows edited arc");
+    RequireNear(BezierEndpointCurvature(project.Wires()[1].wire, true), {-0.1, 0.0, 0.0},
+        "curvature follows edited radius");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_curvature anchor end follower start") != std::string::npos,
+        "curvature written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "curvature-roundtrip");
+    Require(roundTripped.TangentConstraints().size() == 1
+            && roundTripped.TangentConstraints()[0].continuity == WireContinuity::G2Curvature,
+        "curvature roundtrip");
+    RequireNear(BezierEndpointCurvature(roundTripped.Wires()[1].wire, true), {-0.1, 0.0, 0.0},
+        "roundtrip curvature value");
+
+    bool outOfPlaneRejected = false;
+    try {
+        std::istringstream lockedInput(R"(
+            plane_point_normal top 0 0 0  0 0 1  1 0 0
+            bezier3d anchor -3 0 0  -2 0 1  -1 0 0  0 0 0
+            bezier3d follower 2 0 0  3 0 0  4 1 0  5 0 0
+            wire_meta follower top locked
+            wire_coincident anchor end follower start
+            wire_curvature anchor end follower start
+        )");
+        (void)LoadProjectScript(lockedInput, "locked-curvature");
+    } catch (const std::runtime_error&) {
+        outOfPlaneRejected = true;
+    }
+    Require(outOfPlaneRejected, "locked follower rejects out-of-plane curvature");
 }
 
 void WrittenProjectRoundTrips()
@@ -752,6 +824,7 @@ int main()
         CoincidentEndpointsRoundTripAndDriveGeometry();
         TangentEndpointsRoundTripAndDriveBezierHandle();
         TangentEndpointsDriveCircularArc();
+        CurvatureEndpointsDriveBezierHandles();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         RadiusConstraintsRoundTripAndDriveGeometry();

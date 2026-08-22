@@ -27,6 +27,7 @@ using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
 using kachakacha::model::WireArcData;
+using kachakacha::model::WireContinuity;
 using kachakacha::model::WireKind;
 using kachakacha::model::WireLineConstraints;
 using kachakacha::model::WireMetadata;
@@ -561,6 +562,16 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 project.AddWireTangentConstraint(
                     {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
                     {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)});
+            } else if (command == "wire_curvature") {
+                const std::string anchorWire = ReadName(stream, sourceName, lineNumber, "anchor wire");
+                const std::string anchorEndpoint = ReadName(stream, sourceName, lineNumber, "anchor endpoint");
+                const std::string followerWire = ReadName(stream, sourceName, lineNumber, "follower wire");
+                const std::string followerEndpoint = ReadName(stream, sourceName, lineNumber, "follower endpoint");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWireTangentConstraint(
+                    {anchorWire, ParseWireEndpoint(anchorEndpoint, sourceName, lineNumber)},
+                    {followerWire, ParseWireEndpoint(followerEndpoint, sourceName, lineNumber)},
+                    WireContinuity::G2Curvature);
             } else if (command == "reference_dimension") {
                 ReferenceDimension dimension;
                 dimension.name = ReadName(stream, sourceName, lineNumber, "reference dimension");
@@ -876,7 +887,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     for (const auto& constraint : project.TangentConstraints()) {
         RequireScriptNameSafe(constraint.anchor.wireName, "Tangent anchor wire");
         RequireScriptNameSafe(constraint.follower.wireName, "Tangent follower wire");
-        output << "wire_tangent "
+        output << (constraint.continuity == WireContinuity::G2Curvature
+                    ? "wire_curvature " : "wire_tangent ")
                << constraint.anchor.wireName << ' ' << WireEndpointToken(constraint.anchor.endpoint) << ' '
                << constraint.follower.wireName << ' ' << WireEndpointToken(constraint.follower.endpoint) << '\n';
     }

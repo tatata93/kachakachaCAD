@@ -231,6 +231,12 @@ void CadViewport::SetTangentRequestedCallback(
     tangentRequested_ = std::move(callback);
 }
 
+void CadViewport::SetCurvatureRequestedCallback(
+    std::function<void(WireEndpointPick, WireEndpointPick)> callback)
+{
+    curvatureRequested_ = std::move(callback);
+}
+
 void CadViewport::SetMeasurementChangedCallback(
     std::function<void(const std::vector<MeasurementPick>&)> callback)
 {
@@ -260,7 +266,7 @@ void CadViewport::SetTool(ViewportTool tool)
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
                 || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
-                || tool_ == ViewportTool::Tangent)
+                || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
@@ -654,6 +660,10 @@ std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
             && namedWire.wire.Kind() != WireKind::CircularArc) {
             continue;
         }
+        if (tool_ == ViewportTool::Curvature && !coincidencePicks_.empty()
+            && namedWire.wire.Kind() != WireKind::CubicBezier) {
+            continue;
+        }
         for (const auto endpoint : {kachakacha::model::WireEndpoint::Start, kachakacha::model::WireEndpoint::End}) {
             const Vector3 point = endpoint == kachakacha::model::WireEndpoint::Start
                 ? namedWire.wire.Start()
@@ -756,7 +766,9 @@ void CadViewport::CommitCoincidencePick(QPointF position)
         const WireEndpointPick anchor = coincidencePicks_[0];
         const WireEndpointPick follower = coincidencePicks_[1];
         coincidencePicks_.clear();
-        if (tool_ == ViewportTool::Tangent && tangentRequested_) {
+        if (tool_ == ViewportTool::Curvature && curvatureRequested_) {
+            curvatureRequested_(anchor, follower);
+        } else if (tool_ == ViewportTool::Tangent && tangentRequested_) {
             tangentRequested_(anchor, follower);
         } else if (coincidenceRequested_) {
             coincidenceRequested_(anchor, follower);
@@ -942,7 +954,8 @@ void CadViewport::UpdateHover(QPointF position)
     hoveredWireParameter_.reset();
 
     if (project_ != nullptr
-        && (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent)) {
+        && (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent
+            || tool_ == ViewportTool::Curvature)) {
         const std::optional<WireEndpointPick> endpoint = NearestWireEndpoint(position, 8.0);
         if (endpoint.has_value()) {
             hoveredSelection_ = {CadSelectionKind::Wire, endpoint->wireIndex};
@@ -992,7 +1005,7 @@ void CadViewport::UpdateHover(QPointF position)
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
                 || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
-                || tool_ == ViewportTool::Tangent)
+                || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
@@ -1337,7 +1350,7 @@ void CadViewport::paintEvent(QPaintEvent*)
             const QPointF screenPoint = ProjectPoint(point);
             const int anchorIndex = static_cast<int>(std::distance(project_->Wires().begin(), anchorWire));
             const int followerIndex = static_cast<int>(std::distance(project_->Wires().begin(), followerWire));
-            const bool tangent = std::any_of(
+            const auto smoothConstraint = std::find_if(
                 project_->TangentConstraints().begin(), project_->TangentConstraints().end(),
                 [&](const auto& candidate) {
                     return candidate.anchor.wireName == constraint.anchor.wireName
@@ -1345,22 +1358,30 @@ void CadViewport::paintEvent(QPaintEvent*)
                         && candidate.follower.wireName == constraint.follower.wireName
                         && candidate.follower.endpoint == constraint.follower.endpoint;
                 });
+            const bool tangent = smoothConstraint != project_->TangentConstraints().end();
+            const bool curvature = tangent
+                && smoothConstraint->continuity == kachakacha::model::WireContinuity::G2Curvature;
             const bool emphasized = tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent
+                || tool_ == ViewportTool::Curvature
                 || IsSelected(CadSelectionKind::Wire, anchorIndex)
                 || IsSelected(CadSelectionKind::Wire, followerIndex);
-            const QColor markerColor(tangent ? "#2f7d4a" : "#0b7f78");
+            const QColor markerColor(curvature ? "#7a4c9e" : tangent ? "#2f7d4a" : "#0b7f78");
             painter.setBrush(QColor(255, 255, 255, 235));
             painter.setPen(QPen(markerColor, emphasized ? 2.6 : 1.8));
             painter.drawEllipse(screenPoint + QPointF(-3.0, 0.0), 4.0, 4.0);
             painter.drawEllipse(screenPoint + QPointF(3.0, 0.0), 4.0, 4.0);
             if (tangent) {
                 painter.drawLine(screenPoint + QPointF(-8.0, 6.0), screenPoint + QPointF(8.0, 6.0));
+                if (curvature) {
+                    painter.drawLine(screenPoint + QPointF(-8.0, 10.0), screenPoint + QPointF(8.0, 10.0));
+                }
             }
             if (emphasized) {
                 painter.setPen(markerColor.darker(125));
                 painter.drawText(
                     screenPoint + QPointF(9.0, -8.0),
-                    tangent ? QStringLiteral("接線") : QStringLiteral("一致"));
+                    curvature ? QStringLiteral("G2")
+                              : tangent ? QStringLiteral("G1") : QStringLiteral("一致"));
             }
         }
         if (!coincidencePicks_.empty()) {
@@ -1726,6 +1747,11 @@ void CadViewport::paintEvent(QPaintEvent*)
             ? QStringLiteral("接線 · 固定側の端点")
             : QStringLiteral("接線 · 追従曲線の端点");
         break;
+    case ViewportTool::Curvature:
+        modeText = coincidencePicks_.empty()
+            ? QStringLiteral("曲率 · 固定側の端点")
+            : QStringLiteral("曲率 · 追従ベジェの端点");
+        break;
     case ViewportTool::Measure:
         modeText = measurementMode_ == MeasurementMode::TwoPoints
             ? QStringLiteral("測定 · 2点間")
@@ -1959,6 +1985,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Measure
         && tool_ != ViewportTool::Coincident
         && tool_ != ViewportTool::Tangent
+        && tool_ != ViewportTool::Curvature
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -2014,6 +2041,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Measure
         && tool_ != ViewportTool::Coincident
         && tool_ != ViewportTool::Tangent
+        && tool_ != ViewportTool::Curvature
         && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
@@ -2094,7 +2122,8 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
-    if (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent) {
+    if (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent
+        || tool_ == ViewportTool::Curvature) {
         if (event->button() == Qt::LeftButton && !mouseMoved_) {
             CommitCoincidencePick(event->position());
         } else if (event->button() == Qt::RightButton && !mouseMoved_) {
@@ -2170,7 +2199,7 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             ClearMeasurement();
         } else if (tool_ == ViewportTool::Coincident) {
             ClearCoincidencePicks();
-        } else if (tool_ == ViewportTool::Tangent) {
+        } else if (tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature) {
             ClearCoincidencePicks();
         } else {
             CancelDrawing();

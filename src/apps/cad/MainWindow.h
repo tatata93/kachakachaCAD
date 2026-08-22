@@ -78,6 +78,11 @@ private:
     void ApplySplitWire(int wireIndex, double parameter);
     void ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointPick follower);
     void ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick follower);
+    void ApplyEndpointCurvature(WireEndpointPick anchor, WireEndpointPick follower);
+    void ApplyEndpointContinuity(
+        WireEndpointPick anchor,
+        WireEndpointPick follower,
+        kachakacha::model::WireContinuity continuity);
     void RemoveSelectedCoincidences();
     void RemoveSelectedTangencies();
     void UpdateMeasurement(const std::vector<MeasurementPick>& picks);
@@ -164,6 +169,7 @@ private:
     QAction* splitToolAction_ = nullptr;
     QAction* coincidentToolAction_ = nullptr;
     QAction* tangentToolAction_ = nullptr;
+    QAction* curvatureToolAction_ = nullptr;
     QAction* removeCoincidentAction_ = nullptr;
     QAction* removeTangentAction_ = nullptr;
     QAction* measureToolAction_ = nullptr;

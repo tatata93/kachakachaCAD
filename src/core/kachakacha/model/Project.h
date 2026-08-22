@@ -33,9 +33,15 @@ struct WireCoincidentConstraint {
     WireEndpointReference follower;
 };
 
+enum class WireContinuity {
+    G1Tangent,
+    G2Curvature,
+};
+
 struct WireTangentConstraint {
     WireEndpointReference anchor;
     WireEndpointReference follower;
+    WireContinuity continuity = WireContinuity::G1Tangent;
 };
 
 enum class ReferenceDimensionKind {
@@ -156,7 +162,8 @@ public:
     [[nodiscard]] std::size_t RemoveWireCoincidentConstraints(std::string_view wireName);
     void AddWireTangentConstraint(
         WireEndpointReference anchor,
-        WireEndpointReference follower);
+        WireEndpointReference follower,
+        WireContinuity continuity = WireContinuity::G1Tangent);
     [[nodiscard]] std::size_t RemoveWireTangentConstraints(std::string_view wireName);
     void AddReferenceDimension(ReferenceDimension dimension);
     [[nodiscard]] bool RemoveReferenceDimension(std::string_view name);

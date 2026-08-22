@@ -94,6 +94,38 @@ geometry::Vector3 EndpointInteriorDirection(const Wire& wire, WireEndpoint endpo
     return endpoint == WireEndpoint::Start ? parameterTangent : parameterTangent * -1.0;
 }
 
+geometry::Vector3 EndpointCurvatureVector(const Wire& wire, WireEndpoint endpoint)
+{
+    switch (wire.Kind()) {
+    case WireKind::Line:
+    case WireKind::Polyline:
+        return {};
+    case WireKind::CubicBezier: {
+        const auto& points = wire.ControlPoints();
+        const geometry::Vector3 endpointPoint = endpoint == WireEndpoint::Start ? points[0] : points[3];
+        const geometry::Vector3 firstInterior = endpoint == WireEndpoint::Start ? points[1] : points[2];
+        const geometry::Vector3 secondInterior = endpoint == WireEndpoint::Start ? points[2] : points[1];
+        const geometry::Vector3 firstDerivative = (firstInterior - endpointPoint) * 3.0;
+        const double speedSquared = firstDerivative.LengthSquared();
+        if (speedSquared <= 1.0e-18) {
+            throw std::invalid_argument("Curvature anchor handle must have a non-zero length.");
+        }
+        const geometry::Vector3 tangent = firstDerivative / std::sqrt(speedSquared);
+        const geometry::Vector3 secondDerivative =
+            (secondInterior - firstInterior * 2.0 + endpointPoint) * 6.0;
+        return (secondDerivative
+            - tangent * geometry::Dot(secondDerivative, tangent)) / speedSquared;
+    }
+    case WireKind::Circle:
+    case WireKind::CircularArc: {
+        const WireArcData arc = wire.ArcData();
+        const geometry::Vector3 endpointPoint = EndpointPoint(wire, endpoint);
+        return (arc.center - endpointPoint) / (arc.radius * arc.radius);
+    }
+    }
+    throw std::logic_error("Unknown wire kind.");
+}
+
 Wire AlignBezierEndpointTangent(
     const Wire& wire,
     WireEndpoint endpoint,
@@ -110,6 +142,38 @@ Wire AlignBezierEndpointTangent(
         throw std::invalid_argument("Tangent follower handle must have a non-zero length.");
     }
     points[handleIndex] = points[endpointIndex] + interiorDirection.Normalized() * handleLength;
+    return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+}
+
+Wire AlignBezierEndpointCurvature(
+    const Wire& wire,
+    WireEndpoint endpoint,
+    geometry::Vector3 interiorDirection,
+    geometry::Vector3 curvature,
+    std::optional<geometry::Vector3> requiredPlaneNormal)
+{
+    const Wire tangentAligned = AlignBezierEndpointTangent(wire, endpoint, interiorDirection);
+    std::vector<geometry::Vector3> points = tangentAligned.ControlPoints();
+    const std::size_t endpointIndex = endpoint == WireEndpoint::Start ? 0 : 3;
+    const std::size_t firstHandleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
+    const std::size_t secondHandleIndex = endpoint == WireEndpoint::Start ? 2 : 1;
+    const geometry::Vector3 firstHandle = points[firstHandleIndex] - points[endpointIndex];
+    const double handleLength = firstHandle.Length();
+    const geometry::Vector3 tangent = firstHandle / handleLength;
+    curvature = curvature - tangent * geometry::Dot(curvature, tangent);
+    if (requiredPlaneNormal.has_value()
+        && std::abs(geometry::Dot(curvature, requiredPlaneNormal->Normalized())) > 1.0e-7) {
+        throw std::invalid_argument("Curvature direction would leave the follower work plane.");
+    }
+
+    const geometry::Vector3 secondDerivativeOrigin =
+        points[firstHandleIndex] * 2.0 - points[endpointIndex];
+    const geometry::Vector3 previousOffset =
+        points[secondHandleIndex] - secondDerivativeOrigin;
+    const geometry::Vector3 tangentOffset =
+        tangent * geometry::Dot(previousOffset, tangent);
+    points[secondHandleIndex] = secondDerivativeOrigin + tangentOffset
+        + curvature * (1.5 * handleLength * handleLength);
     return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
 }
 
@@ -173,15 +237,29 @@ Wire AlignWireEndpointTangent(
     throw std::invalid_argument("Tangent followers must be cubic Bezier wires or circular arcs.");
 }
 
-bool TangentAlignmentMatches(const Wire& first, const Wire& second, WireEndpoint endpoint)
+bool TangentAlignmentMatches(
+    const Wire& first,
+    const Wire& second,
+    WireEndpoint endpoint,
+    WireContinuity continuity)
 {
     if (first.Kind() != second.Kind()) {
         return false;
     }
     if (first.Kind() == WireKind::CubicBezier) {
         const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
-        return geometry::AlmostEqual(
-            first.ControlPoints()[handleIndex], second.ControlPoints()[handleIndex], 1.0e-9);
+        if (!geometry::AlmostEqual(
+                first.ControlPoints()[handleIndex], second.ControlPoints()[handleIndex], 1.0e-9)) {
+            return false;
+        }
+        if (continuity == WireContinuity::G2Curvature) {
+            const std::size_t secondHandleIndex = endpoint == WireEndpoint::Start ? 2 : 1;
+            return geometry::AlmostEqual(
+                first.ControlPoints()[secondHandleIndex],
+                second.ControlPoints()[secondHandleIndex],
+                1.0e-9);
+        }
+        return true;
     }
     const WireArcData firstArc = first.ArcData();
     const WireArcData secondArc = second.ArcData();
@@ -649,7 +727,8 @@ std::size_t Project::RemoveWireCoincidentConstraints(std::string_view wireName)
 
 void Project::AddWireTangentConstraint(
     WireEndpointReference anchor,
-    WireEndpointReference follower)
+    WireEndpointReference follower,
+    WireContinuity continuity)
 {
     const NamedWire& anchorWire = RequireWire(anchor.wireName);
     const NamedWire& followerWire = RequireWire(follower.wireName);
@@ -660,7 +739,12 @@ void Project::AddWireTangentConstraint(
         || anchorWire.wire.IsClosed() || followerWire.wire.IsClosed()) {
         throw std::invalid_argument("Tangent endpoint constraints require open, editable wires.");
     }
-    if (followerWire.wire.Kind() != WireKind::CubicBezier
+    if (continuity == WireContinuity::G2Curvature
+        && followerWire.wire.Kind() != WireKind::CubicBezier) {
+        throw std::invalid_argument("The curvature follower must be a cubic Bezier wire.");
+    }
+    if (continuity == WireContinuity::G1Tangent
+        && followerWire.wire.Kind() != WireKind::CubicBezier
         && followerWire.wire.Kind() != WireKind::CircularArc) {
         throw std::invalid_argument("The tangent follower must be a cubic Bezier wire or circular arc.");
     }
@@ -680,7 +764,8 @@ void Project::AddWireTangentConstraint(
     }
 
     Project candidate = *this;
-    candidate.tangentConstraints_.push_back({std::move(anchor), std::move(follower)});
+    candidate.tangentConstraints_.push_back(
+        {std::move(anchor), std::move(follower), continuity});
     candidate.RebuildDependentGeometry();
     *this = std::move(candidate);
 }
@@ -1270,13 +1355,23 @@ void Project::ApplyTangentConstraints()
                 requiredPlaneNormal = plane->Normal();
             }
 
-            const Wire aligned = AlignWireEndpointTangent(
-                follower->wire,
-                constraint.follower.endpoint,
-                desiredInterior,
-                requiredPlaneNormal);
+            const Wire aligned = constraint.continuity == WireContinuity::G2Curvature
+                ? AlignBezierEndpointCurvature(
+                    follower->wire,
+                    constraint.follower.endpoint,
+                    desiredInterior,
+                    EndpointCurvatureVector(anchor->wire, constraint.anchor.endpoint),
+                    requiredPlaneNormal)
+                : AlignWireEndpointTangent(
+                    follower->wire,
+                    constraint.follower.endpoint,
+                    desiredInterior,
+                    requiredPlaneNormal);
             if (TangentAlignmentMatches(
-                    follower->wire, aligned, constraint.follower.endpoint)) {
+                    follower->wire,
+                    aligned,
+                    constraint.follower.endpoint,
+                    constraint.continuity)) {
                 continue;
             }
             follower->wire = aligned;

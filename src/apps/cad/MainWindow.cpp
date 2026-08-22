@@ -86,6 +86,7 @@ using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::SurfaceKind;
 using kachakacha::model::Wire;
+using kachakacha::model::WireContinuity;
 using kachakacha::model::WireKind;
 using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
@@ -411,6 +412,9 @@ void MainWindow::BuildUi()
     viewport_->SetTangentRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
         ApplyEndpointTangency(anchor, follower);
     });
+    viewport_->SetCurvatureRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
+        ApplyEndpointCurvature(anchor, follower);
+    });
     viewport_->SetMeasurementChangedCallback([this](const std::vector<MeasurementPick>& picks) {
         UpdateMeasurement(picks);
     });
@@ -558,8 +562,9 @@ void MainWindow::BuildDrawingActions()
     splitToolAction_ = new QAction(QStringLiteral("分割"), this);
     coincidentToolAction_ = new QAction(QStringLiteral("端点一致"), this);
     tangentToolAction_ = new QAction(QStringLiteral("接線接続"), this);
+    curvatureToolAction_ = new QAction(QStringLiteral("曲率接続"), this);
     removeCoincidentAction_ = new QAction(QStringLiteral("一致解除"), this);
-    removeTangentAction_ = new QAction(QStringLiteral("接線解除"), this);
+    removeTangentAction_ = new QAction(QStringLiteral("滑らか解除"), this);
     measureToolAction_ = new QAction(QStringLiteral("測定"), this);
     joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
     meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
@@ -572,8 +577,9 @@ void MainWindow::BuildDrawingActions()
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
     tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェまたは円弧端点の順に3D画面で指定"));
+    curvatureToolAction_->setToolTip(QStringLiteral("固定側の端点、曲率まで追従するベジェ端点の順に3D画面で指定"));
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
-    removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーの接線関係を解除し、端点一致は残す"));
+    removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーのG1/G2関係を解除し、端点一致は残す"));
     measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
     joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
@@ -593,6 +599,7 @@ void MainWindow::BuildDrawingActions()
     bezierToolAction_->setShortcut(Qt::Key_B);
     coincidentToolAction_->setShortcut(Qt::Key_I);
     tangentToolAction_->setShortcut(Qt::Key_T);
+    curvatureToolAction_->setShortcut(QKeySequence(QStringLiteral("Shift+T")));
     measureToolAction_->setShortcut(Qt::Key_M);
 
     auto* toolGroup = new QActionGroup(this);
@@ -601,7 +608,7 @@ void MainWindow::BuildDrawingActions()
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
-             coincidentToolAction_, tangentToolAction_, measureToolAction_}) {
+             coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -621,6 +628,7 @@ void MainWindow::BuildDrawingActions()
     connect(splitToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::SplitWire); });
     connect(coincidentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Coincident); });
     connect(tangentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Tangent); });
+    connect(curvatureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Curvature); });
     connect(removeCoincidentAction_, &QAction::triggered, this, &MainWindow::RemoveSelectedCoincidences);
     connect(removeTangentAction_, &QAction::triggered, this, &MainWindow::RemoveSelectedTangencies);
     connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
@@ -1046,8 +1054,9 @@ QWidget* MainWindow::BuildEditPanel()
     addDirectButton(coincidentToolAction_, 3, 0);
     addDirectButton(removeCoincidentAction_, 3, 1);
     addDirectButton(tangentToolAction_, 4, 0);
-    addDirectButton(removeTangentAction_, 4, 1);
-    addDirectButton(meetLinesAction_, 5, 0, 2);
+    addDirectButton(curvatureToolAction_, 4, 1);
+    addDirectButton(removeTangentAction_, 5, 0, 2);
+    addDirectButton(meetLinesAction_, 6, 0, 2);
     layout->addLayout(directGrid);
 
     auto* offsetLabel = new QLabel(QStringLiteral("平行オフセット複製"));
@@ -1705,6 +1714,7 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(coincidentToolAction_);
     editMenu->addAction(removeCoincidentAction_);
     editMenu->addAction(tangentToolAction_);
+    editMenu->addAction(curvatureToolAction_);
     editMenu->addAction(removeTangentAction_);
     editMenu->addAction(joinWiresAction_);
     editMenu->addAction(meetLinesAction_);
@@ -1772,6 +1782,7 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->addAction(splitToolAction_);
     transformToolbar->addAction(coincidentToolAction_);
     transformToolbar->addAction(tangentToolAction_);
+    transformToolbar->addAction(curvatureToolAction_);
     transformToolbar->addAction(joinWiresAction_);
     transformToolbar->addAction(meetLinesAction_);
     transformToolbar->addSeparator();
@@ -2634,7 +2645,8 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     const bool isSplit = tool == ViewportTool::SplitWire;
     const bool isCoincident = tool == ViewportTool::Coincident;
     const bool isTangent = tool == ViewportTool::Tangent;
-    if (tool != ViewportTool::Select && !isSplit && !isCoincident && !isTangent
+    const bool isCurvature = tool == ViewportTool::Curvature;
+    if (tool != ViewportTool::Select && !isSplit && !isCoincident && !isTangent && !isCurvature
         && tool != ViewportTool::Measure) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
@@ -2714,6 +2726,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     splitToolAction_->setChecked(tool == ViewportTool::SplitWire);
     coincidentToolAction_->setChecked(tool == ViewportTool::Coincident);
     tangentToolAction_->setChecked(tool == ViewportTool::Tangent);
+    curvatureToolAction_->setChecked(tool == ViewportTool::Curvature);
     measureToolAction_->setChecked(tool == ViewportTool::Measure);
     switch (tool) {
     case ViewportTool::Select:
@@ -2757,6 +2770,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::Tangent:
         statusBar()->showMessage(QStringLiteral("接線接続: 固定側の端点、追従するベジェまたは円弧端点の順にクリック"), 5000);
+        break;
+    case ViewportTool::Curvature:
+        statusBar()->showMessage(QStringLiteral("曲率接続: 固定側の端点、曲率まで追従するベジェ端点の順にクリック"), 5000);
         break;
     case ViewportTool::Measure:
         statusBar()->showMessage(
@@ -2840,6 +2856,11 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         state = viewport_ != nullptr && viewport_->CoincidencePicks().empty()
             ? QStringLiteral("接線接続 · 固定側をクリック")
             : QStringLiteral("接線接続 · 追従曲線をクリック");
+        break;
+    case ViewportTool::Curvature:
+        state = viewport_ != nullptr && viewport_->CoincidencePicks().empty()
+            ? QStringLiteral("曲率接続 · 固定側をクリック")
+            : QStringLiteral("曲率接続 · 追従ベジェをクリック");
         break;
     case ViewportTool::Measure:
         state = QStringLiteral("測定");
@@ -2951,6 +2972,7 @@ void MainWindow::RefreshActiveWorkPlane()
     splitToolAction_->setEnabled(!project_.Wires().empty());
     coincidentToolAction_->setEnabled(project_.Wires().size() >= 2);
     tangentToolAction_->setEnabled(project_.Wires().size() >= 2);
+    curvatureToolAction_->setEnabled(project_.Wires().size() >= 2);
     removeCoincidentAction_->setEnabled(!project_.CoincidentConstraints().empty());
     removeTangentAction_->setEnabled(!project_.TangentConstraints().empty());
     joinWiresAction_->setEnabled(project_.Wires().size() >= 2);
@@ -2959,6 +2981,7 @@ void MainWindow::RefreshActiveWorkPlane()
         && viewport_->Tool() != ViewportTool::SplitWire
         && viewport_->Tool() != ViewportTool::Coincident
         && viewport_->Tool() != ViewportTool::Tangent
+        && viewport_->Tool() != ViewportTool::Curvature
         && viewport_->Tool() != ViewportTool::Measure) {
         SetViewportTool(ViewportTool::Select);
     }
@@ -3367,6 +3390,19 @@ void MainWindow::ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointP
 
 void MainWindow::ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick follower)
 {
+    ApplyEndpointContinuity(anchor, follower, WireContinuity::G1Tangent);
+}
+
+void MainWindow::ApplyEndpointCurvature(WireEndpointPick anchor, WireEndpointPick follower)
+{
+    ApplyEndpointContinuity(anchor, follower, WireContinuity::G2Curvature);
+}
+
+void MainWindow::ApplyEndpointContinuity(
+    WireEndpointPick anchor,
+    WireEndpointPick follower,
+    WireContinuity continuity)
+{
     try {
         if (anchor.wireIndex < 0 || follower.wireIndex < 0
             || anchor.wireIndex >= static_cast<int>(project_.Wires().size())
@@ -3375,7 +3411,12 @@ void MainWindow::ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick
         }
         const auto& anchorWire = project_.Wires()[anchor.wireIndex];
         const auto& followerWire = project_.Wires()[follower.wireIndex];
-        if (followerWire.wire.Kind() != WireKind::CubicBezier
+        if (continuity == WireContinuity::G2Curvature
+            && followerWire.wire.Kind() != WireKind::CubicBezier) {
+            throw std::invalid_argument("G2の追従側にはベジェ曲線の端点を指定してください。");
+        }
+        if (continuity == WireContinuity::G1Tangent
+            && followerWire.wire.Kind() != WireKind::CubicBezier
             && followerWire.wire.Kind() != WireKind::CircularArc) {
             throw std::invalid_argument("追従側にはベジェ曲線または円弧の端点を指定してください。");
         }
@@ -3401,7 +3442,8 @@ void MainWindow::ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick
         }
         candidate.AddWireTangentConstraint(
             {anchorName, anchor.endpoint},
-            {followerName, follower.endpoint});
+            {followerName, follower.endpoint},
+            continuity);
 
         RecordUndo();
         project_ = std::move(candidate);
@@ -3412,8 +3454,11 @@ void MainWindow::ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick
             {CadSelectionKind::Wire, follower.wireIndex},
         }, true);
         statusBar()->showMessage(
-            QStringLiteral("%1から%2へ滑らかに接線接続しました")
-                .arg(ToQString(anchorName), ToQString(followerName)),
+            QStringLiteral("%1から%2へ%3で滑らかに接続しました")
+                .arg(ToQString(anchorName), ToQString(followerName),
+                    continuity == WireContinuity::G2Curvature
+                        ? QStringLiteral("G2（曲率）")
+                        : QStringLiteral("G1（接線）")),
             4500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
@@ -3474,7 +3519,7 @@ void MainWindow::RemoveSelectedTangencies()
         }
     }
     if (wireNames.empty()) {
-        statusBar()->showMessage(QStringLiteral("接線を解除するワイヤーを3D画面で選択してください"), 4000);
+        statusBar()->showMessage(QStringLiteral("G1/G2を解除するワイヤーを3D画面で選択してください"), 4000);
         return;
     }
 
@@ -3484,7 +3529,7 @@ void MainWindow::RemoveSelectedTangencies()
         removed += candidate.RemoveWireTangentConstraints(name);
     }
     if (removed == 0) {
-        statusBar()->showMessage(QStringLiteral("選択したワイヤーには接線接続がありません"), 3000);
+        statusBar()->showMessage(QStringLiteral("選択したワイヤーにはG1/G2接続がありません"), 3000);
         return;
     }
 
@@ -3494,7 +3539,7 @@ void MainWindow::RemoveSelectedTangencies()
     RefreshModelViews(false);
     UpdateSelections(std::move(selections), true);
     statusBar()->showMessage(
-        QStringLiteral("接線接続を%1件解除しました。端点一致は残っています").arg(removed),
+        QStringLiteral("G1/G2接続を%1件解除しました。端点一致は残っています").arg(removed),
         4000);
 }
 
@@ -4086,6 +4131,7 @@ bool MainWindow::RunCreationSelfTest()
         || measureToolAction_ == nullptr
         || coincidentToolAction_ == nullptr
         || tangentToolAction_ == nullptr
+        || curvatureToolAction_ == nullptr
         || removeCoincidentAction_ == nullptr
         || removeTangentAction_ == nullptr
         || editWireLockRadius_ == nullptr
@@ -4392,6 +4438,13 @@ bool MainWindow::RunCreationSelfTest()
         || !kachakacha::geometry::AlmostEqual(
             project_.Wires()[directStart + 4].wire.End(), arcBeforeTangent.End(), 1.0e-8)) {
         return fail("undo direct arc tangent connection");
+    }
+    viewport_->ClearCoincidencePicks();
+    SetViewportTool(ViewportTool::Curvature);
+    click(center + QPointF(-60.0, 90.0));
+    if (viewport_->CoincidencePicks().size() != 1
+        || viewport_->CoincidencePicks().front().wireIndex != static_cast<int>(directStart)) {
+        return fail("direct curvature anchor pick");
     }
     viewport_->ClearCoincidencePicks();
 
@@ -5124,6 +5177,32 @@ bool MainWindow::RunCreationSelfTest()
         || project_.CoincidentConstraints().size() != coincidenceCount + 1) {
         return fail("remove endpoint tangency only");
     }
+    ApplyEndpointCurvature(
+        {static_cast<int>(directStart), kachakacha::model::WireEndpoint::End, project_.Wires()[directStart].wire.End()},
+        {static_cast<int>(directStart + 5), kachakacha::model::WireEndpoint::Start,
+            project_.Wires()[directStart + 5].wire.Start()});
+    const auto& curvatureConstraint = project_.TangentConstraints().back();
+    const auto& curvaturePoints = project_.Wires()[directStart + 5].wire.ControlPoints();
+    const Vector3 curvatureTangent = (curvaturePoints[1] - curvaturePoints[0]).Normalized();
+    const Vector3 curvatureSecondDerivative =
+        (curvaturePoints[2] - curvaturePoints[1] * 2.0 + curvaturePoints[0]) * 6.0;
+    const Vector3 normalSecondDerivative = curvatureSecondDerivative
+        - curvatureTangent * kachakacha::geometry::Dot(curvatureSecondDerivative, curvatureTangent);
+    if (project_.TangentConstraints().size() != tangentCount + 1
+        || curvatureConstraint.continuity != WireContinuity::G2Curvature
+        || normalSecondDerivative.Length() > 1.0e-8) {
+        return fail("apply endpoint curvature");
+    }
+    Undo();
+    if (project_.TangentConstraints().size() != tangentCount) {
+        return fail("undo endpoint curvature");
+    }
+    Redo();
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(directStart + 5)}, true);
+    RemoveSelectedTangencies();
+    if (project_.TangentConstraints().size() != tangentCount) {
+        return fail("remove endpoint curvature only");
+    }
     RemoveSelectedCoincidences();
     if (project_.CoincidentConstraints().size() != coincidenceCount) {
         return fail("remove tangent endpoint coincidence");
@@ -5733,14 +5812,19 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setToolTip(0, QStringLiteral("左が固定側、右が追従側"));
     }
     auto* tangentRoot = new QTreeWidgetItem(
-        modelTree_, {QStringLiteral("接線接続 (%1)").arg(project_.TangentConstraints().size())});
+        modelTree_, {QStringLiteral("滑らか接続 (%1)").arg(project_.TangentConstraints().size())});
     for (const auto& constraint : project_.TangentConstraints()) {
         auto* item = new QTreeWidgetItem(tangentRoot, {
-            QStringLiteral("%1:%2  →  %3:%4")
-                .arg(ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
+            QStringLiteral("%1  %2:%3  →  %4:%5")
+                .arg(constraint.continuity == WireContinuity::G2Curvature
+                        ? QStringLiteral("G2") : QStringLiteral("G1"),
+                    ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
                     ToQString(constraint.follower.wireName), endpointText(constraint.follower.endpoint)),
         });
-        item->setToolTip(0, QStringLiteral("右側のベジェ曲線または円弧が左側の接線方向へ追従"));
+        item->setToolTip(0,
+            constraint.continuity == WireContinuity::G2Curvature
+                ? QStringLiteral("右側のベジェ曲線が左側の位置・接線・曲率へ追従")
+                : QStringLiteral("右側のベジェ曲線または円弧が左側の接線方向へ追従"));
     }
     auto* dimensionRoot = new QTreeWidgetItem(
         modelTree_, {QStringLiteral("参照寸法 (%1)").arg(project_.ReferenceDimensions().size())});
@@ -6131,8 +6215,18 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     return constraint.anchor.wireName == named.name
                         || constraint.follower.wireName == named.name;
                 });
-            if (tangentCount > 0) {
-                details += QStringLiteral("<br>接線接続: %1件").arg(tangentCount);
+            const std::size_t curvatureCount = std::count_if(
+                project_.TangentConstraints().begin(), project_.TangentConstraints().end(),
+                [&](const auto& constraint) {
+                    return constraint.continuity == WireContinuity::G2Curvature
+                        && (constraint.anchor.wireName == named.name
+                            || constraint.follower.wireName == named.name);
+                });
+            if (tangentCount > curvatureCount) {
+                details += QStringLiteral("<br>G1接線接続: %1件").arg(tangentCount - curvatureCount);
+            }
+            if (curvatureCount > 0) {
+                details += QStringLiteral("<br>G2曲率接続: %1件").arg(curvatureCount);
             }
             infoLabel_->setText(details);
         }

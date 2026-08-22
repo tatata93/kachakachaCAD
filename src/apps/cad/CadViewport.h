@@ -42,6 +42,7 @@ enum class ViewportTool {
     SplitWire,
     Coincident,
     Tangent,
+    Curvature,
     Measure,
 };
 
@@ -109,6 +110,8 @@ public:
     void SetCoincidenceRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetTangentRequestedCallback(
+        std::function<void(WireEndpointPick, WireEndpointPick)> callback);
+    void SetCurvatureRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetMeasurementChangedCallback(std::function<void(const std::vector<MeasurementPick>&)> callback);
     void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
@@ -203,6 +206,7 @@ private:
     std::function<void(int, double)> splitRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> tangentRequested_;
+    std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;
     std::function<void(const std::vector<MeasurementPick>&)> measurementChanged_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;

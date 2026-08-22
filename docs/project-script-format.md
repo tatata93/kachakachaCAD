@@ -132,6 +132,14 @@ wire_tangent ANCHOR_WIRE start|end FOLLOWER_CURVE start|end
 
 同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェの端点ハンドル、または追従側円弧の向きを更新してG1接続を維持する。ベジェのハンドル長、円弧の半径と中心角は保持する。
 
+### 端点の曲率拘束
+
+```text
+wire_curvature ANCHOR_WIRE start|end FOLLOWER_BEZIER start|end
+```
+
+同じ組み合わせの `wire_coincident` に続けて指定する。追従側は3次ベジェ曲線とし、接続端に近い2制御点を再計算して位置、接線、曲率が連続するG2接続を維持する。追従側の反対側端点は動かさない。作業平面に固定された追従曲線が平面外へ曲がる関係は作成しない。
+
 ### 作業平面上の直線
 
 ```text

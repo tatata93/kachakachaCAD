@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 
+#include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Sketch.h"
@@ -60,7 +61,11 @@
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::WireLiesOnWorkPlane;
+using kachakacha::io::WritePlateFlatPatternDxf;
+using kachakacha::io::WritePlateFlatPatternSvg;
 using kachakacha::io::WritePlanarDxf;
 using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
@@ -1184,7 +1189,7 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
-    auto* title = new QLabel(QStringLiteral("1:1 板材図面"));
+    auto* title = new QLabel(QStringLiteral("作業平面の1:1図面"));
     title->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(title);
 
@@ -1204,13 +1209,40 @@ QWidget* MainWindow::BuildOutputPanel()
 
     auto* svgButton = new QPushButton(QStringLiteral("SVGを保存"));
     svgButton->setObjectName("primaryButton");
+    svgButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     auto* dxfButton = new QPushButton(QStringLiteral("DXFを保存"));
+    dxfButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     connect(svgButton, &QPushButton::clicked, this, [this] { ExportPlanar(false); });
     connect(dxfButton, &QPushButton::clicked, this, [this] { ExportPlanar(true); });
     connect(exportPlane_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(exportScope_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     layout->addWidget(svgButton);
     layout->addWidget(dxfButton);
+
+    auto* separator = new QFrame;
+    separator->setFrameShape(QFrame::HLine);
+    separator->setFrameShadow(QFrame::Sunken);
+    layout->addWidget(separator);
+
+    auto* plateTitle = new QLabel(QStringLiteral("選択板材の1:1展開図"));
+    plateTitle->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(plateTitle);
+
+    plateFlatPatternSummary_ = new QLabel(QStringLiteral("選択板材: なし"));
+    plateFlatPatternSummary_->setWordWrap(true);
+    plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(plateFlatPatternSummary_);
+
+    auto* plateSvgButton = new QPushButton(QStringLiteral("展開SVGを保存"));
+    plateSvgButton->setObjectName("primaryButton");
+    plateSvgButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    plateSvgButton->setProperty("plateFlatPatternAction", true);
+    auto* plateDxfButton = new QPushButton(QStringLiteral("展開DXFを保存"));
+    plateDxfButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(plateSvgButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(false); });
+    connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
+    layout->addWidget(plateSvgButton);
+    layout->addWidget(plateDxfButton);
     layout->addStretch(1);
     return panel;
 }
@@ -1495,6 +1527,87 @@ void MainWindow::ExportPlanar(bool dxf)
         }
         exportSummary_->setText(QStringLiteral("%1本を保存: %2").arg(wires.size()).arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("1:1図面を保存しました: %1").arg(path), 5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ExportSelectedPlate(bool dxf)
+{
+    try {
+        std::vector<int> plateIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                plateIndices.push_back(selection.index);
+            }
+        }
+        std::sort(plateIndices.begin(), plateIndices.end());
+        plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
+        if (plateIndices.size() != 1) {
+            throw std::invalid_argument("展開する板材を1枚だけ選択してください。");
+        }
+
+        const auto& plate = project_.Plates()[plateIndices.front()];
+        const auto pattern = BuildPlateFlatPattern(project_, plate);
+        constexpr double warningToleranceMillimeters = 0.1;
+        const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
+        if (pattern.analysis.classification == PlateDevelopability::DoubleCurved
+            || estimatedError > warningToleranceMillimeters) {
+            const QString reason = pattern.analysis.classification == PlateDevelopability::DoubleCurved
+                ? QStringLiteral("この板材は二方向に曲がるため、平面へ正確には展開できません。")
+                : QStringLiteral("推定ずれが工作許容値 0.10 mm を超えています。");
+            const auto answer = QMessageBox::warning(
+                this,
+                QStringLiteral("展開精度の確認"),
+                QStringLiteral("%1\n\n最大推定ずれ: %2 mm\n分割または成形代を検討してください。\n\nこのまま近似図を保存しますか？")
+                    .arg(reason)
+                    .arg(estimatedError, 0, 'f', 3),
+                QMessageBox::Yes | QMessageBox::Cancel,
+                QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) {
+                return;
+            }
+        }
+
+        const QString extension = dxf ? QStringLiteral(".dxf") : QStringLiteral(".svg");
+        const QString filter = dxf ? QStringLiteral("DXF展開図 (*.dxf)") : QStringLiteral("SVG展開図 (*.svg)");
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            QStringLiteral("板材の1:1展開図を保存"),
+            suggestedDirectory + ToQString(plate.name) + QStringLiteral("_flat") + extension,
+            filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(extension, Qt::CaseInsensitive)) {
+            path += extension;
+        }
+
+        std::ofstream output(std::filesystem::path(path.toStdWString()), std::ios::binary);
+        if (!output) {
+            throw std::runtime_error("出力ファイルを開けませんでした。");
+        }
+        if (dxf) {
+            WritePlateFlatPatternDxf(output, pattern);
+        } else {
+            WritePlateFlatPatternSvg(output, pattern);
+        }
+        output.close();
+        if (!output) {
+            throw std::runtime_error("出力ファイルの保存に失敗しました。");
+        }
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("%1 | 最大推定ずれ %2 mm | 開口 %3個 | 保存済み: %4")
+                .arg(ToQString(plate.name))
+                .arg(estimatedError, 0, 'f', 3)
+                .arg(pattern.openings.size())
+                .arg(QFileInfo(path).fileName()));
+        statusBar()->showMessage(QStringLiteral("板材の1:1展開図を保存しました: %1").arg(path), 5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
@@ -2628,7 +2741,8 @@ bool MainWindow::RunCreationSelfTest()
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
         || toolsTabs_->tabText(5) != QStringLiteral("面")
         || toolsTabs_->tabText(6) != QStringLiteral("出力")
-        || activePlaneCombo_->count() == 0) {
+        || activePlaneCombo_->count() == 0
+        || plateFlatPatternSummary_ == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -3227,6 +3341,26 @@ bool MainWindow::RunCreationSelfTest()
         || project_.Plates()[plateStart].name != firstPieceName
         || project_.Plates()[plateStart + 1].name != secondPieceName) {
         return fail("redo plate split");
+    }
+    try {
+        PlateFlatPatternOptions selfTestOptions;
+        selfTestOptions.uSegments = 40;
+        selfTestOptions.vSegments = 16;
+        selfTestOptions.openingSamples = 48;
+        const auto firstPattern = BuildPlateFlatPattern(project_, project_.Plates()[plateStart], selfTestOptions);
+        const auto secondPattern = BuildPlateFlatPattern(project_, project_.Plates()[plateStart + 1], selfTestOptions);
+        std::ostringstream flatSvg;
+        std::ostringstream flatDxf;
+        WritePlateFlatPatternSvg(flatSvg, secondPattern, selfTestOptions);
+        WritePlateFlatPatternDxf(flatDxf, secondPattern);
+        if (firstPattern.openings.size() + secondPattern.openings.size() != 1
+            || flatSvg.str().find("CUT_OUTER") == std::string::npos
+            || flatSvg.str().find("CUT_OPENING") == std::string::npos
+            || flatDxf.str().find("$INSUNITS\n70\n4") == std::string::npos) {
+            return fail("split plate flat-pattern output");
+        }
+    } catch (const std::exception&) {
+        return fail("build split plate flat patterns");
     }
 
     UpdateSelection({CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)}, true);
@@ -3970,21 +4104,69 @@ void MainWindow::RefreshExportSummary()
     const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(exportPlane_->currentText()));
     if (!plane.has_value()) {
         exportSummary_->setText(QStringLiteral("出力面なし"));
+    } else {
+        std::size_t count = 0;
+        if (exportScope_->currentIndex() == 0) {
+            count = static_cast<std::size_t>(std::count_if(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
+                return WireLiesOnWorkPlane(wire.wire, *plane);
+            }));
+        } else {
+            count = static_cast<std::size_t>(std::count_if(viewport_->Selections().begin(), viewport_->Selections().end(), [this](const auto& selection) {
+                return selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Wires().size());
+            }));
+        }
+        exportSummary_->setText(QStringLiteral("出力対象: %1本").arg(count));
+    }
+
+    if (plateFlatPatternSummary_ == nullptr) {
+        return;
+    }
+    std::vector<int> plateIndices;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            plateIndices.push_back(selection.index);
+        }
+    }
+    std::sort(plateIndices.begin(), plateIndices.end());
+    plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
+    if (plateIndices.empty()) {
+        plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
+        plateFlatPatternSummary_->setText(QStringLiteral("選択板材: なし"));
+        return;
+    }
+    if (plateIndices.size() > 1) {
+        plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
+        plateFlatPatternSummary_->setText(QStringLiteral("選択板材: %1枚（1枚に絞って出力）").arg(plateIndices.size()));
         return;
     }
 
-    std::size_t count = 0;
-    if (exportScope_->currentIndex() == 0) {
-        count = static_cast<std::size_t>(std::count_if(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
-            return WireLiesOnWorkPlane(wire.wire, *plane);
-        }));
-    } else {
-        count = static_cast<std::size_t>(std::count_if(viewport_->Selections().begin(), viewport_->Selections().end(), [this](const auto& selection) {
-            return selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size());
-        }));
+    try {
+        PlateFlatPatternOptions previewOptions;
+        previewOptions.uSegments = 48;
+        previewOptions.vSegments = 16;
+        previewOptions.openingSamples = 48;
+        previewOptions.includeOpenings = false;
+        const auto& namedPlate = project_.Plates()[plateIndices.front()];
+        const auto pattern = BuildPlateFlatPattern(project_, namedPlate, previewOptions);
+        const QString shape = pattern.analysis.classification == PlateDevelopability::Planar
+            ? QStringLiteral("平面板")
+            : pattern.analysis.classification == PlateDevelopability::Developable
+            ? QStringLiteral("一方向曲げ")
+            : QStringLiteral("二方向曲面・要確認");
+        const bool warning = pattern.analysis.classification == PlateDevelopability::DoubleCurved
+            || pattern.analysis.MaximumEstimatedErrorMillimeters() > 0.1;
+        plateFlatPatternSummary_->setStyleSheet(warning ? "color: #a32734;" : "color: #35664a;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4個")
+                .arg(ToQString(namedPlate.name), shape)
+                .arg(pattern.analysis.MaximumEstimatedErrorMillimeters(), 0, 'f', 3)
+                .arg(namedPlate.openingWireNames.size()));
+    } catch (const std::exception& error) {
+        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
+        plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));
     }
-    exportSummary_->setText(QStringLiteral("出力対象: %1本").arg(count));
 }
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)

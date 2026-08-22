@@ -51,6 +51,7 @@ private:
     void SaveProject();
     void SaveProjectAs();
     void ExportPlanar(bool dxf);
+    void ExportSelectedPlate(bool dxf);
     void AddWorkPlane();
     [[nodiscard]] kachakacha::model::WorkPlane WorkPlaneFromInputs() const;
     void AlignViewportFromPlaneInputs();
@@ -210,6 +211,7 @@ private:
     QComboBox* exportPlane_ = nullptr;
     QComboBox* exportScope_ = nullptr;
     QLabel* exportSummary_ = nullptr;
+    QLabel* plateFlatPatternSummary_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

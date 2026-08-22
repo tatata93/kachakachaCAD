@@ -15,6 +15,7 @@ endif()
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
+    src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
     src/core/kachakacha/model/Project.cpp
@@ -168,6 +169,21 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME planar_export_tests COMMAND kachakacha_planar_export_tests)
+
+    add_executable(kachakacha_plate_flat_pattern_tests
+        tests/plate_flat_pattern_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_plate_flat_pattern_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(
+        NAME plate_flat_pattern_tests
+        COMMAND kachakacha_plate_flat_pattern_tests
+            "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
+    )
 
     add_executable(kachakacha_surface_tests
         tests/surface_tests.cpp

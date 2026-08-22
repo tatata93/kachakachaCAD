@@ -48,6 +48,11 @@ private:
     void ApplySelectedEdit();
     void ApplyLineChamfer();
     void ApplyLineFillet();
+    void SetViewportTool(ViewportTool tool);
+    void RefreshActiveWorkPlane();
+    void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
+    void AddViewportRectangle(const std::array<kachakacha::geometry::Vector3, 4>& corners);
+    void AddViewportCircle(kachakacha::geometry::Vector3 center, double radius);
     void DeleteSelection();
     void Undo();
     void Redo();
@@ -66,6 +71,7 @@ private:
     bool ConfirmDiscardChanges();
     QString SuggestedPlaneName() const;
     QString SuggestedWireName() const;
+    QString SuggestedDirectGroupName(const QString& prefix) const;
     QString SuggestedChamferName() const;
     QString SuggestedFilletName() const;
 
@@ -76,6 +82,13 @@ private:
     std::vector<kachakacha::model::Project> redoStack_;
     QAction* undoAction_ = nullptr;
     QAction* redoAction_ = nullptr;
+    QAction* selectToolAction_ = nullptr;
+    QAction* lineToolAction_ = nullptr;
+    QAction* rectangleToolAction_ = nullptr;
+    QAction* circleToolAction_ = nullptr;
+    QAction* snapAction_ = nullptr;
+    QComboBox* activePlaneCombo_ = nullptr;
+    QDoubleSpinBox* snapStepField_ = nullptr;
 
     CadViewport* viewport_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;

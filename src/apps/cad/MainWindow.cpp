@@ -5,10 +5,13 @@
 #include "kachakacha/model/WireOperations.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDockWidget>
+#include <QDebug>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -22,8 +25,11 @@
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSaveFile>
+#include <QSignalBlocker>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -231,6 +237,15 @@ void MainWindow::BuildUi()
     setCentralWidget(viewport_);
     viewport_->SetSelectionChangedCallback([this](const std::vector<CadSelection>& selections) {
         UpdateSelections(selections, true);
+    });
+    viewport_->SetLineCreatedCallback([this](Vector3 start, Vector3 end) {
+        AddViewportLine(start, end);
+    });
+    viewport_->SetRectangleCreatedCallback([this](const std::array<Vector3, 4>& corners) {
+        AddViewportRectangle(corners);
+    });
+    viewport_->SetCircleCreatedCallback([this](Vector3 center, double radius) {
+        AddViewportCircle(center, radius);
     });
 
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
@@ -704,6 +719,32 @@ void MainWindow::BuildMenusAndToolbar()
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
 
+    selectToolAction_ = new QAction(QStringLiteral("選択"), this);
+    lineToolAction_ = new QAction(QStringLiteral("直線"), this);
+    rectangleToolAction_ = new QAction(QStringLiteral("矩形"), this);
+    circleToolAction_ = new QAction(QStringLiteral("円"), this);
+    selectToolAction_->setShortcut(Qt::Key_V);
+    lineToolAction_->setShortcut(Qt::Key_L);
+    rectangleToolAction_->setShortcut(Qt::Key_R);
+    circleToolAction_->setShortcut(Qt::Key_C);
+    auto* toolGroup = new QActionGroup(this);
+    toolGroup->setExclusive(true);
+    for (QAction* action : {selectToolAction_, lineToolAction_, rectangleToolAction_, circleToolAction_}) {
+        action->setCheckable(true);
+        toolGroup->addAction(action);
+    }
+    selectToolAction_->setChecked(true);
+    connect(selectToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Select); });
+    connect(lineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawLine); });
+    connect(rectangleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawRectangle); });
+    connect(circleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawCircle); });
+
+    QMenu* drawMenu = menuBar()->addMenu(QStringLiteral("作図"));
+    drawMenu->addAction(selectToolAction_);
+    drawMenu->addAction(lineToolAction_);
+    drawMenu->addAction(rectangleToolAction_);
+    drawMenu->addAction(circleToolAction_);
+
     QToolBar* toolbar = addToolBar(QStringLiteral("基本操作"));
     toolbar->setMovable(false);
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -716,6 +757,40 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addSeparator();
     toolbar->addAction(fitAction);
     toolbar->addAction(deleteAction);
+
+    QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
+    drawingToolbar->setMovable(false);
+    drawingToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    drawingToolbar->addWidget(new QLabel(QStringLiteral("作図面")));
+    activePlaneCombo_ = new QComboBox;
+    activePlaneCombo_->setMinimumWidth(150);
+    activePlaneCombo_->setObjectName("activePlaneCombo");
+    drawingToolbar->addWidget(activePlaneCombo_);
+    QAction* alignPlaneAction = drawingToolbar->addAction(QStringLiteral("正対"));
+    alignPlaneAction->setToolTip(QStringLiteral("作図面を真正面から見る"));
+    drawingToolbar->addSeparator();
+    drawingToolbar->addAction(selectToolAction_);
+    drawingToolbar->addAction(lineToolAction_);
+    drawingToolbar->addAction(rectangleToolAction_);
+    drawingToolbar->addAction(circleToolAction_);
+    drawingToolbar->addSeparator();
+    snapAction_ = drawingToolbar->addAction(QStringLiteral("スナップ"));
+    snapAction_->setCheckable(true);
+    snapAction_->setChecked(true);
+    drawingToolbar->addWidget(new QLabel(QStringLiteral("間隔")));
+    snapStepField_ = new QDoubleSpinBox;
+    snapStepField_->setRange(0.01, 1000.0);
+    snapStepField_->setDecimals(2);
+    snapStepField_->setSingleStep(0.5);
+    snapStepField_->setValue(1.0);
+    snapStepField_->setSuffix(QStringLiteral(" mm"));
+    snapStepField_->setMaximumWidth(105);
+    drawingToolbar->addWidget(snapStepField_);
+
+    connect(activePlaneCombo_, &QComboBox::currentIndexChanged, this, [this] { RefreshActiveWorkPlane(); });
+    connect(alignPlaneAction, &QAction::triggered, viewport_, &CadViewport::AlignToActiveWorkPlane);
+    connect(snapAction_, &QAction::toggled, viewport_, &CadViewport::SetSnapEnabled);
+    connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
     UpdateHistoryActions();
 }
 
@@ -795,14 +870,19 @@ void MainWindow::SaveProjectAs()
 bool MainWindow::SaveProjectFile(const QString& path)
 {
     try {
-        const std::filesystem::path nativePath(path.toStdWString());
-        std::ofstream output(nativePath);
-        if (!output) {
-            throw std::runtime_error("保存先へ書き込めませんでした。");
-        }
-        WriteProjectScript(output, project_);
-        if (!output) {
+        std::ostringstream serialized;
+        WriteProjectScript(serialized, project_);
+        if (!serialized) {
             throw std::runtime_error("保存中にエラーが発生しました。");
+        }
+
+        QSaveFile output(path);
+        if (!output.open(QIODevice::WriteOnly)) {
+            throw std::runtime_error(output.errorString().toUtf8().constData());
+        }
+        const QByteArray contents = QByteArray::fromStdString(serialized.str());
+        if (output.write(contents) != contents.size() || !output.commit()) {
+            throw std::runtime_error(output.errorString().toUtf8().constData());
         }
         currentPath_ = path;
         modified_ = false;
@@ -815,8 +895,125 @@ bool MainWindow::SaveProjectFile(const QString& path)
     }
 }
 
+void MainWindow::SetViewportTool(ViewportTool tool)
+{
+    if (tool != ViewportTool::Select) {
+        const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+        if (!plane.has_value()) {
+            selectToolAction_->setChecked(true);
+            viewport_->SetTool(ViewportTool::Select);
+            statusBar()->showMessage(QStringLiteral("作図する平面を選択してください"), 3000);
+            return;
+        }
+    }
+
+    viewport_->SetTool(tool);
+    selectToolAction_->setChecked(tool == ViewportTool::Select);
+    lineToolAction_->setChecked(tool == ViewportTool::DrawLine);
+    rectangleToolAction_->setChecked(tool == ViewportTool::DrawRectangle);
+    circleToolAction_->setChecked(tool == ViewportTool::DrawCircle);
+    switch (tool) {
+    case ViewportTool::Select:
+        statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
+        break;
+    case ViewportTool::DrawLine:
+        statusBar()->showMessage(QStringLiteral("直線作図モード"), 2500);
+        break;
+    case ViewportTool::DrawRectangle:
+        statusBar()->showMessage(QStringLiteral("矩形作図モード"), 2500);
+        break;
+    case ViewportTool::DrawCircle:
+        statusBar()->showMessage(QStringLiteral("円作図モード"), 2500);
+        break;
+    }
+}
+
+void MainWindow::RefreshActiveWorkPlane()
+{
+    if (activePlaneCombo_ == nullptr) {
+        return;
+    }
+    const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+    viewport_->SetActiveWorkPlane(plane);
+    const bool canDraw = plane.has_value();
+    lineToolAction_->setEnabled(canDraw);
+    rectangleToolAction_->setEnabled(canDraw);
+    circleToolAction_->setEnabled(canDraw);
+    if (!canDraw && viewport_->Tool() != ViewportTool::Select) {
+        SetViewportTool(ViewportTool::Select);
+    }
+}
+
+void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        const Wire line = Wire::Line(start, end);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("line"))), line, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("直線を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportRectangle(const std::array<Vector3, 4>& corners)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        const Wire rectangle = Wire::Polyline({corners[0], corners[1], corners[2], corners[3], corners[0]});
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("rectangle"))), rectangle, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("矩形を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportCircle(Vector3 center, double radius)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        const std::optional<WorkPlane> plane = project_.FindWorkPlane(planeName);
+        if (!plane.has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        const Wire circle = Wire::Circle(center, plane->UAxis(), plane->VAxis(), radius);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("circle"))), circle, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("円を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
 bool MainWindow::RunCreationSelfTest()
 {
+    const auto fail = [](const char* stage) {
+        qWarning() << "self-test failed:" << stage;
+        return false;
+    };
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
 
@@ -827,7 +1024,7 @@ bool MainWindow::RunCreationSelfTest()
     planeTilt_->setValue(12.0);
     AddWorkPlane();
     if (project_.WorkPlanes().size() != initialPlaneCount + 1 || !project_.FindWorkPlane("__ui_test_plane").has_value()) {
-        return false;
+        return fail("add workplane");
     }
 
     wireName_->setText("__ui_test_line3d");
@@ -846,15 +1043,15 @@ bool MainWindow::RunCreationSelfTest()
     qobject_cast<QDoubleSpinBox*>(editWirePointTable_->cellWidget(1, 2))->setValue(5.0);
     ApplySelectedEdit();
     if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {3.0, 8.0, 5.0})) {
-        return false;
+        return fail("edit wire");
     }
     Undo();
     if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {2.0, 7.0, 4.0})) {
-        return false;
+        return fail("undo wire edit");
     }
     Redo();
     if (!kachakacha::geometry::AlmostEqual(project_.Wires()[initialWireCount].wire.End(), {3.0, 8.0, 5.0})) {
-        return false;
+        return fail("redo wire edit");
     }
 
     wireName_->setText("__ui_test_sketch_line");
@@ -883,7 +1080,7 @@ bool MainWindow::RunCreationSelfTest()
     }, true);
     if (chamferFirstWire_->currentText() != "__ui_test_line3d"
         || chamferSecondWire_->currentText() != "__ui_test_lineB") {
-        return false;
+        return fail("multi-select chamfer inputs");
     }
     chamferFirstBranch_->setCurrentIndex(0);
     chamferSecondBranch_->setCurrentIndex(0);
@@ -892,10 +1089,10 @@ bool MainWindow::RunCreationSelfTest()
     ApplyLineChamfer();
 
     if (project_.Wires().size() != initialWireCount + 4) {
-        return false;
+        return fail("create chamfer count");
     }
     if (project_.Wires()[initialWireCount + 3].name != "__ui_test_chamfer") {
-        return false;
+        return fail("create chamfer name");
     }
 
     Undo();
@@ -907,13 +1104,13 @@ bool MainWindow::RunCreationSelfTest()
     UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount + 2)}, true);
     if (chamferFirstWire_->currentText() != "__ui_test_line3d"
         || chamferSecondWire_->currentText() != "__ui_test_lineB") {
-        return false;
+        return fail("individual machining picks");
     }
     filletRadius_->setValue(0.5);
     ApplyLineFillet();
 
     if (project_.Wires().size() != initialWireCount + 4) {
-        return false;
+        return fail("create fillet count");
     }
     const auto& line3d = project_.Wires()[initialWireCount];
     const auto& sketchLine = project_.Wires()[initialWireCount + 1];
@@ -923,12 +1120,98 @@ bool MainWindow::RunCreationSelfTest()
         && sketchLine.metadata.planePolicy == WirePlanePolicy::ReferenceOnly
         && fillet.name == "__ui_test_fillet"
         && fillet.wire.Kind() == WireKind::CircularArc;
-    toolsTabs_->setCurrentIndex(3);
+    if (!result) {
+        return fail("pre-direct drawing checks");
+    }
+
+    int drawingPlaneIndex = activePlaneCombo_->findText(QStringLiteral("top_XY"));
+    if (drawingPlaneIndex < 0 && activePlaneCombo_->count() > 0) {
+        drawingPlaneIndex = 0;
+    }
+    if (drawingPlaneIndex < 0) {
+        return fail("find drawing workplane");
+    }
+    activePlaneCombo_->setCurrentIndex(drawingPlaneIndex);
+    const std::string drawingPlaneName = ToName(activePlaneCombo_->currentText());
+    viewport_->AlignToActiveWorkPlane();
+    snapAction_->setChecked(true);
+    snapStepField_->setValue(1.0);
+
+    const auto sendMouse = [this](QEvent::Type type, QPointF position, Qt::MouseButton button, Qt::MouseButtons buttons) {
+        const QPointF globalPosition(viewport_->mapToGlobal(position.toPoint()));
+        QMouseEvent event(type, position, globalPosition, button, buttons, Qt::NoModifier);
+        QApplication::sendEvent(viewport_, &event);
+    };
+    const auto click = [&](QPointF position) {
+        sendMouse(QEvent::MouseMove, position, Qt::NoButton, Qt::NoButton);
+        sendMouse(QEvent::MouseButtonPress, position, Qt::LeftButton, Qt::LeftButton);
+        sendMouse(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton);
+    };
+    const auto drag = [&](QPointF start, QPointF end) {
+        sendMouse(QEvent::MouseMove, start, Qt::NoButton, Qt::NoButton);
+        sendMouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
+        sendMouse(QEvent::MouseMove, end, Qt::NoButton, Qt::LeftButton);
+        sendMouse(QEvent::MouseButtonRelease, end, Qt::LeftButton, Qt::NoButton);
+    };
+    const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
+    const std::size_t directStart = project_.Wires().size();
+
+    SetViewportTool(ViewportTool::DrawLine);
+    click(center + QPointF(-150.0, 90.0));
+    click(center + QPointF(-60.0, 90.0));
+    click(center + QPointF(-60.0, 25.0));
+    const std::size_t afterLine = project_.Wires().size();
+    SetViewportTool(ViewportTool::DrawRectangle);
+    drag(center + QPointF(15.0, -105.0), center + QPointF(120.0, -35.0));
+    const std::size_t afterRectangle = project_.Wires().size();
+    SetViewportTool(ViewportTool::DrawCircle);
+    click(center + QPointF(90.0, 80.0));
+    click(center + QPointF(135.0, 80.0));
+
+    Undo();
+    if (project_.Wires().size() != directStart + 3) {
+        return fail("undo direct circle");
+    }
+    Redo();
+
+    if (project_.Wires().size() != directStart + 4
+        || project_.Wires()[directStart].wire.Kind() != WireKind::Line
+        || project_.Wires()[directStart + 1].wire.Kind() != WireKind::Line
+        || project_.Wires()[directStart + 2].wire.Kind() != WireKind::Polyline
+        || !project_.Wires()[directStart + 2].wire.IsClosed()
+        || project_.Wires()[directStart + 3].wire.Kind() != WireKind::Circle
+        || project_.Wires()[directStart].metadata.sourcePlaneName != drawingPlaneName
+        || project_.Wires()[directStart].metadata.planePolicy != WirePlanePolicy::ReferenceOnly) {
+        qWarning() << "direct drawing self-test failed"
+                   << "initial" << directStart
+                   << "line" << afterLine
+                   << "rectangle" << afterRectangle
+                   << "circle" << project_.Wires().size();
+        return fail("direct drawing result");
+    }
+
+    std::ostringstream directDrawingScript;
+    WriteProjectScript(directDrawingScript, project_);
+    std::istringstream directDrawingInput(directDrawingScript.str());
+    const Project reloadedProject = LoadProjectScript(directDrawingInput, "direct-drawing-self-test");
+    if (reloadedProject.Wires().size() != project_.Wires().size()
+        || reloadedProject.Wires()[directStart + 3].wire.Kind() != WireKind::Circle
+        || reloadedProject.Wires()[directStart + 3].metadata.sourcePlaneName != drawingPlaneName) {
+        return fail("save and reload direct drawing");
+    }
+
+    SetViewportTool(ViewportTool::Select);
+    toolsTabs_->setCurrentIndex(4);
     UpdateSelections({
-        {CadSelectionKind::Wire, static_cast<int>(initialWireCount)},
-        {CadSelectionKind::Wire, static_cast<int>(initialWireCount + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 3)},
     }, true);
-    return result;
+    SetViewportTool(ViewportTool::DrawCircle);
+    click(center + QPointF(-30.0, -45.0));
+    sendMouse(QEvent::MouseMove, center + QPointF(35.0, -45.0), Qt::NoButton, Qt::NoButton);
+    return true;
 }
 
 void MainWindow::AddWorkPlane()
@@ -1357,16 +1640,15 @@ void MainWindow::RefreshModelViews(bool fitView)
 
     RefreshPlaneChoices();
     RefreshWireChoices();
-    viewport_->SetProject(&project_);
-    if (!fitView) {
-        viewport_->update();
-    }
+    viewport_->SetProject(&project_, fitView);
+    RefreshActiveWorkPlane();
     UpdateSelection({}, false);
 }
 
 void MainWindow::RefreshPlaneChoices()
 {
     const auto refresh = [this](QComboBox* combo) {
+        const QSignalBlocker blocker(combo);
         const QString previous = combo->currentText();
         combo->clear();
         for (const auto& plane : project_.WorkPlanes()) {
@@ -1380,6 +1662,7 @@ void MainWindow::RefreshPlaneChoices()
     refresh(offsetSourcePlane_);
     refresh(rotateSourcePlane_);
     refresh(wirePlane_);
+    refresh(activePlaneCombo_);
 
     const QString previousEditSource = editWireSourcePlane_->currentText();
     editWireSourcePlane_->clear();
@@ -1470,6 +1753,10 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
 
     if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0 && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
         const auto& named = project_.WorkPlanes()[selection.index];
+        const int activeIndex = activePlaneCombo_->findText(ToQString(named.name));
+        if (activeIndex >= 0 && activePlaneCombo_->currentIndex() != activeIndex) {
+            activePlaneCombo_->setCurrentIndex(activeIndex);
+        }
         infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 作業平面<br><br>原点<br>%2<br><br>法線<br>%3<br><br>平面内 X<br>%4")
             .arg(ToQString(named.name), VectorText(named.plane.Origin()), VectorText(named.plane.Normal()), VectorText(named.plane.UAxis())));
     } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())) {
@@ -1666,6 +1953,23 @@ QString MainWindow::SuggestedWireName() const
         ++number;
     }
     return QStringLiteral("wire_%1").arg(number);
+}
+
+QString MainWindow::SuggestedDirectGroupName(const QString& prefix) const
+{
+    int number = 1;
+    for (;;) {
+        const QString candidate = QStringLiteral("%1_%2").arg(prefix).arg(number);
+        const std::string exactName = candidate.toStdString();
+        const std::string memberPrefix = exactName + "_";
+        const bool exists = std::any_of(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
+            return wire.name == exactName || wire.name.starts_with(memberPrefix);
+        });
+        if (!exists) {
+            return candidate;
+        }
+        ++number;
+    }
 }
 
 QString MainWindow::SuggestedChamferName() const

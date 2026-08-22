@@ -1,5 +1,6 @@
 #include "CadViewport.h"
 
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -11,6 +12,7 @@
 #include <limits>
 
 using kachakacha::geometry::Vector3;
+using kachakacha::geometry::AlmostEqual;
 using kachakacha::model::NamedWire;
 using kachakacha::model::WireKind;
 
@@ -55,12 +57,16 @@ CadViewport::CadViewport(QWidget* parent)
     setMouseTracking(true);
 }
 
-void CadViewport::SetProject(const kachakacha::model::Project* project)
+void CadViewport::SetProject(const kachakacha::model::Project* project, bool fitView)
 {
     project_ = project;
     selection_ = {};
     selections_.clear();
-    FitAll();
+    if (fitView) {
+        FitAll();
+    } else {
+        update();
+    }
 }
 
 void CadViewport::SetSelection(CadSelection selection)
@@ -84,6 +90,67 @@ void CadViewport::SetSelectionChangedCallback(std::function<void(const std::vect
     selectionChanged_ = std::move(callback);
 }
 
+void CadViewport::SetLineCreatedCallback(std::function<void(Vector3, Vector3)> callback)
+{
+    lineCreated_ = std::move(callback);
+}
+
+void CadViewport::SetRectangleCreatedCallback(std::function<void(const std::array<Vector3, 4>&)> callback)
+{
+    rectangleCreated_ = std::move(callback);
+}
+
+void CadViewport::SetCircleCreatedCallback(std::function<void(Vector3, double)> callback)
+{
+    circleCreated_ = std::move(callback);
+}
+
+void CadViewport::SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane)
+{
+    activePlane_ = std::move(plane);
+    CancelDrawing();
+    update();
+}
+
+void CadViewport::SetTool(ViewportTool tool)
+{
+    tool_ = tool;
+    CancelDrawing();
+    setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+    update();
+}
+
+void CadViewport::SetSnapEnabled(bool enabled)
+{
+    snapEnabled_ = enabled;
+    update();
+}
+
+void CadViewport::SetSnapStep(double stepMillimeters)
+{
+    if (std::isfinite(stepMillimeters) && stepMillimeters > 1.0e-6) {
+        snapStep_ = stepMillimeters;
+        update();
+    }
+}
+
+void CadViewport::AlignToActiveWorkPlane()
+{
+    if (!activePlane_.has_value()) {
+        return;
+    }
+    target_ = activePlane_->Origin();
+    alignedViewBasis_ = std::array<Vector3, 3>{activePlane_->Normal(), activePlane_->UAxis(), activePlane_->VAxis()};
+    update();
+}
+
+void CadViewport::CancelDrawing()
+{
+    pendingDrawingPoint_.reset();
+    hoverDrawingPoint_.reset();
+    update();
+}
+
 bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
 {
     return std::any_of(selections_.begin(), selections_.end(), [&](const CadSelection& selection) {
@@ -91,15 +158,31 @@ bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
     });
 }
 
-QPointF CadViewport::ProjectPoint(Vector3 point) const
+std::array<Vector3, 3> CadViewport::CurrentViewBasis() const
 {
+    if (alignedViewBasis_.has_value()) {
+        return *alignedViewBasis_;
+    }
     const Vector3 viewDirection = {
         std::cos(pitchRadians_) * std::cos(yawRadians_),
         std::cos(pitchRadians_) * std::sin(yawRadians_),
         std::sin(pitchRadians_),
     };
-    const Vector3 right = Vector3{-viewDirection.y, viewDirection.x, 0.0}.Normalized();
+    Vector3 right{-viewDirection.y, viewDirection.x, 0.0};
+    if (right.LengthSquared() <= 1.0e-12) {
+        right = {1.0, 0.0, 0.0};
+    } else {
+        right = right.Normalized();
+    }
     const Vector3 up = Cross(viewDirection, right).Normalized();
+    return {viewDirection, right, up};
+}
+
+QPointF CadViewport::ProjectPoint(Vector3 point) const
+{
+    const auto basis = CurrentViewBasis();
+    const Vector3& right = basis[1];
+    const Vector3& up = basis[2];
     const Vector3 relative = point - target_;
     return {
         width() * 0.5 + Dot(relative, right) * pixelsPerMillimeter_,
@@ -113,6 +196,7 @@ void CadViewport::FitAll()
         return;
     }
 
+    alignedViewBasis_.reset();
     Vector3 minimum{0.0, 0.0, 0.0};
     Vector3 maximum{0.0, 0.0, 0.0};
     bool hasPoint = false;
@@ -152,6 +236,112 @@ void CadViewport::FitAll()
     update();
 }
 
+std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
+{
+    if (!activePlane_.has_value()) {
+        return std::nullopt;
+    }
+    const auto basis = CurrentViewBasis();
+    const Vector3& viewDirection = basis[0];
+    const Vector3& right = basis[1];
+    const Vector3& up = basis[2];
+    const double screenX = (position.x() - width() * 0.5) / pixelsPerMillimeter_;
+    const double screenY = (height() * 0.5 - position.y()) / pixelsPerMillimeter_;
+    const Vector3 rayPoint = target_ + right * screenX + up * screenY;
+    const double denominator = Dot(viewDirection, activePlane_->Normal());
+    if (std::abs(denominator) <= 1.0e-9) {
+        return std::nullopt;
+    }
+    const double distance = Dot(activePlane_->Origin() - rayPoint, activePlane_->Normal()) / denominator;
+    return rayPoint + viewDirection * distance;
+}
+
+Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
+{
+    if (!activePlane_.has_value() || !snapEnabled_) {
+        return point;
+    }
+
+    if (project_ != nullptr) {
+        double bestDistance = 10.0;
+        std::optional<Vector3> bestEndpoint;
+        for (const auto& namedWire : project_->Wires()) {
+            std::vector<Vector3> snapPoints;
+            if (namedWire.wire.Kind() == WireKind::Polyline) {
+                snapPoints = namedWire.wire.ControlPoints();
+            } else {
+                snapPoints = {namedWire.wire.Start(), namedWire.wire.End()};
+            }
+            for (const Vector3& endpoint : snapPoints) {
+                if (std::abs(activePlane_->Project(endpoint).w) > 1.0e-6) {
+                    continue;
+                }
+                const double distance = QLineF(screenPosition, ProjectPoint(endpoint)).length();
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestEndpoint = endpoint;
+                }
+            }
+        }
+        if (bestEndpoint.has_value()) {
+            return *bestEndpoint;
+        }
+    }
+
+    const auto coordinates = activePlane_->Project(point);
+    const double snappedU = std::round(coordinates.u / snapStep_) * snapStep_;
+    const double snappedV = std::round(coordinates.v / snapStep_) * snapStep_;
+    return activePlane_->ToWorld(snappedU, snappedV);
+}
+
+void CadViewport::CommitDrawingPoint(Vector3 point)
+{
+    if (!activePlane_.has_value()) {
+        return;
+    }
+    if (!pendingDrawingPoint_.has_value()) {
+        pendingDrawingPoint_ = point;
+        hoverDrawingPoint_ = point;
+        update();
+        return;
+    }
+
+    const Vector3 first = *pendingDrawingPoint_;
+    if ((point - first).LengthSquared() <= 1.0e-18) {
+        return;
+    }
+    if (tool_ == ViewportTool::DrawLine) {
+        if (lineCreated_) {
+            lineCreated_(first, point);
+        }
+        pendingDrawingPoint_ = point;
+    } else if (tool_ == ViewportTool::DrawRectangle) {
+        const auto firstCoordinates = activePlane_->Project(first);
+        const auto secondCoordinates = activePlane_->Project(point);
+        if (std::abs(secondCoordinates.u - firstCoordinates.u) <= 1.0e-9
+            || std::abs(secondCoordinates.v - firstCoordinates.v) <= 1.0e-9) {
+            return;
+        }
+        const std::array<Vector3, 4> corners = {
+            activePlane_->ToWorld(firstCoordinates.u, firstCoordinates.v),
+            activePlane_->ToWorld(secondCoordinates.u, firstCoordinates.v),
+            activePlane_->ToWorld(secondCoordinates.u, secondCoordinates.v),
+            activePlane_->ToWorld(firstCoordinates.u, secondCoordinates.v),
+        };
+        if (rectangleCreated_) {
+            rectangleCreated_(corners);
+        }
+        pendingDrawingPoint_.reset();
+    } else if (tool_ == ViewportTool::DrawCircle) {
+        if (circleCreated_) {
+            circleCreated_(first, (point - first).Length());
+        }
+        pendingDrawingPoint_.reset();
+    }
+    hoverDrawingPoint_ = point;
+    update();
+}
+
 void CadViewport::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
@@ -159,9 +349,23 @@ void CadViewport::paintEvent(QPaintEvent*)
     painter.fillRect(rect(), QColor("#f5f6f7"));
 
     painter.setPen(QPen(QColor("#d7dce0"), 1.0));
-    for (int coordinate = -50; coordinate <= 50; coordinate += 5) {
-        painter.drawLine(ProjectPoint({static_cast<double>(coordinate), -50.0, 0.0}), ProjectPoint({static_cast<double>(coordinate), 50.0, 0.0}));
-        painter.drawLine(ProjectPoint({-50.0, static_cast<double>(coordinate), 0.0}), ProjectPoint({50.0, static_cast<double>(coordinate), 0.0}));
+    if (activePlane_.has_value()) {
+        double spacing = snapEnabled_ ? snapStep_ : 5.0;
+        while (spacing * pixelsPerMillimeter_ < 12.0) {
+            spacing *= 2.0;
+        }
+        const double extent = std::max(width(), height()) / std::max(pixelsPerMillimeter_, 0.1);
+        const int lineCount = std::min(100, static_cast<int>(std::ceil(extent / spacing)) + 2);
+        for (int index = -lineCount; index <= lineCount; ++index) {
+            const double coordinate = index * spacing;
+            painter.drawLine(ProjectPoint(activePlane_->ToWorld(coordinate, -extent)), ProjectPoint(activePlane_->ToWorld(coordinate, extent)));
+            painter.drawLine(ProjectPoint(activePlane_->ToWorld(-extent, coordinate)), ProjectPoint(activePlane_->ToWorld(extent, coordinate)));
+        }
+    } else {
+        for (int coordinate = -50; coordinate <= 50; coordinate += 5) {
+            painter.drawLine(ProjectPoint({static_cast<double>(coordinate), -50.0, 0.0}), ProjectPoint({static_cast<double>(coordinate), 50.0, 0.0}));
+            painter.drawLine(ProjectPoint({-50.0, static_cast<double>(coordinate), 0.0}), ProjectPoint({50.0, static_cast<double>(coordinate), 0.0}));
+        }
     }
 
     if (project_ != nullptr) {
@@ -174,8 +378,12 @@ void CadViewport::paintEvent(QPaintEvent*)
                     << ProjectPoint(plane.ToWorld(kPlaneHalfSize, kPlaneHalfSize))
                     << ProjectPoint(plane.ToWorld(-kPlaneHalfSize, kPlaneHalfSize));
             const bool selected = IsSelected(CadSelectionKind::WorkPlane, index);
-            painter.setBrush(selected ? QColor(241, 178, 54, 52) : QColor(69, 132, 142, 24));
-            painter.setPen(QPen(selected ? QColor("#c47a13") : QColor("#7d9aa0"), selected ? 2.2 : 1.0, Qt::DashLine));
+            const bool active = activePlane_.has_value()
+                && AlmostEqual(activePlane_->Origin(), plane.Origin(), 1.0e-8)
+                && AlmostEqual(activePlane_->Normal(), plane.Normal(), 1.0e-8)
+                && AlmostEqual(activePlane_->UAxis(), plane.UAxis(), 1.0e-8);
+            painter.setBrush(selected ? QColor(241, 178, 54, 52) : active ? QColor(0, 127, 120, 36) : QColor(69, 132, 142, 18));
+            painter.setPen(QPen(selected ? QColor("#c47a13") : active ? QColor("#007f78") : QColor("#7d9aa0"), selected || active ? 2.2 : 1.0, Qt::DashLine));
             painter.drawPolygon(polygon);
 
             painter.setPen(QPen(QColor("#25747d"), 1.7));
@@ -205,6 +413,43 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
 
+    if (activePlane_.has_value() && hoverDrawingPoint_.has_value() && tool_ != ViewportTool::Select) {
+        painter.setPen(QPen(QColor("#d97706"), 2.0, Qt::DashLine));
+        if (pendingDrawingPoint_.has_value()) {
+            if (tool_ == ViewportTool::DrawLine) {
+                painter.drawLine(ProjectPoint(*pendingDrawingPoint_), ProjectPoint(*hoverDrawingPoint_));
+            } else if (tool_ == ViewportTool::DrawRectangle) {
+                const auto first = activePlane_->Project(*pendingDrawingPoint_);
+                const auto second = activePlane_->Project(*hoverDrawingPoint_);
+                QPolygonF rectangle;
+                rectangle << ProjectPoint(activePlane_->ToWorld(first.u, first.v))
+                          << ProjectPoint(activePlane_->ToWorld(second.u, first.v))
+                          << ProjectPoint(activePlane_->ToWorld(second.u, second.v))
+                          << ProjectPoint(activePlane_->ToWorld(first.u, second.v));
+                painter.drawPolygon(rectangle);
+            } else if (tool_ == ViewportTool::DrawCircle) {
+                const double radius = (*hoverDrawingPoint_ - *pendingDrawingPoint_).Length();
+                QPainterPath circlePath(ProjectPoint(activePlane_->ToWorld(
+                    activePlane_->Project(*pendingDrawingPoint_).u + radius,
+                    activePlane_->Project(*pendingDrawingPoint_).v)));
+                const auto center = activePlane_->Project(*pendingDrawingPoint_);
+                for (int sample = 1; sample <= 64; ++sample) {
+                    const double angle = static_cast<double>(sample) / 64.0 * 6.28318530717958647692;
+                    circlePath.lineTo(ProjectPoint(activePlane_->ToWorld(
+                        center.u + std::cos(angle) * radius,
+                        center.v + std::sin(angle) * radius)));
+                }
+                painter.drawPath(circlePath);
+            }
+        }
+        painter.setBrush(QColor("#ffffff"));
+        painter.setPen(QPen(QColor("#d97706"), 2.0));
+        painter.drawEllipse(ProjectPoint(*hoverDrawingPoint_), 4.0, 4.0);
+        if (pendingDrawingPoint_.has_value()) {
+            painter.drawEllipse(ProjectPoint(*pendingDrawingPoint_), 4.0, 4.0);
+        }
+    }
+
     const std::array<std::pair<Vector3, QColor>, 3> axes = {{
         {{8.0, 0.0, 0.0}, QColor("#c33b3b")},
         {{0.0, 8.0, 0.0}, QColor("#32844b")},
@@ -218,7 +463,38 @@ void CadViewport::paintEvent(QPaintEvent*)
     }
 
     painter.setPen(QColor("#52606a"));
-    painter.drawText(QRect(14, 12, width() - 28, 24), Qt::AlignLeft, QString::fromUtf8("左ドラッグ: 回転   右ドラッグ: 移動   ホイール: 拡大縮小"));
+    QString modeText;
+    switch (tool_) {
+    case ViewportTool::Select:
+        modeText = QStringLiteral("選択");
+        break;
+    case ViewportTool::DrawLine:
+        modeText = QStringLiteral("直線");
+        break;
+    case ViewportTool::DrawRectangle:
+        modeText = QStringLiteral("矩形");
+        break;
+    case ViewportTool::DrawCircle:
+        modeText = QStringLiteral("円");
+        break;
+    }
+    if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
+        const auto coordinates = activePlane_->Project(*hoverDrawingPoint_);
+        modeText += QStringLiteral("   U %1 mm   V %2 mm").arg(coordinates.u, 0, 'f', 3).arg(coordinates.v, 0, 'f', 3);
+        if (pendingDrawingPoint_.has_value() && tool_ != ViewportTool::Select) {
+            const auto start = activePlane_->Project(*pendingDrawingPoint_);
+            if (tool_ == ViewportTool::DrawLine) {
+                modeText += QStringLiteral("   長さ %1 mm").arg((*hoverDrawingPoint_ - *pendingDrawingPoint_).Length(), 0, 'f', 3);
+            } else if (tool_ == ViewportTool::DrawRectangle) {
+                modeText += QStringLiteral("   幅 %1 mm   高さ %2 mm")
+                    .arg(std::abs(coordinates.u - start.u), 0, 'f', 3)
+                    .arg(std::abs(coordinates.v - start.v), 0, 'f', 3);
+            } else if (tool_ == ViewportTool::DrawCircle) {
+                modeText += QStringLiteral("   半径 %1 mm").arg((*hoverDrawingPoint_ - *pendingDrawingPoint_).Length(), 0, 'f', 3);
+            }
+        }
+    }
+    painter.drawText(QRect(14, 12, width() - 28, 24), Qt::AlignLeft, modeText);
 }
 
 CadSelection CadViewport::HitTest(QPointF position) const
@@ -270,10 +546,27 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     dragButton_ = event->button();
     mouseMoved_ = false;
     setFocus();
+    if (tool_ != ViewportTool::Select
+        && event->button() == Qt::LeftButton
+        && activePlane_.has_value()
+        && !pendingDrawingPoint_.has_value()) {
+        const auto point = PointOnActivePlane(event->position());
+        if (point.has_value()) {
+            CommitDrawingPoint(SnapPoint(*point, event->position()));
+        }
+    }
 }
 
 void CadViewport::mouseMoveEvent(QMouseEvent* event)
 {
+    if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
+        const auto point = PointOnActivePlane(event->position());
+        hoverDrawingPoint_ = point.has_value()
+            ? std::optional<Vector3>(SnapPoint(*point, event->position()))
+            : std::nullopt;
+        update();
+    }
+
     if (dragButton_ == Qt::NoButton) {
         return;
     }
@@ -281,17 +574,14 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
     if (delta.manhattanLength() > 1) {
         mouseMoved_ = true;
     }
-    if (dragButton_ == Qt::LeftButton) {
+    if (dragButton_ == Qt::LeftButton && tool_ == ViewportTool::Select) {
+        alignedViewBasis_.reset();
         yawRadians_ += delta.x() * 0.008;
         pitchRadians_ = std::clamp(pitchRadians_ - delta.y() * 0.008, -1.45, 1.45);
     } else if (dragButton_ == Qt::RightButton || dragButton_ == Qt::MiddleButton) {
-        const Vector3 viewDirection = {
-            std::cos(pitchRadians_) * std::cos(yawRadians_),
-            std::cos(pitchRadians_) * std::sin(yawRadians_),
-            std::sin(pitchRadians_),
-        };
-        const Vector3 right = Vector3{-viewDirection.y, viewDirection.x, 0.0}.Normalized();
-        const Vector3 up = Cross(viewDirection, right).Normalized();
+        const auto basis = CurrentViewBasis();
+        const Vector3& right = basis[1];
+        const Vector3& up = basis[2];
         target_ = target_ - right * (delta.x() / pixelsPerMillimeter_) + up * (delta.y() / pixelsPerMillimeter_);
     }
     lastMousePosition_ = event->position().toPoint();
@@ -300,6 +590,19 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 
 void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (tool_ != ViewportTool::Select) {
+        if (event->button() == Qt::LeftButton && activePlane_.has_value()) {
+            const auto point = PointOnActivePlane(event->position());
+            if (point.has_value()) {
+                CommitDrawingPoint(SnapPoint(*point, event->position()));
+            }
+        } else if (!mouseMoved_ && event->button() == Qt::RightButton) {
+            CancelDrawing();
+        }
+        dragButton_ = Qt::NoButton;
+        return;
+    }
+
     if (event->button() == Qt::LeftButton && !mouseMoved_) {
         const CadSelection hit = HitTest(event->position());
         const bool extendSelection = event->modifiers().testFlag(Qt::ControlModifier)
@@ -324,6 +627,23 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         update();
     }
     dragButton_ = Qt::NoButton;
+}
+
+void CadViewport::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        CancelDrawing();
+        event->accept();
+        return;
+    }
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+        && tool_ == ViewportTool::DrawLine) {
+        pendingDrawingPoint_.reset();
+        update();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 void CadViewport::wheelEvent(QWheelEvent* event)

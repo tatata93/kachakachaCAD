@@ -35,10 +35,11 @@ int main(int argc, char* argv[])
     if (!projectPath.isEmpty() && !window.LoadProjectFile(projectPath)) {
         return 2;
     }
+    window.show();
+    application.processEvents();
     if (selfTest && !window.RunCreationSelfTest()) {
         return 4;
     }
-    window.show();
 
     if (!snapshotPath.isEmpty() || selfTest) {
         QTimer::singleShot(250, &application, [&] {

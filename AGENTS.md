@@ -24,6 +24,7 @@
 6. `docs/development-workflow.md`
 7. `docs/adr/0001-main-technology-stack.md`
 8. `docs/adr/0003-wire-plane-policy.md`
+9. `docs/usability-review.md`
 
 ## 実装の優先順位
 

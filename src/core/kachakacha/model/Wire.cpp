@@ -8,6 +8,7 @@ namespace kachakacha::model {
 
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Cross;
+using kachakacha::geometry::Dot;
 using kachakacha::geometry::Vector3;
 
 namespace {
@@ -307,6 +308,48 @@ Wire Wire::Translated(Vector3 delta) const
     }
 
     return {kind_, std::move(translatedPoints)};
+}
+
+Wire Wire::Mirrored(Vector3 linePoint, Vector3 lineDirection, Vector3 planeNormal) const
+{
+    if (!linePoint.IsFinite() || !lineDirection.IsFinite() || !planeNormal.IsFinite()) {
+        throw std::invalid_argument("Wire mirror definition contains a non-finite value.");
+    }
+
+    const Vector3 normal = planeNormal.Normalized();
+    const Vector3 projectedDirection = lineDirection - normal * Dot(lineDirection, normal);
+    if (projectedDirection.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Wire mirror axis must lie in the mirror plane.");
+    }
+    const Vector3 axis = projectedDirection.Normalized();
+    const Vector3 across = Cross(normal, axis).Normalized();
+    const auto reflectPoint = [&](Vector3 point) {
+        return point - across * (2.0 * Dot(point - linePoint, across));
+    };
+    const auto reflectDirection = [&](Vector3 direction) {
+        return direction - across * (2.0 * Dot(direction, across));
+    };
+
+    std::vector<Vector3> mirroredPoints;
+    mirroredPoints.reserve(controlPoints_.size());
+    for (const Vector3& point : controlPoints_) {
+        mirroredPoints.push_back(reflectPoint(point));
+    }
+
+    if (kind_ == WireKind::Circle || kind_ == WireKind::CircularArc) {
+        return {
+            kind_,
+            std::move(mirroredPoints),
+            reflectPoint(arcCenter_),
+            reflectDirection(arcUAxis_),
+            reflectDirection(arcVAxis_),
+            arcRadius_,
+            arcStartAngleRadians_,
+            arcSweepAngleRadians_,
+        };
+    }
+
+    return {kind_, std::move(mirroredPoints)};
 }
 
 } // namespace kachakacha::model

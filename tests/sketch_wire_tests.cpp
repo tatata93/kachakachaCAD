@@ -177,6 +177,39 @@ void TranslatedArcKeepsFrameAndRadius()
     RequireNear(moved.End(), {6.0, 2.5, 4.0}, "translated arc end");
 }
 
+void MirrorLineAcrossWorkPlaneAxis()
+{
+    const Wire wire = Wire::Line({2.0, 1.0, 0.0}, {5.0, 4.0, 0.0});
+    const Wire mirrored = wire.Mirrored(
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0});
+
+    Require(mirrored.Kind() == WireKind::Line, "mirrored line kind");
+    RequireNear(mirrored.Start(), {-2.0, 1.0, 0.0}, "mirrored line start");
+    RequireNear(mirrored.End(), {-5.0, 4.0, 0.0}, "mirrored line end");
+}
+
+void MirrorArcKeepsExactCurve()
+{
+    const Wire wire = Wire::CircularArc(
+        {3.0, 2.0, 0.0},
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        2.0,
+        0.0,
+        Pi / 2.0);
+    const Wire mirrored = wire.Mirrored(
+        {0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0});
+
+    Require(mirrored.Kind() == WireKind::CircularArc, "mirrored arc kind");
+    RequireNear(mirrored.Start(), {-5.0, 2.0, 0.0}, "mirrored arc start");
+    RequireNear(mirrored.End(), {-3.0, 4.0, 0.0}, "mirrored arc end");
+    RequireNear(mirrored.ArcData().center, {-3.0, 2.0, 0.0}, "mirrored arc center");
+}
+
 } // namespace
 
 int main()
@@ -192,6 +225,8 @@ int main()
         ThreePointArcRejectsCollinearPoints();
         TranslatedLineKeepsShape();
         TranslatedArcKeepsFrameAndRadius();
+        MirrorLineAcrossWorkPlaneAxis();
+        MirrorArcKeepsExactCurve();
     } catch (const std::exception& error) {
         std::cerr << "sketch_wire_tests failed: " << error.what() << '\n';
         return 1;

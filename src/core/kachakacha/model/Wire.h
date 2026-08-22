@@ -65,6 +65,10 @@ public:
     [[nodiscard]] WireArcData ArcData() const;
     [[nodiscard]] geometry::Vector3 Evaluate(double t) const;
     [[nodiscard]] Wire Translated(geometry::Vector3 delta) const;
+    [[nodiscard]] Wire Mirrored(
+        geometry::Vector3 linePoint,
+        geometry::Vector3 lineDirection,
+        geometry::Vector3 planeNormal) const;
     [[nodiscard]] bool IsClosed(double epsilon = 1.0e-9) const noexcept;
 
 private:

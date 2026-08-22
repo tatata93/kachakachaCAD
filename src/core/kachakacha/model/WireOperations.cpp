@@ -12,19 +12,19 @@ using geometry::Vector3;
 
 namespace {
 
-struct SegmentIntersection {
+struct LineIntersection {
     Vector3 point;
     double firstParameter = 0.0;
     double secondParameter = 0.0;
 };
 
-SegmentIntersection IntersectSegments(const Wire& first, const Wire& second, double tolerance)
+LineIntersection IntersectInfiniteLines(const Wire& first, const Wire& second, double tolerance)
 {
     if (first.Kind() != WireKind::Line || second.Kind() != WireKind::Line) {
-        throw std::invalid_argument("Chamfer requires two line wires.");
+        throw std::invalid_argument("Line intersection editing requires two line wires.");
     }
     if (!std::isfinite(tolerance) || tolerance <= 0.0) {
-        throw std::invalid_argument("Chamfer tolerance must be positive.");
+        throw std::invalid_argument("Line intersection tolerance must be positive.");
     }
 
     const Vector3 firstStart = first.Start();
@@ -40,7 +40,7 @@ SegmentIntersection IntersectSegments(const Wire& first, const Wire& second, dou
     const double denominator = a * c - b * b;
     const double scale = std::max(a * c, 1.0);
     if (std::abs(denominator) <= tolerance * tolerance * scale) {
-        throw std::invalid_argument("Chamfer lines are parallel or nearly parallel.");
+        throw std::invalid_argument("Lines are parallel or nearly parallel.");
     }
 
     const double firstParameter = (b * e - c * d) / denominator;
@@ -48,14 +48,20 @@ SegmentIntersection IntersectSegments(const Wire& first, const Wire& second, dou
     const Vector3 firstPoint = firstStart + firstDirection * firstParameter;
     const Vector3 secondPoint = secondStart + secondDirection * secondParameter;
     if ((firstPoint - secondPoint).Length() > tolerance) {
-        throw std::invalid_argument("Chamfer lines do not intersect in 3D.");
-    }
-    if (firstParameter < -tolerance || firstParameter > 1.0 + tolerance
-        || secondParameter < -tolerance || secondParameter > 1.0 + tolerance) {
-        throw std::invalid_argument("Chamfer intersection is outside a line segment.");
+        throw std::invalid_argument("Lines do not intersect in 3D.");
     }
 
     return {(firstPoint + secondPoint) * 0.5, firstParameter, secondParameter};
+}
+
+LineIntersection IntersectSegments(const Wire& first, const Wire& second, double tolerance)
+{
+    const LineIntersection intersection = IntersectInfiniteLines(first, second, tolerance);
+    if (intersection.firstParameter < -tolerance || intersection.firstParameter > 1.0 + tolerance
+        || intersection.secondParameter < -tolerance || intersection.secondParameter > 1.0 + tolerance) {
+        throw std::invalid_argument("Intersection is outside a line segment.");
+    }
+    return intersection;
 }
 
 RetainedLineEnd ResolveRetainedEnd(
@@ -101,7 +107,39 @@ TrimmedLine TrimLine(
     return {Wire::Line(trimPoint, line.End()), trimPoint};
 }
 
+Wire MeetLineAtIntersection(
+    const Wire& line,
+    Vector3 intersection,
+    RetainedLineEnd requestedEnd,
+    double tolerance)
+{
+    const RetainedLineEnd retainedEnd = ResolveRetainedEnd(line, intersection, requestedEnd);
+    const Vector3 retainedPoint = retainedEnd == RetainedLineEnd::Start ? line.Start() : line.End();
+    if ((retainedPoint - intersection).Length() <= tolerance) {
+        throw std::invalid_argument("Line intersection would create a zero-length wire.");
+    }
+    if (retainedEnd == RetainedLineEnd::Start) {
+        return Wire::Line(retainedPoint, intersection);
+    }
+    return Wire::Line(intersection, retainedPoint);
+}
+
 } // namespace
+
+LineIntersectionEditResult MeetLinesAtIntersection(
+    const Wire& first,
+    RetainedLineEnd retainedFirst,
+    const Wire& second,
+    RetainedLineEnd retainedSecond,
+    double tolerance)
+{
+    const LineIntersection intersection = IntersectInfiniteLines(first, second, tolerance);
+    return {
+        MeetLineAtIntersection(first, intersection.point, retainedFirst, tolerance),
+        MeetLineAtIntersection(second, intersection.point, retainedSecond, tolerance),
+        intersection.point,
+    };
+}
 
 LineChamferResult ChamferIntersectingLines(
     const Wire& first,
@@ -112,7 +150,7 @@ LineChamferResult ChamferIntersectingLines(
     double secondSetback,
     double tolerance)
 {
-    const SegmentIntersection intersection = IntersectSegments(first, second, tolerance);
+    const LineIntersection intersection = IntersectSegments(first, second, tolerance);
     const TrimmedLine trimmedFirst = TrimLine(first, intersection.point, retainedFirst, firstSetback, tolerance);
     const TrimmedLine trimmedSecond = TrimLine(second, intersection.point, retainedSecond, secondSetback, tolerance);
     if ((trimmedFirst.trimPoint - trimmedSecond.trimPoint).Length() <= tolerance) {
@@ -141,7 +179,7 @@ LineFilletResult FilletIntersectingLines(
         throw std::invalid_argument("Fillet radius must be positive.");
     }
 
-    const SegmentIntersection intersection = IntersectSegments(first, second, tolerance);
+    const LineIntersection intersection = IntersectSegments(first, second, tolerance);
     const RetainedLineEnd resolvedFirst = ResolveRetainedEnd(first, intersection.point, retainedFirst);
     const RetainedLineEnd resolvedSecond = ResolveRetainedEnd(second, intersection.point, retainedSecond);
     const Vector3 firstRetainedPoint = resolvedFirst == RetainedLineEnd::Start ? first.Start() : first.End();

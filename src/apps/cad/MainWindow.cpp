@@ -32,6 +32,7 @@
 #include <QSaveFile>
 #include <QSignalBlocker>
 #include <QShortcut>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
@@ -64,6 +65,7 @@ using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
+using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::RetainedLineEnd;
 
 namespace {
@@ -215,6 +217,17 @@ QString PolicyText(WirePlanePolicy policy)
     return {};
 }
 
+bool WireLiesOnPlane(const Wire& wire, const WorkPlane& plane, double tolerance = 1.0e-7)
+{
+    const int samples = wire.Kind() == WireKind::Line ? 1 : 32;
+    for (int sample = 0; sample <= samples; ++sample) {
+        if (std::abs(plane.Project(wire.Evaluate(static_cast<double>(sample) / samples)).w) > tolerance) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -260,6 +273,12 @@ void MainWindow::BuildUi()
     });
     viewport_->SetBezierCreatedCallback([this](const std::array<Vector3, 4>& points) {
         AddViewportBezier(points);
+    });
+    viewport_->SetTranslationRequestedCallback([this](Vector3 delta, bool copy) {
+        ApplyViewportTranslation(delta, copy);
+    });
+    viewport_->SetMirrorRequestedCallback([this](Vector3 linePoint, Vector3 lineDirection, Vector3 planeNormal) {
+        ApplyViewportMirror(linePoint, lineDirection, planeNormal);
     });
     BuildDrawingActions();
     viewport_->SetDrawingStateChangedCallback([this](ViewportTool tool, std::size_t pointCount) {
@@ -350,6 +369,14 @@ void MainWindow::BuildDrawingActions()
     circleToolAction_ = new QAction(QStringLiteral("円"), this);
     arcToolAction_ = new QAction(QStringLiteral("3点円弧"), this);
     bezierToolAction_ = new QAction(QStringLiteral("ベジェ"), this);
+    moveToolAction_ = new QAction(QStringLiteral("移動"), this);
+    copyToolAction_ = new QAction(QStringLiteral("コピー"), this);
+    mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
+    meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
+    moveToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で移動"));
+    copyToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で複製"));
+    mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
+    meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
 
     selectToolAction_->setShortcut(Qt::Key_V);
     lineToolAction_->setShortcut(Qt::Key_L);
@@ -363,7 +390,8 @@ void MainWindow::BuildDrawingActions()
     toolGroup->setExclusive(true);
     for (QAction* action : {
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
-             circleToolAction_, arcToolAction_, bezierToolAction_}) {
+             circleToolAction_, arcToolAction_, bezierToolAction_,
+             moveToolAction_, copyToolAction_, mirrorToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -376,6 +404,10 @@ void MainWindow::BuildDrawingActions()
     connect(circleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawCircle); });
     connect(arcToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawArc); });
     connect(bezierToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawBezier); });
+    connect(moveToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MoveSelection); });
+    connect(copyToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::CopySelection); });
+    connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
+    connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
 
     snapAction_ = new QAction(QStringLiteral("スナップ"), this);
     snapAction_->setCheckable(true);
@@ -672,6 +704,31 @@ QWidget* MainWindow::BuildEditPanel()
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
+    auto* directLabel = new QLabel(QStringLiteral("3Dで直接変形"));
+    directLabel->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(directLabel);
+    auto* directGrid = new QGridLayout;
+    directGrid->setContentsMargins(0, 0, 0, 0);
+    directGrid->setHorizontalSpacing(6);
+    directGrid->setVerticalSpacing(6);
+    const auto addDirectButton = [&](QAction* action, int row, int column) {
+        auto* button = new QToolButton;
+        button->setObjectName("drawingToolButton");
+        button->setDefaultAction(action);
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        directGrid->addWidget(button, row, column);
+    };
+    addDirectButton(moveToolAction_, 0, 0);
+    addDirectButton(copyToolAction_, 0, 1);
+    addDirectButton(mirrorToolAction_, 1, 0);
+    addDirectButton(meetLinesAction_, 1, 1);
+    layout->addLayout(directGrid);
+
+    auto* numericLabel = new QLabel(QStringLiteral("選択内容の数値編集"));
+    numericLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 4px;");
+    layout->addWidget(numericLabel);
+
     editSelectionLabel_ = new QLabel(QStringLiteral("選択なし"));
     editSelectionLabel_->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(editSelectionLabel_);
@@ -731,10 +788,10 @@ QWidget* MainWindow::BuildEditPanel()
     editParameters_->addWidget(wirePage);
     layout->addWidget(editParameters_);
 
-    auto* applyButton = new QPushButton(QStringLiteral("変更を適用"));
-    applyButton->setObjectName("primaryButton");
-    connect(applyButton, &QPushButton::clicked, this, &MainWindow::ApplySelectedEdit);
-    layout->addWidget(applyButton);
+    editApplyButton_ = new QPushButton(QStringLiteral("変更を適用"));
+    editApplyButton_->setObjectName("primaryButton");
+    connect(editApplyButton_, &QPushButton::clicked, this, &MainWindow::ApplySelectedEdit);
+    layout->addWidget(editApplyButton_);
     layout->addStretch(1);
     return panel;
 }
@@ -880,6 +937,11 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(undoAction_);
     editMenu->addAction(redoAction_);
     editMenu->addSeparator();
+    editMenu->addAction(moveToolAction_);
+    editMenu->addAction(copyToolAction_);
+    editMenu->addAction(mirrorToolAction_);
+    editMenu->addAction(meetLinesAction_);
+    editMenu->addSeparator();
     editMenu->addAction(deleteAction);
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
@@ -922,6 +984,14 @@ void MainWindow::BuildMenusAndToolbar()
     drawingToolbar->addSeparator();
     drawingToolbar->addAction(finishDrawingAction_);
     drawingToolbar->addAction(cancelDrawingAction_);
+
+    QToolBar* transformToolbar = addToolBar(QStringLiteral("直接変形"));
+    transformToolbar->setMovable(false);
+    transformToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    transformToolbar->addAction(moveToolAction_);
+    transformToolbar->addAction(copyToolAction_);
+    transformToolbar->addAction(mirrorToolAction_);
+    transformToolbar->addAction(meetLinesAction_);
     UpdateHistoryActions();
 }
 
@@ -1034,6 +1104,9 @@ bool MainWindow::SaveProjectFile(const QString& path)
 
 void MainWindow::SetViewportTool(ViewportTool tool)
 {
+    const bool isTransform = tool == ViewportTool::MoveSelection
+        || tool == ViewportTool::CopySelection
+        || tool == ViewportTool::MirrorSelection;
     if (tool != ViewportTool::Select) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
@@ -1042,6 +1115,20 @@ void MainWindow::SetViewportTool(ViewportTool tool)
             statusBar()->showMessage(QStringLiteral("作図する平面を選択してください"), 3000);
             return;
         }
+    }
+    if (isTransform) {
+        const bool hasSelectedWire = std::any_of(
+            viewport_->Selections().begin(), viewport_->Selections().end(), [this](const CadSelection& selection) {
+                return selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Wires().size());
+            });
+        if (!hasSelectedWire) {
+            selectToolAction_->setChecked(true);
+            viewport_->SetTool(ViewportTool::Select);
+            statusBar()->showMessage(QStringLiteral("3D画面で変形するワイヤーを選択してください"), 3500);
+            return;
+        }
+        toolsTabs_->setCurrentIndex(3);
     }
 
     viewport_->SetTool(tool);
@@ -1052,6 +1139,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     circleToolAction_->setChecked(tool == ViewportTool::DrawCircle);
     arcToolAction_->setChecked(tool == ViewportTool::DrawArc);
     bezierToolAction_->setChecked(tool == ViewportTool::DrawBezier);
+    moveToolAction_->setChecked(tool == ViewportTool::MoveSelection);
+    copyToolAction_->setChecked(tool == ViewportTool::CopySelection);
+    mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -1073,6 +1163,15 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::DrawBezier:
         statusBar()->showMessage(QStringLiteral("ベジェ曲線作図モード"), 2500);
+        break;
+    case ViewportTool::MoveSelection:
+        statusBar()->showMessage(QStringLiteral("移動: 基準点と移動先を3D画面で指定"), 3500);
+        break;
+    case ViewportTool::CopySelection:
+        statusBar()->showMessage(QStringLiteral("コピー: 基準点と移動先を3D画面で指定"), 3500);
+        break;
+    case ViewportTool::MirrorSelection:
+        statusBar()->showMessage(QStringLiteral("ミラー複製: 軸の1点目と2点目を3D画面で指定"), 3500);
         break;
     }
 }
@@ -1115,6 +1214,21 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
                                   : QStringLiteral("終点"))
             .arg(pointCount);
         break;
+    case ViewportTool::MoveSelection:
+        state = QStringLiteral("移動 · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("基準点") : QStringLiteral("移動先"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::CopySelection:
+        state = QStringLiteral("コピー · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("基準点") : QStringLiteral("移動先"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::MirrorSelection:
+        state = QStringLiteral("ミラー複製 · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("軸の1点目") : QStringLiteral("軸の2点目"))
+            .arg(pointCount);
+        break;
     }
     if (drawingStateLabel_ != nullptr) {
         drawingStateLabel_->setText(state);
@@ -1141,6 +1255,9 @@ void MainWindow::RefreshActiveWorkPlane()
     circleToolAction_->setEnabled(canDraw);
     arcToolAction_->setEnabled(canDraw);
     bezierToolAction_->setEnabled(canDraw);
+    moveToolAction_->setEnabled(canDraw);
+    copyToolAction_->setEnabled(canDraw);
+    mirrorToolAction_->setEnabled(canDraw);
     if (!canDraw && viewport_->Tool() != ViewportTool::Select) {
         SetViewportTool(ViewportTool::Select);
     }
@@ -1270,6 +1387,154 @@ void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
         statusBar()->showMessage(QStringLiteral("ベジェ曲線を作成しました"), 1800);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
+{
+    try {
+        if (!delta.IsFinite() || delta.LengthSquared() <= 1.0e-18) {
+            throw std::invalid_argument("移動量を指定してください。");
+        }
+
+        std::vector<int> indices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                indices.push_back(selection.index);
+            }
+        }
+        if (indices.empty()) {
+            throw std::invalid_argument("移動またはコピーするワイヤーを選択してください。");
+        }
+
+        std::vector<kachakacha::model::NamedWire> sources;
+        std::vector<Wire> transformed;
+        sources.reserve(indices.size());
+        transformed.reserve(indices.size());
+        for (int index : indices) {
+            const auto source = project_.Wires()[index];
+            const Wire result = source.wire.Translated(delta);
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+                if (!source.metadata.sourcePlaneName.has_value()) {
+                    throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
+                }
+                const auto sourcePlane = project_.FindWorkPlane(*source.metadata.sourcePlaneName);
+                if (!sourcePlane.has_value() || !WireLiesOnPlane(result, *sourcePlane)) {
+                    throw std::invalid_argument("作業平面に固定されたワイヤーは、その平面外へ移動できません。");
+                }
+            }
+            sources.push_back(source);
+            transformed.push_back(result);
+        }
+
+        RecordUndo();
+        std::vector<CadSelection> resultingSelections;
+        if (copy) {
+            for (std::size_t index = 0; index < sources.size(); ++index) {
+                const QString name = SuggestedDirectGroupName(ToQString(sources[index].name) + QStringLiteral("_copy"));
+                project_.AddWire(ToName(name), transformed[index], sources[index].metadata);
+                resultingSelections.push_back({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size() - 1)});
+            }
+        } else {
+            for (std::size_t index = 0; index < sources.size(); ++index) {
+                project_.UpdateWire(sources[index].name, transformed[index]);
+                resultingSelections.push_back({CadSelectionKind::Wire, indices[index]});
+            }
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(std::move(resultingSelections), true);
+        statusBar()->showMessage(
+            copy ? QStringLiteral("%1本のワイヤーをコピーしました").arg(sources.size())
+                 : QStringLiteral("%1本のワイヤーを移動しました").arg(sources.size()),
+            2500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
+void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, Vector3 planeNormal)
+{
+    try {
+        std::vector<int> indices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                indices.push_back(selection.index);
+            }
+        }
+        if (indices.empty()) {
+            throw std::invalid_argument("ミラー複製するワイヤーを選択してください。");
+        }
+
+        std::vector<kachakacha::model::NamedWire> sources;
+        std::vector<Wire> mirrored;
+        sources.reserve(indices.size());
+        mirrored.reserve(indices.size());
+        for (int index : indices) {
+            const auto source = project_.Wires()[index];
+            const Wire result = source.wire.Mirrored(linePoint, lineDirection, planeNormal);
+            if (source.metadata.planePolicy == WirePlanePolicy::LockedToPlane) {
+                if (!source.metadata.sourcePlaneName.has_value()) {
+                    throw std::invalid_argument("作業平面に固定されたワイヤーの基準平面がありません。");
+                }
+                const auto sourcePlane = project_.FindWorkPlane(*source.metadata.sourcePlaneName);
+                if (!sourcePlane.has_value() || !WireLiesOnPlane(result, *sourcePlane)) {
+                    throw std::invalid_argument("この軸では、固定されたワイヤーが作業平面外へ出ます。");
+                }
+            }
+            sources.push_back(source);
+            mirrored.push_back(result);
+        }
+
+        RecordUndo();
+        std::vector<CadSelection> resultingSelections;
+        for (std::size_t index = 0; index < sources.size(); ++index) {
+            const QString name = SuggestedDirectGroupName(ToQString(sources[index].name) + QStringLiteral("_mirror"));
+            project_.AddWire(ToName(name), mirrored[index], sources[index].metadata);
+            resultingSelections.push_back({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size() - 1)});
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(std::move(resultingSelections), true);
+        statusBar()->showMessage(QStringLiteral("%1本のワイヤーをミラー複製しました").arg(sources.size()), 2500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
+void MainWindow::ApplyMeetSelectedLines()
+{
+    try {
+        std::vector<int> indices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                indices.push_back(selection.index);
+            }
+        }
+        if (indices.size() != 2) {
+            throw std::invalid_argument("交点で合わせる2本の直線を選択してください。");
+        }
+        const auto first = project_.Wires()[indices[0]];
+        const auto second = project_.Wires()[indices[1]];
+        const auto result = MeetLinesAtIntersection(
+            first.wire, RetainedLineEnd::Automatic,
+            second.wire, RetainedLineEnd::Automatic);
+
+        RecordUndo();
+        project_.UpdateWire(first.name, result.first);
+        project_.UpdateWire(second.name, result.second);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections({
+            {CadSelectionKind::Wire, indices[0]},
+            {CadSelectionKind::Wire, indices[1]},
+        }, true);
+        statusBar()->showMessage(QStringLiteral("2本の直線を交点までトリム・延長しました"), 3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
     }
 }
 
@@ -1488,31 +1753,110 @@ bool MainWindow::RunCreationSelfTest()
         return fail("direct drawing result");
     }
 
-    std::ostringstream directDrawingScript;
-    WriteProjectScript(directDrawingScript, project_);
-    std::istringstream directDrawingInput(directDrawingScript.str());
-    const Project reloadedProject = LoadProjectScript(directDrawingInput, "direct-drawing-self-test");
-    if (reloadedProject.Wires().size() != project_.Wires().size()
-        || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
-        || reloadedProject.Wires()[directStart + 5].metadata.sourcePlaneName != drawingPlaneName) {
-        return fail("save and reload direct drawing");
-    }
-
     SetViewportTool(ViewportTool::Select);
-    toolsTabs_->setCurrentIndex(0);
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(directStart)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
-        {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
-        {CadSelectionKind::Wire, static_cast<int>(directStart + 3)},
-        {CadSelectionKind::Wire, static_cast<int>(directStart + 4)},
-        {CadSelectionKind::Wire, static_cast<int>(directStart + 5)},
     }, true);
-    SetViewportTool(ViewportTool::DrawBezier);
-    click(center + QPointF(-35.0, -105.0));
-    click(center + QPointF(-5.0, -145.0));
-    click(center + QPointF(35.0, -145.0));
-    sendMouse(QEvent::MouseMove, center + QPointF(65.0, -105.0), Qt::NoButton, Qt::NoButton);
+    const Wire beforeMove = project_.Wires()[directStart].wire;
+    SetViewportTool(ViewportTool::MoveSelection);
+    click(center + QPointF(-35.0, -150.0));
+    click(center + QPointF(35.0, -150.0));
+    if (project_.Wires().size() != directStart + 6) {
+        return fail("direct move count");
+    }
+    const Vector3 moveDelta = project_.Wires()[directStart].wire.Start() - beforeMove.Start();
+    if (moveDelta.LengthSquared() <= 1.0e-9
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart].wire.End() - beforeMove.End(), moveDelta, 1.0e-8)) {
+        return fail("direct move geometry");
+    }
+    Undo();
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[directStart].wire.Start(), beforeMove.Start())) {
+        return fail("undo direct move");
+    }
+    Redo();
+    if (!kachakacha::geometry::AlmostEqual(
+            project_.Wires()[directStart].wire.Start(), beforeMove.Start() + moveDelta)) {
+        return fail("redo direct move");
+    }
+
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(directStart)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
+    }, true);
+    const std::size_t copyStart = project_.Wires().size();
+    SetViewportTool(ViewportTool::CopySelection);
+    click(center + QPointF(-170.0, 145.0));
+    click(center + QPointF(-170.0, 75.0));
+    if (project_.Wires().size() != copyStart + 2
+        || project_.Wires()[copyStart].wire.Kind() != WireKind::Line
+        || project_.Wires()[copyStart + 1].wire.Kind() != WireKind::Polyline
+        || project_.Wires()[copyStart].metadata.sourcePlaneName != drawingPlaneName) {
+        return fail("direct copy");
+    }
+    Undo();
+    if (project_.Wires().size() != copyStart) {
+        return fail("undo direct copy");
+    }
+    Redo();
+    if (project_.Wires().size() != copyStart + 2) {
+        return fail("redo direct copy");
+    }
+
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(copyStart)},
+        {CadSelectionKind::Wire, static_cast<int>(copyStart + 1)},
+    }, true);
+    const std::size_t mirrorStart = project_.Wires().size();
+    SetViewportTool(ViewportTool::MirrorSelection);
+    click(center + QPointF(175.0, -125.0));
+    click(center + QPointF(175.0, 125.0));
+    if (project_.Wires().size() != mirrorStart + 2
+        || project_.Wires()[mirrorStart].wire.Kind() != WireKind::Line
+        || project_.Wires()[mirrorStart + 1].wire.Kind() != WireKind::Polyline
+        || project_.Wires()[mirrorStart].name.find("mirror") == std::string::npos) {
+        return fail("direct mirror copy");
+    }
+
+    const std::size_t meetStart = project_.Wires().size();
+    AddViewportLine({-14.0, -9.0, 0.0}, {-5.0, -9.0, 0.0});
+    AddViewportLine({-2.0, -5.0, 0.0}, {-2.0, 3.0, 0.0});
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(meetStart)},
+        {CadSelectionKind::Wire, static_cast<int>(meetStart + 1)},
+    }, true);
+    meetLinesAction_->trigger();
+    const Vector3 expectedIntersection{-2.0, -9.0, 0.0};
+    if (!kachakacha::geometry::AlmostEqual(project_.Wires()[meetStart].wire.End(), expectedIntersection)
+        || !kachakacha::geometry::AlmostEqual(project_.Wires()[meetStart + 1].wire.Start(), expectedIntersection)) {
+        return fail("meet selected lines");
+    }
+    Undo();
+    if (kachakacha::geometry::AlmostEqual(project_.Wires()[meetStart].wire.End(), expectedIntersection)) {
+        return fail("undo meet selected lines");
+    }
+    Redo();
+
+    std::ostringstream directDrawingScript;
+    WriteProjectScript(directDrawingScript, project_);
+    std::istringstream directDrawingInput(directDrawingScript.str());
+    const Project reloadedProject = LoadProjectScript(directDrawingInput, "direct-editing-self-test");
+    if (reloadedProject.Wires().size() != project_.Wires().size()
+        || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
+        || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
+        || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
+        return fail("save and reload direct editing");
+    }
+
+    toolsTabs_->setCurrentIndex(3);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(mirrorStart)},
+        {CadSelectionKind::Wire, static_cast<int>(mirrorStart + 1)},
+    }, true);
+    SetViewportTool(ViewportTool::MoveSelection);
+    click(center + QPointF(-25.0, -135.0));
+    sendMouse(QEvent::MouseMove, center + QPointF(45.0, -105.0), Qt::NoButton, Qt::NoButton);
     return true;
 }
 
@@ -2070,6 +2414,24 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
     PopulateEditPanel(selection);
+    if (selections.size() > 1) {
+        const auto wireCount = std::count_if(selections.begin(), selections.end(), [](const CadSelection& item) {
+            return item.kind == CadSelectionKind::Wire;
+        });
+        editSelectionLabel_->setText(static_cast<std::size_t>(wireCount) == selections.size()
+                ? QStringLiteral("%1本のワイヤーを選択").arg(wireCount)
+                : QStringLiteral("%1個を選択").arg(selections.size()));
+        editParameters_->setCurrentIndex(0);
+        if (auto* label = qobject_cast<QLabel*>(editParameters_->widget(0))) {
+            label->setText(QStringLiteral("複数選択中"));
+        }
+        editApplyButton_->setEnabled(false);
+    } else {
+        if (auto* label = qobject_cast<QLabel*>(editParameters_->widget(0))) {
+            label->setText(QStringLiteral("選択なし"));
+        }
+        editApplyButton_->setEnabled(selection.kind != CadSelectionKind::None);
+    }
 }
 
 void MainWindow::SyncMachiningSelection(const std::vector<CadSelection>& selections)

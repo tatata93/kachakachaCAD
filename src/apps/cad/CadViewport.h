@@ -31,6 +31,9 @@ enum class ViewportTool {
     DrawCircle,
     DrawArc,
     DrawBezier,
+    MoveSelection,
+    CopySelection,
+    MirrorSelection,
 };
 
 class CadViewport final : public QWidget {
@@ -49,6 +52,8 @@ public:
     void SetCircleCreatedCallback(std::function<void(kachakacha::geometry::Vector3, double)> callback);
     void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
+    void SetTranslationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, bool)> callback);
+    void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
     void SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
     void SetTool(ViewportTool tool);
@@ -90,6 +95,8 @@ private:
     std::function<void(kachakacha::geometry::Vector3, double)> circleCreated_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> arcCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
+    std::function<void(kachakacha::geometry::Vector3, bool)> translationRequested_;
+    std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
     ViewportTool tool_ = ViewportTool::Select;

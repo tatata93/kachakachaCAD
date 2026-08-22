@@ -8,6 +8,7 @@ using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
+using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
 
@@ -113,6 +114,37 @@ void FilletsCornerInArbitrary3DPlane()
     RequireNear(result.secondTangentPoint, {1.0, 2.0, 4.5}, "3d second tangent");
 }
 
+void ExtendsSeparatedLinesToTheirIntersection()
+{
+    const Wire horizontal = Wire::Line({0.0, 0.0, 0.0}, {4.0, 0.0, 0.0});
+    const Wire vertical = Wire::Line({6.0, 2.0, 0.0}, {6.0, 5.0, 0.0});
+
+    const auto result = MeetLinesAtIntersection(
+        horizontal, RetainedLineEnd::Automatic,
+        vertical, RetainedLineEnd::Automatic);
+
+    RequireNear(result.intersection, {6.0, 0.0, 0.0}, "extended intersection");
+    RequireNear(result.first.Start(), {0.0, 0.0, 0.0}, "extended first retained end");
+    RequireNear(result.first.End(), {6.0, 0.0, 0.0}, "extended first intersection end");
+    RequireNear(result.second.Start(), {6.0, 0.0, 0.0}, "extended second intersection start");
+    RequireNear(result.second.End(), {6.0, 5.0, 0.0}, "extended second retained end");
+}
+
+void TrimsCrossingLinesToChosenBranches()
+{
+    const Wire horizontal = Wire::Line({-5.0, 0.0, 0.0}, {5.0, 0.0, 0.0});
+    const Wire vertical = Wire::Line({0.0, -4.0, 0.0}, {0.0, 7.0, 0.0});
+
+    const auto result = MeetLinesAtIntersection(
+        horizontal, RetainedLineEnd::Start,
+        vertical, RetainedLineEnd::End);
+
+    RequireNear(result.first.Start(), {-5.0, 0.0, 0.0}, "trimmed first retained branch");
+    RequireNear(result.first.End(), {0.0, 0.0, 0.0}, "trimmed first intersection");
+    RequireNear(result.second.Start(), {0.0, 0.0, 0.0}, "trimmed second intersection");
+    RequireNear(result.second.End(), {0.0, 7.0, 0.0}, "trimmed second retained branch");
+}
+
 } // namespace
 
 int main()
@@ -123,6 +155,8 @@ int main()
         RejectsInvalidChamfers();
         FilletsSharedCornerWithTangentArc();
         FilletsCornerInArbitrary3DPlane();
+        ExtendsSeparatedLinesToTheirIntersection();
+        TrimsCrossingLinesToChosenBranches();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

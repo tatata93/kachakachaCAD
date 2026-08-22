@@ -121,6 +121,16 @@ void CadViewport::SetBezierCreatedCallback(std::function<void(const std::array<V
     bezierCreated_ = std::move(callback);
 }
 
+void CadViewport::SetTranslationRequestedCallback(std::function<void(Vector3, bool)> callback)
+{
+    translationRequested_ = std::move(callback);
+}
+
+void CadViewport::SetMirrorRequestedCallback(std::function<void(Vector3, Vector3, Vector3)> callback)
+{
+    mirrorRequested_ = std::move(callback);
+}
+
 void CadViewport::SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback)
 {
     drawingStateChanged_ = std::move(callback);
@@ -352,7 +362,23 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
     }
 
     drawingPoints_.push_back(point);
-    if (tool_ == ViewportTool::DrawLine && drawingPoints_.size() == 2) {
+    if ((tool_ == ViewportTool::MoveSelection || tool_ == ViewportTool::CopySelection)
+        && drawingPoints_.size() == 2) {
+        const Vector3 delta = drawingPoints_[1] - drawingPoints_[0];
+        const bool copy = tool_ == ViewportTool::CopySelection;
+        drawingPoints_.clear();
+        if (translationRequested_) {
+            translationRequested_(delta, copy);
+        }
+    } else if (tool_ == ViewportTool::MirrorSelection && drawingPoints_.size() == 2) {
+        const Vector3 linePoint = drawingPoints_[0];
+        const Vector3 lineDirection = drawingPoints_[1] - drawingPoints_[0];
+        const Vector3 planeNormal = activePlane_->Normal();
+        drawingPoints_.clear();
+        if (mirrorRequested_) {
+            mirrorRequested_(linePoint, lineDirection, planeNormal);
+        }
+    } else if (tool_ == ViewportTool::DrawLine && drawingPoints_.size() == 2) {
         const Vector3 start = drawingPoints_[0];
         const Vector3 end = drawingPoints_[1];
         drawingPoints_.clear();
@@ -535,6 +561,31 @@ void CadViewport::paintEvent(QPaintEvent*)
                     } catch (const std::exception&) {
                     }
                 }
+            } else if ((tool_ == ViewportTool::MoveSelection || tool_ == ViewportTool::CopySelection)
+                && project_ != nullptr) {
+                const Vector3 delta = *hoverDrawingPoint_ - drawingPoints_.front();
+                painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
+                for (const CadSelection& selection : selections_) {
+                    if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+                        || selection.index >= static_cast<int>(project_->Wires().size())) {
+                        continue;
+                    }
+                    drawPreviewWire(project_->Wires()[selection.index].wire.Translated(delta));
+                }
+            } else if (tool_ == ViewportTool::MirrorSelection && project_ != nullptr) {
+                painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
+                const Vector3 direction = *hoverDrawingPoint_ - drawingPoints_.front();
+                try {
+                    for (const CadSelection& selection : selections_) {
+                        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+                            || selection.index >= static_cast<int>(project_->Wires().size())) {
+                            continue;
+                        }
+                        drawPreviewWire(project_->Wires()[selection.index].wire.Mirrored(
+                            drawingPoints_.front(), direction, activePlane_->Normal()));
+                    }
+                } catch (const std::exception&) {
+                }
             }
         }
         painter.setBrush(QColor("#ffffff"));
@@ -581,6 +632,15 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::DrawBezier:
         modeText = QStringLiteral("ベジェ曲線");
         break;
+    case ViewportTool::MoveSelection:
+        modeText = QStringLiteral("移動");
+        break;
+    case ViewportTool::CopySelection:
+        modeText = QStringLiteral("コピー");
+        break;
+    case ViewportTool::MirrorSelection:
+        modeText = QStringLiteral("ミラー複製");
+        break;
     }
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
         const auto coordinates = activePlane_->Project(*hoverDrawingPoint_);
@@ -602,6 +662,15 @@ void CadViewport::paintEvent(QPaintEvent*)
                     .arg(std::abs(coordinates.v - start.v), 0, 'f', 3);
             } else if (tool_ == ViewportTool::DrawCircle) {
                 modeText += QStringLiteral("   半径 %1 mm").arg((*hoverDrawingPoint_ - drawingPoints_.front()).Length(), 0, 'f', 3);
+            } else if (tool_ == ViewportTool::MoveSelection || tool_ == ViewportTool::CopySelection) {
+                const Vector3 delta = *hoverDrawingPoint_ - drawingPoints_.front();
+                modeText += QStringLiteral("   移動 X %1   Y %2   Z %3 mm")
+                    .arg(delta.x, 0, 'f', 3)
+                    .arg(delta.y, 0, 'f', 3)
+                    .arg(delta.z, 0, 'f', 3);
+            } else if (tool_ == ViewportTool::MirrorSelection) {
+                modeText += QStringLiteral("   軸長 %1 mm")
+                    .arg((*hoverDrawingPoint_ - drawingPoints_.front()).Length(), 0, 'f', 3);
             }
         }
     }

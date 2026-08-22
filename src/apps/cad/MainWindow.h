@@ -48,6 +48,12 @@ private:
     void AddWorkPlane();
     void AddWire();
     void ApplySelectedEdit();
+    void ApplyViewportTranslation(kachakacha::geometry::Vector3 delta, bool copy);
+    void ApplyViewportMirror(
+        kachakacha::geometry::Vector3 linePoint,
+        kachakacha::geometry::Vector3 lineDirection,
+        kachakacha::geometry::Vector3 planeNormal);
+    void ApplyMeetSelectedLines();
     void ApplyLineChamfer();
     void ApplyLineFillet();
     void SetViewportTool(ViewportTool tool);
@@ -95,6 +101,10 @@ private:
     QAction* circleToolAction_ = nullptr;
     QAction* arcToolAction_ = nullptr;
     QAction* bezierToolAction_ = nullptr;
+    QAction* moveToolAction_ = nullptr;
+    QAction* copyToolAction_ = nullptr;
+    QAction* mirrorToolAction_ = nullptr;
+    QAction* meetLinesAction_ = nullptr;
     QAction* snapAction_ = nullptr;
     QAction* alignPlaneAction_ = nullptr;
     QAction* finishDrawingAction_ = nullptr;
@@ -109,6 +119,7 @@ private:
     QLabel* infoLabel_ = nullptr;
 
     QLabel* editSelectionLabel_ = nullptr;
+    QPushButton* editApplyButton_ = nullptr;
     QStackedWidget* editParameters_ = nullptr;
     std::array<QDoubleSpinBox*, 3> editPlaneOrigin_{};
     std::array<QDoubleSpinBox*, 3> editPlaneNormal_{};

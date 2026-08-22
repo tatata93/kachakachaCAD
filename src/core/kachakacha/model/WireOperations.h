@@ -30,6 +30,19 @@ struct LineFilletResult {
     double radius = 0.0;
 };
 
+struct LineIntersectionEditResult {
+    Wire first;
+    Wire second;
+    geometry::Vector3 intersection;
+};
+
+[[nodiscard]] LineIntersectionEditResult MeetLinesAtIntersection(
+    const Wire& first,
+    RetainedLineEnd retainedFirst,
+    const Wire& second,
+    RetainedLineEnd retainedSecond,
+    double tolerance = 1.0e-8);
+
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(
     const Wire& first,
     RetainedLineEnd retainedFirst,

@@ -76,6 +76,8 @@ private:
     void ApplySplitWire(int wireIndex, double parameter);
     void JoinSelectedWires();
     void ApplyMeetSelectedLines();
+    void UpdateWireOffsetPreview();
+    void ApplyWireOffset();
     void SetReferenceFromSelection();
     void ClearReference();
     void RefreshReference();
@@ -191,6 +193,10 @@ private:
     QDoubleSpinBox* editArcRadius_ = nullptr;
     QDoubleSpinBox* editArcStartAngle_ = nullptr;
     QDoubleSpinBox* editArcSweepAngle_ = nullptr;
+    QLabel* wireOffsetSelectionLabel_ = nullptr;
+    QDoubleSpinBox* wireOffsetDistance_ = nullptr;
+    QComboBox* wireOffsetSide_ = nullptr;
+    QPushButton* wireOffsetApplyButton_ = nullptr;
 
     QLineEdit* chamferName_ = nullptr;
     QComboBox* machiningType_ = nullptr;

@@ -20,6 +20,149 @@ struct LineIntersection {
     double secondParameter = 0.0;
 };
 
+struct Point2 {
+    double u = 0.0;
+    double v = 0.0;
+};
+
+Point2 operator+(Point2 lhs, Point2 rhs)
+{
+    return {lhs.u + rhs.u, lhs.v + rhs.v};
+}
+
+Point2 operator-(Point2 lhs, Point2 rhs)
+{
+    return {lhs.u - rhs.u, lhs.v - rhs.v};
+}
+
+Point2 operator*(Point2 point, double scale)
+{
+    return {point.u * scale, point.v * scale};
+}
+
+double Cross2(Point2 lhs, Point2 rhs)
+{
+    return lhs.u * rhs.v - lhs.v * rhs.u;
+}
+
+double Dot2(Point2 lhs, Point2 rhs)
+{
+    return lhs.u * rhs.u + lhs.v * rhs.v;
+}
+
+double Length2(Point2 point)
+{
+    return std::hypot(point.u, point.v);
+}
+
+Point2 Normalized2(Point2 point, double tolerance)
+{
+    const double length = Length2(point);
+    if (length <= tolerance) {
+        throw std::invalid_argument("Offset wire contains a zero-length segment.");
+    }
+    return point * (1.0 / length);
+}
+
+Point2 LeftNormal(Point2 direction)
+{
+    return {-direction.v, direction.u};
+}
+
+Point2 OffsetCorner(
+    Point2 vertex,
+    Point2 previousDirection,
+    Point2 nextDirection,
+    double distance,
+    double tolerance)
+{
+    const Point2 previousNormal = LeftNormal(previousDirection);
+    const Point2 nextNormal = LeftNormal(nextDirection);
+    const Point2 previousLine = vertex + previousNormal * distance;
+    const Point2 nextLine = vertex + nextNormal * distance;
+    const double denominator = Cross2(previousDirection, nextDirection);
+    if (std::abs(denominator) <= tolerance) {
+        if (Dot2(previousDirection, nextDirection) < 0.0) {
+            throw std::invalid_argument("Offset wire reverses direction at a vertex.");
+        }
+        return vertex + (previousNormal + nextNormal) * (distance * 0.5);
+    }
+
+    const double parameter = Cross2(nextLine - previousLine, nextDirection) / denominator;
+    const Point2 intersection = previousLine + previousDirection * parameter;
+    const double miterLength = Length2(intersection - vertex);
+    if (miterLength > std::max(std::abs(distance) * 50.0, tolerance * 100.0)) {
+        throw std::invalid_argument("Offset corner is too sharp for a stable miter.");
+    }
+    return intersection;
+}
+
+Point2 ProjectOnPlane(const WorkPlane& plane, Vector3 point, double tolerance)
+{
+    const auto coordinates = plane.Project(point);
+    if (std::abs(coordinates.w) > tolerance) {
+        throw std::invalid_argument("Offset wire must lie on the selected work plane.");
+    }
+    return {coordinates.u, coordinates.v};
+}
+
+Wire OffsetLineOrPolyline(
+    const Wire& wire,
+    const WorkPlane& plane,
+    double distance,
+    double tolerance)
+{
+    std::vector<Point2> points;
+    points.reserve(wire.ControlPoints().size());
+    for (const Vector3& point : wire.ControlPoints()) {
+        points.push_back(ProjectOnPlane(plane, point, tolerance));
+    }
+    const bool closed = wire.Kind() == WireKind::Polyline
+        && points.size() >= 2
+        && Length2(points.front() - points.back()) <= tolerance;
+    if (closed) {
+        points.pop_back();
+    }
+    if (points.size() < 2 || (closed && points.size() < 3)) {
+        throw std::invalid_argument("Offset wire does not contain enough distinct points.");
+    }
+
+    std::vector<Point2> directions;
+    const std::size_t segmentCount = closed ? points.size() : points.size() - 1;
+    directions.reserve(segmentCount);
+    for (std::size_t index = 0; index < segmentCount; ++index) {
+        directions.push_back(Normalized2(
+            points[(index + 1) % points.size()] - points[index], tolerance));
+    }
+
+    std::vector<Point2> offsetPoints;
+    offsetPoints.reserve(points.size() + (closed ? 1 : 0));
+    if (!closed) {
+        offsetPoints.push_back(points.front() + LeftNormal(directions.front()) * distance);
+        for (std::size_t index = 1; index + 1 < points.size(); ++index) {
+            offsetPoints.push_back(OffsetCorner(
+                points[index], directions[index - 1], directions[index], distance, tolerance));
+        }
+        offsetPoints.push_back(points.back() + LeftNormal(directions.back()) * distance);
+    } else {
+        for (std::size_t index = 0; index < points.size(); ++index) {
+            const std::size_t previousSegment = (index + directions.size() - 1) % directions.size();
+            offsetPoints.push_back(OffsetCorner(
+                points[index], directions[previousSegment], directions[index], distance, tolerance));
+        }
+        offsetPoints.push_back(offsetPoints.front());
+    }
+
+    std::vector<Vector3> worldPoints;
+    worldPoints.reserve(offsetPoints.size());
+    for (const Point2& point : offsetPoints) {
+        worldPoints.push_back(plane.ToWorld(point.u, point.v));
+    }
+    return wire.Kind() == WireKind::Line
+        ? Wire::Line(worldPoints[0], worldPoints[1])
+        : Wire::Polyline(std::move(worldPoints));
+}
+
 LineIntersection IntersectInfiniteLines(const Wire& first, const Wire& second, double tolerance)
 {
     if (first.Kind() != WireKind::Line || second.Kind() != WireKind::Line) {
@@ -201,6 +344,51 @@ Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
         }
     }
     throw std::invalid_argument("Selected wires do not form one endpoint-connected chain.");
+}
+
+Wire OffsetPlanarWire(
+    const Wire& wire,
+    const WorkPlane& plane,
+    double signedDistance,
+    double tolerance)
+{
+    if (!std::isfinite(signedDistance) || std::abs(signedDistance) <= tolerance) {
+        throw std::invalid_argument("Offset distance must be non-zero.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        throw std::invalid_argument("Offset tolerance must be positive.");
+    }
+
+    if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
+        return OffsetLineOrPolyline(wire, plane, signedDistance, tolerance);
+    }
+    if (wire.Kind() == WireKind::CubicBezier) {
+        throw std::invalid_argument("Exact Bezier offset is not supported yet.");
+    }
+
+    const WireArcData arc = wire.ArcData();
+    (void)ProjectOnPlane(plane, arc.center, tolerance);
+    const Vector3 arcNormal = Cross(arc.uAxis, arc.vAxis).Normalized();
+    const double normalAlignment = Dot(arcNormal, plane.Normal());
+    if (std::abs(normalAlignment) < 1.0 - tolerance) {
+        throw std::invalid_argument("Offset arc must lie on the selected work plane.");
+    }
+    const double traversalOrientation = (normalAlignment >= 0.0 ? 1.0 : -1.0)
+        * (arc.sweepAngleRadians >= 0.0 ? 1.0 : -1.0);
+    const double radius = arc.radius - signedDistance * traversalOrientation;
+    if (radius <= tolerance) {
+        throw std::invalid_argument("Offset distance collapses the circle or arc.");
+    }
+    if (wire.Kind() == WireKind::Circle) {
+        return Wire::Circle(arc.center, arc.uAxis, arc.vAxis, radius);
+    }
+    return Wire::CircularArc(
+        arc.center,
+        arc.uAxis,
+        arc.vAxis,
+        radius,
+        arc.startAngleRadians,
+        arc.sweepAngleRadians);
 }
 
 LineIntersectionEditResult MeetLinesAtIntersection(

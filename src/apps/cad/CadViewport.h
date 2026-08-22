@@ -77,6 +77,8 @@ public:
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
     void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
+    void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
+    [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
     void SetIsometricView();
@@ -136,6 +138,7 @@ private:
     std::optional<double> splitPreviewParameter_;
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;
+    std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

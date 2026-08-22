@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kachakacha/model/Wire.h"
+#include "kachakacha/model/WorkPlane.h"
 
 #include <vector>
 
@@ -47,6 +48,12 @@ struct LineIntersectionEditResult {
 
 [[nodiscard]] Wire JoinLineChain(
     const std::vector<Wire>& wires,
+    double tolerance = 1.0e-8);
+
+[[nodiscard]] Wire OffsetPlanarWire(
+    const Wire& wire,
+    const WorkPlane& plane,
+    double signedDistance,
     double tolerance = 1.0e-8);
 
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(

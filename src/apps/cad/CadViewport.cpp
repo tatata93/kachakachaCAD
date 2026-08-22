@@ -250,6 +250,12 @@ void CadViewport::SetPlateSplitPreview(
     update();
 }
 
+void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
+{
+    wireOffsetPreviews_ = std::move(wires);
+    update();
+}
+
 void CadViewport::AlignToActiveWorkPlane()
 {
     if (!activePlane_.has_value()) {
@@ -988,6 +994,21 @@ void CadViewport::paintEvent(QPaintEvent*)
                     QStringLiteral("基準"));
             }
         }
+    }
+
+    if (!wireOffsetPreviews_.empty()) {
+        painter.save();
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor("#8b3fa7"), 2.4, Qt::DashLine));
+        for (const Wire& wire : wireOffsetPreviews_) {
+            QPainterPath path(ProjectPoint(wire.Evaluate(0.0)));
+            const int samples = wire.Kind() == WireKind::Line ? 1 : 64;
+            for (int sample = 1; sample <= samples; ++sample) {
+                path.lineTo(ProjectPoint(wire.Evaluate(static_cast<double>(sample) / samples)));
+            }
+            painter.drawPath(path);
+        }
+        painter.restore();
     }
 
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value() && tool_ != ViewportTool::Select) {

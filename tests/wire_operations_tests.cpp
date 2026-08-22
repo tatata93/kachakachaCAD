@@ -9,9 +9,11 @@ using kachakacha::geometry::Vector3;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
+using kachakacha::model::WorkPlane;
 
 namespace {
 
@@ -178,6 +180,78 @@ void RejectsDisconnectedJoin()
     Require(rejected, "disconnected join rejected");
 }
 
+void OffsetsPlanarDrawingWires()
+{
+    const WorkPlane plane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0});
+
+    const Wire line = OffsetPlanarWire(
+        Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}), plane, 2.0);
+    RequireNear(line.Start(), {0.0, 2.0, 0.0}, "line offset start");
+    RequireNear(line.End(), {10.0, 2.0, 0.0}, "line offset end");
+
+    const Wire corner = OffsetPlanarWire(
+        Wire::Polyline({{0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {10.0, 10.0, 0.0}}),
+        plane,
+        1.0);
+    RequireNear(corner.ControlPoints()[0], {0.0, 1.0, 0.0}, "open offset start");
+    RequireNear(corner.ControlPoints()[1], {9.0, 1.0, 0.0}, "open offset miter");
+    RequireNear(corner.ControlPoints()[2], {9.0, 10.0, 0.0}, "open offset end");
+
+    const Wire outline = OffsetPlanarWire(
+        Wire::Polyline({
+            {0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {10.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0}, {0.0, 0.0, 0.0},
+        }),
+        plane,
+        1.0);
+    RequireNear(outline.ControlPoints()[0], {1.0, 1.0, 0.0}, "closed offset first corner");
+    RequireNear(outline.ControlPoints()[2], {9.0, 9.0, 0.0}, "closed offset opposite corner");
+    Require(outline.IsClosed(), "closed offset remains closed");
+
+    const Wire circle = OffsetPlanarWire(
+        Wire::Circle({5.0, 5.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 5.0),
+        plane,
+        1.25);
+    Require(std::abs(circle.ArcData().radius - 3.75) <= 1.0e-8, "circle offset radius");
+
+    const Wire outerCircle = OffsetPlanarWire(
+        Wire::Circle({5.0, 5.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 5.0),
+        plane,
+        -1.25);
+    Require(std::abs(outerCircle.ArcData().radius - 6.25) <= 1.0e-8, "circle opposite offset radius");
+
+    const Wire clockwiseArc = OffsetPlanarWire(
+        Wire::CircularArc(
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0},
+            5.0, 0.0, -1.57079632679489661923),
+        plane,
+        1.0);
+    Require(std::abs(clockwiseArc.ArcData().radius - 6.0) <= 1.0e-8, "clockwise arc left offset");
+}
+
+void OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs()
+{
+    const WorkPlane plane = WorkPlane::FromPointNormal(
+        {2.0, 3.0, 4.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0});
+    const Wire source = Wire::Line(plane.ToWorld(0.0, 0.0), plane.ToWorld(8.0, 0.0));
+    const Wire offset = OffsetPlanarWire(source, plane, 1.5);
+    const auto start = plane.Project(offset.Start());
+    const auto end = plane.Project(offset.End());
+    Require(std::abs(start.u) <= 1.0e-8 && std::abs(start.v - 1.5) <= 1.0e-8, "arbitrary plane offset start");
+    Require(std::abs(end.u - 8.0) <= 1.0e-8 && std::abs(end.v - 1.5) <= 1.0e-8, "arbitrary plane offset end");
+
+    bool rejected = false;
+    try {
+        (void)OffsetPlanarWire(
+            Wire::CubicBezier({0.0, 0.0, 0.0}, {2.0, 1.0, 0.0}, {4.0, 1.0, 0.0}, {6.0, 0.0, 0.0}),
+            plane,
+            1.0);
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    Require(rejected, "Bezier offset rejected instead of approximated");
+}
+
 } // namespace
 
 int main()
@@ -192,6 +266,8 @@ int main()
         TrimsCrossingLinesToChosenBranches();
         JoinsUnorderedLineChain();
         RejectsDisconnectedJoin();
+        OffsetsPlanarDrawingWires();
+        OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

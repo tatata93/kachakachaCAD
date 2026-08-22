@@ -88,6 +88,7 @@ using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::RetainedLineEnd;
 
 namespace {
@@ -917,6 +918,28 @@ QWidget* MainWindow::BuildEditPanel()
     addDirectButton(meetLinesAction_, 3, 0, 2);
     layout->addLayout(directGrid);
 
+    auto* offsetLabel = new QLabel(QStringLiteral("平行オフセット複製"));
+    offsetLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 4px;");
+    layout->addWidget(offsetLabel);
+    wireOffsetSelectionLabel_ = new QLabel(QStringLiteral("3D画面でワイヤーを選択"));
+    wireOffsetSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(wireOffsetSelectionLabel_);
+    auto* offsetRow = new QWidget;
+    auto* offsetLayout = new QHBoxLayout(offsetRow);
+    offsetLayout->setContentsMargins(0, 0, 0, 0);
+    offsetLayout->setSpacing(6);
+    wireOffsetSide_ = new QComboBox;
+    wireOffsetSide_->addItems({QStringLiteral("線の左"), QStringLiteral("線の右")});
+    wireOffsetSide_->setToolTip(QStringLiteral("ワイヤーの始点から終点へ見た左右。紫線で結果を確認"));
+    wireOffsetDistance_ = MakePositiveField(1.0);
+    wireOffsetDistance_->setSuffix(QStringLiteral(" mm"));
+    wireOffsetApplyButton_ = new QPushButton(QStringLiteral("複製"));
+    wireOffsetApplyButton_->setEnabled(false);
+    offsetLayout->addWidget(wireOffsetSide_);
+    offsetLayout->addWidget(wireOffsetDistance_, 1);
+    offsetLayout->addWidget(wireOffsetApplyButton_);
+    layout->addWidget(offsetRow);
+
     auto* numericLabel = new QLabel(QStringLiteral("選択内容の数値編集"));
     numericLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 4px;");
     layout->addWidget(numericLabel);
@@ -985,7 +1008,16 @@ QWidget* MainWindow::BuildEditPanel()
     connect(editApplyButton_, &QPushButton::clicked, this, &MainWindow::ApplySelectedEdit);
     layout->addWidget(editApplyButton_);
     layout->addStretch(1);
-    return panel;
+
+    connect(wireOffsetDistance_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateWireOffsetPreview);
+    connect(wireOffsetSide_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateWireOffsetPreview);
+    connect(wireOffsetApplyButton_, &QPushButton::clicked, this, &MainWindow::ApplyWireOffset);
+
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(panel);
+    return scroll;
 }
 
 QWidget* MainWindow::BuildMachiningPanel()
@@ -2164,6 +2196,7 @@ void MainWindow::RefreshActiveWorkPlane()
     if (!canDraw && viewport_->Tool() != ViewportTool::Select && viewport_->Tool() != ViewportTool::SplitWire) {
         SetViewportTool(ViewportTool::Select);
     }
+    UpdateWireOffsetPreview();
 }
 
 void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
@@ -2558,6 +2591,115 @@ void MainWindow::JoinSelectedWires()
         SetViewportTool(ViewportTool::Select);
         UpdateSelection({CadSelectionKind::Wire, joinedIndex}, true);
         statusBar()->showMessage(QStringLiteral("%1本を1本のポリラインに結合しました").arg(sources.size()), 3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+    }
+}
+
+void MainWindow::UpdateWireOffsetPreview()
+{
+    if (wireOffsetSelectionLabel_ == nullptr || wireOffsetDistance_ == nullptr
+        || wireOffsetSide_ == nullptr || wireOffsetApplyButton_ == nullptr || viewport_ == nullptr) {
+        return;
+    }
+
+    std::vector<Wire> previews;
+    wireOffsetApplyButton_->setEnabled(false);
+    const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+    if (!plane.has_value()) {
+        wireOffsetSelectionLabel_->setText(QStringLiteral("作図面を選択してください"));
+        viewport_->SetWireOffsetPreview({});
+        return;
+    }
+
+    const auto& selections = viewport_->Selections();
+    if (selections.empty()) {
+        wireOffsetSelectionLabel_->setText(QStringLiteral("3D画面でワイヤーを選択"));
+        viewport_->SetWireOffsetPreview({});
+        return;
+    }
+
+    const double distance = wireOffsetDistance_->value()
+        * (wireOffsetSide_->currentIndex() == 0 ? 1.0 : -1.0);
+    for (const CadSelection& selection : selections) {
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            wireOffsetSelectionLabel_->setText(QStringLiteral("ワイヤーだけを選択してください"));
+            viewport_->SetWireOffsetPreview({});
+            return;
+        }
+        const auto& source = project_.Wires()[selection.index];
+        if (source.projection.has_value()) {
+            wireOffsetSelectionLabel_->setText(QStringLiteral("投影結果ではなく元の平面図を選択してください"));
+            viewport_->SetWireOffsetPreview({});
+            return;
+        }
+        if (source.wire.Kind() == WireKind::CubicBezier) {
+            wireOffsetSelectionLabel_->setText(QStringLiteral("ベジェの厳密オフセットは未対応です"));
+            viewport_->SetWireOffsetPreview({});
+            return;
+        }
+        try {
+            previews.push_back(OffsetPlanarWire(source.wire, *plane, distance));
+        } catch (const std::exception&) {
+            wireOffsetSelectionLabel_->setText(QStringLiteral("選択線・作図面・距離を確認してください"));
+            viewport_->SetWireOffsetPreview({});
+            return;
+        }
+    }
+
+    wireOffsetSelectionLabel_->setText(QStringLiteral("%1本を紫線の位置へ複製").arg(previews.size()));
+    wireOffsetApplyButton_->setEnabled(!previews.empty());
+    viewport_->SetWireOffsetPreview(std::move(previews));
+}
+
+void MainWindow::ApplyWireOffset()
+{
+    try {
+        UpdateWireOffsetPreview();
+        if (!wireOffsetApplyButton_->isEnabled()) {
+            throw std::invalid_argument("オフセットできるワイヤーを選択してください。");
+        }
+        const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+        if (!plane.has_value()) {
+            throw std::invalid_argument("作図面を選択してください。");
+        }
+
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        const double distance = wireOffsetDistance_->value()
+            * (wireOffsetSide_->currentIndex() == 0 ? 1.0 : -1.0);
+        std::vector<std::pair<kachakacha::model::NamedWire, Wire>> results;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            const auto source = project_.Wires()[selection.index];
+            results.emplace_back(source, OffsetPlanarWire(source.wire, *plane, distance));
+        }
+
+        RecordUndo();
+        std::vector<CadSelection> createdSelections;
+        for (auto& [source, offset] : results) {
+            WireMetadata metadata = source.metadata;
+            metadata.sourcePlaneName = planeName;
+            if (metadata.planePolicy == WirePlanePolicy::Free3D) {
+                metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+            }
+            const QString name = SuggestedDirectGroupName(
+                ToQString(source.name) + QStringLiteral("_offset"));
+            project_.AddWire(ToName(name), std::move(offset), std::move(metadata));
+            createdSelections.push_back({
+                CadSelectionKind::Wire,
+                static_cast<int>(project_.Wires().size() - 1),
+            });
+        }
+
+        MarkModified();
+        RefreshModelViews(false);
+        SetViewportTool(ViewportTool::Select);
+        UpdateSelections(createdSelections, true);
+        statusBar()->showMessage(
+            QStringLiteral("%1本を%2 mmオフセット複製しました")
+                .arg(results.size())
+                .arg(std::abs(distance), 0, 'f', 3),
+            3000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
     }
@@ -3247,6 +3389,36 @@ bool MainWindow::RunCreationSelfTest()
         return fail("undo dimension-driven drawing");
     }
 
+    const Wire offsetLineSource = project_.Wires()[directStart].wire;
+    const double offsetCircleRadius = project_.Wires()[directStart + 2].wire.ArcData().radius;
+    const std::size_t offsetStart = project_.Wires().size();
+    SetViewportTool(ViewportTool::Select);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(directStart)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
+    }, true);
+    wireOffsetDistance_->setValue(1.25);
+    wireOffsetSide_->setCurrentIndex(0);
+    UpdateWireOffsetPreview();
+    if (!wireOffsetApplyButton_->isEnabled() || viewport_->WireOffsetPreviewCount() != 2) {
+        return fail("multi-wire offset preview");
+    }
+    ApplyWireOffset();
+    if (project_.Wires().size() != offsetStart + 2
+        || !kachakacha::geometry::AlmostEqual(
+            (project_.Wires()[offsetStart].wire.Start() - offsetLineSource.Start()).Length(), 1.25, 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            std::abs(project_.Wires()[offsetStart + 1].wire.ArcData().radius - offsetCircleRadius),
+            1.25, 1.0e-8)
+        || project_.Wires()[offsetStart].metadata.sourcePlaneName != drawingPlaneName
+        || project_.Wires()[offsetStart + 1].metadata.planePolicy != WirePlanePolicy::ReferenceOnly) {
+        return fail("multi-wire offset result");
+    }
+    Undo();
+    if (project_.Wires().size() != offsetStart) {
+        return fail("undo multi-wire offset");
+    }
+
     SetViewportTool(ViewportTool::Select);
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(directStart)},
@@ -3705,6 +3877,18 @@ bool MainWindow::RunCreationSelfTest()
             outputScrollArea->ensureWidgetVisible(pdfButtonPointer, 0, 12);
         });
     }
+    toolsTabs_->setCurrentIndex(3);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(directStart)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
+    }, true);
+    wireOffsetDistance_->setValue(1.25);
+    wireOffsetSide_->setCurrentIndex(0);
+    UpdateWireOffsetPreview();
+    if (viewport_->WireOffsetPreviewCount() != 2) {
+        return fail("final offset preview state");
+    }
+    QApplication::processEvents();
     return true;
 }
 
@@ -4699,6 +4883,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     }
     UpdatePlateSplitPreview();
     RefreshExportSummary();
+    UpdateWireOffsetPreview();
 }
 
 void MainWindow::SyncMachiningSelection(const std::vector<CadSelection>& selections)

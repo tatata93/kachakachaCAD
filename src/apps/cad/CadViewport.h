@@ -3,6 +3,7 @@
 #include "kachakacha/model/Project.h"
 
 #include <QPoint>
+#include <QString>
 #include <QWidget>
 
 #include <array>
@@ -38,6 +39,25 @@ enum class ViewportTool {
     MirrorSelection,
     RotateSelection,
     SplitWire,
+    Measure,
+};
+
+enum class MeasurementMode {
+    TwoPoints,
+    Elements,
+};
+
+enum class MeasurementPickKind {
+    Point,
+    Wire,
+    WorkPlane,
+};
+
+struct MeasurementPick {
+    MeasurementPickKind kind = MeasurementPickKind::Point;
+    int index = -1;
+    kachakacha::geometry::Vector3 point;
+    double wireParameter = 0.0;
 };
 
 struct DrawingMeasurements {
@@ -70,6 +90,7 @@ public:
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
     void SetSplitRequestedCallback(std::function<void(int, double)> callback);
+    void SetMeasurementChangedCallback(std::function<void(const std::vector<MeasurementPick>&)> callback);
     void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
     void SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
     void SetTool(ViewportTool tool);
@@ -79,6 +100,14 @@ public:
     void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
     void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
     [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
+    void SetMeasurementMode(MeasurementMode mode);
+    [[nodiscard]] MeasurementMode CurrentMeasurementMode() const noexcept { return measurementMode_; }
+    void ClearMeasurement();
+    void SetMeasurementOverlay(
+        std::optional<kachakacha::geometry::Vector3> firstPoint,
+        std::optional<kachakacha::geometry::Vector3> secondPoint,
+        QString text);
+    [[nodiscard]] const std::vector<MeasurementPick>& MeasurementPicks() const noexcept { return measurementPicks_; }
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
     void SetIsometricView();
@@ -104,12 +133,17 @@ private:
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
-    [[nodiscard]] std::optional<double> NearestWireParameter(int wireIndex, QPointF position, double maximumDistance = 12.0) const;
+    [[nodiscard]] std::optional<double> NearestWireParameter(
+        int wireIndex,
+        QPointF position,
+        double maximumDistance = 12.0,
+        bool allowEndpoints = false) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
+    void CommitMeasurementPick(QPointF position);
     void NotifyDrawingState();
     void NotifySelection();
 
@@ -128,6 +162,7 @@ private:
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;
     std::function<void(int, double)> splitRequested_;
+    std::function<void(const std::vector<MeasurementPick>&)> measurementChanged_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
     ViewportTool tool_ = ViewportTool::Select;
@@ -139,6 +174,11 @@ private:
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
+    MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;
+    std::vector<MeasurementPick> measurementPicks_;
+    std::optional<kachakacha::geometry::Vector3> measurementOverlayFirst_;
+    std::optional<kachakacha::geometry::Vector3> measurementOverlaySecond_;
+    QString measurementOverlayText_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

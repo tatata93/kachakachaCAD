@@ -18,6 +18,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
+    src/core/kachakacha/model/Measurement.cpp
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Plate.cpp
     src/core/kachakacha/model/Sketch.cpp
@@ -182,6 +183,17 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME wire_operations_tests COMMAND kachakacha_wire_operations_tests)
+
+    add_executable(kachakacha_measurement_tests
+        tests/measurement_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_measurement_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME measurement_tests COMMAND kachakacha_measurement_tests)
 
     add_executable(kachakacha_planar_export_tests
         tests/planar_export_tests.cpp

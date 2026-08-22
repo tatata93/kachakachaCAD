@@ -4,6 +4,7 @@
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
+#include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/Sketch.h"
 #include "kachakacha/model/WireOperations.h"
 
@@ -43,6 +44,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStringList>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTimer>
@@ -88,6 +90,15 @@ using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::JoinLineChain;
+using kachakacha::model::MeasureDirectionToPlaneAngleDegrees;
+using kachakacha::model::MeasureDirectionsAngle;
+using kachakacha::model::MeasurePlaneToPlaneAngleDegrees;
+using kachakacha::model::MeasurePointToWireDistance;
+using kachakacha::model::MeasureSignedPointToPlaneDistance;
+using kachakacha::model::MeasureWireLength;
+using kachakacha::model::MeasureWireRadius;
+using kachakacha::model::MeasureWireTangent;
+using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::RetainedLineEnd;
@@ -343,6 +354,9 @@ void MainWindow::BuildUi()
     viewport_->SetSplitRequestedCallback([this](int wireIndex, double parameter) {
         ApplySplitWire(wireIndex, parameter);
     });
+    viewport_->SetMeasurementChangedCallback([this](const std::vector<MeasurementPick>& picks) {
+        UpdateMeasurement(picks);
+    });
     BuildDrawingActions();
     viewport_->SetDrawingStateChangedCallback([this](ViewportTool tool, std::size_t pointCount) {
         UpdateDrawingPanel(tool, pointCount);
@@ -485,6 +499,7 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
     rotateToolAction_ = new QAction(QStringLiteral("回転"), this);
     splitToolAction_ = new QAction(QStringLiteral("分割"), this);
+    measureToolAction_ = new QAction(QStringLiteral("測定"), this);
     joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
     meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
     setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
@@ -494,6 +509,7 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
+    measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
     joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
@@ -510,13 +526,15 @@ void MainWindow::BuildDrawingActions()
     circleToolAction_->setShortcut(Qt::Key_C);
     arcToolAction_->setShortcut(Qt::Key_A);
     bezierToolAction_->setShortcut(Qt::Key_B);
+    measureToolAction_->setShortcut(Qt::Key_M);
 
     auto* toolGroup = new QActionGroup(this);
     toolGroup->setExclusive(true);
     for (QAction* action : {
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_,
-             moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_}) {
+             moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
+             measureToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -534,6 +552,7 @@ void MainWindow::BuildDrawingActions()
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
     connect(rotateToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::RotateSelection); });
     connect(splitToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::SplitWire); });
+    connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
     connect(joinWiresAction_, &QAction::triggered, this, &MainWindow::JoinSelectedWires);
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
     connect(setReferenceAction_, &QAction::triggered, this, &MainWindow::SetReferenceFromSelection);
@@ -1447,6 +1466,37 @@ QWidget* MainWindow::BuildInfoPanel()
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(14, 14, 14, 14);
+
+    auto* measurementBox = new QGroupBox(QStringLiteral("測定"));
+    auto* measurementLayout = new QVBoxLayout(measurementBox);
+    measurementLayout->setContentsMargins(10, 10, 10, 10);
+    measurementLayout->setSpacing(8);
+    measurementMode_ = new QComboBox;
+    measurementMode_->addItems({QStringLiteral("2点間"), QStringLiteral("要素")});
+    measurementStateLabel_ = new QLabel(QStringLiteral("1点目"));
+    measurementStateLabel_->setStyleSheet("font-weight: 600; color: #26323a;");
+    measurementResultLabel_ = new QLabel(QStringLiteral("未測定"));
+    measurementResultLabel_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    measurementResultLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    measurementResultLabel_->setWordWrap(true);
+    measurementResultLabel_->setMinimumHeight(118);
+    measurementResultLabel_->setStyleSheet("background: #f5f7f8; border: 1px solid #d4dade; padding: 8px;");
+    measurementClearButton_ = new QPushButton(QStringLiteral("測定を消去"));
+    measurementLayout->addWidget(measurementMode_);
+    measurementLayout->addWidget(measurementStateLabel_);
+    measurementLayout->addWidget(measurementResultLabel_);
+    measurementLayout->addWidget(measurementClearButton_);
+    layout->addWidget(measurementBox);
+
+    connect(measurementMode_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        viewport_->SetMeasurementMode(index == 0 ? MeasurementMode::TwoPoints : MeasurementMode::Elements);
+        SetViewportTool(ViewportTool::Measure);
+    });
+    connect(measurementClearButton_, &QPushButton::clicked, viewport_, &CadViewport::ClearMeasurement);
+
+    auto* selectionLabel = new QLabel(QStringLiteral("選択情報"));
+    selectionLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 5px;");
+    layout->addWidget(selectionLabel);
     infoLabel_ = new QLabel(QStringLiteral("選択なし"));
     infoLabel_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     infoLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -1533,6 +1583,8 @@ void MainWindow::BuildMenusAndToolbar()
     drawMenu->addAction(arcToolAction_);
     drawMenu->addAction(bezierToolAction_);
     drawMenu->addSeparator();
+    drawMenu->addAction(measureToolAction_);
+    drawMenu->addSeparator();
     drawMenu->addAction(finishDrawingAction_);
     drawMenu->addAction(cancelDrawingAction_);
 
@@ -1547,6 +1599,7 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(redoAction_);
     toolbar->addSeparator();
     toolbar->addAction(fitAction);
+    toolbar->addAction(measureToolAction_);
     toolbar->addAction(hideSelectedAction_);
     toolbar->addAction(showAllObjectsAction_);
     toolbar->addAction(deleteAction);
@@ -1910,6 +1963,244 @@ void MainWindow::SetReferenceFromSelection()
     statusBar()->showMessage(QStringLiteral("基準線を設定しました: %1").arg(ToQString(*referenceWireName_)), 3000);
 }
 
+void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
+{
+    if (measurementStateLabel_ == nullptr || measurementResultLabel_ == nullptr) {
+        return;
+    }
+
+    const bool pointMode = viewport_->CurrentMeasurementMode() == MeasurementMode::TwoPoints;
+    if (picks.empty()) {
+        measurementStateLabel_->setText(pointMode ? QStringLiteral("1点目") : QStringLiteral("1つ目の要素"));
+        measurementResultLabel_->setText(QStringLiteral("未測定"));
+        viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
+        return;
+    }
+
+    const auto pointLines = [](Vector3 point) {
+        return QStringList{
+            QStringLiteral("X  %1 mm").arg(Number(point.x)),
+            QStringLiteral("Y  %1 mm").arg(Number(point.y)),
+            QStringLiteral("Z  %1 mm").arg(Number(point.z)),
+        };
+    };
+    const auto requireWire = [this](const MeasurementPick& pick) -> const Wire& {
+        if (pick.kind != MeasurementPickKind::Wire || pick.index < 0
+            || pick.index >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("測定するワイヤーが見つかりません。");
+        }
+        return project_.Wires()[pick.index].wire;
+    };
+    const auto requirePlane = [this](const MeasurementPick& pick) -> const WorkPlane& {
+        if (pick.kind != MeasurementPickKind::WorkPlane || pick.index < 0
+            || pick.index >= static_cast<int>(project_.WorkPlanes().size())) {
+            throw std::invalid_argument("測定する作業平面が見つかりません。");
+        }
+        return project_.WorkPlanes()[pick.index].plane;
+    };
+
+    try {
+        if (pointMode) {
+            if (picks.size() == 1) {
+                measurementStateLabel_->setText(QStringLiteral("2点目"));
+                measurementResultLabel_->setText(pointLines(picks[0].point).join('\n'));
+                viewport_->SetMeasurementOverlay(picks[0].point, std::nullopt, QStringLiteral("P1"));
+                return;
+            }
+
+            const Vector3 delta = picks[1].point - picks[0].point;
+            const double distance = delta.Length();
+            QStringList result{
+                QStringLiteral("3D距離  %1 mm").arg(Number(distance)),
+                QStringLiteral("ΔX  %1 mm").arg(Number(delta.x)),
+                QStringLiteral("ΔY  %1 mm").arg(Number(delta.y)),
+                QStringLiteral("ΔZ  %1 mm").arg(Number(delta.z)),
+                QStringLiteral("XY投影  %1 mm").arg(Number(std::hypot(delta.x, delta.y))),
+                QStringLiteral("XZ投影  %1 mm").arg(Number(std::hypot(delta.x, delta.z))),
+                QStringLiteral("YZ投影  %1 mm").arg(Number(std::hypot(delta.y, delta.z))),
+            };
+            if (distance > 1.0e-12) {
+                result << QStringLiteral("X/Y/Z軸との角度  %1° / %2° / %3°")
+                    .arg(Number(MeasureDirectionsAngle(delta, {1.0, 0.0, 0.0}).directedDegrees))
+                    .arg(Number(MeasureDirectionsAngle(delta, {0.0, 1.0, 0.0}).directedDegrees))
+                    .arg(Number(MeasureDirectionsAngle(delta, {0.0, 0.0, 1.0}).directedDegrees));
+                result << QStringLiteral("XY / XZ / YZ方向角  %1° / %2° / %3°")
+                    .arg(Number(std::atan2(delta.y, delta.x) * 180.0 / kPi))
+                    .arg(Number(std::atan2(delta.z, delta.x) * 180.0 / kPi))
+                    .arg(Number(std::atan2(delta.z, delta.y) * 180.0 / kPi));
+            }
+            measurementStateLabel_->setText(QStringLiteral("2点間"));
+            measurementResultLabel_->setText(result.join('\n'));
+            viewport_->SetMeasurementOverlay(
+                picks[0].point,
+                picks[1].point,
+                QStringLiteral("%1 mm").arg(Number(distance)));
+            return;
+        }
+
+        if (picks.size() == 1) {
+            const MeasurementPick& pick = picks[0];
+            measurementStateLabel_->setText(QStringLiteral("1要素"));
+            if (pick.kind == MeasurementPickKind::Point) {
+                measurementResultLabel_->setText(pointLines(pick.point).join('\n'));
+                viewport_->SetMeasurementOverlay(pick.point, std::nullopt, QStringLiteral("点"));
+                return;
+            }
+            if (pick.kind == MeasurementPickKind::WorkPlane) {
+                const WorkPlane& plane = requirePlane(pick);
+                measurementResultLabel_->setText(QStringList{
+                    ToQString(project_.WorkPlanes()[pick.index].name),
+                    QStringLiteral("原点  %1").arg(VectorText(plane.Origin())),
+                    QStringLiteral("法線  %1").arg(VectorText(plane.Normal())),
+                }.join('\n'));
+                viewport_->SetMeasurementOverlay(plane.Origin(), std::nullopt, QStringLiteral("作業平面"));
+                return;
+            }
+
+            const Wire& wire = requireWire(pick);
+            const double length = MeasureWireLength(wire);
+            const Vector3 tangent = MeasureWireTangent(wire, pick.wireParameter);
+            QStringList result{
+                ToQString(project_.Wires()[pick.index].name),
+                QStringLiteral("全長  %1 mm").arg(Number(length)),
+            };
+            const std::optional<double> radius = MeasureWireRadius(wire);
+            if (radius.has_value()) {
+                result << QStringLiteral("半径  %1 mm").arg(Number(*radius));
+                result << QStringLiteral("直径  %1 mm").arg(Number(*radius * 2.0));
+                result << QStringLiteral("中心角  %1°")
+                    .arg(Number(std::abs(wire.ArcData().sweepAngleRadians) * 180.0 / kPi));
+            }
+            result << QStringLiteral("クリック位置の接線とX/Y/Z軸  %1° / %2° / %3°")
+                .arg(Number(MeasureDirectionsAngle(tangent, {1.0, 0.0, 0.0}).directedDegrees))
+                .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 1.0, 0.0}).directedDegrees))
+                .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 0.0, 1.0}).directedDegrees));
+            measurementResultLabel_->setText(result.join('\n'));
+            if (radius.has_value()) {
+                viewport_->SetMeasurementOverlay(
+                    wire.ArcData().center,
+                    pick.point,
+                    QStringLiteral("R %1 mm").arg(Number(*radius)));
+            } else {
+                viewport_->SetMeasurementOverlay(
+                    wire.Start(),
+                    wire.End(),
+                    QStringLiteral("L %1 mm").arg(Number(length)));
+            }
+            return;
+        }
+
+        const MeasurementPick& first = picks[0];
+        const MeasurementPick& second = picks[1];
+        measurementStateLabel_->setText(QStringLiteral("2要素"));
+        if (first.kind == MeasurementPickKind::Wire && second.kind == MeasurementPickKind::Wire) {
+            const Wire& firstWire = requireWire(first);
+            const Wire& secondWire = requireWire(second);
+            const auto distance = MeasureWireToWireDistance(firstWire, secondWire);
+            const auto angle = MeasureDirectionsAngle(
+                MeasureWireTangent(firstWire, first.wireParameter),
+                MeasureWireTangent(secondWire, second.wireParameter));
+            measurementResultLabel_->setText(QStringList{
+                QStringLiteral("最短距離  %1 mm").arg(Number(distance.distanceMillimeters)),
+                QStringLiteral("クリック点間  %1 mm").arg(Number((second.point - first.point).Length())),
+                QStringLiteral("クリック位置の接線角  %1°").arg(Number(angle.directedDegrees)),
+                QStringLiteral("最小交角  %1°").arg(Number(angle.acuteDegrees)),
+            }.join('\n'));
+            viewport_->SetMeasurementOverlay(
+                distance.firstPoint,
+                distance.secondPoint,
+                QStringLiteral("最短 %1 mm").arg(Number(distance.distanceMillimeters)));
+            return;
+        }
+
+        const auto pointAndWire = [&](const MeasurementPick& pointPick, const MeasurementPick& wirePick) {
+            const auto distance = MeasurePointToWireDistance(pointPick.point, requireWire(wirePick));
+            measurementResultLabel_->setText(QStringList{
+                QStringLiteral("点からワイヤーの最短距離  %1 mm").arg(Number(distance.distanceMillimeters)),
+                QStringLiteral("クリック点間  %1 mm").arg(Number((wirePick.point - pointPick.point).Length())),
+            }.join('\n'));
+            viewport_->SetMeasurementOverlay(
+                distance.firstPoint,
+                distance.secondPoint,
+                QStringLiteral("%1 mm").arg(Number(distance.distanceMillimeters)));
+        };
+        if (first.kind == MeasurementPickKind::Point && second.kind == MeasurementPickKind::Wire) {
+            pointAndWire(first, second);
+            return;
+        }
+        if (first.kind == MeasurementPickKind::Wire && second.kind == MeasurementPickKind::Point) {
+            pointAndWire(second, first);
+            return;
+        }
+
+        const auto wireAndPlane = [&](const MeasurementPick& wirePick, const MeasurementPick& planePick) {
+            const Wire& wire = requireWire(wirePick);
+            const WorkPlane& plane = requirePlane(planePick);
+            const double signedDistance = MeasureSignedPointToPlaneDistance(wirePick.point, plane);
+            const double angle = MeasureDirectionToPlaneAngleDegrees(
+                MeasureWireTangent(wire, wirePick.wireParameter), plane);
+            measurementResultLabel_->setText(QStringList{
+                QStringLiteral("線・接線と平面の角度  %1°").arg(Number(angle)),
+                QStringLiteral("クリック位置から平面  %1 mm").arg(Number(std::abs(signedDistance))),
+            }.join('\n'));
+            viewport_->SetMeasurementOverlay(
+                wirePick.point,
+                wirePick.point - plane.Normal() * signedDistance,
+                QStringLiteral("%1°").arg(Number(angle)));
+        };
+        if (first.kind == MeasurementPickKind::Wire && second.kind == MeasurementPickKind::WorkPlane) {
+            wireAndPlane(first, second);
+            return;
+        }
+        if (first.kind == MeasurementPickKind::WorkPlane && second.kind == MeasurementPickKind::Wire) {
+            wireAndPlane(second, first);
+            return;
+        }
+
+        const auto pointAndPlane = [&](const MeasurementPick& pointPick, const MeasurementPick& planePick) {
+            const WorkPlane& plane = requirePlane(planePick);
+            const double signedDistance = MeasureSignedPointToPlaneDistance(pointPick.point, plane);
+            measurementResultLabel_->setText(QStringLiteral("点から平面  %1 mm")
+                .arg(Number(std::abs(signedDistance))));
+            viewport_->SetMeasurementOverlay(
+                pointPick.point,
+                pointPick.point - plane.Normal() * signedDistance,
+                QStringLiteral("%1 mm").arg(Number(std::abs(signedDistance))));
+        };
+        if (first.kind == MeasurementPickKind::Point && second.kind == MeasurementPickKind::WorkPlane) {
+            pointAndPlane(first, second);
+            return;
+        }
+        if (first.kind == MeasurementPickKind::WorkPlane && second.kind == MeasurementPickKind::Point) {
+            pointAndPlane(second, first);
+            return;
+        }
+
+        if (first.kind == MeasurementPickKind::WorkPlane
+            && second.kind == MeasurementPickKind::WorkPlane) {
+            const WorkPlane& firstPlane = requirePlane(first);
+            const WorkPlane& secondPlane = requirePlane(second);
+            const double angle = MeasurePlaneToPlaneAngleDegrees(firstPlane, secondPlane);
+            QStringList result{QStringLiteral("平面同士の角度  %1°").arg(Number(angle))};
+            if (angle <= 1.0e-7) {
+                result << QStringLiteral("平行間隔  %1 mm")
+                    .arg(Number(std::abs(MeasureSignedPointToPlaneDistance(firstPlane.Origin(), secondPlane))));
+            }
+            measurementResultLabel_->setText(result.join('\n'));
+            viewport_->SetMeasurementOverlay(
+                firstPlane.Origin(),
+                secondPlane.Origin(),
+                QStringLiteral("%1°").arg(Number(angle)));
+            return;
+        }
+
+        measurementResultLabel_->setText(QStringLiteral("この組合せは測定できません"));
+    } catch (const std::exception& error) {
+        measurementResultLabel_->setText(QString::fromUtf8(error.what()));
+        viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
+    }
+}
+
 void MainWindow::ClearReference()
 {
     referenceWireName_.reset();
@@ -1990,7 +2281,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         || tool == ViewportTool::MirrorSelection
         || tool == ViewportTool::RotateSelection;
     const bool isSplit = tool == ViewportTool::SplitWire;
-    if (tool != ViewportTool::Select && !isSplit) {
+    if (tool != ViewportTool::Select && !isSplit && tool != ViewportTool::Measure) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
             selectToolAction_->setChecked(true);
@@ -2052,6 +2343,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     }
 
     viewport_->SetTool(tool);
+    if (tool == ViewportTool::Measure) {
+        toolsTabs_->setCurrentIndex(7);
+    }
     selectToolAction_->setChecked(tool == ViewportTool::Select);
     lineToolAction_->setChecked(tool == ViewportTool::DrawLine);
     polylineToolAction_->setChecked(tool == ViewportTool::DrawPolyline);
@@ -2064,6 +2358,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
     rotateToolAction_->setChecked(tool == ViewportTool::RotateSelection);
     splitToolAction_->setChecked(tool == ViewportTool::SplitWire);
+    measureToolAction_->setChecked(tool == ViewportTool::Measure);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -2100,6 +2395,13 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::SplitWire:
         statusBar()->showMessage(QStringLiteral("分割: 選択したワイヤー上の分けたい位置をクリック"), 4000);
+        break;
+    case ViewportTool::Measure:
+        statusBar()->showMessage(
+            measurementMode_ != nullptr && measurementMode_->currentIndex() == 1
+                ? QStringLiteral("要素測定: 線・曲線・作業平面を1つまたは2つ指定")
+                : QStringLiteral("2点測定: 3D画面で1点目と2点目を指定"),
+            4500);
         break;
     }
 }
@@ -2166,6 +2468,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::SplitWire:
         state = QStringLiteral("分割 · ワイヤー上をクリック");
+        break;
+    case ViewportTool::Measure:
+        state = QStringLiteral("測定");
         break;
     }
     if (drawingStateLabel_ != nullptr) {
@@ -2274,7 +2579,9 @@ void MainWindow::RefreshActiveWorkPlane()
     splitToolAction_->setEnabled(!project_.Wires().empty());
     joinWiresAction_->setEnabled(project_.Wires().size() >= 2);
     RefreshReference();
-    if (!canDraw && viewport_->Tool() != ViewportTool::Select && viewport_->Tool() != ViewportTool::SplitWire) {
+    if (!canDraw && viewport_->Tool() != ViewportTool::Select
+        && viewport_->Tool() != ViewportTool::SplitWire
+        && viewport_->Tool() != ViewportTool::Measure) {
         SetViewportTool(ViewportTool::Select);
     }
     UpdateWireOffsetPreview();
@@ -3197,7 +3504,10 @@ bool MainWindow::RunCreationSelfTest()
         || activePlaneCombo_->count() == 0
         || plateFlatPatternSummary_ == nullptr
         || platePdfPaper_ == nullptr
-        || platePdfOverlap_ == nullptr) {
+        || platePdfOverlap_ == nullptr
+        || measurementMode_ == nullptr
+        || measurementResultLabel_ == nullptr
+        || measureToolAction_ == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -4018,11 +4328,32 @@ bool MainWindow::RunCreationSelfTest()
     if (viewport_->WireOffsetPreviewCount() != 2) {
         return fail("final offset preview state");
     }
-    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(constrainedLineIndex)}, true);
-    if (auto* editScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(3))) {
-        editScrollArea->widget()->adjustSize();
-        editScrollArea->ensureWidgetVisible(editWireConstraintPanel_, 0, 12);
+
+    measurementMode_->setCurrentIndex(1);
+    UpdateMeasurement({
+        {MeasurementPickKind::Wire, static_cast<int>(directStart + 2), project_.Wires()[directStart + 2].wire.Start(), 0.0},
+    });
+    if (!measurementResultLabel_->text().contains(QStringLiteral("半径"))) {
+        return fail("measure circle radius");
     }
+    UpdateMeasurement({
+        {MeasurementPickKind::Wire, static_cast<int>(directStart), project_.Wires()[directStart].wire.Start(), 0.0},
+        {MeasurementPickKind::Wire, static_cast<int>(meetStart), project_.Wires()[meetStart].wire.Start(), 0.0},
+    });
+    if (!measurementResultLabel_->text().contains(QStringLiteral("最短距離"))
+        || !measurementResultLabel_->text().contains(QStringLiteral("最小交角"))) {
+        return fail("measure wire relation");
+    }
+    measurementMode_->setCurrentIndex(0);
+    UpdateMeasurement({
+        {MeasurementPickKind::Point, -1, {0.0, 0.0, 0.0}, 0.0},
+        {MeasurementPickKind::Point, -1, {3.0, 4.0, 12.0}, 0.0},
+    });
+    if (!measurementResultLabel_->text().contains(QStringLiteral("13.000 mm"))
+        || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))) {
+        return fail("measure two points");
+    }
+    toolsTabs_->setCurrentIndex(7);
     QApplication::processEvents();
     return true;
 }

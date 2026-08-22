@@ -75,6 +75,7 @@ private:
         kachakacha::geometry::Vector3 axisDirection,
         double angleRadians);
     void ApplySplitWire(int wireIndex, double parameter);
+    void UpdateMeasurement(const std::vector<MeasurementPick>& picks);
     void JoinSelectedWires();
     void ApplyMeetSelectedLines();
     void UpdateWireOffsetPreview();
@@ -152,6 +153,7 @@ private:
     QAction* mirrorToolAction_ = nullptr;
     QAction* rotateToolAction_ = nullptr;
     QAction* splitToolAction_ = nullptr;
+    QAction* measureToolAction_ = nullptr;
     QAction* joinWiresAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;
     QAction* setReferenceAction_ = nullptr;
@@ -176,6 +178,10 @@ private:
     QTreeWidget* modelTree_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
     QLabel* infoLabel_ = nullptr;
+    QComboBox* measurementMode_ = nullptr;
+    QLabel* measurementStateLabel_ = nullptr;
+    QLabel* measurementResultLabel_ = nullptr;
+    QPushButton* measurementClearButton_ = nullptr;
 
     QLabel* editSelectionLabel_ = nullptr;
     QLabel* transformReferenceLabel_ = nullptr;

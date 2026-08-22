@@ -1,6 +1,7 @@
 #include "CadViewport.h"
 
 #include <QKeyEvent>
+#include <QFontMetrics>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -122,6 +123,13 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     selection_ = {};
     selections_.clear();
     reference_ = {};
+    measurementPicks_.clear();
+    measurementOverlayFirst_.reset();
+    measurementOverlaySecond_.reset();
+    measurementOverlayText_.clear();
+    if (measurementChanged_) {
+        measurementChanged_(measurementPicks_);
+    }
     if (fitView) {
         FitAll();
     } else {
@@ -206,6 +214,12 @@ void CadViewport::SetSplitRequestedCallback(std::function<void(int, double)> cal
     splitRequested_ = std::move(callback);
 }
 
+void CadViewport::SetMeasurementChangedCallback(
+    std::function<void(const std::vector<MeasurementPick>&)> callback)
+{
+    measurementChanged_ = std::move(callback);
+}
+
 void CadViewport::SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback)
 {
     drawingStateChanged_ = std::move(callback);
@@ -253,6 +267,35 @@ void CadViewport::SetPlateSplitPreview(
 void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
 {
     wireOffsetPreviews_ = std::move(wires);
+    update();
+}
+
+void CadViewport::SetMeasurementMode(MeasurementMode mode)
+{
+    measurementMode_ = mode;
+    ClearMeasurement();
+}
+
+void CadViewport::ClearMeasurement()
+{
+    measurementPicks_.clear();
+    measurementOverlayFirst_.reset();
+    measurementOverlaySecond_.reset();
+    measurementOverlayText_.clear();
+    if (measurementChanged_) {
+        measurementChanged_(measurementPicks_);
+    }
+    update();
+}
+
+void CadViewport::SetMeasurementOverlay(
+    std::optional<Vector3> firstPoint,
+    std::optional<Vector3> secondPoint,
+    QString text)
+{
+    measurementOverlayFirst_ = firstPoint;
+    measurementOverlaySecond_ = secondPoint;
+    measurementOverlayText_ = std::move(text);
     update();
 }
 
@@ -518,7 +561,11 @@ std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
     return rayPoint + viewDirection * distance;
 }
 
-std::optional<double> CadViewport::NearestWireParameter(int wireIndex, QPointF position, double maximumDistance) const
+std::optional<double> CadViewport::NearestWireParameter(
+    int wireIndex,
+    QPointF position,
+    double maximumDistance,
+    bool allowEndpoints) const
 {
     if (project_ == nullptr || wireIndex < 0 || wireIndex >= static_cast<int>(project_->Wires().size())
         || !project_->Wires()[wireIndex].visible) {
@@ -543,10 +590,84 @@ std::optional<double> CadViewport::NearestWireParameter(int wireIndex, QPointF p
         }
         previous = current;
     }
-    if (bestDistance >= maximumDistance || bestParameter <= 1.0e-6 || bestParameter >= 1.0 - 1.0e-6) {
+    if (bestDistance >= maximumDistance
+        || (!allowEndpoints && (bestParameter <= 1.0e-6 || bestParameter >= 1.0 - 1.0e-6))) {
         return std::nullopt;
     }
     return bestParameter;
+}
+
+void CadViewport::CommitMeasurementPick(QPointF position)
+{
+    if (project_ == nullptr) {
+        return;
+    }
+
+    MeasurementPick pick;
+    const CadSelection hit = HitTest(position);
+    if (measurementMode_ == MeasurementMode::Elements) {
+        if (hit.kind == CadSelectionKind::Wire) {
+            const auto parameter = NearestWireParameter(hit.index, position, 14.0, true);
+            if (!parameter.has_value()) {
+                return;
+            }
+            pick = {
+                MeasurementPickKind::Wire,
+                hit.index,
+                project_->Wires()[hit.index].wire.Evaluate(*parameter),
+                *parameter,
+            };
+        } else if (hit.kind == CadSelectionKind::WorkPlane) {
+            pick = {
+                MeasurementPickKind::WorkPlane,
+                hit.index,
+                project_->WorkPlanes()[hit.index].plane.Origin(),
+                0.0,
+            };
+        } else {
+            const auto point = PointOnActivePlane(position);
+            if (!point.has_value()) {
+                return;
+            }
+            pick = {MeasurementPickKind::Point, -1, SnapPoint(*point, position), 0.0};
+        }
+    } else {
+        if (hit.kind == CadSelectionKind::Wire) {
+            const auto parameter = NearestWireParameter(hit.index, position, 14.0, true);
+            if (parameter.has_value()) {
+                pick = {
+                    MeasurementPickKind::Point,
+                    hit.index,
+                    project_->Wires()[hit.index].wire.Evaluate(*parameter),
+                    *parameter,
+                };
+            } else {
+                return;
+            }
+        } else {
+            const auto point = PointOnActivePlane(position);
+            if (!point.has_value()) {
+                return;
+            }
+            pick = {MeasurementPickKind::Point, -1, SnapPoint(*point, position), 0.0};
+        }
+    }
+
+    if (measurementPicks_.size() >= 2
+        || (measurementMode_ == MeasurementMode::Elements
+            && measurementPicks_.size() == 1
+            && measurementPicks_.front().kind == pick.kind
+            && measurementPicks_.front().index == pick.index)) {
+        measurementPicks_.clear();
+        measurementOverlayFirst_.reset();
+        measurementOverlaySecond_.reset();
+        measurementOverlayText_.clear();
+    }
+    measurementPicks_.push_back(pick);
+    if (measurementChanged_) {
+        measurementChanged_(measurementPicks_);
+    }
+    update();
 }
 
 Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
@@ -1146,6 +1267,48 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
 
+    if (!measurementPicks_.empty() || measurementOverlayFirst_.has_value()) {
+        painter.save();
+        const QColor measurementColor("#8b3fb0");
+        painter.setBrush(QColor("#ffffff"));
+        painter.setPen(QPen(measurementColor, 2.2));
+        for (const MeasurementPick& pick : measurementPicks_) {
+            const QPointF point = ProjectPoint(pick.point);
+            painter.drawEllipse(point, 5.0, 5.0);
+            painter.drawLine(point + QPointF(-8.0, 0.0), point + QPointF(8.0, 0.0));
+            painter.drawLine(point + QPointF(0.0, -8.0), point + QPointF(0.0, 8.0));
+        }
+        if (measurementOverlayFirst_.has_value()) {
+            const QPointF first = ProjectPoint(*measurementOverlayFirst_);
+            QPointF labelAnchor = first + QPointF(10.0, -10.0);
+            if (measurementOverlaySecond_.has_value()) {
+                const QPointF second = ProjectPoint(*measurementOverlaySecond_);
+                painter.setPen(QPen(measurementColor, 2.0, Qt::DashLine));
+                painter.drawLine(first, second);
+                painter.setBrush(QColor("#ffffff"));
+                painter.drawEllipse(first, 4.0, 4.0);
+                painter.drawEllipse(second, 4.0, 4.0);
+                labelAnchor = (first + second) * 0.5 + QPointF(8.0, -8.0);
+            }
+            if (!measurementOverlayText_.isEmpty()) {
+                const QFontMetrics metrics = painter.fontMetrics();
+                const QRect textBounds = metrics.boundingRect(measurementOverlayText_);
+                QRectF labelBox(
+                    labelAnchor.x(),
+                    labelAnchor.y() - textBounds.height() - 7.0,
+                    textBounds.width() + 14.0,
+                    textBounds.height() + 10.0);
+                labelBox = labelBox.intersected(QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0));
+                painter.setPen(QPen(measurementColor, 1.0));
+                painter.setBrush(QColor(255, 255, 255, 232));
+                painter.drawRoundedRect(labelBox, 3.0, 3.0);
+                painter.setPen(measurementColor);
+                painter.drawText(labelBox, Qt::AlignCenter, measurementOverlayText_);
+            }
+        }
+        painter.restore();
+    }
+
     const std::array<std::pair<Vector3, QColor>, 3> axes = {{
         {{8.0, 0.0, 0.0}, QColor("#c33b3b")},
         {{0.0, 8.0, 0.0}, QColor("#32844b")},
@@ -1196,6 +1359,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         break;
     case ViewportTool::SplitWire:
         modeText = QStringLiteral("分割");
+        break;
+    case ViewportTool::Measure:
+        modeText = measurementMode_ == MeasurementMode::TwoPoints
+            ? QStringLiteral("測定 · 2点間")
+            : QStringLiteral("測定 · 要素");
         break;
     }
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
@@ -1412,6 +1580,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     }
     if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::SplitWire
+        && tool_ != ViewportTool::Measure
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -1456,7 +1625,9 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             splitPreviewParameter_ = NearestWireParameter(selectedWire->index, event->position());
         }
         update();
-    } else if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
+    } else if (tool_ != ViewportTool::Select
+        && tool_ != ViewportTool::Measure
+        && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
             ? std::optional<Vector3>(ApplyDrawingConstraint(
@@ -1526,6 +1697,16 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (tool_ == ViewportTool::Measure) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_) {
+            CommitMeasurementPick(event->position());
+        } else if (event->button() == Qt::RightButton && !mouseMoved_) {
+            ClearMeasurement();
+        }
+        dragButton_ = Qt::NoButton;
+        return;
+    }
+
     if (tool_ == ViewportTool::SplitWire) {
         if (event->button() == Qt::LeftButton && !mouseMoved_ && splitPreviewParameter_.has_value()) {
             const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
@@ -1588,7 +1769,11 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 void CadViewport::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
-        CancelDrawing();
+        if (tool_ == ViewportTool::Measure) {
+            ClearMeasurement();
+        } else {
+            CancelDrawing();
+        }
         event->accept();
         return;
     }

@@ -88,6 +88,13 @@ public:
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
     void SetPlateVisible(std::string_view name, bool visible);
+    void SetPlateRange(std::string_view name, PlateSurfaceRange range);
+    void SplitPlate(
+        std::string_view name,
+        PlateSplitAxis axis,
+        double parameter,
+        std::string firstName,
+        std::string secondName);
     void AddPlateOpening(std::string_view plateName, std::string wireName);
     void RemovePlateOpening(std::string_view plateName, std::string_view wireName);
     bool RemoveWorkPlane(std::string_view name);

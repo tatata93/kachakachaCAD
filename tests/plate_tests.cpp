@@ -8,6 +8,8 @@
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::model::Plate;
 using kachakacha::model::PlateDevelopability;
+using kachakacha::model::PlateSplitAxis;
+using kachakacha::model::PlateSurfaceRange;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Surface;
 using kachakacha::model::Wire;
@@ -63,6 +65,30 @@ int main()
             Wire::Circle({20.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}, 8.0));
         const auto cylinderAnalysis = Plate(cylinder, 0.5, PlateThicknessDirection::Centered).AnalyzeDevelopability();
         Require(cylinderAnalysis.classification == PlateDevelopability::Developable, "cylindrical sheet is developable");
+
+        const Plate cylinderPlate(cylinder, 0.5, PlateThicknessDirection::Centered);
+        const auto [cylinderTop, cylinderBottom] = cylinderPlate.Split(PlateSplitAxis::U, 0.25);
+        Require(std::abs(cylinderTop.Range().maximumU - 0.25) <= 1.0e-12, "U split first range");
+        Require(std::abs(cylinderBottom.Range().minimumU - 0.25) <= 1.0e-12, "U split second range");
+        Require(AlmostEqual(cylinderTop.Evaluate(1.0, 0.4, 0.5), cylinderPlate.Evaluate(0.25, 0.4, 0.5), 1.0e-9),
+            "U split preserves shared edge");
+        Require(AlmostEqual(cylinderBottom.Evaluate(0.0, 0.4, 0.5), cylinderTop.Evaluate(1.0, 0.4, 0.5), 1.0e-9),
+            "U split pieces meet exactly");
+
+        const auto [cylinderFront, cylinderRear] = cylinderBottom.Split(PlateSplitAxis::V, 0.4);
+        Require(std::abs(cylinderFront.Range().maximumV - 0.4) <= 1.0e-12, "V split first range");
+        Require(std::abs(cylinderRear.Range().minimumV - 0.4) <= 1.0e-12, "V split second range");
+        Require(AlmostEqual(cylinderFront.Evaluate(0.3, 1.0, 0.5), cylinderRear.Evaluate(0.3, 0.0, 0.5), 1.0e-9),
+            "V split pieces meet exactly");
+
+        bool invalidRangeRejected = false;
+        try {
+            static_cast<void>(Plate(cylinder, 0.5, PlateThicknessDirection::Centered,
+                PlateSurfaceRange{0.7, 0.2, 0.0, 1.0}));
+        } catch (const std::invalid_argument&) {
+            invalidRangeRejected = true;
+        }
+        Require(invalidRangeRejected, "invalid plate range is rejected");
 
         const Surface saddle = Surface::Ruled(
             Wire::Line({0.0, -5.0, 0.0}, {0.0, 5.0, 0.0}),

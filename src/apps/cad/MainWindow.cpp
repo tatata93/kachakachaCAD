@@ -32,14 +32,17 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSignalBlocker>
 #include <QShortcut>
 #include <QSizePolicy>
+#include <QSlider>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -63,6 +66,7 @@ using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::Project;
 using kachakacha::model::PlateDevelopability;
+using kachakacha::model::PlateSplitAxis;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::SurfaceKind;
@@ -392,6 +396,9 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
+    connect(toolsTabs_, &QTabWidget::currentChanged, this, [this] {
+        UpdatePlateSplitPreview();
+    });
     toolsDock->setWidget(toolsTabs_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
     toolsDock->setMinimumWidth(380);
@@ -1108,6 +1115,59 @@ QWidget* MainWindow::BuildSurfacePanel()
     openingButtonLayout->addWidget(addOpeningButton, 1);
     openingButtonLayout->addWidget(removeOpeningButton, 1);
     layout->addWidget(openingButtons);
+
+    auto* splitTitle = new QLabel(QStringLiteral("板材を分割"));
+    splitTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(splitTitle);
+    plateSplitSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚"));
+    plateSplitSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(plateSplitSelectionLabel_);
+
+    auto* splitForm = new QFormLayout;
+    splitForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    plateSplitAxis_ = new QComboBox;
+    plateSplitAxis_->addItem(QStringLiteral("断面内（屋根・側面方向）"), static_cast<int>(PlateSplitAxis::U));
+    plateSplitAxis_->addItem(QStringLiteral("長手方向（前後方向）"), static_cast<int>(PlateSplitAxis::V));
+    splitForm->addRow(QStringLiteral("分割方向"), plateSplitAxis_);
+
+    auto* splitPositionControl = new QWidget;
+    auto* splitPositionLayout = new QHBoxLayout(splitPositionControl);
+    splitPositionLayout->setContentsMargins(0, 0, 0, 0);
+    splitPositionLayout->setSpacing(7);
+    plateSplitSlider_ = new QSlider(Qt::Horizontal);
+    plateSplitSlider_->setRange(10, 990);
+    plateSplitSlider_->setValue(500);
+    plateSplitPosition_ = new QDoubleSpinBox;
+    plateSplitPosition_->setRange(1.0, 99.0);
+    plateSplitPosition_->setDecimals(1);
+    plateSplitPosition_->setSingleStep(1.0);
+    plateSplitPosition_->setSuffix(QStringLiteral(" %"));
+    plateSplitPosition_->setValue(50.0);
+    plateSplitPosition_->setFixedWidth(92);
+    splitPositionLayout->addWidget(plateSplitSlider_, 1);
+    splitPositionLayout->addWidget(plateSplitPosition_);
+    splitForm->addRow(QStringLiteral("分割位置"), splitPositionControl);
+    layout->addLayout(splitForm);
+
+    connect(plateSplitAxis_, &QComboBox::currentIndexChanged, this, [this] {
+        UpdatePlateSplitPreview();
+    });
+    connect(plateSplitSlider_, &QSlider::valueChanged, this, [this](int value) {
+        const QSignalBlocker blocker(plateSplitPosition_);
+        plateSplitPosition_->setValue(static_cast<double>(value) / 10.0);
+        UpdatePlateSplitPreview();
+    });
+    connect(plateSplitPosition_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        const QSignalBlocker blocker(plateSplitSlider_);
+        plateSplitSlider_->setValue(static_cast<int>(std::lround(value * 10.0)));
+        UpdatePlateSplitPreview();
+    });
+
+    auto* splitButton = new QPushButton(QStringLiteral("選択中の板材を2分割"));
+    splitButton->setObjectName("primaryButton");
+    splitButton->setProperty("plateSplitAction", true);
+    connect(splitButton, &QPushButton::clicked, this, &MainWindow::SplitSelectedPlate);
+    layout->addWidget(splitButton);
     layout->addStretch(1);
 
     auto* scrollArea = new QScrollArea;
@@ -2451,6 +2511,77 @@ void MainWindow::RemoveSelectedPlateOpenings()
     }
 }
 
+void MainWindow::SplitSelectedPlate()
+{
+    try {
+        std::vector<int> selectedPlateIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                selectedPlateIndices.push_back(selection.index);
+            }
+        }
+        std::sort(selectedPlateIndices.begin(), selectedPlateIndices.end());
+        selectedPlateIndices.erase(
+            std::unique(selectedPlateIndices.begin(), selectedPlateIndices.end()),
+            selectedPlateIndices.end());
+        if (selectedPlateIndices.size() != 1) {
+            throw std::invalid_argument("分割する板材を1枚だけ選択してください。");
+        }
+        const int plateIndex = selectedPlateIndices.front();
+        const std::string sourceName = project_.Plates()[plateIndex].name;
+        std::vector<std::string> reservedNames;
+        const auto uniquePieceName = [this, &sourceName, &reservedNames](std::string suffix) {
+            std::string candidate = sourceName + std::move(suffix);
+            int number = 2;
+            while (project_.FindPlate(candidate).has_value()
+                || std::find(reservedNames.begin(), reservedNames.end(), candidate) != reservedNames.end()) {
+                candidate = sourceName + "_part" + std::to_string(number++);
+            }
+            reservedNames.push_back(candidate);
+            return candidate;
+        };
+        const std::string firstName = uniquePieceName("_part1");
+        const std::string secondName = uniquePieceName("_part2");
+        const auto axis = static_cast<PlateSplitAxis>(plateSplitAxis_->currentData().toInt());
+        const double parameter = plateSplitPosition_->value() / 100.0;
+
+        Project candidate = project_;
+        candidate.SplitPlate(sourceName, axis, parameter, firstName, secondName);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+
+        std::vector<CadSelection> pieces;
+        for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
+            if (project_.Plates()[index].name == firstName || project_.Plates()[index].name == secondName) {
+                pieces.push_back({CadSelectionKind::Plate, index});
+            }
+        }
+        UpdateSelections(std::move(pieces), true);
+        statusBar()->showMessage(
+            QStringLiteral("板材を%1%の位置で2部品に分割しました").arg(plateSplitPosition_->value()),
+            4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::UpdatePlateSplitPreview()
+{
+    if (viewport_ == nullptr || plateSplitAxis_ == nullptr || plateSplitPosition_ == nullptr) {
+        return;
+    }
+    if (toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 5) {
+        viewport_->SetPlateSplitPreview(std::nullopt, 0.5);
+        return;
+    }
+    viewport_->SetPlateSplitPreview(
+        static_cast<PlateSplitAxis>(plateSplitAxis_->currentData().toInt()),
+        plateSplitPosition_->value() / 100.0);
+}
+
 void MainWindow::ApplyMeetSelectedLines()
 {
     try {
@@ -3072,6 +3203,32 @@ bool MainWindow::RunCreationSelfTest()
         return fail("plate opening and forming information");
     }
 
+    plateSplitAxis_->setCurrentIndex(1);
+    plateSplitPosition_->setValue(25.0);
+    UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
+    SplitSelectedPlate();
+    if (project_.Plates().size() != plateStart + 2
+        || std::abs(project_.Plates()[plateStart].plate.Range().maximumV - 0.25) > 1.0e-12
+        || std::abs(project_.Plates()[plateStart + 1].plate.Range().minimumV - 0.25) > 1.0e-12
+        || !project_.Plates()[plateStart].openingWireNames.empty()
+        || project_.Plates()[plateStart + 1].openingWireNames
+            != std::vector<std::string>{projectedLightName}) {
+        return fail("split selected plate and assign opening");
+    }
+    const std::string firstPieceName = project_.Plates()[plateStart].name;
+    const std::string secondPieceName = project_.Plates()[plateStart + 1].name;
+    Undo();
+    if (project_.Plates().size() != plateStart + 1
+        || !project_.Plates()[plateStart].plate.Range().IsFull()) {
+        return fail("undo plate split");
+    }
+    Redo();
+    if (project_.Plates().size() != plateStart + 2
+        || project_.Plates()[plateStart].name != firstPieceName
+        || project_.Plates()[plateStart + 1].name != secondPieceName) {
+        return fail("redo plate split");
+    }
+
     UpdateSelection({CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)}, true);
     HideSelected();
     if (project_.Wires()[projectedLightIndex].visible) {
@@ -3103,7 +3260,8 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Loft
         || reloadedProject.Plates().size() != project_.Plates().size()
         || reloadedProject.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
-        || reloadedProject.Plates()[plateStart].openingWireNames
+        || std::abs(reloadedProject.Plates()[plateStart].plate.Range().maximumV - 0.25) > 1.0e-12
+        || reloadedProject.Plates()[plateStart + 1].openingWireNames
             != std::vector<std::string>{projectedLightName}
         || !reloadedProject.Wires()[projectedLightIndex].projection.has_value()
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
@@ -3113,11 +3271,26 @@ bool MainWindow::RunCreationSelfTest()
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->FitAll();
-    UpdateSelections({
-        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
-        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
-    }, true);
     toolsTabs_->setCurrentIndex(5);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+        {CadSelectionKind::Plate, static_cast<int>(plateStart + 1)},
+    }, true);
+    if (auto* surfaceScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(5))) {
+        surfaceScrollArea->widget()->adjustSize();
+        QApplication::processEvents();
+        const auto buttons = surfaceScrollArea->findChildren<QPushButton*>();
+        const auto splitButton = std::find_if(buttons.begin(), buttons.end(), [](const QPushButton* button) {
+            return button->property("plateSplitAction").toBool();
+        });
+        if (splitButton != buttons.end()) {
+            QPushButton* splitButtonPointer = *splitButton;
+            QTimer::singleShot(0, surfaceScrollArea, [surfaceScrollArea, splitButtonPointer] {
+                surfaceScrollArea->ensureWidgetVisible(splitButtonPointer, 0, 12);
+            });
+        }
+    }
     return true;
 }
 
@@ -3903,6 +4076,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 .arg(selectedPlateCount)
                 .arg(selectedClosedProjectedWireCount));
     }
+    if (plateSplitSelectionLabel_ != nullptr) {
+        plateSplitSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚").arg(selectedPlateCount));
+    }
 
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
     if (pendingMachiningPickSlot_ >= 0 && selection.kind == CadSelectionKind::Wire
@@ -4002,10 +4178,23 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         if (openings.isEmpty()) {
             openings = QStringLiteral("なし");
         }
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 板材<br>元の面: %2<br>板厚: %3 mm<br>厚み方向: %4<br>材質: %5<br>開口: %6<br><br>工作判定: %7")
-                .arg(ToQString(named.name), ToQString(named.sourceSurfaceName))
+        const auto& range = named.plate.Range();
+        const QString rangeText = QStringLiteral("断面内 %1-%2% / 長手 %3-%4%")
+            .arg(range.minimumU * 100.0, 0, 'f', 1)
+            .arg(range.maximumU * 100.0, 0, 'f', 1)
+            .arg(range.minimumV * 100.0, 0, 'f', 1)
+            .arg(range.maximumV * 100.0, 0, 'f', 1);
+        const QString plateKind = range.IsFull() ? QStringLiteral("板材") : QStringLiteral("分割した板材");
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元の面: %3<br>板厚: %4 mm<br>厚み方向: %5<br>材質: %6<br>開口: %7<br>部品範囲: %8<br><br>工作判定: %9")
+                .arg(ToQString(named.name))
+                .arg(plateKind)
+                .arg(ToQString(named.sourceSurfaceName))
                 .arg(named.plate.Thickness())
-                .arg(direction, material, openings, forming));
+                .arg(direction)
+                .arg(material)
+                .arg(openings)
+                .arg(rangeText)
+                .arg(forming));
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
@@ -4041,6 +4230,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             && !project_.Wires()[selection.index].projection.has_value();
         editApplyButton_->setEnabled(selection.kind == CadSelectionKind::WorkPlane || editableWire);
     }
+    UpdatePlateSplitPreview();
     RefreshExportSummary();
 }
 

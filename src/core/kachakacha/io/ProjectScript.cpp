@@ -18,6 +18,7 @@ namespace kachakacha::io {
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
+using kachakacha::model::PlateSurfaceRange;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Sketch;
 using kachakacha::model::Wire;
@@ -415,6 +416,16 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlate(name, sourceSurface, thickness,
                     ParsePlateDirection(directionToken, sourceName, lineNumber), material);
+            } else if (command == "plate_range") {
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
+                const PlateSurfaceRange range{
+                    ReadDouble(stream, sourceName, lineNumber, "minimum U"),
+                    ReadDouble(stream, sourceName, lineNumber, "maximum U"),
+                    ReadDouble(stream, sourceName, lineNumber, "minimum V"),
+                    ReadDouble(stream, sourceName, lineNumber, "maximum V"),
+                };
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPlateRange(plateName, range);
             } else if (command == "plate_opening") {
                 const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
                 const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
@@ -601,6 +612,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         output << "plate " << namedPlate.name << ' ' << namedPlate.sourceSurfaceName << ' '
                << namedPlate.plate.Thickness() << ' ' << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
                << namedPlate.material << '\n';
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        if (namedPlate.plate.Range().IsFull()) {
+            continue;
+        }
+        const auto& range = namedPlate.plate.Range();
+        output << "plate_range " << namedPlate.name << ' '
+               << range.minimumU << ' ' << range.maximumU << ' '
+               << range.minimumV << ' ' << range.maximumV << '\n';
     }
     for (const auto& namedPlate : project.Plates()) {
         for (const std::string& openingWireName : namedPlate.openingWireNames) {

@@ -8,8 +8,20 @@
 
 namespace kachakacha::model {
 
-Plate::Plate(Surface sourceSurface, double thickness, PlateThicknessDirection direction)
-    : sourceSurface_(std::move(sourceSurface)), thickness_(thickness), direction_(direction)
+bool PlateSurfaceRange::IsFull(double tolerance) const noexcept
+{
+    return std::abs(minimumU) <= tolerance
+        && std::abs(maximumU - 1.0) <= tolerance
+        && std::abs(minimumV) <= tolerance
+        && std::abs(maximumV - 1.0) <= tolerance;
+}
+
+Plate::Plate(
+    Surface sourceSurface,
+    double thickness,
+    PlateThicknessDirection direction,
+    PlateSurfaceRange range)
+    : sourceSurface_(std::move(sourceSurface)), thickness_(thickness), direction_(direction), range_(range)
 {
     if (!std::isfinite(thickness_) || thickness_ <= 0.0) {
         throw std::invalid_argument("Plate thickness must be a positive finite value.");
@@ -21,6 +33,14 @@ Plate::Plate(Surface sourceSurface, double thickness, PlateThicknessDirection di
         break;
     default:
         throw std::invalid_argument("Plate thickness direction is invalid.");
+    }
+    if (!std::isfinite(range_.minimumU) || !std::isfinite(range_.maximumU)
+        || !std::isfinite(range_.minimumV) || !std::isfinite(range_.maximumV)
+        || range_.minimumU < 0.0 || range_.maximumU > 1.0
+        || range_.minimumV < 0.0 || range_.maximumV > 1.0
+        || range_.maximumU - range_.minimumU <= 1.0e-9
+        || range_.maximumV - range_.minimumV <= 1.0e-9) {
+        throw std::invalid_argument("Plate surface range must be a non-empty part of the source surface.");
     }
 }
 
@@ -46,6 +66,18 @@ double Plate::MaximumOffset() const noexcept
     return 0.0;
 }
 
+double Plate::SourceU(double localU) const noexcept
+{
+    return range_.minimumU
+        + (range_.maximumU - range_.minimumU) * std::clamp(localU, 0.0, 1.0);
+}
+
+double Plate::SourceV(double localV) const noexcept
+{
+    return range_.minimumV
+        + (range_.maximumV - range_.minimumV) * std::clamp(localV, 0.0, 1.0);
+}
+
 geometry::Vector3 Plate::Evaluate(double u, double v, double throughThickness) const
 {
     if (!std::isfinite(throughThickness)) {
@@ -53,7 +85,33 @@ geometry::Vector3 Plate::Evaluate(double u, double v, double throughThickness) c
     }
     const double offset = MinimumOffset()
         + (MaximumOffset() - MinimumOffset()) * std::clamp(throughThickness, 0.0, 1.0);
-    return sourceSurface_.Evaluate(u, v) + sourceSurface_.Normal(u, v) * offset;
+    const double sourceU = SourceU(u);
+    const double sourceV = SourceV(v);
+    return sourceSurface_.Evaluate(sourceU, sourceV) + sourceSurface_.Normal(sourceU, sourceV) * offset;
+}
+
+std::pair<Plate, Plate> Plate::Split(PlateSplitAxis axis, double parameter) const
+{
+    if (!std::isfinite(parameter) || parameter <= 1.0e-4 || parameter >= 1.0 - 1.0e-4) {
+        throw std::invalid_argument("Plate split position must be between the two edges.");
+    }
+    PlateSurfaceRange firstRange = range_;
+    PlateSurfaceRange secondRange = range_;
+    if (axis == PlateSplitAxis::U) {
+        const double splitU = SourceU(parameter);
+        firstRange.maximumU = splitU;
+        secondRange.minimumU = splitU;
+    } else if (axis == PlateSplitAxis::V) {
+        const double splitV = SourceV(parameter);
+        firstRange.maximumV = splitV;
+        secondRange.minimumV = splitV;
+    } else {
+        throw std::invalid_argument("Plate split axis is invalid.");
+    }
+    return {
+        Plate(sourceSurface_, thickness_, direction_, firstRange),
+        Plate(sourceSurface_, thickness_, direction_, secondRange),
+    };
 }
 
 PlateDevelopabilityAnalysis Plate::AnalyzeDevelopability(int uSamples, int vSamples) const
@@ -65,21 +123,22 @@ PlateDevelopabilityAnalysis Plate::AnalyzeDevelopability(int uSamples, int vSamp
         return {PlateDevelopability::Planar, 0.0, 0.0};
     }
 
-    constexpr double step = 1.0e-3;
     constexpr double planarAngleTolerance = 8.726646259971648e-4; // 0.05 degrees
     constexpr double gaussianCurvatureTolerance = 1.0e-6;
     PlateDevelopabilityAnalysis analysis;
     std::optional<geometry::Vector3> referenceNormal;
     int validSamples = 0;
+    const double stepU = std::min(1.0e-3, (range_.maximumU - range_.minimumU) / (uSamples * 4.0));
+    const double stepV = std::min(1.0e-3, (range_.maximumV - range_.minimumV) / (vSamples * 4.0));
 
     for (int uIndex = 0; uIndex < uSamples; ++uIndex) {
-        const double u = (static_cast<double>(uIndex) + 0.37) / static_cast<double>(uSamples);
+        const double u = SourceU((static_cast<double>(uIndex) + 0.37) / static_cast<double>(uSamples));
         for (int vIndex = 0; vIndex < vSamples; ++vIndex) {
-            const double v = (static_cast<double>(vIndex) + 0.37) / static_cast<double>(vSamples);
-            const double uBefore = std::max(0.0, u - step);
-            const double uAfter = std::min(1.0, u + step);
-            const double vBefore = std::max(0.0, v - step);
-            const double vAfter = std::min(1.0, v + step);
+            const double v = SourceV((static_cast<double>(vIndex) + 0.37) / static_cast<double>(vSamples));
+            const double uBefore = std::max(range_.minimumU, u - stepU);
+            const double uAfter = std::min(range_.maximumU, u + stepU);
+            const double vBefore = std::max(range_.minimumV, v - stepV);
+            const double vAfter = std::min(range_.maximumV, v + stepV);
             const double uSpan = uAfter - uBefore;
             const double vSpan = vAfter - vBefore;
 

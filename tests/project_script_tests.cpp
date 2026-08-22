@@ -10,6 +10,7 @@ using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::WriteProjectScript;
+using kachakacha::model::PlateSplitAxis;
 using kachakacha::model::Wire;
 using kachakacha::model::WirePlanePolicy;
 
@@ -247,6 +248,77 @@ void LoftSurfacesRoundTrip()
         project.Surfaces()[0].surface.Evaluate(0.5, 0.5), "roundtrip loft geometry");
 }
 
+void PlateSplitsRoundTrip()
+{
+    std::istringstream input(R"(
+        plane_point_normal plan 0 0 12  0 0 1  1 0 0
+        bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+        bezier3d section_b 12 -6 0  12 -2 5  12 2 5  12 6 0
+        sketch_circle light_plan plan 6 0 1.25 reference
+        surface_ruled nose_skin section_a section_b
+        wire_project light_on_skin light_plan nose_skin 0 0 -1
+        plate nose_plate nose_skin 0.5 centered styrene
+        plate_opening nose_plate light_on_skin
+    )");
+    auto project = LoadProjectScript(input, "plate-split-test");
+
+    bool crossingOpeningRejected = false;
+    try {
+        project.SplitPlate("nose_plate", PlateSplitAxis::V, 0.5, "cross_a", "cross_b");
+    } catch (const std::invalid_argument&) {
+        crossingOpeningRejected = true;
+    }
+    Require(crossingOpeningRejected, "split line crossing opening is rejected");
+    Require(project.Plates().size() == 1, "rejected split keeps original plate");
+
+    project.SplitPlate("nose_plate", PlateSplitAxis::V, 0.25, "nose_front", "nose_rear");
+    Require(project.Plates().size() == 2, "plate split creates two pieces");
+    Require(std::abs(project.Plates()[0].plate.Range().maximumV - 0.25) <= 1.0e-12, "first split range");
+    Require(std::abs(project.Plates()[1].plate.Range().minimumV - 0.25) <= 1.0e-12, "second split range");
+    Require(project.Plates()[0].openingWireNames.empty(), "opening is absent from first piece");
+    Require(project.Plates()[1].openingWireNames == std::vector<std::string>{"light_on_skin"},
+        "opening follows containing piece");
+    bool outsidePieceOpeningRejected = false;
+    try {
+        project.AddPlateOpening("nose_front", "light_on_skin");
+    } catch (const std::invalid_argument&) {
+        outsidePieceOpeningRejected = true;
+    }
+    Require(outsidePieceOpeningRejected, "opening outside split piece is rejected");
+
+    const Vector3 lightBeforeRejectedMove = project.Wires()[3].wire.Evaluate(0.25);
+    bool openingAcrossSeamEditRejected = false;
+    try {
+        project.UpdateWire("light_plan", Wire::Circle(
+            {2.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25));
+    } catch (const std::invalid_argument&) {
+        openingAcrossSeamEditRejected = true;
+    }
+    Require(openingAcrossSeamEditRejected, "source drawing cannot move opening across plate seam");
+    RequireNear(project.Wires()[3].wire.Evaluate(0.25), lightBeforeRejectedMove,
+        "rejected opening move keeps projected geometry");
+
+    const auto rearRange = project.Plates()[1].plate.Range();
+    project.UpdateWire("section_b", Wire::CubicBezier(
+        {12.0, -6.0, 0.0}, {12.0, -2.0, 7.0}, {12.0, 2.0, 7.0}, {12.0, 6.0, 0.0}));
+    Require(std::abs(project.Plates()[1].plate.Range().minimumV - rearRange.minimumV) <= 1.0e-12,
+        "split range survives source edit");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("plate_range nose_front 0 1 0 0.25") != std::string::npos,
+        "write first plate range");
+    Require(output.str().find("plate_range nose_rear 0 1 0.25 1") != std::string::npos,
+        "write second plate range");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "plate-split-roundtrip");
+    Require(roundTripped.Plates().size() == 2, "roundtrip split plate count");
+    Require(std::abs(roundTripped.Plates()[0].plate.Range().maximumV - 0.25) <= 1.0e-12,
+        "roundtrip first range");
+    Require(roundTripped.Plates()[1].openingWireNames == std::vector<std::string>{"light_on_skin"},
+        "roundtrip opening assignment");
+}
+
 void VisibilityRoundTrips()
 {
     std::istringstream input(R"(
@@ -341,6 +413,7 @@ int main()
         WrittenProjectRoundTrips();
         SurfacesAndProjectedWiresRoundTrip();
         LoftSurfacesRoundTrip();
+        PlateSplitsRoundTrip();
         VisibilityRoundTrips();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();

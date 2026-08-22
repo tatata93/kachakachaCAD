@@ -56,6 +56,28 @@ Wire ReframeWire(const Wire& wire, const WorkPlane& oldPlane, const WorkPlane& n
     throw std::logic_error("Unknown wire kind.");
 }
 
+bool OpeningLiesWithinRange(
+    const Surface& surface,
+    const NamedWire& opening,
+    const PlateSurfaceRange& range)
+{
+    if (!opening.projection.has_value()) {
+        return false;
+    }
+    constexpr double tolerance = 1.0e-5;
+    for (int sample = 0; sample < 24; ++sample) {
+        const geometry::Vector3 point = opening.wire.Evaluate(static_cast<double>(sample) / 24.0);
+        const SurfaceProjection projection = surface.ProjectPointAlongDirection(
+            point,
+            opening.projection->direction);
+        if (projection.u < range.minimumU - tolerance || projection.u > range.maximumU + tolerance
+            || projection.v < range.minimumV - tolerance || projection.v > range.maximumV + tolerance) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 void Project::AddWorkPlane(std::string name, WorkPlane plane)
@@ -270,7 +292,6 @@ void Project::UpdatePlate(
     if (!sourceSurface.has_value()) {
         throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
     }
-    Plate replacement(*sourceSurface, thickness, direction);
     for (NamedPlate& plate : plates_) {
         if (plate.name == name) {
             for (const std::string& openingName : plate.openingWireNames) {
@@ -279,8 +300,11 @@ void Project::UpdatePlate(
                     || opening.projection->targetSurfaceName != sourceSurfaceName) {
                     throw std::invalid_argument("Remove plate openings before changing the source surface.");
                 }
+                if (!OpeningLiesWithinRange(*sourceSurface, opening, plate.plate.Range())) {
+                    throw std::invalid_argument("Updated plate surface does not contain opening: " + openingName);
+                }
             }
-            plate.plate = std::move(replacement);
+            plate.plate = Plate(*sourceSurface, thickness, direction, plate.plate.Range());
             plate.sourceSurfaceName = std::move(sourceSurfaceName);
             plate.material = std::move(material);
             return;
@@ -349,6 +373,113 @@ void Project::SetPlateVisible(std::string_view name, bool visible)
     throw std::invalid_argument("Plate name does not exist: " + std::string(name));
 }
 
+void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
+{
+    for (NamedPlate& plate : plates_) {
+        if (plate.name != name) {
+            continue;
+        }
+        if (plate.plate.SourceSurface().Kind() == SurfaceKind::Planar && !range.IsFull()) {
+            throw std::invalid_argument("Planar plate ranges are not supported.");
+        }
+        for (const std::string& openingName : plate.openingWireNames) {
+            if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), RequireWire(openingName), range)) {
+                throw std::invalid_argument("Plate range does not contain opening: " + openingName);
+            }
+        }
+        plate.plate = Plate(
+            plate.plate.SourceSurface(),
+            plate.plate.Thickness(),
+            plate.plate.Direction(),
+            range);
+        return;
+    }
+    throw std::invalid_argument("Plate name does not exist: " + std::string(name));
+}
+
+void Project::SplitPlate(
+    std::string_view name,
+    PlateSplitAxis axis,
+    double parameter,
+    std::string firstName,
+    std::string secondName)
+{
+    if (firstName.empty() || secondName.empty() || firstName == secondName) {
+        throw std::invalid_argument("Split plate names must be different and non-empty.");
+    }
+    if (FindPlate(firstName).has_value() || FindPlate(secondName).has_value()) {
+        throw std::invalid_argument("Split plate name already exists.");
+    }
+    const auto position = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& plate) {
+        return plate.name == name;
+    });
+    if (position == plates_.end()) {
+        throw std::invalid_argument("Plate name does not exist: " + std::string(name));
+    }
+    if (position->plate.SourceSurface().Kind() == SurfaceKind::Planar) {
+        throw std::invalid_argument("Planar plates can already be cut directly and do not need surface splitting.");
+    }
+
+    const auto [firstPlate, secondPlate] = position->plate.Split(axis, parameter);
+    const double splitCoordinate = axis == PlateSplitAxis::U
+        ? firstPlate.Range().maximumU
+        : firstPlate.Range().maximumV;
+    std::vector<std::string> firstOpenings;
+    std::vector<std::string> secondOpenings;
+    for (const std::string& openingName : position->openingWireNames) {
+        const NamedWire& opening = RequireWire(openingName);
+        if (!opening.projection.has_value()) {
+            throw std::logic_error("Plate opening projection relation is missing.");
+        }
+        bool beforeSplit = false;
+        bool afterSplit = false;
+        for (int sample = 0; sample < 24; ++sample) {
+            const geometry::Vector3 point = opening.wire.Evaluate(static_cast<double>(sample) / 24.0);
+            const SurfaceProjection projection = position->plate.SourceSurface().ProjectPointAlongDirection(
+                point,
+                opening.projection->direction);
+            const double coordinate = axis == PlateSplitAxis::U ? projection.u : projection.v;
+            beforeSplit = beforeSplit || coordinate < splitCoordinate - 1.0e-5;
+            afterSplit = afterSplit || coordinate > splitCoordinate + 1.0e-5;
+        }
+        if (beforeSplit && afterSplit) {
+            throw std::invalid_argument("Plate split line crosses opening: " + openingName);
+        }
+        if (!beforeSplit && !afterSplit) {
+            throw std::invalid_argument("Plate split line coincides with opening: " + openingName);
+        }
+        (beforeSplit ? firstOpenings : secondOpenings).push_back(openingName);
+    }
+
+    const std::string sourceSurfaceName = position->sourceSurfaceName;
+    const std::string material = position->material;
+    const bool visible = position->visible;
+    const std::size_t insertionIndex = static_cast<std::size_t>(std::distance(plates_.begin(), position));
+    plates_.erase(position);
+    NamedPlate firstNamedPlate{
+        std::move(firstName),
+        firstPlate,
+        sourceSurfaceName,
+        material,
+        std::move(firstOpenings),
+        visible,
+    };
+    NamedPlate secondNamedPlate{
+        std::move(secondName),
+        secondPlate,
+        sourceSurfaceName,
+        material,
+        std::move(secondOpenings),
+        visible,
+    };
+    plates_.insert(
+        plates_.begin() + static_cast<std::ptrdiff_t>(insertionIndex),
+        std::move(firstNamedPlate));
+    plates_.insert(
+        plates_.begin() + static_cast<std::ptrdiff_t>(insertionIndex + 1),
+        std::move(secondNamedPlate));
+}
+
 void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
 {
     NamedPlate* plate = nullptr;
@@ -367,6 +498,9 @@ void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
     }
     if (!wire.projection.has_value() || wire.projection->targetSurfaceName != plate->sourceSurfaceName) {
         throw std::invalid_argument("Plate opening must be a wire projected to the plate source surface: " + wireName);
+    }
+    if (!OpeningLiesWithinRange(plate->plate.SourceSurface(), wire, plate->plate.Range())) {
+        throw std::invalid_argument("Plate opening lies outside this plate piece: " + wireName);
     }
     if (std::find(plate->openingWireNames.begin(), plate->openingWireNames.end(), wireName)
         != plate->openingWireNames.end()) {
@@ -550,7 +684,16 @@ void Project::RebuildDependentGeometry()
         if (!sourceSurface.has_value()) {
             throw std::logic_error("Plate source surface is missing.");
         }
-        plate.plate = Plate(*sourceSurface, plate.plate.Thickness(), plate.plate.Direction());
+        plate.plate = Plate(
+            *sourceSurface,
+            plate.plate.Thickness(),
+            plate.plate.Direction(),
+            plate.plate.Range());
+        for (const std::string& openingName : plate.openingWireNames) {
+            if (!OpeningLiesWithinRange(*sourceSurface, RequireWire(openingName), plate.plate.Range())) {
+                throw std::invalid_argument("Plate opening moved outside split piece: " + openingName);
+            }
+        }
     }
 }
 

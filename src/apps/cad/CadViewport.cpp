@@ -240,6 +240,15 @@ void CadViewport::SetSnapStep(double stepMillimeters)
     }
 }
 
+void CadViewport::SetPlateSplitPreview(
+    std::optional<kachakacha::model::PlateSplitAxis> axis,
+    double parameter)
+{
+    plateSplitPreviewAxis_ = axis;
+    plateSplitPreviewParameter_ = std::clamp(parameter, 0.0, 1.0);
+    update();
+}
+
 void CadViewport::AlignToActiveWorkPlane()
 {
     if (!activePlane_.has_value()) {
@@ -793,7 +802,9 @@ void CadViewport::paintEvent(QPaintEvent*)
                         painter.drawPolygon(side);
                     }
                 }
-                if (!source.FirstBoundary().IsClosed()) {
+                const auto& range = plate.Range();
+                if (!source.FirstBoundary().IsClosed()
+                    || range.minimumU > 1.0e-12 || range.maximumU < 1.0 - 1.0e-12) {
                     for (int vIndex = 0; vIndex < 16; ++vIndex) {
                         const double v0 = static_cast<double>(vIndex) / 16.0;
                         const double v1 = static_cast<double>(vIndex + 1) / 16.0;
@@ -807,6 +818,24 @@ void CadViewport::paintEvent(QPaintEvent*)
                         }
                     }
                 }
+            }
+            if (plateSplitPreviewAxis_.has_value()
+                && selection_.kind == CadSelectionKind::Plate && selection_.index == index
+                && source.Kind() != kachakacha::model::SurfaceKind::Planar) {
+                painter.setBrush(Qt::NoBrush);
+                painter.setPen(QPen(QColor("#b23a48"), 3.0, Qt::DashLine));
+                const bool splitU = *plateSplitPreviewAxis_ == kachakacha::model::PlateSplitAxis::U;
+                const double firstU = splitU ? plateSplitPreviewParameter_ : 0.0;
+                const double firstV = splitU ? 0.0 : plateSplitPreviewParameter_;
+                QPainterPath splitPath(ProjectPoint(plate.Evaluate(firstU, firstV, 1.0)));
+                for (int sample = 1; sample <= 96; ++sample) {
+                    const double position = static_cast<double>(sample) / 96.0;
+                    splitPath.lineTo(ProjectPoint(plate.Evaluate(
+                        splitU ? plateSplitPreviewParameter_ : position,
+                        splitU ? position : plateSplitPreviewParameter_,
+                        1.0)));
+                }
+                painter.drawPath(splitPath);
             }
             painter.restore();
             painter.setBrush(Qt::NoBrush);

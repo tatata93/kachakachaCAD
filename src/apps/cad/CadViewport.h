@@ -67,6 +67,7 @@ public:
     [[nodiscard]] ViewportTool Tool() const noexcept { return tool_; }
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
+    void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
     void SetIsometricView();
@@ -119,6 +120,8 @@ private:
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
     std::optional<double> splitPreviewParameter_;
+    std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
+    double plateSplitPreviewParameter_ = 0.5;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;

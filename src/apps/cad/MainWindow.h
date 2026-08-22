@@ -17,6 +17,7 @@ class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QSlider;
 class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
@@ -79,6 +80,8 @@ private:
     void UpdateSelectedPlate();
     void AddSelectedPlateOpenings();
     void RemoveSelectedPlateOpenings();
+    void SplitSelectedPlate();
+    void UpdatePlateSplitPreview();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshActiveWorkPlane();
@@ -199,6 +202,10 @@ private:
     QComboBox* plateDirection_ = nullptr;
     QComboBox* plateMaterial_ = nullptr;
     QLabel* plateOpeningSelectionLabel_ = nullptr;
+    QLabel* plateSplitSelectionLabel_ = nullptr;
+    QComboBox* plateSplitAxis_ = nullptr;
+    QSlider* plateSplitSlider_ = nullptr;
+    QDoubleSpinBox* plateSplitPosition_ = nullptr;
 
     QComboBox* exportPlane_ = nullptr;
     QComboBox* exportScope_ = nullptr;

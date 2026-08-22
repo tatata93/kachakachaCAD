@@ -123,6 +123,33 @@ void SketchArcOnWorkPlaneBecomesWorldWire()
     RequireNear(wire.End(), {10.0, 2.0, 4.5}, "arc end");
 }
 
+void ThreePointArcPassesThroughAllPoints()
+{
+    const Wire wire = Wire::CircularArcThroughThreePoints(
+        {1.0, 0.0, 2.0},
+        {0.0, 1.0, 2.0},
+        {-1.0, 0.0, 2.0});
+
+    Require(wire.Kind() == WireKind::CircularArc, "three-point arc kind");
+    RequireNear(wire.Start(), {1.0, 0.0, 2.0}, "three-point arc start");
+    RequireNear(wire.Evaluate(0.5), {0.0, 1.0, 2.0}, "three-point arc through");
+    RequireNear(wire.End(), {-1.0, 0.0, 2.0}, "three-point arc end");
+}
+
+void ThreePointArcRejectsCollinearPoints()
+{
+    bool rejected = false;
+    try {
+        static_cast<void>(Wire::CircularArcThroughThreePoints(
+            {0.0, 0.0, 0.0},
+            {1.0, 0.0, 0.0},
+            {2.0, 0.0, 0.0}));
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    Require(rejected, "three-point arc rejects collinear points");
+}
+
 void TranslatedLineKeepsShape()
 {
     const Wire wire = Wire::Line({1.0, 2.0, 3.0}, {4.0, 6.0, 8.0});
@@ -161,6 +188,8 @@ int main()
         SketchBezierOnWorkPlaneBecomesWorldWire();
         CircleWireEvaluatesOnPlane();
         SketchArcOnWorkPlaneBecomesWorldWire();
+        ThreePointArcPassesThroughAllPoints();
+        ThreePointArcRejectsCollinearPoints();
         TranslatedLineKeepsShape();
         TranslatedArcKeepsFrameAndRadius();
     } catch (const std::exception& error) {

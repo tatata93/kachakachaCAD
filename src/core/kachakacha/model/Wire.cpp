@@ -172,6 +172,48 @@ Wire Wire::CircularArc(
     };
 }
 
+Wire Wire::CircularArcThroughThreePoints(Vector3 start, Vector3 through, Vector3 end)
+{
+    const std::vector<Vector3> points = {start, through, end};
+    RequireFinite(points);
+
+    const Vector3 startToThrough = through - start;
+    const Vector3 startToEnd = end - start;
+    const Vector3 planeNormal = Cross(startToThrough, startToEnd);
+    const double normalLengthSquared = planeNormal.LengthSquared();
+    if (normalLengthSquared <= 1.0e-18) {
+        throw std::invalid_argument("Three-point arc requires non-collinear points.");
+    }
+
+    const Vector3 centerOffset = (
+        Cross(startToEnd, planeNormal) * startToThrough.LengthSquared()
+        + Cross(planeNormal, startToThrough) * startToEnd.LengthSquared())
+        / (2.0 * normalLengthSquared);
+    const Vector3 center = start + centerOffset;
+    const Vector3 uAxis = (start - center).Normalized();
+    const Vector3 normal = planeNormal.Normalized();
+    const Vector3 vAxis = Cross(normal, uAxis).Normalized();
+    const double radius = (start - center).Length();
+
+    const auto positiveAngle = [&](Vector3 point) {
+        const Vector3 direction = (point - center) / radius;
+        double angle = std::atan2(geometry::Dot(direction, vAxis), geometry::Dot(direction, uAxis));
+        if (angle < 0.0) {
+            angle += TwoPi;
+        }
+        return angle;
+    };
+    const double throughAngle = positiveAngle(through);
+    double endAngle = positiveAngle(end);
+    if (endAngle + 1.0e-12 < throughAngle) {
+        endAngle += TwoPi;
+    }
+    if (endAngle > TwoPi + 1.0e-9) {
+        throw std::invalid_argument("Three-point arc could not determine a valid sweep.");
+    }
+    return CircularArc(center, uAxis, vAxis, radius, 0.0, endAngle);
+}
+
 WireArcData Wire::ArcData() const
 {
     if (kind_ != WireKind::Circle && kind_ != WireKind::CircularArc) {

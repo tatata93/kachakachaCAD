@@ -33,6 +33,8 @@ protected:
 
 private:
     void BuildUi();
+    void BuildDrawingActions();
+    QWidget* BuildDrawingPanel();
     QWidget* BuildPlanePanel();
     QWidget* BuildWirePanel();
     QWidget* BuildEditPanel();
@@ -49,10 +51,14 @@ private:
     void ApplyLineChamfer();
     void ApplyLineFillet();
     void SetViewportTool(ViewportTool tool);
+    void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshActiveWorkPlane();
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
+    void AddViewportPolyline(const std::vector<kachakacha::geometry::Vector3>& points);
     void AddViewportRectangle(const std::array<kachakacha::geometry::Vector3, 4>& corners);
     void AddViewportCircle(kachakacha::geometry::Vector3 center, double radius);
+    void AddViewportArc(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 through, kachakacha::geometry::Vector3 end);
+    void AddViewportBezier(const std::array<kachakacha::geometry::Vector3, 4>& points);
     void DeleteSelection();
     void Undo();
     void Redo();
@@ -84,11 +90,18 @@ private:
     QAction* redoAction_ = nullptr;
     QAction* selectToolAction_ = nullptr;
     QAction* lineToolAction_ = nullptr;
+    QAction* polylineToolAction_ = nullptr;
     QAction* rectangleToolAction_ = nullptr;
     QAction* circleToolAction_ = nullptr;
+    QAction* arcToolAction_ = nullptr;
+    QAction* bezierToolAction_ = nullptr;
     QAction* snapAction_ = nullptr;
+    QAction* alignPlaneAction_ = nullptr;
+    QAction* finishDrawingAction_ = nullptr;
+    QAction* cancelDrawingAction_ = nullptr;
     QComboBox* activePlaneCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
+    QLabel* drawingStateLabel_ = nullptr;
 
     CadViewport* viewport_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;

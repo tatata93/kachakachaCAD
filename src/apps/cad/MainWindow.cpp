@@ -16,6 +16,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QHBoxLayout>
@@ -37,6 +38,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QToolBar>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
@@ -225,6 +227,9 @@ MainWindow::MainWindow(QWidget* parent)
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("side_YZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     RefreshModelViews(true);
+    toolsTabs_->setCurrentIndex(0);
+    SetViewportTool(ViewportTool::DrawLine);
+    viewport_->AlignToActiveWorkPlane();
 
     resize(1380, 820);
     setMinimumSize(1040, 650);
@@ -241,11 +246,24 @@ void MainWindow::BuildUi()
     viewport_->SetLineCreatedCallback([this](Vector3 start, Vector3 end) {
         AddViewportLine(start, end);
     });
+    viewport_->SetPolylineCreatedCallback([this](const std::vector<Vector3>& points) {
+        AddViewportPolyline(points);
+    });
     viewport_->SetRectangleCreatedCallback([this](const std::array<Vector3, 4>& corners) {
         AddViewportRectangle(corners);
     });
     viewport_->SetCircleCreatedCallback([this](Vector3 center, double radius) {
         AddViewportCircle(center, radius);
+    });
+    viewport_->SetArcCreatedCallback([this](Vector3 start, Vector3 through, Vector3 end) {
+        AddViewportArc(start, through, end);
+    });
+    viewport_->SetBezierCreatedCallback([this](const std::array<Vector3, 4>& points) {
+        AddViewportBezier(points);
+    });
+    BuildDrawingActions();
+    viewport_->SetDrawingStateChangedCallback([this](ViewportTool tool, std::size_t pointCount) {
+        UpdateDrawingPanel(tool, pointCount);
     });
 
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
@@ -286,12 +304,13 @@ void MainWindow::BuildUi()
         UpdateSelections(std::move(selections), false);
     });
 
-    auto* toolsDock = new QDockWidget(QStringLiteral("作成と情報"), this);
+    auto* toolsDock = new QDockWidget(QStringLiteral("作図と編集"), this);
     toolsDock->setObjectName("toolsDock");
     toolsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     toolsTabs_ = new QTabWidget;
+    toolsTabs_->addTab(BuildDrawingPanel(), QStringLiteral("作図"));
     toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
-    toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("ワイヤー"));
+    toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("数値入力"));
     toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
     toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
@@ -313,10 +332,156 @@ void MainWindow::BuildUi()
         QPushButton:hover { background: #e8edef; }
         QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
         QPushButton#primaryButton:hover { background: #09666e; }
+        QToolButton#drawingToolButton { min-height: 38px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 3px 8px; }
+        QToolButton#drawingToolButton:hover { background: #e8edef; }
+        QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
         QTreeWidget { border: 0; background: #fafbfb; }
         QTreeWidget::item { min-height: 25px; }
         QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
     )");
+}
+
+void MainWindow::BuildDrawingActions()
+{
+    selectToolAction_ = new QAction(QStringLiteral("選択"), this);
+    lineToolAction_ = new QAction(QStringLiteral("直線"), this);
+    polylineToolAction_ = new QAction(QStringLiteral("ポリライン"), this);
+    rectangleToolAction_ = new QAction(QStringLiteral("矩形"), this);
+    circleToolAction_ = new QAction(QStringLiteral("円"), this);
+    arcToolAction_ = new QAction(QStringLiteral("3点円弧"), this);
+    bezierToolAction_ = new QAction(QStringLiteral("ベジェ"), this);
+
+    selectToolAction_->setShortcut(Qt::Key_V);
+    lineToolAction_->setShortcut(Qt::Key_L);
+    polylineToolAction_->setShortcut(Qt::Key_P);
+    rectangleToolAction_->setShortcut(Qt::Key_R);
+    circleToolAction_->setShortcut(Qt::Key_C);
+    arcToolAction_->setShortcut(Qt::Key_A);
+    bezierToolAction_->setShortcut(Qt::Key_B);
+
+    auto* toolGroup = new QActionGroup(this);
+    toolGroup->setExclusive(true);
+    for (QAction* action : {
+             selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
+             circleToolAction_, arcToolAction_, bezierToolAction_}) {
+        action->setCheckable(true);
+        toolGroup->addAction(action);
+    }
+    selectToolAction_->setChecked(true);
+
+    connect(selectToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Select); });
+    connect(lineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawLine); });
+    connect(polylineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawPolyline); });
+    connect(rectangleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawRectangle); });
+    connect(circleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawCircle); });
+    connect(arcToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawArc); });
+    connect(bezierToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawBezier); });
+
+    snapAction_ = new QAction(QStringLiteral("スナップ"), this);
+    snapAction_->setCheckable(true);
+    snapAction_->setChecked(true);
+    alignPlaneAction_ = new QAction(QStringLiteral("正対"), this);
+    alignPlaneAction_->setToolTip(QStringLiteral("作図面を真正面から見る"));
+    finishDrawingAction_ = new QAction(style()->standardIcon(QStyle::SP_DialogApplyButton), QStringLiteral("完了"), this);
+    cancelDrawingAction_ = new QAction(style()->standardIcon(QStyle::SP_DialogCancelButton), QStringLiteral("取消"), this);
+    finishDrawingAction_->setEnabled(false);
+    cancelDrawingAction_->setEnabled(false);
+
+    connect(alignPlaneAction_, &QAction::triggered, viewport_, &CadViewport::AlignToActiveWorkPlane);
+    connect(snapAction_, &QAction::toggled, viewport_, &CadViewport::SetSnapEnabled);
+    connect(finishDrawingAction_, &QAction::triggered, viewport_, &CadViewport::FinishDrawing);
+    connect(cancelDrawingAction_, &QAction::triggered, viewport_, &CadViewport::CancelDrawing);
+}
+
+QWidget* MainWindow::BuildDrawingPanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    auto* planeLabel = new QLabel(QStringLiteral("作図面"));
+    planeLabel->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(planeLabel);
+
+    auto* planeRow = new QWidget;
+    auto* planeLayout = new QHBoxLayout(planeRow);
+    planeLayout->setContentsMargins(0, 0, 0, 0);
+    planeLayout->setSpacing(6);
+    activePlaneCombo_ = new QComboBox;
+    activePlaneCombo_->setObjectName("activePlaneCombo");
+    planeLayout->addWidget(activePlaneCombo_, 1);
+    auto* alignButton = new QToolButton;
+    alignButton->setDefaultAction(alignPlaneAction_);
+    alignButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    planeLayout->addWidget(alignButton);
+    layout->addWidget(planeRow);
+
+    drawingStateLabel_ = new QLabel(QStringLiteral("選択"));
+    drawingStateLabel_->setStyleSheet("color: #075f69; font-weight: 600; padding: 4px 0;");
+    layout->addWidget(drawingStateLabel_);
+
+    auto* toolGrid = new QGridLayout;
+    toolGrid->setContentsMargins(0, 0, 0, 0);
+    toolGrid->setHorizontalSpacing(6);
+    toolGrid->setVerticalSpacing(6);
+    const auto addToolButton = [&](QAction* action, int row, int column, int columnSpan = 1) {
+        auto* button = new QToolButton;
+        button->setObjectName("drawingToolButton");
+        button->setDefaultAction(action);
+        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        toolGrid->addWidget(button, row, column, 1, columnSpan);
+    };
+    addToolButton(selectToolAction_, 0, 0);
+    addToolButton(lineToolAction_, 0, 1);
+    addToolButton(polylineToolAction_, 1, 0);
+    addToolButton(rectangleToolAction_, 1, 1);
+    addToolButton(circleToolAction_, 2, 0);
+    addToolButton(arcToolAction_, 2, 1);
+    addToolButton(bezierToolAction_, 3, 0, 2);
+    layout->addLayout(toolGrid);
+
+    auto* snapRow = new QWidget;
+    auto* snapLayout = new QHBoxLayout(snapRow);
+    snapLayout->setContentsMargins(0, 2, 0, 0);
+    snapLayout->setSpacing(6);
+    auto* snapButton = new QToolButton;
+    snapButton->setDefaultAction(snapAction_);
+    snapButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    snapLayout->addWidget(snapButton);
+    snapLayout->addWidget(new QLabel(QStringLiteral("間隔")));
+    snapStepField_ = new QDoubleSpinBox;
+    snapStepField_->setRange(0.01, 1000.0);
+    snapStepField_->setDecimals(2);
+    snapStepField_->setSingleStep(0.5);
+    snapStepField_->setValue(1.0);
+    snapStepField_->setSuffix(QStringLiteral(" mm"));
+    snapLayout->addWidget(snapStepField_, 1);
+    layout->addWidget(snapRow);
+
+    auto* commandRow = new QWidget;
+    auto* commandLayout = new QHBoxLayout(commandRow);
+    commandLayout->setContentsMargins(0, 0, 0, 0);
+    commandLayout->setSpacing(6);
+    auto* finishButton = new QToolButton;
+    finishButton->setDefaultAction(finishDrawingAction_);
+    finishButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    auto* cancelButton = new QToolButton;
+    cancelButton->setDefaultAction(cancelDrawingAction_);
+    cancelButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    commandLayout->addWidget(finishButton, 1);
+    commandLayout->addWidget(cancelButton, 1);
+    layout->addWidget(commandRow);
+    layout->addStretch(1);
+
+    connect(activePlaneCombo_, &QComboBox::currentIndexChanged, this, [this] {
+        RefreshActiveWorkPlane();
+        viewport_->AlignToActiveWorkPlane();
+    });
+    connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
+    UpdateDrawingPanel(ViewportTool::Select, 0);
+    return panel;
 }
 
 QWidget* MainWindow::BuildPlanePanel()
@@ -719,31 +884,17 @@ void MainWindow::BuildMenusAndToolbar()
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
 
-    selectToolAction_ = new QAction(QStringLiteral("選択"), this);
-    lineToolAction_ = new QAction(QStringLiteral("直線"), this);
-    rectangleToolAction_ = new QAction(QStringLiteral("矩形"), this);
-    circleToolAction_ = new QAction(QStringLiteral("円"), this);
-    selectToolAction_->setShortcut(Qt::Key_V);
-    lineToolAction_->setShortcut(Qt::Key_L);
-    rectangleToolAction_->setShortcut(Qt::Key_R);
-    circleToolAction_->setShortcut(Qt::Key_C);
-    auto* toolGroup = new QActionGroup(this);
-    toolGroup->setExclusive(true);
-    for (QAction* action : {selectToolAction_, lineToolAction_, rectangleToolAction_, circleToolAction_}) {
-        action->setCheckable(true);
-        toolGroup->addAction(action);
-    }
-    selectToolAction_->setChecked(true);
-    connect(selectToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Select); });
-    connect(lineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawLine); });
-    connect(rectangleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawRectangle); });
-    connect(circleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawCircle); });
-
     QMenu* drawMenu = menuBar()->addMenu(QStringLiteral("作図"));
     drawMenu->addAction(selectToolAction_);
     drawMenu->addAction(lineToolAction_);
+    drawMenu->addAction(polylineToolAction_);
     drawMenu->addAction(rectangleToolAction_);
     drawMenu->addAction(circleToolAction_);
+    drawMenu->addAction(arcToolAction_);
+    drawMenu->addAction(bezierToolAction_);
+    drawMenu->addSeparator();
+    drawMenu->addAction(finishDrawingAction_);
+    drawMenu->addAction(cancelDrawingAction_);
 
     QToolBar* toolbar = addToolBar(QStringLiteral("基本操作"));
     toolbar->setMovable(false);
@@ -761,36 +912,16 @@ void MainWindow::BuildMenusAndToolbar()
     QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
     drawingToolbar->setMovable(false);
     drawingToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    drawingToolbar->addWidget(new QLabel(QStringLiteral("作図面")));
-    activePlaneCombo_ = new QComboBox;
-    activePlaneCombo_->setMinimumWidth(150);
-    activePlaneCombo_->setObjectName("activePlaneCombo");
-    drawingToolbar->addWidget(activePlaneCombo_);
-    QAction* alignPlaneAction = drawingToolbar->addAction(QStringLiteral("正対"));
-    alignPlaneAction->setToolTip(QStringLiteral("作図面を真正面から見る"));
-    drawingToolbar->addSeparator();
     drawingToolbar->addAction(selectToolAction_);
     drawingToolbar->addAction(lineToolAction_);
+    drawingToolbar->addAction(polylineToolAction_);
     drawingToolbar->addAction(rectangleToolAction_);
     drawingToolbar->addAction(circleToolAction_);
+    drawingToolbar->addAction(arcToolAction_);
+    drawingToolbar->addAction(bezierToolAction_);
     drawingToolbar->addSeparator();
-    snapAction_ = drawingToolbar->addAction(QStringLiteral("スナップ"));
-    snapAction_->setCheckable(true);
-    snapAction_->setChecked(true);
-    drawingToolbar->addWidget(new QLabel(QStringLiteral("間隔")));
-    snapStepField_ = new QDoubleSpinBox;
-    snapStepField_->setRange(0.01, 1000.0);
-    snapStepField_->setDecimals(2);
-    snapStepField_->setSingleStep(0.5);
-    snapStepField_->setValue(1.0);
-    snapStepField_->setSuffix(QStringLiteral(" mm"));
-    snapStepField_->setMaximumWidth(105);
-    drawingToolbar->addWidget(snapStepField_);
-
-    connect(activePlaneCombo_, &QComboBox::currentIndexChanged, this, [this] { RefreshActiveWorkPlane(); });
-    connect(alignPlaneAction, &QAction::triggered, viewport_, &CadViewport::AlignToActiveWorkPlane);
-    connect(snapAction_, &QAction::toggled, viewport_, &CadViewport::SetSnapEnabled);
-    connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
+    drawingToolbar->addAction(finishDrawingAction_);
+    drawingToolbar->addAction(cancelDrawingAction_);
     UpdateHistoryActions();
 }
 
@@ -810,6 +941,9 @@ void MainWindow::NewProject()
     redoStack_.clear();
     UpdateHistoryActions();
     RefreshModelViews(true);
+    toolsTabs_->setCurrentIndex(0);
+    SetViewportTool(ViewportTool::DrawLine);
+    viewport_->AlignToActiveWorkPlane();
     setWindowTitle(QStringLiteral("kachakachaCAD - 無題"));
     statusBar()->showMessage(QStringLiteral("新しいプロジェクト"), 3000);
 }
@@ -840,6 +974,9 @@ bool MainWindow::LoadProjectFile(const QString& path)
         redoStack_.clear();
         UpdateHistoryActions();
         RefreshModelViews(true);
+        toolsTabs_->setCurrentIndex(0);
+        SetViewportTool(ViewportTool::DrawLine);
+        viewport_->AlignToActiveWorkPlane();
         setWindowTitle(QStringLiteral("kachakachaCAD - %1").arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("読み込みました: %1").arg(path), 4000);
         return true;
@@ -910,8 +1047,11 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     viewport_->SetTool(tool);
     selectToolAction_->setChecked(tool == ViewportTool::Select);
     lineToolAction_->setChecked(tool == ViewportTool::DrawLine);
+    polylineToolAction_->setChecked(tool == ViewportTool::DrawPolyline);
     rectangleToolAction_->setChecked(tool == ViewportTool::DrawRectangle);
     circleToolAction_->setChecked(tool == ViewportTool::DrawCircle);
+    arcToolAction_->setChecked(tool == ViewportTool::DrawArc);
+    bezierToolAction_->setChecked(tool == ViewportTool::DrawBezier);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -919,12 +1059,71 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     case ViewportTool::DrawLine:
         statusBar()->showMessage(QStringLiteral("直線作図モード"), 2500);
         break;
+    case ViewportTool::DrawPolyline:
+        statusBar()->showMessage(QStringLiteral("ポリライン作図モード"), 2500);
+        break;
     case ViewportTool::DrawRectangle:
         statusBar()->showMessage(QStringLiteral("矩形作図モード"), 2500);
         break;
     case ViewportTool::DrawCircle:
         statusBar()->showMessage(QStringLiteral("円作図モード"), 2500);
         break;
+    case ViewportTool::DrawArc:
+        statusBar()->showMessage(QStringLiteral("3点円弧作図モード"), 2500);
+        break;
+    case ViewportTool::DrawBezier:
+        statusBar()->showMessage(QStringLiteral("ベジェ曲線作図モード"), 2500);
+        break;
+    }
+}
+
+void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
+{
+    QString state;
+    switch (tool) {
+    case ViewportTool::Select:
+        state = QStringLiteral("選択");
+        break;
+    case ViewportTool::DrawLine:
+        state = QStringLiteral("直線 · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("始点") : QStringLiteral("終点"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::DrawPolyline:
+        state = QStringLiteral("ポリライン  %1点").arg(pointCount);
+        break;
+    case ViewportTool::DrawRectangle:
+        state = QStringLiteral("矩形 · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("1点目") : QStringLiteral("対角点"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::DrawCircle:
+        state = QStringLiteral("円 · %1  %2 / 2点")
+            .arg(pointCount == 0 ? QStringLiteral("中心") : QStringLiteral("円周点"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::DrawArc:
+        state = QStringLiteral("3点円弧 · %1  %2 / 3点")
+            .arg(pointCount == 0 ? QStringLiteral("始点") : pointCount == 1 ? QStringLiteral("通過点") : QStringLiteral("終点"))
+            .arg(pointCount);
+        break;
+    case ViewportTool::DrawBezier:
+        state = QStringLiteral("ベジェ曲線 · %1  %2 / 4点")
+            .arg(pointCount == 0 ? QStringLiteral("始点")
+                : pointCount == 1 ? QStringLiteral("制御点1")
+                : pointCount == 2 ? QStringLiteral("制御点2")
+                                  : QStringLiteral("終点"))
+            .arg(pointCount);
+        break;
+    }
+    if (drawingStateLabel_ != nullptr) {
+        drawingStateLabel_->setText(state);
+    }
+    if (finishDrawingAction_ != nullptr) {
+        finishDrawingAction_->setEnabled(tool == ViewportTool::DrawPolyline && pointCount >= 2);
+    }
+    if (cancelDrawingAction_ != nullptr) {
+        cancelDrawingAction_->setEnabled(pointCount > 0);
     }
 }
 
@@ -937,8 +1136,11 @@ void MainWindow::RefreshActiveWorkPlane()
     viewport_->SetActiveWorkPlane(plane);
     const bool canDraw = plane.has_value();
     lineToolAction_->setEnabled(canDraw);
+    polylineToolAction_->setEnabled(canDraw);
     rectangleToolAction_->setEnabled(canDraw);
     circleToolAction_->setEnabled(canDraw);
+    arcToolAction_->setEnabled(canDraw);
+    bezierToolAction_->setEnabled(canDraw);
     if (!canDraw && viewport_->Tool() != ViewportTool::Select) {
         SetViewportTool(ViewportTool::Select);
     }
@@ -960,6 +1162,27 @@ void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
         MarkModified();
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("直線を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportPolyline(const std::vector<Vector3>& points)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        const Wire polyline = Wire::Polyline(points);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("polyline"))), polyline, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("ポリラインを作成しました"), 1800);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
     }
@@ -1008,6 +1231,48 @@ void MainWindow::AddViewportCircle(Vector3 center, double radius)
     }
 }
 
+void MainWindow::AddViewportArc(Vector3 start, Vector3 through, Vector3 end)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        const Wire arc = Wire::CircularArcThroughThreePoints(start, through, end);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("arc"))), arc, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("3点円弧を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        const Wire bezier = Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("bezier"))), bezier, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("ベジェ曲線を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
 bool MainWindow::RunCreationSelfTest()
 {
     const auto fail = [](const char* stage) {
@@ -1016,6 +1281,11 @@ bool MainWindow::RunCreationSelfTest()
     };
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
+    if (toolsTabs_->count() != 6
+        || toolsTabs_->tabText(0) != QStringLiteral("作図")
+        || activePlaneCombo_->count() == 0) {
+        return fail("drawing workbench is primary");
+    }
 
     planeName_->setText("__ui_test_plane");
     planeMethod_->setCurrentIndex(0);
@@ -1159,7 +1429,6 @@ bool MainWindow::RunCreationSelfTest()
     SetViewportTool(ViewportTool::DrawLine);
     click(center + QPointF(-150.0, 90.0));
     click(center + QPointF(-60.0, 90.0));
-    click(center + QPointF(-60.0, 25.0));
     const std::size_t afterLine = project_.Wires().size();
     SetViewportTool(ViewportTool::DrawRectangle);
     drag(center + QPointF(15.0, -105.0), center + QPointF(120.0, -35.0));
@@ -1169,17 +1438,46 @@ bool MainWindow::RunCreationSelfTest()
     click(center + QPointF(135.0, 80.0));
 
     Undo();
-    if (project_.Wires().size() != directStart + 3) {
+    if (project_.Wires().size() != directStart + 2) {
         return fail("undo direct circle");
     }
     Redo();
 
-    if (project_.Wires().size() != directStart + 4
+    SetViewportTool(ViewportTool::DrawPolyline);
+    const std::size_t beforeCancelledPolyline = project_.Wires().size();
+    click(center + QPointF(-175.0, -75.0));
+    click(center + QPointF(-135.0, -105.0));
+    cancelDrawingAction_->trigger();
+    if (viewport_->DrawingPointCount() != 0 || project_.Wires().size() != beforeCancelledPolyline) {
+        return fail("cancel direct polyline");
+    }
+    click(center + QPointF(-150.0, -20.0));
+    click(center + QPointF(-110.0, -60.0));
+    click(center + QPointF(-65.0, -20.0));
+    if (viewport_->DrawingPointCount() != 3 || !finishDrawingAction_->isEnabled()) {
+        return fail("polyline drawing state");
+    }
+    finishDrawingAction_->trigger();
+
+    SetViewportTool(ViewportTool::DrawArc);
+    click(center + QPointF(-20.0, 70.0));
+    click(center + QPointF(20.0, 35.0));
+    click(center + QPointF(60.0, 70.0));
+
+    SetViewportTool(ViewportTool::DrawBezier);
+    click(center + QPointF(-145.0, 35.0));
+    click(center + QPointF(-125.0, -5.0));
+    click(center + QPointF(-85.0, -5.0));
+    click(center + QPointF(-65.0, 35.0));
+
+    if (project_.Wires().size() != directStart + 6
         || project_.Wires()[directStart].wire.Kind() != WireKind::Line
-        || project_.Wires()[directStart + 1].wire.Kind() != WireKind::Line
-        || project_.Wires()[directStart + 2].wire.Kind() != WireKind::Polyline
-        || !project_.Wires()[directStart + 2].wire.IsClosed()
-        || project_.Wires()[directStart + 3].wire.Kind() != WireKind::Circle
+        || project_.Wires()[directStart + 1].wire.Kind() != WireKind::Polyline
+        || !project_.Wires()[directStart + 1].wire.IsClosed()
+        || project_.Wires()[directStart + 2].wire.Kind() != WireKind::Circle
+        || project_.Wires()[directStart + 3].wire.Kind() != WireKind::Polyline
+        || project_.Wires()[directStart + 4].wire.Kind() != WireKind::CircularArc
+        || project_.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
         || project_.Wires()[directStart].metadata.sourcePlaneName != drawingPlaneName
         || project_.Wires()[directStart].metadata.planePolicy != WirePlanePolicy::ReferenceOnly) {
         qWarning() << "direct drawing self-test failed"
@@ -1195,22 +1493,26 @@ bool MainWindow::RunCreationSelfTest()
     std::istringstream directDrawingInput(directDrawingScript.str());
     const Project reloadedProject = LoadProjectScript(directDrawingInput, "direct-drawing-self-test");
     if (reloadedProject.Wires().size() != project_.Wires().size()
-        || reloadedProject.Wires()[directStart + 3].wire.Kind() != WireKind::Circle
-        || reloadedProject.Wires()[directStart + 3].metadata.sourcePlaneName != drawingPlaneName) {
+        || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
+        || reloadedProject.Wires()[directStart + 5].metadata.sourcePlaneName != drawingPlaneName) {
         return fail("save and reload direct drawing");
     }
 
     SetViewportTool(ViewportTool::Select);
-    toolsTabs_->setCurrentIndex(4);
+    toolsTabs_->setCurrentIndex(0);
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(directStart)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 1)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 3)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 4)},
+        {CadSelectionKind::Wire, static_cast<int>(directStart + 5)},
     }, true);
-    SetViewportTool(ViewportTool::DrawCircle);
-    click(center + QPointF(-30.0, -45.0));
-    sendMouse(QEvent::MouseMove, center + QPointF(35.0, -45.0), Qt::NoButton, Qt::NoButton);
+    SetViewportTool(ViewportTool::DrawBezier);
+    click(center + QPointF(-35.0, -105.0));
+    click(center + QPointF(-5.0, -145.0));
+    click(center + QPointF(35.0, -145.0));
+    sendMouse(QEvent::MouseMove, center + QPointF(65.0, -105.0), Qt::NoButton, Qt::NoButton);
     return true;
 }
 

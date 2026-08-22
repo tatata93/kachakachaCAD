@@ -52,6 +52,11 @@ public:
         double startAngleRadians,
         double sweepAngleRadians);
 
+    [[nodiscard]] static Wire CircularArcThroughThreePoints(
+        geometry::Vector3 start,
+        geometry::Vector3 through,
+        geometry::Vector3 end);
+
     [[nodiscard]] WireKind Kind() const noexcept { return kind_; }
     [[nodiscard]] const std::vector<geometry::Vector3>& ControlPoints() const noexcept { return controlPoints_; }
     [[nodiscard]] geometry::Vector3 Start() const { return Evaluate(0.0); }

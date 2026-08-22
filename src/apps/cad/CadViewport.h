@@ -26,8 +26,11 @@ struct CadSelection {
 enum class ViewportTool {
     Select,
     DrawLine,
+    DrawPolyline,
     DrawRectangle,
     DrawCircle,
+    DrawArc,
+    DrawBezier,
 };
 
 class CadViewport final : public QWidget {
@@ -41,15 +44,21 @@ public:
     [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
     void SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback);
     void SetLineCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
+    void SetPolylineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
     void SetRectangleCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetCircleCreatedCallback(std::function<void(kachakacha::geometry::Vector3, double)> callback);
+    void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
+    void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
+    void SetDrawingStateChangedCallback(std::function<void(ViewportTool, std::size_t)> callback);
     void SetActiveWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
     void SetTool(ViewportTool tool);
     [[nodiscard]] ViewportTool Tool() const noexcept { return tool_; }
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
     void AlignToActiveWorkPlane();
+    void FinishDrawing();
     void CancelDrawing();
+    [[nodiscard]] std::size_t DrawingPointCount() const noexcept { return drawingPoints_.size(); }
     void FitAll();
 
 protected:
@@ -68,6 +77,7 @@ private:
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
+    void NotifyDrawingState();
     void NotifySelection();
 
     const kachakacha::model::Project* project_ = nullptr;
@@ -75,13 +85,17 @@ private:
     std::vector<CadSelection> selections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineCreated_;
+    std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> polylineCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> rectangleCreated_;
     std::function<void(kachakacha::geometry::Vector3, double)> circleCreated_;
+    std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> arcCreated_;
+    std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
+    std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
     ViewportTool tool_ = ViewportTool::Select;
     bool snapEnabled_ = true;
     double snapStep_ = 1.0;
-    std::optional<kachakacha::geometry::Vector3> pendingDrawingPoint_;
+    std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;

@@ -1,0 +1,18 @@
+# kachakachaCAD curved panel and projected light holes
+# Units: millimeters
+
+# Two section drawings define a ruled curved panel.
+plane_point_normal section_a_plane 0 0 0  1 0 0  0 1 0
+plane_point_normal section_b_plane 12 0 0  1 0 0  0 1 0
+sketch_bezier section_a section_a_plane -6 0  -2 3  2 3  6 0 reference
+sketch_bezier section_b section_b_plane -6 0  -2 5  2 5  6 0 reference
+surface_ruled nose_panel section_a section_b
+
+# The light-hole drawing stays on a separate planar sheet.
+plane_point_normal light_plan 0 0 12  0 0 1  1 0 0
+sketch_circle light_left_plan light_plan 4 0 0.85 reference
+sketch_circle light_right_plan light_plan 8 0 0.85 reference
+
+# Project both circles through the panel along the sheet normal.
+wire_project light_left_on_panel light_left_plan nose_panel 0 0 1
+wire_project light_right_on_panel light_right_plan nose_panel 0 0 1

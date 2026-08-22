@@ -19,6 +19,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/ProjectScript.cpp
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Sketch.cpp
+    src/core/kachakacha/model/Surface.cpp
     src/core/kachakacha/model/Wire.cpp
     src/core/kachakacha/model/WireOperations.cpp
     src/core/kachakacha/model/WorkPlane.cpp
@@ -94,6 +95,16 @@ if(WIN32)
                         --self-test
                         --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd"
                 )
+                add_test(
+                    NAME qt_surface_sample_smoke
+                    COMMAND ${CMAKE_COMMAND} -E env
+                        "QT_QPA_PLATFORM=offscreen"
+                        "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}"
+                        $<TARGET_FILE:kachakacha_cad>
+                        --project "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
+                        --snapshot "${CMAKE_CURRENT_BINARY_DIR}/surface-sample-smoke.png"
+                )
             endif()
         else()
             message(WARNING "Qt 6.5 or newer was not found; kachakacha_cad will not be built.")
@@ -156,6 +167,17 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME planar_export_tests COMMAND kachakacha_planar_export_tests)
+
+    add_executable(kachakacha_surface_tests
+        tests/surface_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_surface_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME surface_tests COMMAND kachakacha_surface_tests)
 
     if(WIN32)
         add_test(

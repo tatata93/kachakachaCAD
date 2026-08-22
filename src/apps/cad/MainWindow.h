@@ -41,6 +41,7 @@ private:
     QWidget* BuildWirePanel();
     QWidget* BuildEditPanel();
     QWidget* BuildMachiningPanel();
+    QWidget* BuildSurfacePanel();
     QWidget* BuildOutputPanel();
     QWidget* BuildInfoPanel();
     void BuildMenusAndToolbar();
@@ -72,6 +73,8 @@ private:
     void UseReferenceForPlaneRotation();
     void ApplyLineChamfer();
     void ApplyLineFillet();
+    void CreateSurfaceFromSelection();
+    void ProjectSelectedWiresToSurface();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshActiveWorkPlane();
@@ -89,6 +92,7 @@ private:
     void RefreshModelViews(bool fitView = false);
     void RefreshPlaneChoices();
     void RefreshWireChoices();
+    void RefreshSurfaceChoices();
     void RefreshExportSummary();
     void UpdateSelection(CadSelection selection, bool updateTree);
     void UpdateSelections(std::vector<CadSelection> selections, bool updateTree);
@@ -103,6 +107,7 @@ private:
     QString SuggestedDirectGroupName(const QString& prefix) const;
     QString SuggestedChamferName() const;
     QString SuggestedFilletName() const;
+    QString SuggestedSurfaceName() const;
 
     kachakacha::model::Project project_;
     QString currentPath_;
@@ -172,6 +177,13 @@ private:
     QDoubleSpinBox* chamferSecondDistance_ = nullptr;
     QDoubleSpinBox* filletRadius_ = nullptr;
     int pendingMachiningPickSlot_ = -1;
+
+    QLineEdit* surfaceName_ = nullptr;
+    QComboBox* surfaceType_ = nullptr;
+    QLabel* surfaceSelectionLabel_ = nullptr;
+    QComboBox* projectionSurface_ = nullptr;
+    QComboBox* projectionPlane_ = nullptr;
+    QLabel* projectionSelectionLabel_ = nullptr;
 
     QComboBox* exportPlane_ = nullptr;
     QComboBox* exportScope_ = nullptr;

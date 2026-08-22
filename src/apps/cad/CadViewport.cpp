@@ -362,6 +362,15 @@ void CadViewport::FitAll()
             include(wire.wire.Evaluate(static_cast<double>(sample) / 32.0));
         }
     }
+    for (const auto& surface : project_->Surfaces()) {
+        for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+            for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                include(surface.surface.Evaluate(
+                    static_cast<double>(uIndex) / 24.0,
+                    static_cast<double>(vIndex) / 8.0));
+            }
+        }
+    }
     for (const auto& plane : project_->WorkPlanes()) {
         include(plane.plane.Origin());
     }
@@ -608,6 +617,44 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawLine(ProjectPoint(plane.Origin()), ProjectPoint(plane.ToWorld(4.0, 0.0)));
             painter.setPen(QPen(QColor("#8b5a2b"), 1.7));
             painter.drawLine(ProjectPoint(plane.Origin()), ProjectPoint(plane.ToWorld(0.0, 4.0)));
+        }
+
+        for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
+            const auto& surface = project_->Surfaces()[index].surface;
+            const bool selected = IsSelected(CadSelectionKind::Surface, index);
+            const QColor fill = selected ? QColor(230, 159, 0, 90) : QColor(31, 132, 138, 66);
+            const QColor edge = selected ? QColor("#c47a13") : QColor("#277b80");
+            if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
+                QPainterPath boundary(ProjectPoint(surface.FirstBoundary().Evaluate(0.0)));
+                for (int sample = 1; sample <= 128; ++sample) {
+                    boundary.lineTo(ProjectPoint(surface.FirstBoundary().Evaluate(static_cast<double>(sample) / 128.0)));
+                }
+                boundary.closeSubpath();
+                painter.setBrush(fill);
+                painter.setPen(QPen(edge, selected ? 2.5 : 1.4));
+                painter.drawPath(boundary);
+            } else {
+                painter.setPen(QPen(edge, selected ? 1.8 : 0.7));
+                for (int uIndex = 0; uIndex < 32; ++uIndex) {
+                    for (int vIndex = 0; vIndex < 10; ++vIndex) {
+                        const double u0 = static_cast<double>(uIndex) / 32.0;
+                        const double u1 = static_cast<double>(uIndex + 1) / 32.0;
+                        const double v0 = static_cast<double>(vIndex) / 10.0;
+                        const double v1 = static_cast<double>(vIndex + 1) / 10.0;
+                        QPolygonF patch;
+                        patch << ProjectPoint(surface.Evaluate(u0, v0))
+                              << ProjectPoint(surface.Evaluate(u1, v0))
+                              << ProjectPoint(surface.Evaluate(u1, v1))
+                              << ProjectPoint(surface.Evaluate(u0, v1));
+                        QColor patchFill = fill;
+                        if ((uIndex + vIndex) % 2 != 0) {
+                            patchFill.setAlpha(std::max(16, patchFill.alpha() - 14));
+                        }
+                        painter.setBrush(patchFill);
+                        painter.drawPolygon(patch);
+                    }
+                }
+            }
         }
 
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
@@ -912,6 +959,36 @@ CadSelection CadViewport::HitTest(QPointF position) const
     }
     if (best.kind != CadSelectionKind::None) {
         return best;
+    }
+
+    for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
+        const auto& surface = project_->Surfaces()[index].surface;
+        if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
+            QPolygonF polygon;
+            for (int sample = 0; sample < 128; ++sample) {
+                polygon << ProjectPoint(surface.FirstBoundary().Evaluate(static_cast<double>(sample) / 128.0));
+            }
+            if (polygon.containsPoint(position, Qt::OddEvenFill)) {
+                return {CadSelectionKind::Surface, index};
+            }
+            continue;
+        }
+        for (int uIndex = 0; uIndex < 24; ++uIndex) {
+            for (int vIndex = 0; vIndex < 8; ++vIndex) {
+                const double u0 = static_cast<double>(uIndex) / 24.0;
+                const double u1 = static_cast<double>(uIndex + 1) / 24.0;
+                const double v0 = static_cast<double>(vIndex) / 8.0;
+                const double v1 = static_cast<double>(vIndex + 1) / 8.0;
+                QPolygonF patch;
+                patch << ProjectPoint(surface.Evaluate(u0, v0))
+                      << ProjectPoint(surface.Evaluate(u1, v0))
+                      << ProjectPoint(surface.Evaluate(u1, v1))
+                      << ProjectPoint(surface.Evaluate(u0, v1));
+                if (patch.containsPoint(position, Qt::OddEvenFill)) {
+                    return {CadSelectionKind::Surface, index};
+                }
+            }
+        }
     }
 
     for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {

@@ -87,25 +87,97 @@ void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
         throw std::invalid_argument("Wire source plane does not exist: " + *metadata.sourcePlaneName);
     }
 
-    wires_.push_back({std::move(name), std::move(wire), std::move(metadata)});
+    wires_.push_back({std::move(name), std::move(wire), std::move(metadata), std::nullopt});
+}
+
+void Project::AddPlanarSurface(std::string name, std::string boundaryWireName)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    const NamedWire& boundary = RequireWire(boundaryWireName);
+    if (boundary.projection.has_value()) {
+        throw std::invalid_argument("Projected wire cannot be used as a planar surface source.");
+    }
+    surfaces_.push_back({std::move(name), Surface::Planar(boundary.wire), {std::move(boundaryWireName)}});
+}
+
+void Project::AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    if (firstSectionName == secondSectionName) {
+        throw std::invalid_argument("Ruled surface requires two different section wires.");
+    }
+    const NamedWire& first = RequireWire(firstSectionName);
+    const NamedWire& second = RequireWire(secondSectionName);
+    if (first.projection.has_value() || second.projection.has_value()) {
+        throw std::invalid_argument("Projected wire cannot be used as a ruled surface section.");
+    }
+    surfaces_.push_back({
+        std::move(name),
+        Surface::Ruled(first.wire, second.wire),
+        {std::move(firstSectionName), std::move(secondSectionName)},
+    });
+}
+
+void Project::AddProjectedWire(
+    std::string name,
+    std::string sourceWireName,
+    std::string targetSurfaceName,
+    geometry::Vector3 direction)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Projected wire name must not be empty.");
+    }
+    for (const NamedWire& existingWire : wires_) {
+        if (existingWire.name == name) {
+            throw std::invalid_argument("Wire name already exists: " + name);
+        }
+    }
+    const NamedWire& source = RequireWire(sourceWireName);
+    if (source.projection.has_value()) {
+        throw std::invalid_argument("A projected wire cannot be used as another projection source.");
+    }
+    const std::optional<Surface> surface = FindSurface(targetSurfaceName);
+    if (!surface.has_value()) {
+        throw std::invalid_argument("Projection surface does not exist: " + targetSurfaceName);
+    }
+    Wire projected = surface->ProjectWireAlongDirection(source.wire, direction);
+    wires_.push_back({
+        std::move(name),
+        std::move(projected),
+        {},
+        NamedWire::Projection{std::move(sourceWireName), std::move(targetSurfaceName), direction},
+    });
 }
 
 void Project::UpdateWorkPlane(std::string_view name, WorkPlane plane)
 {
-    for (NamedWorkPlane& namedPlane : workPlanes_) {
+    Project candidate = *this;
+    for (NamedWorkPlane& namedPlane : candidate.workPlanes_) {
         if (namedPlane.name != name) {
             continue;
         }
 
         const WorkPlane oldPlane = namedPlane.plane;
         namedPlane.plane = plane;
-        for (NamedWire& wire : wires_) {
+        for (NamedWire& wire : candidate.wires_) {
             if (wire.metadata.planePolicy == WirePlanePolicy::LockedToPlane
                 && wire.metadata.sourcePlaneName.has_value()
                 && *wire.metadata.sourcePlaneName == name) {
                 wire.wire = ReframeWire(wire.wire, oldPlane, plane);
             }
         }
+        candidate.RebuildDependentGeometry();
+        *this = std::move(candidate);
         return;
     }
     throw std::invalid_argument("Work plane name does not exist: " + std::string(name));
@@ -113,9 +185,15 @@ void Project::UpdateWorkPlane(std::string_view name, WorkPlane plane)
 
 void Project::UpdateWire(std::string_view name, Wire wire)
 {
-    for (NamedWire& namedWire : wires_) {
+    Project candidate = *this;
+    for (NamedWire& namedWire : candidate.wires_) {
         if (namedWire.name == name) {
+            if (namedWire.projection.has_value()) {
+                throw std::invalid_argument("Projected wire must be edited through its source drawing.");
+            }
             namedWire.wire = std::move(wire);
+            candidate.RebuildDependentGeometry();
+            *this = std::move(candidate);
             return;
         }
     }
@@ -165,7 +243,35 @@ bool Project::RemoveWire(std::string_view name)
         return false;
     }
 
+    for (const NamedSurface& surface : surfaces_) {
+        if (std::find(surface.sourceWireNames.begin(), surface.sourceWireNames.end(), name) != surface.sourceWireNames.end()) {
+            throw std::invalid_argument("Wire is used by surface: " + surface.name);
+        }
+    }
+    for (const NamedWire& wire : wires_) {
+        if (wire.projection.has_value() && wire.projection->sourceWireName == name) {
+            throw std::invalid_argument("Wire is used as a projection drawing: " + wire.name);
+        }
+    }
+
     wires_.erase(position);
+    return true;
+}
+
+bool Project::RemoveSurface(std::string_view name)
+{
+    const auto position = std::find_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+        return surface.name == name;
+    });
+    if (position == surfaces_.end()) {
+        return false;
+    }
+    for (const NamedWire& wire : wires_) {
+        if (wire.projection.has_value() && wire.projection->targetSurfaceName == name) {
+            throw std::invalid_argument("Surface is used by projected wire: " + wire.name);
+        }
+    }
+    surfaces_.erase(position);
     return true;
 }
 
@@ -178,6 +284,51 @@ std::optional<WorkPlane> Project::FindWorkPlane(std::string_view name) const
     }
 
     return std::nullopt;
+}
+
+std::optional<Surface> Project::FindSurface(std::string_view name) const
+{
+    for (const NamedSurface& surface : surfaces_) {
+        if (surface.name == name) {
+            return surface.surface;
+        }
+    }
+    return std::nullopt;
+}
+
+const NamedWire& Project::RequireWire(std::string_view name) const
+{
+    const auto wire = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& candidate) {
+        return candidate.name == name;
+    });
+    if (wire == wires_.end()) {
+        throw std::invalid_argument("Wire name does not exist: " + std::string(name));
+    }
+    return *wire;
+}
+
+void Project::RebuildDependentGeometry()
+{
+    for (NamedSurface& surface : surfaces_) {
+        if (surface.surface.Kind() == SurfaceKind::Planar) {
+            surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);
+        } else {
+            surface.surface = Surface::Ruled(
+                RequireWire(surface.sourceWireNames.at(0)).wire,
+                RequireWire(surface.sourceWireNames.at(1)).wire);
+        }
+    }
+    for (NamedWire& wire : wires_) {
+        if (!wire.projection.has_value()) {
+            continue;
+        }
+        const NamedWire& source = RequireWire(wire.projection->sourceWireName);
+        const std::optional<Surface> surface = FindSurface(wire.projection->targetSurfaceName);
+        if (!surface.has_value()) {
+            throw std::logic_error("Projected wire target surface is missing.");
+        }
+        wire.wire = surface->ProjectWireAlongDirection(source.wire, wire.projection->direction);
+    }
 }
 
 } // namespace kachakacha::model

@@ -118,6 +118,50 @@ void WrittenProjectRoundTrips()
     Require(roundTripped.Wires()[4].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "roundtrip arc policy");
 }
 
+void SurfacesAndProjectedWiresRoundTrip()
+{
+    std::istringstream input(R"(
+        plane_point_normal plan 0 0 12  0 0 1  1 0 0
+        bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+        bezier3d section_b 12 -6 0  12 -2 5  12 2 5  12 6 0
+        sketch_circle light_plan plan 6 0 1.25 reference
+        surface_ruled nose_skin section_a section_b
+        wire_project light_on_skin light_plan nose_skin 0 0 -1
+    )");
+    auto project = LoadProjectScript(input, "surface-test");
+    Require(project.Surfaces().size() == 1, "surface count");
+    Require(project.Wires().size() == 4, "projected wire count");
+    Require(project.Wires()[3].projection.has_value(), "projection relation exists");
+    Require(project.Wires()[3].wire.IsClosed(), "projected light remains closed");
+
+    const Vector3 beforeUpdate = project.Wires()[3].wire.Evaluate(0.25);
+    project.UpdateWire("section_b", Wire::CubicBezier(
+        {12.0, -6.0, 0.0}, {12.0, -2.0, 7.0}, {12.0, 2.0, 7.0}, {12.0, 6.0, 0.0}));
+    Require(!AlmostEqual(beforeUpdate, project.Wires()[3].wire.Evaluate(0.25), 1.0e-6), "projection rebuilds after section edit");
+
+    const Vector3 sectionBeforeRejectedEdit = project.Wires()[1].wire.Start();
+    const Vector3 projectionBeforeRejectedEdit = project.Wires()[3].wire.Evaluate(0.25);
+    bool invalidEditRejected = false;
+    try {
+        project.UpdateWire("section_b", Wire::CubicBezier(
+            {0.0, -6.0, 0.0}, {0.0, -2.0, 3.0}, {0.0, 2.0, 3.0}, {0.0, 6.0, 0.0}));
+    } catch (const std::invalid_argument&) {
+        invalidEditRejected = true;
+    }
+    Require(invalidEditRejected, "invalid dependent edit is rejected");
+    RequireNear(project.Wires()[1].wire.Start(), sectionBeforeRejectedEdit, "rejected edit keeps source section");
+    RequireNear(project.Wires()[3].wire.Evaluate(0.25), projectionBeforeRejectedEdit, "rejected edit keeps projection");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "surface-roundtrip");
+    Require(roundTripped.Surfaces().size() == 1, "roundtrip surface count");
+    Require(roundTripped.Wires().size() == 4, "roundtrip projected wire count");
+    Require(roundTripped.Wires()[3].projection->sourceWireName == "light_plan", "roundtrip projection source");
+    RequireNear(roundTripped.Wires()[3].wire.Evaluate(0.5), project.Wires()[3].wire.Evaluate(0.5), "roundtrip projected geometry");
+}
+
 void UnknownPlaneIsRejected()
 {
     std::istringstream input("sketch_line bad missing 0 0 1 1");
@@ -178,6 +222,7 @@ int main()
         LoadsPlanesAndWires();
         LoadsWireMetadataForDirectWires();
         WrittenProjectRoundTrips();
+        SurfacesAndProjectedWiresRoundTrip();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

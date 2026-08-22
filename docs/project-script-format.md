@@ -124,6 +124,28 @@ reference  作成元平面を2D編集の基準として使う
 locked     作成元平面上に固定する
 ```
 
+### 閉じたワイヤーから平面
+
+```text
+surface_planar NAME BOUNDARY_WIRE
+```
+
+### 2断面からルールド面
+
+```text
+surface_ruled NAME SECTION_WIRE_A SECTION_WIRE_B
+```
+
+断面ワイヤーの向きが逆の場合は、端点の対応が短くなる向きへ自動でそろえる。
+
+### 平面図ワイヤーを面へ投影
+
+```text
+wire_project NAME SOURCE_WIRE TARGET_SURFACE dx dy dz
+```
+
+投影元の平面図、対象面、投影方向を関係として保持する。断面または元の平面図を編集すると、面と投影ワイヤーを再計算する。
+
 ## 実行
 
 ```powershell

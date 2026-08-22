@@ -62,6 +62,7 @@ using kachakacha::io::WritePlanarSvg;
 using kachakacha::io::WriteProjectScript;
 using kachakacha::model::Project;
 using kachakacha::model::Sketch;
+using kachakacha::model::SurfaceKind;
 using kachakacha::model::Wire;
 using kachakacha::model::WireKind;
 using kachakacha::model::WireMetadata;
@@ -343,6 +344,7 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("数値入力"));
     toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
     toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
+    toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
     toolsDock->setWidget(toolsTabs_);
@@ -949,6 +951,59 @@ QWidget* MainWindow::BuildMachiningPanel()
         chamferName_->setText(index == 0 ? SuggestedChamferName() : SuggestedFilletName());
     });
     layout->addWidget(machiningApplyButton_);
+    layout->addStretch(1);
+    return panel;
+}
+
+QWidget* MainWindow::BuildSurfacePanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    auto* createTitle = new QLabel(QStringLiteral("ワイヤーから面"));
+    createTitle->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(createTitle);
+
+    auto* createForm = new QFormLayout;
+    createForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    surfaceType_ = new QComboBox;
+    surfaceType_->addItems({QStringLiteral("閉じた1本から平面"), QStringLiteral("2断面から曲面")});
+    surfaceName_ = new QLineEdit(QStringLiteral("surface_1"));
+    createForm->addRow(QStringLiteral("作り方"), surfaceType_);
+    createForm->addRow(QStringLiteral("面の名前"), surfaceName_);
+    layout->addLayout(createForm);
+
+    surfaceSelectionLabel_ = new QLabel(QStringLiteral("選択: ワイヤー0本"));
+    surfaceSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(surfaceSelectionLabel_);
+
+    auto* createButton = new QPushButton(QStringLiteral("選択ワイヤーから面を作成"));
+    createButton->setObjectName("primaryButton");
+    connect(createButton, &QPushButton::clicked, this, &MainWindow::CreateSurfaceFromSelection);
+    layout->addWidget(createButton);
+
+    auto* projectionTitle = new QLabel(QStringLiteral("平面図を面へ投影"));
+    projectionTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(projectionTitle);
+
+    auto* projectionForm = new QFormLayout;
+    projectionForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    projectionSurface_ = new QComboBox;
+    projectionPlane_ = new QComboBox;
+    projectionForm->addRow(QStringLiteral("投影先の面"), projectionSurface_);
+    projectionForm->addRow(QStringLiteral("平面図"), projectionPlane_);
+    layout->addLayout(projectionForm);
+
+    projectionSelectionLabel_ = new QLabel(QStringLiteral("投影するワイヤー: 0本"));
+    projectionSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(projectionSelectionLabel_);
+
+    auto* projectButton = new QPushButton(QStringLiteral("選択ワイヤーを面へ投影"));
+    projectButton->setObjectName("primaryButton");
+    connect(projectButton, &QPushButton::clicked, this, &MainWindow::ProjectSelectedWiresToSurface);
+    layout->addWidget(projectButton);
     layout->addStretch(1);
     return panel;
 }
@@ -2000,6 +2055,117 @@ void MainWindow::JoinSelectedWires()
     }
 }
 
+void MainWindow::CreateSurfaceFromSelection()
+{
+    try {
+        ValidateObjectName(surfaceName_->text());
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+
+        const bool planar = surfaceType_->currentIndex() == 0;
+        if ((planar && wireIndices.size() != 1) || (!planar && wireIndices.size() != 2)) {
+            throw std::invalid_argument(planar
+                    ? "閉じたワイヤーを1本だけ選択してください。"
+                    : "断面ワイヤーを2本選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string name = ToName(surfaceName_->text());
+        if (planar) {
+            candidate.AddPlanarSurface(name, candidate.Wires()[wireIndices[0]].name);
+        } else {
+            candidate.AddRuledSurface(
+                name,
+                candidate.Wires()[wireIndices[0]].name,
+                candidate.Wires()[wireIndices[1]].name);
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const int surfaceIndex = static_cast<int>(project_.Surfaces().size() - 1);
+        UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
+        toolsTabs_->setCurrentIndex(5);
+        surfaceName_->setText(SuggestedSurfaceName());
+        statusBar()->showMessage(planar
+                ? QStringLiteral("閉じたワイヤーから平面を作成しました")
+                : QStringLiteral("2断面から曲面を作成しました"),
+            3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ProjectSelectedWiresToSurface()
+{
+    try {
+        const std::optional<WorkPlane> drawingPlane = project_.FindWorkPlane(ToName(projectionPlane_->currentText()));
+        const std::optional<kachakacha::model::Surface> targetSurface = project_.FindSurface(ToName(projectionSurface_->currentText()));
+        if (!drawingPlane.has_value()) {
+            throw std::invalid_argument("平面図を描いた作業平面を選択してください。");
+        }
+        if (!targetSurface.has_value()) {
+            throw std::invalid_argument("投影先の面を選択してください。");
+        }
+
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.empty()) {
+            throw std::invalid_argument("投影する平面図ワイヤーを3D画面で選択してください。");
+        }
+        for (int index : wireIndices) {
+            const auto& source = project_.Wires()[index];
+            if (source.projection.has_value()) {
+                throw std::invalid_argument("投影後のワイヤーではなく、元の平面図を選択してください。");
+            }
+            if (!WireLiesOnPlane(source.wire, *drawingPlane)) {
+                throw std::invalid_argument("選択ワイヤーが指定した平面図上にありません。");
+            }
+        }
+        Project candidate = project_;
+        std::vector<std::string> createdNames;
+        for (int index : wireIndices) {
+            const std::string sourceName = project_.Wires()[index].name;
+            const QString name = SuggestedDirectGroupName(
+                ToQString(sourceName) + QStringLiteral("_on_") + projectionSurface_->currentText());
+            candidate.AddProjectedWire(
+                ToName(name), sourceName, ToName(projectionSurface_->currentText()), drawingPlane->Normal());
+            createdNames.push_back(ToName(name));
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        std::vector<CadSelection> resultingSelections;
+        for (const std::string& name : createdNames) {
+            const auto found = std::find_if(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
+                return wire.name == name;
+            });
+            resultingSelections.push_back({
+                CadSelectionKind::Wire,
+                static_cast<int>(std::distance(project_.Wires().begin(), found)),
+            });
+        }
+        UpdateSelections(std::move(resultingSelections), true);
+        toolsTabs_->setCurrentIndex(5);
+        statusBar()->showMessage(QStringLiteral("%1本の平面図ワイヤーを面へ投影しました").arg(createdNames.size()), 4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::ApplyMeetSelectedLines()
 {
     try {
@@ -2042,9 +2208,10 @@ bool MainWindow::RunCreationSelfTest()
     };
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
-    if (toolsTabs_->count() != 7
+    if (toolsTabs_->count() != 8
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
-        || toolsTabs_->tabText(5) != QStringLiteral("出力")
+        || toolsTabs_->tabText(5) != QStringLiteral("面")
+        || toolsTabs_->tabText(6) != QStringLiteral("出力")
         || activePlaneCombo_->count() == 0) {
         return fail("drawing workbench is primary");
     }
@@ -2476,6 +2643,67 @@ bool MainWindow::RunCreationSelfTest()
         return fail("planar output from UI project");
     }
 
+    const std::size_t surfaceWireStart = project_.Wires().size();
+    const std::size_t surfaceStart = project_.Surfaces().size();
+    project_.AddWorkPlane("__ui_section_a_plane", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
+    project_.AddWorkPlane("__ui_section_b_plane", WorkPlane::FromPointNormal({12.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
+    project_.AddWorkPlane("__ui_light_plan", WorkPlane::FromPointNormal({0.0, 0.0, 12.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
+    project_.AddWire("__ui_section_a", Wire::CubicBezier(
+        {0.0, -6.0, 0.0}, {0.0, -2.0, 3.0}, {0.0, 2.0, 3.0}, {0.0, 6.0, 0.0}),
+        WireMetadata{"__ui_section_a_plane", WirePlanePolicy::ReferenceOnly});
+    project_.AddWire("__ui_section_b", Wire::CubicBezier(
+        {12.0, -6.0, 0.0}, {12.0, -2.0, 5.0}, {12.0, 2.0, 5.0}, {12.0, 6.0, 0.0}),
+        WireMetadata{"__ui_section_b_plane", WirePlanePolicy::ReferenceOnly});
+    project_.AddWire("__ui_light_plan_circle", Wire::Circle(
+        {6.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25),
+        WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly});
+    RefreshModelViews(false);
+
+    surfaceType_->setCurrentIndex(1);
+    surfaceName_->setText("__ui_nose_skin");
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 1)},
+    }, true);
+    CreateSurfaceFromSelection();
+    if (project_.Surfaces().size() != surfaceStart + 1
+        || project_.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Ruled
+        || viewport_->Selection().kind != CadSelectionKind::Surface) {
+        return fail("create ruled surface from selected sections");
+    }
+    Undo();
+    if (project_.Surfaces().size() != surfaceStart) {
+        return fail("undo ruled surface");
+    }
+    Redo();
+    if (project_.Surfaces().size() != surfaceStart + 1) {
+        return fail("redo ruled surface");
+    }
+
+    projectionSurface_->setCurrentText("__ui_nose_skin");
+    projectionPlane_->setCurrentText("__ui_light_plan");
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
+        {CadSelectionKind::Surface, static_cast<int>(surfaceStart)},
+    }, true);
+    ProjectSelectedWiresToSurface();
+    const std::size_t projectedLightIndex = surfaceWireStart + 3;
+    if (project_.Wires().size() != surfaceWireStart + 4
+        || !project_.Wires()[projectedLightIndex].projection.has_value()
+        || project_.Wires()[projectedLightIndex].projection->sourceWireName != "__ui_light_plan_circle"
+        || !project_.Wires()[projectedLightIndex].wire.IsClosed()) {
+        return fail("project planar light drawing to selected surface");
+    }
+    Undo();
+    if (project_.Wires().size() != surfaceWireStart + 3) {
+        return fail("undo surface projection");
+    }
+    Redo();
+    if (project_.Wires().size() != surfaceWireStart + 4
+        || !project_.Wires()[projectedLightIndex].projection.has_value()) {
+        return fail("redo surface projection");
+    }
+
     std::ostringstream directDrawingScript;
     WriteProjectScript(directDrawingScript, project_);
     std::istringstream directDrawingInput(directDrawingScript.str());
@@ -2485,18 +2713,19 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
         || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
         || reloadedProject.Wires()[splitStart].wire.Kind() != WireKind::Polyline
+        || reloadedProject.Surfaces().size() != project_.Surfaces().size()
+        || !reloadedProject.Wires()[projectedLightIndex].projection.has_value()
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
     }
 
-    toolsTabs_->setCurrentIndex(5);
+    SetViewportTool(ViewportTool::Select);
+    viewport_->SetIsometricView();
+    viewport_->FitAll();
     UpdateSelections({
-        {CadSelectionKind::Wire, static_cast<int>(mirrorStart)},
-        {CadSelectionKind::Wire, static_cast<int>(mirrorStart + 1)},
+        {CadSelectionKind::Surface, static_cast<int>(surfaceStart)},
+        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
     }, true);
-    SetViewportTool(ViewportTool::MoveSelection);
-    click(center + QPointF(-25.0, -135.0));
-    sendMouse(QEvent::MouseMove, center + QPointF(45.0, -105.0), Qt::NoButton, Qt::NoButton);
     toolsTabs_->setCurrentIndex(5);
     return true;
 }
@@ -2652,16 +2881,18 @@ void MainWindow::ApplySelectedEdit()
             && selection.index >= 0
             && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
             const auto& namedPlane = project_.WorkPlanes()[selection.index];
+            const std::string planeName = namedPlane.name;
             const WorkPlane replacement = WorkPlane::FromOriginAxes(
                 ReadVector3(editPlaneOrigin_),
                 ReadVector3(editPlaneUAxis_),
                 ReadVector3(editPlaneNormal_));
             RecordUndo();
-            project_.UpdateWorkPlane(namedPlane.name, replacement);
+            project_.UpdateWorkPlane(planeName, replacement);
         } else if (selection.kind == CadSelectionKind::Wire
             && selection.index >= 0
             && selection.index < static_cast<int>(project_.Wires().size())) {
             const auto& namedWire = project_.Wires()[selection.index];
+            const std::string wireName = namedWire.name;
             std::optional<Wire> replacement;
             switch (namedWire.wire.Kind()) {
             case WireKind::Line:
@@ -2711,8 +2942,8 @@ void MainWindow::ApplySelectedEdit()
             metadata.planePolicy = static_cast<WirePlanePolicy>(editWirePolicy_->currentIndex());
 
             RecordUndo();
-            project_.UpdateWire(namedWire.name, *replacement);
-            project_.SetWireMetadata(namedWire.name, metadata);
+            project_.UpdateWire(wireName, *replacement);
+            project_.SetWireMetadata(wireName, metadata);
         } else {
             statusBar()->showMessage(QStringLiteral("編集する項目を選択してください"), 2500);
             return;
@@ -2896,12 +3127,20 @@ void MainWindow::DeleteSelection()
 
     QString name;
     QString detail;
-    if (selection.kind == CadSelectionKind::WorkPlane && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+    if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
+        && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
         name = ToQString(project_.WorkPlanes()[selection.index].name);
         detail = QStringLiteral("作業平面を削除します。平面から作ったワイヤーは3D形状として残ります。");
-    } else if (selection.kind == CadSelectionKind::Wire && selection.index < static_cast<int>(project_.Wires().size())) {
+    } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Wires().size())) {
         name = ToQString(project_.Wires()[selection.index].name);
-        detail = QStringLiteral("ワイヤーを削除します。");
+        detail = project_.Wires()[selection.index].projection.has_value()
+            ? QStringLiteral("面へ投影したワイヤーを削除します。元の平面図は残ります。")
+            : QStringLiteral("ワイヤーを削除します。");
+    } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Surfaces().size())) {
+        name = ToQString(project_.Surfaces()[selection.index].name);
+        detail = QStringLiteral("面を削除します。先に面上の投影ワイヤーを削除してください。");
     } else {
         return;
     }
@@ -2909,16 +3148,23 @@ void MainWindow::DeleteSelection()
     if (QMessageBox::question(this, QStringLiteral("削除"), QStringLiteral("%1\n\n%2").arg(name, detail)) != QMessageBox::Yes) {
         return;
     }
-    if (selection.kind == CadSelectionKind::WorkPlane) {
+    try {
+        Project candidate = project_;
+        if (selection.kind == CadSelectionKind::WorkPlane) {
+            candidate.RemoveWorkPlane(ToName(name));
+        } else if (selection.kind == CadSelectionKind::Wire) {
+            candidate.RemoveWire(ToName(name));
+        } else {
+            candidate.RemoveSurface(ToName(name));
+        }
         RecordUndo();
-        project_.RemoveWorkPlane(ToName(name));
-    } else {
-        RecordUndo();
-        project_.RemoveWire(ToName(name));
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("削除しました: %1").arg(name), 3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
-    MarkModified();
-    RefreshModelViews(false);
-    statusBar()->showMessage(QStringLiteral("削除しました: %1").arg(name), 3000);
 }
 
 void MainWindow::RefreshModelViews(bool fitView)
@@ -2937,12 +3183,20 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Wire));
         item->setData(0, kSelectionIndexRole, index);
     }
+    auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
+    for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+        auto* item = new QTreeWidgetItem(surfaceRoot, {ToQString(project_.Surfaces()[index].name)});
+        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Surface));
+        item->setData(0, kSelectionIndexRole, index);
+    }
     planeRoot->setExpanded(true);
     wireRoot->setExpanded(true);
+    surfaceRoot->setExpanded(true);
     modelTree_->blockSignals(false);
 
     RefreshPlaneChoices();
     RefreshWireChoices();
+    RefreshSurfaceChoices();
     viewport_->SetProject(&project_, fitView);
     RefreshActiveWorkPlane();
     RefreshReference();
@@ -2971,6 +3225,7 @@ void MainWindow::RefreshPlaneChoices()
     refresh(wirePlane_);
     refresh(activePlaneCombo_);
     refresh(exportPlane_);
+    refresh(projectionPlane_);
 
     const QString previousEditSource = editWireSourcePlane_->currentText();
     editWireSourcePlane_->clear();
@@ -3002,6 +3257,23 @@ void MainWindow::RefreshWireChoices()
     refresh(chamferSecondWire_);
     if (chamferSecondWire_->count() > 1 && chamferSecondWire_->currentIndex() == chamferFirstWire_->currentIndex()) {
         chamferSecondWire_->setCurrentIndex(1);
+    }
+}
+
+void MainWindow::RefreshSurfaceChoices()
+{
+    if (projectionSurface_ == nullptr) {
+        return;
+    }
+    const QSignalBlocker blocker(projectionSurface_);
+    const QString previous = projectionSurface_->currentText();
+    projectionSurface_->clear();
+    for (const auto& surface : project_.Surfaces()) {
+        projectionSurface_->addItem(ToQString(surface.name));
+    }
+    const int previousIndex = projectionSurface_->findText(previous);
+    if (previousIndex >= 0) {
+        projectionSurface_->setCurrentIndex(previousIndex);
     }
 }
 
@@ -3068,6 +3340,39 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         modelTree_->blockSignals(false);
     }
 
+    std::size_t selectedWireCount = 0;
+    std::size_t selectedSurfaceCount = 0;
+    for (const CadSelection& item : selections) {
+        if (item.kind == CadSelectionKind::Wire && item.index >= 0
+            && item.index < static_cast<int>(project_.Wires().size())) {
+            ++selectedWireCount;
+            const auto& wire = project_.Wires()[item.index];
+            if (!wire.projection.has_value() && wire.metadata.sourcePlaneName.has_value() && projectionPlane_ != nullptr) {
+                const int planeIndex = projectionPlane_->findText(ToQString(*wire.metadata.sourcePlaneName));
+                if (planeIndex >= 0) {
+                    projectionPlane_->setCurrentIndex(planeIndex);
+                }
+            }
+        } else if (item.kind == CadSelectionKind::Surface && item.index >= 0
+            && item.index < static_cast<int>(project_.Surfaces().size())) {
+            ++selectedSurfaceCount;
+            if (projectionSurface_ != nullptr) {
+                const int surfaceIndex = projectionSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
+                if (surfaceIndex >= 0) {
+                    projectionSurface_->setCurrentIndex(surfaceIndex);
+                }
+            }
+        }
+    }
+    if (surfaceSelectionLabel_ != nullptr) {
+        surfaceSelectionLabel_->setText(QStringLiteral("選択: ワイヤー%1本 / 面%2枚")
+                .arg(selectedWireCount)
+                .arg(selectedSurfaceCount));
+    }
+    if (projectionSelectionLabel_ != nullptr) {
+        projectionSelectionLabel_->setText(QStringLiteral("投影するワイヤー: %1本").arg(selectedWireCount));
+    }
+
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
     if (pendingMachiningPickSlot_ >= 0 && selection.kind == CadSelectionKind::Wire
         && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
@@ -3096,8 +3401,31 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())) {
         const auto& named = project_.Wires()[selection.index];
         const QString source = named.metadata.sourcePlaneName.has_value() ? ToQString(*named.metadata.sourcePlaneName) : QStringLiteral("なし");
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>平面との関係: %3<br>作成元平面: %4<br><br>始点<br>%5<br><br>終点<br>%6")
-            .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End())));
+        if (named.projection.has_value()) {
+            infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 面上の投影ワイヤー<br>元の平面図: %2<br>対象面: %3<br>投影方向<br>%4<br><br>始点<br>%5<br><br>終点<br>%6")
+                    .arg(ToQString(named.name),
+                        ToQString(named.projection->sourceWireName),
+                        ToQString(named.projection->targetSurfaceName),
+                        VectorText(named.projection->direction),
+                        VectorText(named.wire.Start()),
+                        VectorText(named.wire.End())));
+        } else {
+            infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>平面との関係: %3<br>作成元平面: %4<br><br>始点<br>%5<br><br>終点<br>%6")
+                    .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End())));
+        }
+    } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Surfaces().size())) {
+        const auto& named = project_.Surfaces()[selection.index];
+        const QString kind = named.surface.Kind() == SurfaceKind::Planar ? QStringLiteral("平面") : QStringLiteral("2断面の曲面");
+        QString sources;
+        for (const std::string& sourceName : named.sourceWireNames) {
+            if (!sources.isEmpty()) {
+                sources += QStringLiteral(" / ");
+            }
+            sources += ToQString(sourceName);
+        }
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元ワイヤー: %3")
+                .arg(ToQString(named.name), kind, sources));
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
@@ -3116,9 +3444,20 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         editApplyButton_->setEnabled(false);
     } else {
         if (auto* label = qobject_cast<QLabel*>(editParameters_->widget(0))) {
-            label->setText(QStringLiteral("選択なし"));
+            if (selection.kind == CadSelectionKind::Wire
+                && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
+                && project_.Wires()[selection.index].projection.has_value()) {
+                label->setText(QStringLiteral("投影ワイヤーは元の平面図を編集します"));
+            } else if (selection.kind == CadSelectionKind::Surface) {
+                label->setText(QStringLiteral("面は元の境界・断面ワイヤーを編集します"));
+            } else {
+                label->setText(QStringLiteral("選択なし"));
+            }
         }
-        editApplyButton_->setEnabled(selection.kind != CadSelectionKind::None);
+        const bool editableWire = selection.kind == CadSelectionKind::Wire
+            && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
+            && !project_.Wires()[selection.index].projection.has_value();
+        editApplyButton_->setEnabled(selection.kind == CadSelectionKind::WorkPlane || editableWire);
     }
     RefreshExportSummary();
 }
@@ -3187,6 +3526,10 @@ void MainWindow::PopulateEditPanel(CadSelection selection)
         && selection.index < static_cast<int>(project_.Wires().size())) {
         const auto& namedWire = project_.Wires()[selection.index];
         editSelectionLabel_->setText(ToQString(namedWire.name));
+        if (namedWire.projection.has_value()) {
+            editParameters_->setCurrentIndex(0);
+            return;
+        }
         if (namedWire.metadata.sourcePlaneName.has_value()) {
             const int sourceIndex = editWireSourcePlane_->findText(ToQString(*namedWire.metadata.sourcePlaneName));
             editWireSourcePlane_->setCurrentIndex(sourceIndex >= 0 ? sourceIndex : 0);
@@ -3357,6 +3700,15 @@ QString MainWindow::SuggestedFilletName() const
         ++number;
     }
     return QStringLiteral("fillet_%1").arg(number);
+}
+
+QString MainWindow::SuggestedSurfaceName() const
+{
+    int number = static_cast<int>(project_.Surfaces().size()) + 1;
+    while (project_.FindSurface(ToName(QStringLiteral("surface_%1").arg(number))).has_value()) {
+        ++number;
+    }
+    return QStringLiteral("surface_%1").arg(number);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

@@ -390,6 +390,32 @@ Wire Wire::RotatedAroundAxis(Vector3 axisPoint, Vector3 axisDirection, double an
     return {kind_, std::move(rotatedPoints)};
 }
 
+Wire Wire::Reversed() const
+{
+    switch (kind_) {
+    case WireKind::Line:
+        return Line(controlPoints_[1], controlPoints_[0]);
+    case WireKind::Polyline: {
+        std::vector<Vector3> points = controlPoints_;
+        std::reverse(points.begin(), points.end());
+        return Polyline(std::move(points));
+    }
+    case WireKind::CubicBezier:
+        return CubicBezier(controlPoints_[3], controlPoints_[2], controlPoints_[1], controlPoints_[0]);
+    case WireKind::Circle:
+        return Circle(arcCenter_, arcUAxis_, arcVAxis_, arcRadius_);
+    case WireKind::CircularArc:
+        return CircularArc(
+            arcCenter_,
+            arcUAxis_,
+            arcVAxis_,
+            arcRadius_,
+            arcStartAngleRadians_ + arcSweepAngleRadians_,
+            -arcSweepAngleRadians_);
+    }
+    throw std::logic_error("Unknown wire kind.");
+}
+
 std::pair<Wire, Wire> Wire::SplitAt(double parameter) const
 {
     if (!std::isfinite(parameter) || parameter <= 1.0e-9 || parameter >= 1.0 - 1.0e-9) {

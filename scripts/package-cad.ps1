@@ -32,4 +32,5 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\first-check.kcd") -Destination (Join-Path $ResolvedOutput "作例.kcd") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\curved-panel-light-holes.kcd") -Destination (Join-Path $ResolvedOutput "曲面とライト穴の作例.kcd") -Force
 Write-Host "Application: $DeployedExecutable"

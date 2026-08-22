@@ -74,6 +74,7 @@ public:
         geometry::Vector3 axisPoint,
         geometry::Vector3 axisDirection,
         double angleRadians) const;
+    [[nodiscard]] Wire Reversed() const;
     [[nodiscard]] std::pair<Wire, Wire> SplitAt(double parameter) const;
     [[nodiscard]] bool IsClosed(double epsilon = 1.0e-9) const noexcept;
 

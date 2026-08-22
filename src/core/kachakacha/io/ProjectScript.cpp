@@ -2,6 +2,7 @@
 
 #include "kachakacha/model/Sketch.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <optional>
@@ -351,6 +352,24 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber))
                         .MakeCubicBezier(start, control1, control2, end),
                     WireMetadata{planeName, policy});
+            } else if (command == "surface_planar") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::string boundary = ReadName(stream, sourceName, lineNumber, "boundary wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlanarSurface(name, boundary);
+            } else if (command == "surface_ruled") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::string firstSection = ReadName(stream, sourceName, lineNumber, "first section wire");
+                const std::string secondSection = ReadName(stream, sourceName, lineNumber, "second section wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddRuledSurface(name, firstSection, secondSection);
+            } else if (command == "wire_project") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "projected wire");
+                const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source drawing wire");
+                const std::string targetSurface = ReadName(stream, sourceName, lineNumber, "target surface");
+                const Vector3 direction = ReadVector3(stream, sourceName, lineNumber, "projection direction");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddProjectedWire(name, sourceWire, targetSurface, direction);
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
             }
@@ -384,6 +403,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     }
 
     for (const auto& namedWire : project.Wires()) {
+        if (namedWire.projection.has_value()) {
+            continue;
+        }
         RequireScriptNameSafe(namedWire.name, "Wire");
         const Wire& wire = namedWire.wire;
         const std::vector<Vector3>& points = wire.ControlPoints();
@@ -455,6 +477,42 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             }
             output << ' ' << WirePlanePolicyToken(namedWire.metadata.planePolicy) << '\n';
         }
+    }
+
+    if (!project.Surfaces().empty()) {
+        output << '\n';
+    }
+    for (const auto& namedSurface : project.Surfaces()) {
+        RequireScriptNameSafe(namedSurface.name, "Surface");
+        for (const std::string& sourceWireName : namedSurface.sourceWireNames) {
+            RequireScriptNameSafe(sourceWireName, "Surface source wire");
+        }
+        if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
+            output << "surface_planar " << namedSurface.name << ' ' << namedSurface.sourceWireNames.at(0) << '\n';
+        } else {
+            output << "surface_ruled " << namedSurface.name << ' '
+                   << namedSurface.sourceWireNames.at(0) << ' ' << namedSurface.sourceWireNames.at(1) << '\n';
+        }
+    }
+
+    const bool hasProjectedWires = std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
+        return wire.projection.has_value();
+    });
+    if (hasProjectedWires) {
+        output << '\n';
+    }
+    for (const auto& namedWire : project.Wires()) {
+        if (!namedWire.projection.has_value()) {
+            continue;
+        }
+        RequireScriptNameSafe(namedWire.name, "Projected wire");
+        RequireScriptNameSafe(namedWire.projection->sourceWireName, "Projection source wire");
+        RequireScriptNameSafe(namedWire.projection->targetSurfaceName, "Projection target surface");
+        output << "wire_project " << namedWire.name << ' '
+               << namedWire.projection->sourceWireName << ' '
+               << namedWire.projection->targetSurfaceName << ' ';
+        WriteVector3(output, namedWire.projection->direction);
+        output << '\n';
     }
 }
 

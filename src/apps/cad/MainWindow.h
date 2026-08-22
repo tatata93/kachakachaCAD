@@ -6,6 +6,8 @@
 #include <QMainWindow>
 
 #include <array>
+#include <optional>
+#include <string>
 #include <vector>
 
 class QCloseEvent;
@@ -46,6 +48,8 @@ private:
     void SaveProject();
     void SaveProjectAs();
     void AddWorkPlane();
+    [[nodiscard]] kachakacha::model::WorkPlane WorkPlaneFromInputs() const;
+    void AlignViewportFromPlaneInputs();
     void AddWire();
     void ApplySelectedEdit();
     void ApplyViewportTranslation(kachakacha::geometry::Vector3 delta, bool copy);
@@ -54,6 +58,10 @@ private:
         kachakacha::geometry::Vector3 lineDirection,
         kachakacha::geometry::Vector3 planeNormal);
     void ApplyMeetSelectedLines();
+    void SetReferenceFromSelection();
+    void ClearReference();
+    void RefreshReference();
+    void UseReferenceForPlaneRotation();
     void ApplyLineChamfer();
     void ApplyLineFillet();
     void SetViewportTool(ViewportTool tool);
@@ -105,6 +113,8 @@ private:
     QAction* copyToolAction_ = nullptr;
     QAction* mirrorToolAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;
+    QAction* setReferenceAction_ = nullptr;
+    QAction* clearReferenceAction_ = nullptr;
     QAction* snapAction_ = nullptr;
     QAction* alignPlaneAction_ = nullptr;
     QAction* finishDrawingAction_ = nullptr;
@@ -119,6 +129,7 @@ private:
     QLabel* infoLabel_ = nullptr;
 
     QLabel* editSelectionLabel_ = nullptr;
+    QLabel* transformReferenceLabel_ = nullptr;
     QPushButton* editApplyButton_ = nullptr;
     QStackedWidget* editParameters_ = nullptr;
     std::array<QDoubleSpinBox*, 3> editPlaneOrigin_{};
@@ -167,6 +178,8 @@ private:
     QDoubleSpinBox* rotateAngle_ = nullptr;
     QDoubleSpinBox* planeOffset_ = nullptr;
     QDoubleSpinBox* planeTilt_ = nullptr;
+    QLabel* planeReferenceLabel_ = nullptr;
+    std::optional<std::string> referenceWireName_;
 
     QLineEdit* wireName_ = nullptr;
     QComboBox* wireKind_ = nullptr;

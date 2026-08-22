@@ -43,6 +43,7 @@ public:
     void SetProject(const kachakacha::model::Project* project, bool fitView = true);
     void SetSelection(CadSelection selection);
     void SetSelections(std::vector<CadSelection> selections);
+    void SetReference(CadSelection reference);
     [[nodiscard]] CadSelection Selection() const noexcept { return selection_; }
     [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
     void SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback);
@@ -61,6 +62,9 @@ public:
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
     void AlignToActiveWorkPlane();
+    void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
+    void SetIsometricView();
+    [[nodiscard]] kachakacha::geometry::Vector3 ViewDirection() const;
     void FinishDrawing();
     void CancelDrawing();
     [[nodiscard]] std::size_t DrawingPointCount() const noexcept { return drawingPoints_.size(); }
@@ -87,6 +91,7 @@ private:
 
     const kachakacha::model::Project* project_ = nullptr;
     CadSelection selection_;
+    CadSelection reference_;
     std::vector<CadSelection> selections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineCreated_;
@@ -112,4 +117,6 @@ private:
     QPoint lastMousePosition_;
     Qt::MouseButton dragButton_ = Qt::NoButton;
     bool mouseMoved_ = false;
+    bool viewCubeInteraction_ = false;
+    int hoveredViewCubeFace_ = 0;
 };

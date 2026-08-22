@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPolygonF>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -20,6 +21,62 @@ using kachakacha::model::WireKind;
 namespace {
 
 constexpr double kPlaneHalfSize = 12.0;
+
+enum class ViewCubeFace {
+    None,
+    Top,
+    Front,
+    Right,
+    Isometric,
+};
+
+struct ViewCubeGeometry {
+    QPolygonF top;
+    QPolygonF front;
+    QPolygonF right;
+    QPolygonF isometric;
+    QRectF bounds;
+};
+
+ViewCubeGeometry MakeViewCubeGeometry(int viewportWidth)
+{
+    const double centerX = viewportWidth - 60.0;
+    const QPointF top(centerX, 16.0);
+    const QPointF upperRight(centerX + 30.0, 31.0);
+    const QPointF center(centerX, 46.0);
+    const QPointF upperLeft(centerX - 30.0, 31.0);
+    const QPointF lowerLeft(centerX - 30.0, 62.0);
+    const QPointF lowerCenter(centerX, 77.0);
+    const QPointF lowerRight(centerX + 30.0, 62.0);
+    return {
+        QPolygonF{top, upperRight, center, upperLeft},
+        QPolygonF{upperLeft, center, lowerCenter, lowerLeft},
+        QPolygonF{center, upperRight, lowerRight, lowerCenter},
+        QPolygonF{
+            QPointF(centerX, 84.0),
+            QPointF(centerX + 24.0, 96.0),
+            QPointF(centerX, 108.0),
+            QPointF(centerX - 24.0, 96.0)},
+        QRectF(centerX - 36.0, 10.0, 72.0, 104.0),
+    };
+}
+
+ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
+{
+    if (cube.top.containsPoint(position, Qt::OddEvenFill)) {
+        return ViewCubeFace::Top;
+    }
+    if (cube.front.containsPoint(position, Qt::OddEvenFill)) {
+        return ViewCubeFace::Front;
+    }
+    if (cube.right.containsPoint(position, Qt::OddEvenFill)) {
+        return ViewCubeFace::Right;
+    }
+    if (cube.isometric.containsPoint(position, Qt::OddEvenFill)) {
+        return ViewCubeFace::Isometric;
+    }
+    return ViewCubeFace::None;
+}
 
 double DistanceToSegment(QPointF point, QPointF a, QPointF b)
 {
@@ -63,6 +120,7 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     project_ = project;
     selection_ = {};
     selections_.clear();
+    reference_ = {};
     if (fitView) {
         FitAll();
     } else {
@@ -83,6 +141,12 @@ void CadViewport::SetSelections(std::vector<CadSelection> selections)
 {
     selections_ = std::move(selections);
     selection_ = selections_.empty() ? CadSelection{} : selections_.back();
+    update();
+}
+
+void CadViewport::SetReference(CadSelection reference)
+{
+    reference_ = reference;
     update();
 }
 
@@ -171,9 +235,27 @@ void CadViewport::AlignToActiveWorkPlane()
     if (!activePlane_.has_value()) {
         return;
     }
-    target_ = activePlane_->Origin();
-    alignedViewBasis_ = std::array<Vector3, 3>{activePlane_->Normal(), activePlane_->UAxis(), activePlane_->VAxis()};
+    AlignToWorkPlane(*activePlane_);
+}
+
+void CadViewport::AlignToWorkPlane(const kachakacha::model::WorkPlane& plane)
+{
+    target_ = plane.Origin();
+    alignedViewBasis_ = std::array<Vector3, 3>{plane.Normal(), plane.UAxis(), plane.VAxis()};
     update();
+}
+
+void CadViewport::SetIsometricView()
+{
+    alignedViewBasis_.reset();
+    yawRadians_ = 0.75;
+    pitchRadians_ = 0.48;
+    update();
+}
+
+Vector3 CadViewport::ViewDirection() const
+{
+    return CurrentViewBasis()[0];
 }
 
 void CadViewport::FinishDrawing()
@@ -476,7 +558,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
             const bool selected = IsSelected(CadSelectionKind::Wire, index);
-            painter.setPen(QPen(selected ? QColor("#e69f00") : WireColor(namedWire.wire.Kind()), selected ? 3.2 : 2.0));
+            const bool reference = reference_.kind == CadSelectionKind::Wire && reference_.index == index;
+            painter.setPen(QPen(
+                reference ? QColor("#007f78") : selected ? QColor("#e69f00") : WireColor(namedWire.wire.Kind()),
+                reference || selected ? 3.2 : 2.0,
+                reference ? Qt::DashDotLine : Qt::SolidLine));
             QPainterPath path(ProjectPoint(namedWire.wire.Evaluate(0.0)));
             const int samples = namedWire.wire.Kind() == WireKind::Line ? 1 : 64;
             for (int sample = 1; sample <= samples; ++sample) {
@@ -490,6 +576,15 @@ void CadViewport::paintEvent(QPaintEvent*)
                 for (const Vector3& point : namedWire.wire.ControlPoints()) {
                     painter.drawEllipse(ProjectPoint(point), 4.0, 4.0);
                 }
+            }
+            if (reference) {
+                painter.setBrush(QColor("#ffffff"));
+                painter.setPen(QPen(QColor("#007f78"), 2.0));
+                painter.drawRect(QRectF(ProjectPoint(namedWire.wire.Start()) - QPointF(4.0, 4.0), QSizeF(8.0, 8.0)));
+                painter.drawRect(QRectF(ProjectPoint(namedWire.wire.End()) - QPointF(4.0, 4.0), QSizeF(8.0, 8.0)));
+                painter.drawText(
+                    ProjectPoint(namedWire.wire.Evaluate(0.5)) + QPointF(6.0, -7.0),
+                    QStringLiteral("基準"));
             }
         }
     }
@@ -674,7 +769,21 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
         }
     }
-    painter.drawText(QRect(14, 12, width() - 28, 24), Qt::AlignLeft, modeText);
+    painter.drawText(QRect(14, 12, std::max(80, width() - 150), 24), Qt::AlignLeft, modeText);
+
+    const ViewCubeGeometry cube = MakeViewCubeGeometry(width());
+    const auto drawCubeFace = [&](const QPolygonF& polygon, ViewCubeFace face, const QColor& color, const QString& label) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
+        painter.setBrush(hovered ? color.lighter(118) : color);
+        painter.setPen(QPen(QColor("#68747c"), hovered ? 2.0 : 1.2));
+        painter.drawPolygon(polygon);
+        painter.setPen(QColor("#1f2b33"));
+        painter.drawText(polygon.boundingRect(), Qt::AlignCenter, label);
+    };
+    drawCubeFace(cube.top, ViewCubeFace::Top, QColor("#e8edef"), QStringLiteral("上"));
+    drawCubeFace(cube.front, ViewCubeFace::Front, QColor("#d6e6e7"), QStringLiteral("正"));
+    drawCubeFace(cube.right, ViewCubeFace::Right, QColor("#dfe4e8"), QStringLiteral("右"));
+    drawCubeFace(cube.isometric, ViewCubeFace::Isometric, QColor("#f3d9a5"), QStringLiteral("3D"));
 }
 
 CadSelection CadViewport::HitTest(QPointF position) const
@@ -726,6 +835,13 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     dragButton_ = event->button();
     mouseMoved_ = false;
     setFocus();
+    if (event->button() == Qt::LeftButton
+        && MakeViewCubeGeometry(width()).bounds.contains(event->position())) {
+        viewCubeInteraction_ = true;
+        setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+    }
     if (tool_ != ViewportTool::Select
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
@@ -739,6 +855,29 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
 
 void CadViewport::mouseMoveEvent(QMouseEvent* event)
 {
+    if (viewCubeInteraction_ && dragButton_ == Qt::LeftButton) {
+        const QPoint delta = event->position().toPoint() - lastMousePosition_;
+        if (delta.manhattanLength() > 1) {
+            mouseMoved_ = true;
+        }
+        alignedViewBasis_.reset();
+        yawRadians_ += delta.x() * 0.008;
+        pitchRadians_ = std::clamp(pitchRadians_ - delta.y() * 0.008, -1.45, 1.45);
+        lastMousePosition_ = event->position().toPoint();
+        update();
+        event->accept();
+        return;
+    }
+
+    const int hoveredFace = static_cast<int>(HitViewCube(MakeViewCubeGeometry(width()), event->position()));
+    if (hoveredFace != hoveredViewCubeFace_) {
+        hoveredViewCubeFace_ = hoveredFace;
+        setCursor(hoveredFace == static_cast<int>(ViewCubeFace::None)
+                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
+                : Qt::PointingHandCursor);
+        update();
+    }
+
     if (tool_ != ViewportTool::Select && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
@@ -770,6 +909,43 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 
 void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (viewCubeInteraction_) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_) {
+            const ViewCubeFace face = HitViewCube(MakeViewCubeGeometry(width()), event->position());
+            const Vector3 viewTarget = target_;
+            switch (face) {
+            case ViewCubeFace::Top:
+                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
+                    {}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
+                break;
+            case ViewCubeFace::Front:
+                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
+                    {}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
+                break;
+            case ViewCubeFace::Right:
+                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
+                    {}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
+                break;
+            case ViewCubeFace::Isometric:
+                SetIsometricView();
+                break;
+            case ViewCubeFace::None:
+                break;
+            }
+            if (face == ViewCubeFace::Top || face == ViewCubeFace::Front || face == ViewCubeFace::Right) {
+                target_ = viewTarget;
+                update();
+            }
+        }
+        viewCubeInteraction_ = false;
+        dragButton_ = Qt::NoButton;
+        setCursor(hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::None)
+                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
+                : Qt::PointingHandCursor);
+        event->accept();
+        return;
+    }
+
     if (tool_ != ViewportTool::Select) {
         if (event->button() == Qt::LeftButton && activePlane_.has_value()) {
             const auto point = PointOnActivePlane(event->position());

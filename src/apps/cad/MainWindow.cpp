@@ -242,7 +242,7 @@ MainWindow::MainWindow(QWidget* parent)
     RefreshModelViews(true);
     toolsTabs_->setCurrentIndex(0);
     SetViewportTool(ViewportTool::DrawLine);
-    viewport_->AlignToActiveWorkPlane();
+    viewport_->SetIsometricView();
 
     resize(1380, 820);
     setMinimumSize(1040, 650);
@@ -373,10 +373,15 @@ void MainWindow::BuildDrawingActions()
     copyToolAction_ = new QAction(QStringLiteral("コピー"), this);
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
     meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
+    setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
+    clearReferenceAction_ = new QAction(QStringLiteral("基準解除"), this);
     moveToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で移動"));
     copyToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で複製"));
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
+    setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
+    clearReferenceAction_->setToolTip(QStringLiteral("現在の基準線を解除する"));
+    clearReferenceAction_->setEnabled(false);
 
     selectToolAction_->setShortcut(Qt::Key_V);
     lineToolAction_->setShortcut(Qt::Key_L);
@@ -408,6 +413,8 @@ void MainWindow::BuildDrawingActions()
     connect(copyToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::CopySelection); });
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
+    connect(setReferenceAction_, &QAction::triggered, this, &MainWindow::SetReferenceFromSelection);
+    connect(clearReferenceAction_, &QAction::triggered, this, &MainWindow::ClearReference);
 
     snapAction_ = new QAction(QStringLiteral("スナップ"), this);
     snapAction_->setCheckable(true);
@@ -577,6 +584,26 @@ QWidget* MainWindow::BuildPlanePanel()
     layout->addWidget(planeParameters_);
     connect(planeMethod_, &QComboBox::currentIndexChanged, planeParameters_, &QStackedWidget::setCurrentIndex);
 
+    auto* referenceGroup = new QGroupBox(QStringLiteral("基準線"));
+    auto* referenceLayout = new QVBoxLayout(referenceGroup);
+    planeReferenceLabel_ = new QLabel(QStringLiteral("未設定"));
+    planeReferenceLabel_->setStyleSheet("color: #075f69; font-weight: 600;");
+    referenceLayout->addWidget(planeReferenceLabel_);
+    auto* referenceButtons = new QHBoxLayout;
+    auto* setReferenceButton = new QToolButton;
+    setReferenceButton->setDefaultAction(setReferenceAction_);
+    setReferenceButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    auto* useReferenceButton = new QPushButton(QStringLiteral("回転軸に使用"));
+    connect(useReferenceButton, &QPushButton::clicked, this, &MainWindow::UseReferenceForPlaneRotation);
+    auto* clearReferenceButton = new QToolButton;
+    clearReferenceButton->setDefaultAction(clearReferenceAction_);
+    clearReferenceButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    referenceButtons->addWidget(setReferenceButton, 1);
+    referenceButtons->addWidget(useReferenceButton, 1);
+    referenceButtons->addWidget(clearReferenceButton);
+    referenceLayout->addLayout(referenceButtons);
+    layout->addWidget(referenceGroup);
+
     auto* adjustment = new QGroupBox(QStringLiteral("共通調整"));
     auto* adjustmentForm = new QFormLayout(adjustment);
     planeOffset_ = MakeNumberField(0.0);
@@ -588,10 +615,15 @@ QWidget* MainWindow::BuildPlanePanel()
     adjustmentForm->addRow(QStringLiteral("平面内X軸まわり角度"), planeTilt_);
     layout->addWidget(adjustment);
 
-    auto* addButton = new QPushButton(QStringLiteral("作業平面を追加"));
-    addButton->setObjectName("primaryButton");
+    auto* commandRow = new QHBoxLayout;
+    auto* viewButton = new QPushButton(QStringLiteral("この向きで見る"));
+    viewButton->setObjectName("primaryButton");
+    connect(viewButton, &QPushButton::clicked, this, &MainWindow::AlignViewportFromPlaneInputs);
+    commandRow->addWidget(viewButton, 1);
+    auto* addButton = new QPushButton(QStringLiteral("平面を作成"));
     connect(addButton, &QPushButton::clicked, this, &MainWindow::AddWorkPlane);
-    layout->addWidget(addButton);
+    commandRow->addWidget(addButton, 1);
+    layout->addLayout(commandRow);
     layout->addStretch(1);
     return panel;
 }
@@ -703,6 +735,23 @@ QWidget* MainWindow::BuildEditPanel()
     auto* layout = new QVBoxLayout(panel);
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
+
+    auto* referenceLabel = new QLabel(QStringLiteral("変形の基準線"));
+    referenceLabel->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(referenceLabel);
+    transformReferenceLabel_ = new QLabel(QStringLiteral("未設定（ミラーは2点で軸を指定）"));
+    transformReferenceLabel_->setStyleSheet("color: #075f69; font-weight: 600;");
+    layout->addWidget(transformReferenceLabel_);
+    auto* referenceRow = new QHBoxLayout;
+    auto* setReferenceButton = new QToolButton;
+    setReferenceButton->setDefaultAction(setReferenceAction_);
+    setReferenceButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    auto* clearReferenceButton = new QToolButton;
+    clearReferenceButton->setDefaultAction(clearReferenceAction_);
+    clearReferenceButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    referenceRow->addWidget(setReferenceButton, 1);
+    referenceRow->addWidget(clearReferenceButton);
+    layout->addLayout(referenceRow);
 
     auto* directLabel = new QLabel(QStringLiteral("3Dで直接変形"));
     directLabel->setStyleSheet("font-weight: 600; color: #26323a;");
@@ -941,6 +990,8 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(copyToolAction_);
     editMenu->addAction(mirrorToolAction_);
     editMenu->addAction(meetLinesAction_);
+    editMenu->addAction(setReferenceAction_);
+    editMenu->addAction(clearReferenceAction_);
     editMenu->addSeparator();
     editMenu->addAction(deleteAction);
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
@@ -992,6 +1043,8 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->addAction(copyToolAction_);
     transformToolbar->addAction(mirrorToolAction_);
     transformToolbar->addAction(meetLinesAction_);
+    transformToolbar->addSeparator();
+    transformToolbar->addAction(setReferenceAction_);
     UpdateHistoryActions();
 }
 
@@ -1005,6 +1058,7 @@ void MainWindow::NewProject()
     project_.AddWorkPlane("top_XY", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("side_YZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
+    referenceWireName_.reset();
     currentPath_.clear();
     modified_ = false;
     undoStack_.clear();
@@ -1013,7 +1067,7 @@ void MainWindow::NewProject()
     RefreshModelViews(true);
     toolsTabs_->setCurrentIndex(0);
     SetViewportTool(ViewportTool::DrawLine);
-    viewport_->AlignToActiveWorkPlane();
+    viewport_->SetIsometricView();
     setWindowTitle(QStringLiteral("kachakachaCAD - 無題"));
     statusBar()->showMessage(QStringLiteral("新しいプロジェクト"), 3000);
 }
@@ -1038,6 +1092,7 @@ bool MainWindow::LoadProjectFile(const QString& path)
             throw std::runtime_error("ファイルを開けませんでした。");
         }
         project_ = LoadProjectScript(input, nativePath.string());
+        referenceWireName_.reset();
         currentPath_ = path;
         modified_ = false;
         undoStack_.clear();
@@ -1046,7 +1101,7 @@ bool MainWindow::LoadProjectFile(const QString& path)
         RefreshModelViews(true);
         toolsTabs_->setCurrentIndex(0);
         SetViewportTool(ViewportTool::DrawLine);
-        viewport_->AlignToActiveWorkPlane();
+        viewport_->SetIsometricView();
         setWindowTitle(QStringLiteral("kachakachaCAD - %1").arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("読み込みました: %1").arg(path), 4000);
         return true;
@@ -1102,6 +1157,96 @@ bool MainWindow::SaveProjectFile(const QString& path)
     }
 }
 
+void MainWindow::SetReferenceFromSelection()
+{
+    const auto& selections = viewport_->Selections();
+    if (selections.size() != 1 || selections.front().kind != CadSelectionKind::Wire
+        || selections.front().index < 0
+        || selections.front().index >= static_cast<int>(project_.Wires().size())
+        || project_.Wires()[selections.front().index].wire.Kind() != WireKind::Line) {
+        statusBar()->showMessage(QStringLiteral("基準にする直線を1本だけ選択してください"), 4000);
+        return;
+    }
+
+    referenceWireName_ = project_.Wires()[selections.front().index].name;
+    RefreshReference();
+    UpdateSelection({}, true);
+    statusBar()->showMessage(QStringLiteral("基準線を設定しました: %1").arg(ToQString(*referenceWireName_)), 3000);
+}
+
+void MainWindow::ClearReference()
+{
+    referenceWireName_.reset();
+    RefreshReference();
+    statusBar()->showMessage(QStringLiteral("基準線を解除しました"), 2500);
+}
+
+void MainWindow::RefreshReference()
+{
+    int referenceIndex = -1;
+    if (referenceWireName_.has_value()) {
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].name == *referenceWireName_
+                && project_.Wires()[index].wire.Kind() == WireKind::Line) {
+                referenceIndex = index;
+                break;
+            }
+        }
+    }
+    if (referenceIndex < 0) {
+        referenceWireName_.reset();
+    }
+
+    viewport_->SetReference(referenceIndex >= 0
+            ? CadSelection{CadSelectionKind::Wire, referenceIndex}
+            : CadSelection{});
+    const QString text = referenceWireName_.has_value()
+        ? ToQString(*referenceWireName_)
+        : QStringLiteral("未設定");
+    if (planeReferenceLabel_ != nullptr) {
+        planeReferenceLabel_->setText(text);
+    }
+    if (transformReferenceLabel_ != nullptr) {
+        const QString planeName = activePlaneCombo_ != nullptr && !activePlaneCombo_->currentText().isEmpty()
+            ? activePlaneCombo_->currentText()
+            : QStringLiteral("未設定");
+        transformReferenceLabel_->setText(referenceWireName_.has_value()
+                ? QStringLiteral("基準線: %1  /  面: %2").arg(text, planeName)
+                : QStringLiteral("基準線: 2点指定  /  面: %1").arg(planeName));
+    }
+    clearReferenceAction_->setEnabled(referenceWireName_.has_value());
+}
+
+void MainWindow::UseReferenceForPlaneRotation()
+{
+    if (!referenceWireName_.has_value()) {
+        statusBar()->showMessage(QStringLiteral("先に直線を選択して基準線に設定してください"), 3500);
+        return;
+    }
+    const auto found = std::find_if(project_.Wires().begin(), project_.Wires().end(), [this](const auto& wire) {
+        return wire.name == *referenceWireName_ && wire.wire.Kind() == WireKind::Line;
+    });
+    if (found == project_.Wires().end()) {
+        ClearReference();
+        return;
+    }
+
+    const Vector3 point = found->wire.Start();
+    const Vector3 direction = found->wire.End() - found->wire.Start();
+    const std::array<double, 3> pointValues = {point.x, point.y, point.z};
+    const std::array<double, 3> directionValues = {direction.x, direction.y, direction.z};
+    for (int axis = 0; axis < 3; ++axis) {
+        rotateAxisPoint_[axis]->setValue(pointValues[axis]);
+        rotateAxisDirection_[axis]->setValue(directionValues[axis]);
+    }
+    planeMethod_->setCurrentIndex(4);
+    const int activeIndex = rotateSourcePlane_->findText(activePlaneCombo_->currentText());
+    if (activeIndex >= 0) {
+        rotateSourcePlane_->setCurrentIndex(activeIndex);
+    }
+    statusBar()->showMessage(QStringLiteral("基準線を作業平面の回転軸に設定しました"), 3000);
+}
+
 void MainWindow::SetViewportTool(ViewportTool tool)
 {
     const bool isTransform = tool == ViewportTool::MoveSelection
@@ -1129,6 +1274,29 @@ void MainWindow::SetViewportTool(ViewportTool tool)
             return;
         }
         toolsTabs_->setCurrentIndex(3);
+        if (tool == ViewportTool::MirrorSelection && referenceWireName_.has_value()) {
+            const auto reference = std::find_if(project_.Wires().begin(), project_.Wires().end(), [this](const auto& wire) {
+                return wire.name == *referenceWireName_ && wire.wire.Kind() == WireKind::Line;
+            });
+            const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+            if (reference == project_.Wires().end() || !plane.has_value()) {
+                RefreshReference();
+            } else if (std::abs(plane->Project(reference->wire.Start()).w) > 1.0e-7
+                || std::abs(plane->Project(reference->wire.End()).w) > 1.0e-7) {
+                selectToolAction_->setChecked(true);
+                viewport_->SetTool(ViewportTool::Select);
+                statusBar()->showMessage(QStringLiteral("基準線が現在の作図面上にありません"), 4000);
+                return;
+            } else {
+                ApplyViewportMirror(
+                    reference->wire.Start(),
+                    reference->wire.End() - reference->wire.Start(),
+                    plane->Normal());
+                selectToolAction_->setChecked(true);
+                viewport_->SetTool(ViewportTool::Select);
+                return;
+            }
+        }
     }
 
     viewport_->SetTool(tool);
@@ -1258,6 +1426,7 @@ void MainWindow::RefreshActiveWorkPlane()
     moveToolAction_->setEnabled(canDraw);
     copyToolAction_->setEnabled(canDraw);
     mirrorToolAction_->setEnabled(canDraw);
+    RefreshReference();
     if (!canDraw && viewport_->Tool() != ViewportTool::Select) {
         SetViewportTool(ViewportTool::Select);
     }
@@ -1561,6 +1730,13 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.WorkPlanes().size() != initialPlaneCount + 1 || !project_.FindWorkPlane("__ui_test_plane").has_value()) {
         return fail("add workplane");
     }
+    const std::size_t planeCountBeforeViewOnly = project_.WorkPlanes().size();
+    const WorkPlane viewOnlyPlane = WorkPlaneFromInputs();
+    AlignViewportFromPlaneInputs();
+    if (project_.WorkPlanes().size() != planeCountBeforeViewOnly
+        || !kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), viewOnlyPlane.Normal(), 1.0e-8)) {
+        return fail("view without creating workplane");
+    }
 
     wireName_->setText("__ui_test_line3d");
     wireKind_->setCurrentIndex(0);
@@ -1689,6 +1865,23 @@ bool MainWindow::RunCreationSelfTest()
         sendMouse(QEvent::MouseButtonRelease, end, Qt::LeftButton, Qt::NoButton);
     };
     const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
+    const QPointF cubeTop(viewport_->width() - 60.0, 24.0);
+    const QPointF cube3d(viewport_->width() - 60.0, 96.0);
+    const std::size_t beforeViewCube = project_.Wires().size();
+    SetViewportTool(ViewportTool::DrawLine);
+    click(cubeTop);
+    if (!kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), {0.0, 0.0, 1.0}, 1.0e-8)) {
+        return fail("view cube top face");
+    }
+    click(cube3d);
+    const Vector3 beforeCubeDrag = viewport_->ViewDirection();
+    drag(QPointF(viewport_->width() - 60.0, 50.0), QPointF(viewport_->width() - 42.0, 40.0));
+    if (kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), beforeCubeDrag, 1.0e-8)
+        || project_.Wires().size() != beforeViewCube
+        || viewport_->DrawingPointCount() != 0) {
+        return fail("view cube drag without drawing");
+    }
+    viewport_->AlignToActiveWorkPlane();
     const std::size_t directStart = project_.Wires().size();
 
     SetViewportTool(ViewportTool::DrawLine);
@@ -1838,6 +2031,30 @@ bool MainWindow::RunCreationSelfTest()
     }
     Redo();
 
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(meetStart)}, true);
+    SetReferenceFromSelection();
+    if (!referenceWireName_.has_value()
+        || *referenceWireName_ != project_.Wires()[meetStart].name
+        || !viewport_->Selections().empty()) {
+        return fail("set explicit reference line");
+    }
+    UseReferenceForPlaneRotation();
+    if (planeMethod_->currentIndex() != 4
+        || !kachakacha::geometry::AlmostEqual(ReadVector3(rotateAxisPoint_), project_.Wires()[meetStart].wire.Start())
+        || !kachakacha::geometry::AlmostEqual(
+            ReadVector3(rotateAxisDirection_),
+            project_.Wires()[meetStart].wire.End() - project_.Wires()[meetStart].wire.Start())) {
+        return fail("reference line as plane rotation axis");
+    }
+    const std::size_t referenceMirrorStart = project_.Wires().size();
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(directStart + 2)}, true);
+    mirrorToolAction_->trigger();
+    if (project_.Wires().size() != referenceMirrorStart + 1
+        || project_.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
+        || project_.Wires()[referenceMirrorStart].name.find("mirror") == std::string::npos) {
+        return fail("mirror from explicit reference line");
+    }
+
     std::ostringstream directDrawingScript;
     WriteProjectScript(directDrawingScript, project_);
     std::istringstream directDrawingInput(directDrawingScript.str());
@@ -1845,6 +2062,7 @@ bool MainWindow::RunCreationSelfTest()
     if (reloadedProject.Wires().size() != project_.Wires().size()
         || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
         || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
+        || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
     }
@@ -1860,51 +2078,67 @@ bool MainWindow::RunCreationSelfTest()
     return true;
 }
 
+WorkPlane MainWindow::WorkPlaneFromInputs() const
+{
+    std::optional<WorkPlane> basePlane;
+    switch (planeMethod_->currentIndex()) {
+    case 0:
+        if (standardPlane_->currentIndex() == 0) {
+            basePlane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0});
+        } else if (standardPlane_->currentIndex() == 1) {
+            basePlane = WorkPlane::FromPointNormal({}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0});
+        } else {
+            basePlane = WorkPlane::FromPointNormal({}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0});
+        }
+        break;
+    case 1:
+        basePlane = WorkPlane::FromPointNormal(ReadVector3(pointNormalOrigin_), ReadVector3(pointNormalDirection_), ReadVector3(pointNormalUAxis_));
+        break;
+    case 2:
+        basePlane = WorkPlane::FromThreePoints(ReadVector3(threePointA_), ReadVector3(threePointB_), ReadVector3(threePointC_));
+        break;
+    case 3:
+        basePlane = project_.FindWorkPlane(ToName(offsetSourcePlane_->currentText()));
+        if (!basePlane.has_value()) {
+            throw std::invalid_argument("基準平面を選択してください。");
+        }
+        break;
+    case 4:
+        basePlane = project_.FindWorkPlane(ToName(rotateSourcePlane_->currentText()));
+        if (!basePlane.has_value()) {
+            throw std::invalid_argument("基準平面を選択してください。");
+        }
+        basePlane = basePlane->RotateAroundAxis(
+            ReadVector3(rotateAxisPoint_),
+            ReadVector3(rotateAxisDirection_),
+            rotateAngle_->value() * kPi / 180.0);
+        break;
+    default:
+        throw std::invalid_argument("作業平面の作り方を選択してください。");
+    }
+
+    WorkPlane finalPlane = basePlane->Offset(planeOffset_->value());
+    if (std::abs(planeTilt_->value()) > 1.0e-12) {
+        finalPlane = finalPlane.RotateAroundAxis(finalPlane.Origin(), finalPlane.UAxis(), planeTilt_->value() * kPi / 180.0);
+    }
+    return finalPlane;
+}
+
+void MainWindow::AlignViewportFromPlaneInputs()
+{
+    try {
+        viewport_->AlignToWorkPlane(WorkPlaneFromInputs());
+        statusBar()->showMessage(QStringLiteral("作業平面を作らず、この向きへ正対しました"), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("この向きで表示できません"), QString::fromUtf8(error.what()));
+    }
+}
+
 void MainWindow::AddWorkPlane()
 {
     try {
         ValidateObjectName(planeName_->text());
-        std::optional<WorkPlane> basePlane;
-        switch (planeMethod_->currentIndex()) {
-        case 0:
-            if (standardPlane_->currentIndex() == 0) {
-                basePlane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0});
-            } else if (standardPlane_->currentIndex() == 1) {
-                basePlane = WorkPlane::FromPointNormal({}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0});
-            } else {
-                basePlane = WorkPlane::FromPointNormal({}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0});
-            }
-            break;
-        case 1:
-            basePlane = WorkPlane::FromPointNormal(ReadVector3(pointNormalOrigin_), ReadVector3(pointNormalDirection_), ReadVector3(pointNormalUAxis_));
-            break;
-        case 2:
-            basePlane = WorkPlane::FromThreePoints(ReadVector3(threePointA_), ReadVector3(threePointB_), ReadVector3(threePointC_));
-            break;
-        case 3:
-            basePlane = project_.FindWorkPlane(ToName(offsetSourcePlane_->currentText()));
-            if (!basePlane.has_value()) {
-                throw std::invalid_argument("基準平面を選択してください。");
-            }
-            break;
-        case 4:
-            basePlane = project_.FindWorkPlane(ToName(rotateSourcePlane_->currentText()));
-            if (!basePlane.has_value()) {
-                throw std::invalid_argument("基準平面を選択してください。");
-            }
-            basePlane = basePlane->RotateAroundAxis(
-                ReadVector3(rotateAxisPoint_),
-                ReadVector3(rotateAxisDirection_),
-                rotateAngle_->value() * kPi / 180.0);
-            break;
-        default:
-            throw std::invalid_argument("作業平面の作り方を選択してください。");
-        }
-
-        WorkPlane finalPlane = basePlane->Offset(planeOffset_->value());
-        if (std::abs(planeTilt_->value()) > 1.0e-12) {
-            finalPlane = finalPlane.RotateAroundAxis(finalPlane.Origin(), finalPlane.UAxis(), planeTilt_->value() * kPi / 180.0);
-        }
+        const WorkPlane finalPlane = WorkPlaneFromInputs();
         const std::string newName = ToName(planeName_->text());
         if (project_.FindWorkPlane(newName).has_value()) {
             throw std::invalid_argument("同じ名前の作業平面があります。");
@@ -2288,6 +2522,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     RefreshWireChoices();
     viewport_->SetProject(&project_, fitView);
     RefreshActiveWorkPlane();
+    RefreshReference();
     UpdateSelection({}, false);
 }
 

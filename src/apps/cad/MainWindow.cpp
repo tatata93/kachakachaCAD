@@ -3463,7 +3463,9 @@ void MainWindow::ApplyEndpointContinuity(
                         : QStringLiteral("G1（接線）")),
             4500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(
+            QStringLiteral("滑らか接続を適用できません: %1").arg(QString::fromUtf8(error.what())),
+            6000);
     }
 }
 

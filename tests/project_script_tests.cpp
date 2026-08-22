@@ -387,6 +387,133 @@ void CurvatureEndpointsDriveBezierHandles()
     Require(outOfPlaneRejected, "locked follower rejects out-of-plane curvature");
 }
 
+void MixedContinuityChainPropagatesThroughArc()
+{
+    std::istringstream input(R"(
+        line3d anchor 0 0 0  10 0 0
+        arc3d middle 20 5 0  1 0 0  0 1 0  3 0 90
+        bezier3d tail 40 7 0  43 7 0  47 10 0  50 10 0
+        wire_coincident anchor end middle start
+        wire_tangent anchor end middle start
+        wire_coincident middle end tail start
+        wire_tangent middle end tail start
+    )");
+    auto project = LoadProjectScript(input, "mixed-continuity-chain");
+    RequireNear(project.Wires()[1].wire.ArcData().center, {10.0, 3.0, 0.0},
+        "mixed chain initially aligns arc");
+    RequireNear(project.Wires()[1].wire.End(), {13.0, 3.0, 0.0},
+        "mixed chain initially moves arc end");
+    RequireNear(project.Wires()[2].wire.Start(), {13.0, 3.0, 0.0},
+        "mixed chain propagates coincidence after tangent");
+
+    project.UpdateWire("anchor", Wire::Line({0.0, 0.0, 0.0}, {0.0, 10.0, 0.0}));
+    RequireNear(project.Wires()[1].wire.ArcData().center, {-3.0, 10.0, 0.0},
+        "mixed chain follows edited anchor tangent");
+    RequireNear(project.Wires()[1].wire.End(), {-3.0, 13.0, 0.0},
+        "mixed chain updates opposite arc endpoint");
+    RequireNear(project.Wires()[2].wire.Start(), {-3.0, 13.0, 0.0},
+        "mixed chain updates downstream endpoint");
+    const Vector3 arcEndTangent = (
+        project.Wires()[1].wire.Evaluate(1.0)
+        - project.Wires()[1].wire.Evaluate(0.999)).Normalized();
+    const Vector3 tailStartTangent = (
+        project.Wires()[2].wire.ControlPoints()[1]
+        - project.Wires()[2].wire.ControlPoints()[0]).Normalized();
+    Require(kachakacha::geometry::Dot(arcEndTangent, tailStartTangent) > 0.999999,
+        "mixed chain updates downstream tangent");
+}
+
+void DualEndpointContinuitySolvesOrReportsConflict()
+{
+    const auto makeProject = [] {
+        std::istringstream input(R"(
+            line3d left -10 0 0  0 0 0
+            line3d right 10 20 0  10 10 0
+            bezier3d follower 0 0 0  3 1 0  8 7 0  10 10 0
+        )");
+        return LoadProjectScript(input, "dual-end-continuity");
+    };
+
+    auto g1Project = makeProject();
+    g1Project.AddWireCoincidentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start});
+    g1Project.AddWireCoincidentConstraint(
+        {"right", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::End});
+    g1Project.AddWireTangentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start});
+    g1Project.AddWireTangentConstraint(
+        {"right", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::End});
+    const auto& g1Points = g1Project.Wires()[2].wire.ControlPoints();
+    RequireNear(g1Points[0], {0.0, 0.0, 0.0}, "dual G1 start coincidence");
+    RequireNear(g1Points[3], {10.0, 10.0, 0.0}, "dual G1 end coincidence");
+    Require(std::abs(g1Points[1].y) <= 1.0e-9 && g1Points[1].x > 0.0,
+        "dual G1 start tangent");
+    Require(std::abs(g1Points[2].x - 10.0) <= 1.0e-9 && g1Points[2].y < 10.0,
+        "dual G1 end tangent");
+
+    auto g2Project = makeProject();
+    g2Project.AddWireCoincidentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start});
+    g2Project.AddWireCoincidentConstraint(
+        {"right", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::End});
+    g2Project.AddWireTangentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start},
+        WireContinuity::G2Curvature);
+    g2Project.AddWireTangentConstraint(
+        {"right", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::End},
+        WireContinuity::G2Curvature);
+    Require(g2Project.TangentConstraints().size() == 2,
+        "compatible dual G2 constraints solve");
+    RequireNear(BezierEndpointCurvature(g2Project.Wires()[2].wire, true), {},
+        "dual G2 start curvature");
+    RequireNear(BezierEndpointCurvature(g2Project.Wires()[2].wire, false), {},
+        "dual G2 end curvature");
+    std::ostringstream dualG2Output;
+    WriteProjectScript(dualG2Output, g2Project);
+    std::istringstream dualG2Input(dualG2Output.str());
+    const auto dualG2RoundTrip = LoadProjectScript(dualG2Input, "dual-G2-roundtrip");
+    Require(dualG2RoundTrip.TangentConstraints().size() == 2,
+        "dual G2 roundtrip constraints");
+
+    std::istringstream arcInput(R"(
+        line3d left -10 0 0  0 0 0
+        line3d right -7 3 0  3 3 0
+        arc3d follower 0 3 0  1 0 0  0 1 0  3 -90 90
+    )");
+    auto conflictProject = LoadProjectScript(arcInput, "dual-arc-tangent-conflict");
+    conflictProject.AddWireCoincidentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start});
+    conflictProject.AddWireCoincidentConstraint(
+        {"right", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::End});
+    conflictProject.AddWireTangentConstraint(
+        {"left", kachakacha::model::WireEndpoint::End},
+        {"follower", kachakacha::model::WireEndpoint::Start});
+    const Wire beforeConflict = conflictProject.Wires()[2].wire;
+    bool conflictReported = false;
+    try {
+        conflictProject.AddWireTangentConstraint(
+            {"right", kachakacha::model::WireEndpoint::End},
+            {"follower", kachakacha::model::WireEndpoint::End});
+    } catch (const std::invalid_argument& error) {
+        conflictReported = std::string(error.what()).find("follower") != std::string::npos;
+    }
+    Require(conflictReported, "dual arc tangent conflict identifies follower");
+    Require(conflictProject.TangentConstraints().size() == 1,
+        "dual arc tangent conflict does not persist constraint");
+    RequireNear(conflictProject.Wires()[2].wire.ArcData().center,
+        beforeConflict.ArcData().center, "dual arc tangent conflict preserves shape");
+}
+
 void WrittenProjectRoundTrips()
 {
     std::istringstream input(R"(
@@ -873,6 +1000,8 @@ int main()
         TangentEndpointsRoundTripAndDriveBezierHandle();
         TangentEndpointsDriveCircularArc();
         CurvatureEndpointsDriveBezierHandles();
+        MixedContinuityChainPropagatesThroughArc();
+        DualEndpointContinuitySolvesOrReportsConflict();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         RadiusConstraintsRoundTripAndDriveGeometry();

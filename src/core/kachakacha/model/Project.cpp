@@ -273,6 +273,33 @@ bool TangentAlignmentMatches(
             firstArc.sweepAngleRadians, secondArc.sweepAngleRadians, 1.0e-9);
 }
 
+bool WireGeometryMatches(const Wire& first, const Wire& second, double tolerance = 1.0e-9)
+{
+    if (first.Kind() != second.Kind()
+        || first.ControlPoints().size() != second.ControlPoints().size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < first.ControlPoints().size(); ++index) {
+        if (!geometry::AlmostEqual(
+                first.ControlPoints()[index], second.ControlPoints()[index], tolerance)) {
+            return false;
+        }
+    }
+    if (first.Kind() != WireKind::Circle && first.Kind() != WireKind::CircularArc) {
+        return true;
+    }
+    const WireArcData firstArc = first.ArcData();
+    const WireArcData secondArc = second.ArcData();
+    return geometry::AlmostEqual(firstArc.center, secondArc.center, tolerance)
+        && geometry::AlmostEqual(firstArc.uAxis, secondArc.uAxis, tolerance)
+        && geometry::AlmostEqual(firstArc.vAxis, secondArc.vAxis, tolerance)
+        && geometry::AlmostEqual(firstArc.radius, secondArc.radius, tolerance)
+        && geometry::AlmostEqual(
+            firstArc.startAngleRadians, secondArc.startAngleRadians, tolerance)
+        && geometry::AlmostEqual(
+            firstArc.sweepAngleRadians, secondArc.sweepAngleRadians, tolerance);
+}
+
 Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vector3 point)
 {
     if (!point.IsFinite()) {
@@ -1367,6 +1394,7 @@ void Project::ApplyCoincidentConstraints()
 
 void Project::ApplyTangentConstraints()
 {
+    std::string lastChangedFollower;
     for (std::size_t pass = 0; pass <= tangentConstraints_.size(); ++pass) {
         bool changed = false;
         for (const WireTangentConstraint& constraint : tangentConstraints_) {
@@ -1380,52 +1408,96 @@ void Project::ApplyTangentConstraints()
                 throw std::logic_error("Endpoint tangent wire is missing.");
             }
 
-            const geometry::Vector3 desiredInterior =
-                EndpointInteriorDirection(anchor->wire, constraint.anchor.endpoint) * -1.0;
-            std::optional<geometry::Vector3> requiredPlaneNormal;
-            if (follower->metadata.planePolicy == WirePlanePolicy::LockedToPlane
-                && follower->metadata.sourcePlaneName.has_value()) {
-                const std::optional<WorkPlane> plane = FindWorkPlane(*follower->metadata.sourcePlaneName);
-                if (!plane.has_value()
-                    || std::abs(geometry::Dot(desiredInterior, plane->Normal())) > 1.0e-7) {
-                    throw std::invalid_argument("Tangent direction would leave the follower work plane.");
+            try {
+                const geometry::Vector3 desiredInterior =
+                    EndpointInteriorDirection(anchor->wire, constraint.anchor.endpoint) * -1.0;
+                std::optional<geometry::Vector3> requiredPlaneNormal;
+                if (follower->metadata.planePolicy == WirePlanePolicy::LockedToPlane
+                    && follower->metadata.sourcePlaneName.has_value()) {
+                    const std::optional<WorkPlane> plane = FindWorkPlane(*follower->metadata.sourcePlaneName);
+                    if (!plane.has_value()
+                        || std::abs(geometry::Dot(desiredInterior, plane->Normal())) > 1.0e-7) {
+                        throw std::invalid_argument("Tangent direction would leave the follower work plane.");
+                    }
+                    requiredPlaneNormal = plane->Normal();
                 }
-                requiredPlaneNormal = plane->Normal();
-            }
 
-            const Wire aligned = constraint.continuity == WireContinuity::G2Curvature
-                ? AlignBezierEndpointCurvature(
-                    follower->wire,
-                    constraint.follower.endpoint,
-                    desiredInterior,
-                    EndpointCurvatureVector(anchor->wire, constraint.anchor.endpoint),
-                    requiredPlaneNormal)
-                : AlignWireEndpointTangent(
-                    follower->wire,
-                    constraint.follower.endpoint,
-                    desiredInterior,
-                    requiredPlaneNormal);
-            if (TangentAlignmentMatches(
-                    follower->wire,
-                    aligned,
-                    constraint.follower.endpoint,
-                    constraint.continuity)) {
-                continue;
+                const Wire aligned = constraint.continuity == WireContinuity::G2Curvature
+                    ? AlignBezierEndpointCurvature(
+                        follower->wire,
+                        constraint.follower.endpoint,
+                        desiredInterior,
+                        EndpointCurvatureVector(anchor->wire, constraint.anchor.endpoint),
+                        requiredPlaneNormal)
+                    : AlignWireEndpointTangent(
+                        follower->wire,
+                        constraint.follower.endpoint,
+                        desiredInterior,
+                        requiredPlaneNormal);
+                if (TangentAlignmentMatches(
+                        follower->wire,
+                        aligned,
+                        constraint.follower.endpoint,
+                        constraint.continuity)) {
+                    continue;
+                }
+                follower->wire = aligned;
+                lastChangedFollower = constraint.follower.wireName;
+                changed = true;
+            } catch (const std::invalid_argument& error) {
+                throw std::invalid_argument(
+                    std::string(error.what()) + " Follower wire: " + constraint.follower.wireName);
             }
-            follower->wire = aligned;
-            changed = true;
         }
         if (!changed) {
             return;
         }
     }
-    throw std::logic_error("Endpoint tangent constraints did not converge.");
+    throw std::invalid_argument(
+        "Conflicting G1/G2 continuity constraints on wire: " + lastChangedFollower);
+}
+
+void Project::ApplyWireConstraints()
+{
+    const std::size_t maximumPasses =
+        (coincidentConstraints_.size() + tangentConstraints_.size()) * 2 + 2;
+    for (std::size_t pass = 0; pass < maximumPasses; ++pass) {
+        std::vector<Wire> before;
+        before.reserve(wires_.size());
+        for (const NamedWire& wire : wires_) {
+            before.push_back(wire.wire);
+        }
+
+        ApplyCoincidentConstraints();
+        ApplyTangentConstraints();
+
+        bool changed = before.size() != wires_.size();
+        for (std::size_t index = 0; !changed && index < wires_.size(); ++index) {
+            changed = !WireGeometryMatches(before[index], wires_[index].wire);
+        }
+        if (!changed) {
+            return;
+        }
+    }
+
+    for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
+        const NamedWire& anchor = RequireWire(constraint.anchor.wireName);
+        const NamedWire& follower = RequireWire(constraint.follower.wireName);
+        if (!geometry::AlmostEqual(
+                EndpointPoint(anchor.wire, constraint.anchor.endpoint),
+                EndpointPoint(follower.wire, constraint.follower.endpoint),
+                1.0e-8)) {
+            throw std::invalid_argument(
+                "Conflicting endpoint and smooth continuity constraints near wire: "
+                + constraint.follower.wireName);
+        }
+    }
+    throw std::invalid_argument("Wire constraint system did not converge.");
 }
 
 void Project::RebuildDependentGeometry()
 {
-    ApplyCoincidentConstraints();
-    ApplyTangentConstraints();
+    ApplyWireConstraints();
     for (NamedSurface& surface : surfaces_) {
         if (surface.surface.Kind() == SurfaceKind::Planar) {
             surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);

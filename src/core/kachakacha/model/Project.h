@@ -213,6 +213,7 @@ private:
     [[nodiscard]] const NamedWire& RequireWire(std::string_view name) const;
     void ApplyCoincidentConstraints();
     void ApplyTangentConstraints();
+    void ApplyWireConstraints();
     void RebuildDependentGeometry();
 
     std::vector<NamedWorkPlane> workPlanes_;

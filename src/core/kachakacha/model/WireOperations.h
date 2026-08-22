@@ -19,6 +19,17 @@ struct LineChamferResult {
     geometry::Vector3 secondTrimPoint;
 };
 
+struct LineFilletResult {
+    Wire trimmedFirst;
+    Wire fillet;
+    Wire trimmedSecond;
+    geometry::Vector3 intersection;
+    geometry::Vector3 firstTangentPoint;
+    geometry::Vector3 secondTangentPoint;
+    geometry::Vector3 center;
+    double radius = 0.0;
+};
+
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(
     const Wire& first,
     RetainedLineEnd retainedFirst,
@@ -26,6 +37,14 @@ struct LineChamferResult {
     const Wire& second,
     RetainedLineEnd retainedSecond,
     double secondSetback,
+    double tolerance = 1.0e-8);
+
+[[nodiscard]] LineFilletResult FilletIntersectingLines(
+    const Wire& first,
+    RetainedLineEnd retainedFirst,
+    const Wire& second,
+    RetainedLineEnd retainedSecond,
+    double radius,
     double tolerance = 1.0e-8);
 
 } // namespace kachakacha::model

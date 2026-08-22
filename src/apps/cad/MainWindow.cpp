@@ -53,6 +53,7 @@ using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
+using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::RetainedLineEnd;
 
 namespace {
@@ -548,13 +549,11 @@ QWidget* MainWindow::BuildMachiningPanel()
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
-    auto* title = new QLabel(QStringLiteral("C面取り"));
-    title->setStyleSheet("font-weight: 600; color: #26323a;");
-    layout->addWidget(title);
-
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     chamferName_ = new QLineEdit("chamfer_1");
+    machiningType_ = new QComboBox;
+    machiningType_->addItems({QStringLiteral("C面取り"), QStringLiteral("R丸め")});
     chamferFirstWire_ = new QComboBox;
     chamferSecondWire_ = new QComboBox;
     chamferFirstBranch_ = new QComboBox;
@@ -562,24 +561,49 @@ QWidget* MainWindow::BuildMachiningPanel()
     const QStringList branchChoices = {QStringLiteral("自動"), QStringLiteral("始点側"), QStringLiteral("終点側")};
     chamferFirstBranch_->addItems(branchChoices);
     chamferSecondBranch_->addItems(branchChoices);
+
+    form->addRow(QStringLiteral("加工種類"), machiningType_);
+    form->addRow(QStringLiteral("加工線の名前"), chamferName_);
+    form->addRow(QStringLiteral("直線 A"), chamferFirstWire_);
+    form->addRow(QStringLiteral("A の残す側"), chamferFirstBranch_);
+    form->addRow(QStringLiteral("直線 B"), chamferSecondWire_);
+    form->addRow(QStringLiteral("B の残す側"), chamferSecondBranch_);
+    layout->addLayout(form);
+
+    machiningValues_ = new QStackedWidget;
+    QFormLayout* chamferForm = nullptr;
+    QWidget* chamferPage = MakeFormPage(chamferForm);
     chamferFirstDistance_ = MakePositiveField(1.0);
     chamferSecondDistance_ = MakePositiveField(1.0);
     chamferFirstDistance_->setSuffix(QStringLiteral(" mm"));
     chamferSecondDistance_->setSuffix(QStringLiteral(" mm"));
+    chamferForm->addRow(QStringLiteral("A の切戻し"), chamferFirstDistance_);
+    chamferForm->addRow(QStringLiteral("B の切戻し"), chamferSecondDistance_);
+    machiningValues_->addWidget(chamferPage);
 
-    form->addRow(QStringLiteral("面取り線の名前"), chamferName_);
-    form->addRow(QStringLiteral("直線 A"), chamferFirstWire_);
-    form->addRow(QStringLiteral("A の残す側"), chamferFirstBranch_);
-    form->addRow(QStringLiteral("A の切戻し"), chamferFirstDistance_);
-    form->addRow(QStringLiteral("直線 B"), chamferSecondWire_);
-    form->addRow(QStringLiteral("B の残す側"), chamferSecondBranch_);
-    form->addRow(QStringLiteral("B の切戻し"), chamferSecondDistance_);
-    layout->addLayout(form);
+    QFormLayout* filletForm = nullptr;
+    QWidget* filletPage = MakeFormPage(filletForm);
+    filletRadius_ = MakePositiveField(1.0);
+    filletRadius_->setSuffix(QStringLiteral(" mm"));
+    filletForm->addRow(QStringLiteral("半径"), filletRadius_);
+    machiningValues_->addWidget(filletPage);
+    layout->addWidget(machiningValues_);
 
-    auto* applyButton = new QPushButton(QStringLiteral("C面取りを作成"));
-    applyButton->setObjectName("primaryButton");
-    connect(applyButton, &QPushButton::clicked, this, &MainWindow::ApplyLineChamfer);
-    layout->addWidget(applyButton);
+    machiningApplyButton_ = new QPushButton(QStringLiteral("C面取りを作成"));
+    machiningApplyButton_->setObjectName("primaryButton");
+    connect(machiningApplyButton_, &QPushButton::clicked, this, [this] {
+        if (machiningType_->currentIndex() == 0) {
+            ApplyLineChamfer();
+        } else {
+            ApplyLineFillet();
+        }
+    });
+    connect(machiningType_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        machiningValues_->setCurrentIndex(index);
+        machiningApplyButton_->setText(index == 0 ? QStringLiteral("C面取りを作成") : QStringLiteral("R丸めを作成"));
+        chamferName_->setText(index == 0 ? SuggestedChamferName() : SuggestedFilletName());
+    });
+    layout->addWidget(machiningApplyButton_);
     layout->addStretch(1);
     return panel;
 }
@@ -829,13 +853,29 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.Wires().size() != initialWireCount + 4) {
         return false;
     }
+    if (project_.Wires()[initialWireCount + 3].name != "__ui_test_chamfer") {
+        return false;
+    }
+
+    Undo();
+    machiningType_->setCurrentIndex(1);
+    chamferName_->setText("__ui_test_fillet");
+    chamferFirstWire_->setCurrentIndex(chamferFirstWire_->findText("__ui_test_line3d"));
+    chamferSecondWire_->setCurrentIndex(chamferSecondWire_->findText("__ui_test_lineB"));
+    filletRadius_->setValue(0.5);
+    ApplyLineFillet();
+
+    if (project_.Wires().size() != initialWireCount + 4) {
+        return false;
+    }
     const auto& line3d = project_.Wires()[initialWireCount];
     const auto& sketchLine = project_.Wires()[initialWireCount + 1];
-    const auto& chamfer = project_.Wires()[initialWireCount + 3];
+    const auto& fillet = project_.Wires()[initialWireCount + 3];
     const bool result = kachakacha::geometry::AlmostEqual(line3d.wire.End(), {3.0, 8.0, 5.0})
         && sketchLine.metadata.sourcePlaneName == "__ui_test_plane"
         && sketchLine.metadata.planePolicy == WirePlanePolicy::ReferenceOnly
-        && chamfer.name == "__ui_test_chamfer";
+        && fillet.name == "__ui_test_fillet"
+        && fillet.wire.Kind() == WireKind::CircularArc;
     toolsTabs_->setCurrentIndex(3);
     return result;
 }
@@ -1103,6 +1143,61 @@ void MainWindow::ApplyLineChamfer()
         statusBar()->showMessage(QStringLiteral("C面取りを作成しました"), 3000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this, QStringLiteral("C面取りを作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::ApplyLineFillet()
+{
+    try {
+        ValidateObjectName(chamferName_->text());
+        if (chamferFirstWire_->currentIndex() < 0 || chamferSecondWire_->currentIndex() < 0) {
+            throw std::invalid_argument("R丸めする2本の直線を選択してください。");
+        }
+
+        const int firstIndex = chamferFirstWire_->currentData().toInt();
+        const int secondIndex = chamferSecondWire_->currentData().toInt();
+        if (firstIndex == secondIndex) {
+            throw std::invalid_argument("異なる2本の直線を選択してください。");
+        }
+        if (firstIndex < 0 || secondIndex < 0
+            || firstIndex >= static_cast<int>(project_.Wires().size())
+            || secondIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("選択した直線が見つかりません。");
+        }
+
+        const auto first = project_.Wires()[firstIndex];
+        const auto second = project_.Wires()[secondIndex];
+        const std::string filletName = ToName(chamferName_->text());
+        for (const auto& existingWire : project_.Wires()) {
+            if (existingWire.name == filletName) {
+                throw std::invalid_argument("同じ名前のワイヤーがあります。");
+            }
+        }
+
+        const auto result = FilletIntersectingLines(
+            first.wire,
+            static_cast<RetainedLineEnd>(chamferFirstBranch_->currentIndex()),
+            second.wire,
+            static_cast<RetainedLineEnd>(chamferSecondBranch_->currentIndex()),
+            filletRadius_->value());
+
+        WireMetadata filletMetadata;
+        if (first.metadata.sourcePlaneName == second.metadata.sourcePlaneName
+            && first.metadata.planePolicy == second.metadata.planePolicy) {
+            filletMetadata = first.metadata;
+        }
+
+        RecordUndo();
+        project_.UpdateWire(first.name, result.trimmedFirst);
+        project_.UpdateWire(second.name, result.trimmedSecond);
+        project_.AddWire(filletName, result.fillet, filletMetadata);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection({CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
+        chamferName_->setText(SuggestedFilletName());
+        statusBar()->showMessage(QStringLiteral("R丸めを作成しました"), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("R丸めを作成できません"), QString::fromUtf8(error.what()));
     }
 }
 
@@ -1461,6 +1556,23 @@ QString MainWindow::SuggestedChamferName() const
         ++number;
     }
     return QStringLiteral("chamfer_%1").arg(number);
+}
+
+QString MainWindow::SuggestedFilletName() const
+{
+    int number = 1;
+    const auto exists = [this](const std::string& name) {
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    while (exists(QStringLiteral("fillet_%1").arg(number).toStdString())) {
+        ++number;
+    }
+    return QStringLiteral("fillet_%1").arg(number);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

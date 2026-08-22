@@ -14,6 +14,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
+class QPushButton;
 class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
@@ -46,6 +47,7 @@ private:
     void AddWire();
     void ApplySelectedEdit();
     void ApplyLineChamfer();
+    void ApplyLineFillet();
     void DeleteSelection();
     void Undo();
     void Redo();
@@ -62,6 +64,7 @@ private:
     QString SuggestedPlaneName() const;
     QString SuggestedWireName() const;
     QString SuggestedChamferName() const;
+    QString SuggestedFilletName() const;
 
     kachakacha::model::Project project_;
     QString currentPath_;
@@ -93,12 +96,16 @@ private:
     QDoubleSpinBox* editArcSweepAngle_ = nullptr;
 
     QLineEdit* chamferName_ = nullptr;
+    QComboBox* machiningType_ = nullptr;
+    QStackedWidget* machiningValues_ = nullptr;
+    QPushButton* machiningApplyButton_ = nullptr;
     QComboBox* chamferFirstWire_ = nullptr;
     QComboBox* chamferSecondWire_ = nullptr;
     QComboBox* chamferFirstBranch_ = nullptr;
     QComboBox* chamferSecondBranch_ = nullptr;
     QDoubleSpinBox* chamferFirstDistance_ = nullptr;
     QDoubleSpinBox* chamferSecondDistance_ = nullptr;
+    QDoubleSpinBox* filletRadius_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

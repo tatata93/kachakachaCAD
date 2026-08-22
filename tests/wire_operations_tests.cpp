@@ -7,6 +7,7 @@
 using kachakacha::geometry::AlmostEqual;
 using kachakacha::geometry::Vector3;
 using kachakacha::model::ChamferIntersectingLines;
+using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::Wire;
 
@@ -79,6 +80,39 @@ void RejectsInvalidChamfers()
     Require(setbackRejected, "oversized setback rejected");
 }
 
+void FilletsSharedCornerWithTangentArc()
+{
+    const Wire horizontal = Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0});
+    const Wire vertical = Wire::Line({0.0, 0.0, 0.0}, {0.0, 10.0, 0.0});
+
+    const auto result = FilletIntersectingLines(
+        horizontal, RetainedLineEnd::Automatic,
+        vertical, RetainedLineEnd::Automatic,
+        2.0);
+
+    RequireNear(result.center, {2.0, 2.0, 0.0}, "fillet center");
+    RequireNear(result.firstTangentPoint, {2.0, 0.0, 0.0}, "first tangent point");
+    RequireNear(result.secondTangentPoint, {0.0, 2.0, 0.0}, "second tangent point");
+    RequireNear(result.fillet.Start(), result.firstTangentPoint, "fillet start");
+    RequireNear(result.fillet.End(), result.secondTangentPoint, "fillet end");
+    Require(result.fillet.Kind() == kachakacha::model::WireKind::CircularArc, "fillet is an arc");
+}
+
+void FilletsCornerInArbitrary3DPlane()
+{
+    const Wire first = Wire::Line({1.0, 2.0, 3.0}, {11.0, 2.0, 3.0});
+    const Wire second = Wire::Line({1.0, 2.0, 3.0}, {1.0, 2.0, 13.0});
+
+    const auto result = FilletIntersectingLines(
+        first, RetainedLineEnd::Automatic,
+        second, RetainedLineEnd::Automatic,
+        1.5);
+
+    RequireNear(result.center, {2.5, 2.0, 4.5}, "3d plane fillet center");
+    RequireNear(result.firstTangentPoint, {2.5, 2.0, 3.0}, "3d first tangent");
+    RequireNear(result.secondTangentPoint, {1.0, 2.0, 4.5}, "3d second tangent");
+}
+
 } // namespace
 
 int main()
@@ -87,6 +121,8 @@ int main()
         ChamfersSharedCornerAutomatically();
         ChamfersChosenBranchesAtCrossing();
         RejectsInvalidChamfers();
+        FilletsSharedCornerWithTangentArc();
+        FilletsCornerInArbitrary3DPlane();
     } catch (const std::exception& error) {
         std::cerr << "wire_operations_tests failed: " << error.what() << '\n';
         return 1;

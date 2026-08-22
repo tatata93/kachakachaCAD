@@ -7,6 +7,7 @@
 namespace kachakacha::model {
 
 using geometry::Dot;
+using geometry::Cross;
 using geometry::Vector3;
 
 namespace {
@@ -125,6 +126,57 @@ LineChamferResult ChamferIntersectingLines(
         intersection.point,
         trimmedFirst.trimPoint,
         trimmedSecond.trimPoint,
+    };
+}
+
+LineFilletResult FilletIntersectingLines(
+    const Wire& first,
+    RetainedLineEnd retainedFirst,
+    const Wire& second,
+    RetainedLineEnd retainedSecond,
+    double radius,
+    double tolerance)
+{
+    if (!std::isfinite(radius) || radius <= tolerance) {
+        throw std::invalid_argument("Fillet radius must be positive.");
+    }
+
+    const SegmentIntersection intersection = IntersectSegments(first, second, tolerance);
+    const RetainedLineEnd resolvedFirst = ResolveRetainedEnd(first, intersection.point, retainedFirst);
+    const RetainedLineEnd resolvedSecond = ResolveRetainedEnd(second, intersection.point, retainedSecond);
+    const Vector3 firstRetainedPoint = resolvedFirst == RetainedLineEnd::Start ? first.Start() : first.End();
+    const Vector3 secondRetainedPoint = resolvedSecond == RetainedLineEnd::Start ? second.Start() : second.End();
+    const Vector3 firstDirection = (firstRetainedPoint - intersection.point).Normalized();
+    const Vector3 secondDirection = (secondRetainedPoint - intersection.point).Normalized();
+    const double cosine = std::clamp(Dot(firstDirection, secondDirection), -1.0, 1.0);
+    const double angle = std::acos(cosine);
+    if (angle <= tolerance || std::abs(3.14159265358979323846 - angle) <= tolerance) {
+        throw std::invalid_argument("Fillet branches must form a usable corner angle.");
+    }
+
+    const double tangentDistance = radius / std::tan(angle * 0.5);
+    const TrimmedLine trimmedFirst = TrimLine(first, intersection.point, resolvedFirst, tangentDistance, tolerance);
+    const TrimmedLine trimmedSecond = TrimLine(second, intersection.point, resolvedSecond, tangentDistance, tolerance);
+    const Vector3 bisector = (firstDirection + secondDirection).Normalized();
+    const Vector3 center = intersection.point + bisector * (radius / std::sin(angle * 0.5));
+    const Vector3 normal = Cross(firstDirection, secondDirection).Normalized();
+    const Vector3 startRadius = (trimmedFirst.trimPoint - center).Normalized();
+    const Vector3 endRadius = (trimmedSecond.trimPoint - center).Normalized();
+    const Vector3 arcVAxis = Cross(normal, startRadius).Normalized();
+    const double sweep = std::atan2(Dot(Cross(startRadius, endRadius), normal), Dot(startRadius, endRadius));
+    if (std::abs(sweep) <= tolerance) {
+        throw std::invalid_argument("Fillet arc sweep is too small.");
+    }
+
+    return {
+        trimmedFirst.wire,
+        Wire::CircularArc(center, startRadius, arcVAxis, radius, 0.0, sweep),
+        trimmedSecond.wire,
+        intersection.point,
+        trimmedFirst.trimPoint,
+        trimmedSecond.trimPoint,
+        center,
+        radius,
     };
 }
 

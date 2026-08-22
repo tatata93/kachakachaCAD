@@ -22,6 +22,7 @@ struct WireMetadata {
     std::optional<std::string> sourcePlaneName;
     WirePlanePolicy planePolicy = WirePlanePolicy::Free3D;
     WireLineConstraints lineConstraints;
+    bool construction = false;
 };
 
 struct NamedWorkPlane {

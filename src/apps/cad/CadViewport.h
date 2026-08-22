@@ -12,6 +12,7 @@
 #include <vector>
 
 class QKeyEvent;
+class QEvent;
 
 enum class CadSelectionKind {
     None,
@@ -79,6 +80,7 @@ public:
     void SetReference(CadSelection reference);
     [[nodiscard]] CadSelection Selection() const noexcept { return selection_; }
     [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
+    [[nodiscard]] CadSelection HoveredSelection() const noexcept { return hoveredSelection_; }
     void SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback);
     void SetLineCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetPolylineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
@@ -126,10 +128,12 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void leaveEvent(QEvent* event) override;
 
 private:
     [[nodiscard]] QPointF ProjectPoint(kachakacha::geometry::Vector3 point) const;
     [[nodiscard]] std::array<kachakacha::geometry::Vector3, 3> CurrentViewBasis() const;
+    [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
@@ -144,12 +148,15 @@ private:
         Qt::KeyboardModifiers modifiers) const;
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
     void CommitMeasurementPick(QPointF position);
+    void UpdateHover(QPointF position);
+    void ClearHover();
     void NotifyDrawingState();
     void NotifySelection();
 
     const kachakacha::model::Project* project_ = nullptr;
     CadSelection selection_;
     CadSelection reference_;
+    CadSelection hoveredSelection_;
     std::vector<CadSelection> selections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineCreated_;
@@ -170,6 +177,9 @@ private:
     double snapStep_ = 1.0;
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
+    std::optional<kachakacha::geometry::Vector3> hoveredWirePoint_;
+    std::optional<double> hoveredWireParameter_;
+    QPoint hoverScreenPosition_;
     std::optional<double> splitPreviewParameter_;
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;

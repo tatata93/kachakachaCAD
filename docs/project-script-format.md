@@ -100,6 +100,14 @@ wire_constraint NAME LENGTH|- ANGLE_DEGREES|-
 
 直線の始点を固定端として、長さと作業平面内の角度を保持する。`-` はその項目を拘束しない。角度は作成元平面のU方向を0度、V方向を90度とするため、角度を指定する場合は先に `wire_meta` で作成元平面を設定する。長さだけなら自由な3D直線にも使用できる。
 
+### 補助線
+
+```text
+wire_role NAME construction|model
+```
+
+`construction` はスナップや寸法基準に使う補助線で、面・投影・開口・切断出力の形状には使われない。省略時は `model`。
+
 ### 作業平面上の直線
 
 ```text

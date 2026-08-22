@@ -123,6 +123,9 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     selection_ = {};
     selections_.clear();
     reference_ = {};
+    hoveredSelection_ = {};
+    hoveredWirePoint_.reset();
+    hoveredWireParameter_.reset();
     measurementPicks_.clear();
     measurementOverlayFirst_.reset();
     measurementOverlaySecond_.reset();
@@ -237,7 +240,11 @@ void CadViewport::SetTool(ViewportTool tool)
 {
     tool_ = tool;
     CancelDrawing();
-    setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+    setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
+            && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
+                || tool_ == ViewportTool::SplitWire)
+        ? Qt::PointingHandCursor
+        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
 }
 
@@ -838,6 +845,74 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
     update();
 }
 
+void CadViewport::UpdateHover(QPointF position)
+{
+    hoverScreenPosition_ = position.toPoint();
+    hoveredSelection_ = {};
+    hoveredWirePoint_.reset();
+    hoveredWireParameter_.reset();
+
+    if (project_ != nullptr) {
+        double bestPointDistance = 8.0;
+        int bestPointWire = -1;
+        Vector3 bestPoint;
+        const auto considerPoint = [&](int wireIndex, Vector3 point) {
+            const double distance = QLineF(position, ProjectPoint(point)).length();
+            if (distance < bestPointDistance) {
+                bestPointDistance = distance;
+                bestPointWire = wireIndex;
+                bestPoint = point;
+            }
+        };
+
+        for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+            const NamedWire& namedWire = project_->Wires()[index];
+            if (!namedWire.visible) {
+                continue;
+            }
+            considerPoint(index, namedWire.wire.Start());
+            if (!namedWire.wire.IsClosed()) {
+                considerPoint(index, namedWire.wire.End());
+            }
+            if (IsSelected(CadSelectionKind::Wire, index)) {
+                for (const Vector3& point : namedWire.wire.ControlPoints()) {
+                    considerPoint(index, point);
+                }
+            }
+        }
+
+        if (bestPointWire >= 0) {
+            hoveredSelection_ = {CadSelectionKind::Wire, bestPointWire};
+            hoveredWirePoint_ = bestPoint;
+        } else {
+            const CadSelection hit = HitTestWire(position, 9.0);
+            if (hit.kind == CadSelectionKind::Wire) {
+                hoveredSelection_ = hit;
+                hoveredWireParameter_ = NearestWireParameter(hit.index, position, 12.0, true);
+            }
+        }
+    }
+
+    setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
+            && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
+                || tool_ == ViewportTool::SplitWire)
+        ? Qt::PointingHandCursor
+        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+    update();
+}
+
+void CadViewport::ClearHover()
+{
+    if (hoveredSelection_.kind == CadSelectionKind::None
+        && !hoveredWirePoint_.has_value() && !hoveredWireParameter_.has_value()) {
+        return;
+    }
+    hoveredSelection_ = {};
+    hoveredWirePoint_.reset();
+    hoveredWireParameter_.reset();
+    update();
+}
+
 void CadViewport::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
@@ -1087,15 +1162,34 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
             const bool selected = IsSelected(CadSelectionKind::Wire, index);
             const bool reference = reference_.kind == CadSelectionKind::Wire && reference_.index == index;
-            painter.setPen(QPen(
-                reference ? QColor("#007f78") : selected ? QColor("#e69f00") : WireColor(namedWire.wire.Kind()),
-                reference || selected ? 3.2 : 2.0,
-                reference ? Qt::DashDotLine : Qt::SolidLine));
+            const bool hovered = hoveredSelection_.kind == CadSelectionKind::Wire
+                && hoveredSelection_.index == index;
             QPainterPath path(ProjectPoint(namedWire.wire.Evaluate(0.0)));
             const int samples = namedWire.wire.Kind() == WireKind::Line ? 1 : 64;
             for (int sample = 1; sample <= samples; ++sample) {
                 path.lineTo(ProjectPoint(namedWire.wire.Evaluate(static_cast<double>(sample) / samples)));
             }
+
+            if (hovered) {
+                painter.setBrush(Qt::NoBrush);
+                painter.setPen(QPen(QColor(17, 132, 160, 92), selected ? 7.5 : 7.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                painter.drawPath(path);
+            }
+            const QColor wireColor = reference ? QColor("#007f78")
+                : selected ? QColor("#e69200")
+                : hovered ? QColor("#087f9c")
+                : namedWire.metadata.construction ? QColor("#697984")
+                : WireColor(namedWire.wire.Kind());
+            const Qt::PenStyle wireStyle = reference ? Qt::DashDotLine
+                : namedWire.metadata.construction ? Qt::DashLine
+                : Qt::SolidLine;
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(
+                wireColor,
+                hovered ? (selected || reference ? 4.2 : 3.4) : reference || selected ? 3.2 : namedWire.metadata.construction ? 1.7 : 2.0,
+                wireStyle,
+                Qt::RoundCap,
+                Qt::RoundJoin));
             painter.drawPath(path);
 
             if (selected) {
@@ -1103,6 +1197,14 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.setPen(QPen(QColor("#e69f00"), 2.0));
                 for (const Vector3& point : namedWire.wire.ControlPoints()) {
                     painter.drawEllipse(ProjectPoint(point), 4.0, 4.0);
+                }
+                const auto drawEndpoint = [&](Vector3 point) {
+                    const QPointF screenPoint = ProjectPoint(point);
+                    painter.drawRect(QRectF(screenPoint - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
+                };
+                drawEndpoint(namedWire.wire.Start());
+                if (!namedWire.wire.IsClosed()) {
+                    drawEndpoint(namedWire.wire.End());
                 }
             }
             if (reference) {
@@ -1114,6 +1216,61 @@ void CadViewport::paintEvent(QPaintEvent*)
                     ProjectPoint(namedWire.wire.Evaluate(0.5)) + QPointF(6.0, -7.0),
                     QStringLiteral("基準"));
             }
+        }
+
+        if (hoveredSelection_.kind == CadSelectionKind::Wire
+            && hoveredSelection_.index >= 0
+            && hoveredSelection_.index < static_cast<int>(project_->Wires().size())) {
+            const NamedWire& hoveredWire = project_->Wires()[hoveredSelection_.index];
+            Vector3 anchorPoint = hoveredWire.wire.Evaluate(0.5);
+            QString hoverText = QString::fromUtf8(hoveredWire.name);
+            if (hoveredWire.metadata.construction) {
+                hoverText += QStringLiteral("  （補助）");
+            }
+            if (hoveredWirePoint_.has_value()) {
+                anchorPoint = *hoveredWirePoint_;
+                hoverText += hoveredWire.wire.IsClosed()
+                    ? QStringLiteral("  基準点")
+                    : AlmostEqual(anchorPoint, hoveredWire.wire.Start(), 1.0e-8)
+                    ? QStringLiteral("  始点")
+                    : AlmostEqual(anchorPoint, hoveredWire.wire.End(), 1.0e-8)
+                    ? QStringLiteral("  終点")
+                    : QStringLiteral("  制御点");
+                const QPointF screenPoint = ProjectPoint(anchorPoint);
+                painter.setBrush(QColor("#ffffff"));
+                painter.setPen(QPen(QColor("#087f9c"), 2.4));
+                painter.drawEllipse(screenPoint, 6.0, 6.0);
+            } else if (hoveredWireParameter_.has_value()) {
+                anchorPoint = hoveredWire.wire.Evaluate(*hoveredWireParameter_);
+            }
+
+            const QFontMetrics metrics = painter.fontMetrics();
+            const QRect textBounds = metrics.boundingRect(hoverText);
+            QPointF labelAnchor = ProjectPoint(anchorPoint) + QPointF(10.0, -10.0);
+            if (!rect().contains(hoverScreenPosition_)) {
+                labelAnchor = QPointF(hoverScreenPosition_) + QPointF(10.0, -10.0);
+            }
+            QRectF labelBox(
+                labelAnchor.x(), labelAnchor.y() - textBounds.height() - 7.0,
+                textBounds.width() + 14.0, textBounds.height() + 10.0);
+            const QRectF viewportBounds = QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0);
+            if (labelBox.right() > viewportBounds.right()) {
+                labelBox.moveRight(viewportBounds.right());
+            }
+            if (labelBox.left() < viewportBounds.left()) {
+                labelBox.moveLeft(viewportBounds.left());
+            }
+            if (labelBox.top() < viewportBounds.top()) {
+                labelBox.moveTop(viewportBounds.top());
+            }
+            if (labelBox.bottom() > viewportBounds.bottom()) {
+                labelBox.moveBottom(viewportBounds.bottom());
+            }
+            painter.setPen(QPen(QColor("#087f9c"), 1.0));
+            painter.setBrush(QColor(255, 255, 255, 238));
+            painter.drawRoundedRect(labelBox, 3.0, 3.0);
+            painter.setPen(QColor("#075f69"));
+            painter.drawText(labelBox, Qt::AlignCenter, hoverText);
         }
     }
 
@@ -1423,13 +1580,13 @@ void CadViewport::paintEvent(QPaintEvent*)
     drawCubeFace(cube.isometric, ViewCubeFace::Isometric, QColor("#f3d9a5"), QStringLiteral("3D"));
 }
 
-CadSelection CadViewport::HitTest(QPointF position) const
+CadSelection CadViewport::HitTestWire(QPointF position, double maximumDistance) const
 {
-    if (project_ == nullptr) {
+    if (project_ == nullptr || !std::isfinite(maximumDistance) || maximumDistance <= 0.0) {
         return {};
     }
 
-    double bestDistance = 9.0;
+    double bestDistance = maximumDistance;
     CadSelection best;
     for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
         const auto& namedWire = project_->Wires()[index];
@@ -1449,8 +1606,18 @@ CadSelection CadViewport::HitTest(QPointF position) const
             previous = current;
         }
     }
-    if (best.kind != CadSelectionKind::None) {
-        return best;
+    return best;
+}
+
+CadSelection CadViewport::HitTest(QPointF position) const
+{
+    if (project_ == nullptr) {
+        return {};
+    }
+
+    const CadSelection wire = HitTestWire(position);
+    if (wire.kind != CadSelectionKind::None) {
+        return wire;
     }
 
     for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
@@ -1614,6 +1781,13 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
                 : Qt::PointingHandCursor);
         update();
+    }
+
+    if (dragButton_ == Qt::NoButton
+        && hoveredFace == static_cast<int>(ViewCubeFace::None)) {
+        UpdateHover(event->position());
+    } else if (hoveredFace != static_cast<int>(ViewCubeFace::None)) {
+        ClearHover();
     }
 
     if (tool_ == ViewportTool::SplitWire) {
@@ -1783,6 +1957,12 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+void CadViewport::leaveEvent(QEvent* event)
+{
+    ClearHover();
+    QWidget::leaveEvent(event);
 }
 
 void CadViewport::wheelEvent(QWheelEvent* event)

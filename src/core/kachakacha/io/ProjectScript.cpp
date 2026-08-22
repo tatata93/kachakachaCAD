@@ -381,6 +381,31 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 }
                 metadata.lineConstraints = constraints;
                 project.SetWireMetadata(name, std::move(metadata));
+            } else if (command == "wire_role") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const std::string role = ReadName(stream, sourceName, lineNumber, "wire role");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+
+                bool found = false;
+                WireMetadata metadata;
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        metadata = wire.metadata;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    ThrowLineError(sourceName, lineNumber, "Wire does not exist: " + name);
+                }
+                if (role == "construction" || role == "guide") {
+                    metadata.construction = true;
+                } else if (role == "model" || role == "geometry") {
+                    metadata.construction = false;
+                } else {
+                    ThrowLineError(sourceName, lineNumber, "Unknown wire role: " + role);
+                }
+                project.SetWireMetadata(name, std::move(metadata));
             } else if (command == "sketch_line") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -619,6 +644,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             }
             output << '\n';
         }
+        if (namedWire.metadata.construction) {
+            output << "wire_role " << namedWire.name << " construction\n";
+        }
     }
 
     if (!project.Surfaces().empty()) {
@@ -661,6 +689,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                << namedWire.projection->targetSurfaceName << ' ';
         WriteVector3(output, namedWire.projection->direction);
         output << '\n';
+        if (namedWire.metadata.construction) {
+            output << "wire_role " << namedWire.name << " construction\n";
+        }
     }
 
     if (!project.Plates().empty()) {

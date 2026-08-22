@@ -29,6 +29,9 @@ void Require(bool condition, const char* message)
 int main()
 {
     const WorkPlane plane = WorkPlane::FromPointNormal({10.0, 20.0, 30.0}, {0.0, 0.0, 1.0});
+    NamedWire construction{"centerline", Wire::Line(
+        plane.ToWorld(-100.0, 5.0), plane.ToWorld(100.0, 5.0))};
+    construction.metadata.construction = true;
     const std::vector<NamedWire> wires = {
         {"outline", Wire::Polyline({
              plane.ToWorld(0.0, 0.0),
@@ -43,6 +46,7 @@ int main()
              plane.ToWorld(5.0, 8.0),
              plane.ToWorld(15.0, 8.0),
              plane.ToWorld(18.0, 2.0))},
+        construction,
     };
 
     std::ostringstream svg;
@@ -56,6 +60,15 @@ int main()
     Require(dxf.str().find("$INSUNITS\n70\n4") != std::string::npos, "DXF declares millimeter units");
     Require(dxf.str().find("POLYLINE") != std::string::npos, "DXF contains polylines");
     Require(dxf.str().find("VERTEX") != std::string::npos, "DXF contains vertices");
+
+    bool constructionOnlyRejected = false;
+    try {
+        std::ostringstream constructionOnly;
+        WritePlanarSvg(constructionOnly, plane, {construction});
+    } catch (const std::invalid_argument&) {
+        constructionOnlyRejected = true;
+    }
+    Require(constructionOnlyRejected, "construction-only export is rejected");
 
     const Wire offPlane = Wire::Line(plane.ToWorld(0.0, 0.0), plane.ToWorld(1.0, 1.0, 0.1));
     Require(!WireLiesOnWorkPlane(offPlane, plane), "off-plane wire is rejected");

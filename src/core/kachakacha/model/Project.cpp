@@ -71,6 +71,30 @@ Wire ConstrainWire(const Project& project, const Wire& wire, const WireMetadata&
     return ApplyWireLineConstraints(wire, ConstraintPlane(project, metadata), metadata.lineConstraints);
 }
 
+void RequireConstructionWireHasNoModelDependencies(const Project& project, std::string_view wireName)
+{
+    for (const NamedSurface& surface : project.Surfaces()) {
+        if (std::find(surface.sourceWireNames.begin(), surface.sourceWireNames.end(), wireName)
+            != surface.sourceWireNames.end()) {
+            throw std::invalid_argument("A surface source wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
+    }
+    for (const NamedWire& wire : project.Wires()) {
+        if (wire.projection.has_value() && wire.projection->sourceWireName == wireName) {
+            throw std::invalid_argument("A projection source wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
+    }
+    for (const NamedPlate& plate : project.Plates()) {
+        if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), wireName)
+            != plate.openingWireNames.end()) {
+            throw std::invalid_argument("A plate opening wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
+    }
+}
+
 bool OpeningLiesWithinRange(
     const Surface& surface,
     const NamedWire& opening,
@@ -140,6 +164,9 @@ void Project::AddPlanarSurface(std::string name, std::string boundaryWireName)
     if (boundary.projection.has_value()) {
         throw std::invalid_argument("Projected wire cannot be used as a planar surface source.");
     }
+    if (boundary.metadata.construction) {
+        throw std::invalid_argument("Construction wire cannot be used as a planar surface source.");
+    }
     surfaces_.push_back({std::move(name), Surface::Planar(boundary.wire), {std::move(boundaryWireName)}});
 }
 
@@ -158,6 +185,9 @@ void Project::AddRuledSurface(std::string name, std::string firstSectionName, st
     const NamedWire& second = RequireWire(secondSectionName);
     if (first.projection.has_value() || second.projection.has_value()) {
         throw std::invalid_argument("Projected wire cannot be used as a ruled surface section.");
+    }
+    if (first.metadata.construction || second.metadata.construction) {
+        throw std::invalid_argument("Construction wire cannot be used as a ruled surface section.");
     }
     surfaces_.push_back({
         std::move(name),
@@ -187,6 +217,9 @@ void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionN
         const NamedWire& section = RequireWire(sectionName);
         if (section.projection.has_value()) {
             throw std::invalid_argument("Projected wire cannot be used as a loft section.");
+        }
+        if (section.metadata.construction) {
+            throw std::invalid_argument("Construction wire cannot be used as a loft section.");
         }
         sections.push_back(section.wire);
     }
@@ -239,6 +272,9 @@ void Project::AddProjectedWire(
     const NamedWire& source = RequireWire(sourceWireName);
     if (source.projection.has_value()) {
         throw std::invalid_argument("A projected wire cannot be used as another projection source.");
+    }
+    if (source.metadata.construction) {
+        throw std::invalid_argument("Construction wire cannot be used as a projection source.");
     }
     const std::optional<Surface> surface = FindSurface(targetSurfaceName);
     if (!surface.has_value()) {
@@ -310,6 +346,9 @@ void Project::UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetada
         if (namedWire.projection.has_value()) {
             throw std::invalid_argument("Projected wire must be edited through its source drawing.");
         }
+        if (metadata.construction) {
+            RequireConstructionWireHasNoModelDependencies(candidate, name);
+        }
         namedWire.wire = ConstrainWire(candidate, wire, metadata);
         namedWire.metadata = std::move(metadata);
         candidate.RebuildDependentGeometry();
@@ -363,6 +402,9 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
 
     for (NamedWire& wire : candidate.wires_) {
         if (wire.name == name) {
+            if (metadata.construction) {
+                RequireConstructionWireHasNoModelDependencies(candidate, name);
+            }
             wire.wire = ConstrainWire(candidate, wire.wire, metadata);
             wire.metadata = std::move(metadata);
             candidate.RebuildDependentGeometry();
@@ -538,6 +580,9 @@ void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
         throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
     }
     const NamedWire& wire = RequireWire(wireName);
+    if (wire.metadata.construction) {
+        throw std::invalid_argument("Construction wire cannot be used as a plate opening: " + wireName);
+    }
     if (!wire.wire.IsClosed()) {
         throw std::invalid_argument("Plate opening wire must be closed: " + wireName);
     }

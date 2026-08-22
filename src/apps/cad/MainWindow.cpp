@@ -623,6 +623,10 @@ QWidget* MainWindow::BuildDrawingPanel()
     addToolButton(bezierToolAction_, 3, 0, 2);
     layout->addLayout(toolGrid);
 
+    drawingConstruction_ = new QCheckBox(QStringLiteral("補助線として作図"));
+    drawingConstruction_->setToolTip(QStringLiteral("スナップや寸法基準に使い、面や切断出力には含めない"));
+    layout->addWidget(drawingConstruction_);
+
     drawingDimensionSection_ = new QWidget;
     auto* dimensionLayout = new QVBoxLayout(drawingDimensionSection_);
     dimensionLayout->setContentsMargins(0, 2, 0, 0);
@@ -1024,6 +1028,8 @@ QWidget* MainWindow::BuildEditPanel()
     });
     metadataForm->addRow(QStringLiteral("作成元平面"), editWireSourcePlane_);
     metadataForm->addRow(QStringLiteral("平面との関係"), editWirePolicy_);
+    editWireConstruction_ = new QCheckBox(QStringLiteral("補助線（面・出力から除外）"));
+    metadataForm->addRow(QStringLiteral("用途"), editWireConstruction_);
     wireLayout->addLayout(metadataForm);
 
     editWireConstraintPanel_ = new QGroupBox(QStringLiteral("直線の寸法を保持"));
@@ -1726,14 +1732,15 @@ void MainWindow::ExportPlanar(bool dxf)
         std::vector<kachakacha::model::NamedWire> wires;
         if (exportScope_->currentIndex() == 0) {
             for (const auto& wire : project_.Wires()) {
-                if (WireLiesOnWorkPlane(wire.wire, *plane)) {
+                if (!wire.metadata.construction && WireLiesOnWorkPlane(wire.wire, *plane)) {
                     wires.push_back(wire);
                 }
             }
         } else {
             for (const CadSelection& selection : viewport_->Selections()) {
                 if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                    && selection.index < static_cast<int>(project_.Wires().size())) {
+                    && selection.index < static_cast<int>(project_.Wires().size())
+                    && !project_.Wires()[selection.index].metadata.construction) {
                     wires.push_back(project_.Wires()[selection.index]);
                 }
             }
@@ -2597,6 +2604,7 @@ void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire line = Wire::Line(start, end);
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("line"))), line, metadata);
@@ -2618,6 +2626,7 @@ void MainWindow::AddViewportPolyline(const std::vector<Vector3>& points)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire polyline = Wire::Polyline(points);
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("polyline"))), polyline, metadata);
@@ -2640,6 +2649,7 @@ void MainWindow::AddViewportRectangle(const std::array<Vector3, 4>& corners)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("rectangle"))), rectangle, metadata);
         MarkModified();
@@ -2661,6 +2671,7 @@ void MainWindow::AddViewportCircle(Vector3 center, double radius)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire circle = Wire::Circle(center, plane->UAxis(), plane->VAxis(), radius);
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("circle"))), circle, metadata);
@@ -2682,6 +2693,7 @@ void MainWindow::AddViewportArc(Vector3 start, Vector3 through, Vector3 end)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire arc = Wire::CircularArcThroughThreePoints(start, through, end);
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("arc"))), arc, metadata);
@@ -2703,6 +2715,7 @@ void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
         WireMetadata metadata;
         metadata.sourcePlaneName = planeName;
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire bezier = Wire::CubicBezier(points[0], points[1], points[2], points[3]);
         RecordUndo();
         project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("bezier"))), bezier, metadata);
@@ -3135,6 +3148,11 @@ void MainWindow::CreateSurfaceFromSelection()
             }
             throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを3本以上選択してください。");
         }
+        for (int index : wireIndices) {
+            if (project_.Wires()[index].metadata.construction) {
+                throw std::invalid_argument("補助線は面の境界や断面には使えません。通常線へ戻してから選択してください。");
+            }
+        }
 
         Project candidate = project_;
         const std::string name = ToName(surfaceName_->text());
@@ -3197,6 +3215,9 @@ void MainWindow::ProjectSelectedWiresToSurface()
         }
         for (int index : wireIndices) {
             const auto& source = project_.Wires()[index];
+            if (source.metadata.construction) {
+                throw std::invalid_argument("補助線は面へ投影できません。通常線へ戻してから選択してください。");
+            }
             if (source.projection.has_value()) {
                 throw std::invalid_argument("投影後のワイヤーではなく、元の平面図を選択してください。");
             }
@@ -3507,7 +3528,9 @@ bool MainWindow::RunCreationSelfTest()
         || platePdfOverlap_ == nullptr
         || measurementMode_ == nullptr
         || measurementResultLabel_ == nullptr
-        || measureToolAction_ == nullptr) {
+        || measureToolAction_ == nullptr
+        || drawingConstruction_ == nullptr
+        || editWireConstruction_ == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -3762,6 +3785,13 @@ bool MainWindow::RunCreationSelfTest()
                    << "rectangle" << afterRectangle
                    << "circle" << project_.Wires().size();
         return fail("direct drawing result");
+    }
+
+    SetViewportTool(ViewportTool::Select);
+    sendMouse(QEvent::MouseMove, center + QPointF(-105.0, 90.0), Qt::NoButton, Qt::NoButton);
+    if (viewport_->HoveredSelection().kind != CadSelectionKind::Wire
+        || viewport_->HoveredSelection().index != static_cast<int>(directStart)) {
+        return fail("wire hover hit");
     }
 
     const std::size_t exactStart = project_.Wires().size();
@@ -4271,6 +4301,21 @@ bool MainWindow::RunCreationSelfTest()
         return fail("show all objects");
     }
 
+    UpdateSelection({CadSelectionKind::Wire, static_cast<int>(initialWireCount)}, false);
+    editWireConstruction_->setChecked(true);
+    ApplySelectedEdit();
+    if (!project_.Wires()[initialWireCount].metadata.construction) {
+        return fail("set construction wire");
+    }
+    Undo();
+    if (project_.Wires()[initialWireCount].metadata.construction) {
+        return fail("undo construction wire");
+    }
+    Redo();
+    if (!project_.Wires()[initialWireCount].metadata.construction) {
+        return fail("redo construction wire");
+    }
+
     std::ostringstream directDrawingScript;
     WriteProjectScript(directDrawingScript, project_);
     std::istringstream directDrawingInput(directDrawingScript.str());
@@ -4279,6 +4324,7 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Wires()[directStart + 5].wire.Kind() != WireKind::CubicBezier
         || reloadedProject.Wires()[constrainedLineIndex].metadata.lineConstraints.lengthMillimeters != 8.0
         || reloadedProject.Wires()[constrainedLineIndex].metadata.lineConstraints.angleDegrees != 0.0
+        || !reloadedProject.Wires()[initialWireCount].metadata.construction
         || reloadedProject.Wires()[mirrorStart].metadata.sourcePlaneName != drawingPlaneName
         || reloadedProject.Wires()[referenceMirrorStart].wire.Kind() != WireKind::Circle
         || reloadedProject.Wires()[splitStart].wire.Kind() != WireKind::Polyline
@@ -4570,6 +4616,7 @@ void MainWindow::ApplySelectedEdit()
                 metadata.sourcePlaneName.reset();
             }
             metadata.planePolicy = static_cast<WirePlanePolicy>(editWirePolicy_->currentIndex());
+            metadata.construction = editWireConstruction_->isChecked();
             metadata.lineConstraints = {};
             if (namedWire.wire.Kind() == WireKind::Line) {
                 if (editWireLockLength_->isChecked()) {
@@ -4921,7 +4968,11 @@ void MainWindow::RefreshModelViews(bool fitView)
     }
     auto* wireRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("ワイヤー (%1)").arg(project_.Wires().size())});
     for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
-        auto* item = new QTreeWidgetItem(wireRoot, {ToQString(project_.Wires()[index].name)});
+        const auto& wire = project_.Wires()[index];
+        const QString label = wire.metadata.construction
+            ? QStringLiteral("%1 （補助）").arg(ToQString(wire.name))
+            : ToQString(wire.name);
+        auto* item = new QTreeWidgetItem(wireRoot, {label});
         item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Wire));
         item->setData(0, kSelectionIndexRole, index);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
@@ -5065,12 +5116,13 @@ void MainWindow::RefreshExportSummary()
         std::size_t count = 0;
         if (exportScope_->currentIndex() == 0) {
             count = static_cast<std::size_t>(std::count_if(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
-                return WireLiesOnWorkPlane(wire.wire, *plane);
+                return !wire.metadata.construction && WireLiesOnWorkPlane(wire.wire, *plane);
             }));
         } else {
             count = static_cast<std::size_t>(std::count_if(viewport_->Selections().begin(), viewport_->Selections().end(), [this](const auto& selection) {
                 return selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                    && selection.index < static_cast<int>(project_.Wires().size());
+                    && selection.index < static_cast<int>(project_.Wires().size())
+                    && !project_.Wires()[selection.index].metadata.construction;
             }));
         }
         exportSummary_->setText(QStringLiteral("出力対象: %1本").arg(count));
@@ -5261,8 +5313,11 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                         VectorText(named.wire.Start()),
                         VectorText(named.wire.End())));
         } else {
-            QString details = QStringLiteral("<b>%1</b><br><br>種類: %2<br>平面との関係: %3<br>作成元平面: %4<br><br>始点<br>%5<br><br>終点<br>%6")
-                .arg(ToQString(named.name), WireKindText(named.wire.Kind()), PolicyText(named.metadata.planePolicy), source, VectorText(named.wire.Start()), VectorText(named.wire.End()));
+            QString details = QStringLiteral("<b>%1</b><br><br>種類: %2<br>用途: %3<br>平面との関係: %4<br>作成元平面: %5<br><br>始点<br>%6<br><br>終点<br>%7")
+                .arg(ToQString(named.name), WireKindText(named.wire.Kind()),
+                    named.metadata.construction ? QStringLiteral("補助線") : QStringLiteral("通常線"),
+                    PolicyText(named.metadata.planePolicy), source,
+                    VectorText(named.wire.Start()), VectorText(named.wire.End()));
             if (named.wire.Kind() == WireKind::Line) {
                 const double length = (named.wire.End() - named.wire.Start()).Length();
                 details += QStringLiteral("<br><br>長さ: %1 mm%2")
@@ -5465,6 +5520,7 @@ void MainWindow::PopulateEditPanel(CadSelection selection)
             editWireSourcePlane_->setCurrentIndex(0);
         }
         editWirePolicy_->setCurrentIndex(static_cast<int>(namedWire.metadata.planePolicy));
+        editWireConstruction_->setChecked(namedWire.metadata.construction);
         const bool isLine = namedWire.wire.Kind() == WireKind::Line;
         editWireConstraintPanel_->setEnabled(isLine);
         editWireLockLength_->setChecked(

@@ -87,6 +87,34 @@ void LoadsWireMetadataForDirectWires()
     Require(project.Wires()[0].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "direct wire policy");
 }
 
+void ConstructionWiresRoundTripAndStayOutOfSurfaces()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        line3d centerline -10 0 0  10 0 0
+        wire_meta centerline drawing reference
+        wire_role centerline construction
+    )");
+    auto project = LoadProjectScript(input, "construction-test");
+    Require(project.Wires()[0].metadata.construction, "construction role loaded");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("wire_role centerline construction") != std::string::npos,
+        "construction role written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "construction-roundtrip");
+    Require(roundTripped.Wires()[0].metadata.construction, "construction role roundtrip");
+
+    bool rejected = false;
+    try {
+        project.AddPlanarSurface("invalid", "centerline");
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    Require(rejected, "construction wire rejected as surface source");
+}
+
 void WrittenProjectRoundTrips()
 {
     std::istringstream input(R"(
@@ -467,6 +495,7 @@ int main()
     try {
         LoadsPlanesAndWires();
         LoadsWireMetadataForDirectWires();
+        ConstructionWiresRoundTripAndStayOutOfSurfaces();
         WrittenProjectRoundTrips();
         LineConstraintsRoundTripAndDriveGeometry();
         SurfacesAndProjectedWiresRoundTrip();

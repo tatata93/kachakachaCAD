@@ -126,6 +126,9 @@ std::vector<PlanarPolyline> ProjectWires(
     std::vector<PlanarPolyline> projected;
     projected.reserve(wires.size());
     for (const NamedWire& named : wires) {
+        if (named.metadata.construction) {
+            continue;
+        }
         PlanarPolyline polyline;
         polyline.name = named.name;
         polyline.closed = named.wire.IsClosed();
@@ -137,6 +140,9 @@ std::vector<PlanarPolyline> ProjectWires(
             polyline.points.push_back({coordinates.u, coordinates.v});
         }
         projected.push_back(std::move(polyline));
+    }
+    if (projected.empty()) {
+        throw std::invalid_argument("No model wires were selected for planar export.");
     }
     return projected;
 }

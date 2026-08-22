@@ -164,6 +164,7 @@ private:
     QAction* cancelDrawingAction_ = nullptr;
     QComboBox* activePlaneCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
+    QCheckBox* drawingConstruction_ = nullptr;
     QLabel* drawingStateLabel_ = nullptr;
     QWidget* drawingDimensionSection_ = nullptr;
     QStackedWidget* drawingDimensionStack_ = nullptr;
@@ -192,6 +193,7 @@ private:
     std::array<QDoubleSpinBox*, 3> editPlaneUAxis_{};
     QComboBox* editWireSourcePlane_ = nullptr;
     QComboBox* editWirePolicy_ = nullptr;
+    QCheckBox* editWireConstruction_ = nullptr;
     QWidget* editWireConstraintPanel_ = nullptr;
     QCheckBox* editWireLockLength_ = nullptr;
     QDoubleSpinBox* editWireConstraintLength_ = nullptr;

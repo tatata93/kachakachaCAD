@@ -110,6 +110,12 @@ struct NamedWire {
     };
     std::optional<Projection> projection;
     bool visible = true;
+    struct PlateOffset {
+        std::string sourceWireName;
+        std::string plateName;
+        double throughThickness = 0.5;
+    };
+    std::optional<PlateOffset> plateOffset;
 };
 
 struct NamedSurface {
@@ -148,6 +154,13 @@ public:
         double thickness,
         PlateThicknessDirection direction,
         std::string material);
+    void AddPlate(
+        std::string name,
+        std::string sourceSurfaceName,
+        double startThickness,
+        double endThickness,
+        PlateThicknessDirection direction,
+        std::string material);
     void AddSurfaceJig(
         std::string name,
         std::string sourceSurfaceName,
@@ -160,6 +173,11 @@ public:
         std::string sourceWireName,
         std::string targetSurfaceName,
         geometry::Vector3 direction);
+    void AddPlateOffsetWire(
+        std::string name,
+        std::string sourceWireName,
+        std::string plateName,
+        double throughThickness);
     void UpdateWorkPlane(std::string_view name, WorkPlane plane);
     void UpdateWire(std::string_view name, Wire wire);
     void UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetadata metadata);
@@ -167,6 +185,13 @@ public:
         std::string_view name,
         std::string sourceSurfaceName,
         double thickness,
+        PlateThicknessDirection direction,
+        std::string material);
+    void UpdatePlate(
+        std::string_view name,
+        std::string sourceSurfaceName,
+        double startThickness,
+        double endThickness,
         PlateThicknessDirection direction,
         std::string material);
     void UpdateSurfaceJig(

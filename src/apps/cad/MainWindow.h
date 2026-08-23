@@ -104,7 +104,9 @@ private:
     void CreateSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
     void CreatePlateFromSurface();
+    void CreatePlateFromSelectedWires();
     void UpdateSelectedPlate();
+    void CreatePlateOffsetWires();
     void CreateSurfaceJig();
     void UpdateSelectedBody();
     void AddSelectedPlateOpenings();
@@ -112,7 +114,6 @@ private:
     void SplitSelectedPlate();
     void UpdatePlateSplitPreview();
     void ExportSelectedBody(bool step);
-    [[nodiscard]] int SelectedBodyIndexForExport() const;
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void CommitDrawingDimensions();
@@ -197,6 +198,8 @@ private:
     QAction* cancelDrawingAction_ = nullptr;
     QComboBox* activePlaneCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
+    QCheckBox* gridPointsVisible_ = nullptr;
+    std::array<QDoubleSpinBox*, 2> gridOrigin_{};
     QCheckBox* drawingConstruction_ = nullptr;
     QLabel* drawingStateLabel_ = nullptr;
     QWidget* drawingDimensionSection_ = nullptr;
@@ -277,6 +280,8 @@ private:
     QLineEdit* plateName_ = nullptr;
     QComboBox* plateSurface_ = nullptr;
     QDoubleSpinBox* plateThickness_ = nullptr;
+    QCheckBox* plateVariableThickness_ = nullptr;
+    QDoubleSpinBox* plateEndThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QComboBox* plateMaterial_ = nullptr;
     QLineEdit* jigName_ = nullptr;
@@ -287,6 +292,8 @@ private:
     QDoubleSpinBox* jigMinimumWall_ = nullptr;
     QLabel* jigAnalysisLabel_ = nullptr;
     QLabel* plateOpeningSelectionLabel_ = nullptr;
+    QLabel* plateOffsetSelectionLabel_ = nullptr;
+    QComboBox* plateOffsetLayer_ = nullptr;
     QLabel* plateSplitSelectionLabel_ = nullptr;
     QComboBox* plateSplitAxis_ = nullptr;
     QSlider* plateSplitSlider_ = nullptr;
@@ -299,6 +306,7 @@ private:
     QComboBox* platePdfPaper_ = nullptr;
     QDoubleSpinBox* platePdfOverlap_ = nullptr;
     QLabel* bodyExportSummary_ = nullptr;
+    QComboBox* modelExportScope_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

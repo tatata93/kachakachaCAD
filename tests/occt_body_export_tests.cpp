@@ -17,6 +17,8 @@
 using kachakacha::geometry::Vector3;
 using kachakacha::model::Body;
 using kachakacha::model::JigSide;
+using kachakacha::model::PlateThicknessDirection;
+using kachakacha::model::Project;
 using kachakacha::model::Surface;
 using kachakacha::model::Wire;
 
@@ -83,7 +85,6 @@ int main(int argc, char** argv)
         const Body body = Body::SurfaceJig(surface, {}, JigSide::Negative, 0.15, 3.0);
         const std::filesystem::path outputDirectory = argv[1];
         std::filesystem::create_directories(outputDirectory);
-        VerifyExports(outputDirectory, "jig-test", body);
 
         const Body positiveBody = Body::SurfaceJig(
             surface, {}, JigSide::Positive, 0.2, 2.5);
@@ -92,6 +93,49 @@ int main(int argc, char** argv)
             || !positiveAnalysis.meetsMinimumWall || positiveAnalysis.volumeCubicMillimeters <= 1.0) {
             throw std::runtime_error(
                 "Positive-side jig did not produce a printable solid: " + positiveAnalysis.message);
+        }
+
+        Project variablePlateProject;
+        variablePlateProject.AddWire("section_a", Wire::Line(
+            {0.0, -5.0, 0.0}, {0.0, 5.0, 0.0}));
+        variablePlateProject.AddWire("section_b", Wire::Line(
+            {12.0, -5.0, 2.0}, {12.0, 5.0, 2.0}));
+        variablePlateProject.AddRuledSurface("panel", "section_a", "section_b");
+        variablePlateProject.AddPlate(
+            "variable_panel", "panel", 0.4, 1.0,
+            PlateThicknessDirection::Positive, "styrene");
+        const auto variablePlateAnalysis = kachakacha::occt::AnalyzeModelShape(
+            variablePlateProject, {{"variable_panel"}, {}}, 0.35);
+        if (!variablePlateAnalysis.validBRep || !variablePlateAnalysis.closedSolid
+            || !variablePlateAnalysis.meetsMinimumWall
+            || variablePlateAnalysis.plateCount != 1) {
+            throw std::runtime_error(
+                "Variable-thickness panel did not produce a closed solid: "
+                + variablePlateAnalysis.message);
+        }
+
+        Project flatPlateProject;
+        flatPlateProject.AddWire("flat_outline", Wire::Polyline({
+            {0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}, {20.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0}, {0.0, 0.0, 0.0},
+        }));
+        flatPlateProject.AddPlanarSurface("flat_surface", "flat_outline");
+        flatPlateProject.AddWire("flat_hole_plan", Wire::Circle(
+            {10.0, 5.0, 2.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0));
+        flatPlateProject.AddProjectedWire(
+            "flat_hole", "flat_hole_plan", "flat_surface", {0.0, 0.0, -1.0});
+        flatPlateProject.AddPlate(
+            "flat_plate", "flat_surface", 0.8,
+            PlateThicknessDirection::Positive, "styrene");
+        flatPlateProject.AddPlateOpening("flat_plate", "flat_hole");
+        const auto flatPlateAnalysis = kachakacha::occt::AnalyzeModelShape(
+            flatPlateProject, {{"flat_plate"}, {}}, 0.5);
+        if (!flatPlateAnalysis.validBRep || !flatPlateAnalysis.closedSolid
+            || !flatPlateAnalysis.meetsMinimumWall
+            || flatPlateAnalysis.plateCount != 1) {
+            throw std::runtime_error(
+                "Opened planar plate did not produce a closed solid: "
+                + flatPlateAnalysis.message);
         }
 
         std::ifstream acceptanceInput(argv[2]);
@@ -103,7 +147,45 @@ int main(int argc, char** argv)
         if (acceptance.Bodies().size() != 1) {
             throw std::runtime_error("Acceptance project must contain one forming jig.");
         }
-        VerifyExports(outputDirectory, "railway-nose-forming-jig", acceptance.Bodies().front().body);
+        if (acceptance.Plates().size() != 2
+            || acceptance.Plates().front().openingWireNames.size() != 3) {
+            throw std::runtime_error(
+                "Acceptance front panel must contain both lights and the windscreen opening.");
+        }
+        const kachakacha::occt::ModelShapeSelection frontPanelSelection{{"nose_panel_front"}, {}};
+        const auto panelAnalysis = kachakacha::occt::AnalyzeModelShape(
+            acceptance, frontPanelSelection, 0.4);
+        if (!panelAnalysis.validBRep || !panelAnalysis.closedSolid
+            || !panelAnalysis.meetsMinimumWall || panelAnalysis.plateCount != 1
+            || panelAnalysis.bodyCount != 0 || panelAnalysis.volumeCubicMillimeters <= 1.0) {
+            throw std::runtime_error(
+                "Acceptance front panel did not produce an exportable opened solid: "
+                + panelAnalysis.message);
+        }
+        const std::filesystem::path panelStl = outputDirectory / "railway-nose-front-panel.stl";
+        const std::filesystem::path panelStep = outputDirectory / "railway-nose-front-panel.step";
+        kachakacha::occt::WriteModelStl(panelStl, acceptance, frontPanelSelection);
+        kachakacha::occt::WriteModelStep(panelStep, acceptance, frontPanelSelection);
+
+        VerifyExports(outputDirectory, "jig-test", body);
+        const auto acceptanceJigAnalysis = kachakacha::occt::AnalyzeBodyShape(
+            acceptance.Bodies().front().body, 1.2);
+        if (!acceptanceJigAnalysis.validBRep || !acceptanceJigAnalysis.closedSolid) {
+            throw std::runtime_error(
+                "Acceptance forming jig is not a valid solid: " + acceptanceJigAnalysis.message);
+        }
+
+        const kachakacha::occt::ModelShapeSelection completeSelection{
+            {"nose_panel_front", "nose_panel_rear"}, {"nose_forming_jig"}};
+        const auto completeAnalysis = kachakacha::occt::AnalyzeModelShape(
+            acceptance, completeSelection, 0.4);
+        if (!completeAnalysis.validBRep || !completeAnalysis.closedSolid
+            || completeAnalysis.partCount != 3 || completeAnalysis.plateCount != 2
+            || completeAnalysis.bodyCount != 1) {
+            throw std::runtime_error(
+                "Mixed plate and jig selection did not produce an exportable model: "
+                + completeAnalysis.message);
+        }
 
         std::cout << "occt body export tests passed\n";
         return 0;

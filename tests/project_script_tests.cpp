@@ -737,16 +737,23 @@ void SurfacesAndProjectedWiresRoundTrip()
         sketch_circle light_plan plan 6 0 1.25 reference
         surface_ruled nose_skin section_a section_b
         wire_project light_on_skin light_plan nose_skin 0 0 -1
-        plate nose_plate nose_skin 0.5 centered styrene
+        plate_variable nose_plate nose_skin 0.4 0.8 centered styrene
         plate_opening nose_plate light_on_skin
+        wire_plate_offset light_outer light_on_skin nose_plate 1
     )");
     auto project = LoadProjectScript(input, "surface-test");
     Require(project.Surfaces().size() == 1, "surface count");
-    Require(project.Wires().size() == 4, "projected wire count");
+    Require(project.Wires().size() == 5, "projected and plate-offset wire count");
     Require(project.Wires()[3].projection.has_value(), "projection relation exists");
     Require(project.Wires()[3].wire.IsClosed(), "projected light remains closed");
     Require(project.Plates().size() == 1, "plate with opening count");
+    Require(project.Plates()[0].plate.HasVariableThickness(), "variable plate relation exists");
+    Require(std::abs(project.Plates()[0].plate.EndThickness() - 0.8) <= 1.0e-12,
+        "variable plate end thickness exists");
     Require(project.Plates()[0].openingWireNames == std::vector<std::string>{"light_on_skin"}, "plate opening relation exists");
+    Require(project.Wires()[4].plateOffset.has_value(), "plate-offset relation exists");
+    Require(project.Wires()[4].plateOffset->sourceWireName == "light_on_skin",
+        "plate-offset source exists");
 
     bool unprojectedOpeningRejected = false;
     try {
@@ -773,9 +780,12 @@ void SurfacesAndProjectedWiresRoundTrip()
     Require(projectionSourceRejected, "projection source wire cannot be deleted while in use");
 
     const Vector3 beforeUpdate = project.Wires()[3].wire.Evaluate(0.25);
+    const Vector3 offsetBeforeUpdate = project.Wires()[4].wire.Evaluate(0.25);
     project.UpdateWire("section_b", Wire::CubicBezier(
         {12.0, -6.0, 0.0}, {12.0, -2.0, 7.0}, {12.0, 2.0, 7.0}, {12.0, 6.0, 0.0}));
     Require(!AlmostEqual(beforeUpdate, project.Wires()[3].wire.Evaluate(0.25), 1.0e-6), "projection rebuilds after section edit");
+    Require(!AlmostEqual(offsetBeforeUpdate, project.Wires()[4].wire.Evaluate(0.25), 1.0e-6),
+        "plate-offset wire rebuilds after section edit");
     Require(project.Plates()[0].openingWireNames[0] == "light_on_skin", "opening relation survives section edit");
 
     bool usedOpeningRejected = false;
@@ -807,11 +817,15 @@ void SurfacesAndProjectedWiresRoundTrip()
     std::istringstream roundTripInput(output.str());
     const auto roundTripped = LoadProjectScript(roundTripInput, "surface-roundtrip");
     Require(roundTripped.Surfaces().size() == 1, "roundtrip surface count");
-    Require(roundTripped.Wires().size() == 4, "roundtrip projected wire count");
+    Require(roundTripped.Wires().size() == 5, "roundtrip projected and offset wire count");
     Require(roundTripped.Plates().size() == 1, "roundtrip plate with opening");
     Require(roundTripped.Plates()[0].openingWireNames == std::vector<std::string>{"light_on_skin"}, "roundtrip plate opening");
     Require(roundTripped.Wires()[3].projection->sourceWireName == "light_plan", "roundtrip projection source");
+    Require(roundTripped.Wires()[4].plateOffset.has_value(), "roundtrip plate-offset relation");
+    Require(roundTripped.Wires()[4].plateOffset->plateName == "nose_plate",
+        "roundtrip plate-offset plate");
     RequireNear(roundTripped.Wires()[3].wire.Evaluate(0.5), project.Wires()[3].wire.Evaluate(0.5), "roundtrip projected geometry");
+    RequireNear(roundTripped.Wires()[4].wire.Evaluate(0.5), project.Wires()[4].wire.Evaluate(0.5), "roundtrip plate-offset geometry");
 }
 
 void LoftSurfacesRoundTrip()

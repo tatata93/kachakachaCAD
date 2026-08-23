@@ -89,6 +89,7 @@ if(KACHACAD_ENABLE_OCCT)
                 kachakacha_core
             PRIVATE
                 TKOffset
+                TKBO
                 TKMesh
                 TKDESTEP
                 TKDESTL

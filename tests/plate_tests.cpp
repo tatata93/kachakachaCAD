@@ -81,6 +81,22 @@ int main()
         Require(AlmostEqual(cylinderFront.Evaluate(0.3, 1.0, 0.5), cylinderRear.Evaluate(0.3, 0.0, 0.5), 1.0e-9),
             "V split pieces meet exactly");
 
+        const Plate variablePlate(
+            cylinder, 0.4, 1.2, PlateThicknessDirection::Positive);
+        Require(variablePlate.HasVariableThickness(), "variable plate reports thickness profile");
+        Require(std::abs(variablePlate.Thickness(0.0) - 0.4) <= 1.0e-12,
+            "variable plate start thickness");
+        Require(std::abs(variablePlate.Thickness(0.5) - 0.8) <= 1.0e-12,
+            "variable plate interpolated thickness");
+        Require(std::abs(variablePlate.Thickness(1.0) - 1.2) <= 1.0e-12,
+            "variable plate end thickness");
+        const auto [variableFront, variableRear] = variablePlate.Split(PlateSplitAxis::V, 0.25);
+        Require(std::abs(variableFront.EndThickness() - 0.6) <= 1.0e-12,
+            "variable thickness first split end");
+        Require(std::abs(variableRear.Thickness() - 0.6) <= 1.0e-12
+                && std::abs(variableRear.EndThickness() - 1.2) <= 1.0e-12,
+            "variable thickness second split profile");
+
         bool invalidRangeRejected = false;
         try {
             static_cast<void>(Plate(cylinder, 0.5, PlateThicknessDirection::Centered,

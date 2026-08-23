@@ -70,6 +70,8 @@ Copy-Item -LiteralPath $FirstCheckProject -Destination (Join-Path $ResolvedOutpu
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\curved-panel-light-holes.kcd") -Destination (Join-Path $ResolvedOutput "curved-panel-light-holes.kcd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\railway-nose-acceptance.kcd") -Destination $AcceptanceProject -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "START_REVIEW.cmd") -Destination (Join-Path $ResolvedOutput "START_REVIEW.cmd") -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "OPEN_MANUAL.cmd") -Destination (Join-Path $ResolvedOutput "OPEN_MANUAL.cmd") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual.html") -Destination (Join-Path $ResolvedOutput "manual.html") -Force
 
 $PreviousPlatform = $env:QT_QPA_PLATFORM
 try {

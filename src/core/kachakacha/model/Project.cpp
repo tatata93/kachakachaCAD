@@ -419,6 +419,10 @@ void RequireConstructionWireHasNoModelDependencies(const Project& project, std::
             throw std::invalid_argument("A projection source wire cannot be changed to construction: "
                 + std::string(wireName));
         }
+        if (wire.plateOffset.has_value() && wire.plateOffset->sourceWireName == wireName) {
+            throw std::invalid_argument("A plate-offset source wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
     }
     for (const NamedPlate& plate : project.Plates()) {
         if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), wireName)
@@ -449,6 +453,48 @@ bool OpeningLiesWithinRange(
         }
     }
     return true;
+}
+
+Wire BuildPlateOffsetWire(
+    const NamedWire& source,
+    const NamedPlate& plate,
+    double throughThickness)
+{
+    if (!std::isfinite(throughThickness)
+        || throughThickness < 0.0 || throughThickness > 1.0) {
+        throw std::invalid_argument("Plate wire position must be between 0 and 1.");
+    }
+    if (!source.projection.has_value()
+        || source.projection->targetSurfaceName != plate.sourceSurfaceName) {
+        throw std::invalid_argument(
+            "Plate offset source must be a wire projected to the plate source surface: "
+            + source.name);
+    }
+    if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), source, plate.plate.Range())) {
+        throw std::invalid_argument("Plate offset source lies outside this plate piece: " + source.name);
+    }
+
+    const std::vector<geometry::Vector3>& sourcePoints = source.wire.ControlPoints();
+    std::vector<geometry::Vector3> points;
+    points.reserve(sourcePoints.size());
+    for (const geometry::Vector3& point : sourcePoints) {
+        const SurfaceProjection projection = plate.plate.SourceSurface().ProjectPointAlongDirection(
+            point, source.projection->direction);
+        const double localV = (projection.v - plate.plate.Range().minimumV)
+            / (plate.plate.Range().maximumV - plate.plate.Range().minimumV);
+        const double offset = plate.plate.MinimumOffset(localV)
+            + (plate.plate.MaximumOffset(localV) - plate.plate.MinimumOffset(localV))
+                * throughThickness;
+        points.push_back(projection.point
+            + plate.plate.SourceSurface().Normal(projection.u, projection.v) * offset);
+    }
+    if (points.size() < 2) {
+        throw std::invalid_argument("Plate offset wire collapsed to fewer than two points.");
+    }
+    if (source.wire.IsClosed()) {
+        points.back() = points.front();
+    }
+    return Wire::Polyline(std::move(points));
 }
 
 } // namespace
@@ -567,6 +613,19 @@ void Project::AddPlate(
     PlateThicknessDirection direction,
     std::string material)
 {
+    AddPlate(
+        std::move(name), std::move(sourceSurfaceName), thickness, thickness,
+        direction, std::move(material));
+}
+
+void Project::AddPlate(
+    std::string name,
+    std::string sourceSurfaceName,
+    double startThickness,
+    double endThickness,
+    PlateThicknessDirection direction,
+    std::string material)
+{
     if (name.empty()) {
         throw std::invalid_argument("Plate name must not be empty.");
     }
@@ -580,9 +639,14 @@ void Project::AddPlate(
     if (!surface.has_value()) {
         throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
     }
+    if (surface->Kind() == SurfaceKind::Planar
+        && std::abs(startThickness - endThickness) > 1.0e-12) {
+        throw std::invalid_argument(
+            "Variable thickness requires a ruled or loft surface made from multiple section wires.");
+    }
     plates_.push_back({
         std::move(name),
-        Plate(*surface, thickness, direction),
+        Plate(*surface, startThickness, endThickness, direction),
         std::move(sourceSurfaceName),
         std::move(material),
         {},
@@ -630,8 +694,8 @@ void Project::AddProjectedWire(
         }
     }
     const NamedWire& source = RequireWire(sourceWireName);
-    if (source.projection.has_value()) {
-        throw std::invalid_argument("A projected wire cannot be used as another projection source.");
+    if (source.projection.has_value() || source.plateOffset.has_value()) {
+        throw std::invalid_argument("A derived wire cannot be used as another projection source.");
     }
     if (source.metadata.construction) {
         throw std::invalid_argument("Construction wire cannot be used as a projection source.");
@@ -646,6 +710,39 @@ void Project::AddProjectedWire(
         std::move(projected),
         {},
         NamedWire::Projection{std::move(sourceWireName), std::move(targetSurfaceName), direction},
+    });
+}
+
+void Project::AddPlateOffsetWire(
+    std::string name,
+    std::string sourceWireName,
+    std::string plateName,
+    double throughThickness)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Plate offset wire name must not be empty.");
+    }
+    for (const NamedWire& existingWire : wires_) {
+        if (existingWire.name == name) {
+            throw std::invalid_argument("Wire name already exists: " + name);
+        }
+    }
+    const NamedWire& source = RequireWire(sourceWireName);
+    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+        return candidate.name == plateName;
+    });
+    if (plate == plates_.end()) {
+        throw std::invalid_argument("Plate name does not exist: " + plateName);
+    }
+    Wire offsetWire = BuildPlateOffsetWire(source, *plate, throughThickness);
+    wires_.push_back({
+        std::move(name),
+        std::move(offsetWire),
+        {},
+        std::nullopt,
+        true,
+        NamedWire::PlateOffset{
+            std::move(sourceWireName), std::move(plateName), throughThickness},
     });
 }
 
@@ -679,8 +776,8 @@ void Project::UpdateWire(std::string_view name, Wire wire)
     Project candidate = *this;
     for (NamedWire& namedWire : candidate.wires_) {
         if (namedWire.name == name) {
-            if (namedWire.projection.has_value()) {
-                throw std::invalid_argument("Projected wire must be edited through its source drawing.");
+            if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
+                throw std::invalid_argument("Derived wire must be edited through its source geometry.");
             }
             namedWire.wire = ConstrainWire(candidate, wire, namedWire.metadata);
             candidate.RebuildDependentGeometry();
@@ -703,8 +800,8 @@ void Project::UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetada
         if (namedWire.name != name) {
             continue;
         }
-        if (namedWire.projection.has_value()) {
-            throw std::invalid_argument("Projected wire must be edited through its source drawing.");
+        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
+            throw std::invalid_argument("Derived wire must be edited through its source geometry.");
         }
         if (metadata.construction) {
             RequireConstructionWireHasNoModelDependencies(candidate, name);
@@ -725,17 +822,36 @@ void Project::UpdatePlate(
     PlateThicknessDirection direction,
     std::string material)
 {
+    UpdatePlate(
+        name, std::move(sourceSurfaceName), thickness, thickness,
+        direction, std::move(material));
+}
+
+void Project::UpdatePlate(
+    std::string_view name,
+    std::string sourceSurfaceName,
+    double startThickness,
+    double endThickness,
+    PlateThicknessDirection direction,
+    std::string material)
+{
     if (material.empty()) {
         throw std::invalid_argument("Plate material must not be empty.");
     }
-    const std::optional<Surface> sourceSurface = FindSurface(sourceSurfaceName);
+    Project candidate = *this;
+    const std::optional<Surface> sourceSurface = candidate.FindSurface(sourceSurfaceName);
     if (!sourceSurface.has_value()) {
         throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
     }
-    for (NamedPlate& plate : plates_) {
+    if (sourceSurface->Kind() == SurfaceKind::Planar
+        && std::abs(startThickness - endThickness) > 1.0e-12) {
+        throw std::invalid_argument(
+            "Variable thickness requires a ruled or loft surface made from multiple section wires.");
+    }
+    for (NamedPlate& plate : candidate.plates_) {
         if (plate.name == name) {
             for (const std::string& openingName : plate.openingWireNames) {
-                const NamedWire& opening = RequireWire(openingName);
+                const NamedWire& opening = candidate.RequireWire(openingName);
                 if (!opening.projection.has_value()
                     || opening.projection->targetSurfaceName != sourceSurfaceName) {
                     throw std::invalid_argument("Remove plate openings before changing the source surface.");
@@ -744,9 +860,12 @@ void Project::UpdatePlate(
                     throw std::invalid_argument("Updated plate surface does not contain opening: " + openingName);
                 }
             }
-            plate.plate = Plate(*sourceSurface, thickness, direction, plate.plate.Range());
+            plate.plate = Plate(
+                *sourceSurface, startThickness, endThickness, direction, plate.plate.Range());
             plate.sourceSurfaceName = std::move(sourceSurfaceName);
             plate.material = std::move(material);
+            candidate.RebuildDependentGeometry();
+            *this = std::move(candidate);
             return;
         }
     }
@@ -789,6 +908,9 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
 
     for (NamedWire& wire : candidate.wires_) {
         if (wire.name == name) {
+            if (wire.projection.has_value() || wire.plateOffset.has_value()) {
+                throw std::invalid_argument("Derived wire metadata is controlled by its source geometry.");
+            }
             if (metadata.construction) {
                 RequireConstructionWireHasNoModelDependencies(candidate, name);
             }
@@ -1125,7 +1247,8 @@ void Project::SetBodyVisible(std::string_view name, bool visible)
 
 void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
 {
-    for (NamedPlate& plate : plates_) {
+    Project candidate = *this;
+    for (NamedPlate& plate : candidate.plates_) {
         if (plate.name != name) {
             continue;
         }
@@ -1133,15 +1256,18 @@ void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
             throw std::invalid_argument("Planar plate ranges are not supported.");
         }
         for (const std::string& openingName : plate.openingWireNames) {
-            if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), RequireWire(openingName), range)) {
+            if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), candidate.RequireWire(openingName), range)) {
                 throw std::invalid_argument("Plate range does not contain opening: " + openingName);
             }
         }
         plate.plate = Plate(
             plate.plate.SourceSurface(),
             plate.plate.Thickness(),
+            plate.plate.EndThickness(),
             plate.plate.Direction(),
             range);
+        candidate.RebuildDependentGeometry();
+        *this = std::move(candidate);
         return;
     }
     throw std::invalid_argument("Plate name does not exist: " + std::string(name));
@@ -1168,6 +1294,12 @@ void Project::SplitPlate(
     }
     if (position->plate.SourceSurface().Kind() == SurfaceKind::Planar) {
         throw std::invalid_argument("Planar plates can already be cut directly and do not need surface splitting.");
+    }
+    for (const NamedWire& wire : wires_) {
+        if (wire.plateOffset.has_value() && wire.plateOffset->plateName == name) {
+            throw std::invalid_argument(
+                "Delete plate-offset wire before splitting this plate: " + wire.name);
+        }
     }
 
     const auto [firstPlate, secondPlate] = position->plate.Split(axis, parameter);
@@ -1329,6 +1461,9 @@ bool Project::RemoveWire(std::string_view name)
         if (wire.projection.has_value() && wire.projection->sourceWireName == name) {
             throw std::invalid_argument("Wire is used as a projection drawing: " + wire.name);
         }
+        if (wire.plateOffset.has_value() && wire.plateOffset->sourceWireName == name) {
+            throw std::invalid_argument("Wire is used as a plate-offset source: " + wire.name);
+        }
     }
     for (const NamedPlate& plate : plates_) {
         if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), name)
@@ -1391,6 +1526,11 @@ bool Project::RemovePlate(std::string_view name)
     });
     if (position == plates_.end()) {
         return false;
+    }
+    for (const NamedWire& wire : wires_) {
+        if (wire.plateOffset.has_value() && wire.plateOffset->plateName == name) {
+            throw std::invalid_argument("Plate is used by offset wire: " + wire.name);
+        }
     }
     plates_.erase(position);
     return true;
@@ -1656,6 +1796,7 @@ void Project::RebuildDependentGeometry()
         plate.plate = Plate(
             *sourceSurface,
             plate.plate.Thickness(),
+            plate.plate.EndThickness(),
             plate.plate.Direction(),
             plate.plate.Range());
         for (const std::string& openingName : plate.openingWireNames) {
@@ -1663,6 +1804,19 @@ void Project::RebuildDependentGeometry()
                 throw std::invalid_argument("Plate opening moved outside split piece: " + openingName);
             }
         }
+    }
+    for (NamedWire& wire : wires_) {
+        if (!wire.plateOffset.has_value()) {
+            continue;
+        }
+        const NamedWire& source = RequireWire(wire.plateOffset->sourceWireName);
+        const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+            return candidate.name == wire.plateOffset->plateName;
+        });
+        if (plate == plates_.end()) {
+            throw std::logic_error("Plate-offset wire target plate is missing.");
+        }
+        wire.wire = BuildPlateOffsetWire(source, *plate, wire.plateOffset->throughThickness);
     }
     for (NamedBody& body : bodies_) {
         const std::optional<Surface> sourceSurface = FindSurface(body.sourceSurfaceName);

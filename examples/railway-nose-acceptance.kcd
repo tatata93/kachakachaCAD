@@ -43,13 +43,15 @@ wire_project light_left_on_skin light_left_plan nose_skin 0 0 1
 wire_project light_right_on_skin light_right_plan nose_skin 0 0 1
 wire_project windscreen_on_skin windscreen_plan nose_skin 0 0 1
 
-# Two user-controlled 0.5 mm styrene panels; the CAD does not auto-fragment them.
+# Two user-controlled 0.5 mm styrene panels. The seam is behind the windscreen,
+# so the complete windscreen is cut from the front panel instead of crossing a seam.
 plate nose_panel_front nose_skin 0.5 centered styrene
 plate nose_panel_rear nose_skin 0.5 centered styrene
-plate_range nose_panel_front 0 1 0 0.5
-plate_range nose_panel_rear 0 1 0.5 1
+plate_range nose_panel_front 0 1 0 0.9
+plate_range nose_panel_rear 0 1 0.9 1
 plate_opening nose_panel_front light_left_on_skin
 plate_opening nose_panel_front light_right_on_skin
+plate_opening nose_panel_front windscreen_on_skin
 
 # Negative-side forming jig with 0.15 mm forming clearance and 3 mm wall.
 body_surface_jig nose_forming_jig nose_skin negative 0.15 3.0 0 1 0 1

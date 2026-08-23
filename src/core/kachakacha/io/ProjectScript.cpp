@@ -706,6 +706,16 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlate(name, sourceSurface, thickness,
                     ParsePlateDirection(directionToken, sourceName, lineNumber), material);
+            } else if (command == "plate_variable") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string sourceSurface = ReadName(stream, sourceName, lineNumber, "source surface");
+                const double startThickness = ReadDouble(stream, sourceName, lineNumber, "start thickness");
+                const double endThickness = ReadDouble(stream, sourceName, lineNumber, "end thickness");
+                const std::string directionToken = ReadName(stream, sourceName, lineNumber, "thickness direction");
+                const std::string material = ReadName(stream, sourceName, lineNumber, "material");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlate(name, sourceSurface, startThickness, endThickness,
+                    ParsePlateDirection(directionToken, sourceName, lineNumber), material);
             } else if (command == "plate_range") {
                 const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
                 const PlateSurfaceRange range{
@@ -721,6 +731,14 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlateOpening(plateName, wireName);
+            } else if (command == "wire_plate_offset") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "offset wire");
+                const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source wire");
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
+                const double throughThickness = ReadDouble(
+                    stream, sourceName, lineNumber, "position through plate thickness");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlateOffsetWire(name, sourceWire, plateName, throughThickness);
             } else if (command == "body_surface_jig") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "body");
                 const std::string sourceSurface = ReadName(stream, sourceName, lineNumber, "source surface");
@@ -798,7 +816,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     }
 
     for (const auto& namedWire : project.Wires()) {
-        if (namedWire.projection.has_value()) {
+        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
             continue;
         }
         RequireScriptNameSafe(namedWire.name, "Wire");
@@ -981,8 +999,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         RequireScriptNameSafe(namedPlate.name, "Plate");
         RequireScriptNameSafe(namedPlate.sourceSurfaceName, "Plate source surface");
         RequireScriptNameSafe(namedPlate.material, "Plate material");
-        output << "plate " << namedPlate.name << ' ' << namedPlate.sourceSurfaceName << ' '
-               << namedPlate.plate.Thickness() << ' ' << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
+        output << (namedPlate.plate.HasVariableThickness() ? "plate_variable " : "plate ")
+               << namedPlate.name << ' ' << namedPlate.sourceSurfaceName << ' '
+               << namedPlate.plate.Thickness() << ' ';
+        if (namedPlate.plate.HasVariableThickness()) {
+            output << namedPlate.plate.EndThickness() << ' ';
+        }
+        output << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
                << namedPlate.material << '\n';
     }
     for (const auto& namedPlate : project.Plates()) {
@@ -999,6 +1022,18 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             RequireScriptNameSafe(openingWireName, "Plate opening wire");
             output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
         }
+    }
+    for (const auto& namedWire : project.Wires()) {
+        if (!namedWire.plateOffset.has_value()) {
+            continue;
+        }
+        RequireScriptNameSafe(namedWire.name, "Plate-offset wire");
+        RequireScriptNameSafe(namedWire.plateOffset->sourceWireName, "Plate-offset source wire");
+        RequireScriptNameSafe(namedWire.plateOffset->plateName, "Plate-offset plate");
+        output << "wire_plate_offset " << namedWire.name << ' '
+               << namedWire.plateOffset->sourceWireName << ' '
+               << namedWire.plateOffset->plateName << ' '
+               << namedWire.plateOffset->throughThickness << '\n';
     }
 
     if (!project.Bodies().empty()) {

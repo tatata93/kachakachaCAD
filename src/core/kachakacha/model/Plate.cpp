@@ -21,10 +21,25 @@ Plate::Plate(
     double thickness,
     PlateThicknessDirection direction,
     PlateSurfaceRange range)
-    : sourceSurface_(std::move(sourceSurface)), thickness_(thickness), direction_(direction), range_(range)
+    : Plate(std::move(sourceSurface), thickness, thickness, direction, range)
 {
-    if (!std::isfinite(thickness_) || thickness_ <= 0.0) {
-        throw std::invalid_argument("Plate thickness must be a positive finite value.");
+}
+
+Plate::Plate(
+    Surface sourceSurface,
+    double startThickness,
+    double endThickness,
+    PlateThicknessDirection direction,
+    PlateSurfaceRange range)
+    : sourceSurface_(std::move(sourceSurface)),
+      thickness_(startThickness),
+      endThickness_(endThickness),
+      direction_(direction),
+      range_(range)
+{
+    if (!std::isfinite(thickness_) || thickness_ <= 0.0
+        || !std::isfinite(endThickness_) || endThickness_ <= 0.0) {
+        throw std::invalid_argument("Plate start and end thickness must be positive finite values.");
     }
     switch (direction_) {
     case PlateThicknessDirection::Positive:
@@ -44,24 +59,46 @@ Plate::Plate(
     }
 }
 
+double Plate::Thickness(double localV) const noexcept
+{
+    return thickness_ + (endThickness_ - thickness_) * std::clamp(localV, 0.0, 1.0);
+}
+
+bool Plate::HasVariableThickness(double tolerance) const noexcept
+{
+    return std::abs(endThickness_ - thickness_) > tolerance;
+}
+
 double Plate::MinimumOffset() const noexcept
 {
+    return MinimumOffset(0.0);
+}
+
+double Plate::MinimumOffset(double localV) const noexcept
+{
+    const double localThickness = Thickness(localV);
     if (direction_ == PlateThicknessDirection::Negative) {
-        return -thickness_;
+        return -localThickness;
     }
     if (direction_ == PlateThicknessDirection::Centered) {
-        return -thickness_ * 0.5;
+        return -localThickness * 0.5;
     }
     return 0.0;
 }
 
 double Plate::MaximumOffset() const noexcept
 {
+    return MaximumOffset(0.0);
+}
+
+double Plate::MaximumOffset(double localV) const noexcept
+{
+    const double localThickness = Thickness(localV);
     if (direction_ == PlateThicknessDirection::Positive) {
-        return thickness_;
+        return localThickness;
     }
     if (direction_ == PlateThicknessDirection::Centered) {
-        return thickness_ * 0.5;
+        return localThickness * 0.5;
     }
     return 0.0;
 }
@@ -83,8 +120,8 @@ geometry::Vector3 Plate::Evaluate(double u, double v, double throughThickness) c
     if (!std::isfinite(throughThickness)) {
         throw std::invalid_argument("Plate thickness parameter must be finite.");
     }
-    const double offset = MinimumOffset()
-        + (MaximumOffset() - MinimumOffset()) * std::clamp(throughThickness, 0.0, 1.0);
+    const double offset = MinimumOffset(v)
+        + (MaximumOffset(v) - MinimumOffset(v)) * std::clamp(throughThickness, 0.0, 1.0);
     const double sourceU = SourceU(u);
     const double sourceV = SourceV(v);
     return sourceSurface_.Evaluate(sourceU, sourceV) + sourceSurface_.Normal(sourceU, sourceV) * offset;
@@ -108,9 +145,16 @@ std::pair<Plate, Plate> Plate::Split(PlateSplitAxis axis, double parameter) cons
     } else {
         throw std::invalid_argument("Plate split axis is invalid.");
     }
+    if (axis == PlateSplitAxis::V) {
+        const double middleThickness = Thickness(parameter);
+        return {
+            Plate(sourceSurface_, thickness_, middleThickness, direction_, firstRange),
+            Plate(sourceSurface_, middleThickness, endThickness_, direction_, secondRange),
+        };
+    }
     return {
-        Plate(sourceSurface_, thickness_, direction_, firstRange),
-        Plate(sourceSurface_, thickness_, direction_, secondRange),
+        Plate(sourceSurface_, thickness_, endThickness_, direction_, firstRange),
+        Plate(sourceSurface_, thickness_, endThickness_, direction_, secondRange),
     };
 }
 

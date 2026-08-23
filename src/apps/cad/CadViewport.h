@@ -130,6 +130,8 @@ public:
     [[nodiscard]] ViewportTool Tool() const noexcept { return tool_; }
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
+    void SetGridPointsVisible(bool visible);
+    void SetGridOrigin(double u, double v);
     void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
     void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
     [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
@@ -155,7 +157,11 @@ public:
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
     [[nodiscard]] bool AlignToSelection();
     void SetIsometricView();
+    void SetCornerView(kachakacha::geometry::Vector3 direction);
+    void RotateViewYaw(double angleRadians);
+    void RollView(double angleRadians);
     [[nodiscard]] kachakacha::geometry::Vector3 ViewDirection() const;
+    [[nodiscard]] kachakacha::geometry::Vector3 ViewUpDirection() const;
     void FinishDrawing();
     void CancelDrawing();
     [[nodiscard]] DrawingMeasurements CurrentDrawingMeasurements() const;
@@ -236,6 +242,9 @@ private:
     ViewportTool tool_ = ViewportTool::Select;
     bool snapEnabled_ = true;
     double snapStep_ = 1.0;
+    bool gridPointsVisible_ = true;
+    double gridOriginU_ = 0.0;
+    double gridOriginV_ = 0.0;
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
     std::optional<kachakacha::geometry::Vector3> hoveredWirePoint_;
@@ -260,6 +269,7 @@ private:
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;
     double pitchRadians_ = 0.48;
+    double rollRadians_ = 0.0;
     std::optional<std::array<kachakacha::geometry::Vector3, 3>> alignedViewBasis_;
     double pixelsPerMillimeter_ = 14.0;
     QPoint lastMousePosition_;

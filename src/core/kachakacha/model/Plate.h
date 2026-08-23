@@ -45,13 +45,24 @@ public:
         double thickness,
         PlateThicknessDirection direction,
         PlateSurfaceRange range = {});
+    Plate(
+        Surface sourceSurface,
+        double startThickness,
+        double endThickness,
+        PlateThicknessDirection direction,
+        PlateSurfaceRange range = {});
 
     [[nodiscard]] const Surface& SourceSurface() const noexcept { return sourceSurface_; }
     [[nodiscard]] double Thickness() const noexcept { return thickness_; }
+    [[nodiscard]] double EndThickness() const noexcept { return endThickness_; }
+    [[nodiscard]] double Thickness(double localV) const noexcept;
+    [[nodiscard]] bool HasVariableThickness(double tolerance = 1.0e-12) const noexcept;
     [[nodiscard]] PlateThicknessDirection Direction() const noexcept { return direction_; }
     [[nodiscard]] const PlateSurfaceRange& Range() const noexcept { return range_; }
     [[nodiscard]] double MinimumOffset() const noexcept;
     [[nodiscard]] double MaximumOffset() const noexcept;
+    [[nodiscard]] double MinimumOffset(double localV) const noexcept;
+    [[nodiscard]] double MaximumOffset(double localV) const noexcept;
     [[nodiscard]] double SourceU(double localU) const noexcept;
     [[nodiscard]] double SourceV(double localV) const noexcept;
     [[nodiscard]] geometry::Vector3 Evaluate(double u, double v, double throughThickness) const;
@@ -63,6 +74,7 @@ public:
 private:
     Surface sourceSurface_;
     double thickness_ = 0.0;
+    double endThickness_ = 0.0;
     PlateThicknessDirection direction_ = PlateThicknessDirection::Positive;
     PlateSurfaceRange range_;
 };

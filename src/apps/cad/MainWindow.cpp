@@ -18,6 +18,7 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDoubleSpinBox>
 #include <QDir>
 #include <QFile>
@@ -57,6 +58,7 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -807,6 +809,25 @@ QWidget* MainWindow::BuildDrawingPanel()
     snapLayout->addWidget(snapStepField_, 1);
     layout->addWidget(snapRow);
 
+    auto* gridBox = new QGroupBox(QStringLiteral("点グリッド"));
+    auto* gridLayout = new QFormLayout(gridBox);
+    gridLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    gridPointsVisible_ = new QCheckBox(QStringLiteral("表示"));
+    gridPointsVisible_->setChecked(true);
+    gridOrigin_[0] = MakeNumberField(0.0);
+    gridOrigin_[1] = MakeNumberField(0.0);
+    for (QDoubleSpinBox* field : gridOrigin_) {
+        field->setRange(-100000.0, 100000.0);
+        field->setDecimals(3);
+        field->setSuffix(QStringLiteral(" mm"));
+    }
+    auto* resetGridOrigin = new QPushButton(QStringLiteral("基準を 0, 0 に戻す"));
+    gridLayout->addRow(gridPointsVisible_);
+    gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
+    gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
+    gridLayout->addRow(resetGridOrigin);
+    layout->addWidget(gridBox);
+
     auto* commandRow = new QWidget;
     auto* commandLayout = new QHBoxLayout(commandRow);
     commandLayout->setContentsMargins(0, 0, 0, 0);
@@ -827,6 +848,16 @@ QWidget* MainWindow::BuildDrawingPanel()
         viewport_->AlignToActiveWorkPlane();
     });
     connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
+    connect(gridPointsVisible_, &QCheckBox::toggled, viewport_, &CadViewport::SetGridPointsVisible);
+    const auto updateGridOrigin = [this] {
+        viewport_->SetGridOrigin(gridOrigin_[0]->value(), gridOrigin_[1]->value());
+    };
+    connect(gridOrigin_[0], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
+    connect(gridOrigin_[1], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
+    connect(resetGridOrigin, &QPushButton::clicked, this, [this] {
+        gridOrigin_[0]->setValue(0.0);
+        gridOrigin_[1]->setValue(0.0);
+    });
     connect(drawingDimensionCommitButton_, &QPushButton::clicked, this, &MainWindow::CommitDrawingDimensions);
     for (const QKeySequence key : {QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)}) {
         auto* shortcut = new QShortcut(key, drawingDimensionSection_);
@@ -1392,7 +1423,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(projectButton, &QPushButton::clicked, this, &MainWindow::ProjectSelectedWiresToSurface);
     layout->addWidget(projectButton);
 
-    auto* plateTitle = new QLabel(QStringLiteral("面を板材にする"));
+    auto* plateTitle = new QLabel(QStringLiteral("ワイヤー / 面から3D板を作る"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(plateTitle);
 
@@ -1402,10 +1433,14 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateSurface_ = new QComboBox;
     plateThickness_ = MakePositiveField(0.5);
     plateThickness_->setSuffix(QStringLiteral(" mm"));
+    plateVariableThickness_ = new QCheckBox(QStringLiteral("終端まで板厚を変化"));
+    plateEndThickness_ = MakePositiveField(0.5);
+    plateEndThickness_->setSuffix(QStringLiteral(" mm"));
+    plateEndThickness_->setEnabled(false);
     plateDirection_ = new QComboBox;
-    plateDirection_->addItem(QStringLiteral("面から外側へ"), static_cast<int>(PlateThicknessDirection::Positive));
-    plateDirection_->addItem(QStringLiteral("面を中央に"), static_cast<int>(PlateThicknessDirection::Centered));
-    plateDirection_->addItem(QStringLiteral("面から内側へ"), static_cast<int>(PlateThicknessDirection::Negative));
+    plateDirection_->addItem(QStringLiteral("+側へ（法線矢印側）"), static_cast<int>(PlateThicknessDirection::Positive));
+    plateDirection_->addItem(QStringLiteral("中央（両側へ半分）"), static_cast<int>(PlateThicknessDirection::Centered));
+    plateDirection_->addItem(QStringLiteral("-側へ（矢印と反対）"), static_cast<int>(PlateThicknessDirection::Negative));
     plateMaterial_ = new QComboBox;
     plateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("styrene"));
     plateMaterial_->addItem(QStringLiteral("紙・厚紙"), QStringLiteral("paper"));
@@ -1413,10 +1448,25 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
     plateForm->addRow(QStringLiteral("板の名前"), plateName_);
     plateForm->addRow(QStringLiteral("元の面"), plateSurface_);
-    plateForm->addRow(QStringLiteral("板厚"), plateThickness_);
+    plateForm->addRow(QStringLiteral("始端の板厚"), plateThickness_);
+    plateForm->addRow(plateVariableThickness_);
+    plateForm->addRow(QStringLiteral("終端の板厚"), plateEndThickness_);
     plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
     plateForm->addRow(QStringLiteral("材質"), plateMaterial_);
     layout->addLayout(plateForm);
+
+    connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);
+    connect(plateThickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (!plateVariableThickness_->isChecked()) {
+            plateEndThickness_->setValue(value);
+        }
+    });
+
+    auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから3D板を直接作る"));
+    wirePlateButton->setObjectName("primaryButton");
+    wirePlateButton->setToolTip(QStringLiteral("1閉輪郭は平板、2断面は曲面板、3断面以上はロフト板"));
+    connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
+    layout->addWidget(wirePlateButton);
 
     auto* plateButton = new QPushButton(QStringLiteral("この面を板材にする"));
     plateButton->setObjectName("primaryButton");
@@ -1426,6 +1476,21 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
     connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
     layout->addWidget(plateUpdateButton);
+
+    auto* offsetWireBox = new QGroupBox(QStringLiteral("板厚位置にワイヤーを作る"));
+    auto* offsetWireLayout = new QVBoxLayout(offsetWireBox);
+    plateOffsetSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
+    plateOffsetSelectionLabel_->setStyleSheet("color: #5c6670;");
+    plateOffsetLayer_ = new QComboBox;
+    plateOffsetLayer_->addItem(QStringLiteral("+側表面（法線矢印側）"), 1.0);
+    plateOffsetLayer_->addItem(QStringLiteral("板厚の中央"), 0.5);
+    plateOffsetLayer_->addItem(QStringLiteral("-側表面（矢印と反対）"), 0.0);
+    auto* offsetWireButton = new QPushButton(QStringLiteral("選択輪郭をこの位置へ複製"));
+    connect(offsetWireButton, &QPushButton::clicked, this, &MainWindow::CreatePlateOffsetWires);
+    offsetWireLayout->addWidget(plateOffsetSelectionLabel_);
+    offsetWireLayout->addWidget(plateOffsetLayer_);
+    offsetWireLayout->addWidget(offsetWireButton);
+    layout->addWidget(offsetWireBox);
 
     auto* jigTitle = new QLabel(QStringLiteral("曲面から成形治具"));
     jigTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
@@ -1638,10 +1703,16 @@ QWidget* MainWindow::BuildOutputPanel()
     bodySeparator->setFrameShadow(QFrame::Sunken);
     layout->addWidget(bodySeparator);
 
-    auto* bodyTitle = new QLabel(QStringLiteral("選択治具の3Dプリント出力"));
+    auto* bodyTitle = new QLabel(QStringLiteral("3DモデルのSTL / STEP出力"));
     bodyTitle->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(bodyTitle);
-    bodyExportSummary_ = new QLabel(QStringLiteral("選択治具: なし"));
+    modelExportScope_ = new QComboBox;
+    modelExportScope_->addItems({
+        QStringLiteral("3D画面で選択した部分"),
+        QStringLiteral("表示中の3Dモデル全体"),
+    });
+    layout->addWidget(modelExportScope_);
+    bodyExportSummary_ = new QLabel(QStringLiteral("選択3D部品: なし"));
     bodyExportSummary_->setWordWrap(true);
     bodyExportSummary_->setStyleSheet("color: #5c6670;");
     layout->addWidget(bodyExportSummary_);
@@ -1653,6 +1724,7 @@ QWidget* MainWindow::BuildOutputPanel()
     bodyStepButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     connect(bodyStlButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(false); });
     connect(bodyStepButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(true); });
+    connect(modelExportScope_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     layout->addWidget(bodyStlButton);
     layout->addWidget(bodyStepButton);
     layout->addStretch(1);
@@ -1769,6 +1841,7 @@ void MainWindow::BuildMenusAndToolbar()
     redoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), QStringLiteral("やり直す"), this);
     hideSelectedAction_ = new QAction(QStringLiteral("隠す"), this);
     showAllObjectsAction_ = new QAction(QStringLiteral("全て表示"), this);
+    QAction* manualAction = new QAction(QStringLiteral("操作マニュアル"), this);
 
     newAction->setShortcut(QKeySequence::New);
     openAction->setShortcut(QKeySequence::Open);
@@ -1793,6 +1866,20 @@ void MainWindow::BuildMenusAndToolbar()
     connect(redoAction_, &QAction::triggered, this, &MainWindow::Redo);
     connect(hideSelectedAction_, &QAction::triggered, this, &MainWindow::HideSelected);
     connect(showAllObjectsAction_, &QAction::triggered, this, &MainWindow::ShowAllObjects);
+    connect(manualAction, &QAction::triggered, this, [this] {
+        const QDir applicationDirectory(QApplication::applicationDirPath());
+        const QStringList candidates = {
+            applicationDirectory.filePath(QStringLiteral("manual.html")),
+            applicationDirectory.filePath(QStringLiteral("../../docs/manual.html")),
+        };
+        for (const QString& candidate : candidates) {
+            if (QFileInfo::exists(candidate)) {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(candidate).absoluteFilePath()));
+                return;
+            }
+        }
+        statusBar()->showMessage(QStringLiteral("manual.html が見つかりません"), 5000);
+    });
 
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル"));
     fileMenu->addAction(newAction);
@@ -1843,6 +1930,9 @@ void MainWindow::BuildMenusAndToolbar()
     drawMenu->addSeparator();
     drawMenu->addAction(finishDrawingAction_);
     drawMenu->addAction(cancelDrawingAction_);
+
+    QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("ヘルプ"));
+    helpMenu->addAction(manualAction);
 
     QToolBar* toolbar = addToolBar(QStringLiteral("基本操作"));
     toolbar->setMovable(false);
@@ -2097,46 +2187,44 @@ int MainWindow::SelectedPlateIndexForExport() const
     return plateIndices.front();
 }
 
-int MainWindow::SelectedBodyIndexForExport() const
-{
-    std::vector<int> bodyIndices;
-    for (const CadSelection& selection : viewport_->Selections()) {
-        if (selection.kind == CadSelectionKind::Body && selection.index >= 0
-            && selection.index < static_cast<int>(project_.Bodies().size())) {
-            bodyIndices.push_back(selection.index);
-        }
-    }
-    std::sort(bodyIndices.begin(), bodyIndices.end());
-    bodyIndices.erase(std::unique(bodyIndices.begin(), bodyIndices.end()), bodyIndices.end());
-    if (bodyIndices.size() != 1) {
-        throw std::invalid_argument("出力する治具を1個だけ選択してください。");
-    }
-    return bodyIndices.front();
-}
-
 void MainWindow::ExportSelectedBody(bool step)
 {
     try {
-        const auto& namedBody = project_.Bodies()[SelectedBodyIndexForExport()];
-        statusBar()->showMessage(QStringLiteral("治具の閉形状と肉厚を検査しています..."));
-        QApplication::processEvents();
-        const auto analysis = kachakacha::occt::AnalyzeBodyShape(
-            namedBody.body, jigMinimumWall_->value());
-        if (!analysis.validBRep || !analysis.closedSolid) {
-            throw std::runtime_error("治具が閉じた有効な立体になっていないため出力できません。");
-        }
-        if (!analysis.meetsMinimumWall) {
-            const auto answer = QMessageBox::warning(
-                this,
-                QStringLiteral("肉厚不足"),
-                QStringLiteral("治具厚 %1 mm は必要最小肉厚 %2 mm を満たしません。\n\nこのまま出力しますか？")
-                    .arg(analysis.minimumWallMillimeters, 0, 'f', 2)
-                    .arg(jigMinimumWall_->value(), 0, 'f', 2),
-                QMessageBox::Yes | QMessageBox::Cancel,
-                QMessageBox::Cancel);
-            if (answer != QMessageBox::Yes) {
-                return;
+        kachakacha::occt::ModelShapeSelection exportSelection;
+        if (modelExportScope_->currentIndex() == 0) {
+            for (const CadSelection& selection : viewport_->Selections()) {
+                if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Plates().size())) {
+                    exportSelection.plateNames.push_back(project_.Plates()[selection.index].name);
+                } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Bodies().size())) {
+                    exportSelection.bodyNames.push_back(project_.Bodies()[selection.index].name);
+                }
             }
+        } else {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.visible) {
+                    exportSelection.plateNames.push_back(plate.name);
+                }
+            }
+            for (const auto& body : project_.Bodies()) {
+                if (body.visible) {
+                    exportSelection.bodyNames.push_back(body.name);
+                }
+            }
+        }
+        if (exportSelection.Empty()) {
+            throw std::invalid_argument(modelExportScope_->currentIndex() == 0
+                    ? "出力する板材または治具を3D画面で選択してください。"
+                    : "表示中の板材または治具がありません。");
+        }
+
+        statusBar()->showMessage(QStringLiteral("選択した3D部品の閉形状を検査しています..."));
+        QApplication::processEvents();
+        const auto analysis = kachakacha::occt::AnalyzeModelShape(
+            project_, exportSelection, 0.01);
+        if (!analysis.validBRep || !analysis.closedSolid) {
+            throw std::runtime_error("選択した3D部品に閉じていない形状があるため出力できません。");
         }
 
         const QString extension = step ? QStringLiteral(".step") : QStringLiteral(".stl");
@@ -2146,10 +2234,16 @@ void MainWindow::ExportSelectedBody(bool step)
         if (!currentPath_.isEmpty()) {
             suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
         }
+        QString suggestedName = QStringLiteral("selected-model");
+        if (analysis.partCount == 1) {
+            suggestedName = !exportSelection.plateNames.empty()
+                ? ToQString(exportSelection.plateNames.front())
+                : ToQString(exportSelection.bodyNames.front());
+        }
         QString path = QFileDialog::getSaveFileName(
             this,
-            step ? QStringLiteral("治具のSTEPを保存") : QStringLiteral("治具のSTLを保存"),
-            suggestedDirectory + ToQString(namedBody.name) + extension,
+            step ? QStringLiteral("選択3DモデルのSTEPを保存") : QStringLiteral("選択3DモデルのSTLを保存"),
+            suggestedDirectory + suggestedName + extension,
             filter);
         if (path.isEmpty()) {
             return;
@@ -2165,17 +2259,19 @@ void MainWindow::ExportSelectedBody(bool step)
         QApplication::processEvents();
         const std::filesystem::path outputPath(path.toStdWString());
         if (step) {
-            kachakacha::occt::WriteBodyStep(outputPath, namedBody.body);
+            kachakacha::occt::WriteModelStep(outputPath, project_, exportSelection);
         } else {
-            kachakacha::occt::WriteBodyStl(outputPath, namedBody.body);
+            kachakacha::occt::WriteModelStl(outputPath, project_, exportSelection);
         }
         bodyExportSummary_->setStyleSheet("color: #35664a;");
         bodyExportSummary_->setText(
-            QStringLiteral("%1 | 閉じた立体 | 体積 %2 mm³ | 保存済み: %3")
-                .arg(ToQString(namedBody.name))
+            QStringLiteral("%1部品（板材%2 / 治具%3）| 体積 %4 mm³ | 保存済み: %5")
+                .arg(analysis.partCount)
+                .arg(analysis.plateCount)
+                .arg(analysis.bodyCount)
                 .arg(analysis.volumeCubicMillimeters, 0, 'f', 1)
                 .arg(QFileInfo(path).fileName()));
-        statusBar()->showMessage(QStringLiteral("治具を保存しました: %1").arg(path), 5000);
+        statusBar()->showMessage(QStringLiteral("選択した3Dモデルを保存しました: %1").arg(path), 5000);
     } catch (const std::exception& error) {
         if (bodyExportSummary_ != nullptr) {
             bodyExportSummary_->setStyleSheet("color: #a32734;");
@@ -4164,6 +4260,8 @@ void MainWindow::CreatePlateFromSurface()
             name,
             sourceSurfaceName,
             plateThickness_->value(),
+            plateVariableThickness_->isChecked()
+                ? plateEndThickness_->value() : plateThickness_->value(),
             direction,
             ToName(plateMaterial_->currentData().toString()));
         candidate.SetSurfaceVisible(sourceSurfaceName, false);
@@ -4179,6 +4277,72 @@ void MainWindow::CreatePlateFromSurface()
         statusBar()->showMessage(QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value()), 3500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreatePlateFromSelectedWires()
+{
+    try {
+        ValidateObjectName(plateName_->text());
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())
+                && std::find(wireIndices.begin(), wireIndices.end(), selection.index) == wireIndices.end()) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.empty()) {
+            throw std::invalid_argument("3D板の輪郭または断面ワイヤーを3D画面で選択してください。");
+        }
+        if (wireIndices.size() == 1 && !project_.Wires()[wireIndices.front()].wire.IsClosed()) {
+            throw std::invalid_argument("1本から平板を作る場合は閉じた輪郭を選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = ToName(plateName_->text());
+        std::string surfaceName = plateName + "_surface";
+        int suffix = 2;
+        while (candidate.FindSurface(surfaceName).has_value()) {
+            surfaceName = plateName + "_surface" + std::to_string(suffix++);
+        }
+        std::vector<std::string> wireNames;
+        wireNames.reserve(wireIndices.size());
+        for (int index : wireIndices) {
+            wireNames.push_back(candidate.Wires()[index].name);
+        }
+        if (wireNames.size() == 1) {
+            candidate.AddPlanarSurface(surfaceName, wireNames.front());
+        } else if (wireNames.size() == 2) {
+            candidate.AddRuledSurface(surfaceName, wireNames[0], wireNames[1]);
+        } else {
+            candidate.AddLoftSurface(surfaceName, wireNames);
+        }
+        const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
+        candidate.AddPlate(
+            plateName,
+            surfaceName,
+            plateThickness_->value(),
+            plateVariableThickness_->isChecked()
+                ? plateEndThickness_->value() : plateThickness_->value(),
+            direction,
+            ToName(plateMaterial_->currentData().toString()));
+        candidate.SetSurfaceVisible(surfaceName, false);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(
+            {CadSelectionKind::Plate, static_cast<int>(project_.Plates().size() - 1)}, true);
+        plateName_->setText(SuggestedPlateName());
+        statusBar()->showMessage(
+            plateVariableThickness_->isChecked()
+                ? QStringLiteral("選択断面から可変板厚の3D板を作成しました")
+                : QStringLiteral("選択ワイヤーから3D板を作成しました"),
+            4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
     }
 }
 
@@ -4198,6 +4362,8 @@ void MainWindow::UpdateSelectedPlate()
             candidate.Plates()[selection.index].name,
             sourceSurfaceName,
             plateThickness_->value(),
+            plateVariableThickness_->isChecked()
+                ? plateEndThickness_->value() : plateThickness_->value(),
             direction,
             ToName(plateMaterial_->currentData().toString()));
         candidate.SetSurfaceVisible(sourceSurfaceName, false);
@@ -4210,6 +4376,67 @@ void MainWindow::UpdateSelectedPlate()
         statusBar()->showMessage(QStringLiteral("板材の板厚・方向・材質を更新しました"), 3500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreatePlateOffsetWires()
+{
+    try {
+        int plateIndex = -1;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                if (plateIndex >= 0 && plateIndex != selection.index) {
+                    throw std::invalid_argument("板厚位置の基準にする板材は1枚だけ選択してください。");
+                }
+                plateIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (plateIndex < 0 || wireIndices.empty()) {
+            throw std::invalid_argument("板材1枚と、その元の面へ投影したワイヤーを選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = candidate.Plates()[plateIndex].name;
+        const double throughThickness = plateOffsetLayer_->currentData().toDouble();
+        const std::string layerSuffix = throughThickness > 0.75 ? "_plus"
+            : throughThickness < 0.25 ? "_minus" : "_center";
+        std::vector<std::string> createdNames;
+        for (int wireIndex : wireIndices) {
+            const std::string sourceName = candidate.Wires()[wireIndex].name;
+            std::string name = sourceName + layerSuffix;
+            int suffix = 2;
+            const auto nameExists = [&](const std::string& candidateName) {
+                return std::any_of(candidate.Wires().begin(), candidate.Wires().end(),
+                    [&](const auto& wire) { return wire.name == candidateName; });
+            };
+            while (nameExists(name)) {
+                name = sourceName + layerSuffix + std::to_string(suffix++);
+            }
+            candidate.AddPlateOffsetWire(name, sourceName, plateName, throughThickness);
+            createdNames.push_back(std::move(name));
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        std::vector<CadSelection> createdSelections;
+        for (const std::string& name : createdNames) {
+            const auto position = std::find_if(project_.Wires().begin(), project_.Wires().end(),
+                [&](const auto& wire) { return wire.name == name; });
+            createdSelections.push_back({CadSelectionKind::Wire,
+                static_cast<int>(std::distance(project_.Wires().begin(), position))});
+        }
+        UpdateSelections(std::move(createdSelections), true);
+        statusBar()->showMessage(
+            QStringLiteral("板厚位置へ%1本のワイヤーを作成しました").arg(createdNames.size()), 4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
     }
 }
 
@@ -4552,7 +4779,14 @@ bool MainWindow::RunCreationSelfTest()
         || removeTangentAction_ == nullptr
         || editWireLockRadius_ == nullptr
         || drawingConstruction_ == nullptr
-        || editWireConstruction_ == nullptr) {
+        || editWireConstruction_ == nullptr
+        || gridPointsVisible_ == nullptr
+        || gridOrigin_[0] == nullptr
+        || gridOrigin_[1] == nullptr
+        || modelExportScope_ == nullptr
+        || plateVariableThickness_ == nullptr
+        || plateEndThickness_ == nullptr
+        || plateOffsetLayer_ == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -4744,6 +4978,21 @@ bool MainWindow::RunCreationSelfTest()
     click(cubeTop);
     if (!kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), {0.0, 0.0, 1.0}, 1.0e-8)) {
         return fail("view cube top face");
+    }
+    click(cube3d);
+    click(QPointF(viewport_->width() - 30.0, 31.0));
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), Vector3{1.0, -1.0, 1.0}.Normalized(), 1.0e-8)) {
+        return fail("view cube corner view");
+    }
+    const Vector3 directionBeforeRoll = viewport_->ViewDirection();
+    const Vector3 upBeforeRoll = viewport_->ViewUpDirection();
+    click(QPointF(viewport_->width() - 40.0, 10.0));
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), directionBeforeRoll, 1.0e-8)
+        || kachakacha::geometry::AlmostEqual(
+            viewport_->ViewUpDirection(), upBeforeRoll, 1.0e-8)) {
+        return fail("view cube roll control");
     }
     click(cube3d);
     const Vector3 beforeCubeDrag = viewport_->ViewDirection();
@@ -5228,6 +5477,29 @@ bool MainWindow::RunCreationSelfTest()
         WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly});
     RefreshModelViews(false);
 
+    plateName_->setText("__ui_direct_variable_plate");
+    plateThickness_->setValue(0.4);
+    plateVariableThickness_->setChecked(true);
+    plateEndThickness_->setValue(0.9);
+    plateDirection_->setCurrentIndex(1);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
+    }, true);
+    CreatePlateFromSelectedWires();
+    if (project_.Surfaces().size() != surfaceStart + 1
+        || project_.Plates().size() != plateStart + 1
+        || !project_.Plates().back().plate.HasVariableThickness()
+        || std::abs(project_.Plates().back().plate.EndThickness() - 0.9) > 1.0e-12) {
+        return fail("direct variable plate from selected wires");
+    }
+    Undo();
+    if (project_.Surfaces().size() != surfaceStart || project_.Plates().size() != plateStart) {
+        return fail("undo direct variable plate");
+    }
+    plateVariableThickness_->setChecked(false);
+
     surfaceType_->setCurrentIndex(2);
     surfaceName_->setText("__ui_nose_skin");
     UpdateSelections({
@@ -5334,10 +5606,13 @@ bool MainWindow::RunCreationSelfTest()
 
     UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
     plateThickness_->setValue(0.7);
+    plateVariableThickness_->setChecked(true);
+    plateEndThickness_->setValue(1.1);
     plateDirection_->setCurrentIndex(0);
     plateMaterial_->setCurrentIndex(1);
     UpdateSelectedPlate();
     if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12
+        || std::abs(project_.Plates()[plateStart].plate.EndThickness() - 1.1) > 1.0e-12
         || project_.Plates()[plateStart].plate.Direction() != PlateThicknessDirection::Positive
         || project_.Plates()[plateStart].material != "paper") {
         return fail("update selected plate properties");
@@ -5347,8 +5622,26 @@ bool MainWindow::RunCreationSelfTest()
         return fail("undo plate property update");
     }
     Redo();
-    if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12) {
+    if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12
+        || std::abs(project_.Plates()[plateStart].plate.EndThickness() - 1.1) > 1.0e-12) {
         return fail("redo plate property update");
+    }
+
+    const std::size_t beforePlateOffsetWire = project_.Wires().size();
+    UpdateSelections({
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+        {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
+    }, true);
+    plateOffsetLayer_->setCurrentIndex(0);
+    CreatePlateOffsetWires();
+    if (project_.Wires().size() != beforePlateOffsetWire + 1
+        || !project_.Wires().back().plateOffset.has_value()
+        || project_.Wires().back().plateOffset->plateName != "__ui_nose_plate") {
+        return fail("create plate thickness position wire");
+    }
+    Undo();
+    if (project_.Wires().size() != beforePlateOffsetWire) {
+        return fail("undo plate thickness position wire");
     }
 
     UpdateSelections({
@@ -5397,6 +5690,11 @@ bool MainWindow::RunCreationSelfTest()
         || project_.Plates()[plateStart + 1].openingWireNames
             != std::vector<std::string>{projectedLightName}) {
         return fail("split selected plate and assign opening");
+    }
+    if (std::abs(project_.Plates()[plateStart].plate.EndThickness() - 0.8) > 1.0e-12
+        || std::abs(project_.Plates()[plateStart + 1].plate.Thickness() - 0.8) > 1.0e-12
+        || std::abs(project_.Plates()[plateStart + 1].plate.EndThickness() - 1.1) > 1.0e-12) {
+        return fail("split variable plate thickness profile");
     }
     const std::string firstPieceName = project_.Plates()[plateStart].name;
     const std::string secondPieceName = project_.Plates()[plateStart + 1].name;
@@ -5485,6 +5783,7 @@ bool MainWindow::RunCreationSelfTest()
         || reloadedProject.Surfaces()[surfaceStart].surface.Kind() != SurfaceKind::Loft
         || reloadedProject.Plates().size() != project_.Plates().size()
         || reloadedProject.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
+        || std::abs(reloadedProject.Plates()[plateStart].plate.EndThickness() - 0.8) > 1.0e-12
         || std::abs(reloadedProject.Plates()[plateStart].plate.Range().maximumV - 0.25) > 1.0e-12
         || reloadedProject.Plates()[plateStart + 1].openingWireNames
             != std::vector<std::string>{projectedLightName}
@@ -6510,6 +6809,36 @@ void MainWindow::RefreshExportSummary()
         exportSummary_->setText(QStringLiteral("出力対象: %1本").arg(count));
     }
 
+    if (bodyExportSummary_ != nullptr && modelExportScope_ != nullptr) {
+        std::size_t plateCount = 0;
+        std::size_t bodyCount = 0;
+        if (modelExportScope_->currentIndex() == 0) {
+            for (const CadSelection& selection : viewport_->Selections()) {
+                if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Plates().size())) {
+                    ++plateCount;
+                } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+                    && selection.index < static_cast<int>(project_.Bodies().size())) {
+                    ++bodyCount;
+                }
+            }
+        } else {
+            plateCount = static_cast<std::size_t>(std::count_if(
+                project_.Plates().begin(), project_.Plates().end(), [](const auto& plate) {
+                    return plate.visible;
+                }));
+            bodyCount = static_cast<std::size_t>(std::count_if(
+                project_.Bodies().begin(), project_.Bodies().end(), [](const auto& body) {
+                    return body.visible;
+                }));
+        }
+        bodyExportSummary_->setStyleSheet("color: #5c6670;");
+        bodyExportSummary_->setText(plateCount + bodyCount == 0
+            ? QStringLiteral("3D出力対象: なし")
+            : QStringLiteral("3D出力対象: %1部品（板材%2 / 治具%3）")
+                .arg(plateCount + bodyCount).arg(plateCount).arg(bodyCount));
+    }
+
     if (plateFlatPatternSummary_ == nullptr) {
         return;
     }
@@ -6606,13 +6935,16 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     std::size_t selectedWireCount = 0;
     std::size_t selectedSurfaceCount = 0;
     std::size_t selectedPlateCount = 0;
-    std::size_t selectedBodyCount = 0;
+    std::size_t selectedProjectedWireCount = 0;
     std::size_t selectedClosedProjectedWireCount = 0;
     for (const CadSelection& item : selections) {
         if (item.kind == CadSelectionKind::Wire && item.index >= 0
             && item.index < static_cast<int>(project_.Wires().size())) {
             ++selectedWireCount;
             const auto& wire = project_.Wires()[item.index];
+            if (wire.projection.has_value()) {
+                ++selectedProjectedWireCount;
+            }
             if (wire.projection.has_value() && wire.wire.IsClosed()) {
                 ++selectedClosedProjectedWireCount;
             }
@@ -6646,9 +6978,6 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         } else if (item.kind == CadSelectionKind::Plate && item.index >= 0
             && item.index < static_cast<int>(project_.Plates().size())) {
             ++selectedPlateCount;
-        } else if (item.kind == CadSelectionKind::Body && item.index >= 0
-            && item.index < static_cast<int>(project_.Bodies().size())) {
-            ++selectedBodyCount;
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
@@ -6664,16 +6993,14 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 .arg(selectedPlateCount)
                 .arg(selectedClosedProjectedWireCount));
     }
+    if (plateOffsetSelectionLabel_ != nullptr) {
+        plateOffsetSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 投影ワイヤー%2本")
+                .arg(selectedPlateCount)
+                .arg(selectedProjectedWireCount));
+    }
     if (plateSplitSelectionLabel_ != nullptr) {
         plateSplitSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚").arg(selectedPlateCount));
     }
-    if (bodyExportSummary_ != nullptr && selectedBodyCount != 1) {
-        bodyExportSummary_->setStyleSheet("color: #5c6670;");
-        bodyExportSummary_->setText(selectedBodyCount == 0
-            ? QStringLiteral("選択治具: なし")
-            : QStringLiteral("選択治具: %1個（1個に絞って出力）").arg(selectedBodyCount));
-    }
-
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
     if (pendingMachiningPickSlot_ >= 0 && selection.kind == CadSelectionKind::Wire
         && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
@@ -6702,7 +7029,19 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())) {
         const auto& named = project_.Wires()[selection.index];
         const QString source = named.metadata.sourcePlaneName.has_value() ? ToQString(*named.metadata.sourcePlaneName) : QStringLiteral("なし");
-        if (named.projection.has_value()) {
+        if (named.plateOffset.has_value()) {
+            const QString layer = named.plateOffset->throughThickness > 0.75
+                ? QStringLiteral("+側表面")
+                : named.plateOffset->throughThickness < 0.25
+                ? QStringLiteral("-側表面") : QStringLiteral("板厚中央");
+            infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 板厚位置ワイヤー<br>元の輪郭: %2<br>対象板材: %3<br>位置: %4<br><br>始点<br>%5<br><br>終点<br>%6")
+                    .arg(ToQString(named.name),
+                        ToQString(named.plateOffset->sourceWireName),
+                        ToQString(named.plateOffset->plateName),
+                        layer,
+                        VectorText(named.wire.Start()),
+                        VectorText(named.wire.End())));
+        } else if (named.projection.has_value()) {
             infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 面上の投影ワイヤー<br>元の平面図: %2<br>対象面: %3<br>投影方向<br>%4<br><br>始点<br>%5<br><br>終点<br>%6")
                     .arg(ToQString(named.name),
                         ToQString(named.projection->sourceWireName),
@@ -6788,6 +7127,10 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         if (plateThickness_ != nullptr) {
             plateThickness_->setValue(named.plate.Thickness());
         }
+        if (plateVariableThickness_ != nullptr && plateEndThickness_ != nullptr) {
+            plateVariableThickness_->setChecked(named.plate.HasVariableThickness());
+            plateEndThickness_->setValue(named.plate.EndThickness());
+        }
         if (plateDirection_ != nullptr) {
             plateDirection_->setCurrentIndex(plateDirection_->findData(static_cast<int>(named.plate.Direction())));
         }
@@ -6796,10 +7139,10 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             plateMaterial_->setCurrentIndex(materialIndex >= 0 ? materialIndex : plateMaterial_->count() - 1);
         }
         const QString direction = named.plate.Direction() == PlateThicknessDirection::Positive
-            ? QStringLiteral("面から外側へ")
+            ? QStringLiteral("+側（法線矢印側）")
             : named.plate.Direction() == PlateThicknessDirection::Centered
-            ? QStringLiteral("面を中央に")
-            : QStringLiteral("面から内側へ");
+            ? QStringLiteral("中央（両側へ半分）")
+            : QStringLiteral("-側（矢印と反対）");
         const QString material = named.material == "styrene" ? QStringLiteral("プラ板")
             : named.material == "paper" ? QStringLiteral("紙・厚紙")
             : named.material == "brass" ? QStringLiteral("真鍮板")
@@ -6827,11 +7170,15 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             .arg(range.minimumV * 100.0, 0, 'f', 1)
             .arg(range.maximumV * 100.0, 0, 'f', 1);
         const QString plateKind = range.IsFull() ? QStringLiteral("板材") : QStringLiteral("分割した板材");
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元の面: %3<br>板厚: %4 mm<br>厚み方向: %5<br>材質: %6<br>開口: %7<br>部品範囲: %8<br><br>工作判定: %9")
+        const QString thicknessText = named.plate.HasVariableThickness()
+            ? QStringLiteral("%1 mm → %2 mm")
+                .arg(named.plate.Thickness()).arg(named.plate.EndThickness())
+            : QStringLiteral("%1 mm").arg(named.plate.Thickness());
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元の面: %3<br>板厚: %4<br>厚み方向: %5<br>材質: %6<br>開口: %7<br>部品範囲: %8<br><br>工作判定: %9")
                 .arg(ToQString(named.name))
                 .arg(plateKind)
                 .arg(ToQString(named.sourceSurfaceName))
-                .arg(named.plate.Thickness())
+                .arg(thicknessText)
                 .arg(direction)
                 .arg(material)
                 .arg(openings)
@@ -6895,8 +7242,11 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         if (auto* label = qobject_cast<QLabel*>(editParameters_->widget(0))) {
             if (selection.kind == CadSelectionKind::Wire
                 && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
-                && project_.Wires()[selection.index].projection.has_value()) {
-                label->setText(QStringLiteral("投影ワイヤーは元の平面図を編集します"));
+                && (project_.Wires()[selection.index].projection.has_value()
+                    || project_.Wires()[selection.index].plateOffset.has_value())) {
+                label->setText(project_.Wires()[selection.index].plateOffset.has_value()
+                    ? QStringLiteral("板厚位置ワイヤーは元の投影輪郭または板材を編集します")
+                    : QStringLiteral("投影ワイヤーは元の平面図を編集します"));
             } else if (selection.kind == CadSelectionKind::Surface) {
                 label->setText(QStringLiteral("面は元の境界・断面ワイヤーを編集します"));
             } else if (selection.kind == CadSelectionKind::Plate) {
@@ -6909,7 +7259,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
         const bool editableWire = selection.kind == CadSelectionKind::Wire
             && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
-            && !project_.Wires()[selection.index].projection.has_value();
+            && !project_.Wires()[selection.index].projection.has_value()
+            && !project_.Wires()[selection.index].plateOffset.has_value();
         editApplyButton_->setEnabled(selection.kind == CadSelectionKind::WorkPlane || editableWire);
     }
     UpdatePlateSplitPreview();

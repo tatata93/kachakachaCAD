@@ -4165,6 +4165,31 @@ bool MainWindow::RunCreationSelfTest()
         qWarning() << "self-test failed:" << stage;
         return false;
     };
+    const std::string initialDrawingPlaneName = ToName(activePlaneCombo_->currentText());
+    const std::optional<WorkPlane> initialDrawingPlane = project_.FindWorkPlane(initialDrawingPlaneName);
+    if (!initialDrawingPlane.has_value()) {
+        return fail("find initial spline drawing plane");
+    }
+    const std::size_t beforeInitialSpline = project_.Wires().size();
+    AddViewportSpline({
+        initialDrawingPlane->ToWorld(-8.0, 0.0),
+        initialDrawingPlane->ToWorld(-3.0, 4.0),
+        initialDrawingPlane->ToWorld(3.0, -2.0),
+        initialDrawingPlane->ToWorld(8.0, 1.0),
+    });
+    if (project_.Wires().size() != beforeInitialSpline + 1
+        || project_.Wires().back().wire.Kind() != WireKind::CubicBSpline) {
+        return fail("create initial B-spline");
+    }
+    UpdateSelection(
+        {CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
+    if (editWirePointTable_->rowCount() != 4) {
+        return fail("select initial B-spline");
+    }
+    Undo();
+    if (project_.Wires().size() != beforeInitialSpline) {
+        return fail("undo initial B-spline");
+    }
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
     const std::size_t initialDimensionCount = project_.ReferenceDimensions().size();

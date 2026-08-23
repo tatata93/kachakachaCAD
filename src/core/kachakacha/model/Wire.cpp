@@ -1,6 +1,7 @@
 #include "kachakacha/model/Wire.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 
@@ -68,19 +69,22 @@ Vector3 EvaluateCubicBSpline(
 {
     const std::vector<double> knots = MakeClampedUniformKnots(controlPoints.size());
     const std::size_t span = FindBSplineSpan(parameter, controlPoints.size(), knots);
-    std::vector<Vector3> working(CubicDegree + 1);
+    std::array<Vector3, CubicDegree + 1> working{};
     for (std::size_t index = 0; index <= CubicDegree; ++index) {
         working[index] = controlPoints[span - CubicDegree + index];
     }
 
-    for (std::size_t level = 1; level <= CubicDegree; ++level) {
-        for (std::size_t index = CubicDegree + 1; index-- > level;) {
-            const std::size_t knotIndex = span - CubicDegree + index;
-            const double denominator = knots[knotIndex + CubicDegree - level + 1] - knots[knotIndex];
+    for (int level = 1; level <= static_cast<int>(CubicDegree); ++level) {
+        for (int index = static_cast<int>(CubicDegree); index >= level; --index) {
+            const std::size_t knotIndex = span - CubicDegree + static_cast<std::size_t>(index);
+            const double denominator = knots[knotIndex + CubicDegree - static_cast<std::size_t>(level) + 1]
+                - knots[knotIndex];
             const double alpha = denominator <= 1.0e-15
                 ? 0.0
                 : (parameter - knots[knotIndex]) / denominator;
-            working[index] = working[index - 1] * (1.0 - alpha) + working[index] * alpha;
+            working[static_cast<std::size_t>(index)] =
+                working[static_cast<std::size_t>(index - 1)] * (1.0 - alpha)
+                + working[static_cast<std::size_t>(index)] * alpha;
         }
     }
     return working[CubicDegree];
@@ -91,10 +95,27 @@ std::vector<double> CubicBSplineBasisValues(
     double parameter)
 {
     std::vector<double> values(controlPointCount, 0.0);
-    for (std::size_t index = 0; index < controlPointCount; ++index) {
-        std::vector<Vector3> basisControls(controlPointCount);
-        basisControls[index] = {1.0, 0.0, 0.0};
-        values[index] = EvaluateCubicBSpline(basisControls, parameter).x;
+    const std::vector<double> knots = MakeClampedUniformKnots(controlPointCount);
+    const std::size_t span = FindBSplineSpan(parameter, controlPointCount, knots);
+    std::array<double, CubicDegree + 1> basis{};
+    std::array<double, CubicDegree + 1> left{};
+    std::array<double, CubicDegree + 1> right{};
+    basis[0] = 1.0;
+
+    for (std::size_t degree = 1; degree <= CubicDegree; ++degree) {
+        left[degree] = parameter - knots[span + 1 - degree];
+        right[degree] = knots[span + degree] - parameter;
+        double saved = 0.0;
+        for (std::size_t index = 0; index < degree; ++index) {
+            const double denominator = right[index + 1] + left[degree - index];
+            const double portion = denominator <= 1.0e-15 ? 0.0 : basis[index] / denominator;
+            basis[index] = saved + right[index + 1] * portion;
+            saved = left[degree - index] * portion;
+        }
+        basis[degree] = saved;
+    }
+    for (std::size_t index = 0; index <= CubicDegree; ++index) {
+        values[span - CubicDegree + index] = basis[index];
     }
     return values;
 }
@@ -277,7 +298,8 @@ Wire Wire::InterpolatingCubicBSpline(const std::vector<Vector3>& throughPoints)
     if (AlmostEqual(throughPoints.front(), throughPoints.back())) {
         throw std::invalid_argument("Interpolating cubic B-spline requires different start and end points.");
     }
-    return CubicBSpline(SolveInterpolationControls(throughPoints));
+    const std::vector<Vector3> controls = SolveInterpolationControls(throughPoints);
+    return CubicBSpline(controls);
 }
 
 Wire Wire::Circle(Vector3 center, Vector3 uAxisHint, Vector3 vAxisHint, double radius)

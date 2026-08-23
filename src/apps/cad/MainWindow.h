@@ -23,6 +23,7 @@ class QSlider;
 class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
+class QTimer;
 class QTreeWidget;
 
 namespace kachakacha::io {
@@ -36,6 +37,7 @@ public:
     bool LoadProjectFile(const QString& path);
     bool SaveProjectFile(const QString& path);
     bool RunCreationSelfTest();
+    bool ExportFirstBodyForAutomation(const QString& stlPath, const QString& stepPath);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -103,10 +105,14 @@ private:
     void ProjectSelectedWiresToSurface();
     void CreatePlateFromSurface();
     void UpdateSelectedPlate();
+    void CreateSurfaceJig();
+    void UpdateSelectedBody();
     void AddSelectedPlateOpenings();
     void RemoveSelectedPlateOpenings();
     void SplitSelectedPlate();
     void UpdatePlateSplitPreview();
+    void ExportSelectedBody(bool step);
+    [[nodiscard]] int SelectedBodyIndexForExport() const;
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void CommitDrawingDimensions();
@@ -138,6 +144,10 @@ private:
     void PopulateEditPanel(CadSelection selection);
     void PopulateWirePointTable(const kachakacha::model::NamedWire& wire);
     void MarkModified();
+    void WriteAutosave();
+    void OfferAutosaveRecovery();
+    void RemoveAutosave();
+    [[nodiscard]] QString AutosavePath() const;
     bool ConfirmDiscardChanges();
     QString SuggestedPlaneName() const;
     QString SuggestedWireName() const;
@@ -146,6 +156,7 @@ private:
     QString SuggestedFilletName() const;
     QString SuggestedSurfaceName() const;
     QString SuggestedPlateName() const;
+    QString SuggestedBodyName() const;
     QString SuggestedDimensionName() const;
 
     kachakacha::model::Project project_;
@@ -200,6 +211,7 @@ private:
     CadViewport* viewport_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
+    QTimer* autosaveTimer_ = nullptr;
     QLabel* infoLabel_ = nullptr;
     QComboBox* measurementMode_ = nullptr;
     QLabel* measurementStateLabel_ = nullptr;
@@ -267,6 +279,13 @@ private:
     QDoubleSpinBox* plateThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QComboBox* plateMaterial_ = nullptr;
+    QLineEdit* jigName_ = nullptr;
+    QComboBox* jigSurface_ = nullptr;
+    QComboBox* jigSide_ = nullptr;
+    QDoubleSpinBox* jigClearance_ = nullptr;
+    QDoubleSpinBox* jigThickness_ = nullptr;
+    QDoubleSpinBox* jigMinimumWall_ = nullptr;
+    QLabel* jigAnalysisLabel_ = nullptr;
     QLabel* plateOpeningSelectionLabel_ = nullptr;
     QLabel* plateSplitSelectionLabel_ = nullptr;
     QComboBox* plateSplitAxis_ = nullptr;
@@ -279,6 +298,7 @@ private:
     QLabel* plateFlatPatternSummary_ = nullptr;
     QComboBox* platePdfPaper_ = nullptr;
     QDoubleSpinBox* platePdfOverlap_ = nullptr;
+    QLabel* bodyExportSummary_ = nullptr;
 
     QLineEdit* planeName_ = nullptr;
     QComboBox* planeMethod_ = nullptr;

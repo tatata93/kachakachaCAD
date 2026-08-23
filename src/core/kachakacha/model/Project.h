@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kachakacha/model/Plate.h"
+#include "kachakacha/model/Body.h"
 #include "kachakacha/model/Wire.h"
 #include "kachakacha/model/WireConstraints.h"
 #include "kachakacha/model/WorkPlane.h"
@@ -128,6 +128,13 @@ struct NamedPlate {
     bool visible = true;
 };
 
+struct NamedBody {
+    std::string name;
+    Body body;
+    std::string sourceSurfaceName;
+    bool visible = true;
+};
+
 class Project {
 public:
     void AddWorkPlane(std::string name, WorkPlane plane);
@@ -141,6 +148,13 @@ public:
         double thickness,
         PlateThicknessDirection direction,
         std::string material);
+    void AddSurfaceJig(
+        std::string name,
+        std::string sourceSurfaceName,
+        PlateSurfaceRange range,
+        JigSide side,
+        double clearanceMillimeters,
+        double thicknessMillimeters);
     void AddProjectedWire(
         std::string name,
         std::string sourceWireName,
@@ -155,6 +169,13 @@ public:
         double thickness,
         PlateThicknessDirection direction,
         std::string material);
+    void UpdateSurfaceJig(
+        std::string_view name,
+        std::string sourceSurfaceName,
+        PlateSurfaceRange range,
+        JigSide side,
+        double clearanceMillimeters,
+        double thicknessMillimeters);
     void SetWireMetadata(std::string_view name, WireMetadata metadata);
     void AddWireCoincidentConstraint(
         WireEndpointReference anchor,
@@ -174,6 +195,7 @@ public:
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
     void SetPlateVisible(std::string_view name, bool visible);
+    void SetBodyVisible(std::string_view name, bool visible);
     void SetPlateRange(std::string_view name, PlateSurfaceRange range);
     void SplitPlate(
         std::string_view name,
@@ -187,11 +209,13 @@ public:
     bool RemoveWire(std::string_view name);
     bool RemoveSurface(std::string_view name);
     bool RemovePlate(std::string_view name);
+    bool RemoveBody(std::string_view name);
 
     [[nodiscard]] const std::vector<NamedWorkPlane>& WorkPlanes() const noexcept { return workPlanes_; }
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }
     [[nodiscard]] const std::vector<NamedSurface>& Surfaces() const noexcept { return surfaces_; }
     [[nodiscard]] const std::vector<NamedPlate>& Plates() const noexcept { return plates_; }
+    [[nodiscard]] const std::vector<NamedBody>& Bodies() const noexcept { return bodies_; }
     [[nodiscard]] const std::vector<WireCoincidentConstraint>& CoincidentConstraints() const noexcept
     {
         return coincidentConstraints_;
@@ -208,6 +232,7 @@ public:
     [[nodiscard]] std::optional<WorkPlane> FindWorkPlane(std::string_view name) const;
     [[nodiscard]] std::optional<Surface> FindSurface(std::string_view name) const;
     [[nodiscard]] std::optional<Plate> FindPlate(std::string_view name) const;
+    [[nodiscard]] std::optional<Body> FindBody(std::string_view name) const;
 
 private:
     [[nodiscard]] const NamedWire& RequireWire(std::string_view name) const;
@@ -220,6 +245,7 @@ private:
     std::vector<NamedWire> wires_;
     std::vector<NamedSurface> surfaces_;
     std::vector<NamedPlate> plates_;
+    std::vector<NamedBody> bodies_;
     std::vector<WireCoincidentConstraint> coincidentConstraints_;
     std::vector<WireTangentConstraint> tangentConstraints_;
     std::vector<ReferenceDimension> referenceDimensions_;

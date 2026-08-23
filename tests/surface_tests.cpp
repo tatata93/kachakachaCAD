@@ -58,6 +58,12 @@ int main()
     Require(loft.Kind() == SurfaceKind::Loft, "create multi-section loft surface");
     Require(AlmostEqual(loft.Evaluate(0.0, 0.5), sectionMiddle.Start(), 1.0e-8), "loft keeps selected section order");
     Require(AlmostEqual(loft.Evaluate(1.0, 1.0), sectionB.End(), 1.0e-8), "loft reaches last section");
+    const double loftStep = 1.0e-4;
+    const auto middlePoint = loft.Evaluate(0.5, 0.5);
+    const auto beforeDirection = (middlePoint - loft.Evaluate(0.5, 0.5 - loftStep)).Normalized();
+    const auto afterDirection = (loft.Evaluate(0.5, 0.5 + loftStep) - middlePoint).Normalized();
+    Require(kachakacha::geometry::Dot(beforeDirection, afterDirection) > 0.99999,
+        "loft keeps a continuous direction through section planes");
 
     const Wire lightDrawing = Wire::Circle({6.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25);
     const Wire projectedLight = ruled.ProjectWireAlongDirection(lightDrawing, {0.0, 0.0, -1.0});

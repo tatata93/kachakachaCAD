@@ -7,6 +7,7 @@
 #include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/Sketch.h"
 #include "kachakacha/model/WireOperations.h"
+#include "kachakacha/occt/BodyExport.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -18,6 +19,8 @@
 #include <QDockWidget>
 #include <QDebug>
 #include <QDoubleSpinBox>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -43,6 +46,7 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QStackedWidget>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStringList>
@@ -83,6 +87,7 @@ using kachakacha::model::Project;
 using kachakacha::model::PlateDevelopability;
 using kachakacha::model::PlateSplitAxis;
 using kachakacha::model::PlateThicknessDirection;
+using kachakacha::model::JigSide;
 using kachakacha::model::Sketch;
 using kachakacha::model::SurfaceKind;
 using kachakacha::model::Wire;
@@ -115,6 +120,15 @@ constexpr int kSelectionKindRole = Qt::UserRole;
 constexpr int kSelectionIndexRole = Qt::UserRole + 1;
 constexpr int kDimensionNameRole = Qt::UserRole + 2;
 constexpr double kPi = 3.14159265358979323846;
+
+bool IsAutomationInvocation()
+{
+    const QStringList arguments = QApplication::arguments();
+    return arguments.contains(QStringLiteral("--self-test"))
+        || arguments.contains(QStringLiteral("--snapshot"))
+        || arguments.contains(QStringLiteral("--export-first-body-stl"))
+        || arguments.contains(QStringLiteral("--export-first-body-step"));
+}
 
 QDoubleSpinBox* MakeNumberField(double value = 0.0)
 {
@@ -369,6 +383,12 @@ MainWindow::MainWindow(QWidget* parent)
     resize(1380, 820);
     setMinimumSize(1040, 650);
     setWindowTitle(QStringLiteral("kachakachaCAD - 無題"));
+
+    autosaveTimer_ = new QTimer(this);
+    autosaveTimer_->setInterval(60000);
+    connect(autosaveTimer_, &QTimer::timeout, this, &MainWindow::WriteAutosave);
+    autosaveTimer_->start();
+    QTimer::singleShot(0, this, &MainWindow::OfferAutosaveRecovery);
 }
 
 void MainWindow::BuildUi()
@@ -484,6 +504,8 @@ void MainWindow::BuildUi()
             currentVisibility = project_.Surfaces()[index].visible;
         } else if (kind == CadSelectionKind::Plate && index >= 0 && index < static_cast<int>(project_.Plates().size())) {
             currentVisibility = project_.Plates()[index].visible;
+        } else if (kind == CadSelectionKind::Body && index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+            currentVisibility = project_.Bodies()[index].visible;
         } else {
             return;
         }
@@ -498,8 +520,10 @@ void MainWindow::BuildUi()
             project_.SetWireVisible(project_.Wires()[index].name, visible);
         } else if (kind == CadSelectionKind::Surface) {
             project_.SetSurfaceVisible(project_.Surfaces()[index].name, visible);
-        } else {
+        } else if (kind == CadSelectionKind::Plate) {
             project_.SetPlateVisible(project_.Plates()[index].name, visible);
+        } else {
+            project_.SetBodyVisible(project_.Bodies()[index].name, visible);
         }
         MarkModified();
         RefreshPlaneChoices();
@@ -1403,6 +1427,47 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
     layout->addWidget(plateUpdateButton);
 
+    auto* jigTitle = new QLabel(QStringLiteral("曲面から成形治具"));
+    jigTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(jigTitle);
+
+    auto* jigForm = new QFormLayout;
+    jigForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    jigName_ = new QLineEdit(QStringLiteral("jig_1"));
+    jigSurface_ = new QComboBox;
+    jigSide_ = new QComboBox;
+    jigSide_->addItem(QStringLiteral("外側の型"), static_cast<int>(JigSide::Positive));
+    jigSide_->addItem(QStringLiteral("内側の型"), static_cast<int>(JigSide::Negative));
+    jigClearance_ = MakeNumberField(0.15);
+    jigClearance_->setRange(0.0, 20.0);
+    jigClearance_->setDecimals(3);
+    jigClearance_->setSingleStep(0.05);
+    jigClearance_->setSuffix(QStringLiteral(" mm"));
+    jigThickness_ = MakePositiveField(3.0);
+    jigThickness_->setSuffix(QStringLiteral(" mm"));
+    jigMinimumWall_ = MakePositiveField(1.2);
+    jigMinimumWall_->setSuffix(QStringLiteral(" mm"));
+    jigForm->addRow(QStringLiteral("治具の名前"), jigName_);
+    jigForm->addRow(QStringLiteral("元の面"), jigSurface_);
+    jigForm->addRow(QStringLiteral("型の側"), jigSide_);
+    jigForm->addRow(QStringLiteral("成形の隙間"), jigClearance_);
+    jigForm->addRow(QStringLiteral("治具の厚み"), jigThickness_);
+    jigForm->addRow(QStringLiteral("必要最小肉厚"), jigMinimumWall_);
+    layout->addLayout(jigForm);
+
+    jigAnalysisLabel_ = new QLabel(QStringLiteral("厚みを設定して治具を作成します"));
+    jigAnalysisLabel_->setWordWrap(true);
+    jigAnalysisLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(jigAnalysisLabel_);
+
+    auto* jigCreateButton = new QPushButton(QStringLiteral("この面から成形治具を作る"));
+    jigCreateButton->setObjectName("primaryButton");
+    connect(jigCreateButton, &QPushButton::clicked, this, &MainWindow::CreateSurfaceJig);
+    layout->addWidget(jigCreateButton);
+    auto* jigUpdateButton = new QPushButton(QStringLiteral("選択中の治具へ設定"));
+    connect(jigUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedBody);
+    layout->addWidget(jigUpdateButton);
+
     auto* openingTitle = new QLabel(QStringLiteral("板材に開口"));
     openingTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(openingTitle);
@@ -1567,6 +1632,29 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(platePdfButton);
     layout->addWidget(plateSvgButton);
     layout->addWidget(plateDxfButton);
+
+    auto* bodySeparator = new QFrame;
+    bodySeparator->setFrameShape(QFrame::HLine);
+    bodySeparator->setFrameShadow(QFrame::Sunken);
+    layout->addWidget(bodySeparator);
+
+    auto* bodyTitle = new QLabel(QStringLiteral("選択治具の3Dプリント出力"));
+    bodyTitle->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(bodyTitle);
+    bodyExportSummary_ = new QLabel(QStringLiteral("選択治具: なし"));
+    bodyExportSummary_->setWordWrap(true);
+    bodyExportSummary_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(bodyExportSummary_);
+
+    auto* bodyStlButton = new QPushButton(QStringLiteral("STLを保存"));
+    bodyStlButton->setObjectName("primaryButton");
+    bodyStlButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    auto* bodyStepButton = new QPushButton(QStringLiteral("STEPを保存"));
+    bodyStepButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(bodyStlButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(false); });
+    connect(bodyStepButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(true); });
+    layout->addWidget(bodyStlButton);
+    layout->addWidget(bodyStepButton);
     layout->addStretch(1);
     return panel;
 }
@@ -1811,6 +1899,7 @@ void MainWindow::NewProject()
         return;
     }
 
+    RemoveAutosave();
     project_ = Project{};
     project_.AddWorkPlane("top_XY", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
@@ -1849,6 +1938,9 @@ bool MainWindow::LoadProjectFile(const QString& path)
             throw std::runtime_error("ファイルを開けませんでした。");
         }
         project_ = LoadProjectScript(input, nativePath.string());
+        if (!IsAutomationInvocation()) {
+            RemoveAutosave();
+        }
         referenceWireName_.reset();
         currentPath_ = path;
         modified_ = false;
@@ -1864,6 +1956,41 @@ bool MainWindow::LoadProjectFile(const QString& path)
         return true;
     } catch (const std::exception& error) {
         QMessageBox::critical(this, QStringLiteral("読み込みエラー"), QString::fromUtf8(error.what()));
+        return false;
+    }
+}
+
+bool MainWindow::ExportFirstBodyForAutomation(const QString& stlPath, const QString& stepPath)
+{
+    try {
+        if (project_.Bodies().empty()) {
+            throw std::invalid_argument("自動出力する治具がプロジェクトにありません。");
+        }
+        if (stlPath.isEmpty() && stepPath.isEmpty()) {
+            throw std::invalid_argument("自動出力先が指定されていません。");
+        }
+        const auto& namedBody = project_.Bodies().front();
+        const auto analysis = kachakacha::occt::AnalyzeBodyShape(namedBody.body, 0.01);
+        if (!analysis.validBRep || !analysis.closedSolid) {
+            throw std::runtime_error("治具が閉じた有効な立体ではありません。");
+        }
+        if (!stlPath.isEmpty()) {
+            kachakacha::occt::WriteBodyStl(
+                std::filesystem::path(stlPath.toStdWString()), namedBody.body);
+        }
+        if (!stepPath.isEmpty()) {
+            kachakacha::occt::WriteBodyStep(
+                std::filesystem::path(stepPath.toStdWString()), namedBody.body);
+        }
+        UpdateSelection({CadSelectionKind::Body, 0}, true);
+        toolsTabs_->setCurrentIndex(6);
+        viewport_->FitAll();
+        statusBar()->showMessage(QStringLiteral("完成確認用の治具出力が完了しました"), 5000);
+        return true;
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(
+            QStringLiteral("治具の自動出力に失敗しました: %1").arg(QString::fromUtf8(error.what())),
+            8000);
         return false;
     }
 }
@@ -1968,6 +2095,94 @@ int MainWindow::SelectedPlateIndexForExport() const
         throw std::invalid_argument("展開する板材を1枚だけ選択してください。");
     }
     return plateIndices.front();
+}
+
+int MainWindow::SelectedBodyIndexForExport() const
+{
+    std::vector<int> bodyIndices;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Bodies().size())) {
+            bodyIndices.push_back(selection.index);
+        }
+    }
+    std::sort(bodyIndices.begin(), bodyIndices.end());
+    bodyIndices.erase(std::unique(bodyIndices.begin(), bodyIndices.end()), bodyIndices.end());
+    if (bodyIndices.size() != 1) {
+        throw std::invalid_argument("出力する治具を1個だけ選択してください。");
+    }
+    return bodyIndices.front();
+}
+
+void MainWindow::ExportSelectedBody(bool step)
+{
+    try {
+        const auto& namedBody = project_.Bodies()[SelectedBodyIndexForExport()];
+        statusBar()->showMessage(QStringLiteral("治具の閉形状と肉厚を検査しています..."));
+        QApplication::processEvents();
+        const auto analysis = kachakacha::occt::AnalyzeBodyShape(
+            namedBody.body, jigMinimumWall_->value());
+        if (!analysis.validBRep || !analysis.closedSolid) {
+            throw std::runtime_error("治具が閉じた有効な立体になっていないため出力できません。");
+        }
+        if (!analysis.meetsMinimumWall) {
+            const auto answer = QMessageBox::warning(
+                this,
+                QStringLiteral("肉厚不足"),
+                QStringLiteral("治具厚 %1 mm は必要最小肉厚 %2 mm を満たしません。\n\nこのまま出力しますか？")
+                    .arg(analysis.minimumWallMillimeters, 0, 'f', 2)
+                    .arg(jigMinimumWall_->value(), 0, 'f', 2),
+                QMessageBox::Yes | QMessageBox::Cancel,
+                QMessageBox::Cancel);
+            if (answer != QMessageBox::Yes) {
+                return;
+            }
+        }
+
+        const QString extension = step ? QStringLiteral(".step") : QStringLiteral(".stl");
+        const QString filter = step ? QStringLiteral("STEP CAD形状 (*.step *.stp)")
+                                    : QStringLiteral("STL 3Dプリント形状 (*.stl)");
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            step ? QStringLiteral("治具のSTEPを保存") : QStringLiteral("治具のSTLを保存"),
+            suggestedDirectory + ToQString(namedBody.name) + extension,
+            filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(extension, Qt::CaseInsensitive)
+            && !(step && path.endsWith(QStringLiteral(".stp"), Qt::CaseInsensitive))) {
+            path += extension;
+        }
+
+        statusBar()->showMessage(step
+            ? QStringLiteral("CAD形状をSTEPへ書き出しています...")
+            : QStringLiteral("出力時だけ高精度メッシュを作りSTLへ書き出しています..."));
+        QApplication::processEvents();
+        const std::filesystem::path outputPath(path.toStdWString());
+        if (step) {
+            kachakacha::occt::WriteBodyStep(outputPath, namedBody.body);
+        } else {
+            kachakacha::occt::WriteBodyStl(outputPath, namedBody.body);
+        }
+        bodyExportSummary_->setStyleSheet("color: #35664a;");
+        bodyExportSummary_->setText(
+            QStringLiteral("%1 | 閉じた立体 | 体積 %2 mm³ | 保存済み: %3")
+                .arg(ToQString(namedBody.name))
+                .arg(analysis.volumeCubicMillimeters, 0, 'f', 1)
+                .arg(QFileInfo(path).fileName()));
+        statusBar()->showMessage(QStringLiteral("治具を保存しました: %1").arg(path), 5000);
+    } catch (const std::exception& error) {
+        if (bodyExportSummary_ != nullptr) {
+            bodyExportSummary_->setStyleSheet("color: #a32734;");
+            bodyExportSummary_->setText(QStringLiteral("3D出力不可: %1").arg(QString::fromUtf8(error.what())));
+        }
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
 }
 
 bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlatPattern& pattern)
@@ -2110,6 +2325,7 @@ bool MainWindow::SaveProjectFile(const QString& path)
         }
         currentPath_ = path;
         modified_ = false;
+        RemoveAutosave();
         setWindowTitle(QStringLiteral("kachakachaCAD - %1").arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("保存しました: %1").arg(path), 4000);
         return true;
@@ -3997,6 +4213,86 @@ void MainWindow::UpdateSelectedPlate()
     }
 }
 
+void MainWindow::CreateSurfaceJig()
+{
+    try {
+        ValidateObjectName(jigName_->text());
+        const std::string sourceSurfaceName = ToName(jigSurface_->currentText());
+        if (!project_.FindSurface(sourceSurfaceName).has_value()) {
+            throw std::invalid_argument("治具の元にする面を3D画面または一覧で選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string name = ToName(jigName_->text());
+        const auto side = static_cast<JigSide>(jigSide_->currentData().toInt());
+        candidate.AddSurfaceJig(
+            name,
+            sourceSurfaceName,
+            {},
+            side,
+            jigClearance_->value(),
+            jigThickness_->value());
+        candidate.SetSurfaceVisible(sourceSurfaceName, false);
+
+        const auto analysis = candidate.Bodies().back().body.AnalyzePrintability(jigMinimumWall_->value());
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const int bodyIndex = static_cast<int>(project_.Bodies().size() - 1);
+        UpdateSelection({CadSelectionKind::Body, bodyIndex}, true);
+        toolsTabs_->setCurrentIndex(5);
+        jigName_->setText(SuggestedBodyName());
+        jigAnalysisLabel_->setStyleSheet(
+            analysis.meetsMinimumWall ? "color: #35664a;" : "color: #a32734;");
+        jigAnalysisLabel_->setText(analysis.meetsMinimumWall
+            ? QStringLiteral("造形確認: 最小肉厚 %1 mm を満たします").arg(analysis.minimumWallMillimeters, 0, 'f', 2)
+            : QStringLiteral("造形警告: 厚み %1 mm は必要最小肉厚に不足します").arg(analysis.minimumWallMillimeters, 0, 'f', 2));
+        statusBar()->showMessage(QStringLiteral("曲面から成形治具を作成しました"), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::UpdateSelectedBody()
+{
+    try {
+        const CadSelection selection = viewport_->Selection();
+        if (selection.kind != CadSelectionKind::Body || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Bodies().size())) {
+            throw std::invalid_argument("変更する治具を3D画面またはモデル一覧で選択してください。");
+        }
+        const std::string sourceSurfaceName = ToName(jigSurface_->currentText());
+        const auto side = static_cast<JigSide>(jigSide_->currentData().toInt());
+
+        Project candidate = project_;
+        const auto& current = candidate.Bodies()[selection.index];
+        candidate.UpdateSurfaceJig(
+            current.name,
+            sourceSurfaceName,
+            current.body.Range(),
+            side,
+            jigClearance_->value(),
+            jigThickness_->value());
+        candidate.SetSurfaceVisible(sourceSurfaceName, false);
+        const auto analysis = candidate.Bodies()[selection.index].body.AnalyzePrintability(jigMinimumWall_->value());
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(selection, true);
+        jigAnalysisLabel_->setStyleSheet(
+            analysis.meetsMinimumWall ? "color: #35664a;" : "color: #a32734;");
+        jigAnalysisLabel_->setText(analysis.meetsMinimumWall
+            ? QStringLiteral("造形確認: 最小肉厚 %1 mm を満たします").arg(analysis.minimumWallMillimeters, 0, 'f', 2)
+            : QStringLiteral("造形警告: 厚み %1 mm は必要最小肉厚に不足します").arg(analysis.minimumWallMillimeters, 0, 'f', 2));
+        statusBar()->showMessage(QStringLiteral("治具の側・隙間・厚みを更新しました"), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::AddSelectedPlateOpenings()
 {
     try {
@@ -4913,6 +5209,7 @@ bool MainWindow::RunCreationSelfTest()
     const std::size_t surfaceWireStart = project_.Wires().size();
     const std::size_t surfaceStart = project_.Surfaces().size();
     const std::size_t plateStart = project_.Plates().size();
+    const std::size_t bodyStart = project_.Bodies().size();
     project_.AddWorkPlane("__ui_section_a_plane", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     project_.AddWorkPlane("__ui_section_mid_plane", WorkPlane::FromPointNormal({6.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     project_.AddWorkPlane("__ui_section_b_plane", WorkPlane::FromPointNormal({12.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
@@ -4999,6 +5296,41 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.Plates().size() != plateStart + 1 || project_.Surfaces()[surfaceStart].visible) {
         return fail("redo plate creation");
     }
+
+    jigSurface_->setCurrentText(QStringLiteral("__ui_nose_skin"));
+    jigName_->setText(QStringLiteral("__ui_nose_jig"));
+    jigSide_->setCurrentIndex(jigSide_->findData(static_cast<int>(JigSide::Negative)));
+    jigClearance_->setValue(0.15);
+    jigThickness_->setValue(3.0);
+    jigMinimumWall_->setValue(1.2);
+    CreateSurfaceJig();
+    if (project_.Bodies().size() != bodyStart + 1
+        || project_.Bodies()[bodyStart].sourceSurfaceName != "__ui_nose_skin"
+        || project_.Bodies()[bodyStart].body.Side() != JigSide::Negative
+        || std::abs(project_.Bodies()[bodyStart].body.ClearanceMillimeters() - 0.15) > 1.0e-12
+        || viewport_->Selection().kind != CadSelectionKind::Body) {
+        return fail("create forming jig from loft surface");
+    }
+    Undo();
+    if (project_.Bodies().size() != bodyStart) {
+        return fail("undo forming jig creation");
+    }
+    Redo();
+    if (project_.Bodies().size() != bodyStart + 1) {
+        return fail("redo forming jig creation");
+    }
+    UpdateSelection({CadSelectionKind::Body, static_cast<int>(bodyStart)}, true);
+    jigThickness_->setValue(4.0);
+    UpdateSelectedBody();
+    if (std::abs(project_.Bodies()[bodyStart].body.ThicknessMillimeters() - 4.0) > 1.0e-12
+        || !jigAnalysisLabel_->text().contains(QStringLiteral("満たします"))) {
+        return fail("update forming jig and analyze wall");
+    }
+    Undo();
+    if (std::abs(project_.Bodies()[bodyStart].body.ThicknessMillimeters() - 3.0) > 1.0e-12) {
+        return fail("undo forming jig update");
+    }
+    Redo();
 
     UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
     plateThickness_->setValue(0.7);
@@ -5156,6 +5488,9 @@ bool MainWindow::RunCreationSelfTest()
         || std::abs(reloadedProject.Plates()[plateStart].plate.Range().maximumV - 0.25) > 1.0e-12
         || reloadedProject.Plates()[plateStart + 1].openingWireNames
             != std::vector<std::string>{projectedLightName}
+        || reloadedProject.Bodies().size() != project_.Bodies().size()
+        || reloadedProject.Bodies()[bodyStart].sourceSurfaceName != "__ui_nose_skin"
+        || std::abs(reloadedProject.Bodies()[bodyStart].body.ThicknessMillimeters() - 4.0) > 1.0e-12
         || !reloadedProject.Wires()[projectedLightIndex].projection.has_value()
         || !kachakacha::geometry::AlmostEqual(reloadedProject.Wires()[meetStart].wire.End(), expectedIntersection)) {
         return fail("save and reload direct editing");
@@ -5814,6 +6149,10 @@ void MainWindow::DeleteSelection()
         && selection.index < static_cast<int>(project_.Plates().size())) {
         name = ToQString(project_.Plates()[selection.index].name);
         detail = QStringLiteral("板材を削除します。元の面は残ります。");
+    } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Bodies().size())) {
+        name = ToQString(project_.Bodies()[selection.index].name);
+        detail = QStringLiteral("成形治具を削除します。元の面は残ります。");
     } else {
         return;
     }
@@ -5829,8 +6168,10 @@ void MainWindow::DeleteSelection()
             candidate.RemoveWire(ToName(name));
         } else if (selection.kind == CadSelectionKind::Surface) {
             candidate.RemoveSurface(ToName(name));
-        } else {
+        } else if (selection.kind == CadSelectionKind::Plate) {
             candidate.RemovePlate(ToName(name));
+        } else {
+            candidate.RemoveBody(ToName(name));
         }
         RecordUndo();
         project_ = std::move(candidate);
@@ -5859,6 +6200,9 @@ void MainWindow::HideSelected()
         } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
             && selection.index < static_cast<int>(project_.Plates().size())) {
             hasVisibleSelection = hasVisibleSelection || project_.Plates()[selection.index].visible;
+        } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Bodies().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.Bodies()[selection.index].visible;
         }
     }
     if (!hasVisibleSelection) {
@@ -5880,6 +6224,9 @@ void MainWindow::HideSelected()
         } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
             && selection.index < static_cast<int>(project_.Plates().size())) {
             project_.SetPlateVisible(project_.Plates()[selection.index].name, false);
+        } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Bodies().size())) {
+            project_.SetBodyVisible(project_.Bodies()[selection.index].name, false);
         }
     }
     MarkModified();
@@ -5897,6 +6244,8 @@ void MainWindow::ShowAllObjects()
         return !surface.visible;
     }) || std::any_of(project_.Plates().begin(), project_.Plates().end(), [](const auto& plate) {
         return !plate.visible;
+    }) || std::any_of(project_.Bodies().begin(), project_.Bodies().end(), [](const auto& body) {
+        return !body.visible;
     }) || std::any_of(project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(), [](const auto& dimension) {
         return !dimension.visible;
     });
@@ -5917,6 +6266,9 @@ void MainWindow::ShowAllObjects()
     }
     for (const auto& plate : project_.Plates()) {
         project_.SetPlateVisible(plate.name, true);
+    }
+    for (const auto& body : project_.Bodies()) {
+        project_.SetBodyVisible(body.name, true);
     }
     for (const auto& dimension : project_.ReferenceDimensions()) {
         project_.SetReferenceDimensionVisible(dimension.name, true);
@@ -6010,6 +6362,14 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, project_.Plates()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
+    auto* bodyRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("治具・立体 (%1)").arg(project_.Bodies().size())});
+    for (int index = 0; index < static_cast<int>(project_.Bodies().size()); ++index) {
+        auto* item = new QTreeWidgetItem(bodyRoot, {ToQString(project_.Bodies()[index].name)});
+        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Body));
+        item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.Bodies()[index].visible ? Qt::Checked : Qt::Unchecked);
+    }
     planeRoot->setExpanded(true);
     wireRoot->setExpanded(true);
     coincidenceRoot->setExpanded(true);
@@ -6017,6 +6377,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     dimensionRoot->setExpanded(true);
     surfaceRoot->setExpanded(true);
     plateRoot->setExpanded(true);
+    bodyRoot->setExpanded(true);
     modelTree_->blockSignals(false);
 
     RefreshPlaneChoices();
@@ -6122,6 +6483,7 @@ void MainWindow::RefreshSurfaceChoices()
     };
     refresh(projectionSurface_);
     refresh(plateSurface_);
+    refresh(jigSurface_);
 }
 
 void MainWindow::RefreshExportSummary()
@@ -6244,6 +6606,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     std::size_t selectedWireCount = 0;
     std::size_t selectedSurfaceCount = 0;
     std::size_t selectedPlateCount = 0;
+    std::size_t selectedBodyCount = 0;
     std::size_t selectedClosedProjectedWireCount = 0;
     for (const CadSelection& item : selections) {
         if (item.kind == CadSelectionKind::Wire && item.index >= 0
@@ -6274,9 +6637,18 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     plateSurface_->setCurrentIndex(surfaceIndex);
                 }
             }
+            if (jigSurface_ != nullptr) {
+                const int surfaceIndex = jigSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
+                if (surfaceIndex >= 0) {
+                    jigSurface_->setCurrentIndex(surfaceIndex);
+                }
+            }
         } else if (item.kind == CadSelectionKind::Plate && item.index >= 0
             && item.index < static_cast<int>(project_.Plates().size())) {
             ++selectedPlateCount;
+        } else if (item.kind == CadSelectionKind::Body && item.index >= 0
+            && item.index < static_cast<int>(project_.Bodies().size())) {
+            ++selectedBodyCount;
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
@@ -6294,6 +6666,12 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     }
     if (plateSplitSelectionLabel_ != nullptr) {
         plateSplitSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚").arg(selectedPlateCount));
+    }
+    if (bodyExportSummary_ != nullptr && selectedBodyCount != 1) {
+        bodyExportSummary_->setStyleSheet("color: #5c6670;");
+        bodyExportSummary_->setText(selectedBodyCount == 0
+            ? QStringLiteral("選択治具: なし")
+            : QStringLiteral("選択治具: %1個（1個に絞って出力）").arg(selectedBodyCount));
     }
 
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
@@ -6459,6 +6837,44 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 .arg(openings)
                 .arg(rangeText)
                 .arg(forming));
+    } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Bodies().size())) {
+        const auto& named = project_.Bodies()[selection.index];
+        const auto& body = named.body;
+        if (jigSurface_ != nullptr) {
+            jigSurface_->setCurrentText(ToQString(named.sourceSurfaceName));
+        }
+        if (jigSide_ != nullptr) {
+            jigSide_->setCurrentIndex(jigSide_->findData(static_cast<int>(body.Side())));
+        }
+        jigClearance_->setValue(body.ClearanceMillimeters());
+        jigThickness_->setValue(body.ThicknessMillimeters());
+        const auto analysis = body.AnalyzePrintability(jigMinimumWall_->value());
+        jigAnalysisLabel_->setStyleSheet(
+            analysis.meetsMinimumWall ? "color: #35664a;" : "color: #a32734;");
+        jigAnalysisLabel_->setText(analysis.meetsMinimumWall
+            ? QStringLiteral("造形確認: 最小肉厚 %1 mm を満たします").arg(analysis.minimumWallMillimeters, 0, 'f', 2)
+            : QStringLiteral("造形警告: 厚み %1 mm は必要最小肉厚に不足します").arg(analysis.minimumWallMillimeters, 0, 'f', 2));
+        const auto& range = body.Range();
+        const QString side = body.Side() == JigSide::Positive
+            ? QStringLiteral("外側の型") : QStringLiteral("内側の型");
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 成形治具<br>元の面: %2<br>型の側: %3<br>成形の隙間: %4 mm<br>治具の厚み: %5 mm<br>使用範囲: U %6-%7% / V %8-%9%")
+                .arg(ToQString(named.name), ToQString(named.sourceSurfaceName), side)
+                .arg(body.ClearanceMillimeters(), 0, 'f', 3)
+                .arg(body.ThicknessMillimeters(), 0, 'f', 3)
+                .arg(range.minimumU * 100.0, 0, 'f', 1)
+                .arg(range.maximumU * 100.0, 0, 'f', 1)
+                .arg(range.minimumV * 100.0, 0, 'f', 1)
+                .arg(range.maximumV * 100.0, 0, 'f', 1));
+        if (bodyExportSummary_ != nullptr) {
+            bodyExportSummary_->setStyleSheet(analysis.meetsMinimumWall
+                ? "color: #35664a;" : "color: #a32734;");
+            bodyExportSummary_->setText(analysis.meetsMinimumWall
+                ? QStringLiteral("%1 | 肉厚 %2 mm | STL/STEP出力可能")
+                    .arg(ToQString(named.name)).arg(body.ThicknessMillimeters(), 0, 'f', 2)
+                : QStringLiteral("%1 | 肉厚不足: %2 mm")
+                    .arg(ToQString(named.name)).arg(body.ThicknessMillimeters(), 0, 'f', 2));
+        }
     } else {
         infoLabel_->setText(QStringLiteral("選択なし"));
     }
@@ -6485,6 +6901,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 label->setText(QStringLiteral("面は元の境界・断面ワイヤーを編集します"));
             } else if (selection.kind == CadSelectionKind::Plate) {
                 label->setText(QStringLiteral("板材は元の面と板材欄から作り直します"));
+            } else if (selection.kind == CadSelectionKind::Body) {
+                label->setText(QStringLiteral("治具は面タブで側・隙間・厚みを変更します"));
             } else {
                 label->setText(QStringLiteral("選択なし"));
             }
@@ -6675,6 +7093,94 @@ void MainWindow::MarkModified()
     }
 }
 
+QString MainWindow::AutosavePath() const
+{
+    const QString directory = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    return directory.isEmpty() ? QString() : QDir(directory).filePath(QStringLiteral("recovery.kcd"));
+}
+
+void MainWindow::WriteAutosave()
+{
+    if (!modified_) {
+        return;
+    }
+    try {
+        const QString path = AutosavePath();
+        if (path.isEmpty()) {
+            return;
+        }
+        const QFileInfo fileInfo(path);
+        if (!QDir().mkpath(fileInfo.absolutePath())) {
+            throw std::runtime_error("自動保存先を作成できませんでした。");
+        }
+        std::ostringstream serialized;
+        WriteProjectScript(serialized, project_);
+        QSaveFile output(path);
+        if (!output.open(QIODevice::WriteOnly)) {
+            throw std::runtime_error(output.errorString().toUtf8().constData());
+        }
+        const QByteArray contents = QByteArray::fromStdString(serialized.str());
+        if (output.write(contents) != contents.size() || !output.commit()) {
+            throw std::runtime_error(output.errorString().toUtf8().constData());
+        }
+        statusBar()->showMessage(QStringLiteral("自動保存しました"), 1600);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(
+            QStringLiteral("自動保存に失敗しました: %1").arg(QString::fromUtf8(error.what())), 5000);
+    }
+}
+
+void MainWindow::OfferAutosaveRecovery()
+{
+    if (!currentPath_.isEmpty() || IsAutomationInvocation()) {
+        return;
+    }
+    const QString path = AutosavePath();
+    if (path.isEmpty() || !QFileInfo::exists(path)) {
+        return;
+    }
+    const auto answer = QMessageBox::question(
+        this,
+        QStringLiteral("作業を復元"),
+        QStringLiteral("前回の異常終了または未保存作業が見つかりました。\n直前の自動保存から復元しますか？"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::Yes);
+    if (answer != QMessageBox::Yes) {
+        RemoveAutosave();
+        return;
+    }
+
+    try {
+        const std::filesystem::path nativePath(path.toStdWString());
+        std::ifstream input(nativePath);
+        if (!input) {
+            throw std::runtime_error("復元ファイルを開けませんでした。");
+        }
+        project_ = LoadProjectScript(input, nativePath.string());
+        referenceWireName_.reset();
+        currentPath_.clear();
+        modified_ = true;
+        undoStack_.clear();
+        redoStack_.clear();
+        UpdateHistoryActions();
+        RefreshModelViews(true);
+        toolsTabs_->setCurrentIndex(0);
+        viewport_->SetIsometricView();
+        setWindowTitle(QStringLiteral("kachakachaCAD - 復元した未保存作業 *"));
+        statusBar()->showMessage(QStringLiteral("自動保存から作業を復元しました"), 5000);
+    } catch (const std::exception& error) {
+        QMessageBox::critical(this, QStringLiteral("復元エラー"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::RemoveAutosave()
+{
+    const QString path = AutosavePath();
+    if (!path.isEmpty()) {
+        QFile::remove(path);
+    }
+}
+
 bool MainWindow::ConfirmDiscardChanges()
 {
     if (!modified_) {
@@ -6791,6 +7297,15 @@ QString MainWindow::SuggestedPlateName() const
     return QStringLiteral("plate_%1").arg(number);
 }
 
+QString MainWindow::SuggestedBodyName() const
+{
+    int number = static_cast<int>(project_.Bodies().size()) + 1;
+    while (project_.FindBody(ToName(QStringLiteral("jig_%1").arg(number))).has_value()) {
+        ++number;
+    }
+    return QStringLiteral("jig_%1").arg(number);
+}
+
 QString MainWindow::SuggestedDimensionName() const
 {
     int number = static_cast<int>(project_.ReferenceDimensions().size()) + 1;
@@ -6808,6 +7323,9 @@ QString MainWindow::SuggestedDimensionName() const
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     if (ConfirmDiscardChanges()) {
+        if (!IsAutomationInvocation()) {
+            RemoveAutosave();
+        }
         event->accept();
     } else {
         event->ignore();

@@ -119,6 +119,32 @@ std::vector<Wire> PrepareSections(std::vector<Wire> sections, std::size_t requir
     return sections;
 }
 
+Vector3 EvaluateSmoothLoft(
+    const std::vector<Wire>& sections,
+    double u,
+    double v)
+{
+    const double scaledV = v * static_cast<double>(sections.size() - 1);
+    const std::size_t segment = static_cast<std::size_t>(std::min(
+        scaledV,
+        static_cast<double>(sections.size() - 2)));
+    const double t = scaledV - static_cast<double>(segment);
+    const Vector3 p1 = sections[segment].Evaluate(u);
+    const Vector3 p2 = sections[segment + 1].Evaluate(u);
+    const Vector3 p0 = segment > 0
+        ? sections[segment - 1].Evaluate(u)
+        : p1 * 2.0 - p2;
+    const Vector3 p3 = segment + 2 < sections.size()
+        ? sections[segment + 2].Evaluate(u)
+        : p2 * 2.0 - p1;
+    const double t2 = t * t;
+    const double t3 = t2 * t;
+    return (p1 * 2.0
+        + (p2 - p0) * t
+        + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * t2
+        + (-p0 + p1 * 3.0 - p2 * 3.0 + p3) * t3) * 0.5;
+}
+
 } // namespace
 
 Surface::Surface(
@@ -207,6 +233,9 @@ Vector3 Surface::Evaluate(double u, double v) const
         return planarWorkPlane_->ToWorld(
             minimumU_ + (maximumU_ - minimumU_) * clampedU,
             minimumV_ + (maximumV_ - minimumV_) * clampedV);
+    }
+    if (kind_ == SurfaceKind::Loft) {
+        return EvaluateSmoothLoft(boundaries_, clampedU, clampedV);
     }
     const double scaledV = clampedV * static_cast<double>(boundaries_.size() - 1);
     const std::size_t segment = static_cast<std::size_t>(std::min(
@@ -305,9 +334,24 @@ Wire Surface::ProjectWireAlongDirection(const Wire& sourceWire, Vector3 directio
     const int sampleCount = ProjectionSampleCount(sourceWire, samples);
     std::vector<Vector3> points;
     points.reserve(static_cast<std::size_t>(sampleCount) + 1);
+    std::optional<SurfaceProjection> previousProjection;
     for (int sample = 0; sample <= sampleCount; ++sample) {
-        const Vector3 projected = ProjectPointAlongDirection(
-            sourceWire.Evaluate(static_cast<double>(sample) / sampleCount), direction, tolerance).point;
+        const Vector3 sourcePoint = sourceWire.Evaluate(static_cast<double>(sample) / sampleCount);
+        std::optional<SurfaceProjection> projection;
+        if (kind_ != SurfaceKind::Planar && previousProjection.has_value()) {
+            projection = RefineProjection(
+                *this,
+                sourcePoint,
+                direction.Normalized(),
+                previousProjection->u,
+                previousProjection->v,
+                tolerance);
+        }
+        if (!projection.has_value()) {
+            projection = ProjectPointAlongDirection(sourcePoint, direction, tolerance);
+        }
+        previousProjection = projection;
+        const Vector3 projected = projection->point;
         if (points.empty() || (projected - points.back()).LengthSquared() > tolerance * tolerance) {
             points.push_back(projected);
         }
@@ -315,8 +359,12 @@ Wire Surface::ProjectWireAlongDirection(const Wire& sourceWire, Vector3 directio
     if (points.size() < 2) {
         throw std::invalid_argument("Projected wire collapsed to a point.");
     }
-    if (sourceWire.IsClosed() && (points.front() - points.back()).LengthSquared() > tolerance * tolerance) {
-        points.push_back(points.front());
+    if (sourceWire.IsClosed()) {
+        if ((points.front() - points.back()).LengthSquared() > tolerance * tolerance) {
+            points.push_back(points.front());
+        } else {
+            points.back() = points.front();
+        }
     }
     return Wire::Polyline(std::move(points));
 }

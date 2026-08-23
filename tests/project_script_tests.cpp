@@ -89,6 +89,26 @@ void LoadsPlanesAndWires()
     Require(project.Wires()[7].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "sketch bezier can be locked");
 }
 
+void ProjectFormatVersionIsChecked()
+{
+    std::istringstream supported("format_version 1\nline3d rail 0 0 0 1 0 0\n");
+    Require(LoadProjectScript(supported, "version-test").Wires().size() == 1,
+        "supported format version loads");
+
+    std::istringstream legacy("line3d rail 0 0 0 1 0 0\n");
+    Require(LoadProjectScript(legacy, "legacy-test").Wires().size() == 1,
+        "legacy unversioned project loads");
+
+    bool futureRejected = false;
+    try {
+        std::istringstream future("format_version 99\n");
+        (void)LoadProjectScript(future, "future-test");
+    } catch (const std::runtime_error&) {
+        futureRejected = true;
+    }
+    Require(futureRejected, "unsupported future format is rejected");
+}
+
 void LoadsWireMetadataForDirectWires()
 {
     std::istringstream input(R"(
@@ -1017,6 +1037,7 @@ void AngleConstraintTracksAndProtectsItsWorkPlane()
 int main()
 {
     try {
+        ProjectFormatVersionIsChecked();
         LoadsPlanesAndWires();
         LoadsWireMetadataForDirectWires();
         ConstructionWiresRoundTripAndStayOutOfSurfaces();

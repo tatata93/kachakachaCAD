@@ -459,6 +459,23 @@ bool CadViewport::AlignToSelection()
                     points.push_back(plate.Evaluate(u, v, 1.0));
                 }
             }
+        } else if (selection_.kind == CadSelectionKind::Body
+            && selection_.index >= 0
+            && selection_.index < static_cast<int>(project_->Bodies().size())) {
+            const auto& body = project_->Bodies()[selection_.index].body;
+            const double sourceU = body.SourceU(0.5);
+            const double sourceV = body.SourceV(0.5);
+            origin = body.Evaluate(0.5, 0.5, 0.5);
+            normal = body.SourceSurface().Normal(sourceU, sourceV);
+            uAxisHint = surfaceUAxis(body.SourceSurface(), sourceU, sourceV);
+            for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+                for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                    const double u = static_cast<double>(uIndex) / 24.0;
+                    const double v = static_cast<double>(vIndex) / 8.0;
+                    points.push_back(body.Evaluate(u, v, 0.0));
+                    points.push_back(body.Evaluate(u, v, 1.0));
+                }
+            }
         } else if (selection_.kind == CadSelectionKind::Wire
             && selection_.index >= 0
             && selection_.index < static_cast<int>(project_->Wires().size())) {
@@ -784,6 +801,19 @@ void CadViewport::FitAll()
                 const double v = static_cast<double>(vIndex) / 8.0;
                 include(plate.plate.Evaluate(u, v, 0.0));
                 include(plate.plate.Evaluate(u, v, 1.0));
+            }
+        }
+    }
+    for (const auto& body : project_->Bodies()) {
+        if (!body.visible) {
+            continue;
+        }
+        for (int uIndex = 0; uIndex <= 24; ++uIndex) {
+            for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                const double u = static_cast<double>(uIndex) / 24.0;
+                const double v = static_cast<double>(vIndex) / 8.0;
+                include(body.body.Evaluate(u, v, 0.0));
+                include(body.body.Evaluate(u, v, 1.0));
             }
         }
     }
@@ -1323,6 +1353,8 @@ void CadViewport::UpdateHover(QPointF position)
             if (hit.kind == CadSelectionKind::Wire) {
                 hoveredSelection_ = hit;
                 hoveredWireParameter_ = NearestWireParameter(hit.index, position, 12.0, true);
+            } else if (tool_ == ViewportTool::Select) {
+                hoveredSelection_ = HitTest(position);
             }
         }
     }
@@ -1333,6 +1365,8 @@ void CadViewport::UpdateHover(QPointF position)
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
                 || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
                 || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
+        ? Qt::PointingHandCursor
+        : tool_ == ViewportTool::Select && hoveredSelection_.kind != CadSelectionKind::None
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     update();
@@ -1599,6 +1633,66 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.setPen(QPen(edge, selected ? 2.8 : 1.6));
             for (const QPainterPath& openingPath : openingPaths) {
                 painter.drawPath(openingPath);
+            }
+        }
+
+        for (int index = 0; index < static_cast<int>(project_->Bodies().size()); ++index) {
+            const auto& namedBody = project_->Bodies()[index];
+            if (!namedBody.visible) {
+                continue;
+            }
+            const auto& body = namedBody.body;
+            const bool selected = IsSelected(CadSelectionKind::Body, index);
+            const bool hovered = hoveredSelection_.kind == CadSelectionKind::Body
+                && hoveredSelection_.index == index;
+            QColor fill = selected ? QColor(230, 159, 0, 185)
+                : hovered ? QColor(49, 145, 135, 190)
+                : QColor(72, 128, 111, 160);
+            const QColor edge = selected ? QColor("#b56b00")
+                : hovered ? QColor("#167c73") : QColor("#356f62");
+            painter.setPen(QPen(edge, selected || hovered ? 2.2 : 1.0));
+
+            for (int layer = 0; layer < 2; ++layer) {
+                QColor layerFill = fill;
+                if (layer == 0) {
+                    layerFill.setAlpha(std::max(56, fill.alpha() - 60));
+                }
+                painter.setBrush(layerFill);
+                for (int uIndex = 0; uIndex < 32; ++uIndex) {
+                    for (int vIndex = 0; vIndex < 10; ++vIndex) {
+                        const double u0 = static_cast<double>(uIndex) / 32.0;
+                        const double u1 = static_cast<double>(uIndex + 1) / 32.0;
+                        const double v0 = static_cast<double>(vIndex) / 10.0;
+                        const double v1 = static_cast<double>(vIndex + 1) / 10.0;
+                        QPolygonF patch;
+                        patch << ProjectPoint(body.Evaluate(u0, v0, static_cast<double>(layer)))
+                              << ProjectPoint(body.Evaluate(u1, v0, static_cast<double>(layer)))
+                              << ProjectPoint(body.Evaluate(u1, v1, static_cast<double>(layer)))
+                              << ProjectPoint(body.Evaluate(u0, v1, static_cast<double>(layer)));
+                        painter.drawPolygon(patch);
+                    }
+                }
+            }
+
+            painter.setBrush(fill.darker(112));
+            for (int sample = 0; sample < 32; ++sample) {
+                const double t0 = static_cast<double>(sample) / 32.0;
+                const double t1 = static_cast<double>(sample + 1) / 32.0;
+                for (double fixed : {0.0, 1.0}) {
+                    QPolygonF uSide;
+                    uSide << ProjectPoint(body.Evaluate(t0, fixed, 0.0))
+                          << ProjectPoint(body.Evaluate(t1, fixed, 0.0))
+                          << ProjectPoint(body.Evaluate(t1, fixed, 1.0))
+                          << ProjectPoint(body.Evaluate(t0, fixed, 1.0));
+                    painter.drawPolygon(uSide);
+
+                    QPolygonF vSide;
+                    vSide << ProjectPoint(body.Evaluate(fixed, t0, 0.0))
+                          << ProjectPoint(body.Evaluate(fixed, t1, 0.0))
+                          << ProjectPoint(body.Evaluate(fixed, t1, 1.0))
+                          << ProjectPoint(body.Evaluate(fixed, t0, 1.0));
+                    painter.drawPolygon(vSide);
+                }
             }
         }
 
@@ -2275,6 +2369,30 @@ CadSelection CadViewport::HitTest(QPointF position) const
     const CadSelection wire = HitTestWire(position);
     if (wire.kind != CadSelectionKind::None) {
         return wire;
+    }
+
+    for (int index = 0; index < static_cast<int>(project_->Bodies().size()); ++index) {
+        const auto& namedBody = project_->Bodies()[index];
+        if (!namedBody.visible) {
+            continue;
+        }
+        const auto& body = namedBody.body;
+        for (int uIndex = 0; uIndex < 24; ++uIndex) {
+            for (int vIndex = 0; vIndex < 8; ++vIndex) {
+                const double u0 = static_cast<double>(uIndex) / 24.0;
+                const double u1 = static_cast<double>(uIndex + 1) / 24.0;
+                const double v0 = static_cast<double>(vIndex) / 8.0;
+                const double v1 = static_cast<double>(vIndex + 1) / 8.0;
+                QPolygonF patch;
+                patch << ProjectPoint(body.Evaluate(u0, v0, 1.0))
+                      << ProjectPoint(body.Evaluate(u1, v0, 1.0))
+                      << ProjectPoint(body.Evaluate(u1, v1, 1.0))
+                      << ProjectPoint(body.Evaluate(u0, v1, 1.0));
+                if (patch.containsPoint(position, Qt::OddEvenFill)) {
+                    return {CadSelectionKind::Body, index};
+                }
+            }
+        }
     }
 
     for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {

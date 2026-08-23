@@ -20,6 +20,7 @@ using kachakacha::geometry::Vector3;
 using kachakacha::model::Project;
 using kachakacha::model::DimensionReference;
 using kachakacha::model::DimensionReferenceKind;
+using kachakacha::model::JigSide;
 using kachakacha::model::PlateSurfaceRange;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::ReferenceDimension;
@@ -298,6 +299,22 @@ const char* PlateDirectionToken(PlateThicknessDirection direction)
     return "positive";
 }
 
+JigSide ParseJigSide(const std::string& token, std::string_view sourceName, int lineNumber)
+{
+    if (token == "positive" || token == "outside") {
+        return JigSide::Positive;
+    }
+    if (token == "negative" || token == "inside") {
+        return JigSide::Negative;
+    }
+    ThrowLineError(sourceName, lineNumber, "Unknown jig side: " + token);
+}
+
+const char* JigSideToken(JigSide side)
+{
+    return side == JigSide::Negative ? "negative" : "positive";
+}
+
 bool IsScriptNameSafe(std::string_view name)
 {
     if (name.empty()) {
@@ -361,6 +378,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
     Project project;
     std::string line;
     int lineNumber = 0;
+    bool formatVersionSeen = false;
 
     while (std::getline(input, line)) {
         ++lineNumber;
@@ -375,7 +393,20 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
         stream >> command;
 
         try {
-            if (command == "plane_three") {
+            if (command == "format_version") {
+                int version = 0;
+                if (!(stream >> version)) {
+                    ThrowLineError(sourceName, lineNumber, "Expected project format version.");
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                if (formatVersionSeen) {
+                    ThrowLineError(sourceName, lineNumber, "Project format version is specified more than once.");
+                }
+                if (version != 1) {
+                    ThrowLineError(sourceName, lineNumber, "Unsupported project format version: " + std::to_string(version));
+                }
+                formatVersionSeen = true;
+            } else if (command == "plane_three") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "plane");
                 const Vector3 a = ReadVector3(stream, sourceName, lineNumber, "point A");
                 const Vector3 b = ReadVector3(stream, sourceName, lineNumber, "point B");
@@ -690,6 +721,24 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlateOpening(plateName, wireName);
+            } else if (command == "body_surface_jig") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "body");
+                const std::string sourceSurface = ReadName(stream, sourceName, lineNumber, "source surface");
+                const JigSide side = ParseJigSide(
+                    ReadName(stream, sourceName, lineNumber, "jig side"),
+                    sourceName,
+                    lineNumber);
+                const double clearance = ReadDouble(stream, sourceName, lineNumber, "jig clearance");
+                const double thickness = ReadDouble(stream, sourceName, lineNumber, "jig thickness");
+                const PlateSurfaceRange range{
+                    ReadDouble(stream, sourceName, lineNumber, "minimum U"),
+                    ReadDouble(stream, sourceName, lineNumber, "maximum U"),
+                    ReadDouble(stream, sourceName, lineNumber, "minimum V"),
+                    ReadDouble(stream, sourceName, lineNumber, "maximum V"),
+                };
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddSurfaceJig(
+                    name, sourceSurface, range, side, clearance, thickness);
             } else if (command == "visibility") {
                 const std::string objectKind = ReadName(stream, sourceName, lineNumber, "object kind");
                 const std::string name = ReadName(stream, sourceName, lineNumber, "object");
@@ -707,11 +756,13 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     project.SetSurfaceVisible(name, visible);
                 } else if (objectKind == "plate") {
                     project.SetPlateVisible(name, visible);
+                } else if (objectKind == "body") {
+                    project.SetBodyVisible(name, visible);
                 } else if (objectKind == "dimension") {
                     project.SetReferenceDimensionVisible(name, visible);
                 } else {
                     throw std::invalid_argument(
-                        "Visibility object kind must be workplane, wire, surface, plate, or dimension.");
+                        "Visibility object kind must be workplane, wire, surface, plate, body, or dimension.");
                 }
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
@@ -728,7 +779,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
 {
     output << std::setprecision(17);
     output << "# kachakachaCAD project script\n";
-    output << "# Units are millimeters.\n\n";
+    output << "# Units are millimeters.\n";
+    output << "format_version 1\n\n";
 
     for (const auto& workPlane : project.WorkPlanes()) {
         RequireScriptNameSafe(workPlane.name, "Work plane");
@@ -949,6 +1001,22 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
     }
 
+    if (!project.Bodies().empty()) {
+        output << '\n';
+    }
+    for (const auto& namedBody : project.Bodies()) {
+        RequireScriptNameSafe(namedBody.name, "Body");
+        RequireScriptNameSafe(namedBody.sourceSurfaceName, "Body source surface");
+        const auto& range = namedBody.body.Range();
+        output << "body_surface_jig " << namedBody.name << ' '
+               << namedBody.sourceSurfaceName << ' '
+               << JigSideToken(namedBody.body.Side()) << ' '
+               << namedBody.body.ClearanceMillimeters() << ' '
+               << namedBody.body.ThicknessMillimeters() << ' '
+               << range.minimumU << ' ' << range.maximumU << ' '
+               << range.minimumV << ' ' << range.maximumV << '\n';
+    }
+
     const bool hasHiddenObjects = std::any_of(project.WorkPlanes().begin(), project.WorkPlanes().end(), [](const auto& plane) {
         return !plane.visible;
     }) || std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
@@ -957,6 +1025,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         return !surface.visible;
     }) || std::any_of(project.Plates().begin(), project.Plates().end(), [](const auto& plate) {
         return !plate.visible;
+    }) || std::any_of(project.Bodies().begin(), project.Bodies().end(), [](const auto& body) {
+        return !body.visible;
     }) || std::any_of(project.ReferenceDimensions().begin(), project.ReferenceDimensions().end(), [](const auto& dimension) {
         return !dimension.visible;
     });
@@ -981,6 +1051,11 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     for (const auto& plate : project.Plates()) {
         if (!plate.visible) {
             output << "visibility plate " << plate.name << " hidden\n";
+        }
+    }
+    for (const auto& body : project.Bodies()) {
+        if (!body.visible) {
+            output << "visibility body " << body.name << " hidden\n";
         }
     }
     for (const auto& dimension : project.ReferenceDimensions()) {

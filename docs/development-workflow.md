@@ -16,6 +16,14 @@
 
 ## 作業後
 
+初回だけ、`%USERPROFILE%\vcpkg` にvcpkgを用意し、Open CASCADEを導入する。
+
+```powershell
+& "$env:USERPROFILE\vcpkg\vcpkg.exe" install opencascade:x64-windows
+```
+
+`configure.ps1` はこのvcpkg toolchainを自動検出する。Qtは `C:\Qt\6.9.2\msvc2022_64` を使う。
+
 PowerShell で以下を実行する。
 
 ```powershell
@@ -34,6 +42,18 @@ PowerShell で以下を実行する。
 
 ```powershell
 .\scripts\run-viewer.ps1 -Project examples\first-check.kcd
+```
+
+完成受入モデルをQt版で確認する場合:
+
+```powershell
+.\scripts\run-cad.ps1 -Project examples\railway-nose-acceptance.kcd
+```
+
+配布可能なReleaseフォルダを作り、同梱DLLを含めて自己検査する場合:
+
+```powershell
+.\scripts\package-cad.ps1
 ```
 
 ## Definition of Done

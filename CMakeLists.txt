@@ -8,6 +8,7 @@ project(kachakachaCAD
 
 option(KACHACAD_BUILD_TESTS "Build kachakachaCAD tests" ON)
 option(KACHACAD_BUILD_QT_APP "Build the Qt desktop application when Qt 6 is available" ON)
+option(KACHACAD_ENABLE_OCCT "Enable Open CASCADE B-Rep and 3D export support" ON)
 
 if(KACHACAD_BUILD_TESTS)
     enable_testing()
@@ -18,6 +19,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
+    src/core/kachakacha/model/Body.cpp
     src/core/kachakacha/model/Measurement.cpp
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Plate.cpp
@@ -41,6 +43,74 @@ else()
     target_compile_options(kachakacha_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(KACHACAD_ENABLE_OCCT)
+    set(KACHACAD_OCCT_BUILDTREE_TARGETS "${OpenCASCADE_DIR}/OpenCASCADETargets.cmake")
+    if(EXISTS "${KACHACAD_OCCT_BUILDTREE_TARGETS}"
+        AND EXISTS "${OpenCASCADE_DIR}/include/opencascade"
+        AND NOT EXISTS "${OpenCASCADE_DIR}/OpenCASCADEFoundationClassesTargets.cmake")
+        include("${KACHACAD_OCCT_BUILDTREE_TARGETS}")
+        set(OpenCASCADE_FOUND TRUE)
+        set(OpenCASCADE_INCLUDE_DIR "${OpenCASCADE_DIR}/include/opencascade")
+        set(KACHACAD_OCCT_VERSION "build tree")
+    else()
+        find_package(OpenCASCADE CONFIG QUIET COMPONENTS
+            FoundationClasses
+            ModelingData
+            ModelingAlgorithms
+            Visualization
+            ApplicationFramework
+            DataExchange
+        )
+        if(TARGET TKernel AND TARGET TKOffset AND TARGET TKMesh
+            AND TARGET TKDESTEP AND TARGET TKDESTL)
+            set(OpenCASCADE_FOUND TRUE)
+        endif()
+        set(KACHACAD_OCCT_VERSION
+            "${OpenCASCADE_MAJOR_VERSION}.${OpenCASCADE_MINOR_VERSION}.${OpenCASCADE_MAINTENANCE_VERSION}")
+    endif()
+    if(OpenCASCADE_FOUND)
+        set(KACHACAD_OCCT_INCLUDE_DIR "${OpenCASCADE_INCLUDE_DIR}")
+        if(NOT EXISTS "${KACHACAD_OCCT_INCLUDE_DIR}"
+            AND EXISTS "${OpenCASCADE_DIR}/include/opencascade")
+            set(KACHACAD_OCCT_INCLUDE_DIR "${OpenCASCADE_DIR}/include/opencascade")
+        endif()
+        add_library(kachakacha_occt STATIC
+            src/occt/kachakacha/occt/BodyExport.cpp
+            src/occt/kachakacha/occt/BodyExport.h
+        )
+        target_include_directories(kachakacha_occt
+            PUBLIC
+                src/occt
+            PRIVATE
+                ${KACHACAD_OCCT_INCLUDE_DIR}
+        )
+        target_link_libraries(kachakacha_occt
+            PUBLIC
+                kachakacha_core
+            PRIVATE
+                TKOffset
+                TKMesh
+                TKDESTEP
+                TKDESTL
+        )
+        target_compile_features(kachakacha_occt PUBLIC cxx_std_20)
+        if(MSVC)
+            target_compile_options(kachakacha_occt PRIVATE /W4 /permissive- /utf-8)
+        else()
+            target_compile_options(kachakacha_occt PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+        set(KACHACAD_OCCT_RUNTIME_PATH "$<TARGET_FILE_DIR:TKernel>")
+        if(EXISTS "$ENV{USERPROFILE}/vcpkg/installed/x64-windows/bin")
+            string(APPEND KACHACAD_OCCT_RUNTIME_PATH
+                "$<SEMICOLON>$ENV{USERPROFILE}/vcpkg/installed/x64-windows/debug/bin"
+                "$<SEMICOLON>$ENV{USERPROFILE}/vcpkg/installed/x64-windows/bin")
+        endif()
+        message(STATUS "Open CASCADE shape/export layer enabled: ${KACHACAD_OCCT_VERSION}")
+    else()
+        message(WARNING "Open CASCADE was not found; the Qt CAD application requires it for verified STL/STEP export.")
+    endif()
+endif()
+
 if(WIN32)
     add_executable(kachakacha_viewer
         src/apps/viewer/main.cpp
@@ -61,7 +131,7 @@ if(WIN32)
         endif()
 
         find_package(Qt6 6.5 COMPONENTS Widgets QUIET)
-        if(Qt6_FOUND)
+        if(Qt6_FOUND AND TARGET kachakacha_occt)
             add_executable(kachakacha_cad WIN32
                 src/apps/cad/CadViewport.cpp
                 src/apps/cad/CadViewport.h
@@ -75,6 +145,7 @@ if(WIN32)
             target_link_libraries(kachakacha_cad
                 PRIVATE
                     kachakacha_core
+                    kachakacha_occt
                     Qt6::Widgets
             )
 
@@ -95,7 +166,7 @@ if(WIN32)
                     COMMAND ${CMAKE_COMMAND} -E env
                         "QT_QPA_PLATFORM=offscreen"
                         "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
-                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
                         $<TARGET_FILE:kachakacha_cad>
                         --self-test
                         --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd"
@@ -105,10 +176,20 @@ if(WIN32)
                     COMMAND ${CMAKE_COMMAND} -E env
                         "QT_QPA_PLATFORM=offscreen"
                         "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
-                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
                         $<TARGET_FILE:kachakacha_cad>
                         --project "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
                         --snapshot "${CMAKE_CURRENT_BINARY_DIR}/surface-sample-smoke.png"
+                )
+                add_test(
+                    NAME qt_acceptance_model_smoke
+                    COMMAND ${CMAKE_COMMAND} -E env
+                        "QT_QPA_PLATFORM=offscreen"
+                        "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
+                        $<TARGET_FILE:kachakacha_cad>
+                        --project "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+                        --snapshot "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-acceptance.png"
                 )
 
                 add_executable(kachakacha_plate_pdf_tests
@@ -127,14 +208,16 @@ if(WIN32)
                     COMMAND ${CMAKE_COMMAND} -E env
                         "QT_QPA_PLATFORM=offscreen"
                         "QT_PLUGIN_PATH=${KACHACAD_QT_PREFIX}/plugins"
-                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}"
+                        "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
                         $<TARGET_FILE:kachakacha_plate_pdf_tests>
                         "${CMAKE_CURRENT_BINARY_DIR}/plate-pdf-test.pdf"
                         "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
                 )
             endif()
-        else()
+        elseif(NOT Qt6_FOUND)
             message(WARNING "Qt 6.5 or newer was not found; kachakacha_cad will not be built.")
+        else()
+            message(WARNING "Open CASCADE was not found; kachakacha_cad will not be built.")
         endif()
     endif()
 endif()
@@ -242,6 +325,43 @@ if(KACHACAD_BUILD_TESTS)
     )
 
     add_test(NAME plate_tests COMMAND kachakacha_plate_tests)
+
+    add_executable(kachakacha_body_tests
+        tests/body_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_body_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(
+        NAME body_tests
+        COMMAND kachakacha_body_tests
+            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+    )
+
+    if(TARGET kachakacha_occt)
+        add_executable(kachakacha_occt_body_export_tests
+            tests/occt_body_export_tests.cpp
+        )
+        target_link_libraries(kachakacha_occt_body_export_tests
+            PRIVATE
+                kachakacha_occt
+        )
+        target_include_directories(kachakacha_occt_body_export_tests
+            PRIVATE
+                ${KACHACAD_OCCT_INCLUDE_DIR}
+        )
+        add_test(
+            NAME occt_body_export_tests
+            COMMAND ${CMAKE_COMMAND} -E env
+                "PATH=${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
+                $<TARGET_FILE:kachakacha_occt_body_export_tests>
+                "${CMAKE_CURRENT_BINARY_DIR}/occt-body-export"
+                "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+        )
+    endif()
 
     if(WIN32)
         add_test(

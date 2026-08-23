@@ -1,6 +1,10 @@
 #include "kachakacha/io/ProjectScript.h"
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 
 #include "kachakacha/model/Sketch.h"
 #include "kachakacha/model/Project.h"

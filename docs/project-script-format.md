@@ -6,6 +6,8 @@
 
 ユーザーはテキストで作業平面やワイヤーを定義し、ビューアで確認できる。
 
+新しく保存したファイルは先頭に `format_version 1` を持つ。バージョン記載のない従来ファイルも互換読込し、未対応の新しいバージョンは内容を誤解釈せず読み込みエラーにする。
+
 ## 単位と座標
 
 単位は mm。
@@ -200,7 +202,7 @@ surface_ruled NAME SECTION_WIRE_A SECTION_WIRE_B
 surface_loft NAME SECTION_WIRE_A SECTION_WIRE_B SECTION_WIRE_C [...]
 ```
 
-断面は車体の前から後ろの順に並べる。現段階では隣接断面を直線的に補間する。断面ワイヤーを編集すると面を再計算する。
+断面は車体の前から後ろの順に並べる。3断面以上では各断面を通り、断面位置で長手方向の接線が連続する三次補間を使う。断面ワイヤーを編集すると面を再計算する。
 
 ### 平面図ワイヤーを面へ投影
 
@@ -225,6 +227,14 @@ plate_opening PLATE PROJECTED_CLOSED_WIRE
 ```
 
 板材の元の面へ投影した閉じたワイヤーを、板材の開口境界として関連付ける。元の平面図や断面を編集すると投影ワイヤーと開口が追従する。
+
+### 面から成形治具Body
+
+```text
+body_surface_jig NAME SOURCE_SURFACE positive|negative CLEARANCE THICKNESS minU maxU minV maxV
+```
+
+元面の指定範囲から、雄型または雌型側へ逃げ量 `CLEARANCE` を取り、指定肉厚の閉じた治具Bodyを定義する。Bodyはメッシュを保存せず、元断面と面の編集から再生成する。
 
 ### 板材が使う曲面範囲
 
@@ -260,7 +270,7 @@ reference_dimension floor_gap point_plane_distance point 12 4 7 plane floor
 ### 表示・非表示
 
 ```text
-visibility workplane|wire|surface|plate|dimension NAME shown|hidden
+visibility workplane|wire|surface|plate|body|dimension NAME shown|hidden
 ```
 
 非表示の作図用断面や平面図もプロジェクトから削除せず、依存関係を保ったままモデル一覧へ残す。

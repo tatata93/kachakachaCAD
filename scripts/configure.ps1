@@ -20,6 +20,10 @@ if ($Generator -eq "") {
 }
 
 $CMakeArgs = @("-S", $RepoRoot, "-B", $BuildPath)
+$VcpkgToolchain = Join-Path $env:USERPROFILE "vcpkg\scripts\buildsystems\vcpkg.cmake"
+if (Test-Path $VcpkgToolchain) {
+    $CMakeArgs += @("-DCMAKE_TOOLCHAIN_FILE=$VcpkgToolchain", "-DVCPKG_TARGET_TRIPLET=x64-windows")
+}
 if ($Generator -ne "") {
     $CMakeArgs += @("-G", $Generator)
     if ($Generator.StartsWith("Visual Studio")) {

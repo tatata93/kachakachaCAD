@@ -46,10 +46,22 @@ if (Get-Command "cmake" -ErrorAction SilentlyContinue) {
 }
 
 Write-Host ""
-Write-Host "Optional later dependencies:"
-Write-Host "- Qt 6"
-Write-Host "- Open CASCADE Technology"
-Write-Host "- Eigen"
+$QtRoot = "C:\Qt\6.9.2\msvc2022_64"
+$VcpkgToolchain = Join-Path $env:USERPROFILE "vcpkg\scripts\buildsystems\vcpkg.cmake"
+$OcctConfig = Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\share\opencascade\OpenCASCADEConfig.cmake"
+Write-Host "Desktop CAD dependencies:"
+foreach ($dependency in @(
+    @{ Name = "Qt 6"; Path = $QtRoot },
+    @{ Name = "vcpkg toolchain"; Path = $VcpkgToolchain },
+    @{ Name = "Open CASCADE"; Path = $OcctConfig }
+)) {
+    if (Test-Path $dependency.Path) {
+        Write-Host "[ok]      $($dependency.Name) -> $($dependency.Path)"
+    } else {
+        Write-Host "[missing] $($dependency.Name) -> $($dependency.Path)"
+        $ok = $false
+    }
+}
 
 Write-Host ""
 Write-Host "C++ compiler visibility:"

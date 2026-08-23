@@ -20,6 +20,7 @@ enum class CadSelectionKind {
     Wire,
     Surface,
     Plate,
+    Body,
 };
 
 struct CadSelection {

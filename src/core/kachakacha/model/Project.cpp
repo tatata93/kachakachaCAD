@@ -589,6 +589,32 @@ void Project::AddPlate(
     });
 }
 
+void Project::AddSurfaceJig(
+    std::string name,
+    std::string sourceSurfaceName,
+    PlateSurfaceRange range,
+    JigSide side,
+    double clearanceMillimeters,
+    double thicknessMillimeters)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Body name must not be empty.");
+    }
+    if (FindBody(name).has_value()) {
+        throw std::invalid_argument("Body name already exists: " + name);
+    }
+    const std::optional<Surface> surface = FindSurface(sourceSurfaceName);
+    if (!surface.has_value()) {
+        throw std::invalid_argument("Jig source surface does not exist: " + sourceSurfaceName);
+    }
+    bodies_.push_back({
+        std::move(name),
+        Body::SurfaceJig(
+            *surface, range, side, clearanceMillimeters, thicknessMillimeters),
+        std::move(sourceSurfaceName),
+    });
+}
+
 void Project::AddProjectedWire(
     std::string name,
     std::string sourceWireName,
@@ -725,6 +751,33 @@ void Project::UpdatePlate(
         }
     }
     throw std::invalid_argument("Plate name does not exist: " + std::string(name));
+}
+
+void Project::UpdateSurfaceJig(
+    std::string_view name,
+    std::string sourceSurfaceName,
+    PlateSurfaceRange range,
+    JigSide side,
+    double clearanceMillimeters,
+    double thicknessMillimeters)
+{
+    const std::optional<Surface> sourceSurface = FindSurface(sourceSurfaceName);
+    if (!sourceSurface.has_value()) {
+        throw std::invalid_argument("Jig source surface does not exist: " + sourceSurfaceName);
+    }
+    for (NamedBody& body : bodies_) {
+        if (body.name == name) {
+            body.body = Body::SurfaceJig(
+                *sourceSurface,
+                range,
+                side,
+                clearanceMillimeters,
+                thicknessMillimeters);
+            body.sourceSurfaceName = std::move(sourceSurfaceName);
+            return;
+        }
+    }
+    throw std::invalid_argument("Body name does not exist: " + std::string(name));
 }
 
 void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
@@ -1059,6 +1112,17 @@ void Project::SetPlateVisible(std::string_view name, bool visible)
     throw std::invalid_argument("Plate name does not exist: " + std::string(name));
 }
 
+void Project::SetBodyVisible(std::string_view name, bool visible)
+{
+    for (NamedBody& body : bodies_) {
+        if (body.name == name) {
+            body.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Body name does not exist: " + std::string(name));
+}
+
 void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
 {
     for (NamedPlate& plate : plates_) {
@@ -1311,6 +1375,11 @@ bool Project::RemoveSurface(std::string_view name)
             throw std::invalid_argument("Surface is used by plate: " + plate.name);
         }
     }
+    for (const NamedBody& body : bodies_) {
+        if (body.sourceSurfaceName == name) {
+            throw std::invalid_argument("Surface is used by body: " + body.name);
+        }
+    }
     surfaces_.erase(position);
     return true;
 }
@@ -1324,6 +1393,18 @@ bool Project::RemovePlate(std::string_view name)
         return false;
     }
     plates_.erase(position);
+    return true;
+}
+
+bool Project::RemoveBody(std::string_view name)
+{
+    const auto position = std::find_if(bodies_.begin(), bodies_.end(), [&](const NamedBody& body) {
+        return body.name == name;
+    });
+    if (position == bodies_.end()) {
+        return false;
+    }
+    bodies_.erase(position);
     return true;
 }
 
@@ -1353,6 +1434,16 @@ std::optional<Plate> Project::FindPlate(std::string_view name) const
     for (const NamedPlate& plate : plates_) {
         if (plate.name == name) {
             return plate.plate;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<Body> Project::FindBody(std::string_view name) const
+{
+    for (const NamedBody& body : bodies_) {
+        if (body.name == name) {
+            return body.body;
         }
     }
     return std::nullopt;
@@ -1572,6 +1663,18 @@ void Project::RebuildDependentGeometry()
                 throw std::invalid_argument("Plate opening moved outside split piece: " + openingName);
             }
         }
+    }
+    for (NamedBody& body : bodies_) {
+        const std::optional<Surface> sourceSurface = FindSurface(body.sourceSurfaceName);
+        if (!sourceSurface.has_value()) {
+            throw std::logic_error("Body source surface is missing.");
+        }
+        body.body = Body::SurfaceJig(
+            *sourceSurface,
+            body.body.Range(),
+            body.body.Side(),
+            body.body.ClearanceMillimeters(),
+            body.body.ThicknessMillimeters());
     }
 }
 

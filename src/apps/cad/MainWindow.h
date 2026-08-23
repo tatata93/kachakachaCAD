@@ -118,6 +118,7 @@ private:
     void AddViewportArc(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 through, kachakacha::geometry::Vector3 end);
     void AddViewportBezier(const std::array<kachakacha::geometry::Vector3, 4>& points);
     void AddViewportSpline(const std::vector<kachakacha::geometry::Vector3>& throughPoints);
+    void ApplyViewportWireEdit(int wireIndex, const kachakacha::model::Wire& replacement);
     void DeleteSelection();
     void HideSelected();
     void ShowAllObjects();

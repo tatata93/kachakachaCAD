@@ -399,6 +399,9 @@ void MainWindow::BuildUi()
     viewport_->SetSplineCreatedCallback([this](const std::vector<Vector3>& throughPoints) {
         AddViewportSpline(throughPoints);
     });
+    viewport_->SetWireControlPointMovedCallback([this](int wireIndex, const Wire& replacement) {
+        ApplyViewportWireEdit(wireIndex, replacement);
+    });
     viewport_->SetTranslationRequestedCallback([this](Vector3 delta, bool copy) {
         ApplyViewportTranslation(delta, copy);
     });
@@ -3170,6 +3173,28 @@ void MainWindow::AddViewportSpline(const std::vector<Vector3>& throughPoints)
     }
 }
 
+void MainWindow::ApplyViewportWireEdit(int wireIndex, const Wire& replacement)
+{
+    try {
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("編集する曲線が見つかりません。");
+        }
+        const auto selections = viewport_->Selections();
+        const std::string wireName = project_.Wires()[wireIndex].name;
+        Project candidate = project_;
+        candidate.UpdateWire(wireName, replacement);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(QStringLiteral("制御点を移動しました（元に戻す: Ctrl+Z）"), 2500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
 void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
 {
     try {
@@ -4185,6 +4210,21 @@ bool MainWindow::RunCreationSelfTest()
         {CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
     if (editWirePointTable_->rowCount() != 4) {
         return fail("select initial B-spline");
+    }
+    const int initialSplineIndex = static_cast<int>(project_.Wires().size()) - 1;
+    const Vector3 originalControlPoint = project_.Wires().back().wire.ControlPoints()[1];
+    std::vector<Vector3> movedControlPoints = project_.Wires().back().wire.ControlPoints();
+    movedControlPoints[1] = movedControlPoints[1] + initialDrawingPlane->UAxis() * 1.0;
+    ApplyViewportWireEdit(initialSplineIndex, Wire::CubicBSpline(movedControlPoints));
+    if (!kachakacha::geometry::AlmostEqual(
+            project_.Wires().back().wire.ControlPoints()[1], movedControlPoints[1], 1.0e-9)) {
+        return fail("drag B-spline control point");
+    }
+    Undo();
+    if (project_.Wires().size() != beforeInitialSpline + 1
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires().back().wire.ControlPoints()[1], originalControlPoint, 1.0e-9)) {
+        return fail("undo B-spline control point drag");
     }
     Undo();
     if (project_.Wires().size() != beforeInitialSpline) {

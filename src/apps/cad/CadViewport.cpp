@@ -2,6 +2,7 @@
 
 #include <QKeyEvent>
 #include <QFontMetrics>
+#include <QCursor>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -13,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <stdexcept>
 
 using kachakacha::geometry::Vector3;
 using kachakacha::geometry::AlmostEqual;
@@ -134,6 +136,8 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     hoveredSelection_ = {};
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
+    hoveredControlPoint_.reset();
+    CancelControlPointDrag();
     coincidencePicks_.clear();
     measurementPicks_.clear();
     measurementOverlayFirst_.reset();
@@ -212,6 +216,12 @@ void CadViewport::SetSplineCreatedCallback(std::function<void(const std::vector<
     splineCreated_ = std::move(callback);
 }
 
+void CadViewport::SetWireControlPointMovedCallback(
+    std::function<void(int, const Wire&)> callback)
+{
+    wireControlPointMoved_ = std::move(callback);
+}
+
 void CadViewport::SetTranslationRequestedCallback(std::function<void(Vector3, bool)> callback)
 {
     translationRequested_ = std::move(callback);
@@ -275,6 +285,7 @@ void CadViewport::SetTool(ViewportTool tool)
         coincidencePicks_.clear();
     }
     tool_ = tool;
+    CancelControlPointDrag();
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
@@ -795,11 +806,10 @@ void CadViewport::FitAll()
     update();
 }
 
-std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
+std::optional<Vector3> CadViewport::PointOnPlane(
+    QPointF position,
+    const kachakacha::model::WorkPlane& plane) const
 {
-    if (!activePlane_.has_value()) {
-        return std::nullopt;
-    }
     const auto basis = CurrentViewBasis();
     const Vector3& viewDirection = basis[0];
     const Vector3& right = basis[1];
@@ -807,12 +817,53 @@ std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
     const double screenX = (position.x() - width() * 0.5) / pixelsPerMillimeter_;
     const double screenY = (height() * 0.5 - position.y()) / pixelsPerMillimeter_;
     const Vector3 rayPoint = target_ + right * screenX + up * screenY;
-    const double denominator = Dot(viewDirection, activePlane_->Normal());
+    const double denominator = Dot(viewDirection, plane.Normal());
     if (std::abs(denominator) <= 1.0e-9) {
         return std::nullopt;
     }
-    const double distance = Dot(activePlane_->Origin() - rayPoint, activePlane_->Normal()) / denominator;
+    const double distance = Dot(plane.Origin() - rayPoint, plane.Normal()) / denominator;
     return rayPoint + viewDirection * distance;
+}
+
+std::optional<Vector3> CadViewport::PointOnActivePlane(QPointF position) const
+{
+    return activePlane_.has_value()
+        ? PointOnPlane(position, *activePlane_)
+        : std::nullopt;
+}
+
+std::optional<WireControlPointPick> CadViewport::NearestEditableControlPoint(
+    QPointF position,
+    double maximumDistance) const
+{
+    if (project_ == nullptr || tool_ != ViewportTool::Select
+        || !std::isfinite(maximumDistance) || maximumDistance <= 0.0) {
+        return std::nullopt;
+    }
+
+    double bestDistance = maximumDistance;
+    std::optional<WireControlPointPick> best;
+    for (const CadSelection& selected : selections_) {
+        if (selected.kind != CadSelectionKind::Wire || selected.index < 0
+            || selected.index >= static_cast<int>(project_->Wires().size())) {
+            continue;
+        }
+        const NamedWire& namedWire = project_->Wires()[selected.index];
+        if (!namedWire.visible || namedWire.projection.has_value()
+            || (namedWire.wire.Kind() != WireKind::CubicBezier
+                && namedWire.wire.Kind() != WireKind::CubicBSpline)) {
+            continue;
+        }
+        const auto& points = namedWire.wire.ControlPoints();
+        for (std::size_t index = 0; index < points.size(); ++index) {
+            const double distance = QLineF(position, ProjectPoint(points[index])).length();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = WireControlPointPick{selected.index, index};
+            }
+        }
+    }
+    return best;
 }
 
 std::optional<double> CadViewport::NearestWireParameter(
@@ -1030,6 +1081,68 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
     return activePlane_->ToWorld(snappedU, snappedV);
 }
 
+Vector3 CadViewport::SnapDraggedControlPoint(Vector3 point, QPointF screenPosition) const
+{
+    if (!snapEnabled_ || !controlPointSnapPlane_.has_value()) {
+        return point;
+    }
+
+    if (project_ != nullptr && controlPointDragPlane_.has_value()) {
+        double bestDistance = 10.0;
+        std::optional<Vector3> bestPoint;
+        for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
+            const NamedWire& namedWire = project_->Wires()[wireIndex];
+            if (!namedWire.visible) {
+                continue;
+            }
+            const auto& controls = namedWire.wire.ControlPoints();
+            for (std::size_t pointIndex = 0; pointIndex < controls.size(); ++pointIndex) {
+                if (draggedControlPoint_.has_value()
+                    && draggedControlPoint_->wireIndex == wireIndex
+                    && draggedControlPoint_->controlPointIndex == pointIndex) {
+                    continue;
+                }
+                const Vector3 candidate = controls[pointIndex];
+                if (std::abs(controlPointDragPlane_->Project(candidate).w) > 1.0e-6) {
+                    continue;
+                }
+                const double distance = QLineF(screenPosition, ProjectPoint(candidate)).length();
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestPoint = candidate;
+                }
+            }
+        }
+        if (bestPoint.has_value()) {
+            return *bestPoint;
+        }
+    }
+
+    const auto coordinates = controlPointSnapPlane_->Project(point);
+    const double snappedU = std::round(coordinates.u / snapStep_) * snapStep_;
+    const double snappedV = std::round(coordinates.v / snapStep_) * snapStep_;
+    return controlPointSnapPlane_->ToWorld(snappedU, snappedV, coordinates.w);
+}
+
+Wire CadViewport::WireWithMovedControlPoint(
+    const Wire& wire,
+    std::size_t controlPointIndex,
+    Vector3 point) const
+{
+    std::vector<Vector3> controls = wire.ControlPoints();
+    if (controlPointIndex >= controls.size()) {
+        throw std::out_of_range("Wire control point index is out of range.");
+    }
+    controls[controlPointIndex] = point;
+    if (wire.Kind() == WireKind::CubicBezier && controls.size() == 4) {
+        return Wire::CubicBezier(controls[0], controls[1], controls[2], controls[3]);
+    }
+    if (wire.Kind() == WireKind::CubicBSpline) {
+        return Wire::CubicBSpline(std::move(controls));
+    }
+    throw std::invalid_argument("Only Bezier and B-spline control points can be dragged.");
+}
+
 Vector3 CadViewport::ApplyDrawingConstraint(Vector3 point, Qt::KeyboardModifiers modifiers) const
 {
     if (!activePlane_.has_value() || drawingPoints_.empty()
@@ -1164,8 +1277,15 @@ void CadViewport::UpdateHover(QPointF position)
     hoveredSelection_ = {};
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
+    hoveredControlPoint_.reset();
 
-    if (project_ != nullptr
+    if (const auto controlPoint = NearestEditableControlPoint(position, 9.0);
+        controlPoint.has_value()) {
+        hoveredControlPoint_ = controlPoint;
+        hoveredSelection_ = {CadSelectionKind::Wire, controlPoint->wireIndex};
+        hoveredWirePoint_ = project_->Wires()[controlPoint->wireIndex]
+                                .wire.ControlPoints()[controlPoint->controlPointIndex];
+    } else if (project_ != nullptr
         && (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent
             || tool_ == ViewportTool::Curvature)) {
         const std::optional<WireEndpointPick> endpoint = NearestWireEndpoint(position, 8.0);
@@ -1214,7 +1334,9 @@ void CadViewport::UpdateHover(QPointF position)
         }
     }
 
-    setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
+    setCursor(hoveredControlPoint_.has_value() && tool_ == ViewportTool::Select
+            ? Qt::SizeAllCursor
+            : hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
                 || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
                 || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
@@ -1226,13 +1348,23 @@ void CadViewport::UpdateHover(QPointF position)
 void CadViewport::ClearHover()
 {
     if (hoveredSelection_.kind == CadSelectionKind::None
-        && !hoveredWirePoint_.has_value() && !hoveredWireParameter_.has_value()) {
+        && !hoveredWirePoint_.has_value() && !hoveredWireParameter_.has_value()
+        && !hoveredControlPoint_.has_value()) {
         return;
     }
     hoveredSelection_ = {};
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
+    hoveredControlPoint_.reset();
     update();
+}
+
+void CadViewport::CancelControlPointDrag()
+{
+    draggedControlPoint_.reset();
+    draggedWirePreview_.reset();
+    controlPointDragPlane_.reset();
+    controlPointSnapPlane_.reset();
 }
 
 void CadViewport::paintEvent(QPaintEvent*)
@@ -1482,14 +1614,19 @@ void CadViewport::paintEvent(QPaintEvent*)
             if (!namedWire.visible) {
                 continue;
             }
+            const Wire& displayedWire = draggedControlPoint_.has_value()
+                    && draggedControlPoint_->wireIndex == index
+                    && draggedWirePreview_.has_value()
+                ? *draggedWirePreview_
+                : namedWire.wire;
             const bool selected = IsSelected(CadSelectionKind::Wire, index);
             const bool reference = reference_.kind == CadSelectionKind::Wire && reference_.index == index;
             const bool hovered = hoveredSelection_.kind == CadSelectionKind::Wire
                 && hoveredSelection_.index == index;
-            QPainterPath path(ProjectPoint(namedWire.wire.Evaluate(0.0)));
-            const int samples = namedWire.wire.Kind() == WireKind::Line ? 1 : 64;
+            QPainterPath path(ProjectPoint(displayedWire.Evaluate(0.0)));
+            const int samples = displayedWire.Kind() == WireKind::Line ? 1 : 64;
             for (int sample = 1; sample <= samples; ++sample) {
-                path.lineTo(ProjectPoint(namedWire.wire.Evaluate(static_cast<double>(sample) / samples)));
+                path.lineTo(ProjectPoint(displayedWire.Evaluate(static_cast<double>(sample) / samples)));
             }
 
             if (hovered) {
@@ -1501,7 +1638,7 @@ void CadViewport::paintEvent(QPaintEvent*)
                 : selected ? QColor("#e69200")
                 : hovered ? QColor("#087f9c")
                 : namedWire.metadata.construction ? QColor("#697984")
-                : WireColor(namedWire.wire.Kind());
+                : WireColor(displayedWire.Kind());
             const Qt::PenStyle wireStyle = reference ? Qt::DashDotLine
                 : namedWire.metadata.construction ? Qt::DashLine
                 : Qt::SolidLine;
@@ -1515,29 +1652,42 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawPath(path);
 
             if (selected) {
-                if (namedWire.wire.Kind() == WireKind::CubicBezier
-                    || namedWire.wire.Kind() == WireKind::CubicBSpline) {
-                    QPainterPath controlPath(ProjectPoint(namedWire.wire.ControlPoints().front()));
+                const auto activeControlPoint = [&](std::size_t controlIndex) {
+                    const auto& pick = draggedControlPoint_.has_value()
+                        ? draggedControlPoint_
+                        : hoveredControlPoint_;
+                    return pick.has_value() && pick->wireIndex == index
+                        && pick->controlPointIndex == controlIndex;
+                };
+                if (displayedWire.Kind() == WireKind::CubicBezier
+                    || displayedWire.Kind() == WireKind::CubicBSpline) {
+                    QPainterPath controlPath(ProjectPoint(displayedWire.ControlPoints().front()));
                     for (std::size_t controlIndex = 1;
-                         controlIndex < namedWire.wire.ControlPoints().size(); ++controlIndex) {
-                        controlPath.lineTo(ProjectPoint(namedWire.wire.ControlPoints()[controlIndex]));
+                         controlIndex < displayedWire.ControlPoints().size(); ++controlIndex) {
+                        controlPath.lineTo(ProjectPoint(displayedWire.ControlPoints()[controlIndex]));
                     }
                     painter.setBrush(Qt::NoBrush);
                     painter.setPen(QPen(QColor("#79838a"), 1.2, Qt::DashLine));
                     painter.drawPath(controlPath);
                 }
-                painter.setBrush(QColor("#ffffff"));
                 painter.setPen(QPen(QColor("#e69f00"), 2.0));
-                for (const Vector3& point : namedWire.wire.ControlPoints()) {
-                    painter.drawEllipse(ProjectPoint(point), 4.0, 4.0);
+                for (std::size_t controlIndex = 0;
+                     controlIndex < displayedWire.ControlPoints().size(); ++controlIndex) {
+                    const bool active = activeControlPoint(controlIndex);
+                    painter.setBrush(active ? QColor("#1184a0") : QColor("#ffffff"));
+                    const double radius = active ? 5.5 : 4.0;
+                    painter.drawEllipse(
+                        ProjectPoint(displayedWire.ControlPoints()[controlIndex]), radius, radius);
                 }
-                const auto drawEndpoint = [&](Vector3 point) {
+                const auto drawEndpoint = [&](Vector3 point, std::size_t controlIndex) {
                     const QPointF screenPoint = ProjectPoint(point);
+                    painter.setBrush(activeControlPoint(controlIndex)
+                            ? QColor("#1184a0") : QColor("#ffffff"));
                     painter.drawRect(QRectF(screenPoint - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
                 };
-                drawEndpoint(namedWire.wire.Start());
-                if (!namedWire.wire.IsClosed()) {
-                    drawEndpoint(namedWire.wire.End());
+                drawEndpoint(displayedWire.Start(), 0);
+                if (!displayedWire.IsClosed()) {
+                    drawEndpoint(displayedWire.End(), displayedWire.ControlPoints().size() - 1);
                 }
             }
             if (reference) {
@@ -2237,6 +2387,34 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+    if (event->button() == Qt::LeftButton && tool_ == ViewportTool::Select) {
+        const auto controlPoint = NearestEditableControlPoint(event->position(), 9.0);
+        if (controlPoint.has_value()) {
+            const NamedWire& namedWire = project_->Wires()[controlPoint->wireIndex];
+            const Vector3 point = namedWire.wire.ControlPoints()[controlPoint->controlPointIndex];
+            std::optional<kachakacha::model::WorkPlane> sourcePlane;
+            if (namedWire.metadata.sourcePlaneName.has_value()) {
+                sourcePlane = project_->FindWorkPlane(*namedWire.metadata.sourcePlaneName);
+            }
+
+            draggedControlPoint_ = controlPoint;
+            draggedWirePreview_ = namedWire.wire;
+            if (namedWire.metadata.planePolicy == kachakacha::model::WirePlanePolicy::LockedToPlane
+                && sourcePlane.has_value()) {
+                controlPointDragPlane_ = sourcePlane;
+            } else {
+                const auto basis = CurrentViewBasis();
+                controlPointDragPlane_ = kachakacha::model::WorkPlane::FromPointNormal(
+                    point, basis[0], basis[1]);
+            }
+            controlPointSnapPlane_ = sourcePlane.has_value()
+                ? sourcePlane
+                : activePlane_.has_value() ? activePlane_ : controlPointDragPlane_;
+            setCursor(Qt::ClosedHandCursor);
+            event->accept();
+            return;
+        }
+    }
     if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::SplitWire
         && tool_ != ViewportTool::Measure
@@ -2263,6 +2441,30 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         alignedViewBasis_.reset();
         yawRadians_ += delta.x() * 0.008;
         pitchRadians_ = std::clamp(pitchRadians_ - delta.y() * 0.008, -1.45, 1.45);
+        lastMousePosition_ = event->position().toPoint();
+        update();
+        event->accept();
+        return;
+    }
+
+    if (draggedControlPoint_.has_value() && dragButton_ == Qt::LeftButton
+        && controlPointDragPlane_.has_value() && project_ != nullptr) {
+        const QPoint delta = event->position().toPoint() - lastMousePosition_;
+        if (delta.manhattanLength() > 1) {
+            mouseMoved_ = true;
+        }
+        const auto point = PointOnPlane(event->position(), *controlPointDragPlane_);
+        if (point.has_value()) {
+            try {
+                const NamedWire& source = project_->Wires()[draggedControlPoint_->wireIndex];
+                draggedWirePreview_ = WireWithMovedControlPoint(
+                    source.wire,
+                    draggedControlPoint_->controlPointIndex,
+                    SnapDraggedControlPoint(*point, event->position()));
+            } catch (const std::exception&) {
+                draggedWirePreview_.reset();
+            }
+        }
         lastMousePosition_ = event->position().toPoint();
         update();
         event->accept();
@@ -2397,6 +2599,28 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+
+    if (draggedControlPoint_.has_value()) {
+        const WireControlPointPick pick = *draggedControlPoint_;
+        const std::optional<Wire> preview = draggedWirePreview_;
+        const bool changed = event->button() == Qt::LeftButton && mouseMoved_
+            && preview.has_value() && project_ != nullptr
+            && pick.wireIndex >= 0 && pick.wireIndex < static_cast<int>(project_->Wires().size())
+            && !AlmostEqual(
+                preview->ControlPoints()[pick.controlPointIndex],
+                project_->Wires()[pick.wireIndex].wire.ControlPoints()[pick.controlPointIndex],
+                1.0e-9);
+        CancelControlPointDrag();
+        dragButton_ = Qt::NoButton;
+        setCursor(Qt::SizeAllCursor);
+        if (changed && wireControlPointMoved_) {
+            wireControlPointMoved_(pick.wireIndex, *preview);
+        }
+        UpdateHover(event->position());
+        event->accept();
+        return;
+    }
+
     if (tool_ == ViewportTool::Measure) {
         if (event->button() == Qt::LeftButton && !mouseMoved_) {
             CommitMeasurementPick(event->position());
@@ -2481,7 +2705,11 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 void CadViewport::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
-        if (tool_ == ViewportTool::Measure) {
+        if (draggedControlPoint_.has_value()) {
+            CancelControlPointDrag();
+            dragButton_ = Qt::NoButton;
+            UpdateHover(mapFromGlobal(QCursor::pos()));
+        } else if (tool_ == ViewportTool::Measure) {
             ClearMeasurement();
         } else if (tool_ == ViewportTool::Coincident) {
             ClearCoincidencePicks();

@@ -86,6 +86,11 @@ struct DrawingMeasurements {
     double radiusMillimeters = 0.0;
 };
 
+struct WireControlPointPick {
+    int wireIndex = -1;
+    std::size_t controlPointIndex = 0;
+};
+
 class CadViewport final : public QWidget {
 public:
     explicit CadViewport(QWidget* parent = nullptr);
@@ -105,6 +110,8 @@ public:
     void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetSplineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
+    void SetWireControlPointMovedCallback(
+        std::function<void(int, const kachakacha::model::Wire&)> callback);
     void SetTranslationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, bool)> callback);
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
@@ -170,7 +177,13 @@ private:
     [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
+    [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnPlane(
+        QPointF position,
+        const kachakacha::model::WorkPlane& plane) const;
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnActivePlane(QPointF position) const;
+    [[nodiscard]] std::optional<WireControlPointPick> NearestEditableControlPoint(
+        QPointF position,
+        double maximumDistance = 9.0) const;
     [[nodiscard]] std::optional<double> NearestWireParameter(
         int wireIndex,
         QPointF position,
@@ -180,6 +193,13 @@ private:
         QPointF position,
         double maximumDistance = 12.0) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
+    [[nodiscard]] kachakacha::geometry::Vector3 SnapDraggedControlPoint(
+        kachakacha::geometry::Vector3 point,
+        QPointF screenPosition) const;
+    [[nodiscard]] kachakacha::model::Wire WireWithMovedControlPoint(
+        const kachakacha::model::Wire& wire,
+        std::size_t controlPointIndex,
+        kachakacha::geometry::Vector3 point) const;
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;
@@ -188,6 +208,7 @@ private:
     void CommitCoincidencePick(QPointF position);
     void UpdateHover(QPointF position);
     void ClearHover();
+    void CancelControlPointDrag();
     void NotifyDrawingState();
     void NotifySelection();
 
@@ -204,6 +225,7 @@ private:
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> arcCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
     std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> splineCreated_;
+    std::function<void(int, const kachakacha::model::Wire&)> wireControlPointMoved_;
     std::function<void(kachakacha::geometry::Vector3, bool)> translationRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;
@@ -221,6 +243,11 @@ private:
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
     std::optional<kachakacha::geometry::Vector3> hoveredWirePoint_;
     std::optional<double> hoveredWireParameter_;
+    std::optional<WireControlPointPick> hoveredControlPoint_;
+    std::optional<WireControlPointPick> draggedControlPoint_;
+    std::optional<kachakacha::model::Wire> draggedWirePreview_;
+    std::optional<kachakacha::model::WorkPlane> controlPointDragPlane_;
+    std::optional<kachakacha::model::WorkPlane> controlPointSnapPlane_;
     QPoint hoverScreenPosition_;
     std::optional<double> splitPreviewParameter_;
     std::vector<WireEndpointPick> coincidencePicks_;

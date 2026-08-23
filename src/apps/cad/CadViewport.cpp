@@ -14,7 +14,6 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
-#include <stdexcept>
 
 using kachakacha::geometry::Vector3;
 using kachakacha::geometry::AlmostEqual;
@@ -849,13 +848,18 @@ std::optional<WireControlPointPick> CadViewport::NearestEditableControlPoint(
             continue;
         }
         const NamedWire& namedWire = project_->Wires()[selected.index];
-        if (!namedWire.visible || namedWire.projection.has_value()
-            || (namedWire.wire.Kind() != WireKind::CubicBezier
-                && namedWire.wire.Kind() != WireKind::CubicBSpline)) {
+        if (!namedWire.visible || namedWire.projection.has_value()) {
             continue;
         }
         const auto& points = namedWire.wire.ControlPoints();
         for (std::size_t index = 0; index < points.size(); ++index) {
+            if (namedWire.wire.Kind() == WireKind::Circle && index > 1) {
+                continue;
+            }
+            if (namedWire.wire.Kind() == WireKind::Circle && index == 1
+                && namedWire.metadata.curveConstraints.radiusMillimeters.has_value()) {
+                continue;
+            }
             const double distance = QLineF(position, ProjectPoint(points[index])).length();
             if (distance < bestDistance) {
                 bestDistance = distance;
@@ -1103,6 +1107,14 @@ Vector3 CadViewport::SnapDraggedControlPoint(Vector3 point, QPointF screenPositi
                     continue;
                 }
                 const Vector3 candidate = controls[pointIndex];
+                if (draggedControlPoint_.has_value()
+                    && draggedControlPoint_->wireIndex == wireIndex
+                    && AlmostEqual(
+                        candidate,
+                        controls[draggedControlPoint_->controlPointIndex],
+                        1.0e-9)) {
+                    continue;
+                }
                 if (std::abs(controlPointDragPlane_->Project(candidate).w) > 1.0e-6) {
                     continue;
                 }
@@ -1122,25 +1134,6 @@ Vector3 CadViewport::SnapDraggedControlPoint(Vector3 point, QPointF screenPositi
     const double snappedU = std::round(coordinates.u / snapStep_) * snapStep_;
     const double snappedV = std::round(coordinates.v / snapStep_) * snapStep_;
     return controlPointSnapPlane_->ToWorld(snappedU, snappedV, coordinates.w);
-}
-
-Wire CadViewport::WireWithMovedControlPoint(
-    const Wire& wire,
-    std::size_t controlPointIndex,
-    Vector3 point) const
-{
-    std::vector<Vector3> controls = wire.ControlPoints();
-    if (controlPointIndex >= controls.size()) {
-        throw std::out_of_range("Wire control point index is out of range.");
-    }
-    controls[controlPointIndex] = point;
-    if (wire.Kind() == WireKind::CubicBezier && controls.size() == 4) {
-        return Wire::CubicBezier(controls[0], controls[1], controls[2], controls[3]);
-    }
-    if (wire.Kind() == WireKind::CubicBSpline) {
-        return Wire::CubicBSpline(std::move(controls));
-    }
-    throw std::invalid_argument("Only Bezier and B-spline control points can be dragged.");
 }
 
 Vector3 CadViewport::ApplyDrawingConstraint(Vector3 point, Qt::KeyboardModifiers modifiers) const
@@ -1673,6 +1666,13 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.setPen(QPen(QColor("#e69f00"), 2.0));
                 for (std::size_t controlIndex = 0;
                      controlIndex < displayedWire.ControlPoints().size(); ++controlIndex) {
+                    if (displayedWire.Kind() == WireKind::Circle && controlIndex > 1) {
+                        continue;
+                    }
+                    if (displayedWire.Kind() == WireKind::Circle && controlIndex == 1
+                        && namedWire.metadata.curveConstraints.radiusMillimeters.has_value()) {
+                        continue;
+                    }
                     const bool active = activeControlPoint(controlIndex);
                     painter.setBrush(active ? QColor("#1184a0") : QColor("#ffffff"));
                     const double radius = active ? 5.5 : 4.0;
@@ -1685,9 +1685,24 @@ void CadViewport::paintEvent(QPaintEvent*)
                             ? QColor("#1184a0") : QColor("#ffffff"));
                     painter.drawRect(QRectF(screenPoint - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
                 };
-                drawEndpoint(displayedWire.Start(), 0);
-                if (!displayedWire.IsClosed()) {
-                    drawEndpoint(displayedWire.End(), displayedWire.ControlPoints().size() - 1);
+                if (displayedWire.Kind() == WireKind::CircularArc) {
+                    drawEndpoint(displayedWire.Start(), 1);
+                    drawEndpoint(displayedWire.End(), 2);
+                } else if (displayedWire.Kind() == WireKind::Circle
+                    && !namedWire.metadata.curveConstraints.radiusMillimeters.has_value()) {
+                    drawEndpoint(displayedWire.Start(), 1);
+                } else if (displayedWire.Kind() != WireKind::Circle) {
+                    drawEndpoint(displayedWire.Start(), 0);
+                    if (!displayedWire.IsClosed()) {
+                        drawEndpoint(displayedWire.End(), displayedWire.ControlPoints().size() - 1);
+                    }
+                }
+                if (displayedWire.Kind() == WireKind::Circle
+                    || displayedWire.Kind() == WireKind::CircularArc) {
+                    const QPointF center = ProjectPoint(displayedWire.ArcData().center);
+                    painter.setPen(QPen(QColor("#e69f00"), 1.5));
+                    painter.drawLine(center - QPointF(6.0, 0.0), center + QPointF(6.0, 0.0));
+                    painter.drawLine(center - QPointF(0.0, 6.0), center + QPointF(0.0, 6.0));
                 }
             }
             if (reference) {
@@ -2457,8 +2472,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         if (point.has_value()) {
             try {
                 const NamedWire& source = project_->Wires()[draggedControlPoint_->wireIndex];
-                draggedWirePreview_ = WireWithMovedControlPoint(
-                    source.wire,
+                draggedWirePreview_ = source.wire.WithMovedControlPoint(
                     draggedControlPoint_->controlPointIndex,
                     SnapDraggedControlPoint(*point, event->position()));
             } catch (const std::exception&) {

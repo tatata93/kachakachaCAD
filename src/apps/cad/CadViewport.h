@@ -196,10 +196,6 @@ private:
     [[nodiscard]] kachakacha::geometry::Vector3 SnapDraggedControlPoint(
         kachakacha::geometry::Vector3 point,
         QPointF screenPosition) const;
-    [[nodiscard]] kachakacha::model::Wire WireWithMovedControlPoint(
-        const kachakacha::model::Wire& wire,
-        std::size_t controlPointIndex,
-        kachakacha::geometry::Vector3 point) const;
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;

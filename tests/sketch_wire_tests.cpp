@@ -73,6 +73,53 @@ void CubicBSplineUsesEditableControlPoints()
     RequireNear(wire.Evaluate(0.5), {2.0, 2.25, 0.0}, "B-spline midpoint");
 }
 
+void MovedControlPointsRebuildExactWires()
+{
+    const Wire line = Wire::Line({0.0, 0.0, 0.0}, {2.0, 0.0, 0.0})
+                          .WithMovedControlPoint(1, {3.0, 4.0, 0.0});
+    RequireNear(line.End(), {3.0, 4.0, 0.0}, "moved line endpoint");
+
+    const Wire polyline = Wire::Polyline({
+        {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {4.0, 0.0, 0.0}})
+                              .WithMovedControlPoint(1, {2.0, 3.0, 0.0});
+    RequireNear(polyline.ControlPoints()[1], {2.0, 3.0, 0.0}, "moved polyline vertex");
+
+    const Wire bezier = Wire::CubicBezier(
+        {0.0, 0.0, 0.0}, {1.0, 2.0, 0.0}, {3.0, 2.0, 0.0}, {4.0, 0.0, 0.0})
+                            .WithMovedControlPoint(2, {3.0, 4.0, 0.0});
+    RequireNear(bezier.ControlPoints()[2], {3.0, 4.0, 0.0}, "moved Bezier control");
+
+    const Wire spline = Wire::CubicBSpline({
+        {0.0, 0.0, 0.0}, {1.0, 2.0, 0.0}, {3.0, 2.0, 0.0}, {4.0, 0.0, 0.0}})
+                           .WithMovedControlPoint(1, {1.0, 4.0, 0.0});
+    RequireNear(spline.ControlPoints()[1], {1.0, 4.0, 0.0}, "moved B-spline control");
+}
+
+void MovedCircleAndArcHandlesPreserveExactGeometry()
+{
+    const Wire circle = Wire::Circle(
+        {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0)
+                            .WithMovedControlPoint(1, {3.0, 0.0, 0.0});
+    Require(AlmostEqual(circle.ArcData().radius, 3.0, 1.0e-9), "moved circle radius");
+    RequireNear(circle.Start(), {3.0, 0.0, 0.0}, "moved circle radius point");
+
+    const Wire movedCircle = circle.WithMovedControlPoint(0, {5.0, 2.0, 1.0});
+    RequireNear(movedCircle.ArcData().center, {5.0, 2.0, 1.0}, "moved circle center");
+    Require(AlmostEqual(movedCircle.ArcData().radius, 3.0, 1.0e-9), "moved circle keeps radius");
+
+    const Wire sourceArc = Wire::CircularArc(
+        {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0},
+        2.0, 0.0, Pi / 2.0);
+    const Wire startEdited = sourceArc.WithMovedControlPoint(1, {0.0, 3.0, 0.0});
+    RequireNear(startEdited.Start(), {0.0, 2.0, 0.0}, "moved arc start angle");
+    RequireNear(startEdited.End(), {-2.0, 0.0, 0.0}, "moved arc start keeps sweep");
+    Require(AlmostEqual(startEdited.ArcData().radius, 2.0, 1.0e-9), "moved arc start keeps radius");
+
+    const Wire endEdited = sourceArc.WithMovedControlPoint(2, {-4.0, 0.0, 0.0});
+    RequireNear(endEdited.End(), {-2.0, 0.0, 0.0}, "moved arc end angle");
+    Require(AlmostEqual(endEdited.ArcData().sweepAngleRadians, Pi, 1.0e-9), "moved arc sweep");
+}
+
 void InterpolatingBSplinePassesThroughPickedPoints()
 {
     const std::vector<Vector3> points = {
@@ -303,6 +350,8 @@ int main()
         DirectLineWireUsesExactEndpoints();
         CubicBezierWireUsesControlPoints();
         CubicBSplineUsesEditableControlPoints();
+        MovedControlPointsRebuildExactWires();
+        MovedCircleAndArcHandlesPreserveExactGeometry();
         InterpolatingBSplinePassesThroughPickedPoints();
         SketchLineOnWorkPlaneBecomesWorldWire();
         SketchBezierOnWorkPlaneBecomesWorldWire();

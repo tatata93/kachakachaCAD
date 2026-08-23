@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -393,6 +394,70 @@ WireArcData Wire::ArcData() const
         arcStartAngleRadians_,
         arcSweepAngleRadians_,
     };
+}
+
+Wire Wire::WithMovedControlPoint(std::size_t controlPointIndex, Vector3 point) const
+{
+    if (!point.IsFinite() || controlPointIndex >= controlPoints_.size()) {
+        throw std::invalid_argument("Wire control point move is invalid.");
+    }
+
+    std::vector<Vector3> controls = controlPoints_;
+    controls[controlPointIndex] = point;
+    switch (kind_) {
+    case WireKind::Line:
+        return Line(controls[0], controls[1]);
+    case WireKind::Polyline:
+        return Polyline(std::move(controls));
+    case WireKind::CubicBezier:
+        return CubicBezier(controls[0], controls[1], controls[2], controls[3]);
+    case WireKind::CubicBSpline:
+        return CubicBSpline(std::move(controls));
+    case WireKind::Circle:
+    case WireKind::CircularArc:
+        break;
+    }
+
+    if (controlPointIndex == 0) {
+        return Translated(point - arcCenter_);
+    }
+
+    const Vector3 normal = Cross(arcUAxis_, arcVAxis_).Normalized();
+    const Vector3 radial = point - arcCenter_ - normal * Dot(point - arcCenter_, normal);
+    if (radial.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Arc handle must remain away from its center.");
+    }
+    if (kind_ == WireKind::Circle) {
+        const double radius = radial.Length();
+        const Vector3 uAxis = radial / radius;
+        return Circle(arcCenter_, uAxis, Cross(normal, uAxis), radius);
+    }
+
+    const double handleAngle = std::atan2(Dot(radial, arcVAxis_), Dot(radial, arcUAxis_));
+    if (controlPointIndex == 1) {
+        return CircularArc(
+            arcCenter_, arcUAxis_, arcVAxis_, arcRadius_,
+            handleAngle, arcSweepAngleRadians_);
+    }
+    if (controlPointIndex == 2) {
+        constexpr double twoPi = std::numbers::pi * 2.0;
+        double sweep = handleAngle - arcStartAngleRadians_;
+        if (arcSweepAngleRadians_ > 0.0) {
+            while (sweep <= 1.0e-9) {
+                sweep += twoPi;
+            }
+            sweep = std::min(sweep, twoPi - 1.0e-6);
+        } else {
+            while (sweep >= -1.0e-9) {
+                sweep -= twoPi;
+            }
+            sweep = std::max(sweep, -twoPi + 1.0e-6);
+        }
+        return CircularArc(
+            arcCenter_, arcUAxis_, arcVAxis_, arcRadius_,
+            arcStartAngleRadians_, sweep);
+    }
+    throw std::invalid_argument("Arc control point move is invalid.");
 }
 
 Vector3 Wire::Evaluate(double t) const

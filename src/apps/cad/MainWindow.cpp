@@ -3189,7 +3189,7 @@ void MainWindow::ApplyViewportWireEdit(int wireIndex, const Wire& replacement)
         MarkModified();
         RefreshModelViews(false);
         UpdateSelections(selections, true);
-        statusBar()->showMessage(QStringLiteral("制御点を移動しました（元に戻す: Ctrl+Z）"), 2500);
+        statusBar()->showMessage(QStringLiteral("点またはハンドルを移動しました（元に戻す: Ctrl+Z）"), 2500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
     }

@@ -72,6 +72,9 @@ public:
 
     [[nodiscard]] WireArcData ArcData() const;
     [[nodiscard]] geometry::Vector3 Evaluate(double t) const;
+    [[nodiscard]] Wire WithMovedControlPoint(
+        std::size_t controlPointIndex,
+        geometry::Vector3 point) const;
     [[nodiscard]] Wire Translated(geometry::Vector3 delta) const;
     [[nodiscard]] Wire Mirrored(
         geometry::Vector3 linePoint,

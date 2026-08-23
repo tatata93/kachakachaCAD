@@ -283,6 +283,8 @@ QString WireKindText(WireKind kind)
         return QStringLiteral("ポリライン");
     case WireKind::CubicBezier:
         return QStringLiteral("3次ベジェ曲線");
+    case WireKind::CubicBSpline:
+        return QStringLiteral("3次B-spline");
     case WireKind::Circle:
         return QStringLiteral("円");
     case WireKind::CircularArc:
@@ -393,6 +395,9 @@ void MainWindow::BuildUi()
     });
     viewport_->SetBezierCreatedCallback([this](const std::array<Vector3, 4>& points) {
         AddViewportBezier(points);
+    });
+    viewport_->SetSplineCreatedCallback([this](const std::vector<Vector3>& throughPoints) {
+        AddViewportSpline(throughPoints);
     });
     viewport_->SetTranslationRequestedCallback([this](Vector3 delta, bool copy) {
         ApplyViewportTranslation(delta, copy);
@@ -555,6 +560,7 @@ void MainWindow::BuildDrawingActions()
     circleToolAction_ = new QAction(QStringLiteral("円"), this);
     arcToolAction_ = new QAction(QStringLiteral("3点円弧"), this);
     bezierToolAction_ = new QAction(QStringLiteral("ベジェ"), this);
+    splineToolAction_ = new QAction(QStringLiteral("スプライン"), this);
     moveToolAction_ = new QAction(QStringLiteral("移動"), this);
     copyToolAction_ = new QAction(QStringLiteral("コピー"), this);
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
@@ -576,7 +582,7 @@ void MainWindow::BuildDrawingActions()
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
-    tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェまたは円弧端点の順に3D画面で指定"));
+    tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェ・B-spline・円弧端点の順に3D画面で指定"));
     curvatureToolAction_->setToolTip(QStringLiteral("固定側の端点、曲率まで追従するベジェ端点の順に3D画面で指定"));
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
     removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーのG1/G2関係を解除し、端点一致は残す"));
@@ -588,6 +594,7 @@ void MainWindow::BuildDrawingActions()
     lineToolAction_->setToolTip(QStringLiteral("始点と終点を指定。Shiftで作図面の水平・垂直へ固定"));
     polylineToolAction_->setToolTip(QStringLiteral("点を続けて指定。Shiftで次の辺を水平・垂直へ固定"));
     rectangleToolAction_->setToolTip(QStringLiteral("対角2点を指定。Shiftで正方形へ固定"));
+    splineToolAction_->setToolTip(QStringLiteral("通過点を4点以上指定し、Enterまたは右クリックで完了"));
     clearReferenceAction_->setEnabled(false);
 
     selectToolAction_->setShortcut(Qt::Key_V);
@@ -597,6 +604,7 @@ void MainWindow::BuildDrawingActions()
     circleToolAction_->setShortcut(Qt::Key_C);
     arcToolAction_->setShortcut(Qt::Key_A);
     bezierToolAction_->setShortcut(Qt::Key_B);
+    splineToolAction_->setShortcut(Qt::Key_S);
     coincidentToolAction_->setShortcut(Qt::Key_I);
     tangentToolAction_->setShortcut(Qt::Key_T);
     curvatureToolAction_->setShortcut(QKeySequence(QStringLiteral("Shift+T")));
@@ -606,7 +614,7 @@ void MainWindow::BuildDrawingActions()
     toolGroup->setExclusive(true);
     for (QAction* action : {
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
-             circleToolAction_, arcToolAction_, bezierToolAction_,
+             circleToolAction_, arcToolAction_, bezierToolAction_, splineToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
              coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_}) {
         action->setCheckable(true);
@@ -621,6 +629,7 @@ void MainWindow::BuildDrawingActions()
     connect(circleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawCircle); });
     connect(arcToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawArc); });
     connect(bezierToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawBezier); });
+    connect(splineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawSpline); });
     connect(moveToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MoveSelection); });
     connect(copyToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::CopySelection); });
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
@@ -699,7 +708,8 @@ QWidget* MainWindow::BuildDrawingPanel()
     addToolButton(rectangleToolAction_, 1, 1);
     addToolButton(circleToolAction_, 2, 0);
     addToolButton(arcToolAction_, 2, 1);
-    addToolButton(bezierToolAction_, 3, 0, 2);
+    addToolButton(bezierToolAction_, 3, 0);
+    addToolButton(splineToolAction_, 3, 1);
     layout->addLayout(toolGrid);
 
     drawingConstruction_ = new QCheckBox(QStringLiteral("補助線として作図"));
@@ -1736,6 +1746,7 @@ void MainWindow::BuildMenusAndToolbar()
     drawMenu->addAction(circleToolAction_);
     drawMenu->addAction(arcToolAction_);
     drawMenu->addAction(bezierToolAction_);
+    drawMenu->addAction(splineToolAction_);
     drawMenu->addSeparator();
     drawMenu->addAction(measureToolAction_);
     drawMenu->addSeparator();
@@ -1768,6 +1779,7 @@ void MainWindow::BuildMenusAndToolbar()
     drawingToolbar->addAction(circleToolAction_);
     drawingToolbar->addAction(arcToolAction_);
     drawingToolbar->addAction(bezierToolAction_);
+    drawingToolbar->addAction(splineToolAction_);
     drawingToolbar->addSeparator();
     drawingToolbar->addAction(finishDrawingAction_);
     drawingToolbar->addAction(cancelDrawingAction_);
@@ -2719,6 +2731,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     circleToolAction_->setChecked(tool == ViewportTool::DrawCircle);
     arcToolAction_->setChecked(tool == ViewportTool::DrawArc);
     bezierToolAction_->setChecked(tool == ViewportTool::DrawBezier);
+    splineToolAction_->setChecked(tool == ViewportTool::DrawSpline);
     moveToolAction_->setChecked(tool == ViewportTool::MoveSelection);
     copyToolAction_->setChecked(tool == ViewportTool::CopySelection);
     mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
@@ -2750,6 +2763,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     case ViewportTool::DrawBezier:
         statusBar()->showMessage(QStringLiteral("ベジェ曲線作図モード"), 2500);
         break;
+    case ViewportTool::DrawSpline:
+        statusBar()->showMessage(QStringLiteral("通過点スプライン: 4点以上を指定し、Enterまたは右クリックで完了"), 4500);
+        break;
     case ViewportTool::MoveSelection:
         statusBar()->showMessage(QStringLiteral("移動: 基準点と移動先を3D画面で指定"), 3500);
         break;
@@ -2769,7 +2785,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         statusBar()->showMessage(QStringLiteral("端点一致: 動かさない固定側、追従させる側の順に端点をクリック"), 5000);
         break;
     case ViewportTool::Tangent:
-        statusBar()->showMessage(QStringLiteral("接線接続: 固定側の端点、追従するベジェまたは円弧端点の順にクリック"), 5000);
+        statusBar()->showMessage(QStringLiteral("接線接続: 固定側の端点、追従するベジェ・B-spline・円弧端点の順にクリック"), 5000);
         break;
     case ViewportTool::Curvature:
         statusBar()->showMessage(QStringLiteral("曲率接続: 固定側の端点、曲率まで追従するベジェ端点の順にクリック"), 5000);
@@ -2822,6 +2838,11 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
                                   : QStringLiteral("終点"))
             .arg(pointCount);
         break;
+    case ViewportTool::DrawSpline:
+        state = pointCount < 4
+            ? QStringLiteral("通過点スプライン  %1 / 4点以上").arg(pointCount)
+            : QStringLiteral("通過点スプライン  %1点 · 完了できます").arg(pointCount);
+        break;
     case ViewportTool::MoveSelection:
         state = QStringLiteral("移動 · %1  %2 / 2点")
             .arg(pointCount == 0 ? QStringLiteral("基準点") : QStringLiteral("移動先"))
@@ -2870,7 +2891,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         drawingStateLabel_->setText(state);
     }
     if (finishDrawingAction_ != nullptr) {
-        finishDrawingAction_->setEnabled(tool == ViewportTool::DrawPolyline && pointCount >= 2);
+        finishDrawingAction_->setEnabled(
+            (tool == ViewportTool::DrawPolyline && pointCount >= 2)
+            || (tool == ViewportTool::DrawSpline && pointCount >= 4));
     }
     if (cancelDrawingAction_ != nullptr) {
         cancelDrawingAction_->setEnabled(pointCount > 0);
@@ -2882,7 +2905,8 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     }
 
     int dimensionPage = -1;
-    if (tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline) {
+    if (tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline
+        || tool == ViewportTool::DrawSpline) {
         dimensionPage = 0;
     } else if (tool == ViewportTool::DrawRectangle) {
         dimensionPage = 1;
@@ -2928,7 +2952,8 @@ void MainWindow::CommitDrawingDimensions()
     }
 
     bool committed = false;
-    if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline) {
+    if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline
+        || viewport_->Tool() == ViewportTool::DrawSpline) {
         committed = viewport_->CommitDrawingDimensions(
             drawingLengthField_->value(), drawingAngleField_->value());
     } else if (viewport_->Tool() == ViewportTool::DrawRectangle) {
@@ -2965,6 +2990,7 @@ void MainWindow::RefreshActiveWorkPlane()
     circleToolAction_->setEnabled(canDraw);
     arcToolAction_->setEnabled(canDraw);
     bezierToolAction_->setEnabled(canDraw);
+    splineToolAction_->setEnabled(canDraw);
     moveToolAction_->setEnabled(canDraw);
     copyToolAction_->setEnabled(canDraw);
     mirrorToolAction_->setEnabled(canDraw);
@@ -3118,6 +3144,29 @@ void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
         statusBar()->showMessage(QStringLiteral("ベジェ曲線を作成しました"), 1800);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportSpline(const std::vector<Vector3>& throughPoints)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
+        const Wire spline = Wire::InterpolatingCubicBSpline(throughPoints);
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("spline"))), spline, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("%1点を通るスプラインを作成しました").arg(throughPoints.size()), 2200);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
     }
 }
 
@@ -3419,8 +3468,9 @@ void MainWindow::ApplyEndpointContinuity(
         }
         if (continuity == WireContinuity::G1Tangent
             && followerWire.wire.Kind() != WireKind::CubicBezier
+            && followerWire.wire.Kind() != WireKind::CubicBSpline
             && followerWire.wire.Kind() != WireKind::CircularArc) {
-            throw std::invalid_argument("追従側にはベジェ曲線または円弧の端点を指定してください。");
+            throw std::invalid_argument("追従側にはベジェ、B-spline、または円弧の端点を指定してください。");
         }
         const std::string anchorName = anchorWire.name;
         const std::string followerName = followerWire.name;
@@ -3646,8 +3696,9 @@ void MainWindow::UpdateWireOffsetPreview()
             viewport_->SetWireOffsetPreview({});
             return;
         }
-        if (source.wire.Kind() == WireKind::CubicBezier) {
-            wireOffsetSelectionLabel_->setText(QStringLiteral("ベジェの厳密オフセットは未対応です"));
+        if (source.wire.Kind() == WireKind::CubicBezier
+            || source.wire.Kind() == WireKind::CubicBSpline) {
+            wireOffsetSelectionLabel_->setText(QStringLiteral("曲線の厳密オフセットは未対応です"));
             viewport_->SetWireOffsetPreview({});
             return;
         }
@@ -4356,6 +4407,7 @@ bool MainWindow::RunCreationSelfTest()
         return fail("view cube align selected workplane");
     }
     viewport_->AlignToActiveWorkPlane();
+
     const std::size_t directStart = project_.Wires().size();
 
     SetViewportTool(ViewportTool::DrawLine);
@@ -5234,6 +5286,7 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.CoincidentConstraints().size() != coincidenceCount) {
         return fail("remove tangent endpoint coincidence");
     }
+
     toolsTabs_->setCurrentIndex(7);
     QApplication::processEvents();
     return true;
@@ -5423,6 +5476,15 @@ void MainWindow::ApplySelectedEdit()
                     ReadTablePoint(editWirePointTable_, 2),
                     ReadTablePoint(editWirePointTable_, 3));
                 break;
+            case WireKind::CubicBSpline: {
+                std::vector<Vector3> points;
+                points.reserve(editWirePointTable_->rowCount());
+                for (int row = 0; row < editWirePointTable_->rowCount(); ++row) {
+                    points.push_back(ReadTablePoint(editWirePointTable_, row));
+                }
+                replacement = Wire::CubicBSpline(std::move(points));
+                break;
+            }
             case WireKind::Circle:
                 replacement = Wire::Circle(
                     ReadVector3(editArcCenter_),
@@ -6515,6 +6577,12 @@ void MainWindow::PopulateWirePointTable(const kachakacha::model::NamedWire& name
         rowLabels = {QStringLiteral("始点"), QStringLiteral("終点")};
     } else if (namedWire.wire.Kind() == WireKind::CubicBezier) {
         rowLabels = {QStringLiteral("始点"), QStringLiteral("制御点 1"), QStringLiteral("制御点 2"), QStringLiteral("終点")};
+    } else if (namedWire.wire.Kind() == WireKind::CubicBSpline) {
+        for (int index = 0; index < static_cast<int>(points.size()); ++index) {
+            rowLabels.append(index == 0 ? QStringLiteral("始点")
+                : index == static_cast<int>(points.size()) - 1 ? QStringLiteral("終点")
+                : QStringLiteral("制御点 %1").arg(index));
+        }
     } else {
         for (int index = 0; index < static_cast<int>(points.size()); ++index) {
             rowLabels.append(QStringLiteral("点 %1").arg(index + 1));

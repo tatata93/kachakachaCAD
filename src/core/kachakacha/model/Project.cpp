@@ -45,6 +45,8 @@ Wire ReframeWire(const Wire& wire, const WorkPlane& oldPlane, const WorkPlane& n
         return Wire::Polyline(std::move(points));
     case WireKind::CubicBezier:
         return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+    case WireKind::CubicBSpline:
+        return Wire::CubicBSpline(std::move(points));
     case WireKind::Circle:
     case WireKind::CircularArc: {
         const WireArcData arc = wire.ArcData();
@@ -116,6 +118,23 @@ geometry::Vector3 EndpointCurvatureVector(const Wire& wire, WireEndpoint endpoin
         return (secondDerivative
             - tangent * geometry::Dot(secondDerivative, tangent)) / speedSquared;
     }
+    case WireKind::CubicBSpline: {
+        constexpr double step = 1.0e-4;
+        const double start = endpoint == WireEndpoint::Start ? 0.0 : 1.0;
+        const double direction = endpoint == WireEndpoint::Start ? 1.0 : -1.0;
+        const geometry::Vector3 p0 = wire.Evaluate(start);
+        const geometry::Vector3 p1 = wire.Evaluate(start + direction * step);
+        const geometry::Vector3 p2 = wire.Evaluate(start + direction * step * 2.0);
+        const geometry::Vector3 firstDerivative = (p1 - p0) / step;
+        const double speedSquared = firstDerivative.LengthSquared();
+        if (speedSquared <= 1.0e-18) {
+            throw std::invalid_argument("Curvature anchor must have a non-zero endpoint tangent.");
+        }
+        const geometry::Vector3 tangent = firstDerivative / std::sqrt(speedSquared);
+        const geometry::Vector3 secondDerivative = (p2 - p1 * 2.0 + p0) / (step * step);
+        return (secondDerivative
+            - tangent * geometry::Dot(secondDerivative, tangent)) / speedSquared;
+    }
     case WireKind::Circle:
     case WireKind::CircularArc: {
         const WireArcData arc = wire.ArcData();
@@ -131,18 +150,20 @@ Wire AlignBezierEndpointTangent(
     WireEndpoint endpoint,
     geometry::Vector3 interiorDirection)
 {
-    if (wire.Kind() != WireKind::CubicBezier) {
-        throw std::invalid_argument("Tangent followers must be cubic Bezier wires.");
+    if (wire.Kind() != WireKind::CubicBezier && wire.Kind() != WireKind::CubicBSpline) {
+        throw std::invalid_argument("Tangent followers must be Bezier or B-spline wires.");
     }
     std::vector<geometry::Vector3> points = wire.ControlPoints();
-    const std::size_t endpointIndex = endpoint == WireEndpoint::Start ? 0 : 3;
-    const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
+    const std::size_t endpointIndex = endpoint == WireEndpoint::Start ? 0 : points.size() - 1;
+    const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : points.size() - 2;
     const double handleLength = (points[handleIndex] - points[endpointIndex]).Length();
     if (handleLength <= 1.0e-9) {
         throw std::invalid_argument("Tangent follower handle must have a non-zero length.");
     }
     points[handleIndex] = points[endpointIndex] + interiorDirection.Normalized() * handleLength;
-    return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+    return wire.Kind() == WireKind::CubicBezier
+        ? Wire::CubicBezier(points[0], points[1], points[2], points[3])
+        : Wire::CubicBSpline(std::move(points));
 }
 
 Wire AlignBezierEndpointCurvature(
@@ -227,14 +248,14 @@ Wire AlignWireEndpointTangent(
     geometry::Vector3 interiorDirection,
     std::optional<geometry::Vector3> requiredPlaneNormal)
 {
-    if (wire.Kind() == WireKind::CubicBezier) {
+    if (wire.Kind() == WireKind::CubicBezier || wire.Kind() == WireKind::CubicBSpline) {
         return AlignBezierEndpointTangent(wire, endpoint, interiorDirection);
     }
     if (wire.Kind() == WireKind::CircularArc) {
         return AlignArcEndpointTangent(
             wire, endpoint, interiorDirection, std::move(requiredPlaneNormal));
     }
-    throw std::invalid_argument("Tangent followers must be cubic Bezier wires or circular arcs.");
+    throw std::invalid_argument("Tangent followers must be Bezier, B-spline, or circular arc wires.");
 }
 
 bool TangentAlignmentMatches(
@@ -246,8 +267,9 @@ bool TangentAlignmentMatches(
     if (first.Kind() != second.Kind()) {
         return false;
     }
-    if (first.Kind() == WireKind::CubicBezier) {
-        const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : 2;
+    if (first.Kind() == WireKind::CubicBezier || first.Kind() == WireKind::CubicBSpline) {
+        const std::size_t handleIndex = endpoint == WireEndpoint::Start
+            ? 1 : first.ControlPoints().size() - 2;
         if (!geometry::AlmostEqual(
                 first.ControlPoints()[handleIndex], second.ControlPoints()[handleIndex], 1.0e-9)) {
             return false;
@@ -327,6 +349,15 @@ Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vect
             points[2] = points[2] + delta;
         }
         return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
+    }
+    case WireKind::CubicBSpline: {
+        std::vector<geometry::Vector3> points = wire.ControlPoints();
+        const std::size_t endpointIndex = endpoint == WireEndpoint::Start ? 0 : points.size() - 1;
+        const std::size_t handleIndex = endpoint == WireEndpoint::Start ? 1 : points.size() - 2;
+        const geometry::Vector3 delta = point - points[endpointIndex];
+        points[endpointIndex] = point;
+        points[handleIndex] = points[handleIndex] + delta;
+        return Wire::CubicBSpline(std::move(points));
     }
     case WireKind::CircularArc:
         return wire.Translated(point - EndpointPoint(wire, endpoint));
@@ -791,8 +822,9 @@ void Project::AddWireTangentConstraint(
     }
     if (continuity == WireContinuity::G1Tangent
         && followerWire.wire.Kind() != WireKind::CubicBezier
+        && followerWire.wire.Kind() != WireKind::CubicBSpline
         && followerWire.wire.Kind() != WireKind::CircularArc) {
-        throw std::invalid_argument("The tangent follower must be a cubic Bezier wire or circular arc.");
+        throw std::invalid_argument("The tangent follower must be a Bezier, B-spline, or circular arc wire.");
     }
     const bool hasCoincidence = std::any_of(
         coincidentConstraints_.begin(), coincidentConstraints_.end(),

@@ -68,6 +68,14 @@ polyline3d NAME x1 y1 z1 x2 y2 z2 [x3 y3 z3 ...]
 bezier3d NAME sx sy sz c1x c1y c1z c2x c2y c2z ex ey ez
 ```
 
+### 3D Cubic B-spline
+
+```text
+bspline3d NAME x1 y1 z1 x2 y2 z2 x3 y3 z3 x4 y4 z4 [x5 y5 z5 ...]
+```
+
+4点以上の制御点を持つ、端点固定の3次B-splineを作る。画面の「スプライン」は指定した通過点を補間してから、この制御点形式で保存する。
+
 ### 3D円
 
 ```text
@@ -90,7 +98,7 @@ arc3d NAME cx cy cz ux uy uz vx vy vz radius startDegrees sweepDegrees
 wire_meta NAME PLANE|none|- free|reference|locked
 ```
 
-`line3d`、`polyline3d`、`bezier3d`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
+`line3d`、`polyline3d`、`bezier3d`、`bspline3d`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
 
 ### 直線の寸法拘束
 
@@ -130,7 +138,7 @@ wire_coincident ANCHOR_WIRE start|end FOLLOWER_WIRE start|end
 wire_tangent ANCHOR_WIRE start|end FOLLOWER_CURVE start|end
 ```
 
-同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェの端点ハンドル、または追従側円弧の向きを更新してG1接続を維持する。ベジェのハンドル長、円弧の半径と中心角は保持する。
+同じ組み合わせの `wire_coincident` に続けて指定する。固定側の端点方向が変化すると、追従側ベジェまたはB-splineの端点制御点、追従側円弧の向きを更新してG1接続を維持する。曲線の端点ハンドル長、円弧の半径と中心角は保持する。
 
 ### 端点の曲率拘束
 

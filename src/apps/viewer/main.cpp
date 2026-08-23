@@ -244,6 +244,8 @@ std::wstring WireKindName(kachakacha::model::WireKind kind)
         return L"Polyline";
     case kachakacha::model::WireKind::CubicBezier:
         return L"Cubic Bezier";
+    case kachakacha::model::WireKind::CubicBSpline:
+        return L"Cubic B-spline";
     case kachakacha::model::WireKind::Circle:
         return L"Circle";
     case kachakacha::model::WireKind::CircularArc:

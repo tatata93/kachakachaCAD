@@ -11,6 +11,7 @@ enum class WireKind {
     Line,
     Polyline,
     CubicBezier,
+    CubicBSpline,
     Circle,
     CircularArc,
 };
@@ -38,6 +39,12 @@ public:
         geometry::Vector3 control1,
         geometry::Vector3 control2,
         geometry::Vector3 end);
+
+    [[nodiscard]] static Wire CubicBSpline(
+        std::vector<geometry::Vector3> controlPoints);
+
+    [[nodiscard]] static Wire InterpolatingCubicBSpline(
+        const std::vector<geometry::Vector3>& throughPoints);
 
     [[nodiscard]] static Wire Circle(
         geometry::Vector3 center,

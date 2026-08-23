@@ -117,6 +117,7 @@ private:
     void AddViewportCircle(kachakacha::geometry::Vector3 center, double radius);
     void AddViewportArc(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 through, kachakacha::geometry::Vector3 end);
     void AddViewportBezier(const std::array<kachakacha::geometry::Vector3, 4>& points);
+    void AddViewportSpline(const std::vector<kachakacha::geometry::Vector3>& throughPoints);
     void DeleteSelection();
     void HideSelected();
     void ShowAllObjects();
@@ -162,6 +163,7 @@ private:
     QAction* circleToolAction_ = nullptr;
     QAction* arcToolAction_ = nullptr;
     QAction* bezierToolAction_ = nullptr;
+    QAction* splineToolAction_ = nullptr;
     QAction* moveToolAction_ = nullptr;
     QAction* copyToolAction_ = nullptr;
     QAction* mirrorToolAction_ = nullptr;

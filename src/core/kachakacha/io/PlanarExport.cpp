@@ -66,6 +66,37 @@ void FlattenBezier(
     FlattenBezier({midpoint, p123, p23, points[3]}, tolerance, depth + 1, result);
 }
 
+void FlattenEvaluatedWire(
+    const Wire& wire,
+    double startParameter,
+    double endParameter,
+    Vector3 start,
+    Vector3 end,
+    double tolerance,
+    int depth,
+    std::vector<Vector3>& result)
+{
+    const double span = endParameter - startParameter;
+    const Vector3 quarter = wire.Evaluate(startParameter + span * 0.25);
+    const Vector3 midpoint = wire.Evaluate(startParameter + span * 0.5);
+    const Vector3 threeQuarter = wire.Evaluate(startParameter + span * 0.75);
+    const double flatness = std::max({
+        DistanceToChord(quarter, start, end),
+        DistanceToChord(midpoint, start, end),
+        DistanceToChord(threeQuarter, start, end),
+    });
+    if (flatness <= tolerance || depth >= 24) {
+        result.push_back(end);
+        return;
+    }
+    FlattenEvaluatedWire(
+        wire, startParameter, startParameter + span * 0.5,
+        start, midpoint, tolerance, depth + 1, result);
+    FlattenEvaluatedWire(
+        wire, startParameter + span * 0.5, endParameter,
+        midpoint, end, tolerance, depth + 1, result);
+}
+
 std::vector<Vector3> FlattenWire(const Wire& wire, double tolerance)
 {
     switch (wire.Kind()) {
@@ -77,6 +108,20 @@ std::vector<Vector3> FlattenWire(const Wire& wire, double tolerance)
         const auto& controls = wire.ControlPoints();
         std::vector<Vector3> points = {controls[0]};
         FlattenBezier({controls[0], controls[1], controls[2], controls[3]}, tolerance, 0, points);
+        return points;
+    }
+
+    case WireKind::CubicBSpline: {
+        std::vector<Vector3> points = {wire.Start()};
+        const std::size_t spans = wire.ControlPoints().size() - 3;
+        for (std::size_t span = 0; span < spans; ++span) {
+            const double startParameter = static_cast<double>(span) / static_cast<double>(spans);
+            const double endParameter = static_cast<double>(span + 1) / static_cast<double>(spans);
+            FlattenEvaluatedWire(
+                wire, startParameter, endParameter,
+                wire.Evaluate(startParameter), wire.Evaluate(endParameter),
+                tolerance, 0, points);
+        }
         return points;
     }
 

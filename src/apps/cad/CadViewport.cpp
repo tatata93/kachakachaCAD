@@ -106,6 +106,8 @@ QColor WireColor(WireKind kind)
         return QColor("#24313b");
     case WireKind::CubicBezier:
         return QColor("#007f78");
+    case WireKind::CubicBSpline:
+        return QColor("#4355a5");
     case WireKind::Circle:
     case WireKind::CircularArc:
         return QColor("#a23b3b");
@@ -203,6 +205,11 @@ void CadViewport::SetArcCreatedCallback(std::function<void(Vector3, Vector3, Vec
 void CadViewport::SetBezierCreatedCallback(std::function<void(const std::array<Vector3, 4>&)> callback)
 {
     bezierCreated_ = std::move(callback);
+}
+
+void CadViewport::SetSplineCreatedCallback(std::function<void(const std::vector<Vector3>&)> callback)
+{
+    splineCreated_ = std::move(callback);
 }
 
 void CadViewport::SetTranslationRequestedCallback(std::function<void(Vector3, bool)> callback)
@@ -574,6 +581,12 @@ void CadViewport::FinishDrawing()
         if (polylineCreated_) {
             polylineCreated_(points);
         }
+    } else if (tool_ == ViewportTool::DrawSpline && drawingPoints_.size() >= 4) {
+        const std::vector<Vector3> points = drawingPoints_;
+        drawingPoints_.clear();
+        if (splineCreated_) {
+            splineCreated_(points);
+        }
     } else {
         drawingPoints_.clear();
     }
@@ -598,7 +611,7 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
         return measurements;
     }
 
-    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline || tool_ == ViewportTool::DrawSpline
         ? drawingPoints_.back()
         : drawingPoints_.front();
     const auto start = activePlane_->Project(anchor);
@@ -606,7 +619,8 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
     const double deltaU = hover.u - start.u;
     const double deltaV = hover.v - start.v;
 
-    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
+        || tool_ == ViewportTool::DrawSpline) {
         measurements.lengthMillimeters = std::hypot(deltaU, deltaV);
         measurements.angleDegrees = std::atan2(deltaV, deltaU) * 180.0 / std::numbers::pi;
         measurements.available = measurements.lengthMillimeters > 1.0e-9;
@@ -630,8 +644,9 @@ bool CadViewport::CommitDrawingDimensions(double primaryMillimeters, double seco
         return false;
     }
 
-    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
-        const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
+        || tool_ == ViewportTool::DrawSpline) {
+        const Vector3 anchor = tool_ == ViewportTool::DrawPolyline || tool_ == ViewportTool::DrawSpline
             ? drawingPoints_.back()
             : drawingPoints_.front();
         const auto coordinates = activePlane_->Project(anchor);
@@ -852,6 +867,7 @@ std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
         }
         if (tool_ == ViewportTool::Tangent && !coincidencePicks_.empty()
             && namedWire.wire.Kind() != WireKind::CubicBezier
+            && namedWire.wire.Kind() != WireKind::CubicBSpline
             && namedWire.wire.Kind() != WireKind::CircularArc) {
             continue;
         }
@@ -1021,7 +1037,7 @@ Vector3 CadViewport::ApplyDrawingConstraint(Vector3 point, Qt::KeyboardModifiers
         return point;
     }
 
-    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline
+    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline || tool_ == ViewportTool::DrawSpline
         ? drawingPoints_.back()
         : drawingPoints_.front();
     const auto start = activePlane_->Project(anchor);
@@ -1029,7 +1045,8 @@ Vector3 CadViewport::ApplyDrawingConstraint(Vector3 point, Qt::KeyboardModifiers
     const double deltaU = target.u - start.u;
     const double deltaV = target.v - start.v;
 
-    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline) {
+    if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
+        || tool_ == ViewportTool::DrawSpline) {
         if (std::abs(deltaU) >= std::abs(deltaV)) {
             target.v = start.v;
         } else {
@@ -1498,6 +1515,17 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawPath(path);
 
             if (selected) {
+                if (namedWire.wire.Kind() == WireKind::CubicBezier
+                    || namedWire.wire.Kind() == WireKind::CubicBSpline) {
+                    QPainterPath controlPath(ProjectPoint(namedWire.wire.ControlPoints().front()));
+                    for (std::size_t controlIndex = 1;
+                         controlIndex < namedWire.wire.ControlPoints().size(); ++controlIndex) {
+                        controlPath.lineTo(ProjectPoint(namedWire.wire.ControlPoints()[controlIndex]));
+                    }
+                    painter.setBrush(Qt::NoBrush);
+                    painter.setPen(QPen(QColor("#79838a"), 1.2, Qt::DashLine));
+                    painter.drawPath(controlPath);
+                }
                 painter.setBrush(QColor("#ffffff"));
                 painter.setPen(QPen(QColor("#e69f00"), 2.0));
                 for (const Vector3& point : namedWire.wire.ControlPoints()) {
@@ -1726,6 +1754,20 @@ void CadViewport::paintEvent(QPaintEvent*)
                     } catch (const std::exception&) {
                     }
                 }
+            } else if (tool_ == ViewportTool::DrawSpline) {
+                std::vector<Vector3> previewPoints = drawingPoints_;
+                previewPoints.push_back(*hoverDrawingPoint_);
+                QPainterPath guide(ProjectPoint(previewPoints.front()));
+                for (std::size_t index = 1; index < previewPoints.size(); ++index) {
+                    guide.lineTo(ProjectPoint(previewPoints[index]));
+                }
+                painter.drawPath(guide);
+                if (previewPoints.size() >= 4) {
+                    try {
+                        drawPreviewWire(Wire::InterpolatingCubicBSpline(previewPoints));
+                    } catch (const std::exception&) {
+                    }
+                }
             } else if ((tool_ == ViewportTool::MoveSelection || tool_ == ViewportTool::CopySelection)
                 && project_ != nullptr) {
                 const Vector3 delta = *hoverDrawingPoint_ - drawingPoints_.front();
@@ -1917,6 +1959,9 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::DrawBezier:
         modeText = QStringLiteral("ベジェ曲線");
         break;
+    case ViewportTool::DrawSpline:
+        modeText = QStringLiteral("通過点スプライン");
+        break;
     case ViewportTool::MoveSelection:
         modeText = QStringLiteral("移動");
         break;
@@ -1967,6 +2012,8 @@ void CadViewport::paintEvent(QPaintEvent*)
                 }
                 length += (*hoverDrawingPoint_ - drawingPoints_.back()).Length();
                 modeText += QStringLiteral("   合計 %1 mm").arg(length, 0, 'f', 3);
+            } else if (tool_ == ViewportTool::DrawSpline) {
+                modeText += QStringLiteral("   通過点 %1").arg(drawingPoints_.size());
             } else if (tool_ == ViewportTool::DrawRectangle) {
                 modeText += QStringLiteral("   幅 %1 mm   高さ %2 mm")
                     .arg(std::abs(coordinates.u - start.u), 0, 'f', 3)
@@ -2394,7 +2441,8 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                     SnapPoint(*point, event->position()), event->modifiers()));
             }
         } else if (!mouseMoved_ && event->button() == Qt::RightButton) {
-            if (tool_ == ViewportTool::DrawPolyline && drawingPoints_.size() >= 2) {
+            if ((tool_ == ViewportTool::DrawPolyline && drawingPoints_.size() >= 2)
+                || (tool_ == ViewportTool::DrawSpline && drawingPoints_.size() >= 4)) {
                 FinishDrawing();
             } else {
                 CancelDrawing();

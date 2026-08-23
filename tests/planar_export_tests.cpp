@@ -46,6 +46,11 @@ int main()
              plane.ToWorld(5.0, 8.0),
              plane.ToWorld(15.0, 8.0),
              plane.ToWorld(18.0, 2.0))},
+        {"spline", Wire::InterpolatingCubicBSpline({
+             plane.ToWorld(2.0, 4.0),
+             plane.ToWorld(6.0, 7.0),
+             plane.ToWorld(12.0, 3.0),
+             plane.ToWorld(18.0, 6.0)})},
         construction,
     };
 
@@ -60,6 +65,7 @@ int main()
     Require(dxf.str().find("$INSUNITS\n70\n4") != std::string::npos, "DXF declares millimeter units");
     Require(dxf.str().find("POLYLINE") != std::string::npos, "DXF contains polylines");
     Require(dxf.str().find("VERTEX") != std::string::npos, "DXF contains vertices");
+    Require(WireLiesOnWorkPlane(wires[3].wire, plane), "B-spline remains on export plane");
 
     bool constructionOnlyRejected = false;
     try {

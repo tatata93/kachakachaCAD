@@ -53,6 +53,37 @@ void FlattenBezier(
     FlattenBezier(midpoint, p123, p23, p3, tolerance, depth + 1, points);
 }
 
+void FlattenEvaluatedWire(
+    const Wire& wire,
+    double startParameter,
+    double endParameter,
+    Vector3 start,
+    Vector3 end,
+    double tolerance,
+    int depth,
+    std::vector<Vector3>& points)
+{
+    const double span = endParameter - startParameter;
+    const Vector3 quarter = wire.Evaluate(startParameter + span * 0.25);
+    const Vector3 midpoint = wire.Evaluate(startParameter + span * 0.5);
+    const Vector3 threeQuarter = wire.Evaluate(startParameter + span * 0.75);
+    const double flatness = std::max({
+        PointToLineDistance(quarter, start, end),
+        PointToLineDistance(midpoint, start, end),
+        PointToLineDistance(threeQuarter, start, end),
+    });
+    if (flatness <= tolerance || depth >= 18) {
+        points.push_back(end);
+        return;
+    }
+    FlattenEvaluatedWire(
+        wire, startParameter, startParameter + span * 0.5,
+        start, midpoint, tolerance, depth + 1, points);
+    FlattenEvaluatedWire(
+        wire, startParameter + span * 0.5, endParameter,
+        midpoint, end, tolerance, depth + 1, points);
+}
+
 std::vector<Vector3> FlattenWire(const Wire& wire, double tolerance)
 {
     if (!std::isfinite(tolerance) || tolerance <= 0.0) {
@@ -68,6 +99,19 @@ std::vector<Vector3> FlattenWire(const Wire& wire, double tolerance)
         FlattenBezier(
             controls[0], controls[1], controls[2], controls[3],
             tolerance, 0, points);
+        return points;
+    }
+    if (wire.Kind() == WireKind::CubicBSpline) {
+        std::vector<Vector3> points{wire.Start()};
+        const std::size_t spans = wire.ControlPoints().size() - 3;
+        for (std::size_t span = 0; span < spans; ++span) {
+            const double startParameter = static_cast<double>(span) / static_cast<double>(spans);
+            const double endParameter = static_cast<double>(span + 1) / static_cast<double>(spans);
+            FlattenEvaluatedWire(
+                wire, startParameter, endParameter,
+                wire.Evaluate(startParameter), wire.Evaluate(endParameter),
+                tolerance, 0, points);
+        }
         return points;
     }
 
@@ -228,6 +272,11 @@ Vector3 MeasureWireTangent(const Wire& wire, double parameter)
             tangent = wire.Evaluate(after) - wire.Evaluate(before);
         }
         return tangent.Normalized();
+    }
+    if (wire.Kind() == WireKind::CubicBSpline) {
+        const double before = std::max(0.0, t - 1.0e-5);
+        const double after = std::min(1.0, t + 1.0e-5);
+        return (wire.Evaluate(after) - wire.Evaluate(before)).Normalized();
     }
 
     const WireArcData arc = wire.ArcData();

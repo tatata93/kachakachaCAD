@@ -35,6 +35,7 @@ enum class ViewportTool {
     DrawCircle,
     DrawArc,
     DrawBezier,
+    DrawSpline,
     MoveSelection,
     CopySelection,
     MirrorSelection,
@@ -103,6 +104,7 @@ public:
     void SetCircleCreatedCallback(std::function<void(kachakacha::geometry::Vector3, double)> callback);
     void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
+    void SetSplineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
     void SetTranslationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, bool)> callback);
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
@@ -201,6 +203,7 @@ private:
     std::function<void(kachakacha::geometry::Vector3, double)> circleCreated_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> arcCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
+    std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> splineCreated_;
     std::function<void(kachakacha::geometry::Vector3, bool)> translationRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;

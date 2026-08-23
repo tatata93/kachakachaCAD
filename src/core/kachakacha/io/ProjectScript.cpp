@@ -432,6 +432,17 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector3 end = ReadVector3(stream, sourceName, lineNumber, "end");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddWire(name, Wire::CubicBezier(start, control1, control2, end));
+            } else if (command == "bspline3d") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                std::vector<Vector3> controlPoints;
+                while (true) {
+                    stream >> std::ws;
+                    if (stream.eof()) {
+                        break;
+                    }
+                    controlPoints.push_back(ReadVector3(stream, sourceName, lineNumber, "B-spline control point"));
+                }
+                project.AddWire(name, Wire::CubicBSpline(std::move(controlPoints)));
             } else if (command == "circle3d") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const Vector3 center = ReadVector3(stream, sourceName, lineNumber, "center");
@@ -762,6 +773,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
 
         case WireKind::CubicBezier:
             output << "bezier3d " << namedWire.name;
+            for (const Vector3& point : points) {
+                output << ' ';
+                WriteVector3(output, point);
+            }
+            output << '\n';
+            break;
+
+        case WireKind::CubicBSpline:
+            output << "bspline3d " << namedWire.name;
             for (const Vector3& point : points) {
                 output << ' ';
                 WriteVector3(output, point);

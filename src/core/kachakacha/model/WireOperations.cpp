@@ -362,8 +362,8 @@ Wire OffsetPlanarWire(
     if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
         return OffsetLineOrPolyline(wire, plane, signedDistance, tolerance);
     }
-    if (wire.Kind() == WireKind::CubicBezier) {
-        throw std::invalid_argument("Exact Bezier offset is not supported yet.");
+    if (wire.Kind() == WireKind::CubicBezier || wire.Kind() == WireKind::CubicBSpline) {
+        throw std::invalid_argument("Exact spline offset is not supported yet.");
     }
 
     const WireArcData arc = wire.ArcData();

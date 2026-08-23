@@ -14,6 +14,7 @@ using kachakacha::geometry::Vector3;
 namespace {
 
 constexpr double TwoPi = 6.28318530717958647692;
+constexpr std::size_t CubicDegree = 3;
 
 void RequireFinite(const std::vector<Vector3>& points)
 {
@@ -27,6 +28,123 @@ void RequireFinite(const std::vector<Vector3>& points)
 Vector3 Lerp(const Vector3& start, const Vector3& end, double t)
 {
     return start * (1.0 - t) + end * t;
+}
+
+std::vector<double> MakeClampedUniformKnots(std::size_t controlPointCount)
+{
+    const std::size_t lastControlPoint = controlPointCount - 1;
+    const std::size_t lastKnot = lastControlPoint + CubicDegree + 1;
+    std::vector<double> knots(lastKnot + 1, 0.0);
+    for (std::size_t index = lastKnot - CubicDegree; index <= lastKnot; ++index) {
+        knots[index] = 1.0;
+    }
+
+    const std::size_t interiorCount = lastControlPoint - CubicDegree;
+    for (std::size_t index = 1; index <= interiorCount; ++index) {
+        knots[CubicDegree + index] = static_cast<double>(index)
+            / static_cast<double>(interiorCount + 1);
+    }
+    return knots;
+}
+
+std::size_t FindBSplineSpan(double parameter, std::size_t controlPointCount, const std::vector<double>& knots)
+{
+    const std::size_t lastControlPoint = controlPointCount - 1;
+    if (parameter >= 1.0) {
+        return lastControlPoint;
+    }
+
+    for (std::size_t span = CubicDegree; span <= lastControlPoint; ++span) {
+        if (parameter >= knots[span] && parameter < knots[span + 1]) {
+            return span;
+        }
+    }
+    return CubicDegree;
+}
+
+Vector3 EvaluateCubicBSpline(
+    const std::vector<Vector3>& controlPoints,
+    double parameter)
+{
+    const std::vector<double> knots = MakeClampedUniformKnots(controlPoints.size());
+    const std::size_t span = FindBSplineSpan(parameter, controlPoints.size(), knots);
+    std::vector<Vector3> working(CubicDegree + 1);
+    for (std::size_t index = 0; index <= CubicDegree; ++index) {
+        working[index] = controlPoints[span - CubicDegree + index];
+    }
+
+    for (std::size_t level = 1; level <= CubicDegree; ++level) {
+        for (std::size_t index = CubicDegree + 1; index-- > level;) {
+            const std::size_t knotIndex = span - CubicDegree + index;
+            const double denominator = knots[knotIndex + CubicDegree - level + 1] - knots[knotIndex];
+            const double alpha = denominator <= 1.0e-15
+                ? 0.0
+                : (parameter - knots[knotIndex]) / denominator;
+            working[index] = working[index - 1] * (1.0 - alpha) + working[index] * alpha;
+        }
+    }
+    return working[CubicDegree];
+}
+
+std::vector<double> CubicBSplineBasisValues(
+    std::size_t controlPointCount,
+    double parameter)
+{
+    std::vector<double> values(controlPointCount, 0.0);
+    for (std::size_t index = 0; index < controlPointCount; ++index) {
+        std::vector<Vector3> basisControls(controlPointCount);
+        basisControls[index] = {1.0, 0.0, 0.0};
+        values[index] = EvaluateCubicBSpline(basisControls, parameter).x;
+    }
+    return values;
+}
+
+std::vector<Vector3> SolveInterpolationControls(const std::vector<Vector3>& throughPoints)
+{
+    const std::size_t count = throughPoints.size();
+    std::vector<std::vector<double>> matrix(count, std::vector<double>(count + 3, 0.0));
+    for (std::size_t row = 0; row < count; ++row) {
+        const double parameter = static_cast<double>(row) / static_cast<double>(count - 1);
+        const std::vector<double> basis = CubicBSplineBasisValues(count, parameter);
+        std::copy(basis.begin(), basis.end(), matrix[row].begin());
+        matrix[row][count] = throughPoints[row].x;
+        matrix[row][count + 1] = throughPoints[row].y;
+        matrix[row][count + 2] = throughPoints[row].z;
+    }
+
+    for (std::size_t column = 0; column < count; ++column) {
+        std::size_t pivot = column;
+        for (std::size_t row = column + 1; row < count; ++row) {
+            if (std::abs(matrix[row][column]) > std::abs(matrix[pivot][column])) {
+                pivot = row;
+            }
+        }
+        if (std::abs(matrix[pivot][column]) <= 1.0e-12) {
+            throw std::invalid_argument("Spline through-points could not be interpolated.");
+        }
+        std::swap(matrix[column], matrix[pivot]);
+
+        const double divisor = matrix[column][column];
+        for (std::size_t value = column; value < count + 3; ++value) {
+            matrix[column][value] /= divisor;
+        }
+        for (std::size_t row = 0; row < count; ++row) {
+            if (row == column) {
+                continue;
+            }
+            const double factor = matrix[row][column];
+            for (std::size_t value = column; value < count + 3; ++value) {
+                matrix[row][value] -= factor * matrix[column][value];
+            }
+        }
+    }
+
+    std::vector<Vector3> controls;
+    controls.reserve(count);
+    for (const auto& row : matrix) {
+        controls.push_back({row[count], row[count + 1], row[count + 2]});
+    }
+    return controls;
 }
 
 struct ArcFrame {
@@ -136,6 +254,30 @@ Wire Wire::CubicBezier(Vector3 start, Vector3 control1, Vector3 control2, Vector
     }
 
     return {WireKind::CubicBezier, std::move(points)};
+}
+
+Wire Wire::CubicBSpline(std::vector<Vector3> controlPoints)
+{
+    RequireFinite(controlPoints);
+    if (controlPoints.size() < CubicDegree + 1) {
+        throw std::invalid_argument("Cubic B-spline wire requires at least four control points.");
+    }
+    if (AlmostEqual(controlPoints.front(), controlPoints.back())) {
+        throw std::invalid_argument("Cubic B-spline wire requires different start and end points.");
+    }
+    return {WireKind::CubicBSpline, std::move(controlPoints)};
+}
+
+Wire Wire::InterpolatingCubicBSpline(const std::vector<Vector3>& throughPoints)
+{
+    RequireFinite(throughPoints);
+    if (throughPoints.size() < CubicDegree + 1) {
+        throw std::invalid_argument("Interpolating cubic B-spline requires at least four through-points.");
+    }
+    if (AlmostEqual(throughPoints.front(), throughPoints.back())) {
+        throw std::invalid_argument("Interpolating cubic B-spline requires different start and end points.");
+    }
+    return CubicBSpline(SolveInterpolationControls(throughPoints));
 }
 
 Wire Wire::Circle(Vector3 center, Vector3 uAxisHint, Vector3 vAxisHint, double radius)
@@ -259,6 +401,9 @@ Vector3 Wire::Evaluate(double t) const
             + controlPoints_[2] * (3.0 * oneMinusT * clamped * clamped)
             + controlPoints_[3] * (clamped * clamped * clamped);
     }
+
+    case WireKind::CubicBSpline:
+        return EvaluateCubicBSpline(controlPoints_, clamped);
 
     case WireKind::Circle:
     case WireKind::CircularArc:
@@ -402,6 +547,11 @@ Wire Wire::Reversed() const
     }
     case WireKind::CubicBezier:
         return CubicBezier(controlPoints_[3], controlPoints_[2], controlPoints_[1], controlPoints_[0]);
+    case WireKind::CubicBSpline: {
+        std::vector<Vector3> points = controlPoints_;
+        std::reverse(points.begin(), points.end());
+        return CubicBSpline(std::move(points));
+    }
     case WireKind::Circle:
         return Circle(arcCenter_, arcUAxis_, arcVAxis_, arcRadius_);
     case WireKind::CircularArc:
@@ -458,6 +608,8 @@ std::pair<Wire, Wire> Wire::SplitAt(double parameter) const
             CubicBezier(split, bccd, cd, controlPoints_[3]),
         };
     }
+    case WireKind::CubicBSpline:
+        throw std::invalid_argument("B-spline splitting is not available yet.");
     case WireKind::CircularArc:
         return {
             CircularArc(

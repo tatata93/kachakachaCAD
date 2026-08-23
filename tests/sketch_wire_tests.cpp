@@ -58,6 +58,40 @@ void CubicBezierWireUsesControlPoints()
     RequireNear(wire.Evaluate(0.5), {1.5, 2.25, 0.0}, "bezier midpoint");
 }
 
+void CubicBSplineUsesEditableControlPoints()
+{
+    const Wire wire = Wire::CubicBSpline({
+        {0.0, 0.0, 0.0},
+        {1.0, 3.0, 0.0},
+        {3.0, 3.0, 0.0},
+        {4.0, 0.0, 0.0},
+    });
+
+    Require(wire.Kind() == WireKind::CubicBSpline, "B-spline kind");
+    RequireNear(wire.Start(), {0.0, 0.0, 0.0}, "B-spline start");
+    RequireNear(wire.End(), {4.0, 0.0, 0.0}, "B-spline end");
+    RequireNear(wire.Evaluate(0.5), {2.0, 2.25, 0.0}, "B-spline midpoint");
+}
+
+void InterpolatingBSplinePassesThroughPickedPoints()
+{
+    const std::vector<Vector3> points = {
+        {0.0, 0.0, 2.0},
+        {1.0, 2.0, 2.0},
+        {3.0, -1.0, 2.0},
+        {5.0, 1.0, 2.0},
+        {7.0, 0.0, 2.0},
+    };
+    const Wire wire = Wire::InterpolatingCubicBSpline(points);
+
+    Require(wire.Kind() == WireKind::CubicBSpline, "interpolating B-spline kind");
+    Require(wire.ControlPoints().size() == points.size(), "interpolating B-spline control count");
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const double parameter = static_cast<double>(index) / static_cast<double>(points.size() - 1);
+        RequireNear(wire.Evaluate(parameter), points[index], "interpolating B-spline through-point");
+    }
+}
+
 void SketchLineOnWorkPlaneBecomesWorldWire()
 {
     const WorkPlane plane = WorkPlane::FromPointNormal(
@@ -268,6 +302,8 @@ int main()
     try {
         DirectLineWireUsesExactEndpoints();
         CubicBezierWireUsesControlPoints();
+        CubicBSplineUsesEditableControlPoints();
+        InterpolatingBSplinePassesThroughPickedPoints();
         SketchLineOnWorkPlaneBecomesWorldWire();
         SketchBezierOnWorkPlaneBecomesWorldWire();
         CircleWireEvaluatesOnPlane();

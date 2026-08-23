@@ -128,6 +128,7 @@ bool IsAutomationInvocation()
     const QStringList arguments = QApplication::arguments();
     return arguments.contains(QStringLiteral("--self-test"))
         || arguments.contains(QStringLiteral("--snapshot"))
+        || arguments.contains(QStringLiteral("--manual-state"))
         || arguments.contains(QStringLiteral("--export-first-body-stl"))
         || arguments.contains(QStringLiteral("--export-first-body-step"));
 }
@@ -1478,6 +1479,8 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(plateUpdateButton);
 
     auto* offsetWireBox = new QGroupBox(QStringLiteral("板厚位置にワイヤーを作る"));
+    offsetWireBox->setObjectName(QStringLiteral("plateOffsetSection"));
+    offsetWireBox->setProperty("manualAnchor", QStringLiteral("plateOffset"));
     auto* offsetWireLayout = new QVBoxLayout(offsetWireBox);
     plateOffsetSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
     plateOffsetSelectionLabel_->setStyleSheet("color: #5c6670;");
@@ -1541,6 +1544,8 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(plateOpeningSelectionLabel_);
 
     auto* openingButtons = new QWidget;
+    openingButtons->setObjectName(QStringLiteral("plateOpeningSection"));
+    openingButtons->setProperty("manualAnchor", QStringLiteral("plateOpening"));
     auto* openingButtonLayout = new QHBoxLayout(openingButtons);
     openingButtonLayout->setContentsMargins(0, 0, 0, 0);
     openingButtonLayout->setSpacing(6);
@@ -1603,6 +1608,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* splitButton = new QPushButton(QStringLiteral("選択中の板材を2分割"));
     splitButton->setObjectName("primaryButton");
     splitButton->setProperty("plateSplitAction", true);
+    splitButton->setProperty("manualAnchor", QStringLiteral("plateSplit"));
     connect(splitButton, &QPushButton::clicked, this, &MainWindow::SplitSelectedPlate);
     layout->addWidget(splitButton);
     layout->addStretch(1);
@@ -1704,6 +1710,8 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(bodySeparator);
 
     auto* bodyTitle = new QLabel(QStringLiteral("3DモデルのSTL / STEP出力"));
+    bodyTitle->setObjectName(QStringLiteral("modelOutputSection"));
+    bodyTitle->setProperty("manualAnchor", QStringLiteral("modelOutput"));
     bodyTitle->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(bodyTitle);
     modelExportScope_ = new QComboBox;
@@ -2083,6 +2091,265 @@ bool MainWindow::ExportFirstBodyForAutomation(const QString& stlPath, const QStr
             8000);
         return false;
     }
+}
+
+bool MainWindow::PrepareManualScreenshot(const QString& state)
+{
+    const auto findSelection = [this](CadSelectionKind kind, std::string_view name)
+        -> std::optional<CadSelection> {
+        if (kind == CadSelectionKind::WorkPlane) {
+            for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
+                if (project_.WorkPlanes()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
+        } else if (kind == CadSelectionKind::Wire) {
+            for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+                if (project_.Wires()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
+        } else if (kind == CadSelectionKind::Surface) {
+            for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+                if (project_.Surfaces()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
+        } else if (kind == CadSelectionKind::Plate) {
+            for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
+                if (project_.Plates()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
+        } else if (kind == CadSelectionKind::Body) {
+            for (int index = 0; index < static_cast<int>(project_.Bodies().size()); ++index) {
+                if (project_.Bodies()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
+        }
+        return std::nullopt;
+    };
+    const auto select = [&](std::initializer_list<std::pair<CadSelectionKind, std::string_view>> names) {
+        std::vector<CadSelection> selections;
+        for (const auto& [kind, name] : names) {
+            const auto found = findSelection(kind, name);
+            if (!found.has_value()) {
+                qWarning() << "manual screenshot object not found:" << QString::fromUtf8(name.data(), static_cast<int>(name.size()));
+                return false;
+            }
+            selections.push_back(*found);
+        }
+        UpdateSelections(std::move(selections), true);
+        return true;
+    };
+    const auto showTab = [this](int index, double scrollFraction = 0.0) {
+        toolsTabs_->setCurrentIndex(index);
+        QApplication::processEvents();
+        if (auto* area = qobject_cast<QScrollArea*>(toolsTabs_->widget(index))) {
+            QScrollBar* scroll = area->verticalScrollBar();
+            scroll->setValue(static_cast<int>(std::round(scroll->maximum()
+                * std::clamp(scrollFraction, 0.0, 1.0))));
+        }
+    };
+    const auto revealSection = [this](int tabIndex, const QString& anchorName) {
+        QWidget* tab = toolsTabs_->widget(tabIndex);
+        auto* area = qobject_cast<QScrollArea*>(tab);
+        if (area == nullptr && tab != nullptr) {
+            area = tab->findChild<QScrollArea*>();
+        }
+        if (area == nullptr) {
+            qWarning() << "manual screenshot scroll area not found:" << tabIndex;
+            return;
+        }
+        QApplication::processEvents();
+        const auto children = tab->findChildren<QWidget*>();
+        const auto anchor = std::find_if(children.begin(), children.end(), [&](QWidget* child) {
+            return child->property("manualAnchor").toString() == anchorName;
+        });
+        if (anchor != children.end()) {
+            QWidget* content = area->widget();
+            QScrollBar* scroll = area->verticalScrollBar();
+            const int anchorTop = (*anchor)->mapTo(content, QPoint(0, 0)).y();
+            const int centeredValue = anchorTop - area->viewport()->height() / 2;
+            scroll->setValue(std::clamp(centeredValue, scroll->minimum(), scroll->maximum()));
+            QApplication::processEvents();
+        } else {
+            qWarning() << "manual screenshot anchor not found:" << anchorName;
+        }
+    };
+    const auto setActivePlane = [this](const QString& name) {
+        const int index = activePlaneCombo_->findText(name);
+        if (index < 0) {
+            return false;
+        }
+        activePlaneCombo_->setCurrentIndex(index);
+        RefreshActiveWorkPlane();
+        return true;
+    };
+    int finalRevealTab = -1;
+    QString finalRevealAnchor;
+
+    UpdateSelection({}, true);
+    viewport_->SetIsometricView();
+
+    if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
+        showTab(0);
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("grid") || state == QStringLiteral("drawing")) {
+        if (!setActivePlane(QStringLiteral("front"))) {
+            return false;
+        }
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, plane.name == "front");
+        }
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name,
+                wire.metadata.sourcePlaneName.has_value()
+                    && *wire.metadata.sourcePlaneName == "front");
+        }
+        gridPointsVisible_->setChecked(true);
+        snapAction_->setChecked(true);
+        snapStepField_->setValue(1.0);
+        gridOrigin_[0]->setValue(0.5);
+        gridOrigin_[1]->setValue(0.5);
+        RefreshModelViews(false);
+        showTab(0);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("workplane")) {
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, true);
+        }
+        RefreshModelViews(false);
+        if (!select({{CadSelectionKind::WorkPlane, "free_paper"}})) {
+            return false;
+        }
+        showTab(1);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("numeric")) {
+        if (!select({{CadSelectionKind::Wire, "origin_to_point"}})) {
+            return false;
+        }
+        showTab(2);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("edit")) {
+        if (!select({{CadSelectionKind::Wire, "front_nose_curve"}})) {
+            return false;
+        }
+        showTab(3);
+        (void)viewport_->AlignToSelection();
+    } else if (state == QStringLiteral("machining")) {
+        if (!select({
+                {CadSelectionKind::Wire, "front_window_bottom"},
+                {CadSelectionKind::Wire, "front_window_top"},
+            })) {
+            return false;
+        }
+        showTab(4);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("surface")) {
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name, wire.name.ends_with("_joined"));
+        }
+        for (const auto& plate : project_.Plates()) {
+            project_.SetPlateVisible(plate.name, false);
+        }
+        for (const auto& body : project_.Bodies()) {
+            project_.SetBodyVisible(body.name, false);
+        }
+        RefreshModelViews(false);
+        if (!select({
+                {CadSelectionKind::Wire, "nose_0_joined"},
+                {CadSelectionKind::Wire, "nose_4_joined"},
+                {CadSelectionKind::Wire, "nose_8_joined"},
+                {CadSelectionKind::Wire, "nose_12_joined"},
+                {CadSelectionKind::Wire, "nose_18_joined"},
+            })) {
+            return false;
+        }
+        showTab(5, 0.0);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("plate") || state == QStringLiteral("direction")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        showTab(5, 0.35);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("plateOffset");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("openings")) {
+        project_.SetWireVisible("light_left_on_skin", true);
+        project_.SetWireVisible("light_right_on_skin", true);
+        project_.SetWireVisible("windscreen_on_skin", true);
+        RefreshModelViews(false);
+        if (!select({
+                {CadSelectionKind::Plate, "nose_panel_front"},
+                {CadSelectionKind::Wire, "light_left_on_skin"},
+                {CadSelectionKind::Wire, "light_right_on_skin"},
+                {CadSelectionKind::Wire, "windscreen_on_skin"},
+            })) {
+            return false;
+        }
+        showTab(5, 0.78);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("plateOpening");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("split")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        showTab(5, 1.0);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("plateSplit");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("output")) {
+        if (!select({
+                {CadSelectionKind::Plate, "nose_panel_front"},
+                {CadSelectionKind::Body, "nose_forming_jig"},
+            })) {
+            return false;
+        }
+        showTab(6, 1.0);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("modelOutput");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("info")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        showTab(7);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else {
+        qWarning() << "unknown manual screenshot state:" << state;
+        return false;
+    }
+
+    QApplication::processEvents();
+    if (state == QStringLiteral("split")) {
+        QTimer::singleShot(0, this, [this] {
+            if (auto* area = qobject_cast<QScrollArea*>(toolsTabs_->widget(5))) {
+                if (area->widget() != nullptr && area->widget()->layout() != nullptr) {
+                    area->widget()->layout()->activate();
+                }
+                area->verticalScrollBar()->setValue(area->verticalScrollBar()->maximum());
+            }
+        });
+    } else if (finalRevealTab >= 0) {
+        revealSection(finalRevealTab, finalRevealAnchor);
+    }
+    statusBar()->showMessage(QStringLiteral("マニュアル画像: %1").arg(state));
+    QApplication::processEvents();
+    return true;
 }
 
 void MainWindow::SaveProject()
@@ -4963,11 +5230,15 @@ bool MainWindow::RunCreationSelfTest()
         sendMouse(QEvent::MouseButtonPress, position, Qt::LeftButton, Qt::LeftButton);
         sendMouse(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton);
     };
-    const auto drag = [&](QPointF start, QPointF end) {
+    const auto dragMouse = [&](QPointF start, QPointF end, Qt::MouseButton button,
+                               Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
         sendMouse(QEvent::MouseMove, start, Qt::NoButton, Qt::NoButton);
-        sendMouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
-        sendMouse(QEvent::MouseMove, end, Qt::NoButton, Qt::LeftButton);
-        sendMouse(QEvent::MouseButtonRelease, end, Qt::LeftButton, Qt::NoButton);
+        sendMouse(QEvent::MouseButtonPress, start, button, button, modifiers);
+        sendMouse(QEvent::MouseMove, end, Qt::NoButton, button, modifiers);
+        sendMouse(QEvent::MouseButtonRelease, end, button, Qt::NoButton, modifiers);
+    };
+    const auto drag = [&](QPointF start, QPointF end) {
+        dragMouse(start, end, Qt::LeftButton);
     };
     const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
     const QPointF cubeTop(viewport_->width() - 60.0, 24.0);
@@ -4995,6 +5266,12 @@ bool MainWindow::RunCreationSelfTest()
         return fail("view cube roll control");
     }
     click(cube3d);
+    const Vector3 beforeTinyCubeMotion = viewport_->ViewDirection();
+    drag(cube3d, cube3d + QPointF(3.0, 2.0));
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), beforeTinyCubeMotion, 1.0e-8)) {
+        return fail("view cube ignores accidental motion");
+    }
     const Vector3 beforeCubeDrag = viewport_->ViewDirection();
     drag(QPointF(viewport_->width() - 60.0, 50.0), QPointF(viewport_->width() - 42.0, 40.0));
     if (kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), beforeCubeDrag, 1.0e-8)
@@ -5002,6 +5279,21 @@ bool MainWindow::RunCreationSelfTest()
         || viewport_->DrawingPointCount() != 0) {
         return fail("view cube drag without drawing");
     }
+    SetViewportTool(ViewportTool::Select);
+    const Vector3 beforeLeftDrag = viewport_->ViewDirection();
+    drag(center + QPointF(-180.0, 150.0), center + QPointF(-130.0, 120.0));
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), beforeLeftDrag, 1.0e-8)) {
+        return fail("left drag must not orbit");
+    }
+    dragMouse(
+        center + QPointF(-180.0, 150.0), center + QPointF(-130.0, 120.0),
+        Qt::MiddleButton, Qt::ShiftModifier);
+    if (kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), beforeLeftDrag, 1.0e-8)) {
+        return fail("shift middle drag orbits");
+    }
+    SetViewportTool(ViewportTool::DrawLine);
     const Vector3 viewBeforeSelectionAlignment = viewport_->ViewDirection();
     const Vector3 selectedPlaneNormal = selectedPlaneIterator->plane.Normal();
     const Vector3 expectedSelectionView = kachakacha::geometry::Dot(

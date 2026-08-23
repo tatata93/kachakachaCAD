@@ -38,6 +38,7 @@ public:
     bool SaveProjectFile(const QString& path);
     bool RunCreationSelfTest();
     bool ExportFirstBodyForAutomation(const QString& stlPath, const QString& stepPath);
+    bool PrepareManualScreenshot(const QString& state);
 
 protected:
     void closeEvent(QCloseEvent* event) override;

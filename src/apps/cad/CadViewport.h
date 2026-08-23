@@ -272,9 +272,13 @@ private:
     double rollRadians_ = 0.0;
     std::optional<std::array<kachakacha::geometry::Vector3, 3>> alignedViewBasis_;
     double pixelsPerMillimeter_ = 14.0;
+    QPoint mousePressPosition_;
     QPoint lastMousePosition_;
     Qt::MouseButton dragButton_ = Qt::NoButton;
     bool mouseMoved_ = false;
+    bool orbitInteraction_ = false;
     bool viewCubeInteraction_ = false;
+    bool viewCubeDragActive_ = false;
+    int pressedViewCubeFace_ = 0;
     int hoveredViewCubeFace_ = 0;
 };

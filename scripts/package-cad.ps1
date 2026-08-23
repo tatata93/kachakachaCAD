@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 & (Join-Path $PSScriptRoot "configure.ps1") -BuildDir $BuildDir
 & (Join-Path $PSScriptRoot "build.ps1") -BuildDir $BuildDir -Config $Config
 & (Join-Path $PSScriptRoot "test.ps1") -BuildDir $BuildDir -Config $Config
+& (Join-Path $PSScriptRoot "build-manual-assets.ps1") -BuildDir $BuildDir -Config $Config -SkipBuild
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $CadPath = Join-Path $RepoRoot "$BuildDir\$Config\kachakacha_cad.exe"
@@ -72,6 +73,7 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\railway-nose-acceptance.kc
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "START_REVIEW.cmd") -Destination (Join-Path $ResolvedOutput "START_REVIEW.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "OPEN_MANUAL.cmd") -Destination (Join-Path $ResolvedOutput "OPEN_MANUAL.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual.html") -Destination (Join-Path $ResolvedOutput "manual.html") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual-assets") -Destination (Join-Path $ResolvedOutput "manual-assets") -Recurse -Force
 
 $PreviousPlatform = $env:QT_QPA_PLATFORM
 try {

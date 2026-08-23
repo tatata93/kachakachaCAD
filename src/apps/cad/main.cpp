@@ -21,6 +21,7 @@ int main(int argc, char* argv[])
     QString snapshotPath;
     QString exportStlPath;
     QString exportStepPath;
+    QString manualState;
     bool selfTest = false;
     const QStringList arguments = application.arguments();
     for (int index = 1; index < arguments.size(); ++index) {
@@ -34,6 +35,8 @@ int main(int argc, char* argv[])
             exportStepPath = arguments[++index];
         } else if (arguments[index] == "--self-test") {
             selfTest = true;
+        } else if (arguments[index] == "--manual-state" && index + 1 < arguments.size()) {
+            manualState = arguments[++index];
         }
     }
 
@@ -41,7 +44,14 @@ int main(int argc, char* argv[])
     if (!projectPath.isEmpty() && !window.LoadProjectFile(projectPath)) {
         return 2;
     }
+    if (manualState == QStringLiteral("split")) {
+        window.resize(1380, 1080);
+    }
     window.show();
+    application.processEvents();
+    if (!manualState.isEmpty() && !window.PrepareManualScreenshot(manualState)) {
+        return 6;
+    }
     application.processEvents();
     if (selfTest && !window.RunCreationSelfTest()) {
         return 4;

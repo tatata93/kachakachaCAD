@@ -135,6 +135,14 @@ ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
     return ViewCubeFace::None;
 }
 
+bool CanDragViewCube(ViewCubeFace face)
+{
+    return face == ViewCubeFace::Top
+        || face == ViewCubeFace::Front
+        || face == ViewCubeFace::Right
+        || face == ViewCubeFace::Isometric;
+}
+
 double DistanceToSegment(QPointF point, QPointF a, QPointF b)
 {
     const QPointF segment = b - a;
@@ -2718,13 +2726,25 @@ CadSelection CadViewport::HitTest(QPointF position) const
 
 void CadViewport::mousePressEvent(QMouseEvent* event)
 {
+    mousePressPosition_ = event->position().toPoint();
     lastMousePosition_ = event->position().toPoint();
     dragButton_ = event->button();
     mouseMoved_ = false;
+    orbitInteraction_ = event->button() == Qt::MiddleButton
+        && event->modifiers().testFlag(Qt::ShiftModifier);
     setFocus();
     if (event->button() == Qt::LeftButton
         && MakeViewCubeGeometry(width()).bounds.contains(event->position())) {
         viewCubeInteraction_ = true;
+        viewCubeDragActive_ = false;
+        pressedViewCubeFace_ = static_cast<int>(
+            HitViewCube(MakeViewCubeGeometry(width()), event->position()));
+        setCursor(CanDragViewCube(static_cast<ViewCubeFace>(pressedViewCubeFace_))
+                ? Qt::OpenHandCursor : Qt::PointingHandCursor);
+        event->accept();
+        return;
+    }
+    if (orbitInteraction_) {
         setCursor(Qt::ClosedHandCursor);
         event->accept();
         return;
@@ -2776,10 +2796,22 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
 void CadViewport::mouseMoveEvent(QMouseEvent* event)
 {
     if (viewCubeInteraction_ && dragButton_ == Qt::LeftButton) {
-        const QPoint delta = event->position().toPoint() - lastMousePosition_;
-        if (delta.manhattanLength() > 1) {
-            mouseMoved_ = true;
+        const ViewCubeFace pressedFace = static_cast<ViewCubeFace>(pressedViewCubeFace_);
+        if (!CanDragViewCube(pressedFace)) {
+            event->accept();
+            return;
         }
+        if (!viewCubeDragActive_) {
+            const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
+            if (totalDelta.manhattanLength() <= 8) {
+                event->accept();
+                return;
+            }
+            viewCubeDragActive_ = true;
+            mouseMoved_ = true;
+            setCursor(Qt::ClosedHandCursor);
+        }
+        const QPoint delta = event->position().toPoint() - lastMousePosition_;
         if (alignedViewBasis_.has_value()) {
             const Vector3 direction = ViewDirection();
             yawRadians_ = std::atan2(direction.y, direction.x);
@@ -2907,7 +2939,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
     if (delta.manhattanLength() > 1) {
         mouseMoved_ = true;
     }
-    if (dragButton_ == Qt::LeftButton && tool_ == ViewportTool::Select) {
+    if (orbitInteraction_) {
         if (alignedViewBasis_.has_value()) {
             const Vector3 direction = ViewDirection();
             yawRadians_ = std::atan2(direction.y, direction.x);
@@ -2929,8 +2961,8 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 {
     if (viewCubeInteraction_) {
-        if (event->button() == Qt::LeftButton && !mouseMoved_) {
-            const ViewCubeFace face = HitViewCube(MakeViewCubeGeometry(width()), event->position());
+        if (event->button() == Qt::LeftButton && !viewCubeDragActive_) {
+            const ViewCubeFace face = static_cast<ViewCubeFace>(pressedViewCubeFace_);
             const Vector3 viewTarget = target_;
             switch (face) {
             case ViewCubeFace::Top:
@@ -2984,6 +3016,8 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
             }
         }
         viewCubeInteraction_ = false;
+        viewCubeDragActive_ = false;
+        pressedViewCubeFace_ = static_cast<int>(ViewCubeFace::None);
         dragButton_ = Qt::NoButton;
         setCursor(hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::None)
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
@@ -2992,6 +3026,10 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (orbitInteraction_) {
+        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+    }
+    orbitInteraction_ = false;
 
     if (draggedControlPoint_.has_value()) {
         const WireControlPointPick pick = *draggedControlPoint_;

@@ -104,6 +104,7 @@ private:
     void ApplyLineFillet();
     void CreateSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
+    void CreateProtrudingLightCase();
     void CreatePlateFromSurface();
     void CreatePlateFromSelectedWires();
     void UpdateSelectedPlate();
@@ -278,6 +279,13 @@ private:
     QComboBox* projectionSurface_ = nullptr;
     QComboBox* projectionPlane_ = nullptr;
     QLabel* projectionSelectionLabel_ = nullptr;
+    QLabel* lightCaseSelectionLabel_ = nullptr;
+    QLabel* lightCaseReferenceLabel_ = nullptr;
+    QLineEdit* lightCaseRootName_ = nullptr;
+    QLineEdit* lightCaseSurfaceName_ = nullptr;
+    QComboBox* lightCaseDirectionMode_ = nullptr;
+    QWidget* lightCaseDirectionEditor_ = nullptr;
+    std::array<QDoubleSpinBox*, 3> lightCaseDirection_{};
     QLineEdit* plateName_ = nullptr;
     QComboBox* plateSurface_ = nullptr;
     QDoubleSpinBox* plateThickness_ = nullptr;

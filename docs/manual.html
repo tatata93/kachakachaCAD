@@ -71,13 +71,14 @@
       <a href="#surface">11. ワイヤーから面</a>
       <a href="#plate">12. 面・ワイヤーから板</a>
       <a href="#projection">13. 投影と開口</a>
-      <a href="#jig">14. 成形治具</a>
-      <a href="#split">15. 板材分割</a>
-      <a href="#output">16. 図面・3D出力</a>
-      <a href="#save">17. 保存・復旧</a>
-      <a href="#trouble">18. 困ったとき</a>
-      <a href="#limits">19. 現在の制限</a>
-      <a href="#shortcuts">20. 操作早見表</a>
+      <a href="#lightcase">14. 飛び出すライトケース</a>
+      <a href="#jig">15. 成形治具</a>
+      <a href="#split">16. 板材分割</a>
+      <a href="#output">17. 図面・3D出力</a>
+      <a href="#save">18. 保存・復旧</a>
+      <a href="#trouble">19. 困ったとき</a>
+      <a href="#limits">20. 現在の制限</a>
+      <a href="#shortcuts">21. 操作早見表</a>
     </nav>
     <article>
       <section id="start">
@@ -309,25 +310,42 @@
         <p class="warning">輪郭全体が1枚の板の範囲内に必要です。窓をまたぐ位置で板が分割されている場合、先に継ぎ目を窓の外へ移すか、各板用の閉じた輪郭に分けてください。</p>
       </section>
 
+      <section id="lightcase">
+        <h2>14. 車体から飛び出すライトケースを作る</h2>
+        <p class="lead">パノラマカーのようなライトケースは、最前面の閉じた輪郭を指定方向へ車体面まで伸ばし、根元輪郭とケース側面を一度に作ります。正面向きだけでなく斜めのケースにも使えます。</p>
+        <figure><a href="manual-assets/protruding-light-case.png"><img src="manual-assets/protruding-light-case.png" alt="斜めに飛び出すライトケースと専用操作欄"></a><figcaption>画像14: 橙色のライト最前面輪郭と車体前面板を選択。青緑の基準線と平行に根元まで伸びるケースです。</figcaption></figure>
+        <h3>最前面輪郭と接続先を選ぶ</h3>
+        <ol><li>ライトレンズ最前面の位置・角度に作業平面を置き、円などの<strong>閉じた通常ワイヤー</strong>を描きます。</li><li><kbd>V</kbd>で選択へ戻り、最前面輪郭をクリックします。</li><li><kbd>Ctrl</kbd>を押しながら、根元を置く車体の「面」または「板材」をクリックします。</li><li>「面」タブの「飛び出すライトケース」に、最前面名と接続先名が表示されたことを確認します。</li></ol>
+        <h3>伸ばす方向を決める</h3>
+        <table><thead><tr><th>設定</th><th>使い方</th></tr></thead><tbody>
+          <tr><td>最前面輪郭の法線（自動）</td><td>ライト面に直角なケース。通常の正面向きライトはこれだけで作れます。</td></tr>
+          <tr><td>設定した基準線と平行</td><td>斜めケース。先に軸を表す直線を1本選び、「選択直線を基準に設定」を押します。その後、最前面輪郭と接続先を選び直します。</td></tr>
+          <tr><td>任意方向 XYZ</td><td>既知の方向を数値指定します。例 <code>X=1, Y=0.2, Z=0.1</code> はX方向へ進みながらY/Zにも傾く軸です。</td></tr>
+        </tbody></table>
+        <dl class="recipe"><dt>名前</dt><dd>根元ワイヤー名とケース側面名を入力。</dd><dt>実行</dt><dd>「根元ワイヤーとケース側面を作る」。</dd><dt>結果1</dt><dd>接続先の面に沿う閉じた根元ワイヤーが追加されます。</dd><dt>結果2</dt><dd>最前面と根元を結ぶケース側面が「面」に追加されます。</dd><dt>板厚</dt><dd>できたケース側面を選び、同じ「面」タブの「この面を板材にする」で外殻に厚みを付けます。</dd></dl>
+        <p class="note">最前面輪郭または車体の元断面を後から編集すると、根元ワイヤーとケース側面も追従して再計算されます。接続先に板材を選んだ場合は、その板の元になった設計面へ接続します。</p>
+        <p class="warning">「投影線が面と交差しない」と表示された場合は、方向が車体面と平行になっていないか、投影先の範囲から外れていないかを確認してください。同梱の <code>panorama-light-case.kcd</code> で完成例を確認できます。</p>
+      </section>
+
       <section id="jig">
-        <h2>14. 曲面から成形治具を作る</h2>
+        <h2>15. 曲面から成形治具を作る</h2>
         <p>プラ板を曲面へ押し当てて成形するため、設計面から外型または内型の3D治具を作ります。</p>
-        <figure><a href="manual-assets/openings.png"><img src="manual-assets/openings.png" alt="曲面成形治具の設定欄と車体面"></a><figcaption>画像14: 面タブ中央の「曲面から成形治具」。右側で型の側、隙間、厚み、最小肉厚を指定します。</figcaption></figure>
+        <figure><a href="manual-assets/openings.png"><img src="manual-assets/openings.png" alt="曲面成形治具の設定欄と車体面"></a><figcaption>画像15: 面タブ中央の「曲面から成形治具」。右側で型の側、隙間、厚み、最小肉厚を指定します。</figcaption></figure>
         <dl class="recipe"><dt>元の面</dt><dd>治具へ写す曲面。面を選択すると候補が同期します。</dd><dt>型の側</dt><dd>板を外側から押さえる形なら「外側の型」、内側から支える形なら「内側の型」。</dd><dt>成形の隙間</dt><dd>材料厚や取り外しを考慮したクリアランス。例 <code>0.15 mm</code>。</dd><dt>治具の厚み</dt><dd>3Dプリントする型本体の厚み。</dd><dt>必要最小肉厚</dt><dd>薄すぎる箇所を避ける基準。</dd><dt>実行</dt><dd>「この面から成形治具を作る」。</dd></dl>
         <p>既存治具を選んで値を変更し「選択中の治具へ設定」で更新できます。治具は板材と同じく任意選択でSTL/STEPへ出力できます。</p>
       </section>
 
       <section id="split">
-        <h2>15. 板材を必要な位置で2分割する</h2>
+        <h2>16. 板材を必要な位置で2分割する</h2>
         <p>CADが勝手に多数の小片へ分けることはありません。選んだ板を、確認した位置で1回につき2部品へ分けます。</p>
-        <figure><a href="manual-assets/plate-split.png"><img src="manual-assets/plate-split.png" alt="板材分割の方向と位置指定"></a><figcaption>画像15: 板を選び、方向と位置を指定します。赤い破線が実行前の分割位置です。</figcaption></figure>
+        <figure><a href="manual-assets/plate-split.png"><img src="manual-assets/plate-split.png" alt="板材分割の方向と位置指定"></a><figcaption>画像16: 板を選び、方向と位置を指定します。赤い破線が実行前の分割位置です。</figcaption></figure>
         <dl class="recipe"><dt>選ぶ</dt><dd>分割する板材を1枚。</dd><dt>方向</dt><dd>「断面内（屋根・側面方向）」または「長手方向（前後方向）」。</dd><dt>位置</dt><dd>スライダーまたは1～99%の数値。赤い破線を中央画面で確認。</dd><dt>実行</dt><dd>「選択中の板材を2分割」。</dd><dt>結果</dt><dd>元板が2枚の板へ置き換わり、可変板厚なら分割位置の厚みを両方が引き継ぎます。</dd></dl>
         <p class="warning">登録済み開口を横切る分割はできません。開口から外す、分割位置をずらす、または開口前に分割してください。</p>
       </section>
 
       <section id="output">
-        <h2>16. 1:1図面・展開図・3Dモデルを出力する</h2>
-        <figure><a href="manual-assets/model-output.png"><img src="manual-assets/model-output.png" alt="選択した板材と治具のSTL STEP出力"></a><figcaption>画像16: 板材と治具を中央で直接選択し、「3D画面で選択した部分」だけをSTL/STEPへ保存できます。</figcaption></figure>
+        <h2>17. 1:1図面・展開図・3Dモデルを出力する</h2>
+        <figure><a href="manual-assets/model-output.png"><img src="manual-assets/model-output.png" alt="選択した板材と治具のSTL STEP出力"></a><figcaption>画像17: 板材と治具を中央で直接選択し、「3D画面で選択した部分」だけをSTL/STEPへ保存できます。</figcaption></figure>
         <h3>作業平面の1:1 SVG / DXF</h3>
         <dl class="recipe"><dt>設定</dt><dd>「出力」タブで出力面を選び、「出力面上の全ワイヤー」または「選択したワイヤーのみ」。</dd><dt>実行</dt><dd>「SVGを保存」または「DXFを保存」。</dd><dt>用途</dt><dd>平らなプラ板・紙への印刷、レーザー加工、他2D CADへの受け渡し。単位mm、1:1です。</dd></dl>
         <h3>選択板材の1:1展開図</h3>
@@ -344,7 +362,7 @@
       </section>
 
       <section id="save">
-        <h2>17. 保存・元に戻す・異常終了から復旧する</h2>
+        <h2>18. 保存・元に戻す・異常終了から復旧する</h2>
         <table><thead><tr><th>操作</th><th>手順</th></tr></thead><tbody>
           <tr><td>新規</td><td><kbd>Ctrl</kbd>+<kbd>N</kbd>。未保存の変更がある場合は確認してから空のプロジェクトを作ります。</td></tr>
           <tr><td>開く</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd>。<code>.kcd</code> プロジェクトを選びます。</td></tr>
@@ -359,7 +377,7 @@
       </section>
 
       <section id="trouble">
-        <h2>18. 困ったとき</h2>
+        <h2>19. 困ったとき</h2>
         <table><thead><tr><th>状態</th><th>対処</th></tr></thead><tbody>
           <tr><td>視点を変えたいのに形状を選んでしまう</td><td>自由回転は <kbd>Shift</kbd>+中ドラッグ。平行移動は中または右ドラッグ。左ボタンは選択・作図専用です。</td></tr>
           <tr><td>キューブを押すと少し回る</td><td>面・角・矢印はクリックして離します。キューブ本体は8pxを超えて動かした場合だけ自由回転になります。</td></tr>
@@ -372,6 +390,7 @@
           <tr><td>ロフトがねじれる</td><td>断面の始点・進行方向を揃え、前から後ろの順で選択し直します。</td></tr>
           <tr><td>板厚方向が逆</td><td>板を選び法線矢印を確認し、「+側へ」と「-側へ」を切り替えて「選択中の板材へ設定」。</td></tr>
           <tr><td>窓・ライトを開口にできない</td><td>平面図ワイヤーではなく、面へ投影した閉じた輪郭を選びます。板1枚と輪郭全体が同じ板範囲内にあることも確認します。</td></tr>
+          <tr><td>飛び出すライトケースを作れない</td><td>最前面は閉じた通常ワイヤー1本、接続先は面または板材1枚を選びます。斜め方向では基準線かXYZが車体面を横切る向きか確認します。</td></tr>
           <tr><td>板を分割できない</td><td>開口を横切っていないか確認します。分割位置をずらすか、先に開口を外します。</td></tr>
           <tr><td>STL/STEP対象が0</td><td>板材または治具を選ぶか、「表示中の3Dモデル全体」へ変更します。厚みのない面・ワイヤーは3D出力対象外です。</td></tr>
           <tr><td>Qt platform pluginエラー</td><td><code>kachakacha_cad.exe</code> だけを配布フォルダから取り出していないか確認し、フォルダごと置いたまま <code>START_REVIEW.cmd</code> を実行します。</td></tr>
@@ -381,7 +400,7 @@
       </section>
 
       <section id="limits">
-        <h2>19. 現在の制限と実用上の回避方法</h2>
+        <h2>20. 現在の制限と実用上の回避方法</h2>
         <table><thead><tr><th>制限</th><th>現在の回避方法</th></tr></thead><tbody>
           <tr><td>可変板厚と曲面開口を同じ板へ設定した立体出力</td><td>窓・ライト穴が必要な板は一定板厚で作るか、開口部分を別部品として設計します。</td></tr>
           <tr><td>ベジェ・B-splineの厳密な平行オフセット</td><td>オフセット複製後、制御点を測定値に合わせて調整します。</td></tr>
@@ -393,7 +412,7 @@
       </section>
 
       <section id="shortcuts">
-        <h2>20. 操作早見表</h2>
+        <h2>21. 操作早見表</h2>
         <table><thead><tr><th>キー / マウス</th><th>機能</th><th>キー / マウス</th><th>機能</th></tr></thead><tbody>
           <tr><td><kbd>V</kbd></td><td>選択</td><td><kbd>L</kbd></td><td>直線</td></tr>
           <tr><td><kbd>P</kbd></td><td>ポリライン</td><td><kbd>R</kbd></td><td>矩形</td></tr>
@@ -411,7 +430,7 @@
           <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>選択を隠す</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>全て表示</td></tr>
         </tbody></table>
         <h3>最短の製作手順</h3>
-        <ol><li>作業平面を選んで正対。</li><li>点グリッドとスナップを設定し、断面や開口平面図を作図。</li><li>断面を順番に複数選択し、面または3D板を作成。</li><li>窓・ライト平面図を面へ投影し、板と一緒に選んで開口へ追加。</li><li>必要なら板を手動分割し、展開精度を確認。</li><li>板・治具を中央で選び、STL/STEPまたは1:1図面を出力。</li></ol>
+        <ol><li>作業平面を選んで正対。</li><li>点グリッドとスナップを設定し、断面や開口平面図を作図。</li><li>断面を順番に複数選択し、面または3D板を作成。</li><li>窓・ライト平面図を面へ投影し、板と一緒に選んで開口へ追加。</li><li>飛び出すライトは最前面輪郭と車体面を選び、根元とケース側面を作成。</li><li>必要なら板を手動分割し、展開精度を確認。</li><li>板・治具を中央で選び、STL/STEPまたは1:1図面を出力。</li></ol>
         <p class="small">すべての画像はこの製品版を自動操作して撮影しています。画像をクリックすると原寸表示できます。</p>
       </section>
     </article>

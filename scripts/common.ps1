@@ -32,7 +32,7 @@ function Repair-PathEnvironment {
 
     foreach ($key in @($processEnvironment.Keys)) {
         if ([string]::Equals([string]$key, "Path", [System.StringComparison]::OrdinalIgnoreCase)) {
-            [System.Environment]::SetEnvironmentVariable([string]$key, $null, "Process")
+            Remove-Item -LiteralPath ("Env:" + [string]$key) -ErrorAction SilentlyContinue
         }
     }
 

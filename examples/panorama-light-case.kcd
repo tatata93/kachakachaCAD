@@ -1,0 +1,20 @@
+# Protruding, slanted headlight case example.
+# X is the vehicle length. The lamp face is 6 mm ahead of the body mounting face.
+
+polyline3d body_front_outline 0 -12 -5  0 12 -5  0 12 10  0 -12 10  0 -12 -5
+circle3d lamp_front -6 -2 3  0 1 0  0 0 1  1.4
+line3d lamp_axis -6 -2 3  0 -0.8 3.6
+
+surface_planar body_front body_front_outline
+wire_project lamp_root lamp_front body_front 1 0.2 0.1
+surface_ruled lamp_case_side lamp_front lamp_root
+surface_planar lamp_front_face lamp_front
+
+plate body_front_panel body_front 0.5 centered styrene
+plate lamp_case_shell lamp_case_side 0.4 centered styrene
+plate lamp_lens_face lamp_front_face 0.4 centered styrene
+
+visibility wire body_front_outline hidden
+visibility surface body_front hidden
+visibility surface lamp_case_side hidden
+visibility surface lamp_front_face hidden

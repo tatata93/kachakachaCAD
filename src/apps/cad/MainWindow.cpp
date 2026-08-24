@@ -1424,6 +1424,58 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(projectButton, &QPushButton::clicked, this, &MainWindow::ProjectSelectedWiresToSurface);
     layout->addWidget(projectButton);
 
+    auto* lightCaseBox = new QGroupBox(QStringLiteral("飛び出すライトケース"));
+    lightCaseBox->setObjectName(QStringLiteral("lightCaseSection"));
+    lightCaseBox->setProperty("manualAnchor", QStringLiteral("lightCase"));
+    auto* lightCaseLayout = new QVBoxLayout(lightCaseBox);
+    lightCaseLayout->setSpacing(8);
+
+    lightCaseSelectionLabel_ = new QLabel(QStringLiteral("選択: 最前面の閉じた輪郭0本 / 接続先0個"));
+    lightCaseSelectionLabel_->setWordWrap(true);
+    lightCaseSelectionLabel_->setStyleSheet("color: #5c6670;");
+    lightCaseLayout->addWidget(lightCaseSelectionLabel_);
+
+    auto* lightCaseForm = new QFormLayout;
+    lightCaseForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    lightCaseRootName_ = new QLineEdit(QStringLiteral("light_root_1"));
+    lightCaseSurfaceName_ = new QLineEdit(QStringLiteral("light_case_1"));
+    lightCaseDirectionMode_ = new QComboBox;
+    lightCaseDirectionMode_->addItems({
+        QStringLiteral("最前面輪郭の法線（自動）"),
+        QStringLiteral("設定した基準線と平行"),
+        QStringLiteral("任意方向 XYZ"),
+    });
+    lightCaseDirectionEditor_ = MakeVector3Editor(lightCaseDirection_, {0.0, 0.0, -1.0});
+    lightCaseDirectionEditor_->setEnabled(false);
+    lightCaseForm->addRow(QStringLiteral("根元ワイヤー名"), lightCaseRootName_);
+    lightCaseForm->addRow(QStringLiteral("ケース側面名"), lightCaseSurfaceName_);
+    lightCaseForm->addRow(QStringLiteral("伸ばす方向"), lightCaseDirectionMode_);
+    lightCaseForm->addRow(QStringLiteral("XYZ（任意時）"), lightCaseDirectionEditor_);
+    lightCaseLayout->addLayout(lightCaseForm);
+
+    auto* referenceRow = new QWidget;
+    auto* referenceLayout = new QHBoxLayout(referenceRow);
+    referenceLayout->setContentsMargins(0, 0, 0, 0);
+    referenceLayout->setSpacing(6);
+    lightCaseReferenceLabel_ = new QLabel(QStringLiteral("基準線: 未設定"));
+    lightCaseReferenceLabel_->setStyleSheet("color: #5c6670;");
+    auto* setLightCaseReference = new QPushButton(QStringLiteral("選択直線を基準に設定"));
+    setLightCaseReference->setToolTip(QStringLiteral("斜め方向の基準にする直線を1本選択して押します"));
+    connect(setLightCaseReference, &QPushButton::clicked, this, &MainWindow::SetReferenceFromSelection);
+    referenceLayout->addWidget(lightCaseReferenceLabel_, 1);
+    referenceLayout->addWidget(setLightCaseReference);
+    lightCaseLayout->addWidget(referenceRow);
+
+    auto* createLightCaseButton = new QPushButton(QStringLiteral("根元ワイヤーとケース側面を作る"));
+    createLightCaseButton->setObjectName("primaryButton");
+    createLightCaseButton->setToolTip(QStringLiteral("閉じた最前面輪郭1本と、接続先の面または板1枚を3D画面で選択します"));
+    connect(createLightCaseButton, &QPushButton::clicked, this, &MainWindow::CreateProtrudingLightCase);
+    connect(lightCaseDirectionMode_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        lightCaseDirectionEditor_->setEnabled(index == 2);
+    });
+    lightCaseLayout->addWidget(createLightCaseButton);
+    layout->addWidget(lightCaseBox);
+
     auto* plateTitle = new QLabel(QStringLiteral("ワイヤー / 面から3D板を作る"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(plateTitle);
@@ -2053,7 +2105,11 @@ bool MainWindow::LoadProjectFile(const QString& path)
         statusBar()->showMessage(QStringLiteral("読み込みました: %1").arg(path), 4000);
         return true;
     } catch (const std::exception& error) {
-        QMessageBox::critical(this, QStringLiteral("読み込みエラー"), QString::fromUtf8(error.what()));
+        if (IsAutomationInvocation()) {
+            qWarning() << "project load failed:" << QString::fromUtf8(error.what());
+        } else {
+            QMessageBox::critical(this, QStringLiteral("読み込みエラー"), QString::fromUtf8(error.what()));
+        }
         return false;
     }
 }
@@ -2272,6 +2328,21 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         showTab(5, 0.0);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("lightcase")) {
+        referenceWireName_ = "lamp_axis";
+        RefreshReference();
+        lightCaseDirectionMode_->setCurrentIndex(1);
+        if (!select({
+                {CadSelectionKind::Wire, "lamp_front"},
+                {CadSelectionKind::Plate, "body_front_panel"},
+            })) {
+            return false;
+        }
+        showTab(5, 0.22);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("lightCase");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("plate") || state == QStringLiteral("direction")) {
@@ -3196,6 +3267,9 @@ void MainWindow::RefreshReference()
         transformReferenceLabel_->setText(referenceWireName_.has_value()
                 ? QStringLiteral("基準線: %1  /  面: %2").arg(text, planeName)
                 : QStringLiteral("基準線: 2点指定  /  面: %1").arg(planeName));
+    }
+    if (lightCaseReferenceLabel_ != nullptr) {
+        lightCaseReferenceLabel_->setText(QStringLiteral("基準線: %1").arg(text));
     }
     clearReferenceAction_->setEnabled(referenceWireName_.has_value());
 }
@@ -4511,6 +4585,126 @@ void MainWindow::ProjectSelectedWiresToSurface()
     }
 }
 
+void MainWindow::CreateProtrudingLightCase()
+{
+    try {
+        ValidateObjectName(lightCaseRootName_->text());
+        ValidateObjectName(lightCaseSurfaceName_->text());
+
+        int frontWireIndex = -1;
+        std::string targetSurfaceName;
+        QString targetDisplayName;
+        int targetCount = 0;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                if (frontWireIndex >= 0) {
+                    throw std::invalid_argument("ライトケース最前面の閉じた輪郭は1本だけ選択してください。");
+                }
+                frontWireIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Surfaces().size())) {
+                ++targetCount;
+                targetSurfaceName = project_.Surfaces()[selection.index].name;
+                targetDisplayName = ToQString(targetSurfaceName);
+            } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                ++targetCount;
+                targetSurfaceName = project_.Plates()[selection.index].sourceSurfaceName;
+                targetDisplayName = ToQString(project_.Plates()[selection.index].name);
+            }
+        }
+        if (frontWireIndex < 0 || targetCount != 1) {
+            throw std::invalid_argument(
+                "最前面の閉じた輪郭1本と、根元を置く面または板1枚を3D画面で選択してください。");
+        }
+
+        const auto& front = project_.Wires()[frontWireIndex];
+        if (front.metadata.construction) {
+            throw std::invalid_argument("補助線はライトケース最前面に使えません。通常線へ戻してください。");
+        }
+        if (front.projection.has_value() || front.plateOffset.has_value()) {
+            throw std::invalid_argument("投影後や板厚位置の輪郭ではなく、ライト最前面の元輪郭を選択してください。");
+        }
+        if (!front.wire.IsClosed()) {
+            throw std::invalid_argument("ライトケース最前面には閉じた輪郭を選択してください。");
+        }
+
+        Vector3 direction;
+        if (lightCaseDirectionMode_->currentIndex() == 0) {
+            try {
+                const auto frontSurface = kachakacha::model::Surface::Planar(front.wire);
+                if (!frontSurface.PlanarWorkPlane().has_value()) {
+                    throw std::invalid_argument("planar work plane is unavailable");
+                }
+                direction = frontSurface.PlanarWorkPlane()->Normal();
+            } catch (const std::exception&) {
+                throw std::invalid_argument(
+                    "最前面輪郭は、1枚の作業平面上にある閉じた輪郭にしてください。");
+            }
+        } else if (lightCaseDirectionMode_->currentIndex() == 1) {
+            if (!referenceWireName_.has_value()) {
+                throw std::invalid_argument("伸ばす方向の基準にする直線を先に設定してください。");
+            }
+            const auto reference = std::find_if(
+                project_.Wires().begin(), project_.Wires().end(), [this](const auto& wire) {
+                    return wire.name == *referenceWireName_ && wire.wire.Kind() == WireKind::Line;
+                });
+            if (reference == project_.Wires().end()) {
+                throw std::invalid_argument("設定した基準線が見つかりません。もう一度設定してください。");
+            }
+            direction = reference->wire.End() - reference->wire.Start();
+        } else {
+            direction = ReadVector3(lightCaseDirection_);
+        }
+        if (!direction.IsFinite() || direction.LengthSquared() <= 1.0e-18) {
+            throw std::invalid_argument("伸ばす方向には0ではないXYZ方向を指定してください。");
+        }
+        direction = direction.Normalized();
+
+        const std::string rootName = ToName(lightCaseRootName_->text());
+        const std::string sideName = ToName(lightCaseSurfaceName_->text());
+        Project candidate = project_;
+        try {
+            candidate.AddProjectedWire(rootName, front.name, targetSurfaceName, direction);
+        } catch (const std::invalid_argument& error) {
+            const std::string message = error.what();
+            if (message.starts_with("Projection") || message.starts_with("Projected")) {
+                throw std::invalid_argument(
+                    "最前面輪郭から伸ばした線が接続先に届きません。方向と接続先の範囲を確認してください。");
+            }
+            throw;
+        }
+        candidate.AddRuledSurface(sideName, front.name, rootName);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const auto root = std::find_if(project_.Wires().begin(), project_.Wires().end(),
+            [&](const auto& wire) { return wire.name == rootName; });
+        const auto side = std::find_if(project_.Surfaces().begin(), project_.Surfaces().end(),
+            [&](const auto& surface) { return surface.name == sideName; });
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(std::distance(project_.Wires().begin(), root))},
+            {CadSelectionKind::Surface, static_cast<int>(std::distance(project_.Surfaces().begin(), side))},
+        }, true);
+
+        lightCaseRootName_->setText(SuggestedDirectGroupName(QStringLiteral("light_root")));
+        int nextCaseNumber = 1;
+        while (project_.FindSurface(ToName(QStringLiteral("light_case_%1").arg(nextCaseNumber))).has_value()) {
+            ++nextCaseNumber;
+        }
+        lightCaseSurfaceName_->setText(QStringLiteral("light_case_%1").arg(nextCaseNumber));
+        statusBar()->showMessage(
+            QStringLiteral("%1へ根元輪郭を投影し、斜めライトケース側面を作成しました")
+                .arg(targetDisplayName),
+            4500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6500);
+    }
+}
+
 void MainWindow::CreatePlateFromSurface()
 {
     try {
@@ -5053,7 +5247,13 @@ bool MainWindow::RunCreationSelfTest()
         || modelExportScope_ == nullptr
         || plateVariableThickness_ == nullptr
         || plateEndThickness_ == nullptr
-        || plateOffsetLayer_ == nullptr) {
+        || plateOffsetLayer_ == nullptr
+        || lightCaseSelectionLabel_ == nullptr
+        || lightCaseReferenceLabel_ == nullptr
+        || lightCaseRootName_ == nullptr
+        || lightCaseSurfaceName_ == nullptr
+        || lightCaseDirectionMode_ == nullptr
+        || lightCaseDirection_[0] == nullptr) {
         return fail("drawing workbench is primary");
     }
 
@@ -5859,6 +6059,39 @@ bool MainWindow::RunCreationSelfTest()
     Redo();
     if (project_.Plates().size() != plateStart + 1 || project_.Surfaces()[surfaceStart].visible) {
         return fail("redo plate creation");
+    }
+
+    const std::size_t lightCaseWireCount = project_.Wires().size();
+    const std::size_t lightCaseSurfaceCount = project_.Surfaces().size();
+    lightCaseRootName_->setText(QStringLiteral("__ui_light_root"));
+    lightCaseSurfaceName_->setText(QStringLiteral("__ui_light_case_side"));
+    lightCaseDirectionMode_->setCurrentIndex(2);
+    lightCaseDirection_[0]->setValue(0.0);
+    lightCaseDirection_[1]->setValue(0.0);
+    lightCaseDirection_[2]->setValue(-1.0);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 3)},
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+    }, true);
+    CreateProtrudingLightCase();
+    if (project_.Wires().size() != lightCaseWireCount + 1
+        || project_.Surfaces().size() != lightCaseSurfaceCount + 1
+        || !project_.Wires().back().projection.has_value()
+        || project_.Wires().back().projection->targetSurfaceName != "__ui_nose_skin"
+        || project_.Surfaces().back().sourceWireNames
+            != std::vector<std::string>{"__ui_light_plan_circle", "__ui_light_root"}) {
+        return fail("create protruding light case from selected front and plate");
+    }
+    Undo();
+    if (project_.Wires().size() != lightCaseWireCount
+        || project_.Surfaces().size() != lightCaseSurfaceCount) {
+        return fail("undo protruding light case");
+    }
+    Redo();
+    if (project_.Wires().size() != lightCaseWireCount + 1
+        || project_.Surfaces().size() != lightCaseSurfaceCount + 1
+        || !project_.Wires().back().projection.has_value()) {
+        return fail("redo protruding light case");
     }
 
     jigSurface_->setCurrentText(QStringLiteral("__ui_nose_skin"));
@@ -7229,6 +7462,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     std::size_t selectedPlateCount = 0;
     std::size_t selectedProjectedWireCount = 0;
     std::size_t selectedClosedProjectedWireCount = 0;
+    QStringList lightCaseFrontNames;
+    QStringList lightCaseTargetNames;
     for (const CadSelection& item : selections) {
         if (item.kind == CadSelectionKind::Wire && item.index >= 0
             && item.index < static_cast<int>(project_.Wires().size())) {
@@ -7240,6 +7475,10 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             if (wire.projection.has_value() && wire.wire.IsClosed()) {
                 ++selectedClosedProjectedWireCount;
             }
+            if (!wire.metadata.construction && !wire.projection.has_value()
+                && !wire.plateOffset.has_value() && wire.wire.IsClosed()) {
+                lightCaseFrontNames.push_back(ToQString(wire.name));
+            }
             if (!wire.projection.has_value() && wire.metadata.sourcePlaneName.has_value() && projectionPlane_ != nullptr) {
                 const int planeIndex = projectionPlane_->findText(ToQString(*wire.metadata.sourcePlaneName));
                 if (planeIndex >= 0) {
@@ -7249,6 +7488,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         } else if (item.kind == CadSelectionKind::Surface && item.index >= 0
             && item.index < static_cast<int>(project_.Surfaces().size())) {
             ++selectedSurfaceCount;
+            lightCaseTargetNames.push_back(ToQString(project_.Surfaces()[item.index].name));
             if (projectionSurface_ != nullptr) {
                 const int surfaceIndex = projectionSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
                 if (surfaceIndex >= 0) {
@@ -7270,6 +7510,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         } else if (item.kind == CadSelectionKind::Plate && item.index >= 0
             && item.index < static_cast<int>(project_.Plates().size())) {
             ++selectedPlateCount;
+            lightCaseTargetNames.push_back(ToQString(project_.Plates()[item.index].name));
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
@@ -7279,6 +7520,18 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     }
     if (projectionSelectionLabel_ != nullptr) {
         projectionSelectionLabel_->setText(QStringLiteral("投影するワイヤー: %1本").arg(selectedWireCount));
+    }
+    if (lightCaseSelectionLabel_ != nullptr) {
+        if (lightCaseFrontNames.size() == 1 && lightCaseTargetNames.size() == 1) {
+            lightCaseSelectionLabel_->setText(
+                QStringLiteral("最前面: %1\n根元の接続先: %2")
+                    .arg(lightCaseFrontNames.front(), lightCaseTargetNames.front()));
+        } else {
+            lightCaseSelectionLabel_->setText(
+                QStringLiteral("選択: 最前面の閉じた輪郭%1本 / 接続先%2個")
+                    .arg(lightCaseFrontNames.size())
+                    .arg(lightCaseTargetNames.size()));
+        }
     }
     if (plateOpeningSelectionLabel_ != nullptr) {
         plateOpeningSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 閉じた投影輪郭%2本")

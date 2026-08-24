@@ -923,10 +923,14 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
     }
 
-    if (!project.Surfaces().empty()) {
+    const bool hasProjectedWires = std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
+        return wire.projection.has_value();
+    });
+    if (!project.Surfaces().empty() || hasProjectedWires) {
         output << '\n';
     }
-    for (const auto& namedSurface : project.Surfaces()) {
+
+    const auto writeSurface = [&](const auto& namedSurface) {
         RequireScriptNameSafe(namedSurface.name, "Surface");
         for (const std::string& sourceWireName : namedSurface.sourceWireNames) {
             RequireScriptNameSafe(sourceWireName, "Surface source wire");
@@ -943,18 +947,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             }
             output << '\n';
         }
-    }
+    };
 
-    const bool hasProjectedWires = std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
-        return wire.projection.has_value();
-    });
-    if (hasProjectedWires || !project.CoincidentConstraints().empty()) {
-        output << '\n';
-    }
-    for (const auto& namedWire : project.Wires()) {
-        if (!namedWire.projection.has_value()) {
-            continue;
-        }
+    const auto writeProjectedWire = [&](const auto& namedWire) {
         RequireScriptNameSafe(namedWire.name, "Projected wire");
         RequireScriptNameSafe(namedWire.projection->sourceWireName, "Projection source wire");
         RequireScriptNameSafe(namedWire.projection->targetSurfaceName, "Projection target surface");
@@ -966,6 +961,77 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         if (namedWire.metadata.construction) {
             output << "wire_role " << namedWire.name << " construction\n";
         }
+    };
+
+    std::vector<bool> surfaceWritten(project.Surfaces().size(), false);
+    std::vector<bool> projectionWritten(project.Wires().size(), false);
+    std::size_t pendingSurfaces = project.Surfaces().size();
+    std::size_t pendingProjections = static_cast<std::size_t>(std::count_if(
+        project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
+            return wire.projection.has_value();
+        }));
+    while (pendingSurfaces > 0 || pendingProjections > 0) {
+        bool madeProgress = false;
+        for (std::size_t surfaceIndex = 0; surfaceIndex < project.Surfaces().size(); ++surfaceIndex) {
+            if (surfaceWritten[surfaceIndex]) {
+                continue;
+            }
+            const auto& surface = project.Surfaces()[surfaceIndex];
+            const bool sourcesWritten = std::all_of(
+                surface.sourceWireNames.begin(), surface.sourceWireNames.end(),
+                [&](const std::string& sourceName) {
+                    const auto source = std::find_if(
+                        project.Wires().begin(), project.Wires().end(), [&](const auto& wire) {
+                            return wire.name == sourceName;
+                        });
+                    if (source == project.Wires().end()) {
+                        throw std::logic_error("Surface source wire is missing: " + sourceName);
+                    }
+                    if (!source->projection.has_value()) {
+                        return true;
+                    }
+                    return static_cast<bool>(projectionWritten[static_cast<std::size_t>(
+                        std::distance(project.Wires().begin(), source))]);
+                });
+            if (!sourcesWritten) {
+                continue;
+            }
+            writeSurface(surface);
+            surfaceWritten[surfaceIndex] = true;
+            --pendingSurfaces;
+            madeProgress = true;
+        }
+        for (std::size_t wireIndex = 0; wireIndex < project.Wires().size(); ++wireIndex) {
+            const auto& wire = project.Wires()[wireIndex];
+            if (!wire.projection.has_value() || projectionWritten[wireIndex]) {
+                continue;
+            }
+            const auto target = std::find_if(
+                project.Surfaces().begin(), project.Surfaces().end(), [&](const auto& surface) {
+                    return surface.name == wire.projection->targetSurfaceName;
+                });
+            if (target == project.Surfaces().end()) {
+                throw std::logic_error("Projection target surface is missing: "
+                    + wire.projection->targetSurfaceName);
+            }
+            const std::size_t targetIndex = static_cast<std::size_t>(
+                std::distance(project.Surfaces().begin(), target));
+            if (!surfaceWritten[targetIndex]) {
+                continue;
+            }
+            writeProjectedWire(wire);
+            projectionWritten[wireIndex] = true;
+            --pendingProjections;
+            madeProgress = true;
+        }
+        if (!madeProgress) {
+            throw std::logic_error("Surface and projected-wire dependencies contain a cycle.");
+        }
+    }
+    if ((!project.Surfaces().empty() || hasProjectedWires)
+        && (!project.CoincidentConstraints().empty() || !project.TangentConstraints().empty()
+            || !project.ReferenceDimensions().empty())) {
+        output << '\n';
     }
     for (const auto& constraint : project.CoincidentConstraints()) {
         RequireScriptNameSafe(constraint.anchor.wireName, "Coincidence anchor wire");

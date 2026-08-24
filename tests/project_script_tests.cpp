@@ -828,6 +828,52 @@ void SurfacesAndProjectedWiresRoundTrip()
     RequireNear(roundTripped.Wires()[4].wire.Evaluate(0.5), project.Wires()[4].wire.Evaluate(0.5), "roundtrip plate-offset geometry");
 }
 
+void ProtrudingLightCaseFollowsItsFrontContour()
+{
+    std::istringstream input(R"(
+        polyline3d body_outline -12 -10 0  12 -10 0  12 10 0  -12 10 0  -12 -10 0
+        circle3d lamp_front 0 0 8  1 0 0  0 1 0  2
+        surface_planar body_skin body_outline
+        wire_project lamp_root lamp_front body_skin 0.25 0 -1
+        surface_ruled lamp_case_side lamp_front lamp_root
+    )");
+    auto project = LoadProjectScript(input, "protruding-light-case");
+    Require(project.Surfaces().size() == 2, "light case surface count");
+    Require(project.Wires().size() == 3, "light case wire count");
+    Require(project.Wires()[2].projection.has_value(), "light case root projection relation");
+    Require(project.Surfaces()[1].surface.Kind() == kachakacha::model::SurfaceKind::Ruled,
+        "light case side is a ruled surface");
+    RequireNear(project.Wires()[2].wire.Evaluate(0.0), {4.0, 0.0, 0.0},
+        "slanted projection reaches body surface");
+
+    const Vector3 oldRoot = project.Wires()[2].wire.Evaluate(0.0);
+    const Vector3 oldSide = project.Surfaces()[1].surface.Evaluate(0.0, 0.5);
+    project.UpdateWire("lamp_front", Wire::Circle(
+        {0.5, 0.0, 10.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0));
+    Require(!AlmostEqual(oldRoot, project.Wires()[2].wire.Evaluate(0.0), 1.0e-8),
+        "light case root follows front contour edit");
+    Require(!AlmostEqual(oldSide, project.Surfaces()[1].surface.Evaluate(0.0, 0.5), 1.0e-8),
+        "light case side follows root projection edit");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    const std::string script = output.str();
+    const std::size_t bodySurface = script.find("surface_planar body_skin");
+    const std::size_t rootProjection = script.find("wire_project lamp_root");
+    const std::size_t caseSurface = script.find("surface_ruled lamp_case_side");
+    Require(bodySurface < rootProjection && rootProjection < caseSurface,
+        "light case dependencies are written in loadable order");
+
+    std::istringstream roundTripInput(script);
+    const auto roundTripped = LoadProjectScript(roundTripInput, "protruding-light-case-roundtrip");
+    Require(roundTripped.Surfaces().size() == 2, "roundtrip light case surface count");
+    RequireNear(roundTripped.Wires()[2].wire.Evaluate(0.25), project.Wires()[2].wire.Evaluate(0.25),
+        "roundtrip light case root geometry");
+    RequireNear(roundTripped.Surfaces()[1].surface.Evaluate(0.25, 0.5),
+        project.Surfaces()[1].surface.Evaluate(0.25, 0.5),
+        "roundtrip light case side geometry");
+}
+
 void LoftSurfacesRoundTrip()
 {
     std::istringstream input(R"(
@@ -1068,6 +1114,7 @@ int main()
         RadiusConstraintsRoundTripAndDriveGeometry();
         ReferenceDimensionsRoundTripAndFollowGeometry();
         SurfacesAndProjectedWiresRoundTrip();
+        ProtrudingLightCaseFollowsItsFrontContour();
         LoftSurfacesRoundTrip();
         PlateSplitsRoundTrip();
         VisibilityRoundTrips();

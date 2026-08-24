@@ -16,6 +16,7 @@ $CadPath = Join-Path $RepoRoot "$BuildDir\$Config\kachakacha_cad.exe"
 $OutputDirectory = Join-Path $RepoRoot "docs\manual-assets"
 $FirstCheck = Join-Path $RepoRoot "examples\first-check.kcd"
 $Acceptance = Join-Path $RepoRoot "examples\railway-nose-acceptance.kcd"
+$LightCase = Join-Path $RepoRoot "examples\panorama-light-case.kcd"
 $QtBin = "C:\Qt\6.9.2\msvc2022_64\bin"
 $VcpkgBin = Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\bin"
 
@@ -36,6 +37,7 @@ $Shots = @(
     @{ Name = "wire-edit"; Project = $FirstCheck; State = "edit" },
     @{ Name = "machining"; Project = $FirstCheck; State = "machining" },
     @{ Name = "surface-sections"; Project = $Acceptance; State = "surface" },
+    @{ Name = "protruding-light-case"; Project = $LightCase; State = "lightcase" },
     @{ Name = "plate-direction"; Project = $Acceptance; State = "direction" },
     @{ Name = "openings"; Project = $Acceptance; State = "openings" },
     @{ Name = "plate-split"; Project = $Acceptance; State = "split" },

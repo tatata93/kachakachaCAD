@@ -563,8 +563,8 @@ void Project::AddRuledSurface(std::string name, std::string firstSectionName, st
     }
     const NamedWire& first = RequireWire(firstSectionName);
     const NamedWire& second = RequireWire(secondSectionName);
-    if (first.projection.has_value() || second.projection.has_value()) {
-        throw std::invalid_argument("Projected wire cannot be used as a ruled surface section.");
+    if (first.plateOffset.has_value() || second.plateOffset.has_value()) {
+        throw std::invalid_argument("Plate-offset wire cannot be used as a ruled surface section.");
     }
     if (first.metadata.construction || second.metadata.construction) {
         throw std::invalid_argument("Construction wire cannot be used as a ruled surface section.");
@@ -1761,32 +1761,89 @@ void Project::ApplyWireConstraints()
 void Project::RebuildDependentGeometry()
 {
     ApplyWireConstraints();
-    for (NamedSurface& surface : surfaces_) {
-        if (surface.surface.Kind() == SurfaceKind::Planar) {
-            surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);
-        } else if (surface.surface.Kind() == SurfaceKind::Ruled) {
-            surface.surface = Surface::Ruled(
-                RequireWire(surface.sourceWireNames.at(0)).wire,
-                RequireWire(surface.sourceWireNames.at(1)).wire);
-        } else {
-            std::vector<Wire> sections;
-            sections.reserve(surface.sourceWireNames.size());
-            for (const std::string& sourceName : surface.sourceWireNames) {
-                sections.push_back(RequireWire(sourceName).wire);
-            }
-            surface.surface = Surface::Loft(std::move(sections));
+
+    const auto wireIndex = [this](const std::string& name) {
+        const auto found = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == name;
+        });
+        if (found == wires_.end()) {
+            throw std::logic_error("Dependent wire is missing: " + name);
         }
+        return static_cast<std::size_t>(std::distance(wires_.begin(), found));
+    };
+    const auto surfaceIndex = [this](const std::string& name) {
+        const auto found = std::find_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+            return surface.name == name;
+        });
+        if (found == surfaces_.end()) {
+            throw std::logic_error("Dependent surface is missing: " + name);
+        }
+        return static_cast<std::size_t>(std::distance(surfaces_.begin(), found));
+    };
+
+    std::vector<bool> wireReady(wires_.size(), false);
+    std::size_t pendingProjections = 0;
+    for (std::size_t index = 0; index < wires_.size(); ++index) {
+        wireReady[index] = !wires_[index].projection.has_value();
+        pendingProjections += wires_[index].projection.has_value() ? 1U : 0U;
     }
-    for (NamedWire& wire : wires_) {
-        if (!wire.projection.has_value()) {
-            continue;
+    std::vector<bool> surfaceReady(surfaces_.size(), false);
+    std::size_t pendingSurfaces = surfaces_.size();
+
+    while (pendingSurfaces > 0 || pendingProjections > 0) {
+        bool madeProgress = false;
+
+        for (std::size_t index = 0; index < surfaces_.size(); ++index) {
+            if (surfaceReady[index]) {
+                continue;
+            }
+            NamedSurface& surface = surfaces_[index];
+            const bool sourcesReady = std::all_of(
+                surface.sourceWireNames.begin(), surface.sourceWireNames.end(),
+                [&](const std::string& sourceName) { return wireReady[wireIndex(sourceName)]; });
+            if (!sourcesReady) {
+                continue;
+            }
+
+            if (surface.surface.Kind() == SurfaceKind::Planar) {
+                surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);
+            } else if (surface.surface.Kind() == SurfaceKind::Ruled) {
+                surface.surface = Surface::Ruled(
+                    RequireWire(surface.sourceWireNames.at(0)).wire,
+                    RequireWire(surface.sourceWireNames.at(1)).wire);
+            } else {
+                std::vector<Wire> sections;
+                sections.reserve(surface.sourceWireNames.size());
+                for (const std::string& sourceName : surface.sourceWireNames) {
+                    sections.push_back(RequireWire(sourceName).wire);
+                }
+                surface.surface = Surface::Loft(std::move(sections));
+            }
+            surfaceReady[index] = true;
+            --pendingSurfaces;
+            madeProgress = true;
         }
-        const NamedWire& source = RequireWire(wire.projection->sourceWireName);
-        const std::optional<Surface> surface = FindSurface(wire.projection->targetSurfaceName);
-        if (!surface.has_value()) {
-            throw std::logic_error("Projected wire target surface is missing.");
+
+        for (std::size_t index = 0; index < wires_.size(); ++index) {
+            NamedWire& wire = wires_[index];
+            if (wireReady[index] || !wire.projection.has_value()) {
+                continue;
+            }
+            const std::size_t sourceIndex = wireIndex(wire.projection->sourceWireName);
+            const std::size_t targetIndex = surfaceIndex(wire.projection->targetSurfaceName);
+            if (!wireReady[sourceIndex] || !surfaceReady[targetIndex]) {
+                continue;
+            }
+            wire.wire = surfaces_[targetIndex].surface.ProjectWireAlongDirection(
+                wires_[sourceIndex].wire, wire.projection->direction);
+            wireReady[index] = true;
+            --pendingProjections;
+            madeProgress = true;
         }
-        wire.wire = surface->ProjectWireAlongDirection(source.wire, wire.projection->direction);
+
+        if (!madeProgress) {
+            throw std::logic_error("Surface and projected-wire dependencies contain a cycle.");
+        }
     }
     for (NamedPlate& plate : plates_) {
         const std::optional<Surface> sourceSurface = FindSurface(plate.sourceSurfaceName);

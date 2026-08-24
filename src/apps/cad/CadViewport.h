@@ -21,6 +21,7 @@ class QLineEdit;
 enum class CadSelectionKind {
     None,
     WorkPlane,
+    Point,
     Wire,
     Surface,
     Plate,
@@ -35,6 +36,7 @@ struct CadSelection {
 enum class ViewportTool {
     Select,
     MoveGridOrigin,
+    DrawPoint,
     DrawLine,
     DrawPolyline,
     DrawRectangle,
@@ -51,6 +53,20 @@ enum class ViewportTool {
     Tangent,
     Curvature,
     Measure,
+};
+
+enum class DrawingSnapKind {
+    None,
+    Point,
+    Intersection,
+    Endpoint,
+    Grid,
+};
+
+struct DrawingSnapCandidate {
+    DrawingSnapKind kind = DrawingSnapKind::None;
+    kachakacha::geometry::Vector3 point;
+    double distancePixels = 0.0;
 };
 
 enum class MeasurementMode {
@@ -125,6 +141,7 @@ public:
     [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
     [[nodiscard]] CadSelection HoveredSelection() const noexcept { return hoveredSelection_; }
     void SetSelectionChangedCallback(std::function<void(const std::vector<CadSelection>&)> callback);
+    void SetPointCreatedCallback(std::function<void(kachakacha::geometry::Vector3)> callback);
     void SetLineCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetPolylineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
     void SetRectangleCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
@@ -158,6 +175,10 @@ public:
     [[nodiscard]] int GridSubdivision() const noexcept { return gridSubdivision_; }
     [[nodiscard]] double GridOriginU() const noexcept { return gridOriginU_; }
     [[nodiscard]] double GridOriginV() const noexcept { return gridOriginV_; }
+    [[nodiscard]] const std::optional<DrawingSnapCandidate>& DrawingSnapHover() const noexcept
+    {
+        return drawingSnapHover_;
+    }
     void SetWireAppearance(const QColor& color, double width, Qt::PenStyle style);
     void SetConstructionWireAppearance(const QColor& color, double width, Qt::PenStyle style);
     void SetSurfaceAppearance(
@@ -266,7 +287,12 @@ private:
     [[nodiscard]] std::optional<WireEndpointPick> NearestWireEndpoint(
         QPointF position,
         double maximumDistance = 12.0) const;
-    [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
+    [[nodiscard]] std::optional<DrawingSnapCandidate> FindDrawingSnap(
+        kachakacha::geometry::Vector3 point,
+        QPointF screenPosition) const;
+    [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(
+        kachakacha::geometry::Vector3 point,
+        QPointF screenPosition);
     [[nodiscard]] kachakacha::geometry::Vector3 SnapGridAlignmentTarget(
         kachakacha::geometry::Vector3 point,
         QPointF screenPosition) const;
@@ -300,6 +326,7 @@ private:
     ViewportDisplayMode displayMode_ = ViewportDisplayMode::Design;
     std::vector<CadSelection> isolatedSelections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
+    std::function<void(kachakacha::geometry::Vector3)> pointCreated_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineCreated_;
     std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> polylineCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> rectangleCreated_;
@@ -351,6 +378,7 @@ private:
     QColor minorGridColor_{"#c5cdd2"};
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
+    std::optional<DrawingSnapCandidate> drawingSnapHover_;
     QFrame* dynamicDimensionEditor_ = nullptr;
     QLabel* dynamicPrimaryLabel_ = nullptr;
     QLabel* dynamicSecondaryLabel_ = nullptr;

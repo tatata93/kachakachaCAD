@@ -528,6 +528,11 @@ void CadViewport::SetSelectionChangedCallback(std::function<void(const std::vect
     selectionChanged_ = std::move(callback);
 }
 
+void CadViewport::SetPointCreatedCallback(std::function<void(Vector3)> callback)
+{
+    pointCreated_ = std::move(callback);
+}
+
 void CadViewport::SetLineCreatedCallback(std::function<void(Vector3, Vector3)> callback)
 {
     lineCreated_ = std::move(callback);
@@ -652,6 +657,9 @@ void CadViewport::SetTool(ViewportTool tool)
 void CadViewport::SetSnapEnabled(bool enabled)
 {
     snapEnabled_ = enabled;
+    if (!enabled) {
+        drawingSnapHover_.reset();
+    }
     update();
 }
 
@@ -869,6 +877,13 @@ bool CadViewport::AlignToSelection()
 {
     if (project_ == nullptr || selection_.kind == CadSelectionKind::None) {
         return false;
+    }
+    if (selection_.kind == CadSelectionKind::Point
+        && selection_.index >= 0
+        && selection_.index < static_cast<int>(project_->Points().size())) {
+        target_ = project_->Points()[selection_.index].point;
+        update();
+        return true;
     }
 
     std::vector<Vector3> points;
@@ -1169,6 +1184,7 @@ void CadViewport::FinishDrawing()
         drawingPoints_.clear();
     }
     hoverDrawingPoint_.reset();
+    drawingSnapHover_.reset();
     dynamicDimensionEditor_->hide();
     NotifyDrawingState();
     update();
@@ -1178,6 +1194,7 @@ void CadViewport::CancelDrawing()
 {
     drawingPoints_.clear();
     hoverDrawingPoint_.reset();
+    drawingSnapHover_.reset();
     splitPreviewParameter_.reset();
     if (dynamicDimensionEditor_ != nullptr) {
         dynamicDimensionEditor_->hide();
@@ -1595,6 +1612,12 @@ void CadViewport::FitAll()
             include(plane.plane.Origin());
         }
     }
+    for (int index = 0; index < static_cast<int>(project_->Points().size()); ++index) {
+        const auto& point = project_->Points()[index];
+        if (ShouldDisplay(CadSelectionKind::Point, index, point.visible)) {
+            include(point.point);
+        }
+    }
 
     if (!hasPoint) {
         target_ = {};
@@ -1850,15 +1873,55 @@ void CadViewport::CommitCoincidencePick(QPointF position)
     update();
 }
 
-Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
+std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
+    Vector3 point,
+    QPointF screenPosition) const
 {
     if (!activePlane_.has_value() || !snapEnabled_) {
-        return point;
+        return std::nullopt;
     }
 
+    std::optional<DrawingSnapCandidate> best;
+    const auto priority = [](DrawingSnapKind kind) {
+        switch (kind) {
+        case DrawingSnapKind::Intersection: return 4;
+        case DrawingSnapKind::Point: return 3;
+        case DrawingSnapKind::Endpoint: return 2;
+        case DrawingSnapKind::Grid: return 1;
+        case DrawingSnapKind::None: return 0;
+        }
+        return 0;
+    };
+    const auto consider = [&](DrawingSnapKind kind, Vector3 candidate, double maximumDistance) {
+        const double distance = QLineF(screenPosition, ProjectPoint(candidate)).length();
+        if (distance > maximumDistance) {
+            return;
+        }
+        if (!best.has_value() || distance < best->distancePixels - 0.15
+            || (std::abs(distance - best->distancePixels) <= 0.15
+                && priority(kind) > priority(best->kind))) {
+            best = DrawingSnapCandidate{kind, candidate, distance};
+        }
+    };
+
     if (project_ != nullptr) {
-        double bestDistance = 10.0;
-        std::optional<Vector3> bestEndpoint;
+        for (int pointIndex = 0; pointIndex < static_cast<int>(project_->Points().size()); ++pointIndex) {
+            const auto& namedPoint = project_->Points()[pointIndex];
+            if (!ShouldDisplay(CadSelectionKind::Point, pointIndex, namedPoint.visible)
+                || std::abs(activePlane_->Project(namedPoint.point).w) > 1.0e-6) {
+                continue;
+            }
+            consider(DrawingSnapKind::Point, namedPoint.point, 3.0);
+        }
+
+        struct PlaneSegment {
+            double au = 0.0;
+            double av = 0.0;
+            double bu = 0.0;
+            double bv = 0.0;
+            int wireIndex = -1;
+        };
+        std::vector<PlaneSegment> nearbySegments;
         for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
             const auto& namedWire = project_->Wires()[wireIndex];
             if (!ShouldDisplay(CadSelectionKind::Wire, wireIndex, namedWire.visible)) {
@@ -1874,25 +1937,90 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
                 if (std::abs(activePlane_->Project(endpoint).w) > 1.0e-6) {
                     continue;
                 }
-                const double distance = QLineF(screenPosition, ProjectPoint(endpoint)).length();
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestEndpoint = endpoint;
+                consider(DrawingSnapKind::Endpoint, endpoint, 3.0);
+            }
+
+            std::vector<Vector3> samples;
+            if (namedWire.wire.Kind() == WireKind::Line
+                || namedWire.wire.Kind() == WireKind::Polyline) {
+                samples = namedWire.wire.ControlPoints();
+            } else {
+                constexpr int kCurveIntersectionSamples = 64;
+                samples.reserve(kCurveIntersectionSamples + 1);
+                for (int sample = 0; sample <= kCurveIntersectionSamples; ++sample) {
+                    samples.push_back(namedWire.wire.Evaluate(
+                        static_cast<double>(sample) / kCurveIntersectionSamples));
                 }
             }
+            for (std::size_t index = 1; index < samples.size(); ++index) {
+                const auto first = activePlane_->Project(samples[index - 1]);
+                const auto second = activePlane_->Project(samples[index]);
+                if (std::abs(first.w) > 1.0e-6 || std::abs(second.w) > 1.0e-6
+                    || DistanceToSegment(
+                           screenPosition,
+                           ProjectPoint(samples[index - 1]),
+                           ProjectPoint(samples[index])) > 7.0) {
+                    continue;
+                }
+                nearbySegments.push_back({
+                    first.u, first.v, second.u, second.v, wireIndex,
+                });
+            }
         }
-        if (bestEndpoint.has_value()) {
-            return *bestEndpoint;
+
+        for (std::size_t firstIndex = 0; firstIndex < nearbySegments.size(); ++firstIndex) {
+            const PlaneSegment& first = nearbySegments[firstIndex];
+            const double firstU = first.bu - first.au;
+            const double firstV = first.bv - first.av;
+            for (std::size_t secondIndex = firstIndex + 1;
+                 secondIndex < nearbySegments.size(); ++secondIndex) {
+                const PlaneSegment& second = nearbySegments[secondIndex];
+                if (first.wireIndex == second.wireIndex) {
+                    continue;
+                }
+                const double secondU = second.bu - second.au;
+                const double secondV = second.bv - second.av;
+                const double denominator = firstU * secondV - firstV * secondU;
+                if (std::abs(denominator) <= 1.0e-12) {
+                    continue;
+                }
+                const double deltaU = second.au - first.au;
+                const double deltaV = second.av - first.av;
+                const double firstParameter = (deltaU * secondV - deltaV * secondU) / denominator;
+                const double secondParameter = (deltaU * firstV - deltaV * firstU) / denominator;
+                if (firstParameter < -1.0e-8 || firstParameter > 1.0 + 1.0e-8
+                    || secondParameter < -1.0e-8 || secondParameter > 1.0 + 1.0e-8) {
+                    continue;
+                }
+                consider(
+                    DrawingSnapKind::Intersection,
+                    activePlane_->ToWorld(
+                        first.au + firstU * firstParameter,
+                        first.av + firstV * firstParameter),
+                    3.5);
+            }
         }
     }
 
-    const double gridStep = snapStep_ / static_cast<double>(gridSubdivision_);
-    const auto coordinates = activePlane_->Project(point);
-    const double snappedU = gridOriginU_
-        + std::round((coordinates.u - gridOriginU_) / gridStep) * gridStep;
-    const double snappedV = gridOriginV_
-        + std::round((coordinates.v - gridOriginV_) / gridStep) * gridStep;
-    return activePlane_->ToWorld(snappedU, snappedV);
+    if (gridPointsVisible_) {
+        const double gridStep = snapStep_ / static_cast<double>(gridSubdivision_);
+        const auto coordinates = activePlane_->Project(point);
+        const double snappedU = gridOriginU_
+            + std::round((coordinates.u - gridOriginU_) / gridStep) * gridStep;
+        const double snappedV = gridOriginV_
+            + std::round((coordinates.v - gridOriginV_) / gridStep) * gridStep;
+        consider(
+            DrawingSnapKind::Grid,
+            activePlane_->ToWorld(snappedU, snappedV),
+            1.25);
+    }
+    return best;
+}
+
+Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition)
+{
+    drawingSnapHover_ = FindDrawingSnap(point, screenPosition);
+    return drawingSnapHover_.has_value() ? drawingSnapHover_->point : point;
 }
 
 Vector3 CadViewport::SnapGridAlignmentTarget(Vector3 point, QPointF screenPosition) const
@@ -2018,6 +2146,17 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
         return;
     }
 
+    if (tool_ == ViewportTool::DrawPoint) {
+        if (pointCreated_) {
+            pointCreated_(point);
+        }
+        hoverDrawingPoint_ = point;
+        drawingSnapHover_.reset();
+        NotifyDrawingState();
+        update();
+        return;
+    }
+
     if (tool_ == ViewportTool::DrawRectangle && drawingPoints_.size() == 1) {
         const auto firstCoordinates = activePlane_->Project(drawingPoints_.front());
         const auto secondCoordinates = activePlane_->Project(point);
@@ -2112,7 +2251,25 @@ void CadViewport::UpdateHover(QPointF position)
     hoveredWireParameter_.reset();
     hoveredControlPoint_.reset();
 
-    if (const auto controlPoint = NearestEditableControlPoint(position, 9.0);
+    CadSelection nearbyPoint;
+    if (project_ != nullptr && tool_ == ViewportTool::Select) {
+        double bestDistance = 7.0;
+        for (int index = 0; index < static_cast<int>(project_->Points().size()); ++index) {
+            const auto& point = project_->Points()[index];
+            if (!ShouldDisplay(CadSelectionKind::Point, index, point.visible)) {
+                continue;
+            }
+            const double distance = QLineF(position, ProjectPoint(point.point)).length();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                nearbyPoint = {CadSelectionKind::Point, index};
+            }
+        }
+    }
+
+    if (nearbyPoint.kind == CadSelectionKind::Point) {
+        hoveredSelection_ = nearbyPoint;
+    } else if (const auto controlPoint = NearestEditableControlPoint(position, 9.0);
         controlPoint.has_value()) {
         hoveredControlPoint_ = controlPoint;
         hoveredSelection_ = {CadSelectionKind::Wire, controlPoint->wireIndex};
@@ -2126,7 +2283,9 @@ void CadViewport::UpdateHover(QPointF position)
             hoveredSelection_ = {CadSelectionKind::Wire, endpoint->wireIndex};
             hoveredWirePoint_ = endpoint->point;
         }
-    } else if (project_ != nullptr) {
+    } else if (project_ != nullptr
+        && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
+            || tool_ == ViewportTool::SplitWire)) {
         double bestPointDistance = 8.0;
         int bestPointWire = -1;
         Vector3 bestPoint;
@@ -2186,13 +2345,14 @@ void CadViewport::ClearHover()
 {
     if (hoveredSelection_.kind == CadSelectionKind::None
         && !hoveredWirePoint_.has_value() && !hoveredWireParameter_.has_value()
-        && !hoveredControlPoint_.has_value()) {
+        && !hoveredControlPoint_.has_value() && !drawingSnapHover_.has_value()) {
         return;
     }
     hoveredSelection_ = {};
     hoveredWirePoint_.reset();
     hoveredWireParameter_.reset();
     hoveredControlPoint_.reset();
+    drawingSnapHover_.reset();
     update();
 }
 
@@ -2640,6 +2800,27 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
         }
 
+        for (int index = 0; index < static_cast<int>(project_->Points().size()); ++index) {
+            const auto& namedPoint = project_->Points()[index];
+            if (!ShouldDisplay(CadSelectionKind::Point, index, namedPoint.visible)) {
+                continue;
+            }
+            const bool selected = IsSelected(CadSelectionKind::Point, index);
+            const bool hovered = hoveredSelection_.kind == CadSelectionKind::Point
+                && hoveredSelection_.index == index;
+            const QPointF center = ProjectPoint(namedPoint.point);
+            const QColor color = selected ? QColor("#e69200")
+                : hovered ? QColor("#087f9c") : QColor("#54767a");
+            painter.save();
+            painter.setBrush(selected || hovered ? QColor(255, 255, 255, 235) : color);
+            painter.setPen(QPen(color, selected || hovered ? 2.0 : 1.3));
+            painter.drawEllipse(center, selected || hovered ? 4.0 : 2.6,
+                selected || hovered ? 4.0 : 2.6);
+            painter.drawLine(center + QPointF(-6.0, 0.0), center + QPointF(6.0, 0.0));
+            painter.drawLine(center + QPointF(0.0, -6.0), center + QPointF(0.0, 6.0));
+            painter.restore();
+        }
+
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
             if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
@@ -3022,11 +3203,36 @@ void CadViewport::paintEvent(QPaintEvent*)
                 }
             }
         }
-        painter.setBrush(QColor("#ffffff"));
-        painter.setPen(QPen(QColor("#d97706"), 2.0));
-        painter.drawEllipse(ProjectPoint(*hoverDrawingPoint_), 4.0, 4.0);
+        painter.setBrush(QColor(255, 255, 255, 190));
+        painter.setPen(QPen(QColor(217, 119, 6, 185), 1.3));
+        painter.drawEllipse(ProjectPoint(*hoverDrawingPoint_), 2.7, 2.7);
         for (const Vector3& point : drawingPoints_) {
             painter.drawEllipse(ProjectPoint(point), 4.0, 4.0);
+        }
+        if (drawingSnapHover_.has_value()) {
+            const QPointF center = ProjectPoint(drawingSnapHover_->point);
+            painter.save();
+            painter.setBrush(QColor(255, 255, 255, 175));
+            painter.setPen(QPen(QColor(8, 119, 128, 155), 1.2));
+            switch (drawingSnapHover_->kind) {
+            case DrawingSnapKind::Intersection:
+                painter.drawLine(center + QPointF(-4.0, -4.0), center + QPointF(4.0, 4.0));
+                painter.drawLine(center + QPointF(-4.0, 4.0), center + QPointF(4.0, -4.0));
+                break;
+            case DrawingSnapKind::Point:
+                painter.drawRect(QRectF(center - QPointF(3.5, 3.5), QSizeF(7.0, 7.0)));
+                break;
+            case DrawingSnapKind::Endpoint:
+                painter.drawEllipse(center, 3.8, 3.8);
+                break;
+            case DrawingSnapKind::Grid:
+                painter.setPen(QPen(QColor(8, 119, 128, 105), 1.0));
+                painter.drawEllipse(center, 3.0, 3.0);
+                break;
+            case DrawingSnapKind::None:
+                break;
+            }
+            painter.restore();
         }
     }
 
@@ -3164,6 +3370,9 @@ void CadViewport::paintEvent(QPaintEvent*)
         break;
     case ViewportTool::MoveGridOrigin:
         modeText = QStringLiteral("点グリッド基準をドラッグ");
+        break;
+    case ViewportTool::DrawPoint:
+        modeText = QStringLiteral("作図点");
         break;
     case ViewportTool::DrawLine:
         modeText = QStringLiteral("直線");
@@ -3426,6 +3635,23 @@ CadSelection CadViewport::HitTest(QPointF position) const
         return {};
     }
 
+    double pointDistance = 7.0;
+    CadSelection pointSelection;
+    for (int index = 0; index < static_cast<int>(project_->Points().size()); ++index) {
+        const auto& point = project_->Points()[index];
+        if (!ShouldDisplay(CadSelectionKind::Point, index, point.visible)) {
+            continue;
+        }
+        const double distance = QLineF(position, ProjectPoint(point.point)).length();
+        if (distance < pointDistance) {
+            pointDistance = distance;
+            pointSelection = {CadSelectionKind::Point, index};
+        }
+    }
+    if (pointSelection.kind == CadSelectionKind::Point) {
+        return pointSelection;
+    }
+
     const CadSelection wire = HitTestWire(position);
     if (wire.kind != CadSelectionKind::None) {
         return wire;
@@ -3651,6 +3877,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Tangent
         && tool_ != ViewportTool::Curvature
         && tool_ != ViewportTool::MoveGridOrigin
+        && tool_ != ViewportTool::DrawPoint
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {

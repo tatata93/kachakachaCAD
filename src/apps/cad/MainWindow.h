@@ -137,6 +137,7 @@ private:
     void OpenLegalNotices();
     void CommitDrawingDimensions();
     void RefreshActiveWorkPlane();
+    void AddViewportPoint(kachakacha::geometry::Vector3 point);
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
     void AddViewportPolyline(const std::vector<kachakacha::geometry::Vector3>& points);
     void AddViewportRectangle(const std::array<kachakacha::geometry::Vector3, 4>& corners);
@@ -195,6 +196,7 @@ private:
     QAction* finishedDisplayAction_ = nullptr;
     QAction* isolateDisplayAction_ = nullptr;
     QAction* selectToolAction_ = nullptr;
+    QAction* pointToolAction_ = nullptr;
     QAction* lineToolAction_ = nullptr;
     QAction* polylineToolAction_ = nullptr;
     QAction* rectangleToolAction_ = nullptr;

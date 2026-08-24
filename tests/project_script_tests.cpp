@@ -56,6 +56,7 @@ void LoadsPlanesAndWires()
         plane_three base 0 0 0  1 0 0  0 1 0
         plane_offset roof base 2.5
         plane_point_normal front 10 0 0  1 0 0  0 1 0
+        point3d window_center 10 3.5 5 front
         line3d diagonal 0 0 0  2 7 4
         polyline3d handrail 0 0 0  1 0 0  1 1 0
         circle3d coupler 0 0 0  1 0 0  0 1 0  2
@@ -69,6 +70,9 @@ void LoadsPlanesAndWires()
     const auto project = LoadProjectScript(input, "test");
 
     Require(project.WorkPlanes().size() == 3, "plane count");
+    Require(project.Points().size() == 1, "point count");
+    RequireNear(project.Points()[0].point, {10.0, 3.5, 5.0}, "point position");
+    Require(project.Points()[0].sourcePlaneName == "front", "point source plane");
     Require(project.Wires().size() == 8, "wire count");
     RequireNear(project.Wires()[0].wire.End(), {2.0, 7.0, 4.0}, "3d line end");
     Require(project.Wires()[0].metadata.planePolicy == WirePlanePolicy::Free3D, "3d line is free");
@@ -991,16 +995,20 @@ void VisibilityRoundTrips()
 {
     std::istringstream input(R"(
         plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        point3d datum 2 3 0 drawing
         sketch_circle boundary drawing 0 0 5 reference
         surface_planar panel boundary
         plate side_sheet panel 0.5 centered styrene
         visibility workplane drawing hidden
+        visibility point datum hidden
         visibility wire boundary hidden
         visibility surface panel hidden
         visibility plate side_sheet hidden
     )");
     const auto project = LoadProjectScript(input, "visibility-test");
     Require(!project.WorkPlanes()[0].visible, "load hidden workplane");
+    Require(project.Points().size() == 1, "load point");
+    Require(!project.Points()[0].visible, "load hidden point");
     Require(!project.Wires()[0].visible, "load hidden wire");
     Require(!project.Surfaces()[0].visible, "load hidden surface");
     Require(project.Plates().size() == 1, "load plate");
@@ -1013,6 +1021,9 @@ void VisibilityRoundTrips()
     std::istringstream roundTripInput(output.str());
     const auto roundTripped = LoadProjectScript(roundTripInput, "visibility-roundtrip");
     Require(!roundTripped.WorkPlanes()[0].visible, "roundtrip hidden workplane");
+    Require(roundTripped.Points().size() == 1, "roundtrip point");
+    RequireNear(roundTripped.Points()[0].point, {2.0, 3.0, 0.0}, "roundtrip point position");
+    Require(!roundTripped.Points()[0].visible, "roundtrip hidden point");
     Require(!roundTripped.Wires()[0].visible, "roundtrip hidden wire");
     Require(!roundTripped.Surfaces()[0].visible, "roundtrip hidden surface");
     Require(roundTripped.Plates().size() == 1, "roundtrip plate");

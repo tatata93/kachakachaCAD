@@ -437,6 +437,18 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     name,
                     RequirePlane(project, sourcePlaneName, sourceName, lineNumber)
                         .RotateAroundAxis(axisPoint, axisDirection, degrees * Pi / 180.0));
+            } else if (command == "point3d") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "point");
+                const Vector3 point = ReadVector3(stream, sourceName, lineNumber, "position");
+                const std::string sourcePlaneName = ReadName(
+                    stream, sourceName, lineNumber, "source plane");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPoint(
+                    name,
+                    point,
+                    sourcePlaneName == "-" || sourcePlaneName == "none"
+                        ? std::nullopt
+                        : std::optional<std::string>(sourcePlaneName));
             } else if (command == "line3d") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const Vector3 start = ReadVector3(stream, sourceName, lineNumber, "start");
@@ -773,6 +785,8 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const bool visible = state == "shown";
                 if (objectKind == "workplane") {
                     project.SetWorkPlaneVisible(name, visible);
+                } else if (objectKind == "point") {
+                    project.SetPointVisible(name, visible);
                 } else if (objectKind == "wire") {
                     project.SetWireVisible(name, visible);
                 } else if (objectKind == "surface") {
@@ -785,7 +799,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     project.SetReferenceDimensionVisible(name, visible);
                 } else {
                     throw std::invalid_argument(
-                        "Visibility object kind must be workplane, wire, surface, plate, body, or dimension.");
+                        "Visibility object kind must be workplane, point, wire, surface, plate, body, or dimension.");
                 }
             } else {
                 ThrowLineError(sourceName, lineNumber, "Unknown command: " + command);
@@ -816,7 +830,25 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         output << '\n';
     }
 
-    if (!project.WorkPlanes().empty() && !project.Wires().empty()) {
+    if (!project.WorkPlanes().empty() && (!project.Points().empty() || !project.Wires().empty())) {
+        output << '\n';
+    }
+
+    for (const auto& namedPoint : project.Points()) {
+        RequireScriptNameSafe(namedPoint.name, "Point");
+        output << "point3d " << namedPoint.name << ' ';
+        WriteVector3(output, namedPoint.point);
+        output << ' ';
+        if (namedPoint.sourcePlaneName.has_value()) {
+            RequireScriptNameSafe(*namedPoint.sourcePlaneName, "Point source plane");
+            output << *namedPoint.sourcePlaneName;
+        } else {
+            output << '-';
+        }
+        output << '\n';
+    }
+
+    if (!project.Points().empty() && !project.Wires().empty()) {
         output << '\n';
     }
 
@@ -1131,6 +1163,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
 
     const bool hasHiddenObjects = std::any_of(project.WorkPlanes().begin(), project.WorkPlanes().end(), [](const auto& plane) {
         return !plane.visible;
+    }) || std::any_of(project.Points().begin(), project.Points().end(), [](const auto& point) {
+        return !point.visible;
     }) || std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
         return !wire.visible;
     }) || std::any_of(project.Surfaces().begin(), project.Surfaces().end(), [](const auto& surface) {
@@ -1148,6 +1182,11 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     for (const auto& plane : project.WorkPlanes()) {
         if (!plane.visible) {
             output << "visibility workplane " << plane.name << " hidden\n";
+        }
+    }
+    for (const auto& point : project.Points()) {
+        if (!point.visible) {
+            output << "visibility point " << point.name << " hidden\n";
         }
     }
     for (const auto& wire : project.Wires()) {

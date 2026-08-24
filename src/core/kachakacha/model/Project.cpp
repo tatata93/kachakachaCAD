@@ -517,6 +517,28 @@ void Project::AddWorkPlane(std::string name, WorkPlane plane)
     workPlanes_.push_back({std::move(name), plane});
 }
 
+void Project::AddPoint(
+    std::string name,
+    geometry::Vector3 point,
+    std::optional<std::string> sourcePlaneName)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Point name must not be empty.");
+    }
+    if (!point.IsFinite()) {
+        throw std::invalid_argument("Point coordinates must be finite.");
+    }
+    if (std::any_of(points_.begin(), points_.end(), [&](const NamedPoint& existingPoint) {
+            return existingPoint.name == name;
+        })) {
+        throw std::invalid_argument("Point name already exists: " + name);
+    }
+    if (sourcePlaneName.has_value() && !FindWorkPlane(*sourcePlaneName).has_value()) {
+        throw std::invalid_argument("Point source plane does not exist: " + *sourcePlaneName);
+    }
+    points_.push_back({std::move(name), point, std::move(sourcePlaneName)});
+}
+
 void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
 {
     if (name.empty()) {
@@ -1206,6 +1228,17 @@ void Project::SetWorkPlaneVisible(std::string_view name, bool visible)
     throw std::invalid_argument("Work plane name does not exist: " + std::string(name));
 }
 
+void Project::SetPointVisible(std::string_view name, bool visible)
+{
+    for (NamedPoint& point : points_) {
+        if (point.name == name) {
+            point.visible = visible;
+            return;
+        }
+    }
+    throw std::invalid_argument("Point name does not exist: " + std::string(name));
+}
+
 void Project::SetWireVisible(std::string_view name, bool visible)
 {
     for (NamedWire& wire : wires_) {
@@ -1532,6 +1565,23 @@ bool Project::RemoveWorkPlane(std::string_view name)
             wire.metadata.sourcePlaneName.reset();
         }
     }
+    for (NamedPoint& point : points_) {
+        if (point.sourcePlaneName.has_value() && *point.sourcePlaneName == name) {
+            point.sourcePlaneName.reset();
+        }
+    }
+    return true;
+}
+
+bool Project::RemovePoint(std::string_view name)
+{
+    const auto position = std::find_if(points_.begin(), points_.end(), [&](const NamedPoint& point) {
+        return point.name == name;
+    });
+    if (position == points_.end()) {
+        return false;
+    }
+    points_.erase(position);
     return true;
 }
 

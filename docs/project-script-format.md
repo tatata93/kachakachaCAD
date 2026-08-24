@@ -50,6 +50,14 @@ plane_rotate NAME SOURCE ax ay az dx dy dz angleDegrees
 
 `SOURCE` 平面を、点 `(ax, ay, az)` と方向 `(dx, dy, dz)` の軸まわりに回転する。
 
+### 作図点
+
+```text
+point3d NAME x y z SOURCE_PLANE_OR_-
+```
+
+線の交点や任意位置に置く、作図・スナップ用の点。作成元の作業平面がある場合は名前を、自由3D点なら `-` を指定する。
+
 ### 3D直線
 
 ```text
@@ -279,7 +287,7 @@ reference_dimension floor_gap point_plane_distance point 12 4 7 plane floor
 ### 表示・非表示
 
 ```text
-visibility workplane|wire|surface|plate|body|dimension NAME shown|hidden
+visibility workplane|point|wire|surface|plate|body|dimension NAME shown|hidden
 ```
 
 非表示の作図用断面や平面図もプロジェクトから削除せず、依存関係を保ったままモデル一覧へ残す。

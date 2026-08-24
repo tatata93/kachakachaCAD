@@ -474,6 +474,9 @@ void MainWindow::BuildUi()
     viewport_->SetSelectionChangedCallback([this](const std::vector<CadSelection>& selections) {
         UpdateSelections(selections, true);
     });
+    viewport_->SetPointCreatedCallback([this](Vector3 point) {
+        AddViewportPoint(point);
+    });
     viewport_->SetLineCreatedCallback([this](Vector3 start, Vector3 end) {
         AddViewportLine(start, end);
     });
@@ -651,6 +654,8 @@ void MainWindow::BuildUi()
         bool currentVisibility = visible;
         if (kind == CadSelectionKind::WorkPlane && index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
             currentVisibility = project_.WorkPlanes()[index].visible;
+        } else if (kind == CadSelectionKind::Point && index >= 0 && index < static_cast<int>(project_.Points().size())) {
+            currentVisibility = project_.Points()[index].visible;
         } else if (kind == CadSelectionKind::Wire && index >= 0 && index < static_cast<int>(project_.Wires().size())) {
             currentVisibility = project_.Wires()[index].visible;
         } else if (kind == CadSelectionKind::Surface && index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
@@ -669,6 +674,8 @@ void MainWindow::BuildUi()
         RecordUndo();
         if (kind == CadSelectionKind::WorkPlane) {
             project_.SetWorkPlaneVisible(project_.WorkPlanes()[index].name, visible);
+        } else if (kind == CadSelectionKind::Point) {
+            project_.SetPointVisible(project_.Points()[index].name, visible);
         } else if (kind == CadSelectionKind::Wire) {
             project_.SetWireVisible(project_.Wires()[index].name, visible);
         } else if (kind == CadSelectionKind::Surface) {
@@ -734,6 +741,7 @@ void MainWindow::BuildUi()
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
         const ViewportTool tool = viewport_->Tool();
         const bool drawingTool = tool == ViewportTool::DrawLine
+            || tool == ViewportTool::DrawPoint
             || tool == ViewportTool::DrawPolyline || tool == ViewportTool::DrawRectangle
             || tool == ViewportTool::DrawCircle || tool == ViewportTool::DrawArc
             || tool == ViewportTool::DrawBezier || tool == ViewportTool::DrawSpline;
@@ -791,6 +799,7 @@ void MainWindow::BuildUi()
 void MainWindow::BuildDrawingActions()
 {
     selectToolAction_ = new QAction(QStringLiteral("選択"), this);
+    pointToolAction_ = new QAction(QStringLiteral("作図点"), this);
     lineToolAction_ = new QAction(QStringLiteral("直線"), this);
     polylineToolAction_ = new QAction(QStringLiteral("ポリライン"), this);
     rectangleToolAction_ = new QAction(QStringLiteral("矩形"), this);
@@ -831,6 +840,7 @@ void MainWindow::BuildDrawingActions()
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
     clearReferenceAction_->setToolTip(QStringLiteral("現在の基準線を解除する"));
+    pointToolAction_->setToolTip(QStringLiteral("交点・端点・格子点または任意位置に、スナップ基準として残る点を置く"));
     lineToolAction_->setToolTip(QStringLiteral("始点と終点を指定。Shiftで作図面の水平・垂直へ固定"));
     polylineToolAction_->setToolTip(QStringLiteral("点を続けて指定。Shiftで次の辺を水平・垂直へ固定"));
     rectangleToolAction_->setToolTip(QStringLiteral("対角2点を指定。Shiftで正方形へ固定"));
@@ -838,6 +848,7 @@ void MainWindow::BuildDrawingActions()
     clearReferenceAction_->setEnabled(false);
 
     selectToolAction_->setShortcut(Qt::Key_V);
+    pointToolAction_->setShortcut(Qt::Key_D);
     lineToolAction_->setShortcut(Qt::Key_L);
     polylineToolAction_->setShortcut(Qt::Key_P);
     rectangleToolAction_->setShortcut(Qt::Key_R);
@@ -853,7 +864,7 @@ void MainWindow::BuildDrawingActions()
     auto* toolGroup = new QActionGroup(this);
     toolGroup->setExclusive(true);
     for (QAction* action : {
-             selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
+             selectToolAction_, pointToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_, splineToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
              coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_,
@@ -864,6 +875,7 @@ void MainWindow::BuildDrawingActions()
     selectToolAction_->setChecked(true);
 
     connect(selectToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Select); });
+    connect(pointToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawPoint); });
     connect(lineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawLine); });
     connect(polylineToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawPolyline); });
     connect(rectangleToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::DrawRectangle); });
@@ -954,6 +966,7 @@ QWidget* MainWindow::BuildDrawingPanel()
     addToolButton(arcToolAction_, 2, 1);
     addToolButton(bezierToolAction_, 3, 0);
     addToolButton(splineToolAction_, 3, 1);
+    addToolButton(pointToolAction_, 4, 0, 2);
     layout->addLayout(toolGrid);
 
     drawingConstruction_ = new QCheckBox(QStringLiteral("補助線として作図"));
@@ -2835,6 +2848,12 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                     return CadSelection{kind, index};
                 }
             }
+        } else if (kind == CadSelectionKind::Point) {
+            for (int index = 0; index < static_cast<int>(project_.Points().size()); ++index) {
+                if (project_.Points()[index].name == name) {
+                    return CadSelection{kind, index};
+                }
+            }
         } else if (kind == CadSelectionKind::Wire) {
             for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
                 if (project_.Wires()[index].name == name) {
@@ -2929,7 +2948,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
         showTab(0);
         viewport_->FitAll();
-    } else if (state == QStringLiteral("grid") || state == QStringLiteral("drawing")) {
+    } else if (state == QStringLiteral("grid") || state == QStringLiteral("drawing")
+        || state == QStringLiteral("snap")) {
         if (!setActivePlane(QStringLiteral("front"))) {
             return false;
         }
@@ -2951,6 +2971,24 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(0);
         if (state == QStringLiteral("drawing")) {
             SetViewportTool(ViewportTool::DrawLine);
+        } else if (state == QStringLiteral("snap")) {
+            const auto front = project_.FindWorkPlane("front");
+            if (!front.has_value()) {
+                return false;
+            }
+            for (const auto& wire : project_.Wires()) {
+                project_.SetWireVisible(wire.name, false);
+            }
+            WireMetadata metadata;
+            metadata.sourcePlaneName = "front";
+            metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+            project_.AddWire("snap_horizontal", Wire::Line(
+                front->ToWorld(-6.0, 1.0), front->ToWorld(4.0, 1.0)), metadata);
+            project_.AddWire("snap_vertical", Wire::Line(
+                front->ToWorld(-1.0, -3.0), front->ToWorld(-1.0, 5.0)), metadata);
+            project_.AddPoint("snap_reference", front->ToWorld(2.0, 3.0), "front");
+            RefreshModelViews(false);
+            SetViewportTool(ViewportTool::DrawPoint);
         } else {
             SetViewportTool(ViewportTool::MoveGridOrigin);
         }
@@ -2984,6 +3022,14 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                     QEvent::KeyPress, character.unicode(), Qt::NoModifier, QString(character));
                 QApplication::sendEvent(target, &keyEvent);
             }
+        } else if (state == QStringLiteral("snap")) {
+            QApplication::processEvents();
+            const QPointF intersection(viewport_->width() * 0.5, viewport_->height() * 0.5);
+            const QPointF globalPosition = viewport_->mapToGlobal(intersection.toPoint());
+            QMouseEvent moveEvent(
+                QEvent::MouseMove, intersection, globalPosition,
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(viewport_, &moveEvent);
         }
     } else if (state == QStringLiteral("workplane")) {
         for (const auto& plane : project_.WorkPlanes()) {
@@ -4340,6 +4386,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         gridPointsVisible_->setChecked(true);
     }
     selectToolAction_->setChecked(tool == ViewportTool::Select);
+    pointToolAction_->setChecked(tool == ViewportTool::DrawPoint);
     lineToolAction_->setChecked(tool == ViewportTool::DrawLine);
     polylineToolAction_->setChecked(tool == ViewportTool::DrawPolyline);
     rectangleToolAction_->setChecked(tool == ViewportTool::DrawRectangle);
@@ -4364,6 +4411,10 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     case ViewportTool::MoveGridOrigin:
         statusBar()->showMessage(
             QStringLiteral("点グリッド: 動かす点を掴み、作図上の合わせたい点までドラッグ"), 5000);
+        break;
+    case ViewportTool::DrawPoint:
+        statusBar()->showMessage(
+            QStringLiteral("作図点: 位置をクリック。記号が出た候補だけに弱く吸着します"), 4500);
         break;
     case ViewportTool::DrawLine:
         statusBar()->showMessage(QStringLiteral("直線作図モード"), 2500);
@@ -4429,6 +4480,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::MoveGridOrigin:
         state = QStringLiteral("点グリッド基準 · 格子点をドラッグ");
+        break;
+    case ViewportTool::DrawPoint:
+        state = QStringLiteral("作図点 · 位置をクリック");
         break;
     case ViewportTool::DrawLine:
         state = QStringLiteral("直線 · %1  %2 / 2点")
@@ -4521,6 +4575,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     if (cancelDrawingAction_ != nullptr) {
         cancelDrawingAction_->setEnabled(pointCount > 0);
     }
+    if (drawingConstruction_ != nullptr) {
+        drawingConstruction_->setVisible(tool != ViewportTool::DrawPoint);
+    }
     RefreshBeginnerGuide();
 
     if (drawingDimensionSection_ == nullptr || drawingDimensionStack_ == nullptr
@@ -4590,11 +4647,13 @@ void MainWindow::RefreshBeginnerGuide()
     }
 
     const auto& selections = viewport_->Selections();
+    std::size_t pointSelectionCount = 0;
     std::size_t wireCount = 0;
     std::size_t surfaceCount = 0;
     std::size_t plateCount = 0;
     std::size_t bodyCount = 0;
     for (const CadSelection& selection : selections) {
+        pointSelectionCount += selection.kind == CadSelectionKind::Point ? 1 : 0;
         wireCount += selection.kind == CadSelectionKind::Wire ? 1 : 0;
         surfaceCount += selection.kind == CadSelectionKind::Surface ? 1 : 0;
         plateCount += selection.kind == CadSelectionKind::Plate ? 1 : 0;
@@ -4603,6 +4662,9 @@ void MainWindow::RefreshBeginnerGuide()
     QString selectionText = QStringLiteral("なし");
     if (!selections.empty()) {
         QStringList parts;
+        if (pointSelectionCount > 0) {
+            parts << QStringLiteral("作図点%1個").arg(pointSelectionCount);
+        }
         if (wireCount > 0) {
             parts << QStringLiteral("ワイヤー%1本").arg(wireCount);
         }
@@ -4615,7 +4677,7 @@ void MainWindow::RefreshBeginnerGuide()
         if (bodyCount > 0) {
             parts << QStringLiteral("立体%1個").arg(bodyCount);
         }
-        const std::size_t described = wireCount + surfaceCount + plateCount + bodyCount;
+        const std::size_t described = pointSelectionCount + wireCount + surfaceCount + plateCount + bodyCount;
         if (selections.size() > described) {
             parts << QStringLiteral("作業平面など%1個").arg(selections.size() - described);
         }
@@ -4647,6 +4709,12 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 動かす格子点から合わせたい点までドラッグ"),
                 QStringLiteral("1  大きい主点または小さい副点を掴む\n2  線の端点・制御点までドラッグ\n3  離すと基準X/Yへ反映。Escで取消"),
                 QStringLiteral("grid"));
+            return;
+        case ViewportTool::DrawPoint:
+            setGuide(QStringLiteral("作図点を置く"),
+                QStringLiteral("次: 点を置く位置を中央画面でクリック"),
+                QStringLiteral("交点・端点・格子点は薄い記号が出た時だけ吸着\n記号がなければ、そのまま任意位置に置けます"),
+                QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawLine:
             setGuide(QStringLiteral("直線を描く"),
@@ -4859,6 +4927,7 @@ void MainWindow::RefreshActiveWorkPlane()
     }
     viewport_->SetActiveWorkPlane(plane);
     const bool canDraw = plane.has_value();
+    pointToolAction_->setEnabled(canDraw);
     lineToolAction_->setEnabled(canDraw);
     polylineToolAction_->setEnabled(canDraw);
     rectangleToolAction_->setEnabled(canDraw);
@@ -4889,6 +4958,24 @@ void MainWindow::RefreshActiveWorkPlane()
     }
     UpdateWireOffsetPreview();
     RefreshBeginnerGuide();
+}
+
+void MainWindow::AddViewportPoint(Vector3 point)
+{
+    try {
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        RecordUndo();
+        project_.AddPoint(
+            ToName(SuggestedDirectGroupName(QStringLiteral("point"))), point, planeName);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("作図点を作成しました"), 1800);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
 }
 
 void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
@@ -6560,6 +6647,7 @@ bool MainWindow::RunCreationSelfTest()
         || designDisplayAction_ == nullptr
         || finishedDisplayAction_ == nullptr
         || isolateDisplayAction_ == nullptr
+        || pointToolAction_ == nullptr
         || modelExportScope_ == nullptr
         || plateVariableThickness_ == nullptr
         || plateEndThickness_ == nullptr
@@ -6992,6 +7080,95 @@ bool MainWindow::RunCreationSelfTest()
                    << "rectangle" << afterRectangle
                    << "circle" << project_.Wires().size();
         return fail("direct drawing result");
+    }
+
+    {
+        const Project snapTestProject = project_;
+        const auto snapTestUndo = undoStack_;
+        const auto snapTestRedo = redoStack_;
+        const std::size_t snapWireStart = project_.Wires().size();
+
+        SetViewportTool(ViewportTool::DrawLine);
+        click(center + QPointF(-120.0, 0.0));
+        click(center + QPointF(120.0, 0.0));
+        SetViewportTool(ViewportTool::DrawLine);
+        click(center + QPointF(0.0, -105.0));
+        click(center + QPointF(0.0, 105.0));
+        if (project_.Wires().size() != snapWireStart + 2) {
+            return fail("create crossing snap test lines");
+        }
+
+        SetViewportTool(ViewportTool::DrawPoint);
+        sendMouse(QEvent::MouseMove, center, Qt::NoButton, Qt::NoButton);
+        if (!viewport_->DrawingSnapHover().has_value()
+            || viewport_->DrawingSnapHover()->kind != DrawingSnapKind::Intersection) {
+            return fail("intersection snap candidate");
+        }
+        const std::size_t pointStart = project_.Points().size();
+        click(center);
+        if (project_.Points().size() != pointStart + 1) {
+            return fail("create point at intersection");
+        }
+
+        const WorkPlane& snapPlane = selectedPlaneIterator->plane;
+        const auto firstStart = snapPlane.Project(project_.Wires()[snapWireStart].wire.Start());
+        const auto firstEnd = snapPlane.Project(project_.Wires()[snapWireStart].wire.End());
+        const auto secondStart = snapPlane.Project(project_.Wires()[snapWireStart + 1].wire.Start());
+        const auto secondEnd = snapPlane.Project(project_.Wires()[snapWireStart + 1].wire.End());
+        const double firstU = firstEnd.u - firstStart.u;
+        const double firstV = firstEnd.v - firstStart.v;
+        const double secondU = secondEnd.u - secondStart.u;
+        const double secondV = secondEnd.v - secondStart.v;
+        const double denominator = firstU * secondV - firstV * secondU;
+        if (std::abs(denominator) <= 1.0e-12) {
+            return fail("crossing snap test geometry");
+        }
+        const double deltaU = secondStart.u - firstStart.u;
+        const double deltaV = secondStart.v - firstStart.v;
+        const double parameter = (deltaU * secondV - deltaV * secondU) / denominator;
+        const Vector3 expectedIntersection = snapPlane.ToWorld(
+            firstStart.u + firstU * parameter,
+            firstStart.v + firstV * parameter);
+        if (!kachakacha::geometry::AlmostEqual(
+                project_.Points().back().point, expectedIntersection, 1.0e-8)) {
+            return fail("point uses exact line intersection");
+        }
+
+        std::optional<QPointF> freeScreenPoint;
+        for (int y = 25; y <= 85 && !freeScreenPoint.has_value(); ++y) {
+            for (int x = 25; x <= 85; ++x) {
+                const QPointF candidate = center + QPointF(x, y);
+                sendMouse(QEvent::MouseMove, candidate, Qt::NoButton, Qt::NoButton);
+                if (!viewport_->DrawingSnapHover().has_value()) {
+                    freeScreenPoint = candidate;
+                    break;
+                }
+            }
+        }
+        if (!freeScreenPoint.has_value()) {
+            return fail("find unsnapped drawing position");
+        }
+        click(*freeScreenPoint);
+        if (project_.Points().size() != pointStart + 2) {
+            return fail("create freely positioned point");
+        }
+        const auto freeCoordinates = snapPlane.Project(project_.Points().back().point);
+        const double minorStep = snapStepField_->value()
+            / static_cast<double>(viewport_->GridSubdivision());
+        const double nearestGridU = viewport_->GridOriginU()
+            + std::round((freeCoordinates.u - viewport_->GridOriginU()) / minorStep) * minorStep;
+        const double nearestGridV = viewport_->GridOriginV()
+            + std::round((freeCoordinates.v - viewport_->GridOriginV()) / minorStep) * minorStep;
+        if (std::abs(freeCoordinates.u - nearestGridU) <= 1.0e-9
+            && std::abs(freeCoordinates.v - nearestGridV) <= 1.0e-9) {
+            return fail("free point must not be forced onto grid");
+        }
+
+        project_ = snapTestProject;
+        undoStack_ = snapTestUndo;
+        redoStack_ = snapTestRedo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
     }
 
     SetViewportTool(ViewportTool::Select);
@@ -8496,6 +8673,10 @@ void MainWindow::DeleteSelection()
         && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
         name = ToQString(project_.WorkPlanes()[selection.index].name);
         detail = QStringLiteral("作業平面を削除します。平面から作ったワイヤーは3D形状として残ります。");
+    } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Points().size())) {
+        name = ToQString(project_.Points()[selection.index].name);
+        detail = QStringLiteral("作図点を削除します。ワイヤーなどの形状は変わりません。");
     } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
         && selection.index < static_cast<int>(project_.Wires().size())) {
         name = ToQString(project_.Wires()[selection.index].name);
@@ -8525,6 +8706,8 @@ void MainWindow::DeleteSelection()
         Project candidate = project_;
         if (selection.kind == CadSelectionKind::WorkPlane) {
             candidate.RemoveWorkPlane(ToName(name));
+        } else if (selection.kind == CadSelectionKind::Point) {
+            candidate.RemovePoint(ToName(name));
         } else if (selection.kind == CadSelectionKind::Wire) {
             candidate.RemoveWire(ToName(name));
         } else if (selection.kind == CadSelectionKind::Surface) {
@@ -8552,6 +8735,9 @@ void MainWindow::HideSelected()
         if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
             && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
             hasVisibleSelection = hasVisibleSelection || project_.WorkPlanes()[selection.index].visible;
+        } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Points().size())) {
+            hasVisibleSelection = hasVisibleSelection || project_.Points()[selection.index].visible;
         } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
             && selection.index < static_cast<int>(project_.Wires().size())) {
             hasVisibleSelection = hasVisibleSelection || project_.Wires()[selection.index].visible;
@@ -8576,6 +8762,9 @@ void MainWindow::HideSelected()
         if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
             && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
             project_.SetWorkPlaneVisible(project_.WorkPlanes()[selection.index].name, false);
+        } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Points().size())) {
+            project_.SetPointVisible(project_.Points()[selection.index].name, false);
         } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
             && selection.index < static_cast<int>(project_.Wires().size())) {
             project_.SetWireVisible(project_.Wires()[selection.index].name, false);
@@ -8599,6 +8788,8 @@ void MainWindow::ShowAllObjects()
 {
     const bool hasHiddenObjects = std::any_of(project_.WorkPlanes().begin(), project_.WorkPlanes().end(), [](const auto& plane) {
         return !plane.visible;
+    }) || std::any_of(project_.Points().begin(), project_.Points().end(), [](const auto& point) {
+        return !point.visible;
     }) || std::any_of(project_.Wires().begin(), project_.Wires().end(), [](const auto& wire) {
         return !wire.visible;
     }) || std::any_of(project_.Surfaces().begin(), project_.Surfaces().end(), [](const auto& surface) {
@@ -8618,6 +8809,9 @@ void MainWindow::ShowAllObjects()
     RecordUndo();
     for (const auto& plane : project_.WorkPlanes()) {
         project_.SetWorkPlaneVisible(plane.name, true);
+    }
+    for (const auto& point : project_.Points()) {
+        project_.SetPointVisible(point.name, true);
     }
     for (const auto& wire : project_.Wires()) {
         project_.SetWireVisible(wire.name, true);
@@ -8761,6 +8955,14 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
         item->setCheckState(0, project_.WorkPlanes()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
+    auto* pointRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("作図点 (%1)").arg(project_.Points().size())});
+    for (int index = 0; index < static_cast<int>(project_.Points().size()); ++index) {
+        auto* item = new QTreeWidgetItem(pointRoot, {ToQString(project_.Points()[index].name)});
+        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Point));
+        item->setData(0, kSelectionIndexRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, project_.Points()[index].visible ? Qt::Checked : Qt::Unchecked);
+    }
     auto* wireRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("ワイヤー (%1)").arg(project_.Wires().size())});
     for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
         const auto& wire = project_.Wires()[index];
@@ -8845,6 +9047,7 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setCheckState(0, project_.Bodies()[index].visible ? Qt::Checked : Qt::Unchecked);
     }
     planeRoot->setExpanded(true);
+    pointRoot->setExpanded(true);
     wireRoot->setExpanded(true);
     coincidenceRoot->setExpanded(true);
     tangentRoot->setExpanded(true);
@@ -9233,6 +9436,13 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
         infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 作業平面<br><br>原点<br>%2<br><br>法線<br>%3<br><br>平面内 X<br>%4")
             .arg(ToQString(named.name), VectorText(named.plane.Origin()), VectorText(named.plane.Normal()), VectorText(named.plane.UAxis())));
+    } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Points().size())) {
+        const auto& named = project_.Points()[selection.index];
+        const QString source = named.sourcePlaneName.has_value()
+            ? ToQString(*named.sourcePlaneName) : QStringLiteral("なし");
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: 作図点<br>作成元平面: %2<br><br>位置<br>%3")
+            .arg(ToQString(named.name), source, VectorText(named.point)));
     } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())) {
         const auto& named = project_.Wires()[selection.index];
         const QString source = named.metadata.sourcePlaneName.has_value() ? ToQString(*named.metadata.sourcePlaneName) : QStringLiteral("なし");
@@ -9807,6 +10017,8 @@ QString MainWindow::SuggestedDirectGroupName(const QString& prefix) const
         const std::string memberPrefix = exactName + "_";
         const bool exists = std::any_of(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
             return wire.name == exactName || wire.name.starts_with(memberPrefix);
+        }) || std::any_of(project_.Points().begin(), project_.Points().end(), [&](const auto& point) {
+            return point.name == exactName || point.name.starts_with(memberPrefix);
         });
         if (!exists) {
             return candidate;

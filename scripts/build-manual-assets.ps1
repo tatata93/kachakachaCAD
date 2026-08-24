@@ -32,6 +32,7 @@ $Shots = @(
     @{ Name = "view-controls"; Project = $Acceptance; State = "view" },
     @{ Name = "point-grid"; Project = $FirstCheck; State = "grid" },
     @{ Name = "drawing-tools"; Project = $FirstCheck; State = "drawing" },
+    @{ Name = "weak-snapping"; Project = $FirstCheck; State = "snap" },
     @{ Name = "workplane"; Project = $FirstCheck; State = "workplane" },
     @{ Name = "numeric-input"; Project = $FirstCheck; State = "numeric" },
     @{ Name = "wire-edit"; Project = $FirstCheck; State = "edit" },

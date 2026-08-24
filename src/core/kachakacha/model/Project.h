@@ -99,6 +99,13 @@ struct NamedWorkPlane {
     bool visible = true;
 };
 
+struct NamedPoint {
+    std::string name;
+    geometry::Vector3 point;
+    std::optional<std::string> sourcePlaneName;
+    bool visible = true;
+};
+
 struct NamedWire {
     std::string name;
     Wire wire;
@@ -145,6 +152,10 @@ struct NamedBody {
 class Project {
 public:
     void AddWorkPlane(std::string name, WorkPlane plane);
+    void AddPoint(
+        std::string name,
+        geometry::Vector3 point,
+        std::optional<std::string> sourcePlaneName = std::nullopt);
     void AddWire(std::string name, Wire wire, WireMetadata metadata = {});
     void AddPlanarSurface(std::string name, std::string boundaryWireName);
     void AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName);
@@ -218,6 +229,7 @@ public:
     [[nodiscard]] ReferenceDimensionResult EvaluateReferenceDimension(
         std::string_view name) const;
     void SetWorkPlaneVisible(std::string_view name, bool visible);
+    void SetPointVisible(std::string_view name, bool visible);
     void SetWireVisible(std::string_view name, bool visible);
     void SetSurfaceVisible(std::string_view name, bool visible);
     void SetPlateVisible(std::string_view name, bool visible);
@@ -234,12 +246,14 @@ public:
     void AddPlateReliefCut(std::string_view plateName, std::string wireName);
     void RemovePlateReliefCut(std::string_view plateName, std::string_view wireName);
     bool RemoveWorkPlane(std::string_view name);
+    bool RemovePoint(std::string_view name);
     bool RemoveWire(std::string_view name);
     bool RemoveSurface(std::string_view name);
     bool RemovePlate(std::string_view name);
     bool RemoveBody(std::string_view name);
 
     [[nodiscard]] const std::vector<NamedWorkPlane>& WorkPlanes() const noexcept { return workPlanes_; }
+    [[nodiscard]] const std::vector<NamedPoint>& Points() const noexcept { return points_; }
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }
     [[nodiscard]] const std::vector<NamedSurface>& Surfaces() const noexcept { return surfaces_; }
     [[nodiscard]] const std::vector<NamedPlate>& Plates() const noexcept { return plates_; }
@@ -270,6 +284,7 @@ private:
     void RebuildDependentGeometry();
 
     std::vector<NamedWorkPlane> workPlanes_;
+    std::vector<NamedPoint> points_;
     std::vector<NamedWire> wires_;
     std::vector<NamedSurface> surfaces_;
     std::vector<NamedPlate> plates_;

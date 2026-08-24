@@ -474,9 +474,57 @@ void MainWindow::BuildUi()
     modelTree_->header()->setStretchLastSection(true);
     modelLayout->addWidget(modelFilter_);
     modelLayout->addWidget(modelTree_, 1);
+
+    auto* beginnerGuide = new QGroupBox(QStringLiteral("操作ガイド"));
+    beginnerGuide->setObjectName(QStringLiteral("beginnerGuide"));
+    auto* beginnerGuideLayout = new QVBoxLayout(beginnerGuide);
+    beginnerGuideLayout->setContentsMargins(9, 8, 9, 9);
+    beginnerGuideLayout->setSpacing(5);
+    beginnerGuideTitle_ = new QLabel(QStringLiteral("作業を選んでください"));
+    beginnerGuideTitle_->setObjectName(QStringLiteral("beginnerGuideTitle"));
+    beginnerGuideTitle_->setWordWrap(true);
+    beginnerGuideNext_ = new QLabel(QStringLiteral("次に行う操作をここへ表示します"));
+    beginnerGuideNext_->setObjectName(QStringLiteral("beginnerGuideNext"));
+    beginnerGuideNext_->setWordWrap(true);
+    beginnerGuideSteps_ = new QLabel;
+    beginnerGuideSteps_->setObjectName(QStringLiteral("beginnerGuideSteps"));
+    beginnerGuideSteps_->setWordWrap(true);
+    beginnerGuideContext_ = new QLabel;
+    beginnerGuideContext_->setObjectName(QStringLiteral("beginnerGuideContext"));
+    beginnerGuideContext_->setWordWrap(true);
+    beginnerGuideContext_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    beginnerGuideLayout->addWidget(beginnerGuideTitle_);
+    beginnerGuideLayout->addWidget(beginnerGuideNext_);
+    beginnerGuideLayout->addWidget(beginnerGuideSteps_);
+    beginnerGuideLayout->addWidget(beginnerGuideContext_);
+
+    auto* beginnerGuideButtons = new QHBoxLayout;
+    beginnerGuideButtons->setContentsMargins(0, 2, 0, 0);
+    beginnerGuideButtons->setSpacing(5);
+    beginnerGuideNextButton_ = new QPushButton;
+    beginnerGuideNextButton_->setObjectName(QStringLiteral("guideNextButton"));
+    beginnerGuideNextButton_->setVisible(false);
+    beginnerGuideManualButton_ = new QPushButton(
+        style()->standardIcon(QStyle::SP_DialogHelpButton), QStringLiteral("詳しい手順"));
+    beginnerGuideManualButton_->setToolTip(QStringLiteral("現在の機能の画像付きマニュアルを開く"));
+    beginnerGuideButtons->addWidget(beginnerGuideNextButton_, 1);
+    beginnerGuideButtons->addWidget(beginnerGuideManualButton_);
+    beginnerGuideLayout->addLayout(beginnerGuideButtons);
+    modelLayout->addWidget(beginnerGuide);
+
+    connect(beginnerGuideNextButton_, &QPushButton::clicked, this, [this] {
+        if (toolsTabs_ == nullptr || beginnerGuideNextTab_ < 0) {
+            return;
+        }
+        SetViewportTool(ViewportTool::Select);
+        toolsTabs_->setCurrentIndex(beginnerGuideNextTab_);
+    });
+    connect(beginnerGuideManualButton_, &QPushButton::clicked, this, [this] {
+        OpenManual(beginnerGuideManualAnchor_);
+    });
     modelDock->setWidget(modelPanel);
     addDockWidget(Qt::LeftDockWidgetArea, modelDock);
-    modelDock->setMinimumWidth(220);
+    modelDock->setMinimumWidth(260);
 
     connect(modelFilter_, &QLineEdit::textChanged, this, [this] {
         ApplyModelTreeFilter();
@@ -561,6 +609,35 @@ void MainWindow::BuildUi()
     auto* toolsDock = new QDockWidget(QStringLiteral("作図と編集"), this);
     toolsDock->setObjectName("toolsDock");
     toolsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    auto* toolsPanel = new QWidget;
+    auto* toolsLayout = new QVBoxLayout(toolsPanel);
+    toolsLayout->setContentsMargins(0, 0, 0, 0);
+    toolsLayout->setSpacing(5);
+    auto* workflowPanel = new QWidget;
+    workflowPanel->setObjectName(QStringLiteral("workflowPanel"));
+    auto* workflowLayout = new QHBoxLayout(workflowPanel);
+    workflowLayout->setContentsMargins(6, 6, 6, 0);
+    workflowLayout->setSpacing(4);
+    const std::array<QString, 4> workflowNames = {
+        QStringLiteral("1 平面"), QStringLiteral("2 作図"),
+        QStringLiteral("3 面・板"), QStringLiteral("4 出力"),
+    };
+    const std::array<int, 4> workflowTabs = {1, 0, 5, 6};
+    for (std::size_t index = 0; index < workflowButtons_.size(); ++index) {
+        workflowButtons_[index] = new QPushButton(workflowNames[index]);
+        workflowButtons_[index]->setObjectName(QStringLiteral("workflowButton"));
+        workflowButtons_[index]->setCheckable(true);
+        workflowButtons_[index]->setToolTip(index == 0 ? QStringLiteral("作図する位置と向きを決める")
+            : index == 1 ? QStringLiteral("作業平面へ線や曲線を描く")
+            : index == 2 ? QStringLiteral("ワイヤーから面・板・治具を作る")
+                         : QStringLiteral("1:1図面または3Dモデルを保存する"));
+        workflowLayout->addWidget(workflowButtons_[index], 1);
+        connect(workflowButtons_[index], &QPushButton::clicked, this, [this, tab = workflowTabs[index]] {
+            SetViewportTool(ViewportTool::Select);
+            toolsTabs_->setCurrentIndex(tab);
+        });
+    }
+    toolsLayout->addWidget(workflowPanel);
     toolsTabs_ = new QTabWidget;
     toolsTabs_->addTab(BuildDrawingPanel(), QStringLiteral("作図"));
     toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
@@ -570,11 +647,26 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
-    connect(toolsTabs_, &QTabWidget::currentChanged, this, [this] {
+    connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
+        const ViewportTool tool = viewport_->Tool();
+        const bool drawingTool = tool == ViewportTool::DrawLine
+            || tool == ViewportTool::DrawPolyline || tool == ViewportTool::DrawRectangle
+            || tool == ViewportTool::DrawCircle || tool == ViewportTool::DrawArc
+            || tool == ViewportTool::DrawBezier || tool == ViewportTool::DrawSpline;
+        const bool editTool = tool == ViewportTool::MoveSelection || tool == ViewportTool::CopySelection
+            || tool == ViewportTool::MirrorSelection || tool == ViewportTool::RotateSelection
+            || tool == ViewportTool::SplitWire || tool == ViewportTool::Coincident
+            || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature;
+        if ((drawingTool && index != 0) || (editTool && index != 3)
+            || (tool == ViewportTool::Measure && index != 7)) {
+            SetViewportTool(ViewportTool::Select);
+        }
         UpdatePlateSplitPreview();
         UpdatePlateAssemblyGuidePreview();
+        RefreshBeginnerGuide();
     });
-    toolsDock->setWidget(toolsTabs_);
+    toolsLayout->addWidget(toolsTabs_, 1);
+    toolsDock->setWidget(toolsPanel);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
     toolsDock->setMinimumWidth(380);
     toolsDock->setMaximumWidth(460);
@@ -593,6 +685,15 @@ void MainWindow::BuildUi()
         QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
         QPushButton#primaryButton:hover { background: #09666e; }
         QPushButton#primaryButton:disabled { background: #d7dcdf; color: #7c868d; border-color: #bcc4c9; }
+        QPushButton#workflowButton { min-height: 28px; padding: 2px 5px; font-weight: 600; }
+        QPushButton#workflowButton:checked { background: #d7edef; color: #075f69; border: 2px solid #087780; }
+        QGroupBox#beginnerGuide { border: 1px solid #9eabb3; margin-top: 9px; background: #ffffff; }
+        QGroupBox#beginnerGuide::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #42515a; }
+        QLabel#beginnerGuideTitle { color: #17242b; font-weight: 700; font-size: 14px; }
+        QLabel#beginnerGuideNext { color: #075f69; background: #e4f2f3; border-left: 4px solid #087780; padding: 6px; font-weight: 600; }
+        QLabel#beginnerGuideSteps { color: #34444d; }
+        QLabel#beginnerGuideContext { color: #5d6970; background: #f1f3f4; padding: 5px; }
+        QPushButton#guideNextButton { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
         QToolButton#drawingToolButton { min-height: 38px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 3px 8px; }
         QToolButton#drawingToolButton:hover { background: #e8edef; }
         QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
@@ -1399,6 +1500,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->setSpacing(10);
 
     auto* createTitle = new QLabel(QStringLiteral("ワイヤーから面"));
+    createTitle->setProperty("manualAnchor", QStringLiteral("surfaceCreate"));
     createTitle->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(createTitle);
 
@@ -1425,6 +1527,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(createButton);
 
     auto* projectionTitle = new QLabel(QStringLiteral("平面図を面へ投影"));
+    projectionTitle->setProperty("manualAnchor", QStringLiteral("surfaceProjection"));
     projectionTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(projectionTitle);
 
@@ -1498,6 +1601,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(lightCaseBox);
 
     auto* plateTitle = new QLabel(QStringLiteral("ワイヤー / 面から3D板を作る"));
+    plateTitle->setProperty("manualAnchor", QStringLiteral("plateCreate"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(plateTitle);
 
@@ -1569,6 +1673,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(offsetWireBox);
 
     auto* jigTitle = new QLabel(QStringLiteral("曲面から成形治具"));
+    jigTitle->setProperty("manualAnchor", QStringLiteral("surfaceJig"));
     jigTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(jigTitle);
 
@@ -1632,6 +1737,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->addWidget(openingButtons);
 
     auto* reliefTitle = new QLabel(QStringLiteral("展開時の切れ目"));
+    reliefTitle->setProperty("manualAnchor", QStringLiteral("plateRelief"));
     reliefTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(reliefTitle);
     plateReliefSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
@@ -1721,6 +1827,7 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->setSpacing(10);
 
     auto* title = new QLabel(QStringLiteral("作業平面の1:1図面"));
+    title->setProperty("manualAnchor", QStringLiteral("planarOutput"));
     title->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(title);
 
@@ -1888,6 +1995,7 @@ QWidget* MainWindow::BuildInfoPanel()
     layout->setContentsMargins(14, 14, 14, 14);
 
     auto* measurementBox = new QGroupBox(QStringLiteral("測定"));
+    measurementBox->setProperty("manualAnchor", QStringLiteral("measurement"));
     auto* measurementLayout = new QVBoxLayout(measurementBox);
     measurementLayout->setContentsMargins(10, 10, 10, 10);
     measurementLayout->setSpacing(8);
@@ -1978,6 +2086,27 @@ QWidget* MainWindow::BuildInfoPanel()
     return panel;
 }
 
+void MainWindow::OpenManual(const QString& anchor)
+{
+    const QDir applicationDirectory(QApplication::applicationDirPath());
+    const QStringList candidates = {
+        applicationDirectory.filePath(QStringLiteral("manual.html")),
+        applicationDirectory.filePath(QStringLiteral("../../docs/manual.html")),
+    };
+    for (const QString& candidate : candidates) {
+        if (!QFileInfo::exists(candidate)) {
+            continue;
+        }
+        QUrl url = QUrl::fromLocalFile(QFileInfo(candidate).absoluteFilePath());
+        if (!anchor.isEmpty()) {
+            url.setFragment(anchor);
+        }
+        QDesktopServices::openUrl(url);
+        return;
+    }
+    statusBar()->showMessage(QStringLiteral("manual.html が見つかりません"), 5000);
+}
+
 void MainWindow::BuildMenusAndToolbar()
 {
     QAction* newAction = new QAction(style()->standardIcon(QStyle::SP_FileIcon), QStringLiteral("新規"), this);
@@ -2042,20 +2171,7 @@ void MainWindow::BuildMenusAndToolbar()
     connect(isolateDisplayAction_, &QAction::triggered, this, [this] {
         SetDisplayMode(ViewportDisplayMode::IsolatedSelection);
     });
-    connect(manualAction, &QAction::triggered, this, [this] {
-        const QDir applicationDirectory(QApplication::applicationDirPath());
-        const QStringList candidates = {
-            applicationDirectory.filePath(QStringLiteral("manual.html")),
-            applicationDirectory.filePath(QStringLiteral("../../docs/manual.html")),
-        };
-        for (const QString& candidate : candidates) {
-            if (QFileInfo::exists(candidate)) {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(candidate).absoluteFilePath()));
-                return;
-            }
-        }
-        statusBar()->showMessage(QStringLiteral("manual.html が見つかりません"), 5000);
-    });
+    connect(manualAction, &QAction::triggered, this, [this] { OpenManual(); });
 
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル"));
     fileMenu->addAction(newAction);
@@ -2376,6 +2492,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     QString finalRevealAnchor;
 
     UpdateSelection({}, true);
+    SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
 
     if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
@@ -2400,6 +2517,9 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         gridOrigin_[1]->setValue(0.5);
         RefreshModelViews(false);
         showTab(0);
+        if (state == QStringLiteral("drawing")) {
+            SetViewportTool(ViewportTool::DrawLine);
+        }
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
     } else if (state == QStringLiteral("workplane")) {
@@ -2426,6 +2546,16 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         showTab(3);
         (void)viewport_->AlignToSelection();
+    } else if (state == QStringLiteral("transforms")) {
+        if (!select({
+                {CadSelectionKind::Wire, "front_window_bottom"},
+                {CadSelectionKind::Wire, "front_window_top"},
+            })) {
+            return false;
+        }
+        showTab(3, 0.0);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("machining")) {
         if (!select({
                 {CadSelectionKind::Wire, "front_window_bottom"},
@@ -2459,6 +2589,33 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(5, 0.0);
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("projection")) {
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name,
+                wire.name == "light_left_plan" || wire.name == "light_right_plan"
+                    || wire.name == "windscreen_plan");
+        }
+        for (const auto& plate : project_.Plates()) {
+            project_.SetPlateVisible(plate.name, false);
+        }
+        project_.SetSurfaceVisible("nose_skin", true);
+        RefreshModelViews(false);
+        if (!select({
+                {CadSelectionKind::Wire, "light_left_plan"},
+                {CadSelectionKind::Wire, "light_right_plan"},
+                {CadSelectionKind::Wire, "windscreen_plan"},
+            })) {
+            return false;
+        }
+        const int targetIndex = projectionSurface_->findText(QStringLiteral("nose_skin"));
+        if (targetIndex >= 0) {
+            projectionSurface_->setCurrentIndex(targetIndex);
+        }
+        showTab(5);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("surfaceProjection");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("lightcase")) {
         referenceWireName_ = "lamp_axis";
         RefreshReference();
@@ -2483,6 +2640,24 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         finalRevealAnchor = QStringLiteral("plateOffset");
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("plate-create")) {
+        if (!select({{CadSelectionKind::Surface, "nose_skin"}})) {
+            return false;
+        }
+        showTab(5);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("plateCreate");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("jig")) {
+        if (!select({{CadSelectionKind::Surface, "nose_skin"}})) {
+            return false;
+        }
+        showTab(5);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("surfaceJig");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("openings")) {
         project_.SetWireVisible("light_left_on_skin", true);
         project_.SetWireVisible("light_right_on_skin", true);
@@ -2499,6 +2674,20 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(5, 0.78);
         finalRevealTab = 5;
         finalRevealAnchor = QStringLiteral("plateOpening");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("relief")) {
+        project_.SetWireVisible("light_left_on_skin", true);
+        RefreshModelViews(false);
+        if (!select({
+                {CadSelectionKind::Plate, "nose_panel_front"},
+                {CadSelectionKind::Wire, "light_left_on_skin"},
+            })) {
+            return false;
+        }
+        showTab(5);
+        finalRevealTab = 5;
+        finalRevealAnchor = QStringLiteral("plateRelief");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("split")) {
@@ -2519,6 +2708,23 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         finalRevealTab = 6;
         finalRevealAnchor = QStringLiteral("plateFlatPattern");
         viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("planar-output")) {
+        if (!select({
+                {CadSelectionKind::Wire, "front_window_bottom"},
+                {CadSelectionKind::Wire, "front_window_top"},
+            })) {
+            return false;
+        }
+        const int planeIndex = exportPlane_->findText(QStringLiteral("front"));
+        if (planeIndex >= 0) {
+            exportPlane_->setCurrentIndex(planeIndex);
+        }
+        exportScope_->setCurrentIndex(1);
+        showTab(6);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("planarOutput");
+        viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
     } else if (state == QStringLiteral("output")) {
         if (!select({
@@ -3833,6 +4039,7 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     if (cancelDrawingAction_ != nullptr) {
         cancelDrawingAction_->setEnabled(pointCount > 0);
     }
+    RefreshBeginnerGuide();
 
     if (drawingDimensionSection_ == nullptr || drawingDimensionStack_ == nullptr
         || drawingDimensionCommitButton_ == nullptr) {
@@ -3876,6 +4083,242 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         updateField(drawingHeightField_, measurements.heightMillimeters);
     } else {
         updateField(drawingRadiusField_, measurements.radiusMillimeters);
+    }
+}
+
+void MainWindow::RefreshBeginnerGuide()
+{
+    if (viewport_ == nullptr || toolsTabs_ == nullptr || beginnerGuideTitle_ == nullptr
+        || beginnerGuideNext_ == nullptr || beginnerGuideSteps_ == nullptr
+        || beginnerGuideContext_ == nullptr || beginnerGuideNextButton_ == nullptr) {
+        return;
+    }
+
+    const int tab = toolsTabs_->currentIndex();
+    const int activeStage = tab == 1 ? 0
+        : (tab == 0 || tab == 2 || tab == 3 || tab == 4) ? 1
+        : tab == 5 ? 2
+        : tab == 6 ? 3 : -1;
+    for (std::size_t index = 0; index < workflowButtons_.size(); ++index) {
+        if (workflowButtons_[index] != nullptr) {
+            const QSignalBlocker blocker(workflowButtons_[index]);
+            workflowButtons_[index]->setChecked(static_cast<int>(index) == activeStage);
+        }
+    }
+
+    const auto& selections = viewport_->Selections();
+    std::size_t wireCount = 0;
+    std::size_t surfaceCount = 0;
+    std::size_t plateCount = 0;
+    std::size_t bodyCount = 0;
+    for (const CadSelection& selection : selections) {
+        wireCount += selection.kind == CadSelectionKind::Wire ? 1 : 0;
+        surfaceCount += selection.kind == CadSelectionKind::Surface ? 1 : 0;
+        plateCount += selection.kind == CadSelectionKind::Plate ? 1 : 0;
+        bodyCount += selection.kind == CadSelectionKind::Body ? 1 : 0;
+    }
+    QString selectionText = QStringLiteral("なし");
+    if (!selections.empty()) {
+        QStringList parts;
+        if (wireCount > 0) {
+            parts << QStringLiteral("ワイヤー%1本").arg(wireCount);
+        }
+        if (surfaceCount > 0) {
+            parts << QStringLiteral("面%1枚").arg(surfaceCount);
+        }
+        if (plateCount > 0) {
+            parts << QStringLiteral("板材%1枚").arg(plateCount);
+        }
+        if (bodyCount > 0) {
+            parts << QStringLiteral("立体%1個").arg(bodyCount);
+        }
+        const std::size_t described = wireCount + surfaceCount + plateCount + bodyCount;
+        if (selections.size() > described) {
+            parts << QStringLiteral("作業平面など%1個").arg(selections.size() - described);
+        }
+        selectionText = parts.join(QStringLiteral(" / "));
+    }
+    const QString activePlane = activePlaneCombo_ != nullptr && !activePlaneCombo_->currentText().isEmpty()
+        ? activePlaneCombo_->currentText() : QStringLiteral("なし");
+    beginnerGuideContext_->setText(
+        QStringLiteral("作図面: %1\n選択: %2").arg(activePlane, selectionText));
+
+    const auto setGuide = [this](const QString& title, const QString& next,
+                              const QString& steps, const QString& anchor,
+                              int nextTab = -1, const QString& nextTabText = {}) {
+        beginnerGuideTitle_->setText(title);
+        beginnerGuideNext_->setText(next);
+        beginnerGuideSteps_->setText(steps);
+        beginnerGuideManualAnchor_ = anchor;
+        beginnerGuideNextTab_ = nextTab;
+        beginnerGuideNextButton_->setVisible(nextTab >= 0);
+        beginnerGuideNextButton_->setText(nextTabText);
+    };
+
+    const ViewportTool tool = viewport_->Tool();
+    const std::size_t pointCount = viewport_->DrawingPointCount();
+    if (tool != ViewportTool::Select) {
+        switch (tool) {
+        case ViewportTool::DrawLine:
+            setGuide(QStringLiteral("直線を描く"),
+                pointCount == 0 ? QStringLiteral("次: 始点を中央画面でクリック")
+                                : QStringLiteral("次: 終点をクリック、または寸法で確定"),
+                QStringLiteral("1  始点\n2  終点（Shiftで水平・垂直）\n3  長さ・角度は右の欄で実寸指定"),
+                QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawPolyline:
+            setGuide(QStringLiteral("ポリラインを描く"),
+                pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                                : QStringLiteral("次: 折れ点を追加。終わりはEnter"),
+                QStringLiteral("1  始点\n2  折れ点を順にクリック\n3  Enter・右クリック・完了で確定"),
+                QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawRectangle:
+            setGuide(QStringLiteral("矩形を描く"),
+                pointCount == 0 ? QStringLiteral("次: 1つ目の角をクリック")
+                                : QStringLiteral("次: 対角をクリック、または幅・高さで確定"),
+                QStringLiteral("1  角を1点\n2  対角を1点（Shiftで正方形）\n3  幅・高さは右の欄で実寸指定"),
+                QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawCircle:
+            setGuide(QStringLiteral("円を描く"),
+                pointCount == 0 ? QStringLiteral("次: 中心をクリック")
+                                : QStringLiteral("次: 円周をクリック、または半径で確定"),
+                QStringLiteral("1  中心\n2  円周上の点\n3  半径は右の欄で実寸指定"),
+                QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawArc:
+            setGuide(QStringLiteral("3点円弧を描く"),
+                pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                    : pointCount == 1 ? QStringLiteral("次: 円弧が通る点をクリック")
+                                      : QStringLiteral("次: 終点をクリック"),
+                QStringLiteral("1  始点\n2  円弧上の通過点\n3  終点"), QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawBezier:
+            setGuide(QStringLiteral("ベジェ曲線を描く"),
+                pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                    : pointCount == 1 ? QStringLiteral("次: 始点側の制御点")
+                    : pointCount == 2 ? QStringLiteral("次: 終点側の制御点")
+                                      : QStringLiteral("次: 終点をクリック"),
+                QStringLiteral("1  始点\n2  制御点1\n3  制御点2\n4  終点"), QStringLiteral("drawing"));
+            return;
+        case ViewportTool::DrawSpline:
+            setGuide(QStringLiteral("通過点スプラインを描く"),
+                pointCount < 4 ? QStringLiteral("次: 通過点を%1点以上まで追加").arg(4 - pointCount)
+                               : QStringLiteral("次: Enterで確定、または通過点を追加"),
+                QStringLiteral("1  通したい点を4点以上クリック\n2  Enter・右クリック・完了で確定"),
+                QStringLiteral("drawing"));
+            return;
+        case ViewportTool::MoveSelection:
+        case ViewportTool::CopySelection:
+            setGuide(tool == ViewportTool::MoveSelection ? QStringLiteral("選択線を移動") : QStringLiteral("選択線をコピー"),
+                pointCount == 0 ? QStringLiteral("次: 移動元の基準点をクリック")
+                                : QStringLiteral("次: 移動先をクリック"),
+                QStringLiteral("1  基準点\n2  移動先\nEscで取消"), QStringLiteral("edit"));
+            return;
+        case ViewportTool::MirrorSelection:
+            setGuide(QStringLiteral("選択線をミラー複製"),
+                pointCount == 0 ? QStringLiteral("次: ミラー軸の1点目") : QStringLiteral("次: ミラー軸の2点目"),
+                QStringLiteral("1  軸の1点目\n2  軸の2点目\n基準線を設定済みなら即時実行"),
+                QStringLiteral("edit"));
+            return;
+        case ViewportTool::RotateSelection:
+            setGuide(QStringLiteral("選択線を回転"),
+                pointCount == 0 ? QStringLiteral("次: 回転中心")
+                    : pointCount == 1 ? QStringLiteral("次: 角度0°の基準点")
+                                      : QStringLiteral("次: 回転先"),
+                QStringLiteral("1  回転中心\n2  角度の基準点\n3  回転先"), QStringLiteral("edit"));
+            return;
+        case ViewportTool::SplitWire:
+            setGuide(QStringLiteral("ワイヤーを分割"), QStringLiteral("次: 選択線上の分けたい位置をクリック"),
+                QStringLiteral("1  分割する線を1本選択\n2  分割道具\n3  線上をクリック"), QStringLiteral("edit"));
+            return;
+        case ViewportTool::Coincident:
+        case ViewportTool::Tangent:
+        case ViewportTool::Curvature: {
+            const bool first = viewport_->CoincidencePicks().empty();
+            const QString title = tool == ViewportTool::Coincident ? QStringLiteral("端点を一致")
+                : tool == ViewportTool::Tangent ? QStringLiteral("端点を接線接続")
+                                                : QStringLiteral("端点を曲率接続");
+            setGuide(title,
+                first ? QStringLiteral("次: 動かさない固定側の端点")
+                      : QStringLiteral("次: 形を追従させる側の端点"),
+                QStringLiteral("1  固定側の端点\n2  追従側の端点\nEscで取消"), QStringLiteral("edit"));
+            return;
+        }
+        case ViewportTool::Measure:
+            setGuide(QStringLiteral("形状を測る"),
+                QStringLiteral("次: 中央画面で測る点・線・平面を指定"),
+                QStringLiteral("1  情報タブで2点間/要素を選択\n2  中央画面で対象を指定\n3  必要なら参照寸法として残す"),
+                QStringLiteral("measure"));
+            return;
+        case ViewportTool::Select:
+            break;
+        }
+    }
+
+    switch (tab) {
+    case 0:
+        setGuide(QStringLiteral("作業平面へ作図"), QStringLiteral("次: 直線・矩形・円などの道具を選ぶ"),
+            QStringLiteral("1  作図面と向きを確認\n2  道具を選択\n3  中央画面へ直接作図"),
+            QStringLiteral("drawing"), 1, QStringLiteral("作業平面を作る"));
+        break;
+    case 1:
+        setGuide(QStringLiteral("作図する紙を置く"), QStringLiteral("次: 作り方を選び、位置と向きを入力"),
+            QStringLiteral("1  作り方と値を指定\n2  この向きで見る\n3  必要なら平面を作成"),
+            QStringLiteral("planes"), 0, QStringLiteral("作図へ進む"));
+        break;
+    case 2:
+        setGuide(QStringLiteral("座標で正確にワイヤーを作る"), QStringLiteral("次: 種類を選び、座標を入力"),
+            QStringLiteral("1  ワイヤー種類\n2  XYZまたは平面内XY\n3  ワイヤーを追加"),
+            QStringLiteral("numeric"));
+        break;
+    case 3:
+        setGuide(QStringLiteral("ワイヤー・平面を編集"),
+            selections.empty() ? QStringLiteral("次: 中央画面で編集対象を選ぶ")
+                               : QStringLiteral("次: 点をドラッグ、または右欄で数値変更"),
+            QStringLiteral("1  対象を直接選択\n2  点移動・変形・拘束を選択\n3  数値変更は「変更を適用」"),
+            QStringLiteral("edit"), wireCount >= 2 ? 5 : -1,
+            wireCount >= 2 ? QStringLiteral("面・板へ進む") : QString());
+        break;
+    case 4:
+        setGuide(QStringLiteral("交差する角を加工"), QStringLiteral("次: 直線2本をCtrl+クリックで選ぶ"),
+            QStringLiteral("1  直線A/Bを3Dで選択\n2  C面取り/R丸めと寸法\n3  作成"),
+            QStringLiteral("machining"));
+        break;
+    case 5:
+        if (plateCount > 0) {
+            setGuide(QStringLiteral("板材を仕上げる"), QStringLiteral("次: 開口輪郭・切れ目、または分割位置を指定"),
+                QStringLiteral("1  板材と必要な輪郭を選択\n2  開口・切れ目・分割\n3  3Dで結果を確認"),
+                QStringLiteral("projection"), 6, QStringLiteral("出力へ進む"));
+        } else if (surfaceCount > 0) {
+            setGuide(QStringLiteral("面を板材・治具にする"), QStringLiteral("次: 板厚方向または治具の側を決める"),
+                QStringLiteral("1  面を選択\n2  板厚・方向または治具設定\n3  作成"),
+                QStringLiteral("plate"));
+        } else {
+            setGuide(QStringLiteral("ワイヤーから面を作る"),
+                wireCount > 0 ? QStringLiteral("次: 選択順と本数を確認して面を作成")
+                              : QStringLiteral("次: 中央画面で輪郭・断面を順に選ぶ"),
+                QStringLiteral("1  断面を順にCtrl+クリック\n2  面の作り方を選択\n3  面を作成"),
+                QStringLiteral("surface"));
+        }
+        break;
+    case 6:
+        setGuide(QStringLiteral("製作データを出力"),
+            plateCount + bodyCount > 0 ? QStringLiteral("次: 出力範囲と形式を確認して保存")
+                                       : QStringLiteral("次: 中央画面で板材・治具を選ぶ"),
+            QStringLiteral("1  出力対象を直接選択\n2  1:1図面/展開図/3D形式を選択\n3  保存"),
+            QStringLiteral("output"));
+        break;
+    case 7:
+        setGuide(QStringLiteral("寸法と選択情報を確認"), QStringLiteral("次: 対象を選ぶか、測定を開始"),
+            QStringLiteral("1  対象を中央画面で選択\n2  寸法・材質・工作判定を確認\n3  測定はM"),
+            QStringLiteral("measure"));
+        break;
+    default:
+        setGuide(QStringLiteral("作業を選んでください"), QStringLiteral("次: 上の製作工程を選ぶ"),
+            QStringLiteral("1  平面\n2  作図\n3  面・板\n4  出力"), QStringLiteral("start"));
+        break;
     }
 }
 
@@ -3947,6 +4390,7 @@ void MainWindow::RefreshActiveWorkPlane()
         SetViewportTool(ViewportTool::Select);
     }
     UpdateWireOffsetPreview();
+    RefreshBeginnerGuide();
 }
 
 void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
@@ -5615,9 +6059,27 @@ bool MainWindow::RunCreationSelfTest()
         || lightCaseRootName_ == nullptr
         || lightCaseSurfaceName_ == nullptr
         || lightCaseDirectionMode_ == nullptr
-        || lightCaseDirection_[0] == nullptr) {
+        || lightCaseDirection_[0] == nullptr
+        || beginnerGuideTitle_ == nullptr
+        || beginnerGuideNext_ == nullptr
+        || beginnerGuideSteps_ == nullptr
+        || beginnerGuideContext_ == nullptr
+        || beginnerGuideManualButton_ == nullptr
+        || std::any_of(workflowButtons_.begin(), workflowButtons_.end(), [](QPushButton* button) {
+            return button == nullptr;
+        })) {
         return fail("drawing workbench is primary");
     }
+    toolsTabs_->setCurrentIndex(0);
+    SetViewportTool(ViewportTool::DrawLine);
+    toolsTabs_->setCurrentIndex(5);
+    if (viewport_->Tool() != ViewportTool::Select
+        || beginnerGuideTitle_->text().isEmpty()
+        || !workflowButtons_[2]->isChecked()) {
+        return fail("beginner workflow guide follows tab and cancels stale tools");
+    }
+    toolsTabs_->setCurrentIndex(0);
+    SetViewportTool(ViewportTool::DrawLine);
 
     planeName_->setText("__ui_test_plane");
     planeMethod_->setCurrentIndex(0);
@@ -8398,6 +8860,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     UpdatePlateSplitPreview();
     RefreshExportSummary();
     UpdateWireOffsetPreview();
+    RefreshBeginnerGuide();
 }
 
 void MainWindow::SyncMachiningSelection(const std::vector<CadSelection>& selections)

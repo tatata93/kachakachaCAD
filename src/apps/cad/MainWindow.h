@@ -124,6 +124,8 @@ private:
     void UpdatePlateAssemblyGuidePreview();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
+    void RefreshBeginnerGuide();
+    void OpenManual(const QString& anchor = {});
     void CommitDrawingDimensions();
     void RefreshActiveWorkPlane();
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
@@ -229,6 +231,15 @@ private:
     QLineEdit* modelFilter_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
+    std::array<QPushButton*, 4> workflowButtons_{};
+    QLabel* beginnerGuideTitle_ = nullptr;
+    QLabel* beginnerGuideNext_ = nullptr;
+    QLabel* beginnerGuideSteps_ = nullptr;
+    QLabel* beginnerGuideContext_ = nullptr;
+    QPushButton* beginnerGuideNextButton_ = nullptr;
+    QPushButton* beginnerGuideManualButton_ = nullptr;
+    int beginnerGuideNextTab_ = -1;
+    QString beginnerGuideManualAnchor_;
     QTimer* autosaveTimer_ = nullptr;
     QLabel* infoLabel_ = nullptr;
     QComboBox* measurementMode_ = nullptr;

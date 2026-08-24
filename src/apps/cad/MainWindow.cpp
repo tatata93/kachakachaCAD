@@ -4,6 +4,7 @@
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
+#include "kachakacha/io/NumericExpression.h"
 #include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/Sketch.h"
 #include "kachakacha/model/WireOperations.h"
@@ -137,15 +138,83 @@ bool IsAutomationInvocation()
         || arguments.contains(QStringLiteral("--export-first-body-step"));
 }
 
+class ExpressionDoubleSpinBox final : public QDoubleSpinBox {
+public:
+    using QDoubleSpinBox::QDoubleSpinBox;
+
+protected:
+    QValidator::State validate(QString& input, int& position) const override
+    {
+        Q_UNUSED(position);
+        const QString expression = NormalizeExpression(input);
+        if (expression.isEmpty()) {
+            return QValidator::Intermediate;
+        }
+        static const QRegularExpression allowed(
+            QStringLiteral("^[0-9eEpiPI+\\-*/().\\s]*$"));
+        if (!allowed.match(expression).hasMatch()) {
+            return QValidator::Invalid;
+        }
+        const std::optional<double> value = Evaluate(expression);
+        if (!value.has_value()) {
+            return QValidator::Intermediate;
+        }
+        return *value >= minimum() && *value <= maximum()
+            ? QValidator::Acceptable
+            : QValidator::Invalid;
+    }
+
+    double valueFromText(const QString& text) const override
+    {
+        const std::optional<double> result = Evaluate(NormalizeExpression(text));
+        return result.has_value() ? *result : value();
+    }
+
+    void fixup(QString& input) const override
+    {
+        const std::optional<double> result = Evaluate(NormalizeExpression(input));
+        if (result.has_value() && *result >= minimum() && *result <= maximum()) {
+            input = prefix() + QDoubleSpinBox::textFromValue(*result) + suffix();
+        }
+    }
+
+private:
+    QString NormalizeExpression(QString text) const
+    {
+        if (!prefix().isEmpty() && text.startsWith(prefix())) {
+            text.remove(0, prefix().size());
+        }
+        if (!suffix().isEmpty() && text.endsWith(suffix())) {
+            text.chop(suffix().size());
+        }
+        text.replace(QChar(0x00d7), QLatin1Char('*'));
+        text.replace(QChar(0x00f7), QLatin1Char('/'));
+        text.replace(QChar(0x03c0), QStringLiteral("pi"));
+        const QString decimalPoint = locale().decimalPoint();
+        if (decimalPoint != QStringLiteral(".")) {
+            text.replace(decimalPoint, QStringLiteral("."));
+        }
+        return text.trimmed();
+    }
+
+    static std::optional<double> Evaluate(const QString& expression)
+    {
+        const QByteArray utf8 = expression.toUtf8();
+        return kachakacha::io::EvaluateNumericExpression(
+            std::string_view(utf8.constData(), static_cast<std::size_t>(utf8.size())));
+    }
+};
+
 QDoubleSpinBox* MakeNumberField(double value = 0.0)
 {
-    auto* field = new QDoubleSpinBox;
+    auto* field = new ExpressionDoubleSpinBox;
     field->setRange(-1000000.0, 1000000.0);
     field->setDecimals(4);
     field->setSingleStep(0.5);
     field->setValue(value);
     field->setKeyboardTracking(false);
     field->setMinimumWidth(72);
+    field->setToolTip(QStringLiteral("数値または計算式を入力できます。例: (180/2)*3"));
     return field;
 }
 
@@ -946,12 +1015,13 @@ QWidget* MainWindow::BuildDrawingPanel()
     snapButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     snapLayout->addWidget(snapButton);
     snapLayout->addWidget(new QLabel(QStringLiteral("主点間隔")));
-    snapStepField_ = new QDoubleSpinBox;
+    snapStepField_ = new ExpressionDoubleSpinBox;
     snapStepField_->setRange(0.01, 1000.0);
     snapStepField_->setDecimals(2);
     snapStepField_->setSingleStep(0.5);
     snapStepField_->setValue(1.0);
     snapStepField_->setSuffix(QStringLiteral(" mm"));
+    snapStepField_->setToolTip(QStringLiteral("数値または計算式を入力できます。例: 1/4"));
     snapLayout->addWidget(snapStepField_, 1);
     layout->addWidget(snapRow);
 
@@ -1818,7 +1888,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateSplitSlider_ = new QSlider(Qt::Horizontal);
     plateSplitSlider_->setRange(10, 990);
     plateSplitSlider_->setValue(500);
-    plateSplitPosition_ = new QDoubleSpinBox;
+    plateSplitPosition_ = new ExpressionDoubleSpinBox;
     plateSplitPosition_->setRange(1.0, 99.0);
     plateSplitPosition_->setDecimals(1);
     plateSplitPosition_->setSingleStep(1.0);
@@ -2036,7 +2106,7 @@ QWidget* MainWindow::BuildDisplayPanel()
     layout->setSpacing(10);
 
     const auto makeWidthField = [] (double value) {
-        auto* field = new QDoubleSpinBox;
+        auto* field = new ExpressionDoubleSpinBox;
         field->setRange(0.25, 12.0);
         field->setDecimals(2);
         field->setSingleStep(0.25);
@@ -2046,7 +2116,7 @@ QWidget* MainWindow::BuildDisplayPanel()
         return field;
     };
     const auto makeOpacityField = [] (double value) {
-        auto* field = new QDoubleSpinBox;
+        auto* field = new ExpressionDoubleSpinBox;
         field->setRange(0.0, 100.0);
         field->setDecimals(0);
         field->setSingleStep(5.0);
@@ -2886,6 +2956,35 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
+        if (state == QStringLiteral("drawing")) {
+            QApplication::processEvents();
+            const QPointF start(viewport_->width() * 0.38, viewport_->height() * 0.58);
+            const QPointF end = start + QPointF(135.0, -70.0);
+            const auto sendViewportMouse = [this](
+                                               QEvent::Type type,
+                                               QPointF position,
+                                               Qt::MouseButton button,
+                                               Qt::MouseButtons buttons) {
+                const QPointF globalPosition = viewport_->mapToGlobal(position.toPoint());
+                QMouseEvent event(
+                    type, position, globalPosition, button, buttons, Qt::NoModifier);
+                QApplication::sendEvent(viewport_, &event);
+            };
+            sendViewportMouse(QEvent::MouseMove, start, Qt::NoButton, Qt::NoButton);
+            sendViewportMouse(QEvent::MouseButtonPress, start, Qt::LeftButton, Qt::LeftButton);
+            sendViewportMouse(QEvent::MouseButtonRelease, start, Qt::LeftButton, Qt::NoButton);
+            sendViewportMouse(QEvent::MouseMove, end, Qt::NoButton, Qt::NoButton);
+            const QString expression = QStringLiteral("(10/2)*3");
+            for (const QChar character : expression) {
+                QWidget* target = QApplication::focusWidget();
+                if (target == nullptr) {
+                    target = viewport_;
+                }
+                QKeyEvent keyEvent(
+                    QEvent::KeyPress, character.unicode(), Qt::NoModifier, QString(character));
+                QApplication::sendEvent(target, &keyEvent);
+            }
+        }
     } else if (state == QStringLiteral("workplane")) {
         for (const auto& plane : project_.WorkPlanes()) {
             project_.SetWorkPlaneVisible(plane.name, true);
@@ -4431,7 +4530,8 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
 
     int dimensionPage = -1;
     if (tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline
-        || tool == ViewportTool::DrawSpline) {
+        || tool == ViewportTool::DrawSpline || tool == ViewportTool::DrawArc
+        || tool == ViewportTool::DrawBezier) {
         dimensionPage = 0;
     } else if (tool == ViewportTool::DrawRectangle) {
         dimensionPage = 1;
@@ -4551,29 +4651,29 @@ void MainWindow::RefreshBeginnerGuide()
         case ViewportTool::DrawLine:
             setGuide(QStringLiteral("直線を描く"),
                 pointCount == 0 ? QStringLiteral("次: 始点を中央画面でクリック")
-                                : QStringLiteral("次: 終点をクリック、または寸法で確定"),
-                QStringLiteral("1  始点\n2  終点（Shiftで水平・垂直）\n3  長さ・角度は右の欄で実寸指定"),
+                                : QStringLiteral("次: 終点をクリック、または数字を入力"),
+                QStringLiteral("1  始点\n2  数字を打つと長さ欄へ入力\n3  Tabで角度、Enterで確定"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawPolyline:
             setGuide(QStringLiteral("ポリラインを描く"),
                 pointCount == 0 ? QStringLiteral("次: 始点をクリック")
-                                : QStringLiteral("次: 折れ点を追加。終わりはEnter"),
-                QStringLiteral("1  始点\n2  折れ点を順にクリック\n3  Enter・右クリック・完了で確定"),
+                                : QStringLiteral("次: 折れ点をクリック、または数字を入力"),
+                QStringLiteral("1  始点\n2  各区間は長さ→Tab→角度→Enter\n3  右クリック・完了で全体を確定"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawRectangle:
             setGuide(QStringLiteral("矩形を描く"),
                 pointCount == 0 ? QStringLiteral("次: 1つ目の角をクリック")
-                                : QStringLiteral("次: 対角をクリック、または幅・高さで確定"),
-                QStringLiteral("1  角を1点\n2  対角を1点（Shiftで正方形）\n3  幅・高さは右の欄で実寸指定"),
+                                : QStringLiteral("次: 対角をクリック、または数字を入力"),
+                QStringLiteral("1  角を1点\n2  数字を打つと幅欄へ入力\n3  Tabで高さ、Enterで確定"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawCircle:
             setGuide(QStringLiteral("円を描く"),
                 pointCount == 0 ? QStringLiteral("次: 中心をクリック")
-                                : QStringLiteral("次: 円周をクリック、または半径で確定"),
-                QStringLiteral("1  中心\n2  円周上の点\n3  半径は右の欄で実寸指定"),
+                                : QStringLiteral("次: 円周をクリック、または半径を入力"),
+                QStringLiteral("1  中心\n2  数字を打つと半径欄へ入力\n3  Enterで確定"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawArc:
@@ -4581,7 +4681,8 @@ void MainWindow::RefreshBeginnerGuide()
                 pointCount == 0 ? QStringLiteral("次: 始点をクリック")
                     : pointCount == 1 ? QStringLiteral("次: 円弧が通る点をクリック")
                                       : QStringLiteral("次: 終点をクリック"),
-                QStringLiteral("1  始点\n2  円弧上の通過点\n3  終点"), QStringLiteral("drawing"));
+                QStringLiteral("1  始点\n2  通過点\n3  終点\n各点は距離→Tab→角度→Enterでも指定"),
+                QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawBezier:
             setGuide(QStringLiteral("ベジェ曲線を描く"),
@@ -4589,13 +4690,14 @@ void MainWindow::RefreshBeginnerGuide()
                     : pointCount == 1 ? QStringLiteral("次: 始点側の制御点")
                     : pointCount == 2 ? QStringLiteral("次: 終点側の制御点")
                                       : QStringLiteral("次: 終点をクリック"),
-                QStringLiteral("1  始点\n2  制御点1\n3  制御点2\n4  終点"), QStringLiteral("drawing"));
+                QStringLiteral("1  始点\n2  制御点1\n3  制御点2\n4  終点\n各点は距離・角度でも指定"),
+                QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawSpline:
             setGuide(QStringLiteral("通過点スプラインを描く"),
                 pointCount < 4 ? QStringLiteral("次: 通過点を%1点以上まで追加").arg(4 - pointCount)
                                : QStringLiteral("次: Enterで確定、または通過点を追加"),
-                QStringLiteral("1  通したい点を4点以上クリック\n2  Enter・右クリック・完了で確定"),
+                QStringLiteral("1  通過点をクリックまたは距離・角度で追加\n2  右クリック・完了で確定"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::MoveSelection:
@@ -4725,7 +4827,8 @@ void MainWindow::CommitDrawingDimensions()
 
     bool committed = false;
     if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline
-        || viewport_->Tool() == ViewportTool::DrawSpline) {
+        || viewport_->Tool() == ViewportTool::DrawSpline || viewport_->Tool() == ViewportTool::DrawArc
+        || viewport_->Tool() == ViewportTool::DrawBezier) {
         committed = viewport_->CommitDrawingDimensions(
             drawingLengthField_->value(), drawingAngleField_->value());
     } else if (viewport_->Tool() == ViewportTool::DrawRectangle) {
@@ -6949,6 +7052,15 @@ bool MainWindow::RunCreationSelfTest()
     const std::size_t exactStart = project_.Wires().size();
     SetViewportTool(ViewportTool::DrawLine);
     click(center + QPointF(-205.0, 135.0));
+    QLineEdit* exactLengthEditor = drawingLengthField_->findChild<QLineEdit*>();
+    if (exactLengthEditor == nullptr) {
+        return fail("find expression dimension editor");
+    }
+    exactLengthEditor->setText(QStringLiteral("(10/2)*3"));
+    drawingLengthField_->interpretText();
+    if (!kachakacha::geometry::AlmostEqual(drawingLengthField_->value(), 15.0, 1.0e-10)) {
+        return fail("expression dimension field");
+    }
     drawingLengthField_->setValue(12.5);
     drawingAngleField_->setValue(30.0);
     CommitDrawingDimensions();
@@ -7007,6 +7119,51 @@ bool MainWindow::RunCreationSelfTest()
     Undo();
     if (project_.Wires().size() != exactStart) {
         return fail("undo dimension-driven drawing");
+    }
+
+    const auto sendKey = [this](int key, const QString& text = QString()) {
+        QWidget* target = QApplication::focusWidget();
+        if (target == nullptr) {
+            target = viewport_;
+        }
+        QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier, text);
+        QApplication::sendEvent(target, &press);
+        QWidget* releaseTarget = QApplication::focusWidget();
+        if (releaseTarget == nullptr) {
+            releaseTarget = target;
+        }
+        QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier, text);
+        QApplication::sendEvent(releaseTarget, &release);
+    };
+    const auto typeExpression = [&sendKey](const QString& expression) {
+        for (const QChar character : expression) {
+            sendKey(character.unicode(), QString(character));
+        }
+    };
+    SetViewportTool(ViewportTool::DrawLine);
+    click(center + QPointF(-205.0, 155.0));
+    typeExpression(QStringLiteral("(10/2)*3"));
+    sendKey(Qt::Key_Tab);
+    typeExpression(QStringLiteral("(45/3)*2"));
+    sendKey(Qt::Key_Return);
+    if (project_.Wires().size() != exactStart + 1
+        || !kachakacha::geometry::AlmostEqual(
+            (project_.Wires().back().wire.End() - project_.Wires().back().wire.Start()).Length(),
+            15.0, 1.0e-8)) {
+        return fail("cursor expression drawing");
+    }
+    const auto expressionStart = exactPlane->Project(project_.Wires().back().wire.Start());
+    const auto expressionEnd = exactPlane->Project(project_.Wires().back().wire.End());
+    if (!kachakacha::geometry::AlmostEqual(
+            std::atan2(
+                expressionEnd.v - expressionStart.v,
+                expressionEnd.u - expressionStart.u) * 180.0 / kPi,
+            30.0, 1.0e-8)) {
+        return fail("cursor expression angle");
+    }
+    Undo();
+    if (project_.Wires().size() != exactStart) {
+        return fail("undo cursor expression drawing");
     }
 
     const std::size_t radiusCircleIndex = directStart + 2;

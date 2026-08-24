@@ -16,6 +16,7 @@ endif()
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
+    src/core/kachakacha/io/NumericExpression.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
@@ -240,6 +241,17 @@ if(WIN32)
 endif()
 
 if(KACHACAD_BUILD_TESTS)
+    add_executable(kachakacha_numeric_expression_tests
+        tests/numeric_expression_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_numeric_expression_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(NAME numeric_expression_tests COMMAND kachakacha_numeric_expression_tests)
+
     add_executable(kachakacha_workplane_tests
         tests/workplane_tests.cpp
     )

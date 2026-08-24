@@ -1,12 +1,20 @@
 #include "CadViewport.h"
 
+#include "kachakacha/io/NumericExpression.h"
+
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QFontMetrics>
 #include <QCursor>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
+#include <QStyle>
+#include <QToolTip>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -394,6 +402,21 @@ QColor WireColor(WireKind kind)
     return QColor("#24313b");
 }
 
+std::optional<double> EvaluateDimensionExpression(QString expression)
+{
+    expression.replace(QChar(0x00d7), QLatin1Char('*'));
+    expression.replace(QChar(0x00f7), QLatin1Char('/'));
+    expression.replace(QChar(0x03c0), QStringLiteral("pi"));
+    const QByteArray utf8 = expression.trimmed().toUtf8();
+    return kachakacha::io::EvaluateNumericExpression(
+        std::string_view(utf8.constData(), static_cast<std::size_t>(utf8.size())));
+}
+
+QString DimensionText(double value)
+{
+    return QString::number(value, 'f', 3);
+}
+
 } // namespace
 
 CadViewport::CadViewport(QWidget* parent)
@@ -402,6 +425,41 @@ CadViewport::CadViewport(QWidget* parent)
     setMinimumSize(520, 420);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+
+    dynamicDimensionEditor_ = new QFrame(this);
+    dynamicDimensionEditor_->setObjectName(QStringLiteral("dynamicDimensionEditor"));
+    auto* layout = new QHBoxLayout(dynamicDimensionEditor_);
+    layout->setContentsMargins(7, 5, 7, 5);
+    layout->setSpacing(5);
+    dynamicPrimaryLabel_ = new QLabel(dynamicDimensionEditor_);
+    dynamicPrimaryField_ = new QLineEdit(dynamicDimensionEditor_);
+    dynamicSecondaryLabel_ = new QLabel(dynamicDimensionEditor_);
+    dynamicSecondaryField_ = new QLineEdit(dynamicDimensionEditor_);
+    for (QLineEdit* field : {dynamicPrimaryField_, dynamicSecondaryField_}) {
+        field->setMaxLength(64);
+        field->setFixedWidth(92);
+        field->setAlignment(Qt::AlignRight);
+        field->setPlaceholderText(QStringLiteral("(180/2)*3"));
+        field->setToolTip(QStringLiteral("数値または + - * / ( ) を使った計算式。Enterで確定"));
+        field->installEventFilter(this);
+    }
+    layout->addWidget(dynamicPrimaryLabel_);
+    layout->addWidget(dynamicPrimaryField_);
+    layout->addWidget(dynamicSecondaryLabel_);
+    layout->addWidget(dynamicSecondaryField_);
+    dynamicDimensionEditor_->setStyleSheet(QStringLiteral(
+        "QFrame#dynamicDimensionEditor {"
+        " background: #ffffff; border: 1px solid #82939b; border-radius: 4px; }"
+        "QFrame#dynamicDimensionEditor QLabel {"
+        " color: #26343b; border: none; font-weight: 600; }"
+        "QFrame#dynamicDimensionEditor QLineEdit {"
+        " min-height: 24px; padding: 1px 5px; color: #17252b;"
+        " background: #f7fbfb; border: 1px solid #6d858d; border-radius: 2px; }"
+        "QFrame#dynamicDimensionEditor QLineEdit:focus {"
+        " background: #ffffff; border: 2px solid #087780; }"
+        "QFrame#dynamicDimensionEditor QLineEdit[expressionError=\"true\"] {"
+        " background: #fff0f1; border: 2px solid #a02c3a; }"));
+    dynamicDimensionEditor_->hide();
 }
 
 void CadViewport::SetProject(const kachakacha::model::Project* project, bool fitView)
@@ -572,6 +630,10 @@ void CadViewport::SetTool(ViewportTool tool)
 {
     if (tool_ != tool) {
         coincidencePicks_.clear();
+        if (dynamicPrimaryField_ != nullptr) {
+            dynamicPrimaryField_->clear();
+            dynamicSecondaryField_->clear();
+        }
     }
     tool_ = tool;
     gridOriginDragSource_.reset();
@@ -1107,6 +1169,7 @@ void CadViewport::FinishDrawing()
         drawingPoints_.clear();
     }
     hoverDrawingPoint_.reset();
+    dynamicDimensionEditor_->hide();
     NotifyDrawingState();
     update();
 }
@@ -1116,6 +1179,9 @@ void CadViewport::CancelDrawing()
     drawingPoints_.clear();
     hoverDrawingPoint_.reset();
     splitPreviewParameter_.reset();
+    if (dynamicDimensionEditor_ != nullptr) {
+        dynamicDimensionEditor_->hide();
+    }
     NotifyDrawingState();
     update();
 }
@@ -1127,7 +1193,11 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
         return measurements;
     }
 
-    const Vector3 anchor = tool_ == ViewportTool::DrawPolyline || tool_ == ViewportTool::DrawSpline
+    const bool usesLastPoint = tool_ == ViewportTool::DrawPolyline
+        || tool_ == ViewportTool::DrawSpline
+        || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawBezier;
+    const Vector3 anchor = usesLastPoint
         ? drawingPoints_.back()
         : drawingPoints_.front();
     const auto start = activePlane_->Project(anchor);
@@ -1136,7 +1206,8 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
     const double deltaV = hover.v - start.v;
 
     if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
-        || tool_ == ViewportTool::DrawSpline) {
+        || tool_ == ViewportTool::DrawSpline || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawBezier) {
         measurements.lengthMillimeters = std::hypot(deltaU, deltaV);
         measurements.angleDegrees = std::atan2(deltaV, deltaU) * 180.0 / std::numbers::pi;
         measurements.available = measurements.lengthMillimeters > 1.0e-9;
@@ -1152,6 +1223,159 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
     return measurements;
 }
 
+bool CadViewport::HasDynamicDimensions() const noexcept
+{
+    return tool_ == ViewportTool::DrawLine
+        || tool_ == ViewportTool::DrawPolyline
+        || tool_ == ViewportTool::DrawRectangle
+        || tool_ == ViewportTool::DrawCircle
+        || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawBezier
+        || tool_ == ViewportTool::DrawSpline;
+}
+
+void CadViewport::UpdateDynamicDimensionEditor()
+{
+    if (dynamicDimensionEditor_ == nullptr || !HasDynamicDimensions()
+        || !activePlane_.has_value() || drawingPoints_.empty()) {
+        if (dynamicDimensionEditor_ != nullptr) {
+            dynamicDimensionEditor_->hide();
+        }
+        return;
+    }
+
+    const bool rectangle = tool_ == ViewportTool::DrawRectangle;
+    const bool circle = tool_ == ViewportTool::DrawCircle;
+    const bool line = tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline;
+    dynamicPrimaryLabel_->setText(
+        rectangle ? QStringLiteral("幅 mm")
+        : circle ? QStringLiteral("半径 mm")
+        : line ? QStringLiteral("長さ mm")
+               : QStringLiteral("距離 mm"));
+    dynamicSecondaryLabel_->setText(rectangle ? QStringLiteral("高さ mm") : QStringLiteral("角度 °"));
+    dynamicSecondaryLabel_->setVisible(!circle);
+    dynamicSecondaryField_->setVisible(!circle);
+
+    const DrawingMeasurements measurements = CurrentDrawingMeasurements();
+    if (measurements.available) {
+        if (!dynamicPrimaryField_->hasFocus()) {
+            dynamicPrimaryField_->setText(DimensionText(
+                rectangle ? measurements.widthMillimeters
+                : circle ? measurements.radiusMillimeters
+                         : measurements.lengthMillimeters));
+        }
+        if (!circle && !dynamicSecondaryField_->hasFocus()) {
+            dynamicSecondaryField_->setText(DimensionText(
+                rectangle ? measurements.heightMillimeters : measurements.angleDegrees));
+        }
+    } else {
+        if (!dynamicPrimaryField_->hasFocus() && dynamicPrimaryField_->text().isEmpty()) {
+            dynamicPrimaryField_->setText(circle ? QStringLiteral("5") : QStringLiteral("10"));
+        }
+        if (!circle && !dynamicSecondaryField_->hasFocus() && dynamicSecondaryField_->text().isEmpty()) {
+            dynamicSecondaryField_->setText(rectangle ? QStringLiteral("10") : QStringLiteral("0"));
+        }
+    }
+
+    dynamicDimensionEditor_->adjustSize();
+    PositionDynamicDimensionEditor();
+    dynamicDimensionEditor_->show();
+    dynamicDimensionEditor_->raise();
+}
+
+void CadViewport::PositionDynamicDimensionEditor()
+{
+    if (dynamicDimensionEditor_ == nullptr || drawingPoints_.empty()) {
+        return;
+    }
+    QPoint anchor = hoverScreenPosition_;
+    if (!rect().contains(anchor)) {
+        anchor = ProjectPoint(drawingPoints_.back()).toPoint();
+    }
+    int x = anchor.x() + 16;
+    int y = anchor.y() + 18;
+    if (x + dynamicDimensionEditor_->width() > width() - 8) {
+        x = anchor.x() - dynamicDimensionEditor_->width() - 16;
+    }
+    if (y + dynamicDimensionEditor_->height() > height() - 8) {
+        y = anchor.y() - dynamicDimensionEditor_->height() - 16;
+    }
+    dynamicDimensionEditor_->move(
+        std::clamp(x, 8, std::max(8, width() - dynamicDimensionEditor_->width() - 8)),
+        std::clamp(y, 8, std::max(8, height() - dynamicDimensionEditor_->height() - 8)));
+}
+
+void CadViewport::BeginDynamicDimensionInput(const QString& initialText, bool secondary)
+{
+    UpdateDynamicDimensionEditor();
+    if (!dynamicDimensionEditor_->isVisible()) {
+        return;
+    }
+    QLineEdit* field = secondary && dynamicSecondaryField_->isVisible()
+        ? dynamicSecondaryField_
+        : dynamicPrimaryField_;
+    SetDynamicDimensionFieldError(field, false);
+    field->setFocus(Qt::ShortcutFocusReason);
+    field->selectAll();
+    if (!initialText.isEmpty()) {
+        field->setText(initialText);
+        field->setCursorPosition(field->text().size());
+    }
+}
+
+void CadViewport::SetDynamicDimensionFieldError(QLineEdit* field, bool error)
+{
+    if (field == nullptr || field->property("expressionError").toBool() == error) {
+        return;
+    }
+    field->setProperty("expressionError", error);
+    field->style()->unpolish(field);
+    field->style()->polish(field);
+}
+
+bool CadViewport::ValidateDynamicDimensionField(QLineEdit* field, bool positiveOnly)
+{
+    const std::optional<double> value = field != nullptr
+        ? EvaluateDimensionExpression(field->text())
+        : std::nullopt;
+    const bool valid = value.has_value() && std::isfinite(*value)
+        && (!positiveOnly || *value > 1.0e-9);
+    SetDynamicDimensionFieldError(field, !valid);
+    if (!valid && field != nullptr) {
+        QToolTip::showText(
+            field->mapToGlobal(QPoint(0, field->height() + 3)),
+            positiveOnly
+                ? QStringLiteral("0より大きい数値または計算式を入力してください")
+                : QStringLiteral("計算式を確認してください"),
+            field);
+    }
+    return valid;
+}
+
+bool CadViewport::CommitDynamicDimensionInput()
+{
+    const bool circle = tool_ == ViewportTool::DrawCircle;
+    const bool rectangle = tool_ == ViewportTool::DrawRectangle;
+    if (!ValidateDynamicDimensionField(dynamicPrimaryField_, true)
+        || (!circle && !ValidateDynamicDimensionField(dynamicSecondaryField_, rectangle))) {
+        return false;
+    }
+
+    const double primary = *EvaluateDimensionExpression(dynamicPrimaryField_->text());
+    const double secondary = circle
+        ? 0.0
+        : *EvaluateDimensionExpression(dynamicSecondaryField_->text());
+    if (!CommitDrawingDimensions(primary, secondary)) {
+        return false;
+    }
+
+    dynamicPrimaryField_->clearFocus();
+    dynamicSecondaryField_->clearFocus();
+    setFocus(Qt::OtherFocusReason);
+    UpdateDynamicDimensionEditor();
+    return true;
+}
+
 bool CadViewport::CommitDrawingDimensions(double primaryMillimeters, double secondaryValue)
 {
     if (!activePlane_.has_value() || drawingPoints_.empty()
@@ -1161,8 +1385,10 @@ bool CadViewport::CommitDrawingDimensions(double primaryMillimeters, double seco
     }
 
     if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
-        || tool_ == ViewportTool::DrawSpline) {
-        const Vector3 anchor = tool_ == ViewportTool::DrawPolyline || tool_ == ViewportTool::DrawSpline
+        || tool_ == ViewportTool::DrawSpline || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawBezier) {
+        const bool usesLastPoint = tool_ != ViewportTool::DrawLine;
+        const Vector3 anchor = usesLastPoint
             ? drawingPoints_.back()
             : drawingPoints_.front();
         const auto coordinates = activePlane_->Project(anchor);
@@ -1873,6 +2099,7 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
         }
     }
     hoverDrawingPoint_ = point;
+    UpdateDynamicDimensionEditor();
     NotifyDrawingState();
     update();
 }
@@ -3605,6 +3832,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             ? std::optional<Vector3>(ApplyDrawingConstraint(
                   SnapPoint(*point, event->position()), event->modifiers()))
             : std::nullopt;
+        UpdateDynamicDimensionEditor();
         NotifyDrawingState();
         update();
     }
@@ -3823,6 +4051,14 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 
 void CadViewport::keyPressEvent(QKeyEvent* event)
 {
+    const QString text = event->text();
+    const bool startsExpression = text.size() == 1
+        && QStringLiteral("0123456789.+-(pP").contains(text.front());
+    if (startsExpression && HasDynamicDimensions() && !drawingPoints_.empty()) {
+        BeginDynamicDimensionInput(text);
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape) {
         if (gridOriginDragSource_.has_value()) {
             gridOriginDragSource_.reset();
@@ -3852,6 +4088,43 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+bool CadViewport::eventFilter(QObject* watched, QEvent* event)
+{
+    const bool isPrimary = watched == dynamicPrimaryField_;
+    const bool isSecondary = watched == dynamicSecondaryField_;
+    if ((isPrimary || isSecondary) && event->type() == QEvent::KeyPress) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        SetDynamicDimensionFieldError(static_cast<QLineEdit*>(watched), false);
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            CommitDynamicDimensionInput();
+            keyEvent->accept();
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_Escape) {
+            static_cast<QLineEdit*>(watched)->clearFocus();
+            setFocus(Qt::OtherFocusReason);
+            keyEvent->accept();
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_Tab || keyEvent->key() == Qt::Key_Backtab) {
+            const bool rectangle = tool_ == ViewportTool::DrawRectangle;
+            const bool positiveOnly = isPrimary || rectangle;
+            if (!ValidateDynamicDimensionField(static_cast<QLineEdit*>(watched), positiveOnly)) {
+                keyEvent->accept();
+                return true;
+            }
+            QLineEdit* target = isPrimary && dynamicSecondaryField_->isVisible()
+                ? dynamicSecondaryField_
+                : dynamicPrimaryField_;
+            target->setFocus(Qt::TabFocusReason);
+            target->selectAll();
+            keyEvent->accept();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void CadViewport::leaveEvent(QEvent* event)

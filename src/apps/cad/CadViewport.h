@@ -14,6 +14,9 @@
 
 class QKeyEvent;
 class QEvent;
+class QFrame;
+class QLabel;
+class QLineEdit;
 
 enum class CadSelectionKind {
     None,
@@ -235,6 +238,7 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void leaveEvent(QEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     [[nodiscard]] QPointF ProjectPoint(kachakacha::geometry::Vector3 point) const;
@@ -272,6 +276,13 @@ private:
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;
+    [[nodiscard]] bool HasDynamicDimensions() const noexcept;
+    void UpdateDynamicDimensionEditor();
+    void PositionDynamicDimensionEditor();
+    void BeginDynamicDimensionInput(const QString& initialText, bool secondary = false);
+    bool CommitDynamicDimensionInput();
+    bool ValidateDynamicDimensionField(QLineEdit* field, bool positiveOnly);
+    void SetDynamicDimensionFieldError(QLineEdit* field, bool error);
     void CommitDrawingPoint(kachakacha::geometry::Vector3 point);
     void CommitMeasurementPick(QPointF position);
     void CommitCoincidencePick(QPointF position);
@@ -340,6 +351,11 @@ private:
     QColor minorGridColor_{"#c5cdd2"};
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
+    QFrame* dynamicDimensionEditor_ = nullptr;
+    QLabel* dynamicPrimaryLabel_ = nullptr;
+    QLabel* dynamicSecondaryLabel_ = nullptr;
+    QLineEdit* dynamicPrimaryField_ = nullptr;
+    QLineEdit* dynamicSecondaryField_ = nullptr;
     std::optional<kachakacha::geometry::Vector3> hoveredWirePoint_;
     std::optional<double> hoveredWireParameter_;
     std::optional<WireControlPointPick> hoveredControlPoint_;

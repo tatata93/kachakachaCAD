@@ -1,0 +1,46 @@
+LGPL対象ライブラリのソース提供と差し替え方法
+=============================================
+
+対象
+----
+
+* Qt 6.9.2（LGPLv3）
+* Open CASCADE Technology 8.0.1（LGPLv2.1 + Open CASCADE exception）
+
+公開配布時のソース提供
+----------------------
+
+公開する実行ファイルと同じダウンロード場所に、次の完全な対応ソースと
+ビルド用情報を置きます。外部サイトへのリンクだけで済ませず、配布者が管理する
+GitHub Releases の添付ファイルとして保持します。
+
+* qtbase-everywhere-src-6.9.2.zip
+* Open-Cascade-SAS-OCCT-V8_0_1.tar.gz
+* FreeType、Brotli、bzip2、libpng、zlib の使用版ソース
+* 使用した vcpkg port、triplet、バージョン情報
+
+これらをまとめる作業には scripts/package-third-party-source.ps1 を使用します。
+ソフトの公開期間中と、適用ライセンスが要求する期間は削除しません。
+
+Qt DLLの差し替え
+----------------
+
+1. kachakachaCAD を終了します。
+2. 配布フォルダを複製して、元の状態を残します。
+3. Qt 6.9.2 の対応ソースから、同じABIと構成の共有 DLL をビルドします。
+4. 配布フォルダの Qt6Core.dll、Qt6Gui.dll、Qt6Widgets.dll と、必要に応じて
+   platforms、styles 内のプラグイン DLL を差し替えます。
+5. kachakacha_cad.exe を通常どおり起動します。
+
+実行ファイルは配布フォルダ内の共有 DLL を実行時に読み込みます。DLLの署名確認や
+差し替え防止は行っていません。互換性のないDLLでは起動しない場合があります。
+
+Open CASCADE DLLの差し替え
+--------------------------
+
+同様に、OCCT 8.0.1 の対応ソースを共有 DLL としてビルドし、配布フォルダ内の
+TK*.dll をABI互換のものへ差し替えられます。OCCTのヘッダ利用に関しては
+Open CASCADE exception version 1.0 も適用されます。
+
+この文書は利用者のライセンス上の権利を制限するものではありません。
+ライセンス本文と食い違う場合は、各ライセンス本文が優先します。

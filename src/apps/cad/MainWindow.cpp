@@ -2428,6 +2428,43 @@ void MainWindow::OpenManual(const QString& anchor)
     statusBar()->showMessage(QStringLiteral("manual.html が見つかりません"), 5000);
 }
 
+void MainWindow::OpenLegalNotices()
+{
+    const QDir applicationDirectory(QApplication::applicationDirPath());
+    const QStringList candidates = {
+        applicationDirectory.filePath(QStringLiteral("legal/README-JA.txt")),
+        applicationDirectory.filePath(QStringLiteral("../../legal/README-JA.txt")),
+    };
+    QString noticePath;
+    for (const QString& candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            noticePath = QFileInfo(candidate).absoluteFilePath();
+            break;
+        }
+    }
+
+    QMessageBox dialog(this);
+    dialog.setWindowTitle(QStringLiteral("使用ライブラリと権利"));
+    dialog.setIcon(QMessageBox::Information);
+    dialog.setText(QStringLiteral(
+        "kachakachaCAD %1\n\n"
+        "Qt 6.9.2（LGPLv3）と Open CASCADE Technology 8.0.1"
+        "（LGPLv2.1 + 追加例外）を共有DLLとして使用しています。\n\n"
+        "利用者は各ライセンスに従ってDLLを調査・変更・差し替えできます。"
+        "本ソフトで作成した模型データに、これらのライブラリのライセンスが"
+        "自動的に適用されることはありません。実在車両やロゴなど第三者の権利は別途確認してください。")
+        .arg(QApplication::applicationVersion()));
+    QPushButton* openButton = nullptr;
+    if (!noticePath.isEmpty()) {
+        openButton = dialog.addButton(QStringLiteral("詳細文書を開く"), QMessageBox::ActionRole);
+    }
+    dialog.addButton(QStringLiteral("閉じる"), QMessageBox::RejectRole);
+    dialog.exec();
+    if (openButton != nullptr && dialog.clickedButton() == openButton) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(noticePath));
+    }
+}
+
 void MainWindow::BuildMenusAndToolbar()
 {
     QAction* newAction = new QAction(style()->standardIcon(QStyle::SP_FileIcon), QStringLiteral("新規"), this);
@@ -2445,6 +2482,7 @@ void MainWindow::BuildMenusAndToolbar()
     finishedDisplayAction_ = new QAction(QStringLiteral("完成形"), this);
     isolateDisplayAction_ = new QAction(QStringLiteral("選択だけ"), this);
     QAction* manualAction = new QAction(QStringLiteral("操作マニュアル"), this);
+    QAction* legalAction = new QAction(QStringLiteral("使用ライブラリと権利"), this);
 
     auto* displayModeGroup = new QActionGroup(this);
     displayModeGroup->setExclusive(true);
@@ -2493,6 +2531,7 @@ void MainWindow::BuildMenusAndToolbar()
         SetDisplayMode(ViewportDisplayMode::IsolatedSelection);
     });
     connect(manualAction, &QAction::triggered, this, [this] { OpenManual(); });
+    connect(legalAction, &QAction::triggered, this, &MainWindow::OpenLegalNotices);
 
     QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル"));
     fileMenu->addAction(newAction);
@@ -2550,6 +2589,7 @@ void MainWindow::BuildMenusAndToolbar()
 
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("ヘルプ"));
     helpMenu->addAction(manualAction);
+    helpMenu->addAction(legalAction);
 
     QToolBar* toolbar = addToolBar(QStringLiteral("基本操作"));
     toolbar->setMovable(false);

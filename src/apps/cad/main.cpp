@@ -11,6 +11,7 @@ int main(int argc, char* argv[])
 {
     QApplication application(argc, argv);
     QApplication::setApplicationName("kachakachaCAD");
+    QApplication::setApplicationVersion("0.1.0");
     QApplication::setOrganizationName("kachakachaCAD");
     QApplication::setStyle("Fusion");
     const int japaneseFontId = QFontDatabase::addApplicationFont("C:/Windows/Fonts/YuGothM.ttc");

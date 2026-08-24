@@ -1,0 +1,53 @@
+THIRD-PARTY SOFTWARE NOTICES
+============================
+
+This product includes the following third-party software. Copyright and
+license texts supplied by each project are included in this legal directory.
+
+Qt 6.9.2
+--------
+Copyright (C) The Qt Company Ltd. and other contributors.
+
+Qt Core, GUI, Widgets, and the deployed Qt plugins are used under the GNU
+Lesser General Public License version 3. They are dynamically linked and are
+distributed as replaceable DLLs. Detailed package and bundled third-party
+attributions are provided in sbom/qt/qtbase-6.9.2.spdx.json.
+
+Project: https://www.qt.io/
+Source:  https://download.qt.io/official_releases/qt/6.9/6.9.2/submodules/
+
+Open CASCADE Technology 8.0.1
+-----------------------------
+Copyright (c) OPEN CASCADE S.A.S. and contributors.
+
+Open CASCADE Technology is used under GNU Lesser General Public License
+version 2.1 with the Open CASCADE exception version 1.0. It is dynamically
+linked and distributed as replaceable TK*.dll files. The complete license and
+exception are in third-party/opencascade/copyright.
+
+Project: https://github.com/Open-Cascade-SAS/OCCT
+
+Runtime dependencies supplied by vcpkg
+---------------------------------------
+
+* FreeType 2.14.3: FreeType License or GPL-2.0-or-later; this distribution
+  uses the FreeType License option.
+* Brotli 1.2.0: MIT License.
+* bzip2 1.0.8: bzip2 license.
+* libpng 1.6.58: libpng-2.0 license.
+* zlib 1.3.2: zlib License.
+* Khronos EGL/OpenGL registry headers: Apache-2.0, MIT, and the per-file
+  notices identified by the registry packages. Windows OpenGL itself is an
+  operating-system component and is not included in this folder.
+
+The corresponding copyright and license files are in third-party/<name>/.
+SPDX package records are in sbom/vcpkg/<name>/.
+
+Microsoft runtime components
+----------------------------
+
+Release packages may contain unmodified Microsoft Visual C++ runtime files
+installed by Visual Studio Build Tools. They are redistributed subject to the
+Microsoft Software License Terms and the Visual Studio 2022 REDIST list.
+
+No endorsement by any third-party project is implied.

@@ -134,6 +134,7 @@ private:
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void RefreshBeginnerGuide();
     void OpenManual(const QString& anchor = {});
+    void OpenLegalNotices();
     void CommitDrawingDimensions();
     void RefreshActiveWorkPlane();
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);

@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QCloseEvent>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QDebug>
@@ -42,6 +43,7 @@
 #include <QSaveFile>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QShortcut>
 #include <QSizePolicy>
@@ -455,6 +457,17 @@ void MainWindow::BuildUi()
     viewport_->SetDrawingStateChangedCallback([this](ViewportTool tool, std::size_t pointCount) {
         UpdateDrawingPanel(tool, pointCount);
     });
+    viewport_->SetGridOriginChangedCallback([this](double u, double v) {
+        const QSignalBlocker blockU(gridOrigin_[0]);
+        const QSignalBlocker blockV(gridOrigin_[1]);
+        gridOrigin_[0]->setValue(u);
+        gridOrigin_[1]->setValue(v);
+        statusBar()->showMessage(
+            QStringLiteral("点グリッドの基準を X %1 mm / Y %2 mm に合わせました")
+                .arg(u, 0, 'f', 3).arg(v, 0, 'f', 3),
+            4000);
+        SetViewportTool(ViewportTool::Select);
+    });
 
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
     modelDock->setObjectName("modelDock");
@@ -646,7 +659,9 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
     toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
+    toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
+    LoadDisplaySettings();
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
         const ViewportTool tool = viewport_->Tool();
         const bool drawingTool = tool == ViewportTool::DrawLine
@@ -658,7 +673,8 @@ void MainWindow::BuildUi()
             || tool == ViewportTool::SplitWire || tool == ViewportTool::Coincident
             || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature;
         if ((drawingTool && index != 0) || (editTool && index != 3)
-            || (tool == ViewportTool::Measure && index != 7)) {
+            || (tool == ViewportTool::MoveGridOrigin && index != 0)
+            || (tool == ViewportTool::Measure && index != 8)) {
             SetViewportTool(ViewportTool::Select);
         }
         UpdatePlateSplitPreview();
@@ -721,6 +737,7 @@ void MainWindow::BuildDrawingActions()
     coincidentToolAction_ = new QAction(QStringLiteral("端点一致"), this);
     tangentToolAction_ = new QAction(QStringLiteral("接線接続"), this);
     curvatureToolAction_ = new QAction(QStringLiteral("曲率接続"), this);
+    gridOriginToolAction_ = new QAction(QStringLiteral("画面で基準を合わせる"), this);
     removeCoincidentAction_ = new QAction(QStringLiteral("一致解除"), this);
     removeTangentAction_ = new QAction(QStringLiteral("滑らか解除"), this);
     measureToolAction_ = new QAction(QStringLiteral("測定"), this);
@@ -736,6 +753,8 @@ void MainWindow::BuildDrawingActions()
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
     tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェ・B-spline・円弧端点の順に3D画面で指定"));
     curvatureToolAction_->setToolTip(QStringLiteral("固定側の端点、曲率まで追従するベジェ端点の順に3D画面で指定"));
+    gridOriginToolAction_->setToolTip(
+        QStringLiteral("点グリッドの点を掴み、作図上の合わせたい点までドラッグ"));
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
     removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーのG1/G2関係を解除し、端点一致は残す"));
     measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
@@ -768,7 +787,8 @@ void MainWindow::BuildDrawingActions()
              selectToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_, splineToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
-             coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_}) {
+             coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_,
+             gridOriginToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
     }
@@ -790,6 +810,9 @@ void MainWindow::BuildDrawingActions()
     connect(coincidentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Coincident); });
     connect(tangentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Tangent); });
     connect(curvatureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Curvature); });
+    connect(gridOriginToolAction_, &QAction::triggered, this, [this] {
+        SetViewportTool(ViewportTool::MoveGridOrigin);
+    });
     connect(removeCoincidentAction_, &QAction::triggered, this, &MainWindow::RemoveSelectedCoincidences);
     connect(removeTangentAction_, &QAction::triggered, this, &MainWindow::RemoveSelectedTangencies);
     connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
@@ -922,7 +945,7 @@ QWidget* MainWindow::BuildDrawingPanel()
     snapButton->setDefaultAction(snapAction_);
     snapButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     snapLayout->addWidget(snapButton);
-    snapLayout->addWidget(new QLabel(QStringLiteral("間隔")));
+    snapLayout->addWidget(new QLabel(QStringLiteral("主点間隔")));
     snapStepField_ = new QDoubleSpinBox;
     snapStepField_->setRange(0.01, 1000.0);
     snapStepField_->setDecimals(2);
@@ -937,6 +960,13 @@ QWidget* MainWindow::BuildDrawingPanel()
     gridLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     gridPointsVisible_ = new QCheckBox(QStringLiteral("表示"));
     gridPointsVisible_->setChecked(true);
+    gridSubdivision_ = new QComboBox;
+    gridSubdivision_->addItem(QStringLiteral("主点のみ"), 1);
+    gridSubdivision_->addItem(QStringLiteral("1/2 間隔に副点"), 2);
+    gridSubdivision_->addItem(QStringLiteral("1/3 間隔に副点"), 3);
+    gridSubdivision_->addItem(QStringLiteral("1/4 間隔に副点"), 4);
+    gridSubdivision_->setCurrentIndex(0);
+    gridSubdivision_->setToolTip(QStringLiteral("大きい主点の間を小さい副点で分割"));
     gridOrigin_[0] = MakeNumberField(0.0);
     gridOrigin_[1] = MakeNumberField(0.0);
     for (QDoubleSpinBox* field : gridOrigin_) {
@@ -945,9 +975,15 @@ QWidget* MainWindow::BuildDrawingPanel()
         field->setSuffix(QStringLiteral(" mm"));
     }
     auto* resetGridOrigin = new QPushButton(QStringLiteral("基準を 0, 0 に戻す"));
+    auto* moveGridOrigin = new QToolButton;
+    moveGridOrigin->setDefaultAction(gridOriginToolAction_);
+    moveGridOrigin->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    moveGridOrigin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     gridLayout->addRow(gridPointsVisible_);
+    gridLayout->addRow(QStringLiteral("副点"), gridSubdivision_);
     gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
     gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
+    gridLayout->addRow(moveGridOrigin);
     gridLayout->addRow(resetGridOrigin);
     layout->addWidget(gridBox);
 
@@ -972,6 +1008,10 @@ QWidget* MainWindow::BuildDrawingPanel()
     });
     connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
     connect(gridPointsVisible_, &QCheckBox::toggled, viewport_, &CadViewport::SetGridPointsVisible);
+    connect(gridSubdivision_, &QComboBox::currentIndexChanged, this, [this] {
+        viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
+    });
+    viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
     const auto updateGridOrigin = [this] {
         viewport_->SetGridOrigin(gridOrigin_[0]->value(), gridOrigin_[1]->value());
     };
@@ -1988,6 +2028,287 @@ QWidget* MainWindow::BuildOutputPanel()
     return scrollArea;
 }
 
+QWidget* MainWindow::BuildDisplayPanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    const auto makeWidthField = [] (double value) {
+        auto* field = new QDoubleSpinBox;
+        field->setRange(0.25, 12.0);
+        field->setDecimals(2);
+        field->setSingleStep(0.25);
+        field->setSuffix(QStringLiteral(" px"));
+        field->setValue(value);
+        field->setKeyboardTracking(false);
+        return field;
+    };
+    const auto makeOpacityField = [] (double value) {
+        auto* field = new QDoubleSpinBox;
+        field->setRange(0.0, 100.0);
+        field->setDecimals(0);
+        field->setSingleStep(5.0);
+        field->setSuffix(QStringLiteral(" %"));
+        field->setValue(value);
+        field->setKeyboardTracking(false);
+        return field;
+    };
+    const auto makeLineStyle = [] {
+        auto* combo = new QComboBox;
+        combo->addItem(QStringLiteral("実線"), static_cast<int>(Qt::SolidLine));
+        combo->addItem(QStringLiteral("破線"), static_cast<int>(Qt::DashLine));
+        combo->addItem(QStringLiteral("点線"), static_cast<int>(Qt::DotLine));
+        combo->addItem(QStringLiteral("一点鎖線"), static_cast<int>(Qt::DashDotLine));
+        return combo;
+    };
+    const auto makeColorButton = [this](const QColor& color) {
+        auto* button = new QPushButton;
+        button->setToolTip(QStringLiteral("色を選択"));
+        SetDisplayColorButton(button, color);
+        return button;
+    };
+
+    auto* wireBox = new QGroupBox(QStringLiteral("通常ワイヤー"));
+    auto* wireForm = new QFormLayout(wireBox);
+    wireColor_ = makeColorButton(QColor("#263b44"));
+    wireWidth_ = makeWidthField(2.0);
+    wireStyle_ = makeLineStyle();
+    wireForm->addRow(QStringLiteral("色"), wireColor_);
+    wireForm->addRow(QStringLiteral("太さ"), wireWidth_);
+    wireForm->addRow(QStringLiteral("線種"), wireStyle_);
+    layout->addWidget(wireBox);
+
+    auto* constructionBox = new QGroupBox(QStringLiteral("補助線"));
+    auto* constructionForm = new QFormLayout(constructionBox);
+    constructionColor_ = makeColorButton(QColor("#697984"));
+    constructionWidth_ = makeWidthField(1.7);
+    constructionStyle_ = makeLineStyle();
+    constructionStyle_->setCurrentIndex(1);
+    constructionForm->addRow(QStringLiteral("色"), constructionColor_);
+    constructionForm->addRow(QStringLiteral("太さ"), constructionWidth_);
+    constructionForm->addRow(QStringLiteral("線種"), constructionStyle_);
+    layout->addWidget(constructionBox);
+
+    auto* surfaceBox = new QGroupBox(QStringLiteral("面"));
+    auto* surfaceForm = new QFormLayout(surfaceBox);
+    surfaceFillColor_ = makeColorButton(QColor("#1f848a"));
+    surfaceOpacity_ = makeOpacityField(26.0);
+    surfaceEdgeColor_ = makeColorButton(QColor("#277b80"));
+    surfaceEdgeWidth_ = makeWidthField(1.4);
+    surfaceEdgeStyle_ = makeLineStyle();
+    surfaceForm->addRow(QStringLiteral("塗り色"), surfaceFillColor_);
+    surfaceForm->addRow(QStringLiteral("不透明度"), surfaceOpacity_);
+    surfaceForm->addRow(QStringLiteral("輪郭色"), surfaceEdgeColor_);
+    surfaceForm->addRow(QStringLiteral("輪郭太さ"), surfaceEdgeWidth_);
+    surfaceForm->addRow(QStringLiteral("輪郭線種"), surfaceEdgeStyle_);
+    layout->addWidget(surfaceBox);
+
+    auto* plateBox = new QGroupBox(QStringLiteral("板材"));
+    auto* plateForm = new QFormLayout(plateBox);
+    plateFillColor_ = makeColorButton(QColor("#b2c2cb"));
+    plateOpacity_ = makeOpacityField(62.0);
+    plateEdgeColor_ = makeColorButton(QColor("#586970"));
+    plateEdgeWidth_ = makeWidthField(1.0);
+    plateEdgeStyle_ = makeLineStyle();
+    plateForm->addRow(QStringLiteral("塗り色"), plateFillColor_);
+    plateForm->addRow(QStringLiteral("不透明度"), plateOpacity_);
+    plateForm->addRow(QStringLiteral("輪郭色"), plateEdgeColor_);
+    plateForm->addRow(QStringLiteral("輪郭太さ"), plateEdgeWidth_);
+    plateForm->addRow(QStringLiteral("輪郭線種"), plateEdgeStyle_);
+    layout->addWidget(plateBox);
+
+    auto* environmentBox = new QGroupBox(QStringLiteral("背景・点グリッド"));
+    environmentBox->setProperty("manualAnchor", QStringLiteral("displaySettings"));
+    auto* environmentForm = new QFormLayout(environmentBox);
+    backgroundColor_ = makeColorButton(QColor("#f5f6f7"));
+    majorGridColor_ = makeColorButton(QColor("#9aa8b0"));
+    minorGridColor_ = makeColorButton(QColor("#c5cdd2"));
+    environmentForm->addRow(QStringLiteral("背景色"), backgroundColor_);
+    environmentForm->addRow(QStringLiteral("主点色"), majorGridColor_);
+    environmentForm->addRow(QStringLiteral("副点色"), minorGridColor_);
+    layout->addWidget(environmentBox);
+
+    auto* resetButton = new QPushButton(QStringLiteral("表示設定を初期値に戻す"));
+    layout->addWidget(resetButton);
+    layout->addStretch(1);
+
+    const auto changed = [this] {
+        ApplyDisplaySettings();
+        SaveDisplaySettings();
+    };
+    for (QPushButton* button : {wireColor_, constructionColor_, surfaceFillColor_,
+             surfaceEdgeColor_, plateFillColor_, plateEdgeColor_, backgroundColor_,
+             majorGridColor_, minorGridColor_}) {
+        connect(button, &QPushButton::clicked, this, [this, button] { ChooseDisplayColor(button); });
+    }
+    for (QDoubleSpinBox* field : {wireWidth_, constructionWidth_, surfaceOpacity_,
+             surfaceEdgeWidth_, plateOpacity_, plateEdgeWidth_}) {
+        connect(field, &QDoubleSpinBox::valueChanged, this, changed);
+    }
+    for (QComboBox* combo : {wireStyle_, constructionStyle_, surfaceEdgeStyle_, plateEdgeStyle_}) {
+        connect(combo, &QComboBox::currentIndexChanged, this, changed);
+    }
+    connect(resetButton, &QPushButton::clicked, this, [this] {
+        loadingDisplaySettings_ = true;
+        SetDisplayColorButton(wireColor_, QColor("#263b44"));
+        wireWidth_->setValue(2.0);
+        wireStyle_->setCurrentIndex(wireStyle_->findData(static_cast<int>(Qt::SolidLine)));
+        SetDisplayColorButton(constructionColor_, QColor("#697984"));
+        constructionWidth_->setValue(1.7);
+        constructionStyle_->setCurrentIndex(constructionStyle_->findData(static_cast<int>(Qt::DashLine)));
+        SetDisplayColorButton(surfaceFillColor_, QColor("#1f848a"));
+        surfaceOpacity_->setValue(26.0);
+        SetDisplayColorButton(surfaceEdgeColor_, QColor("#277b80"));
+        surfaceEdgeWidth_->setValue(1.4);
+        surfaceEdgeStyle_->setCurrentIndex(surfaceEdgeStyle_->findData(static_cast<int>(Qt::SolidLine)));
+        SetDisplayColorButton(plateFillColor_, QColor("#b2c2cb"));
+        plateOpacity_->setValue(62.0);
+        SetDisplayColorButton(plateEdgeColor_, QColor("#586970"));
+        plateEdgeWidth_->setValue(1.0);
+        plateEdgeStyle_->setCurrentIndex(plateEdgeStyle_->findData(static_cast<int>(Qt::SolidLine)));
+        SetDisplayColorButton(backgroundColor_, QColor("#f5f6f7"));
+        SetDisplayColorButton(majorGridColor_, QColor("#9aa8b0"));
+        SetDisplayColorButton(minorGridColor_, QColor("#c5cdd2"));
+        loadingDisplaySettings_ = false;
+        ApplyDisplaySettings();
+        SaveDisplaySettings();
+    });
+
+    auto* scrollArea = new QScrollArea;
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidget(panel);
+    return scrollArea;
+}
+
+void MainWindow::SetDisplayColorButton(QPushButton* button, const QColor& color)
+{
+    if (button == nullptr || !color.isValid()) {
+        return;
+    }
+    const QColor textColor = color.lightnessF() < 0.52 ? QColor("#ffffff") : QColor("#17242b");
+    button->setProperty("displayColor", color.name(QColor::HexRgb));
+    button->setText(color.name(QColor::HexRgb).toUpper());
+    button->setStyleSheet(QStringLiteral(
+        "background: %1; color: %2; border: 1px solid #66747c; font-weight: 600;")
+            .arg(color.name(QColor::HexRgb), textColor.name(QColor::HexRgb)));
+}
+
+QColor MainWindow::DisplayColor(const QPushButton* button)
+{
+    return button == nullptr ? QColor() : QColor(button->property("displayColor").toString());
+}
+
+void MainWindow::ChooseDisplayColor(QPushButton* button)
+{
+    const QColor color = QColorDialog::getColor(
+        DisplayColor(button), this, QStringLiteral("表示色を選択"));
+    if (!color.isValid()) {
+        return;
+    }
+    SetDisplayColorButton(button, color);
+    ApplyDisplaySettings();
+    SaveDisplaySettings();
+}
+
+void MainWindow::ApplyDisplaySettings()
+{
+    if (viewport_ == nullptr || wireStyle_ == nullptr) {
+        return;
+    }
+    viewport_->SetWireAppearance(
+        DisplayColor(wireColor_), wireWidth_->value(),
+        static_cast<Qt::PenStyle>(wireStyle_->currentData().toInt()));
+    viewport_->SetConstructionWireAppearance(
+        DisplayColor(constructionColor_), constructionWidth_->value(),
+        static_cast<Qt::PenStyle>(constructionStyle_->currentData().toInt()));
+    viewport_->SetSurfaceAppearance(
+        DisplayColor(surfaceFillColor_), static_cast<int>(surfaceOpacity_->value()),
+        DisplayColor(surfaceEdgeColor_), surfaceEdgeWidth_->value(),
+        static_cast<Qt::PenStyle>(surfaceEdgeStyle_->currentData().toInt()));
+    viewport_->SetPlateAppearance(
+        DisplayColor(plateFillColor_), static_cast<int>(plateOpacity_->value()),
+        DisplayColor(plateEdgeColor_), plateEdgeWidth_->value(),
+        static_cast<Qt::PenStyle>(plateEdgeStyle_->currentData().toInt()));
+    viewport_->SetBackgroundColor(DisplayColor(backgroundColor_));
+    viewport_->SetGridColors(DisplayColor(majorGridColor_), DisplayColor(minorGridColor_));
+}
+
+void MainWindow::LoadDisplaySettings()
+{
+    if (wireColor_ == nullptr) {
+        return;
+    }
+    if (IsAutomationInvocation()) {
+        ApplyDisplaySettings();
+        return;
+    }
+    loadingDisplaySettings_ = true;
+    QSettings settings;
+    const auto loadColor = [&settings](QPushButton* button, const char* key) {
+        const QColor fallback = DisplayColor(button);
+        const QColor stored(settings.value(QString::fromLatin1(key), fallback.name()).toString());
+        SetDisplayColorButton(button, stored.isValid() ? stored : fallback);
+    };
+    const auto loadStyle = [&settings](QComboBox* combo, const char* key) {
+        const int style = settings.value(QString::fromLatin1(key), combo->currentData()).toInt();
+        const int index = combo->findData(style);
+        if (index >= 0) {
+            combo->setCurrentIndex(index);
+        }
+    };
+    loadColor(wireColor_, "display/wireColor");
+    wireWidth_->setValue(settings.value("display/wireWidth", wireWidth_->value()).toDouble());
+    loadStyle(wireStyle_, "display/wireStyle");
+    loadColor(constructionColor_, "display/constructionColor");
+    constructionWidth_->setValue(settings.value("display/constructionWidth", constructionWidth_->value()).toDouble());
+    loadStyle(constructionStyle_, "display/constructionStyle");
+    loadColor(surfaceFillColor_, "display/surfaceFillColor");
+    surfaceOpacity_->setValue(settings.value("display/surfaceOpacity", surfaceOpacity_->value()).toDouble());
+    loadColor(surfaceEdgeColor_, "display/surfaceEdgeColor");
+    surfaceEdgeWidth_->setValue(settings.value("display/surfaceEdgeWidth", surfaceEdgeWidth_->value()).toDouble());
+    loadStyle(surfaceEdgeStyle_, "display/surfaceEdgeStyle");
+    loadColor(plateFillColor_, "display/plateFillColor");
+    plateOpacity_->setValue(settings.value("display/plateOpacity", plateOpacity_->value()).toDouble());
+    loadColor(plateEdgeColor_, "display/plateEdgeColor");
+    plateEdgeWidth_->setValue(settings.value("display/plateEdgeWidth", plateEdgeWidth_->value()).toDouble());
+    loadStyle(plateEdgeStyle_, "display/plateEdgeStyle");
+    loadColor(backgroundColor_, "display/backgroundColor");
+    loadColor(majorGridColor_, "display/majorGridColor");
+    loadColor(minorGridColor_, "display/minorGridColor");
+    loadingDisplaySettings_ = false;
+    ApplyDisplaySettings();
+}
+
+void MainWindow::SaveDisplaySettings() const
+{
+    if (loadingDisplaySettings_ || IsAutomationInvocation() || wireColor_ == nullptr) {
+        return;
+    }
+    QSettings settings;
+    settings.setValue("display/wireColor", DisplayColor(wireColor_).name());
+    settings.setValue("display/wireWidth", wireWidth_->value());
+    settings.setValue("display/wireStyle", wireStyle_->currentData());
+    settings.setValue("display/constructionColor", DisplayColor(constructionColor_).name());
+    settings.setValue("display/constructionWidth", constructionWidth_->value());
+    settings.setValue("display/constructionStyle", constructionStyle_->currentData());
+    settings.setValue("display/surfaceFillColor", DisplayColor(surfaceFillColor_).name());
+    settings.setValue("display/surfaceOpacity", surfaceOpacity_->value());
+    settings.setValue("display/surfaceEdgeColor", DisplayColor(surfaceEdgeColor_).name());
+    settings.setValue("display/surfaceEdgeWidth", surfaceEdgeWidth_->value());
+    settings.setValue("display/surfaceEdgeStyle", surfaceEdgeStyle_->currentData());
+    settings.setValue("display/plateFillColor", DisplayColor(plateFillColor_).name());
+    settings.setValue("display/plateOpacity", plateOpacity_->value());
+    settings.setValue("display/plateEdgeColor", DisplayColor(plateEdgeColor_).name());
+    settings.setValue("display/plateEdgeWidth", plateEdgeWidth_->value());
+    settings.setValue("display/plateEdgeStyle", plateEdgeStyle_->currentData());
+    settings.setValue("display/backgroundColor", DisplayColor(backgroundColor_).name());
+    settings.setValue("display/majorGridColor", DisplayColor(majorGridColor_).name());
+    settings.setValue("display/minorGridColor", DisplayColor(minorGridColor_).name());
+}
+
 QWidget* MainWindow::BuildInfoPanel()
 {
     auto* panel = new QWidget;
@@ -2513,12 +2834,15 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         gridPointsVisible_->setChecked(true);
         snapAction_->setChecked(true);
         snapStepField_->setValue(1.0);
+        gridSubdivision_->setCurrentIndex(gridSubdivision_->findData(4));
         gridOrigin_[0]->setValue(0.5);
         gridOrigin_[1]->setValue(0.5);
         RefreshModelViews(false);
         showTab(0);
         if (state == QStringLiteral("drawing")) {
             SetViewportTool(ViewportTool::DrawLine);
+        } else {
+            SetViewportTool(ViewportTool::MoveGridOrigin);
         }
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
@@ -2738,12 +3062,20 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         finalRevealAnchor = QStringLiteral("modelOutput");
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("display") || state == QStringLiteral("display-grid")) {
+        showTab(7);
+        if (state == QStringLiteral("display-grid")) {
+            finalRevealTab = 7;
+            finalRevealAnchor = QStringLiteral("displaySettings");
+        }
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("inspection")) {
         modelFilter_->setText(QStringLiteral("nose_panel"));
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(7);
+        showTab(8);
         SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -2751,7 +3083,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(7);
+        showTab(8);
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else {
@@ -3863,7 +4195,10 @@ void MainWindow::SetViewportTool(ViewportTool tool)
 
     viewport_->SetTool(tool);
     if (tool == ViewportTool::Measure) {
-        toolsTabs_->setCurrentIndex(7);
+        toolsTabs_->setCurrentIndex(8);
+    } else if (tool == ViewportTool::MoveGridOrigin) {
+        toolsTabs_->setCurrentIndex(0);
+        gridPointsVisible_->setChecked(true);
     }
     selectToolAction_->setChecked(tool == ViewportTool::Select);
     lineToolAction_->setChecked(tool == ViewportTool::DrawLine);
@@ -3882,9 +4217,14 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     tangentToolAction_->setChecked(tool == ViewportTool::Tangent);
     curvatureToolAction_->setChecked(tool == ViewportTool::Curvature);
     measureToolAction_->setChecked(tool == ViewportTool::Measure);
+    gridOriginToolAction_->setChecked(tool == ViewportTool::MoveGridOrigin);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
+        break;
+    case ViewportTool::MoveGridOrigin:
+        statusBar()->showMessage(
+            QStringLiteral("点グリッド: 動かす点を掴み、作図上の合わせたい点までドラッグ"), 5000);
         break;
     case ViewportTool::DrawLine:
         statusBar()->showMessage(QStringLiteral("直線作図モード"), 2500);
@@ -3947,6 +4287,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     switch (tool) {
     case ViewportTool::Select:
         state = QStringLiteral("選択");
+        break;
+    case ViewportTool::MoveGridOrigin:
+        state = QStringLiteral("点グリッド基準 · 格子点をドラッグ");
         break;
     case ViewportTool::DrawLine:
         state = QStringLiteral("直線 · %1  %2 / 2点")
@@ -4159,6 +4502,12 @@ void MainWindow::RefreshBeginnerGuide()
     const std::size_t pointCount = viewport_->DrawingPointCount();
     if (tool != ViewportTool::Select) {
         switch (tool) {
+        case ViewportTool::MoveGridOrigin:
+            setGuide(QStringLiteral("点グリッドの基準を合わせる"),
+                QStringLiteral("次: 動かす格子点から合わせたい点までドラッグ"),
+                QStringLiteral("1  大きい主点または小さい副点を掴む\n2  線の端点・制御点までドラッグ\n3  離すと基準X/Yへ反映。Escで取消"),
+                QStringLiteral("grid"));
+            return;
         case ViewportTool::DrawLine:
             setGuide(QStringLiteral("直線を描く"),
                 pointCount == 0 ? QStringLiteral("次: 始点を中央画面でクリック")
@@ -4311,6 +4660,11 @@ void MainWindow::RefreshBeginnerGuide()
             QStringLiteral("output"));
         break;
     case 7:
+        setGuide(QStringLiteral("見た目を調整"), QStringLiteral("次: 色・太さ・線種を選ぶ"),
+            QStringLiteral("1  対象の表示グループを開く\n2  色・太さ・線種・透明度を変更\n3  設定は次回起動にも残る"),
+            QStringLiteral("display"));
+        break;
+    case 8:
         setGuide(QStringLiteral("寸法と選択情報を確認"), QStringLiteral("次: 対象を選ぶか、測定を開始"),
             QStringLiteral("1  対象を中央画面で選択\n2  寸法・材質・工作判定を確認\n3  測定はM"),
             QStringLiteral("measure"));
@@ -4369,6 +4723,7 @@ void MainWindow::RefreshActiveWorkPlane()
     arcToolAction_->setEnabled(canDraw);
     bezierToolAction_->setEnabled(canDraw);
     splineToolAction_->setEnabled(canDraw);
+    gridOriginToolAction_->setEnabled(canDraw);
     moveToolAction_->setEnabled(canDraw);
     copyToolAction_->setEnabled(canDraw);
     mirrorToolAction_->setEnabled(canDraw);
@@ -6018,10 +6373,12 @@ bool MainWindow::RunCreationSelfTest()
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
     const std::size_t initialDimensionCount = project_.ReferenceDimensions().size();
-    if (toolsTabs_->count() != 8
+    if (toolsTabs_->count() != 9
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
         || toolsTabs_->tabText(5) != QStringLiteral("面")
         || toolsTabs_->tabText(6) != QStringLiteral("出力")
+        || toolsTabs_->tabText(7) != QStringLiteral("表示")
+        || toolsTabs_->tabText(8) != QStringLiteral("情報")
         || activePlaneCombo_->count() == 0
         || plateFlatPatternSummary_ == nullptr
         || plateAssemblyGuidePreview_ == nullptr
@@ -6044,8 +6401,18 @@ bool MainWindow::RunCreationSelfTest()
         || drawingConstruction_ == nullptr
         || editWireConstruction_ == nullptr
         || gridPointsVisible_ == nullptr
+        || gridSubdivision_ == nullptr
         || gridOrigin_[0] == nullptr
         || gridOrigin_[1] == nullptr
+        || gridOriginToolAction_ == nullptr
+        || wireColor_ == nullptr
+        || wireWidth_ == nullptr
+        || wireStyle_ == nullptr
+        || surfaceFillColor_ == nullptr
+        || plateFillColor_ == nullptr
+        || backgroundColor_ == nullptr
+        || majorGridColor_ == nullptr
+        || minorGridColor_ == nullptr
         || modelFilter_ == nullptr
         || designDisplayAction_ == nullptr
         || finishedDisplayAction_ == nullptr
@@ -6071,6 +6438,41 @@ bool MainWindow::RunCreationSelfTest()
         return fail("drawing workbench is primary");
     }
     toolsTabs_->setCurrentIndex(0);
+    gridSubdivision_->setCurrentIndex(gridSubdivision_->findData(4));
+    if (viewport_->GridSubdivision() != 4) {
+        return fail("set JWCAD-style quarter grid subdivisions");
+    }
+    viewport_->SetGridOrigin(1.25, -2.5);
+    if (std::abs(viewport_->GridOriginU() - 1.25) > 1.0e-9
+        || std::abs(viewport_->GridOriginV() + 2.5) > 1.0e-9) {
+        return fail("set numeric grid origin");
+    }
+    gridOrigin_[0]->setValue(0.0);
+    gridOrigin_[1]->setValue(0.0);
+    viewport_->SetGridOrigin(0.0, 0.0);
+    SetViewportTool(ViewportTool::MoveGridOrigin);
+    if (viewport_->Tool() != ViewportTool::MoveGridOrigin || !gridOriginToolAction_->isChecked()) {
+        return fail("activate drag grid origin tool");
+    }
+    SetViewportTool(ViewportTool::Select);
+
+    SetDisplayColorButton(wireColor_, QColor("#325a6b"));
+    wireWidth_->setValue(3.25);
+    wireStyle_->setCurrentIndex(wireStyle_->findData(static_cast<int>(Qt::DotLine)));
+    SetDisplayColorButton(backgroundColor_, QColor("#f0f3f4"));
+    ApplyDisplaySettings();
+    if (viewport_->WireColorSetting() != QColor("#325a6b")
+        || std::abs(viewport_->WireWidthSetting() - 3.25) > 1.0e-9
+        || viewport_->WireStyleSetting() != Qt::DotLine
+        || viewport_->BackgroundColor() != QColor("#f0f3f4")) {
+        return fail("apply display color width style and background");
+    }
+    SetDisplayColorButton(wireColor_, QColor("#263b44"));
+    wireWidth_->setValue(2.0);
+    wireStyle_->setCurrentIndex(wireStyle_->findData(static_cast<int>(Qt::SolidLine)));
+    SetDisplayColorButton(backgroundColor_, QColor("#f5f6f7"));
+    ApplyDisplaySettings();
+
     SetViewportTool(ViewportTool::DrawLine);
     toolsTabs_->setCurrentIndex(5);
     if (viewport_->Tool() != ViewportTool::Select
@@ -7424,7 +7826,7 @@ bool MainWindow::RunCreationSelfTest()
         return fail("restore design display without history change");
     }
 
-    toolsTabs_->setCurrentIndex(7);
+    toolsTabs_->setCurrentIndex(8);
     QApplication::processEvents();
     return true;
 }

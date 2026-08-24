@@ -2,6 +2,7 @@
 
 #include "kachakacha/model/Project.h"
 
+#include <QColor>
 #include <QPoint>
 #include <QString>
 #include <QWidget>
@@ -30,6 +31,7 @@ struct CadSelection {
 
 enum class ViewportTool {
     Select,
+    MoveGridOrigin,
     DrawLine,
     DrawPolyline,
     DrawRectangle,
@@ -141,7 +143,32 @@ public:
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
     void SetGridPointsVisible(bool visible);
+    void SetGridSubdivision(int subdivision);
     void SetGridOrigin(double u, double v);
+    void SetGridOriginChangedCallback(std::function<void(double, double)> callback);
+    [[nodiscard]] int GridSubdivision() const noexcept { return gridSubdivision_; }
+    [[nodiscard]] double GridOriginU() const noexcept { return gridOriginU_; }
+    [[nodiscard]] double GridOriginV() const noexcept { return gridOriginV_; }
+    void SetWireAppearance(const QColor& color, double width, Qt::PenStyle style);
+    void SetConstructionWireAppearance(const QColor& color, double width, Qt::PenStyle style);
+    void SetSurfaceAppearance(
+        const QColor& fillColor,
+        int opacityPercent,
+        const QColor& edgeColor,
+        double edgeWidth,
+        Qt::PenStyle edgeStyle);
+    void SetPlateAppearance(
+        const QColor& fillColor,
+        int opacityPercent,
+        const QColor& edgeColor,
+        double edgeWidth,
+        Qt::PenStyle edgeStyle);
+    void SetBackgroundColor(const QColor& color);
+    void SetGridColors(const QColor& majorColor, const QColor& minorColor);
+    [[nodiscard]] QColor BackgroundColor() const { return backgroundColor_; }
+    [[nodiscard]] QColor WireColorSetting() const { return wireColor_; }
+    [[nodiscard]] double WireWidthSetting() const noexcept { return wireWidth_; }
+    [[nodiscard]] Qt::PenStyle WireStyleSetting() const noexcept { return wireStyle_; }
     void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
     void SetPlateAssemblyGuidePreview(
         std::optional<int> plateIndex,
@@ -227,6 +254,9 @@ private:
         QPointF position,
         double maximumDistance = 12.0) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(kachakacha::geometry::Vector3 point, QPointF screenPosition) const;
+    [[nodiscard]] kachakacha::geometry::Vector3 SnapGridAlignmentTarget(
+        kachakacha::geometry::Vector3 point,
+        QPointF screenPosition) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapDraggedControlPoint(
         kachakacha::geometry::Vector3 point,
         QPointF screenPosition) const;
@@ -267,13 +297,38 @@ private:
     std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;
     std::function<void(const std::vector<MeasurementPick>&)> measurementChanged_;
     std::function<void(ViewportTool, std::size_t)> drawingStateChanged_;
+    std::function<void(double, double)> gridOriginChanged_;
     std::optional<kachakacha::model::WorkPlane> activePlane_;
     ViewportTool tool_ = ViewportTool::Select;
     bool snapEnabled_ = true;
     double snapStep_ = 1.0;
     bool gridPointsVisible_ = true;
+    int gridSubdivision_ = 1;
     double gridOriginU_ = 0.0;
     double gridOriginV_ = 0.0;
+    std::optional<kachakacha::geometry::Vector3> gridOriginDragSource_;
+    std::optional<kachakacha::geometry::Vector3> gridOriginDragTarget_;
+    double gridOriginDragBaseU_ = 0.0;
+    double gridOriginDragBaseV_ = 0.0;
+    QColor backgroundColor_{"#f5f6f7"};
+    QColor wireColor_{"#263b44"};
+    double wireWidth_ = 2.0;
+    Qt::PenStyle wireStyle_ = Qt::SolidLine;
+    QColor constructionWireColor_{"#697984"};
+    double constructionWireWidth_ = 1.7;
+    Qt::PenStyle constructionWireStyle_ = Qt::DashLine;
+    QColor surfaceFillColor_{"#1f848a"};
+    int surfaceOpacityPercent_ = 26;
+    QColor surfaceEdgeColor_{"#277b80"};
+    double surfaceEdgeWidth_ = 1.4;
+    Qt::PenStyle surfaceEdgeStyle_ = Qt::SolidLine;
+    QColor plateFillColor_{"#b2c2cb"};
+    int plateOpacityPercent_ = 62;
+    QColor plateEdgeColor_{"#586970"};
+    double plateEdgeWidth_ = 1.0;
+    Qt::PenStyle plateEdgeStyle_ = Qt::SolidLine;
+    QColor majorGridColor_{"#9aa8b0"};
+    QColor minorGridColor_{"#c5cdd2"};
     std::vector<kachakacha::geometry::Vector3> drawingPoints_;
     std::optional<kachakacha::geometry::Vector3> hoverDrawingPoint_;
     std::optional<kachakacha::geometry::Vector3> hoveredWirePoint_;

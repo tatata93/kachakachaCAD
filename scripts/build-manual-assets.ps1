@@ -50,6 +50,8 @@ $Shots = @(
     @{ Name = "flat-pattern"; Project = $Acceptance; State = "flat-pattern" },
     @{ Name = "model-output"; Project = $Acceptance; State = "output" },
     @{ Name = "model-inspection"; Project = $Acceptance; State = "inspection" },
+    @{ Name = "display-settings"; Project = $Acceptance; State = "display" },
+    @{ Name = "display-background-grid"; Project = $FirstCheck; State = "display-grid" },
     @{ Name = "selection-info"; Project = $Acceptance; State = "info" }
 )
 

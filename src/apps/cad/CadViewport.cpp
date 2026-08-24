@@ -468,6 +468,8 @@ void CadViewport::SetTool(ViewportTool tool)
         coincidencePicks_.clear();
     }
     tool_ = tool;
+    gridOriginDragSource_.reset();
+    gridOriginDragTarget_.reset();
     CancelControlPointDrag();
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
@@ -499,6 +501,15 @@ void CadViewport::SetGridPointsVisible(bool visible)
     update();
 }
 
+void CadViewport::SetGridSubdivision(int subdivision)
+{
+    if (subdivision != 1 && subdivision != 2 && subdivision != 3 && subdivision != 4) {
+        return;
+    }
+    gridSubdivision_ = subdivision;
+    update();
+}
+
 void CadViewport::SetGridOrigin(double u, double v)
 {
     if (!std::isfinite(u) || !std::isfinite(v)) {
@@ -506,6 +517,99 @@ void CadViewport::SetGridOrigin(double u, double v)
     }
     gridOriginU_ = u;
     gridOriginV_ = v;
+    update();
+}
+
+void CadViewport::SetGridOriginChangedCallback(std::function<void(double, double)> callback)
+{
+    gridOriginChanged_ = std::move(callback);
+}
+
+void CadViewport::SetWireAppearance(const QColor& color, double width, Qt::PenStyle style)
+{
+    if (color.isValid()) {
+        wireColor_ = color;
+    }
+    if (std::isfinite(width)) {
+        wireWidth_ = std::clamp(width, 0.25, 12.0);
+    }
+    wireStyle_ = style;
+    update();
+}
+
+void CadViewport::SetConstructionWireAppearance(
+    const QColor& color,
+    double width,
+    Qt::PenStyle style)
+{
+    if (color.isValid()) {
+        constructionWireColor_ = color;
+    }
+    if (std::isfinite(width)) {
+        constructionWireWidth_ = std::clamp(width, 0.25, 12.0);
+    }
+    constructionWireStyle_ = style;
+    update();
+}
+
+void CadViewport::SetSurfaceAppearance(
+    const QColor& fillColor,
+    int opacityPercent,
+    const QColor& edgeColor,
+    double edgeWidth,
+    Qt::PenStyle edgeStyle)
+{
+    if (fillColor.isValid()) {
+        surfaceFillColor_ = fillColor;
+    }
+    surfaceOpacityPercent_ = std::clamp(opacityPercent, 0, 100);
+    if (edgeColor.isValid()) {
+        surfaceEdgeColor_ = edgeColor;
+    }
+    if (std::isfinite(edgeWidth)) {
+        surfaceEdgeWidth_ = std::clamp(edgeWidth, 0.25, 12.0);
+    }
+    surfaceEdgeStyle_ = edgeStyle;
+    update();
+}
+
+void CadViewport::SetPlateAppearance(
+    const QColor& fillColor,
+    int opacityPercent,
+    const QColor& edgeColor,
+    double edgeWidth,
+    Qt::PenStyle edgeStyle)
+{
+    if (fillColor.isValid()) {
+        plateFillColor_ = fillColor;
+    }
+    plateOpacityPercent_ = std::clamp(opacityPercent, 0, 100);
+    if (edgeColor.isValid()) {
+        plateEdgeColor_ = edgeColor;
+    }
+    if (std::isfinite(edgeWidth)) {
+        plateEdgeWidth_ = std::clamp(edgeWidth, 0.25, 12.0);
+    }
+    plateEdgeStyle_ = edgeStyle;
+    update();
+}
+
+void CadViewport::SetBackgroundColor(const QColor& color)
+{
+    if (color.isValid()) {
+        backgroundColor_ = color;
+        update();
+    }
+}
+
+void CadViewport::SetGridColors(const QColor& majorColor, const QColor& minorColor)
+{
+    if (majorColor.isValid()) {
+        majorGridColor_ = majorColor;
+    }
+    if (minorColor.isValid()) {
+        minorGridColor_ = minorColor;
+    }
     update();
 }
 
@@ -1430,12 +1534,40 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
         }
     }
 
+    const double gridStep = snapStep_ / static_cast<double>(gridSubdivision_);
     const auto coordinates = activePlane_->Project(point);
     const double snappedU = gridOriginU_
-        + std::round((coordinates.u - gridOriginU_) / snapStep_) * snapStep_;
+        + std::round((coordinates.u - gridOriginU_) / gridStep) * gridStep;
     const double snappedV = gridOriginV_
-        + std::round((coordinates.v - gridOriginV_) / snapStep_) * snapStep_;
+        + std::round((coordinates.v - gridOriginV_) / gridStep) * gridStep;
     return activePlane_->ToWorld(snappedU, snappedV);
+}
+
+Vector3 CadViewport::SnapGridAlignmentTarget(Vector3 point, QPointF screenPosition) const
+{
+    if (!activePlane_.has_value() || project_ == nullptr) {
+        return point;
+    }
+
+    double bestDistance = 12.0;
+    std::optional<Vector3> bestPoint;
+    for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
+        const NamedWire& namedWire = project_->Wires()[wireIndex];
+        if (!ShouldDisplay(CadSelectionKind::Wire, wireIndex, namedWire.visible)) {
+            continue;
+        }
+        for (const Vector3& candidate : namedWire.wire.ControlPoints()) {
+            if (std::abs(activePlane_->Project(candidate).w) > 1.0e-6) {
+                continue;
+            }
+            const double distance = QLineF(screenPosition, ProjectPoint(candidate)).length();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestPoint = candidate;
+            }
+        }
+    }
+    return bestPoint.value_or(point);
 }
 
 Vector3 CadViewport::SnapDraggedControlPoint(Vector3 point, QPointF screenPosition) const
@@ -1723,28 +1855,77 @@ void CadViewport::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor("#f5f6f7"));
+    painter.fillRect(rect(), backgroundColor_);
 
-    painter.setPen(QPen(QColor("#b8c1c7"), 2.0, Qt::SolidLine, Qt::RoundCap));
     if (displayMode_ == ViewportDisplayMode::Design
         && activePlane_.has_value() && gridPointsVisible_) {
-        double spacing = snapEnabled_ ? snapStep_ : 5.0;
-        while (spacing * pixelsPerMillimeter_ < 12.0) {
-            spacing *= 2.0;
+        double displayOriginU = gridOriginU_;
+        double displayOriginV = gridOriginV_;
+        if (gridOriginDragSource_.has_value() && gridOriginDragTarget_.has_value()) {
+            const auto source = activePlane_->Project(*gridOriginDragSource_);
+            const auto target = activePlane_->Project(*gridOriginDragTarget_);
+            displayOriginU = gridOriginDragBaseU_ + target.u - source.u;
+            displayOriginV = gridOriginDragBaseV_ + target.v - source.v;
         }
+
+        const double majorSpacing = snapStep_;
+        const double minorSpacing = majorSpacing / static_cast<double>(gridSubdivision_);
+        int majorStride = 1;
+        while (majorSpacing * pixelsPerMillimeter_ * majorStride < 12.0) {
+            majorStride *= 2;
+        }
+
         const double extent = std::max(width(), height()) / std::max(pixelsPerMillimeter_, 0.1);
-        const int lineCount = std::min(100, static_cast<int>(std::ceil(extent / spacing)) + 2);
-        for (int uIndex = -lineCount; uIndex <= lineCount; ++uIndex) {
-            const double u = gridOriginU_ + uIndex * spacing;
-            for (int vIndex = -lineCount; vIndex <= lineCount; ++vIndex) {
-                const double v = gridOriginV_ + vIndex * spacing;
+        double minimumU = displayOriginU - extent;
+        double maximumU = displayOriginU + extent;
+        double minimumV = displayOriginV - extent;
+        double maximumV = displayOriginV + extent;
+        bool foundBounds = false;
+        for (const QPointF corner : {QPointF(0.0, 0.0), QPointF(width(), 0.0),
+                 QPointF(width(), height()), QPointF(0.0, height())}) {
+            const auto point = PointOnActivePlane(corner);
+            if (!point.has_value()) {
+                continue;
+            }
+            const auto coordinates = activePlane_->Project(*point);
+            if (!foundBounds) {
+                minimumU = maximumU = coordinates.u;
+                minimumV = maximumV = coordinates.v;
+                foundBounds = true;
+            } else {
+                minimumU = std::min(minimumU, coordinates.u);
+                maximumU = std::max(maximumU, coordinates.u);
+                minimumV = std::min(minimumV, coordinates.v);
+                maximumV = std::max(maximumV, coordinates.v);
+            }
+        }
+
+        const bool showMinorPoints = gridSubdivision_ > 1
+            && minorSpacing * pixelsPerMillimeter_ >= 2.5 && majorStride == 1;
+        const double drawSpacing = showMinorPoints ? minorSpacing : majorSpacing * majorStride;
+        const int firstU = static_cast<int>(std::floor((minimumU - displayOriginU) / drawSpacing)) - 1;
+        const int lastU = static_cast<int>(std::ceil((maximumU - displayOriginU) / drawSpacing)) + 1;
+        const int firstV = static_cast<int>(std::floor((minimumV - displayOriginV) / drawSpacing)) - 1;
+        const int lastV = static_cast<int>(std::ceil((maximumV - displayOriginV) / drawSpacing)) + 1;
+        for (int uIndex = firstU; uIndex <= lastU; ++uIndex) {
+            const double u = displayOriginU + uIndex * drawSpacing;
+            for (int vIndex = firstV; vIndex <= lastV; ++vIndex) {
+                const double v = displayOriginV + vIndex * drawSpacing;
                 const QPointF point = ProjectPoint(activePlane_->ToWorld(u, v));
                 if (rect().adjusted(-2, -2, 2, 2).contains(point.toPoint())) {
+                    const bool majorPoint = !showMinorPoints
+                        || (uIndex % gridSubdivision_ == 0 && vIndex % gridSubdivision_ == 0);
+                    painter.setPen(QPen(
+                        majorPoint ? majorGridColor_ : minorGridColor_,
+                        majorPoint ? 3.2 : 1.25,
+                        Qt::SolidLine,
+                        Qt::RoundCap));
                     painter.drawPoint(point);
                 }
             }
         }
     } else if (project_ == nullptr || project_->WorkPlanes().empty()) {
+        painter.setPen(QPen(majorGridColor_, 1.0));
         for (int coordinate = -50; coordinate <= 50; coordinate += 5) {
             painter.drawLine(ProjectPoint({static_cast<double>(coordinate), -50.0, 0.0}), ProjectPoint({static_cast<double>(coordinate), 50.0, 0.0}));
             painter.drawLine(ProjectPoint({-50.0, static_cast<double>(coordinate), 0.0}), ProjectPoint({50.0, static_cast<double>(coordinate), 0.0}));
@@ -1785,8 +1966,13 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
             const auto& surface = namedSurface.surface;
             const bool selected = IsSelected(CadSelectionKind::Surface, index);
-            const QColor fill = selected ? QColor(230, 159, 0, 90) : QColor(31, 132, 138, 66);
-            const QColor edge = selected ? QColor("#c47a13") : QColor("#277b80");
+            QColor fill = selected ? QColor(230, 159, 0, 90) : surfaceFillColor_;
+            if (!selected) {
+                fill.setAlphaF(static_cast<double>(surfaceOpacityPercent_) / 100.0);
+            }
+            const QColor edge = selected ? QColor("#c47a13") : surfaceEdgeColor_;
+            const double edgeWidth = selected ? 2.5 : surfaceEdgeWidth_;
+            const Qt::PenStyle edgeStyle = selected ? Qt::SolidLine : surfaceEdgeStyle_;
             if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
                 QPainterPath boundary(ProjectPoint(surface.FirstBoundary().Evaluate(0.0)));
                 for (int sample = 1; sample <= 128; ++sample) {
@@ -1794,10 +1980,10 @@ void CadViewport::paintEvent(QPaintEvent*)
                 }
                 boundary.closeSubpath();
                 painter.setBrush(fill);
-                painter.setPen(QPen(edge, selected ? 2.5 : 1.4));
+                painter.setPen(QPen(edge, edgeWidth, edgeStyle));
                 painter.drawPath(boundary);
             } else {
-                painter.setPen(QPen(edge, selected ? 1.8 : 0.7));
+                painter.setPen(QPen(edge, selected ? 1.8 : std::max(0.25, edgeWidth * 0.55), edgeStyle));
                 for (int uIndex = 0; uIndex < 32; ++uIndex) {
                     for (int vIndex = 0; vIndex < 10; ++vIndex) {
                         const double u0 = static_cast<double>(uIndex) / 32.0;
@@ -1828,13 +2014,12 @@ void CadViewport::paintEvent(QPaintEvent*)
             const auto& plate = namedPlate.plate;
             const auto& source = plate.SourceSurface();
             const bool selected = IsSelected(CadSelectionKind::Plate, index);
-            QColor fill = namedPlate.material == "brass" ? QColor(188, 156, 72, 150)
-                : namedPlate.material == "paper" ? QColor(208, 193, 142, 150)
-                : QColor(178, 194, 203, 158);
+            QColor fill = plateFillColor_;
+            fill.setAlphaF(static_cast<double>(plateOpacityPercent_) / 100.0);
             if (selected) {
                 fill = QColor(230, 159, 0, 168);
             }
-            const QColor edge = selected ? QColor("#b66700") : QColor("#586970");
+            const QColor edge = selected ? QColor("#b66700") : plateEdgeColor_;
             std::vector<QPainterPath> openingPaths;
             for (const std::string& openingName : namedPlate.openingWireNames) {
                 const auto opening = std::find_if(project_->Wires().begin(), project_->Wires().end(), [&](const auto& wire) {
@@ -1861,7 +2046,10 @@ void CadViewport::paintEvent(QPaintEvent*)
                 clipPath.setFillRule(Qt::OddEvenFill);
                 painter.setClipPath(clipPath);
             }
-            painter.setPen(QPen(edge, selected ? 2.2 : 1.0));
+            painter.setPen(QPen(
+                edge,
+                selected ? 2.2 : plateEdgeWidth_,
+                selected ? Qt::SolidLine : plateEdgeStyle_));
 
             if (source.Kind() == kachakacha::model::SurfaceKind::Planar) {
                 const Vector3 normal = source.Normal(0.5, 0.5);
@@ -2127,15 +2315,17 @@ void CadViewport::paintEvent(QPaintEvent*)
             const QColor wireColor = reference ? QColor("#007f78")
                 : selected ? QColor("#e69200")
                 : hovered ? QColor("#087f9c")
-                : namedWire.metadata.construction ? QColor("#697984")
-                : WireColor(displayedWire.Kind());
+                : namedWire.metadata.construction ? constructionWireColor_
+                : wireColor_;
             const Qt::PenStyle wireStyle = reference ? Qt::DashDotLine
-                : namedWire.metadata.construction ? Qt::DashLine
-                : Qt::SolidLine;
+                : namedWire.metadata.construction ? constructionWireStyle_
+                : wireStyle_;
             painter.setBrush(Qt::NoBrush);
             painter.setPen(QPen(
                 wireColor,
-                hovered ? (selected || reference ? 4.2 : 3.4) : reference || selected ? 3.2 : namedWire.metadata.construction ? 1.7 : 2.0,
+                hovered ? (selected || reference ? 4.2 : 3.4)
+                        : reference || selected ? 3.2
+                        : namedWire.metadata.construction ? constructionWireWidth_ : wireWidth_,
                 wireStyle,
                 Qt::RoundCap,
                 Qt::RoundJoin));
@@ -2487,6 +2677,18 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
 
+    if (tool_ == ViewportTool::MoveGridOrigin
+        && gridOriginDragSource_.has_value() && gridOriginDragTarget_.has_value()) {
+        const QPointF source = ProjectPoint(*gridOriginDragSource_);
+        const QPointF target = ProjectPoint(*gridOriginDragTarget_);
+        painter.setBrush(QColor(255, 255, 255, 225));
+        painter.setPen(QPen(QColor("#d97706"), 2.2, Qt::DashLine));
+        painter.drawLine(source, target);
+        painter.drawEllipse(source, 5.5, 5.5);
+        painter.setBrush(QColor("#d97706"));
+        painter.drawEllipse(target, 5.0, 5.0);
+    }
+
     if (tool_ == ViewportTool::SplitWire && splitPreviewParameter_.has_value() && project_ != nullptr) {
         const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
             return selection.kind == CadSelectionKind::Wire;
@@ -2606,6 +2808,9 @@ void CadViewport::paintEvent(QPaintEvent*)
     switch (tool_) {
     case ViewportTool::Select:
         modeText = QStringLiteral("選択");
+        break;
+    case ViewportTool::MoveGridOrigin:
+        modeText = QStringLiteral("点グリッド基準をドラッグ");
         break;
     case ViewportTool::DrawLine:
         modeText = QStringLiteral("直線");
@@ -2996,6 +3201,29 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+    if (event->button() == Qt::LeftButton && tool_ == ViewportTool::MoveGridOrigin
+        && activePlane_.has_value() && gridPointsVisible_) {
+        const auto point = PointOnActivePlane(event->position());
+        if (point.has_value()) {
+            const auto coordinates = activePlane_->Project(*point);
+            const double step = snapStep_ / static_cast<double>(gridSubdivision_);
+            const double gridU = gridOriginU_
+                + std::round((coordinates.u - gridOriginU_) / step) * step;
+            const double gridV = gridOriginV_
+                + std::round((coordinates.v - gridOriginV_) / step) * step;
+            const Vector3 gridPoint = activePlane_->ToWorld(gridU, gridV);
+            if (QLineF(event->position(), ProjectPoint(gridPoint)).length() <= 14.0) {
+                gridOriginDragSource_ = gridPoint;
+                gridOriginDragTarget_ = gridPoint;
+                gridOriginDragBaseU_ = gridOriginU_;
+                gridOriginDragBaseV_ = gridOriginV_;
+                setCursor(Qt::ClosedHandCursor);
+                update();
+                event->accept();
+                return;
+            }
+        }
+    }
     if (event->button() == Qt::LeftButton && tool_ == ViewportTool::Select) {
         const auto controlPoint = NearestEditableControlPoint(event->position(), 9.0);
         if (controlPoint.has_value()) {
@@ -3030,6 +3258,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Coincident
         && tool_ != ViewportTool::Tangent
         && tool_ != ViewportTool::Curvature
+        && tool_ != ViewportTool::MoveGridOrigin
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -3082,6 +3311,22 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             } catch (const std::exception&) {
                 draggedWirePreview_.reset();
             }
+        }
+        lastMousePosition_ = event->position().toPoint();
+        update();
+        event->accept();
+        return;
+    }
+
+    if (tool_ == ViewportTool::MoveGridOrigin && dragButton_ == Qt::LeftButton
+        && gridOriginDragSource_.has_value() && activePlane_.has_value()) {
+        const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
+        if (std::hypot(totalDelta.x(), totalDelta.y()) > 1.5) {
+            mouseMoved_ = true;
+        }
+        const auto point = PointOnActivePlane(event->position());
+        if (point.has_value()) {
+            gridOriginDragTarget_ = SnapGridAlignmentTarget(*point, event->position());
         }
         lastMousePosition_ = event->position().toPoint();
         update();
@@ -3179,6 +3424,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Coincident
         && tool_ != ViewportTool::Tangent
         && tool_ != ViewportTool::Curvature
+        && tool_ != ViewportTool::MoveGridOrigin
         && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
@@ -3264,6 +3510,30 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
     }
     orbitInteraction_ = false;
+
+    if (tool_ == ViewportTool::MoveGridOrigin && event->button() == Qt::LeftButton) {
+        if (gridOriginDragSource_.has_value() && gridOriginDragTarget_.has_value()
+            && activePlane_.has_value() && mouseMoved_) {
+            const auto source = activePlane_->Project(*gridOriginDragSource_);
+            const auto target = activePlane_->Project(*gridOriginDragTarget_);
+            const double newU = gridOriginDragBaseU_ + target.u - source.u;
+            const double newV = gridOriginDragBaseV_ + target.v - source.v;
+            gridOriginDragSource_.reset();
+            gridOriginDragTarget_.reset();
+            SetGridOrigin(newU, newV);
+            if (gridOriginChanged_) {
+                gridOriginChanged_(newU, newV);
+            }
+        } else {
+            gridOriginDragSource_.reset();
+            gridOriginDragTarget_.reset();
+            update();
+        }
+        dragButton_ = Qt::NoButton;
+        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        event->accept();
+        return;
+    }
 
     if (draggedControlPoint_.has_value()) {
         const WireControlPointPick pick = *draggedControlPoint_;
@@ -3370,7 +3640,13 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 void CadViewport::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
-        if (draggedControlPoint_.has_value()) {
+        if (gridOriginDragSource_.has_value()) {
+            gridOriginDragSource_.reset();
+            gridOriginDragTarget_.reset();
+            dragButton_ = Qt::NoButton;
+            setCursor(Qt::CrossCursor);
+            update();
+        } else if (draggedControlPoint_.has_value()) {
             CancelControlPointDrag();
             dragButton_ = Qt::NoButton;
             UpdateHover(mapFromGlobal(QCursor::pos()));

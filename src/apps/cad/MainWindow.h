@@ -3,6 +3,7 @@
 #include "CadViewport.h"
 #include "kachakacha/model/Project.h"
 
+#include <QColor>
 #include <QMainWindow>
 
 #include <array>
@@ -54,8 +55,15 @@ private:
     QWidget* BuildMachiningPanel();
     QWidget* BuildSurfacePanel();
     QWidget* BuildOutputPanel();
+    QWidget* BuildDisplayPanel();
     QWidget* BuildInfoPanel();
     void BuildMenusAndToolbar();
+    void ApplyDisplaySettings();
+    void LoadDisplaySettings();
+    void SaveDisplaySettings() const;
+    void ChooseDisplayColor(QPushButton* button);
+    static void SetDisplayColorButton(QPushButton* button, const QColor& color);
+    [[nodiscard]] static QColor DisplayColor(const QPushButton* button);
     void NewProject();
     void OpenProject();
     void SaveProject();
@@ -209,12 +217,14 @@ private:
     QAction* setReferenceAction_ = nullptr;
     QAction* clearReferenceAction_ = nullptr;
     QAction* snapAction_ = nullptr;
+    QAction* gridOriginToolAction_ = nullptr;
     QAction* alignPlaneAction_ = nullptr;
     QAction* finishDrawingAction_ = nullptr;
     QAction* cancelDrawingAction_ = nullptr;
     QComboBox* activePlaneCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QCheckBox* gridPointsVisible_ = nullptr;
+    QComboBox* gridSubdivision_ = nullptr;
     std::array<QDoubleSpinBox*, 2> gridOrigin_{};
     QCheckBox* drawingConstruction_ = nullptr;
     QLabel* drawingStateLabel_ = nullptr;
@@ -226,6 +236,27 @@ private:
     QDoubleSpinBox* drawingHeightField_ = nullptr;
     QDoubleSpinBox* drawingRadiusField_ = nullptr;
     QPushButton* drawingDimensionCommitButton_ = nullptr;
+
+    QPushButton* wireColor_ = nullptr;
+    QDoubleSpinBox* wireWidth_ = nullptr;
+    QComboBox* wireStyle_ = nullptr;
+    QPushButton* constructionColor_ = nullptr;
+    QDoubleSpinBox* constructionWidth_ = nullptr;
+    QComboBox* constructionStyle_ = nullptr;
+    QPushButton* surfaceFillColor_ = nullptr;
+    QDoubleSpinBox* surfaceOpacity_ = nullptr;
+    QPushButton* surfaceEdgeColor_ = nullptr;
+    QDoubleSpinBox* surfaceEdgeWidth_ = nullptr;
+    QComboBox* surfaceEdgeStyle_ = nullptr;
+    QPushButton* plateFillColor_ = nullptr;
+    QDoubleSpinBox* plateOpacity_ = nullptr;
+    QPushButton* plateEdgeColor_ = nullptr;
+    QDoubleSpinBox* plateEdgeWidth_ = nullptr;
+    QComboBox* plateEdgeStyle_ = nullptr;
+    QPushButton* backgroundColor_ = nullptr;
+    QPushButton* majorGridColor_ = nullptr;
+    QPushButton* minorGridColor_ = nullptr;
+    bool loadingDisplaySettings_ = false;
 
     CadViewport* viewport_ = nullptr;
     QLineEdit* modelFilter_ = nullptr;

@@ -28,30 +28,48 @@ constexpr double kPlaneHalfSize = 12.0;
 enum class ViewCubeFace {
     None,
     Top,
+    Bottom,
     Front,
+    Back,
     Right,
-    Isometric,
+    Left,
+    Home,
     Selection,
-    CornerUpperLeft,
-    CornerUpperRight,
-    CornerLowerLeft,
-    CornerLowerRight,
+    CornerPositivePositivePositive,
+    CornerPositivePositiveNegative,
+    CornerPositiveNegativePositive,
+    CornerPositiveNegativeNegative,
+    CornerNegativePositivePositive,
+    CornerNegativePositiveNegative,
+    CornerNegativeNegativePositive,
+    CornerNegativeNegativeNegative,
     OrbitLeft,
     OrbitRight,
     RollLeft,
     RollRight,
 };
 
+struct ViewCubeFaceGeometry {
+    ViewCubeFace face = ViewCubeFace::None;
+    QPolygonF polygon;
+    Vector3 direction;
+    double depth = 0.0;
+    QColor color;
+    QString label;
+};
+
+struct ViewCubeCornerGeometry {
+    ViewCubeFace face = ViewCubeFace::None;
+    QRectF area;
+    Vector3 direction;
+    double depth = 0.0;
+};
+
 struct ViewCubeGeometry {
-    QPolygonF top;
-    QPolygonF front;
-    QPolygonF right;
-    QPolygonF isometric;
+    std::vector<ViewCubeFaceGeometry> faces;
+    std::vector<ViewCubeCornerGeometry> corners;
+    QPolygonF home;
     QRectF selection;
-    QRectF cornerUpperLeft;
-    QRectF cornerUpperRight;
-    QRectF cornerLowerLeft;
-    QRectF cornerLowerRight;
     QRectF orbitLeft;
     QRectF orbitRight;
     QRectF rollLeft;
@@ -59,36 +77,120 @@ struct ViewCubeGeometry {
     QRectF bounds;
 };
 
-ViewCubeGeometry MakeViewCubeGeometry(int viewportWidth)
+Vector3 RotateVectorAroundAxis(Vector3 value, Vector3 axis, double angleRadians)
 {
+    axis = axis.Normalized();
+    const double cosine = std::cos(angleRadians);
+    const double sine = std::sin(angleRadians);
+    return value * cosine
+        + Cross(axis, value) * sine
+        + axis * Dot(axis, value) * (1.0 - cosine);
+}
+
+ViewCubeGeometry MakeViewCubeGeometry(
+    int viewportWidth,
+    const std::array<Vector3, 3>& viewBasis)
+{
+    // Use the model's camera basis so the navigator always reports the exact current attitude.
+    ViewCubeGeometry geometry;
     const double centerX = viewportWidth - 60.0;
-    const QPointF top(centerX, 16.0);
-    const QPointF upperRight(centerX + 30.0, 31.0);
-    const QPointF center(centerX, 46.0);
-    const QPointF upperLeft(centerX - 30.0, 31.0);
-    const QPointF lowerLeft(centerX - 30.0, 62.0);
-    const QPointF lowerCenter(centerX, 77.0);
-    const QPointF lowerRight(centerX + 30.0, 62.0);
-    return {
-        QPolygonF{top, upperRight, center, upperLeft},
-        QPolygonF{upperLeft, center, lowerCenter, lowerLeft},
-        QPolygonF{center, upperRight, lowerRight, lowerCenter},
-        QPolygonF{
-            QPointF(centerX, 84.0),
-            QPointF(centerX + 24.0, 96.0),
-            QPointF(centerX, 108.0),
-            QPointF(centerX - 24.0, 96.0)},
-        QRectF(centerX - 50.0, 116.0, 100.0, 28.0),
-        QRectF(centerX - 37.0, 24.0, 14.0, 14.0),
-        QRectF(centerX + 23.0, 24.0, 14.0, 14.0),
-        QRectF(centerX - 37.0, 55.0, 14.0, 14.0),
-        QRectF(centerX + 23.0, 55.0, 14.0, 14.0),
-        QRectF(centerX - 59.0, 40.0, 18.0, 28.0),
-        QRectF(centerX + 41.0, 40.0, 18.0, 28.0),
-        QRectF(centerX - 31.0, 0.0, 22.0, 20.0),
-        QRectF(centerX + 9.0, 0.0, 22.0, 20.0),
-        QRectF(centerX - 64.0, 0.0, 128.0, 150.0),
+    const double centerY = 49.0;
+    const double cubeScale = 22.0;
+    const auto project = [&](Vector3 point) {
+        return QPointF{
+            centerX + Dot(point, viewBasis[1]) * cubeScale,
+            centerY - Dot(point, viewBasis[2]) * cubeScale,
+        };
     };
+
+    struct FaceDefinition {
+        ViewCubeFace face;
+        Vector3 direction;
+        std::array<Vector3, 4> corners;
+        QColor color;
+        QString label;
+    };
+    const std::array faceDefinitions = {
+        FaceDefinition{ViewCubeFace::Top, {0.0, 0.0, 1.0},
+            {{{-1.0, -1.0, 1.0}, {1.0, -1.0, 1.0}, {1.0, 1.0, 1.0}, {-1.0, 1.0, 1.0}}},
+            QColor("#e8edef"), QStringLiteral("上")},
+        FaceDefinition{ViewCubeFace::Bottom, {0.0, 0.0, -1.0},
+            {{{-1.0, 1.0, -1.0}, {1.0, 1.0, -1.0}, {1.0, -1.0, -1.0}, {-1.0, -1.0, -1.0}}},
+            QColor("#e4e8eb"), QStringLiteral("下")},
+        FaceDefinition{ViewCubeFace::Front, {0.0, -1.0, 0.0},
+            {{{-1.0, -1.0, -1.0}, {1.0, -1.0, -1.0}, {1.0, -1.0, 1.0}, {-1.0, -1.0, 1.0}}},
+            QColor("#d6e6e7"), QStringLiteral("正")},
+        FaceDefinition{ViewCubeFace::Back, {0.0, 1.0, 0.0},
+            {{{1.0, 1.0, -1.0}, {-1.0, 1.0, -1.0}, {-1.0, 1.0, 1.0}, {1.0, 1.0, 1.0}}},
+            QColor("#e0e8e9"), QStringLiteral("後")},
+        FaceDefinition{ViewCubeFace::Right, {1.0, 0.0, 0.0},
+            {{{1.0, -1.0, -1.0}, {1.0, 1.0, -1.0}, {1.0, 1.0, 1.0}, {1.0, -1.0, 1.0}}},
+            QColor("#dfe4e8"), QStringLiteral("右")},
+        FaceDefinition{ViewCubeFace::Left, {-1.0, 0.0, 0.0},
+            {{{-1.0, 1.0, -1.0}, {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, {-1.0, 1.0, 1.0}}},
+            QColor("#e3e6e9"), QStringLiteral("左")},
+    };
+    for (const FaceDefinition& definition : faceDefinitions) {
+        const double depth = Dot(definition.direction, viewBasis[0]);
+        if (depth <= 1.0e-6) {
+            continue;
+        }
+        QPolygonF polygon;
+        for (const Vector3& corner : definition.corners) {
+            polygon << project(corner);
+        }
+        geometry.faces.push_back({
+            definition.face, std::move(polygon), definition.direction,
+            depth, definition.color, definition.label,
+        });
+    }
+    std::sort(geometry.faces.begin(), geometry.faces.end(), [](const auto& first, const auto& second) {
+        return first.depth < second.depth;
+    });
+
+    struct CornerDefinition {
+        ViewCubeFace face;
+        Vector3 direction;
+    };
+    const std::array cornerDefinitions = {
+        CornerDefinition{ViewCubeFace::CornerPositivePositivePositive, {1.0, 1.0, 1.0}},
+        CornerDefinition{ViewCubeFace::CornerPositivePositiveNegative, {1.0, 1.0, -1.0}},
+        CornerDefinition{ViewCubeFace::CornerPositiveNegativePositive, {1.0, -1.0, 1.0}},
+        CornerDefinition{ViewCubeFace::CornerPositiveNegativeNegative, {1.0, -1.0, -1.0}},
+        CornerDefinition{ViewCubeFace::CornerNegativePositivePositive, {-1.0, 1.0, 1.0}},
+        CornerDefinition{ViewCubeFace::CornerNegativePositiveNegative, {-1.0, 1.0, -1.0}},
+        CornerDefinition{ViewCubeFace::CornerNegativeNegativePositive, {-1.0, -1.0, 1.0}},
+        CornerDefinition{ViewCubeFace::CornerNegativeNegativeNegative, {-1.0, -1.0, -1.0}},
+    };
+    for (const CornerDefinition& definition : cornerDefinitions) {
+        const double depth = Dot(definition.direction, viewBasis[0]);
+        if (depth <= 1.0e-6) {
+            continue;
+        }
+        const QPointF center = project(definition.direction);
+        geometry.corners.push_back({
+            definition.face,
+            QRectF(center.x() - 5.0, center.y() - 5.0, 10.0, 10.0),
+            definition.direction.Normalized(),
+            depth,
+        });
+    }
+    std::sort(geometry.corners.begin(), geometry.corners.end(), [](const auto& first, const auto& second) {
+        return first.depth < second.depth;
+    });
+
+    geometry.home = QPolygonF{
+        QPointF(centerX, 91.0),
+        QPointF(centerX + 22.0, 102.0),
+        QPointF(centerX, 113.0),
+        QPointF(centerX - 22.0, 102.0)};
+    geometry.selection = QRectF(centerX - 50.0, 121.0, 100.0, 28.0);
+    geometry.orbitLeft = QRectF(centerX - 59.0, 40.0, 18.0, 28.0);
+    geometry.orbitRight = QRectF(centerX + 41.0, 40.0, 18.0, 28.0);
+    geometry.rollLeft = QRectF(centerX - 31.0, 0.0, 22.0, 20.0);
+    geometry.rollRight = QRectF(centerX + 9.0, 0.0, 22.0, 20.0);
+    geometry.bounds = QRectF(centerX - 64.0, 0.0, 128.0, 154.0);
+    return geometry;
 }
 
 ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
@@ -105,29 +207,18 @@ ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
     if (cube.orbitRight.contains(position)) {
         return ViewCubeFace::OrbitRight;
     }
-    if (cube.cornerUpperLeft.contains(position)) {
-        return ViewCubeFace::CornerUpperLeft;
+    for (auto corner = cube.corners.rbegin(); corner != cube.corners.rend(); ++corner) {
+        if (corner->area.contains(position)) {
+            return corner->face;
+        }
     }
-    if (cube.cornerUpperRight.contains(position)) {
-        return ViewCubeFace::CornerUpperRight;
+    for (auto face = cube.faces.rbegin(); face != cube.faces.rend(); ++face) {
+        if (face->polygon.containsPoint(position, Qt::OddEvenFill)) {
+            return face->face;
+        }
     }
-    if (cube.cornerLowerLeft.contains(position)) {
-        return ViewCubeFace::CornerLowerLeft;
-    }
-    if (cube.cornerLowerRight.contains(position)) {
-        return ViewCubeFace::CornerLowerRight;
-    }
-    if (cube.top.containsPoint(position, Qt::OddEvenFill)) {
-        return ViewCubeFace::Top;
-    }
-    if (cube.front.containsPoint(position, Qt::OddEvenFill)) {
-        return ViewCubeFace::Front;
-    }
-    if (cube.right.containsPoint(position, Qt::OddEvenFill)) {
-        return ViewCubeFace::Right;
-    }
-    if (cube.isometric.containsPoint(position, Qt::OddEvenFill)) {
-        return ViewCubeFace::Isometric;
+    if (cube.home.containsPoint(position, Qt::OddEvenFill)) {
+        return ViewCubeFace::Home;
     }
     if (cube.selection.contains(position)) {
         return ViewCubeFace::Selection;
@@ -138,9 +229,34 @@ ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
 bool CanDragViewCube(ViewCubeFace face)
 {
     return face == ViewCubeFace::Top
+        || face == ViewCubeFace::Bottom
         || face == ViewCubeFace::Front
+        || face == ViewCubeFace::Back
         || face == ViewCubeFace::Right
-        || face == ViewCubeFace::Isometric;
+        || face == ViewCubeFace::Left
+        || (face >= ViewCubeFace::CornerPositivePositivePositive
+            && face <= ViewCubeFace::CornerNegativeNegativeNegative);
+}
+
+std::optional<Vector3> ViewCubeDirection(ViewCubeFace face)
+{
+    switch (face) {
+    case ViewCubeFace::Top: return Vector3{0.0, 0.0, 1.0};
+    case ViewCubeFace::Bottom: return Vector3{0.0, 0.0, -1.0};
+    case ViewCubeFace::Front: return Vector3{0.0, -1.0, 0.0};
+    case ViewCubeFace::Back: return Vector3{0.0, 1.0, 0.0};
+    case ViewCubeFace::Right: return Vector3{1.0, 0.0, 0.0};
+    case ViewCubeFace::Left: return Vector3{-1.0, 0.0, 0.0};
+    case ViewCubeFace::CornerPositivePositivePositive: return Vector3{1.0, 1.0, 1.0}.Normalized();
+    case ViewCubeFace::CornerPositivePositiveNegative: return Vector3{1.0, 1.0, -1.0}.Normalized();
+    case ViewCubeFace::CornerPositiveNegativePositive: return Vector3{1.0, -1.0, 1.0}.Normalized();
+    case ViewCubeFace::CornerPositiveNegativeNegative: return Vector3{1.0, -1.0, -1.0}.Normalized();
+    case ViewCubeFace::CornerNegativePositivePositive: return Vector3{-1.0, 1.0, 1.0}.Normalized();
+    case ViewCubeFace::CornerNegativePositiveNegative: return Vector3{-1.0, 1.0, -1.0}.Normalized();
+    case ViewCubeFace::CornerNegativeNegativePositive: return Vector3{-1.0, -1.0, 1.0}.Normalized();
+    case ViewCubeFace::CornerNegativeNegativeNegative: return Vector3{-1.0, -1.0, -1.0}.Normalized();
+    default: return std::nullopt;
+    }
 }
 
 double DistanceToSegment(QPointF point, QPointF a, QPointF b)
@@ -707,10 +823,14 @@ void CadViewport::RotateViewYaw(double angleRadians)
     if (!std::isfinite(angleRadians)) {
         return;
     }
-    const Vector3 direction = ViewDirection();
-    yawRadians_ = std::atan2(direction.y, direction.x) + angleRadians;
-    pitchRadians_ = std::asin(std::clamp(direction.z, -1.0, 1.0));
-    alignedViewBasis_.reset();
+    const auto basis = CurrentViewBasis();
+    const Vector3 worldUp{0.0, 0.0, 1.0};
+    alignedViewBasis_ = std::array<Vector3, 3>{
+        RotateVectorAroundAxis(basis[0], worldUp, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[1], worldUp, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[2], worldUp, angleRadians).Normalized(),
+    };
+    rollRadians_ = 0.0;
     update();
 }
 
@@ -719,7 +839,13 @@ void CadViewport::RollView(double angleRadians)
     if (!std::isfinite(angleRadians)) {
         return;
     }
-    rollRadians_ = std::remainder(rollRadians_ + angleRadians, 2.0 * std::numbers::pi);
+    const auto basis = CurrentViewBasis();
+    alignedViewBasis_ = std::array<Vector3, 3>{
+        basis[0],
+        RotateVectorAroundAxis(basis[1], basis[0], angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[2], basis[0], angleRadians).Normalized(),
+    };
+    rollRadians_ = 0.0;
     update();
 }
 
@@ -900,6 +1026,27 @@ std::array<Vector3, 3> CadViewport::CurrentViewBasis() const
     return {basis[0], right, up};
 }
 
+void CadViewport::OrbitViewByPixels(double horizontalPixels, double verticalPixels)
+{
+    if (!std::isfinite(horizontalPixels) || !std::isfinite(verticalPixels)) {
+        return;
+    }
+
+    auto basis = CurrentViewBasis();
+    const double horizontalAngle = -horizontalPixels * 0.008;
+    const double verticalAngle = verticalPixels * 0.008;
+
+    basis[0] = RotateVectorAroundAxis(basis[0], basis[2], horizontalAngle).Normalized();
+    basis[1] = RotateVectorAroundAxis(basis[1], basis[2], horizontalAngle).Normalized();
+    basis[0] = RotateVectorAroundAxis(basis[0], basis[1], verticalAngle).Normalized();
+    basis[2] = RotateVectorAroundAxis(basis[2], basis[1], verticalAngle).Normalized();
+
+    basis[1] = (basis[1] - basis[0] * Dot(basis[1], basis[0])).Normalized();
+    basis[2] = Cross(basis[0], basis[1]).Normalized();
+    alignedViewBasis_ = basis;
+    rollRadians_ = 0.0;
+}
+
 QPointF CadViewport::ProjectPoint(Vector3 point) const
 {
     const auto basis = CurrentViewBasis();
@@ -918,7 +1065,6 @@ void CadViewport::FitAll()
         return;
     }
 
-    alignedViewBasis_.reset();
     Vector3 minimum{0.0, 0.0, 0.0};
     Vector3 maximum{0.0, 0.0, 0.0};
     bool hasPoint = false;
@@ -2562,34 +2708,39 @@ void CadViewport::paintEvent(QPaintEvent*)
     }
     painter.drawText(QRect(14, 12, std::max(80, width() - 150), 24), Qt::AlignLeft, modeText);
 
-    const ViewCubeGeometry cube = MakeViewCubeGeometry(width());
-    const auto drawCubeFace = [&](const QPolygonF& polygon, ViewCubeFace face, const QColor& color, const QString& label) {
-        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
-        painter.setBrush(hovered ? color.lighter(118) : color);
+    const ViewCubeGeometry cube = MakeViewCubeGeometry(width(), CurrentViewBasis());
+    painter.save();
+    QFont cubeFont = painter.font();
+    cubeFont.setPointSizeF(std::max(7.0, cubeFont.pointSizeF() - 1.0));
+    painter.setFont(cubeFont);
+    for (const ViewCubeFaceGeometry& face : cube.faces) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face.face);
+        painter.setBrush(hovered ? face.color.lighter(118) : face.color);
         painter.setPen(QPen(QColor("#68747c"), hovered ? 2.0 : 1.2));
-        painter.drawPolygon(polygon);
+        painter.drawPolygon(face.polygon);
         painter.setPen(QColor("#1f2b33"));
-        painter.drawText(polygon.boundingRect(), Qt::AlignCenter, label);
-    };
-    drawCubeFace(cube.top, ViewCubeFace::Top, QColor("#e8edef"), QStringLiteral("上"));
-    drawCubeFace(cube.front, ViewCubeFace::Front, QColor("#d6e6e7"), QStringLiteral("正"));
-    drawCubeFace(cube.right, ViewCubeFace::Right, QColor("#dfe4e8"), QStringLiteral("右"));
-    drawCubeFace(cube.isometric, ViewCubeFace::Isometric, QColor("#f3d9a5"), QStringLiteral("3D"));
-    const auto drawCorner = [&](const QRectF& area, ViewCubeFace face) {
-        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
+        if (face.polygon.boundingRect().width() >= 16.0
+            && face.polygon.boundingRect().height() >= 14.0) {
+            painter.drawText(face.polygon.boundingRect(), Qt::AlignCenter, face.label);
+        }
+    }
+    for (const ViewCubeCornerGeometry& corner : cube.corners) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(corner.face);
         QPolygonF diamond;
-        diamond << QPointF(area.center().x(), area.top())
-                << QPointF(area.right(), area.center().y())
-                << QPointF(area.center().x(), area.bottom())
-                << QPointF(area.left(), area.center().y());
+        diamond << QPointF(corner.area.center().x(), corner.area.top())
+                << QPointF(corner.area.right(), corner.area.center().y())
+                << QPointF(corner.area.center().x(), corner.area.bottom())
+                << QPointF(corner.area.left(), corner.area.center().y());
         painter.setBrush(hovered ? QColor("#f0b64a") : QColor("#f7dca6"));
         painter.setPen(QPen(QColor("#8b6a2c"), hovered ? 2.0 : 1.0));
         painter.drawPolygon(diamond);
-    };
-    drawCorner(cube.cornerUpperLeft, ViewCubeFace::CornerUpperLeft);
-    drawCorner(cube.cornerUpperRight, ViewCubeFace::CornerUpperRight);
-    drawCorner(cube.cornerLowerLeft, ViewCubeFace::CornerLowerLeft);
-    drawCorner(cube.cornerLowerRight, ViewCubeFace::CornerLowerRight);
+    }
+    const bool homeHovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Home);
+    painter.setBrush(homeHovered ? QColor("#f0c46d") : QColor("#f3d9a5"));
+    painter.setPen(QPen(homeHovered ? QColor("#9a6715") : QColor("#8b6a2c"), homeHovered ? 2.0 : 1.0));
+    painter.drawPolygon(cube.home);
+    painter.setPen(QColor("#483a22"));
+    painter.drawText(cube.home.boundingRect(), Qt::AlignCenter, QStringLiteral("3D"));
     const auto drawArrowButton = [&](const QRectF& area, ViewCubeFace face, const QString& glyph) {
         const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
         painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#edf2f2"));
@@ -2640,6 +2791,7 @@ void CadViewport::paintEvent(QPaintEvent*)
     painter.drawLine(targetCenter + QPointF(0.0, -9.0), targetCenter + QPointF(0.0, 9.0));
     painter.setPen(canAlignSelection ? QColor("#174d50") : QColor("#8c969b"));
     painter.drawText(cube.selection.adjusted(27.0, 0.0, -4.0, 0.0), Qt::AlignCenter, QStringLiteral("選択に正対"));
+    painter.restore();
 }
 
 CadSelection CadViewport::HitTestWire(QPointF position, double maximumDistance) const
@@ -2827,13 +2979,14 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     orbitInteraction_ = event->button() == Qt::MiddleButton
         && event->modifiers().testFlag(Qt::ShiftModifier);
     setFocus();
-    if (event->button() == Qt::LeftButton
-        && MakeViewCubeGeometry(width()).bounds.contains(event->position())) {
+    const ViewCubeFace pressedCubeFace = event->button() == Qt::LeftButton
+        ? HitViewCube(MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position())
+        : ViewCubeFace::None;
+    if (pressedCubeFace != ViewCubeFace::None) {
         viewCubeInteraction_ = true;
         viewCubeDragActive_ = false;
-        pressedViewCubeFace_ = static_cast<int>(
-            HitViewCube(MakeViewCubeGeometry(width()), event->position()));
-        setCursor(CanDragViewCube(static_cast<ViewCubeFace>(pressedViewCubeFace_))
+        pressedViewCubeFace_ = static_cast<int>(pressedCubeFace);
+        setCursor(CanDragViewCube(pressedCubeFace)
                 ? Qt::OpenHandCursor : Qt::PointingHandCursor);
         event->accept();
         return;
@@ -2897,7 +3050,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         }
         if (!viewCubeDragActive_) {
             const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
-            if (totalDelta.manhattanLength() <= 8) {
+            if (std::hypot(totalDelta.x(), totalDelta.y()) <= 2.0) {
                 event->accept();
                 return;
             }
@@ -2906,14 +3059,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             setCursor(Qt::ClosedHandCursor);
         }
         const QPoint delta = event->position().toPoint() - lastMousePosition_;
-        if (alignedViewBasis_.has_value()) {
-            const Vector3 direction = ViewDirection();
-            yawRadians_ = std::atan2(direction.y, direction.x);
-            pitchRadians_ = std::asin(std::clamp(direction.z, -1.0, 1.0));
-            alignedViewBasis_.reset();
-        }
-        yawRadians_ += delta.x() * 0.008;
-        pitchRadians_ = std::clamp(pitchRadians_ - delta.y() * 0.008, -1.45, 1.45);
+        OrbitViewByPixels(delta.x(), delta.y());
         lastMousePosition_ = event->position().toPoint();
         update();
         event->accept();
@@ -2943,38 +3089,55 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
-    const int hoveredFace = static_cast<int>(HitViewCube(MakeViewCubeGeometry(width()), event->position()));
+    const int hoveredFace = static_cast<int>(HitViewCube(
+        MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position()));
     if (hoveredFace != hoveredViewCubeFace_) {
         hoveredViewCubeFace_ = hoveredFace;
         const bool unavailableSelection = hoveredFace == static_cast<int>(ViewCubeFace::Selection)
             && selection_.kind == CadSelectionKind::None;
-        setCursor(hoveredFace == static_cast<int>(ViewCubeFace::None)
+        const ViewCubeFace hoveredCubeFace = static_cast<ViewCubeFace>(hoveredFace);
+        setCursor(hoveredCubeFace == ViewCubeFace::None
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
-                : unavailableSelection ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+                : unavailableSelection ? Qt::ForbiddenCursor
+                : CanDragViewCube(hoveredCubeFace) ? Qt::OpenHandCursor
+                : Qt::PointingHandCursor);
         QString tooltip;
-        switch (static_cast<ViewCubeFace>(hoveredFace)) {
+        switch (hoveredCubeFace) {
         case ViewCubeFace::Top:
-            tooltip = QStringLiteral("上面に正対");
+            tooltip = QStringLiteral("上面へ正対。ドラッグで自由回転");
+            break;
+        case ViewCubeFace::Bottom:
+            tooltip = QStringLiteral("下面へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::Front:
-            tooltip = QStringLiteral("正面に正対");
+            tooltip = QStringLiteral("正面へ正対。ドラッグで自由回転");
+            break;
+        case ViewCubeFace::Back:
+            tooltip = QStringLiteral("後面へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::Right:
-            tooltip = QStringLiteral("右面に正対");
+            tooltip = QStringLiteral("右面へ正対。ドラッグで自由回転");
             break;
-        case ViewCubeFace::Isometric:
-            tooltip = QStringLiteral("3D表示");
+        case ViewCubeFace::Left:
+            tooltip = QStringLiteral("左面へ正対。ドラッグで自由回転");
+            break;
+        case ViewCubeFace::Home:
+            tooltip = QStringLiteral("標準の3D表示へ戻す");
             break;
         case ViewCubeFace::Selection:
             tooltip = unavailableSelection
                 ? QStringLiteral("線・面・板材・作業平面を先に選択")
                 : QStringLiteral("選択対象に正対して中央表示");
             break;
-        case ViewCubeFace::CornerUpperLeft:
-        case ViewCubeFace::CornerUpperRight:
-        case ViewCubeFace::CornerLowerLeft:
-        case ViewCubeFace::CornerLowerRight:
-            tooltip = QStringLiteral("角から見る");
+        case ViewCubeFace::CornerPositivePositivePositive:
+        case ViewCubeFace::CornerPositivePositiveNegative:
+        case ViewCubeFace::CornerPositiveNegativePositive:
+        case ViewCubeFace::CornerPositiveNegativeNegative:
+        case ViewCubeFace::CornerNegativePositivePositive:
+        case ViewCubeFace::CornerNegativePositiveNegative:
+        case ViewCubeFace::CornerNegativeNegativePositive:
+        case ViewCubeFace::CornerNegativeNegativeNegative:
+            tooltip = QStringLiteral("角へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::OrbitLeft:
             tooltip = QStringLiteral("視点を左へ15°回転");
@@ -3034,14 +3197,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         mouseMoved_ = true;
     }
     if (orbitInteraction_) {
-        if (alignedViewBasis_.has_value()) {
-            const Vector3 direction = ViewDirection();
-            yawRadians_ = std::atan2(direction.y, direction.x);
-            pitchRadians_ = std::asin(std::clamp(direction.z, -1.0, 1.0));
-            alignedViewBasis_.reset();
-        }
-        yawRadians_ += delta.x() * 0.008;
-        pitchRadians_ = std::clamp(pitchRadians_ - delta.y() * 0.008, -1.45, 1.45);
+        OrbitViewByPixels(delta.x(), delta.y());
     } else if (dragButton_ == Qt::RightButton || dragButton_ == Qt::MiddleButton) {
         const auto basis = CurrentViewBasis();
         const Vector3& right = basis[1];
@@ -3055,66 +3211,50 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 void CadViewport::mouseReleaseEvent(QMouseEvent* event)
 {
     if (viewCubeInteraction_) {
-        if (event->button() == Qt::LeftButton && !viewCubeDragActive_) {
+        const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
+        const double totalDistance = std::hypot(totalDelta.x(), totalDelta.y());
+        if (event->button() == Qt::LeftButton && !viewCubeDragActive_
+            && totalDistance <= 1.5) {
             const ViewCubeFace face = static_cast<ViewCubeFace>(pressedViewCubeFace_);
-            const Vector3 viewTarget = target_;
-            switch (face) {
-            case ViewCubeFace::Top:
-                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
-                    {}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
-                break;
-            case ViewCubeFace::Front:
-                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
-                    {}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
-                break;
-            case ViewCubeFace::Right:
-                AlignToWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
-                    {}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
-                break;
-            case ViewCubeFace::Isometric:
-                SetIsometricView();
-                break;
-            case ViewCubeFace::Selection:
-                (void)AlignToSelection();
-                break;
-            case ViewCubeFace::CornerUpperLeft:
-                SetCornerView({-1.0, -1.0, 1.0});
-                break;
-            case ViewCubeFace::CornerUpperRight:
-                SetCornerView({1.0, -1.0, 1.0});
-                break;
-            case ViewCubeFace::CornerLowerLeft:
-                SetCornerView({-1.0, -1.0, -1.0});
-                break;
-            case ViewCubeFace::CornerLowerRight:
-                SetCornerView({1.0, -1.0, -1.0});
-                break;
-            case ViewCubeFace::OrbitLeft:
-                RotateViewYaw(-15.0 * std::numbers::pi / 180.0);
-                break;
-            case ViewCubeFace::OrbitRight:
-                RotateViewYaw(15.0 * std::numbers::pi / 180.0);
-                break;
-            case ViewCubeFace::RollLeft:
-                RollView(-std::numbers::pi / 2.0);
-                break;
-            case ViewCubeFace::RollRight:
-                RollView(std::numbers::pi / 2.0);
-                break;
-            case ViewCubeFace::None:
-                break;
-            }
-            if (face == ViewCubeFace::Top || face == ViewCubeFace::Front || face == ViewCubeFace::Right) {
-                target_ = viewTarget;
-                update();
+            const ViewCubeFace releasedFace = HitViewCube(
+                MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position());
+            if (releasedFace == face) {
+                if (const auto direction = ViewCubeDirection(face); direction.has_value()) {
+                    SetCornerView(*direction);
+                } else {
+                    switch (face) {
+                    case ViewCubeFace::Home:
+                        SetIsometricView();
+                        break;
+                    case ViewCubeFace::Selection:
+                        (void)AlignToSelection();
+                        break;
+                    case ViewCubeFace::OrbitLeft:
+                        RotateViewYaw(-15.0 * std::numbers::pi / 180.0);
+                        break;
+                    case ViewCubeFace::OrbitRight:
+                        RotateViewYaw(15.0 * std::numbers::pi / 180.0);
+                        break;
+                    case ViewCubeFace::RollLeft:
+                        RollView(-std::numbers::pi / 2.0);
+                        break;
+                    case ViewCubeFace::RollRight:
+                        RollView(std::numbers::pi / 2.0);
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
         }
         viewCubeInteraction_ = false;
         viewCubeDragActive_ = false;
         pressedViewCubeFace_ = static_cast<int>(ViewCubeFace::None);
         dragButton_ = Qt::NoButton;
-        setCursor(hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::None)
+        const ViewCubeFace hoveredFace = static_cast<ViewCubeFace>(hoveredViewCubeFace_);
+        setCursor(hoveredFace == ViewCubeFace::None
                 ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
+                : CanDragViewCube(hoveredFace) ? Qt::OpenHandCursor
                 : Qt::PointingHandCursor);
         event->accept();
         return;

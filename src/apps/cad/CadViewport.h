@@ -203,6 +203,7 @@ protected:
 private:
     [[nodiscard]] QPointF ProjectPoint(kachakacha::geometry::Vector3 point) const;
     [[nodiscard]] std::array<kachakacha::geometry::Vector3, 3> CurrentViewBasis() const;
+    void OrbitViewByPixels(double horizontalPixels, double verticalPixels);
     [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;

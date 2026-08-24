@@ -5803,19 +5803,35 @@ bool MainWindow::RunCreationSelfTest()
         dragMouse(start, end, Qt::LeftButton);
     };
     const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
-    const QPointF cubeTop(viewport_->width() - 60.0, 24.0);
-    const QPointF cube3d(viewport_->width() - 60.0, 96.0);
-    const QPointF cubeSelection(viewport_->width() - 60.0, 130.0);
+    const QPointF cubeCenter(viewport_->width() - 60.0, 49.0);
+    const QPointF cubeHome(viewport_->width() - 60.0, 102.0);
+    const QPointF cubeSelection(viewport_->width() - 60.0, 135.0);
+    const auto cubePointForDirection = [this, cubeCenter](Vector3 direction) {
+        const Vector3 view = viewport_->ViewDirection();
+        const Vector3 up = viewport_->ViewUpDirection();
+        const Vector3 right = kachakacha::geometry::Cross(up, view).Normalized();
+        return cubeCenter + QPointF(
+            kachakacha::geometry::Dot(direction, right) * 22.0,
+            -kachakacha::geometry::Dot(direction, up) * 22.0);
+    };
     const std::size_t beforeViewCube = project_.Wires().size();
     SetViewportTool(ViewportTool::DrawLine);
+    click(cubeHome);
+    const QPointF cubeTop = cubePointForDirection({0.0, 0.0, 1.0});
     click(cubeTop);
     if (!kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), {0.0, 0.0, 1.0}, 1.0e-8)) {
         return fail("view cube top face");
     }
-    click(cube3d);
-    click(QPointF(viewport_->width() - 30.0, 31.0));
+    click(cubeHome);
+    const Vector3 homeDirection = viewport_->ViewDirection();
+    const Vector3 cornerDirection{
+        homeDirection.x >= 0.0 ? 1.0 : -1.0,
+        homeDirection.y >= 0.0 ? 1.0 : -1.0,
+        homeDirection.z >= 0.0 ? 1.0 : -1.0,
+    };
+    click(cubePointForDirection(cornerDirection));
     if (!kachakacha::geometry::AlmostEqual(
-            viewport_->ViewDirection(), Vector3{1.0, -1.0, 1.0}.Normalized(), 1.0e-8)) {
+            viewport_->ViewDirection(), cornerDirection.Normalized(), 1.0e-8)) {
         return fail("view cube corner view");
     }
     const Vector3 directionBeforeRoll = viewport_->ViewDirection();
@@ -5827,19 +5843,29 @@ bool MainWindow::RunCreationSelfTest()
             viewport_->ViewUpDirection(), upBeforeRoll, 1.0e-8)) {
         return fail("view cube roll control");
     }
-    click(cube3d);
+    click(cubeHome);
     const Vector3 beforeTinyCubeMotion = viewport_->ViewDirection();
-    drag(cube3d, cube3d + QPointF(3.0, 2.0));
+    drag(cubeHome, cubeHome + QPointF(2.0, 0.0));
     if (!kachakacha::geometry::AlmostEqual(
             viewport_->ViewDirection(), beforeTinyCubeMotion, 1.0e-8)) {
         return fail("view cube ignores accidental motion");
     }
     const Vector3 beforeCubeDrag = viewport_->ViewDirection();
-    drag(QPointF(viewport_->width() - 60.0, 50.0), QPointF(viewport_->width() - 42.0, 40.0));
+    const QPointF draggableCubeFace = cubePointForDirection({0.0, 0.0, 1.0});
+    drag(draggableCubeFace, draggableCubeFace + QPointF(18.0, -10.0));
     if (kachakacha::geometry::AlmostEqual(viewport_->ViewDirection(), beforeCubeDrag, 1.0e-8)
         || project_.Wires().size() != beforeViewCube
         || viewport_->DrawingPointCount() != 0) {
         return fail("view cube drag without drawing");
+    }
+    const Vector3 directionBeforeFit = viewport_->ViewDirection();
+    const Vector3 upBeforeFit = viewport_->ViewUpDirection();
+    viewport_->FitAll();
+    if (!kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), directionBeforeFit, 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            viewport_->ViewUpDirection(), upBeforeFit, 1.0e-8)) {
+        return fail("fit all preserves view cube orientation");
     }
     SetViewportTool(ViewportTool::Select);
     const Vector3 beforeLeftDrag = viewport_->ViewDirection();

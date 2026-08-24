@@ -11,10 +11,12 @@ using kachakacha::model::ApplyWireCurveConstraints;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::ApplyWireLineConstraints;
 using kachakacha::model::FilletIntersectingLines;
+using kachakacha::model::ExtendLineToBoundary;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::RetainedLineEnd;
+using kachakacha::model::TrimLineAtBoundaries;
 using kachakacha::model::Wire;
 using kachakacha::model::WireCurveConstraints;
 using kachakacha::model::WireLineConstraints;
@@ -151,6 +153,52 @@ void TrimsCrossingLinesToChosenBranches()
     RequireNear(result.first.End(), {0.0, 0.0, 0.0}, "trimmed first intersection");
     RequireNear(result.second.Start(), {0.0, 0.0, 0.0}, "trimmed second intersection");
     RequireNear(result.second.End(), {0.0, 7.0, 0.0}, "trimmed second retained branch");
+}
+
+void TrimsTheDirectlyPickedLinePortion()
+{
+    const Wire target = Wire::Line({0.0, 0.0, 0.0}, {12.0, 0.0, 0.0});
+    const std::vector<Wire> boundaries = {
+        Wire::Line({3.0, -2.0, 0.0}, {3.0, 2.0, 0.0}),
+        Wire::Line({8.0, -2.0, 0.0}, {8.0, 2.0, 0.0}),
+    };
+
+    const auto middle = TrimLineAtBoundaries(target, 0.5, boundaries);
+    RequireNear(middle.removed.Start(), {3.0, 0.0, 0.0}, "middle trim start");
+    RequireNear(middle.removed.End(), {8.0, 0.0, 0.0}, "middle trim end");
+    Require(middle.retained.size() == 2, "middle trim keeps two sides");
+    RequireNear(middle.retained[0].Start(), {0.0, 0.0, 0.0}, "middle trim first start");
+    RequireNear(middle.retained[0].End(), {3.0, 0.0, 0.0}, "middle trim first end");
+    RequireNear(middle.retained[1].Start(), {8.0, 0.0, 0.0}, "middle trim second start");
+    RequireNear(middle.retained[1].End(), {12.0, 0.0, 0.0}, "middle trim second end");
+
+    const auto end = TrimLineAtBoundaries(target, 0.95, boundaries);
+    Require(end.retained.size() == 1, "end trim keeps one side");
+    RequireNear(end.removed.Start(), {8.0, 0.0, 0.0}, "end trim boundary");
+    RequireNear(end.removed.End(), {12.0, 0.0, 0.0}, "end trim removed endpoint");
+    RequireNear(end.retained.front().End(), {8.0, 0.0, 0.0}, "end trim retained endpoint");
+}
+
+void ExtendsTheDirectlyPickedLineEndToNearestBoundary()
+{
+    const Wire target = Wire::Line({2.0, 0.0, 0.0}, {6.0, 0.0, 0.0});
+    const std::vector<Wire> boundaries = {
+        Wire::Line({0.0, -3.0, 0.0}, {0.0, 3.0, 0.0}),
+        Wire::Line({9.0, -3.0, 0.0}, {9.0, 3.0, 0.0}),
+        Wire::Line({12.0, -3.0, 0.0}, {12.0, 3.0, 0.0}),
+    };
+
+    const auto start = ExtendLineToBoundary(target, 0.1, boundaries);
+    Require(start.extendedEnd == RetainedLineEnd::Start, "start end selected");
+    RequireNear(start.extended.Start(), {0.0, 0.0, 0.0}, "start extension intersection");
+    RequireNear(start.extended.End(), {6.0, 0.0, 0.0}, "start extension retained end");
+    RequireNear(start.added.End(), {2.0, 0.0, 0.0}, "start extension preview end");
+
+    const auto end = ExtendLineToBoundary(target, 0.9, boundaries);
+    Require(end.extendedEnd == RetainedLineEnd::End, "end selected");
+    RequireNear(end.extended.Start(), {2.0, 0.0, 0.0}, "end extension retained start");
+    RequireNear(end.extended.End(), {9.0, 0.0, 0.0}, "nearest end boundary");
+    RequireNear(end.added.Start(), {6.0, 0.0, 0.0}, "end extension preview start");
 }
 
 void JoinsUnorderedLineChain()
@@ -336,6 +384,8 @@ int main()
         FilletsCornerInArbitrary3DPlane();
         ExtendsSeparatedLinesToTheirIntersection();
         TrimsCrossingLinesToChosenBranches();
+        TrimsTheDirectlyPickedLinePortion();
+        ExtendsTheDirectlyPickedLineEndToNearestBoundary();
         JoinsUnorderedLineChain();
         RejectsDisconnectedJoin();
         OffsetsPlanarDrawingWires();

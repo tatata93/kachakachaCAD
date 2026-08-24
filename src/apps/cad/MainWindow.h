@@ -88,6 +88,8 @@ private:
         kachakacha::geometry::Vector3 axisDirection,
         double angleRadians);
     void ApplySplitWire(int wireIndex, double parameter);
+    void ApplyDirectLineTrim(int wireIndex, double parameter);
+    void ApplyDirectLineExtend(int wireIndex, double parameter);
     void ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointPick follower);
     void ApplyEndpointTangency(WireEndpointPick anchor, WireEndpointPick follower);
     void ApplyEndpointCurvature(WireEndpointPick anchor, WireEndpointPick follower);
@@ -209,6 +211,8 @@ private:
     QAction* mirrorToolAction_ = nullptr;
     QAction* rotateToolAction_ = nullptr;
     QAction* splitToolAction_ = nullptr;
+    QAction* trimToolAction_ = nullptr;
+    QAction* extendToolAction_ = nullptr;
     QAction* coincidentToolAction_ = nullptr;
     QAction* tangentToolAction_ = nullptr;
     QAction* curvatureToolAction_ = nullptr;

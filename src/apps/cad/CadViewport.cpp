@@ -1,6 +1,7 @@
 #include "CadViewport.h"
 
 #include "kachakacha/io/NumericExpression.h"
+#include "kachakacha/model/WireOperations.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
@@ -28,6 +29,8 @@ using kachakacha::geometry::AlmostEqual;
 using kachakacha::model::NamedWire;
 using kachakacha::model::Wire;
 using kachakacha::model::WireKind;
+using kachakacha::model::ExtendLineToBoundary;
+using kachakacha::model::TrimLineAtBoundaries;
 
 namespace {
 
@@ -594,6 +597,21 @@ void CadViewport::SetSplitRequestedCallback(std::function<void(int, double)> cal
     splitRequested_ = std::move(callback);
 }
 
+void CadViewport::SetTrimRequestedCallback(std::function<void(int, double)> callback)
+{
+    trimRequested_ = std::move(callback);
+}
+
+void CadViewport::SetExtendRequestedCallback(std::function<void(int, double)> callback)
+{
+    extendRequested_ = std::move(callback);
+}
+
+void CadViewport::SetToolExitRequestedCallback(std::function<void()> callback)
+{
+    toolExitRequested_ = std::move(callback);
+}
+
 void CadViewport::SetCoincidenceRequestedCallback(
     std::function<void(WireEndpointPick, WireEndpointPick)> callback)
 {
@@ -647,7 +665,8 @@ void CadViewport::SetTool(ViewportTool tool)
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
-                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
+                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::TrimWire
+                || tool_ == ViewportTool::ExtendWire || tool_ == ViewportTool::Coincident
                 || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
@@ -660,6 +679,17 @@ void CadViewport::SetSnapEnabled(bool enabled)
     if (!enabled) {
         drawingSnapHover_.reset();
     }
+    update();
+}
+
+void CadViewport::RestoreViewFraming(Vector3 target, double pixelsPerMillimeter)
+{
+    if (!std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)
+        || !std::isfinite(pixelsPerMillimeter) || pixelsPerMillimeter <= 0.0) {
+        return;
+    }
+    target_ = target;
+    pixelsPerMillimeter_ = pixelsPerMillimeter;
     update();
 }
 
@@ -1196,6 +1226,8 @@ void CadViewport::CancelDrawing()
     hoverDrawingPoint_.reset();
     drawingSnapHover_.reset();
     splitPreviewParameter_.reset();
+    directLineEditPreviewWire_.reset();
+    directLineEditPreviewIntersection_.reset();
     if (dynamicDimensionEditor_ != nullptr) {
         dynamicDimensionEditor_->hide();
     }
@@ -2292,7 +2324,7 @@ void CadViewport::UpdateHover(QPointF position)
     if (nearbyPoint.kind == CadSelectionKind::Point) {
         hoveredSelection_ = nearbyPoint;
     } else if (const auto controlPoint = NearestEditableControlPoint(position, 9.0);
-        controlPoint.has_value()) {
+        tool_ == ViewportTool::Select && controlPoint.has_value()) {
         hoveredControlPoint_ = controlPoint;
         hoveredSelection_ = {CadSelectionKind::Wire, controlPoint->wireIndex};
         hoveredWirePoint_ = project_->Wires()[controlPoint->wireIndex]
@@ -2307,45 +2339,54 @@ void CadViewport::UpdateHover(QPointF position)
         }
     } else if (project_ != nullptr
         && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
-            || tool_ == ViewportTool::SplitWire)) {
-        double bestPointDistance = 8.0;
-        int bestPointWire = -1;
-        Vector3 bestPoint;
-        const auto considerPoint = [&](int wireIndex, Vector3 point) {
-            const double distance = QLineF(position, ProjectPoint(point)).length();
-            if (distance < bestPointDistance) {
-                bestPointDistance = distance;
-                bestPointWire = wireIndex;
-                bestPoint = point;
-            }
-        };
-
-        for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
-            const NamedWire& namedWire = project_->Wires()[index];
-            if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
-                continue;
-            }
-            considerPoint(index, namedWire.wire.Start());
-            if (!namedWire.wire.IsClosed()) {
-                considerPoint(index, namedWire.wire.End());
-            }
-            if (IsSelected(CadSelectionKind::Wire, index)) {
-                for (const Vector3& point : namedWire.wire.ControlPoints()) {
-                    considerPoint(index, point);
-                }
-            }
-        }
-
-        if (bestPointWire >= 0) {
-            hoveredSelection_ = {CadSelectionKind::Wire, bestPointWire};
-            hoveredWirePoint_ = bestPoint;
-        } else {
+            || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::TrimWire
+            || tool_ == ViewportTool::ExtendWire)) {
+        if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
             const CadSelection hit = HitTestWire(position, 9.0);
             if (hit.kind == CadSelectionKind::Wire) {
                 hoveredSelection_ = hit;
                 hoveredWireParameter_ = NearestWireParameter(hit.index, position, 12.0, true);
-            } else if (tool_ == ViewportTool::Select) {
-                hoveredSelection_ = HitTest(position);
+            }
+        } else {
+            double bestPointDistance = 8.0;
+            int bestPointWire = -1;
+            Vector3 bestPoint;
+            const auto considerPoint = [&](int wireIndex, Vector3 point) {
+                const double distance = QLineF(position, ProjectPoint(point)).length();
+                if (distance < bestPointDistance) {
+                    bestPointDistance = distance;
+                    bestPointWire = wireIndex;
+                    bestPoint = point;
+                }
+            };
+
+            for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+                const NamedWire& namedWire = project_->Wires()[index];
+                if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
+                    continue;
+                }
+                considerPoint(index, namedWire.wire.Start());
+                if (!namedWire.wire.IsClosed()) {
+                    considerPoint(index, namedWire.wire.End());
+                }
+                if (IsSelected(CadSelectionKind::Wire, index)) {
+                    for (const Vector3& point : namedWire.wire.ControlPoints()) {
+                        considerPoint(index, point);
+                    }
+                }
+            }
+
+            if (bestPointWire >= 0) {
+                hoveredSelection_ = {CadSelectionKind::Wire, bestPointWire};
+                hoveredWirePoint_ = bestPoint;
+            } else {
+                const CadSelection hit = HitTestWire(position, 9.0);
+                if (hit.kind == CadSelectionKind::Wire) {
+                    hoveredSelection_ = hit;
+                    hoveredWireParameter_ = NearestWireParameter(hit.index, position, 12.0, true);
+                } else if (tool_ == ViewportTool::Select) {
+                    hoveredSelection_ = HitTest(position);
+                }
             }
         }
     }
@@ -2354,7 +2395,8 @@ void CadViewport::UpdateHover(QPointF position)
             ? Qt::SizeAllCursor
             : hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
-                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::Coincident
+                || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::TrimWire
+                || tool_ == ViewportTool::ExtendWire || tool_ == ViewportTool::Coincident
                 || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select && hoveredSelection_.kind != CadSelectionKind::None
@@ -2363,11 +2405,60 @@ void CadViewport::UpdateHover(QPointF position)
     update();
 }
 
+void CadViewport::UpdateDirectLineEditPreview()
+{
+    directLineEditPreviewWire_.reset();
+    directLineEditPreviewIntersection_.reset();
+    if (project_ == nullptr
+        || (tool_ != ViewportTool::TrimWire && tool_ != ViewportTool::ExtendWire)
+        || hoveredSelection_.kind != CadSelectionKind::Wire
+        || !hoveredWireParameter_.has_value()
+        || hoveredSelection_.index < 0
+        || hoveredSelection_.index >= static_cast<int>(project_->Wires().size())) {
+        update();
+        return;
+    }
+
+    const int targetIndex = hoveredSelection_.index;
+    const Wire& target = project_->Wires()[targetIndex].wire;
+    if (target.Kind() != WireKind::Line) {
+        update();
+        return;
+    }
+
+    std::vector<Wire> boundaries;
+    boundaries.reserve(project_->Wires().size());
+    for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+        const NamedWire& candidate = project_->Wires()[index];
+        if (index == targetIndex || candidate.wire.Kind() != WireKind::Line
+            || !ShouldDisplay(CadSelectionKind::Wire, index, candidate.visible)) {
+            continue;
+        }
+        boundaries.push_back(candidate.wire);
+    }
+
+    try {
+        if (tool_ == ViewportTool::TrimWire) {
+            directLineEditPreviewWire_ = TrimLineAtBoundaries(
+                target, *hoveredWireParameter_, boundaries).removed;
+        } else {
+            const auto result = ExtendLineToBoundary(
+                target, *hoveredWireParameter_, boundaries);
+            directLineEditPreviewWire_ = result.added;
+            directLineEditPreviewIntersection_ = result.intersection;
+        }
+    } catch (const std::invalid_argument&) {
+        // The line remains hoverable even when no visible boundary can edit it.
+    }
+    update();
+}
+
 void CadViewport::ClearHover()
 {
     if (hoveredSelection_.kind == CadSelectionKind::None
         && !hoveredWirePoint_.has_value() && !hoveredWireParameter_.has_value()
-        && !hoveredControlPoint_.has_value() && !drawingSnapHover_.has_value()) {
+        && !hoveredControlPoint_.has_value() && !drawingSnapHover_.has_value()
+        && !directLineEditPreviewWire_.has_value()) {
         return;
     }
     hoveredSelection_ = {};
@@ -2375,6 +2466,8 @@ void CadViewport::ClearHover()
     hoveredWireParameter_.reset();
     hoveredControlPoint_.reset();
     drawingSnapHover_.reset();
+    directLineEditPreviewWire_.reset();
+    directLineEditPreviewIntersection_.reset();
     update();
 }
 
@@ -3028,6 +3121,8 @@ void CadViewport::paintEvent(QPaintEvent*)
         painter.restore();
 
         if (hoveredSelection_.kind == CadSelectionKind::Wire
+            && !((tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire)
+                && directLineEditPreviewWire_.has_value())
             && hoveredSelection_.index >= 0
             && hoveredSelection_.index < static_cast<int>(project_->Wires().size())) {
             const NamedWire& hoveredWire = project_->Wires()[hoveredSelection_.index];
@@ -3080,6 +3175,58 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.drawRoundedRect(labelBox, 3.0, 3.0);
             painter.setPen(QColor("#075f69"));
             painter.drawText(labelBox, Qt::AlignCenter, hoverText);
+        }
+
+        if (directLineEditPreviewWire_.has_value()) {
+            painter.save();
+            const bool trim = tool_ == ViewportTool::TrimWire;
+            const QColor previewColor = trim ? QColor("#c0392b") : QColor("#27845c");
+            const Wire& preview = *directLineEditPreviewWire_;
+            QPainterPath previewPath(ProjectPoint(preview.Start()));
+            previewPath.lineTo(ProjectPoint(preview.End()));
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor(255, 255, 255, 215), 8.0,
+                Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.drawPath(previewPath);
+            painter.setPen(QPen(previewColor, trim ? 5.0 : 3.8,
+                trim ? Qt::SolidLine : Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.drawPath(previewPath);
+
+            const QPointF labelPoint = ProjectPoint(preview.Evaluate(0.5)) + QPointF(10.0, -12.0);
+            const QString label = trim
+                ? QStringLiteral("クリックで削除")
+                : QStringLiteral("クリックでここまで延長");
+            const QFontMetrics metrics = painter.fontMetrics();
+            const QRect textBounds = metrics.boundingRect(label);
+            QRectF labelBox(
+                labelPoint.x(), labelPoint.y() - textBounds.height() - 7.0,
+                textBounds.width() + 14.0, textBounds.height() + 10.0);
+            const QRectF viewportBounds = QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0);
+            if (labelBox.right() > viewportBounds.right()) {
+                labelBox.moveRight(viewportBounds.right());
+            }
+            if (labelBox.left() < viewportBounds.left()) {
+                labelBox.moveLeft(viewportBounds.left());
+            }
+            if (labelBox.top() < viewportBounds.top()) {
+                labelBox.moveTop(viewportBounds.top());
+            }
+            if (labelBox.bottom() > viewportBounds.bottom()) {
+                labelBox.moveBottom(viewportBounds.bottom());
+            }
+            painter.setPen(QPen(previewColor, 1.0));
+            painter.setBrush(QColor(255, 255, 255, 242));
+            painter.drawRoundedRect(labelBox, 3.0, 3.0);
+            painter.setPen(previewColor.darker(125));
+            painter.drawText(labelBox, Qt::AlignCenter, label);
+
+            if (directLineEditPreviewIntersection_.has_value()) {
+                const QPointF intersection = ProjectPoint(*directLineEditPreviewIntersection_);
+                painter.setBrush(QColor("#ffffff"));
+                painter.setPen(QPen(previewColor, 2.4));
+                painter.drawEllipse(intersection, 5.0, 5.0);
+            }
+            painter.restore();
         }
     }
 
@@ -3431,6 +3578,12 @@ void CadViewport::paintEvent(QPaintEvent*)
         break;
     case ViewportTool::SplitWire:
         modeText = QStringLiteral("分割");
+        break;
+    case ViewportTool::TrimWire:
+        modeText = QStringLiteral("トリム · 消す部分をクリック");
+        break;
+    case ViewportTool::ExtendWire:
+        modeText = QStringLiteral("延長 · 伸ばす端側をクリック");
         break;
     case ViewportTool::Coincident:
         modeText = coincidencePicks_.empty()
@@ -3841,6 +3994,11 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+    if (event->button() == Qt::LeftButton
+        && (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire)) {
+        UpdateHover(event->position());
+        UpdateDirectLineEditPreview();
+    }
     if (event->button() == Qt::LeftButton && tool_ == ViewportTool::MoveGridOrigin
         && activePlane_.has_value() && gridPointsVisible_) {
         const auto point = PointOnActivePlane(event->position());
@@ -3894,6 +4052,8 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     }
     if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::SplitWire
+        && tool_ != ViewportTool::TrimWire
+        && tool_ != ViewportTool::ExtendWire
         && tool_ != ViewportTool::Measure
         && tool_ != ViewportTool::Coincident
         && tool_ != ViewportTool::Tangent
@@ -4069,6 +4229,8 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             splitPreviewParameter_ = NearestWireParameter(selectedWire->index, event->position());
         }
         update();
+    } else if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
+        UpdateDirectLineEditPreview();
     } else if (tool_ != ViewportTool::Select
         && tool_ != ViewportTool::Measure
         && tool_ != ViewportTool::Coincident
@@ -4238,6 +4400,28 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_
+            && hoveredSelection_.kind == CadSelectionKind::Wire
+            && hoveredWireParameter_.has_value()) {
+            const int wireIndex = hoveredSelection_.index;
+            const double parameter = *hoveredWireParameter_;
+            if (tool_ == ViewportTool::TrimWire && trimRequested_) {
+                trimRequested_(wireIndex, parameter);
+            } else if (tool_ == ViewportTool::ExtendWire && extendRequested_) {
+                extendRequested_(wireIndex, parameter);
+            }
+            directLineEditPreviewWire_.reset();
+            directLineEditPreviewIntersection_.reset();
+        } else if (event->button() == Qt::RightButton && !mouseMoved_
+            && toolExitRequested_) {
+            toolExitRequested_();
+        }
+        dragButton_ = Qt::NoButton;
+        event->accept();
+        return;
+    }
+
     if (tool_ == ViewportTool::SplitWire) {
         if (event->button() == Qt::LeftButton && !mouseMoved_ && splitPreviewParameter_.has_value()) {
             const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
@@ -4348,6 +4532,10 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             ClearCoincidencePicks();
         } else if (tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature) {
             ClearCoincidencePicks();
+        } else if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
+            if (toolExitRequested_) {
+                toolExitRequested_();
+            }
         } else {
             CancelDrawing();
         }

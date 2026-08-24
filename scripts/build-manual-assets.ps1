@@ -37,6 +37,8 @@ $Shots = @(
     @{ Name = "numeric-input"; Project = $FirstCheck; State = "numeric" },
     @{ Name = "wire-edit"; Project = $FirstCheck; State = "edit" },
     @{ Name = "direct-transforms"; Project = $FirstCheck; State = "transforms" },
+    @{ Name = "line-trim"; Project = $FirstCheck; State = "trim" },
+    @{ Name = "line-extend"; Project = $FirstCheck; State = "extend" },
     @{ Name = "machining"; Project = $FirstCheck; State = "machining" },
     @{ Name = "surface-sections"; Project = $Acceptance; State = "surface" },
     @{ Name = "surface-projection"; Project = $Acceptance; State = "projection" },

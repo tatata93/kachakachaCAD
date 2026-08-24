@@ -49,6 +49,8 @@ enum class ViewportTool {
     MirrorSelection,
     RotateSelection,
     SplitWire,
+    TrimWire,
+    ExtendWire,
     Coincident,
     Tangent,
     Curvature,
@@ -155,6 +157,9 @@ public:
     void SetMirrorRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetRotationRequestedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> callback);
     void SetSplitRequestedCallback(std::function<void(int, double)> callback);
+    void SetTrimRequestedCallback(std::function<void(int, double)> callback);
+    void SetExtendRequestedCallback(std::function<void(int, double)> callback);
+    void SetToolExitRequestedCallback(std::function<void()> callback);
     void SetCoincidenceRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetTangentRequestedCallback(
@@ -175,9 +180,24 @@ public:
     [[nodiscard]] int GridSubdivision() const noexcept { return gridSubdivision_; }
     [[nodiscard]] double GridOriginU() const noexcept { return gridOriginU_; }
     [[nodiscard]] double GridOriginV() const noexcept { return gridOriginV_; }
+    [[nodiscard]] bool IsDisplayed(CadSelectionKind kind, int index, bool projectVisible) const
+    {
+        return ShouldDisplay(kind, index, projectVisible);
+    }
+    [[nodiscard]] QPointF ScreenPoint(kachakacha::geometry::Vector3 point) const
+    {
+        return ProjectPoint(point);
+    }
+    [[nodiscard]] kachakacha::geometry::Vector3 ViewTarget() const noexcept { return target_; }
+    [[nodiscard]] double ViewScale() const noexcept { return pixelsPerMillimeter_; }
+    void RestoreViewFraming(kachakacha::geometry::Vector3 target, double pixelsPerMillimeter);
     [[nodiscard]] const std::optional<DrawingSnapCandidate>& DrawingSnapHover() const noexcept
     {
         return drawingSnapHover_;
+    }
+    [[nodiscard]] bool DirectLineEditPreviewReady() const noexcept
+    {
+        return directLineEditPreviewWire_.has_value();
     }
     void SetWireAppearance(const QColor& color, double width, Qt::PenStyle style);
     void SetConstructionWireAppearance(const QColor& color, double width, Qt::PenStyle style);
@@ -315,6 +335,7 @@ private:
     void CommitMeasurementPick(QPointF position);
     void CommitCoincidencePick(QPointF position);
     void UpdateHover(QPointF position);
+    void UpdateDirectLineEditPreview();
     void ClearHover();
     void CancelControlPointDrag();
     void NotifyDrawingState();
@@ -341,6 +362,9 @@ private:
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> mirrorRequested_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, double)> rotationRequested_;
     std::function<void(int, double)> splitRequested_;
+    std::function<void(int, double)> trimRequested_;
+    std::function<void(int, double)> extendRequested_;
+    std::function<void()> toolExitRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> tangentRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;
@@ -395,6 +419,8 @@ private:
     std::optional<kachakacha::model::WorkPlane> controlPointSnapPlane_;
     QPoint hoverScreenPosition_;
     std::optional<double> splitPreviewParameter_;
+    std::optional<kachakacha::model::Wire> directLineEditPreviewWire_;
+    std::optional<kachakacha::geometry::Vector3> directLineEditPreviewIntersection_;
     std::vector<WireEndpointPick> coincidencePicks_;
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;

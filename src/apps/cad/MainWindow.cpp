@@ -116,10 +116,12 @@ using kachakacha::model::MeasureWireRadius;
 using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::ExtendLineToBoundary;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::ReferenceDimension;
 using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::RetainedLineEnd;
+using kachakacha::model::TrimLineAtBoundaries;
 
 namespace {
 
@@ -513,6 +515,15 @@ void MainWindow::BuildUi()
     viewport_->SetSplitRequestedCallback([this](int wireIndex, double parameter) {
         ApplySplitWire(wireIndex, parameter);
     });
+    viewport_->SetTrimRequestedCallback([this](int wireIndex, double parameter) {
+        ApplyDirectLineTrim(wireIndex, parameter);
+    });
+    viewport_->SetExtendRequestedCallback([this](int wireIndex, double parameter) {
+        ApplyDirectLineExtend(wireIndex, parameter);
+    });
+    viewport_->SetToolExitRequestedCallback([this] {
+        SetViewportTool(ViewportTool::Select);
+    });
     viewport_->SetCoincidenceRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
         ApplyEndpointCoincidence(anchor, follower);
     });
@@ -747,7 +758,8 @@ void MainWindow::BuildUi()
             || tool == ViewportTool::DrawBezier || tool == ViewportTool::DrawSpline;
         const bool editTool = tool == ViewportTool::MoveSelection || tool == ViewportTool::CopySelection
             || tool == ViewportTool::MirrorSelection || tool == ViewportTool::RotateSelection
-            || tool == ViewportTool::SplitWire || tool == ViewportTool::Coincident
+            || tool == ViewportTool::SplitWire || tool == ViewportTool::TrimWire
+            || tool == ViewportTool::ExtendWire || tool == ViewportTool::Coincident
             || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature;
         if ((drawingTool && index != 0) || (editTool && index != 3)
             || (tool == ViewportTool::MoveGridOrigin && index != 0)
@@ -812,6 +824,8 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_ = new QAction(QStringLiteral("ミラー複製"), this);
     rotateToolAction_ = new QAction(QStringLiteral("回転"), this);
     splitToolAction_ = new QAction(QStringLiteral("分割"), this);
+    trimToolAction_ = new QAction(QStringLiteral("トリム"), this);
+    extendToolAction_ = new QAction(QStringLiteral("延長"), this);
     coincidentToolAction_ = new QAction(QStringLiteral("端点一致"), this);
     tangentToolAction_ = new QAction(QStringLiteral("接線接続"), this);
     curvatureToolAction_ = new QAction(QStringLiteral("曲率接続"), this);
@@ -820,7 +834,7 @@ void MainWindow::BuildDrawingActions()
     removeTangentAction_ = new QAction(QStringLiteral("滑らか解除"), this);
     measureToolAction_ = new QAction(QStringLiteral("測定"), this);
     joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
-    meetLinesAction_ = new QAction(QStringLiteral("交点まで"), this);
+    meetLinesAction_ = new QAction(QStringLiteral("2線を交点まで"), this);
     setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
     clearReferenceAction_ = new QAction(QStringLiteral("基準解除"), this);
     moveToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で移動"));
@@ -828,6 +842,8 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
+    trimToolAction_->setToolTip(QStringLiteral("3D画面で赤く表示された直線部分をクリックして削除"));
+    extendToolAction_->setToolTip(QStringLiteral("3D画面で直線の端側をクリックし、最初の境界線まで延長"));
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
     tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェ・B-spline・円弧端点の順に3D画面で指定"));
     curvatureToolAction_->setToolTip(QStringLiteral("固定側の端点、曲率まで追従するベジェ端点の順に3D画面で指定"));
@@ -860,6 +876,8 @@ void MainWindow::BuildDrawingActions()
     tangentToolAction_->setShortcut(Qt::Key_T);
     curvatureToolAction_->setShortcut(QKeySequence(QStringLiteral("Shift+T")));
     measureToolAction_->setShortcut(Qt::Key_M);
+    trimToolAction_->setShortcut(Qt::Key_X);
+    extendToolAction_->setShortcut(Qt::Key_E);
 
     auto* toolGroup = new QActionGroup(this);
     toolGroup->setExclusive(true);
@@ -867,7 +885,8 @@ void MainWindow::BuildDrawingActions()
              selectToolAction_, pointToolAction_, lineToolAction_, polylineToolAction_, rectangleToolAction_,
              circleToolAction_, arcToolAction_, bezierToolAction_, splineToolAction_,
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
-             coincidentToolAction_, tangentToolAction_, curvatureToolAction_, measureToolAction_,
+             trimToolAction_, extendToolAction_, coincidentToolAction_, tangentToolAction_,
+             curvatureToolAction_, measureToolAction_,
              gridOriginToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
@@ -888,6 +907,8 @@ void MainWindow::BuildDrawingActions()
     connect(mirrorToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::MirrorSelection); });
     connect(rotateToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::RotateSelection); });
     connect(splitToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::SplitWire); });
+    connect(trimToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::TrimWire); });
+    connect(extendToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::ExtendWire); });
     connect(coincidentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Coincident); });
     connect(tangentToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Tangent); });
     connect(curvatureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Curvature); });
@@ -1368,12 +1389,14 @@ QWidget* MainWindow::BuildEditPanel()
     addDirectButton(mirrorToolAction_, 1, 1);
     addDirectButton(splitToolAction_, 2, 0);
     addDirectButton(joinWiresAction_, 2, 1);
-    addDirectButton(coincidentToolAction_, 3, 0);
-    addDirectButton(removeCoincidentAction_, 3, 1);
-    addDirectButton(tangentToolAction_, 4, 0);
-    addDirectButton(curvatureToolAction_, 4, 1);
-    addDirectButton(removeTangentAction_, 5, 0, 2);
-    addDirectButton(meetLinesAction_, 6, 0, 2);
+    addDirectButton(trimToolAction_, 3, 0);
+    addDirectButton(extendToolAction_, 3, 1);
+    addDirectButton(coincidentToolAction_, 4, 0);
+    addDirectButton(removeCoincidentAction_, 4, 1);
+    addDirectButton(tangentToolAction_, 5, 0);
+    addDirectButton(curvatureToolAction_, 5, 1);
+    addDirectButton(removeTangentAction_, 6, 0, 2);
+    addDirectButton(meetLinesAction_, 7, 0, 2);
     layout->addLayout(directGrid);
 
     auto* offsetLabel = new QLabel(QStringLiteral("平行オフセット複製"));
@@ -2637,6 +2660,8 @@ void MainWindow::BuildMenusAndToolbar()
     editMenu->addAction(rotateToolAction_);
     editMenu->addAction(mirrorToolAction_);
     editMenu->addAction(splitToolAction_);
+    editMenu->addAction(trimToolAction_);
+    editMenu->addAction(extendToolAction_);
     editMenu->addAction(coincidentToolAction_);
     editMenu->addAction(removeCoincidentAction_);
     editMenu->addAction(tangentToolAction_);
@@ -2721,6 +2746,8 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->addAction(rotateToolAction_);
     transformToolbar->addAction(mirrorToolAction_);
     transformToolbar->addAction(splitToolAction_);
+    transformToolbar->addAction(trimToolAction_);
+    transformToolbar->addAction(extendToolAction_);
     transformToolbar->addAction(coincidentToolAction_);
     transformToolbar->addAction(tangentToolAction_);
     transformToolbar->addAction(curvatureToolAction_);
@@ -3068,6 +3095,47 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(3, 0.0);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("trim") || state == QStringLiteral("extend")) {
+        if (!setActivePlane(QStringLiteral("front"))) {
+            return false;
+        }
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, plane.name == "front");
+        }
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name, false);
+        }
+        const auto front = project_.FindWorkPlane("front");
+        if (!front.has_value()) {
+            return false;
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = "front";
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        project_.AddWire("edit_boundary_left", Wire::Line(
+            front->ToWorld(-4.0, -5.0), front->ToWorld(-4.0, 5.0)), metadata);
+        project_.AddWire("edit_boundary_right", Wire::Line(
+            front->ToWorld(4.0, -5.0), front->ToWorld(4.0, 5.0)), metadata);
+        const bool trimState = state == QStringLiteral("trim");
+        const Vector3 targetStart = trimState
+            ? front->ToWorld(-8.0, 0.0) : front->ToWorld(-2.0, 2.5);
+        const Vector3 targetEnd = trimState
+            ? front->ToWorld(8.0, 0.0) : front->ToWorld(2.0, 2.5);
+        project_.AddWire("edit_target", Wire::Line(targetStart, targetEnd), metadata);
+        RefreshModelViews(false);
+        showTab(3, 0.0);
+        SetViewportTool(trimState ? ViewportTool::TrimWire : ViewportTool::ExtendWire);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
+        QApplication::processEvents();
+        const Vector3 hoverPoint = trimState
+            ? front->ToWorld(0.0, 0.0) : front->ToWorld(1.7, 2.5);
+        const QPointF screenPoint = viewport_->ScreenPoint(hoverPoint);
+        const QPointF globalPoint = viewport_->mapToGlobal(screenPoint.toPoint());
+        QMouseEvent moveEvent(
+            QEvent::MouseMove, screenPoint, globalPoint,
+            Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport_, &moveEvent);
     } else if (state == QStringLiteral("machining")) {
         if (!select({
                 {CadSelectionKind::Wire, "front_window_bottom"},
@@ -4316,10 +4384,13 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         || tool == ViewportTool::MirrorSelection
         || tool == ViewportTool::RotateSelection;
     const bool isSplit = tool == ViewportTool::SplitWire;
+    const bool isDirectLineEdit = tool == ViewportTool::TrimWire
+        || tool == ViewportTool::ExtendWire;
     const bool isCoincident = tool == ViewportTool::Coincident;
     const bool isTangent = tool == ViewportTool::Tangent;
     const bool isCurvature = tool == ViewportTool::Curvature;
-    if (tool != ViewportTool::Select && !isSplit && !isCoincident && !isTangent && !isCurvature
+    if (tool != ViewportTool::Select && !isSplit && !isDirectLineEdit
+        && !isCoincident && !isTangent && !isCurvature
         && tool != ViewportTool::Measure) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
@@ -4382,7 +4453,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     }
 
     viewport_->SetTool(tool);
-    if (tool == ViewportTool::Measure) {
+    if (isDirectLineEdit) {
+        toolsTabs_->setCurrentIndex(3);
+    } else if (tool == ViewportTool::Measure) {
         toolsTabs_->setCurrentIndex(8);
     } else if (tool == ViewportTool::MoveGridOrigin) {
         toolsTabs_->setCurrentIndex(0);
@@ -4402,6 +4475,8 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     mirrorToolAction_->setChecked(tool == ViewportTool::MirrorSelection);
     rotateToolAction_->setChecked(tool == ViewportTool::RotateSelection);
     splitToolAction_->setChecked(tool == ViewportTool::SplitWire);
+    trimToolAction_->setChecked(tool == ViewportTool::TrimWire);
+    extendToolAction_->setChecked(tool == ViewportTool::ExtendWire);
     coincidentToolAction_->setChecked(tool == ViewportTool::Coincident);
     tangentToolAction_->setChecked(tool == ViewportTool::Tangent);
     curvatureToolAction_->setChecked(tool == ViewportTool::Curvature);
@@ -4456,6 +4531,12 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::SplitWire:
         statusBar()->showMessage(QStringLiteral("分割: 選択したワイヤー上の分けたい位置をクリック"), 4000);
+        break;
+    case ViewportTool::TrimWire:
+        statusBar()->showMessage(QStringLiteral("トリム: 赤く表示される直線部分をクリックして削除。右クリックまたはEscで終了"), 6000);
+        break;
+    case ViewportTool::ExtendWire:
+        statusBar()->showMessage(QStringLiteral("延長: 伸ばしたい端側をクリック。緑の最初の境界まで延長。右クリックまたはEscで終了"), 6000);
         break;
     case ViewportTool::Coincident:
         statusBar()->showMessage(QStringLiteral("端点一致: 動かさない固定側、追従させる側の順に端点をクリック"), 5000);
@@ -4549,6 +4630,12 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::SplitWire:
         state = QStringLiteral("分割 · ワイヤー上をクリック");
+        break;
+    case ViewportTool::TrimWire:
+        state = QStringLiteral("トリム · 赤い部分をクリック");
+        break;
+    case ViewportTool::ExtendWire:
+        state = QStringLiteral("延長 · 伸ばす端側をクリック");
         break;
     case ViewportTool::Coincident:
         state = viewport_ != nullptr && viewport_->CoincidencePicks().empty()
@@ -4799,6 +4886,18 @@ void MainWindow::RefreshBeginnerGuide()
         case ViewportTool::SplitWire:
             setGuide(QStringLiteral("ワイヤーを分割"), QStringLiteral("次: 選択線上の分けたい位置をクリック"),
                 QStringLiteral("1  分割する線を1本選択\n2  分割道具\n3  線上をクリック"), QStringLiteral("edit"));
+            return;
+        case ViewportTool::TrimWire:
+            setGuide(QStringLiteral("不要な線部分をトリム"),
+                QStringLiteral("次: 赤く表示された部分をクリック"),
+                QStringLiteral("1  トリム道具を選択\n2  消したい直線部分へマウスを置く\n3  赤い事前表示を確認してクリック\n続けて処理可能。右クリックまたはEscで終了"),
+                QStringLiteral("edit"));
+            return;
+        case ViewportTool::ExtendWire:
+            setGuide(QStringLiteral("直線を境界まで延長"),
+                QStringLiteral("次: 伸ばしたい端側へマウスを置いてクリック"),
+                QStringLiteral("1  延長道具を選択\n2  直線の伸ばしたい端側へマウスを置く\n3  緑の到達先を確認してクリック\n最初に交わる表示中の直線まで延長"),
+                QStringLiteral("edit"));
             return;
         case ViewportTool::Coincident:
         case ViewportTool::Tangent:
@@ -5387,6 +5486,139 @@ void MainWindow::ApplySplitWire(int wireIndex, double parameter)
         statusBar()->showMessage(QStringLiteral("ワイヤーを2本に分割しました"), 3000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+    }
+}
+
+void MainWindow::ApplyDirectLineTrim(int wireIndex, double parameter)
+{
+    try {
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("トリムする直線が見つかりません。");
+        }
+        const auto source = project_.Wires()[wireIndex];
+        if (source.wire.Kind() != WireKind::Line) {
+            throw std::invalid_argument("現在の直接トリムは直線に対応しています。");
+        }
+        if (source.projection.has_value() || source.plateOffset.has_value()) {
+            throw std::invalid_argument("投影線・板厚位置線は、元の作図線を編集してください。");
+        }
+
+        std::vector<Wire> boundaries;
+        boundaries.reserve(project_.Wires().size());
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            const auto& candidate = project_.Wires()[index];
+            if (index == wireIndex || candidate.wire.Kind() != WireKind::Line
+                || !viewport_->IsDisplayed(CadSelectionKind::Wire, index, candidate.visible)) {
+                continue;
+            }
+            boundaries.push_back(candidate.wire);
+        }
+        const auto result = TrimLineAtBoundaries(source.wire, parameter, boundaries);
+
+        Project candidate = project_;
+        std::vector<CadSelection> resultingSelections;
+        bool clearReference = false;
+        if (result.retained.size() == 1) {
+            candidate.UpdateWireAndMetadata(
+                source.name,
+                result.retained.front(),
+                RetargetLineConstraints(project_, source.metadata, result.retained.front(), true));
+            resultingSelections.push_back({CadSelectionKind::Wire, wireIndex});
+        } else {
+            const QString groupName = SuggestedDirectGroupName(
+                ToQString(source.name) + QStringLiteral("_trim"));
+            const std::string firstName = ToName(groupName + QStringLiteral("_1"));
+            const std::string secondName = ToName(groupName + QStringLiteral("_2"));
+            candidate.RemoveWire(source.name);
+            candidate.AddWire(
+                firstName,
+                result.retained[0],
+                RetargetLineConstraints(project_, source.metadata, result.retained[0], true));
+            const int firstIndex = static_cast<int>(candidate.Wires().size() - 1);
+            candidate.AddWire(
+                secondName,
+                result.retained[1],
+                RetargetLineConstraints(project_, source.metadata, result.retained[1], true));
+            const int secondIndex = static_cast<int>(candidate.Wires().size() - 1);
+            resultingSelections = {
+                {CadSelectionKind::Wire, firstIndex},
+                {CadSelectionKind::Wire, secondIndex},
+            };
+            clearReference = referenceWireName_.has_value()
+                && *referenceWireName_ == source.name;
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        if (clearReference) {
+            referenceWireName_.reset();
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(std::move(resultingSelections), true);
+        statusBar()->showMessage(
+            result.retained.size() == 1
+                ? QStringLiteral("指定した端側を交点までトリムしました")
+                : QStringLiteral("指定した中間部分を削除し、直線を2本に分けました"),
+            3500);
+    } catch (const std::exception& error) {
+        QString message = QString::fromUtf8(error.what());
+        if (message.contains(QStringLiteral("No visible line boundary"))) {
+            message = QStringLiteral("この部分を区切る表示中の直線がありません。");
+        } else if (message.contains(QStringLiteral("complete target line"))) {
+            message = QStringLiteral("直線全体が消えるためトリムできません。");
+        } else if (message.contains(QStringLiteral("too short"))) {
+            message = QStringLiteral("交点から少し離れた、消したい直線部分を指してください。");
+        } else if (message.startsWith(QStringLiteral("Wire is used"))) {
+            message = QStringLiteral("この直線は面・投影・開口・拘束で使用中のため中央を2本に分けられません。派生形状を外すか、元図の段階でトリムしてください。");
+        }
+        statusBar()->showMessage(message, 5000);
+    }
+}
+
+void MainWindow::ApplyDirectLineExtend(int wireIndex, double parameter)
+{
+    try {
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("延長する直線が見つかりません。");
+        }
+        const auto source = project_.Wires()[wireIndex];
+        if (source.wire.Kind() != WireKind::Line) {
+            throw std::invalid_argument("現在の直接延長は直線に対応しています。");
+        }
+        if (source.projection.has_value() || source.plateOffset.has_value()) {
+            throw std::invalid_argument("投影線・板厚位置線は、元の作図線を編集してください。");
+        }
+
+        std::vector<Wire> boundaries;
+        boundaries.reserve(project_.Wires().size());
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            const auto& candidate = project_.Wires()[index];
+            if (index == wireIndex || candidate.wire.Kind() != WireKind::Line
+                || !viewport_->IsDisplayed(CadSelectionKind::Wire, index, candidate.visible)) {
+                continue;
+            }
+            boundaries.push_back(candidate.wire);
+        }
+        const auto result = ExtendLineToBoundary(source.wire, parameter, boundaries);
+        Project candidate = project_;
+        candidate.UpdateWireAndMetadata(
+            source.name,
+            result.extended,
+            RetargetLineConstraints(project_, source.metadata, result.extended, true));
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection({CadSelectionKind::Wire, wireIndex}, true);
+        statusBar()->showMessage(QStringLiteral("直線を最初の境界まで延長しました"), 3500);
+    } catch (const std::exception& error) {
+        QString message = QString::fromUtf8(error.what());
+        if (message.contains(QStringLiteral("No visible line boundary"))) {
+            message = QStringLiteral("選んだ端の先に交わる表示中の直線がありません。");
+        }
+        statusBar()->showMessage(message, 5000);
     }
 }
 
@@ -6566,6 +6798,11 @@ bool MainWindow::RunCreationSelfTest()
 {
     const auto fail = [](const char* stage) {
         qWarning() << "self-test failed:" << stage;
+        QFile report(QStringLiteral("self-test-failure.txt"));
+        if (report.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            report.write(stage);
+            report.write("\n");
+        }
         return false;
     };
     const std::string initialDrawingPlaneName = ToName(activePlaneCombo_->currentText());
@@ -7102,11 +7339,11 @@ bool MainWindow::RunCreationSelfTest()
         const std::size_t snapWireStart = project_.Wires().size();
 
         SetViewportTool(ViewportTool::DrawLine);
-        click(center + QPointF(-120.0, 0.0));
-        click(center + QPointF(120.0, 0.0));
+        click(center + QPointF(-120.0, 0.0), Qt::ControlModifier);
+        click(center + QPointF(120.0, 0.0), Qt::ControlModifier);
         SetViewportTool(ViewportTool::DrawLine);
-        click(center + QPointF(0.0, -105.0));
-        click(center + QPointF(0.0, 105.0));
+        click(center + QPointF(0.0, -105.0), Qt::ControlModifier);
+        click(center + QPointF(0.0, 105.0), Qt::ControlModifier);
         if (project_.Wires().size() != snapWireStart + 2) {
             return fail("create crossing snap test lines");
         }
@@ -7213,6 +7450,96 @@ bool MainWindow::RunCreationSelfTest()
         redoStack_ = snapTestRedo;
         RefreshModelViews(false);
         UpdateHistoryActions();
+    }
+
+    {
+        const Project directEditSavedProject = project_;
+        const auto directEditSavedUndo = undoStack_;
+        const auto directEditSavedRedo = redoStack_;
+        const auto directEditSavedReference = referenceWireName_;
+        const bool directEditSavedModified = modified_;
+        const QString directEditSavedTitle = windowTitle();
+        const Vector3 directEditSavedViewTarget = viewport_->ViewTarget();
+        const double directEditSavedViewScale = viewport_->ViewScale();
+
+        Project directEditProject;
+        directEditProject.AddWorkPlane(
+            "direct_edit_XY",
+            WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
+        directEditProject.AddWire("boundary_left", Wire::Line({-4.0, -5.0, 0.0}, {-4.0, 5.0, 0.0}));
+        directEditProject.AddWire("boundary_right", Wire::Line({4.0, -5.0, 0.0}, {4.0, 5.0, 0.0}));
+        directEditProject.AddWire("trim_target", Wire::Line({-8.0, 0.0, 0.0}, {8.0, 0.0, 0.0}));
+        directEditProject.AddWire("extend_target", Wire::Line({-2.0, 3.0, 0.0}, {2.0, 3.0, 0.0}));
+        project_ = std::move(directEditProject);
+        undoStack_.clear();
+        redoStack_.clear();
+        referenceWireName_.reset();
+        RefreshModelViews(true);
+        SetDisplayMode(ViewportDisplayMode::Design);
+        const int directEditPlane = activePlaneCombo_->findText(QStringLiteral("direct_edit_XY"));
+        if (directEditPlane < 0) {
+            return fail("find direct trim test plane");
+        }
+        activePlaneCombo_->setCurrentIndex(directEditPlane);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
+
+        SetViewportTool(ViewportTool::TrimWire);
+        click(viewport_->ScreenPoint({0.0, 0.0, 0.0}));
+        if (project_.Wires().size() != 5
+            || !kachakacha::geometry::AlmostEqual(project_.Wires()[3].wire.End(), {-4.0, 0.0, 0.0}, 1.0e-8)
+            || !kachakacha::geometry::AlmostEqual(project_.Wires()[4].wire.Start(), {4.0, 0.0, 0.0}, 1.0e-8)) {
+            return fail("direct middle line trim");
+        }
+        Undo();
+        if (project_.Wires().size() != 4
+            || project_.Wires()[2].name != "trim_target") {
+            return fail("undo direct line trim");
+        }
+
+        SetViewportTool(ViewportTool::ExtendWire);
+        const QPointF extendPick = viewport_->ScreenPoint({1.7, 3.0, 0.0});
+        sendMouse(QEvent::MouseMove, extendPick, Qt::NoButton, Qt::NoButton);
+        if (viewport_->HoveredSelection().kind != CadSelectionKind::Wire
+            || viewport_->HoveredSelection().index != 3) {
+            return fail("direct line extend target hover");
+        }
+        if (!viewport_->DirectLineEditPreviewReady()) {
+            return fail("direct line extend preview");
+        }
+        click(extendPick);
+        if (project_.Wires().size() != 4) {
+            return fail("direct line extend wire count");
+        }
+        if (kachakacha::geometry::AlmostEqual(
+                project_.Wires()[3].wire.End(), {2.0, 3.0, 0.0}, 1.0e-8)) {
+            return fail("direct line extend unchanged");
+        }
+        if (!kachakacha::geometry::AlmostEqual(
+                project_.Wires()[3].wire.End(), {4.0, 3.0, 0.0}, 1.0e-8)) {
+            return fail("direct line extend wrong endpoint");
+        }
+        Undo();
+        if (!kachakacha::geometry::AlmostEqual(
+                project_.Wires()[3].wire.End(), {2.0, 3.0, 0.0}, 1.0e-8)) {
+            return fail("undo direct line extend");
+        }
+        rightClick(viewport_->ScreenPoint({0.0, 3.0, 0.0}));
+        if (viewport_->Tool() != ViewportTool::Select) {
+            return fail("right click exits direct line edit");
+        }
+
+        project_ = directEditSavedProject;
+        undoStack_ = directEditSavedUndo;
+        redoStack_ = directEditSavedRedo;
+        referenceWireName_ = directEditSavedReference;
+        modified_ = directEditSavedModified;
+        setWindowTitle(directEditSavedTitle);
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+        activePlaneCombo_->setCurrentIndex(drawingPlaneIndex);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->RestoreViewFraming(directEditSavedViewTarget, directEditSavedViewScale);
     }
 
     SetViewportTool(ViewportTool::Select);

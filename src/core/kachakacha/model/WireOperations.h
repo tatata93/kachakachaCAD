@@ -41,6 +41,30 @@ struct LineIntersectionEditResult {
     geometry::Vector3 intersection;
 };
 
+struct DirectLineTrimResult {
+    Wire removed;
+    std::vector<Wire> retained;
+};
+
+struct DirectLineExtendResult {
+    Wire extended;
+    Wire added;
+    geometry::Vector3 intersection;
+    RetainedLineEnd extendedEnd = RetainedLineEnd::End;
+};
+
+[[nodiscard]] DirectLineTrimResult TrimLineAtBoundaries(
+    const Wire& target,
+    double pickedParameter,
+    const std::vector<Wire>& boundaries,
+    double tolerance = 1.0e-8);
+
+[[nodiscard]] DirectLineExtendResult ExtendLineToBoundary(
+    const Wire& target,
+    double pickedParameter,
+    const std::vector<Wire>& boundaries,
+    double tolerance = 1.0e-8);
+
 [[nodiscard]] LineIntersectionEditResult MeetLinesAtIntersection(
     const Wire& first,
     RetainedLineEnd retainedFirst,

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -278,6 +279,161 @@ std::vector<Vector3> ChainPoints(const Wire& wire)
 }
 
 } // namespace
+
+DirectLineTrimResult TrimLineAtBoundaries(
+    const Wire& target,
+    double pickedParameter,
+    const std::vector<Wire>& boundaries,
+    double tolerance)
+{
+    if (target.Kind() != WireKind::Line) {
+        throw std::invalid_argument("Direct trim currently requires a line wire.");
+    }
+    if (!std::isfinite(pickedParameter) || pickedParameter < 0.0 || pickedParameter > 1.0) {
+        throw std::invalid_argument("Trim pick parameter must lie on the target line.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        throw std::invalid_argument("Trim tolerance must be positive.");
+    }
+
+    const double targetLength = (target.End() - target.Start()).Length();
+    const double parameterTolerance = tolerance / targetLength;
+    std::vector<double> intersections;
+    intersections.reserve(boundaries.size());
+    for (const Wire& boundary : boundaries) {
+        if (boundary.Kind() != WireKind::Line) {
+            continue;
+        }
+        try {
+            const LineIntersection intersection = IntersectInfiniteLines(target, boundary, tolerance);
+            const double boundaryParameterTolerance = tolerance
+                / (boundary.End() - boundary.Start()).Length();
+            if (intersection.firstParameter <= parameterTolerance
+                || intersection.firstParameter >= 1.0 - parameterTolerance
+                || intersection.secondParameter < -boundaryParameterTolerance
+                || intersection.secondParameter > 1.0 + boundaryParameterTolerance) {
+                continue;
+            }
+            const auto duplicate = std::find_if(
+                intersections.begin(), intersections.end(), [&](double parameter) {
+                    return std::abs(parameter - intersection.firstParameter) <= parameterTolerance;
+                });
+            if (duplicate == intersections.end()) {
+                intersections.push_back(intersection.firstParameter);
+            }
+        } catch (const std::invalid_argument&) {
+            // Parallel, skew, and otherwise non-intersecting boundaries do not limit this line.
+        }
+    }
+    if (intersections.empty()) {
+        throw std::invalid_argument("No visible line boundary intersects the target segment.");
+    }
+    std::sort(intersections.begin(), intersections.end());
+
+    double lower = 0.0;
+    double upper = 1.0;
+    for (double parameter : intersections) {
+        if (parameter < pickedParameter - parameterTolerance) {
+            lower = parameter;
+        } else if (parameter > pickedParameter + parameterTolerance) {
+            upper = parameter;
+            break;
+        } else if (pickedParameter <= parameter) {
+            upper = parameter;
+            break;
+        } else {
+            lower = parameter;
+        }
+    }
+
+    const Vector3 lowerPoint = target.Evaluate(lower);
+    const Vector3 upperPoint = target.Evaluate(upper);
+    if ((upperPoint - lowerPoint).Length() <= tolerance) {
+        throw std::invalid_argument("Trimmed line portion is too short.");
+    }
+
+    std::vector<Wire> retained;
+    if (lower > parameterTolerance) {
+        retained.push_back(Wire::Line(target.Start(), lowerPoint));
+    }
+    if (upper < 1.0 - parameterTolerance) {
+        retained.push_back(Wire::Line(upperPoint, target.End()));
+    }
+    if (retained.empty()) {
+        throw std::invalid_argument("Trim would remove the complete target line.");
+    }
+    return {Wire::Line(lowerPoint, upperPoint), std::move(retained)};
+}
+
+DirectLineExtendResult ExtendLineToBoundary(
+    const Wire& target,
+    double pickedParameter,
+    const std::vector<Wire>& boundaries,
+    double tolerance)
+{
+    if (target.Kind() != WireKind::Line) {
+        throw std::invalid_argument("Direct extend currently requires a line wire.");
+    }
+    if (!std::isfinite(pickedParameter) || pickedParameter < 0.0 || pickedParameter > 1.0) {
+        throw std::invalid_argument("Extend pick parameter must lie on the target line.");
+    }
+    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+        throw std::invalid_argument("Extend tolerance must be positive.");
+    }
+
+    const RetainedLineEnd extendedEnd = pickedParameter < 0.5
+        ? RetainedLineEnd::Start
+        : RetainedLineEnd::End;
+    const double targetLength = (target.End() - target.Start()).Length();
+    const double parameterTolerance = tolerance / targetLength;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    std::optional<LineIntersection> best;
+    for (const Wire& boundary : boundaries) {
+        if (boundary.Kind() != WireKind::Line) {
+            continue;
+        }
+        try {
+            const LineIntersection intersection = IntersectInfiniteLines(target, boundary, tolerance);
+            const double boundaryParameterTolerance = tolerance
+                / (boundary.End() - boundary.Start()).Length();
+            const bool onBoundary = intersection.secondParameter >= -boundaryParameterTolerance
+                && intersection.secondParameter <= 1.0 + boundaryParameterTolerance;
+            const bool onExtension = extendedEnd == RetainedLineEnd::Start
+                ? intersection.firstParameter < -parameterTolerance
+                : intersection.firstParameter > 1.0 + parameterTolerance;
+            if (!onBoundary || !onExtension) {
+                continue;
+            }
+            const double distance = extendedEnd == RetainedLineEnd::Start
+                ? -intersection.firstParameter
+                : intersection.firstParameter - 1.0;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = intersection;
+            }
+        } catch (const std::invalid_argument&) {
+            // Parallel, skew, and otherwise non-intersecting boundaries are skipped.
+        }
+    }
+    if (!best.has_value()) {
+        throw std::invalid_argument("No visible line boundary lies in the selected extension direction.");
+    }
+
+    if (extendedEnd == RetainedLineEnd::Start) {
+        return {
+            Wire::Line(best->point, target.End()),
+            Wire::Line(best->point, target.Start()),
+            best->point,
+            extendedEnd,
+        };
+    }
+    return {
+        Wire::Line(target.Start(), best->point),
+        Wire::Line(target.End(), best->point),
+        best->point,
+        extendedEnd,
+    };
+}
 
 Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
 {

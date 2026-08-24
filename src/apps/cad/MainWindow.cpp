@@ -6651,10 +6651,10 @@ bool MainWindow::RunCreationSelfTest()
         QMouseEvent event(type, position, globalPosition, button, buttons, modifiers);
         QApplication::sendEvent(viewport_, &event);
     };
-    const auto click = [&](QPointF position) {
+    const auto click = [&](QPointF position, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
         sendMouse(QEvent::MouseMove, position, Qt::NoButton, Qt::NoButton);
-        sendMouse(QEvent::MouseButtonPress, position, Qt::LeftButton, Qt::LeftButton);
-        sendMouse(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton);
+        sendMouse(QEvent::MouseButtonPress, position, Qt::LeftButton, Qt::LeftButton, modifiers);
+        sendMouse(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton, modifiers);
     };
     const auto dragMouse = [&](QPointF start, QPointF end, Qt::MouseButton button,
                                Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
@@ -6706,6 +6706,31 @@ bool MainWindow::RunCreationSelfTest()
         || kachakacha::geometry::AlmostEqual(
             viewport_->ViewUpDirection(), upBeforeRoll, 1.0e-8)) {
         return fail("view cube roll control");
+    }
+    click(cubeHome);
+    const Vector3 directionBeforeWorldX = viewport_->ViewDirection();
+    click(QPointF(cubeCenter.x() - 146.0, 30.0));
+    if (kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), directionBeforeWorldX, 1.0e-8)
+        || std::abs(viewport_->ViewDirection().x - directionBeforeWorldX.x) > 1.0e-8) {
+        return fail("view cube absolute X rotation");
+    }
+    const Vector3 directionBeforeRelativeX = viewport_->ViewDirection();
+    const Vector3 rightBeforeRelativeX = viewport_->ViewRightDirection();
+    click(QPointF(cubeCenter.x() - 82.0, 30.0));
+    if (kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), directionBeforeRelativeX, 1.0e-8)
+        || !kachakacha::geometry::AlmostEqual(
+            viewport_->ViewRightDirection(), rightBeforeRelativeX, 1.0e-8)) {
+        return fail("view cube relative X rotation");
+    }
+    const Vector3 directionBeforeFineRotation = viewport_->ViewDirection();
+    click(QPointF(cubeCenter.x() - 118.0, 30.0), Qt::ShiftModifier);
+    const double fineAngle = std::acos(std::clamp(
+        kachakacha::geometry::Dot(directionBeforeFineRotation, viewport_->ViewDirection()),
+        -1.0, 1.0));
+    if (std::abs(fineAngle - 5.0 * kPi / 180.0) > 1.0e-8) {
+        return fail("view cube five degree fine rotation");
     }
     click(cubeHome);
     const Vector3 beforeTinyCubeMotion = viewport_->ViewDirection();

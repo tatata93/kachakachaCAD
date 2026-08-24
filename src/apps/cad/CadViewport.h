@@ -61,6 +61,12 @@ enum class ViewportDisplayMode {
     IsolatedSelection,
 };
 
+enum class ViewRotationAxis {
+    X,
+    Y,
+    Z,
+};
+
 enum class MeasurementPickKind {
     Point,
     Wire,
@@ -207,9 +213,12 @@ public:
     [[nodiscard]] bool AlignToSelection();
     void SetIsometricView();
     void SetCornerView(kachakacha::geometry::Vector3 direction);
+    void RotateViewAroundWorldAxis(ViewRotationAxis axis, double angleRadians);
+    void RotateViewAroundRelativeAxis(ViewRotationAxis axis, double angleRadians);
     void RotateViewYaw(double angleRadians);
     void RollView(double angleRadians);
     [[nodiscard]] kachakacha::geometry::Vector3 ViewDirection() const;
+    [[nodiscard]] kachakacha::geometry::Vector3 ViewRightDirection() const;
     [[nodiscard]] kachakacha::geometry::Vector3 ViewUpDirection() const;
     void FinishDrawing();
     void CancelDrawing();

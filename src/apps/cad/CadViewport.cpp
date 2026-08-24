@@ -47,6 +47,18 @@ enum class ViewCubeFace {
     OrbitRight,
     RollLeft,
     RollRight,
+    WorldXNegative,
+    WorldXPositive,
+    WorldYNegative,
+    WorldYPositive,
+    WorldZNegative,
+    WorldZPositive,
+    RelativeXNegative,
+    RelativeXPositive,
+    RelativeYNegative,
+    RelativeYPositive,
+    RelativeZNegative,
+    RelativeZPositive,
 };
 
 struct ViewCubeFaceGeometry {
@@ -65,6 +77,16 @@ struct ViewCubeCornerGeometry {
     double depth = 0.0;
 };
 
+struct ViewCubeAxisRotationGeometry {
+    ViewCubeFace negativeFace = ViewCubeFace::None;
+    ViewCubeFace positiveFace = ViewCubeFace::None;
+    QRectF negativeArea;
+    QRectF positiveArea;
+    QRectF labelArea;
+    QString label;
+    QColor color;
+};
+
 struct ViewCubeGeometry {
     std::vector<ViewCubeFaceGeometry> faces;
     std::vector<ViewCubeCornerGeometry> corners;
@@ -74,6 +96,10 @@ struct ViewCubeGeometry {
     QRectF orbitRight;
     QRectF rollLeft;
     QRectF rollRight;
+    QRectF worldAxesPanel;
+    QRectF relativeAxesPanel;
+    std::vector<ViewCubeAxisRotationGeometry> worldAxes;
+    std::vector<ViewCubeAxisRotationGeometry> relativeAxes;
     QRectF bounds;
 };
 
@@ -189,12 +215,57 @@ ViewCubeGeometry MakeViewCubeGeometry(
     geometry.orbitRight = QRectF(centerX + 41.0, 40.0, 18.0, 28.0);
     geometry.rollLeft = QRectF(centerX - 31.0, 0.0, 22.0, 20.0);
     geometry.rollRight = QRectF(centerX + 9.0, 0.0, 22.0, 20.0);
-    geometry.bounds = QRectF(centerX - 64.0, 0.0, 128.0, 154.0);
+    const auto makeAxisPanel = [&](double left, bool relative) {
+        const QRectF panel(left, 1.0, 60.0, 92.0);
+        std::vector<ViewCubeAxisRotationGeometry> axes;
+        const std::array<QString, 3> labels = {
+            QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")};
+        const std::array<QColor, 3> colors = {
+            QColor("#b9363e"), QColor("#2d7f49"), QColor("#326bb4")};
+        const std::array<ViewCubeFace, 3> negativeFaces = relative
+            ? std::array{ViewCubeFace::RelativeXNegative, ViewCubeFace::RelativeYNegative,
+                  ViewCubeFace::RelativeZNegative}
+            : std::array{ViewCubeFace::WorldXNegative, ViewCubeFace::WorldYNegative,
+                  ViewCubeFace::WorldZNegative};
+        const std::array<ViewCubeFace, 3> positiveFaces = relative
+            ? std::array{ViewCubeFace::RelativeXPositive, ViewCubeFace::RelativeYPositive,
+                  ViewCubeFace::RelativeZPositive}
+            : std::array{ViewCubeFace::WorldXPositive, ViewCubeFace::WorldYPositive,
+                  ViewCubeFace::WorldZPositive};
+        for (int index = 0; index < 3; ++index) {
+            const double top = 21.0 + index * 23.0;
+            axes.push_back({
+                negativeFaces[index], positiveFaces[index],
+                QRectF(left + 3.0, top, 18.0, 18.0),
+                QRectF(left + 39.0, top, 18.0, 18.0),
+                QRectF(left + 21.0, top, 18.0, 18.0),
+                labels[index], colors[index],
+            });
+        }
+        return std::pair{panel, axes};
+    };
+    auto [relativePanel, relativeAxes] = makeAxisPanel(centerX - 130.0, true);
+    auto [worldPanel, worldAxes] = makeAxisPanel(centerX - 194.0, false);
+    geometry.relativeAxesPanel = relativePanel;
+    geometry.relativeAxes = std::move(relativeAxes);
+    geometry.worldAxesPanel = worldPanel;
+    geometry.worldAxes = std::move(worldAxes);
+    geometry.bounds = QRectF(centerX - 196.0, 0.0, 260.0, 154.0);
     return geometry;
 }
 
 ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
 {
+    for (const auto* axes : {&cube.worldAxes, &cube.relativeAxes}) {
+        for (const ViewCubeAxisRotationGeometry& axis : *axes) {
+            if (axis.negativeArea.contains(position)) {
+                return axis.negativeFace;
+            }
+            if (axis.positiveArea.contains(position)) {
+                return axis.positiveFace;
+            }
+        }
+    }
     if (cube.rollLeft.contains(position)) {
         return ViewCubeFace::RollLeft;
     }
@@ -257,6 +328,41 @@ std::optional<Vector3> ViewCubeDirection(ViewCubeFace face)
     case ViewCubeFace::CornerNegativeNegativeNegative: return Vector3{-1.0, -1.0, -1.0}.Normalized();
     default: return std::nullopt;
     }
+}
+
+struct ViewCubeRotationCommand {
+    bool relative = false;
+    ViewRotationAxis axis = ViewRotationAxis::X;
+    double direction = 1.0;
+};
+
+std::optional<ViewCubeRotationCommand> ViewCubeRotation(ViewCubeFace face)
+{
+    switch (face) {
+    case ViewCubeFace::WorldXNegative: return ViewCubeRotationCommand{false, ViewRotationAxis::X, -1.0};
+    case ViewCubeFace::WorldXPositive: return ViewCubeRotationCommand{false, ViewRotationAxis::X, 1.0};
+    case ViewCubeFace::WorldYNegative: return ViewCubeRotationCommand{false, ViewRotationAxis::Y, -1.0};
+    case ViewCubeFace::WorldYPositive: return ViewCubeRotationCommand{false, ViewRotationAxis::Y, 1.0};
+    case ViewCubeFace::WorldZNegative: return ViewCubeRotationCommand{false, ViewRotationAxis::Z, -1.0};
+    case ViewCubeFace::WorldZPositive: return ViewCubeRotationCommand{false, ViewRotationAxis::Z, 1.0};
+    case ViewCubeFace::RelativeXNegative: return ViewCubeRotationCommand{true, ViewRotationAxis::X, -1.0};
+    case ViewCubeFace::RelativeXPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::X, 1.0};
+    case ViewCubeFace::RelativeYNegative: return ViewCubeRotationCommand{true, ViewRotationAxis::Y, -1.0};
+    case ViewCubeFace::RelativeYPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::Y, 1.0};
+    case ViewCubeFace::RelativeZNegative: return ViewCubeRotationCommand{true, ViewRotationAxis::Z, -1.0};
+    case ViewCubeFace::RelativeZPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::Z, 1.0};
+    default: return std::nullopt;
+    }
+}
+
+QString RotationAxisName(ViewRotationAxis axis)
+{
+    switch (axis) {
+    case ViewRotationAxis::X: return QStringLiteral("X");
+    case ViewRotationAxis::Y: return QStringLiteral("Y");
+    case ViewRotationAxis::Z: return QStringLiteral("Z");
+    }
+    return {};
 }
 
 double DistanceToSegment(QPointF point, QPointF a, QPointF b)
@@ -922,40 +1028,60 @@ void CadViewport::SetCornerView(Vector3 direction)
     update();
 }
 
-void CadViewport::RotateViewYaw(double angleRadians)
+void CadViewport::RotateViewAroundWorldAxis(ViewRotationAxis axis, double angleRadians)
 {
     if (!std::isfinite(angleRadians)) {
         return;
     }
     const auto basis = CurrentViewBasis();
-    const Vector3 worldUp{0.0, 0.0, 1.0};
+    const Vector3 rotationAxis = axis == ViewRotationAxis::X ? Vector3{1.0, 0.0, 0.0}
+        : axis == ViewRotationAxis::Y ? Vector3{0.0, 1.0, 0.0}
+                                      : Vector3{0.0, 0.0, 1.0};
     alignedViewBasis_ = std::array<Vector3, 3>{
-        RotateVectorAroundAxis(basis[0], worldUp, angleRadians).Normalized(),
-        RotateVectorAroundAxis(basis[1], worldUp, angleRadians).Normalized(),
-        RotateVectorAroundAxis(basis[2], worldUp, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[0], rotationAxis, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[1], rotationAxis, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[2], rotationAxis, angleRadians).Normalized(),
     };
     rollRadians_ = 0.0;
     update();
 }
 
-void CadViewport::RollView(double angleRadians)
+void CadViewport::RotateViewAroundRelativeAxis(ViewRotationAxis axis, double angleRadians)
 {
     if (!std::isfinite(angleRadians)) {
         return;
     }
     const auto basis = CurrentViewBasis();
+    const Vector3 rotationAxis = axis == ViewRotationAxis::X ? basis[1]
+        : axis == ViewRotationAxis::Y ? basis[2]
+                                      : basis[0];
     alignedViewBasis_ = std::array<Vector3, 3>{
-        basis[0],
-        RotateVectorAroundAxis(basis[1], basis[0], angleRadians).Normalized(),
-        RotateVectorAroundAxis(basis[2], basis[0], angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[0], rotationAxis, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[1], rotationAxis, angleRadians).Normalized(),
+        RotateVectorAroundAxis(basis[2], rotationAxis, angleRadians).Normalized(),
     };
     rollRadians_ = 0.0;
     update();
+}
+
+void CadViewport::RotateViewYaw(double angleRadians)
+{
+    RotateViewAroundWorldAxis(ViewRotationAxis::Z, angleRadians);
+}
+
+void CadViewport::RollView(double angleRadians)
+{
+    RotateViewAroundRelativeAxis(ViewRotationAxis::Z, angleRadians);
 }
 
 Vector3 CadViewport::ViewDirection() const
 {
     return CurrentViewBasis()[0];
+}
+
+Vector3 CadViewport::ViewRightDirection() const
+{
+    return CurrentViewBasis()[1];
 }
 
 Vector3 CadViewport::ViewUpDirection() const
@@ -2911,13 +3037,52 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
         }
     }
-    painter.drawText(QRect(14, 12, std::max(80, width() - 150), 24), Qt::AlignLeft, modeText);
+    painter.drawText(QRect(14, 12, std::max(80, width() - 270), 24), Qt::AlignLeft, modeText);
 
     const ViewCubeGeometry cube = MakeViewCubeGeometry(width(), CurrentViewBasis());
     painter.save();
     QFont cubeFont = painter.font();
     cubeFont.setPointSizeF(std::max(7.0, cubeFont.pointSizeF() - 1.0));
     painter.setFont(cubeFont);
+    const auto drawAxisRotationButton = [&](const QRectF& area, ViewCubeFace face, bool clockwise) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
+        const QColor stroke = hovered ? QColor("#075f69") : QColor("#40515a");
+        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#f7f9f9"));
+        painter.setPen(QPen(hovered ? QColor("#087780") : QColor("#9aa6ac"), hovered ? 1.8 : 1.0));
+        painter.drawEllipse(area);
+        painter.setBrush(stroke);
+        painter.setPen(QPen(stroke, 1.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        const QRectF arc = area.adjusted(4.0, 4.0, -4.0, -4.0);
+        painter.drawArc(arc, clockwise ? 35 * 16 : 145 * 16, clockwise ? -230 * 16 : 230 * 16);
+        QPolygonF head;
+        if (clockwise) {
+            head << QPointF(area.right() - 3.0, area.bottom() - 4.0)
+                 << QPointF(area.right() - 7.0, area.bottom() - 4.0)
+                 << QPointF(area.right() - 4.0, area.bottom() - 8.0);
+        } else {
+            head << QPointF(area.left() + 3.0, area.bottom() - 4.0)
+                 << QPointF(area.left() + 7.0, area.bottom() - 4.0)
+                 << QPointF(area.left() + 4.0, area.bottom() - 8.0);
+        }
+        painter.drawPolygon(head);
+    };
+    const auto drawAxisPanel = [&](const QRectF& panel, const QString& title,
+                                   const std::vector<ViewCubeAxisRotationGeometry>& axes) {
+        painter.setBrush(QColor(250, 252, 252, 232));
+        painter.setPen(QPen(QColor("#a7b1b6"), 1.0));
+        painter.drawRoundedRect(panel, 3.0, 3.0);
+        painter.setPen(QColor("#46555d"));
+        painter.drawText(QRectF(panel.left(), panel.top() + 1.0, panel.width(), 18.0),
+            Qt::AlignCenter, title);
+        for (const ViewCubeAxisRotationGeometry& axis : axes) {
+            drawAxisRotationButton(axis.negativeArea, axis.negativeFace, false);
+            drawAxisRotationButton(axis.positiveArea, axis.positiveFace, true);
+            painter.setPen(axis.color);
+            painter.drawText(axis.labelArea, Qt::AlignCenter, axis.label);
+        }
+    };
+    drawAxisPanel(cube.worldAxesPanel, QStringLiteral("絶対"), cube.worldAxes);
+    drawAxisPanel(cube.relativeAxesPanel, QStringLiteral("相対"), cube.relativeAxes);
     for (const ViewCubeFaceGeometry& face : cube.faces) {
         const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face.face);
         painter.setBrush(hovered ? face.color.lighter(118) : face.color);
@@ -3347,7 +3512,13 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
                 : CanDragViewCube(hoveredCubeFace) ? Qt::OpenHandCursor
                 : Qt::PointingHandCursor);
         QString tooltip;
-        switch (hoveredCubeFace) {
+        if (const auto rotation = ViewCubeRotation(hoveredCubeFace); rotation.has_value()) {
+            tooltip = QStringLiteral("%1%2軸を%3方向へ15°回転（Shiftで5°）")
+                .arg(rotation->relative ? QStringLiteral("相対") : QStringLiteral("絶対"))
+                .arg(RotationAxisName(rotation->axis))
+                .arg(rotation->direction > 0.0 ? QStringLiteral("+") : QStringLiteral("-"));
+        } else {
+            switch (hoveredCubeFace) {
         case ViewCubeFace::Top:
             tooltip = QStringLiteral("上面へ正対。ドラッグで自由回転");
             break;
@@ -3385,19 +3556,22 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             tooltip = QStringLiteral("角へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::OrbitLeft:
-            tooltip = QStringLiteral("視点を左へ15°回転");
+            tooltip = QStringLiteral("絶対Z軸を-方向へ15°回転（Shiftで5°）");
             break;
         case ViewCubeFace::OrbitRight:
-            tooltip = QStringLiteral("視点を右へ15°回転");
+            tooltip = QStringLiteral("絶対Z軸を+方向へ15°回転（Shiftで5°）");
             break;
         case ViewCubeFace::RollLeft:
-            tooltip = QStringLiteral("画面を左へ90°回転");
+            tooltip = QStringLiteral("相対Z軸を-方向へ15°回転（Shiftで5°）");
             break;
         case ViewCubeFace::RollRight:
-            tooltip = QStringLiteral("画面を右へ90°回転");
+            tooltip = QStringLiteral("相対Z軸を+方向へ15°回転（Shiftで5°）");
             break;
         case ViewCubeFace::None:
             break;
+        default:
+            break;
+            }
         }
         setToolTip(tooltip);
         update();
@@ -3465,8 +3639,18 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
             const ViewCubeFace releasedFace = HitViewCube(
                 MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position());
             if (releasedFace == face) {
+                const double stepRadians = (event->modifiers().testFlag(Qt::ShiftModifier) ? 5.0 : 15.0)
+                    * std::numbers::pi / 180.0;
                 if (const auto direction = ViewCubeDirection(face); direction.has_value()) {
                     SetCornerView(*direction);
+                } else if (const auto rotation = ViewCubeRotation(face); rotation.has_value()) {
+                    if (rotation->relative) {
+                        RotateViewAroundRelativeAxis(
+                            rotation->axis, rotation->direction * stepRadians);
+                    } else {
+                        RotateViewAroundWorldAxis(
+                            rotation->axis, rotation->direction * stepRadians);
+                    }
                 } else {
                     switch (face) {
                     case ViewCubeFace::Home:
@@ -3476,16 +3660,16 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                         (void)AlignToSelection();
                         break;
                     case ViewCubeFace::OrbitLeft:
-                        RotateViewYaw(-15.0 * std::numbers::pi / 180.0);
+                        RotateViewYaw(-stepRadians);
                         break;
                     case ViewCubeFace::OrbitRight:
-                        RotateViewYaw(15.0 * std::numbers::pi / 180.0);
+                        RotateViewYaw(stepRadians);
                         break;
                     case ViewCubeFace::RollLeft:
-                        RollView(-std::numbers::pi / 2.0);
+                        RollView(-stepRadians);
                         break;
                     case ViewCubeFace::RollRight:
-                        RollView(std::numbers::pi / 2.0);
+                        RollView(stepRadians);
                         break;
                     default:
                         break;

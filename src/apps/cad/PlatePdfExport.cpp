@@ -60,6 +60,12 @@ PatternBounds MeasurePattern(const PlateFlatPattern& pattern)
     for (const auto& opening : pattern.openings) {
         IncludePath(bounds, opening);
     }
+    for (const auto& fold : pattern.foldLines) {
+        IncludePath(bounds, fold);
+    }
+    for (const auto& cut : pattern.reliefCuts) {
+        IncludePath(bounds, cut);
+    }
     if (!std::isfinite(bounds.minimumX) || bounds.maximumX - bounds.minimumX <= 1.0e-9
         || bounds.maximumY - bounds.minimumY <= 1.0e-9) {
         throw std::invalid_argument("Plate PDF boundary has no measurable area.");
@@ -141,7 +147,12 @@ QPainterPath ToPainterPath(const PlateFlatPatternPath& path, const PatternBounds
     for (std::size_t index = 1; index < path.points.size(); ++index) {
         painterPath.lineTo(mapPoint(path.points[index]));
     }
-    painterPath.closeSubpath();
+    if (path.points.size() > 2
+        && std::hypot(
+            path.points.front().x - path.points.back().x,
+            path.points.front().y - path.points.back().y) <= 1.0e-9) {
+        painterPath.closeSubpath();
+    }
     return painterPath;
 }
 
@@ -337,6 +348,16 @@ void WritePlateFlatPatternPdf(
     for (const auto& opening : pattern.openings) {
         openingPaths.push_back(ToPainterPath(opening, bounds));
     }
+    std::vector<QPainterPath> foldPaths;
+    foldPaths.reserve(pattern.foldLines.size());
+    for (const auto& fold : pattern.foldLines) {
+        foldPaths.push_back(ToPainterPath(fold, bounds));
+    }
+    std::vector<QPainterPath> reliefCutPaths;
+    reliefCutPaths.reserve(pattern.reliefCuts.size());
+    for (const auto& cut : pattern.reliefCuts) {
+        reliefCutPaths.push_back(ToPainterPath(cut, bounds));
+    }
     const auto registrationMarks = RegistrationMarks(layout);
 
     QSaveFile output(path);
@@ -398,6 +419,14 @@ void WritePlateFlatPatternPdf(
                 painter.drawPath(outerPath);
                 for (const QPainterPath& opening : openingPaths) {
                     painter.drawPath(opening);
+                }
+                painter.setPen(QPen(QColor("#d12f3f"), 0.16, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                for (const QPainterPath& cut : reliefCutPaths) {
+                    painter.drawPath(cut);
+                }
+                painter.setPen(QPen(QColor("#4c5963"), 0.1, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+                for (const QPainterPath& fold : foldPaths) {
+                    painter.drawPath(fold);
                 }
                 painter.setPen(QPen(QColor("#4c5963"), 0.1));
                 for (const RegistrationMark& mark : registrationMarks) {

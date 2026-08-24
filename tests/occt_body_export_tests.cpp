@@ -1,4 +1,5 @@
 #include "kachakacha/occt/BodyExport.h"
+#include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Body.h"
 #include "kachakacha/model/Surface.h"
@@ -21,6 +22,7 @@ using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Project;
 using kachakacha::model::Surface;
 using kachakacha::model::Wire;
+using kachakacha::model::WorkPlane;
 
 namespace {
 
@@ -124,18 +126,42 @@ int main(int argc, char** argv)
             {10.0, 5.0, 2.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0));
         flatPlateProject.AddProjectedWire(
             "flat_hole", "flat_hole_plan", "flat_surface", {0.0, 0.0, -1.0});
+        flatPlateProject.AddWire("flat_relief_plan", Wire::Line(
+            {0.0, 5.0, 2.0}, {8.0, 5.0, 2.0}));
+        flatPlateProject.AddProjectedWire(
+            "flat_relief", "flat_relief_plan", "flat_surface", {0.0, 0.0, -1.0});
         flatPlateProject.AddPlate(
-            "flat_plate", "flat_surface", 0.8,
+            "flat_plate", "flat_surface", 0.8, 1.2,
             PlateThicknessDirection::Positive, "styrene");
         flatPlateProject.AddPlateOpening("flat_plate", "flat_hole");
+        flatPlateProject.AddPlateReliefCut("flat_plate", "flat_relief");
         const auto flatPlateAnalysis = kachakacha::occt::AnalyzeModelShape(
             flatPlateProject, {{"flat_plate"}, {}}, 0.5);
         if (!flatPlateAnalysis.validBRep || !flatPlateAnalysis.closedSolid
             || !flatPlateAnalysis.meetsMinimumWall
-            || flatPlateAnalysis.plateCount != 1) {
+            || flatPlateAnalysis.plateCount != 1
+            || !flatPlateProject.Plates().front().plate.HasVariableThickness()) {
             throw std::runtime_error(
                 "Opened planar plate did not produce a closed solid: "
                 + flatPlateAnalysis.message);
+        }
+
+        const auto flatPattern = kachakacha::io::BuildPlateFlatPattern(
+            flatPlateProject, flatPlateProject.Plates().front());
+        const auto developedResult = kachakacha::io::AddPlateFlatPatternModel(
+            flatPlateProject,
+            flatPlateProject.Plates().front(),
+            flatPattern,
+            WorkPlane::FromPointNormal({0.0, 0.0, 20.0}, {0.0, 0.0, 1.0}),
+            "developed_flat",
+            0.2);
+        const auto developedAnalysis = kachakacha::occt::AnalyzeModelShape(
+            flatPlateProject, {{developedResult.plateName}, {}}, 0.2);
+        if (!developedAnalysis.validBRep || !developedAnalysis.closedSolid
+            || developedAnalysis.plateCount != 1 || developedAnalysis.volumeCubicMillimeters <= 1.0) {
+            throw std::runtime_error(
+                "Developed plate with a relief slot did not produce a closed solid: "
+                + developedAnalysis.message);
         }
 
         std::ifstream acceptanceInput(argv[2]);

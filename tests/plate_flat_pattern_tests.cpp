@@ -11,6 +11,7 @@
 
 using kachakacha::geometry::Vector2;
 using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::PlateFlatPattern;
@@ -21,6 +22,7 @@ using kachakacha::model::PlateSplitAxis;
 using kachakacha::model::PlateThicknessDirection;
 using kachakacha::model::Project;
 using kachakacha::model::Wire;
+using kachakacha::model::WorkPlane;
 
 namespace {
 
@@ -60,10 +62,13 @@ Project MakePlanarProject()
     }));
     project.AddWire("light_plan", Wire::Circle(
         {10.0, 5.0, 5.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 2.0));
+    project.AddWire("relief_plan", Wire::Line({0.0, 5.0, 5.0}, {8.0, 5.0, 5.0}));
     project.AddPlanarSurface("panel", "outline");
     project.AddProjectedWire("light_on_panel", "light_plan", "panel", {0.0, 0.0, -1.0});
+    project.AddProjectedWire("relief_on_panel", "relief_plan", "panel", {0.0, 0.0, -1.0});
     project.AddPlate("panel_plate", "panel", 0.5, PlateThicknessDirection::Centered, "styrene");
     project.AddPlateOpening("panel_plate", "light_on_panel");
+    project.AddPlateReliefCut("panel_plate", "relief_on_panel");
     return project;
 }
 
@@ -97,18 +102,37 @@ int main(int argc, char* argv[])
         Require(planar.analysis.MaximumEstimatedErrorMillimeters() <= 1.0e-12, "planar pattern has zero estimated error");
         Require(planar.openings.size() == 1 && planar.openings.front().points.size() > 40,
             "planar light opening is exported");
+        Require(planar.reliefCuts.size() == 1 && planar.reliefCuts.front().points.size() >= 2,
+            "manual planar relief cut is exported");
 
         std::ostringstream svg;
         WritePlateFlatPatternSvg(svg, planar);
         Require(svg.str().find("width=\"30.000000mm\"") != std::string::npos, "flat SVG preserves 1:1 millimeter width");
         Require(svg.str().find("CUT_OUTER") != std::string::npos, "flat SVG has outer cutting layer");
         Require(svg.str().find("CUT_OPENING") != std::string::npos, "flat SVG has opening cutting layer");
+        Require(svg.str().find("RELIEF_CUT") != std::string::npos, "flat SVG has relief cutting layer");
+        Require(svg.str().find("FOLD") != std::string::npos, "flat SVG has fold layer");
 
         std::ostringstream dxf;
         WritePlateFlatPatternDxf(dxf, planar);
         Require(dxf.str().find("$INSUNITS\n70\n4") != std::string::npos, "flat DXF declares millimeters");
         Require(dxf.str().find("CUT_OUTER") != std::string::npos, "flat DXF has outer cutting layer");
         Require(dxf.str().find("CUT_OPENING") != std::string::npos, "flat DXF has opening cutting layer");
+        Require(dxf.str().find("RELIEF_CUT") != std::string::npos, "flat DXF has relief cutting layer");
+
+        Project developedProject = planarProject;
+        const auto flatModel = AddPlateFlatPatternModel(
+            developedProject,
+            planarProject.Plates().front(),
+            planar,
+            WorkPlane::FromPointNormal({0.0, 0.0, 20.0}, {0.0, 0.0, 1.0}),
+            "developed_test",
+            0.2);
+        Require(developedProject.FindPlate(flatModel.plateName).has_value(),
+            "flat pattern creates a 3D plate model");
+        Require(!flatModel.reliefCutWireNames.empty(), "flat pattern creates editable relief-cut wires");
+        Require(flatModel.openingWireNames.size() == 2,
+            "flat pattern creates original opening and physical relief slot");
 
         Project cylinderProject = MakeCylinderProject();
         const PlateFlatPattern cylinder = BuildPlateFlatPattern(cylinderProject, cylinderProject.Plates().front());
@@ -136,11 +160,18 @@ int main(int argc, char* argv[])
         twisted.AddWire("second", Wire::Line({10.0, -5.0, -4.0}, {10.0, 5.0, 4.0}));
         twisted.AddRuledSurface("twisted", "first", "second");
         twisted.AddPlate("twisted_plate", "twisted", 0.5, PlateThicknessDirection::Centered, "styrene");
-        const PlateFlatPattern twistedPattern = BuildPlateFlatPattern(twisted, twisted.Plates().front());
+        PlateFlatPatternOptions twistedOptions;
+        twistedOptions.includeAutomaticReliefCuts = true;
+        twistedOptions.foldSpacingMillimeters = 2.0;
+        twistedOptions.minimumFoldAngleDegrees = 0.1;
+        const PlateFlatPattern twistedPattern = BuildPlateFlatPattern(
+            twisted, twisted.Plates().front(), twistedOptions);
         Require(twistedPattern.analysis.classification == PlateDevelopability::DoubleCurved,
             "double-curved sheet remains an explicit warning case");
         Require(std::isfinite(twistedPattern.analysis.MaximumEstimatedErrorMillimeters()),
             "double-curved development reports a finite error");
+        Require(!twistedPattern.foldLines.empty(), "curved development creates fold wires");
+        Require(!twistedPattern.reliefCuts.empty(), "double-curved development creates automatic relief cuts");
 
         if (argc >= 2) {
             std::ifstream sampleInput(argv[1]);

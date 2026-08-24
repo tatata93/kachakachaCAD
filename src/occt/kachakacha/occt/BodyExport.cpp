@@ -377,13 +377,48 @@ const model::NamedWire& RequireOpeningWire(
     return *position;
 }
 
+TopoDS_Shape BuildVariablePlanarPlateShape(const model::NamedPlate& namedPlate)
+{
+    const model::Plate& plate = namedPlate.plate;
+    const model::Surface& surface = plate.SourceSurface();
+    const geometry::Vector3 normal = surface.Normal(0.5, 0.5);
+    std::vector<geometry::Vector3> minimumLayer;
+    std::vector<geometry::Vector3> maximumLayer;
+    minimumLayer.reserve(129);
+    maximumLayer.reserve(129);
+    for (int index = 0; index <= 128; ++index) {
+        const geometry::Vector3 sourcePoint = surface.FirstBoundary().Evaluate(
+            static_cast<double>(index) / 128.0);
+        const model::SurfaceProjection projection = surface.ProjectPointAlongDirection(
+            sourcePoint + normal, normal * -1.0, kModelTolerance * 10.0);
+        const double localV = (projection.v - plate.Range().minimumV)
+            / (plate.Range().maximumV - plate.Range().minimumV);
+        minimumLayer.push_back(sourcePoint + normal * plate.MinimumOffset(localV));
+        maximumLayer.push_back(sourcePoint + normal * plate.MaximumOffset(localV));
+    }
+    minimumLayer.back() = minimumLayer.front();
+    maximumLayer.back() = maximumLayer.front();
+
+    BRepOffsetAPI_ThruSections loft(true, true, kModelTolerance);
+    loft.AddWire(BuildPolylineLoop(minimumLayer));
+    loft.AddWire(BuildPolylineLoop(maximumLayer));
+    loft.Build();
+    if (!loft.IsDone() || loft.Shape().IsNull()) {
+        throw std::runtime_error("Could not build variable-thickness planar plate: " + namedPlate.name);
+    }
+    return loft.Shape();
+}
+
 TopoDS_Shape BuildPlateShape(
     const model::Project& project,
     const model::NamedPlate& namedPlate)
 {
     const model::Plate& plate = namedPlate.plate;
     TopoDS_Shape shape;
-    if (plate.SourceSurface().Kind() == model::SurfaceKind::Planar) {
+    if (plate.SourceSurface().Kind() == model::SurfaceKind::Planar
+        && plate.HasVariableThickness()) {
+        shape = BuildVariablePlanarPlateShape(namedPlate);
+    } else if (plate.SourceSurface().Kind() == model::SurfaceKind::Planar) {
         std::vector<geometry::Vector3> boundary;
         boundary.reserve(129);
         const model::Wire& sourceBoundary = plate.SourceSurface().FirstBoundary();

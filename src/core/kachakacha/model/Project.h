@@ -132,6 +132,7 @@ struct NamedPlate {
     std::string material;
     std::vector<std::string> openingWireNames;
     bool visible = true;
+    std::vector<std::string> reliefCutWireNames;
 };
 
 struct NamedBody {
@@ -230,6 +231,8 @@ public:
         std::string secondName);
     void AddPlateOpening(std::string_view plateName, std::string wireName);
     void RemovePlateOpening(std::string_view plateName, std::string_view wireName);
+    void AddPlateReliefCut(std::string_view plateName, std::string wireName);
+    void RemovePlateReliefCut(std::string_view plateName, std::string_view wireName);
     bool RemoveWorkPlane(std::string_view name);
     bool RemoveWire(std::string_view name);
     bool RemoveSurface(std::string_view name);

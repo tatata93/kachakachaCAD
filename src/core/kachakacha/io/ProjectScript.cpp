@@ -731,6 +731,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlateOpening(plateName, wireName);
+            } else if (command == "plate_relief_cut") {
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string wireName = ReadName(stream, sourceName, lineNumber, "relief-cut wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlateReliefCut(plateName, wireName);
             } else if (command == "wire_plate_offset") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "offset wire");
                 const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source wire");
@@ -1087,6 +1092,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         for (const std::string& openingWireName : namedPlate.openingWireNames) {
             RequireScriptNameSafe(openingWireName, "Plate opening wire");
             output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
+        }
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        for (const std::string& cutWireName : namedPlate.reliefCutWireNames) {
+            RequireScriptNameSafe(cutWireName, "Plate relief-cut wire");
+            output << "plate_relief_cut " << namedPlate.name << ' ' << cutWireName << '\n';
         }
     }
     for (const auto& namedWire : project.Wires()) {

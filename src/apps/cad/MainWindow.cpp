@@ -72,6 +72,7 @@
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::BuildPlateFlatPattern;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::WireLiesOnWorkPlane;
@@ -1610,6 +1611,26 @@ QWidget* MainWindow::BuildSurfacePanel()
     openingButtonLayout->addWidget(removeOpeningButton, 1);
     layout->addWidget(openingButtons);
 
+    auto* reliefTitle = new QLabel(QStringLiteral("展開時の切れ目"));
+    reliefTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(reliefTitle);
+    plateReliefSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
+    plateReliefSelectionLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(plateReliefSelectionLabel_);
+    auto* reliefButtons = new QWidget;
+    auto* reliefButtonLayout = new QHBoxLayout(reliefButtons);
+    reliefButtonLayout->setContentsMargins(0, 0, 0, 0);
+    reliefButtonLayout->setSpacing(6);
+    auto* addReliefButton = new QPushButton(QStringLiteral("切れ目に追加"));
+    addReliefButton->setObjectName("primaryButton");
+    addReliefButton->setToolTip(QStringLiteral("板材と、その面へ投影した開いた線を3D画面で選択"));
+    auto* removeReliefButton = new QPushButton(QStringLiteral("切れ目から外す"));
+    connect(addReliefButton, &QPushButton::clicked, this, &MainWindow::AddSelectedPlateReliefCuts);
+    connect(removeReliefButton, &QPushButton::clicked, this, &MainWindow::RemoveSelectedPlateReliefCuts);
+    reliefButtonLayout->addWidget(addReliefButton, 1);
+    reliefButtonLayout->addWidget(removeReliefButton, 1);
+    layout->addWidget(reliefButtons);
+
     auto* splitTitle = new QLabel(QStringLiteral("板材を分割"));
     splitTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(splitTitle);
@@ -1715,6 +1736,7 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(separator);
 
     auto* plateTitle = new QLabel(QStringLiteral("選択板材の1:1展開図"));
+    plateTitle->setProperty("manualAnchor", QStringLiteral("plateFlatPattern"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(plateTitle);
 
@@ -1722,6 +1744,40 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternSummary_->setWordWrap(true);
     plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
     layout->addWidget(plateFlatPatternSummary_);
+
+    auto* flatModelForm = new QFormLayout;
+    flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
+    plateFlatPatternPlane_ = new QComboBox;
+    plateFlatPatternAutoRelief_ = new QCheckBox(QStringLiteral("二方向曲面へ自動切れ目"));
+    plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
+    plateFlatPatternFoldSpacing_ = MakePositiveField(8.0);
+    plateFlatPatternFoldSpacing_->setRange(1.0, 100.0);
+    plateFlatPatternFoldSpacing_->setSuffix(QStringLiteral(" mm"));
+    plateFlatPatternReliefDepth_ = MakePositiveField(45.0);
+    plateFlatPatternReliefDepth_->setRange(5.0, 90.0);
+    plateFlatPatternReliefDepth_->setDecimals(0);
+    plateFlatPatternReliefDepth_->setSuffix(QStringLiteral(" %"));
+    plateFlatPatternCutWidth_ = MakePositiveField(0.2);
+    plateFlatPatternCutWidth_->setRange(0.05, 3.0);
+    plateFlatPatternCutWidth_->setDecimals(2);
+    plateFlatPatternCutWidth_->setSingleStep(0.05);
+    plateFlatPatternCutWidth_->setSuffix(QStringLiteral(" mm"));
+    flatModelForm->addRow(QStringLiteral("展開部材名"), plateFlatPatternName_);
+    flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
+    flatModelForm->addRow(plateFlatPatternAutoRelief_);
+    flatModelForm->addRow(QStringLiteral("折り線間隔"), plateFlatPatternFoldSpacing_);
+    flatModelForm->addRow(QStringLiteral("切れ目の深さ"), plateFlatPatternReliefDepth_);
+    flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
+    layout->addLayout(flatModelForm);
+
+    auto* createFlatModelButton = new QPushButton(QStringLiteral("展開ワイヤー＋3D板を作成"));
+    createFlatModelButton->setObjectName("primaryButton");
+    createFlatModelButton->setProperty("plateFlatPatternModelAction", true);
+    createFlatModelButton->setToolTip(QStringLiteral("選択板材を配置平面へ展開し、編集可能な線と厚み付き板を作成"));
+    connect(createFlatModelButton, &QPushButton::clicked,
+        this, &MainWindow::CreateSelectedPlateFlatPatternModel);
+    layout->addWidget(createFlatModelButton);
 
     auto* pdfForm = new QFormLayout;
     pdfForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -1752,6 +1808,9 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternFoldSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternReliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     layout->addWidget(platePdfButton);
     layout->addWidget(plateSvgButton);
     layout->addWidget(plateDxfButton);
@@ -1788,7 +1847,11 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(bodyStlButton);
     layout->addWidget(bodyStepButton);
     layout->addStretch(1);
-    return panel;
+    auto* scrollArea = new QScrollArea;
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidget(panel);
+    return scrollArea;
 }
 
 QWidget* MainWindow::BuildInfoPanel()
@@ -2227,8 +2290,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             QWidget* content = area->widget();
             QScrollBar* scroll = area->verticalScrollBar();
             const int anchorTop = (*anchor)->mapTo(content, QPoint(0, 0)).y();
-            const int centeredValue = anchorTop - area->viewport()->height() / 2;
-            scroll->setValue(std::clamp(centeredValue, scroll->minimum(), scroll->maximum()));
+            const int sectionTopValue = anchorTop - 12;
+            scroll->setValue(std::clamp(sectionTopValue, scroll->minimum(), scroll->maximum()));
             QApplication::processEvents();
         } else {
             qWarning() << "manual screenshot anchor not found:" << anchorName;
@@ -2379,6 +2442,16 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(5, 1.0);
         finalRevealTab = 5;
         finalRevealAnchor = QStringLiteral("plateSplit");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("flat-pattern")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        plateFlatPatternAutoRelief_->setChecked(true);
+        showTab(6, 0.45);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("plateFlatPattern");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("output")) {
@@ -2640,11 +2713,27 @@ bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlat
         QMessageBox::Cancel) == QMessageBox::Yes;
 }
 
+PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
+{
+    PlateFlatPatternOptions options;
+    if (plateFlatPatternAutoRelief_ != nullptr) {
+        options.includeAutomaticReliefCuts = plateFlatPatternAutoRelief_->isChecked();
+    }
+    if (plateFlatPatternFoldSpacing_ != nullptr) {
+        options.foldSpacingMillimeters = plateFlatPatternFoldSpacing_->value();
+    }
+    if (plateFlatPatternReliefDepth_ != nullptr) {
+        options.reliefCutDepthRatio = plateFlatPatternReliefDepth_->value() / 100.0;
+    }
+    return options;
+}
+
 void MainWindow::ExportSelectedPlate(bool dxf)
 {
     try {
         const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
-        const auto pattern = BuildPlateFlatPattern(project_, plate);
+        const PlateFlatPatternOptions flatOptions = PlateFlatPatternOptionsFromUi();
+        const auto pattern = BuildPlateFlatPattern(project_, plate, flatOptions);
         if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
             return;
         }
@@ -2675,17 +2764,19 @@ void MainWindow::ExportSelectedPlate(bool dxf)
         if (dxf) {
             WritePlateFlatPatternDxf(output, pattern);
         } else {
-            WritePlateFlatPatternSvg(output, pattern);
+            WritePlateFlatPatternSvg(output, pattern, flatOptions);
         }
         output.close();
         if (!output) {
             throw std::runtime_error("出力ファイルの保存に失敗しました。");
         }
         plateFlatPatternSummary_->setText(
-            QStringLiteral("%1 | 最大推定ずれ %2 mm | 開口 %3個 | 保存済み: %4")
+            QStringLiteral("%1 | 最大推定ずれ %2 mm | 開口 %3個 | 折り線 %4本 | 切れ目 %5本 | 保存済み: %6")
                 .arg(ToQString(plate.name))
                 .arg(estimatedError, 0, 'f', 3)
                 .arg(pattern.openings.size())
+                .arg(pattern.foldLines.size())
+                .arg(pattern.reliefCuts.size())
                 .arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("板材の1:1展開図を保存しました: %1").arg(path), 5000);
     } catch (const std::exception& error) {
@@ -2697,7 +2788,7 @@ void MainWindow::ExportSelectedPlatePdf()
 {
     try {
         const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
-        const auto pattern = BuildPlateFlatPattern(project_, plate);
+        const auto pattern = BuildPlateFlatPattern(project_, plate, PlateFlatPatternOptionsFromUi());
         if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
             return;
         }
@@ -2736,6 +2827,70 @@ void MainWindow::ExportSelectedPlatePdf()
                 .arg(pdfLayout.PageCount()),
             5000);
     } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreateSelectedPlateFlatPatternModel()
+{
+    try {
+        const int sourceIndex = SelectedPlateIndexForExport();
+        const auto sourcePlate = project_.Plates()[sourceIndex];
+        const PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
+        const auto pattern = BuildPlateFlatPattern(project_, sourcePlate, options);
+        if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
+            return;
+        }
+        if (plateFlatPatternPlane_ == nullptr || plateFlatPatternPlane_->currentText().isEmpty()) {
+            throw std::invalid_argument("展開部材を配置する作業平面を選択してください。");
+        }
+        const std::optional<WorkPlane> targetPlane = project_.FindWorkPlane(
+            ToName(plateFlatPatternPlane_->currentText()));
+        if (!targetPlane.has_value()) {
+            throw std::invalid_argument("展開部材の配置平面が見つかりません。");
+        }
+        const std::string prefix = ToName(plateFlatPatternName_->text().trimmed());
+        if (prefix.empty()) {
+            throw std::invalid_argument("展開部材名を入力してください。");
+        }
+
+        Project candidate = project_;
+        const auto result = AddPlateFlatPatternModel(
+            candidate,
+            sourcePlate,
+            pattern,
+            *targetPlane,
+            prefix,
+            plateFlatPatternCutWidth_->value());
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(true);
+        const auto platePosition = std::find_if(
+            project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
+                return plate.name == result.plateName;
+            });
+        if (platePosition != project_.Plates().end()) {
+            UpdateSelection({
+                CadSelectionKind::Plate,
+                static_cast<int>(std::distance(project_.Plates().begin(), platePosition))}, true);
+        }
+        plateFlatPatternName_->setText(SuggestedDirectGroupName(QStringLiteral("developed")));
+        plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("%1を作成 | 外周1 | 開口%2 | 折り線%3 | 切れ目%4 | 3D板あり")
+                .arg(ToQString(result.plateName))
+                .arg(pattern.openings.size())
+                .arg(result.foldWireNames.size())
+                .arg(result.reliefCutWireNames.size()));
+        statusBar()->showMessage(
+            QStringLiteral("展開ワイヤーと厚み付き3D板を作成しました: %1")
+                .arg(ToQString(result.plateName)),
+            5000);
+    } catch (const std::exception& error) {
+        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
+        plateFlatPatternSummary_->setText(QStringLiteral("展開部材を作成できません: %1")
+            .arg(QString::fromUtf8(error.what())));
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
 }
@@ -5057,6 +5212,84 @@ void MainWindow::RemoveSelectedPlateOpenings()
     }
 }
 
+void MainWindow::AddSelectedPlateReliefCuts()
+{
+    try {
+        const std::vector<CadSelection> selections = viewport_->Selections();
+        int plateIndex = -1;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : selections) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                if (plateIndex >= 0 && plateIndex != selection.index) {
+                    throw std::invalid_argument("切れ目を設定する板材は1枚だけ選択してください。");
+                }
+                plateIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (plateIndex < 0 || wireIndices.empty()) {
+            throw std::invalid_argument("板材1枚と、その面へ投影した切れ目ワイヤーを選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = candidate.Plates()[plateIndex].name;
+        for (int wireIndex : wireIndices) {
+            candidate.AddPlateReliefCut(plateName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(
+            QStringLiteral("展開用の手動切れ目を%1本追加しました").arg(wireIndices.size()), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::RemoveSelectedPlateReliefCuts()
+{
+    try {
+        const std::vector<CadSelection> selections = viewport_->Selections();
+        int plateIndex = -1;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : selections) {
+            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Plates().size())) {
+                if (plateIndex >= 0 && plateIndex != selection.index) {
+                    throw std::invalid_argument("切れ目を外す板材は1枚だけ選択してください。");
+                }
+                plateIndex = selection.index;
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (plateIndex < 0 || wireIndices.empty()) {
+            throw std::invalid_argument("板材1枚と、切れ目から外すワイヤーを選択してください。");
+        }
+
+        Project candidate = project_;
+        const std::string plateName = candidate.Plates()[plateIndex].name;
+        for (int wireIndex : wireIndices) {
+            candidate.RemovePlateReliefCut(plateName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(
+            QStringLiteral("展開用の切れ目から%1本外しました").arg(wireIndices.size()), 3500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::SplitSelectedPlate()
 {
     try {
@@ -6335,8 +6568,16 @@ bool MainWindow::RunCreationSelfTest()
         const auto pdfButton = std::find_if(buttons.begin(), buttons.end(), [](const QPushButton* button) {
             return button->property("platePdfAction").toBool();
         });
+        const auto flatModelButton = std::find_if(buttons.begin(), buttons.end(), [](const QPushButton* button) {
+            return button->property("plateFlatPatternModelAction").toBool();
+        });
         if (pdfButton == buttons.end()) {
             return fail("plate PDF output button");
+        }
+        if (flatModelButton == buttons.end() || plateFlatPatternAutoRelief_ == nullptr
+            || plateFlatPatternPlane_ == nullptr || plateFlatPatternPlane_->count() == 0
+            || plateFlatPatternCutWidth_ == nullptr) {
+            return fail("flat-pattern wire and 3D plate controls");
         }
         QPushButton* pdfButtonPointer = *pdfButton;
         QTimer::singleShot(0, outputScrollArea, [outputScrollArea, pdfButtonPointer] {
@@ -7235,6 +7476,7 @@ void MainWindow::RefreshPlaneChoices()
     refresh(rotateSourcePlane_);
     refresh(wirePlane_);
     refresh(exportPlane_);
+    refresh(plateFlatPatternPlane_);
     refresh(projectionPlane_);
 
     if (activePlaneCombo_ != nullptr) {
@@ -7388,7 +7630,7 @@ void MainWindow::RefreshExportSummary()
     }
 
     try {
-        PlateFlatPatternOptions previewOptions;
+        PlateFlatPatternOptions previewOptions = PlateFlatPatternOptionsFromUi();
         previewOptions.uSegments = 48;
         previewOptions.vSegments = 16;
         previewOptions.openingSamples = 48;
@@ -7408,10 +7650,12 @@ void MainWindow::RefreshExportSummary()
             || pattern.analysis.MaximumEstimatedErrorMillimeters() > 0.1;
         plateFlatPatternSummary_->setStyleSheet(warning ? "color: #a32734;" : "color: #35664a;");
         plateFlatPatternSummary_->setText(
-            QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4個 | PDF %5ページ")
+            QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4 | 折り線 %5 | 切れ目 %6 | PDF %7ページ")
                 .arg(ToQString(namedPlate.name), shape)
                 .arg(pattern.analysis.MaximumEstimatedErrorMillimeters(), 0, 'f', 3)
                 .arg(namedPlate.openingWireNames.size())
+                .arg(pattern.foldLines.size())
+                .arg(pattern.reliefCuts.size())
                 .arg(pdfLayout.PageCount()));
     } catch (const std::exception& error) {
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
@@ -7537,6 +7781,11 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         plateOpeningSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 閉じた投影輪郭%2本")
                 .arg(selectedPlateCount)
                 .arg(selectedClosedProjectedWireCount));
+    }
+    if (plateReliefSelectionLabel_ != nullptr) {
+        plateReliefSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 投影ワイヤー%2本")
+                .arg(selectedPlateCount)
+                .arg(selectedProjectedWireCount));
     }
     if (plateOffsetSelectionLabel_ != nullptr) {
         plateOffsetSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 投影ワイヤー%2本")
@@ -7708,6 +7957,16 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         if (openings.isEmpty()) {
             openings = QStringLiteral("なし");
         }
+        QString reliefCuts;
+        for (const std::string& cutName : named.reliefCutWireNames) {
+            if (!reliefCuts.isEmpty()) {
+                reliefCuts += QStringLiteral(" / ");
+            }
+            reliefCuts += ToQString(cutName);
+        }
+        if (reliefCuts.isEmpty()) {
+            reliefCuts = QStringLiteral("なし");
+        }
         const auto& range = named.plate.Range();
         const QString rangeText = QStringLiteral("断面内 %1-%2% / 長手 %3-%4%")
             .arg(range.minimumU * 100.0, 0, 'f', 1)
@@ -7719,7 +7978,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             ? QStringLiteral("%1 mm → %2 mm")
                 .arg(named.plate.Thickness()).arg(named.plate.EndThickness())
             : QStringLiteral("%1 mm").arg(named.plate.Thickness());
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元の面: %3<br>板厚: %4<br>厚み方向: %5<br>材質: %6<br>開口: %7<br>部品範囲: %8<br><br>工作判定: %9")
+        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元の面: %3<br>板厚: %4<br>厚み方向: %5<br>材質: %6<br>開口: %7<br>展開切れ目: %8<br>部品範囲: %9<br><br>工作判定: %10")
                 .arg(ToQString(named.name))
                 .arg(plateKind)
                 .arg(ToQString(named.sourceSurfaceName))
@@ -7727,6 +7986,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                 .arg(direction)
                 .arg(material)
                 .arg(openings)
+                .arg(reliefCuts)
                 .arg(rangeText)
                 .arg(forming));
     } else if (selection.kind == CadSelectionKind::Body && selection.index >= 0

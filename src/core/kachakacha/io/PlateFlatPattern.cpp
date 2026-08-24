@@ -53,7 +53,12 @@ void ValidateOptions(const PlateFlatPatternOptions& options)
     if (options.uSegments < 2 || options.uSegments > 2000
         || options.vSegments < 2 || options.vSegments > 2000
         || options.openingSamples < 8 || options.openingSamples > 100000
-        || !std::isfinite(options.marginMillimeters) || options.marginMillimeters < 0.0) {
+        || !std::isfinite(options.marginMillimeters) || options.marginMillimeters < 0.0
+        || !std::isfinite(options.foldSpacingMillimeters) || options.foldSpacingMillimeters <= 0.0
+        || !std::isfinite(options.minimumFoldAngleDegrees)
+        || options.minimumFoldAngleDegrees < 0.0 || options.minimumFoldAngleDegrees > 180.0
+        || !std::isfinite(options.reliefCutDepthRatio)
+        || options.reliefCutDepthRatio <= 0.0 || options.reliefCutDepthRatio >= 1.0) {
         throw std::invalid_argument("Plate flat-pattern options are invalid.");
     }
 }
@@ -255,6 +260,38 @@ public:
         return boundary;
     }
 
+    [[nodiscard]] std::vector<Vector2> ConstantU(
+        double u,
+        double firstV = 0.0,
+        double lastV = 1.0) const
+    {
+        const int samples = std::max(2, static_cast<int>(
+            std::ceil(std::abs(lastV - firstV) * static_cast<double>(vSegments_))));
+        std::vector<Vector2> points;
+        points.reserve(static_cast<std::size_t>(samples) + 1);
+        for (int sample = 0; sample <= samples; ++sample) {
+            const double fraction = static_cast<double>(sample) / samples;
+            points.push_back(Evaluate(u, firstV + (lastV - firstV) * fraction));
+        }
+        return points;
+    }
+
+    [[nodiscard]] std::vector<Vector2> ConstantV(
+        double v,
+        double firstU = 0.0,
+        double lastU = 1.0) const
+    {
+        const int samples = std::max(2, static_cast<int>(
+            std::ceil(std::abs(lastU - firstU) * static_cast<double>(uSegments_))));
+        std::vector<Vector2> points;
+        points.reserve(static_cast<std::size_t>(samples) + 1);
+        for (int sample = 0; sample <= samples; ++sample) {
+            const double fraction = static_cast<double>(sample) / samples;
+            points.push_back(Evaluate(firstU + (lastU - firstU) * fraction, v));
+        }
+        return points;
+    }
+
     [[nodiscard]] double MaximumEdgeDistortion() const noexcept { return maximumEdgeDistortion_; }
     [[nodiscard]] double RootMeanSquareEdgeDistortion() const noexcept { return rmsEdgeDistortion_; }
     [[nodiscard]] double MaximumBoundaryApproximation() const noexcept { return maximumBoundaryApproximation_; }
@@ -440,38 +477,42 @@ std::vector<Vector2> BuildPlanarBoundary(const NamedPlate& namedPlate, int sampl
     return polygon;
 }
 
-std::vector<Vector2> BuildPlanarOpening(
+std::vector<Vector2> BuildPlanarWirePath(
     const Project& project,
     std::string_view name,
     const Surface& surface,
-    int samples)
+    int samples,
+    bool closePath)
 {
     const NamedWire& opening = RequireNamedWire(project, name);
     std::vector<Vector2> points;
     for (const Vector3 point : SampleWire(opening.wire, samples)) {
         const auto projected = surface.PlanarWorkPlane()->Project(point);
         if (std::abs(projected.w) > 1.0e-5) {
-            throw std::invalid_argument("Plate opening is not on its planar source surface: " + opening.name);
+            throw std::invalid_argument("Plate wire is not on its planar source surface: " + opening.name);
         }
         points.push_back({projected.u, projected.v});
     }
-    ClosePath(points);
+    if (closePath) {
+        ClosePath(points);
+    }
     return points;
 }
 
-std::vector<Vector2> BuildDevelopedOpening(
+std::vector<Vector2> BuildDevelopedWirePath(
     const Project& project,
     const NamedPlate& namedPlate,
     std::string_view openingName,
     const DevelopmentGrid& grid,
-    int samples)
+    int samples,
+    bool closePath)
 {
     const NamedWire& opening = RequireNamedWire(project, openingName);
     if (!opening.projection.has_value()) {
-        throw std::invalid_argument("A curved-plate opening must come from a projected drawing: " + opening.name);
+        throw std::invalid_argument("A curved-plate wire must come from a projected drawing: " + opening.name);
     }
     if (opening.projection->targetSurfaceName != namedPlate.sourceSurfaceName) {
-        throw std::invalid_argument("Plate opening belongs to a different source surface: " + opening.name);
+        throw std::invalid_argument("Plate wire belongs to a different source surface: " + opening.name);
     }
     const NamedWire& source = RequireNamedWire(project, opening.projection->sourceWireName);
     const Surface& surface = namedPlate.plate.SourceSurface();
@@ -491,15 +532,137 @@ std::vector<Vector2> BuildDevelopedOpening(
         constexpr double rangeTolerance = 1.0e-5;
         if (localU < -rangeTolerance || localU > 1.0 + rangeTolerance
             || localV < -rangeTolerance || localV > 1.0 + rangeTolerance) {
-            throw std::invalid_argument("Plate opening lies outside the selected plate piece: " + opening.name);
+            throw std::invalid_argument("Plate wire lies outside the selected plate piece: " + opening.name);
         }
         const Vector2 flatPoint = grid.Evaluate(localU, localV);
         if (points.empty() || !AlmostSame(points.back(), flatPoint, 1.0e-7)) {
             points.push_back(flatPoint);
         }
     }
-    ClosePath(points);
+    if (closePath) {
+        ClosePath(points);
+    }
     return points;
+}
+
+double SpatialPathLength(const Plate& plate, bool alongU, double fixedParameter)
+{
+    constexpr int samples = 96;
+    double length = 0.0;
+    Vector3 previous = alongU
+        ? plate.Evaluate(0.0, fixedParameter, 0.5)
+        : plate.Evaluate(fixedParameter, 0.0, 0.5);
+    for (int sample = 1; sample <= samples; ++sample) {
+        const double parameter = static_cast<double>(sample) / samples;
+        const Vector3 point = alongU
+            ? plate.Evaluate(parameter, fixedParameter, 0.5)
+            : plate.Evaluate(fixedParameter, parameter, 0.5);
+        length += (point - previous).Length();
+        previous = point;
+    }
+    return length;
+}
+
+Vector3 PlateNormal(const Plate& plate, double u, double v)
+{
+    const auto& range = plate.Range();
+    return plate.SourceSurface().Normal(
+        range.minimumU + u * (range.maximumU - range.minimumU),
+        range.minimumV + v * (range.maximumV - range.minimumV));
+}
+
+double NormalAngleDegrees(Vector3 first, Vector3 second)
+{
+    constexpr double radiansToDegrees = 57.2957795130823208768;
+    const double cosine = std::clamp(geometry::Dot(first.Normalized(), second.Normalized()), -1.0, 1.0);
+    return std::acos(cosine) * radiansToDegrees;
+}
+
+std::vector<double> FoldParameters(
+    const Plate& plate,
+    bool alongU,
+    const PlateFlatPatternOptions& options)
+{
+    const double length = SpatialPathLength(plate, alongU, 0.5);
+    const int intervalCount = std::clamp(
+        static_cast<int>(std::ceil(length / options.foldSpacingMillimeters)), 1, 200);
+    std::vector<double> parameters;
+    for (int interval = 1; interval < intervalCount; ++interval) {
+        const double parameter = static_cast<double>(interval) / intervalCount;
+        const double delta = std::min(0.02, 0.45 / intervalCount);
+        const Vector3 firstNormal = alongU
+            ? PlateNormal(plate, parameter - delta, 0.5)
+            : PlateNormal(plate, 0.5, parameter - delta);
+        const Vector3 secondNormal = alongU
+            ? PlateNormal(plate, parameter + delta, 0.5)
+            : PlateNormal(plate, 0.5, parameter + delta);
+        if (NormalAngleDegrees(firstNormal, secondNormal) + 1.0e-9
+            >= options.minimumFoldAngleDegrees) {
+            parameters.push_back(parameter);
+        }
+    }
+    return parameters;
+}
+
+double TotalNormalChangeDegrees(const Plate& plate, bool alongU)
+{
+    constexpr int samples = 32;
+    double total = 0.0;
+    Vector3 previous = alongU ? PlateNormal(plate, 0.0, 0.5) : PlateNormal(plate, 0.5, 0.0);
+    for (int sample = 1; sample <= samples; ++sample) {
+        const double parameter = static_cast<double>(sample) / samples;
+        const Vector3 current = alongU
+            ? PlateNormal(plate, parameter, 0.5)
+            : PlateNormal(plate, 0.5, parameter);
+        total += NormalAngleDegrees(previous, current);
+        previous = current;
+    }
+    return total;
+}
+
+void AddGeneratedFoldAndReliefPaths(
+    PlateFlatPattern& pattern,
+    const Plate& plate,
+    const DevelopmentGrid& grid,
+    const PlateFlatPatternOptions& options)
+{
+    const std::vector<double> uParameters = FoldParameters(plate, true, options);
+    const std::vector<double> vParameters = FoldParameters(plate, false, options);
+    if (options.includeFoldLines) {
+        for (std::size_t index = 0; index < uParameters.size(); ++index) {
+            pattern.foldLines.push_back({
+                "fold_u_" + std::to_string(index + 1),
+                grid.ConstantU(uParameters[index]),
+            });
+        }
+        for (std::size_t index = 0; index < vParameters.size(); ++index) {
+            pattern.foldLines.push_back({
+                "fold_v_" + std::to_string(index + 1),
+                grid.ConstantV(vParameters[index]),
+            });
+        }
+    }
+
+    if (!options.includeAutomaticReliefCuts
+        || pattern.analysis.classification != PlateDevelopability::DoubleCurved) {
+        return;
+    }
+    const bool cutAtConstantU = TotalNormalChangeDegrees(plate, true)
+        >= TotalNormalChangeDegrees(plate, false);
+    const std::vector<double>& parameters = cutAtConstantU ? uParameters : vParameters;
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const bool fromMinimumSide = index % 2 == 0;
+        const double first = fromMinimumSide ? 0.0 : 1.0;
+        const double last = fromMinimumSide
+            ? options.reliefCutDepthRatio
+            : 1.0 - options.reliefCutDepthRatio;
+        pattern.reliefCuts.push_back({
+            "auto_relief_" + std::to_string(index + 1),
+            cutAtConstantU
+                ? grid.ConstantU(parameters[index], first, last)
+                : grid.ConstantV(parameters[index], first, last),
+        });
+    }
 }
 
 void ValidatePattern(const PlateFlatPattern& pattern)
@@ -520,6 +683,22 @@ void ValidatePattern(const PlateFlatPattern& pattern)
     for (const auto& opening : pattern.openings) {
         validatePath(opening, false);
     }
+    const auto validateOpenPath = [](const PlateFlatPatternPath& path) {
+        if (path.points.size() < 2) {
+            throw std::invalid_argument("Plate flat pattern contains an unusable open path.");
+        }
+        for (const Vector2 point : path.points) {
+            if (!point.IsFinite()) {
+                throw std::invalid_argument("Plate flat pattern contains invalid coordinates.");
+            }
+        }
+    };
+    for (const auto& fold : pattern.foldLines) {
+        validateOpenPath(fold);
+    }
+    for (const auto& cut : pattern.reliefCuts) {
+        validateOpenPath(cut);
+    }
 }
 
 void WriteDxfPair(std::ostream& output, int code, std::string_view value)
@@ -532,8 +711,9 @@ void WriteDxfPath(std::ostream& output, const PlateFlatPatternPath& path, std::s
     WriteDxfPair(output, 0, "POLYLINE");
     WriteDxfPair(output, 8, layer);
     WriteDxfPair(output, 66, "1");
-    WriteDxfPair(output, 70, "1");
-    const std::size_t count = path.points.size() > 1 && AlmostSame(path.points.front(), path.points.back())
+    const bool closed = path.points.size() > 1 && AlmostSame(path.points.front(), path.points.back());
+    WriteDxfPair(output, 70, closed ? "1" : "0");
+    const std::size_t count = closed
         ? path.points.size() - 1
         : path.points.size();
     for (std::size_t index = 0; index < count; ++index) {
@@ -571,9 +751,15 @@ PlateFlatPattern BuildPlateFlatPattern(
             for (const std::string& openingName : namedPlate.openingWireNames) {
                 pattern.openings.push_back({
                     openingName,
-                    BuildPlanarOpening(project, openingName, plate.SourceSurface(), options.openingSamples),
+                    BuildPlanarWirePath(project, openingName, plate.SourceSurface(), options.openingSamples, true),
                 });
             }
+        }
+        for (const std::string& cutName : namedPlate.reliefCutWireNames) {
+            pattern.reliefCuts.push_back({
+                cutName,
+                BuildPlanarWirePath(project, cutName, plate.SourceSurface(), options.openingSamples, false),
+            });
         }
     } else {
         const DevelopmentGrid grid(plate, options.uSegments, options.vSegments);
@@ -585,10 +771,17 @@ PlateFlatPattern BuildPlateFlatPattern(
             for (const std::string& openingName : namedPlate.openingWireNames) {
                 pattern.openings.push_back({
                     openingName,
-                    BuildDevelopedOpening(project, namedPlate, openingName, grid, options.openingSamples),
+                    BuildDevelopedWirePath(project, namedPlate, openingName, grid, options.openingSamples, true),
                 });
             }
         }
+        for (const std::string& cutName : namedPlate.reliefCutWireNames) {
+            pattern.reliefCuts.push_back({
+                cutName,
+                BuildDevelopedWirePath(project, namedPlate, cutName, grid, options.openingSamples, false),
+            });
+        }
+        AddGeneratedFoldAndReliefPaths(pattern, plate, grid, options);
     }
     ValidatePattern(pattern);
     return pattern;
@@ -617,6 +810,12 @@ void WritePlateFlatPatternSvg(
     for (const auto& opening : pattern.openings) {
         includePath(opening);
     }
+    for (const auto& fold : pattern.foldLines) {
+        includePath(fold);
+    }
+    for (const auto& cut : pattern.reliefCuts) {
+        includePath(cut);
+    }
     const double width = maximumX - minimumX + options.marginMillimeters * 2.0;
     const double height = maximumY - minimumY + options.marginMillimeters * 2.0;
     const auto writePath = [&](const PlateFlatPatternPath& path, std::string_view indent) {
@@ -643,6 +842,16 @@ void WritePlateFlatPatternSvg(
     for (const auto& opening : pattern.openings) {
         writePath(opening, "    ");
     }
+    output << "  </g>\n"
+           << "  <g id=\"RELIEF_CUT\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.14\" stroke-linecap=\"round\">\n";
+    for (const auto& cut : pattern.reliefCuts) {
+        writePath(cut, "    ");
+    }
+    output << "  </g>\n"
+           << "  <g id=\"FOLD\" fill=\"none\" stroke=\"#4c5963\" stroke-width=\"0.1\" stroke-dasharray=\"2,1\">\n";
+    for (const auto& fold : pattern.foldLines) {
+        writePath(fold, "    ");
+    }
     output << "  </g>\n</svg>\n";
     if (!output) {
         throw std::runtime_error("Failed to write plate flat-pattern SVG.");
@@ -665,11 +874,166 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
     for (const auto& opening : pattern.openings) {
         WriteDxfPath(output, opening, "CUT_OPENING");
     }
+    for (const auto& cut : pattern.reliefCuts) {
+        WriteDxfPath(output, cut, "RELIEF_CUT");
+    }
+    for (const auto& fold : pattern.foldLines) {
+        WriteDxfPath(output, fold, "FOLD");
+    }
     WriteDxfPair(output, 0, "ENDSEC");
     WriteDxfPair(output, 0, "EOF");
     if (!output) {
         throw std::runtime_error("Failed to write plate flat-pattern DXF.");
     }
+}
+
+PlateFlatPatternModelResult AddPlateFlatPatternModel(
+    Project& project,
+    const NamedPlate& sourcePlate,
+    const PlateFlatPattern& pattern,
+    model::WorkPlane targetPlane,
+    std::string namePrefix,
+    double reliefCutWidthMillimeters)
+{
+    ValidatePattern(pattern);
+    if (namePrefix.empty()) {
+        throw std::invalid_argument("Flat-pattern model name must not be empty.");
+    }
+    if (!std::isfinite(reliefCutWidthMillimeters)
+        || reliefCutWidthMillimeters <= 0.0 || reliefCutWidthMillimeters > 10.0) {
+        throw std::invalid_argument("Relief-cut width must be between 0 and 10 mm.");
+    }
+
+    const Plate sourceGeometry = sourcePlate.plate;
+    const std::string sourceMaterial = sourcePlate.material;
+    double minimumX = std::numeric_limits<double>::infinity();
+    double minimumY = std::numeric_limits<double>::infinity();
+    for (const Vector2 point : pattern.outerBoundary.points) {
+        minimumX = std::min(minimumX, point.x);
+        minimumY = std::min(minimumY, point.y);
+    }
+    const auto toWorld = [&](const PlateFlatPatternPath& path, double height) {
+        std::vector<Vector3> points;
+        points.reserve(path.points.size());
+        for (const Vector2 point : path.points) {
+            points.push_back(targetPlane.ToWorld(point.x - minimumX, point.y - minimumY, height));
+        }
+        return points;
+    };
+    const auto makeMetadata = [&](bool construction) {
+        model::WireMetadata metadata;
+        metadata.sourcePlaneName = namePrefix + "_plane";
+        metadata.planePolicy = model::WirePlanePolicy::LockedToPlane;
+        metadata.construction = construction;
+        return metadata;
+    };
+    const auto slotContour = [&](const PlateFlatPatternPath& cut) {
+        std::vector<Vector2> centerline;
+        for (const Vector2 point : cut.points) {
+            if (centerline.empty() || !AlmostSame(centerline.back(), point, 1.0e-8)) {
+                centerline.push_back(point);
+            }
+        }
+        if (centerline.size() < 2) {
+            throw std::invalid_argument("Relief cut is too short to form a 3D slot.");
+        }
+        if (AlmostSame(centerline.front(), centerline.back())) {
+            centerline.pop_back();
+        }
+        const double halfWidth = reliefCutWidthMillimeters * 0.5;
+        std::vector<Vector2> left;
+        std::vector<Vector2> right;
+        left.reserve(centerline.size());
+        right.reserve(centerline.size());
+        for (std::size_t index = 0; index < centerline.size(); ++index) {
+            Vector2 tangent;
+            if (index == 0) {
+                tangent = centerline[1] - centerline[0];
+            } else if (index + 1 == centerline.size()) {
+                tangent = centerline[index] - centerline[index - 1];
+            } else {
+                tangent = centerline[index + 1] - centerline[index - 1];
+            }
+            const double tangentLength = Length(tangent);
+            if (tangentLength <= 1.0e-9) {
+                throw std::invalid_argument("Relief cut contains a collapsed segment.");
+            }
+            const Vector2 offset{-tangent.y * halfWidth / tangentLength,
+                tangent.x * halfWidth / tangentLength};
+            left.push_back(centerline[index] + offset);
+            right.push_back(centerline[index] - offset);
+        }
+        PlateFlatPatternPath contour;
+        contour.name = cut.name + "_slot";
+        contour.points = std::move(left);
+        for (auto position = right.rbegin(); position != right.rend(); ++position) {
+            contour.points.push_back(*position);
+        }
+        ClosePath(contour.points);
+        return contour;
+    };
+
+    PlateFlatPatternModelResult result;
+    result.workPlaneName = namePrefix + "_plane";
+    result.outerWireName = namePrefix + "_outer";
+    result.surfaceName = namePrefix + "_surface";
+    result.plateName = namePrefix + "_plate";
+    project.AddWorkPlane(result.workPlaneName, targetPlane);
+    project.AddWire(
+        result.outerWireName,
+        Wire::Polyline(toWorld(pattern.outerBoundary, 0.0)),
+        makeMetadata(false));
+    project.AddPlanarSurface(result.surfaceName, result.outerWireName);
+    if (sourceGeometry.HasVariableThickness()) {
+        project.AddPlate(
+            result.plateName,
+            result.surfaceName,
+            sourceGeometry.Thickness(),
+            sourceGeometry.EndThickness(),
+            sourceGeometry.Direction(),
+            sourceMaterial);
+    } else {
+        project.AddPlate(
+            result.plateName,
+            result.surfaceName,
+            sourceGeometry.Thickness(),
+            sourceGeometry.Direction(),
+            sourceMaterial);
+    }
+
+    const Vector3 projectionDirection = targetPlane.Normal() * -1.0;
+    const auto addProjectedPath = [&](const PlateFlatPatternPath& path, const std::string& baseName) {
+        const std::string drawingName = baseName + "_drawing";
+        project.AddWire(drawingName, Wire::Polyline(toWorld(path, 1.0)));
+        project.AddProjectedWire(baseName, drawingName, result.surfaceName, projectionDirection);
+        project.SetWireVisible(drawingName, false);
+        return baseName;
+    };
+
+    for (std::size_t index = 0; index < pattern.openings.size(); ++index) {
+        const std::string name = namePrefix + "_opening_" + std::to_string(index + 1);
+        addProjectedPath(pattern.openings[index], name);
+        project.AddPlateOpening(result.plateName, name);
+        result.openingWireNames.push_back(name);
+    }
+    for (std::size_t index = 0; index < pattern.foldLines.size(); ++index) {
+        const std::string name = namePrefix + "_fold_" + std::to_string(index + 1);
+        project.AddWire(name, Wire::Polyline(toWorld(pattern.foldLines[index], 0.0)), makeMetadata(true));
+        result.foldWireNames.push_back(name);
+    }
+    for (std::size_t index = 0; index < pattern.reliefCuts.size(); ++index) {
+        const std::string name = namePrefix + "_relief_" + std::to_string(index + 1);
+        addProjectedPath(pattern.reliefCuts[index], name);
+        project.AddPlateReliefCut(result.plateName, name);
+        result.reliefCutWireNames.push_back(name);
+
+        const PlateFlatPatternPath slot = slotContour(pattern.reliefCuts[index]);
+        const std::string slotName = namePrefix + "_relief_slot_" + std::to_string(index + 1);
+        addProjectedPath(slot, slotName);
+        project.AddPlateOpening(result.plateName, slotName);
+        result.openingWireNames.push_back(slotName);
+    }
+    return result;
 }
 
 } // namespace kachakacha::io

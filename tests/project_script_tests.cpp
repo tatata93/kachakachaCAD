@@ -1092,6 +1092,41 @@ void AngleConstraintTracksAndProtectsItsWorkPlane()
     Require(removalRejected, "angle constraint protects source plane");
 }
 
+void PlateReliefCutsRoundTrip()
+{
+    std::istringstream input(R"(
+        plane_point_normal cut_plan 0 0 5  0 0 1  1 0 0
+        polyline3d outline 0 0 0  20 0 0  20 10 0  0 10 0  0 0 0
+        sketch_line slit_plan cut_plan 0 5  8 5 reference
+        surface_planar panel outline
+        wire_project slit_on_panel slit_plan panel 0 0 -1
+        plate panel_plate panel 0.4 centered paper
+        plate_relief_cut panel_plate slit_on_panel
+    )");
+    auto project = LoadProjectScript(input, "relief-cut-test");
+    Require(project.Plates().size() == 1, "relief-cut plate count");
+    Require(project.Plates()[0].reliefCutWireNames == std::vector<std::string>{"slit_on_panel"},
+        "plate relief-cut relation loads");
+
+    bool usedCutRejected = false;
+    try {
+        project.RemoveWire("slit_on_panel");
+    } catch (const std::invalid_argument&) {
+        usedCutRejected = true;
+    }
+    Require(usedCutRejected, "relief-cut wire cannot be removed while in use");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("plate_relief_cut panel_plate slit_on_panel") != std::string::npos,
+        "plate relief-cut command is written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "relief-cut-roundtrip");
+    Require(roundTripped.Plates()[0].reliefCutWireNames
+            == std::vector<std::string>{"slit_on_panel"},
+        "plate relief-cut relation roundtrips");
+}
+
 } // namespace
 
 int main()
@@ -1122,6 +1157,7 @@ int main()
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();
         AngleConstraintTracksAndProtectsItsWorkPlane();
+        PlateReliefCutsRoundTrip();
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

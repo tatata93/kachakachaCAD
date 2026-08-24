@@ -11,6 +11,7 @@
 
 using kachakacha::geometry::Vector2;
 using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::PlateFlatPatternOptions;
@@ -104,6 +105,14 @@ int main(int argc, char* argv[])
             "planar light opening is exported");
         Require(planar.reliefCuts.size() == 1 && planar.reliefCuts.front().points.size() >= 2,
             "manual planar relief cut is exported");
+        const auto planarAssemblyGuide = BuildPlateAssemblyGuide(
+            planarProject, planarProject.Plates().front());
+        Require(planarAssemblyGuide.foldLines.empty(),
+            "planar plate has no assembled fold guides");
+        Require(planarAssemblyGuide.reliefCuts.size() == 1,
+            "manual relief cut appears on assembled plate");
+        Require(std::abs(planarAssemblyGuide.reliefCuts.front().points.front().z - 0.25) <= 1.0e-9,
+            "assembled relief guide is drawn on the plate outer face");
 
         std::ostringstream svg;
         WritePlateFlatPatternSvg(svg, planar);
@@ -172,6 +181,17 @@ int main(int argc, char* argv[])
             "double-curved development reports a finite error");
         Require(!twistedPattern.foldLines.empty(), "curved development creates fold wires");
         Require(!twistedPattern.reliefCuts.empty(), "double-curved development creates automatic relief cuts");
+        const auto twistedAssemblyGuide = BuildPlateAssemblyGuide(
+            twisted, twisted.Plates().front(), twistedOptions);
+        Require(twistedAssemblyGuide.foldLines.size() == twistedPattern.foldLines.size(),
+            "assembled preview uses the same fold guides as development");
+        Require(twistedAssemblyGuide.reliefCuts.size() == twistedPattern.reliefCuts.size(),
+            "assembled preview uses the same automatic relief cuts as development");
+        Require(std::all_of(
+            twistedAssemblyGuide.foldLines.begin(),
+            twistedAssemblyGuide.foldLines.end(),
+            [](const auto& path) { return path.points.size() >= 3; }),
+            "assembled fold guides contain usable 3D paths");
 
         if (argc >= 2) {
             std::ifstream sampleInput(argv[1]);

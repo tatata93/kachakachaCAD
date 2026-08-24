@@ -121,6 +121,7 @@ private:
     void ExportSelectedBody(bool step);
     void CreateSelectedPlateFlatPatternModel();
     [[nodiscard]] kachakacha::io::PlateFlatPatternOptions PlateFlatPatternOptionsFromUi() const;
+    void UpdatePlateAssemblyGuidePreview();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
     void CommitDrawingDimensions();
@@ -321,6 +322,7 @@ private:
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
+    QCheckBox* plateAssemblyGuidePreview_ = nullptr;
     QDoubleSpinBox* plateFlatPatternFoldSpacing_ = nullptr;
     QDoubleSpinBox* plateFlatPatternReliefDepth_ = nullptr;
     QDoubleSpinBox* plateFlatPatternCutWidth_ = nullptr;

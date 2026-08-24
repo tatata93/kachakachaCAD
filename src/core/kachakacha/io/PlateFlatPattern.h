@@ -46,6 +46,17 @@ struct PlateFlatPattern {
     PlateFlatPatternAnalysis analysis;
 };
 
+struct PlateAssemblyGuidePath {
+    std::string name;
+    std::vector<geometry::Vector3> points;
+};
+
+struct PlateAssemblyGuide {
+    std::string plateName;
+    std::vector<PlateAssemblyGuidePath> foldLines;
+    std::vector<PlateAssemblyGuidePath> reliefCuts;
+};
+
 struct PlateFlatPatternModelResult {
     std::string workPlaneName;
     std::string outerWireName;
@@ -57,6 +68,11 @@ struct PlateFlatPatternModelResult {
 };
 
 [[nodiscard]] PlateFlatPattern BuildPlateFlatPattern(
+    const model::Project& project,
+    const model::NamedPlate& plate,
+    PlateFlatPatternOptions options = {});
+
+[[nodiscard]] PlateAssemblyGuide BuildPlateAssemblyGuide(
     const model::Project& project,
     const model::NamedPlate& plate,
     PlateFlatPatternOptions options = {});

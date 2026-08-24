@@ -545,6 +545,78 @@ std::vector<Vector2> BuildDevelopedWirePath(
     return points;
 }
 
+std::vector<Vector3> BuildAssemblyWirePath(
+    const Project& project,
+    const NamedPlate& namedPlate,
+    std::string_view wireName,
+    int samples)
+{
+    const NamedWire& projectedWire = RequireNamedWire(project, wireName);
+    if (!projectedWire.projection.has_value()) {
+        throw std::invalid_argument("A plate assembly guide must come from a projected drawing: "
+            + projectedWire.name);
+    }
+    if (projectedWire.projection->targetSurfaceName != namedPlate.sourceSurfaceName) {
+        throw std::invalid_argument("Plate assembly guide belongs to a different source surface: "
+            + projectedWire.name);
+    }
+    const NamedWire& source = RequireNamedWire(
+        project, projectedWire.projection->sourceWireName);
+    const Plate& plate = namedPlate.plate;
+    const Surface& surface = plate.SourceSurface();
+    const auto& range = plate.Range();
+    const int sampleCount = source.wire.Kind() == WireKind::Polyline
+        ? std::max(samples, static_cast<int>(source.wire.ControlPoints().size()) * 4)
+        : samples;
+    std::vector<Vector3> points;
+    points.reserve(static_cast<std::size_t>(sampleCount) + 1);
+    for (int sample = 0; sample <= sampleCount; ++sample) {
+        const double parameter = static_cast<double>(sample) / sampleCount;
+        const auto projected = surface.ProjectPointAlongDirection(
+            source.wire.Evaluate(parameter), projectedWire.projection->direction);
+        const double localU = (projected.u - range.minimumU)
+            / (range.maximumU - range.minimumU);
+        const double localV = (projected.v - range.minimumV)
+            / (range.maximumV - range.minimumV);
+        constexpr double rangeTolerance = 1.0e-5;
+        if (localU < -rangeTolerance || localU > 1.0 + rangeTolerance
+            || localV < -rangeTolerance || localV > 1.0 + rangeTolerance) {
+            throw std::invalid_argument("Plate assembly guide lies outside the selected plate piece: "
+                + projectedWire.name);
+        }
+        const Vector3 point = plate.Evaluate(localU, localV, 1.0);
+        if (points.empty() || (points.back() - point).LengthSquared() > 1.0e-14) {
+            points.push_back(point);
+        }
+    }
+    if (points.size() < 2) {
+        throw std::invalid_argument("Plate assembly guide collapsed to a point: "
+            + projectedWire.name);
+    }
+    return points;
+}
+
+std::vector<Vector3> BuildConstantAssemblyPath(
+    const Plate& plate,
+    bool constantU,
+    double constantParameter,
+    double first,
+    double last,
+    int samples)
+{
+    samples = std::max(samples, 2);
+    std::vector<Vector3> points;
+    points.reserve(static_cast<std::size_t>(samples) + 1);
+    for (int sample = 0; sample <= samples; ++sample) {
+        const double fraction = static_cast<double>(sample) / samples;
+        const double varyingParameter = first + (last - first) * fraction;
+        points.push_back(constantU
+            ? plate.Evaluate(constantParameter, varyingParameter, 1.0)
+            : plate.Evaluate(varyingParameter, constantParameter, 1.0));
+    }
+    return points;
+}
+
 double SpatialPathLength(const Plate& plate, bool alongU, double fixedParameter)
 {
     constexpr int samples = 96;
@@ -785,6 +857,73 @@ PlateFlatPattern BuildPlateFlatPattern(
     }
     ValidatePattern(pattern);
     return pattern;
+}
+
+PlateAssemblyGuide BuildPlateAssemblyGuide(
+    const Project& project,
+    const NamedPlate& namedPlate,
+    PlateFlatPatternOptions options)
+{
+    ValidateOptions(options);
+    PlateAssemblyGuide guide;
+    guide.plateName = namedPlate.name;
+    const Plate& plate = namedPlate.plate;
+
+    for (const std::string& cutName : namedPlate.reliefCutWireNames) {
+        guide.reliefCuts.push_back({
+            cutName,
+            BuildAssemblyWirePath(
+                project, namedPlate, cutName, options.openingSamples),
+        });
+    }
+    if (plate.SourceSurface().Kind() == SurfaceKind::Planar) {
+        return guide;
+    }
+
+    const std::vector<double> uParameters = FoldParameters(plate, true, options);
+    const std::vector<double> vParameters = FoldParameters(plate, false, options);
+    if (options.includeFoldLines) {
+        for (std::size_t index = 0; index < uParameters.size(); ++index) {
+            guide.foldLines.push_back({
+                "fold_u_" + std::to_string(index + 1),
+                BuildConstantAssemblyPath(
+                    plate, true, uParameters[index], 0.0, 1.0, options.vSegments),
+            });
+        }
+        for (std::size_t index = 0; index < vParameters.size(); ++index) {
+            guide.foldLines.push_back({
+                "fold_v_" + std::to_string(index + 1),
+                BuildConstantAssemblyPath(
+                    plate, false, vParameters[index], 0.0, 1.0, options.uSegments),
+            });
+        }
+    }
+
+    if (!options.includeAutomaticReliefCuts
+        || plate.AnalyzeDevelopability().classification != PlateDevelopability::DoubleCurved) {
+        return guide;
+    }
+    const bool cutAtConstantU = TotalNormalChangeDegrees(plate, true)
+        >= TotalNormalChangeDegrees(plate, false);
+    const std::vector<double>& parameters = cutAtConstantU ? uParameters : vParameters;
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const bool fromMinimumSide = index % 2 == 0;
+        const double first = fromMinimumSide ? 0.0 : 1.0;
+        const double last = fromMinimumSide
+            ? options.reliefCutDepthRatio
+            : 1.0 - options.reliefCutDepthRatio;
+        guide.reliefCuts.push_back({
+            "auto_relief_" + std::to_string(index + 1),
+            BuildConstantAssemblyPath(
+                plate,
+                cutAtConstantU,
+                parameters[index],
+                first,
+                last,
+                cutAtConstantU ? options.vSegments : options.uSegments),
+        });
+    }
+    return guide;
 }
 
 void WritePlateFlatPatternSvg(

@@ -390,6 +390,17 @@ void CadViewport::SetPlateSplitPreview(
     update();
 }
 
+void CadViewport::SetPlateAssemblyGuidePreview(
+    std::optional<int> plateIndex,
+    std::vector<std::vector<Vector3>> foldLines,
+    std::vector<std::vector<Vector3>> reliefCuts)
+{
+    plateAssemblyGuideIndex_ = plateIndex;
+    plateAssemblyFoldLines_ = std::move(foldLines);
+    plateAssemblyReliefCuts_ = std::move(reliefCuts);
+    update();
+}
+
 void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
 {
     wireOffsetPreviews_ = std::move(wires);
@@ -1761,6 +1772,35 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.setPen(QPen(edge, selected ? 2.8 : 1.6));
             for (const QPainterPath& openingPath : openingPaths) {
                 painter.drawPath(openingPath);
+            }
+            if (plateAssemblyGuideIndex_.has_value()
+                && *plateAssemblyGuideIndex_ == index) {
+                const auto drawGuidePaths = [&](const auto& paths, const QPen& halo, const QPen& line) {
+                    for (const auto& points : paths) {
+                        if (points.size() < 2) {
+                            continue;
+                        }
+                        QPainterPath path(ProjectPoint(points.front()));
+                        for (std::size_t pointIndex = 1; pointIndex < points.size(); ++pointIndex) {
+                            path.lineTo(ProjectPoint(points[pointIndex]));
+                        }
+                        painter.setPen(halo);
+                        painter.drawPath(path);
+                        painter.setPen(line);
+                        painter.drawPath(path);
+                    }
+                };
+                painter.save();
+                painter.setBrush(Qt::NoBrush);
+                drawGuidePaths(
+                    plateAssemblyFoldLines_,
+                    QPen(QColor(255, 255, 255, 190), 4.6, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin),
+                    QPen(QColor("#1769aa"), 2.2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+                drawGuidePaths(
+                    plateAssemblyReliefCuts_,
+                    QPen(QColor(255, 255, 255, 205), 5.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin),
+                    QPen(QColor("#c62838"), 3.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                painter.restore();
             }
         }
 

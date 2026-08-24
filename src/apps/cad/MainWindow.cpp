@@ -73,6 +73,7 @@ using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::AddPlateFlatPatternModel;
+using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::BuildPlateFlatPattern;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::WireLiesOnWorkPlane;
@@ -553,6 +554,7 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this] {
         UpdatePlateSplitPreview();
+        UpdatePlateAssemblyGuidePreview();
     });
     toolsDock->setWidget(toolsTabs_);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
@@ -1751,6 +1753,11 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternPlane_ = new QComboBox;
     plateFlatPatternAutoRelief_ = new QCheckBox(QStringLiteral("二方向曲面へ自動切れ目"));
     plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
+    plateAssemblyGuidePreview_ = new QCheckBox(QStringLiteral("組立3Dで折り目・切れ目を表示"));
+    plateAssemblyGuidePreview_->setObjectName(QStringLiteral("plateAssemblyGuidePreview"));
+    plateAssemblyGuidePreview_->setChecked(true);
+    plateAssemblyGuidePreview_->setToolTip(
+        QStringLiteral("選択板材の完成位置へ、折り目を青破線、切れ目を赤線で重ねます"));
     plateFlatPatternFoldSpacing_ = MakePositiveField(8.0);
     plateFlatPatternFoldSpacing_->setRange(1.0, 100.0);
     plateFlatPatternFoldSpacing_->setSuffix(QStringLiteral(" mm"));
@@ -1766,6 +1773,7 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("展開部材名"), plateFlatPatternName_);
     flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
+    flatModelForm->addRow(plateAssemblyGuidePreview_);
     flatModelForm->addRow(QStringLiteral("折り線間隔"), plateFlatPatternFoldSpacing_);
     flatModelForm->addRow(QStringLiteral("切れ目の深さ"), plateFlatPatternReliefDepth_);
     flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
@@ -1809,6 +1817,7 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
+    connect(plateAssemblyGuidePreview_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternFoldSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternReliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     layout->addWidget(platePdfButton);
@@ -2726,6 +2735,55 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
         options.reliefCutDepthRatio = plateFlatPatternReliefDepth_->value() / 100.0;
     }
     return options;
+}
+
+void MainWindow::UpdatePlateAssemblyGuidePreview()
+{
+    if (viewport_ == nullptr || plateAssemblyGuidePreview_ == nullptr
+        || toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 6
+        || !plateAssemblyGuidePreview_->isChecked()) {
+        if (viewport_ != nullptr) {
+            viewport_->SetPlateAssemblyGuidePreview(std::nullopt, {}, {});
+        }
+        return;
+    }
+
+    std::vector<int> plateIndices;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            plateIndices.push_back(selection.index);
+        }
+    }
+    std::sort(plateIndices.begin(), plateIndices.end());
+    plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
+    if (plateIndices.size() != 1 || !project_.Plates()[plateIndices.front()].visible) {
+        viewport_->SetPlateAssemblyGuidePreview(std::nullopt, {}, {});
+        return;
+    }
+
+    try {
+        PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
+        options.uSegments = 96;
+        options.vSegments = 48;
+        options.openingSamples = 96;
+        const auto guide = BuildPlateAssemblyGuide(
+            project_, project_.Plates()[plateIndices.front()], options);
+        std::vector<std::vector<Vector3>> foldLines;
+        std::vector<std::vector<Vector3>> reliefCuts;
+        foldLines.reserve(guide.foldLines.size());
+        reliefCuts.reserve(guide.reliefCuts.size());
+        for (const auto& path : guide.foldLines) {
+            foldLines.push_back(path.points);
+        }
+        for (const auto& path : guide.reliefCuts) {
+            reliefCuts.push_back(path.points);
+        }
+        viewport_->SetPlateAssemblyGuidePreview(
+            plateIndices.front(), std::move(foldLines), std::move(reliefCuts));
+    } catch (const std::exception&) {
+        viewport_->SetPlateAssemblyGuidePreview(std::nullopt, {}, {});
+    }
 }
 
 void MainWindow::ExportSelectedPlate(bool dxf)
@@ -5456,6 +5514,7 @@ bool MainWindow::RunCreationSelfTest()
         || toolsTabs_->tabText(6) != QStringLiteral("出力")
         || activePlaneCombo_->count() == 0
         || plateFlatPatternSummary_ == nullptr
+        || plateAssemblyGuidePreview_ == nullptr
         || platePdfPaper_ == nullptr
         || platePdfOverlap_ == nullptr
         || measurementMode_ == nullptr
@@ -6561,6 +6620,23 @@ bool MainWindow::RunCreationSelfTest()
     if (!plateFlatPatternSummary_->text().contains(QStringLiteral("PDF"))) {
         return fail("plate PDF output summary");
     }
+    try {
+        const auto expectedGuide = BuildPlateAssemblyGuide(
+            project_, project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
+        if (!plateAssemblyGuidePreview_->isChecked()
+            || viewport_->PlateAssemblyFoldGuideCount() != expectedGuide.foldLines.size()
+            || viewport_->PlateAssemblyReliefGuideCount() != expectedGuide.reliefCuts.size()) {
+            return fail("assembled fold and relief preview");
+        }
+        plateAssemblyGuidePreview_->setChecked(false);
+        if (viewport_->PlateAssemblyFoldGuideCount() != 0
+            || viewport_->PlateAssemblyReliefGuideCount() != 0) {
+            return fail("hide assembled fold and relief preview");
+        }
+        plateAssemblyGuidePreview_->setChecked(true);
+    } catch (const std::exception&) {
+        return fail("build assembled fold and relief preview");
+    }
     if (auto* outputScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(6))) {
         outputScrollArea->widget()->adjustSize();
         QApplication::processEvents();
@@ -6575,6 +6651,7 @@ bool MainWindow::RunCreationSelfTest()
             return fail("plate PDF output button");
         }
         if (flatModelButton == buttons.end() || plateFlatPatternAutoRelief_ == nullptr
+            || plateAssemblyGuidePreview_ == nullptr
             || plateFlatPatternPlane_ == nullptr || plateFlatPatternPlane_->count() == 0
             || plateFlatPatternCutWidth_ == nullptr) {
             return fail("flat-pattern wire and 3D plate controls");
@@ -7609,6 +7686,7 @@ void MainWindow::RefreshExportSummary()
     if (plateFlatPatternSummary_ == nullptr) {
         return;
     }
+    UpdatePlateAssemblyGuidePreview();
     std::vector<int> plateIndices;
     for (const CadSelection& selection : viewport_->Selections()) {
         if (selection.kind == CadSelectionKind::Plate && selection.index >= 0

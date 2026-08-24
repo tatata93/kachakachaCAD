@@ -133,6 +133,18 @@ public:
     void SetGridPointsVisible(bool visible);
     void SetGridOrigin(double u, double v);
     void SetPlateSplitPreview(std::optional<kachakacha::model::PlateSplitAxis> axis, double parameter);
+    void SetPlateAssemblyGuidePreview(
+        std::optional<int> plateIndex,
+        std::vector<std::vector<kachakacha::geometry::Vector3>> foldLines,
+        std::vector<std::vector<kachakacha::geometry::Vector3>> reliefCuts);
+    [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
+    {
+        return plateAssemblyFoldLines_.size();
+    }
+    [[nodiscard]] std::size_t PlateAssemblyReliefGuideCount() const noexcept
+    {
+        return plateAssemblyReliefCuts_.size();
+    }
     void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
     [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
     void SetMeasurementMode(MeasurementMode mode);
@@ -259,6 +271,9 @@ private:
     std::vector<WireEndpointPick> coincidencePicks_;
     std::optional<kachakacha::model::PlateSplitAxis> plateSplitPreviewAxis_;
     double plateSplitPreviewParameter_ = 0.5;
+    std::optional<int> plateAssemblyGuideIndex_;
+    std::vector<std::vector<kachakacha::geometry::Vector3>> plateAssemblyFoldLines_;
+    std::vector<std::vector<kachakacha::geometry::Vector3>> plateAssemblyReliefCuts_;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;
     std::vector<MeasurementPick> measurementPicks_;

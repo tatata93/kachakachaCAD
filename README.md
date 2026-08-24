@@ -54,6 +54,8 @@ PowerShell で以下を実行します。
 .\scripts\run-cad.ps1
 ```
 
+ビルド後は `build-msvc2022-x64\Debug\kachakacha_cad.exe` を直接ダブルクリックしても起動できます。必要なQt/Open CASCADE DLLと画面プラグインは、ビルド時にEXEと同じ場所へ自動配置されます。
+
 既存プロジェクトを開いて起動する場合:
 
 ```powershell

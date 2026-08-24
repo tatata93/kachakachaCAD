@@ -158,6 +158,22 @@ if(WIN32)
             endif()
 
             qt_finalize_executable(kachakacha_cad)
+
+            if(WIN32)
+                add_custom_command(TARGET kachakacha_cad POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        $<TARGET_RUNTIME_DLLS:kachakacha_cad>
+                        $<TARGET_FILE_DIR:kachakacha_cad>
+                    COMMAND ${CMAKE_COMMAND} -E make_directory
+                        $<TARGET_FILE_DIR:kachakacha_cad>/platforms
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        $<TARGET_FILE:Qt6::QWindowsIntegrationPlugin>
+                        $<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>
+                        $<TARGET_FILE_DIR:kachakacha_cad>/platforms
+                    COMMAND_EXPAND_LISTS
+                    COMMENT "Copying Qt and Open CASCADE runtimes next to kachakacha_cad"
+                )
+            endif()
             message(STATUS "Qt desktop application enabled: ${Qt6_VERSION}")
 
             if(KACHACAD_BUILD_TESTS)

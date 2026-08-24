@@ -44,3 +44,5 @@ Windows では Visual Studio 2022 Build Tools の C++ 開発環境を想定す�
 ```
 
 既定のビルド先は `build-msvc2022-x64`。Visual Studio Build Tools 2022 が入っていれば、自動で `Visual Studio 17 2022` を使う。
+
+Qt版をビルドすると、必要なQt/Open CASCADE DLLと `platforms` プラグインが `kachakacha_cad.exe` の隣へ自動配置される。開発用EXEを直接起動しても、`TKOffset.dll` やQt platform pluginを別途探す必要はない。

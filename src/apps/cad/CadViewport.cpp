@@ -225,6 +225,18 @@ void CadViewport::SetSelections(std::vector<CadSelection> selections)
     update();
 }
 
+void CadViewport::SetDisplayMode(
+    ViewportDisplayMode mode,
+    std::vector<CadSelection> isolatedSelections)
+{
+    displayMode_ = mode;
+    isolatedSelections_ = mode == ViewportDisplayMode::IsolatedSelection
+        ? std::move(isolatedSelections)
+        : std::vector<CadSelection>{};
+    ClearHover();
+    update();
+}
+
 void CadViewport::SetReference(CadSelection reference)
 {
     reference_ = reference;
@@ -835,6 +847,30 @@ bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
     });
 }
 
+bool CadViewport::ShouldDisplay(
+    CadSelectionKind kind,
+    int index,
+    bool projectVisible) const
+{
+    if (displayMode_ == ViewportDisplayMode::IsolatedSelection) {
+        return std::any_of(
+            isolatedSelections_.begin(), isolatedSelections_.end(),
+            [&](const CadSelection& selection) {
+                return selection.kind == kind && selection.index == index;
+            });
+    }
+    if (!projectVisible) {
+        return false;
+    }
+    if (displayMode_ == ViewportDisplayMode::Design) {
+        return true;
+    }
+    if (displayMode_ == ViewportDisplayMode::FinishedModel) {
+        return kind == CadSelectionKind::Plate || kind == CadSelectionKind::Body;
+    }
+    return false;
+}
+
 std::array<Vector3, 3> CadViewport::CurrentViewBasis() const
 {
     std::array<Vector3, 3> basis;
@@ -901,16 +937,18 @@ void CadViewport::FitAll()
         maximum.z = std::max(maximum.z, point.z);
     };
 
-    for (const auto& wire : project_->Wires()) {
-        if (!wire.visible) {
+    for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+        const auto& wire = project_->Wires()[index];
+        if (!ShouldDisplay(CadSelectionKind::Wire, index, wire.visible)) {
             continue;
         }
         for (int sample = 0; sample <= 32; ++sample) {
             include(wire.wire.Evaluate(static_cast<double>(sample) / 32.0));
         }
     }
-    for (const auto& surface : project_->Surfaces()) {
-        if (!surface.visible) {
+    for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
+        const auto& surface = project_->Surfaces()[index];
+        if (!ShouldDisplay(CadSelectionKind::Surface, index, surface.visible)) {
             continue;
         }
         for (int uIndex = 0; uIndex <= 24; ++uIndex) {
@@ -921,8 +959,9 @@ void CadViewport::FitAll()
             }
         }
     }
-    for (const auto& plate : project_->Plates()) {
-        if (!plate.visible) {
+    for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
+        const auto& plate = project_->Plates()[index];
+        if (!ShouldDisplay(CadSelectionKind::Plate, index, plate.visible)) {
             continue;
         }
         for (int uIndex = 0; uIndex <= 24; ++uIndex) {
@@ -934,8 +973,9 @@ void CadViewport::FitAll()
             }
         }
     }
-    for (const auto& body : project_->Bodies()) {
-        if (!body.visible) {
+    for (int index = 0; index < static_cast<int>(project_->Bodies().size()); ++index) {
+        const auto& body = project_->Bodies()[index];
+        if (!ShouldDisplay(CadSelectionKind::Body, index, body.visible)) {
             continue;
         }
         for (int uIndex = 0; uIndex <= 24; ++uIndex) {
@@ -947,8 +987,9 @@ void CadViewport::FitAll()
             }
         }
     }
-    for (const auto& plane : project_->WorkPlanes()) {
-        if (plane.visible) {
+    for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {
+        const auto& plane = project_->WorkPlanes()[index];
+        if (ShouldDisplay(CadSelectionKind::WorkPlane, index, plane.visible)) {
             include(plane.plane.Origin());
         }
     }
@@ -1008,7 +1049,8 @@ std::optional<WireControlPointPick> CadViewport::NearestEditableControlPoint(
             continue;
         }
         const NamedWire& namedWire = project_->Wires()[selected.index];
-        if (!namedWire.visible || namedWire.projection.has_value()) {
+        if (!ShouldDisplay(CadSelectionKind::Wire, selected.index, namedWire.visible)
+            || namedWire.projection.has_value()) {
             continue;
         }
         const auto& points = namedWire.wire.ControlPoints();
@@ -1037,7 +1079,8 @@ std::optional<double> CadViewport::NearestWireParameter(
     bool allowEndpoints) const
 {
     if (project_ == nullptr || wireIndex < 0 || wireIndex >= static_cast<int>(project_->Wires().size())
-        || !project_->Wires()[wireIndex].visible) {
+        || !ShouldDisplay(
+            CadSelectionKind::Wire, wireIndex, project_->Wires()[wireIndex].visible)) {
         return std::nullopt;
     }
     const Wire& wire = project_->Wires()[wireIndex].wire;
@@ -1077,7 +1120,8 @@ std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
     std::optional<WireEndpointPick> best;
     for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
         const NamedWire& namedWire = project_->Wires()[index];
-        if (!namedWire.visible || namedWire.projection.has_value() || namedWire.wire.IsClosed()) {
+        if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)
+            || namedWire.projection.has_value() || namedWire.wire.IsClosed()) {
             continue;
         }
         if (tool_ == ViewportTool::Tangent && !coincidencePicks_.empty()
@@ -1213,8 +1257,9 @@ Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition) const
     if (project_ != nullptr) {
         double bestDistance = 10.0;
         std::optional<Vector3> bestEndpoint;
-        for (const auto& namedWire : project_->Wires()) {
-            if (!namedWire.visible) {
+        for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
+            const auto& namedWire = project_->Wires()[wireIndex];
+            if (!ShouldDisplay(CadSelectionKind::Wire, wireIndex, namedWire.visible)) {
                 continue;
             }
             std::vector<Vector3> snapPoints;
@@ -1258,7 +1303,7 @@ Vector3 CadViewport::SnapDraggedControlPoint(Vector3 point, QPointF screenPositi
         std::optional<Vector3> bestPoint;
         for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
             const NamedWire& namedWire = project_->Wires()[wireIndex];
-            if (!namedWire.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Wire, wireIndex, namedWire.visible)) {
                 continue;
             }
             const auto& controls = namedWire.wire.ControlPoints();
@@ -1465,7 +1510,7 @@ void CadViewport::UpdateHover(QPointF position)
 
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
-            if (!namedWire.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
                 continue;
             }
             considerPoint(index, namedWire.wire.Start());
@@ -1535,7 +1580,8 @@ void CadViewport::paintEvent(QPaintEvent*)
     painter.fillRect(rect(), QColor("#f5f6f7"));
 
     painter.setPen(QPen(QColor("#b8c1c7"), 2.0, Qt::SolidLine, Qt::RoundCap));
-    if (activePlane_.has_value() && gridPointsVisible_) {
+    if (displayMode_ == ViewportDisplayMode::Design
+        && activePlane_.has_value() && gridPointsVisible_) {
         double spacing = snapEnabled_ ? snapStep_ : 5.0;
         while (spacing * pixelsPerMillimeter_ < 12.0) {
             spacing *= 2.0;
@@ -1562,7 +1608,7 @@ void CadViewport::paintEvent(QPaintEvent*)
     if (project_ != nullptr) {
         for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {
             const auto& namedPlane = project_->WorkPlanes()[index];
-            if (!namedPlane.visible) {
+            if (!ShouldDisplay(CadSelectionKind::WorkPlane, index, namedPlane.visible)) {
                 continue;
             }
             const auto& plane = namedPlane.plane;
@@ -1588,7 +1634,7 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
             const auto& namedSurface = project_->Surfaces()[index];
-            if (!namedSurface.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Surface, index, namedSurface.visible)) {
                 continue;
             }
             const auto& surface = namedSurface.surface;
@@ -1630,7 +1676,7 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
             const auto& namedPlate = project_->Plates()[index];
-            if (!namedPlate.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Plate, index, namedPlate.visible)) {
                 continue;
             }
             const auto& plate = namedPlate.plate;
@@ -1807,12 +1853,16 @@ void CadViewport::paintEvent(QPaintEvent*)
         std::optional<Vector3> normalOrigin;
         std::optional<Vector3> normalDirection;
         if (selection_.kind == CadSelectionKind::Surface && selection_.index >= 0
-            && selection_.index < static_cast<int>(project_->Surfaces().size())) {
+            && selection_.index < static_cast<int>(project_->Surfaces().size())
+            && ShouldDisplay(CadSelectionKind::Surface, selection_.index,
+                project_->Surfaces()[selection_.index].visible)) {
             const auto& surface = project_->Surfaces()[selection_.index].surface;
             normalOrigin = surface.Evaluate(0.5, 0.5);
             normalDirection = surface.Normal(0.5, 0.5);
         } else if (selection_.kind == CadSelectionKind::Plate && selection_.index >= 0
-            && selection_.index < static_cast<int>(project_->Plates().size())) {
+            && selection_.index < static_cast<int>(project_->Plates().size())
+            && ShouldDisplay(CadSelectionKind::Plate, selection_.index,
+                project_->Plates()[selection_.index].visible)) {
             const auto& plate = project_->Plates()[selection_.index].plate;
             const double u = plate.SourceU(0.5);
             const double v = plate.SourceV(0.5);
@@ -1845,7 +1895,7 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         for (int index = 0; index < static_cast<int>(project_->Bodies().size()); ++index) {
             const auto& namedBody = project_->Bodies()[index];
-            if (!namedBody.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Body, index, namedBody.visible)) {
                 continue;
             }
             const auto& body = namedBody.body;
@@ -1905,7 +1955,7 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
             const NamedWire& namedWire = project_->Wires()[index];
-            if (!namedWire.visible) {
+            if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
                 continue;
             }
             const Wire& displayedWire = draggedControlPoint_.has_value()
@@ -2031,14 +2081,17 @@ void CadViewport::paintEvent(QPaintEvent*)
         for (const auto& constraint : project_->CoincidentConstraints()) {
             const auto anchorWire = findWire(constraint.anchor.wireName);
             const auto followerWire = findWire(constraint.follower.wireName);
-            if (anchorWire == project_->Wires().end() || followerWire == project_->Wires().end()
-                || !anchorWire->visible || !followerWire->visible) {
+            if (anchorWire == project_->Wires().end() || followerWire == project_->Wires().end()) {
                 continue;
             }
             const Vector3 point = endpointPoint(*anchorWire, constraint.anchor.endpoint);
             const QPointF screenPoint = ProjectPoint(point);
             const int anchorIndex = static_cast<int>(std::distance(project_->Wires().begin(), anchorWire));
             const int followerIndex = static_cast<int>(std::distance(project_->Wires().begin(), followerWire));
+            if (!ShouldDisplay(CadSelectionKind::Wire, anchorIndex, anchorWire->visible)
+                || !ShouldDisplay(CadSelectionKind::Wire, followerIndex, followerWire->visible)) {
+                continue;
+            }
             const auto smoothConstraint = std::find_if(
                 project_->TangentConstraints().begin(), project_->TangentConstraints().end(),
                 [&](const auto& candidate) {
@@ -2302,7 +2355,8 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
 
-    if (!referenceDimensionOverlays_.empty()) {
+    if (displayMode_ == ViewportDisplayMode::Design
+        && !referenceDimensionOverlays_.empty()) {
         painter.save();
         const QColor dimensionColor("#256b63");
         const QRectF viewportBounds = QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0);
@@ -2598,7 +2652,7 @@ CadSelection CadViewport::HitTestWire(QPointF position, double maximumDistance) 
     CadSelection best;
     for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
         const auto& namedWire = project_->Wires()[index];
-        if (!namedWire.visible) {
+        if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
             continue;
         }
         const auto& wire = namedWire.wire;
@@ -2630,7 +2684,7 @@ CadSelection CadViewport::HitTest(QPointF position) const
 
     for (int index = 0; index < static_cast<int>(project_->Bodies().size()); ++index) {
         const auto& namedBody = project_->Bodies()[index];
-        if (!namedBody.visible) {
+        if (!ShouldDisplay(CadSelectionKind::Body, index, namedBody.visible)) {
             continue;
         }
         const auto& body = namedBody.body;
@@ -2654,7 +2708,7 @@ CadSelection CadViewport::HitTest(QPointF position) const
 
     for (int index = 0; index < static_cast<int>(project_->Plates().size()); ++index) {
         const auto& namedPlate = project_->Plates()[index];
-        if (!namedPlate.visible) {
+        if (!ShouldDisplay(CadSelectionKind::Plate, index, namedPlate.visible)) {
             continue;
         }
         const auto& plate = namedPlate.plate;
@@ -2711,7 +2765,7 @@ CadSelection CadViewport::HitTest(QPointF position) const
 
     for (int index = 0; index < static_cast<int>(project_->Surfaces().size()); ++index) {
         const auto& namedSurface = project_->Surfaces()[index];
-        if (!namedSurface.visible) {
+        if (!ShouldDisplay(CadSelectionKind::Surface, index, namedSurface.visible)) {
             continue;
         }
         const auto& surface = namedSurface.surface;
@@ -2745,7 +2799,7 @@ CadSelection CadViewport::HitTest(QPointF position) const
 
     for (int index = 0; index < static_cast<int>(project_->WorkPlanes().size()); ++index) {
         const auto& namedPlane = project_->WorkPlanes()[index];
-        if (!namedPlane.visible) {
+        if (!ShouldDisplay(CadSelectionKind::WorkPlane, index, namedPlane.visible)) {
             continue;
         }
         const auto& plane = namedPlane.plane;

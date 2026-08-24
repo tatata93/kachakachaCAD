@@ -53,6 +53,12 @@ enum class MeasurementMode {
     Elements,
 };
 
+enum class ViewportDisplayMode {
+    Design,
+    FinishedModel,
+    IsolatedSelection,
+};
+
 enum class MeasurementPickKind {
     Point,
     Wire,
@@ -99,6 +105,10 @@ public:
     void SetProject(const kachakacha::model::Project* project, bool fitView = true);
     void SetSelection(CadSelection selection);
     void SetSelections(std::vector<CadSelection> selections);
+    void SetDisplayMode(
+        ViewportDisplayMode mode,
+        std::vector<CadSelection> isolatedSelections = {});
+    [[nodiscard]] ViewportDisplayMode DisplayMode() const noexcept { return displayMode_; }
     void SetReference(CadSelection reference);
     [[nodiscard]] CadSelection Selection() const noexcept { return selection_; }
     [[nodiscard]] const std::vector<CadSelection>& Selections() const noexcept { return selections_; }
@@ -196,6 +206,10 @@ private:
     [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
+    [[nodiscard]] bool ShouldDisplay(
+        CadSelectionKind kind,
+        int index,
+        bool projectVisible) const;
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> PointOnPlane(
         QPointF position,
         const kachakacha::model::WorkPlane& plane) const;
@@ -232,6 +246,8 @@ private:
     CadSelection reference_;
     CadSelection hoveredSelection_;
     std::vector<CadSelection> selections_;
+    ViewportDisplayMode displayMode_ = ViewportDisplayMode::Design;
+    std::vector<CadSelection> isolatedSelections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineCreated_;
     std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> polylineCreated_;

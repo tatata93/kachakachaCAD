@@ -459,20 +459,36 @@ void MainWindow::BuildUi()
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
     modelDock->setObjectName("modelDock");
     modelDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    auto* modelPanel = new QWidget;
+    auto* modelLayout = new QVBoxLayout(modelPanel);
+    modelLayout->setContentsMargins(6, 6, 6, 6);
+    modelLayout->setSpacing(6);
+    modelFilter_ = new QLineEdit;
+    modelFilter_->setClearButtonEnabled(true);
+    modelFilter_->setPlaceholderText(QStringLiteral("名前・種類で絞り込み"));
+    modelFilter_->setToolTip(QStringLiteral("ワイヤー、板材などの種類名または部材名を入力して絞り込み"));
     modelTree_ = new QTreeWidget;
     modelTree_->setHeaderHidden(true);
     modelTree_->setAlternatingRowColors(true);
     modelTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     modelTree_->header()->setStretchLastSection(true);
-    modelDock->setWidget(modelTree_);
+    modelLayout->addWidget(modelFilter_);
+    modelLayout->addWidget(modelTree_, 1);
+    modelDock->setWidget(modelPanel);
     addDockWidget(Qt::LeftDockWidgetArea, modelDock);
     modelDock->setMinimumWidth(220);
+
+    connect(modelFilter_, &QLineEdit::textChanged, this, [this] {
+        ApplyModelTreeFilter();
+    });
 
     connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
         const QList<QTreeWidgetItem*> items = modelTree_->selectedItems();
         std::vector<CadSelection> selections;
         for (QTreeWidgetItem* item : items) {
-            if (item->parent() == nullptr) {
+            if (item->parent() == nullptr
+                || !item->data(0, kSelectionKindRole).isValid()
+                || !item->data(0, kSelectionIndexRole).isValid()) {
                 continue;
             }
             selections.push_back({
@@ -481,7 +497,9 @@ void MainWindow::BuildUi()
             });
         }
         QTreeWidgetItem* current = modelTree_->currentItem();
-        if (current != nullptr && current->parent() != nullptr) {
+        if (current != nullptr && current->parent() != nullptr
+            && current->data(0, kSelectionKindRole).isValid()
+            && current->data(0, kSelectionIndexRole).isValid()) {
             const CadSelection currentSelection = {
                 static_cast<CadSelectionKind>(current->data(0, kSelectionKindRole).toInt()),
                 current->data(0, kSelectionIndexRole).toInt(),
@@ -1973,7 +1991,18 @@ void MainWindow::BuildMenusAndToolbar()
     redoAction_ = new QAction(style()->standardIcon(QStyle::SP_ArrowForward), QStringLiteral("やり直す"), this);
     hideSelectedAction_ = new QAction(QStringLiteral("隠す"), this);
     showAllObjectsAction_ = new QAction(QStringLiteral("全て表示"), this);
+    designDisplayAction_ = new QAction(QStringLiteral("設計"), this);
+    finishedDisplayAction_ = new QAction(QStringLiteral("完成形"), this);
+    isolateDisplayAction_ = new QAction(QStringLiteral("選択だけ"), this);
     QAction* manualAction = new QAction(QStringLiteral("操作マニュアル"), this);
+
+    auto* displayModeGroup = new QActionGroup(this);
+    displayModeGroup->setExclusive(true);
+    for (QAction* action : {designDisplayAction_, finishedDisplayAction_, isolateDisplayAction_}) {
+        action->setCheckable(true);
+        displayModeGroup->addAction(action);
+    }
+    designDisplayAction_->setChecked(true);
 
     newAction->setShortcut(QKeySequence::New);
     openAction->setShortcut(QKeySequence::Open);
@@ -1984,8 +2013,14 @@ void MainWindow::BuildMenusAndToolbar()
     redoAction_->setShortcut(QKeySequence::Redo);
     hideSelectedAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+H")));
     showAllObjectsAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+H")));
+    designDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+1")));
+    finishedDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+2")));
+    isolateDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+3")));
     hideSelectedAction_->setToolTip(QStringLiteral("選択した作業平面・ワイヤー・面・板材を隠す"));
     showAllObjectsAction_->setToolTip(QStringLiteral("隠した作業平面・ワイヤー・面・板材をすべて表示"));
+    designDisplayAction_->setToolTip(QStringLiteral("作業平面、ワイヤー、面、板材、立体を通常どおり表示"));
+    finishedDisplayAction_->setToolTip(QStringLiteral("板材と立体だけを一時表示。設計データや履歴は変更しません"));
+    isolateDisplayAction_->setToolTip(QStringLiteral("現在選択している要素だけを一時表示。設計データや履歴は変更しません"));
 
     connect(newAction, &QAction::triggered, this, &MainWindow::NewProject);
     connect(openAction, &QAction::triggered, this, &MainWindow::OpenProject);
@@ -1998,6 +2033,15 @@ void MainWindow::BuildMenusAndToolbar()
     connect(redoAction_, &QAction::triggered, this, &MainWindow::Redo);
     connect(hideSelectedAction_, &QAction::triggered, this, &MainWindow::HideSelected);
     connect(showAllObjectsAction_, &QAction::triggered, this, &MainWindow::ShowAllObjects);
+    connect(designDisplayAction_, &QAction::triggered, this, [this] {
+        SetDisplayMode(ViewportDisplayMode::Design);
+    });
+    connect(finishedDisplayAction_, &QAction::triggered, this, [this] {
+        SetDisplayMode(ViewportDisplayMode::FinishedModel);
+    });
+    connect(isolateDisplayAction_, &QAction::triggered, this, [this] {
+        SetDisplayMode(ViewportDisplayMode::IsolatedSelection);
+    });
     connect(manualAction, &QAction::triggered, this, [this] {
         const QDir applicationDirectory(QApplication::applicationDirPath());
         const QStringList candidates = {
@@ -2045,6 +2089,10 @@ void MainWindow::BuildMenusAndToolbar()
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示"));
     viewMenu->addAction(fitAction);
     viewMenu->addSeparator();
+    viewMenu->addAction(designDisplayAction_);
+    viewMenu->addAction(finishedDisplayAction_);
+    viewMenu->addAction(isolateDisplayAction_);
+    viewMenu->addSeparator();
     viewMenu->addAction(hideSelectedAction_);
     viewMenu->addAction(showAllObjectsAction_);
 
@@ -2078,6 +2126,11 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addSeparator();
     toolbar->addAction(fitAction);
     toolbar->addAction(measureToolAction_);
+    toolbar->addSeparator();
+    toolbar->addAction(designDisplayAction_);
+    toolbar->addAction(finishedDisplayAction_);
+    toolbar->addAction(isolateDisplayAction_);
+    toolbar->addSeparator();
     toolbar->addAction(hideSelectedAction_);
     toolbar->addAction(showAllObjectsAction_);
     toolbar->addAction(deleteAction);
@@ -2132,6 +2185,8 @@ void MainWindow::NewProject()
     undoStack_.clear();
     redoStack_.clear();
     UpdateHistoryActions();
+    ResetDisplayMode();
+    modelFilter_->clear();
     RefreshModelViews(true);
     toolsTabs_->setCurrentIndex(0);
     SetViewportTool(ViewportTool::DrawLine);
@@ -2169,6 +2224,8 @@ bool MainWindow::LoadProjectFile(const QString& path)
         undoStack_.clear();
         redoStack_.clear();
         UpdateHistoryActions();
+        ResetDisplayMode();
+        modelFilter_->clear();
         RefreshModelViews(true);
         toolsTabs_->setCurrentIndex(0);
         SetViewportTool(ViewportTool::DrawLine);
@@ -2473,6 +2530,15 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(6, 1.0);
         finalRevealTab = 6;
         finalRevealAnchor = QStringLiteral("modelOutput");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("inspection")) {
+        modelFilter_->setText(QStringLiteral("nose_panel"));
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        showTab(7);
+        SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("info")) {
@@ -5536,6 +5602,10 @@ bool MainWindow::RunCreationSelfTest()
         || gridPointsVisible_ == nullptr
         || gridOrigin_[0] == nullptr
         || gridOrigin_[1] == nullptr
+        || modelFilter_ == nullptr
+        || designDisplayAction_ == nullptr
+        || finishedDisplayAction_ == nullptr
+        || isolateDisplayAction_ == nullptr
         || modelExportScope_ == nullptr
         || plateVariableThickness_ == nullptr
         || plateEndThickness_ == nullptr
@@ -6829,6 +6899,43 @@ bool MainWindow::RunCreationSelfTest()
         return fail("remove tangent endpoint coincidence");
     }
 
+    modelFilter_->setText(QStringLiteral("__ui_nose_skin"));
+    bool matchingTreeItemVisible = false;
+    QTreeWidgetItemIterator filteredIterator(modelTree_);
+    while (*filteredIterator) {
+        QTreeWidgetItem* item = *filteredIterator;
+        if (item->text(0) == QStringLiteral("__ui_nose_skin") && !item->isHidden()) {
+            matchingTreeItemVisible = true;
+            break;
+        }
+        ++filteredIterator;
+    }
+    if (!matchingTreeItemVisible) {
+        return fail("filter model tree by object name");
+    }
+    modelFilter_->clear();
+
+    const std::size_t historySizeBeforeDisplayMode = undoStack_.size();
+    UpdateSelections({
+        {CadSelectionKind::Surface, static_cast<int>(surfaceStart)},
+        {CadSelectionKind::Plate, static_cast<int>(plateStart)},
+    }, true);
+    SetDisplayMode(ViewportDisplayMode::IsolatedSelection);
+    if (viewport_->DisplayMode() != ViewportDisplayMode::IsolatedSelection) {
+        return fail("isolate selected model objects");
+    }
+    SetDisplayMode(ViewportDisplayMode::FinishedModel);
+    if (viewport_->DisplayMode() != ViewportDisplayMode::FinishedModel
+        || viewport_->Selections().size() != 1
+        || viewport_->Selections().front().kind != CadSelectionKind::Plate) {
+        return fail("show completed plates and bodies only");
+    }
+    SetDisplayMode(ViewportDisplayMode::Design);
+    if (viewport_->DisplayMode() != ViewportDisplayMode::Design
+        || undoStack_.size() != historySizeBeforeDisplayMode) {
+        return fail("restore design display without history change");
+    }
+
     toolsTabs_->setCurrentIndex(7);
     QApplication::processEvents();
     return true;
@@ -7420,8 +7527,118 @@ void MainWindow::ShowAllObjects()
     statusBar()->showMessage(QStringLiteral("すべて再表示しました"), 2500);
 }
 
+void MainWindow::ApplyModelTreeFilter()
+{
+    if (modelFilter_ == nullptr || modelTree_ == nullptr) {
+        return;
+    }
+
+    const QString term = modelFilter_->text().trimmed();
+    for (int rootIndex = 0; rootIndex < modelTree_->topLevelItemCount(); ++rootIndex) {
+        QTreeWidgetItem* root = modelTree_->topLevelItem(rootIndex);
+        const bool rootMatches = term.isEmpty()
+            || root->text(0).contains(term, Qt::CaseInsensitive);
+        bool childMatches = false;
+        for (int childIndex = 0; childIndex < root->childCount(); ++childIndex) {
+            QTreeWidgetItem* child = root->child(childIndex);
+            const bool matches = term.isEmpty() || rootMatches
+                || child->text(0).contains(term, Qt::CaseInsensitive);
+            child->setHidden(!matches);
+            childMatches = childMatches || matches;
+        }
+        const bool rootVisible = term.isEmpty() || rootMatches || childMatches;
+        root->setHidden(!rootVisible);
+        if (!term.isEmpty() && rootVisible) {
+            root->setExpanded(true);
+        }
+    }
+}
+
+void MainWindow::SetDisplayMode(ViewportDisplayMode mode)
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+
+    const auto restoreCurrentModeAction = [this] {
+        const ViewportDisplayMode currentMode = viewport_->DisplayMode();
+        const QSignalBlocker designBlocker(designDisplayAction_);
+        const QSignalBlocker finishedBlocker(finishedDisplayAction_);
+        const QSignalBlocker isolateBlocker(isolateDisplayAction_);
+        designDisplayAction_->setChecked(currentMode == ViewportDisplayMode::Design);
+        finishedDisplayAction_->setChecked(currentMode == ViewportDisplayMode::FinishedModel);
+        isolateDisplayAction_->setChecked(currentMode == ViewportDisplayMode::IsolatedSelection);
+    };
+    if (viewport_->DrawingPointCount() > 0) {
+        restoreCurrentModeAction();
+        statusBar()->showMessage(
+            QStringLiteral("作図中です。先に「完了」または「取消」を押してください"), 4000);
+        return;
+    }
+
+    std::vector<CadSelection> isolatedSelections;
+    if (mode == ViewportDisplayMode::IsolatedSelection) {
+        isolatedSelections = viewport_->Selections();
+        if (isolatedSelections.empty()) {
+            restoreCurrentModeAction();
+            statusBar()->showMessage(QStringLiteral("先に3D画面またはモデル一覧で要素を選択してください"), 4000);
+            return;
+        }
+    }
+
+    SetViewportTool(ViewportTool::Select);
+    if (mode == ViewportDisplayMode::FinishedModel) {
+        std::vector<CadSelection> finishedSelections;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Plate
+                || selection.kind == CadSelectionKind::Body) {
+                finishedSelections.push_back(selection);
+            }
+        }
+        UpdateSelections(std::move(finishedSelections), true);
+    }
+    viewport_->SetDisplayMode(mode, std::move(isolatedSelections));
+
+    {
+        const QSignalBlocker designBlocker(designDisplayAction_);
+        const QSignalBlocker finishedBlocker(finishedDisplayAction_);
+        const QSignalBlocker isolateBlocker(isolateDisplayAction_);
+        designDisplayAction_->setChecked(mode == ViewportDisplayMode::Design);
+        finishedDisplayAction_->setChecked(mode == ViewportDisplayMode::FinishedModel);
+        isolateDisplayAction_->setChecked(mode == ViewportDisplayMode::IsolatedSelection);
+    }
+    viewport_->FitAll();
+
+    const QString message = mode == ViewportDisplayMode::Design
+        ? QStringLiteral("設計表示に戻しました")
+        : mode == ViewportDisplayMode::FinishedModel
+            ? QStringLiteral("完成形だけを一時表示しています")
+            : QStringLiteral("選択した要素だけを一時表示しています");
+    statusBar()->showMessage(message, 3000);
+}
+
+void MainWindow::ResetDisplayMode()
+{
+    if (viewport_ != nullptr) {
+        viewport_->SetDisplayMode(ViewportDisplayMode::Design);
+    }
+    if (designDisplayAction_ == nullptr || finishedDisplayAction_ == nullptr
+        || isolateDisplayAction_ == nullptr) {
+        return;
+    }
+    const QSignalBlocker designBlocker(designDisplayAction_);
+    const QSignalBlocker finishedBlocker(finishedDisplayAction_);
+    const QSignalBlocker isolateBlocker(isolateDisplayAction_);
+    designDisplayAction_->setChecked(true);
+    finishedDisplayAction_->setChecked(false);
+    isolateDisplayAction_->setChecked(false);
+}
+
 void MainWindow::RefreshModelViews(bool fitView)
 {
+    if (viewport_->DisplayMode() == ViewportDisplayMode::IsolatedSelection) {
+        ResetDisplayMode();
+    }
     modelTree_->blockSignals(true);
     modelTree_->clear();
     auto* planeRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("作業平面 (%1)").arg(project_.WorkPlanes().size())});
@@ -7457,6 +7674,7 @@ void MainWindow::RefreshModelViews(bool fitView)
                 .arg(ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
                     ToQString(constraint.follower.wireName), endpointText(constraint.follower.endpoint)),
         });
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         item->setToolTip(0, QStringLiteral("左が固定側、右が追従側"));
     }
     auto* tangentRoot = new QTreeWidgetItem(
@@ -7469,6 +7687,7 @@ void MainWindow::RefreshModelViews(bool fitView)
                     ToQString(constraint.anchor.wireName), endpointText(constraint.anchor.endpoint),
                     ToQString(constraint.follower.wireName), endpointText(constraint.follower.endpoint)),
         });
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         item->setToolTip(0,
             constraint.continuity == WireContinuity::G2Curvature
                 ? QStringLiteral("右側のベジェ曲線が左側の位置・接線・曲率へ追従")
@@ -7486,6 +7705,7 @@ void MainWindow::RefreshModelViews(bool fitView)
             label += QStringLiteral("  [参照切れ]");
         }
         auto* item = new QTreeWidgetItem(dimensionRoot, {label});
+        item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         item->setToolTip(0, ReferenceDimensionKindText(dimension.kind));
     }
     auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
@@ -7521,6 +7741,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     plateRoot->setExpanded(true);
     bodyRoot->setExpanded(true);
     modelTree_->blockSignals(false);
+    ApplyModelTreeFilter();
 
     RefreshPlaneChoices();
     RefreshWireChoices();
@@ -7761,7 +7982,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         while (*iterator) {
             QTreeWidgetItem* item = *iterator;
             const auto matching = std::find_if(selections.begin(), selections.end(), [&](const CadSelection& selection) {
-                return item->data(0, kSelectionKindRole).toInt() == static_cast<int>(selection.kind)
+                return item->data(0, kSelectionKindRole).isValid()
+                    && item->data(0, kSelectionIndexRole).isValid()
+                    && item->data(0, kSelectionKindRole).toInt() == static_cast<int>(selection.kind)
                     && item->data(0, kSelectionIndexRole).toInt() == selection.index;
             });
             if (matching != selections.end()) {

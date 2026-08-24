@@ -87,8 +87,8 @@
         <div class="flow"><div>1. 作業平面を決める</div><div>2. ワイヤーを描く</div><div>3. 面・板・開口を作る</div><div>4. 図面・立体を出力</div></div>
         <figure><a href="manual-assets/overview.png"><img src="manual-assets/overview.png" alt="kachakachaCADの画面全体"></a><figcaption>画像1: 左がモデル一覧、中央が3D画面、右が機能別タブ。画像をクリックすると原寸で開きます。</figcaption></figure>
         <table><thead><tr><th>場所</th><th>役割</th></tr></thead><tbody>
-          <tr><td>上のツールバー</td><td>新規・保存・元に戻す・全体表示・選択・作図・変形をすぐ実行します。</td></tr>
-          <tr><td>左「モデル」</td><td>作業平面、ワイヤー、面、板材、治具を種類ごとに表示します。チェックで表示を切り替え、行のクリックで選択します。</td></tr>
+          <tr><td>上のツールバー</td><td>新規・保存・元に戻す・全体表示・設計/完成形/選択だけ表示・作図・変形をすぐ実行します。</td></tr>
+          <tr><td>左「モデル」</td><td>上端の検索欄で部材名や種類を絞り込みます。チェックで3D表示を切り替え、行のクリックで選択します。</td></tr>
           <tr><td>中央「3D画面」</td><td>作図、選択、直接変形、測定を行います。選択中は橙色、マウスを置いた候補は色が変わります。</td></tr>
           <tr><td>右「作図と編集」</td><td>作図、作業平面、数値入力、編集、加工、面、出力、情報の8タブがあります。</td></tr>
           <tr><td>右上のキューブ</td><td>正面・上面・右面・斜め視点、旋回、画面回転、選択への正対を行います。</td></tr>
@@ -129,11 +129,18 @@
           <tr><td>空白を左クリック</td><td>選択解除。</td></tr>
           <tr><td>線・点へマウスを置く</td><td>候補色が変わり、クリック前に対象を確認できます。</td></tr>
           <tr><td>左のモデル一覧をクリック</td><td>名前で確実に選択。複数は <kbd>Ctrl</kbd>+クリック。</td></tr>
+          <tr><td>左上「名前・種類で絞り込み」</td><td>一覧だけを部材名または「ワイヤー」「板材」などの種類で絞る。3D形状は隠しません。</td></tr>
           <tr><td>左一覧のチェック</td><td>対象の表示・非表示。選択状態とは別です。</td></tr>
+          <tr><td>上部「完成形」 / <kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>板材と立体だけを一時表示。作業平面、線、面、寸法、グリッドをまとめて退避します。</td></tr>
+          <tr><td>上部「選択だけ」 / <kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>先に選択した要素だけを一時表示。複雑な重なりの点検に使います。</td></tr>
+          <tr><td>上部「設計」 / <kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>通常の設計表示へ戻る。</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>選択中を隠す。</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>すべて再表示。</td></tr>
           <tr><td><kbd>Delete</kbd></td><td>選択対象を削除。依存物があるときは確認内容に従います。</td></tr>
         </tbody></table>
+        <figure><a href="manual-assets/model-inspection.png"><img src="manual-assets/model-inspection.png" alt="モデル一覧を名前で絞り込み、完成形だけを表示した状態"></a><figcaption>画像3a: <code>nose_panel</code> で一覧を絞り込み、「完成形」で板材と立体だけを確認しています。</figcaption></figure>
+        <dl class="recipe"><dt>部材を探す</dt><dd>左上へ名前の一部を入力。種類一式なら「板材」「ワイヤー」などを入力します。</dd><dt>完成形を見る</dt><dd>上部「完成形」。表示中の板材と立体だけへ自動で全体表示します。</dd><dt>一部だけ見る</dt><dd>中央または左一覧で対象を複数選び、上部「選択だけ」。</dd><dt>作業へ戻る</dt><dd>上部「設計」。検索欄右端の×で一覧の絞り込みも解除します。</dd></dl>
+        <p class="note">「設計・完成形・選択だけ」は一時的な見方なので、保存内容や元に戻す履歴を変更しません。左一覧のチェックと「隠す」はプロジェクトに保存される表示設定です。</p>
         <p class="note">選択順が形状へ影響する操作では、前から後ろなど意図した順に <kbd>Ctrl</kbd>+クリックしてください。「面」タブの選択数表示で確認できます。</p>
       </section>
 
@@ -440,6 +447,8 @@
           <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>保存</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>名前を付けて保存</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>元に戻す</td><td><kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>やり直す</td></tr>
           <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>選択を隠す</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>全て表示</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>設計表示</td><td><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>完成形だけ表示</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>選択だけ表示</td><td></td><td></td></tr>
         </tbody></table>
         <h3>最短の製作手順</h3>
         <ol><li>作業平面を選んで正対。</li><li>点グリッドとスナップを設定し、断面や開口平面図を作図。</li><li>断面を順番に複数選択し、面または3D板を作成。</li><li>窓・ライト平面図を面へ投影し、板と一緒に選んで開口へ追加。</li><li>飛び出すライトは最前面輪郭と車体面を選び、根元とケース側面を作成。</li><li>必要なら板を手動分割し、展開精度を確認。</li><li>板・治具を中央で選び、STL/STEPまたは1:1図面を出力。</li></ol>

@@ -43,6 +43,7 @@ $Shots = @(
     @{ Name = "plate-split"; Project = $Acceptance; State = "split" },
     @{ Name = "flat-pattern"; Project = $Acceptance; State = "flat-pattern" },
     @{ Name = "model-output"; Project = $Acceptance; State = "output" },
+    @{ Name = "model-inspection"; Project = $Acceptance; State = "inspection" },
     @{ Name = "selection-info"; Project = $Acceptance; State = "info" }
 )
 

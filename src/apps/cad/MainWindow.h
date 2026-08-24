@@ -146,6 +146,9 @@ private:
     void RefreshWireChoices();
     void RefreshSurfaceChoices();
     void RefreshExportSummary();
+    void ApplyModelTreeFilter();
+    void SetDisplayMode(ViewportDisplayMode mode);
+    void ResetDisplayMode();
     void UpdateSelection(CadSelection selection, bool updateTree);
     void UpdateSelections(std::vector<CadSelection> selections, bool updateTree);
     void SyncMachiningSelection(const std::vector<CadSelection>& selections);
@@ -177,6 +180,9 @@ private:
     QAction* redoAction_ = nullptr;
     QAction* hideSelectedAction_ = nullptr;
     QAction* showAllObjectsAction_ = nullptr;
+    QAction* designDisplayAction_ = nullptr;
+    QAction* finishedDisplayAction_ = nullptr;
+    QAction* isolateDisplayAction_ = nullptr;
     QAction* selectToolAction_ = nullptr;
     QAction* lineToolAction_ = nullptr;
     QAction* polylineToolAction_ = nullptr;
@@ -220,6 +226,7 @@ private:
     QPushButton* drawingDimensionCommitButton_ = nullptr;
 
     CadViewport* viewport_ = nullptr;
+    QLineEdit* modelFilter_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
     QTimer* autosaveTimer_ = nullptr;

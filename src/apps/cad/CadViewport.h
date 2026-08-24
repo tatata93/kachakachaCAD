@@ -289,10 +289,12 @@ private:
         double maximumDistance = 12.0) const;
     [[nodiscard]] std::optional<DrawingSnapCandidate> FindDrawingSnap(
         kachakacha::geometry::Vector3 point,
-        QPointF screenPosition) const;
+        QPointF screenPosition,
+        bool nearbyStructuralOnly = false) const;
     [[nodiscard]] kachakacha::geometry::Vector3 SnapPoint(
         kachakacha::geometry::Vector3 point,
-        QPointF screenPosition);
+        QPointF screenPosition,
+        Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     [[nodiscard]] kachakacha::geometry::Vector3 SnapGridAlignmentTarget(
         kachakacha::geometry::Vector3 point,
         QPointF screenPosition) const;

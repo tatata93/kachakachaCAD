@@ -905,6 +905,9 @@ void MainWindow::BuildDrawingActions()
     snapAction_ = new QAction(QStringLiteral("スナップ"), this);
     snapAction_->setCheckable(true);
     snapAction_->setChecked(true);
+    snapAction_->setToolTip(QStringLiteral(
+        "交点・作図点・端点・格子点へ吸着。Ctrlを押している間は完全解除。"
+        "入力前の右クリックは近くの構造点を始点にします"));
     alignPlaneAction_ = new QAction(QStringLiteral("正対"), this);
     alignPlaneAction_->setToolTip(QStringLiteral("作図面を真正面から見る"));
     finishDrawingAction_ = new QAction(style()->standardIcon(QStyle::SP_DialogApplyButton), QStringLiteral("完了"), this);
@@ -4414,10 +4417,12 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::DrawPoint:
         statusBar()->showMessage(
-            QStringLiteral("作図点: 位置をクリック。記号が出た候補だけに弱く吸着します"), 4500);
+            QStringLiteral("作図点: 位置をクリック。Ctrlを押している間は吸着しません"), 4500);
         break;
     case ViewportTool::DrawLine:
-        statusBar()->showMessage(QStringLiteral("直線作図モード"), 2500);
+        statusBar()->showMessage(
+            QStringLiteral("直線: 左クリックで始点。近くの点からは右クリック。Ctrl中は吸着なし"),
+            5000);
         break;
     case ViewportTool::DrawPolyline:
         statusBar()->showMessage(QStringLiteral("ポリライン作図モード"), 2500);
@@ -4703,6 +4708,9 @@ void MainWindow::RefreshBeginnerGuide()
     const ViewportTool tool = viewport_->Tool();
     const std::size_t pointCount = viewport_->DrawingPointCount();
     if (tool != ViewportTool::Select) {
+        const QString startSnapHint = QStringLiteral(
+            "\n入力前の右クリック: 近くの交点・端点・作図点を始点"
+            "\nCtrl中: 完全に吸着しない");
         switch (tool) {
         case ViewportTool::MoveGridOrigin:
             setGuide(QStringLiteral("点グリッドの基準を合わせる"),
@@ -4713,35 +4721,35 @@ void MainWindow::RefreshBeginnerGuide()
         case ViewportTool::DrawPoint:
             setGuide(QStringLiteral("作図点を置く"),
                 QStringLiteral("次: 点を置く位置を中央画面でクリック"),
-                QStringLiteral("交点・端点・格子点は薄い記号が出た時だけ吸着\n記号がなければ、そのまま任意位置に置けます"),
+                QStringLiteral("交点・端点・格子点は薄い記号が出た時だけ吸着\n記号がなければ任意位置。Ctrl中は完全に吸着しません"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawLine:
             setGuide(QStringLiteral("直線を描く"),
                 pointCount == 0 ? QStringLiteral("次: 始点を中央画面でクリック")
                                 : QStringLiteral("次: 終点をクリック、または数字を入力"),
-                QStringLiteral("1  始点\n2  数字を打つと長さ欄へ入力\n3  Tabで角度、Enterで確定"),
+                QStringLiteral("1  始点\n2  数字を打つと長さ欄へ入力\n3  Tabで角度、Enterで確定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawPolyline:
             setGuide(QStringLiteral("ポリラインを描く"),
                 pointCount == 0 ? QStringLiteral("次: 始点をクリック")
                                 : QStringLiteral("次: 折れ点をクリック、または数字を入力"),
-                QStringLiteral("1  始点\n2  各区間は長さ→Tab→角度→Enter\n3  右クリック・完了で全体を確定"),
+                QStringLiteral("1  始点\n2  各区間は長さ→Tab→角度→Enter\n3  入力後の右クリック・完了で全体を確定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawRectangle:
             setGuide(QStringLiteral("矩形を描く"),
                 pointCount == 0 ? QStringLiteral("次: 1つ目の角をクリック")
                                 : QStringLiteral("次: 対角をクリック、または数字を入力"),
-                QStringLiteral("1  角を1点\n2  数字を打つと幅欄へ入力\n3  Tabで高さ、Enterで確定"),
+                QStringLiteral("1  角を1点\n2  数字を打つと幅欄へ入力\n3  Tabで高さ、Enterで確定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawCircle:
             setGuide(QStringLiteral("円を描く"),
                 pointCount == 0 ? QStringLiteral("次: 中心をクリック")
                                 : QStringLiteral("次: 円周をクリック、または半径を入力"),
-                QStringLiteral("1  中心\n2  数字を打つと半径欄へ入力\n3  Enterで確定"),
+                QStringLiteral("1  中心\n2  数字を打つと半径欄へ入力\n3  Enterで確定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawArc:
@@ -4749,7 +4757,7 @@ void MainWindow::RefreshBeginnerGuide()
                 pointCount == 0 ? QStringLiteral("次: 始点をクリック")
                     : pointCount == 1 ? QStringLiteral("次: 円弧が通る点をクリック")
                                       : QStringLiteral("次: 終点をクリック"),
-                QStringLiteral("1  始点\n2  通過点\n3  終点\n各点は距離→Tab→角度→Enterでも指定"),
+                QStringLiteral("1  始点\n2  通過点\n3  終点\n各点は距離→Tab→角度→Enterでも指定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawBezier:
@@ -4758,14 +4766,14 @@ void MainWindow::RefreshBeginnerGuide()
                     : pointCount == 1 ? QStringLiteral("次: 始点側の制御点")
                     : pointCount == 2 ? QStringLiteral("次: 終点側の制御点")
                                       : QStringLiteral("次: 終点をクリック"),
-                QStringLiteral("1  始点\n2  制御点1\n3  制御点2\n4  終点\n各点は距離・角度でも指定"),
+                QStringLiteral("1  始点\n2  制御点1\n3  制御点2\n4  終点\n各点は距離・角度でも指定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawSpline:
             setGuide(QStringLiteral("通過点スプラインを描く"),
                 pointCount < 4 ? QStringLiteral("次: 通過点を%1点以上まで追加").arg(4 - pointCount)
                                : QStringLiteral("次: Enterで確定、または通過点を追加"),
-                QStringLiteral("1  通過点をクリックまたは距離・角度で追加\n2  右クリック・完了で確定"),
+                QStringLiteral("1  通過点をクリックまたは距離・角度で追加\n2  入力後の右クリック・完了で確定") + startSnapHint,
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::MoveSelection:
@@ -6887,6 +6895,11 @@ bool MainWindow::RunCreationSelfTest()
         sendMouse(QEvent::MouseButtonPress, position, Qt::LeftButton, Qt::LeftButton, modifiers);
         sendMouse(QEvent::MouseButtonRelease, position, Qt::LeftButton, Qt::NoButton, modifiers);
     };
+    const auto rightClick = [&](QPointF position, Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
+        sendMouse(QEvent::MouseMove, position, Qt::NoButton, Qt::NoButton, modifiers);
+        sendMouse(QEvent::MouseButtonPress, position, Qt::RightButton, Qt::RightButton, modifiers);
+        sendMouse(QEvent::MouseButtonRelease, position, Qt::RightButton, Qt::NoButton, modifiers);
+    };
     const auto dragMouse = [&](QPointF start, QPointF end, Qt::MouseButton button,
                                Qt::KeyboardModifiers modifiers = Qt::NoModifier) {
         sendMouse(QEvent::MouseMove, start, Qt::NoButton, Qt::NoButton);
@@ -7099,13 +7112,13 @@ bool MainWindow::RunCreationSelfTest()
         }
 
         SetViewportTool(ViewportTool::DrawPoint);
-        sendMouse(QEvent::MouseMove, center, Qt::NoButton, Qt::NoButton);
+        sendMouse(QEvent::MouseMove, center + QPointF(5.0, 0.0), Qt::NoButton, Qt::NoButton);
         if (!viewport_->DrawingSnapHover().has_value()
             || viewport_->DrawingSnapHover()->kind != DrawingSnapKind::Intersection) {
-            return fail("intersection snap candidate");
+            return fail("moderate intersection snap candidate");
         }
         const std::size_t pointStart = project_.Points().size();
-        click(center);
+        click(center + QPointF(5.0, 0.0));
         if (project_.Points().size() != pointStart + 1) {
             return fail("create point at intersection");
         }
@@ -7134,6 +7147,37 @@ bool MainWindow::RunCreationSelfTest()
             return fail("point uses exact line intersection");
         }
 
+        SetViewportTool(ViewportTool::DrawLine);
+        const std::size_t nearbyStartWireCount = project_.Wires().size();
+        rightClick(center + QPointF(11.0, 0.0));
+        if (viewport_->DrawingPointCount() != 1) {
+            return fail("right click begins at nearby structural point");
+        }
+        click(center + QPointF(90.0, 55.0), Qt::ControlModifier);
+        if (project_.Wires().size() != nearbyStartWireCount + 1
+            || !kachakacha::geometry::AlmostEqual(
+                project_.Wires().back().wire.Start(), expectedIntersection, 1.0e-8)) {
+            return fail("right click line uses exact nearby intersection");
+        }
+
+        SetViewportTool(ViewportTool::DrawPoint);
+        const QPointF bypassPosition = center + QPointF(1.0, 0.0);
+        sendMouse(
+            QEvent::MouseMove,
+            bypassPosition,
+            Qt::NoButton,
+            Qt::NoButton,
+            Qt::ControlModifier);
+        if (viewport_->DrawingSnapHover().has_value()) {
+            return fail("ctrl bypass hides snap candidate");
+        }
+        click(bypassPosition, Qt::ControlModifier);
+        if (project_.Points().size() != pointStart + 2
+            || kachakacha::geometry::AlmostEqual(
+                project_.Points().back().point, expectedIntersection, 1.0e-8)) {
+            return fail("ctrl bypass creates unsnapped point");
+        }
+
         std::optional<QPointF> freeScreenPoint;
         for (int y = 25; y <= 85 && !freeScreenPoint.has_value(); ++y) {
             for (int x = 25; x <= 85; ++x) {
@@ -7149,7 +7193,7 @@ bool MainWindow::RunCreationSelfTest()
             return fail("find unsnapped drawing position");
         }
         click(*freeScreenPoint);
-        if (project_.Points().size() != pointStart + 2) {
+        if (project_.Points().size() != pointStart + 3) {
             return fail("create freely positioned point");
         }
         const auto freeCoordinates = snapPlane.Project(project_.Points().back().point);

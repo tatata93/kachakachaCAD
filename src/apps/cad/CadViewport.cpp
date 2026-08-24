@@ -1875,7 +1875,8 @@ void CadViewport::CommitCoincidencePick(QPointF position)
 
 std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
     Vector3 point,
-    QPointF screenPosition) const
+    QPointF screenPosition,
+    bool nearbyStructuralOnly) const
 {
     if (!activePlane_.has_value() || !snapEnabled_) {
         return std::nullopt;
@@ -1897,12 +1898,20 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         if (distance > maximumDistance) {
             return;
         }
-        if (!best.has_value() || distance < best->distancePixels - 0.15
+        const bool structuralCandidate = kind != DrawingSnapKind::Grid;
+        const bool structuralBest = best.has_value() && best->kind != DrawingSnapKind::Grid;
+        if (!best.has_value()
+            || (structuralCandidate && !structuralBest)
+            || (structuralCandidate == structuralBest && distance < best->distancePixels - 0.15)
             || (std::abs(distance - best->distancePixels) <= 0.15
                 && priority(kind) > priority(best->kind))) {
             best = DrawingSnapCandidate{kind, candidate, distance};
         }
     };
+
+    const double pointRadius = nearbyStructuralOnly ? 14.0 : 6.0;
+    const double intersectionRadius = nearbyStructuralOnly ? 14.0 : 7.0;
+    const double segmentSearchRadius = nearbyStructuralOnly ? 17.0 : 10.0;
 
     if (project_ != nullptr) {
         for (int pointIndex = 0; pointIndex < static_cast<int>(project_->Points().size()); ++pointIndex) {
@@ -1911,7 +1920,7 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                 || std::abs(activePlane_->Project(namedPoint.point).w) > 1.0e-6) {
                 continue;
             }
-            consider(DrawingSnapKind::Point, namedPoint.point, 3.0);
+            consider(DrawingSnapKind::Point, namedPoint.point, pointRadius);
         }
 
         struct PlaneSegment {
@@ -1937,7 +1946,7 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                 if (std::abs(activePlane_->Project(endpoint).w) > 1.0e-6) {
                     continue;
                 }
-                consider(DrawingSnapKind::Endpoint, endpoint, 3.0);
+                consider(DrawingSnapKind::Endpoint, endpoint, pointRadius);
             }
 
             std::vector<Vector3> samples;
@@ -1959,7 +1968,7 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                     || DistanceToSegment(
                            screenPosition,
                            ProjectPoint(samples[index - 1]),
-                           ProjectPoint(samples[index])) > 7.0) {
+                           ProjectPoint(samples[index])) > segmentSearchRadius) {
                     continue;
                 }
                 nearbySegments.push_back({
@@ -1997,28 +2006,41 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                     activePlane_->ToWorld(
                         first.au + firstU * firstParameter,
                         first.av + firstV * firstParameter),
-                    3.5);
+                    intersectionRadius);
             }
         }
     }
 
-    if (gridPointsVisible_) {
+    if (gridPointsVisible_ && !nearbyStructuralOnly) {
         const double gridStep = snapStep_ / static_cast<double>(gridSubdivision_);
         const auto coordinates = activePlane_->Project(point);
-        const double snappedU = gridOriginU_
-            + std::round((coordinates.u - gridOriginU_) / gridStep) * gridStep;
-        const double snappedV = gridOriginV_
-            + std::round((coordinates.v - gridOriginV_) / gridStep) * gridStep;
+        const long long gridUIndex = std::llround((coordinates.u - gridOriginU_) / gridStep);
+        const long long gridVIndex = std::llround((coordinates.v - gridOriginV_) / gridStep);
+        const double snappedU = gridOriginU_ + static_cast<double>(gridUIndex) * gridStep;
+        const double snappedV = gridOriginV_ + static_cast<double>(gridVIndex) * gridStep;
+        const bool mainPoint = gridUIndex % gridSubdivision_ == 0
+            && gridVIndex % gridSubdivision_ == 0;
+        const double minorRadius = std::clamp(
+            gridStep * pixelsPerMillimeter_ * 0.3,
+            0.75,
+            2.25);
         consider(
             DrawingSnapKind::Grid,
             activePlane_->ToWorld(snappedU, snappedV),
-            1.25);
+            mainPoint ? 4.0 : minorRadius);
     }
     return best;
 }
 
-Vector3 CadViewport::SnapPoint(Vector3 point, QPointF screenPosition)
+Vector3 CadViewport::SnapPoint(
+    Vector3 point,
+    QPointF screenPosition,
+    Qt::KeyboardModifiers modifiers)
 {
+    if (modifiers.testFlag(Qt::ControlModifier)) {
+        drawingSnapHover_.reset();
+        return point;
+    }
     drawingSnapHover_ = FindDrawingSnap(point, screenPosition);
     return drawingSnapHover_.has_value() ? drawingSnapHover_->point : point;
 }
@@ -3883,7 +3905,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         && drawingPoints_.empty()) {
         const auto point = PointOnActivePlane(event->position());
         if (point.has_value()) {
-            CommitDrawingPoint(SnapPoint(*point, event->position()));
+            CommitDrawingPoint(SnapPoint(*point, event->position(), event->modifiers()));
         }
     }
 }
@@ -4057,7 +4079,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
             ? std::optional<Vector3>(ApplyDrawingConstraint(
-                  SnapPoint(*point, event->position()), event->modifiers()))
+                  SnapPoint(*point, event->position(), event->modifiers()), event->modifiers()))
             : std::nullopt;
         UpdateDynamicDimensionEditor();
         NotifyDrawingState();
@@ -4236,9 +4258,32 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
             const auto point = PointOnActivePlane(event->position());
             if (point.has_value()) {
                 CommitDrawingPoint(ApplyDrawingConstraint(
-                    SnapPoint(*point, event->position()), event->modifiers()));
+                    SnapPoint(*point, event->position(), event->modifiers()), event->modifiers()));
             }
         } else if (!mouseMoved_ && event->button() == Qt::RightButton) {
+            const bool canStartFromNearbyPoint = drawingPoints_.empty()
+                && (tool_ == ViewportTool::DrawLine
+                    || tool_ == ViewportTool::DrawPolyline
+                    || tool_ == ViewportTool::DrawRectangle
+                    || tool_ == ViewportTool::DrawCircle
+                    || tool_ == ViewportTool::DrawArc
+                    || tool_ == ViewportTool::DrawBezier
+                    || tool_ == ViewportTool::DrawSpline)
+                && !event->modifiers().testFlag(Qt::ControlModifier)
+                && activePlane_.has_value();
+            if (canStartFromNearbyPoint) {
+                const auto point = PointOnActivePlane(event->position());
+                const auto candidate = point.has_value()
+                    ? FindDrawingSnap(*point, event->position(), true)
+                    : std::nullopt;
+                if (candidate.has_value()) {
+                    drawingSnapHover_ = candidate;
+                    CommitDrawingPoint(candidate->point);
+                    dragButton_ = Qt::NoButton;
+                    event->accept();
+                    return;
+                }
+            }
             if ((tool_ == ViewportTool::DrawPolyline && drawingPoints_.size() >= 2)
                 || (tool_ == ViewportTool::DrawSpline && drawingPoints_.size() >= 4)) {
                 FinishDrawing();

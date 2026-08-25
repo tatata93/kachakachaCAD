@@ -2647,10 +2647,11 @@ void MainWindow::OpenLegalNotices()
     dialog.setIcon(QMessageBox::Information);
     dialog.setText(QStringLiteral(
         "kachakachaCAD %1\n\n"
+        "本体は GPL-3.0-or-later で公開しています。\n\n"
         "Qt 6.9.2（LGPLv3）と Open CASCADE Technology 8.0.1"
         "（LGPLv2.1 + 追加例外）を共有DLLとして使用しています。\n\n"
         "利用者は各ライセンスに従ってDLLを調査・変更・差し替えできます。"
-        "本ソフトで作成した模型データに、これらのライブラリのライセンスが"
+        "本ソフトで作成した模型データに、本体のGPLやこれらのライブラリのライセンスが"
         "自動的に適用されることはありません。実在車両やロゴなど第三者の権利は別途確認してください。")
         .arg(QApplication::applicationVersion()));
     QPushButton* openButton = nullptr;

@@ -4,6 +4,13 @@ kachakachaCAD 使用ライブラリと権利
 このフォルダには、kachakachaCAD が利用・同梱する第三者ソフトウェアの
 著作権表示、ライセンス本文、SBOM（部品表）を収録しています。
 
+kachakachaCAD 本体
+------------------
+
+kachakachaCAD 本体は GNU General Public License version 3 or later
+（GPL-3.0-or-later）で公開しています。配布物ルートの LICENSE にライセンス全文、
+COPYRIGHT に著作権表示と適用通知があります。
+
 主な使用ライブラリ
 ------------------
 
@@ -43,4 +50,4 @@ Qt や Open CASCADE Technology のライセンスが自動的に適用される�
 * sbom: Qtおよびvcpkgが生成したSPDX形式の部品表
 
 kachakachaCAD 本体のライセンスは、配布物のルートにある LICENSE に従います。
-LICENSE がない開発版は、一般公開用の最終配布物ではありません。
+適用する版と著作権表示は、配布物のルートにある COPYRIGHT に従います。

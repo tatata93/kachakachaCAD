@@ -96,6 +96,7 @@ Copy-Item -LiteralPath $LegalSource -Destination $ResolvedOutput -Recurse -Force
 $ApplicationLicense = Join-Path $RepoRoot "LICENSE"
 if (Test-Path $ApplicationLicense) {
     Copy-Item -LiteralPath $ApplicationLicense -Destination (Join-Path $ResolvedOutput "LICENSE") -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "COPYRIGHT") -Destination (Join-Path $ResolvedOutput "COPYRIGHT") -Force
 }
 else {
     Write-Warning "The kachakachaCAD application license has not been selected. This package is not ready for public distribution."

@@ -135,3 +135,9 @@ Qt版では、画面からプロジェクトの新規作成・読み込み・保
 ```powershell
 .\scripts\export-project.ps1 -Project examples\first-check.kcd -OutputPath out\first-check-export.kcd
 ```
+
+## ライセンス
+
+kachakachaCAD 本体は `GPL-3.0-or-later` で公開しています。全文は `LICENSE`、適用通知は `COPYRIGHT` を参照してください。Qt、Open CASCADE Technologyなどの第三者部品には、それぞれのライセンスが適用されます。
+
+このCADで作成したKCD、SVG、DXF、PDF、STL、STEPなどへ、kachakachaCAD本体のGPLが自動的に適用されることはありません。作成者は自作モデルの配布条件を自分で決められます。ただし、実在車両、社章、ロゴ、他人の図面などの権利は別途確認してください。

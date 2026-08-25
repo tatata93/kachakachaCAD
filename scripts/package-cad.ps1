@@ -83,6 +83,7 @@ Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\panorama-light-case.kcd") 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "START_REVIEW.cmd") -Destination (Join-Path $ResolvedOutput "START_REVIEW.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "OPEN_MANUAL.cmd") -Destination (Join-Path $ResolvedOutput "OPEN_MANUAL.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual.html") -Destination (Join-Path $ResolvedOutput "manual.html") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\portable-readme-ja.txt") -Destination (Join-Path $ResolvedOutput "最初にお読みください.txt") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual-assets") -Destination (Join-Path $ResolvedOutput "manual-assets") -Recurse -Force
 
 $LegalSource = Join-Path $RepoRoot "legal"

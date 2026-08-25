@@ -486,6 +486,29 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     controlPoints.push_back(ReadVector3(stream, sourceName, lineNumber, "B-spline control point"));
                 }
                 project.AddWire(name, Wire::CubicBSpline(std::move(controlPoints)));
+            } else if (command == "bspline3d_knots") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
+                const double rawCount = ReadDouble(
+                    stream, sourceName, lineNumber, "B-spline control point count");
+                if (!std::isfinite(rawCount) || rawCount < 4.0 || std::floor(rawCount) != rawCount) {
+                    ThrowLineError(sourceName, lineNumber,
+                        "B-spline control point count must be an integer of at least four.");
+                }
+                const auto controlCount = static_cast<std::size_t>(rawCount);
+                std::vector<Vector3> controlPoints;
+                controlPoints.reserve(controlCount);
+                for (std::size_t index = 0; index < controlCount; ++index) {
+                    controlPoints.push_back(ReadVector3(
+                        stream, sourceName, lineNumber, "B-spline control point"));
+                }
+                std::vector<double> knots;
+                knots.reserve(controlCount + 4);
+                for (std::size_t index = 0; index < controlCount + 4; ++index) {
+                    knots.push_back(ReadDouble(stream, sourceName, lineNumber, "B-spline knot"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddWire(name, Wire::CubicBSplineWithKnots(
+                    std::move(controlPoints), std::move(knots)));
             } else if (command == "circle3d") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const Vector3 center = ReadVector3(stream, sourceName, lineNumber, "center");
@@ -888,10 +911,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             break;
 
         case WireKind::CubicBSpline:
-            output << "bspline3d " << namedWire.name;
+            output << "bspline3d_knots " << namedWire.name << ' ' << points.size();
             for (const Vector3& point : points) {
                 output << ' ';
                 WriteVector3(output, point);
+            }
+            for (double knot : namedWire.wire.BSplineKnots()) {
+                output << ' ' << knot;
             }
             output << '\n';
             break;

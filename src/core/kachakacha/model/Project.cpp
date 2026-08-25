@@ -46,7 +46,7 @@ Wire ReframeWire(const Wire& wire, const WorkPlane& oldPlane, const WorkPlane& n
     case WireKind::CubicBezier:
         return Wire::CubicBezier(points[0], points[1], points[2], points[3]);
     case WireKind::CubicBSpline:
-        return Wire::CubicBSpline(std::move(points));
+        return Wire::CubicBSplineWithKnots(std::move(points), wire.BSplineKnots());
     case WireKind::Circle:
     case WireKind::CircularArc: {
         const WireArcData arc = wire.ArcData();
@@ -163,7 +163,7 @@ Wire AlignBezierEndpointTangent(
     points[handleIndex] = points[endpointIndex] + interiorDirection.Normalized() * handleLength;
     return wire.Kind() == WireKind::CubicBezier
         ? Wire::CubicBezier(points[0], points[1], points[2], points[3])
-        : Wire::CubicBSpline(std::move(points));
+        : Wire::CubicBSplineWithKnots(std::move(points), wire.BSplineKnots());
 }
 
 Wire AlignBezierEndpointCurvature(
@@ -357,7 +357,7 @@ Wire ReplaceWireEndpoint(const Wire& wire, WireEndpoint endpoint, geometry::Vect
         const geometry::Vector3 delta = point - points[endpointIndex];
         points[endpointIndex] = point;
         points[handleIndex] = points[handleIndex] + delta;
-        return Wire::CubicBSpline(std::move(points));
+        return Wire::CubicBSplineWithKnots(std::move(points), wire.BSplineKnots());
     }
     case WireKind::CircularArc:
         return wire.Translated(point - EndpointPoint(wire, endpoint));

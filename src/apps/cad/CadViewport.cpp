@@ -29,8 +29,8 @@ using kachakacha::geometry::AlmostEqual;
 using kachakacha::model::NamedWire;
 using kachakacha::model::Wire;
 using kachakacha::model::WireKind;
-using kachakacha::model::ExtendLineToBoundary;
-using kachakacha::model::TrimLineAtBoundaries;
+using kachakacha::model::ExtendWireToBoundary;
+using kachakacha::model::TrimWireAtBoundaries;
 
 namespace {
 
@@ -480,6 +480,7 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     measurementPicks_.clear();
     measurementOverlayFirst_.reset();
     measurementOverlaySecond_.reset();
+    measurementOverlayThird_.reset();
     measurementOverlayText_.clear();
     referenceDimensionOverlays_.clear();
     if (measurementChanged_) {
@@ -559,6 +560,11 @@ void CadViewport::SetCircleCreatedCallback(std::function<void(Vector3, double)> 
 void CadViewport::SetArcCreatedCallback(std::function<void(Vector3, Vector3, Vector3)> callback)
 {
     arcCreated_ = std::move(callback);
+}
+
+void CadViewport::SetArcWireCreatedCallback(std::function<void(const Wire&)> callback)
+{
+    arcWireCreated_ = std::move(callback);
 }
 
 void CadViewport::SetBezierCreatedCallback(std::function<void(const std::array<Vector3, 4>&)> callback)
@@ -731,6 +737,65 @@ void CadViewport::SetGridOriginChangedCallback(std::function<void(double, double
     gridOriginChanged_ = std::move(callback);
 }
 
+void CadViewport::SetArcDrawingMode(ArcDrawingMode mode)
+{
+    if (arcDrawingMode_ == mode) {
+        return;
+    }
+    arcDrawingMode_ = mode;
+    CancelDrawing();
+}
+
+void CadViewport::SetConfiguredArc(
+    double radiusMillimeters,
+    double tangentAngleDegrees,
+    double sweepAngleDegrees,
+    bool bulgeLeft)
+{
+    if (!std::isfinite(radiusMillimeters) || radiusMillimeters <= 1.0e-9
+        || !std::isfinite(tangentAngleDegrees) || !std::isfinite(sweepAngleDegrees)) {
+        return;
+    }
+    configuredArcRadius_ = radiusMillimeters;
+    configuredArcTangentAngleDegrees_ = tangentAngleDegrees;
+    configuredArcSweepAngleDegrees_ = sweepAngleDegrees;
+    configuredArcBulgeLeft_ = bulgeLeft;
+    update();
+}
+
+bool CadViewport::CommitConfiguredArc()
+{
+    if (tool_ != ViewportTool::DrawArc || !activePlane_.has_value()
+        || arcDrawingMode_ == ArcDrawingMode::ThreePoints || !arcWireCreated_) {
+        return false;
+    }
+
+    Wire arc = arcDrawingMode_ == ArcDrawingMode::EndpointsRadius
+        ? (drawingPoints_.size() == 2
+            ? Wire::CircularArcFromEndpointsRadius(
+                drawingPoints_[0], drawingPoints_[1], activePlane_->Normal(),
+                configuredArcRadius_, configuredArcBulgeLeft_)
+            : throw std::invalid_argument("Endpoint-radius arc needs its start and end points."))
+        : (drawingPoints_.size() == 1
+            ? Wire::CircularArcFromStartTangent(
+                drawingPoints_.front(),
+                activePlane_->UAxis() * std::cos(
+                    configuredArcTangentAngleDegrees_ * std::numbers::pi / 180.0)
+                    + activePlane_->VAxis() * std::sin(
+                        configuredArcTangentAngleDegrees_ * std::numbers::pi / 180.0),
+                activePlane_->Normal(),
+                configuredArcRadius_,
+                configuredArcSweepAngleDegrees_ * std::numbers::pi / 180.0)
+            : throw std::invalid_argument("Start-tangent arc needs its start point."));
+    arcWireCreated_(arc);
+    drawingPoints_.clear();
+    drawingSnapHover_.reset();
+    NotifyDrawingState();
+    UpdateDynamicDimensionEditor();
+    update();
+    return true;
+}
+
 void CadViewport::SetWireAppearance(const QColor& color, double width, Qt::PenStyle style)
 {
     if (color.isValid()) {
@@ -856,6 +921,7 @@ void CadViewport::ClearMeasurement()
     measurementPicks_.clear();
     measurementOverlayFirst_.reset();
     measurementOverlaySecond_.reset();
+    measurementOverlayThird_.reset();
     measurementOverlayText_.clear();
     if (measurementChanged_) {
         measurementChanged_(measurementPicks_);
@@ -877,6 +943,20 @@ void CadViewport::SetMeasurementOverlay(
 {
     measurementOverlayFirst_ = firstPoint;
     measurementOverlaySecond_ = secondPoint;
+    measurementOverlayThird_.reset();
+    measurementOverlayText_ = std::move(text);
+    update();
+}
+
+void CadViewport::SetMeasurementAngleOverlay(
+    Vector3 vertex,
+    Vector3 firstPoint,
+    Vector3 secondPoint,
+    QString text)
+{
+    measurementOverlayFirst_ = vertex;
+    measurementOverlaySecond_ = firstPoint;
+    measurementOverlayThird_ = secondPoint;
     measurementOverlayText_ = std::move(text);
     update();
 }
@@ -1244,7 +1324,7 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
 
     const bool usesLastPoint = tool_ == ViewportTool::DrawPolyline
         || tool_ == ViewportTool::DrawSpline
-        || tool_ == ViewportTool::DrawArc
+        || (tool_ == ViewportTool::DrawArc && arcDrawingMode_ == ArcDrawingMode::ThreePoints)
         || tool_ == ViewportTool::DrawBezier;
     const Vector3 anchor = usesLastPoint
         ? drawingPoints_.back()
@@ -1255,7 +1335,8 @@ DrawingMeasurements CadViewport::CurrentDrawingMeasurements() const
     const double deltaV = hover.v - start.v;
 
     if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
-        || tool_ == ViewportTool::DrawSpline || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawSpline
+        || (tool_ == ViewportTool::DrawArc && arcDrawingMode_ == ArcDrawingMode::ThreePoints)
         || tool_ == ViewportTool::DrawBezier) {
         measurements.lengthMillimeters = std::hypot(deltaU, deltaV);
         measurements.angleDegrees = std::atan2(deltaV, deltaU) * 180.0 / std::numbers::pi;
@@ -1278,7 +1359,7 @@ bool CadViewport::HasDynamicDimensions() const noexcept
         || tool_ == ViewportTool::DrawPolyline
         || tool_ == ViewportTool::DrawRectangle
         || tool_ == ViewportTool::DrawCircle
-        || tool_ == ViewportTool::DrawArc
+        || (tool_ == ViewportTool::DrawArc && arcDrawingMode_ == ArcDrawingMode::ThreePoints)
         || tool_ == ViewportTool::DrawBezier
         || tool_ == ViewportTool::DrawSpline;
 }
@@ -1434,7 +1515,8 @@ bool CadViewport::CommitDrawingDimensions(double primaryMillimeters, double seco
     }
 
     if (tool_ == ViewportTool::DrawLine || tool_ == ViewportTool::DrawPolyline
-        || tool_ == ViewportTool::DrawSpline || tool_ == ViewportTool::DrawArc
+        || tool_ == ViewportTool::DrawSpline
+        || (tool_ == ViewportTool::DrawArc && arcDrawingMode_ == ArcDrawingMode::ThreePoints)
         || tool_ == ViewportTool::DrawBezier) {
         const bool usesLastPoint = tool_ != ViewportTool::DrawLine;
         const Vector3 anchor = usesLastPoint
@@ -1832,6 +1914,14 @@ void CadViewport::CommitMeasurementPick(QPointF position)
                 project_->WorkPlanes()[hit.index].plane.Origin(),
                 0.0,
             };
+        } else if (hit.kind == CadSelectionKind::Point
+            && hit.index >= 0 && hit.index < static_cast<int>(project_->Points().size())) {
+            pick = {
+                MeasurementPickKind::Point,
+                hit.index,
+                project_->Points()[hit.index].point,
+                0.0,
+            };
         } else {
             const auto point = PointOnActivePlane(position);
             if (!point.has_value()) {
@@ -1840,7 +1930,15 @@ void CadViewport::CommitMeasurementPick(QPointF position)
             pick = {MeasurementPickKind::Point, -1, SnapPoint(*point, position), 0.0};
         }
     } else {
-        if (hit.kind == CadSelectionKind::Wire) {
+        if (hit.kind == CadSelectionKind::Point
+            && hit.index >= 0 && hit.index < static_cast<int>(project_->Points().size())) {
+            pick = {
+                MeasurementPickKind::Point,
+                hit.index,
+                project_->Points()[hit.index].point,
+                0.0,
+            };
+        } else if (hit.kind == CadSelectionKind::Wire) {
             const auto parameter = NearestWireParameter(hit.index, position, 14.0, true);
             if (parameter.has_value()) {
                 pick = {
@@ -1861,7 +1959,9 @@ void CadViewport::CommitMeasurementPick(QPointF position)
         }
     }
 
-    if (measurementPicks_.size() >= 2
+    const std::size_t requiredPicks = measurementMode_ == MeasurementMode::ThreePointsAngle
+        ? 3 : 2;
+    if (measurementPicks_.size() >= requiredPicks
         || (measurementMode_ == MeasurementMode::Elements
             && measurementPicks_.size() == 1
             && measurementPicks_.front().kind == pick.kind
@@ -1869,6 +1969,7 @@ void CadViewport::CommitMeasurementPick(QPointF position)
         measurementPicks_.clear();
         measurementOverlayFirst_.reset();
         measurementOverlaySecond_.reset();
+        measurementOverlayThird_.reset();
         measurementOverlayText_.clear();
     }
     measurementPicks_.push_back(pick);
@@ -2219,6 +2320,11 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
             return;
         }
     }
+    if (tool_ == ViewportTool::DrawArc
+        && ((arcDrawingMode_ == ArcDrawingMode::EndpointsRadius && drawingPoints_.size() >= 2)
+            || (arcDrawingMode_ == ArcDrawingMode::StartTangent && !drawingPoints_.empty()))) {
+        return;
+    }
 
     drawingPoints_.push_back(point);
     if ((tool_ == ViewportTool::MoveSelection || tool_ == ViewportTool::CopySelection)
@@ -2278,7 +2384,9 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
         if (circleCreated_) {
             circleCreated_(center, radius);
         }
-    } else if (tool_ == ViewportTool::DrawArc && drawingPoints_.size() == 3) {
+    } else if (tool_ == ViewportTool::DrawArc
+        && arcDrawingMode_ == ArcDrawingMode::ThreePoints
+        && drawingPoints_.size() == 3) {
         const std::array<Vector3, 3> points = {drawingPoints_[0], drawingPoints_[1], drawingPoints_[2]};
         drawingPoints_.clear();
         if (arcCreated_) {
@@ -2421,16 +2529,11 @@ void CadViewport::UpdateDirectLineEditPreview()
 
     const int targetIndex = hoveredSelection_.index;
     const Wire& target = project_->Wires()[targetIndex].wire;
-    if (target.Kind() != WireKind::Line) {
-        update();
-        return;
-    }
-
     std::vector<Wire> boundaries;
     boundaries.reserve(project_->Wires().size());
     for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
         const NamedWire& candidate = project_->Wires()[index];
-        if (index == targetIndex || candidate.wire.Kind() != WireKind::Line
+        if (index == targetIndex
             || !ShouldDisplay(CadSelectionKind::Wire, index, candidate.visible)) {
             continue;
         }
@@ -2439,10 +2542,10 @@ void CadViewport::UpdateDirectLineEditPreview()
 
     try {
         if (tool_ == ViewportTool::TrimWire) {
-            directLineEditPreviewWire_ = TrimLineAtBoundaries(
+            directLineEditPreviewWire_ = TrimWireAtBoundaries(
                 target, *hoveredWireParameter_, boundaries).removed;
         } else {
-            const auto result = ExtendLineToBoundary(
+            const auto result = ExtendWireToBoundary(
                 target, *hoveredWireParameter_, boundaries);
             directLineEditPreviewWire_ = result.added;
             directLineEditPreviewIntersection_ = result.intersection;
@@ -3183,7 +3286,11 @@ void CadViewport::paintEvent(QPaintEvent*)
             const QColor previewColor = trim ? QColor("#c0392b") : QColor("#27845c");
             const Wire& preview = *directLineEditPreviewWire_;
             QPainterPath previewPath(ProjectPoint(preview.Start()));
-            previewPath.lineTo(ProjectPoint(preview.End()));
+            const int previewSegments = preview.Kind() == WireKind::Line ? 1 : 96;
+            for (int segment = 1; segment <= previewSegments; ++segment) {
+                previewPath.lineTo(ProjectPoint(preview.Evaluate(
+                    static_cast<double>(segment) / previewSegments)));
+            }
             painter.setBrush(Qt::NoBrush);
             painter.setPen(QPen(QColor(255, 255, 255, 215), 8.0,
                 Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -3285,17 +3392,48 @@ void CadViewport::paintEvent(QPaintEvent*)
                 }
                 painter.drawPath(circlePath);
             } else if (tool_ == ViewportTool::DrawArc) {
-                if (drawingPoints_.size() == 1) {
-                    painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
-                } else {
+                if (arcDrawingMode_ == ArcDrawingMode::ThreePoints) {
+                    if (drawingPoints_.size() == 1) {
+                        painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
+                    } else {
+                        try {
+                            drawPreviewWire(Wire::CircularArcThroughThreePoints(
+                                drawingPoints_[0], drawingPoints_[1], *hoverDrawingPoint_));
+                        } catch (const std::exception&) {
+                            QPainterPath guide(ProjectPoint(drawingPoints_[0]));
+                            guide.lineTo(ProjectPoint(drawingPoints_[1]));
+                            guide.lineTo(ProjectPoint(*hoverDrawingPoint_));
+                            painter.drawPath(guide);
+                        }
+                    }
+                } else if (arcDrawingMode_ == ArcDrawingMode::EndpointsRadius) {
+                    if (drawingPoints_.size() == 1) {
+                        painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
+                    } else if (drawingPoints_.size() == 2) {
+                        try {
+                            drawPreviewWire(Wire::CircularArcFromEndpointsRadius(
+                                drawingPoints_[0], drawingPoints_[1], activePlane_->Normal(),
+                                configuredArcRadius_, configuredArcBulgeLeft_));
+                        } catch (const std::exception&) {
+                            painter.drawLine(
+                                ProjectPoint(drawingPoints_[0]), ProjectPoint(drawingPoints_[1]));
+                        }
+                    }
+                } else if (drawingPoints_.size() == 1) {
                     try {
-                        drawPreviewWire(Wire::CircularArcThroughThreePoints(
-                            drawingPoints_[0], drawingPoints_[1], *hoverDrawingPoint_));
+                        const double direction = configuredArcTangentAngleDegrees_
+                            * std::numbers::pi / 180.0;
+                        const Vector3 tangent = activePlane_->UAxis() * std::cos(direction)
+                            + activePlane_->VAxis() * std::sin(direction);
+                        drawPreviewWire(Wire::CircularArcFromStartTangent(
+                            drawingPoints_.front(), tangent, activePlane_->Normal(),
+                            configuredArcRadius_, configuredArcSweepAngleDegrees_
+                                * std::numbers::pi / 180.0));
+                        painter.drawLine(
+                            ProjectPoint(drawingPoints_.front()),
+                            ProjectPoint(drawingPoints_.front()
+                                + tangent * std::max(configuredArcRadius_ * 0.65, 2.0)));
                     } catch (const std::exception&) {
-                        QPainterPath guide(ProjectPoint(drawingPoints_[0]));
-                        guide.lineTo(ProjectPoint(drawingPoints_[1]));
-                        guide.lineTo(ProjectPoint(*hoverDrawingPoint_));
-                        painter.drawPath(guide);
                     }
                 }
             } else if (tool_ == ViewportTool::DrawBezier) {
@@ -3499,6 +3637,12 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.drawEllipse(first, 4.0, 4.0);
                 painter.drawEllipse(second, 4.0, 4.0);
                 labelAnchor = (first + second) * 0.5 + QPointF(8.0, -8.0);
+                if (measurementOverlayThird_.has_value()) {
+                    const QPointF third = ProjectPoint(*measurementOverlayThird_);
+                    painter.drawLine(first, third);
+                    painter.drawEllipse(third, 4.0, 4.0);
+                    labelAnchor = (first + second + third) / 3.0 + QPointF(8.0, -8.0);
+                }
             }
             if (!measurementOverlayText_.isEmpty()) {
                 const QFontMetrics metrics = painter.fontMetrics();
@@ -3556,7 +3700,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         modeText = QStringLiteral("円");
         break;
     case ViewportTool::DrawArc:
-        modeText = QStringLiteral("3点円弧");
+        modeText = arcDrawingMode_ == ArcDrawingMode::ThreePoints
+            ? QStringLiteral("3点円弧")
+            : arcDrawingMode_ == ArcDrawingMode::EndpointsRadius
+            ? QStringLiteral("両端＋半径 円弧")
+            : QStringLiteral("始点＋方向 円弧");
         break;
     case ViewportTool::DrawBezier:
         modeText = QStringLiteral("ベジェ曲線");
@@ -3603,6 +3751,8 @@ void CadViewport::paintEvent(QPaintEvent*)
     case ViewportTool::Measure:
         modeText = measurementMode_ == MeasurementMode::TwoPoints
             ? QStringLiteral("測定 · 2点間")
+            : measurementMode_ == MeasurementMode::ThreePointsAngle
+            ? QStringLiteral("測定 · 3点角度")
             : QStringLiteral("測定 · 要素");
         break;
     }

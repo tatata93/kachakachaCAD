@@ -66,9 +66,9 @@ std::size_t FindBSplineSpan(double parameter, std::size_t controlPointCount, con
 
 Vector3 EvaluateCubicBSpline(
     const std::vector<Vector3>& controlPoints,
+    const std::vector<double>& knots,
     double parameter)
 {
-    const std::vector<double> knots = MakeClampedUniformKnots(controlPoints.size());
     const std::size_t span = FindBSplineSpan(parameter, controlPoints.size(), knots);
     std::array<Vector3, CubicDegree + 1> working{};
     for (std::size_t index = 0; index <= CubicDegree; ++index) {
@@ -89,6 +89,112 @@ Vector3 EvaluateCubicBSpline(
         }
     }
     return working[CubicDegree];
+}
+
+std::vector<double> NormalizeKnots(std::vector<double> knots)
+{
+    if (knots.empty()) {
+        return knots;
+    }
+    const double first = knots.front();
+    const double range = knots.back() - first;
+    if (!std::isfinite(first) || !std::isfinite(range) || range <= 1.0e-15) {
+        throw std::invalid_argument("B-spline knot range must be positive.");
+    }
+    for (double& knot : knots) {
+        if (!std::isfinite(knot)) {
+            throw std::invalid_argument("B-spline knot contains a non-finite value.");
+        }
+        knot = (knot - first) / range;
+    }
+    return knots;
+}
+
+void ValidateCubicBSplineKnots(
+    const std::vector<Vector3>& controlPoints,
+    const std::vector<double>& knots)
+{
+    if (knots.size() != controlPoints.size() + CubicDegree + 1) {
+        throw std::invalid_argument("Cubic B-spline knot count does not match its control points.");
+    }
+    for (std::size_t index = 1; index < knots.size(); ++index) {
+        if (!std::isfinite(knots[index]) || knots[index] + 1.0e-12 < knots[index - 1]) {
+            throw std::invalid_argument("Cubic B-spline knots must be finite and nondecreasing.");
+        }
+    }
+    for (std::size_t index = 1; index <= CubicDegree; ++index) {
+        if (std::abs(knots[index] - knots.front()) > 1.0e-12
+            || std::abs(knots[knots.size() - 1 - index] - knots.back()) > 1.0e-12) {
+            throw std::invalid_argument("Cubic B-spline must be clamped at both ends.");
+        }
+    }
+    for (std::size_t first = 0; first < knots.size();) {
+        std::size_t last = first + 1;
+        while (last < knots.size()
+            && std::abs(knots[last] - knots[first]) <= 1.0e-12) {
+            ++last;
+        }
+        const bool internal = knots[first] > knots.front() + 1.0e-12
+            && knots[first] < knots.back() - 1.0e-12;
+        if (internal && last - first > CubicDegree) {
+            throw std::invalid_argument("Cubic B-spline internal knot multiplicity is too high.");
+        }
+        first = last;
+    }
+}
+
+struct KnotInsertionResult {
+    std::vector<Vector3> controlPoints;
+    std::vector<double> knots;
+};
+
+std::size_t KnotMultiplicity(const std::vector<double>& knots, double parameter)
+{
+    return static_cast<std::size_t>(std::count_if(
+        knots.begin(), knots.end(), [&](double knot) {
+            return std::abs(knot - parameter) <= 1.0e-12;
+        }));
+}
+
+KnotInsertionResult InsertCubicKnotOnce(
+    const std::vector<Vector3>& controlPoints,
+    const std::vector<double>& knots,
+    double parameter)
+{
+    const std::size_t lastControl = controlPoints.size() - 1;
+    const std::size_t lastKnot = knots.size() - 1;
+    const std::size_t span = FindBSplineSpan(parameter, controlPoints.size(), knots);
+    const std::size_t multiplicity = KnotMultiplicity(knots, parameter);
+    if (multiplicity >= CubicDegree + 1) {
+        return {controlPoints, knots};
+    }
+
+    std::vector<Vector3> insertedControls(controlPoints.size() + 1);
+    std::vector<double> insertedKnots(knots.size() + 1);
+    for (std::size_t index = 0; index <= span; ++index) {
+        insertedKnots[index] = knots[index];
+    }
+    insertedKnots[span + 1] = parameter;
+    for (std::size_t index = span + 1; index <= lastKnot; ++index) {
+        insertedKnots[index + 1] = knots[index];
+    }
+
+    for (std::size_t index = 0; index <= span - CubicDegree; ++index) {
+        insertedControls[index] = controlPoints[index];
+    }
+    for (std::size_t index = span - multiplicity; index <= lastControl; ++index) {
+        insertedControls[index + 1] = controlPoints[index];
+    }
+    for (std::size_t index = span - CubicDegree + 1;
+         index <= span - multiplicity; ++index) {
+        const double denominator = knots[index + CubicDegree] - knots[index];
+        const double alpha = denominator <= 1.0e-15
+            ? 0.0
+            : (parameter - knots[index]) / denominator;
+        insertedControls[index] = controlPoints[index - 1] * (1.0 - alpha)
+            + controlPoints[index] * alpha;
+    }
+    return {std::move(insertedControls), std::move(insertedKnots)};
 }
 
 std::vector<double> CubicBSplineBasisValues(
@@ -226,6 +332,16 @@ Wire::Wire(WireKind kind, std::vector<Vector3> controlPoints)
 Wire::Wire(
     WireKind kind,
     std::vector<Vector3> controlPoints,
+    std::vector<double> bsplineKnots)
+    : kind_(kind),
+      controlPoints_(std::move(controlPoints)),
+      bsplineKnots_(std::move(bsplineKnots))
+{
+}
+
+Wire::Wire(
+    WireKind kind,
+    std::vector<Vector3> controlPoints,
     Vector3 arcCenter,
     Vector3 arcUAxis,
     Vector3 arcVAxis,
@@ -280,6 +396,18 @@ Wire Wire::CubicBezier(Vector3 start, Vector3 control1, Vector3 control2, Vector
 
 Wire Wire::CubicBSpline(std::vector<Vector3> controlPoints)
 {
+    if (controlPoints.size() < CubicDegree + 1) {
+        throw std::invalid_argument("Cubic B-spline wire requires at least four control points.");
+    }
+    const std::vector<double> knots = MakeClampedUniformKnots(controlPoints.size());
+    return CubicBSplineWithKnots(
+        std::move(controlPoints), knots);
+}
+
+Wire Wire::CubicBSplineWithKnots(
+    std::vector<Vector3> controlPoints,
+    std::vector<double> knots)
+{
     RequireFinite(controlPoints);
     if (controlPoints.size() < CubicDegree + 1) {
         throw std::invalid_argument("Cubic B-spline wire requires at least four control points.");
@@ -287,7 +415,9 @@ Wire Wire::CubicBSpline(std::vector<Vector3> controlPoints)
     if (AlmostEqual(controlPoints.front(), controlPoints.back())) {
         throw std::invalid_argument("Cubic B-spline wire requires different start and end points.");
     }
-    return {WireKind::CubicBSpline, std::move(controlPoints)};
+    knots = NormalizeKnots(std::move(knots));
+    ValidateCubicBSplineKnots(controlPoints, knots);
+    return {WireKind::CubicBSpline, std::move(controlPoints), std::move(knots)};
 }
 
 Wire Wire::InterpolatingCubicBSpline(const std::vector<Vector3>& throughPoints)
@@ -380,6 +510,79 @@ Wire Wire::CircularArcThroughThreePoints(Vector3 start, Vector3 through, Vector3
     return CircularArc(center, uAxis, vAxis, radius, 0.0, endAngle);
 }
 
+Wire Wire::CircularArcFromEndpointsRadius(
+    Vector3 start,
+    Vector3 end,
+    Vector3 planeNormal,
+    double radius,
+    bool bulgeLeft)
+{
+    if (!start.IsFinite() || !end.IsFinite() || !planeNormal.IsFinite()
+        || !std::isfinite(radius) || radius <= 1.0e-9) {
+        throw std::invalid_argument("Endpoint-radius arc definition is invalid.");
+    }
+    const Vector3 chord = end - start;
+    const double chordLength = chord.Length();
+    if (chordLength <= 1.0e-9) {
+        throw std::invalid_argument("Endpoint-radius arc requires two different endpoints.");
+    }
+    if (chordLength > radius * 2.0 + 1.0e-9) {
+        throw std::invalid_argument("Arc radius must be at least half the endpoint distance.");
+    }
+    const Vector3 normal = planeNormal.Normalized();
+    const Vector3 chordDirection = chord / chordLength;
+    const Vector3 left = Cross(normal, chordDirection).Normalized();
+    const double centerOffset = std::sqrt(std::max(
+        0.0, radius * radius - chordLength * chordLength * 0.25));
+    const Vector3 midpoint = (start + end) * 0.5;
+    const Vector3 center = midpoint + left * (bulgeLeft ? -centerOffset : centerOffset);
+    const Vector3 uAxis = (start - center).Normalized();
+    const Vector3 vAxis = Cross(normal, uAxis).Normalized();
+    const Vector3 endDirection = (end - center).Normalized();
+    double positiveSweep = std::atan2(Dot(endDirection, vAxis), Dot(endDirection, uAxis));
+    if (positiveSweep <= 1.0e-12) {
+        positiveSweep += TwoPi;
+    }
+    const double negativeSweep = positiveSweep - TwoPi;
+    const auto midpointSide = [&](double sweep) {
+        const Vector3 arcMidpoint = EvaluateArcPoint(
+            center, uAxis, vAxis, radius, sweep * 0.5);
+        return Dot(arcMidpoint - midpoint, left);
+    };
+    const double sweep = (midpointSide(positiveSweep) >= 0.0) == bulgeLeft
+        ? positiveSweep
+        : negativeSweep;
+    return CircularArc(center, uAxis, vAxis, radius, 0.0, sweep);
+}
+
+Wire Wire::CircularArcFromStartTangent(
+    Vector3 start,
+    Vector3 tangentDirection,
+    Vector3 planeNormal,
+    double radius,
+    double sweepAngleRadians)
+{
+    if (!start.IsFinite() || !tangentDirection.IsFinite() || !planeNormal.IsFinite()
+        || !std::isfinite(radius) || !std::isfinite(sweepAngleRadians)
+        || radius <= 1.0e-9 || std::abs(sweepAngleRadians) <= 1.0e-9
+        || std::abs(sweepAngleRadians) >= TwoPi - 1.0e-9) {
+        throw std::invalid_argument("Start-tangent arc definition is invalid.");
+    }
+    const Vector3 normal = planeNormal.Normalized();
+    const Vector3 tangentInPlane = tangentDirection
+        - normal * Dot(tangentDirection, normal);
+    if (tangentInPlane.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Arc tangent direction must lie in its drawing plane.");
+    }
+    const Vector3 tangent = tangentInPlane.Normalized();
+    const double orientation = sweepAngleRadians > 0.0 ? 1.0 : -1.0;
+    const Vector3 center = start + Cross(normal, tangent) * (radius * orientation);
+    const Vector3 uAxis = (start - center).Normalized();
+    const Vector3 vAxis = Cross(normal, uAxis).Normalized();
+    return CircularArc(
+        center, uAxis, vAxis, radius, 0.0, sweepAngleRadians);
+}
+
 WireArcData Wire::ArcData() const
 {
     if (kind_ != WireKind::Circle && kind_ != WireKind::CircularArc) {
@@ -394,6 +597,14 @@ WireArcData Wire::ArcData() const
         arcStartAngleRadians_,
         arcSweepAngleRadians_,
     };
+}
+
+const std::vector<double>& Wire::BSplineKnots() const
+{
+    if (kind_ != WireKind::CubicBSpline) {
+        throw std::logic_error("Wire is not a cubic B-spline.");
+    }
+    return bsplineKnots_;
 }
 
 Wire Wire::WithMovedControlPoint(std::size_t controlPointIndex, Vector3 point) const
@@ -412,7 +623,7 @@ Wire Wire::WithMovedControlPoint(std::size_t controlPointIndex, Vector3 point) c
     case WireKind::CubicBezier:
         return CubicBezier(controls[0], controls[1], controls[2], controls[3]);
     case WireKind::CubicBSpline:
-        return CubicBSpline(std::move(controls));
+        return CubicBSplineWithKnots(std::move(controls), bsplineKnots_);
     case WireKind::Circle:
     case WireKind::CircularArc:
         break;
@@ -490,7 +701,7 @@ Vector3 Wire::Evaluate(double t) const
     }
 
     case WireKind::CubicBSpline:
-        return EvaluateCubicBSpline(controlPoints_, clamped);
+        return EvaluateCubicBSpline(controlPoints_, bsplineKnots_, clamped);
 
     case WireKind::Circle:
     case WireKind::CircularArc:
@@ -539,6 +750,10 @@ Wire Wire::Translated(Vector3 delta) const
         };
     }
 
+    if (kind_ == WireKind::CubicBSpline) {
+        return {kind_, std::move(translatedPoints), bsplineKnots_};
+    }
+
     return {kind_, std::move(translatedPoints)};
 }
 
@@ -581,6 +796,10 @@ Wire Wire::Mirrored(Vector3 linePoint, Vector3 lineDirection, Vector3 planeNorma
         };
     }
 
+    if (kind_ == WireKind::CubicBSpline) {
+        return {kind_, std::move(mirroredPoints), bsplineKnots_};
+    }
+
     return {kind_, std::move(mirroredPoints)};
 }
 
@@ -619,6 +838,9 @@ Wire Wire::RotatedAroundAxis(Vector3 axisPoint, Vector3 axisDirection, double an
             arcSweepAngleRadians_,
         };
     }
+    if (kind_ == WireKind::CubicBSpline) {
+        return {kind_, std::move(rotatedPoints), bsplineKnots_};
+    }
     return {kind_, std::move(rotatedPoints)};
 }
 
@@ -637,7 +859,12 @@ Wire Wire::Reversed() const
     case WireKind::CubicBSpline: {
         std::vector<Vector3> points = controlPoints_;
         std::reverse(points.begin(), points.end());
-        return CubicBSpline(std::move(points));
+        std::vector<double> knots;
+        knots.reserve(bsplineKnots_.size());
+        for (auto iterator = bsplineKnots_.rbegin(); iterator != bsplineKnots_.rend(); ++iterator) {
+            knots.push_back(1.0 - *iterator);
+        }
+        return CubicBSplineWithKnots(std::move(points), std::move(knots));
     }
     case WireKind::Circle:
         return Circle(arcCenter_, arcUAxis_, arcVAxis_, arcRadius_);
@@ -695,8 +922,43 @@ std::pair<Wire, Wire> Wire::SplitAt(double parameter) const
             CubicBezier(split, bccd, cd, controlPoints_[3]),
         };
     }
-    case WireKind::CubicBSpline:
-        throw std::invalid_argument("B-spline splitting is not available yet.");
+    case WireKind::CubicBSpline: {
+        KnotInsertionResult inserted{controlPoints_, bsplineKnots_};
+        while (KnotMultiplicity(inserted.knots, parameter) < CubicDegree) {
+            inserted = InsertCubicKnotOnce(
+                inserted.controlPoints, inserted.knots, parameter);
+        }
+        const auto firstKnot = std::find_if(
+            inserted.knots.begin(), inserted.knots.end(), [&](double knot) {
+                return std::abs(knot - parameter) <= 1.0e-12;
+            });
+        if (firstKnot == inserted.knots.end()) {
+            throw std::logic_error("Inserted B-spline knot was not found.");
+        }
+        const std::size_t firstKnotIndex = static_cast<std::size_t>(
+            std::distance(inserted.knots.begin(), firstKnot));
+        const std::size_t splitControlIndex = firstKnotIndex - 1;
+        const auto lastKnot = std::find_if(
+            firstKnot, inserted.knots.end(), [&](double knot) {
+                return std::abs(knot - parameter) > 1.0e-12;
+            });
+
+        std::vector<Vector3> firstControls(
+            inserted.controlPoints.begin(),
+            inserted.controlPoints.begin() + splitControlIndex + 1);
+        std::vector<Vector3> secondControls(
+            inserted.controlPoints.begin() + splitControlIndex,
+            inserted.controlPoints.end());
+        std::vector<double> firstKnots(
+            inserted.knots.begin(), inserted.knots.begin() + firstKnotIndex);
+        firstKnots.insert(firstKnots.end(), CubicDegree + 1, parameter);
+        std::vector<double> secondKnots(CubicDegree + 1, parameter);
+        secondKnots.insert(secondKnots.end(), lastKnot, inserted.knots.end());
+        return {
+            CubicBSplineWithKnots(std::move(firstControls), std::move(firstKnots)),
+            CubicBSplineWithKnots(std::move(secondControls), std::move(secondKnots)),
+        };
+    }
     case WireKind::CircularArc:
         return {
             CircularArc(

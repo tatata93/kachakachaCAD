@@ -286,6 +286,49 @@ Vector3 MeasureWireTangent(const Wire& wire, double parameter)
         + arc.vAxis * (std::cos(angle) * orientation)).Normalized();
 }
 
+std::optional<Vector3> MeasureWireCurvatureNormal(const Wire& wire, double parameter)
+{
+    if (!std::isfinite(parameter)) {
+        throw std::invalid_argument("Measurement parameter must be finite.");
+    }
+    const double t = std::clamp(parameter, 0.0, 1.0);
+    if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
+        return std::nullopt;
+    }
+    if (wire.Kind() == WireKind::Circle || wire.Kind() == WireKind::CircularArc) {
+        const Vector3 inward = wire.ArcData().center - wire.Evaluate(t);
+        return inward.LengthSquared() > 1.0e-18
+            ? std::optional<Vector3>(inward.Normalized())
+            : std::nullopt;
+    }
+
+    Vector3 secondDerivative;
+    if (wire.Kind() == WireKind::CubicBezier) {
+        const auto& points = wire.ControlPoints();
+        secondDerivative = (points[2] - points[1] * 2.0 + points[0]) * (6.0 * (1.0 - t))
+            + (points[3] - points[2] * 2.0 + points[1]) * (6.0 * t);
+    } else {
+        constexpr double step = 1.0e-4;
+        if (t <= step) {
+            secondDerivative = (wire.Evaluate(step * 2.0)
+                - wire.Evaluate(step) * 2.0 + wire.Evaluate(0.0)) / (step * step);
+        } else if (t >= 1.0 - step) {
+            secondDerivative = (wire.Evaluate(1.0)
+                - wire.Evaluate(1.0 - step) * 2.0
+                + wire.Evaluate(1.0 - step * 2.0)) / (step * step);
+        } else {
+            secondDerivative = (wire.Evaluate(t + step)
+                - wire.Evaluate(t) * 2.0 + wire.Evaluate(t - step)) / (step * step);
+        }
+    }
+    const Vector3 tangent = MeasureWireTangent(wire, t);
+    const Vector3 normal = secondDerivative - tangent * Dot(secondDerivative, tangent);
+    if (normal.LengthSquared() <= 1.0e-16) {
+        return std::nullopt;
+    }
+    return normal.Normalized();
+}
+
 AngleMeasurement MeasureDirectionsAngle(Vector3 firstDirection, Vector3 secondDirection)
 {
     const double cosine = std::clamp(
@@ -294,6 +337,20 @@ AngleMeasurement MeasureDirectionsAngle(Vector3 firstDirection, Vector3 secondDi
         1.0);
     const double directed = std::acos(cosine) * 180.0 / kPi;
     return {directed, std::min(directed, 180.0 - directed)};
+}
+
+AngleMeasurement MeasureThreePointAngle(
+    Vector3 vertex,
+    Vector3 firstPoint,
+    Vector3 secondPoint)
+{
+    const Vector3 firstDirection = firstPoint - vertex;
+    const Vector3 secondDirection = secondPoint - vertex;
+    if (firstDirection.LengthSquared() <= 1.0e-18
+        || secondDirection.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Three-point angle requires points away from its vertex.");
+    }
+    return MeasureDirectionsAngle(firstDirection, secondDirection);
 }
 
 DistanceMeasurement MeasurePointToWireDistance(Vector3 point, const Wire& wire, double tolerance)

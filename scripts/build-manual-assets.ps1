@@ -32,13 +32,15 @@ $Shots = @(
     @{ Name = "view-controls"; Project = $Acceptance; State = "view" },
     @{ Name = "point-grid"; Project = $FirstCheck; State = "grid" },
     @{ Name = "drawing-tools"; Project = $FirstCheck; State = "drawing" },
+    @{ Name = "arc-endpoints-radius"; Project = $FirstCheck; State = "arc-endpoints" },
+    @{ Name = "arc-start-direction"; Project = $FirstCheck; State = "arc-tangent" },
     @{ Name = "weak-snapping"; Project = $FirstCheck; State = "snap" },
     @{ Name = "workplane"; Project = $FirstCheck; State = "workplane" },
     @{ Name = "numeric-input"; Project = $FirstCheck; State = "numeric" },
     @{ Name = "wire-edit"; Project = $FirstCheck; State = "edit" },
     @{ Name = "direct-transforms"; Project = $FirstCheck; State = "transforms" },
-    @{ Name = "line-trim"; Project = $FirstCheck; State = "trim" },
-    @{ Name = "line-extend"; Project = $FirstCheck; State = "extend" },
+    @{ Name = "curve-trim"; Project = $FirstCheck; State = "trim" },
+    @{ Name = "curve-extend"; Project = $FirstCheck; State = "extend" },
     @{ Name = "machining"; Project = $FirstCheck; State = "machining" },
     @{ Name = "surface-sections"; Project = $Acceptance; State = "surface" },
     @{ Name = "surface-projection"; Project = $Acceptance; State = "projection" },
@@ -55,6 +57,8 @@ $Shots = @(
     @{ Name = "model-inspection"; Project = $Acceptance; State = "inspection" },
     @{ Name = "display-settings"; Project = $Acceptance; State = "display" },
     @{ Name = "display-background-grid"; Project = $FirstCheck; State = "display-grid" },
+    @{ Name = "measure-3d-angle"; Project = $FirstCheck; State = "measure-3d" },
+    @{ Name = "measure-curve-normal"; Project = $FirstCheck; State = "measure-normal" },
     @{ Name = "selection-info"; Project = $Acceptance; State = "info" }
 )
 

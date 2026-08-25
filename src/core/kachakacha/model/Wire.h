@@ -43,6 +43,10 @@ public:
     [[nodiscard]] static Wire CubicBSpline(
         std::vector<geometry::Vector3> controlPoints);
 
+    [[nodiscard]] static Wire CubicBSplineWithKnots(
+        std::vector<geometry::Vector3> controlPoints,
+        std::vector<double> knots);
+
     [[nodiscard]] static Wire InterpolatingCubicBSpline(
         const std::vector<geometry::Vector3>& throughPoints);
 
@@ -65,8 +69,23 @@ public:
         geometry::Vector3 through,
         geometry::Vector3 end);
 
+    [[nodiscard]] static Wire CircularArcFromEndpointsRadius(
+        geometry::Vector3 start,
+        geometry::Vector3 end,
+        geometry::Vector3 planeNormal,
+        double radius,
+        bool bulgeLeft);
+
+    [[nodiscard]] static Wire CircularArcFromStartTangent(
+        geometry::Vector3 start,
+        geometry::Vector3 tangentDirection,
+        geometry::Vector3 planeNormal,
+        double radius,
+        double sweepAngleRadians);
+
     [[nodiscard]] WireKind Kind() const noexcept { return kind_; }
     [[nodiscard]] const std::vector<geometry::Vector3>& ControlPoints() const noexcept { return controlPoints_; }
+    [[nodiscard]] const std::vector<double>& BSplineKnots() const;
     [[nodiscard]] geometry::Vector3 Start() const { return Evaluate(0.0); }
     [[nodiscard]] geometry::Vector3 End() const { return Evaluate(1.0); }
 
@@ -93,6 +112,10 @@ private:
     Wire(
         WireKind kind,
         std::vector<geometry::Vector3> controlPoints,
+        std::vector<double> bsplineKnots);
+    Wire(
+        WireKind kind,
+        std::vector<geometry::Vector3> controlPoints,
         geometry::Vector3 arcCenter,
         geometry::Vector3 arcUAxis,
         geometry::Vector3 arcVAxis,
@@ -102,6 +125,7 @@ private:
 
     WireKind kind_;
     std::vector<geometry::Vector3> controlPoints_;
+    std::vector<double> bsplineKnots_;
     geometry::Vector3 arcCenter_;
     geometry::Vector3 arcUAxis_ = {1.0, 0.0, 0.0};
     geometry::Vector3 arcVAxis_ = {0.0, 1.0, 0.0};

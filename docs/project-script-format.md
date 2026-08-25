@@ -82,9 +82,10 @@ bezier3d NAME sx sy sz c1x c1y c1z c2x c2y c2z ex ey ez
 
 ```text
 bspline3d NAME x1 y1 z1 x2 y2 z2 x3 y3 z3 x4 y4 z4 [x5 y5 z5 ...]
+bspline3d_knots NAME CONTROL_COUNT x1 y1 z1 ... xN yN zN k1 k2 ... kN+4
 ```
 
-4点以上の制御点を持つ、端点固定の3次B-splineを作る。画面の「スプライン」は指定した通過点を補間してから、この制御点形式で保存する。
+4点以上の制御点を持つ、端点固定の3次B-splineを作る。`bspline3d` は一様な内部ノットを自動生成する旧来の簡易形式で、引き続き読み込める。保存時は、トリム・延長後の曲線形状も厳密に保てる `bspline3d_knots` を使い、制御点数に続けて制御点と `CONTROL_COUNT + 4` 個の非減少ノットを書く。画面の「スプライン」は指定した通過点を補間してから、この制御点・ノット形式で保存する。
 
 ### 3D円
 
@@ -108,7 +109,7 @@ arc3d NAME cx cy cz ux uy uz vx vy vz radius startDegrees sweepDegrees
 wire_meta NAME PLANE|none|- free|reference|locked
 ```
 
-`line3d`、`polyline3d`、`bezier3d`、`bspline3d`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
+`line3d`、`polyline3d`、`bezier3d`、`bspline3d`、`bspline3d_knots`、`circle3d`、`arc3d` で作ったワイヤーに、作成元平面や平面ポリシーを後から付ける。`none` または `-` を指定すると、作成元平面なしのままポリシーだけを記録する。
 
 ### 直線の寸法拘束
 

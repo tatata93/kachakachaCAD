@@ -294,11 +294,12 @@ void TangentEndpointsDriveBSplineControlPoint()
 {
     std::istringstream input(R"(
         line3d anchor 0 0 0  10 0 0
-        bspline3d follower 20 2 0  23 5 0  26 2 0  30 0 0
+        bspline3d_knots follower 5  20 2 0  23 5 0  26 2 0  28 1 0  30 0 0  0 0 0 0 0.4 1 1 1 1
         wire_coincident anchor end follower start
         wire_tangent anchor end follower start
     )");
     auto project = LoadProjectScript(input, "B-spline-tangent-test");
+    const std::vector<double> originalKnots = project.Wires()[1].wire.BSplineKnots();
 
     RequireNear(project.Wires()[1].wire.Start(), {10.0, 0.0, 0.0}, "B-spline tangent start coincides");
     Vector3 tangent = (project.Wires()[1].wire.ControlPoints()[1]
@@ -310,6 +311,8 @@ void TangentEndpointsDriveBSplineControlPoint()
     tangent = (project.Wires()[1].wire.ControlPoints()[1]
         - project.Wires()[1].wire.ControlPoints()[0]).Normalized();
     RequireNear(tangent, {0.0, 1.0, 0.0}, "B-spline tangent tracks anchor direction");
+    Require(project.Wires()[1].wire.BSplineKnots() == originalKnots,
+        "B-spline tangent updates preserve knots");
 }
 
 void TangentEndpointsDriveCircularArc()
@@ -568,7 +571,7 @@ void WrittenProjectRoundTrips()
         wire_meta bottom front reference
         polyline3d handrail 0 0 0  1 0 0  1 1 0
         bezier3d nose 0 0 0  1 2 0  3 2 0  4 0 0
-        bspline3d window_curve 0 0 1  1 3 1  3 -1 1  5 2 1  7 0 1
+        bspline3d_knots window_curve 5  0 0 1  1 3 1  3 -1 1  5 2 1  7 0 1  0 0 0 0 0.35 1 1 1 1
         circle3d light 10 3 3  0 1 0  0 0 1  0.5
         arc3d roof 0 0 2  1 0 0  0 1 0  1.25 180 90
         wire_meta roof - locked
@@ -578,6 +581,8 @@ void WrittenProjectRoundTrips()
 
     std::ostringstream output;
     WriteProjectScript(output, project);
+    Require(output.str().find("bspline3d_knots window_curve 5") != std::string::npos,
+        "write arbitrary-knot B-spline command");
 
     std::istringstream roundTripInput(output.str());
     const auto roundTripped = LoadProjectScript(roundTripInput, "roundtrip");
@@ -591,6 +596,8 @@ void WrittenProjectRoundTrips()
     RequireNear(roundTripped.Wires()[2].wire.Evaluate(0.5), project.Wires()[2].wire.Evaluate(0.5), "roundtrip bezier");
     RequireNear(roundTripped.Wires()[3].wire.Evaluate(0.37), project.Wires()[3].wire.Evaluate(0.37), "roundtrip B-spline");
     Require(roundTripped.Wires()[3].wire.Kind() == kachakacha::model::WireKind::CubicBSpline, "roundtrip B-spline kind");
+    Require(roundTripped.Wires()[3].wire.BSplineKnots() == project.Wires()[3].wire.BSplineKnots(),
+        "roundtrip arbitrary B-spline knots");
     RequireNear(roundTripped.Wires()[4].wire.Evaluate(0.25), project.Wires()[4].wire.Evaluate(0.25), "roundtrip circle");
     RequireNear(roundTripped.Wires()[5].wire.End(), project.Wires()[5].wire.End(), "roundtrip arc");
     Require(roundTripped.Wires()[5].metadata.planePolicy == WirePlanePolicy::LockedToPlane, "roundtrip arc policy");

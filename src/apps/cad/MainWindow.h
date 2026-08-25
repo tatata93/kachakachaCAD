@@ -138,6 +138,7 @@ private:
     void OpenManual(const QString& anchor = {});
     void OpenLegalNotices();
     void CommitDrawingDimensions();
+    void UpdateArcConfiguration();
     void RefreshActiveWorkPlane();
     void AddViewportPoint(kachakacha::geometry::Vector3 point);
     void AddViewportLine(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 end);
@@ -145,6 +146,7 @@ private:
     void AddViewportRectangle(const std::array<kachakacha::geometry::Vector3, 4>& corners);
     void AddViewportCircle(kachakacha::geometry::Vector3 center, double radius);
     void AddViewportArc(kachakacha::geometry::Vector3 start, kachakacha::geometry::Vector3 through, kachakacha::geometry::Vector3 end);
+    void AddViewportArcWire(const kachakacha::model::Wire& arc);
     void AddViewportBezier(const std::array<kachakacha::geometry::Vector3, 4>& points);
     void AddViewportSpline(const std::vector<kachakacha::geometry::Vector3>& throughPoints);
     void ApplyViewportWireEdit(int wireIndex, const kachakacha::model::Wire& replacement);
@@ -242,6 +244,17 @@ private:
     QDoubleSpinBox* drawingWidthField_ = nullptr;
     QDoubleSpinBox* drawingHeightField_ = nullptr;
     QDoubleSpinBox* drawingRadiusField_ = nullptr;
+    QComboBox* arcDrawingMode_ = nullptr;
+    QStackedWidget* arcParameterStack_ = nullptr;
+    QLabel* arcRadiusLabel_ = nullptr;
+    QDoubleSpinBox* arcRadiusField_ = nullptr;
+    QComboBox* arcBulgeSide_ = nullptr;
+    QComboBox* arcDirectionBasis_ = nullptr;
+    QDoubleSpinBox* arcDirectionAngle_ = nullptr;
+    QComboBox* arcExtentMode_ = nullptr;
+    QLabel* arcExtentLabel_ = nullptr;
+    QDoubleSpinBox* arcExtentValue_ = nullptr;
+    QComboBox* arcTurnSide_ = nullptr;
     QPushButton* drawingDimensionCommitButton_ = nullptr;
 
     QPushButton* wireColor_ = nullptr;

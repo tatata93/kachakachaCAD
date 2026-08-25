@@ -111,17 +111,19 @@ using kachakacha::model::MeasureDirectionsAngle;
 using kachakacha::model::MeasurePlaneToPlaneAngleDegrees;
 using kachakacha::model::MeasurePointToWireDistance;
 using kachakacha::model::MeasureSignedPointToPlaneDistance;
+using kachakacha::model::MeasureThreePointAngle;
+using kachakacha::model::MeasureWireCurvatureNormal;
 using kachakacha::model::MeasureWireLength;
 using kachakacha::model::MeasureWireRadius;
 using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
-using kachakacha::model::ExtendLineToBoundary;
+using kachakacha::model::ExtendWireToBoundary;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::ReferenceDimension;
 using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::RetainedLineEnd;
-using kachakacha::model::TrimLineAtBoundaries;
+using kachakacha::model::TrimWireAtBoundaries;
 
 namespace {
 
@@ -494,6 +496,9 @@ void MainWindow::BuildUi()
     viewport_->SetArcCreatedCallback([this](Vector3 start, Vector3 through, Vector3 end) {
         AddViewportArc(start, through, end);
     });
+    viewport_->SetArcWireCreatedCallback([this](const Wire& arc) {
+        AddViewportArcWire(arc);
+    });
     viewport_->SetBezierCreatedCallback([this](const std::array<Vector3, 4>& points) {
         AddViewportBezier(points);
     });
@@ -816,7 +821,7 @@ void MainWindow::BuildDrawingActions()
     polylineToolAction_ = new QAction(QStringLiteral("ポリライン"), this);
     rectangleToolAction_ = new QAction(QStringLiteral("矩形"), this);
     circleToolAction_ = new QAction(QStringLiteral("円"), this);
-    arcToolAction_ = new QAction(QStringLiteral("3点円弧"), this);
+    arcToolAction_ = new QAction(QStringLiteral("円弧"), this);
     bezierToolAction_ = new QAction(QStringLiteral("ベジェ"), this);
     splineToolAction_ = new QAction(QStringLiteral("スプライン"), this);
     moveToolAction_ = new QAction(QStringLiteral("移動"), this);
@@ -842,8 +847,8 @@ void MainWindow::BuildDrawingActions()
     mirrorToolAction_->setToolTip(QStringLiteral("選択したワイヤーを作図面上の2点軸で反転複製"));
     rotateToolAction_->setToolTip(QStringLiteral("中心・角度基準・回転先の3点で選択ワイヤーを回転"));
     splitToolAction_->setToolTip(QStringLiteral("選択した1本のワイヤーをクリック位置で分割"));
-    trimToolAction_->setToolTip(QStringLiteral("3D画面で赤く表示された直線部分をクリックして削除"));
-    extendToolAction_->setToolTip(QStringLiteral("3D画面で直線の端側をクリックし、最初の境界線まで延長"));
+    trimToolAction_->setToolTip(QStringLiteral("3D画面で赤く表示された線・曲線部分をクリックして削除"));
+    extendToolAction_->setToolTip(QStringLiteral("3D画面で線・曲線の端側をクリックし、最初の境界まで延長"));
     coincidentToolAction_->setToolTip(QStringLiteral("固定側、追従側の順にワイヤー端点を3D画面で指定"));
     tangentToolAction_->setToolTip(QStringLiteral("固定側の端点、追従するベジェ・B-spline・円弧端点の順に3D画面で指定"));
     curvatureToolAction_->setToolTip(QStringLiteral("固定側の端点、曲率まで追従するベジェ端点の順に3D画面で指定"));
@@ -851,7 +856,7 @@ void MainWindow::BuildDrawingActions()
         QStringLiteral("点グリッドの点を掴み、作図上の合わせたい点までドラッグ"));
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
     removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーのG1/G2関係を解除し、端点一致は残す"));
-    measureToolAction_->setToolTip(QStringLiteral("3D画面で2点または要素を直接指定して寸法を測定"));
+    measureToolAction_->setToolTip(QStringLiteral("3D画面で2点距離、3点角度、接線・法線角を直接測定"));
     joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
@@ -860,6 +865,7 @@ void MainWindow::BuildDrawingActions()
     lineToolAction_->setToolTip(QStringLiteral("始点と終点を指定。Shiftで作図面の水平・垂直へ固定"));
     polylineToolAction_->setToolTip(QStringLiteral("点を続けて指定。Shiftで次の辺を水平・垂直へ固定"));
     rectangleToolAction_->setToolTip(QStringLiteral("対角2点を指定。Shiftで正方形へ固定"));
+    arcToolAction_->setToolTip(QStringLiteral("3点、両端＋半径、または始点＋接線/法線方向で円弧を作図"));
     splineToolAction_->setToolTip(QStringLiteral("通過点を4点以上指定し、Enterまたは右クリックで完了"));
     clearReferenceAction_->setEnabled(false);
 
@@ -1034,6 +1040,69 @@ QWidget* MainWindow::BuildDrawingPanel()
     drawingRadiusField_->setSuffix(QStringLiteral(" mm"));
     dimensionForm->addRow(QStringLiteral("半径"), drawingRadiusField_);
     drawingDimensionStack_->addWidget(circlePage);
+
+    auto* arcPage = new QWidget;
+    auto* arcLayout = new QVBoxLayout(arcPage);
+    arcLayout->setContentsMargins(0, 0, 0, 0);
+    arcLayout->setSpacing(6);
+    arcDrawingMode_ = new QComboBox;
+    arcDrawingMode_->addItem(QStringLiteral("3点（始点・通過点・終点）"),
+        static_cast<int>(ArcDrawingMode::ThreePoints));
+    arcDrawingMode_->addItem(QStringLiteral("両端＋半径"),
+        static_cast<int>(ArcDrawingMode::EndpointsRadius));
+    arcDrawingMode_->addItem(QStringLiteral("始点＋接線/法線方向"),
+        static_cast<int>(ArcDrawingMode::StartTangent));
+    arcLayout->addWidget(arcDrawingMode_);
+    auto* arcCommonForm = new QFormLayout;
+    arcCommonForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    arcRadiusField_ = MakePositiveField(5.0);
+    arcRadiusField_->setSuffix(QStringLiteral(" mm"));
+    arcRadiusField_->setToolTip(QStringLiteral("数値または計算式を入力できます"));
+    arcRadiusLabel_ = new QLabel(QStringLiteral("半径"));
+    arcCommonForm->addRow(arcRadiusLabel_, arcRadiusField_);
+    arcLayout->addLayout(arcCommonForm);
+    arcParameterStack_ = new QStackedWidget;
+
+    auto* threePointPage = new QLabel(QStringLiteral(
+        "中央画面で始点、通過点、終点の順に指定します。"));
+    threePointPage->setWordWrap(true);
+    arcParameterStack_->addWidget(threePointPage);
+
+    QWidget* endpointArcPage = MakeFormPage(dimensionForm);
+    arcBulgeSide_ = new QComboBox;
+    arcBulgeSide_->addItem(QStringLiteral("進行方向の左"), true);
+    arcBulgeSide_->addItem(QStringLiteral("進行方向の右"), false);
+    dimensionForm->addRow(QStringLiteral("膨らむ側"), arcBulgeSide_);
+    arcParameterStack_->addWidget(endpointArcPage);
+
+    QWidget* tangentArcPage = MakeFormPage(dimensionForm);
+    arcDirectionBasis_ = new QComboBox;
+    arcDirectionBasis_->addItem(QStringLiteral("接線角"), 0);
+    arcDirectionBasis_->addItem(QStringLiteral("法線角"), 1);
+    arcDirectionAngle_ = MakeNumberField(0.0);
+    arcDirectionAngle_->setRange(-360.0, 360.0);
+    arcDirectionAngle_->setDecimals(3);
+    arcDirectionAngle_->setSuffix(QStringLiteral(" °"));
+    arcDirectionAngle_->setToolTip(QStringLiteral("作図面の横方向を0°、縦方向を90°とする角度"));
+    arcExtentMode_ = new QComboBox;
+    arcExtentMode_->addItem(QStringLiteral("中心角"), 0);
+    arcExtentMode_->addItem(QStringLiteral("円弧長"), 1);
+    arcExtentLabel_ = new QLabel(QStringLiteral("中心角"));
+    arcExtentValue_ = MakePositiveField(90.0);
+    arcExtentValue_->setRange(0.001, 359.999);
+    arcExtentValue_->setDecimals(3);
+    arcExtentValue_->setSuffix(QStringLiteral(" °"));
+    arcTurnSide_ = new QComboBox;
+    arcTurnSide_->addItem(QStringLiteral("左へ曲がる"), 1.0);
+    arcTurnSide_->addItem(QStringLiteral("右へ曲がる"), -1.0);
+    dimensionForm->addRow(QStringLiteral("方向の種類"), arcDirectionBasis_);
+    dimensionForm->addRow(QStringLiteral("方向角"), arcDirectionAngle_);
+    dimensionForm->addRow(QStringLiteral("円弧量"), arcExtentMode_);
+    dimensionForm->addRow(arcExtentLabel_, arcExtentValue_);
+    dimensionForm->addRow(QStringLiteral("曲がる側"), arcTurnSide_);
+    arcParameterStack_->addWidget(tangentArcPage);
+    arcLayout->addWidget(arcParameterStack_);
+    drawingDimensionStack_->addWidget(arcPage);
     dimensionLayout->addWidget(drawingDimensionStack_);
 
     drawingDimensionCommitButton_ = new QPushButton(QStringLiteral("寸法で確定"));
@@ -1129,11 +1198,26 @@ QWidget* MainWindow::BuildDrawingPanel()
         gridOrigin_[1]->setValue(0.0);
     });
     connect(drawingDimensionCommitButton_, &QPushButton::clicked, this, &MainWindow::CommitDrawingDimensions);
+    connect(arcDrawingMode_, &QComboBox::currentIndexChanged, this, [this] {
+        const auto mode = static_cast<ArcDrawingMode>(arcDrawingMode_->currentData().toInt());
+        arcParameterStack_->setCurrentIndex(arcDrawingMode_->currentIndex());
+        viewport_->SetArcDrawingMode(mode);
+        UpdateArcConfiguration();
+        UpdateDrawingPanel(viewport_->Tool(), viewport_->DrawingPointCount());
+    });
+    connect(arcRadiusField_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcBulgeSide_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcDirectionBasis_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcDirectionAngle_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcExtentMode_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcExtentValue_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateArcConfiguration);
+    connect(arcTurnSide_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
     for (const QKeySequence key : {QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)}) {
         auto* shortcut = new QShortcut(key, drawingDimensionSection_);
         shortcut->setContext(Qt::WidgetWithChildrenShortcut);
         connect(shortcut, &QShortcut::activated, this, &MainWindow::CommitDrawingDimensions);
     }
+    UpdateArcConfiguration();
     UpdateDrawingPanel(ViewportTool::Select, 0);
     return panel;
 }
@@ -2430,7 +2514,11 @@ QWidget* MainWindow::BuildInfoPanel()
     measurementLayout->setContentsMargins(10, 10, 10, 10);
     measurementLayout->setSpacing(8);
     measurementMode_ = new QComboBox;
-    measurementMode_->addItems({QStringLiteral("2点間"), QStringLiteral("要素")});
+    measurementMode_->addItems({
+        QStringLiteral("2点間（3D距離）"),
+        QStringLiteral("3点角度（3D）"),
+        QStringLiteral("要素（接線・法線）"),
+    });
     measurementStateLabel_ = new QLabel(QStringLiteral("1点目"));
     measurementStateLabel_->setStyleSheet("font-weight: 600; color: #26323a;");
     measurementResultLabel_ = new QLabel(QStringLiteral("未測定"));
@@ -2475,7 +2563,9 @@ QWidget* MainWindow::BuildInfoPanel()
     layout->addWidget(savedBox);
 
     connect(measurementMode_, &QComboBox::currentIndexChanged, this, [this](int index) {
-        viewport_->SetMeasurementMode(index == 0 ? MeasurementMode::TwoPoints : MeasurementMode::Elements);
+        viewport_->SetMeasurementMode(index == 0 ? MeasurementMode::TwoPoints
+            : index == 1 ? MeasurementMode::ThreePointsAngle
+                         : MeasurementMode::Elements);
         SetViewportTool(ViewportTool::Measure);
     });
     connect(measurementClearButton_, &QPushButton::clicked, viewport_, &CadViewport::ClearMeasurement);
@@ -3061,6 +3151,61 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                 Qt::NoButton, Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(viewport_, &moveEvent);
         }
+    } else if (state == QStringLiteral("arc-endpoints")
+        || state == QStringLiteral("arc-tangent")) {
+        if (!setActivePlane(QStringLiteral("front"))) {
+            return false;
+        }
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, plane.name == "front");
+        }
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name, false);
+        }
+        RefreshModelViews(false);
+        showTab(0);
+        viewport_->AlignToActiveWorkPlane();
+        viewport_->FitAll();
+        const auto front = project_.FindWorkPlane("front");
+        if (!front.has_value()) {
+            return false;
+        }
+        const auto clickWorld = [this](Vector3 point) {
+            const QPointF position = viewport_->ScreenPoint(point);
+            const QPointF globalPosition = viewport_->mapToGlobal(position.toPoint());
+            QMouseEvent moveEvent(
+                QEvent::MouseMove, position, globalPosition,
+                Qt::NoButton, Qt::NoButton, Qt::ControlModifier);
+            QApplication::sendEvent(viewport_, &moveEvent);
+            QMouseEvent pressEvent(
+                QEvent::MouseButtonPress, position, globalPosition,
+                Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
+            QApplication::sendEvent(viewport_, &pressEvent);
+            QMouseEvent releaseEvent(
+                QEvent::MouseButtonRelease, position, globalPosition,
+                Qt::LeftButton, Qt::NoButton, Qt::ControlModifier);
+            QApplication::sendEvent(viewport_, &releaseEvent);
+        };
+        if (state == QStringLiteral("arc-endpoints")) {
+            arcDrawingMode_->setCurrentIndex(1);
+            arcRadiusField_->setValue(5.0);
+            arcBulgeSide_->setCurrentIndex(arcBulgeSide_->findData(true));
+            UpdateArcConfiguration();
+            SetViewportTool(ViewportTool::DrawArc);
+            clickWorld(front->ToWorld(-3.0, 0.0));
+            clickWorld(front->ToWorld(3.0, 0.0));
+        } else {
+            arcDrawingMode_->setCurrentIndex(2);
+            arcDirectionBasis_->setCurrentIndex(arcDirectionBasis_->findData(1));
+            arcDirectionAngle_->setValue(90.0);
+            arcRadiusField_->setValue(4.0);
+            arcExtentMode_->setCurrentIndex(arcExtentMode_->findData(0));
+            arcExtentValue_->setValue(160.0);
+            arcTurnSide_->setCurrentIndex(arcTurnSide_->findData(1.0));
+            UpdateArcConfiguration();
+            SetViewportTool(ViewportTool::DrawArc);
+            clickWorld(front->ToWorld(-2.5, -1.0));
+        }
     } else if (state == QStringLiteral("workplane")) {
         for (const auto& plane : project_.WorkPlanes()) {
             project_.SetWorkPlaneVisible(plane.name, true);
@@ -3114,22 +3259,25 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
         project_.AddWire("edit_boundary_left", Wire::Line(
             front->ToWorld(-4.0, -5.0), front->ToWorld(-4.0, 5.0)), metadata);
-        project_.AddWire("edit_boundary_right", Wire::Line(
-            front->ToWorld(4.0, -5.0), front->ToWorld(4.0, 5.0)), metadata);
         const bool trimState = state == QStringLiteral("trim");
-        const Vector3 targetStart = trimState
-            ? front->ToWorld(-8.0, 0.0) : front->ToWorld(-2.0, 2.5);
-        const Vector3 targetEnd = trimState
-            ? front->ToWorld(8.0, 0.0) : front->ToWorld(2.0, 2.5);
-        project_.AddWire("edit_target", Wire::Line(targetStart, targetEnd), metadata);
+        project_.AddWire("edit_boundary_right", Wire::Line(
+            front->ToWorld(trimState ? 4.0 : -3.0, -5.0),
+            front->ToWorld(trimState ? 4.0 : -3.0, trimState ? 5.0 : 8.0)), metadata);
+        project_.AddWire("edit_target", trimState
+                ? Wire::CubicBezier(
+                    front->ToWorld(-8.0, 0.0), front->ToWorld(-5.0, 3.0),
+                    front->ToWorld(5.0, -3.0), front->ToWorld(8.0, 0.0))
+                : Wire::CircularArc(
+                    front->ToWorld(0.0, 0.0), front->UAxis(), front->VAxis(),
+                    5.0, 0.0, kPi * 0.5),
+            metadata);
         RefreshModelViews(false);
         showTab(3, 0.0);
         SetViewportTool(trimState ? ViewportTool::TrimWire : ViewportTool::ExtendWire);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
         QApplication::processEvents();
-        const Vector3 hoverPoint = trimState
-            ? front->ToWorld(0.0, 0.0) : front->ToWorld(1.7, 2.5);
+        const Vector3 hoverPoint = project_.Wires().back().wire.Evaluate(trimState ? 0.5 : 0.85);
         const QPointF screenPoint = viewport_->ScreenPoint(hoverPoint);
         const QPointF globalPoint = viewport_->mapToGlobal(screenPoint.toPoint());
         QMouseEvent moveEvent(
@@ -3326,6 +3474,36 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("measure-3d")) {
+        showTab(8);
+        measurementMode_->setCurrentIndex(1);
+        UpdateMeasurement({
+            {MeasurementPickKind::Point, -1, {0.0, 0.0, 0.0}, 0.0},
+            {MeasurementPickKind::Point, -1, {8.0, 0.0, 0.0}, 0.0},
+            {MeasurementPickKind::Point, -1, {0.0, 6.0, 4.0}, 0.0},
+        });
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+        finalRevealTab = 8;
+        finalRevealAnchor = QStringLiteral("measurement");
+    } else if (state == QStringLiteral("measure-normal")) {
+        const auto curve = findSelection(CadSelectionKind::Wire, "front_nose_curve");
+        const auto line = findSelection(CadSelectionKind::Wire, "origin_to_point");
+        if (!curve.has_value() || !line.has_value()) {
+            return false;
+        }
+        showTab(8);
+        measurementMode_->setCurrentIndex(2);
+        UpdateMeasurement({
+            {MeasurementPickKind::Wire, curve->index,
+                project_.Wires()[curve->index].wire.Evaluate(0.55), 0.55},
+            {MeasurementPickKind::Wire, line->index,
+                project_.Wires()[line->index].wire.Evaluate(0.5), 0.5},
+        });
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+        finalRevealTab = 8;
+        finalRevealAnchor = QStringLiteral("measurement");
     } else if (state == QStringLiteral("inspection")) {
         modelFilter_->setText(QStringLiteral("nose_panel"));
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
@@ -3877,8 +4055,11 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
     };
 
     const bool pointMode = viewport_->CurrentMeasurementMode() == MeasurementMode::TwoPoints;
+    const bool angleMode = viewport_->CurrentMeasurementMode() == MeasurementMode::ThreePointsAngle;
     if (picks.empty()) {
-        measurementStateLabel_->setText(pointMode ? QStringLiteral("1点目") : QStringLiteral("1つ目の要素"));
+        measurementStateLabel_->setText(pointMode ? QStringLiteral("1点目")
+            : angleMode ? QStringLiteral("角度の頂点")
+                        : QStringLiteral("1つ目の要素"));
         measurementResultLabel_->setText(QStringLiteral("未測定"));
         viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
         return;
@@ -3907,6 +4088,44 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
     };
 
     try {
+        if (angleMode) {
+            if (picks.size() == 1) {
+                measurementStateLabel_->setText(QStringLiteral("1方向目の点"));
+                measurementResultLabel_->setText(
+                    QStringLiteral("角度の頂点\n%1").arg(pointLines(picks[0].point).join('\n')));
+                viewport_->SetMeasurementOverlay(
+                    picks[0].point, std::nullopt, QStringLiteral("頂点"));
+                return;
+            }
+            if (picks.size() == 2) {
+                const double firstLength = (picks[1].point - picks[0].point).Length();
+                measurementStateLabel_->setText(QStringLiteral("2方向目の点"));
+                measurementResultLabel_->setText(QStringList{
+                    QStringLiteral("1方向目  %1 mm").arg(Number(firstLength)),
+                    QStringLiteral("次に2方向目の点を指定"),
+                }.join('\n'));
+                viewport_->SetMeasurementOverlay(
+                    picks[0].point, picks[1].point,
+                    QStringLiteral("%1 mm").arg(Number(firstLength)));
+                return;
+            }
+            const auto angle = MeasureThreePointAngle(
+                picks[0].point, picks[1].point, picks[2].point);
+            const double firstLength = (picks[1].point - picks[0].point).Length();
+            const double secondLength = (picks[2].point - picks[0].point).Length();
+            measurementStateLabel_->setText(QStringLiteral("3D角度"));
+            measurementResultLabel_->setText(QStringList{
+                QStringLiteral("3D角度  %1°").arg(Number(angle.directedDegrees)),
+                QStringLiteral("最小角  %1°").arg(Number(angle.acuteDegrees)),
+                QStringLiteral("頂点→1方向目  %1 mm").arg(Number(firstLength)),
+                QStringLiteral("頂点→2方向目  %1 mm").arg(Number(secondLength)),
+            }.join('\n'));
+            viewport_->SetMeasurementAngleOverlay(
+                picks[0].point, picks[1].point, picks[2].point,
+                QStringLiteral("%1°").arg(Number(angle.directedDegrees)));
+            return;
+        }
+
         if (pointMode) {
             if (picks.size() == 1) {
                 measurementStateLabel_->setText(QStringLiteral("2点目"));
@@ -3968,6 +4187,8 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             const Wire& wire = requireWire(pick);
             const double length = MeasureWireLength(wire);
             const Vector3 tangent = MeasureWireTangent(wire, pick.wireParameter);
+            const std::optional<Vector3> normal = MeasureWireCurvatureNormal(
+                wire, pick.wireParameter);
             QStringList result{
                 ToQString(project_.Wires()[pick.index].name),
                 QStringLiteral("全長  %1 mm").arg(Number(length)),
@@ -3984,6 +4205,14 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                 .arg(Number(MeasureDirectionsAngle(tangent, {1.0, 0.0, 0.0}).directedDegrees))
                 .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 1.0, 0.0}).directedDegrees))
                 .arg(Number(MeasureDirectionsAngle(tangent, {0.0, 0.0, 1.0}).directedDegrees));
+            if (normal.has_value()) {
+                result << QStringLiteral("曲率法線とX/Y/Z軸  %1° / %2° / %3°")
+                    .arg(Number(MeasureDirectionsAngle(*normal, {1.0, 0.0, 0.0}).directedDegrees))
+                    .arg(Number(MeasureDirectionsAngle(*normal, {0.0, 1.0, 0.0}).directedDegrees))
+                    .arg(Number(MeasureDirectionsAngle(*normal, {0.0, 0.0, 1.0}).directedDegrees));
+            } else {
+                result << QStringLiteral("曲率法線  なし（直線または曲率0）");
+            }
             addMetric(QStringLiteral("残す値: ワイヤー全長"), ReferenceDimensionKind::WireLength);
             measurementResultLabel_->setText(result.join('\n'));
             if (radius.has_value()) {
@@ -4007,15 +4236,30 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             const Wire& firstWire = requireWire(first);
             const Wire& secondWire = requireWire(second);
             const auto distance = MeasureWireToWireDistance(firstWire, secondWire);
-            const auto angle = MeasureDirectionsAngle(
-                MeasureWireTangent(firstWire, first.wireParameter),
-                MeasureWireTangent(secondWire, second.wireParameter));
-            measurementResultLabel_->setText(QStringList{
+            const Vector3 firstTangent = MeasureWireTangent(firstWire, first.wireParameter);
+            const Vector3 secondTangent = MeasureWireTangent(secondWire, second.wireParameter);
+            const auto angle = MeasureDirectionsAngle(firstTangent, secondTangent);
+            const auto firstNormal = MeasureWireCurvatureNormal(firstWire, first.wireParameter);
+            const auto secondNormal = MeasureWireCurvatureNormal(secondWire, second.wireParameter);
+            QStringList result{
                 QStringLiteral("最短距離  %1 mm").arg(Number(distance.distanceMillimeters)),
                 QStringLiteral("クリック点間  %1 mm").arg(Number((second.point - first.point).Length())),
                 QStringLiteral("クリック位置の接線角  %1°").arg(Number(angle.directedDegrees)),
                 QStringLiteral("最小交角  %1°").arg(Number(angle.acuteDegrees)),
-            }.join('\n'));
+            };
+            if (firstNormal.has_value() && secondNormal.has_value()) {
+                const auto normalAngle = MeasureDirectionsAngle(*firstNormal, *secondNormal);
+                result << QStringLiteral("曲率法線同士の角度  %1°").arg(Number(normalAngle.directedDegrees));
+            } else if (firstNormal.has_value()) {
+                const auto normalAngle = MeasureDirectionsAngle(*firstNormal, secondTangent);
+                result << QStringLiteral("1本目の曲率法線と2本目の接線  %1°")
+                    .arg(Number(normalAngle.directedDegrees));
+            } else if (secondNormal.has_value()) {
+                const auto normalAngle = MeasureDirectionsAngle(firstTangent, *secondNormal);
+                result << QStringLiteral("1本目の接線と2本目の曲率法線  %1°")
+                    .arg(Number(normalAngle.directedDegrees));
+            }
+            measurementResultLabel_->setText(result.join('\n'));
             addMetric(QStringLiteral("残す値: 最短距離"), ReferenceDimensionKind::WireDistance);
             addMetric(QStringLiteral("残す値: クリック位置の接線角"), ReferenceDimensionKind::WireAngle);
             viewport_->SetMeasurementOverlay(
@@ -4509,7 +4753,13 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         statusBar()->showMessage(QStringLiteral("円作図モード"), 2500);
         break;
     case ViewportTool::DrawArc:
-        statusBar()->showMessage(QStringLiteral("3点円弧作図モード"), 2500);
+        statusBar()->showMessage(
+            viewport_->CurrentArcDrawingMode() == ArcDrawingMode::ThreePoints
+                ? QStringLiteral("3点円弧作図モード")
+                : viewport_->CurrentArcDrawingMode() == ArcDrawingMode::EndpointsRadius
+                ? QStringLiteral("始点と終点を指定し、半径で円弧を作るモード")
+                : QStringLiteral("始点から接線・法線角を指定して円弧を伸ばすモード"),
+            3500);
         break;
     case ViewportTool::DrawBezier:
         statusBar()->showMessage(QStringLiteral("ベジェ曲線作図モード"), 2500);
@@ -4533,7 +4783,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         statusBar()->showMessage(QStringLiteral("分割: 選択したワイヤー上の分けたい位置をクリック"), 4000);
         break;
     case ViewportTool::TrimWire:
-        statusBar()->showMessage(QStringLiteral("トリム: 赤く表示される直線部分をクリックして削除。右クリックまたはEscで終了"), 6000);
+        statusBar()->showMessage(QStringLiteral("トリム: 赤く表示される線・曲線部分をクリックして削除。右クリックまたはEscで終了"), 6000);
         break;
     case ViewportTool::ExtendWire:
         statusBar()->showMessage(QStringLiteral("延長: 伸ばしたい端側をクリック。緑の最初の境界まで延長。右クリックまたはEscで終了"), 6000);
@@ -4549,9 +4799,11 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         break;
     case ViewportTool::Measure:
         statusBar()->showMessage(
-            measurementMode_ != nullptr && measurementMode_->currentIndex() == 1
+            measurementMode_ != nullptr && measurementMode_->currentIndex() == 2
                 ? QStringLiteral("要素測定: 線・曲線・作業平面を1つまたは2つ指定")
-                : QStringLiteral("2点測定: 3D画面で1点目と2点目を指定"),
+                : measurementMode_ != nullptr && measurementMode_->currentIndex() == 1
+                ? QStringLiteral("3点角度: 頂点、1方向目、2方向目の順に3D点を指定")
+                : QStringLiteral("2点測定: 既存点・線上点を3D画面で指定"),
             4500);
         break;
     }
@@ -4589,9 +4841,21 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
             .arg(pointCount);
         break;
     case ViewportTool::DrawArc:
-        state = QStringLiteral("3点円弧 · %1  %2 / 3点")
-            .arg(pointCount == 0 ? QStringLiteral("始点") : pointCount == 1 ? QStringLiteral("通過点") : QStringLiteral("終点"))
-            .arg(pointCount);
+        if (viewport_->CurrentArcDrawingMode() == ArcDrawingMode::ThreePoints) {
+            state = QStringLiteral("3点円弧 · %1  %2 / 3点")
+                .arg(pointCount == 0 ? QStringLiteral("始点") : pointCount == 1 ? QStringLiteral("通過点") : QStringLiteral("終点"))
+                .arg(pointCount);
+        } else if (viewport_->CurrentArcDrawingMode() == ArcDrawingMode::EndpointsRadius) {
+            state = pointCount < 2
+                ? QStringLiteral("両端＋半径 · %1  %2 / 2点")
+                    .arg(pointCount == 0 ? QStringLiteral("始点") : QStringLiteral("終点"))
+                    .arg(pointCount)
+                : QStringLiteral("両端＋半径 · 半径と膨らむ側を確認");
+        } else {
+            state = pointCount == 0
+                ? QStringLiteral("始点＋方向 · 始点を指定")
+                : QStringLiteral("始点＋方向 · 方向・半径・円弧量を確認");
+        }
         break;
     case ViewportTool::DrawBezier:
         state = QStringLiteral("ベジェ曲線 · %1  %2 / 4点")
@@ -4679,22 +4943,48 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
 
     int dimensionPage = -1;
     if (tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline
-        || tool == ViewportTool::DrawSpline || tool == ViewportTool::DrawArc
+        || tool == ViewportTool::DrawSpline
         || tool == ViewportTool::DrawBezier) {
         dimensionPage = 0;
     } else if (tool == ViewportTool::DrawRectangle) {
         dimensionPage = 1;
     } else if (tool == ViewportTool::DrawCircle) {
         dimensionPage = 2;
+    } else if (tool == ViewportTool::DrawArc) {
+        dimensionPage = 3;
     }
     drawingDimensionSection_->setVisible(dimensionPage >= 0);
     if (dimensionPage < 0) {
         return;
     }
     drawingDimensionStack_->setCurrentIndex(dimensionPage);
-    drawingDimensionCommitButton_->setEnabled(pointCount > 0);
-    drawingDimensionCommitButton_->setText(
-        pointCount > 0 ? QStringLiteral("寸法で確定") : QStringLiteral("始点を指定"));
+    bool canCommit = pointCount > 0;
+    QString commitText = canCommit ? QStringLiteral("寸法で確定") : QStringLiteral("始点を指定");
+    if (tool == ViewportTool::DrawArc) {
+        const ArcDrawingMode mode = viewport_->CurrentArcDrawingMode();
+        canCommit = mode == ArcDrawingMode::ThreePoints ? false
+            : mode == ArcDrawingMode::EndpointsRadius ? pointCount == 2
+            : pointCount == 1;
+        commitText = mode == ArcDrawingMode::ThreePoints
+            ? QStringLiteral("3点を画面で指定")
+            : canCommit ? QStringLiteral("この円弧を作成")
+                        : mode == ArcDrawingMode::EndpointsRadius
+                        ? QStringLiteral("始点と終点を指定")
+                        : QStringLiteral("始点を指定");
+    }
+    drawingDimensionCommitButton_->setEnabled(canCommit);
+    drawingDimensionCommitButton_->setText(commitText);
+
+    if (tool == ViewportTool::DrawArc
+        && viewport_->CurrentArcDrawingMode() != ArcDrawingMode::ThreePoints
+        && canCommit && QApplication::focusWidget() == viewport_) {
+        QDoubleSpinBox* firstField = viewport_->CurrentArcDrawingMode()
+                == ArcDrawingMode::EndpointsRadius
+            ? arcRadiusField_
+            : arcDirectionAngle_;
+        firstField->setFocus(Qt::OtherFocusReason);
+        firstField->selectAll();
+    }
 
     const DrawingMeasurements measurements = viewport_->CurrentDrawingMeasurements();
     if (!measurements.available) {
@@ -4713,7 +5003,7 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     } else if (dimensionPage == 1) {
         updateField(drawingWidthField_, measurements.widthMillimeters);
         updateField(drawingHeightField_, measurements.heightMillimeters);
-    } else {
+    } else if (dimensionPage == 2) {
         updateField(drawingRadiusField_, measurements.radiusMillimeters);
     }
 }
@@ -4840,12 +5130,27 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawArc:
-            setGuide(QStringLiteral("3点円弧を描く"),
-                pointCount == 0 ? QStringLiteral("次: 始点をクリック")
-                    : pointCount == 1 ? QStringLiteral("次: 円弧が通る点をクリック")
-                                      : QStringLiteral("次: 終点をクリック"),
-                QStringLiteral("1  始点\n2  通過点\n3  終点\n各点は距離→Tab→角度→Enterでも指定") + startSnapHint,
-                QStringLiteral("drawing"));
+            if (viewport_->CurrentArcDrawingMode() == ArcDrawingMode::ThreePoints) {
+                setGuide(QStringLiteral("3点円弧を描く"),
+                    pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                        : pointCount == 1 ? QStringLiteral("次: 円弧が通る点をクリック")
+                                          : QStringLiteral("次: 終点をクリック"),
+                    QStringLiteral("1  始点\n2  通過点\n3  終点\n各点は距離→Tab→角度→Enterでも指定") + startSnapHint,
+                    QStringLiteral("drawing"));
+            } else if (viewport_->CurrentArcDrawingMode() == ArcDrawingMode::EndpointsRadius) {
+                setGuide(QStringLiteral("両端と半径で円弧を描く"),
+                    pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                        : pointCount == 1 ? QStringLiteral("次: 終点をクリック")
+                                          : QStringLiteral("次: 半径と膨らむ側を確認して作成"),
+                    QStringLiteral("1  始点\n2  終点\n3  半径（両端間隔の1/2以上）\n4  左右を確認して作成") + startSnapHint,
+                    QStringLiteral("drawing"));
+            } else {
+                setGuide(QStringLiteral("始点から指定方向へ円弧を伸ばす"),
+                    pointCount == 0 ? QStringLiteral("次: 始点をクリック")
+                                    : QStringLiteral("次: 接線/法線角、半径、円弧量を確認して作成"),
+                    QStringLiteral("1  始点\n2  接線角または法線角\n3  半径\n4  中心角または円弧長\n5  左右を確認して作成") + startSnapHint,
+                    QStringLiteral("drawing"));
+            }
             return;
         case ViewportTool::DrawBezier:
             setGuide(QStringLiteral("ベジェ曲線を描く"),
@@ -4888,15 +5193,15 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("1  分割する線を1本選択\n2  分割道具\n3  線上をクリック"), QStringLiteral("edit"));
             return;
         case ViewportTool::TrimWire:
-            setGuide(QStringLiteral("不要な線部分をトリム"),
+            setGuide(QStringLiteral("不要な線・曲線部分をトリム"),
                 QStringLiteral("次: 赤く表示された部分をクリック"),
-                QStringLiteral("1  トリム道具を選択\n2  消したい直線部分へマウスを置く\n3  赤い事前表示を確認してクリック\n続けて処理可能。右クリックまたはEscで終了"),
+                QStringLiteral("1  トリム道具を選択\n2  消したい線・曲線部分へマウスを置く\n3  赤い事前表示を確認してクリック\n続けて処理可能。右クリックまたはEscで終了"),
                 QStringLiteral("edit"));
             return;
         case ViewportTool::ExtendWire:
-            setGuide(QStringLiteral("直線を境界まで延長"),
+            setGuide(QStringLiteral("線・曲線を境界まで延長"),
                 QStringLiteral("次: 伸ばしたい端側へマウスを置いてクリック"),
-                QStringLiteral("1  延長道具を選択\n2  直線の伸ばしたい端側へマウスを置く\n3  緑の到達先を確認してクリック\n最初に交わる表示中の直線まで延長"),
+                QStringLiteral("1  延長道具を選択\n2  線・曲線の伸ばしたい端側へマウスを置く\n3  緑の到達先を確認してクリック\n最初に交わる表示中の線・曲線まで延長"),
                 QStringLiteral("edit"));
             return;
         case ViewportTool::Coincident:
@@ -4983,7 +5288,7 @@ void MainWindow::RefreshBeginnerGuide()
         break;
     case 8:
         setGuide(QStringLiteral("寸法と選択情報を確認"), QStringLiteral("次: 対象を選ぶか、測定を開始"),
-            QStringLiteral("1  対象を中央画面で選択\n2  寸法・材質・工作判定を確認\n3  測定はM"),
+            QStringLiteral("1  2点距離・3点角度・要素から方式を選択\n2  中央画面でガイド順に指定\n3  距離・接線・法線角を確認"),
             QStringLiteral("measure"));
         break;
     default:
@@ -5001,22 +5306,79 @@ void MainWindow::CommitDrawingDimensions()
     }
 
     bool committed = false;
-    if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline
+    try {
+        if (viewport_->Tool() == ViewportTool::DrawArc
+            && viewport_->CurrentArcDrawingMode() != ArcDrawingMode::ThreePoints) {
+            UpdateArcConfiguration();
+            committed = viewport_->CommitConfiguredArc();
+        } else if (viewport_->Tool() == ViewportTool::DrawLine || viewport_->Tool() == ViewportTool::DrawPolyline
         || viewport_->Tool() == ViewportTool::DrawSpline || viewport_->Tool() == ViewportTool::DrawArc
         || viewport_->Tool() == ViewportTool::DrawBezier) {
-        committed = viewport_->CommitDrawingDimensions(
-            drawingLengthField_->value(), drawingAngleField_->value());
-    } else if (viewport_->Tool() == ViewportTool::DrawRectangle) {
-        committed = viewport_->CommitDrawingDimensions(
-            drawingWidthField_->value(), drawingHeightField_->value());
-    } else if (viewport_->Tool() == ViewportTool::DrawCircle) {
-        committed = viewport_->CommitDrawingDimensions(drawingRadiusField_->value());
+            committed = viewport_->CommitDrawingDimensions(
+                drawingLengthField_->value(), drawingAngleField_->value());
+        } else if (viewport_->Tool() == ViewportTool::DrawRectangle) {
+            committed = viewport_->CommitDrawingDimensions(
+                drawingWidthField_->value(), drawingHeightField_->value());
+        } else if (viewport_->Tool() == ViewportTool::DrawCircle) {
+            committed = viewport_->CommitDrawingDimensions(drawingRadiusField_->value());
+        }
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
     }
 
     if (!committed) {
         statusBar()->showMessage(QStringLiteral("始点を3D画面で指定してください"), 3000);
     }
     viewport_->setFocus();
+}
+
+void MainWindow::UpdateArcConfiguration()
+{
+    if (viewport_ == nullptr || arcDrawingMode_ == nullptr || arcParameterStack_ == nullptr
+        || arcRadiusField_ == nullptr || arcDirectionBasis_ == nullptr
+        || arcDirectionAngle_ == nullptr || arcExtentMode_ == nullptr
+        || arcExtentValue_ == nullptr || arcTurnSide_ == nullptr || arcBulgeSide_ == nullptr) {
+        return;
+    }
+    const ArcDrawingMode mode = static_cast<ArcDrawingMode>(
+        arcDrawingMode_->currentData().toInt());
+    arcParameterStack_->setCurrentIndex(arcDrawingMode_->currentIndex());
+    const bool configured = mode != ArcDrawingMode::ThreePoints;
+    arcRadiusLabel_->setVisible(configured);
+    arcRadiusField_->setVisible(configured);
+
+    const bool lengthMode = arcExtentMode_->currentData().toInt() == 1;
+    const bool wasLength = arcExtentValue_->suffix().contains(QStringLiteral("mm"));
+    if (lengthMode != wasLength) {
+        const QSignalBlocker blocker(arcExtentValue_);
+        const double radius = std::max(arcRadiusField_->value(), 1.0e-9);
+        const double converted = lengthMode
+            ? radius * arcExtentValue_->value() * kPi / 180.0
+            : arcExtentValue_->value() / radius * 180.0 / kPi;
+        arcExtentValue_->setRange(
+            0.001,
+            lengthMode ? radius * 2.0 * kPi - 1.0e-6 : 359.999);
+        arcExtentValue_->setSuffix(lengthMode ? QStringLiteral(" mm") : QStringLiteral(" °"));
+        arcExtentValue_->setValue(converted);
+    } else {
+        const QSignalBlocker blocker(arcExtentValue_);
+        arcExtentValue_->setRange(
+            0.001,
+            lengthMode ? arcRadiusField_->value() * 2.0 * kPi - 1.0e-6 : 359.999);
+    }
+    arcExtentLabel_->setText(lengthMode ? QStringLiteral("円弧長") : QStringLiteral("中心角"));
+
+    const double turn = arcTurnSide_->currentData().toDouble();
+    double tangentAngle = arcDirectionAngle_->value();
+    if (arcDirectionBasis_->currentData().toInt() == 1) {
+        tangentAngle -= turn * 90.0;
+    }
+    const double sweepDegrees = (lengthMode
+        ? arcExtentValue_->value() / arcRadiusField_->value() * 180.0 / kPi
+        : arcExtentValue_->value()) * turn;
+    viewport_->SetConfiguredArc(
+        arcRadiusField_->value(), tangentAngle, sweepDegrees,
+        arcBulgeSide_->currentData().toBool());
 }
 
 void MainWindow::RefreshActiveWorkPlane()
@@ -5193,6 +5555,30 @@ void MainWindow::AddViewportArc(Vector3 start, Vector3 through, Vector3 end)
         statusBar()->showMessage(QStringLiteral("3点円弧を作成しました"), 1800);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+    }
+}
+
+void MainWindow::AddViewportArcWire(const Wire& arc)
+{
+    try {
+        if (arc.Kind() != WireKind::CircularArc) {
+            throw std::invalid_argument("作成結果が円弧ではありません。");
+        }
+        const std::string planeName = ToName(activePlaneCombo_->currentText());
+        if (!project_.FindWorkPlane(planeName).has_value()) {
+            throw std::invalid_argument("作図面が見つかりません。");
+        }
+        WireMetadata metadata;
+        metadata.sourcePlaneName = planeName;
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
+        RecordUndo();
+        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("arc"))), arc, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(QStringLiteral("指定した半径・方向で円弧を作成しました"), 2200);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
     }
 }
 
@@ -5493,12 +5879,9 @@ void MainWindow::ApplyDirectLineTrim(int wireIndex, double parameter)
 {
     try {
         if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
-            throw std::invalid_argument("トリムする直線が見つかりません。");
+            throw std::invalid_argument("トリムする線・曲線が見つかりません。");
         }
         const auto source = project_.Wires()[wireIndex];
-        if (source.wire.Kind() != WireKind::Line) {
-            throw std::invalid_argument("現在の直接トリムは直線に対応しています。");
-        }
         if (source.projection.has_value() || source.plateOffset.has_value()) {
             throw std::invalid_argument("投影線・板厚位置線は、元の作図線を編集してください。");
         }
@@ -5507,13 +5890,13 @@ void MainWindow::ApplyDirectLineTrim(int wireIndex, double parameter)
         boundaries.reserve(project_.Wires().size());
         for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
             const auto& candidate = project_.Wires()[index];
-            if (index == wireIndex || candidate.wire.Kind() != WireKind::Line
+            if (index == wireIndex
                 || !viewport_->IsDisplayed(CadSelectionKind::Wire, index, candidate.visible)) {
                 continue;
             }
             boundaries.push_back(candidate.wire);
         }
-        const auto result = TrimLineAtBoundaries(source.wire, parameter, boundaries);
+        const auto result = TrimWireAtBoundaries(source.wire, parameter, boundaries);
 
         Project candidate = project_;
         std::vector<CadSelection> resultingSelections;
@@ -5558,19 +5941,19 @@ void MainWindow::ApplyDirectLineTrim(int wireIndex, double parameter)
         UpdateSelections(std::move(resultingSelections), true);
         statusBar()->showMessage(
             result.retained.size() == 1
-                ? QStringLiteral("指定した端側を交点までトリムしました")
-                : QStringLiteral("指定した中間部分を削除し、直線を2本に分けました"),
+                ? QStringLiteral("指定した部分を境界までトリムしました")
+                : QStringLiteral("指定した中間部分を削除し、曲線を2本に分けました"),
             3500);
     } catch (const std::exception& error) {
         QString message = QString::fromUtf8(error.what());
-        if (message.contains(QStringLiteral("No visible line boundary"))) {
-            message = QStringLiteral("この部分を区切る表示中の直線がありません。");
-        } else if (message.contains(QStringLiteral("complete target line"))) {
-            message = QStringLiteral("直線全体が消えるためトリムできません。");
+        if (message.contains(QStringLiteral("No visible wire boundary"))) {
+            message = QStringLiteral("この部分を区切る表示中の線・曲線がありません。");
+        } else if (message.contains(QStringLiteral("complete target wire"))) {
+            message = QStringLiteral("ワイヤー全体が消えるためトリムできません。");
         } else if (message.contains(QStringLiteral("too short"))) {
-            message = QStringLiteral("交点から少し離れた、消したい直線部分を指してください。");
+            message = QStringLiteral("交点から少し離れた、消したい線・曲線部分を指してください。");
         } else if (message.startsWith(QStringLiteral("Wire is used"))) {
-            message = QStringLiteral("この直線は面・投影・開口・拘束で使用中のため中央を2本に分けられません。派生形状を外すか、元図の段階でトリムしてください。");
+            message = QStringLiteral("このワイヤーは面・投影・開口・拘束で使用中のため中央を2本に分けられません。派生形状を外すか、元図の段階でトリムしてください。");
         }
         statusBar()->showMessage(message, 5000);
     }
@@ -5580,12 +5963,9 @@ void MainWindow::ApplyDirectLineExtend(int wireIndex, double parameter)
 {
     try {
         if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
-            throw std::invalid_argument("延長する直線が見つかりません。");
+            throw std::invalid_argument("延長する線・曲線が見つかりません。");
         }
         const auto source = project_.Wires()[wireIndex];
-        if (source.wire.Kind() != WireKind::Line) {
-            throw std::invalid_argument("現在の直接延長は直線に対応しています。");
-        }
         if (source.projection.has_value() || source.plateOffset.has_value()) {
             throw std::invalid_argument("投影線・板厚位置線は、元の作図線を編集してください。");
         }
@@ -5594,13 +5974,13 @@ void MainWindow::ApplyDirectLineExtend(int wireIndex, double parameter)
         boundaries.reserve(project_.Wires().size());
         for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
             const auto& candidate = project_.Wires()[index];
-            if (index == wireIndex || candidate.wire.Kind() != WireKind::Line
+            if (index == wireIndex
                 || !viewport_->IsDisplayed(CadSelectionKind::Wire, index, candidate.visible)) {
                 continue;
             }
             boundaries.push_back(candidate.wire);
         }
-        const auto result = ExtendLineToBoundary(source.wire, parameter, boundaries);
+        const auto result = ExtendWireToBoundary(source.wire, parameter, boundaries);
         Project candidate = project_;
         candidate.UpdateWireAndMetadata(
             source.name,
@@ -5612,11 +5992,11 @@ void MainWindow::ApplyDirectLineExtend(int wireIndex, double parameter)
         MarkModified();
         RefreshModelViews(false);
         UpdateSelection({CadSelectionKind::Wire, wireIndex}, true);
-        statusBar()->showMessage(QStringLiteral("直線を最初の境界まで延長しました"), 3500);
+        statusBar()->showMessage(QStringLiteral("ワイヤーを最初の境界まで延長しました"), 3500);
     } catch (const std::exception& error) {
         QString message = QString::fromUtf8(error.what());
-        if (message.contains(QStringLiteral("No visible line boundary"))) {
-            message = QStringLiteral("選んだ端の先に交わる表示中の直線がありません。");
+        if (message.contains(QStringLiteral("No visible wire boundary"))) {
+            message = QStringLiteral("選んだ端の先に交わる表示中の線・曲線がありません。");
         }
         statusBar()->showMessage(message, 5000);
     }
@@ -7529,6 +7909,105 @@ bool MainWindow::RunCreationSelfTest()
             return fail("right click exits direct line edit");
         }
 
+        project_.AddWire("curve_trim_target", Wire::CubicBezier(
+            {-8.0, -3.0, 0.0}, {-5.0, -1.0, 0.0},
+            {5.0, -5.0, 0.0}, {8.0, -3.0, 0.0}));
+        RefreshModelViews(false);
+        viewport_->FitAll();
+        const int curveTrimIndex = 4;
+        SetViewportTool(ViewportTool::TrimWire);
+        const QPointF curveTrimPick = viewport_->ScreenPoint(
+            project_.Wires()[curveTrimIndex].wire.Evaluate(0.5));
+        sendMouse(QEvent::MouseMove, curveTrimPick, Qt::NoButton, Qt::NoButton);
+        if (viewport_->HoveredSelection().kind != CadSelectionKind::Wire
+            || viewport_->HoveredSelection().index != curveTrimIndex
+            || !viewport_->DirectLineEditPreviewReady()) {
+            return fail("direct curve trim preview");
+        }
+        click(curveTrimPick);
+        if (project_.Wires().size() != 6
+            || project_.Wires()[4].wire.Kind() != WireKind::CubicBezier
+            || project_.Wires()[5].wire.Kind() != WireKind::CubicBezier) {
+            return fail("direct cubic Bezier middle trim");
+        }
+        Undo();
+        if (project_.Wires().size() != 5
+            || project_.Wires()[curveTrimIndex].name != "curve_trim_target") {
+            return fail("undo direct curve trim");
+        }
+        project_.SetWireVisible("curve_trim_target", false);
+
+        project_.AddWire("curve_extend_boundary", Wire::Line(
+            {14.0, -5.0, 0.0}, {14.0, 5.0, 0.0}));
+        project_.AddWire("curve_extend_target", Wire::CubicBezier(
+            {0.0, -4.0, 0.0}, {3.0, -4.0, 0.0},
+            {7.0, -4.0, 0.0}, {10.0, -2.0, 0.0}));
+        RefreshModelViews(false);
+        viewport_->FitAll();
+        const int curveExtendIndex = 6;
+        SetViewportTool(ViewportTool::ExtendWire);
+        const QPointF curveExtendPick = viewport_->ScreenPoint(
+            project_.Wires()[curveExtendIndex].wire.Evaluate(0.9));
+        sendMouse(QEvent::MouseMove, curveExtendPick, Qt::NoButton, Qt::NoButton);
+        if (viewport_->HoveredSelection().kind != CadSelectionKind::Wire
+            || viewport_->HoveredSelection().index != curveExtendIndex
+            || !viewport_->DirectLineEditPreviewReady()) {
+            return fail("direct curve extend preview");
+        }
+        click(curveExtendPick);
+        if (project_.Wires()[curveExtendIndex].wire.Kind() != WireKind::CubicBezier
+            || std::abs(project_.Wires()[curveExtendIndex].wire.End().x - 14.0) > 1.0e-7
+            || project_.Wires()[curveExtendIndex].wire.End().y <= -2.0) {
+            return fail("direct cubic Bezier extend");
+        }
+        Undo();
+        if (!kachakacha::geometry::AlmostEqual(
+                project_.Wires()[curveExtendIndex].wire.End(), {10.0, -2.0, 0.0}, 1.0e-8)) {
+            return fail("undo direct curve extend");
+        }
+
+        const std::size_t configuredArcStart = project_.Wires().size();
+        arcDrawingMode_->setCurrentIndex(1);
+        arcRadiusField_->setValue(4.0);
+        arcBulgeSide_->setCurrentIndex(arcBulgeSide_->findData(true));
+        UpdateArcConfiguration();
+        SetViewportTool(ViewportTool::DrawArc);
+        click(viewport_->ScreenPoint({-3.0, 1.0, 0.0}), Qt::ControlModifier);
+        click(viewport_->ScreenPoint({3.0, 1.0, 0.0}), Qt::ControlModifier);
+        if (viewport_->DrawingPointCount() != 2 || !drawingDimensionCommitButton_->isEnabled()) {
+            return fail("endpoint radius arc input state");
+        }
+        CommitDrawingDimensions();
+        if (project_.Wires().size() != configuredArcStart + 1
+            || project_.Wires().back().wire.Kind() != WireKind::CircularArc
+            || std::abs(project_.Wires().back().wire.ArcData().radius - 4.0) > 1.0e-8) {
+            return fail("endpoint radius arc drawing");
+        }
+
+        arcDrawingMode_->setCurrentIndex(2);
+        arcDirectionBasis_->setCurrentIndex(arcDirectionBasis_->findData(0));
+        arcDirectionAngle_->setValue(0.0);
+        arcRadiusField_->setValue(2.0);
+        arcExtentMode_->setCurrentIndex(arcExtentMode_->findData(0));
+        arcExtentValue_->setValue(90.0);
+        arcTurnSide_->setCurrentIndex(arcTurnSide_->findData(1.0));
+        UpdateArcConfiguration();
+        SetViewportTool(ViewportTool::DrawArc);
+        click(viewport_->ScreenPoint({0.0, 2.0, 0.0}), Qt::ControlModifier);
+        if (viewport_->DrawingPointCount() != 1 || !drawingDimensionCommitButton_->isEnabled()) {
+            return fail("start tangent arc input state");
+        }
+        CommitDrawingDimensions();
+        const Wire& tangentArc = project_.Wires().back().wire;
+        if (project_.Wires().size() != configuredArcStart + 2
+            || tangentArc.Kind() != WireKind::CircularArc
+            || std::abs(tangentArc.ArcData().radius - 2.0) > 1.0e-8
+            || std::abs(tangentArc.ArcData().sweepAngleRadians - kPi * 0.5) > 1.0e-8
+            || kachakacha::geometry::Dot(MeasureWireTangent(tangentArc, 0.0), {1.0, 0.0, 0.0}) < 0.999999) {
+            return fail("start tangent arc drawing");
+        }
+        arcDrawingMode_->setCurrentIndex(0);
+
         project_ = directEditSavedProject;
         undoStack_ = directEditSavedUndo;
         redoStack_ = directEditSavedRedo;
@@ -8403,7 +8882,7 @@ bool MainWindow::RunCreationSelfTest()
         return fail("final offset preview state");
     }
 
-    measurementMode_->setCurrentIndex(1);
+    measurementMode_->setCurrentIndex(2);
     UpdateMeasurement({
         {MeasurementPickKind::Wire, static_cast<int>(directStart + 2), project_.Wires()[directStart + 2].wire.Start(), 0.0},
     });
@@ -8468,6 +8947,25 @@ bool MainWindow::RunCreationSelfTest()
         || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))
         || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0) {
         return fail("measure two points");
+    }
+    measurementMode_->setCurrentIndex(1);
+    UpdateMeasurement({
+        {MeasurementPickKind::Point, -1, {0.0, 0.0, 0.0}, 0.0},
+        {MeasurementPickKind::Point, -1, {3.0, 0.0, 0.0}, 0.0},
+        {MeasurementPickKind::Point, -1, {0.0, 0.0, 4.0}, 0.0},
+    });
+    if (!measurementResultLabel_->text().contains(QStringLiteral("3D角度  90.000°"))) {
+        return fail("measure three point 3D angle");
+    }
+    measurementMode_->setCurrentIndex(2);
+    UpdateMeasurement({
+        {MeasurementPickKind::Wire, static_cast<int>(directStart + 2),
+            project_.Wires()[directStart + 2].wire.Start(), 0.0},
+        {MeasurementPickKind::Wire, static_cast<int>(directStart),
+            project_.Wires()[directStart].wire.Start(), 0.0},
+    });
+    if (!measurementResultLabel_->text().contains(QStringLiteral("曲率法線"))) {
+        return fail("measure curve normal against line");
     }
     for (int row = 0; row < referenceDimensionList_->count(); ++row) {
         if (referenceDimensionList_->item(row)->data(kDimensionNameRole).toString()
@@ -8791,7 +9289,8 @@ void MainWindow::ApplySelectedEdit()
                 for (int row = 0; row < editWirePointTable_->rowCount(); ++row) {
                     points.push_back(ReadTablePoint(editWirePointTable_, row));
                 }
-                replacement = Wire::CubicBSpline(std::move(points));
+                replacement = Wire::CubicBSplineWithKnots(
+                    std::move(points), namedWire.wire.BSplineKnots());
                 break;
             }
             case WireKind::Circle:

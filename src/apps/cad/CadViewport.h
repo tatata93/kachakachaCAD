@@ -65,6 +65,12 @@ enum class DrawingSnapKind {
     Grid,
 };
 
+enum class ArcDrawingMode {
+    ThreePoints,
+    EndpointsRadius,
+    StartTangent,
+};
+
 struct DrawingSnapCandidate {
     DrawingSnapKind kind = DrawingSnapKind::None;
     kachakacha::geometry::Vector3 point;
@@ -73,6 +79,7 @@ struct DrawingSnapCandidate {
 
 enum class MeasurementMode {
     TwoPoints,
+    ThreePointsAngle,
     Elements,
 };
 
@@ -149,6 +156,7 @@ public:
     void SetRectangleCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetCircleCreatedCallback(std::function<void(kachakacha::geometry::Vector3, double)> callback);
     void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
+    void SetArcWireCreatedCallback(std::function<void(const kachakacha::model::Wire&)> callback);
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetSplineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
     void SetWireControlPointMovedCallback(
@@ -177,6 +185,14 @@ public:
     void SetGridSubdivision(int subdivision);
     void SetGridOrigin(double u, double v);
     void SetGridOriginChangedCallback(std::function<void(double, double)> callback);
+    void SetArcDrawingMode(ArcDrawingMode mode);
+    [[nodiscard]] ArcDrawingMode CurrentArcDrawingMode() const noexcept { return arcDrawingMode_; }
+    void SetConfiguredArc(
+        double radiusMillimeters,
+        double tangentAngleDegrees,
+        double sweepAngleDegrees,
+        bool bulgeLeft);
+    [[nodiscard]] bool CommitConfiguredArc();
     [[nodiscard]] int GridSubdivision() const noexcept { return gridSubdivision_; }
     [[nodiscard]] double GridOriginU() const noexcept { return gridOriginU_; }
     [[nodiscard]] double GridOriginV() const noexcept { return gridOriginV_; }
@@ -245,6 +261,11 @@ public:
     void SetMeasurementOverlay(
         std::optional<kachakacha::geometry::Vector3> firstPoint,
         std::optional<kachakacha::geometry::Vector3> secondPoint,
+        QString text);
+    void SetMeasurementAngleOverlay(
+        kachakacha::geometry::Vector3 vertex,
+        kachakacha::geometry::Vector3 firstPoint,
+        kachakacha::geometry::Vector3 secondPoint,
         QString text);
     void SetReferenceDimensionOverlays(std::vector<ReferenceDimensionOverlay> overlays);
     [[nodiscard]] std::size_t ReferenceDimensionOverlayCount() const noexcept
@@ -355,6 +376,7 @@ private:
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> rectangleCreated_;
     std::function<void(kachakacha::geometry::Vector3, double)> circleCreated_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> arcCreated_;
+    std::function<void(const kachakacha::model::Wire&)> arcWireCreated_;
     std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> bezierCreated_;
     std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> splineCreated_;
     std::function<void(int, const kachakacha::model::Wire&)> wireControlPointMoved_;
@@ -377,6 +399,11 @@ private:
     double snapStep_ = 1.0;
     bool gridPointsVisible_ = true;
     int gridSubdivision_ = 1;
+    ArcDrawingMode arcDrawingMode_ = ArcDrawingMode::ThreePoints;
+    double configuredArcRadius_ = 5.0;
+    double configuredArcTangentAngleDegrees_ = 0.0;
+    double configuredArcSweepAngleDegrees_ = 90.0;
+    bool configuredArcBulgeLeft_ = true;
     double gridOriginU_ = 0.0;
     double gridOriginV_ = 0.0;
     std::optional<kachakacha::geometry::Vector3> gridOriginDragSource_;
@@ -432,6 +459,7 @@ private:
     std::vector<MeasurementPick> measurementPicks_;
     std::optional<kachakacha::geometry::Vector3> measurementOverlayFirst_;
     std::optional<kachakacha::geometry::Vector3> measurementOverlaySecond_;
+    std::optional<kachakacha::geometry::Vector3> measurementOverlayThird_;
     QString measurementOverlayText_;
     std::vector<ReferenceDimensionOverlay> referenceDimensionOverlays_;
     kachakacha::geometry::Vector3 target_;

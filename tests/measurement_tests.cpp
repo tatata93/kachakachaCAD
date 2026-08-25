@@ -11,7 +11,9 @@ using kachakacha::model::MeasureDirectionsAngle;
 using kachakacha::model::MeasurePlaneToPlaneAngleDegrees;
 using kachakacha::model::MeasurePointToWireDistance;
 using kachakacha::model::MeasureSignedPointToPlaneDistance;
+using kachakacha::model::MeasureThreePointAngle;
 using kachakacha::model::MeasureWireLength;
+using kachakacha::model::MeasureWireCurvatureNormal;
 using kachakacha::model::MeasureWireRadius;
 using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
@@ -86,6 +88,21 @@ void MeasuresDistancesAndAngles()
     const auto pointDistance = MeasurePointToWireDistance({8.0, 0.0, 0.0}, circle, 1.0e-4);
     RequireNear(pointDistance.distanceMillimeters, 3.0, 2.0e-4, "point to circle distance");
     Require(AlmostEqual(MeasureWireTangent(circle, 0.0), {0.0, 1.0, 0.0}, 1.0e-9), "circle tangent");
+    Require(MeasureWireCurvatureNormal(circle, 0.0).has_value(), "circle curvature normal");
+    Require(AlmostEqual(*MeasureWireCurvatureNormal(circle, 0.0), {-1.0, 0.0, 0.0}, 1.0e-9),
+        "circle normal points to center");
+
+    const Wire curvedBezier = Wire::CubicBezier(
+        {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0},
+        {3.0, 2.0, 0.0}, {4.0, 4.0, 0.0});
+    Require(MeasureWireCurvatureNormal(curvedBezier, 0.25).has_value(),
+        "Bezier curvature normal");
+    Require(!MeasureWireCurvatureNormal(first, 0.5).has_value(),
+        "line has no unique curvature normal");
+
+    const auto spatialAngle = MeasureThreePointAngle(
+        {1.0, 2.0, 3.0}, {4.0, 2.0, 3.0}, {1.0, 2.0, 8.0});
+    RequireNear(spatialAngle.directedDegrees, 90.0, 1.0e-9, "3D three-point angle");
 }
 
 void MeasuresPlaneRelations()

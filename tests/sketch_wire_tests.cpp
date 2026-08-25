@@ -231,6 +231,30 @@ void ThreePointArcRejectsCollinearPoints()
     Require(rejected, "three-point arc rejects collinear points");
 }
 
+void EndpointRadiusArcUsesRequestedSideAndRadius()
+{
+    const Wire arc = Wire::CircularArcFromEndpointsRadius(
+        {0.0, 0.0, 0.0}, {8.0, 0.0, 0.0}, {0.0, 0.0, 1.0},
+        5.0, true);
+    RequireNear(arc.Start(), {0.0, 0.0, 0.0}, "endpoint-radius start");
+    RequireNear(arc.End(), {8.0, 0.0, 0.0}, "endpoint-radius end");
+    Require(arc.Evaluate(0.5).y > 0.0, "endpoint-radius bulges left");
+    Require(AlmostEqual(arc.ArcData().radius, 5.0, 1.0e-9),
+        "endpoint-radius keeps radius");
+}
+
+void StartTangentArcUsesDirectionRadiusAndSweep()
+{
+    const Wire arc = Wire::CircularArcFromStartTangent(
+        {2.0, 3.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0},
+        4.0, Pi / 2.0);
+    RequireNear(arc.Start(), {2.0, 3.0, 0.0}, "start-tangent start");
+    RequireNear(arc.End(), {6.0, 7.0, 0.0}, "start-tangent end");
+    RequireNear(arc.ArcData().center, {2.0, 7.0, 0.0}, "start-tangent center");
+    Require(AlmostEqual(arc.ArcData().sweepAngleRadians, Pi / 2.0, 1.0e-9),
+        "start-tangent sweep");
+}
+
 void TranslatedLineKeepsShape()
 {
     const Wire wire = Wire::Line({1.0, 2.0, 3.0}, {4.0, 6.0, 8.0});
@@ -342,6 +366,32 @@ void SplitArcPreservesSweep()
     Require(AlmostEqual(second.ArcData().sweepAngleRadians, 1.8, 1.0e-9), "split arc second sweep");
 }
 
+void SplitBSplinePreservesExactShapeAndKnots()
+{
+    const Wire wire = Wire::CubicBSpline({
+        {0.0, 0.0, 0.0}, {1.0, 3.0, 0.0}, {3.0, 4.0, 0.0},
+        {5.0, -1.0, 0.0}, {7.0, 2.0, 0.0}, {9.0, 0.0, 0.0},
+    });
+    constexpr double splitParameter = 0.37;
+    const auto [first, second] = wire.SplitAt(splitParameter);
+    Require(first.Kind() == WireKind::CubicBSpline
+            && second.Kind() == WireKind::CubicBSpline,
+        "split B-spline types");
+    for (int sample = 0; sample <= 20; ++sample) {
+        const double local = static_cast<double>(sample) / 20.0;
+        RequireNear(first.Evaluate(local), wire.Evaluate(splitParameter * local),
+            "split B-spline first shape");
+        RequireNear(second.Evaluate(local),
+            wire.Evaluate(splitParameter + (1.0 - splitParameter) * local),
+            "split B-spline second shape");
+    }
+    const std::vector<double> firstKnots = first.BSplineKnots();
+    const Wire moved = first.WithMovedControlPoint(
+        1, first.ControlPoints()[1] + Vector3{0.0, 0.5, 0.0});
+    Require(moved.BSplineKnots() == firstKnots,
+        "editing a split B-spline preserves its knot vector");
+}
+
 } // namespace
 
 int main()
@@ -359,6 +409,8 @@ int main()
         SketchArcOnWorkPlaneBecomesWorldWire();
         ThreePointArcPassesThroughAllPoints();
         ThreePointArcRejectsCollinearPoints();
+        EndpointRadiusArcUsesRequestedSideAndRadius();
+        StartTangentArcUsesDirectionRadiusAndSweep();
         TranslatedLineKeepsShape();
         TranslatedArcKeepsFrameAndRadius();
         MirrorLineAcrossWorkPlaneAxis();
@@ -366,6 +418,7 @@ int main()
         RotateWireAroundArbitraryAxis();
         SplitBezierPreservesExactShape();
         SplitArcPreservesSweep();
+        SplitBSplinePreservesExactShapeAndKnots();
     } catch (const std::exception& error) {
         std::cerr << "sketch_wire_tests failed: " << error.what() << '\n';
         return 1;

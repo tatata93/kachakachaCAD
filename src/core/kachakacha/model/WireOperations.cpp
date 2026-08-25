@@ -1,10 +1,12 @@
 #include "kachakacha/model/WireOperations.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <iterator>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -278,40 +280,488 @@ std::vector<Vector3> ChainPoints(const Wire& wire)
     throw std::invalid_argument("Join currently supports line and polyline wires.");
 }
 
+struct ParameterPoint {
+    Vector3 point;
+    double parameter = 0.0;
+};
+
+struct WireIntersection {
+    Vector3 point;
+    double firstParameter = 0.0;
+    double secondParameter = 0.0;
+};
+
+double PointToSegmentDistance(Vector3 point, Vector3 start, Vector3 end)
+{
+    const Vector3 segment = end - start;
+    const double lengthSquared = segment.LengthSquared();
+    if (lengthSquared <= 1.0e-18) {
+        return (point - start).Length();
+    }
+    const double parameter = std::clamp(
+        Dot(point - start, segment) / lengthSquared, 0.0, 1.0);
+    return (point - (start + segment * parameter)).Length();
+}
+
+void FlattenWireRange(
+    const Wire& wire,
+    double startParameter,
+    double endParameter,
+    Vector3 start,
+    Vector3 end,
+    double tolerance,
+    int depth,
+    std::vector<ParameterPoint>& points)
+{
+    const double span = endParameter - startParameter;
+    const std::array<double, 3> fractions = {0.25, 0.5, 0.75};
+    double flatness = 0.0;
+    for (double fraction : fractions) {
+        flatness = std::max(flatness, PointToSegmentDistance(
+            wire.Evaluate(startParameter + span * fraction), start, end));
+    }
+    if (flatness <= tolerance || depth >= 18) {
+        points.push_back({end, endParameter});
+        return;
+    }
+    const double middleParameter = (startParameter + endParameter) * 0.5;
+    const Vector3 middle = wire.Evaluate(middleParameter);
+    FlattenWireRange(
+        wire, startParameter, middleParameter, start, middle,
+        tolerance, depth + 1, points);
+    FlattenWireRange(
+        wire, middleParameter, endParameter, middle, end,
+        tolerance, depth + 1, points);
+}
+
+std::vector<ParameterPoint> FlattenWireWithParameters(const Wire& wire, double tolerance)
+{
+    if (wire.Kind() == WireKind::Line) {
+        return {{wire.Start(), 0.0}, {wire.End(), 1.0}};
+    }
+    if (wire.Kind() == WireKind::Polyline) {
+        const auto& controls = wire.ControlPoints();
+        std::vector<ParameterPoint> points;
+        points.reserve(controls.size());
+        for (std::size_t index = 0; index < controls.size(); ++index) {
+            points.push_back({
+                controls[index],
+                static_cast<double>(index) / static_cast<double>(controls.size() - 1),
+            });
+        }
+        return points;
+    }
+
+    std::vector<ParameterPoint> points{{wire.Start(), 0.0}};
+    FlattenWireRange(
+        wire, 0.0, 1.0, wire.Start(), wire.End(),
+        tolerance, 0, points);
+    return points;
+}
+
+struct SegmentPair {
+    double first = 0.0;
+    double second = 0.0;
+    double distance = std::numeric_limits<double>::infinity();
+};
+
+std::optional<SegmentPair> ClosestSegmentPair(
+    Vector3 firstStart,
+    Vector3 firstEnd,
+    Vector3 secondStart,
+    Vector3 secondEnd)
+{
+    const Vector3 firstDirection = firstEnd - firstStart;
+    const Vector3 secondDirection = secondEnd - secondStart;
+    const Vector3 offset = firstStart - secondStart;
+    const double a = Dot(firstDirection, firstDirection);
+    const double b = Dot(firstDirection, secondDirection);
+    const double c = Dot(secondDirection, secondDirection);
+    const double d = Dot(firstDirection, offset);
+    const double e = Dot(secondDirection, offset);
+    const double denominator = a * c - b * b;
+    if (a <= 1.0e-18 || c <= 1.0e-18
+        || std::abs(denominator) <= 1.0e-14 * std::max(a * c, 1.0)) {
+        return std::nullopt;
+    }
+
+    double firstParameter = (b * e - c * d) / denominator;
+    double secondParameter = (a * e - b * d) / denominator;
+    firstParameter = std::clamp(firstParameter, 0.0, 1.0);
+    secondParameter = std::clamp((b * firstParameter + e) / c, 0.0, 1.0);
+    firstParameter = std::clamp((b * secondParameter - d) / a, 0.0, 1.0);
+    const Vector3 firstPoint = firstStart + firstDirection * firstParameter;
+    const Vector3 secondPoint = secondStart + secondDirection * secondParameter;
+    return SegmentPair{firstParameter, secondParameter, (firstPoint - secondPoint).Length()};
+}
+
+Vector3 NumericWireDerivative(const Wire& wire, double parameter)
+{
+    constexpr double step = 1.0e-6;
+    const double before = std::max(0.0, parameter - step);
+    const double after = std::min(1.0, parameter + step);
+    if (after - before <= 1.0e-15) {
+        return {};
+    }
+    return (wire.Evaluate(after) - wire.Evaluate(before)) / (after - before);
+}
+
+WireIntersection RefineWireIntersection(
+    const Wire& first,
+    const Wire& second,
+    double firstParameter,
+    double secondParameter)
+{
+    for (int iteration = 0; iteration < 16; ++iteration) {
+        const Vector3 firstPoint = first.Evaluate(firstParameter);
+        const Vector3 secondPoint = second.Evaluate(secondParameter);
+        const Vector3 residual = firstPoint - secondPoint;
+        const Vector3 firstDerivative = NumericWireDerivative(first, firstParameter);
+        const Vector3 secondDerivative = NumericWireDerivative(second, secondParameter);
+        const double a = Dot(firstDerivative, firstDerivative);
+        const double b = Dot(firstDerivative, secondDerivative);
+        const double c = Dot(secondDerivative, secondDerivative);
+        const double denominator = a * c - b * b;
+        if (a <= 1.0e-18 || c <= 1.0e-18
+            || std::abs(denominator) <= 1.0e-18 * std::max(a * c, 1.0)) {
+            break;
+        }
+        const double firstRight = -Dot(firstDerivative, residual);
+        const double secondRight = Dot(secondDerivative, residual);
+        const double firstDelta = (firstRight * c + b * secondRight) / denominator;
+        const double secondDelta = (a * secondRight + b * firstRight) / denominator;
+        const double nextFirst = std::clamp(firstParameter + firstDelta, 0.0, 1.0);
+        const double nextSecond = std::clamp(secondParameter + secondDelta, 0.0, 1.0);
+        if (std::abs(nextFirst - firstParameter) + std::abs(nextSecond - secondParameter) <= 1.0e-13) {
+            firstParameter = nextFirst;
+            secondParameter = nextSecond;
+            break;
+        }
+        firstParameter = nextFirst;
+        secondParameter = nextSecond;
+    }
+    const Vector3 firstPoint = first.Evaluate(firstParameter);
+    const Vector3 secondPoint = second.Evaluate(secondParameter);
+    return {(firstPoint + secondPoint) * 0.5, firstParameter, secondParameter};
+}
+
+std::vector<WireIntersection> IntersectFiniteWires(
+    const Wire& first,
+    const Wire& second,
+    double tolerance)
+{
+    const double flattenTolerance = std::max(tolerance * 0.25, 1.0e-6);
+    const auto firstPoints = FlattenWireWithParameters(first, flattenTolerance);
+    const auto secondPoints = FlattenWireWithParameters(second, flattenTolerance);
+    std::vector<WireIntersection> intersections;
+    for (std::size_t firstIndex = 1; firstIndex < firstPoints.size(); ++firstIndex) {
+        for (std::size_t secondIndex = 1; secondIndex < secondPoints.size(); ++secondIndex) {
+            const auto segment = ClosestSegmentPair(
+                firstPoints[firstIndex - 1].point,
+                firstPoints[firstIndex].point,
+                secondPoints[secondIndex - 1].point,
+                secondPoints[secondIndex].point);
+            if (!segment.has_value() || segment->distance > flattenTolerance * 3.0) {
+                continue;
+            }
+            const double firstParameter = firstPoints[firstIndex - 1].parameter
+                + (firstPoints[firstIndex].parameter - firstPoints[firstIndex - 1].parameter)
+                    * segment->first;
+            const double secondParameter = secondPoints[secondIndex - 1].parameter
+                + (secondPoints[secondIndex].parameter - secondPoints[secondIndex - 1].parameter)
+                    * segment->second;
+            const WireIntersection refined = RefineWireIntersection(
+                first, second, firstParameter, secondParameter);
+            if ((first.Evaluate(refined.firstParameter)
+                    - second.Evaluate(refined.secondParameter)).Length() > tolerance * 2.0) {
+                continue;
+            }
+            const auto duplicate = std::find_if(
+                intersections.begin(), intersections.end(), [&](const WireIntersection& existing) {
+                    return std::abs(existing.firstParameter - refined.firstParameter) <= 1.0e-6
+                        && std::abs(existing.secondParameter - refined.secondParameter) <= 1.0e-6;
+                });
+            if (duplicate == intersections.end()) {
+                intersections.push_back(refined);
+            }
+        }
+    }
+    return intersections;
+}
+
+Wire ExtractWireRange(const Wire& wire, double startParameter, double endParameter)
+{
+    constexpr double parameterTolerance = 1.0e-10;
+    if (!std::isfinite(startParameter) || !std::isfinite(endParameter)
+        || startParameter < -parameterTolerance || endParameter > 1.0 + parameterTolerance
+        || endParameter - startParameter <= parameterTolerance) {
+        throw std::invalid_argument("Wire extraction range is invalid.");
+    }
+    const double start = std::clamp(startParameter, 0.0, 1.0);
+    const double end = std::clamp(endParameter, 0.0, 1.0);
+    if (start <= parameterTolerance && end >= 1.0 - parameterTolerance) {
+        return wire;
+    }
+    if (wire.Kind() == WireKind::Circle) {
+        const WireArcData arc = wire.ArcData();
+        return Wire::CircularArc(
+            arc.center, arc.uAxis, arc.vAxis, arc.radius,
+            arc.startAngleRadians + arc.sweepAngleRadians * start,
+            arc.sweepAngleRadians * (end - start));
+    }
+    if (start <= parameterTolerance) {
+        return wire.SplitAt(end).first;
+    }
+    if (end >= 1.0 - parameterTolerance) {
+        return wire.SplitAt(start).second;
+    }
+    const auto beforeEnd = wire.SplitAt(end).first;
+    return beforeEnd.SplitAt(start / end).second;
+}
+
+Vector3 EvaluateBezierPolynomial(const std::array<Vector3, 4>& controls, double parameter)
+{
+    const double oneMinus = 1.0 - parameter;
+    return controls[0] * (oneMinus * oneMinus * oneMinus)
+        + controls[1] * (3.0 * oneMinus * oneMinus * parameter)
+        + controls[2] * (3.0 * oneMinus * parameter * parameter)
+        + controls[3] * (parameter * parameter * parameter);
+}
+
+Vector3 EvaluateBezierDerivative(const std::array<Vector3, 4>& controls, double parameter)
+{
+    const double oneMinus = 1.0 - parameter;
+    return (controls[1] - controls[0]) * (3.0 * oneMinus * oneMinus)
+        + (controls[2] - controls[1]) * (6.0 * oneMinus * parameter)
+        + (controls[3] - controls[2]) * (3.0 * parameter * parameter);
+}
+
+Wire BezierPolynomialRange(
+    const std::array<Vector3, 4>& controls,
+    double startParameter,
+    double endParameter)
+{
+    const double span = endParameter - startParameter;
+    const Vector3 start = EvaluateBezierPolynomial(controls, startParameter);
+    const Vector3 end = EvaluateBezierPolynomial(controls, endParameter);
+    return Wire::CubicBezier(
+        start,
+        start + EvaluateBezierDerivative(controls, startParameter) * (span / 3.0),
+        end - EvaluateBezierDerivative(controls, endParameter) * (span / 3.0),
+        end);
+}
+
+std::array<Vector3, 4> BezierControls(const Wire& wire)
+{
+    if (wire.Kind() != WireKind::CubicBezier || wire.ControlPoints().size() != 4) {
+        throw std::invalid_argument("Wire is not a cubic Bezier segment.");
+    }
+    const auto& points = wire.ControlPoints();
+    return {points[0], points[1], points[2], points[3]};
+}
+
+std::vector<std::array<Vector3, 4>> DecomposeBSplineToBezier(const Wire& wire)
+{
+    if (wire.Kind() != WireKind::CubicBSpline) {
+        throw std::invalid_argument("Wire is not a cubic B-spline.");
+    }
+    std::vector<double> internalKnots;
+    const auto& knots = wire.BSplineKnots();
+    for (std::size_t index = 4; index + 4 < knots.size(); ++index) {
+        if (knots[index] <= 1.0e-12 || knots[index] >= 1.0 - 1.0e-12) {
+            continue;
+        }
+        if (internalKnots.empty() || std::abs(internalKnots.back() - knots[index]) > 1.0e-12) {
+            internalKnots.push_back(knots[index]);
+        }
+    }
+
+    Wire remaining = wire;
+    double previous = 0.0;
+    std::vector<std::array<Vector3, 4>> segments;
+    for (double knot : internalKnots) {
+        const double local = (knot - previous) / (1.0 - previous);
+        auto parts = remaining.SplitAt(local);
+        const auto& controls = parts.first.ControlPoints();
+        if (controls.size() != 4) {
+            throw std::logic_error("B-spline span did not reduce to a cubic Bezier segment.");
+        }
+        segments.push_back({controls[0], controls[1], controls[2], controls[3]});
+        remaining = std::move(parts.second);
+        previous = knot;
+    }
+    const auto& controls = remaining.ControlPoints();
+    if (controls.size() != 4) {
+        throw std::logic_error("Final B-spline span did not reduce to a cubic Bezier segment.");
+    }
+    segments.push_back({controls[0], controls[1], controls[2], controls[3]});
+    return segments;
+}
+
+Wire BezierChainToBSpline(const std::vector<std::array<Vector3, 4>>& segments)
+{
+    if (segments.empty()) {
+        throw std::invalid_argument("Bezier chain must contain at least one segment.");
+    }
+    std::vector<Vector3> controls(segments.front().begin(), segments.front().end());
+    for (std::size_t segment = 1; segment < segments.size(); ++segment) {
+        controls.insert(controls.end(), segments[segment].begin() + 1, segments[segment].end());
+    }
+    std::vector<double> knots(4, 0.0);
+    for (std::size_t segment = 1; segment < segments.size(); ++segment) {
+        const double knot = static_cast<double>(segment) / static_cast<double>(segments.size());
+        knots.insert(knots.end(), 3, knot);
+    }
+    knots.insert(knots.end(), 4, 1.0);
+    return Wire::CubicBSplineWithKnots(std::move(controls), std::move(knots));
+}
+
+double ExtensionReach(const Wire& target, Vector3 endpoint, const std::vector<Wire>& boundaries)
+{
+    double reach = std::max((target.End() - target.Start()).Length() * 4.0, 10.0);
+    for (const Wire& boundary : boundaries) {
+        for (int sample = 0; sample <= 24; ++sample) {
+            reach = std::max(reach,
+                (boundary.Evaluate(static_cast<double>(sample) / 24.0) - endpoint).Length() * 1.5);
+        }
+    }
+    return reach;
+}
+
+struct ExtensionCandidate {
+    Wire added;
+    std::function<Wire(double)> buildExtended;
+};
+
+ExtensionCandidate MakeExtensionCandidate(
+    const Wire& target,
+    RetainedLineEnd end,
+    const std::vector<Wire>& boundaries)
+{
+    const bool start = end == RetainedLineEnd::Start;
+    const Vector3 endpoint = start ? target.Start() : target.End();
+    const double reach = ExtensionReach(target, endpoint, boundaries);
+    if (target.Kind() == WireKind::Line || target.Kind() == WireKind::Polyline) {
+        const auto& points = target.ControlPoints();
+        const Vector3 adjacent = start ? points[1] : points[points.size() - 2];
+        const Vector3 direction = (endpoint - adjacent).Normalized();
+        const Wire added = Wire::Line(endpoint, endpoint + direction * reach);
+        return {
+            added,
+            [target, start, endpoint, direction, reach](double parameter) {
+                const Vector3 intersection = endpoint + direction * (reach * parameter);
+                if (target.Kind() == WireKind::Line) {
+                    return start
+                        ? Wire::Line(intersection, target.End())
+                        : Wire::Line(target.Start(), intersection);
+                }
+                std::vector<Vector3> controls = target.ControlPoints();
+                (start ? controls.front() : controls.back()) = intersection;
+                return Wire::Polyline(std::move(controls));
+            },
+        };
+    }
+    if (target.Kind() == WireKind::CircularArc) {
+        const WireArcData arc = target.ArcData();
+        const double orientation = arc.sweepAngleRadians >= 0.0 ? 1.0 : -1.0;
+        const double available = 2.0 * std::numbers::pi
+            - std::abs(arc.sweepAngleRadians) - 1.0e-6;
+        if (available <= 1.0e-6) {
+            throw std::invalid_argument("Circular arc has no remaining sweep to extend.");
+        }
+        const double endpointAngle = start
+            ? arc.startAngleRadians
+            : arc.startAngleRadians + arc.sweepAngleRadians;
+        const double addedSweep = (start ? -orientation : orientation) * available;
+        const Wire added = Wire::CircularArc(
+            arc.center, arc.uAxis, arc.vAxis, arc.radius,
+            endpointAngle, addedSweep);
+        return {
+            added,
+            [arc, start, orientation, available](double parameter) {
+                const double delta = available * parameter;
+                return start
+                    ? Wire::CircularArc(
+                        arc.center, arc.uAxis, arc.vAxis, arc.radius,
+                        arc.startAngleRadians - orientation * delta,
+                        arc.sweepAngleRadians + orientation * delta)
+                    : Wire::CircularArc(
+                        arc.center, arc.uAxis, arc.vAxis, arc.radius,
+                        arc.startAngleRadians,
+                        arc.sweepAngleRadians + orientation * delta);
+            },
+        };
+    }
+    if (target.Kind() == WireKind::Circle) {
+        throw std::invalid_argument("A closed circle cannot be extended.");
+    }
+
+    std::vector<std::array<Vector3, 4>> sourceSegments;
+    if (target.Kind() == WireKind::CubicBezier) {
+        sourceSegments.push_back(BezierControls(target));
+    } else if (target.Kind() == WireKind::CubicBSpline) {
+        sourceSegments = DecomposeBSplineToBezier(target);
+    } else {
+        throw std::invalid_argument("This wire kind cannot be extended.");
+    }
+    const auto endpointSegment = start ? sourceSegments.front() : sourceSegments.back();
+    const Vector3 derivative = EvaluateBezierDerivative(endpointSegment, start ? 0.0 : 1.0);
+    if (derivative.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Curve endpoint has no stable direction to extend.");
+    }
+    const double span = std::clamp(reach / derivative.Length(), 1.0, 64.0);
+    const Wire added = start
+        ? BezierPolynomialRange(endpointSegment, 0.0, -span)
+        : BezierPolynomialRange(endpointSegment, 1.0, 1.0 + span);
+    if (target.Kind() == WireKind::CubicBezier) {
+        return {
+            added,
+            [endpointSegment, start, span](double parameter) {
+                return start
+                    ? BezierPolynomialRange(endpointSegment, -span * parameter, 1.0)
+                    : BezierPolynomialRange(endpointSegment, 0.0, 1.0 + span * parameter);
+            },
+        };
+    }
+    return {
+        added,
+        [sourceSegments, added, start](double parameter) {
+            std::vector<std::array<Vector3, 4>> segments = sourceSegments;
+            const auto partial = BezierControls(ExtractWireRange(added, 0.0, parameter));
+            if (start) {
+                const Wire reversed = Wire::CubicBezier(
+                    partial[3], partial[2], partial[1], partial[0]);
+                segments.insert(segments.begin(), BezierControls(reversed));
+            } else {
+                segments.push_back(partial);
+            }
+            return BezierChainToBSpline(segments);
+        },
+    };
+}
+
 } // namespace
 
-DirectLineTrimResult TrimLineAtBoundaries(
+DirectWireTrimResult TrimWireAtBoundaries(
     const Wire& target,
     double pickedParameter,
     const std::vector<Wire>& boundaries,
     double tolerance)
 {
-    if (target.Kind() != WireKind::Line) {
-        throw std::invalid_argument("Direct trim currently requires a line wire.");
-    }
     if (!std::isfinite(pickedParameter) || pickedParameter < 0.0 || pickedParameter > 1.0) {
-        throw std::invalid_argument("Trim pick parameter must lie on the target line.");
+        throw std::invalid_argument("Trim pick parameter must lie on the target wire.");
     }
     if (!std::isfinite(tolerance) || tolerance <= 0.0) {
         throw std::invalid_argument("Trim tolerance must be positive.");
     }
 
-    const double targetLength = (target.End() - target.Start()).Length();
-    const double parameterTolerance = tolerance / targetLength;
+    constexpr double parameterTolerance = 1.0e-7;
     std::vector<double> intersections;
-    intersections.reserve(boundaries.size());
     for (const Wire& boundary : boundaries) {
-        if (boundary.Kind() != WireKind::Line) {
-            continue;
-        }
-        try {
-            const LineIntersection intersection = IntersectInfiniteLines(target, boundary, tolerance);
-            const double boundaryParameterTolerance = tolerance
-                / (boundary.End() - boundary.Start()).Length();
-            if (intersection.firstParameter <= parameterTolerance
-                || intersection.firstParameter >= 1.0 - parameterTolerance
-                || intersection.secondParameter < -boundaryParameterTolerance
-                || intersection.secondParameter > 1.0 + boundaryParameterTolerance) {
+        for (const WireIntersection& intersection : IntersectFiniteWires(target, boundary, tolerance)) {
+            if (!target.IsClosed()
+                && (intersection.firstParameter <= parameterTolerance
+                    || intersection.firstParameter >= 1.0 - parameterTolerance)) {
                 continue;
             }
             const auto duplicate = std::find_if(
@@ -321,14 +771,44 @@ DirectLineTrimResult TrimLineAtBoundaries(
             if (duplicate == intersections.end()) {
                 intersections.push_back(intersection.firstParameter);
             }
-        } catch (const std::invalid_argument&) {
-            // Parallel, skew, and otherwise non-intersecting boundaries do not limit this line.
         }
     }
     if (intersections.empty()) {
-        throw std::invalid_argument("No visible line boundary intersects the target segment.");
+        throw std::invalid_argument("No visible wire boundary intersects the target.");
     }
     std::sort(intersections.begin(), intersections.end());
+
+    if (target.IsClosed()) {
+        if (target.Kind() != WireKind::Circle) {
+            throw std::invalid_argument("Closed polyline trimming is not available yet.");
+        }
+        if (intersections.size() < 2) {
+            throw std::invalid_argument("A closed curve needs two boundary intersections to trim.");
+        }
+        auto upperIterator = std::upper_bound(intersections.begin(), intersections.end(), pickedParameter);
+        const double upper = upperIterator == intersections.end()
+            ? intersections.front() + 1.0
+            : *upperIterator;
+        const double lower = upperIterator == intersections.begin()
+            ? intersections.back() - 1.0
+            : *(upperIterator - 1);
+        const double removedFraction = upper - lower;
+        const double retainedFraction = 1.0 - removedFraction;
+        if (removedFraction <= parameterTolerance || retainedFraction <= parameterTolerance) {
+            throw std::invalid_argument("Trimmed curve portion is too short.");
+        }
+        const WireArcData arc = target.ArcData();
+        const auto makeArc = [&](double start, double fraction) {
+            return Wire::CircularArc(
+                arc.center, arc.uAxis, arc.vAxis, arc.radius,
+                arc.startAngleRadians + arc.sweepAngleRadians * start,
+                arc.sweepAngleRadians * fraction);
+        };
+        return {
+            makeArc(lower, removedFraction),
+            {makeArc(upper, retainedFraction)},
+        };
+    }
 
     double lower = 0.0;
     double upper = 1.0;
@@ -346,36 +826,31 @@ DirectLineTrimResult TrimLineAtBoundaries(
         }
     }
 
-    const Vector3 lowerPoint = target.Evaluate(lower);
-    const Vector3 upperPoint = target.Evaluate(upper);
-    if ((upperPoint - lowerPoint).Length() <= tolerance) {
-        throw std::invalid_argument("Trimmed line portion is too short.");
+    if (upper - lower <= parameterTolerance) {
+        throw std::invalid_argument("Trimmed curve portion is too short.");
     }
 
     std::vector<Wire> retained;
     if (lower > parameterTolerance) {
-        retained.push_back(Wire::Line(target.Start(), lowerPoint));
+        retained.push_back(ExtractWireRange(target, 0.0, lower));
     }
     if (upper < 1.0 - parameterTolerance) {
-        retained.push_back(Wire::Line(upperPoint, target.End()));
+        retained.push_back(ExtractWireRange(target, upper, 1.0));
     }
     if (retained.empty()) {
-        throw std::invalid_argument("Trim would remove the complete target line.");
+        throw std::invalid_argument("Trim would remove the complete target wire.");
     }
-    return {Wire::Line(lowerPoint, upperPoint), std::move(retained)};
+    return {ExtractWireRange(target, lower, upper), std::move(retained)};
 }
 
-DirectLineExtendResult ExtendLineToBoundary(
+DirectWireExtendResult ExtendWireToBoundary(
     const Wire& target,
     double pickedParameter,
     const std::vector<Wire>& boundaries,
     double tolerance)
 {
-    if (target.Kind() != WireKind::Line) {
-        throw std::invalid_argument("Direct extend currently requires a line wire.");
-    }
     if (!std::isfinite(pickedParameter) || pickedParameter < 0.0 || pickedParameter > 1.0) {
-        throw std::invalid_argument("Extend pick parameter must lie on the target line.");
+        throw std::invalid_argument("Extend pick parameter must lie on the target wire.");
     }
     if (!std::isfinite(tolerance) || tolerance <= 0.0) {
         throw std::invalid_argument("Extend tolerance must be positive.");
@@ -384,52 +859,33 @@ DirectLineExtendResult ExtendLineToBoundary(
     const RetainedLineEnd extendedEnd = pickedParameter < 0.5
         ? RetainedLineEnd::Start
         : RetainedLineEnd::End;
-    const double targetLength = (target.End() - target.Start()).Length();
-    const double parameterTolerance = tolerance / targetLength;
-    double bestDistance = std::numeric_limits<double>::infinity();
-    std::optional<LineIntersection> best;
+    const ExtensionCandidate candidate = MakeExtensionCandidate(
+        target, extendedEnd, boundaries);
+    constexpr double parameterTolerance = 1.0e-7;
+    double bestParameter = std::numeric_limits<double>::infinity();
+    std::optional<WireIntersection> best;
     for (const Wire& boundary : boundaries) {
-        if (boundary.Kind() != WireKind::Line) {
-            continue;
-        }
-        try {
-            const LineIntersection intersection = IntersectInfiniteLines(target, boundary, tolerance);
-            const double boundaryParameterTolerance = tolerance
-                / (boundary.End() - boundary.Start()).Length();
-            const bool onBoundary = intersection.secondParameter >= -boundaryParameterTolerance
-                && intersection.secondParameter <= 1.0 + boundaryParameterTolerance;
-            const bool onExtension = extendedEnd == RetainedLineEnd::Start
-                ? intersection.firstParameter < -parameterTolerance
-                : intersection.firstParameter > 1.0 + parameterTolerance;
-            if (!onBoundary || !onExtension) {
+        for (const WireIntersection& intersection : IntersectFiniteWires(
+                 candidate.added, boundary, tolerance)) {
+            if (intersection.firstParameter <= parameterTolerance) {
                 continue;
             }
-            const double distance = extendedEnd == RetainedLineEnd::Start
-                ? -intersection.firstParameter
-                : intersection.firstParameter - 1.0;
-            if (distance < bestDistance) {
-                bestDistance = distance;
+            if (intersection.firstParameter < bestParameter) {
+                bestParameter = intersection.firstParameter;
                 best = intersection;
             }
-        } catch (const std::invalid_argument&) {
-            // Parallel, skew, and otherwise non-intersecting boundaries are skipped.
         }
     }
     if (!best.has_value()) {
-        throw std::invalid_argument("No visible line boundary lies in the selected extension direction.");
+        throw std::invalid_argument("No visible wire boundary lies in the selected extension direction.");
     }
-
+    Wire added = ExtractWireRange(candidate.added, 0.0, bestParameter);
     if (extendedEnd == RetainedLineEnd::Start) {
-        return {
-            Wire::Line(best->point, target.End()),
-            Wire::Line(best->point, target.Start()),
-            best->point,
-            extendedEnd,
-        };
+        added = added.Reversed();
     }
     return {
-        Wire::Line(target.Start(), best->point),
-        Wire::Line(target.End(), best->point),
+        candidate.buildExtended(bestParameter),
+        std::move(added),
         best->point,
         extendedEnd,
     };

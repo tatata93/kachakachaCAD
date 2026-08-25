@@ -21,9 +21,16 @@ struct AngleMeasurement {
 [[nodiscard]] double MeasureWireLength(const Wire& wire, double tolerance = 1.0e-5);
 [[nodiscard]] std::optional<double> MeasureWireRadius(const Wire& wire);
 [[nodiscard]] geometry::Vector3 MeasureWireTangent(const Wire& wire, double parameter);
+[[nodiscard]] std::optional<geometry::Vector3> MeasureWireCurvatureNormal(
+    const Wire& wire,
+    double parameter);
 [[nodiscard]] AngleMeasurement MeasureDirectionsAngle(
     geometry::Vector3 firstDirection,
     geometry::Vector3 secondDirection);
+[[nodiscard]] AngleMeasurement MeasureThreePointAngle(
+    geometry::Vector3 vertex,
+    geometry::Vector3 firstPoint,
+    geometry::Vector3 secondPoint);
 [[nodiscard]] DistanceMeasurement MeasurePointToWireDistance(
     geometry::Vector3 point,
     const Wire& wire,

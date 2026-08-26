@@ -904,6 +904,22 @@ void CadViewport::SetPlateAssemblyGuidePreview(
     update();
 }
 
+void CadViewport::SetPlateAssemblyApproximationPreview(
+    std::optional<int> plateIndex,
+    std::vector<std::array<Vector3, 3>> panels,
+    std::vector<int> pieceIndices,
+    std::vector<double> deviations,
+    double maximumDeviationMillimeters)
+{
+    plateAssemblyApproximationIndex_ = plateIndex;
+    plateAssemblyApproximationPanels_ = std::move(panels);
+    plateAssemblyApproximationPieceIndices_ = std::move(pieceIndices);
+    plateAssemblyApproximationDeviations_ = std::move(deviations);
+    plateAssemblyApproximationMaximumDeviationMillimeters_
+        = std::max(0.0, maximumDeviationMillimeters);
+    update();
+}
+
 void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
 {
     wireOffsetPreviews_ = std::move(wires);
@@ -2879,6 +2895,39 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.drawPath(splitPath);
             }
             painter.restore();
+            if (plateAssemblyApproximationIndex_.has_value()
+                && *plateAssemblyApproximationIndex_ == index) {
+                painter.save();
+                const double errorScale = std::max(
+                    plateAssemblyApproximationMaximumDeviationMillimeters_, 1.0e-9);
+                for (std::size_t panelIndex = 0;
+                     panelIndex < plateAssemblyApproximationPanels_.size(); ++panelIndex) {
+                    const auto& panel = plateAssemblyApproximationPanels_[panelIndex];
+                    const int pieceIndex = panelIndex < plateAssemblyApproximationPieceIndices_.size()
+                        ? plateAssemblyApproximationPieceIndices_[panelIndex]
+                        : 0;
+                    const double deviation = panelIndex < plateAssemblyApproximationDeviations_.size()
+                        ? plateAssemblyApproximationDeviations_[panelIndex]
+                        : 0.0;
+                    const int warm = static_cast<int>(std::clamp(
+                        deviation / errorScale, 0.0, 1.0) * 120.0);
+                    QColor approximationFill = pieceIndex % 2 == 0
+                        ? QColor(31 + warm, 139, 142 - warm / 3, 88)
+                        : QColor(201, 161 - warm / 4, 67, 82);
+                    const QColor approximationEdge = deviation > 0.1
+                        ? QColor(173, 39, 52, 205)
+                        : QColor(37, 76, 84, 175);
+                    QPolygonF polygon;
+                    polygon << ProjectPoint(panel[0])
+                            << ProjectPoint(panel[1])
+                            << ProjectPoint(panel[2]);
+                    painter.setBrush(approximationFill);
+                    painter.setPen(QPen(
+                        approximationEdge, deviation > 0.1 ? 1.35 : 0.75));
+                    painter.drawPolygon(polygon);
+                }
+                painter.restore();
+            }
             painter.setBrush(Qt::NoBrush);
             painter.setPen(QPen(edge, selected ? 2.8 : 1.6));
             for (const QPainterPath& openingPath : openingPaths) {

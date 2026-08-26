@@ -4,16 +4,21 @@
 #include "kachakacha/model/Plate.h"
 #include "kachakacha/model/Project.h"
 
+#include <array>
 #include <iosfwd>
 #include <string>
 #include <vector>
 
 namespace kachakacha::io {
 
-enum class AutomaticReliefStyle {
+enum class PlateAssemblyStrategy {
+    SingleSheet,
     SplitPieces,
-    VNotch,
-    RoundedVNotch,
+};
+
+enum class ReliefNotchStyle {
+    SharpV,
+    CurvedV,
 };
 
 struct PlateFlatPatternOptions {
@@ -24,13 +29,16 @@ struct PlateFlatPatternOptions {
     bool includeOpenings = true;
     bool includeFoldLines = true;
     bool includeAutomaticReliefCuts = false;
-    AutomaticReliefStyle automaticReliefStyle = AutomaticReliefStyle::SplitPieces;
+    PlateAssemblyStrategy assemblyStrategy = PlateAssemblyStrategy::SplitPieces;
+    bool allowAutomaticNotches = true;
+    ReliefNotchStyle notchStyle = ReliefNotchStyle::CurvedV;
+    bool fidelityControlsFeatureSpacing = true;
     double foldSpacingMillimeters = 8.0;
     double minimumFoldAngleDegrees = 2.0;
     double reliefCutDepthRatio = 0.45;
     double reliefCutSpacingMillimeters = 8.0;
     double reliefNotchAngleDegrees = 18.0;
-    double reliefNotchTipRadiusMillimeters = 0.5;
+    double reliefNotchCurveStrength = 1.0;
     int papercraftFidelity = 5;
 };
 
@@ -81,6 +89,21 @@ struct PlateAssemblyGuide {
     std::vector<PlateAssemblyGuidePath> splitLines;
 };
 
+struct PlateAssemblyApproximationPanel {
+    std::array<geometry::Vector3, 3> points;
+    int pieceIndex = 0;
+    double maximumDeviationMillimeters = 0.0;
+};
+
+struct PlateAssemblyApproximation {
+    std::string plateName;
+    std::vector<PlateAssemblyApproximationPanel> panels;
+    PlateAssemblyGuide guide;
+    int pieceCount = 1;
+    double maximumDeviationMillimeters = 0.0;
+    double rootMeanSquareDeviationMillimeters = 0.0;
+};
+
 struct PlateFlatPatternModelResult {
     std::string workPlaneName;
     std::string outerWireName;
@@ -100,6 +123,11 @@ struct PlateFlatPatternModelResult {
     PlateFlatPatternOptions options = {});
 
 [[nodiscard]] PlateAssemblyGuide BuildPlateAssemblyGuide(
+    const model::Project& project,
+    const model::NamedPlate& plate,
+    PlateFlatPatternOptions options = {});
+
+[[nodiscard]] PlateAssemblyApproximation BuildPlateAssemblyApproximation(
     const model::Project& project,
     const model::NamedPlate& plate,
     PlateFlatPatternOptions options = {});

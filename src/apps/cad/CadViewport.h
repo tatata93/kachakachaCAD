@@ -240,6 +240,12 @@ public:
         std::optional<int> plateIndex,
         std::vector<std::vector<kachakacha::geometry::Vector3>> foldLines,
         std::vector<std::vector<kachakacha::geometry::Vector3>> reliefCuts);
+    void SetPlateAssemblyApproximationPreview(
+        std::optional<int> plateIndex,
+        std::vector<std::array<kachakacha::geometry::Vector3, 3>> panels,
+        std::vector<int> pieceIndices,
+        std::vector<double> deviations,
+        double maximumDeviationMillimeters);
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();
@@ -247,6 +253,10 @@ public:
     [[nodiscard]] std::size_t PlateAssemblyReliefGuideCount() const noexcept
     {
         return plateAssemblyReliefCuts_.size();
+    }
+    [[nodiscard]] std::size_t PlateAssemblyApproximationPanelCount() const noexcept
+    {
+        return plateAssemblyApproximationPanels_.size();
     }
     void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
     [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
@@ -454,6 +464,11 @@ private:
     std::optional<int> plateAssemblyGuideIndex_;
     std::vector<std::vector<kachakacha::geometry::Vector3>> plateAssemblyFoldLines_;
     std::vector<std::vector<kachakacha::geometry::Vector3>> plateAssemblyReliefCuts_;
+    std::optional<int> plateAssemblyApproximationIndex_;
+    std::vector<std::array<kachakacha::geometry::Vector3, 3>> plateAssemblyApproximationPanels_;
+    std::vector<int> plateAssemblyApproximationPieceIndices_;
+    std::vector<double> plateAssemblyApproximationDeviations_;
+    double plateAssemblyApproximationMaximumDeviationMillimeters_ = 0.0;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;
     std::vector<MeasurementPick> measurementPicks_;

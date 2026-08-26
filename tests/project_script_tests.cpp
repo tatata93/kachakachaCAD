@@ -1116,15 +1116,20 @@ void PlateReliefCutsRoundTrip()
         plane_point_normal cut_plan 0 0 5  0 0 1  1 0 0
         polyline3d outline 0 0 0  20 0 0  20 10 0  0 10 0  0 0 0
         sketch_line slit_plan cut_plan 0 5  8 5 reference
+        sketch_line split_plan cut_plan 0 3  20 3 reference
         surface_planar panel outline
         wire_project slit_on_panel slit_plan panel 0 0 -1
+        wire_project split_on_panel split_plan panel 0 0 -1
         plate panel_plate panel 0.4 centered paper
         plate_relief_cut panel_plate slit_on_panel
+        plate_split_line panel_plate split_on_panel
     )");
     auto project = LoadProjectScript(input, "relief-cut-test");
     Require(project.Plates().size() == 1, "relief-cut plate count");
     Require(project.Plates()[0].reliefCutWireNames == std::vector<std::string>{"slit_on_panel"},
         "plate relief-cut relation loads");
+    Require(project.Plates()[0].splitWireNames == std::vector<std::string>{"split_on_panel"},
+        "plate split-line relation loads");
 
     bool usedCutRejected = false;
     try {
@@ -1138,11 +1143,46 @@ void PlateReliefCutsRoundTrip()
     WriteProjectScript(output, project);
     Require(output.str().find("plate_relief_cut panel_plate slit_on_panel") != std::string::npos,
         "plate relief-cut command is written");
+    Require(output.str().find("plate_split_line panel_plate split_on_panel") != std::string::npos,
+        "plate split-line command is written");
     std::istringstream roundTripInput(output.str());
     const auto roundTripped = LoadProjectScript(roundTripInput, "relief-cut-roundtrip");
     Require(roundTripped.Plates()[0].reliefCutWireNames
             == std::vector<std::string>{"slit_on_panel"},
         "plate relief-cut relation roundtrips");
+    Require(roundTripped.Plates()[0].splitWireNames
+            == std::vector<std::string>{"split_on_panel"},
+        "plate split-line relation roundtrips");
+}
+
+void CompositePlanarSurfacesRoundTrip()
+{
+    std::istringstream input(R"(
+        plane_point_normal drawing 0 0 0  0 0 1  1 0 0
+        sketch_line bottom drawing 0 0  10 0 reference
+        sketch_line right drawing 10 5  10 0 reference
+        sketch_arc roof drawing 5 5  5 0 180 reference
+        sketch_line left drawing 0 0  0 5 reference
+        surface_planar cab_side roof bottom left right
+    )");
+    auto project = LoadProjectScript(input, "composite-planar-test");
+    Require(project.Surfaces().size() == 1, "composite planar surface loads");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 4,
+        "composite planar surface keeps all source wires");
+    Require(project.Surfaces()[0].surface.FirstBoundary().IsClosed(),
+        "composite planar boundary is closed");
+    Require(project.Surfaces()[0].surface.FirstBoundary().ControlPoints().size() > 8,
+        "composite planar boundary preserves curved shape");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("surface_planar cab_side roof bottom left right")
+            != std::string::npos,
+        "all planar boundary sources are written");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "composite-planar-roundtrip");
+    Require(roundTripped.Surfaces()[0].sourceWireNames.size() == 4,
+        "composite planar sources roundtrip");
 }
 
 } // namespace
@@ -1176,6 +1216,7 @@ int main()
         UpdatingPlaneMovesOnlyLockedWires();
         AngleConstraintTracksAndProtectsItsWorkPlane();
         PlateReliefCutsRoundTrip();
+        CompositePlanarSurfacesRoundTrip();
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

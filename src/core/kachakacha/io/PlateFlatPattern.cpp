@@ -58,7 +58,8 @@ void ValidateOptions(const PlateFlatPatternOptions& options)
         || !std::isfinite(options.minimumFoldAngleDegrees)
         || options.minimumFoldAngleDegrees < 0.0 || options.minimumFoldAngleDegrees > 180.0
         || !std::isfinite(options.reliefCutDepthRatio)
-        || options.reliefCutDepthRatio <= 0.0 || options.reliefCutDepthRatio >= 1.0) {
+        || options.reliefCutDepthRatio <= 0.0 || options.reliefCutDepthRatio >= 1.0
+        || options.papercraftFidelity < 1 || options.papercraftFidelity > 10) {
         throw std::invalid_argument("Plate flat-pattern options are invalid.");
     }
 }
@@ -499,11 +500,10 @@ std::vector<Vector2> BuildPlanarWirePath(
     return points;
 }
 
-std::vector<Vector2> BuildDevelopedWirePath(
+std::vector<Vector2> BuildPlateWireUvPath(
     const Project& project,
     const NamedPlate& namedPlate,
     std::string_view openingName,
-    const DevelopmentGrid& grid,
     int samples,
     bool closePath)
 {
@@ -534,13 +534,29 @@ std::vector<Vector2> BuildDevelopedWirePath(
             || localV < -rangeTolerance || localV > 1.0 + rangeTolerance) {
             throw std::invalid_argument("Plate wire lies outside the selected plate piece: " + opening.name);
         }
-        const Vector2 flatPoint = grid.Evaluate(localU, localV);
-        if (points.empty() || !AlmostSame(points.back(), flatPoint, 1.0e-7)) {
-            points.push_back(flatPoint);
+        const Vector2 uvPoint{std::clamp(localU, 0.0, 1.0), std::clamp(localV, 0.0, 1.0)};
+        if (points.empty() || !AlmostSame(points.back(), uvPoint, 1.0e-7)) {
+            points.push_back(uvPoint);
         }
     }
     if (closePath) {
         ClosePath(points);
+    }
+    return points;
+}
+
+std::vector<Vector2> BuildDevelopedWirePath(
+    const Project& project,
+    const NamedPlate& namedPlate,
+    std::string_view openingName,
+    const DevelopmentGrid& grid,
+    int samples,
+    bool closePath)
+{
+    std::vector<Vector2> points = BuildPlateWireUvPath(
+        project, namedPlate, openingName, samples, closePath);
+    for (Vector2& point : points) {
+        point = grid.Evaluate(point.x, point.y);
     }
     return points;
 }
@@ -692,6 +708,532 @@ double TotalNormalChangeDegrees(const Plate& plate, bool alongU)
     return total;
 }
 
+struct NamedUvPath {
+    std::string name;
+    std::vector<Vector2> points;
+};
+
+bool SegmentsIntersect(Vector2 firstA, Vector2 firstB, Vector2 secondA, Vector2 secondB)
+{
+    constexpr double tolerance = 1.0e-10;
+    const auto orientation = [](Vector2 a, Vector2 b, Vector2 c) {
+        return Cross2(b - a, c - a);
+    };
+    const auto within = [&](double value, double first, double second) {
+        return value >= std::min(first, second) - tolerance
+            && value <= std::max(first, second) + tolerance;
+    };
+    const auto onSegment = [&](Vector2 a, Vector2 b, Vector2 point) {
+        return std::abs(orientation(a, b, point)) <= tolerance
+            && within(point.x, a.x, b.x) && within(point.y, a.y, b.y);
+    };
+    const double first = orientation(firstA, firstB, secondA);
+    const double second = orientation(firstA, firstB, secondB);
+    const double third = orientation(secondA, secondB, firstA);
+    const double fourth = orientation(secondA, secondB, firstB);
+    if (((first > tolerance && second < -tolerance) || (first < -tolerance && second > tolerance))
+        && ((third > tolerance && fourth < -tolerance) || (third < -tolerance && fourth > tolerance))) {
+        return true;
+    }
+    return (std::abs(first) <= tolerance && onSegment(firstA, firstB, secondA))
+        || (std::abs(second) <= tolerance && onSegment(firstA, firstB, secondB))
+        || (std::abs(third) <= tolerance && onSegment(secondA, secondB, firstA))
+        || (std::abs(fourth) <= tolerance && onSegment(secondA, secondB, firstB));
+}
+
+double PapercraftTargetSpacing(int fidelity)
+{
+    const double fraction = static_cast<double>(fidelity - 1) / 9.0;
+    return 20.0 + (2.0 - 20.0) * fraction;
+}
+
+std::vector<double> PapercraftStripParameters(
+    const Plate& plate,
+    bool splitAlongU,
+    const PlateFlatPatternOptions& options,
+    const std::vector<NamedUvPath>& protectedPaths)
+{
+    if (!options.includeAutomaticReliefCuts) {
+        return {0.0, 1.0};
+    }
+    const double length = SpatialPathLength(plate, splitAlongU, 0.5);
+    const int stripCount = std::clamp(
+        static_cast<int>(std::ceil(length / PapercraftTargetSpacing(options.papercraftFidelity))),
+        2,
+        64);
+    std::vector<double> parameters{0.0};
+    for (int strip = 1; strip < stripCount; ++strip) {
+        const double parameter = static_cast<double>(strip) / stripCount;
+        bool crossesProtectedPath = false;
+        for (const NamedUvPath& path : protectedPaths) {
+            if (path.points.empty()) {
+                continue;
+            }
+            double minimum = 1.0;
+            double maximum = 0.0;
+            for (const Vector2 point : path.points) {
+                const double coordinate = splitAlongU ? point.x : point.y;
+                minimum = std::min(minimum, coordinate);
+                maximum = std::max(maximum, coordinate);
+            }
+            if (parameter > minimum + 1.0e-5 && parameter < maximum - 1.0e-5) {
+                crossesProtectedPath = true;
+                break;
+            }
+        }
+        if (!crossesProtectedPath) {
+            parameters.push_back(parameter);
+        }
+    }
+    parameters.push_back(1.0);
+    return parameters;
+}
+
+class PapercraftGrid {
+public:
+    PapercraftGrid(
+        const Plate& plate,
+        bool splitAlongU,
+        std::vector<double> stripParameters,
+        int weakSegments,
+        const std::vector<NamedUvPath>& splitLines,
+        const PlateFlatPatternOptions& options)
+        : plate_(plate),
+          splitAlongU_(splitAlongU),
+          stripParameters_(std::move(stripParameters)),
+          weakSegments_(std::max(2, weakSegments))
+    {
+        BuildMesh();
+        BuildAdjacency();
+        MarkManualCuts(splitLines);
+        DevelopPieces(options);
+    }
+
+    void AddClosedPath(const NamedUvPath& path, bool opening)
+    {
+        const auto mapped = MapPath(path);
+        if (mapped.first < 0) {
+            throw std::invalid_argument("A plate opening or cut crosses a papercraft piece boundary: " + path.name);
+        }
+        PlateFlatPatternPath flat{path.name, mapped.second};
+        if (opening) {
+            pieces_[static_cast<std::size_t>(mapped.first)].openings.push_back(flat);
+        } else {
+            pieces_[static_cast<std::size_t>(mapped.first)].reliefCuts.push_back(flat);
+        }
+    }
+
+    [[nodiscard]] const std::vector<PlateFlatPatternPiece>& Pieces() const noexcept { return pieces_; }
+    [[nodiscard]] double MaximumEdgeDistortion() const noexcept { return maximumEdgeDistortion_; }
+    [[nodiscard]] double RootMeanSquareEdgeDistortion() const noexcept { return rmsEdgeDistortion_; }
+
+private:
+    [[nodiscard]] int VertexIndex(int strip, int side, int weakIndex) const noexcept
+    {
+        return strip * 2 * (weakSegments_ + 1) + side * (weakSegments_ + 1) + weakIndex;
+    }
+
+    void BuildMesh()
+    {
+        const int stripCount = static_cast<int>(stripParameters_.size()) - 1;
+        uv_.reserve(static_cast<std::size_t>(stripCount * 2 * (weakSegments_ + 1)));
+        spatial_.reserve(uv_.capacity());
+        for (int strip = 0; strip < stripCount; ++strip) {
+            for (int side = 0; side < 2; ++side) {
+                const double strong = stripParameters_[static_cast<std::size_t>(strip + side)];
+                for (int weakIndex = 0; weakIndex <= weakSegments_; ++weakIndex) {
+                    const double weak = static_cast<double>(weakIndex) / weakSegments_;
+                    const Vector2 point = splitAlongU_ ? Vector2{strong, weak} : Vector2{weak, strong};
+                    uv_.push_back(point);
+                    spatial_.push_back(plate_.Evaluate(point.x, point.y, 0.5));
+                }
+            }
+            for (int weakIndex = 0; weakIndex < weakSegments_; ++weakIndex) {
+                int lowerLeft;
+                int lowerRight;
+                int upperLeft;
+                int upperRight;
+                if (splitAlongU_) {
+                    lowerLeft = VertexIndex(strip, 0, weakIndex);
+                    lowerRight = VertexIndex(strip, 1, weakIndex);
+                    upperLeft = VertexIndex(strip, 0, weakIndex + 1);
+                    upperRight = VertexIndex(strip, 1, weakIndex + 1);
+                } else {
+                    lowerLeft = VertexIndex(strip, 0, weakIndex);
+                    lowerRight = VertexIndex(strip, 0, weakIndex + 1);
+                    upperLeft = VertexIndex(strip, 1, weakIndex);
+                    upperRight = VertexIndex(strip, 1, weakIndex + 1);
+                }
+                triangles_.push_back({{lowerLeft, lowerRight, upperRight}});
+                triangles_.push_back({{lowerLeft, upperRight, upperLeft}});
+            }
+        }
+    }
+
+    void BuildAdjacency()
+    {
+        for (int triangleIndex = 0; triangleIndex < static_cast<int>(triangles_.size()); ++triangleIndex) {
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                edgeTriangles_[std::minmax(vertices[edgeIndex], vertices[(edgeIndex + 1) % 3])]
+                    .push_back(triangleIndex);
+            }
+        }
+    }
+
+    void MarkManualCuts(const std::vector<NamedUvPath>& splitLines)
+    {
+        for (const NamedUvPath& split : splitLines) {
+            const bool alreadyASeam = std::any_of(
+                stripParameters_.begin() + 1, stripParameters_.end() - 1,
+                [&](double seam) {
+                    double minimumWeak = 1.0;
+                    double maximumWeak = 0.0;
+                    for (const Vector2 point : split.points) {
+                        const double strong = splitAlongU_ ? point.x : point.y;
+                        if (std::abs(strong - seam) > 1.0e-3) {
+                            return false;
+                        }
+                        const double weak = splitAlongU_ ? point.y : point.x;
+                        minimumWeak = std::min(minimumWeak, weak);
+                        maximumWeak = std::max(maximumWeak, weak);
+                    }
+                    return minimumWeak <= 1.0e-3 && maximumWeak >= 1.0 - 1.0e-3;
+                });
+            if (alreadyASeam) {
+                continue;
+            }
+            std::size_t markedBefore = cutEdges_.size();
+            for (const auto& [edge, adjacent] : edgeTriangles_) {
+                if (adjacent.size() != 2) {
+                    continue;
+                }
+                for (std::size_t index = 1; index < split.points.size(); ++index) {
+                    if (SegmentsIntersect(
+                            uv_[static_cast<std::size_t>(edge.first)],
+                            uv_[static_cast<std::size_t>(edge.second)],
+                            split.points[index - 1],
+                            split.points[index])) {
+                        cutEdges_.insert(edge);
+                        break;
+                    }
+                }
+            }
+            if (cutEdges_.size() == markedBefore) {
+                throw std::invalid_argument("Split line does not cross the papercraft fold mesh: " + split.name);
+            }
+        }
+    }
+
+    void DevelopPieces(const PlateFlatPatternOptions& options)
+    {
+        std::vector<int> trianglePiece(triangles_.size(), -1);
+        std::vector<std::vector<int>> components;
+        for (int seed = 0; seed < static_cast<int>(triangles_.size()); ++seed) {
+            if (trianglePiece[static_cast<std::size_t>(seed)] >= 0) {
+                continue;
+            }
+            const int pieceIndex = static_cast<int>(components.size());
+            components.emplace_back();
+            std::queue<int> pending;
+            pending.push(seed);
+            trianglePiece[static_cast<std::size_t>(seed)] = pieceIndex;
+            while (!pending.empty()) {
+                const int current = pending.front();
+                pending.pop();
+                components.back().push_back(current);
+                const auto& vertices = triangles_[static_cast<std::size_t>(current)].vertices;
+                for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                    const auto edge = std::minmax(vertices[edgeIndex], vertices[(edgeIndex + 1) % 3]);
+                    if (cutEdges_.contains(edge)) {
+                        continue;
+                    }
+                    for (const int neighbor : edgeTriangles_[edge]) {
+                        if (trianglePiece[static_cast<std::size_t>(neighbor)] < 0) {
+                            trianglePiece[static_cast<std::size_t>(neighbor)] = pieceIndex;
+                            pending.push(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        trianglePiece_ = std::move(trianglePiece);
+        triangleFlat_.resize(triangles_.size());
+        pieces_.resize(components.size());
+        pieceOffsets_.resize(components.size());
+        double squaredError = 0.0;
+        std::size_t measuredEdges = 0;
+        double cursorX = 0.0;
+        for (std::size_t pieceIndex = 0; pieceIndex < components.size(); ++pieceIndex) {
+            const auto& component = components[pieceIndex];
+            std::map<int, Vector2> flat;
+            const auto& initial = triangles_[static_cast<std::size_t>(component.front())].vertices;
+            flat[initial[0]] = {0.0, 0.0};
+            flat[initial[1]] = {(spatial_[initial[1]] - spatial_[initial[0]]).Length(), 0.0};
+            flat[initial[2]] = PlaceTriangleVertex(
+                flat[initial[0]], flat[initial[1]],
+                (spatial_[initial[2]] - spatial_[initial[0]]).Length(),
+                (spatial_[initial[2]] - spatial_[initial[1]]).Length(),
+                {0.0, -1.0});
+            std::set<int> processed{component.front()};
+            std::queue<int> pending;
+            pending.push(component.front());
+            while (!pending.empty()) {
+                const int currentIndex = pending.front();
+                pending.pop();
+                const auto& current = triangles_[static_cast<std::size_t>(currentIndex)].vertices;
+                for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                    const int sharedFirst = current[edgeIndex];
+                    const int sharedSecond = current[(edgeIndex + 1) % 3];
+                    const int reference = current[(edgeIndex + 2) % 3];
+                    const auto edge = std::minmax(sharedFirst, sharedSecond);
+                    if (cutEdges_.contains(edge)) {
+                        continue;
+                    }
+                    for (const int neighborIndex : edgeTriangles_[edge]) {
+                        if (trianglePiece_[static_cast<std::size_t>(neighborIndex)] != static_cast<int>(pieceIndex)
+                            || processed.contains(neighborIndex)) {
+                            continue;
+                        }
+                        const auto& neighbor = triangles_[static_cast<std::size_t>(neighborIndex)].vertices;
+                        const int target = *std::find_if(neighbor.begin(), neighbor.end(), [&](int vertex) {
+                            return vertex != sharedFirst && vertex != sharedSecond;
+                        });
+                        if (!flat.contains(target)) {
+                            flat[target] = PlaceTriangleVertex(
+                                flat[sharedFirst], flat[sharedSecond],
+                                (spatial_[target] - spatial_[sharedFirst]).Length(),
+                                (spatial_[target] - spatial_[sharedSecond]).Length(),
+                                flat[reference]);
+                        }
+                        processed.insert(neighborIndex);
+                        pending.push(neighborIndex);
+                    }
+                }
+            }
+            for (const int triangleIndex : component) {
+                const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+                for (int vertexIndex = 0; vertexIndex < 3; ++vertexIndex) {
+                    triangleFlat_[static_cast<std::size_t>(triangleIndex)][vertexIndex]
+                        = flat.at(vertices[vertexIndex]);
+                }
+                for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                    const int first = vertices[edgeIndex];
+                    const int second = vertices[(edgeIndex + 1) % 3];
+                    const double spatialLength = (spatial_[second] - spatial_[first]).Length();
+                    const double flatLength = Length(flat.at(second) - flat.at(first));
+                    const double error = std::abs(flatLength - spatialLength);
+                    maximumEdgeDistortion_ = std::max(maximumEdgeDistortion_, error);
+                    squaredError += error * error;
+                    ++measuredEdges;
+                }
+            }
+
+            PlateFlatPatternPiece& piece = pieces_[pieceIndex];
+            piece.name = "piece_" + std::to_string(pieceIndex + 1);
+            piece.outerBoundary.name = piece.name;
+            piece.outerBoundary.points = BuildBoundary(component, static_cast<int>(pieceIndex), flat);
+            if (options.includeFoldLines) {
+                AddFoldLines(piece, component, static_cast<int>(pieceIndex), flat, options);
+            }
+            double minimumX = std::numeric_limits<double>::infinity();
+            double minimumY = std::numeric_limits<double>::infinity();
+            double maximumX = -std::numeric_limits<double>::infinity();
+            for (const Vector2 point : piece.outerBoundary.points) {
+                minimumX = std::min(minimumX, point.x);
+                minimumY = std::min(minimumY, point.y);
+                maximumX = std::max(maximumX, point.x);
+            }
+            pieceOffsets_[pieceIndex] = {cursorX - minimumX, -minimumY};
+            TranslatePiece(piece, pieceOffsets_[pieceIndex]);
+            cursorX += maximumX - minimumX + options.marginMillimeters;
+        }
+        if (measuredEdges > 0) {
+            rmsEdgeDistortion_ = std::sqrt(squaredError / static_cast<double>(measuredEdges));
+        }
+    }
+
+    std::vector<Vector2> BuildBoundary(
+        const std::vector<int>& component,
+        int pieceIndex,
+        const std::map<int, Vector2>& flat) const
+    {
+        std::map<int, std::vector<int>> boundaryNeighbors;
+        for (const int triangleIndex : component) {
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                const int first = vertices[edgeIndex];
+                const int second = vertices[(edgeIndex + 1) % 3];
+                const auto edge = std::minmax(first, second);
+                int samePieceNeighbors = 0;
+                for (const int adjacent : edgeTriangles_.at(edge)) {
+                    if (trianglePiece_[static_cast<std::size_t>(adjacent)] == pieceIndex
+                        && !cutEdges_.contains(edge)) {
+                        ++samePieceNeighbors;
+                    }
+                }
+                if (samePieceNeighbors < 2) {
+                    boundaryNeighbors[first].push_back(second);
+                    boundaryNeighbors[second].push_back(first);
+                }
+            }
+        }
+        if (boundaryNeighbors.empty()) {
+            throw std::logic_error("Papercraft piece has no boundary.");
+        }
+        const int start = boundaryNeighbors.begin()->first;
+        int previous = -1;
+        int current = start;
+        std::vector<Vector2> boundary;
+        do {
+            boundary.push_back(flat.at(current));
+            const auto& neighbors = boundaryNeighbors.at(current);
+            if (neighbors.empty()) {
+                throw std::logic_error("Papercraft boundary is open.");
+            }
+            const int next = neighbors.front() == previous && neighbors.size() > 1
+                ? neighbors[1]
+                : neighbors.front();
+            previous = current;
+            current = next;
+            if (boundary.size() > boundaryNeighbors.size() + 1) {
+                throw std::logic_error("Papercraft boundary could not be ordered.");
+            }
+        } while (current != start);
+        ClosePath(boundary);
+        return boundary;
+    }
+
+    void AddFoldLines(
+        PlateFlatPatternPiece& piece,
+        const std::vector<int>& component,
+        int pieceIndex,
+        const std::map<int, Vector2>& flat,
+        const PlateFlatPatternOptions& options) const
+    {
+        std::set<std::pair<int, int>> added;
+        for (const int triangleIndex : component) {
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                const auto edge = std::minmax(vertices[edgeIndex], vertices[(edgeIndex + 1) % 3]);
+                if (!added.insert(edge).second || cutEdges_.contains(edge)) {
+                    continue;
+                }
+                const auto& adjacent = edgeTriangles_.at(edge);
+                if (adjacent.size() != 2
+                    || trianglePiece_[static_cast<std::size_t>(adjacent[0])] != pieceIndex
+                    || trianglePiece_[static_cast<std::size_t>(adjacent[1])] != pieceIndex) {
+                    continue;
+                }
+                const auto normal = [&](int index) {
+                    const auto& triangle = triangles_[static_cast<std::size_t>(index)].vertices;
+                    return geometry::Cross(
+                        spatial_[triangle[1]] - spatial_[triangle[0]],
+                        spatial_[triangle[2]] - spatial_[triangle[0]]).Normalized();
+                };
+                if (NormalAngleDegrees(normal(adjacent[0]), normal(adjacent[1])) + 1.0e-9
+                    < options.minimumFoldAngleDegrees) {
+                    continue;
+                }
+                piece.foldLines.push_back({
+                    "facet_fold_" + std::to_string(pieceIndex + 1) + "_" + std::to_string(piece.foldLines.size() + 1),
+                    {flat.at(edge.first), flat.at(edge.second)},
+                });
+            }
+        }
+    }
+
+    static void TranslatePath(PlateFlatPatternPath& path, Vector2 offset)
+    {
+        for (Vector2& point : path.points) {
+            point = point + offset;
+        }
+    }
+
+    static void TranslatePiece(PlateFlatPatternPiece& piece, Vector2 offset)
+    {
+        TranslatePath(piece.outerBoundary, offset);
+        for (PlateFlatPatternPath& path : piece.foldLines) {
+            TranslatePath(path, offset);
+        }
+    }
+
+    [[nodiscard]] std::pair<int, std::vector<Vector2>> MapPath(const NamedUvPath& path) const
+    {
+        int pieceIndex = -1;
+        std::vector<Vector2> flatPoints;
+        flatPoints.reserve(path.points.size());
+        for (const Vector2 uv : path.points) {
+            const auto [mappedPiece, point] = Evaluate(uv);
+            if (pieceIndex < 0) {
+                pieceIndex = mappedPiece;
+            } else if (pieceIndex != mappedPiece) {
+                return {-1, {}};
+            }
+            if (flatPoints.empty() || !AlmostSame(flatPoints.back(), point, 1.0e-7)) {
+                flatPoints.push_back(point);
+            }
+        }
+        return {pieceIndex, std::move(flatPoints)};
+    }
+
+    [[nodiscard]] std::pair<int, Vector2> Evaluate(Vector2 uv) const
+    {
+        const double strong = splitAlongU_ ? uv.x : uv.y;
+        auto upper = std::upper_bound(stripParameters_.begin(), stripParameters_.end(), strong + 1.0e-12);
+        int strip = std::clamp(
+            static_cast<int>(std::distance(stripParameters_.begin(), upper)) - 1,
+            0,
+            static_cast<int>(stripParameters_.size()) - 2);
+        const double weak = splitAlongU_ ? uv.y : uv.x;
+        const int weakIndex = std::min(static_cast<int>(std::clamp(weak, 0.0, 1.0) * weakSegments_), weakSegments_ - 1);
+        const int cellIndex = strip * weakSegments_ + weakIndex;
+        const double minimumU = splitAlongU_ ? stripParameters_[static_cast<std::size_t>(strip)]
+                                             : static_cast<double>(weakIndex) / weakSegments_;
+        const double maximumU = splitAlongU_ ? stripParameters_[static_cast<std::size_t>(strip + 1)]
+                                             : static_cast<double>(weakIndex + 1) / weakSegments_;
+        const double minimumV = splitAlongU_ ? static_cast<double>(weakIndex) / weakSegments_
+                                             : stripParameters_[static_cast<std::size_t>(strip)];
+        const double maximumV = splitAlongU_ ? static_cast<double>(weakIndex + 1) / weakSegments_
+                                             : stripParameters_[static_cast<std::size_t>(strip + 1)];
+        const double localU = (uv.x - minimumU) / (maximumU - minimumU);
+        const double localV = (uv.y - minimumV) / (maximumV - minimumV);
+        const int triangleIndex = cellIndex * 2 + (localV <= localU ? 0 : 1);
+        const auto& triangle = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+        const auto& flat = triangleFlat_[static_cast<std::size_t>(triangleIndex)];
+        const Vector2 a = uv_[static_cast<std::size_t>(triangle[0])];
+        const Vector2 b = uv_[static_cast<std::size_t>(triangle[1])];
+        const Vector2 c = uv_[static_cast<std::size_t>(triangle[2])];
+        const double denominator = Cross2(b - a, c - a);
+        const double weightB = Cross2(uv - a, c - a) / denominator;
+        const double weightC = Cross2(b - a, uv - a) / denominator;
+        const double weightA = 1.0 - weightB - weightC;
+        const int pieceIndex = trianglePiece_[static_cast<std::size_t>(triangleIndex)];
+        return {
+            pieceIndex,
+            flat[0] * weightA + flat[1] * weightB + flat[2] * weightC
+                + pieceOffsets_[static_cast<std::size_t>(pieceIndex)],
+        };
+    }
+
+    const Plate& plate_;
+    bool splitAlongU_ = true;
+    std::vector<double> stripParameters_;
+    int weakSegments_ = 2;
+    std::vector<Vector2> uv_;
+    std::vector<Vector3> spatial_;
+    std::vector<Triangle> triangles_;
+    std::map<std::pair<int, int>, std::vector<int>> edgeTriangles_;
+    std::set<std::pair<int, int>> cutEdges_;
+    std::vector<int> trianglePiece_;
+    std::vector<std::array<Vector2, 3>> triangleFlat_;
+    std::vector<Vector2> pieceOffsets_;
+    std::vector<PlateFlatPatternPiece> pieces_;
+    double maximumEdgeDistortion_ = 0.0;
+    double rmsEdgeDistortion_ = 0.0;
+};
+
 void AddGeneratedFoldAndReliefPaths(
     PlateFlatPattern& pattern,
     const Plate& plate,
@@ -752,6 +1294,9 @@ void ValidatePattern(const PlateFlatPattern& pattern)
         }
     };
     validatePath(pattern.outerBoundary, true);
+    for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+        validatePath(piece.outerBoundary, true);
+    }
     for (const auto& opening : pattern.openings) {
         validatePath(opening, false);
     }
@@ -817,7 +1362,128 @@ PlateFlatPattern BuildPlateFlatPattern(
     const Plate& plate = namedPlate.plate;
     pattern.analysis.classification = plate.AnalyzeDevelopability().classification;
 
-    if (plate.SourceSurface().Kind() == SurfaceKind::Planar) {
+    const bool automaticPapercraft = options.includeAutomaticReliefCuts
+        && pattern.analysis.classification == PlateDevelopability::DoubleCurved;
+    const bool papercraftMode = automaticPapercraft || !namedPlate.splitWireNames.empty();
+    if (papercraftMode) {
+        PlateFlatPatternOptions papercraftOptions = options;
+        papercraftOptions.includeAutomaticReliefCuts = automaticPapercraft;
+        std::vector<NamedUvPath> openingPaths;
+        std::vector<NamedUvPath> reliefPaths;
+        std::vector<NamedUvPath> splitPaths;
+        if (options.includeOpenings) {
+            for (const std::string& openingName : namedPlate.openingWireNames) {
+                openingPaths.push_back({
+                    openingName,
+                    BuildPlateWireUvPath(project, namedPlate, openingName, options.openingSamples, true),
+                });
+            }
+        }
+        for (const std::string& cutName : namedPlate.reliefCutWireNames) {
+            reliefPaths.push_back({
+                cutName,
+                BuildPlateWireUvPath(project, namedPlate, cutName, options.openingSamples, false),
+            });
+        }
+        for (const std::string& splitName : namedPlate.splitWireNames) {
+            splitPaths.push_back({
+                splitName,
+                BuildPlateWireUvPath(project, namedPlate, splitName, options.openingSamples, false),
+            });
+        }
+        std::vector<NamedUvPath> protectedPaths = openingPaths;
+        protectedPaths.insert(protectedPaths.end(), reliefPaths.begin(), reliefPaths.end());
+        const bool splitAlongU = TotalNormalChangeDegrees(plate, true)
+            >= TotalNormalChangeDegrees(plate, false);
+        std::vector<double> stripParameters = PapercraftStripParameters(
+            plate, splitAlongU, papercraftOptions, protectedPaths);
+        const Vector3 strongStart = splitAlongU
+            ? plate.Evaluate(0.0, 0.5, 0.5)
+            : plate.Evaluate(0.5, 0.0, 0.5);
+        const Vector3 strongEnd = splitAlongU
+            ? plate.Evaluate(1.0, 0.5, 0.5)
+            : plate.Evaluate(0.5, 1.0, 0.5);
+        if (stripParameters.size() == 2
+            && (strongStart - strongEnd).Length() <= 1.0e-7) {
+            const auto crossesProtectedPath = [&](double candidate) {
+                return std::any_of(
+                    protectedPaths.begin(), protectedPaths.end(), [&](const NamedUvPath& path) {
+                    if (path.points.empty()) {
+                        return false;
+                    }
+                    double minimum = 1.0;
+                    double maximum = 0.0;
+                    for (const Vector2 point : path.points) {
+                        const double coordinate = splitAlongU ? point.x : point.y;
+                        minimum = std::min(minimum, coordinate);
+                        maximum = std::max(maximum, coordinate);
+                    }
+                    return candidate > minimum + 1.0e-5
+                        && candidate < maximum - 1.0e-5;
+                });
+            };
+            for (const NamedUvPath& split : splitPaths) {
+                double minimumStrong = 1.0;
+                double maximumStrong = 0.0;
+                double minimumWeak = 1.0;
+                double maximumWeak = 0.0;
+                for (const Vector2 point : split.points) {
+                    const double strong = splitAlongU ? point.x : point.y;
+                    const double weak = splitAlongU ? point.y : point.x;
+                    minimumStrong = std::min(minimumStrong, strong);
+                    maximumStrong = std::max(maximumStrong, strong);
+                    minimumWeak = std::min(minimumWeak, weak);
+                    maximumWeak = std::max(maximumWeak, weak);
+                }
+                const double candidate = (minimumStrong + maximumStrong) * 0.5;
+                if (maximumStrong - minimumStrong <= 1.0e-3
+                    && minimumWeak <= 1.0e-3 && maximumWeak >= 1.0 - 1.0e-3
+                    && candidate > 1.0e-3 && candidate < 1.0 - 1.0e-3
+                    && !crossesProtectedPath(candidate)) {
+                    stripParameters.insert(stripParameters.begin() + 1, candidate);
+                    break;
+                }
+            }
+            for (const double candidate : {0.5, 0.25, 0.75, 0.125, 0.875}) {
+                if (stripParameters.size() > 2) {
+                    break;
+                }
+                if (!crossesProtectedPath(candidate)) {
+                    stripParameters.insert(stripParameters.begin() + 1, candidate);
+                }
+            }
+            if (stripParameters.size() == 2) {
+                throw std::invalid_argument(
+                    "No safe seam remains between openings on this closed surface.");
+            }
+        }
+        const double weakLength = SpatialPathLength(plate, !splitAlongU, 0.5);
+        const int weakSegments = std::clamp(
+            static_cast<int>(std::ceil(
+                weakLength / PapercraftTargetSpacing(papercraftOptions.papercraftFidelity))),
+            2,
+            128);
+        PapercraftGrid grid(
+            plate, splitAlongU, stripParameters, weakSegments, splitPaths, papercraftOptions);
+        for (const NamedUvPath& opening : openingPaths) {
+            grid.AddClosedPath(opening, true);
+        }
+        for (const NamedUvPath& relief : reliefPaths) {
+            grid.AddClosedPath(relief, false);
+        }
+        pattern.pieces = grid.Pieces();
+        pattern.analysis.maximumEdgeDistortionMillimeters = grid.MaximumEdgeDistortion();
+        pattern.analysis.rootMeanSquareEdgeDistortionMillimeters = grid.RootMeanSquareEdgeDistortion();
+        pattern.analysis.maximumBoundaryApproximationMillimeters
+            = PapercraftTargetSpacing(papercraftOptions.papercraftFidelity) * 0.005;
+        pattern.analysis.pieceCount = static_cast<int>(pattern.pieces.size());
+        pattern.outerBoundary = pattern.pieces.front().outerBoundary;
+        for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+            pattern.openings.insert(pattern.openings.end(), piece.openings.begin(), piece.openings.end());
+            pattern.foldLines.insert(pattern.foldLines.end(), piece.foldLines.begin(), piece.foldLines.end());
+            pattern.reliefCuts.insert(pattern.reliefCuts.end(), piece.reliefCuts.begin(), piece.reliefCuts.end());
+        }
+    } else if (plate.SourceSurface().Kind() == SurfaceKind::Planar) {
         pattern.outerBoundary.points = BuildPlanarBoundary(namedPlate, options.openingSamples);
         if (options.includeOpenings) {
             for (const std::string& openingName : namedPlate.openingWireNames) {
@@ -855,6 +1521,16 @@ PlateFlatPattern BuildPlateFlatPattern(
         }
         AddGeneratedFoldAndReliefPaths(pattern, plate, grid, options);
     }
+    if (pattern.pieces.empty()) {
+        pattern.pieces.push_back({
+            namedPlate.name,
+            pattern.outerBoundary,
+            pattern.openings,
+            pattern.foldLines,
+            pattern.reliefCuts,
+        });
+    }
+    pattern.analysis.pieceCount = static_cast<int>(pattern.pieces.size());
     ValidatePattern(pattern);
     return pattern;
 }
@@ -874,6 +1550,12 @@ PlateAssemblyGuide BuildPlateAssemblyGuide(
             cutName,
             BuildAssemblyWirePath(
                 project, namedPlate, cutName, options.openingSamples),
+        });
+    }
+    for (const std::string& splitName : namedPlate.splitWireNames) {
+        guide.splitLines.push_back({
+            splitName,
+            BuildAssemblyWirePath(project, namedPlate, splitName, options.openingSamples),
         });
     }
     if (plate.SourceSurface().Kind() == SurfaceKind::Planar) {
@@ -905,21 +1587,30 @@ PlateAssemblyGuide BuildPlateAssemblyGuide(
     }
     const bool cutAtConstantU = TotalNormalChangeDegrees(plate, true)
         >= TotalNormalChangeDegrees(plate, false);
-    const std::vector<double>& parameters = cutAtConstantU ? uParameters : vParameters;
-    for (std::size_t index = 0; index < parameters.size(); ++index) {
-        const bool fromMinimumSide = index % 2 == 0;
-        const double first = fromMinimumSide ? 0.0 : 1.0;
-        const double last = fromMinimumSide
-            ? options.reliefCutDepthRatio
-            : 1.0 - options.reliefCutDepthRatio;
-        guide.reliefCuts.push_back({
-            "auto_relief_" + std::to_string(index + 1),
+    std::vector<NamedUvPath> protectedPaths;
+    for (const std::string& openingName : namedPlate.openingWireNames) {
+        protectedPaths.push_back({
+            openingName,
+            BuildPlateWireUvPath(project, namedPlate, openingName, options.openingSamples, true),
+        });
+    }
+    for (const std::string& reliefName : namedPlate.reliefCutWireNames) {
+        protectedPaths.push_back({
+            reliefName,
+            BuildPlateWireUvPath(project, namedPlate, reliefName, options.openingSamples, false),
+        });
+    }
+    const std::vector<double> parameters = PapercraftStripParameters(
+        plate, cutAtConstantU, options, protectedPaths);
+    for (std::size_t index = 1; index + 1 < parameters.size(); ++index) {
+        guide.splitLines.push_back({
+            "papercraft_split_" + std::to_string(index),
             BuildConstantAssemblyPath(
                 plate,
                 cutAtConstantU,
                 parameters[index],
-                first,
-                last,
+                0.0,
+                1.0,
                 cutAtConstantU ? options.vSegments : options.uSegments),
         });
     }
@@ -945,7 +1636,13 @@ void WritePlateFlatPatternSvg(
             maximumY = std::max(maximumY, point.y);
         }
     };
-    includePath(pattern.outerBoundary);
+    if (pattern.pieces.empty()) {
+        includePath(pattern.outerBoundary);
+    } else {
+        for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+            includePath(piece.outerBoundary);
+        }
+    }
     for (const auto& opening : pattern.openings) {
         includePath(opening);
     }
@@ -975,7 +1672,13 @@ void WritePlateFlatPatternSvg(
            << "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"" << width
            << "mm\" height=\"" << height << "mm\" viewBox=\"0 0 " << width << ' ' << height << "\">\n"
            << "  <g id=\"CUT_OUTER\" fill=\"none\" stroke=\"#000000\" stroke-width=\"0.1\" stroke-linejoin=\"round\">\n";
-    writePath(pattern.outerBoundary, "    ");
+    if (pattern.pieces.empty()) {
+        writePath(pattern.outerBoundary, "    ");
+    } else {
+        for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+            writePath(piece.outerBoundary, "    ");
+        }
+    }
     output << "  </g>\n"
            << "  <g id=\"CUT_OPENING\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.1\" stroke-linejoin=\"round\">\n";
     for (const auto& opening : pattern.openings) {
@@ -1009,7 +1712,13 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
     WriteDxfPair(output, 0, "ENDSEC");
     WriteDxfPair(output, 0, "SECTION");
     WriteDxfPair(output, 2, "ENTITIES");
-    WriteDxfPath(output, pattern.outerBoundary, "CUT_OUTER");
+    if (pattern.pieces.empty()) {
+        WriteDxfPath(output, pattern.outerBoundary, "CUT_OUTER");
+    } else {
+        for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+            WriteDxfPath(output, piece.outerBoundary, "CUT_OUTER");
+        }
+    }
     for (const auto& opening : pattern.openings) {
         WriteDxfPath(output, opening, "CUT_OPENING");
     }
@@ -1047,9 +1756,11 @@ PlateFlatPatternModelResult AddPlateFlatPatternModel(
     const std::string sourceMaterial = sourcePlate.material;
     double minimumX = std::numeric_limits<double>::infinity();
     double minimumY = std::numeric_limits<double>::infinity();
-    for (const Vector2 point : pattern.outerBoundary.points) {
-        minimumX = std::min(minimumX, point.x);
-        minimumY = std::min(minimumY, point.y);
+    for (const PlateFlatPatternPiece& piece : pattern.pieces) {
+        for (const Vector2 point : piece.outerBoundary.points) {
+            minimumX = std::min(minimumX, point.x);
+            minimumY = std::min(minimumY, point.y);
+        }
     }
     const auto toWorld = [&](const PlateFlatPatternPath& path, double height) {
         std::vector<Vector3> points;
@@ -1114,63 +1825,79 @@ PlateFlatPatternModelResult AddPlateFlatPatternModel(
 
     PlateFlatPatternModelResult result;
     result.workPlaneName = namePrefix + "_plane";
-    result.outerWireName = namePrefix + "_outer";
-    result.surfaceName = namePrefix + "_surface";
-    result.plateName = namePrefix + "_plate";
     project.AddWorkPlane(result.workPlaneName, targetPlane);
-    project.AddWire(
-        result.outerWireName,
-        Wire::Polyline(toWorld(pattern.outerBoundary, 0.0)),
-        makeMetadata(false));
-    project.AddPlanarSurface(result.surfaceName, result.outerWireName);
-    if (sourceGeometry.HasVariableThickness()) {
-        project.AddPlate(
-            result.plateName,
-            result.surfaceName,
-            sourceGeometry.Thickness(),
-            sourceGeometry.EndThickness(),
-            sourceGeometry.Direction(),
-            sourceMaterial);
-    } else {
-        project.AddPlate(
-            result.plateName,
-            result.surfaceName,
-            sourceGeometry.Thickness(),
-            sourceGeometry.Direction(),
-            sourceMaterial);
-    }
-
     const Vector3 projectionDirection = targetPlane.Normal() * -1.0;
-    const auto addProjectedPath = [&](const PlateFlatPatternPath& path, const std::string& baseName) {
+    const auto addProjectedPath = [&](
+        const PlateFlatPatternPath& path,
+        const std::string& baseName,
+        const std::string& surfaceName) {
         const std::string drawingName = baseName + "_drawing";
         project.AddWire(drawingName, Wire::Polyline(toWorld(path, 1.0)));
-        project.AddProjectedWire(baseName, drawingName, result.surfaceName, projectionDirection);
+        project.AddProjectedWire(baseName, drawingName, surfaceName, projectionDirection);
         project.SetWireVisible(drawingName, false);
         return baseName;
     };
+    std::size_t openingIndex = 0;
+    std::size_t foldIndex = 0;
+    std::size_t reliefIndex = 0;
+    for (std::size_t pieceIndex = 0; pieceIndex < pattern.pieces.size(); ++pieceIndex) {
+        const PlateFlatPatternPiece& piece = pattern.pieces[pieceIndex];
+        const std::string pieceSuffix = pattern.pieces.size() == 1
+            ? std::string{}
+            : "_piece_" + std::to_string(pieceIndex + 1);
+        const std::string outerName = namePrefix + pieceSuffix + "_outer";
+        const std::string surfaceName = namePrefix + pieceSuffix + "_surface";
+        const std::string plateName = namePrefix + pieceSuffix + "_plate";
+        project.AddWire(outerName, Wire::Polyline(toWorld(piece.outerBoundary, 0.0)), makeMetadata(false));
+        project.AddPlanarSurface(surfaceName, outerName);
+        if (sourceGeometry.HasVariableThickness()) {
+            project.AddPlate(
+                plateName,
+                surfaceName,
+                sourceGeometry.Thickness(),
+                sourceGeometry.EndThickness(),
+                sourceGeometry.Direction(),
+                sourceMaterial);
+        } else {
+            project.AddPlate(
+                plateName,
+                surfaceName,
+                sourceGeometry.Thickness(),
+                sourceGeometry.Direction(),
+                sourceMaterial);
+        }
+        result.outerWireNames.push_back(outerName);
+        result.surfaceNames.push_back(surfaceName);
+        result.plateNames.push_back(plateName);
+        if (pieceIndex == 0) {
+            result.outerWireName = outerName;
+            result.surfaceName = surfaceName;
+            result.plateName = plateName;
+        }
 
-    for (std::size_t index = 0; index < pattern.openings.size(); ++index) {
-        const std::string name = namePrefix + "_opening_" + std::to_string(index + 1);
-        addProjectedPath(pattern.openings[index], name);
-        project.AddPlateOpening(result.plateName, name);
-        result.openingWireNames.push_back(name);
-    }
-    for (std::size_t index = 0; index < pattern.foldLines.size(); ++index) {
-        const std::string name = namePrefix + "_fold_" + std::to_string(index + 1);
-        project.AddWire(name, Wire::Polyline(toWorld(pattern.foldLines[index], 0.0)), makeMetadata(true));
-        result.foldWireNames.push_back(name);
-    }
-    for (std::size_t index = 0; index < pattern.reliefCuts.size(); ++index) {
-        const std::string name = namePrefix + "_relief_" + std::to_string(index + 1);
-        addProjectedPath(pattern.reliefCuts[index], name);
-        project.AddPlateReliefCut(result.plateName, name);
-        result.reliefCutWireNames.push_back(name);
+        for (const PlateFlatPatternPath& opening : piece.openings) {
+            const std::string name = namePrefix + "_opening_" + std::to_string(++openingIndex);
+            addProjectedPath(opening, name, surfaceName);
+            project.AddPlateOpening(plateName, name);
+            result.openingWireNames.push_back(name);
+        }
+        for (const PlateFlatPatternPath& fold : piece.foldLines) {
+            const std::string name = namePrefix + "_fold_" + std::to_string(++foldIndex);
+            project.AddWire(name, Wire::Polyline(toWorld(fold, 0.0)), makeMetadata(true));
+            result.foldWireNames.push_back(name);
+        }
+        for (const PlateFlatPatternPath& relief : piece.reliefCuts) {
+            const std::string name = namePrefix + "_relief_" + std::to_string(++reliefIndex);
+            addProjectedPath(relief, name, surfaceName);
+            project.AddPlateReliefCut(plateName, name);
+            result.reliefCutWireNames.push_back(name);
 
-        const PlateFlatPatternPath slot = slotContour(pattern.reliefCuts[index]);
-        const std::string slotName = namePrefix + "_relief_slot_" + std::to_string(index + 1);
-        addProjectedPath(slot, slotName);
-        project.AddPlateOpening(result.plateName, slotName);
-        result.openingWireNames.push_back(slotName);
+            const PlateFlatPatternPath slot = slotContour(relief);
+            const std::string slotName = namePrefix + "_relief_slot_" + std::to_string(reliefIndex);
+            addProjectedPath(slot, slotName, surfaceName);
+            project.AddPlateOpening(plateName, slotName);
+            result.openingWireNames.push_back(slotName);
+        }
     }
     return result;
 }

@@ -43,6 +43,7 @@ $Shots = @(
     @{ Name = "curve-extend"; Project = $FirstCheck; State = "extend" },
     @{ Name = "machining"; Project = $FirstCheck; State = "machining" },
     @{ Name = "surface-sections"; Project = $Acceptance; State = "surface" },
+    @{ Name = "composite-planar-surface"; Project = $FirstCheck; State = "composite-surface" },
     @{ Name = "surface-projection"; Project = $Acceptance; State = "projection" },
     @{ Name = "protruding-light-case"; Project = $LightCase; State = "lightcase" },
     @{ Name = "plate-create"; Project = $Acceptance; State = "plate-create" },

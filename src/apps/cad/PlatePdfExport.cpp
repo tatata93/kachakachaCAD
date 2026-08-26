@@ -56,7 +56,13 @@ PatternBounds MeasurePattern(const PlateFlatPattern& pattern)
         throw std::invalid_argument("Plate PDF requires a usable outer boundary.");
     }
     PatternBounds bounds;
-    IncludePath(bounds, pattern.outerBoundary);
+    if (pattern.pieces.empty()) {
+        IncludePath(bounds, pattern.outerBoundary);
+    } else {
+        for (const auto& piece : pattern.pieces) {
+            IncludePath(bounds, piece.outerBoundary);
+        }
+    }
     for (const auto& opening : pattern.openings) {
         IncludePath(bounds, opening);
     }
@@ -342,7 +348,15 @@ void WritePlateFlatPatternPdf(
     }
     const PlatePdfLayout layout = CalculatePlatePdfLayout(pattern, options);
     const PatternBounds bounds = MeasurePattern(pattern);
-    const QPainterPath outerPath = ToPainterPath(pattern.outerBoundary, bounds);
+    std::vector<QPainterPath> outerPaths;
+    outerPaths.reserve(std::max<std::size_t>(1, pattern.pieces.size()));
+    if (pattern.pieces.empty()) {
+        outerPaths.push_back(ToPainterPath(pattern.outerBoundary, bounds));
+    } else {
+        for (const auto& piece : pattern.pieces) {
+            outerPaths.push_back(ToPainterPath(piece.outerBoundary, bounds));
+        }
+    }
     std::vector<QPainterPath> openingPaths;
     openingPaths.reserve(pattern.openings.size());
     for (const auto& opening : pattern.openings) {
@@ -416,7 +430,9 @@ void WritePlateFlatPatternPdf(
                 painter.scale(pixelsPerMillimeter, pixelsPerMillimeter);
                 painter.setBrush(Qt::NoBrush);
                 painter.setPen(QPen(Qt::black, 0.15, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-                painter.drawPath(outerPath);
+                for (const QPainterPath& outerPath : outerPaths) {
+                    painter.drawPath(outerPath);
+                }
                 for (const QPainterPath& opening : openingPaths) {
                     painter.drawPath(opening);
                 }

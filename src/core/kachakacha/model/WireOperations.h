@@ -76,6 +76,13 @@ struct DirectWireExtendResult {
     const std::vector<Wire>& wires,
     double tolerance = 1.0e-8);
 
+// Orders endpoint-connected wires and flattens native curves only for the
+// resulting composite boundary. Source wires remain independently editable.
+[[nodiscard]] Wire JoinWireChain(
+    const std::vector<Wire>& wires,
+    double connectionTolerance = 1.0e-6,
+    double curveChordTolerance = 0.01);
+
 [[nodiscard]] Wire OffsetPlanarWire(
     const Wire& wire,
     const WorkPlane& plane,

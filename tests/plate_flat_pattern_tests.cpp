@@ -155,6 +155,21 @@ int main(int argc, char* argv[])
         Require(cylinder.openings.size() == 1 && cylinder.openings.front().points.size() > 40,
             "projected cylinder opening is carried into pattern");
 
+        cylinderProject.AddWire("manual_split_plan", Wire::Line(
+            {0.0, 4.0, 12.0}, {20.0, 4.0, 12.0}));
+        cylinderProject.AddProjectedWire(
+            "manual_split_on_shell", "manual_split_plan", "shell", {0.0, 0.0, -1.0});
+        cylinderProject.RemovePlateOpening("shell_plate", "light_on_shell");
+        cylinderProject.AddPlateSplitLine("shell_plate", "manual_split_on_shell");
+        PlateFlatPatternOptions manualCylinderOptions;
+        manualCylinderOptions.papercraftFidelity = 10;
+        const PlateFlatPattern manuallySplitCylinder = BuildPlateFlatPattern(
+            cylinderProject, cylinderProject.Plates().front(), manualCylinderOptions);
+        Require(manuallySplitCylinder.analysis.pieceCount == 2,
+            "one full manual split line creates two pieces on a closed developable surface");
+        cylinderProject.RemovePlateSplitLine("shell_plate", "manual_split_on_shell");
+        cylinderProject.AddPlateOpening("shell_plate", "light_on_shell");
+
         cylinderProject.SplitPlate("shell_plate", PlateSplitAxis::U, 0.125, "shell_eighth", "shell_rest");
         const PlateFlatPattern eighth = BuildPlateFlatPattern(cylinderProject, cylinderProject.Plates().front());
         const auto [eighthWidth, eighthHeight] = Extents(eighth);
@@ -168,7 +183,15 @@ int main(int argc, char* argv[])
         twisted.AddWire("first", Wire::Line({0.0, -5.0, 0.0}, {0.0, 5.0, 0.0}));
         twisted.AddWire("second", Wire::Line({10.0, -5.0, -4.0}, {10.0, 5.0, 4.0}));
         twisted.AddRuledSurface("twisted", "first", "second");
+        twisted.AddWire("manual_split_plan", Wire::Line(
+            {0.0, -4.0, 20.0}, {10.0, 4.0, 20.0}));
+        twisted.AddProjectedWire(
+            "manual_split_on_twisted",
+            "manual_split_plan",
+            "twisted",
+            {0.0, 0.0, -1.0});
         twisted.AddPlate("twisted_plate", "twisted", 0.5, PlateThicknessDirection::Centered, "styrene");
+        twisted.AddPlateSplitLine("twisted_plate", "manual_split_on_twisted");
         PlateFlatPatternOptions twistedOptions;
         twistedOptions.includeAutomaticReliefCuts = true;
         twistedOptions.foldSpacingMillimeters = 2.0;
@@ -180,18 +203,57 @@ int main(int argc, char* argv[])
         Require(std::isfinite(twistedPattern.analysis.MaximumEstimatedErrorMillimeters()),
             "double-curved development reports a finite error");
         Require(!twistedPattern.foldLines.empty(), "curved development creates fold wires");
-        Require(!twistedPattern.reliefCuts.empty(), "double-curved development creates automatic relief cuts");
+        Require(twistedPattern.analysis.pieceCount > 1,
+            "double-curved development creates separate papercraft pieces");
+        Require(twisted.Plates().front().splitWireNames
+                == std::vector<std::string>{"manual_split_on_twisted"},
+            "projected wire remains an editable manual split relation");
+        Require(twistedPattern.pieces.size()
+                == static_cast<std::size_t>(twistedPattern.analysis.pieceCount),
+            "papercraft piece count matches exported outer boundaries");
+        Require(std::all_of(
+            twistedPattern.pieces.begin(),
+            twistedPattern.pieces.end(),
+            [](const auto& piece) {
+                return piece.outerBoundary.points.size() >= 4
+                    && std::hypot(
+                        piece.outerBoundary.points.front().x - piece.outerBoundary.points.back().x,
+                        piece.outerBoundary.points.front().y - piece.outerBoundary.points.back().y) < 1.0e-9;
+            }),
+            "every papercraft piece has a closed cutting boundary");
         const auto twistedAssemblyGuide = BuildPlateAssemblyGuide(
             twisted, twisted.Plates().front(), twistedOptions);
-        Require(twistedAssemblyGuide.foldLines.size() == twistedPattern.foldLines.size(),
-            "assembled preview uses the same fold guides as development");
-        Require(twistedAssemblyGuide.reliefCuts.size() == twistedPattern.reliefCuts.size(),
-            "assembled preview uses the same automatic relief cuts as development");
+        Require(!twistedAssemblyGuide.splitLines.empty(),
+            "assembled preview shows full papercraft split lines");
         Require(std::all_of(
             twistedAssemblyGuide.foldLines.begin(),
             twistedAssemblyGuide.foldLines.end(),
             [](const auto& path) { return path.points.size() >= 3; }),
             "assembled fold guides contain usable 3D paths");
+
+        PlateFlatPatternOptions coarseOptions = twistedOptions;
+        coarseOptions.papercraftFidelity = 1;
+        PlateFlatPatternOptions fineOptions = twistedOptions;
+        fineOptions.papercraftFidelity = 10;
+        const PlateFlatPattern coarsePattern = BuildPlateFlatPattern(
+            twisted, twisted.Plates().front(), coarseOptions);
+        const PlateFlatPattern finePattern = BuildPlateFlatPattern(
+            twisted, twisted.Plates().front(), fineOptions);
+        Require(finePattern.pieces.size() > coarsePattern.pieces.size(),
+            "higher papercraft fidelity creates more, narrower pieces");
+        Require(finePattern.analysis.MaximumEstimatedErrorMillimeters()
+                < coarsePattern.analysis.MaximumEstimatedErrorMillimeters(),
+            "higher papercraft fidelity lowers the faceting estimate");
+
+        Project twistedDeveloped = twisted;
+        const auto twistedFlatModel = AddPlateFlatPatternModel(
+            twistedDeveloped,
+            twisted.Plates().front(),
+            twistedPattern,
+            WorkPlane::FromPointNormal({0.0, 0.0, 30.0}, {0.0, 0.0, 1.0}),
+            "twisted_developed");
+        Require(twistedFlatModel.plateNames.size() == twistedPattern.pieces.size(),
+            "each papercraft piece creates an independent editable 3D plate");
 
         if (argc >= 2) {
             std::ifstream sampleInput(argv[1]);

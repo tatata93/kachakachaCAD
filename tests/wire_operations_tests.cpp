@@ -1,6 +1,7 @@
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/model/WireOperations.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -16,6 +17,7 @@ using kachakacha::model::ExtendWireToBoundary;
 using kachakacha::model::MeetLinesAtIntersection;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::JoinLineChain;
+using kachakacha::model::JoinWireChain;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::TrimWireAtBoundaries;
 using kachakacha::model::Wire;
@@ -294,6 +296,25 @@ void RejectsDisconnectedJoin()
     Require(rejected, "disconnected join rejected");
 }
 
+void JoinsMixedCurvesIntoAClosedContour()
+{
+    const std::vector<Wire> wires = {
+        Wire::Line({0.0, 8.0, 0.0}, {0.0, 0.0, 0.0}),
+        Wire::CircularArcThroughThreePoints(
+            {10.0, 8.0, 0.0}, {12.0, 4.0, 0.0}, {10.0, 0.0, 0.0}),
+        Wire::Line({10.0, 8.0, 0.0}, {0.0, 8.0, 0.0}),
+        Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}),
+    };
+    const Wire joined = JoinWireChain(wires);
+
+    Require(joined.IsClosed(1.0e-9), "mixed curve contour closes exactly");
+    Require(joined.ControlPoints().size() > 8, "arc is adaptively sampled");
+    Require(std::any_of(
+                joined.ControlPoints().begin(), joined.ControlPoints().end(),
+                [](Vector3 point) { return point.x > 10.5; }),
+        "joined contour keeps the arc bulge");
+}
+
 void OffsetsPlanarDrawingWires()
 {
     const WorkPlane plane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0});
@@ -450,6 +471,7 @@ int main()
         TrimsAndExtendsNativeCurvesWithoutFlattening();
         JoinsUnorderedLineChain();
         RejectsDisconnectedJoin();
+        JoinsMixedCurvesIntoAClosedContour();
         OffsetsPlanarDrawingWires();
         OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs();
         AppliesPersistentLineConstraints();

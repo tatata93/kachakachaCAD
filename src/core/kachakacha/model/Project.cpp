@@ -435,6 +435,11 @@ void RequireConstructionWireHasNoModelDependencies(const Project& project, std::
             throw std::invalid_argument("A plate relief-cut wire cannot be changed to construction: "
                 + std::string(wireName));
         }
+        if (std::find(plate.splitWireNames.begin(), plate.splitWireNames.end(), wireName)
+            != plate.splitWireNames.end()) {
+            throw std::invalid_argument("A plate split-line wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
     }
 }
 
@@ -561,20 +566,48 @@ void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
 
 void Project::AddPlanarSurface(std::string name, std::string boundaryWireName)
 {
+    AddPlanarSurface(
+        std::move(name), std::vector<std::string>{std::move(boundaryWireName)});
+}
+
+void Project::AddPlanarSurface(
+    std::string name,
+    std::vector<std::string> boundaryWireNames)
+{
     if (name.empty()) {
         throw std::invalid_argument("Surface name must not be empty.");
     }
     if (FindSurface(name).has_value()) {
         throw std::invalid_argument("Surface name already exists: " + name);
     }
-    const NamedWire& boundary = RequireWire(boundaryWireName);
-    if (boundary.projection.has_value()) {
-        throw std::invalid_argument("Projected wire cannot be used as a planar surface source.");
+    if (boundaryWireNames.empty()) {
+        throw std::invalid_argument("Planar surface requires at least one boundary wire.");
     }
-    if (boundary.metadata.construction) {
-        throw std::invalid_argument("Construction wire cannot be used as a planar surface source.");
+    std::vector<Wire> boundaries;
+    boundaries.reserve(boundaryWireNames.size());
+    for (std::size_t index = 0; index < boundaryWireNames.size(); ++index) {
+        if (std::find(
+                boundaryWireNames.begin(), boundaryWireNames.begin() + index,
+                boundaryWireNames[index]) != boundaryWireNames.begin() + index) {
+            throw std::invalid_argument("Planar surface boundary contains the same wire more than once.");
+        }
+        const NamedWire& boundary = RequireWire(boundaryWireNames[index]);
+        if (boundary.projection.has_value()) {
+            throw std::invalid_argument("Projected wire cannot be used as a planar surface source.");
+        }
+        if (boundary.metadata.construction) {
+            throw std::invalid_argument("Construction wire cannot be used as a planar surface source.");
+        }
+        boundaries.push_back(boundary.wire);
     }
-    surfaces_.push_back({std::move(name), Surface::Planar(boundary.wire), {std::move(boundaryWireName)}});
+    Wire composite = boundaries.size() == 1
+        ? std::move(boundaries.front())
+        : JoinWireChain(boundaries);
+    surfaces_.push_back({
+        std::move(name),
+        Surface::Planar(std::move(composite)),
+        std::move(boundaryWireNames),
+    });
 }
 
 void Project::AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName)
@@ -885,6 +918,16 @@ void Project::UpdatePlate(
                 }
                 if (!OpeningLiesWithinRange(*sourceSurface, cut, plate.plate.Range())) {
                     throw std::invalid_argument("Updated plate surface does not contain relief cut: " + cutName);
+                }
+            }
+            for (const std::string& splitName : plate.splitWireNames) {
+                const NamedWire& split = candidate.RequireWire(splitName);
+                if (!split.projection.has_value()
+                    || split.projection->targetSurfaceName != sourceSurfaceName) {
+                    throw std::invalid_argument("Remove plate split lines before changing the source surface.");
+                }
+                if (!OpeningLiesWithinRange(*sourceSurface, split, plate.plate.Range())) {
+                    throw std::invalid_argument("Updated plate surface does not contain split line: " + splitName);
                 }
             }
             plate.plate = Plate(
@@ -1303,6 +1346,11 @@ void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
                 throw std::invalid_argument("Plate range does not contain relief cut: " + cutName);
             }
         }
+        for (const std::string& splitName : plate.splitWireNames) {
+            if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), candidate.RequireWire(splitName), range)) {
+                throw std::invalid_argument("Plate range does not contain split line: " + splitName);
+            }
+        }
         plate.plate = Plate(
             plate.plate.SourceSurface(),
             plate.plate.Thickness(),
@@ -1337,6 +1385,9 @@ void Project::SplitPlate(
     }
     if (position->plate.SourceSurface().Kind() == SurfaceKind::Planar) {
         throw std::invalid_argument("Planar plates can already be cut directly and do not need surface splitting.");
+    }
+    if (!position->splitWireNames.empty()) {
+        throw std::invalid_argument("Remove papercraft split lines before replacing this plate with two plate objects.");
     }
     for (const NamedWire& wire : wires_) {
         if (wire.plateOffset.has_value() && wire.plateOffset->plateName == name) {
@@ -1467,6 +1518,10 @@ void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
         != plate->reliefCutWireNames.end()) {
         throw std::invalid_argument("Plate relief cut cannot also be an opening: " + wireName);
     }
+    if (std::find(plate->splitWireNames.begin(), plate->splitWireNames.end(), wireName)
+        != plate->splitWireNames.end()) {
+        throw std::invalid_argument("Plate split line cannot also be an opening: " + wireName);
+    }
     plate->openingWireNames.push_back(std::move(wireName));
 }
 
@@ -1516,6 +1571,10 @@ void Project::AddPlateReliefCut(std::string_view plateName, std::string wireName
         != plate->openingWireNames.end()) {
         throw std::invalid_argument("Plate opening cannot also be a relief cut: " + wireName);
     }
+    if (std::find(plate->splitWireNames.begin(), plate->splitWireNames.end(), wireName)
+        != plate->splitWireNames.end()) {
+        throw std::invalid_argument("Plate split line cannot also be a relief cut: " + wireName);
+    }
     plate->reliefCutWireNames.push_back(std::move(wireName));
 }
 
@@ -1531,6 +1590,57 @@ void Project::RemovePlateReliefCut(std::string_view plateName, std::string_view 
             throw std::invalid_argument("Wire is not a relief cut of this plate: " + std::string(wireName));
         }
         plate.reliefCutWireNames.erase(position);
+        return;
+    }
+    throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
+}
+
+void Project::AddPlateSplitLine(std::string_view plateName, std::string wireName)
+{
+    NamedPlate* plate = nullptr;
+    for (NamedPlate& candidate : plates_) {
+        if (candidate.name == plateName) {
+            plate = &candidate;
+            break;
+        }
+    }
+    if (plate == nullptr) {
+        throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
+    }
+    const NamedWire& wire = RequireWire(wireName);
+    if (wire.metadata.construction) {
+        throw std::invalid_argument("Construction wire cannot be used as a plate split line: " + wireName);
+    }
+    if (!wire.projection.has_value() || wire.projection->targetSurfaceName != plate->sourceSurfaceName) {
+        throw std::invalid_argument("Plate split line must be a wire projected to the plate source surface: " + wireName);
+    }
+    if (!OpeningLiesWithinRange(plate->plate.SourceSurface(), wire, plate->plate.Range())) {
+        throw std::invalid_argument("Plate split line lies outside this plate piece: " + wireName);
+    }
+    if (std::find(plate->splitWireNames.begin(), plate->splitWireNames.end(), wireName)
+        != plate->splitWireNames.end()) {
+        throw std::invalid_argument("Wire is already a plate split line: " + wireName);
+    }
+    if (std::find(plate->openingWireNames.begin(), plate->openingWireNames.end(), wireName)
+        != plate->openingWireNames.end()
+        || std::find(plate->reliefCutWireNames.begin(), plate->reliefCutWireNames.end(), wireName)
+            != plate->reliefCutWireNames.end()) {
+        throw std::invalid_argument("An opening or relief cut cannot also be a plate split line: " + wireName);
+    }
+    plate->splitWireNames.push_back(std::move(wireName));
+}
+
+void Project::RemovePlateSplitLine(std::string_view plateName, std::string_view wireName)
+{
+    for (NamedPlate& plate : plates_) {
+        if (plate.name != plateName) {
+            continue;
+        }
+        const auto position = std::find(plate.splitWireNames.begin(), plate.splitWireNames.end(), wireName);
+        if (position == plate.splitWireNames.end()) {
+            throw std::invalid_argument("Wire is not a split line of this plate: " + std::string(wireName));
+        }
+        plate.splitWireNames.erase(position);
         return;
     }
     throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
@@ -1616,6 +1726,10 @@ bool Project::RemoveWire(std::string_view name)
         if (std::find(plate.reliefCutWireNames.begin(), plate.reliefCutWireNames.end(), name)
             != plate.reliefCutWireNames.end()) {
             throw std::invalid_argument("Wire is used as a plate relief cut: " + plate.name);
+        }
+        if (std::find(plate.splitWireNames.begin(), plate.splitWireNames.end(), name)
+            != plate.splitWireNames.end()) {
+            throw std::invalid_argument("Wire is used as a plate split line: " + plate.name);
         }
     }
     for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
@@ -1953,7 +2067,15 @@ void Project::RebuildDependentGeometry()
             }
 
             if (surface.surface.Kind() == SurfaceKind::Planar) {
-                surface.surface = Surface::Planar(RequireWire(surface.sourceWireNames.at(0)).wire);
+                std::vector<Wire> boundaries;
+                boundaries.reserve(surface.sourceWireNames.size());
+                for (const std::string& sourceName : surface.sourceWireNames) {
+                    boundaries.push_back(RequireWire(sourceName).wire);
+                }
+                Wire composite = boundaries.size() == 1
+                    ? std::move(boundaries.front())
+                    : JoinWireChain(boundaries);
+                surface.surface = Surface::Planar(std::move(composite));
             } else if (surface.surface.Kind() == SurfaceKind::Ruled) {
                 surface.surface = Surface::Ruled(
                     RequireWire(surface.sourceWireNames.at(0)).wire,
@@ -2011,6 +2133,11 @@ void Project::RebuildDependentGeometry()
         for (const std::string& cutName : plate.reliefCutWireNames) {
             if (!OpeningLiesWithinRange(*sourceSurface, RequireWire(cutName), plate.plate.Range())) {
                 throw std::invalid_argument("Plate relief cut moved outside split piece: " + cutName);
+            }
+        }
+        for (const std::string& splitName : plate.splitWireNames) {
+            if (!OpeningLiesWithinRange(*sourceSurface, RequireWire(splitName), plate.plate.Range())) {
+                throw std::invalid_argument("Plate split line moved outside split piece: " + splitName);
             }
         }
     }

@@ -126,6 +126,8 @@ private:
     void RemoveSelectedPlateOpenings();
     void AddSelectedPlateReliefCuts();
     void RemoveSelectedPlateReliefCuts();
+    void AddSelectedPlateSplitLines();
+    void RemoveSelectedPlateSplitLines();
     void SplitSelectedPlate();
     void UpdatePlateSplitPreview();
     void ExportSelectedBody(bool step);
@@ -377,6 +379,7 @@ private:
     QLabel* jigAnalysisLabel_ = nullptr;
     QLabel* plateOpeningSelectionLabel_ = nullptr;
     QLabel* plateReliefSelectionLabel_ = nullptr;
+    QLabel* plateSplitLineSelectionLabel_ = nullptr;
     QLabel* plateOffsetSelectionLabel_ = nullptr;
     QComboBox* plateOffsetLayer_ = nullptr;
     QLabel* plateSplitSelectionLabel_ = nullptr;
@@ -391,9 +394,10 @@ private:
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
+    QSlider* plateFlatPatternFidelity_ = nullptr;
+    QLabel* plateFlatPatternFidelityLabel_ = nullptr;
     QCheckBox* plateAssemblyGuidePreview_ = nullptr;
     QDoubleSpinBox* plateFlatPatternFoldSpacing_ = nullptr;
-    QDoubleSpinBox* plateFlatPatternReliefDepth_ = nullptr;
     QDoubleSpinBox* plateFlatPatternCutWidth_ = nullptr;
     QComboBox* platePdfPaper_ = nullptr;
     QDoubleSpinBox* platePdfOverlap_ = nullptr;

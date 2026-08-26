@@ -140,6 +140,7 @@ struct NamedPlate {
     std::vector<std::string> openingWireNames;
     bool visible = true;
     std::vector<std::string> reliefCutWireNames;
+    std::vector<std::string> splitWireNames;
 };
 
 struct NamedBody {
@@ -158,6 +159,7 @@ public:
         std::optional<std::string> sourcePlaneName = std::nullopt);
     void AddWire(std::string name, Wire wire, WireMetadata metadata = {});
     void AddPlanarSurface(std::string name, std::string boundaryWireName);
+    void AddPlanarSurface(std::string name, std::vector<std::string> boundaryWireNames);
     void AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName);
     void AddLoftSurface(std::string name, std::vector<std::string> sectionNames);
     void AddPlate(
@@ -245,6 +247,8 @@ public:
     void RemovePlateOpening(std::string_view plateName, std::string_view wireName);
     void AddPlateReliefCut(std::string_view plateName, std::string wireName);
     void RemovePlateReliefCut(std::string_view plateName, std::string_view wireName);
+    void AddPlateSplitLine(std::string_view plateName, std::string wireName);
+    void RemovePlateSplitLine(std::string_view plateName, std::string_view wireName);
     bool RemoveWorkPlane(std::string_view name);
     bool RemovePoint(std::string_view name);
     bool RemoveWire(std::string_view name);

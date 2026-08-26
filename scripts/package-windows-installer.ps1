@@ -116,7 +116,8 @@ $Sed | Set-Content -LiteralPath $SedPath -Encoding ASCII
 if (Test-Path -LiteralPath $OutputExe) {
     Remove-Item -LiteralPath $OutputExe -Force
 }
-$Process = Start-Process -FilePath $IExpress -ArgumentList @("/N", $SedPath) -Wait -PassThru
+$Process = Start-Process -FilePath $IExpress -ArgumentList @("/N", $SedPath) `
+    -Wait -PassThru -WindowStyle Hidden
 if ($Process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $OutputExe)) {
     throw "IExpress failed to create the installer"
 }

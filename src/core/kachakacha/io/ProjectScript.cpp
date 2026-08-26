@@ -708,9 +708,15 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     WireMetadata{planeName, policy});
             } else if (command == "surface_planar") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
-                const std::string boundary = ReadName(stream, sourceName, lineNumber, "boundary wire");
-                EnsureLineEnded(stream, sourceName, lineNumber);
-                project.AddPlanarSurface(name, boundary);
+                std::vector<std::string> boundaries;
+                std::string boundaryName;
+                while (stream >> boundaryName) {
+                    boundaries.push_back(boundaryName);
+                }
+                if (boundaries.empty()) {
+                    ThrowLineError(sourceName, lineNumber, "surface_planar requires a boundary wire");
+                }
+                project.AddPlanarSurface(name, std::move(boundaries));
             } else if (command == "surface_ruled") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
                 const std::string firstSection = ReadName(stream, sourceName, lineNumber, "first section wire");
@@ -771,6 +777,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string wireName = ReadName(stream, sourceName, lineNumber, "relief-cut wire");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPlateReliefCut(plateName, wireName);
+            } else if (command == "plate_split_line") {
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string wireName = ReadName(stream, sourceName, lineNumber, "split-line wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPlateSplitLine(plateName, wireName);
             } else if (command == "wire_plate_offset") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "offset wire");
                 const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source wire");
@@ -999,7 +1010,11 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             RequireScriptNameSafe(sourceWireName, "Surface source wire");
         }
         if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
-            output << "surface_planar " << namedSurface.name << ' ' << namedSurface.sourceWireNames.at(0) << '\n';
+            output << "surface_planar " << namedSurface.name;
+            for (const std::string& boundaryName : namedSurface.sourceWireNames) {
+                output << ' ' << boundaryName;
+            }
+            output << '\n';
         } else if (namedSurface.surface.Kind() == model::SurfaceKind::Ruled) {
             output << "surface_ruled " << namedSurface.name << ' '
                    << namedSurface.sourceWireNames.at(0) << ' ' << namedSurface.sourceWireNames.at(1) << '\n';
@@ -1156,6 +1171,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         for (const std::string& cutWireName : namedPlate.reliefCutWireNames) {
             RequireScriptNameSafe(cutWireName, "Plate relief-cut wire");
             output << "plate_relief_cut " << namedPlate.name << ' ' << cutWireName << '\n';
+        }
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        for (const std::string& splitWireName : namedPlate.splitWireNames) {
+            RequireScriptNameSafe(splitWireName, "Plate split-line wire");
+            output << "plate_split_line " << namedPlate.name << ' ' << splitWireName << '\n';
         }
     }
     for (const auto& namedWire : project.Wires()) {

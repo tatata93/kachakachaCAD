@@ -21,6 +21,7 @@ struct PlateFlatPatternOptions {
     double foldSpacingMillimeters = 8.0;
     double minimumFoldAngleDegrees = 2.0;
     double reliefCutDepthRatio = 0.45;
+    int papercraftFidelity = 5;
 };
 
 struct PlateFlatPatternAnalysis {
@@ -28,6 +29,7 @@ struct PlateFlatPatternAnalysis {
     double maximumEdgeDistortionMillimeters = 0.0;
     double rootMeanSquareEdgeDistortionMillimeters = 0.0;
     double maximumBoundaryApproximationMillimeters = 0.0;
+    int pieceCount = 1;
 
     [[nodiscard]] double MaximumEstimatedErrorMillimeters() const noexcept;
 };
@@ -37,12 +39,21 @@ struct PlateFlatPatternPath {
     std::vector<geometry::Vector2> points;
 };
 
+struct PlateFlatPatternPiece {
+    std::string name;
+    PlateFlatPatternPath outerBoundary;
+    std::vector<PlateFlatPatternPath> openings;
+    std::vector<PlateFlatPatternPath> foldLines;
+    std::vector<PlateFlatPatternPath> reliefCuts;
+};
+
 struct PlateFlatPattern {
     std::string plateName;
     PlateFlatPatternPath outerBoundary;
     std::vector<PlateFlatPatternPath> openings;
     std::vector<PlateFlatPatternPath> foldLines;
     std::vector<PlateFlatPatternPath> reliefCuts;
+    std::vector<PlateFlatPatternPiece> pieces;
     PlateFlatPatternAnalysis analysis;
 };
 
@@ -55,6 +66,7 @@ struct PlateAssemblyGuide {
     std::string plateName;
     std::vector<PlateAssemblyGuidePath> foldLines;
     std::vector<PlateAssemblyGuidePath> reliefCuts;
+    std::vector<PlateAssemblyGuidePath> splitLines;
 };
 
 struct PlateFlatPatternModelResult {
@@ -65,6 +77,9 @@ struct PlateFlatPatternModelResult {
     std::vector<std::string> openingWireNames;
     std::vector<std::string> foldWireNames;
     std::vector<std::string> reliefCutWireNames;
+    std::vector<std::string> outerWireNames;
+    std::vector<std::string> surfaceNames;
+    std::vector<std::string> plateNames;
 };
 
 [[nodiscard]] PlateFlatPattern BuildPlateFlatPattern(

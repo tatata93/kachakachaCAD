@@ -272,12 +272,60 @@ Wire MeetLineAtIntersection(
     return Wire::Line(intersection, retainedPoint);
 }
 
-std::vector<Vector3> ChainPoints(const Wire& wire)
+double ChordDeviation(Vector3 point, Vector3 start, Vector3 end)
+{
+    const Vector3 chord = end - start;
+    if (chord.LengthSquared() <= 1.0e-24) {
+        return (point - start).Length();
+    }
+    const double parameter = std::clamp(
+        geometry::Dot(point - start, chord) / chord.LengthSquared(), 0.0, 1.0);
+    return (point - (start + chord * parameter)).Length();
+}
+
+void AppendAdaptiveCurvePoints(
+    const Wire& wire,
+    double startParameter,
+    Vector3 start,
+    double endParameter,
+    Vector3 end,
+    double chordTolerance,
+    int depth,
+    std::vector<Vector3>& points)
+{
+    const double span = endParameter - startParameter;
+    const double quarterParameter = startParameter + span * 0.25;
+    const double middleParameter = startParameter + span * 0.5;
+    const double threeQuarterParameter = startParameter + span * 0.75;
+    const Vector3 quarter = wire.Evaluate(quarterParameter);
+    const Vector3 middle = wire.Evaluate(middleParameter);
+    const Vector3 threeQuarter = wire.Evaluate(threeQuarterParameter);
+    const double deviation = std::max({
+        ChordDeviation(quarter, start, end),
+        ChordDeviation(middle, start, end),
+        ChordDeviation(threeQuarter, start, end),
+    });
+    if (deviation > chordTolerance && depth < 18) {
+        AppendAdaptiveCurvePoints(
+            wire, startParameter, start, middleParameter, middle,
+            chordTolerance, depth + 1, points);
+        AppendAdaptiveCurvePoints(
+            wire, middleParameter, middle, endParameter, end,
+            chordTolerance, depth + 1, points);
+        return;
+    }
+    points.push_back(end);
+}
+
+std::vector<Vector3> ChainPoints(const Wire& wire, double chordTolerance)
 {
     if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
         return wire.ControlPoints();
     }
-    throw std::invalid_argument("Join currently supports line and polyline wires.");
+    std::vector<Vector3> points{wire.Start()};
+    AppendAdaptiveCurvePoints(
+        wire, 0.0, points.front(), 1.0, wire.End(), chordTolerance, 0, points);
+    return points;
 }
 
 struct ParameterPoint {
@@ -893,20 +941,31 @@ DirectWireExtendResult ExtendWireToBoundary(
 
 Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
 {
+    return JoinWireChain(wires, tolerance, 0.01);
+}
+
+Wire JoinWireChain(
+    const std::vector<Wire>& wires,
+    double connectionTolerance,
+    double curveChordTolerance)
+{
     if (wires.size() < 2) {
         throw std::invalid_argument("Join requires at least two wires.");
     }
-    if (!std::isfinite(tolerance) || tolerance <= 0.0) {
+    if (!std::isfinite(connectionTolerance) || connectionTolerance <= 0.0) {
         throw std::invalid_argument("Join tolerance must be positive.");
+    }
+    if (!std::isfinite(curveChordTolerance) || curveChordTolerance <= 0.0) {
+        throw std::invalid_argument("Curve chord tolerance must be positive.");
     }
 
     std::vector<std::vector<Vector3>> sourcePoints;
     sourcePoints.reserve(wires.size());
     for (const Wire& wire : wires) {
-        if (wire.IsClosed(tolerance)) {
+        if (wire.IsClosed(connectionTolerance)) {
             throw std::invalid_argument("Join requires open wires.");
         }
-        sourcePoints.push_back(ChainPoints(wire));
+        sourcePoints.push_back(ChainPoints(wire, curveChordTolerance));
     }
 
     std::vector<bool> used(wires.size(), false);
@@ -922,7 +981,7 @@ Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
             for (int reverse = 0; reverse < 2; ++reverse) {
                 const auto& points = sourcePoints[index];
                 const Vector3 candidateStart = reverse == 0 ? points.front() : points.back();
-                if (!geometry::AlmostEqual(joined.back(), candidateStart, tolerance)) {
+                if (!geometry::AlmostEqual(joined.back(), candidateStart, connectionTolerance)) {
                     continue;
                 }
                 const std::size_t oldSize = joined.size();
@@ -951,6 +1010,10 @@ Wire JoinLineChain(const std::vector<Wire>& wires, double tolerance)
             }
             used[startIndex] = true;
             if (appendRemaining(1)) {
+                if (geometry::AlmostEqual(
+                        joined.front(), joined.back(), connectionTolerance)) {
+                    joined.back() = joined.front();
+                }
                 return Wire::Polyline(std::move(joined));
             }
         }

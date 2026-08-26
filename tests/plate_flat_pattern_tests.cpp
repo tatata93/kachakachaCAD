@@ -10,11 +10,15 @@
 #include <stdexcept>
 
 using kachakacha::geometry::Vector2;
+using kachakacha::geometry::Vector3;
 using kachakacha::io::BuildPlateFlatPattern;
 using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::BuildPlateAssemblyApproximation;
+using kachakacha::io::BuildPlateAssemblyMotion;
+using kachakacha::io::AddPlateAssemblyMotionModel;
 using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::PapercraftCutDirection;
 using kachakacha::io::PlateAssemblyStrategy;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::PlateFlatPattern;
@@ -263,6 +267,7 @@ int main(int argc, char* argv[])
         notchedTwisted.RemovePlateSplitLine("twisted_plate", "manual_split_on_twisted");
         PlateFlatPatternOptions notchOptions = twistedOptions;
         notchOptions.assemblyStrategy = PlateAssemblyStrategy::SingleSheet;
+        notchOptions.cutDirection = PapercraftCutDirection::Vertical;
         notchOptions.notchStyle = ReliefNotchStyle::CurvedV;
         notchOptions.papercraftFidelity = 9;
         notchOptions.reliefCutDepthRatio = 0.55;
@@ -270,8 +275,10 @@ int main(int argc, char* argv[])
         notchOptions.reliefNotchCurveStrength = 1.0;
         const PlateFlatPattern curvedNotchPattern = BuildPlateFlatPattern(
             notchedTwisted, notchedTwisted.Plates().front(), notchOptions);
-        Require(curvedNotchPattern.pieces.size() == 1,
-            "curved V notches keep a double-curved pattern in one connected sheet");
+        Require(curvedNotchPattern.pieces.size() > 1,
+            "an impossible double-curved single sheet falls back to buildable pieces");
+        Require(curvedNotchPattern.analysis.maximumEdgeDistortionMillimeters < 1.0e-7,
+            "fallback pieces preserve every faceted edge length");
         Require(curvedNotchPattern.analysis.automaticNotchCount > 0,
             "curved V notch development creates automatic edge notches");
         PlateFlatPatternOptions notchPreviewOptions = notchOptions;
@@ -321,10 +328,10 @@ int main(int argc, char* argv[])
 
         const auto notchedAssemblyGuide = BuildPlateAssemblyGuide(
             notchedTwisted, notchedTwisted.Plates().front(), notchOptions);
-        Require(notchedAssemblyGuide.splitLines.empty()
+        Require(!notchedAssemblyGuide.splitLines.empty()
                 && notchedAssemblyGuide.reliefCuts.size()
                     == static_cast<std::size_t>(curvedNotchPattern.analysis.automaticNotchCount),
-            "assembled preview distinguishes edge notches from full split lines");
+            "assembled preview distinguishes required split lines from edge notches");
 
         Project notchedDeveloped = notchedTwisted;
         const auto notchedFlatModel = AddPlateFlatPatternModel(
@@ -333,8 +340,8 @@ int main(int argc, char* argv[])
             curvedNotchPattern,
             WorkPlane::FromPointNormal({0.0, 0.0, 45.0}, {0.0, 0.0, 1.0}),
             "curved_notch_developed");
-        Require(notchedFlatModel.plateNames.size() == 1,
-            "curved V notch development creates one editable 3D plate");
+        Require(notchedFlatModel.plateNames.size() == curvedNotchPattern.pieces.size(),
+            "fallback development creates every editable 3D plate piece");
         Require(notchedFlatModel.reliefCutWireNames.size()
                 == static_cast<std::size_t>(curvedNotchPattern.analysis.automaticNotchCount),
             "curved V notch edges remain editable CAD wires");
@@ -350,6 +357,85 @@ int main(int argc, char* argv[])
             "twisted_developed");
         Require(twistedFlatModel.plateNames.size() == twistedPattern.pieces.size(),
             "each papercraft piece creates an independent editable 3D plate");
+
+        PlateFlatPatternOptions verticalOptions = notchOptions;
+        verticalOptions.assemblyStrategy = PlateAssemblyStrategy::SplitPieces;
+        verticalOptions.allowAutomaticNotches = false;
+        verticalOptions.cutDirection = PapercraftCutDirection::Vertical;
+        PlateFlatPatternOptions horizontalOptions = verticalOptions;
+        horizontalOptions.cutDirection = PapercraftCutDirection::Horizontal;
+        PlateFlatPatternOptions bothOptions = verticalOptions;
+        bothOptions.cutDirection = PapercraftCutDirection::Both;
+        const auto verticalPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), verticalOptions);
+        const auto horizontalPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), horizontalOptions);
+        const auto bothPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), bothOptions);
+        Require(verticalPattern.pieces.size() > 1 && horizontalPattern.pieces.size() > 1,
+            "vertical-only and horizontal-only cut layouts both create real pieces");
+        Require(bothPattern.pieces.size() > verticalPattern.pieces.size()
+                && bothPattern.pieces.size() > horizontalPattern.pieces.size(),
+            "combined vertical-horizontal cuts create the highest fidelity tile layout");
+        Require(verticalPattern.analysis.maximumEdgeDistortionMillimeters < 1.0e-7
+                && horizontalPattern.analysis.maximumEdgeDistortionMillimeters < 1.0e-7
+                && bothPattern.analysis.maximumEdgeDistortionMillimeters < 1.0e-7,
+            "all three cut directions unfold without stretching triangle edges");
+
+        const auto flatMotion = BuildPlateAssemblyMotion(
+            notchedTwisted, notchedTwisted.Plates().front(), 0.0, verticalOptions);
+        const auto halfMotion = BuildPlateAssemblyMotion(
+            notchedTwisted, notchedTwisted.Plates().front(), 0.5, verticalOptions);
+        const auto assembledMotion = BuildPlateAssemblyMotion(
+            notchedTwisted, notchedTwisted.Plates().front(), 1.0, verticalOptions);
+        Require(flatMotion.panels.size() == halfMotion.panels.size()
+                && halfMotion.panels.size() == assembledMotion.panels.size()
+                && flatMotion.panels.size()
+                    == flatMotion.panelThicknessMillimeters.size()
+                && flatMotion.panels.size()
+                    == flatMotion.panelDeviationMillimeters.size()
+                && flatMotion.pieceCount == verticalPattern.analysis.pieceCount,
+            "assembly slider keeps the same physical panels and piece count");
+        Require(flatMotion.maximumTargetMismatchMillimeters > 0.1
+                && assembledMotion.maximumTargetMismatchMillimeters < 1.0e-6,
+            "assembly slider starts flat and closes exactly onto the faceted source model");
+        const auto edgeLength = [](const std::array<Vector3, 3>& panel, int edge) {
+            return (panel[static_cast<std::size_t>((edge + 1) % 3)]
+                - panel[static_cast<std::size_t>(edge)]).Length();
+        };
+        for (std::size_t panel = 0; panel < flatMotion.panels.size(); ++panel) {
+            for (int edge = 0; edge < 3; ++edge) {
+                Require(std::abs(edgeLength(flatMotion.panels[panel], edge)
+                        - edgeLength(halfMotion.panels[panel], edge)) < 1.0e-7
+                        && std::abs(edgeLength(flatMotion.panels[panel], edge)
+                            - edgeLength(assembledMotion.panels[panel], edge)) < 1.0e-7,
+                    "folding animation preserves rigid panel edge lengths");
+            }
+        }
+
+        Project allMotionModel = notchedTwisted;
+        const auto allMotionResult = AddPlateAssemblyMotionModel(
+            allMotionModel,
+            notchedTwisted.Plates().front(),
+            halfMotion,
+            "half_fold_all");
+        Require(allMotionResult.plateNames.size() == halfMotion.panels.size(),
+            "arbitrary slider state creates one editable solid plate per rigid panel");
+        const int chosenPiece = halfMotion.pieceIndices.front();
+        Project selectedMotionModel = notchedTwisted;
+        const auto selectedMotionResult = AddPlateAssemblyMotionModel(
+            selectedMotionModel,
+            notchedTwisted.Plates().front(),
+            halfMotion,
+            "half_fold_selected",
+            chosenPiece);
+        Require(!selectedMotionResult.plateNames.empty()
+                && selectedMotionResult.plateNames.size() < allMotionResult.plateNames.size()
+                && std::all_of(
+                    selectedMotionResult.pieceIndices.begin(),
+                    selectedMotionResult.pieceIndices.end(),
+                    [&](int piece) { return piece == chosenPiece; }),
+            "a selected split piece creates and exports only its own rigid panels");
 
         if (argc >= 2) {
             std::ifstream sampleInput(argv[1]);
@@ -378,6 +464,7 @@ int main(int argc, char* argv[])
             PlateFlatPatternOptions noseOptions;
             noseOptions.includeAutomaticReliefCuts = true;
             noseOptions.assemblyStrategy = PlateAssemblyStrategy::SingleSheet;
+            noseOptions.cutDirection = PapercraftCutDirection::Vertical;
             noseOptions.allowAutomaticNotches = true;
             noseOptions.notchStyle = ReliefNotchStyle::CurvedV;
             noseOptions.reliefCutDepthRatio = 0.55;
@@ -394,6 +481,22 @@ int main(int argc, char* argv[])
                 "railway nose split pieces retain needed curved cuts");
             Require(splitNose.openings.size() >= nosePlate->openingWireNames.size(),
                 "railway nose openings are retained or divided across split pieces");
+            noseOptions.cutDirection = PapercraftCutDirection::Both;
+            noseOptions.allowAutomaticNotches = false;
+            const PlateFlatPattern tiledNose = BuildPlateFlatPattern(
+                nose, *nosePlate, noseOptions);
+            Require(tiledNose.analysis.pieceCount > splitNose.analysis.pieceCount,
+                "railway nose supports combined vertical-horizontal panel division");
+            Require(tiledNose.openings.size() >= nosePlate->openingWireNames.size(),
+                "windows remain present when they cross a two-direction panel grid");
+            const auto openedMotion = BuildPlateAssemblyMotion(
+                nose, *nosePlate, 0.65, noseOptions);
+            PlateFlatPatternOptions closedMotionOptions = noseOptions;
+            closedMotionOptions.includeOpenings = false;
+            const auto uncutMotion = BuildPlateAssemblyMotion(
+                nose, *nosePlate, 0.65, closedMotionOptions);
+            Require(openedMotion.panels.size() < uncutMotion.panels.size(),
+                "assembly-state 3D output removes panels covered by light and window openings");
         }
     } catch (const std::exception& error) {
         std::cerr << "plate_flat_pattern_tests failed: " << error.what() << '\n';

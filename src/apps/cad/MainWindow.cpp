@@ -75,10 +75,12 @@
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
+using kachakacha::io::AddPlateAssemblyMotionModel;
 using kachakacha::io::AddPlateFlatPatternModel;
-using kachakacha::io::BuildPlateAssemblyApproximation;
 using kachakacha::io::BuildPlateAssemblyGuide;
+using kachakacha::io::BuildPlateAssemblyMotion;
 using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::PapercraftCutDirection;
 using kachakacha::io::PlateAssemblyStrategy;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::ReliefNotchStyle;
@@ -2140,14 +2142,27 @@ QWidget* MainWindow::BuildOutputPanel()
         QStringLiteral("二方向に曲がる面へ、選んだ再現度の分割・折り目・切れ込みを生成"));
     plateFlatPatternAssemblyStrategy_ = new QComboBox;
     plateFlatPatternAssemblyStrategy_->addItem(
-        QStringLiteral("一枚から折って接着"),
+        QStringLiteral("一枚を優先（無理な箇所は分割）"),
         static_cast<int>(PlateAssemblyStrategy::SingleSheet));
     plateFlatPatternAssemblyStrategy_->addItem(
         QStringLiteral("部品へ分割して接着"),
         static_cast<int>(PlateAssemblyStrategy::SplitPieces));
     plateFlatPatternAssemblyStrategy_->setCurrentIndex(0);
     plateFlatPatternAssemblyStrategy_->setToolTip(
-        QStringLiteral("部品をつないだまま作るか、加工しやすい複数部品へ分けるかを選択"));
+        QStringLiteral("二方向曲面は伸ばさず一枚にできない場合があります。その場合は組立可能な部品へ自動分割します"));
+    plateFlatPatternCutDirection_ = new QComboBox;
+    plateFlatPatternCutDirection_->addItem(
+        QStringLiteral("縦だけ（上下へ走る切れ目）"),
+        static_cast<int>(PapercraftCutDirection::Vertical));
+    plateFlatPatternCutDirection_->addItem(
+        QStringLiteral("横だけ（左右へ走る切れ目）"),
+        static_cast<int>(PapercraftCutDirection::Horizontal));
+    plateFlatPatternCutDirection_->addItem(
+        QStringLiteral("縦横を併用"),
+        static_cast<int>(PapercraftCutDirection::Both));
+    plateFlatPatternCutDirection_->setCurrentIndex(2);
+    plateFlatPatternCutDirection_->setToolTip(
+        QStringLiteral("板を分ける方向。縦横併用は小片が増えますが二方向の丸みを最も忠実に再現します"));
     plateFlatPatternAllowNotches_ = new QCheckBox(QStringLiteral("必要箇所のV字切れ込みを許可"));
     plateFlatPatternAllowNotches_->setChecked(true);
     plateFlatPatternAllowNotches_->setToolTip(
@@ -2214,12 +2229,33 @@ QWidget* MainWindow::BuildOutputPanel()
     plateAssemblyGuidePreview_->setToolTip(
         QStringLiteral("選択板材の完成位置へ、折り目を青破線、切れ目を赤線で重ねます"));
     plateAssemblyApproximationPreview_ = new QCheckBox(
-        QStringLiteral("組み立てた近似3Dを元形状に重ねる"));
+        QStringLiteral("展開から組立まで3D表示"));
     plateAssemblyApproximationPreview_->setObjectName(
         QStringLiteral("plateAssemblyApproximationPreview"));
     plateAssemblyApproximationPreview_->setChecked(true);
     plateAssemblyApproximationPreview_->setToolTip(
-        QStringLiteral("実際の平面片を折って組んだときの角張りと推定ずれを色付きで比較"));
+        QStringLiteral("平らな展開片が折り線を軸に回転し、完成形になる過程を表示"));
+    plateAssemblyProgress_ = new QSlider(Qt::Horizontal);
+    plateAssemblyProgress_->setRange(0, 100);
+    plateAssemblyProgress_->setValue(100);
+    plateAssemblyProgress_->setTickPosition(QSlider::TicksBelow);
+    plateAssemblyProgress_->setTickInterval(10);
+    plateAssemblyProgressLabel_ = new QLabel(QStringLiteral("100%（完成形）"));
+    plateAssemblyPreviewTimer_ = new QTimer(this);
+    plateAssemblyPreviewTimer_->setSingleShot(true);
+    plateAssemblyPreviewTimer_->setInterval(100);
+    connect(plateAssemblyPreviewTimer_, &QTimer::timeout,
+        this, &MainWindow::UpdatePlateAssemblyGuidePreview);
+    auto* assemblyProgressControl = new QWidget;
+    auto* assemblyProgressLayout = new QHBoxLayout(assemblyProgressControl);
+    assemblyProgressLayout->setContentsMargins(0, 0, 0, 0);
+    assemblyProgressLayout->setSpacing(7);
+    assemblyProgressLayout->addWidget(plateAssemblyProgress_, 1);
+    assemblyProgressLayout->addWidget(plateAssemblyProgressLabel_);
+    plateAssemblyOutputPiece_ = new QComboBox;
+    plateAssemblyOutputPiece_->addItem(QStringLiteral("全ての分割部品"), -1);
+    plateAssemblyOutputPiece_->setToolTip(
+        QStringLiteral("曲げ途中の3DモデルやSTL/STEPへ含める部品を選択"));
     plateFlatPatternFoldSpacing_ = MakePositiveField(8.0);
     plateFlatPatternFoldSpacing_->setRange(1.0, 100.0);
     plateFlatPatternFoldSpacing_->setSuffix(QStringLiteral(" mm"));
@@ -2232,6 +2268,7 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
     flatModelForm->addRow(QStringLiteral("組み立て方"), plateFlatPatternAssemblyStrategy_);
+    flatModelForm->addRow(QStringLiteral("切れ目の方向"), plateFlatPatternCutDirection_);
     flatModelForm->addRow(QStringLiteral("立体再現度"), fidelityControl);
     flatModelForm->addRow(plateFlatPatternAllowNotches_);
     flatModelForm->addRow(QStringLiteral("切れ込み形状"), plateFlatPatternNotchStyle_);
@@ -2243,6 +2280,8 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("反応する最小曲がり"), plateFlatPatternMinimumBendAngle_);
     flatModelForm->addRow(plateAssemblyGuidePreview_);
     flatModelForm->addRow(plateAssemblyApproximationPreview_);
+    flatModelForm->addRow(QStringLiteral("組立過程"), assemblyProgressControl);
+    flatModelForm->addRow(QStringLiteral("3D出力する部品"), plateAssemblyOutputPiece_);
     flatModelForm->addRow(QStringLiteral("折り線間隔"), plateFlatPatternFoldSpacing_);
     flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
     layout->addLayout(flatModelForm);
@@ -2254,6 +2293,31 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(createFlatModelButton, &QPushButton::clicked,
         this, &MainWindow::CreateSelectedPlateFlatPatternModel);
     layout->addWidget(createFlatModelButton);
+
+    auto* assemblyModelButton = new QPushButton(QStringLiteral("この曲げ状態を3Dモデル化"));
+    assemblyModelButton->setObjectName("primaryButton");
+    assemblyModelButton->setProperty("manualAnchor", QStringLiteral("plateAssemblyOutput"));
+    assemblyModelButton->setToolTip(
+        QStringLiteral("スライダー位置のパネルを厚み付き板としてプロジェクトへ追加"));
+    connect(assemblyModelButton, &QPushButton::clicked,
+        this, &MainWindow::CreatePlateAssemblyStateModel);
+    layout->addWidget(assemblyModelButton);
+
+    auto* assemblyExportRow = new QWidget;
+    auto* assemblyExportLayout = new QHBoxLayout(assemblyExportRow);
+    assemblyExportLayout->setContentsMargins(0, 0, 0, 0);
+    assemblyExportLayout->setSpacing(7);
+    auto* assemblyStlButton = new QPushButton(QStringLiteral("曲げ状態をSTL保存"));
+    assemblyStlButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    auto* assemblyStepButton = new QPushButton(QStringLiteral("曲げ状態をSTEP保存"));
+    assemblyStepButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(assemblyStlButton, &QPushButton::clicked,
+        this, [this] { ExportPlateAssemblyState(false); });
+    connect(assemblyStepButton, &QPushButton::clicked,
+        this, [this] { ExportPlateAssemblyState(true); });
+    assemblyExportLayout->addWidget(assemblyStlButton);
+    assemblyExportLayout->addWidget(assemblyStepButton);
+    layout->addWidget(assemblyExportRow);
 
     auto* pdfForm = new QFormLayout;
     pdfForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -2284,7 +2348,7 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
-    const auto updateReliefControls = [this, fidelityControl, flatModelForm] {
+    const auto updateReliefControls = [this, fidelityControl, assemblyProgressControl, flatModelForm] {
         const bool enabled = plateFlatPatternAutoRelief_->isChecked();
         const bool allowNotches = enabled && plateFlatPatternAllowNotches_->isChecked();
         const ReliefNotchStyle notchStyle = static_cast<ReliefNotchStyle>(
@@ -2292,6 +2356,7 @@ QWidget* MainWindow::BuildOutputPanel()
         const bool curved = notchStyle == ReliefNotchStyle::CurvedV;
         const bool advancedSpacing = enabled && plateFlatPatternAdvancedSpacing_->isChecked();
         plateFlatPatternAssemblyStrategy_->setEnabled(enabled);
+        plateFlatPatternCutDirection_->setEnabled(enabled);
         fidelityControl->setEnabled(enabled);
         plateFlatPatternAllowNotches_->setEnabled(enabled);
         plateFlatPatternNotchStyle_->setEnabled(allowNotches);
@@ -2302,6 +2367,8 @@ QWidget* MainWindow::BuildOutputPanel()
         plateFlatPatternNotchCurveStrength_->setEnabled(allowNotches && curved);
         plateFlatPatternMinimumBendAngle_->setEnabled(enabled);
         plateFlatPatternFoldSpacing_->setEnabled(advancedSpacing);
+        assemblyProgressControl->setEnabled(enabled);
+        plateAssemblyOutputPiece_->setEnabled(enabled);
         flatModelForm->setRowVisible(fidelityControl, enabled);
         flatModelForm->setRowVisible(plateFlatPatternAllowNotches_, enabled);
         flatModelForm->setRowVisible(plateFlatPatternNotchStyle_, allowNotches);
@@ -2318,6 +2385,8 @@ QWidget* MainWindow::BuildOutputPanel()
         [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAssemblyStrategy_, &QComboBox::currentIndexChanged, this,
         [updateReliefControls] { updateReliefControls(); });
+    connect(plateFlatPatternCutDirection_, &QComboBox::currentIndexChanged, this,
+        [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAllowNotches_, &QCheckBox::toggled, this,
         [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternNotchStyle_, &QComboBox::currentIndexChanged, this,
@@ -2333,7 +2402,19 @@ QWidget* MainWindow::BuildOutputPanel()
     });
     connect(plateAssemblyGuidePreview_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
     connect(plateAssemblyApproximationPreview_, &QCheckBox::toggled,
-        this, [this] { RefreshExportSummary(); });
+        this, [updateReliefControls] { updateReliefControls(); });
+    connect(plateAssemblyProgress_, &QSlider::valueChanged, this, [this](int value) {
+        const QString state = value == 0
+            ? QStringLiteral("平面")
+            : value == 100 ? QStringLiteral("完成形") : QStringLiteral("組立中");
+        plateAssemblyProgressLabel_->setText(
+            QStringLiteral("%1%（%2）").arg(value).arg(state));
+        if (plateAssemblyPreviewTimer_ != nullptr) {
+            plateAssemblyPreviewTimer_->start();
+        }
+    });
+    connect(plateAssemblyOutputPiece_, &QComboBox::currentIndexChanged,
+        this, [this] { UpdatePlateAssemblyGuidePreview(); });
     connect(plateFlatPatternFoldSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternReliefSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternReliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
@@ -3649,6 +3730,21 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         finalRevealAnchor = QStringLiteral("plateFlatPattern");
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("assembly-output")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
+        }
+        plateFlatPatternAutoRelief_->setChecked(true);
+        plateFlatPatternCutDirection_->setCurrentIndex(2);
+        plateAssemblyProgress_->setValue(45);
+        if (plateAssemblyOutputPiece_->count() > 1) {
+            plateAssemblyOutputPiece_->setCurrentIndex(1);
+        }
+        showTab(6, 0.72);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("planar-output")) {
         if (!select({
                 {CadSelectionKind::Wire, "front_window_bottom"},
@@ -3983,6 +4079,10 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
         options.assemblyStrategy = static_cast<PlateAssemblyStrategy>(
             plateFlatPatternAssemblyStrategy_->currentData().toInt());
     }
+    if (plateFlatPatternCutDirection_ != nullptr) {
+        options.cutDirection = static_cast<PapercraftCutDirection>(
+            plateFlatPatternCutDirection_->currentData().toInt());
+    }
     if (plateFlatPatternAllowNotches_ != nullptr) {
         options.allowAutomaticNotches = plateFlatPatternAllowNotches_->isChecked();
     }
@@ -4056,14 +4156,18 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
         options.uSegments = 96;
         options.vSegments = 48;
         options.openingSamples = 96;
-        const auto approximation = approximationEnabled
-            ? std::optional(BuildPlateAssemblyApproximation(
-                  project_, project_.Plates()[plateIndices.front()], options))
+        const double assemblyProgress = plateAssemblyProgress_ != nullptr
+            ? static_cast<double>(plateAssemblyProgress_->value()) / 100.0
+            : 1.0;
+        const auto motion = approximationEnabled
+            ? std::optional(BuildPlateAssemblyMotion(
+                  project_,
+                  project_.Plates()[plateIndices.front()],
+                  assemblyProgress,
+                  options))
             : std::nullopt;
-        const auto guide = approximation.has_value()
-            ? approximation->guide
-            : BuildPlateAssemblyGuide(
-                  project_, project_.Plates()[plateIndices.front()], options);
+        const auto guide = BuildPlateAssemblyGuide(
+            project_, project_.Plates()[plateIndices.front()], options);
         std::vector<std::vector<Vector3>> foldLines;
         std::vector<std::vector<Vector3>> reliefCuts;
         if (guideEnabled) {
@@ -4083,24 +4187,30 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
             guideEnabled ? std::optional(plateIndices.front()) : std::nullopt,
             std::move(foldLines),
             std::move(reliefCuts));
-        if (approximation.has_value()) {
-            std::vector<std::array<Vector3, 3>> panels;
-            std::vector<int> pieceIndices;
-            std::vector<double> deviations;
-            panels.reserve(approximation->panels.size());
-            pieceIndices.reserve(approximation->panels.size());
-            deviations.reserve(approximation->panels.size());
-            for (const auto& panel : approximation->panels) {
-                panels.push_back(panel.points);
-                pieceIndices.push_back(panel.pieceIndex);
-                deviations.push_back(panel.maximumDeviationMillimeters);
+        if (motion.has_value()) {
+            const std::optional<int> selectedPiece = SelectedPlateAssemblyPiece();
+            std::vector<std::array<Vector3, 3>> visiblePanels;
+            std::vector<int> visiblePieceIndices;
+            std::vector<double> visibleDeviations;
+            visiblePanels.reserve(motion->panels.size());
+            visiblePieceIndices.reserve(motion->pieceIndices.size());
+            visibleDeviations.reserve(motion->panelDeviationMillimeters.size());
+            for (std::size_t panel = 0; panel < motion->panels.size(); ++panel) {
+                if (selectedPiece.has_value()
+                    && motion->pieceIndices[panel] != *selectedPiece) {
+                    continue;
+                }
+                visiblePanels.push_back(motion->panels[panel]);
+                visiblePieceIndices.push_back(motion->pieceIndices[panel]);
+                visibleDeviations.push_back(
+                    motion->panelDeviationMillimeters[panel]);
             }
             viewport_->SetPlateAssemblyApproximationPreview(
                 plateIndices.front(),
-                std::move(panels),
-                std::move(pieceIndices),
-                std::move(deviations),
-                approximation->maximumDeviationMillimeters);
+                std::move(visiblePanels),
+                std::move(visiblePieceIndices),
+                std::move(visibleDeviations),
+                motion->maximumPanelDeviationMillimeters);
         } else {
             viewport_->SetPlateAssemblyApproximationPreview(
                 std::nullopt, {}, {}, {}, 0.0);
@@ -4252,20 +4362,28 @@ void MainWindow::CreateSelectedPlateFlatPatternModel()
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(true);
-        const auto platePosition = std::find_if(
-            project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
-                return plate.name == result.plateName;
-            });
-        if (platePosition != project_.Plates().end()) {
-            UpdateSelection({
-                CadSelectionKind::Plate,
-                static_cast<int>(std::distance(project_.Plates().begin(), platePosition))}, true);
+        std::vector<CadSelection> createdPlateSelections;
+        for (const std::string& createdName : result.plateNames) {
+            const auto platePosition = std::find_if(
+                project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
+                    return plate.name == createdName;
+                });
+            if (platePosition != project_.Plates().end()) {
+                createdPlateSelections.push_back({
+                    CadSelectionKind::Plate,
+                    static_cast<int>(std::distance(
+                        project_.Plates().begin(), platePosition)),
+                });
+            }
+        }
+        if (!createdPlateSelections.empty()) {
+            UpdateSelections(std::move(createdPlateSelections), true);
         }
         plateFlatPatternName_->setText(SuggestedDirectGroupName(QStringLiteral("developed")));
         plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
         plateFlatPatternSummary_->setText(
-            QStringLiteral("%1を作成 | 展開板%2枚 | 開口%3 | 折り線%4 | 切れ目%5 | 3D板あり")
-                .arg(ToQString(result.plateName))
+            QStringLiteral("%1 | 展開板%2枚を個別作成・全選択 | 開口%3 | 折り線%4 | 切れ目%5 | 3D板あり")
+                .arg(ToQString(sourcePlate.name))
                 .arg(result.plateNames.size())
                 .arg(pattern.openings.size())
                 .arg(result.foldWireNames.size())
@@ -4278,6 +4396,156 @@ void MainWindow::CreateSelectedPlateFlatPatternModel()
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開部材を作成できません: %1")
             .arg(QString::fromUtf8(error.what())));
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+std::optional<int> MainWindow::SelectedPlateAssemblyPiece() const
+{
+    if (plateAssemblyOutputPiece_ == nullptr
+        || plateAssemblyOutputPiece_->currentIndex() < 0) {
+        return std::nullopt;
+    }
+    const int piece = plateAssemblyOutputPiece_->currentData().toInt();
+    return piece >= 0 ? std::optional(piece) : std::nullopt;
+}
+
+void MainWindow::CreatePlateAssemblyStateModel()
+{
+    try {
+        const auto sourcePlate = project_.Plates()[SelectedPlateIndexForExport()];
+        const int progressPercent = plateAssemblyProgress_ != nullptr
+            ? plateAssemblyProgress_->value()
+            : 100;
+        const double progress = static_cast<double>(progressPercent) / 100.0;
+        const PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
+        const auto motion = BuildPlateAssemblyMotion(
+            project_, sourcePlate, progress, options);
+        const std::optional<int> selectedPiece = SelectedPlateAssemblyPiece();
+        const QString baseName = plateFlatPatternName_ != nullptr
+                && !plateFlatPatternName_->text().trimmed().isEmpty()
+            ? plateFlatPatternName_->text().trimmed()
+            : ToQString(sourcePlate.name);
+        const std::string prefix = ToName(SuggestedDirectGroupName(
+            QStringLiteral("%1_fold_%2").arg(baseName).arg(progressPercent)));
+
+        Project candidate = project_;
+        const auto result = AddPlateAssemblyMotionModel(
+            candidate, sourcePlate, motion, prefix, selectedPiece);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(true);
+
+        std::vector<CadSelection> createdSelections;
+        createdSelections.reserve(result.plateNames.size());
+        for (const std::string& name : result.plateNames) {
+            const auto position = std::find_if(
+                project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
+                    return plate.name == name;
+                });
+            if (position != project_.Plates().end()) {
+                createdSelections.push_back({
+                    CadSelectionKind::Plate,
+                    static_cast<int>(std::distance(project_.Plates().begin(), position)),
+                });
+            }
+        }
+        UpdateSelections(std::move(createdSelections), true);
+        const QString scope = selectedPiece.has_value()
+            ? QStringLiteral("部品%1").arg(*selectedPiece + 1)
+            : QStringLiteral("全分割部品");
+        plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("曲げ%1% | %2 | 厚み付きパネル%3枚を3Dモデル化")
+                .arg(progressPercent)
+                .arg(scope)
+                .arg(result.plateNames.size()));
+        statusBar()->showMessage(
+            QStringLiteral("現在の曲げ状態を3Dモデルへ追加しました"), 5000);
+    } catch (const std::exception& error) {
+        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("曲げ状態を3Dモデル化できません: %1")
+                .arg(QString::fromUtf8(error.what())));
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ExportPlateAssemblyState(bool step)
+{
+    try {
+        const auto sourcePlate = project_.Plates()[SelectedPlateIndexForExport()];
+        const int progressPercent = plateAssemblyProgress_ != nullptr
+            ? plateAssemblyProgress_->value()
+            : 100;
+        const double progress = static_cast<double>(progressPercent) / 100.0;
+        const auto motion = BuildPlateAssemblyMotion(
+            project_, sourcePlate, progress, PlateFlatPatternOptionsFromUi());
+        const std::optional<int> selectedPiece = SelectedPlateAssemblyPiece();
+
+        Project exportProject = project_;
+        const std::string prefix = ToName(SuggestedDirectGroupName(
+            QStringLiteral("assembly_export_%1").arg(progressPercent)));
+        const auto result = AddPlateAssemblyMotionModel(
+            exportProject, sourcePlate, motion, prefix, selectedPiece);
+        kachakacha::occt::ModelShapeSelection selection;
+        selection.plateNames = result.plateNames;
+
+        statusBar()->showMessage(QStringLiteral("曲げ状態の閉形状を検査しています..."));
+        QApplication::processEvents();
+        const auto analysis = kachakacha::occt::AnalyzeModelShape(
+            exportProject, selection, 0.01);
+        if (!analysis.validBRep || !analysis.closedSolid) {
+            throw std::runtime_error("曲げ状態から閉じた3D形状を作成できませんでした。");
+        }
+
+        const QString extension = step ? QStringLiteral(".step") : QStringLiteral(".stl");
+        const QString filter = step ? QStringLiteral("STEP CAD形状 (*.step *.stp)")
+                                    : QStringLiteral("STL 3Dプリント形状 (*.stl)");
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        const QString pieceSuffix = selectedPiece.has_value()
+            ? QStringLiteral("_piece_%1").arg(*selectedPiece + 1)
+            : QStringLiteral("_all_parts");
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            step ? QStringLiteral("現在の曲げ状態をSTEP保存")
+                 : QStringLiteral("現在の曲げ状態をSTL保存"),
+            suggestedDirectory + ToQString(sourcePlate.name)
+                + QStringLiteral("_fold_%1").arg(progressPercent)
+                + pieceSuffix + extension,
+            filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(extension, Qt::CaseInsensitive)
+            && !(step && path.endsWith(QStringLiteral(".stp"), Qt::CaseInsensitive))) {
+            path += extension;
+        }
+
+        QApplication::processEvents();
+        const std::filesystem::path outputPath(path.toStdWString());
+        if (step) {
+            kachakacha::occt::WriteModelStep(outputPath, exportProject, selection);
+        } else {
+            kachakacha::occt::WriteModelStl(outputPath, exportProject, selection);
+        }
+        plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("曲げ%1% | %2パネル | 保存済み: %3")
+                .arg(progressPercent)
+                .arg(result.plateNames.size())
+                .arg(QFileInfo(path).fileName()));
+        statusBar()->showMessage(
+            QStringLiteral("現在の曲げ状態を保存しました: %1").arg(path), 5000);
+    } catch (const std::exception& error) {
+        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("曲げ状態を出力できません: %1")
+                .arg(QString::fromUtf8(error.what())));
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
 }
@@ -5569,7 +5837,7 @@ void MainWindow::RefreshBeginnerGuide()
         setGuide(QStringLiteral("製作データを出力"),
             plateCount + bodyCount > 0 ? QStringLiteral("次: 出力範囲と形式を確認して保存")
                                        : QStringLiteral("次: 中央画面で板材・治具を選ぶ"),
-            QStringLiteral("1  出力対象を直接選択\n2  組み立て方・再現度・切れ込みを指定\n3  組立近似3Dと線を確認\n4  1:1図面または3Dを保存"),
+            QStringLiteral("1  出力対象を直接選択\n2  分割方向・再現度・切れ込みを指定\n3  スライダーで曲げ状態と部品を確認\n4  1:1図面または現在の3Dを保存"),
             QStringLiteral("output"));
         break;
     case 7:
@@ -10519,6 +10787,22 @@ void MainWindow::RefreshExportSummary()
     if (plateFlatPatternSummary_ == nullptr) {
         return;
     }
+    const auto refreshAssemblyPieceChoices = [this](int pieceCount) {
+        if (plateAssemblyOutputPiece_ == nullptr) {
+            return;
+        }
+        const int previousPiece = plateAssemblyOutputPiece_->currentData().toInt();
+        const QSignalBlocker blocker(plateAssemblyOutputPiece_);
+        plateAssemblyOutputPiece_->clear();
+        plateAssemblyOutputPiece_->addItem(QStringLiteral("全ての分割部品"), -1);
+        for (int piece = 0; piece < pieceCount; ++piece) {
+            plateAssemblyOutputPiece_->addItem(
+                QStringLiteral("部品 %1 だけ").arg(piece + 1), piece);
+        }
+        const int previousIndex = plateAssemblyOutputPiece_->findData(previousPiece);
+        plateAssemblyOutputPiece_->setCurrentIndex(
+            previousIndex >= 0 ? previousIndex : 0);
+    };
     UpdatePlateAssemblyGuidePreview();
     std::vector<int> plateIndices;
     for (const CadSelection& selection : viewport_->Selections()) {
@@ -10530,11 +10814,13 @@ void MainWindow::RefreshExportSummary()
     std::sort(plateIndices.begin(), plateIndices.end());
     plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
     if (plateIndices.empty()) {
+        refreshAssemblyPieceChoices(0);
         plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
         plateFlatPatternSummary_->setText(QStringLiteral("選択板材: なし"));
         return;
     }
     if (plateIndices.size() > 1) {
+        refreshAssemblyPieceChoices(0);
         plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
         plateFlatPatternSummary_->setText(QStringLiteral("選択板材: %1枚（1枚に絞って出力）").arg(plateIndices.size()));
         return;
@@ -10548,6 +10834,7 @@ void MainWindow::RefreshExportSummary()
         previewOptions.includeOpenings = false;
         const auto& namedPlate = project_.Plates()[plateIndices.front()];
         const auto pattern = BuildPlateFlatPattern(project_, namedPlate, previewOptions);
+        refreshAssemblyPieceChoices(pattern.analysis.pieceCount);
         PlatePdfOptions pdfOptions;
         pdfOptions.pageSize = static_cast<QPageSize::PageSizeId>(platePdfPaper_->currentData().toInt());
         pdfOptions.overlapMillimeters = platePdfOverlap_->value();
@@ -10555,9 +10842,16 @@ void MainWindow::RefreshExportSummary()
         const QString notchLabel = previewOptions.notchStyle == ReliefNotchStyle::CurvedV
             ? QStringLiteral("曲線切れ込み")
             : QStringLiteral("直線V字");
+        const QString directionLabel = previewOptions.cutDirection
+                == PapercraftCutDirection::Vertical
+            ? QStringLiteral("縦")
+            : previewOptions.cutDirection == PapercraftCutDirection::Horizontal
+            ? QStringLiteral("横")
+            : QStringLiteral("縦横");
         const QString shape = pattern.analysis.pieceCount > 1
                 && pattern.analysis.automaticNotchCount > 0
-            ? QStringLiteral("分割 %1片＋%2 %3本")
+            ? QStringLiteral("%1分割 %2片＋%3 %4本")
+                .arg(directionLabel)
                 .arg(pattern.analysis.pieceCount)
                 .arg(notchLabel)
                 .arg(pattern.analysis.automaticNotchCount)
@@ -10566,7 +10860,13 @@ void MainWindow::RefreshExportSummary()
                 .arg(notchLabel)
                 .arg(pattern.analysis.automaticNotchCount)
             : pattern.analysis.pieceCount > 1
-            ? QStringLiteral("ペーパークラフト %1片").arg(pattern.analysis.pieceCount)
+            ? (previewOptions.assemblyStrategy == PlateAssemblyStrategy::SingleSheet
+                ? QStringLiteral("一枚では成立不可 → %1分割 %2片")
+                    .arg(directionLabel)
+                    .arg(pattern.analysis.pieceCount)
+                : QStringLiteral("%1分割 %2片")
+                    .arg(directionLabel)
+                    .arg(pattern.analysis.pieceCount))
             : pattern.analysis.classification == PlateDevelopability::Planar
             ? QStringLiteral("平面板")
             : pattern.analysis.classification == PlateDevelopability::Developable
@@ -10585,6 +10885,7 @@ void MainWindow::RefreshExportSummary()
                 .arg(pattern.reliefCuts.size())
                 .arg(pdfLayout.PageCount()));
     } catch (const std::exception& error) {
+        refreshAssemblyPieceChoices(0);
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));
     }

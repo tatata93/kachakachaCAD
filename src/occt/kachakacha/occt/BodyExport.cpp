@@ -420,14 +420,23 @@ TopoDS_Shape BuildPlateShape(
         shape = BuildVariablePlanarPlateShape(namedPlate);
     } else if (plate.SourceSurface().Kind() == model::SurfaceKind::Planar) {
         std::vector<geometry::Vector3> boundary;
-        boundary.reserve(129);
         const model::Wire& sourceBoundary = plate.SourceSurface().FirstBoundary();
         const geometry::Vector3 normal = plate.SourceSurface().Normal(0.5, 0.5);
-        for (int index = 0; index < 128; ++index) {
-            boundary.push_back(sourceBoundary.Evaluate(static_cast<double>(index) / 128.0)
-                + normal * plate.MinimumOffset());
+        if (sourceBoundary.Kind() == model::WireKind::Polyline) {
+            boundary.reserve(sourceBoundary.ControlPoints().size());
+            for (const geometry::Vector3 point : sourceBoundary.ControlPoints()) {
+                boundary.push_back(point + normal * plate.MinimumOffset());
+            }
+        } else {
+            boundary.reserve(129);
+            for (int index = 0; index < 128; ++index) {
+                boundary.push_back(sourceBoundary.Evaluate(static_cast<double>(index) / 128.0)
+                    + normal * plate.MinimumOffset());
+            }
         }
-        boundary.push_back(boundary.front());
+        if (!geometry::AlmostEqual(boundary.front(), boundary.back(), kModelTolerance)) {
+            boundary.push_back(boundary.front());
+        }
         const TopoDS_Face face = BRepBuilderAPI_MakeFace(BuildPolylineLoop(boundary));
         const geometry::Vector3 extrusion = normal * plate.Thickness();
         BRepPrimAPI_MakePrism prism(face, gp_Vec(extrusion.x, extrusion.y, extrusion.z));

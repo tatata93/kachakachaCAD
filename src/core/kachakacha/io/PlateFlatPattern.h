@@ -6,6 +6,7 @@
 
 #include <array>
 #include <iosfwd>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,12 @@ enum class ReliefNotchStyle {
     CurvedV,
 };
 
+enum class PapercraftCutDirection {
+    Vertical,
+    Horizontal,
+    Both,
+};
+
 struct PlateFlatPatternOptions {
     int uSegments = 128;
     int vSegments = 40;
@@ -30,6 +37,7 @@ struct PlateFlatPatternOptions {
     bool includeFoldLines = true;
     bool includeAutomaticReliefCuts = false;
     PlateAssemblyStrategy assemblyStrategy = PlateAssemblyStrategy::SplitPieces;
+    PapercraftCutDirection cutDirection = PapercraftCutDirection::Both;
     bool allowAutomaticNotches = true;
     ReliefNotchStyle notchStyle = ReliefNotchStyle::CurvedV;
     bool fidelityControlsFeatureSpacing = true;
@@ -104,6 +112,25 @@ struct PlateAssemblyApproximation {
     double rootMeanSquareDeviationMillimeters = 0.0;
 };
 
+struct PlateAssemblyMotion {
+    std::string plateName;
+    std::vector<std::array<geometry::Vector3, 3>> panels;
+    std::vector<int> pieceIndices;
+    std::vector<double> panelThicknessMillimeters;
+    std::vector<double> panelDeviationMillimeters;
+    int pieceCount = 1;
+    double progress = 1.0;
+    double maximumPanelDeviationMillimeters = 0.0;
+    double maximumTargetMismatchMillimeters = 0.0;
+};
+
+struct PlateAssemblyModelResult {
+    std::vector<std::string> outerWireNames;
+    std::vector<std::string> surfaceNames;
+    std::vector<std::string> plateNames;
+    std::vector<int> pieceIndices;
+};
+
 struct PlateFlatPatternModelResult {
     std::string workPlaneName;
     std::string outerWireName;
@@ -131,6 +158,19 @@ struct PlateFlatPatternModelResult {
     const model::Project& project,
     const model::NamedPlate& plate,
     PlateFlatPatternOptions options = {});
+
+[[nodiscard]] PlateAssemblyMotion BuildPlateAssemblyMotion(
+    const model::Project& project,
+    const model::NamedPlate& plate,
+    double progress,
+    PlateFlatPatternOptions options = {});
+
+[[nodiscard]] PlateAssemblyModelResult AddPlateAssemblyMotionModel(
+    model::Project& project,
+    const model::NamedPlate& sourcePlate,
+    const PlateAssemblyMotion& motion,
+    std::string namePrefix,
+    std::optional<int> selectedPieceIndex = std::nullopt);
 
 void WritePlateFlatPatternSvg(
     std::ostream& output,

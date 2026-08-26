@@ -132,6 +132,9 @@ private:
     void UpdatePlateSplitPreview();
     void ExportSelectedBody(bool step);
     void CreateSelectedPlateFlatPatternModel();
+    void CreatePlateAssemblyStateModel();
+    void ExportPlateAssemblyState(bool step);
+    [[nodiscard]] std::optional<int> SelectedPlateAssemblyPiece() const;
     [[nodiscard]] kachakacha::io::PlateFlatPatternOptions PlateFlatPatternOptionsFromUi() const;
     void UpdatePlateAssemblyGuidePreview();
     void SetViewportTool(ViewportTool tool);
@@ -395,6 +398,7 @@ private:
     QComboBox* plateFlatPatternPlane_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
     QComboBox* plateFlatPatternAssemblyStrategy_ = nullptr;
+    QComboBox* plateFlatPatternCutDirection_ = nullptr;
     QCheckBox* plateFlatPatternAllowNotches_ = nullptr;
     QComboBox* plateFlatPatternNotchStyle_ = nullptr;
     QSlider* plateFlatPatternFidelity_ = nullptr;
@@ -407,6 +411,10 @@ private:
     QDoubleSpinBox* plateFlatPatternMinimumBendAngle_ = nullptr;
     QCheckBox* plateAssemblyGuidePreview_ = nullptr;
     QCheckBox* plateAssemblyApproximationPreview_ = nullptr;
+    QSlider* plateAssemblyProgress_ = nullptr;
+    QLabel* plateAssemblyProgressLabel_ = nullptr;
+    QComboBox* plateAssemblyOutputPiece_ = nullptr;
+    QTimer* plateAssemblyPreviewTimer_ = nullptr;
     QDoubleSpinBox* plateFlatPatternFoldSpacing_ = nullptr;
     QDoubleSpinBox* plateFlatPatternCutWidth_ = nullptr;
     QComboBox* platePdfPaper_ = nullptr;

@@ -54,6 +54,7 @@ $Shots = @(
     @{ Name = "plate-split"; Project = $Acceptance; State = "split" },
     @{ Name = "planar-output"; Project = $FirstCheck; State = "planar-output" },
     @{ Name = "flat-pattern"; Project = $Acceptance; State = "flat-pattern" },
+    @{ Name = "assembly-output"; Project = $Acceptance; State = "assembly-output" },
     @{ Name = "model-output"; Project = $Acceptance; State = "output" },
     @{ Name = "model-inspection"; Project = $Acceptance; State = "inspection" },
     @{ Name = "display-settings"; Project = $Acceptance; State = "display" },

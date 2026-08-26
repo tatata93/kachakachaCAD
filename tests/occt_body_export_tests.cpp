@@ -230,6 +230,39 @@ int main(int argc, char** argv)
         kachakacha::occt::WriteModelStl(panelStl, acceptance, frontPanelSelection);
         kachakacha::occt::WriteModelStep(panelStep, acceptance, frontPanelSelection);
 
+        kachakacha::io::PlateFlatPatternOptions foldingOptions;
+        foldingOptions.includeAutomaticReliefCuts = true;
+        foldingOptions.cutDirection = kachakacha::io::PapercraftCutDirection::Vertical;
+        foldingOptions.papercraftFidelity = 3;
+        const auto foldingMotion = kachakacha::io::BuildPlateAssemblyMotion(
+            acceptance, acceptance.Plates().front(), 0.45, foldingOptions);
+        Project foldingProject = acceptance;
+        const int selectedPiece = foldingMotion.pieceIndices.front();
+        const auto foldingResult = kachakacha::io::AddPlateAssemblyMotionModel(
+            foldingProject,
+            acceptance.Plates().front(),
+            foldingMotion,
+            "nose_fold_45",
+            selectedPiece);
+        const kachakacha::occt::ModelShapeSelection foldingSelection{
+            foldingResult.plateNames, {}};
+        const auto foldingAnalysis = kachakacha::occt::AnalyzeModelShape(
+            foldingProject, foldingSelection, 0.4);
+        if (!foldingAnalysis.validBRep || !foldingAnalysis.closedSolid
+            || foldingAnalysis.plateCount != foldingResult.plateNames.size()) {
+            throw std::runtime_error(
+                "Selected folded piece did not produce exportable solids: "
+                + foldingAnalysis.message);
+        }
+        kachakacha::occt::WriteModelStl(
+            outputDirectory / "railway-nose-fold-45-piece.stl",
+            foldingProject,
+            foldingSelection);
+        kachakacha::occt::WriteModelStep(
+            outputDirectory / "railway-nose-fold-45-piece.step",
+            foldingProject,
+            foldingSelection);
+
         VerifyExports(outputDirectory, "jig-test", body);
         const auto acceptanceJigAnalysis = kachakacha::occt::AnalyzeBodyShape(
             acceptance.Bodies().front().body, 1.2);

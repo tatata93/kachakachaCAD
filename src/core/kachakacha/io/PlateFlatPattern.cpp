@@ -48,6 +48,92 @@ bool AlmostSame(Vector2 first, Vector2 second, double tolerance = 1.0e-9)
     return Length(first - second) <= tolerance;
 }
 
+Vector3 RotateAroundAxis(Vector3 value, Vector3 axis, double angleRadians)
+{
+    if (axis.LengthSquared() <= 1.0e-18 || std::abs(angleRadians) <= 1.0e-15) {
+        return value;
+    }
+    axis = axis.Normalized();
+    const double cosine = std::cos(angleRadians);
+    const double sine = std::sin(angleRadians);
+    return value * cosine
+        + geometry::Cross(axis, value) * sine
+        + axis * geometry::Dot(axis, value) * (1.0 - cosine);
+}
+
+struct RigidTransform {
+    std::array<std::array<double, 3>, 3> rotation{{
+        {{1.0, 0.0, 0.0}},
+        {{0.0, 1.0, 0.0}},
+        {{0.0, 0.0, 1.0}},
+    }};
+    Vector3 translation;
+
+    [[nodiscard]] Vector3 Apply(Vector3 point) const noexcept
+    {
+        return {
+            rotation[0][0] * point.x + rotation[0][1] * point.y
+                + rotation[0][2] * point.z + translation.x,
+            rotation[1][0] * point.x + rotation[1][1] * point.y
+                + rotation[1][2] * point.z + translation.y,
+            rotation[2][0] * point.x + rotation[2][1] * point.y
+                + rotation[2][2] * point.z + translation.z,
+        };
+    }
+};
+
+RigidTransform RotationAroundLine(
+    Vector3 axisPoint,
+    Vector3 axisDirection,
+    double angleRadians)
+{
+    RigidTransform transform;
+    if (axisDirection.LengthSquared() <= 1.0e-18
+        || std::abs(angleRadians) <= 1.0e-15) {
+        return transform;
+    }
+    const Vector3 axis = axisDirection.Normalized();
+    const double cosine = std::cos(angleRadians);
+    const double sine = std::sin(angleRadians);
+    const double oneMinusCosine = 1.0 - cosine;
+    transform.rotation = {{
+        {{cosine + axis.x * axis.x * oneMinusCosine,
+          axis.x * axis.y * oneMinusCosine - axis.z * sine,
+          axis.x * axis.z * oneMinusCosine + axis.y * sine}},
+        {{axis.y * axis.x * oneMinusCosine + axis.z * sine,
+          cosine + axis.y * axis.y * oneMinusCosine,
+          axis.y * axis.z * oneMinusCosine - axis.x * sine}},
+        {{axis.z * axis.x * oneMinusCosine - axis.y * sine,
+          axis.z * axis.y * oneMinusCosine + axis.x * sine,
+          cosine + axis.z * axis.z * oneMinusCosine}},
+    }};
+    const Vector3 rotatedAxisPoint = transform.Apply(axisPoint);
+    transform.translation = axisPoint - rotatedAxisPoint;
+    return transform;
+}
+
+RigidTransform Compose(RigidTransform after, const RigidTransform& before)
+{
+    RigidTransform result;
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            result.rotation[row][column] = 0.0;
+            for (int inner = 0; inner < 3; ++inner) {
+                result.rotation[row][column]
+                    += after.rotation[row][inner] * before.rotation[inner][column];
+            }
+        }
+    }
+    result.translation = after.Apply(before.translation);
+    return result;
+}
+
+Vector3 TriangleNormal(const std::array<Vector3, 3>& triangle)
+{
+    return geometry::Cross(
+        triangle[1] - triangle[0], triangle[2] - triangle[0]).Normalized();
+}
+
 void ValidateOptions(const PlateFlatPatternOptions& options)
 {
     if (options.uSegments < 2 || options.uSegments > 2000
@@ -747,6 +833,25 @@ struct NamedUvPath {
     std::vector<Vector2> points;
 };
 
+bool PointInsideUvPath(Vector2 point, const NamedUvPath& path)
+{
+    if (path.points.size() < 3) {
+        return false;
+    }
+    bool inside = false;
+    for (std::size_t first = 0, second = path.points.size() - 1;
+         first < path.points.size(); second = first++) {
+        const Vector2 a = path.points[first];
+        const Vector2 b = path.points[second];
+        if ((a.y > point.y) != (b.y > point.y)
+            && point.x < (b.x - a.x) * (point.y - a.y)
+                    / (b.y - a.y + 1.0e-30) + a.x) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
 bool SegmentsIntersect(Vector2 firstA, Vector2 firstB, Vector2 secondA, Vector2 secondB)
 {
     constexpr double tolerance = 1.0e-10;
@@ -1316,15 +1421,18 @@ public:
         bool splitAlongU,
         std::vector<double> stripParameters,
         int weakSegments,
+        bool splitAcrossWeak,
         const std::vector<NamedUvPath>& splitLines,
         const PlateFlatPatternOptions& options)
         : plate_(plate),
           splitAlongU_(splitAlongU),
           stripParameters_(std::move(stripParameters)),
-          weakSegments_(std::max(2, weakSegments))
+          weakSegments_(std::max(2, weakSegments)),
+          splitAcrossWeak_(splitAcrossWeak)
     {
         BuildMesh();
         BuildAdjacency();
+        MarkTransverseCuts();
         MarkManualCuts(splitLines);
         DevelopPieces(options);
     }
@@ -1343,44 +1451,57 @@ public:
         for (int strip = 0; strip + 1 < static_cast<int>(stripParameters_.size()); ++strip) {
             const double strongMinimum = stripParameters_[static_cast<std::size_t>(strip)];
             const double strongMaximum = stripParameters_[static_cast<std::size_t>(strip + 1)];
-            std::vector<Vector2> clipped = splitAlongU_
-                ? ClipToRectangle(path.points, strongMinimum, strongMaximum, 0.0, 1.0)
-                : ClipToRectangle(path.points, 0.0, 1.0, strongMinimum, strongMaximum);
-            if (clipped.size() < 3) {
-                continue;
-            }
-            double twiceArea = 0.0;
-            for (std::size_t point = 0; point < clipped.size(); ++point) {
-                const Vector2 first = clipped[point];
-                const Vector2 second = clipped[(point + 1) % clipped.size()];
-                twiceArea += Cross2(first, second);
-            }
-            if (std::abs(twiceArea) <= 1.0e-10) {
-                continue;
-            }
-            ClosePath(clipped);
-            int pieceIndex = -1;
-            bool crossesManualBoundary = false;
-            std::vector<Vector2> flat;
-            flat.reserve(clipped.size());
-            for (const Vector2 point : clipped) {
-                const auto fragmentPoint = EvaluateInStrip(point, strip);
-                if (pieceIndex < 0) {
-                    pieceIndex = fragmentPoint.first;
-                } else if (pieceIndex != fragmentPoint.first) {
-                    crossesManualBoundary = true;
-                    break;
+            const int weakCellCount = splitAcrossWeak_ ? weakSegments_ : 1;
+            for (int weakCell = 0; weakCell < weakCellCount; ++weakCell) {
+                const double weakMinimum = splitAcrossWeak_
+                    ? static_cast<double>(weakCell) / weakSegments_
+                    : 0.0;
+                const double weakMaximum = splitAcrossWeak_
+                    ? static_cast<double>(weakCell + 1) / weakSegments_
+                    : 1.0;
+                std::vector<Vector2> clipped = splitAlongU_
+                    ? ClipToRectangle(
+                        path.points, strongMinimum, strongMaximum, weakMinimum, weakMaximum)
+                    : ClipToRectangle(
+                        path.points, weakMinimum, weakMaximum, strongMinimum, strongMaximum);
+                if (clipped.size() < 3) {
+                    continue;
                 }
-                flat.push_back(fragmentPoint.second);
+                double twiceArea = 0.0;
+                for (std::size_t point = 0; point < clipped.size(); ++point) {
+                    const Vector2 first = clipped[point];
+                    const Vector2 second = clipped[(point + 1) % clipped.size()];
+                    twiceArea += Cross2(first, second);
+                }
+                if (std::abs(twiceArea) <= 1.0e-10) {
+                    continue;
+                }
+                ClosePath(clipped);
+                int pieceIndex = -1;
+                bool crossesManualBoundary = false;
+                std::vector<Vector2> flat;
+                flat.reserve(clipped.size());
+                for (const Vector2 point : clipped) {
+                    const auto fragmentPoint = splitAcrossWeak_
+                        ? EvaluateInCell(point, strip, weakCell)
+                        : EvaluateInStrip(point, strip);
+                    if (pieceIndex < 0) {
+                        pieceIndex = fragmentPoint.first;
+                    } else if (pieceIndex != fragmentPoint.first) {
+                        crossesManualBoundary = true;
+                        break;
+                    }
+                    flat.push_back(fragmentPoint.second);
+                }
+                if (crossesManualBoundary || pieceIndex < 0) {
+                    throw std::invalid_argument(
+                        "A plate opening crosses a manual papercraft split: " + path.name);
+                }
+                pieces_[static_cast<std::size_t>(pieceIndex)].openings.push_back({
+                    path.name + "_fragment_" + std::to_string(++fragmentIndex),
+                    std::move(flat),
+                });
             }
-            if (crossesManualBoundary || pieceIndex < 0) {
-                throw std::invalid_argument(
-                    "A plate opening crosses a manual papercraft split: " + path.name);
-            }
-            pieces_[static_cast<std::size_t>(pieceIndex)].openings.push_back({
-                path.name + "_fragment_" + std::to_string(++fragmentIndex),
-                std::move(flat),
-            });
         }
         if (fragmentIndex == 0) {
             throw std::invalid_argument(
@@ -1444,6 +1565,232 @@ public:
     [[nodiscard]] double MaximumEdgeDistortion() const noexcept { return maximumEdgeDistortion_; }
     [[nodiscard]] double RootMeanSquareEdgeDistortion() const noexcept { return rmsEdgeDistortion_; }
 
+    [[nodiscard]] PlateAssemblyMotion BuildAssemblyMotion(
+        std::string plateName,
+        double progress,
+        const std::vector<NamedUvPath>& openings) const
+    {
+        PlateAssemblyMotion motion;
+        motion.plateName = std::move(plateName);
+        motion.progress = std::clamp(progress, 0.0, 1.0);
+        motion.pieceCount = static_cast<int>(pieces_.size());
+        motion.panels.reserve(triangles_.size());
+        motion.pieceIndices.reserve(triangles_.size());
+        motion.panelThicknessMillimeters.reserve(triangles_.size());
+        motion.panelDeviationMillimeters.reserve(triangles_.size());
+
+        Vector3 layoutOrigin = plate_.Evaluate(0.0, 0.0, 0.5);
+        Vector3 layoutNormal = PlateNormal(plate_, 0.01, 0.01);
+        Vector3 layoutX = plate_.Evaluate(0.01, 0.0, 0.5) - layoutOrigin;
+        layoutX = layoutX - layoutNormal * geometry::Dot(layoutX, layoutNormal);
+        if (layoutX.LengthSquared() <= 1.0e-18) {
+            layoutX = plate_.Evaluate(0.0, 0.01, 0.5) - layoutOrigin;
+            layoutX = layoutX - layoutNormal * geometry::Dot(layoutX, layoutNormal);
+        }
+        layoutX = layoutX.Normalized();
+        Vector3 layoutY = geometry::Cross(layoutNormal, layoutX).Normalized();
+        const Vector3 sourceV = plate_.Evaluate(0.0, 0.01, 0.5) - layoutOrigin;
+        if (geometry::Dot(layoutY, sourceV) < 0.0) {
+            layoutY = -layoutY;
+            layoutNormal = -layoutNormal;
+        }
+
+        std::vector<std::array<Vector3, 3>> current(triangles_.size());
+        for (std::size_t triangleIndex = 0; triangleIndex < triangles_.size(); ++triangleIndex) {
+            const int pieceIndex = trianglePiece_[triangleIndex];
+            for (int corner = 0; corner < 3; ++corner) {
+                const Vector2 point = triangleFlat_[triangleIndex][corner]
+                    + pieceOffsets_[static_cast<std::size_t>(pieceIndex)];
+                current[triangleIndex][corner]
+                    = layoutOrigin + layoutX * point.x + layoutY * point.y;
+            }
+        }
+
+        const auto pointForVertex = [&](int triangleIndex, int vertex) {
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            const auto position = std::find(vertices.begin(), vertices.end(), vertex);
+            if (position == vertices.end()) {
+                throw std::logic_error("Assembly hinge vertex was not found.");
+            }
+            return current[static_cast<std::size_t>(triangleIndex)]
+                [static_cast<std::size_t>(std::distance(vertices.begin(), position))];
+        };
+        const auto sourceTriangle = [&](int triangleIndex) {
+            std::array<Vector3, 3> result;
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            for (int corner = 0; corner < 3; ++corner) {
+                result[static_cast<std::size_t>(corner)]
+                    = spatial_[static_cast<std::size_t>(vertices[corner])];
+            }
+            return result;
+        };
+        const auto panelDeviation = [&](int triangleIndex) {
+            const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+            const std::array<Vector2, 3> triangleUv{{
+                uv_[static_cast<std::size_t>(vertices[0])],
+                uv_[static_cast<std::size_t>(vertices[1])],
+                uv_[static_cast<std::size_t>(vertices[2])],
+            }};
+            const std::array<Vector3, 3> target = sourceTriangle(triangleIndex);
+            const Vector3 normal = TriangleNormal(target);
+            const std::array<std::array<double, 3>, 4> samples{{
+                {{0.5, 0.5, 0.0}},
+                {{0.0, 0.5, 0.5}},
+                {{0.5, 0.0, 0.5}},
+                {{1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0}},
+            }};
+            double maximum = 0.0;
+            for (const auto& weights : samples) {
+                const Vector2 parameter = triangleUv[0] * weights[0]
+                    + triangleUv[1] * weights[1]
+                    + triangleUv[2] * weights[2];
+                const Vector3 source = plate_.Evaluate(
+                    parameter.x, parameter.y, 0.5);
+                maximum = std::max(
+                    maximum, std::abs(geometry::Dot(source - target[0], normal)));
+            }
+            return maximum;
+        };
+
+        for (int pieceIndex = 0; pieceIndex < static_cast<int>(pieces_.size()); ++pieceIndex) {
+            std::vector<int> component;
+            for (int triangleIndex = 0;
+                 triangleIndex < static_cast<int>(triangles_.size()); ++triangleIndex) {
+                if (trianglePiece_[static_cast<std::size_t>(triangleIndex)] == pieceIndex) {
+                    component.push_back(triangleIndex);
+                }
+            }
+            if (component.empty()) {
+                continue;
+            }
+
+            const int root = component.front();
+            std::vector<int> parent(triangles_.size(), -2);
+            std::vector<std::pair<int, int>> parentEdge(triangles_.size(), {-1, -1});
+            std::vector<int> traversal;
+            std::queue<int> pending;
+            parent[static_cast<std::size_t>(root)] = -1;
+            pending.push(root);
+            while (!pending.empty()) {
+                const int currentIndex = pending.front();
+                pending.pop();
+                traversal.push_back(currentIndex);
+                const auto& vertices = triangles_[static_cast<std::size_t>(currentIndex)].vertices;
+                for (int edgeIndex = 0; edgeIndex < 3; ++edgeIndex) {
+                    const auto edge = std::minmax(
+                        vertices[edgeIndex], vertices[(edgeIndex + 1) % 3]);
+                    if (cutEdges_.contains(edge)) {
+                        continue;
+                    }
+                    for (const int neighbor : edgeTriangles_.at(edge)) {
+                        if (neighbor == currentIndex
+                            || trianglePiece_[static_cast<std::size_t>(neighbor)] != pieceIndex
+                            || parent[static_cast<std::size_t>(neighbor)] != -2) {
+                            continue;
+                        }
+                        parent[static_cast<std::size_t>(neighbor)] = currentIndex;
+                        parentEdge[static_cast<std::size_t>(neighbor)] = edge;
+                        pending.push(neighbor);
+                    }
+                }
+            }
+
+            const std::array<Vector3, 3> flatRoot = current[static_cast<std::size_t>(root)];
+            const std::array<Vector3, 3> targetRoot = sourceTriangle(root);
+            const Vector3 flatX = (flatRoot[1] - flatRoot[0]).Normalized();
+            const Vector3 flatNormal = TriangleNormal(flatRoot);
+            const Vector3 targetX = (targetRoot[1] - targetRoot[0]).Normalized();
+            const Vector3 targetNormal = TriangleNormal(targetRoot);
+            Vector3 firstAxis = geometry::Cross(flatNormal, targetNormal);
+            double firstAngle = 0.0;
+            if (firstAxis.LengthSquared() > 1.0e-18) {
+                firstAngle = std::atan2(
+                    firstAxis.Length(), geometry::Dot(flatNormal, targetNormal));
+                firstAxis = firstAxis.Normalized();
+            } else if (geometry::Dot(flatNormal, targetNormal) < 0.0) {
+                firstAxis = flatX;
+                firstAngle = 3.14159265358979323846;
+            } else {
+                firstAxis = flatX;
+            }
+            const Vector3 alignedX = RotateAroundAxis(flatX, firstAxis, firstAngle);
+            const double twistAngle = std::atan2(
+                geometry::Dot(targetNormal, geometry::Cross(alignedX, targetX)),
+                geometry::Dot(alignedX, targetX));
+            const Vector3 partialNormal = RotateAroundAxis(
+                flatNormal, firstAxis, firstAngle * motion.progress);
+            const Vector3 rootPosition = flatRoot[0] * (1.0 - motion.progress)
+                + targetRoot[0] * motion.progress;
+            for (const int triangleIndex : component) {
+                for (Vector3& point : current[static_cast<std::size_t>(triangleIndex)]) {
+                    Vector3 relative = point - flatRoot[0];
+                    relative = RotateAroundAxis(
+                        relative, firstAxis, firstAngle * motion.progress);
+                    relative = RotateAroundAxis(
+                        relative, partialNormal, twistAngle * motion.progress);
+                    point = rootPosition + relative;
+                }
+            }
+
+            std::vector<RigidTransform> cumulative(triangles_.size());
+            for (std::size_t traversalIndex = 1;
+                 traversalIndex < traversal.size(); ++traversalIndex) {
+                const int child = traversal[traversalIndex];
+                const int parentIndex = parent[static_cast<std::size_t>(child)];
+                const auto edge = parentEdge[static_cast<std::size_t>(child)];
+                const Vector3 axisStart = pointForVertex(parentIndex, edge.first);
+                const Vector3 axisEnd = pointForVertex(parentIndex, edge.second);
+                const Vector3 sourceAxis
+                    = (spatial_[static_cast<std::size_t>(edge.second)]
+                        - spatial_[static_cast<std::size_t>(edge.first)]).Normalized();
+                const Vector3 parentNormal = TriangleNormal(sourceTriangle(parentIndex));
+                const Vector3 childNormal = TriangleNormal(sourceTriangle(child));
+                const double foldAngle = std::atan2(
+                    geometry::Dot(
+                        sourceAxis, geometry::Cross(parentNormal, childNormal)),
+                    geometry::Dot(parentNormal, childNormal));
+                const RigidTransform hinge = RotationAroundLine(
+                    axisStart,
+                    axisEnd - axisStart,
+                    foldAngle * motion.progress);
+                cumulative[static_cast<std::size_t>(child)] = Compose(
+                    hinge, cumulative[static_cast<std::size_t>(parentIndex)]);
+                for (Vector3& point : current[static_cast<std::size_t>(child)]) {
+                    point = cumulative[static_cast<std::size_t>(child)].Apply(point);
+                }
+            }
+
+            for (const int triangleIndex : component) {
+                const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
+                const Vector2 uvCenter = (
+                    uv_[static_cast<std::size_t>(vertices[0])]
+                    + uv_[static_cast<std::size_t>(vertices[1])]
+                    + uv_[static_cast<std::size_t>(vertices[2])]) * (1.0 / 3.0);
+                if (std::any_of(openings.begin(), openings.end(), [&](const NamedUvPath& opening) {
+                        return PointInsideUvPath(uvCenter, opening);
+                    })) {
+                    continue;
+                }
+                const auto& panel = current[static_cast<std::size_t>(triangleIndex)];
+                const auto target = sourceTriangle(triangleIndex);
+                for (int corner = 0; corner < 3; ++corner) {
+                    motion.maximumTargetMismatchMillimeters = std::max(
+                        motion.maximumTargetMismatchMillimeters,
+                        (panel[static_cast<std::size_t>(corner)]
+                            - target[static_cast<std::size_t>(corner)]).Length());
+                }
+                motion.panels.push_back(panel);
+                motion.pieceIndices.push_back(pieceIndex);
+                motion.panelThicknessMillimeters.push_back(plate_.Thickness(uvCenter.y));
+                const double deviation = panelDeviation(triangleIndex);
+                motion.panelDeviationMillimeters.push_back(deviation);
+                motion.maximumPanelDeviationMillimeters = std::max(
+                    motion.maximumPanelDeviationMillimeters, deviation);
+            }
+        }
+        return motion;
+    }
+
 private:
     [[nodiscard]] int VertexIndex(int strip, int side, int weakIndex) const noexcept
     {
@@ -1498,6 +1845,28 @@ private:
         }
     }
 
+    void MarkTransverseCuts()
+    {
+        if (!splitAcrossWeak_) {
+            return;
+        }
+        for (const auto& [edge, adjacent] : edgeTriangles_) {
+            if (adjacent.size() != 2) {
+                continue;
+            }
+            const Vector2 first = uv_[static_cast<std::size_t>(edge.first)];
+            const Vector2 second = uv_[static_cast<std::size_t>(edge.second)];
+            const double firstWeak = splitAlongU_ ? first.y : first.x;
+            const double secondWeak = splitAlongU_ ? second.y : second.x;
+            const double firstStrong = splitAlongU_ ? first.x : first.y;
+            const double secondStrong = splitAlongU_ ? second.x : second.y;
+            if (std::abs(firstWeak - secondWeak) <= 1.0e-10
+                && std::abs(firstStrong - secondStrong) > 1.0e-10) {
+                cutEdges_.insert(edge);
+            }
+        }
+    }
+
     void MarkManualCuts(const std::vector<NamedUvPath>& splitLines)
     {
         for (const NamedUvPath& split : splitLines) {
@@ -1520,7 +1889,7 @@ private:
             if (alreadyASeam) {
                 continue;
             }
-            std::size_t markedBefore = cutEdges_.size();
+            bool intersectsMesh = false;
             for (const auto& [edge, adjacent] : edgeTriangles_) {
                 if (adjacent.size() != 2) {
                     continue;
@@ -1531,12 +1900,13 @@ private:
                             uv_[static_cast<std::size_t>(edge.second)],
                             split.points[index - 1],
                             split.points[index])) {
+                        intersectsMesh = true;
                         cutEdges_.insert(edge);
                         break;
                     }
                 }
             }
-            if (cutEdges_.size() == markedBefore) {
+            if (!intersectsMesh) {
                 throw std::invalid_argument("Split line does not cross the papercraft fold mesh: " + split.name);
             }
         }
@@ -1795,11 +2165,14 @@ private:
         return {pieceIndex, std::move(flatPoints)};
     }
 
-    [[nodiscard]] std::pair<int, Vector2> EvaluateInStrip(Vector2 uv, int strip) const
+    [[nodiscard]] std::pair<int, Vector2> EvaluateInCell(
+        Vector2 uv,
+        int strip,
+        int requestedWeakIndex) const
     {
         strip = std::clamp(strip, 0, static_cast<int>(stripParameters_.size()) - 2);
-        const double weak = splitAlongU_ ? uv.y : uv.x;
-        const int weakIndex = std::min(static_cast<int>(std::clamp(weak, 0.0, 1.0) * weakSegments_), weakSegments_ - 1);
+        const int weakIndex = std::clamp(
+            requestedWeakIndex, 0, weakSegments_ - 1);
         const int cellIndex = strip * weakSegments_ + weakIndex;
         const double minimumU = splitAlongU_ ? stripParameters_[static_cast<std::size_t>(strip)]
                                              : static_cast<double>(weakIndex) / weakSegments_;
@@ -1829,6 +2202,15 @@ private:
         };
     }
 
+    [[nodiscard]] std::pair<int, Vector2> EvaluateInStrip(Vector2 uv, int strip) const
+    {
+        const double weak = splitAlongU_ ? uv.y : uv.x;
+        const int weakIndex = std::min(
+            static_cast<int>(std::clamp(weak, 0.0, 1.0) * weakSegments_),
+            weakSegments_ - 1);
+        return EvaluateInCell(uv, strip, weakIndex);
+    }
+
     [[nodiscard]] std::pair<int, Vector2> Evaluate(Vector2 uv) const
     {
         const double strong = splitAlongU_ ? uv.x : uv.y;
@@ -1845,6 +2227,7 @@ private:
     bool splitAlongU_ = true;
     std::vector<double> stripParameters_;
     int weakSegments_ = 2;
+    bool splitAcrossWeak_ = false;
     std::vector<Vector2> uv_;
     std::vector<Vector3> spatial_;
     std::vector<Triangle> triangles_;
@@ -1994,7 +2377,6 @@ PlateFlatPattern BuildPlateFlatPattern(
     pattern.analysis.classification = plate.AnalyzeDevelopability().classification;
 
     const bool automaticPapercraft = options.includeAutomaticReliefCuts
-        && options.assemblyStrategy == PlateAssemblyStrategy::SplitPieces
         && pattern.analysis.classification == PlateDevelopability::DoubleCurved;
     const bool papercraftMode = automaticPapercraft || !namedPlate.splitWireNames.empty();
     if (papercraftMode) {
@@ -2031,8 +2413,10 @@ PlateFlatPattern BuildPlateFlatPattern(
         }
         notchProtectedPaths.insert(
             notchProtectedPaths.end(), reliefPaths.begin(), reliefPaths.end());
-        const bool splitAlongU = TotalNormalChangeDegrees(plate, true)
-            >= TotalNormalChangeDegrees(plate, false);
+        const bool splitAlongU
+            = options.cutDirection != PapercraftCutDirection::Horizontal;
+        const bool splitAcrossWeak = automaticPapercraft
+            && options.cutDirection == PapercraftCutDirection::Both;
         std::vector<double> stripParameters = PapercraftStripParameters(
             plate, splitAlongU, papercraftOptions, reliefPaths);
         const Vector3 strongStart = splitAlongU
@@ -2102,7 +2486,13 @@ PlateFlatPattern BuildPlateFlatPattern(
             2,
             128);
         PapercraftGrid grid(
-            plate, splitAlongU, stripParameters, weakSegments, splitPaths, papercraftOptions);
+            plate,
+            splitAlongU,
+            stripParameters,
+            weakSegments,
+            splitAcrossWeak,
+            splitPaths,
+            papercraftOptions);
         for (const NamedUvPath& opening : openingPaths) {
             grid.AddOpeningPath(opening);
         }
@@ -2235,8 +2625,8 @@ PlateAssemblyGuide BuildPlateAssemblyGuide(
         || plate.AnalyzeDevelopability().classification != PlateDevelopability::DoubleCurved) {
         return guide;
     }
-    const bool cutAtConstantU = TotalNormalChangeDegrees(plate, true)
-        >= TotalNormalChangeDegrees(plate, false);
+    const bool cutAtConstantU
+        = options.cutDirection != PapercraftCutDirection::Horizontal;
     std::vector<NamedUvPath> notchProtectedPaths;
     std::vector<NamedUvPath> seamProtectedPaths;
     for (const std::string& openingName : namedPlate.openingWireNames) {
@@ -2254,47 +2644,34 @@ PlateAssemblyGuide BuildPlateAssemblyGuide(
         seamProtectedPaths.push_back(std::move(relief));
     }
     PlateFlatPatternOptions stripOptions = options;
-    stripOptions.includeAutomaticReliefCuts
-        = options.assemblyStrategy == PlateAssemblyStrategy::SplitPieces;
+    stripOptions.includeAutomaticReliefCuts = true;
     const std::vector<double> parameters = PapercraftStripParameters(
         plate, cutAtConstantU, stripOptions, seamProtectedPaths);
-    if (options.assemblyStrategy == PlateAssemblyStrategy::SingleSheet
-        && namedPlate.splitWireNames.empty()) {
-        if (!options.allowAutomaticNotches) {
-            return guide;
-        }
-        const std::vector<AutomaticNotchSpec> notches = BuildAutomaticNotchSpecs(
-            plate, cutAtConstantU, options, notchProtectedPaths);
-        for (std::size_t index = 0; index < notches.size(); ++index) {
-            const std::vector<Vector2> uv = BuildNotchUvPath(
-                notches[index], cutAtConstantU);
-            PlateAssemblyGuidePath path;
-            path.name = options.notchStyle == ReliefNotchStyle::CurvedV
-                ? "curved_v_notch_" + std::to_string(index + 1)
-                : "v_notch_" + std::to_string(index + 1);
-            constexpr int samplesPerArm = 8;
-            for (std::size_t arm = 0; arm + 1 < uv.size(); ++arm) {
-                for (int sample = arm == 0 ? 0 : 1; sample <= samplesPerArm; ++sample) {
-                    const double fraction = static_cast<double>(sample) / samplesPerArm;
-                    const Vector2 point = uv[arm] * (1.0 - fraction) + uv[arm + 1] * fraction;
-                    path.points.push_back(plate.Evaluate(point.x, point.y, 1.0));
-                }
-            }
-            guide.reliefCuts.push_back(std::move(path));
-        }
-        return guide;
+    for (std::size_t index = 1; index + 1 < parameters.size(); ++index) {
+        guide.splitLines.push_back({
+            "papercraft_split_primary_" + std::to_string(index),
+            BuildConstantAssemblyPath(
+                plate,
+                cutAtConstantU,
+                parameters[index],
+                0.0,
+                1.0,
+                cutAtConstantU ? options.vSegments : options.uSegments),
+        });
     }
-    if (options.assemblyStrategy == PlateAssemblyStrategy::SplitPieces) {
-        for (std::size_t index = 1; index + 1 < parameters.size(); ++index) {
+    if (options.cutDirection == PapercraftCutDirection::Both) {
+        const std::vector<double> secondaryParameters = PapercraftStripParameters(
+            plate, false, stripOptions, seamProtectedPaths);
+        for (std::size_t index = 1; index + 1 < secondaryParameters.size(); ++index) {
             guide.splitLines.push_back({
-                "papercraft_split_" + std::to_string(index),
+                "papercraft_split_secondary_" + std::to_string(index),
                 BuildConstantAssemblyPath(
                     plate,
-                    cutAtConstantU,
-                    parameters[index],
+                    false,
+                    secondaryParameters[index],
                     0.0,
                     1.0,
-                    cutAtConstantU ? options.vSegments : options.uSegments),
+                    options.uSegments),
             });
         }
     }
@@ -2361,10 +2738,9 @@ PlateAssemblyApproximation BuildPlateAssemblyApproximation(
     }
     std::vector<double> uParameters = uniformParameters(uIntervals);
     std::vector<double> vParameters = uniformParameters(vIntervals);
-    const bool strongIsU = TotalNormalChangeDegrees(plate, true)
-        >= TotalNormalChangeDegrees(plate, false);
+    const bool strongIsU
+        = options.cutDirection != PapercraftCutDirection::Horizontal;
     if (options.includeAutomaticReliefCuts
-        && options.assemblyStrategy == PlateAssemblyStrategy::SplitPieces
         && classification == PlateDevelopability::DoubleCurved) {
         std::vector<NamedUvPath> seamProtectedPaths;
         for (const std::string& reliefName : namedPlate.reliefCutWireNames) {
@@ -2386,6 +2762,15 @@ PlateAssemblyApproximation BuildPlateAssemblyApproximation(
             uParameters = std::move(strongParameters);
         } else {
             vParameters = std::move(strongParameters);
+        }
+        if (options.cutDirection == PapercraftCutDirection::Both) {
+            std::vector<double> secondaryParameters = PapercraftStripParameters(
+                plate, false, stripOptions, seamProtectedPaths);
+            vParameters = std::move(secondaryParameters);
+            approximation.pieceCount = std::max(
+                approximation.pieceCount,
+                static_cast<int>((uParameters.size() - 1) * (vParameters.size() - 1))
+                    + static_cast<int>(namedPlate.splitWireNames.size()));
         }
     }
 
@@ -2458,12 +2843,11 @@ PlateAssemblyApproximation BuildPlateAssemblyApproximation(
                 for (std::size_t point = 0; point < uv.size(); ++point) {
                     panel.points[point] = plate.Evaluate(uv[point].x, uv[point].y, 0.5);
                 }
-                panel.pieceIndex = options.assemblyStrategy
-                        == PlateAssemblyStrategy::SplitPieces
-                    ? (strongIsU
+                panel.pieceIndex = options.cutDirection == PapercraftCutDirection::Both
+                    ? static_cast<int>(vIndex * (uParameters.size() - 1) + uIndex)
+                    : (strongIsU
                         ? static_cast<int>(uIndex)
-                        : static_cast<int>(vIndex))
-                    : 0;
+                        : static_cast<int>(vIndex));
                 panel.maximumDeviationMillimeters = panelDeviation(uv, panel.points);
                 approximation.maximumDeviationMillimeters = std::max(
                     approximation.maximumDeviationMillimeters,
@@ -2480,6 +2864,71 @@ PlateAssemblyApproximation BuildPlateAssemblyApproximation(
             squaredDeviation / static_cast<double>(measuredPanels));
     }
     return approximation;
+}
+
+PlateAssemblyMotion BuildPlateAssemblyMotion(
+    const Project& project,
+    const NamedPlate& namedPlate,
+    double progress,
+    PlateFlatPatternOptions options)
+{
+    ValidateOptions(options);
+    if (!std::isfinite(progress)) {
+        throw std::invalid_argument("Plate assembly progress must be finite.");
+    }
+
+    const Plate& plate = namedPlate.plate;
+    const bool splitAlongU
+        = options.cutDirection != PapercraftCutDirection::Horizontal;
+    std::vector<NamedUvPath> splitPaths;
+    std::vector<NamedUvPath> protectedPaths;
+    for (const std::string& splitName : namedPlate.splitWireNames) {
+        splitPaths.push_back({
+            splitName,
+            BuildPlateWireUvPath(
+                project, namedPlate, splitName, options.openingSamples, false),
+        });
+    }
+    for (const std::string& reliefName : namedPlate.reliefCutWireNames) {
+        protectedPaths.push_back({
+            reliefName,
+            BuildPlateWireUvPath(
+                project, namedPlate, reliefName, options.openingSamples, false),
+        });
+    }
+    std::vector<NamedUvPath> openings;
+    if (options.includeOpenings) {
+        for (const std::string& openingName : namedPlate.openingWireNames) {
+            openings.push_back({
+                openingName,
+                BuildPlateWireUvPath(
+                    project, namedPlate, openingName, options.openingSamples, true),
+            });
+        }
+    }
+
+    PlateFlatPatternOptions motionOptions = options;
+    motionOptions.includeAutomaticReliefCuts
+        = options.includeAutomaticReliefCuts
+        && plate.AnalyzeDevelopability().classification == PlateDevelopability::DoubleCurved;
+    std::vector<double> stripParameters = PapercraftStripParameters(
+        plate, splitAlongU, motionOptions, protectedPaths);
+    const double weakLength = SpatialPathLength(plate, !splitAlongU, 0.5);
+    const int weakSegments = std::clamp(
+        static_cast<int>(std::ceil(
+            weakLength / FidelityTargetSpacing(options.papercraftFidelity))),
+        2,
+        128);
+    PapercraftGrid grid(
+        plate,
+        splitAlongU,
+        std::move(stripParameters),
+        weakSegments,
+        motionOptions.includeAutomaticReliefCuts
+            && options.cutDirection == PapercraftCutDirection::Both,
+        splitPaths,
+        motionOptions);
+    return grid.BuildAssemblyMotion(namedPlate.name, progress, openings);
 }
 
 void WritePlateFlatPatternSvg(
@@ -2602,6 +3051,70 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
     if (!output) {
         throw std::runtime_error("Failed to write plate flat-pattern DXF.");
     }
+}
+
+PlateAssemblyModelResult AddPlateAssemblyMotionModel(
+    Project& project,
+    const NamedPlate& sourcePlate,
+    const PlateAssemblyMotion& motion,
+    std::string namePrefix,
+    std::optional<int> selectedPieceIndex)
+{
+    if (namePrefix.empty()) {
+        throw std::invalid_argument("Assembly-state model name must not be empty.");
+    }
+    if (motion.panels.empty()
+        || motion.panels.size() != motion.pieceIndices.size()
+        || motion.panels.size() != motion.panelThicknessMillimeters.size()) {
+        throw std::invalid_argument("Assembly-state panels are incomplete.");
+    }
+    if (selectedPieceIndex.has_value()
+        && (*selectedPieceIndex < 0 || *selectedPieceIndex >= motion.pieceCount)) {
+        throw std::invalid_argument("Selected assembly piece is outside the available range.");
+    }
+
+    PlateAssemblyModelResult result;
+    for (std::size_t panelIndex = 0; panelIndex < motion.panels.size(); ++panelIndex) {
+        const int pieceIndex = motion.pieceIndices[panelIndex];
+        if (selectedPieceIndex.has_value() && pieceIndex != *selectedPieceIndex) {
+            continue;
+        }
+        const auto& panel = motion.panels[panelIndex];
+        const double thickness = motion.panelThicknessMillimeters[panelIndex];
+        if (!std::isfinite(thickness) || thickness <= 0.0) {
+            throw std::invalid_argument("Assembly-state panel thickness must be positive.");
+        }
+        if (!panel[0].IsFinite() || !panel[1].IsFinite() || !panel[2].IsFinite()
+            || geometry::Cross(panel[1] - panel[0], panel[2] - panel[0]).LengthSquared()
+                <= 1.0e-16) {
+            throw std::invalid_argument("Assembly-state panel is collapsed.");
+        }
+
+        const std::string baseName = namePrefix
+            + "_piece_" + std::to_string(pieceIndex + 1)
+            + "_panel_" + std::to_string(panelIndex + 1);
+        const std::string outerName = baseName + "_outer";
+        const std::string surfaceName = baseName + "_surface";
+        const std::string plateName = baseName + "_plate";
+        project.AddWire(outerName, Wire::Polyline({
+            panel[0], panel[1], panel[2], panel[0],
+        }));
+        project.AddPlanarSurface(surfaceName, outerName);
+        project.AddPlate(
+            plateName,
+            surfaceName,
+            thickness,
+            model::PlateThicknessDirection::Centered,
+            sourcePlate.material);
+        result.outerWireNames.push_back(outerName);
+        result.surfaceNames.push_back(surfaceName);
+        result.plateNames.push_back(plateName);
+        result.pieceIndices.push_back(pieceIndex);
+    }
+    if (result.plateNames.empty()) {
+        throw std::invalid_argument("Selected assembly piece contains no panels.");
+    }
+    return result;
 }
 
 PlateFlatPatternModelResult AddPlateFlatPatternModel(

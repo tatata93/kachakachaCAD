@@ -370,7 +370,9 @@ void WritePlateFlatPatternPdf(
     std::vector<QPainterPath> reliefCutPaths;
     reliefCutPaths.reserve(pattern.reliefCuts.size());
     for (const auto& cut : pattern.reliefCuts) {
-        reliefCutPaths.push_back(ToPainterPath(cut, bounds));
+        if (!cut.incorporatedInOuterBoundary) {
+            reliefCutPaths.push_back(ToPainterPath(cut, bounds));
+        }
     }
     const auto registrationMarks = RegistrationMarks(layout);
 

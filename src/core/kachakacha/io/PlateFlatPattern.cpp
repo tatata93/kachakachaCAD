@@ -59,6 +59,12 @@ void ValidateOptions(const PlateFlatPatternOptions& options)
         || options.minimumFoldAngleDegrees < 0.0 || options.minimumFoldAngleDegrees > 180.0
         || !std::isfinite(options.reliefCutDepthRatio)
         || options.reliefCutDepthRatio <= 0.0 || options.reliefCutDepthRatio >= 1.0
+        || !std::isfinite(options.reliefCutSpacingMillimeters)
+        || options.reliefCutSpacingMillimeters <= 0.0
+        || !std::isfinite(options.reliefNotchAngleDegrees)
+        || options.reliefNotchAngleDegrees < 1.0 || options.reliefNotchAngleDegrees > 120.0
+        || !std::isfinite(options.reliefNotchTipRadiusMillimeters)
+        || options.reliefNotchTipRadiusMillimeters < 0.0
         || options.papercraftFidelity < 1 || options.papercraftFidelity > 10) {
         throw std::invalid_argument("Plate flat-pattern options are invalid.");
     }
@@ -789,6 +795,274 @@ std::vector<double> PapercraftStripParameters(
     return parameters;
 }
 
+struct AutomaticNotchSpec {
+    double strongParameter = 0.0;
+    double halfMouthParameter = 0.0;
+    bool fromMinimumSide = true;
+};
+
+bool ProtectedPathIntersectsNotch(
+    const NamedUvPath& path,
+    bool strongIsU,
+    double strongMinimum,
+    double strongMaximum,
+    double depthRatio,
+    bool fromMinimumSide)
+{
+    constexpr double clearance = 0.01;
+    for (const Vector2 point : path.points) {
+        const double strong = strongIsU ? point.x : point.y;
+        const double weak = strongIsU ? point.y : point.x;
+        const bool withinStrong = strong >= strongMinimum - clearance
+            && strong <= strongMaximum + clearance;
+        const bool withinWeak = fromMinimumSide
+            ? weak <= depthRatio + clearance
+            : weak >= 1.0 - depthRatio - clearance;
+        if (withinStrong && withinWeak) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<AutomaticNotchSpec> BuildAutomaticNotchSpecs(
+    const Plate& plate,
+    bool strongIsU,
+    const PlateFlatPatternOptions& options,
+    const std::vector<NamedUvPath>& protectedPaths)
+{
+    PlateFlatPatternOptions notchOptions = options;
+    notchOptions.foldSpacingMillimeters = options.reliefCutSpacingMillimeters;
+    const std::vector<double> parameters = FoldParameters(plate, strongIsU, notchOptions);
+    const double strongLength = SpatialPathLength(plate, strongIsU, 0.5);
+    const double weakLength = SpatialPathLength(plate, !strongIsU, 0.5);
+    constexpr double degreesToRadians = 0.0174532925199432957692;
+    const double physicalDepth = weakLength * options.reliefCutDepthRatio;
+    const double requestedHalfMouth = physicalDepth
+        * std::tan(options.reliefNotchAngleDegrees * degreesToRadians * 0.5);
+
+    std::vector<AutomaticNotchSpec> notches;
+    notches.reserve(parameters.size());
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const double parameter = parameters[index];
+        const double previous = index == 0 ? 0.0 : parameters[index - 1];
+        const double next = index + 1 == parameters.size() ? 1.0 : parameters[index + 1];
+        const double availableHalfParameter = std::max(0.0,
+            std::min(parameter - previous, next - parameter) * 0.4);
+        const double halfMouthParameter = std::min({
+            requestedHalfMouth / std::max(strongLength, 1.0e-9),
+            availableHalfParameter,
+            parameter * 0.45,
+            (1.0 - parameter) * 0.45,
+        });
+        if (halfMouthParameter <= 1.0e-5) {
+            continue;
+        }
+
+        const auto sideIsBlocked = [&](bool fromMinimumSide) {
+            return std::any_of(protectedPaths.begin(), protectedPaths.end(),
+                [&](const NamedUvPath& path) {
+                    return ProtectedPathIntersectsNotch(
+                        path,
+                        strongIsU,
+                        parameter - halfMouthParameter,
+                        parameter + halfMouthParameter,
+                        options.reliefCutDepthRatio,
+                        fromMinimumSide);
+                });
+        };
+        bool fromMinimumSide = index % 2 == 0;
+        if (sideIsBlocked(fromMinimumSide)) {
+            fromMinimumSide = !fromMinimumSide;
+            if (sideIsBlocked(fromMinimumSide)) {
+                continue;
+            }
+        }
+        notches.push_back({parameter, halfMouthParameter, fromMinimumSide});
+    }
+    return notches;
+}
+
+std::vector<Vector2> BuildNotchUvPath(
+    const AutomaticNotchSpec& notch,
+    bool strongIsU,
+    double depthRatio)
+{
+    const double side = notch.fromMinimumSide ? 0.0 : 1.0;
+    const double tipWeak = notch.fromMinimumSide ? depthRatio : 1.0 - depthRatio;
+    if (strongIsU) {
+        return {
+            {notch.strongParameter - notch.halfMouthParameter, side},
+            {notch.strongParameter, tipWeak},
+            {notch.strongParameter + notch.halfMouthParameter, side},
+        };
+    }
+    return {
+        {side, notch.strongParameter - notch.halfMouthParameter},
+        {tipWeak, notch.strongParameter},
+        {side, notch.strongParameter + notch.halfMouthParameter},
+    };
+}
+
+std::vector<Vector2> RoundNotchTip(
+    Vector2 first,
+    Vector2 tip,
+    Vector2 last,
+    double requestedRadius)
+{
+    if (requestedRadius <= 1.0e-9) {
+        return {first, tip, last};
+    }
+    const Vector2 firstRay = first - tip;
+    const Vector2 lastRay = last - tip;
+    const double firstLength = Length(firstRay);
+    const double lastLength = Length(lastRay);
+    if (firstLength <= 1.0e-9 || lastLength <= 1.0e-9) {
+        return {first, tip, last};
+    }
+    const Vector2 firstDirection = firstRay * (1.0 / firstLength);
+    const Vector2 lastDirection = lastRay * (1.0 / lastLength);
+    const double cosine = std::clamp(
+        firstDirection.x * lastDirection.x + firstDirection.y * lastDirection.y,
+        -1.0,
+        1.0);
+    const double angle = std::acos(cosine);
+    if (angle <= 1.0e-4 || angle >= 3.14149265358979323846) {
+        return {first, tip, last};
+    }
+    const double tangentScale = std::tan(angle * 0.5);
+    if (tangentScale <= 1.0e-6) {
+        return {first, tip, last};
+    }
+    const double tangentDistance = std::min(
+        requestedRadius / tangentScale,
+        std::min(firstLength, lastLength) * 0.72);
+    const double actualRadius = tangentDistance * tangentScale;
+    const Vector2 tangentFirst = tip + firstDirection * tangentDistance;
+    const Vector2 tangentLast = tip + lastDirection * tangentDistance;
+    Vector2 centerDirection = firstDirection + lastDirection;
+    const double centerDirectionLength = Length(centerDirection);
+    if (centerDirectionLength <= 1.0e-9) {
+        return {first, tip, last};
+    }
+    centerDirection = centerDirection * (1.0 / centerDirectionLength);
+    const Vector2 center = tip + centerDirection
+        * (actualRadius / std::sin(angle * 0.5));
+    const Vector2 radialFirst = tangentFirst - center;
+    const Vector2 radialLast = tangentLast - center;
+    const double startAngle = std::atan2(radialFirst.y, radialFirst.x);
+    double sweep = std::atan2(Cross2(radialFirst, radialLast),
+        radialFirst.x * radialLast.x + radialFirst.y * radialLast.y);
+    if (std::abs(sweep) <= 1.0e-6) {
+        return {first, tip, last};
+    }
+
+    constexpr int arcSegments = 10;
+    std::vector<Vector2> rounded{first};
+    if (!AlmostSame(first, tangentFirst)) {
+        rounded.push_back(tangentFirst);
+    }
+    for (int segment = 1; segment < arcSegments; ++segment) {
+        const double arcAngle = startAngle + sweep * static_cast<double>(segment) / arcSegments;
+        rounded.push_back(center + Vector2{std::cos(arcAngle), std::sin(arcAngle)} * actualRadius);
+    }
+    rounded.push_back(tangentLast);
+    if (!AlmostSame(tangentLast, last)) {
+        rounded.push_back(last);
+    }
+    return rounded;
+}
+
+std::vector<Vector2> BuildFlatNotchPath(
+    const DevelopmentGrid& grid,
+    const AutomaticNotchSpec& notch,
+    bool strongIsU,
+    const PlateFlatPatternOptions& options)
+{
+    const std::vector<Vector2> uv = BuildNotchUvPath(
+        notch, strongIsU, options.reliefCutDepthRatio);
+    const Vector2 first = grid.Evaluate(uv[0].x, uv[0].y);
+    const Vector2 tip = grid.Evaluate(uv[1].x, uv[1].y);
+    const Vector2 last = grid.Evaluate(uv[2].x, uv[2].y);
+    if (options.automaticReliefStyle == AutomaticReliefStyle::RoundedVNotch) {
+        return RoundNotchTip(
+            first, tip, last, options.reliefNotchTipRadiusMillimeters);
+    }
+    return {first, tip, last};
+}
+
+std::vector<Vector2> BuildNotchedBoundary(
+    const DevelopmentGrid& grid,
+    bool strongIsU,
+    const std::vector<AutomaticNotchSpec>& notches,
+    const PlateFlatPatternOptions& options,
+    std::vector<PlateFlatPatternPath>& generatedNotches)
+{
+    const auto appendUnique = [](std::vector<Vector2>& target, Vector2 point) {
+        if (target.empty() || !AlmostSame(target.back(), point, 1.0e-8)) {
+            target.push_back(point);
+        }
+    };
+    const auto appendSide = [&](std::vector<Vector2>& boundary,
+                                bool varyingU,
+                                double fixed,
+                                bool increasing,
+                                bool notched,
+                                bool minimumSide) {
+        const auto sidePoint = [&](double parameter) {
+            return varyingU ? grid.Evaluate(parameter, fixed) : grid.Evaluate(fixed, parameter);
+        };
+        appendUnique(boundary, sidePoint(increasing ? 0.0 : 1.0));
+        std::vector<const AutomaticNotchSpec*> sideNotches;
+        if (notched) {
+            for (const AutomaticNotchSpec& notch : notches) {
+                if (notch.fromMinimumSide == minimumSide) {
+                    sideNotches.push_back(&notch);
+                }
+            }
+            std::sort(sideNotches.begin(), sideNotches.end(),
+                [&](const auto* first, const auto* second) {
+                    return increasing
+                        ? first->strongParameter < second->strongParameter
+                        : first->strongParameter > second->strongParameter;
+                });
+        }
+        for (const AutomaticNotchSpec* notch : sideNotches) {
+            std::vector<Vector2> path = BuildFlatNotchPath(grid, *notch, strongIsU, options);
+            generatedNotches.push_back({
+                "auto_" + std::string(
+                    options.automaticReliefStyle == AutomaticReliefStyle::RoundedVNotch
+                        ? "rounded_v_notch_"
+                        : "v_notch_") + std::to_string(generatedNotches.size() + 1),
+                path,
+                true,
+            });
+            if (!increasing) {
+                std::reverse(path.begin(), path.end());
+            }
+            for (const Vector2 point : path) {
+                appendUnique(boundary, point);
+            }
+        }
+        appendUnique(boundary, sidePoint(increasing ? 1.0 : 0.0));
+    };
+
+    std::vector<Vector2> boundary;
+    if (strongIsU) {
+        appendSide(boundary, true, 0.0, true, true, true);
+        appendSide(boundary, false, 1.0, true, false, false);
+        appendSide(boundary, true, 1.0, false, true, false);
+        appendSide(boundary, false, 0.0, false, false, true);
+    } else {
+        appendSide(boundary, true, 0.0, true, false, true);
+        appendSide(boundary, false, 1.0, true, true, false);
+        appendSide(boundary, true, 1.0, false, false, false);
+        appendSide(boundary, false, 0.0, false, true, true);
+    }
+    ClosePath(boundary);
+    return boundary;
+}
+
 class PapercraftGrid {
 public:
     PapercraftGrid(
@@ -1236,6 +1510,8 @@ private:
 
 void AddGeneratedFoldAndReliefPaths(
     PlateFlatPattern& pattern,
+    const Project& project,
+    const NamedPlate& namedPlate,
     const Plate& plate,
     const DevelopmentGrid& grid,
     const PlateFlatPatternOptions& options)
@@ -1258,25 +1534,29 @@ void AddGeneratedFoldAndReliefPaths(
     }
 
     if (!options.includeAutomaticReliefCuts
-        || pattern.analysis.classification != PlateDevelopability::DoubleCurved) {
+        || pattern.analysis.classification != PlateDevelopability::DoubleCurved
+        || options.automaticReliefStyle == AutomaticReliefStyle::SplitPieces) {
         return;
     }
-    const bool cutAtConstantU = TotalNormalChangeDegrees(plate, true)
+    const bool strongIsU = TotalNormalChangeDegrees(plate, true)
         >= TotalNormalChangeDegrees(plate, false);
-    const std::vector<double>& parameters = cutAtConstantU ? uParameters : vParameters;
-    for (std::size_t index = 0; index < parameters.size(); ++index) {
-        const bool fromMinimumSide = index % 2 == 0;
-        const double first = fromMinimumSide ? 0.0 : 1.0;
-        const double last = fromMinimumSide
-            ? options.reliefCutDepthRatio
-            : 1.0 - options.reliefCutDepthRatio;
-        pattern.reliefCuts.push_back({
-            "auto_relief_" + std::to_string(index + 1),
-            cutAtConstantU
-                ? grid.ConstantU(parameters[index], first, last)
-                : grid.ConstantV(parameters[index], first, last),
-        });
+    std::vector<NamedUvPath> protectedPaths;
+    for (const std::string& openingName : namedPlate.openingWireNames) {
+        protectedPaths.push_back({openingName, BuildPlateWireUvPath(
+            project, namedPlate, openingName, options.openingSamples, true)});
     }
+    for (const std::string& reliefName : namedPlate.reliefCutWireNames) {
+        protectedPaths.push_back({reliefName, BuildPlateWireUvPath(
+            project, namedPlate, reliefName, options.openingSamples, false)});
+    }
+    const std::vector<AutomaticNotchSpec> notches = BuildAutomaticNotchSpecs(
+        plate, strongIsU, options, protectedPaths);
+    std::vector<PlateFlatPatternPath> generatedNotches;
+    pattern.outerBoundary.points = BuildNotchedBoundary(
+        grid, strongIsU, notches, options, generatedNotches);
+    pattern.analysis.automaticNotchCount = static_cast<int>(generatedNotches.size());
+    pattern.reliefCuts.insert(
+        pattern.reliefCuts.end(), generatedNotches.begin(), generatedNotches.end());
 }
 
 void ValidatePattern(const PlateFlatPattern& pattern)
@@ -1363,6 +1643,7 @@ PlateFlatPattern BuildPlateFlatPattern(
     pattern.analysis.classification = plate.AnalyzeDevelopability().classification;
 
     const bool automaticPapercraft = options.includeAutomaticReliefCuts
+        && options.automaticReliefStyle == AutomaticReliefStyle::SplitPieces
         && pattern.analysis.classification == PlateDevelopability::DoubleCurved;
     const bool papercraftMode = automaticPapercraft || !namedPlate.splitWireNames.empty();
     if (papercraftMode) {
@@ -1371,11 +1652,17 @@ PlateFlatPattern BuildPlateFlatPattern(
         std::vector<NamedUvPath> openingPaths;
         std::vector<NamedUvPath> reliefPaths;
         std::vector<NamedUvPath> splitPaths;
-        if (options.includeOpenings) {
-            for (const std::string& openingName : namedPlate.openingWireNames) {
+        std::vector<NamedUvPath> protectedPaths;
+        for (const std::string& openingName : namedPlate.openingWireNames) {
+            NamedUvPath openingPath{
+                openingName,
+                BuildPlateWireUvPath(project, namedPlate, openingName, options.openingSamples, true),
+            };
+            protectedPaths.push_back(openingPath);
+            if (options.includeOpenings) {
                 openingPaths.push_back({
-                    openingName,
-                    BuildPlateWireUvPath(project, namedPlate, openingName, options.openingSamples, true),
+                    openingPath.name,
+                    std::move(openingPath.points),
                 });
             }
         }
@@ -1391,7 +1678,6 @@ PlateFlatPattern BuildPlateFlatPattern(
                 BuildPlateWireUvPath(project, namedPlate, splitName, options.openingSamples, false),
             });
         }
-        std::vector<NamedUvPath> protectedPaths = openingPaths;
         protectedPaths.insert(protectedPaths.end(), reliefPaths.begin(), reliefPaths.end());
         const bool splitAlongU = TotalNormalChangeDegrees(plate, true)
             >= TotalNormalChangeDegrees(plate, false);
@@ -1519,7 +1805,7 @@ PlateFlatPattern BuildPlateFlatPattern(
                 BuildDevelopedWirePath(project, namedPlate, cutName, grid, options.openingSamples, false),
             });
         }
-        AddGeneratedFoldAndReliefPaths(pattern, plate, grid, options);
+        AddGeneratedFoldAndReliefPaths(pattern, project, namedPlate, plate, grid, options);
     }
     if (pattern.pieces.empty()) {
         pattern.pieces.push_back({
@@ -1602,6 +1888,31 @@ PlateAssemblyGuide BuildPlateAssemblyGuide(
     }
     const std::vector<double> parameters = PapercraftStripParameters(
         plate, cutAtConstantU, options, protectedPaths);
+    if (options.automaticReliefStyle != AutomaticReliefStyle::SplitPieces) {
+        if (!namedPlate.splitWireNames.empty()) {
+            return guide;
+        }
+        const std::vector<AutomaticNotchSpec> notches = BuildAutomaticNotchSpecs(
+            plate, cutAtConstantU, options, protectedPaths);
+        for (std::size_t index = 0; index < notches.size(); ++index) {
+            const std::vector<Vector2> uv = BuildNotchUvPath(
+                notches[index], cutAtConstantU, options.reliefCutDepthRatio);
+            PlateAssemblyGuidePath path;
+            path.name = options.automaticReliefStyle == AutomaticReliefStyle::RoundedVNotch
+                ? "rounded_v_notch_" + std::to_string(index + 1)
+                : "v_notch_" + std::to_string(index + 1);
+            constexpr int samplesPerArm = 8;
+            for (std::size_t arm = 0; arm + 1 < uv.size(); ++arm) {
+                for (int sample = arm == 0 ? 0 : 1; sample <= samplesPerArm; ++sample) {
+                    const double fraction = static_cast<double>(sample) / samplesPerArm;
+                    const Vector2 point = uv[arm] * (1.0 - fraction) + uv[arm + 1] * fraction;
+                    path.points.push_back(plate.Evaluate(point.x, point.y, 1.0));
+                }
+            }
+            guide.reliefCuts.push_back(std::move(path));
+        }
+        return guide;
+    }
     for (std::size_t index = 1; index + 1 < parameters.size(); ++index) {
         guide.splitLines.push_back({
             "papercraft_split_" + std::to_string(index),
@@ -1687,7 +1998,9 @@ void WritePlateFlatPatternSvg(
     output << "  </g>\n"
            << "  <g id=\"RELIEF_CUT\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.14\" stroke-linecap=\"round\">\n";
     for (const auto& cut : pattern.reliefCuts) {
-        writePath(cut, "    ");
+        if (!cut.incorporatedInOuterBoundary) {
+            writePath(cut, "    ");
+        }
     }
     output << "  </g>\n"
            << "  <g id=\"FOLD\" fill=\"none\" stroke=\"#4c5963\" stroke-width=\"0.1\" stroke-dasharray=\"2,1\">\n";
@@ -1723,7 +2036,9 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
         WriteDxfPath(output, opening, "CUT_OPENING");
     }
     for (const auto& cut : pattern.reliefCuts) {
-        WriteDxfPath(output, cut, "RELIEF_CUT");
+        if (!cut.incorporatedInOuterBoundary) {
+            WriteDxfPath(output, cut, "RELIEF_CUT");
+        }
     }
     for (const auto& fold : pattern.foldLines) {
         WriteDxfPath(output, fold, "FOLD");
@@ -1888,6 +2203,12 @@ PlateFlatPatternModelResult AddPlateFlatPatternModel(
         }
         for (const PlateFlatPatternPath& relief : piece.reliefCuts) {
             const std::string name = namePrefix + "_relief_" + std::to_string(++reliefIndex);
+            if (relief.incorporatedInOuterBoundary) {
+                project.AddWire(
+                    name, Wire::Polyline(toWorld(relief, 0.0)), makeMetadata(false));
+                result.reliefCutWireNames.push_back(name);
+                continue;
+            }
             addProjectedPath(relief, name, surfaceName);
             project.AddPlateReliefCut(plateName, name);
             result.reliefCutWireNames.push_back(name);

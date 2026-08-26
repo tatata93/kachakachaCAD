@@ -13,6 +13,7 @@ using kachakacha::geometry::Vector2;
 using kachakacha::io::BuildPlateFlatPattern;
 using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::AddPlateFlatPatternModel;
+using kachakacha::io::AutomaticReliefStyle;
 using kachakacha::io::LoadProjectScript;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::PlateFlatPattern;
@@ -244,6 +245,97 @@ int main(int argc, char* argv[])
         Require(finePattern.analysis.MaximumEstimatedErrorMillimeters()
                 < coarsePattern.analysis.MaximumEstimatedErrorMillimeters(),
             "higher papercraft fidelity lowers the faceting estimate");
+
+        Project notchedTwisted = twisted;
+        notchedTwisted.RemovePlateSplitLine("twisted_plate", "manual_split_on_twisted");
+        notchedTwisted.AddWire("notch_protected_opening_plan", Wire::Polyline({
+            {4.0, -1.0, 20.0}, {6.0, -1.0, 20.0}, {6.0, 1.0, 20.0},
+            {4.0, 1.0, 20.0}, {4.0, -1.0, 20.0},
+        }));
+        notchedTwisted.AddProjectedWire(
+            "notch_protected_opening",
+            "notch_protected_opening_plan",
+            "twisted",
+            {0.0, 0.0, -1.0});
+        notchedTwisted.AddPlateOpening("twisted_plate", "notch_protected_opening");
+        PlateFlatPatternOptions notchOptions = twistedOptions;
+        notchOptions.automaticReliefStyle = AutomaticReliefStyle::RoundedVNotch;
+        notchOptions.reliefCutSpacingMillimeters = 2.0;
+        notchOptions.reliefCutDepthRatio = 0.55;
+        notchOptions.reliefNotchAngleDegrees = 20.0;
+        notchOptions.reliefNotchTipRadiusMillimeters = 0.4;
+        const PlateFlatPattern roundedNotchPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), notchOptions);
+        Require(roundedNotchPattern.pieces.size() == 1,
+            "rounded V notches keep a double-curved pattern in one connected sheet");
+        Require(roundedNotchPattern.analysis.automaticNotchCount > 0,
+            "rounded V notch development creates automatic edge notches");
+        PlateFlatPatternOptions notchPreviewOptions = notchOptions;
+        notchPreviewOptions.includeOpenings = false;
+        const PlateFlatPattern notchPreviewPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), notchPreviewOptions);
+        Require(notchPreviewPattern.analysis.automaticNotchCount
+                == roundedNotchPattern.analysis.automaticNotchCount,
+            "preview-only opening visibility does not change protected notch placement");
+        Require(std::all_of(
+            roundedNotchPattern.reliefCuts.begin(),
+            roundedNotchPattern.reliefCuts.end(),
+            [](const auto& path) {
+                return path.incorporatedInOuterBoundary && path.points.size() > 3;
+            }),
+            "rounded V notches are filleted and incorporated into the cutting boundary");
+        std::ostringstream roundedNotchSvg;
+        WritePlateFlatPatternSvg(roundedNotchSvg, roundedNotchPattern, notchOptions);
+        const std::string roundedSvgText = roundedNotchSvg.str();
+        const std::size_t reliefLayer = roundedSvgText.find("id=\"RELIEF_CUT\"");
+        const std::size_t reliefLayerEnd = roundedSvgText.find("</g>", reliefLayer);
+        Require(reliefLayer != std::string::npos && reliefLayerEnd != std::string::npos
+                && roundedSvgText.find("<polyline", reliefLayer) > reliefLayerEnd,
+            "outer-boundary V notches are not duplicated on the SVG relief layer");
+        std::ostringstream roundedNotchDxf;
+        WritePlateFlatPatternDxf(roundedNotchDxf, roundedNotchPattern);
+        Require(roundedNotchDxf.str().find("RELIEF_CUT") == std::string::npos,
+            "outer-boundary V notches are not duplicated in the DXF relief layer");
+
+        PlateFlatPatternOptions plainNotchOptions = notchOptions;
+        plainNotchOptions.automaticReliefStyle = AutomaticReliefStyle::VNotch;
+        const PlateFlatPattern plainNotchPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), plainNotchOptions);
+        Require(std::all_of(
+            plainNotchPattern.reliefCuts.begin(),
+            plainNotchPattern.reliefCuts.end(),
+            [](const auto& path) { return path.points.size() == 3; }),
+            "plain V notches retain a sharp three-point cutting profile");
+
+        PlateFlatPatternOptions denseNotchOptions = notchOptions;
+        denseNotchOptions.reliefCutSpacingMillimeters = 1.0;
+        const PlateFlatPattern denseNotchPattern = BuildPlateFlatPattern(
+            notchedTwisted, notchedTwisted.Plates().front(), denseNotchOptions);
+        Require(denseNotchPattern.analysis.automaticNotchCount
+                >= roundedNotchPattern.analysis.automaticNotchCount,
+            "smaller notch spacing never reduces rounded-corner reproduction density");
+
+        const auto notchedAssemblyGuide = BuildPlateAssemblyGuide(
+            notchedTwisted, notchedTwisted.Plates().front(), notchOptions);
+        Require(notchedAssemblyGuide.splitLines.empty()
+                && notchedAssemblyGuide.reliefCuts.size()
+                    == static_cast<std::size_t>(roundedNotchPattern.analysis.automaticNotchCount),
+            "assembled preview distinguishes edge notches from full split lines");
+
+        Project notchedDeveloped = notchedTwisted;
+        const auto notchedFlatModel = AddPlateFlatPatternModel(
+            notchedDeveloped,
+            notchedTwisted.Plates().front(),
+            roundedNotchPattern,
+            WorkPlane::FromPointNormal({0.0, 0.0, 45.0}, {0.0, 0.0, 1.0}),
+            "rounded_notch_developed");
+        Require(notchedFlatModel.plateNames.size() == 1,
+            "rounded V notch development creates one editable 3D plate");
+        Require(notchedFlatModel.reliefCutWireNames.size()
+                == static_cast<std::size_t>(roundedNotchPattern.analysis.automaticNotchCount),
+            "rounded V notch edges remain editable CAD wires");
+        Require(notchedFlatModel.openingWireNames.size() == roundedNotchPattern.openings.size(),
+            "outer-boundary V notches are not duplicated as invalid internal slots");
 
         Project twistedDeveloped = twisted;
         const auto twistedFlatModel = AddPlateFlatPatternModel(

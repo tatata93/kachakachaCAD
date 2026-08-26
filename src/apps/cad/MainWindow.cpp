@@ -78,6 +78,7 @@ using kachakacha::io::LoadProjectScript;
 using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::AutomaticReliefStyle;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::WireLiesOnWorkPlane;
 using kachakacha::io::WritePlateFlatPatternDxf;
@@ -2130,10 +2131,23 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
     plateFlatPatternPlane_ = new QComboBox;
-    plateFlatPatternAutoRelief_ = new QCheckBox(QStringLiteral("ペーパークラフト分割"));
+    plateFlatPatternAutoRelief_ = new QCheckBox(QStringLiteral("自動切れ込み／分割を使う"));
     plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
     plateFlatPatternAutoRelief_->setToolTip(
-        QStringLiteral("二方向に曲がる面を、切って折れる複数の平面片へ変換"));
+        QStringLiteral("二方向に曲がる面を、紙や薄板で組める展開形状へ変換"));
+    plateFlatPatternReliefStyle_ = new QComboBox;
+    plateFlatPatternReliefStyle_->addItem(
+        QStringLiteral("帯に完全分割（最大精度）"),
+        static_cast<int>(AutomaticReliefStyle::SplitPieces));
+    plateFlatPatternReliefStyle_->addItem(
+        QStringLiteral("V字切れ込み（一体板）"),
+        static_cast<int>(AutomaticReliefStyle::VNotch));
+    plateFlatPatternReliefStyle_->addItem(
+        QStringLiteral("先端R付きV字（一体板）"),
+        static_cast<int>(AutomaticReliefStyle::RoundedVNotch));
+    plateFlatPatternReliefStyle_->setCurrentIndex(2);
+    plateFlatPatternReliefStyle_->setToolTip(
+        QStringLiteral("完全分割は精度優先、V字は部材をつないだまま丸みを寄せます"));
     plateFlatPatternFidelity_ = new QSlider(Qt::Horizontal);
     plateFlatPatternFidelity_->setRange(1, 10);
     plateFlatPatternFidelity_->setValue(5);
@@ -2146,6 +2160,38 @@ QWidget* MainWindow::BuildOutputPanel()
     fidelityLayout->setSpacing(7);
     fidelityLayout->addWidget(plateFlatPatternFidelity_, 1);
     fidelityLayout->addWidget(plateFlatPatternFidelityLabel_);
+    plateFlatPatternReliefSpacing_ = MakePositiveField(8.0);
+    plateFlatPatternReliefSpacing_->setRange(1.0, 100.0);
+    plateFlatPatternReliefSpacing_->setSingleStep(1.0);
+    plateFlatPatternReliefSpacing_->setSuffix(QStringLiteral(" mm"));
+    plateFlatPatternReliefSpacing_->setToolTip(
+        QStringLiteral("小さくすると切れ込みが増え、丸い角を細かく追従します"));
+    plateFlatPatternReliefDepth_ = MakePositiveField(55.0);
+    plateFlatPatternReliefDepth_->setRange(5.0, 95.0);
+    plateFlatPatternReliefDepth_->setSingleStep(5.0);
+    plateFlatPatternReliefDepth_->setSuffix(QStringLiteral(" %"));
+    plateFlatPatternReliefDepth_->setToolTip(
+        QStringLiteral("外周から板幅の何%まで切り込むかを指定します"));
+    plateFlatPatternNotchAngle_ = MakePositiveField(18.0);
+    plateFlatPatternNotchAngle_->setRange(1.0, 120.0);
+    plateFlatPatternNotchAngle_->setSingleStep(1.0);
+    plateFlatPatternNotchAngle_->setSuffix(QStringLiteral(" °"));
+    plateFlatPatternNotchAngle_->setToolTip(
+        QStringLiteral("V字の開き。大きくすると組立時に強く絞れます"));
+    plateFlatPatternNotchTipRadius_ = MakePositiveField(0.5);
+    plateFlatPatternNotchTipRadius_->setRange(0.05, 10.0);
+    plateFlatPatternNotchTipRadius_->setDecimals(2);
+    plateFlatPatternNotchTipRadius_->setSingleStep(0.1);
+    plateFlatPatternNotchTipRadius_->setSuffix(QStringLiteral(" mm"));
+    plateFlatPatternNotchTipRadius_->setToolTip(
+        QStringLiteral("切れ込み底の丸み。割れ防止や工具径に合わせます"));
+    plateFlatPatternMinimumBendAngle_ = MakePositiveField(2.0);
+    plateFlatPatternMinimumBendAngle_->setRange(0.1, 45.0);
+    plateFlatPatternMinimumBendAngle_->setDecimals(1);
+    plateFlatPatternMinimumBendAngle_->setSingleStep(0.5);
+    plateFlatPatternMinimumBendAngle_->setSuffix(QStringLiteral(" °"));
+    plateFlatPatternMinimumBendAngle_->setToolTip(
+        QStringLiteral("この角度より小さい局所的な曲がりでは自動線を増やしません"));
     plateAssemblyGuidePreview_ = new QCheckBox(QStringLiteral("組立3Dで折り目・切れ目を表示"));
     plateAssemblyGuidePreview_->setObjectName(QStringLiteral("plateAssemblyGuidePreview"));
     plateAssemblyGuidePreview_->setChecked(true);
@@ -2162,7 +2208,13 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("展開部材名"), plateFlatPatternName_);
     flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
+    flatModelForm->addRow(QStringLiteral("二方向曲面の処理"), plateFlatPatternReliefStyle_);
     flatModelForm->addRow(QStringLiteral("立体再現度"), fidelityControl);
+    flatModelForm->addRow(QStringLiteral("切れ込み間隔"), plateFlatPatternReliefSpacing_);
+    flatModelForm->addRow(QStringLiteral("切れ込み深さ"), plateFlatPatternReliefDepth_);
+    flatModelForm->addRow(QStringLiteral("V字の開き角"), plateFlatPatternNotchAngle_);
+    flatModelForm->addRow(QStringLiteral("切れ込み先端R"), plateFlatPatternNotchTipRadius_);
+    flatModelForm->addRow(QStringLiteral("反応する最小曲がり"), plateFlatPatternMinimumBendAngle_);
     flatModelForm->addRow(plateAssemblyGuidePreview_);
     flatModelForm->addRow(QStringLiteral("折り線間隔"), plateFlatPatternFoldSpacing_);
     flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
@@ -2205,7 +2257,31 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
-    connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
+    const auto updateReliefControls = [this, fidelityControl, flatModelForm] {
+        const bool enabled = plateFlatPatternAutoRelief_->isChecked();
+        const AutomaticReliefStyle style = static_cast<AutomaticReliefStyle>(
+            plateFlatPatternReliefStyle_->currentData().toInt());
+        const bool splitPieces = style == AutomaticReliefStyle::SplitPieces;
+        const bool rounded = style == AutomaticReliefStyle::RoundedVNotch;
+        plateFlatPatternReliefStyle_->setEnabled(enabled);
+        fidelityControl->setEnabled(enabled && splitPieces);
+        plateFlatPatternReliefSpacing_->setEnabled(enabled && !splitPieces);
+        plateFlatPatternReliefDepth_->setEnabled(enabled && !splitPieces);
+        plateFlatPatternNotchAngle_->setEnabled(enabled && !splitPieces);
+        plateFlatPatternNotchTipRadius_->setEnabled(enabled && rounded);
+        plateFlatPatternMinimumBendAngle_->setEnabled(enabled);
+        flatModelForm->setRowVisible(fidelityControl, enabled && splitPieces);
+        flatModelForm->setRowVisible(plateFlatPatternReliefSpacing_, enabled && !splitPieces);
+        flatModelForm->setRowVisible(plateFlatPatternReliefDepth_, enabled && !splitPieces);
+        flatModelForm->setRowVisible(plateFlatPatternNotchAngle_, enabled && !splitPieces);
+        flatModelForm->setRowVisible(plateFlatPatternNotchTipRadius_, enabled && rounded);
+        flatModelForm->setRowVisible(plateFlatPatternMinimumBendAngle_, enabled);
+        RefreshExportSummary();
+    };
+    connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this,
+        [updateReliefControls] { updateReliefControls(); });
+    connect(plateFlatPatternReliefStyle_, &QComboBox::currentIndexChanged, this,
+        [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternFidelity_, &QSlider::valueChanged, this, [this](int value) {
         const QString level = value <= 3
             ? QStringLiteral("粗い")
@@ -2215,6 +2291,12 @@ QWidget* MainWindow::BuildOutputPanel()
     });
     connect(plateAssemblyGuidePreview_, &QCheckBox::toggled, this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternFoldSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternReliefSpacing_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternReliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternNotchAngle_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternNotchTipRadius_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    connect(plateFlatPatternMinimumBendAngle_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
+    updateReliefControls();
     layout->addWidget(platePdfButton);
     layout->addWidget(plateSvgButton);
     layout->addWidget(plateDxfButton);
@@ -3852,11 +3934,30 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
     if (plateFlatPatternAutoRelief_ != nullptr) {
         options.includeAutomaticReliefCuts = plateFlatPatternAutoRelief_->isChecked();
     }
+    if (plateFlatPatternReliefStyle_ != nullptr) {
+        options.automaticReliefStyle = static_cast<AutomaticReliefStyle>(
+            plateFlatPatternReliefStyle_->currentData().toInt());
+    }
     if (plateFlatPatternFoldSpacing_ != nullptr) {
         options.foldSpacingMillimeters = plateFlatPatternFoldSpacing_->value();
     }
     if (plateFlatPatternFidelity_ != nullptr) {
         options.papercraftFidelity = plateFlatPatternFidelity_->value();
+    }
+    if (plateFlatPatternReliefSpacing_ != nullptr) {
+        options.reliefCutSpacingMillimeters = plateFlatPatternReliefSpacing_->value();
+    }
+    if (plateFlatPatternReliefDepth_ != nullptr) {
+        options.reliefCutDepthRatio = plateFlatPatternReliefDepth_->value() / 100.0;
+    }
+    if (plateFlatPatternNotchAngle_ != nullptr) {
+        options.reliefNotchAngleDegrees = plateFlatPatternNotchAngle_->value();
+    }
+    if (plateFlatPatternNotchTipRadius_ != nullptr) {
+        options.reliefNotchTipRadiusMillimeters = plateFlatPatternNotchTipRadius_->value();
+    }
+    if (plateFlatPatternMinimumBendAngle_ != nullptr) {
+        options.minimumFoldAngleDegrees = plateFlatPatternMinimumBendAngle_->value();
     }
     return options;
 }
@@ -5370,7 +5471,7 @@ void MainWindow::RefreshBeginnerGuide()
         setGuide(QStringLiteral("製作データを出力"),
             plateCount + bodyCount > 0 ? QStringLiteral("次: 出力範囲と形式を確認して保存")
                                        : QStringLiteral("次: 中央画面で板材・治具を選ぶ"),
-            QStringLiteral("1  出力対象を直接選択\n2  1:1図面/展開図/3D形式を選択\n3  保存"),
+            QStringLiteral("1  出力対象を直接選択\n2  二方向曲面は完全分割/V字を選択\n3  組立3Dで線を確認\n4  1:1図面または3Dを保存"),
             QStringLiteral("output"));
         break;
     case 7:
@@ -10346,7 +10447,15 @@ void MainWindow::RefreshExportSummary()
         pdfOptions.pageSize = static_cast<QPageSize::PageSizeId>(platePdfPaper_->currentData().toInt());
         pdfOptions.overlapMillimeters = platePdfOverlap_->value();
         const auto pdfLayout = CalculatePlatePdfLayout(pattern, pdfOptions);
-        const QString shape = pattern.analysis.pieceCount > 1
+        const bool manualSplitOverridesNotches = !namedPlate.splitWireNames.empty()
+            && previewOptions.includeAutomaticReliefCuts
+            && previewOptions.automaticReliefStyle != AutomaticReliefStyle::SplitPieces;
+        const QString shape = manualSplitOverridesNotches
+            ? QStringLiteral("手動分割を優先 %1片").arg(pattern.analysis.pieceCount)
+            : pattern.analysis.automaticNotchCount > 0
+            ? QStringLiteral("一体板・V字切れ込み %1本")
+                .arg(pattern.analysis.automaticNotchCount)
+            : pattern.analysis.pieceCount > 1
             ? QStringLiteral("ペーパークラフト %1片").arg(pattern.analysis.pieceCount)
             : pattern.analysis.classification == PlateDevelopability::Planar
             ? QStringLiteral("平面板")

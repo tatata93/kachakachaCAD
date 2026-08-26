@@ -164,6 +164,43 @@ int main(int argc, char** argv)
                 + developedAnalysis.message);
         }
 
+        kachakacha::io::PlateFlatPattern notchedPattern;
+        notchedPattern.plateName = "notched_test";
+        notchedPattern.outerBoundary = {
+            "notched_test_outer",
+            {
+                {0.0, 0.0}, {8.0, 0.0}, {10.0, 4.0}, {12.0, 0.0},
+                {20.0, 0.0}, {20.0, 10.0}, {0.0, 10.0}, {0.0, 0.0},
+            },
+        };
+        notchedPattern.reliefCuts.push_back({
+            "notched_test_v",
+            {{8.0, 0.0}, {10.0, 4.0}, {12.0, 0.0}},
+            true,
+        });
+        notchedPattern.pieces.push_back({
+            "notched_test_piece",
+            notchedPattern.outerBoundary,
+            {},
+            {},
+            notchedPattern.reliefCuts,
+        });
+        const auto notchedResult = kachakacha::io::AddPlateFlatPatternModel(
+            flatPlateProject,
+            flatPlateProject.Plates().front(),
+            notchedPattern,
+            WorkPlane::FromPointNormal({0.0, 0.0, 40.0}, {0.0, 0.0, 1.0}),
+            "developed_notched",
+            0.2);
+        const auto notchedAnalysis = kachakacha::occt::AnalyzeModelShape(
+            flatPlateProject, {{notchedResult.plateName}, {}}, 0.2);
+        if (!notchedAnalysis.validBRep || !notchedAnalysis.closedSolid
+            || notchedAnalysis.plateCount != 1 || notchedAnalysis.volumeCubicMillimeters <= 1.0) {
+            throw std::runtime_error(
+                "Developed plate with an outer-boundary V notch did not produce a closed solid: "
+                + notchedAnalysis.message);
+        }
+
         std::ifstream acceptanceInput(argv[2]);
         if (!acceptanceInput) {
             throw std::runtime_error("Could not open the railway nose acceptance project.");

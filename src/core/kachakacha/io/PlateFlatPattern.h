@@ -10,6 +10,12 @@
 
 namespace kachakacha::io {
 
+enum class AutomaticReliefStyle {
+    SplitPieces,
+    VNotch,
+    RoundedVNotch,
+};
+
 struct PlateFlatPatternOptions {
     int uSegments = 128;
     int vSegments = 40;
@@ -18,9 +24,13 @@ struct PlateFlatPatternOptions {
     bool includeOpenings = true;
     bool includeFoldLines = true;
     bool includeAutomaticReliefCuts = false;
+    AutomaticReliefStyle automaticReliefStyle = AutomaticReliefStyle::SplitPieces;
     double foldSpacingMillimeters = 8.0;
     double minimumFoldAngleDegrees = 2.0;
     double reliefCutDepthRatio = 0.45;
+    double reliefCutSpacingMillimeters = 8.0;
+    double reliefNotchAngleDegrees = 18.0;
+    double reliefNotchTipRadiusMillimeters = 0.5;
     int papercraftFidelity = 5;
 };
 
@@ -30,6 +40,7 @@ struct PlateFlatPatternAnalysis {
     double rootMeanSquareEdgeDistortionMillimeters = 0.0;
     double maximumBoundaryApproximationMillimeters = 0.0;
     int pieceCount = 1;
+    int automaticNotchCount = 0;
 
     [[nodiscard]] double MaximumEstimatedErrorMillimeters() const noexcept;
 };
@@ -37,6 +48,7 @@ struct PlateFlatPatternAnalysis {
 struct PlateFlatPatternPath {
     std::string name;
     std::vector<geometry::Vector2> points;
+    bool incorporatedInOuterBoundary = false;
 };
 
 struct PlateFlatPatternPiece {

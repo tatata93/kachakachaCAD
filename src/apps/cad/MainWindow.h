@@ -394,8 +394,14 @@ private:
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
+    QComboBox* plateFlatPatternReliefStyle_ = nullptr;
     QSlider* plateFlatPatternFidelity_ = nullptr;
     QLabel* plateFlatPatternFidelityLabel_ = nullptr;
+    QDoubleSpinBox* plateFlatPatternReliefSpacing_ = nullptr;
+    QDoubleSpinBox* plateFlatPatternReliefDepth_ = nullptr;
+    QDoubleSpinBox* plateFlatPatternNotchAngle_ = nullptr;
+    QDoubleSpinBox* plateFlatPatternNotchTipRadius_ = nullptr;
+    QDoubleSpinBox* plateFlatPatternMinimumBendAngle_ = nullptr;
     QCheckBox* plateAssemblyGuidePreview_ = nullptr;
     QDoubleSpinBox* plateFlatPatternFoldSpacing_ = nullptr;
     QDoubleSpinBox* plateFlatPatternCutWidth_ = nullptr;

@@ -225,6 +225,46 @@ int main(int argc, char** argv)
                 "Acceptance front panel did not produce an exportable opened solid: "
                 + panelAnalysis.message);
         }
+
+        kachakacha::io::PlateFlatPatternOptions papercraftOptions;
+        papercraftOptions.includeAutomaticReliefCuts = true;
+        papercraftOptions.assemblyStrategy
+            = kachakacha::io::PlateAssemblyStrategy::SingleSheet;
+        papercraftOptions.cutDirection
+            = kachakacha::io::PapercraftCutDirection::Vertical;
+        papercraftOptions.papercraftFidelity = 5;
+        const auto papercraftPattern = kachakacha::io::BuildPlateFlatPattern(
+            acceptance, acceptance.Plates().front(), papercraftOptions);
+        Project papercraftProject = acceptance;
+        const auto papercraftResult = kachakacha::io::AddPlateFlatPatternModel(
+            papercraftProject,
+            acceptance.Plates().front(),
+            papercraftPattern,
+            WorkPlane::FromPointNormal(
+                {0.0, 0.0, 40.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}),
+            "nose_papercraft",
+            0.2);
+        const kachakacha::occt::ModelShapeSelection papercraftSelection{
+            papercraftResult.plateNames, {}};
+        const auto papercraftAnalysis = kachakacha::occt::AnalyzeModelShape(
+            papercraftProject, papercraftSelection, 0.2);
+        for (const std::string& plateName : papercraftResult.plateNames) {
+            const auto pieceAnalysis = kachakacha::occt::AnalyzeModelShape(
+                papercraftProject, {{plateName}, {}}, 0.2);
+            if (!pieceAnalysis.validBRep || !pieceAnalysis.closedSolid
+                || pieceAnalysis.plateCount != 1) {
+                throw std::runtime_error(
+                    "Papercraft piece is not an exportable solid: " + plateName
+                    + ": " + pieceAnalysis.message);
+            }
+        }
+        if (!papercraftAnalysis.validBRep || !papercraftAnalysis.closedSolid
+            || papercraftAnalysis.plateCount != papercraftResult.plateNames.size()
+            || papercraftResult.plateNames.size() != papercraftPattern.pieces.size()) {
+            throw std::runtime_error(
+                "Papercraft nose pieces with window and light cutouts are not exportable solids: "
+                + papercraftAnalysis.message);
+        }
         const std::filesystem::path panelStl = outputDirectory / "railway-nose-front-panel.stl";
         const std::filesystem::path panelStep = outputDirectory / "railway-nose-front-panel.step";
         kachakacha::occt::WriteModelStl(panelStl, acceptance, frontPanelSelection);

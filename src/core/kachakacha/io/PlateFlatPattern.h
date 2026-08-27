@@ -122,6 +122,7 @@ struct PlateAssemblyMotion {
     double progress = 1.0;
     double maximumPanelDeviationMillimeters = 0.0;
     double maximumTargetMismatchMillimeters = 0.0;
+    double materialAreaSquareMillimeters = 0.0;
 };
 
 struct PlateAssemblyModelResult {

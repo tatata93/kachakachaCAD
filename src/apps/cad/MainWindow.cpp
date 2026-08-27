@@ -2121,7 +2121,7 @@ QWidget* MainWindow::BuildOutputPanel()
     separator->setFrameShadow(QFrame::Sunken);
     layout->addWidget(separator);
 
-    auto* plateTitle = new QLabel(QStringLiteral("選択板材の1:1展開図"));
+    auto* plateTitle = new QLabel(QStringLiteral("ペーパークラフト展開（1:1）"));
     plateTitle->setProperty("manualAnchor", QStringLiteral("plateFlatPattern"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a;");
     layout->addWidget(plateTitle);
@@ -2135,7 +2135,8 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
     plateFlatPatternPlane_ = new QComboBox;
-    plateFlatPatternAutoRelief_ = new QCheckBox(QStringLiteral("形状に合わせて展開を補正する"));
+    plateFlatPatternAutoRelief_ = new QCheckBox(
+        QStringLiteral("ペーパークラフトとして分割・切れ目を生成"));
     plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
     plateFlatPatternAutoRelief_->setChecked(true);
     plateFlatPatternAutoRelief_->setToolTip(
@@ -2286,7 +2287,8 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
     layout->addLayout(flatModelForm);
 
-    auto* createFlatModelButton = new QPushButton(QStringLiteral("展開ワイヤー＋3D板を作成"));
+    auto* createFlatModelButton = new QPushButton(
+        QStringLiteral("ペーパークラフト部品を作成"));
     createFlatModelButton->setObjectName("primaryButton");
     createFlatModelButton->setProperty("plateFlatPatternModelAction", true);
     createFlatModelButton->setToolTip(QStringLiteral("選択板材を配置平面へ展開し、編集可能な線と厚み付き板を作成"));
@@ -9515,20 +9517,31 @@ bool MainWindow::RunCreationSelfTest()
     toolsTabs_->setCurrentIndex(6);
     UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart + 1)}, true);
     if (!plateFlatPatternSummary_->text().contains(QStringLiteral("PDF"))) {
-        return fail("plate PDF output summary");
+        const std::string failure = "plate PDF output summary: "
+            + plateFlatPatternSummary_->text().toUtf8().toStdString();
+        return fail(failure.c_str());
     }
     try {
         const auto expectedGuide = BuildPlateAssemblyGuide(
             project_, project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
-        const auto expectedApproximation = BuildPlateAssemblyApproximation(
-            project_, project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
+        const auto expectedMotion = BuildPlateAssemblyMotion(
+            project_,
+            project_.Plates()[plateStart + 1],
+            static_cast<double>(plateAssemblyProgress_->value()) / 100.0,
+            PlateFlatPatternOptionsFromUi());
+        const std::optional<int> expectedPiece = SelectedPlateAssemblyPiece();
+        const std::size_t expectedPanelCount = expectedPiece.has_value()
+            ? static_cast<std::size_t>(std::count(
+                expectedMotion.pieceIndices.begin(), expectedMotion.pieceIndices.end(),
+                *expectedPiece))
+            : expectedMotion.panels.size();
         if (!plateAssemblyGuidePreview_->isChecked()
             || viewport_->PlateAssemblyFoldGuideCount() != expectedGuide.foldLines.size()
             || viewport_->PlateAssemblyReliefGuideCount()
                 != expectedGuide.reliefCuts.size() + expectedGuide.splitLines.size()
             || !plateAssemblyApproximationPreview_->isChecked()
             || viewport_->PlateAssemblyApproximationPanelCount()
-                != expectedApproximation.panels.size()) {
+                != expectedPanelCount) {
             return fail("assembled fold and relief preview");
         }
         plateAssemblyGuidePreview_->setChecked(false);
@@ -10831,7 +10844,7 @@ void MainWindow::RefreshExportSummary()
         previewOptions.uSegments = 48;
         previewOptions.vSegments = 16;
         previewOptions.openingSamples = 48;
-        previewOptions.includeOpenings = false;
+        previewOptions.includeOpenings = true;
         const auto& namedPlate = project_.Plates()[plateIndices.front()];
         const auto pattern = BuildPlateFlatPattern(project_, namedPlate, previewOptions);
         refreshAssemblyPieceChoices(pattern.analysis.pieceCount);

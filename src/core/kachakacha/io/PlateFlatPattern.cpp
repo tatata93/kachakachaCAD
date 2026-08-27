@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <locale>
@@ -181,6 +182,36 @@ void ClosePath(std::vector<Vector2>& points)
     if (!AlmostSame(points.front(), points.back())) {
         points.push_back(points.front());
     }
+}
+
+void NormalizeClosedPath(PlateFlatPatternPath& path)
+{
+    std::vector<Vector2> normalized;
+    normalized.reserve(path.points.size());
+    for (const Vector2 point : path.points) {
+        if (normalized.empty() || !AlmostSame(normalized.back(), point, 1.0e-8)) {
+            normalized.push_back(point);
+        }
+    }
+    if (normalized.size() > 1 && AlmostSame(normalized.front(), normalized.back(), 1.0e-8)) {
+        normalized.pop_back();
+    }
+    if (normalized.size() >= 3) {
+        normalized.push_back(normalized.front());
+    }
+    path.points = std::move(normalized);
+}
+
+void NormalizeOpenPath(PlateFlatPatternPath& path)
+{
+    std::vector<Vector2> normalized;
+    normalized.reserve(path.points.size());
+    for (const Vector2 point : path.points) {
+        if (normalized.empty() || !AlmostSame(normalized.back(), point, 1.0e-8)) {
+            normalized.push_back(point);
+        }
+    }
+    path.points = std::move(normalized);
 }
 
 template <typename Inside, typename Intersect>
@@ -1362,20 +1393,31 @@ bool IncorporateNotchInBoundary(
         return false;
     }
 
-    const auto forwardLength = [&](Vector2 firstPoint, std::size_t fromEdge,
-                                   Vector2 lastPoint, std::size_t toEdge) {
-        double length = Length(boundary[(fromEdge + 1) % edgeCount] - firstPoint);
-        std::size_t edge = (fromEdge + 1) % edgeCount;
-        while (edge != toEdge) {
-            length += Length(boundary[(edge + 1) % edgeCount] - boundary[edge]);
-            edge = (edge + 1) % edgeCount;
-        }
-        return length + Length(lastPoint - boundary[toEdge]);
+    std::vector<double> boundaryDistance(edgeCount + 1, 0.0);
+    for (std::size_t edge = 0; edge < edgeCount; ++edge) {
+        boundaryDistance[edge + 1] = boundaryDistance[edge]
+            + Length(boundary[edge + 1] - boundary[edge]);
+    }
+    const double perimeter = boundaryDistance.back();
+    const auto boundaryPosition = [&](Vector2 point, std::size_t edge) {
+        const Vector2 edgeVector = boundary[edge + 1] - boundary[edge];
+        const double squaredLength = edgeVector.x * edgeVector.x + edgeVector.y * edgeVector.y;
+        const double parameter = squaredLength <= 1.0e-18
+            ? 0.0
+            : std::clamp(
+                ((point.x - boundary[edge].x) * edgeVector.x
+                    + (point.y - boundary[edge].y) * edgeVector.y) / squaredLength,
+                0.0,
+                1.0);
+        return boundaryDistance[edge] + std::sqrt(squaredLength) * parameter;
     };
-    const double firstToLast = forwardLength(
-        notch.front(), firstEdge, notch.back(), lastEdge);
-    const double lastToFirst = forwardLength(
-        notch.back(), lastEdge, notch.front(), firstEdge);
+    const double firstPosition = boundaryPosition(notch.front(), firstEdge);
+    const double lastPosition = boundaryPosition(notch.back(), lastEdge);
+    const auto forwardLength = [&](double from, double to) {
+        return to >= from ? to - from : perimeter - from + to;
+    };
+    const double firstToLast = forwardLength(firstPosition, lastPosition);
+    const double lastToFirst = forwardLength(lastPosition, firstPosition);
 
     Vector2 keptStart;
     Vector2 keptEnd;
@@ -1414,6 +1456,62 @@ bool IncorporateNotchInBoundary(
     return true;
 }
 
+std::optional<std::vector<Vector2>> BoundaryOpeningCut(
+    const std::vector<Vector2>& boundary,
+    const std::vector<Vector2>& closedOpening)
+{
+    if (boundary.size() < 4 || closedOpening.size() < 4) {
+        return std::nullopt;
+    }
+    std::vector<Vector2> opening = closedOpening;
+    if (AlmostSame(opening.front(), opening.back(), 1.0e-7)) {
+        opening.pop_back();
+    }
+    if (opening.size() < 3) {
+        return std::nullopt;
+    }
+
+    const auto onBoundary = [&](Vector2 point) {
+        for (std::size_t edge = 0; edge + 1 < boundary.size(); ++edge) {
+            if (PointSegmentDistance(point, boundary[edge], boundary[edge + 1]) <= 1.0e-5) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::optional<std::vector<Vector2>> best;
+    double bestLength = 0.0;
+    for (std::size_t start = 0; start < opening.size(); ++start) {
+        if (!onBoundary(opening[start])) {
+            continue;
+        }
+        std::vector<Vector2> candidate{opening[start]};
+        double length = 0.0;
+        for (std::size_t step = 1; step < opening.size(); ++step) {
+            const std::size_t index = (start + step) % opening.size();
+            length += Length(opening[index] - candidate.back());
+            candidate.push_back(opening[index]);
+            if (onBoundary(opening[index])) {
+                if (candidate.size() >= 3 && length > bestLength) {
+                    best = candidate;
+                    bestLength = length;
+                }
+                break;
+            }
+        }
+    }
+    return best;
+}
+
+bool IncorporateOpeningInBoundary(
+    std::vector<Vector2>& boundary,
+    const std::vector<Vector2>& closedOpening)
+{
+    const auto cut = BoundaryOpeningCut(boundary, closedOpening);
+    return cut.has_value() && IncorporateNotchInBoundary(boundary, *cut);
+}
+
 class PapercraftGrid {
 public:
     PapercraftGrid(
@@ -1430,6 +1528,8 @@ public:
           weakSegments_(std::max(2, weakSegments)),
           splitAcrossWeak_(splitAcrossWeak)
     {
+        openingRefinementDepth_ = std::clamp(
+            2 + options.papercraftFidelity / 2, 2, 6);
         BuildMesh();
         BuildAdjacency();
         MarkTransverseCuts();
@@ -1441,9 +1541,11 @@ public:
     {
         const auto mapped = MapPath(path);
         if (mapped.first >= 0) {
-            pieces_[static_cast<std::size_t>(mapped.first)].openings.push_back({
-                path.name, mapped.second,
-            });
+            PlateFlatPatternPiece& piece = pieces_[static_cast<std::size_t>(mapped.first)];
+            PlateFlatPatternPath opening{path.name, mapped.second};
+            opening.incorporatedInOuterBoundary = IncorporateOpeningInBoundary(
+                piece.outerBoundary.points, opening.points);
+            piece.openings.push_back(std::move(opening));
             return;
         }
 
@@ -1497,10 +1599,14 @@ public:
                     throw std::invalid_argument(
                         "A plate opening crosses a manual papercraft split: " + path.name);
                 }
-                pieces_[static_cast<std::size_t>(pieceIndex)].openings.push_back({
+                PlateFlatPatternPiece& piece = pieces_[static_cast<std::size_t>(pieceIndex)];
+                PlateFlatPatternPath opening{
                     path.name + "_fragment_" + std::to_string(++fragmentIndex),
                     std::move(flat),
-                });
+                };
+                opening.incorporatedInOuterBoundary = IncorporateOpeningInBoundary(
+                    piece.outerBoundary.points, opening.points);
+                piece.openings.push_back(std::move(opening));
             }
         }
         if (fragmentIndex == 0) {
@@ -1760,32 +1866,107 @@ public:
                 }
             }
 
+            const auto pointInTriangle = [](Vector2 point, const std::array<Vector2, 3>& triangle) {
+                constexpr double tolerance = 1.0e-10;
+                const double first = Cross2(triangle[1] - triangle[0], point - triangle[0]);
+                const double second = Cross2(triangle[2] - triangle[1], point - triangle[1]);
+                const double third = Cross2(triangle[0] - triangle[2], point - triangle[2]);
+                const bool hasNegative = first < -tolerance || second < -tolerance || third < -tolerance;
+                const bool hasPositive = first > tolerance || second > tolerance || third > tolerance;
+                return !(hasNegative && hasPositive);
+            };
+            const auto openingBoundaryIntersects = [&](const std::array<Vector2, 3>& triangle) {
+                for (const NamedUvPath& opening : openings) {
+                    if (std::any_of(opening.points.begin(), opening.points.end(),
+                            [&](Vector2 point) { return pointInTriangle(point, triangle); })) {
+                        return true;
+                    }
+                    for (std::size_t point = 1; point < opening.points.size(); ++point) {
+                        for (int edge = 0; edge < 3; ++edge) {
+                            if (SegmentsIntersect(
+                                    opening.points[point - 1], opening.points[point],
+                                    triangle[static_cast<std::size_t>(edge)],
+                                    triangle[static_cast<std::size_t>((edge + 1) % 3)])) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            };
             for (const int triangleIndex : component) {
                 const auto& vertices = triangles_[static_cast<std::size_t>(triangleIndex)].vertices;
-                const Vector2 uvCenter = (
-                    uv_[static_cast<std::size_t>(vertices[0])]
-                    + uv_[static_cast<std::size_t>(vertices[1])]
-                    + uv_[static_cast<std::size_t>(vertices[2])]) * (1.0 / 3.0);
-                if (std::any_of(openings.begin(), openings.end(), [&](const NamedUvPath& opening) {
-                        return PointInsideUvPath(uvCenter, opening);
-                    })) {
-                    continue;
-                }
-                const auto& panel = current[static_cast<std::size_t>(triangleIndex)];
-                const auto target = sourceTriangle(triangleIndex);
-                for (int corner = 0; corner < 3; ++corner) {
-                    motion.maximumTargetMismatchMillimeters = std::max(
-                        motion.maximumTargetMismatchMillimeters,
-                        (panel[static_cast<std::size_t>(corner)]
-                            - target[static_cast<std::size_t>(corner)]).Length());
-                }
-                motion.panels.push_back(panel);
-                motion.pieceIndices.push_back(pieceIndex);
-                motion.panelThicknessMillimeters.push_back(plate_.Thickness(uvCenter.y));
+                const std::array<Vector2, 3> baseUv{{
+                    uv_[static_cast<std::size_t>(vertices[0])],
+                    uv_[static_cast<std::size_t>(vertices[1])],
+                    uv_[static_cast<std::size_t>(vertices[2])],
+                }};
+                const std::array<Vector3, 3> basePanel
+                    = current[static_cast<std::size_t>(triangleIndex)];
                 const double deviation = panelDeviation(triangleIndex);
-                motion.panelDeviationMillimeters.push_back(deviation);
-                motion.maximumPanelDeviationMillimeters = std::max(
-                    motion.maximumPanelDeviationMillimeters, deviation);
+                std::function<void(
+                    const std::array<Vector2, 3>&,
+                    const std::array<Vector3, 3>&,
+                    int)> emitPanel;
+                emitPanel = [&](const std::array<Vector2, 3>& panelUv,
+                                const std::array<Vector3, 3>& panel,
+                                int depth) {
+                    const Vector2 uvCenter = (panelUv[0] + panelUv[1] + panelUv[2]) * (1.0 / 3.0);
+                    const auto insideOpening = [&](Vector2 point) {
+                        return std::any_of(openings.begin(), openings.end(),
+                            [&](const NamedUvPath& opening) {
+                                return PointInsideUvPath(point, opening);
+                            });
+                    };
+                    const bool allInside = insideOpening(panelUv[0])
+                        && insideOpening(panelUv[1]) && insideOpening(panelUv[2]);
+                    const bool boundaryCrosses = openingBoundaryIntersects(panelUv);
+                    if (allInside && !boundaryCrosses) {
+                        return;
+                    }
+                    if (boundaryCrosses && depth < openingRefinementDepth_) {
+                        const std::array<Vector2, 3> uvMid{{
+                            (panelUv[0] + panelUv[1]) * 0.5,
+                            (panelUv[1] + panelUv[2]) * 0.5,
+                            (panelUv[2] + panelUv[0]) * 0.5,
+                        }};
+                        const std::array<Vector3, 3> mid{{
+                            (panel[0] + panel[1]) * 0.5,
+                            (panel[1] + panel[2]) * 0.5,
+                            (panel[2] + panel[0]) * 0.5,
+                        }};
+                        emitPanel({{panelUv[0], uvMid[0], uvMid[2]}},
+                            {{panel[0], mid[0], mid[2]}}, depth + 1);
+                        emitPanel({{uvMid[0], panelUv[1], uvMid[1]}},
+                            {{mid[0], panel[1], mid[1]}}, depth + 1);
+                        emitPanel({{uvMid[2], uvMid[1], panelUv[2]}},
+                            {{mid[2], mid[1], panel[2]}}, depth + 1);
+                        emitPanel({{uvMid[0], uvMid[1], uvMid[2]}},
+                            {{mid[0], mid[1], mid[2]}}, depth + 1);
+                        return;
+                    }
+                    if (insideOpening(uvCenter)) {
+                        return;
+                    }
+                    for (int corner = 0; corner < 3; ++corner) {
+                        const Vector3 target = plate_.Evaluate(
+                            panelUv[static_cast<std::size_t>(corner)].x,
+                            panelUv[static_cast<std::size_t>(corner)].y,
+                            0.5);
+                        motion.maximumTargetMismatchMillimeters = std::max(
+                            motion.maximumTargetMismatchMillimeters,
+                            (panel[static_cast<std::size_t>(corner)] - target).Length());
+                    }
+                    motion.panels.push_back(panel);
+                    motion.pieceIndices.push_back(pieceIndex);
+                    motion.panelThicknessMillimeters.push_back(plate_.Thickness(uvCenter.y));
+                    motion.panelDeviationMillimeters.push_back(deviation);
+                    motion.maximumPanelDeviationMillimeters = std::max(
+                        motion.maximumPanelDeviationMillimeters, deviation);
+                    motion.materialAreaSquareMillimeters += geometry::Cross(
+                        panel[1] - panel[0], panel[2] - panel[0]).Length() * 0.5;
+                };
+                emitPanel(baseUv, basePanel, 0);
             }
         }
         return motion;
@@ -2107,6 +2288,17 @@ private:
                 if (!added.insert(edge).second || cutEdges_.contains(edge)) {
                     continue;
                 }
+                const Vector2 firstUv = uv_[static_cast<std::size_t>(edge.first)];
+                const Vector2 secondUv = uv_[static_cast<std::size_t>(edge.second)];
+                const double strongDelta = std::abs(
+                    (splitAlongU_ ? firstUv.x : firstUv.y)
+                    - (splitAlongU_ ? secondUv.x : secondUv.y));
+                const double weakDelta = std::abs(
+                    (splitAlongU_ ? firstUv.y : firstUv.x)
+                    - (splitAlongU_ ? secondUv.y : secondUv.x));
+                if (strongDelta > 1.0e-10 && weakDelta > 1.0e-10) {
+                    continue;
+                }
                 const auto& adjacent = edgeTriangles_.at(edge);
                 if (adjacent.size() != 2
                     || trianglePiece_[static_cast<std::size_t>(adjacent[0])] != pieceIndex
@@ -2227,6 +2419,7 @@ private:
     bool splitAlongU_ = true;
     std::vector<double> stripParameters_;
     int weakSegments_ = 2;
+    int openingRefinementDepth_ = 4;
     bool splitAcrossWeak_ = false;
     std::vector<Vector2> uv_;
     std::vector<Vector3> spatial_;
@@ -2304,6 +2497,24 @@ void ValidatePattern(const PlateFlatPattern& pattern)
         for (const Vector2 point : path.points) {
             if (!point.IsFinite()) {
                 throw std::invalid_argument("Plate flat pattern contains invalid coordinates.");
+            }
+        }
+        const std::size_t edgeCount = path.points.size() - 1;
+        for (std::size_t edge = 0; edge < edgeCount; ++edge) {
+            if (Length(path.points[edge + 1] - path.points[edge]) <= 1.0e-8) {
+                throw std::invalid_argument("Plate flat pattern contains a collapsed cutting edge.");
+            }
+            for (std::size_t other = edge + 1; other < edgeCount; ++other) {
+                if (other == edge + 1
+                    || (edge == 0 && other + 1 == edgeCount)) {
+                    continue;
+                }
+                if (SegmentsIntersect(
+                        path.points[edge], path.points[edge + 1],
+                        path.points[other], path.points[other + 1])) {
+                    throw std::invalid_argument(
+                        "Plate flat pattern contains a self-intersecting cutting boundary.");
+                }
             }
         }
     };
@@ -2569,6 +2780,28 @@ PlateFlatPattern BuildPlateFlatPattern(
             pattern.foldLines,
             pattern.reliefCuts,
         });
+    }
+    NormalizeClosedPath(pattern.outerBoundary);
+    for (PlateFlatPatternPath& opening : pattern.openings) {
+        NormalizeClosedPath(opening);
+    }
+    for (PlateFlatPatternPath& fold : pattern.foldLines) {
+        NormalizeOpenPath(fold);
+    }
+    for (PlateFlatPatternPath& cut : pattern.reliefCuts) {
+        NormalizeOpenPath(cut);
+    }
+    for (PlateFlatPatternPiece& piece : pattern.pieces) {
+        NormalizeClosedPath(piece.outerBoundary);
+        for (PlateFlatPatternPath& opening : piece.openings) {
+            NormalizeClosedPath(opening);
+        }
+        for (PlateFlatPatternPath& fold : piece.foldLines) {
+            NormalizeOpenPath(fold);
+        }
+        for (PlateFlatPatternPath& cut : piece.reliefCuts) {
+            NormalizeOpenPath(cut);
+        }
     }
     pattern.analysis.pieceCount = static_cast<int>(pattern.pieces.size());
     ValidatePattern(pattern);
@@ -2958,13 +3191,36 @@ void WritePlateFlatPatternSvg(
         }
     }
     for (const auto& opening : pattern.openings) {
-        includePath(opening);
+        if (!opening.incorporatedInOuterBoundary) {
+            includePath(opening);
+        }
     }
     for (const auto& fold : pattern.foldLines) {
         includePath(fold);
     }
     for (const auto& cut : pattern.reliefCuts) {
         includePath(cut);
+    }
+    std::vector<std::pair<Vector2, std::string>> pieceLabels;
+    pieceLabels.reserve(pattern.pieces.size());
+    for (std::size_t pieceIndex = 0; pieceIndex < pattern.pieces.size(); ++pieceIndex) {
+        const PlateFlatPatternPiece& piece = pattern.pieces[pieceIndex];
+        double pieceMinimumX = std::numeric_limits<double>::infinity();
+        double pieceMaximumX = -std::numeric_limits<double>::infinity();
+        double pieceMinimumY = std::numeric_limits<double>::infinity();
+        for (const Vector2 point : piece.outerBoundary.points) {
+            pieceMinimumX = std::min(pieceMinimumX, point.x);
+            pieceMaximumX = std::max(pieceMaximumX, point.x);
+            pieceMinimumY = std::min(pieceMinimumY, point.y);
+        }
+        const Vector2 labelPosition{
+            (pieceMinimumX + pieceMaximumX) * 0.5,
+            pieceMinimumY - 2.5,
+        };
+        minimumX = std::min(minimumX, labelPosition.x - 2.0);
+        maximumX = std::max(maximumX, labelPosition.x + 2.0);
+        minimumY = std::min(minimumY, labelPosition.y - 1.2);
+        pieceLabels.push_back({labelPosition, "P" + std::to_string(pieceIndex + 1)});
     }
     const double width = maximumX - minimumX + options.marginMillimeters * 2.0;
     const double height = maximumY - minimumY + options.marginMillimeters * 2.0;
@@ -2996,7 +3252,9 @@ void WritePlateFlatPatternSvg(
     output << "  </g>\n"
            << "  <g id=\"CUT_OPENING\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.1\" stroke-linejoin=\"round\">\n";
     for (const auto& opening : pattern.openings) {
-        writePath(opening, "    ");
+        if (!opening.incorporatedInOuterBoundary) {
+            writePath(opening, "    ");
+        }
     }
     output << "  </g>\n"
            << "  <g id=\"RELIEF_CUT\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.14\" stroke-linecap=\"round\">\n";
@@ -3009,6 +3267,13 @@ void WritePlateFlatPatternSvg(
            << "  <g id=\"FOLD\" fill=\"none\" stroke=\"#4c5963\" stroke-width=\"0.1\" stroke-dasharray=\"2,1\">\n";
     for (const auto& fold : pattern.foldLines) {
         writePath(fold, "    ");
+    }
+    output << "  </g>\n"
+           << "  <g id=\"ASSEMBLY_LABEL\" fill=\"#26323a\" font-family=\"sans-serif\" font-size=\"2.4\" text-anchor=\"middle\">\n";
+    for (const auto& [position, label] : pieceLabels) {
+        output << "    <text x=\"" << position.x - minimumX + options.marginMillimeters
+               << "\" y=\"" << maximumY - position.y + options.marginMillimeters
+               << "\">" << label << "</text>\n";
     }
     output << "  </g>\n</svg>\n";
     if (!output) {
@@ -3036,7 +3301,9 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
         }
     }
     for (const auto& opening : pattern.openings) {
-        WriteDxfPath(output, opening, "CUT_OPENING");
+        if (!opening.incorporatedInOuterBoundary) {
+            WriteDxfPath(output, opening, "CUT_OPENING");
+        }
     }
     for (const auto& cut : pattern.reliefCuts) {
         if (!cut.incorporatedInOuterBoundary) {
@@ -3045,6 +3312,23 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
     }
     for (const auto& fold : pattern.foldLines) {
         WriteDxfPath(output, fold, "FOLD");
+    }
+    for (std::size_t pieceIndex = 0; pieceIndex < pattern.pieces.size(); ++pieceIndex) {
+        const PlateFlatPatternPiece& piece = pattern.pieces[pieceIndex];
+        double minimumX = std::numeric_limits<double>::infinity();
+        double maximumX = -std::numeric_limits<double>::infinity();
+        double minimumY = std::numeric_limits<double>::infinity();
+        for (const Vector2 point : piece.outerBoundary.points) {
+            minimumX = std::min(minimumX, point.x);
+            maximumX = std::max(maximumX, point.x);
+            minimumY = std::min(minimumY, point.y);
+        }
+        WriteDxfPair(output, 0, "TEXT");
+        WriteDxfPair(output, 8, "ASSEMBLY_LABEL");
+        output << "10\n" << (minimumX + maximumX) * 0.5
+               << "\n20\n" << minimumY - 2.5
+               << "\n30\n0.000000000\n40\n2.400000000\n1\nP"
+               << pieceIndex + 1 << '\n';
     }
     WriteDxfPair(output, 0, "ENDSEC");
     WriteDxfPair(output, 0, "EOF");
@@ -3258,6 +3542,9 @@ PlateFlatPatternModelResult AddPlateFlatPatternModel(
         }
 
         for (const PlateFlatPatternPath& opening : piece.openings) {
+            if (opening.incorporatedInOuterBoundary) {
+                continue;
+            }
             const std::string name = namePrefix + "_opening_" + std::to_string(++openingIndex);
             addProjectedPath(opening, name, surfaceName);
             project.AddPlateOpening(plateName, name);

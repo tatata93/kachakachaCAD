@@ -332,6 +332,7 @@ if(KACHACAD_BUILD_TESTS)
         COMMAND kachakacha_plate_flat_pattern_tests
             "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
             "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+            "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-papercraft.svg"
     )
 
     add_executable(kachakacha_surface_tests

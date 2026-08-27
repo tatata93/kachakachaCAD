@@ -209,7 +209,8 @@ int main(int argc, char* argv[])
             "double-curved sheet remains an explicit warning case");
         Require(std::isfinite(twistedPattern.analysis.MaximumEstimatedErrorMillimeters()),
             "double-curved development reports a finite error");
-        Require(!twistedPattern.foldLines.empty(), "curved development creates fold wires");
+        Require(twistedPattern.foldLines.size() < twistedPattern.outerBoundary.points.size(),
+            "smooth forming strips do not expose triangulation diagonals as paper folds");
         Require(twistedPattern.analysis.pieceCount > 1,
             "double-curved development creates separate papercraft pieces");
         Require(twisted.Plates().front().splitWireNames
@@ -472,6 +473,27 @@ int main(int argc, char* argv[])
                 nose, *nosePlate, noseOptions);
             Require(oneSheetNose.analysis.automaticNotchCount > 0,
                 "railway nose edge fillets create shape-following curved cuts");
+            const auto incorporatedOpeningCount = std::count_if(
+                oneSheetNose.openings.begin(), oneSheetNose.openings.end(),
+                [](const auto& opening) { return opening.incorporatedInOuterBoundary; });
+            Require(incorporatedOpeningCount >= nosePlate->openingWireNames.size(),
+                "windows and lights crossing seams become physical paper-edge cutouts");
+            Project developedNose = nose;
+            const auto developedNoseModel = AddPlateFlatPatternModel(
+                developedNose,
+                *nosePlate,
+                oneSheetNose,
+                WorkPlane::FromPointNormal({0.0, 0.0, 40.0}, {0.0, 0.0, 1.0}),
+                "nose_papercraft",
+                0.2);
+            Require(developedNoseModel.plateNames.size() == oneSheetNose.pieces.size(),
+                "every nose papercraft piece becomes an editable cut 3D plate");
+            if (argc >= 4) {
+                std::ofstream noseSvg(argv[3]);
+                Require(static_cast<bool>(noseSvg), "railway nose papercraft SVG opens");
+                WritePlateFlatPatternSvg(noseSvg, oneSheetNose, noseOptions);
+                Require(static_cast<bool>(noseSvg), "railway nose papercraft SVG is written");
+            }
             noseOptions.assemblyStrategy = PlateAssemblyStrategy::SplitPieces;
             const PlateFlatPattern splitNose = BuildPlateFlatPattern(
                 nose, *nosePlate, noseOptions);
@@ -495,8 +517,11 @@ int main(int argc, char* argv[])
             closedMotionOptions.includeOpenings = false;
             const auto uncutMotion = BuildPlateAssemblyMotion(
                 nose, *nosePlate, 0.65, closedMotionOptions);
-            Require(openedMotion.panels.size() < uncutMotion.panels.size(),
-                "assembly-state 3D output removes panels covered by light and window openings");
+            Require(openedMotion.materialAreaSquareMillimeters
+                    < uncutMotion.materialAreaSquareMillimeters,
+                "assembly-state 3D output removes the light and window opening areas");
+            Require(openedMotion.panels.size() > uncutMotion.panels.size(),
+                "assembly-state 3D output refines only the opening boundaries");
         }
     } catch (const std::exception& error) {
         std::cerr << "plate_flat_pattern_tests failed: " << error.what() << '\n';

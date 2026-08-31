@@ -7,6 +7,7 @@
 #include <QMainWindow>
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -187,6 +188,8 @@ private:
     void RemoveAutosave();
     [[nodiscard]] QString AutosavePath() const;
     bool ConfirmDiscardChanges();
+    QString SuggestedName(
+        const QString& prefix, int startNumber, const std::function<bool(const QString& candidate)>& exists) const;
     QString SuggestedPlaneName() const;
     QString SuggestedWireName() const;
     QString SuggestedDirectGroupName(const QString& prefix) const;

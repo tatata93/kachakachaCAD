@@ -8883,54 +8883,27 @@ bool MainWindow::ConfirmDiscardChanges()
     return true;
 }
 
-QString MainWindow::SuggestedPlaneName() const
+QString MainWindow::SuggestedName(
+    const QString& prefix, int startNumber, const std::function<bool(const QString& candidate)>& exists) const
 {
-    int number = static_cast<int>(project_.WorkPlanes().size()) + 1;
-    while (project_.FindWorkPlane(QStringLiteral("plane_%1").arg(number).toStdString()).has_value()) {
-        ++number;
-    }
-    return QStringLiteral("plane_%1").arg(number);
-}
-
-QString MainWindow::SuggestedWireName() const
-{
-    int number = static_cast<int>(project_.Wires().size()) + 1;
-    const auto exists = [this](const std::string& name) {
-        for (const auto& wire : project_.Wires()) {
-            if (wire.name == name) {
-                return true;
-            }
-        }
-        return false;
-    };
-    while (exists(QStringLiteral("wire_%1").arg(number).toStdString())) {
-        ++number;
-    }
-    return QStringLiteral("wire_%1").arg(number);
-}
-
-QString MainWindow::SuggestedDirectGroupName(const QString& prefix) const
-{
-    int number = 1;
+    int number = startNumber;
     for (;;) {
         const QString candidate = QStringLiteral("%1_%2").arg(prefix).arg(number);
-        const std::string exactName = candidate.toStdString();
-        const std::string memberPrefix = exactName + "_";
-        const bool exists = std::any_of(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
-            return wire.name == exactName || wire.name.starts_with(memberPrefix);
-        }) || std::any_of(project_.Points().begin(), project_.Points().end(), [&](const auto& point) {
-            return point.name == exactName || point.name.starts_with(memberPrefix);
-        });
-        if (!exists) {
+        if (!exists(candidate)) {
             return candidate;
         }
         ++number;
     }
 }
 
-QString MainWindow::SuggestedChamferName() const
+QString MainWindow::SuggestedPlaneName() const
 {
-    int number = 1;
+    return SuggestedName(QStringLiteral("plane"), static_cast<int>(project_.WorkPlanes().size()) + 1,
+        [this](const QString& candidate) { return project_.FindWorkPlane(candidate.toStdString()).has_value(); });
+}
+
+QString MainWindow::SuggestedWireName() const
+{
     const auto exists = [this](const std::string& name) {
         for (const auto& wire : project_.Wires()) {
             if (wire.name == name) {
@@ -8939,15 +8912,40 @@ QString MainWindow::SuggestedChamferName() const
         }
         return false;
     };
-    while (exists(QStringLiteral("chamfer_%1").arg(number).toStdString())) {
-        ++number;
-    }
-    return QStringLiteral("chamfer_%1").arg(number);
+    return SuggestedName(QStringLiteral("wire"), static_cast<int>(project_.Wires().size()) + 1,
+        [&exists](const QString& candidate) { return exists(candidate.toStdString()); });
+}
+
+QString MainWindow::SuggestedDirectGroupName(const QString& prefix) const
+{
+    const auto exists = [this](const QString& candidate) {
+        const std::string exactName = candidate.toStdString();
+        const std::string memberPrefix = exactName + "_";
+        return std::any_of(project_.Wires().begin(), project_.Wires().end(), [&](const auto& wire) {
+            return wire.name == exactName || wire.name.starts_with(memberPrefix);
+        }) || std::any_of(project_.Points().begin(), project_.Points().end(), [&](const auto& point) {
+            return point.name == exactName || point.name.starts_with(memberPrefix);
+        });
+    };
+    return SuggestedName(prefix, 1, exists);
+}
+
+QString MainWindow::SuggestedChamferName() const
+{
+    const auto exists = [this](const std::string& name) {
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    return SuggestedName(
+        QStringLiteral("chamfer"), 1, [&exists](const QString& candidate) { return exists(candidate.toStdString()); });
 }
 
 QString MainWindow::SuggestedFilletName() const
 {
-    int number = 1;
     const auto exists = [this](const std::string& name) {
         for (const auto& wire : project_.Wires()) {
             if (wire.name == name) {
@@ -8956,51 +8954,37 @@ QString MainWindow::SuggestedFilletName() const
         }
         return false;
     };
-    while (exists(QStringLiteral("fillet_%1").arg(number).toStdString())) {
-        ++number;
-    }
-    return QStringLiteral("fillet_%1").arg(number);
+    return SuggestedName(
+        QStringLiteral("fillet"), 1, [&exists](const QString& candidate) { return exists(candidate.toStdString()); });
 }
 
 QString MainWindow::SuggestedSurfaceName() const
 {
-    int number = static_cast<int>(project_.Surfaces().size()) + 1;
-    while (project_.FindSurface(ToName(QStringLiteral("surface_%1").arg(number))).has_value()) {
-        ++number;
-    }
-    return QStringLiteral("surface_%1").arg(number);
+    return SuggestedName(QStringLiteral("surface"), static_cast<int>(project_.Surfaces().size()) + 1,
+        [this](const QString& candidate) { return project_.FindSurface(ToName(candidate)).has_value(); });
 }
 
 QString MainWindow::SuggestedPlateName() const
 {
-    int number = static_cast<int>(project_.Plates().size()) + 1;
-    while (project_.FindPlate(ToName(QStringLiteral("plate_%1").arg(number))).has_value()) {
-        ++number;
-    }
-    return QStringLiteral("plate_%1").arg(number);
+    return SuggestedName(QStringLiteral("plate"), static_cast<int>(project_.Plates().size()) + 1,
+        [this](const QString& candidate) { return project_.FindPlate(ToName(candidate)).has_value(); });
 }
 
 QString MainWindow::SuggestedBodyName() const
 {
-    int number = static_cast<int>(project_.Bodies().size()) + 1;
-    while (project_.FindBody(ToName(QStringLiteral("jig_%1").arg(number))).has_value()) {
-        ++number;
-    }
-    return QStringLiteral("jig_%1").arg(number);
+    return SuggestedName(QStringLiteral("jig"), static_cast<int>(project_.Bodies().size()) + 1,
+        [this](const QString& candidate) { return project_.FindBody(ToName(candidate)).has_value(); });
 }
 
 QString MainWindow::SuggestedDimensionName() const
 {
-    int number = static_cast<int>(project_.ReferenceDimensions().size()) + 1;
-    const auto exists = [this](const std::string& name) {
+    const auto exists = [this](const QString& candidate) {
+        const std::string name = ToName(candidate);
         return std::any_of(
             project_.ReferenceDimensions().begin(), project_.ReferenceDimensions().end(),
             [&](const ReferenceDimension& dimension) { return dimension.name == name; });
     };
-    while (exists(ToName(QStringLiteral("dim_%1").arg(number)))) {
-        ++number;
-    }
-    return QStringLiteral("dim_%1").arg(number);
+    return SuggestedName(QStringLiteral("dim"), static_cast<int>(project_.ReferenceDimensions().size()) + 1, exists);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)

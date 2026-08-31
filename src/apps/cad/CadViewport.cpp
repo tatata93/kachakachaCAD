@@ -388,23 +388,6 @@ double DistanceToSegment(QPointF point, QPointF a, QPointF b)
     return QLineF(point, a + segment * t).length();
 }
 
-QColor WireColor(WireKind kind)
-{
-    switch (kind) {
-    case WireKind::Line:
-    case WireKind::Polyline:
-        return QColor("#24313b");
-    case WireKind::CubicBezier:
-        return QColor("#007f78");
-    case WireKind::CubicBSpline:
-        return QColor("#4355a5");
-    case WireKind::Circle:
-    case WireKind::CircularArc:
-        return QColor("#a23b3b");
-    }
-    return QColor("#24313b");
-}
-
 std::optional<double> EvaluateDimensionExpression(QString expression)
 {
     expression.replace(QChar(0x00d7), QLatin1Char('*'));

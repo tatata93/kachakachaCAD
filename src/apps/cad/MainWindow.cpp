@@ -1217,7 +1217,7 @@ QWidget* MainWindow::BuildDrawingPanel()
     connect(arcExtentMode_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
     connect(arcExtentValue_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateArcConfiguration);
     connect(arcTurnSide_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateArcConfiguration);
-    for (const QKeySequence key : {QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)}) {
+    for (const QKeySequence& key : {QKeySequence(Qt::Key_Return), QKeySequence(Qt::Key_Enter)}) {
         auto* shortcut = new QShortcut(key, drawingDimensionSection_);
         shortcut->setContext(Qt::WidgetWithChildrenShortcut);
         connect(shortcut, &QShortcut::activated, this, &MainWindow::CommitDrawingDimensions);

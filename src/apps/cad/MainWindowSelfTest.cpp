@@ -2114,16 +2114,16 @@ bool MainWindow::RunCreationSelfTest()
     project_.AddWorkPlane("__ui_light_plan", WorkPlane::FromPointNormal({0.0, 0.0, 12.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
     project_.AddWire("__ui_section_a", Wire::CubicBezier(
         {0.0, -6.0, 0.0}, {0.0, -2.0, 3.0}, {0.0, 2.0, 3.0}, {0.0, 6.0, 0.0}),
-        WireMetadata{"__ui_section_a_plane", WirePlanePolicy::ReferenceOnly});
+        WireMetadata{"__ui_section_a_plane", WirePlanePolicy::ReferenceOnly, {}, {}});
     project_.AddWire("__ui_section_mid", Wire::CubicBezier(
         {6.0, -6.0, 0.0}, {6.0, -2.0, 6.0}, {6.0, 2.0, 6.0}, {6.0, 6.0, 0.0}),
-        WireMetadata{"__ui_section_mid_plane", WirePlanePolicy::ReferenceOnly});
+        WireMetadata{"__ui_section_mid_plane", WirePlanePolicy::ReferenceOnly, {}, {}});
     project_.AddWire("__ui_section_b", Wire::CubicBezier(
         {12.0, -6.0, 0.0}, {12.0, -2.0, 5.0}, {12.0, 2.0, 5.0}, {12.0, 6.0, 0.0}),
-        WireMetadata{"__ui_section_b_plane", WirePlanePolicy::ReferenceOnly});
+        WireMetadata{"__ui_section_b_plane", WirePlanePolicy::ReferenceOnly, {}, {}});
     project_.AddWire("__ui_light_plan_circle", Wire::Circle(
         {6.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25),
-        WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly});
+        WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly, {}, {}});
     RefreshModelViews(false);
 
     plateName_->setText("__ui_direct_variable_plate");

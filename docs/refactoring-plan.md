@@ -11,6 +11,7 @@
 
 ## 作業の原則
 
+- オーナーは早期の実用開始を最優先している。(2)以降の項目は、機能追加を止めて一括実施するのではなく、該当箇所に触れる機能追加・修正の直前に併せて少しずつ実施する。実用を妨げる大規模な一括改修を勝手に始めない。
 - 挙動を変えるリファクタと機能追加を同一コミットにしない。1コミット1目的を守る。
 - コードの移動は逐語的に行う(切って貼るか、確実な自動化で移す)。手で書き写して再入力しない。書き写しは差分確認を不可能にし、微妙な挙動変化を混入させる。
 - 変更後は必ず `scripts\check.ps1`(構成+ビルド+テスト)と `kachakacha_cad.exe --self-test` を通す。両方が通らない変更はマージしない。
@@ -23,7 +24,7 @@
 
 ### (1) セルフテストとマニュアル用スクリーンショットの分離
 
-状態: 未着手
+状態: 完了(2026-08-31、コミット c488ea6。`RunCreationSelfTest` と `PrepareManualScreenshot` の計2,617行を `MainWindowSelfTest.cpp` へ逐語移動。Linux環境のためコア11テストの合格のみ確認済み。**次回Windowsで作業する者は最初に `scripts\check.ps1` と `--self-test` の通過を確認し、この備考を更新すること**)
 
 `MainWindow.cpp` 内の `RunCreationSelfTest`(約1,972行)と `PrepareManualScreenshot`(約647行)を、それぞれ独立した翻訳単位(例: `MainWindowSelfTest.cpp`、`MainWindowManualScreenshot.cpp` など)へ切り出す。
 

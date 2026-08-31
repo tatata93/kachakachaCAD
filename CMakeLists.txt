@@ -139,6 +139,7 @@ if(WIN32)
                 src/apps/cad/CadViewport.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
+                src/apps/cad/MainWindowSelfTest.cpp
                 src/apps/cad/PlatePdfExport.cpp
                 src/apps/cad/PlatePdfExport.h
                 src/apps/cad/main.cpp

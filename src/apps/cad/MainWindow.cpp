@@ -6846,7 +6846,10 @@ void MainWindow::UpdateSelectedBody()
     }
 }
 
-void MainWindow::AddSelectedPlateOpenings()
+void MainWindow::ModifySelectedPlateWires(
+    void (*applyToPlate)(Project& candidate, std::string_view plateName, const std::string& wireName),
+    const char* onlyOnePlateMessage, const char* selectionRequiredMessage,
+    const QString& successMessageTemplate)
 {
     try {
         const std::vector<CadSelection> selections = viewport_->Selections();
@@ -6856,7 +6859,7 @@ void MainWindow::AddSelectedPlateOpenings()
             if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
                 && selection.index < static_cast<int>(project_.Plates().size())) {
                 if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("開口を作る板材は1枚だけ選択してください。");
+                    throw std::invalid_argument(onlyOnePlateMessage);
                 }
                 plateIndex = selection.index;
             } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
@@ -6865,217 +6868,89 @@ void MainWindow::AddSelectedPlateOpenings()
             }
         }
         if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、その面へ投影した閉じた輪郭を選択してください。");
+            throw std::invalid_argument(selectionRequiredMessage);
         }
 
         Project candidate = project_;
         const std::string plateName = candidate.Plates()[plateIndex].name;
         for (int wireIndex : wireIndices) {
-            candidate.AddPlateOpening(plateName, candidate.Wires()[wireIndex].name);
+            applyToPlate(candidate, plateName, candidate.Wires()[wireIndex].name);
         }
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
         UpdateSelections(selections, true);
-        statusBar()->showMessage(QStringLiteral("板材へ%1個の開口を追加しました").arg(wireIndices.size()), 3500);
+        statusBar()->showMessage(successMessageTemplate.arg(wireIndices.size()), 3500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }
+}
+
+void MainWindow::AddSelectedPlateOpenings()
+{
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.AddPlateOpening(plateName, wireName);
+        },
+        "開口を作る板材は1枚だけ選択してください。",
+        "板材1枚と、その面へ投影した閉じた輪郭を選択してください。",
+        QStringLiteral("板材へ%1個の開口を追加しました"));
 }
 
 void MainWindow::RemoveSelectedPlateOpenings()
 {
-    try {
-        const std::vector<CadSelection> selections = viewport_->Selections();
-        int plateIndex = -1;
-        std::vector<int> wireIndices;
-        for (const CadSelection& selection : selections) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("開口を外す板材は1枚だけ選択してください。");
-                }
-                plateIndex = selection.index;
-            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size())) {
-                wireIndices.push_back(selection.index);
-            }
-        }
-        if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、開口から外す輪郭を選択してください。");
-        }
-
-        Project candidate = project_;
-        const std::string plateName = candidate.Plates()[plateIndex].name;
-        for (int wireIndex : wireIndices) {
-            candidate.RemovePlateOpening(plateName, candidate.Wires()[wireIndex].name);
-        }
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(false);
-        UpdateSelections(selections, true);
-        statusBar()->showMessage(QStringLiteral("板材から%1個の開口を外しました").arg(wireIndices.size()), 3500);
-    } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.RemovePlateOpening(plateName, wireName);
+        },
+        "開口を外す板材は1枚だけ選択してください。",
+        "板材1枚と、開口から外す輪郭を選択してください。",
+        QStringLiteral("板材から%1個の開口を外しました"));
 }
 
 void MainWindow::AddSelectedPlateReliefCuts()
 {
-    try {
-        const std::vector<CadSelection> selections = viewport_->Selections();
-        int plateIndex = -1;
-        std::vector<int> wireIndices;
-        for (const CadSelection& selection : selections) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("切れ目を設定する板材は1枚だけ選択してください。");
-                }
-                plateIndex = selection.index;
-            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size())) {
-                wireIndices.push_back(selection.index);
-            }
-        }
-        if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、その面へ投影した切れ目ワイヤーを選択してください。");
-        }
-
-        Project candidate = project_;
-        const std::string plateName = candidate.Plates()[plateIndex].name;
-        for (int wireIndex : wireIndices) {
-            candidate.AddPlateReliefCut(plateName, candidate.Wires()[wireIndex].name);
-        }
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(false);
-        UpdateSelections(selections, true);
-        statusBar()->showMessage(
-            QStringLiteral("展開用の手動切れ目を%1本追加しました").arg(wireIndices.size()), 3500);
-    } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.AddPlateReliefCut(plateName, wireName);
+        },
+        "切れ目を設定する板材は1枚だけ選択してください。",
+        "板材1枚と、その面へ投影した切れ目ワイヤーを選択してください。",
+        QStringLiteral("展開用の手動切れ目を%1本追加しました"));
 }
 
 void MainWindow::RemoveSelectedPlateReliefCuts()
 {
-    try {
-        const std::vector<CadSelection> selections = viewport_->Selections();
-        int plateIndex = -1;
-        std::vector<int> wireIndices;
-        for (const CadSelection& selection : selections) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("切れ目を外す板材は1枚だけ選択してください。");
-                }
-                plateIndex = selection.index;
-            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size())) {
-                wireIndices.push_back(selection.index);
-            }
-        }
-        if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、切れ目から外すワイヤーを選択してください。");
-        }
-
-        Project candidate = project_;
-        const std::string plateName = candidate.Plates()[plateIndex].name;
-        for (int wireIndex : wireIndices) {
-            candidate.RemovePlateReliefCut(plateName, candidate.Wires()[wireIndex].name);
-        }
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(false);
-        UpdateSelections(selections, true);
-        statusBar()->showMessage(
-            QStringLiteral("展開用の切れ目から%1本外しました").arg(wireIndices.size()), 3500);
-    } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.RemovePlateReliefCut(plateName, wireName);
+        },
+        "切れ目を外す板材は1枚だけ選択してください。",
+        "板材1枚と、切れ目から外すワイヤーを選択してください。",
+        QStringLiteral("展開用の切れ目から%1本外しました"));
 }
 
 void MainWindow::AddSelectedPlateSplitLines()
 {
-    try {
-        const std::vector<CadSelection> selections = viewport_->Selections();
-        int plateIndex = -1;
-        std::vector<int> wireIndices;
-        for (const CadSelection& selection : selections) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("分割線を設定する板材は1枚だけ選択してください。");
-                }
-                plateIndex = selection.index;
-            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size())) {
-                wireIndices.push_back(selection.index);
-            }
-        }
-        if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、その面へ投影した分割ワイヤーを選択してください。");
-        }
-
-        Project candidate = project_;
-        const std::string plateName = candidate.Plates()[plateIndex].name;
-        for (int wireIndex : wireIndices) {
-            candidate.AddPlateSplitLine(plateName, candidate.Wires()[wireIndex].name);
-        }
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(false);
-        UpdateSelections(selections, true);
-        statusBar()->showMessage(
-            QStringLiteral("展開片を分ける分割線を%1本追加しました").arg(wireIndices.size()), 3500);
-    } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.AddPlateSplitLine(plateName, wireName);
+        },
+        "分割線を設定する板材は1枚だけ選択してください。",
+        "板材1枚と、その面へ投影した分割ワイヤーを選択してください。",
+        QStringLiteral("展開片を分ける分割線を%1本追加しました"));
 }
 
 void MainWindow::RemoveSelectedPlateSplitLines()
 {
-    try {
-        const std::vector<CadSelection> selections = viewport_->Selections();
-        int plateIndex = -1;
-        std::vector<int> wireIndices;
-        for (const CadSelection& selection : selections) {
-            if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Plates().size())) {
-                if (plateIndex >= 0 && plateIndex != selection.index) {
-                    throw std::invalid_argument("分割線を解除する板材は1枚だけ選択してください。");
-                }
-                plateIndex = selection.index;
-            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
-                && selection.index < static_cast<int>(project_.Wires().size())) {
-                wireIndices.push_back(selection.index);
-            }
-        }
-        if (plateIndex < 0 || wireIndices.empty()) {
-            throw std::invalid_argument("板材1枚と、解除する分割ワイヤーを選択してください。");
-        }
-
-        Project candidate = project_;
-        const std::string plateName = candidate.Plates()[plateIndex].name;
-        for (int wireIndex : wireIndices) {
-            candidate.RemovePlateSplitLine(plateName, candidate.Wires()[wireIndex].name);
-        }
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(false);
-        UpdateSelections(selections, true);
-        statusBar()->showMessage(
-            QStringLiteral("展開片の分割線を%1本解除しました").arg(wireIndices.size()), 3500);
-    } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
+    ModifySelectedPlateWires(
+        [](Project& candidate, std::string_view plateName, const std::string& wireName) {
+            candidate.RemovePlateSplitLine(plateName, wireName);
+        },
+        "分割線を解除する板材は1枚だけ選択してください。",
+        "板材1枚と、解除する分割ワイヤーを選択してください。",
+        QStringLiteral("展開片の分割線を%1本解除しました"));
 }
 
 void MainWindow::SplitSelectedPlate()

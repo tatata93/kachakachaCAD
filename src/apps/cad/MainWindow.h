@@ -122,6 +122,11 @@ private:
     void CreatePlateOffsetWires();
     void CreateSurfaceJig();
     void UpdateSelectedBody();
+    void ModifySelectedPlateWires(
+        void (*applyToPlate)(kachakacha::model::Project& candidate, std::string_view plateName,
+            const std::string& wireName),
+        const char* onlyOnePlateMessage, const char* selectionRequiredMessage,
+        const QString& successMessageTemplate);
     void AddSelectedPlateOpenings();
     void RemoveSelectedPlateOpenings();
     void AddSelectedPlateReliefCuts();

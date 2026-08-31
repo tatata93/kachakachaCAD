@@ -24,7 +24,7 @@
 
 ### (1) セルフテストとマニュアル用スクリーンショットの分離
 
-状態: 完了(2026-08-31、コミット c488ea6。`RunCreationSelfTest` と `PrepareManualScreenshot` の計2,617行を `MainWindowSelfTest.cpp` へ逐語移動。Linux環境のためコア11テストの合格のみ確認済み。**次回Windowsで作業する者は最初に `scripts\check.ps1` と `--self-test` の通過を確認し、この備考を更新すること**)
+状態: 完了(2026-08-31、コミット c488ea6。`RunCreationSelfTest` と `PrepareManualScreenshot` の計2,617行を `MainWindowSelfTest.cpp` へ逐語移動。Linuxフルビルド(docs/linux-build.md)で警告ゼロのコンパイル、16テスト、`--self-test` の通過を確認済み)
 
 `MainWindow.cpp` 内の `RunCreationSelfTest`(約1,972行)と `PrepareManualScreenshot`(約647行)を、それぞれ独立した翻訳単位(例: `MainWindowSelfTest.cpp`、`MainWindowManualScreenshot.cpp` など)へ切り出す。
 
@@ -33,7 +33,7 @@
 
 ### (2) 板材Add/Remove関数のパラメータ化とSuggested*Name統合
 
-状態: 未着手
+状態: 完了(2026-08-31、コミット 78a1bd8 / 6402db9。共通メソッド `ModifySelectedPlateWires` と `SuggestedName` へ統合し純減220行。Linuxフルビルドで警告ゼロ・16テスト・`--self-test` 通過を確認済み)
 
 `AddSelectedPlateOpenings` / `RemoveSelectedPlateOpenings` / `AddSelectedPlateReliefCuts` / `RemoveSelectedPlateReliefCuts` / `AddSelectedPlateSplitLines` / `RemoveSelectedPlateSplitLines` の6関数はほぼ同一の処理を開口・切れ目・分割線の3種類に対して繰り返しているだけなので、共通処理をパラメータ化した1組のAdd/Remove関数へ統合する。同様に `SuggestedPlaneName` / `SuggestedWireName` / `SuggestedDirectGroupName` / `SuggestedChamferName` / `SuggestedFilletName` / `SuggestedSurfaceName` / `SuggestedPlateName` / `SuggestedBodyName` / `SuggestedDimensionName` の名前提案系関数群も、接頭辞と既存名の集合を引数に取る共通関数へ統合する。
 

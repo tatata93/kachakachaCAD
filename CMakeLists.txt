@@ -126,8 +126,11 @@ if(WIN32)
     )
 
     target_compile_features(kachakacha_viewer PRIVATE cxx_std_20)
+endif()
 
-    if(KACHACAD_BUILD_QT_APP)
+# The Qt desktop application is cross-platform: build it whenever Qt 6 and
+# Open CASCADE are available, not only on Windows.
+if(KACHACAD_BUILD_QT_APP)
         if(EXISTS "C:/Qt/6.9.2/msvc2022_64" AND NOT DEFINED Qt6_DIR)
             list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.2/msvc2022_64")
         endif()
@@ -238,7 +241,6 @@ if(WIN32)
         else()
             message(WARNING "Open CASCADE was not found; kachakacha_cad will not be built.")
         endif()
-    endif()
 endif()
 
 if(KACHACAD_BUILD_TESTS)

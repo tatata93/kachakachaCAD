@@ -25,6 +25,7 @@
 7. `docs/adr/0001-main-technology-stack.md`
 8. `docs/adr/0003-wire-plane-policy.md`
 9. `docs/usability-review.md`
+10. `docs/refactoring-plan.md`
 
 ## 実装の優先順位
 
@@ -57,3 +58,13 @@
 - ユーザーが直接編集する対象は何か。
 - 出力や実製作にどうつながるか。
 - メッシュ編集中心に寄っていないか。
+
+## コード衛生ガードレール
+
+2026-08-31時点の調査で、コア(`src/core`)は健全な一方、UI層(`src/apps/cad/MainWindow.cpp`)が肥大していると判明した。今後の作業は以下を守る。詳細な作業計画は `docs/refactoring-plan.md` を参照する。
+
+- 1つの `.cpp` が3,000行を超えたら、機能追加の前に分割を提案する。`MainWindow.cpp` への新規追加は原則禁止とし、新しいUIパネル・機能は独立したクラス/ファイルにする。
+- ほぼ同一の関数を3つ以上コピペしない。3回目でパラメータ化する。
+- 新しいツール(`ViewportTool`)を追加する際は、`tool_ ==` 比較の散在を増やさない。追加前に既存の分岐箇所数を数え、増加を最小化する実装方法を選ぶ。
+- オブジェクトは名前文字列で参照される。名前参照を持つフィールドを追加したら、`docs/refactoring-plan.md` の名前参照一覧にも追記する(将来のリネーム機能実装時の更新漏れを防ぐため)。
+- 変更後は `scripts\check.ps1`(構成+ビルド+テスト)と `kachakacha_cad.exe --self-test` を必ず通す。

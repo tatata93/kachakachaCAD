@@ -669,7 +669,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 project.AddWire(
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeLine(start, end),
-                    WireMetadata{planeName, policy});
+                    WireMetadata{planeName, policy, {}, {}});
             } else if (command == "sketch_circle") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -679,7 +679,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 project.AddWire(
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber)).MakeCircle(center, radius),
-                    WireMetadata{planeName, policy});
+                    WireMetadata{planeName, policy, {}, {}});
             } else if (command == "sketch_arc") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -692,7 +692,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber))
                         .MakeCircularArc(center, radius, startDegrees * Pi / 180.0, sweepDegrees * Pi / 180.0),
-                    WireMetadata{planeName, policy});
+                    WireMetadata{planeName, policy, {}, {}});
             } else if (command == "sketch_bezier") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "wire");
                 const std::string planeName = ReadName(stream, sourceName, lineNumber, "plane");
@@ -705,7 +705,7 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     name,
                     Sketch(RequirePlane(project, planeName, sourceName, lineNumber))
                         .MakeCubicBezier(start, control1, control2, end),
-                    WireMetadata{planeName, policy});
+                    WireMetadata{planeName, policy, {}, {}});
             } else if (command == "surface_planar") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
                 std::vector<std::string> boundaries;

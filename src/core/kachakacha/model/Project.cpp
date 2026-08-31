@@ -561,7 +561,7 @@ void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
     }
 
     wire = ConstrainWire(*this, wire, metadata);
-    wires_.push_back({std::move(name), std::move(wire), std::move(metadata), std::nullopt});
+    wires_.push_back({std::move(name), std::move(wire), std::move(metadata), std::nullopt, true, {}});
 }
 
 void Project::AddPlanarSurface(std::string name, std::string boundaryWireName)
@@ -705,6 +705,9 @@ void Project::AddPlate(
         std::move(sourceSurfaceName),
         std::move(material),
         {},
+        true,
+        {},
+        {},
     });
 }
 
@@ -765,6 +768,8 @@ void Project::AddProjectedWire(
         std::move(projected),
         {},
         NamedWire::Projection{std::move(sourceWireName), std::move(targetSurfaceName), direction},
+        true,
+        {},
     });
 }
 
@@ -1467,6 +1472,7 @@ void Project::SplitPlate(
         std::move(firstOpenings),
         visible,
         std::move(firstReliefCuts),
+        {},
     };
     NamedPlate secondNamedPlate{
         std::move(secondName),
@@ -1476,6 +1482,7 @@ void Project::SplitPlate(
         std::move(secondOpenings),
         visible,
         std::move(secondReliefCuts),
+        {},
     };
     plates_.insert(
         plates_.begin() + static_cast<std::ptrdiff_t>(insertionIndex),

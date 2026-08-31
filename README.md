@@ -18,7 +18,7 @@ kachakachaCAD は、鉄道模型製作用のワイヤーフレーム／板材CAD
 言語: C++20
 UI: Qt 6
 CADカーネル: Open CASCADE Technology
-数値計算: Eigen
+数値計算: 自前の軽量ベクトル型(将来Eigen検討)
 ビルド: CMake
 ```
 

@@ -309,7 +309,7 @@ TopoDS_Shape BuildUniformCurvedPlateShape(
     if (!approximation.IsDone() || approximation.Surface().IsNull()) {
         throw std::runtime_error("Could not fit a CAD surface for plate: " + namedPlate.name);
     }
-    const occ::handle<Geom_Surface> surface = approximation.Surface();
+    const occ::handle<Geom_Surface> surface(approximation.Surface());
     double surfaceUMinimum = 0.0;
     double surfaceUMaximum = 1.0;
     double surfaceVMinimum = 0.0;

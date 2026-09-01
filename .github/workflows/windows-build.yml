@@ -1,0 +1,99 @@
+name: windows-build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  OCCT_COMMIT: 3d097a0328e71b826377d4814ab05ec3c3d23871
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        run: |
+          pip install aqtinstall
+          aqt install-qt windows desktop 6.9.2 win64_msvc2022_64 --outputdir C:/Qt
+
+      - name: Cache OCCT
+        id: occt-cache
+        uses: actions/cache@v4
+        with:
+          path: C:/occt-install
+          key: occt-${{ env.OCCT_COMMIT }}-msvc-v1
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build OCCT
+        if: steps.occt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone https://github.com/Open-Cascade-SAS/OCCT.git C:/OCCT
+          git -C C:/OCCT checkout $env:OCCT_COMMIT
+          cmake -S C:/OCCT -B C:/occt-build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_INSTALL_PREFIX=C:/occt-install `
+            -DBUILD_MODULE_ApplicationFramework=OFF `
+            -DBUILD_MODULE_DataExchange=ON `
+            -DBUILD_MODULE_DETools=OFF `
+            -DBUILD_MODULE_Draw=OFF `
+            -DBUILD_MODULE_Visualization=OFF `
+            -DBUILD_DOC_Overview=OFF `
+            -DUSE_FREETYPE=OFF -DUSE_TK=OFF -DUSE_TCL=OFF -DUSE_OPENGL=OFF `
+            -DUSE_FREEIMAGE=OFF -DUSE_RAPIDJSON=OFF -DUSE_DRACO=OFF `
+            -DUSE_TBB=OFF -DUSE_VTK=OFF
+          cmake --build C:/occt-build
+          cmake --install C:/occt-build | Out-Null
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="C:/Qt/6.9.2/msvc2022_64;C:/occt-install"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:PATH = "C:/occt-install/win64/vc14/bin;$env:PATH"
+          ctest --test-dir build --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out/kachakachaCAD | Out-Null
+          Copy-Item build/kachakacha_cad.exe out/kachakachaCAD/
+          Copy-Item build/*.dll out/kachakachaCAD/ -ErrorAction SilentlyContinue
+          if (Test-Path build/platforms) { Copy-Item build/platforms out/kachakachaCAD/platforms -Recurse }
+          Copy-Item examples out/kachakachaCAD/examples -Recurse
+          Copy-Item docs/manual.html out/kachakachaCAD/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path out/kachakachaCAD -DestinationPath kachakachaCAD-windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kachakachaCAD-windows-x64
+          path: kachakachaCAD-windows-x64.zip
+
+      - name: Publish rolling release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ci-latest --yes 2>$null; if ($LASTEXITCODE -ne 0) { Write-Host "no existing release" }
+          git push origin :refs/tags/ci-latest 2>$null; if ($LASTEXITCODE -ne 0) { Write-Host "no existing tag" }
+          gh release create ci-latest kachakachaCAD-windows-x64.zip `
+            --prerelease --title "CI build (latest main)" `
+            --notes "Automated Windows build of the latest main branch."
+          exit 0

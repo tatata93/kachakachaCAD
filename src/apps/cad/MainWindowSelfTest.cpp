@@ -2477,6 +2477,46 @@ bool MainWindow::RunCreationSelfTest()
         return fail("save and reload direct editing");
     }
 
+    const std::size_t gordonSurfaceStart = project_.Surfaces().size();
+    const Vector3 gordonPointA = project_.Wires()[surfaceWireStart].wire.Evaluate(0.5);
+    const Vector3 gordonPointMid = project_.Wires()[surfaceWireStart + 1].wire.Evaluate(0.5);
+    const Vector3 gordonPointB = project_.Wires()[surfaceWireStart + 2].wire.Evaluate(0.5);
+    const std::size_t gordonGuideWireIndex = project_.Wires().size();
+    project_.AddWire("__ui_gordon_guide", Wire::Polyline({gordonPointA, gordonPointMid, gordonPointB}));
+    RefreshModelViews(false);
+
+    UpdateSelections({{CadSelectionKind::Wire, static_cast<int>(gordonGuideWireIndex)}}, true);
+    AddSelectedGordonGuides();
+    if (gordonGuideNames_.size() != 1 || gordonGuideNames_.front() != "__ui_gordon_guide") {
+        return fail("add selected wire to gordon guide list");
+    }
+
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
+    }, true);
+    CreateGordonSurfaceFromSelection();
+    if (project_.Surfaces().size() != gordonSurfaceStart + 1
+        || project_.Surfaces().back().surface.Kind() != SurfaceKind::Gordon
+        || project_.Surfaces().back().guideWireNames != std::vector<std::string>{"__ui_gordon_guide"}) {
+        return fail("create gordon surface from sections and outline guide");
+    }
+    const Vector3 gordonSurfaceMidPoint = project_.Surfaces().back().surface.Evaluate(0.5, 0.5);
+    const Vector3 gordonGuideMidPoint = project_.Wires()[gordonGuideWireIndex].wire.Evaluate(0.5);
+    if ((gordonSurfaceMidPoint - gordonGuideMidPoint).Length() > 1.0e-3) {
+        return fail("gordon surface stays on the outline guide");
+    }
+    Undo();
+    if (project_.Surfaces().size() != gordonSurfaceStart) {
+        return fail("undo gordon surface");
+    }
+    Redo();
+    if (project_.Surfaces().size() != gordonSurfaceStart + 1
+        || project_.Surfaces().back().surface.Kind() != SurfaceKind::Gordon) {
+        return fail("redo gordon surface");
+    }
+
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->FitAll();

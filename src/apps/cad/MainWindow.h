@@ -115,6 +115,10 @@ private:
     void ApplyLineChamfer();
     void ApplyLineFillet();
     void CreateSurfaceFromSelection();
+    void AddSelectedGordonGuides();
+    void ClearGordonGuides();
+    void RefreshGordonGuideLabel();
+    void CreateGordonSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
     void CreateProtrudingLightCase();
     void CreatePlateFromSurface();
@@ -364,6 +368,8 @@ private:
     QLineEdit* surfaceName_ = nullptr;
     QComboBox* surfaceType_ = nullptr;
     QLabel* surfaceSelectionLabel_ = nullptr;
+    QLabel* gordonGuideLabel_ = nullptr;
+    std::vector<std::string> gordonGuideNames_;
     QComboBox* projectionSurface_ = nullptr;
     QComboBox* projectionPlane_ = nullptr;
     QLabel* projectionSelectionLabel_ = nullptr;

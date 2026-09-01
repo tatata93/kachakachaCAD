@@ -1764,6 +1764,35 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(createButton, &QPushButton::clicked, this, &MainWindow::CreateSurfaceFromSelection);
     layout->addWidget(createButton);
 
+    auto* gordonTitle = new QLabel(QStringLiteral("断面と外形ガイドから面（Gordon面）"));
+    gordonTitle->setProperty("manualAnchor", QStringLiteral("surfaceGordon"));
+    gordonTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(gordonTitle);
+
+    gordonGuideLabel_ = new QLabel(QStringLiteral("外形ガイド: (なし)"));
+    gordonGuideLabel_->setWordWrap(true);
+    gordonGuideLabel_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(gordonGuideLabel_);
+
+    auto* gordonGuideButtons = new QWidget;
+    auto* gordonGuideButtonLayout = new QHBoxLayout(gordonGuideButtons);
+    gordonGuideButtonLayout->setContentsMargins(0, 0, 0, 0);
+    gordonGuideButtonLayout->setSpacing(6);
+    auto* addGordonGuideButton = new QPushButton(QStringLiteral("選択を外形ガイドに追加"));
+    addGordonGuideButton->setToolTip(QStringLiteral("外形ガイドにする線を3D画面またはモデル一覧で選択してから押します"));
+    connect(addGordonGuideButton, &QPushButton::clicked, this, &MainWindow::AddSelectedGordonGuides);
+    auto* clearGordonGuideButton = new QPushButton(QStringLiteral("外形ガイドを全解除"));
+    connect(clearGordonGuideButton, &QPushButton::clicked, this, &MainWindow::ClearGordonGuides);
+    gordonGuideButtonLayout->addWidget(addGordonGuideButton, 1);
+    gordonGuideButtonLayout->addWidget(clearGordonGuideButton, 1);
+    layout->addWidget(gordonGuideButtons);
+
+    auto* createGordonButton = new QPushButton(QStringLiteral("断面と外形で面を作成"));
+    createGordonButton->setObjectName("primaryButton");
+    createGordonButton->setToolTip(QStringLiteral("断面ワイヤーを2本以上、車体の前から後ろの順に3D画面で選択してから押します"));
+    connect(createGordonButton, &QPushButton::clicked, this, &MainWindow::CreateGordonSurfaceFromSelection);
+    layout->addWidget(createGordonButton);
+
     auto* projectionTitle = new QLabel(QStringLiteral("平面図を面へ投影"));
     projectionTitle->setProperty("manualAnchor", QStringLiteral("surfaceProjection"));
     projectionTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
@@ -3108,6 +3137,7 @@ void MainWindow::NewProject()
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("side_YZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     referenceWireName_.reset();
+    gordonGuideNames_.clear();
     currentPath_.clear();
     modified_ = false;
     undoStack_.clear();
@@ -3147,6 +3177,7 @@ bool MainWindow::LoadProjectFile(const QString& path)
             RemoveAutosave();
         }
         referenceWireName_.reset();
+        gordonGuideNames_.clear();
         currentPath_ = path;
         modified_ = false;
         undoStack_.clear();
@@ -6366,6 +6397,110 @@ void MainWindow::CreateSurfaceFromSelection()
     }
 }
 
+void MainWindow::AddSelectedGordonGuides()
+{
+    const auto& selections = viewport_->Selections();
+    if (selections.empty()) {
+        statusBar()->showMessage(QStringLiteral("外形ガイドにするワイヤーを選択してください"), 4000);
+        return;
+    }
+    std::vector<std::string> wireNames;
+    wireNames.reserve(selections.size());
+    for (const CadSelection& selection : selections) {
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            statusBar()->showMessage(QStringLiteral("外形ガイドにはワイヤーだけを選択してください"), 4000);
+            return;
+        }
+        wireNames.push_back(project_.Wires()[selection.index].name);
+    }
+
+    int added = 0;
+    for (const std::string& name : wireNames) {
+        if (std::find(gordonGuideNames_.begin(), gordonGuideNames_.end(), name) == gordonGuideNames_.end()) {
+            gordonGuideNames_.push_back(name);
+            ++added;
+        }
+    }
+    RefreshGordonGuideLabel();
+    statusBar()->showMessage(added > 0
+            ? QStringLiteral("外形ガイドに%1本追加しました").arg(added)
+            : QStringLiteral("選択したワイヤーは既に外形ガイドに追加されています"),
+        3000);
+}
+
+void MainWindow::ClearGordonGuides()
+{
+    gordonGuideNames_.clear();
+    RefreshGordonGuideLabel();
+    statusBar()->showMessage(QStringLiteral("外形ガイドを解除しました"), 2500);
+}
+
+void MainWindow::RefreshGordonGuideLabel()
+{
+    if (gordonGuideLabel_ == nullptr) {
+        return;
+    }
+    if (gordonGuideNames_.empty()) {
+        gordonGuideLabel_->setText(QStringLiteral("外形ガイド: (なし)"));
+        return;
+    }
+    QStringList names;
+    names.reserve(static_cast<int>(gordonGuideNames_.size()));
+    for (const std::string& name : gordonGuideNames_) {
+        names.push_back(ToQString(name));
+    }
+    gordonGuideLabel_->setText(QStringLiteral("外形ガイド: %1").arg(names.join(QStringLiteral(", "))));
+}
+
+void MainWindow::CreateGordonSurfaceFromSelection()
+{
+    try {
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.size() < 2) {
+            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを2本以上選択してください。");
+        }
+        for (int index : wireIndices) {
+            if (project_.Wires()[index].metadata.construction) {
+                throw std::invalid_argument("補助線は断面には使えません。通常線へ戻してから選択してください。");
+            }
+        }
+        if (gordonGuideNames_.empty()) {
+            throw std::invalid_argument("外形ガイドを1本以上追加してください。");
+        }
+
+        Project candidate = project_;
+        const std::string name = ToName(SuggestedSurfaceName());
+        std::vector<std::string> sectionNames;
+        sectionNames.reserve(wireIndices.size());
+        for (int index : wireIndices) {
+            sectionNames.push_back(candidate.Wires()[index].name);
+        }
+        candidate.AddGordonSurface(name, sectionNames, gordonGuideNames_);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const int surfaceIndex = static_cast<int>(project_.Surfaces().size() - 1);
+        UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
+        toolsTabs_->setCurrentIndex(5);
+        const double maximumGap = project_.Surfaces()[surfaceIndex].surface.MaximumGuideGap();
+        statusBar()->showMessage(
+            QStringLiteral("面 %1 を作成しました（ガイド交点の最大ずれ %2 mm）")
+                .arg(ToQString(name), Number(maximumGap)),
+            4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::ProjectSelectedWiresToSurface()
 {
     try {
@@ -7901,6 +8036,14 @@ void MainWindow::RefreshModelViews(bool fitView)
     RefreshReferenceDimensions();
     RefreshActiveWorkPlane();
     RefreshReference();
+    gordonGuideNames_.erase(
+        std::remove_if(gordonGuideNames_.begin(), gordonGuideNames_.end(),
+            [this](const std::string& name) {
+                return std::none_of(project_.Wires().begin(), project_.Wires().end(),
+                    [&name](const kachakacha::model::NamedWire& wire) { return wire.name == name; });
+            }),
+        gordonGuideNames_.end());
+    RefreshGordonGuideLabel();
     UpdateSelection({}, false);
 }
 

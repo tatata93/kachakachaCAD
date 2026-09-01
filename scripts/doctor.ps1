@@ -46,9 +46,33 @@ if (Get-Command "cmake" -ErrorAction SilentlyContinue) {
 }
 
 Write-Host ""
-$QtRoot = "C:\Qt\6.9.2\msvc2022_64"
-$VcpkgToolchain = Join-Path $env:USERPROFILE "vcpkg\scripts\buildsystems\vcpkg.cmake"
-$OcctConfig = Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\share\opencascade\OpenCASCADEConfig.cmake"
+# PC固有の絶対パスを書かない。CMake側と同じ順序で探す。
+$QtRoot = ""
+foreach ($candidate in @($env:KACHACAD_QT_ROOT, $env:QT_ROOT_DIR)) {
+    if ($candidate -and (Test-Path $candidate)) { $QtRoot = $candidate; break }
+}
+if ($QtRoot -eq "") {
+    $QtCandidates = @()
+    foreach ($root in @("C:\Qt", "D:\Qt", (Join-Path $env:USERPROFILE "Qt"))) {
+        if (Test-Path $root) {
+            $QtCandidates += Get-ChildItem -Path $root -Directory -Filter "6.*" -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending |
+                ForEach-Object { Get-ChildItem -Path $_.FullName -Directory -Filter "msvc*_64" -ErrorAction SilentlyContinue }
+        }
+    }
+    foreach ($candidate in $QtCandidates) {
+        if (Test-Path (Join-Path $candidate.FullName "lib\cmake\Qt6")) { $QtRoot = $candidate.FullName; break }
+    }
+}
+if ($QtRoot -eq "") { $QtRoot = "(未検出: KACHACAD_QT_ROOT を設定するか windows-core プリセットを使う)" }
+
+$VcpkgRoot = ""
+foreach ($candidate in @($env:VCPKG_ROOT, (Join-Path $env:USERPROFILE "vcpkg"), "C:\vcpkg", "C:\dev\vcpkg")) {
+    if ($candidate -and (Test-Path (Join-Path $candidate "scripts\buildsystems\vcpkg.cmake"))) { $VcpkgRoot = $candidate; break }
+}
+if ($VcpkgRoot -eq "") { $VcpkgRoot = Join-Path $env:USERPROFILE "vcpkg" }
+$VcpkgToolchain = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
+$OcctConfig = Join-Path $VcpkgRoot "installed\x64-windows\share\opencascade\OpenCASCADEConfig.cmake"
 Write-Host "Desktop CAD dependencies:"
 foreach ($dependency in @(
     @{ Name = "Qt 6"; Path = $QtRoot },

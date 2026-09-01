@@ -1,0 +1,15 @@
+# 複数OSで開発するため、リポジトリ内の改行はLFに統一する。
+# Windows専用スクリプトだけはCRLFで取り出す(cmd.exe / PowerShell対策)。
+* text=auto eol=lf
+
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.pdf  binary
+*.ico  binary
+*.ttf  binary
+*.zip  binary

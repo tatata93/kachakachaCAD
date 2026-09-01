@@ -26,6 +26,7 @@
 8. `docs/adr/0003-wire-plane-policy.md`
 9. `docs/usability-review.md`
 10. `docs/refactoring-plan.md`
+11. `docs/multi-machine-development.md`
 
 ## 実装の優先順位
 
@@ -68,3 +69,15 @@
 - 新しいツール(`ViewportTool`)を追加する際は、`tool_ ==` 比較の散在を増やさない。追加前に既存の分岐箇所数を数え、増加を最小化する実装方法を選ぶ。
 - オブジェクトは名前文字列で参照される。名前参照を持つフィールドを追加したら、`docs/refactoring-plan.md` の名前参照一覧にも追記する(将来のリネーム機能実装時の更新漏れを防ぐため)。
 - 変更後は `scripts\check.ps1`(構成+ビルド+テスト)と `kachakacha_cad.exe --self-test` を必ず通す。
+
+## 複数PC開発のガードレール
+
+このプロジェクトは複数のPC(自宅PC・別PC・クラウドのLinux検証環境)で開発する。詳細は `docs/multi-machine-development.md`。
+
+- 作業開始前に必ず同期する。Windowsは `scripts\sync.ps1`、Linux/macOSは `scripts/sync.sh`。
+- そのPCでの作業を終えたら、必ずコミットしてGitHubへpushする。未コミットのまま別PCで作業しない。
+- 特定PCの絶対パス(`C:/Qt/6.9.2/...`、`%USERPROFILE%/vcpkg` など)をリポジトリ内へ直接書かない。
+  依存の場所は `cmake/KachakachaEnvironment.cmake` の検出に任せ、足りない場合は環境変数か `local.cmake` で渡す。
+- ビルド設定は `CMakePresets.json` のプリセットを使う。新しい環境を足すときはプリセットを追加する。
+- Windows専用の手順を追加したら、Linux/macOS側の同等手順(`scripts/*.sh`)も用意する。
+- 改行コードは `.gitattributes` に従う(基本LF、`.ps1`/`.cmd`/`.bat` のみCRLF)。

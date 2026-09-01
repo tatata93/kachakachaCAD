@@ -29,6 +29,18 @@ Windows では Visual Studio 2022 Build Tools の C++ 開発環境を想定す�
 .\scripts\doctor.ps1
 ```
 
+## 依存の場所
+
+Qt と vcpkg の場所は CMake が自動検出する(`cmake/KachakachaEnvironment.cmake`)。
+標準的でない場所へ入れている場合だけ、そのPCで環境変数を設定する。
+
+```powershell
+setx KACHACAD_QT_ROOT "C:\Qt\6.9.2\msvc2022_64"
+setx VCPKG_ROOT "%USERPROFILE%\vcpkg"
+```
+
+複数PCでの運用は `docs/multi-machine-development.md` を参照。
+
 ## 構成・ビルド・テスト
 
 ```powershell
@@ -46,3 +58,16 @@ Windows では Visual Studio 2022 Build Tools の C++ 開発環境を想定す�
 既定のビルド先は `build-msvc2022-x64`。Visual Studio Build Tools 2022 が入っていれば、自動で `Visual Studio 17 2022` を使う。
 
 Qt版をビルドすると、必要なQt/Open CASCADE DLLと `platforms` プラグインが `kachakacha_cad.exe` の隣へ自動配置される。開発用EXEを直接起動しても、`TKOffset.dll` やQt platform pluginを別途探す必要はない。
+
+## プリセットを使う場合
+
+`CMakePresets.json` に環境ごとのプリセットがある。
+
+```powershell
+cmake --preset windows-msvc      # Qt + OCCT あり
+cmake --preset windows-core      # Qt/OCCT が無いPCでもコアとテストは通る
+cmake --build --preset windows-msvc
+ctest --preset windows-msvc
+```
+
+スクリプト経由なら `.\scripts\check.ps1 -Preset windows-msvc`。

@@ -76,10 +76,30 @@ jobs:
           Copy-Item build/kachakacha_cad.exe out/kachakachaCAD/
           Copy-Item build/*.dll out/kachakachaCAD/ -ErrorAction SilentlyContinue
           if (Test-Path build/platforms) { Copy-Item build/platforms out/kachakachaCAD/platforms -Recurse }
-          $crt = Get-ChildItem "C:/Program Files/Microsoft Visual Studio/2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT" -Directory | Select-Object -First 1
-          if ($null -eq $crt) { throw "MSVC redist CRT folder not found" }
-          Copy-Item "$($crt.FullName)/*.dll" out/kachakachaCAD/
-          Write-Host "Bundled CRT from $($crt.FullName)"
+          # MSVC ランタイムを同梱する(まず VS の Redist、無ければ System32 から)。
+          $crt = $null
+          $redistRoots = Get-ChildItem 'C:\Program Files\Microsoft Visual Studio\2022' -Directory -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'VC\Redist\MSVC' } | Where-Object { Test-Path $_ }
+          foreach ($root in $redistRoots) {
+            $candidate = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
+              ForEach-Object { Join-Path $_.FullName 'x64' } | Where-Object { Test-Path $_ } |
+              ForEach-Object { Get-ChildItem $_ -Directory -Filter 'Microsoft.VC14*.CRT' -ErrorAction SilentlyContinue } |
+              Select-Object -First 1
+            if ($candidate) { $crt = $candidate; break }
+          }
+          if ($crt) {
+            Copy-Item (Join-Path $crt.FullName '*.dll') out/kachakachaCAD/
+            Write-Host "Bundled CRT from $($crt.FullName)"
+          } else {
+            Write-Host 'Redist CRT not found; falling back to System32.'
+          }
+          foreach ($dll in 'vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll','msvcp140_atomic_wait.dll','msvcp140_codecvt_ids.dll','concrt140.dll') {
+            if (-not (Test-Path (Join-Path 'out/kachakachaCAD' $dll))) {
+              Copy-Item (Join-Path 'C:\Windows\System32' $dll) out/kachakachaCAD/ -ErrorAction SilentlyContinue
+            }
+          }
+          if (-not (Test-Path 'out/kachakachaCAD/vcruntime140.dll')) { throw 'vcruntime140.dll could not be bundled' }
+          Get-ChildItem out/kachakachaCAD -Filter '*140*.dll' | ForEach-Object { Write-Host "runtime: $($_.Name)" }
           Copy-Item examples out/kachakachaCAD/examples -Recurse
           Copy-Item docs/manual.html out/kachakachaCAD/ -ErrorAction SilentlyContinue
           Compress-Archive -Path out/kachakachaCAD -DestinationPath kachakachaCAD-windows-x64.zip -Force

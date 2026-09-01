@@ -42,6 +42,7 @@ endif()
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
     src/core/kachakacha/io/NumericExpression.cpp
+    src/core/kachakacha/io/PartFoldState.cpp
     src/core/kachakacha/io/PartPatterns.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp

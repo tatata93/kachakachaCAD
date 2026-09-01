@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSlider>
 #include <QSpinBox>
 #include <QStringList>
 #include <QTreeWidget>
@@ -161,6 +162,67 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         if (onShowPatterns) onShowPatterns();
     });
     layout->addWidget(patternButton);
+
+    // --- 曲げ確認と出力 ---
+    auto* foldGroup = new QGroupBox(QStringLiteral("曲げ確認と出力"));
+    auto* foldLayout = new QVBoxLayout(foldGroup);
+    foldLayout->setContentsMargins(8, 4, 8, 8);
+    foldPreviewCheck_ = new QCheckBox(QStringLiteral("3Dビューで曲げ状態を表示"));
+    foldPreviewCheck_->setToolTip(QStringLiteral(
+        "選択中のモデルを、下のスライダーの曲げ具合でメイン3Dビューへ重ねて表示します"));
+    foldLayout->addWidget(foldPreviewCheck_);
+    auto* sliderRow = new QHBoxLayout;
+    foldSlider_ = new QSlider(Qt::Horizontal);
+    foldSlider_->setRange(0, 100);
+    foldSlider_->setValue(100);
+    foldSlider_->setToolTip(QStringLiteral("0%=平面（型紙の状態） / 100%=折り曲げた近似完成形"));
+    foldLabel_ = new QLabel(QStringLiteral("100%（近似完成形）"));
+    sliderRow->addWidget(foldSlider_, 1);
+    sliderRow->addWidget(foldLabel_);
+    foldLayout->addLayout(sliderRow);
+    const auto foldChanged = [this] {
+        const int value = foldSlider_->value();
+        foldLabel_->setText(value == 0
+            ? QStringLiteral("0%（平面）")
+            : value == 100 ? QStringLiteral("100%（近似完成形）")
+                           : QStringLiteral("%1%（曲げ途中）").arg(value));
+        if (onFoldStateChanged) onFoldStateChanged();
+    };
+    connect(foldSlider_, &QSlider::valueChanged, this, [foldChanged](int) { foldChanged(); });
+    connect(foldPreviewCheck_, &QCheckBox::toggled, this, [foldChanged](bool) { foldChanged(); });
+    connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
+        if (onFoldStateChanged) onFoldStateChanged();
+    });
+    auto* realizeButton = new QPushButton(QStringLiteral("この曲げ状態を板材化"));
+    realizeButton->setToolTip(QStringLiteral(
+        "スライダーの曲げ具合の形状を、このプロジェクトへ通常の板材として追加します。\n"
+        "0%なら平面に置いた展開状態（窓などの開口も実際の穴になります）"));
+    connect(realizeButton, &QPushButton::clicked, this, [this] {
+        if (onRealizeFoldState) onRealizeFoldState();
+    });
+    foldLayout->addWidget(realizeButton);
+    auto* exportRow = new QHBoxLayout;
+    auto* stlButton = new QPushButton(QStringLiteral("STL保存…"));
+    stlButton->setToolTip(QStringLiteral("この曲げ状態を3Dプリント用STLへ保存します"));
+    auto* stepButton = new QPushButton(QStringLiteral("STEP保存…"));
+    stepButton->setToolTip(QStringLiteral("この曲げ状態をCAD交換用STEPへ保存します"));
+    auto* kcdButton = new QPushButton(QStringLiteral("別の.kcdへ保存…"));
+    kcdButton->setToolTip(QStringLiteral(
+        "この曲げ状態だけを含む新しいプロジェクト(.kcd)を書き出します"));
+    connect(stlButton, &QPushButton::clicked, this, [this] {
+        if (onExportFoldMesh) onExportFoldMesh(false);
+    });
+    connect(stepButton, &QPushButton::clicked, this, [this] {
+        if (onExportFoldMesh) onExportFoldMesh(true);
+    });
+    connect(kcdButton, &QPushButton::clicked, this, [this] {
+        if (onExportFoldKcd) onExportFoldKcd();
+    });
+    exportRow->addWidget(stlButton, 1);
+    exportRow->addWidget(stepButton, 1);
+    exportRow->addWidget(kcdButton, 1);
+    foldLayout->addLayout(exportRow);
+    layout->addWidget(foldGroup);
 
     // --- セット ---
     auto* setGroup = new QGroupBox(QStringLiteral("セット"));
@@ -313,4 +375,14 @@ QString PartModelPanel::SelectedSetName() const
         return {};
     }
     return item->data(kSetNameRole).toString();
+}
+
+double PartModelPanel::FoldProgress() const
+{
+    return static_cast<double>(foldSlider_->value()) / 100.0;
+}
+
+bool PartModelPanel::FoldPreviewEnabled() const
+{
+    return foldPreviewCheck_->isChecked();
 }

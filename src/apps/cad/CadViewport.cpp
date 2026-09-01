@@ -913,6 +913,15 @@ void CadViewport::SetPlateAssemblyApproximationPreview(
     update();
 }
 
+void CadViewport::SetPartFoldPreview(
+    std::vector<std::vector<Vector3>> rails,
+    std::vector<int> creaseDirections)
+{
+    partFoldPreviewRails_ = std::move(rails);
+    partFoldPreviewCreases_ = std::move(creaseDirections);
+    update();
+}
+
 void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
 {
     wireOffsetPreviews_ = std::move(wires);
@@ -3053,6 +3062,55 @@ void CadViewport::paintEvent(QPaintEvent*)
                     QPen(QColor("#c62838"), 3.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
                 painter.restore();
             }
+        }
+
+        // 部材近似モデルの曲げ状態プレビュー(部材タブのスライダー連動)。
+        if (partFoldPreviewRails_.size() >= 2) {
+            painter.save();
+            painter.setBrush(Qt::NoBrush);
+            // 素線(レール間のルールドのあたり)を薄く描く。
+            painter.setPen(QPen(QColor(90, 140, 160, 110), 1.1,
+                Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            for (std::size_t row = 0; row + 1 < partFoldPreviewRails_.size(); ++row) {
+                const auto& bottom = partFoldPreviewRails_[row];
+                const auto& top = partFoldPreviewRails_[row + 1];
+                const std::size_t count = std::min(bottom.size(), top.size());
+                for (std::size_t column = 0; column < count; column += 8) {
+                    painter.drawLine(
+                        ProjectPoint(bottom[column]), ProjectPoint(top[column]));
+                }
+            }
+            // レール。外縁は実線、内部の折り線は山(赤破線)/谷(青一点鎖線)。
+            for (std::size_t row = 0; row < partFoldPreviewRails_.size(); ++row) {
+                const auto& points = partFoldPreviewRails_[row];
+                if (points.size() < 2) {
+                    continue;
+                }
+                QPen pen(QColor("#1f5f4a"), 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+                if (row > 0 && row + 1 < partFoldPreviewRails_.size()) {
+                    const std::size_t creaseIndex = row - 1;
+                    const int crease = creaseIndex < partFoldPreviewCreases_.size()
+                        ? partFoldPreviewCreases_[creaseIndex]
+                        : 0;
+                    if (crease > 0) {
+                        pen = QPen(QColor("#c62838"), 2.2, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+                    } else if (crease < 0) {
+                        pen = QPen(QColor("#1769aa"), 2.2, Qt::DashDotLine, Qt::RoundCap, Qt::RoundJoin);
+                    } else {
+                        pen = QPen(QColor("#6a7680"), 1.8, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin);
+                    }
+                }
+                QPainterPath path(ProjectPoint(points.front()));
+                for (std::size_t index = 1; index < points.size(); ++index) {
+                    path.lineTo(ProjectPoint(points[index]));
+                }
+                painter.setPen(QPen(QColor(255, 255, 255, 190), pen.widthF() + 2.2,
+                    pen.style(), Qt::RoundCap, Qt::RoundJoin));
+                painter.drawPath(path);
+                painter.setPen(pen);
+                painter.drawPath(path);
+            }
+            painter.restore();
         }
 
         std::optional<Vector3> normalOrigin;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -451,6 +452,94 @@ std::vector<std::vector<Vector3>> BuildFoldPreview(
         }
     }
     return result;
+}
+
+PartMeshMappedPoint MapPointToPartMeshState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<std::vector<Vector3>>& state,
+    const Vector3& point)
+{
+    if (mesh.rows < 2 || mesh.columns < 2
+        || static_cast<int>(state.size()) != mesh.rows) {
+        throw std::invalid_argument("近似メッシュと状態の位相が一致していません。");
+    }
+    PartMeshMappedPoint best;
+    best.distanceMillimeters = std::numeric_limits<double>::max();
+    // 三角形への最近点(重心座標)。標準的な閉形式(Ericson)。
+    const auto consider = [&](int band,
+                              const Vector3& a3, const Vector3& b3, const Vector3& c3,
+                              const Vector3& aT, const Vector3& bT, const Vector3& cT) {
+        const Vector3 ab = b3 - a3;
+        const Vector3 ac = c3 - a3;
+        const Vector3 ap = point - a3;
+        const double d1 = Dot(ab, ap);
+        const double d2 = Dot(ac, ap);
+        double v = 0.0;
+        double w = 0.0;
+        do {
+            if (d1 <= 0.0 && d2 <= 0.0) {
+                break;
+            }
+            const Vector3 bp = point - b3;
+            const double d3 = Dot(ab, bp);
+            const double d4 = Dot(ac, bp);
+            if (d3 >= 0.0 && d4 <= d3) {
+                v = 1.0;
+                break;
+            }
+            const Vector3 cp = point - c3;
+            const double d5 = Dot(ab, cp);
+            const double d6 = Dot(ac, cp);
+            if (d6 >= 0.0 && d5 <= d6) {
+                w = 1.0;
+                break;
+            }
+            const double vc = d1 * d4 - d3 * d2;
+            if (vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0) {
+                v = d1 / (d1 - d3);
+                break;
+            }
+            const double vb = d5 * d2 - d1 * d6;
+            if (vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0) {
+                w = d2 / (d2 - d6);
+                break;
+            }
+            const double va = d3 * d6 - d5 * d4;
+            if (va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0) {
+                const double t = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+                v = 1.0 - t;
+                w = t;
+                break;
+            }
+            const double denominator = va + vb + vc;
+            if (std::abs(denominator) > 1.0e-18) {
+                v = vb / denominator;
+                w = vc / denominator;
+            }
+        } while (false);
+        const Vector3 closest = a3 + ab * v + ac * w;
+        const double distance = (point - closest).Length();
+        if (distance < best.distanceMillimeters) {
+            best.distanceMillimeters = distance;
+            best.band = band;
+            best.point = aT + (bT - aT) * v + (cT - aT) * w;
+        }
+    };
+    for (int band = 0; band + 1 < mesh.rows; ++band) {
+        const auto& bottom3 = mesh.world[band];
+        const auto& top3 = mesh.world[band + 1];
+        const auto& bottomT = state[band];
+        const auto& topT = state[band + 1];
+        for (int column = 0; column + 1 < mesh.columns; ++column) {
+            consider(band,
+                bottom3[column], top3[column], bottom3[column + 1],
+                bottomT[column], topT[column], bottomT[column + 1]);
+            consider(band,
+                top3[column], bottom3[column + 1], top3[column + 1],
+                topT[column], bottomT[column + 1], topT[column + 1]);
+        }
+    }
+    return best;
 }
 
 } // namespace kachakacha::model

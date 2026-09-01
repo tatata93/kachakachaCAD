@@ -3,19 +3,28 @@
 // (ADR 0018: MainWindow.cpp を太らせない)。
 
 #include "MainWindow.h"
+#include "CadViewport.h"
 #include "PartModelPanel.h"
 #include "PartPatternViewDialog.h"
 
+#include "kachakacha/io/PartFoldState.h"
 #include "kachakacha/io/PartPatterns.h"
+#include "kachakacha/io/ProjectScript.h"
+#include "kachakacha/occt/BodyExport.h"
 
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QStatusBar>
 #include <QStringList>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+using kachakacha::model::NamedPartModel;
 using kachakacha::model::ObjectSetState;
 using kachakacha::model::PartApproximationOptions;
 using kachakacha::model::Project;
@@ -30,6 +39,17 @@ namespace {
 [[nodiscard]] std::string ToName(const QString& text)
 {
     return text.trimmed().toStdString();
+}
+
+[[nodiscard]] const NamedPartModel* FindPartModel(
+    const Project& project, const std::string& name)
+{
+    for (const NamedPartModel& model : project.PartModels()) {
+        if (model.name == name) {
+            return &model;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -47,6 +67,10 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     };
     partModelPanel_->onSetStateChange = [this](int state) { ChangeSelectedSetState(state); };
     partModelPanel_->onMakePlate = [this] { CreatePlateFromSelectedPart(); };
+    partModelPanel_->onFoldStateChanged = [this] { UpdatePartFoldPreview(); };
+    partModelPanel_->onRealizeFoldState = [this] { RealizePartFoldState(); };
+    partModelPanel_->onExportFoldMesh = [this](bool step) { ExportPartFoldMesh(step); };
+    partModelPanel_->onExportFoldKcd = [this] { ExportPartFoldKcd(); };
     return partModelPanel_;
 }
 
@@ -344,6 +368,226 @@ void MainWindow::CreatePlateFromSelectedPart()
                 .arg(created.size())
                 .arg(ToQString(created.front())),
             5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+// ---- 曲げ確認と出力 -------------------------------------------------------
+
+void MainWindow::UpdatePartFoldPreview()
+{
+    if (viewport_ == nullptr || partModelPanel_ == nullptr) {
+        return;
+    }
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const NamedPartModel* model = name.empty()
+            ? nullptr
+            : FindPartModel(project_, name);
+        if (!partModelPanel_->FoldPreviewEnabled() || model == nullptr) {
+            viewport_->SetPartFoldPreview({}, {});
+            return;
+        }
+        const auto plate = std::find_if(
+            project_.Plates().begin(), project_.Plates().end(),
+            [&model](const kachakacha::model::NamedPlate& candidate) {
+                return candidate.name == model->sourcePlateName;
+            });
+        if (plate == project_.Plates().end()) {
+            viewport_->SetPartFoldPreview({}, {});
+            return;
+        }
+        std::vector<double> parameters;
+        parameters.push_back(0.0);
+        for (std::size_t index = 1; index < model->result.parts.size(); ++index) {
+            parameters.push_back(model->result.parts[index].minimumParameter);
+        }
+        parameters.push_back(1.0);
+        const auto mesh = kachakacha::model::DevelopPartMesh(
+            plate->plate, model->options.splitAxis, parameters, 64);
+        auto state = kachakacha::model::BuildFoldPreview(
+            mesh, partModelPanel_->FoldProgress());
+        viewport_->SetPartFoldPreview(std::move(state), mesh.creaseDirections);
+    } catch (const std::exception& error) {
+        viewport_->SetPartFoldPreview({}, {});
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+namespace {
+
+//! 曲げ状態の名前プレフィックス(プロジェクト内で未使用のもの)を作る。
+[[nodiscard]] std::string MakeFoldStatePrefix(
+    const Project& project, const std::string& modelName, double progress)
+{
+    const int percent = static_cast<int>(progress * 100.0 + 0.5);
+    const std::string base = modelName + "_曲げ" + std::to_string(percent);
+    for (int suffix = 0;; ++suffix) {
+        const std::string candidate
+            = suffix == 0 ? base : base + "_" + std::to_string(suffix + 1);
+        const std::string probe = candidate + "_レール1";
+        const bool taken = std::any_of(
+            project.Wires().begin(), project.Wires().end(),
+            [&probe](const kachakacha::model::NamedWire& wire) {
+                return wire.name == probe;
+            });
+        if (!taken) {
+            return candidate;
+        }
+    }
+}
+
+} // namespace
+
+void MainWindow::RealizePartFoldState()
+{
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        if (name.empty()) {
+            throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
+        }
+        const NamedPartModel* model = FindPartModel(project_, name);
+        if (model == nullptr) {
+            throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
+        }
+        kachakacha::io::PartFoldStateOptions options;
+        options.progress = partModelPanel_->FoldProgress();
+        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        const std::string prefix
+            = MakeFoldStatePrefix(project_, model->name, options.progress);
+
+        Project candidate = project_;
+        const auto result = kachakacha::io::AddPartFoldStateModel(
+            candidate, candidate, *model, options, prefix);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("曲げ状態 %1 を板材化しました（板 %2 枚、穴 %3 件%4）")
+                .arg(ToQString(prefix))
+                .arg(result.plateNames.size())
+                .arg(result.openingWireNames.size())
+                .arg(result.outlineWireNames.empty()
+                        ? QString()
+                        : QStringLiteral("、境界またぎで輪郭のみ %1 件")
+                              .arg(result.outlineWireNames.size())),
+            6000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ExportPartFoldMesh(bool step)
+{
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        if (name.empty()) {
+            throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
+        }
+        const NamedPartModel* model = FindPartModel(project_, name);
+        if (model == nullptr) {
+            throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
+        }
+        kachakacha::io::PartFoldStateOptions options;
+        options.progress = partModelPanel_->FoldProgress();
+        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+
+        Project exportProject;
+        const auto result = kachakacha::io::AddPartFoldStateModel(
+            exportProject, project_, *model, options, "出力");
+
+        const int percent = static_cast<int>(options.progress * 100.0 + 0.5);
+        const QString extension = step ? QStringLiteral(".step") : QStringLiteral(".stl");
+        const QString filter = step
+            ? QStringLiteral("STEP CAD形状 (*.step *.stp)")
+            : QStringLiteral("STL 3Dプリント形状 (*.stl)");
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            step ? QStringLiteral("曲げ状態をSTEP保存") : QStringLiteral("曲げ状態をSTL保存"),
+            suggestedDirectory
+                + QStringLiteral("%1_曲げ%2%3").arg(ToQString(model->name)).arg(percent).arg(extension),
+            filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(extension, Qt::CaseInsensitive)
+            && !(step && path.endsWith(QStringLiteral(".stp"), Qt::CaseInsensitive))) {
+            path += extension;
+        }
+        kachakacha::occt::ModelShapeSelection selection;
+        selection.plateNames = result.plateNames;
+        const std::filesystem::path nativePath(path.toStdWString());
+        if (step) {
+            kachakacha::occt::WriteModelStep(nativePath, exportProject, selection);
+        } else {
+            kachakacha::occt::WriteModelStl(nativePath, exportProject, selection);
+        }
+        statusBar()->showMessage(
+            QStringLiteral("曲げ%1%の形状を保存しました: %2（板 %3 枚、穴 %4 件）")
+                .arg(percent)
+                .arg(path)
+                .arg(result.plateNames.size())
+                .arg(result.openingWireNames.size()),
+            6000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ExportPartFoldKcd()
+{
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        if (name.empty()) {
+            throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
+        }
+        const NamedPartModel* model = FindPartModel(project_, name);
+        if (model == nullptr) {
+            throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
+        }
+        kachakacha::io::PartFoldStateOptions options;
+        options.progress = partModelPanel_->FoldProgress();
+        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+
+        Project exportProject;
+        const auto result = kachakacha::io::AddPartFoldStateModel(
+            exportProject, project_, *model, options, ToName(ToQString(model->name)));
+
+        const int percent = static_cast<int>(options.progress * 100.0 + 0.5);
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            QStringLiteral("曲げ状態を別のプロジェクトへ保存"),
+            suggestedDirectory
+                + QStringLiteral("%1_曲げ%2.kcd").arg(ToQString(model->name)).arg(percent),
+            QStringLiteral("kachakachaCAD (*.kcd)"));
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(QStringLiteral(".kcd"), Qt::CaseInsensitive)) {
+            path += QStringLiteral(".kcd");
+        }
+        const std::filesystem::path nativePath(path.toStdWString());
+        std::ofstream output(nativePath, std::ios::binary);
+        if (!output) {
+            throw std::runtime_error("出力ファイルを開けませんでした。");
+        }
+        kachakacha::io::WriteProjectScript(output, exportProject);
+        statusBar()->showMessage(
+            QStringLiteral("曲げ%1%の状態を書き出しました: %2（板 %3 枚）")
+                .arg(percent)
+                .arg(path)
+                .arg(result.plateNames.size()),
+            6000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

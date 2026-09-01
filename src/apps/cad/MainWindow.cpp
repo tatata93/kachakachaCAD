@@ -8956,6 +8956,7 @@ void MainWindow::RefreshModelViews(bool fitView)
     RefreshSurfaceChoices();
     if (partModelPanel_ != nullptr) {
         partModelPanel_->RefreshFromProject(project_);
+        UpdatePartFoldPreview();
     }
     viewport_->SetProject(&project_, fitView);
     RefreshReferenceDimensions();

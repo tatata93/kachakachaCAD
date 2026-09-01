@@ -1,3 +1,4 @@
+#include "kachakacha/io/PartFoldState.h"
 #include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/PartModel.h"
@@ -421,6 +422,119 @@ int main()
                 Require(!wire.partModelSourceName.has_value(),
                     "derived opening wires removed with the model");
             }
+        }
+
+        // --- 曲げ状態モデル(スライダーで選んだ曲げ具合の実体化) ---
+        {
+            Project foldProject = MakeBottleLikeProject();
+            foldProject.AddWire("窓下書き", Wire::Polyline({
+                {-4.0, 40.0, 26.0}, {4.0, 40.0, 26.0}, {4.0, 40.0, 33.0},
+                {-4.0, 40.0, 33.0}, {-4.0, 40.0, 26.0}}));
+            foldProject.AddProjectedWire("窓", "窓下書き", "胴", {0.0, -1.0, 0.0});
+            foldProject.AddPlateOpening("胴板", "窓");
+            PartApproximationOptions foldOptions;
+            foldOptions.splitAxis = PartSplitAxis::V;
+            foldOptions.automaticBoundaries = false;
+            foldOptions.manualBoundaryParameters = {0.5};
+            foldProject.AddPartModel("近似F", "胴板", foldOptions);
+            const auto foldModel = foldProject.PartModels().back();
+
+            const auto polylineLength = [](const Wire& wire) {
+                const auto& points = wire.ControlPoints();
+                double length = 0.0;
+                for (std::size_t i = 1; i < points.size(); ++i) {
+                    length += (points[i] - points[i - 1]).Length();
+                }
+                return length;
+            };
+            const auto findWire = [](const Project& project,
+                                      const std::string& name) -> const Wire& {
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        return wire.wire;
+                    }
+                }
+                throw std::runtime_error("fold-state wire missing: " + name);
+            };
+
+            // 完成形(progress=1): 板材2枚、窓は部材2の板の実際の穴になる。
+            kachakacha::io::PartFoldStateOptions foldedState;
+            foldedState.progress = 1.0;
+            const auto foldedResult = kachakacha::io::AddPartFoldStateModel(
+                foldProject, foldProject, foldModel, foldedState, "曲げ100");
+            Require(foldedResult.plateNames.size() == 2,
+                "folded state creates one plate per part");
+            Require(foldedResult.openingWireNames.size() == 1,
+                "window becomes a real hole in the folded state");
+            {
+                bool holeAttached = false;
+                for (const auto& plate : foldProject.Plates()) {
+                    if (plate.name == "曲げ100_部材2板") {
+                        holeAttached = plate.openingWireNames.size() == 1;
+                    }
+                }
+                Require(holeAttached, "hole is attached to the second part plate");
+            }
+
+            // 平面(progress=0): 全レールが同一平面に載り、レール長は完成形と一致する。
+            Project flatTarget;
+            kachakacha::io::PartFoldStateOptions flatState;
+            flatState.progress = 0.0;
+            const auto flatResult = kachakacha::io::AddPartFoldStateModel(
+                flatTarget, foldProject, foldModel, flatState, "展開");
+            Require(flatResult.plateNames.size() == 2,
+                "flat state creates one plate per part");
+            Require(flatResult.openingWireNames.size() == 1,
+                "window is a real hole in the flat state too");
+            {
+                // 同一平面チェック。
+                const auto& first = findWire(flatTarget, "展開_レール1").ControlPoints();
+                const Vector3 origin = first.front();
+                const Vector3 axisA = first.back() - origin;
+                const auto& last = findWire(flatTarget, "展開_レール3").ControlPoints();
+                Vector3 axisB{0.0, 0.0, 0.0};
+                for (const auto& candidate : last) {
+                    axisB = candidate - origin;
+                    if (Cross(axisA, axisB).Length() > 1.0e-6) {
+                        break;
+                    }
+                }
+                const Vector3 normal = Cross(axisA, axisB);
+                Require(normal.Length() > 1.0e-9, "flat rails are not degenerate");
+                const Vector3 unit = normal * (1.0 / normal.Length());
+                for (const char* railName : {"展開_レール1", "展開_レール2", "展開_レール3"}) {
+                    for (const auto& point : findWire(flatTarget, railName).ControlPoints()) {
+                        Require(std::abs(Dot(point - origin, unit)) < 1.0e-6,
+                            "flat state lies in a single plane");
+                    }
+                }
+                // レール長の保存(展開は等長)。
+                for (int rail = 1; rail <= 3; ++rail) {
+                    const double flatLength = polylineLength(findWire(
+                        flatTarget, "展開_レール" + std::to_string(rail)));
+                    const double foldedLength = polylineLength(findWire(
+                        foldProject, "曲げ100_レール" + std::to_string(rail)));
+                    Require(std::abs(flatLength - foldedLength) < 1.0e-6,
+                        "rail lengths are preserved between flat and folded");
+                }
+            }
+
+            // 平面状態は別プロジェクト(別kcd相当)として保存・復元できる。
+            std::ostringstream flatSaved;
+            kachakacha::io::WriteProjectScript(flatSaved, flatTarget);
+            std::istringstream flatInput(flatSaved.str());
+            Project flatLoaded = kachakacha::io::LoadProjectScript(
+                flatInput, "part-fold-flat");
+            Require(flatLoaded.Plates().size() == 2, "flat kcd restores both plates");
+
+            // 中間(50%)も部材選択つきで実体化できる。
+            kachakacha::io::PartFoldStateOptions halfState;
+            halfState.progress = 0.5;
+            halfState.partNumbers = {2};
+            const auto halfResult = kachakacha::io::AddPartFoldStateModel(
+                foldProject, foldProject, foldModel, halfState, "曲げ50");
+            Require(halfResult.plateNames.size() == 1,
+                "half-folded state respects the part selection");
         }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';

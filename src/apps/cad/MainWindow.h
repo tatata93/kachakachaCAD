@@ -72,6 +72,10 @@ private:
     void SetApproximationSetsVisible(bool visible);
     void ChangeSelectedSetState(int state);
     void CreatePlateFromSelectedPart();
+    void UpdatePartFoldPreview();
+    void RealizePartFoldState();
+    void ExportPartFoldMesh(bool step);
+    void ExportPartFoldKcd();
     void BuildMenusAndToolbar();
     void ApplyDisplaySettings();
     void LoadDisplaySettings();

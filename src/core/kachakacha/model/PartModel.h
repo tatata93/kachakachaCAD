@@ -85,4 +85,19 @@ struct PartMeshDevelopment {
     const PartMeshDevelopment& mesh,
     double progress);
 
+//! 3D点を近似メッシュ(world)の最近三角形へ対応付け、同じ位相の状態
+//! state(BuildFoldPreview の戻り値など)上の対応点を返す。
+//! band は点が属した帯(0始まり = 部材番号-1)、distanceMillimeters は
+//! メッシュからの距離(メッシュ上の点なら ~0)。
+struct PartMeshMappedPoint {
+    int band = 0;
+    geometry::Vector3 point;
+    double distanceMillimeters = 0.0;
+};
+
+[[nodiscard]] PartMeshMappedPoint MapPointToPartMeshState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<std::vector<geometry::Vector3>>& state,
+    const geometry::Vector3& point);
+
 } // namespace kachakacha::model

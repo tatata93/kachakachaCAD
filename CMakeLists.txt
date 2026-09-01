@@ -76,6 +76,16 @@ else()
 endif()
 
 if(KACHACAD_ENABLE_OCCT)
+    # vcpkg のツールチェインを使う環境では、インストール済みのOCCTパッケージを最優先する。
+    # 過去のキャッシュで OpenCASCADE_DIR が vcpkg の buildtrees(デバッグビルド木)を指したままだと、
+    # デバッグ用 freetyped.dll に依存する DLL へリンクされ、exe の直接起動が
+    # 「freetyped.dll が見つからない」で失敗する(2026-09-02 に実際に発生)。
+    if(DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED OpenCASCADE_DIR
+        AND OpenCASCADE_DIR MATCHES "buildtrees")
+        message(STATUS "古い OpenCASCADE_DIR (${OpenCASCADE_DIR}) を無視し、vcpkg のOCCTを使います")
+        unset(OpenCASCADE_DIR)
+        unset(OpenCASCADE_DIR CACHE)
+    endif()
     set(KACHACAD_OCCT_BUILDTREE_TARGETS "${OpenCASCADE_DIR}/OpenCASCADETargets.cmake")
     if(EXISTS "${KACHACAD_OCCT_BUILDTREE_TARGETS}"
         AND EXISTS "${OpenCASCADE_DIR}/include/opencascade"

@@ -76,9 +76,23 @@ int main()
                 "each part stays within tolerance");
             Require(part.widthMillimeters >= 3.0 - 1.0e-6, "minimum width respected");
         }
-        // 境界ワイヤが部材数-1本、派生としてぶら下がる。
-        Require(model.boundaryWireNames.size() == model.result.parts.size() - 1,
-            "boundary wires match part count");
+        // レール(縁+内部境界)が部材数+1本、部材面が部材数本ぶら下がる。
+        Require(model.boundaryWireNames.size() == model.result.parts.size() + 1,
+            "rail wires match part count");
+        Require(model.partSurfaceNames.size() == model.result.parts.size(),
+            "one derived surface per part");
+        for (const auto& surfaceName : model.partSurfaceNames) {
+            bool found = false;
+            for (const auto& surface : project.Surfaces()) {
+                if (surface.name == surfaceName) {
+                    Require(surface.partModelSourceName.has_value(), "part surface marked derived");
+                    Require(surface.surface.Kind() == kachakacha::model::SurfaceKind::Ruled,
+                        "part surface is ruled (angular approximation)");
+                    found = true;
+                }
+            }
+            Require(found, "part surface exists");
+        }
         std::size_t derivedCount = 0;
         for (const auto& wire : project.Wires()) {
             if (wire.partModelSourceName.has_value()) {
@@ -95,20 +109,67 @@ int main()
                 == ObjectSetState::Visible,
             "set state readable through membership");
 
-        // --- 幾何学的な正しさ: 上がすぼまる帯の展開は上辺が短い扇環になる ---
-        const auto patterns = kachakacha::io::BuildAllPartPatterns(project, model);
-        Require(patterns.size() == model.result.parts.size(), "one pattern per part");
-        for (const auto& pattern : patterns) {
-            Require(pattern.outerBoundary.points.size() >= 4, "pattern boundary exists");
-            Require(pattern.analysis.maximumEdgeDistortionMillimeters < 0.5,
-                "pattern preserves edge lengths");
+        // --- 展開の厳密さ: レールの2D長は近似形状(角ばったメッシュ)の3D長と一致する ---
+        const auto results = kachakacha::io::BuildAllPartPatternsWithPreview(project, model);
+        Require(results.size() == model.result.parts.size(), "one pattern per part");
+        for (const auto& patternResult : results) {
+            const auto& mesh = patternResult.mesh;
+            Require(mesh.rows == 2, "single part has two rails");
+            for (int row = 0; row < mesh.rows; ++row) {
+                double length3d = 0.0;
+                double length2d = 0.0;
+                for (int column = 1; column < mesh.columns; ++column) {
+                    length3d += (mesh.world[row][column] - mesh.world[row][column - 1]).Length();
+                    const double dx = mesh.developed[row][column].x - mesh.developed[row][column - 1].x;
+                    const double dy = mesh.developed[row][column].y - mesh.developed[row][column - 1].y;
+                    length2d += std::sqrt(dx * dx + dy * dy);
+                }
+                Require(std::abs(length3d - length2d) < 1.0e-6 * std::max(1.0, length3d),
+                    "development preserves rail lengths exactly");
+            }
+            // 横断方向(素線)の実長も保存される。
+            for (int column = 0; column < mesh.columns; column += 16) {
+                const double rail3d = (mesh.world[1][column] - mesh.world[0][column]).Length();
+                const double dx = mesh.developed[1][column].x - mesh.developed[0][column].x;
+                const double dy = mesh.developed[1][column].y - mesh.developed[0][column].y;
+                const double rail2d = std::sqrt(dx * dx + dy * dy);
+                Require(std::abs(rail3d - rail2d) < 1.0e-6 * std::max(1.0, rail3d),
+                    "development preserves ruling lengths exactly");
+            }
+            Require(patternResult.pattern.analysis.maximumEdgeDistortionMillimeters == 0.0,
+                "exact development reports zero edge distortion");
+            Require(patternResult.pattern.foldLines.empty(),
+                "single part has no crease lines");
+            // 折り畳みプレビュー: 0で平面、1で近似形状に一致。
+            const auto flat = kachakacha::model::BuildFoldPreview(mesh, 0.0);
+            const auto folded = kachakacha::model::BuildFoldPreview(mesh, 1.0);
+            Require((folded[0][0] - mesh.world[0][0]).Length() < 1.0e-9,
+                "fold preview at 1 matches the approximation shape");
+            double planarity = 0.0;
+            const kachakacha::geometry::Vector3 origin = flat[0][0];
+            const kachakacha::geometry::Vector3 e1 = flat[0][mesh.columns - 1] - origin;
+            const kachakacha::geometry::Vector3 e2 = flat[1][0] - origin;
+            const kachakacha::geometry::Vector3 normal = kachakacha::geometry::Cross(e1, e2);
+            const double normalLength = normal.Length();
+            if (normalLength > 1.0e-12) {
+                for (int row = 0; row < mesh.rows; ++row) {
+                    for (int column = 0; column < mesh.columns; ++column) {
+                        planarity = std::max(planarity,
+                            std::abs(kachakacha::geometry::Dot(flat[row][column] - origin, normal) / normalLength));
+                    }
+                }
+                Require(planarity < 1.0e-6, "fold preview at 0 is planar");
+            }
         }
 
-        // --- 結合展開: 隣接部材はひとつの型紙になり、非隣接は拒否される ---
+        // --- 結合展開: 隣接部材は一枚になり、部材境界が折り線(山/谷)として入る ---
         if (model.result.parts.size() >= 2) {
             const auto joined =
                 kachakacha::io::BuildPartPattern(project, model, {1, 2});
             Require(!joined.outerBoundary.points.empty(), "joined pattern exists");
+            Require(joined.foldLines.size() == 1, "joined pattern has one crease");
+            Require(joined.foldLines.front().foldDirection != 0,
+                "crease has a mountain/valley direction");
         }
         if (model.result.parts.size() >= 3) {
             bool rejected = false;
@@ -173,6 +234,12 @@ int main()
             Require(found, "extracted wire exists");
         }
 
+        // --- 部材面から板材を作れる(板材化) ---
+        project.AddPlate(
+            "部材板", project.PartModels().front().partSurfaceNames.front(),
+            0.5, PlateThicknessDirection::Centered, "プラ板");
+        Require(project.FindPlate("部材板").has_value(), "plate created from part surface");
+
         // --- セット状態と保存/読込 ---
         project.SetObjectSetState("近似:近似A", ObjectSetState::ReferenceOnly);
         std::ostringstream saved;
@@ -186,9 +253,14 @@ int main()
             "automatic set state saved");
         Require(text.find("object_set 抽出:近似A visible") != std::string::npos,
             "manual set saved");
-        Require(text.find("近似A_境界1 ") == std::string::npos
-                && text.find("polyline3d 近似A_境界") == std::string::npos,
-            "derived boundary wires are not saved");
+        Require(text.find("polyline3d 近似A_境界") == std::string::npos,
+            "derived rail wires are not saved");
+        Require(text.find("surface_ruled 近似A_部材") == std::string::npos,
+            "derived part surfaces are not saved");
+        Require(text.find("plate 部材板 近似A_部材1") != std::string::npos,
+            "plate on a part surface is saved after part_model");
+        Require(text.find("part_model 近似A") < text.find("plate 部材板"),
+            "part-surface plates are written after part_model");
 
         std::istringstream input(text);
         Project loaded = kachakacha::io::LoadProjectScript(input, "part-model-test");
@@ -201,6 +273,10 @@ int main()
                     loaded.PartModels().front().boundaryWireNames.front())
                 == ObjectSetState::ReferenceOnly,
             "set state restored");
+        Require(loaded.FindPlate("部材板").has_value(), "part-surface plate restored");
+        Require(loaded.PartModels().front().partSurfaceNames.size()
+                == loaded.PartModels().front().result.parts.size(),
+            "part surfaces regenerated on load");
 
         // --- 片付けと保護 ---
         bool guarded = false;
@@ -210,6 +286,21 @@ int main()
             guarded = true;
         }
         Require(guarded, "derived boundary wires cannot be removed directly");
+        bool surfaceGuarded = false;
+        try {
+            (void)loaded.RemoveSurface(loaded.PartModels().front().partSurfaceNames.front());
+        } catch (const std::exception&) {
+            surfaceGuarded = true;
+        }
+        Require(surfaceGuarded, "derived part surfaces cannot be removed directly");
+        bool partModelGuarded = false;
+        try {
+            (void)loaded.RemovePartModel("近似A");
+        } catch (const std::exception&) {
+            partModelGuarded = true;
+        }
+        Require(partModelGuarded, "part model with dependent plate is protected");
+        Require(loaded.RemovePlate("部材板"), "dependent plate removed first");
         bool plateGuarded = false;
         try {
             (void)loaded.RemovePlate("胴板");
@@ -221,6 +312,9 @@ int main()
         Require(loaded.RemovePartModel("近似M"), "second part model removed");
         for (const auto& wire : loaded.Wires()) {
             Require(!wire.partModelSourceName.has_value(), "derived wires removed with model");
+        }
+        for (const auto& surface : loaded.Surfaces()) {
+            Require(!surface.partModelSourceName.has_value(), "derived surfaces removed with model");
         }
         Require(loaded.RemovePlate("胴板"), "plate removable after part models are gone");
     } catch (const std::exception& error) {

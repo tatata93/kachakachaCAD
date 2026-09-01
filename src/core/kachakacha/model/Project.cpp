@@ -1934,6 +1934,13 @@ bool Project::RemoveWire(std::string_view name)
 
 bool Project::RemoveSurface(std::string_view name)
 {
+    for (const NamedSurface& surface : surfaces_) {
+        if (surface.name == name && surface.partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                "Part-model surfaces cannot be removed individually: "
+                + std::string(name));
+        }
+    }
     const auto position = std::find_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
         return surface.name == name;
     });
@@ -2270,6 +2277,12 @@ void Project::RebuildDependentGeometry()
     }
     std::vector<bool> surfaceReady(surfaces_.size(), false);
     std::size_t pendingSurfaces = surfaces_.size();
+    for (std::size_t index = 0; index < surfaces_.size(); ++index) {
+        if (surfaces_[index].partModelSourceName.has_value()) {
+            surfaceReady[index] = true;
+            --pendingSurfaces;
+        }
+    }
 
     while (pendingSurfaces > 0 || pendingProjections > 0) {
         bool madeProgress = false;
@@ -2412,6 +2425,25 @@ void Project::RebuildDependentGeometry()
             }
         }
     }
+    RebuildPartModels();
+    // 部材面(部材近似モデルの派生面)を元にした板材は、部材面の更新後に再構築する。
+    for (NamedPlate& plate : plates_) {
+        const auto sourceSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) {
+                return candidate.name == plate.sourceSurfaceName
+                    && candidate.partModelSourceName.has_value();
+            });
+        if (sourceSurface == surfaces_.end()) {
+            continue;
+        }
+        plate.plate = Plate(
+            sourceSurface->surface,
+            plate.plate.Thickness(),
+            plate.plate.EndThickness(),
+            plate.plate.Direction(),
+            plate.plate.Range());
+    }
+
     for (NamedWire& wire : wires_) {
         if (!wire.plateOffset.has_value()) {
             continue;
@@ -2437,8 +2469,6 @@ void Project::RebuildDependentGeometry()
             body.body.ClearanceMillimeters(),
             body.body.ThicknessMillimeters());
     }
-
-    RebuildPartModels();
 }
 
 // ---- 部材近似モデル(ADR 0019) ----------------------------------------
@@ -2466,16 +2496,19 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
     }
 
-    // 内部境界パラメータ(部材数-1本)。
+    // レール(帯の縁+内部境界)のパラメータ列。部材数+1本。
     std::vector<double> parameters;
+    parameters.push_back(0.0);
     for (std::size_t index = 1; index < model.result.parts.size(); ++index) {
         parameters.push_back(model.result.parts[index].minimumParameter);
     }
+    parameters.push_back(1.0);
 
-    std::vector<std::string> newNames;
-    const std::string prefix = model.name + "_境界";
+    // --- レールの派生ワイヤ ---
+    std::vector<std::string> newWireNames;
+    const std::string wirePrefix = model.name + "_境界";
     for (std::size_t index = 0; index < parameters.size(); ++index) {
-        const std::string wireName = prefix + std::to_string(index + 1);
+        const std::string wireName = wirePrefix + std::to_string(index + 1);
         Wire boundary = BuildPartBoundaryWire(
             plate->plate, model.options.splitAxis, parameters[index]);
         const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
@@ -2492,12 +2525,10 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             NamedWire derived{wireName, std::move(boundary), {}, std::nullopt, model.visible, std::nullopt, model.name};
             wires_.push_back(std::move(derived));
         }
-        newNames.push_back(wireName);
+        newWireNames.push_back(wireName);
     }
-
-    // 部材数が減った場合、余った派生ワイヤを片付ける。
     for (const std::string& oldName : model.boundaryWireNames) {
-        if (std::find(newNames.begin(), newNames.end(), oldName) != newNames.end()) {
+        if (std::find(newWireNames.begin(), newWireNames.end(), oldName) != newWireNames.end()) {
             continue;
         }
         wires_.erase(
@@ -2509,9 +2540,70 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             wires_.end());
         RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
     }
-    model.boundaryWireNames = newNames;
+    model.boundaryWireNames = newWireNames;
 
-    // 自動セット「近似:<名前>」を最新のメンバーで作り直す。
+    // --- 部材ごとの派生ルールド面(角ばった近似の実形状) ---
+    std::vector<std::string> newSurfaceNames;
+    const std::string surfacePrefix = model.name + "_部材";
+    for (std::size_t index = 0; index < model.result.parts.size(); ++index) {
+        const std::string surfaceName = surfacePrefix + std::to_string(index + 1);
+        const auto bottomWire = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == newWireNames[index];
+        });
+        const auto topWire = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == newWireNames[index + 1];
+        });
+        if (bottomWire == wires_.end() || topWire == wires_.end()) {
+            throw std::logic_error("Part-model rail wire is missing.");
+        }
+        Surface ruled = Surface::Ruled(bottomWire->wire, topWire->wire);
+        const auto existing = std::find_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+            return surface.name == surfaceName;
+        });
+        if (existing != surfaces_.end()) {
+            if (!existing->partModelSourceName.has_value()
+                || *existing->partModelSourceName != model.name) {
+                throw std::invalid_argument(
+                    "Part-model surface name is already used: " + surfaceName);
+            }
+            existing->surface = std::move(ruled);
+            existing->sourceWireNames = {newWireNames[index], newWireNames[index + 1]};
+            existing->sourceWireGroups = {{newWireNames[index]}, {newWireNames[index + 1]}};
+        } else {
+            surfaces_.push_back(NamedSurface{
+                surfaceName,
+                std::move(ruled),
+                {newWireNames[index], newWireNames[index + 1]},
+                model.visible,
+                {},
+                {{newWireNames[index]}, {newWireNames[index + 1]}},
+                model.name,
+            });
+        }
+        newSurfaceNames.push_back(surfaceName);
+    }
+    for (const std::string& oldName : model.partSurfaceNames) {
+        if (std::find(newSurfaceNames.begin(), newSurfaceNames.end(), oldName) != newSurfaceNames.end()) {
+            continue;
+        }
+        for (const NamedPlate& dependentPlate : plates_) {
+            if (dependentPlate.sourceSurfaceName == oldName) {
+                throw std::invalid_argument(
+                    "Part surface is used by plate: " + dependentPlate.name);
+            }
+        }
+        surfaces_.erase(
+            std::remove_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+                return surface.name == oldName
+                    && surface.partModelSourceName.has_value()
+                    && *surface.partModelSourceName == model.name;
+            }),
+            surfaces_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Surface, oldName);
+    }
+    model.partSurfaceNames = newSurfaceNames;
+
+    // --- 自動セット「近似:<名前>」を最新のメンバーで作り直す ---
     const std::string setName = "近似:" + model.name;
     ObjectSet* set = FindObjectSetMutable(setName);
     if (set == nullptr) {
@@ -2521,8 +2613,11 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     set->automatic = true;
     set->members.clear();
     set->members.push_back({ProjectObjectKind::PartModel, model.name});
-    for (const std::string& wireName : newNames) {
+    for (const std::string& wireName : newWireNames) {
         set->members.push_back({ProjectObjectKind::Wire, wireName});
+    }
+    for (const std::string& surfaceName : newSurfaceNames) {
+        set->members.push_back({ProjectObjectKind::Surface, surfaceName});
     }
 }
 
@@ -2584,6 +2679,29 @@ bool Project::RemovePartModel(std::string_view name)
     if (model == partModels_.end()) {
         return false;
     }
+    for (const std::string& surfaceName : model->partSurfaceNames) {
+        for (const NamedPlate& dependentPlate : plates_) {
+            if (dependentPlate.sourceSurfaceName == surfaceName) {
+                throw std::invalid_argument(
+                    "Part surface is used by plate (remove the plate first): "
+                    + dependentPlate.name);
+            }
+        }
+        for (const NamedBody& dependentBody : bodies_) {
+            if (dependentBody.sourceSurfaceName == surfaceName) {
+                throw std::invalid_argument(
+                    "Part surface is used by body (remove the body first): "
+                    + dependentBody.name);
+            }
+        }
+    }
+    for (const std::string& surfaceName : model->partSurfaceNames) {
+        surfaces_.erase(
+            std::remove_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+                return surface.name == surfaceName && surface.partModelSourceName.has_value();
+            }),
+            surfaces_.end());
+    }
     for (const std::string& wireName : model->boundaryWireNames) {
         wires_.erase(
             std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
@@ -2614,6 +2732,13 @@ void Project::SetPartModelVisible(std::string_view name, bool visible)
         for (NamedWire& wire : wires_) {
             if (wire.name == wireName) {
                 wire.visible = visible;
+            }
+        }
+    }
+    for (const std::string& surfaceName : model->partSurfaceNames) {
+        for (NamedSurface& surface : surfaces_) {
+            if (surface.name == surfaceName) {
+                surface.visible = visible;
             }
         }
     }

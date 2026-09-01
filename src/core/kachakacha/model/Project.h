@@ -138,6 +138,8 @@ struct NamedSurface {
     // endpoint-connected source wires. sourceWireNames remains the flattened
     // dependency list used by existing project operations.
     std::vector<std::vector<std::string>> sourceWireGroups;
+    //! 部材近似モデルの派生面(部材面)の場合、そのモデル名。個別編集・保存の対象外。
+    std::optional<std::string> partModelSourceName;
 };
 
 struct NamedPlate {
@@ -164,7 +166,8 @@ struct NamedPartModel {
     std::string sourcePlateName;
     PartApproximationOptions options;
     PartApproximationResult result;
-    std::vector<std::string> boundaryWireNames; //!< 内部境界の派生ワイヤ名(部材数-1本)
+    std::vector<std::string> boundaryWireNames; //!< レール(縁+内部境界)の派生ワイヤ名(部材数+1本)
+    std::vector<std::string> partSurfaceNames;  //!< 部材ごとの派生ルールド面名(部材数本)
     bool visible = true;
 };
 

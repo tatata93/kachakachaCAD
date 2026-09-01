@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kachakacha/geometry/Vector2.h"
 #include "kachakacha/model/Plate.h"
 #include "kachakacha/model/Wire.h"
 
@@ -56,5 +57,32 @@ struct PartApproximationResult {
     PartSplitAxis splitAxis,
     double parameter,
     int samples = 64);
+
+//! 部材近似モデルの帯メッシュ(近似の実形状)とその厳密展開。
+//! rows = レール本数(部材数+1)。各レールは columns 個の点列。
+//! world は角ばった近似形状(レール間は直線=ルールド)、developed はその等長展開。
+//! 展開は三角形単位で辺長を厳密に保存する(標準的なペーパークラフト展開)。
+struct PartMeshDevelopment {
+    int rows = 0;
+    int columns = 0;
+    //! [row][column] の順。row0 が範囲の始まり側。
+    std::vector<std::vector<geometry::Vector3>> world;
+    std::vector<std::vector<geometry::Vector2>> developed;
+    //! 内部レール(折り線)の山谷。サイズ rows-2。+1=山, -1=谷, 0=ほぼ平ら。
+    std::vector<int> creaseDirections;
+};
+
+//! 帯範囲 [t0,t1] を boundaries(内部境界のパラメータ列)で区切ってメッシュ展開する。
+[[nodiscard]] PartMeshDevelopment DevelopPartMesh(
+    const Plate& plate,
+    PartSplitAxis splitAxis,
+    const std::vector<double>& railParameters,
+    int columns = 96);
+
+//! 展開状態(progress=0)から折り曲げた近似形状(progress=1)までの中間形状を返す。
+//! スライダー確認用。返り値は world と同じ [row][column]。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildFoldPreview(
+    const PartMeshDevelopment& mesh,
+    double progress);
 
 } // namespace kachakacha::model

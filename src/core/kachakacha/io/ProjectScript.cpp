@@ -1269,6 +1269,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                 continue;
             }
             const auto& surface = project.Surfaces()[surfaceIndex];
+            if (surface.partModelSourceName.has_value()) {
+                // 部材近似モデルの派生面は保存しない(読み込み時に再生成)。
+                surfaceWritten[surfaceIndex] = true;
+                --pendingSurfaces;
+                madeProgress = true;
+                continue;
+            }
             const bool sourcesWritten = std::all_of(
                 surface.sourceWireNames.begin(), surface.sourceWireNames.end(),
                 [&](const std::string& sourceName) {
@@ -1353,7 +1360,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     if (!project.Plates().empty()) {
         output << '\n';
     }
-    for (const auto& namedPlate : project.Plates()) {
+    const auto isPartSurfacePlate = [&project](const model::NamedPlate& namedPlate) {
+        for (const auto& surface : project.Surfaces()) {
+            if (surface.name == namedPlate.sourceSurfaceName) {
+                return surface.partModelSourceName.has_value();
+            }
+        }
+        return false;
+    };
+    const auto writePlateLine = [&output](const model::NamedPlate& namedPlate) {
         RequireScriptNameSafe(namedPlate.name, "Plate");
         RequireScriptNameSafe(namedPlate.sourceSurfaceName, "Plate source surface");
         RequireScriptNameSafe(namedPlate.material, "Plate material");
@@ -1365,9 +1380,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
         output << PlateDirectionToken(namedPlate.plate.Direction()) << ' '
                << namedPlate.material << '\n';
+    };
+    for (const auto& namedPlate : project.Plates()) {
+        if (isPartSurfacePlate(namedPlate)) {
+            continue; // 部材面由来の板材は part_model の後で書く。
+        }
+        writePlateLine(namedPlate);
     }
     for (const auto& namedPlate : project.Plates()) {
-        if (namedPlate.plate.Range().IsFull()) {
+        if (namedPlate.plate.Range().IsFull() || isPartSurfacePlate(namedPlate)) {
             continue;
         }
         const auto& range = namedPlate.plate.Range();
@@ -1376,18 +1397,27 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                << range.minimumV << ' ' << range.maximumV << '\n';
     }
     for (const auto& namedPlate : project.Plates()) {
+        if (isPartSurfacePlate(namedPlate)) {
+            continue;
+        }
         for (const std::string& openingWireName : namedPlate.openingWireNames) {
             RequireScriptNameSafe(openingWireName, "Plate opening wire");
             output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
         }
     }
     for (const auto& namedPlate : project.Plates()) {
+        if (isPartSurfacePlate(namedPlate)) {
+            continue;
+        }
         for (const std::string& cutWireName : namedPlate.reliefCutWireNames) {
             RequireScriptNameSafe(cutWireName, "Plate relief-cut wire");
             output << "plate_relief_cut " << namedPlate.name << ' ' << cutWireName << '\n';
         }
     }
     for (const auto& namedPlate : project.Plates()) {
+        if (isPartSurfacePlate(namedPlate)) {
+            continue;
+        }
         for (const std::string& splitWireName : namedPlate.splitWireNames) {
             RequireScriptNameSafe(splitWireName, "Plate split-line wire");
             output << "plate_split_line " << namedPlate.name << ' ' << splitWireName << '\n';
@@ -1436,6 +1466,30 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             output << ' ' << parameter;
         }
         output << '\n';
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        if (!isPartSurfacePlate(namedPlate)) {
+            continue;
+        }
+        writePlateLine(namedPlate);
+        if (!namedPlate.plate.Range().IsFull()) {
+            const auto& range = namedPlate.plate.Range();
+            output << "plate_range " << namedPlate.name << ' '
+                   << range.minimumU << ' ' << range.maximumU << ' '
+                   << range.minimumV << ' ' << range.maximumV << '\n';
+        }
+        for (const std::string& openingWireName : namedPlate.openingWireNames) {
+            RequireScriptNameSafe(openingWireName, "Plate opening wire");
+            output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
+        }
+        for (const std::string& cutWireName : namedPlate.reliefCutWireNames) {
+            RequireScriptNameSafe(cutWireName, "Plate relief-cut wire");
+            output << "plate_relief_cut " << namedPlate.name << ' ' << cutWireName << '\n';
+        }
+        for (const std::string& splitWireName : namedPlate.splitWireNames) {
+            RequireScriptNameSafe(splitWireName, "Plate split-line wire");
+            output << "plate_split_line " << namedPlate.name << ' ' << splitWireName << '\n';
+        }
     }
     const auto setStateToken = [](model::ObjectSetState state) {
         switch (state) {
@@ -1513,7 +1567,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
     }
     for (const auto& surface : project.Surfaces()) {
-        if (!surface.visible) {
+        if (!surface.visible && !surface.partModelSourceName.has_value()) {
             output << "visibility surface " << surface.name << " hidden\n";
         }
     }

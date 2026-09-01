@@ -927,6 +927,105 @@ void LoftSurfacesRoundTrip()
         project.Surfaces()[0].surface.Evaluate(0.5, 0.5), "roundtrip loft geometry");
 }
 
+void GordonSurfacesRoundTrip()
+{
+    // ガイドは各断面の Wire::Evaluate(0.5) の点列を通るポリライン。
+    std::istringstream input(R"(
+        bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+        bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+        bezier3d section_c 12 -6 0  12 -2 4  12 2 4  12 6 0
+        polyline3d ridge 0 0 2.25  6 0 4.5  12 0 3
+        surface_gordon carbody 3 section_a section_b section_c 1 ridge
+    )");
+    auto project = LoadProjectScript(input, "gordon-test");
+    Require(project.Surfaces().size() == 1, "gordon surface count");
+    Require(project.Surfaces()[0].surface.Kind() == kachakacha::model::SurfaceKind::Gordon, "gordon surface kind");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 3, "gordon section dependency count");
+    Require(project.Surfaces()[0].guideWireNames == std::vector<std::string>{"ridge"}, "gordon guide dependency name");
+    RequireNear(project.Surfaces()[0].surface.Evaluate(0.5, 0.5), {6.0, 0.0, 4.5},
+        "gordon passes through the guide midpoint");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("surface_gordon carbody 3 section_a section_b section_c 1 ridge") != std::string::npos,
+        "write gordon command");
+
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(roundTripInput, "gordon-roundtrip");
+    Require(roundTripped.Surfaces().size() == 1, "roundtrip gordon surface count");
+    Require(roundTripped.Surfaces()[0].surface.Kind() == kachakacha::model::SurfaceKind::Gordon, "roundtrip gordon kind");
+    Require(roundTripped.Surfaces()[0].guideWireNames == std::vector<std::string>{"ridge"},
+        "roundtrip gordon guide dependency name");
+    RequireNear(roundTripped.Surfaces()[0].surface.Evaluate(0.5, 0.5),
+        project.Surfaces()[0].surface.Evaluate(0.5, 0.5), "roundtrip gordon geometry");
+}
+
+void GordonSurfaceCommandRejectsInvalidCounts()
+{
+    bool negativeSectionCountRejected = false;
+    try {
+        std::istringstream input(R"(
+            bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+            bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+            polyline3d ridge 0 0 2.25  6 0 4.5
+            surface_gordon carbody -1 section_a section_b 1 ridge
+        )");
+        (void)LoadProjectScript(input, "gordon-negative-section-count");
+    } catch (const std::runtime_error&) {
+        negativeSectionCountRejected = true;
+    }
+    Require(negativeSectionCountRejected, "surface_gordon rejects a negative section count");
+
+    bool shortSectionListRejected = false;
+    try {
+        std::istringstream input(R"(
+            bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+            bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+            surface_gordon carbody 3 section_a section_b
+        )");
+        (void)LoadProjectScript(input, "gordon-short-section-list");
+    } catch (const std::runtime_error&) {
+        shortSectionListRejected = true;
+    }
+    Require(shortSectionListRejected, "surface_gordon rejects a section count exceeding the supplied names");
+
+    bool shortGuideListRejected = false;
+    try {
+        std::istringstream input(R"(
+            bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+            bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+            polyline3d ridge 0 0 2.25  6 0 4.5
+            surface_gordon carbody 2 section_a section_b 5 ridge
+        )");
+        (void)LoadProjectScript(input, "gordon-short-guide-list");
+    } catch (const std::runtime_error&) {
+        shortGuideListRejected = true;
+    }
+    Require(shortGuideListRejected, "surface_gordon rejects a guide count exceeding the supplied names");
+}
+
+void GordonSurfaceRejectsGuideWireRemoval()
+{
+    std::istringstream input(R"(
+        bezier3d section_a 0 -6 0  0 -2 3  0 2 3  0 6 0
+        bezier3d section_b 6 -6 0  6 -2 6  6 2 6  6 6 0
+        polyline3d ridge 0 0 2.25  6 0 4.5
+        surface_gordon carbody 2 section_a section_b 1 ridge
+    )");
+    auto project = LoadProjectScript(input, "gordon-guide-removal");
+    Require(project.Surfaces()[0].surface.Kind() == kachakacha::model::SurfaceKind::Gordon,
+        "gordon guide-removal fixture surface kind");
+
+    bool guideRemovalRejected = false;
+    try {
+        project.RemoveWire("ridge");
+    } catch (const std::invalid_argument&) {
+        guideRemovalRejected = true;
+    }
+    Require(guideRemovalRejected, "guide wire cannot be deleted while used by a gordon surface");
+    Require(project.Wires().size() == 3, "guide wire still present after rejected removal");
+}
+
 void PlateSplitsRoundTrip()
 {
     std::istringstream input(R"(
@@ -1209,6 +1308,9 @@ int main()
         SurfacesAndProjectedWiresRoundTrip();
         ProtrudingLightCaseFollowsItsFrontContour();
         LoftSurfacesRoundTrip();
+        GordonSurfacesRoundTrip();
+        GordonSurfaceCommandRejectsInvalidCounts();
+        GordonSurfaceRejectsGuideWireRemoval();
         PlateSplitsRoundTrip();
         VisibilityRoundTrips();
         UnknownPlaneIsRejected();

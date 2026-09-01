@@ -130,6 +130,7 @@ struct NamedSurface {
     Surface surface;
     std::vector<std::string> sourceWireNames;
     bool visible = true;
+    std::vector<std::string> guideWireNames;
 };
 
 struct NamedPlate {
@@ -162,6 +163,10 @@ public:
     void AddPlanarSurface(std::string name, std::vector<std::string> boundaryWireNames);
     void AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName);
     void AddLoftSurface(std::string name, std::vector<std::string> sectionNames);
+    void AddGordonSurface(
+        std::string name,
+        std::vector<std::string> sectionNames,
+        std::vector<std::string> guideNames);
     void AddPlate(
         std::string name,
         std::string sourceSurfaceName,

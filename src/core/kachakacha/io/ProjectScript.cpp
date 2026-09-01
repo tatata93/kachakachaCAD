@@ -77,6 +77,16 @@ double ReadDouble(std::istringstream& stream, std::string_view sourceName, int l
     return value;
 }
 
+std::size_t ReadCount(std::istringstream& stream, std::string_view sourceName, int lineNumber, const char* label)
+{
+    long long value = 0;
+    if (!(stream >> value) || value < 0) {
+        ThrowLineError(sourceName, lineNumber, std::string("Expected count for ") + label + ".");
+    }
+
+    return static_cast<std::size_t>(value);
+}
+
 std::string ReadName(std::istringstream& stream, std::string_view sourceName, int lineNumber, const char* label)
 {
     std::string value;
@@ -731,6 +741,22 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     sections.push_back(sectionName);
                 }
                 project.AddLoftSurface(name, std::move(sections));
+            } else if (command == "surface_gordon") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::size_t sectionCount = ReadCount(stream, sourceName, lineNumber, "section count");
+                std::vector<std::string> sections;
+                sections.reserve(sectionCount);
+                for (std::size_t index = 0; index < sectionCount; ++index) {
+                    sections.push_back(ReadName(stream, sourceName, lineNumber, "section wire"));
+                }
+                const std::size_t guideCount = ReadCount(stream, sourceName, lineNumber, "guide count");
+                std::vector<std::string> guides;
+                guides.reserve(guideCount);
+                for (std::size_t index = 0; index < guideCount; ++index) {
+                    guides.push_back(ReadName(stream, sourceName, lineNumber, "guide wire"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddGordonSurface(name, std::move(sections), std::move(guides));
             } else if (command == "wire_project") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "projected wire");
                 const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source drawing wire");
@@ -1009,6 +1035,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         for (const std::string& sourceWireName : namedSurface.sourceWireNames) {
             RequireScriptNameSafe(sourceWireName, "Surface source wire");
         }
+        for (const std::string& guideWireName : namedSurface.guideWireNames) {
+            RequireScriptNameSafe(guideWireName, "Surface guide wire");
+        }
         if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
             output << "surface_planar " << namedSurface.name;
             for (const std::string& boundaryName : namedSurface.sourceWireNames) {
@@ -1018,10 +1047,20 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         } else if (namedSurface.surface.Kind() == model::SurfaceKind::Ruled) {
             output << "surface_ruled " << namedSurface.name << ' '
                    << namedSurface.sourceWireNames.at(0) << ' ' << namedSurface.sourceWireNames.at(1) << '\n';
-        } else {
+        } else if (namedSurface.surface.Kind() == model::SurfaceKind::Loft) {
             output << "surface_loft " << namedSurface.name;
             for (const std::string& sectionName : namedSurface.sourceWireNames) {
                 output << ' ' << sectionName;
+            }
+            output << '\n';
+        } else {
+            output << "surface_gordon " << namedSurface.name << ' ' << namedSurface.sourceWireNames.size();
+            for (const std::string& sectionName : namedSurface.sourceWireNames) {
+                output << ' ' << sectionName;
+            }
+            output << ' ' << namedSurface.guideWireNames.size();
+            for (const std::string& guideName : namedSurface.guideWireNames) {
+                output << ' ' << guideName;
             }
             output << '\n';
         }

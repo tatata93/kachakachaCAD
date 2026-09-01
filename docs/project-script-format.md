@@ -217,6 +217,14 @@ surface_loft NAME SECTION_WIRE_A SECTION_WIRE_B SECTION_WIRE_C [...]
 
 断面は車体の前から後ろの順に並べる。3断面以上では各断面を通り、断面位置で長手方向の接線が連続する三次補間を使う。断面ワイヤーを編集すると面を再計算する。
 
+### 断面群とガイド線からゴードン面
+
+```text
+surface_gordon NAME SECTION_COUNT SECTION_WIRE... GUIDE_COUNT GUIDE_WIRE...
+```
+
+断面ワイヤー(2本以上)と外形ガイド線(1本以上)を両方とも厳密に通る面。`SECTION_COUNT`・`GUIDE_COUNT` はそれぞれの直後に続く名前の個数を示す。各ガイドは全ての断面と交差していなければならず、交差しないガイドを指定するとコアが拒否する。断面・ガイドの名前は互いに重複できず、投影ワイヤー・plate-offsetワイヤー・constructionワイヤーは断面にもガイドにも使用できない。断面またはガイドのワイヤーを編集すると面を再計算する。
+
 ### 平面図ワイヤーを面へ投影
 
 ```text

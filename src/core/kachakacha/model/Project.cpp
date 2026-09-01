@@ -413,6 +413,11 @@ void RequireConstructionWireHasNoModelDependencies(const Project& project, std::
             throw std::invalid_argument("A surface source wire cannot be changed to construction: "
                 + std::string(wireName));
         }
+        if (std::find(surface.guideWireNames.begin(), surface.guideWireNames.end(), wireName)
+            != surface.guideWireNames.end()) {
+            throw std::invalid_argument("A surface guide wire cannot be changed to construction: "
+                + std::string(wireName));
+        }
     }
     for (const NamedWire& wire : project.Wires()) {
         if (wire.projection.has_value() && wire.projection->sourceWireName == wireName) {
@@ -607,6 +612,8 @@ void Project::AddPlanarSurface(
         std::move(name),
         Surface::Planar(std::move(composite)),
         std::move(boundaryWireNames),
+        true,
+        {},
     });
 }
 
@@ -633,6 +640,8 @@ void Project::AddRuledSurface(std::string name, std::string firstSectionName, st
         std::move(name),
         Surface::Ruled(first.wire, second.wire),
         {std::move(firstSectionName), std::move(secondSectionName)},
+        true,
+        {},
     });
 }
 
@@ -663,7 +672,82 @@ void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionN
         }
         sections.push_back(section.wire);
     }
-    surfaces_.push_back({std::move(name), Surface::Loft(std::move(sections)), std::move(sectionNames)});
+    surfaces_.push_back({
+        std::move(name),
+        Surface::Loft(std::move(sections)),
+        std::move(sectionNames),
+        true,
+        {},
+    });
+}
+
+void Project::AddGordonSurface(
+    std::string name,
+    std::vector<std::string> sectionNames,
+    std::vector<std::string> guideNames)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    if (sectionNames.size() < 2) {
+        throw std::invalid_argument("Gordon surface requires at least two section wires.");
+    }
+    if (guideNames.empty()) {
+        throw std::invalid_argument("Gordon surface requires at least one guide wire.");
+    }
+
+    std::vector<Wire> sections;
+    sections.reserve(sectionNames.size());
+    for (const std::string& sectionName : sectionNames) {
+        if (std::count(sectionNames.begin(), sectionNames.end(), sectionName) != 1) {
+            throw std::invalid_argument("Gordon section wires must not be repeated: " + sectionName);
+        }
+        if (std::count(guideNames.begin(), guideNames.end(), sectionName) != 0) {
+            throw std::invalid_argument(
+                "Gordon surface wire cannot be used as both a section and a guide: " + sectionName);
+        }
+        const NamedWire& section = RequireWire(sectionName);
+        if (section.projection.has_value()) {
+            throw std::invalid_argument("Projected wire cannot be used as a Gordon surface section.");
+        }
+        if (section.plateOffset.has_value()) {
+            throw std::invalid_argument("Plate-offset wire cannot be used as a Gordon surface section.");
+        }
+        if (section.metadata.construction) {
+            throw std::invalid_argument("Construction wire cannot be used as a Gordon surface section.");
+        }
+        sections.push_back(section.wire);
+    }
+
+    std::vector<Wire> guides;
+    guides.reserve(guideNames.size());
+    for (const std::string& guideName : guideNames) {
+        if (std::count(guideNames.begin(), guideNames.end(), guideName) != 1) {
+            throw std::invalid_argument("Gordon guide wires must not be repeated: " + guideName);
+        }
+        const NamedWire& guide = RequireWire(guideName);
+        if (guide.projection.has_value()) {
+            throw std::invalid_argument("Projected wire cannot be used as a Gordon surface guide.");
+        }
+        if (guide.plateOffset.has_value()) {
+            throw std::invalid_argument("Plate-offset wire cannot be used as a Gordon surface guide.");
+        }
+        if (guide.metadata.construction) {
+            throw std::invalid_argument("Construction wire cannot be used as a Gordon surface guide.");
+        }
+        guides.push_back(guide.wire);
+    }
+
+    surfaces_.push_back({
+        std::move(name),
+        Surface::Gordon(std::move(sections), std::move(guides)),
+        std::move(sectionNames),
+        true,
+        std::move(guideNames),
+    });
 }
 
 void Project::AddPlate(
@@ -1716,6 +1800,10 @@ bool Project::RemoveWire(std::string_view name)
             != surface.sourceWireNames.end()) {
             throw std::invalid_argument("Wire is used by surface: " + surface.name);
         }
+        if (std::find(surface.guideWireNames.begin(), surface.guideWireNames.end(), name)
+            != surface.guideWireNames.end()) {
+            throw std::invalid_argument("Wire is used as a surface guide: " + surface.name);
+        }
     }
     for (const NamedWire& wire : wires_) {
         if (wire.projection.has_value() && wire.projection->sourceWireName == name) {
@@ -2068,7 +2156,10 @@ void Project::RebuildDependentGeometry()
             NamedSurface& surface = surfaces_[index];
             const bool sourcesReady = std::all_of(
                 surface.sourceWireNames.begin(), surface.sourceWireNames.end(),
-                [&](const std::string& sourceName) { return wireReady[wireIndex(sourceName)]; });
+                [&](const std::string& sourceName) { return wireReady[wireIndex(sourceName)]; })
+                && std::all_of(
+                    surface.guideWireNames.begin(), surface.guideWireNames.end(),
+                    [&](const std::string& guideName) { return wireReady[wireIndex(guideName)]; });
             if (!sourcesReady) {
                 continue;
             }
@@ -2087,13 +2178,25 @@ void Project::RebuildDependentGeometry()
                 surface.surface = Surface::Ruled(
                     RequireWire(surface.sourceWireNames.at(0)).wire,
                     RequireWire(surface.sourceWireNames.at(1)).wire);
-            } else {
+            } else if (surface.surface.Kind() == SurfaceKind::Loft) {
                 std::vector<Wire> sections;
                 sections.reserve(surface.sourceWireNames.size());
                 for (const std::string& sourceName : surface.sourceWireNames) {
                     sections.push_back(RequireWire(sourceName).wire);
                 }
                 surface.surface = Surface::Loft(std::move(sections));
+            } else {
+                std::vector<Wire> sections;
+                sections.reserve(surface.sourceWireNames.size());
+                for (const std::string& sourceName : surface.sourceWireNames) {
+                    sections.push_back(RequireWire(sourceName).wire);
+                }
+                std::vector<Wire> guides;
+                guides.reserve(surface.guideWireNames.size());
+                for (const std::string& guideName : surface.guideWireNames) {
+                    guides.push_back(RequireWire(guideName).wire);
+                }
+                surface.surface = Surface::Gordon(std::move(sections), std::move(guides));
             }
             surfaceReady[index] = true;
             --pendingSurfaces;

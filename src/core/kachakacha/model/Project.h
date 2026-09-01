@@ -168,6 +168,9 @@ struct NamedPartModel {
     PartApproximationResult result;
     std::vector<std::string> boundaryWireNames; //!< レール(縁+内部境界)の派生ワイヤ名(部材数+1本)
     std::vector<std::string> partSurfaceNames;  //!< 部材ごとの派生ルールド面名(部材数本)
+    //! 元板材の開口(窓・ライト等)を部材面へ投影した派生ワイヤ名。
+    //! 命名は「<モデル名>_部材<番号>_穴<開口番号>」。部材境界をまたぐ開口は作らない。
+    std::vector<std::string> openingWireNames;
     bool visible = true;
 };
 

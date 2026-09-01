@@ -2603,6 +2603,133 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     }
     model.partSurfaceNames = newSurfaceNames;
 
+    // --- 元板材の開口(窓・ライト等)を、収まる部材の面へ投影した派生ワイヤ ---
+    // 元開口は「下書きワイヤを方向投影した閉ワイヤ」なので、同じ下書き・同じ方向を
+    // 部材のルールド面(角ばった近似形状)へ投影し直すと、近似モデル上の穴輪郭になる。
+    // 部材境界をまたぐ開口はどの部材にも属せないため作らない(型紙側では表示される)。
+    std::vector<std::string> newOpeningNames;
+    for (std::size_t openingIndex = 0;
+         openingIndex < plate->openingWireNames.size(); ++openingIndex) {
+        // 注意: このループは wires_ へ push_back するため、参照ではなくコピーで持つ。
+        const NamedWire opening = RequireWire(plate->openingWireNames[openingIndex]);
+        if (!opening.projection.has_value()) {
+            continue;
+        }
+        // 開口の分割軸方向の範囲(板材ローカル0..1)を測り、収まる部材を探す。
+        const PlateSurfaceRange& range = plate->plate.Range();
+        const bool splitAlongV = model.options.splitAxis == PartSplitAxis::V;
+        const double rangeMinimum = splitAlongV ? range.minimumV : range.minimumU;
+        const double rangeMaximum = splitAlongV ? range.maximumV : range.maximumU;
+        const double rangeSpan = std::max(1.0e-12, rangeMaximum - rangeMinimum);
+        double minimumParameter = 1.0;
+        double maximumParameter = 0.0;
+        const int samples = 48;
+        bool measured = true;
+        for (int sample = 0; sample <= samples; ++sample) {
+            const geometry::Vector3 point = opening.wire.Evaluate(
+                static_cast<double>(sample) / samples);
+            SurfaceProjection projected{};
+            try {
+                projected = plate->plate.SourceSurface().ProjectPointAlongDirection(
+                    point, opening.projection->direction);
+            } catch (const std::exception&) {
+                measured = false;
+                break;
+            }
+            const double surfaceParameter = splitAlongV ? projected.v : projected.u;
+            const double localParameter = (surfaceParameter - rangeMinimum) / rangeSpan;
+            minimumParameter = std::min(minimumParameter, localParameter);
+            maximumParameter = std::max(maximumParameter, localParameter);
+        }
+        if (!measured) {
+            continue;
+        }
+        constexpr double parameterTolerance = 1.0e-6;
+        int ownerIndex = -1;
+        for (std::size_t partIndex = 0; partIndex < model.result.parts.size(); ++partIndex) {
+            const ApproximatedPart& part = model.result.parts[partIndex];
+            if (minimumParameter >= part.minimumParameter - parameterTolerance
+                && maximumParameter <= part.maximumParameter + parameterTolerance) {
+                ownerIndex = static_cast<int>(partIndex);
+                break;
+            }
+        }
+        if (ownerIndex < 0) {
+            continue; // 部材境界をまたぐ開口。
+        }
+        const auto openingSource = std::find_if(wires_.begin(), wires_.end(),
+            [&](const NamedWire& wire) {
+                return wire.name == opening.projection->sourceWireName;
+            });
+        if (openingSource == wires_.end()) {
+            continue;
+        }
+        const std::string& targetSurfaceName = newSurfaceNames[ownerIndex];
+        const auto targetSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) { return candidate.name == targetSurfaceName; });
+        if (targetSurface == surfaces_.end()) {
+            continue;
+        }
+        Wire projectedOutline = targetSurface->surface.ProjectWireAlongDirection(
+            openingSource->wire, opening.projection->direction);
+        const std::string derivedName = model.name + "_部材"
+            + std::to_string(ownerIndex + 1) + "_穴"
+            + std::to_string(openingIndex + 1);
+        const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == derivedName;
+        });
+        if (existing != wires_.end()) {
+            if (!existing->partModelSourceName.has_value()
+                || *existing->partModelSourceName != model.name) {
+                throw std::invalid_argument(
+                    "Part-model opening wire name is already used: " + derivedName);
+            }
+            existing->wire = std::move(projectedOutline);
+            existing->projection = NamedWire::Projection{
+                opening.projection->sourceWireName,
+                targetSurfaceName,
+                opening.projection->direction,
+            };
+        } else {
+            wires_.push_back(NamedWire{
+                derivedName,
+                std::move(projectedOutline),
+                {},
+                NamedWire::Projection{
+                    opening.projection->sourceWireName,
+                    targetSurfaceName,
+                    opening.projection->direction,
+                },
+                model.visible,
+                std::nullopt,
+                model.name,
+            });
+        }
+        newOpeningNames.push_back(derivedName);
+    }
+    for (const std::string& oldName : model.openingWireNames) {
+        if (std::find(newOpeningNames.begin(), newOpeningNames.end(), oldName)
+            != newOpeningNames.end()) {
+            continue;
+        }
+        // 消える派生開口を穴として使っている板材からは外す(名前の残留参照を防ぐ)。
+        for (NamedPlate& dependentPlate : plates_) {
+            dependentPlate.openingWireNames.erase(
+                std::remove(dependentPlate.openingWireNames.begin(),
+                    dependentPlate.openingWireNames.end(), oldName),
+                dependentPlate.openingWireNames.end());
+        }
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == oldName
+                    && wire.partModelSourceName.has_value()
+                    && *wire.partModelSourceName == model.name;
+            }),
+            wires_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
+    }
+    model.openingWireNames = newOpeningNames;
+
     // --- 自動セット「近似:<名前>」を最新のメンバーで作り直す ---
     const std::string setName = "近似:" + model.name;
     ObjectSet* set = FindObjectSetMutable(setName);
@@ -2614,6 +2741,9 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     set->members.clear();
     set->members.push_back({ProjectObjectKind::PartModel, model.name});
     for (const std::string& wireName : newWireNames) {
+        set->members.push_back({ProjectObjectKind::Wire, wireName});
+    }
+    for (const std::string& wireName : newOpeningNames) {
         set->members.push_back({ProjectObjectKind::Wire, wireName});
     }
     for (const std::string& surfaceName : newSurfaceNames) {
@@ -2709,6 +2839,20 @@ bool Project::RemovePartModel(std::string_view name)
             }),
             wires_.end());
     }
+    for (const std::string& wireName : model->openingWireNames) {
+        for (NamedPlate& dependentPlate : plates_) {
+            dependentPlate.openingWireNames.erase(
+                std::remove(dependentPlate.openingWireNames.begin(),
+                    dependentPlate.openingWireNames.end(), wireName),
+                dependentPlate.openingWireNames.end());
+        }
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == wireName && wire.partModelSourceName.has_value();
+            }),
+            wires_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Wire, wireName);
+    }
     const std::string setName = "近似:" + model->name;
     objectSets_.erase(
         std::remove_if(objectSets_.begin(), objectSets_.end(), [&](const ObjectSet& set) {
@@ -2729,6 +2873,13 @@ void Project::SetPartModelVisible(std::string_view name, bool visible)
     }
     model->visible = visible;
     for (const std::string& wireName : model->boundaryWireNames) {
+        for (NamedWire& wire : wires_) {
+            if (wire.name == wireName) {
+                wire.visible = visible;
+            }
+        }
+    }
+    for (const std::string& wireName : model->openingWireNames) {
         for (NamedWire& wire : wires_) {
             if (wire.name == wireName) {
                 wire.visible = visible;

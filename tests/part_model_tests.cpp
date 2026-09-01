@@ -317,6 +317,111 @@ int main()
             Require(!surface.partModelSourceName.has_value(), "derived surfaces removed with model");
         }
         Require(loaded.RemovePlate("胴板"), "plate removable after part models are gone");
+
+        // --- 開口(窓・ライト)の近似モデルへの反映 ---
+        {
+            Project openingProject = MakeBottleLikeProject();
+            // 前面(y+側)の上寄りに四角い窓の下書きを置き、-y方向へ投影して胴板の開口にする。
+            openingProject.AddWire("窓下書き", Wire::Polyline({
+                {-4.0, 40.0, 26.0}, {4.0, 40.0, 26.0}, {4.0, 40.0, 33.0},
+                {-4.0, 40.0, 33.0}, {-4.0, 40.0, 26.0}}));
+            openingProject.AddProjectedWire("窓", "窓下書き", "胴", {0.0, -1.0, 0.0});
+            openingProject.AddPlateOpening("胴板", "窓");
+
+            PartApproximationOptions twoParts;
+            twoParts.splitAxis = PartSplitAxis::V;
+            twoParts.automaticBoundaries = false;
+            twoParts.manualBoundaryParameters = {0.5};
+            openingProject.AddPartModel("近似穴", "胴板", twoParts);
+            const std::string derivedOpening = "近似穴_部材2_穴1";
+            {
+                const auto& openingModel = openingProject.PartModels().back();
+                Require(openingModel.openingWireNames.size() == 1,
+                    "window maps to one derived opening on the approximation");
+                Require(openingModel.openingWireNames.front() == derivedOpening,
+                    "derived opening belongs to the part that contains it");
+            }
+            bool derivedFound = false;
+            for (const auto& wire : openingProject.Wires()) {
+                if (wire.name == derivedOpening) {
+                    derivedFound = true;
+                    Require(wire.partModelSourceName.has_value(),
+                        "derived opening is marked as derived");
+                    Require(wire.projection.has_value()
+                            && wire.projection->targetSurfaceName == "近似穴_部材2",
+                        "derived opening projects onto its part surface");
+                    Require(wire.wire.IsClosed(1.0e-6), "derived opening stays closed");
+                }
+            }
+            Require(derivedFound, "derived opening wire exists");
+
+            // 部材面から作った板材に、その開口を穴として付けられる。
+            openingProject.AddPlate(
+                "窓板", "近似穴_部材2", 0.5, PlateThicknessDirection::Centered, "プラ板");
+            openingProject.AddPlateOpening("窓板", derivedOpening);
+            Require(openingProject.FindPlate("窓板").has_value(), "part plate with opening");
+
+            // 型紙にも開口が写る。
+            const auto patterned = kachakacha::io::BuildPartPatternWithPreview(
+                openingProject, openingProject.PartModels().back(), {2});
+            Require(patterned.pattern.openings.size() == 1,
+                "pattern of the owning part shows the opening");
+
+            // 保存/読込で開口付きの部材板が復元される。
+            std::ostringstream openingSaved;
+            kachakacha::io::WriteProjectScript(openingSaved, openingProject);
+            const std::string openingText = openingSaved.str();
+            Require(openingText.find("plate_opening 窓板 " + derivedOpening)
+                    != std::string::npos,
+                "part-plate opening saved by derived name");
+            std::istringstream openingInput(openingText);
+            Project openingLoaded = kachakacha::io::LoadProjectScript(
+                openingInput, "part-model-opening-test");
+            Require(openingLoaded.PartModels().back().openingWireNames.size() == 1,
+                "derived opening regenerated on load");
+            {
+                bool restored = false;
+                for (const auto& plate : openingLoaded.Plates()) {
+                    if (plate.name == "窓板") {
+                        restored = plate.openingWireNames.size() == 1
+                            && plate.openingWireNames.front() == derivedOpening;
+                    }
+                }
+                Require(restored, "part-plate opening restored");
+            }
+
+            // 境界を動かすと開口の所属部材が変わり、古い派生穴は残らない。
+            PartApproximationOptions movedBoundary = twoParts;
+            movedBoundary.manualBoundaryParameters = {0.9};
+            openingProject.UpdatePartModelOptions("近似穴", movedBoundary);
+            {
+                const auto& openingModel = openingProject.PartModels().back();
+                Require(openingModel.openingWireNames.size() == 1,
+                    "moved boundary keeps one derived opening");
+                Require(openingModel.openingWireNames.front() == "近似穴_部材1_穴1",
+                    "opening moved to the first part");
+            }
+            for (const auto& wire : openingProject.Wires()) {
+                Require(wire.name != derivedOpening, "stale derived opening removed");
+            }
+            {
+                bool cleared = false;
+                for (const auto& plate : openingProject.Plates()) {
+                    if (plate.name == "窓板") {
+                        cleared = plate.openingWireNames.empty();
+                    }
+                }
+                Require(cleared, "part plate no longer references the removed opening");
+            }
+
+            // 片付け: 板材→モデルの順で消すと派生穴も消える。
+            Require(openingProject.RemovePlate("窓板"), "part plate removed");
+            Require(openingProject.RemovePartModel("近似穴"), "opening part model removed");
+            for (const auto& wire : openingProject.Wires()) {
+                Require(!wire.partModelSourceName.has_value(),
+                    "derived opening wires removed with the model");
+            }
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

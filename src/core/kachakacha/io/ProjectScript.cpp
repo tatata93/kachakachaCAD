@@ -1305,6 +1305,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             if (!wire.projection.has_value() || projectionWritten[wireIndex]) {
                 continue;
             }
+            if (wire.partModelSourceName.has_value()) {
+                // 部材近似モデルの派生開口ワイヤは保存しない(読み込み時に再生成)。
+                projectionWritten[wireIndex] = true;
+                --pendingProjections;
+                madeProgress = true;
+                continue;
+            }
             const auto target = std::find_if(
                 project.Surfaces().begin(), project.Surfaces().end(), [&](const auto& surface) {
                     return surface.name == wire.projection->targetSurfaceName;

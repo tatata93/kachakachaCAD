@@ -316,6 +316,19 @@ void MainWindow::CreatePlateFromSelectedPart()
                 sourcePlate->plate.Thickness(),
                 sourcePlate->plate.Direction(),
                 sourcePlate->material);
+            // この部材に収まる開口(窓・ライト等)の派生輪郭を、そのまま穴として付ける。
+            const std::string openingPrefix
+                = model->name + "_部材" + std::to_string(number) + "_穴";
+            for (const std::string& openingName : model->openingWireNames) {
+                if (openingName.rfind(openingPrefix, 0) != 0) {
+                    continue;
+                }
+                try {
+                    candidate.AddPlateOpening(plateName, openingName);
+                } catch (const std::exception&) {
+                    // 開いた輪郭など穴にできない場合は輪郭表示のみとする。
+                }
+            }
             created.push_back(plateName);
         }
         if (created.empty()) {

@@ -34,6 +34,9 @@ endfunction()
 
 if(KACHACAD_BUILD_TESTS)
     enable_testing()
+    # 応答しなくなったテストでビルド全体が止まらないよう、既定の上限を設ける。
+    # プリセット未使用の ctest 実行でも効くよう CMake 側にも入れておく。
+    set(CTEST_TEST_TIMEOUT 600)
 endif()
 
 add_library(kachakacha_core STATIC
@@ -247,6 +250,14 @@ if(KACHACAD_BUILD_QT_APP)
                         --project "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
                         --snapshot "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-acceptance.png"
                 )
+
+                # Qtアプリを起動するテストは、ダイアログ等で無応答になると
+                # ctest が永久に待ってしまう。必ず上限を設ける。
+                set_tests_properties(
+                    qt_cad_smoke
+                    qt_surface_sample_smoke
+                    qt_acceptance_model_smoke
+                    PROPERTIES TIMEOUT 300)
 
                 add_executable(kachakacha_plate_pdf_tests
                     src/apps/cad/PlatePdfExport.cpp

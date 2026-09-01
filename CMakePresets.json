@@ -1,6 +1,10 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
@@ -17,7 +21,11 @@
       "generator": "Visual Studio 17 2022",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build-msvc2022-x64",
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "windows-core",
@@ -37,8 +45,14 @@
       "inherits": "base",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-linux",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
     },
     {
       "name": "linux-core",
@@ -62,31 +76,94 @@
         "KACHACAD_BUILD_QT_APP": "OFF",
         "KACHACAD_ENABLE_OCCT": "OFF"
       },
-      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "windows-msvc", "configurePreset": "windows-msvc", "configuration": "Release" },
-    { "name": "windows-core", "configurePreset": "windows-core", "configuration": "Release" },
-    { "name": "linux", "configurePreset": "linux" },
-    { "name": "linux-core", "configurePreset": "linux-core" },
-    { "name": "macos-core", "configurePreset": "macos-core" }
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-core",
+      "configurePreset": "windows-core",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux",
+      "configurePreset": "linux"
+    },
+    {
+      "name": "linux-core",
+      "configurePreset": "linux-core"
+    },
+    {
+      "name": "macos-core",
+      "configurePreset": "macos-core"
+    }
   ],
   "testPresets": [
     {
       "name": "windows-msvc",
       "configurePreset": "windows-msvc",
       "configuration": "Release",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 600,
+        "stopOnFailure": false
+      }
     },
     {
       "name": "windows-core",
       "configurePreset": "windows-core",
       "configuration": "Release",
-      "output": { "outputOnFailure": true }
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 600,
+        "stopOnFailure": false
+      }
     },
-    { "name": "linux", "configurePreset": "linux", "output": { "outputOnFailure": true } },
-    { "name": "linux-core", "configurePreset": "linux-core", "output": { "outputOnFailure": true } },
-    { "name": "macos-core", "configurePreset": "macos-core", "output": { "outputOnFailure": true } }
+    {
+      "name": "linux",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 600,
+        "stopOnFailure": false
+      }
+    },
+    {
+      "name": "linux-core",
+      "configurePreset": "linux-core",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 600,
+        "stopOnFailure": false
+      }
+    },
+    {
+      "name": "macos-core",
+      "configurePreset": "macos-core",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 600,
+        "stopOnFailure": false
+      }
+    }
   ]
 }

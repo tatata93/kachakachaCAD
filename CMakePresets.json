@@ -1,0 +1,92 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows / MSVC 2022 (Qt + OCCT)",
+      "description": "Windows開発PC用。Qtとvcpkg(OCCT)はCMakeが自動検出する。",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-msvc2022-x64",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "windows-core",
+      "displayName": "Windows / コアのみ (Qt・OCCT無し)",
+      "description": "Qt/OCCTが入っていないWindows PCでも幾何コアとテストだけは回せる。",
+      "inherits": "windows-msvc",
+      "binaryDir": "${sourceDir}/build-core",
+      "cacheVariables": {
+        "KACHACAD_BUILD_QT_APP": "OFF",
+        "KACHACAD_ENABLE_OCCT": "OFF"
+      }
+    },
+    {
+      "name": "linux",
+      "displayName": "Linux (Qt + OCCT)",
+      "description": "Linux検証環境用。Qtは KACHACAD_QT_ROOT か /opt/qt6 を見る。",
+      "inherits": "base",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-linux",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-core",
+      "displayName": "Linux / コアのみ (Qt・OCCT無し)",
+      "description": "依存を入れずに幾何コアとテストだけを短時間で確認する。",
+      "inherits": "linux",
+      "binaryDir": "${sourceDir}/build-core",
+      "cacheVariables": {
+        "KACHACAD_BUILD_QT_APP": "OFF",
+        "KACHACAD_ENABLE_OCCT": "OFF"
+      }
+    },
+    {
+      "name": "macos-core",
+      "displayName": "macOS / コアのみ",
+      "inherits": "base",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-core",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "KACHACAD_BUILD_QT_APP": "OFF",
+        "KACHACAD_ENABLE_OCCT": "OFF"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc", "configurePreset": "windows-msvc", "configuration": "Release" },
+    { "name": "windows-core", "configurePreset": "windows-core", "configuration": "Release" },
+    { "name": "linux", "configurePreset": "linux" },
+    { "name": "linux-core", "configurePreset": "linux-core" },
+    { "name": "macos-core", "configurePreset": "macos-core" }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-core",
+      "configurePreset": "windows-core",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    { "name": "linux", "configurePreset": "linux", "output": { "outputOnFailure": true } },
+    { "name": "linux-core", "configurePreset": "linux-core", "output": { "outputOnFailure": true } },
+    { "name": "macos-core", "configurePreset": "macos-core", "output": { "outputOnFailure": true } }
+  ]
+}

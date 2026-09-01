@@ -2,6 +2,9 @@
 
 ## 作業前
 
+0. **同期する。** Windows は `.\scripts\sync.ps1`、Linux/macOS は `./scripts/sync.sh`。
+   複数PCで開発しているため、これを飛ばすと未コミット作業と衝突する。
+   詳細は `docs/multi-machine-development.md`。
 1. `AGENTS.md` を確認する。
 2. 関連する `docs/` の仕様を確認する。
 3. 変更する範囲を小さく決める。
@@ -63,3 +66,15 @@ PowerShell で以下を実行する。
 - テストまたは確認手順がある。
 - 既存の方針文書と矛盾しない。
 - 未決定事項があれば文書に残っている。
+
+## 作業を終えるとき
+
+そのPCを離れる前に、必ずコミットしてGitHubへpushする。
+
+```powershell
+git add -A
+git commit -m "作業内容"
+git push
+```
+
+未コミットのまま別PCで作業しないこと。

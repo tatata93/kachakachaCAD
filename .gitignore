@@ -15,3 +15,9 @@ CMakeUserPresets.json
 *.dll
 *.lib
 *.log
+
+# PC固有の設定(複数PC開発用・共有しない)
+local.cmake
+compile_commands.json
+/_*.cmd
+/_claude-log.txt

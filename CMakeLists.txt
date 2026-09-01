@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
+# --- 複数PC・複数OS対応 -------------------------------------------------
+# このファイルに特定PCの絶対パスを書かないこと。
+# Qt / vcpkg の場所は cmake/KachakachaEnvironment.cmake が
+#   明示指定 > 環境変数 > local.cmake > OSごとの標準的な場所
+# の順で解決する。詳細は docs/multi-machine-development.md。
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+include(KachakachaEnvironment)
+kachakacha_include_local_config("${CMAKE_CURRENT_LIST_DIR}")
+kachakacha_detect_vcpkg()   # project() より前に呼ぶ必要がある
+# -----------------------------------------------------------------------
+
 project(kachakachaCAD
     VERSION 0.1.0
     DESCRIPTION "Wireframe and sheet-material CAD for railway model making"
@@ -105,10 +116,11 @@ if(KACHACAD_ENABLE_OCCT)
             target_compile_options(kachakacha_occt PRIVATE -Wall -Wextra -Wpedantic)
         endif()
         set(KACHACAD_OCCT_RUNTIME_PATH "$<TARGET_FILE_DIR:TKernel>")
-        if(EXISTS "$ENV{USERPROFILE}/vcpkg/installed/x64-windows/bin")
+        if(KACHACAD_VCPKG_ROOT AND VCPKG_TARGET_TRIPLET
+            AND EXISTS "${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin")
             string(APPEND KACHACAD_OCCT_RUNTIME_PATH
-                "$<SEMICOLON>$ENV{USERPROFILE}/vcpkg/installed/x64-windows/debug/bin"
-                "$<SEMICOLON>$ENV{USERPROFILE}/vcpkg/installed/x64-windows/bin")
+                "$<SEMICOLON>${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/debug/bin"
+                "$<SEMICOLON>${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin")
         endif()
         message(STATUS "Open CASCADE shape/export layer enabled: ${KACHACAD_OCCT_VERSION}")
     else()
@@ -134,8 +146,11 @@ endif()
 # The Qt desktop application is cross-platform: build it whenever Qt 6 and
 # Open CASCADE are available, not only on Windows.
 if(KACHACAD_BUILD_QT_APP)
-        if(EXISTS "C:/Qt/6.9.2/msvc2022_64" AND NOT DEFINED Qt6_DIR)
-            list(PREPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.2/msvc2022_64")
+        if(NOT DEFINED Qt6_DIR)
+            kachakacha_detect_qt(KACHACAD_DETECTED_QT_ROOT)
+            if(KACHACAD_DETECTED_QT_ROOT)
+                list(PREPEND CMAKE_PREFIX_PATH "${KACHACAD_DETECTED_QT_ROOT}")
+            endif()
         endif()
 
         find_package(Qt6 6.5 COMPONENTS Widgets QUIET)

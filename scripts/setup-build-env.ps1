@@ -1,4 +1,4 @@
-# kachakachaCAD ローカルビルド環境の一括セットアップ(Windows)
+﻿# kachakachaCAD ローカルビルド環境の一括セットアップ(Windows)
 # 導入するもの: CMake / Visual Studio 2022 Build Tools (C++) / Python / Qt 6.9.2 / OCCT (master固定コミット)
 # 実行中にユーザーアカウント制御(UAC)の確認が数回出るので「はい」を選ぶこと。
 $ErrorActionPreference = 'Stop'

@@ -41,9 +41,6 @@ endif()
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
-    src/core/kachakacha/io/BentSheetPapercraft.cpp
-    src/core/kachakacha/io/FacetedPapercraft.cpp
-    src/core/kachakacha/io/FabricationPanelPapercraft.cpp
     src/core/kachakacha/io/NumericExpression.cpp
     src/core/kachakacha/io/PartPatterns.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
@@ -184,25 +181,6 @@ if(KACHACAD_ENABLE_OCCT)
         message(STATUS "Open CASCADE shape/export layer enabled: ${KACHACAD_OCCT_VERSION}")
     else()
         message(WARNING "Open CASCADE was not found; the Qt CAD application requires it for verified STL/STEP export.")
-    endif()
-endif()
-
-if(WIN32)
-    add_executable(kachakacha_viewer
-        src/apps/viewer/main.cpp
-    )
-
-    target_link_libraries(kachakacha_viewer
-        PRIVATE
-            kachakacha_core
-            user32
-            gdi32
-    )
-
-    target_compile_features(kachakacha_viewer PRIVATE cxx_std_20)
-    if(MSVC)
-        # 日本語コメントを含むヘッダを読むため /utf-8 が必須(既定コードページ932対策)。
-        target_compile_options(kachakacha_viewer PRIVATE /utf-8 /MP)
     endif()
 endif()
 
@@ -459,58 +437,6 @@ if(KACHACAD_BUILD_TESTS)
             "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-papercraft.svg"
     )
 
-    add_executable(kachakacha_faceted_papercraft_tests
-        tests/faceted_papercraft_tests.cpp
-    )
-
-    target_link_libraries(kachakacha_faceted_papercraft_tests
-        PRIVATE
-            kachakacha_core
-    )
-    kachakacha_apply_test_options(kachakacha_faceted_papercraft_tests)
-
-    add_test(
-        NAME faceted_papercraft_tests
-        COMMAND kachakacha_faceted_papercraft_tests
-            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
-            "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-faceted-papercraft.svg"
-    )
-
-    add_executable(kachakacha_bent_sheet_papercraft_tests
-        tests/bent_sheet_papercraft_tests.cpp
-    )
-
-    target_link_libraries(kachakacha_bent_sheet_papercraft_tests
-        PRIVATE
-            kachakacha_core
-    )
-    kachakacha_apply_test_options(kachakacha_bent_sheet_papercraft_tests)
-
-    add_test(
-        NAME bent_sheet_papercraft_tests
-        COMMAND kachakacha_bent_sheet_papercraft_tests
-            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
-            "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-bent-sheet-papercraft.svg"
-    )
-
-    add_executable(kachakacha_fabrication_panel_papercraft_tests
-        tests/fabrication_panel_papercraft_tests.cpp
-    )
-
-    target_link_libraries(kachakacha_fabrication_panel_papercraft_tests
-        PRIVATE
-            kachakacha_core
-    )
-    kachakacha_apply_test_options(kachakacha_fabrication_panel_papercraft_tests)
-
-    add_test(
-        NAME fabrication_panel_papercraft_tests
-        COMMAND kachakacha_fabrication_panel_papercraft_tests
-            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
-            "${CMAKE_SOURCE_DIR}/examples/er1-er2-round-cab-1-87.kcd"
-            "${CMAKE_CURRENT_BINARY_DIR}/er1-er2-round-cab-panel-first.svg"
-    )
-
     add_executable(kachakacha_part_model_tests
         tests/part_model_tests.cpp
     )
@@ -586,25 +512,4 @@ if(KACHACAD_BUILD_TESTS)
         )
     endif()
 
-    if(WIN32)
-        add_test(
-            NAME viewer_snapshot
-            COMMAND $<TARGET_FILE:kachakacha_viewer> --snapshot "${CMAKE_BINARY_DIR}/viewer-smoke.bmp"
-        )
-
-        add_test(
-            NAME viewer_edit_smoke
-            COMMAND $<TARGET_FILE:kachakacha_viewer> --self-test-edits
-        )
-
-        add_test(
-            NAME viewer_project_edit_smoke
-            COMMAND $<TARGET_FILE:kachakacha_viewer> --self-test-edits --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd"
-        )
-
-        add_test(
-            NAME viewer_export_project
-            COMMAND $<TARGET_FILE:kachakacha_viewer> --project "${CMAKE_SOURCE_DIR}/examples/first-check.kcd" --export "${CMAKE_BINARY_DIR}/viewer-export.kcd"
-        )
-    endif()
 endif()

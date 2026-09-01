@@ -1,6 +1,4 @@
 #include "kachakacha/occt/BodyExport.h"
-#include "kachakacha/io/BentSheetPapercraft.h"
-#include "kachakacha/io/FacetedPapercraft.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Body.h"
@@ -304,112 +302,6 @@ int main(int argc, char** argv)
             outputDirectory / "railway-nose-fold-45-piece.step",
             foldingProject,
             foldingSelection);
-
-        kachakacha::io::PlateFlatPatternOptions facetedOptions;
-        facetedOptions.includeAutomaticReliefCuts = true;
-        facetedOptions.includeOpenings = true;
-        facetedOptions.cutDirection = kachakacha::io::PapercraftCutDirection::Both;
-        facetedOptions.papercraftFidelity = 2;
-        const auto facetedMotion = kachakacha::io::BuildFacetedPapercraftMotion(
-            acceptance, acceptance.Plates().front(), 0.45, facetedOptions);
-        Project facetedProject = acceptance;
-        const int facetedPiece = facetedMotion.pieceIndices.front();
-        const auto facetedResult = kachakacha::io::AddPlateAssemblyMotionModel(
-            facetedProject,
-            acceptance.Plates().front(),
-            facetedMotion,
-            "nose_faceted_fold_45",
-            facetedPiece);
-        const kachakacha::occt::ModelShapeSelection facetedSelection{
-            facetedResult.plateNames, {}};
-        const auto facetedAnalysis = kachakacha::occt::AnalyzeModelShape(
-            facetedProject, facetedSelection, 0.4);
-        if (!facetedAnalysis.validBRep || !facetedAnalysis.closedSolid
-            || facetedAnalysis.plateCount != facetedResult.plateNames.size()) {
-            throw std::runtime_error(
-                "Selected new-mode faceted piece did not produce exportable solids: "
-                + facetedAnalysis.message);
-        }
-        kachakacha::occt::WriteModelStl(
-            outputDirectory / "railway-nose-faceted-fold-45-piece.stl",
-            facetedProject,
-            facetedSelection);
-        kachakacha::occt::WriteModelStep(
-            outputDirectory / "railway-nose-faceted-fold-45-piece.step",
-            facetedProject,
-            facetedSelection);
-
-        kachakacha::io::PlateFlatPatternOptions bentSheetOptions;
-        bentSheetOptions.includeAutomaticReliefCuts = true;
-        bentSheetOptions.includeOpenings = true;
-        bentSheetOptions.cutDirection
-            = kachakacha::io::PapercraftCutDirection::Both;
-        bentSheetOptions.papercraftFidelity = 1;
-        bentSheetOptions.minimumFoldAngleDegrees = 0.5;
-        const auto bentSheetMotion
-            = kachakacha::io::BuildBentSheetPapercraftMotion(
-                acceptance,
-                acceptance.Plates().front(),
-                0.30,
-                bentSheetOptions);
-        Project bentSheetProject = acceptance;
-        const auto bentSheetResult
-            = kachakacha::io::AddPlateAssemblyMotionModel(
-                bentSheetProject,
-                acceptance.Plates().front(),
-                bentSheetMotion,
-                "nose_bent_sheet_30",
-                0);
-        const kachakacha::occt::ModelShapeSelection bentSheetSelection{
-            bentSheetResult.plateNames, {}};
-        const auto bentSheetAnalysis = kachakacha::occt::AnalyzeModelShape(
-            bentSheetProject, bentSheetSelection, 0.4);
-        if (!bentSheetAnalysis.validBRep || !bentSheetAnalysis.closedSolid
-            || bentSheetAnalysis.plateCount
-                != bentSheetResult.plateNames.size()) {
-            throw std::runtime_error(
-                "Selected 30 percent bent-sheet state did not produce exportable solids: "
-                + bentSheetAnalysis.message);
-        }
-        kachakacha::occt::WriteModelStl(
-            outputDirectory / "railway-nose-bent-sheet-30-piece.stl",
-            bentSheetProject,
-            bentSheetSelection);
-        kachakacha::occt::WriteModelStep(
-            outputDirectory / "railway-nose-bent-sheet-30-piece.step",
-            bentSheetProject,
-            bentSheetSelection);
-        const auto bentStlPath
-            = outputDirectory / "railway-nose-bent-sheet-30-piece.stl";
-        const auto bentStepPath
-            = outputDirectory / "railway-nose-bent-sheet-30-piece.step";
-        if (!std::filesystem::exists(bentStlPath)
-            || std::filesystem::file_size(bentStlPath) < 1024
-            || !std::filesystem::exists(bentStepPath)
-            || std::filesystem::file_size(bentStepPath) < 1024) {
-            throw std::runtime_error(
-                "30 percent bent-sheet STL/STEP exports are unexpectedly small.");
-        }
-        TopoDS_Shape bentStlShape;
-        StlAPI_Reader bentStlReader;
-        bentStlReader.Read(bentStlShape, bentStlPath.string().c_str());
-        if (bentStlShape.IsNull()) {
-            throw std::runtime_error(
-                "30 percent bent-sheet STL cannot be read back.");
-        }
-        STEPControl_Reader bentStepReader;
-        if (bentStepReader.ReadFile(bentStepPath.string().c_str())
-                != IFSelect_RetDone
-            || bentStepReader.TransferRoots() <= 0) {
-            throw std::runtime_error(
-                "30 percent bent-sheet STEP cannot be read back.");
-        }
-        const TopoDS_Shape bentStepShape = bentStepReader.OneShape();
-        if (bentStepShape.IsNull()
-            || !BRepCheck_Analyzer(bentStepShape, true).IsValid()) {
-            throw std::runtime_error(
-                "30 percent bent-sheet STEP has invalid boundary geometry.");
-        }
 
         VerifyExports(outputDirectory, "jig-test", body);
         const auto acceptanceJigAnalysis = kachakacha::occt::AnalyzeBodyShape(

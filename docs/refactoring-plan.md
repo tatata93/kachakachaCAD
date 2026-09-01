@@ -117,7 +117,7 @@
 
 - Undoの差分化: 現状のUndoが状態の全体コピー的な実装であれば、操作ごとの差分(コマンドパターン)へ置き換える。大規模プロジェクトでのUndoのメモリ・速度改善が目的。着手前に現状のUndo実装を計測してから要否を判断する。
 - `paintEvent`(`CadViewport.cpp`、1,376行)のシーン記述と描画の分離: 「何を描くか」の決定と「どう描くか」の描画処理が1関数に混在しているため、シーン記述(描くべき要素のリスト化)と描画(そのリストをQPainterへ流し込む)を分離する。差分描画やテスト容易性の向上が目的。
-- `src/apps/viewer`(Win32 GDIによる並行実装)の廃止判断: Qt版(`src/apps/cad`)が本命として実用段階にある現状で、GDI版を維持し続ける価値があるか判断する。存続させる場合は維持コストを明記し、廃止する場合は削除コミットを別途起こす。
+- ~~`src/apps/viewer`(Win32 GDIによる並行実装)の廃止判断~~: **完了(2026-09-01)**。オーナー指示「従来機能を削除した方がよい場合は全部削除してもよい」に基づき、GDI版ビューア本体・viewer系テスト4本・run-viewer/snapshot-viewer/export-project スクリプトを削除した。
 
 - なぜ: いずれも実装コストや判断材料の確認が先に必要で、他項目より優先度を下げている。
 - 検証方法: 着手する場合は、この文書の該当項目に具体的な検証方法を書き足してから着手する。
@@ -129,7 +129,7 @@
 ## 追加済みの主要機能
 
 - Gordon面(2026-08-31、コミット a1a501b / e32e7b3 / f391e7a): 断面2本以上+外形ガイド線1本以上を厳密に通る面。面タブの「断面と外形で面を作成」。ガイドが断面に0.01mm以内で交差していることを検証し、交差しない場合は距離付きでエラーにする。.kcdでは surface_gordon コマンド。
-- ペーパークラフト3系統+ガイド付きロフト(2026-08-27〜29の作業を 2026-09-02 に main へ統合、マージ 38b26f5): `FacetedPapercraft`(多面体)、`BentSheetPapercraft`(連続曲げ板)、`FabricationPanelPapercraft`(製作用大部材)、`Surface::GuidedLoft`、面入力のグループ化(`NamedSurface::sourceWireGroups`、.kcd の surface_grouped)。ADR 0014〜0017。`docs/test-models/er1-er2-round-cab` に検証モデル一式。
+- ペーパークラフト3系統+ガイド付きロフト(2026-08-27〜29の作業を 2026-09-02 に main へ統合、マージ 38b26f5): `FacetedPapercraft`(多面体)、`BentSheetPapercraft`(連続曲げ板)、`FabricationPanelPapercraft`(製作用大部材)、`Surface::GuidedLoft`、面入力のグループ化(`NamedSurface::sourceWireGroups`、.kcd の surface_grouped)。ADR 0014〜0017。→ **ペーパークラフト3系統は 2026-09-01 に削除**。部材近似モデル(`PartModel` / ADR 0019、`docs/surface-unfolding-spec.md`)へ置き換えた。組み上がらない展開を出す旧方式を残す価値がないというオーナー判断。GuidedLoft と surface_grouped は存続。`MainWindow` の `UsesFacetedPapercraft` 等は常に false を返す暫定スタブとして残っており、出力タブUI刷新時に撤去する。
 - 複数環境対応(2026-09-02、809667f〜): Qt/vcpkg自動検出(`cmake/KachakachaEnvironment.cmake`)、`CMakePresets.json`、`scripts/*.sh`、MSVC `/utf-8` `/MP`、テストのタイムアウト。詳細は `docs/multi-machine-development.md`。
 - 今後の大きな機能開発の軸は面展開の新パイプライン(`docs/surface-unfolding-spec.md`)。既存の展開4系統はそこへ統合・整理していく。
 

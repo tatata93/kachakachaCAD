@@ -2,9 +2,6 @@
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
-#include "kachakacha/io/BentSheetPapercraft.h"
-#include "kachakacha/io/FacetedPapercraft.h"
-#include "kachakacha/io/FabricationPanelPapercraft.h"
 #include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
@@ -80,21 +77,8 @@
 using kachakacha::geometry::Vector2;
 using kachakacha::geometry::Vector3;
 using kachakacha::io::LoadProjectScript;
-using kachakacha::io::BuildBentSheetPapercraftGuide;
-using kachakacha::io::BuildBentSheetPapercraftMotion;
-using kachakacha::io::BuildBentSheetPapercraftPattern;
-using kachakacha::io::BuildBentSheetPapercraftPreview;
 using kachakacha::io::BuildAllPartPatterns;
-using kachakacha::io::BuildFabricationPanelPapercraftGuide;
-using kachakacha::io::BuildFabricationPanelPapercraftMotion;
-using kachakacha::io::BuildFabricationPanelPapercraftPattern;
-using kachakacha::io::BuildFabricationPanelPapercraftPreview;
-using kachakacha::io::BuildFacetedPapercraftGuide;
-using kachakacha::io::BuildFacetedPapercraftMotion;
-using kachakacha::io::BuildFacetedPapercraftPattern;
-using kachakacha::io::BuildFacetedPapercraftPreview;
 using kachakacha::io::FabricationPanelDirection;
-using kachakacha::io::PapercraftPanelPriority;
 using kachakacha::model::kWireChainConnectionTolerance;
 using kachakacha::io::AddPlateAssemblyMotionModel;
 using kachakacha::io::AddPlateFlatPatternModel;
@@ -720,10 +704,6 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        const int bentMode = platePapercraftMode_->findData(2);
-        if (bentMode >= 0) {
-            platePapercraftMode_->setCurrentIndex(bentMode);
-        }
         plateFlatPatternAutoRelief_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
         plateFlatPatternFidelity_->setValue(10);
@@ -737,10 +717,6 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     } else if (state == QStringLiteral("assembly-complete")) {
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
-        }
-        const int bentMode = platePapercraftMode_->findData(2);
-        if (bentMode >= 0) {
-            platePapercraftMode_->setCurrentIndex(bentMode);
         }
         plateFlatPatternAutoRelief_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
@@ -825,148 +801,6 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(8);
         SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
-        viewport_->FitAll();
-    } else if (state.startsWith(QStringLiteral("er2-"))) {
-        if (!findSelection(CadSelectionKind::Surface, "er2_round_cab_skin").has_value()
-            || !findSelection(CadSelectionKind::Plate, "er2_round_cab_shell").has_value()) {
-            return false;
-        }
-
-        platePapercraftMode_->setCurrentIndex(
-            platePapercraftMode_->findData(3));
-        platePapercraftPanelPriority_->setCurrentIndex(
-            platePapercraftPanelPriority_->findData(
-                static_cast<int>(PapercraftPanelPriority::Balanced)));
-        platePapercraftMaximumError_->setValue(0.25);
-        platePapercraftMinimumWidth_->setValue(2.0);
-        plateFabricationPanelDirection_->setCurrentIndex(
-            plateFabricationPanelDirection_->findData(
-                static_cast<int>(FabricationPanelDirection::LongAlongU)));
-        plateFabricationPanelMaximumCount_->setValue(8);
-        plateFlatPatternFidelity_->setValue(8);
-        plateFlatPatternCutDirection_->setCurrentIndex(
-            plateFlatPatternCutDirection_->findData(
-                static_cast<int>(PapercraftCutDirection::Both)));
-
-        for (const auto& plane : project_.WorkPlanes()) {
-            project_.SetWorkPlaneVisible(plane.name, false);
-        }
-        for (const auto& point : project_.Points()) {
-            project_.SetPointVisible(point.name, false);
-        }
-        for (const auto& body : project_.Bodies()) {
-            project_.SetBodyVisible(body.name, false);
-        }
-        for (const auto& surface : project_.Surfaces()) {
-            project_.SetSurfaceVisible(surface.name, false);
-        }
-        for (const auto& wire : project_.Wires()) {
-            project_.SetWireVisible(wire.name, false);
-        }
-        for (const auto& plate : project_.Plates()) {
-            project_.SetPlateVisible(plate.name, false);
-        }
-
-        const bool showSections = state == QStringLiteral("er2-sections");
-        const bool showCenterSection = state == QStringLiteral("er2-center-section");
-        const bool showWireframe = state == QStringLiteral("er2-wireframe");
-        const bool showCurvature = state == QStringLiteral("er2-curvature");
-        const bool showFlatPattern = state == QStringLiteral("er2-flat-pattern");
-        const bool showAssembly30 = state == QStringLiteral("er2-assembly-30");
-        const bool showAssembly100 = state == QStringLiteral("er2-assembly-100");
-        const bool showAssembly = showAssembly30 || showAssembly100;
-        const bool showSurface = showSections || showCenterSection
-            || showWireframe || showCurvature;
-        project_.SetSurfaceVisible("er2_round_cab_skin", showSurface);
-        if (showSections) {
-            for (const auto& wire : project_.Wires()) {
-                if (wire.name.starts_with("er2_section_")) {
-                    project_.SetWireVisible(wire.name, true);
-                }
-            }
-        } else if (showCenterSection) {
-            project_.SetWireVisible("er2_vertical_center_section", true);
-        } else if (showAssembly) {
-            project_.SetPlateVisible("er2_round_cab_shell", true);
-        } else if (!showSurface && !showFlatPattern) {
-            for (const auto& plate : project_.Plates()) {
-                if (plate.name.starts_with("er2_")) {
-                    project_.SetPlateVisible(plate.name, true);
-                }
-            }
-        }
-        if (showWireframe) {
-            viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Wireframe);
-        } else if (showCurvature) {
-            viewport_->SetSurfaceDiagnosticMode(
-                SurfaceDiagnosticMode::GaussianCurvature);
-        }
-
-        std::vector<std::string> flatPlateNames;
-        if (showFlatPattern) {
-            const auto sourceSelection = findSelection(
-                CadSelectionKind::Plate, "er2_round_cab_shell");
-            const auto targetPlane = project_.FindWorkPlane("window_projection");
-            if (!sourceSelection.has_value() || !targetPlane.has_value()) {
-                return false;
-            }
-            const auto sourcePlate = project_.Plates()[sourceSelection->index];
-            PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
-            options.uSegments = 64;
-            options.vSegments = 32;
-            options.openingSamples = 64;
-            const auto pattern = BuildFabricationPanelPapercraftPattern(
-                project_, sourcePlate, options);
-            const auto result = AddPlateFlatPatternModel(
-                project_, sourcePlate, pattern, *targetPlane,
-                "er2_developed", 0.20);
-            flatPlateNames = result.plateNames;
-            for (const std::string& name : result.plateNames) {
-                project_.SetPlateVisible(name, true);
-            }
-            for (const std::string& name : result.foldWireNames) {
-                project_.SetWireVisible(name, true);
-            }
-            for (const std::string& name : result.reliefCutWireNames) {
-                project_.SetWireVisible(name, true);
-            }
-        }
-        gridPointsVisible_->setChecked(false);
-        RefreshModelViews(false);
-        if (showFlatPattern) {
-            std::vector<CadSelection> selections;
-            for (const std::string& name : flatPlateNames) {
-                const auto plate = findSelection(CadSelectionKind::Plate, name);
-                if (plate.has_value()) {
-                    selections.push_back(*plate);
-                }
-            }
-            UpdateSelections(std::move(selections), true);
-            showTab(6);
-            viewport_->SetCornerView({0.0, 1.0, 0.0});
-        } else if (showAssembly) {
-            if (!select({{CadSelectionKind::Plate, "er2_round_cab_shell"}})) {
-                return false;
-            }
-            plateAssemblyGuidePreview_->setChecked(true);
-            plateAssemblyApproximationPreview_->setChecked(true);
-            plateAssemblyProgress_->setValue(showAssembly30 ? 30 : 100);
-            showTab(6);
-            UpdatePlateAssemblyGuidePreview();
-            viewport_->SetCornerView({1.0, 1.0, 0.55});
-        } else {
-            showTab(0);
-        }
-        if (state == QStringLiteral("er2-front")) {
-            viewport_->SetCornerView({0.0, 1.0, 0.0});
-        } else if (state == QStringLiteral("er2-top")) {
-            viewport_->SetCornerView({0.0, 0.0, 1.0});
-        } else if (state == QStringLiteral("er2-side")
-            || state == QStringLiteral("er2-center-section")) {
-            viewport_->SetCornerView({1.0, 0.0, 0.0});
-        } else if (!showFlatPattern && !showAssembly) {
-            viewport_->SetCornerView({1.0, 1.0, 0.55});
-        }
         viewport_->FitAll();
     } else if (state == QStringLiteral("info")) {
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {

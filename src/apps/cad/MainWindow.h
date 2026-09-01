@@ -182,7 +182,6 @@ private:
     void ExportSelectedBody(bool step);
     void CreateSelectedPlateFlatPatternModel();
     void CreatePlateAssemblyStateModel();
-    void CreateFacetedApproximationModel();
     void ExportPlateAssemblyState(bool step);
     [[nodiscard]] std::optional<int> SelectedPlateAssemblyPiece() const;
     [[nodiscard]] kachakacha::io::PlateFlatPatternOptions PlateFlatPatternOptionsFromUi() const;
@@ -471,12 +470,6 @@ private:
     QLabel* plateFlatPatternSummary_ = nullptr;
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
-    QComboBox* platePapercraftMode_ = nullptr;
-    QComboBox* platePapercraftPanelPriority_ = nullptr;
-    QDoubleSpinBox* platePapercraftMaximumError_ = nullptr;
-    QDoubleSpinBox* platePapercraftMinimumWidth_ = nullptr;
-    QComboBox* plateFabricationPanelDirection_ = nullptr;
-    QSpinBox* plateFabricationPanelMaximumCount_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
     QComboBox* plateFlatPatternAssemblyStrategy_ = nullptr;
     QComboBox* plateFlatPatternCutDirection_ = nullptr;

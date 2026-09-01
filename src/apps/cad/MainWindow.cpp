@@ -2,9 +2,6 @@
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
-#include "kachakacha/io/BentSheetPapercraft.h"
-#include "kachakacha/io/FacetedPapercraft.h"
-#include "kachakacha/io/FabricationPanelPapercraft.h"
 #include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
@@ -87,22 +84,9 @@ using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::BuildPlateAssemblyMotion;
 using kachakacha::io::BuildPlateFlatPattern;
-using kachakacha::io::BuildBentSheetPapercraftGuide;
-using kachakacha::io::BuildBentSheetPapercraftMotion;
-using kachakacha::io::BuildBentSheetPapercraftPattern;
-using kachakacha::io::BuildBentSheetPapercraftPreview;
-using kachakacha::io::BuildFacetedPapercraftGuide;
-using kachakacha::io::BuildFacetedPapercraftMotion;
-using kachakacha::io::BuildFacetedPapercraftPattern;
-using kachakacha::io::BuildFacetedPapercraftPreview;
 using kachakacha::io::BuildAllPartPatterns;
-using kachakacha::io::BuildFabricationPanelPapercraftGuide;
-using kachakacha::io::BuildFabricationPanelPapercraftMotion;
-using kachakacha::io::BuildFabricationPanelPapercraftPattern;
-using kachakacha::io::BuildFabricationPanelPapercraftPreview;
 using kachakacha::io::FabricationPanelDirection;
 using kachakacha::io::PapercraftCutDirection;
-using kachakacha::io::PapercraftPanelPriority;
 using kachakacha::io::PlateAssemblyStrategy;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::ReliefNotchStyle;
@@ -2429,64 +2413,6 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
     plateFlatPatternPlane_ = new QComboBox;
-    platePapercraftMode_ = new QComboBox;
-    platePapercraftMode_->setObjectName(QStringLiteral("platePapercraftMode"));
-    platePapercraftMode_->addItem(
-        QStringLiteral("製作用大部材（近似モデル→各部材を展開）"), 3);
-    platePapercraftMode_->addItem(
-        QStringLiteral("曲げ紙ペーパークラフト（連続部材）"), 2);
-    platePapercraftMode_->addItem(
-        QStringLiteral("多面体ペーパークラフト（比較用）"), 1);
-    platePapercraftMode_->addItem(
-        QStringLiteral("曲げ帯ペーパークラフト（従来方式）"), 0);
-    platePapercraftMode_->setCurrentIndex(
-        platePapercraftMode_->findData(2));
-    platePapercraftMode_->setToolTip(
-        QStringLiteral("製作用大部材は元形状へ少数の長い曲げ板を先に当て、許容偏差を超える板だけ追加分割します。既存方式も比較用に残ります"));
-    platePapercraftPanelPriority_ = new QComboBox;
-    platePapercraftPanelPriority_->addItem(
-        QStringLiteral("部材優先（少数の長い部材）"),
-        static_cast<int>(PapercraftPanelPriority::PartFirst));
-    platePapercraftPanelPriority_->addItem(
-        QStringLiteral("バランス"),
-        static_cast<int>(PapercraftPanelPriority::Balanced));
-    platePapercraftPanelPriority_->addItem(
-        QStringLiteral("精度優先"),
-        static_cast<int>(PapercraftPanelPriority::AccuracyFirst));
-    platePapercraftPanelPriority_->setToolTip(
-        QStringLiteral("部材優先では分離を避けて短い切れ目を先に使います。精度優先では許容誤差へ近づけるため切れ目を増やします"));
-    platePapercraftMaximumError_ = MakePositiveField(0.10);
-    platePapercraftMaximumError_->setRange(0.01, 10.0);
-    platePapercraftMaximumError_->setDecimals(3);
-    platePapercraftMaximumError_->setSingleStep(0.01);
-    platePapercraftMaximumError_->setSuffix(QStringLiteral(" mm"));
-    platePapercraftMaximumError_->setToolTip(
-        QStringLiteral("元の3D面と組み立て形状の最大偏差の設計目標。結果欄には推定値ではなく実測値を表示します"));
-    platePapercraftMinimumWidth_ = MakePositiveField(3.0);
-    platePapercraftMinimumWidth_->setRange(0.2, 100.0);
-    platePapercraftMinimumWidth_->setDecimals(1);
-    platePapercraftMinimumWidth_->setSingleStep(0.5);
-    platePapercraftMinimumWidth_->setSuffix(QStringLiteral(" mm"));
-    platePapercraftMinimumWidth_->setToolTip(
-        QStringLiteral("切れ込みの間や接続部に残す最小幅。細すぎて切り出せない部材を避けます"));
-    plateFabricationPanelDirection_ = new QComboBox;
-    plateFabricationPanelDirection_->addItem(
-        QStringLiteral("曲率から自動"),
-        static_cast<int>(FabricationPanelDirection::Automatic));
-    plateFabricationPanelDirection_->addItem(
-        QStringLiteral("U方向へ長い部材"),
-        static_cast<int>(FabricationPanelDirection::LongAlongU));
-    plateFabricationPanelDirection_->addItem(
-        QStringLiteral("V方向へ長い部材"),
-        static_cast<int>(FabricationPanelDirection::LongAlongV));
-    plateFabricationPanelDirection_->setToolTip(
-        QStringLiteral("通常は自動。車体前面を横長帯で作る場合は、面の横方向に合うU/Vを選びます"));
-    plateFabricationPanelMaximumCount_ = new QSpinBox;
-    plateFabricationPanelMaximumCount_->setRange(1, 32);
-    plateFabricationPanelMaximumCount_->setValue(8);
-    plateFabricationPanelMaximumCount_->setSuffix(QStringLiteral(" 枚"));
-    plateFabricationPanelMaximumCount_->setToolTip(
-        QStringLiteral("許容偏差へ届かない場合でも、ここで指定した枚数より細分化しません"));
     plateFlatPatternAutoRelief_ = new QCheckBox(
         QStringLiteral("ペーパークラフトとして分割・切れ目を生成"));
     plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
@@ -2619,12 +2545,6 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternCutWidth_->setSuffix(QStringLiteral(" mm"));
     flatModelForm->addRow(QStringLiteral("展開部材名"), plateFlatPatternName_);
     flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
-    flatModelForm->addRow(QStringLiteral("生成方式"), platePapercraftMode_);
-    flatModelForm->addRow(QStringLiteral("展開方針"), platePapercraftPanelPriority_);
-    flatModelForm->addRow(QStringLiteral("最大許容3D偏差"), platePapercraftMaximumError_);
-    flatModelForm->addRow(QStringLiteral("最小部材幅"), platePapercraftMinimumWidth_);
-    flatModelForm->addRow(QStringLiteral("大部材の向き"), plateFabricationPanelDirection_);
-    flatModelForm->addRow(QStringLiteral("最大部材数"), plateFabricationPanelMaximumCount_);
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
     flatModelForm->addRow(QStringLiteral("組み立て方"), plateFlatPatternAssemblyStrategy_);
     flatModelForm->addRow(QStringLiteral("切れ目の方向"), plateFlatPatternCutDirection_);
@@ -2662,15 +2582,6 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(assemblyModelButton, &QPushButton::clicked,
         this, &MainWindow::CreatePlateAssemblyStateModel);
     layout->addWidget(assemblyModelButton);
-
-    auto* approximationModelButton = new QPushButton(
-        QStringLiteral("近似完成モデルを別オブジェクトで作成"));
-    approximationModelButton->setObjectName(QStringLiteral("primaryButton"));
-    approximationModelButton->setToolTip(
-        QStringLiteral("立体再現度で角ばらせた完成形を、元の板材を残したまま別モデルとして追加"));
-    connect(approximationModelButton, &QPushButton::clicked,
-        this, &MainWindow::CreateFacetedApproximationModel);
-    layout->addWidget(approximationModelButton);
 
     auto* assemblyExportRow = new QWidget;
     auto* assemblyExportLayout = new QHBoxLayout(assemblyExportRow);
@@ -2718,23 +2629,14 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     const auto updateReliefControls = [this, fidelityControl, assemblyProgressControl,
-                                       flatModelForm, approximationModelButton] {
-        const bool faceted = UsesFacetedPapercraft();
-        const bool bentSheet = UsesBentSheetPapercraft();
-        const bool fabricationPanel = UsesFabricationPanelPapercraft();
-        const bool independentMode = faceted || bentSheet || fabricationPanel;
-        const bool enabled = independentMode || plateFlatPatternAutoRelief_->isChecked();
+                                       flatModelForm] {
+        const bool enabled = plateFlatPatternAutoRelief_->isChecked();
         const bool allowNotches = enabled && plateFlatPatternAllowNotches_->isChecked();
         const ReliefNotchStyle notchStyle = static_cast<ReliefNotchStyle>(
             plateFlatPatternNotchStyle_->currentData().toInt());
         const bool curved = notchStyle == ReliefNotchStyle::CurvedV;
         const bool advancedSpacing = enabled && plateFlatPatternAdvancedSpacing_->isChecked();
-        plateFlatPatternAssemblyStrategy_->setEnabled(enabled && !independentMode);
-        platePapercraftPanelPriority_->setEnabled(bentSheet || fabricationPanel);
-        platePapercraftMaximumError_->setEnabled(bentSheet || fabricationPanel);
-        platePapercraftMinimumWidth_->setEnabled(bentSheet || fabricationPanel);
-        plateFabricationPanelDirection_->setEnabled(fabricationPanel);
-        plateFabricationPanelMaximumCount_->setEnabled(fabricationPanel);
+        plateFlatPatternAssemblyStrategy_->setEnabled(enabled);
         plateFlatPatternCutDirection_->setEnabled(enabled);
         fidelityControl->setEnabled(enabled);
         plateFlatPatternAllowNotches_->setEnabled(enabled);
@@ -2748,14 +2650,6 @@ QWidget* MainWindow::BuildOutputPanel()
         plateFlatPatternFoldSpacing_->setEnabled(advancedSpacing);
         assemblyProgressControl->setEnabled(enabled);
         plateAssemblyOutputPiece_->setEnabled(enabled);
-        approximationModelButton->setEnabled(independentMode);
-        flatModelForm->setRowVisible(plateFlatPatternAutoRelief_, !independentMode);
-        flatModelForm->setRowVisible(plateFlatPatternAssemblyStrategy_, !independentMode);
-        flatModelForm->setRowVisible(platePapercraftPanelPriority_, bentSheet || fabricationPanel);
-        flatModelForm->setRowVisible(platePapercraftMaximumError_, bentSheet || fabricationPanel);
-        flatModelForm->setRowVisible(platePapercraftMinimumWidth_, bentSheet || fabricationPanel);
-        flatModelForm->setRowVisible(plateFabricationPanelDirection_, fabricationPanel);
-        flatModelForm->setRowVisible(plateFabricationPanelMaximumCount_, fabricationPanel);
         flatModelForm->setRowVisible(fidelityControl, enabled);
         flatModelForm->setRowVisible(plateFlatPatternAllowNotches_, enabled);
         flatModelForm->setRowVisible(plateFlatPatternNotchStyle_, allowNotches);
@@ -2766,54 +2660,8 @@ QWidget* MainWindow::BuildOutputPanel()
         flatModelForm->setRowVisible(plateFlatPatternNotchCurveStrength_, allowNotches && curved);
         flatModelForm->setRowVisible(plateFlatPatternMinimumBendAngle_, enabled);
         flatModelForm->setRowVisible(plateFlatPatternFoldSpacing_, advancedSpacing);
-        if (bentSheet || fabricationPanel) {
-            plateFlatPatternCutDirection_->setItemText(
-                0, QStringLiteral("U方向へ滑らかに丸める"));
-            plateFlatPatternCutDirection_->setItemText(
-                1, QStringLiteral("V方向へ滑らかに丸める"));
-            plateFlatPatternCutDirection_->setItemText(
-                2, QStringLiteral("曲率から主曲げ方向を自動選択"));
-            plateFlatPatternAllowNotches_->setText(
-                QStringLiteral("曲線Vを併用（OFF: ブリッジ付き一本線）"));
-            plateFlatPatternAllowNotches_->setToolTip(
-                QStringLiteral("ONでは最初の強い曲がりへ曲線Vを使い、残りを一本線スリットにします。中央または端に紙のつながりを残します"));
-            approximationModelButton->setText(fabricationPanel
-                    ? QStringLiteral("製作用近似モデルを別オブジェクトで作成")
-                    : QStringLiteral("曲げ紙の完成形を別オブジェクトで作成"));
-            plateAssemblyApproximationPreview_->setToolTip(
-                fabricationPanel
-                    ? QStringLiteral("各大部材が平面から曲がり、元モデルの近似形へ組み上がる過程を表示")
-                    : QStringLiteral("一枚の紙が滑らかに丸まり、スリットとV字が二方向目の曲がりを逃がす過程を表示"));
-        } else {
-            plateFlatPatternCutDirection_->setItemText(
-                0, QStringLiteral("縦だけ（上下へ走る切れ目）"));
-            plateFlatPatternCutDirection_->setItemText(
-                1, QStringLiteral("横だけ（左右へ走る切れ目）"));
-            plateFlatPatternCutDirection_->setItemText(
-                2, QStringLiteral("縦横を併用"));
-            plateFlatPatternAllowNotches_->setText(
-                QStringLiteral("必要箇所のV字切れ込みを許可"));
-            plateFlatPatternAllowNotches_->setToolTip(
-                QStringLiteral("丸い角や収束部だけにV字を加えます。分割部品にも適用できます"));
-            approximationModelButton->setText(
-                QStringLiteral("近似完成モデルを別オブジェクトで作成"));
-            plateAssemblyApproximationPreview_->setToolTip(
-                QStringLiteral("平らな展開片が折り線を軸に回転し、完成形になる過程を表示"));
-        }
         RefreshExportSummary();
     };
-    connect(platePapercraftMode_, &QComboBox::currentIndexChanged, this,
-        [updateReliefControls] { updateReliefControls(); });
-    connect(platePapercraftPanelPriority_, &QComboBox::currentIndexChanged,
-        this, [this] { RefreshExportSummary(); });
-    connect(platePapercraftMaximumError_, &QDoubleSpinBox::valueChanged,
-        this, [this] { RefreshExportSummary(); });
-    connect(platePapercraftMinimumWidth_, &QDoubleSpinBox::valueChanged,
-        this, [this] { RefreshExportSummary(); });
-    connect(plateFabricationPanelDirection_, &QComboBox::currentIndexChanged,
-        this, [this] { RefreshExportSummary(); });
-    connect(plateFabricationPanelMaximumCount_, &QSpinBox::valueChanged,
-        this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this,
         [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAssemblyStrategy_, &QComboBox::currentIndexChanged, this,
@@ -3840,10 +3688,6 @@ bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlat
 {
     constexpr double warningToleranceMillimeters = 0.1;
     const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
-    if (UsesFacetedPapercraft() || UsesBentSheetPapercraft()
-        || UsesFabricationPanelPapercraft()) {
-        return true;
-    }
     if ((pattern.analysis.classification != PlateDevelopability::DoubleCurved
             || pattern.analysis.pieceCount > 1)
         && estimatedError <= warningToleranceMillimeters) {
@@ -3862,40 +3706,27 @@ bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlat
         QMessageBox::Cancel) == QMessageBox::Yes;
 }
 
+// 旧ペーパークラフト3方式(多面体/曲げ紙/製作用大部材)は部材近似モデルへ置き換えて撤去した。
+// 常に基本展開のみを使う。
 bool MainWindow::UsesFacetedPapercraft() const
 {
-    return platePapercraftMode_ != nullptr
-        && platePapercraftMode_->currentData().toInt() == 1;
+    return false;
 }
 
 bool MainWindow::UsesBentSheetPapercraft() const
 {
-    return platePapercraftMode_ != nullptr
-        && platePapercraftMode_->currentData().toInt() == 2;
+    return false;
 }
 
 bool MainWindow::UsesFabricationPanelPapercraft() const
 {
-    return platePapercraftMode_ != nullptr
-        && platePapercraftMode_->currentData().toInt() == 3;
+    return false;
 }
 
 kachakacha::io::PlateFlatPattern MainWindow::BuildActivePapercraftPattern(
     const kachakacha::model::NamedPlate& plate,
     PlateFlatPatternOptions options) const
 {
-    if (UsesFabricationPanelPapercraft()) {
-        return BuildFabricationPanelPapercraftPattern(
-            project_, plate, std::move(options));
-    }
-    if (UsesBentSheetPapercraft()) {
-        return BuildBentSheetPapercraftPattern(
-            project_, plate, std::move(options));
-    }
-    if (UsesFacetedPapercraft()) {
-        return BuildFacetedPapercraftPattern(
-            project_, plate, std::move(options));
-    }
     return BuildPlateFlatPattern(project_, plate, std::move(options));
 }
 
@@ -3903,18 +3734,6 @@ kachakacha::io::PlateAssemblyGuide MainWindow::BuildActivePapercraftGuide(
     const kachakacha::model::NamedPlate& plate,
     PlateFlatPatternOptions options) const
 {
-    if (UsesFabricationPanelPapercraft()) {
-        return BuildFabricationPanelPapercraftGuide(
-            project_, plate, std::move(options));
-    }
-    if (UsesBentSheetPapercraft()) {
-        return BuildBentSheetPapercraftGuide(
-            project_, plate, std::move(options));
-    }
-    if (UsesFacetedPapercraft()) {
-        return BuildFacetedPapercraftGuide(
-            project_, plate, std::move(options));
-    }
     return BuildPlateAssemblyGuide(project_, plate, std::move(options));
 }
 
@@ -3923,18 +3742,6 @@ kachakacha::io::PlateAssemblyMotion MainWindow::BuildActivePapercraftMotion(
     double progress,
     PlateFlatPatternOptions options) const
 {
-    if (UsesFabricationPanelPapercraft()) {
-        return BuildFabricationPanelPapercraftMotion(
-            project_, plate, progress, std::move(options));
-    }
-    if (UsesBentSheetPapercraft()) {
-        return BuildBentSheetPapercraftMotion(
-            project_, plate, progress, std::move(options));
-    }
-    if (UsesFacetedPapercraft()) {
-        return BuildFacetedPapercraftMotion(
-            project_, plate, progress, std::move(options));
-    }
     return BuildPlateAssemblyMotion(
         project_, plate, progress, std::move(options));
 }
@@ -3943,10 +3750,7 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
 {
     PlateFlatPatternOptions options;
     if (plateFlatPatternAutoRelief_ != nullptr) {
-        options.includeAutomaticReliefCuts = UsesFacetedPapercraft()
-            || UsesBentSheetPapercraft()
-            || UsesFabricationPanelPapercraft()
-            || plateFlatPatternAutoRelief_->isChecked();
+        options.includeAutomaticReliefCuts = plateFlatPatternAutoRelief_->isChecked();
     }
     if (plateFlatPatternAssemblyStrategy_ != nullptr) {
         options.assemblyStrategy = static_cast<PlateAssemblyStrategy>(
@@ -3955,27 +3759,6 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
     if (plateFlatPatternCutDirection_ != nullptr) {
         options.cutDirection = static_cast<PapercraftCutDirection>(
             plateFlatPatternCutDirection_->currentData().toInt());
-    }
-    if (platePapercraftPanelPriority_ != nullptr) {
-        options.panelPriority = static_cast<PapercraftPanelPriority>(
-            platePapercraftPanelPriority_->currentData().toInt());
-    }
-    if (platePapercraftMaximumError_ != nullptr) {
-        options.maximumShapeErrorMillimeters
-            = platePapercraftMaximumError_->value();
-    }
-    if (platePapercraftMinimumWidth_ != nullptr) {
-        options.minimumPartWidthMillimeters
-            = platePapercraftMinimumWidth_->value();
-    }
-    if (plateFabricationPanelDirection_ != nullptr) {
-        options.fabricationPanelDirection
-            = static_cast<FabricationPanelDirection>(
-                plateFabricationPanelDirection_->currentData().toInt());
-    }
-    if (plateFabricationPanelMaximumCount_ != nullptr) {
-        options.maximumFabricationPanelCount
-            = plateFabricationPanelMaximumCount_->value();
     }
     if (plateFlatPatternAllowNotches_ != nullptr) {
         options.allowAutomaticNotches = plateFlatPatternAllowNotches_->isChecked();
@@ -4055,31 +3838,11 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
             : 1.0;
         kachakacha::io::PlateAssemblyGuide guide;
         std::optional<kachakacha::io::PlateAssemblyMotion> motion;
-        if (UsesFabricationPanelPapercraft() && approximationEnabled) {
-            auto preview = BuildFabricationPanelPapercraftPreview(
-                project_, project_.Plates()[plateIndices.front()],
-                assemblyProgress, options);
-            guide = std::move(preview.guide);
-            motion = std::move(preview.motion);
-        } else if (UsesBentSheetPapercraft() && approximationEnabled) {
-            auto preview = BuildBentSheetPapercraftPreview(
-                project_, project_.Plates()[plateIndices.front()],
-                assemblyProgress, options);
-            guide = std::move(preview.guide);
-            motion = std::move(preview.motion);
-        } else if (UsesFacetedPapercraft() && approximationEnabled) {
-            auto preview = BuildFacetedPapercraftPreview(
-                project_, project_.Plates()[plateIndices.front()],
-                assemblyProgress, options);
-            guide = std::move(preview.guide);
-            motion = std::move(preview.motion);
-        } else {
-            guide = BuildActivePapercraftGuide(
-                project_.Plates()[plateIndices.front()], options);
-            if (approximationEnabled) {
-                motion = BuildActivePapercraftMotion(
-                    project_.Plates()[plateIndices.front()], assemblyProgress, options);
-            }
+        guide = BuildActivePapercraftGuide(
+            project_.Plates()[plateIndices.front()], options);
+        if (approximationEnabled) {
+            motion = BuildActivePapercraftMotion(
+                project_.Plates()[plateIndices.front()], assemblyProgress, options);
         }
         std::vector<std::vector<Vector3>> foldLines;
         std::vector<std::vector<Vector3>> reliefCuts;
@@ -4388,78 +4151,6 @@ void MainWindow::CreatePlateAssemblyStateModel()
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(
             QStringLiteral("曲げ状態を3Dモデル化できません: %1")
-                .arg(QString::fromUtf8(error.what())));
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
-    }
-}
-
-void MainWindow::CreateFacetedApproximationModel()
-{
-    try {
-        if (!UsesFacetedPapercraft() && !UsesBentSheetPapercraft()
-            && !UsesFabricationPanelPapercraft()) {
-            throw std::invalid_argument(
-                "生成方式を「製作用大部材」「曲げ紙」または「多面体」にしてください。");
-        }
-        const auto sourcePlate = project_.Plates()[SelectedPlateIndexForExport()];
-        const auto motion = BuildActivePapercraftMotion(
-            sourcePlate, 1.0, PlateFlatPatternOptionsFromUi());
-        const QString baseName = plateFlatPatternName_ != nullptr
-                && !plateFlatPatternName_->text().trimmed().isEmpty()
-            ? plateFlatPatternName_->text().trimmed()
-            : ToQString(sourcePlate.name);
-        const QString resultKind = UsesFabricationPanelPapercraft()
-            ? QStringLiteral("fabrication_panel_complete")
-            : UsesBentSheetPapercraft()
-            ? QStringLiteral("bent_sheet_complete")
-            : QStringLiteral("faceted_complete");
-        const std::string prefix = ToName(SuggestedDirectGroupName(
-            QStringLiteral("%1_%2").arg(baseName, resultKind)));
-
-        Project candidate = project_;
-        const auto result = AddPlateAssemblyMotionModel(
-            candidate, sourcePlate, motion, prefix);
-        RecordUndo();
-        project_ = std::move(candidate);
-        MarkModified();
-        RefreshModelViews(true);
-
-        std::vector<CadSelection> createdSelections;
-        createdSelections.reserve(result.plateNames.size());
-        for (const std::string& name : result.plateNames) {
-            const auto position = std::find_if(
-                project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
-                    return plate.name == name;
-                });
-            if (position != project_.Plates().end()) {
-                createdSelections.push_back({
-                    CadSelectionKind::Plate,
-                    static_cast<int>(std::distance(project_.Plates().begin(), position)),
-                });
-            }
-        }
-        UpdateSelections(std::move(createdSelections), true);
-        plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
-        plateFlatPatternSummary_->setText(
-            QStringLiteral("元板を保持 | %1 | 再現度%2/10 | 完成形パネル%3枚を別作成")
-                .arg(UsesBentSheetPapercraft()
-                        ? QStringLiteral("曲げ紙")
-                        : UsesFabricationPanelPapercraft()
-                        ? QStringLiteral("製作用大部材")
-                        : QStringLiteral("多面体"))
-                .arg(plateFlatPatternFidelity_->value())
-                .arg(result.plateNames.size()));
-        statusBar()->showMessage(
-            UsesFabricationPanelPapercraft()
-                ? QStringLiteral("少数の大部材で近似した製作用モデルを別オブジェクトとして追加しました")
-                : UsesBentSheetPapercraft()
-                ? QStringLiteral("滑らかに曲げた紙の完成形を別オブジェクトとして追加しました")
-                : QStringLiteral("角ばった近似完成モデルを別オブジェクトとして追加しました"),
-            5000);
-    } catch (const std::exception& error) {
-        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
-        plateFlatPatternSummary_->setText(
-            QStringLiteral("近似完成モデルを作成できません: %1")
                 .arg(QString::fromUtf8(error.what())));
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

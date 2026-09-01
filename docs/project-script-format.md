@@ -339,17 +339,14 @@ visibility workplane|point|wire|surface|plate|body|dimension NAME shown|hidden
 ## 実行
 
 ```powershell
-.\scripts\run-viewer.ps1 -Project examples\first-check.kcd
+.\scripts\run-cad.ps1 -Project examples\first-check.kcd
 ```
 
 画像出力だけなら:
 
 ```powershell
-.\scripts\snapshot-viewer.ps1 -Project examples\first-check.kcd
+.\scripts\snapshot-cad.ps1 -Project examples\first-check.kcd
 ```
 
-ビューアで編集した内容は `Ctrl+S` で `out` フォルダへ保存できる。コマンドだけで書き出す場合:
-
-```powershell
-.\scripts\export-project.ps1 -Project examples\first-check.kcd -OutputPath out\first-check-export.kcd
-```
+編集した内容は Qt アプリの保存機能(`Ctrl+S`)で `.kcd` へ書き戻せる。
+(旧 Win32 GDI ビューアと run-viewer / snapshot-viewer / export-project スクリプトは 2026-09-01 に廃止した。)

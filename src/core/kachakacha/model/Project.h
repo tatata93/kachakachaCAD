@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kachakacha/model/Body.h"
+#include "kachakacha/model/PartModel.h"
 #include "kachakacha/model/Wire.h"
 #include "kachakacha/model/WireConstraints.h"
 #include "kachakacha/model/WorkPlane.h"
@@ -123,6 +124,8 @@ struct NamedWire {
         double throughThickness = 0.5;
     };
     std::optional<PlateOffset> plateOffset;
+    //! 部材近似モデルの派生境界線の場合、そのモデル名。個別編集・保存の対象外。
+    std::optional<std::string> partModelSourceName;
 };
 
 struct NamedSurface {
@@ -153,6 +156,46 @@ struct NamedBody {
     Body body;
     std::string sourceSurfaceName;
     bool visible = true;
+};
+
+//! 部材近似モデル(ADR 0019)。板材を1軸曲げ部材の集合へ近似する派生レシピ。
+struct NamedPartModel {
+    std::string name;
+    std::string sourcePlateName;
+    PartApproximationOptions options;
+    PartApproximationResult result;
+    std::vector<std::string> boundaryWireNames; //!< 内部境界の派生ワイヤ名(部材数-1本)
+    bool visible = true;
+};
+
+//! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
+enum class ObjectSetState {
+    Visible,
+    ReferenceOnly,
+    Hidden,
+};
+
+enum class ProjectObjectKind {
+    WorkPlane,
+    Point,
+    Wire,
+    Surface,
+    Plate,
+    Body,
+    PartModel,
+};
+
+struct ObjectSetMember {
+    ProjectObjectKind kind = ProjectObjectKind::Wire;
+    std::string name;
+};
+
+//! セット(グループ)。派生物の整理と一括表示制御に使う(docs/surface-unfolding-spec.md)。
+struct ObjectSet {
+    std::string name;
+    ObjectSetState state = ObjectSetState::Visible;
+    bool automatic = false; //!< 部材近似モデル等が生成・管理する自動セット
+    std::vector<ObjectSetMember> members;
 };
 
 class Project {
@@ -275,6 +318,25 @@ public:
     void RemovePlateReliefCut(std::string_view plateName, std::string_view wireName);
     void AddPlateSplitLine(std::string_view plateName, std::string wireName);
     void RemovePlateSplitLine(std::string_view plateName, std::string_view wireName);
+    void AddPartModel(
+        std::string name,
+        std::string sourcePlateName,
+        PartApproximationOptions options);
+    void UpdatePartModelOptions(std::string_view name, PartApproximationOptions options);
+    bool RemovePartModel(std::string_view name);
+    void SetPartModelVisible(std::string_view name, bool visible);
+    //! 部材境界を独立した通常ワイヤとして複製する(抽出)。作成したワイヤ名を返す。
+    [[nodiscard]] std::vector<std::string> ExtractPartModelBoundaries(std::string_view name);
+
+    void CreateObjectSet(std::string name, ObjectSetState state = ObjectSetState::Visible);
+    bool RemoveObjectSet(std::string_view name);
+    void SetObjectSetState(std::string_view name, ObjectSetState state);
+    void AssignObjectToSet(ProjectObjectKind kind, std::string objectName, std::string_view setName);
+    void RemoveObjectFromSets(ProjectObjectKind kind, std::string_view objectName);
+    //! オブジェクトが属するセットの状態。どのセットにも属さなければ Visible。
+    [[nodiscard]] ObjectSetState ObjectStateInSets(
+        ProjectObjectKind kind, std::string_view objectName) const;
+
     bool RemoveWorkPlane(std::string_view name);
     bool RemovePoint(std::string_view name);
     bool RemoveWire(std::string_view name);
@@ -288,6 +350,8 @@ public:
     [[nodiscard]] const std::vector<NamedSurface>& Surfaces() const noexcept { return surfaces_; }
     [[nodiscard]] const std::vector<NamedPlate>& Plates() const noexcept { return plates_; }
     [[nodiscard]] const std::vector<NamedBody>& Bodies() const noexcept { return bodies_; }
+    [[nodiscard]] const std::vector<NamedPartModel>& PartModels() const noexcept { return partModels_; }
+    [[nodiscard]] const std::vector<ObjectSet>& ObjectSets() const noexcept { return objectSets_; }
     [[nodiscard]] const std::vector<WireCoincidentConstraint>& CoincidentConstraints() const noexcept
     {
         return coincidentConstraints_;
@@ -317,6 +381,9 @@ private:
     void ApplyTangentConstraints();
     void ApplyWireConstraints();
     void RebuildDependentGeometry();
+    void RebuildPartModels();
+    void RegeneratePartModelDerivedObjects(NamedPartModel& model);
+    [[nodiscard]] ObjectSet* FindObjectSetMutable(std::string_view name);
 
     std::vector<NamedWorkPlane> workPlanes_;
     std::vector<NamedPoint> points_;
@@ -324,6 +391,8 @@ private:
     std::vector<NamedSurface> surfaces_;
     std::vector<NamedPlate> plates_;
     std::vector<NamedBody> bodies_;
+    std::vector<NamedPartModel> partModels_;
+    std::vector<ObjectSet> objectSets_;
     std::vector<WireCoincidentConstraint> coincidentConstraints_;
     std::vector<WireTangentConstraint> tangentConstraints_;
     std::vector<ReferenceDimension> referenceDimensions_;

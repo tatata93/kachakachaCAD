@@ -45,11 +45,13 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/FacetedPapercraft.cpp
     src/core/kachakacha/io/FabricationPanelPapercraft.cpp
     src/core/kachakacha/io/NumericExpression.cpp
+    src/core/kachakacha/io/PartPatterns.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
     src/core/kachakacha/model/Body.cpp
     src/core/kachakacha/model/Measurement.cpp
+    src/core/kachakacha/model/PartModel.cpp
     src/core/kachakacha/model/Project.cpp
     src/core/kachakacha/model/Plate.cpp
     src/core/kachakacha/model/Sketch.cpp
@@ -444,6 +446,18 @@ if(KACHACAD_BUILD_TESTS)
             "${CMAKE_SOURCE_DIR}/examples/er1-er2-round-cab-1-87.kcd"
             "${CMAKE_CURRENT_BINARY_DIR}/er1-er2-round-cab-panel-first.svg"
     )
+
+    add_executable(kachakacha_part_model_tests
+        tests/part_model_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_part_model_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    kachakacha_apply_test_options(kachakacha_part_model_tests)
+    add_test(NAME part_model_tests COMMAND kachakacha_part_model_tests)
 
     add_executable(kachakacha_surface_tests
         tests/surface_tests.cpp

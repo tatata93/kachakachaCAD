@@ -100,6 +100,8 @@ struct PlateFlatPatternPath {
     std::vector<geometry::Vector2> points;
     bool incorporatedInOuterBoundary = false;
     std::optional<PapercraftCutKind> cutKind;
+    //! 折り線の山谷。+1=山折り(型紙の表=板厚中央面の法線+側から見て凸)、-1=谷折り、0=不明。
+    int foldDirection = 0;
 };
 
 struct PlateFlatPatternPiece {

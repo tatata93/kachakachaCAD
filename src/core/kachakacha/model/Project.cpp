@@ -1540,6 +1540,11 @@ void Project::SplitPlate(
     if (FindPlate(firstName).has_value() || FindPlate(secondName).has_value()) {
         throw std::invalid_argument("Split plate name already exists.");
     }
+    for (const NamedPartModel& model : partModels_) {
+        if (model.sourcePlateName == name) {
+            throw std::invalid_argument("Plate is used by part model: " + model.name);
+        }
+    }
     const auto position = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& plate) {
         return plate.name == name;
     });
@@ -1868,6 +1873,11 @@ bool Project::RemoveWire(std::string_view name)
     if (position == wires_.end()) {
         return false;
     }
+    if (position->partModelSourceName.has_value()) {
+        throw std::invalid_argument(
+            "Part-model boundary wires cannot be removed individually: "
+            + std::string(name));
+    }
 
     for (const NamedSurface& surface : surfaces_) {
         if (std::find(surface.sourceWireNames.begin(), surface.sourceWireNames.end(), name)
@@ -1960,6 +1970,11 @@ bool Project::RemovePlate(std::string_view name)
     for (const NamedWire& wire : wires_) {
         if (wire.plateOffset.has_value() && wire.plateOffset->plateName == name) {
             throw std::invalid_argument("Plate is used by offset wire: " + wire.name);
+        }
+    }
+    for (const NamedPartModel& model : partModels_) {
+        if (model.sourcePlateName == name) {
+            throw std::invalid_argument("Plate is used by part model: " + model.name);
         }
     }
     plates_.erase(position);
@@ -2422,6 +2437,310 @@ void Project::RebuildDependentGeometry()
             body.body.ClearanceMillimeters(),
             body.body.ThicknessMillimeters());
     }
+
+    RebuildPartModels();
+}
+
+// ---- 部材近似モデル(ADR 0019) ----------------------------------------
+
+void Project::RebuildPartModels()
+{
+    for (NamedPartModel& model : partModels_) {
+        const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+            return candidate.name == model.sourcePlateName;
+        });
+        if (plate == plates_.end()) {
+            throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
+        }
+        model.result = ApproximatePlateParts(plate->plate, model.options);
+        RegeneratePartModelDerivedObjects(model);
+    }
+}
+
+void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
+{
+    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+        return candidate.name == model.sourcePlateName;
+    });
+    if (plate == plates_.end()) {
+        throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
+    }
+
+    // 内部境界パラメータ(部材数-1本)。
+    std::vector<double> parameters;
+    for (std::size_t index = 1; index < model.result.parts.size(); ++index) {
+        parameters.push_back(model.result.parts[index].minimumParameter);
+    }
+
+    std::vector<std::string> newNames;
+    const std::string prefix = model.name + "_境界";
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const std::string wireName = prefix + std::to_string(index + 1);
+        Wire boundary = BuildPartBoundaryWire(
+            plate->plate, model.options.splitAxis, parameters[index]);
+        const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == wireName;
+        });
+        if (existing != wires_.end()) {
+            if (!existing->partModelSourceName.has_value()
+                || *existing->partModelSourceName != model.name) {
+                throw std::invalid_argument(
+                    "Part-model boundary wire name is already used: " + wireName);
+            }
+            existing->wire = std::move(boundary);
+        } else {
+            NamedWire derived{wireName, std::move(boundary), {}, std::nullopt, model.visible, std::nullopt, model.name};
+            wires_.push_back(std::move(derived));
+        }
+        newNames.push_back(wireName);
+    }
+
+    // 部材数が減った場合、余った派生ワイヤを片付ける。
+    for (const std::string& oldName : model.boundaryWireNames) {
+        if (std::find(newNames.begin(), newNames.end(), oldName) != newNames.end()) {
+            continue;
+        }
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == oldName
+                    && wire.partModelSourceName.has_value()
+                    && *wire.partModelSourceName == model.name;
+            }),
+            wires_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
+    }
+    model.boundaryWireNames = newNames;
+
+    // 自動セット「近似:<名前>」を最新のメンバーで作り直す。
+    const std::string setName = "近似:" + model.name;
+    ObjectSet* set = FindObjectSetMutable(setName);
+    if (set == nullptr) {
+        objectSets_.push_back({setName, ObjectSetState::Visible, true, {}});
+        set = &objectSets_.back();
+    }
+    set->automatic = true;
+    set->members.clear();
+    set->members.push_back({ProjectObjectKind::PartModel, model.name});
+    for (const std::string& wireName : newNames) {
+        set->members.push_back({ProjectObjectKind::Wire, wireName});
+    }
+}
+
+void Project::AddPartModel(
+    std::string name,
+    std::string sourcePlateName,
+    PartApproximationOptions options)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Part-model name must not be empty.");
+    }
+    const auto duplicate = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& model) {
+        return model.name == name;
+    });
+    if (duplicate != partModels_.end()) {
+        throw std::invalid_argument("Part-model name already exists: " + name);
+    }
+    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+        return candidate.name == sourcePlateName;
+    });
+    if (plate == plates_.end()) {
+        throw std::invalid_argument("Part-model source plate is missing: " + sourcePlateName);
+    }
+
+    NamedPartModel model;
+    model.name = std::move(name);
+    model.sourcePlateName = std::move(sourcePlateName);
+    model.options = std::move(options);
+    model.result = ApproximatePlateParts(plate->plate, model.options);
+    RegeneratePartModelDerivedObjects(model);
+    partModels_.push_back(std::move(model));
+}
+
+void Project::UpdatePartModelOptions(std::string_view name, PartApproximationOptions options)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& candidate) {
+        return candidate.name == name;
+    });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+        return candidate.name == model->sourcePlateName;
+    });
+    if (plate == plates_.end()) {
+        throw std::logic_error("Part-model source plate is missing: " + model->sourcePlateName);
+    }
+    const PartApproximationResult result = ApproximatePlateParts(plate->plate, options);
+    model->options = std::move(options);
+    model->result = result;
+    RegeneratePartModelDerivedObjects(*model);
+}
+
+bool Project::RemovePartModel(std::string_view name)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& candidate) {
+        return candidate.name == name;
+    });
+    if (model == partModels_.end()) {
+        return false;
+    }
+    for (const std::string& wireName : model->boundaryWireNames) {
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == wireName && wire.partModelSourceName.has_value();
+            }),
+            wires_.end());
+    }
+    const std::string setName = "近似:" + model->name;
+    objectSets_.erase(
+        std::remove_if(objectSets_.begin(), objectSets_.end(), [&](const ObjectSet& set) {
+            return set.name == setName;
+        }),
+        objectSets_.end());
+    partModels_.erase(model);
+    return true;
+}
+
+void Project::SetPartModelVisible(std::string_view name, bool visible)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](NamedPartModel& candidate) {
+        return candidate.name == name;
+    });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    model->visible = visible;
+    for (const std::string& wireName : model->boundaryWireNames) {
+        for (NamedWire& wire : wires_) {
+            if (wire.name == wireName) {
+                wire.visible = visible;
+            }
+        }
+    }
+}
+
+std::vector<std::string> Project::ExtractPartModelBoundaries(std::string_view name)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& candidate) {
+        return candidate.name == name;
+    });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+
+    const std::string setName = "抽出:" + model->name;
+    if (FindObjectSetMutable(setName) == nullptr) {
+        objectSets_.push_back({setName, ObjectSetState::Visible, false, {}});
+    }
+
+    std::vector<std::string> created;
+    for (const std::string& wireName : model->boundaryWireNames) {
+        const auto source = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == wireName;
+        });
+        if (source == wires_.end()) {
+            continue;
+        }
+        std::string copyName;
+        for (int suffix = 1;; ++suffix) {
+            copyName = model->name + "_抽出" + std::to_string(created.size() + 1)
+                + (suffix == 1 ? std::string() : "_" + std::to_string(suffix));
+            const bool taken = std::any_of(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == copyName;
+            });
+            if (!taken) {
+                break;
+            }
+        }
+        NamedWire copy{copyName, source->wire, {}, std::nullopt, true, std::nullopt, std::nullopt};
+        wires_.push_back(std::move(copy));
+        AssignObjectToSet(ProjectObjectKind::Wire, copyName, setName);
+        created.push_back(copyName);
+    }
+    return created;
+}
+
+// ---- セット(グループ) ------------------------------------------------
+
+ObjectSet* Project::FindObjectSetMutable(std::string_view name)
+{
+    for (ObjectSet& set : objectSets_) {
+        if (set.name == name) {
+            return &set;
+        }
+    }
+    return nullptr;
+}
+
+void Project::CreateObjectSet(std::string name, ObjectSetState state)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Set name must not be empty.");
+    }
+    if (FindObjectSetMutable(name) != nullptr) {
+        throw std::invalid_argument("Set name already exists: " + name);
+    }
+    objectSets_.push_back({std::move(name), state, false, {}});
+}
+
+bool Project::RemoveObjectSet(std::string_view name)
+{
+    const auto set = std::find_if(objectSets_.begin(), objectSets_.end(), [&](const ObjectSet& candidate) {
+        return candidate.name == name;
+    });
+    if (set == objectSets_.end()) {
+        return false;
+    }
+    if (set->automatic) {
+        throw std::invalid_argument(
+            "Automatic sets are removed with their part model: " + std::string(name));
+    }
+    objectSets_.erase(set);
+    return true;
+}
+
+void Project::SetObjectSetState(std::string_view name, ObjectSetState state)
+{
+    ObjectSet* set = FindObjectSetMutable(name);
+    if (set == nullptr) {
+        throw std::invalid_argument("Set is missing: " + std::string(name));
+    }
+    set->state = state;
+}
+
+void Project::AssignObjectToSet(
+    ProjectObjectKind kind, std::string objectName, std::string_view setName)
+{
+    ObjectSet* set = FindObjectSetMutable(setName);
+    if (set == nullptr) {
+        throw std::invalid_argument("Set is missing: " + std::string(setName));
+    }
+    RemoveObjectFromSets(kind, objectName);
+    set->members.push_back({kind, std::move(objectName)});
+}
+
+void Project::RemoveObjectFromSets(ProjectObjectKind kind, std::string_view objectName)
+{
+    for (ObjectSet& set : objectSets_) {
+        set.members.erase(
+            std::remove_if(set.members.begin(), set.members.end(), [&](const ObjectSetMember& member) {
+                return member.kind == kind && member.name == objectName;
+            }),
+            set.members.end());
+    }
+}
+
+ObjectSetState Project::ObjectStateInSets(
+    ProjectObjectKind kind, std::string_view objectName) const
+{
+    for (const ObjectSet& set : objectSets_) {
+        for (const ObjectSetMember& member : set.members) {
+            if (member.kind == kind && member.name == objectName) {
+                return set.state;
+            }
+        }
+    }
+    return ObjectSetState::Visible;
 }
 
 } // namespace kachakacha::model

@@ -2444,18 +2444,45 @@ void AddGeneratedFoldAndReliefPaths(
 {
     const std::vector<double> uParameters = FoldParameters(plate, true, options);
     const std::vector<double> vParameters = FoldParameters(plate, false, options);
+    // 折り線の山谷: 折り線の両側の面が板厚中央面の法線+側(型紙の表)から見て
+    // 凸なら山折り(+1)、凹なら谷折り(-1)とする。
+    const auto foldDirectionAt = [&plate](bool constantU, double parameter) {
+        const double epsilon = 0.02;
+        const double mid = 0.5;
+        const auto evaluate = [&plate](double u, double v) {
+            return plate.Evaluate(
+                std::clamp(u, 0.0, 1.0), std::clamp(v, 0.0, 1.0), 0.5);
+        };
+        const double u = constantU ? parameter : mid;
+        const double v = constantU ? mid : parameter;
+        const Vector3 center = evaluate(u, v);
+        const Vector3 before = constantU ? evaluate(u - epsilon, v) : evaluate(u, v - epsilon);
+        const Vector3 after = constantU ? evaluate(u + epsilon, v) : evaluate(u, v + epsilon);
+        const Vector3 du = evaluate(u + epsilon, v) - evaluate(u - epsilon, v);
+        const Vector3 dv = evaluate(u, v + epsilon) - evaluate(u, v - epsilon);
+        const Vector3 normal = Cross(du, dv);
+        const double bend = Dot(before + after - center * 2.0, normal);
+        if (std::abs(bend) < 1.0e-12) {
+            return 0;
+        }
+        return bend < 0.0 ? 1 : -1;
+    };
     if (options.includeFoldLines) {
         for (std::size_t index = 0; index < uParameters.size(); ++index) {
-            pattern.foldLines.push_back({
+            PlateFlatPatternPath path{
                 "fold_u_" + std::to_string(index + 1),
                 grid.ConstantU(uParameters[index]),
-            });
+            };
+            path.foldDirection = foldDirectionAt(true, uParameters[index]);
+            pattern.foldLines.push_back(std::move(path));
         }
         for (std::size_t index = 0; index < vParameters.size(); ++index) {
-            pattern.foldLines.push_back({
+            PlateFlatPatternPath path{
                 "fold_v_" + std::to_string(index + 1),
                 grid.ConstantV(vParameters[index]),
-            });
+            };
+            path.foldDirection = foldDirectionAt(false, vParameters[index]);
+            pattern.foldLines.push_back(std::move(path));
         }
     }
 

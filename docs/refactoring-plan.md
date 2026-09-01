@@ -83,6 +83,10 @@
 - `NamedPlate::splitWireNames` — 板材の分割線として登録されたワイヤー名の並び。
 - `NamedBody::sourceSurfaceName` — 治具ボディの元になった面名。
 - `DimensionReference::objectName` — 参照寸法(`ReferenceDimension`)がワイヤーまたは作業平面を指す名前。
+- `NamedWire::partModelSourceName`(省略可) — 部材近似モデルの派生境界線が属するモデル名(ADR 0019)。
+- `NamedPartModel::sourcePlateName` — 部材近似モデルの元板材名。
+- `NamedPartModel::boundaryWireNames` — 部材近似モデルが管理する派生境界ワイヤ名の並び。
+- `ObjectSetMember::name` — セットのメンバー(種類+名前)。
 
 - なぜ: リネーム機能を安全に実装するには、名前を書き換える際に更新すべき参照箇所を漏れなく把握できる必要がある。フィールド追加のたびにここへ追記するルールをAGENTS.mdのガードレールとして併設した。
 - 検証方法: この一覧と `Project.h` の構造体定義を突き合わせ、差分がないことを確認する。リネーム機能実装時は、この一覧の全項目を更新対象としてテストする。

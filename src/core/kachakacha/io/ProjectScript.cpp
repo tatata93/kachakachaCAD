@@ -910,6 +910,76 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddSurfaceJig(
                     name, sourceSurface, range, side, clearance, thickness);
+            } else if (command == "part_model") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const std::string plateName = ReadName(stream, sourceName, lineNumber, "source plate");
+                const std::string axisToken = ReadName(stream, sourceName, lineNumber, "split axis");
+                if (axisToken != "u" && axisToken != "v") {
+                    throw std::invalid_argument("Part-model split axis must be u or v.");
+                }
+                const int automatic = static_cast<int>(ReadDouble(stream, sourceName, lineNumber, "automatic flag"));
+                model::PartApproximationOptions options;
+                options.splitAxis = axisToken == "u"
+                    ? model::PartSplitAxis::U
+                    : model::PartSplitAxis::V;
+                options.automaticBoundaries = automatic != 0;
+                options.maximumDeviationMillimeters =
+                    ReadDouble(stream, sourceName, lineNumber, "maximum deviation");
+                options.maximumPartCount = static_cast<int>(ReadDouble(stream, sourceName, lineNumber, "maximum part count"));
+                options.minimumPartWidthMillimeters =
+                    ReadDouble(stream, sourceName, lineNumber, "minimum part width");
+                const int manualCount = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "manual boundary count"));
+                for (int index = 0; index < manualCount; ++index) {
+                    options.manualBoundaryParameters.push_back(
+                        ReadDouble(stream, sourceName, lineNumber, "manual boundary parameter"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPartModel(name, plateName, options);
+            } else if (command == "object_set" || command == "object_set_state") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "set");
+                const std::string stateToken = ReadName(stream, sourceName, lineNumber, "set state");
+                model::ObjectSetState state = model::ObjectSetState::Visible;
+                if (stateToken == "reference") {
+                    state = model::ObjectSetState::ReferenceOnly;
+                } else if (stateToken == "hidden") {
+                    state = model::ObjectSetState::Hidden;
+                } else if (stateToken != "visible") {
+                    throw std::invalid_argument("Set state must be visible, reference, or hidden.");
+                }
+                if (command == "object_set_state") {
+                    EnsureLineEnded(stream, sourceName, lineNumber);
+                    project.SetObjectSetState(name, state);
+                } else {
+                    const int memberCount = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "set member count"));
+                    project.CreateObjectSet(name, state);
+                    for (int index = 0; index < memberCount; ++index) {
+                        const std::string kindToken =
+                            ReadName(stream, sourceName, lineNumber, "set member kind");
+                        const std::string memberName =
+                            ReadName(stream, sourceName, lineNumber, "set member");
+                        model::ProjectObjectKind kind = model::ProjectObjectKind::Wire;
+                        if (kindToken == "workplane") {
+                            kind = model::ProjectObjectKind::WorkPlane;
+                        } else if (kindToken == "point") {
+                            kind = model::ProjectObjectKind::Point;
+                        } else if (kindToken == "wire") {
+                            kind = model::ProjectObjectKind::Wire;
+                        } else if (kindToken == "surface") {
+                            kind = model::ProjectObjectKind::Surface;
+                        } else if (kindToken == "plate") {
+                            kind = model::ProjectObjectKind::Plate;
+                        } else if (kindToken == "body") {
+                            kind = model::ProjectObjectKind::Body;
+                        } else if (kindToken == "part_model") {
+                            kind = model::ProjectObjectKind::PartModel;
+                        } else {
+                            throw std::invalid_argument(
+                                "Set member kind is unknown: " + kindToken);
+                        }
+                        project.AssignObjectToSet(kind, memberName, name);
+                    }
+                    EnsureLineEnded(stream, sourceName, lineNumber);
+                }
             } else if (command == "visibility") {
                 const std::string objectKind = ReadName(stream, sourceName, lineNumber, "object kind");
                 const std::string name = ReadName(stream, sourceName, lineNumber, "object");
@@ -989,7 +1059,8 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     }
 
     for (const auto& namedWire : project.Wires()) {
-        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
+        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()
+            || namedWire.partModelSourceName.has_value()) {
             continue;
         }
         RequireScriptNameSafe(namedWire.name, "Wire");
@@ -1351,6 +1422,63 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                << range.minimumV << ' ' << range.maximumV << '\n';
     }
 
+    for (const auto& model : project.PartModels()) {
+        RequireScriptNameSafe(model.name, "Part model");
+        RequireScriptNameSafe(model.sourcePlateName, "Part-model source plate");
+        output << "part_model " << model.name << ' ' << model.sourcePlateName << ' '
+               << (model.options.splitAxis == model::PartSplitAxis::U ? "u" : "v") << ' '
+               << (model.options.automaticBoundaries ? 1 : 0) << ' '
+               << model.options.maximumDeviationMillimeters << ' '
+               << model.options.maximumPartCount << ' '
+               << model.options.minimumPartWidthMillimeters << ' '
+               << model.options.manualBoundaryParameters.size();
+        for (const double parameter : model.options.manualBoundaryParameters) {
+            output << ' ' << parameter;
+        }
+        output << '\n';
+    }
+    const auto setStateToken = [](model::ObjectSetState state) {
+        switch (state) {
+        case model::ObjectSetState::ReferenceOnly:
+            return "reference";
+        case model::ObjectSetState::Hidden:
+            return "hidden";
+        case model::ObjectSetState::Visible:
+        default:
+            return "visible";
+        }
+    };
+    const auto setMemberKindToken = [](model::ProjectObjectKind kind) {
+        switch (kind) {
+        case model::ProjectObjectKind::WorkPlane: return "workplane";
+        case model::ProjectObjectKind::Point: return "point";
+        case model::ProjectObjectKind::Wire: return "wire";
+        case model::ProjectObjectKind::Surface: return "surface";
+        case model::ProjectObjectKind::Plate: return "plate";
+        case model::ProjectObjectKind::Body: return "body";
+        case model::ProjectObjectKind::PartModel:
+        default: return "part_model";
+        }
+    };
+    for (const auto& set : project.ObjectSets()) {
+        RequireScriptNameSafe(set.name, "Set");
+        if (set.automatic) {
+            // 自動セットは part_model が再生成するため、状態だけ保存する。
+            if (set.state != model::ObjectSetState::Visible) {
+                output << "object_set_state " << set.name << ' '
+                       << setStateToken(set.state) << '\n';
+            }
+            continue;
+        }
+        output << "object_set " << set.name << ' ' << setStateToken(set.state)
+               << ' ' << set.members.size();
+        for (const auto& member : set.members) {
+            RequireScriptNameSafe(member.name, "Set member");
+            output << ' ' << setMemberKindToken(member.kind) << ' ' << member.name;
+        }
+        output << '\n';
+    }
+
     const bool hasHiddenObjects = std::any_of(project.WorkPlanes().begin(), project.WorkPlanes().end(), [](const auto& plane) {
         return !plane.visible;
     }) || std::any_of(project.Points().begin(), project.Points().end(), [](const auto& point) {
@@ -1380,7 +1508,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
     }
     for (const auto& wire : project.Wires()) {
-        if (!wire.visible) {
+        if (!wire.visible && !wire.partModelSourceName.has_value()) {
             output << "visibility wire " << wire.name << " hidden\n";
         }
     }

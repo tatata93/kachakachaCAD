@@ -21,3 +21,6 @@ local.cmake
 compile_commands.json
 /_*.cmd
 /_claude-log.txt
+
+# git bundle(PCへの受け渡し用・共有しない)
+*.bundle

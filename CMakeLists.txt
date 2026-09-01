@@ -21,6 +21,17 @@ option(KACHACAD_BUILD_TESTS "Build kachakachaCAD tests" ON)
 option(KACHACAD_BUILD_QT_APP "Build the Qt desktop application when Qt 6 is available" ON)
 option(KACHACAD_ENABLE_OCCT "Enable Open CASCADE B-Rep and 3D export support" ON)
 
+# テスト実行ファイル共通のコンパイル設定を1か所にまとめる。
+# /utf-8 が無いと、日本語コメントを含むヘッダで MSVC が C4819 を大量に出す。
+function(kachakacha_apply_test_options target)
+    target_compile_features(${target} PRIVATE cxx_std_20)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
 if(KACHACAD_BUILD_TESTS)
     enable_testing()
 endif()
@@ -53,7 +64,8 @@ target_include_directories(kachakacha_core
 target_compile_features(kachakacha_core PUBLIC cxx_std_20)
 
 if(MSVC)
-    target_compile_options(kachakacha_core PRIVATE /W4 /permissive-)
+    # /utf-8 が無いと、日本語コメントを含むヘッダで C4819 が大量に出る(既定コードページ932のため)。
+    target_compile_options(kachakacha_core PRIVATE /W4 /permissive- /utf-8)
 else()
     target_compile_options(kachakacha_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
@@ -239,10 +251,6 @@ if(KACHACAD_BUILD_QT_APP)
                 )
                 target_include_directories(kachakacha_plate_pdf_tests PRIVATE src/apps/cad)
                 target_link_libraries(kachakacha_plate_pdf_tests PRIVATE kachakacha_core Qt6::Gui)
-                target_compile_features(kachakacha_plate_pdf_tests PRIVATE cxx_std_20)
-                if(MSVC)
-                    target_compile_options(kachakacha_plate_pdf_tests PRIVATE /W4 /permissive- /utf-8)
-                endif()
                 add_test(
                     NAME plate_pdf_tests
                     COMMAND ${CMAKE_COMMAND} -E env
@@ -253,6 +261,7 @@ if(KACHACAD_BUILD_QT_APP)
                         "${CMAKE_CURRENT_BINARY_DIR}/plate-pdf-test.pdf"
                         "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
                 )
+    kachakacha_apply_test_options(kachakacha_plate_pdf_tests)
             endif()
         elseif(NOT Qt6_FOUND)
             message(WARNING "Qt 6.5 or newer was not found; kachakacha_cad will not be built.")
@@ -270,6 +279,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_numeric_expression_tests)
 
     add_test(NAME numeric_expression_tests COMMAND kachakacha_numeric_expression_tests)
 
@@ -281,6 +291,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_workplane_tests)
 
     add_test(NAME workplane_tests COMMAND kachakacha_workplane_tests)
 
@@ -292,6 +303,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_sketch_wire_tests)
 
     add_test(NAME sketch_wire_tests COMMAND kachakacha_sketch_wire_tests)
 
@@ -303,6 +315,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_project_script_tests)
 
     add_test(
         NAME project_script_tests
@@ -319,6 +332,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_wire_operations_tests)
 
     add_test(NAME wire_operations_tests COMMAND kachakacha_wire_operations_tests)
 
@@ -330,6 +344,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_measurement_tests)
 
     add_test(NAME measurement_tests COMMAND kachakacha_measurement_tests)
 
@@ -341,6 +356,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_planar_export_tests)
 
     add_test(NAME planar_export_tests COMMAND kachakacha_planar_export_tests)
 
@@ -352,6 +368,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_plate_flat_pattern_tests)
 
     add_test(
         NAME plate_flat_pattern_tests
@@ -369,6 +386,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_faceted_papercraft_tests)
 
     add_test(
         NAME faceted_papercraft_tests
@@ -385,6 +403,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_bent_sheet_papercraft_tests)
 
     add_test(
         NAME bent_sheet_papercraft_tests
@@ -401,6 +420,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_fabrication_panel_papercraft_tests)
 
     add_test(
         NAME fabrication_panel_papercraft_tests
@@ -418,6 +438,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_surface_tests)
 
     add_test(NAME surface_tests COMMAND kachakacha_surface_tests)
 
@@ -429,6 +450,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_plate_tests)
 
     add_test(NAME plate_tests COMMAND kachakacha_plate_tests)
 
@@ -440,6 +462,7 @@ if(KACHACAD_BUILD_TESTS)
         PRIVATE
             kachakacha_core
     )
+    kachakacha_apply_test_options(kachakacha_body_tests)
 
     add_test(
         NAME body_tests
@@ -455,6 +478,7 @@ if(KACHACAD_BUILD_TESTS)
             PRIVATE
                 kachakacha_occt
         )
+    kachakacha_apply_test_options(kachakacha_occt_body_export_tests)
         target_include_directories(kachakacha_occt_body_export_tests
             PRIVATE
                 ${KACHACAD_OCCT_INCLUDE_DIR}

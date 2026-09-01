@@ -1,6 +1,9 @@
 #include "MainWindow.h"
 #include "PlatePdfExport.h"
 
+#include "kachakacha/io/BentSheetPapercraft.h"
+#include "kachakacha/io/FacetedPapercraft.h"
+#include "kachakacha/io/FabricationPanelPapercraft.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"

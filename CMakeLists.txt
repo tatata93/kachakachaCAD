@@ -153,6 +153,10 @@ if(WIN32)
     )
 
     target_compile_features(kachakacha_viewer PRIVATE cxx_std_20)
+    if(MSVC)
+        # 日本語コメントを含むヘッダを読むため /utf-8 が必須(既定コードページ932対策)。
+        target_compile_options(kachakacha_viewer PRIVATE /utf-8 /MP)
+    endif()
 endif()
 
 # The Qt desktop application is cross-platform: build it whenever Qt 6 and

@@ -4,7 +4,9 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace kachakacha::model {
@@ -145,6 +147,153 @@ Vector3 EvaluateSmoothLoft(
         + (-p0 + p1 * 3.0 - p2 * 3.0 + p3) * t3) * 0.5;
 }
 
+//! 一様Catmull-Rom補間。EvaluateSmoothLoftと同じ端点処理(鏡映ゴースト点)で、
+//! 与えた点列 values[i] を t = i/(n-1) で厳密に通る。
+Vector3 CatmullRomPoints(const std::vector<Vector3>& values, double t)
+{
+    if (values.size() == 1) {
+        return values.front();
+    }
+    const double scaled = std::clamp(t, 0.0, 1.0) * static_cast<double>(values.size() - 1);
+    const std::size_t segment = static_cast<std::size_t>(std::min(
+        scaled,
+        static_cast<double>(values.size() - 2)));
+    const double local = scaled - static_cast<double>(segment);
+    const Vector3 p1 = values[segment];
+    const Vector3 p2 = values[segment + 1];
+    const Vector3 p0 = segment > 0 ? values[segment - 1] : p1 * 2.0 - p2;
+    const Vector3 p3 = segment + 2 < values.size() ? values[segment + 2] : p2 * 2.0 - p1;
+    const double local2 = local * local;
+    const double local3 = local2 * local;
+    return (p1 * 2.0
+        + (p2 - p0) * local
+        + (p0 * 2.0 - p1 * 5.0 + p2 * 4.0 - p3) * local2
+        + (-p0 + p1 * 3.0 - p2 * 3.0 + p3) * local3) * 0.5;
+}
+
+//! 非一様ノット上のカーディナル補間(有限差分接線の3次Hermite)。
+//! knots[k] で values[k] を厳密に通る。
+Vector3 NonUniformCardinal(
+    const std::vector<double>& knots,
+    const std::vector<Vector3>& values,
+    double u)
+{
+    const std::size_t count = knots.size();
+    if (count == 1) {
+        return values.front();
+    }
+    const double clamped = std::clamp(u, knots.front(), knots.back());
+    std::size_t segment = 0;
+    while (segment + 2 < count && clamped >= knots[segment + 1]) {
+        ++segment;
+    }
+    const double width = knots[segment + 1] - knots[segment];
+    const double s = (clamped - knots[segment]) / width;
+    const auto tangent = [&](std::size_t k) {
+        if (k == 0) {
+            return (values[1] - values[0]) / (knots[1] - knots[0]);
+        }
+        if (k + 1 == count) {
+            return (values[count - 1] - values[count - 2]) / (knots[count - 1] - knots[count - 2]);
+        }
+        return (values[k + 1] - values[k - 1]) / (knots[k + 1] - knots[k - 1]);
+    };
+    const Vector3 m0 = tangent(segment) * width;
+    const Vector3 m1 = tangent(segment + 1) * width;
+    const double s2 = s * s;
+    const double s3 = s2 * s;
+    return values[segment] * (2.0 * s3 - 3.0 * s2 + 1.0)
+        + m0 * (s3 - 2.0 * s2 + s)
+        + values[segment + 1] * (-2.0 * s3 + 3.0 * s2)
+        + m1 * (s3 - s2);
+}
+
+//! 単調な折れ線マップ。pairs は (入力, 出力) の列で入力昇順。範囲外はクランプ。
+double PiecewiseLinearMap(const std::vector<std::pair<double, double>>& pairs, double input)
+{
+    if (input <= pairs.front().first) {
+        return pairs.front().second;
+    }
+    if (input >= pairs.back().first) {
+        return pairs.back().second;
+    }
+    std::size_t segment = 0;
+    while (segment + 2 < pairs.size() && input >= pairs[segment + 1].first) {
+        ++segment;
+    }
+    const double span = pairs[segment + 1].first - pairs[segment].first;
+    const double local = (input - pairs[segment].first) / span;
+    return pairs[segment].second + (pairs[segment + 1].second - pairs[segment].second) * local;
+}
+
+struct CurveClosestPair {
+    double firstParam = 0.0;
+    double secondParam = 0.0;
+    double distance = 0.0;
+};
+
+//! 2本のワイヤーの最近接点対(粗探索+交互1次元黄金分割の反復)。
+CurveClosestPair ClosestPairBetweenWires(const Wire& first, const Wire& second)
+{
+    constexpr int kCoarse = 64;
+    CurveClosestPair best;
+    best.distance = std::numeric_limits<double>::infinity();
+    std::array<Vector3, kCoarse + 1> secondSamples;
+    for (int b = 0; b <= kCoarse; ++b) {
+        secondSamples[static_cast<std::size_t>(b)] = second.Evaluate(static_cast<double>(b) / kCoarse);
+    }
+    for (int a = 0; a <= kCoarse; ++a) {
+        const Vector3 firstPoint = first.Evaluate(static_cast<double>(a) / kCoarse);
+        for (int b = 0; b <= kCoarse; ++b) {
+            const double distance = (firstPoint - secondSamples[static_cast<std::size_t>(b)]).Length();
+            if (distance < best.distance) {
+                best = {static_cast<double>(a) / kCoarse, static_cast<double>(b) / kCoarse, distance};
+            }
+        }
+    }
+
+    const auto goldenMinimize = [](const auto& evaluateDistance, double center, double halfWidth) {
+        double low = std::clamp(center - halfWidth, 0.0, 1.0);
+        double high = std::clamp(center + halfWidth, 0.0, 1.0);
+        constexpr double kRatio = 0.6180339887498949;
+        double x1 = high - (high - low) * kRatio;
+        double x2 = low + (high - low) * kRatio;
+        double f1 = evaluateDistance(x1);
+        double f2 = evaluateDistance(x2);
+        for (int iteration = 0; iteration < 48; ++iteration) {
+            if (f1 <= f2) {
+                high = x2;
+                x2 = x1;
+                f2 = f1;
+                x1 = high - (high - low) * kRatio;
+                f1 = evaluateDistance(x1);
+            } else {
+                low = x1;
+                x1 = x2;
+                f1 = f2;
+                x2 = low + (high - low) * kRatio;
+                f2 = evaluateDistance(x2);
+            }
+        }
+        return (low + high) * 0.5;
+    };
+
+    double halfWidth = 1.5 / kCoarse;
+    for (int iteration = 0; iteration < 12; ++iteration) {
+        const Vector3 secondPoint = second.Evaluate(best.secondParam);
+        best.firstParam = goldenMinimize(
+            [&](double a) { return (first.Evaluate(a) - secondPoint).Length(); },
+            best.firstParam, halfWidth);
+        const Vector3 firstPoint = first.Evaluate(best.firstParam);
+        best.secondParam = goldenMinimize(
+            [&](double b) { return (second.Evaluate(b) - firstPoint).Length(); },
+            best.secondParam, halfWidth);
+        halfWidth = std::max(halfWidth * 0.5, 1.0e-6);
+    }
+    best.distance = (first.Evaluate(best.firstParam) - second.Evaluate(best.secondParam)).Length();
+    return best;
+}
+
 } // namespace
 
 Surface::Surface(
@@ -222,6 +371,120 @@ Surface Surface::Loft(std::vector<Wire> sections)
     return {SurfaceKind::Loft, PrepareSections(std::move(sections), 3), std::nullopt, 0.0, 0.0, 1.0, 1.0};
 }
 
+Surface Surface::Gordon(std::vector<Wire> sections, std::vector<Wire> guides, double intersectionTolerance)
+{
+    if (sections.size() < 2) {
+        throw std::invalid_argument("Gordon surface requires at least two section wires.");
+    }
+    if (guides.empty()) {
+        throw std::invalid_argument("Gordon surface requires at least one guide wire.");
+    }
+    if (!std::isfinite(intersectionTolerance) || intersectionTolerance <= 0.0) {
+        throw std::invalid_argument("Gordon surface intersection tolerance must be positive.");
+    }
+    for (const Wire& section : sections) {
+        if (section.IsClosed()) {
+            throw std::invalid_argument("Gordon surface currently supports open section wires only.");
+        }
+    }
+    for (const Wire& guide : guides) {
+        if (guide.IsClosed()) {
+            throw std::invalid_argument("Gordon surface guide wires must be open.");
+        }
+    }
+
+    // 断面の向きを揃え、隣接断面の分離を検査(PrepareSectionsと同等、2断面から許可)。
+    for (std::size_t index = 1; index < sections.size(); ++index) {
+        const double sameDirection = (sections[index - 1].Start() - sections[index].Start()).LengthSquared()
+            + (sections[index - 1].End() - sections[index].End()).LengthSquared();
+        const double reversedDirection = (sections[index - 1].Start() - sections[index].End()).LengthSquared()
+            + (sections[index - 1].End() - sections[index].Start()).LengthSquared();
+        if (reversedDirection + 1.0e-12 < sameDirection) {
+            sections[index] = sections[index].Reversed();
+        }
+        double separation = 0.0;
+        for (int sample = 0; sample <= 32; ++sample) {
+            const double u = static_cast<double>(sample) / 32.0;
+            separation = std::max(separation, (sections[index - 1].Evaluate(u) - sections[index].Evaluate(u)).Length());
+        }
+        if (separation <= 1.0e-8) {
+            throw std::invalid_argument("Adjacent surface sections must be separated.");
+        }
+    }
+
+    const std::size_t sectionCount = sections.size();
+    std::vector<GordonGuideData> guideData;
+    guideData.reserve(guides.size());
+    double maximumGap = 0.0;
+    for (std::size_t guideIndex = 0; guideIndex < guides.size(); ++guideIndex) {
+        Wire guide = guides[guideIndex];
+        std::vector<double> sectionU(sectionCount, 0.0);
+        std::vector<double> guideT(sectionCount, 0.0);
+        for (std::size_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) {
+            const CurveClosestPair pair = ClosestPairBetweenWires(sections[sectionIndex], guide);
+            if (pair.distance > intersectionTolerance) {
+                std::ostringstream message;
+                message << "Guide wire " << (guideIndex + 1) << " does not touch section "
+                        << (sectionIndex + 1) << " (gap " << pair.distance
+                        << " mm exceeds tolerance " << intersectionTolerance << " mm).";
+                throw std::invalid_argument(message.str());
+            }
+            sectionU[sectionIndex] = pair.firstParam;
+            guideT[sectionIndex] = pair.secondParam;
+            maximumGap = std::max(maximumGap, pair.distance);
+        }
+        // ガイドの向きを断面順に揃える。
+        if (sectionCount >= 2 && guideT.back() < guideT.front()) {
+            guide = guide.Reversed();
+            for (double& t : guideT) {
+                t = 1.0 - t;
+            }
+        }
+        for (std::size_t sectionIndex = 1; sectionIndex < sectionCount; ++sectionIndex) {
+            if (guideT[sectionIndex] <= guideT[sectionIndex - 1] + 1.0e-9) {
+                std::ostringstream message;
+                message << "Guide wire " << (guideIndex + 1)
+                        << " must cross the sections one by one in order (crossing parameters are not increasing).";
+                throw std::invalid_argument(message.str());
+            }
+        }
+        double knotSum = 0.0;
+        for (const double u : sectionU) {
+            knotSum += u;
+        }
+        guideData.push_back(GordonGuideData{
+            std::move(guide),
+            knotSum / static_cast<double>(sectionCount),
+            std::move(sectionU),
+            std::move(guideT),
+        });
+    }
+
+    // ガイドを共通uで昇順に並べ、同一位置・順序矛盾を検査。
+    std::sort(guideData.begin(), guideData.end(), [](const GordonGuideData& a, const GordonGuideData& b) {
+        return a.knotU < b.knotU;
+    });
+    for (std::size_t guideIndex = 1; guideIndex < guideData.size(); ++guideIndex) {
+        if (guideData[guideIndex].knotU <= guideData[guideIndex - 1].knotU + 1.0e-6) {
+            throw std::invalid_argument("Two guide wires cross the sections at the same position.");
+        }
+    }
+    for (std::size_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) {
+        for (std::size_t guideIndex = 1; guideIndex < guideData.size(); ++guideIndex) {
+            if (guideData[guideIndex].sectionU[sectionIndex]
+                <= guideData[guideIndex - 1].sectionU[sectionIndex] + 1.0e-9) {
+                throw std::invalid_argument("Guide wires must cross every section in the same order.");
+            }
+        }
+    }
+
+    Surface surface{SurfaceKind::Gordon, std::move(sections), std::nullopt, 0.0, 0.0, 1.0, 1.0};
+    surface.guides_ = std::move(guides);
+    surface.gordonGuides_ = std::move(guideData);
+    surface.maximumGuideGap_ = maximumGap;
+    return surface;
+}
+
 Vector3 Surface::Evaluate(double u, double v) const
 {
     if (!std::isfinite(u) || !std::isfinite(v)) {
@@ -237,6 +500,9 @@ Vector3 Surface::Evaluate(double u, double v) const
     if (kind_ == SurfaceKind::Loft) {
         return EvaluateSmoothLoft(boundaries_, clampedU, clampedV);
     }
+    if (kind_ == SurfaceKind::Gordon) {
+        return EvaluateGordon(clampedU, clampedV);
+    }
     const double scaledV = clampedV * static_cast<double>(boundaries_.size() - 1);
     const std::size_t segment = static_cast<std::size_t>(std::min(
         scaledV,
@@ -245,6 +511,62 @@ Vector3 Surface::Evaluate(double u, double v) const
     const Vector3 first = boundaries_[segment].Evaluate(clampedU);
     const Vector3 second = boundaries_[segment + 1].Evaluate(clampedU);
     return first * (1.0 - localV) + second * localV;
+}
+
+Vector3 Surface::EvaluateGordon(double u, double v) const
+{
+    const std::size_t sectionCount = boundaries_.size();
+    const std::size_t guideCount = gordonGuides_.size();
+
+    // 各断面を「ガイドの共通u → その断面での交点パラメータ」で再パラメータ化して評価する。
+    // これにより u = knotU の線上で全断面の交点が縦に揃う。
+    std::vector<Vector3> sectionPoints(sectionCount);
+    std::vector<std::pair<double, double>> parameterMap;
+    for (std::size_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) {
+        parameterMap.clear();
+        parameterMap.reserve(guideCount + 2);
+        parameterMap.emplace_back(0.0, 0.0);
+        for (const GordonGuideData& data : gordonGuides_) {
+            if (parameterMap.back().first + 1.0e-9 < data.knotU) {
+                parameterMap.emplace_back(data.knotU, data.sectionU[sectionIndex]);
+            }
+        }
+        if (parameterMap.back().first + 1.0e-9 < 1.0) {
+            parameterMap.emplace_back(1.0, 1.0);
+        }
+        sectionPoints[sectionIndex] = boundaries_[sectionIndex].Evaluate(PiecewiseLinearMap(parameterMap, u));
+    }
+    const Vector3 loftPoint = CatmullRomPoints(sectionPoints, v);
+
+    // 各ガイドの補正量 D_j(v) = ガイド上の点 − 断面交点列のCatmull-Rom補間。
+    // 断面上(v = i/(n-1))では厳密に0になるため、断面は常に厳密に通る。
+    std::vector<double> knots;
+    std::vector<Vector3> corrections;
+    knots.reserve(guideCount + 2);
+    corrections.reserve(guideCount + 2);
+    if (gordonGuides_.front().knotU > 1.0e-9) {
+        knots.push_back(0.0);
+        corrections.push_back({0.0, 0.0, 0.0});
+    }
+    std::vector<Vector3> crossings(sectionCount);
+    std::vector<std::pair<double, double>> guideMap(sectionCount);
+    for (const GordonGuideData& data : gordonGuides_) {
+        for (std::size_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) {
+            guideMap[sectionIndex] = {
+                sectionCount == 1 ? 0.0 : static_cast<double>(sectionIndex) / static_cast<double>(sectionCount - 1),
+                data.guideT[sectionIndex],
+            };
+            crossings[sectionIndex] = data.guide.Evaluate(data.guideT[sectionIndex]);
+        }
+        const Vector3 guidePoint = data.guide.Evaluate(PiecewiseLinearMap(guideMap, v));
+        knots.push_back(data.knotU);
+        corrections.push_back(guidePoint - CatmullRomPoints(crossings, v));
+    }
+    if (gordonGuides_.back().knotU < 1.0 - 1.0e-9) {
+        knots.push_back(1.0);
+        corrections.push_back({0.0, 0.0, 0.0});
+    }
+    return loftPoint + NonUniformCardinal(knots, corrections, u);
 }
 
 Vector3 Surface::Normal(double u, double v) const

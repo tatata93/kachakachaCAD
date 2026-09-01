@@ -181,7 +181,12 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/CadViewport.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
+                src/apps/cad/MainWindowPartModel.cpp
                 src/apps/cad/MainWindowSelfTest.cpp
+                src/apps/cad/PartModelPanel.cpp
+                src/apps/cad/PartModelPanel.h
+                src/apps/cad/PartPatternViewDialog.cpp
+                src/apps/cad/PartPatternViewDialog.h
                 src/apps/cad/PlatePdfExport.cpp
                 src/apps/cad/PlatePdfExport.h
                 src/apps/cad/main.cpp

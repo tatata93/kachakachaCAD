@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+class PartModelPanel;
 class QCloseEvent;
 class QAction;
 class QCheckBox;
@@ -62,6 +63,14 @@ private:
     QWidget* BuildOutputPanel();
     QWidget* BuildDisplayPanel();
     QWidget* BuildInfoPanel();
+    QWidget* BuildPartModelPanelTab();
+    void CreatePartModelFromPanel();
+    void RecalculateSelectedPartModel();
+    void RemoveSelectedPartModel();
+    void ExtractSelectedPartModelBoundaries();
+    void ShowSelectedPartPatterns();
+    void SetApproximationSetsVisible(bool visible);
+    void ChangeSelectedSetState(int state);
     void BuildMenusAndToolbar();
     void ApplyDisplaySettings();
     void LoadDisplaySettings();
@@ -341,6 +350,7 @@ private:
     CadViewport* viewport_ = nullptr;
     QLineEdit* modelFilter_ = nullptr;
     QTreeWidget* modelTree_ = nullptr;
+    PartModelPanel* partModelPanel_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
     std::array<QPushButton*, 4> workflowButtons_{};
     QLabel* beginnerGuideTitle_ = nullptr;

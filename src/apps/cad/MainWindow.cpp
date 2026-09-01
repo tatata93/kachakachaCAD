@@ -1,9 +1,11 @@
 #include "MainWindow.h"
+#include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
 #include "kachakacha/io/BentSheetPapercraft.h"
 #include "kachakacha/io/FacetedPapercraft.h"
 #include "kachakacha/io/FabricationPanelPapercraft.h"
+#include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
@@ -93,6 +95,7 @@ using kachakacha::io::BuildFacetedPapercraftGuide;
 using kachakacha::io::BuildFacetedPapercraftMotion;
 using kachakacha::io::BuildFacetedPapercraftPattern;
 using kachakacha::io::BuildFacetedPapercraftPreview;
+using kachakacha::io::BuildAllPartPatterns;
 using kachakacha::io::BuildFabricationPanelPapercraftGuide;
 using kachakacha::io::BuildFabricationPanelPapercraftMotion;
 using kachakacha::io::BuildFabricationPanelPapercraftPattern;
@@ -842,6 +845,7 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
+    toolsTabs_->addTab(BuildPartModelPanelTab(), QStringLiteral("部材"));
     LoadDisplaySettings();
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
         const ViewportTool tool = viewport_->Tool();
@@ -9259,6 +9263,9 @@ void MainWindow::RefreshModelViews(bool fitView)
     RefreshPlaneChoices();
     RefreshWireChoices();
     RefreshSurfaceChoices();
+    if (partModelPanel_ != nullptr) {
+        partModelPanel_->RefreshFromProject(project_);
+    }
     viewport_->SetProject(&project_, fitView);
     RefreshReferenceDimensions();
     RefreshActiveWorkPlane();

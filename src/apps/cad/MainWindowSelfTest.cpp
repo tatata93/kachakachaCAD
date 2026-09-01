@@ -1,9 +1,11 @@
 #include "MainWindow.h"
+#include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
 #include "kachakacha/io/BentSheetPapercraft.h"
 #include "kachakacha/io/FacetedPapercraft.h"
 #include "kachakacha/io/FabricationPanelPapercraft.h"
+#include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
@@ -82,6 +84,7 @@ using kachakacha::io::BuildBentSheetPapercraftGuide;
 using kachakacha::io::BuildBentSheetPapercraftMotion;
 using kachakacha::io::BuildBentSheetPapercraftPattern;
 using kachakacha::io::BuildBentSheetPapercraftPreview;
+using kachakacha::io::BuildAllPartPatterns;
 using kachakacha::io::BuildFabricationPanelPapercraftGuide;
 using kachakacha::io::BuildFabricationPanelPapercraftMotion;
 using kachakacha::io::BuildFabricationPanelPapercraftPattern;
@@ -2769,6 +2772,54 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.Surfaces().size() != gordonSurfaceStart + 1
         || project_.Surfaces().back().surface.Kind() != SurfaceKind::Gordon) {
         return fail("redo gordon surface");
+    }
+
+    // --- 部材近似モデル(部材タブ、docs/surface-unfolding-spec.md) ---
+    {
+        if (project_.Plates().empty()) {
+            return fail("part model self-test needs a plate");
+        }
+        const std::string partModelPlate = project_.Plates().back().name;
+        const std::size_t partModelStart = project_.PartModels().size();
+        kachakacha::model::PartApproximationOptions partOptions;
+        partOptions.maximumDeviationMillimeters = 0.5;
+        partOptions.minimumPartWidthMillimeters = 2.0;
+        project_.AddPartModel("__ui_部材近似", partModelPlate, partOptions);
+        RefreshModelViews(false);
+        if (project_.PartModels().size() != partModelStart + 1) {
+            return fail("create part-approximation model");
+        }
+        const auto& partModel = project_.PartModels().back();
+        if (partModel.result.parts.empty()) {
+            return fail("part-approximation model has parts");
+        }
+        if (partModel.boundaryWireNames.size() != partModel.result.parts.size() - 1) {
+            return fail("part-model boundary wires match part count");
+        }
+        const auto partPatterns = BuildAllPartPatterns(project_, partModel);
+        if (partPatterns.size() != partModel.result.parts.size()) {
+            return fail("build one pattern per approximated part");
+        }
+        if (!partModel.boundaryWireNames.empty()) {
+            SetApproximationSetsVisible(false);
+            if (project_.ObjectStateInSets(
+                    kachakacha::model::ProjectObjectKind::Wire,
+                    project_.PartModels().back().boundaryWireNames.front())
+                != kachakacha::model::ObjectSetState::Hidden) {
+                return fail("hide approximation sets");
+            }
+            SetApproximationSetsVisible(true);
+            if (project_.ObjectStateInSets(
+                    kachakacha::model::ProjectObjectKind::Wire,
+                    project_.PartModels().back().boundaryWireNames.front())
+                != kachakacha::model::ObjectSetState::Visible) {
+                return fail("show approximation sets");
+            }
+        }
+        if (!project_.RemovePartModel("__ui_部材近似")) {
+            return fail("remove part-approximation model");
+        }
+        RefreshModelViews(false);
     }
 
     SetViewportTool(ViewportTool::Select);

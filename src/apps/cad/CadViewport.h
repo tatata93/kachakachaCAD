@@ -333,6 +333,7 @@ private:
     [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
+    [[nodiscard]] bool HiddenBySet(CadSelectionKind kind, int index) const;
     [[nodiscard]] bool ShouldDisplay(
         CadSelectionKind kind,
         int index,

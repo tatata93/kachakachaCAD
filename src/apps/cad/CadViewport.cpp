@@ -1572,6 +1572,52 @@ bool CadViewport::IsSelected(CadSelectionKind kind, int index) const
     });
 }
 
+bool CadViewport::HiddenBySet(CadSelectionKind kind, int index) const
+{
+    if (project_ == nullptr || project_->ObjectSets().empty() || index < 0) {
+        return false;
+    }
+    using kachakacha::model::ObjectSetState;
+    using kachakacha::model::ProjectObjectKind;
+    const std::string* name = nullptr;
+    ProjectObjectKind objectKind = ProjectObjectKind::Wire;
+    switch (kind) {
+    case CadSelectionKind::WorkPlane:
+        if (index >= static_cast<int>(project_->WorkPlanes().size())) return false;
+        name = &project_->WorkPlanes()[index].name;
+        objectKind = ProjectObjectKind::WorkPlane;
+        break;
+    case CadSelectionKind::Point:
+        if (index >= static_cast<int>(project_->Points().size())) return false;
+        name = &project_->Points()[index].name;
+        objectKind = ProjectObjectKind::Point;
+        break;
+    case CadSelectionKind::Wire:
+        if (index >= static_cast<int>(project_->Wires().size())) return false;
+        name = &project_->Wires()[index].name;
+        objectKind = ProjectObjectKind::Wire;
+        break;
+    case CadSelectionKind::Surface:
+        if (index >= static_cast<int>(project_->Surfaces().size())) return false;
+        name = &project_->Surfaces()[index].name;
+        objectKind = ProjectObjectKind::Surface;
+        break;
+    case CadSelectionKind::Plate:
+        if (index >= static_cast<int>(project_->Plates().size())) return false;
+        name = &project_->Plates()[index].name;
+        objectKind = ProjectObjectKind::Plate;
+        break;
+    case CadSelectionKind::Body:
+        if (index >= static_cast<int>(project_->Bodies().size())) return false;
+        name = &project_->Bodies()[index].name;
+        objectKind = ProjectObjectKind::Body;
+        break;
+    default:
+        return false;
+    }
+    return project_->ObjectStateInSets(objectKind, *name) == ObjectSetState::Hidden;
+}
+
 bool CadViewport::ShouldDisplay(
     CadSelectionKind kind,
     int index,
@@ -1585,6 +1631,9 @@ bool CadViewport::ShouldDisplay(
             });
     }
     if (!projectVisible) {
+        return false;
+    }
+    if (HiddenBySet(kind, index)) {
         return false;
     }
     if (displayMode_ == ViewportDisplayMode::Design) {
@@ -3158,6 +3207,7 @@ void CadViewport::paintEvent(QPaintEvent*)
             const QColor wireColor = reference ? QColor("#007f78")
                 : selected ? QColor("#e69200")
                 : hovered ? QColor("#087f9c")
+                : namedWire.partModelSourceName.has_value() ? QColor("#c2402a")
                 : namedWire.metadata.construction ? constructionWireColor_
                 : wireColor_;
             const Qt::PenStyle wireStyle = reference ? Qt::DashDotLine

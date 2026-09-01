@@ -264,6 +264,23 @@ if(KACHACAD_BUILD_QT_APP)
                     COMMAND_EXPAND_LISTS
                     COMMENT "Copying Qt and Open CASCADE runtimes next to kachakacha_cad"
                 )
+                # $<TARGET_RUNTIME_DLLS> は Qt と OCCT 本体しか含まない。
+                # OCCT が使うサードパーティDLL(freetype.dll など)が無いと、
+                # exe の直接起動が「freetype.dll が見つからない」で失敗する。
+                if(KACHACAD_VCPKG_ROOT AND DEFINED VCPKG_TARGET_TRIPLET)
+                    file(GLOB KACHACAD_VCPKG_THIRDPARTY_DLLS
+                        "${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/bin/*.dll")
+                    list(FILTER KACHACAD_VCPKG_THIRDPARTY_DLLS
+                        EXCLUDE REGEX "/TK[^/]*\\.dll$")
+                    if(KACHACAD_VCPKG_THIRDPARTY_DLLS)
+                        add_custom_command(TARGET kachakacha_cad POST_BUILD
+                            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                                ${KACHACAD_VCPKG_THIRDPARTY_DLLS}
+                                $<TARGET_FILE_DIR:kachakacha_cad>
+                            COMMENT "Copying vcpkg third-party runtimes (freetype etc.)"
+                        )
+                    endif()
+                endif()
             endif()
             message(STATUS "Qt desktop application enabled: ${Qt6_VERSION}")
 

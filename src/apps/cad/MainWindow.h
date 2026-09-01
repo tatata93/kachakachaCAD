@@ -71,6 +71,7 @@ private:
     void ShowSelectedPartPatterns();
     void SetApproximationSetsVisible(bool visible);
     void ChangeSelectedSetState(int state);
+    void CreatePlateFromSelectedPart();
     void BuildMenusAndToolbar();
     void ApplyDisplaySettings();
     void LoadDisplaySettings();

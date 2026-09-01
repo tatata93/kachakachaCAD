@@ -38,6 +38,7 @@ public:
     std::function<void()> onShowPatterns;
     std::function<void(bool)> onOverlayVisibility;
     std::function<void(int)> onSetStateChange; //!< kachakacha::model::ObjectSetState の値
+    std::function<void()> onMakePlate;
 
 private:
     QComboBox* plateCombo_ = nullptr;

@@ -144,6 +144,15 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     actionRow->addWidget(extractButton, 1);
     layout->addLayout(actionRow);
 
+    auto* makePlateButton = new QPushButton(QStringLiteral("選択部材を板材化"));
+    makePlateButton->setToolTip(QStringLiteral(
+        "選択した部材の面から板材を作ります（板厚・材質は元の板材と同じ）。\n"
+        "板材にすると開口の追加や1:1出力など既存の板材機能が使えます"));
+    connect(makePlateButton, &QPushButton::clicked, this, [this] {
+        if (onMakePlate) onMakePlate();
+    });
+    layout->addWidget(makePlateButton);
+
     auto* patternButton = new QPushButton(QStringLiteral("型紙を表示"));
     patternButton->setObjectName("primaryButton");
     patternButton->setToolTip(

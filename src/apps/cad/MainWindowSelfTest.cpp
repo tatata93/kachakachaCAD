@@ -2794,8 +2794,11 @@ bool MainWindow::RunCreationSelfTest()
         if (partModel.result.parts.empty()) {
             return fail("part-approximation model has parts");
         }
-        if (partModel.boundaryWireNames.size() != partModel.result.parts.size() - 1) {
-            return fail("part-model boundary wires match part count");
+        if (partModel.boundaryWireNames.size() != partModel.result.parts.size() + 1) {
+            return fail("part-model rail wires match part count");
+        }
+        if (partModel.partSurfaceNames.size() != partModel.result.parts.size()) {
+            return fail("part-model surfaces match part count");
         }
         const auto partPatterns = BuildAllPartPatterns(project_, partModel);
         if (partPatterns.size() != partModel.result.parts.size()) {

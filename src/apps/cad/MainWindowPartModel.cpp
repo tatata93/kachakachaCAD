@@ -46,6 +46,7 @@ QWidget* MainWindow::BuildPartModelPanelTab()
         SetApproximationSetsVisible(visible);
     };
     partModelPanel_->onSetStateChange = [this](int state) { ChangeSelectedSetState(state); };
+    partModelPanel_->onMakePlate = [this] { CreatePlateFromSelectedPart(); };
     return partModelPanel_;
 }
 
@@ -182,19 +183,19 @@ void MainWindow::ShowSelectedPartPatterns()
             throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
         }
 
-        std::vector<kachakacha::io::PlateFlatPattern> patterns;
+        std::vector<kachakacha::io::PartPatternResult> results;
         QStringList captions;
         const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
         if (selectedParts.size() >= 2) {
             // 選択した隣接部材を1枚に結合した型紙。
-            patterns.push_back(
-                kachakacha::io::BuildPartPattern(project_, *model, selectedParts));
+            results.push_back(
+                kachakacha::io::BuildPartPatternWithPreview(project_, *model, selectedParts));
             captions.push_back(
-                QStringLiteral("部材%1-%2 を1枚に結合")
+                QStringLiteral("部材%1-%2 を1枚に結合（境界は折り線）")
                     .arg(selectedParts.front())
                     .arg(selectedParts.back()));
         } else {
-            patterns = kachakacha::io::BuildAllPartPatterns(project_, *model);
+            results = kachakacha::io::BuildAllPartPatternsWithPreview(project_, *model);
             for (const auto& part : model->result.parts) {
                 captions.push_back(
                     QStringLiteral("幅 %1 mm ・ 偏差 %2 mm")
@@ -205,7 +206,7 @@ void MainWindow::ShowSelectedPartPatterns()
 
         auto* dialog = new PartPatternViewDialog(
             QStringLiteral("型紙ビュー - %1").arg(ToQString(name)),
-            std::move(patterns),
+            std::move(results),
             std::move(captions),
             this);
         dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -260,6 +261,76 @@ void MainWindow::ChangeSelectedSetState(int state)
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreatePlateFromSelectedPart()
+{
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        if (name.empty()) {
+            throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
+        }
+        const auto model = std::find_if(
+            project_.PartModels().begin(), project_.PartModels().end(),
+            [&name](const kachakacha::model::NamedPartModel& candidate) {
+                return candidate.name == name;
+            });
+        if (model == project_.PartModels().end()) {
+            throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
+        }
+        std::vector<int> numbers = partModelPanel_->SelectedPartNumbers();
+        if (numbers.empty()) {
+            throw std::invalid_argument(
+                "板材にする部材を一覧で選択してください（複数選択可）。");
+        }
+        const auto sourcePlate = std::find_if(
+            project_.Plates().begin(), project_.Plates().end(),
+            [&model](const kachakacha::model::NamedPlate& candidate) {
+                return candidate.name == model->sourcePlateName;
+            });
+        if (sourcePlate == project_.Plates().end()) {
+            throw std::invalid_argument("元の板材が見つかりません。");
+        }
+
+        Project candidate = project_;
+        std::vector<std::string> created;
+        for (const int number : numbers) {
+            if (number < 1 || number > static_cast<int>(model->partSurfaceNames.size())) {
+                continue;
+            }
+            const std::string surfaceName = model->partSurfaceNames[number - 1];
+            std::string plateName;
+            for (int suffix = 0;; ++suffix) {
+                plateName = surfaceName + "板"
+                    + (suffix == 0 ? std::string() : std::to_string(suffix + 1));
+                if (!candidate.FindPlate(plateName).has_value()) {
+                    break;
+                }
+            }
+            candidate.AddPlate(
+                plateName,
+                surfaceName,
+                sourcePlate->plate.Thickness(),
+                sourcePlate->plate.Direction(),
+                sourcePlate->material);
+            created.push_back(plateName);
+        }
+        if (created.empty()) {
+            throw std::invalid_argument("板材にできる部材がありません。");
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("部材から板材を %1 枚作成しました（%2）")
+                .arg(created.size())
+                .arg(ToQString(created.front())),
+            5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

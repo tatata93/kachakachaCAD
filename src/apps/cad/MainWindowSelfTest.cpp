@@ -1052,8 +1052,9 @@ bool MainWindow::RunCreationSelfTest()
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
     const std::size_t initialDimensionCount = project_.ReferenceDimensions().size();
-    if (toolsTabs_->count() != 9
+    if (toolsTabs_->count() != 10
         || toolsTabs_->tabText(0) != QStringLiteral("作図")
+        || toolsTabs_->tabText(9) != QStringLiteral("部材")
         || toolsTabs_->tabText(5) != QStringLiteral("面")
         || toolsTabs_->tabText(6) != QStringLiteral("出力")
         || toolsTabs_->tabText(7) != QStringLiteral("表示")

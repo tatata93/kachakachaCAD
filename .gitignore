@@ -19,8 +19,9 @@ CMakeUserPresets.json
 # PC固有の設定(複数PC開発用・共有しない)
 local.cmake
 compile_commands.json
+# クラウド↔PC の受け渡しに使う一時ファイル(リポジトリ直下)
 /_*.cmd
-/_claude-log.txt
+/_claude-*.txt
 
 # git bundle(PCへの受け渡し用・共有しない)
 *.bundle

@@ -13,6 +13,7 @@ enum class SurfaceKind {
     Ruled,
     Loft,
     Gordon,
+    GuidedLoft,
 };
 
 struct SurfaceProjection {
@@ -20,6 +21,13 @@ struct SurfaceProjection {
     double u = 0.0;
     double v = 0.0;
     double distanceAlongDirection = 0.0;
+};
+
+struct SurfaceCurvature {
+    double gaussian = 0.0;
+    double mean = 0.0;
+    double principalMinimum = 0.0;
+    double principalMaximum = 0.0;
 };
 
 class Surface {
@@ -34,6 +42,11 @@ public:
         std::vector<Wire> sections,
         std::vector<Wire> guides,
         double intersectionTolerance = 0.01);
+    [[nodiscard]] static Surface GuidedLoft(
+        Wire firstGuide,
+        Wire secondGuide,
+        std::vector<Wire> sections,
+        double connectionToleranceMillimeters = 0.05);
 
     [[nodiscard]] SurfaceKind Kind() const noexcept { return kind_; }
     [[nodiscard]] const Wire& FirstBoundary() const noexcept { return boundaries_.front(); }
@@ -44,8 +57,13 @@ public:
     [[nodiscard]] const std::optional<WorkPlane>& PlanarWorkPlane() const noexcept { return planarWorkPlane_; }
     [[nodiscard]] geometry::Vector3 Evaluate(double u, double v) const;
     [[nodiscard]] geometry::Vector3 Normal(double u, double v) const;
+    [[nodiscard]] SurfaceCurvature Curvature(double u, double v) const;
     [[nodiscard]] SurfaceProjection ProjectPointAlongDirection(
         geometry::Vector3 sourcePoint,
+        geometry::Vector3 direction,
+        double tolerance = 1.0e-7) const;
+    [[nodiscard]] std::vector<SurfaceProjection> ProjectPointsAlongDirection(
+        const std::vector<geometry::Vector3>& sourcePoints,
         geometry::Vector3 direction,
         double tolerance = 1.0e-7) const;
     [[nodiscard]] Wire ProjectWireAlongDirection(
@@ -62,12 +80,20 @@ private:
         double minimumU,
         double minimumV,
         double maximumU,
-        double maximumV);
+        double maximumV,
+        std::vector<Wire> guides = {},
+        std::vector<double> sectionParameters = {},
+        std::vector<double> firstGuideParameters = {},
+        std::vector<double> secondGuideParameters = {});
 
     [[nodiscard]] bool ContainsPlanarPoint(double u, double v, double tolerance) const;
 
     SurfaceKind kind_;
     std::vector<Wire> boundaries_;
+    std::vector<Wire> guides_;
+    std::vector<double> sectionParameters_;
+    std::vector<double> firstGuideParameters_;
+    std::vector<double> secondGuideParameters_;
     std::optional<WorkPlane> planarWorkPlane_;
     double minimumU_ = 0.0;
     double minimumV_ = 0.0;
@@ -81,7 +107,6 @@ private:
         std::vector<double> sectionU;      //!< 断面iとの交点の断面側パラメータ u_ij
         std::vector<double> guideT;        //!< 断面iとの交点のガイド側パラメータ t_ij
     };
-    std::vector<Wire> guides_;
     std::vector<GordonGuideData> gordonGuides_;
     double maximumGuideGap_ = 0.0;
 

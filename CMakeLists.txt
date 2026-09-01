@@ -16,6 +16,9 @@ endif()
 
 add_library(kachakacha_core STATIC
     src/core/kachakacha/geometry/Vector3.cpp
+    src/core/kachakacha/io/BentSheetPapercraft.cpp
+    src/core/kachakacha/io/FacetedPapercraft.cpp
+    src/core/kachakacha/io/FabricationPanelPapercraft.cpp
     src/core/kachakacha/io/NumericExpression.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
@@ -286,7 +289,12 @@ if(KACHACAD_BUILD_TESTS)
             kachakacha_core
     )
 
-    add_test(NAME project_script_tests COMMAND kachakacha_project_script_tests)
+    add_test(
+        NAME project_script_tests
+        COMMAND kachakacha_project_script_tests
+            "${CMAKE_SOURCE_DIR}/examples/115-front-guided-loft.kcd"
+            "${CMAKE_SOURCE_DIR}/examples/er1-er2-round-cab-1-87.kcd"
+    )
 
     add_executable(kachakacha_wire_operations_tests
         tests/wire_operations_tests.cpp
@@ -336,6 +344,55 @@ if(KACHACAD_BUILD_TESTS)
             "${CMAKE_SOURCE_DIR}/examples/curved-panel-light-holes.kcd"
             "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
             "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-papercraft.svg"
+    )
+
+    add_executable(kachakacha_faceted_papercraft_tests
+        tests/faceted_papercraft_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_faceted_papercraft_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(
+        NAME faceted_papercraft_tests
+        COMMAND kachakacha_faceted_papercraft_tests
+            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+            "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-faceted-papercraft.svg"
+    )
+
+    add_executable(kachakacha_bent_sheet_papercraft_tests
+        tests/bent_sheet_papercraft_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_bent_sheet_papercraft_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(
+        NAME bent_sheet_papercraft_tests
+        COMMAND kachakacha_bent_sheet_papercraft_tests
+            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+            "${CMAKE_CURRENT_BINARY_DIR}/railway-nose-bent-sheet-papercraft.svg"
+    )
+
+    add_executable(kachakacha_fabrication_panel_papercraft_tests
+        tests/fabrication_panel_papercraft_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_fabrication_panel_papercraft_tests
+        PRIVATE
+            kachakacha_core
+    )
+
+    add_test(
+        NAME fabrication_panel_papercraft_tests
+        COMMAND kachakacha_fabrication_panel_papercraft_tests
+            "${CMAKE_SOURCE_DIR}/examples/railway-nose-acceptance.kcd"
+            "${CMAKE_SOURCE_DIR}/examples/er1-er2-round-cab-1-87.kcd"
+            "${CMAKE_CURRENT_BINARY_DIR}/er1-er2-round-cab-panel-first.svg"
     )
 
     add_executable(kachakacha_surface_tests

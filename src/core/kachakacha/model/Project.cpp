@@ -588,64 +588,28 @@ void Project::AddPlanarSurface(
     if (boundaryWireNames.empty()) {
         throw std::invalid_argument("Planar surface requires at least one boundary wire.");
     }
-    std::vector<Wire> boundaries;
-    boundaries.reserve(boundaryWireNames.size());
-    for (std::size_t index = 0; index < boundaryWireNames.size(); ++index) {
-        if (std::find(
-                boundaryWireNames.begin(), boundaryWireNames.begin() + index,
-                boundaryWireNames[index]) != boundaryWireNames.begin() + index) {
-            throw std::invalid_argument("Planar surface boundary contains the same wire more than once.");
-        }
-        const NamedWire& boundary = RequireWire(boundaryWireNames[index]);
-        if (boundary.projection.has_value()) {
-            throw std::invalid_argument("Projected wire cannot be used as a planar surface source.");
-        }
-        if (boundary.metadata.construction) {
-            throw std::invalid_argument("Construction wire cannot be used as a planar surface source.");
-        }
-        boundaries.push_back(boundary.wire);
-    }
-    Wire composite = boundaries.size() == 1
-        ? std::move(boundaries.front())
-        : JoinWireChain(boundaries);
+    Wire composite = BuildSurfaceWireGroup(
+        boundaryWireNames, true, false, "planar surface boundary");
     surfaces_.push_back({
         std::move(name),
         Surface::Planar(std::move(composite)),
-        std::move(boundaryWireNames),
-        true,
-        {},
+        boundaryWireNames,
     });
+    surfaces_.back().sourceWireGroups.push_back(std::move(boundaryWireNames));
 }
 
 void Project::AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName)
 {
-    if (name.empty()) {
-        throw std::invalid_argument("Surface name must not be empty.");
-    }
-    if (FindSurface(name).has_value()) {
-        throw std::invalid_argument("Surface name already exists: " + name);
-    }
-    if (firstSectionName == secondSectionName) {
-        throw std::invalid_argument("Ruled surface requires two different section wires.");
-    }
-    const NamedWire& first = RequireWire(firstSectionName);
-    const NamedWire& second = RequireWire(secondSectionName);
-    if (first.plateOffset.has_value() || second.plateOffset.has_value()) {
-        throw std::invalid_argument("Plate-offset wire cannot be used as a ruled surface section.");
-    }
-    if (first.metadata.construction || second.metadata.construction) {
-        throw std::invalid_argument("Construction wire cannot be used as a ruled surface section.");
-    }
-    surfaces_.push_back({
+    AddRuledSurface(
         std::move(name),
-        Surface::Ruled(first.wire, second.wire),
-        {std::move(firstSectionName), std::move(secondSectionName)},
-        true,
-        {},
-    });
+        std::vector<std::string>{std::move(firstSectionName)},
+        std::vector<std::string>{std::move(secondSectionName)});
 }
 
-void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionNames)
+void Project::AddRuledSurface(
+    std::string name,
+    std::vector<std::string> firstSectionNames,
+    std::vector<std::string> secondSectionNames)
 {
     if (name.empty()) {
         throw std::invalid_argument("Surface name must not be empty.");
@@ -653,32 +617,142 @@ void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionN
     if (FindSurface(name).has_value()) {
         throw std::invalid_argument("Surface name already exists: " + name);
     }
-    if (sectionNames.size() < 3) {
+    std::vector<std::string> sources = firstSectionNames;
+    sources.insert(sources.end(), secondSectionNames.begin(), secondSectionNames.end());
+    for (const std::string& source : sources) {
+        if (std::count(sources.begin(), sources.end(), source) != 1) {
+            throw std::invalid_argument(
+                "Ruled-surface source wire is repeated: " + source);
+        }
+    }
+    Wire first = BuildSurfaceWireGroup(
+        firstSectionNames, false, true, "first ruled-surface section");
+    Wire second = BuildSurfaceWireGroup(
+        secondSectionNames, false, true, "second ruled-surface section");
+    surfaces_.push_back({
+        std::move(name),
+        Surface::Ruled(std::move(first), std::move(second)),
+        std::move(sources),
+    });
+    surfaces_.back().sourceWireGroups = {
+        std::move(firstSectionNames), std::move(secondSectionNames)};
+}
+
+void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionNames)
+{
+    std::vector<std::vector<std::string>> groups;
+    groups.reserve(sectionNames.size());
+    for (std::string& sectionName : sectionNames) {
+        groups.push_back({std::move(sectionName)});
+    }
+    AddLoftSurface(std::move(name), std::move(groups));
+}
+
+void Project::AddLoftSurface(
+    std::string name,
+    std::vector<std::vector<std::string>> sectionWireGroups)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    if (sectionWireGroups.size() < 3) {
         throw std::invalid_argument("Loft surface requires at least three section wires.");
     }
 
+    std::vector<std::string> sectionNames;
+    for (const auto& group : sectionWireGroups) {
+        sectionNames.insert(sectionNames.end(), group.begin(), group.end());
+    }
     std::vector<Wire> sections;
-    sections.reserve(sectionNames.size());
+    sections.reserve(sectionWireGroups.size());
     for (const std::string& sectionName : sectionNames) {
         if (std::count(sectionNames.begin(), sectionNames.end(), sectionName) != 1) {
             throw std::invalid_argument("Loft section wires must not be repeated: " + sectionName);
         }
-        const NamedWire& section = RequireWire(sectionName);
-        if (section.projection.has_value()) {
-            throw std::invalid_argument("Projected wire cannot be used as a loft section.");
-        }
-        if (section.metadata.construction) {
-            throw std::invalid_argument("Construction wire cannot be used as a loft section.");
-        }
-        sections.push_back(section.wire);
+    }
+    for (const auto& group : sectionWireGroups) {
+        sections.push_back(BuildSurfaceWireGroup(
+            group, true, false, "loft section"));
     }
     surfaces_.push_back({
+        std::move(name), Surface::Loft(std::move(sections)),
+        std::move(sectionNames)});
+    surfaces_.back().sourceWireGroups = std::move(sectionWireGroups);
+}
+
+void Project::AddGuidedLoftSurface(
+    std::string name,
+    std::string firstGuideName,
+    std::string secondGuideName,
+    std::vector<std::string> sectionNames)
+{
+    std::vector<std::vector<std::string>> groups;
+    groups.reserve(sectionNames.size());
+    for (std::string& sectionName : sectionNames) {
+        groups.push_back({std::move(sectionName)});
+    }
+    AddGuidedLoftSurface(
         std::move(name),
-        Surface::Loft(std::move(sections)),
-        std::move(sectionNames),
-        true,
-        {},
+        std::vector<std::string>{std::move(firstGuideName)},
+        std::vector<std::string>{std::move(secondGuideName)},
+        std::move(groups));
+}
+
+void Project::AddGuidedLoftSurface(
+    std::string name,
+    std::vector<std::string> firstGuideNames,
+    std::vector<std::string> secondGuideNames,
+    std::vector<std::vector<std::string>> sectionWireGroups)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    if (firstGuideNames.empty() || secondGuideNames.empty()
+        || sectionWireGroups.empty()) {
+        throw std::invalid_argument(
+            "Guided loft requires two different guides and at least one cross section.");
+    }
+    std::vector<std::string> sources = firstGuideNames;
+    sources.insert(sources.end(), secondGuideNames.begin(), secondGuideNames.end());
+    for (const auto& group : sectionWireGroups) {
+        sources.insert(sources.end(), group.begin(), group.end());
+    }
+    for (const std::string& sourceName : sources) {
+        if (std::count(sources.begin(), sources.end(), sourceName) != 1) {
+            throw std::invalid_argument(
+                "Guided-loft wires must not be repeated: " + sourceName);
+        }
+    }
+    std::vector<Wire> sections;
+    sections.reserve(sectionWireGroups.size());
+    for (const auto& group : sectionWireGroups) {
+        sections.push_back(BuildSurfaceWireGroup(
+            group, true, true, "guided-loft cross section"));
+    }
+    Wire firstGuide = BuildSurfaceWireGroup(
+        firstGuideNames, true, true, "first guided-loft guide");
+    Wire secondGuide = BuildSurfaceWireGroup(
+        secondGuideNames, true, true, "second guided-loft guide");
+    surfaces_.push_back({
+        std::move(name),
+        Surface::GuidedLoft(
+            std::move(firstGuide),
+            std::move(secondGuide),
+            std::move(sections)),
+        std::move(sources),
     });
+    surfaces_.back().sourceWireGroups.reserve(sectionWireGroups.size() + 2);
+    surfaces_.back().sourceWireGroups.push_back(std::move(firstGuideNames));
+    surfaces_.back().sourceWireGroups.push_back(std::move(secondGuideNames));
+    for (auto& group : sectionWireGroups) {
+        surfaces_.back().sourceWireGroups.push_back(std::move(group));
+    }
 }
 
 void Project::AddGordonSurface(
@@ -1956,6 +2030,42 @@ const NamedWire& Project::RequireWire(std::string_view name) const
     return *wire;
 }
 
+Wire Project::BuildSurfaceWireGroup(
+    const std::vector<std::string>& wireNames,
+    bool rejectProjected,
+    bool rejectPlateOffset,
+    std::string_view role) const
+{
+    if (wireNames.empty()) {
+        throw std::invalid_argument(
+            std::string(role) + " requires at least one source wire.");
+    }
+    std::vector<Wire> wires;
+    wires.reserve(wireNames.size());
+    for (std::size_t index = 0; index < wireNames.size(); ++index) {
+        if (std::find(wireNames.begin(), wireNames.begin() + index,
+                wireNames[index]) != wireNames.begin() + index) {
+            throw std::invalid_argument(
+                std::string(role) + " repeats source wire: " + wireNames[index]);
+        }
+        const NamedWire& source = RequireWire(wireNames[index]);
+        if (rejectProjected && source.projection.has_value()) {
+            throw std::invalid_argument(
+                "Projected wire cannot be used as " + std::string(role) + ".");
+        }
+        if (rejectPlateOffset && source.plateOffset.has_value()) {
+            throw std::invalid_argument(
+                "Plate-offset wire cannot be used as " + std::string(role) + ".");
+        }
+        if (source.metadata.construction) {
+            throw std::invalid_argument(
+                "Construction wire cannot be used as " + std::string(role) + ".");
+        }
+        wires.push_back(source.wire);
+    }
+    return JoinWireChain(wires);
+}
+
 void Project::ApplyCoincidentConstraints()
 {
     const std::size_t maximumPasses = coincidentConstraints_.size() * 2 + 2;
@@ -2164,28 +2274,45 @@ void Project::RebuildDependentGeometry()
                 continue;
             }
 
-            if (surface.surface.Kind() == SurfaceKind::Planar) {
-                std::vector<Wire> boundaries;
-                boundaries.reserve(surface.sourceWireNames.size());
-                for (const std::string& sourceName : surface.sourceWireNames) {
-                    boundaries.push_back(RequireWire(sourceName).wire);
+            std::vector<std::vector<std::string>> groups
+                = surface.sourceWireGroups;
+            if (groups.empty()) {
+                if (surface.surface.Kind() == SurfaceKind::Planar) {
+                    groups.push_back(surface.sourceWireNames);
+                } else {
+                    groups.reserve(surface.sourceWireNames.size());
+                    for (const std::string& sourceName : surface.sourceWireNames) {
+                        groups.push_back({sourceName});
+                    }
                 }
-                Wire composite = boundaries.size() == 1
-                    ? std::move(boundaries.front())
-                    : JoinWireChain(boundaries);
-                surface.surface = Surface::Planar(std::move(composite));
+            }
+
+            if (surface.surface.Kind() == SurfaceKind::Planar) {
+                if (groups.size() != 1) {
+                    throw std::logic_error(
+                        "Planar surface must contain one boundary group.");
+                }
+                surface.surface = Surface::Planar(BuildSurfaceWireGroup(
+                    groups.front(), true, false, "planar surface boundary"));
             } else if (surface.surface.Kind() == SurfaceKind::Ruled) {
+                if (groups.size() != 2) {
+                    throw std::logic_error(
+                        "Ruled surface must contain two section groups.");
+                }
                 surface.surface = Surface::Ruled(
-                    RequireWire(surface.sourceWireNames.at(0)).wire,
-                    RequireWire(surface.sourceWireNames.at(1)).wire);
+                    BuildSurfaceWireGroup(
+                        groups[0], false, true, "first ruled-surface section"),
+                    BuildSurfaceWireGroup(
+                        groups[1], false, true, "second ruled-surface section"));
             } else if (surface.surface.Kind() == SurfaceKind::Loft) {
                 std::vector<Wire> sections;
-                sections.reserve(surface.sourceWireNames.size());
-                for (const std::string& sourceName : surface.sourceWireNames) {
-                    sections.push_back(RequireWire(sourceName).wire);
+                sections.reserve(groups.size());
+                for (const auto& group : groups) {
+                    sections.push_back(BuildSurfaceWireGroup(
+                        group, true, false, "loft section"));
                 }
                 surface.surface = Surface::Loft(std::move(sections));
-            } else {
+            } else if (surface.surface.Kind() == SurfaceKind::Gordon) {
                 std::vector<Wire> sections;
                 sections.reserve(surface.sourceWireNames.size());
                 for (const std::string& sourceName : surface.sourceWireNames) {
@@ -2197,6 +2324,25 @@ void Project::RebuildDependentGeometry()
                     guides.push_back(RequireWire(guideName).wire);
                 }
                 surface.surface = Surface::Gordon(std::move(sections), std::move(guides));
+            } else {
+                if (groups.size() < 3) {
+                    throw std::logic_error(
+                        "Guided loft source groups are incomplete.");
+                }
+                std::vector<Wire> sections;
+                sections.reserve(groups.size() - 2);
+                for (std::size_t groupIndex = 2;
+                     groupIndex < groups.size(); ++groupIndex) {
+                    sections.push_back(BuildSurfaceWireGroup(
+                        groups[groupIndex], true, true,
+                        "guided-loft cross section"));
+                }
+                surface.surface = Surface::GuidedLoft(
+                    BuildSurfaceWireGroup(
+                        groups[0], true, true, "first guided-loft guide"),
+                    BuildSurfaceWireGroup(
+                        groups[1], true, true, "second guided-loft guide"),
+                    std::move(sections));
             }
             surfaceReady[index] = true;
             --pendingSurfaces;

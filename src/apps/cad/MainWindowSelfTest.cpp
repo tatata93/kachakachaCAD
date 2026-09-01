@@ -260,6 +260,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     UpdateSelection({}, true);
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
+    viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Normal);
 
     if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
         showTab(0);
@@ -510,6 +511,15 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
+        surfaceType_->setCurrentIndex(2);
+        surfaceInputGroups_ = {
+            {SurfaceInputRole::Section, {"nose_0_joined"}},
+            {SurfaceInputRole::Section, {"nose_4_joined"}},
+            {SurfaceInputRole::Section, {"nose_8_joined"}},
+            {SurfaceInputRole::Section, {"nose_12_joined"}},
+            {SurfaceInputRole::Section, {"nose_18_joined"}},
+        };
+        RefreshSurfaceInputTable();
         showTab(5, 0.0);
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -552,11 +562,16 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                 {CadSelectionKind::Wire, "free_outline_arc"},
                 {CadSelectionKind::Wire, "free_outline_top"},
                 {CadSelectionKind::Wire, "free_outline_left"},
-                {CadSelectionKind::Surface, "free_outline_surface"},
             })) {
             return false;
         }
         surfaceType_->setCurrentIndex(0);
+        surfaceInputGroups_ = {{
+            SurfaceInputRole::Boundary,
+            {"free_outline_bottom", "free_outline_arc",
+                "free_outline_top", "free_outline_left"},
+        }};
+        RefreshSurfaceInputTable();
         showTab(5, 0.0);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
@@ -684,12 +699,31 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
+        const int bentMode = platePapercraftMode_->findData(2);
+        if (bentMode >= 0) {
+            platePapercraftMode_->setCurrentIndex(bentMode);
+        }
         plateFlatPatternAutoRelief_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
+        plateFlatPatternFidelity_->setValue(10);
         plateAssemblyProgress_->setValue(45);
-        if (plateAssemblyOutputPiece_->count() > 1) {
-            plateAssemblyOutputPiece_->setCurrentIndex(1);
+        plateAssemblyOutputPiece_->setCurrentIndex(0);
+        showTab(6, 0.72);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("assembly-complete")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
         }
+        const int bentMode = platePapercraftMode_->findData(2);
+        if (bentMode >= 0) {
+            platePapercraftMode_->setCurrentIndex(bentMode);
+        }
+        plateFlatPatternAutoRelief_->setChecked(true);
+        plateFlatPatternCutDirection_->setCurrentIndex(2);
+        plateAssemblyProgress_->setValue(100);
         showTab(6, 0.72);
         finalRevealTab = 6;
         finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
@@ -770,6 +804,148 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(8);
         SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state.startsWith(QStringLiteral("er2-"))) {
+        if (!findSelection(CadSelectionKind::Surface, "er2_round_cab_skin").has_value()
+            || !findSelection(CadSelectionKind::Plate, "er2_round_cab_shell").has_value()) {
+            return false;
+        }
+
+        platePapercraftMode_->setCurrentIndex(
+            platePapercraftMode_->findData(3));
+        platePapercraftPanelPriority_->setCurrentIndex(
+            platePapercraftPanelPriority_->findData(
+                static_cast<int>(PapercraftPanelPriority::Balanced)));
+        platePapercraftMaximumError_->setValue(0.25);
+        platePapercraftMinimumWidth_->setValue(2.0);
+        plateFabricationPanelDirection_->setCurrentIndex(
+            plateFabricationPanelDirection_->findData(
+                static_cast<int>(FabricationPanelDirection::LongAlongU)));
+        plateFabricationPanelMaximumCount_->setValue(8);
+        plateFlatPatternFidelity_->setValue(8);
+        plateFlatPatternCutDirection_->setCurrentIndex(
+            plateFlatPatternCutDirection_->findData(
+                static_cast<int>(PapercraftCutDirection::Both)));
+
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, false);
+        }
+        for (const auto& point : project_.Points()) {
+            project_.SetPointVisible(point.name, false);
+        }
+        for (const auto& body : project_.Bodies()) {
+            project_.SetBodyVisible(body.name, false);
+        }
+        for (const auto& surface : project_.Surfaces()) {
+            project_.SetSurfaceVisible(surface.name, false);
+        }
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name, false);
+        }
+        for (const auto& plate : project_.Plates()) {
+            project_.SetPlateVisible(plate.name, false);
+        }
+
+        const bool showSections = state == QStringLiteral("er2-sections");
+        const bool showCenterSection = state == QStringLiteral("er2-center-section");
+        const bool showWireframe = state == QStringLiteral("er2-wireframe");
+        const bool showCurvature = state == QStringLiteral("er2-curvature");
+        const bool showFlatPattern = state == QStringLiteral("er2-flat-pattern");
+        const bool showAssembly30 = state == QStringLiteral("er2-assembly-30");
+        const bool showAssembly100 = state == QStringLiteral("er2-assembly-100");
+        const bool showAssembly = showAssembly30 || showAssembly100;
+        const bool showSurface = showSections || showCenterSection
+            || showWireframe || showCurvature;
+        project_.SetSurfaceVisible("er2_round_cab_skin", showSurface);
+        if (showSections) {
+            for (const auto& wire : project_.Wires()) {
+                if (wire.name.starts_with("er2_section_")) {
+                    project_.SetWireVisible(wire.name, true);
+                }
+            }
+        } else if (showCenterSection) {
+            project_.SetWireVisible("er2_vertical_center_section", true);
+        } else if (showAssembly) {
+            project_.SetPlateVisible("er2_round_cab_shell", true);
+        } else if (!showSurface && !showFlatPattern) {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name.starts_with("er2_")) {
+                    project_.SetPlateVisible(plate.name, true);
+                }
+            }
+        }
+        if (showWireframe) {
+            viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Wireframe);
+        } else if (showCurvature) {
+            viewport_->SetSurfaceDiagnosticMode(
+                SurfaceDiagnosticMode::GaussianCurvature);
+        }
+
+        std::vector<std::string> flatPlateNames;
+        if (showFlatPattern) {
+            const auto sourceSelection = findSelection(
+                CadSelectionKind::Plate, "er2_round_cab_shell");
+            const auto targetPlane = project_.FindWorkPlane("window_projection");
+            if (!sourceSelection.has_value() || !targetPlane.has_value()) {
+                return false;
+            }
+            const auto sourcePlate = project_.Plates()[sourceSelection->index];
+            PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
+            options.uSegments = 64;
+            options.vSegments = 32;
+            options.openingSamples = 64;
+            const auto pattern = BuildFabricationPanelPapercraftPattern(
+                project_, sourcePlate, options);
+            const auto result = AddPlateFlatPatternModel(
+                project_, sourcePlate, pattern, *targetPlane,
+                "er2_developed", 0.20);
+            flatPlateNames = result.plateNames;
+            for (const std::string& name : result.plateNames) {
+                project_.SetPlateVisible(name, true);
+            }
+            for (const std::string& name : result.foldWireNames) {
+                project_.SetWireVisible(name, true);
+            }
+            for (const std::string& name : result.reliefCutWireNames) {
+                project_.SetWireVisible(name, true);
+            }
+        }
+        gridPointsVisible_->setChecked(false);
+        RefreshModelViews(false);
+        if (showFlatPattern) {
+            std::vector<CadSelection> selections;
+            for (const std::string& name : flatPlateNames) {
+                const auto plate = findSelection(CadSelectionKind::Plate, name);
+                if (plate.has_value()) {
+                    selections.push_back(*plate);
+                }
+            }
+            UpdateSelections(std::move(selections), true);
+            showTab(6);
+            viewport_->SetCornerView({0.0, 1.0, 0.0});
+        } else if (showAssembly) {
+            if (!select({{CadSelectionKind::Plate, "er2_round_cab_shell"}})) {
+                return false;
+            }
+            plateAssemblyGuidePreview_->setChecked(true);
+            plateAssemblyApproximationPreview_->setChecked(true);
+            plateAssemblyProgress_->setValue(showAssembly30 ? 30 : 100);
+            showTab(6);
+            UpdatePlateAssemblyGuidePreview();
+            viewport_->SetCornerView({1.0, 1.0, 0.55});
+        } else {
+            showTab(0);
+        }
+        if (state == QStringLiteral("er2-front")) {
+            viewport_->SetCornerView({0.0, 1.0, 0.0});
+        } else if (state == QStringLiteral("er2-top")) {
+            viewport_->SetCornerView({0.0, 0.0, 1.0});
+        } else if (state == QStringLiteral("er2-side")
+            || state == QStringLiteral("er2-center-section")) {
+            viewport_->SetCornerView({1.0, 0.0, 0.0});
+        } else if (!showFlatPattern && !showAssembly) {
+            viewport_->SetCornerView({1.0, 1.0, 0.55});
+        }
         viewport_->FitAll();
     } else if (state == QStringLiteral("info")) {
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
@@ -2104,6 +2280,65 @@ bool MainWindow::RunCreationSelfTest()
         return fail("undo composite planar surface");
     }
 
+    const std::size_t groupedWireStart = project_.Wires().size();
+    const std::size_t groupedSurfaceStart = project_.Surfaces().size();
+    project_.AddWire("__ui_grouped_guide_left_a", Wire::Line(
+        {0.0, -5.0, 0.0}, {6.0, -5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_left_b", Wire::Line(
+        {6.0, -5.0, 0.0}, {12.0, -5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_right_a", Wire::Line(
+        {0.0, 5.0, 0.0}, {6.0, 5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_right_b", Wire::Line(
+        {6.0, 5.0, 0.0}, {12.0, 5.0, 0.0}));
+    project_.AddWire("__ui_grouped_section_a", Wire::CubicBezier(
+        {6.0, -5.0, 0.0}, {6.0, -4.0, 2.0},
+        {6.0, -1.0, 4.0}, {6.0, 0.0, 4.0}));
+    project_.AddWire("__ui_grouped_section_b", Wire::CubicBezier(
+        {6.0, 0.0, 4.0}, {6.0, 1.0, 4.0},
+        {6.0, 4.0, 2.0}, {6.0, 5.0, 0.0}));
+    RefreshModelViews(false);
+    surfaceType_->setCurrentIndex(3);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Guide);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 3)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Guide);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 3)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 4)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 5)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Section);
+    if (surfaceInputGroups_.size() != 3
+        || surfaceInputTable_->rowCount() != 3
+        || surfaceInputGroups_[0].wireNames.size() != 2
+        || surfaceInputGroups_[2].wireNames.size() != 2) {
+        return fail("assign compound surface wires through role table");
+    }
+    surfaceName_->setText("__ui_grouped_guided_surface");
+    CreateSurfaceFromSelection();
+    if (project_.Surfaces().size() != groupedSurfaceStart + 1
+        || project_.Surfaces().back().surface.Kind() != SurfaceKind::GuidedLoft
+        || project_.Surfaces().back().sourceWireGroups.size() != 3
+        || project_.Surfaces().back().sourceWireGroups[0].size() != 2
+        || !surfaceInputGroups_.empty()) {
+        return fail("create grouped guided surface from role table");
+    }
+    Undo();
+    if (project_.Surfaces().size() != groupedSurfaceStart) {
+        return fail("undo grouped guided surface from role table");
+    }
+
     const std::size_t surfaceWireStart = project_.Wires().size();
     const std::size_t surfaceStart = project_.Surfaces().size();
     const std::size_t plateStart = project_.Plates().size();
@@ -2126,6 +2361,7 @@ bool MainWindow::RunCreationSelfTest()
         WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly, {}, {}});
     RefreshModelViews(false);
 
+    surfaceType_->setCurrentIndex(2);
     plateName_->setText("__ui_direct_variable_plate");
     plateThickness_->setValue(0.4);
     plateVariableThickness_->setChecked(true);
@@ -2528,10 +2764,9 @@ bool MainWindow::RunCreationSelfTest()
         return fail(failure.c_str());
     }
     try {
-        const auto expectedGuide = BuildPlateAssemblyGuide(
-            project_, project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
-        const auto expectedMotion = BuildPlateAssemblyMotion(
-            project_,
+        const auto expectedGuide = BuildActivePapercraftGuide(
+            project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
+        const auto expectedMotion = BuildActivePapercraftMotion(
             project_.Plates()[plateStart + 1],
             static_cast<double>(plateAssemblyProgress_->value()) / 100.0,
             PlateFlatPatternOptionsFromUi());
@@ -2548,7 +2783,15 @@ bool MainWindow::RunCreationSelfTest()
             || !plateAssemblyApproximationPreview_->isChecked()
             || viewport_->PlateAssemblyApproximationPanelCount()
                 != expectedPanelCount) {
-            return fail("assembled fold and relief preview");
+            const std::string details = "assembled fold and relief preview: fold "
+                + std::to_string(viewport_->PlateAssemblyFoldGuideCount()) + "/"
+                + std::to_string(expectedGuide.foldLines.size()) + ", cut "
+                + std::to_string(viewport_->PlateAssemblyReliefGuideCount()) + "/"
+                + std::to_string(expectedGuide.reliefCuts.size() + expectedGuide.splitLines.size())
+                + ", panel "
+                + std::to_string(viewport_->PlateAssemblyApproximationPanelCount()) + "/"
+                + std::to_string(expectedPanelCount);
+            return fail(details.c_str());
         }
         plateAssemblyGuidePreview_->setChecked(false);
         if (viewport_->PlateAssemblyFoldGuideCount() != 0
@@ -2659,7 +2902,8 @@ bool MainWindow::RunCreationSelfTest()
     });
     if (!measurementResultLabel_->text().contains(QStringLiteral("13.000 mm"))
         || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))
-        || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0) {
+        || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0
+        || viewport_->MeasurementComponentOverlayCount() != 3) {
         return fail("measure two points");
     }
     measurementMode_->setCurrentIndex(1);

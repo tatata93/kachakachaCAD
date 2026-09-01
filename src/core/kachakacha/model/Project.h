@@ -131,6 +131,10 @@ struct NamedSurface {
     std::vector<std::string> sourceWireNames;
     bool visible = true;
     std::vector<std::string> guideWireNames;
+    // Each entry is one logical boundary, guide, or section assembled from
+    // endpoint-connected source wires. sourceWireNames remains the flattened
+    // dependency list used by existing project operations.
+    std::vector<std::vector<std::string>> sourceWireGroups;
 };
 
 struct NamedPlate {
@@ -162,11 +166,28 @@ public:
     void AddPlanarSurface(std::string name, std::string boundaryWireName);
     void AddPlanarSurface(std::string name, std::vector<std::string> boundaryWireNames);
     void AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName);
+    void AddRuledSurface(
+        std::string name,
+        std::vector<std::string> firstSectionNames,
+        std::vector<std::string> secondSectionNames);
     void AddLoftSurface(std::string name, std::vector<std::string> sectionNames);
     void AddGordonSurface(
         std::string name,
         std::vector<std::string> sectionNames,
         std::vector<std::string> guideNames);
+    void AddLoftSurface(
+        std::string name,
+        std::vector<std::vector<std::string>> sectionWireGroups);
+    void AddGuidedLoftSurface(
+        std::string name,
+        std::string firstGuideName,
+        std::string secondGuideName,
+        std::vector<std::string> sectionNames);
+    void AddGuidedLoftSurface(
+        std::string name,
+        std::vector<std::string> firstGuideNames,
+        std::vector<std::string> secondGuideNames,
+        std::vector<std::vector<std::string>> sectionWireGroups);
     void AddPlate(
         std::string name,
         std::string sourceSurfaceName,
@@ -287,6 +308,11 @@ public:
 
 private:
     [[nodiscard]] const NamedWire& RequireWire(std::string_view name) const;
+    [[nodiscard]] Wire BuildSurfaceWireGroup(
+        const std::vector<std::string>& wireNames,
+        bool rejectProjected,
+        bool rejectPlateOffset,
+        std::string_view role) const;
     void ApplyCoincidentConstraints();
     void ApplyTangentConstraints();
     void ApplyWireConstraints();

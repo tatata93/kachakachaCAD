@@ -72,6 +72,8 @@ public:
         int vSamples = 10) const;
 
 private:
+    void ValidateGeometry() const;
+
     Surface sourceSurface_;
     double thickness_ = 0.0;
     double endThickness_ = 0.0;

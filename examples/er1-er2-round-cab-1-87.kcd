@@ -1,0 +1,78 @@
+# kachakachaCAD ER1 / early ER2 "Globus" round-cab test model
+# Units are model millimeters at 1:87 scale.
+# Confirmed prototype dimension: body width 3480 mm -> 40.00 mm at 1:87.
+# Nose depth, window dimensions, roof height and radii below are test-geometry
+# approximations. They are not claimed as measured ER1 / ER2 dimensions.
+format_version 1
+
+plane_point_normal window_projection 0 22 25  0 1 0  1 0 0
+
+# Eight broad transverse sections. X=lateral, Y=forward, Z=up.
+# The first six sections keep a broad blunt front. The last two sections form the
+# normal transverse roof arch at Y=0, producing the double-curved forehead.
+bspline3d_knots er2_section_lower 9  -20 0 0  -20 6.5 0  -16.5 11.5 0  -9 14.5 0  0 15.0 0  9 14.5 0  16.5 11.5 0  20 6.5 0  20 0 0  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_waist 9  -19.9 0 10  -19.9 6.9 10  -16.3 12 10  -8.8 15.4 10  0 16 10  8.8 15.4 10  16.3 12 10  19.9 6.9 10  19.9 0 10  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_window_sill 9  -19.9 0 19  -19.9 6.9 19  -16.3 12 19  -8.8 15.4 19  0 16.0 19  8.8 15.4 19  16.3 12 19  19.9 6.9 19  19.9 0 19  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_window_mid 9  -19.9 0 25  -19.9 6.9 25  -16.3 12 25  -8.8 15.4 25  0 16 25  8.8 15.4 25  16.3 12 25  19.9 6.9 25  19.9 0 25  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_window_head 9  -19.9 0 31  -19.9 6.9 31  -16.3 12 31  -8.8 15.4 31  0 16 31  8.8 15.4 31  16.3 12 31  19.9 6.9 31  19.9 0 31  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_forehead 9  -18.9 0 36.5  -18.9 4.1 36.5  -15.2 7.2 36.5  -8 9.2 36.5  0 9.6 36.5  8 9.2 36.5  15.2 7.2 36.5  18.9 4.1 36.5  18.9 0 36.5  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_roof_front 9  -18.5 0.2 37.5  -18 0.8 39.5  -15 1.8 42  -8 2.7 44.2  0 3 45  8 2.7 44.2  15 1.8 42  18 0.8 39.5  18.5 0.2 37.5  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+bspline3d_knots er2_section_roof_join 9  -18.5 0 37.5  -18 0 39.5  -15 0 42  -8 0 44.2  0 0 45  8 0 44.2  15 0 42  18 0 39.5  18.5 0 37.5  0 0 0 0 0.166666667 0.333333333 0.5 0.666666667 0.833333333 1 1 1 1
+
+surface_loft er2_round_cab_skin er2_section_lower er2_section_waist er2_section_window_sill er2_section_window_mid er2_section_window_head er2_section_forehead er2_section_roof_front er2_section_roof_join
+
+# Six separate rounded window openings. Their relative widths are
+# narrow outer / medium / broad center, and they project around the nose.
+polyline3d window_left_outer_drawing -17.45 22 20.4  -15.25 22 20.4  -14.79039 22 20.59038  -14.6 22 21.05  -14.6 22 28.35  -14.79039 22 28.80962  -15.25 22 29  -17.45 22 29  -17.90962 22 28.80962  -18.1 22 28.35  -18.1 22 21.05  -17.90962 22 20.59038  -17.45 22 20.4
+polyline3d window_left_middle_drawing -13.25 22 20.4  -9.35 22 20.4  -8.89039 22 20.59038  -8.7 22 21.05  -8.7 22 28.35  -8.89039 22 28.80962  -9.35 22 29  -13.25 22 29  -13.70961 22 28.80962  -13.9 22 28.35  -13.9 22 21.05  -13.70961 22 20.59038  -13.25 22 20.4
+polyline3d window_left_center_drawing -7.35 22 20.4  -1.2 22 20.4  -0.74039 22 20.59038  -0.55 22 21.05  -0.55 22 28.35  -0.74039 22 28.80962  -1.2 22 29  -7.35 22 29  -7.80961 22 28.80962  -8 22 28.35  -8 22 21.05  -7.80961 22 20.59038  -7.35 22 20.4
+polyline3d window_right_center_drawing 1.2 22 20.4  7.35 22 20.4  7.80961 22 20.59038  8 22 21.05  8 22 28.35  7.80961 22 28.80962  7.35 22 29  1.2 22 29  0.74039 22 28.80962  0.55 22 28.35  0.55 22 21.05  0.74039 22 20.59038  1.2 22 20.4
+polyline3d window_right_middle_drawing 9.35 22 20.4  13.25 22 20.4  13.70961 22 20.59038  13.9 22 21.05  13.9 22 28.35  13.70961 22 28.80962  13.25 22 29  9.35 22 29  8.89039 22 28.80962  8.7 22 28.35  8.7 22 21.05  8.89039 22 20.59038  9.35 22 20.4
+polyline3d window_right_outer_drawing 15.25 22 20.4  17.45 22 20.4  17.90962 22 20.59038  18.1 22 21.05  18.1 22 28.35  17.90962 22 28.80962  17.45 22 29  15.25 22 29  14.79039 22 28.80962  14.6 22 28.35  14.6 22 21.05  14.79039 22 20.59038  15.25 22 20.4
+
+wire_project window_left_outer window_left_outer_drawing er2_round_cab_skin 0 -1 0
+wire_project window_left_middle window_left_middle_drawing er2_round_cab_skin 0 -1 0
+wire_project window_left_center window_left_center_drawing er2_round_cab_skin 0 -1 0
+wire_project window_right_center window_right_center_drawing er2_round_cab_skin 0 -1 0
+wire_project window_right_middle window_right_middle_drawing er2_round_cab_skin 0 -1 0
+wire_project window_right_outer window_right_outer_drawing er2_round_cab_skin 0 -1 0
+
+# Separate center headlight case. The exact size and protrusion are test approximations.
+circle3d headlight_front 0 11.5 36.5  1 0 0  0 0 1  2.6
+wire_project headlight_root headlight_front er2_round_cab_skin 0 -1 0
+surface_ruled headlight_case_surface headlight_front headlight_root
+surface_planar headlight_lens_surface headlight_front
+
+plate er2_round_cab_shell er2_round_cab_skin 0.3 centered styrene
+plate_opening er2_round_cab_shell window_left_outer
+plate_opening er2_round_cab_shell window_left_middle
+plate_opening er2_round_cab_shell window_left_center
+plate_opening er2_round_cab_shell window_right_center
+plate_opening er2_round_cab_shell window_right_middle
+plate_opening er2_round_cab_shell window_right_outer
+plate_opening er2_round_cab_shell headlight_root
+plate er2_headlight_case headlight_case_surface 0.25 centered styrene
+plate er2_headlight_lens headlight_lens_surface 0.3 centered styrene
+
+# Diagnostic center profile through the sampled section centers.
+polyline3d er2_vertical_center_section 0 15 0  0 16 10  0 16 19  0 16 25  0 16 31  0 9.6 36.5  0 3 45  0 0 45
+
+visibility workplane window_projection hidden
+visibility wire window_left_outer_drawing hidden
+visibility wire window_left_middle_drawing hidden
+visibility wire window_left_center_drawing hidden
+visibility wire window_right_center_drawing hidden
+visibility wire window_right_middle_drawing hidden
+visibility wire window_right_outer_drawing hidden
+visibility wire er2_section_lower hidden
+visibility wire er2_section_waist hidden
+visibility wire er2_section_window_sill hidden
+visibility wire er2_section_window_mid hidden
+visibility wire er2_section_window_head hidden
+visibility wire er2_section_forehead hidden
+visibility wire er2_section_roof_front hidden
+visibility wire er2_section_roof_join hidden
+visibility wire er2_vertical_center_section hidden
+visibility surface er2_round_cab_skin hidden
+visibility surface headlight_case_surface hidden
+visibility surface headlight_lens_surface hidden

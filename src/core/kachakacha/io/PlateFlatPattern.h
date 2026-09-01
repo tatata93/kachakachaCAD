@@ -28,6 +28,23 @@ enum class PapercraftCutDirection {
     Both,
 };
 
+enum class PapercraftPanelPriority {
+    PartFirst,
+    Balanced,
+    AccuracyFirst,
+};
+
+enum class FabricationPanelDirection {
+    Automatic,
+    LongAlongU,
+    LongAlongV,
+};
+
+enum class PapercraftCutKind {
+    SeparatingSeam,
+    NonSeparatingReliefCut,
+};
+
 struct PlateFlatPatternOptions {
     int uSegments = 128;
     int vSegments = 40;
@@ -40,6 +57,7 @@ struct PlateFlatPatternOptions {
     PapercraftCutDirection cutDirection = PapercraftCutDirection::Both;
     bool allowAutomaticNotches = true;
     ReliefNotchStyle notchStyle = ReliefNotchStyle::CurvedV;
+    PapercraftPanelPriority panelPriority = PapercraftPanelPriority::PartFirst;
     bool fidelityControlsFeatureSpacing = true;
     double foldSpacingMillimeters = 8.0;
     double minimumFoldAngleDegrees = 2.0;
@@ -47,6 +65,11 @@ struct PlateFlatPatternOptions {
     double reliefCutSpacingMillimeters = 8.0;
     double reliefNotchAngleDegrees = 18.0;
     double reliefNotchCurveStrength = 1.0;
+    double maximumShapeErrorMillimeters = 0.10;
+    double minimumPartWidthMillimeters = 3.0;
+    FabricationPanelDirection fabricationPanelDirection
+        = FabricationPanelDirection::Automatic;
+    int maximumFabricationPanelCount = 8;
     int papercraftFidelity = 5;
 };
 
@@ -55,7 +78,18 @@ struct PlateFlatPatternAnalysis {
     double maximumEdgeDistortionMillimeters = 0.0;
     double rootMeanSquareEdgeDistortionMillimeters = 0.0;
     double maximumBoundaryApproximationMillimeters = 0.0;
+    double maximumReconstructedDeviationMillimeters = 0.0;
+    double rootMeanSquareReconstructedDeviationMillimeters = 0.0;
+    double maximumMaterialEdgeErrorMillimeters = 0.0;
+    double rootMeanSquareMaterialEdgeErrorMillimeters = 0.0;
+    double maximumSeamMismatchMillimeters = 0.0;
+    double maximumPanelConnectionMismatchMillimeters = 0.0;
+    double totalCutLengthMillimeters = 0.0;
+    double separatingSeamLengthMillimeters = 0.0;
+    double reliefCutLengthMillimeters = 0.0;
     int pieceCount = 1;
+    int separatingSeamCount = 0;
+    int nonSeparatingReliefCutCount = 0;
     int automaticNotchCount = 0;
 
     [[nodiscard]] double MaximumEstimatedErrorMillimeters() const noexcept;
@@ -65,6 +99,7 @@ struct PlateFlatPatternPath {
     std::string name;
     std::vector<geometry::Vector2> points;
     bool incorporatedInOuterBoundary = false;
+    std::optional<PapercraftCutKind> cutKind;
 };
 
 struct PlateFlatPatternPiece {
@@ -112,16 +147,40 @@ struct PlateAssemblyApproximation {
     double rootMeanSquareDeviationMillimeters = 0.0;
 };
 
+struct PlateAssemblyMotionPath {
+    std::string name;
+    std::vector<geometry::Vector3> points;
+};
+
+struct PlateAssemblyContinuousPiece {
+    int pieceIndex = 0;
+    std::vector<std::vector<geometry::Vector3>> sections;
+    std::vector<PlateAssemblyMotionPath> openingPaths;
+    std::vector<PlateAssemblyMotionPath> reliefCutPaths;
+};
+
 struct PlateAssemblyMotion {
     std::string plateName;
     std::vector<std::array<geometry::Vector3, 3>> panels;
     std::vector<int> pieceIndices;
     std::vector<double> panelThicknessMillimeters;
     std::vector<double> panelDeviationMillimeters;
+    std::vector<std::vector<geometry::Vector3>> continuousSections;
+    std::vector<PlateAssemblyContinuousPiece> continuousPieces;
+    std::vector<PlateAssemblyMotionPath> openingPaths;
+    std::vector<PlateAssemblyMotionPath> reliefCutPaths;
+    bool preferContinuousModel = false;
     int pieceCount = 1;
     double progress = 1.0;
     double maximumPanelDeviationMillimeters = 0.0;
     double maximumTargetMismatchMillimeters = 0.0;
+    double rootMeanSquareTargetMismatchMillimeters = 0.0;
+    double maximumMaterialEdgeErrorMillimeters = 0.0;
+    double rootMeanSquareMaterialEdgeErrorMillimeters = 0.0;
+    double maximumSeamMismatchMillimeters = 0.0;
+    double rootMeanSquareSeamMismatchMillimeters = 0.0;
+    double maximumPanelConnectionMismatchMillimeters = 0.0;
+    double rootMeanSquarePanelConnectionMismatchMillimeters = 0.0;
     double materialAreaSquareMillimeters = 0.0;
 };
 

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -1026,6 +1027,141 @@ void GordonSurfaceRejectsGuideWireRemoval()
     Require(project.Wires().size() == 3, "guide wire still present after rejected removal");
 }
 
+void GuidedLoftSurfacesRoundTrip()
+{
+    std::istringstream input(R"(
+        bezier3d guide_a 0 -5 0 4 -5 0 8 -5 0 12 -5 0
+        bezier3d guide_b 0 5 0 4 5 0 8 5 0 12 5 0
+        bezier3d section 6 -5 0 6 -2 6 6 2 6 6 5 0
+        surface_guided_loft nose guide_a guide_b section
+        plate skin nose 0.5 positive styrene
+    )");
+    auto project = LoadProjectScript(input, "guided-loft-test");
+    Require(project.Surfaces().size() == 1, "guided loft surface count");
+    Require(project.Surfaces()[0].surface.Kind()
+            == kachakacha::model::SurfaceKind::GuidedLoft,
+        "guided loft surface kind");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 3,
+        "guided loft dependency count");
+    Require(project.Plates().size() == 1, "guided loft plate count");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("surface_guided_loft nose guide_a guide_b section")
+            != std::string::npos,
+        "write guided loft command");
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(
+        roundTripInput, "guided-loft-roundtrip");
+    Require(roundTripped.Surfaces()[0].surface.Kind()
+            == kachakacha::model::SurfaceKind::GuidedLoft,
+        "roundtrip guided loft kind");
+}
+
+void CompositeSectionSurfacesRoundTrip()
+{
+    kachakacha::model::Project project;
+    const auto addSection = [&](const std::string& prefix, double x, double height) {
+        project.AddWire(prefix + "_lower", Wire::CubicBezier(
+            {x, -4.0, 0.0}, {x, -3.0, height * 0.5},
+            {x, -1.0, height}, {x, 0.0, height}));
+        project.AddWire(prefix + "_upper", Wire::CubicBezier(
+            {x, 0.0, height}, {x, 1.0, height},
+            {x, 3.0, height * 0.5}, {x, 4.0, 0.0}));
+    };
+    addSection("section_0", 0.0, 2.0);
+    addSection("section_1", 6.0, 5.0);
+    addSection("section_2", 12.0, 3.0);
+    project.AddWire("guide_left_0", Wire::Line(
+        {0.0, -4.0, 0.0}, {6.0, -4.0, 0.0}));
+    project.AddWire("guide_left_1", Wire::Line(
+        {6.0, -4.0, 0.0}, {12.0, -4.0, 0.0}));
+    project.AddWire("guide_right_0", Wire::Line(
+        {0.0, 4.0, 0.0}, {6.0, 4.0, 0.0}));
+    project.AddWire("guide_right_1", Wire::Line(
+        {6.0, 4.0, 0.0}, {12.0, 4.0, 0.0}));
+
+    project.AddRuledSurface(
+        "compound_ruled",
+        std::vector<std::string>{"section_0_lower", "section_0_upper"},
+        std::vector<std::string>{"section_2_lower", "section_2_upper"});
+    project.AddLoftSurface(
+        "compound_loft",
+        std::vector<std::vector<std::string>>{
+            {"section_0_lower", "section_0_upper"},
+            {"section_1_lower", "section_1_upper"},
+            {"section_2_lower", "section_2_upper"},
+        });
+    project.AddGuidedLoftSurface(
+        "compound_guided",
+        std::vector<std::string>{"guide_left_0", "guide_left_1"},
+        std::vector<std::string>{"guide_right_0", "guide_right_1"},
+        std::vector<std::vector<std::string>>{
+            {"section_1_lower", "section_1_upper"}});
+
+    Require(project.Surfaces().size() == 3,
+        "compound section surfaces are created");
+    Require(project.Surfaces()[0].sourceWireGroups.size() == 2
+            && project.Surfaces()[0].sourceWireGroups[0].size() == 2,
+        "ruled surface stores two compound section groups");
+    Require(project.Surfaces()[1].sourceWireGroups.size() == 3
+            && project.Surfaces()[1].sourceWireNames.size() == 6,
+        "loft surface stores three compound section groups");
+    Require(project.Surfaces()[2].sourceWireGroups.size() == 3
+            && project.Surfaces()[2].sourceWireGroups[0].size() == 2
+            && project.Surfaces()[2].sourceWireGroups[2].size() == 2,
+        "guided loft stores compound guides and compound cross section");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    Require(output.str().find("surface_grouped ruled compound_ruled")
+            != std::string::npos,
+        "compound ruled surface writes grouped command");
+    Require(output.str().find("surface_grouped loft compound_loft")
+            != std::string::npos,
+        "compound loft surface writes grouped command");
+    Require(output.str().find("surface_grouped guided_loft compound_guided")
+            != std::string::npos,
+        "compound guided loft writes grouped command");
+
+    std::istringstream input(output.str());
+    auto roundTripped = LoadProjectScript(input, "compound-surface-roundtrip");
+    Require(roundTripped.Surfaces().size() == 3,
+        "compound surfaces roundtrip");
+    Require(roundTripped.Surfaces()[1].sourceWireGroups.size() == 3
+            && roundTripped.Surfaces()[1].sourceWireGroups[1].size() == 2,
+        "compound loft grouping survives roundtrip");
+    RequireNear(
+        roundTripped.Surfaces()[2].surface.Evaluate(0.5, 0.5),
+        project.Surfaces()[2].surface.Evaluate(0.5, 0.5),
+        "compound guided loft geometry roundtrips");
+}
+
+void CurvedRailwayOutlineNetworkBuildsGroupedSurface()
+{
+    std::istringstream input(R"(
+        line3d end_section 12 0 0  -12 0 0
+        arc3d lower_left -9 0 0  -1 0 0  0 0 1  3 0 70.582027399111709
+        arc3d lower_right 9 0 0  1 0 0  0 0 1  3 0 70.582027399111809
+        arc3d lower_center -1.7763568394002505e-15 0 -19.107842849980148  0.4148027702946569 0 0.90991134829491949  -0.90991134829491949 0 0.4148027702946569  24.107842849980148 0 49.013793210244906
+        line3d upper_right 12 0 0  8 5 0
+        line3d upper_left -12 0 0  -8 5 0
+        arc3d upper_center 0 -10 0  0.47058823529411764 0.88235294117647056 0  -0.88235294117647056 0.47058823529411764 0  17 0 56.144973871705922
+        bezier3d middle_section 0 7 0  0 6.0870493168012283 3.5084533289393471  0 3.9929168175679433 4.3836131793651978  0 0 5
+        surface_grouped guided_loft curved_front 3  3 upper_left upper_center upper_right  3 lower_left lower_center lower_right  1 middle_section
+    )");
+    const auto project = LoadProjectScript(input, "curved-railway-outline-network");
+    Require(project.Surfaces().size() == 1,
+        "mixed line and arc guide network creates a surface");
+    Require(project.Surfaces()[0].sourceWireGroups.size() == 3
+            && project.Surfaces()[0].sourceWireGroups[0].size() == 3
+            && project.Surfaces()[0].sourceWireGroups[1].size() == 3,
+        "three-part curved guides remain separate editable source wires");
+    const auto& surface = project.Surfaces()[0].surface;
+    Require(surface.Evaluate(0.5, 0.5).IsFinite(),
+        "mixed curved guide surface evaluates at its center");
+}
+
 void PlateSplitsRoundTrip()
 {
     std::istringstream input(R"(
@@ -1284,9 +1420,64 @@ void CompositePlanarSurfacesRoundTrip()
         "composite planar sources roundtrip");
 }
 
+void GuidedLoftRailwayFrontSampleLoads(const char* path)
+{
+    std::ifstream input(path);
+    Require(static_cast<bool>(input), "guided-loft railway-front sample opens");
+    const auto project = LoadProjectScript(input, path);
+    Require(project.Surfaces().size() == 1,
+        "guided-loft railway-front sample creates one surface");
+    Require(project.Plates().size() == 1,
+        "guided-loft railway-front sample creates one plate");
+    Require(project.Plates()[0].openingWireNames.size() == 3,
+        "guided-loft railway-front sample keeps two lights and one window");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 5,
+        "guided-loft railway-front sample keeps two guides and three sections");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(
+        roundTripInput, "guided-loft-railway-front-roundtrip");
+    Require(roundTripped.Surfaces().size() == 1
+            && roundTripped.Plates().size() == 1
+            && roundTripped.Plates()[0].openingWireNames.size() == 3,
+        "guided-loft railway-front sample roundtrips");
+}
+
+void Er2RoundCabSampleLoads(const char* path)
+{
+    std::ifstream input(path);
+    Require(static_cast<bool>(input), "ER1 / ER2 round-cab sample opens");
+    const auto project = LoadProjectScript(input, path);
+    Require(project.Surfaces().size() == 3,
+        "ER1 / ER2 sample creates the cab skin and two headlight surfaces");
+    Require(project.Plates().size() == 3,
+        "ER1 / ER2 sample creates the cab skin and two headlight plates");
+    Require(project.Plates()[0].openingWireNames.size() == 7,
+        "ER1 / ER2 cab skin keeps six windows and one headlight opening");
+    Require(project.Surfaces()[0].sourceWireNames.size() == 8,
+        "ER1 / ER2 cab skin keeps eight broad transverse sections");
+    const auto& lowerSection = project.Wires()[0].wire;
+    RequireNear(lowerSection.Start(), {-20.0, 0.0, 0.0},
+        "ER1 / ER2 lower section starts at half width");
+    RequireNear(lowerSection.End(), {20.0, 0.0, 0.0},
+        "ER1 / ER2 lower section ends at half width");
+
+    std::ostringstream output;
+    WriteProjectScript(output, project);
+    std::istringstream roundTripInput(output.str());
+    const auto roundTripped = LoadProjectScript(
+        roundTripInput, "ER1-ER2-round-cab-roundtrip");
+    Require(roundTripped.Surfaces().size() == 3
+            && roundTripped.Plates().size() == 3
+            && roundTripped.Plates()[0].openingWireNames.size() == 7,
+        "ER1 / ER2 round-cab sample roundtrips");
+}
+
 } // namespace
 
-int main()
+int main(int argc, char* argv[])
 {
     try {
         ProjectFormatVersionIsChecked();
@@ -1311,6 +1502,9 @@ int main()
         GordonSurfacesRoundTrip();
         GordonSurfaceCommandRejectsInvalidCounts();
         GordonSurfaceRejectsGuideWireRemoval();
+        GuidedLoftSurfacesRoundTrip();
+        CompositeSectionSurfacesRoundTrip();
+        CurvedRailwayOutlineNetworkBuildsGroupedSurface();
         PlateSplitsRoundTrip();
         VisibilityRoundTrips();
         UnknownPlaneIsRejected();
@@ -1319,6 +1513,12 @@ int main()
         AngleConstraintTracksAndProtectsItsWorkPlane();
         PlateReliefCutsRoundTrip();
         CompositePlanarSurfacesRoundTrip();
+        if (argc >= 2) {
+            GuidedLoftRailwayFrontSampleLoads(argv[1]);
+        }
+        if (argc >= 3) {
+            Er2RoundCabSampleLoads(argv[2]);
+        }
     } catch (const std::exception& error) {
         std::cerr << "project_script_tests failed: " << error.what() << '\n';
         return 1;

@@ -949,14 +949,27 @@ Wire JoinWireChain(
     double connectionTolerance,
     double curveChordTolerance)
 {
-    if (wires.size() < 2) {
-        throw std::invalid_argument("Join requires at least two wires.");
+    if (wires.empty()) {
+        throw std::invalid_argument("Join requires at least one wire.");
     }
     if (!std::isfinite(connectionTolerance) || connectionTolerance <= 0.0) {
         throw std::invalid_argument("Join tolerance must be positive.");
     }
     if (!std::isfinite(curveChordTolerance) || curveChordTolerance <= 0.0) {
         throw std::invalid_argument("Curve chord tolerance must be positive.");
+    }
+
+    if (wires.size() == 1) {
+        if (wires.front().IsClosed()) {
+            return wires.front();
+        }
+        if (!wires.front().IsClosed(connectionTolerance)) {
+            return wires.front();
+        }
+        std::vector<Vector3> points = ChainPoints(
+            wires.front(), curveChordTolerance);
+        points.back() = points.front();
+        return Wire::Polyline(std::move(points));
     }
 
     std::vector<std::vector<Vector3>> sourcePoints;
@@ -968,57 +981,146 @@ Wire JoinWireChain(
         sourcePoints.push_back(ChainPoints(wire, curveChordTolerance));
     }
 
-    std::vector<bool> used(wires.size(), false);
-    std::vector<Vector3> joined;
-    std::function<bool(std::size_t)> appendRemaining = [&](std::size_t usedCount) {
-        if (usedCount == wires.size()) {
-            return true;
-        }
-        for (std::size_t index = 0; index < sourcePoints.size(); ++index) {
-            if (used[index]) {
-                continue;
-            }
-            for (int reverse = 0; reverse < 2; ++reverse) {
-                const auto& points = sourcePoints[index];
-                const Vector3 candidateStart = reverse == 0 ? points.front() : points.back();
-                if (!geometry::AlmostEqual(joined.back(), candidateStart, connectionTolerance)) {
-                    continue;
-                }
-                const std::size_t oldSize = joined.size();
-                if (reverse == 0) {
-                    joined.insert(joined.end(), points.begin() + 1, points.end());
-                } else {
-                    joined.insert(joined.end(), std::next(points.rbegin()), points.rend());
-                }
-                used[index] = true;
-                if (appendRemaining(usedCount + 1)) {
-                    return true;
-                }
-                used[index] = false;
-                joined.resize(oldSize);
+    struct EndpointNode {
+        Vector3 center;
+        int sampleCount = 0;
+        std::vector<std::size_t> incidentWires;
+    };
+    std::vector<EndpointNode> nodes;
+    std::vector<std::array<std::size_t, 2>> wireNodes(wires.size());
+    const auto assignNode = [&](Vector3 point) {
+        std::size_t best = nodes.size();
+        double bestDistance = connectionTolerance;
+        for (std::size_t index = 0; index < nodes.size(); ++index) {
+            const double distance = (nodes[index].center - point).Length();
+            if (distance <= bestDistance) {
+                best = index;
+                bestDistance = distance;
             }
         }
-        return false;
+        if (best == nodes.size()) {
+            nodes.push_back({point, 1, {}});
+            return nodes.size() - 1;
+        }
+        EndpointNode& node = nodes[best];
+        node.center = (node.center * static_cast<double>(node.sampleCount) + point)
+            / static_cast<double>(node.sampleCount + 1);
+        ++node.sampleCount;
+        return best;
     };
 
-    for (std::size_t startIndex = 0; startIndex < sourcePoints.size(); ++startIndex) {
-        for (int reverse = 0; reverse < 2; ++reverse) {
-            std::fill(used.begin(), used.end(), false);
-            joined = sourcePoints[startIndex];
-            if (reverse != 0) {
-                std::reverse(joined.begin(), joined.end());
+    for (std::size_t index = 0; index < wires.size(); ++index) {
+        wireNodes[index][0] = assignNode(sourcePoints[index].front());
+        wireNodes[index][1] = assignNode(sourcePoints[index].back());
+        if (wireNodes[index][0] == wireNodes[index][1]) {
+            throw std::invalid_argument(
+                "A selected wire closes onto itself and cannot be mixed into another chain.");
+        }
+        nodes[wireNodes[index][0]].incidentWires.push_back(index);
+        nodes[wireNodes[index][1]].incidentWires.push_back(index);
+    }
+
+    for (std::size_t first = 0; first < wires.size(); ++first) {
+        for (std::size_t second = first + 1; second < wires.size(); ++second) {
+            const bool sameNodes = wireNodes[first] == wireNodes[second];
+            const bool reversedNodes = wireNodes[first][0] == wireNodes[second][1]
+                && wireNodes[first][1] == wireNodes[second][0];
+            if (!sameNodes && !reversedNodes) {
+                continue;
             }
-            used[startIndex] = true;
-            if (appendRemaining(1)) {
-                if (geometry::AlmostEqual(
-                        joined.front(), joined.back(), connectionTolerance)) {
-                    joined.back() = joined.front();
+            bool sameShape = true;
+            for (double parameter : {0.25, 0.5, 0.75}) {
+                const double secondParameter = reversedNodes
+                    ? 1.0 - parameter : parameter;
+                if ((wires[first].Evaluate(parameter)
+                        - wires[second].Evaluate(secondParameter)).Length()
+                    > connectionTolerance) {
+                    sameShape = false;
+                    break;
                 }
-                return Wire::Polyline(std::move(joined));
+            }
+            if (sameShape) {
+                throw std::invalid_argument(
+                    "Selected wires contain a duplicate or overlapping segment.");
             }
         }
     }
-    throw std::invalid_argument("Selected wires do not form one endpoint-connected chain.");
+
+    std::vector<bool> reachableWires(wires.size(), false);
+    std::vector<std::size_t> pending{0};
+    reachableWires[0] = true;
+    while (!pending.empty()) {
+        const std::size_t wireIndex = pending.back();
+        pending.pop_back();
+        for (const std::size_t nodeIndex : wireNodes[wireIndex]) {
+            for (const std::size_t neighbor : nodes[nodeIndex].incidentWires) {
+                if (!reachableWires[neighbor]) {
+                    reachableWires[neighbor] = true;
+                    pending.push_back(neighbor);
+                }
+            }
+        }
+    }
+    if (std::find(reachableWires.begin(), reachableWires.end(), false)
+        != reachableWires.end()) {
+        throw std::invalid_argument(
+            "Selected wires form more than one disconnected chain.");
+    }
+
+    std::vector<std::size_t> endNodes;
+    for (std::size_t index = 0; index < nodes.size(); ++index) {
+        const std::size_t degree = nodes[index].incidentWires.size();
+        if (degree == 1) {
+            endNodes.push_back(index);
+        } else if (degree != 2) {
+            throw std::invalid_argument(
+                "Selected wires contain a branch. Select one path between junctions.");
+        }
+    }
+    if (!endNodes.empty() && endNodes.size() != 2) {
+        throw std::invalid_argument(
+            "Selected wires do not form one open or closed endpoint chain.");
+    }
+
+    const std::size_t startNode = endNodes.empty() ? wireNodes[0][0] : endNodes.front();
+    std::size_t currentNode = startNode;
+    std::vector<bool> used(wires.size(), false);
+    std::vector<Vector3> joined;
+    for (std::size_t usedCount = 0; usedCount < wires.size(); ++usedCount) {
+        const auto next = std::find_if(
+            nodes[currentNode].incidentWires.begin(),
+            nodes[currentNode].incidentWires.end(),
+            [&](std::size_t index) { return !used[index]; });
+        if (next == nodes[currentNode].incidentWires.end()) {
+            throw std::invalid_argument(
+                "Selected wires cannot be ordered into one continuous chain.");
+        }
+        const std::size_t wireIndex = *next;
+        const bool reverse = wireNodes[wireIndex][1] == currentNode;
+        const std::size_t nextNode = wireNodes[wireIndex][reverse ? 0 : 1];
+        std::vector<Vector3> points = sourcePoints[wireIndex];
+        if (reverse) {
+            std::reverse(points.begin(), points.end());
+        }
+        points.front() = nodes[currentNode].center;
+        points.back() = nodes[nextNode].center;
+        if (joined.empty()) {
+            joined = std::move(points);
+        } else {
+            joined.back() = points.front();
+            joined.insert(joined.end(), points.begin() + 1, points.end());
+        }
+        used[wireIndex] = true;
+        currentNode = nextNode;
+    }
+    if (currentNode != (endNodes.empty() ? startNode : endNodes.back())) {
+        throw std::invalid_argument(
+            "Selected wires cannot be ordered into one continuous chain.");
+    }
+    if (endNodes.empty()) {
+        joined.back() = joined.front();
+    }
+    return Wire::Polyline(std::move(joined));
 }
 
 Wire OffsetPlanarWire(

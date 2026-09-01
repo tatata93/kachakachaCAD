@@ -111,6 +111,41 @@ int main()
             Wire::Line({10.0, -5.0, -4.0}, {10.0, 5.0, 4.0}));
         const auto saddleAnalysis = Plate(saddle, 0.5, PlateThicknessDirection::Centered).AnalyzeDevelopability();
         Require(saddleAnalysis.classification == PlateDevelopability::DoubleCurved, "twisted ruled sheet is double curved");
+
+        const Wire joinedEndFirstGuide = Wire::CubicBezier(
+            {0.0, 0.0, 0.0}, {10.0 / 3.0, 5.0, 0.0},
+            {20.0 / 3.0, 5.0, 0.0}, {10.0, 0.0, 0.0});
+        const Wire joinedEndSecondGuide = Wire::Line(
+            {0.0, 0.0, 0.0}, {10.0, 0.0, 0.0});
+        const Surface joinedEndGuided = Surface::GuidedLoft(
+            joinedEndFirstGuide,
+            joinedEndSecondGuide,
+            {
+                Wire::Line(joinedEndFirstGuide.Evaluate(0.3), joinedEndSecondGuide.Evaluate(0.3)),
+                Wire::Line(joinedEndFirstGuide.Evaluate(0.7), joinedEndSecondGuide.Evaluate(0.7)),
+            });
+        const Plate joinedEndPlate(
+            joinedEndGuided, 0.4, PlateThicknessDirection::Centered);
+        for (double u : {0.0, 0.25, 0.5, 0.75, 1.0}) {
+            for (double v : {0.0, 1.0}) {
+                const auto front = joinedEndPlate.Evaluate(u, v, 0.0);
+                const auto back = joinedEndPlate.Evaluate(u, v, 1.0);
+                Require(front.IsFinite() && back.IsFinite(),
+                    "point-converged plate edge remains finite");
+                Require(std::abs((back - front).Length() - 0.4) <= 1.0e-7,
+                    "point-converged plate keeps requested thickness");
+            }
+        }
+
+        bool excessiveInsideThicknessRejected = false;
+        try {
+            static_cast<void>(Plate(
+                cylinder, 9.0, PlateThicknessDirection::Negative));
+        } catch (const std::invalid_argument&) {
+            excessiveInsideThicknessRejected = true;
+        }
+        Require(excessiveInsideThicknessRejected,
+            "plate rejects thickness that folds an inward cylindrical offset");
     } catch (const std::exception& error) {
         std::cerr << "plate_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

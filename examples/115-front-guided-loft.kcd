@@ -1,0 +1,31 @@
+# kachakachaCAD guided-loft example
+# A 115-series-like upper front made from two outer guides and three sections.
+format_version 1
+
+plane_point_normal front_drawing 0 20 5  0 1 0  1 0 0
+
+bezier3d lower_outline -14 0 0  -5 0 -1  5 0 -1  14 0 0
+bezier3d upper_outline -14 0 10  -5 0.8 11  5 0.8 11  14 0 10
+
+bezier3d section_left -7.09375 0 -0.5625  -7.09375 2.8 2.8  -7.09375 2.8 7.2  -7.09375 0.45 10.5625
+bezier3d section_center 0 0 -0.75  0 3.2 2.6  0 3.2 7.6  0 0.6 10.75
+bezier3d section_right 7.09375 0 -0.5625  7.09375 2.8 2.8  7.09375 2.8 7.2  7.09375 0.45 10.5625
+
+surface_guided_loft front_upper lower_outline upper_outline section_left section_center section_right
+
+circle3d light_left_drawing -6 20 3.0  1 0 0  0 0 1  1.1
+circle3d light_right_drawing 6 20 3.0  1 0 0  0 0 1  1.1
+polyline3d window_drawing -8 20 6.0  -7.5 20 9.0  7.5 20 9.0  8 20 6.0  -8 20 6.0
+wire_project light_left light_left_drawing front_upper 0 -1 0
+wire_project light_right light_right_drawing front_upper 0 -1 0
+wire_project window window_drawing front_upper 0 -1 0
+
+plate front_upper_skin front_upper 0.5 centered styrene
+plate_opening front_upper_skin light_left
+plate_opening front_upper_skin light_right
+plate_opening front_upper_skin window
+
+visibility workplane front_drawing hidden
+visibility wire light_left_drawing hidden
+visibility wire light_right_drawing hidden
+visibility wire window_drawing hidden

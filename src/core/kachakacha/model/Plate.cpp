@@ -1,6 +1,7 @@
 #include "kachakacha/model/Plate.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <optional>
 #include <stdexcept>
@@ -56,6 +57,95 @@ Plate::Plate(
         || range_.maximumU - range_.minimumU <= 1.0e-9
         || range_.maximumV - range_.minimumV <= 1.0e-9) {
         throw std::invalid_argument("Plate surface range must be a non-empty part of the source surface.");
+    }
+    ValidateGeometry();
+}
+
+void Plate::ValidateGeometry() const
+{
+    constexpr int kSamples = 12;
+    constexpr double kMinimumLength = 1.0e-9;
+    constexpr double kMinimumSine = 1.0e-7;
+    const double localStep = 0.2 / static_cast<double>(kSamples);
+
+    for (int uIndex = 0; uIndex < kSamples; ++uIndex) {
+        const double localU = (static_cast<double>(uIndex) + 0.5) / kSamples;
+        const double uBefore = std::max(0.0, localU - localStep);
+        const double uAfter = std::min(1.0, localU + localStep);
+        for (int vIndex = 0; vIndex < kSamples; ++vIndex) {
+            const double localV = (static_cast<double>(vIndex) + 0.5) / kSamples;
+            const double vBefore = std::max(0.0, localV - localStep);
+            const double vAfter = std::min(1.0, localV + localStep);
+
+            const double sourceU = SourceU(localU);
+            const double sourceV = SourceV(localV);
+            const geometry::Vector3 sourceDerivativeU =
+                (sourceSurface_.Evaluate(SourceU(uAfter), sourceV)
+                    - sourceSurface_.Evaluate(SourceU(uBefore), sourceV))
+                / (uAfter - uBefore);
+            const geometry::Vector3 sourceDerivativeV =
+                (sourceSurface_.Evaluate(sourceU, SourceV(vAfter))
+                    - sourceSurface_.Evaluate(sourceU, SourceV(vBefore)))
+                / (vAfter - vBefore);
+            const double sourceULength = sourceDerivativeU.Length();
+            const double sourceVLength = sourceDerivativeV.Length();
+            const geometry::Vector3 sourceCross =
+                geometry::Cross(sourceDerivativeU, sourceDerivativeV);
+            if (!sourceDerivativeU.IsFinite() || !sourceDerivativeV.IsFinite()
+                || sourceULength <= kMinimumLength
+                || sourceVLength <= kMinimumLength
+                || sourceCross.Length()
+                    <= sourceULength * sourceVLength * kMinimumSine) {
+                throw std::invalid_argument(
+                    "Plate source surface has a degenerate interior region.");
+            }
+
+            for (const double layer : {0.0, 1.0}) {
+                const geometry::Vector3 center = Evaluate(localU, localV, layer);
+                const geometry::Vector3 derivativeU =
+                    (Evaluate(uAfter, localV, layer)
+                        - Evaluate(uBefore, localV, layer))
+                    / (uAfter - uBefore);
+                const geometry::Vector3 derivativeV =
+                    (Evaluate(localU, vAfter, layer)
+                        - Evaluate(localU, vBefore, layer))
+                    / (vAfter - vBefore);
+                const geometry::Vector3 offsetCross =
+                    geometry::Cross(derivativeU, derivativeV);
+                const double uLength = derivativeU.Length();
+                const double vLength = derivativeV.Length();
+                if (!center.IsFinite() || !derivativeU.IsFinite()
+                    || !derivativeV.IsFinite() || !offsetCross.IsFinite()) {
+                    throw std::invalid_argument(
+                        "Plate offset produced non-finite coordinates.");
+                }
+                if (uLength <= kMinimumLength || vLength <= kMinimumLength
+                    || offsetCross.Length()
+                        <= uLength * vLength * kMinimumSine
+                    || geometry::Dot(sourceCross, offsetCross) <= 0.0) {
+                    throw std::invalid_argument(
+                        "Plate thickness causes the offset surface to fold or collapse.");
+                }
+            }
+        }
+    }
+
+    // Include all outer edges in validation. Point-converged edges are allowed
+    // when a limiting normal exists, but no invalid coordinate may reach Qt.
+    for (int index = 0; index <= kSamples; ++index) {
+        const double parameter = static_cast<double>(index) / kSamples;
+        for (const auto& uv : std::array<std::pair<double, double>, 4>{
+                 std::pair{parameter, 0.0},
+                 std::pair{parameter, 1.0},
+                 std::pair{0.0, parameter},
+                 std::pair{1.0, parameter},
+             }) {
+            if (!Evaluate(uv.first, uv.second, 0.0).IsFinite()
+                || !Evaluate(uv.first, uv.second, 1.0).IsFinite()) {
+                throw std::invalid_argument(
+                    "Plate boundary produced non-finite coordinates.");
+            }
+        }
     }
 }
 

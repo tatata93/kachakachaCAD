@@ -79,8 +79,11 @@ $AcceptanceProject = Join-Path $ResolvedOutput "review-model.kcd"
 Copy-Item -LiteralPath $FirstCheckProject -Destination (Join-Path $ResolvedOutput "first-check.kcd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\curved-panel-light-holes.kcd") -Destination (Join-Path $ResolvedOutput "curved-panel-light-holes.kcd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\railway-nose-acceptance.kcd") -Destination $AcceptanceProject -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\115-front-guided-loft.kcd") -Destination (Join-Path $ResolvedOutput "115-front-guided-loft.kcd") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\er1-er2-round-cab-1-87.kcd") -Destination (Join-Path $ResolvedOutput "er1-er2-round-cab-1-87.kcd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "examples\panorama-light-case.kcd") -Destination (Join-Path $ResolvedOutput "panorama-light-case.kcd") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "START_REVIEW.cmd") -Destination (Join-Path $ResolvedOutput "START_REVIEW.cmd") -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "START_ER2_TEST.cmd") -Destination (Join-Path $ResolvedOutput "START_ER2_TEST.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "OPEN_MANUAL.cmd") -Destination (Join-Path $ResolvedOutput "OPEN_MANUAL.cmd") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual.html") -Destination (Join-Path $ResolvedOutput "manual.html") -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\portable-readme-ja.txt") -Destination (Join-Path $ResolvedOutput "最初にお読みください.txt") -Force
@@ -152,10 +155,20 @@ try {
         "--export-first-body-step", $ReviewStep,
         "--snapshot", $ReviewSnapshot
     )
+    $Er2Project = Join-Path $ResolvedOutput "er1-er2-round-cab-1-87.kcd"
+    $Er2Snapshot = Join-Path $ResolvedOutput "er1-er2-round-cab-1-87.png"
+    Invoke-Checked $DeployedExecutable @(
+        "--project", $Er2Project,
+        "--manual-state", "er2-front-45",
+        "--snapshot", $Er2Snapshot
+    )
     foreach ($artifact in @($ReviewStl, $ReviewStep, $ReviewSnapshot)) {
         if (-not (Test-Path $artifact) -or (Get-Item -LiteralPath $artifact).Length -lt 1024) {
             throw "Packaged acceptance artifact was not created correctly: $artifact"
         }
+    }
+    if (-not (Test-Path $Er2Snapshot) -or (Get-Item -LiteralPath $Er2Snapshot).Length -lt 1024) {
+        throw "Packaged ER1 / ER2 test model was not rendered correctly: $Er2Snapshot"
     }
     foreach ($legalArtifact in @(
         (Join-Path $LegalOutput "README-JA.txt"),

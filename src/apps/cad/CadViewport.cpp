@@ -6,6 +6,7 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QLineF>
 #include <QFontMetrics>
 #include <QCursor>
 #include <QLabel>
@@ -482,6 +483,7 @@ void CadViewport::SetProject(const kachakacha::model::Project* project, bool fit
     measurementOverlaySecond_.reset();
     measurementOverlayThird_.reset();
     measurementOverlayText_.clear();
+    measurementOverlayComponentTexts_.clear();
     referenceDimensionOverlays_.clear();
     if (measurementChanged_) {
         measurementChanged_(measurementPicks_);
@@ -844,6 +846,12 @@ void CadViewport::SetSurfaceAppearance(
     update();
 }
 
+void CadViewport::SetSurfaceDiagnosticMode(SurfaceDiagnosticMode mode)
+{
+    surfaceDiagnosticMode_ = mode;
+    update();
+}
+
 void CadViewport::SetPlateAppearance(
     const QColor& fillColor,
     int opacityPercent,
@@ -909,7 +917,8 @@ void CadViewport::SetPlateAssemblyApproximationPreview(
     std::vector<std::array<Vector3, 3>> panels,
     std::vector<int> pieceIndices,
     std::vector<double> deviations,
-    double maximumDeviationMillimeters)
+    double maximumDeviationMillimeters,
+    bool smoothPaper)
 {
     plateAssemblyApproximationIndex_ = plateIndex;
     plateAssemblyApproximationPanels_ = std::move(panels);
@@ -917,6 +926,7 @@ void CadViewport::SetPlateAssemblyApproximationPreview(
     plateAssemblyApproximationDeviations_ = std::move(deviations);
     plateAssemblyApproximationMaximumDeviationMillimeters_
         = std::max(0.0, maximumDeviationMillimeters);
+    plateAssemblyApproximationSmoothPaper_ = smoothPaper;
     update();
 }
 
@@ -955,12 +965,14 @@ void CadViewport::ClearCoincidencePicks()
 void CadViewport::SetMeasurementOverlay(
     std::optional<Vector3> firstPoint,
     std::optional<Vector3> secondPoint,
-    QString text)
+    QString text,
+    QStringList componentTexts)
 {
     measurementOverlayFirst_ = firstPoint;
     measurementOverlaySecond_ = secondPoint;
     measurementOverlayThird_.reset();
     measurementOverlayText_ = std::move(text);
+    measurementOverlayComponentTexts_ = std::move(componentTexts);
     update();
 }
 
@@ -974,6 +986,7 @@ void CadViewport::SetMeasurementAngleOverlay(
     measurementOverlaySecond_ = firstPoint;
     measurementOverlayThird_ = secondPoint;
     measurementOverlayText_ = std::move(text);
+    measurementOverlayComponentTexts_.clear();
     update();
 }
 
@@ -2058,9 +2071,9 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         }
     };
 
-    const double pointRadius = nearbyStructuralOnly ? 14.0 : 6.0;
-    const double intersectionRadius = nearbyStructuralOnly ? 14.0 : 7.0;
-    const double segmentSearchRadius = nearbyStructuralOnly ? 17.0 : 10.0;
+    const double pointRadius = nearbyStructuralOnly ? 18.0 : 12.0;
+    const double intersectionRadius = nearbyStructuralOnly ? 19.0 : 14.0;
+    const double segmentSearchRadius = nearbyStructuralOnly ? 22.0 : 16.0;
 
     if (project_ != nullptr) {
         for (int pointIndex = 0; pointIndex < static_cast<int>(project_->Points().size()); ++pointIndex) {
@@ -2176,7 +2189,7 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         consider(
             DrawingSnapKind::Grid,
             activePlane_->ToWorld(snappedU, snappedV),
-            mainPoint ? 4.0 : minorRadius);
+            mainPoint ? 5.5 : std::max(1.5, minorRadius));
     }
     return best;
 }
@@ -2731,6 +2744,27 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.drawPath(boundary);
             } else {
                 painter.setPen(QPen(edge, selected ? 1.8 : std::max(0.25, edgeWidth * 0.55), edgeStyle));
+                double curvatureScale = 0.0;
+                if (surfaceDiagnosticMode_ == SurfaceDiagnosticMode::GaussianCurvature) {
+                    std::vector<double> sampledCurvatures;
+                    sampledCurvatures.reserve(32 * 10);
+                    for (int uIndex = 0; uIndex < 32; ++uIndex) {
+                        for (int vIndex = 0; vIndex < 10; ++vIndex) {
+                            try {
+                                sampledCurvatures.push_back(std::abs(surface.Curvature(
+                                    (static_cast<double>(uIndex) + 0.5) / 32.0,
+                                    (static_cast<double>(vIndex) + 0.5) / 10.0).gaussian));
+                            } catch (const std::exception&) {
+                            }
+                        }
+                    }
+                    if (!sampledCurvatures.empty()) {
+                        std::sort(sampledCurvatures.begin(), sampledCurvatures.end());
+                        curvatureScale = sampledCurvatures[
+                            sampledCurvatures.size() * 9 / 10];
+                    }
+                    curvatureScale = std::max(curvatureScale, 1.0e-12);
+                }
                 for (int uIndex = 0; uIndex < 32; ++uIndex) {
                     for (int vIndex = 0; vIndex < 10; ++vIndex) {
                         const double u0 = static_cast<double>(uIndex) / 32.0;
@@ -2743,7 +2777,28 @@ void CadViewport::paintEvent(QPaintEvent*)
                               << ProjectPoint(surface.Evaluate(u1, v1))
                               << ProjectPoint(surface.Evaluate(u0, v1));
                         QColor patchFill = fill;
-                        if ((uIndex + vIndex) % 2 != 0) {
+                        if (surfaceDiagnosticMode_ == SurfaceDiagnosticMode::Wireframe) {
+                            patchFill = Qt::transparent;
+                        } else if (surfaceDiagnosticMode_
+                            == SurfaceDiagnosticMode::GaussianCurvature) {
+                            double gaussian = 0.0;
+                            try {
+                                gaussian = surface.Curvature(
+                                    (u0 + u1) * 0.5, (v0 + v1) * 0.5).gaussian;
+                            } catch (const std::exception&) {
+                            }
+                            const double strength = std::sqrt(std::clamp(
+                                std::abs(gaussian) / curvatureScale, 0.0, 1.0));
+                            const QColor neutral("#2f8f78");
+                            const QColor target = gaussian >= 0.0
+                                ? QColor("#d94b37")
+                                : QColor("#3568c0");
+                            patchFill = QColor::fromRgbF(
+                                neutral.redF() * (1.0 - strength) + target.redF() * strength,
+                                neutral.greenF() * (1.0 - strength) + target.greenF() * strength,
+                                neutral.blueF() * (1.0 - strength) + target.blueF() * strength,
+                                0.88F);
+                        } else if ((uIndex + vIndex) % 2 != 0) {
                             patchFill.setAlpha(std::max(16, patchFill.alpha() - 14));
                         }
                         painter.setBrush(patchFill);
@@ -2921,9 +2976,13 @@ void CadViewport::paintEvent(QPaintEvent*)
                     polygon << ProjectPoint(panel[0])
                             << ProjectPoint(panel[1])
                             << ProjectPoint(panel[2]);
+                    if (plateAssemblyApproximationSmoothPaper_) {
+                        approximationFill = QColor(36, 143, 147, 105);
+                    }
                     painter.setBrush(approximationFill);
-                    painter.setPen(QPen(
-                        approximationEdge, deviation > 0.1 ? 1.35 : 0.75));
+                    painter.setPen(plateAssemblyApproximationSmoothPaper_
+                        ? QPen(Qt::NoPen)
+                        : QPen(approximationEdge, deviation > 0.1 ? 1.35 : 0.75));
                     painter.drawPolygon(polygon);
                 }
                 painter.restore();
@@ -3568,18 +3627,24 @@ void CadViewport::paintEvent(QPaintEvent*)
         if (drawingSnapHover_.has_value()) {
             const QPointF center = ProjectPoint(drawingSnapHover_->point);
             painter.save();
-            painter.setBrush(QColor(255, 255, 255, 175));
-            painter.setPen(QPen(QColor(8, 119, 128, 155), 1.2));
+            const bool structural = drawingSnapHover_->kind != DrawingSnapKind::Grid;
+            painter.setBrush(QColor(255, 255, 255, structural ? 225 : 175));
+            painter.setPen(QPen(
+                structural ? QColor(0, 126, 138, 235) : QColor(8, 119, 128, 125),
+                structural ? 2.2 : 1.0));
+            if (structural) {
+                painter.drawEllipse(center, 10.5, 10.5);
+            }
             switch (drawingSnapHover_->kind) {
             case DrawingSnapKind::Intersection:
-                painter.drawLine(center + QPointF(-4.0, -4.0), center + QPointF(4.0, 4.0));
-                painter.drawLine(center + QPointF(-4.0, 4.0), center + QPointF(4.0, -4.0));
+                painter.drawLine(center + QPointF(-5.5, -5.5), center + QPointF(5.5, 5.5));
+                painter.drawLine(center + QPointF(-5.5, 5.5), center + QPointF(5.5, -5.5));
                 break;
             case DrawingSnapKind::Point:
-                painter.drawRect(QRectF(center - QPointF(3.5, 3.5), QSizeF(7.0, 7.0)));
+                painter.drawEllipse(center, 4.5, 4.5);
                 break;
             case DrawingSnapKind::Endpoint:
-                painter.drawEllipse(center, 3.8, 3.8);
+                painter.drawRect(QRectF(center - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
                 break;
             case DrawingSnapKind::Grid:
                 painter.setPen(QPen(QColor(8, 119, 128, 105), 1.0));
@@ -3680,6 +3745,55 @@ void CadViewport::paintEvent(QPaintEvent*)
             QPointF labelAnchor = first + QPointF(10.0, -10.0);
             if (measurementOverlaySecond_.has_value()) {
                 const QPointF second = ProjectPoint(*measurementOverlaySecond_);
+                if (measurementOverlayComponentTexts_.size() == 3) {
+                    const Vector3& start = *measurementOverlayFirst_;
+                    const Vector3& end = *measurementOverlaySecond_;
+                    const std::array<Vector3, 4> componentPoints{{
+                        start,
+                        {end.x, start.y, start.z},
+                        {end.x, end.y, start.z},
+                        end,
+                    }};
+                    const std::array<QColor, 3> componentColors{{
+                        QColor("#c73535"), QColor("#2d8a4a"), QColor("#2674c8")}};
+                    const std::array<QPointF, 3> labelOffsets{{
+                        {6.0, -8.0}, {6.0, 17.0}, {6.0, -8.0}}};
+                    for (int axis = 0; axis < 3; ++axis) {
+                        const QPointF componentStart = ProjectPoint(componentPoints[axis]);
+                        const QPointF componentEnd = ProjectPoint(componentPoints[axis + 1]);
+                        painter.setPen(QPen(componentColors[axis], 2.6));
+                        if (QLineF(componentStart, componentEnd).length() > 1.0) {
+                            painter.drawLine(componentStart, componentEnd);
+                        } else {
+                            painter.drawEllipse(componentStart, 3.0, 3.0);
+                        }
+                        const QString& componentText = measurementOverlayComponentTexts_[axis];
+                        const QFontMetrics componentMetrics = painter.fontMetrics();
+                        const QRect componentBounds = componentMetrics.boundingRect(componentText);
+                        const QPointF componentAnchor
+                            = (componentStart + componentEnd) * 0.5 + labelOffsets[axis];
+                        QRectF componentBox(
+                            componentAnchor.x(), componentAnchor.y() - componentBounds.height() - 5.0,
+                            componentBounds.width() + 10.0, componentBounds.height() + 8.0);
+                        const QRectF bounds = QRectF(rect()).adjusted(4.0, 4.0, -4.0, -4.0);
+                        if (componentBox.left() < bounds.left()) {
+                            componentBox.moveLeft(bounds.left());
+                        }
+                        if (componentBox.right() > bounds.right()) {
+                            componentBox.moveRight(bounds.right());
+                        }
+                        if (componentBox.top() < bounds.top()) {
+                            componentBox.moveTop(bounds.top());
+                        }
+                        if (componentBox.bottom() > bounds.bottom()) {
+                            componentBox.moveBottom(bounds.bottom());
+                        }
+                        painter.setPen(QPen(componentColors[axis], 1.0));
+                        painter.setBrush(QColor(255, 255, 255, 236));
+                        painter.drawRoundedRect(componentBox, 3.0, 3.0);
+                        painter.drawText(componentBox, Qt::AlignCenter, componentText);
+                    }
+                }
                 painter.setPen(QPen(measurementColor, 2.0, Qt::DashLine));
                 painter.drawLine(first, second);
                 painter.setBrush(QColor("#ffffff"));
@@ -3708,6 +3822,30 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.setPen(measurementColor);
                 painter.drawText(labelBox, Qt::AlignCenter, measurementOverlayText_);
             }
+        }
+        painter.restore();
+    }
+
+    if (surfaceDiagnosticMode_ == SurfaceDiagnosticMode::GaussianCurvature) {
+        painter.save();
+        const QRectF legend(18.0, height() - 54.0, 300.0, 34.0);
+        painter.setBrush(QColor(255, 255, 255, 224));
+        painter.setPen(QPen(QColor("#829097"), 1.0));
+        painter.drawRoundedRect(legend, 3.0, 3.0);
+        const std::array<QColor, 3> colors{
+            QColor("#3568c0"), QColor("#2f8f78"), QColor("#d94b37")};
+        const std::array<QString, 3> texts{
+            QStringLiteral("鞍状"), QStringLiteral("一方向"), QStringLiteral("二重曲率")};
+        for (int index = 0; index < 3; ++index) {
+            const QRectF swatch(
+                legend.left() + 10.0 + index * 96.0, legend.top() + 8.0, 20.0, 18.0);
+            painter.setBrush(colors[index]);
+            painter.setPen(Qt::NoPen);
+            painter.drawRect(swatch);
+            painter.setPen(QColor("#2f3d43"));
+            painter.drawText(QRectF(
+                swatch.right() + 4.0, legend.top() + 5.0, 66.0, 24.0),
+                Qt::AlignVCenter | Qt::AlignLeft, texts[index]);
         }
         painter.restore();
     }

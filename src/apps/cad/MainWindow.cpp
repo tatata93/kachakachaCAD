@@ -1,6 +1,9 @@
 #include "MainWindow.h"
 #include "PlatePdfExport.h"
 
+#include "kachakacha/io/BentSheetPapercraft.h"
+#include "kachakacha/io/FacetedPapercraft.h"
+#include "kachakacha/io/FabricationPanelPapercraft.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
 #include "kachakacha/io/ProjectScript.h"
@@ -49,6 +52,7 @@
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -68,6 +72,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -80,7 +85,21 @@ using kachakacha::io::AddPlateFlatPatternModel;
 using kachakacha::io::BuildPlateAssemblyGuide;
 using kachakacha::io::BuildPlateAssemblyMotion;
 using kachakacha::io::BuildPlateFlatPattern;
+using kachakacha::io::BuildBentSheetPapercraftGuide;
+using kachakacha::io::BuildBentSheetPapercraftMotion;
+using kachakacha::io::BuildBentSheetPapercraftPattern;
+using kachakacha::io::BuildBentSheetPapercraftPreview;
+using kachakacha::io::BuildFacetedPapercraftGuide;
+using kachakacha::io::BuildFacetedPapercraftMotion;
+using kachakacha::io::BuildFacetedPapercraftPattern;
+using kachakacha::io::BuildFacetedPapercraftPreview;
+using kachakacha::io::BuildFabricationPanelPapercraftGuide;
+using kachakacha::io::BuildFabricationPanelPapercraftMotion;
+using kachakacha::io::BuildFabricationPanelPapercraftPattern;
+using kachakacha::io::BuildFabricationPanelPapercraftPreview;
+using kachakacha::io::FabricationPanelDirection;
 using kachakacha::io::PapercraftCutDirection;
+using kachakacha::io::PapercraftPanelPriority;
 using kachakacha::io::PlateAssemblyStrategy;
 using kachakacha::io::PlateFlatPatternOptions;
 using kachakacha::io::ReliefNotchStyle;
@@ -111,6 +130,7 @@ using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
 using kachakacha::model::FilletIntersectingLines;
 using kachakacha::model::JoinLineChain;
+using kachakacha::model::kWireChainConnectionTolerance;
 using kachakacha::model::MeasureDirectionToPlaneAngleDegrees;
 using kachakacha::model::MeasureDirectionsAngle;
 using kachakacha::model::MeasurePlaneToPlaneAngleDegrees;
@@ -145,6 +165,70 @@ bool IsAutomationInvocation()
         || arguments.contains(QStringLiteral("--manual-state"))
         || arguments.contains(QStringLiteral("--export-first-body-stl"))
         || arguments.contains(QStringLiteral("--export-first-body-step"));
+}
+
+QString FriendlyPlateCreationError(const std::exception& error)
+{
+    const QString technical = QString::fromUtf8(error.what());
+    if (technical.contains(QStringLiteral("degenerate interior"))) {
+        return QStringLiteral(
+            "面の内部に幅または高さが0になる箇所があるため、板材化できません。\n"
+            "断面の交差、重複、途中で一点に潰れる箇所を修正してください。\n"
+            "端だけが一点に収束する形状には対応しています。");
+    }
+    if (technical.contains(QStringLiteral("fold or collapse"))) {
+        return QStringLiteral(
+            "指定した板厚では表面または裏面が折り返すため、板材化できません。\n"
+            "板厚を小さくするか、厚み方向を反対側または中央に変更してください。");
+    }
+    if (technical.contains(QStringLiteral("normal is undefined"))) {
+        return QStringLiteral(
+            "面の向きを決められない領域があるため、板材化できません。\n"
+            "外形線・断面線の重複や急なねじれを修正してください。");
+    }
+    if (technical.contains(QStringLiteral("non-finite"))) {
+        return QStringLiteral(
+            "面または厚みの計算結果が不正になったため、板材化できません。\n"
+            "面の断面構成と板厚を確認してください。");
+    }
+    return technical;
+}
+
+QString FriendlySurfaceChainError(const std::exception& error)
+{
+    const QString technical = QString::fromUtf8(error.what());
+    if (technical.contains(QStringLiteral("disconnected chain"))) {
+        return QStringLiteral(
+            "選んだ線が複数の離れた経路に分かれています。\n"
+            "1つの輪郭・外形・断面として端点で続く線だけを選んでください。");
+    }
+    if (technical.contains(QStringLiteral("contain a branch"))) {
+        return QStringLiteral(
+            "選んだ線に枝分かれがあります。\n"
+            "分岐点から先は、輪郭として使う側だけを選んでください。");
+    }
+    if (technical.contains(QStringLiteral("duplicate or overlapping"))) {
+        return QStringLiteral(
+            "同じ位置に重複する線が含まれています。\n"
+            "重なった線の一方を外してから登録してください。");
+    }
+    if (technical.contains(QStringLiteral("crosses or overlaps itself"))) {
+        return QStringLiteral(
+            "閉じた輪郭が途中で交差または重なっています。\n"
+            "交差点で線を分割し、面の外周になるループだけを登録してください。");
+    }
+    if (technical.contains(QStringLiteral("closes onto itself"))) {
+        return QStringLiteral(
+            "すでに閉じている線と別の線が同じ経路へ混在しています。\n"
+            "閉じた線は単独の輪郭として登録してください。");
+    }
+    if (technical.contains(QStringLiteral("continuous chain"))
+        || technical.contains(QStringLiteral("endpoint chain"))) {
+        return QStringLiteral(
+            "端点がつながる1本の経路として並べられません。\n"
+            "端点の小さな四角を確認し、離れた箇所は端点一致で接続してください。");
+    }
+    return technical;
 }
 
 class ExpressionDoubleSpinBox final : public QDoubleSpinBox {
@@ -862,11 +946,13 @@ void MainWindow::BuildDrawingActions()
     removeCoincidentAction_->setToolTip(QStringLiteral("選択したワイヤーの端点一致と、それに付随する接線関係を解除"));
     removeTangentAction_->setToolTip(QStringLiteral("選択したワイヤーのG1/G2関係を解除し、端点一致は残す"));
     measureToolAction_->setToolTip(QStringLiteral("3D画面で2点距離、3点角度、接線・法線角を直接測定"));
-    joinWiresAction_->setToolTip(QStringLiteral("端点がつながる直線・ポリラインを1本へ結合"));
+    joinWiresAction_->setToolTip(QStringLiteral(
+        "端点がつながる直線・円弧・ベジェ・スプラインを1本のポリラインへ結合"));
     meetLinesAction_->setToolTip(QStringLiteral("選択した2直線をトリムまたは延長して交点で合わせる"));
     setReferenceAction_->setToolTip(QStringLiteral("選択した1本の直線を変形や平面作成の基準線にする"));
     clearReferenceAction_->setToolTip(QStringLiteral("現在の基準線を解除する"));
-    pointToolAction_->setToolTip(QStringLiteral("交点・端点・格子点または任意位置に、スナップ基準として残る点を置く"));
+    pointToolAction_->setToolTip(QStringLiteral(
+        "交点・端点・格子点または任意位置に点を置く。吸着時は大きな丸を表示し、Ctrl中は吸着しません"));
     lineToolAction_->setToolTip(QStringLiteral("始点と終点を指定。Shiftで作図面の水平・垂直へ固定"));
     polylineToolAction_->setToolTip(QStringLiteral("点を続けて指定。Shiftで次の辺を水平・垂直へ固定"));
     rectangleToolAction_->setToolTip(QStringLiteral("対角2点を指定。Shiftで正方形へ固定"));
@@ -1239,11 +1325,17 @@ QWidget* MainWindow::BuildPlanePanel()
     planeName_ = new QLineEdit("plane_1");
     planeMethod_ = new QComboBox;
     planeMethod_->addItems({
-        QStringLiteral("標準平面"),
-        QStringLiteral("点 + 法線"),
-        QStringLiteral("3点"),
-        QStringLiteral("既存平面からオフセット"),
-        QStringLiteral("軸まわりに回転"),
+        QStringLiteral("XYZの基準面"),
+        QStringLiteral("位置と向きを数値指定"),
+        QStringLiteral("3点を通る"),
+        QStringLiteral("平面から平行距離"),
+        QStringLiteral("直線を軸に傾ける"),
+        QStringLiteral("点を通る平行面"),
+        QStringLiteral("2平面の中央面"),
+        QStringLiteral("2直線を含む面"),
+        QStringLiteral("点を通る直線直角面"),
+        QStringLiteral("線上位置の直角面"),
+        QStringLiteral("曲面近傍の接平面"),
     });
     form->addRow(QStringLiteral("名前"), planeName_);
     form->addRow(QStringLiteral("作り方"), planeMethod_);
@@ -1265,6 +1357,10 @@ QWidget* MainWindow::BuildPlanePanel()
     planeParameters_->addWidget(pointNormalPage);
 
     QWidget* threePointPage = MakeFormPage(pageForm);
+    auto* threePointHint = new QLabel(QStringLiteral(
+        "3Dで作図点を3つ選択すると、その点を優先します。未選択時は下の座標を使います。"));
+    threePointHint->setWordWrap(true);
+    pageForm->addRow(threePointHint);
     pageForm->addRow(QStringLiteral("点 A"), MakeVector3Editor(threePointA_));
     pageForm->addRow(QStringLiteral("点 B"), MakeVector3Editor(threePointB_, {10.0, 0.0, 0.0}));
     pageForm->addRow(QStringLiteral("点 C"), MakeVector3Editor(threePointC_, {0.0, 10.0, 0.0}));
@@ -1272,6 +1368,10 @@ QWidget* MainWindow::BuildPlanePanel()
 
     QWidget* offsetPage = MakeFormPage(pageForm);
     offsetSourcePlane_ = new QComboBox;
+    auto* offsetHint = new QLabel(QStringLiteral(
+        "3Dで作業平面を1つ選択した場合は、その平面を優先します。距離は下の共通調整で指定します。"));
+    offsetHint->setWordWrap(true);
+    pageForm->addRow(offsetHint);
     pageForm->addRow(QStringLiteral("基準平面"), offsetSourcePlane_);
     planeParameters_->addWidget(offsetPage);
 
@@ -1279,11 +1379,45 @@ QWidget* MainWindow::BuildPlanePanel()
     rotateSourcePlane_ = new QComboBox;
     rotateAngle_ = MakeNumberField(30.0);
     rotateAngle_->setSuffix(QStringLiteral(" °"));
+    auto* rotateHint = new QLabel(QStringLiteral(
+        "3Dで作業平面と直線を選択した場合は、その組み合わせを優先します。"));
+    rotateHint->setWordWrap(true);
+    pageForm->addRow(rotateHint);
     pageForm->addRow(QStringLiteral("基準平面"), rotateSourcePlane_);
     pageForm->addRow(QStringLiteral("回転軸の点"), MakeVector3Editor(rotateAxisPoint_));
     pageForm->addRow(QStringLiteral("回転軸の向き"), MakeVector3Editor(rotateAxisDirection_, {1.0, 0.0, 0.0}));
     pageForm->addRow(QStringLiteral("基準角度"), rotateAngle_);
     planeParameters_->addWidget(rotatePage);
+
+    const auto addSelectionPage = [&](const QString& instruction) {
+        QFormLayout* selectionForm = nullptr;
+        QWidget* page = MakeFormPage(selectionForm);
+        auto* label = new QLabel(instruction);
+        label->setWordWrap(true);
+        label->setStyleSheet("color: #435159;");
+        selectionForm->addRow(label);
+        planeParameters_->addWidget(page);
+        return selectionForm;
+    };
+
+    addSelectionPage(QStringLiteral(
+        "3Dで作業平面1つと作図点1つを選択します。選んだ点を通り、元の平面と同じ向きになります。"));
+    addSelectionPage(QStringLiteral(
+        "3Dで平行な作業平面を2つ選択します。ちょうど中央の位置に平面を作ります。"));
+    addSelectionPage(QStringLiteral(
+        "3Dで同一平面上にある直線を2本選択します。交差線または平行線に対応します。"));
+    addSelectionPage(QStringLiteral(
+        "3Dで直線1本と作図点1つを選択します。点を通り、直線に直角な平面を作ります。"));
+
+    QFormLayout* pathForm = addSelectionPage(QStringLiteral(
+        "3Dで線または曲線を1本選択します。指定位置で経路に直角な平面を作ります。"));
+    pathPlanePosition_ = MakeNumberField(50.0);
+    pathPlanePosition_->setRange(0.0, 100.0);
+    pathPlanePosition_->setSuffix(QStringLiteral(" %"));
+    pathForm->addRow(QStringLiteral("線上位置"), pathPlanePosition_);
+
+    addSelectionPage(QStringLiteral(
+        "3Dで面または板1つと作図点1つを選択します。点に最も近い曲面位置へ接する平面を作ります。"));
 
     layout->addWidget(planeParameters_);
     connect(planeMethod_, &QComboBox::currentIndexChanged, planeParameters_, &QStackedWidget::setCurrentIndex);
@@ -1749,7 +1883,11 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("閉じた輪郭から平面"),
         QStringLiteral("2断面から曲面"),
         QStringLiteral("3断面以上からロフト"),
+        QStringLiteral("外形ガイド2本＋断面1本以上"),
     });
+    surfaceType_->setToolTip(QStringLiteral(
+        "115系前面上部のような形は「外形ガイド2本＋断面1本以上」を選び、"
+        "外形2本、断面の順にCtrl+クリックします"));
     surfaceName_ = new QLineEdit(QStringLiteral("surface_1"));
     createForm->addRow(QStringLiteral("作り方"), surfaceType_);
     createForm->addRow(QStringLiteral("面の名前"), surfaceName_);
@@ -1757,12 +1895,133 @@ QWidget* MainWindow::BuildSurfacePanel()
 
     surfaceSelectionLabel_ = new QLabel(QStringLiteral("選択: ワイヤー0本"));
     surfaceSelectionLabel_->setStyleSheet("color: #5c6670;");
+    surfaceSelectionLabel_->setWordWrap(true);
     layout->addWidget(surfaceSelectionLabel_);
 
-    auto* createButton = new QPushButton(QStringLiteral("選択ワイヤーから面を作成"));
-    createButton->setObjectName("primaryButton");
-    connect(createButton, &QPushButton::clicked, this, &MainWindow::CreateSurfaceFromSelection);
-    layout->addWidget(createButton);
+    auto* groupHint = new QLabel(QStringLiteral(
+        "複数線で1つの輪郭・断面を作る場合は、3Dで線を選んで下の表へ役割ごとに追加します。"));
+    groupHint->setWordWrap(true);
+    groupHint->setStyleSheet("color: #4f5b63;");
+    layout->addWidget(groupHint);
+
+    surfaceSelectChainButton_ = new QPushButton(QStringLiteral("接続区間を一括選択"));
+    surfaceSelectChainButton_->setToolTip(QStringLiteral(
+        "線を1本選んで実行すると、端点で続く直線・円弧・ベジェ・スプラインを"
+        "枝分かれ点までまとめて選択します"));
+    connect(surfaceSelectChainButton_, &QPushButton::clicked,
+        this, &MainWindow::SelectConnectedSurfaceWireChain);
+    layout->addWidget(surfaceSelectChainButton_);
+
+    surfaceInputTable_ = new QTableWidget(0, 4);
+    surfaceInputTable_->setHorizontalHeaderLabels({
+        QStringLiteral("役割"), QStringLiteral("状態"),
+        QStringLiteral("本数"), QStringLiteral("元の線")});
+    surfaceInputTable_->verticalHeader()->setVisible(false);
+    surfaceInputTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    surfaceInputTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    surfaceInputTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    surfaceInputTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    surfaceInputTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    surfaceInputTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    surfaceInputTable_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    surfaceInputTable_->setMinimumHeight(118);
+    surfaceInputTable_->setMaximumHeight(170);
+    surfaceInputTable_->setToolTip(QStringLiteral(
+        "1行が1つの連続輪郭・外形・断面です。行内の線は端点でつながっている必要があります"));
+    layout->addWidget(surfaceInputTable_);
+
+    auto* groupAddRow = new QHBoxLayout;
+    groupAddRow->setContentsMargins(0, 0, 0, 0);
+    surfaceAddBoundaryOrGuideButton_ = new QPushButton(QStringLiteral("輪郭を追加"));
+    surfaceAddSectionButton_ = new QPushButton(QStringLiteral("断面を追加"));
+    surfaceAppendGroupButton_ = new QPushButton(QStringLiteral("選択行へ線を追加"));
+    groupAddRow->addWidget(surfaceAddBoundaryOrGuideButton_);
+    groupAddRow->addWidget(surfaceAddSectionButton_);
+    groupAddRow->addWidget(surfaceAppendGroupButton_);
+    layout->addLayout(groupAddRow);
+
+    auto* groupEditRow = new QHBoxLayout;
+    groupEditRow->setContentsMargins(0, 0, 0, 0);
+    auto* moveGroupUpButton = new QToolButton;
+    moveGroupUpButton->setIcon(style()->standardIcon(QStyle::SP_ArrowUp));
+    moveGroupUpButton->setToolTip(QStringLiteral("選択した断面を1つ前へ移動"));
+    auto* moveGroupDownButton = new QToolButton;
+    moveGroupDownButton->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    moveGroupDownButton->setToolTip(QStringLiteral("選択した断面を1つ後ろへ移動"));
+    auto* removeGroupButton = new QPushButton(QStringLiteral("選択行を削除"));
+    auto* clearGroupsButton = new QPushButton(QStringLiteral("割当をすべて消す"));
+    groupEditRow->addWidget(moveGroupUpButton);
+    groupEditRow->addWidget(moveGroupDownButton);
+    groupEditRow->addWidget(removeGroupButton);
+    groupEditRow->addWidget(clearGroupsButton);
+    layout->addLayout(groupEditRow);
+
+    connect(surfaceAddBoundaryOrGuideButton_, &QPushButton::clicked, this, [this] {
+        AddSelectedSurfaceInputGroup(
+            surfaceType_->currentIndex() == 0
+                ? SurfaceInputRole::Boundary : SurfaceInputRole::Guide);
+    });
+    connect(surfaceAddSectionButton_, &QPushButton::clicked, this, [this] {
+        AddSelectedSurfaceInputGroup(SurfaceInputRole::Section);
+    });
+    connect(surfaceAppendGroupButton_, &QPushButton::clicked,
+        this, &MainWindow::AppendSelectedWiresToSurfaceInputGroup);
+    connect(removeGroupButton, &QPushButton::clicked,
+        this, &MainWindow::RemoveSelectedSurfaceInputGroup);
+    connect(clearGroupsButton, &QPushButton::clicked,
+        this, &MainWindow::ClearSurfaceInputGroups);
+    const auto moveGroup = [this](int direction) {
+        const int row = surfaceInputTable_->currentRow();
+        const int target = row + direction;
+        if (row < 0 || target < 0
+            || target >= static_cast<int>(surfaceInputGroups_.size())) {
+            statusBar()->showMessage(QStringLiteral("移動する表の行を選択してください"), 3000);
+            return;
+        }
+        if (surfaceInputGroups_[row].role != surfaceInputGroups_[target].role) {
+            statusBar()->showMessage(
+                QStringLiteral("外形と断面の区分を越えて移動することはできません"), 3500);
+            return;
+        }
+        std::swap(surfaceInputGroups_[row], surfaceInputGroups_[target]);
+        RefreshSurfaceInputTable();
+        surfaceInputTable_->selectRow(target);
+    };
+    connect(moveGroupUpButton, &QToolButton::clicked,
+        this, [moveGroup] { moveGroup(-1); });
+    connect(moveGroupDownButton, &QToolButton::clicked,
+        this, [moveGroup] { moveGroup(1); });
+    connect(surfaceInputTable_, &QTableWidget::cellClicked,
+        this, [this](int row, int) {
+            if (row < 0 || row >= static_cast<int>(surfaceInputGroups_.size())) {
+                return;
+            }
+            std::vector<CadSelection> selections;
+            for (const std::string& name : surfaceInputGroups_[row].wireNames) {
+                const auto found = std::find_if(
+                    project_.Wires().begin(), project_.Wires().end(),
+                    [&](const auto& wire) { return wire.name == name; });
+                if (found != project_.Wires().end()) {
+                    selections.push_back({
+                        CadSelectionKind::Wire,
+                        static_cast<int>(std::distance(project_.Wires().begin(), found)),
+                    });
+                }
+            }
+            UpdateSelections(std::move(selections), true);
+        });
+    connect(surfaceType_, &QComboBox::currentIndexChanged, this, [this] {
+        surfaceInputGroups_.clear();
+        RefreshSurfaceInputTable();
+        UpdateSelections(viewport_->Selections(), false);
+    });
+    RefreshSurfaceInputTable();
+
+    surfaceCreateButton_ = new QPushButton(QStringLiteral("選択ワイヤーから面を作成"));
+    surfaceCreateButton_->setObjectName("primaryButton");
+    connect(surfaceCreateButton_, &QPushButton::clicked,
+        this, &MainWindow::CreateSurfaceFromSelection);
+    layout->addWidget(surfaceCreateButton_);
 
     auto* projectionTitle = new QLabel(QStringLiteral("平面図を面へ投影"));
     projectionTitle->setProperty("manualAnchor", QStringLiteral("surfaceProjection"));
@@ -1880,7 +2139,9 @@ QWidget* MainWindow::BuildSurfacePanel()
 
     auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから3D板を直接作る"));
     wirePlateButton->setObjectName("primaryButton");
-    wirePlateButton->setToolTip(QStringLiteral("1閉輪郭は平板、2断面は曲面板、3断面以上はロフト板"));
+    wirePlateButton->setToolTip(QStringLiteral(
+        "通常は1閉輪郭で平板、2断面で曲面板、3断面以上でロフト板。"
+        "外形ガイド方式を選んだ場合は、外形2本＋断面1本以上から板を作ります"));
     connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
     layout->addWidget(wirePlateButton);
 
@@ -2135,6 +2396,64 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
     plateFlatPatternPlane_ = new QComboBox;
+    platePapercraftMode_ = new QComboBox;
+    platePapercraftMode_->setObjectName(QStringLiteral("platePapercraftMode"));
+    platePapercraftMode_->addItem(
+        QStringLiteral("製作用大部材（近似モデル→各部材を展開）"), 3);
+    platePapercraftMode_->addItem(
+        QStringLiteral("曲げ紙ペーパークラフト（連続部材）"), 2);
+    platePapercraftMode_->addItem(
+        QStringLiteral("多面体ペーパークラフト（比較用）"), 1);
+    platePapercraftMode_->addItem(
+        QStringLiteral("曲げ帯ペーパークラフト（従来方式）"), 0);
+    platePapercraftMode_->setCurrentIndex(
+        platePapercraftMode_->findData(2));
+    platePapercraftMode_->setToolTip(
+        QStringLiteral("製作用大部材は元形状へ少数の長い曲げ板を先に当て、許容偏差を超える板だけ追加分割します。既存方式も比較用に残ります"));
+    platePapercraftPanelPriority_ = new QComboBox;
+    platePapercraftPanelPriority_->addItem(
+        QStringLiteral("部材優先（少数の長い部材）"),
+        static_cast<int>(PapercraftPanelPriority::PartFirst));
+    platePapercraftPanelPriority_->addItem(
+        QStringLiteral("バランス"),
+        static_cast<int>(PapercraftPanelPriority::Balanced));
+    platePapercraftPanelPriority_->addItem(
+        QStringLiteral("精度優先"),
+        static_cast<int>(PapercraftPanelPriority::AccuracyFirst));
+    platePapercraftPanelPriority_->setToolTip(
+        QStringLiteral("部材優先では分離を避けて短い切れ目を先に使います。精度優先では許容誤差へ近づけるため切れ目を増やします"));
+    platePapercraftMaximumError_ = MakePositiveField(0.10);
+    platePapercraftMaximumError_->setRange(0.01, 10.0);
+    platePapercraftMaximumError_->setDecimals(3);
+    platePapercraftMaximumError_->setSingleStep(0.01);
+    platePapercraftMaximumError_->setSuffix(QStringLiteral(" mm"));
+    platePapercraftMaximumError_->setToolTip(
+        QStringLiteral("元の3D面と組み立て形状の最大偏差の設計目標。結果欄には推定値ではなく実測値を表示します"));
+    platePapercraftMinimumWidth_ = MakePositiveField(3.0);
+    platePapercraftMinimumWidth_->setRange(0.2, 100.0);
+    platePapercraftMinimumWidth_->setDecimals(1);
+    platePapercraftMinimumWidth_->setSingleStep(0.5);
+    platePapercraftMinimumWidth_->setSuffix(QStringLiteral(" mm"));
+    platePapercraftMinimumWidth_->setToolTip(
+        QStringLiteral("切れ込みの間や接続部に残す最小幅。細すぎて切り出せない部材を避けます"));
+    plateFabricationPanelDirection_ = new QComboBox;
+    plateFabricationPanelDirection_->addItem(
+        QStringLiteral("曲率から自動"),
+        static_cast<int>(FabricationPanelDirection::Automatic));
+    plateFabricationPanelDirection_->addItem(
+        QStringLiteral("U方向へ長い部材"),
+        static_cast<int>(FabricationPanelDirection::LongAlongU));
+    plateFabricationPanelDirection_->addItem(
+        QStringLiteral("V方向へ長い部材"),
+        static_cast<int>(FabricationPanelDirection::LongAlongV));
+    plateFabricationPanelDirection_->setToolTip(
+        QStringLiteral("通常は自動。車体前面を横長帯で作る場合は、面の横方向に合うU/Vを選びます"));
+    plateFabricationPanelMaximumCount_ = new QSpinBox;
+    plateFabricationPanelMaximumCount_->setRange(1, 32);
+    plateFabricationPanelMaximumCount_->setValue(8);
+    plateFabricationPanelMaximumCount_->setSuffix(QStringLiteral(" 枚"));
+    plateFabricationPanelMaximumCount_->setToolTip(
+        QStringLiteral("許容偏差へ届かない場合でも、ここで指定した枚数より細分化しません"));
     plateFlatPatternAutoRelief_ = new QCheckBox(
         QStringLiteral("ペーパークラフトとして分割・切れ目を生成"));
     plateFlatPatternAutoRelief_->setObjectName(QStringLiteral("plateFlatPatternAutoRelief"));
@@ -2267,6 +2586,12 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternCutWidth_->setSuffix(QStringLiteral(" mm"));
     flatModelForm->addRow(QStringLiteral("展開部材名"), plateFlatPatternName_);
     flatModelForm->addRow(QStringLiteral("配置する平面"), plateFlatPatternPlane_);
+    flatModelForm->addRow(QStringLiteral("生成方式"), platePapercraftMode_);
+    flatModelForm->addRow(QStringLiteral("展開方針"), platePapercraftPanelPriority_);
+    flatModelForm->addRow(QStringLiteral("最大許容3D偏差"), platePapercraftMaximumError_);
+    flatModelForm->addRow(QStringLiteral("最小部材幅"), platePapercraftMinimumWidth_);
+    flatModelForm->addRow(QStringLiteral("大部材の向き"), plateFabricationPanelDirection_);
+    flatModelForm->addRow(QStringLiteral("最大部材数"), plateFabricationPanelMaximumCount_);
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
     flatModelForm->addRow(QStringLiteral("組み立て方"), plateFlatPatternAssemblyStrategy_);
     flatModelForm->addRow(QStringLiteral("切れ目の方向"), plateFlatPatternCutDirection_);
@@ -2304,6 +2629,15 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(assemblyModelButton, &QPushButton::clicked,
         this, &MainWindow::CreatePlateAssemblyStateModel);
     layout->addWidget(assemblyModelButton);
+
+    auto* approximationModelButton = new QPushButton(
+        QStringLiteral("近似完成モデルを別オブジェクトで作成"));
+    approximationModelButton->setObjectName(QStringLiteral("primaryButton"));
+    approximationModelButton->setToolTip(
+        QStringLiteral("立体再現度で角ばらせた完成形を、元の板材を残したまま別モデルとして追加"));
+    connect(approximationModelButton, &QPushButton::clicked,
+        this, &MainWindow::CreateFacetedApproximationModel);
+    layout->addWidget(approximationModelButton);
 
     auto* assemblyExportRow = new QWidget;
     auto* assemblyExportLayout = new QHBoxLayout(assemblyExportRow);
@@ -2350,14 +2684,24 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(plateDxfButton, &QPushButton::clicked, this, [this] { ExportSelectedPlate(true); });
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
-    const auto updateReliefControls = [this, fidelityControl, assemblyProgressControl, flatModelForm] {
-        const bool enabled = plateFlatPatternAutoRelief_->isChecked();
+    const auto updateReliefControls = [this, fidelityControl, assemblyProgressControl,
+                                       flatModelForm, approximationModelButton] {
+        const bool faceted = UsesFacetedPapercraft();
+        const bool bentSheet = UsesBentSheetPapercraft();
+        const bool fabricationPanel = UsesFabricationPanelPapercraft();
+        const bool independentMode = faceted || bentSheet || fabricationPanel;
+        const bool enabled = independentMode || plateFlatPatternAutoRelief_->isChecked();
         const bool allowNotches = enabled && plateFlatPatternAllowNotches_->isChecked();
         const ReliefNotchStyle notchStyle = static_cast<ReliefNotchStyle>(
             plateFlatPatternNotchStyle_->currentData().toInt());
         const bool curved = notchStyle == ReliefNotchStyle::CurvedV;
         const bool advancedSpacing = enabled && plateFlatPatternAdvancedSpacing_->isChecked();
-        plateFlatPatternAssemblyStrategy_->setEnabled(enabled);
+        plateFlatPatternAssemblyStrategy_->setEnabled(enabled && !independentMode);
+        platePapercraftPanelPriority_->setEnabled(bentSheet || fabricationPanel);
+        platePapercraftMaximumError_->setEnabled(bentSheet || fabricationPanel);
+        platePapercraftMinimumWidth_->setEnabled(bentSheet || fabricationPanel);
+        plateFabricationPanelDirection_->setEnabled(fabricationPanel);
+        plateFabricationPanelMaximumCount_->setEnabled(fabricationPanel);
         plateFlatPatternCutDirection_->setEnabled(enabled);
         fidelityControl->setEnabled(enabled);
         plateFlatPatternAllowNotches_->setEnabled(enabled);
@@ -2371,6 +2715,14 @@ QWidget* MainWindow::BuildOutputPanel()
         plateFlatPatternFoldSpacing_->setEnabled(advancedSpacing);
         assemblyProgressControl->setEnabled(enabled);
         plateAssemblyOutputPiece_->setEnabled(enabled);
+        approximationModelButton->setEnabled(independentMode);
+        flatModelForm->setRowVisible(plateFlatPatternAutoRelief_, !independentMode);
+        flatModelForm->setRowVisible(plateFlatPatternAssemblyStrategy_, !independentMode);
+        flatModelForm->setRowVisible(platePapercraftPanelPriority_, bentSheet || fabricationPanel);
+        flatModelForm->setRowVisible(platePapercraftMaximumError_, bentSheet || fabricationPanel);
+        flatModelForm->setRowVisible(platePapercraftMinimumWidth_, bentSheet || fabricationPanel);
+        flatModelForm->setRowVisible(plateFabricationPanelDirection_, fabricationPanel);
+        flatModelForm->setRowVisible(plateFabricationPanelMaximumCount_, fabricationPanel);
         flatModelForm->setRowVisible(fidelityControl, enabled);
         flatModelForm->setRowVisible(plateFlatPatternAllowNotches_, enabled);
         flatModelForm->setRowVisible(plateFlatPatternNotchStyle_, allowNotches);
@@ -2381,8 +2733,54 @@ QWidget* MainWindow::BuildOutputPanel()
         flatModelForm->setRowVisible(plateFlatPatternNotchCurveStrength_, allowNotches && curved);
         flatModelForm->setRowVisible(plateFlatPatternMinimumBendAngle_, enabled);
         flatModelForm->setRowVisible(plateFlatPatternFoldSpacing_, advancedSpacing);
+        if (bentSheet || fabricationPanel) {
+            plateFlatPatternCutDirection_->setItemText(
+                0, QStringLiteral("U方向へ滑らかに丸める"));
+            plateFlatPatternCutDirection_->setItemText(
+                1, QStringLiteral("V方向へ滑らかに丸める"));
+            plateFlatPatternCutDirection_->setItemText(
+                2, QStringLiteral("曲率から主曲げ方向を自動選択"));
+            plateFlatPatternAllowNotches_->setText(
+                QStringLiteral("曲線Vを併用（OFF: ブリッジ付き一本線）"));
+            plateFlatPatternAllowNotches_->setToolTip(
+                QStringLiteral("ONでは最初の強い曲がりへ曲線Vを使い、残りを一本線スリットにします。中央または端に紙のつながりを残します"));
+            approximationModelButton->setText(fabricationPanel
+                    ? QStringLiteral("製作用近似モデルを別オブジェクトで作成")
+                    : QStringLiteral("曲げ紙の完成形を別オブジェクトで作成"));
+            plateAssemblyApproximationPreview_->setToolTip(
+                fabricationPanel
+                    ? QStringLiteral("各大部材が平面から曲がり、元モデルの近似形へ組み上がる過程を表示")
+                    : QStringLiteral("一枚の紙が滑らかに丸まり、スリットとV字が二方向目の曲がりを逃がす過程を表示"));
+        } else {
+            plateFlatPatternCutDirection_->setItemText(
+                0, QStringLiteral("縦だけ（上下へ走る切れ目）"));
+            plateFlatPatternCutDirection_->setItemText(
+                1, QStringLiteral("横だけ（左右へ走る切れ目）"));
+            plateFlatPatternCutDirection_->setItemText(
+                2, QStringLiteral("縦横を併用"));
+            plateFlatPatternAllowNotches_->setText(
+                QStringLiteral("必要箇所のV字切れ込みを許可"));
+            plateFlatPatternAllowNotches_->setToolTip(
+                QStringLiteral("丸い角や収束部だけにV字を加えます。分割部品にも適用できます"));
+            approximationModelButton->setText(
+                QStringLiteral("近似完成モデルを別オブジェクトで作成"));
+            plateAssemblyApproximationPreview_->setToolTip(
+                QStringLiteral("平らな展開片が折り線を軸に回転し、完成形になる過程を表示"));
+        }
         RefreshExportSummary();
     };
+    connect(platePapercraftMode_, &QComboBox::currentIndexChanged, this,
+        [updateReliefControls] { updateReliefControls(); });
+    connect(platePapercraftPanelPriority_, &QComboBox::currentIndexChanged,
+        this, [this] { RefreshExportSummary(); });
+    connect(platePapercraftMaximumError_, &QDoubleSpinBox::valueChanged,
+        this, [this] { RefreshExportSummary(); });
+    connect(platePapercraftMinimumWidth_, &QDoubleSpinBox::valueChanged,
+        this, [this] { RefreshExportSummary(); });
+    connect(plateFabricationPanelDirection_, &QComboBox::currentIndexChanged,
+        this, [this] { RefreshExportSummary(); });
+    connect(plateFabricationPanelMaximumCount_, &QSpinBox::valueChanged,
+        this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this,
         [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAssemblyStrategy_, &QComboBox::currentIndexChanged, this,
@@ -3312,6 +3710,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     UpdateSelection({}, true);
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
+    viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Normal);
 
     if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
         showTab(0);
@@ -3562,6 +3961,15 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
+        surfaceType_->setCurrentIndex(2);
+        surfaceInputGroups_ = {
+            {SurfaceInputRole::Section, {"nose_0_joined"}},
+            {SurfaceInputRole::Section, {"nose_4_joined"}},
+            {SurfaceInputRole::Section, {"nose_8_joined"}},
+            {SurfaceInputRole::Section, {"nose_12_joined"}},
+            {SurfaceInputRole::Section, {"nose_18_joined"}},
+        };
+        RefreshSurfaceInputTable();
         showTab(5, 0.0);
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -3604,11 +4012,16 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                 {CadSelectionKind::Wire, "free_outline_arc"},
                 {CadSelectionKind::Wire, "free_outline_top"},
                 {CadSelectionKind::Wire, "free_outline_left"},
-                {CadSelectionKind::Surface, "free_outline_surface"},
             })) {
             return false;
         }
         surfaceType_->setCurrentIndex(0);
+        surfaceInputGroups_ = {{
+            SurfaceInputRole::Boundary,
+            {"free_outline_bottom", "free_outline_arc",
+                "free_outline_top", "free_outline_left"},
+        }};
+        RefreshSurfaceInputTable();
         showTab(5, 0.0);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
@@ -3736,12 +4149,31 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
+        const int bentMode = platePapercraftMode_->findData(2);
+        if (bentMode >= 0) {
+            platePapercraftMode_->setCurrentIndex(bentMode);
+        }
         plateFlatPatternAutoRelief_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
+        plateFlatPatternFidelity_->setValue(10);
         plateAssemblyProgress_->setValue(45);
-        if (plateAssemblyOutputPiece_->count() > 1) {
-            plateAssemblyOutputPiece_->setCurrentIndex(1);
+        plateAssemblyOutputPiece_->setCurrentIndex(0);
+        showTab(6, 0.72);
+        finalRevealTab = 6;
+        finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("assembly-complete")) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
+            return false;
         }
+        const int bentMode = platePapercraftMode_->findData(2);
+        if (bentMode >= 0) {
+            platePapercraftMode_->setCurrentIndex(bentMode);
+        }
+        plateFlatPatternAutoRelief_->setChecked(true);
+        plateFlatPatternCutDirection_->setCurrentIndex(2);
+        plateAssemblyProgress_->setValue(100);
         showTab(6, 0.72);
         finalRevealTab = 6;
         finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
@@ -3822,6 +4254,148 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(8);
         SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state.startsWith(QStringLiteral("er2-"))) {
+        if (!findSelection(CadSelectionKind::Surface, "er2_round_cab_skin").has_value()
+            || !findSelection(CadSelectionKind::Plate, "er2_round_cab_shell").has_value()) {
+            return false;
+        }
+
+        platePapercraftMode_->setCurrentIndex(
+            platePapercraftMode_->findData(3));
+        platePapercraftPanelPriority_->setCurrentIndex(
+            platePapercraftPanelPriority_->findData(
+                static_cast<int>(PapercraftPanelPriority::Balanced)));
+        platePapercraftMaximumError_->setValue(0.25);
+        platePapercraftMinimumWidth_->setValue(2.0);
+        plateFabricationPanelDirection_->setCurrentIndex(
+            plateFabricationPanelDirection_->findData(
+                static_cast<int>(FabricationPanelDirection::LongAlongU)));
+        plateFabricationPanelMaximumCount_->setValue(8);
+        plateFlatPatternFidelity_->setValue(8);
+        plateFlatPatternCutDirection_->setCurrentIndex(
+            plateFlatPatternCutDirection_->findData(
+                static_cast<int>(PapercraftCutDirection::Both)));
+
+        for (const auto& plane : project_.WorkPlanes()) {
+            project_.SetWorkPlaneVisible(plane.name, false);
+        }
+        for (const auto& point : project_.Points()) {
+            project_.SetPointVisible(point.name, false);
+        }
+        for (const auto& body : project_.Bodies()) {
+            project_.SetBodyVisible(body.name, false);
+        }
+        for (const auto& surface : project_.Surfaces()) {
+            project_.SetSurfaceVisible(surface.name, false);
+        }
+        for (const auto& wire : project_.Wires()) {
+            project_.SetWireVisible(wire.name, false);
+        }
+        for (const auto& plate : project_.Plates()) {
+            project_.SetPlateVisible(plate.name, false);
+        }
+
+        const bool showSections = state == QStringLiteral("er2-sections");
+        const bool showCenterSection = state == QStringLiteral("er2-center-section");
+        const bool showWireframe = state == QStringLiteral("er2-wireframe");
+        const bool showCurvature = state == QStringLiteral("er2-curvature");
+        const bool showFlatPattern = state == QStringLiteral("er2-flat-pattern");
+        const bool showAssembly30 = state == QStringLiteral("er2-assembly-30");
+        const bool showAssembly100 = state == QStringLiteral("er2-assembly-100");
+        const bool showAssembly = showAssembly30 || showAssembly100;
+        const bool showSurface = showSections || showCenterSection
+            || showWireframe || showCurvature;
+        project_.SetSurfaceVisible("er2_round_cab_skin", showSurface);
+        if (showSections) {
+            for (const auto& wire : project_.Wires()) {
+                if (wire.name.starts_with("er2_section_")) {
+                    project_.SetWireVisible(wire.name, true);
+                }
+            }
+        } else if (showCenterSection) {
+            project_.SetWireVisible("er2_vertical_center_section", true);
+        } else if (showAssembly) {
+            project_.SetPlateVisible("er2_round_cab_shell", true);
+        } else if (!showSurface && !showFlatPattern) {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name.starts_with("er2_")) {
+                    project_.SetPlateVisible(plate.name, true);
+                }
+            }
+        }
+        if (showWireframe) {
+            viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Wireframe);
+        } else if (showCurvature) {
+            viewport_->SetSurfaceDiagnosticMode(
+                SurfaceDiagnosticMode::GaussianCurvature);
+        }
+
+        std::vector<std::string> flatPlateNames;
+        if (showFlatPattern) {
+            const auto sourceSelection = findSelection(
+                CadSelectionKind::Plate, "er2_round_cab_shell");
+            const auto targetPlane = project_.FindWorkPlane("window_projection");
+            if (!sourceSelection.has_value() || !targetPlane.has_value()) {
+                return false;
+            }
+            const auto sourcePlate = project_.Plates()[sourceSelection->index];
+            PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
+            options.uSegments = 64;
+            options.vSegments = 32;
+            options.openingSamples = 64;
+            const auto pattern = BuildFabricationPanelPapercraftPattern(
+                project_, sourcePlate, options);
+            const auto result = AddPlateFlatPatternModel(
+                project_, sourcePlate, pattern, *targetPlane,
+                "er2_developed", 0.20);
+            flatPlateNames = result.plateNames;
+            for (const std::string& name : result.plateNames) {
+                project_.SetPlateVisible(name, true);
+            }
+            for (const std::string& name : result.foldWireNames) {
+                project_.SetWireVisible(name, true);
+            }
+            for (const std::string& name : result.reliefCutWireNames) {
+                project_.SetWireVisible(name, true);
+            }
+        }
+        gridPointsVisible_->setChecked(false);
+        RefreshModelViews(false);
+        if (showFlatPattern) {
+            std::vector<CadSelection> selections;
+            for (const std::string& name : flatPlateNames) {
+                const auto plate = findSelection(CadSelectionKind::Plate, name);
+                if (plate.has_value()) {
+                    selections.push_back(*plate);
+                }
+            }
+            UpdateSelections(std::move(selections), true);
+            showTab(6);
+            viewport_->SetCornerView({0.0, 1.0, 0.0});
+        } else if (showAssembly) {
+            if (!select({{CadSelectionKind::Plate, "er2_round_cab_shell"}})) {
+                return false;
+            }
+            plateAssemblyGuidePreview_->setChecked(true);
+            plateAssemblyApproximationPreview_->setChecked(true);
+            plateAssemblyProgress_->setValue(showAssembly30 ? 30 : 100);
+            showTab(6);
+            UpdatePlateAssemblyGuidePreview();
+            viewport_->SetCornerView({1.0, 1.0, 0.55});
+        } else {
+            showTab(0);
+        }
+        if (state == QStringLiteral("er2-front")) {
+            viewport_->SetCornerView({0.0, 1.0, 0.0});
+        } else if (state == QStringLiteral("er2-top")) {
+            viewport_->SetCornerView({0.0, 0.0, 1.0});
+        } else if (state == QStringLiteral("er2-side")
+            || state == QStringLiteral("er2-center-section")) {
+            viewport_->SetCornerView({1.0, 0.0, 0.0});
+        } else if (!showFlatPattern && !showAssembly) {
+            viewport_->SetCornerView({1.0, 1.0, 0.55});
+        }
         viewport_->FitAll();
     } else if (state == QStringLiteral("info")) {
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
@@ -4053,6 +4627,10 @@ bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlat
 {
     constexpr double warningToleranceMillimeters = 0.1;
     const double estimatedError = pattern.analysis.MaximumEstimatedErrorMillimeters();
+    if (UsesFacetedPapercraft() || UsesBentSheetPapercraft()
+        || UsesFabricationPanelPapercraft()) {
+        return true;
+    }
     if ((pattern.analysis.classification != PlateDevelopability::DoubleCurved
             || pattern.analysis.pieceCount > 1)
         && estimatedError <= warningToleranceMillimeters) {
@@ -4071,11 +4649,91 @@ bool MainWindow::ConfirmPlateFlatPatternAccuracy(const kachakacha::io::PlateFlat
         QMessageBox::Cancel) == QMessageBox::Yes;
 }
 
+bool MainWindow::UsesFacetedPapercraft() const
+{
+    return platePapercraftMode_ != nullptr
+        && platePapercraftMode_->currentData().toInt() == 1;
+}
+
+bool MainWindow::UsesBentSheetPapercraft() const
+{
+    return platePapercraftMode_ != nullptr
+        && platePapercraftMode_->currentData().toInt() == 2;
+}
+
+bool MainWindow::UsesFabricationPanelPapercraft() const
+{
+    return platePapercraftMode_ != nullptr
+        && platePapercraftMode_->currentData().toInt() == 3;
+}
+
+kachakacha::io::PlateFlatPattern MainWindow::BuildActivePapercraftPattern(
+    const kachakacha::model::NamedPlate& plate,
+    PlateFlatPatternOptions options) const
+{
+    if (UsesFabricationPanelPapercraft()) {
+        return BuildFabricationPanelPapercraftPattern(
+            project_, plate, std::move(options));
+    }
+    if (UsesBentSheetPapercraft()) {
+        return BuildBentSheetPapercraftPattern(
+            project_, plate, std::move(options));
+    }
+    if (UsesFacetedPapercraft()) {
+        return BuildFacetedPapercraftPattern(
+            project_, plate, std::move(options));
+    }
+    return BuildPlateFlatPattern(project_, plate, std::move(options));
+}
+
+kachakacha::io::PlateAssemblyGuide MainWindow::BuildActivePapercraftGuide(
+    const kachakacha::model::NamedPlate& plate,
+    PlateFlatPatternOptions options) const
+{
+    if (UsesFabricationPanelPapercraft()) {
+        return BuildFabricationPanelPapercraftGuide(
+            project_, plate, std::move(options));
+    }
+    if (UsesBentSheetPapercraft()) {
+        return BuildBentSheetPapercraftGuide(
+            project_, plate, std::move(options));
+    }
+    if (UsesFacetedPapercraft()) {
+        return BuildFacetedPapercraftGuide(
+            project_, plate, std::move(options));
+    }
+    return BuildPlateAssemblyGuide(project_, plate, std::move(options));
+}
+
+kachakacha::io::PlateAssemblyMotion MainWindow::BuildActivePapercraftMotion(
+    const kachakacha::model::NamedPlate& plate,
+    double progress,
+    PlateFlatPatternOptions options) const
+{
+    if (UsesFabricationPanelPapercraft()) {
+        return BuildFabricationPanelPapercraftMotion(
+            project_, plate, progress, std::move(options));
+    }
+    if (UsesBentSheetPapercraft()) {
+        return BuildBentSheetPapercraftMotion(
+            project_, plate, progress, std::move(options));
+    }
+    if (UsesFacetedPapercraft()) {
+        return BuildFacetedPapercraftMotion(
+            project_, plate, progress, std::move(options));
+    }
+    return BuildPlateAssemblyMotion(
+        project_, plate, progress, std::move(options));
+}
+
 PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
 {
     PlateFlatPatternOptions options;
     if (plateFlatPatternAutoRelief_ != nullptr) {
-        options.includeAutomaticReliefCuts = plateFlatPatternAutoRelief_->isChecked();
+        options.includeAutomaticReliefCuts = UsesFacetedPapercraft()
+            || UsesBentSheetPapercraft()
+            || UsesFabricationPanelPapercraft()
+            || plateFlatPatternAutoRelief_->isChecked();
     }
     if (plateFlatPatternAssemblyStrategy_ != nullptr) {
         options.assemblyStrategy = static_cast<PlateAssemblyStrategy>(
@@ -4084,6 +4742,27 @@ PlateFlatPatternOptions MainWindow::PlateFlatPatternOptionsFromUi() const
     if (plateFlatPatternCutDirection_ != nullptr) {
         options.cutDirection = static_cast<PapercraftCutDirection>(
             plateFlatPatternCutDirection_->currentData().toInt());
+    }
+    if (platePapercraftPanelPriority_ != nullptr) {
+        options.panelPriority = static_cast<PapercraftPanelPriority>(
+            platePapercraftPanelPriority_->currentData().toInt());
+    }
+    if (platePapercraftMaximumError_ != nullptr) {
+        options.maximumShapeErrorMillimeters
+            = platePapercraftMaximumError_->value();
+    }
+    if (platePapercraftMinimumWidth_ != nullptr) {
+        options.minimumPartWidthMillimeters
+            = platePapercraftMinimumWidth_->value();
+    }
+    if (plateFabricationPanelDirection_ != nullptr) {
+        options.fabricationPanelDirection
+            = static_cast<FabricationPanelDirection>(
+                plateFabricationPanelDirection_->currentData().toInt());
+    }
+    if (plateFabricationPanelMaximumCount_ != nullptr) {
+        options.maximumFabricationPanelCount
+            = plateFabricationPanelMaximumCount_->value();
     }
     if (plateFlatPatternAllowNotches_ != nullptr) {
         options.allowAutomaticNotches = plateFlatPatternAllowNotches_->isChecked();
@@ -4161,15 +4840,34 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
         const double assemblyProgress = plateAssemblyProgress_ != nullptr
             ? static_cast<double>(plateAssemblyProgress_->value()) / 100.0
             : 1.0;
-        const auto motion = approximationEnabled
-            ? std::optional(BuildPlateAssemblyMotion(
-                  project_,
-                  project_.Plates()[plateIndices.front()],
-                  assemblyProgress,
-                  options))
-            : std::nullopt;
-        const auto guide = BuildPlateAssemblyGuide(
-            project_, project_.Plates()[plateIndices.front()], options);
+        kachakacha::io::PlateAssemblyGuide guide;
+        std::optional<kachakacha::io::PlateAssemblyMotion> motion;
+        if (UsesFabricationPanelPapercraft() && approximationEnabled) {
+            auto preview = BuildFabricationPanelPapercraftPreview(
+                project_, project_.Plates()[plateIndices.front()],
+                assemblyProgress, options);
+            guide = std::move(preview.guide);
+            motion = std::move(preview.motion);
+        } else if (UsesBentSheetPapercraft() && approximationEnabled) {
+            auto preview = BuildBentSheetPapercraftPreview(
+                project_, project_.Plates()[plateIndices.front()],
+                assemblyProgress, options);
+            guide = std::move(preview.guide);
+            motion = std::move(preview.motion);
+        } else if (UsesFacetedPapercraft() && approximationEnabled) {
+            auto preview = BuildFacetedPapercraftPreview(
+                project_, project_.Plates()[plateIndices.front()],
+                assemblyProgress, options);
+            guide = std::move(preview.guide);
+            motion = std::move(preview.motion);
+        } else {
+            guide = BuildActivePapercraftGuide(
+                project_.Plates()[plateIndices.front()], options);
+            if (approximationEnabled) {
+                motion = BuildActivePapercraftMotion(
+                    project_.Plates()[plateIndices.front()], assemblyProgress, options);
+            }
+        }
         std::vector<std::vector<Vector3>> foldLines;
         std::vector<std::vector<Vector3>> reliefCuts;
         if (guideEnabled) {
@@ -4212,7 +4910,8 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
                 std::move(visiblePanels),
                 std::move(visiblePieceIndices),
                 std::move(visibleDeviations),
-                motion->maximumPanelDeviationMillimeters);
+                motion->maximumPanelDeviationMillimeters,
+                UsesBentSheetPapercraft() || UsesFabricationPanelPapercraft());
         } else {
             viewport_->SetPlateAssemblyApproximationPreview(
                 std::nullopt, {}, {}, {}, 0.0);
@@ -4229,7 +4928,7 @@ void MainWindow::ExportSelectedPlate(bool dxf)
     try {
         const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
         const PlateFlatPatternOptions flatOptions = PlateFlatPatternOptionsFromUi();
-        const auto pattern = BuildPlateFlatPattern(project_, plate, flatOptions);
+        const auto pattern = BuildActivePapercraftPattern(plate, flatOptions);
         if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
             return;
         }
@@ -4271,7 +4970,9 @@ void MainWindow::ExportSelectedPlate(bool dxf)
                 .arg(ToQString(plate.name))
                 .arg(pattern.analysis.pieceCount)
                 .arg(estimatedError, 0, 'f', 3)
-                .arg(pattern.openings.size())
+                .arg(UsesFacetedPapercraft()
+                        ? plate.openingWireNames.size()
+                        : pattern.openings.size())
                 .arg(pattern.foldLines.size())
                 .arg(pattern.reliefCuts.size())
                 .arg(QFileInfo(path).fileName()));
@@ -4285,7 +4986,8 @@ void MainWindow::ExportSelectedPlatePdf()
 {
     try {
         const auto& plate = project_.Plates()[SelectedPlateIndexForExport()];
-        const auto pattern = BuildPlateFlatPattern(project_, plate, PlateFlatPatternOptionsFromUi());
+        const auto pattern = BuildActivePapercraftPattern(
+            plate, PlateFlatPatternOptionsFromUi());
         if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
             return;
         }
@@ -4317,7 +5019,9 @@ void MainWindow::ExportSelectedPlatePdf()
                 .arg(ToQString(plate.name))
                 .arg(pattern.analysis.pieceCount)
                 .arg(pattern.analysis.MaximumEstimatedErrorMillimeters(), 0, 'f', 3)
-                .arg(pattern.openings.size())
+                .arg(UsesFacetedPapercraft()
+                        ? plate.openingWireNames.size()
+                        : pattern.openings.size())
                 .arg(pdfLayout.PageCount()));
         statusBar()->showMessage(
             QStringLiteral("1:1印刷PDFを保存しました: %1（%2ページ）")
@@ -4335,7 +5039,7 @@ void MainWindow::CreateSelectedPlateFlatPatternModel()
         const int sourceIndex = SelectedPlateIndexForExport();
         const auto sourcePlate = project_.Plates()[sourceIndex];
         const PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
-        const auto pattern = BuildPlateFlatPattern(project_, sourcePlate, options);
+        const auto pattern = BuildActivePapercraftPattern(sourcePlate, options);
         if (!ConfirmPlateFlatPatternAccuracy(pattern)) {
             return;
         }
@@ -4387,7 +5091,9 @@ void MainWindow::CreateSelectedPlateFlatPatternModel()
             QStringLiteral("%1 | 展開板%2枚を個別作成・全選択 | 開口%3 | 折り線%4 | 切れ目%5 | 3D板あり")
                 .arg(ToQString(sourcePlate.name))
                 .arg(result.plateNames.size())
-                .arg(pattern.openings.size())
+                .arg(UsesFacetedPapercraft()
+                        ? sourcePlate.openingWireNames.size()
+                        : pattern.openings.size())
                 .arg(result.foldWireNames.size())
                 .arg(result.reliefCutWireNames.size()));
         statusBar()->showMessage(
@@ -4421,8 +5127,8 @@ void MainWindow::CreatePlateAssemblyStateModel()
             : 100;
         const double progress = static_cast<double>(progressPercent) / 100.0;
         const PlateFlatPatternOptions options = PlateFlatPatternOptionsFromUi();
-        const auto motion = BuildPlateAssemblyMotion(
-            project_, sourcePlate, progress, options);
+        const auto motion = BuildActivePapercraftMotion(
+            sourcePlate, progress, options);
         const std::optional<int> selectedPiece = SelectedPlateAssemblyPiece();
         const QString baseName = plateFlatPatternName_ != nullptr
                 && !plateFlatPatternName_->text().trimmed().isEmpty()
@@ -4474,6 +5180,78 @@ void MainWindow::CreatePlateAssemblyStateModel()
     }
 }
 
+void MainWindow::CreateFacetedApproximationModel()
+{
+    try {
+        if (!UsesFacetedPapercraft() && !UsesBentSheetPapercraft()
+            && !UsesFabricationPanelPapercraft()) {
+            throw std::invalid_argument(
+                "生成方式を「製作用大部材」「曲げ紙」または「多面体」にしてください。");
+        }
+        const auto sourcePlate = project_.Plates()[SelectedPlateIndexForExport()];
+        const auto motion = BuildActivePapercraftMotion(
+            sourcePlate, 1.0, PlateFlatPatternOptionsFromUi());
+        const QString baseName = plateFlatPatternName_ != nullptr
+                && !plateFlatPatternName_->text().trimmed().isEmpty()
+            ? plateFlatPatternName_->text().trimmed()
+            : ToQString(sourcePlate.name);
+        const QString resultKind = UsesFabricationPanelPapercraft()
+            ? QStringLiteral("fabrication_panel_complete")
+            : UsesBentSheetPapercraft()
+            ? QStringLiteral("bent_sheet_complete")
+            : QStringLiteral("faceted_complete");
+        const std::string prefix = ToName(SuggestedDirectGroupName(
+            QStringLiteral("%1_%2").arg(baseName, resultKind)));
+
+        Project candidate = project_;
+        const auto result = AddPlateAssemblyMotionModel(
+            candidate, sourcePlate, motion, prefix);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(true);
+
+        std::vector<CadSelection> createdSelections;
+        createdSelections.reserve(result.plateNames.size());
+        for (const std::string& name : result.plateNames) {
+            const auto position = std::find_if(
+                project_.Plates().begin(), project_.Plates().end(), [&](const auto& plate) {
+                    return plate.name == name;
+                });
+            if (position != project_.Plates().end()) {
+                createdSelections.push_back({
+                    CadSelectionKind::Plate,
+                    static_cast<int>(std::distance(project_.Plates().begin(), position)),
+                });
+            }
+        }
+        UpdateSelections(std::move(createdSelections), true);
+        plateFlatPatternSummary_->setStyleSheet("color: #35664a;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("元板を保持 | %1 | 再現度%2/10 | 完成形パネル%3枚を別作成")
+                .arg(UsesBentSheetPapercraft()
+                        ? QStringLiteral("曲げ紙")
+                        : UsesFabricationPanelPapercraft()
+                        ? QStringLiteral("製作用大部材")
+                        : QStringLiteral("多面体"))
+                .arg(plateFlatPatternFidelity_->value())
+                .arg(result.plateNames.size()));
+        statusBar()->showMessage(
+            UsesFabricationPanelPapercraft()
+                ? QStringLiteral("少数の大部材で近似した製作用モデルを別オブジェクトとして追加しました")
+                : UsesBentSheetPapercraft()
+                ? QStringLiteral("滑らかに曲げた紙の完成形を別オブジェクトとして追加しました")
+                : QStringLiteral("角ばった近似完成モデルを別オブジェクトとして追加しました"),
+            5000);
+    } catch (const std::exception& error) {
+        plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
+        plateFlatPatternSummary_->setText(
+            QStringLiteral("近似完成モデルを作成できません: %1")
+                .arg(QString::fromUtf8(error.what())));
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::ExportPlateAssemblyState(bool step)
 {
     try {
@@ -4482,8 +5260,8 @@ void MainWindow::ExportPlateAssemblyState(bool step)
             ? plateAssemblyProgress_->value()
             : 100;
         const double progress = static_cast<double>(progressPercent) / 100.0;
-        const auto motion = BuildPlateAssemblyMotion(
-            project_, sourcePlate, progress, PlateFlatPatternOptionsFromUi());
+        const auto motion = BuildActivePapercraftMotion(
+            sourcePlate, progress, PlateFlatPatternOptionsFromUi());
         const std::optional<int> selectedPiece = SelectedPlateAssemblyPiece();
 
         Project exportProject = project_;
@@ -4722,7 +5500,12 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
             viewport_->SetMeasurementOverlay(
                 picks[0].point,
                 picks[1].point,
-                QStringLiteral("%1 mm").arg(Number(distance)));
+                QStringLiteral("%1 mm").arg(Number(distance)),
+                {
+                    QStringLiteral("ΔX  %1 mm").arg(Number(delta.x)),
+                    QStringLiteral("ΔY  %1 mm").arg(Number(delta.y)),
+                    QStringLiteral("ΔZ  %1 mm").arg(Number(delta.z)),
+                });
             return;
         }
 
@@ -5659,7 +6442,7 @@ void MainWindow::RefreshBeginnerGuide()
         case ViewportTool::DrawPoint:
             setGuide(QStringLiteral("作図点を置く"),
                 QStringLiteral("次: 点を置く位置を中央画面でクリック"),
-                QStringLiteral("交点・端点・格子点は薄い記号が出た時だけ吸着\n記号がなければ任意位置。Ctrl中は完全に吸着しません"),
+                QStringLiteral("交点・端点・既存点は大きな丸が出た位置へ吸着\n丸がなければ任意位置。Ctrl中は完全に吸着しません"),
                 QStringLiteral("drawing"));
             return;
         case ViewportTool::DrawLine:
@@ -6775,7 +7558,8 @@ void MainWindow::JoinSelectedWires()
             }
         }
         if (indices.size() < 2) {
-            throw std::invalid_argument("端点がつながる直線またはポリラインを2本以上選択してください。");
+            throw std::invalid_argument(
+                "端点がつながる直線・円弧・ベジェ・スプラインを2本以上選択してください。");
         }
 
         std::vector<kachakacha::model::NamedWire> sources;
@@ -6937,6 +7721,420 @@ void MainWindow::ApplyWireOffset()
     }
 }
 
+std::vector<std::string> MainWindow::SelectedSurfaceWireNames() const
+{
+    std::vector<std::string> names;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            continue;
+        }
+        const std::string& name = project_.Wires()[selection.index].name;
+        if (std::find(names.begin(), names.end(), name) == names.end()) {
+            names.push_back(name);
+        }
+    }
+    return names;
+}
+
+void MainWindow::ValidateSurfaceInputGroup(
+    const std::vector<std::string>& wireNames,
+    SurfaceInputRole role,
+    bool requireClosedBoundary) const
+{
+    if (wireNames.empty()) {
+        throw std::invalid_argument("3D画面で線を1本以上選択してください。");
+    }
+    std::vector<Wire> wires;
+    wires.reserve(wireNames.size());
+    for (std::size_t index = 0; index < wireNames.size(); ++index) {
+        if (std::find(wireNames.begin(), wireNames.begin() + index,
+                wireNames[index]) != wireNames.begin() + index) {
+            throw std::invalid_argument("同じ線を同じグループへ重複して追加できません。");
+        }
+        const auto found = std::find_if(
+            project_.Wires().begin(), project_.Wires().end(),
+            [&](const auto& wire) { return wire.name == wireNames[index]; });
+        if (found == project_.Wires().end()) {
+            throw std::invalid_argument("割り当てた元線が見つかりません。");
+        }
+        if (found->metadata.construction) {
+            throw std::invalid_argument(
+                "補助線は輪郭や断面に使えません。通常線へ戻してください。");
+        }
+        wires.push_back(found->wire);
+    }
+    Wire composite = JoinWireChain(wires);
+    const int mode = surfaceType_ != nullptr ? surfaceType_->currentIndex() : 0;
+    if (role == SurfaceInputRole::Boundary
+        && requireClosedBoundary && !composite.IsClosed()) {
+        throw std::invalid_argument(
+            "輪郭グループは、選んだ全線をつないで閉じる必要があります。");
+    }
+    if (mode == 3 && composite.IsClosed()) {
+        throw std::invalid_argument(
+            "1行の外形・断面は開いた連続線にしてください。2つの外形行が両端で互いに接続する形は使用できます。");
+    }
+}
+
+void MainWindow::RefreshSurfaceInputTable()
+{
+    if (surfaceInputTable_ == nullptr || surfaceType_ == nullptr) {
+        return;
+    }
+    surfaceInputTable_->setRowCount(static_cast<int>(surfaceInputGroups_.size()));
+    int boundaryNumber = 0;
+    int guideNumber = 0;
+    int sectionNumber = 0;
+    for (int row = 0; row < static_cast<int>(surfaceInputGroups_.size()); ++row) {
+        const SurfaceInputGroup& group = surfaceInputGroups_[row];
+        QString role;
+        if (group.role == SurfaceInputRole::Boundary) {
+            role = QStringLiteral("輪郭%1").arg(++boundaryNumber);
+        } else if (group.role == SurfaceInputRole::Guide) {
+            role = QStringLiteral("外形%1").arg(++guideNumber);
+        } else {
+            role = QStringLiteral("断面%1").arg(++sectionNumber);
+        }
+        QStringList names;
+        std::vector<Wire> wires;
+        for (const std::string& name : group.wireNames) {
+            names.push_back(ToQString(name));
+            const auto found = std::find_if(
+                project_.Wires().begin(), project_.Wires().end(),
+                [&](const auto& wire) { return wire.name == name; });
+            if (found != project_.Wires().end()) {
+                wires.push_back(found->wire);
+            }
+        }
+        surfaceInputTable_->setItem(row, 0, new QTableWidgetItem(role));
+        QString state = QStringLiteral("接続エラー");
+        if (wires.size() == group.wireNames.size() && !wires.empty()) {
+            try {
+                const Wire composite = JoinWireChain(wires);
+                state = composite.IsClosed(kWireChainConnectionTolerance)
+                    ? QStringLiteral("閉ループ") : QStringLiteral("開経路");
+            } catch (const std::exception&) {
+            }
+        }
+        auto* stateItem = new QTableWidgetItem(state);
+        if (state == QStringLiteral("接続エラー")) {
+            stateItem->setForeground(QColor("#b23a48"));
+        } else if (state == QStringLiteral("閉ループ")) {
+            stateItem->setForeground(QColor("#19734a"));
+        }
+        surfaceInputTable_->setItem(row, 1, stateItem);
+        surfaceInputTable_->setItem(row, 2,
+            new QTableWidgetItem(QString::number(group.wireNames.size())));
+        auto* sourcesItem = new QTableWidgetItem(
+            names.join(QStringLiteral(" + ")));
+        sourcesItem->setToolTip(names.join(QStringLiteral("\n")));
+        surfaceInputTable_->setItem(row, 3, sourcesItem);
+    }
+
+    const int mode = surfaceType_->currentIndex();
+    surfaceAddBoundaryOrGuideButton_->setVisible(mode == 0 || mode == 3);
+    surfaceAddBoundaryOrGuideButton_->setText(mode == 0
+            ? QStringLiteral("輪郭を追加")
+            : QStringLiteral("外形を追加"));
+    surfaceAddSectionButton_->setVisible(mode != 0);
+    surfaceAppendGroupButton_->setEnabled(!surfaceInputGroups_.empty());
+    if (surfaceCreateButton_ != nullptr) {
+        surfaceCreateButton_->setText(surfaceInputGroups_.empty()
+                ? QStringLiteral("選択ワイヤーから面を作成")
+                : QStringLiteral("表の輪郭・断面から面を作成"));
+    }
+}
+
+void MainWindow::SelectConnectedSurfaceWireChain()
+{
+    try {
+        constexpr double connectionTolerance = kWireChainConnectionTolerance;
+        std::vector<int> selectedIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())
+                && std::find(selectedIndices.begin(), selectedIndices.end(), selection.index)
+                    == selectedIndices.end()) {
+                selectedIndices.push_back(selection.index);
+            }
+        }
+        if (selectedIndices.empty()) {
+            throw std::invalid_argument(
+                "起点にする線を3D画面で1本選択してください。");
+        }
+
+        const auto canUse = [&](int index) {
+            const auto& wire = project_.Wires()[index];
+            return wire.visible && !wire.metadata.construction
+                && !wire.projection.has_value() && !wire.plateOffset.has_value();
+        };
+        const auto endpointCandidates = [&](Vector3 point) {
+            std::vector<int> candidates;
+            for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+                if (!canUse(index)) {
+                    continue;
+                }
+                const Wire& wire = project_.Wires()[index].wire;
+                if ((wire.Start() - point).Length() <= connectionTolerance
+                    || (wire.End() - point).Length() <= connectionTolerance) {
+                    candidates.push_back(index);
+                }
+            }
+            return candidates;
+        };
+
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            const std::vector<int> current = selectedIndices;
+            for (const int index : current) {
+                if (!canUse(index)) {
+                    continue;
+                }
+                const Wire& wire = project_.Wires()[index].wire;
+                for (const Vector3 endpoint : {wire.Start(), wire.End()}) {
+                    const std::vector<int> candidates = endpointCandidates(endpoint);
+                    if (candidates.size() != 2) {
+                        continue;
+                    }
+                    for (const int candidate : candidates) {
+                        if (std::find(selectedIndices.begin(), selectedIndices.end(), candidate)
+                            == selectedIndices.end()) {
+                            selectedIndices.push_back(candidate);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        std::vector<CadSelection> selections;
+        selections.reserve(selectedIndices.size());
+        for (const int index : selectedIndices) {
+            selections.push_back({CadSelectionKind::Wire, index});
+        }
+        UpdateSelections(std::move(selections), true);
+        statusBar()->showMessage(
+            QStringLiteral("分岐点まで続く%1本を選択しました。続けて外形・断面へ追加できます")
+                .arg(selectedIndices.size()),
+            4500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::AddSelectedSurfaceInputGroup(SurfaceInputRole role)
+{
+    try {
+        const int mode = surfaceType_->currentIndex();
+        if ((role == SurfaceInputRole::Boundary && mode != 0)
+            || (role == SurfaceInputRole::Guide && mode != 3)
+            || (role == SurfaceInputRole::Section && mode == 0)) {
+            throw std::invalid_argument("現在の面の作り方では、その役割を追加できません。");
+        }
+        const int sameRoleCount = static_cast<int>(std::count_if(
+            surfaceInputGroups_.begin(), surfaceInputGroups_.end(),
+            [&](const auto& group) { return group.role == role; }));
+        if ((role == SurfaceInputRole::Boundary && sameRoleCount >= 1)
+            || (role == SurfaceInputRole::Guide && sameRoleCount >= 2)
+            || (role == SurfaceInputRole::Section && mode == 1 && sameRoleCount >= 2)) {
+            throw std::invalid_argument(
+                "必要数はすでに表へ追加されています。線分を足す場合は行を選んで「選択行へ線を追加」を使ってください。");
+        }
+
+        const std::vector<std::string> selectedNames = SelectedSurfaceWireNames();
+        std::vector<std::string> names;
+        names.reserve(selectedNames.size());
+        for (const std::string& name : selectedNames) {
+            const bool alreadyAssigned = std::any_of(
+                surfaceInputGroups_.begin(), surfaceInputGroups_.end(),
+                [&](const auto& group) {
+                    return std::find(group.wireNames.begin(), group.wireNames.end(), name)
+                        != group.wireNames.end();
+                });
+            if (!alreadyAssigned) {
+                names.push_back(name);
+            }
+        }
+        if (names.empty() && !selectedNames.empty()) {
+            throw std::invalid_argument(
+                "選択した線はすべて表へ登録済みです。新しい外形・断面の線を追加選択してください。");
+        }
+        ValidateSurfaceInputGroup(names, role);
+
+        SurfaceInputGroup group{role, names};
+        auto position = surfaceInputGroups_.end();
+        if (role == SurfaceInputRole::Guide) {
+            position = std::find_if(
+                surfaceInputGroups_.begin(), surfaceInputGroups_.end(),
+                [](const auto& candidate) {
+                    return candidate.role == SurfaceInputRole::Section;
+                });
+        }
+        const int row = static_cast<int>(std::distance(
+            surfaceInputGroups_.begin(),
+            surfaceInputGroups_.insert(position, std::move(group))));
+        RefreshSurfaceInputTable();
+        surfaceInputTable_->selectRow(row);
+        UpdateSelections({}, true);
+        statusBar()->showMessage(
+            QStringLiteral("未登録の%1本を1つの%2として追加しました")
+                .arg(names.size())
+                .arg(role == SurfaceInputRole::Boundary
+                        ? QStringLiteral("輪郭")
+                        : role == SurfaceInputRole::Guide
+                        ? QStringLiteral("外形")
+                        : QStringLiteral("断面")),
+            3500);
+    } catch (const std::exception& error) {
+        const QString message = FriendlySurfaceChainError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 7000);
+        QMessageBox::warning(this, QStringLiteral("経路を登録できません"), message);
+    }
+}
+
+void MainWindow::AppendSelectedWiresToSurfaceInputGroup()
+{
+    try {
+        const int row = surfaceInputTable_->currentRow();
+        if (row < 0 || row >= static_cast<int>(surfaceInputGroups_.size())) {
+            throw std::invalid_argument("線分を追加する表の行を先に選択してください。");
+        }
+        std::vector<std::string> combined = surfaceInputGroups_[row].wireNames;
+        for (const std::string& name : SelectedSurfaceWireNames()) {
+            if (std::find(combined.begin(), combined.end(), name) != combined.end()) {
+                continue;
+            }
+            const bool assignedElsewhere = std::any_of(
+                surfaceInputGroups_.begin(), surfaceInputGroups_.end(),
+                [&](const auto& group) {
+                    return &group != &surfaceInputGroups_[row]
+                        && std::find(group.wireNames.begin(), group.wireNames.end(), name)
+                            != group.wireNames.end();
+                });
+            if (assignedElsewhere) {
+                continue;
+            }
+            combined.push_back(name);
+        }
+        if (combined.size() == surfaceInputGroups_[row].wireNames.size()) {
+            throw std::invalid_argument("追加する新しい線を3D画面で選択してください。");
+        }
+        ValidateSurfaceInputGroup(combined, surfaceInputGroups_[row].role);
+        surfaceInputGroups_[row].wireNames = std::move(combined);
+        RefreshSurfaceInputTable();
+        surfaceInputTable_->selectRow(row);
+        UpdateSelections({}, true);
+        statusBar()->showMessage(QStringLiteral("選択行へ線分を追加しました"), 3000);
+    } catch (const std::exception& error) {
+        const QString message = FriendlySurfaceChainError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 7000);
+        QMessageBox::warning(this, QStringLiteral("経路へ追加できません"), message);
+    }
+}
+
+void MainWindow::RemoveSelectedSurfaceInputGroup()
+{
+    const int row = surfaceInputTable_ != nullptr ? surfaceInputTable_->currentRow() : -1;
+    if (row < 0 || row >= static_cast<int>(surfaceInputGroups_.size())) {
+        statusBar()->showMessage(QStringLiteral("削除する表の行を選択してください"), 3500);
+        return;
+    }
+    surfaceInputGroups_.erase(surfaceInputGroups_.begin() + row);
+    RefreshSurfaceInputTable();
+    statusBar()->showMessage(QStringLiteral("輪郭・断面の割当を1行削除しました"), 3000);
+}
+
+void MainWindow::ClearSurfaceInputGroups()
+{
+    surfaceInputGroups_.clear();
+    RefreshSurfaceInputTable();
+    statusBar()->showMessage(QStringLiteral("輪郭・断面の割当を消しました"), 3000);
+}
+
+void MainWindow::AddSurfaceFromConfiguredInputs(
+    Project& candidate,
+    const std::string& surfaceName,
+    int surfaceMode,
+    const std::vector<int>& fallbackWireIndices) const
+{
+    if (surfaceInputGroups_.empty()) {
+        if ((surfaceMode == 0 && fallbackWireIndices.empty())
+            || (surfaceMode == 1 && fallbackWireIndices.size() != 2)
+            || (surfaceMode == 2 && fallbackWireIndices.size() < 3)
+            || (surfaceMode == 3 && fallbackWireIndices.size() < 3)) {
+            if (surfaceMode == 0) {
+                throw std::invalid_argument("閉じた輪郭を作る直線・曲線を1本以上選択してください。");
+            }
+            if (surfaceMode == 1) {
+                throw std::invalid_argument("断面ワイヤーを2本選択してください。");
+            }
+            if (surfaceMode == 3) {
+                throw std::invalid_argument(
+                    "外形ガイド2本を先に、その後に断面ワイヤーを1本以上選択してください。");
+            }
+            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを3本以上選択してください。");
+        }
+        std::vector<std::string> names;
+        names.reserve(fallbackWireIndices.size());
+        for (int index : fallbackWireIndices) {
+            names.push_back(candidate.Wires()[index].name);
+        }
+        if (surfaceMode == 0) {
+            candidate.AddPlanarSurface(surfaceName, std::move(names));
+        } else if (surfaceMode == 1) {
+            candidate.AddRuledSurface(surfaceName, names[0], names[1]);
+        } else if (surfaceMode == 2) {
+            candidate.AddLoftSurface(surfaceName, std::move(names));
+        } else {
+            std::vector<std::string> sections(names.begin() + 2, names.end());
+            candidate.AddGuidedLoftSurface(
+                surfaceName, names[0], names[1], std::move(sections));
+        }
+        return;
+    }
+
+    std::vector<std::vector<std::string>> boundaries;
+    std::vector<std::vector<std::string>> guides;
+    std::vector<std::vector<std::string>> sections;
+    for (const SurfaceInputGroup& group : surfaceInputGroups_) {
+        if (group.role == SurfaceInputRole::Boundary) {
+            boundaries.push_back(group.wireNames);
+        } else if (group.role == SurfaceInputRole::Guide) {
+            guides.push_back(group.wireNames);
+        } else {
+            sections.push_back(group.wireNames);
+        }
+    }
+    if (surfaceMode == 0) {
+        if (boundaries.size() != 1 || !guides.empty() || !sections.empty()) {
+            throw std::invalid_argument("閉じた輪郭を1行だけ表へ追加してください。");
+        }
+        ValidateSurfaceInputGroup(
+            boundaries.front(), SurfaceInputRole::Boundary, true);
+        candidate.AddPlanarSurface(surfaceName, std::move(boundaries.front()));
+    } else if (surfaceMode == 1) {
+        if (sections.size() != 2 || !boundaries.empty() || !guides.empty()) {
+            throw std::invalid_argument("2つの断面を表へ追加してください。");
+        }
+        candidate.AddRuledSurface(
+            surfaceName, std::move(sections[0]), std::move(sections[1]));
+    } else if (surfaceMode == 2) {
+        if (sections.size() < 3 || !boundaries.empty() || !guides.empty()) {
+            throw std::invalid_argument("3つ以上の断面を順番に表へ追加してください。");
+        }
+        candidate.AddLoftSurface(surfaceName, std::move(sections));
+    } else {
+        if (guides.size() != 2 || sections.empty() || !boundaries.empty()) {
+            throw std::invalid_argument("外形2つと断面1つ以上を表へ追加してください。");
+        }
+        candidate.AddGuidedLoftSurface(
+            surfaceName, std::move(guides[0]), std::move(guides[1]),
+            std::move(sections));
+    }
+}
+
 void MainWindow::CreateSurfaceFromSelection()
 {
     try {
@@ -6949,18 +8147,6 @@ void MainWindow::CreateSurfaceFromSelection()
             }
         }
 
-        const int surfaceMode = surfaceType_->currentIndex();
-        if ((surfaceMode == 0 && wireIndices.empty())
-            || (surfaceMode == 1 && wireIndices.size() != 2)
-            || (surfaceMode == 2 && wireIndices.size() < 3)) {
-            if (surfaceMode == 0) {
-                throw std::invalid_argument("閉じた輪郭を作る直線・曲線を1本以上選択してください。");
-            }
-            if (surfaceMode == 1) {
-                throw std::invalid_argument("断面ワイヤーを2本選択してください。");
-            }
-            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを3本以上選択してください。");
-        }
         for (int index : wireIndices) {
             if (project_.Wires()[index].metadata.construction) {
                 throw std::invalid_argument("補助線は面の境界や断面には使えません。通常線へ戻してから選択してください。");
@@ -6969,26 +8155,9 @@ void MainWindow::CreateSurfaceFromSelection()
 
         Project candidate = project_;
         const std::string name = ToName(surfaceName_->text());
-        if (surfaceMode == 0) {
-            std::vector<std::string> boundaryNames;
-            boundaryNames.reserve(wireIndices.size());
-            for (int index : wireIndices) {
-                boundaryNames.push_back(candidate.Wires()[index].name);
-            }
-            candidate.AddPlanarSurface(name, std::move(boundaryNames));
-        } else if (surfaceMode == 1) {
-            candidate.AddRuledSurface(
-                name,
-                candidate.Wires()[wireIndices[0]].name,
-                candidate.Wires()[wireIndices[1]].name);
-        } else {
-            std::vector<std::string> sectionNames;
-            sectionNames.reserve(wireIndices.size());
-            for (int index : wireIndices) {
-                sectionNames.push_back(candidate.Wires()[index].name);
-            }
-            candidate.AddLoftSurface(name, std::move(sectionNames));
-        }
+        const int surfaceMode = surfaceType_->currentIndex();
+        AddSurfaceFromConfiguredInputs(
+            candidate, name, surfaceMode, wireIndices);
 
         RecordUndo();
         project_ = std::move(candidate);
@@ -6998,17 +8167,33 @@ void MainWindow::CreateSurfaceFromSelection()
         UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
         toolsTabs_->setCurrentIndex(5);
         surfaceName_->setText(SuggestedSurfaceName());
+        const std::size_t logicalInputCount = surfaceInputGroups_.empty()
+            ? wireIndices.size() : surfaceInputGroups_.size();
+        const std::size_t sourceWireCount = surfaceInputGroups_.empty()
+            ? wireIndices.size()
+            : std::accumulate(
+                  surfaceInputGroups_.begin(), surfaceInputGroups_.end(),
+                  std::size_t{0}, [](std::size_t count, const auto& group) {
+                      return count + group.wireNames.size();
+                  });
+        surfaceInputGroups_.clear();
+        RefreshSurfaceInputTable();
         const QString message = surfaceMode == 0
-            ? wireIndices.size() == 1
+            ? sourceWireCount == 1
                 ? QStringLiteral("閉じたワイヤーから平面を作成しました")
                 : QStringLiteral("%1本の直線・曲線をつないで平面を作成しました")
-                      .arg(wireIndices.size())
+                      .arg(sourceWireCount)
             : surfaceMode == 1
             ? QStringLiteral("2断面から曲面を作成しました")
-            : QStringLiteral("%1断面からロフト面を作成しました").arg(wireIndices.size());
+            : surfaceMode == 2
+            ? QStringLiteral("%1断面からロフト面を作成しました").arg(logicalInputCount)
+            : QStringLiteral("外形2本と断面%1本からガイド付き面を作成しました")
+                  .arg(logicalInputCount - 2);
         statusBar()->showMessage(message, 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        const QString message = FriendlySurfaceChainError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 7000);
+        QMessageBox::warning(this, QStringLiteral("面を作成できません"), message);
     }
 }
 
@@ -7231,7 +8416,9 @@ void MainWindow::CreatePlateFromSurface()
         plateName_->setText(SuggestedPlateName());
         statusBar()->showMessage(QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value()), 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        const QString message = FriendlyPlateCreationError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 8000);
+        QMessageBox::warning(this, QStringLiteral("板材化できません"), message);
     }
 }
 
@@ -7247,10 +8434,11 @@ void MainWindow::CreatePlateFromSelectedWires()
                 wireIndices.push_back(selection.index);
             }
         }
-        if (wireIndices.empty()) {
+        if (wireIndices.empty() && surfaceInputGroups_.empty()) {
             throw std::invalid_argument("3D板の輪郭または断面ワイヤーを3D画面で選択してください。");
         }
-        if (wireIndices.size() == 1 && !project_.Wires()[wireIndices.front()].wire.IsClosed()) {
+        if (surfaceInputGroups_.empty() && wireIndices.size() == 1
+            && !project_.Wires()[wireIndices.front()].wire.IsClosed()) {
             throw std::invalid_argument("1本から平板を作る場合は閉じた輪郭を選択してください。");
         }
 
@@ -7261,34 +8449,47 @@ void MainWindow::CreatePlateFromSelectedWires()
         while (candidate.FindSurface(surfaceName).has_value()) {
             surfaceName = plateName + "_surface" + std::to_string(suffix++);
         }
-        std::vector<std::string> wireNames;
-        wireNames.reserve(wireIndices.size());
-        for (int index : wireIndices) {
-            wireNames.push_back(candidate.Wires()[index].name);
-        }
-        bool formsPlanarClosedContour = wireNames.size() == 1;
-        if (wireNames.size() > 1) {
-            std::vector<Wire> boundaryWires;
-            boundaryWires.reserve(wireIndices.size());
-            for (int index : wireIndices) {
-                boundaryWires.push_back(candidate.Wires()[index].wire);
-            }
-            try {
-                const Wire joined = JoinWireChain(boundaryWires);
-                (void)kachakacha::model::Surface::Planar(joined);
-                formsPlanarClosedContour = true;
-            } catch (const std::invalid_argument&) {
-                formsPlanarClosedContour = false;
-            }
-        }
-        if (formsPlanarClosedContour) {
-            candidate.AddPlanarSurface(surfaceName, wireNames);
-        } else if (wireNames.size() == 1) {
-            candidate.AddPlanarSurface(surfaceName, wireNames.front());
-        } else if (wireNames.size() == 2) {
-            candidate.AddRuledSurface(surfaceName, wireNames[0], wireNames[1]);
+        if (!surfaceInputGroups_.empty()) {
+            AddSurfaceFromConfiguredInputs(
+                candidate, surfaceName, surfaceType_->currentIndex(), wireIndices);
         } else {
-            candidate.AddLoftSurface(surfaceName, wireNames);
+            std::vector<std::string> wireNames;
+            wireNames.reserve(wireIndices.size());
+            for (int index : wireIndices) {
+                wireNames.push_back(candidate.Wires()[index].name);
+            }
+            bool formsPlanarClosedContour = wireNames.size() == 1;
+            if (wireNames.size() > 1) {
+                std::vector<Wire> boundaryWires;
+                boundaryWires.reserve(wireIndices.size());
+                for (int index : wireIndices) {
+                    boundaryWires.push_back(candidate.Wires()[index].wire);
+                }
+                try {
+                    const Wire joined = JoinWireChain(boundaryWires);
+                    (void)kachakacha::model::Surface::Planar(joined);
+                    formsPlanarClosedContour = true;
+                } catch (const std::invalid_argument&) {
+                    formsPlanarClosedContour = false;
+                }
+            }
+            const bool guidedLoft = surfaceType_ != nullptr
+                && surfaceType_->currentIndex() == 3 && wireNames.size() >= 3;
+            if (guidedLoft) {
+                std::vector<std::string> sectionNames(
+                    wireNames.begin() + 2, wireNames.end());
+                candidate.AddGuidedLoftSurface(
+                    surfaceName, wireNames[0], wireNames[1],
+                    std::move(sectionNames));
+            } else if (formsPlanarClosedContour) {
+                candidate.AddPlanarSurface(surfaceName, wireNames);
+            } else if (wireNames.size() == 1) {
+                candidate.AddPlanarSurface(surfaceName, wireNames.front());
+            } else if (wireNames.size() == 2) {
+                candidate.AddRuledSurface(surfaceName, wireNames[0], wireNames[1]);
+            } else {
+                candidate.AddLoftSurface(surfaceName, wireNames);
+            }
         }
         const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
         candidate.AddPlate(
@@ -7307,6 +8508,8 @@ void MainWindow::CreatePlateFromSelectedWires()
         RefreshModelViews(false);
         UpdateSelection(
             {CadSelectionKind::Plate, static_cast<int>(project_.Plates().size() - 1)}, true);
+        surfaceInputGroups_.clear();
+        RefreshSurfaceInputTable();
         plateName_->setText(SuggestedPlateName());
         statusBar()->showMessage(
             plateVariableThickness_->isChecked()
@@ -7314,7 +8517,9 @@ void MainWindow::CreatePlateFromSelectedWires()
                 : QStringLiteral("選択ワイヤーから3D板を作成しました"),
             4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        const QString message = FriendlyPlateCreationError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 8000);
+        QMessageBox::warning(this, QStringLiteral("板材化できません"), message);
     }
 }
 
@@ -7347,7 +8552,9 @@ void MainWindow::UpdateSelectedPlate()
         UpdateSelection(selection, true);
         statusBar()->showMessage(QStringLiteral("板材の板厚・方向・材質を更新しました"), 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        const QString message = FriendlyPlateCreationError(error);
+        statusBar()->showMessage(message.section('\n', 0, 0), 8000);
+        QMessageBox::warning(this, QStringLiteral("板材を更新できません"), message);
     }
 }
 
@@ -9138,6 +10345,65 @@ bool MainWindow::RunCreationSelfTest()
         return fail("undo composite planar surface");
     }
 
+    const std::size_t groupedWireStart = project_.Wires().size();
+    const std::size_t groupedSurfaceStart = project_.Surfaces().size();
+    project_.AddWire("__ui_grouped_guide_left_a", Wire::Line(
+        {0.0, -5.0, 0.0}, {6.0, -5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_left_b", Wire::Line(
+        {6.0, -5.0, 0.0}, {12.0, -5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_right_a", Wire::Line(
+        {0.0, 5.0, 0.0}, {6.0, 5.0, 0.0}));
+    project_.AddWire("__ui_grouped_guide_right_b", Wire::Line(
+        {6.0, 5.0, 0.0}, {12.0, 5.0, 0.0}));
+    project_.AddWire("__ui_grouped_section_a", Wire::CubicBezier(
+        {6.0, -5.0, 0.0}, {6.0, -4.0, 2.0},
+        {6.0, -1.0, 4.0}, {6.0, 0.0, 4.0}));
+    project_.AddWire("__ui_grouped_section_b", Wire::CubicBezier(
+        {6.0, 0.0, 4.0}, {6.0, 1.0, 4.0},
+        {6.0, 4.0, 2.0}, {6.0, 5.0, 0.0}));
+    RefreshModelViews(false);
+    surfaceType_->setCurrentIndex(3);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Guide);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 3)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Guide);
+    UpdateSelections({
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 2)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 3)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 4)},
+        {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 5)},
+    }, true);
+    AddSelectedSurfaceInputGroup(SurfaceInputRole::Section);
+    if (surfaceInputGroups_.size() != 3
+        || surfaceInputTable_->rowCount() != 3
+        || surfaceInputGroups_[0].wireNames.size() != 2
+        || surfaceInputGroups_[2].wireNames.size() != 2) {
+        return fail("assign compound surface wires through role table");
+    }
+    surfaceName_->setText("__ui_grouped_guided_surface");
+    CreateSurfaceFromSelection();
+    if (project_.Surfaces().size() != groupedSurfaceStart + 1
+        || project_.Surfaces().back().surface.Kind() != SurfaceKind::GuidedLoft
+        || project_.Surfaces().back().sourceWireGroups.size() != 3
+        || project_.Surfaces().back().sourceWireGroups[0].size() != 2
+        || !surfaceInputGroups_.empty()) {
+        return fail("create grouped guided surface from role table");
+    }
+    Undo();
+    if (project_.Surfaces().size() != groupedSurfaceStart) {
+        return fail("undo grouped guided surface from role table");
+    }
+
     const std::size_t surfaceWireStart = project_.Wires().size();
     const std::size_t surfaceStart = project_.Surfaces().size();
     const std::size_t plateStart = project_.Plates().size();
@@ -9160,6 +10426,7 @@ bool MainWindow::RunCreationSelfTest()
         WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly});
     RefreshModelViews(false);
 
+    surfaceType_->setCurrentIndex(2);
     plateName_->setText("__ui_direct_variable_plate");
     plateThickness_->setValue(0.4);
     plateVariableThickness_->setChecked(true);
@@ -9522,10 +10789,9 @@ bool MainWindow::RunCreationSelfTest()
         return fail(failure.c_str());
     }
     try {
-        const auto expectedGuide = BuildPlateAssemblyGuide(
-            project_, project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
-        const auto expectedMotion = BuildPlateAssemblyMotion(
-            project_,
+        const auto expectedGuide = BuildActivePapercraftGuide(
+            project_.Plates()[plateStart + 1], PlateFlatPatternOptionsFromUi());
+        const auto expectedMotion = BuildActivePapercraftMotion(
             project_.Plates()[plateStart + 1],
             static_cast<double>(plateAssemblyProgress_->value()) / 100.0,
             PlateFlatPatternOptionsFromUi());
@@ -9542,7 +10808,15 @@ bool MainWindow::RunCreationSelfTest()
             || !plateAssemblyApproximationPreview_->isChecked()
             || viewport_->PlateAssemblyApproximationPanelCount()
                 != expectedPanelCount) {
-            return fail("assembled fold and relief preview");
+            const std::string details = "assembled fold and relief preview: fold "
+                + std::to_string(viewport_->PlateAssemblyFoldGuideCount()) + "/"
+                + std::to_string(expectedGuide.foldLines.size()) + ", cut "
+                + std::to_string(viewport_->PlateAssemblyReliefGuideCount()) + "/"
+                + std::to_string(expectedGuide.reliefCuts.size() + expectedGuide.splitLines.size())
+                + ", panel "
+                + std::to_string(viewport_->PlateAssemblyApproximationPanelCount()) + "/"
+                + std::to_string(expectedPanelCount);
+            return fail(details.c_str());
         }
         plateAssemblyGuidePreview_->setChecked(false);
         if (viewport_->PlateAssemblyFoldGuideCount() != 0
@@ -9653,7 +10927,8 @@ bool MainWindow::RunCreationSelfTest()
     });
     if (!measurementResultLabel_->text().contains(QStringLiteral("13.000 mm"))
         || !measurementResultLabel_->text().contains(QStringLiteral("XY投影"))
-        || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0) {
+        || measurementMetric_->findData(static_cast<int>(ReferenceDimensionKind::PointDistance)) < 0
+        || viewport_->MeasurementComponentOverlayCount() != 3) {
         return fail("measure two points");
     }
     measurementMode_->setCurrentIndex(1);
@@ -9809,6 +11084,29 @@ bool MainWindow::RunCreationSelfTest()
 
 WorkPlane MainWindow::WorkPlaneFromInputs() const
 {
+    std::vector<const WorkPlane*> selectedPlanes;
+    std::vector<Vector3> selectedPoints;
+    std::vector<const Wire*> selectedWires;
+    std::vector<const kachakacha::model::Surface*> selectedSurfaces;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
+            && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+            selectedPlanes.push_back(&project_.WorkPlanes()[selection.index].plane);
+        } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Points().size())) {
+            selectedPoints.push_back(project_.Points()[selection.index].point);
+        } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            selectedWires.push_back(&project_.Wires()[selection.index].wire);
+        } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Surfaces().size())) {
+            selectedSurfaces.push_back(&project_.Surfaces()[selection.index].surface);
+        } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            selectedSurfaces.push_back(&project_.Plates()[selection.index].plate.SourceSurface());
+        }
+    }
+
     std::optional<WorkPlane> basePlane;
     switch (planeMethod_->currentIndex()) {
     case 0:
@@ -9824,24 +11122,197 @@ WorkPlane MainWindow::WorkPlaneFromInputs() const
         basePlane = WorkPlane::FromPointNormal(ReadVector3(pointNormalOrigin_), ReadVector3(pointNormalDirection_), ReadVector3(pointNormalUAxis_));
         break;
     case 2:
-        basePlane = WorkPlane::FromThreePoints(ReadVector3(threePointA_), ReadVector3(threePointB_), ReadVector3(threePointC_));
+        if (selectedPoints.empty()) {
+            basePlane = WorkPlane::FromThreePoints(
+                ReadVector3(threePointA_), ReadVector3(threePointB_),
+                ReadVector3(threePointC_));
+        } else {
+            if (selectedPoints.size() != 3) {
+                throw std::invalid_argument("作図点を3つ選択してください。");
+            }
+            basePlane = WorkPlane::FromThreePoints(
+                selectedPoints[0], selectedPoints[1], selectedPoints[2]);
+        }
         break;
     case 3:
-        basePlane = project_.FindWorkPlane(ToName(offsetSourcePlane_->currentText()));
+        if (selectedPlanes.size() > 1) {
+            throw std::invalid_argument("基準にする作業平面を1つだけ選択してください。");
+        }
+        basePlane = selectedPlanes.empty()
+            ? project_.FindWorkPlane(ToName(offsetSourcePlane_->currentText()))
+            : std::optional<WorkPlane>{*selectedPlanes.front()};
         if (!basePlane.has_value()) {
             throw std::invalid_argument("基準平面を選択してください。");
         }
         break;
-    case 4:
-        basePlane = project_.FindWorkPlane(ToName(rotateSourcePlane_->currentText()));
+    case 4: {
+        if (selectedPlanes.size() > 1) {
+            throw std::invalid_argument("傾ける基準平面を1つだけ選択してください。");
+        }
+        basePlane = selectedPlanes.empty()
+            ? project_.FindWorkPlane(ToName(rotateSourcePlane_->currentText()))
+            : std::optional<WorkPlane>{*selectedPlanes.front()};
         if (!basePlane.has_value()) {
             throw std::invalid_argument("基準平面を選択してください。");
+        }
+        Vector3 axisPoint = ReadVector3(rotateAxisPoint_);
+        Vector3 axisDirection = ReadVector3(rotateAxisDirection_);
+        if (!selectedWires.empty()) {
+            if (selectedWires.size() != 1
+                || selectedWires.front()->Kind() != WireKind::Line) {
+                throw std::invalid_argument("回転軸にする直線を1本だけ選択してください。");
+            }
+            axisPoint = selectedWires.front()->Start();
+            axisDirection = selectedWires.front()->End() - axisPoint;
         }
         basePlane = basePlane->RotateAroundAxis(
-            ReadVector3(rotateAxisPoint_),
-            ReadVector3(rotateAxisDirection_),
+            axisPoint,
+            axisDirection,
             rotateAngle_->value() * kPi / 180.0);
         break;
+    }
+    case 5:
+        if (selectedPlanes.size() != 1 || selectedPoints.size() != 1) {
+            throw std::invalid_argument("作業平面1つと作図点1つを選択してください。");
+        }
+        basePlane = WorkPlane::FromPointNormal(
+            selectedPoints.front(), selectedPlanes.front()->Normal(),
+            selectedPlanes.front()->UAxis());
+        break;
+    case 6: {
+        if (selectedPlanes.size() != 2) {
+            throw std::invalid_argument("平行な作業平面を2つ選択してください。");
+        }
+        const Vector3 firstNormal = selectedPlanes[0]->Normal();
+        const double alignment = kachakacha::geometry::Dot(
+            firstNormal, selectedPlanes[1]->Normal());
+        if (std::abs(alignment) < 1.0 - 1.0e-6) {
+            throw std::invalid_argument("中央面を作る2平面は平行である必要があります。");
+        }
+        const double separation = kachakacha::geometry::Dot(
+            selectedPlanes[1]->Origin() - selectedPlanes[0]->Origin(),
+            firstNormal);
+        basePlane = WorkPlane::FromPointNormal(
+            selectedPlanes[0]->Origin() + firstNormal * (separation * 0.5),
+            firstNormal, selectedPlanes[0]->UAxis());
+        break;
+    }
+    case 7: {
+        if (selectedWires.size() != 2
+            || selectedWires[0]->Kind() != WireKind::Line
+            || selectedWires[1]->Kind() != WireKind::Line) {
+            throw std::invalid_argument("同一平面上の直線を2本選択してください。");
+        }
+        const Vector3 firstPoint = selectedWires[0]->Start();
+        const Vector3 firstDirection
+            = (selectedWires[0]->End() - firstPoint).Normalized();
+        const Vector3 secondPoint = selectedWires[1]->Start();
+        const Vector3 secondDirection
+            = (selectedWires[1]->End() - secondPoint).Normalized();
+        Vector3 normal = kachakacha::geometry::Cross(
+            firstDirection, secondDirection);
+        if (normal.LengthSquared() <= 1.0e-14) {
+            normal = kachakacha::geometry::Cross(
+                firstDirection, secondPoint - firstPoint);
+        } else {
+            const Vector3 normalUnit = normal.Normalized();
+            if (std::abs(kachakacha::geometry::Dot(
+                    secondPoint - firstPoint, normalUnit)) > 1.0e-5) {
+                throw std::invalid_argument("選択した2直線は同一平面上にありません。");
+            }
+        }
+        if (normal.LengthSquared() <= 1.0e-14) {
+            throw std::invalid_argument("同一直線上の2本だけでは平面の向きを決められません。");
+        }
+        basePlane = WorkPlane::FromPointNormal(
+            firstPoint, normal, firstDirection);
+        break;
+    }
+    case 8: {
+        if (selectedWires.size() != 1 || selectedPoints.size() != 1
+            || selectedWires.front()->Kind() != WireKind::Line) {
+            throw std::invalid_argument("直線1本と作図点1つを選択してください。");
+        }
+        const Vector3 direction
+            = selectedWires.front()->End() - selectedWires.front()->Start();
+        basePlane = WorkPlane::FromPointNormal(
+            selectedPoints.front(), direction);
+        break;
+    }
+    case 9: {
+        if (selectedWires.size() != 1) {
+            throw std::invalid_argument("経路にする線または曲線を1本選択してください。");
+        }
+        const double parameter = pathPlanePosition_->value() / 100.0;
+        const double before = std::max(0.0, parameter - 1.0e-4);
+        const double after = std::min(1.0, parameter + 1.0e-4);
+        const Vector3 tangent
+            = selectedWires.front()->Evaluate(after)
+            - selectedWires.front()->Evaluate(before);
+        if (tangent.LengthSquared() <= 1.0e-18) {
+            throw std::invalid_argument("指定位置で曲線の向きを計算できません。");
+        }
+        basePlane = WorkPlane::FromPointNormal(
+            selectedWires.front()->Evaluate(parameter), tangent);
+        break;
+    }
+    case 10: {
+        if (selectedSurfaces.size() != 1 || selectedPoints.size() != 1) {
+            throw std::invalid_argument("面または板1つと作図点1つを選択してください。");
+        }
+        const auto& surface = *selectedSurfaces.front();
+        const Vector3 target = selectedPoints.front();
+        double bestU = 0.0;
+        double bestV = 0.0;
+        double bestDistance = (surface.Evaluate(0.0, 0.0) - target).LengthSquared();
+        constexpr int grid = 32;
+        for (int uIndex = 0; uIndex <= grid; ++uIndex) {
+            for (int vIndex = 0; vIndex <= grid; ++vIndex) {
+                const double u = static_cast<double>(uIndex) / grid;
+                const double v = static_cast<double>(vIndex) / grid;
+                const double distance
+                    = (surface.Evaluate(u, v) - target).LengthSquared();
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestU = u;
+                    bestV = v;
+                }
+            }
+        }
+        double step = 1.0 / grid;
+        for (int iteration = 0; iteration < 14; ++iteration) {
+            for (int uDirection = -1; uDirection <= 1; ++uDirection) {
+                for (int vDirection = -1; vDirection <= 1; ++vDirection) {
+                    const double u = std::clamp(
+                        bestU + step * uDirection, 0.0, 1.0);
+                    const double v = std::clamp(
+                        bestV + step * vDirection, 0.0, 1.0);
+                    const double distance
+                        = (surface.Evaluate(u, v) - target).LengthSquared();
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestU = u;
+                        bestV = v;
+                    }
+                }
+            }
+            step *= 0.5;
+        }
+        const double derivativeStep = 1.0e-4;
+        Vector3 uAxis = surface.Evaluate(
+                            std::min(1.0, bestU + derivativeStep), bestV)
+            - surface.Evaluate(
+                std::max(0.0, bestU - derivativeStep), bestV);
+        if (uAxis.LengthSquared() <= 1.0e-18) {
+            uAxis = surface.Evaluate(
+                        bestU, std::min(1.0, bestV + derivativeStep))
+                - surface.Evaluate(
+                    bestU, std::max(0.0, bestV - derivativeStep));
+        }
+        basePlane = WorkPlane::FromPointNormal(
+            surface.Evaluate(bestU, bestV), surface.Normal(bestU, bestV), uAxis);
+        break;
+    }
     default:
         throw std::invalid_argument("作業平面の作り方を選択してください。");
     }
@@ -10816,7 +12287,6 @@ void MainWindow::RefreshExportSummary()
         plateAssemblyOutputPiece_->setCurrentIndex(
             previousIndex >= 0 ? previousIndex : 0);
     };
-    UpdatePlateAssemblyGuidePreview();
     std::vector<int> plateIndices;
     for (const CadSelection& selection : viewport_->Selections()) {
         if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
@@ -10828,12 +12298,14 @@ void MainWindow::RefreshExportSummary()
     plateIndices.erase(std::unique(plateIndices.begin(), plateIndices.end()), plateIndices.end());
     if (plateIndices.empty()) {
         refreshAssemblyPieceChoices(0);
+        UpdatePlateAssemblyGuidePreview();
         plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
         plateFlatPatternSummary_->setText(QStringLiteral("選択板材: なし"));
         return;
     }
     if (plateIndices.size() > 1) {
         refreshAssemblyPieceChoices(0);
+        UpdatePlateAssemblyGuidePreview();
         plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
         plateFlatPatternSummary_->setText(QStringLiteral("選択板材: %1枚（1枚に絞って出力）").arg(plateIndices.size()));
         return;
@@ -10846,22 +12318,57 @@ void MainWindow::RefreshExportSummary()
         previewOptions.openingSamples = 48;
         previewOptions.includeOpenings = true;
         const auto& namedPlate = project_.Plates()[plateIndices.front()];
-        const auto pattern = BuildPlateFlatPattern(project_, namedPlate, previewOptions);
+        const auto pattern = BuildActivePapercraftPattern(namedPlate, previewOptions);
         refreshAssemblyPieceChoices(pattern.analysis.pieceCount);
+        UpdatePlateAssemblyGuidePreview();
         PlatePdfOptions pdfOptions;
         pdfOptions.pageSize = static_cast<QPageSize::PageSizeId>(platePdfPaper_->currentData().toInt());
         pdfOptions.overlapMillimeters = platePdfOverlap_->value();
         const auto pdfLayout = CalculatePlatePdfLayout(pattern, pdfOptions);
-        const QString notchLabel = previewOptions.notchStyle == ReliefNotchStyle::CurvedV
-            ? QStringLiteral("曲線切れ込み")
-            : QStringLiteral("直線V字");
-        const QString directionLabel = previewOptions.cutDirection
+        const QString notchLabel = (UsesBentSheetPapercraft()
+                || UsesFabricationPanelPapercraft())
+                && !previewOptions.allowAutomaticNotches
+            ? QStringLiteral("ブリッジ付きスリット")
+            : previewOptions.notchStyle == ReliefNotchStyle::CurvedV
+            ? QStringLiteral("曲線V＋スリット")
+            : QStringLiteral("直線V＋スリット");
+        const QString directionLabel = (UsesBentSheetPapercraft()
+                || UsesFabricationPanelPapercraft())
+            ? (previewOptions.cutDirection == PapercraftCutDirection::Vertical
+                ? QStringLiteral("U")
+                : previewOptions.cutDirection == PapercraftCutDirection::Horizontal
+                ? QStringLiteral("V")
+                : QStringLiteral("曲率自動"))
+            : previewOptions.cutDirection
                 == PapercraftCutDirection::Vertical
             ? QStringLiteral("縦")
             : previewOptions.cutDirection == PapercraftCutDirection::Horizontal
             ? QStringLiteral("横")
             : QStringLiteral("縦横");
-        const QString shape = pattern.analysis.pieceCount > 1
+        const QString shape = UsesFabricationPanelPapercraft()
+            ? QStringLiteral("製作用大部材 %1枚・%2方向へ長い帯")
+                .arg(pattern.analysis.pieceCount)
+                .arg(previewOptions.fabricationPanelDirection
+                        == FabricationPanelDirection::LongAlongU
+                    ? QStringLiteral("U")
+                    : previewOptions.fabricationPanelDirection
+                        == FabricationPanelDirection::LongAlongV
+                    ? QStringLiteral("V")
+                    : QStringLiteral("曲率自動"))
+            : UsesBentSheetPapercraft()
+            ? QStringLiteral("曲げ紙・連続部材1枚・主曲げ%1＋%2 %3本")
+                .arg(directionLabel, notchLabel)
+                .arg(pattern.analysis.automaticNotchCount)
+            : UsesFacetedPapercraft()
+            ? QStringLiteral("新方式・%1方向の角面紙片 %2枚%3")
+                .arg(directionLabel)
+                .arg(pattern.analysis.pieceCount)
+                .arg(pattern.analysis.automaticNotchCount > 0
+                    ? QStringLiteral("＋%1 %2本")
+                        .arg(notchLabel)
+                        .arg(pattern.analysis.automaticNotchCount)
+                    : QString())
+            : pattern.analysis.pieceCount > 1
                 && pattern.analysis.automaticNotchCount > 0
             ? QStringLiteral("%1分割 %2片＋%3 %4本")
                 .arg(directionLabel)
@@ -10885,9 +12392,35 @@ void MainWindow::RefreshExportSummary()
             : pattern.analysis.classification == PlateDevelopability::Developable
             ? QStringLiteral("一方向曲げ")
             : QStringLiteral("二方向曲面・要確認");
-        const bool warning = (pattern.analysis.classification == PlateDevelopability::DoubleCurved
-                && pattern.analysis.pieceCount <= 1)
-            || pattern.analysis.MaximumEstimatedErrorMillimeters() > 0.1;
+        if (UsesBentSheetPapercraft() || UsesFabricationPanelPapercraft()) {
+            const bool warning
+                = pattern.analysis.maximumReconstructedDeviationMillimeters
+                    > previewOptions.maximumShapeErrorMillimeters
+                || pattern.analysis.maximumMaterialEdgeErrorMillimeters > 0.1
+                || pattern.analysis.maximumSeamMismatchMillimeters > 0.1
+                || pattern.analysis.maximumPanelConnectionMismatchMillimeters > 0.05;
+            plateFlatPatternSummary_->setStyleSheet(
+                warning ? "color: #a32734;" : "color: #35664a;");
+            plateFlatPatternSummary_->setText(
+                QStringLiteral("%1 | %2 | 部材 %3 / 完全分割線 %4 / 歪み逃がし %5 / 開口 %6 | 最大3D偏差 %7 mm（目標 %8）/ RMS %9 mm | 寸法誤差 %10 mm | 継ぎ目 %11 mm | relief長 %12 mm | PDF %13ページ")
+                    .arg(ToQString(namedPlate.name), shape)
+                    .arg(pattern.analysis.pieceCount)
+                    .arg(pattern.analysis.separatingSeamCount)
+                    .arg(pattern.analysis.nonSeparatingReliefCutCount)
+                    .arg(pattern.openings.size())
+                    .arg(pattern.analysis.maximumReconstructedDeviationMillimeters, 0, 'f', 3)
+                    .arg(previewOptions.maximumShapeErrorMillimeters, 0, 'f', 3)
+                    .arg(pattern.analysis.rootMeanSquareReconstructedDeviationMillimeters, 0, 'f', 3)
+                    .arg(pattern.analysis.maximumMaterialEdgeErrorMillimeters, 0, 'f', 3)
+                    .arg(pattern.analysis.maximumSeamMismatchMillimeters, 0, 'f', 3)
+                    .arg(pattern.analysis.reliefCutLengthMillimeters, 0, 'f', 1)
+                    .arg(pdfLayout.PageCount()));
+            return;
+        }
+        const bool warning = !UsesFacetedPapercraft()
+            && ((pattern.analysis.classification == PlateDevelopability::DoubleCurved
+                    && pattern.analysis.pieceCount <= 1)
+                || pattern.analysis.MaximumEstimatedErrorMillimeters() > 0.1);
         plateFlatPatternSummary_->setStyleSheet(warning ? "color: #a32734;" : "color: #35664a;");
         plateFlatPatternSummary_->setText(
             QStringLiteral("%1 | %2 | 最大推定ずれ %3 mm | 開口 %4 | 折り線 %5 | 切れ目 %6 | PDF %7ページ")
@@ -10899,6 +12432,7 @@ void MainWindow::RefreshExportSummary()
                 .arg(pdfLayout.PageCount()));
     } catch (const std::exception& error) {
         refreshAssemblyPieceChoices(0);
+        UpdatePlateAssemblyGuidePreview();
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));
     }
@@ -10949,6 +12483,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     std::size_t selectedPlateCount = 0;
     std::size_t selectedProjectedWireCount = 0;
     std::size_t selectedClosedProjectedWireCount = 0;
+    QStringList selectedWireNames;
     QStringList lightCaseFrontNames;
     QStringList lightCaseTargetNames;
     for (const CadSelection& item : selections) {
@@ -10956,6 +12491,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             && item.index < static_cast<int>(project_.Wires().size())) {
             ++selectedWireCount;
             const auto& wire = project_.Wires()[item.index];
+            selectedWireNames.push_back(ToQString(wire.name));
             if (wire.projection.has_value()) {
                 ++selectedProjectedWireCount;
             }
@@ -11001,9 +12537,21 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
-        surfaceSelectionLabel_->setText(QStringLiteral("選択: ワイヤー%1本 / 面%2枚")
-                .arg(selectedWireCount)
-                .arg(selectedSurfaceCount));
+        if (surfaceType_ != nullptr && surfaceType_->currentIndex() == 3
+            && !selectedWireNames.isEmpty()) {
+            QStringList roles;
+            for (int index = 0; index < selectedWireNames.size(); ++index) {
+                roles.push_back(index < 2
+                        ? QStringLiteral("外形%1: %2").arg(index + 1).arg(selectedWireNames[index])
+                        : QStringLiteral("断面%1: %2").arg(index - 1).arg(selectedWireNames[index]));
+            }
+            surfaceSelectionLabel_->setText(
+                QStringLiteral("選択順\n%1").arg(roles.join(QStringLiteral("\n"))));
+        } else {
+            surfaceSelectionLabel_->setText(QStringLiteral("選択: ワイヤー%1本 / 面%2枚")
+                    .arg(selectedWireCount)
+                    .arg(selectedSurfaceCount));
+        }
     }
     if (projectionSelectionLabel_ != nullptr) {
         projectionSelectionLabel_->setText(QStringLiteral("投影するワイヤー: %1本").arg(selectedWireCount));
@@ -11157,7 +12705,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             ? QStringLiteral("平面")
             : named.surface.Kind() == SurfaceKind::Ruled
             ? QStringLiteral("2断面の曲面")
-            : QStringLiteral("複数断面のロフト面");
+            : named.surface.Kind() == SurfaceKind::Loft
+            ? QStringLiteral("複数断面のロフト面")
+            : QStringLiteral("外形ガイド付きロフト面");
         QString sources;
         for (const std::string& sourceName : named.sourceWireNames) {
             if (!sources.isEmpty()) {

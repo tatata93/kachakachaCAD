@@ -1,60 +1,65 @@
-# kachakachaCAD minimum-product acceptance model
-# A railway vehicle nose from editable sections to panels, openings and a forming jig.
-# Units: millimeters. X is longitudinal, Y is width, Z is height.
+# kachakachaCAD project script
+# Units are millimeters.
+format_version 1
 
 plane_point_normal nose_0_plane 0 0 0  1 0 0  0 1 0
 plane_point_normal nose_4_plane 4 0 0  1 0 0  0 1 0
 plane_point_normal nose_8_plane 8 0 0  1 0 0  0 1 0
 plane_point_normal nose_12_plane 12 0 0  1 0 0  0 1 0
 plane_point_normal nose_18_plane 18 0 0  1 0 0  0 1 0
-
-# Lower sides are steeper and the roof shoulder is gentler.
-sketch_bezier nose_0 nose_0_plane -16 -7  -13 5  -6 10.5  0 12 reference
-sketch_bezier nose_0_r nose_0_plane 0 12  6 10.5  13 5  16 -7 reference
-sketch_bezier nose_4 nose_4_plane -15.5 -6.5  -12 6  -6 12  0 13.5 reference
-sketch_bezier nose_4_r nose_4_plane 0 13.5  6 12  12 6  15.5 -6.5 reference
-sketch_bezier nose_8 nose_8_plane -14.5 -5.5  -11 6.5  -5.5 13  0 14.5 reference
-sketch_bezier nose_8_r nose_8_plane 0 14.5  5.5 13  11 6.5  14.5 -5.5 reference
-sketch_bezier nose_12 nose_12_plane -13.5 -4.5  -10 6  -5 12  0 13.5 reference
-sketch_bezier nose_12_r nose_12_plane 0 13.5  5 12  10 6  13.5 -4.5 reference
-sketch_bezier nose_18 nose_18_plane -12.5 -4  -9 5  -4.5 10  0 11.5 reference
-sketch_bezier nose_18_r nose_18_plane 0 11.5  4.5 10  9 5  12.5 -4 reference
-
-# Each half can be edited independently; the joined section curves define one smooth skin.
-bspline3d nose_0_joined 0 -16 -7  0 -12 4  0 -5 11  0 0 12  0 5 11  0 12 4  0 16 -7
-bspline3d nose_4_joined 4 -15.5 -6.5  4 -11.5 5  4 -5 12.5  4 0 13.5  4 5 12.5  4 11.5 5  4 15.5 -6.5
-bspline3d nose_8_joined 8 -14.5 -5.5  8 -10.5 5.5  8 -4.5 13.5  8 0 14.5  8 4.5 13.5  8 10.5 5.5  8 14.5 -5.5
-bspline3d nose_12_joined 12 -13.5 -4.5  12 -9.5 5  12 -4 12.5  12 0 13.5  12 4 12.5  12 9.5 5  12 13.5 -4.5
-bspline3d nose_18_joined 18 -12.5 -4  18 -9 4.5  18 -4 10.5  18 0 11.5  18 4 10.5  18 9 4.5  18 12.5 -4
-wire_meta nose_0_joined nose_0_plane reference
-wire_meta nose_4_joined nose_4_plane reference
-wire_meta nose_8_joined nose_8_plane reference
-wire_meta nose_12_joined nose_12_plane reference
-wire_meta nose_18_joined nose_18_plane reference
-surface_loft nose_skin nose_0_joined nose_4_joined nose_8_joined nose_12_joined nose_18_joined
-
-# Lights and windscreen are kept as a reusable planar drawing and projected to the skin.
 plane_point_normal front_plan 0 0 18  0 0 1  1 0 0
-sketch_circle light_left_plan front_plan 5 -7 1.25 reference
-sketch_circle light_right_plan front_plan 5 7 1.25 reference
-polyline3d windscreen_plan 7 -8 18  13 -7 18  13 7 18  7 8 18  7 -8 18
+
+bezier3d nose_0 0 -16 -7 0 -13 5 0 -6 10.5 0 0 12
+wire_meta nose_0 nose_0_plane reference
+bezier3d nose_0_r 0 0 12 0 6 10.5 0 13 5 0 16 -7
+wire_meta nose_0_r nose_0_plane reference
+bezier3d nose_4 4 -15.5 -6.5 4 -12 6 4 -6 12 4 0 13.5
+wire_meta nose_4 nose_4_plane reference
+bezier3d nose_4_r 4 0 13.5 4 6 12 4 12 6 4 15.5 -6.5
+wire_meta nose_4_r nose_4_plane reference
+bezier3d nose_8 8 -14.5 -5.5 8 -11 6.5 8 -5.5 13 8 0 14.5
+wire_meta nose_8 nose_8_plane reference
+bezier3d nose_8_r 8 0 14.5 8 5.5 13 8 11 6.5 8 14.5 -5.5
+wire_meta nose_8_r nose_8_plane reference
+bezier3d nose_12 12 -13.5 -4.5 12 -10 6 12 -5 12 12 0 13.5
+wire_meta nose_12 nose_12_plane reference
+bezier3d nose_12_r 12 0 13.5 12 5 12 12 10 6 12 13.5 -4.5
+wire_meta nose_12_r nose_12_plane reference
+bezier3d nose_18 18 -12.5 -4 18 -9 5 18 -4.5 10 18 0 11.5
+wire_meta nose_18 nose_18_plane reference
+bezier3d nose_18_r 18 0 11.5 18 4.5 10 18 9 5 18 12.5 -4
+wire_meta nose_18_r nose_18_plane reference
+bspline3d_knots nose_0_joined 7 0 -16 -7 0 -12 4 0 -5 11 0 0 12 0 5 11 0 12 4 0 16 -7 0 0 0 0 0.25 0.5 0.75 1 1 1 1
+wire_meta nose_0_joined nose_0_plane reference
+bspline3d_knots nose_4_joined 7 4 -15.5 -6.5 4 -11.5 5 4 -5 12.5 4 0 13.5 4 5 12.5 4 11.5 5 4 15.5 -6.5 0 0 0 0 0.25 0.5 0.75 1 1 1 1
+wire_meta nose_4_joined nose_4_plane reference
+bspline3d_knots nose_8_joined 7 8 -14.5 -5.5 8 -10.5 5.5 8 -4.5 13.5 8 0 14.5 8 4.5 13.5 8 10.5 5.5 8 14.5 -5.5 0 0 0 0 0.25 0.5 0.75 1 1 1 1
+wire_meta nose_8_joined nose_8_plane reference
+bspline3d_knots nose_12_joined 7 12 -13.5 -4.5 12 -9.5 5 12 -4 12.5 12 0 13.5 12 4 12.5 12 9.5 5 12 13.5 -4.5 0 0 0 0 0.25 0.5 0.75 1 1 1 1
+wire_meta nose_12_joined nose_12_plane reference
+bspline3d_knots nose_18_joined 7 18 -12.5 -4 18 -9 4.5 18 -4 10.5 18 0 11.5 18 4 10.5 18 9 4.5 18 12.5 -4 0 0 0 0 0.25 0.5 0.75 1 1 1 1
+wire_meta nose_18_joined nose_18_plane reference
+circle3d light_left_plan 5 -7 18  1 0 0  0 1 0 1.25
+wire_meta light_left_plan front_plan reference
+circle3d light_right_plan 5 7 18  1 0 0  0 1 0 1.25
+wire_meta light_right_plan front_plan reference
+polyline3d windscreen_plan 7 -8 18 13 -7 18 13 7 18 7 8 18 7 -8 18
 wire_meta windscreen_plan front_plan reference
+
+surface_loft nose_skin nose_0_joined nose_4_joined nose_8_joined nose_12_joined nose_18_joined
 wire_project light_left_on_skin light_left_plan nose_skin 0 0 1
 wire_project light_right_on_skin light_right_plan nose_skin 0 0 1
 wire_project windscreen_on_skin windscreen_plan nose_skin 0 0 1
 
-# Two user-controlled 0.5 mm styrene panels. The seam is behind the windscreen,
-# so the complete windscreen is cut from the front panel instead of crossing a seam.
 plate nose_panel_front nose_skin 0.5 centered styrene
 plate nose_panel_rear nose_skin 0.5 centered styrene
-plate_range nose_panel_front 0 1 0 0.9
-plate_range nose_panel_rear 0 1 0.9 1
+plate_range nose_panel_front 0 1 0 0.90000000000000002
+plate_range nose_panel_rear 0 1 0.90000000000000002 1
 plate_opening nose_panel_front light_left_on_skin
 plate_opening nose_panel_front light_right_on_skin
 plate_opening nose_panel_front windscreen_on_skin
 
-# Negative-side forming jig with 0.15 mm forming clearance and 3 mm wall.
-body_surface_jig nose_forming_jig nose_skin negative 0.15 3.0 0 1 0 1
+body_surface_jig nose_forming_jig nose_skin negative 0.14999999999999999 3 0 1 0 1
 
 visibility workplane nose_0_plane hidden
 visibility workplane nose_4_plane hidden
@@ -80,4 +85,5 @@ visibility wire nose_18_joined hidden
 visibility wire light_left_plan hidden
 visibility wire light_right_plan hidden
 visibility wire windscreen_plan hidden
-visibility surface nose_skin hidden
+visibility plate nose_panel_rear hidden
+visibility body nose_forming_jig hidden

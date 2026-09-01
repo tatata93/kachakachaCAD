@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
+#include <iterator>
 #include <optional>
 #include <ostream>
 #include <sstream>
@@ -731,6 +732,81 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     sections.push_back(sectionName);
                 }
                 project.AddLoftSurface(name, std::move(sections));
+            } else if (command == "surface_grouped") {
+                const std::string kind = ReadName(
+                    stream, sourceName, lineNumber, "grouped surface kind");
+                const std::string name = ReadName(
+                    stream, sourceName, lineNumber, "surface");
+                int groupCount = 0;
+                if (!(stream >> groupCount) || groupCount <= 0) {
+                    ThrowLineError(
+                        sourceName, lineNumber,
+                        "surface_grouped requires a positive group count");
+                }
+                std::vector<std::vector<std::string>> groups;
+                groups.reserve(static_cast<std::size_t>(groupCount));
+                for (int groupIndex = 0; groupIndex < groupCount; ++groupIndex) {
+                    int wireCount = 0;
+                    if (!(stream >> wireCount) || wireCount <= 0) {
+                        ThrowLineError(
+                            sourceName, lineNumber,
+                            "each grouped surface input requires a positive wire count");
+                    }
+                    std::vector<std::string> group;
+                    group.reserve(static_cast<std::size_t>(wireCount));
+                    for (int wireIndex = 0; wireIndex < wireCount; ++wireIndex) {
+                        group.push_back(ReadName(
+                            stream, sourceName, lineNumber,
+                            "grouped surface source wire"));
+                    }
+                    groups.push_back(std::move(group));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                if (kind == "planar") {
+                    if (groups.size() != 1) {
+                        ThrowLineError(
+                            sourceName, lineNumber,
+                            "grouped planar surface requires one boundary group");
+                    }
+                    project.AddPlanarSurface(name, std::move(groups.front()));
+                } else if (kind == "ruled") {
+                    if (groups.size() != 2) {
+                        ThrowLineError(
+                            sourceName, lineNumber,
+                            "grouped ruled surface requires two section groups");
+                    }
+                    project.AddRuledSurface(
+                        name, std::move(groups[0]), std::move(groups[1]));
+                } else if (kind == "loft") {
+                    project.AddLoftSurface(name, std::move(groups));
+                } else if (kind == "guided_loft") {
+                    if (groups.size() < 3) {
+                        ThrowLineError(
+                            sourceName, lineNumber,
+                            "grouped guided loft requires two guides and at least one section");
+                    }
+                    std::vector<std::vector<std::string>> sections(
+                        std::make_move_iterator(groups.begin() + 2),
+                        std::make_move_iterator(groups.end()));
+                    project.AddGuidedLoftSurface(
+                        name, std::move(groups[0]), std::move(groups[1]),
+                        std::move(sections));
+                } else {
+                    ThrowLineError(
+                        sourceName, lineNumber,
+                        "unknown grouped surface kind: " + kind);
+                }
+            } else if (command == "surface_guided_loft") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::string firstGuide = ReadName(stream, sourceName, lineNumber, "first guide wire");
+                const std::string secondGuide = ReadName(stream, sourceName, lineNumber, "second guide wire");
+                std::vector<std::string> sections;
+                std::string sectionName;
+                while (stream >> sectionName) {
+                    sections.push_back(sectionName);
+                }
+                project.AddGuidedLoftSurface(
+                    name, firstGuide, secondGuide, std::move(sections));
             } else if (command == "wire_project") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "projected wire");
                 const std::string sourceWire = ReadName(stream, sourceName, lineNumber, "source drawing wire");
@@ -1009,7 +1085,29 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         for (const std::string& sourceWireName : namedSurface.sourceWireNames) {
             RequireScriptNameSafe(sourceWireName, "Surface source wire");
         }
-        if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
+        const bool compoundGroups = !namedSurface.sourceWireGroups.empty()
+            && std::any_of(
+                namedSurface.sourceWireGroups.begin(),
+                namedSurface.sourceWireGroups.end(),
+                [](const auto& group) { return group.size() > 1; });
+        if (compoundGroups
+            && namedSurface.surface.Kind() != model::SurfaceKind::Planar) {
+            const char* kind = namedSurface.surface.Kind() == model::SurfaceKind::Ruled
+                ? "ruled"
+                : namedSurface.surface.Kind() == model::SurfaceKind::Loft
+                ? "loft"
+                : "guided_loft";
+            output << "surface_grouped " << kind << ' '
+                   << namedSurface.name << ' '
+                   << namedSurface.sourceWireGroups.size();
+            for (const auto& group : namedSurface.sourceWireGroups) {
+                output << ' ' << group.size();
+                for (const std::string& sourceName : group) {
+                    output << ' ' << sourceName;
+                }
+            }
+            output << '\n';
+        } else if (namedSurface.surface.Kind() == model::SurfaceKind::Planar) {
             output << "surface_planar " << namedSurface.name;
             for (const std::string& boundaryName : namedSurface.sourceWireNames) {
                 output << ' ' << boundaryName;
@@ -1018,10 +1116,16 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         } else if (namedSurface.surface.Kind() == model::SurfaceKind::Ruled) {
             output << "surface_ruled " << namedSurface.name << ' '
                    << namedSurface.sourceWireNames.at(0) << ' ' << namedSurface.sourceWireNames.at(1) << '\n';
-        } else {
+        } else if (namedSurface.surface.Kind() == model::SurfaceKind::Loft) {
             output << "surface_loft " << namedSurface.name;
             for (const std::string& sectionName : namedSurface.sourceWireNames) {
                 output << ' ' << sectionName;
+            }
+            output << '\n';
+        } else {
+            output << "surface_guided_loft " << namedSurface.name;
+            for (const std::string& sourceName : namedSurface.sourceWireNames) {
+                output << ' ' << sourceName;
             }
             output << '\n';
         }

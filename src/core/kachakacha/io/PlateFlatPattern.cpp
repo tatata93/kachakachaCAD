@@ -3259,7 +3259,16 @@ void WritePlateFlatPatternSvg(
     output << "  </g>\n"
            << "  <g id=\"RELIEF_CUT\" fill=\"none\" stroke=\"#d12f3f\" stroke-width=\"0.14\" stroke-linecap=\"round\">\n";
     for (const auto& cut : pattern.reliefCuts) {
-        if (!cut.incorporatedInOuterBoundary) {
+        if (!cut.incorporatedInOuterBoundary
+            && cut.cutKind != PapercraftCutKind::SeparatingSeam) {
+            writePath(cut, "    ");
+        }
+    }
+    output << "  </g>\n"
+           << "  <g id=\"SEPARATING_SEAM\" fill=\"none\" stroke=\"#a65b00\" stroke-width=\"0.14\" stroke-linecap=\"round\">\n";
+    for (const auto& cut : pattern.reliefCuts) {
+        if (!cut.incorporatedInOuterBoundary
+            && cut.cutKind == PapercraftCutKind::SeparatingSeam) {
             writePath(cut, "    ");
         }
     }
@@ -3307,7 +3316,12 @@ void WritePlateFlatPatternDxf(std::ostream& output, const PlateFlatPattern& patt
     }
     for (const auto& cut : pattern.reliefCuts) {
         if (!cut.incorporatedInOuterBoundary) {
-            WriteDxfPath(output, cut, "RELIEF_CUT");
+            WriteDxfPath(
+                output,
+                cut,
+                cut.cutKind == PapercraftCutKind::SeparatingSeam
+                    ? "SEPARATING_SEAM"
+                    : "RELIEF_CUT");
         }
     }
     for (const auto& fold : pattern.foldLines) {
@@ -3358,6 +3372,153 @@ PlateAssemblyModelResult AddPlateAssemblyMotionModel(
     }
 
     PlateAssemblyModelResult result;
+    if (motion.preferContinuousModel && !motion.continuousPieces.empty()) {
+        for (const PlateAssemblyContinuousPiece& piece : motion.continuousPieces) {
+            if (selectedPieceIndex.has_value()
+                && piece.pieceIndex != *selectedPieceIndex) {
+                continue;
+            }
+            const auto panelPosition = std::find(
+                motion.pieceIndices.begin(), motion.pieceIndices.end(),
+                piece.pieceIndex);
+            if (panelPosition == motion.pieceIndices.end()) {
+                throw std::invalid_argument(
+                    "Continuous assembly piece contains no verification panel.");
+            }
+            const std::size_t panelIndex = static_cast<std::size_t>(
+                std::distance(motion.pieceIndices.begin(), panelPosition));
+            PlateAssemblyMotion single;
+            single.plateName = motion.plateName;
+            single.panels.push_back(motion.panels[panelIndex]);
+            single.pieceIndices.push_back(0);
+            single.panelThicknessMillimeters.push_back(
+                motion.panelThicknessMillimeters[panelIndex]);
+            single.panelDeviationMillimeters.push_back(
+                panelIndex < motion.panelDeviationMillimeters.size()
+                    ? motion.panelDeviationMillimeters[panelIndex]
+                    : 0.0);
+            single.continuousSections = piece.sections;
+            single.openingPaths = piece.openingPaths;
+            single.reliefCutPaths = piece.reliefCutPaths;
+            single.preferContinuousModel = true;
+            single.pieceCount = 1;
+            const auto added = AddPlateAssemblyMotionModel(
+                project,
+                sourcePlate,
+                single,
+                namePrefix + "_piece_" + std::to_string(piece.pieceIndex + 1),
+                std::nullopt);
+            result.outerWireNames.insert(
+                result.outerWireNames.end(),
+                added.outerWireNames.begin(), added.outerWireNames.end());
+            result.surfaceNames.insert(
+                result.surfaceNames.end(),
+                added.surfaceNames.begin(), added.surfaceNames.end());
+            result.plateNames.insert(
+                result.plateNames.end(),
+                added.plateNames.begin(), added.plateNames.end());
+            result.pieceIndices.insert(
+                result.pieceIndices.end(),
+                added.plateNames.size(), piece.pieceIndex);
+        }
+        if (result.plateNames.empty()) {
+            throw std::invalid_argument(
+                "Selected continuous assembly piece contains no model.");
+        }
+        return result;
+    }
+    if (motion.preferContinuousModel
+        && motion.continuousSections.size() >= 3
+        && (!selectedPieceIndex.has_value() || *selectedPieceIndex == 0)) {
+        std::vector<std::string> sectionNames;
+        sectionNames.reserve(motion.continuousSections.size());
+        for (std::size_t sectionIndex = 0;
+             sectionIndex < motion.continuousSections.size(); ++sectionIndex) {
+            const auto& points = motion.continuousSections[sectionIndex];
+            if (points.size() < 4) {
+                throw std::invalid_argument(
+                    "Continuous assembly section needs at least four points.");
+            }
+            const std::string sectionName = namePrefix + "_section_"
+                + std::to_string(sectionIndex + 1);
+            project.AddWire(
+                sectionName, Wire::InterpolatingCubicBSpline(points));
+            sectionNames.push_back(sectionName);
+        }
+        const std::string surfaceName = namePrefix + "_continuous_surface";
+        const std::string plateName = namePrefix + "_continuous_plate";
+        project.AddLoftSurface(surfaceName, sectionNames);
+        if (sourcePlate.plate.HasVariableThickness()) {
+            project.AddPlate(
+                plateName,
+                surfaceName,
+                sourcePlate.plate.Thickness(),
+                sourcePlate.plate.EndThickness(),
+                sourcePlate.plate.Direction(),
+                sourcePlate.material);
+        } else {
+            project.AddPlate(
+                plateName,
+                surfaceName,
+                sourcePlate.plate.Thickness(),
+                sourcePlate.plate.Direction(),
+                sourcePlate.material);
+        }
+
+        const auto& firstSection = motion.continuousSections.front();
+        const auto& lastSection = motion.continuousSections.back();
+        const std::size_t middle = firstSection.size() / 2;
+        Vector3 projectionNormal = geometry::Cross(
+            firstSection[std::min(middle + 1, firstSection.size() - 1)]
+                - firstSection[middle > 0 ? middle - 1 : middle],
+            lastSection[middle] - firstSection[middle]);
+        if (projectionNormal.LengthSquared() <= 1.0e-18) {
+            projectionNormal = sourcePlate.plate.SourceSurface().Normal(0.5, 0.5);
+        } else {
+            projectionNormal = projectionNormal.Normalized();
+        }
+        for (std::size_t openingIndex = 0;
+             openingIndex < motion.openingPaths.size(); ++openingIndex) {
+            std::vector<Vector3> sourcePoints
+                = motion.openingPaths[openingIndex].points;
+            if (sourcePoints.size() < 4) {
+                continue;
+            }
+            if ((sourcePoints.front() - sourcePoints.back()).Length()
+                > 1.0e-7) {
+                sourcePoints.push_back(sourcePoints.front());
+            }
+            for (Vector3& point : sourcePoints) {
+                point = point + projectionNormal * 2.0;
+            }
+            const std::string sourceName = namePrefix + "_opening_source_"
+                + std::to_string(openingIndex + 1);
+            const std::string projectedName = namePrefix + "_opening_"
+                + std::to_string(openingIndex + 1);
+            project.AddWire(sourceName, Wire::Polyline(std::move(sourcePoints)));
+            project.AddProjectedWire(
+                projectedName,
+                sourceName,
+                surfaceName,
+                -projectionNormal);
+            project.AddPlateOpening(plateName, projectedName);
+            project.SetWireVisible(sourceName, false);
+        }
+        for (std::size_t cutIndex = 0;
+             cutIndex < motion.reliefCutPaths.size(); ++cutIndex) {
+            if (motion.reliefCutPaths[cutIndex].points.size() < 2) {
+                continue;
+            }
+            project.AddWire(
+                namePrefix + "_relief_guide_" + std::to_string(cutIndex + 1),
+                Wire::Polyline(motion.reliefCutPaths[cutIndex].points));
+        }
+        result.outerWireNames = std::move(sectionNames);
+        result.surfaceNames.push_back(surfaceName);
+        result.plateNames.push_back(plateName);
+        result.pieceIndices.push_back(0);
+        return result;
+    }
     for (std::size_t panelIndex = 0; panelIndex < motion.panels.size(); ++panelIndex) {
         const int pieceIndex = motion.pieceIndices[panelIndex];
         if (selectedPieceIndex.has_value() && pieceIndex != *selectedPieceIndex) {

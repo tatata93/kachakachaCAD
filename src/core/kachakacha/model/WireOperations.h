@@ -9,6 +9,8 @@
 
 namespace kachakacha::model {
 
+inline constexpr double kWireChainConnectionTolerance = 0.02;
+
 enum class RetainedLineEnd {
     Automatic,
     Start,
@@ -74,13 +76,13 @@ struct DirectWireExtendResult {
 
 [[nodiscard]] Wire JoinLineChain(
     const std::vector<Wire>& wires,
-    double tolerance = 1.0e-8);
+    double tolerance = kWireChainConnectionTolerance);
 
 // Orders endpoint-connected wires and flattens native curves only for the
 // resulting composite boundary. Source wires remain independently editable.
 [[nodiscard]] Wire JoinWireChain(
     const std::vector<Wire>& wires,
-    double connectionTolerance = 1.0e-6,
+    double connectionTolerance = kWireChainConnectionTolerance,
     double curveChordTolerance = 0.01);
 
 [[nodiscard]] Wire OffsetPlanarWire(

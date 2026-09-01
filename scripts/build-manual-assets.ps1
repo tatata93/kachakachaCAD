@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "common.ps1")
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
 if (-not $SkipBuild) {
@@ -18,7 +19,13 @@ $FirstCheck = Join-Path $RepoRoot "examples\first-check.kcd"
 $Acceptance = Join-Path $RepoRoot "examples\railway-nose-acceptance.kcd"
 $LightCase = Join-Path $RepoRoot "examples\panorama-light-case.kcd"
 $QtBin = "C:\Qt\6.9.2\msvc2022_64\bin"
-$VcpkgBin = Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\bin"
+$QtPlugins = "C:\Qt\6.9.2\msvc2022_64\plugins"
+$VcpkgBin = if ($Config -ieq "Debug") {
+    Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\debug\bin"
+}
+else {
+    Join-Path $env:USERPROFILE "vcpkg\installed\x64-windows\bin"
+}
 
 if (-not (Test-Path $CadPath)) {
     throw "CAD executable was not found: $CadPath"
@@ -55,6 +62,7 @@ $Shots = @(
     @{ Name = "planar-output"; Project = $FirstCheck; State = "planar-output" },
     @{ Name = "flat-pattern"; Project = $Acceptance; State = "flat-pattern" },
     @{ Name = "assembly-output"; Project = $Acceptance; State = "assembly-output" },
+    @{ Name = "bent-sheet-assembled"; Project = $Acceptance; State = "assembly-complete" },
     @{ Name = "model-output"; Project = $Acceptance; State = "output" },
     @{ Name = "model-inspection"; Project = $Acceptance; State = "inspection" },
     @{ Name = "display-settings"; Project = $Acceptance; State = "display" },
@@ -66,9 +74,12 @@ $Shots = @(
 
 $PreviousPath = $env:Path
 $PreviousPlatform = $env:QT_QPA_PLATFORM
+$PreviousPluginPath = $env:QT_PLUGIN_PATH
 try {
+    Repair-PathEnvironment
     $env:Path = "$QtBin;$VcpkgBin;$PreviousPath"
     $env:QT_QPA_PLATFORM = "offscreen"
+    $env:QT_PLUGIN_PATH = $QtPlugins
     foreach ($Shot in $Shots) {
         $OutputPath = Join-Path $OutputDirectory ($Shot.Name + ".png")
         $Process = Start-Process -FilePath $CadPath -ArgumentList @(
@@ -91,6 +102,12 @@ finally {
     }
     else {
         $env:QT_QPA_PLATFORM = $PreviousPlatform
+    }
+    if ($null -eq $PreviousPluginPath) {
+        Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:QT_PLUGIN_PATH = $PreviousPluginPath
     }
 }
 

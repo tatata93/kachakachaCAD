@@ -315,6 +315,59 @@ void JoinsMixedCurvesIntoAClosedContour()
         "joined contour keeps the arc bulge");
 }
 
+void JoinsMixedCurvesAcrossSmallDrawingGaps()
+{
+    const std::vector<Wire> wires = {
+        Wire::CubicBezier(
+            {10.006, 5.0, 0.0}, {7.0, 6.5, 0.0},
+            {3.0, 6.5, 0.0}, {0.0, 5.008, 0.0}),
+        Wire::Line({0.004, 5.0, 0.0}, {0.0, 0.006, 0.0}),
+        Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}),
+        Wire::CircularArcThroughThreePoints(
+            {10.008, 0.0, 0.0}, {12.0, 2.5, 0.0}, {10.0, 4.994, 0.0}),
+    };
+    const Wire joined = JoinWireChain(wires);
+    Require(joined.IsClosed(),
+        "mixed curve contour heals sub-0.02 mm endpoint gaps");
+    Require(joined.ControlPoints().size() > 12,
+        "gap-healed chain preserves sampled curves");
+}
+
+void RejectsBranchedAndDuplicateChains()
+{
+    bool branchRejected = false;
+    try {
+        (void)JoinWireChain({
+            Wire::Line({0.0, 0.0, 0.0}, {5.0, 0.0, 0.0}),
+            Wire::Line({5.0, 0.0, 0.0}, {10.0, 0.0, 0.0}),
+            Wire::Line({5.0, 0.0, 0.0}, {5.0, 5.0, 0.0}),
+        });
+    } catch (const std::invalid_argument&) {
+        branchRejected = true;
+    }
+    Require(branchRejected, "branched chain is rejected explicitly");
+
+    bool duplicateRejected = false;
+    try {
+        (void)JoinWireChain({
+            Wire::Line({0.0, 0.0, 0.0}, {5.0, 0.0, 0.0}),
+            Wire::Line({5.0, 0.0, 0.0}, {0.0, 0.0, 0.0}),
+        });
+    } catch (const std::invalid_argument&) {
+        duplicateRejected = true;
+    }
+    Require(duplicateRejected, "duplicate reversed segment is rejected explicitly");
+
+    const Wire lens = JoinWireChain({
+        Wire::CircularArcThroughThreePoints(
+            {-5.0, 0.0, 0.0}, {0.0, 3.0, 0.0}, {5.0, 0.0, 0.0}),
+        Wire::CircularArcThroughThreePoints(
+            {5.0, 0.0, 0.0}, {0.0, -3.0, 0.0}, {-5.0, 0.0, 0.0}),
+    });
+    Require(lens.IsClosed(),
+        "two different curves sharing both endpoints form a valid closed loop");
+}
+
 void OffsetsPlanarDrawingWires()
 {
     const WorkPlane plane = WorkPlane::FromPointNormal({}, {0.0, 0.0, 1.0});
@@ -472,6 +525,8 @@ int main()
         JoinsUnorderedLineChain();
         RejectsDisconnectedJoin();
         JoinsMixedCurvesIntoAClosedContour();
+        JoinsMixedCurvesAcrossSmallDrawingGaps();
+        RejectsBranchedAndDuplicateChains();
         OffsetsPlanarDrawingWires();
         OffsetsOnArbitraryWorkPlaneAndRejectsInvalidInputs();
         AppliesPersistentLineConstraints();

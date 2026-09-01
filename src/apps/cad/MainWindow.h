@@ -21,6 +21,8 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QSlider;
+class QSpinBox;
+class QSpinBox;
 class QStackedWidget;
 class QTabWidget;
 class QTableWidget;
@@ -28,6 +30,8 @@ class QTimer;
 class QTreeWidget;
 
 namespace kachakacha::io {
+struct PlateAssemblyGuide;
+struct PlateAssemblyMotion;
 struct PlateFlatPattern;
 struct PlateFlatPatternOptions;
 }
@@ -113,6 +117,31 @@ private:
     void UseReferenceForPlaneRotation();
     void ApplyLineChamfer();
     void ApplyLineFillet();
+    enum class SurfaceInputRole {
+        Boundary,
+        Guide,
+        Section,
+    };
+    struct SurfaceInputGroup {
+        SurfaceInputRole role = SurfaceInputRole::Section;
+        std::vector<std::string> wireNames;
+    };
+    void AddSelectedSurfaceInputGroup(SurfaceInputRole role);
+    void SelectConnectedSurfaceWireChain();
+    void AppendSelectedWiresToSurfaceInputGroup();
+    void RemoveSelectedSurfaceInputGroup();
+    void ClearSurfaceInputGroups();
+    void RefreshSurfaceInputTable();
+    [[nodiscard]] std::vector<std::string> SelectedSurfaceWireNames() const;
+    void ValidateSurfaceInputGroup(
+        const std::vector<std::string>& wireNames,
+        SurfaceInputRole role,
+        bool requireClosedBoundary = false) const;
+    void AddSurfaceFromConfiguredInputs(
+        kachakacha::model::Project& project,
+        const std::string& surfaceName,
+        int surfaceMode,
+        const std::vector<int>& fallbackWireIndices) const;
     void CreateSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
     void CreateProtrudingLightCase();
@@ -133,9 +162,23 @@ private:
     void ExportSelectedBody(bool step);
     void CreateSelectedPlateFlatPatternModel();
     void CreatePlateAssemblyStateModel();
+    void CreateFacetedApproximationModel();
     void ExportPlateAssemblyState(bool step);
     [[nodiscard]] std::optional<int> SelectedPlateAssemblyPiece() const;
     [[nodiscard]] kachakacha::io::PlateFlatPatternOptions PlateFlatPatternOptionsFromUi() const;
+    [[nodiscard]] bool UsesFacetedPapercraft() const;
+    [[nodiscard]] bool UsesBentSheetPapercraft() const;
+    [[nodiscard]] bool UsesFabricationPanelPapercraft() const;
+    [[nodiscard]] kachakacha::io::PlateFlatPattern BuildActivePapercraftPattern(
+        const kachakacha::model::NamedPlate& plate,
+        kachakacha::io::PlateFlatPatternOptions options) const;
+    [[nodiscard]] kachakacha::io::PlateAssemblyGuide BuildActivePapercraftGuide(
+        const kachakacha::model::NamedPlate& plate,
+        kachakacha::io::PlateFlatPatternOptions options) const;
+    [[nodiscard]] kachakacha::io::PlateAssemblyMotion BuildActivePapercraftMotion(
+        const kachakacha::model::NamedPlate& plate,
+        double progress,
+        kachakacha::io::PlateFlatPatternOptions options) const;
     void UpdatePlateAssemblyGuidePreview();
     void SetViewportTool(ViewportTool tool);
     void UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount);
@@ -356,6 +399,13 @@ private:
     QLineEdit* surfaceName_ = nullptr;
     QComboBox* surfaceType_ = nullptr;
     QLabel* surfaceSelectionLabel_ = nullptr;
+    QTableWidget* surfaceInputTable_ = nullptr;
+    QPushButton* surfaceSelectChainButton_ = nullptr;
+    QPushButton* surfaceAddBoundaryOrGuideButton_ = nullptr;
+    QPushButton* surfaceAddSectionButton_ = nullptr;
+    QPushButton* surfaceAppendGroupButton_ = nullptr;
+    QPushButton* surfaceCreateButton_ = nullptr;
+    std::vector<SurfaceInputGroup> surfaceInputGroups_;
     QComboBox* projectionSurface_ = nullptr;
     QComboBox* projectionPlane_ = nullptr;
     QLabel* projectionSelectionLabel_ = nullptr;
@@ -396,6 +446,12 @@ private:
     QLabel* plateFlatPatternSummary_ = nullptr;
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
+    QComboBox* platePapercraftMode_ = nullptr;
+    QComboBox* platePapercraftPanelPriority_ = nullptr;
+    QDoubleSpinBox* platePapercraftMaximumError_ = nullptr;
+    QDoubleSpinBox* platePapercraftMinimumWidth_ = nullptr;
+    QComboBox* plateFabricationPanelDirection_ = nullptr;
+    QSpinBox* plateFabricationPanelMaximumCount_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
     QComboBox* plateFlatPatternAssemblyStrategy_ = nullptr;
     QComboBox* plateFlatPatternCutDirection_ = nullptr;
@@ -437,6 +493,7 @@ private:
     std::array<QDoubleSpinBox*, 3> rotateAxisPoint_{};
     std::array<QDoubleSpinBox*, 3> rotateAxisDirection_{};
     QDoubleSpinBox* rotateAngle_ = nullptr;
+    QDoubleSpinBox* pathPlanePosition_ = nullptr;
     QDoubleSpinBox* planeOffset_ = nullptr;
     QDoubleSpinBox* planeTilt_ = nullptr;
     QLabel* planeReferenceLabel_ = nullptr;

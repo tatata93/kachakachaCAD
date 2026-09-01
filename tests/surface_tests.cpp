@@ -34,6 +34,10 @@ int main()
     });
     const Surface planar = Surface::Planar(rectangle);
     Require(planar.Kind() == SurfaceKind::Planar, "create planar surface");
+    const auto planarCurvature = planar.Curvature(0.5, 0.5);
+    Require(std::abs(planarCurvature.gaussian) <= 1.0e-10
+            && std::abs(planarCurvature.mean) <= 1.0e-10,
+        "planar surface has zero curvature");
     const auto planarProjection = planar.ProjectPointAlongDirection({7.0, 4.0, 8.0}, {0.0, 0.0, -1.0});
     Require(AlmostEqual(planarProjection.point, {7.0, 4.0, 0.0}, 1.0e-8), "project point to bounded plane");
     bool outsideRejected = false;
@@ -43,6 +47,21 @@ int main()
         outsideRejected = true;
     }
     Require(outsideRejected, "reject projection outside planar boundary");
+
+    bool crossingBoundaryRejected = false;
+    try {
+        (void)Surface::Planar(Wire::Polyline({
+            {0.0, 0.0, 0.0},
+            {10.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0},
+            {10.0, 0.0, 0.0},
+            {0.0, 0.0, 0.0},
+        }));
+    } catch (const std::invalid_argument&) {
+        crossingBoundaryRejected = true;
+    }
+    Require(crossingBoundaryRejected,
+        "self-crossing planar boundary is rejected explicitly");
 
     const Wire sectionA = Wire::CubicBezier(
         {0.0, -6.0, 0.0}, {0.0, -2.0, 3.0}, {0.0, 2.0, 3.0}, {0.0, 6.0, 0.0});
@@ -64,6 +83,72 @@ int main()
     const auto afterDirection = (loft.Evaluate(0.5, 0.5 + loftStep) - middlePoint).Normalized();
     Require(kachakacha::geometry::Dot(beforeDirection, afterDirection) > 0.99999,
         "loft keeps a continuous direction through section planes");
+    const auto secondBefore = (
+        loft.Evaluate(0.5, 0.5)
+        - loft.Evaluate(0.5, 0.5 - loftStep) * 2.0
+        + loft.Evaluate(0.5, 0.5 - loftStep * 2.0))
+        / (loftStep * loftStep);
+    const auto secondAfter = (
+        loft.Evaluate(0.5, 0.5 + loftStep * 2.0)
+        - loft.Evaluate(0.5, 0.5 + loftStep) * 2.0
+        + loft.Evaluate(0.5, 0.5))
+        / (loftStep * loftStep);
+    Require((secondBefore - secondAfter).Length() < 0.1,
+        "loft keeps C2 curvature continuity through section planes");
+    const auto loftCurvature = loft.Curvature(0.5, 0.5);
+    Require(std::isfinite(loftCurvature.gaussian)
+            && std::isfinite(loftCurvature.mean)
+            && loftCurvature.principalMinimum <= loftCurvature.principalMaximum,
+        "loft reports finite ordered principal curvatures");
+
+    const Wire firstGuide = Wire::CubicBezier(
+        {0.0, -6.0, 0.0}, {4.0, -6.0, 1.0},
+        {8.0, -6.0, 2.0}, {12.0, -6.0, 0.0});
+    const Wire secondGuide = Wire::CubicBezier(
+        {0.0, 6.0, 0.0}, {4.0, 6.0, 1.5},
+        {8.0, 6.0, 2.5}, {12.0, 6.0, 0.0});
+    const Wire guidedSection = Wire::CubicBezier(
+        firstGuide.Evaluate(0.5), {6.0, -2.0, 7.0},
+        {6.0, 2.0, 7.0}, secondGuide.Evaluate(0.5));
+    const Surface guided = Surface::GuidedLoft(
+        firstGuide, secondGuide.Reversed(), {guidedSection.Reversed()});
+    Require(guided.Kind() == SurfaceKind::GuidedLoft,
+        "create guided loft from two profiles and one cross section");
+    Require(AlmostEqual(guided.Evaluate(0.0, 0.5), firstGuide.Evaluate(0.5), 1.0e-6),
+        "guided loft follows first outer contour");
+    Require(AlmostEqual(guided.Evaluate(1.0, 0.5), secondGuide.Evaluate(0.5), 1.0e-6),
+        "guided loft follows second outer contour");
+    Require(AlmostEqual(guided.Evaluate(0.5, 0.5), guidedSection.Evaluate(0.5), 1.0e-6),
+        "guided loft passes through selected cross section");
+
+    const Wire joinedEndFirstGuide = Wire::CubicBezier(
+        {0.0, 0.0, 0.0}, {10.0 / 3.0, 5.0, 0.0},
+        {20.0 / 3.0, 5.0, 0.0}, {10.0, 0.0, 0.0});
+    const Wire joinedEndSecondGuide = Wire::Line(
+        {0.0, 0.0, 0.0}, {10.0, 0.0, 0.0});
+    const Wire joinedEndSectionA = Wire::Line(
+        joinedEndFirstGuide.Evaluate(0.3),
+        joinedEndSecondGuide.Evaluate(0.3));
+    const Wire joinedEndSectionB = Wire::Line(
+        joinedEndFirstGuide.Evaluate(0.7),
+        joinedEndSecondGuide.Evaluate(0.7));
+    const Surface joinedEndGuided = Surface::GuidedLoft(
+        joinedEndFirstGuide, joinedEndSecondGuide,
+        {joinedEndSectionA, joinedEndSectionB});
+    Require(AlmostEqual(
+                joinedEndGuided.Evaluate(0.0, 0.0),
+                joinedEndGuided.Evaluate(1.0, 0.0), 1.0e-8)
+            && AlmostEqual(
+                joinedEndGuided.Evaluate(0.0, 1.0),
+                joinedEndGuided.Evaluate(1.0, 1.0), 1.0e-8),
+        "guided loft permits two guide rows that meet at both ends");
+    Require(AlmostEqual(
+                joinedEndGuided.Evaluate(0.5, 0.3),
+                joinedEndSectionA.Evaluate(0.5), 1.0e-6)
+            && AlmostEqual(
+                joinedEndGuided.Evaluate(0.5, 0.7),
+                joinedEndSectionB.Evaluate(0.5), 1.0e-6),
+        "guided loft sections may touch intermediate points of joined guides");
 
     const Wire lightDrawing = Wire::Circle({6.0, 0.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.25);
     const Wire projectedLight = ruled.ProjectWireAlongDirection(lightDrawing, {0.0, 0.0, -1.0});
@@ -75,6 +160,21 @@ int main()
 
     const Wire loftProjectedLight = loft.ProjectWireAlongDirection(lightDrawing, {0.0, 0.0, -1.0});
     Require(loftProjectedLight.IsClosed(), "project light drawing to loft surface");
+
+    std::vector<kachakacha::geometry::Vector3> lightSamples;
+    for (int sample = 0; sample <= 64; ++sample) {
+        lightSamples.push_back(lightDrawing.Evaluate(
+            static_cast<double>(sample) / 64.0));
+    }
+    const auto trackedProjections = loft.ProjectPointsAlongDirection(
+        lightSamples, {0.0, 0.0, -1.0});
+    Require(trackedProjections.size() == lightSamples.size(),
+        "track all neighboring projection samples");
+    Require(AlmostEqual(
+            trackedProjections.front().point,
+            trackedProjections.back().point,
+            1.0e-5),
+        "tracked projection preserves a closed curve");
 
     std::cout << "surface tests passed\n";
     return EXIT_SUCCESS;

@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QPoint>
 #include <QString>
+#include <QStringList>
 #include <QWidget>
 
 #include <array>
@@ -87,6 +88,12 @@ enum class ViewportDisplayMode {
     Design,
     FinishedModel,
     IsolatedSelection,
+};
+
+enum class SurfaceDiagnosticMode {
+    Normal,
+    Wireframe,
+    GaussianCurvature,
 };
 
 enum class ViewRotationAxis {
@@ -223,6 +230,7 @@ public:
         const QColor& edgeColor,
         double edgeWidth,
         Qt::PenStyle edgeStyle);
+    void SetSurfaceDiagnosticMode(SurfaceDiagnosticMode mode);
     void SetPlateAppearance(
         const QColor& fillColor,
         int opacityPercent,
@@ -245,7 +253,8 @@ public:
         std::vector<std::array<kachakacha::geometry::Vector3, 3>> panels,
         std::vector<int> pieceIndices,
         std::vector<double> deviations,
-        double maximumDeviationMillimeters);
+        double maximumDeviationMillimeters,
+        bool smoothPaper = false);
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();
@@ -271,7 +280,8 @@ public:
     void SetMeasurementOverlay(
         std::optional<kachakacha::geometry::Vector3> firstPoint,
         std::optional<kachakacha::geometry::Vector3> secondPoint,
-        QString text);
+        QString text,
+        QStringList componentTexts = {});
     void SetMeasurementAngleOverlay(
         kachakacha::geometry::Vector3 vertex,
         kachakacha::geometry::Vector3 firstPoint,
@@ -283,6 +293,10 @@ public:
         return referenceDimensionOverlays_.size();
     }
     [[nodiscard]] const std::vector<MeasurementPick>& MeasurementPicks() const noexcept { return measurementPicks_; }
+    [[nodiscard]] int MeasurementComponentOverlayCount() const noexcept
+    {
+        return measurementOverlayComponentTexts_.size();
+    }
     void AlignToActiveWorkPlane();
     void AlignToWorkPlane(const kachakacha::model::WorkPlane& plane);
     [[nodiscard]] bool AlignToSelection();
@@ -428,6 +442,7 @@ private:
     double constructionWireWidth_ = 1.7;
     Qt::PenStyle constructionWireStyle_ = Qt::DashLine;
     QColor surfaceFillColor_{"#1f848a"};
+    SurfaceDiagnosticMode surfaceDiagnosticMode_ = SurfaceDiagnosticMode::Normal;
     int surfaceOpacityPercent_ = 26;
     QColor surfaceEdgeColor_{"#277b80"};
     double surfaceEdgeWidth_ = 1.4;
@@ -469,6 +484,7 @@ private:
     std::vector<int> plateAssemblyApproximationPieceIndices_;
     std::vector<double> plateAssemblyApproximationDeviations_;
     double plateAssemblyApproximationMaximumDeviationMillimeters_ = 0.0;
+    bool plateAssemblyApproximationSmoothPaper_ = false;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;
     std::vector<MeasurementPick> measurementPicks_;
@@ -476,6 +492,7 @@ private:
     std::optional<kachakacha::geometry::Vector3> measurementOverlaySecond_;
     std::optional<kachakacha::geometry::Vector3> measurementOverlayThird_;
     QString measurementOverlayText_;
+    QStringList measurementOverlayComponentTexts_;
     std::vector<ReferenceDimensionOverlay> referenceDimensionOverlays_;
     kachakacha::geometry::Vector3 target_;
     double yawRadians_ = 0.75;

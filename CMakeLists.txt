@@ -86,6 +86,18 @@ if(KACHACAD_ENABLE_OCCT)
         unset(OpenCASCADE_DIR)
         unset(OpenCASCADE_DIR CACHE)
     endif()
+    # 過去の失敗が NOTFOUND としてキャッシュされていると、OCCT設定ファイル内の
+    # freetype 解決まで巻き添えで失敗し続ける。掃除してから探し直す。
+    foreach(_kachacad_stale IN ITEMS
+        FREETYPE_INCLUDE_DIR_freetype2
+        FREETYPE_INCLUDE_DIR_ft2build
+        FREETYPE_LIBRARY_DEBUG
+        FREETYPE_LIBRARY_RELEASE)
+        if(DEFINED ${_kachacad_stale} AND "${${_kachacad_stale}}" MATCHES "NOTFOUND")
+            unset(${_kachacad_stale} CACHE)
+        endif()
+    endforeach()
+    unset(_kachacad_stale)
     set(KACHACAD_OCCT_BUILDTREE_TARGETS "${OpenCASCADE_DIR}/OpenCASCADETargets.cmake")
     if(EXISTS "${KACHACAD_OCCT_BUILDTREE_TARGETS}"
         AND EXISTS "${OpenCASCADE_DIR}/include/opencascade"
@@ -103,9 +115,29 @@ if(KACHACAD_ENABLE_OCCT)
             ApplicationFramework
             DataExchange
         )
+        # 見つからない場合、vcpkg のインストール先を明示して探し直す。
+        if(NOT (TARGET TKernel AND TARGET TKDESTEP)
+            AND KACHACAD_VCPKG_ROOT AND DEFINED VCPKG_TARGET_TRIPLET
+            AND EXISTS "${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/share/opencascade/OpenCASCADEConfig.cmake")
+            set(OpenCASCADE_DIR
+                "${KACHACAD_VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/share/opencascade"
+                CACHE PATH "vcpkg の OpenCASCADE (自動検出)" FORCE)
+            find_package(OpenCASCADE CONFIG COMPONENTS
+                FoundationClasses
+                ModelingData
+                ModelingAlgorithms
+                Visualization
+                ApplicationFramework
+                DataExchange
+            )
+        endif()
         if(TARGET TKernel AND TARGET TKOffset AND TARGET TKMesh
             AND TARGET TKDESTEP AND TARGET TKDESTL)
             set(OpenCASCADE_FOUND TRUE)
+        else()
+            message(STATUS
+                "OpenCASCADE の探索に失敗: DIR=${OpenCASCADE_DIR} "
+                "considered=${OpenCASCADE_CONSIDERED_CONFIGS}")
         endif()
         set(KACHACAD_OCCT_VERSION
             "${OpenCASCADE_MAJOR_VERSION}.${OpenCASCADE_MINOR_VERSION}.${OpenCASCADE_MAINTENANCE_VERSION}")

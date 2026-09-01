@@ -76,6 +76,10 @@ jobs:
           Copy-Item build/kachakacha_cad.exe out/kachakachaCAD/
           Copy-Item build/*.dll out/kachakachaCAD/ -ErrorAction SilentlyContinue
           if (Test-Path build/platforms) { Copy-Item build/platforms out/kachakachaCAD/platforms -Recurse }
+          $crt = Get-ChildItem "C:/Program Files/Microsoft Visual Studio/2022/*/VC/Redist/MSVC/*/x64/Microsoft.VC14*.CRT" -Directory | Select-Object -First 1
+          if ($null -eq $crt) { throw "MSVC redist CRT folder not found" }
+          Copy-Item "$($crt.FullName)/*.dll" out/kachakachaCAD/
+          Write-Host "Bundled CRT from $($crt.FullName)"
           Copy-Item examples out/kachakachaCAD/examples -Recurse
           Copy-Item docs/manual.html out/kachakachaCAD/ -ErrorAction SilentlyContinue
           Compress-Archive -Path out/kachakachaCAD -DestinationPath kachakachaCAD-windows-x64.zip -Force

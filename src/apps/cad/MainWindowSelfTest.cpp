@@ -1017,7 +1017,7 @@ bool MainWindow::RunCreationSelfTest()
     ApplyDisplaySettings();
 
     SetViewportTool(ViewportTool::DrawLine);
-    toolsTabs_->setCurrentIndex(5);
+    toolsTabs_->setCurrentIndex(2);
     if (viewport_->Tool() != ViewportTool::Select
         || beginnerGuideTitle_->text().isEmpty()
         || !workflowButtons_[2]->isChecked()) {
@@ -2690,7 +2690,7 @@ bool MainWindow::RunCreationSelfTest()
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->FitAll();
-    toolsTabs_->setCurrentIndex(6);
+    toolsTabs_->setCurrentIndex(3);
     UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart + 1)}, true);
     if (!plateFlatPatternSummary_->text().contains(QStringLiteral("PDF"))) {
         const std::string failure = "plate PDF output summary: "
@@ -2761,7 +2761,7 @@ bool MainWindow::RunCreationSelfTest()
             outputScrollArea->ensureWidgetVisible(pdfButtonPointer, 0, 12);
         });
     }
-    toolsTabs_->setCurrentIndex(3);
+    toolsTabs_->setCurrentIndex(0);
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(directStart)},
         {CadSelectionKind::Wire, static_cast<int>(directStart + 2)},
@@ -2986,7 +2986,7 @@ bool MainWindow::RunCreationSelfTest()
         return fail("restore design display without history change");
     }
 
-    toolsTabs_->setCurrentIndex(8);
+    toolsTabs_->setCurrentIndex(5);
     QApplication::processEvents();
     return true;
 }

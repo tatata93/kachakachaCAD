@@ -807,7 +807,7 @@ void MainWindow::BuildUi()
         QStringLiteral("1 平面"), QStringLiteral("2 作図"),
         QStringLiteral("3 面・板"), QStringLiteral("4 出力"),
     };
-    const std::array<int, 4> workflowTabs = {1, 0, 5, 6};
+    const std::array<int, 4> workflowTabs = {1, 0, 2, 3};
     for (std::size_t index = 0; index < workflowButtons_.size(); ++index) {
         workflowButtons_[index] = new QPushButton(workflowNames[index]);
         workflowButtons_[index]->setObjectName(QStringLiteral("workflowButton"));
@@ -824,12 +824,30 @@ void MainWindow::BuildUi()
     }
     toolsLayout->addWidget(workflowPanel);
     toolsTabs_ = new QTabWidget;
-    toolsTabs_->addTab(BuildDrawingPanel(), QStringLiteral("作図"));
+    // ADR 0020 第2段: 作図に使う4タブ(作図/数値入力/編集/加工)を
+    // 1つの「スケッチ」タブへ統合し、折りたたみセクションで区分けする。
+    {
+        auto* sketchPanel = new QWidget;
+        auto* sketchLayout = new QVBoxLayout(sketchPanel);
+        sketchLayout->setContentsMargins(6, 6, 6, 6);
+        sketchLayout->setSpacing(6);
+        sketchLayout->addWidget(new CollapsibleSection(
+            QStringLiteral("作図"), BuildDrawingPanel(), true));
+        sketchLayout->addWidget(new CollapsibleSection(
+            QStringLiteral("数値入力"), BuildWirePanel(), false));
+        sketchLayout->addWidget(new CollapsibleSection(
+            QStringLiteral("編集"), BuildEditPanel(), false));
+        sketchLayout->addWidget(new CollapsibleSection(
+            QStringLiteral("加工（面取り・交点）"), BuildMachiningPanel(), false));
+        sketchLayout->addStretch(1);
+        auto* sketchScroll = new QScrollArea;
+        sketchScroll->setWidgetResizable(true);
+        sketchScroll->setFrameShape(QFrame::NoFrame);
+        sketchScroll->setWidget(sketchPanel);
+        toolsTabs_->addTab(sketchScroll, QStringLiteral("スケッチ"));
+    }
     toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
-    toolsTabs_->addTab(BuildWirePanel(), QStringLiteral("数値入力"));
-    toolsTabs_->addTab(BuildEditPanel(), QStringLiteral("編集"));
-    toolsTabs_->addTab(BuildMachiningPanel(), QStringLiteral("加工"));
-    toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面"));
+    toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面・板"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
@@ -847,9 +865,9 @@ void MainWindow::BuildUi()
             || tool == ViewportTool::SplitWire || tool == ViewportTool::TrimWire
             || tool == ViewportTool::ExtendWire || tool == ViewportTool::Coincident
             || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature;
-        if ((drawingTool && index != 0) || (editTool && index != 3)
+        if (((drawingTool || editTool) && index != 0)
             || (tool == ViewportTool::MoveGridOrigin && index != 0)
-            || (tool == ViewportTool::Measure && index != 8)) {
+            || (tool == ViewportTool::Measure && index != 5)) {
             SetViewportTool(ViewportTool::Select);
         }
         UpdatePlateSplitPreview();
@@ -1764,12 +1782,7 @@ QWidget* MainWindow::BuildEditPanel()
     connect(wireOffsetDistance_, &QDoubleSpinBox::valueChanged, this, &MainWindow::UpdateWireOffsetPreview);
     connect(wireOffsetSide_, &QComboBox::currentIndexChanged, this, &MainWindow::UpdateWireOffsetPreview);
     connect(wireOffsetApplyButton_, &QPushButton::clicked, this, &MainWindow::ApplyWireOffset);
-
-    auto* scroll = new QScrollArea;
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(panel);
-    return scroll;
+    return panel;
 }
 
 QWidget* MainWindow::BuildMachiningPanel()
@@ -3527,7 +3540,7 @@ bool MainWindow::ExportFirstBodyForAutomation(const QString& stlPath, const QStr
                 std::filesystem::path(stepPath.toStdWString()), namedBody.body);
         }
         UpdateSelection({CadSelectionKind::Body, 0}, true);
-        toolsTabs_->setCurrentIndex(6);
+        toolsTabs_->setCurrentIndex(3);
         viewport_->FitAll();
         statusBar()->showMessage(QStringLiteral("完成確認用の治具出力が完了しました"), 5000);
         return true;
@@ -3854,7 +3867,7 @@ void MainWindow::UpdatePlateAssemblyGuidePreview()
         && plateAssemblyGuidePreview_->isChecked();
     const bool approximationEnabled = plateAssemblyApproximationPreview_ != nullptr
         && plateAssemblyApproximationPreview_->isChecked();
-    if (viewport_ == nullptr || toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 6
+    if (viewport_ == nullptr || toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 3
         || (!guideEnabled && !approximationEnabled)) {
         if (viewport_ != nullptr) {
             viewport_->SetPlateAssemblyGuidePreview(std::nullopt, {}, {});
@@ -4970,7 +4983,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
             statusBar()->showMessage(QStringLiteral("円の分割は2点指定が必要です。現在は直線・ポリライン・円弧・ベジェを分割できます"), 5000);
             return;
         }
-        toolsTabs_->setCurrentIndex(3);
+        toolsTabs_->setCurrentIndex(0);
         if (tool == ViewportTool::MirrorSelection && referenceWireName_.has_value()) {
             const auto reference = std::find_if(project_.Wires().begin(), project_.Wires().end(), [this](const auto& wire) {
                 return wire.name == *referenceWireName_ && wire.wire.Kind() == WireKind::Line;
@@ -4998,9 +5011,9 @@ void MainWindow::SetViewportTool(ViewportTool tool)
 
     viewport_->SetTool(tool);
     if (isDirectLineEdit) {
-        toolsTabs_->setCurrentIndex(3);
+        toolsTabs_->setCurrentIndex(0);
     } else if (tool == ViewportTool::Measure) {
-        toolsTabs_->setCurrentIndex(8);
+        toolsTabs_->setCurrentIndex(5);
     } else if (tool == ViewportTool::MoveGridOrigin) {
         toolsTabs_->setCurrentIndex(0);
         gridPointsVisible_->setChecked(true);
@@ -5318,9 +5331,9 @@ void MainWindow::RefreshBeginnerGuide()
 
     const int tab = toolsTabs_->currentIndex();
     const int activeStage = tab == 1 ? 0
-        : (tab == 0 || tab == 2 || tab == 3 || tab == 4) ? 1
-        : tab == 5 ? 2
-        : tab == 6 ? 3 : -1;
+        : tab == 0 ? 1
+        : tab == 2 ? 2
+        : tab == 3 ? 3 : -1;
     for (std::size_t index = 0; index < workflowButtons_.size(); ++index) {
         if (workflowButtons_[index] != nullptr) {
             const QSignalBlocker blocker(workflowButtons_[index]);
@@ -5561,7 +5574,7 @@ void MainWindow::RefreshBeginnerGuide()
         if (plateCount > 0) {
             setGuide(QStringLiteral("板材を仕上げる"), QStringLiteral("次: 開口、途中切れ目、展開分割線を指定"),
                 QStringLiteral("1  板材と投影ワイヤーを選択\n2  開口・切れ目・分割線\n3  出力タブで紙片数を確認"),
-                QStringLiteral("projection"), 6, QStringLiteral("出力へ進む"));
+                QStringLiteral("projection"), 3, QStringLiteral("出力へ進む"));
         } else if (surfaceCount > 0) {
             setGuide(QStringLiteral("面を板材・治具にする"), QStringLiteral("次: 板厚方向または治具の側を決める"),
                 QStringLiteral("1  面を選択\n2  板厚・方向または治具設定\n3  作成"),
@@ -7121,7 +7134,7 @@ void MainWindow::CreateSurfaceFromSelection()
         RefreshModelViews(false);
         const int surfaceIndex = static_cast<int>(project_.Surfaces().size() - 1);
         UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
-        toolsTabs_->setCurrentIndex(5);
+        toolsTabs_->setCurrentIndex(2);
         surfaceName_->setText(SuggestedSurfaceName());
         const std::size_t logicalInputCount = surfaceInputGroups_.empty()
             ? wireIndices.size() : surfaceInputGroups_.size();
@@ -7246,7 +7259,7 @@ void MainWindow::CreateGordonSurfaceFromSelection()
         RefreshModelViews(false);
         const int surfaceIndex = static_cast<int>(project_.Surfaces().size() - 1);
         UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
-        toolsTabs_->setCurrentIndex(5);
+        toolsTabs_->setCurrentIndex(2);
         const double maximumGap = project_.Surfaces()[surfaceIndex].surface.MaximumGuideGap();
         statusBar()->showMessage(
             QStringLiteral("面 %1 を作成しました（ガイド交点の最大ずれ %2 mm）")
@@ -7317,7 +7330,7 @@ void MainWindow::ProjectSelectedWiresToSurface()
             });
         }
         UpdateSelections(std::move(resultingSelections), true);
-        toolsTabs_->setCurrentIndex(5);
+        toolsTabs_->setCurrentIndex(2);
         statusBar()->showMessage(QStringLiteral("%1本の平面図ワイヤーを面へ投影しました").arg(createdNames.size()), 4000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
@@ -7472,7 +7485,7 @@ void MainWindow::CreatePlateFromSurface()
         RefreshModelViews(false);
         const int plateIndex = static_cast<int>(project_.Plates().size() - 1);
         UpdateSelection({CadSelectionKind::Plate, plateIndex}, true);
-        toolsTabs_->setCurrentIndex(5);
+        toolsTabs_->setCurrentIndex(2);
         plateName_->setText(SuggestedPlateName());
         statusBar()->showMessage(QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value()), 3500);
     } catch (const std::exception& error) {
@@ -7707,7 +7720,7 @@ void MainWindow::CreateSurfaceJig()
         RefreshModelViews(false);
         const int bodyIndex = static_cast<int>(project_.Bodies().size() - 1);
         UpdateSelection({CadSelectionKind::Body, bodyIndex}, true);
-        toolsTabs_->setCurrentIndex(5);
+        toolsTabs_->setCurrentIndex(2);
         jigName_->setText(SuggestedBodyName());
         jigAnalysisLabel_->setStyleSheet(
             analysis.meetsMinimumWall ? "color: #35664a;" : "color: #a32734;");
@@ -7928,7 +7941,7 @@ void MainWindow::UpdatePlateSplitPreview()
     if (viewport_ == nullptr || plateSplitAxis_ == nullptr || plateSplitPosition_ == nullptr) {
         return;
     }
-    if (toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 5) {
+    if (toolsTabs_ == nullptr || toolsTabs_->currentIndex() != 2) {
         viewport_->SetPlateSplitPreview(std::nullopt, 0.5);
         return;
     }

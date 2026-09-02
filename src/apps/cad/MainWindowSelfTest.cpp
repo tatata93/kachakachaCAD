@@ -228,6 +228,22 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                 * std::clamp(scrollFraction, 0.0, 1.0))));
         }
     };
+    const auto expandSectionByTitle = [this](int tabIndex, const QString& title) {
+        QWidget* tab = toolsTabs_->widget(tabIndex);
+        if (tab == nullptr) {
+            return;
+        }
+        const auto children = tab->findChildren<QWidget*>();
+        for (QWidget* child : children) {
+            // moc不使用のため dynamic_cast で判定する。
+            if (auto* section = dynamic_cast<CollapsibleSection*>(child)) {
+                if (section->Title() == title) {
+                    section->SetExpanded(true);
+                }
+            }
+        }
+        QApplication::processEvents();
+    };
     const auto revealSection = [this](int tabIndex, const QString& anchorName) {
         QWidget* tab = toolsTabs_->widget(tabIndex);
         auto* area = qobject_cast<QScrollArea*>(tab);
@@ -429,14 +445,16 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Wire, "origin_to_point"}})) {
             return false;
         }
-        showTab(2);
+        showTab(0);
+        expandSectionByTitle(0, QStringLiteral("数値入力"));
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("edit")) {
         if (!select({{CadSelectionKind::Wire, "front_nose_curve"}})) {
             return false;
         }
-        showTab(3);
+        showTab(0);
+        expandSectionByTitle(0, QStringLiteral("編集"));
         (void)viewport_->AlignToSelection();
     } else if (state == QStringLiteral("transforms")) {
         if (!select({
@@ -445,7 +463,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(3, 0.0);
+        showTab(0, 0.0);
+        expandSectionByTitle(0, QStringLiteral("編集"));
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
     } else if (state == QStringLiteral("trim") || state == QStringLiteral("extend")) {
@@ -480,7 +499,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                     5.0, 0.0, kPi * 0.5),
             metadata);
         RefreshModelViews(false);
-        showTab(3, 0.0);
+        showTab(0, 0.0);
+        expandSectionByTitle(0, QStringLiteral("編集"));
         SetViewportTool(trimState ? ViewportTool::TrimWire : ViewportTool::ExtendWire);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
@@ -499,7 +519,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(4);
+        showTab(0);
+        expandSectionByTitle(0, QStringLiteral("加工（面取り・交点）"));
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
     } else if (state == QStringLiteral("surface")) {
@@ -531,7 +552,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             {SurfaceInputRole::Section, {"nose_18_joined"}},
         };
         RefreshSurfaceInputTable();
-        showTab(5, 0.0);
+        showTab(2, 0.0);
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("composite-surface")) {
@@ -583,7 +604,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
                 "free_outline_top", "free_outline_left"},
         }};
         RefreshSurfaceInputTable();
-        showTab(5, 0.0);
+        showTab(2, 0.0);
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
     } else if (state == QStringLiteral("projection")) {
@@ -608,8 +629,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (targetIndex >= 0) {
             projectionSurface_->setCurrentIndex(targetIndex);
         }
-        showTab(5);
-        finalRevealTab = 5;
+        showTab(2);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("surfaceProjection");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -623,8 +644,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(5, 0.22);
-        finalRevealTab = 5;
+        showTab(2, 0.22);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("lightCase");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -632,8 +653,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(5, 0.35);
-        finalRevealTab = 5;
+        showTab(2, 0.35);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateOffset");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -641,8 +662,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Surface, "nose_skin"}})) {
             return false;
         }
-        showTab(5);
-        finalRevealTab = 5;
+        showTab(2);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateCreate");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -650,8 +671,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Surface, "nose_skin"}})) {
             return false;
         }
-        showTab(5);
-        finalRevealTab = 5;
+        showTab(2);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("surfaceJig");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -668,8 +689,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(5, 0.78);
-        finalRevealTab = 5;
+        showTab(2, 0.78);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateOpening");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -682,8 +703,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(5);
-        finalRevealTab = 5;
+        showTab(2);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateRelief");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -691,8 +712,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(5, 1.0);
-        finalRevealTab = 5;
+        showTab(2, 1.0);
+        finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateSplit");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -701,8 +722,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         plateFlatPatternAutoRelief_->setChecked(true);
-        showTab(6, 0.45);
-        finalRevealTab = 6;
+        showTab(3, 0.45);
+        finalRevealTab = 3;
         finalRevealAnchor = QStringLiteral("plateFlatPattern");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -715,8 +736,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         plateFlatPatternFidelity_->setValue(10);
         plateAssemblyProgress_->setValue(45);
         plateAssemblyOutputPiece_->setCurrentIndex(0);
-        showTab(6, 0.72);
-        finalRevealTab = 6;
+        showTab(3, 0.72);
+        finalRevealTab = 3;
         finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -727,8 +748,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         plateFlatPatternAutoRelief_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
         plateAssemblyProgress_->setValue(100);
-        showTab(6, 0.72);
-        finalRevealTab = 6;
+        showTab(3, 0.72);
+        finalRevealTab = 3;
         finalRevealAnchor = QStringLiteral("plateAssemblyOutput");
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -744,8 +765,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             exportPlane_->setCurrentIndex(planeIndex);
         }
         exportScope_->setCurrentIndex(1);
-        showTab(6);
-        finalRevealTab = 6;
+        showTab(3);
+        finalRevealTab = 3;
         finalRevealAnchor = QStringLiteral("planarOutput");
         viewport_->AlignToActiveWorkPlane();
         viewport_->FitAll();
@@ -756,21 +777,21 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        showTab(6, 1.0);
-        finalRevealTab = 6;
+        showTab(3, 1.0);
+        finalRevealTab = 3;
         finalRevealAnchor = QStringLiteral("modelOutput");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("display") || state == QStringLiteral("display-grid")) {
-        showTab(7);
+        showTab(4);
         if (state == QStringLiteral("display-grid")) {
-            finalRevealTab = 7;
+            finalRevealTab = 4;
             finalRevealAnchor = QStringLiteral("displaySettings");
         }
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("measure-3d")) {
-        showTab(8);
+        showTab(5);
         measurementMode_->setCurrentIndex(1);
         UpdateMeasurement({
             {MeasurementPickKind::Point, -1, {0.0, 0.0, 0.0}, 0.0},
@@ -779,7 +800,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         });
         viewport_->SetIsometricView();
         viewport_->FitAll();
-        finalRevealTab = 8;
+        finalRevealTab = 5;
         finalRevealAnchor = QStringLiteral("measurement");
     } else if (state == QStringLiteral("measure-normal")) {
         const auto curve = findSelection(CadSelectionKind::Wire, "front_nose_curve");
@@ -787,7 +808,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!curve.has_value() || !line.has_value()) {
             return false;
         }
-        showTab(8);
+        showTab(5);
         measurementMode_->setCurrentIndex(2);
         UpdateMeasurement({
             {MeasurementPickKind::Wire, curve->index,
@@ -797,14 +818,14 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         });
         viewport_->SetIsometricView();
         viewport_->FitAll();
-        finalRevealTab = 8;
+        finalRevealTab = 5;
         finalRevealAnchor = QStringLiteral("measurement");
     } else if (state == QStringLiteral("inspection")) {
         modelFilter_->setText(QStringLiteral("nose_panel"));
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(8);
+        showTab(5);
         SetDisplayMode(ViewportDisplayMode::FinishedModel);
         viewport_->SetIsometricView();
         viewport_->FitAll();
@@ -812,7 +833,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
-        showTab(8);
+        showTab(5);
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else {
@@ -823,7 +844,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     QApplication::processEvents();
     if (state == QStringLiteral("split")) {
         QTimer::singleShot(0, this, [this] {
-            if (auto* area = qobject_cast<QScrollArea*>(toolsTabs_->widget(5))) {
+            if (auto* area = qobject_cast<QScrollArea*>(toolsTabs_->widget(2))) {
                 if (area->widget() != nullptr && area->widget()->layout() != nullptr) {
                     area->widget()->layout()->activate();
                 }
@@ -892,13 +913,13 @@ bool MainWindow::RunCreationSelfTest()
     const std::size_t initialPlaneCount = project_.WorkPlanes().size();
     const std::size_t initialWireCount = project_.Wires().size();
     const std::size_t initialDimensionCount = project_.ReferenceDimensions().size();
-    if (toolsTabs_->count() != 10
-        || toolsTabs_->tabText(0) != QStringLiteral("作図")
-        || toolsTabs_->tabText(9) != QStringLiteral("部材")
-        || toolsTabs_->tabText(5) != QStringLiteral("面")
-        || toolsTabs_->tabText(6) != QStringLiteral("出力")
-        || toolsTabs_->tabText(7) != QStringLiteral("表示")
-        || toolsTabs_->tabText(8) != QStringLiteral("情報")
+    if (toolsTabs_->count() != 7
+        || toolsTabs_->tabText(0) != QStringLiteral("スケッチ")
+        || toolsTabs_->tabText(6) != QStringLiteral("部材")
+        || toolsTabs_->tabText(2) != QStringLiteral("面・板")
+        || toolsTabs_->tabText(3) != QStringLiteral("出力")
+        || toolsTabs_->tabText(4) != QStringLiteral("表示")
+        || toolsTabs_->tabText(5) != QStringLiteral("情報")
         || activePlaneCombo_->count() == 0
         || plateFlatPatternSummary_ == nullptr
         || plateAssemblyGuidePreview_ == nullptr
@@ -2715,7 +2736,7 @@ bool MainWindow::RunCreationSelfTest()
     } catch (const std::exception&) {
         return fail("build assembled fold and relief preview");
     }
-    if (auto* outputScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(6))) {
+    if (auto* outputScrollArea = qobject_cast<QScrollArea*>(toolsTabs_->widget(3))) {
         outputScrollArea->widget()->adjustSize();
         QApplication::processEvents();
         const auto buttons = outputScrollArea->findChildren<QPushButton*>();

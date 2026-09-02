@@ -19,12 +19,14 @@ public:
     void SetExpanded(bool expanded);
     [[nodiscard]] bool IsExpanded() const;
     [[nodiscard]] QWidget* Content() const noexcept { return content_; }
+    [[nodiscard]] const QString& Title() const noexcept { return title_; }
 
     //! widget の先祖にある折りたたみセクションをすべて開く
     //! (セルフテスト・マニュアル画像がアンカーへスクロールする前に使う)。
     static void ExpandAncestors(QWidget* widget);
 
 private:
+    QString title_;
     QToolButton* header_ = nullptr;
     QWidget* content_ = nullptr;
 };

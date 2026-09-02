@@ -9,6 +9,7 @@ CollapsibleSection::CollapsibleSection(
     bool expanded,
     QWidget* parent)
     : QWidget(parent)
+    , title_(title)
     , content_(content)
 {
     auto* layout = new QVBoxLayout(this);

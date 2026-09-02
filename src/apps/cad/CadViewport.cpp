@@ -2098,18 +2098,36 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         }
         return 0;
     };
+    // スナップの階級: 平面上の実在ジオメトリ(2) > 投影・延長の推測(1) > グリッド(0)。
+    // 推測スナップは実在候補が届かない時だけ効かせ、従来の挙動を変えない。
+    const auto snapClass = [](DrawingSnapKind kind) {
+        switch (kind) {
+        case DrawingSnapKind::Intersection:
+        case DrawingSnapKind::Point:
+        case DrawingSnapKind::Endpoint:
+            return 2;
+        case DrawingSnapKind::ProjectedPoint:
+        case DrawingSnapKind::Extension:
+            return 1;
+        case DrawingSnapKind::Grid:
+        case DrawingSnapKind::None:
+            return 0;
+        }
+        return 0;
+    };
     const auto consider = [&](DrawingSnapKind kind, Vector3 candidate, double maximumDistance,
                               std::optional<Vector3> guideAnchor = std::nullopt) {
         const double distance = QLineF(screenPosition, ProjectPoint(candidate)).length();
         if (distance > maximumDistance) {
             return;
         }
-        const bool structuralCandidate = kind != DrawingSnapKind::Grid;
-        const bool structuralBest = best.has_value() && best->kind != DrawingSnapKind::Grid;
+        const int candidateClass = snapClass(kind);
+        const int bestClass = best.has_value() ? snapClass(best->kind) : -1;
         if (!best.has_value()
-            || (structuralCandidate && !structuralBest)
-            || (structuralCandidate == structuralBest && distance < best->distancePixels - 0.15)
-            || (std::abs(distance - best->distancePixels) <= 0.15
+            || candidateClass > bestClass
+            || (candidateClass == bestClass && distance < best->distancePixels - 0.15)
+            || (candidateClass == bestClass
+                && std::abs(distance - best->distancePixels) <= 0.15
                 && priority(kind) > priority(best->kind))) {
             best = DrawingSnapCandidate{kind, candidate, distance, guideAnchor};
         }

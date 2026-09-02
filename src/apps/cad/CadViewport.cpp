@@ -2088,15 +2088,18 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
     std::optional<DrawingSnapCandidate> best;
     const auto priority = [](DrawingSnapKind kind) {
         switch (kind) {
-        case DrawingSnapKind::Intersection: return 4;
-        case DrawingSnapKind::Point: return 3;
-        case DrawingSnapKind::Endpoint: return 2;
+        case DrawingSnapKind::Intersection: return 6;
+        case DrawingSnapKind::Point: return 5;
+        case DrawingSnapKind::Endpoint: return 4;
+        case DrawingSnapKind::ProjectedPoint: return 3;
+        case DrawingSnapKind::Extension: return 2;
         case DrawingSnapKind::Grid: return 1;
         case DrawingSnapKind::None: return 0;
         }
         return 0;
     };
-    const auto consider = [&](DrawingSnapKind kind, Vector3 candidate, double maximumDistance) {
+    const auto consider = [&](DrawingSnapKind kind, Vector3 candidate, double maximumDistance,
+                              std::optional<Vector3> guideAnchor = std::nullopt) {
         const double distance = QLineF(screenPosition, ProjectPoint(candidate)).length();
         if (distance > maximumDistance) {
             return;
@@ -2108,7 +2111,7 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
             || (structuralCandidate == structuralBest && distance < best->distancePixels - 0.15)
             || (std::abs(distance - best->distancePixels) <= 0.15
                 && priority(kind) > priority(best->kind))) {
-            best = DrawingSnapCandidate{kind, candidate, distance};
+            best = DrawingSnapCandidate{kind, candidate, distance, guideAnchor};
         }
     };
 
@@ -2119,11 +2122,19 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
     if (project_ != nullptr) {
         for (int pointIndex = 0; pointIndex < static_cast<int>(project_->Points().size()); ++pointIndex) {
             const auto& namedPoint = project_->Points()[pointIndex];
-            if (!ShouldDisplay(CadSelectionKind::Point, pointIndex, namedPoint.visible)
-                || std::abs(activePlane_->Project(namedPoint.point).w) > 1.0e-6) {
+            if (!ShouldDisplay(CadSelectionKind::Point, pointIndex, namedPoint.visible)) {
                 continue;
             }
-            consider(DrawingSnapKind::Point, namedPoint.point, pointRadius);
+            const auto planeCoordinates = activePlane_->Project(namedPoint.point);
+            if (std::abs(planeCoordinates.w) <= 1.0e-6) {
+                consider(DrawingSnapKind::Point, namedPoint.point, pointRadius);
+            } else {
+                // 別平面・空間上の点は、作業平面へ法線投影した位置を参照できる
+                // (Inventor の「ジオメトリを投影」に相当する暗黙投影)。
+                consider(DrawingSnapKind::ProjectedPoint,
+                    activePlane_->ToWorld(planeCoordinates.u, planeCoordinates.v),
+                    pointRadius, namedPoint.point);
+            }
         }
 
         struct PlaneSegment {
@@ -2146,10 +2157,14 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                 snapPoints = {namedWire.wire.Start(), namedWire.wire.End()};
             }
             for (const Vector3& endpoint : snapPoints) {
-                if (std::abs(activePlane_->Project(endpoint).w) > 1.0e-6) {
-                    continue;
+                const auto planeCoordinates = activePlane_->Project(endpoint);
+                if (std::abs(planeCoordinates.w) <= 1.0e-6) {
+                    consider(DrawingSnapKind::Endpoint, endpoint, pointRadius);
+                } else {
+                    consider(DrawingSnapKind::ProjectedPoint,
+                        activePlane_->ToWorld(planeCoordinates.u, planeCoordinates.v),
+                        pointRadius - 2.0, endpoint);
                 }
-                consider(DrawingSnapKind::Endpoint, endpoint, pointRadius);
             }
 
             std::vector<Vector3> samples;
@@ -2210,6 +2225,68 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                         first.au + firstU * firstParameter,
                         first.av + firstV * firstParameter),
                     intersectionRadius);
+            }
+        }
+
+        // 延長線の推測(作図補助): 既存の直線分の延長上へカーソルが来たら、
+        // 破線ガイド付きでその延長線上にスナップする(同一直線の作図補助)。
+        {
+            constexpr double kExtensionPerpendicularPixels = 6.0;
+            constexpr double kExtensionReachPixels = 480.0;
+            for (int wireIndex = 0; wireIndex < static_cast<int>(project_->Wires().size()); ++wireIndex) {
+                const auto& namedWire = project_->Wires()[wireIndex];
+                if (!ShouldDisplay(CadSelectionKind::Wire, wireIndex, namedWire.visible)
+                    || (namedWire.wire.Kind() != WireKind::Line
+                        && namedWire.wire.Kind() != WireKind::Polyline)) {
+                    continue;
+                }
+                const auto& points = namedWire.wire.ControlPoints();
+                for (std::size_t index = 1; index < points.size(); ++index) {
+                    const auto firstCoordinates = activePlane_->Project(points[index - 1]);
+                    const auto secondCoordinates = activePlane_->Project(points[index]);
+                    if (std::abs(firstCoordinates.w) > 1.0e-6
+                        || std::abs(secondCoordinates.w) > 1.0e-6) {
+                        continue;
+                    }
+                    const QPointF screenA = ProjectPoint(points[index - 1]);
+                    const QPointF screenB = ProjectPoint(points[index]);
+                    const QPointF direction = screenB - screenA;
+                    const double lengthSquared = QPointF::dotProduct(direction, direction);
+                    if (lengthSquared <= 1.0e-9) {
+                        continue;
+                    }
+                    const double along = QPointF::dotProduct(
+                        screenPosition - screenA, direction) / lengthSquared;
+                    if (along >= -1.0e-9 && along <= 1.0 + 1.0e-9) {
+                        continue; // 線分の内側は通常のスナップに任せる。
+                    }
+                    const QPointF footScreen = screenA + direction * along;
+                    const double perpendicular = QLineF(screenPosition, footScreen).length();
+                    if (perpendicular > kExtensionPerpendicularPixels) {
+                        continue;
+                    }
+                    const QPointF nearestEnd = along < 0.0 ? screenA : screenB;
+                    if (QLineF(footScreen, nearestEnd).length() > kExtensionReachPixels) {
+                        continue;
+                    }
+                    const double deltaU = secondCoordinates.u - firstCoordinates.u;
+                    const double deltaV = secondCoordinates.v - firstCoordinates.v;
+                    const double planeLengthSquared = deltaU * deltaU + deltaV * deltaV;
+                    if (planeLengthSquared <= 1.0e-18) {
+                        continue;
+                    }
+                    const auto cursorCoordinates = activePlane_->Project(point);
+                    const double planeAlong
+                        = ((cursorCoordinates.u - firstCoordinates.u) * deltaU
+                              + (cursorCoordinates.v - firstCoordinates.v) * deltaV)
+                        / planeLengthSquared;
+                    consider(DrawingSnapKind::Extension,
+                        activePlane_->ToWorld(
+                            firstCoordinates.u + deltaU * planeAlong,
+                            firstCoordinates.v + deltaV * planeAlong),
+                        kExtensionPerpendicularPixels + 2.0,
+                        along < 0.0 ? points[index - 1] : points[index]);
+                }
             }
         }
     }
@@ -3737,6 +3814,31 @@ void CadViewport::paintEvent(QPaintEvent*)
             case DrawingSnapKind::Endpoint:
                 painter.drawRect(QRectF(center - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
                 break;
+            case DrawingSnapKind::ProjectedPoint: {
+                // 別平面の点の投影: ひし形マーカー+元の点への破線。
+                painter.setPen(QPen(QColor(124, 58, 237, 235), 2.0));
+                QPolygonF diamond;
+                diamond << center + QPointF(0.0, -5.5) << center + QPointF(5.5, 0.0)
+                        << center + QPointF(0.0, 5.5) << center + QPointF(-5.5, 0.0);
+                painter.drawPolygon(diamond);
+                if (drawingSnapHover_->guideAnchor.has_value()) {
+                    painter.setPen(QPen(QColor(124, 58, 237, 130), 1.2, Qt::DashLine));
+                    painter.drawLine(center, ProjectPoint(*drawingSnapHover_->guideAnchor));
+                }
+                break;
+            }
+            case DrawingSnapKind::Extension: {
+                // 延長線の推測: 線分端からの破線ガイド。
+                painter.setPen(QPen(QColor(217, 119, 6, 200), 1.6, Qt::DashLine));
+                if (drawingSnapHover_->guideAnchor.has_value()) {
+                    painter.drawLine(
+                        ProjectPoint(*drawingSnapHover_->guideAnchor), center);
+                }
+                painter.setPen(QPen(QColor(217, 119, 6, 230), 2.0));
+                painter.drawLine(center + QPointF(-5.0, 0.0), center + QPointF(5.0, 0.0));
+                painter.drawLine(center + QPointF(0.0, -5.0), center + QPointF(0.0, 5.0));
+                break;
+            }
             case DrawingSnapKind::Grid:
                 painter.setPen(QPen(QColor(8, 119, 128, 105), 1.0));
                 painter.drawEllipse(center, 3.0, 3.0);

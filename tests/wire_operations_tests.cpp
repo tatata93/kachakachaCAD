@@ -509,9 +509,95 @@ void AppliesPersistentRadiusConstraints()
 
 } // namespace
 
+namespace {
+
+void FindsWireIntersectionsIn3d()
+{
+    // 交差する2直線(3D)。
+    const Wire lineA = Wire::Line({-10.0, 0.0, 5.0}, {10.0, 0.0, 5.0});
+    const Wire lineB = Wire::Line({0.0, -10.0, 5.0}, {0.0, 10.0, 5.0});
+    const auto crossing = kachakacha::model::IntersectWires(lineA, lineB);
+    Require(crossing.size() == 1, "crossing lines meet once");
+    RequireNear(crossing.front(), {0.0, 0.0, 5.0}, "3d crossing position");
+
+    // 円と直線は2点で交わる。
+    const Wire circle = Wire::Circle({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 10.0);
+    const Wire chord = Wire::Line({-20.0, 5.0, 0.0}, {20.0, 5.0, 0.0});
+    const auto chordHits = kachakacha::model::IntersectWires(circle, chord, 1.0e-4);
+    Require(chordHits.size() == 2, "circle and chord meet twice");
+    for (const Vector3& hit : chordHits) {
+        Require(std::abs(hit.Length() - 10.0) < 1.0e-3, "hits lie on the circle");
+        Require(std::abs(hit.y - 5.0) < 1.0e-3, "hits lie on the chord");
+    }
+
+    // すれ違う(交わらない)2直線は空。
+    const Wire skewA = Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0});
+    const Wire skewB = Wire::Line({0.0, 5.0, 3.0}, {10.0, 5.0, 3.0});
+    Require(kachakacha::model::IntersectWires(skewA, skewB).empty(),
+        "skew lines produce no intersection");
+}
+
+void CutsAndRoundsPolylineCorners()
+{
+    // 30x20 の長方形(閉)。
+    const Wire rectangle = Wire::Polyline({
+        {0.0, 0.0, 0.0}, {30.0, 0.0, 0.0}, {30.0, 20.0, 0.0},
+        {0.0, 20.0, 0.0}, {0.0, 0.0, 0.0}});
+
+    // C面取り: 頂点1(30,0)を5mmで落とす。
+    const auto cut = kachakacha::model::CutPolylineCorner(rectangle, 1, 5.0);
+    RequireNear(cut.firstPoint, {25.0, 0.0, 0.0}, "chamfer start point");
+    RequireNear(cut.secondPoint, {30.0, 5.0, 0.0}, "chamfer end point");
+    Require(cut.wire.IsClosed(1.0e-9), "chamfered rectangle stays closed");
+    Require(cut.wire.ControlPoints().size() == rectangle.ControlPoints().size() + 1,
+        "chamfer adds one vertex");
+
+    // R丸め: 頂点2(30,20)をR4で丸める。
+    const auto rounded = kachakacha::model::RoundPolylineCorner(rectangle, 2, 4.0);
+    RequireNear(rounded.firstPoint, {30.0, 16.0, 0.0}, "fillet tangent on first edge");
+    RequireNear(rounded.secondPoint, {26.0, 20.0, 0.0}, "fillet tangent on second edge");
+    Require(rounded.wire.IsClosed(1.0e-9), "rounded rectangle stays closed");
+    const Vector3 center{26.0, 16.0, 0.0};
+    bool sawArcPoint = false;
+    for (const Vector3& point : rounded.wire.ControlPoints()) {
+        const double distance = (point - center).Length();
+        if (point.x > 26.0 + 1.0e-9 && point.y > 16.0 + 1.0e-9) {
+            Require(std::abs(distance - 4.0) < 1.0e-6, "arc points lie on the fillet circle");
+            sawArcPoint = true;
+        }
+    }
+    Require(sawArcPoint, "fillet inserts arc points");
+
+    // 閉ポリラインの始終点の角(頂点0)も加工できる。
+    const auto seamCut = kachakacha::model::CutPolylineCorner(rectangle, 0, 3.0);
+    Require(seamCut.wire.IsClosed(1.0e-9), "seam chamfer stays closed");
+
+    // 開ポリラインの端点は角ではない。
+    const Wire open = Wire::Polyline({{0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {10.0, 10.0, 0.0}});
+    bool rejected = false;
+    try {
+        (void)kachakacha::model::CutPolylineCorner(open, 0, 2.0);
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    Require(rejected, "open polyline endpoints are rejected");
+    // 大きすぎる半径は拒否。
+    rejected = false;
+    try {
+        (void)kachakacha::model::RoundPolylineCorner(rectangle, 1, 25.0);
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    Require(rejected, "oversized fillet radius is rejected");
+}
+
+} // namespace
+
 int main()
 {
     try {
+        FindsWireIntersectionsIn3d();
+        CutsAndRoundsPolylineCorners();
         ChamfersSharedCornerAutomatically();
         ChamfersChosenBranchesAtCrossing();
         RejectsInvalidChamfers();

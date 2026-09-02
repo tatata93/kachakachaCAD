@@ -63,6 +63,10 @@ enum class DrawingSnapKind {
     Point,
     Intersection,
     Endpoint,
+    //! 作業平面上にない点・端点を、平面へ法線投影した位置(ジオメトリ投影)。
+    ProjectedPoint,
+    //! 既存線分の延長線上(作図補助)。guideAnchor に線分側の端点が入る。
+    Extension,
     Grid,
 };
 
@@ -76,6 +80,8 @@ struct DrawingSnapCandidate {
     DrawingSnapKind kind = DrawingSnapKind::None;
     kachakacha::geometry::Vector3 point;
     double distancePixels = 0.0;
+    //! Extension のとき、破線ガイドの根元(線分の端点)。
+    std::optional<kachakacha::geometry::Vector3> guideAnchor;
 };
 
 enum class MeasurementMode {

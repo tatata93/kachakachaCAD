@@ -115,7 +115,10 @@ using kachakacha::model::WireMetadata;
 using kachakacha::model::WirePlanePolicy;
 using kachakacha::model::WorkPlane;
 using kachakacha::model::ChamferIntersectingLines;
+using kachakacha::model::CutPolylineCorner;
 using kachakacha::model::FilletIntersectingLines;
+using kachakacha::model::IntersectWires;
+using kachakacha::model::RoundPolylineCorner;
 using kachakacha::model::JoinLineChain;
 using kachakacha::model::kWireChainConnectionTolerance;
 using kachakacha::model::MeasureDirectionToPlaneAngleDegrees;
@@ -1848,6 +1851,53 @@ QWidget* MainWindow::BuildMachiningPanel()
         chamferName_->setText(index == 0 ? SuggestedChamferName() : SuggestedFilletName());
     });
     layout->addWidget(machiningApplyButton_);
+
+    // --- ポリラインの角(頂点単位のC面取り/R丸め) ---
+    auto* cornerTitle = new QLabel(QStringLiteral("ポリラインの角"));
+    cornerTitle->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(cornerTitle);
+    auto* cornerForm = new QFormLayout;
+    cornerForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    polylineCornerWire_ = new QComboBox;
+    polylineCornerWire_->setToolTip(
+        QStringLiteral("角を加工するポリライン(多角形・折れ線)を選びます"));
+    polylineCornerVertex_ = new QSpinBox;
+    polylineCornerVertex_->setRange(0, 9999);
+    polylineCornerVertex_->setToolTip(QStringLiteral(
+        "頂点番号(0始まり)。閉じた輪郭では0が始点/終点の角です。\n"
+        "開いた折れ線の両端は角ではないため加工できません"));
+    cornerForm->addRow(QStringLiteral("ポリライン"), polylineCornerWire_);
+    cornerForm->addRow(QStringLiteral("頂点番号"), polylineCornerVertex_);
+    layout->addLayout(cornerForm);
+    auto* cornerButton = new QPushButton(QStringLiteral("角を加工（上の種類と値を使用）"));
+    cornerButton->setToolTip(QStringLiteral(
+        "上の「加工種類」がC面取りなら「Aの切戻し」を、R丸めなら「半径」を使い、\n"
+        "選んだ頂点の角を1本のポリラインのまま加工します(2D/3Dどちらの輪郭も可)"));
+    connect(cornerButton, &QPushButton::clicked,
+        this, &MainWindow::ApplyPolylineCornerEdit);
+    layout->addWidget(cornerButton);
+
+    // --- 作図補助(交点・点結び) ---
+    auto* aidTitle = new QLabel(QStringLiteral("交点と点結び"));
+    aidTitle->setStyleSheet("font-weight: 600; color: #26323a;");
+    layout->addWidget(aidTitle);
+    auto* intersectButton = new QPushButton(
+        QStringLiteral("選択した2本の線の交点に点を作成"));
+    intersectButton->setToolTip(QStringLiteral(
+        "3Dビューで線を2本(Ctrl+クリックで追加)選んで実行します。\n"
+        "3D空間で交わる線・円・曲線どうしの交点すべてに点を作ります"));
+    connect(intersectButton, &QPushButton::clicked,
+        this, &MainWindow::CreateIntersectionPoints);
+    layout->addWidget(intersectButton);
+    auto* joinPointsButton = new QPushButton(
+        QStringLiteral("選択した2点を結ぶ線を作成"));
+    joinPointsButton->setToolTip(QStringLiteral(
+        "点を2つ選んで実行すると、その2点を結ぶ3D直線を作ります。\n"
+        "交点に作った点どうしを結べば「任意の交点から任意の交点への線」になります"));
+    connect(joinPointsButton, &QPushButton::clicked,
+        this, &MainWindow::CreateLineBetweenSelectedPoints);
+    layout->addWidget(joinPointsButton);
+
     layout->addStretch(1);
     return panel;
 }
@@ -8504,6 +8554,140 @@ void MainWindow::ApplyLineFillet()
     }
 }
 
+void MainWindow::ApplyPolylineCornerEdit()
+{
+    try {
+        if (polylineCornerWire_->currentIndex() < 0) {
+            throw std::invalid_argument("角を加工するポリラインを選択してください。");
+        }
+        const int wireIndex = polylineCornerWire_->currentData().toInt();
+        if (wireIndex < 0 || wireIndex >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("選択したポリラインが見つかりません。");
+        }
+        const auto named = project_.Wires()[wireIndex];
+        const bool chamfer = machiningType_->currentIndex() == 0;
+        const auto result = chamfer
+            ? CutPolylineCorner(
+                  named.wire, polylineCornerVertex_->value(),
+                  chamferFirstDistance_->value())
+            : RoundPolylineCorner(
+                  named.wire, polylineCornerVertex_->value(),
+                  filletRadius_->value());
+
+        kachakacha::model::WireMetadata metadata = named.metadata;
+        metadata.lineConstraints = {};
+        RecordUndo();
+        project_.UpdateWireAndMetadata(named.name, result.wire, metadata);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection({CadSelectionKind::Wire, wireIndex}, true);
+        statusBar()->showMessage(chamfer
+                ? QStringLiteral("頂点%1をC面取りしました（%2）")
+                      .arg(polylineCornerVertex_->value())
+                      .arg(ToQString(named.name))
+                : QStringLiteral("頂点%1をR丸めしました（%2）")
+                      .arg(polylineCornerVertex_->value())
+                      .arg(ToQString(named.name)),
+            3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this,
+            QStringLiteral("角を加工できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::CreateIntersectionPoints()
+{
+    try {
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.size() != 2) {
+            throw std::invalid_argument(
+                "3Dビューで線を2本選んでください（2本目はCtrl+クリック）。");
+        }
+        const auto& first = project_.Wires()[wireIndices[0]];
+        const auto& second = project_.Wires()[wireIndices[1]];
+        const auto intersections = IntersectWires(first.wire, second.wire, 1.0e-3);
+        if (intersections.empty()) {
+            throw std::invalid_argument(
+                "交点が見つかりません（3D空間ですれ違っている可能性があります）。");
+        }
+
+        RecordUndo();
+        int created = 0;
+        for (const auto& point : intersections) {
+            std::string name;
+            for (int suffix = 1;; ++suffix) {
+                name = "交点" + std::to_string(suffix);
+                bool taken = false;
+                for (const auto& namedPoint : project_.Points()) {
+                    if (namedPoint.name == name) {
+                        taken = true;
+                        break;
+                    }
+                }
+                if (!taken) {
+                    break;
+                }
+            }
+            project_.AddPoint(name, point, std::nullopt);
+            ++created;
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("%1 と %2 の交点に点を %3 個作成しました")
+                .arg(ToQString(first.name), ToQString(second.name))
+                .arg(created),
+            4000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this,
+            QStringLiteral("交点を作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::CreateLineBetweenSelectedPoints()
+{
+    try {
+        std::vector<int> pointIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Points().size())) {
+                pointIndices.push_back(selection.index);
+            }
+        }
+        if (pointIndices.size() != 2) {
+            throw std::invalid_argument(
+                "3Dビューで点を2つ選んでください（2つ目はCtrl+クリック）。");
+        }
+        const auto& first = project_.Points()[pointIndices[0]];
+        const auto& second = project_.Points()[pointIndices[1]];
+        if ((first.point - second.point).Length() <= 1.0e-9) {
+            throw std::invalid_argument("2つの点が同じ位置にあります。");
+        }
+
+        RecordUndo();
+        const std::string name
+            = ToName(SuggestedDirectGroupName(QStringLiteral("line")));
+        project_.AddWire(name, Wire::Line(first.point, second.point), {});
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(
+            {CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
+        statusBar()->showMessage(
+            QStringLiteral("%1 と %2 を結ぶ線 %3 を作成しました")
+                .arg(ToQString(first.name), ToQString(second.name), ToQString(name)),
+            4000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this,
+            QStringLiteral("線を作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
 void MainWindow::Undo()
 {
     if (undoStack_.empty()) {
@@ -9045,6 +9229,20 @@ void MainWindow::RefreshWireChoices()
     refresh(chamferSecondWire_);
     if (chamferSecondWire_->count() > 1 && chamferSecondWire_->currentIndex() == chamferFirstWire_->currentIndex()) {
         chamferSecondWire_->setCurrentIndex(1);
+    }
+    if (polylineCornerWire_ != nullptr) {
+        const QSignalBlocker blocker(polylineCornerWire_);
+        const QString previous = polylineCornerWire_->currentText();
+        polylineCornerWire_->clear();
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].wire.Kind() == WireKind::Polyline) {
+                polylineCornerWire_->addItem(ToQString(project_.Wires()[index].name), index);
+            }
+        }
+        const int previousIndex = polylineCornerWire_->findText(previous);
+        if (previousIndex >= 0) {
+            polylineCornerWire_->setCurrentIndex(previousIndex);
+        }
     }
 }
 

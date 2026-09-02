@@ -76,6 +76,9 @@ private:
     void RealizePartFoldState();
     void ExportPartFoldMesh(bool step);
     void ExportPartFoldKcd();
+    void ApplyPolylineCornerEdit();
+    void CreateIntersectionPoints();
+    void CreateLineBetweenSelectedPoints();
     void BuildMenusAndToolbar();
     void ApplyDisplaySettings();
     void LoadDisplaySettings();
@@ -415,6 +418,8 @@ private:
     QPushButton* machiningPickSecondButton_ = nullptr;
     QComboBox* chamferFirstWire_ = nullptr;
     QComboBox* chamferSecondWire_ = nullptr;
+    QComboBox* polylineCornerWire_ = nullptr;
+    QSpinBox* polylineCornerVertex_ = nullptr;
     QComboBox* chamferFirstBranch_ = nullptr;
     QComboBox* chamferSecondBranch_ = nullptr;
     QDoubleSpinBox* chamferFirstDistance_ = nullptr;

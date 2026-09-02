@@ -1349,4 +1349,321 @@ LineFilletResult FilletIntersectingLines(
     };
 }
 
+// ---- 3D交点とポリライン角の加工 -------------------------------------------
+
+namespace {
+
+//! 線分 ab と cd の最近接パラメータ(s,t)∈[0,1]^2 を返す(Ericson 準拠)。
+[[nodiscard]] std::pair<double, double> ClosestSegmentParameters(
+    const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d)
+{
+    const Vector3 u = b - a;
+    const Vector3 v = d - c;
+    const Vector3 w = a - c;
+    const double uu = Dot(u, u);
+    const double vv = Dot(v, v);
+    const double uv = Dot(u, v);
+    const double uw = Dot(u, w);
+    const double vw = Dot(v, w);
+    const double denominator = uu * vv - uv * uv;
+    double s = 0.0;
+    if (std::abs(denominator) > 1.0e-18) {
+        s = std::clamp((uv * vw - vv * uw) / denominator, 0.0, 1.0);
+    }
+    double t = vv > 1.0e-18 ? std::clamp((uv * s + vw) / vv, 0.0, 1.0) : 0.0;
+    if (uu > 1.0e-18) {
+        s = std::clamp((uv * t - uw) / uu, 0.0, 1.0);
+    }
+    return {s, t};
+}
+
+} // namespace
+
+std::vector<Vector3> IntersectWires(
+    const Wire& first,
+    const Wire& second,
+    double tolerance,
+    int samplesPerCurve)
+{
+    if (!(tolerance > 0.0) || samplesPerCurve < 8) {
+        throw std::invalid_argument("交点探索の公差・サンプル数が不正です。");
+    }
+    // ワイヤをパラメータ付きの折れ線サンプルへ落とす。
+    const auto sampleWire = [samplesPerCurve](const Wire& wire) {
+        std::vector<std::pair<double, Vector3>> samples;
+        if (wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline) {
+            const auto& points = wire.ControlPoints();
+            const std::size_t count = std::max<std::size_t>(points.size(), 2);
+            for (std::size_t index = 0; index < points.size(); ++index) {
+                samples.emplace_back(
+                    static_cast<double>(index) / static_cast<double>(count - 1),
+                    points[index]);
+            }
+        } else {
+            samples.reserve(samplesPerCurve + 1);
+            for (int index = 0; index <= samplesPerCurve; ++index) {
+                const double parameter
+                    = static_cast<double>(index) / samplesPerCurve;
+                samples.emplace_back(parameter, wire.Evaluate(parameter));
+            }
+        }
+        return samples;
+    };
+    const auto firstSamples = sampleWire(first);
+    const auto secondSamples = sampleWire(second);
+
+    // 局所探索: 粗い候補パラメータ近傍で、交互の三分探索により距離を最小化する。
+    const auto refine = [&first, &second](double parameterA, double parameterB,
+                            double windowA, double windowB) {
+        double centerA = parameterA;
+        double centerB = parameterB;
+        double spanA = windowA;
+        double spanB = windowB;
+        for (int round = 0; round < 6; ++round) {
+            // Aを固定しBを三分探索、次にBを固定しAを三分探索。
+            const auto minimizeOne = [&](bool refineA) {
+                double low = std::clamp((refineA ? centerA : centerB)
+                        - (refineA ? spanA : spanB), 0.0, 1.0);
+                double high = std::clamp((refineA ? centerA : centerB)
+                        + (refineA ? spanA : spanB), 0.0, 1.0);
+                for (int iteration = 0; iteration < 24; ++iteration) {
+                    const double m1 = low + (high - low) / 3.0;
+                    const double m2 = high - (high - low) / 3.0;
+                    const auto distanceAt = [&](double value) {
+                        const Vector3 pointA
+                            = first.Evaluate(refineA ? value : centerA);
+                        const Vector3 pointB
+                            = second.Evaluate(refineA ? centerB : value);
+                        return (pointA - pointB).Length();
+                    };
+                    if (distanceAt(m1) <= distanceAt(m2)) {
+                        high = m2;
+                    } else {
+                        low = m1;
+                    }
+                }
+                if (refineA) {
+                    centerA = (low + high) / 2.0;
+                } else {
+                    centerB = (low + high) / 2.0;
+                }
+            };
+            minimizeOne(true);
+            minimizeOne(false);
+            spanA *= 0.5;
+            spanB *= 0.5;
+        }
+        const Vector3 pointA = first.Evaluate(centerA);
+        const Vector3 pointB = second.Evaluate(centerB);
+        return std::pair<double, Vector3>{
+            (pointA - pointB).Length(), (pointA + pointB) * 0.5};
+    };
+
+    std::vector<Vector3> intersections;
+    // 折れ線同士はサンプルが厳密な線分なので、粗い最近接がそのまま答えになる。
+    const auto isExactPolyline = [](const Wire& wire) {
+        return wire.Kind() == WireKind::Line || wire.Kind() == WireKind::Polyline;
+    };
+    const bool exactPair = isExactPolyline(first) && isExactPolyline(second);
+    const double coarseThreshold = std::max(tolerance * 50.0, 0.5);
+    for (std::size_t indexA = 0; indexA + 1 < firstSamples.size(); ++indexA) {
+        for (std::size_t indexB = 0; indexB + 1 < secondSamples.size(); ++indexB) {
+            const auto& a0 = firstSamples[indexA];
+            const auto& a1 = firstSamples[indexA + 1];
+            const auto& b0 = secondSamples[indexB];
+            const auto& b1 = secondSamples[indexB + 1];
+            const auto [s, t] = ClosestSegmentParameters(
+                a0.second, a1.second, b0.second, b1.second);
+            const Vector3 pointA = a0.second + (a1.second - a0.second) * s;
+            const Vector3 pointB = b0.second + (b1.second - b0.second) * t;
+            const double coarseDistance = (pointA - pointB).Length();
+            if (coarseDistance > coarseThreshold) {
+                continue;
+            }
+            double distance = coarseDistance;
+            Vector3 point = (pointA + pointB) * 0.5;
+            if (!exactPair) {
+                const double parameterA = a0.first + (a1.first - a0.first) * s;
+                const double parameterB = b0.first + (b1.first - b0.first) * t;
+                const auto refined = refine(
+                    parameterA, parameterB,
+                    std::max(1.0e-6, a1.first - a0.first),
+                    std::max(1.0e-6, b1.first - b0.first));
+                distance = refined.first;
+                point = refined.second;
+            }
+            if (distance > tolerance) {
+                continue;
+            }
+            const bool duplicate = std::any_of(
+                intersections.begin(), intersections.end(),
+                [&point, tolerance](const Vector3& existing) {
+                    return (existing - point).Length() < tolerance * 10.0 + 1.0e-6;
+                });
+            if (!duplicate) {
+                intersections.push_back(point);
+            }
+        }
+    }
+    return intersections;
+}
+
+namespace {
+
+struct PolylineCorner {
+    std::vector<Vector3> points; // 閉の場合も終端の重複を除いた実点列
+    bool closed = false;
+    int index = 0;               // points 内での角の位置
+    Vector3 previous;
+    Vector3 corner;
+    Vector3 next;
+};
+
+[[nodiscard]] PolylineCorner ResolvePolylineCorner(
+    const Wire& polyline, int vertexIndex)
+{
+    if (polyline.Kind() != WireKind::Polyline) {
+        throw std::invalid_argument("角の加工はポリラインだけに使えます。");
+    }
+    std::vector<Vector3> points = polyline.ControlPoints();
+    const bool closed = polyline.IsClosed(1.0e-9);
+    if (closed) {
+        points.pop_back(); // 終端の重複点を除く
+    }
+    const int count = static_cast<int>(points.size());
+    if (count < 3) {
+        throw std::invalid_argument("角を加工するには頂点が3つ以上必要です。");
+    }
+    if (vertexIndex < 0 || vertexIndex >= count
+        || (!closed && (vertexIndex == 0 || vertexIndex == count - 1))) {
+        throw std::invalid_argument("指定した頂点は角ではありません。");
+    }
+    PolylineCorner corner;
+    corner.closed = closed;
+    corner.index = vertexIndex;
+    corner.corner = points[vertexIndex];
+    corner.previous = points[(vertexIndex + count - 1) % count];
+    corner.next = points[(vertexIndex + 1) % count];
+    corner.points = std::move(points);
+    return corner;
+}
+
+[[nodiscard]] Wire RebuildPolylineWithCorner(
+    const PolylineCorner& corner, const std::vector<Vector3>& replacement)
+{
+    std::vector<Vector3> result;
+    result.reserve(corner.points.size() + replacement.size());
+    for (int index = 0; index < static_cast<int>(corner.points.size()); ++index) {
+        if (index == corner.index) {
+            result.insert(result.end(), replacement.begin(), replacement.end());
+        } else {
+            result.push_back(corner.points[index]);
+        }
+    }
+    if (corner.closed) {
+        result.push_back(result.front());
+    }
+    return Wire::Polyline(std::move(result));
+}
+
+} // namespace
+
+PolylineCornerEditResult CutPolylineCorner(
+    const Wire& polyline,
+    int vertexIndex,
+    double setback)
+{
+    if (!(setback > 0.0)) {
+        throw std::invalid_argument("C面取りの距離は正の値で指定してください。");
+    }
+    const PolylineCorner corner = ResolvePolylineCorner(polyline, vertexIndex);
+    const Vector3 toPrevious = corner.previous - corner.corner;
+    const Vector3 toNext = corner.next - corner.corner;
+    const double previousLength = toPrevious.Length();
+    const double nextLength = toNext.Length();
+    if (setback >= previousLength - 1.0e-9 || setback >= nextLength - 1.0e-9) {
+        throw std::invalid_argument("C面取りの距離が辺の長さを超えています。");
+    }
+    const Vector3 firstPoint
+        = corner.corner + toPrevious * (setback / previousLength);
+    const Vector3 secondPoint = corner.corner + toNext * (setback / nextLength);
+    return {
+        RebuildPolylineWithCorner(corner, {firstPoint, secondPoint}),
+        firstPoint,
+        secondPoint,
+    };
+}
+
+PolylineCornerEditResult RoundPolylineCorner(
+    const Wire& polyline,
+    int vertexIndex,
+    double radius,
+    double chordToleranceMillimeters)
+{
+    if (!(radius > 0.0)) {
+        throw std::invalid_argument("R丸めの半径は正の値で指定してください。");
+    }
+    if (!(chordToleranceMillimeters > 0.0)) {
+        throw std::invalid_argument("R丸めの弦公差は正の値で指定してください。");
+    }
+    const PolylineCorner corner = ResolvePolylineCorner(polyline, vertexIndex);
+    const Vector3 toPrevious = corner.previous - corner.corner;
+    const Vector3 toNext = corner.next - corner.corner;
+    const double previousLength = toPrevious.Length();
+    const double nextLength = toNext.Length();
+    if (previousLength <= 1.0e-9 || nextLength <= 1.0e-9) {
+        throw std::invalid_argument("角の辺が退化しています。");
+    }
+    const Vector3 unitPrevious = toPrevious * (1.0 / previousLength);
+    const Vector3 unitNext = toNext * (1.0 / nextLength);
+    const double cosine = std::clamp(Dot(unitPrevious, unitNext), -1.0, 1.0);
+    const double interiorAngle = std::acos(cosine);
+    if (interiorAngle < 1.0e-6 || interiorAngle > std::numbers::pi - 1.0e-6) {
+        throw std::invalid_argument("この頂点には丸められる角がありません(直線または折り返し)。");
+    }
+    const double tangentDistance = radius / std::tan(interiorAngle / 2.0);
+    if (tangentDistance >= previousLength - 1.0e-9
+        || tangentDistance >= nextLength - 1.0e-9) {
+        throw std::invalid_argument("R丸めの半径が大きすぎます(接点が辺からはみ出します)。");
+    }
+    const Vector3 firstPoint = corner.corner + unitPrevious * tangentDistance;
+    const Vector3 secondPoint = corner.corner + unitNext * tangentDistance;
+    const Vector3 bisector = unitPrevious + unitNext;
+    const double bisectorLength = bisector.Length();
+    if (bisectorLength <= 1.0e-9) {
+        throw std::invalid_argument("この頂点には丸められる角がありません。");
+    }
+    const Vector3 center = corner.corner
+        + bisector * ((radius / std::sin(interiorAngle / 2.0)) / bisectorLength);
+
+    // 円弧を弦公差で分割してポリラインへ埋め込む。
+    const double sweep = std::numbers::pi - interiorAngle;
+    const double maximumStep = radius > chordToleranceMillimeters
+        ? 2.0 * std::acos(std::clamp(1.0 - chordToleranceMillimeters / radius, -1.0, 1.0))
+        : sweep;
+    const int segments = std::max(4,
+        static_cast<int>(std::ceil(sweep / std::max(maximumStep, 1.0e-4))));
+    const Vector3 uAxis = (firstPoint - center) * (1.0 / radius);
+    Vector3 normal = Cross(firstPoint - center, secondPoint - center);
+    const double normalLength = normal.Length();
+    if (normalLength <= 1.0e-12) {
+        throw std::invalid_argument("この頂点には丸められる角がありません。");
+    }
+    normal = normal * (1.0 / normalLength);
+    const Vector3 vAxis = Cross(normal, uAxis);
+    std::vector<Vector3> replacement;
+    replacement.reserve(segments + 1);
+    for (int index = 0; index <= segments; ++index) {
+        const double angle = sweep * static_cast<double>(index) / segments;
+        replacement.push_back(center
+            + uAxis * (radius * std::cos(angle))
+            + vAxis * (radius * std::sin(angle)));
+    }
+    return {
+        RebuildPolylineWithCorner(corner, replacement),
+        firstPoint,
+        secondPoint,
+    };
+}
+
 } // namespace kachakacha::model

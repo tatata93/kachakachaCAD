@@ -119,4 +119,33 @@ struct DirectWireExtendResult {
     double radius,
     double tolerance = 1.0e-8);
 
+//! 2本のワイヤの3D交点(距離 tolerance 以内まで近づく点)を求める。
+//! 曲線はサンプリングし、粗い候補を局所探索で詰める。同一交点は統合する。
+//! 3D空間で「任意の交点」に点を作り、そこから線を引くための基盤。
+[[nodiscard]] std::vector<geometry::Vector3> IntersectWires(
+    const Wire& first,
+    const Wire& second,
+    double tolerance = 1.0e-4,
+    int samplesPerCurve = 256);
+
+struct PolylineCornerEditResult {
+    Wire wire;                     //!< 角を加工した後のポリライン
+    geometry::Vector3 firstPoint;  //!< 加工区間の始点(前の辺側)
+    geometry::Vector3 secondPoint; //!< 加工区間の終点(次の辺側)
+};
+
+//! ポリラインの頂点(vertexIndex)を C 面取りする(両辺 setback で角を落とす)。
+//! 閉じたポリラインでは始点/終点の角(vertexIndex=0)も加工できる。
+[[nodiscard]] PolylineCornerEditResult CutPolylineCorner(
+    const Wire& polyline,
+    int vertexIndex,
+    double setback);
+
+//! ポリラインの頂点を半径 radius のR丸めへ置き換える(円弧は弦公差で分割)。
+[[nodiscard]] PolylineCornerEditResult RoundPolylineCorner(
+    const Wire& polyline,
+    int vertexIndex,
+    double radius,
+    double chordToleranceMillimeters = 0.02);
+
 } // namespace kachakacha::model

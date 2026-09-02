@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "CollapsibleSection.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
@@ -243,6 +244,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return child->property("manualAnchor").toString() == anchorName;
         });
         if (anchor != children.end()) {
+            CollapsibleSection::ExpandAncestors(*anchor);
+            QApplication::processEvents();
             QWidget* content = area->widget();
             QScrollBar* scroll = area->verticalScrollBar();
             const int anchorTop = (*anchor)->mapTo(content, QPoint(0, 0)).y();

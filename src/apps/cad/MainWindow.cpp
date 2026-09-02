@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "CollapsibleSection.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
@@ -859,7 +860,7 @@ void MainWindow::BuildUi()
     toolsDock->setWidget(toolsPanel);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
     toolsDock->setMinimumWidth(380);
-    toolsDock->setMaximumWidth(460);
+    toolsDock->setMaximumWidth(560);
 
     statusBar()->showMessage(QStringLiteral("準備完了"));
     setStyleSheet(R"(
@@ -2413,10 +2414,17 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
-    auto* title = new QLabel(QStringLiteral("作業平面の1:1図面"));
-    title->setProperty("manualAnchor", QStringLiteral("planarOutput"));
-    title->setStyleSheet("font-weight: 600; color: #26323a;");
-    layout->addWidget(title);
+    // ADR 0020 第1段: 長い縦一列フォームを折りたたみセクションへ分ける。
+    const auto beginSection = [] {
+        auto* content = new QWidget;
+        auto* contentLayout = new QVBoxLayout(content);
+        contentLayout->setContentsMargins(4, 2, 4, 6);
+        contentLayout->setSpacing(10);
+        return std::pair<QWidget*, QVBoxLayout*>{content, contentLayout};
+    };
+    auto [planarContent, planarLayout] = beginSection();
+    auto [plateContent, plateLayout] = beginSection();
+    auto [modelContent, modelLayout] = beginSection();
 
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -2426,11 +2434,11 @@ QWidget* MainWindow::BuildOutputPanel()
     form->addRow(QStringLiteral("出力面"), exportPlane_);
     form->addRow(QStringLiteral("対象"), exportScope_);
     form->addRow(QStringLiteral("寸法"), new QLabel(QStringLiteral("mm / 1:1")));
-    layout->addLayout(form);
+    planarLayout->addLayout(form);
 
     exportSummary_ = new QLabel(QStringLiteral("0本"));
     exportSummary_->setStyleSheet("color: #5c6670;");
-    layout->addWidget(exportSummary_);
+    planarLayout->addWidget(exportSummary_);
 
     auto* svgButton = new QPushButton(QStringLiteral("SVGを保存"));
     svgButton->setObjectName("primaryButton");
@@ -2441,23 +2449,13 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(dxfButton, &QPushButton::clicked, this, [this] { ExportPlanar(true); });
     connect(exportPlane_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(exportScope_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
-    layout->addWidget(svgButton);
-    layout->addWidget(dxfButton);
-
-    auto* separator = new QFrame;
-    separator->setFrameShape(QFrame::HLine);
-    separator->setFrameShadow(QFrame::Sunken);
-    layout->addWidget(separator);
-
-    auto* plateTitle = new QLabel(QStringLiteral("ペーパークラフト展開（1:1）"));
-    plateTitle->setProperty("manualAnchor", QStringLiteral("plateFlatPattern"));
-    plateTitle->setStyleSheet("font-weight: 600; color: #26323a;");
-    layout->addWidget(plateTitle);
+    planarLayout->addWidget(svgButton);
+    planarLayout->addWidget(dxfButton);
 
     plateFlatPatternSummary_ = new QLabel(QStringLiteral("選択板材: なし"));
     plateFlatPatternSummary_->setWordWrap(true);
     plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
-    layout->addWidget(plateFlatPatternSummary_);
+    plateLayout->addWidget(plateFlatPatternSummary_);
 
     auto* flatModelForm = new QFormLayout;
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -2613,7 +2611,7 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(QStringLiteral("3D出力する部品"), plateAssemblyOutputPiece_);
     flatModelForm->addRow(QStringLiteral("折り線間隔"), plateFlatPatternFoldSpacing_);
     flatModelForm->addRow(QStringLiteral("3D切り幅"), plateFlatPatternCutWidth_);
-    layout->addLayout(flatModelForm);
+    plateLayout->addLayout(flatModelForm);
 
     auto* createFlatModelButton = new QPushButton(
         QStringLiteral("ペーパークラフト部品を作成"));
@@ -2622,7 +2620,7 @@ QWidget* MainWindow::BuildOutputPanel()
     createFlatModelButton->setToolTip(QStringLiteral("選択板材を配置平面へ展開し、編集可能な線と厚み付き板を作成"));
     connect(createFlatModelButton, &QPushButton::clicked,
         this, &MainWindow::CreateSelectedPlateFlatPatternModel);
-    layout->addWidget(createFlatModelButton);
+    plateLayout->addWidget(createFlatModelButton);
 
     auto* assemblyModelButton = new QPushButton(QStringLiteral("この曲げ状態を3Dモデル化"));
     assemblyModelButton->setObjectName("primaryButton");
@@ -2631,7 +2629,7 @@ QWidget* MainWindow::BuildOutputPanel()
         QStringLiteral("スライダー位置のパネルを厚み付き板としてプロジェクトへ追加"));
     connect(assemblyModelButton, &QPushButton::clicked,
         this, &MainWindow::CreatePlateAssemblyStateModel);
-    layout->addWidget(assemblyModelButton);
+    plateLayout->addWidget(assemblyModelButton);
 
     auto* assemblyExportRow = new QWidget;
     auto* assemblyExportLayout = new QHBoxLayout(assemblyExportRow);
@@ -2647,7 +2645,7 @@ QWidget* MainWindow::BuildOutputPanel()
         this, [this] { ExportPlateAssemblyState(true); });
     assemblyExportLayout->addWidget(assemblyStlButton);
     assemblyExportLayout->addWidget(assemblyStepButton);
-    layout->addWidget(assemblyExportRow);
+    plateLayout->addWidget(assemblyExportRow);
 
     auto* pdfForm = new QFormLayout;
     pdfForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -2661,7 +2659,7 @@ QWidget* MainWindow::BuildOutputPanel()
     platePdfOverlap_->setSuffix(QStringLiteral(" mm"));
     pdfForm->addRow(QStringLiteral("PDF用紙"), platePdfPaper_);
     pdfForm->addRow(QStringLiteral("ページ重なり"), platePdfOverlap_);
-    layout->addLayout(pdfForm);
+    plateLayout->addLayout(pdfForm);
 
     auto* platePdfButton = new QPushButton(QStringLiteral("1:1 PDFを保存"));
     platePdfButton->setObjectName("primaryButton");
@@ -2754,30 +2752,20 @@ QWidget* MainWindow::BuildOutputPanel()
         this, [this] { RefreshExportSummary(); });
     connect(plateFlatPatternMinimumBendAngle_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     updateReliefControls();
-    layout->addWidget(platePdfButton);
-    layout->addWidget(plateSvgButton);
-    layout->addWidget(plateDxfButton);
+    plateLayout->addWidget(platePdfButton);
+    plateLayout->addWidget(plateSvgButton);
+    plateLayout->addWidget(plateDxfButton);
 
-    auto* bodySeparator = new QFrame;
-    bodySeparator->setFrameShape(QFrame::HLine);
-    bodySeparator->setFrameShadow(QFrame::Sunken);
-    layout->addWidget(bodySeparator);
-
-    auto* bodyTitle = new QLabel(QStringLiteral("3DモデルのSTL / STEP出力"));
-    bodyTitle->setObjectName(QStringLiteral("modelOutputSection"));
-    bodyTitle->setProperty("manualAnchor", QStringLiteral("modelOutput"));
-    bodyTitle->setStyleSheet("font-weight: 600; color: #26323a;");
-    layout->addWidget(bodyTitle);
     modelExportScope_ = new QComboBox;
     modelExportScope_->addItems({
         QStringLiteral("3D画面で選択した部分"),
         QStringLiteral("表示中の3Dモデル全体"),
     });
-    layout->addWidget(modelExportScope_);
+    modelLayout->addWidget(modelExportScope_);
     bodyExportSummary_ = new QLabel(QStringLiteral("選択3D部品: なし"));
     bodyExportSummary_->setWordWrap(true);
     bodyExportSummary_->setStyleSheet("color: #5c6670;");
-    layout->addWidget(bodyExportSummary_);
+    modelLayout->addWidget(bodyExportSummary_);
 
     auto* bodyStlButton = new QPushButton(QStringLiteral("STLを保存"));
     bodyStlButton->setObjectName("primaryButton");
@@ -2787,8 +2775,22 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(bodyStlButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(false); });
     connect(bodyStepButton, &QPushButton::clicked, this, [this] { ExportSelectedBody(true); });
     connect(modelExportScope_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
-    layout->addWidget(bodyStlButton);
-    layout->addWidget(bodyStepButton);
+    modelLayout->addWidget(bodyStlButton);
+    modelLayout->addWidget(bodyStepButton);
+
+    auto* planarSection = new CollapsibleSection(
+        QStringLiteral("作業平面の1:1図面"), planarContent, true);
+    planarSection->setProperty("manualAnchor", QStringLiteral("planarOutput"));
+    layout->addWidget(planarSection);
+    auto* plateSection = new CollapsibleSection(
+        QStringLiteral("ペーパークラフト展開（1:1）"), plateContent, false);
+    plateSection->setProperty("manualAnchor", QStringLiteral("plateFlatPattern"));
+    layout->addWidget(plateSection);
+    auto* modelSection = new CollapsibleSection(
+        QStringLiteral("3DモデルのSTL / STEP出力"), modelContent, true);
+    modelSection->setObjectName(QStringLiteral("modelOutputSection"));
+    modelSection->setProperty("manualAnchor", QStringLiteral("modelOutput"));
+    layout->addWidget(modelSection);
     layout->addStretch(1);
     auto* scrollArea = new QScrollArea;
     scrollArea->setWidgetResizable(true);

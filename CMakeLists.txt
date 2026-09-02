@@ -200,6 +200,8 @@ if(KACHACAD_BUILD_QT_APP)
             add_executable(kachakacha_cad WIN32
                 src/apps/cad/CadViewport.cpp
                 src/apps/cad/CadViewport.h
+                src/apps/cad/CollapsibleSection.cpp
+                src/apps/cad/CollapsibleSection.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
                 src/apps/cad/MainWindowPartModel.cpp

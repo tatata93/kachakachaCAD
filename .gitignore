@@ -22,6 +22,8 @@ compile_commands.json
 # クラウド↔PC の受け渡しに使う一時ファイル(リポジトリ直下)
 /_*.cmd
 /_claude-*.txt
+/_build-request.txt
+/_ui-*.png
 
 # git bundle(PCへの受け渡し用・共有しない)
 *.bundle

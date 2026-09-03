@@ -18,6 +18,7 @@ class QEvent;
 class QFrame;
 class QLabel;
 class QLineEdit;
+class QTimer;
 
 enum class CadSelectionKind {
     None,
@@ -317,6 +318,13 @@ public:
     [[nodiscard]] bool AlignToSelection();
     void SetIsometricView();
     void SetCornerView(kachakacha::geometry::Vector3 direction);
+    //! 指定方向から見るビューへアニメーション付きで遷移する。面ビューでは現在に
+    //! 最も近いアップ方向を保存する(視点キューブのクリック用)。
+    void SetDirectionView(kachakacha::geometry::Vector3 direction);
+    //! 現在のビュー基底から目標基底へ約180msかけて補間する。
+    void AnimateViewTo(const std::array<kachakacha::geometry::Vector3, 3>& targetBasis);
+    //! 進行中のビュー遷移アニメーションを打ち切る(手動操作が勝つ)。
+    void StopViewAnimation();
     void RotateViewAroundWorldAxis(ViewRotationAxis axis, double angleRadians);
     void RotateViewAroundRelativeAxis(ViewRotationAxis axis, double angleRadians);
     void RotateViewYaw(double angleRadians);
@@ -528,4 +536,11 @@ private:
     bool viewCubeDragActive_ = false;
     int pressedViewCubeFace_ = 0;
     int hoveredViewCubeFace_ = 0;
+    kachakacha::geometry::Vector3 pressedViewCubeDirection_;
+    kachakacha::geometry::Vector3 hoveredViewCubeDirection_;
+    bool navigatorHot_ = false;                     //!< カーソルがナビゲータ近傍にあるか(遠いと半透明表示)
+    QTimer* viewAnimationTimer_ = nullptr;          //!< ビュー遷移アニメーション(約180ms)
+    double viewAnimationProgress_ = 1.0;
+    std::array<kachakacha::geometry::Vector3, 3> viewAnimationStart_{};
+    std::array<kachakacha::geometry::Vector3, 3> viewAnimationTarget_{};
 };

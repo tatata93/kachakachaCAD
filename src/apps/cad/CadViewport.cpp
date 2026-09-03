@@ -17,6 +17,7 @@
 #include <QPainterPath>
 #include <QPolygonF>
 #include <QStyle>
+#include <QTimer>
 #include <QToolTip>
 #include <QWheelEvent>
 
@@ -48,6 +49,11 @@ enum class ViewCubeFace {
     Left,
     Home,
     Selection,
+    Edge,
+    AdjacentLeft,
+    AdjacentRight,
+    AdjacentUp,
+    AdjacentDown,
     CornerPositivePositivePositive,
     CornerPositivePositiveNegative,
     CornerPositiveNegativePositive,
@@ -56,8 +62,6 @@ enum class ViewCubeFace {
     CornerNegativePositiveNegative,
     CornerNegativeNegativePositive,
     CornerNegativeNegativeNegative,
-    OrbitLeft,
-    OrbitRight,
     RollLeft,
     RollRight,
     WorldXNegative,
@@ -70,8 +74,6 @@ enum class ViewCubeFace {
     RelativeXPositive,
     RelativeYNegative,
     RelativeYPositive,
-    RelativeZNegative,
-    RelativeZPositive,
 };
 
 struct ViewCubeFaceGeometry {
@@ -90,30 +92,55 @@ struct ViewCubeCornerGeometry {
     double depth = 0.0;
 };
 
-struct ViewCubeAxisRotationGeometry {
-    ViewCubeFace negativeFace = ViewCubeFace::None;
-    ViewCubeFace positiveFace = ViewCubeFace::None;
-    QRectF negativeArea;
-    QRectF positiveArea;
-    QRectF labelArea;
-    QString label;
+//! キューブの辺(2面の中間ビュー)。ヒット領域は投影した辺の中点に置く。
+struct ViewCubeEdgeGeometry {
+    QRectF area;
+    Vector3 direction;
+    QPointF lineStart;
+    QPointF lineEnd;
+    double depth = 0.0;
+};
+
+//! モデル軸まわりの回転リング。キューブと同じ投影で描くので視点に追従する。
+struct ViewCubeRingGeometry {
+    int axis = 0; //!< 0=X 1=Y 2=Z
+    QPolygonF polyline;
     QColor color;
+    QRectF plusArea;      //!< クリックで+方向(カメラ+回転)の矢じり
+    QPointF plusTip;
+    QPointF plusTangent;  //!< 矢じりの向き(単位ベクトル)
+    ViewCubeFace plusFace = ViewCubeFace::None;
+    QRectF minusArea;
+    QPointF minusTip;
+    QPointF minusTangent;
+    ViewCubeFace minusFace = ViewCubeFace::None;
+};
+
+//! 画面基準(位置固定)の回転矢印の半分。クリックした側の方向へ回す。
+struct ViewCubeScreenArrowGeometry {
+    QRectF area;
+    ViewCubeFace face = ViewCubeFace::None;
 };
 
 struct ViewCubeGeometry {
     std::vector<ViewCubeFaceGeometry> faces;
     std::vector<ViewCubeCornerGeometry> corners;
-    QPolygonF home;
+    std::vector<ViewCubeEdgeGeometry> edges;
+    std::array<ViewCubeRingGeometry, 3> rings;
+    std::vector<ViewCubeScreenArrowGeometry> screenArrows; //!< ヨー左右+ピッチ上下
+    std::vector<std::pair<QRectF, ViewCubeFace>> adjacentArrows; //!< 面に正対中のみ
+    QRectF home;
     QRectF selection;
-    QRectF orbitLeft;
-    QRectF orbitRight;
     QRectF rollLeft;
     QRectF rollRight;
-    QRectF worldAxesPanel;
-    QRectF relativeAxesPanel;
-    std::vector<ViewCubeAxisRotationGeometry> worldAxes;
-    std::vector<ViewCubeAxisRotationGeometry> relativeAxes;
+    QPointF cubeCenter;
     QRectF bounds;
+};
+
+//! ヒット結果。Edge のときは direction が正対方向を運ぶ。
+struct ViewCubeHit {
+    ViewCubeFace face = ViewCubeFace::None;
+    Vector3 direction;
 };
 
 Vector3 RotateVectorAroundAxis(Vector3 value, Vector3 axis, double angleRadians)
@@ -132,8 +159,8 @@ ViewCubeGeometry MakeViewCubeGeometry(
 {
     // Use the model's camera basis so the navigator always reports the exact current attitude.
     ViewCubeGeometry geometry;
-    const double centerX = viewportWidth - 60.0;
-    const double centerY = 49.0;
+    const double centerX = viewportWidth - 84.0;
+    const double centerY = 74.0;
     const double cubeScale = 22.0;
     const auto project = [&](Vector3 point) {
         return QPointF{
@@ -158,7 +185,7 @@ ViewCubeGeometry MakeViewCubeGeometry(
             QColor("#e4e8eb"), QStringLiteral("下")},
         FaceDefinition{ViewCubeFace::Front, {0.0, -1.0, 0.0},
             {{{-1.0, -1.0, -1.0}, {1.0, -1.0, -1.0}, {1.0, -1.0, 1.0}, {-1.0, -1.0, 1.0}}},
-            QColor("#d6e6e7"), QStringLiteral("正")},
+            QColor("#d6e6e7"), QStringLiteral("前")},
         FaceDefinition{ViewCubeFace::Back, {0.0, 1.0, 0.0},
             {{{1.0, 1.0, -1.0}, {-1.0, 1.0, -1.0}, {-1.0, 1.0, 1.0}, {1.0, 1.0, 1.0}}},
             QColor("#e0e8e9"), QStringLiteral("後")},
@@ -209,7 +236,7 @@ ViewCubeGeometry MakeViewCubeGeometry(
         const QPointF center = project(definition.direction);
         geometry.corners.push_back({
             definition.face,
-            QRectF(center.x() - 5.0, center.y() - 5.0, 10.0, 10.0),
+            QRectF(center.x() - 7.0, center.y() - 7.0, 14.0, 14.0),
             definition.direction.Normalized(),
             depth,
         });
@@ -218,96 +245,183 @@ ViewCubeGeometry MakeViewCubeGeometry(
         return first.depth < second.depth;
     });
 
-    geometry.home = QPolygonF{
-        QPointF(centerX, 91.0),
-        QPointF(centerX + 22.0, 102.0),
-        QPointF(centerX, 113.0),
-        QPointF(centerX - 22.0, 102.0)};
-    geometry.selection = QRectF(centerX - 50.0, 121.0, 100.0, 28.0);
-    geometry.orbitLeft = QRectF(centerX - 59.0, 40.0, 18.0, 28.0);
-    geometry.orbitRight = QRectF(centerX + 41.0, 40.0, 18.0, 28.0);
-    geometry.rollLeft = QRectF(centerX - 31.0, 0.0, 22.0, 20.0);
-    geometry.rollRight = QRectF(centerX + 9.0, 0.0, 22.0, 20.0);
-    const auto makeAxisPanel = [&](double left, bool relative) {
-        const QRectF panel(left, 1.0, 60.0, 92.0);
-        std::vector<ViewCubeAxisRotationGeometry> axes;
-        const std::array<QString, 3> labels = {
-            QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")};
-        const std::array<QColor, 3> colors = {
-            QColor("#b9363e"), QColor("#2d7f49"), QColor("#326bb4")};
-        const std::array<ViewCubeFace, 3> negativeFaces = relative
-            ? std::array{ViewCubeFace::RelativeXNegative, ViewCubeFace::RelativeYNegative,
-                  ViewCubeFace::RelativeZNegative}
-            : std::array{ViewCubeFace::WorldXNegative, ViewCubeFace::WorldYNegative,
-                  ViewCubeFace::WorldZNegative};
-        const std::array<ViewCubeFace, 3> positiveFaces = relative
-            ? std::array{ViewCubeFace::RelativeXPositive, ViewCubeFace::RelativeYPositive,
-                  ViewCubeFace::RelativeZPositive}
-            : std::array{ViewCubeFace::WorldXPositive, ViewCubeFace::WorldYPositive,
-                  ViewCubeFace::WorldZPositive};
-        for (int index = 0; index < 3; ++index) {
-            const double top = 21.0 + index * 23.0;
-            axes.push_back({
-                negativeFaces[index], positiveFaces[index],
-                QRectF(left + 3.0, top, 18.0, 18.0),
-                QRectF(left + 39.0, top, 18.0, 18.0),
-                QRectF(left + 21.0, top, 18.0, 18.0),
-                labels[index], colors[index],
-            });
+    // 辺(2面の中間ビュー)。中点にヒット領域、ハイライト用に辺の両端も持つ。
+    const std::array<Vector3, 3> axisUnits = {
+        Vector3{1.0, 0.0, 0.0}, Vector3{0.0, 1.0, 0.0}, Vector3{0.0, 0.0, 1.0}};
+    for (int firstAxis = 0; firstAxis < 3; ++firstAxis) {
+        for (int secondAxis = firstAxis + 1; secondAxis < 3; ++secondAxis) {
+            const int freeAxis = 3 - firstAxis - secondAxis;
+            for (double firstSign : {-1.0, 1.0}) {
+                for (double secondSign : {-1.0, 1.0}) {
+                    const Vector3 middle =
+                        axisUnits[firstAxis] * firstSign + axisUnits[secondAxis] * secondSign;
+                    const double depth = Dot(middle.Normalized(), viewBasis[0]);
+                    if (depth <= 0.05) {
+                        continue;
+                    }
+                    const QPointF center = project(middle);
+                    geometry.edges.push_back({
+                        QRectF(center.x() - 6.0, center.y() - 6.0, 12.0, 12.0),
+                        middle.Normalized(),
+                        project(middle - axisUnits[freeAxis]),
+                        project(middle + axisUnits[freeAxis]),
+                        depth,
+                    });
+                }
+            }
         }
-        return std::pair{panel, axes};
+    }
+    std::sort(geometry.edges.begin(), geometry.edges.end(), [](const auto& first, const auto& second) {
+        return first.depth < second.depth;
+    });
+
+    // モデル軸まわりの回転リング(キューブと同じ投影=視点に追従する矢印)。
+    const std::array<QColor, 3> axisColors = {
+        QColor("#b9363e"), QColor("#2d7f49"), QColor("#326bb4")};
+    const std::array<ViewCubeFace, 3> ringNegative = {
+        ViewCubeFace::WorldXNegative, ViewCubeFace::WorldYNegative, ViewCubeFace::WorldZNegative};
+    const std::array<ViewCubeFace, 3> ringPositive = {
+        ViewCubeFace::WorldXPositive, ViewCubeFace::WorldYPositive, ViewCubeFace::WorldZPositive};
+    constexpr int kRingSamples = 64;
+    constexpr double kRingRadius = 1.95;
+    for (int axis = 0; axis < 3; ++axis) {
+        ViewCubeRingGeometry ring;
+        ring.axis = axis;
+        ring.color = axisColors[axis];
+        const Vector3 planeU = axisUnits[(axis + 1) % 3];
+        const Vector3 planeV = axisUnits[(axis + 2) % 3];
+        int farthestIndex = 0;
+        double farthestDistance = -1.0;
+        for (int sample = 0; sample < kRingSamples; ++sample) {
+            const double angle = 2.0 * std::numbers::pi * sample / kRingSamples;
+            const QPointF point = project(
+                planeU * (kRingRadius * std::cos(angle)) + planeV * (kRingRadius * std::sin(angle)));
+            ring.polyline << point;
+            const double distance = std::hypot(point.x() - centerX, point.y() - centerY);
+            if (distance > farthestDistance) {
+                farthestDistance = distance;
+                farthestIndex = sample;
+            }
+        }
+        const auto ringPoint = [&](int index) {
+            return ring.polyline[((index % kRingSamples) + kRingSamples) % kRingSamples];
+        };
+        const auto tangentAt = [&](int index) {
+            const QPointF delta = ringPoint(index + 1) - ringPoint(index - 1);
+            const double length = std::hypot(delta.x(), delta.y());
+            return length > 1.0e-9 ? delta / length : QPointF(1.0, 0.0);
+        };
+        // +θ向きの矢じり=見た目が+θへ回る=カメラは-回転(Negative)。反対側の矢じりが+回転。
+        const int oppositeIndex = (farthestIndex + kRingSamples / 2) % kRingSamples;
+        ring.minusTip = ringPoint(farthestIndex);
+        ring.minusTangent = tangentAt(farthestIndex);
+        ring.minusFace = ringNegative[axis];
+        ring.minusArea = QRectF(ring.minusTip.x() - 9.0, ring.minusTip.y() - 9.0, 18.0, 18.0);
+        ring.plusTip = ringPoint(oppositeIndex);
+        ring.plusTangent = -tangentAt(oppositeIndex);
+        ring.plusFace = ringPositive[axis];
+        ring.plusArea = QRectF(ring.plusTip.x() - 9.0, ring.plusTip.y() - 9.0, 18.0, 18.0);
+        geometry.rings[axis] = std::move(ring);
+    }
+
+    // 画面基準の回転矢印(位置固定)。下=左右回し、右=上下回し、上=ロール。
+    geometry.screenArrows = {
+        {QRectF(centerX - 48.0, centerY + 52.0, 38.0, 22.0), ViewCubeFace::RelativeYPositive},
+        {QRectF(centerX + 10.0, centerY + 52.0, 38.0, 22.0), ViewCubeFace::RelativeYNegative},
+        {QRectF(centerX + 52.0, centerY - 46.0, 22.0, 38.0), ViewCubeFace::RelativeXPositive},
+        {QRectF(centerX + 52.0, centerY + 8.0, 22.0, 38.0), ViewCubeFace::RelativeXNegative},
     };
-    auto [relativePanel, relativeAxes] = makeAxisPanel(centerX - 130.0, true);
-    auto [worldPanel, worldAxes] = makeAxisPanel(centerX - 194.0, false);
-    geometry.relativeAxesPanel = relativePanel;
-    geometry.relativeAxes = std::move(relativeAxes);
-    geometry.worldAxesPanel = worldPanel;
-    geometry.worldAxes = std::move(worldAxes);
-    geometry.bounds = QRectF(centerX - 196.0, 0.0, 260.0, 154.0);
+    geometry.rollLeft = QRectF(centerX - 33.0, 2.0, 22.0, 20.0);
+    geometry.rollRight = QRectF(centerX + 11.0, 2.0, 22.0, 20.0);
+    geometry.home = QRectF(centerX - 94.0, 2.0, 26.0, 24.0);
+
+    // 面に正対しているときだけ、隣の面へ90°回る三角矢印を出す(行き止まり防止)。
+    for (const ViewCubeFaceGeometry& face : geometry.faces) {
+        if (face.depth > 0.9995) {
+            geometry.adjacentArrows = {
+                {QRectF(centerX - 44.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentLeft},
+                {QRectF(centerX + 30.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentRight},
+                {QRectF(centerX - 9.0, centerY - 44.0, 18.0, 14.0), ViewCubeFace::AdjacentUp},
+                {QRectF(centerX - 9.0, centerY + 30.0, 18.0, 14.0), ViewCubeFace::AdjacentDown},
+            };
+            break;
+        }
+    }
+
+    geometry.selection = QRectF(centerX - 50.0, centerY + 80.0, 100.0, 26.0);
+    geometry.cubeCenter = QPointF(centerX, centerY);
+    geometry.bounds = QRectF(centerX - 96.0, 0.0, 176.0, centerY + 110.0);
     return geometry;
 }
 
-ViewCubeFace HitViewCube(const ViewCubeGeometry& cube, QPointF position)
+ViewCubeHit HitViewCube(const ViewCubeGeometry& cube, QPointF position)
 {
-    for (const auto* axes : {&cube.worldAxes, &cube.relativeAxes}) {
-        for (const ViewCubeAxisRotationGeometry& axis : *axes) {
-            if (axis.negativeArea.contains(position)) {
-                return axis.negativeFace;
-            }
-            if (axis.positiveArea.contains(position)) {
-                return axis.positiveFace;
-            }
-        }
+    if (cube.home.contains(position)) {
+        return {ViewCubeFace::Home, {}};
     }
     if (cube.rollLeft.contains(position)) {
-        return ViewCubeFace::RollLeft;
+        return {ViewCubeFace::RollLeft, {}};
     }
     if (cube.rollRight.contains(position)) {
-        return ViewCubeFace::RollRight;
+        return {ViewCubeFace::RollRight, {}};
     }
-    if (cube.orbitLeft.contains(position)) {
-        return ViewCubeFace::OrbitLeft;
+    for (const auto& [area, face] : cube.adjacentArrows) {
+        if (area.contains(position)) {
+            return {face, {}};
+        }
     }
-    if (cube.orbitRight.contains(position)) {
-        return ViewCubeFace::OrbitRight;
+    for (const ViewCubeScreenArrowGeometry& arrow : cube.screenArrows) {
+        if (arrow.area.contains(position)) {
+            return {arrow.face, {}};
+        }
     }
     for (auto corner = cube.corners.rbegin(); corner != cube.corners.rend(); ++corner) {
         if (corner->area.contains(position)) {
-            return corner->face;
+            return {corner->face, corner->direction};
+        }
+    }
+    for (auto edge = cube.edges.rbegin(); edge != cube.edges.rend(); ++edge) {
+        if (edge->area.contains(position)) {
+            return {ViewCubeFace::Edge, edge->direction};
         }
     }
     for (auto face = cube.faces.rbegin(); face != cube.faces.rend(); ++face) {
         if (face->polygon.containsPoint(position, Qt::OddEvenFill)) {
-            return face->face;
+            return {face->face, face->direction};
         }
     }
-    if (cube.home.containsPoint(position, Qt::OddEvenFill)) {
-        return ViewCubeFace::Home;
+    for (const ViewCubeRingGeometry& ring : cube.rings) {
+        if (ring.plusArea.contains(position)) {
+            return {ring.plusFace, {}};
+        }
+        if (ring.minusArea.contains(position)) {
+            return {ring.minusFace, {}};
+        }
+        double nearestDistance = 1.0e18;
+        for (int index = 0; index < ring.polyline.size(); ++index) {
+            const QPointF a = ring.polyline[index];
+            const QPointF b = ring.polyline[(index + 1) % ring.polyline.size()];
+            const QPointF delta = b - a;
+            const double lengthSquared = QPointF::dotProduct(delta, delta);
+            double t = 0.0;
+            if (lengthSquared > 1.0e-12) {
+                t = std::clamp(
+                    QPointF::dotProduct(position - a, delta) / lengthSquared, 0.0, 1.0);
+            }
+            nearestDistance =
+                std::min(nearestDistance, QLineF(position, a + delta * t).length());
+        }
+        if (nearestDistance <= 5.0) {
+            // 矢じりに近い側の方向へ回す。
+            const double toMinus = QLineF(position, ring.minusTip).length();
+            const double toPlus = QLineF(position, ring.plusTip).length();
+            return {toMinus <= toPlus ? ring.minusFace : ring.plusFace, {}};
+        }
     }
     if (cube.selection.contains(position)) {
-        return ViewCubeFace::Selection;
+        return {ViewCubeFace::Selection, {}};
     }
-    return ViewCubeFace::None;
+    return {ViewCubeFace::None, {}};
 }
 
 bool CanDragViewCube(ViewCubeFace face)
@@ -318,6 +432,7 @@ bool CanDragViewCube(ViewCubeFace face)
         || face == ViewCubeFace::Back
         || face == ViewCubeFace::Right
         || face == ViewCubeFace::Left
+        || face == ViewCubeFace::Edge
         || (face >= ViewCubeFace::CornerPositivePositivePositive
             && face <= ViewCubeFace::CornerNegativeNegativeNegative);
 }
@@ -362,10 +477,112 @@ std::optional<ViewCubeRotationCommand> ViewCubeRotation(ViewCubeFace face)
     case ViewCubeFace::RelativeXPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::X, 1.0};
     case ViewCubeFace::RelativeYNegative: return ViewCubeRotationCommand{true, ViewRotationAxis::Y, -1.0};
     case ViewCubeFace::RelativeYPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::Y, 1.0};
-    case ViewCubeFace::RelativeZNegative: return ViewCubeRotationCommand{true, ViewRotationAxis::Z, -1.0};
-    case ViewCubeFace::RelativeZPositive: return ViewCubeRotationCommand{true, ViewRotationAxis::Z, 1.0};
     default: return std::nullopt;
     }
+}
+
+//! 回転行列(列 = 前・右・上)と単位クォータニオンの相互変換。ビュー遷移の補間用。
+struct ViewQuaternion {
+    double w = 1.0;
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+};
+
+ViewQuaternion BasisToQuaternion(const std::array<Vector3, 3>& basis)
+{
+    // m[row][column]、列0=前, 列1=右, 列2=上。
+    const double m00 = basis[0].x, m01 = basis[1].x, m02 = basis[2].x;
+    const double m10 = basis[0].y, m11 = basis[1].y, m12 = basis[2].y;
+    const double m20 = basis[0].z, m21 = basis[1].z, m22 = basis[2].z;
+    ViewQuaternion q;
+    const double trace = m00 + m11 + m22;
+    if (trace > 0.0) {
+        const double s = std::sqrt(trace + 1.0) * 2.0;
+        q.w = 0.25 * s;
+        q.x = (m21 - m12) / s;
+        q.y = (m02 - m20) / s;
+        q.z = (m10 - m01) / s;
+    } else if (m00 > m11 && m00 > m22) {
+        const double s = std::sqrt(1.0 + m00 - m11 - m22) * 2.0;
+        q.w = (m21 - m12) / s;
+        q.x = 0.25 * s;
+        q.y = (m01 + m10) / s;
+        q.z = (m02 + m20) / s;
+    } else if (m11 > m22) {
+        const double s = std::sqrt(1.0 + m11 - m00 - m22) * 2.0;
+        q.w = (m02 - m20) / s;
+        q.x = (m01 + m10) / s;
+        q.y = 0.25 * s;
+        q.z = (m12 + m21) / s;
+    } else {
+        const double s = std::sqrt(1.0 + m22 - m00 - m11) * 2.0;
+        q.w = (m10 - m01) / s;
+        q.x = (m02 + m20) / s;
+        q.y = (m12 + m21) / s;
+        q.z = 0.25 * s;
+    }
+    return q;
+}
+
+std::array<Vector3, 3> QuaternionToBasis(const ViewQuaternion& q)
+{
+    const double xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+    const double xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+    const double wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+    const Vector3 forward{1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz), 2.0 * (xz - wy)};
+    const Vector3 right{2.0 * (xy - wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx)};
+    const Vector3 up{2.0 * (xz + wy), 2.0 * (yz - wx), 1.0 - 2.0 * (xx + yy)};
+    return {forward.Normalized(), right.Normalized(), up.Normalized()};
+}
+
+ViewQuaternion SlerpQuaternion(ViewQuaternion from, const ViewQuaternion& to, double t)
+{
+    double dot = from.w * to.w + from.x * to.x + from.y * to.y + from.z * to.z;
+    if (dot < 0.0) {
+        from.w = -from.w;
+        from.x = -from.x;
+        from.y = -from.y;
+        from.z = -from.z;
+        dot = -dot;
+    }
+    double weightFrom = 1.0 - t;
+    double weightTo = t;
+    if (dot < 0.9995) {
+        const double theta = std::acos(std::clamp(dot, -1.0, 1.0));
+        const double sine = std::sin(theta);
+        if (sine > 1.0e-9) {
+            weightFrom = std::sin((1.0 - t) * theta) / sine;
+            weightTo = std::sin(t * theta) / sine;
+        }
+    }
+    ViewQuaternion result{
+        from.w * weightFrom + to.w * weightTo,
+        from.x * weightFrom + to.x * weightTo,
+        from.y * weightFrom + to.y * weightTo,
+        from.z * weightFrom + to.z * weightTo,
+    };
+    const double length =
+        std::sqrt(result.w * result.w + result.x * result.x + result.y * result.y + result.z * result.z);
+    if (length > 1.0e-12) {
+        result.w /= length;
+        result.x /= length;
+        result.y /= length;
+        result.z /= length;
+    }
+    return result;
+}
+
+std::array<Vector3, 3> IsometricViewBasis()
+{
+    const double yaw = 0.75;
+    const double pitch = 0.48;
+    const Vector3 forward{
+        std::cos(pitch) * std::cos(yaw),
+        std::cos(pitch) * std::sin(yaw),
+        std::sin(pitch)};
+    const Vector3 right = Vector3{-forward.y, forward.x, 0.0}.Normalized();
+    return {forward, right, Cross(forward, right).Normalized()};
 }
 
 QString RotationAxisName(ViewRotationAxis axis)
@@ -999,6 +1216,7 @@ void CadViewport::AlignToActiveWorkPlane()
 
 void CadViewport::AlignToWorkPlane(const kachakacha::model::WorkPlane& plane)
 {
+    StopViewAnimation();
     target_ = plane.Origin();
     alignedViewBasis_ = std::array<Vector3, 3>{plane.Normal(), plane.UAxis(), plane.VAxis()};
     rollRadians_ = 0.0;
@@ -1218,8 +1436,17 @@ bool CadViewport::AlignToSelection()
     }
 }
 
+void CadViewport::StopViewAnimation()
+{
+    if (viewAnimationTimer_ != nullptr && viewAnimationTimer_->isActive()) {
+        viewAnimationTimer_->stop();
+        viewAnimationProgress_ = 1.0;
+    }
+}
+
 void CadViewport::SetIsometricView()
 {
+    StopViewAnimation();
     alignedViewBasis_.reset();
     yawRadians_ = 0.75;
     pitchRadians_ = 0.48;
@@ -1229,6 +1456,7 @@ void CadViewport::SetIsometricView()
 
 void CadViewport::SetCornerView(Vector3 direction)
 {
+    StopViewAnimation();
     direction = direction.Normalized();
     alignedViewBasis_.reset();
     yawRadians_ = std::atan2(direction.y, direction.x);
@@ -1237,11 +1465,96 @@ void CadViewport::SetCornerView(Vector3 direction)
     update();
 }
 
+void CadViewport::SetDirectionView(Vector3 direction)
+{
+    if (direction.LengthSquared() <= 1.0e-12) {
+        return;
+    }
+    direction = direction.Normalized();
+    const auto current = CurrentViewBasis();
+    Vector3 up{0.0, 0.0, 0.0};
+    const bool faceView = std::abs(std::abs(direction.x) - 1.0) < 1.0e-9
+        || std::abs(std::abs(direction.y) - 1.0) < 1.0e-9
+        || std::abs(std::abs(direction.z) - 1.0) < 1.0e-9;
+    if (faceView) {
+        // 面ビュー: 面に垂直な4方向のうち、現在のアップに最も近いものを選ぶ
+        // (上面図にしても直前の「どちらが前か」が保たれる)。
+        const std::array<Vector3, 6> candidates = {
+            Vector3{1.0, 0.0, 0.0}, Vector3{-1.0, 0.0, 0.0},
+            Vector3{0.0, 1.0, 0.0}, Vector3{0.0, -1.0, 0.0},
+            Vector3{0.0, 0.0, 1.0}, Vector3{0.0, 0.0, -1.0}};
+        double bestScore = -2.0;
+        for (const Vector3& candidate : candidates) {
+            if (std::abs(Dot(candidate, direction)) > 1.0e-6) {
+                continue;
+            }
+            const double score = Dot(candidate, current[2]);
+            if (score > bestScore) {
+                bestScore = score;
+                up = candidate;
+            }
+        }
+    } else {
+        up = Vector3{0.0, 0.0, 1.0} - direction * direction.z;
+        if (up.LengthSquared() <= 1.0e-9) {
+            up = current[2] - direction * Dot(current[2], direction);
+        }
+    }
+    if (up.LengthSquared() <= 1.0e-9) {
+        SetCornerView(direction);
+        return;
+    }
+    up = up.Normalized();
+    const Vector3 right = Cross(up, direction).Normalized();
+    AnimateViewTo({direction, right, Cross(direction, right).Normalized()});
+}
+
+void CadViewport::AnimateViewTo(const std::array<Vector3, 3>& targetBasis)
+{
+    const auto current = CurrentViewBasis();
+    double difference = 0.0;
+    for (int index = 0; index < 3; ++index) {
+        difference += (targetBasis[index] - current[index]).Length();
+    }
+    if (difference < 1.0e-6) {
+        alignedViewBasis_ = targetBasis;
+        rollRadians_ = 0.0;
+        update();
+        return;
+    }
+    if (viewAnimationTimer_ == nullptr) {
+        viewAnimationTimer_ = new QTimer(this);
+        viewAnimationTimer_->setInterval(16);
+        QObject::connect(viewAnimationTimer_, &QTimer::timeout, this, [this] {
+            viewAnimationProgress_ = std::min(1.0, viewAnimationProgress_ + 16.0 / 180.0);
+            const double t = viewAnimationProgress_;
+            const double eased = t * t * (3.0 - 2.0 * t);
+            const ViewQuaternion interpolated = SlerpQuaternion(
+                BasisToQuaternion(viewAnimationStart_),
+                BasisToQuaternion(viewAnimationTarget_), eased);
+            alignedViewBasis_ = QuaternionToBasis(interpolated);
+            rollRadians_ = 0.0;
+            if (viewAnimationProgress_ >= 1.0) {
+                alignedViewBasis_ = viewAnimationTarget_;
+                viewAnimationTimer_->stop();
+            }
+            update();
+        });
+    }
+    viewAnimationStart_ = current;
+    viewAnimationTarget_ = targetBasis;
+    viewAnimationProgress_ = 0.0;
+    rollRadians_ = 0.0;
+    alignedViewBasis_ = current;
+    viewAnimationTimer_->start();
+}
+
 void CadViewport::RotateViewAroundWorldAxis(ViewRotationAxis axis, double angleRadians)
 {
     if (!std::isfinite(angleRadians)) {
         return;
     }
+    StopViewAnimation();
     const auto basis = CurrentViewBasis();
     const Vector3 rotationAxis = axis == ViewRotationAxis::X ? Vector3{1.0, 0.0, 0.0}
         : axis == ViewRotationAxis::Y ? Vector3{0.0, 1.0, 0.0}
@@ -1260,6 +1573,7 @@ void CadViewport::RotateViewAroundRelativeAxis(ViewRotationAxis axis, double ang
     if (!std::isfinite(angleRadians)) {
         return;
     }
+    StopViewAnimation();
     const auto basis = CurrentViewBasis();
     const Vector3 rotationAxis = axis == ViewRotationAxis::X ? basis[1]
         : axis == ViewRotationAxis::Y ? basis[2]
@@ -1689,6 +2003,7 @@ void CadViewport::OrbitViewByPixels(double horizontalPixels, double verticalPixe
     if (!std::isfinite(horizontalPixels) || !std::isfinite(verticalPixels)) {
         return;
     }
+    StopViewAnimation();
 
     auto basis = CurrentViewBasis();
     const double horizontalAngle = -horizontalPixels * 0.008;
@@ -4201,57 +4516,63 @@ void CadViewport::paintEvent(QPaintEvent*)
 
     const ViewCubeGeometry cube = MakeViewCubeGeometry(width(), CurrentViewBasis());
     painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const bool navigatorActive = navigatorHot_ || viewCubeInteraction_
+        || hoveredViewCubeFace_ != static_cast<int>(ViewCubeFace::None);
+    painter.setOpacity(navigatorActive ? 1.0 : 0.55);
     QFont cubeFont = painter.font();
     cubeFont.setPointSizeF(std::max(7.0, cubeFont.pointSizeF() - 1.0));
     painter.setFont(cubeFont);
-    const auto drawAxisRotationButton = [&](const QRectF& area, ViewCubeFace face, bool clockwise) {
-        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
-        const QColor stroke = hovered ? QColor("#075f69") : QColor("#40515a");
-        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#f7f9f9"));
-        painter.setPen(QPen(hovered ? QColor("#087780") : QColor("#9aa6ac"), hovered ? 1.8 : 1.0));
-        painter.drawEllipse(area);
-        painter.setBrush(stroke);
-        painter.setPen(QPen(stroke, 1.25, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        const QRectF arc = area.adjusted(4.0, 4.0, -4.0, -4.0);
-        painter.drawArc(arc, clockwise ? 35 * 16 : 145 * 16, clockwise ? -230 * 16 : 230 * 16);
+
+    // モデル軸まわりの回転リング(キューブの後ろに描く。視点に追従する)。
+    const auto drawRingArrowHead = [&](QPointF tip, QPointF direction, const QColor& color, bool hovered) {
+        const QPointF perpendicular(-direction.y(), direction.x());
+        const double size = hovered ? 1.35 : 1.0;
         QPolygonF head;
-        if (clockwise) {
-            head << QPointF(area.right() - 3.0, area.bottom() - 4.0)
-                 << QPointF(area.right() - 7.0, area.bottom() - 4.0)
-                 << QPointF(area.right() - 4.0, area.bottom() - 8.0);
-        } else {
-            head << QPointF(area.left() + 3.0, area.bottom() - 4.0)
-                 << QPointF(area.left() + 7.0, area.bottom() - 4.0)
-                 << QPointF(area.left() + 4.0, area.bottom() - 8.0);
-        }
+        head << tip + direction * (8.0 * size)
+             << tip - direction * (3.0 * size) + perpendicular * (5.0 * size)
+             << tip - direction * (3.0 * size) - perpendicular * (5.0 * size);
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen);
         painter.drawPolygon(head);
     };
-    const auto drawAxisPanel = [&](const QRectF& panel, const QString& title,
-                                   const std::vector<ViewCubeAxisRotationGeometry>& axes) {
-        painter.setBrush(QColor(250, 252, 252, 232));
-        painter.setPen(QPen(QColor("#a7b1b6"), 1.0));
-        painter.drawRoundedRect(panel, 3.0, 3.0);
-        painter.setPen(QColor("#46555d"));
-        painter.drawText(QRectF(panel.left(), panel.top() + 1.0, panel.width(), 18.0),
-            Qt::AlignCenter, title);
-        for (const ViewCubeAxisRotationGeometry& axis : axes) {
-            drawAxisRotationButton(axis.negativeArea, axis.negativeFace, false);
-            drawAxisRotationButton(axis.positiveArea, axis.positiveFace, true);
-            painter.setPen(axis.color);
-            painter.drawText(axis.labelArea, Qt::AlignCenter, axis.label);
-        }
-    };
-    drawAxisPanel(cube.worldAxesPanel, QStringLiteral("絶対"), cube.worldAxes);
-    drawAxisPanel(cube.relativeAxesPanel, QStringLiteral("相対"), cube.relativeAxes);
+    for (const ViewCubeRingGeometry& ring : cube.rings) {
+        const bool plusHovered = hoveredViewCubeFace_ == static_cast<int>(ring.plusFace);
+        const bool minusHovered = hoveredViewCubeFace_ == static_cast<int>(ring.minusFace);
+        QColor ringColor = ring.color;
+        ringColor.setAlpha(plusHovered || minusHovered ? 235 : 150);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(ringColor, plusHovered || minusHovered ? 2.4 : 1.6));
+        painter.drawPolygon(ring.polyline);
+        drawRingArrowHead(ring.plusTip, ring.plusTangent, ringColor, plusHovered);
+        drawRingArrowHead(ring.minusTip, ring.minusTangent, ringColor, minusHovered);
+    }
+
+    // キューブ本体(リングの上に重ねる)。
     for (const ViewCubeFaceGeometry& face : cube.faces) {
         const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face.face);
-        painter.setBrush(hovered ? face.color.lighter(118) : face.color);
+        QColor fill = hovered ? face.color.lighter(118) : face.color;
+        fill.setAlpha(242);
+        painter.setBrush(fill);
         painter.setPen(QPen(QColor("#68747c"), hovered ? 2.0 : 1.2));
         painter.drawPolygon(face.polygon);
         painter.setPen(QColor("#1f2b33"));
         if (face.polygon.boundingRect().width() >= 16.0
             && face.polygon.boundingRect().height() >= 14.0) {
             painter.drawText(face.polygon.boundingRect(), Qt::AlignCenter, face.label);
+        }
+    }
+    // 辺(2面の中間ビュー)。ホバーで辺そのものを光らせる。
+    for (const ViewCubeEdgeGeometry& edge : cube.edges) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Edge)
+            && (edge.direction - hoveredViewCubeDirection_).LengthSquared() < 1.0e-12;
+        if (hovered) {
+            painter.setPen(QPen(QColor("#087780"), 3.4, Qt::SolidLine, Qt::RoundCap));
+            painter.drawLine(edge.lineStart, edge.lineEnd);
+        } else if (navigatorActive) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(159, 179, 186, 170));
+            painter.drawEllipse(edge.area.center(), 2.4, 2.4);
         }
     }
     for (const ViewCubeCornerGeometry& corner : cube.corners) {
@@ -4261,26 +4582,38 @@ void CadViewport::paintEvent(QPaintEvent*)
                 << QPointF(corner.area.right(), corner.area.center().y())
                 << QPointF(corner.area.center().x(), corner.area.bottom())
                 << QPointF(corner.area.left(), corner.area.center().y());
-        painter.setBrush(hovered ? QColor("#f0b64a") : QColor("#f7dca6"));
+        painter.setBrush(hovered ? QColor("#f0b64a") : QColor(247, 220, 166, 200));
         painter.setPen(QPen(QColor("#8b6a2c"), hovered ? 2.0 : 1.0));
         painter.drawPolygon(diamond);
     }
-    const bool homeHovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Home);
-    painter.setBrush(homeHovered ? QColor("#f0c46d") : QColor("#f3d9a5"));
-    painter.setPen(QPen(homeHovered ? QColor("#9a6715") : QColor("#8b6a2c"), homeHovered ? 2.0 : 1.0));
-    painter.drawPolygon(cube.home);
-    painter.setPen(QColor("#483a22"));
-    painter.drawText(cube.home.boundingRect(), Qt::AlignCenter, QStringLiteral("3D"));
-    const auto drawArrowButton = [&](const QRectF& area, ViewCubeFace face, const QString& glyph) {
-        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
-        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#edf2f2"));
+    // 面に正対中のみ: 隣の面へ90°回る三角矢印。
+    for (const auto& [area, adjacentFace] : cube.adjacentArrows) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(adjacentFace);
+        QPolygonF triangle;
+        const QPointF center = area.center();
+        if (adjacentFace == ViewCubeFace::AdjacentLeft) {
+            triangle << QPointF(area.left(), center.y())
+                     << QPointF(area.right(), area.top())
+                     << QPointF(area.right(), area.bottom());
+        } else if (adjacentFace == ViewCubeFace::AdjacentRight) {
+            triangle << QPointF(area.right(), center.y())
+                     << QPointF(area.left(), area.top())
+                     << QPointF(area.left(), area.bottom());
+        } else if (adjacentFace == ViewCubeFace::AdjacentUp) {
+            triangle << QPointF(center.x(), area.top())
+                     << QPointF(area.left(), area.bottom())
+                     << QPointF(area.right(), area.bottom());
+        } else {
+            triangle << QPointF(center.x(), area.bottom())
+                     << QPointF(area.left(), area.top())
+                     << QPointF(area.right(), area.top());
+        }
+        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor(237, 242, 242, 220));
         painter.setPen(QPen(hovered ? QColor("#087780") : QColor("#68747c"), hovered ? 2.0 : 1.0));
-        painter.drawEllipse(area);
-        painter.setPen(hovered ? QColor("#075f69") : QColor("#34434b"));
-        painter.drawText(area, Qt::AlignCenter, glyph);
-    };
-    drawArrowButton(cube.orbitLeft, ViewCubeFace::OrbitLeft, QStringLiteral("<"));
-    drawArrowButton(cube.orbitRight, ViewCubeFace::OrbitRight, QStringLiteral(">"));
+        painter.drawPolygon(triangle);
+    }
+
+    // ロール(画面基準・位置固定)。
     const auto drawRollButton = [&](const QRectF& area, ViewCubeFace face, bool clockwise) {
         const bool hovered = hoveredViewCubeFace_ == static_cast<int>(face);
         const QColor stroke = hovered ? QColor("#075f69") : QColor("#34434b");
@@ -4306,6 +4639,77 @@ void CadViewport::paintEvent(QPaintEvent*)
     };
     drawRollButton(cube.rollLeft, ViewCubeFace::RollLeft, false);
     drawRollButton(cube.rollRight, ViewCubeFace::RollRight, true);
+
+    // 画面基準の回転矢印(位置固定)。下=左右回し、右=上下回し。
+    for (const ViewCubeScreenArrowGeometry& arrow : cube.screenArrows) {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(arrow.face);
+        const QColor stroke = hovered ? QColor("#087780") : QColor("#34434b");
+        if (hovered) {
+            painter.setBrush(QColor(201, 232, 229, 180));
+            painter.setPen(Qt::NoPen);
+            painter.drawRoundedRect(arrow.area, 5.0, 5.0);
+        }
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(stroke, 2.0, Qt::SolidLine, Qt::RoundCap));
+        const QRectF area = arrow.area;
+        QPainterPath path;
+        QPointF tip;
+        QPointF tipDirection;
+        if (arrow.face == ViewCubeFace::RelativeYPositive) {
+            // 下段・左向き(モデルの前面が左へ流れる)。
+            tip = QPointF(area.left() + 4.0, area.center().y());
+            tipDirection = QPointF(-1.0, 0.0);
+            path.moveTo(area.right() - 4.0, area.center().y());
+            path.quadTo(area.center().x(), area.center().y() + 9.0, tip.x(), tip.y());
+        } else if (arrow.face == ViewCubeFace::RelativeYNegative) {
+            tip = QPointF(area.right() - 4.0, area.center().y());
+            tipDirection = QPointF(1.0, 0.0);
+            path.moveTo(area.left() + 4.0, area.center().y());
+            path.quadTo(area.center().x(), area.center().y() + 9.0, tip.x(), tip.y());
+        } else if (arrow.face == ViewCubeFace::RelativeXPositive) {
+            // 右列・上向き(前面が上へ流れる)。
+            tip = QPointF(area.center().x(), area.top() + 4.0);
+            tipDirection = QPointF(0.0, -1.0);
+            path.moveTo(area.center().x(), area.bottom() - 4.0);
+            path.quadTo(area.center().x() + 9.0, area.center().y(), tip.x(), tip.y());
+        } else {
+            tip = QPointF(area.center().x(), area.bottom() - 4.0);
+            tipDirection = QPointF(0.0, 1.0);
+            path.moveTo(area.center().x(), area.top() + 4.0);
+            path.quadTo(area.center().x() + 9.0, area.center().y(), tip.x(), tip.y());
+        }
+        painter.drawPath(path);
+        const QPointF perpendicular(-tipDirection.y(), tipDirection.x());
+        QPolygonF head;
+        head << tip + tipDirection * 6.0
+             << tip - tipDirection * 2.0 + perpendicular * 4.5
+             << tip - tipDirection * 2.0 - perpendicular * 4.5;
+        painter.setBrush(stroke);
+        painter.setPen(Qt::NoPen);
+        painter.drawPolygon(head);
+    }
+
+    // ホームボタン(家アイコン)。
+    {
+        const bool hovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Home);
+        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#f4f7f7"));
+        painter.setPen(QPen(hovered ? QColor("#087780") : QColor("#8d999f"), hovered ? 2.0 : 1.0));
+        painter.drawRoundedRect(cube.home, 4.0, 4.0);
+        const QPointF center = cube.home.center();
+        const QColor icon = hovered ? QColor("#075f69") : QColor("#3b4a52");
+        QPolygonF roof;
+        roof << center + QPointF(0.0, -8.0)
+             << center + QPointF(-8.0, -1.0)
+             << center + QPointF(8.0, -1.0);
+        painter.setBrush(icon);
+        painter.setPen(Qt::NoPen);
+        painter.drawPolygon(roof);
+        painter.drawRect(QRectF(center.x() - 5.5, center.y() - 1.0, 11.0, 8.0));
+        painter.setBrush(hovered ? QColor("#c9e8e5") : QColor("#f4f7f7"));
+        painter.drawRect(QRectF(center.x() - 1.8, center.y() + 2.2, 3.6, 4.8));
+    }
+
+    // 選択に正対。
     const bool canAlignSelection = project_ != nullptr && selection_.kind != CadSelectionKind::None;
     const bool selectionHovered = hoveredViewCubeFace_ == static_cast<int>(ViewCubeFace::Selection);
     painter.setBrush(canAlignSelection
@@ -4526,14 +4930,15 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
     orbitInteraction_ = event->button() == Qt::MiddleButton
         && event->modifiers().testFlag(Qt::ShiftModifier);
     setFocus();
-    const ViewCubeFace pressedCubeFace = event->button() == Qt::LeftButton
+    const ViewCubeHit pressedCubeHit = event->button() == Qt::LeftButton
         ? HitViewCube(MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position())
-        : ViewCubeFace::None;
-    if (pressedCubeFace != ViewCubeFace::None) {
+        : ViewCubeHit{};
+    if (pressedCubeHit.face != ViewCubeFace::None) {
         viewCubeInteraction_ = true;
         viewCubeDragActive_ = false;
-        pressedViewCubeFace_ = static_cast<int>(pressedCubeFace);
-        setCursor(CanDragViewCube(pressedCubeFace)
+        pressedViewCubeFace_ = static_cast<int>(pressedCubeHit.face);
+        pressedViewCubeDirection_ = pressedCubeHit.direction;
+        setCursor(CanDragViewCube(pressedCubeHit.face)
                 ? Qt::OpenHandCursor : Qt::PointingHandCursor);
         event->accept();
         return;
@@ -4629,7 +5034,9 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         }
         if (!viewCubeDragActive_) {
             const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
-            if (std::hypot(totalDelta.x(), totalDelta.y()) <= 2.0) {
+            // クリック判定(リリース側)と同じ3pxを境にする。閾値がずれていると
+            // 「クリックともドラッグとも扱われない不感帯」が生まれる。
+            if (std::hypot(totalDelta.x(), totalDelta.y()) <= 3.0) {
                 event->accept();
                 return;
             }
@@ -4684,10 +5091,19 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
-    const int hoveredFace = static_cast<int>(HitViewCube(
-        MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position()));
-    if (hoveredFace != hoveredViewCubeFace_) {
+    const ViewCubeGeometry hoverCube = MakeViewCubeGeometry(width(), CurrentViewBasis());
+    const ViewCubeHit hoveredHit = HitViewCube(hoverCube, event->position());
+    const int hoveredFace = static_cast<int>(hoveredHit.face);
+    const bool navigatorHot =
+        hoverCube.bounds.adjusted(-26.0, -26.0, 26.0, 26.0).contains(event->position());
+    if (navigatorHot != navigatorHot_) {
+        navigatorHot_ = navigatorHot;
+        update();
+    }
+    if (hoveredFace != hoveredViewCubeFace_
+        || (hoveredHit.direction - hoveredViewCubeDirection_).LengthSquared() > 1.0e-12) {
         hoveredViewCubeFace_ = hoveredFace;
+        hoveredViewCubeDirection_ = hoveredHit.direction;
         const bool unavailableSelection = hoveredFace == static_cast<int>(ViewCubeFace::Selection)
             && selection_.kind == CadSelectionKind::None;
         const ViewCubeFace hoveredCubeFace = static_cast<ViewCubeFace>(hoveredFace);
@@ -4698,10 +5114,10 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
                 : Qt::PointingHandCursor);
         QString tooltip;
         if (const auto rotation = ViewCubeRotation(hoveredCubeFace); rotation.has_value()) {
-            tooltip = QStringLiteral("%1%2軸を%3方向へ15°回転（Shiftで5°）")
-                .arg(rotation->relative ? QStringLiteral("相対") : QStringLiteral("絶対"))
-                .arg(RotationAxisName(rotation->axis))
-                .arg(rotation->direction > 0.0 ? QStringLiteral("+") : QStringLiteral("-"));
+            tooltip = rotation->relative
+                ? QStringLiteral("画面基準で15°回転（Shiftで5°。矢印は動かない）")
+                : QStringLiteral("モデルの%1軸まわりに15°回転（Shiftで5°。輪は視点に追従）")
+                      .arg(RotationAxisName(rotation->axis));
         } else {
             switch (hoveredCubeFace) {
         case ViewCubeFace::Top:
@@ -4711,7 +5127,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             tooltip = QStringLiteral("下面へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::Front:
-            tooltip = QStringLiteral("正面へ正対。ドラッグで自由回転");
+            tooltip = QStringLiteral("前面へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::Back:
             tooltip = QStringLiteral("後面へ正対。ドラッグで自由回転");
@@ -4723,12 +5139,21 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             tooltip = QStringLiteral("左面へ正対。ドラッグで自由回転");
             break;
         case ViewCubeFace::Home:
-            tooltip = QStringLiteral("標準の3D表示へ戻す");
+            tooltip = QStringLiteral("ホーム（標準の3D表示へ戻す）");
             break;
         case ViewCubeFace::Selection:
             tooltip = unavailableSelection
                 ? QStringLiteral("線・面・板材・作業平面を先に選択")
                 : QStringLiteral("選択対象に正対して中央表示");
+            break;
+        case ViewCubeFace::Edge:
+            tooltip = QStringLiteral("この辺の方向へ正対。ドラッグで自由回転");
+            break;
+        case ViewCubeFace::AdjacentLeft:
+        case ViewCubeFace::AdjacentRight:
+        case ViewCubeFace::AdjacentUp:
+        case ViewCubeFace::AdjacentDown:
+            tooltip = QStringLiteral("隣の面へ90°回転");
             break;
         case ViewCubeFace::CornerPositivePositivePositive:
         case ViewCubeFace::CornerPositivePositiveNegative:
@@ -4740,17 +5165,11 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         case ViewCubeFace::CornerNegativeNegativeNegative:
             tooltip = QStringLiteral("角へ正対。ドラッグで自由回転");
             break;
-        case ViewCubeFace::OrbitLeft:
-            tooltip = QStringLiteral("絶対Z軸を-方向へ15°回転（Shiftで5°）");
-            break;
-        case ViewCubeFace::OrbitRight:
-            tooltip = QStringLiteral("絶対Z軸を+方向へ15°回転（Shiftで5°）");
-            break;
         case ViewCubeFace::RollLeft:
-            tooltip = QStringLiteral("相対Z軸を-方向へ15°回転（Shiftで5°）");
+            tooltip = QStringLiteral("画面上で左へ15°ロール（Shiftで5°）");
             break;
         case ViewCubeFace::RollRight:
-            tooltip = QStringLiteral("相対Z軸を+方向へ15°回転（Shiftで5°）");
+            tooltip = QStringLiteral("画面上で右へ15°ロール（Shiftで5°）");
             break;
         case ViewCubeFace::None:
             break;
@@ -4822,15 +5241,30 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
         const double totalDistance = std::hypot(totalDelta.x(), totalDelta.y());
         if (event->button() == Qt::LeftButton && !viewCubeDragActive_
-            && totalDistance <= 1.5) {
+            && totalDistance <= 3.0) {
             const ViewCubeFace face = static_cast<ViewCubeFace>(pressedViewCubeFace_);
-            const ViewCubeFace releasedFace = HitViewCube(
+            const ViewCubeHit releasedHit = HitViewCube(
                 MakeViewCubeGeometry(width(), CurrentViewBasis()), event->position());
-            if (releasedFace == face) {
+            if (releasedHit.face == face) {
                 const double stepRadians = (event->modifiers().testFlag(Qt::ShiftModifier) ? 5.0 : 15.0)
                     * std::numbers::pi / 180.0;
-                if (const auto direction = ViewCubeDirection(face); direction.has_value()) {
-                    SetCornerView(*direction);
+                const auto basis = CurrentViewBasis();
+                const auto snapToAxis = [](Vector3 value) {
+                    const double absX = std::abs(value.x);
+                    const double absY = std::abs(value.y);
+                    const double absZ = std::abs(value.z);
+                    if (absX >= absY && absX >= absZ) {
+                        return Vector3{value.x >= 0.0 ? 1.0 : -1.0, 0.0, 0.0};
+                    }
+                    if (absY >= absZ) {
+                        return Vector3{0.0, value.y >= 0.0 ? 1.0 : -1.0, 0.0};
+                    }
+                    return Vector3{0.0, 0.0, value.z >= 0.0 ? 1.0 : -1.0};
+                };
+                if (face == ViewCubeFace::Edge) {
+                    SetDirectionView(pressedViewCubeDirection_);
+                } else if (const auto direction = ViewCubeDirection(face); direction.has_value()) {
+                    SetDirectionView(*direction);
                 } else if (const auto rotation = ViewCubeRotation(face); rotation.has_value()) {
                     if (rotation->relative) {
                         RotateViewAroundRelativeAxis(
@@ -4842,16 +5276,22 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                 } else {
                     switch (face) {
                     case ViewCubeFace::Home:
-                        SetIsometricView();
+                        AnimateViewTo(IsometricViewBasis());
                         break;
                     case ViewCubeFace::Selection:
                         (void)AlignToSelection();
                         break;
-                    case ViewCubeFace::OrbitLeft:
-                        RotateViewYaw(-stepRadians);
+                    case ViewCubeFace::AdjacentLeft:
+                        SetDirectionView(snapToAxis(-basis[1]));
                         break;
-                    case ViewCubeFace::OrbitRight:
-                        RotateViewYaw(stepRadians);
+                    case ViewCubeFace::AdjacentRight:
+                        SetDirectionView(snapToAxis(basis[1]));
+                        break;
+                    case ViewCubeFace::AdjacentUp:
+                        SetDirectionView(snapToAxis(basis[2]));
+                        break;
+                    case ViewCubeFace::AdjacentDown:
+                        SetDirectionView(snapToAxis(-basis[2]));
                         break;
                     case ViewCubeFace::RollLeft:
                         RollView(-stepRadians);

@@ -15,12 +15,14 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include <QTableWidget>
+#include <QVBoxLayout>
 #include <QValidator>
 #include <QWidget>
 
@@ -431,6 +433,50 @@ inline WireMetadata RetargetLineConstraints(
     metadata.lineConstraints.angleDegrees =
         std::atan2(end.v - start.v, end.u - start.u) * 180.0 / kPi;
     return metadata;
+}
+
+//! 縦レイアウトを見出し(QLabelの文字列またはQGroupBoxのタイトル)ごとの
+//! コンテナへ束ね直す。モードのツール選択で1セクションだけ表示するために使う
+//! (ADR 0025: 右パネルの単純化)。戻り値は (見出し, コンテナ) を並び順で返す。
+inline std::vector<std::pair<QString, QWidget*>> SectionizeVerticalLayout(
+    QVBoxLayout* source, const QStringList& sectionTitles)
+{
+    std::vector<QLayoutItem*> items;
+    while (QLayoutItem* item = source->takeAt(0)) {
+        items.push_back(item);
+    }
+    std::vector<std::pair<QString, QWidget*>> sections;
+    QVBoxLayout* currentLayout = nullptr;
+    for (QLayoutItem* item : items) {
+        QWidget* widget = item->widget();
+        QString startsTitle;
+        if (widget != nullptr) {
+            if (auto* box = qobject_cast<QGroupBox*>(widget);
+                box != nullptr && sectionTitles.contains(box->title())) {
+                startsTitle = box->title();
+            } else if (auto* label = qobject_cast<QLabel*>(widget);
+                label != nullptr && sectionTitles.contains(label->text())) {
+                startsTitle = label->text();
+            }
+        }
+        if (!startsTitle.isEmpty() || currentLayout == nullptr) {
+            auto* container = new QWidget;
+            currentLayout = new QVBoxLayout(container);
+            currentLayout->setContentsMargins(0, 0, 0, 0);
+            currentLayout->setSpacing(source->spacing());
+            sections.emplace_back(startsTitle, container);
+            source->addWidget(container);
+        }
+        if (widget != nullptr) {
+            currentLayout->addWidget(widget);
+            delete item;
+        } else if (QLayout* sublayout = item->layout()) {
+            currentLayout->addLayout(sublayout);
+        } else {
+            currentLayout->addItem(item);
+        }
+    }
+    return sections;
 }
 
 } // namespace mainwindow_helpers

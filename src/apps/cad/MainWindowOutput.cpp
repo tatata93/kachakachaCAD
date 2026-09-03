@@ -544,6 +544,12 @@ QWidget* MainWindow::BuildOutputPanel()
     modelSection->setObjectName(QStringLiteral("modelOutputSection"));
     modelSection->setProperty("manualAnchor", QStringLiteral("modelOutput"));
     layout->addWidget(modelSection);
+    // 出力ツール(上部)で選んだ1セクションだけ表示する(ADR 0025)。
+    outputSections_ = {
+        {QStringLiteral("作業平面の1:1図面"), planarSection},
+        {QStringLiteral("ペーパークラフト展開（1:1）"), plateSection},
+        {QStringLiteral("3DモデルのSTL / STEP出力"), modelSection},
+    };
     layout->addStretch(1);
     auto* scrollArea = new QScrollArea;
     scrollArea->setWidgetResizable(true);

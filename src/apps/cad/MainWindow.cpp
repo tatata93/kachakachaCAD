@@ -75,6 +75,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -159,6 +160,10 @@ MainWindow::MainWindow(QWidget* parent)
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("side_YZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}));
     RefreshModelViews(true);
+    // 各モードの右パネルは既定ツールのセクションだけ表示する(ADR 0025)。
+    RevealSurfaceGroup(QString());
+    ShowOutputTool(QString());
+    ShowPartModelTool(0);
     toolsTabs_->setCurrentIndex(0);
     SetViewportTool(ViewportTool::DrawLine);
     viewport_->SetIsometricView();
@@ -854,8 +859,8 @@ void MainWindow::OpenLegalNotices()
         "Qt 6.9.2（LGPLv3）と Open CASCADE Technology 8.0.1"
         "（LGPLv2.1 + 追加例外）を共有DLLとして使用しています。\n\n"
         "利用者は各ライセンスに従ってDLLを調査・変更・差し替えできます。"
-        "本ソフトで作成した模型データに、本体のGPLやこれらのライブラリのライセンスが"
-        "自動的に適用されることはありません。実在車両やロゴなど第三者の権利は別途確認してください。")
+        "本ソフトで作成した作品データに、本体のGPLやこれらのライブラリのライセンスが"
+        "自動的に適用されることはありません。実在の製品・車両やロゴなど第三者の権利は別途確認してください。")
         .arg(QApplication::applicationVersion()));
     QPushButton* openButton = nullptr;
     if (!noticePath.isEmpty()) {
@@ -1172,48 +1177,51 @@ void MainWindow::BuildMenusAndToolbar()
     surfaceToolbar_->setMovable(false);
     surfaceToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
     {
-        const auto addSurfaceCommand = [this](const QString& text, const QString& tip,
-                                            const QString& revealTitle, void (MainWindow::*slot)()) {
+        auto* surfaceToolGroup = new QActionGroup(this);
+        const auto addSurfaceTool = [this, surfaceToolGroup](
+                                        const QString& text, const QString& sectionTitle,
+                                        const QString& tip) {
             auto* action = new QAction(text, this);
+            action->setCheckable(true);
             action->setToolTip(tip);
-            connect(action, &QAction::triggered, this, [this, revealTitle, slot] {
-                // ツールを押したら右パネルの該当セクションを必ず見せてから実行する。
-                RevealSurfaceGroup(revealTitle);
-                (this->*slot)();
-            });
+            action->setData(sectionTitle);
+            surfaceToolGroup->addAction(action);
             surfaceToolbar_->addAction(action);
+            connect(action, &QAction::triggered, this, [this, sectionTitle] {
+                RevealSurfaceGroup(sectionTitle);
+            });
+            surfaceToolActions_.push_back(action);
             return action;
         };
-        addSurfaceCommand(QStringLiteral("面を作成"),
-            QStringLiteral("選択した輪郭・断面ワイヤーから面を作る(詳細は右パネル)"),
-            QStringLiteral("ワイヤーから面"),
-            &MainWindow::CreateSurfaceFromSelection);
-        addSurfaceCommand(QStringLiteral("ゴードン面"),
-            QStringLiteral("縦横の断面ネットワークから面を作る"),
+        addSurfaceTool(QStringLiteral("面を作成"), QStringLiteral("ワイヤーから面"),
+            QStringLiteral("選択した輪郭・断面ワイヤーから面を作る"));
+        addSurfaceTool(QStringLiteral("ゴードン面"),
             QStringLiteral("断面と外形ガイドから面（Gordon面）"),
-            &MainWindow::CreateGordonSurfaceFromSelection);
-        addSurfaceCommand(QStringLiteral("面へ投影"),
-            QStringLiteral("選択ワイヤーを面へ投影する(窓・ライトの下書きに)"),
-            QStringLiteral("平面図を面へ投影"),
-            &MainWindow::ProjectSelectedWiresToSurface);
+            QStringLiteral("縦横の断面ネットワークから面を作る"));
+        addSurfaceTool(QStringLiteral("面へ投影"), QStringLiteral("平面図を面へ投影"),
+            QStringLiteral("平面の下書きを面へ投影する（窓・開口の輪郭作りに）"));
         surfaceToolbar_->addSeparator();
-        addSurfaceCommand(QStringLiteral("板材化"),
-            QStringLiteral("選択した面に厚みを付けて板材にする(厚み・方向は右パネル)"),
-            QStringLiteral("ワイヤー / 面から3D板を作る"),
-            &MainWindow::CreatePlateFromSurface);
-        addSurfaceCommand(QStringLiteral("厚み位置のワイヤ"),
-            QStringLiteral("板材の任意の厚み位置に輪郭ワイヤーを作る"),
+        addSurfaceTool(QStringLiteral("板材化"), QStringLiteral("ワイヤー / 面から3D板を作る"),
+            QStringLiteral("面に厚みを付けて板材にする"));
+        addSurfaceTool(QStringLiteral("厚み位置のワイヤ"),
             QStringLiteral("板厚位置にワイヤーを作る"),
-            &MainWindow::CreatePlateOffsetWires);
-        addSurfaceCommand(QStringLiteral("ライトケース"),
-            QStringLiteral("前面形状から突出するライトケースを作る"),
-            QStringLiteral("飛び出すライトケース"),
-            &MainWindow::CreateProtrudingLightCase);
+            QStringLiteral("板材の任意の厚み位置に輪郭ワイヤーを作る"));
+        addSurfaceTool(QStringLiteral("開口"), QStringLiteral("板材に開口"),
+            QStringLiteral("板材に窓・穴などの開口を追加する"));
+        addSurfaceTool(QStringLiteral("切れ目"), QStringLiteral("展開時の切れ目"),
+            QStringLiteral("展開時に逃がす切れ目を指定する"));
+        addSurfaceTool(QStringLiteral("分割線"), QStringLiteral("展開片の分割線"),
+            QStringLiteral("展開片を分ける位置を指定する"));
+        addSurfaceTool(QStringLiteral("板を分割"), QStringLiteral("板材を分割"),
+            QStringLiteral("板材を複数の板に分割する"));
         surfaceToolbar_->addSeparator();
-        addSurfaceCommand(QStringLiteral("成形治具"),
-            QStringLiteral("面から曲げ成形用の治具を作る"),
-            QStringLiteral("曲面から成形治具"),
-            &MainWindow::CreateSurfaceJig);
+        addSurfaceTool(QStringLiteral("ライトケース"), QStringLiteral("飛び出すライトケース"),
+            QStringLiteral("面から突き出す小箱（ライトなどのケース）を作る"));
+        addSurfaceTool(QStringLiteral("成形治具"), QStringLiteral("曲面から成形治具"),
+            QStringLiteral("曲面から曲げ成形用の治具を作る"));
+        if (!surfaceToolActions_.empty()) {
+            surfaceToolActions_.front()->setChecked(true);
+        }
     }
 
     // 加工系(作図モードの2列目。オーナー指示: 縦2列可)。
@@ -1233,6 +1241,69 @@ void MainWindow::BuildMenusAndToolbar()
     machiningToolbar_->addAction(removeTangentAction_);
     machiningToolbar_->addAction(clearReferenceAction_);
 
+    // 出力モードのツール列(選んだ出力の種類だけ右パネルに出す)。
+    outputToolbar_ = addToolBar(QStringLiteral("出力ツール"));
+    outputToolbar_->setMovable(false);
+    outputToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    {
+        auto* outputToolGroup = new QActionGroup(this);
+        const auto addOutputTool = [this, outputToolGroup](
+                                       const QString& text, const QString& sectionTitle,
+                                       const QString& tip) {
+            auto* action = new QAction(text, this);
+            action->setCheckable(true);
+            action->setToolTip(tip);
+            action->setData(sectionTitle);
+            outputToolGroup->addAction(action);
+            outputToolbar_->addAction(action);
+            connect(action, &QAction::triggered, this, [this, sectionTitle] {
+                ShowOutputTool(sectionTitle);
+            });
+            outputToolActions_.push_back(action);
+            return action;
+        };
+        addOutputTool(QStringLiteral("1:1図面"), QStringLiteral("作業平面の1:1図面"),
+            QStringLiteral("作業平面上の線をSVG/DXFの1:1図面として保存"));
+        addOutputTool(QStringLiteral("ペーパークラフト展開"),
+            QStringLiteral("ペーパークラフト展開（1:1）"),
+            QStringLiteral("板材の展開図・組立ガイドを出力"));
+        addOutputTool(QStringLiteral("3Dモデル・.kcd"),
+            QStringLiteral("3DモデルのSTL / STEP出力"),
+            QStringLiteral("立体のSTL/STEP出力と、部材を選んだ.kcd書き出し"));
+        if (!outputToolActions_.empty()) {
+            outputToolActions_.front()->setChecked(true);
+        }
+    }
+
+    // 近似モデルモードのツール列。
+    partModelToolbar_ = addToolBar(QStringLiteral("近似モデルツール"));
+    partModelToolbar_->setMovable(false);
+    partModelToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    {
+        auto* partToolGroup = new QActionGroup(this);
+        const std::array<QString, 4> partToolNames = {
+            QStringLiteral("部材近似を作成"), QStringLiteral("一覧・型紙"),
+            QStringLiteral("曲げ確認と出力"), QStringLiteral("セット")};
+        const std::array<QString, 4> partToolTips = {
+            QStringLiteral("板材を選び、帯状の部材へ近似分割する"),
+            QStringLiteral("作成済みモデルの一覧・再計算・板材化・型紙表示"),
+            QStringLiteral("曲げ具合をスライダーで確認し、任意の曲げ状態を出力"),
+            QStringLiteral("派生物のまとまりの表示状態を切り替える")};
+        for (int index = 0; index < 4; ++index) {
+            auto* action = new QAction(partToolNames[index], this);
+            action->setCheckable(true);
+            action->setToolTip(partToolTips[index]);
+            partToolGroup->addAction(action);
+            partModelToolbar_->addAction(action);
+            connect(action, &QAction::triggered, this, [this, index] {
+                ShowPartModelTool(index);
+            });
+            if (index == 0) {
+                action->setChecked(true);
+            }
+        }
+    }
+
     SetWorkMode(WorkMode::Drawing);
     UpdateHistoryActions();
 }
@@ -1249,6 +1320,12 @@ void MainWindow::SetWorkMode(WorkMode mode)
         transformToolbar_->setVisible(drawing);
         machiningToolbar_->setVisible(drawing);
         surfaceToolbar_->setVisible(surface);
+        if (outputToolbar_ != nullptr) {
+            outputToolbar_->setVisible(mode == WorkMode::Output);
+        }
+        if (partModelToolbar_ != nullptr) {
+            partModelToolbar_->setVisible(mode == WorkMode::PartModel);
+        }
     }
     QAction* action = mode == WorkMode::Drawing ? drawingModeAction_
         : mode == WorkMode::SurfacePlate ? surfaceModeAction_
@@ -1294,34 +1371,54 @@ void MainWindow::ShowRightPanel(int tabIndex)
 void MainWindow::RevealSurfaceGroup(const QString& title)
 {
     ShowRightPanel(2);
-    if (surfacePanelWidget_ == nullptr) {
+    if (surfaceSections_.empty()) {
         return;
     }
-    auto* scrollArea = qobject_cast<QScrollArea*>(surfacePanelWidget_);
-    if (scrollArea == nullptr) {
+    QString effective = title;
+    const auto known = std::any_of(surfaceSections_.begin(), surfaceSections_.end(),
+        [&](const auto& section) { return section.first == effective; });
+    if (!known) {
+        effective = surfaceSections_.front().first;
+    }
+    for (const auto& [sectionTitle, container] : surfaceSections_) {
+        container->setVisible(sectionTitle == effective);
+    }
+    for (QAction* action : surfaceToolActions_) {
+        action->setChecked(action->data().toString() == effective);
+    }
+}
+
+void MainWindow::ShowOutputTool(const QString& title)
+{
+    ShowRightPanel(3);
+    if (outputSections_.empty()) {
         return;
     }
-    if (title.isEmpty()) {
-        scrollArea->verticalScrollBar()->setValue(0);
-        return;
+    QString effective = title;
+    const auto known = std::any_of(outputSections_.begin(), outputSections_.end(),
+        [&](const auto& section) { return section.first == effective; });
+    if (!known) {
+        effective = outputSections_.front().first;
     }
-    QWidget* target = nullptr;
-    for (auto* box : surfacePanelWidget_->findChildren<QGroupBox*>()) {
-        if (box->title() == title) {
-            target = box;
-            break;
-        }
-    }
-    if (target == nullptr) {
-        for (auto* label : surfacePanelWidget_->findChildren<QLabel*>()) {
-            if (label->text() == title) {
-                target = label;
-                break;
+    for (const auto& [sectionTitle, container] : outputSections_) {
+        const bool visible = sectionTitle == effective;
+        container->setVisible(visible);
+        if (visible) {
+            if (auto* section = dynamic_cast<CollapsibleSection*>(container)) {
+                section->SetExpanded(true);
             }
         }
     }
-    if (target != nullptr) {
-        scrollArea->ensureWidgetVisible(target, 0, 40);
+    for (QAction* action : outputToolActions_) {
+        action->setChecked(action->data().toString() == effective);
+    }
+}
+
+void MainWindow::ShowPartModelTool(int sectionIndex)
+{
+    ShowRightPanel(6);
+    if (partModelPanel_ != nullptr) {
+        partModelPanel_->SetVisibleSection(sectionIndex);
     }
 }
 
@@ -1372,6 +1469,10 @@ void MainWindow::NewProject()
     ResetDisplayMode();
     modelFilter_->clear();
     RefreshModelViews(true);
+    // 各モードの右パネルは既定ツールのセクションだけ表示する(ADR 0025)。
+    RevealSurfaceGroup(QString());
+    ShowOutputTool(QString());
+    ShowPartModelTool(0);
     toolsTabs_->setCurrentIndex(0);
     SetViewportTool(ViewportTool::DrawLine);
     viewport_->SetIsometricView();
@@ -4539,7 +4640,7 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
     const auto createSet = [this]() -> std::optional<std::string> {
         const QString input = QInputDialog::getText(this,
             QStringLiteral("新しい部材グループ"),
-            QStringLiteral("部材グループ名（例: 前面、右側面、屋根）:"));
+            QStringLiteral("部材グループ名（例: 前面、右側面、上面）:"));
         if (input.trimmed().isEmpty()) {
             return std::nullopt;
         }

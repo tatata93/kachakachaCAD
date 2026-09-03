@@ -75,6 +75,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -246,6 +247,11 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return child->property("manualAnchor").toString() == anchorName;
         });
         if (anchor != children.end()) {
+            // モードのツールで隠れているセクションでも撮影できるよう、祖先を表示する。
+            for (QWidget* ancestor = *anchor; ancestor != nullptr && ancestor != tab;
+                ancestor = ancestor->parentWidget()) {
+                ancestor->setVisible(true);
+            }
             CollapsibleSection::ExpandAncestors(*anchor);
             QApplication::processEvents();
             QWidget* content = area->widget();
@@ -3260,11 +3266,36 @@ bool MainWindow::RunCreationSelfTest()
     }
     SetViewportTool(ViewportTool::Select);
     RevealSurfaceGroup(QStringLiteral("飛び出すライトケース"));
-    auto* surfaceScroll = qobject_cast<QScrollArea*>(surfacePanelWidget_);
-    if (toolsTabs_->currentIndex() != 2 || surfaceScroll == nullptr
-        || surfaceScroll->verticalScrollBar()->value() <= 0) {
-        return fail("surface tool reveals its panel section");
+    bool lightCaseSectionVisible = false;
+    bool createSectionHidden = false;
+    for (const auto& [sectionTitle, container] : surfaceSections_) {
+        if (sectionTitle == QStringLiteral("飛び出すライトケース")) {
+            lightCaseSectionVisible = !container->isHidden();
+        }
+        if (sectionTitle == QStringLiteral("ワイヤーから面")) {
+            createSectionHidden = container->isHidden();
+        }
     }
+    if (toolsTabs_->currentIndex() != 2 || !lightCaseSectionVisible || !createSectionHidden) {
+        return fail("surface tool shows only its own section");
+    }
+    RevealSurfaceGroup(QStringLiteral("ワイヤーから面"));
+    // 出力ツールも同様に1セクションだけ表示する。
+    ShowOutputTool(QStringLiteral("ペーパークラフト展開（1:1）"));
+    bool plateOutputVisible = false;
+    bool planarOutputHidden = false;
+    for (const auto& [sectionTitle, container] : outputSections_) {
+        if (sectionTitle == QStringLiteral("ペーパークラフト展開（1:1）")) {
+            plateOutputVisible = !container->isHidden();
+        }
+        if (sectionTitle == QStringLiteral("作業平面の1:1図面")) {
+            planarOutputHidden = container->isHidden();
+        }
+    }
+    if (!plateOutputVisible || !planarOutputHidden) {
+        return fail("output tool shows only its own section");
+    }
+    ShowOutputTool(QString());
     drawingModeAction_->trigger();
 
     // T字分岐の自動分割: 線の途中から分岐する線でも、接点までの区間として

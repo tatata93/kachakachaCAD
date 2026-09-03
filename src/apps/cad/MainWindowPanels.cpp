@@ -1129,7 +1129,7 @@ QWidget* MainWindow::BuildSurfacePanel()
 
     auto* createGordonButton = new QPushButton(QStringLiteral("断面と外形で面を作成"));
     createGordonButton->setObjectName("primaryButton");
-    createGordonButton->setToolTip(QStringLiteral("断面ワイヤーを2本以上、車体の前から後ろの順に3D画面で選択してから押します"));
+    createGordonButton->setToolTip(QStringLiteral("断面ワイヤーを2本以上、通し方向の手前から奥の順に3D画面で選択してから押します"));
     connect(createGordonButton, &QPushButton::clicked, this, &MainWindow::CreateGordonSurfaceFromSelection);
     layout->addWidget(createGordonButton);
 
@@ -1397,8 +1397,8 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* splitForm = new QFormLayout;
     splitForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     plateSplitAxis_ = new QComboBox;
-    plateSplitAxis_->addItem(QStringLiteral("断面内（屋根・側面方向）"), static_cast<int>(PlateSplitAxis::U));
-    plateSplitAxis_->addItem(QStringLiteral("長手方向（前後方向）"), static_cast<int>(PlateSplitAxis::V));
+    plateSplitAxis_->addItem(QStringLiteral("断面に沿う方向（周方向）"), static_cast<int>(PlateSplitAxis::U));
+    plateSplitAxis_->addItem(QStringLiteral("長手方向（通し方向）"), static_cast<int>(PlateSplitAxis::V));
     splitForm->addRow(QStringLiteral("分割方向"), plateSplitAxis_);
 
     auto* splitPositionControl = new QWidget;
@@ -1441,6 +1441,21 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(splitButton, &QPushButton::clicked, this, &MainWindow::SplitSelectedPlate);
     layout->addWidget(splitButton);
     layout->addStretch(1);
+
+    // モードのツール(上部)で選んだ1セクションだけを表示する(ADR 0025)。
+    surfaceSections_ = SectionizeVerticalLayout(layout, {
+        QStringLiteral("ワイヤーから面"),
+        QStringLiteral("断面と外形ガイドから面（Gordon面）"),
+        QStringLiteral("平面図を面へ投影"),
+        QStringLiteral("飛び出すライトケース"),
+        QStringLiteral("ワイヤー / 面から3D板を作る"),
+        QStringLiteral("板厚位置にワイヤーを作る"),
+        QStringLiteral("曲面から成形治具"),
+        QStringLiteral("板材に開口"),
+        QStringLiteral("展開時の切れ目"),
+        QStringLiteral("展開片の分割線"),
+        QStringLiteral("板材を分割"),
+    });
 
     auto* scrollArea = new QScrollArea;
     scrollArea->setWidgetResizable(true);

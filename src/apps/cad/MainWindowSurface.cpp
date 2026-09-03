@@ -503,7 +503,7 @@ void MainWindow::AddSurfaceFromConfiguredInputs(
                 throw std::invalid_argument(
                     "外形ガイド2本を先に、その後に断面ワイヤーを1本以上選択してください。");
             }
-            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを3本以上選択してください。");
+            throw std::invalid_argument("通し方向の手前から奥の順に、断面ワイヤーを3本以上選択してください。");
         }
         std::vector<std::string> names;
         names.reserve(fallbackWireIndices.size());
@@ -890,7 +890,7 @@ void MainWindow::CreateGordonSurfaceFromSelection()
             }
         }
         if (wireIndices.size() < 2) {
-            throw std::invalid_argument("車体の前から後ろの順に、断面ワイヤーを2本以上選択してください。");
+            throw std::invalid_argument("通し方向の手前から奥の順に、断面ワイヤーを2本以上選択してください。");
         }
         for (int index : wireIndices) {
             if (project_.Wires()[index].metadata.construction) {

@@ -261,6 +261,8 @@ private:
     void ShowRightPanel(int tabIndex);
     //! 面・板パネルの見出しへスクロールして表示する(空文字なら先頭)。
     void RevealSurfaceGroup(const QString& title);
+    void ShowOutputTool(const QString& title);
+    void ShowPartModelTool(int sectionIndex);
     //! 選択中ワイヤ同士のT字分岐(端点が他の線の途中に接する箇所)で自動分割し、
     //! チェーンに繋がる側だけを選択に残す。分割したら true。
     bool SplitSelectedWiresAtBranchPoints();
@@ -425,6 +427,12 @@ private:
     QWidget* planePanelWidget_ = nullptr;
     QWidget* wirePanelWidget_ = nullptr;
     QWidget* surfacePanelWidget_ = nullptr;
+    std::vector<std::pair<QString, QWidget*>> surfaceSections_;
+    std::vector<QAction*> surfaceToolActions_;
+    std::vector<std::pair<QString, QWidget*>> outputSections_;
+    std::vector<QAction*> outputToolActions_;
+    QToolBar* outputToolbar_ = nullptr;
+    QToolBar* partModelToolbar_ = nullptr;
     QCheckBox* gridOutsideDrawingCheck_ = nullptr;
     QLabel* beginnerGuideTitle_ = nullptr;
     QLabel* beginnerGuideNext_ = nullptr;

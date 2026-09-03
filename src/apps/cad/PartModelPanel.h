@@ -5,6 +5,7 @@
 
 #include <QWidget>
 
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -26,6 +27,8 @@ public:
     explicit PartModelPanel(QWidget* parent = nullptr);
 
     void RefreshFromProject(const kachakacha::model::Project& project);
+    //! 上部ツールで選んだセクションだけ表示する(0=作成 1=一覧・型紙 2=曲げ 3=セット、負=全部)。
+    void SetVisibleSection(int index);
     //! 板材コンボを指定名に合わせる(ビューポートの右クリックメニューから)。
     void SelectPlate(const QString& plateName);
 
@@ -63,4 +66,5 @@ private:
     QCheckBox* foldPreviewCheck_ = nullptr;
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
+    std::array<QWidget*, 4> sections_{};
 };

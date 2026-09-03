@@ -115,14 +115,19 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     });
     createForm->addRow(createButton);
     layout->addWidget(createGroup);
+    sections_[0] = createGroup;
 
     // --- 一覧 ---
+    auto* listSection = new QWidget;
+    auto* listSectionLayout = new QVBoxLayout(listSection);
+    listSectionLayout->setContentsMargins(0, 0, 0, 0);
+    listSectionLayout->setSpacing(layout->spacing());
     modelTree_ = new QTreeWidget;
     modelTree_->setHeaderHidden(true);
     modelTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     modelTree_->setToolTip(
         QStringLiteral("部材を複数選ぶと「型紙を表示」で隣接部材を1枚に結合した型紙を出せます"));
-    layout->addWidget(modelTree_, 2);
+    listSectionLayout->addWidget(modelTree_, 2);
 
     auto* actionRow = new QHBoxLayout;
     auto* recalcButton = new QPushButton(QStringLiteral("再計算"));
@@ -143,7 +148,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     actionRow->addWidget(recalcButton, 1);
     actionRow->addWidget(removeButton, 1);
     actionRow->addWidget(extractButton, 1);
-    layout->addLayout(actionRow);
+    listSectionLayout->addLayout(actionRow);
 
     auto* makePlateButton = new QPushButton(QStringLiteral("選択部材を板材化"));
     makePlateButton->setToolTip(QStringLiteral(
@@ -152,7 +157,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     connect(makePlateButton, &QPushButton::clicked, this, [this] {
         if (onMakePlate) onMakePlate();
     });
-    layout->addWidget(makePlateButton);
+    listSectionLayout->addWidget(makePlateButton);
 
     auto* patternButton = new QPushButton(QStringLiteral("型紙を表示"));
     patternButton->setObjectName("primaryButton");
@@ -161,7 +166,9 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     connect(patternButton, &QPushButton::clicked, this, [this] {
         if (onShowPatterns) onShowPatterns();
     });
-    layout->addWidget(patternButton);
+    listSectionLayout->addWidget(patternButton);
+    layout->addWidget(listSection, 2);
+    sections_[1] = listSection;
 
     // --- 曲げ確認と出力 ---
     auto* foldGroup = new QGroupBox(QStringLiteral("曲げ確認と出力"));
@@ -223,6 +230,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     exportRow->addWidget(kcdButton, 1);
     foldLayout->addLayout(exportRow);
     layout->addWidget(foldGroup);
+    sections_[2] = foldGroup;
 
     // --- セット ---
     auto* setGroup = new QGroupBox(QStringLiteral("セット"));
@@ -250,6 +258,16 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     stateRow->addWidget(hiddenButton, 1);
     setLayout->addLayout(stateRow);
     layout->addWidget(setGroup, 1);
+    sections_[3] = setGroup;
+}
+
+void PartModelPanel::SetVisibleSection(int index)
+{
+    for (int section = 0; section < static_cast<int>(sections_.size()); ++section) {
+        if (sections_[section] != nullptr) {
+            sections_[section]->setVisible(index < 0 || section == index);
+        }
+    }
 }
 
 void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& project)

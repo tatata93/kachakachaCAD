@@ -153,14 +153,17 @@ Vector3 RotateVectorAroundAxis(Vector3 value, Vector3 axis, double angleRadians)
         + axis * Dot(axis, value) * (1.0 - cosine);
 }
 
+constexpr double kViewCubeCenterFromRight = 84.0;
+constexpr double kViewCubeCenterY = 74.0;
+
 ViewCubeGeometry MakeViewCubeGeometry(
     int viewportWidth,
     const std::array<Vector3, 3>& viewBasis)
 {
     // Use the model's camera basis so the navigator always reports the exact current attitude.
     ViewCubeGeometry geometry;
-    const double centerX = viewportWidth - 84.0;
-    const double centerY = 74.0;
+    const double centerX = viewportWidth - kViewCubeCenterFromRight;
+    const double centerY = kViewCubeCenterY;
     const double cubeScale = 22.0;
     const auto project = [&](Vector3 point) {
         return QPointF{
@@ -339,10 +342,10 @@ ViewCubeGeometry MakeViewCubeGeometry(
     for (const ViewCubeFaceGeometry& face : geometry.faces) {
         if (face.depth > 0.9995) {
             geometry.adjacentArrows = {
-                {QRectF(centerX - 44.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentLeft},
-                {QRectF(centerX + 30.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentRight},
-                {QRectF(centerX - 9.0, centerY - 44.0, 18.0, 14.0), ViewCubeFace::AdjacentUp},
-                {QRectF(centerX - 9.0, centerY + 30.0, 18.0, 14.0), ViewCubeFace::AdjacentDown},
+                {QRectF(centerX - 38.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentLeft},
+                {QRectF(centerX + 24.0, centerY - 9.0, 14.0, 18.0), ViewCubeFace::AdjacentRight},
+                {QRectF(centerX - 9.0, centerY - 38.0, 18.0, 14.0), ViewCubeFace::AdjacentUp},
+                {QRectF(centerX - 9.0, centerY + 24.0, 18.0, 14.0), ViewCubeFace::AdjacentDown},
             };
             break;
         }
@@ -364,6 +367,16 @@ ViewCubeHit HitViewCube(const ViewCubeGeometry& cube, QPointF position)
     }
     if (cube.rollRight.contains(position)) {
         return {ViewCubeFace::RollRight, {}};
+    }
+    // リングの矢じりは隣接面三角より先に判定する。面正対時、直線に潰れたリングの
+    // 矢じりが三角の外側帯と重なるため(重なった場合は矢じりが勝つ)。
+    for (const ViewCubeRingGeometry& ring : cube.rings) {
+        if (ring.plusArea.contains(position)) {
+            return {ring.plusFace, {}};
+        }
+        if (ring.minusArea.contains(position)) {
+            return {ring.minusFace, {}};
+        }
     }
     for (const auto& [area, face] : cube.adjacentArrows) {
         if (area.contains(position)) {
@@ -391,12 +404,6 @@ ViewCubeHit HitViewCube(const ViewCubeGeometry& cube, QPointF position)
         }
     }
     for (const ViewCubeRingGeometry& ring : cube.rings) {
-        if (ring.plusArea.contains(position)) {
-            return {ring.plusFace, {}};
-        }
-        if (ring.minusArea.contains(position)) {
-            return {ring.minusFace, {}};
-        }
         double nearestDistance = 1.0e18;
         for (int index = 0; index < ring.polyline.size(); ++index) {
             const QPointF a = ring.polyline[index];
@@ -411,7 +418,7 @@ ViewCubeHit HitViewCube(const ViewCubeGeometry& cube, QPointF position)
             nearestDistance =
                 std::min(nearestDistance, QLineF(position, a + delta * t).length());
         }
-        if (nearestDistance <= 5.0) {
+        if (nearestDistance <= 7.0) {
             // 矢じりに近い側の方向へ回す。
             const double toMinus = QLineF(position, ring.minusTip).length();
             const double toPlus = QLineF(position, ring.plusTip).length();
@@ -4939,7 +4946,9 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         viewCubeDragActive_ = false;
         pressedViewCubeFace_ = static_cast<int>(pressedCubeHit.face);
         pressedViewCubeDirection_ = pressedCubeHit.direction;
+        const auto pressedRotation = ViewCubeRotation(pressedCubeHit.face);
         setCursor(CanDragViewCube(pressedCubeHit.face)
+                    || (pressedRotation.has_value() && !pressedRotation->relative)
                 ? Qt::OpenHandCursor : Qt::PointingHandCursor);
         event->accept();
         return;
@@ -5029,6 +5038,46 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
 {
     if (viewCubeInteraction_ && dragButton_ == Qt::LeftButton) {
         const ViewCubeFace pressedFace = static_cast<ViewCubeFace>(pressedViewCubeFace_);
+        // リング(モデル軸まわり)はドラッグで連続回転する。マウスの角度変化に
+        // 追従させる: カメラ回転 = -sign(Dot(軸, 視線)) × 画面上の角度変化。
+        if (const auto ringRotation = ViewCubeRotation(pressedFace);
+            ringRotation.has_value() && !ringRotation->relative) {
+            const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
+            if (!viewCubeDragActive_ && std::hypot(totalDelta.x(), totalDelta.y()) <= 3.0) {
+                event->accept();
+                return;
+            }
+            viewCubeDragActive_ = true;
+            mouseMoved_ = true;
+            setCursor(Qt::ClosedHandCursor);
+            const QPointF ringCenter(
+                width() - kViewCubeCenterFromRight, kViewCubeCenterY);
+            const QPointF previous = QPointF(lastMousePosition_) - ringCenter;
+            const QPointF current = event->position() - ringCenter;
+            if (std::hypot(previous.x(), previous.y()) > 4.0
+                && std::hypot(current.x(), current.y()) > 4.0) {
+                const double angleDelta = std::atan2(-current.y(), current.x())
+                    - std::atan2(-previous.y(), previous.x());
+                double wrapped = angleDelta;
+                while (wrapped > std::numbers::pi) {
+                    wrapped -= 2.0 * std::numbers::pi;
+                }
+                while (wrapped < -std::numbers::pi) {
+                    wrapped += 2.0 * std::numbers::pi;
+                }
+                const Vector3 axis = ringRotation->axis == ViewRotationAxis::X
+                    ? Vector3{1.0, 0.0, 0.0}
+                    : ringRotation->axis == ViewRotationAxis::Y
+                    ? Vector3{0.0, 1.0, 0.0}
+                    : Vector3{0.0, 0.0, 1.0};
+                const double orientation =
+                    Dot(axis, CurrentViewBasis()[0]) >= 0.0 ? 1.0 : -1.0;
+                RotateViewAroundWorldAxis(ringRotation->axis, -orientation * wrapped);
+            }
+            lastMousePosition_ = event->position().toPoint();
+            event->accept();
+            return;
+        }
         if (!CanDragViewCube(pressedFace)) {
             event->accept();
             return;
@@ -5117,7 +5166,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         if (const auto rotation = ViewCubeRotation(hoveredCubeFace); rotation.has_value()) {
             tooltip = rotation->relative
                 ? QStringLiteral("画面基準で15°回転（Shiftで5°。矢印は動かない）")
-                : QStringLiteral("モデルの%1軸まわりに15°回転（Shiftで5°。輪は視点に追従）")
+                : QStringLiteral("モデルの%1軸まわりに回転: クリック15°（Shiftで5°）、ドラッグで連続")
                       .arg(RotationAxisName(rotation->axis));
         } else {
             switch (hoveredCubeFace) {

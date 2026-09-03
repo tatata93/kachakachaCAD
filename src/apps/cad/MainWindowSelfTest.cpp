@@ -1251,25 +1251,42 @@ bool MainWindow::RunCreationSelfTest()
             kachakacha::geometry::Dot(point, right) * 22.0,
             -kachakacha::geometry::Dot(point, up) * 22.0);
     };
-    QPointF ringHead = cubeCenter;
-    double ringHeadDistance = -1.0;
-    for (int sample = 0; sample < 64; ++sample) {
-        const double angle = 2.0 * kPi * sample / 64.0;
-        const QPointF point = cubeProjection(
-            {0.0, 1.95 * std::cos(angle), 1.95 * std::sin(angle)});
-        const double distance = std::hypot(
-            point.x() - cubeCenter.x(), point.y() - cubeCenter.y());
-        if (distance > ringHeadDistance) {
-            ringHeadDistance = distance;
-            ringHead = point;
+    const auto xRingHead = [&] {
+        QPointF head = cubeCenter;
+        double headDistance = -1.0;
+        for (int sample = 0; sample < 64; ++sample) {
+            const double angle = 2.0 * kPi * sample / 64.0;
+            const QPointF point = cubeProjection(
+                {0.0, 1.95 * std::cos(angle), 1.95 * std::sin(angle)});
+            const double distance = std::hypot(
+                point.x() - cubeCenter.x(), point.y() - cubeCenter.y());
+            if (distance > headDistance) {
+                headDistance = distance;
+                head = point;
+            }
         }
-    }
-    click(ringHead);
+        return head;
+    };
+    click(xRingHead());
     if (kachakacha::geometry::AlmostEqual(
             viewport_->ViewDirection(), directionBeforeWorldX, 1.0e-8)
         || std::abs(viewport_->ViewDirection().x - directionBeforeWorldX.x) > 1.0e-8) {
         return fail("view cube absolute X rotation");
     }
+    // リング上のドラッグ=同じ軸まわりの連続回転(X成分は変わらない)。
+    const Vector3 directionBeforeRingDrag = viewport_->ViewDirection();
+    const QPointF ringDragStart = xRingHead();
+    const QPointF ringDragVector = ringDragStart - cubeCenter;
+    const QPointF ringDragEnd = cubeCenter + QPointF(
+        ringDragVector.x() * std::cos(0.4) - ringDragVector.y() * std::sin(0.4),
+        ringDragVector.x() * std::sin(0.4) + ringDragVector.y() * std::cos(0.4));
+    drag(ringDragStart, ringDragEnd);
+    if (kachakacha::geometry::AlmostEqual(
+            viewport_->ViewDirection(), directionBeforeRingDrag, 1.0e-8)
+        || std::abs(viewport_->ViewDirection().x - directionBeforeRingDrag.x) > 1.0e-6) {
+        return fail("view cube ring drag rotation");
+    }
+
     const Vector3 directionBeforeRelativeX = viewport_->ViewDirection();
     const Vector3 rightBeforeRelativeX = viewport_->ViewRightDirection();
     click(QPointF(cubeCenter.x() + 63.0, cubeCenter.y() - 27.0));

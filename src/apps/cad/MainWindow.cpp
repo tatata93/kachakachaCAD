@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
+#include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
@@ -271,7 +272,11 @@ void MainWindow::BuildUi()
     modelFilter_->setClearButtonEnabled(true);
     modelFilter_->setPlaceholderText(QStringLiteral("名前・種類で絞り込み"));
     modelFilter_->setToolTip(QStringLiteral("ワイヤー、板材などの種類名または部材名を入力して絞り込み"));
-    modelTree_ = new QTreeWidget;
+    auto* modelTree = new ModelTreeWidget;
+    modelTree->onMoveRequested = [this](const QList<QTreeWidgetItem*>& dragged, QTreeWidgetItem* target) {
+        return HandleModelTreeDrop(dragged, target);
+    };
+    modelTree_ = modelTree;
     modelTree_->setHeaderHidden(true);
     modelTree_->setAlternatingRowColors(true);
     modelTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -4118,11 +4123,24 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
     if (!targets.empty()) {
         QMenu* assignMenu = menu.addMenu(
             QStringLiteral("部材グループへ割り当て（%1個）").arg(targets.size()));
+        const auto setPathLabel = [this](const ObjectSet& set) {
+            QString label = ToQString(set.name);
+            std::string current = set.parentName;
+            int guard = 0;
+            while (!current.empty() && guard++ < 16) {
+                label = ToQString(current) + QStringLiteral(" / ") + label;
+                const auto sets = project_.ObjectSets();
+                const auto parent = std::find_if(sets.begin(), sets.end(),
+                    [&](const ObjectSet& candidate) { return candidate.name == current; });
+                current = parent != sets.end() ? parent->parentName : std::string();
+            }
+            return label;
+        };
         for (const ObjectSet& set : project_.ObjectSets()) {
             if (set.automatic) {
                 continue;
             }
-            QAction* action = assignMenu->addAction(ToQString(set.name));
+            QAction* action = assignMenu->addAction(setPathLabel(set));
             const std::string setName = set.name;
             connect(action, &QAction::triggered, this, [this, assignTargets, setName] {
                 RecordUndo();
@@ -4184,9 +4202,21 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
                                 : QStringLiteral("書き出しから除外しました（出力タブの「出力対象のみで書き出し」に反映）"));
                     });
             }
+            {
+                QAction* childSetAction = menu.addAction(QStringLiteral("子グループを作成…"));
+                const std::string parentName = *clickedSetName;
+                connect(childSetAction, &QAction::triggered, this,
+                    [this, createSet, finishSetEdit, parentName] {
+                        if (const auto name = createSet(); name.has_value()) {
+                            project_.SetObjectSetParent(*name, parentName);
+                            finishSetEdit(QStringLiteral("子グループ「%1」を作成しました")
+                                    .arg(ToQString(*name)));
+                        }
+                    });
+            }
             if (!set->automatic) {
                 QAction* removeAction = menu.addAction(
-                    QStringLiteral("部材グループを削除（中身は未分類へ）"));
+                    QStringLiteral("部材グループを削除（中身と子グループは1つ上へ）"));
                 const std::string setName = *clickedSetName;
                 connect(removeAction, &QAction::triggered, this, [this, setName, finishSetEdit] {
                     RecordUndo();
@@ -4204,6 +4234,157 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
         }
     });
     menu.exec(modelTree_->viewport()->mapToGlobal(position));
+}
+
+bool MainWindow::HandleModelTreeDrop(
+    const QList<QTreeWidgetItem*>& dragged, QTreeWidgetItem* target)
+{
+    using kachakacha::model::ObjectSet;
+    using kachakacha::model::ProjectObjectKind;
+    // ドロップ先のグループ = ドロップ位置から親方向へ最初に見つかる部材グループ。
+    // 見つからない場合、「未分類」配下や空欄なら最上位(未所属)扱い、それ以外は無視。
+    std::optional<std::string> targetSet;
+    for (QTreeWidgetItem* node = target; node != nullptr; node = node->parent()) {
+        if (node->data(0, kSetNameRole).isValid()) {
+            targetSet = ToName(node->data(0, kSetNameRole).toString());
+            break;
+        }
+    }
+    if (!targetSet.has_value() && target != nullptr) {
+        QTreeWidgetItem* top = target;
+        while (top->parent() != nullptr) {
+            top = top->parent();
+        }
+        if (top->text(0) != QStringLiteral("未分類")) {
+            return false;
+        }
+    }
+
+    const auto toObjectKind = [](CadSelectionKind kind) -> std::optional<ProjectObjectKind> {
+        switch (kind) {
+        case CadSelectionKind::WorkPlane: return ProjectObjectKind::WorkPlane;
+        case CadSelectionKind::Point: return ProjectObjectKind::Point;
+        case CadSelectionKind::Wire: return ProjectObjectKind::Wire;
+        case CadSelectionKind::Surface: return ProjectObjectKind::Surface;
+        case CadSelectionKind::Plate: return ProjectObjectKind::Plate;
+        case CadSelectionKind::Body: return ProjectObjectKind::Body;
+        default: return std::nullopt;
+        }
+    };
+    const auto objectNameOf = [this](CadSelectionKind kind, int index) -> std::optional<std::string> {
+        switch (kind) {
+        case CadSelectionKind::WorkPlane:
+            if (index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+                return project_.WorkPlanes()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Point:
+            if (index >= 0 && index < static_cast<int>(project_.Points().size())) {
+                return project_.Points()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Wire:
+            if (index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+                return project_.Wires()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Surface:
+            if (index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+                return project_.Surfaces()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Plate:
+            if (index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+                return project_.Plates()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Body:
+            if (index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+                return project_.Bodies()[index].name;
+            }
+            return std::nullopt;
+        default:
+            return std::nullopt;
+        }
+    };
+
+    std::vector<std::string> draggedSets;
+    std::vector<std::pair<ProjectObjectKind, std::string>> draggedObjects;
+    for (QTreeWidgetItem* item : dragged) {
+        if (item == nullptr) {
+            continue;
+        }
+        if (item->data(0, kSetNameRole).isValid()) {
+            const std::string setName = ToName(item->data(0, kSetNameRole).toString());
+            if (!targetSet.has_value() || *targetSet != setName) {
+                draggedSets.push_back(setName);
+            }
+            continue;
+        }
+        if (!item->data(0, kSelectionKindRole).isValid()
+            || !item->data(0, kSelectionIndexRole).isValid()) {
+            continue;
+        }
+        const CadSelectionKind kind =
+            static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt());
+        const auto objectKind = toObjectKind(kind);
+        const auto name = objectNameOf(kind, item->data(0, kSelectionIndexRole).toInt());
+        if (objectKind.has_value() && name.has_value()) {
+            draggedObjects.emplace_back(*objectKind, *name);
+        }
+    }
+    // ドラッグ中のグループの配下要素は、グループごと動くので個別移動から除く。
+    if (!draggedSets.empty()) {
+        std::erase_if(draggedObjects, [&](const auto& object) {
+            for (const ObjectSet& set : project_.ObjectSets()) {
+                if (std::find(draggedSets.begin(), draggedSets.end(), set.name) == draggedSets.end()) {
+                    continue;
+                }
+                for (const auto& member : set.members) {
+                    if (member.kind == object.first && member.name == object.second) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+    }
+    if (draggedSets.empty() && draggedObjects.empty()) {
+        return false;
+    }
+
+    RecordUndo();
+    QStringList problems;
+    for (const std::string& setName : draggedSets) {
+        try {
+            project_.SetObjectSetParent(setName, targetSet.value_or(std::string()));
+        } catch (const std::exception& error) {
+            problems << QString::fromUtf8(error.what());
+        }
+    }
+    for (const auto& [kind, name] : draggedObjects) {
+        try {
+            if (targetSet.has_value()) {
+                project_.AssignObjectToSet(kind, name, *targetSet);
+            } else {
+                project_.RemoveObjectFromSets(kind, name);
+            }
+        } catch (const std::exception& error) {
+            problems << QString::fromUtf8(error.what());
+        }
+    }
+    MarkModified();
+    RefreshModelViews(false);
+    if (!problems.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("部材グループ"),
+            problems.join(QStringLiteral("\n")));
+    } else {
+        statusBar()->showMessage(targetSet.has_value()
+                ? QStringLiteral("部材「%1」へ移動しました").arg(ToQString(*targetSet))
+                : QStringLiteral("未分類へ移動しました"),
+            3000);
+    }
+    return true;
 }
 
 void MainWindow::SetDisplayMode(ViewportDisplayMode mode)
@@ -4314,7 +4495,8 @@ void MainWindow::RefreshModelViews(bool fitView)
         auto* item = new QTreeWidgetItem(parent, {label});
         item->setData(0, kSelectionKindRole, static_cast<int>(kind));
         item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable
+            | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
         item->setCheckState(0, visible ? Qt::Checked : Qt::Unchecked);
         return item;
     };
@@ -4399,7 +4581,9 @@ void MainWindow::RefreshModelViews(bool fitView)
         });
     };
 
-    for (const ObjectSet& set : project_.ObjectSets()) {
+    // グループはエクスプローラのフォルダのように入れ子にできる(parentName)。
+    const std::function<void(const ObjectSet&, QTreeWidgetItem*)> addSetNode =
+        [&](const ObjectSet& set, QTreeWidgetItem* parentItem) {
         QString label = ToQString(set.name);
         QStringList notes;
         if (set.state == ObjectSetState::ReferenceOnly) notes << QStringLiteral("参照のみ");
@@ -4407,22 +4591,46 @@ void MainWindow::RefreshModelViews(bool fitView)
         if (!notes.isEmpty()) {
             label += QStringLiteral("  [%1]").arg(notes.join(QStringLiteral("・")));
         }
-        auto* setRoot = new QTreeWidgetItem(modelTree_, {label});
+        auto* setRoot = parentItem != nullptr
+            ? new QTreeWidgetItem(parentItem, {label})
+            : new QTreeWidgetItem(modelTree_, {label});
         setRoot->setData(0, kSetNameRole, ToQString(set.name));
-        setRoot->setFlags(setRoot->flags() | Qt::ItemIsUserCheckable);
+        setRoot->setFlags(setRoot->flags() | Qt::ItemIsUserCheckable
+            | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
         setRoot->setCheckState(0, set.state == ObjectSetState::Hidden ? Qt::Unchecked : Qt::Checked);
+        setRoot->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
         setRoot->setToolTip(0, QStringLiteral(
-            "部材グループ。チェックで一括表示/非表示。右クリックで割り当て・出力設定"));
+            "部材グループ。チェックで一括表示/非表示。ドラッグで入れ子に移動、"
+            "右クリックで割り当て・出力設定"));
         QFont setFont = setRoot->font(0);
         setFont.setBold(true);
         setRoot->setFont(0, setFont);
         addKindSections(setRoot, &set);
+        for (const ObjectSet& child : project_.ObjectSets()) {
+            if (child.parentName == set.name) {
+                addSetNode(child, setRoot);
+            }
+        }
         setRoot->setExpanded(true);
+    };
+    const auto setExists = [this](const std::string& name) {
+        for (const ObjectSet& set : project_.ObjectSets()) {
+            if (set.name == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (const ObjectSet& set : project_.ObjectSets()) {
+        if (set.parentName.empty() || !setExists(set.parentName)) {
+            addSetNode(set, nullptr);
+        }
     }
     {
         auto* unassignedRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("未分類")});
+        unassignedRoot->setFlags(unassignedRoot->flags() | Qt::ItemIsDropEnabled);
         unassignedRoot->setToolTip(0, QStringLiteral(
-            "どの部材グループにも属さないオブジェクト。右クリックで部材へ割り当てできます"));
+            "どの部材グループにも属さないオブジェクト。右クリックかドラッグで部材へ移せます"));
         addKindSections(unassignedRoot, nullptr);
         unassignedRoot->setExpanded(true);
     }

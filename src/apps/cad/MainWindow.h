@@ -4,6 +4,7 @@
 #include "kachakacha/model/Project.h"
 
 #include <QColor>
+#include <QList>
 #include <QMainWindow>
 
 #include <array>
@@ -30,6 +31,7 @@ class QTabWidget;
 class QTableWidget;
 class QTimer;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 namespace kachakacha::io {
 struct PlateAssemblyGuide;
@@ -241,6 +243,9 @@ private:
     void RefreshExportSummary();
     void ApplyModelTreeFilter();
     void ShowModelTreeContextMenu(const QPoint& position);
+    //! ツリーのドラッグ&ドロップ: オブジェクトは部材グループへ所属変更、
+    //! グループはグループの入れ子へ移動。ドロップ先が未分類/空欄なら最上位・未所属へ。
+    bool HandleModelTreeDrop(const QList<QTreeWidgetItem*>& dragged, QTreeWidgetItem* target);
     void ExportProjectExcludingSets();
     void SetDisplayMode(ViewportDisplayMode mode);
     void ResetDisplayMode();

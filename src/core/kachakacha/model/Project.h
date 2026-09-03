@@ -204,6 +204,9 @@ struct ObjectSet {
     //! 「出力対象のみで.kcd書き出し」で書き出すか。通常の保存には影響しない。
     bool exportEnabled = true;
     std::vector<ObjectSetMember> members;
+    //! 親グループ名(空=最上位)。エクスプローラ風の入れ子(ADR 0024)。
+    //! 集成体初期化の互換のため末尾に置く。
+    std::string parentName;
 };
 
 class Project {
@@ -340,6 +343,8 @@ public:
     bool RemoveObjectSet(std::string_view name);
     void SetObjectSetState(std::string_view name, ObjectSetState state);
     void SetObjectSetExport(std::string_view name, bool enabled);
+    //! 親グループを設定する(空文字で最上位へ)。自分自身・子孫は循環として拒否。
+    void SetObjectSetParent(std::string_view child, std::string_view parent);
     void AssignObjectToSet(ProjectObjectKind kind, std::string objectName, std::string_view setName);
     void RemoveObjectFromSets(ProjectObjectKind kind, std::string_view objectName);
     //! オブジェクトが属するセットの状態。どのセットにも属さなければ Visible。

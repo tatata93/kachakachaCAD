@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
+#include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
@@ -3038,6 +3039,92 @@ bool MainWindow::RunCreationSelfTest()
             kachakacha::model::ProjectObjectKind::Surface, "__ui_nose_skin")
         != kachakacha::model::ObjectSetState::Visible) {
         return fail("checking set node shows its members");
+    }
+    // 入れ子グループとドラッグ&ドロップ(エクスプローラ風、ADR 0024)。
+    project_.CreateObjectSet("__ui_子部材");
+    project_.SetObjectSetParent("__ui_子部材", "__ui_部材テスト");
+    RefreshModelViews(false);
+    QTreeWidgetItem* parentNode = nullptr;
+    QTreeWidgetItem* childNode = nullptr;
+    QTreeWidgetItemIterator nestIterator(modelTree_);
+    while (*nestIterator) {
+        QTreeWidgetItem* item = *nestIterator;
+        if (item->data(0, kSetNameRole).isValid()) {
+            if (item->data(0, kSetNameRole).toString() == QStringLiteral("__ui_部材テスト")) {
+                parentNode = item;
+            } else if (item->data(0, kSetNameRole).toString() == QStringLiteral("__ui_子部材")) {
+                childNode = item;
+            }
+        }
+        ++nestIterator;
+    }
+    if (parentNode == nullptr || childNode == nullptr || childNode->parent() != parentNode) {
+        return fail("nested set shows under its parent group");
+    }
+    // 面のアイテムを子グループへドロップ→所属が子グループへ移る。
+    QTreeWidgetItem* surfaceItem = nullptr;
+    QTreeWidgetItemIterator surfaceIterator(modelTree_);
+    while (*surfaceIterator) {
+        if ((*surfaceIterator)->text(0) == QStringLiteral("__ui_nose_skin")) {
+            surfaceItem = *surfaceIterator;
+            break;
+        }
+        ++surfaceIterator;
+    }
+    if (surfaceItem == nullptr
+        || !HandleModelTreeDrop({surfaceItem}, childNode)) {
+        return fail("drop surface onto nested group");
+    }
+    {
+        bool inChild = false;
+        for (const auto& set : project_.ObjectSets()) {
+            if (set.name != "__ui_子部材") {
+                continue;
+            }
+            for (const auto& member : set.members) {
+                inChild = inChild || member.name == "__ui_nose_skin";
+            }
+        }
+        if (!inChild) {
+            return fail("dropped surface belongs to nested group");
+        }
+    }
+    // 親を非表示にすると子グループのメンバーも実効非表示。
+    project_.SetObjectSetState("__ui_部材テスト", kachakacha::model::ObjectSetState::Hidden);
+    if (project_.ObjectStateInSets(
+            kachakacha::model::ProjectObjectKind::Surface, "__ui_nose_skin")
+        != kachakacha::model::ObjectSetState::Hidden) {
+        return fail("hidden parent group hides nested members");
+    }
+    project_.SetObjectSetState("__ui_部材テスト", kachakacha::model::ObjectSetState::Visible);
+    // 子グループを最上位へドロップ(ドロップ先なし=未分類扱い)→入れ子解除。
+    RefreshModelViews(false);
+    childNode = nullptr;
+    QTreeWidgetItemIterator childIterator(modelTree_);
+    while (*childIterator) {
+        if ((*childIterator)->data(0, kSetNameRole).isValid()
+            && (*childIterator)->data(0, kSetNameRole).toString() == QStringLiteral("__ui_子部材")) {
+            childNode = *childIterator;
+            break;
+        }
+        ++childIterator;
+    }
+    if (childNode == nullptr || !HandleModelTreeDrop({childNode}, nullptr)) {
+        return fail("drop nested group to top level");
+    }
+    {
+        bool topLevel = false;
+        for (const auto& set : project_.ObjectSets()) {
+            if (set.name == "__ui_子部材") {
+                topLevel = set.parentName.empty();
+            }
+        }
+        if (!topLevel) {
+            return fail("dropped group becomes top level");
+        }
+    }
+    if (!project_.RemoveObjectSet("__ui_子部材")) {
+        return fail("remove nested test set");
     }
     if (!project_.RemoveObjectSet("__ui_部材テスト")) {
         return fail("remove test object set");

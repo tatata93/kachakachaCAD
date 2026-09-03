@@ -211,6 +211,7 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/MainWindowSelfTest.cpp
                 src/apps/cad/MainWindowSurface.cpp
                 src/apps/cad/MainWindowUiHelpers.h
+                src/apps/cad/ModelTreeWidget.h
                 src/apps/cad/PartModelPanel.cpp
                 src/apps/cad/PartModelPanel.h
                 src/apps/cad/PartPatternViewDialog.cpp

@@ -1500,6 +1500,54 @@ void ObjectSetExportFlagRoundTrips()
     Require(loaded.ObjectSets().front().members.size() == 1, "set member round trips");
 }
 
+void ObjectSetHierarchyRoundTripsAndCombinesState()
+{
+    kachakacha::model::Project project;
+    project.AddWire("edge", Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}));
+    project.CreateObjectSet("前面");
+    project.CreateObjectSet("理想形");
+    project.SetObjectSetParent("理想形", "前面");
+    project.AssignObjectToSet(kachakacha::model::ProjectObjectKind::Wire, "edge", "理想形");
+
+    bool cycleRejected = false;
+    try {
+        project.SetObjectSetParent("前面", "理想形");
+    } catch (const std::exception&) {
+        cycleRejected = true;
+    }
+    Require(cycleRejected, "cyclic nesting is rejected");
+
+    project.SetObjectSetState("前面", kachakacha::model::ObjectSetState::Hidden);
+    Require(project.ObjectStateInSets(kachakacha::model::ProjectObjectKind::Wire, "edge")
+            == kachakacha::model::ObjectSetState::Hidden,
+        "hidden ancestor hides nested members");
+    project.SetObjectSetState("前面", kachakacha::model::ObjectSetState::Visible);
+
+    std::ostringstream written;
+    WriteProjectScript(written, project);
+    Require(written.str().find("object_set_parent 理想形 前面") != std::string::npos,
+        "object_set_parent line is written");
+    std::istringstream input(written.str());
+    const kachakacha::model::Project loaded = LoadProjectScript(input, "test");
+    Require(loaded.ObjectSets().size() == 2, "nested sets round trip");
+    bool childHasParent = false;
+    for (const auto& set : loaded.ObjectSets()) {
+        if (set.name == "理想形") {
+            childHasParent = set.parentName == "前面";
+        }
+    }
+    Require(childHasParent, "parent name round trips");
+
+    // グループ削除で子は1つ上へ、メンバーは未所属へ。
+    kachakacha::model::Project removal = loaded;
+    Require(removal.RemoveObjectSet("前面"), "remove parent set");
+    for (const auto& set : removal.ObjectSets()) {
+        if (set.name == "理想形") {
+            Require(set.parentName.empty(), "child reparents to top level");
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -1531,6 +1579,7 @@ int main(int argc, char* argv[])
         PlateSplitsRoundTrip();
         VisibilityRoundTrips();
         ObjectSetExportFlagRoundTrips();
+        ObjectSetHierarchyRoundTripsAndCombinesState();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

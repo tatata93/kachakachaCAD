@@ -2971,7 +2971,14 @@ bool Project::RemoveObjectSet(std::string_view name)
         throw std::invalid_argument(
             "Automatic sets are removed with their part model: " + std::string(name));
     }
+    const std::string removedParent = set->parentName;
     objectSets_.erase(set);
+    // 子グループは削除したグループの親へ付け替える(孤児にしない)。
+    for (ObjectSet& candidate : objectSets_) {
+        if (candidate.parentName == name) {
+            candidate.parentName = removedParent;
+        }
+    }
     return true;
 }
 
@@ -2982,6 +2989,37 @@ void Project::SetObjectSetState(std::string_view name, ObjectSetState state)
         throw std::invalid_argument("Set is missing: " + std::string(name));
     }
     set->state = state;
+}
+
+void Project::SetObjectSetParent(std::string_view child, std::string_view parent)
+{
+    ObjectSet* childSet = FindObjectSetMutable(child);
+    if (childSet == nullptr) {
+        throw std::invalid_argument("Set is missing: " + std::string(child));
+    }
+    if (parent.empty()) {
+        childSet->parentName.clear();
+        return;
+    }
+    if (child == parent) {
+        throw std::invalid_argument("グループを自分自身の中へは移動できません。");
+    }
+    if (FindObjectSetMutable(parent) == nullptr) {
+        throw std::invalid_argument("Set is missing: " + std::string(parent));
+    }
+    std::string current(parent);
+    int guard = 0;
+    while (!current.empty() && guard++ < 1024) {
+        if (current == child) {
+            throw std::invalid_argument("グループを自分の子グループの中へは移動できません。");
+        }
+        const ObjectSet* ancestor = FindObjectSetMutable(current);
+        if (ancestor == nullptr) {
+            break;
+        }
+        current = ancestor->parentName;
+    }
+    childSet->parentName = parent;
 }
 
 void Project::SetObjectSetExport(std::string_view name, bool enabled)
@@ -3020,9 +3058,30 @@ ObjectSetState Project::ObjectStateInSets(
 {
     for (const ObjectSet& set : objectSets_) {
         for (const ObjectSetMember& member : set.members) {
-            if (member.kind == kind && member.name == objectName) {
-                return set.state;
+            if (member.kind != kind || member.name != objectName) {
+                continue;
             }
+            // 祖先グループの状態を合成する(非表示 > 参照のみ > 表示)。
+            ObjectSetState combined = set.state;
+            std::string current = set.parentName;
+            int guard = 0;
+            while (!current.empty() && guard++ < 1024) {
+                const auto ancestor = std::find_if(
+                    objectSets_.begin(), objectSets_.end(),
+                    [&](const ObjectSet& candidate) { return candidate.name == current; });
+                if (ancestor == objectSets_.end()) {
+                    break;
+                }
+                if (ancestor->state == ObjectSetState::Hidden) {
+                    return ObjectSetState::Hidden;
+                }
+                if (ancestor->state == ObjectSetState::ReferenceOnly
+                    && combined == ObjectSetState::Visible) {
+                    combined = ObjectSetState::ReferenceOnly;
+                }
+                current = ancestor->parentName;
+            }
+            return combined;
         }
     }
     return ObjectSetState::Visible;

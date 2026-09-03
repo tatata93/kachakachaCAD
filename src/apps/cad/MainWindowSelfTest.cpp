@@ -3180,6 +3180,21 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.Points().size() != pointsBeforeCenter + 1) {
         return fail("create center point from measurement window");
     }
+    // ツール選択で右パネルが詳細(スケッチ)へ自動で切り替わる(タブ見出し廃止の代替)。
+    toolsTabs_->setCurrentIndex(1);
+    SetViewportTool(ViewportTool::DrawArc);
+    if (toolsTabs_->currentIndex() != 0 || drawingDimensionSection_ == nullptr
+        || drawingDimensionSection_->isHidden()
+        || drawingDimensionStack_->currentIndex() != 3) {
+        return fail("arc tool reveals its detail settings");
+    }
+    toolsTabs_->setCurrentIndex(1);
+    SetViewportTool(ViewportTool::DrawCircle);
+    if (toolsTabs_->currentIndex() != 0 || drawingDimensionStack_->currentIndex() != 2) {
+        return fail("circle tool reveals its detail settings");
+    }
+    SetViewportTool(ViewportTool::Select);
+
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
     // qt_cad_smoke は first-check.kcd を読み込むため原点平面が無い → テスト用に追加する。
     if (!project_.FindWorkPlane("top_XY").has_value()) {

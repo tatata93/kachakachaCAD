@@ -1414,8 +1414,22 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     }
 
     viewport_->SetTool(tool);
-    if (isDirectLineEdit) {
+    // タブ見出しを隠したため、ツールの詳細設定があるパネルへは
+    // ここで自動的に切り替える(円・円弧の描き方、実寸確定など)。
+    const bool sketchDetailTool = tool == ViewportTool::DrawPoint
+        || tool == ViewportTool::DrawLine || tool == ViewportTool::DrawPolyline
+        || tool == ViewportTool::DrawRectangle || tool == ViewportTool::DrawCircle
+        || tool == ViewportTool::DrawArc || tool == ViewportTool::DrawBezier
+        || tool == ViewportTool::DrawSpline || tool == ViewportTool::MoveSelection
+        || tool == ViewportTool::CopySelection || tool == ViewportTool::MirrorSelection
+        || tool == ViewportTool::RotateSelection || tool == ViewportTool::SplitWire
+        || tool == ViewportTool::Coincident || tool == ViewportTool::Tangent
+        || tool == ViewportTool::Curvature;
+    if (isDirectLineEdit || sketchDetailTool) {
         toolsTabs_->setCurrentIndex(0);
+        if (sketchDetailTool) {
+            ExpandSketchSection(QStringLiteral("作図"));
+        }
     } else if (tool == ViewportTool::Measure) {
         toolsTabs_->setCurrentIndex(5);
         EnsureMeasurementWindow();

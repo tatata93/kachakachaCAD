@@ -45,7 +45,14 @@
 
 ### (3) 9枚のUIパネルをQWidgetサブクラスへ抽出
 
-状態: 未着手
+状態: 前段完了(2026-09-03、ADR 0022)。QWidgetサブクラス化そのものは未着手。
+
+前段として `MainWindow.cpp`(10,450行)を話題別TUへ逐語分割した:
+`MainWindowUiHelpers.h`(旧・無名名前空間の共有ヘルパー)/ `MainWindowPanels.cpp`
+(Build*Panel 9枚のうち出力以外+表示設定)/ `MainWindowOutput.cpp`(出力タブと
+書き出し一式)/ `MainWindowSurface.cpp`(面・板の操作)/ `MainWindowMeasure.cpp`
+(計測・参照寸法)。分割後 MainWindow.cpp は5,100行。QWidgetサブクラス化は
+今後もこの計画どおり1パネルずつ進める(先例: PartModelPanel)。
 
 `BuildDrawingPanel` / `BuildPlanePanel` / `BuildWirePanel` / `BuildEditPanel` / `BuildMachiningPanel` / `BuildSurfacePanel` / `BuildOutputPanel` / `BuildDisplayPanel` / `BuildInfoPanel` の9関数を、それぞれ独立した `QWidget` サブクラス(ファイル)へ抽出する。1回の変更で1パネルずつ進め、`MainWindow` 側はパネルの生成と配線のみを残す。
 

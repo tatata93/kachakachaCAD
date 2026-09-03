@@ -204,8 +204,13 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/CollapsibleSection.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
+                src/apps/cad/MainWindowMeasure.cpp
+                src/apps/cad/MainWindowOutput.cpp
+                src/apps/cad/MainWindowPanels.cpp
                 src/apps/cad/MainWindowPartModel.cpp
                 src/apps/cad/MainWindowSelfTest.cpp
+                src/apps/cad/MainWindowSurface.cpp
+                src/apps/cad/MainWindowUiHelpers.h
                 src/apps/cad/PartModelPanel.cpp
                 src/apps/cad/PartModelPanel.h
                 src/apps/cad/PartPatternViewDialog.cpp

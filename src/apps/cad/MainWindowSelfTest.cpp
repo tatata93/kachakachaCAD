@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "CollapsibleSection.h"
+#include "MainWindowUiHelpers.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
@@ -53,6 +54,7 @@
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QStackedWidget>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -72,6 +74,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -140,29 +143,7 @@ using kachakacha::model::ReferenceDimensionKind;
 using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::TrimWireAtBoundaries;
 
-namespace {
-
-// Duplicated verbatim from the anonymous namespace in MainWindow.cpp: these
-// helpers have internal linkage there and are still used by the rest of that
-// file, so they were left in place per the split plan. RunCreationSelfTest()
-// and PrepareManualScreenshot() below need them too, and an anonymous
-// namespace cannot be shared across translation units, so a byte-identical
-// copy is kept here rather than changing MainWindow.cpp's linkage.
-
-constexpr int kDimensionNameRole = Qt::UserRole + 2;
-constexpr double kPi = 3.14159265358979323846;
-
-Vector3 ReadVector3(const std::array<QDoubleSpinBox*, 3>& fields)
-{
-    return {fields[0]->value(), fields[1]->value(), fields[2]->value()};
-}
-
-std::string ToName(const QString& text)
-{
-    return text.trimmed().toUtf8().toStdString();
-}
-
-} // namespace
+using namespace mainwindow_helpers;
 
 bool MainWindow::PrepareManualScreenshot(const QString& state)
 {

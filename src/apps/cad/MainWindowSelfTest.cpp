@@ -1198,9 +1198,11 @@ bool MainWindow::RunCreationSelfTest()
         dragMouse(start, end, Qt::LeftButton);
     };
     const QPointF center(viewport_->width() * 0.5, viewport_->height() * 0.5);
-    const QPointF cubeCenter(viewport_->width() - 60.0, 49.0);
-    const QPointF cubeHome(viewport_->width() - 60.0, 102.0);
-    const QPointF cubeSelection(viewport_->width() - 60.0, 135.0);
+    // ナビゲータの配置は CadViewport::MakeViewCubeGeometry と一致させる(ADR 0023)。
+    const QPointF cubeCenter(viewport_->width() - 84.0, 74.0);
+    const QPointF cubeHome(cubeCenter.x() - 81.0, 14.0);
+    const QPointF cubeSelection(cubeCenter.x(), cubeCenter.y() + 93.0);
+    viewport_->SetViewTransitionsEnabled(false);
     const auto cubePointForDirection = [this, cubeCenter](Vector3 direction) {
         const Vector3 view = viewport_->ViewDirection();
         const Vector3 up = viewport_->ViewUpDirection();
@@ -1231,7 +1233,7 @@ bool MainWindow::RunCreationSelfTest()
     }
     const Vector3 directionBeforeRoll = viewport_->ViewDirection();
     const Vector3 upBeforeRoll = viewport_->ViewUpDirection();
-    click(QPointF(viewport_->width() - 40.0, 10.0));
+    click(QPointF(cubeCenter.x() + 22.0, 12.0));
     if (!kachakacha::geometry::AlmostEqual(
             viewport_->ViewDirection(), directionBeforeRoll, 1.0e-8)
         || kachakacha::geometry::AlmostEqual(
@@ -1240,7 +1242,29 @@ bool MainWindow::RunCreationSelfTest()
     }
     click(cubeHome);
     const Vector3 directionBeforeWorldX = viewport_->ViewDirection();
-    click(QPointF(cubeCenter.x() - 146.0, 30.0));
+    // X軸リングの矢じり(投影して中心から最も遠いサンプル=実装と同じ選び方)をクリックする。
+    const auto cubeProjection = [this, cubeCenter](Vector3 point) {
+        const Vector3 view = viewport_->ViewDirection();
+        const Vector3 up = viewport_->ViewUpDirection();
+        const Vector3 right = kachakacha::geometry::Cross(up, view).Normalized();
+        return cubeCenter + QPointF(
+            kachakacha::geometry::Dot(point, right) * 22.0,
+            -kachakacha::geometry::Dot(point, up) * 22.0);
+    };
+    QPointF ringHead = cubeCenter;
+    double ringHeadDistance = -1.0;
+    for (int sample = 0; sample < 64; ++sample) {
+        const double angle = 2.0 * kPi * sample / 64.0;
+        const QPointF point = cubeProjection(
+            {0.0, 1.95 * std::cos(angle), 1.95 * std::sin(angle)});
+        const double distance = std::hypot(
+            point.x() - cubeCenter.x(), point.y() - cubeCenter.y());
+        if (distance > ringHeadDistance) {
+            ringHeadDistance = distance;
+            ringHead = point;
+        }
+    }
+    click(ringHead);
     if (kachakacha::geometry::AlmostEqual(
             viewport_->ViewDirection(), directionBeforeWorldX, 1.0e-8)
         || std::abs(viewport_->ViewDirection().x - directionBeforeWorldX.x) > 1.0e-8) {
@@ -1248,7 +1272,7 @@ bool MainWindow::RunCreationSelfTest()
     }
     const Vector3 directionBeforeRelativeX = viewport_->ViewDirection();
     const Vector3 rightBeforeRelativeX = viewport_->ViewRightDirection();
-    click(QPointF(cubeCenter.x() - 82.0, 30.0));
+    click(QPointF(cubeCenter.x() + 63.0, cubeCenter.y() - 27.0));
     if (kachakacha::geometry::AlmostEqual(
             viewport_->ViewDirection(), directionBeforeRelativeX, 1.0e-8)
         || !kachakacha::geometry::AlmostEqual(
@@ -1256,7 +1280,7 @@ bool MainWindow::RunCreationSelfTest()
         return fail("view cube relative X rotation");
     }
     const Vector3 directionBeforeFineRotation = viewport_->ViewDirection();
-    click(QPointF(cubeCenter.x() - 118.0, 30.0), Qt::ShiftModifier);
+    click(QPointF(cubeCenter.x() + 63.0, cubeCenter.y() + 27.0), Qt::ShiftModifier);
     const double fineAngle = std::acos(std::clamp(
         kachakacha::geometry::Dot(directionBeforeFineRotation, viewport_->ViewDirection()),
         -1.0, 1.0));

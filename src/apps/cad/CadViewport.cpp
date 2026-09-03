@@ -1516,7 +1516,8 @@ void CadViewport::AnimateViewTo(const std::array<Vector3, 3>& targetBasis)
     for (int index = 0; index < 3; ++index) {
         difference += (targetBasis[index] - current[index]).Length();
     }
-    if (difference < 1.0e-6) {
+    if (!viewTransitionsEnabled_ || difference < 1.0e-6) {
+        StopViewAnimation();
         alignedViewBasis_ = targetBasis;
         rollRadians_ = 0.0;
         update();

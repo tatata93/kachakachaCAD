@@ -325,6 +325,8 @@ public:
     void AnimateViewTo(const std::array<kachakacha::geometry::Vector3, 3>& targetBasis);
     //! 進行中のビュー遷移アニメーションを打ち切る(手動操作が勝つ)。
     void StopViewAnimation();
+    //! ビュー遷移アニメーションの有効・無効(セルフテストは無効にして同期実行する)。
+    void SetViewTransitionsEnabled(bool enabled) noexcept { viewTransitionsEnabled_ = enabled; }
     void RotateViewAroundWorldAxis(ViewRotationAxis axis, double angleRadians);
     void RotateViewAroundRelativeAxis(ViewRotationAxis axis, double angleRadians);
     void RotateViewYaw(double angleRadians);
@@ -539,6 +541,7 @@ private:
     kachakacha::geometry::Vector3 pressedViewCubeDirection_;
     kachakacha::geometry::Vector3 hoveredViewCubeDirection_;
     bool navigatorHot_ = false;                     //!< カーソルがナビゲータ近傍にあるか(遠いと半透明表示)
+    bool viewTransitionsEnabled_ = true;
     QTimer* viewAnimationTimer_ = nullptr;          //!< ビュー遷移アニメーション(約180ms)
     double viewAnimationProgress_ = 1.0;
     std::array<kachakacha::geometry::Vector3, 3> viewAnimationStart_{};

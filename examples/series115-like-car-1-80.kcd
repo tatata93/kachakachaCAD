@@ -1,0 +1,195 @@
+# kachakachaCAD 115系風 近郊形電車サンプル(先頭車・1/80)
+# 実寸の厳密な再現ではなく、ソフトの機能一巡(平面板+開口・ルールド屋根・部材近似)を示す見本。
+# 単位: 模型mm(1/80)。X=車体長(0=前面) Y=左右 Z=高さ(0=裾)
+format_version 1
+
+# --- 作図用平面(開口の下書きはここに描き、各面へ投影する) ---
+plane_point_normal 前面下書き -6 0 0  1 0 0  0 1 0
+plane_point_normal 後面下書き 250 0 0  1 0 0  0 1 0
+plane_point_normal 側面下書き右 0 -24.45 0  0 1 0  1 0 0
+plane_point_normal 側面下書き左 0 24.45 0  0 1 0  1 0 0
+
+# --- 側面(裾0〜幕板27.5の平面板。乗務員扉+客用扉3+ユニット窓風8) ---
+# 側面右(Y=-18.45)
+polyline3d 側面右_外形 0 -18.45 0 244 -18.45 0 244 -18.45 27.5 0 -18.45 27.5 0 -18.45 0
+surface_planar 側面右 側面右_外形
+polyline3d 側面右_乗務員扉_下書き 13 -24.45 1 22 -24.45 1 22 -24.45 26 13 -24.45 26 13 -24.45 1
+polyline3d 側面右_運転席横窓_下書き 3 -24.45 12 10 -24.45 12 10 -24.45 20 3 -24.45 20 3 -24.45 12
+polyline3d 側面右_客扉1_下書き 37.85 -24.45 0.8 54.15 -24.45 0.8 54.15 -24.45 25 37.85 -24.45 25 37.85 -24.45 0.8
+polyline3d 側面右_客扉2_下書き 113.85 -24.45 0.8 130.15 -24.45 0.8 130.15 -24.45 25 113.85 -24.45 25 113.85 -24.45 0.8
+polyline3d 側面右_客扉3_下書き 189.85 -24.45 0.8 206.15 -24.45 0.8 206.15 -24.45 25 189.85 -24.45 25 189.85 -24.45 0.8
+polyline3d 側面右_窓1_下書き 61 -24.45 10.5 72.5 -24.45 10.5 72.5 -24.45 19.5 61 -24.45 19.5 61 -24.45 10.5
+polyline3d 側面右_窓2_下書き 78 -24.45 10.5 89.5 -24.45 10.5 89.5 -24.45 19.5 78 -24.45 19.5 78 -24.45 10.5
+polyline3d 側面右_窓3_下書き 95 -24.45 10.5 106.5 -24.45 10.5 106.5 -24.45 19.5 95 -24.45 19.5 95 -24.45 10.5
+polyline3d 側面右_窓4_下書き 137 -24.45 10.5 148.5 -24.45 10.5 148.5 -24.45 19.5 137 -24.45 19.5 137 -24.45 10.5
+polyline3d 側面右_窓5_下書き 154 -24.45 10.5 165.5 -24.45 10.5 165.5 -24.45 19.5 154 -24.45 19.5 154 -24.45 10.5
+polyline3d 側面右_窓6_下書き 171 -24.45 10.5 182.5 -24.45 10.5 182.5 -24.45 19.5 171 -24.45 19.5 171 -24.45 10.5
+polyline3d 側面右_窓7_下書き 212 -24.45 10.5 223.5 -24.45 10.5 223.5 -24.45 19.5 212 -24.45 19.5 212 -24.45 10.5
+polyline3d 側面右_窓8_下書き 228 -24.45 10.5 239.5 -24.45 10.5 239.5 -24.45 19.5 228 -24.45 19.5 228 -24.45 10.5
+wire_project 側面右_乗務員扉 側面右_乗務員扉_下書き 側面右 0 1 0
+wire_project 側面右_運転席横窓 側面右_運転席横窓_下書き 側面右 0 1 0
+wire_project 側面右_客扉1 側面右_客扉1_下書き 側面右 0 1 0
+wire_project 側面右_客扉2 側面右_客扉2_下書き 側面右 0 1 0
+wire_project 側面右_客扉3 側面右_客扉3_下書き 側面右 0 1 0
+wire_project 側面右_窓1 側面右_窓1_下書き 側面右 0 1 0
+wire_project 側面右_窓2 側面右_窓2_下書き 側面右 0 1 0
+wire_project 側面右_窓3 側面右_窓3_下書き 側面右 0 1 0
+wire_project 側面右_窓4 側面右_窓4_下書き 側面右 0 1 0
+wire_project 側面右_窓5 側面右_窓5_下書き 側面右 0 1 0
+wire_project 側面右_窓6 側面右_窓6_下書き 側面右 0 1 0
+wire_project 側面右_窓7 側面右_窓7_下書き 側面右 0 1 0
+wire_project 側面右_窓8 側面右_窓8_下書き 側面右 0 1 0
+
+# 側面左(Y=18.45)
+polyline3d 側面左_外形 0 18.45 0 244 18.45 0 244 18.45 27.5 0 18.45 27.5 0 18.45 0
+surface_planar 側面左 側面左_外形
+polyline3d 側面左_乗務員扉_下書き 13 24.45 1 22 24.45 1 22 24.45 26 13 24.45 26 13 24.45 1
+polyline3d 側面左_運転席横窓_下書き 3 24.45 12 10 24.45 12 10 24.45 20 3 24.45 20 3 24.45 12
+polyline3d 側面左_客扉1_下書き 37.85 24.45 0.8 54.15 24.45 0.8 54.15 24.45 25 37.85 24.45 25 37.85 24.45 0.8
+polyline3d 側面左_客扉2_下書き 113.85 24.45 0.8 130.15 24.45 0.8 130.15 24.45 25 113.85 24.45 25 113.85 24.45 0.8
+polyline3d 側面左_客扉3_下書き 189.85 24.45 0.8 206.15 24.45 0.8 206.15 24.45 25 189.85 24.45 25 189.85 24.45 0.8
+polyline3d 側面左_窓1_下書き 61 24.45 10.5 72.5 24.45 10.5 72.5 24.45 19.5 61 24.45 19.5 61 24.45 10.5
+polyline3d 側面左_窓2_下書き 78 24.45 10.5 89.5 24.45 10.5 89.5 24.45 19.5 78 24.45 19.5 78 24.45 10.5
+polyline3d 側面左_窓3_下書き 95 24.45 10.5 106.5 24.45 10.5 106.5 24.45 19.5 95 24.45 19.5 95 24.45 10.5
+polyline3d 側面左_窓4_下書き 137 24.45 10.5 148.5 24.45 10.5 148.5 24.45 19.5 137 24.45 19.5 137 24.45 10.5
+polyline3d 側面左_窓5_下書き 154 24.45 10.5 165.5 24.45 10.5 165.5 24.45 19.5 154 24.45 19.5 154 24.45 10.5
+polyline3d 側面左_窓6_下書き 171 24.45 10.5 182.5 24.45 10.5 182.5 24.45 19.5 171 24.45 19.5 171 24.45 10.5
+polyline3d 側面左_窓7_下書き 212 24.45 10.5 223.5 24.45 10.5 223.5 24.45 19.5 212 24.45 19.5 212 24.45 10.5
+polyline3d 側面左_窓8_下書き 228 24.45 10.5 239.5 24.45 10.5 239.5 24.45 19.5 228 24.45 19.5 228 24.45 10.5
+wire_project 側面左_乗務員扉 側面左_乗務員扉_下書き 側面左 0 -1 0
+wire_project 側面左_運転席横窓 側面左_運転席横窓_下書き 側面左 0 -1 0
+wire_project 側面左_客扉1 側面左_客扉1_下書き 側面左 0 -1 0
+wire_project 側面左_客扉2 側面左_客扉2_下書き 側面左 0 -1 0
+wire_project 側面左_客扉3 側面左_客扉3_下書き 側面左 0 -1 0
+wire_project 側面左_窓1 側面左_窓1_下書き 側面左 0 -1 0
+wire_project 側面左_窓2 側面左_窓2_下書き 側面左 0 -1 0
+wire_project 側面左_窓3 側面左_窓3_下書き 側面左 0 -1 0
+wire_project 側面左_窓4 側面左_窓4_下書き 側面左 0 -1 0
+wire_project 側面左_窓5 側面左_窓5_下書き 側面左 0 -1 0
+wire_project 側面左_窓6 側面左_窓6_下書き 側面左 0 -1 0
+wire_project 側面左_窓7 側面左_窓7_下書き 側面左 0 -1 0
+wire_project 側面左_窓8 側面左_窓8_下書き 側面左 0 -1 0
+
+# --- 前面・後面(屋根アーチまで含む一枚板) ---
+polyline3d 前面_外形 0 -18.45 0 0 18.45 0 0 18.45 27.5 0 15.957 30.096 0 13.147 32.221 0 10.083 33.873 0 6.828 35.053 0 3.446 35.761 0 0 35.998 0 -3.446 35.761 0 -6.828 35.053 0 -10.083 33.873 0 -13.147 32.221 0 -15.957 30.096 0 -18.45 27.5 0 -18.45 0
+surface_planar 前面 前面_外形
+polyline3d 後面_外形 244 -18.45 0 244 18.45 0 244 18.45 27.5 244 15.957 30.096 244 13.147 32.221 244 10.083 33.873 244 6.828 35.053 244 3.446 35.761 244 0 35.998 244 -3.446 35.761 244 -6.828 35.053 244 -10.083 33.873 244 -13.147 32.221 244 -15.957 30.096 244 -18.45 27.5 244 -18.45 0
+surface_planar 後面 後面_外形
+
+# 前面の窓・灯具(115系風: 2枚窓+貫通扉窓、幕板シールドビーム2灯、腰板テールライト)
+polyline3d 前面_運転席窓_下書き -6 -16 14 -6 -7 14 -6 -7 22 -6 -16 22 -6 -16 14
+polyline3d 前面_助士側窓_下書き -6 7 14 -6 16 14 -6 16 22 -6 7 22 -6 7 14
+polyline3d 前面_貫通扉窓_下書き -6 -3.4 15 -6 3.4 15 -6 3.4 22.5 -6 -3.4 22.5 -6 -3.4 15
+circle3d 前面_前照灯右_下書き -6 -11.5 25.2  0 1 0  0 0 1  1.1
+circle3d 前面_前照灯左_下書き -6 11.5 25.2  0 1 0  0 0 1  1.1
+circle3d 前面_尾灯右_下書き -6 -14.5 9  0 1 0  0 0 1  0.75
+circle3d 前面_尾灯左_下書き -6 14.5 9  0 1 0  0 0 1  0.75
+wire_project 前面_運転席窓 前面_運転席窓_下書き 前面 1 0 0
+wire_project 前面_助士側窓 前面_助士側窓_下書き 前面 1 0 0
+wire_project 前面_貫通扉窓 前面_貫通扉窓_下書き 前面 1 0 0
+wire_project 前面_前照灯右 前面_前照灯右_下書き 前面 1 0 0
+wire_project 前面_前照灯左 前面_前照灯左_下書き 前面 1 0 0
+wire_project 前面_尾灯右 前面_尾灯右_下書き 前面 1 0 0
+wire_project 前面_尾灯左 前面_尾灯左_下書き 前面 1 0 0
+polyline3d 後面_貫通扉窓_下書き 250 -3.4 15 250 3.4 15 250 3.4 22.5 250 -3.4 22.5 250 -3.4 15
+wire_project 後面_貫通扉窓 後面_貫通扉窓_下書き 後面 -1 0 0
+
+# --- 屋根(前後断面のルールド面 → 板 → 部材近似) ---
+bezier3d 屋根断面_前 0 -18.45 27.5  0 -9.2 38.83  0 9.2 38.83  0 18.45 27.5
+bezier3d 屋根断面_後 244 -18.45 27.5  244 -9.2 38.83  244 9.2 38.83  244 18.45 27.5
+surface_ruled 屋根面 屋根断面_前 屋根断面_後
+
+# --- 板材(スチレン0.5mm) ---
+plate 側面右板 側面右 0.5 centered styrene
+plate_opening 側面右板 側面右_乗務員扉
+plate_opening 側面右板 側面右_運転席横窓
+plate_opening 側面右板 側面右_客扉1
+plate_opening 側面右板 側面右_客扉2
+plate_opening 側面右板 側面右_客扉3
+plate_opening 側面右板 側面右_窓1
+plate_opening 側面右板 側面右_窓2
+plate_opening 側面右板 側面右_窓3
+plate_opening 側面右板 側面右_窓4
+plate_opening 側面右板 側面右_窓5
+plate_opening 側面右板 側面右_窓6
+plate_opening 側面右板 側面右_窓7
+plate_opening 側面右板 側面右_窓8
+plate 側面左板 側面左 0.5 centered styrene
+plate_opening 側面左板 側面左_乗務員扉
+plate_opening 側面左板 側面左_運転席横窓
+plate_opening 側面左板 側面左_客扉1
+plate_opening 側面左板 側面左_客扉2
+plate_opening 側面左板 側面左_客扉3
+plate_opening 側面左板 側面左_窓1
+plate_opening 側面左板 側面左_窓2
+plate_opening 側面左板 側面左_窓3
+plate_opening 側面左板 側面左_窓4
+plate_opening 側面左板 側面左_窓5
+plate_opening 側面左板 側面左_窓6
+plate_opening 側面左板 側面左_窓7
+plate_opening 側面左板 側面左_窓8
+plate 前面板 前面 0.5 centered styrene
+plate_opening 前面板 前面_運転席窓
+plate_opening 前面板 前面_助士側窓
+plate_opening 前面板 前面_貫通扉窓
+plate_opening 前面板 前面_前照灯右
+plate_opening 前面板 前面_前照灯左
+plate_opening 前面板 前面_尾灯右
+plate_opening 前面板 前面_尾灯左
+plate 後面板 後面 0.5 centered styrene
+plate_opening 後面板 後面_貫通扉窓
+plate 屋根板 屋根面 0.5 centered styrene
+
+# 屋根の部材近似: 曲面を帯状部材に分割(部材タブでスライダー確認・板材化・出力ができる)
+part_model 屋根部材 屋根板 u 1 0.4 8 3 0
+
+# --- 下書き・骨組みは隠して完成形だけ見せる ---
+visibility workplane 前面下書き hidden
+visibility workplane 後面下書き hidden
+visibility workplane 側面下書き右 hidden
+visibility workplane 側面下書き左 hidden
+visibility wire 前面_外形 hidden
+visibility wire 後面_外形 hidden
+visibility wire 屋根断面_前 hidden
+visibility wire 屋根断面_後 hidden
+visibility wire 後面_貫通扉窓_下書き hidden
+visibility wire 側面右_外形 hidden
+visibility wire 側面左_外形 hidden
+visibility wire 側面右_乗務員扉_下書き hidden
+visibility wire 側面右_運転席横窓_下書き hidden
+visibility wire 側面右_客扉1_下書き hidden
+visibility wire 側面右_客扉2_下書き hidden
+visibility wire 側面右_客扉3_下書き hidden
+visibility wire 側面右_窓1_下書き hidden
+visibility wire 側面右_窓2_下書き hidden
+visibility wire 側面右_窓3_下書き hidden
+visibility wire 側面右_窓4_下書き hidden
+visibility wire 側面右_窓5_下書き hidden
+visibility wire 側面右_窓6_下書き hidden
+visibility wire 側面右_窓7_下書き hidden
+visibility wire 側面右_窓8_下書き hidden
+visibility wire 側面左_乗務員扉_下書き hidden
+visibility wire 側面左_運転席横窓_下書き hidden
+visibility wire 側面左_客扉1_下書き hidden
+visibility wire 側面左_客扉2_下書き hidden
+visibility wire 側面左_客扉3_下書き hidden
+visibility wire 側面左_窓1_下書き hidden
+visibility wire 側面左_窓2_下書き hidden
+visibility wire 側面左_窓3_下書き hidden
+visibility wire 側面左_窓4_下書き hidden
+visibility wire 側面左_窓5_下書き hidden
+visibility wire 側面左_窓6_下書き hidden
+visibility wire 側面左_窓7_下書き hidden
+visibility wire 側面左_窓8_下書き hidden
+visibility wire 前面_運転席窓_下書き hidden
+visibility wire 前面_助士側窓_下書き hidden
+visibility wire 前面_貫通扉窓_下書き hidden
+visibility wire 前面_前照灯右_下書き hidden
+visibility wire 前面_前照灯左_下書き hidden
+visibility wire 前面_尾灯右_下書き hidden
+visibility wire 前面_尾灯左_下書き hidden
+visibility surface 側面右 hidden
+visibility surface 側面左 hidden
+visibility surface 前面 hidden
+visibility surface 後面 hidden
+visibility surface 屋根面 hidden

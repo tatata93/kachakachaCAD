@@ -62,6 +62,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabBar>
 #include <QStringList>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -523,6 +524,9 @@ void MainWindow::BuildUi()
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
     toolsTabs_->addTab(BuildPartModelPanelTab(), QStringLiteral("部材"));
+    // 右パネルは選択中モードのパネルだけを表示する(オーナー指示)。
+    // タブ自体は残し(セルフテスト互換・プログラムからの切替用)、見出しだけ隠す。
+    toolsTabs_->tabBar()->hide();
     LoadDisplaySettings();
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
         const ViewportTool tool = viewport_->Tool();
@@ -567,6 +571,18 @@ void MainWindow::BuildUi()
         QPushButton#primaryButton:hover { background: #09666e; }
         QPushButton#primaryButton:disabled { background: #d7dcdf; color: #7c868d; border-color: #bcc4c9; }
         QPushButton#workflowButton { min-height: 28px; padding: 2px 5px; font-weight: 600; }
+        QToolButton#modeButtonDrawing, QToolButton#modeButtonSurface,
+        QToolButton#modeButtonPartModel, QToolButton#modeButtonOutput {
+            font-weight: 700; font-size: 13px; padding: 4px 12px; margin: 1px;
+            border-radius: 4px; border: 1px solid; }
+        QToolButton#modeButtonDrawing { background: #e2f1f2; color: #075f69; border-color: #77b4b9; }
+        QToolButton#modeButtonDrawing:checked { background: #087780; color: #ffffff; border-color: #075f69; }
+        QToolButton#modeButtonSurface { background: #e4edf8; color: #24507e; border-color: #86a9cf; }
+        QToolButton#modeButtonSurface:checked { background: #2f6db3; color: #ffffff; border-color: #24507e; }
+        QToolButton#modeButtonPartModel { background: #f7ecdf; color: #7d5218; border-color: #cfa877; }
+        QToolButton#modeButtonPartModel:checked { background: #b3762f; color: #ffffff; border-color: #7d5218; }
+        QToolButton#modeButtonOutput { background: #e5f2e9; color: #245c38; border-color: #83bd97; }
+        QToolButton#modeButtonOutput:checked { background: #2f8b57; color: #ffffff; border-color: #245c38; }
         QPushButton#workflowButton:checked { background: #d7edef; color: #075f69; border: 2px solid #087780; }
         QGroupBox#beginnerGuide { border: 1px solid #9eabb3; margin-top: 9px; background: #ffffff; }
         QGroupBox#beginnerGuide::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #42515a; }
@@ -994,10 +1010,10 @@ void MainWindow::BuildMenusAndToolbar()
     QToolBar* modeToolbar = addToolBar(QStringLiteral("モード"));
     modeToolbar->setMovable(false);
     modeToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    drawingModeAction_ = new QAction(QStringLiteral("① 作図"), this);
-    surfaceModeAction_ = new QAction(QStringLiteral("② 面・板材"), this);
-    partModelModeAction_ = new QAction(QStringLiteral("③ 近似モデル"), this);
-    outputModeAction_ = new QAction(QStringLiteral("④ 出力"), this);
+    drawingModeAction_ = new QAction(QStringLiteral("作図"), this);
+    surfaceModeAction_ = new QAction(QStringLiteral("面・板材"), this);
+    partModelModeAction_ = new QAction(QStringLiteral("近似モデル"), this);
+    outputModeAction_ = new QAction(QStringLiteral("出力"), this);
     auto* modeGroup = new QActionGroup(this);
     for (QAction* action : {drawingModeAction_, surfaceModeAction_, partModelModeAction_, outputModeAction_}) {
         action->setCheckable(true);
@@ -1008,6 +1024,19 @@ void MainWindow::BuildMenusAndToolbar()
     surfaceModeAction_->setToolTip(QStringLiteral("ワイヤーから面・板材・ライトケースを作る"));
     partModelModeAction_->setToolTip(QStringLiteral("板材を製作用の部材近似モデルにする"));
     outputModeAction_->setToolTip(QStringLiteral("出力対象と形式(.kcd / STL / STEP / 図面)を選んで書き出す"));
+    // 各モードボタンに固有色を付ける(QSSはBuildUiのsetStyleSheetにまとめてある)。
+    if (QWidget* button = modeToolbar->widgetForAction(drawingModeAction_)) {
+        button->setObjectName(QStringLiteral("modeButtonDrawing"));
+    }
+    if (QWidget* button = modeToolbar->widgetForAction(surfaceModeAction_)) {
+        button->setObjectName(QStringLiteral("modeButtonSurface"));
+    }
+    if (QWidget* button = modeToolbar->widgetForAction(partModelModeAction_)) {
+        button->setObjectName(QStringLiteral("modeButtonPartModel"));
+    }
+    if (QWidget* button = modeToolbar->widgetForAction(outputModeAction_)) {
+        button->setObjectName(QStringLiteral("modeButtonOutput"));
+    }
     connect(drawingModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::Drawing); });
     connect(surfaceModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::SurfacePlate); });
     connect(partModelModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::PartModel); });
@@ -3987,6 +4016,11 @@ void MainWindow::DeleteSelection()
     QString detail;
     if (selection.kind == CadSelectionKind::WorkPlane && selection.index >= 0
         && selection.index < static_cast<int>(project_.WorkPlanes().size())) {
+        if (IsOriginPlaneName(project_.WorkPlanes()[selection.index].name)) {
+            statusBar()->showMessage(
+                QStringLiteral("原点の基準平面（top_XY / front_XZ / side_YZ）は削除できません"), 3500);
+            return;
+        }
         name = ToQString(project_.WorkPlanes()[selection.index].name);
         detail = QStringLiteral("作業平面を削除します。平面から作ったワイヤーは3D形状として残ります。");
     } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
@@ -4257,6 +4291,9 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
         if (!name.has_value()) {
             continue;
         }
+        if (*kind == ProjectObjectKind::WorkPlane && IsOriginPlaneName(*name)) {
+            continue; // 原点平面はグループへ移せない
+        }
         const auto duplicate = std::find_if(targets.begin(), targets.end(), [&](const auto& target) {
             return target.first == *kind && target.second == *name;
         });
@@ -4516,7 +4553,8 @@ bool MainWindow::HandleModelTreeDrop(
             static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt());
         const auto objectKind = toObjectKind(kind);
         const auto name = objectNameOf(kind, item->data(0, kSelectionIndexRole).toInt());
-        if (objectKind.has_value() && name.has_value()) {
+        if (objectKind.has_value() && name.has_value()
+            && !(*objectKind == ProjectObjectKind::WorkPlane && IsOriginPlaneName(*name))) {
             draggedObjects.emplace_back(*objectKind, *name);
         }
     }
@@ -4707,6 +4745,7 @@ void MainWindow::RefreshModelViews(bool fitView)
             int count = 0;
             for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
                 const auto& plane = project_.WorkPlanes()[index];
+                if (IsOriginPlaneName(plane.name)) continue; // 原点平面は最上部の専用ノードへ
                 if (!belongs(ProjectObjectKind::WorkPlane, plane.name)) continue;
                 addObjectItem(root, CadSelectionKind::WorkPlane, index, ToQString(plane.name), plane.visible);
                 ++count;
@@ -4767,6 +4806,27 @@ void MainWindow::RefreshModelViews(bool fitView)
             return count;
         });
     };
+
+    // 原点の基準平面は常に最上部へ固定表示する(削除・グループ移動は不可)。
+    {
+        auto* originRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("原点")});
+        originRoot->setToolTip(0, QStringLiteral(
+            "初期の基準平面（top_XY / front_XZ / side_YZ）。削除やグループ移動はできません"));
+        QFont originFont = originRoot->font(0);
+        originFont.setBold(true);
+        originRoot->setFont(0, originFont);
+        originRoot->setIcon(0, style()->standardIcon(QStyle::SP_ComputerIcon));
+        for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
+            const auto& plane = project_.WorkPlanes()[index];
+            if (!IsOriginPlaneName(plane.name)) {
+                continue;
+            }
+            auto* item = addObjectItem(
+                originRoot, CadSelectionKind::WorkPlane, index, ToQString(plane.name), plane.visible);
+            item->setFlags(item->flags() & ~Qt::ItemIsDragEnabled);
+        }
+        originRoot->setExpanded(true);
+    }
 
     // グループはエクスプローラのフォルダのように入れ子にできる(parentName)。
     const std::function<void(const ObjectSet&, QTreeWidgetItem*)> addSetNode =

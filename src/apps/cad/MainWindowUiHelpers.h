@@ -49,6 +49,12 @@ inline constexpr int kSelectionKindRole = Qt::UserRole;
 inline constexpr int kSelectionIndexRole = Qt::UserRole + 1;
 inline constexpr int kDimensionNameRole = Qt::UserRole + 2;
 inline constexpr int kSetNameRole = Qt::UserRole + 3;
+
+//! 原点平面(初期の3基準面)。削除・グループ移動を禁止し、ツリー最上部に固定表示する。
+inline bool IsOriginPlaneName(const std::string& name)
+{
+    return name == "top_XY" || name == "front_XZ" || name == "side_YZ";
+}
 inline constexpr double kPi = 3.14159265358979323846;
 
 inline bool IsAutomationInvocation()

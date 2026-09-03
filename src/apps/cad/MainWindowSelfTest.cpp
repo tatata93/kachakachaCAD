@@ -62,6 +62,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabBar>
 #include <QStringList>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -3178,6 +3179,30 @@ bool MainWindow::RunCreationSelfTest()
     curveCenterPointButton_->click();
     if (project_.Points().size() != pointsBeforeCenter + 1) {
         return fail("create center point from measurement window");
+    }
+    // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
+    if (modelTree_->topLevelItemCount() == 0
+        || modelTree_->topLevelItem(0)->text(0) != QStringLiteral("原点")
+        || modelTree_->topLevelItem(0)->childCount() < 3) {
+        return fail("origin planes pinned at top of tree");
+    }
+    {
+        int originPlaneIndex = -1;
+        for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
+            if (project_.WorkPlanes()[index].name == "top_XY") {
+                originPlaneIndex = index;
+                break;
+            }
+        }
+        if (originPlaneIndex < 0) {
+            return fail("find origin plane top_XY");
+        }
+        const std::size_t planesBeforeDelete = project_.WorkPlanes().size();
+        UpdateSelections({{CadSelectionKind::WorkPlane, originPlaneIndex}}, true);
+        DeleteSelection();
+        if (project_.WorkPlanes().size() != planesBeforeDelete) {
+            return fail("origin plane cannot be deleted");
+        }
     }
 
     const std::size_t historySizeBeforeDisplayMode = undoStack_.size();

@@ -1477,6 +1477,29 @@ void Er2RoundCabSampleLoads(const char* path)
 
 } // namespace
 
+
+void ObjectSetExportFlagRoundTrips()
+{
+    kachakacha::model::Project project;
+    project.AddWorkPlane("top", kachakacha::model::WorkPlane::FromPointNormal(
+        {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
+    project.AddWire("edge", Wire::Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}));
+    project.CreateObjectSet("前面");
+    project.AssignObjectToSet(kachakacha::model::ProjectObjectKind::Wire, "edge", "前面");
+    project.SetObjectSetExport("前面", false);
+
+    std::ostringstream written;
+    WriteProjectScript(written, project);
+    Require(written.str().find("object_set_export 前面 0") != std::string::npos,
+        "object_set_export line is written");
+
+    std::istringstream input(written.str());
+    const kachakacha::model::Project loaded = LoadProjectScript(input, "test");
+    Require(loaded.ObjectSets().size() == 1, "set round trips");
+    Require(!loaded.ObjectSets().front().exportEnabled, "export flag round trips");
+    Require(loaded.ObjectSets().front().members.size() == 1, "set member round trips");
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -1507,6 +1530,7 @@ int main(int argc, char* argv[])
         CurvedRailwayOutlineNetworkBuildsGroupedSurface();
         PlateSplitsRoundTrip();
         VisibilityRoundTrips();
+        ObjectSetExportFlagRoundTrips();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

@@ -34,6 +34,7 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QKeySequence>
@@ -274,6 +275,9 @@ void MainWindow::BuildUi()
     modelTree_->setHeaderHidden(true);
     modelTree_->setAlternatingRowColors(true);
     modelTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    modelTree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(modelTree_, &QTreeWidget::customContextMenuRequested, this,
+        [this](const QPoint& position) { ShowModelTreeContextMenu(position); });
     modelTree_->header()->setStretchLastSection(true);
     modelLayout->addWidget(modelFilter_);
     modelLayout->addWidget(modelTree_, 1);
@@ -364,7 +368,33 @@ void MainWindow::BuildUi()
         UpdateSelections(std::move(selections), false);
     });
     connect(modelTree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int) {
-        if (item == nullptr || item->parent() == nullptr) {
+        if (item == nullptr) {
+            return;
+        }
+        if (item->data(0, kSetNameRole).isValid()) {
+            // 部材グループのチェック=グループ一括の表示/非表示。
+            const std::string setName = ToName(item->data(0, kSetNameRole).toString());
+            const bool visible = item->checkState(0) == Qt::Checked;
+            const auto sets = project_.ObjectSets();
+            const auto set = std::find_if(sets.begin(), sets.end(),
+                [&](const auto& candidate) { return candidate.name == setName; });
+            if (set == sets.end()
+                || (set->state == kachakacha::model::ObjectSetState::Hidden) != visible) {
+                return;
+            }
+            RecordUndo();
+            project_.SetObjectSetState(setName, visible
+                    ? kachakacha::model::ObjectSetState::Visible
+                    : kachakacha::model::ObjectSetState::Hidden);
+            MarkModified();
+            viewport_->SetProject(&project_, false);
+            UpdateSelection({}, false);
+            statusBar()->showMessage(visible
+                    ? QStringLiteral("部材グループを表示しました")
+                    : QStringLiteral("部材グループを非表示にしました"), 2000);
+            return;
+        }
+        if (item->parent() == nullptr) {
             return;
         }
         const CadSelectionKind kind = static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt());
@@ -562,6 +592,22 @@ void MainWindow::BuildDrawingActions()
     measureToolAction_ = new QAction(QStringLiteral("測定"), this);
     joinWiresAction_ = new QAction(QStringLiteral("結合"), this);
     meetLinesAction_ = new QAction(QStringLiteral("2線を交点まで"), this);
+    chamferAction_ = new QAction(QStringLiteral("C面取り"), this);
+    filletAction_ = new QAction(QStringLiteral("R面取り"), this);
+    cornerEditAction_ = new QAction(QStringLiteral("角の加工"), this);
+    intersectionPointsAction_ = new QAction(QStringLiteral("交点に点"), this);
+    lineBetweenPointsAction_ = new QAction(QStringLiteral("2点を線で結ぶ"), this);
+    offsetApplyAction_ = new QAction(QStringLiteral("オフセット"), this);
+    chamferAction_->setToolTip(
+        QStringLiteral("選択した2直線をC面取り。距離はスケッチタブ「加工」の値を使用"));
+    filletAction_->setToolTip(
+        QStringLiteral("選択した2直線を円弧でつなぐ。半径はスケッチタブ「加工」の値を使用"));
+    cornerEditAction_->setToolTip(
+        QStringLiteral("選択したポリラインの角を落とす/丸める。数値はスケッチタブ「加工」の値を使用"));
+    intersectionPointsAction_->setToolTip(QStringLiteral("選択した2本のワイヤーの交点すべてに作図点を作成"));
+    lineBetweenPointsAction_->setToolTip(QStringLiteral("選択した2つの点(3D空間の任意交点も可)を直線で結ぶ"));
+    offsetApplyAction_->setToolTip(
+        QStringLiteral("選択した平面ワイヤーを平行オフセット。距離はスケッチタブ「編集」の値を使用"));
     setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
     clearReferenceAction_ = new QAction(QStringLiteral("基準解除"), this);
     moveToolAction_->setToolTip(QStringLiteral("選択したワイヤーを基準点と移動先の2点で移動"));
@@ -650,6 +696,12 @@ void MainWindow::BuildDrawingActions()
     connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
     connect(joinWiresAction_, &QAction::triggered, this, &MainWindow::JoinSelectedWires);
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
+    connect(chamferAction_, &QAction::triggered, this, &MainWindow::ApplyLineChamfer);
+    connect(filletAction_, &QAction::triggered, this, &MainWindow::ApplyLineFillet);
+    connect(cornerEditAction_, &QAction::triggered, this, &MainWindow::ApplyPolylineCornerEdit);
+    connect(intersectionPointsAction_, &QAction::triggered, this, &MainWindow::CreateIntersectionPoints);
+    connect(lineBetweenPointsAction_, &QAction::triggered, this, &MainWindow::CreateLineBetweenSelectedPoints);
+    connect(offsetApplyAction_, &QAction::triggered, this, &MainWindow::ApplyWireOffset);
     connect(setReferenceAction_, &QAction::triggered, this, &MainWindow::SetReferenceFromSelection);
     connect(clearReferenceAction_, &QAction::triggered, this, &MainWindow::ClearReference);
 
@@ -924,6 +976,24 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar->addAction(meetLinesAction_);
     transformToolbar->addSeparator();
     transformToolbar->addAction(setReferenceAction_);
+
+    // 加工系(パラメータはスケッチタブに残し、コマンド起動は上段からもできるようにする)。
+    // 作図列のあふれを防ぐため3段目に置く(オーナー指示: 縦2列可)。
+    addToolBarBreak(Qt::TopToolBarArea);
+    QToolBar* machiningToolbar = addToolBar(QStringLiteral("加工"));
+    machiningToolbar->setMovable(false);
+    machiningToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    machiningToolbar->addAction(chamferAction_);
+    machiningToolbar->addAction(filletAction_);
+    machiningToolbar->addAction(cornerEditAction_);
+    machiningToolbar->addSeparator();
+    machiningToolbar->addAction(intersectionPointsAction_);
+    machiningToolbar->addAction(lineBetweenPointsAction_);
+    machiningToolbar->addAction(offsetApplyAction_);
+    machiningToolbar->addSeparator();
+    machiningToolbar->addAction(removeCoincidentAction_);
+    machiningToolbar->addAction(removeTangentAction_);
+    machiningToolbar->addAction(clearReferenceAction_);
     UpdateHistoryActions();
 }
 
@@ -3894,24 +3964,246 @@ void MainWindow::ApplyModelTreeFilter()
     }
 
     const QString term = modelFilter_->text().trimmed();
-    for (int rootIndex = 0; rootIndex < modelTree_->topLevelItemCount(); ++rootIndex) {
-        QTreeWidgetItem* root = modelTree_->topLevelItem(rootIndex);
-        const bool rootMatches = term.isEmpty()
-            || root->text(0).contains(term, Qt::CaseInsensitive);
-        bool childMatches = false;
-        for (int childIndex = 0; childIndex < root->childCount(); ++childIndex) {
-            QTreeWidgetItem* child = root->child(childIndex);
-            const bool matches = term.isEmpty() || rootMatches
-                || child->text(0).contains(term, Qt::CaseInsensitive);
-            child->setHidden(!matches);
-            childMatches = childMatches || matches;
+    // 部材グループ化で3階層になったため再帰で判定する。
+    // 自分か祖先が一致すれば子孫ごと表示、子孫が一致すれば祖先も表示。
+    const std::function<bool(QTreeWidgetItem*, bool)> applyFilter =
+        [&](QTreeWidgetItem* item, bool ancestorMatches) -> bool {
+        const bool selfMatches = term.isEmpty()
+            || item->text(0).contains(term, Qt::CaseInsensitive);
+        bool descendantMatches = false;
+        for (int childIndex = 0; childIndex < item->childCount(); ++childIndex) {
+            descendantMatches = applyFilter(
+                                    item->child(childIndex), ancestorMatches || selfMatches)
+                || descendantMatches;
         }
-        const bool rootVisible = term.isEmpty() || rootMatches || childMatches;
-        root->setHidden(!rootVisible);
-        if (!term.isEmpty() && rootVisible) {
-            root->setExpanded(true);
+        const bool visible = term.isEmpty() || ancestorMatches || selfMatches || descendantMatches;
+        item->setHidden(!visible);
+        if (!term.isEmpty() && visible && item->childCount() > 0) {
+            item->setExpanded(true);
+        }
+        return selfMatches || descendantMatches;
+    };
+    for (int rootIndex = 0; rootIndex < modelTree_->topLevelItemCount(); ++rootIndex) {
+        applyFilter(modelTree_->topLevelItem(rootIndex), false);
+    }
+}
+
+void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
+{
+    using kachakacha::model::ObjectSet;
+    using kachakacha::model::ObjectSetState;
+    using kachakacha::model::ProjectObjectKind;
+    QTreeWidgetItem* clicked = modelTree_->itemAt(position);
+
+    const auto toObjectKind = [](CadSelectionKind kind) -> std::optional<ProjectObjectKind> {
+        switch (kind) {
+        case CadSelectionKind::WorkPlane: return ProjectObjectKind::WorkPlane;
+        case CadSelectionKind::Point: return ProjectObjectKind::Point;
+        case CadSelectionKind::Wire: return ProjectObjectKind::Wire;
+        case CadSelectionKind::Surface: return ProjectObjectKind::Surface;
+        case CadSelectionKind::Plate: return ProjectObjectKind::Plate;
+        case CadSelectionKind::Body: return ProjectObjectKind::Body;
+        default: return std::nullopt;
+        }
+    };
+    const auto objectName = [this](CadSelectionKind kind, int index) -> std::optional<std::string> {
+        switch (kind) {
+        case CadSelectionKind::WorkPlane:
+            if (index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+                return project_.WorkPlanes()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Point:
+            if (index >= 0 && index < static_cast<int>(project_.Points().size())) {
+                return project_.Points()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Wire:
+            if (index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+                return project_.Wires()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Surface:
+            if (index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+                return project_.Surfaces()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Plate:
+            if (index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+                return project_.Plates()[index].name;
+            }
+            return std::nullopt;
+        case CadSelectionKind::Body:
+            if (index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+                return project_.Bodies()[index].name;
+            }
+            return std::nullopt;
+        default:
+            return std::nullopt;
+        }
+    };
+
+    // 対象 = ツリーで選択中の要素(クリック位置の要素も含める)。
+    std::vector<std::pair<ProjectObjectKind, std::string>> targets;
+    QList<QTreeWidgetItem*> items = modelTree_->selectedItems();
+    if (clicked != nullptr && !items.contains(clicked)) {
+        items.prepend(clicked);
+    }
+    for (QTreeWidgetItem* item : items) {
+        if (item == nullptr || !item->data(0, kSelectionKindRole).isValid()
+            || !item->data(0, kSelectionIndexRole).isValid()) {
+            continue;
+        }
+        const auto kind = toObjectKind(
+            static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt()));
+        if (!kind.has_value()) {
+            continue;
+        }
+        const auto name = objectName(
+            static_cast<CadSelectionKind>(item->data(0, kSelectionKindRole).toInt()),
+            item->data(0, kSelectionIndexRole).toInt());
+        if (!name.has_value()) {
+            continue;
+        }
+        const auto duplicate = std::find_if(targets.begin(), targets.end(), [&](const auto& target) {
+            return target.first == *kind && target.second == *name;
+        });
+        if (duplicate == targets.end()) {
+            targets.emplace_back(*kind, *name);
         }
     }
+    std::optional<std::string> clickedSetName;
+    if (clicked != nullptr && clicked->data(0, kSetNameRole).isValid()) {
+        clickedSetName = ToName(clicked->data(0, kSetNameRole).toString());
+    }
+
+    const auto finishSetEdit = [this](const QString& message) {
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(message, 3000);
+    };
+    const auto createSet = [this]() -> std::optional<std::string> {
+        const QString input = QInputDialog::getText(this,
+            QStringLiteral("新しい部材グループ"),
+            QStringLiteral("部材グループ名（例: 前面、右側面、屋根）:"));
+        if (input.trimmed().isEmpty()) {
+            return std::nullopt;
+        }
+        try {
+            ValidateObjectName(input);
+            const std::string name = ToName(input);
+            for (const ObjectSet& set : project_.ObjectSets()) {
+                if (set.name == name) {
+                    throw std::invalid_argument("同じ名前の部材グループがあります。");
+                }
+            }
+            RecordUndo();
+            project_.CreateObjectSet(name);
+            return name;
+        } catch (const std::exception& error) {
+            QMessageBox::warning(this, QStringLiteral("部材グループ"),
+                QString::fromUtf8(error.what()));
+            return std::nullopt;
+        }
+    };
+    const auto assignTargets = [this, targets, finishSetEdit](const std::string& setName) {
+        for (const auto& [kind, name] : targets) {
+            project_.AssignObjectToSet(kind, name, setName);
+        }
+        finishSetEdit(QStringLiteral("%1個を部材「%2」へ割り当てました")
+                .arg(targets.size()).arg(ToQString(setName)));
+    };
+
+    QMenu menu(this);
+    if (!targets.empty()) {
+        QMenu* assignMenu = menu.addMenu(
+            QStringLiteral("部材グループへ割り当て（%1個）").arg(targets.size()));
+        for (const ObjectSet& set : project_.ObjectSets()) {
+            if (set.automatic) {
+                continue;
+            }
+            QAction* action = assignMenu->addAction(ToQString(set.name));
+            const std::string setName = set.name;
+            connect(action, &QAction::triggered, this, [this, assignTargets, setName] {
+                RecordUndo();
+                assignTargets(setName);
+            });
+        }
+        if (!assignMenu->isEmpty()) {
+            assignMenu->addSeparator();
+        }
+        QAction* assignNew = assignMenu->addAction(QStringLiteral("新しい部材グループ…"));
+        connect(assignNew, &QAction::triggered, this, [this, createSet, assignTargets] {
+            if (const auto name = createSet(); name.has_value()) {
+                assignTargets(*name);
+            }
+        });
+        QAction* unassign = menu.addAction(QStringLiteral("部材グループから外す"));
+        connect(unassign, &QAction::triggered, this, [this, targets, finishSetEdit] {
+            RecordUndo();
+            for (const auto& [kind, name] : targets) {
+                project_.RemoveObjectFromSets(kind, name);
+            }
+            finishSetEdit(QStringLiteral("部材グループから外しました"));
+        });
+        menu.addSeparator();
+    }
+    if (clickedSetName.has_value()) {
+        const auto sets = project_.ObjectSets();
+        const auto set = std::find_if(sets.begin(), sets.end(),
+            [&](const ObjectSet& candidate) { return candidate.name == *clickedSetName; });
+        if (set != sets.end()) {
+            QMenu* stateMenu = menu.addMenu(QStringLiteral("表示状態"));
+            const auto addStateAction = [&](const QString& label, ObjectSetState state) {
+                QAction* action = stateMenu->addAction(label);
+                action->setCheckable(true);
+                action->setChecked(set->state == state);
+                const std::string setName = *clickedSetName;
+                connect(action, &QAction::triggered, this, [this, setName, state, finishSetEdit] {
+                    RecordUndo();
+                    project_.SetObjectSetState(setName, state);
+                    viewport_->SetProject(&project_, false);
+                    finishSetEdit(QStringLiteral("表示状態を変更しました"));
+                });
+            };
+            addStateAction(QStringLiteral("表示"), ObjectSetState::Visible);
+            addStateAction(QStringLiteral("参照のみ（スナップ可・編集不可）"), ObjectSetState::ReferenceOnly);
+            addStateAction(QStringLiteral("非表示"), ObjectSetState::Hidden);
+            QAction* exportAction = menu.addAction(QStringLiteral(".kcd書き出しに含める"));
+            exportAction->setCheckable(true);
+            exportAction->setChecked(set->exportEnabled);
+            {
+                const std::string setName = *clickedSetName;
+                const bool nextEnabled = !set->exportEnabled;
+                connect(exportAction, &QAction::triggered, this,
+                    [this, setName, nextEnabled, finishSetEdit] {
+                        RecordUndo();
+                        project_.SetObjectSetExport(setName, nextEnabled);
+                        finishSetEdit(nextEnabled
+                                ? QStringLiteral("書き出し対象にしました")
+                                : QStringLiteral("書き出しから除外しました（出力タブの「出力対象のみで書き出し」に反映）"));
+                    });
+            }
+            if (!set->automatic) {
+                QAction* removeAction = menu.addAction(
+                    QStringLiteral("部材グループを削除（中身は未分類へ）"));
+                const std::string setName = *clickedSetName;
+                connect(removeAction, &QAction::triggered, this, [this, setName, finishSetEdit] {
+                    RecordUndo();
+                    project_.RemoveObjectSet(setName);
+                    finishSetEdit(QStringLiteral("部材グループを削除しました"));
+                });
+            }
+            menu.addSeparator();
+        }
+    }
+    QAction* newSetAction = menu.addAction(QStringLiteral("新しい部材グループを作成…"));
+    connect(newSetAction, &QAction::triggered, this, [createSet, finishSetEdit] {
+        if (const auto name = createSet(); name.has_value()) {
+            finishSetEdit(QStringLiteral("部材グループ「%1」を作成しました").arg(ToQString(*name)));
+        }
+    });
+    menu.exec(modelTree_->viewport()->mapToGlobal(position));
 }
 
 void MainWindow::SetDisplayMode(ViewportDisplayMode mode)
@@ -4001,34 +4293,140 @@ void MainWindow::RefreshModelViews(bool fitView)
     }
     modelTree_->blockSignals(true);
     modelTree_->clear();
-    auto* planeRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("作業平面 (%1)").arg(project_.WorkPlanes().size())});
-    for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
-        auto* item = new QTreeWidgetItem(planeRoot, {ToQString(project_.WorkPlanes()[index].name)});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::WorkPlane));
+
+    // 部材グループ(ObjectSet)ごとにまとめて表示する(ADR 0024)。
+    // 所属は「1オブジェクト=最大1グループ」。未所属は「未分類」へ。
+    using kachakacha::model::ObjectSet;
+    using kachakacha::model::ObjectSetState;
+    using kachakacha::model::ProjectObjectKind;
+    const auto setOf = [this](ProjectObjectKind kind, const std::string& name) -> const ObjectSet* {
+        for (const ObjectSet& set : project_.ObjectSets()) {
+            for (const auto& member : set.members) {
+                if (member.kind == kind && member.name == name) {
+                    return &set;
+                }
+            }
+        }
+        return nullptr;
+    };
+    const auto addObjectItem = [this](QTreeWidgetItem* parent, CadSelectionKind kind, int index,
+                                   const QString& label, bool visible) {
+        auto* item = new QTreeWidgetItem(parent, {label});
+        item->setData(0, kSelectionKindRole, static_cast<int>(kind));
         item->setData(0, kSelectionIndexRole, index);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.WorkPlanes()[index].visible ? Qt::Checked : Qt::Unchecked);
+        item->setCheckState(0, visible ? Qt::Checked : Qt::Unchecked);
+        return item;
+    };
+    // 各コンテナ(部材グループまたは未分類)に、種類ごとの小見出し+要素を作る。
+    const auto addKindSections = [&](QTreeWidgetItem* container, const ObjectSet* owner) {
+        const auto belongs = [&](ProjectObjectKind kind, const std::string& name) {
+            return setOf(kind, name) == owner;
+        };
+        const auto section = [&](const QString& title, auto&& fill) {
+            auto* root = new QTreeWidgetItem({QStringLiteral("")});
+            int count = fill(root);
+            if (count == 0) {
+                delete root;
+                return;
+            }
+            root->setText(0, QStringLiteral("%1 (%2)").arg(title).arg(count));
+            container->addChild(root);
+            root->setExpanded(true);
+        };
+        section(QStringLiteral("作業平面"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.WorkPlanes().size()); ++index) {
+                const auto& plane = project_.WorkPlanes()[index];
+                if (!belongs(ProjectObjectKind::WorkPlane, plane.name)) continue;
+                addObjectItem(root, CadSelectionKind::WorkPlane, index, ToQString(plane.name), plane.visible);
+                ++count;
+            }
+            return count;
+        });
+        section(QStringLiteral("作図点"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.Points().size()); ++index) {
+                const auto& point = project_.Points()[index];
+                if (!belongs(ProjectObjectKind::Point, point.name)) continue;
+                addObjectItem(root, CadSelectionKind::Point, index, ToQString(point.name), point.visible);
+                ++count;
+            }
+            return count;
+        });
+        section(QStringLiteral("ワイヤー"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+                const auto& wire = project_.Wires()[index];
+                if (!belongs(ProjectObjectKind::Wire, wire.name)) continue;
+                const QString label = wire.metadata.construction
+                    ? QStringLiteral("%1 （補助）").arg(ToQString(wire.name))
+                    : ToQString(wire.name);
+                addObjectItem(root, CadSelectionKind::Wire, index, label, wire.visible);
+                ++count;
+            }
+            return count;
+        });
+        section(QStringLiteral("面"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+                const auto& surface = project_.Surfaces()[index];
+                if (!belongs(ProjectObjectKind::Surface, surface.name)) continue;
+                addObjectItem(root, CadSelectionKind::Surface, index, ToQString(surface.name), surface.visible);
+                ++count;
+            }
+            return count;
+        });
+        section(QStringLiteral("板材"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
+                const auto& plate = project_.Plates()[index];
+                if (!belongs(ProjectObjectKind::Plate, plate.name)) continue;
+                addObjectItem(root, CadSelectionKind::Plate, index, ToQString(plate.name), plate.visible);
+                ++count;
+            }
+            return count;
+        });
+        section(QStringLiteral("治具・立体"), [&](QTreeWidgetItem* root) {
+            int count = 0;
+            for (int index = 0; index < static_cast<int>(project_.Bodies().size()); ++index) {
+                const auto& body = project_.Bodies()[index];
+                if (!belongs(ProjectObjectKind::Body, body.name)) continue;
+                addObjectItem(root, CadSelectionKind::Body, index, ToQString(body.name), body.visible);
+                ++count;
+            }
+            return count;
+        });
+    };
+
+    for (const ObjectSet& set : project_.ObjectSets()) {
+        QString label = ToQString(set.name);
+        QStringList notes;
+        if (set.state == ObjectSetState::ReferenceOnly) notes << QStringLiteral("参照のみ");
+        if (!set.exportEnabled) notes << QStringLiteral("出力しない");
+        if (!notes.isEmpty()) {
+            label += QStringLiteral("  [%1]").arg(notes.join(QStringLiteral("・")));
+        }
+        auto* setRoot = new QTreeWidgetItem(modelTree_, {label});
+        setRoot->setData(0, kSetNameRole, ToQString(set.name));
+        setRoot->setFlags(setRoot->flags() | Qt::ItemIsUserCheckable);
+        setRoot->setCheckState(0, set.state == ObjectSetState::Hidden ? Qt::Unchecked : Qt::Checked);
+        setRoot->setToolTip(0, QStringLiteral(
+            "部材グループ。チェックで一括表示/非表示。右クリックで割り当て・出力設定"));
+        QFont setFont = setRoot->font(0);
+        setFont.setBold(true);
+        setRoot->setFont(0, setFont);
+        addKindSections(setRoot, &set);
+        setRoot->setExpanded(true);
     }
-    auto* pointRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("作図点 (%1)").arg(project_.Points().size())});
-    for (int index = 0; index < static_cast<int>(project_.Points().size()); ++index) {
-        auto* item = new QTreeWidgetItem(pointRoot, {ToQString(project_.Points()[index].name)});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Point));
-        item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.Points()[index].visible ? Qt::Checked : Qt::Unchecked);
+    {
+        auto* unassignedRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("未分類")});
+        unassignedRoot->setToolTip(0, QStringLiteral(
+            "どの部材グループにも属さないオブジェクト。右クリックで部材へ割り当てできます"));
+        addKindSections(unassignedRoot, nullptr);
+        unassignedRoot->setExpanded(true);
     }
-    auto* wireRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("ワイヤー (%1)").arg(project_.Wires().size())});
-    for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
-        const auto& wire = project_.Wires()[index];
-        const QString label = wire.metadata.construction
-            ? QStringLiteral("%1 （補助）").arg(ToQString(wire.name))
-            : ToQString(wire.name);
-        auto* item = new QTreeWidgetItem(wireRoot, {label});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Wire));
-        item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.Wires()[index].visible ? Qt::Checked : Qt::Unchecked);
-    }
+
     auto* coincidenceRoot = new QTreeWidgetItem(
         modelTree_, {QStringLiteral("端点一致 (%1)").arg(project_.CoincidentConstraints().size())});
     const auto endpointText = [](kachakacha::model::WireEndpoint endpoint) {
@@ -4076,39 +4474,9 @@ void MainWindow::RefreshModelViews(bool fitView)
         item->setFlags(item->flags() & ~Qt::ItemIsSelectable);
         item->setToolTip(0, ReferenceDimensionKindText(dimension.kind));
     }
-    auto* surfaceRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("面 (%1)").arg(project_.Surfaces().size())});
-    for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
-        auto* item = new QTreeWidgetItem(surfaceRoot, {ToQString(project_.Surfaces()[index].name)});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Surface));
-        item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.Surfaces()[index].visible ? Qt::Checked : Qt::Unchecked);
-    }
-    auto* plateRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("板材 (%1)").arg(project_.Plates().size())});
-    for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
-        auto* item = new QTreeWidgetItem(plateRoot, {ToQString(project_.Plates()[index].name)});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Plate));
-        item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.Plates()[index].visible ? Qt::Checked : Qt::Unchecked);
-    }
-    auto* bodyRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("治具・立体 (%1)").arg(project_.Bodies().size())});
-    for (int index = 0; index < static_cast<int>(project_.Bodies().size()); ++index) {
-        auto* item = new QTreeWidgetItem(bodyRoot, {ToQString(project_.Bodies()[index].name)});
-        item->setData(0, kSelectionKindRole, static_cast<int>(CadSelectionKind::Body));
-        item->setData(0, kSelectionIndexRole, index);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(0, project_.Bodies()[index].visible ? Qt::Checked : Qt::Unchecked);
-    }
-    planeRoot->setExpanded(true);
-    pointRoot->setExpanded(true);
-    wireRoot->setExpanded(true);
     coincidenceRoot->setExpanded(true);
     tangentRoot->setExpanded(true);
     dimensionRoot->setExpanded(true);
-    surfaceRoot->setExpanded(true);
-    plateRoot->setExpanded(true);
-    bodyRoot->setExpanded(true);
     modelTree_->blockSignals(false);
     ApplyModelTreeFilter();
 

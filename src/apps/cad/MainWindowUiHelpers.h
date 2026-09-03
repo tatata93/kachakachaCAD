@@ -48,6 +48,7 @@ using kachakacha::model::WorkPlane;
 inline constexpr int kSelectionKindRole = Qt::UserRole;
 inline constexpr int kSelectionIndexRole = Qt::UserRole + 1;
 inline constexpr int kDimensionNameRole = Qt::UserRole + 2;
+inline constexpr int kSetNameRole = Qt::UserRole + 3;
 inline constexpr double kPi = 3.14159265358979323846;
 
 inline bool IsAutomationInvocation()

@@ -935,6 +935,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 }
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPartModel(name, plateName, options);
+            } else if (command == "object_set_export") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "set");
+                const int enabled = static_cast<int>(ReadDouble(stream, sourceName, lineNumber, "export flag"));
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetObjectSetExport(name, enabled != 0);
             } else if (command == "object_set" || command == "object_set_state") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "set");
                 const std::string stateToken = ReadName(stream, sourceName, lineNumber, "set state");
@@ -1591,6 +1596,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     for (const auto& dimension : project.ReferenceDimensions()) {
         if (!dimension.visible) {
             output << "visibility dimension " << dimension.name << " hidden\n";
+        }
+    }
+    // 出力除外フラグは全セット(自動セット含む)が生成された後に読めるよう末尾に書く。
+    for (const auto& set : project.ObjectSets()) {
+        if (!set.exportEnabled) {
+            output << "object_set_export " << set.name << " 0\n";
         }
     }
 }

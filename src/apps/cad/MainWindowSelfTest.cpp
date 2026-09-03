@@ -34,6 +34,7 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
 #include <QKeySequence>
@@ -2987,6 +2988,61 @@ bool MainWindow::RunCreationSelfTest()
         return fail("filter model tree by object name");
     }
     modelFilter_->clear();
+
+    // 部材グループ: 割り当て→ツリーのグループ表示→一括非表示→復帰(ADR 0024)。
+    project_.CreateObjectSet("__ui_部材テスト");
+    project_.AssignObjectToSet(
+        kachakacha::model::ProjectObjectKind::Surface, "__ui_nose_skin", "__ui_部材テスト");
+    project_.SetObjectSetExport("__ui_部材テスト", false);
+    RefreshModelViews(false);
+    QTreeWidgetItem* setNode = nullptr;
+    for (int rootIndex = 0; rootIndex < modelTree_->topLevelItemCount(); ++rootIndex) {
+        QTreeWidgetItem* candidate = modelTree_->topLevelItem(rootIndex);
+        if (candidate->data(0, kSetNameRole).isValid()
+            && candidate->data(0, kSetNameRole).toString() == QStringLiteral("__ui_部材テスト")) {
+            setNode = candidate;
+            break;
+        }
+    }
+    if (setNode == nullptr || !setNode->text(0).contains(QStringLiteral("出力しない"))) {
+        return fail("model tree shows object set group with export note");
+    }
+    bool surfaceUnderSet = false;
+    QTreeWidgetItemIterator setIterator(setNode);
+    while (*setIterator) {
+        QTreeWidgetItem* item = *setIterator;
+        QTreeWidgetItem* ancestor = item;
+        while (ancestor != nullptr && ancestor != setNode) {
+            ancestor = ancestor->parent();
+        }
+        if (ancestor != setNode) {
+            break;
+        }
+        if (item->text(0) == QStringLiteral("__ui_nose_skin")) {
+            surfaceUnderSet = true;
+            break;
+        }
+        ++setIterator;
+    }
+    if (!surfaceUnderSet) {
+        return fail("assigned surface listed under its set node");
+    }
+    setNode->setCheckState(0, Qt::Unchecked);
+    if (project_.ObjectStateInSets(
+            kachakacha::model::ProjectObjectKind::Surface, "__ui_nose_skin")
+        != kachakacha::model::ObjectSetState::Hidden) {
+        return fail("unchecking set node hides its members");
+    }
+    setNode->setCheckState(0, Qt::Checked);
+    if (project_.ObjectStateInSets(
+            kachakacha::model::ProjectObjectKind::Surface, "__ui_nose_skin")
+        != kachakacha::model::ObjectSetState::Visible) {
+        return fail("checking set node shows its members");
+    }
+    if (!project_.RemoveObjectSet("__ui_部材テスト")) {
+        return fail("remove test object set");
+    }
+    RefreshModelViews(false);
 
     const std::size_t historySizeBeforeDisplayMode = undoStack_.size();
     UpdateSelections({

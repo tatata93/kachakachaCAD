@@ -519,6 +519,18 @@ QWidget* MainWindow::BuildOutputPanel()
     modelLayout->addWidget(bodyStlButton);
     modelLayout->addWidget(bodyStepButton);
 
+    // 部材グループ単位の .kcd 書き出し(モデルツリーの右クリックで除外を設定)。
+    auto* filteredKcdLabel = new QLabel(QStringLiteral(
+        "「出力しない」に設定した部材グループを除いて .kcd を書き出します。\n"
+        "除外はモデルツリーの部材グループを右クリックして設定します。"));
+    filteredKcdLabel->setWordWrap(true);
+    filteredKcdLabel->setStyleSheet("color: #5c6670;");
+    modelLayout->addWidget(filteredKcdLabel);
+    auto* filteredKcdButton = new QPushButton(QStringLiteral("出力対象のみで .kcd 書き出し"));
+    filteredKcdButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(filteredKcdButton, &QPushButton::clicked, this, [this] { ExportProjectExcludingSets(); });
+    modelLayout->addWidget(filteredKcdButton);
+
     auto* planarSection = new CollapsibleSection(
         QStringLiteral("作業平面の1:1図面"), planarContent, true);
     planarSection->setProperty("manualAnchor", QStringLiteral("planarOutput"));
@@ -1524,5 +1536,126 @@ void MainWindow::RefreshExportSummary()
         UpdatePlateAssemblyGuidePreview();
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));
+    }
+}
+
+void MainWindow::ExportProjectExcludingSets()
+{
+    using kachakacha::model::ObjectSet;
+    using kachakacha::model::ObjectSetMember;
+    using kachakacha::model::ProjectObjectKind;
+    try {
+        std::vector<std::string> excludedSets;
+        for (const ObjectSet& set : project_.ObjectSets()) {
+            if (!set.exportEnabled) {
+                excludedSets.push_back(set.name);
+            }
+        }
+        if (excludedSets.empty()) {
+            QMessageBox::information(this, QStringLiteral(".kcd書き出し"),
+                QStringLiteral("出力から除外された部材グループがありません。\n"
+                               "モデルツリーで部材グループを右クリックし、"
+                               "「.kcd書き出しに含める」のチェックを外してください。"));
+            return;
+        }
+
+        // コピーへ複製し、除外部材のメンバーを依存順に削除する。
+        // 依存で消せない場合は理由を集めて中断する(部材の所属は自分で管理する方針)。
+        Project exportProject = project_;
+        std::vector<ObjectSetMember> pending;
+        for (const std::string& setName : excludedSets) {
+            for (const ObjectSet& set : exportProject.ObjectSets()) {
+                if (set.name == setName) {
+                    pending.insert(pending.end(), set.members.begin(), set.members.end());
+                }
+            }
+        }
+        const auto kindRank = [](ProjectObjectKind kind) {
+            switch (kind) {
+            case ProjectObjectKind::PartModel: return 0;
+            case ProjectObjectKind::Body: return 1;
+            case ProjectObjectKind::Plate: return 2;
+            case ProjectObjectKind::Surface: return 3;
+            case ProjectObjectKind::Wire: return 4;
+            case ProjectObjectKind::Point: return 5;
+            case ProjectObjectKind::WorkPlane:
+            default: return 6;
+            }
+        };
+        std::stable_sort(pending.begin(), pending.end(), [&](const auto& a, const auto& b) {
+            return kindRank(a.kind) < kindRank(b.kind);
+        });
+        const auto removeOne = [&exportProject](const ObjectSetMember& member) {
+            switch (member.kind) {
+            case ProjectObjectKind::PartModel: exportProject.RemovePartModel(member.name); return;
+            case ProjectObjectKind::Body: exportProject.RemoveBody(member.name); return;
+            case ProjectObjectKind::Plate: exportProject.RemovePlate(member.name); return;
+            case ProjectObjectKind::Surface: exportProject.RemoveSurface(member.name); return;
+            case ProjectObjectKind::Wire: exportProject.RemoveWire(member.name); return;
+            case ProjectObjectKind::Point: exportProject.RemovePoint(member.name); return;
+            case ProjectObjectKind::WorkPlane: exportProject.RemoveWorkPlane(member.name); return;
+            }
+        };
+        std::vector<QString> blockers;
+        bool progress = true;
+        while (progress && !pending.empty()) {
+            progress = false;
+            blockers.clear();
+            for (auto member = pending.begin(); member != pending.end();) {
+                try {
+                    removeOne(*member);
+                    member = pending.erase(member);
+                    progress = true;
+                } catch (const std::exception& error) {
+                    blockers.push_back(QStringLiteral("%1: %2")
+                            .arg(ToQString(member->name), QString::fromUtf8(error.what())));
+                    ++member;
+                }
+            }
+        }
+        if (!pending.empty()) {
+            throw std::runtime_error(ToName(
+                QStringLiteral("出力対象の部材が除外部材を参照しているため書き出せません。\n%1")
+                    .arg(QStringList(blockers.begin(), blockers.end())
+                            .join(QStringLiteral("\n")))));
+        }
+        for (const std::string& setName : excludedSets) {
+            exportProject.RemoveObjectSet(setName);
+        }
+
+        QString suggestedDirectory;
+        if (!currentPath_.isEmpty()) {
+            suggestedDirectory = QFileInfo(currentPath_).absolutePath() + QLatin1Char('/');
+        }
+        QString suggestedName = QStringLiteral("出力対象のみ.kcd");
+        if (!currentPath_.isEmpty()) {
+            suggestedName = QFileInfo(currentPath_).completeBaseName()
+                + QStringLiteral("_出力対象のみ.kcd");
+        }
+        QString path = QFileDialog::getSaveFileName(
+            this,
+            QStringLiteral("出力対象の部材のみで書き出し"),
+            suggestedDirectory + suggestedName,
+            QStringLiteral("kachakachaCAD (*.kcd)"));
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(QStringLiteral(".kcd"), Qt::CaseInsensitive)) {
+            path += QStringLiteral(".kcd");
+        }
+        const std::filesystem::path nativePath(path.toStdWString());
+        std::ofstream output(nativePath, std::ios::binary);
+        if (!output) {
+            throw std::runtime_error("出力ファイルを開けませんでした。");
+        }
+        WriteProjectScript(output, exportProject);
+        statusBar()->showMessage(
+            QStringLiteral("出力対象のみで書き出しました: %1（除外部材 %2 件）")
+                .arg(path)
+                .arg(excludedSets.size()),
+            5000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral(".kcd書き出し"),
+            QString::fromUtf8(error.what()));
     }
 }

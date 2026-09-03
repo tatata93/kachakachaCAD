@@ -240,6 +240,8 @@ private:
     void RefreshSurfaceChoices();
     void RefreshExportSummary();
     void ApplyModelTreeFilter();
+    void ShowModelTreeContextMenu(const QPoint& position);
+    void ExportProjectExcludingSets();
     void SetDisplayMode(ViewportDisplayMode mode);
     void ResetDisplayMode();
     void UpdateSelection(CadSelection selection, bool updateTree);
@@ -302,6 +304,12 @@ private:
     QAction* measureToolAction_ = nullptr;
     QAction* joinWiresAction_ = nullptr;
     QAction* meetLinesAction_ = nullptr;
+    QAction* chamferAction_ = nullptr;
+    QAction* filletAction_ = nullptr;
+    QAction* cornerEditAction_ = nullptr;
+    QAction* intersectionPointsAction_ = nullptr;
+    QAction* lineBetweenPointsAction_ = nullptr;
+    QAction* offsetApplyAction_ = nullptr;
     QAction* setReferenceAction_ = nullptr;
     QAction* clearReferenceAction_ = nullptr;
     QAction* snapAction_ = nullptr;

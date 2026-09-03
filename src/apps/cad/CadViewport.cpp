@@ -5095,7 +5095,9 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             setCursor(Qt::ClosedHandCursor);
         }
         const QPoint delta = event->position().toPoint() - lastMousePosition_;
-        OrbitViewByPixels(delta.x(), delta.y());
+        // キューブは「つかんで回す」向き: 上へドラッグ=キューブの上面が奥へ倒れる。
+        // キャンバスのオービット(カメラを動かす向き)とは縦方向が逆になる。
+        OrbitViewByPixels(delta.x(), -delta.y());
         lastMousePosition_ = event->position().toPoint();
         update();
         event->accept();

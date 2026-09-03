@@ -201,6 +201,8 @@ struct ObjectSet {
     std::string name;
     ObjectSetState state = ObjectSetState::Visible;
     bool automatic = false; //!< 部材近似モデル等が生成・管理する自動セット
+    //! 「出力対象のみで.kcd書き出し」で書き出すか。通常の保存には影響しない。
+    bool exportEnabled = true;
     std::vector<ObjectSetMember> members;
 };
 
@@ -337,6 +339,7 @@ public:
     void CreateObjectSet(std::string name, ObjectSetState state = ObjectSetState::Visible);
     bool RemoveObjectSet(std::string_view name);
     void SetObjectSetState(std::string_view name, ObjectSetState state);
+    void SetObjectSetExport(std::string_view name, bool enabled);
     void AssignObjectToSet(ProjectObjectKind kind, std::string objectName, std::string_view setName);
     void RemoveObjectFromSets(ProjectObjectKind kind, std::string_view objectName);
     //! オブジェクトが属するセットの状態。どのセットにも属さなければ Visible。

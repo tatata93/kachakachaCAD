@@ -2734,7 +2734,7 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     const std::string setName = "近似:" + model.name;
     ObjectSet* set = FindObjectSetMutable(setName);
     if (set == nullptr) {
-        objectSets_.push_back({setName, ObjectSetState::Visible, true, {}});
+        objectSets_.push_back({setName, ObjectSetState::Visible, true, true, {}});
         set = &objectSets_.back();
     }
     set->automatic = true;
@@ -2906,7 +2906,7 @@ std::vector<std::string> Project::ExtractPartModelBoundaries(std::string_view na
 
     const std::string setName = "抽出:" + model->name;
     if (FindObjectSetMutable(setName) == nullptr) {
-        objectSets_.push_back({setName, ObjectSetState::Visible, false, {}});
+        objectSets_.push_back({setName, ObjectSetState::Visible, false, true, {}});
     }
 
     std::vector<std::string> created;
@@ -2956,7 +2956,7 @@ void Project::CreateObjectSet(std::string name, ObjectSetState state)
     if (FindObjectSetMutable(name) != nullptr) {
         throw std::invalid_argument("Set name already exists: " + name);
     }
-    objectSets_.push_back({std::move(name), state, false, {}});
+    objectSets_.push_back({std::move(name), state, false, true, {}});
 }
 
 bool Project::RemoveObjectSet(std::string_view name)
@@ -2982,6 +2982,15 @@ void Project::SetObjectSetState(std::string_view name, ObjectSetState state)
         throw std::invalid_argument("Set is missing: " + std::string(name));
     }
     set->state = state;
+}
+
+void Project::SetObjectSetExport(std::string_view name, bool enabled)
+{
+    ObjectSet* set = FindObjectSetMutable(name);
+    if (set == nullptr) {
+        throw std::invalid_argument("Set is missing: " + std::string(name));
+    }
+    set->exportEnabled = enabled;
 }
 
 void Project::AssignObjectToSet(

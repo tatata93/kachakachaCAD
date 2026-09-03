@@ -4808,7 +4808,11 @@ void MainWindow::RefreshModelViews(bool fitView)
     };
 
     // 原点の基準平面は常に最上部へ固定表示する(削除・グループ移動は不可)。
-    {
+    // 別のプロジェクトを読み込んだ場合は存在しないことがあるので、あるときだけ出す。
+    const bool hasOriginPlanes = std::any_of(
+        project_.WorkPlanes().begin(), project_.WorkPlanes().end(),
+        [](const auto& plane) { return IsOriginPlaneName(plane.name); });
+    if (hasOriginPlanes) {
         auto* originRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("原点")});
         originRoot->setToolTip(0, QStringLiteral(
             "初期の基準平面（top_XY / front_XZ / side_YZ）。削除やグループ移動はできません"));

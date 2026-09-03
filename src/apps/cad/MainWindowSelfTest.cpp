@@ -3181,9 +3181,17 @@ bool MainWindow::RunCreationSelfTest()
         return fail("create center point from measurement window");
     }
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
+    RefreshModelViews(false);
     if (modelTree_->topLevelItemCount() == 0
         || modelTree_->topLevelItem(0)->text(0) != QStringLiteral("原点")
         || modelTree_->topLevelItem(0)->childCount() < 3) {
+        for (int index = 0; index < modelTree_->topLevelItemCount(); ++index) {
+            qWarning() << "tree top" << index << modelTree_->topLevelItem(index)->text(0)
+                       << modelTree_->topLevelItem(index)->childCount();
+        }
+        for (const auto& plane : project_.WorkPlanes()) {
+            qWarning() << "plane" << ToQString(plane.name);
+        }
         return fail("origin planes pinned at top of tree");
     }
     {

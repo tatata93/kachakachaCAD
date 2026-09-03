@@ -3377,6 +3377,8 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(showAllObjectsAction_);
     toolbar->addAction(deleteAction);
 
+    // 作図系は2段目の列へ(1段目の汎用操作と分節し、あふれチェブロンを防ぐ)。
+    addToolBarBreak(Qt::TopToolBarArea);
     QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
     drawingToolbar->setMovable(false);
     drawingToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);

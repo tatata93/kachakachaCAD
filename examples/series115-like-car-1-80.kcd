@@ -193,3 +193,20 @@ visibility surface 側面左 hidden
 visibility surface 前面 hidden
 visibility surface 後面 hidden
 visibility surface 屋根面 hidden
+
+# --- 部材グループ(エクスプローラ風ツリーの見本): 部材ごとに整理し、下書きは子グループへ ---
+object_set 側面右 visible 16 surface 側面右 plate 側面右板 wire 側面右_外形 wire 側面右_乗務員扉 wire 側面右_運転席横窓 wire 側面右_客扉1 wire 側面右_客扉2 wire 側面右_客扉3 wire 側面右_窓1 wire 側面右_窓2 wire 側面右_窓3 wire 側面右_窓4 wire 側面右_窓5 wire 側面右_窓6 wire 側面右_窓7 wire 側面右_窓8
+object_set 側面右の下書き visible 14 workplane 側面下書き右 wire 側面右_乗務員扉_下書き wire 側面右_運転席横窓_下書き wire 側面右_客扉1_下書き wire 側面右_客扉2_下書き wire 側面右_客扉3_下書き wire 側面右_窓1_下書き wire 側面右_窓2_下書き wire 側面右_窓3_下書き wire 側面右_窓4_下書き wire 側面右_窓5_下書き wire 側面右_窓6_下書き wire 側面右_窓7_下書き wire 側面右_窓8_下書き
+object_set 側面左 visible 16 surface 側面左 plate 側面左板 wire 側面左_外形 wire 側面左_乗務員扉 wire 側面左_運転席横窓 wire 側面左_客扉1 wire 側面左_客扉2 wire 側面左_客扉3 wire 側面左_窓1 wire 側面左_窓2 wire 側面左_窓3 wire 側面左_窓4 wire 側面左_窓5 wire 側面左_窓6 wire 側面左_窓7 wire 側面左_窓8
+object_set 側面左の下書き visible 14 workplane 側面下書き左 wire 側面左_乗務員扉_下書き wire 側面左_運転席横窓_下書き wire 側面左_客扉1_下書き wire 側面左_客扉2_下書き wire 側面左_客扉3_下書き wire 側面左_窓1_下書き wire 側面左_窓2_下書き wire 側面左_窓3_下書き wire 側面左_窓4_下書き wire 側面左_窓5_下書き wire 側面左_窓6_下書き wire 側面左_窓7_下書き wire 側面左_窓8_下書き
+object_set 前面 visible 10 surface 前面 plate 前面板 wire 前面_外形 wire 前面_運転席窓 wire 前面_助士側窓 wire 前面_貫通扉窓 wire 前面_前照灯右 wire 前面_前照灯左 wire 前面_尾灯右 wire 前面_尾灯左
+object_set 前面の下書き visible 8 workplane 前面下書き wire 前面_運転席窓_下書き wire 前面_助士側窓_下書き wire 前面_貫通扉窓_下書き wire 前面_前照灯右_下書き wire 前面_前照灯左_下書き wire 前面_尾灯右_下書き wire 前面_尾灯左_下書き
+object_set 後面 visible 4 surface 後面 plate 後面板 wire 後面_外形 wire 後面_貫通扉窓
+object_set 後面の下書き visible 2 workplane 後面下書き wire 後面_貫通扉窓_下書き
+object_set 屋根 visible 4 wire 屋根断面_前 wire 屋根断面_後 surface 屋根面 plate 屋根板
+# 入れ子: 下書きグループを各部材の子に、屋根の近似(自動グループ)を屋根の子にする
+object_set_parent 側面右の下書き 側面右
+object_set_parent 側面左の下書き 側面左
+object_set_parent 前面の下書き 前面
+object_set_parent 後面の下書き 後面
+object_set_parent 近似:屋根部材 屋根

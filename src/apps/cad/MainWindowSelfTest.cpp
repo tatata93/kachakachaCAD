@@ -3267,6 +3267,50 @@ bool MainWindow::RunCreationSelfTest()
     }
     drawingModeAction_->trigger();
 
+    // T字分岐の自動分割: 線の途中から分岐する線でも、接点までの区間として
+    // 面の境界に選べる(ADR 0025補、オーナー指示)。
+    const int branchWireStart = static_cast<int>(project_.Wires().size());
+    project_.AddWire("__ui_branch_bottom", Wire::Line({600.0, 0.0, 0.0}, {620.0, 0.0, 0.0}), {});
+    project_.AddWire("__ui_branch_top", Wire::Line({600.0, 30.0, 0.0}, {620.0, 30.0, 0.0}), {});
+    project_.AddWire("__ui_branch_left", Wire::Line({600.0, 0.0, 0.0}, {600.0, 30.0, 0.0}), {});
+    project_.AddWire(
+        "__ui_branch_right_long", Wire::Line({620.0, -10.0, 0.0}, {620.0, 40.0, 0.0}), {});
+    RefreshModelViews(false);
+    UpdateSelections({
+        {CadSelectionKind::Wire, branchWireStart},
+        {CadSelectionKind::Wire, branchWireStart + 1},
+        {CadSelectionKind::Wire, branchWireStart + 2},
+        {CadSelectionKind::Wire, branchWireStart + 3},
+    }, true);
+    if (!SplitSelectedWiresAtBranchPoints()) {
+        return fail("branch points trigger automatic split");
+    }
+    if (viewport_->Selections().size() != 4) {
+        return fail("branch split keeps four boundary wires selected");
+    }
+    bool middleSegmentSelected = false;
+    for (const CadSelection& branchSelection : viewport_->Selections()) {
+        const auto& candidate = project_.Wires()[branchSelection.index];
+        if (candidate.name.rfind("__ui_branch_right_long", 0) != 0) {
+            continue;
+        }
+        const Vector3 lower{620.0, 0.0, 0.0};
+        const Vector3 upper{620.0, 30.0, 0.0};
+        const bool spansJunctions =
+            (kachakacha::geometry::AlmostEqual(candidate.wire.Start(), lower, 1.0e-6)
+                && kachakacha::geometry::AlmostEqual(candidate.wire.End(), upper, 1.0e-6))
+            || (kachakacha::geometry::AlmostEqual(candidate.wire.Start(), upper, 1.0e-6)
+                && kachakacha::geometry::AlmostEqual(candidate.wire.End(), lower, 1.0e-6));
+        if (!spansJunctions) {
+            return fail("branch split keeps only the segment between junctions");
+        }
+        middleSegmentSelected = true;
+    }
+    if (!middleSegmentSelected) {
+        return fail("branch split selects the connected segment");
+    }
+    UpdateSelections({}, true);
+
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
     // qt_cad_smoke は first-check.kcd を読み込むため原点平面が無い → テスト用に追加する。
     if (!project_.FindWorkPlane("top_XY").has_value()) {

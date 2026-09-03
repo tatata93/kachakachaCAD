@@ -77,6 +77,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <sstream>
@@ -354,6 +355,7 @@ void MainWindow::SelectConnectedSurfaceWireChain()
 void MainWindow::AddSelectedSurfaceInputGroup(SurfaceInputRole role)
 {
     try {
+        SplitSelectedWiresAtBranchPoints();
         const int mode = surfaceType_->currentIndex();
         if ((role == SurfaceInputRole::Boundary && mode != 0)
             || (role == SurfaceInputRole::Guide && mode != 3)
@@ -562,10 +564,207 @@ void MainWindow::AddSurfaceFromConfiguredInputs(
     }
 }
 
+
+namespace {
+
+//! ワイヤ上で点に最も近いパラメータ(距離が許容内のときのみ)。
+std::optional<double> ParameterOnWire(
+    const kachakacha::model::Wire& wire, Vector3 point, double toleranceMillimeters)
+{
+    constexpr int kSamples = 256;
+    double bestParameter = 0.0;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (int sample = 0; sample <= kSamples; ++sample) {
+        const double parameter = static_cast<double>(sample) / kSamples;
+        const double distance = (wire.Evaluate(parameter) - point).Length();
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestParameter = parameter;
+        }
+    }
+    double low = std::max(0.0, bestParameter - 1.0 / kSamples);
+    double high = std::min(1.0, bestParameter + 1.0 / kSamples);
+    for (int iteration = 0; iteration < 60; ++iteration) {
+        const double first = low + (high - low) / 3.0;
+        const double second = high - (high - low) / 3.0;
+        if ((wire.Evaluate(first) - point).LengthSquared()
+            < (wire.Evaluate(second) - point).LengthSquared()) {
+            high = second;
+        } else {
+            low = first;
+        }
+    }
+    const double parameter = (low + high) * 0.5;
+    if ((wire.Evaluate(parameter) - point).Length() > toleranceMillimeters) {
+        return std::nullopt;
+    }
+    return parameter;
+}
+
+} // namespace
+
+bool MainWindow::SplitSelectedWiresAtBranchPoints()
+{
+    constexpr double kTouchTolerance = 1.0e-3; // mm
+    std::vector<std::string> selectedNames;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            selectedNames.push_back(project_.Wires()[selection.index].name);
+        }
+    }
+    if (selectedNames.size() < 2) {
+        return false;
+    }
+    const auto wireByName = [this](const std::string& name) -> const kachakacha::model::NamedWire* {
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name == name) {
+                return &wire;
+            }
+        }
+        return nullptr;
+    };
+    // 端点が他の選択ワイヤの途中に接している箇所を1つずつ分割する
+    // (分割後は形が変わるので毎回探し直す)。
+    bool recordedUndo = false;
+    std::vector<std::string> createdNames;
+    QStringList warnings;
+    for (int guard = 0; guard < 64; ++guard) {
+        std::string splitTarget;
+        double splitParameter = 0.0;
+        for (const std::string& targetName : selectedNames) {
+            const auto* target = wireByName(targetName);
+            if (target == nullptr) {
+                continue;
+            }
+            for (const std::string& otherName : selectedNames) {
+                if (otherName == targetName) {
+                    continue;
+                }
+                const auto* other = wireByName(otherName);
+                if (other == nullptr || other->wire.IsClosed()) {
+                    continue;
+                }
+                for (const Vector3 endpoint : {other->wire.Start(), other->wire.End()}) {
+                    const auto parameter =
+                        ParameterOnWire(target->wire, endpoint, kTouchTolerance);
+                    if (parameter.has_value() && *parameter > 1.0e-4
+                        && *parameter < 1.0 - 1.0e-4
+                        && (target->wire.Start() - endpoint).Length() > kTouchTolerance
+                        && (target->wire.End() - endpoint).Length() > kTouchTolerance) {
+                        splitTarget = targetName;
+                        splitParameter = *parameter;
+                        break;
+                    }
+                }
+                if (!splitTarget.empty()) {
+                    break;
+                }
+            }
+            if (!splitTarget.empty()) {
+                break;
+            }
+        }
+        if (splitTarget.empty()) {
+            break;
+        }
+        const auto* source = wireByName(splitTarget);
+        try {
+            const auto sourceCopy = *source;
+            const auto parts = sourceCopy.wire.SplitAt(splitParameter);
+            const QString groupName =
+                SuggestedDirectGroupName(ToQString(sourceCopy.name) + QStringLiteral("_part"));
+            const std::string firstName = ToName(groupName + QStringLiteral("_1"));
+            const std::string secondName = ToName(groupName + QStringLiteral("_2"));
+            if (!recordedUndo) {
+                RecordUndo();
+                recordedUndo = true;
+            }
+            if (referenceWireName_.has_value() && *referenceWireName_ == sourceCopy.name) {
+                referenceWireName_.reset();
+            }
+            project_.RemoveWire(sourceCopy.name);
+            project_.AddWire(firstName, parts.first,
+                RetargetLineConstraints(project_, sourceCopy.metadata, parts.first, true));
+            project_.AddWire(secondName, parts.second,
+                RetargetLineConstraints(project_, sourceCopy.metadata, parts.second, true));
+            std::erase(selectedNames, sourceCopy.name);
+            std::erase(createdNames, sourceCopy.name);
+            selectedNames.push_back(firstName);
+            selectedNames.push_back(secondName);
+            createdNames.push_back(firstName);
+            createdNames.push_back(secondName);
+        } catch (const std::exception& error) {
+            warnings << QString::fromUtf8(error.what());
+            break;
+        }
+    }
+    if (createdNames.empty()) {
+        return false;
+    }
+    // 分割で生まれた断片のうち、反対側の端が他の選択ワイヤの端点に
+    // 接していないもの(境界の外へ伸びていた部分)は選択から外す。
+    const auto endpointTouchesSelection = [&](const std::string& selfName, Vector3 endpoint) {
+        for (const std::string& otherName : selectedNames) {
+            if (otherName == selfName) {
+                continue;
+            }
+            const auto* other = wireByName(otherName);
+            if (other == nullptr) {
+                continue;
+            }
+            if (!other->wire.IsClosed()
+                && ((other->wire.Start() - endpoint).Length() <= kTouchTolerance
+                    || (other->wire.End() - endpoint).Length() <= kTouchTolerance)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    QStringList droppedNames;
+    for (const std::string& createdName : createdNames) {
+        const auto* piece = wireByName(createdName);
+        if (piece == nullptr) {
+            continue;
+        }
+        if (!endpointTouchesSelection(createdName, piece->wire.Start())
+            || !endpointTouchesSelection(createdName, piece->wire.End())) {
+            std::erase(selectedNames, createdName);
+            droppedNames << ToQString(createdName);
+        }
+    }
+    MarkModified();
+    RefreshModelViews(false);
+    std::vector<CadSelection> keptSelections;
+    for (const std::string& name : selectedNames) {
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].name == name) {
+                keptSelections.push_back({CadSelectionKind::Wire, index});
+                break;
+            }
+        }
+    }
+    UpdateSelections(std::move(keptSelections), true);
+    QString message = QStringLiteral("分岐点でワイヤーを自動分割しました");
+    if (!droppedNames.isEmpty()) {
+        message += QStringLiteral("（境界の外側 %1 は選択から外しました）")
+            .arg(droppedNames.join(QStringLiteral("、")));
+    }
+    if (!warnings.isEmpty()) {
+        message += QStringLiteral(" / 一部は分割できません: %1")
+            .arg(warnings.join(QStringLiteral("、")));
+    }
+    statusBar()->showMessage(message, 6000);
+    return true;
+}
+
 void MainWindow::CreateSurfaceFromSelection()
 {
     try {
         ValidateObjectName(surfaceName_->text());
+        // T字分岐(線の途中から分岐)は、分割済みの線と同じように扱えるよう
+        // 接点で自動分割してから面を作る(オーナー指示)。
+        SplitSelectedWiresAtBranchPoints();
         std::vector<int> wireIndices;
         for (const CadSelection& selection : viewport_->Selections()) {
             if (selection.kind == CadSelectionKind::Wire && selection.index >= 0

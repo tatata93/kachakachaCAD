@@ -261,6 +261,9 @@ private:
     void ShowRightPanel(int tabIndex);
     //! 面・板パネルの見出しへスクロールして表示する(空文字なら先頭)。
     void RevealSurfaceGroup(const QString& title);
+    //! 選択中ワイヤ同士のT字分岐(端点が他の線の途中に接する箇所)で自動分割し、
+    //! チェーンに繋がる側だけを選択に残す。分割したら true。
+    bool SplitSelectedWiresAtBranchPoints();
     void EnsureMeasurementWindow();
     void UpdateMeasurementWindow();
     void CreateCurveCenterPoint();

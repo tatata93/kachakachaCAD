@@ -57,6 +57,8 @@ enum class ViewportTool {
     Tangent,
     Curvature,
     Measure,
+    //! 2点間線: 作図点・線の端点・線同士の交点をクリックで拾い、直線で結ぶ。
+    LineBetweenPoints,
 };
 
 enum class DrawingSnapKind {
@@ -186,6 +188,9 @@ public:
     void SetExtendRequestedCallback(std::function<void(int, double)> callback);
     void SetToolExitRequestedCallback(std::function<void()> callback);
     void SetEscapeRequestedCallback(std::function<void()> callback);
+    //! 2点間線ツールで2点が確定したときに呼ばれる(始点, 終点)。
+    void SetLineBetweenPickedCallback(
+        std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetCoincidenceRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetTangentRequestedCallback(
@@ -377,6 +382,9 @@ private:
         QPointF position,
         double maximumDistance = 12.0,
         bool allowEndpoints = false) const;
+    //! 2点間線ツールの候補点: 作図点・線の端点・近傍の線同士の交点から最も近いもの。
+    [[nodiscard]] std::optional<kachakacha::geometry::Vector3> FindConnectablePoint(
+        QPointF position, double maximumDistance) const;
     [[nodiscard]] std::optional<WireEndpointPick> NearestWireEndpoint(
         QPointF position,
         double maximumDistance = 12.0) const;
@@ -440,6 +448,9 @@ private:
     std::function<void(int, double)> extendRequested_;
     std::function<void()> toolExitRequested_;
     std::function<void()> escapeRequested_; //!< Escで選択モードへ戻す(選択も解除)
+    std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineBetweenPicked_;
+    std::optional<kachakacha::geometry::Vector3> lineBetweenFirstPoint_;
+    std::optional<kachakacha::geometry::Vector3> lineBetweenHoverPoint_;
     std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> tangentRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;

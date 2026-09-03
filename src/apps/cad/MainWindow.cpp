@@ -240,6 +240,9 @@ void MainWindow::BuildUi()
         SetViewportTool(ViewportTool::Select);
         UpdateSelections({}, true);
     });
+    viewport_->SetLineBetweenPickedCallback([this](Vector3 first, Vector3 second) {
+        CreateLineBetweenPickedPoints(first, second);
+    });
     viewport_->SetCoincidenceRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
         ApplyEndpointCoincidence(anchor, follower);
     });
@@ -539,7 +542,8 @@ void MainWindow::BuildUi()
             || tool == ViewportTool::MirrorSelection || tool == ViewportTool::RotateSelection
             || tool == ViewportTool::SplitWire || tool == ViewportTool::TrimWire
             || tool == ViewportTool::ExtendWire || tool == ViewportTool::Coincident
-            || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature;
+            || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature
+            || tool == ViewportTool::LineBetweenPoints;
         if (((drawingTool || editTool) && index != 0)
             || (tool == ViewportTool::MoveGridOrigin && index != 0)
             || (tool == ViewportTool::Measure && index != 5)) {
@@ -632,6 +636,7 @@ void MainWindow::BuildDrawingActions()
     cornerEditAction_ = new QAction(QStringLiteral("角の加工"), this);
     intersectionPointsAction_ = new QAction(QStringLiteral("交点に点"), this);
     lineBetweenPointsAction_ = new QAction(QStringLiteral("2点を線で結ぶ"), this);
+    lineBetweenPointsAction_->setCheckable(true);
     offsetApplyAction_ = new QAction(QStringLiteral("オフセット"), this);
     chamferAction_->setToolTip(
         QStringLiteral("選択した2直線をC面取り。距離はスケッチタブ「加工」の値を使用"));
@@ -640,7 +645,9 @@ void MainWindow::BuildDrawingActions()
     cornerEditAction_->setToolTip(
         QStringLiteral("選択したポリラインの角を落とす/丸める。数値はスケッチタブ「加工」の値を使用"));
     intersectionPointsAction_->setToolTip(QStringLiteral("選択した2本のワイヤーの交点すべてに作図点を作成"));
-    lineBetweenPointsAction_->setToolTip(QStringLiteral("選択した2つの点(3D空間の任意交点も可)を直線で結ぶ"));
+    lineBetweenPointsAction_->setToolTip(QStringLiteral(
+        "3D画面で点・線の端点・線同士の交点を2回クリックして直線で結ぶ\n"
+        "(点を2つ選択済みならその2点をすぐ結ぶ)"));
     offsetApplyAction_->setToolTip(
         QStringLiteral("選択した平面ワイヤーを平行オフセット。距離はスケッチタブ「編集」の値を使用"));
     setReferenceAction_ = new QAction(QStringLiteral("基準線に設定"), this);
@@ -735,7 +742,21 @@ void MainWindow::BuildDrawingActions()
     connect(filletAction_, &QAction::triggered, this, &MainWindow::ApplyLineFillet);
     connect(cornerEditAction_, &QAction::triggered, this, &MainWindow::ApplyPolylineCornerEdit);
     connect(intersectionPointsAction_, &QAction::triggered, this, &MainWindow::CreateIntersectionPoints);
-    connect(lineBetweenPointsAction_, &QAction::triggered, this, &MainWindow::CreateLineBetweenSelectedPoints);
+    connect(lineBetweenPointsAction_, &QAction::triggered, this, [this] {
+        // 点を2つ選択済みなら従来どおり即結ぶ。そうでなければピック式ツールを開始し、
+        // 端点・交点・作図点を直接クリックして結べるようにする。
+        int selectedPoints = 0;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Point) {
+                ++selectedPoints;
+            }
+        }
+        if (selectedPoints == 2) {
+            CreateLineBetweenSelectedPoints();
+        } else {
+            SetViewportTool(ViewportTool::LineBetweenPoints);
+        }
+    });
     connect(offsetApplyAction_, &QAction::triggered, this, &MainWindow::ApplyWireOffset);
     connect(setReferenceAction_, &QAction::triggered, this, &MainWindow::SetReferenceFromSelection);
     connect(clearReferenceAction_, &QAction::triggered, this, &MainWindow::ClearReference);
@@ -1424,7 +1445,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         || tool == ViewportTool::CopySelection || tool == ViewportTool::MirrorSelection
         || tool == ViewportTool::RotateSelection || tool == ViewportTool::SplitWire
         || tool == ViewportTool::Coincident || tool == ViewportTool::Tangent
-        || tool == ViewportTool::Curvature;
+        || tool == ViewportTool::Curvature || tool == ViewportTool::LineBetweenPoints;
     if (isDirectLineEdit || sketchDetailTool) {
         toolsTabs_->setCurrentIndex(0);
         if (sketchDetailTool) {
@@ -1461,6 +1482,7 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     curvatureToolAction_->setChecked(tool == ViewportTool::Curvature);
     measureToolAction_->setChecked(tool == ViewportTool::Measure);
     gridOriginToolAction_->setChecked(tool == ViewportTool::MoveGridOrigin);
+    lineBetweenPointsAction_->setChecked(tool == ViewportTool::LineBetweenPoints);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -1540,6 +1562,10 @@ void MainWindow::SetViewportTool(ViewportTool tool)
                 ? QStringLiteral("3点角度: 頂点、1方向目、2方向目の順に3D点を指定")
                 : QStringLiteral("2点測定: 既存点・線上点を3D画面で指定"),
             4500);
+        break;
+    case ViewportTool::LineBetweenPoints:
+        statusBar()->showMessage(QStringLiteral(
+            "2点間線: 点・線の端点・線同士の交点を2回クリック（右クリックで1点目を取消）"), 5000);
         break;
     }
 }
@@ -1653,6 +1679,9 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::Measure:
         state = QStringLiteral("測定");
+        break;
+    case ViewportTool::LineBetweenPoints:
+        state = QStringLiteral("2点間線 · 点・端点・交点をクリック");
         break;
     }
     if (drawingStateLabel_ != nullptr) {
@@ -1957,6 +1986,12 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 中央画面で測る点・線・平面を指定"),
                 QStringLiteral("1  情報タブで2点間/要素を選択\n2  中央画面で対象を指定\n3  必要なら参照寸法として残す"),
                 QStringLiteral("measure"));
+            return;
+        case ViewportTool::LineBetweenPoints:
+            setGuide(QStringLiteral("2点を線で結ぶ"),
+                QStringLiteral("次: 1点目を中央画面でクリック"),
+                QStringLiteral("1  点・線の端点・線同士の交点に吸着します\n2  2点目をクリックすると直線を作成\n3  右クリックで1点目を取消、Escで終了"),
+                QStringLiteral("drawing"));
             return;
         case ViewportTool::Select:
             break;
@@ -3858,6 +3893,30 @@ void MainWindow::CreateLineBetweenSelectedPoints()
         statusBar()->showMessage(
             QStringLiteral("%1 と %2 を結ぶ線 %3 を作成しました")
                 .arg(ToQString(first.name), ToQString(second.name), ToQString(name)),
+            4000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this,
+            QStringLiteral("線を作成できません"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::CreateLineBetweenPickedPoints(Vector3 first, Vector3 second)
+{
+    try {
+        if ((first - second).Length() <= 1.0e-9) {
+            throw std::invalid_argument("2つの点が同じ位置にあります。");
+        }
+        RecordUndo();
+        const std::string name
+            = ToName(SuggestedDirectGroupName(QStringLiteral("line")));
+        project_.AddWire(name, Wire::Line(first, second), {});
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelection(
+            {CadSelectionKind::Wire, static_cast<int>(project_.Wires().size()) - 1}, true);
+        statusBar()->showMessage(
+            QStringLiteral("2点を結ぶ線 %1 を作成しました（続けて次の2点を選べます）")
+                .arg(ToQString(name)),
             4000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this,

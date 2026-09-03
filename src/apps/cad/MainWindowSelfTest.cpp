@@ -3195,6 +3195,32 @@ bool MainWindow::RunCreationSelfTest()
     }
     SetViewportTool(ViewportTool::Select);
 
+    // 2点間線ツール: 線の端点を自動認識してクリック2回で結ぶ。
+    const Vector3 connectA1{-515.0, -500.0, 0.0};
+    const Vector3 connectA2{-490.0, -500.0, 0.0};
+    const Vector3 connectB1{-480.0, -490.0, 0.0};
+    const Vector3 connectB2{-460.0, -490.0, 0.0};
+    project_.AddWire("__ui_connect_a", Wire::Line(connectA1, connectA2), {});
+    project_.AddWire("__ui_connect_b", Wire::Line(connectB1, connectB2), {});
+    RefreshModelViews(false);
+    viewport_->SetIsometricView();
+    viewport_->RestoreViewFraming({-487.5, -495.0, 0.0}, 4.0);
+    const std::size_t wiresBeforeConnect = project_.Wires().size();
+    SetViewportTool(ViewportTool::LineBetweenPoints);
+    click(viewport_->ScreenPoint(connectA1));
+    click(viewport_->ScreenPoint(connectB2));
+    if (project_.Wires().size() != wiresBeforeConnect + 1
+        || project_.Wires().back().wire.Kind() != WireKind::Line
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires().back().wire.Start(), connectA1, 1.0e-6)
+        || !kachakacha::geometry::AlmostEqual(
+            project_.Wires().back().wire.End(), connectB2, 1.0e-6)) {
+        return fail("line-between tool connects wire endpoints");
+    }
+    SetViewportTool(ViewportTool::Select);
+    viewport_->SetIsometricView();
+    viewport_->FitAll();
+
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
     // qt_cad_smoke は first-check.kcd を読み込むため原点平面が無い → テスト用に追加する。
     if (!project_.FindWorkPlane("top_XY").has_value()) {

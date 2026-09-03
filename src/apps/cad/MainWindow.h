@@ -84,6 +84,8 @@ private:
     void ApplyPolylineCornerEdit();
     void CreateIntersectionPoints();
     void CreateLineBetweenSelectedPoints();
+    void CreateLineBetweenPickedPoints(
+        kachakacha::geometry::Vector3 first, kachakacha::geometry::Vector3 second);
     void ShowViewportContextMenu(const QPoint& globalPosition);
     void PrepareMachiningForWires(int firstIndex, int secondIndex);
     void ExpandSketchSection(const QString& title);

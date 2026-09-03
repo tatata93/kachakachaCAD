@@ -833,6 +833,12 @@ void CadViewport::SetEscapeRequestedCallback(std::function<void()> callback)
     escapeRequested_ = std::move(callback);
 }
 
+void CadViewport::SetLineBetweenPickedCallback(
+    std::function<void(Vector3, Vector3)> callback)
+{
+    lineBetweenPicked_ = std::move(callback);
+}
+
 void CadViewport::SetCoincidenceRequestedCallback(
     std::function<void(WireEndpointPick, WireEndpointPick)> callback)
 {
@@ -882,6 +888,8 @@ void CadViewport::SetTool(ViewportTool tool)
     tool_ = tool;
     gridOriginDragSource_.reset();
     gridOriginDragTarget_.reset();
+    lineBetweenFirstPoint_.reset();
+    lineBetweenHoverPoint_.reset();
     CancelControlPointDrag();
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
@@ -2245,6 +2253,66 @@ std::optional<double> CadViewport::NearestWireParameter(
         return std::nullopt;
     }
     return bestParameter;
+}
+
+std::optional<Vector3> CadViewport::FindConnectablePoint(
+    QPointF position, double maximumDistance) const
+{
+    if (project_ == nullptr || !std::isfinite(maximumDistance) || maximumDistance <= 0.0) {
+        return std::nullopt;
+    }
+    double bestDistance = maximumDistance;
+    std::optional<Vector3> best;
+    bool bestIsIntersection = false;
+    const auto consider = [&](Vector3 candidate, bool isIntersection) {
+        const double distance = QLineF(position, ProjectPoint(candidate)).length();
+        // ほぼ同距離なら交点を優先する(端点と交点が重なりがちなため)。
+        if (distance < bestDistance - 1.0e-9
+            || (isIntersection && !bestIsIntersection && distance <= bestDistance + 2.0)) {
+            if (distance <= maximumDistance) {
+                bestDistance = std::min(bestDistance, distance);
+                best = candidate;
+                bestIsIntersection = isIntersection;
+            }
+        }
+    };
+    for (int index = 0; index < static_cast<int>(project_->Points().size()); ++index) {
+        const auto& point = project_->Points()[index];
+        if (!ShouldDisplay(CadSelectionKind::Point, index, point.visible)) {
+            continue;
+        }
+        consider(point.point, false);
+    }
+    std::vector<int> nearbyWires;
+    for (int index = 0; index < static_cast<int>(project_->Wires().size()); ++index) {
+        const NamedWire& namedWire = project_->Wires()[index];
+        if (!ShouldDisplay(CadSelectionKind::Wire, index, namedWire.visible)) {
+            continue;
+        }
+        if (!namedWire.wire.IsClosed()) {
+            consider(namedWire.wire.Start(), false);
+            consider(namedWire.wire.End(), false);
+        }
+        if (nearbyWires.size() < 6
+            && NearestWireParameter(index, position, maximumDistance, true).has_value()) {
+            nearbyWires.push_back(index);
+        }
+    }
+    for (std::size_t first = 0; first < nearbyWires.size(); ++first) {
+        for (std::size_t second = first + 1; second < nearbyWires.size(); ++second) {
+            try {
+                const auto intersections = kachakacha::model::IntersectWires(
+                    project_->Wires()[nearbyWires[first]].wire,
+                    project_->Wires()[nearbyWires[second]].wire);
+                for (const Vector3& intersection : intersections) {
+                    consider(intersection, true);
+                }
+            } catch (const std::exception&) {
+                // 交点計算に失敗した組は候補に含めない。
+            }
+        }
+    }
+    return best;
 }
 
 std::optional<WireEndpointPick> CadViewport::NearestWireEndpoint(
@@ -4482,6 +4550,11 @@ void CadViewport::paintEvent(QPaintEvent*)
             ? QStringLiteral("測定 · 3点角度")
             : QStringLiteral("測定 · 要素");
         break;
+    case ViewportTool::LineBetweenPoints:
+        modeText = lineBetweenFirstPoint_.has_value()
+            ? QStringLiteral("2点間線 · 2点目（点・端点・交点に吸着）")
+            : QStringLiteral("2点間線 · 1点目（点・端点・交点に吸着）");
+        break;
     }
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
         const auto coordinates = activePlane_->Project(*hoverDrawingPoint_);
@@ -4526,6 +4599,31 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
     painter.drawText(QRect(14, 12, std::max(80, width() - 270), 24), Qt::AlignLeft, modeText);
+
+    if (tool_ == ViewportTool::LineBetweenPoints) {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        if (lineBetweenFirstPoint_.has_value()) {
+            const QPointF first = ProjectPoint(*lineBetweenFirstPoint_);
+            painter.setBrush(QColor("#087780"));
+            painter.setPen(QPen(QColor("#075f69"), 1.5));
+            painter.drawEllipse(first, 5.0, 5.0);
+            if (lineBetweenHoverPoint_.has_value()) {
+                painter.setBrush(Qt::NoBrush);
+                painter.setPen(QPen(QColor("#087780"), 1.5, Qt::DashLine));
+                painter.drawLine(first, ProjectPoint(*lineBetweenHoverPoint_));
+            }
+        }
+        if (lineBetweenHoverPoint_.has_value()) {
+            const QPointF hover = ProjectPoint(*lineBetweenHoverPoint_);
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor("#d17d00"), 2.0));
+            painter.drawEllipse(hover, 7.0, 7.0);
+            painter.drawLine(hover + QPointF(-10.0, 0.0), hover + QPointF(10.0, 0.0));
+            painter.drawLine(hover + QPointF(0.0, -10.0), hover + QPointF(0.0, 10.0));
+        }
+        painter.restore();
+    }
 
     const ViewCubeGeometry cube = MakeViewCubeGeometry(width(), CurrentViewBasis());
     painter.save();
@@ -5265,6 +5363,10 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         ClearHover();
     }
 
+    if (tool_ == ViewportTool::LineBetweenPoints && dragButton_ == Qt::NoButton) {
+        lineBetweenHoverPoint_ = FindConnectablePoint(event->position(), 14.0);
+        update();
+    }
     if (tool_ == ViewportTool::SplitWire) {
         splitPreviewParameter_.reset();
         const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
@@ -5455,6 +5557,29 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (tool_ == ViewportTool::LineBetweenPoints) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_) {
+            const auto picked = FindConnectablePoint(event->position(), 14.0);
+            if (picked.has_value()) {
+                if (!lineBetweenFirstPoint_.has_value()) {
+                    lineBetweenFirstPoint_ = *picked;
+                } else if ((*picked - *lineBetweenFirstPoint_).Length() > 1.0e-9) {
+                    const Vector3 firstPoint = *lineBetweenFirstPoint_;
+                    lineBetweenFirstPoint_.reset();
+                    if (lineBetweenPicked_) {
+                        lineBetweenPicked_(firstPoint, *picked);
+                    }
+                }
+                update();
+            }
+        } else if (event->button() == Qt::RightButton && !mouseMoved_) {
+            lineBetweenFirstPoint_.reset();
+            update();
+        }
+        dragButton_ = Qt::NoButton;
+        return;
+    }
+
     if (tool_ == ViewportTool::Coincident || tool_ == ViewportTool::Tangent
         || tool_ == ViewportTool::Curvature) {
         if (event->button() == Qt::LeftButton && !mouseMoved_) {
@@ -5594,6 +5719,8 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             UpdateHover(mapFromGlobal(QCursor::pos()));
         } else if (tool_ == ViewportTool::Measure) {
             ClearMeasurement();
+        } else if (tool_ == ViewportTool::LineBetweenPoints) {
+            lineBetweenFirstPoint_.reset();
         } else if (tool_ == ViewportTool::Coincident) {
             ClearCoincidencePicks();
         } else if (tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature) {

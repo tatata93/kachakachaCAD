@@ -311,6 +311,14 @@ QString PartModelPanel::SelectedPlateName() const
     return plateCombo_->currentText();
 }
 
+void PartModelPanel::SelectPlate(const QString& plateName)
+{
+    const int index = plateCombo_->findText(plateName);
+    if (index >= 0) {
+        plateCombo_->setCurrentIndex(index);
+    }
+}
+
 kachakacha::model::PartApproximationOptions PartModelPanel::CurrentOptions() const
 {
     kachakacha::model::PartApproximationOptions options;

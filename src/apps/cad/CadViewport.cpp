@@ -11,6 +11,7 @@
 #include <QCursor>
 #include <QLabel>
 #include <QLineEdit>
+#include <QContextMenuEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -5133,6 +5134,19 @@ bool CadViewport::eventFilter(QObject* watched, QEvent* event)
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void CadViewport::contextMenuEvent(QContextMenuEvent* event)
+{
+    // 選択ツール中だけ右クリックメニューを出す。作図ツール中の右クリックは
+    // 「近くの点から引き始める」操作に割り当て済みのため出さない。
+    // 右ドラッグ(軌道回転)の後にも出さない。
+    if (tool_ == ViewportTool::Select && !mouseMoved_ && onSelectContextMenu) {
+        onSelectContextMenu(event->globalPos());
+        event->accept();
+        return;
+    }
+    event->ignore();
 }
 
 void CadViewport::leaveEvent(QEvent* event)

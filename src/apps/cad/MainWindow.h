@@ -79,6 +79,9 @@ private:
     void ApplyPolylineCornerEdit();
     void CreateIntersectionPoints();
     void CreateLineBetweenSelectedPoints();
+    void ShowViewportContextMenu(const QPoint& globalPosition);
+    void PrepareMachiningForWires(int firstIndex, int secondIndex);
+    void ExpandSketchSection(const QString& title);
     void BuildMenusAndToolbar();
     void ApplyDisplaySettings();
     void LoadDisplaySettings();

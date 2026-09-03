@@ -39,6 +39,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -555,6 +556,9 @@ void MainWindow::BuildUi()
 {
     viewport_ = new CadViewport;
     setCentralWidget(viewport_);
+    viewport_->onSelectContextMenu = [this](const QPoint& globalPosition) {
+        ShowViewportContextMenu(globalPosition);
+    };
     viewport_->SetSelectionChangedCallback([this](const std::vector<CadSelection>& selections) {
         UpdateSelections(selections, true);
     });
@@ -656,7 +660,7 @@ void MainWindow::BuildUi()
     modelLayout->addWidget(modelFilter_);
     modelLayout->addWidget(modelTree_, 1);
 
-    auto* beginnerGuide = new QGroupBox(QStringLiteral("操作ガイド"));
+    auto* beginnerGuide = new QGroupBox;
     beginnerGuide->setObjectName(QStringLiteral("beginnerGuide"));
     auto* beginnerGuideLayout = new QVBoxLayout(beginnerGuide);
     beginnerGuideLayout->setContentsMargins(9, 8, 9, 9);
@@ -691,7 +695,8 @@ void MainWindow::BuildUi()
     beginnerGuideButtons->addWidget(beginnerGuideNextButton_, 1);
     beginnerGuideButtons->addWidget(beginnerGuideManualButton_);
     beginnerGuideLayout->addLayout(beginnerGuideButtons);
-    modelLayout->addWidget(beginnerGuide);
+    modelLayout->addWidget(new CollapsibleSection(
+        QStringLiteral("操作ガイド"), beginnerGuide, true));
 
     connect(beginnerGuideNextButton_, &QPushButton::clicked, this, [this] {
         if (toolsTabs_ == nullptr || beginnerGuideNextTab_ < 0) {
@@ -1056,49 +1061,14 @@ QWidget* MainWindow::BuildDrawingPanel()
     layout->setContentsMargins(12, 12, 12, 12);
     layout->setSpacing(10);
 
-    auto* planeLabel = new QLabel(QStringLiteral("作図面"));
-    planeLabel->setStyleSheet("font-weight: 600; color: #26323a;");
-    layout->addWidget(planeLabel);
-
-    auto* planeRow = new QWidget;
-    auto* planeLayout = new QHBoxLayout(planeRow);
-    planeLayout->setContentsMargins(0, 0, 0, 0);
-    planeLayout->setSpacing(6);
+    // 作図面コンボは上部ツールバーに常時表示する(ADR 0021: モードの可視化)。
     activePlaneCombo_ = new QComboBox;
     activePlaneCombo_->setObjectName("activePlaneCombo");
-    planeLayout->addWidget(activePlaneCombo_, 1);
-    auto* alignButton = new QToolButton;
-    alignButton->setDefaultAction(alignPlaneAction_);
-    alignButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    planeLayout->addWidget(alignButton);
-    layout->addWidget(planeRow);
+    activePlaneCombo_->setMinimumWidth(150);
 
     drawingStateLabel_ = new QLabel(QStringLiteral("選択"));
     drawingStateLabel_->setStyleSheet("color: #075f69; font-weight: 600; padding: 4px 0;");
     layout->addWidget(drawingStateLabel_);
-
-    auto* toolGrid = new QGridLayout;
-    toolGrid->setContentsMargins(0, 0, 0, 0);
-    toolGrid->setHorizontalSpacing(6);
-    toolGrid->setVerticalSpacing(6);
-    const auto addToolButton = [&](QAction* action, int row, int column, int columnSpan = 1) {
-        auto* button = new QToolButton;
-        button->setObjectName("drawingToolButton");
-        button->setDefaultAction(action);
-        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        toolGrid->addWidget(button, row, column, 1, columnSpan);
-    };
-    addToolButton(selectToolAction_, 0, 0);
-    addToolButton(lineToolAction_, 0, 1);
-    addToolButton(polylineToolAction_, 1, 0);
-    addToolButton(rectangleToolAction_, 1, 1);
-    addToolButton(circleToolAction_, 2, 0);
-    addToolButton(arcToolAction_, 2, 1);
-    addToolButton(bezierToolAction_, 3, 0);
-    addToolButton(splineToolAction_, 3, 1);
-    addToolButton(pointToolAction_, 4, 0, 2);
-    layout->addLayout(toolGrid);
 
     drawingConstruction_ = new QCheckBox(QStringLiteral("補助線として作図"));
     drawingConstruction_->setToolTip(QStringLiteral("スナップや寸法基準に使い、面や切断出力には含めない"));
@@ -1213,57 +1183,6 @@ QWidget* MainWindow::BuildDrawingPanel()
     dimensionLayout->addWidget(drawingDimensionCommitButton_);
     layout->addWidget(drawingDimensionSection_);
 
-    auto* snapRow = new QWidget;
-    auto* snapLayout = new QHBoxLayout(snapRow);
-    snapLayout->setContentsMargins(0, 2, 0, 0);
-    snapLayout->setSpacing(6);
-    auto* snapButton = new QToolButton;
-    snapButton->setDefaultAction(snapAction_);
-    snapButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    snapLayout->addWidget(snapButton);
-    snapLayout->addWidget(new QLabel(QStringLiteral("主点間隔")));
-    snapStepField_ = new ExpressionDoubleSpinBox;
-    snapStepField_->setRange(0.01, 1000.0);
-    snapStepField_->setDecimals(2);
-    snapStepField_->setSingleStep(0.5);
-    snapStepField_->setValue(1.0);
-    snapStepField_->setSuffix(QStringLiteral(" mm"));
-    snapStepField_->setToolTip(QStringLiteral("数値または計算式を入力できます。例: 1/4"));
-    snapLayout->addWidget(snapStepField_, 1);
-    layout->addWidget(snapRow);
-
-    auto* gridBox = new QGroupBox(QStringLiteral("点グリッド"));
-    auto* gridLayout = new QFormLayout(gridBox);
-    gridLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    gridPointsVisible_ = new QCheckBox(QStringLiteral("表示"));
-    gridPointsVisible_->setChecked(true);
-    gridSubdivision_ = new QComboBox;
-    gridSubdivision_->addItem(QStringLiteral("主点のみ"), 1);
-    gridSubdivision_->addItem(QStringLiteral("1/2 間隔に副点"), 2);
-    gridSubdivision_->addItem(QStringLiteral("1/3 間隔に副点"), 3);
-    gridSubdivision_->addItem(QStringLiteral("1/4 間隔に副点"), 4);
-    gridSubdivision_->setCurrentIndex(0);
-    gridSubdivision_->setToolTip(QStringLiteral("大きい主点の間を小さい副点で分割"));
-    gridOrigin_[0] = MakeNumberField(0.0);
-    gridOrigin_[1] = MakeNumberField(0.0);
-    for (QDoubleSpinBox* field : gridOrigin_) {
-        field->setRange(-100000.0, 100000.0);
-        field->setDecimals(3);
-        field->setSuffix(QStringLiteral(" mm"));
-    }
-    auto* resetGridOrigin = new QPushButton(QStringLiteral("基準を 0, 0 に戻す"));
-    auto* moveGridOrigin = new QToolButton;
-    moveGridOrigin->setDefaultAction(gridOriginToolAction_);
-    moveGridOrigin->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    moveGridOrigin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    gridLayout->addRow(gridPointsVisible_);
-    gridLayout->addRow(QStringLiteral("副点"), gridSubdivision_);
-    gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
-    gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
-    gridLayout->addRow(moveGridOrigin);
-    gridLayout->addRow(resetGridOrigin);
-    layout->addWidget(gridBox);
-
     auto* commandRow = new QWidget;
     auto* commandLayout = new QHBoxLayout(commandRow);
     commandLayout->setContentsMargins(0, 0, 0, 0);
@@ -1282,21 +1201,6 @@ QWidget* MainWindow::BuildDrawingPanel()
     connect(activePlaneCombo_, &QComboBox::currentIndexChanged, this, [this] {
         RefreshActiveWorkPlane();
         viewport_->AlignToActiveWorkPlane();
-    });
-    connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
-    connect(gridPointsVisible_, &QCheckBox::toggled, viewport_, &CadViewport::SetGridPointsVisible);
-    connect(gridSubdivision_, &QComboBox::currentIndexChanged, this, [this] {
-        viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
-    });
-    viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
-    const auto updateGridOrigin = [this] {
-        viewport_->SetGridOrigin(gridOrigin_[0]->value(), gridOrigin_[1]->value());
-    };
-    connect(gridOrigin_[0], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
-    connect(gridOrigin_[1], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
-    connect(resetGridOrigin, &QPushButton::clicked, this, [this] {
-        gridOrigin_[0]->setValue(0.0);
-        gridOrigin_[1]->setValue(0.0);
     });
     connect(drawingDimensionCommitButton_, &QPushButton::clicked, this, &MainWindow::CommitDrawingDimensions);
     connect(arcDrawingMode_, &QComboBox::currentIndexChanged, this, [this] {
@@ -2914,6 +2818,74 @@ QWidget* MainWindow::BuildDisplayPanel()
     environmentForm->addRow(QStringLiteral("副点色"), minorGridColor_);
     layout->addWidget(environmentBox);
 
+    // スケッチ用スナップ・点グリッド設定(ADR 0021: 設定は表示タブへ集約)
+    auto* snapRow = new QWidget;
+    auto* snapLayout = new QHBoxLayout(snapRow);
+    snapLayout->setContentsMargins(0, 2, 0, 0);
+    snapLayout->setSpacing(6);
+    auto* snapButton = new QToolButton;
+    snapButton->setDefaultAction(snapAction_);
+    snapButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    snapLayout->addWidget(snapButton);
+    snapLayout->addWidget(new QLabel(QStringLiteral("主点間隔")));
+    snapStepField_ = new ExpressionDoubleSpinBox;
+    snapStepField_->setRange(0.01, 1000.0);
+    snapStepField_->setDecimals(2);
+    snapStepField_->setSingleStep(0.5);
+    snapStepField_->setValue(1.0);
+    snapStepField_->setSuffix(QStringLiteral(" mm"));
+    snapStepField_->setToolTip(QStringLiteral("数値または計算式を入力できます。例: 1/4"));
+    snapLayout->addWidget(snapStepField_, 1);
+    layout->addWidget(snapRow);
+
+    auto* gridBox = new QGroupBox(QStringLiteral("点グリッド"));
+    auto* gridLayout = new QFormLayout(gridBox);
+    gridLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    gridPointsVisible_ = new QCheckBox(QStringLiteral("表示"));
+    gridPointsVisible_->setChecked(true);
+    gridSubdivision_ = new QComboBox;
+    gridSubdivision_->addItem(QStringLiteral("主点のみ"), 1);
+    gridSubdivision_->addItem(QStringLiteral("1/2 間隔に副点"), 2);
+    gridSubdivision_->addItem(QStringLiteral("1/3 間隔に副点"), 3);
+    gridSubdivision_->addItem(QStringLiteral("1/4 間隔に副点"), 4);
+    gridSubdivision_->setCurrentIndex(0);
+    gridSubdivision_->setToolTip(QStringLiteral("大きい主点の間を小さい副点で分割"));
+    gridOrigin_[0] = MakeNumberField(0.0);
+    gridOrigin_[1] = MakeNumberField(0.0);
+    for (QDoubleSpinBox* field : gridOrigin_) {
+        field->setRange(-100000.0, 100000.0);
+        field->setDecimals(3);
+        field->setSuffix(QStringLiteral(" mm"));
+    }
+    auto* resetGridOrigin = new QPushButton(QStringLiteral("基準を 0, 0 に戻す"));
+    auto* moveGridOrigin = new QToolButton;
+    moveGridOrigin->setDefaultAction(gridOriginToolAction_);
+    moveGridOrigin->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    moveGridOrigin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    gridLayout->addRow(gridPointsVisible_);
+    gridLayout->addRow(QStringLiteral("副点"), gridSubdivision_);
+    gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
+    gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
+    gridLayout->addRow(moveGridOrigin);
+    gridLayout->addRow(resetGridOrigin);
+    layout->addWidget(gridBox);
+
+    connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
+    connect(gridPointsVisible_, &QCheckBox::toggled, viewport_, &CadViewport::SetGridPointsVisible);
+    connect(gridSubdivision_, &QComboBox::currentIndexChanged, this, [this] {
+        viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
+    });
+    viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
+    const auto updateGridOrigin = [this] {
+        viewport_->SetGridOrigin(gridOrigin_[0]->value(), gridOrigin_[1]->value());
+    };
+    connect(gridOrigin_[0], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
+    connect(gridOrigin_[1], &QDoubleSpinBox::valueChanged, this, updateGridOrigin);
+    connect(resetGridOrigin, &QPushButton::clicked, this, [this] {
+        gridOrigin_[0]->setValue(0.0);
+        gridOrigin_[1]->setValue(0.0);
+    });
+
     auto* resetButton = new QPushButton(QStringLiteral("表示設定を初期値に戻す"));
     layout->addWidget(resetButton);
     layout->addStretch(1);
@@ -3408,6 +3380,15 @@ void MainWindow::BuildMenusAndToolbar()
     QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
     drawingToolbar->setMovable(false);
     drawingToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    {
+        auto* planeCaption = new QLabel(QStringLiteral(" 作図面 "));
+        planeCaption->setStyleSheet("color: #26323a; font-weight: 600;");
+        drawingToolbar->addWidget(planeCaption);
+        drawingToolbar->addWidget(activePlaneCombo_);
+    }
+    drawingToolbar->addAction(alignPlaneAction_);
+    drawingToolbar->addAction(snapAction_);
+    drawingToolbar->addSeparator();
     drawingToolbar->addAction(selectToolAction_);
     drawingToolbar->addAction(lineToolAction_);
     drawingToolbar->addAction(polylineToolAction_);
@@ -3416,6 +3397,7 @@ void MainWindow::BuildMenusAndToolbar()
     drawingToolbar->addAction(arcToolAction_);
     drawingToolbar->addAction(bezierToolAction_);
     drawingToolbar->addAction(splineToolAction_);
+    drawingToolbar->addAction(pointToolAction_);
     drawingToolbar->addSeparator();
     drawingToolbar->addAction(finishDrawingAction_);
     drawingToolbar->addAction(cancelDrawingAction_);
@@ -8701,6 +8683,111 @@ void MainWindow::CreateLineBetweenSelectedPoints()
         QMessageBox::warning(this,
             QStringLiteral("線を作成できません"), QString::fromUtf8(error.what()));
     }
+}
+
+void MainWindow::ExpandSketchSection(const QString& title)
+{
+    QWidget* tab = toolsTabs_ != nullptr ? toolsTabs_->widget(0) : nullptr;
+    if (tab == nullptr) {
+        return;
+    }
+    const auto children = tab->findChildren<QWidget*>();
+    for (QWidget* child : children) {
+        // moc不使用のため dynamic_cast で判定する。
+        if (auto* section = dynamic_cast<CollapsibleSection*>(child)) {
+            if (section->Title() == title) {
+                section->SetExpanded(true);
+            }
+        }
+    }
+}
+
+void MainWindow::PrepareMachiningForWires(int firstIndex, int secondIndex)
+{
+    toolsTabs_->setCurrentIndex(0);
+    ExpandSketchSection(QStringLiteral("加工（面取り・交点）"));
+    const auto selectByData = [](QComboBox* combo, int wireIndex) {
+        if (combo == nullptr) {
+            return false;
+        }
+        const int position = combo->findData(wireIndex);
+        if (position >= 0) {
+            combo->setCurrentIndex(position);
+            return true;
+        }
+        return false;
+    };
+    const bool firstSet = selectByData(chamferFirstWire_, firstIndex);
+    const bool secondSet = selectByData(chamferSecondWire_, secondIndex);
+    statusBar()->showMessage(firstSet && secondSet
+            ? QStringLiteral("加工対象に設定しました。種類と値を選んで作成してください")
+            : QStringLiteral("直線以外は加工対象にできません（ポリラインは「ポリラインの角」を使用）"),
+        5000);
+}
+
+void MainWindow::ShowViewportContextMenu(const QPoint& globalPosition)
+{
+    QMenu menu(this);
+    const auto& selections = viewport_->Selections();
+    std::vector<int> wireIndices;
+    std::vector<int> pointIndices;
+    int plateIndex = -1;
+    for (const CadSelection& selection : selections) {
+        if (selection.kind == CadSelectionKind::Wire) {
+            wireIndices.push_back(selection.index);
+        } else if (selection.kind == CadSelectionKind::Point) {
+            pointIndices.push_back(selection.index);
+        } else if (selection.kind == CadSelectionKind::Plate) {
+            plateIndex = selection.index;
+        }
+    }
+
+    if (wireIndices.size() == 2) {
+        menu.addAction(QStringLiteral("交点に点を作成"),
+            this, &MainWindow::CreateIntersectionPoints);
+        menu.addAction(QStringLiteral("この2本を面取り（C/R）の対象にする"),
+            this, [this, wireIndices] {
+                PrepareMachiningForWires(wireIndices[0], wireIndices[1]);
+            });
+        menu.addSeparator();
+    }
+    if (pointIndices.size() == 2) {
+        menu.addAction(QStringLiteral("2点を結ぶ線を作成"),
+            this, &MainWindow::CreateLineBetweenSelectedPoints);
+        menu.addSeparator();
+    }
+    if (plateIndex >= 0 && plateIndex < static_cast<int>(project_.Plates().size())) {
+        const QString plateName = ToQString(project_.Plates()[plateIndex].name);
+        menu.addAction(QStringLiteral("部材近似へ（%1）").arg(plateName),
+            this, [this, plateName] {
+                toolsTabs_->setCurrentIndex(6);
+                if (partModelPanel_ != nullptr) {
+                    partModelPanel_->SelectPlate(plateName);
+                }
+            });
+        menu.addSeparator();
+    }
+
+    QMenu* drawMenu = menu.addMenu(QStringLiteral("作図ツール"));
+    for (QAction* action : {lineToolAction_, polylineToolAction_, rectangleToolAction_,
+             circleToolAction_, arcToolAction_, bezierToolAction_, splineToolAction_,
+             pointToolAction_}) {
+        drawMenu->addAction(action);
+    }
+    QMenu* editMenu = menu.addMenu(QStringLiteral("編集ツール"));
+    for (QAction* action : {moveToolAction_, copyToolAction_, mirrorToolAction_,
+             rotateToolAction_, splitToolAction_, trimToolAction_, extendToolAction_}) {
+        editMenu->addAction(action);
+    }
+    menu.addSeparator();
+    if (!selections.empty()) {
+        menu.addAction(hideSelectedAction_);
+        menu.addAction(QStringLiteral("選択に正対"),
+            this, [this] { (void)viewport_->AlignToSelection(); });
+    }
+    menu.addAction(showAllObjectsAction_);
+    menu.addAction(QStringLiteral("全体表示"), this, [this] { viewport_->FitAll(); });
+    menu.exec(globalPosition);
 }
 
 void MainWindow::Undo()

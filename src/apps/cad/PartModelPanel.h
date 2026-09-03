@@ -26,6 +26,8 @@ public:
     explicit PartModelPanel(QWidget* parent = nullptr);
 
     void RefreshFromProject(const kachakacha::model::Project& project);
+    //! 板材コンボを指定名に合わせる(ビューポートの右クリックメニューから)。
+    void SelectPlate(const QString& plateName);
 
     [[nodiscard]] QString SelectedPlateName() const;
     [[nodiscard]] kachakacha::model::PartApproximationOptions CurrentOptions() const;

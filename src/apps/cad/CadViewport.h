@@ -170,6 +170,9 @@ public:
     void SetCircleCreatedCallback(std::function<void(kachakacha::geometry::Vector3, double)> callback);
     void SetArcCreatedCallback(std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
     void SetArcWireCreatedCallback(std::function<void(const kachakacha::model::Wire&)> callback);
+    //! 選択ツール中の右クリックで呼ばれるコンテキストメニュー要求(ADR 0021)。
+    //! 作図ツール中の右クリックは従来どおり近傍スナップ開始に使う。
+    std::function<void(const QPoint&)> onSelectContextMenu;
     void SetBezierCreatedCallback(std::function<void(const std::array<kachakacha::geometry::Vector3, 4>&)> callback);
     void SetSplineCreatedCallback(std::function<void(const std::vector<kachakacha::geometry::Vector3>&)> callback);
     void SetWireControlPointMovedCallback(
@@ -335,6 +338,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
     void leaveEvent(QEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 

@@ -1596,6 +1596,11 @@ QWidget* MainWindow::BuildDisplayPanel()
     moveGridOrigin->setToolButtonStyle(Qt::ToolButtonTextOnly);
     moveGridOrigin->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     gridLayout->addRow(gridPointsVisible_);
+    gridOutsideDrawingCheck_ = new QCheckBox(QStringLiteral("作図モード以外でも表示"));
+    gridOutsideDrawingCheck_->setToolTip(QStringLiteral(
+        "通常、点グリッドは作図モード(作図面を選んでいるとき)だけ表示します。\n"
+        "面・板材や出力モードでも表示したい場合にチェックしてください"));
+    gridLayout->addRow(gridOutsideDrawingCheck_);
     gridLayout->addRow(QStringLiteral("副点"), gridSubdivision_);
     gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
     gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
@@ -1604,7 +1609,14 @@ QWidget* MainWindow::BuildDisplayPanel()
     layout->addWidget(gridBox);
 
     connect(snapStepField_, &QDoubleSpinBox::valueChanged, viewport_, &CadViewport::SetSnapStep);
-    connect(gridPointsVisible_, &QCheckBox::toggled, viewport_, &CadViewport::SetGridPointsVisible);
+    connect(gridPointsVisible_, &QCheckBox::toggled, this, [this] {
+        ApplyGridVisibility();
+        SaveDisplaySettings();
+    });
+    connect(gridOutsideDrawingCheck_, &QCheckBox::toggled, this, [this] {
+        ApplyGridVisibility();
+        SaveDisplaySettings();
+    });
     connect(gridSubdivision_, &QComboBox::currentIndexChanged, this, [this] {
         viewport_->SetGridSubdivision(gridSubdivision_->currentData().toInt());
     });
@@ -1789,6 +1801,8 @@ void MainWindow::LoadDisplaySettings()
     };
     loadColor(wireColor_, "display/wireColor");
     wireWidth_->setValue(settings.value("display/wireWidth", wireWidth_->value()).toDouble());
+    gridOutsideDrawingCheck_->setChecked(
+        settings.value("display/gridOutsideDrawing", false).toBool());
     loadStyle(wireStyle_, "display/wireStyle");
     loadColor(constructionColor_, "display/constructionColor");
     constructionWidth_->setValue(settings.value("display/constructionWidth", constructionWidth_->value()).toDouble());
@@ -1817,6 +1831,7 @@ void MainWindow::SaveDisplaySettings() const
     }
     QSettings settings;
     settings.setValue("display/wireColor", DisplayColor(wireColor_).name());
+    settings.setValue("display/gridOutsideDrawing", gridOutsideDrawingCheck_->isChecked());
     settings.setValue("display/wireWidth", wireWidth_->value());
     settings.setValue("display/wireStyle", wireStyle_->currentData());
     settings.setValue("display/constructionColor", DisplayColor(constructionColor_).name());

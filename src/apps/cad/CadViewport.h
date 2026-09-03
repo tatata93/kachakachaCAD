@@ -191,6 +191,12 @@ public:
     //! 2点間線ツールで2点が確定したときに呼ばれる(始点, 終点)。
     void SetLineBetweenPickedCallback(
         std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> callback);
+    //! 数値入力パネルの内容をゴースト表示する(確定前に完成形が見えるように)。
+    void SetPreviewWorkPlane(std::optional<kachakacha::model::WorkPlane> plane);
+    void SetPreviewWire(std::optional<kachakacha::model::Wire> wire);
+    [[nodiscard]] bool HasPreviewWorkPlane() const noexcept { return previewPlane_.has_value(); }
+    [[nodiscard]] bool HasPreviewWire() const noexcept { return previewWire_.has_value(); }
+    [[nodiscard]] bool GridPointsVisibleSetting() const noexcept { return gridPointsVisible_; }
     void SetCoincidenceRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetTangentRequestedCallback(
@@ -451,6 +457,8 @@ private:
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineBetweenPicked_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenFirstPoint_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenHoverPoint_;
+    std::optional<kachakacha::model::WorkPlane> previewPlane_;
+    std::optional<kachakacha::model::Wire> previewWire_;
     std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> tangentRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;

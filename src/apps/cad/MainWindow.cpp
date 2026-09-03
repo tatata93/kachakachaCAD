@@ -508,8 +508,9 @@ void MainWindow::BuildUi()
         sketchLayout->setSpacing(6);
         sketchLayout->addWidget(new CollapsibleSection(
             QStringLiteral("作図"), BuildDrawingPanel(), true));
+        wirePanelWidget_ = BuildWirePanel();
         sketchLayout->addWidget(new CollapsibleSection(
-            QStringLiteral("数値入力"), BuildWirePanel(), false));
+            QStringLiteral("数値入力"), wirePanelWidget_, false));
         sketchLayout->addWidget(new CollapsibleSection(
             QStringLiteral("編集"), BuildEditPanel(), false));
         sketchLayout->addWidget(new CollapsibleSection(
@@ -521,7 +522,8 @@ void MainWindow::BuildUi()
         sketchScroll->setWidget(sketchPanel);
         toolsTabs_->addTab(sketchScroll, QStringLiteral("スケッチ"));
     }
-    toolsTabs_->addTab(BuildPlanePanel(), QStringLiteral("作業平面"));
+    planePanelWidget_ = BuildPlanePanel();
+    toolsTabs_->addTab(planePanelWidget_, QStringLiteral("作業平面"));
     toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面・板"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
@@ -530,6 +532,31 @@ void MainWindow::BuildUi()
     // 右パネルは選択中モードのパネルだけを表示する(オーナー指示)。
     // タブ自体は残し(セルフテスト互換・プログラムからの切替用)、見出しだけ隠す。
     toolsTabs_->tabBar()->hide();
+    // 数値入力の変更を完成形プレビューへ即反映する(値・種類・平面の選択すべて)。
+    const auto watchPanelInputs = [this](QWidget* panel) {
+        if (panel == nullptr) {
+            return;
+        }
+        for (auto* field : panel->findChildren<QDoubleSpinBox*>()) {
+            connect(field, &QDoubleSpinBox::valueChanged, this,
+                [this] { UpdateNumericPreviews(); });
+        }
+        for (auto* field : panel->findChildren<QSpinBox*>()) {
+            connect(field, &QSpinBox::valueChanged, this, [this] { UpdateNumericPreviews(); });
+        }
+        for (auto* combo : panel->findChildren<QComboBox*>()) {
+            connect(combo, &QComboBox::currentIndexChanged, this,
+                [this] { UpdateNumericPreviews(); });
+        }
+        for (auto* edit : panel->findChildren<QLineEdit*>()) {
+            connect(edit, &QLineEdit::textChanged, this, [this] { UpdateNumericPreviews(); });
+        }
+        for (auto* check : panel->findChildren<QCheckBox*>()) {
+            connect(check, &QCheckBox::toggled, this, [this] { UpdateNumericPreviews(); });
+        }
+    };
+    watchPanelInputs(planePanelWidget_);
+    watchPanelInputs(wirePanelWidget_);
     LoadDisplaySettings();
     connect(toolsTabs_, &QTabWidget::currentChanged, this, [this](int index) {
         const ViewportTool tool = viewport_->Tool();
@@ -552,6 +579,7 @@ void MainWindow::BuildUi()
         UpdatePlateSplitPreview();
         UpdatePlateAssemblyGuidePreview();
         SyncWorkModeToTab(index);
+        UpdateNumericPreviews();
         RefreshBeginnerGuide();
     });
     toolsLayout->addWidget(toolsTabs_, 1);
@@ -1180,6 +1208,8 @@ void MainWindow::BuildMenusAndToolbar()
 void MainWindow::SetWorkMode(WorkMode mode)
 {
     // ツール列の表示切り替え+右パネルの対応タブへ移動。
+    currentMode_ = mode;
+    ApplyGridVisibility();
     const bool drawing = mode == WorkMode::Drawing;
     const bool surface = mode == WorkMode::SurfacePlate;
     if (drawingToolbar_ != nullptr) {
@@ -1207,6 +1237,17 @@ void MainWindow::SetWorkMode(WorkMode mode)
         toolsTabs_->setCurrentIndex(tab);
     }
     syncingWorkMode_ = false;
+}
+
+void MainWindow::ApplyGridVisibility()
+{
+    // 点グリッドは作図の道具なので、作図モード以外では出さない(設定で常時表示可)。
+    if (viewport_ == nullptr || gridPointsVisible_ == nullptr) {
+        return;
+    }
+    const bool allowed = currentMode_ == WorkMode::Drawing
+        || (gridOutsideDrawingCheck_ != nullptr && gridOutsideDrawingCheck_->isChecked());
+    viewport_->SetGridPointsVisible(gridPointsVisible_->isChecked() && allowed);
 }
 
 void MainWindow::SyncWorkModeToTab(int tabIndex)
@@ -3461,42 +3502,75 @@ void MainWindow::AddWorkPlane()
     }
 }
 
+//! 数値入力パネルの内容からワイヤを構築する(AddWire とプレビューで共用)。
+Wire MainWindow::BuildNumericWire(std::optional<std::string>* sourcePlaneName) const
+{
+    const int kind = wireKind_->currentIndex();
+    if (kind == 0) {
+        return Wire::Line(ReadVector3(lineStart_), ReadVector3(lineEnd_));
+    }
+    if (kind == 1) {
+        return Wire::CubicBezier(ReadVector3(bezierStart_), ReadVector3(bezierControl1_),
+            ReadVector3(bezierControl2_), ReadVector3(bezierEnd_));
+    }
+    const std::string planeName = ToName(wirePlane_->currentText());
+    const std::optional<WorkPlane> plane = project_.FindWorkPlane(planeName);
+    if (!plane.has_value()) {
+        throw std::invalid_argument("作図する作業平面を選択してください。");
+    }
+    const Sketch sketch(*plane);
+    if (sourcePlaneName != nullptr) {
+        *sourcePlaneName = planeName;
+    }
+    switch (kind) {
+    case 2:
+        return sketch.MakeLine(ReadVector2(sketchLineStart_), ReadVector2(sketchLineEnd_));
+    case 3:
+        return sketch.MakeCircle(ReadVector2(circleCenter_), circleRadius_->value());
+    case 4:
+        return sketch.MakeCircularArc(ReadVector2(arcCenter_), arcRadius_->value(),
+            arcStartAngle_->value() * kPi / 180.0, arcSweepAngle_->value() * kPi / 180.0);
+    case 5:
+        return sketch.MakeCubicBezier(ReadVector2(sketchBezierStart_),
+            ReadVector2(sketchBezierControl1_), ReadVector2(sketchBezierControl2_),
+            ReadVector2(sketchBezierEnd_));
+    default:
+        throw std::invalid_argument("ワイヤーの種類を選択してください。");
+    }
+}
+
+void MainWindow::UpdateNumericPreviews()
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+    std::optional<WorkPlane> planePreview;
+    if (planePanelWidget_ != nullptr && planePanelWidget_->isVisible()) {
+        try {
+            planePreview = WorkPlaneFromInputs();
+        } catch (const std::exception&) {
+            // 入力が未完成の間はプレビューを出さない。
+        }
+    }
+    viewport_->SetPreviewWorkPlane(std::move(planePreview));
+    std::optional<Wire> wirePreview;
+    if (wirePanelWidget_ != nullptr && wirePanelWidget_->isVisible()) {
+        try {
+            wirePreview = BuildNumericWire(nullptr);
+        } catch (const std::exception&) {
+        }
+    }
+    viewport_->SetPreviewWire(std::move(wirePreview));
+}
+
 void MainWindow::AddWire()
 {
     try {
         ValidateObjectName(wireName_->text());
-        std::optional<Wire> wire;
         WireMetadata metadata;
-        const int kind = wireKind_->currentIndex();
-        if (kind == 0) {
-            wire = Wire::Line(ReadVector3(lineStart_), ReadVector3(lineEnd_));
-        } else if (kind == 1) {
-            wire = Wire::CubicBezier(ReadVector3(bezierStart_), ReadVector3(bezierControl1_), ReadVector3(bezierControl2_), ReadVector3(bezierEnd_));
-        } else {
-            const std::string planeName = ToName(wirePlane_->currentText());
-            const std::optional<WorkPlane> plane = project_.FindWorkPlane(planeName);
-            if (!plane.has_value()) {
-                throw std::invalid_argument("作図する作業平面を選択してください。");
-            }
-            const Sketch sketch(*plane);
-            metadata.sourcePlaneName = planeName;
-            switch (kind) {
-            case 2:
-                wire = sketch.MakeLine(ReadVector2(sketchLineStart_), ReadVector2(sketchLineEnd_));
-                break;
-            case 3:
-                wire = sketch.MakeCircle(ReadVector2(circleCenter_), circleRadius_->value());
-                break;
-            case 4:
-                wire = sketch.MakeCircularArc(ReadVector2(arcCenter_), arcRadius_->value(), arcStartAngle_->value() * kPi / 180.0, arcSweepAngle_->value() * kPi / 180.0);
-                break;
-            case 5:
-                wire = sketch.MakeCubicBezier(ReadVector2(sketchBezierStart_), ReadVector2(sketchBezierControl1_), ReadVector2(sketchBezierControl2_), ReadVector2(sketchBezierEnd_));
-                break;
-            default:
-                break;
-            }
-        }
+        std::optional<std::string> sourcePlaneName;
+        const std::optional<Wire> wire = BuildNumericWire(&sourcePlaneName);
+        metadata.sourcePlaneName = sourcePlaneName;
 
         switch (wirePolicy_->currentIndex()) {
         case 0:
@@ -5031,6 +5105,7 @@ void MainWindow::RefreshModelViews(bool fitView)
             }),
         gordonGuideNames_.end());
     RefreshGordonGuideLabel();
+    UpdateNumericPreviews();
     UpdateSelection({}, false);
 }
 

@@ -3221,6 +3221,32 @@ bool MainWindow::RunCreationSelfTest()
     viewport_->SetIsometricView();
     viewport_->FitAll();
 
+    // 数値入力のゴーストプレビューと、グリッドのモード連動(ADR 0025補)。
+    toolsTabs_->setCurrentIndex(1);
+    UpdateNumericPreviews();
+    if (!viewport_->HasPreviewWorkPlane()) {
+        return fail("plane inputs show a ghost preview");
+    }
+    toolsTabs_->setCurrentIndex(0);
+    UpdateNumericPreviews();
+    if (viewport_->HasPreviewWorkPlane()) {
+        return fail("plane preview clears when panel hidden");
+    }
+    gridPointsVisible_->setChecked(true);
+    surfaceModeAction_->trigger();
+    if (viewport_->GridPointsVisibleSetting()) {
+        return fail("grid hides outside drawing mode");
+    }
+    gridOutsideDrawingCheck_->setChecked(true);
+    if (!viewport_->GridPointsVisibleSetting()) {
+        return fail("grid override keeps grid visible");
+    }
+    gridOutsideDrawingCheck_->setChecked(false);
+    drawingModeAction_->trigger();
+    if (!viewport_->GridPointsVisibleSetting()) {
+        return fail("grid returns in drawing mode");
+    }
+
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
     // qt_cad_smoke は first-check.kcd を読み込むため原点平面が無い → テスト用に追加する。
     if (!project_.FindWorkPlane("top_XY").has_value()) {

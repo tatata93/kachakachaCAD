@@ -839,6 +839,18 @@ void CadViewport::SetLineBetweenPickedCallback(
     lineBetweenPicked_ = std::move(callback);
 }
 
+void CadViewport::SetPreviewWorkPlane(std::optional<kachakacha::model::WorkPlane> plane)
+{
+    previewPlane_ = std::move(plane);
+    update();
+}
+
+void CadViewport::SetPreviewWire(std::optional<Wire> wire)
+{
+    previewWire_ = std::move(wire);
+    update();
+}
+
 void CadViewport::SetCoincidenceRequestedCallback(
     std::function<void(WireEndpointPick, WireEndpointPick)> callback)
 {
@@ -4599,6 +4611,46 @@ void CadViewport::paintEvent(QPaintEvent*)
         }
     }
     painter.drawText(QRect(14, 12, std::max(80, width() - 270), 24), Qt::AlignLeft, modeText);
+
+    // 数値入力の完成形プレビュー(ゴースト表示)。
+    if (previewPlane_.has_value() || previewWire_.has_value()) {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        if (previewPlane_.has_value()) {
+            const QPolygonF quad({
+                ProjectPoint(previewPlane_->ToWorld(-kPlaneHalfSize, -kPlaneHalfSize)),
+                ProjectPoint(previewPlane_->ToWorld(kPlaneHalfSize, -kPlaneHalfSize)),
+                ProjectPoint(previewPlane_->ToWorld(kPlaneHalfSize, kPlaneHalfSize)),
+                ProjectPoint(previewPlane_->ToWorld(-kPlaneHalfSize, kPlaneHalfSize)),
+            });
+            painter.setBrush(QColor(8, 119, 128, 34));
+            painter.setPen(QPen(QColor("#d17d00"), 2.0, Qt::DashLine));
+            painter.drawPolygon(quad);
+            painter.setPen(QPen(QColor("#d17d00"), 1.2, Qt::DashLine));
+            painter.drawLine(
+                ProjectPoint(previewPlane_->ToWorld(0.0, -kPlaneHalfSize)),
+                ProjectPoint(previewPlane_->ToWorld(0.0, kPlaneHalfSize)));
+            painter.drawLine(
+                ProjectPoint(previewPlane_->ToWorld(-kPlaneHalfSize, 0.0)),
+                ProjectPoint(previewPlane_->ToWorld(kPlaneHalfSize, 0.0)));
+        }
+        if (previewWire_.has_value()) {
+            QPolygonF path;
+            constexpr int kPreviewSamples = 64;
+            for (int sample = 0; sample <= kPreviewSamples; ++sample) {
+                path << ProjectPoint(
+                    previewWire_->Evaluate(static_cast<double>(sample) / kPreviewSamples));
+            }
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor("#d17d00"), 2.4, Qt::DashLine, Qt::RoundCap));
+            painter.drawPolyline(path);
+            painter.setBrush(QColor("#d17d00"));
+            painter.setPen(Qt::NoPen);
+            painter.drawEllipse(path.first(), 3.5, 3.5);
+            painter.drawEllipse(path.last(), 3.5, 3.5);
+        }
+        painter.restore();
+    }
 
     if (tool_ == ViewportTool::LineBetweenPoints) {
         painter.save();

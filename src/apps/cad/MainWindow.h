@@ -251,6 +251,12 @@ private:
     enum class WorkMode { Drawing, SurfacePlate, PartModel, Output };
     void SetWorkMode(WorkMode mode);
     void SyncWorkModeToTab(int tabIndex);
+    //! 数値入力パネル(作業平面・ワイヤ)の内容をゴーストプレビューへ反映する。
+    void UpdateNumericPreviews();
+    [[nodiscard]] kachakacha::model::Wire BuildNumericWire(
+        std::optional<std::string>* sourcePlaneName) const;
+    //! 点グリッドの実効表示(作図モード時のみ。設定で常時表示可)。
+    void ApplyGridVisibility();
     void EnsureMeasurementWindow();
     void UpdateMeasurementWindow();
     void CreateCurveCenterPoint();
@@ -408,6 +414,10 @@ private:
     QPushButton* curveCenterPointButton_ = nullptr;
     QPushButton* curveControlPointsButton_ = nullptr;
     bool syncingWorkMode_ = false;
+    WorkMode currentMode_ = WorkMode::Drawing;
+    QWidget* planePanelWidget_ = nullptr;
+    QWidget* wirePanelWidget_ = nullptr;
+    QCheckBox* gridOutsideDrawingCheck_ = nullptr;
     QLabel* beginnerGuideTitle_ = nullptr;
     QLabel* beginnerGuideNext_ = nullptr;
     QLabel* beginnerGuideSteps_ = nullptr;

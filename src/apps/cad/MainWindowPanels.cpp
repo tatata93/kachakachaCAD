@@ -1653,6 +1653,15 @@ QWidget* MainWindow::BuildDisplayPanel()
         connect(toolsCheck, &QCheckBox::toggled, this, [this](bool visible) {
             if (toolsDock_ != nullptr) toolsDock_->setVisible(visible);
         });
+        // ドック側の×やメニューで閉じ/開きしたときもチェック状態を追従させる。
+        if (modelDock_ != nullptr) {
+            connect(modelDock_->toggleViewAction(), &QAction::toggled,
+                modelCheck, &QCheckBox::setChecked);
+        }
+        if (toolsDock_ != nullptr) {
+            connect(toolsDock_->toggleViewAction(), &QAction::toggled,
+                toolsCheck, &QCheckBox::setChecked);
+        }
         connect(guideCheck, &QCheckBox::toggled, this, [this](bool visible) {
             if (guideSection_ != nullptr) guideSection_->setVisible(visible);
         });

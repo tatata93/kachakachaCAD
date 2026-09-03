@@ -524,7 +524,8 @@ void MainWindow::BuildUi()
     }
     planePanelWidget_ = BuildPlanePanel();
     toolsTabs_->addTab(planePanelWidget_, QStringLiteral("作業平面"));
-    toolsTabs_->addTab(BuildSurfacePanel(), QStringLiteral("面・板"));
+    surfacePanelWidget_ = BuildSurfacePanel();
+    toolsTabs_->addTab(surfacePanelWidget_, QStringLiteral("面・板"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
@@ -992,6 +993,25 @@ void MainWindow::BuildMenusAndToolbar()
     viewMenu->addSeparator();
     viewMenu->addAction(hideSelectedAction_);
     viewMenu->addAction(showAllObjectsAction_);
+    viewMenu->addSeparator();
+    if (modelDock_ != nullptr) {
+        QAction* modelDockAction = modelDock_->toggleViewAction();
+        modelDockAction->setText(QStringLiteral("モデルパネル"));
+        viewMenu->addAction(modelDockAction);
+    }
+    if (toolsDock_ != nullptr) {
+        QAction* toolsDockAction = toolsDock_->toggleViewAction();
+        toolsDockAction->setText(QStringLiteral("作図と編集パネル"));
+        viewMenu->addAction(toolsDockAction);
+    }
+    auto* measurementWindowViewAction = new QAction(QStringLiteral("測定結果ウィンドウ"), this);
+    connect(measurementWindowViewAction, &QAction::triggered, this, [this] {
+        EnsureMeasurementWindow();
+        UpdateMeasurementWindow();
+        measurementWindow_->show();
+        measurementWindow_->raise();
+    });
+    viewMenu->addAction(measurementWindowViewAction);
 
     QMenu* drawMenu = menuBar()->addMenu(QStringLiteral("作図"));
     drawMenu->addAction(selectToolAction_);
@@ -1152,35 +1172,47 @@ void MainWindow::BuildMenusAndToolbar()
     surfaceToolbar_->setMovable(false);
     surfaceToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
     {
-        const auto addSurfaceCommand = [this](const QString& text, const QString& tip, auto slot) {
+        const auto addSurfaceCommand = [this](const QString& text, const QString& tip,
+                                            const QString& revealTitle, void (MainWindow::*slot)()) {
             auto* action = new QAction(text, this);
             action->setToolTip(tip);
-            connect(action, &QAction::triggered, this, slot);
+            connect(action, &QAction::triggered, this, [this, revealTitle, slot] {
+                // ツールを押したら右パネルの該当セクションを必ず見せてから実行する。
+                RevealSurfaceGroup(revealTitle);
+                (this->*slot)();
+            });
             surfaceToolbar_->addAction(action);
             return action;
         };
         addSurfaceCommand(QStringLiteral("面を作成"),
             QStringLiteral("選択した輪郭・断面ワイヤーから面を作る(詳細は右パネル)"),
+            QStringLiteral("ワイヤーから面"),
             &MainWindow::CreateSurfaceFromSelection);
         addSurfaceCommand(QStringLiteral("ゴードン面"),
             QStringLiteral("縦横の断面ネットワークから面を作る"),
+            QStringLiteral("断面と外形ガイドから面（Gordon面）"),
             &MainWindow::CreateGordonSurfaceFromSelection);
         addSurfaceCommand(QStringLiteral("面へ投影"),
             QStringLiteral("選択ワイヤーを面へ投影する(窓・ライトの下書きに)"),
+            QStringLiteral("平面図を面へ投影"),
             &MainWindow::ProjectSelectedWiresToSurface);
         surfaceToolbar_->addSeparator();
         addSurfaceCommand(QStringLiteral("板材化"),
             QStringLiteral("選択した面に厚みを付けて板材にする(厚み・方向は右パネル)"),
+            QStringLiteral("ワイヤー / 面から3D板を作る"),
             &MainWindow::CreatePlateFromSurface);
         addSurfaceCommand(QStringLiteral("厚み位置のワイヤ"),
             QStringLiteral("板材の任意の厚み位置に輪郭ワイヤーを作る"),
+            QStringLiteral("板厚位置にワイヤーを作る"),
             &MainWindow::CreatePlateOffsetWires);
         addSurfaceCommand(QStringLiteral("ライトケース"),
             QStringLiteral("前面形状から突出するライトケースを作る"),
+            QStringLiteral("飛び出すライトケース"),
             &MainWindow::CreateProtrudingLightCase);
         surfaceToolbar_->addSeparator();
         addSurfaceCommand(QStringLiteral("成形治具"),
             QStringLiteral("面から曲げ成形用の治具を作る"),
+            QStringLiteral("曲面から成形治具"),
             &MainWindow::CreateSurfaceJig);
     }
 
@@ -1233,9 +1265,7 @@ void MainWindow::SetWorkMode(WorkMode mode)
         : mode == WorkMode::SurfacePlate ? 2
         : mode == WorkMode::PartModel ? 6
                                       : 3;
-    if (toolsTabs_->currentIndex() != tab) {
-        toolsTabs_->setCurrentIndex(tab);
-    }
+    ShowRightPanel(tab);
     syncingWorkMode_ = false;
 }
 
@@ -1248,6 +1278,51 @@ void MainWindow::ApplyGridVisibility()
     const bool allowed = currentMode_ == WorkMode::Drawing
         || (gridOutsideDrawingCheck_ != nullptr && gridOutsideDrawingCheck_->isChecked());
     viewport_->SetGridPointsVisible(gridPointsVisible_->isChecked() && allowed);
+}
+
+void MainWindow::ShowRightPanel(int tabIndex)
+{
+    // 一度閉じた右パネルでも、必要な操作をしたら自動で戻す(オーナー指示)。
+    if (toolsDock_ != nullptr && !toolsDock_->isVisible()) {
+        toolsDock_->setVisible(true);
+    }
+    if (toolsTabs_ != nullptr) {
+        toolsTabs_->setCurrentIndex(tabIndex);
+    }
+}
+
+void MainWindow::RevealSurfaceGroup(const QString& title)
+{
+    ShowRightPanel(2);
+    if (surfacePanelWidget_ == nullptr) {
+        return;
+    }
+    auto* scrollArea = qobject_cast<QScrollArea*>(surfacePanelWidget_);
+    if (scrollArea == nullptr) {
+        return;
+    }
+    if (title.isEmpty()) {
+        scrollArea->verticalScrollBar()->setValue(0);
+        return;
+    }
+    QWidget* target = nullptr;
+    for (auto* box : surfacePanelWidget_->findChildren<QGroupBox*>()) {
+        if (box->title() == title) {
+            target = box;
+            break;
+        }
+    }
+    if (target == nullptr) {
+        for (auto* label : surfacePanelWidget_->findChildren<QLabel*>()) {
+            if (label->text() == title) {
+                target = label;
+                break;
+            }
+        }
+    }
+    if (target != nullptr) {
+        scrollArea->ensureWidgetVisible(target, 0, 40);
+    }
 }
 
 void MainWindow::SyncWorkModeToTab(int tabIndex)
@@ -1488,18 +1563,18 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         || tool == ViewportTool::Coincident || tool == ViewportTool::Tangent
         || tool == ViewportTool::Curvature || tool == ViewportTool::LineBetweenPoints;
     if (isDirectLineEdit || sketchDetailTool) {
-        toolsTabs_->setCurrentIndex(0);
+        ShowRightPanel(0);
         if (sketchDetailTool) {
             ExpandSketchSection(QStringLiteral("作図"));
         }
     } else if (tool == ViewportTool::Measure) {
-        toolsTabs_->setCurrentIndex(5);
+        ShowRightPanel(5);
         EnsureMeasurementWindow();
         UpdateMeasurementWindow();
         measurementWindow_->show();
         measurementWindow_->raise();
     } else if (tool == ViewportTool::MoveGridOrigin) {
-        toolsTabs_->setCurrentIndex(0);
+        ShowRightPanel(0);
         gridPointsVisible_->setChecked(true);
     }
     selectToolAction_->setChecked(tool == ViewportTool::Select);
@@ -4000,6 +4075,9 @@ void MainWindow::CreateLineBetweenPickedPoints(Vector3 first, Vector3 second)
 
 void MainWindow::ExpandSketchSection(const QString& title)
 {
+    if (toolsDock_ != nullptr && !toolsDock_->isVisible()) {
+        toolsDock_->setVisible(true);
+    }
     QWidget* tab = toolsTabs_ != nullptr ? toolsTabs_->widget(0) : nullptr;
     if (tab == nullptr) {
         return;

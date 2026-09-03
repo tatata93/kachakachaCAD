@@ -257,6 +257,10 @@ private:
         std::optional<std::string>* sourcePlaneName) const;
     //! 点グリッドの実効表示(作図モード時のみ。設定で常時表示可)。
     void ApplyGridVisibility();
+    //! 右パネル(作図と編集ドック)を必ず表示して指定タブへ切り替える。
+    void ShowRightPanel(int tabIndex);
+    //! 面・板パネルの見出しへスクロールして表示する(空文字なら先頭)。
+    void RevealSurfaceGroup(const QString& title);
     void EnsureMeasurementWindow();
     void UpdateMeasurementWindow();
     void CreateCurveCenterPoint();
@@ -417,6 +421,7 @@ private:
     WorkMode currentMode_ = WorkMode::Drawing;
     QWidget* planePanelWidget_ = nullptr;
     QWidget* wirePanelWidget_ = nullptr;
+    QWidget* surfacePanelWidget_ = nullptr;
     QCheckBox* gridOutsideDrawingCheck_ = nullptr;
     QLabel* beginnerGuideTitle_ = nullptr;
     QLabel* beginnerGuideNext_ = nullptr;

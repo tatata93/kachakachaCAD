@@ -3247,6 +3247,26 @@ bool MainWindow::RunCreationSelfTest()
         return fail("grid returns in drawing mode");
     }
 
+    // 右パネルは閉じても、必要な操作(モード切替・ツール選択・面ツール)で自動復帰する。
+    toolsDock_->setVisible(false);
+    surfaceModeAction_->trigger();
+    if (!toolsDock_->isVisible() || toolsTabs_->currentIndex() != 2) {
+        return fail("mode switch restores the right panel");
+    }
+    toolsDock_->setVisible(false);
+    SetViewportTool(ViewportTool::DrawLine);
+    if (!toolsDock_->isVisible() || toolsTabs_->currentIndex() != 0) {
+        return fail("tool selection restores the right panel");
+    }
+    SetViewportTool(ViewportTool::Select);
+    RevealSurfaceGroup(QStringLiteral("飛び出すライトケース"));
+    auto* surfaceScroll = qobject_cast<QScrollArea*>(surfacePanelWidget_);
+    if (toolsTabs_->currentIndex() != 2 || surfaceScroll == nullptr
+        || surfaceScroll->verticalScrollBar()->value() <= 0) {
+        return fail("surface tool reveals its panel section");
+    }
+    drawingModeAction_->trigger();
+
     // 原点平面はツリー最上部の「原点」ノードに固定され、削除できない。
     // qt_cad_smoke は first-check.kcd を読み込むため原点平面が無い → テスト用に追加する。
     if (!project_.FindWorkPlane("top_XY").has_value()) {

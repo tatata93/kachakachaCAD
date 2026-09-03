@@ -38,6 +38,7 @@
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
@@ -233,6 +234,11 @@ void MainWindow::BuildUi()
     viewport_->SetToolExitRequestedCallback([this] {
         SetViewportTool(ViewportTool::Select);
     });
+    viewport_->SetEscapeRequestedCallback([this] {
+        // 他CAD同様: Esc = 選択モード・何も選ばれていない状態へ。
+        SetViewportTool(ViewportTool::Select);
+        UpdateSelections({}, true);
+    });
     viewport_->SetCoincidenceRequestedCallback([this](WireEndpointPick anchor, WireEndpointPick follower) {
         ApplyEndpointCoincidence(anchor, follower);
     });
@@ -262,6 +268,7 @@ void MainWindow::BuildUi()
     });
 
     auto* modelDock = new QDockWidget(QStringLiteral("モデル"), this);
+    modelDock_ = modelDock;
     modelDock->setObjectName("modelDock");
     modelDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     auto* modelPanel = new QWidget;
@@ -322,8 +329,10 @@ void MainWindow::BuildUi()
     beginnerGuideButtons->addWidget(beginnerGuideNextButton_, 1);
     beginnerGuideButtons->addWidget(beginnerGuideManualButton_);
     beginnerGuideLayout->addLayout(beginnerGuideButtons);
-    modelLayout->addWidget(new CollapsibleSection(
-        QStringLiteral("操作ガイド"), beginnerGuide, true));
+    auto* guideSection = new CollapsibleSection(
+        QStringLiteral("操作ガイド"), beginnerGuide, true);
+    guideSection_ = guideSection;
+    modelLayout->addWidget(guideSection);
 
     connect(beginnerGuideNextButton_, &QPushButton::clicked, this, [this] {
         if (toolsTabs_ == nullptr || beginnerGuideNextTab_ < 0) {
@@ -450,6 +459,7 @@ void MainWindow::BuildUi()
     });
 
     auto* toolsDock = new QDockWidget(QStringLiteral("作図と編集"), this);
+    toolsDock_ = toolsDock;
     toolsDock->setObjectName("toolsDock");
     toolsDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
     auto* toolsPanel = new QWidget;
@@ -480,6 +490,9 @@ void MainWindow::BuildUi()
             toolsTabs_->setCurrentIndex(tab);
         });
     }
+    workflowPanel_ = workflowPanel;
+    // モード切替は上部ツールバーへ移設(ADR 0025)。ボタンは互換のため残すが隠す。
+    workflowPanel->setVisible(false);
     toolsLayout->addWidget(workflowPanel);
     toolsTabs_ = new QTabWidget;
     // ADR 0020 第2段: 作図に使う4タブ(作図/数値入力/編集/加工)を
@@ -530,6 +543,7 @@ void MainWindow::BuildUi()
         }
         UpdatePlateSplitPreview();
         UpdatePlateAssemblyGuidePreview();
+        SyncWorkModeToTab(index);
         RefreshBeginnerGuide();
     });
     toolsLayout->addWidget(toolsTabs_, 1);
@@ -788,6 +802,23 @@ void MainWindow::OpenLegalNotices()
     }
 }
 
+void MainWindow::ShowShortcutReference()
+{
+    QMessageBox::information(this, QStringLiteral("ショートカット一覧"), QStringLiteral(
+        "Esc\t選択モードへ戻る（選択解除・作図の取り消し）\n"
+        "Enter\t作図中の線・曲線を確定\n"
+        "数字・式\t作図中に入力すると実寸で確定（例: (180/2)*3）\n"
+        "Shift\tビュー回転ボタンを15°→5°に\n"
+        "マウスホイール\tズーム\n"
+        "右ドラッグ\tビュー回転\n"
+        "中ドラッグ\tパン（Shift+中ドラッグで回転）\n"
+        "右クリック\t選択ツール中: コンテキストメニュー\n"
+        "\t作図ツール中: 近くのスナップ点から引き始め\n"
+        "ビューキューブ\t面・辺・角クリックで正対、ドラッグで自由回転\n"
+        "色付きリング\tモデルの軸まわりに回転（ドラッグで連続）\n"
+        "灰色の矢印\t画面基準で回転（位置固定、ドラッグで連続）"));
+}
+
 void MainWindow::BuildMenusAndToolbar()
 {
     QAction* newAction = new QAction(style()->standardIcon(QStyle::SP_FileIcon), QStringLiteral("新規"), this);
@@ -912,6 +943,28 @@ void MainWindow::BuildMenusAndToolbar()
     drawMenu->addAction(finishDrawingAction_);
     drawMenu->addAction(cancelDrawingAction_);
 
+    // ソフト全体の設定はここに集約する(オーナー指示、ADR 0025)。
+    QMenu* settingsMenu = menuBar()->addMenu(QStringLiteral("設定"));
+    auto* shortcutAction = new QAction(QStringLiteral("ショートカット一覧…"), this);
+    connect(shortcutAction, &QAction::triggered, this, &MainWindow::ShowShortcutReference);
+    settingsMenu->addAction(shortcutAction);
+    auto* displaySettingsAction = new QAction(QStringLiteral("表示・線の設定（表示タブ）"), this);
+    connect(displaySettingsAction, &QAction::triggered, this, [this] {
+        toolsTabs_->setCurrentIndex(4);
+        if (toolsDock_ != nullptr) {
+            toolsDock_->setVisible(true);
+        }
+    });
+    settingsMenu->addAction(displaySettingsAction);
+    auto* measurementWindowAction = new QAction(QStringLiteral("測定結果ウィンドウ"), this);
+    connect(measurementWindowAction, &QAction::triggered, this, [this] {
+        EnsureMeasurementWindow();
+        UpdateMeasurementWindow();
+        measurementWindow_->show();
+        measurementWindow_->raise();
+    });
+    settingsMenu->addAction(measurementWindowAction);
+
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("ヘルプ"));
     helpMenu->addAction(manualAction);
     helpMenu->addAction(legalAction);
@@ -927,7 +980,6 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(redoAction_);
     toolbar->addSeparator();
     toolbar->addAction(fitAction);
-    toolbar->addAction(measureToolAction_);
     toolbar->addSeparator();
     toolbar->addAction(designDisplayAction_);
     toolbar->addAction(finishedDisplayAction_);
@@ -937,69 +989,200 @@ void MainWindow::BuildMenusAndToolbar()
     toolbar->addAction(showAllObjectsAction_);
     toolbar->addAction(deleteAction);
 
-    // 作図系は2段目の列へ(1段目の汎用操作と分節し、あふれチェブロンを防ぐ)。
+    // --- 2段目: モード切替+常時ツール(正対・選択・測定)+作図面(ADR 0025) ---
     addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar* drawingToolbar = addToolBar(QStringLiteral("平面作図"));
-    drawingToolbar->setMovable(false);
-    drawingToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    QToolBar* modeToolbar = addToolBar(QStringLiteral("モード"));
+    modeToolbar->setMovable(false);
+    modeToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    drawingModeAction_ = new QAction(QStringLiteral("① 作図"), this);
+    surfaceModeAction_ = new QAction(QStringLiteral("② 面・板材"), this);
+    partModelModeAction_ = new QAction(QStringLiteral("③ 近似モデル"), this);
+    outputModeAction_ = new QAction(QStringLiteral("④ 出力"), this);
+    auto* modeGroup = new QActionGroup(this);
+    for (QAction* action : {drawingModeAction_, surfaceModeAction_, partModelModeAction_, outputModeAction_}) {
+        action->setCheckable(true);
+        modeGroup->addAction(action);
+        modeToolbar->addAction(action);
+    }
+    drawingModeAction_->setToolTip(QStringLiteral("平面を作り、線・曲線を描き、編集する"));
+    surfaceModeAction_->setToolTip(QStringLiteral("ワイヤーから面・板材・ライトケースを作る"));
+    partModelModeAction_->setToolTip(QStringLiteral("板材を製作用の部材近似モデルにする"));
+    outputModeAction_->setToolTip(QStringLiteral("出力対象と形式(.kcd / STL / STEP / 図面)を選んで書き出す"));
+    connect(drawingModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::Drawing); });
+    connect(surfaceModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::SurfacePlate); });
+    connect(partModelModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::PartModel); });
+    connect(outputModeAction_, &QAction::triggered, this, [this] { SetWorkMode(WorkMode::Output); });
+    modeToolbar->addSeparator();
+    modeToolbar->addAction(alignPlaneAction_);
+    modeToolbar->addAction(selectToolAction_);
+    modeToolbar->addAction(measureToolAction_);
+    modeToolbar->addSeparator();
     {
         auto* planeCaption = new QLabel(QStringLiteral(" 作図面 "));
         planeCaption->setStyleSheet("color: #26323a; font-weight: 600;");
-        drawingToolbar->addWidget(planeCaption);
-        drawingToolbar->addWidget(activePlaneCombo_);
+        modeToolbar->addWidget(planeCaption);
+        modeToolbar->addWidget(activePlaneCombo_);
     }
-    drawingToolbar->addAction(alignPlaneAction_);
-    drawingToolbar->addAction(snapAction_);
-    drawingToolbar->addSeparator();
-    drawingToolbar->addAction(selectToolAction_);
-    drawingToolbar->addAction(lineToolAction_);
-    drawingToolbar->addAction(polylineToolAction_);
-    drawingToolbar->addAction(rectangleToolAction_);
-    drawingToolbar->addAction(circleToolAction_);
-    drawingToolbar->addAction(arcToolAction_);
-    drawingToolbar->addAction(bezierToolAction_);
-    drawingToolbar->addAction(splineToolAction_);
-    drawingToolbar->addAction(pointToolAction_);
-    drawingToolbar->addSeparator();
-    drawingToolbar->addAction(finishDrawingAction_);
-    drawingToolbar->addAction(cancelDrawingAction_);
+    modeToolbar->addAction(snapAction_);
 
-    QToolBar* transformToolbar = addToolBar(QStringLiteral("直接変形"));
-    transformToolbar->setMovable(false);
-    transformToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    transformToolbar->addAction(moveToolAction_);
-    transformToolbar->addAction(copyToolAction_);
-    transformToolbar->addAction(rotateToolAction_);
-    transformToolbar->addAction(mirrorToolAction_);
-    transformToolbar->addAction(splitToolAction_);
-    transformToolbar->addAction(trimToolAction_);
-    transformToolbar->addAction(extendToolAction_);
-    transformToolbar->addAction(coincidentToolAction_);
-    transformToolbar->addAction(tangentToolAction_);
-    transformToolbar->addAction(curvatureToolAction_);
-    transformToolbar->addAction(joinWiresAction_);
-    transformToolbar->addAction(meetLinesAction_);
-    transformToolbar->addSeparator();
-    transformToolbar->addAction(setReferenceAction_);
-
-    // 加工系(パラメータはスケッチタブに残し、コマンド起動は上段からもできるようにする)。
-    // 作図列のあふれを防ぐため3段目に置く(オーナー指示: 縦2列可)。
+    // --- 3段目以降: 選択中モードのツール列(モードで表示を切り替える) ---
     addToolBarBreak(Qt::TopToolBarArea);
-    QToolBar* machiningToolbar = addToolBar(QStringLiteral("加工"));
-    machiningToolbar->setMovable(false);
-    machiningToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    machiningToolbar->addAction(chamferAction_);
-    machiningToolbar->addAction(filletAction_);
-    machiningToolbar->addAction(cornerEditAction_);
-    machiningToolbar->addSeparator();
-    machiningToolbar->addAction(intersectionPointsAction_);
-    machiningToolbar->addAction(lineBetweenPointsAction_);
-    machiningToolbar->addAction(offsetApplyAction_);
-    machiningToolbar->addSeparator();
-    machiningToolbar->addAction(removeCoincidentAction_);
-    machiningToolbar->addAction(removeTangentAction_);
-    machiningToolbar->addAction(clearReferenceAction_);
+    drawingToolbar_ = addToolBar(QStringLiteral("作図ツール"));
+    drawingToolbar_->setMovable(false);
+    drawingToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    {
+        auto* makePlaneAction = new QAction(QStringLiteral("平面を作る"), this);
+        makePlaneAction->setToolTip(QStringLiteral("作業平面の作成・回転・オフセット(右パネルに詳細)"));
+        connect(makePlaneAction, &QAction::triggered, this, [this] {
+            toolsTabs_->setCurrentIndex(1);
+        });
+        drawingToolbar_->addAction(makePlaneAction);
+        drawingToolbar_->addSeparator();
+    }
+    drawingToolbar_->addAction(lineToolAction_);
+    drawingToolbar_->addAction(polylineToolAction_);
+    drawingToolbar_->addAction(rectangleToolAction_);
+    drawingToolbar_->addAction(circleToolAction_);
+    drawingToolbar_->addAction(arcToolAction_);
+    drawingToolbar_->addAction(bezierToolAction_);
+    drawingToolbar_->addAction(splineToolAction_);
+    drawingToolbar_->addAction(pointToolAction_);
+    drawingToolbar_->addSeparator();
+    drawingToolbar_->addAction(finishDrawingAction_);
+    drawingToolbar_->addAction(cancelDrawingAction_);
+
+    transformToolbar_ = addToolBar(QStringLiteral("直接変形"));
+    transformToolbar_->setMovable(false);
+    transformToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    transformToolbar_->addAction(moveToolAction_);
+    transformToolbar_->addAction(copyToolAction_);
+    transformToolbar_->addAction(rotateToolAction_);
+    transformToolbar_->addAction(mirrorToolAction_);
+    transformToolbar_->addAction(splitToolAction_);
+    transformToolbar_->addAction(trimToolAction_);
+    transformToolbar_->addAction(extendToolAction_);
+    transformToolbar_->addAction(coincidentToolAction_);
+    transformToolbar_->addAction(tangentToolAction_);
+    transformToolbar_->addAction(curvatureToolAction_);
+    transformToolbar_->addAction(joinWiresAction_);
+    transformToolbar_->addAction(meetLinesAction_);
+    transformToolbar_->addSeparator();
+    transformToolbar_->addAction(setReferenceAction_);
+
+    // 面・板材モードのツール列(パラメータは右パネル)。
+    surfaceToolbar_ = addToolBar(QStringLiteral("面・板材ツール"));
+    surfaceToolbar_->setMovable(false);
+    surfaceToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    {
+        const auto addSurfaceCommand = [this](const QString& text, const QString& tip, auto slot) {
+            auto* action = new QAction(text, this);
+            action->setToolTip(tip);
+            connect(action, &QAction::triggered, this, slot);
+            surfaceToolbar_->addAction(action);
+            return action;
+        };
+        addSurfaceCommand(QStringLiteral("面を作成"),
+            QStringLiteral("選択した輪郭・断面ワイヤーから面を作る(詳細は右パネル)"),
+            &MainWindow::CreateSurfaceFromSelection);
+        addSurfaceCommand(QStringLiteral("ゴードン面"),
+            QStringLiteral("縦横の断面ネットワークから面を作る"),
+            &MainWindow::CreateGordonSurfaceFromSelection);
+        addSurfaceCommand(QStringLiteral("面へ投影"),
+            QStringLiteral("選択ワイヤーを面へ投影する(窓・ライトの下書きに)"),
+            &MainWindow::ProjectSelectedWiresToSurface);
+        surfaceToolbar_->addSeparator();
+        addSurfaceCommand(QStringLiteral("板材化"),
+            QStringLiteral("選択した面に厚みを付けて板材にする(厚み・方向は右パネル)"),
+            &MainWindow::CreatePlateFromSurface);
+        addSurfaceCommand(QStringLiteral("厚み位置のワイヤ"),
+            QStringLiteral("板材の任意の厚み位置に輪郭ワイヤーを作る"),
+            &MainWindow::CreatePlateOffsetWires);
+        addSurfaceCommand(QStringLiteral("ライトケース"),
+            QStringLiteral("前面形状から突出するライトケースを作る"),
+            &MainWindow::CreateProtrudingLightCase);
+        surfaceToolbar_->addSeparator();
+        addSurfaceCommand(QStringLiteral("成形治具"),
+            QStringLiteral("面から曲げ成形用の治具を作る"),
+            &MainWindow::CreateSurfaceJig);
+    }
+
+    // 加工系(作図モードの2列目。オーナー指示: 縦2列可)。
+    addToolBarBreak(Qt::TopToolBarArea);
+    machiningToolbar_ = addToolBar(QStringLiteral("加工"));
+    machiningToolbar_->setMovable(false);
+    machiningToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    machiningToolbar_->addAction(chamferAction_);
+    machiningToolbar_->addAction(filletAction_);
+    machiningToolbar_->addAction(cornerEditAction_);
+    machiningToolbar_->addSeparator();
+    machiningToolbar_->addAction(intersectionPointsAction_);
+    machiningToolbar_->addAction(lineBetweenPointsAction_);
+    machiningToolbar_->addAction(offsetApplyAction_);
+    machiningToolbar_->addSeparator();
+    machiningToolbar_->addAction(removeCoincidentAction_);
+    machiningToolbar_->addAction(removeTangentAction_);
+    machiningToolbar_->addAction(clearReferenceAction_);
+
+    SetWorkMode(WorkMode::Drawing);
     UpdateHistoryActions();
+}
+
+void MainWindow::SetWorkMode(WorkMode mode)
+{
+    // ツール列の表示切り替え+右パネルの対応タブへ移動。
+    const bool drawing = mode == WorkMode::Drawing;
+    const bool surface = mode == WorkMode::SurfacePlate;
+    if (drawingToolbar_ != nullptr) {
+        drawingToolbar_->setVisible(drawing);
+        transformToolbar_->setVisible(drawing);
+        machiningToolbar_->setVisible(drawing);
+        surfaceToolbar_->setVisible(surface);
+    }
+    QAction* action = mode == WorkMode::Drawing ? drawingModeAction_
+        : mode == WorkMode::SurfacePlate ? surfaceModeAction_
+        : mode == WorkMode::PartModel ? partModelModeAction_
+                                      : outputModeAction_;
+    if (action != nullptr && !action->isChecked()) {
+        action->setChecked(true);
+    }
+    if (syncingWorkMode_ || toolsTabs_ == nullptr) {
+        return;
+    }
+    syncingWorkMode_ = true;
+    const int tab = mode == WorkMode::Drawing ? 0
+        : mode == WorkMode::SurfacePlate ? 2
+        : mode == WorkMode::PartModel ? 6
+                                      : 3;
+    if (toolsTabs_->currentIndex() != tab) {
+        toolsTabs_->setCurrentIndex(tab);
+    }
+    syncingWorkMode_ = false;
+}
+
+void MainWindow::SyncWorkModeToTab(int tabIndex)
+{
+    if (syncingWorkMode_ || drawingModeAction_ == nullptr) {
+        return;
+    }
+    syncingWorkMode_ = true;
+    switch (tabIndex) {
+    case 0:
+    case 1:
+        SetWorkMode(WorkMode::Drawing);
+        break;
+    case 2:
+        SetWorkMode(WorkMode::SurfacePlate);
+        break;
+    case 3:
+        SetWorkMode(WorkMode::Output);
+        break;
+    case 6:
+        SetWorkMode(WorkMode::PartModel);
+        break;
+    default:
+        break; // 表示・情報タブはモードと独立
+    }
+    syncingWorkMode_ = false;
 }
 
 void MainWindow::NewProject()
@@ -1206,6 +1389,10 @@ void MainWindow::SetViewportTool(ViewportTool tool)
         toolsTabs_->setCurrentIndex(0);
     } else if (tool == ViewportTool::Measure) {
         toolsTabs_->setCurrentIndex(5);
+        EnsureMeasurementWindow();
+        UpdateMeasurementWindow();
+        measurementWindow_->show();
+        measurementWindow_->raise();
     } else if (tool == ViewportTool::MoveGridOrigin) {
         toolsTabs_->setCurrentIndex(0);
         gridPointsVisible_->setChecked(true);
@@ -5316,6 +5503,7 @@ void MainWindow::BeginMachiningPick(int slot)
 
 void MainWindow::PopulateEditPanel(CadSelection selection)
 {
+    UpdateMeasurementWindow();
     if (selection.kind == CadSelectionKind::WorkPlane
         && selection.index >= 0
         && selection.index < static_cast<int>(project_.WorkPlanes().size())) {

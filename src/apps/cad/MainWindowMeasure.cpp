@@ -27,6 +27,7 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QDebug>
+#include <QDialog>
 #include <QDesktopServices>
 #include <QDoubleSpinBox>
 #include <QDir>
@@ -190,6 +191,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
                         : QStringLiteral("1つ目の要素"));
         measurementResultLabel_->setText(QStringLiteral("未測定"));
         viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
+        UpdateMeasurementWindow();
         return;
     }
 
@@ -500,6 +502,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
         measurementResultLabel_->setText(QString::fromUtf8(error.what()));
         viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
     }
+    UpdateMeasurementWindow();
 }
 
 void MainWindow::SaveCurrentMeasurement()
@@ -752,4 +755,197 @@ void MainWindow::UseReferenceForPlaneRotation()
         rotateSourcePlane_->setCurrentIndex(activeIndex);
     }
     statusBar()->showMessage(QStringLiteral("基準線を作業平面の回転軸に設定しました"), 3000);
+}
+
+void MainWindow::EnsureMeasurementWindow()
+{
+    if (measurementWindow_ != nullptr) {
+        return;
+    }
+    // 測定結果は別ウィンドウで常に見えるようにする(オーナー指示、ADR 0025)。
+    measurementWindow_ = new QDialog(this);
+    measurementWindow_->setWindowTitle(QStringLiteral("測定結果"));
+    measurementWindow_->setModal(false);
+    measurementWindow_->setMinimumWidth(320);
+    auto* layout = new QVBoxLayout(measurementWindow_);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setSpacing(8);
+    auto* resultCaption = new QLabel(QStringLiteral("測定"));
+    resultCaption->setStyleSheet("font-weight: 700; color: #17242b;");
+    layout->addWidget(resultCaption);
+    measurementWindowResult_ = new QLabel(QStringLiteral("未測定"));
+    measurementWindowResult_->setWordWrap(true);
+    measurementWindowResult_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(measurementWindowResult_);
+    auto* curveCaption = new QLabel(QStringLiteral("選択中の線の詳細"));
+    curveCaption->setStyleSheet("font-weight: 700; color: #17242b; padding-top: 4px;");
+    layout->addWidget(curveCaption);
+    measurementWindowCurve_ = new QLabel(QStringLiteral("線を選択すると、円弧の半径・円周・中心や\n曲線の制御点をここに表示します"));
+    measurementWindowCurve_->setWordWrap(true);
+    measurementWindowCurve_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(measurementWindowCurve_);
+    curveCenterPointButton_ = new QPushButton(QStringLiteral("中心点に作図点を作成"));
+    curveControlPointsButton_ = new QPushButton(QStringLiteral("制御点・通過点に作図点を作成"));
+    curveCenterPointButton_->setEnabled(false);
+    curveControlPointsButton_->setEnabled(false);
+    connect(curveCenterPointButton_, &QPushButton::clicked, this, [this] { CreateCurveCenterPoint(); });
+    connect(curveControlPointsButton_, &QPushButton::clicked, this, [this] { CreateCurveControlPoints(); });
+    layout->addWidget(curveCenterPointButton_);
+    layout->addWidget(curveControlPointsButton_);
+    layout->addStretch(1);
+}
+
+void MainWindow::UpdateMeasurementWindow()
+{
+    if (measurementWindow_ == nullptr) {
+        return;
+    }
+    if (measurementResultLabel_ != nullptr) {
+        measurementWindowResult_->setText(measurementResultLabel_->text());
+    }
+    const CadSelection selection = viewport_->Selection();
+    bool centerAvailable = false;
+    bool controlAvailable = false;
+    QString info;
+    if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+        && selection.index < static_cast<int>(project_.Wires().size())) {
+        const auto& named = project_.Wires()[selection.index];
+        const Wire& wire = named.wire;
+        const auto pointText = [](Vector3 point) {
+            return QStringLiteral("X %1  Y %2  Z %3")
+                .arg(Number(point.x), Number(point.y), Number(point.z));
+        };
+        try {
+            switch (wire.Kind()) {
+            case WireKind::Circle:
+            case WireKind::CircularArc: {
+                const auto arc = wire.ArcData();
+                const double length = MeasureWireLength(wire);
+                info = QStringLiteral("%1「%2」\n半径  R %3 mm\n%4  %5 mm\n中心  %6")
+                    .arg(WireKindText(wire.Kind()), ToQString(named.name), Number(arc.radius),
+                        wire.Kind() == WireKind::Circle
+                            ? QStringLiteral("円周") : QStringLiteral("弧長"),
+                        Number(length), pointText(arc.center));
+                centerAvailable = true;
+                break;
+            }
+            case WireKind::CubicBezier:
+            case WireKind::CubicBSpline: {
+                const auto& points = wire.ControlPoints();
+                info = QStringLiteral("%1「%2」\n長さ  %3 mm\n制御点 %4個:")
+                    .arg(WireKindText(wire.Kind()), ToQString(named.name),
+                        Number(MeasureWireLength(wire)))
+                    .arg(points.size());
+                for (std::size_t index = 0; index < points.size(); ++index) {
+                    info += QStringLiteral("\n  %1: %2")
+                        .arg(index + 1)
+                        .arg(pointText(points[index]));
+                }
+                controlAvailable = !points.empty();
+                break;
+            }
+            default:
+                info = QStringLiteral("%1「%2」\n長さ  %3 mm")
+                    .arg(WireKindText(wire.Kind()), ToQString(named.name),
+                        Number(MeasureWireLength(wire)));
+                break;
+            }
+        } catch (const std::exception& error) {
+            info = QString::fromUtf8(error.what());
+        }
+    } else {
+        info = QStringLiteral("線を選択すると、円弧の半径・円周・中心や\n曲線の制御点をここに表示します");
+    }
+    measurementWindowCurve_->setText(info);
+    curveCenterPointButton_->setEnabled(centerAvailable);
+    curveControlPointsButton_->setEnabled(controlAvailable);
+}
+
+void MainWindow::CreateCurveCenterPoint()
+{
+    try {
+        const CadSelection selection = viewport_->Selection();
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("円または円弧を選択してください。");
+        }
+        const auto& named = project_.Wires()[selection.index];
+        if (named.wire.Kind() != WireKind::Circle && named.wire.Kind() != WireKind::CircularArc) {
+            throw std::invalid_argument("中心点を作れるのは円と円弧です。");
+        }
+        const auto arc = named.wire.ArcData();
+        const auto uniqueName = [this](std::string base) {
+            std::string candidate = base;
+            int counter = 2;
+            const auto exists = [this](const std::string& name) {
+                for (const auto& point : project_.Points()) {
+                    if (point.name == name) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            while (exists(candidate)) {
+                candidate = base + "_" + std::to_string(counter++);
+            }
+            return candidate;
+        };
+        RecordUndo();
+        const std::string name = uniqueName(named.name + "_中心");
+        project_.AddPoint(name, arc.center);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateMeasurementWindow();
+        statusBar()->showMessage(
+            QStringLiteral("中心点「%1」を作成しました").arg(ToQString(name)), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("測定"), QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::CreateCurveControlPoints()
+{
+    try {
+        const CadSelection selection = viewport_->Selection();
+        if (selection.kind != CadSelectionKind::Wire || selection.index < 0
+            || selection.index >= static_cast<int>(project_.Wires().size())) {
+            throw std::invalid_argument("ベジェ曲線またはスプラインを選択してください。");
+        }
+        const auto& named = project_.Wires()[selection.index];
+        if (named.wire.Kind() != WireKind::CubicBezier
+            && named.wire.Kind() != WireKind::CubicBSpline) {
+            throw std::invalid_argument("制御点を作れるのはベジェ曲線とスプラインです。");
+        }
+        const std::vector<Vector3> points = named.wire.ControlPoints();
+        if (points.empty()) {
+            throw std::invalid_argument("制御点がありません。");
+        }
+        const auto exists = [this](const std::string& name) {
+            for (const auto& point : project_.Points()) {
+                if (point.name == name) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        RecordUndo();
+        int created = 0;
+        for (std::size_t index = 0; index < points.size(); ++index) {
+            std::string base = named.name + "_制御点" + std::to_string(index + 1);
+            std::string candidate = base;
+            int counter = 2;
+            while (exists(candidate)) {
+                candidate = base + "_" + std::to_string(counter++);
+            }
+            project_.AddPoint(candidate, points[index]);
+            ++created;
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateMeasurementWindow();
+        statusBar()->showMessage(
+            QStringLiteral("制御点に作図点を%1個作成しました").arg(created), 3000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("測定"), QString::fromUtf8(error.what()));
+    }
 }

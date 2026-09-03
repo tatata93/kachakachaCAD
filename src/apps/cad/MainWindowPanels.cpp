@@ -164,6 +164,37 @@ QWidget* MainWindow::BuildDrawingPanel()
     drawingStateLabel_->setStyleSheet("color: #075f69; font-weight: 600; padding: 4px 0;");
     layout->addWidget(drawingStateLabel_);
 
+    // 作図モード専用: 使う道具を右パネルからも選べるボタン群(オーナー指示、ADR 0025)。
+    // QToolButton::setDefaultAction でツールバーの QAction と状態が同期する。
+    {
+        auto* toolGrid = new QGridLayout;
+        toolGrid->setContentsMargins(0, 2, 0, 4);
+        toolGrid->setHorizontalSpacing(5);
+        toolGrid->setVerticalSpacing(5);
+        const std::array<QAction*, 18> toolActions = {
+            selectToolAction_, pointToolAction_, lineToolAction_,
+            polylineToolAction_, rectangleToolAction_, circleToolAction_,
+            arcToolAction_, bezierToolAction_, splineToolAction_,
+            moveToolAction_, copyToolAction_, rotateToolAction_,
+            mirrorToolAction_, splitToolAction_, trimToolAction_,
+            extendToolAction_, chamferAction_, filletAction_,
+        };
+        int cell = 0;
+        for (QAction* action : toolActions) {
+            if (action == nullptr) {
+                continue;
+            }
+            auto* button = new QToolButton;
+            button->setDefaultAction(action);
+            button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+            button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            button->setMinimumHeight(28);
+            toolGrid->addWidget(button, cell / 3, cell % 3);
+            ++cell;
+        }
+        layout->addLayout(toolGrid);
+    }
+
     drawingConstruction_ = new QCheckBox(QStringLiteral("補助線として作図"));
     drawingConstruction_->setToolTip(QStringLiteral("スナップや寸法基準に使い、面や切断出力には含めない"));
     layout->addWidget(drawingConstruction_);
@@ -1590,6 +1621,45 @@ QWidget* MainWindow::BuildDisplayPanel()
 
     auto* resetButton = new QPushButton(QStringLiteral("表示設定を初期値に戻す"));
     layout->addWidget(resetButton);
+
+    // 各ウィンドウの表示切り替え(オーナー指示、ADR 0025)。
+    {
+        auto* windowsBox = new QGroupBox(QStringLiteral("ウィンドウの表示"));
+        auto* windowsLayout = new QVBoxLayout(windowsBox);
+        windowsLayout->setSpacing(4);
+        auto* modelCheck = new QCheckBox(QStringLiteral("モデルパネル（左）"));
+        auto* toolsCheck = new QCheckBox(QStringLiteral("作図と編集パネル（右）"));
+        auto* guideCheck = new QCheckBox(QStringLiteral("操作ガイド"));
+        auto* measureCheck = new QCheckBox(QStringLiteral("測定結果ウィンドウ"));
+        modelCheck->setChecked(true);
+        toolsCheck->setChecked(true);
+        guideCheck->setChecked(true);
+        measureCheck->setChecked(false);
+        connect(modelCheck, &QCheckBox::toggled, this, [this](bool visible) {
+            if (modelDock_ != nullptr) modelDock_->setVisible(visible);
+        });
+        connect(toolsCheck, &QCheckBox::toggled, this, [this](bool visible) {
+            if (toolsDock_ != nullptr) toolsDock_->setVisible(visible);
+        });
+        connect(guideCheck, &QCheckBox::toggled, this, [this](bool visible) {
+            if (guideSection_ != nullptr) guideSection_->setVisible(visible);
+        });
+        connect(measureCheck, &QCheckBox::toggled, this, [this](bool visible) {
+            if (visible) {
+                EnsureMeasurementWindow();
+                UpdateMeasurementWindow();
+                measurementWindow_->show();
+                measurementWindow_->raise();
+            } else if (measurementWindow_ != nullptr) {
+                measurementWindow_->hide();
+            }
+        });
+        windowsLayout->addWidget(modelCheck);
+        windowsLayout->addWidget(toolsCheck);
+        windowsLayout->addWidget(guideCheck);
+        windowsLayout->addWidget(measureCheck);
+        layout->addWidget(windowsBox);
+    }
     layout->addStretch(1);
 
     const auto changed = [this] {

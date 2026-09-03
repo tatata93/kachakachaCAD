@@ -828,6 +828,11 @@ void CadViewport::SetToolExitRequestedCallback(std::function<void()> callback)
     toolExitRequested_ = std::move(callback);
 }
 
+void CadViewport::SetEscapeRequestedCallback(std::function<void()> callback)
+{
+    escapeRequested_ = std::move(callback);
+}
+
 void CadViewport::SetCoincidenceRequestedCallback(
     std::function<void(WireEndpointPick, WireEndpointPick)> callback)
 {
@@ -4947,8 +4952,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         pressedViewCubeFace_ = static_cast<int>(pressedCubeHit.face);
         pressedViewCubeDirection_ = pressedCubeHit.direction;
         const auto pressedRotation = ViewCubeRotation(pressedCubeHit.face);
-        setCursor(CanDragViewCube(pressedCubeHit.face)
-                    || (pressedRotation.has_value() && !pressedRotation->relative)
+        setCursor(CanDragViewCube(pressedCubeHit.face) || pressedRotation.has_value()
                 ? Qt::OpenHandCursor : Qt::PointingHandCursor);
         event->accept();
         return;
@@ -5040,6 +5044,27 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         const ViewCubeFace pressedFace = static_cast<ViewCubeFace>(pressedViewCubeFace_);
         // リング(モデル軸まわり)はドラッグで連続回転する。マウスの角度変化に
         // 追従させる: カメラ回転 = -sign(Dot(軸, 視線)) × 画面上の角度変化。
+        if (const auto ringRotation = ViewCubeRotation(pressedFace);
+            ringRotation.has_value() && ringRotation->relative) {
+            // 画面固定矢印も「つかんで回す」: 下段はマウスの左右、右列は上下に追従する。
+            const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
+            if (!viewCubeDragActive_ && std::hypot(totalDelta.x(), totalDelta.y()) <= 3.0) {
+                event->accept();
+                return;
+            }
+            viewCubeDragActive_ = true;
+            mouseMoved_ = true;
+            setCursor(Qt::ClosedHandCursor);
+            const QPoint delta = event->position().toPoint() - lastMousePosition_;
+            if (ringRotation->axis == ViewRotationAxis::Y) {
+                RotateViewAroundRelativeAxis(ViewRotationAxis::Y, -delta.x() * 0.008);
+            } else {
+                RotateViewAroundRelativeAxis(ViewRotationAxis::X, -delta.y() * 0.008);
+            }
+            lastMousePosition_ = event->position().toPoint();
+            event->accept();
+            return;
+        }
         if (const auto ringRotation = ViewCubeRotation(pressedFace);
             ringRotation.has_value() && !ringRotation->relative) {
             const QPoint totalDelta = event->position().toPoint() - mousePressPosition_;
@@ -5167,7 +5192,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         QString tooltip;
         if (const auto rotation = ViewCubeRotation(hoveredCubeFace); rotation.has_value()) {
             tooltip = rotation->relative
-                ? QStringLiteral("画面基準で15°回転（Shiftで5°。矢印は動かない）")
+                ? QStringLiteral("画面基準で回転: クリック15°（Shiftで5°）、つかんでドラッグで連続")
                 : QStringLiteral("モデルの%1軸まわりに回転: クリック15°（Shiftで5°）、ドラッグで連続")
                       .arg(RotationAxisName(rotation->axis));
         } else {
@@ -5579,6 +5604,10 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             }
         } else {
             CancelDrawing();
+        }
+        // 他CAD同様、Escは常に「選択モード・何も選ばれていない」状態で終わる。
+        if (escapeRequested_) {
+            escapeRequested_();
         }
         event->accept();
         return;

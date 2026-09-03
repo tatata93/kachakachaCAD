@@ -185,6 +185,7 @@ public:
     void SetTrimRequestedCallback(std::function<void(int, double)> callback);
     void SetExtendRequestedCallback(std::function<void(int, double)> callback);
     void SetToolExitRequestedCallback(std::function<void()> callback);
+    void SetEscapeRequestedCallback(std::function<void()> callback);
     void SetCoincidenceRequestedCallback(
         std::function<void(WireEndpointPick, WireEndpointPick)> callback);
     void SetTangentRequestedCallback(
@@ -438,6 +439,7 @@ private:
     std::function<void(int, double)> trimRequested_;
     std::function<void(int, double)> extendRequested_;
     std::function<void()> toolExitRequested_;
+    std::function<void()> escapeRequested_; //!< Escで選択モードへ戻す(選択も解除)
     std::function<void(WireEndpointPick, WireEndpointPick)> coincidenceRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> tangentRequested_;
     std::function<void(WireEndpointPick, WireEndpointPick)> curvatureRequested_;

@@ -16,6 +16,9 @@
 class PartModelPanel;
 class QCloseEvent;
 class QAction;
+class QDialog;
+class QDockWidget;
+class QToolBar;
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
@@ -242,6 +245,15 @@ private:
     void RefreshSurfaceChoices();
     void RefreshExportSummary();
     void ApplyModelTreeFilter();
+    //! 上部モード切替(ADR 0025)。作図/面・板材/近似モデル/出力。
+    enum class WorkMode { Drawing, SurfacePlate, PartModel, Output };
+    void SetWorkMode(WorkMode mode);
+    void SyncWorkModeToTab(int tabIndex);
+    void EnsureMeasurementWindow();
+    void UpdateMeasurementWindow();
+    void CreateCurveCenterPoint();
+    void CreateCurveControlPoints();
+    void ShowShortcutReference();
     void ShowModelTreeContextMenu(const QPoint& position);
     //! ツリーのドラッグ&ドロップ: オブジェクトは部材グループへ所属変更、
     //! グループはグループの入れ子へ移動。ドロップ先が未分類/空欄なら最上位・未所属へ。
@@ -376,6 +388,24 @@ private:
     PartModelPanel* partModelPanel_ = nullptr;
     QTabWidget* toolsTabs_ = nullptr;
     std::array<QPushButton*, 4> workflowButtons_{};
+    QWidget* workflowPanel_ = nullptr;
+    QAction* drawingModeAction_ = nullptr;
+    QAction* surfaceModeAction_ = nullptr;
+    QAction* partModelModeAction_ = nullptr;
+    QAction* outputModeAction_ = nullptr;
+    QToolBar* drawingToolbar_ = nullptr;
+    QToolBar* transformToolbar_ = nullptr;
+    QToolBar* machiningToolbar_ = nullptr;
+    QToolBar* surfaceToolbar_ = nullptr;
+    QDockWidget* modelDock_ = nullptr;
+    QDockWidget* toolsDock_ = nullptr;
+    QWidget* guideSection_ = nullptr;
+    QDialog* measurementWindow_ = nullptr;
+    QLabel* measurementWindowResult_ = nullptr;
+    QLabel* measurementWindowCurve_ = nullptr;
+    QPushButton* curveCenterPointButton_ = nullptr;
+    QPushButton* curveControlPointsButton_ = nullptr;
+    bool syncingWorkMode_ = false;
     QLabel* beginnerGuideTitle_ = nullptr;
     QLabel* beginnerGuideNext_ = nullptr;
     QLabel* beginnerGuideSteps_ = nullptr;

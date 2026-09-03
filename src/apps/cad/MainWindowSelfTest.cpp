@@ -38,6 +38,7 @@
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QItemSelectionModel>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
@@ -3130,6 +3131,54 @@ bool MainWindow::RunCreationSelfTest()
         return fail("remove test object set");
     }
     RefreshModelViews(false);
+
+    // Esc = 選択モード・選択なし(ADR 0025)。
+    SetViewportTool(ViewportTool::DrawLine);
+    UpdateSelections({{CadSelectionKind::Wire, 0}}, true);
+    {
+        QKeyEvent escapeEvent(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QApplication::sendEvent(viewport_, &escapeEvent);
+    }
+    if (viewport_->Tool() != ViewportTool::Select || !viewport_->Selections().empty()) {
+        return fail("escape returns to empty selection mode");
+    }
+    // モード切替がツール列と右パネルを追従させる。
+    surfaceModeAction_->trigger();
+    if (toolsTabs_->currentIndex() != 2 || !drawingToolbar_->isHidden()
+        || surfaceToolbar_->isHidden()) {
+        return fail("surface mode shows surface tools");
+    }
+    outputModeAction_->trigger();
+    if (toolsTabs_->currentIndex() != 3 || !surfaceToolbar_->isHidden()) {
+        return fail("output mode hides tool rows");
+    }
+    drawingModeAction_->trigger();
+    if (toolsTabs_->currentIndex() != 0 || drawingToolbar_->isHidden()
+        || machiningToolbar_->isHidden()) {
+        return fail("drawing mode restores drawing tools");
+    }
+    // 測定結果ウィンドウ: 円の半径・円周・中心と、中心点の作図点化。
+    int measuredCircleIndex = -1;
+    for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+        if (project_.Wires()[index].wire.Kind() == WireKind::Circle) {
+            measuredCircleIndex = index;
+            break;
+        }
+    }
+    if (measuredCircleIndex < 0) {
+        return fail("find circle wire for measurement window");
+    }
+    EnsureMeasurementWindow();
+    UpdateSelections({{CadSelectionKind::Wire, measuredCircleIndex}}, true);
+    if (!measurementWindowCurve_->text().contains(QStringLiteral("半径"))
+        || !measurementWindowCurve_->text().contains(QStringLiteral("中心"))) {
+        return fail("measurement window shows circle radius and center");
+    }
+    const std::size_t pointsBeforeCenter = project_.Points().size();
+    curveCenterPointButton_->click();
+    if (project_.Points().size() != pointsBeforeCenter + 1) {
+        return fail("create center point from measurement window");
+    }
 
     const std::size_t historySizeBeforeDisplayMode = undoStack_.size();
     UpdateSelections({

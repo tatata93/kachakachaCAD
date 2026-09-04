@@ -1324,7 +1324,7 @@ void MainWindow::ProjectSelectedWiresAcrossSurfaces()
         int registeredOpenings = 0;
         QStringList skipped;
         for (int wireIndex : wireIndices) {
-            const NamedWire sourceNamed = project_.Wires()[wireIndex];
+            const kachakacha::model::NamedWire sourceNamed = project_.Wires()[wireIndex];
             const Wire& sourceWire = sourceNamed.wire;
             const bool closedSource = sourceWire.IsClosed();
 

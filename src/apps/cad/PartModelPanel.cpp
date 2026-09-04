@@ -11,9 +11,11 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QHeaderView>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStringList>
+#include <QTableWidget>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -71,10 +73,87 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     modeRow->addWidget(overlayButton, 1);
     layout->addLayout(modeRow);
 
-    // --- 作成 ---
+    // --- 作成(近似ユニット #15 が主、従来の1面近似は下に併設) ---
     auto* createGroup = new QGroupBox(QStringLiteral("部材近似モデルを作成"));
-    auto* createForm = new QFormLayout(createGroup);
-    createForm->setContentsMargins(8, 4, 8, 8);
+    auto* createOuter = new QVBoxLayout(createGroup);
+    createOuter->setContentsMargins(8, 4, 8, 8);
+    createOuter->setSpacing(5);
+
+    unitNameEdit_ = new QLineEdit(QStringLiteral("近似ユニット1"));
+    unitNameEdit_->setToolTip(QStringLiteral(
+        "ユニット名。作られる近似モデルと部材グループの名前に使われます"));
+    auto* unitNameRow = new QHBoxLayout;
+    unitNameRow->addWidget(new QLabel(QStringLiteral("ユニット名")));
+    unitNameRow->addWidget(unitNameEdit_, 1);
+    createOuter->addLayout(unitNameRow);
+
+    auto* collectButton = new QPushButton(QStringLiteral("選択をユニットの表へ取り込む"));
+    collectButton->setToolTip(QStringLiteral(
+        "近似したい部品の周辺の面・板材・ワイヤーを3D画面でまとめて選んで押します。\n"
+        "部材グループごとの選択でも構いません。押すたびに表へ追記されます"));
+    connect(collectButton, &QPushButton::clicked, this, [this] {
+        if (onCollectUnitMembers) onCollectUnitMembers();
+    });
+    createOuter->addWidget(collectButton);
+
+    unitTable_ = new QTableWidget(0, 3);
+    unitTable_->setHorizontalHeaderLabels({
+        QStringLiteral("対象"), QStringLiteral("種類"), QStringLiteral("役割")});
+    unitTable_->verticalHeader()->setVisible(false);
+    unitTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    unitTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    unitTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    unitTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    unitTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    unitTable_->setMinimumHeight(96);
+    unitTable_->setMaximumHeight(150);
+    unitTable_->setToolTip(QStringLiteral(
+        "各行の役割: 近似する=部材近似モデルになる / 形状維持(接続)=形は保ったまま\n"
+        "近似の実形状へ接続できるよう「〜_接続」を自動生成 / 対象外=何もしない"));
+    createOuter->addWidget(unitTable_);
+
+    auto* unitRowButtons = new QHBoxLayout;
+    auto* removeUnitRowButton = new QPushButton(QStringLiteral("選択行を外す"));
+    connect(removeUnitRowButton, &QPushButton::clicked, this, [this] {
+        const int row = unitTable_->currentRow();
+        if (row >= 0 && row < static_cast<int>(unitMembers_.size())) {
+            unitMembers_.erase(unitMembers_.begin() + row);
+            RefreshUnitTable();
+        }
+    });
+    auto* clearUnitButton = new QPushButton(QStringLiteral("表をクリア"));
+    connect(clearUnitButton, &QPushButton::clicked, this, [this] { ClearUnitMembers(); });
+    unitRowButtons->addWidget(removeUnitRowButton, 1);
+    unitRowButtons->addWidget(clearUnitButton, 1);
+    createOuter->addLayout(unitRowButtons);
+
+    unitOutputCombo_ = new QComboBox;
+    unitOutputCombo_->addItem(QStringLiteral("このプロジェクト内の新グループへ"));
+    unitOutputCombo_->addItem(QStringLiteral("新グループ+新しい.kcdにも保存"));
+    auto* unitOutputRow = new QHBoxLayout;
+    unitOutputRow->addWidget(new QLabel(QStringLiteral("出力先")));
+    unitOutputRow->addWidget(unitOutputCombo_, 1);
+    createOuter->addLayout(unitOutputRow);
+
+    auto* createUnitButton = new QPushButton(QStringLiteral("ユニットを近似"));
+    createUnitButton->setObjectName("primaryButton");
+    createUnitButton->setToolTip(QStringLiteral(
+        "「近似する」役割の面・板材ごとに部材近似モデルを作り、\n"
+        "「形状維持(接続)」役割は最寄りの近似へ接続する「〜_接続」を自動生成します。\n"
+        "近似元の面にある閉じた投影輪郭は開口として自動で写します"));
+    connect(createUnitButton, &QPushButton::clicked, this, [this] {
+        if (onCreateUnit) onCreateUnit();
+    });
+    createOuter->addWidget(createUnitButton);
+
+    auto* singleLabel = new QLabel(QStringLiteral("―― 1面だけ手早く近似（従来方式） ――"));
+    singleLabel->setStyleSheet("color: #6a7781;");
+    singleLabel->setAlignment(Qt::AlignCenter);
+    createOuter->addWidget(singleLabel);
+
+    auto* createForm = new QFormLayout;
+    createForm->setContentsMargins(0, 0, 0, 0);
+    createOuter->addLayout(createForm);
     plateCombo_ = new QComboBox;
     plateCombo_->setToolTip(QStringLiteral(
         "近似する板材または面を選びます。\n"
@@ -169,10 +248,32 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     actionRow->addWidget(extractButton, 1);
     listSectionLayout->addLayout(actionRow);
 
-    auto* makePlateButton = new QPushButton(QStringLiteral("選択部材を板材化"));
+    // #18: 板材化の追従/固定と出力の種類。
+    auto* partOutputRow = new QHBoxLayout;
+    partPlateFollowCombo_ = new QComboBox;
+    partPlateFollowCombo_->addItem(QStringLiteral("近似に追従（派生）"));
+    partPlateFollowCombo_->addItem(QStringLiteral("現在の形で固定（独立）"));
+    partPlateFollowCombo_->setToolTip(QStringLiteral(
+        "追従: 部材面(派生)から作り、近似の再計算で作り直されます。\n"
+        "固定: 現在の形を独立ワイヤ+ルールド面として複製してから作り、以後は変わりません"));
+    partOutputRow->addWidget(partPlateFollowCombo_, 1);
+    listSectionLayout->addLayout(partOutputRow);
+    auto* partOutputChecks = new QHBoxLayout;
+    partOutputPlateCheck_ = new QCheckBox(QStringLiteral("板材"));
+    partOutputPlateCheck_->setChecked(true);
+    partOutputSurfaceCheck_ = new QCheckBox(QStringLiteral("面"));
+    partOutputWiresCheck_ = new QCheckBox(QStringLiteral("縁ワイヤ"));
+    partOutputChecks->addWidget(new QLabel(QStringLiteral("出力:")));
+    partOutputChecks->addWidget(partOutputPlateCheck_);
+    partOutputChecks->addWidget(partOutputSurfaceCheck_);
+    partOutputChecks->addWidget(partOutputWiresCheck_);
+    partOutputChecks->addStretch(1);
+    listSectionLayout->addLayout(partOutputChecks);
+
+    auto* makePlateButton = new QPushButton(QStringLiteral("選択部材を板材化・出力"));
     makePlateButton->setToolTip(QStringLiteral(
-        "選択した部材の面から板材を作ります（板材入力なら板厚・材質は元と同じ、\n"
-        "面入力なら「面入力の板厚」の値を使います）。\n"
+        "選択した部材からチェックした出力を作ります（複数チェックで全部出力）。\n"
+        "板材入力なら板厚・材質は元と同じ、面入力なら「面入力の板厚」の値を使います。\n"
         "板材にすると開口の追加や1:1出力など既存の板材機能が使えます"));
     connect(makePlateButton, &QPushButton::clicked, this, [this] {
         if (onMakePlate) onMakePlate();
@@ -353,19 +454,48 @@ void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& projec
     const QString previousModel = SelectedModelName();
     modelTree_->blockSignals(true);
     modelTree_->clear();
+    // #16: ユニット→近似面(モデル)→部材 の3階層。ユニット = 自動セット
+    // 「近似:<モデル名>」の親グループ名(空なら最上位に置く)。
+    const auto unitNameOf = [&project](const std::string& modelName) -> QString {
+        const std::string setName = "近似:" + modelName;
+        for (const auto& set : project.ObjectSets()) {
+            if (set.name == setName) {
+                return ToQString(set.parentName);
+            }
+        }
+        return {};
+    };
+    std::vector<std::pair<QString, QTreeWidgetItem*>> unitItems;
+    const auto unitItemFor = [&](const QString& unitName) -> QTreeWidgetItem* {
+        if (unitName.isEmpty()) {
+            return nullptr;
+        }
+        for (const auto& [name, item] : unitItems) {
+            if (name == unitName) {
+                return item;
+            }
+        }
+        auto* item = new QTreeWidgetItem(modelTree_,
+            {QStringLiteral("ユニット %1").arg(unitName)});
+        item->setExpanded(true);
+        unitItems.emplace_back(unitName, item);
+        return item;
+    };
     for (const auto& model : project.PartModels()) {
-        auto* modelItem = new QTreeWidgetItem(modelTree_, {
-            QStringLiteral("%1 ← %2  （部材 %3、最大偏差 %4 mm%5）")
-                .arg(ToQString(model.name),
-                    model.sourceSurfaceName.empty()
-                        ? ToQString(model.sourcePlateName)
-                        : QStringLiteral("面: %1").arg(ToQString(model.sourceSurfaceName)))
-                .arg(model.result.parts.size())
-                .arg(model.result.maximumDeviationMillimeters, 0, 'f', 3)
-                .arg(model.result.reachedRequestedTolerance
-                        ? QString()
-                        : QStringLiteral("・許容超過")),
-        });
+        QTreeWidgetItem* unitParent = unitItemFor(unitNameOf(model.name));
+        const QString label = QStringLiteral("%1 ← %2  （部材 %3、最大偏差 %4 mm%5）")
+            .arg(ToQString(model.name),
+                model.sourceSurfaceName.empty()
+                    ? ToQString(model.sourcePlateName)
+                    : QStringLiteral("面: %1").arg(ToQString(model.sourceSurfaceName)))
+            .arg(model.result.parts.size())
+            .arg(model.result.maximumDeviationMillimeters, 0, 'f', 3)
+            .arg(model.result.reachedRequestedTolerance
+                    ? QString()
+                    : QStringLiteral("・許容超過"));
+        auto* modelItem = unitParent != nullptr
+            ? new QTreeWidgetItem(unitParent, {label})
+            : new QTreeWidgetItem(modelTree_, {label});
         modelItem->setData(0, kModelNameRole, ToQString(model.name));
         for (const auto& part : model.result.parts) {
             auto* partItem = new QTreeWidgetItem(modelItem, {
@@ -597,4 +727,96 @@ void PartModelPanel::SetFoldLines(
     }
     syncingFoldRows_ = false;
     foldLinesContainer_->setVisible(count > 0);
+}
+
+void PartModelPanel::AddUnitMembers(const std::vector<UnitMember>& members)
+{
+    for (const UnitMember& member : members) {
+        const auto existing = std::find_if(unitMembers_.begin(), unitMembers_.end(),
+            [&](const UnitMember& candidate) {
+                return candidate.name == member.name && candidate.kind == member.kind;
+            });
+        if (existing == unitMembers_.end()) {
+            unitMembers_.push_back(member);
+        }
+    }
+    RefreshUnitTable();
+}
+
+void PartModelPanel::ClearUnitMembers()
+{
+    unitMembers_.clear();
+    RefreshUnitTable();
+}
+
+QString PartModelPanel::UnitName() const
+{
+    return unitNameEdit_ != nullptr ? unitNameEdit_->text().trimmed() : QString();
+}
+
+void PartModelPanel::SetUnitName(const QString& name)
+{
+    if (unitNameEdit_ != nullptr) {
+        unitNameEdit_->setText(name);
+    }
+}
+
+bool PartModelPanel::UnitWantsNewKcd() const
+{
+    return unitOutputCombo_ != nullptr && unitOutputCombo_->currentIndex() == 1;
+}
+
+bool PartModelPanel::PartOutputPlate() const
+{
+    return partOutputPlateCheck_ == nullptr || partOutputPlateCheck_->isChecked();
+}
+
+bool PartModelPanel::PartOutputSurface() const
+{
+    return partOutputSurfaceCheck_ != nullptr && partOutputSurfaceCheck_->isChecked();
+}
+
+bool PartModelPanel::PartOutputWires() const
+{
+    return partOutputWiresCheck_ != nullptr && partOutputWiresCheck_->isChecked();
+}
+
+bool PartModelPanel::PartPlateFollows() const
+{
+    return partPlateFollowCombo_ == nullptr || partPlateFollowCombo_->currentIndex() == 0;
+}
+
+void PartModelPanel::RefreshUnitTable()
+{
+    if (unitTable_ == nullptr) {
+        return;
+    }
+    unitTable_->setRowCount(static_cast<int>(unitMembers_.size()));
+    for (int row = 0; row < static_cast<int>(unitMembers_.size()); ++row) {
+        const UnitMember& member = unitMembers_[row];
+        unitTable_->setItem(row, 0, new QTableWidgetItem(member.name));
+        unitTable_->setItem(row, 1, new QTableWidgetItem(
+            member.kind == 1 ? QStringLiteral("面")
+            : member.kind == 2 ? QStringLiteral("板材") : QStringLiteral("ワイヤ")));
+        auto* roleCombo = new QComboBox;
+        roleCombo->addItem(QStringLiteral("近似する"));
+        roleCombo->addItem(QStringLiteral("形状維持（接続）"));
+        roleCombo->addItem(QStringLiteral("対象外"));
+        // ワイヤは近似できない(面・板材のみ)。
+        if (member.kind == 0 && member.role == 0) {
+            unitMembers_[row].role = 1;
+        }
+        roleCombo->setCurrentIndex(unitMembers_[row].role);
+        connect(roleCombo, &QComboBox::currentIndexChanged, this, [this, row](int role) {
+            if (row >= 0 && row < static_cast<int>(unitMembers_.size())) {
+                if (unitMembers_[row].kind == 0 && role == 0) {
+                    // ワイヤは「近似する」にできない → 形状維持へ戻す。
+                    RefreshUnitTable();
+                    return;
+                }
+                unitMembers_[row].role = role;
+            }
+        });
+        unitTable_->setCellWidget(row, 2, roleCombo);
+    }
 }

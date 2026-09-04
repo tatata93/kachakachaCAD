@@ -74,6 +74,9 @@ private:
     QWidget* BuildInfoPanel();
     QWidget* BuildPartModelPanelTab();
     void CreatePartModelFromPanel();
+    //! 近似ユニット(#15): 3D選択を表へ取り込み、役割どおりに一括近似する。
+    void CollectUnitMembersFromSelection();
+    void CreateApproximationUnitFromPanel();
     void RecalculateSelectedPartModel();
     void RemoveSelectedPartModel();
     void ExtractSelectedPartModelBoundaries();

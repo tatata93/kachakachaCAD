@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+using kachakacha::geometry::Vector3;
 using kachakacha::model::NamedPartModel;
 using kachakacha::model::ObjectSetState;
 using kachakacha::model::PartApproximationOptions;
@@ -60,6 +61,8 @@ QWidget* MainWindow::BuildPartModelPanelTab()
 {
     partModelPanel_ = new PartModelPanel;
     partModelPanel_->onCreate = [this] { CreatePartModelFromPanel(); };
+    partModelPanel_->onCollectUnitMembers = [this] { CollectUnitMembersFromSelection(); };
+    partModelPanel_->onCreateUnit = [this] { CreateApproximationUnitFromPanel(); };
     partModelPanel_->onRecalculate = [this] { RecalculateSelectedPartModel(); };
     partModelPanel_->onRemove = [this] { RemoveSelectedPartModel(); };
     partModelPanel_->onExtract = [this] { ExtractSelectedPartModelBoundaries(); };
@@ -160,6 +163,301 @@ void MainWindow::CreatePartModelFromPanel()
             6000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CollectUnitMembersFromSelection()
+{
+    std::vector<PartModelPanel::UnitMember> members;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())) {
+            const auto& wire = project_.Wires()[selection.index];
+            if (!wire.partModelSourceName.has_value() && !wire.metadata.construction) {
+                members.push_back({ToQString(wire.name), 0, 1});
+            }
+        } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Surfaces().size())) {
+            const auto& surface = project_.Surfaces()[selection.index];
+            if (!surface.partModelSourceName.has_value()) {
+                members.push_back({ToQString(surface.name), 1, 0});
+            }
+        } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Plates().size())) {
+            members.push_back({ToQString(project_.Plates()[selection.index].name), 2, 0});
+        }
+    }
+    if (members.empty()) {
+        statusBar()->showMessage(QStringLiteral(
+            "3D画面で近似したい部品周辺の面・板材・ワイヤーを選んでから押してください"), 4500);
+        return;
+    }
+    partModelPanel_->AddUnitMembers(members);
+    statusBar()->showMessage(QStringLiteral(
+        "%1件を表へ取り込みました。各行の役割（近似する / 形状維持 / 対象外）を確認してください")
+            .arg(members.size()), 5000);
+}
+
+void MainWindow::CreateApproximationUnitFromPanel()
+{
+    try {
+        const std::string unitName = ToName(partModelPanel_->UnitName());
+        if (unitName.empty()) {
+            throw std::invalid_argument("ユニット名を入力してください。");
+        }
+        for (const auto& set : project_.ObjectSets()) {
+            if (set.name == unitName) {
+                throw std::invalid_argument("同じ名前の部材グループがあります: " + unitName);
+            }
+        }
+        const std::vector<PartModelPanel::UnitMember> members
+            = partModelPanel_->UnitMembers();
+        struct ApproxTarget {
+            std::string name;
+            bool isSurface = true;
+        };
+        std::vector<ApproxTarget> targets;
+        std::vector<std::string> keepWires;
+        std::vector<std::string> keepSurfaces;
+        QStringList ignored;
+        for (const auto& member : members) {
+            const std::string memberName = ToName(member.name);
+            if (member.role == 2) {
+                continue;
+            }
+            if (member.role == 0) {
+                if (member.kind == 1) {
+                    targets.push_back({memberName, true});
+                } else if (member.kind == 2) {
+                    targets.push_back({memberName, false});
+                } else {
+                    ignored << member.name; // ワイヤは近似できない
+                }
+            } else { // 形状維持
+                if (member.kind == 0) {
+                    keepWires.push_back(memberName);
+                } else if (member.kind == 1) {
+                    keepSurfaces.push_back(memberName);
+                } else {
+                    ignored << QStringLiteral("%1(板材は形状維持にできません)").arg(member.name);
+                }
+            }
+        }
+        if (targets.empty()) {
+            throw std::invalid_argument(
+                "「近似する」役割の面または板材を表に1つ以上入れてください。");
+        }
+        const PartApproximationOptions options = partModelPanel_->CurrentOptions();
+
+        Project candidate = project_;
+
+        // #17a: 近似元の面上にある閉じた投影輪郭は、開口として自動登録してから近似する
+        // (登録済み・開いた輪郭は対象外)。
+        int autoOpenings = 0;
+        for (const ApproxTarget& target : targets) {
+            if (!target.isSurface) {
+                continue;
+            }
+            const auto surface = std::find_if(
+                candidate.Surfaces().begin(), candidate.Surfaces().end(),
+                [&](const kachakacha::model::NamedSurface& entry) {
+                    return entry.name == target.name;
+                });
+            if (surface == candidate.Surfaces().end()) {
+                throw std::invalid_argument("面が見つかりません: " + target.name);
+            }
+            std::vector<std::string> openingCandidates;
+            for (const auto& wire : candidate.Wires()) {
+                if (wire.projection.has_value()
+                    && wire.projection->targetSurfaceName == target.name
+                    && wire.wire.IsClosed()
+                    && std::find(surface->openingWireNames.begin(),
+                           surface->openingWireNames.end(), wire.name)
+                        == surface->openingWireNames.end()) {
+                    openingCandidates.push_back(wire.name);
+                }
+            }
+            for (const std::string& wireName : openingCandidates) {
+                try {
+                    candidate.AddSurfaceOpening(target.name, wireName);
+                    ++autoOpenings;
+                } catch (const std::exception&) {
+                }
+            }
+        }
+
+        // 近似モデルを面・板材ごとに作る。
+        std::vector<std::string> modelNames;
+        for (const ApproxTarget& target : targets) {
+            std::string modelName = unitName + "_" + target.name;
+            for (int suffix = 2;; ++suffix) {
+                const bool taken = std::any_of(
+                    candidate.PartModels().begin(), candidate.PartModels().end(),
+                    [&](const NamedPartModel& model) { return model.name == modelName; });
+                if (!taken) {
+                    break;
+                }
+                modelName = unitName + "_" + target.name + "_" + std::to_string(suffix);
+            }
+            if (target.isSurface) {
+                candidate.AddPartModelFromSurface(modelName, target.name, options);
+            } else {
+                candidate.AddPartModel(modelName, target.name, options);
+            }
+            modelNames.push_back(modelName);
+        }
+
+        // 形状維持(接続)対象を最寄りの近似モデルへ割り当てる(モデルごとに
+        // 「〜_接続」の派生を作るため、対象は1つのモデルにだけ属させる)。
+        const auto distanceToTarget = [&](const ApproxTarget& target,
+                                          const std::vector<Vector3>& probes) {
+            double best = std::numeric_limits<double>::infinity();
+            const auto consider = [&](const Vector3& point) {
+                for (const Vector3& probe : probes) {
+                    best = std::min(best, (point - probe).Length());
+                }
+            };
+            if (target.isSurface) {
+                const auto surface = std::find_if(
+                    candidate.Surfaces().begin(), candidate.Surfaces().end(),
+                    [&](const kachakacha::model::NamedSurface& entry) {
+                        return entry.name == target.name;
+                    });
+                if (surface == candidate.Surfaces().end()) {
+                    return best;
+                }
+                for (int uIndex = 0; uIndex <= 8; ++uIndex) {
+                    for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                        consider(surface->surface.Evaluate(uIndex / 8.0, vIndex / 8.0));
+                    }
+                }
+            } else {
+                const auto plate = std::find_if(
+                    candidate.Plates().begin(), candidate.Plates().end(),
+                    [&](const kachakacha::model::NamedPlate& entry) {
+                        return entry.name == target.name;
+                    });
+                if (plate == candidate.Plates().end()) {
+                    return best;
+                }
+                for (int uIndex = 0; uIndex <= 8; ++uIndex) {
+                    for (int vIndex = 0; vIndex <= 8; ++vIndex) {
+                        consider(plate->plate.Evaluate(uIndex / 8.0, vIndex / 8.0, 0.5));
+                    }
+                }
+            }
+            return best;
+        };
+        const auto probesOfWire = [&](const std::string& wireName) {
+            std::vector<Vector3> probes;
+            for (const auto& wire : candidate.Wires()) {
+                if (wire.name == wireName) {
+                    for (int sample = 0; sample <= 8; ++sample) {
+                        probes.push_back(wire.wire.Evaluate(sample / 8.0));
+                    }
+                }
+            }
+            return probes;
+        };
+        const auto probesOfSurface = [&](const std::string& surfaceName) {
+            std::vector<Vector3> probes;
+            for (const auto& surface : candidate.Surfaces()) {
+                if (surface.name == surfaceName) {
+                    for (int uIndex = 0; uIndex <= 3; ++uIndex) {
+                        for (int vIndex = 0; vIndex <= 3; ++vIndex) {
+                            probes.push_back(
+                                surface.surface.Evaluate(uIndex / 3.0, vIndex / 3.0));
+                        }
+                    }
+                }
+            }
+            return probes;
+        };
+        const auto nearestTargetIndex = [&](const std::vector<Vector3>& probes) {
+            std::size_t best = 0;
+            double bestDistance = std::numeric_limits<double>::infinity();
+            for (std::size_t index = 0; index < targets.size(); ++index) {
+                const double distance = distanceToTarget(targets[index], probes);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = index;
+                }
+            }
+            return best;
+        };
+        std::vector<std::vector<std::string>> scopeWiresPerModel(targets.size());
+        std::vector<std::vector<std::string>> scopeSurfacesPerModel(targets.size());
+        for (const std::string& wireName : keepWires) {
+            scopeWiresPerModel[nearestTargetIndex(probesOfWire(wireName))]
+                .push_back(wireName);
+        }
+        for (const std::string& surfaceName : keepSurfaces) {
+            scopeSurfacesPerModel[nearestTargetIndex(probesOfSurface(surfaceName))]
+                .push_back(surfaceName);
+        }
+        std::size_t adaptedTotal = 0;
+        for (std::size_t index = 0; index < modelNames.size(); ++index) {
+            if (scopeWiresPerModel[index].empty() && scopeSurfacesPerModel[index].empty()) {
+                continue;
+            }
+            candidate.SetPartModelConnectionScope(modelNames[index],
+                scopeWiresPerModel[index], scopeSurfacesPerModel[index]);
+            const auto model = std::find_if(
+                candidate.PartModels().begin(), candidate.PartModels().end(),
+                [&](const NamedPartModel& entry) { return entry.name == modelNames[index]; });
+            if (model != candidate.PartModels().end()) {
+                adaptedTotal += model->adaptedWireNames.size()
+                    + model->adaptedSurfaceNames.size();
+            }
+        }
+
+        // ユニットのグループを作り、各モデルの自動セットをその下へ入れる(#16)。
+        candidate.CreateObjectSet(unitName);
+        for (const std::string& modelName : modelNames) {
+            candidate.SetObjectSetParent("近似:" + modelName, unitName);
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        partModelPanel_->ClearUnitMembers();
+        QString message = QStringLiteral(
+            "ユニット %1: 近似モデル%2件を作成しました")
+                .arg(ToQString(unitName)).arg(modelNames.size());
+        if (adaptedTotal > 0) {
+            message += QStringLiteral("、接続用に%1個を自動変形").arg(adaptedTotal);
+        }
+        if (autoOpenings > 0) {
+            message += QStringLiteral("、開口%1件を自動で写しました").arg(autoOpenings);
+        }
+        if (!ignored.isEmpty()) {
+            message += QStringLiteral("（対象外にした行: %1）")
+                .arg(ignored.join(QStringLiteral("、")));
+        }
+        statusBar()->showMessage(message, 8000);
+
+        if (partModelPanel_->UnitWantsNewKcd()) {
+            // v1: ユニットを含むプロジェクト全体を新しい.kcdへ保存する
+            // (ユニットだけに絞る場合は部材グループの書き出し除外と
+            //  「出力対象のみで書き出し」を使う)。
+            const QString path = QFileDialog::getSaveFileName(
+                this, QStringLiteral("ユニットを含むプロジェクトを保存"),
+                ToQString(unitName) + QStringLiteral(".kcd"),
+                QStringLiteral("kachakachaCAD (*.kcd)"));
+            if (!path.isEmpty()) {
+                const std::filesystem::path nativePath(path.toStdWString());
+                std::ofstream output(nativePath, std::ios::binary);
+                if (output) {
+                    kachakacha::io::WriteProjectScript(output, project_);
+                    statusBar()->showMessage(
+                        QStringLiteral("ユニットを含むプロジェクトを保存しました: %1").arg(path),
+                        5000);
+                }
+            }
+        }
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
     }
 }
 
@@ -366,13 +664,88 @@ void MainWindow::CreatePlateFromSelectedPart()
             }
         }
 
+        // #18: 出力の種類と追従/固定。
+        const bool outputPlate = partModelPanel_->PartOutputPlate();
+        const bool outputSurface = partModelPanel_->PartOutputSurface();
+        const bool outputWires = partModelPanel_->PartOutputWires();
+        const bool follows = partModelPanel_->PartPlateFollows();
+        if (!outputPlate && !outputSurface && !outputWires) {
+            throw std::invalid_argument("出力（板材・面・縁ワイヤ）を1つ以上チェックしてください。");
+        }
+
         Project candidate = project_;
         std::vector<std::string> created;
+        int createdSurfaces = 0;
+        int createdWires = 0;
+        const auto freeWireName = [&candidate](const std::string& base) {
+            std::string name = base;
+            for (int suffix = 2; ; ++suffix) {
+                const bool taken = std::any_of(
+                    candidate.Wires().begin(), candidate.Wires().end(),
+                    [&](const kachakacha::model::NamedWire& wire) {
+                        return wire.name == name;
+                    });
+                if (!taken) {
+                    return name;
+                }
+                name = base + std::to_string(suffix);
+            }
+        };
         for (const int number : numbers) {
             if (number < 1 || number > static_cast<int>(model->partSurfaceNames.size())) {
                 continue;
             }
             const std::string surfaceName = model->partSurfaceNames[number - 1];
+
+            // 固定(独立)出力・面/ワイヤ出力用: 部材のレール2本を独立ワイヤへ複製。
+            std::string bottomCopyName;
+            std::string topCopyName;
+            std::string independentSurfaceName;
+            const bool needsCopies = outputWires || outputSurface || (outputPlate && !follows);
+            if (needsCopies) {
+                const auto railWire = [&](const std::string& railName)
+                    -> const kachakacha::model::NamedWire* {
+                    for (const auto& wire : candidate.Wires()) {
+                        if (wire.name == railName) {
+                            return &wire;
+                        }
+                    }
+                    return nullptr;
+                };
+                const auto* bottom = railWire(model->boundaryWireNames[number - 1]);
+                const auto* top = railWire(model->boundaryWireNames[number]);
+                if (bottom == nullptr || top == nullptr) {
+                    continue;
+                }
+                bottomCopyName = freeWireName(surfaceName + "_縁1");
+                const kachakacha::model::Wire bottomGeometry = bottom->wire;
+                const kachakacha::model::Wire topGeometry = top->wire;
+                candidate.AddWire(bottomCopyName, bottomGeometry);
+                topCopyName = freeWireName(surfaceName + "_縁2");
+                candidate.AddWire(topCopyName, topGeometry);
+                createdWires += 2;
+                if (outputSurface || (outputPlate && !follows)) {
+                    independentSurfaceName = surfaceName + "_独立面";
+                    for (int suffix = 2;
+                         candidate.FindSurface(independentSurfaceName).has_value(); ++suffix) {
+                        independentSurfaceName
+                            = surfaceName + "_独立面" + std::to_string(suffix);
+                    }
+                    candidate.AddRuledSurface(
+                        independentSurfaceName, bottomCopyName, topCopyName);
+                    ++createdSurfaces;
+                }
+                if (!outputWires) {
+                    candidate.SetWireVisible(bottomCopyName, false);
+                    candidate.SetWireVisible(topCopyName, false);
+                }
+            }
+
+            if (!outputPlate) {
+                continue;
+            }
+            // 板材: 追従=派生の部材面から / 固定=独立コピーの面から。
+            const std::string plateSourceName = follows ? surfaceName : independentSurfaceName;
             std::string plateName;
             for (int suffix = 0;; ++suffix) {
                 plateName = surfaceName + "板"
@@ -384,14 +757,14 @@ void MainWindow::CreatePlateFromSelectedPart()
             if (fromSurface) {
                 candidate.AddPlate(
                     plateName,
-                    surfaceName,
+                    plateSourceName,
                     partModelPanel_->FoldThicknessMillimeters(),
                     kachakacha::model::PlateThicknessDirection::Centered,
                     "未指定");
             } else {
                 candidate.AddPlate(
                     plateName,
-                    surfaceName,
+                    plateSourceName,
                     sourcePlate->plate.Thickness(),
                     sourcePlate->plate.Direction(),
                     sourcePlate->material);
@@ -411,18 +784,29 @@ void MainWindow::CreatePlateFromSelectedPart()
             }
             created.push_back(plateName);
         }
-        if (created.empty()) {
-            throw std::invalid_argument("板材にできる部材がありません。");
+        if (created.empty() && createdSurfaces == 0 && createdWires == 0) {
+            throw std::invalid_argument("出力できる部材がありません。");
         }
 
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
-        statusBar()->showMessage(
-            QStringLiteral("部材から板材を %1 枚作成しました（%2）")
+        QStringList parts;
+        if (!created.empty()) {
+            parts << QStringLiteral("板材%1枚(%2)")
                 .arg(created.size())
-                .arg(ToQString(created.front())),
+                .arg(follows ? QStringLiteral("近似に追従") : QStringLiteral("固定"));
+        }
+        if (createdSurfaces > 0) {
+            parts << QStringLiteral("独立面%1枚").arg(createdSurfaces);
+        }
+        if (createdWires > 0 && outputWires) {
+            parts << QStringLiteral("縁ワイヤ%1本").arg(createdWires);
+        }
+        statusBar()->showMessage(
+            QStringLiteral("部材から %1 を作成しました")
+                .arg(parts.join(QStringLiteral("、"))),
             5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);

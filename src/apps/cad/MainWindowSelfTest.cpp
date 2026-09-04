@@ -1956,6 +1956,94 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // #15/#16/#17a: 近似ユニット — 複数近似面+形状維持+開口の自動反映。
+        const Project wave8Saved = project_;
+        const auto wave8Undo = undoStack_;
+        const auto wave8Redo = redoStack_;
+        project_.AddWire("__w8断面1",
+            Wire::CircularArcThroughThreePoints(
+                {-20.0, 0.0, 0.0}, {0.0, 20.0, 0.0}, {20.0, 0.0, 0.0}));
+        project_.AddWire("__w8断面2",
+            Wire::CircularArcThroughThreePoints(
+                {-24.0, 0.0, 12.0}, {0.0, 24.0, 12.0}, {24.0, 0.0, 12.0}));
+        project_.AddWire("__w8断面3",
+            Wire::CircularArcThroughThreePoints(
+                {-12.0, 0.0, 26.0}, {0.0, 12.0, 26.0}, {12.0, 0.0, 26.0}));
+        project_.AddLoftSurface("__w8前面",
+            std::vector<std::string>{"__w8断面1", "__w8断面2", "__w8断面3"});
+        project_.AddWire("__w8側輪郭",
+            Wire::Polyline({{30.0, -10.0, 0.0}, {30.0, 10.0, 0.0}, {30.0, 10.0, 20.0},
+                {30.0, -10.0, 20.0}, {30.0, -10.0, 0.0}}));
+        project_.AddPlanarSurface("__w8側面", "__w8側輪郭");
+        project_.AddWire("__w8帯", Wire::Line({32.0, 0.0, 5.0}, {45.0, 0.0, 5.0}));
+        project_.AddWire("__w8窓下書き",
+            Wire::Circle({0.0, 40.0, 12.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, 3.0));
+        project_.AddProjectedWire(
+            "__w8窓投影", "__w8窓下書き", "__w8前面", {0.0, -1.0, 0.0});
+        RefreshModelViews(false);
+        partModelPanel_->SetUnitName(QStringLiteral("近似U1"));
+        partModelPanel_->ClearUnitMembers();
+        partModelPanel_->AddUnitMembers({
+            {QStringLiteral("__w8前面"), 1, 0},
+            {QStringLiteral("__w8側面"), 1, 0},
+            {QStringLiteral("__w8帯"), 0, 1},
+        });
+        CreateApproximationUnitFromPanel();
+        const kachakacha::model::NamedPartModel* frontModel = nullptr;
+        const kachakacha::model::NamedPartModel* sideModel = nullptr;
+        for (const auto& model : project_.PartModels()) {
+            if (model.name == "近似U1___w8前面") {
+                frontModel = &model;
+            } else if (model.name == "近似U1___w8側面") {
+                sideModel = &model;
+            }
+        }
+        if (frontModel == nullptr || sideModel == nullptr) {
+            return fail("unit creates one model per approximated surface");
+        }
+        // 形状維持ワイヤは最寄り(側面)のモデルのスコープに入り「_接続」が作られる。
+        bool keepAssignedToSide = std::find(sideModel->scopeWireNames.begin(),
+            sideModel->scopeWireNames.end(), std::string("__w8帯"))
+            != sideModel->scopeWireNames.end();
+        bool adaptedExists = false;
+        for (const auto& wire : project_.Wires()) {
+            adaptedExists = adaptedExists || wire.name == "__w8帯_接続";
+        }
+        if (!keepAssignedToSide || !adaptedExists) {
+            return fail("unit assigns keep wires to the nearest model");
+        }
+        // 自動セットがユニットのグループ配下に入る(#16)。
+        bool unitSetExists = false;
+        bool frontSetParented = false;
+        for (const auto& set : project_.ObjectSets()) {
+            unitSetExists = unitSetExists || set.name == "近似U1";
+            if (set.name == "近似:近似U1___w8前面") {
+                frontSetParented = set.parentName == "近似U1";
+            }
+        }
+        if (!unitSetExists || !frontSetParented) {
+            return fail("unit groups its models under one set");
+        }
+        // 未登録だった閉じた投影輪郭が開口として自動反映される(#17a)。
+        bool openingRegistered = false;
+        for (const auto& surface : project_.Surfaces()) {
+            if (surface.name == "__w8前面") {
+                openingRegistered = std::find(surface.openingWireNames.begin(),
+                    surface.openingWireNames.end(), std::string("__w8窓投影"))
+                    != surface.openingWireNames.end();
+            }
+        }
+        if (!openingRegistered) {
+            return fail("unit auto-registers closed projected wires as openings");
+        }
+        project_ = wave8Saved;
+        undoStack_ = wave8Undo;
+        redoStack_ = wave8Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;

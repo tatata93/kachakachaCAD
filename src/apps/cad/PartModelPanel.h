@@ -17,6 +17,7 @@ class QLineEdit;
 class QListWidget;
 class QSlider;
 class QSpinBox;
+class QTableWidget;
 class QTreeWidget;
 class QVBoxLayout;
 
@@ -47,6 +48,24 @@ public:
     [[nodiscard]] double FoldProgress() const;      //!< 0(平面)〜1(近似完成形)
     [[nodiscard]] bool FoldPreviewEnabled() const;  //!< 3Dビューで曲げ状態を表示するか
 
+    //! 近似ユニット(#15): 取り込んだ対象と役割の表。
+    struct UnitMember {
+        QString name;
+        int kind = 0; //!< 0=ワイヤ 1=面 2=板材
+        int role = 0; //!< 0=近似する 1=形状維持(接続) 2=対象外
+    };
+    void AddUnitMembers(const std::vector<UnitMember>& members);
+    void ClearUnitMembers();
+    void SetUnitName(const QString& name);
+    [[nodiscard]] std::vector<UnitMember> UnitMembers() const { return unitMembers_; }
+    [[nodiscard]] QString UnitName() const;
+    [[nodiscard]] bool UnitWantsNewKcd() const;
+    //! 板材化の出力(#18)。
+    [[nodiscard]] bool PartOutputPlate() const;
+    [[nodiscard]] bool PartOutputSurface() const;
+    [[nodiscard]] bool PartOutputWires() const;
+    [[nodiscard]] bool PartPlateFollows() const; //!< true=近似に追従(派生) false=固定(独立)
+
     //! 可動折り線の行(角度⇄%の相互編集)を選択中モデルに合わせて作り直す・更新する。
     //! fullAngleDegrees は完成形での各折り線の折り角(度)、progress は現在の進行度。
     //! 手動境界欄へパラメータ列を書き込み、自動分割のチェックを外す。
@@ -58,6 +77,8 @@ public:
         const std::vector<double>& progress);
 
     std::function<void()> onCreate;
+    std::function<void()> onCollectUnitMembers; //!< 3D選択をユニット表へ取り込む(#15)
+    std::function<void()> onCreateUnit;         //!< 表の役割どおりにユニットを近似(#15)
     std::function<void()> onPickBoundariesFromWires; //!< 選択ワイヤーから手動境界を求める
     std::function<void()> onRecalculate;
     std::function<void()> onRemove;
@@ -73,6 +94,16 @@ public:
     std::function<void()> onExportFoldKcd;     //!< 曲げ状態を別の.kcdへ保存
 
 private:
+    void RefreshUnitTable();
+
+    QLineEdit* unitNameEdit_ = nullptr;
+    QTableWidget* unitTable_ = nullptr;
+    QComboBox* unitOutputCombo_ = nullptr;
+    std::vector<UnitMember> unitMembers_;
+    QComboBox* partPlateFollowCombo_ = nullptr;
+    QCheckBox* partOutputPlateCheck_ = nullptr;
+    QCheckBox* partOutputSurfaceCheck_ = nullptr;
+    QCheckBox* partOutputWiresCheck_ = nullptr;
     QComboBox* plateCombo_ = nullptr;
     QComboBox* axisCombo_ = nullptr;
     QCheckBox* automaticCheck_ = nullptr;

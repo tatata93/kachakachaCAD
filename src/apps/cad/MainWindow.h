@@ -155,6 +155,12 @@ private:
     void UseReferenceForPlaneRotation();
     void ApplyLineChamfer();
     void ApplyLineFillet();
+    //! 面取り/丸めのモーダルツール(#7): ペアを次々クリック→一括適用。
+    void StartCornerTool(bool fillet);
+    void HandleCornerPairPicked(
+        int firstWire, double firstParameter, int secondWire, double secondParameter);
+    void RefreshCornerToolPreview();
+    void ApplyCornerToolPairs();
     enum class SurfaceInputRole {
         Boundary,
         Guide,
@@ -379,6 +385,15 @@ private:
     QCheckBox* drawingConstruction_ = nullptr;
     QCheckBox* drawingKeepCurvePoints_ = nullptr; //!< スプライン/ベジェの指定点を作図点に残す(#9)
     bool performingGlobalEscape_ = false; //!< Escの全体処理の再入防止(#1)
+    //! 面取り/丸めツール(#7)の選択済みペア(クリック位置tは残す側の判定に使う)。
+    struct CornerToolPair {
+        int firstWire = -1;
+        double firstParameter = 0.5;
+        int secondWire = -1;
+        double secondParameter = 0.5;
+    };
+    std::vector<CornerToolPair> cornerToolPairs_;
+    bool cornerToolFillet_ = false;
     QLabel* drawingStateLabel_ = nullptr;
     QWidget* drawingDimensionSection_ = nullptr;
     QStackedWidget* drawingDimensionStack_ = nullptr;

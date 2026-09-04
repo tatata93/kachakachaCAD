@@ -257,6 +257,11 @@ void MainWindow::BuildUi()
             arcBulgeSide_->setCurrentIndex(bulgeLeft ? 0 : 1);
         }
     });
+    viewport_->SetCornerPairPickedCallback(
+        [this](int firstWire, double firstParameter, int secondWire, double secondParameter) {
+            HandleCornerPairPicked(firstWire, firstParameter, secondWire, secondParameter);
+        });
+    viewport_->SetCornerApplyRequestedCallback([this] { ApplyCornerToolPairs(); });
     // Escはアプリのどこにフォーカスがあっても効かせる(#1)。
     qApp->installEventFilter(this);
     viewport_->SetLineBetweenPickedCallback([this](Vector3 first, Vector3 second) {
@@ -598,7 +603,8 @@ void MainWindow::BuildUi()
             || tool == ViewportTool::SplitWire || tool == ViewportTool::TrimWire
             || tool == ViewportTool::ExtendWire || tool == ViewportTool::Coincident
             || tool == ViewportTool::Tangent || tool == ViewportTool::Curvature
-            || tool == ViewportTool::LineBetweenPoints;
+            || tool == ViewportTool::LineBetweenPoints
+            || tool == ViewportTool::CornerPick;
         if (((drawingTool || editTool) && index != 0)
             || (tool == ViewportTool::MoveGridOrigin && index != 0)
             || (tool == ViewportTool::Measure && index != 5)) {
@@ -694,10 +700,12 @@ void MainWindow::BuildDrawingActions()
     lineBetweenPointsAction_ = new QAction(QStringLiteral("2点を線で結ぶ"), this);
     lineBetweenPointsAction_->setCheckable(true);
     offsetApplyAction_ = new QAction(QStringLiteral("オフセット"), this);
-    chamferAction_->setToolTip(
-        QStringLiteral("選択した2直線をC面取り。距離はスケッチタブ「加工」の値を使用"));
-    filletAction_->setToolTip(
-        QStringLiteral("選択した2直線を円弧でつなぐ。半径はスケッチタブ「加工」の値を使用"));
+    chamferAction_->setToolTip(QStringLiteral(
+        "C面取りツール: 直線のペアを次々クリックして選び（複数ペア可）、\n"
+        "切戻しを入力してEnterで一括適用。離れた線は交点まで自動延長"));
+    filletAction_->setToolTip(QStringLiteral(
+        "丸めツール: 直線のペアを次々クリックして選び（複数ペア可）、\n"
+        "半径を入力してEnterで一括適用。離れた線は交点まで自動延長"));
     cornerEditAction_->setToolTip(
         QStringLiteral("選択したポリラインの角を落とす/丸める。数値はスケッチタブ「加工」の値を使用"));
     intersectionPointsAction_->setToolTip(QStringLiteral("選択した2本のワイヤーの交点すべてに作図点を作成"));
@@ -761,6 +769,7 @@ void MainWindow::BuildDrawingActions()
              moveToolAction_, copyToolAction_, mirrorToolAction_, rotateToolAction_, splitToolAction_,
              trimToolAction_, extendToolAction_, coincidentToolAction_, tangentToolAction_,
              curvatureToolAction_, measureToolAction_,
+             chamferAction_, filletAction_,
              gridOriginToolAction_}) {
         action->setCheckable(true);
         toolGroup->addAction(action);
@@ -794,8 +803,8 @@ void MainWindow::BuildDrawingActions()
     connect(measureToolAction_, &QAction::triggered, this, [this] { SetViewportTool(ViewportTool::Measure); });
     connect(joinWiresAction_, &QAction::triggered, this, &MainWindow::JoinSelectedWires);
     connect(meetLinesAction_, &QAction::triggered, this, &MainWindow::ApplyMeetSelectedLines);
-    connect(chamferAction_, &QAction::triggered, this, &MainWindow::ApplyLineChamfer);
-    connect(filletAction_, &QAction::triggered, this, &MainWindow::ApplyLineFillet);
+    connect(chamferAction_, &QAction::triggered, this, [this] { StartCornerTool(false); });
+    connect(filletAction_, &QAction::triggered, this, [this] { StartCornerTool(true); });
     connect(cornerEditAction_, &QAction::triggered, this, &MainWindow::ApplyPolylineCornerEdit);
     connect(intersectionPointsAction_, &QAction::triggered, this, &MainWindow::CreateIntersectionPoints);
     connect(lineBetweenPointsAction_, &QAction::triggered, this, [this] {
@@ -1614,9 +1623,16 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     const bool isCoincident = tool == ViewportTool::Coincident;
     const bool isTangent = tool == ViewportTool::Tangent;
     const bool isCurvature = tool == ViewportTool::Curvature;
+    if (tool != ViewportTool::CornerPick) {
+        // 面取りツールを離れたらペアとプレビューを片付ける。
+        if (!cornerToolPairs_.empty() || viewport_->CornerPreviewWireCount() != 0) {
+            cornerToolPairs_.clear();
+            viewport_->SetCornerPreviewWires({});
+        }
+    }
     if (tool != ViewportTool::Select && !isSplit && !isDirectLineEdit
         && !isCoincident && !isTangent && !isCurvature
-        && tool != ViewportTool::Measure) {
+        && tool != ViewportTool::Measure && tool != ViewportTool::CornerPick) {
         const std::optional<WorkPlane> plane = project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
         if (!plane.has_value()) {
             selectToolAction_->setChecked(true);
@@ -1726,6 +1742,8 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     measureToolAction_->setChecked(tool == ViewportTool::Measure);
     gridOriginToolAction_->setChecked(tool == ViewportTool::MoveGridOrigin);
     lineBetweenPointsAction_->setChecked(tool == ViewportTool::LineBetweenPoints);
+    chamferAction_->setChecked(tool == ViewportTool::CornerPick && !cornerToolFillet_);
+    filletAction_->setChecked(tool == ViewportTool::CornerPick && cornerToolFillet_);
     switch (tool) {
     case ViewportTool::Select:
         statusBar()->showMessage(QStringLiteral("選択モード"), 2500);
@@ -1809,6 +1827,12 @@ void MainWindow::SetViewportTool(ViewportTool tool)
     case ViewportTool::LineBetweenPoints:
         statusBar()->showMessage(QStringLiteral(
             "2点間線: 点・線の端点・線同士の交点を2回クリック（右クリックで1点目を取消）"), 5000);
+        break;
+    case ViewportTool::CornerPick:
+        statusBar()->showMessage(cornerToolFillet_
+                ? QStringLiteral("丸め: 直線のペアを次々クリック → 半径を入力 → Enterで一括適用（離れた線は自動延長）")
+                : QStringLiteral("C面取り: 直線のペアを次々クリック → 切戻しを入力 → Enterで一括適用（離れた線は自動延長）"),
+            8000);
         break;
     }
 }
@@ -1925,6 +1949,13 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
         break;
     case ViewportTool::LineBetweenPoints:
         state = QStringLiteral("2点間線 · 点・端点・交点をクリック");
+        break;
+    case ViewportTool::CornerPick:
+        state = QStringLiteral("%1 · ペア%2組%3 · Enterで一括適用")
+            .arg(cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("C面取り"))
+            .arg(cornerToolPairs_.size())
+            .arg(viewport_ != nullptr && viewport_->HasCornerFirstPick()
+                    ? QStringLiteral("＋1本目選択中") : QString());
         break;
     }
     if (drawingStateLabel_ != nullptr) {
@@ -2239,6 +2270,14 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 1点目を中央画面でクリック"),
                 QStringLiteral("1  点・線の端点・線同士の交点に吸着します\n2  2点目をクリックすると直線を作成\n3  右クリックで1点目を取消、Escで終了"),
                 QStringLiteral("drawing"));
+            return;
+        case ViewportTool::CornerPick:
+            setGuide(cornerToolFillet_ ? QStringLiteral("角を丸める") : QStringLiteral("角をC面取りする"),
+                viewport_->HasCornerFirstPick()
+                    ? QStringLiteral("次: ペアの2本目の直線をクリック")
+                    : QStringLiteral("次: 1本目の直線をクリック"),
+                QStringLiteral("1  直線のペアを次々クリック（複数ペア可）\n2  加工の値を入力するとプレビューが追従\n3  Enterまたは「作成」で全ペアへ一括適用。離れた線は自動延長"),
+                QStringLiteral("machining"));
             return;
         case ViewportTool::Select:
             break;
@@ -4128,6 +4167,245 @@ void MainWindow::ApplyLineFillet()
     } catch (const std::exception& error) {
         QMessageBox::warning(this, QStringLiteral("R丸めを作成できません"), QString::fromUtf8(error.what()));
     }
+}
+
+namespace {
+
+//! 2直線の無限直線としての交点パラメータ(各線の0..1座標系、外挿あり)。
+//! ほぼ平行なら nullopt。残す側(クリック側)の判定に使う。
+std::optional<std::pair<double, double>> InfiniteLineParameters(
+    const Wire& first, const Wire& second)
+{
+    if (first.Kind() != WireKind::Line || second.Kind() != WireKind::Line) {
+        return std::nullopt;
+    }
+    const Vector3 firstStart = first.Start();
+    const Vector3 secondStart = second.Start();
+    const Vector3 firstDirection = first.End() - firstStart;
+    const Vector3 secondDirection = second.End() - secondStart;
+    const Vector3 offset = firstStart - secondStart;
+    const double a = kachakacha::geometry::Dot(firstDirection, firstDirection);
+    const double b = kachakacha::geometry::Dot(firstDirection, secondDirection);
+    const double c = kachakacha::geometry::Dot(secondDirection, secondDirection);
+    const double d = kachakacha::geometry::Dot(firstDirection, offset);
+    const double e = kachakacha::geometry::Dot(secondDirection, offset);
+    const double denominator = a * c - b * b;
+    if (std::abs(denominator) <= 1.0e-12 * std::max(a * c, 1.0)) {
+        return std::nullopt;
+    }
+    return std::make_pair((b * e - c * d) / denominator, (a * e - b * d) / denominator);
+}
+
+//! クリック位置(パラメータt)から「残す側」を決める: 交点よりクリックが
+//! 終点側なら終点側を残す。交点が求まらなければ自動(遠い端)。
+RetainedLineEnd RetainedEndFromClick(
+    double clickedParameter, std::optional<double> intersectionParameter)
+{
+    if (!intersectionParameter.has_value()) {
+        return RetainedLineEnd::Automatic;
+    }
+    return clickedParameter > *intersectionParameter
+        ? RetainedLineEnd::End
+        : RetainedLineEnd::Start;
+}
+
+} // namespace
+
+void MainWindow::StartCornerTool(bool fillet)
+{
+    cornerToolFillet_ = fillet;
+    cornerToolPairs_.clear();
+    viewport_->SetCornerPreviewWires({});
+    if (machiningType_ != nullptr) {
+        machiningType_->setCurrentIndex(fillet ? 1 : 0);
+    }
+    SetViewportTool(ViewportTool::CornerPick);
+    if (viewport_->Tool() != ViewportTool::CornerPick) {
+        return; // ガードで選択モードへ戻された
+    }
+    ShowRightPanel(0);
+    ExpandSketchSection(QStringLiteral("加工（面取り・交点）"));
+    UpdateDrawingPanel(viewport_->Tool(), viewport_->DrawingPointCount());
+}
+
+void MainWindow::HandleCornerPairPicked(
+    int firstWire, double firstParameter, int secondWire, double secondParameter)
+{
+    if (firstWire < 0 || secondWire < 0
+        || firstWire >= static_cast<int>(project_.Wires().size())
+        || secondWire >= static_cast<int>(project_.Wires().size())
+        || firstWire == secondWire) {
+        return;
+    }
+    for (const CornerToolPair& pair : cornerToolPairs_) {
+        if ((pair.firstWire == firstWire && pair.secondWire == secondWire)
+            || (pair.firstWire == secondWire && pair.secondWire == firstWire)) {
+            statusBar()->showMessage(QStringLiteral("このペアは選択済みです"), 2500);
+            return;
+        }
+    }
+    // その場で試算し、面取りできないペア(平行・ねじれ)は理由を出して拾わない。
+    const Wire& first = project_.Wires()[firstWire].wire;
+    const Wire& second = project_.Wires()[secondWire].wire;
+    const auto parameters = InfiniteLineParameters(first, second);
+    try {
+        const RetainedLineEnd retainedFirst = RetainedEndFromClick(
+            firstParameter, parameters ? std::optional<double>(parameters->first) : std::nullopt);
+        const RetainedLineEnd retainedSecond = RetainedEndFromClick(
+            secondParameter, parameters ? std::optional<double>(parameters->second) : std::nullopt);
+        if (cornerToolFillet_) {
+            (void)FilletIntersectingLines(first, retainedFirst, second, retainedSecond,
+                filletRadius_->value(), 1.0e-8, true);
+        } else {
+            (void)ChamferIntersectingLines(first, retainedFirst,
+                chamferFirstDistance_->value(), second, retainedSecond,
+                chamferSecondDistance_->value(), 1.0e-8, true);
+        }
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(
+            QStringLiteral("このペアは%1できません: %2")
+                .arg(cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("面取り"))
+                .arg(QString::fromUtf8(error.what())), 6000);
+        return;
+    }
+    cornerToolPairs_.push_back({firstWire, firstParameter, secondWire, secondParameter});
+    RefreshCornerToolPreview();
+    statusBar()->showMessage(
+        QStringLiteral("ペア%1組を選択中。続けて選ぶか、値を調整してEnterで一括適用")
+            .arg(cornerToolPairs_.size()), 5000);
+}
+
+void MainWindow::RefreshCornerToolPreview()
+{
+    if (viewport_->Tool() != ViewportTool::CornerPick) {
+        return;
+    }
+    std::vector<Wire> previews;
+    for (const CornerToolPair& pair : cornerToolPairs_) {
+        if (pair.firstWire < 0 || pair.secondWire < 0
+            || pair.firstWire >= static_cast<int>(project_.Wires().size())
+            || pair.secondWire >= static_cast<int>(project_.Wires().size())) {
+            continue;
+        }
+        const Wire& first = project_.Wires()[pair.firstWire].wire;
+        const Wire& second = project_.Wires()[pair.secondWire].wire;
+        const auto parameters = InfiniteLineParameters(first, second);
+        const RetainedLineEnd retainedFirst = RetainedEndFromClick(
+            pair.firstParameter, parameters ? std::optional<double>(parameters->first) : std::nullopt);
+        const RetainedLineEnd retainedSecond = RetainedEndFromClick(
+            pair.secondParameter, parameters ? std::optional<double>(parameters->second) : std::nullopt);
+        try {
+            if (cornerToolFillet_) {
+                const auto result = FilletIntersectingLines(first, retainedFirst,
+                    second, retainedSecond, filletRadius_->value(), 1.0e-8, true);
+                previews.push_back(result.fillet);
+                previews.push_back(result.trimmedFirst);
+                previews.push_back(result.trimmedSecond);
+            } else {
+                const auto result = ChamferIntersectingLines(first, retainedFirst,
+                    chamferFirstDistance_->value(), second, retainedSecond,
+                    chamferSecondDistance_->value(), 1.0e-8, true);
+                previews.push_back(result.chamfer);
+                previews.push_back(result.trimmedFirst);
+                previews.push_back(result.trimmedSecond);
+            }
+        } catch (const std::exception&) {
+            // 値が大きすぎる等で作れないペアはプレビュー無し(適用時に報告)。
+        }
+    }
+    viewport_->SetCornerPreviewWires(std::move(previews));
+    UpdateDrawingPanel(viewport_->Tool(), viewport_->DrawingPointCount());
+}
+
+void MainWindow::ApplyCornerToolPairs()
+{
+    if (viewport_->Tool() != ViewportTool::CornerPick) {
+        return;
+    }
+    if (cornerToolPairs_.empty()) {
+        statusBar()->showMessage(
+            QStringLiteral("先に%1する直線のペアをクリックしてください")
+                .arg(cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("面取り")), 3500);
+        return;
+    }
+    Project candidate = project_;
+    int created = 0;
+    QStringList errors;
+    const auto freeName = [&candidate](const QString& base) {
+        int counter = 1;
+        while (true) {
+            const std::string name = ToName(QStringLiteral("%1_%2").arg(base).arg(counter));
+            const bool used = std::any_of(candidate.Wires().begin(), candidate.Wires().end(),
+                [&](const NamedWire& wire) { return wire.name == name; });
+            if (!used) {
+                return name;
+            }
+            ++counter;
+        }
+    };
+    for (const CornerToolPair& pair : cornerToolPairs_) {
+        try {
+            if (pair.firstWire < 0 || pair.secondWire < 0
+                || pair.firstWire >= static_cast<int>(candidate.Wires().size())
+                || pair.secondWire >= static_cast<int>(candidate.Wires().size())) {
+                throw std::invalid_argument("対象の直線が見つかりません。");
+            }
+            const NamedWire firstNamed = candidate.Wires()[pair.firstWire];
+            const NamedWire secondNamed = candidate.Wires()[pair.secondWire];
+            const auto parameters = InfiniteLineParameters(firstNamed.wire, secondNamed.wire);
+            const RetainedLineEnd retainedFirst = RetainedEndFromClick(pair.firstParameter,
+                parameters ? std::optional<double>(parameters->first) : std::nullopt);
+            const RetainedLineEnd retainedSecond = RetainedEndFromClick(pair.secondParameter,
+                parameters ? std::optional<double>(parameters->second) : std::nullopt);
+            WireMetadata cornerMetadata;
+            if (firstNamed.metadata.sourcePlaneName == secondNamed.metadata.sourcePlaneName
+                && firstNamed.metadata.planePolicy == secondNamed.metadata.planePolicy) {
+                cornerMetadata = firstNamed.metadata;
+            }
+            cornerMetadata.lineConstraints = {};
+            if (cornerToolFillet_) {
+                const auto result = FilletIntersectingLines(firstNamed.wire, retainedFirst,
+                    secondNamed.wire, retainedSecond, filletRadius_->value(), 1.0e-8, true);
+                candidate.UpdateWireAndMetadata(firstNamed.name, result.trimmedFirst,
+                    RetargetLineConstraints(candidate, firstNamed.metadata, result.trimmedFirst, true));
+                candidate.UpdateWireAndMetadata(secondNamed.name, result.trimmedSecond,
+                    RetargetLineConstraints(candidate, secondNamed.metadata, result.trimmedSecond, true));
+                candidate.AddWire(freeName(QStringLiteral("fillet")), result.fillet, cornerMetadata);
+            } else {
+                const auto result = ChamferIntersectingLines(firstNamed.wire, retainedFirst,
+                    chamferFirstDistance_->value(), secondNamed.wire, retainedSecond,
+                    chamferSecondDistance_->value(), 1.0e-8, true);
+                candidate.UpdateWireAndMetadata(firstNamed.name, result.trimmedFirst,
+                    RetargetLineConstraints(candidate, firstNamed.metadata, result.trimmedFirst, true));
+                candidate.UpdateWireAndMetadata(secondNamed.name, result.trimmedSecond,
+                    RetargetLineConstraints(candidate, secondNamed.metadata, result.trimmedSecond, true));
+                candidate.AddWire(freeName(QStringLiteral("chamfer")), result.chamfer, cornerMetadata);
+            }
+            ++created;
+        } catch (const std::exception& error) {
+            errors << QString::fromUtf8(error.what());
+        }
+    }
+    if (created == 0) {
+        QMessageBox::warning(this,
+            cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("C面取り"),
+            QStringLiteral("どのペアにも適用できませんでした:\n%1").arg(errors.join(QStringLiteral("\n"))));
+        return;
+    }
+    RecordUndo();
+    project_ = std::move(candidate);
+    cornerToolPairs_.clear();
+    viewport_->SetCornerPreviewWires({});
+    MarkModified();
+    RefreshModelViews(false);
+    UpdateDrawingPanel(viewport_->Tool(), viewport_->DrawingPointCount());
+    statusBar()->showMessage(errors.isEmpty()
+            ? QStringLiteral("%1組へ%2を作成しました（続けてペアを選べます）")
+                  .arg(created)
+                  .arg(cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("C面取り"))
+            : QStringLiteral("%1組へ作成、%2組は失敗: %3")
+                  .arg(created).arg(errors.size()).arg(errors.join(QStringLiteral(" / "))),
+        6000);
 }
 
 void MainWindow::ApplyPolylineCornerEdit()

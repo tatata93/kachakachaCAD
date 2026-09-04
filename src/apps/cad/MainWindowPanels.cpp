@@ -828,6 +828,14 @@ QWidget* MainWindow::BuildMachiningPanel()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(6);
 
+    auto* toolHint = new QLabel(QStringLiteral(
+        "ツール列の「C面取り」「R面取り」ボタン: 3D画面で直線のペアを次々クリック→\n"
+        "下の値を入力→Enterで全ペアへ一括適用。離れた線は交点まで自動延長します。\n"
+        "下の欄は選択済みの2直線へ1組だけ作る従来方式です。"));
+    toolHint->setWordWrap(true);
+    toolHint->setStyleSheet("color: #51626b;");
+    layout->addWidget(toolHint);
+
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     chamferName_ = new QLineEdit("chamfer_1");
@@ -889,12 +897,22 @@ QWidget* MainWindow::BuildMachiningPanel()
     machiningApplyButton_ = new QPushButton(QStringLiteral("C面取りを作成"));
     machiningApplyButton_->setObjectName("primaryButton");
     connect(machiningApplyButton_, &QPushButton::clicked, this, [this] {
-        if (machiningType_->currentIndex() == 0) {
+        // 面取りツールでペア選択中なら一括適用(#7)。それ以外は従来の単発作成。
+        if (viewport_->Tool() == ViewportTool::CornerPick && !cornerToolPairs_.empty()) {
+            ApplyCornerToolPairs();
+        } else if (machiningType_->currentIndex() == 0) {
             ApplyLineChamfer();
         } else {
             ApplyLineFillet();
         }
     });
+    // 値の変更は選択中ペアのプレビューへ即反映(#7)。
+    connect(chamferFirstDistance_, &QDoubleSpinBox::valueChanged,
+        this, &MainWindow::RefreshCornerToolPreview);
+    connect(chamferSecondDistance_, &QDoubleSpinBox::valueChanged,
+        this, &MainWindow::RefreshCornerToolPreview);
+    connect(filletRadius_, &QDoubleSpinBox::valueChanged,
+        this, &MainWindow::RefreshCornerToolPreview);
     connect(machiningType_, &QComboBox::currentIndexChanged, this, [this](int index) {
         machiningValues_->setCurrentIndex(index);
         machiningApplyButton_->setText(index == 0 ? QStringLiteral("C面取りを作成") : QStringLiteral("R丸めを作成"));

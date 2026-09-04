@@ -59,6 +59,41 @@ void ChamfersSharedCornerAutomatically()
     RequireNear(result.chamfer.End(), {0.0, 3.0, 0.0}, "chamfer end");
 }
 
+void ChamfersAndFilletsSeparatedLinesWithAutoExtension()
+{
+    // 離れた2本(仮想交点 10,0,0)。allowExtension=true なら延長して面取り。
+    const Wire horizontal = Wire::Line({0.0, 0.0, 0.0}, {6.0, 0.0, 0.0});
+    const Wire vertical = Wire::Line({10.0, 4.0, 0.0}, {10.0, 12.0, 0.0});
+
+    bool separatedRejected = false;
+    try {
+        (void)ChamferIntersectingLines(
+            horizontal, RetainedLineEnd::Automatic, 2.0,
+            vertical, RetainedLineEnd::Automatic, 2.0);
+    } catch (const std::invalid_argument&) {
+        separatedRejected = true;
+    }
+    Require(separatedRejected, "separated lines rejected without extension");
+
+    const auto chamfered = ChamferIntersectingLines(
+        horizontal, RetainedLineEnd::Automatic, 2.0,
+        vertical, RetainedLineEnd::Automatic, 3.0,
+        1.0e-8, true);
+    RequireNear(chamfered.intersection, {10.0, 0.0, 0.0}, "virtual intersection");
+    RequireNear(chamfered.trimmedFirst.Start(), {0.0, 0.0, 0.0}, "extended line keeps its far end");
+    RequireNear(chamfered.trimmedFirst.End(), {8.0, 0.0, 0.0}, "line extends to the setback");
+    RequireNear(chamfered.trimmedSecond.Start(), {10.0, 3.0, 0.0}, "second line extends to the setback");
+    RequireNear(chamfered.chamfer.Start(), {8.0, 0.0, 0.0}, "chamfer start on extension");
+    RequireNear(chamfered.chamfer.End(), {10.0, 3.0, 0.0}, "chamfer end on extension");
+
+    const auto filleted = FilletIntersectingLines(
+        horizontal, RetainedLineEnd::Automatic,
+        vertical, RetainedLineEnd::Automatic, 2.0, 1.0e-8, true);
+    RequireNear(filleted.center, {8.0, 2.0, 0.0}, "fillet center from virtual corner");
+    RequireNear(filleted.firstTangentPoint, {8.0, 0.0, 0.0}, "fillet tangent on extension");
+    RequireNear(filleted.secondTangentPoint, {10.0, 2.0, 0.0}, "fillet tangent on second extension");
+}
+
 void ChamfersChosenBranchesAtCrossing()
 {
     const Wire horizontal = Wire::Line({-10.0, 0.0, 0.0}, {10.0, 0.0, 0.0});
@@ -601,6 +636,7 @@ int main()
         ChamfersSharedCornerAutomatically();
         ChamfersChosenBranchesAtCrossing();
         RejectsInvalidChamfers();
+        ChamfersAndFilletsSeparatedLinesWithAutoExtension();
         FilletsSharedCornerWithTangentArc();
         FilletsCornerInArbitrary3DPlane();
         ExtendsSeparatedLinesToTheirIntersection();

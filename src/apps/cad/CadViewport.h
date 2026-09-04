@@ -60,6 +60,8 @@ enum class ViewportTool {
     Measure,
     //! 2点間線: 作図点・線の端点・線同士の交点をクリックで拾い、直線で結ぶ。
     LineBetweenPoints,
+    //! 面取り/丸め(#7): 直線のペアを次々クリックして選び、一括適用する。
+    CornerPick,
 };
 
 enum class DrawingSnapKind {
@@ -222,6 +224,20 @@ public:
     //! 両端+半径の円弧でドラッグ中の半径・膨らむ側が変わったときに呼ばれる
     //! (パネルの数値表示を追従させる)。
     void SetArcRadiusDraggedCallback(std::function<void(double, bool)> callback);
+    //! 面取り/丸めツール(#7): ペア(1本目index,クリックt,2本目index,クリックt)確定時。
+    void SetCornerPairPickedCallback(std::function<void(int, double, int, double)> callback);
+    //! 面取り/丸めツール: Enterで「全ペアへ一括適用」を要求されたとき。
+    void SetCornerApplyRequestedCallback(std::function<void()> callback);
+    //! 面取り/丸めのプレビュー線(ペアごとの面取り線・丸め弧)。空で消える。
+    void SetCornerPreviewWires(std::vector<kachakacha::model::Wire> wires);
+    [[nodiscard]] std::size_t CornerPreviewWireCount() const noexcept
+    {
+        return cornerPreviewWires_.size();
+    }
+    [[nodiscard]] bool HasCornerFirstPick() const noexcept
+    {
+        return cornerFirstPick_.has_value();
+    }
     void SetGridPointsVisible(bool visible);
     void SetGridSubdivision(int subdivision);
     void SetGridOrigin(double u, double v);
@@ -480,6 +496,10 @@ private:
     std::function<void()> toolExitRequested_;
     std::function<void()> escapeRequested_; //!< Escで選択モードへ戻す(選択も解除)
     std::function<void(double, bool)> arcRadiusDragged_;
+    std::function<void(int, double, int, double)> cornerPairPicked_;
+    std::function<void()> cornerApplyRequested_;
+    std::optional<std::pair<int, double>> cornerFirstPick_; //!< 面取りペアの1本目
+    std::vector<kachakacha::model::Wire> cornerPreviewWires_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineBetweenPicked_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenFirstPoint_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenHoverPoint_;

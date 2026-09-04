@@ -1279,9 +1279,12 @@ LineChamferResult ChamferIntersectingLines(
     const Wire& second,
     RetainedLineEnd retainedSecond,
     double secondSetback,
-    double tolerance)
+    double tolerance,
+    bool allowExtension)
 {
-    const LineIntersection intersection = IntersectSegments(first, second, tolerance);
+    const LineIntersection intersection = allowExtension
+        ? IntersectInfiniteLines(first, second, tolerance)
+        : IntersectSegments(first, second, tolerance);
     const TrimmedLine trimmedFirst = TrimLine(first, intersection.point, retainedFirst, firstSetback, tolerance);
     const TrimmedLine trimmedSecond = TrimLine(second, intersection.point, retainedSecond, secondSetback, tolerance);
     if ((trimmedFirst.trimPoint - trimmedSecond.trimPoint).Length() <= tolerance) {
@@ -1304,13 +1307,16 @@ LineFilletResult FilletIntersectingLines(
     const Wire& second,
     RetainedLineEnd retainedSecond,
     double radius,
-    double tolerance)
+    double tolerance,
+    bool allowExtension)
 {
     if (!std::isfinite(radius) || radius <= tolerance) {
         throw std::invalid_argument("Fillet radius must be positive.");
     }
 
-    const LineIntersection intersection = IntersectSegments(first, second, tolerance);
+    const LineIntersection intersection = allowExtension
+        ? IntersectInfiniteLines(first, second, tolerance)
+        : IntersectSegments(first, second, tolerance);
     const RetainedLineEnd resolvedFirst = ResolveRetainedEnd(first, intersection.point, retainedFirst);
     const RetainedLineEnd resolvedSecond = ResolveRetainedEnd(second, intersection.point, retainedSecond);
     const Vector3 firstRetainedPoint = resolvedFirst == RetainedLineEnd::Start ? first.Start() : first.End();

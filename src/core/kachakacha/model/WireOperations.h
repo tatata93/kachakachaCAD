@@ -102,6 +102,8 @@ struct DirectWireExtendResult {
     const WireCurveConstraints& constraints,
     double tolerance = 1.0e-8);
 
+//! allowExtension=true なら、線分同士が離れていても延長線上の(仮想)交点で
+//! 面取りする(AutoCADのFILLET同様、届かない側は交点まで自動延長される)。
 [[nodiscard]] LineChamferResult ChamferIntersectingLines(
     const Wire& first,
     RetainedLineEnd retainedFirst,
@@ -109,7 +111,8 @@ struct DirectWireExtendResult {
     const Wire& second,
     RetainedLineEnd retainedSecond,
     double secondSetback,
-    double tolerance = 1.0e-8);
+    double tolerance = 1.0e-8,
+    bool allowExtension = false);
 
 [[nodiscard]] LineFilletResult FilletIntersectingLines(
     const Wire& first,
@@ -117,7 +120,8 @@ struct DirectWireExtendResult {
     const Wire& second,
     RetainedLineEnd retainedSecond,
     double radius,
-    double tolerance = 1.0e-8);
+    double tolerance = 1.0e-8,
+    bool allowExtension = false);
 
 //! 2本のワイヤの3D交点(距離 tolerance 以内まで近づく点)を求める。
 //! 曲線はサンプリングし、粗い候補を局所探索で詰める。同一交点は統合する。

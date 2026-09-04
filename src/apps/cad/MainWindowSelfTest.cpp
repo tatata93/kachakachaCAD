@@ -1681,6 +1681,63 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // #7: 面取りモーダルツール(ペアをクリック→一括適用、離れた線は自動延長)。
+        const Project wave3Saved = project_;
+        const auto wave3Undo = undoStack_;
+        const auto wave3Redo = redoStack_;
+        const std::size_t wave3WireStart = project_.Wires().size();
+        // 離れた2本(仮想交点 45,-30)。
+        project_.AddWire("__corner_h",
+            Wire::Line(selectedDrawingPlane.ToWorld(30.0, -30.0),
+                selectedDrawingPlane.ToWorld(40.0, -30.0)));
+        project_.AddWire("__corner_v",
+            Wire::Line(selectedDrawingPlane.ToWorld(45.0, -25.0),
+                selectedDrawingPlane.ToWorld(45.0, -15.0)));
+        RefreshModelViews(false);
+        chamferAction_->trigger();
+        if (viewport_->Tool() != ViewportTool::CornerPick) {
+            return fail("chamfer button starts corner tool");
+        }
+        const int hIndex = static_cast<int>(wave3WireStart);
+        const int vIndex = static_cast<int>(wave3WireStart + 1);
+        click(viewport_->ScreenPoint(project_.Wires()[hIndex].wire.Evaluate(0.5)));
+        if (!viewport_->HasCornerFirstPick()) {
+            return fail("corner tool picks the first line");
+        }
+        click(viewport_->ScreenPoint(project_.Wires()[vIndex].wire.Evaluate(0.5)));
+        if (cornerToolPairs_.size() != 1 || viewport_->CornerPreviewWireCount() != 3) {
+            return fail("corner tool completes a pair with preview");
+        }
+        chamferFirstDistance_->setValue(2.0);
+        chamferSecondDistance_->setValue(2.0);
+        ApplyCornerToolPairs();
+        if (project_.Wires().size() != wave3WireStart + 3
+            || !cornerToolPairs_.empty()
+            || viewport_->CornerPreviewWireCount() != 0) {
+            return fail("corner tool applies the chamfer");
+        }
+        const Vector3 virtualCorner = selectedDrawingPlane.ToWorld(45.0, -30.0);
+        const auto& extendedH = project_.Wires()[hIndex].wire;
+        const auto& extendedV = project_.Wires()[vIndex].wire;
+        const auto& cornerWire = project_.Wires().back().wire;
+        if (cornerWire.Kind() != WireKind::Line
+            || !kachakacha::geometry::AlmostEqual(
+                extendedH.End(), selectedDrawingPlane.ToWorld(43.0, -30.0), 1.0e-6)
+            || !kachakacha::geometry::AlmostEqual(
+                extendedV.Start(), selectedDrawingPlane.ToWorld(45.0, -28.0), 1.0e-6)
+            || std::abs((cornerWire.Start() - virtualCorner).Length() - 2.0) > 1.0e-6
+            || std::abs((cornerWire.End() - virtualCorner).Length() - 2.0) > 1.0e-6) {
+            return fail("separated lines auto-extend to the chamfer");
+        }
+        SetViewportTool(ViewportTool::Select);
+        project_ = wave3Saved;
+        undoStack_ = wave3Undo;
+        redoStack_ = wave3Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;

@@ -903,13 +903,15 @@ void CadViewport::SetTool(ViewportTool tool)
     gridOriginDragTarget_.reset();
     lineBetweenFirstPoint_.reset();
     lineBetweenHoverPoint_.reset();
+    cornerFirstPick_.reset();
     CancelControlPointDrag();
     CancelDrawing();
     setCursor(hoveredSelection_.kind == CadSelectionKind::Wire
             && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
                 || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::TrimWire
                 || tool_ == ViewportTool::ExtendWire || tool_ == ViewportTool::Coincident
-                || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
+                || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature
+                || tool_ == ViewportTool::CornerPick)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor());
     update();
@@ -935,6 +937,22 @@ void CadViewport::SetOffPlaneDimmingAlways(bool always)
 void CadViewport::SetArcRadiusDraggedCallback(std::function<void(double, bool)> callback)
 {
     arcRadiusDragged_ = std::move(callback);
+}
+
+void CadViewport::SetCornerPairPickedCallback(std::function<void(int, double, int, double)> callback)
+{
+    cornerPairPicked_ = std::move(callback);
+}
+
+void CadViewport::SetCornerApplyRequestedCallback(std::function<void()> callback)
+{
+    cornerApplyRequested_ = std::move(callback);
+}
+
+void CadViewport::SetCornerPreviewWires(std::vector<Wire> wires)
+{
+    cornerPreviewWires_ = std::move(wires);
+    update();
 }
 
 bool CadViewport::UsingDrawingTool() const noexcept
@@ -1728,6 +1746,13 @@ Vector3 CadViewport::ViewUpDirection() const
 
 void CadViewport::FinishDrawing()
 {
+    if (tool_ == ViewportTool::CornerPick) {
+        // Enter = 選んだ全ペアへ面取り/丸めを一括適用(#7)。
+        if (cornerApplyRequested_) {
+            cornerApplyRequested_();
+        }
+        return;
+    }
     if (tool_ == ViewportTool::DrawPolyline && drawingPoints_.size() >= 2) {
         const std::vector<Vector3> points = drawingPoints_;
         drawingPoints_.clear();
@@ -3156,8 +3181,9 @@ void CadViewport::UpdateHover(QPointF position)
     } else if (project_ != nullptr
         && (tool_ == ViewportTool::Select || tool_ == ViewportTool::Measure
             || tool_ == ViewportTool::SplitWire || tool_ == ViewportTool::TrimWire
-            || tool_ == ViewportTool::ExtendWire)) {
-        if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
+            || tool_ == ViewportTool::ExtendWire || tool_ == ViewportTool::CornerPick)) {
+        if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire
+            || tool_ == ViewportTool::CornerPick) {
             const CadSelection hit = HitTestWire(position, 9.0);
             if (hit.kind == CadSelectionKind::Wire) {
                 hoveredSelection_ = hit;
@@ -4276,6 +4302,29 @@ void CadViewport::paintEvent(QPaintEvent*)
         painter.restore();
     }
 
+    // 面取り/丸めツール(#7): 1本目のハイライトとペアのプレビュー。
+    if (tool_ == ViewportTool::CornerPick) {
+        painter.save();
+        painter.setBrush(Qt::NoBrush);
+        if (cornerFirstPick_.has_value() && project_ != nullptr
+            && cornerFirstPick_->first >= 0
+            && cornerFirstPick_->first < static_cast<int>(project_->Wires().size())) {
+            const Wire& picked = project_->Wires()[cornerFirstPick_->first].wire;
+            painter.setPen(QPen(QColor(230, 146, 0, 150), 6.0, Qt::SolidLine, Qt::RoundCap));
+            painter.drawLine(ProjectPoint(picked.Start()), ProjectPoint(picked.End()));
+        }
+        painter.setPen(QPen(QColor("#d97706"), 2.4, Qt::DashLine, Qt::RoundCap));
+        for (const Wire& wire : cornerPreviewWires_) {
+            QPainterPath path(ProjectPoint(wire.Evaluate(0.0)));
+            const int samples = wire.Kind() == WireKind::Line ? 1 : 48;
+            for (int sample = 1; sample <= samples; ++sample) {
+                path.lineTo(ProjectPoint(wire.Evaluate(static_cast<double>(sample) / samples)));
+            }
+            painter.drawPath(path);
+        }
+        painter.restore();
+    }
+
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value() && tool_ != ViewportTool::Select) {
         painter.setPen(QPen(QColor("#d97706"), 2.0, Qt::DashLine));
         const auto drawPreviewWire = [&](const Wire& wire) {
@@ -4808,6 +4857,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         modeText = lineBetweenFirstPoint_.has_value()
             ? QStringLiteral("2点間線 · 2点目（点・端点・交点に吸着）")
             : QStringLiteral("2点間線 · 1点目（点・端点・交点に吸着）");
+        break;
+    case ViewportTool::CornerPick:
+        modeText = cornerFirstPick_.has_value()
+            ? QStringLiteral("面取り/丸め · ペアの2本目をクリック")
+            : QStringLiteral("面取り/丸め · 直線を次々ペアでクリック → Enterで一括適用");
         break;
     }
     if (activePlane_.has_value() && hoverDrawingPoint_.has_value()) {
@@ -5420,6 +5474,7 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Curvature
         && tool_ != ViewportTool::MoveGridOrigin
         && tool_ != ViewportTool::DrawPoint
+        && tool_ != ViewportTool::CornerPick
         && event->button() == Qt::LeftButton
         && activePlane_.has_value()
         && drawingPoints_.empty()) {
@@ -5678,6 +5733,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         && tool_ != ViewportTool::Tangent
         && tool_ != ViewportTool::Curvature
         && tool_ != ViewportTool::MoveGridOrigin
+        && tool_ != ViewportTool::CornerPick
         && activePlane_.has_value()) {
         const auto point = PointOnActivePlane(event->position());
         hoverDrawingPoint_ = point.has_value()
@@ -5928,6 +5984,39 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
+    if (tool_ == ViewportTool::CornerPick) {
+        if (event->button() == Qt::LeftButton && !mouseMoved_ && project_ != nullptr) {
+            const CadSelection hit = HitTestWire(event->position(), 9.0);
+            if (hit.kind == CadSelectionKind::Wire && hit.index >= 0
+                && hit.index < static_cast<int>(project_->Wires().size())
+                && project_->Wires()[hit.index].wire.Kind() == WireKind::Line) {
+                const auto parameter = NearestWireParameter(hit.index, event->position(), 12.0, true);
+                const double clicked = parameter.value_or(0.5);
+                if (!cornerFirstPick_.has_value()) {
+                    cornerFirstPick_ = {hit.index, clicked};
+                } else if (cornerFirstPick_->first != hit.index) {
+                    const auto first = *cornerFirstPick_;
+                    cornerFirstPick_.reset();
+                    if (cornerPairPicked_) {
+                        cornerPairPicked_(first.first, first.second, hit.index, clicked);
+                    }
+                }
+                update();
+            }
+        } else if (event->button() == Qt::RightButton && !mouseMoved_) {
+            if (cornerFirstPick_.has_value()) {
+                cornerFirstPick_.reset();
+                update();
+            } else if (cornerApplyRequested_) {
+                // 右クリック = Enterと同じく一括適用(ペアが無ければ何もしない)。
+                cornerApplyRequested_();
+            }
+        }
+        dragButton_ = Qt::NoButton;
+        event->accept();
+        return;
+    }
+
     if (tool_ == ViewportTool::SplitWire) {
         if (event->button() == Qt::LeftButton && !mouseMoved_ && splitPreviewParameter_.has_value()) {
             const auto selectedWire = std::find_if(selections_.begin(), selections_.end(), [](const CadSelection& selection) {
@@ -6040,6 +6129,8 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             ClearCoincidencePicks();
         } else if (tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature) {
             ClearCoincidencePicks();
+        } else if (tool_ == ViewportTool::CornerPick) {
+            cornerFirstPick_.reset();
         } else if (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire) {
             if (toolExitRequested_) {
                 toolExitRequested_();

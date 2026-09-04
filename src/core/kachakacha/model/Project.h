@@ -163,6 +163,9 @@ struct NamedBody {
 //! 部材近似モデル(ADR 0019)。板材を1軸曲げ部材の集合へ近似する派生レシピ。
 struct NamedPartModel {
     std::string name;
+    //! 近似元。sourcePlateName(板材)か sourceSurfaceName(面)のどちらか一方だけが
+    //! 非空になる(面入力では厚み未定のまま近似し、板材化の時点で厚みを指定する)。
+    //! 注意: 集成体初期化互換のため、新フィールドは末尾へ追加する。
     std::string sourcePlateName;
     PartApproximationOptions options;
     PartApproximationResult result;
@@ -172,6 +175,7 @@ struct NamedPartModel {
     //! 命名は「<モデル名>_部材<番号>_穴<開口番号>」。部材境界をまたぐ開口は作らない。
     std::vector<std::string> openingWireNames;
     bool visible = true;
+    std::string sourceSurfaceName; //!< 面入力のときの元面名(板材入力なら空)
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -333,6 +337,11 @@ public:
         std::string name,
         std::string sourcePlateName,
         PartApproximationOptions options);
+    //! 面を直接近似する部材近似モデル(厚みは後段の板材化で指定)。
+    void AddPartModelFromSurface(
+        std::string name,
+        std::string sourceSurfaceName,
+        PartApproximationOptions options);
     void UpdatePartModelOptions(std::string_view name, PartApproximationOptions options);
     bool RemovePartModel(std::string_view name);
     void SetPartModelVisible(std::string_view name, bool visible);
@@ -397,6 +406,8 @@ private:
     void RebuildDependentGeometry();
     void RebuildPartModels();
     void RegeneratePartModelDerivedObjects(NamedPartModel& model);
+    //! 近似元(面 or 板材の厚み中央面)のサンプラを返す。見つからなければ投げる。
+    [[nodiscard]] PartSource RequirePartModelSource(const NamedPartModel& model) const;
     [[nodiscard]] ObjectSet* FindObjectSetMutable(std::string_view name);
 
     std::vector<NamedWorkPlane> workPlanes_;

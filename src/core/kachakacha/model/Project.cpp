@@ -1962,6 +1962,11 @@ bool Project::RemoveSurface(std::string_view name)
             throw std::invalid_argument("Surface is used by body: " + body.name);
         }
     }
+    for (const NamedPartModel& model : partModels_) {
+        if (model.sourceSurfaceName == name) {
+            throw std::invalid_argument("Surface is used by part model: " + model.name);
+        }
+    }
     surfaces_.erase(position);
     return true;
 }
@@ -2473,27 +2478,49 @@ void Project::RebuildDependentGeometry()
 
 // ---- 部材近似モデル(ADR 0019) ----------------------------------------
 
+PartSource Project::RequirePartModelSource(const NamedPartModel& model) const
+{
+    if (!model.sourceSurfaceName.empty()) {
+        const auto surface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) {
+                return candidate.name == model.sourceSurfaceName;
+            });
+        if (surface == surfaces_.end()) {
+            throw std::logic_error(
+                "Part-model source surface is missing: " + model.sourceSurfaceName);
+        }
+        return PartSource(surface->surface);
+    }
+    const auto plate = std::find_if(plates_.begin(), plates_.end(),
+        [&](const NamedPlate& candidate) {
+            return candidate.name == model.sourcePlateName;
+        });
+    if (plate == plates_.end()) {
+        throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
+    }
+    return PartSource(plate->plate);
+}
+
 void Project::RebuildPartModels()
 {
     for (NamedPartModel& model : partModels_) {
-        const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
-            return candidate.name == model.sourcePlateName;
-        });
-        if (plate == plates_.end()) {
-            throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
-        }
-        model.result = ApproximatePlateParts(plate->plate, model.options);
+        model.result = ApproximatePlateParts(RequirePartModelSource(model), model.options);
         RegeneratePartModelDerivedObjects(model);
     }
 }
 
 void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
 {
-    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
-        return candidate.name == model.sourcePlateName;
-    });
-    if (plate == plates_.end()) {
-        throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
+    // 板材入力のときだけ元板材を引く(開口の投影に使う)。面入力では nullptr。
+    const NamedPlate* sourcePlate = nullptr;
+    if (model.sourceSurfaceName.empty()) {
+        const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
+            return candidate.name == model.sourcePlateName;
+        });
+        if (plate == plates_.end()) {
+            throw std::logic_error("Part-model source plate is missing: " + model.sourcePlateName);
+        }
+        sourcePlate = &*plate;
     }
 
     // レール(帯の縁+内部境界)のパラメータ列。部材数+1本。
@@ -2510,7 +2537,7 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     for (std::size_t index = 0; index < parameters.size(); ++index) {
         const std::string wireName = wirePrefix + std::to_string(index + 1);
         Wire boundary = BuildPartBoundaryWire(
-            plate->plate, model.options.splitAxis, parameters[index]);
+            RequirePartModelSource(model), model.options.splitAxis, parameters[index]);
         const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
             return wire.name == wireName;
         });
@@ -2608,15 +2635,17 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     // 部材のルールド面(角ばった近似形状)へ投影し直すと、近似モデル上の穴輪郭になる。
     // 部材境界をまたぐ開口はどの部材にも属せないため作らない(型紙側では表示される)。
     std::vector<std::string> newOpeningNames;
+    const std::size_t sourceOpeningCount
+        = sourcePlate != nullptr ? sourcePlate->openingWireNames.size() : 0;
     for (std::size_t openingIndex = 0;
-         openingIndex < plate->openingWireNames.size(); ++openingIndex) {
+         openingIndex < sourceOpeningCount; ++openingIndex) {
         // 注意: このループは wires_ へ push_back するため、参照ではなくコピーで持つ。
-        const NamedWire opening = RequireWire(plate->openingWireNames[openingIndex]);
+        const NamedWire opening = RequireWire(sourcePlate->openingWireNames[openingIndex]);
         if (!opening.projection.has_value()) {
             continue;
         }
         // 開口の分割軸方向の範囲(板材ローカル0..1)を測り、収まる部材を探す。
-        const PlateSurfaceRange& range = plate->plate.Range();
+        const PlateSurfaceRange& range = sourcePlate->plate.Range();
         const bool splitAlongV = model.options.splitAxis == PartSplitAxis::V;
         const double rangeMinimum = splitAlongV ? range.minimumV : range.minimumU;
         const double rangeMaximum = splitAlongV ? range.maximumV : range.maximumU;
@@ -2630,7 +2659,7 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
                 static_cast<double>(sample) / samples);
             SurfaceProjection projected{};
             try {
-                projected = plate->plate.SourceSurface().ProjectPointAlongDirection(
+                projected = sourcePlate->plate.SourceSurface().ProjectPointAlongDirection(
                     point, opening.projection->direction);
             } catch (const std::exception&) {
                 measured = false;
@@ -2781,6 +2810,42 @@ void Project::AddPartModel(
     partModels_.push_back(std::move(model));
 }
 
+void Project::AddPartModelFromSurface(
+    std::string name,
+    std::string sourceSurfaceName,
+    PartApproximationOptions options)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Part-model name must not be empty.");
+    }
+    const auto duplicate = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& model) {
+        return model.name == name;
+    });
+    if (duplicate != partModels_.end()) {
+        throw std::invalid_argument("Part-model name already exists: " + name);
+    }
+    const auto surface = std::find_if(surfaces_.begin(), surfaces_.end(),
+        [&](const NamedSurface& candidate) {
+            return candidate.name == sourceSurfaceName;
+        });
+    if (surface == surfaces_.end()) {
+        throw std::invalid_argument(
+            "Part-model source surface is missing: " + sourceSurfaceName);
+    }
+    if (surface->partModelSourceName.has_value()) {
+        throw std::invalid_argument(
+            "Part-model derived surfaces cannot be approximated again: " + sourceSurfaceName);
+    }
+
+    NamedPartModel model;
+    model.name = std::move(name);
+    model.sourceSurfaceName = std::move(sourceSurfaceName);
+    model.options = std::move(options);
+    model.result = ApproximatePlateParts(PartSource(surface->surface), model.options);
+    RegeneratePartModelDerivedObjects(model);
+    partModels_.push_back(std::move(model));
+}
+
 void Project::UpdatePartModelOptions(std::string_view name, PartApproximationOptions options)
 {
     const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& candidate) {
@@ -2789,13 +2854,8 @@ void Project::UpdatePartModelOptions(std::string_view name, PartApproximationOpt
     if (model == partModels_.end()) {
         throw std::invalid_argument("Part model is missing: " + std::string(name));
     }
-    const auto plate = std::find_if(plates_.begin(), plates_.end(), [&](const NamedPlate& candidate) {
-        return candidate.name == model->sourcePlateName;
-    });
-    if (plate == plates_.end()) {
-        throw std::logic_error("Part-model source plate is missing: " + model->sourcePlateName);
-    }
-    const PartApproximationResult result = ApproximatePlateParts(plate->plate, options);
+    const PartApproximationResult result
+        = ApproximatePlateParts(RequirePartModelSource(*model), options);
     model->options = std::move(options);
     model->result = result;
     RegeneratePartModelDerivedObjects(*model);

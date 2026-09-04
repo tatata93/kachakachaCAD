@@ -31,6 +31,23 @@ struct PartApproximationOptions {
     std::vector<double> manualBoundaryParameters;
 };
 
+//! 近似の入力(面、または板材の厚み中央面)をUVサンプリングで共通に扱う軽量ビュー。
+//! 指した元オブジェクトより長生きさせないこと(参照のみ保持する)。
+class PartSource {
+public:
+    PartSource(const Surface& surface) : surface_(&surface) {}
+    PartSource(const Plate& plate) : plate_(&plate) {}
+
+    [[nodiscard]] geometry::Vector3 Evaluate(double u, double v) const
+    {
+        return plate_ != nullptr ? plate_->Evaluate(u, v, 0.5) : surface_->Evaluate(u, v);
+    }
+
+private:
+    const Surface* surface_ = nullptr;
+    const Plate* plate_ = nullptr;
+};
+
 struct ApproximatedPart {
     int number = 1;                    //!< 型紙・一覧に出す部材番号(1始まり)
     double minimumParameter = 0.0;     //!< 分割軸方向の範囲(板材ローカル 0..1)
@@ -46,14 +63,14 @@ struct PartApproximationResult {
     bool reachedRequestedTolerance = true;    //!< 全部材が許容偏差以下か
 };
 
-//! 板材(の厚み中央面)を部材へ近似分割する。
+//! 入力(面、または板材の厚み中央面)を部材へ近似分割する。
 [[nodiscard]] PartApproximationResult ApproximatePlateParts(
-    const Plate& plate,
+    const PartSource& source,
     const PartApproximationOptions& options);
 
-//! 部材境界(分割軸パラメータ=一定の線)を板厚中央面上のポリラインとして作る。
+//! 部材境界(分割軸パラメータ=一定の線)を入力面上のポリラインとして作る。
 [[nodiscard]] Wire BuildPartBoundaryWire(
-    const Plate& plate,
+    const PartSource& source,
     PartSplitAxis splitAxis,
     double parameter,
     int samples = 64);
@@ -74,7 +91,7 @@ struct PartMeshDevelopment {
 
 //! 帯範囲 [t0,t1] を boundaries(内部境界のパラメータ列)で区切ってメッシュ展開する。
 [[nodiscard]] PartMeshDevelopment DevelopPartMesh(
-    const Plate& plate,
+    const PartSource& source,
     PartSplitAxis splitAxis,
     const std::vector<double>& railParameters,
     int columns = 96);

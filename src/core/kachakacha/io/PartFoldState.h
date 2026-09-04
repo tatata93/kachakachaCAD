@@ -17,6 +17,8 @@ struct PartFoldStateOptions {
     double progress = 1.0;        //!< 0=平面(展開状態) 〜 1=近似完成形
     std::vector<int> partNumbers; //!< 出力する部材番号(1始まり)。空=全部材。
     int columns = 96;             //!< レールのサンプル数(メッシュ解像度)
+    //! 面入力の近似モデルを板材化するときの厚み(mm)。板材入力では元板材の厚みを使う。
+    double surfaceThicknessMillimeters = 0.5;
 };
 
 struct PartFoldStateResult {

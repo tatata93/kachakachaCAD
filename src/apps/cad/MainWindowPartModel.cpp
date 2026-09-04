@@ -77,9 +77,10 @@ QWidget* MainWindow::BuildPartModelPanelTab()
 void MainWindow::CreatePartModelFromPanel()
 {
     try {
-        const std::string plateName = ToName(partModelPanel_->SelectedPlateName());
-        if (plateName.empty()) {
-            throw std::invalid_argument("近似する板材を選択してください。");
+        const std::string sourceObjectName = ToName(partModelPanel_->SelectedSourceName());
+        const bool fromSurface = partModelPanel_->SelectedSourceIsSurface();
+        if (sourceObjectName.empty()) {
+            throw std::invalid_argument("近似する板材または面を選択してください。");
         }
         const PartApproximationOptions options = partModelPanel_->CurrentOptions();
         if (!options.automaticBoundaries && options.manualBoundaryParameters.empty()) {
@@ -102,7 +103,11 @@ void MainWindow::CreatePartModelFromPanel()
         }
 
         Project candidate = project_;
-        candidate.AddPartModel(name, plateName, options);
+        if (fromSurface) {
+            candidate.AddPartModelFromSurface(name, sourceObjectName, options);
+        } else {
+            candidate.AddPartModel(name, sourceObjectName, options);
+        }
 
         RecordUndo();
         project_ = std::move(candidate);
@@ -310,13 +315,17 @@ void MainWindow::CreatePlateFromSelectedPart()
             throw std::invalid_argument(
                 "板材にする部材を一覧で選択してください（複数選択可）。");
         }
-        const auto sourcePlate = std::find_if(
-            project_.Plates().begin(), project_.Plates().end(),
-            [&model](const kachakacha::model::NamedPlate& candidate) {
-                return candidate.name == model->sourcePlateName;
-            });
-        if (sourcePlate == project_.Plates().end()) {
-            throw std::invalid_argument("元の板材が見つかりません。");
+        const bool fromSurface = !model->sourceSurfaceName.empty();
+        auto sourcePlate = project_.Plates().end();
+        if (!fromSurface) {
+            sourcePlate = std::find_if(
+                project_.Plates().begin(), project_.Plates().end(),
+                [&model](const kachakacha::model::NamedPlate& candidate) {
+                    return candidate.name == model->sourcePlateName;
+                });
+            if (sourcePlate == project_.Plates().end()) {
+                throw std::invalid_argument("元の板材が見つかりません。");
+            }
         }
 
         Project candidate = project_;
@@ -334,12 +343,21 @@ void MainWindow::CreatePlateFromSelectedPart()
                     break;
                 }
             }
-            candidate.AddPlate(
-                plateName,
-                surfaceName,
-                sourcePlate->plate.Thickness(),
-                sourcePlate->plate.Direction(),
-                sourcePlate->material);
+            if (fromSurface) {
+                candidate.AddPlate(
+                    plateName,
+                    surfaceName,
+                    partModelPanel_->FoldThicknessMillimeters(),
+                    kachakacha::model::PlateThicknessDirection::Centered,
+                    "未指定");
+            } else {
+                candidate.AddPlate(
+                    plateName,
+                    surfaceName,
+                    sourcePlate->plate.Thickness(),
+                    sourcePlate->plate.Direction(),
+                    sourcePlate->material);
+            }
             // この部材に収まる開口(窓・ライト等)の派生輪郭を、そのまま穴として付ける。
             const std::string openingPrefix
                 = model->name + "_部材" + std::to_string(number) + "_穴";
@@ -389,12 +407,24 @@ void MainWindow::UpdatePartFoldPreview()
             viewport_->SetPartFoldPreview({}, {});
             return;
         }
-        const auto plate = std::find_if(
-            project_.Plates().begin(), project_.Plates().end(),
-            [&model](const kachakacha::model::NamedPlate& candidate) {
-                return candidate.name == model->sourcePlateName;
-            });
-        if (plate == project_.Plates().end()) {
+        const kachakacha::model::Surface* sourceSurface = nullptr;
+        const kachakacha::model::Plate* sourcePlate = nullptr;
+        if (!model->sourceSurfaceName.empty()) {
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name == model->sourceSurfaceName) {
+                    sourceSurface = &surface.surface;
+                    break;
+                }
+            }
+        } else {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name == model->sourcePlateName) {
+                    sourcePlate = &plate.plate;
+                    break;
+                }
+            }
+        }
+        if (sourceSurface == nullptr && sourcePlate == nullptr) {
             viewport_->SetPartFoldPreview({}, {});
             return;
         }
@@ -404,8 +434,11 @@ void MainWindow::UpdatePartFoldPreview()
             parameters.push_back(model->result.parts[index].minimumParameter);
         }
         parameters.push_back(1.0);
+        const kachakacha::model::PartSource source = sourceSurface != nullptr
+            ? kachakacha::model::PartSource(*sourceSurface)
+            : kachakacha::model::PartSource(*sourcePlate);
         const auto mesh = kachakacha::model::DevelopPartMesh(
-            plate->plate, model->options.splitAxis, parameters, 64);
+            source, model->options.splitAxis, parameters, 64);
         auto state = kachakacha::model::BuildFoldPreview(
             mesh, partModelPanel_->FoldProgress());
         viewport_->SetPartFoldPreview(std::move(state), mesh.creaseDirections);
@@ -454,12 +487,37 @@ void MainWindow::RealizePartFoldState()
         kachakacha::io::PartFoldStateOptions options;
         options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
         const std::string prefix
             = MakeFoldStatePrefix(project_, model->name, options.progress);
 
         Project candidate = project_;
         const auto result = kachakacha::io::AddPartFoldStateModel(
             candidate, candidate, *model, options, prefix);
+        // 実体化した曲げ状態は「近似:<モデル名>」配下の子グループへまとめる
+        // (docs/surface-unfolding-spec.md 合意11)。
+        try {
+            using kachakacha::model::ProjectObjectKind;
+            candidate.CreateObjectSet(prefix);
+            candidate.SetObjectSetParent(prefix, "近似:" + model->name);
+            for (const std::string& wireName : result.railWireNames) {
+                candidate.AssignObjectToSet(ProjectObjectKind::Wire, wireName, prefix);
+            }
+            for (const std::string& surfaceName : result.surfaceNames) {
+                candidate.AssignObjectToSet(ProjectObjectKind::Surface, surfaceName, prefix);
+            }
+            for (const std::string& plateName : result.plateNames) {
+                candidate.AssignObjectToSet(ProjectObjectKind::Plate, plateName, prefix);
+            }
+            for (const std::string& wireName : result.openingWireNames) {
+                candidate.AssignObjectToSet(ProjectObjectKind::Wire, wireName, prefix);
+            }
+            for (const std::string& wireName : result.outlineWireNames) {
+                candidate.AssignObjectToSet(ProjectObjectKind::Wire, wireName, prefix);
+            }
+        } catch (const std::exception&) {
+            // グループ化に失敗しても実体化自体は成立させる。
+        }
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
@@ -493,6 +551,7 @@ void MainWindow::ExportPartFoldMesh(bool step)
         kachakacha::io::PartFoldStateOptions options;
         options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 
         Project exportProject;
         const auto result = kachakacha::io::AddPartFoldStateModel(
@@ -554,6 +613,7 @@ void MainWindow::ExportPartFoldKcd()
         kachakacha::io::PartFoldStateOptions options;
         options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 
         Project exportProject;
         const auto result = kachakacha::io::AddPartFoldStateModel(

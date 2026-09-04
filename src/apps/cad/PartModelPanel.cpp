@@ -24,6 +24,8 @@ namespace {
 constexpr int kModelNameRole = Qt::UserRole + 1;
 constexpr int kPartNumberRole = Qt::UserRole + 2;
 constexpr int kSetNameRole = Qt::UserRole + 3;
+constexpr int kSourceNameRole = Qt::UserRole + 4;   // 近似元コンボ: 実際の名前
+constexpr int kSourceIsSurfaceRole = Qt::UserRole + 5; // 近似元コンボ: 面なら true
 
 [[nodiscard]] QString ToQString(const std::string& value)
 {
@@ -73,8 +75,10 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     auto* createForm = new QFormLayout(createGroup);
     createForm->setContentsMargins(8, 4, 8, 8);
     plateCombo_ = new QComboBox;
-    plateCombo_->setToolTip(QStringLiteral("近似する板材を選びます"));
-    createForm->addRow(QStringLiteral("板材"), plateCombo_);
+    plateCombo_->setToolTip(QStringLiteral(
+        "近似する板材または面を選びます。\n"
+        "面は厚み未定のまま近似し、板材化の時点で板厚を指定します"));
+    createForm->addRow(QStringLiteral("近似元"), plateCombo_);
     axisCombo_ = new QComboBox;
     axisCombo_->addItem(QStringLiteral("V方向で区切る（標準）"));
     axisCombo_->addItem(QStringLiteral("U方向で区切る"));
@@ -152,7 +156,8 @@ PartModelPanel::PartModelPanel(QWidget* parent)
 
     auto* makePlateButton = new QPushButton(QStringLiteral("選択部材を板材化"));
     makePlateButton->setToolTip(QStringLiteral(
-        "選択した部材の面から板材を作ります（板厚・材質は元の板材と同じ）。\n"
+        "選択した部材の面から板材を作ります（板材入力なら板厚・材質は元と同じ、\n"
+        "面入力なら「面入力の板厚」の値を使います）。\n"
         "板材にすると開口の追加や1:1出力など既存の板材機能が使えます"));
     connect(makePlateButton, &QPushButton::clicked, this, [this] {
         if (onMakePlate) onMakePlate();
@@ -200,6 +205,20 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
         if (onFoldStateChanged) onFoldStateChanged();
     });
+    auto* thicknessRow = new QHBoxLayout;
+    auto* thicknessLabel = new QLabel(QStringLiteral("面入力の板厚"));
+    foldThicknessSpin_ = new QDoubleSpinBox;
+    foldThicknessSpin_->setRange(0.05, 10.0);
+    foldThicknessSpin_->setDecimals(2);
+    foldThicknessSpin_->setSingleStep(0.05);
+    foldThicknessSpin_->setValue(0.5);
+    foldThicknessSpin_->setSuffix(QStringLiteral(" mm"));
+    foldThicknessSpin_->setToolTip(QStringLiteral(
+        "面から作った近似モデルを板材化・出力するときに使う板厚です。\n"
+        "板材から作ったモデルでは元の板厚が使われます"));
+    thicknessRow->addWidget(thicknessLabel);
+    thicknessRow->addWidget(foldThicknessSpin_, 1);
+    foldLayout->addLayout(thicknessRow);
     auto* realizeButton = new QPushButton(QStringLiteral("この曲げ状態を板材化"));
     realizeButton->setToolTip(QStringLiteral(
         "スライダーの曲げ具合の形状を、このプロジェクトへ通常の板材として追加します。\n"
@@ -276,6 +295,18 @@ void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& projec
     plateCombo_->clear();
     for (const auto& plate : project.Plates()) {
         plateCombo_->addItem(ToQString(plate.name));
+        const int index = plateCombo_->count() - 1;
+        plateCombo_->setItemData(index, ToQString(plate.name), kSourceNameRole);
+        plateCombo_->setItemData(index, false, kSourceIsSurfaceRole);
+    }
+    for (const auto& surface : project.Surfaces()) {
+        if (surface.partModelSourceName.has_value()) {
+            continue; // 近似モデルの派生面は再近似の対象にしない。
+        }
+        plateCombo_->addItem(QStringLiteral("面: %1").arg(ToQString(surface.name)));
+        const int index = plateCombo_->count() - 1;
+        plateCombo_->setItemData(index, ToQString(surface.name), kSourceNameRole);
+        plateCombo_->setItemData(index, true, kSourceIsSurfaceRole);
     }
     const int plateIndex = plateCombo_->findText(previousPlate);
     if (plateIndex >= 0) {
@@ -288,7 +319,10 @@ void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& projec
     for (const auto& model : project.PartModels()) {
         auto* modelItem = new QTreeWidgetItem(modelTree_, {
             QStringLiteral("%1 ← %2  （部材 %3、最大偏差 %4 mm%5）")
-                .arg(ToQString(model.name), ToQString(model.sourcePlateName))
+                .arg(ToQString(model.name),
+                    model.sourceSurfaceName.empty()
+                        ? ToQString(model.sourcePlateName)
+                        : QStringLiteral("面: %1").arg(ToQString(model.sourceSurfaceName)))
                 .arg(model.result.parts.size())
                 .arg(model.result.maximumDeviationMillimeters, 0, 'f', 3)
                 .arg(model.result.reachedRequestedTolerance
@@ -327,6 +361,22 @@ void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& projec
 QString PartModelPanel::SelectedPlateName() const
 {
     return plateCombo_->currentText();
+}
+
+QString PartModelPanel::SelectedSourceName() const
+{
+    const QVariant data = plateCombo_->currentData(kSourceNameRole);
+    return data.isValid() ? data.toString() : plateCombo_->currentText();
+}
+
+bool PartModelPanel::SelectedSourceIsSurface() const
+{
+    return plateCombo_->currentData(kSourceIsSurfaceRole).toBool();
+}
+
+double PartModelPanel::FoldThicknessMillimeters() const
+{
+    return foldThicknessSpin_ != nullptr ? foldThicknessSpin_->value() : 0.5;
 }
 
 void PartModelPanel::SelectPlate(const QString& plateName)

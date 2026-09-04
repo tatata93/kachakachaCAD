@@ -910,9 +910,12 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddSurfaceJig(
                     name, sourceSurface, range, side, clearance, thickness);
-            } else if (command == "part_model") {
+            } else if (command == "part_model" || command == "part_model_surface") {
+                const bool fromSurface = command == "part_model_surface";
                 const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
-                const std::string plateName = ReadName(stream, sourceName, lineNumber, "source plate");
+                const std::string sourceObjectName = ReadName(
+                    stream, sourceName, lineNumber,
+                    fromSurface ? "source surface" : "source plate");
                 const std::string axisToken = ReadName(stream, sourceName, lineNumber, "split axis");
                 if (axisToken != "u" && axisToken != "v") {
                     throw std::invalid_argument("Part-model split axis must be u or v.");
@@ -934,7 +937,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                         ReadDouble(stream, sourceName, lineNumber, "manual boundary parameter"));
                 }
                 EnsureLineEnded(stream, sourceName, lineNumber);
-                project.AddPartModel(name, plateName, options);
+                if (fromSurface) {
+                    project.AddPartModelFromSurface(name, sourceObjectName, options);
+                } else {
+                    project.AddPartModel(name, sourceObjectName, options);
+                }
             } else if (command == "object_set_parent") {
                 const std::string child = ReadName(stream, sourceName, lineNumber, "set");
                 const std::string parent = ReadName(stream, sourceName, lineNumber, "parent set");
@@ -1471,8 +1478,13 @@ void WriteProjectScript(std::ostream& output, const Project& project)
 
     for (const auto& model : project.PartModels()) {
         RequireScriptNameSafe(model.name, "Part model");
-        RequireScriptNameSafe(model.sourcePlateName, "Part-model source plate");
-        output << "part_model " << model.name << ' ' << model.sourcePlateName << ' '
+        const bool fromSurface = !model.sourceSurfaceName.empty();
+        const std::string& sourceObjectName
+            = fromSurface ? model.sourceSurfaceName : model.sourcePlateName;
+        RequireScriptNameSafe(sourceObjectName,
+            fromSurface ? "Part-model source surface" : "Part-model source plate");
+        output << (fromSurface ? "part_model_surface " : "part_model ")
+               << model.name << ' ' << sourceObjectName << ' '
                << (model.options.splitAxis == model::PartSplitAxis::U ? "u" : "v") << ' '
                << (model.options.automaticBoundaries ? 1 : 0) << ' '
                << model.options.maximumDeviationMillimeters << ' '

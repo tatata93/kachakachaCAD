@@ -33,6 +33,12 @@ public:
     void SelectPlate(const QString& plateName);
 
     [[nodiscard]] QString SelectedPlateName() const;
+    //! 近似元コンボで選ばれた対象の名前(板材名または面名)。
+    [[nodiscard]] QString SelectedSourceName() const;
+    //! 近似元コンボで面が選ばれているか。
+    [[nodiscard]] bool SelectedSourceIsSurface() const;
+    //! 面入力の近似モデルを板材化するときの板厚(mm)。
+    [[nodiscard]] double FoldThicknessMillimeters() const;
     [[nodiscard]] kachakacha::model::PartApproximationOptions CurrentOptions() const;
     [[nodiscard]] QString SelectedModelName() const;
     [[nodiscard]] std::vector<int> SelectedPartNumbers() const;
@@ -64,6 +70,7 @@ private:
     QTreeWidget* modelTree_ = nullptr;
     QListWidget* setList_ = nullptr;
     QCheckBox* foldPreviewCheck_ = nullptr;
+    QDoubleSpinBox* foldThicknessSpin_ = nullptr;
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
     std::array<QWidget*, 4> sections_{};

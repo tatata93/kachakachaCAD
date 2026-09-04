@@ -12,33 +12,33 @@ namespace {
 constexpr int kAxisSamples = 96;   // 分割軸方向のサンプル数
 constexpr int kCrossSamples = 17;  // 直交方向のサンプル数
 
-// 板厚中央面上の点。tは分割軸方向、sは直交方向(いずれも板材ローカル0..1)。
+// 入力面上の点。tは分割軸方向、sは直交方向(いずれもローカル0..1)。
 [[nodiscard]] geometry::Vector3 EvaluateMid(
-    const Plate& plate, PartSplitAxis axis, double t, double s)
+    const PartSource& source, PartSplitAxis axis, double t, double s)
 {
     const double u = axis == PartSplitAxis::V ? s : t;
     const double v = axis == PartSplitAxis::V ? t : s;
-    return plate.Evaluate(u, v, 0.5);
+    return source.Evaluate(u, v);
 }
 
 // 帯 [t0,t1] の「1軸曲げ近似からのずれ」を弦偏差で見積もる。
 // 1軸曲げ部材は帯を横切る素線(分割軸方向の曲線)が直線になるため、
 // 実曲線と弦との最大距離が近似偏差の見積もりになる。
 [[nodiscard]] double EstimateChordDeviation(
-    const Plate& plate, PartSplitAxis axis, double t0, double t1)
+    const PartSource& source, PartSplitAxis axis, double t0, double t1)
 {
     double worst = 0.0;
     const int innerSamples = 9;
     for (int crossIndex = 0; crossIndex < kCrossSamples; ++crossIndex) {
         const double s = static_cast<double>(crossIndex) / (kCrossSamples - 1);
-        const geometry::Vector3 start = EvaluateMid(plate, axis, t0, s);
-        const geometry::Vector3 end = EvaluateMid(plate, axis, t1, s);
+        const geometry::Vector3 start = EvaluateMid(source, axis, t0, s);
+        const geometry::Vector3 end = EvaluateMid(source, axis, t1, s);
         const geometry::Vector3 chord = end - start;
         const double chordLengthSquared = chord.LengthSquared();
         for (int inner = 1; inner < innerSamples; ++inner) {
             const double f = static_cast<double>(inner) / innerSamples;
             const double t = t0 + (t1 - t0) * f;
-            const geometry::Vector3 point = EvaluateMid(plate, axis, t, s);
+            const geometry::Vector3 point = EvaluateMid(source, axis, t, s);
             geometry::Vector3 offset = point - start;
             if (chordLengthSquared > 1.0e-18) {
                 const double along = Dot(offset, chord) / chordLengthSquared;
@@ -52,17 +52,17 @@ constexpr int kCrossSamples = 17;  // 直交方向のサンプル数
 
 // 帯 [t0,t1] の分割軸方向の実幅(直交方向サンプルの平均)。
 [[nodiscard]] double MeasureWidth(
-    const Plate& plate, PartSplitAxis axis, double t0, double t1)
+    const PartSource& source, PartSplitAxis axis, double t0, double t1)
 {
     double total = 0.0;
     const int lengthSamples = 8;
     for (int crossIndex = 0; crossIndex < kCrossSamples; ++crossIndex) {
         const double s = static_cast<double>(crossIndex) / (kCrossSamples - 1);
         double length = 0.0;
-        geometry::Vector3 previous = EvaluateMid(plate, axis, t0, s);
+        geometry::Vector3 previous = EvaluateMid(source, axis, t0, s);
         for (int step = 1; step <= lengthSamples; ++step) {
             const double t = t0 + (t1 - t0) * static_cast<double>(step) / lengthSamples;
-            const geometry::Vector3 point = EvaluateMid(plate, axis, t, s);
+            const geometry::Vector3 point = EvaluateMid(source, axis, t, s);
             length += (point - previous).Length();
             previous = point;
         }
@@ -72,14 +72,14 @@ constexpr int kCrossSamples = 17;  // 直交方向のサンプル数
 }
 
 [[nodiscard]] ApproximatedPart MakePart(
-    const Plate& plate, PartSplitAxis axis, int number, double t0, double t1)
+    const PartSource& source, PartSplitAxis axis, int number, double t0, double t1)
 {
     ApproximatedPart part;
     part.number = number;
     part.minimumParameter = t0;
     part.maximumParameter = t1;
-    part.widthMillimeters = MeasureWidth(plate, axis, t0, t1);
-    part.estimatedDeviationMillimeters = EstimateChordDeviation(plate, axis, t0, t1);
+    part.widthMillimeters = MeasureWidth(source, axis, t0, t1);
+    part.estimatedDeviationMillimeters = EstimateChordDeviation(source, axis, t0, t1);
     if (part.estimatedDeviationMillimeters <= 1.0e-6) {
         part.classification = PlateDevelopability::Planar;
     } else {
@@ -91,7 +91,7 @@ constexpr int kCrossSamples = 17;  // 直交方向のサンプル数
 } // namespace
 
 PartApproximationResult ApproximatePlateParts(
-    const Plate& plate,
+    const PartSource& source,
     const PartApproximationOptions& options)
 {
     if (!std::isfinite(options.maximumDeviationMillimeters)
@@ -132,7 +132,7 @@ PartApproximationResult ApproximatePlateParts(
             double lastGood = end;
             while (end < 1.0 - 1.0e-9) {
                 const double next = std::min(1.0, end + step);
-                if (EstimateChordDeviation(plate, axis, start, next)
+                if (EstimateChordDeviation(source, axis, start, next)
                     > options.maximumDeviationMillimeters) {
                     break;
                 }
@@ -142,7 +142,7 @@ PartApproximationResult ApproximatePlateParts(
             end = lastGood;
             // 最小幅を満たすまで伸ばす(公差超過よりも「作れない細さ」を避ける)。
             while (end < 1.0 - 1.0e-9
-                && MeasureWidth(plate, axis, start, end)
+                && MeasureWidth(source, axis, start, end)
                     < options.minimumPartWidthMillimeters) {
                 end = std::min(1.0, end + step);
             }
@@ -163,7 +163,7 @@ PartApproximationResult ApproximatePlateParts(
         // 末尾の帯が細すぎる場合は手前の帯と結合する。
         if (boundaries.size() >= 3) {
             const double t0 = boundaries[boundaries.size() - 2];
-            if (MeasureWidth(plate, axis, t0, 1.0)
+            if (MeasureWidth(source, axis, t0, 1.0)
                 < options.minimumPartWidthMillimeters) {
                 boundaries.erase(boundaries.end() - 2);
             }
@@ -173,7 +173,7 @@ PartApproximationResult ApproximatePlateParts(
     PartApproximationResult result;
     for (std::size_t index = 0; index + 1 < boundaries.size(); ++index) {
         ApproximatedPart part = MakePart(
-            plate, axis, static_cast<int>(index) + 1,
+            source, axis, static_cast<int>(index) + 1,
             boundaries[index], boundaries[index + 1]);
         result.maximumDeviationMillimeters = std::max(
             result.maximumDeviationMillimeters, part.estimatedDeviationMillimeters);
@@ -185,7 +185,7 @@ PartApproximationResult ApproximatePlateParts(
 }
 
 Wire BuildPartBoundaryWire(
-    const Plate& plate,
+    const PartSource& source,
     PartSplitAxis splitAxis,
     double parameter,
     int samples)
@@ -197,7 +197,7 @@ Wire BuildPartBoundaryWire(
     points.reserve(static_cast<std::size_t>(samples) + 1);
     for (int index = 0; index <= samples; ++index) {
         const double s = static_cast<double>(index) / samples;
-        points.push_back(EvaluateMid(plate, splitAxis, parameter, s));
+        points.push_back(EvaluateMid(source, splitAxis, parameter, s));
     }
     return Wire::Polyline(std::move(points));
 }
@@ -255,7 +255,7 @@ using geometry::Vector3;
 } // namespace
 
 PartMeshDevelopment DevelopPartMesh(
-    const Plate& plate,
+    const PartSource& source,
     PartSplitAxis splitAxis,
     const std::vector<double>& railParameters,
     int columns)
@@ -278,10 +278,10 @@ PartMeshDevelopment DevelopPartMesh(
 
     // 近似の実形状: 各レールは実面上の曲線、レール間は直線補間(ルールド)。
     // メッシュ自体はレール点列で表す(レール間の直線は展開時の三角形が担う)。
-    const auto evaluateMid = [&plate, splitAxis](double t, double s) {
+    const auto evaluateMid = [&source, splitAxis](double t, double s) {
         const double u = splitAxis == PartSplitAxis::V ? s : t;
         const double v = splitAxis == PartSplitAxis::V ? t : s;
-        return plate.Evaluate(u, v, 0.5);
+        return source.Evaluate(u, v);
     };
     mesh.world.resize(mesh.rows);
     for (int row = 0; row < mesh.rows; ++row) {

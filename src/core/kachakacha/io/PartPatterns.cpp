@@ -12,17 +12,42 @@ namespace {
 using geometry::Vector2;
 using geometry::Vector3;
 
-[[nodiscard]] const model::NamedPlate& RequireSourcePlate(
+[[nodiscard]] const model::NamedPlate* FindSourcePlate(
     const model::Project& project,
     const model::NamedPartModel& partModel)
 {
     for (const model::NamedPlate& plate : project.Plates()) {
         if (plate.name == partModel.sourcePlateName) {
-            return plate;
+            return &plate;
         }
     }
-    throw std::invalid_argument(
-        "Part-model source plate is missing: " + partModel.sourcePlateName);
+    return nullptr;
+}
+
+//! 近似元(面 or 板材の厚み中央面)のサンプラ。板材入力なら plate も返す(開口用)。
+[[nodiscard]] model::PartSource RequireSource(
+    const model::Project& project,
+    const model::NamedPartModel& partModel,
+    const model::NamedPlate** sourcePlate)
+{
+    if (!partModel.sourceSurfaceName.empty()) {
+        for (const model::NamedSurface& surface : project.Surfaces()) {
+            if (surface.name == partModel.sourceSurfaceName) {
+                return model::PartSource(surface.surface);
+            }
+        }
+        throw std::invalid_argument(
+            "Part-model source surface is missing: " + partModel.sourceSurfaceName);
+    }
+    const model::NamedPlate* plate = FindSourcePlate(project, partModel);
+    if (plate == nullptr) {
+        throw std::invalid_argument(
+            "Part-model source plate is missing: " + partModel.sourcePlateName);
+    }
+    if (sourcePlate != nullptr) {
+        *sourcePlate = plate;
+    }
+    return model::PartSource(plate->plate);
 }
 
 struct MappedPoint {
@@ -139,7 +164,8 @@ PartPatternResult BuildPartPatternWithPreview(
         }
     }
 
-    const model::NamedPlate& sourcePlate = RequireSourcePlate(project, partModel);
+    const model::NamedPlate* sourcePlate = nullptr;
+    const model::PartSource source = RequireSource(project, partModel, &sourcePlate);
 
     // レール(選択部材の縁+内部境界)のパラメータ列。
     std::vector<double> rails;
@@ -150,7 +176,7 @@ PartPatternResult BuildPartPatternWithPreview(
 
     PartPatternResult result;
     result.mesh = model::DevelopPartMesh(
-        sourcePlate.plate, partModel.options.splitAxis, rails,
+        source, partModel.options.splitAxis, rails,
         std::max(24, options.uSegments));
 
     PlateFlatPattern& pattern = result.pattern;
@@ -192,7 +218,10 @@ PartPatternResult BuildPartPatternWithPreview(
             partModel.result.parts[number - 1].estimatedDeviationMillimeters);
     }
     const double inclusionTolerance = std::max(1.0, deviation * 3.0);
-    for (const std::string& openingName : sourcePlate.openingWireNames) {
+    const std::vector<std::string> sourceOpeningNames = sourcePlate != nullptr
+        ? sourcePlate->openingWireNames
+        : std::vector<std::string>{};
+    for (const std::string& openingName : sourceOpeningNames) {
         const auto wire = std::find_if(
             project.Wires().begin(), project.Wires().end(),
             [&openingName](const model::NamedWire& candidate) {

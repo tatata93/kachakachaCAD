@@ -536,6 +536,90 @@ int main()
             Require(halfResult.plateNames.size() == 1,
                 "half-folded state respects the part selection");
         }
+
+        // --- 面からの直接近似(合意8: 厚みは板材化の時点で指定) ---
+        {
+            Project surfaceProject = MakeBottleLikeProject();
+            PartApproximationOptions surfaceOptions;
+            surfaceOptions.splitAxis = PartSplitAxis::V;
+            surfaceOptions.automaticBoundaries = false;
+            surfaceOptions.manualBoundaryParameters = {0.5};
+            surfaceProject.AddPartModelFromSurface("面近似", "胴", surfaceOptions);
+            const auto& surfaceModel = surfaceProject.PartModels().back();
+            Require(surfaceModel.sourceSurfaceName == "胴", "surface source recorded");
+            Require(surfaceModel.sourcePlateName.empty(), "no plate source for surface input");
+            Require(surfaceModel.result.parts.size() == 2, "surface input splits into two parts");
+            Require(surfaceModel.boundaryWireNames.size() == 3, "surface input creates rails");
+            Require(surfaceModel.partSurfaceNames.size() == 2, "surface input creates part surfaces");
+            Require(surfaceModel.openingWireNames.empty(),
+                "surface input has no plate openings to project");
+
+            // 派生面を再近似することは禁止。
+            bool derivedGuarded = false;
+            try {
+                surfaceProject.AddPartModelFromSurface(
+                    "二重近似", surfaceModel.partSurfaceNames.front(), surfaceOptions);
+            } catch (const std::exception&) {
+                derivedGuarded = true;
+            }
+            Require(derivedGuarded, "derived part surfaces cannot be approximated again");
+
+            // 元面の削除は近似モデルが使っている間は拒否される。
+            bool sourceGuarded = false;
+            try {
+                (void)surfaceProject.RemoveSurface("胴");
+            } catch (const std::exception&) {
+                sourceGuarded = true;
+            }
+            Require(sourceGuarded, "source surface protected while a part model uses it");
+
+            // スクリプト保存・復元(part_model_surface)。
+            std::ostringstream saved;
+            kachakacha::io::WriteProjectScript(saved, surfaceProject);
+            const std::string text = saved.str();
+            Require(text.find("part_model_surface 面近似 胴 v 0") != std::string::npos,
+                "surface-source part model saved as part_model_surface");
+            std::istringstream input(text);
+            Project loadedSurface = kachakacha::io::LoadProjectScript(input, "surface-source");
+            Require(loadedSurface.PartModels().size() == 1, "surface-source model loaded");
+            Require(loadedSurface.PartModels().front().sourceSurfaceName == "胴",
+                "surface source survives the round trip");
+            Require(loadedSurface.PartModels().front().result.parts.size() == 2,
+                "surface-source result regenerated on load");
+
+            // 板材化: 面入力では options の板厚を使う。
+            kachakacha::io::PartFoldStateOptions foldOptions;
+            foldOptions.progress = 1.0;
+            foldOptions.surfaceThicknessMillimeters = 0.3;
+            const auto realized = kachakacha::io::AddPartFoldStateModel(
+                surfaceProject, surfaceProject,
+                surfaceProject.PartModels().front(), foldOptions, "面曲げ");
+            Require(realized.plateNames.size() == 2, "surface-source fold state creates plates");
+            const auto realizedPlate = surfaceProject.FindPlate(realized.plateNames.front());
+            Require(realizedPlate.has_value(), "realized plate exists");
+            Require(std::abs(realizedPlate->Thickness() - 0.3) < 1.0e-9,
+                "surface thickness option is used for realized plates");
+
+            // 板厚未指定(0)は拒否。
+            bool thicknessGuarded = false;
+            try {
+                kachakacha::io::PartFoldStateOptions zeroThickness;
+                zeroThickness.surfaceThicknessMillimeters = 0.0;
+                (void)kachakacha::io::AddPartFoldStateModel(
+                    surfaceProject, surfaceProject,
+                    surfaceProject.PartModels().front(), zeroThickness, "面曲げ2");
+            } catch (const std::exception&) {
+                thicknessGuarded = true;
+            }
+            Require(thicknessGuarded, "surface-source realization requires a positive thickness");
+
+            // 型紙も面入力から直接作れる。
+            const auto patterns = kachakacha::io::BuildAllPartPatterns(
+                surfaceProject, surfaceProject.PartModels().front());
+            Require(patterns.size() == 2, "surface-source patterns built for each part");
+            Require(!patterns.front().outerBoundary.points.empty(),
+                "surface-source pattern has an outer boundary");
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

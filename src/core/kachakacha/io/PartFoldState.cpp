@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include <set>
 #include <stdexcept>
 
@@ -45,23 +46,43 @@ PartFoldStateResult AddPartFoldStateModel(
 
     // source と target が同じプロジェクトでも安全なように、必要な元データを先にコピーする。
     const NamedPartModel model = partModel;
-    const NamedPlate* sourcePlatePointer = nullptr;
-    for (const NamedPlate& candidate : source.Plates()) {
-        if (candidate.name == model.sourcePlateName) {
-            sourcePlatePointer = &candidate;
-            break;
+    const bool fromSurface = !model.sourceSurfaceName.empty();
+    std::optional<model::NamedPlate> sourcePlateCopy;
+    std::optional<model::NamedSurface> sourceSurfaceCopy;
+    if (fromSurface) {
+        for (const model::NamedSurface& candidate : source.Surfaces()) {
+            if (candidate.name == model.sourceSurfaceName) {
+                sourceSurfaceCopy = candidate;
+                break;
+            }
+        }
+        if (!sourceSurfaceCopy.has_value()) {
+            throw std::invalid_argument("元の面が見つかりません: " + model.sourceSurfaceName);
+        }
+        if (!std::isfinite(options.surfaceThicknessMillimeters)
+            || options.surfaceThicknessMillimeters <= 0.0) {
+            throw std::invalid_argument(
+                "面入力の近似モデルを板材化するには板厚を正の値で指定してください。");
+        }
+    } else {
+        for (const NamedPlate& candidate : source.Plates()) {
+            if (candidate.name == model.sourcePlateName) {
+                sourcePlateCopy = candidate;
+                break;
+            }
+        }
+        if (!sourcePlateCopy.has_value()) {
+            throw std::invalid_argument("元の板材が見つかりません: " + model.sourcePlateName);
         }
     }
-    if (sourcePlatePointer == nullptr) {
-        throw std::invalid_argument("元の板材が見つかりません: " + model.sourcePlateName);
-    }
-    const NamedPlate sourcePlate = *sourcePlatePointer;
     std::vector<NamedWire> openings;
-    for (const std::string& openingName : sourcePlate.openingWireNames) {
-        for (const NamedWire& wire : source.Wires()) {
-            if (wire.name == openingName) {
-                openings.push_back(wire);
-                break;
+    if (sourcePlateCopy.has_value()) {
+        for (const std::string& openingName : sourcePlateCopy->openingWireNames) {
+            for (const NamedWire& wire : source.Wires()) {
+                if (wire.name == openingName) {
+                    openings.push_back(wire);
+                    break;
+                }
             }
         }
     }
@@ -90,8 +111,11 @@ PartFoldStateResult AddPartFoldStateModel(
         parameters.push_back(model.result.parts[index].minimumParameter);
     }
     parameters.push_back(1.0);
+    const model::PartSource meshSource = fromSurface
+        ? model::PartSource(sourceSurfaceCopy->surface)
+        : model::PartSource(sourcePlateCopy->plate);
     const PartMeshDevelopment mesh = model::DevelopPartMesh(
-        sourcePlate.plate, model.options.splitAxis, parameters, options.columns);
+        meshSource, model.options.splitAxis, parameters, options.columns);
     const std::vector<std::vector<Vector3>> state
         = model::BuildFoldPreview(mesh, progress);
 
@@ -122,21 +146,28 @@ PartFoldStateResult AddPartFoldStateModel(
             = namePrefix + "_部材" + std::to_string(number) + "板";
         target.AddRuledSurface(
             surfaceName, railNameByRow[number - 1], railNameByRow[number]);
-        if (sourcePlate.plate.HasVariableThickness()) {
+        if (fromSurface) {
             target.AddPlate(
                 plateName,
                 surfaceName,
-                sourcePlate.plate.Thickness(),
-                sourcePlate.plate.EndThickness(),
-                sourcePlate.plate.Direction(),
-                sourcePlate.material);
+                options.surfaceThicknessMillimeters,
+                model::PlateThicknessDirection::Centered,
+                "未指定");
+        } else if (sourcePlateCopy->plate.HasVariableThickness()) {
+            target.AddPlate(
+                plateName,
+                surfaceName,
+                sourcePlateCopy->plate.Thickness(),
+                sourcePlateCopy->plate.EndThickness(),
+                sourcePlateCopy->plate.Direction(),
+                sourcePlateCopy->material);
         } else {
             target.AddPlate(
                 plateName,
                 surfaceName,
-                sourcePlate.plate.Thickness(),
-                sourcePlate.plate.Direction(),
-                sourcePlate.material);
+                sourcePlateCopy->plate.Thickness(),
+                sourcePlateCopy->plate.Direction(),
+                sourcePlateCopy->material);
         }
         surfaceNameByPart[number - 1] = surfaceName;
         plateNameByPart[number - 1] = plateName;
@@ -148,8 +179,10 @@ PartFoldStateResult AddPartFoldStateModel(
     // 開口は元板材の(真の曲)面上にあるので、角ばった近似メッシュからは
     // 板厚の半分+近似偏差ぶん浮く。その分を許容して対応付ける。
     const double meshTolerance = 1.0
-        + std::max(std::abs(sourcePlate.plate.Thickness()),
-            std::abs(sourcePlate.plate.EndThickness()))
+        + (fromSurface
+            ? options.surfaceThicknessMillimeters
+            : std::max(std::abs(sourcePlateCopy->plate.Thickness()),
+                std::abs(sourcePlateCopy->plate.EndThickness())))
         + model.result.maximumDeviationMillimeters;
     const int openingSamples = 64;
     for (std::size_t openingIndex = 0; openingIndex < openings.size(); ++openingIndex) {

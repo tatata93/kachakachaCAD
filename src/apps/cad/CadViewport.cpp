@@ -976,7 +976,9 @@ bool CadViewport::WireOnActivePlane(const kachakacha::model::Wire& wire) const
 QCursor CadViewport::DrawingCrossCursor()
 {
     // 標準の十字カーソルは小さく視認しづらいので、白フチ付きの大きめ十字を使う(#3)。
-    static const QCursor cursor = [] {
+    // 注意: QCursor/QPixmap を関数staticの値で持つと QApplication 破棄後の
+    // デストラクタで落ちるため、意図的にポインタで保持して解放しない。
+    static const QCursor* cursor = [] {
         constexpr int kSize = 33;
         constexpr int kCenter = kSize / 2;
         QPixmap pixmap(kSize, kSize);
@@ -993,9 +995,9 @@ QCursor CadViewport::DrawingCrossCursor()
         painter.setCompositionMode(QPainter::CompositionMode_Clear);
         painter.fillRect(kCenter - 2, kCenter - 2, 5, 5, Qt::transparent);
         painter.end();
-        return QCursor(pixmap, kCenter, kCenter);
+        return new QCursor(pixmap, kCenter, kCenter);
     }();
-    return cursor;
+    return *cursor;
 }
 
 void CadViewport::RestoreViewFraming(Vector3 target, double pixelsPerMillimeter)
@@ -2839,18 +2841,14 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         const long long gridVIndex = std::llround((coordinates.v - gridOriginV_) / gridStep);
         const double snappedU = gridOriginU_ + static_cast<double>(gridUIndex) * gridStep;
         const double snappedV = gridOriginV_ + static_cast<double>(gridVIndex) * gridStep;
-        const bool mainPoint = gridUIndex % gridSubdivision_ == 0
-            && gridVIndex % gridSubdivision_ == 0;
-        // グリッド吸着は「最寄りの格子点までほぼ常に効く」強さにする(#3)。
-        // 半径は画面上の格子間隔の45%まで広げる(隣の格子点と取り合わない上限)。
-        const double minorRadius = std::clamp(
-            gridStep * pixelsPerMillimeter_ * 0.45,
-            2.5,
-            14.0);
+        // グリッド吸着は最寄りの格子点へ常に効く(#3、AutoCADのSNAPと同じ強さ)。
+        // カーソルは常にセル対角の半分(約0.71セル)以内にいるので0.75セルで必ず届く。
+        // 実在ジオメトリ(交点・端点・中点等)は階級で優先され、自由位置はCtrlで置ける。
+        const double gridRadius = std::max(gridStep * pixelsPerMillimeter_ * 0.75, 2.5);
         consider(
             DrawingSnapKind::Grid,
             activePlane_->ToWorld(snappedU, snappedV),
-            mainPoint ? std::max(minorRadius, 9.0) : minorRadius);
+            gridRadius);
     }
     return best;
 }

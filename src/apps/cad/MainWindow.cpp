@@ -313,6 +313,14 @@ void MainWindow::BuildUi()
     modelTree_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(modelTree_, &QTreeWidget::customContextMenuRequested, this,
         [this](const QPoint& position) { ShowModelTreeContextMenu(position); });
+    {
+        // F2 = 選択中のツリー項目の名前を変更(#2 リネーム)。
+        auto* renameShortcut = new QShortcut(QKeySequence(Qt::Key_F2), modelTree_);
+        renameShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(renameShortcut, &QShortcut::activated, this, [this] {
+            RenameModelTreeItem(modelTree_->currentItem());
+        });
+    }
     modelTree_->header()->setStretchLastSection(true);
     modelLayout->addWidget(modelFilter_);
     modelLayout->addWidget(modelTree_, 1);
@@ -4776,6 +4784,13 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
     };
 
     QMenu menu(this);
+    if ((targets.size() == 1 && clicked != nullptr) || clickedSetName.has_value()) {
+        QAction* renameAction = menu.addAction(QStringLiteral("名前を変更…\tF2"));
+        connect(renameAction, &QAction::triggered, this, [this, clicked] {
+            RenameModelTreeItem(clicked);
+        });
+        menu.addSeparator();
+    }
     if (!targets.empty()) {
         QMenu* assignMenu = menu.addMenu(
             QStringLiteral("部材グループへ割り当て（%1個）").arg(targets.size()));
@@ -4890,6 +4905,148 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
         }
     });
     menu.exec(modelTree_->viewport()->mapToGlobal(position));
+}
+
+void MainWindow::RenameModelTreeItem(QTreeWidgetItem* item)
+{
+    using kachakacha::model::ProjectObjectKind;
+    if (item == nullptr) {
+        return;
+    }
+
+    // 対象の種別と現在名を決める: オブジェクト(平面/点/線/面/板/実体)、
+    // 部材グループ、または自動セット「近似:<名前>」経由の近似モデル。
+    std::optional<ProjectObjectKind> objectKind;
+    std::optional<std::string> currentName;
+    bool isSet = false;
+    bool isPartModel = false;
+    if (item->data(0, kSelectionKindRole).isValid()
+        && item->data(0, kSelectionIndexRole).isValid()) {
+        const auto kind = static_cast<CadSelectionKind>(
+            item->data(0, kSelectionKindRole).toInt());
+        const int index = item->data(0, kSelectionIndexRole).toInt();
+        switch (kind) {
+        case CadSelectionKind::WorkPlane:
+            if (index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+                objectKind = ProjectObjectKind::WorkPlane;
+                currentName = project_.WorkPlanes()[index].name;
+            }
+            break;
+        case CadSelectionKind::Point:
+            if (index >= 0 && index < static_cast<int>(project_.Points().size())) {
+                objectKind = ProjectObjectKind::Point;
+                currentName = project_.Points()[index].name;
+            }
+            break;
+        case CadSelectionKind::Wire:
+            if (index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+                objectKind = ProjectObjectKind::Wire;
+                currentName = project_.Wires()[index].name;
+            }
+            break;
+        case CadSelectionKind::Surface:
+            if (index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+                objectKind = ProjectObjectKind::Surface;
+                currentName = project_.Surfaces()[index].name;
+            }
+            break;
+        case CadSelectionKind::Plate:
+            if (index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+                objectKind = ProjectObjectKind::Plate;
+                currentName = project_.Plates()[index].name;
+            }
+            break;
+        case CadSelectionKind::Body:
+            if (index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+                objectKind = ProjectObjectKind::Body;
+                currentName = project_.Bodies()[index].name;
+            }
+            break;
+        default:
+            break;
+        }
+    } else if (item->data(0, kSetNameRole).isValid()) {
+        const std::string setName = ToName(item->data(0, kSetNameRole).toString());
+        constexpr std::string_view kPartModelSetPrefix = "近似:";
+        if (setName.rfind(kPartModelSetPrefix, 0) == 0) {
+            // 自動セット経由: 近似モデル本体のリネームとして扱う。
+            isPartModel = true;
+            objectKind = ProjectObjectKind::PartModel;
+            currentName = setName.substr(kPartModelSetPrefix.size());
+        } else {
+            isSet = true;
+            currentName = setName;
+        }
+    }
+    if (!currentName.has_value()) {
+        statusBar()->showMessage(
+            QStringLiteral("名前を変更できる項目を選んでください"), 3000);
+        return;
+    }
+    if (objectKind == ProjectObjectKind::WorkPlane && IsOriginPlaneName(*currentName)) {
+        statusBar()->showMessage(QStringLiteral("原点平面の名前は変更できません"), 3000);
+        return;
+    }
+    // 近似モデルの派生物(境界線・部材面・_接続)は単独リネーム不可。
+    const auto derivedModelName = [&]() -> std::optional<std::string> {
+        if (objectKind == ProjectObjectKind::Wire) {
+            for (const auto& wire : project_.Wires()) {
+                if (wire.name == *currentName) {
+                    return wire.partModelSourceName;
+                }
+            }
+        } else if (objectKind == ProjectObjectKind::Surface) {
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name == *currentName) {
+                    return surface.partModelSourceName;
+                }
+            }
+        }
+        return std::nullopt;
+    }();
+    if (derivedModelName.has_value()) {
+        QMessageBox::information(this, QStringLiteral("名前を変更"),
+            QStringLiteral("「%1」は近似モデル「%2」の派生オブジェクトのため、単独では変更できません。\n"
+                           "近似モデル自体の名前を変更すると、派生の名前も連動して変わります。")
+                .arg(ToQString(*currentName), ToQString(*derivedModelName)));
+        return;
+    }
+
+    bool accepted = false;
+    const QString input = QInputDialog::getText(this,
+        QStringLiteral("名前を変更"),
+        isPartModel ? QStringLiteral("近似モデルの新しい名前（派生の境界・部材面も連動します）:")
+        : isSet ? QStringLiteral("部材グループの新しい名前:")
+                : QStringLiteral("新しい名前:"),
+        QLineEdit::Normal, ToQString(*currentName), &accepted);
+    if (!accepted || input.trimmed().isEmpty()
+        || ToName(input) == *currentName) {
+        return;
+    }
+    try {
+        ValidateObjectName(input);
+        const std::string newName = ToName(input);
+        Project candidate = project_;
+        if (isSet) {
+            candidate.RenameObjectSet(*currentName, newName);
+        } else {
+            candidate.RenameObject(*objectKind, *currentName, newName);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        if (referenceWireName_.has_value() && objectKind == ProjectObjectKind::Wire
+            && *referenceWireName_ == *currentName) {
+            referenceWireName_ = newName;
+        }
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("「%1」を「%2」へ変更しました（参照も更新済み）")
+                .arg(ToQString(*currentName), ToQString(newName)), 4000);
+    } catch (const std::exception& error) {
+        QMessageBox::warning(this, QStringLiteral("名前を変更"),
+            QString::fromUtf8(error.what()));
+    }
 }
 
 bool MainWindow::HandleModelTreeDrop(

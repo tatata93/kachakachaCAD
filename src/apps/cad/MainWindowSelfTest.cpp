@@ -1512,34 +1512,41 @@ bool MainWindow::RunCreationSelfTest()
                 project_.Points().back().point, expectedIntersection, 1.0e-8)) {
             return fail("ctrl bypass creates unsnapped point");
         }
-        std::optional<QPointF> freeScreenPoint;
-        for (int y = 25; y <= 85 && !freeScreenPoint.has_value(); ++y) {
-            for (int x = 25; x <= 85; ++x) {
+        // グリッド吸着は最寄りの格子点へ常に効く(#3)。構造点が近い場所では
+        // そちらが優先されるため、「吸着が必ずあり、格子吸着なら格子点に一致」を
+        // 確かめる。自由位置はCtrl(上の bypass テストで確認済み)。
+        const double minorStep = snapStepField_->value()
+            / static_cast<double>(viewport_->GridSubdivision());
+        bool gridSnapChecked = false;
+        for (int y = 25; y <= 85 && !gridSnapChecked; y += 3) {
+            for (int x = 25; x <= 85; x += 3) {
                 const QPointF candidate = center + QPointF(x, y);
                 sendMouse(QEvent::MouseMove, candidate, Qt::NoButton, Qt::NoButton);
                 if (!viewport_->DrawingSnapHover().has_value()) {
-                    freeScreenPoint = candidate;
-                    break;
+                    return fail("snap candidate always available");
                 }
+                if (viewport_->DrawingSnapHover()->kind != DrawingSnapKind::Grid) {
+                    continue;
+                }
+                const auto snapped = snapPlane.Project(viewport_->DrawingSnapHover()->point);
+                const double offsetU = std::abs(std::remainder(
+                    snapped.u - viewport_->GridOriginU(), minorStep));
+                const double offsetV = std::abs(std::remainder(
+                    snapped.v - viewport_->GridOriginV(), minorStep));
+                if (offsetU > 1.0e-6 || offsetV > 1.0e-6) {
+                    return fail("grid snap lands exactly on a grid point");
+                }
+                const std::size_t beforeGridPoint = project_.Points().size();
+                click(candidate);
+                if (project_.Points().size() != beforeGridPoint + 1) {
+                    return fail("create grid snapped point");
+                }
+                gridSnapChecked = true;
+                break;
             }
         }
-        if (!freeScreenPoint.has_value()) {
-            return fail("find unsnapped drawing position");
-        }
-        click(*freeScreenPoint);
-        if (project_.Points().size() != pointStart + 3) {
-            return fail("create freely positioned point");
-        }
-        const auto freeCoordinates = snapPlane.Project(project_.Points().back().point);
-        const double minorStep = snapStepField_->value()
-            / static_cast<double>(viewport_->GridSubdivision());
-        const double nearestGridU = viewport_->GridOriginU()
-            + std::round((freeCoordinates.u - viewport_->GridOriginU()) / minorStep) * minorStep;
-        const double nearestGridV = viewport_->GridOriginV()
-            + std::round((freeCoordinates.v - viewport_->GridOriginV()) / minorStep) * minorStep;
-        if (std::abs(freeCoordinates.u - nearestGridU) <= 1.0e-9
-            && std::abs(freeCoordinates.v - nearestGridV) <= 1.0e-9) {
-            return fail("free point must not be forced onto grid");
+        if (!gridSnapChecked) {
+            return fail("find a grid snapped position");
         }
 
         project_ = snapTestProject;
@@ -1637,6 +1644,38 @@ bool MainWindow::RunCreationSelfTest()
         project_ = wave1Saved;
         undoStack_ = wave1Undo;
         redoStack_ = wave1Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
+        // #5: 正対していない3Dビューでも「カーソルのレイ×作図面」で作図できる。
+        const Project wave2Saved = project_;
+        const auto wave2Undo = undoStack_;
+        const auto wave2Redo = redoStack_;
+        const std::size_t wave2WireStart = project_.Wires().size();
+        viewport_->SetIsometricView();
+        SetViewportTool(ViewportTool::DrawLine);
+        const QPointF firstScreen = center + QPointF(-80.0, 30.0);
+        const QPointF secondScreen = center + QPointF(60.0, -25.0);
+        click(firstScreen, Qt::ControlModifier);
+        click(secondScreen, Qt::ControlModifier);
+        if (project_.Wires().size() != wave2WireStart + 1) {
+            return fail("draw line in rotated 3d view");
+        }
+        const Wire obliqueLine = project_.Wires().back().wire;
+        if (std::abs(selectedDrawingPlane.Project(obliqueLine.Start()).w) > 1.0e-6
+            || std::abs(selectedDrawingPlane.Project(obliqueLine.End()).w) > 1.0e-6) {
+            return fail("oblique drawing lands on work plane");
+        }
+        if (QLineF(viewport_->ScreenPoint(obliqueLine.Start()), firstScreen).length() > 1.5
+            || QLineF(viewport_->ScreenPoint(obliqueLine.End()), secondScreen).length() > 1.5) {
+            return fail("oblique drawing matches cursor ray");
+        }
+        viewport_->AlignToActiveWorkPlane();
+        project_ = wave2Saved;
+        undoStack_ = wave2Undo;
+        redoStack_ = wave2Redo;
         RefreshModelViews(false);
         UpdateHistoryActions();
     }

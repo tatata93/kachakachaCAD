@@ -401,6 +401,14 @@ public:
     bool RemovePlate(std::string_view name);
     bool RemoveBody(std::string_view name);
 
+    //! 名前を変更し、参照する全フィールド(投影元・先、面の元ワイヤ、板の元面、
+    //! 開口、近似モデルの元・スコープ、積層、拘束、寸法、セット所属)を一括更新する。
+    //! 近似モデルの派生物(partModelSourceName 付き)は単独リネーム不可。
+    //! 近似モデル自体のリネームは派生物(<名前>_境界N 等)と自動セットも連動して付け替える。
+    void RenameObject(ProjectObjectKind kind, std::string_view oldName, std::string newName);
+    //! セット(グループ)名の変更。自動セットは不可。子の親参照も更新する。
+    void RenameObjectSet(std::string_view oldName, std::string newName);
+
     [[nodiscard]] const std::vector<NamedWorkPlane>& WorkPlanes() const noexcept { return workPlanes_; }
     [[nodiscard]] const std::vector<NamedPoint>& Points() const noexcept { return points_; }
     [[nodiscard]] const std::vector<NamedWire>& Wires() const noexcept { return wires_; }
@@ -444,6 +452,8 @@ private:
     //! 近似元(面 or 板材の厚み中央面)のサンプラを返す。見つからなければ投げる。
     [[nodiscard]] PartSource RequirePartModelSource(const NamedPartModel& model) const;
     [[nodiscard]] ObjectSet* FindObjectSetMutable(std::string_view name);
+    //! 参照フィールドの付け替え(kind の名前 old → new)。ガード無しの内部処理。
+    void RenameReferences(ProjectObjectKind kind, std::string_view oldName, const std::string& newName);
 
     std::vector<NamedWorkPlane> workPlanes_;
     std::vector<NamedPoint> points_;

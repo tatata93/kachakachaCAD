@@ -2237,6 +2237,338 @@ bool Project::RemoveBody(std::string_view name)
     return true;
 }
 
+void Project::RenameReferences(
+    ProjectObjectKind kind, std::string_view oldName, const std::string& newName)
+{
+    const auto renameIn = [&](std::string& value) {
+        if (value == oldName) {
+            value = newName;
+        }
+    };
+    const auto renameList = [&](std::vector<std::string>& values) {
+        for (std::string& value : values) {
+            renameIn(value);
+        }
+    };
+    // セット所属は全種共通。
+    for (ObjectSet& set : objectSets_) {
+        for (ObjectSetMember& member : set.members) {
+            if (member.kind == kind && member.name == oldName) {
+                member.name = newName;
+            }
+        }
+    }
+    switch (kind) {
+    case ProjectObjectKind::WorkPlane:
+        for (NamedPoint& point : points_) {
+            if (point.sourcePlaneName.has_value() && *point.sourcePlaneName == oldName) {
+                point.sourcePlaneName = newName;
+            }
+        }
+        for (NamedWire& wire : wires_) {
+            if (wire.metadata.sourcePlaneName.has_value()
+                && *wire.metadata.sourcePlaneName == oldName) {
+                wire.metadata.sourcePlaneName = newName;
+            }
+        }
+        for (ReferenceDimension& dimension : referenceDimensions_) {
+            for (DimensionReference* reference : {&dimension.first, &dimension.second}) {
+                if (reference->kind == DimensionReferenceKind::WorkPlane) {
+                    renameIn(reference->objectName);
+                }
+            }
+        }
+        break;
+    case ProjectObjectKind::Point:
+        break;
+    case ProjectObjectKind::Wire:
+        for (NamedWire& wire : wires_) {
+            if (wire.projection.has_value()) {
+                renameIn(wire.projection->sourceWireName);
+            }
+            if (wire.plateOffset.has_value()) {
+                renameIn(wire.plateOffset->sourceWireName);
+            }
+        }
+        for (NamedSurface& surface : surfaces_) {
+            renameList(surface.sourceWireNames);
+            renameList(surface.guideWireNames);
+            renameList(surface.openingWireNames);
+            for (std::vector<std::string>& group : surface.sourceWireGroups) {
+                renameList(group);
+            }
+        }
+        for (NamedPlate& plate : plates_) {
+            renameList(plate.openingWireNames);
+            renameList(plate.reliefCutWireNames);
+            renameList(plate.splitWireNames);
+        }
+        for (NamedPartModel& model : partModels_) {
+            renameList(model.scopeWireNames);
+            renameList(model.boundaryWireNames);
+            renameList(model.openingWireNames);
+            renameList(model.adaptedWireNames);
+        }
+        for (WireCoincidentConstraint& constraint : coincidentConstraints_) {
+            renameIn(constraint.anchor.wireName);
+            renameIn(constraint.follower.wireName);
+        }
+        for (WireTangentConstraint& constraint : tangentConstraints_) {
+            renameIn(constraint.anchor.wireName);
+            renameIn(constraint.follower.wireName);
+        }
+        for (ReferenceDimension& dimension : referenceDimensions_) {
+            for (DimensionReference* reference : {&dimension.first, &dimension.second}) {
+                if (reference->kind == DimensionReferenceKind::Wire) {
+                    renameIn(reference->objectName);
+                }
+            }
+        }
+        break;
+    case ProjectObjectKind::Surface:
+        for (NamedWire& wire : wires_) {
+            if (wire.projection.has_value()) {
+                renameIn(wire.projection->targetSurfaceName);
+            }
+        }
+        for (NamedPlate& plate : plates_) {
+            renameIn(plate.sourceSurfaceName);
+        }
+        for (NamedBody& body : bodies_) {
+            renameIn(body.sourceSurfaceName);
+        }
+        for (NamedPartModel& model : partModels_) {
+            renameIn(model.sourceSurfaceName);
+            renameList(model.scopeSurfaceNames);
+            renameList(model.partSurfaceNames);
+            renameList(model.adaptedSurfaceNames);
+        }
+        break;
+    case ProjectObjectKind::Plate:
+        for (NamedWire& wire : wires_) {
+            if (wire.plateOffset.has_value()) {
+                renameIn(wire.plateOffset->plateName);
+            }
+        }
+        for (NamedPlate& plate : plates_) {
+            renameIn(plate.laminateBaseName);
+        }
+        for (NamedPartModel& model : partModels_) {
+            renameIn(model.sourcePlateName);
+        }
+        break;
+    case ProjectObjectKind::Body:
+        break;
+    case ProjectObjectKind::PartModel:
+        for (NamedWire& wire : wires_) {
+            if (wire.partModelSourceName.has_value() && *wire.partModelSourceName == oldName) {
+                wire.partModelSourceName = newName;
+            }
+        }
+        for (NamedSurface& surface : surfaces_) {
+            if (surface.partModelSourceName.has_value()
+                && *surface.partModelSourceName == oldName) {
+                surface.partModelSourceName = newName;
+            }
+        }
+        break;
+    }
+}
+
+void Project::RenameObject(ProjectObjectKind kind, std::string_view oldName, std::string newName)
+{
+    if (newName.empty()) {
+        throw std::invalid_argument("New name must not be empty.");
+    }
+    if (newName == oldName) {
+        return;
+    }
+    const auto ensureUnique = [&](const auto& container) {
+        const auto clash = std::find_if(container.begin(), container.end(), [&](const auto& entry) {
+            return entry.name == newName;
+        });
+        if (clash != container.end()) {
+            throw std::invalid_argument("Name already exists: " + newName);
+        }
+    };
+    switch (kind) {
+    case ProjectObjectKind::WorkPlane: {
+        const auto entry = std::find_if(workPlanes_.begin(), workPlanes_.end(),
+            [&](const NamedWorkPlane& plane) { return plane.name == oldName; });
+        if (entry == workPlanes_.end()) {
+            throw std::invalid_argument("Work plane not found: " + std::string(oldName));
+        }
+        ensureUnique(workPlanes_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::Point: {
+        const auto entry = std::find_if(points_.begin(), points_.end(),
+            [&](const NamedPoint& point) { return point.name == oldName; });
+        if (entry == points_.end()) {
+            throw std::invalid_argument("Point not found: " + std::string(oldName));
+        }
+        ensureUnique(points_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::Wire: {
+        const auto entry = std::find_if(wires_.begin(), wires_.end(),
+            [&](const NamedWire& wire) { return wire.name == oldName; });
+        if (entry == wires_.end()) {
+            throw std::invalid_argument("Wire not found: " + std::string(oldName));
+        }
+        if (entry->partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                "Part-model derived wires cannot be renamed directly: " + std::string(oldName));
+        }
+        ensureUnique(wires_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::Surface: {
+        const auto entry = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& surface) { return surface.name == oldName; });
+        if (entry == surfaces_.end()) {
+            throw std::invalid_argument("Surface not found: " + std::string(oldName));
+        }
+        if (entry->partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                "Part-model derived surfaces cannot be renamed directly: " + std::string(oldName));
+        }
+        ensureUnique(surfaces_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::Plate: {
+        const auto entry = std::find_if(plates_.begin(), plates_.end(),
+            [&](const NamedPlate& plate) { return plate.name == oldName; });
+        if (entry == plates_.end()) {
+            throw std::invalid_argument("Plate not found: " + std::string(oldName));
+        }
+        ensureUnique(plates_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::Body: {
+        const auto entry = std::find_if(bodies_.begin(), bodies_.end(),
+            [&](const NamedBody& body) { return body.name == oldName; });
+        if (entry == bodies_.end()) {
+            throw std::invalid_argument("Body not found: " + std::string(oldName));
+        }
+        ensureUnique(bodies_);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        break;
+    }
+    case ProjectObjectKind::PartModel: {
+        const auto entry = std::find_if(partModels_.begin(), partModels_.end(),
+            [&](const NamedPartModel& model) { return model.name == oldName; });
+        if (entry == partModels_.end()) {
+            throw std::invalid_argument("Part model not found: " + std::string(oldName));
+        }
+        ensureUnique(partModels_);
+        // 派生物(<モデル名>_境界N / _部材N / _部材N_穴M)を新しい接頭辞へ連動リネーム。
+        const std::string oldPrefix = std::string(oldName) + "_";
+        const std::string newPrefix = newName + "_";
+        const auto renamedDerived = [&](const std::string& derivedName) {
+            if (derivedName.rfind(oldPrefix, 0) == 0) {
+                return newPrefix + derivedName.substr(oldPrefix.size());
+            }
+            return derivedName;
+        };
+        const auto renameDerivedList = [&](std::vector<std::string>& names,
+                                           ProjectObjectKind derivedKind, bool isWire) {
+            for (std::string& derivedName : names) {
+                const std::string replacement = renamedDerived(derivedName);
+                if (replacement == derivedName) {
+                    continue;
+                }
+                const bool clash = isWire
+                    ? std::any_of(wires_.begin(), wires_.end(),
+                          [&](const NamedWire& wire) { return wire.name == replacement; })
+                    : std::any_of(surfaces_.begin(), surfaces_.end(),
+                          [&](const NamedSurface& surface) { return surface.name == replacement; });
+                if (clash) {
+                    throw std::invalid_argument("Name already exists: " + replacement);
+                }
+                if (isWire) {
+                    for (NamedWire& wire : wires_) {
+                        if (wire.name == derivedName) {
+                            wire.name = replacement;
+                        }
+                    }
+                } else {
+                    for (NamedSurface& surface : surfaces_) {
+                        if (surface.name == derivedName) {
+                            surface.name = replacement;
+                        }
+                    }
+                }
+                RenameReferences(derivedKind, derivedName, replacement);
+                derivedName = replacement;
+            }
+        };
+        renameDerivedList(entry->boundaryWireNames, ProjectObjectKind::Wire, true);
+        renameDerivedList(entry->openingWireNames, ProjectObjectKind::Wire, true);
+        renameDerivedList(entry->adaptedWireNames, ProjectObjectKind::Wire, true);
+        renameDerivedList(entry->partSurfaceNames, ProjectObjectKind::Surface, false);
+        renameDerivedList(entry->adaptedSurfaceNames, ProjectObjectKind::Surface, false);
+        entry->name = newName;
+        RenameReferences(kind, oldName, newName);
+        // 自動セット「近似:<名前>」も連動して付け替える。
+        const std::string oldSetName = "近似:" + std::string(oldName);
+        if (FindObjectSetMutable(oldSetName) != nullptr) {
+            const std::string newSetName = "近似:" + newName;
+            if (FindObjectSetMutable(newSetName) != nullptr) {
+                throw std::invalid_argument("Set name already exists: " + newSetName);
+            }
+            for (ObjectSet& set : objectSets_) {
+                if (set.name == oldSetName) {
+                    set.name = newSetName;
+                }
+                if (set.parentName == oldSetName) {
+                    set.parentName = newSetName;
+                }
+            }
+        }
+        break;
+    }
+    }
+}
+
+void Project::RenameObjectSet(std::string_view oldName, std::string newName)
+{
+    if (newName.empty()) {
+        throw std::invalid_argument("New set name must not be empty.");
+    }
+    if (newName == oldName) {
+        return;
+    }
+    ObjectSet* set = FindObjectSetMutable(oldName);
+    if (set == nullptr) {
+        throw std::invalid_argument("Set not found: " + std::string(oldName));
+    }
+    if (set->automatic) {
+        throw std::invalid_argument(
+            "Automatic sets cannot be renamed: " + std::string(oldName));
+    }
+    if (FindObjectSetMutable(newName) != nullptr) {
+        throw std::invalid_argument("Set name already exists: " + newName);
+    }
+    set->name = newName;
+    for (ObjectSet& child : objectSets_) {
+        if (child.parentName == oldName) {
+            child.parentName = newName;
+        }
+    }
+}
+
 std::optional<WorkPlane> Project::FindWorkPlane(std::string_view name) const
 {
     for (const NamedWorkPlane& workPlane : workPlanes_) {

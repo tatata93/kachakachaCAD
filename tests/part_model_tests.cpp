@@ -4,6 +4,7 @@
 #include "kachakacha/model/PartModel.h"
 #include "kachakacha/model/Project.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -1173,6 +1174,126 @@ int main()
                 Require(!surface.partModelSourceName.has_value(),
                     "adapted surfaces removed with the model");
             }
+        }
+
+        // --- リネーム(#2): 全参照の一括更新と派生物の連動 ---
+        {
+            Project renameProject = MakeBottleLikeProject();
+            PartApproximationOptions renameOptions;
+            renameOptions.splitAxis = PartSplitAxis::V;
+            renameOptions.automaticBoundaries = true;
+            renameOptions.maximumDeviationMillimeters = 0.4;
+            renameOptions.maximumPartCount = 8;
+            renameOptions.minimumPartWidthMillimeters = 3.0;
+            renameProject.AddPartModel("近似R", "胴板", renameOptions);
+            renameProject.CreateObjectSet("部品箱");
+            renameProject.AssignObjectToSet(
+                kachakacha::model::ProjectObjectKind::Wire, "断面1", "部品箱");
+
+            // ワイヤのリネーム: 面の元ワイヤ・セット所属が追従する。
+            renameProject.RenameObject(
+                kachakacha::model::ProjectObjectKind::Wire, "断面1", "裾断面");
+            {
+                const auto& surface = renameProject.Surfaces().front();
+                Require(std::find(surface.sourceWireNames.begin(),
+                            surface.sourceWireNames.end(), "裾断面")
+                        != surface.sourceWireNames.end(),
+                    "surface source wires follow the wire rename");
+                bool inSet = false;
+                for (const auto& set : renameProject.ObjectSets()) {
+                    for (const auto& member : set.members) {
+                        inSet = inSet || (set.name == "部品箱" && member.name == "裾断面");
+                    }
+                }
+                Require(inSet, "set membership follows the wire rename");
+            }
+
+            // 面のリネーム: 板材の元面・近似モデルの参照が追従し、再構築も通る。
+            renameProject.RenameObject(
+                kachakacha::model::ProjectObjectKind::Surface, "胴", "胴体");
+            Require(renameProject.Plates().front().sourceSurfaceName == "胴体",
+                "plate source follows the surface rename");
+
+            // 板材のリネーム: 近似モデルの元板材が追従する。
+            renameProject.RenameObject(
+                kachakacha::model::ProjectObjectKind::Plate, "胴板", "胴体板");
+            Require(renameProject.PartModels().front().sourcePlateName == "胴体板",
+                "part model source follows the plate rename");
+
+            // 近似モデルのリネーム: 派生(<名前>_境界N/_部材N)と自動セットが連動する。
+            renameProject.RenameObject(
+                kachakacha::model::ProjectObjectKind::PartModel, "近似R", "胴近似");
+            {
+                const auto& model = renameProject.PartModels().front();
+                Require(model.name == "胴近似", "part model renamed");
+                Require(!model.boundaryWireNames.empty()
+                        && model.boundaryWireNames.front().rfind("胴近似_境界", 0) == 0,
+                    "derived boundary names follow the model rename");
+                bool boundaryFound = false;
+                for (const auto& wire : renameProject.Wires()) {
+                    if (wire.name == model.boundaryWireNames.front()) {
+                        boundaryFound = true;
+                        Require(wire.partModelSourceName.has_value()
+                                && *wire.partModelSourceName == "胴近似",
+                            "derived wire mark follows the model rename");
+                    }
+                    Require(wire.name.rfind("近似R_", 0) != 0, "no stale derived wire names");
+                }
+                Require(boundaryFound, "renamed derived boundary wire exists");
+                bool setFound = false;
+                for (const auto& set : renameProject.ObjectSets()) {
+                    setFound = setFound || set.name == "近似:胴近似";
+                    Require(set.name != "近似:近似R", "old automatic set is gone");
+                }
+                Require(setFound, "automatic set follows the model rename");
+            }
+
+            // 派生物の単独リネームと重複名は拒否。
+            bool derivedRejected = false;
+            try {
+                renameProject.RenameObject(kachakacha::model::ProjectObjectKind::Wire,
+                    renameProject.PartModels().front().boundaryWireNames.front(), "勝手な名前");
+            } catch (const std::exception&) {
+                derivedRejected = true;
+            }
+            Require(derivedRejected, "derived wires cannot be renamed directly");
+            bool duplicateRejected = false;
+            try {
+                renameProject.RenameObject(
+                    kachakacha::model::ProjectObjectKind::Wire, "断面2", "断面3");
+            } catch (const std::exception&) {
+                duplicateRejected = true;
+            }
+            Require(duplicateRejected, "duplicate names are rejected");
+
+            // リネーム後もスクリプト往復・再生成が通る(参照の整合)。
+            std::ostringstream renamedScript;
+            kachakacha::io::WriteProjectScript(renamedScript, renameProject);
+            std::istringstream renamedInput(renamedScript.str());
+            Project renamedLoaded = kachakacha::io::LoadProjectScript(renamedInput, "renamed");
+            Require(renamedLoaded.PartModels().front().name == "胴近似"
+                    && renamedLoaded.PartModels().front().sourcePlateName == "胴体板",
+                "renamed project round-trips");
+
+            // グループ名の変更: 子の親参照が追従し、自動セットは拒否。
+            renameProject.CreateObjectSet("子箱");
+            renameProject.SetObjectSetParent("子箱", "部品箱");
+            renameProject.RenameObjectSet("部品箱", "パーツ箱");
+            {
+                bool childFollows = false;
+                for (const auto& set : renameProject.ObjectSets()) {
+                    childFollows = childFollows
+                        || (set.name == "子箱" && set.parentName == "パーツ箱");
+                }
+                Require(childFollows, "child parent reference follows the set rename");
+            }
+            bool automaticRejected = false;
+            try {
+                renameProject.RenameObjectSet("近似:胴近似", "別名");
+            } catch (const std::exception&) {
+                automaticRejected = true;
+            }
+            Require(automaticRejected, "automatic sets cannot be renamed");
         }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';

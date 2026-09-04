@@ -290,6 +290,8 @@ private:
     void CreateCurveControlPoints();
     void ShowShortcutReference();
     void ShowModelTreeContextMenu(const QPoint& position);
+    //! ツリー項目の名前変更(#2)。F2・右クリック「名前を変更…」から。
+    void RenameModelTreeItem(QTreeWidgetItem* item);
     //! ツリーのドラッグ&ドロップ: オブジェクトは部材グループへ所属変更、
     //! グループはグループの入れ子へ移動。ドロップ先が未分類/空欄なら最上位・未所属へ。
     bool HandleModelTreeDrop(const QList<QTreeWidgetItem*>& dragged, QTreeWidgetItem* target);

@@ -829,6 +829,13 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         showTab(5);
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("part-model")) {
+        // 近似ユニット(#15)の作成UI。
+        if (partModelModeAction_ != nullptr) {
+            partModelModeAction_->trigger();
+        }
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else {
         qWarning() << "unknown manual screenshot state:" << state;
         return false;

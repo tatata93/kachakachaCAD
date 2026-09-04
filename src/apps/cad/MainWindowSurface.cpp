@@ -1489,7 +1489,16 @@ void MainWindow::ProjectSelectedWiresAcrossSurfaces()
                 const Run& run = runs[runIndex];
                 const int surfaceIndex = surfaceIndices[run.surfacePosition];
                 const std::string surfaceName = project_.Surfaces()[surfaceIndex].name;
-                const double span = run.endParameter - run.startParameter;
+                // 境目ちょうどの点は面の縁の上に載り、面の内外判定が不安定になる。
+                // 区間を1/4サンプルぶんだけ内側へ寄せ、必ず自分の面の内側に置く。
+                double startParameter = run.startParameter;
+                double endParameter = run.endParameter;
+                const double boundaryMargin = 0.25 / kSamples;
+                if (runs.size() > 1 && endParameter - startParameter > 4.0 * boundaryMargin) {
+                    startParameter += boundaryMargin;
+                    endParameter -= boundaryMargin;
+                }
+                const double span = endParameter - startParameter;
                 if (span <= 1.0e-6) {
                     continue;
                 }
@@ -1497,7 +1506,7 @@ void MainWindow::ProjectSelectedWiresAcrossSurfaces()
                 std::vector<Vector3> piecePoints;
                 piecePoints.reserve(kPieceSamples + 2);
                 for (int sample = 0; sample <= kPieceSamples; ++sample) {
-                    double t = run.startParameter
+                    double t = startParameter
                         + span * static_cast<double>(sample) / kPieceSamples;
                     if (closedSource) {
                         t = std::fmod(t + 1.0, 1.0);

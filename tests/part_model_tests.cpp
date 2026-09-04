@@ -761,6 +761,94 @@ int main()
             Require((customFirst - defaultFirst).Length() < 1.0e-6,
                 "rails before the flattened crease stay in place");
         }
+
+        // --- 積層(重ね板、合意9) ---
+        {
+            Project laminateProject = MakeBottleLikeProject();
+            laminateProject.AddPlate(
+                "外板", "胴", 0.3, PlateThicknessDirection::Positive, "プラ板");
+
+            // 同じ元面の積層: 下の板の外側へ厚みぶんずれる。
+            laminateProject.AddLaminatedPlate("外板_L2", "外板", 0.3, {});
+            laminateProject.AddLaminatedPlate("外板_L3", "外板_L2", 0.2, {});
+            const auto layer2 = laminateProject.FindPlate("外板_L2");
+            const auto layer3 = laminateProject.FindPlate("外板_L3");
+            Require(layer2.has_value() && layer3.has_value(), "laminated plates created");
+            Require(std::abs(layer2->BaseOffset() - 0.3) < 1.0e-9,
+                "second layer sits on top of the base thickness");
+            Require(std::abs(layer3->BaseOffset() - 0.6) < 1.0e-9,
+                "third layer stacks on the second");
+            const auto basePlate = laminateProject.FindPlate("外板");
+            const Vector3 baseOuter = basePlate->Evaluate(0.5, 0.5, 1.0);
+            const Vector3 layerInner = layer2->Evaluate(0.5, 0.5, 0.0);
+            Require((baseOuter - layerInner).Length() < 1.0e-9,
+                "layer bottom touches the base top");
+            Require(laminateProject.Plates().back().laminateBaseName == "外板_L2",
+                "laminate relation stored");
+            // 材質は下の板から引き継がれる。
+            Require(laminateProject.Plates().back().material == "プラ板",
+                "laminate inherits the base material");
+
+            // 循環と削除の保護。
+            bool cycleGuarded = false;
+            try {
+                laminateProject.SetPlateLaminate("外板", "外板_L3");
+            } catch (const std::exception&) {
+                cycleGuarded = true;
+            }
+            Require(cycleGuarded, "laminate cycles are rejected");
+            bool removeGuarded = false;
+            try {
+                (void)laminateProject.RemovePlate("外板");
+            } catch (const std::exception&) {
+                removeGuarded = true;
+            }
+            Require(removeGuarded, "laminate base cannot be removed while layers exist");
+
+            // 中央合わせの板を土台にした同面積層は拒否。
+            laminateProject.AddPlate(
+                "中央板", "胴", 0.3, PlateThicknessDirection::Centered, "プラ板");
+            bool centeredGuarded = false;
+            try {
+                laminateProject.AddLaminatedPlate("中央板_L2", "中央板", 0.3, {});
+            } catch (const std::exception&) {
+                centeredGuarded = true;
+            }
+            Require(centeredGuarded, "centered bases are rejected for same-surface laminates");
+
+            // 別の面に描いた板同士は「関係の記録のみ」(幾何は変えない)。
+            laminateProject.AddWire("帯線1", Wire::Line({50.0, 0.0, 0.0}, {70.0, 0.0, 0.0}));
+            laminateProject.AddWire("帯線2", Wire::Line({50.0, 0.0, 8.0}, {70.0, 0.0, 8.0}));
+            laminateProject.AddRuledSurface("帯", "帯線1", "帯線2");
+            laminateProject.AddPlate(
+                "帯板", "帯", 0.3, PlateThicknessDirection::Positive, "プラ板");
+            laminateProject.SetPlateLaminate("帯板", "外板");
+            Require(std::abs(laminateProject.FindPlate("帯板")->BaseOffset()) < 1.0e-12,
+                "cross-surface laminate keeps the plate geometry unchanged");
+
+            // スクリプト往復で関係と下駄が復元される。
+            std::ostringstream saved;
+            kachakacha::io::WriteProjectScript(saved, laminateProject);
+            Require(saved.str().find("plate_laminate 外板_L2 外板") != std::string::npos,
+                "laminate relation saved to the script");
+            std::istringstream input(saved.str());
+            Project loadedLaminate
+                = kachakacha::io::LoadProjectScript(input, "laminate");
+            Require(std::abs(loadedLaminate.FindPlate("外板_L3")->BaseOffset() - 0.6) < 1.0e-9,
+                "laminate offsets recomputed on load");
+            bool laminateFound = false;
+            for (const auto& plate : loadedLaminate.Plates()) {
+                if (plate.name == "帯板") {
+                    laminateFound = plate.laminateBaseName == "外板";
+                }
+            }
+            Require(laminateFound, "cross-surface laminate relation survives the round trip");
+
+            // 関係の解除で下駄も戻る。
+            loadedLaminate.SetPlateLaminate("外板_L3", {});
+            Require(std::abs(loadedLaminate.FindPlate("外板_L3")->BaseOffset()) < 1.0e-12,
+                "clearing the laminate removes the offset");
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

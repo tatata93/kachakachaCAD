@@ -1214,6 +1214,8 @@ void MainWindow::BuildMenusAndToolbar()
             QStringLiteral("展開片を分ける位置を指定する"));
         addSurfaceTool(QStringLiteral("板を分割"), QStringLiteral("板材を分割"),
             QStringLiteral("板材を複数の板に分割する"));
+        addSurfaceTool(QStringLiteral("積層"), QStringLiteral("板材を重ねて積層"),
+            QStringLiteral("薄板を重ねて段差の表現や補強をする（重ね板）"));
         surfaceToolbar_->addSeparator();
         addSurfaceTool(QStringLiteral("ライトケース"), QStringLiteral("飛び出すライトケース"),
             QStringLiteral("面から突き出す小箱（ライトなどのケース）を作る"));

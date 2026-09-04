@@ -869,6 +869,150 @@ void Project::AddPlate(
     });
 }
 
+void Project::SetPlateLaminate(std::string_view name, std::string_view basePlateName)
+{
+    const auto plate = std::find_if(plates_.begin(), plates_.end(),
+        [&](const NamedPlate& candidate) { return candidate.name == name; });
+    if (plate == plates_.end()) {
+        throw std::invalid_argument("Plate name does not exist: " + std::string(name));
+    }
+    if (basePlateName.empty()) {
+        plate->laminateBaseName.clear();
+        if (std::abs(plate->plate.BaseOffset()) > 1.0e-12) {
+            plate->plate = Plate(
+                plate->plate.SourceSurface(),
+                plate->plate.Thickness(),
+                plate->plate.EndThickness(),
+                plate->plate.Direction(),
+                plate->plate.Range(),
+                0.0);
+        }
+        return;
+    }
+    if (basePlateName == name) {
+        throw std::invalid_argument("Plate cannot laminate onto itself: " + std::string(name));
+    }
+    const auto base = std::find_if(plates_.begin(), plates_.end(),
+        [&](const NamedPlate& candidate) { return candidate.name == basePlateName; });
+    if (base == plates_.end()) {
+        throw std::invalid_argument(
+            "Laminate base plate does not exist: " + std::string(basePlateName));
+    }
+    // 循環の拒否(base から親をたどって name に戻らないこと)。
+    std::string_view cursor = basePlateName;
+    for (std::size_t guard = 0; guard <= plates_.size(); ++guard) {
+        const auto current = std::find_if(plates_.begin(), plates_.end(),
+            [&](const NamedPlate& candidate) { return candidate.name == cursor; });
+        if (current == plates_.end() || current->laminateBaseName.empty()) {
+            break;
+        }
+        if (current->laminateBaseName == name) {
+            throw std::invalid_argument(
+                "Laminate relation would create a cycle: " + std::string(name));
+        }
+        cursor = current->laminateBaseName;
+    }
+    if (base->sourceSurfaceName == plate->sourceSurfaceName) {
+        // 同じ元面の積層は幾何も追従する。v1では可変厚・中央合わせの base を許可しない。
+        if (base->plate.HasVariableThickness()) {
+            throw std::invalid_argument(
+                "Laminating onto a variable-thickness plate is not supported yet: "
+                + std::string(basePlateName));
+        }
+        if (base->plate.Direction() == PlateThicknessDirection::Centered) {
+            throw std::invalid_argument(
+                "Laminate base must use a one-sided thickness direction (not centered): "
+                + std::string(basePlateName));
+        }
+        if (plate->plate.Direction() != base->plate.Direction()) {
+            throw std::invalid_argument(
+                "Laminated plate must use the same thickness direction as its base.");
+        }
+    }
+    plate->laminateBaseName = std::string(basePlateName);
+    RecomputeLaminateOffsets();
+}
+
+void Project::AddLaminatedPlate(
+    std::string name,
+    std::string_view basePlateName,
+    double thickness,
+    std::string material)
+{
+    const auto base = std::find_if(plates_.begin(), plates_.end(),
+        [&](const NamedPlate& candidate) { return candidate.name == basePlateName; });
+    if (base == plates_.end()) {
+        throw std::invalid_argument(
+            "Laminate base plate does not exist: " + std::string(basePlateName));
+    }
+    if (name.empty()) {
+        throw std::invalid_argument("Plate name must not be empty.");
+    }
+    if (FindPlate(name).has_value()) {
+        throw std::invalid_argument("Plate name already exists: " + name);
+    }
+    if (material.empty()) {
+        material = base->material;
+    }
+    const std::string baseName(basePlateName);
+    plates_.push_back({
+        std::move(name),
+        Plate(base->plate.SourceSurface(), thickness, thickness,
+            base->plate.Direction(), base->plate.Range()),
+        base->sourceSurfaceName,
+        std::move(material),
+        {},
+        true,
+        {},
+        {},
+    });
+    SetPlateLaminate(plates_.back().name, baseName);
+}
+
+void Project::RecomputeLaminateOffsets()
+{
+    // 積層の連鎖(最長でも板の枚数)ぶんだけ反復し、下から順に下駄を確定させる。
+    for (std::size_t pass = 0; pass < plates_.size(); ++pass) {
+        bool changed = false;
+        for (NamedPlate& plate : plates_) {
+            if (plate.laminateBaseName.empty()) {
+                continue;
+            }
+            const auto base = std::find_if(plates_.begin(), plates_.end(),
+                [&](const NamedPlate& candidate) {
+                    return candidate.name == plate.laminateBaseName;
+                });
+            if (base == plates_.end()) {
+                throw std::logic_error(
+                    "Laminate base plate is missing: " + plate.laminateBaseName);
+            }
+            if (base->sourceSurfaceName != plate.sourceSurfaceName) {
+                continue; // 別の面に描いた積層は関係の記録のみ。
+            }
+            double desired = base->plate.BaseOffset();
+            if (base->plate.Direction() == PlateThicknessDirection::Positive) {
+                desired += base->plate.Thickness();
+            } else if (base->plate.Direction() == PlateThicknessDirection::Negative) {
+                desired -= base->plate.Thickness();
+            }
+            if (std::abs(plate.plate.BaseOffset() - desired) <= 1.0e-12) {
+                continue;
+            }
+            plate.plate = Plate(
+                plate.plate.SourceSurface(),
+                plate.plate.Thickness(),
+                plate.plate.EndThickness(),
+                plate.plate.Direction(),
+                plate.plate.Range(),
+                desired);
+            changed = true;
+        }
+        if (!changed) {
+            break;
+        }
+    }
+}
+
 void Project::AddSurfaceJig(
     std::string name,
     std::string sourceSurfaceName,
@@ -1094,7 +1238,8 @@ void Project::UpdatePlate(
                 }
             }
             plate.plate = Plate(
-                *sourceSurface, startThickness, endThickness, direction, plate.plate.Range());
+                *sourceSurface, startThickness, endThickness, direction, plate.plate.Range(),
+                plate.plate.BaseOffset());
             plate.sourceSurfaceName = std::move(sourceSurfaceName);
             plate.material = std::move(material);
             candidate.RebuildDependentGeometry();
@@ -1519,7 +1664,8 @@ void Project::SetPlateRange(std::string_view name, PlateSurfaceRange range)
             plate.plate.Thickness(),
             plate.plate.EndThickness(),
             plate.plate.Direction(),
-            range);
+            range,
+            plate.plate.BaseOffset());
         candidate.RebuildDependentGeometry();
         *this = std::move(candidate);
         return;
@@ -1622,9 +1768,16 @@ void Project::SplitPlate(
         (beforeSplit ? firstReliefCuts : secondReliefCuts).push_back(cutName);
     }
 
+    for (const NamedPlate& other : plates_) {
+        if (other.laminateBaseName == position->name) {
+            throw std::invalid_argument(
+                "Plate is used as laminate base by: " + other.name);
+        }
+    }
     const std::string sourceSurfaceName = position->sourceSurfaceName;
     const std::string material = position->material;
     const bool visible = position->visible;
+    const std::string laminateBaseName = position->laminateBaseName;
     const std::size_t insertionIndex = static_cast<std::size_t>(std::distance(plates_.begin(), position));
     plates_.erase(position);
     NamedPlate firstNamedPlate{
@@ -1636,6 +1789,7 @@ void Project::SplitPlate(
         visible,
         std::move(firstReliefCuts),
         {},
+        laminateBaseName,
     };
     NamedPlate secondNamedPlate{
         std::move(secondName),
@@ -1646,6 +1800,7 @@ void Project::SplitPlate(
         visible,
         std::move(secondReliefCuts),
         {},
+        laminateBaseName,
     };
     plates_.insert(
         plates_.begin() + static_cast<std::ptrdiff_t>(insertionIndex),
@@ -1987,6 +2142,12 @@ bool Project::RemovePlate(std::string_view name)
     for (const NamedPartModel& model : partModels_) {
         if (model.sourcePlateName == name) {
             throw std::invalid_argument("Plate is used by part model: " + model.name);
+        }
+    }
+    for (const NamedPlate& other : plates_) {
+        if (other.laminateBaseName == name) {
+            throw std::invalid_argument(
+                "Plate is used as laminate base by: " + other.name);
         }
     }
     plates_.erase(position);
@@ -2413,7 +2574,8 @@ void Project::RebuildDependentGeometry()
             plate.plate.Thickness(),
             plate.plate.EndThickness(),
             plate.plate.Direction(),
-            plate.plate.Range());
+            plate.plate.Range(),
+            plate.plate.BaseOffset());
         for (const std::string& openingName : plate.openingWireNames) {
             if (!OpeningLiesWithinRange(*sourceSurface, RequireWire(openingName), plate.plate.Range())) {
                 throw std::invalid_argument("Plate opening moved outside split piece: " + openingName);
@@ -2446,8 +2608,10 @@ void Project::RebuildDependentGeometry()
             plate.plate.Thickness(),
             plate.plate.EndThickness(),
             plate.plate.Direction(),
-            plate.plate.Range());
+            plate.plate.Range(),
+            plate.plate.BaseOffset());
     }
+    RecomputeLaminateOffsets();
 
     for (NamedWire& wire : wires_) {
         if (!wire.plateOffset.has_value()) {

@@ -1440,6 +1440,77 @@ QWidget* MainWindow::BuildSurfacePanel()
     splitButton->setProperty("manualAnchor", QStringLiteral("plateSplit"));
     connect(splitButton, &QPushButton::clicked, this, &MainWindow::SplitSelectedPlate);
     layout->addWidget(splitButton);
+
+    // --- 積層(重ね板、合意9) ---
+    auto* laminateTitle = new QLabel(QStringLiteral("板材を重ねて積層"));
+    laminateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(laminateTitle);
+    auto* laminateHint = new QLabel(QStringLiteral(
+        "薄板を重ねて段差の表現や補強をします。同じ元面の積層は下の板の外側へ
+"
+        "自動でずれて重なり、下の板の厚みを変えると追従します。"));
+    laminateHint->setWordWrap(true);
+    laminateHint->setStyleSheet("color: #5b6a74;");
+    layout->addWidget(laminateHint);
+    auto* laminateForm = new QFormLayout;
+    laminateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    laminateThicknessSpin_ = MakePositiveField(0.3);
+    laminateThicknessSpin_->setSuffix(QStringLiteral(" mm"));
+    laminateForm->addRow(QStringLiteral("1層の板厚"), laminateThicknessSpin_);
+    laminateCountSpin_ = new QSpinBox;
+    laminateCountSpin_->setRange(1, 20);
+    laminateCountSpin_->setValue(1);
+    laminateCountSpin_->setToolTip(QStringLiteral("追加する層の枚数(下の板は数えません)"));
+    laminateForm->addRow(QStringLiteral("追加する層数"), laminateCountSpin_);
+    laminateTargetHeightSpin_ = new QDoubleSpinBox;
+    laminateTargetHeightSpin_->setRange(0.0, 100.0);
+    laminateTargetHeightSpin_->setDecimals(2);
+    laminateTargetHeightSpin_->setSingleStep(0.1);
+    laminateTargetHeightSpin_->setSuffix(QStringLiteral(" mm"));
+    laminateTargetHeightSpin_->setToolTip(
+        QStringLiteral("目標の段差高さ。入力すると必要な層数を下に提案します(0なら未使用)"));
+    laminateForm->addRow(QStringLiteral("目標高さ"), laminateTargetHeightSpin_);
+    laminateSuggestLabel_ = new QLabel;
+    laminateSuggestLabel_->setStyleSheet("color: #5b6a74;");
+    laminateForm->addRow(QString(), laminateSuggestLabel_);
+    layout->addLayout(laminateForm);
+    const auto updateLaminateSuggestion = [this] {
+        const double height = laminateTargetHeightSpin_->value();
+        const double thickness = laminateThicknessSpin_->value();
+        if (height <= 0.0 || thickness <= 0.0) {
+            laminateSuggestLabel_->clear();
+            return;
+        }
+        const int layers = std::max(1, static_cast<int>(std::ceil(height / thickness - 1.0e-9)));
+        laminateSuggestLabel_->setText(
+            QStringLiteral("提案: %1層（%2 mm × %1 = %3 mm）")
+                .arg(layers)
+                .arg(thickness, 0, 'f', 2)
+                .arg(layers * thickness, 0, 'f', 2));
+    };
+    connect(laminateThicknessSpin_, &QDoubleSpinBox::valueChanged, this,
+        [updateLaminateSuggestion](double) { updateLaminateSuggestion(); });
+    connect(laminateTargetHeightSpin_, &QDoubleSpinBox::valueChanged, this,
+        [updateLaminateSuggestion](double) { updateLaminateSuggestion(); });
+    auto* laminateAddButton = new QPushButton(QStringLiteral("選択中の板材の上に積層を追加"));
+    laminateAddButton->setObjectName("primaryButton");
+    laminateAddButton->setToolTip(QStringLiteral(
+        "3D画面で板材を1枚選んでから押します。その外側へ指定枚数の層を追加します"));
+    connect(laminateAddButton, &QPushButton::clicked, this, &MainWindow::AddLaminationToSelectedPlate);
+    layout->addWidget(laminateAddButton);
+    auto* laminateLinkRow = new QHBoxLayout;
+    auto* laminateLinkButton = new QPushButton(QStringLiteral("選択2枚を積層関係に"));
+    laminateLinkButton->setToolTip(QStringLiteral(
+        "全層を自分で描いた場合に使います。先に選んだ板が下、後に選んだ板が上です。
+"
+        "同じ元面なら幾何も追従し、別の面なら関係の記録だけを付けます"));
+    connect(laminateLinkButton, &QPushButton::clicked, this, &MainWindow::LinkSelectedPlatesAsLaminate);
+    auto* laminateClearButton = new QPushButton(QStringLiteral("積層関係を解除"));
+    laminateClearButton->setToolTip(QStringLiteral("選択中の板材の積層関係を外します"));
+    connect(laminateClearButton, &QPushButton::clicked, this, &MainWindow::ClearSelectedPlateLaminate);
+    laminateLinkRow->addWidget(laminateLinkButton, 1);
+    laminateLinkRow->addWidget(laminateClearButton, 1);
+    layout->addLayout(laminateLinkRow);
     layout->addStretch(1);
 
     // モードのツール(上部)で選んだ1セクションだけを表示する(ADR 0025)。
@@ -1455,6 +1526,7 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("展開時の切れ目"),
         QStringLiteral("展開片の分割線"),
         QStringLiteral("板材を分割"),
+        QStringLiteral("板材を重ねて積層"),
     });
 
     auto* scrollArea = new QScrollArea;

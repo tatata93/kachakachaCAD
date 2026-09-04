@@ -151,6 +151,10 @@ struct NamedPlate {
     bool visible = true;
     std::vector<std::string> reliefCutWireNames;
     std::vector<std::string> splitWireNames;
+    //! 積層(重ね板、合意9): この板が重なる下の板の名前(空=独立)。
+    //! 同じ元面の板同士なら幾何も追従し、下の板の外側へ厚みぶんずらして作られる。
+    //! 別の面に描いた板同士なら関係の記録のみ(幾何は変えない)。
+    std::string laminateBaseName;
 };
 
 struct NamedBody {
@@ -336,6 +340,14 @@ public:
     void RemovePlateReliefCut(std::string_view plateName, std::string_view wireName);
     void AddPlateSplitLine(std::string_view plateName, std::string wireName);
     void RemovePlateSplitLine(std::string_view plateName, std::string_view wireName);
+    //! 積層関係の設定/解除(basePlateName が空なら解除)。同じ元面なら幾何も追従する。
+    void SetPlateLaminate(std::string_view name, std::string_view basePlateName);
+    //! base 板の外側に積層板を1枚追加する(同じ元面・同じ方向・同じ範囲)。
+    void AddLaminatedPlate(
+        std::string name,
+        std::string_view basePlateName,
+        double thickness,
+        std::string material);
     void AddPartModel(
         std::string name,
         std::string sourcePlateName,
@@ -409,6 +421,7 @@ private:
     void ApplyTangentConstraints();
     void ApplyWireConstraints();
     void RebuildDependentGeometry();
+    void RecomputeLaminateOffsets();
     void RebuildPartModels();
     void RegeneratePartModelDerivedObjects(NamedPartModel& model);
     //! 近似元(面 or 板材の厚み中央面)のサンプラを返す。見つからなければ投げる。

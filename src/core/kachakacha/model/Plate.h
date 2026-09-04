@@ -44,13 +44,15 @@ public:
         Surface sourceSurface,
         double thickness,
         PlateThicknessDirection direction,
-        PlateSurfaceRange range = {});
+        PlateSurfaceRange range = {},
+        double baseOffsetMillimeters = 0.0);
     Plate(
         Surface sourceSurface,
         double startThickness,
         double endThickness,
         PlateThicknessDirection direction,
-        PlateSurfaceRange range = {});
+        PlateSurfaceRange range = {},
+        double baseOffsetMillimeters = 0.0);
 
     [[nodiscard]] const Surface& SourceSurface() const noexcept { return sourceSurface_; }
     [[nodiscard]] double Thickness() const noexcept { return thickness_; }
@@ -59,6 +61,8 @@ public:
     [[nodiscard]] bool HasVariableThickness(double tolerance = 1.0e-12) const noexcept;
     [[nodiscard]] PlateThicknessDirection Direction() const noexcept { return direction_; }
     [[nodiscard]] const PlateSurfaceRange& Range() const noexcept { return range_; }
+    //! 積層(重ね板)用: 元面の法線方向の下駄(mm)。板はこのぶんだけ浮いた位置に作られる。
+    [[nodiscard]] double BaseOffset() const noexcept { return baseOffsetMillimeters_; }
     [[nodiscard]] double MinimumOffset() const noexcept;
     [[nodiscard]] double MaximumOffset() const noexcept;
     [[nodiscard]] double MinimumOffset(double localV) const noexcept;
@@ -79,6 +83,7 @@ private:
     double endThickness_ = 0.0;
     PlateThicknessDirection direction_ = PlateThicknessDirection::Positive;
     PlateSurfaceRange range_;
+    double baseOffsetMillimeters_ = 0.0;
 };
 
 } // namespace kachakacha::model

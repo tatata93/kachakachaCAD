@@ -196,6 +196,9 @@ private:
     void AddSelectedPlateSplitLines();
     void RemoveSelectedPlateSplitLines();
     void SplitSelectedPlate();
+    void AddLaminationToSelectedPlate();
+    void LinkSelectedPlatesAsLaminate();
+    void ClearSelectedPlateLaminate();
     void UpdatePlateSplitPreview();
     void ExportSelectedBody(bool step);
     void CreateSelectedPlateFlatPatternModel();
@@ -530,6 +533,10 @@ private:
     QCheckBox* plateVariableThickness_ = nullptr;
     QDoubleSpinBox* plateEndThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
+    QSpinBox* laminateCountSpin_ = nullptr;
+    QDoubleSpinBox* laminateThicknessSpin_ = nullptr;
+    QDoubleSpinBox* laminateTargetHeightSpin_ = nullptr;
+    QLabel* laminateSuggestLabel_ = nullptr;
     QComboBox* plateMaterial_ = nullptr;
     QLineEdit* jigName_ = nullptr;
     QComboBox* jigSurface_ = nullptr;

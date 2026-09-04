@@ -942,6 +942,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 } else {
                     project.AddPartModel(name, sourceObjectName, options);
                 }
+            } else if (command == "plate_laminate") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "plate");
+                const std::string baseName = ReadName(stream, sourceName, lineNumber, "laminate base plate");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPlateLaminate(name, baseName);
             } else if (command == "part_model_fold") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
                 const int count = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "fold value count"));
@@ -1542,6 +1547,14 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             RequireScriptNameSafe(splitWireName, "Plate split-line wire");
             output << "plate_split_line " << namedPlate.name << ' ' << splitWireName << '\n';
         }
+    }
+    for (const auto& namedPlate : project.Plates()) {
+        if (namedPlate.laminateBaseName.empty()) {
+            continue;
+        }
+        RequireScriptNameSafe(namedPlate.laminateBaseName, "Laminate base plate");
+        output << "plate_laminate " << namedPlate.name << ' '
+               << namedPlate.laminateBaseName << '\n';
     }
     const auto setStateToken = [](model::ObjectSetState state) {
         switch (state) {

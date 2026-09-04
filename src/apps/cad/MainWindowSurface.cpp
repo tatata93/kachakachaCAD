@@ -1606,3 +1606,128 @@ void MainWindow::UpdatePlateSplitPreview()
         static_cast<PlateSplitAxis>(plateSplitAxis_->currentData().toInt()),
         plateSplitPosition_->value() / 100.0);
 }
+
+// ---- 積層(重ね板、合意9) --------------------------------------------------
+
+namespace {
+
+//! 3D画面で選択されている板材のインデックスを選択順で返す(重複除去)。
+[[nodiscard]] std::vector<int> SelectedPlateIndicesInOrder(
+    const std::vector<CadSelection>& selections, std::size_t plateCount)
+{
+    std::vector<int> indices;
+    for (const CadSelection& selection : selections) {
+        if (selection.kind != CadSelectionKind::Plate || selection.index < 0
+            || selection.index >= static_cast<int>(plateCount)) {
+            continue;
+        }
+        if (std::find(indices.begin(), indices.end(), selection.index) == indices.end()) {
+            indices.push_back(selection.index);
+        }
+    }
+    return indices;
+}
+
+} // namespace
+
+void MainWindow::AddLaminationToSelectedPlate()
+{
+    try {
+        const std::vector<int> indices = SelectedPlateIndicesInOrder(
+            viewport_->Selections(), project_.Plates().size());
+        if (indices.size() != 1) {
+            throw std::invalid_argument("積層の土台になる板材を1枚だけ選択してください。");
+        }
+        const double thickness = laminateThicknessSpin_->value();
+        const int layers = laminateCountSpin_->value();
+        std::string baseName = project_.Plates()[indices.front()].name;
+
+        Project candidate = project_;
+        std::vector<std::string> created;
+        for (int layer = 0; layer < layers; ++layer) {
+            // 名前は <土台>_L2, _L3, ...(空き番号)。
+            std::string layerName;
+            for (int suffix = 2;; ++suffix) {
+                layerName = baseName + "_L" + std::to_string(suffix);
+                if (!candidate.FindPlate(layerName).has_value()) {
+                    break;
+                }
+            }
+            candidate.AddLaminatedPlate(layerName, baseName, thickness, {});
+            created.push_back(layerName);
+            baseName = layerName; // 次の層はこの層の上に重ねる。
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("積層を%1層追加しました（%2 ほか）")
+                .arg(created.size())
+                .arg(QString::fromStdString(created.front())),
+            5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::LinkSelectedPlatesAsLaminate()
+{
+    try {
+        const std::vector<int> indices = SelectedPlateIndicesInOrder(
+            viewport_->Selections(), project_.Plates().size());
+        if (indices.size() != 2) {
+            throw std::invalid_argument(
+                "積層関係にする板材を2枚選択してください（先=下、後=上）。");
+        }
+        const std::string baseName = project_.Plates()[indices[0]].name;
+        const std::string upperName = project_.Plates()[indices[1]].name;
+
+        Project candidate = project_;
+        candidate.SetPlateLaminate(upperName, baseName);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("%1 を %2 の上の積層として関連付けました")
+                .arg(QString::fromStdString(upperName), QString::fromStdString(baseName)),
+            5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ClearSelectedPlateLaminate()
+{
+    try {
+        const std::vector<int> indices = SelectedPlateIndicesInOrder(
+            viewport_->Selections(), project_.Plates().size());
+        if (indices.empty()) {
+            throw std::invalid_argument("積層関係を解除する板材を選択してください。");
+        }
+        Project candidate = project_;
+        int cleared = 0;
+        for (const int index : indices) {
+            const auto& plate = project_.Plates()[index];
+            if (plate.laminateBaseName.empty()) {
+                continue;
+            }
+            candidate.SetPlateLaminate(plate.name, {});
+            ++cleared;
+        }
+        if (cleared == 0) {
+            throw std::invalid_argument("選択中の板材に積層関係はありません。");
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("積層関係を%1件解除しました").arg(cleared), 4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}

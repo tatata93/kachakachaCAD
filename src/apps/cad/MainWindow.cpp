@@ -141,6 +141,7 @@ using kachakacha::model::MeasureWireRadius;
 using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::NamedWire;
 using kachakacha::model::ExtendWireToBoundary;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::ReferenceDimension;
@@ -610,6 +611,7 @@ void MainWindow::BuildUi()
             || (tool == ViewportTool::Measure && index != 5)) {
             SetViewportTool(ViewportTool::Select);
         }
+        UpdateSurfaceCreationPreview();
         UpdatePlateSplitPreview();
         UpdatePlateAssemblyGuidePreview();
         SyncWorkModeToTab(index);
@@ -6039,7 +6041,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
     }
     if (surfaceSelectionLabel_ != nullptr) {
-        if (surfaceType_ != nullptr && surfaceType_->currentIndex() == 3
+        if (surfaceType_ != nullptr && ConfiguredSurfaceMode() == 3
             && !selectedWireNames.isEmpty()) {
             QStringList roles;
             for (int index = 0; index < selectedWireNames.size(); ++index) {
@@ -6055,6 +6057,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     .arg(selectedSurfaceCount));
         }
     }
+    // 選択が変わるたびに面の自動判定+半透明プレビューを更新(#10/#11)。
+    UpdateSurfaceCreationPreview();
     if (projectionSelectionLabel_ != nullptr) {
         projectionSelectionLabel_->setText(QStringLiteral("投影するワイヤー: %1本").arg(selectedWireCount));
     }

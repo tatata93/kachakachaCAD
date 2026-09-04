@@ -330,6 +330,12 @@ public:
     }
     void SetWireOffsetPreview(std::vector<kachakacha::model::Wire> wires);
     [[nodiscard]] std::size_t WireOffsetPreviewCount() const noexcept { return wireOffsetPreviews_.size(); }
+    //! 面作成のライブプレビュー(#11)。選択から試作した面を半透明表示。nulloptで消す。
+    void SetSurfaceCreationPreview(std::optional<kachakacha::model::Surface> surface);
+    [[nodiscard]] bool HasSurfaceCreationPreview() const noexcept
+    {
+        return surfacePreview_.has_value();
+    }
     void SetMeasurementMode(MeasurementMode mode);
     [[nodiscard]] MeasurementMode CurrentMeasurementMode() const noexcept { return measurementMode_; }
     void ClearMeasurement();
@@ -585,6 +591,7 @@ private:
     bool partFoldPreviewDetached_ = false;
     std::vector<int> partFoldPreviewCreases_;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
+    std::optional<kachakacha::model::Surface> surfacePreview_; //!< 面作成プレビュー(#11)
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;
     std::vector<MeasurementPick> measurementPicks_;
     std::optional<kachakacha::geometry::Vector3> measurementOverlayFirst_;

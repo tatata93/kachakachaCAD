@@ -193,7 +193,7 @@ void MainWindow::ValidateSurfaceInputGroup(
         wires.push_back(found->wire);
     }
     Wire composite = JoinWireChain(wires);
-    const int mode = surfaceType_ != nullptr ? surfaceType_->currentIndex() : 0;
+    const int mode = surfaceType_ != nullptr ? ConfiguredSurfaceMode() : 0;
     if (role == SurfaceInputRole::Boundary
         && requireClosedBoundary && !composite.IsClosed()) {
         throw std::invalid_argument(
@@ -260,11 +260,12 @@ void MainWindow::RefreshSurfaceInputTable()
         surfaceInputTable_->setItem(row, 3, sourcesItem);
     }
 
-    const int mode = surfaceType_->currentIndex();
-    surfaceAddBoundaryOrGuideButton_->setVisible(mode == 0 || mode == 3);
+    const int mode = ConfiguredSurfaceMode();
+    surfaceAddBoundaryOrGuideButton_->setVisible(mode == 0 || mode == 3 || mode == -1);
     surfaceAddBoundaryOrGuideButton_->setText(mode == 0
             ? QStringLiteral("輪郭を追加")
-            : QStringLiteral("外形を追加"));
+            : mode == 3 ? QStringLiteral("外形を追加")
+                        : QStringLiteral("輪郭/外形を追加"));
     surfaceAddSectionButton_->setVisible(mode != 0);
     surfaceAppendGroupButton_->setEnabled(!surfaceInputGroups_.empty());
     if (surfaceCreateButton_ != nullptr) {
@@ -356,10 +357,11 @@ void MainWindow::AddSelectedSurfaceInputGroup(SurfaceInputRole role)
 {
     try {
         SplitSelectedWiresAtBranchPoints();
-        const int mode = surfaceType_->currentIndex();
-        if ((role == SurfaceInputRole::Boundary && mode != 0)
-            || (role == SurfaceInputRole::Guide && mode != 3)
-            || (role == SurfaceInputRole::Section && mode == 0)) {
+        const int mode = ConfiguredSurfaceMode();
+        if (mode >= 0
+            && ((role == SurfaceInputRole::Boundary && mode != 0)
+                || (role == SurfaceInputRole::Guide && mode != 3)
+                || (role == SurfaceInputRole::Section && mode == 0))) {
             throw std::invalid_argument("現在の面の作り方では、その役割を追加できません。");
         }
         const int sameRoleCount = static_cast<int>(std::count_if(
@@ -758,6 +760,225 @@ bool MainWindow::SplitSelectedWiresAtBranchPoints()
     return true;
 }
 
+int MainWindow::ConfiguredSurfaceMode() const
+{
+    if (surfaceType_ == nullptr) {
+        return 0;
+    }
+    const QVariant data = surfaceType_->currentData();
+    return data.isValid() ? data.toInt() : surfaceType_->currentIndex();
+}
+
+MainWindow::SurfaceModeResolution MainWindow::ResolveAutomaticSurfaceMode(
+    const std::vector<int>& wireIndices) const
+{
+    SurfaceModeResolution resolution;
+    // 表(グループ)を使っている場合は行の役割と数から一意に決まる。
+    if (!surfaceInputGroups_.empty()) {
+        std::size_t boundaries = 0;
+        std::size_t guides = 0;
+        std::size_t sections = 0;
+        for (const SurfaceInputGroup& group : surfaceInputGroups_) {
+            if (group.role == SurfaceInputRole::Boundary) {
+                ++boundaries;
+            } else if (group.role == SurfaceInputRole::Guide) {
+                ++guides;
+            } else {
+                ++sections;
+            }
+        }
+        if (boundaries == 1 && guides == 0 && sections == 0) {
+            resolution.mode = 0;
+            resolution.label = QStringLiteral("平面");
+        } else if (sections == 2 && boundaries == 0 && guides == 0) {
+            resolution.mode = 1;
+            resolution.label = QStringLiteral("2断面の曲面");
+        } else if (sections >= 3 && boundaries == 0 && guides == 0) {
+            resolution.mode = 2;
+            resolution.label = QStringLiteral("ロフト面");
+        } else if (guides == 2 && sections >= 1 && boundaries == 0) {
+            resolution.mode = 3;
+            resolution.label = QStringLiteral("外形ガイド付き面");
+        } else {
+            resolution.reason = QStringLiteral(
+                "表の構成(輪郭%1/外形%2/断面%3)から作り方を判定できません")
+                    .arg(boundaries).arg(guides).arg(sections);
+        }
+        return resolution;
+    }
+
+    if (wireIndices.empty()) {
+        resolution.reason = QStringLiteral("面にする線を選択してください");
+        return resolution;
+    }
+    std::vector<const kachakacha::model::NamedWire*> wires;
+    for (int index : wireIndices) {
+        if (index < 0 || index >= static_cast<int>(project_.Wires().size())) {
+            resolution.reason = QStringLiteral("選択した線が見つかりません");
+            return resolution;
+        }
+        wires.push_back(&project_.Wires()[index]);
+    }
+
+    // 1) 全選択が端点でつながって閉じた平面輪郭になるなら平面。
+    {
+        std::vector<Wire> chain;
+        chain.reserve(wires.size());
+        for (const kachakacha::model::NamedWire* wire : wires) {
+            chain.push_back(wire->wire);
+        }
+        try {
+            const Wire joined = JoinWireChain(chain);
+            if (joined.IsClosed(kWireChainConnectionTolerance)) {
+                (void)kachakacha::model::Surface::Planar(joined);
+                resolution.mode = 0;
+                resolution.label = QStringLiteral("平面");
+                return resolution;
+            }
+        } catch (const std::exception&) {
+        }
+    }
+
+    // 2) ガイドの自動判定(#10): 他の線の端点が2本以上載っている線をガイド候補に。
+    //    ちょうど2本あり、残りが断面として1本以上あればガイド付き面。
+    if (wireIndices.size() >= 3) {
+        constexpr double kTouchTolerance = 0.05; // mm(面生成側の接続判定と同じ)
+        const auto endpointOnWire = [&](const Wire& wire, Vector3 endpoint) {
+            constexpr int kSamples = 96;
+            double best = std::numeric_limits<double>::infinity();
+            for (int sample = 0; sample <= kSamples; ++sample) {
+                best = std::min(best,
+                    (wire.Evaluate(static_cast<double>(sample) / kSamples) - endpoint).Length());
+                if (best <= kTouchTolerance) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        std::vector<int> guidePositions;
+        for (std::size_t candidateIndex = 0; candidateIndex < wires.size(); ++candidateIndex) {
+            int touching = 0;
+            for (std::size_t otherIndex = 0; otherIndex < wires.size(); ++otherIndex) {
+                if (otherIndex == candidateIndex) {
+                    continue;
+                }
+                const Wire& other = wires[otherIndex]->wire;
+                if (endpointOnWire(wires[candidateIndex]->wire, other.Start())
+                    || endpointOnWire(wires[candidateIndex]->wire, other.End())) {
+                    ++touching;
+                }
+            }
+            if (touching >= 2) {
+                guidePositions.push_back(static_cast<int>(candidateIndex));
+            }
+        }
+        if (guidePositions.size() == 2
+            && wireIndices.size() - guidePositions.size() >= 1) {
+            resolution.mode = 3;
+            resolution.label = QStringLiteral("外形ガイド付き面");
+            resolution.orderedWireIndices.push_back(wireIndices[guidePositions[0]]);
+            resolution.orderedWireIndices.push_back(wireIndices[guidePositions[1]]);
+            for (std::size_t index = 0; index < wireIndices.size(); ++index) {
+                if (static_cast<int>(index) != guidePositions[0]
+                    && static_cast<int>(index) != guidePositions[1]) {
+                    resolution.orderedWireIndices.push_back(wireIndices[index]);
+                }
+            }
+            return resolution;
+        }
+    }
+
+    // 3) 残りは断面の本数で決める: 2本→ルールド / 3本以上→ロフト。
+    if (wireIndices.size() == 2) {
+        resolution.mode = 1;
+        resolution.label = QStringLiteral("2断面の曲面");
+    } else if (wireIndices.size() >= 3) {
+        resolution.mode = 2;
+        resolution.label = QStringLiteral("ロフト面");
+    } else {
+        resolution.reason = QStringLiteral(
+            "1本の開いた線からは面を作れません（閉じた輪郭にするか断面を追加）");
+    }
+    return resolution;
+}
+
+void MainWindow::UpdateSurfaceCreationPreview()
+{
+    if (viewport_ == nullptr || surfaceType_ == nullptr) {
+        return;
+    }
+    // 面・板材モードのときだけ試作する(他モードでは消す)。
+    const bool surfaceTab = toolsTabs_ != nullptr && toolsTabs_->currentIndex() == 2;
+    std::vector<int> wireIndices;
+    for (const CadSelection& selection : viewport_->Selections()) {
+        if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(project_.Wires().size())
+            && std::find(wireIndices.begin(), wireIndices.end(), selection.index)
+                == wireIndices.end()) {
+            wireIndices.push_back(selection.index);
+        }
+    }
+    // 追記行(自動判定/エラー)は毎回貼り替える(重複追記を防ぐ)。
+    const auto setLabelSuffix = [this](const QString& suffix) {
+        if (surfaceSelectionLabel_ == nullptr) {
+            return;
+        }
+        QStringList kept;
+        for (const QString& line : surfaceSelectionLabel_->text().split(QLatin1Char('\n'))) {
+            if (!line.startsWith(QStringLiteral("自動判定:"))
+                && !line.startsWith(QStringLiteral("この選択では作れません"))) {
+                kept << line;
+            }
+        }
+        if (!suffix.isEmpty()) {
+            kept << suffix;
+        }
+        surfaceSelectionLabel_->setText(kept.join(QLatin1Char('\n')));
+    };
+
+    if (!surfaceTab || (wireIndices.empty() && surfaceInputGroups_.empty())) {
+        viewport_->SetSurfaceCreationPreview(std::nullopt);
+        setLabelSuffix({});
+        return;
+    }
+
+    int mode = ConfiguredSurfaceMode();
+    QString label;
+    std::vector<int> ordered = wireIndices;
+    if (mode < 0) {
+        const SurfaceModeResolution resolution = ResolveAutomaticSurfaceMode(wireIndices);
+        if (resolution.mode < 0) {
+            viewport_->SetSurfaceCreationPreview(std::nullopt);
+            setLabelSuffix(resolution.reason.isEmpty()
+                    ? QString()
+                    : QStringLiteral("自動判定: %1").arg(resolution.reason));
+            return;
+        }
+        mode = resolution.mode;
+        label = resolution.label;
+        if (!resolution.orderedWireIndices.empty()) {
+            ordered = resolution.orderedWireIndices;
+        }
+    }
+
+    try {
+        Project scratch = project_;
+        std::string previewName = "__surface_preview";
+        while (scratch.FindSurface(previewName).has_value()) {
+            previewName += "_";
+        }
+        AddSurfaceFromConfiguredInputs(scratch, previewName, mode, ordered);
+        viewport_->SetSurfaceCreationPreview(scratch.Surfaces().back().surface);
+        setLabelSuffix(label.isEmpty()
+                ? QString()
+                : QStringLiteral("自動判定: %1（半透明が完成予想）").arg(label));
+    } catch (const std::exception& error) {
+        viewport_->SetSurfaceCreationPreview(std::nullopt);
+        setLabelSuffix(QStringLiteral("この選択では作れません: %1")
+                .arg(QString::fromUtf8(error.what()).section('\n', 0, 0)));
+    }
+}
+
 void MainWindow::CreateSurfaceFromSelection()
 {
     try {
@@ -781,9 +1002,23 @@ void MainWindow::CreateSurfaceFromSelection()
 
         Project candidate = project_;
         const std::string name = ToName(surfaceName_->text());
-        const int surfaceMode = surfaceType_->currentIndex();
+        int surfaceMode = ConfiguredSurfaceMode();
+        std::vector<int> orderedWireIndices = wireIndices;
+        QString autoLabel;
+        if (surfaceMode < 0) {
+            // 自動(#10): 選択内容から作り方を判定する。
+            const SurfaceModeResolution resolution = ResolveAutomaticSurfaceMode(wireIndices);
+            if (resolution.mode < 0) {
+                throw std::invalid_argument(resolution.reason.toStdString());
+            }
+            surfaceMode = resolution.mode;
+            autoLabel = resolution.label;
+            if (!resolution.orderedWireIndices.empty()) {
+                orderedWireIndices = resolution.orderedWireIndices;
+            }
+        }
         AddSurfaceFromConfiguredInputs(
-            candidate, name, surfaceMode, wireIndices);
+            candidate, name, surfaceMode, orderedWireIndices);
 
         RecordUndo();
         project_ = std::move(candidate);
@@ -804,7 +1039,7 @@ void MainWindow::CreateSurfaceFromSelection()
                   });
         surfaceInputGroups_.clear();
         RefreshSurfaceInputTable();
-        const QString message = surfaceMode == 0
+        QString message = surfaceMode == 0
             ? sourceWireCount == 1
                 ? QStringLiteral("閉じたワイヤーから平面を作成しました")
                 : QStringLiteral("%1本の直線・曲線をつないで平面を作成しました")
@@ -815,6 +1050,9 @@ void MainWindow::CreateSurfaceFromSelection()
             ? QStringLiteral("%1断面からロフト面を作成しました").arg(logicalInputCount)
             : QStringLiteral("外形2本と断面%1本からガイド付き面を作成しました")
                   .arg(logicalInputCount - 2);
+        if (!autoLabel.isEmpty()) {
+            message = QStringLiteral("自動判定=%1: ").arg(autoLabel) + message;
+        }
         statusBar()->showMessage(message, 3500);
     } catch (const std::exception& error) {
         const QString message = FriendlySurfaceChainError(error);
@@ -1180,8 +1418,17 @@ void MainWindow::CreatePlateFromSelectedWires()
             surfaceName = plateName + "_surface" + std::to_string(suffix++);
         }
         if (!surfaceInputGroups_.empty()) {
+            int plateSurfaceMode = ConfiguredSurfaceMode();
+            if (plateSurfaceMode < 0) {
+                const SurfaceModeResolution resolution =
+                    ResolveAutomaticSurfaceMode(wireIndices);
+                if (resolution.mode < 0) {
+                    throw std::invalid_argument(resolution.reason.toStdString());
+                }
+                plateSurfaceMode = resolution.mode;
+            }
             AddSurfaceFromConfiguredInputs(
-                candidate, surfaceName, surfaceType_->currentIndex(), wireIndices);
+                candidate, surfaceName, plateSurfaceMode, wireIndices);
         } else {
             std::vector<std::string> wireNames;
             wireNames.reserve(wireIndices.size());
@@ -1204,7 +1451,7 @@ void MainWindow::CreatePlateFromSelectedWires()
                 }
             }
             const bool guidedLoft = surfaceType_ != nullptr
-                && surfaceType_->currentIndex() == 3 && wireNames.size() >= 3;
+                && ConfiguredSurfaceMode() == 3 && wireNames.size() >= 3;
             if (guidedLoft) {
                 std::vector<std::string> sectionNames(
                     wireNames.begin() + 2, wireNames.end());

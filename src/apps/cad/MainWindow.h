@@ -181,6 +181,19 @@ private:
         const std::vector<std::string>& wireNames,
         SurfaceInputRole role,
         bool requireClosedBoundary = false) const;
+    //! 面の作り方(#10): コンボの値(-1=自動, 0=平面, 1=ルールド, 2=ロフト, 3=ガイド付き)。
+    [[nodiscard]] int ConfiguredSurfaceMode() const;
+    //! 自動判定の結果。mode<0 は判定不能(reason に理由)。
+    struct SurfaceModeResolution {
+        int mode = -2;
+        std::vector<int> orderedWireIndices; //!< ガイド付きのときの並べ替え済み選択
+        QString label;                       //!< 「平面」「ロフト面」等の表示名
+        QString reason;                      //!< 判定不能の理由
+    };
+    [[nodiscard]] SurfaceModeResolution ResolveAutomaticSurfaceMode(
+        const std::vector<int>& wireIndices) const;
+    //! 選択が変わるたびに面を試作して半透明プレビュー(#11)。
+    void UpdateSurfaceCreationPreview();
     void AddSurfaceFromConfiguredInputs(
         kachakacha::model::Project& project,
         const std::string& surfaceName,

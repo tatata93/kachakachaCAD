@@ -1277,6 +1277,12 @@ void CadViewport::SetWireOffsetPreview(std::vector<Wire> wires)
     update();
 }
 
+void CadViewport::SetSurfaceCreationPreview(std::optional<kachakacha::model::Surface> surface)
+{
+    surfacePreview_ = std::move(surface);
+    update();
+}
+
 void CadViewport::SetMeasurementMode(MeasurementMode mode)
 {
     measurementMode_ = mode;
@@ -4944,6 +4950,54 @@ void CadViewport::paintEvent(QPaintEvent*)
             painter.setPen(Qt::NoPen);
             painter.drawEllipse(path.first(), 3.5, 3.5);
             painter.drawEllipse(path.last(), 3.5, 3.5);
+        }
+        painter.restore();
+    }
+
+    // 面作成のライブプレビュー(#11): 選択から自動判定した面を半透明で試作表示。
+    if (surfacePreview_.has_value()) {
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        constexpr int kGrid = 14;
+        std::array<std::array<QPointF, kGrid + 1>, kGrid + 1> grid;
+        bool valid = true;
+        for (int row = 0; row <= kGrid && valid; ++row) {
+            for (int column = 0; column <= kGrid; ++column) {
+                try {
+                    grid[row][column] = ProjectPoint(surfacePreview_->Evaluate(
+                        static_cast<double>(column) / kGrid,
+                        static_cast<double>(row) / kGrid));
+                } catch (const std::exception&) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (valid) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(31, 132, 138, 54));
+            for (int row = 0; row < kGrid; ++row) {
+                for (int column = 0; column < kGrid; ++column) {
+                    const QPolygonF quad({
+                        grid[row][column], grid[row][column + 1],
+                        grid[row + 1][column + 1], grid[row + 1][column],
+                    });
+                    painter.drawPolygon(quad);
+                }
+            }
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor(209, 125, 0, 210), 1.8, Qt::DashLine));
+            QPolygonF uEdge0, uEdge1, vEdge0, vEdge1;
+            for (int index = 0; index <= kGrid; ++index) {
+                uEdge0 << grid[0][index];
+                uEdge1 << grid[kGrid][index];
+                vEdge0 << grid[index][0];
+                vEdge1 << grid[index][kGrid];
+            }
+            painter.drawPolyline(uEdge0);
+            painter.drawPolyline(uEdge1);
+            painter.drawPolyline(vEdge0);
+            painter.drawPolyline(vEdge1);
         }
         painter.restore();
     }

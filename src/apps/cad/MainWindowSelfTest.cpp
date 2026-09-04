@@ -141,6 +141,7 @@ using kachakacha::model::MeasureWireRadius;
 using kachakacha::model::MeasureWireTangent;
 using kachakacha::model::MeasureWireToWireDistance;
 using kachakacha::model::MeetLinesAtIntersection;
+using kachakacha::model::NamedWire;
 using kachakacha::model::ExtendWireToBoundary;
 using kachakacha::model::OffsetPlanarWire;
 using kachakacha::model::ReferenceDimension;
@@ -535,7 +536,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        surfaceType_->setCurrentIndex(2);
+        surfaceType_->setCurrentIndex(surfaceType_->findData(2));
         surfaceInputGroups_ = {
             {SurfaceInputRole::Section, {"nose_0_joined"}},
             {SurfaceInputRole::Section, {"nose_4_joined"}},
@@ -589,7 +590,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             })) {
             return false;
         }
-        surfaceType_->setCurrentIndex(0);
+        surfaceType_->setCurrentIndex(surfaceType_->findData(0));
         surfaceInputGroups_ = {{
             SurfaceInputRole::Boundary,
             {"free_outline_bottom", "free_outline_arc",
@@ -1738,6 +1739,69 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // #10/#11: 面の作り方の自動判定と選択時の半透明プレビュー。
+        const Project wave5Saved = project_;
+        const auto wave5Undo = undoStack_;
+        const auto wave5Redo = redoStack_;
+        const std::size_t wave5WireStart = project_.Wires().size();
+        const std::size_t wave5SurfaceStart = project_.Surfaces().size();
+        project_.AddWire("__auto断面1",
+            Wire::CircularArcThroughThreePoints(
+                {-20.0, 0.0, 0.0}, {0.0, 20.0, 0.0}, {20.0, 0.0, 0.0}));
+        project_.AddWire("__auto断面2",
+            Wire::CircularArcThroughThreePoints(
+                {-24.0, 0.0, 12.0}, {0.0, 24.0, 12.0}, {24.0, 0.0, 12.0}));
+        project_.AddWire("__auto断面3",
+            Wire::CircularArcThroughThreePoints(
+                {-12.0, 0.0, 26.0}, {0.0, 12.0, 26.0}, {12.0, 0.0, 26.0}));
+        project_.AddWire("__auto閉輪郭",
+            Wire::Polyline({{40.0, 0.0, 0.0}, {60.0, 0.0, 0.0},
+                {60.0, 15.0, 0.0}, {40.0, 15.0, 0.0}, {40.0, 0.0, 0.0}}));
+        RefreshModelViews(false);
+        surfaceModeAction_->trigger();
+        surfaceType_->setCurrentIndex(surfaceType_->findData(-1));
+        // 断面3本 → ロフトと判定され、選択だけでプレビューが出る。
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(wave5WireStart)},
+            {CadSelectionKind::Wire, static_cast<int>(wave5WireStart + 1)},
+            {CadSelectionKind::Wire, static_cast<int>(wave5WireStart + 2)},
+        }, true);
+        if (!viewport_->HasSurfaceCreationPreview()) {
+            return fail("auto surface mode previews a loft");
+        }
+        surfaceName_->setText(QStringLiteral("__auto_loft"));
+        CreateSurfaceFromSelection();
+        if (project_.Surfaces().size() != wave5SurfaceStart + 1
+            || project_.Surfaces().back().sourceWireNames.size() != 3) {
+            return fail("auto mode creates the loft surface");
+        }
+        // 閉じた輪郭1本 → 平面と判定。
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(wave5WireStart + 3)},
+        }, true);
+        if (!viewport_->HasSurfaceCreationPreview()) {
+            return fail("auto surface mode previews a planar face");
+        }
+        surfaceName_->setText(QStringLiteral("__auto_plane"));
+        CreateSurfaceFromSelection();
+        if (project_.Surfaces().size() != wave5SurfaceStart + 2
+            || project_.Surfaces().back().sourceWireNames.size() != 1) {
+            return fail("auto mode creates the planar surface");
+        }
+        // 選択を外すとプレビューも消える。
+        UpdateSelections({}, true);
+        if (viewport_->HasSurfaceCreationPreview()) {
+            return fail("surface preview clears with the selection");
+        }
+        drawingModeAction_->trigger();
+        project_ = wave5Saved;
+        undoStack_ = wave5Undo;
+        redoStack_ = wave5Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;
@@ -2364,7 +2428,7 @@ bool MainWindow::RunCreationSelfTest()
     project_.AddWire("__ui_composite_left", Wire::Line(
         {0.0, 6.0, 0.0}, {0.0, 0.0, 0.0}));
     RefreshModelViews(false);
-    surfaceType_->setCurrentIndex(0);
+    surfaceType_->setCurrentIndex(surfaceType_->findData(0));
     surfaceName_->setText("__ui_composite_surface");
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(compositeWireStart + 2)},
@@ -2401,7 +2465,7 @@ bool MainWindow::RunCreationSelfTest()
         {6.0, 0.0, 4.0}, {6.0, 1.0, 4.0},
         {6.0, 4.0, 2.0}, {6.0, 5.0, 0.0}));
     RefreshModelViews(false);
-    surfaceType_->setCurrentIndex(3);
+    surfaceType_->setCurrentIndex(surfaceType_->findData(3));
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(groupedWireStart)},
         {CadSelectionKind::Wire, static_cast<int>(groupedWireStart + 1)},
@@ -2465,7 +2529,7 @@ bool MainWindow::RunCreationSelfTest()
         WireMetadata{"__ui_light_plan", WirePlanePolicy::ReferenceOnly, {}, {}});
     RefreshModelViews(false);
 
-    surfaceType_->setCurrentIndex(2);
+    surfaceType_->setCurrentIndex(surfaceType_->findData(2));
     plateName_->setText("__ui_direct_variable_plate");
     plateThickness_->setValue(0.4);
     plateVariableThickness_->setChecked(true);
@@ -2489,7 +2553,7 @@ bool MainWindow::RunCreationSelfTest()
     }
     plateVariableThickness_->setChecked(false);
 
-    surfaceType_->setCurrentIndex(2);
+    surfaceType_->setCurrentIndex(surfaceType_->findData(2));
     surfaceName_->setText("__ui_nose_skin");
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},

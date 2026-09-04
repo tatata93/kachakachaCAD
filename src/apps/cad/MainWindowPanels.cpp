@@ -985,15 +985,15 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* createForm = new QFormLayout;
     createForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     surfaceType_ = new QComboBox;
-    surfaceType_->addItems({
-        QStringLiteral("閉じた輪郭から平面"),
-        QStringLiteral("2断面から曲面"),
-        QStringLiteral("3断面以上からロフト"),
-        QStringLiteral("外形ガイド2本＋断面1本以上"),
-    });
+    surfaceType_->addItem(QStringLiteral("自動（選択から判定・推奨）"), -1);
+    surfaceType_->addItem(QStringLiteral("閉じた輪郭から平面"), 0);
+    surfaceType_->addItem(QStringLiteral("2断面から曲面"), 1);
+    surfaceType_->addItem(QStringLiteral("3断面以上からロフト"), 2);
+    surfaceType_->addItem(QStringLiteral("外形ガイド2本＋断面1本以上"), 3);
     surfaceType_->setToolTip(QStringLiteral(
-        "115系前面上部のような形は「外形ガイド2本＋断面1本以上」を選び、"
-        "外形2本、断面の順にCtrl+クリックします"));
+        "「自動」は選択内容から判定します: 閉じる輪郭→平面 / 断面2→曲面 /\n"
+        "断面3以上→ロフト / 断面の端が載る線2本があればガイド付き。\n"
+        "判定結果は選択のたびにラベルと半透明プレビューで確認できます"));
     surfaceName_ = new QLineEdit(QStringLiteral("surface_1"));
     createForm->addRow(QStringLiteral("作り方"), surfaceType_);
     createForm->addRow(QStringLiteral("面の名前"), surfaceName_);
@@ -1064,7 +1064,7 @@ QWidget* MainWindow::BuildSurfacePanel()
 
     connect(surfaceAddBoundaryOrGuideButton_, &QPushButton::clicked, this, [this] {
         AddSelectedSurfaceInputGroup(
-            surfaceType_->currentIndex() == 0
+            ConfiguredSurfaceMode() == 0
                 ? SurfaceInputRole::Boundary : SurfaceInputRole::Guide);
     });
     connect(surfaceAddSectionButton_, &QPushButton::clicked, this, [this] {

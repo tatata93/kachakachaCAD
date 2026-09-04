@@ -55,8 +55,12 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    //! アプリ全体のEsc捕捉(#1): どこにフォーカスがあっても1回で
+    //! 「入力破棄→ツール=選択→選択解除」まで戻す。
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    void PerformGlobalEscape();
     void BuildUi();
     void BuildDrawingActions();
     QWidget* BuildDrawingPanel();
@@ -88,6 +92,10 @@ private:
     void CreateLineBetweenSelectedPoints();
     void CreateLineBetweenPickedPoints(
         kachakacha::geometry::Vector3 first, kachakacha::geometry::Vector3 second);
+    void KeepCurveDrawingPoints(
+        const std::string& wireName,
+        const std::vector<kachakacha::geometry::Vector3>& points,
+        const std::string& planeName);
     void ShowViewportContextMenu(const QPoint& globalPosition);
     void PrepareMachiningForWires(int firstIndex, int secondIndex);
     void ExpandSketchSection(const QString& title);
@@ -367,6 +375,8 @@ private:
     QComboBox* gridSubdivision_ = nullptr;
     std::array<QDoubleSpinBox*, 2> gridOrigin_{};
     QCheckBox* drawingConstruction_ = nullptr;
+    QCheckBox* drawingKeepCurvePoints_ = nullptr; //!< スプライン/ベジェの指定点を作図点に残す(#9)
+    bool performingGlobalEscape_ = false; //!< Escの全体処理の再入防止(#1)
     QLabel* drawingStateLabel_ = nullptr;
     QWidget* drawingDimensionSection_ = nullptr;
     QStackedWidget* drawingDimensionStack_ = nullptr;
@@ -444,6 +454,7 @@ private:
     QToolBar* outputToolbar_ = nullptr;
     QToolBar* partModelToolbar_ = nullptr;
     QCheckBox* gridOutsideDrawingCheck_ = nullptr;
+    QCheckBox* dimOtherPlanesCheck_ = nullptr; //!< 作図面以外の線を常時薄く表示(#6)
     QLabel* beginnerGuideTitle_ = nullptr;
     QLabel* beginnerGuideNext_ = nullptr;
     QLabel* beginnerGuideSteps_ = nullptr;

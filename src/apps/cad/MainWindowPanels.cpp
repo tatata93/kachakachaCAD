@@ -199,6 +199,13 @@ QWidget* MainWindow::BuildDrawingPanel()
     drawingConstruction_->setToolTip(QStringLiteral("スナップや寸法基準に使い、面や切断出力には含めない"));
     layout->addWidget(drawingConstruction_);
 
+    drawingKeepCurvePoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"));
+    drawingKeepCurvePoints_->setToolTip(QStringLiteral(
+        "ベジェ・スプラインの確定時に、クリックした通過点・制御点を\n"
+        "作図点(<線名>_点N)としても作成します"));
+    drawingKeepCurvePoints_->setVisible(false);
+    layout->addWidget(drawingKeepCurvePoints_);
+
     drawingDimensionSection_ = new QWidget;
     auto* dimensionLayout = new QVBoxLayout(drawingDimensionSection_);
     dimensionLayout->setContentsMargins(0, 2, 0, 0);
@@ -1783,6 +1790,11 @@ QWidget* MainWindow::BuildDisplayPanel()
         "通常、点グリッドは作図モード(作図面を選んでいるとき)だけ表示します。\n"
         "面・板材や出力モードでも表示したい場合にチェックしてください"));
     gridLayout->addRow(gridOutsideDrawingCheck_);
+    dimOtherPlanesCheck_ = new QCheckBox(QStringLiteral("作図面以外の線を常に薄く表示"));
+    dimOtherPlanesCheck_->setToolTip(QStringLiteral(
+        "作図面上にない線・点を薄く表示します。\n"
+        "作図ツールの使用中はチェックに関わらず自動で薄くなります"));
+    gridLayout->addRow(dimOtherPlanesCheck_);
     gridLayout->addRow(QStringLiteral("副点"), gridSubdivision_);
     gridLayout->addRow(QStringLiteral("基準 X"), gridOrigin_[0]);
     gridLayout->addRow(QStringLiteral("基準 Y"), gridOrigin_[1]);
@@ -1797,6 +1809,10 @@ QWidget* MainWindow::BuildDisplayPanel()
     });
     connect(gridOutsideDrawingCheck_, &QCheckBox::toggled, this, [this] {
         ApplyGridVisibility();
+        SaveDisplaySettings();
+    });
+    connect(dimOtherPlanesCheck_, &QCheckBox::toggled, this, [this](bool checked) {
+        viewport_->SetOffPlaneDimmingAlways(checked);
         SaveDisplaySettings();
     });
     connect(gridSubdivision_, &QComboBox::currentIndexChanged, this, [this] {
@@ -1994,6 +2010,9 @@ void MainWindow::LoadDisplaySettings()
     wireWidth_->setValue(settings.value("display/wireWidth", wireWidth_->value()).toDouble());
     gridOutsideDrawingCheck_->setChecked(
         settings.value("display/gridOutsideDrawing", false).toBool());
+    dimOtherPlanesCheck_->setChecked(
+        settings.value("display/dimOtherPlanes", false).toBool());
+    viewport_->SetOffPlaneDimmingAlways(dimOtherPlanesCheck_->isChecked());
     loadStyle(wireStyle_, "display/wireStyle");
     loadColor(constructionColor_, "display/constructionColor");
     constructionWidth_->setValue(settings.value("display/constructionWidth", constructionWidth_->value()).toDouble());
@@ -2023,6 +2042,8 @@ void MainWindow::SaveDisplaySettings() const
     QSettings settings;
     settings.setValue("display/wireColor", DisplayColor(wireColor_).name());
     settings.setValue("display/gridOutsideDrawing", gridOutsideDrawingCheck_->isChecked());
+    settings.setValue("display/dimOtherPlanes",
+        dimOtherPlanesCheck_ != nullptr && dimOtherPlanesCheck_->isChecked());
     settings.setValue("display/wireWidth", wireWidth_->value());
     settings.setValue("display/wireStyle", wireStyle_->currentData());
     settings.setValue("display/constructionColor", DisplayColor(constructionColor_).name());

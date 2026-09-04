@@ -3,6 +3,7 @@
 #include "kachakacha/model/Project.h"
 
 #include <QColor>
+#include <QCursor>
 #include <QPoint>
 #include <QString>
 #include <QStringList>
@@ -66,6 +67,10 @@ enum class DrawingSnapKind {
     Point,
     Intersection,
     Endpoint,
+    //! 線分・曲線の中点(ポリラインは各区間の中点)。
+    Midpoint,
+    //! 円・円弧の中心。
+    Center,
     //! 作業平面上にない点・端点を、平面へ法線投影した位置(ジオメトリ投影)。
     ProjectedPoint,
     //! 既存線分の延長線上(作図補助)。guideAnchor に線分側の端点が入る。
@@ -210,6 +215,13 @@ public:
     [[nodiscard]] ViewportTool Tool() const noexcept { return tool_; }
     void SetSnapEnabled(bool enabled);
     void SetSnapStep(double stepMillimeters);
+    //! 作図面上にない線・点を薄く表示する(作図ツール使用中は常に有効。
+    //! always=true で選択ツール中も含め常時薄くする)。
+    void SetOffPlaneDimmingAlways(bool always);
+    [[nodiscard]] bool OffPlaneDimmingAlways() const noexcept { return dimOffPlaneAlways_; }
+    //! 両端+半径の円弧でドラッグ中の半径・膨らむ側が変わったときに呼ばれる
+    //! (パネルの数値表示を追従させる)。
+    void SetArcRadiusDraggedCallback(std::function<void(double, bool)> callback);
     void SetGridPointsVisible(bool visible);
     void SetGridSubdivision(int subdivision);
     void SetGridOrigin(double u, double v);
@@ -416,6 +428,14 @@ private:
     [[nodiscard]] kachakacha::geometry::Vector3 ApplyDrawingConstraint(
         kachakacha::geometry::Vector3 point,
         Qt::KeyboardModifiers modifiers) const;
+    //! 作図系ツール(点〜スプライン、2点間線)を使用中か。
+    [[nodiscard]] bool UsingDrawingTool() const noexcept;
+    //! 作図面外の要素を薄く表示すべき状態か(#6 減光)。
+    [[nodiscard]] bool OffPlaneDimmingActive() const noexcept;
+    //! ワイヤ全体が作図面上に載っているか。
+    [[nodiscard]] bool WireOnActivePlane(const kachakacha::model::Wire& wire) const;
+    //! 作図ツール用の大きめ十字カーソル。
+    [[nodiscard]] static QCursor DrawingCrossCursor();
     [[nodiscard]] bool HasDynamicDimensions() const noexcept;
     void UpdateDynamicDimensionEditor();
     void PositionDynamicDimensionEditor();
@@ -459,6 +479,7 @@ private:
     std::function<void(int, double)> extendRequested_;
     std::function<void()> toolExitRequested_;
     std::function<void()> escapeRequested_; //!< Escで選択モードへ戻す(選択も解除)
+    std::function<void(double, bool)> arcRadiusDragged_;
     std::function<void(kachakacha::geometry::Vector3, kachakacha::geometry::Vector3)> lineBetweenPicked_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenFirstPoint_;
     std::optional<kachakacha::geometry::Vector3> lineBetweenHoverPoint_;
@@ -474,6 +495,7 @@ private:
     ViewportTool tool_ = ViewportTool::Select;
     bool snapEnabled_ = true;
     double snapStep_ = 1.0;
+    bool dimOffPlaneAlways_ = false;
     bool gridPointsVisible_ = true;
     int gridSubdivision_ = 1;
     ArcDrawingMode arcDrawingMode_ = ArcDrawingMode::ThreePoints;

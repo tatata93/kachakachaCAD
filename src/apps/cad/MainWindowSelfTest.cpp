@@ -1550,6 +1550,98 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // 使い勝手改善(#1 Esc全域 / #4 中点・中心スナップ / #8 円弧ドラッグ確定)。
+        const Project wave1Saved = project_;
+        const auto wave1Undo = undoStack_;
+        const auto wave1Redo = redoStack_;
+        const std::size_t wave1WireStart = project_.Wires().size();
+
+        SetViewportTool(ViewportTool::DrawLine);
+        click(center + QPointF(-120.0, 40.0), Qt::ControlModifier);
+        click(center + QPointF(-40.0, 40.0), Qt::ControlModifier);
+        if (project_.Wires().size() != wave1WireStart + 1) {
+            return fail("wave1 create midpoint test line");
+        }
+        const Vector3 lineMidpoint = project_.Wires().back().wire.Evaluate(0.5);
+        SetViewportTool(ViewportTool::DrawPoint);
+        sendMouse(QEvent::MouseMove,
+            viewport_->ScreenPoint(lineMidpoint) + QPointF(5.0, 2.0),
+            Qt::NoButton, Qt::NoButton);
+        if (!viewport_->DrawingSnapHover().has_value()
+            || viewport_->DrawingSnapHover()->kind != DrawingSnapKind::Midpoint
+            || !kachakacha::geometry::AlmostEqual(
+                viewport_->DrawingSnapHover()->point, lineMidpoint, 1.0e-8)) {
+            return fail("midpoint snap candidate");
+        }
+
+        SetViewportTool(ViewportTool::DrawCircle);
+        click(center + QPointF(70.0, 40.0), Qt::ControlModifier);
+        click(center + QPointF(95.0, 40.0), Qt::ControlModifier);
+        if (project_.Wires().size() != wave1WireStart + 2
+            || project_.Wires().back().wire.Kind() != WireKind::Circle) {
+            return fail("wave1 create center test circle");
+        }
+        const Vector3 circleCenter = project_.Wires().back().wire.ArcData().center;
+        SetViewportTool(ViewportTool::DrawPoint);
+        sendMouse(QEvent::MouseMove,
+            viewport_->ScreenPoint(circleCenter) + QPointF(4.0, -3.0),
+            Qt::NoButton, Qt::NoButton);
+        if (!viewport_->DrawingSnapHover().has_value()
+            || viewport_->DrawingSnapHover()->kind != DrawingSnapKind::Center
+            || !kachakacha::geometry::AlmostEqual(
+                viewport_->DrawingSnapHover()->point, circleCenter, 1.0e-8)) {
+            return fail("circle center snap candidate");
+        }
+
+        // #8: 両端+半径の円弧は3クリック目(カーソル)で半径・膨らむ側が決まる。
+        arcDrawingMode_->setCurrentIndex(1);
+        SetViewportTool(ViewportTool::DrawArc);
+        click(center + QPointF(-100.0, -40.0), Qt::ControlModifier);
+        click(center + QPointF(-20.0, -40.0), Qt::ControlModifier);
+        click(center + QPointF(-60.0, -75.0), Qt::ControlModifier);
+        if (project_.Wires().size() != wave1WireStart + 3
+            || project_.Wires().back().wire.Kind() != WireKind::CircularArc) {
+            return fail("endpoint-radius arc commits by third click");
+        }
+        {
+            const auto arcData = project_.Wires().back().wire.ArcData();
+            const Vector3 arcStart = project_.Wires().back().wire.Start();
+            const Vector3 arcEnd = project_.Wires().back().wire.End();
+            const Vector3 arcMiddle = project_.Wires().back().wire.Evaluate(0.5);
+            const Vector3 chord = arcEnd - arcStart;
+            const Vector3 toMiddle = arcMiddle - arcStart;
+            const Vector3 offset = toMiddle
+                - chord * (kachakacha::geometry::Dot(toMiddle, chord)
+                    / std::max(chord.LengthSquared(), 1.0e-18));
+            // 半径が正で、3クリック目のカーソル側へ実際に膨らんでいること。
+            if (!(arcData.radius > 1.0e-6) || !(offset.Length() > 1.0e-6)) {
+                return fail("dragged arc bulges toward cursor");
+            }
+        }
+        arcDrawingMode_->setCurrentIndex(0);
+
+        // #1: 右パネルなどにフォーカスがあってもEsc1回で選択モード+選択解除。
+        SetViewportTool(ViewportTool::DrawLine);
+        click(center + QPointF(-140.0, -10.0), Qt::ControlModifier);
+        modelFilter_->setFocus();
+        {
+            QKeyEvent globalEscape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+            QApplication::sendEvent(modelFilter_, &globalEscape);
+        }
+        if (viewport_->Tool() != ViewportTool::Select
+            || !viewport_->Selections().empty()
+            || viewport_->DrawingPointCount() != 0) {
+            return fail("global escape resets tool and selection");
+        }
+
+        project_ = wave1Saved;
+        undoStack_ = wave1Undo;
+        redoStack_ = wave1Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;

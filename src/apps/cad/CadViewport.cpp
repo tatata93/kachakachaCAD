@@ -15,6 +15,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QPolygonF>
 #include <QStyle>
 #include <QTimer>
@@ -910,7 +911,7 @@ void CadViewport::SetTool(ViewportTool tool)
                 || tool_ == ViewportTool::ExtendWire || tool_ == ViewportTool::Coincident
                 || tool_ == ViewportTool::Tangent || tool_ == ViewportTool::Curvature)
         ? Qt::PointingHandCursor
-        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor());
     update();
 }
 
@@ -921,6 +922,80 @@ void CadViewport::SetSnapEnabled(bool enabled)
         drawingSnapHover_.reset();
     }
     update();
+}
+
+void CadViewport::SetOffPlaneDimmingAlways(bool always)
+{
+    if (dimOffPlaneAlways_ != always) {
+        dimOffPlaneAlways_ = always;
+        update();
+    }
+}
+
+void CadViewport::SetArcRadiusDraggedCallback(std::function<void(double, bool)> callback)
+{
+    arcRadiusDragged_ = std::move(callback);
+}
+
+bool CadViewport::UsingDrawingTool() const noexcept
+{
+    switch (tool_) {
+    case ViewportTool::DrawPoint:
+    case ViewportTool::DrawLine:
+    case ViewportTool::DrawPolyline:
+    case ViewportTool::DrawRectangle:
+    case ViewportTool::DrawCircle:
+    case ViewportTool::DrawArc:
+    case ViewportTool::DrawBezier:
+    case ViewportTool::DrawSpline:
+    case ViewportTool::LineBetweenPoints:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool CadViewport::OffPlaneDimmingActive() const noexcept
+{
+    return activePlane_.has_value() && (dimOffPlaneAlways_ || UsingDrawingTool());
+}
+
+bool CadViewport::WireOnActivePlane(const kachakacha::model::Wire& wire) const
+{
+    if (!activePlane_.has_value()) {
+        return true;
+    }
+    for (const Vector3& point : wire.ControlPoints()) {
+        if (std::abs(activePlane_->Project(point).w) > 1.0e-6) {
+            return false;
+        }
+    }
+    return true;
+}
+
+QCursor CadViewport::DrawingCrossCursor()
+{
+    // 標準の十字カーソルは小さく視認しづらいので、白フチ付きの大きめ十字を使う(#3)。
+    static const QCursor cursor = [] {
+        constexpr int kSize = 33;
+        constexpr int kCenter = kSize / 2;
+        QPixmap pixmap(kSize, kSize);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(QPen(QColor(255, 255, 255, 235), 3.0));
+        painter.drawLine(kCenter, 0, kCenter, kSize - 1);
+        painter.drawLine(0, kCenter, kSize - 1, kCenter);
+        painter.setPen(QPen(QColor(20, 46, 56, 255), 1.0));
+        painter.drawLine(kCenter, 0, kCenter, kSize - 1);
+        painter.drawLine(0, kCenter, kSize - 1, kCenter);
+        // 中心はモデルが見えるよう小さく開ける。
+        painter.setCompositionMode(QPainter::CompositionMode_Clear);
+        painter.fillRect(kCenter - 2, kCenter - 2, 5, 5, Qt::transparent);
+        painter.end();
+        return QCursor(pixmap, kCenter, kCenter);
+    }();
+    return cursor;
 }
 
 void CadViewport::RestoreViewFraming(Vector3 target, double pixelsPerMillimeter)
@@ -2501,9 +2576,11 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
     std::optional<DrawingSnapCandidate> best;
     const auto priority = [](DrawingSnapKind kind) {
         switch (kind) {
-        case DrawingSnapKind::Intersection: return 6;
-        case DrawingSnapKind::Point: return 5;
-        case DrawingSnapKind::Endpoint: return 4;
+        case DrawingSnapKind::Intersection: return 8;
+        case DrawingSnapKind::Point: return 7;
+        case DrawingSnapKind::Endpoint: return 6;
+        case DrawingSnapKind::Midpoint: return 5;
+        case DrawingSnapKind::Center: return 4;
         case DrawingSnapKind::ProjectedPoint: return 3;
         case DrawingSnapKind::Extension: return 2;
         case DrawingSnapKind::Grid: return 1;
@@ -2518,6 +2595,8 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         case DrawingSnapKind::Intersection:
         case DrawingSnapKind::Point:
         case DrawingSnapKind::Endpoint:
+        case DrawingSnapKind::Midpoint:
+        case DrawingSnapKind::Center:
             return 2;
         case DrawingSnapKind::ProjectedPoint:
         case DrawingSnapKind::Extension:
@@ -2546,9 +2625,11 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         }
     };
 
-    const double pointRadius = nearbyStructuralOnly ? 18.0 : 12.0;
-    const double intersectionRadius = nearbyStructuralOnly ? 19.0 : 14.0;
-    const double segmentSearchRadius = nearbyStructuralOnly ? 22.0 : 16.0;
+    // 吸着半径は大きめに取る(#3)。実在ジオメトリが優先されるので広くても安全。
+    const double pointRadius = nearbyStructuralOnly ? 20.0 : 16.0;
+    const double intersectionRadius = nearbyStructuralOnly ? 21.0 : 18.0;
+    const double segmentSearchRadius = nearbyStructuralOnly ? 24.0 : 20.0;
+    const double midpointRadius = nearbyStructuralOnly ? 18.0 : 14.0;
 
     if (project_ != nullptr) {
         for (int pointIndex = 0; pointIndex < static_cast<int>(project_->Points().size()); ++pointIndex) {
@@ -2595,6 +2676,35 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
                     consider(DrawingSnapKind::ProjectedPoint,
                         activePlane_->ToWorld(planeCoordinates.u, planeCoordinates.v),
                         pointRadius - 2.0, endpoint);
+                }
+            }
+
+            // 中点(#4): 直線・ポリラインは各区間の中点、曲線は弧長中央付近。
+            const auto considerOnPlane = [&](DrawingSnapKind kind, Vector3 candidate,
+                                             double radius) {
+                if (std::abs(activePlane_->Project(candidate).w) <= 1.0e-6) {
+                    consider(kind, candidate, radius);
+                }
+            };
+            if (namedWire.wire.Kind() == WireKind::Line
+                || namedWire.wire.Kind() == WireKind::Polyline) {
+                const auto& segmentPoints = namedWire.wire.ControlPoints();
+                for (std::size_t index = 1; index < segmentPoints.size(); ++index) {
+                    considerOnPlane(DrawingSnapKind::Midpoint,
+                        (segmentPoints[index - 1] + segmentPoints[index]) * 0.5,
+                        midpointRadius);
+                }
+            } else if (namedWire.wire.Kind() != WireKind::Circle) {
+                considerOnPlane(
+                    DrawingSnapKind::Midpoint, namedWire.wire.Evaluate(0.5), midpointRadius);
+            }
+            // 円・円弧の中心(#4)。
+            if (namedWire.wire.Kind() == WireKind::Circle
+                || namedWire.wire.Kind() == WireKind::CircularArc) {
+                try {
+                    considerOnPlane(DrawingSnapKind::Center,
+                        namedWire.wire.ArcData().center, midpointRadius);
+                } catch (const std::exception&) {
                 }
             }
 
@@ -2731,14 +2841,16 @@ std::optional<DrawingSnapCandidate> CadViewport::FindDrawingSnap(
         const double snappedV = gridOriginV_ + static_cast<double>(gridVIndex) * gridStep;
         const bool mainPoint = gridUIndex % gridSubdivision_ == 0
             && gridVIndex % gridSubdivision_ == 0;
+        // グリッド吸着は「最寄りの格子点までほぼ常に効く」強さにする(#3)。
+        // 半径は画面上の格子間隔の45%まで広げる(隣の格子点と取り合わない上限)。
         const double minorRadius = std::clamp(
-            gridStep * pixelsPerMillimeter_ * 0.3,
-            0.75,
-            2.25);
+            gridStep * pixelsPerMillimeter_ * 0.45,
+            2.5,
+            14.0);
         consider(
             DrawingSnapKind::Grid,
             activePlane_->ToWorld(snappedU, snappedV),
-            mainPoint ? 5.5 : std::max(1.5, minorRadius));
+            mainPoint ? std::max(minorRadius, 9.0) : minorRadius);
     }
     return best;
 }
@@ -2899,8 +3011,28 @@ void CadViewport::CommitDrawingPoint(Vector3 point)
         }
     }
     if (tool_ == ViewportTool::DrawArc
-        && ((arcDrawingMode_ == ArcDrawingMode::EndpointsRadius && drawingPoints_.size() >= 2)
-            || (arcDrawingMode_ == ArcDrawingMode::StartTangent && !drawingPoints_.empty()))) {
+        && arcDrawingMode_ == ArcDrawingMode::EndpointsRadius
+        && drawingPoints_.size() >= 2) {
+        // 3クリック目=カーソル位置で半径と膨らむ側を確定(#8 ドラッグ指定)。
+        // 数値で決めたいときは従来どおりパネルの「寸法で確定」を使う。
+        try {
+            const Wire arc = Wire::CircularArcThroughThreePoints(
+                drawingPoints_[0], point, drawingPoints_[1]);
+            if (arcWireCreated_) {
+                arcWireCreated_(arc);
+            }
+            drawingPoints_.clear();
+            drawingSnapHover_.reset();
+            NotifyDrawingState();
+            UpdateDynamicDimensionEditor();
+            update();
+        } catch (const std::exception&) {
+            // ほぼ一直線など円弧にならない位置のクリックは無視して待つ。
+        }
+        return;
+    }
+    if (tool_ == ViewportTool::DrawArc
+        && arcDrawingMode_ == ArcDrawingMode::StartTangent && !drawingPoints_.empty()) {
         return;
     }
 
@@ -3087,7 +3219,7 @@ void CadViewport::UpdateHover(QPointF position)
         ? Qt::PointingHandCursor
         : tool_ == ViewportTool::Select && hoveredSelection_.kind != CadSelectionKind::None
         ? Qt::PointingHandCursor
-        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        : tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor());
     update();
 }
 
@@ -3810,8 +3942,13 @@ void CadViewport::paintEvent(QPaintEvent*)
             const bool hovered = hoveredSelection_.kind == CadSelectionKind::Point
                 && hoveredSelection_.index == index;
             const QPointF center = ProjectPoint(namedPoint.point);
-            const QColor color = selected ? QColor("#e69200")
+            QColor color = selected ? QColor("#e69200")
                 : hovered ? QColor("#087f9c") : QColor("#54767a");
+            // 作図中は作図面上にない点を薄くする(#6 減光)。
+            if (!selected && !hovered && OffPlaneDimmingActive()
+                && std::abs(activePlane_->Project(namedPoint.point).w) > 1.0e-6) {
+                color.setAlphaF(color.alphaF() * 0.26);
+            }
             painter.save();
             painter.setBrush(selected || hovered ? QColor(255, 255, 255, 235) : color);
             painter.setPen(QPen(color, selected || hovered ? 2.0 : 1.3));
@@ -3847,12 +3984,17 @@ void CadViewport::paintEvent(QPaintEvent*)
                 painter.setPen(QPen(QColor(17, 132, 160, 92), selected ? 7.5 : 7.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
                 painter.drawPath(path);
             }
-            const QColor wireColor = reference ? QColor("#007f78")
+            QColor wireColor = reference ? QColor("#007f78")
                 : selected ? QColor("#e69200")
                 : hovered ? QColor("#087f9c")
                 : namedWire.partModelSourceName.has_value() ? QColor("#c2402a")
                 : namedWire.metadata.construction ? constructionWireColor_
                 : wireColor_;
+            // 作図中は作図面上にない線を薄くして、自分の線を見やすくする(#6)。
+            if (!selected && !hovered && !reference && OffPlaneDimmingActive()
+                && !WireOnActivePlane(displayedWire)) {
+                wireColor.setAlphaF(wireColor.alphaF() * 0.24);
+            }
             const Qt::PenStyle wireStyle = reference ? Qt::DashDotLine
                 : namedWire.metadata.construction ? constructionWireStyle_
                 : wireStyle_;
@@ -4194,13 +4336,20 @@ void CadViewport::paintEvent(QPaintEvent*)
                     if (drawingPoints_.size() == 1) {
                         painter.drawLine(ProjectPoint(drawingPoints_.front()), ProjectPoint(*hoverDrawingPoint_));
                     } else if (drawingPoints_.size() == 2) {
+                        // カーソルを通る円弧をライブ表示(#8)。だめなら設定半径で。
                         try {
-                            drawPreviewWire(Wire::CircularArcFromEndpointsRadius(
-                                drawingPoints_[0], drawingPoints_[1], activePlane_->Normal(),
-                                configuredArcRadius_, configuredArcBulgeLeft_));
+                            drawPreviewWire(Wire::CircularArcThroughThreePoints(
+                                drawingPoints_[0], *hoverDrawingPoint_, drawingPoints_[1]));
                         } catch (const std::exception&) {
-                            painter.drawLine(
-                                ProjectPoint(drawingPoints_[0]), ProjectPoint(drawingPoints_[1]));
+                            try {
+                                drawPreviewWire(Wire::CircularArcFromEndpointsRadius(
+                                    drawingPoints_[0], drawingPoints_[1], activePlane_->Normal(),
+                                    configuredArcRadius_, configuredArcBulgeLeft_));
+                            } catch (const std::exception&) {
+                                painter.drawLine(
+                                    ProjectPoint(drawingPoints_[0]),
+                                    ProjectPoint(drawingPoints_[1]));
+                            }
                         }
                     }
                 } else if (drawingPoints_.size() == 1) {
@@ -4309,18 +4458,32 @@ void CadViewport::paintEvent(QPaintEvent*)
                 structural ? QColor(0, 126, 138, 235) : QColor(8, 119, 128, 125),
                 structural ? 2.2 : 1.0));
             if (structural) {
-                painter.drawEllipse(center, 10.5, 10.5);
+                painter.drawEllipse(center, 11.5, 11.5);
             }
             switch (drawingSnapHover_->kind) {
             case DrawingSnapKind::Intersection:
-                painter.drawLine(center + QPointF(-5.5, -5.5), center + QPointF(5.5, 5.5));
-                painter.drawLine(center + QPointF(-5.5, 5.5), center + QPointF(5.5, -5.5));
+                painter.drawLine(center + QPointF(-6.5, -6.5), center + QPointF(6.5, 6.5));
+                painter.drawLine(center + QPointF(-6.5, 6.5), center + QPointF(6.5, -6.5));
                 break;
             case DrawingSnapKind::Point:
-                painter.drawEllipse(center, 4.5, 4.5);
+                painter.drawEllipse(center, 5.0, 5.0);
                 break;
             case DrawingSnapKind::Endpoint:
-                painter.drawRect(QRectF(center - QPointF(4.5, 4.5), QSizeF(9.0, 9.0)));
+                painter.drawRect(QRectF(center - QPointF(5.5, 5.5), QSizeF(11.0, 11.0)));
+                break;
+            case DrawingSnapKind::Midpoint: {
+                // 中点=三角(AutoCAD系の流儀)。
+                QPolygonF triangle;
+                triangle << center + QPointF(0.0, -6.5) << center + QPointF(6.0, 4.5)
+                         << center + QPointF(-6.0, 4.5);
+                painter.drawPolygon(triangle);
+                break;
+            }
+            case DrawingSnapKind::Center:
+                // 中心=丸+中心点。
+                painter.drawEllipse(center, 6.0, 6.0);
+                painter.setBrush(painter.pen().color());
+                painter.drawEllipse(center, 1.6, 1.6);
                 break;
             case DrawingSnapKind::ProjectedPoint: {
                 // 別平面の点の投影: ひし形マーカー+元の点への破線。
@@ -5416,7 +5579,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             && selection_.kind == CadSelectionKind::None;
         const ViewCubeFace hoveredCubeFace = static_cast<ViewCubeFace>(hoveredFace);
         setCursor(hoveredCubeFace == ViewCubeFace::None
-                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
+                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor())
                 : unavailableSelection ? Qt::ForbiddenCursor
                 : CanDragViewCube(hoveredCubeFace) ? Qt::OpenHandCursor
                 : Qt::PointingHandCursor);
@@ -5523,6 +5686,27 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             ? std::optional<Vector3>(ApplyDrawingConstraint(
                   SnapPoint(*point, event->position(), event->modifiers()), event->modifiers()))
             : std::nullopt;
+        // 両端+半径の円弧: 2点確定後はカーソルで半径・膨らむ側をライブ指定(#8)。
+        if (tool_ == ViewportTool::DrawArc
+            && arcDrawingMode_ == ArcDrawingMode::EndpointsRadius
+            && drawingPoints_.size() == 2 && hoverDrawingPoint_.has_value()
+            && activePlane_.has_value()) {
+            try {
+                const Wire dragArc = Wire::CircularArcThroughThreePoints(
+                    drawingPoints_[0], *hoverDrawingPoint_, drawingPoints_[1]);
+                const auto first = activePlane_->Project(drawingPoints_[0]);
+                const auto second = activePlane_->Project(drawingPoints_[1]);
+                const auto cursor = activePlane_->Project(*hoverDrawingPoint_);
+                const double side = (second.u - first.u) * (cursor.v - first.v)
+                    - (second.v - first.v) * (cursor.u - first.u);
+                configuredArcRadius_ = dragArc.ArcData().radius;
+                configuredArcBulgeLeft_ = side >= 0.0;
+                if (arcRadiusDragged_) {
+                    arcRadiusDragged_(configuredArcRadius_, configuredArcBulgeLeft_);
+                }
+            } catch (const std::exception&) {
+            }
+        }
         UpdateDynamicDimensionEditor();
         NotifyDrawingState();
         update();
@@ -5623,7 +5807,7 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
         dragButton_ = Qt::NoButton;
         const ViewCubeFace hoveredFace = static_cast<ViewCubeFace>(hoveredViewCubeFace_);
         setCursor(hoveredFace == ViewCubeFace::None
-                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor)
+                ? (tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor())
                 : CanDragViewCube(hoveredFace) ? Qt::OpenHandCursor
                 : Qt::PointingHandCursor);
         event->accept();
@@ -5631,7 +5815,7 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
     }
 
     if (orbitInteraction_) {
-        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor());
     }
     orbitInteraction_ = false;
 
@@ -5654,7 +5838,7 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
             update();
         }
         dragButton_ = Qt::NoButton;
-        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : Qt::CrossCursor);
+        setCursor(tool_ == ViewportTool::Select ? Qt::ArrowCursor : DrawingCrossCursor());
         event->accept();
         return;
     }
@@ -5844,7 +6028,7 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
             gridOriginDragSource_.reset();
             gridOriginDragTarget_.reset();
             dragButton_ = Qt::NoButton;
-            setCursor(Qt::CrossCursor);
+            setCursor(DrawingCrossCursor());
             update();
         } else if (draggedControlPoint_.has_value()) {
             CancelControlPointDrag();

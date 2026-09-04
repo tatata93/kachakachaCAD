@@ -245,6 +245,20 @@ void MainWindow::BuildUi()
         SetViewportTool(ViewportTool::Select);
         UpdateSelections({}, true);
     });
+    viewport_->SetArcRadiusDraggedCallback([this](double radius, bool bulgeLeft) {
+        // ドラッグ中の半径・膨らむ側をパネルへ追従表示(#8)。
+        // 数値入力中(欄にフォーカス)はそちらを優先して上書きしない。
+        if (arcRadiusField_ != nullptr && !arcRadiusField_->hasFocus()) {
+            const QSignalBlocker blockRadius(arcRadiusField_);
+            arcRadiusField_->setValue(radius);
+        }
+        if (arcBulgeSide_ != nullptr && !arcBulgeSide_->hasFocus()) {
+            const QSignalBlocker blockSide(arcBulgeSide_);
+            arcBulgeSide_->setCurrentIndex(bulgeLeft ? 0 : 1);
+        }
+    });
+    // Escはアプリのどこにフォーカスがあっても効かせる(#1)。
+    qApp->installEventFilter(this);
     viewport_->SetLineBetweenPickedCallback([this](Vector3 first, Vector3 second) {
         CreateLineBetweenPickedPoints(first, second);
     });
@@ -1832,7 +1846,7 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
                 ? QStringLiteral("両端＋半径 · %1  %2 / 2点")
                     .arg(pointCount == 0 ? QStringLiteral("始点") : QStringLiteral("終点"))
                     .arg(pointCount)
-                : QStringLiteral("両端＋半径 · 半径と膨らむ側を確認");
+                : QStringLiteral("両端＋半径 · カーソルで膨らみを決めてクリック（数値入力も可）");
         } else {
             state = pointCount == 0
                 ? QStringLiteral("始点＋方向 · 始点を指定")
@@ -1918,6 +1932,10 @@ void MainWindow::UpdateDrawingPanel(ViewportTool tool, std::size_t pointCount)
     }
     if (drawingConstruction_ != nullptr) {
         drawingConstruction_->setVisible(tool != ViewportTool::DrawPoint);
+    }
+    if (drawingKeepCurvePoints_ != nullptr) {
+        drawingKeepCurvePoints_->setVisible(
+            tool == ViewportTool::DrawBezier || tool == ViewportTool::DrawSpline);
     }
     RefreshBeginnerGuide();
 
@@ -2637,7 +2655,9 @@ void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
         metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire bezier = Wire::CubicBezier(points[0], points[1], points[2], points[3]);
         RecordUndo();
-        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("bezier"))), bezier, metadata);
+        const std::string wireName = ToName(SuggestedDirectGroupName(QStringLiteral("bezier")));
+        project_.AddWire(wireName, bezier, metadata);
+        KeepCurveDrawingPoints(wireName, {points.begin(), points.end()}, planeName);
         MarkModified();
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("ベジェ曲線を作成しました"), 1800);
@@ -2659,13 +2679,44 @@ void MainWindow::AddViewportSpline(const std::vector<Vector3>& throughPoints)
         metadata.construction = drawingConstruction_ != nullptr && drawingConstruction_->isChecked();
         const Wire spline = Wire::InterpolatingCubicBSpline(throughPoints);
         RecordUndo();
-        project_.AddWire(ToName(SuggestedDirectGroupName(QStringLiteral("spline"))), spline, metadata);
+        const std::string wireName = ToName(SuggestedDirectGroupName(QStringLiteral("spline")));
+        project_.AddWire(wireName, spline, metadata);
+        KeepCurveDrawingPoints(wireName, throughPoints, planeName);
         MarkModified();
         RefreshModelViews(false);
         statusBar()->showMessage(
             QStringLiteral("%1点を通るスプラインを作成しました").arg(throughPoints.size()), 2200);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
+void MainWindow::KeepCurveDrawingPoints(
+    const std::string& wireName,
+    const std::vector<Vector3>& points,
+    const std::string& planeName)
+{
+    // #9: 「指定した点を作図点として残す」チェック時、通過点・制御点を
+    // <線名>_点N として作成する(呼び出し元のRecordUndoに含める)。
+    if (drawingKeepCurvePoints_ == nullptr || !drawingKeepCurvePoints_->isChecked()) {
+        return;
+    }
+    const auto exists = [this](const std::string& name) {
+        for (const auto& point : project_.Points()) {
+            if (point.name == name) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        std::string base = wireName + "_点" + std::to_string(index + 1);
+        std::string candidate = base;
+        int counter = 2;
+        while (exists(candidate)) {
+            candidate = base + "_" + std::to_string(counter++);
+        }
+        project_.AddPoint(candidate, points[index], planeName);
     }
 }
 
@@ -6308,4 +6359,38 @@ void MainWindow::closeEvent(QCloseEvent* event)
     } else {
         event->ignore();
     }
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    // Escはどこにフォーカスがあっても1回で「入力破棄→ツール=選択→選択解除」(#1)。
+    // ダイアログが前面のとき(activeWindowが別)やコンボのポップアップ表示中は
+    // それぞれの標準動作(閉じる)に任せる。
+    if (event->type() == QEvent::KeyPress && !performingGlobalEscape_) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Escape
+            && (QApplication::activeWindow() == this
+                || QApplication::activeWindow() == nullptr)
+            && QApplication::activePopupWidget() == nullptr) {
+            PerformGlobalEscape();
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::PerformGlobalEscape()
+{
+    performingGlobalEscape_ = true;
+    // 入力欄などのフォーカスを外す(入力途中の値は確定させない)。
+    if (QWidget* focused = QApplication::focusWidget();
+        focused != nullptr && focused != viewport_) {
+        focused->clearFocus();
+    }
+    // ビューポート自身のEsc処理(ドラッグ・作図・ピックの取消→選択モード→選択解除)を
+    // そのまま通す。ビューポートの外にいても同じ結果になる。
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(viewport_, &escape);
+    viewport_->setFocus(Qt::ShortcutFocusReason);
+    performingGlobalEscape_ = false;
 }

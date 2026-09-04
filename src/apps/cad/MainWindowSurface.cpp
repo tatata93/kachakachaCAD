@@ -603,6 +603,10 @@ std::optional<double> ParameterOnWire(
     return parameter;
 }
 
+//! 定義は後方(押し出し・回転ヘルパ群)にある。前方の関数からも使うため前方宣言。
+[[nodiscard]] std::string FreeDerivedName(
+    const Project& project, const std::string& base, const char* suffix);
+
 } // namespace
 
 bool MainWindow::SplitSelectedWiresAtBranchPoints()
@@ -1269,6 +1273,253 @@ void MainWindow::ProjectSelectedWiresToSurface()
         statusBar()->showMessage(QStringLiteral("%1本の平面図ワイヤーを面へ投影しました").arg(createdNames.size()), 4000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::ProjectSelectedWiresAcrossSurfaces()
+{
+    try {
+        const std::optional<WorkPlane> drawingPlane =
+            project_.FindWorkPlane(ToName(projectionPlane_->currentText()));
+        if (!drawingPlane.has_value()) {
+            throw std::invalid_argument("平面図を描いた作業平面を選択してください。");
+        }
+        // 投影先 = 3D画面で選択中の面(2枚以上)。
+        std::vector<int> surfaceIndices;
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Surfaces().size())) {
+                surfaceIndices.push_back(selection.index);
+            } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (surfaceIndices.size() < 2) {
+            throw std::invalid_argument(
+                "回り込み投影は、投影先の面を3D画面で2枚以上選択してください"
+                "（1枚だけなら通常の「選択ワイヤーを面へ投影」を使います）。");
+        }
+        if (wireIndices.empty()) {
+            throw std::invalid_argument("投影する平面図ワイヤーも一緒に選択してください。");
+        }
+        for (int index : wireIndices) {
+            const auto& source = project_.Wires()[index];
+            if (source.metadata.construction || source.projection.has_value()
+                || source.plateOffset.has_value()) {
+                throw std::invalid_argument(
+                    "下書きは補助線・投影済みでない平面図ワイヤーを選択してください。");
+            }
+            if (!WireLiesOnPlane(source.wire, *drawingPlane)) {
+                throw std::invalid_argument("選択ワイヤーが指定した平面図上にありません。");
+            }
+        }
+        const Vector3 direction = drawingPlane->Normal();
+        const bool registerOpenings = wrapProjectionOpenings_ != nullptr
+            && wrapProjectionOpenings_->isChecked();
+
+        Project candidate = project_;
+        int createdSegments = 0;
+        int registeredOpenings = 0;
+        QStringList skipped;
+        for (int wireIndex : wireIndices) {
+            const NamedWire sourceNamed = project_.Wires()[wireIndex];
+            const Wire& sourceWire = sourceNamed.wire;
+            const bool closedSource = sourceWire.IsClosed();
+
+            // どの面に「載る」か: サンプルごとに最短ヒットの面を選ぶ。
+            constexpr int kSamples = 256;
+            const int sampleCount = closedSource ? kSamples : kSamples + 1;
+            const auto nearestSurfaceAt = [&](double t) -> int {
+                const Vector3 point = sourceWire.Evaluate(
+                    closedSource ? std::fmod(t + 2.0, 1.0) : std::clamp(t, 0.0, 1.0));
+                int best = -1;
+                double bestDistance = std::numeric_limits<double>::infinity();
+                for (std::size_t position = 0; position < surfaceIndices.size(); ++position) {
+                    try {
+                        const auto hit = project_.Surfaces()[surfaceIndices[position]]
+                            .surface.ProjectPointAlongDirection(point, direction);
+                        if (std::abs(hit.distanceAlongDirection) < bestDistance) {
+                            bestDistance = std::abs(hit.distanceAlongDirection);
+                            best = static_cast<int>(position);
+                        }
+                    } catch (const std::exception&) {
+                    }
+                }
+                return best;
+            };
+            std::vector<int> assignment(sampleCount);
+            for (int sample = 0; sample < sampleCount; ++sample) {
+                assignment[sample] = nearestSurfaceAt(
+                    static_cast<double>(sample) / kSamples);
+            }
+
+            // 連続区間(閉ワイヤは巡回)へまとめ、境目を二分探索で詰める。
+            struct Run {
+                int surfacePosition = -1;
+                double startParameter = 0.0;
+                double endParameter = 1.0; //!< 閉ワイヤでは start+長さ(1を超えうる)
+            };
+            std::vector<Run> runs;
+            const auto refineBoundary = [&](double insideT, double outsideT, int surfacePosition) {
+                for (int iteration = 0; iteration < 12; ++iteration) {
+                    const double middle = (insideT + outsideT) * 0.5;
+                    if (nearestSurfaceAt(middle) == surfacePosition) {
+                        insideT = middle;
+                    } else {
+                        outsideT = middle;
+                    }
+                }
+                return (insideT + outsideT) * 0.5;
+            };
+            if (closedSource) {
+                bool uniform = true;
+                for (int sample = 1; sample < sampleCount; ++sample) {
+                    uniform = uniform && assignment[sample] == assignment[0];
+                }
+                if (uniform) {
+                    if (assignment[0] >= 0) {
+                        runs.push_back({assignment[0], 0.0, 1.0});
+                    }
+                } else {
+                    // 境目を起点に巡回スキャン。
+                    int start = 0;
+                    while (start < sampleCount
+                        && assignment[start]
+                            == assignment[(start + sampleCount - 1) % sampleCount]) {
+                        ++start;
+                    }
+                    int position = start;
+                    int visited = 0;
+                    while (visited < sampleCount) {
+                        const int current = assignment[position % sampleCount];
+                        int length = 0;
+                        while (length < sampleCount
+                            && assignment[(position + length) % sampleCount] == current) {
+                            ++length;
+                        }
+                        if (current >= 0) {
+                            const double first = static_cast<double>(position) / kSamples;
+                            const double last =
+                                static_cast<double>(position + length - 1) / kSamples;
+                            const double startBoundary = refineBoundary(
+                                first, first - 1.0 / kSamples, current);
+                            const double endBoundary = refineBoundary(
+                                last, last + 1.0 / kSamples, current);
+                            runs.push_back({current, startBoundary, endBoundary});
+                        }
+                        position += length;
+                        visited += length;
+                    }
+                }
+            } else {
+                int sample = 0;
+                while (sample < sampleCount) {
+                    const int current = assignment[sample];
+                    int length = 0;
+                    while (sample + length < sampleCount
+                        && assignment[sample + length] == current) {
+                        ++length;
+                    }
+                    if (current >= 0) {
+                        double first = static_cast<double>(sample) / kSamples;
+                        double last = static_cast<double>(sample + length - 1) / kSamples;
+                        if (sample > 0) {
+                            first = refineBoundary(first, first - 1.0 / kSamples, current);
+                        }
+                        if (sample + length < sampleCount) {
+                            last = refineBoundary(last, last + 1.0 / kSamples, current);
+                        }
+                        runs.push_back({current, first, last});
+                    }
+                    sample += length;
+                }
+            }
+            if (runs.empty()) {
+                skipped << QStringLiteral("%1(どの面にも載りません)")
+                    .arg(ToQString(sourceNamed.name));
+                continue;
+            }
+
+            // 区間ごとに: 下書きの部分ワイヤ(面ごとの開口輪郭)を作り、その面へ投影。
+            for (std::size_t runIndex = 0; runIndex < runs.size(); ++runIndex) {
+                const Run& run = runs[runIndex];
+                const int surfaceIndex = surfaceIndices[run.surfacePosition];
+                const std::string surfaceName = project_.Surfaces()[surfaceIndex].name;
+                const double span = run.endParameter - run.startParameter;
+                if (span <= 1.0e-6) {
+                    continue;
+                }
+                constexpr int kPieceSamples = 64;
+                std::vector<Vector3> piecePoints;
+                piecePoints.reserve(kPieceSamples + 2);
+                for (int sample = 0; sample <= kPieceSamples; ++sample) {
+                    double t = run.startParameter
+                        + span * static_cast<double>(sample) / kPieceSamples;
+                    if (closedSource) {
+                        t = std::fmod(t + 1.0, 1.0);
+                    }
+                    piecePoints.push_back(sourceWire.Evaluate(std::clamp(t, 0.0, 1.0)));
+                }
+                const bool closePiece = closedSource && runs.size() > 1;
+                if (closePiece) {
+                    piecePoints.push_back(piecePoints.front());
+                }
+                WireMetadata pieceMetadata;
+                pieceMetadata.sourcePlaneName = ToName(projectionPlane_->currentText());
+                pieceMetadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+                const std::string pieceName = FreeDerivedName(
+                    candidate, sourceNamed.name,
+                    ("_" + surfaceName + "分").c_str());
+                candidate.AddWire(pieceName, Wire::Polyline(piecePoints), pieceMetadata);
+                candidate.SetWireVisible(pieceName, false);
+                const std::string projectedName = FreeDerivedName(
+                    candidate, sourceNamed.name, ("_on_" + surfaceName).c_str());
+                try {
+                    candidate.AddProjectedWire(
+                        projectedName, pieceName, surfaceName, direction);
+                    ++createdSegments;
+                    const bool pieceClosed = closedSource
+                        && (closePiece || runs.size() == 1);
+                    if (registerOpenings && pieceClosed) {
+                        candidate.AddSurfaceOpening(surfaceName, projectedName);
+                        ++registeredOpenings;
+                    }
+                } catch (const std::exception& error) {
+                    (void)candidate.RemoveWire(pieceName);
+                    skipped << QStringLiteral("%1→%2(%3)")
+                        .arg(ToQString(sourceNamed.name), ToQString(surfaceName),
+                            QString::fromUtf8(error.what()).section('\n', 0, 0));
+                }
+            }
+        }
+        if (createdSegments == 0) {
+            throw std::invalid_argument(
+                skipped.isEmpty()
+                    ? std::string("投影できる区間がありませんでした。")
+                    : skipped.join(QStringLiteral(" / ")).toStdString());
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        toolsTabs_->setCurrentIndex(2);
+        QString message = QStringLiteral(
+            "回り込み投影: %1面へ%2区間を投影しました")
+                .arg(surfaceIndices.size()).arg(createdSegments);
+        if (registeredOpenings > 0) {
+            message += QStringLiteral("（面ごとの開口%1件を登録）").arg(registeredOpenings);
+        }
+        if (!skipped.isEmpty()) {
+            message += QStringLiteral(" / 一部は投影できません: %1")
+                .arg(skipped.join(QStringLiteral("、")));
+        }
+        statusBar()->showMessage(message, 8000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 7000);
+        QMessageBox::warning(this, QStringLiteral("回り込み投影"), QString::fromUtf8(error.what()));
     }
 }
 

@@ -1875,6 +1875,87 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // #14: 回り込み投影 — 角をまたぐ閉輪郭が面ごとの閉じた開口へ分割される。
+        const Project wave7Saved = project_;
+        const auto wave7Undo = undoStack_;
+        const auto wave7Redo = redoStack_;
+        project_.AddWorkPlane("__w7図面",
+            WorkPlane::FromPointNormal({0.0, 0.0, 40.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
+        project_.AddWire("__w7A輪郭",
+            Wire::Polyline({{-30.0, -20.0, 0.0}, {0.0, -20.0, 0.0}, {0.0, 20.0, 0.0},
+                {-30.0, 20.0, 0.0}, {-30.0, -20.0, 0.0}}));
+        project_.AddPlanarSurface("__w7面A", "__w7A輪郭");
+        project_.AddWire("__w7B下",
+            Wire::Line({0.0, -20.0, 0.0}, {0.0, 20.0, 0.0}));
+        project_.AddWire("__w7B上",
+            Wire::Line({20.0, -20.0, 20.0}, {20.0, 20.0, 20.0}));
+        project_.AddRuledSurface("__w7面B", "__w7B下", "__w7B上");
+        project_.AddWire("__w7窓",
+            Wire::Polyline({{-10.0, -5.0, 40.0}, {10.0, -5.0, 40.0}, {10.0, 5.0, 40.0},
+                {-10.0, 5.0, 40.0}, {-10.0, -5.0, 40.0}}));
+        RefreshModelViews(false);
+        const int w7PlaneIndex = projectionPlane_->findText(QStringLiteral("__w7図面"));
+        if (w7PlaneIndex < 0) {
+            return fail("wrap projection plane in combo");
+        }
+        projectionPlane_->setCurrentIndex(w7PlaneIndex);
+        const auto surfaceIndexByName = [this](const char* name) {
+            for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+                if (project_.Surfaces()[index].name == name) {
+                    return index;
+                }
+            }
+            return -1;
+        };
+        const auto wireIndexByName = [this](const char* name) {
+            for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+                if (project_.Wires()[index].name == name) {
+                    return index;
+                }
+            }
+            return -1;
+        };
+        wrapProjectionOpenings_->setChecked(true);
+        UpdateSelections({
+            {CadSelectionKind::Wire, wireIndexByName("__w7窓")},
+            {CadSelectionKind::Surface, surfaceIndexByName("__w7面A")},
+            {CadSelectionKind::Surface, surfaceIndexByName("__w7面B")},
+        }, true);
+        ProjectSelectedWiresAcrossSurfaces();
+        int wrapProjectedCount = 0;
+        int wrapClosedCount = 0;
+        for (const auto& wire : project_.Wires()) {
+            if (wire.projection.has_value()
+                && wire.name.find("__w7窓_on_") == 0) {
+                ++wrapProjectedCount;
+                if (wire.wire.IsClosed(1.0e-6)) {
+                    ++wrapClosedCount;
+                }
+            }
+        }
+        std::size_t openingsA = 0;
+        std::size_t openingsB = 0;
+        for (const auto& surface : project_.Surfaces()) {
+            if (surface.name == "__w7面A") {
+                openingsA = surface.openingWireNames.size();
+            } else if (surface.name == "__w7面B") {
+                openingsB = surface.openingWireNames.size();
+            }
+        }
+        if (wrapProjectedCount != 2 || wrapClosedCount != 2
+            || openingsA != 1 || openingsB != 1) {
+            qWarning() << "wrap projection" << wrapProjectedCount << wrapClosedCount
+                       << openingsA << openingsB;
+            return fail("wrap projection splits into per-face closed openings");
+        }
+        project_ = wave7Saved;
+        undoStack_ = wave7Undo;
+        redoStack_ = wave7Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;

@@ -1185,6 +1185,22 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(projectButton, &QPushButton::clicked, this, &MainWindow::ProjectSelectedWiresToSurface);
     layout->addWidget(projectButton);
 
+    wrapProjectionOpenings_ = new QCheckBox(QStringLiteral("閉じた輪郭は面ごとの開口として登録"));
+    wrapProjectionOpenings_->setChecked(true);
+    wrapProjectionOpenings_->setToolTip(QStringLiteral(
+        "回り込み投影で分割された閉じた輪郭を、その面の開口(窓)として自動登録します。\n"
+        "実物と同じく、角で2枚の板それぞれに窓が開きます"));
+    layout->addWidget(wrapProjectionOpenings_);
+    auto* wrapProjectButton = new QPushButton(QStringLiteral("複数の面へ回り込み投影"));
+    wrapProjectButton->setObjectName("primaryButton");
+    wrapProjectButton->setToolTip(QStringLiteral(
+        "パノラミックウインドウのように角をまたぐ窓に使います(#14)。\n"
+        "下書きワイヤーと投影先の面2枚以上を3D画面で一緒に選択してから押します。\n"
+        "下書きは面ごとに載る区間へ分割され、各面へ投影されます(下書きの分割片は非表示で保持)"));
+    connect(wrapProjectButton, &QPushButton::clicked,
+        this, &MainWindow::ProjectSelectedWiresAcrossSurfaces);
+    layout->addWidget(wrapProjectButton);
+
     auto* lightCaseBox = new QGroupBox(QStringLiteral("飛び出すライトケース"));
     lightCaseBox->setObjectName(QStringLiteral("lightCaseSection"));
     lightCaseBox->setProperty("manualAnchor", QStringLiteral("lightCase"));

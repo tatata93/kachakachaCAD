@@ -199,6 +199,8 @@ private:
         kachakacha::model::Project& candidate,
         const kachakacha::model::NamedSurface& source,
         double signedDistanceMillimeters) const;
+    //! 回り込み投影(#14): 1つの下書きを選択した複数の面へ分割投影する。
+    void ProjectSelectedWiresAcrossSurfaces();
     void AddSurfaceFromConfiguredInputs(
         kachakacha::model::Project& project,
         const std::string& surfaceName,
@@ -586,6 +588,7 @@ private:
     QCheckBox* thicknessAlsoSurface_ = nullptr; //!< 板材化と同時に反対側表面の面も作る(#12)
     QCheckBox* thicknessAlsoWires_ = nullptr;   //!< 板材化と同時に縁ワイヤを厚み位置へ複製(#12)
     QCheckBox* surfaceKeepSectionWires_ = nullptr; //!< 面作成時に構成線もワイヤ化(#13)
+    QCheckBox* wrapProjectionOpenings_ = nullptr;  //!< 回り込み投影の閉輪郭を開口登録(#14)
     QDoubleSpinBox* plateEndThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QSpinBox* laminateCountSpin_ = nullptr;

@@ -849,6 +849,89 @@ int main()
             Require(std::abs(loadedLaminate.FindPlate("外板_L3")->BaseOffset()) < 1.0e-12,
                 "clearing the laminate removes the offset");
         }
+
+        // --- 面への開口(窓・ライト)と近似モデル・板材への反映 ---
+        {
+            Project openingProject = MakeBottleLikeProject();
+            openingProject.AddWire("窓下書きS", Wire::Polyline({
+                {-4.0, 40.0, 26.0}, {4.0, 40.0, 26.0}, {4.0, 40.0, 33.0},
+                {-4.0, 40.0, 33.0}, {-4.0, 40.0, 26.0}}));
+            openingProject.AddProjectedWire("窓S", "窓下書きS", "胴", {0.0, -1.0, 0.0});
+            openingProject.AddSurfaceOpening("胴", "窓S");
+            bool duplicateGuarded = false;
+            try {
+                openingProject.AddSurfaceOpening("胴", "窓S");
+            } catch (const std::exception&) {
+                duplicateGuarded = true;
+            }
+            Require(duplicateGuarded, "duplicate surface openings are rejected");
+
+            // 開口に使われているワイヤは削除できない。
+            bool wireGuarded = false;
+            try {
+                (void)openingProject.RemoveWire("窓S");
+            } catch (const std::exception&) {
+                wireGuarded = true;
+            }
+            Require(wireGuarded, "surface-opening wires cannot be removed");
+
+            // 面入力の近似モデルへ開口が写る(部材内に収まる開口は派生穴ワイヤになる)。
+            PartApproximationOptions twoParts;
+            twoParts.splitAxis = PartSplitAxis::V;
+            twoParts.automaticBoundaries = false;
+            twoParts.manualBoundaryParameters = {0.5};
+            openingProject.AddPartModelFromSurface("面近似穴", "胴", twoParts);
+            Require(openingProject.PartModels().back().openingWireNames.size() == 1,
+                "surface opening is projected into the surface-source part model");
+
+            // この面から作る板材へ自動で引き継がれる。
+            openingProject.AddPlate(
+                "胴板2", "胴", 0.3, PlateThicknessDirection::Positive, "プラ板");
+            bool inherited = false;
+            for (const auto& plate : openingProject.Plates()) {
+                if (plate.name == "胴板2") {
+                    inherited = plate.openingWireNames
+                        == std::vector<std::string>{"窓S"};
+                }
+            }
+            Require(inherited, "new plates inherit surface openings");
+
+            // スクリプト往復。
+            std::ostringstream saved;
+            kachakacha::io::WriteProjectScript(saved, openingProject);
+            Require(saved.str().find("surface_opening 胴 窓S") != std::string::npos,
+                "surface opening saved to the script");
+            std::istringstream input(saved.str());
+            Project loadedOpening = kachakacha::io::LoadProjectScript(input, "surface-opening");
+            bool restored = false;
+            for (const auto& surface : loadedOpening.Surfaces()) {
+                if (surface.name == "胴") {
+                    restored = surface.openingWireNames
+                        == std::vector<std::string>{"窓S"};
+                }
+            }
+            Require(restored, "surface opening survives the round trip");
+            Require(loadedOpening.PartModels().back().openingWireNames.size() == 1,
+                "part-model opening regenerated on load");
+
+            // 実体化(曲げ状態)にも開口が実穴として写る。
+            kachakacha::io::PartFoldStateOptions foldOptions;
+            foldOptions.progress = 1.0;
+            foldOptions.surfaceThicknessMillimeters = 0.3;
+            const auto realized = kachakacha::io::AddPartFoldStateModel(
+                openingProject, openingProject,
+                openingProject.PartModels().back(), foldOptions, "面穴曲げ");
+            Require(realized.openingWireNames.size() + realized.outlineWireNames.size() >= 1,
+                "surface opening reaches the realized fold state");
+
+            // 解除も往復も対称に動く。
+            openingProject.RemoveSurfaceOpening("胴", "窓S");
+            for (const auto& surface : openingProject.Surfaces()) {
+                if (surface.name == "胴") {
+                    Require(surface.openingWireNames.empty(), "surface opening removed");
+                }
+            }
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

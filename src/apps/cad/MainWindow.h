@@ -196,6 +196,11 @@ private:
     void AddSelectedPlateSplitLines();
     void RemoveSelectedPlateSplitLines();
     void SplitSelectedPlate();
+    void AddSelectedSurfaceOpenings();
+    void CreateExtrudedSurface();
+    void CreateRevolvedSurface();
+    void CreateOffsetSurfaceApproximation();
+    void RemoveSelectedSurfaceOpenings();
     void AddLaminationToSelectedPlate();
     void LinkSelectedPlatesAsLaminate();
     void ClearSelectedPlateLaminate();
@@ -534,6 +539,12 @@ private:
     QDoubleSpinBox* plateEndThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QSpinBox* laminateCountSpin_ = nullptr;
+    QComboBox* extrudeDirection_ = nullptr;
+    QDoubleSpinBox* extrudeDistance_ = nullptr;
+    QComboBox* revolveAxis_ = nullptr;
+    QDoubleSpinBox* revolveAngle_ = nullptr;
+    QSpinBox* revolveSections_ = nullptr;
+    QDoubleSpinBox* offsetSurfaceDistance_ = nullptr;
     QDoubleSpinBox* laminateThicknessSpin_ = nullptr;
     QDoubleSpinBox* laminateTargetHeightSpin_ = nullptr;
     QLabel* laminateSuggestLabel_ = nullptr;

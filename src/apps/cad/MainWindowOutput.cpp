@@ -152,15 +152,15 @@ QWidget* MainWindow::BuildOutputPanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     // ADR 0020 第1段: 長い縦一列フォームを折りたたみセクションへ分ける。
     const auto beginSection = [] {
         auto* content = new QWidget;
         auto* contentLayout = new QVBoxLayout(content);
         contentLayout->setContentsMargins(4, 2, 4, 6);
-        contentLayout->setSpacing(10);
+        contentLayout->setSpacing(6);
         return std::pair<QWidget*, QVBoxLayout*>{content, contentLayout};
     };
     auto [planarContent, planarLayout] = beginSection();

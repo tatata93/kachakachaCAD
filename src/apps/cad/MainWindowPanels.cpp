@@ -152,8 +152,8 @@ QWidget* MainWindow::BuildDrawingPanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     // 作図面コンボは上部ツールバーに常時表示する(ADR 0021: モードの可視化)。
     activePlaneCombo_ = new QComboBox;
@@ -356,8 +356,8 @@ QWidget* MainWindow::BuildPlanePanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -509,8 +509,8 @@ QWidget* MainWindow::BuildWirePanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -610,8 +610,8 @@ QWidget* MainWindow::BuildEditPanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     auto* referenceLabel = new QLabel(QStringLiteral("変形の基準線"));
     referenceLabel->setStyleSheet("font-weight: 600; color: #26323a;");
@@ -818,8 +818,8 @@ QWidget* MainWindow::BuildMachiningPanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     auto* form = new QFormLayout;
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -949,8 +949,8 @@ QWidget* MainWindow::BuildSurfacePanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     auto* createTitle = new QLabel(QStringLiteral("ワイヤーから面"));
     createTitle->setProperty("manualAnchor", QStringLiteral("surfaceCreate"));
@@ -1159,7 +1159,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     lightCaseBox->setObjectName(QStringLiteral("lightCaseSection"));
     lightCaseBox->setProperty("manualAnchor", QStringLiteral("lightCase"));
     auto* lightCaseLayout = new QVBoxLayout(lightCaseBox);
-    lightCaseLayout->setSpacing(8);
+    lightCaseLayout->setSpacing(5);
 
     lightCaseSelectionLabel_ = new QLabel(QStringLiteral("選択: 最前面の閉じた輪郭0本 / 接続先0個"));
     lightCaseSelectionLabel_->setWordWrap(true);
@@ -1345,6 +1345,28 @@ QWidget* MainWindow::BuildSurfacePanel()
     openingButtonLayout->addWidget(removeOpeningButton, 1);
     layout->addWidget(openingButtons);
 
+    auto* surfaceOpeningHint = new QLabel(QStringLiteral(
+        "面の段階でも開口を登録できます。面1つ+閉じた投影輪郭を選択:"));
+    surfaceOpeningHint->setWordWrap(true);
+    surfaceOpeningHint->setStyleSheet("color: #5c6670; margin-top: 4px;");
+    layout->addWidget(surfaceOpeningHint);
+    auto* surfaceOpeningButtons = new QWidget;
+    auto* surfaceOpeningLayout = new QHBoxLayout(surfaceOpeningButtons);
+    surfaceOpeningLayout->setContentsMargins(0, 0, 0, 0);
+    surfaceOpeningLayout->setSpacing(6);
+    auto* addSurfaceOpeningButton = new QPushButton(QStringLiteral("面の開口に追加"));
+    addSurfaceOpeningButton->setToolTip(QStringLiteral(
+        "面に登録した開口は、面入力の近似モデル・型紙・実体化と、\n"
+        "この面から後で作る板材へ自動で引き継がれます"));
+    connect(addSurfaceOpeningButton, &QPushButton::clicked,
+        this, &MainWindow::AddSelectedSurfaceOpenings);
+    auto* removeSurfaceOpeningButton = new QPushButton(QStringLiteral("面の開口から外す"));
+    connect(removeSurfaceOpeningButton, &QPushButton::clicked,
+        this, &MainWindow::RemoveSelectedSurfaceOpenings);
+    surfaceOpeningLayout->addWidget(addSurfaceOpeningButton, 1);
+    surfaceOpeningLayout->addWidget(removeSurfaceOpeningButton, 1);
+    layout->addWidget(surfaceOpeningButtons);
+
     auto* reliefTitle = new QLabel(QStringLiteral("展開時の切れ目"));
     reliefTitle->setProperty("manualAnchor", QStringLiteral("plateRelief"));
     reliefTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
@@ -1509,6 +1531,80 @@ QWidget* MainWindow::BuildSurfacePanel()
     laminateLinkRow->addWidget(laminateLinkButton, 1);
     laminateLinkRow->addWidget(laminateClearButton, 1);
     layout->addLayout(laminateLinkRow);
+
+    // --- 押し出し・回転・オフセット面 ---
+    auto* sweepTitle = new QLabel(QStringLiteral("押し出し・回転・オフセット面"));
+    sweepTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(sweepTitle);
+    auto* extrudeForm = new QFormLayout;
+    extrudeForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    extrudeDirection_ = new QComboBox;
+    extrudeDirection_->addItem(QStringLiteral("+X"), 0);
+    extrudeDirection_->addItem(QStringLiteral("-X"), 1);
+    extrudeDirection_->addItem(QStringLiteral("+Y"), 2);
+    extrudeDirection_->addItem(QStringLiteral("-Y"), 3);
+    extrudeDirection_->addItem(QStringLiteral("+Z"), 4);
+    extrudeDirection_->addItem(QStringLiteral("-Z"), 5);
+    extrudeForm->addRow(QStringLiteral("押し出し方向"), extrudeDirection_);
+    extrudeDistance_ = MakePositiveField(20.0);
+    extrudeDistance_->setSuffix(QStringLiteral(" mm"));
+    extrudeForm->addRow(QStringLiteral("押し出し距離"), extrudeDistance_);
+    layout->addLayout(extrudeForm);
+    auto* extrudeButton = new QPushButton(QStringLiteral("選択ワイヤーを押し出して面を作成"));
+    extrudeButton->setObjectName("primaryButton");
+    extrudeButton->setToolTip(QStringLiteral(
+        "3D画面でワイヤーを1本選んでから押します。指定方向へ平行移動した写しとの間に面を張ります"));
+    connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::CreateExtrudedSurface);
+    layout->addWidget(extrudeButton);
+
+    auto* revolveForm = new QFormLayout;
+    revolveForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    revolveAxis_ = new QComboBox;
+    revolveAxis_->addItem(QStringLiteral("X軸まわり"), 0);
+    revolveAxis_->addItem(QStringLiteral("Y軸まわり"), 1);
+    revolveAxis_->addItem(QStringLiteral("Z軸まわり"), 2);
+    revolveAxis_->setToolTip(QStringLiteral(
+        "軸は原点を通ります。作図点を1つ一緒に選ぶと、その点を通る軸になります"));
+    revolveForm->addRow(QStringLiteral("回転軸"), revolveAxis_);
+    revolveAngle_ = new QDoubleSpinBox;
+    revolveAngle_->setRange(1.0, 360.0);
+    revolveAngle_->setDecimals(1);
+    revolveAngle_->setValue(360.0);
+    revolveAngle_->setSuffix(QStringLiteral(" °"));
+    revolveForm->addRow(QStringLiteral("回転角"), revolveAngle_);
+    revolveSections_ = new QSpinBox;
+    revolveSections_->setRange(4, 64);
+    revolveSections_->setValue(24);
+    revolveSections_->setToolTip(QStringLiteral("回転を近似する断面の数。多いほど滑らか"));
+    revolveForm->addRow(QStringLiteral("断面数"), revolveSections_);
+    layout->addLayout(revolveForm);
+    auto* revolveButton = new QPushButton(QStringLiteral("選択ワイヤーを回転して面を作成"));
+    revolveButton->setObjectName("primaryButton");
+    revolveButton->setToolTip(QStringLiteral(
+        "3D画面で断面ワイヤーを1本選んでから押します(回転体・ろくろ形状)。\n"
+        "作図点を1つ追加選択すると、その点を通る軸で回します"));
+    connect(revolveButton, &QPushButton::clicked, this, &MainWindow::CreateRevolvedSurface);
+    layout->addWidget(revolveButton);
+
+    auto* offsetForm = new QFormLayout;
+    offsetForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    offsetSurfaceDistance_ = new QDoubleSpinBox;
+    offsetSurfaceDistance_->setRange(-50.0, 50.0);
+    offsetSurfaceDistance_->setDecimals(2);
+    offsetSurfaceDistance_->setSingleStep(0.1);
+    offsetSurfaceDistance_->setValue(0.5);
+    offsetSurfaceDistance_->setSuffix(QStringLiteral(" mm"));
+    offsetSurfaceDistance_->setToolTip(QStringLiteral(
+        "法線方向のオフセット量。+は法線側、-は反対側"));
+    offsetForm->addRow(QStringLiteral("オフセット量"), offsetSurfaceDistance_);
+    layout->addLayout(offsetForm);
+    auto* offsetButton = new QPushButton(QStringLiteral("選択面のオフセット面を作成"));
+    offsetButton->setObjectName("primaryButton");
+    offsetButton->setToolTip(QStringLiteral(
+        "3D画面で面を1つ選んでから押します。法線方向へずらした近似面(断面ロフト)を作ります。\n"
+        "内張り・裏打ちの土台に使えます(積層は板材どうしの「積層」も参照)"));
+    connect(offsetButton, &QPushButton::clicked, this, &MainWindow::CreateOffsetSurfaceApproximation);
+    layout->addWidget(offsetButton);
     layout->addStretch(1);
 
     // モードのツール(上部)で選んだ1セクションだけを表示する(ADR 0025)。
@@ -1525,6 +1621,7 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("展開片の分割線"),
         QStringLiteral("板材を分割"),
         QStringLiteral("板材を重ねて積層"),
+        QStringLiteral("押し出し・回転・オフセット面"),
     });
 
     auto* scrollArea = new QScrollArea;
@@ -1538,8 +1635,8 @@ QWidget* MainWindow::BuildDisplayPanel()
 {
     auto* panel = new QWidget;
     auto* layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(12, 12, 12, 12);
-    layout->setSpacing(10);
+    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(6);
 
     const auto makeWidthField = [] (double value) {
         auto* field = new ExpressionDoubleSpinBox;
@@ -1956,7 +2053,7 @@ QWidget* MainWindow::BuildInfoPanel()
     measurementBox->setProperty("manualAnchor", QStringLiteral("measurement"));
     auto* measurementLayout = new QVBoxLayout(measurementBox);
     measurementLayout->setContentsMargins(10, 10, 10, 10);
-    measurementLayout->setSpacing(8);
+    measurementLayout->setSpacing(5);
     measurementMode_ = new QComboBox;
     measurementMode_->addItems({
         QStringLiteral("2点間（3D距離）"),

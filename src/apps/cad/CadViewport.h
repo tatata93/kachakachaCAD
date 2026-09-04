@@ -280,9 +280,11 @@ public:
     //! 部材近似モデルの曲げ状態プレビュー。rails は行(レール)ごとの点列、
     //! creaseDirections は内部レールの山谷(+1/-1/0, サイズ rails-2)。
     //! rails を空にすると消える。
+    //! visibleBands は表示する帯(部材番号-1、0始まり)。空なら全帯を表示。
     void SetPartFoldPreview(
         std::vector<std::vector<kachakacha::geometry::Vector3>> rails,
-        std::vector<int> creaseDirections);
+        std::vector<int> creaseDirections,
+        std::vector<int> visibleBands = {});
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();
@@ -534,6 +536,7 @@ private:
     double plateAssemblyApproximationMaximumDeviationMillimeters_ = 0.0;
     bool plateAssemblyApproximationSmoothPaper_ = false;
     std::vector<std::vector<kachakacha::geometry::Vector3>> partFoldPreviewRails_;
+    std::vector<int> partFoldPreviewBands_;
     std::vector<int> partFoldPreviewCreases_;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;

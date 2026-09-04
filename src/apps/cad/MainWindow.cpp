@@ -602,8 +602,8 @@ void MainWindow::BuildUi()
         QTabWidget::pane { border: 1px solid #c7cdd2; background: #ffffff; }
         QTabBar::tab { padding: 8px 12px; background: #e8ebed; }
         QTabBar::tab:selected { background: #ffffff; color: #075f69; }
-        QLineEdit, QComboBox, QDoubleSpinBox { min-height: 26px; border: 1px solid #aeb7be; background: #ffffff; padding: 1px 4px; }
-        QPushButton { min-height: 30px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 3px 10px; }
+        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox { min-height: 22px; border: 1px solid #aeb7be; background: #ffffff; padding: 1px 4px; }
+        QPushButton { min-height: 24px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 8px; }
         QPushButton:hover { background: #e8edef; }
         QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
         QPushButton#primaryButton:hover { background: #09666e; }
@@ -629,11 +629,11 @@ void MainWindow::BuildUi()
         QLabel#beginnerGuideSteps { color: #34444d; }
         QLabel#beginnerGuideContext { color: #5d6970; background: #f1f3f4; padding: 5px; }
         QPushButton#guideNextButton { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
-        QToolButton#drawingToolButton { min-height: 38px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 3px 8px; }
+        QToolButton#drawingToolButton { min-height: 32px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 6px; }
         QToolButton#drawingToolButton:hover { background: #e8edef; }
         QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
         QTreeWidget { border: 0; background: #fafbfb; }
-        QTreeWidget::item { min-height: 25px; }
+        QTreeWidget::item { min-height: 21px; }
         QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
     )");
 }
@@ -1200,6 +1200,8 @@ void MainWindow::BuildMenusAndToolbar()
             QStringLiteral("縦横の断面ネットワークから面を作る"));
         addSurfaceTool(QStringLiteral("面へ投影"), QStringLiteral("平面図を面へ投影"),
             QStringLiteral("平面の下書きを面へ投影する（窓・開口の輪郭作りに）"));
+        addSurfaceTool(QStringLiteral("押出・回転"), QStringLiteral("押し出し・回転・オフセット面"),
+            QStringLiteral("押し出し面・回転体・オフセット面を作る"));
         surfaceToolbar_->addSeparator();
         addSurfaceTool(QStringLiteral("板材化"), QStringLiteral("ワイヤー / 面から3D板を作る"),
             QStringLiteral("面に厚みを付けて板材にする"));
@@ -2228,57 +2230,108 @@ void MainWindow::RefreshBeginnerGuide()
             QStringLiteral("1  作り方と値を指定\n2  この向きで見る\n3  必要なら平面を作成"),
             QStringLiteral("planes"), 0, QStringLiteral("作図へ進む"));
         break;
-    case 2:
-        setGuide(QStringLiteral("座標で正確にワイヤーを作る"), QStringLiteral("次: 種類を選び、座標を入力"),
-            QStringLiteral("1  ワイヤー種類\n2  XYZまたは平面内XY\n3  ワイヤーを追加"),
-            QStringLiteral("numeric"));
-        break;
-    case 3:
-        setGuide(QStringLiteral("ワイヤー・平面を編集"),
-            selections.empty() ? QStringLiteral("次: 中央画面で編集対象を選ぶ")
-                               : QStringLiteral("次: 点をドラッグ、または右欄で数値変更"),
-            QStringLiteral("1  対象を直接選択\n2  点移動・変形・拘束を選択\n3  数値変更は「変更を適用」"),
-            QStringLiteral("edit"), wireCount >= 2 ? 5 : -1,
-            wireCount >= 2 ? QStringLiteral("面・板へ進む") : QString());
-        break;
-    case 4:
-        setGuide(QStringLiteral("交差する角を加工"), QStringLiteral("次: 直線2本をCtrl+クリックで選ぶ"),
-            QStringLiteral("1  直線A/Bを3Dで選択\n2  C面取り/R丸めと寸法\n3  作成"),
-            QStringLiteral("machining"));
-        break;
-    case 5:
-        if (plateCount > 0) {
-            setGuide(QStringLiteral("板材を仕上げる"), QStringLiteral("次: 開口、途中切れ目、展開分割線を指定"),
-                QStringLiteral("1  板材と投影ワイヤーを選択\n2  開口・切れ目・分割線\n3  出力タブで紙片数を確認"),
-                QStringLiteral("projection"), 3, QStringLiteral("出力へ進む"));
-        } else if (surfaceCount > 0) {
-            setGuide(QStringLiteral("面を板材・治具にする"), QStringLiteral("次: 板厚方向または治具の側を決める"),
-                QStringLiteral("1  面を選択\n2  板厚・方向または治具設定\n3  作成"),
+    case 2: {
+        // 面・板材モード: 上のツール列で選んだ区画に合わせた手順を出す。
+        QString sectionTitle;
+        for (QAction* action : surfaceToolActions_) {
+            if (action != nullptr && action->isChecked()) {
+                sectionTitle = action->data().toString();
+                break;
+            }
+        }
+        if (sectionTitle == QStringLiteral("断面と外形ガイドから面（Gordon面）")) {
+            setGuide(QStringLiteral("断面とガイドから面を作る"),
+                QStringLiteral("次: 断面ワイヤーを通し方向の手前から奥の順に選ぶ"),
+                QStringLiteral("1  断面を2本以上、手前から奥の順にCtrl+クリック\n2  外形ガイドを使う場合はガイド2本を先に選ぶ\n3  ゴードン面を作成"),
+                QStringLiteral("surface"));
+        } else if (sectionTitle == QStringLiteral("平面図を面へ投影")) {
+            setGuide(QStringLiteral("平面図を面へ投影する"),
+                QStringLiteral("次: 平らな下書きと投影先の面を選ぶ"),
+                QStringLiteral("1  正面図などの平らな紙に輪郭を描く\n2  下書きワイヤーと投影先の面を選択\n3  投影方向を選んで投影(窓・ライトの輪郭作り)"),
+                QStringLiteral("projection"));
+        } else if (sectionTitle == QStringLiteral("押し出し・回転・オフセット面")) {
+            setGuide(QStringLiteral("押し出し・回転・オフセットで面を増やす"),
+                QStringLiteral("次: 元になるワイヤーまたは面を選ぶ"),
+                QStringLiteral("押し出し: ワイヤー1本+方向と距離\n回転: 断面1本+軸と角度(軸を通す作図点は任意)\nオフセット: 面1つ+ずらす量"),
+                QStringLiteral("surface"));
+        } else if (sectionTitle == QStringLiteral("飛び出すライトケース")) {
+            setGuide(QStringLiteral("飛び出すライトケースを作る"),
+                QStringLiteral("次: 最前面の閉じた輪郭と接続先を選ぶ"),
+                QStringLiteral("1  最前面の閉じた輪郭を選択\n2  Ctrl+クリックで接続先の面/板材\n3  方向を選んで作成"),
+                QStringLiteral("lightcase"));
+        } else if (sectionTitle == QStringLiteral("ワイヤー / 面から3D板を作る")) {
+            setGuide(QStringLiteral("面を板材にする"),
+                QStringLiteral("次: 面を選び、板厚と方向を決める"),
+                QStringLiteral("1  面(または閉じた輪郭)を選択\n2  板厚・厚み方向・材質を指定\n3  板材を作成"),
+                QStringLiteral("plate"));
+        } else if (sectionTitle == QStringLiteral("板厚位置にワイヤーを作る")) {
+            setGuide(QStringLiteral("板厚位置にワイヤーを作る"),
+                QStringLiteral("次: 板材と元ワイヤーを選ぶ"),
+                QStringLiteral("1  板材1枚と輪郭を選択\n2  厚みのどの位置かを0〜1で指定\n3  作成(治具や罫書き線用)"),
+                QStringLiteral("plate"));
+        } else if (sectionTitle == QStringLiteral("曲面から成形治具")) {
+            setGuide(QStringLiteral("曲面から成形治具を作る"),
+                QStringLiteral("次: 元になる曲面を選ぶ"),
+                QStringLiteral("1  曲面を1つ選択\n2  型の側・成形の隙間・厚みを指定\n3  治具を作成"),
+                QStringLiteral("jig"));
+        } else if (sectionTitle == QStringLiteral("板材に開口")) {
+            setGuide(QStringLiteral("窓・ライトの開口をあける"),
+                QStringLiteral("次: 板材(または面)と閉じた投影輪郭を選ぶ"),
+                QStringLiteral("1  板材1枚(または面1つ)を選択\n2  Ctrl+クリックで閉じた投影輪郭\n3  開口に追加(面に登録すると近似・板材へ引き継ぎ)"),
+                QStringLiteral("openings"));
+        } else if (sectionTitle == QStringLiteral("展開時の切れ目")) {
+            setGuide(QStringLiteral("展開時の切れ目を指定する"),
+                QStringLiteral("次: 板材と切れ目にする投影ワイヤーを選ぶ"),
+                QStringLiteral("1  板材1枚と投影ワイヤーを選択\n2  切れ目に追加\n3  出力タブの展開で反映を確認"),
+                QStringLiteral("relief"));
+        } else if (sectionTitle == QStringLiteral("展開片の分割線")) {
+            setGuide(QStringLiteral("展開片の分割線を指定する"),
+                QStringLiteral("次: 板材と分割線にする投影ワイヤーを選ぶ"),
+                QStringLiteral("1  板材1枚と投影ワイヤーを選択\n2  分割線に追加\n3  展開時にこの線で必ず紙片が分かれる"),
+                QStringLiteral("split"));
+        } else if (sectionTitle == QStringLiteral("板材を分割")) {
+            setGuide(QStringLiteral("板材を2枚に分割する"),
+                QStringLiteral("次: 板材を1枚選び、方向と位置を決める"),
+                QStringLiteral("1  板材1枚を選択\n2  断面に沿う方向/長手方向と位置(%)\n3  赤い破線を確認して2分割"),
+                QStringLiteral("plateSplit"));
+        } else if (sectionTitle == QStringLiteral("板材を重ねて積層")) {
+            setGuide(QStringLiteral("薄板を重ねて積層する"),
+                QStringLiteral("次: 土台になる板材を1枚選ぶ"),
+                QStringLiteral("1  土台の板材を選択\n2  1層の板厚と層数(目標高さから提案)\n3  積層を追加(下の板の外側へ自動でずれる)"),
                 QStringLiteral("plate"));
         } else {
             setGuide(QStringLiteral("ワイヤーから面を作る"),
                 wireCount > 0 ? QStringLiteral("次: 選択順と本数を確認して面を作成")
                               : QStringLiteral("次: 中央画面で輪郭・断面を順に選ぶ"),
-                QStringLiteral("1  断面を順にCtrl+クリック\n2  面の作り方を選択\n3  面を作成"),
+                QStringLiteral("1  断面を順にCtrl+クリック(2本=ルールド、3本以上=ロフト)\n2  面の作り方を選択\n3  面を作成\n複数線で1つの断面なら、表へ役割ごとに追加"),
                 QStringLiteral("surface"));
         }
         break;
-    case 6:
+    }
+    case 3:
         setGuide(QStringLiteral("製作データを出力"),
             plateCount + bodyCount > 0 ? QStringLiteral("次: 出力範囲と形式を確認して保存")
                                        : QStringLiteral("次: 中央画面で板材・治具を選ぶ"),
-            QStringLiteral("1  出力対象を直接選択\n2  分割方向・再現度・切れ込みを指定\n3  スライダーで曲げ状態と部品を確認\n4  1:1図面または現在の3Dを保存"),
+            QStringLiteral("1  上のツール列で出力の種類を選択\n2  出力対象を中央画面で選択\n3  1:1図面・展開・STL/STEP/.kcd を保存"),
             QStringLiteral("output"));
         break;
-    case 7:
+    case 4:
         setGuide(QStringLiteral("見た目を調整"), QStringLiteral("次: 色・太さ・線種を選ぶ"),
             QStringLiteral("1  対象の表示グループを開く\n2  色・太さ・線種・透明度を変更\n3  設定は次回起動にも残る"),
             QStringLiteral("display"));
         break;
-    case 8:
+    case 5:
         setGuide(QStringLiteral("寸法と選択情報を確認"), QStringLiteral("次: 対象を選ぶか、測定を開始"),
             QStringLiteral("1  2点距離・3点角度・要素から方式を選択\n2  中央画面でガイド順に指定\n3  距離・接線・法線角を確認"),
             QStringLiteral("measure"));
+        break;
+    case 6:
+        setGuide(QStringLiteral("部材近似モデルを作る"),
+            plateCount + surfaceCount > 0
+                ? QStringLiteral("次: 近似元を確認して部材近似モデルを作成")
+                : QStringLiteral("次: 近似元の板材または面を選ぶ"),
+            QStringLiteral("1  近似元(板材または面)と分割条件を指定\n2  一覧で部材を確認、型紙を表示\n3  曲げ確認: 部材を選ぶとその部材だけ表示\n4  折り線ごとの角度⇄%で個別に曲げられる"),
+            QStringLiteral("output"));
         break;
     default:
         setGuide(QStringLiteral("作業を選んでください"), QStringLiteral("次: 上の製作工程を選ぶ"),

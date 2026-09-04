@@ -76,13 +76,14 @@ PartFoldStateResult AddPartFoldStateModel(
         }
     }
     std::vector<NamedWire> openings;
-    if (sourcePlateCopy.has_value()) {
-        for (const std::string& openingName : sourcePlateCopy->openingWireNames) {
-            for (const NamedWire& wire : source.Wires()) {
-                if (wire.name == openingName) {
-                    openings.push_back(wire);
-                    break;
-                }
+    const std::vector<std::string>& sourceOpeningNames = fromSurface
+        ? sourceSurfaceCopy->openingWireNames
+        : sourcePlateCopy->openingWireNames;
+    for (const std::string& openingName : sourceOpeningNames) {
+        for (const NamedWire& wire : source.Wires()) {
+            if (wire.name == openingName) {
+                openings.push_back(wire);
+                break;
             }
         }
     }
@@ -116,15 +117,21 @@ PartFoldStateResult AddPartFoldStateModel(
         : model::PartSource(sourcePlateCopy->plate);
     const PartMeshDevelopment mesh = model::DevelopPartMesh(
         meshSource, model.options.splitAxis, parameters, options.columns);
-    // 可動折り線(合意10): 折り線ごとの進行度を織り込んだ状態を目標とし、
-    // 全体の曲げ具合(progress)は「展開⇄その折り状態」の補間として掛ける。
-    const bool customFold = std::any_of(
-        model.railFoldProgress.begin(), model.railFoldProgress.end(),
-        [](double value) { return std::abs(value - 1.0) > 1.0e-12; });
-    const std::vector<std::vector<Vector3>> state = customFold
-        ? model::BuildFoldPreviewToState(
-            mesh, model::BuildPerCreaseFoldState(mesh, model.railFoldProgress), progress)
-        : model::BuildFoldPreview(mesh, progress);
+    // 可動折り線(合意10): 進行度>0 では各帯を剛体のまま折り線角度だけ変えた
+    // 「常に正しい」形状を実体化する(進行度は各折り線の倍率)。
+    // 進行度=0 だけは従来どおり平面に置いた展開状態(型紙そのもの)。
+    std::vector<std::vector<Vector3>> state;
+    if (progress <= 1.0e-12) {
+        state = model::BuildFoldPreview(mesh, 0.0);
+    } else {
+        std::vector<double> effective(
+            static_cast<std::size_t>(std::max(0, mesh.rows - 2)), progress);
+        for (std::size_t index = 0;
+             index < effective.size() && index < model.railFoldProgress.size(); ++index) {
+            effective[index] = progress * model.railFoldProgress[index];
+        }
+        state = model::BuildPerCreaseFoldState(mesh, effective);
+    }
 
     PartFoldStateResult result;
 

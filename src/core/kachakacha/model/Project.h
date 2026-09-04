@@ -140,6 +140,9 @@ struct NamedSurface {
     std::vector<std::vector<std::string>> sourceWireGroups;
     //! 部材近似モデルの派生面(部材面)の場合、そのモデル名。個別編集・保存の対象外。
     std::optional<std::string> partModelSourceName;
+    //! 面の開口(窓・ライト等): この面へ投影した閉ワイヤの名前。
+    //! 面入力の近似モデル・型紙・実体化に反映され、この面から作る板材にも引き継がれる。
+    std::vector<std::string> openingWireNames;
 };
 
 struct NamedPlate {
@@ -334,6 +337,8 @@ public:
         double parameter,
         std::string firstName,
         std::string secondName);
+    void AddSurfaceOpening(std::string_view surfaceName, std::string wireName);
+    void RemoveSurfaceOpening(std::string_view surfaceName, std::string_view wireName);
     void AddPlateOpening(std::string_view plateName, std::string wireName);
     void RemovePlateOpening(std::string_view plateName, std::string_view wireName);
     void AddPlateReliefCut(std::string_view plateName, std::string wireName);

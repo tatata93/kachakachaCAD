@@ -1470,6 +1470,99 @@ void MainWindow::ModifySelectedPlateWires(
     }
 }
 
+namespace {
+
+//! 面1つ+ワイヤ複数の選択を取り出す(面開口用)。
+struct SurfaceWireSelection {
+    int surfaceIndex = -1;
+    std::vector<int> wireIndices;
+};
+
+[[nodiscard]] SurfaceWireSelection PickSurfaceAndWires(
+    const std::vector<CadSelection>& selections,
+    std::size_t surfaceCount,
+    std::size_t wireCount,
+    const char* onlyOneSurfaceMessage)
+{
+    SurfaceWireSelection picked;
+    for (const CadSelection& selection : selections) {
+        if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+            && selection.index < static_cast<int>(surfaceCount)) {
+            if (picked.surfaceIndex >= 0 && picked.surfaceIndex != selection.index) {
+                throw std::invalid_argument(onlyOneSurfaceMessage);
+            }
+            picked.surfaceIndex = selection.index;
+        } else if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+            && selection.index < static_cast<int>(wireCount)) {
+            picked.wireIndices.push_back(selection.index);
+        }
+    }
+    return picked;
+}
+
+} // namespace
+
+void MainWindow::AddSelectedSurfaceOpenings()
+{
+    try {
+        const auto selections = viewport_->Selections();
+        const SurfaceWireSelection picked = PickSurfaceAndWires(
+            selections, project_.Surfaces().size(), project_.Wires().size(),
+            "開口を作る面は1つだけ選択してください。");
+        if (picked.surfaceIndex < 0 || picked.wireIndices.empty()) {
+            throw std::invalid_argument(
+                "面1つと、その面へ投影した閉じた輪郭(窓・ライト等)を選択してください。");
+        }
+        Project candidate = project_;
+        const std::string surfaceName = candidate.Surfaces()[picked.surfaceIndex].name;
+        for (const int wireIndex : picked.wireIndices) {
+            candidate.AddSurfaceOpening(surfaceName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(
+            QStringLiteral("面 %1 へ開口を%2個登録しました（近似モデル・型紙・この面から作る板材へ反映されます）")
+                .arg(QString::fromStdString(surfaceName))
+                .arg(picked.wireIndices.size()),
+            5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::RemoveSelectedSurfaceOpenings()
+{
+    try {
+        const auto selections = viewport_->Selections();
+        const SurfaceWireSelection picked = PickSurfaceAndWires(
+            selections, project_.Surfaces().size(), project_.Wires().size(),
+            "開口を外す面は1つだけ選択してください。");
+        if (picked.surfaceIndex < 0 || picked.wireIndices.empty()) {
+            throw std::invalid_argument("面1つと、開口から外す輪郭を選択してください。");
+        }
+        Project candidate = project_;
+        const std::string surfaceName = candidate.Surfaces()[picked.surfaceIndex].name;
+        for (const int wireIndex : picked.wireIndices) {
+            candidate.RemoveSurfaceOpening(surfaceName, candidate.Wires()[wireIndex].name);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        UpdateSelections(selections, true);
+        statusBar()->showMessage(
+            QStringLiteral("面 %1 の開口を%2個外しました")
+                .arg(QString::fromStdString(surfaceName))
+                .arg(picked.wireIndices.size()),
+            4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::AddSelectedPlateOpenings()
 {
     ModifySelectedPlateWires(
@@ -1727,6 +1820,201 @@ void MainWindow::ClearSelectedPlateLaminate()
         RefreshModelViews(false);
         statusBar()->showMessage(
             QStringLiteral("積層関係を%1件解除しました").arg(cleared), 4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+// ---- 押し出し・回転・オフセット面 -----------------------------------------
+
+namespace {
+
+[[nodiscard]] Vector3 AxisDirectionFromIndex(int index)
+{
+    switch (index) {
+    case 0: return {1.0, 0.0, 0.0};
+    case 1: return {0.0, 1.0, 0.0};
+    default: return {0.0, 0.0, 1.0};
+    }
+}
+
+//! 「<ベース名><suffix>」の空き名を返す(ワイヤ・面の両方で未使用)。
+[[nodiscard]] std::string FreeDerivedName(
+    const Project& project, const std::string& base, const char* suffix)
+{
+    for (int number = 0;; ++number) {
+        std::string candidate = base + suffix
+            + (number == 0 ? std::string() : std::to_string(number + 1));
+        const bool wireTaken = std::any_of(
+            project.Wires().begin(), project.Wires().end(),
+            [&](const kachakacha::model::NamedWire& wire) { return wire.name == candidate; });
+        const bool surfaceTaken = std::any_of(
+            project.Surfaces().begin(), project.Surfaces().end(),
+            [&](const kachakacha::model::NamedSurface& surface) {
+                return surface.name == candidate;
+            });
+        if (!wireTaken && !surfaceTaken) {
+            return candidate;
+        }
+    }
+}
+
+} // namespace
+
+void MainWindow::CreateExtrudedSurface()
+{
+    try {
+        std::vector<int> wireIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.size() != 1) {
+            throw std::invalid_argument("押し出すワイヤーを1本だけ選択してください。");
+        }
+        const auto& sourceWire = project_.Wires()[wireIndices.front()];
+        const int directionIndex = extrudeDirection_->currentData().toInt();
+        Vector3 direction = AxisDirectionFromIndex(directionIndex / 2);
+        if (directionIndex % 2 == 1) {
+            direction = direction * -1.0;
+        }
+        const double distance = extrudeDistance_->value();
+
+        Project candidate = project_;
+        const std::string oppositeName
+            = FreeDerivedName(candidate, sourceWire.name, "_押出先");
+        const std::string surfaceName
+            = FreeDerivedName(candidate, sourceWire.name, "_押出面");
+        candidate.AddWire(oppositeName, sourceWire.wire.Translated(direction * distance));
+        candidate.AddRuledSurface(surfaceName, sourceWire.name, oppositeName);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("押し出し面 %1 を作成しました（反対側の縁: %2）")
+                .arg(QString::fromStdString(surfaceName), QString::fromStdString(oppositeName)),
+            5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreateRevolvedSurface()
+{
+    try {
+        std::vector<int> wireIndices;
+        std::vector<int> pointIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                wireIndices.push_back(selection.index);
+            } else if (selection.kind == CadSelectionKind::Point && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Points().size())) {
+                pointIndices.push_back(selection.index);
+            }
+        }
+        if (wireIndices.size() != 1) {
+            throw std::invalid_argument(
+                "回転する断面ワイヤーを1本選択してください(軸を通す作図点は任意で1つ)。");
+        }
+        if (pointIndices.size() > 1) {
+            throw std::invalid_argument("軸を通す作図点は1つだけ選択してください。");
+        }
+        const auto& sourceWire = project_.Wires()[wireIndices.front()];
+        const Vector3 axisPoint = pointIndices.empty()
+            ? Vector3{0.0, 0.0, 0.0}
+            : project_.Points()[pointIndices.front()].point;
+        const Vector3 axisDirection = AxisDirectionFromIndex(revolveAxis_->currentData().toInt());
+        const double angleRadians = revolveAngle_->value() * kPi / 180.0;
+        const int sections = revolveSections_->value();
+
+        Project candidate = project_;
+        std::vector<std::string> sectionNames;
+        sectionNames.push_back(sourceWire.name);
+        for (int index = 1; index <= sections; ++index) {
+            const double angle = angleRadians * static_cast<double>(index) / sections;
+            const std::string name = FreeDerivedName(
+                candidate, sourceWire.name, ("_回転" + std::to_string(index)).c_str());
+            candidate.AddWire(
+                name, sourceWire.wire.RotatedAroundAxis(axisPoint, axisDirection, angle));
+            candidate.SetWireVisible(name, false);
+            sectionNames.push_back(name);
+        }
+        const std::string surfaceName
+            = FreeDerivedName(candidate, sourceWire.name, "_回転面");
+        candidate.AddLoftSurface(surfaceName, sectionNames);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("回転面 %1 を作成しました（%2°、断面%3）")
+                .arg(QString::fromStdString(surfaceName))
+                .arg(revolveAngle_->value(), 0, 'f', 1)
+                .arg(sections),
+            5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::CreateOffsetSurfaceApproximation()
+{
+    try {
+        std::vector<int> surfaceIndices;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Surfaces().size())) {
+                surfaceIndices.push_back(selection.index);
+            }
+        }
+        if (surfaceIndices.size() != 1) {
+            throw std::invalid_argument("オフセットする面を1つだけ選択してください。");
+        }
+        const double distance = offsetSurfaceDistance_->value();
+        if (std::abs(distance) < 1.0e-6) {
+            throw std::invalid_argument("オフセット量は0以外で指定してください。");
+        }
+        const auto& sourceSurface = project_.Surfaces()[surfaceIndices.front()];
+
+        constexpr int kSectionCount = 9;
+        constexpr int kSamplesPerSection = 48;
+        Project candidate = project_;
+        std::vector<std::string> sectionNames;
+        for (int sectionIndex = 0; sectionIndex < kSectionCount; ++sectionIndex) {
+            const double v = static_cast<double>(sectionIndex) / (kSectionCount - 1);
+            std::vector<Vector3> points;
+            points.reserve(kSamplesPerSection + 1);
+            for (int sample = 0; sample <= kSamplesPerSection; ++sample) {
+                const double u = static_cast<double>(sample) / kSamplesPerSection;
+                points.push_back(sourceSurface.surface.Evaluate(u, v)
+                    + sourceSurface.surface.Normal(u, v) * distance);
+            }
+            const std::string name = FreeDerivedName(
+                candidate, sourceSurface.name,
+                ("_オフセット" + std::to_string(sectionIndex + 1)).c_str());
+            candidate.AddWire(name, Wire::Polyline(std::move(points)));
+            candidate.SetWireVisible(name, false);
+            sectionNames.push_back(name);
+        }
+        const std::string surfaceName
+            = FreeDerivedName(candidate, sourceSurface.name, "_オフセット面");
+        candidate.AddLoftSurface(surfaceName, sectionNames);
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("オフセット面 %1 を作成しました（%2 mm、断面ロフト近似）")
+                .arg(QString::fromStdString(surfaceName))
+                .arg(distance, 0, 'f', 2),
+            5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

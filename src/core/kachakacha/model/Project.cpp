@@ -857,12 +857,20 @@ void Project::AddPlate(
     if (!surface.has_value()) {
         throw std::invalid_argument("Plate source surface does not exist: " + sourceSurfaceName);
     }
+    // 面に登録済みの開口(窓・ライト等)は、この面から作る板材へ自動で引き継ぐ。
+    std::vector<std::string> inheritedOpenings;
+    for (const NamedSurface& named : surfaces_) {
+        if (named.name == sourceSurfaceName) {
+            inheritedOpenings = named.openingWireNames;
+            break;
+        }
+    }
     plates_.push_back({
         std::move(name),
         Plate(*surface, startThickness, endThickness, direction),
         std::move(sourceSurfaceName),
         std::move(material),
-        {},
+        std::move(inheritedOpenings),
         true,
         {},
         {},
@@ -1810,6 +1818,53 @@ void Project::SplitPlate(
         std::move(secondNamedPlate));
 }
 
+void Project::AddSurfaceOpening(std::string_view surfaceName, std::string wireName)
+{
+    const auto surface = std::find_if(surfaces_.begin(), surfaces_.end(),
+        [&](const NamedSurface& candidate) { return candidate.name == surfaceName; });
+    if (surface == surfaces_.end()) {
+        throw std::invalid_argument("Surface name does not exist: " + std::string(surfaceName));
+    }
+    if (surface->partModelSourceName.has_value()) {
+        throw std::invalid_argument(
+            "Part-model derived surfaces manage openings automatically: "
+            + std::string(surfaceName));
+    }
+    const NamedWire& wire = RequireWire(wireName);
+    if (wire.metadata.construction) {
+        throw std::invalid_argument(
+            "Construction wire cannot be used as a surface opening: " + wireName);
+    }
+    if (!wire.wire.IsClosed()) {
+        throw std::invalid_argument("Surface opening wire must be closed: " + wireName);
+    }
+    if (!wire.projection.has_value() || wire.projection->targetSurfaceName != surface->name) {
+        throw std::invalid_argument(
+            "Surface opening must be a wire projected to this surface: " + wireName);
+    }
+    if (std::find(surface->openingWireNames.begin(), surface->openingWireNames.end(), wireName)
+        != surface->openingWireNames.end()) {
+        throw std::invalid_argument("Wire is already a surface opening: " + wireName);
+    }
+    surface->openingWireNames.push_back(std::move(wireName));
+}
+
+void Project::RemoveSurfaceOpening(std::string_view surfaceName, std::string_view wireName)
+{
+    const auto surface = std::find_if(surfaces_.begin(), surfaces_.end(),
+        [&](const NamedSurface& candidate) { return candidate.name == surfaceName; });
+    if (surface == surfaces_.end()) {
+        throw std::invalid_argument("Surface name does not exist: " + std::string(surfaceName));
+    }
+    const auto position = std::find(
+        surface->openingWireNames.begin(), surface->openingWireNames.end(), wireName);
+    if (position == surface->openingWireNames.end()) {
+        throw std::invalid_argument(
+            "Wire is not a surface opening: " + std::string(wireName));
+    }
+    surface->openingWireNames.erase(position);
+}
+
 void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
 {
     NamedPlate* plate = nullptr;
@@ -2042,6 +2097,10 @@ bool Project::RemoveWire(std::string_view name)
         if (std::find(surface.guideWireNames.begin(), surface.guideWireNames.end(), name)
             != surface.guideWireNames.end()) {
             throw std::invalid_argument("Wire is used as a surface guide: " + surface.name);
+        }
+        if (std::find(surface.openingWireNames.begin(), surface.openingWireNames.end(), name)
+            != surface.openingWireNames.end()) {
+            throw std::invalid_argument("Wire is used as a surface opening: " + surface.name);
         }
     }
     for (const NamedWire& wire : wires_) {
@@ -2799,20 +2858,39 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     // 部材のルールド面(角ばった近似形状)へ投影し直すと、近似モデル上の穴輪郭になる。
     // 部材境界をまたぐ開口はどの部材にも属せないため作らない(型紙側では表示される)。
     std::vector<std::string> newOpeningNames;
-    const std::size_t sourceOpeningCount
-        = sourcePlate != nullptr ? sourcePlate->openingWireNames.size() : 0;
+    // 開口の元: 板材入力なら板材の開口、面入力なら面の開口(窓・ライト等)。
+    std::vector<std::string> sourceOpeningNames;
+    const Surface* openingReferenceSurface = nullptr;
+    double openingRangeMinimum = 0.0;
+    double openingRangeMaximum = 1.0;
+    const bool splitAlongVAxis = model.options.splitAxis == PartSplitAxis::V;
+    if (sourcePlate != nullptr) {
+        sourceOpeningNames = sourcePlate->openingWireNames;
+        openingReferenceSurface = &sourcePlate->plate.SourceSurface();
+        const PlateSurfaceRange& plateRange = sourcePlate->plate.Range();
+        openingRangeMinimum = splitAlongVAxis ? plateRange.minimumV : plateRange.minimumU;
+        openingRangeMaximum = splitAlongVAxis ? plateRange.maximumV : plateRange.maximumU;
+    } else {
+        const auto sourceSurfaceNamed = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) {
+                return candidate.name == model.sourceSurfaceName;
+            });
+        if (sourceSurfaceNamed != surfaces_.end()) {
+            sourceOpeningNames = sourceSurfaceNamed->openingWireNames;
+            openingReferenceSurface = &sourceSurfaceNamed->surface;
+        }
+    }
     for (std::size_t openingIndex = 0;
-         openingIndex < sourceOpeningCount; ++openingIndex) {
+         openingIndex < sourceOpeningNames.size(); ++openingIndex) {
         // 注意: このループは wires_ へ push_back するため、参照ではなくコピーで持つ。
-        const NamedWire opening = RequireWire(sourcePlate->openingWireNames[openingIndex]);
+        const NamedWire opening = RequireWire(sourceOpeningNames[openingIndex]);
         if (!opening.projection.has_value()) {
             continue;
         }
-        // 開口の分割軸方向の範囲(板材ローカル0..1)を測り、収まる部材を探す。
-        const PlateSurfaceRange& range = sourcePlate->plate.Range();
-        const bool splitAlongV = model.options.splitAxis == PartSplitAxis::V;
-        const double rangeMinimum = splitAlongV ? range.minimumV : range.minimumU;
-        const double rangeMaximum = splitAlongV ? range.maximumV : range.maximumU;
+        // 開口の分割軸方向の範囲(入力ローカル0..1)を測り、収まる部材を探す。
+        const bool splitAlongV = splitAlongVAxis;
+        const double rangeMinimum = openingRangeMinimum;
+        const double rangeMaximum = openingRangeMaximum;
         const double rangeSpan = std::max(1.0e-12, rangeMaximum - rangeMinimum);
         double minimumParameter = 1.0;
         double maximumParameter = 0.0;
@@ -2823,7 +2901,7 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
                 static_cast<double>(sample) / samples);
             SurfaceProjection projected{};
             try {
-                projected = sourcePlate->plate.SourceSurface().ProjectPointAlongDirection(
+                projected = openingReferenceSurface->ProjectPointAlongDirection(
                     point, opening.projection->direction);
             } catch (const std::exception&) {
                 measured = false;

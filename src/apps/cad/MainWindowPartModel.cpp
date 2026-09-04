@@ -488,17 +488,22 @@ void MainWindow::UpdatePartFoldPreview()
         }
         partModelPanel_->SetFoldLines(
             ToQString(model->name), angleDegrees, model->railFoldProgress);
-        const bool customFold = std::any_of(
-            model->railFoldProgress.begin(), model->railFoldProgress.end(),
-            [](double value) { return std::abs(value - 1.0) > 1.0e-12; });
-        auto state = customFold
-            ? kachakacha::model::BuildFoldPreviewToState(
-                mesh,
-                kachakacha::model::BuildPerCreaseFoldState(mesh, model->railFoldProgress),
-                partModelPanel_->FoldProgress())
-            : kachakacha::model::BuildFoldPreview(
-                mesh, partModelPanel_->FoldProgress());
-        viewport_->SetPartFoldPreview(std::move(state), mesh.creaseDirections);
+        // 常に「科学的に正しい」表示: 各帯は剛体のまま、折り線の角度だけを変える
+        // (頂点補間は形や辺間隔が歪むため使わない)。マスターは全折り線への倍率。
+        const double master = partModelPanel_->FoldProgress();
+        std::vector<double> effective(creaseAngles.size(), master);
+        for (std::size_t index = 0;
+             index < effective.size() && index < model->railFoldProgress.size(); ++index) {
+            effective[index] = master * model->railFoldProgress[index];
+        }
+        auto state = kachakacha::model::BuildPerCreaseFoldState(mesh, effective);
+        // 選んでいる部材だけを表示する(複数選択なら複数、未選択なら全部)。
+        std::vector<int> visibleBands;
+        for (const int number : partModelPanel_->SelectedPartNumbers()) {
+            visibleBands.push_back(number - 1);
+        }
+        viewport_->SetPartFoldPreview(
+            std::move(state), mesh.creaseDirections, std::move(visibleBands));
     } catch (const std::exception& error) {
         viewport_->SetPartFoldPreview({}, {});
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);

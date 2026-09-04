@@ -1165,10 +1165,12 @@ void CadViewport::SetPlateAssemblyApproximationPreview(
 
 void CadViewport::SetPartFoldPreview(
     std::vector<std::vector<Vector3>> rails,
-    std::vector<int> creaseDirections)
+    std::vector<int> creaseDirections,
+    std::vector<int> visibleBands)
 {
     partFoldPreviewRails_ = std::move(rails);
     partFoldPreviewCreases_ = std::move(creaseDirections);
+    partFoldPreviewBands_ = std::move(visibleBands);
     update();
 }
 
@@ -3570,12 +3572,24 @@ void CadViewport::paintEvent(QPaintEvent*)
 
         // 部材近似モデルの曲げ状態プレビュー(部材タブのスライダー連動)。
         if (partFoldPreviewRails_.size() >= 2) {
+            // 表示する帯(部材)。空なら全部。選択部材だけの個別確認に使う。
+            const auto bandVisible = [this](std::size_t band) {
+                if (partFoldPreviewBands_.empty()) {
+                    return true;
+                }
+                return std::find(partFoldPreviewBands_.begin(), partFoldPreviewBands_.end(),
+                           static_cast<int>(band))
+                    != partFoldPreviewBands_.end();
+            };
             painter.save();
             painter.setBrush(Qt::NoBrush);
             // 素線(レール間のルールドのあたり)を薄く描く。
             painter.setPen(QPen(QColor(90, 140, 160, 110), 1.1,
                 Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
             for (std::size_t row = 0; row + 1 < partFoldPreviewRails_.size(); ++row) {
+                if (!bandVisible(row)) {
+                    continue;
+                }
                 const auto& bottom = partFoldPreviewRails_[row];
                 const auto& top = partFoldPreviewRails_[row + 1];
                 const std::size_t count = std::min(bottom.size(), top.size());
@@ -3586,6 +3600,11 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
             // レール。外縁は実線、内部の折り線は山(赤破線)/谷(青一点鎖線)。
             for (std::size_t row = 0; row < partFoldPreviewRails_.size(); ++row) {
+                const bool bordersVisibleBand
+                    = (row > 0 && bandVisible(row - 1)) || bandVisible(row);
+                if (!bordersVisibleBand) {
+                    continue;
+                }
                 const auto& points = partFoldPreviewRails_[row];
                 if (points.size() < 2) {
                     continue;

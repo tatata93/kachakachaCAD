@@ -218,9 +218,17 @@ PartPatternResult BuildPartPatternWithPreview(
             partModel.result.parts[number - 1].estimatedDeviationMillimeters);
     }
     const double inclusionTolerance = std::max(1.0, deviation * 3.0);
-    const std::vector<std::string> sourceOpeningNames = sourcePlate != nullptr
-        ? sourcePlate->openingWireNames
-        : std::vector<std::string>{};
+    std::vector<std::string> sourceOpeningNames;
+    if (sourcePlate != nullptr) {
+        sourceOpeningNames = sourcePlate->openingWireNames;
+    } else {
+        for (const model::NamedSurface& surface : project.Surfaces()) {
+            if (surface.name == partModel.sourceSurfaceName) {
+                sourceOpeningNames = surface.openingWireNames;
+                break;
+            }
+        }
+    }
     for (const std::string& openingName : sourceOpeningNames) {
         const auto wire = std::find_if(
             project.Wires().begin(), project.Wires().end(),

@@ -942,6 +942,11 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 } else {
                     project.AddPartModel(name, sourceObjectName, options);
                 }
+            } else if (command == "surface_opening") {
+                const std::string surfaceName = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::string wireName = ReadName(stream, sourceName, lineNumber, "opening wire");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddSurfaceOpening(surfaceName, wireName);
             } else if (command == "plate_laminate") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "plate");
                 const std::string baseName = ReadName(stream, sourceName, lineNumber, "laminate base plate");
@@ -1435,6 +1440,15 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         output << "plate_range " << namedPlate.name << ' '
                << range.minimumU << ' ' << range.maximumU << ' '
                << range.minimumV << ' ' << range.maximumV << '\n';
+    }
+    for (const auto& namedSurface : project.Surfaces()) {
+        if (namedSurface.partModelSourceName.has_value()) {
+            continue; // 派生面の開口は part_model が再生成する。
+        }
+        for (const std::string& openingWireName : namedSurface.openingWireNames) {
+            RequireScriptNameSafe(openingWireName, "Surface opening wire");
+            output << "surface_opening " << namedSurface.name << ' ' << openingWireName << '\n';
+        }
     }
     for (const auto& namedPlate : project.Plates()) {
         if (isPartSurfacePlate(namedPlate)) {

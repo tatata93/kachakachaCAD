@@ -53,7 +53,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
 {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
-    layout->setSpacing(8);
+    layout->setSpacing(5);
 
     // --- 表示モード ---
     auto* modeRow = new QHBoxLayout;
@@ -188,16 +188,18 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     foldSlider_ = new QSlider(Qt::Horizontal);
     foldSlider_->setRange(0, 100);
     foldSlider_->setValue(100);
-    foldSlider_->setToolTip(QStringLiteral("0%=平面（型紙の状態） / 100%=折り曲げた近似完成形"));
-    foldLabel_ = new QLabel(QStringLiteral("100%（近似完成形）"));
+    foldSlider_->setToolTip(QStringLiteral(
+        "全ての折り線へ掛ける倍率です。0%=全て平ら / 100%=指定の折り角。\n"
+        "各部材の形は常に正確に保たれます（板材化の0%だけは型紙の平面配置）"));
+    foldLabel_ = new QLabel(QStringLiteral("100%（指定の折り角）"));
     sliderRow->addWidget(foldSlider_, 1);
     sliderRow->addWidget(foldLabel_);
     foldLayout->addLayout(sliderRow);
     const auto foldChanged = [this] {
         const int value = foldSlider_->value();
         foldLabel_->setText(value == 0
-            ? QStringLiteral("0%（平面）")
-            : value == 100 ? QStringLiteral("100%（近似完成形）")
+            ? QStringLiteral("0%（全て平ら）")
+            : value == 100 ? QStringLiteral("100%（指定の折り角）")
                            : QStringLiteral("%1%（曲げ途中）").arg(value));
         if (onFoldStateChanged) onFoldStateChanged();
     };

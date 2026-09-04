@@ -1020,6 +1020,43 @@ void MainWindow::CreateSurfaceFromSelection()
         AddSurfaceFromConfiguredInputs(
             candidate, name, surfaceMode, orderedWireIndices);
 
+        // #13 構成線のワイヤ化(選択制): 各断面位置の面上の線を独立ワイヤとして残す。
+        int sectionWireCount = 0;
+        if (surfaceKeepSectionWires_ != nullptr && surfaceKeepSectionWires_->isChecked()
+            && surfaceMode >= 1) {
+            std::size_t sectionCount = 0;
+            if (!surfaceInputGroups_.empty()) {
+                for (const SurfaceInputGroup& group : surfaceInputGroups_) {
+                    if (group.role == SurfaceInputRole::Section) {
+                        ++sectionCount;
+                    }
+                }
+            } else {
+                sectionCount = surfaceMode == 3
+                    ? (orderedWireIndices.size() >= 2 ? orderedWireIndices.size() - 2 : 0)
+                    : orderedWireIndices.size();
+            }
+            if (sectionCount >= 2) {
+                const kachakacha::model::NamedSurface createdCopy = candidate.Surfaces().back();
+                constexpr int kSectionSamples = 64;
+                for (std::size_t sectionIndex = 0; sectionIndex < sectionCount; ++sectionIndex) {
+                    const double v = static_cast<double>(sectionIndex)
+                        / static_cast<double>(sectionCount - 1);
+                    std::vector<Vector3> points;
+                    points.reserve(kSectionSamples + 1);
+                    for (int sample = 0; sample <= kSectionSamples; ++sample) {
+                        points.push_back(createdCopy.surface.Evaluate(
+                            static_cast<double>(sample) / kSectionSamples, v));
+                    }
+                    candidate.AddWire(
+                        FreeDerivedName(candidate, name,
+                            ("_構成線" + std::to_string(sectionIndex + 1)).c_str()),
+                        Wire::Polyline(std::move(points)));
+                    ++sectionWireCount;
+                }
+            }
+        }
+
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
@@ -1052,6 +1089,9 @@ void MainWindow::CreateSurfaceFromSelection()
                   .arg(logicalInputCount - 2);
         if (!autoLabel.isEmpty()) {
             message = QStringLiteral("自動判定=%1: ").arg(autoLabel) + message;
+        }
+        if (sectionWireCount > 0) {
+            message += QStringLiteral("（構成線%1本もワイヤ化）").arg(sectionWireCount);
         }
         statusBar()->showMessage(message, 3500);
     } catch (const std::exception& error) {
@@ -1374,6 +1414,52 @@ void MainWindow::CreatePlateFromSurface()
             ToName(plateMaterial_->currentData().toString()));
         candidate.SetSurfaceVisible(sourceSurfaceName, false);
 
+        // #12 厚みの追加出力: 反対側表面の面と、縁ワイヤの厚み位置への複製。
+        QStringList extraOutputs;
+        const double thickness = plateThickness_->value();
+        const double farSigned = direction == PlateThicknessDirection::Positive ? thickness
+            : direction == PlateThicknessDirection::Negative ? -thickness
+            : thickness * 0.5;
+        if (thicknessAlsoSurface_ != nullptr && thicknessAlsoSurface_->isChecked()) {
+            const auto sourceNamed = std::find_if(
+                candidate.Surfaces().begin(), candidate.Surfaces().end(),
+                [&](const kachakacha::model::NamedSurface& surface) {
+                    return surface.name == sourceSurfaceName;
+                });
+            if (sourceNamed != candidate.Surfaces().end()) {
+                // AddOffsetSurfaceLoft は candidate へ追加するため参照が無効化されうる。
+                const kachakacha::model::NamedSurface sourceCopy = *sourceNamed;
+                const std::string offsetName =
+                    AddOffsetSurfaceLoft(candidate, sourceCopy, farSigned);
+                extraOutputs << QStringLiteral("厚み位置の面 %1").arg(ToQString(offsetName));
+            }
+        }
+        if (thicknessAlsoWires_ != nullptr && thicknessAlsoWires_->isChecked()) {
+            const auto sourceNamed = std::find_if(
+                candidate.Surfaces().begin(), candidate.Surfaces().end(),
+                [&](const kachakacha::model::NamedSurface& surface) {
+                    return surface.name == sourceSurfaceName;
+                });
+            const double throughThickness =
+                direction == PlateThicknessDirection::Negative ? 0.0 : 1.0;
+            int createdWires = 0;
+            if (sourceNamed != candidate.Surfaces().end()) {
+                for (const std::string& wireName : sourceNamed->sourceWireNames) {
+                    try {
+                        candidate.AddPlateOffsetWire(
+                            FreeDerivedName(candidate, wireName, "_厚み位置"),
+                            wireName, name, throughThickness);
+                        ++createdWires;
+                    } catch (const std::exception&) {
+                        // 板の範囲外へはみ出す線などは黙って飛ばす(残りは作る)。
+                    }
+                }
+            }
+            if (createdWires > 0) {
+                extraOutputs << QStringLiteral("厚み位置のワイヤ %1本").arg(createdWires);
+            }
+        }
+
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
@@ -1382,7 +1468,12 @@ void MainWindow::CreatePlateFromSurface()
         UpdateSelection({CadSelectionKind::Plate, plateIndex}, true);
         toolsTabs_->setCurrentIndex(2);
         plateName_->setText(SuggestedPlateName());
-        statusBar()->showMessage(QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value()), 3500);
+        statusBar()->showMessage(extraOutputs.isEmpty()
+                ? QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value())
+                : QStringLiteral("板厚 %1 mm の板材と %2 を作成しました")
+                      .arg(plateThickness_->value())
+                      .arg(extraOutputs.join(QStringLiteral("、"))),
+            4500);
     } catch (const std::exception& error) {
         const QString message = FriendlyPlateCreationError(error);
         statusBar()->showMessage(message.section('\n', 0, 0), 8000);
@@ -2210,6 +2301,36 @@ void MainWindow::CreateRevolvedSurface()
     }
 }
 
+std::string MainWindow::AddOffsetSurfaceLoft(
+    Project& candidate,
+    const kachakacha::model::NamedSurface& source,
+    double signedDistanceMillimeters) const
+{
+    constexpr int kSectionCount = 9;
+    constexpr int kSamplesPerSection = 48;
+    std::vector<std::string> sectionNames;
+    for (int sectionIndex = 0; sectionIndex < kSectionCount; ++sectionIndex) {
+        const double v = static_cast<double>(sectionIndex) / (kSectionCount - 1);
+        std::vector<Vector3> points;
+        points.reserve(kSamplesPerSection + 1);
+        for (int sample = 0; sample <= kSamplesPerSection; ++sample) {
+            const double u = static_cast<double>(sample) / kSamplesPerSection;
+            points.push_back(source.surface.Evaluate(u, v)
+                + source.surface.Normal(u, v) * signedDistanceMillimeters);
+        }
+        const std::string name = FreeDerivedName(
+            candidate, source.name,
+            ("_オフセット" + std::to_string(sectionIndex + 1)).c_str());
+        candidate.AddWire(name, Wire::Polyline(std::move(points)));
+        candidate.SetWireVisible(name, false);
+        sectionNames.push_back(name);
+    }
+    const std::string surfaceName
+        = FreeDerivedName(candidate, source.name, "_オフセット面");
+    candidate.AddLoftSurface(surfaceName, sectionNames);
+    return surfaceName;
+}
+
 void MainWindow::CreateOffsetSurfaceApproximation()
 {
     try {
@@ -2229,29 +2350,9 @@ void MainWindow::CreateOffsetSurfaceApproximation()
         }
         const auto& sourceSurface = project_.Surfaces()[surfaceIndices.front()];
 
-        constexpr int kSectionCount = 9;
-        constexpr int kSamplesPerSection = 48;
         Project candidate = project_;
-        std::vector<std::string> sectionNames;
-        for (int sectionIndex = 0; sectionIndex < kSectionCount; ++sectionIndex) {
-            const double v = static_cast<double>(sectionIndex) / (kSectionCount - 1);
-            std::vector<Vector3> points;
-            points.reserve(kSamplesPerSection + 1);
-            for (int sample = 0; sample <= kSamplesPerSection; ++sample) {
-                const double u = static_cast<double>(sample) / kSamplesPerSection;
-                points.push_back(sourceSurface.surface.Evaluate(u, v)
-                    + sourceSurface.surface.Normal(u, v) * distance);
-            }
-            const std::string name = FreeDerivedName(
-                candidate, sourceSurface.name,
-                ("_オフセット" + std::to_string(sectionIndex + 1)).c_str());
-            candidate.AddWire(name, Wire::Polyline(std::move(points)));
-            candidate.SetWireVisible(name, false);
-            sectionNames.push_back(name);
-        }
-        const std::string surfaceName
-            = FreeDerivedName(candidate, sourceSurface.name, "_オフセット面");
-        candidate.AddLoftSurface(surfaceName, sectionNames);
+        const std::string surfaceName =
+            AddOffsetSurfaceLoft(candidate, sourceSurface, distance);
 
         RecordUndo();
         project_ = std::move(candidate);

@@ -1802,6 +1802,79 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     {
+        // #12/#13: 厚みの統合出力(面・ワイヤ同時作成)と構成線のワイヤ化。
+        const Project wave6Saved = project_;
+        const auto wave6Undo = undoStack_;
+        const auto wave6Redo = redoStack_;
+        const std::size_t wave6WireStart = project_.Wires().size();
+        const std::size_t wave6SurfaceStart = project_.Surfaces().size();
+        const std::size_t wave6PlateStart = project_.Plates().size();
+        project_.AddWire("__w6断面1",
+            Wire::CircularArcThroughThreePoints(
+                {-20.0, 0.0, 40.0}, {0.0, 20.0, 40.0}, {20.0, 0.0, 40.0}));
+        project_.AddWire("__w6断面2",
+            Wire::CircularArcThroughThreePoints(
+                {-24.0, 0.0, 52.0}, {0.0, 24.0, 52.0}, {24.0, 0.0, 52.0}));
+        project_.AddWire("__w6断面3",
+            Wire::CircularArcThroughThreePoints(
+                {-12.0, 0.0, 66.0}, {0.0, 12.0, 66.0}, {12.0, 0.0, 66.0}));
+        RefreshModelViews(false);
+        surfaceModeAction_->trigger();
+        surfaceType_->setCurrentIndex(surfaceType_->findData(2));
+        surfaceKeepSectionWires_->setChecked(true);
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(wave6WireStart)},
+            {CadSelectionKind::Wire, static_cast<int>(wave6WireStart + 1)},
+            {CadSelectionKind::Wire, static_cast<int>(wave6WireStart + 2)},
+        }, true);
+        surfaceName_->setText(QStringLiteral("__w6ロフト"));
+        CreateSurfaceFromSelection();
+        surfaceKeepSectionWires_->setChecked(false);
+        int sectionWireCount = 0;
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name.find("__w6ロフト_構成線") == 0) {
+                ++sectionWireCount;
+            }
+        }
+        if (project_.Surfaces().size() != wave6SurfaceStart + 1 || sectionWireCount != 3) {
+            return fail("surface creation keeps section wires");
+        }
+
+        const int sourceComboIndex = plateSurface_->findText(QStringLiteral("__w6ロフト"));
+        if (sourceComboIndex < 0) {
+            return fail("find thickness test surface in combo");
+        }
+        plateSurface_->setCurrentIndex(sourceComboIndex);
+        plateName_->setText(QStringLiteral("__w6板"));
+        thicknessAlsoSurface_->setChecked(true);
+        thicknessAlsoWires_->setChecked(true);
+        CreatePlateFromSurface();
+        thicknessAlsoSurface_->setChecked(false);
+        thicknessAlsoWires_->setChecked(false);
+        bool offsetSurfaceFound = false;
+        for (const auto& surface : project_.Surfaces()) {
+            offsetSurfaceFound = offsetSurfaceFound
+                || surface.name.find("_オフセット面") != std::string::npos;
+        }
+        int thicknessWireCount = 0;
+        for (const auto& wire : project_.Wires()) {
+            if (wire.name.find("_厚み位置") != std::string::npos) {
+                ++thicknessWireCount;
+            }
+        }
+        if (project_.Plates().size() != wave6PlateStart + 1
+            || !offsetSurfaceFound || thicknessWireCount < 1) {
+            return fail("thickness outputs create surface and wires together");
+        }
+        drawingModeAction_->trigger();
+        project_ = wave6Saved;
+        undoStack_ = wave6Undo;
+        redoStack_ = wave6Redo;
+        RefreshModelViews(false);
+        UpdateHistoryActions();
+    }
+
+    {
         const Project directEditSavedProject = project_;
         const auto directEditSavedUndo = undoStack_;
         const auto directEditSavedRedo = redoStack_;

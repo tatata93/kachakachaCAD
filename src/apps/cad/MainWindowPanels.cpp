@@ -997,6 +997,11 @@ QWidget* MainWindow::BuildSurfacePanel()
     surfaceName_ = new QLineEdit(QStringLiteral("surface_1"));
     createForm->addRow(QStringLiteral("作り方"), surfaceType_);
     createForm->addRow(QStringLiteral("面の名前"), surfaceName_);
+    surfaceKeepSectionWires_ = new QCheckBox(QStringLiteral("構成線をワイヤにする"));
+    surfaceKeepSectionWires_->setToolTip(QStringLiteral(
+        "面の各断面位置の線(<面名>_構成線N)を独立ワイヤとしても作ります。\n"
+        "複数線をつないだ断面や隠し断面も1本の連続線になり、工作の基準線に使えます"));
+    createForm->addRow(surfaceKeepSectionWires_);
     layout->addLayout(createForm);
 
     surfaceSelectionLabel_ = new QLabel(QStringLiteral("選択: ワイヤー0本"));
@@ -1263,6 +1268,16 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateForm->addRow(QStringLiteral("終端の板厚"), plateEndThickness_);
     plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
     plateForm->addRow(QStringLiteral("材質"), plateMaterial_);
+    thicknessAlsoSurface_ = new QCheckBox(QStringLiteral("厚み位置の面も作る（反対側表面）"));
+    thicknessAlsoSurface_->setToolTip(QStringLiteral(
+        "板材化と同時に、厚みぶん法線方向へずらした面(断面ロフト近似)も作ります。\n"
+        "内張り・裏打ちの土台に使えます(#12 厚みの統合出力)"));
+    thicknessAlsoWires_ = new QCheckBox(QStringLiteral("縁ワイヤも厚み位置へ複製"));
+    thicknessAlsoWires_->setToolTip(QStringLiteral(
+        "板材化と同時に、元面の輪郭・断面ワイヤを板の反対側表面の位置へ複製します。\n"
+        "板厚を変えると複製も追従します(#12 厚みの統合出力)"));
+    plateForm->addRow(thicknessAlsoSurface_);
+    plateForm->addRow(thicknessAlsoWires_);
     layout->addLayout(plateForm);
 
     connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);

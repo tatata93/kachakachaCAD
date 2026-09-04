@@ -194,6 +194,11 @@ private:
         const std::vector<int>& wireIndices) const;
     //! 選択が変わるたびに面を試作して半透明プレビュー(#11)。
     void UpdateSurfaceCreationPreview();
+    //! 面を法線方向へずらした近似面(断面ロフト)を candidate へ追加し、名前を返す(#12)。
+    std::string AddOffsetSurfaceLoft(
+        kachakacha::model::Project& candidate,
+        const kachakacha::model::NamedSurface& source,
+        double signedDistanceMillimeters) const;
     void AddSurfaceFromConfiguredInputs(
         kachakacha::model::Project& project,
         const std::string& surfaceName,
@@ -578,6 +583,9 @@ private:
     QComboBox* plateSurface_ = nullptr;
     QDoubleSpinBox* plateThickness_ = nullptr;
     QCheckBox* plateVariableThickness_ = nullptr;
+    QCheckBox* thicknessAlsoSurface_ = nullptr; //!< 板材化と同時に反対側表面の面も作る(#12)
+    QCheckBox* thicknessAlsoWires_ = nullptr;   //!< 板材化と同時に縁ワイヤを厚み位置へ複製(#12)
+    QCheckBox* surfaceKeepSectionWires_ = nullptr; //!< 面作成時に構成線もワイヤ化(#13)
     QDoubleSpinBox* plateEndThickness_ = nullptr;
     QComboBox* plateDirection_ = nullptr;
     QSpinBox* laminateCountSpin_ = nullptr;

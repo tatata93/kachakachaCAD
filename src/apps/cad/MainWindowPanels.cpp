@@ -1446,8 +1446,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     laminateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(laminateTitle);
     auto* laminateHint = new QLabel(QStringLiteral(
-        "薄板を重ねて段差の表現や補強をします。同じ元面の積層は下の板の外側へ
-"
+        "薄板を重ねて段差の表現や補強をします。同じ元面の積層は下の板の外側へ\n"
         "自動でずれて重なり、下の板の厚みを変えると追従します。"));
     laminateHint->setWordWrap(true);
     laminateHint->setStyleSheet("color: #5b6a74;");
@@ -1501,8 +1500,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* laminateLinkRow = new QHBoxLayout;
     auto* laminateLinkButton = new QPushButton(QStringLiteral("選択2枚を積層関係に"));
     laminateLinkButton->setToolTip(QStringLiteral(
-        "全層を自分で描いた場合に使います。先に選んだ板が下、後に選んだ板が上です。
-"
+        "全層を自分で描いた場合に使います。先に選んだ板が下、後に選んだ板が上です。\n"
         "同じ元面なら幾何も追従し、別の面なら関係の記録だけを付けます"));
     connect(laminateLinkButton, &QPushButton::clicked, this, &MainWindow::LinkSelectedPlatesAsLaminate);
     auto* laminateClearButton = new QPushButton(QStringLiteral("積層関係を解除"));

@@ -110,6 +110,14 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         QStringLiteral("手動境界の位置(0～1)をカンマ区切りで指定します。自動のチェックを外すと使われます"));
     manualBoundariesEdit_->setEnabled(false);
     createForm->addRow(QStringLiteral("手動境界"), manualBoundariesEdit_);
+    auto* pickBoundariesButton = new QPushButton(QStringLiteral("選択ワイヤーを境界に使う"));
+    pickBoundariesButton->setToolTip(QStringLiteral(
+        "3D画面で境界(折り線)にしたいワイヤーを選んでから押します。\n"
+        "近似元の上での位置を測って手動境界欄へ入れます(折り線を任意の線で指定できます)"));
+    connect(pickBoundariesButton, &QPushButton::clicked, this, [this] {
+        if (onPickBoundariesFromWires) onPickBoundariesFromWires();
+    });
+    createForm->addRow(pickBoundariesButton);
     connect(automaticCheck_, &QCheckBox::toggled, this, [this](bool automatic) {
         manualBoundariesEdit_->setEnabled(!automatic);
     });
@@ -368,6 +376,16 @@ void PartModelPanel::RefreshFromProject(const kachakacha::model::Project& projec
         item->setData(kSetNameRole, ToQString(set.name));
         setList_->addItem(item);
     }
+}
+
+void PartModelPanel::SetManualBoundaryParameters(const std::vector<double>& parameters)
+{
+    QStringList tokens;
+    for (const double value : parameters) {
+        tokens << QString::number(value, 'f', 4);
+    }
+    manualBoundariesEdit_->setText(tokens.join(QStringLiteral(", ")));
+    automaticCheck_->setChecked(false);
 }
 
 QString PartModelPanel::SelectedPlateName() const

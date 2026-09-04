@@ -79,6 +79,7 @@ private:
     void CreatePlateFromSelectedPart();
     void UpdatePartFoldPreview();
     void SetSelectedPartModelRailFold(int railIndex, double value);
+    void PickPartBoundariesFromSelectedWires();
     void RealizePartFoldState();
     void ExportPartFoldMesh(bool step);
     void ExportPartFoldKcd();

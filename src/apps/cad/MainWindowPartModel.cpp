@@ -21,6 +21,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -72,6 +73,9 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     partModelPanel_->onRealizeFoldState = [this] { RealizePartFoldState(); };
     partModelPanel_->onRailFoldEdited = [this](int railIndex, double value) {
         SetSelectedPartModelRailFold(railIndex, value);
+    };
+    partModelPanel_->onPickBoundariesFromWires = [this] {
+        PickPartBoundariesFromSelectedWires();
     };
     partModelPanel_->onExportFoldMesh = [this](bool step) { ExportPartFoldMesh(step); };
     partModelPanel_->onExportFoldKcd = [this] { ExportPartFoldKcd(); };
@@ -390,6 +394,121 @@ void MainWindow::CreatePlateFromSelectedPart()
                 .arg(created.size())
                 .arg(ToQString(created.front())),
             5000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::PickPartBoundariesFromSelectedWires()
+{
+    try {
+        // 近似元(板材 or 面)の上で、選択ワイヤーが分割軸方向のどの位置にあるかを測り、
+        // 手動境界パラメータ(0..1)として設定する(仕様: 境界は自動+手動、段階B)。
+        const std::string sourceObjectName = ToName(partModelPanel_->SelectedSourceName());
+        const bool fromSurface = partModelPanel_->SelectedSourceIsSurface();
+        if (sourceObjectName.empty()) {
+            throw std::invalid_argument("先に近似元の板材または面を選んでください。");
+        }
+        std::vector<const kachakacha::model::NamedWire*> selectedWires;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                selectedWires.push_back(&project_.Wires()[selection.index]);
+            }
+        }
+        if (selectedWires.empty()) {
+            throw std::invalid_argument(
+                "境界にするワイヤーを3D画面で選んでから押してください。");
+        }
+        // 近似元のサンプラを用意する。
+        const kachakacha::model::Surface* sourceSurface = nullptr;
+        const kachakacha::model::Plate* sourcePlate = nullptr;
+        if (fromSurface) {
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name == sourceObjectName) {
+                    sourceSurface = &surface.surface;
+                    break;
+                }
+            }
+        } else {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name == sourceObjectName) {
+                    sourcePlate = &plate.plate;
+                    break;
+                }
+            }
+        }
+        if (sourceSurface == nullptr && sourcePlate == nullptr) {
+            throw std::invalid_argument("近似元が見つかりません: " + sourceObjectName);
+        }
+        const kachakacha::model::PartSource source = sourceSurface != nullptr
+            ? kachakacha::model::PartSource(*sourceSurface)
+            : kachakacha::model::PartSource(*sourcePlate);
+        const bool splitAlongV = partModelPanel_->CurrentOptions().splitAxis
+            == kachakacha::model::PartSplitAxis::V;
+
+        // 近似元を格子サンプリングしておき、各ワイヤー点の最近傍から
+        // 分割軸パラメータを求める(平均)。
+        constexpr int kAxisSamples = 96;
+        constexpr int kCrossSamples = 17;
+        std::vector<std::vector<kachakacha::geometry::Vector3>> grid(kAxisSamples + 1);
+        for (int axisIndex = 0; axisIndex <= kAxisSamples; ++axisIndex) {
+            grid[axisIndex].reserve(kCrossSamples);
+            const double t = static_cast<double>(axisIndex) / kAxisSamples;
+            for (int crossIndex = 0; crossIndex < kCrossSamples; ++crossIndex) {
+                const double sParameter
+                    = static_cast<double>(crossIndex) / (kCrossSamples - 1);
+                const double u = splitAlongV ? sParameter : t;
+                const double v = splitAlongV ? t : sParameter;
+                grid[axisIndex].push_back(source.Evaluate(u, v));
+            }
+        }
+        std::vector<double> parameters;
+        double worstDistance = 0.0;
+        for (const auto* wire : selectedWires) {
+            double parameterSum = 0.0;
+            int sampleCount = 0;
+            double wireWorst = 0.0;
+            constexpr int kWireSamples = 9;
+            for (int sample = 0; sample <= kWireSamples; ++sample) {
+                const kachakacha::geometry::Vector3 point
+                    = wire->wire.Evaluate(static_cast<double>(sample) / kWireSamples);
+                double best = std::numeric_limits<double>::max();
+                int bestAxis = 0;
+                for (int axisIndex = 0; axisIndex <= kAxisSamples; ++axisIndex) {
+                    for (int crossIndex = 0; crossIndex < kCrossSamples; ++crossIndex) {
+                        const double distance
+                            = (grid[axisIndex][crossIndex] - point).Length();
+                        if (distance < best) {
+                            best = distance;
+                            bestAxis = axisIndex;
+                        }
+                    }
+                }
+                parameterSum += static_cast<double>(bestAxis) / kAxisSamples;
+                wireWorst = std::max(wireWorst, best);
+                ++sampleCount;
+            }
+            worstDistance = std::max(worstDistance, wireWorst);
+            const double parameter = parameterSum / sampleCount;
+            if (parameter > 1.0e-3 && parameter < 1.0 - 1.0e-3) {
+                parameters.push_back(parameter);
+            }
+        }
+        std::sort(parameters.begin(), parameters.end());
+        parameters.erase(std::unique(parameters.begin(), parameters.end(),
+            [](double a, double b) { return std::abs(a - b) < 2.0e-3; }),
+            parameters.end());
+        if (parameters.empty()) {
+            throw std::invalid_argument(
+                "選択ワイヤーから境界位置を求められませんでした(端すぎるか、近似元から離れています)。");
+        }
+        partModelPanel_->SetManualBoundaryParameters(parameters);
+        statusBar()->showMessage(
+            QStringLiteral("境界を%1本分設定しました（近似元からの最大距離 %2 mm）。「部材近似モデルを作成」で反映されます")
+                .arg(parameters.size())
+                .arg(worstDistance, 0, 'f', 2),
+            6000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

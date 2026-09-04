@@ -49,12 +49,16 @@ public:
 
     //! 可動折り線の行(角度⇄%の相互編集)を選択中モデルに合わせて作り直す・更新する。
     //! fullAngleDegrees は完成形での各折り線の折り角(度)、progress は現在の進行度。
+    //! 手動境界欄へパラメータ列を書き込み、自動分割のチェックを外す。
+    void SetManualBoundaryParameters(const std::vector<double>& parameters);
+
     void SetFoldLines(
         const QString& modelName,
         const std::vector<double>& fullAngleDegrees,
         const std::vector<double>& progress);
 
     std::function<void()> onCreate;
+    std::function<void()> onPickBoundariesFromWires; //!< 選択ワイヤーから手動境界を求める
     std::function<void()> onRecalculate;
     std::function<void()> onRemove;
     std::function<void()> onExtract;

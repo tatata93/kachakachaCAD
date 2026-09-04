@@ -2610,6 +2610,23 @@ PlateFlatPattern BuildPlateFlatPattern(
     ValidateOptions(options);
     PlateFlatPattern pattern;
     pattern.plateName = namedPlate.name;
+    // 積層(重ね板)の板は、型紙名に積層記号を付けて貼り先が分かるようにする(合意9)。
+    if (!namedPlate.laminateBaseName.empty()) {
+        int layer = 2;
+        std::string cursor = namedPlate.laminateBaseName;
+        for (std::size_t guard = 0; guard < project.Plates().size(); ++guard) {
+            const auto base = std::find_if(
+                project.Plates().begin(), project.Plates().end(),
+                [&](const NamedPlate& candidate) { return candidate.name == cursor; });
+            if (base == project.Plates().end() || base->laminateBaseName.empty()) {
+                break;
+            }
+            cursor = base->laminateBaseName;
+            ++layer;
+        }
+        pattern.plateName += " [積層L" + std::to_string(layer)
+            + " → " + namedPlate.laminateBaseName + " の上]";
+    }
     pattern.outerBoundary.name = namedPlate.name;
     const Plate& plate = namedPlate.plate;
     pattern.analysis.classification = plate.AnalyzeDevelopability().classification;

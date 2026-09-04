@@ -952,6 +952,27 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string baseName = ReadName(stream, sourceName, lineNumber, "laminate base plate");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.SetPlateLaminate(name, baseName);
+            } else if (command == "part_model_scope") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const int wireCount = static_cast<int>(
+                    ReadCount(stream, sourceName, lineNumber, "scope wire count"));
+                std::vector<std::string> wireNames;
+                wireNames.reserve(wireCount);
+                for (int index = 0; index < wireCount; ++index) {
+                    wireNames.push_back(
+                        ReadName(stream, sourceName, lineNumber, "scope wire"));
+                }
+                const int surfaceCount = static_cast<int>(
+                    ReadCount(stream, sourceName, lineNumber, "scope surface count"));
+                std::vector<std::string> surfaceNames;
+                surfaceNames.reserve(surfaceCount);
+                for (int index = 0; index < surfaceCount; ++index) {
+                    surfaceNames.push_back(
+                        ReadName(stream, sourceName, lineNumber, "scope surface"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPartModelConnectionScope(
+                    name, std::move(wireNames), std::move(surfaceNames));
             } else if (command == "part_model_fold") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
                 const int count = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "fold value count"));
@@ -1534,6 +1555,25 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                    << model.railFoldProgress.size();
             for (const double value : model.railFoldProgress) {
                 output << ' ' << value;
+            }
+            output << '\n';
+        }
+        // 接続スコープ(合意13)。派生「_接続」は読込時に再生成される。
+        if (!model.scopeWireNames.empty() || !model.scopeSurfaceNames.empty()) {
+            for (const std::string& scopeName : model.scopeWireNames) {
+                RequireScriptNameSafe(scopeName, "Part-model scope wire");
+            }
+            for (const std::string& scopeName : model.scopeSurfaceNames) {
+                RequireScriptNameSafe(scopeName, "Part-model scope surface");
+            }
+            output << "part_model_scope " << model.name << ' '
+                   << model.scopeWireNames.size();
+            for (const std::string& scopeName : model.scopeWireNames) {
+                output << ' ' << scopeName;
+            }
+            output << ' ' << model.scopeSurfaceNames.size();
+            for (const std::string& scopeName : model.scopeSurfaceNames) {
+                output << ' ' << scopeName;
             }
             output << '\n';
         }

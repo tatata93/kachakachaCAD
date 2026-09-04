@@ -186,6 +186,13 @@ struct NamedPartModel {
     //! 可動折り線(合意10): 各内部折り線の進行度(1=完成形の折り角、0=平ら)。
     //! サイズは 部材数-1。空なら全て1(完成形)。部材数が変わる再生成でリセットされる。
     std::vector<double> railFoldProgress;
+    //! 接続スコープ(合意13): 近似実行時に一緒に選ばれていた近似元以外のワイヤ・面。
+    //! 再生成のたび、近似の実形状(角ばったメッシュ)に載る部分をスナップした
+    //! 派生コピー「<元名>_接続」を作り直す(元は変更しない)。
+    std::vector<std::string> scopeWireNames;
+    std::vector<std::string> scopeSurfaceNames;
+    std::vector<std::string> adaptedWireNames;    //!< 派生「_接続」ワイヤ(自動)
+    std::vector<std::string> adaptedSurfaceNames; //!< 派生「_接続」面(自動)
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -365,6 +372,11 @@ public:
     void UpdatePartModelOptions(std::string_view name, PartApproximationOptions options);
     //! 可動折り線の進行度を設定する(サイズは部材数-1、または空=全て1)。
     void SetPartModelRailFoldProgress(std::string_view name, std::vector<double> progress);
+    //! 接続スコープを設定し、派生「_接続」オブジェクトを作り直す(空で解除)。
+    void SetPartModelConnectionScope(
+        std::string_view name,
+        std::vector<std::string> wireNames,
+        std::vector<std::string> surfaceNames);
     bool RemovePartModel(std::string_view name);
     void SetPartModelVisible(std::string_view name, bool visible);
     //! 部材境界を独立した通常ワイヤとして複製する(抽出)。作成したワイヤ名を返す。

@@ -2125,6 +2125,13 @@ bool Project::RemoveWire(std::string_view name)
             throw std::invalid_argument("Wire is used as a plate split line: " + plate.name);
         }
     }
+    for (const NamedPartModel& model : partModels_) {
+        if (std::find(model.scopeWireNames.begin(), model.scopeWireNames.end(), name)
+            != model.scopeWireNames.end()) {
+            throw std::invalid_argument(
+                "Wire is used by a part-model connection scope: " + model.name);
+        }
+    }
     for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
         if (constraint.anchor.wireName == name || constraint.follower.wireName == name) {
             throw std::invalid_argument("Wire is used by an endpoint coincidence constraint.");
@@ -2179,6 +2186,11 @@ bool Project::RemoveSurface(std::string_view name)
     for (const NamedPartModel& model : partModels_) {
         if (model.sourceSurfaceName == name) {
             throw std::invalid_argument("Surface is used by part model: " + model.name);
+        }
+        if (std::find(model.scopeSurfaceNames.begin(), model.scopeSurfaceNames.end(), name)
+            != model.scopeSurfaceNames.end()) {
+            throw std::invalid_argument(
+                "Surface is used by a part-model connection scope: " + model.name);
         }
     }
     surfaces_.erase(position);
@@ -3001,6 +3013,144 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     }
     model.openingWireNames = newOpeningNames;
 
+    // --- 接続スコープ(合意13): 近似の実形状へスナップした派生「_接続」を作り直す ---
+    std::vector<std::string> newAdaptedWireNames;
+    std::vector<std::string> newAdaptedSurfaceNames;
+    if (!model.scopeWireNames.empty() || !model.scopeSurfaceNames.empty()) {
+        std::vector<double> railParameters;
+        railParameters.push_back(0.0);
+        for (std::size_t index = 1; index < model.result.parts.size(); ++index) {
+            railParameters.push_back(model.result.parts[index].minimumParameter);
+        }
+        railParameters.push_back(1.0);
+        const PartMeshDevelopment adaptMesh = DevelopPartMesh(
+            RequirePartModelSource(model), model.options.splitAxis, railParameters, 96);
+        const double snapTolerance
+            = model.result.maximumDeviationMillimeters + 0.35;
+        // ワイヤ(または輪郭)を折れ線としてサンプリングし、近似メッシュに
+        // 載っている点だけをメッシュ上へスナップする。
+        const auto adaptPolyline = [&](const Wire& wire, int samples) {
+            std::vector<geometry::Vector3> points;
+            points.reserve(static_cast<std::size_t>(samples) + 1);
+            const bool closed = wire.IsClosed();
+            const int last = closed ? samples - 1 : samples;
+            for (int sample = 0; sample <= last; ++sample) {
+                const geometry::Vector3 original
+                    = wire.Evaluate(static_cast<double>(sample) / samples);
+                const PartMeshMappedPoint mapped = MapPointToPartMeshState(
+                    adaptMesh, adaptMesh.world, original);
+                points.push_back(mapped.distanceMillimeters <= snapTolerance
+                        ? mapped.point
+                        : original);
+            }
+            if (closed) {
+                points.push_back(points.front());
+            }
+            return points;
+        };
+        const auto placeAdapted = [&](const std::string& adaptedName, Wire adapted) {
+            const auto existing = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& wire) { return wire.name == adaptedName; });
+            if (existing != wires_.end()) {
+                if (!existing->partModelSourceName.has_value()
+                    || *existing->partModelSourceName != model.name) {
+                    throw std::invalid_argument(
+                        "Connection wire name is already used: " + adaptedName);
+                }
+                existing->wire = std::move(adapted);
+            } else {
+                wires_.push_back(NamedWire{adaptedName, std::move(adapted), {},
+                    std::nullopt, model.visible, std::nullopt, model.name});
+            }
+        };
+        for (const std::string& scopeName : model.scopeWireNames) {
+            const auto scopeWire = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& wire) { return wire.name == scopeName; });
+            if (scopeWire == wires_.end()) {
+                throw std::logic_error("Scope wire is missing: " + scopeName);
+            }
+            const Wire original = scopeWire->wire; // push_backで参照が無効になるため複製
+            const std::string adaptedName = scopeName + "_接続";
+            placeAdapted(adaptedName, Wire::Polyline(adaptPolyline(original, 96)));
+            newAdaptedWireNames.push_back(adaptedName);
+        }
+        for (const std::string& scopeName : model.scopeSurfaceNames) {
+            const auto scopeSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+                [&](const NamedSurface& candidate) { return candidate.name == scopeName; });
+            if (scopeSurface == surfaces_.end()) {
+                throw std::logic_error("Scope surface is missing: " + scopeName);
+            }
+            if (scopeSurface->surface.Kind() != SurfaceKind::Planar) {
+                continue; // v1では平面のみ自動変形の対象にする。
+            }
+            const Wire boundary = scopeSurface->surface.FirstBoundary();
+            const std::string adaptedWireName = scopeName + "_接続縁";
+            const std::string adaptedSurfaceName = scopeName + "_接続";
+            Wire adaptedBoundary = Wire::Polyline(adaptPolyline(boundary, 128));
+            Surface adaptedSurface = Surface::Planar(
+                adaptedBoundary,
+                std::max(0.5, model.result.maximumDeviationMillimeters * 3.0));
+            placeAdapted(adaptedWireName, std::move(adaptedBoundary));
+            newAdaptedWireNames.push_back(adaptedWireName);
+            const auto existing = std::find_if(surfaces_.begin(), surfaces_.end(),
+                [&](const NamedSurface& candidate) {
+                    return candidate.name == adaptedSurfaceName;
+                });
+            if (existing != surfaces_.end()) {
+                if (!existing->partModelSourceName.has_value()
+                    || *existing->partModelSourceName != model.name) {
+                    throw std::invalid_argument(
+                        "Connection surface name is already used: " + adaptedSurfaceName);
+                }
+                existing->surface = std::move(adaptedSurface);
+                existing->sourceWireNames = {adaptedWireName};
+                existing->sourceWireGroups = {{adaptedWireName}};
+            } else {
+                surfaces_.push_back(NamedSurface{
+                    adaptedSurfaceName,
+                    std::move(adaptedSurface),
+                    {adaptedWireName},
+                    model.visible,
+                    {},
+                    {{adaptedWireName}},
+                    model.name,
+                });
+            }
+            newAdaptedSurfaceNames.push_back(adaptedSurfaceName);
+        }
+    }
+    // 前回の派生「_接続」のうち今回作られなかったものを片付ける。
+    for (const std::string& oldName : model.adaptedSurfaceNames) {
+        if (std::find(newAdaptedSurfaceNames.begin(), newAdaptedSurfaceNames.end(), oldName)
+            != newAdaptedSurfaceNames.end()) {
+            continue;
+        }
+        surfaces_.erase(
+            std::remove_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+                return surface.name == oldName
+                    && surface.partModelSourceName.has_value()
+                    && *surface.partModelSourceName == model.name;
+            }),
+            surfaces_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Surface, oldName);
+    }
+    for (const std::string& oldName : model.adaptedWireNames) {
+        if (std::find(newAdaptedWireNames.begin(), newAdaptedWireNames.end(), oldName)
+            != newAdaptedWireNames.end()) {
+            continue;
+        }
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == oldName
+                    && wire.partModelSourceName.has_value()
+                    && *wire.partModelSourceName == model.name;
+            }),
+            wires_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
+    }
+    model.adaptedWireNames = newAdaptedWireNames;
+    model.adaptedSurfaceNames = newAdaptedSurfaceNames;
+
     // 可動折り線: 折り線の本数(部材数-1)が変わったらリセット(全て完成形=1)。
     const std::size_t creaseCount
         = model.result.parts.size() > 0 ? model.result.parts.size() - 1 : 0;
@@ -3025,6 +3175,12 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         set->members.push_back({ProjectObjectKind::Wire, wireName});
     }
     for (const std::string& surfaceName : newSurfaceNames) {
+        set->members.push_back({ProjectObjectKind::Surface, surfaceName});
+    }
+    for (const std::string& wireName : model.adaptedWireNames) {
+        set->members.push_back({ProjectObjectKind::Wire, wireName});
+    }
+    for (const std::string& surfaceName : model.adaptedSurfaceNames) {
         set->members.push_back({ProjectObjectKind::Surface, surfaceName});
     }
 }
@@ -3133,6 +3289,49 @@ void Project::SetPartModelRailFoldProgress(
     model->railFoldProgress = std::move(progress);
 }
 
+void Project::SetPartModelConnectionScope(
+    std::string_view name,
+    std::vector<std::string> wireNames,
+    std::vector<std::string> surfaceNames)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) {
+            return candidate.name == name;
+        });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    for (const std::string& wireName : wireNames) {
+        const auto wire = std::find_if(wires_.begin(), wires_.end(),
+            [&](const NamedWire& candidate) { return candidate.name == wireName; });
+        if (wire == wires_.end()) {
+            throw std::invalid_argument("Scope wire does not exist: " + wireName);
+        }
+        if (wire->partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                "Derived wires cannot join a connection scope: " + wireName);
+        }
+    }
+    for (const std::string& surfaceName : surfaceNames) {
+        const auto surface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) { return candidate.name == surfaceName; });
+        if (surface == surfaces_.end()) {
+            throw std::invalid_argument("Scope surface does not exist: " + surfaceName);
+        }
+        if (surface->partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                "Derived surfaces cannot join a connection scope: " + surfaceName);
+        }
+        if (surfaceName == model->sourceSurfaceName) {
+            throw std::invalid_argument(
+                "Approximation source cannot join its own connection scope: " + surfaceName);
+        }
+    }
+    model->scopeWireNames = std::move(wireNames);
+    model->scopeSurfaceNames = std::move(surfaceNames);
+    RegeneratePartModelDerivedObjects(*model);
+}
+
 bool Project::RemovePartModel(std::string_view name)
 {
     const auto model = std::find_if(partModels_.begin(), partModels_.end(), [&](const NamedPartModel& candidate) {
@@ -3185,6 +3384,22 @@ bool Project::RemovePartModel(std::string_view name)
             wires_.end());
         RemoveObjectFromSets(ProjectObjectKind::Wire, wireName);
     }
+    for (const std::string& surfaceName : model->adaptedSurfaceNames) {
+        surfaces_.erase(
+            std::remove_if(surfaces_.begin(), surfaces_.end(), [&](const NamedSurface& surface) {
+                return surface.name == surfaceName && surface.partModelSourceName.has_value();
+            }),
+            surfaces_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Surface, surfaceName);
+    }
+    for (const std::string& wireName : model->adaptedWireNames) {
+        wires_.erase(
+            std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                return wire.name == wireName && wire.partModelSourceName.has_value();
+            }),
+            wires_.end());
+        RemoveObjectFromSets(ProjectObjectKind::Wire, wireName);
+    }
     const std::string setName = "近似:" + model->name;
     objectSets_.erase(
         std::remove_if(objectSets_.begin(), objectSets_.end(), [&](const ObjectSet& set) {
@@ -3204,6 +3419,20 @@ void Project::SetPartModelVisible(std::string_view name, bool visible)
         throw std::invalid_argument("Part model is missing: " + std::string(name));
     }
     model->visible = visible;
+    for (const std::string& wireName : model->adaptedWireNames) {
+        for (NamedWire& wire : wires_) {
+            if (wire.name == wireName) {
+                wire.visible = visible;
+            }
+        }
+    }
+    for (const std::string& surfaceName : model->adaptedSurfaceNames) {
+        for (NamedSurface& surface : surfaces_) {
+            if (surface.name == surfaceName) {
+                surface.visible = visible;
+            }
+        }
+    }
     for (const std::string& wireName : model->boundaryWireNames) {
         for (NamedWire& wire : wires_) {
             if (wire.name == wireName) {

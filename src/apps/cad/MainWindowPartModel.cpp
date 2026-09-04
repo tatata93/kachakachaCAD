@@ -110,11 +110,36 @@ void MainWindow::CreatePartModelFromPanel()
             }
         }
 
+        // 接続スコープ(合意13): 近似元と一緒に選ばれていたワイヤ・面は、
+        // 近似の実形状へ接続できるよう自動変形した派生「_接続」の対象になる。
+        std::vector<std::string> scopeWires;
+        std::vector<std::string> scopeSurfaces;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                const auto& wire = project_.Wires()[selection.index];
+                if (!wire.partModelSourceName.has_value()) {
+                    scopeWires.push_back(wire.name);
+                }
+            } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Surfaces().size())) {
+                const auto& surface = project_.Surfaces()[selection.index];
+                if (!surface.partModelSourceName.has_value()
+                    && !(fromSurface && surface.name == sourceObjectName)) {
+                    scopeSurfaces.push_back(surface.name);
+                }
+            }
+        }
+
         Project candidate = project_;
         if (fromSurface) {
             candidate.AddPartModelFromSurface(name, sourceObjectName, options);
         } else {
             candidate.AddPartModel(name, sourceObjectName, options);
+        }
+        if (!scopeWires.empty() || !scopeSurfaces.empty()) {
+            candidate.SetPartModelConnectionScope(
+                name, std::move(scopeWires), std::move(scopeSurfaces));
         }
 
         RecordUndo();
@@ -122,12 +147,17 @@ void MainWindow::CreatePartModelFromPanel()
         MarkModified();
         RefreshModelViews(false);
         const auto& model = project_.PartModels().back();
+        const std::size_t adaptedCount
+            = model.adaptedWireNames.size() + model.adaptedSurfaceNames.size();
         statusBar()->showMessage(
-            QStringLiteral("部材近似モデル %1 を作成しました（部材 %2、最大偏差 %3 mm）")
+            QStringLiteral("部材近似モデル %1 を作成しました（部材 %2、最大偏差 %3 mm%4）")
                 .arg(ToQString(name))
                 .arg(model.result.parts.size())
-                .arg(model.result.maximumDeviationMillimeters, 0, 'f', 3),
-            5000);
+                .arg(model.result.maximumDeviationMillimeters, 0, 'f', 3)
+                .arg(adaptedCount > 0
+                        ? QStringLiteral("、接続用に%1個を自動変形").arg(adaptedCount)
+                        : QString()),
+            6000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
     }

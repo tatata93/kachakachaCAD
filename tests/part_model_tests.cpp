@@ -969,6 +969,105 @@ int main()
                 }
             }
         }
+
+        // --- 接続スコープ(合意13): 周辺のワイヤ・面を近似の実形状へ自動変形 ---
+        {
+            Project scopeProject = MakeBottleLikeProject();
+            // 胴の上に載っている縦の線(近似で角ばった実形状からずれるはずの線)。
+            {
+                std::vector<Vector3> onSurface;
+                const auto& body = scopeProject.Surfaces().front().surface;
+                for (int sample = 0; sample <= 24; ++sample) {
+                    onSurface.push_back(body.Evaluate(0.25, sample / 24.0));
+                }
+                scopeProject.AddWire("接続線", Wire::Polyline(std::move(onSurface)));
+            }
+            // 面から遠い線(変形されないはずの線)。
+            scopeProject.AddWire("遠い線", Wire::Line({100.0, 0.0, 0.0}, {120.0, 0.0, 0.0}));
+            // 平面(境界は面から遠い): 平面再構築の経路を通す。
+            scopeProject.AddWire("平面枠", Wire::Polyline({
+                {100.0, 0.0, 10.0}, {120.0, 0.0, 10.0}, {120.0, 0.0, 30.0},
+                {100.0, 0.0, 30.0}, {100.0, 0.0, 10.0}}));
+            scopeProject.AddPlanarSurface("側平面", "平面枠");
+
+            PartApproximationOptions twoParts;
+            twoParts.splitAxis = PartSplitAxis::V;
+            twoParts.automaticBoundaries = false;
+            twoParts.manualBoundaryParameters = {0.5};
+            scopeProject.AddPartModelFromSurface("接続近似", "胴", twoParts);
+            scopeProject.SetPartModelConnectionScope(
+                "接続近似", {"接続線", "遠い線"}, {"側平面"});
+
+            const auto& scopeModel = scopeProject.PartModels().back();
+            Require(scopeModel.adaptedWireNames.size() == 3,
+                "adapted wires created (two wires + planar boundary)");
+            Require(scopeModel.adaptedSurfaceNames
+                    == std::vector<std::string>{"側平面_接続"},
+                "adapted planar surface created");
+
+            const auto findWireByName = [&](const Project& project, const std::string& name)
+                -> const kachakacha::model::NamedWire& {
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        return wire;
+                    }
+                }
+                throw std::runtime_error("wire missing: " + name);
+            };
+            // 面上の線: スナップされて元と変わり(近似の弦誤差ぶん)、変わり幅は許容内。
+            const auto& adaptedOn = findWireByName(scopeProject, "接続線_接続");
+            Require(adaptedOn.partModelSourceName.has_value()
+                    && *adaptedOn.partModelSourceName == "接続近似",
+                "adapted wire is derived from the model");
+            double moved = 0.0;
+            for (int sample = 0; sample <= 24; ++sample) {
+                const double t = sample / 24.0;
+                moved = std::max(moved,
+                    (adaptedOn.wire.Evaluate(t)
+                        - findWireByName(scopeProject, "接続線").wire.Evaluate(t)).Length());
+            }
+            Require(moved > 1.0e-4, "on-surface wire is snapped onto the angular mesh");
+            Require(moved < scopeModel.result.maximumDeviationMillimeters + 0.5,
+                "snap displacement stays within the approximation deviation");
+            // 遠い線: 変形されない(端点一致)。
+            const auto& adaptedFar = findWireByName(scopeProject, "遠い線_接続");
+            Require((adaptedFar.wire.Evaluate(0.0)
+                        - Vector3{100.0, 0.0, 0.0}).Length() < 1.0e-9
+                    && (adaptedFar.wire.Evaluate(1.0)
+                        - Vector3{120.0, 0.0, 0.0}).Length() < 1.0e-9,
+                "far wire keeps its shape");
+
+            // スコープの元は削除から保護される。
+            bool scopeGuarded = false;
+            try {
+                (void)scopeProject.RemoveWire("接続線");
+            } catch (const std::exception&) {
+                scopeGuarded = true;
+            }
+            Require(scopeGuarded, "scope wires are protected while the model uses them");
+
+            // スクリプト往復で再生成される。
+            std::ostringstream saved;
+            kachakacha::io::WriteProjectScript(saved, scopeProject);
+            Require(saved.str().find("part_model_scope 接続近似 2 接続線 遠い線 1 側平面")
+                    != std::string::npos,
+                "connection scope saved to the script");
+            std::istringstream input(saved.str());
+            Project loadedScope = kachakacha::io::LoadProjectScript(input, "scope");
+            Require(loadedScope.PartModels().back().adaptedWireNames.size() == 3,
+                "adapted objects regenerated on load");
+
+            // モデル削除で派生「_接続」も片付く。
+            Require(loadedScope.RemovePartModel("接続近似"), "scope model removed");
+            for (const auto& wire : loadedScope.Wires()) {
+                Require(!wire.partModelSourceName.has_value(),
+                    "adapted wires removed with the model");
+            }
+            for (const auto& surface : loadedScope.Surfaces()) {
+                Require(!surface.partModelSourceName.has_value(),
+                    "adapted surfaces removed with the model");
+            }
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

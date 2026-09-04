@@ -118,6 +118,12 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         if (onPickBoundariesFromWires) onPickBoundariesFromWires();
     });
     createForm->addRow(pickBoundariesButton);
+    auto* scopeHint = new QLabel(QStringLiteral(
+        "近似元と一緒に周辺のワイヤー・面(部材グループごと選択でも可)を選んでおくと、\n"
+        "近似の実形状へ接続できるよう自動変形した「〜_接続」を作り、再計算にも追従します"));
+    scopeHint->setWordWrap(true);
+    scopeHint->setStyleSheet("color: #5b6a74;");
+    createForm->addRow(scopeHint);
     connect(automaticCheck_, &QCheckBox::toggled, this, [this](bool automatic) {
         manualBoundariesEdit_->setEnabled(!automatic);
     });

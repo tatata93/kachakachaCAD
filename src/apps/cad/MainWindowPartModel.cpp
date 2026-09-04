@@ -18,6 +18,7 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -69,6 +70,9 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     partModelPanel_->onMakePlate = [this] { CreatePlateFromSelectedPart(); };
     partModelPanel_->onFoldStateChanged = [this] { UpdatePartFoldPreview(); };
     partModelPanel_->onRealizeFoldState = [this] { RealizePartFoldState(); };
+    partModelPanel_->onRailFoldEdited = [this](int railIndex, double value) {
+        SetSelectedPartModelRailFold(railIndex, value);
+    };
     partModelPanel_->onExportFoldMesh = [this](bool step) { ExportPartFoldMesh(step); };
     partModelPanel_->onExportFoldKcd = [this] { ExportPartFoldKcd(); };
     return partModelPanel_;
@@ -393,6 +397,38 @@ void MainWindow::CreatePlateFromSelectedPart()
 
 // ---- 曲げ確認と出力 -------------------------------------------------------
 
+void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
+{
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const NamedPartModel* model = name.empty()
+            ? nullptr
+            : FindPartModel(project_, name);
+        if (model == nullptr || model->result.parts.size() < 2) {
+            return;
+        }
+        std::vector<double> progress = model->railFoldProgress;
+        if (progress.empty()) {
+            progress.assign(model->result.parts.size() - 1, 1.0);
+        }
+        if (railIndex < 0 || railIndex >= static_cast<int>(progress.size())) {
+            return;
+        }
+        if (std::abs(progress[railIndex] - value) <= 1.0e-12) {
+            return;
+        }
+        progress[railIndex] = std::clamp(value, -4.0, 4.0);
+        Project candidate = project_;
+        candidate.SetPartModelRailFoldProgress(name, std::move(progress));
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        UpdatePartFoldPreview();
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
 void MainWindow::UpdatePartFoldPreview()
 {
     if (viewport_ == nullptr || partModelPanel_ == nullptr) {
@@ -403,6 +439,9 @@ void MainWindow::UpdatePartFoldPreview()
         const NamedPartModel* model = name.empty()
             ? nullptr
             : FindPartModel(project_, name);
+        if (model == nullptr) {
+            partModelPanel_->SetFoldLines(QString(), {}, {});
+        }
         if (!partModelPanel_->FoldPreviewEnabled() || model == nullptr) {
             viewport_->SetPartFoldPreview({}, {});
             return;
@@ -439,8 +478,26 @@ void MainWindow::UpdatePartFoldPreview()
             : kachakacha::model::PartSource(*sourcePlate);
         const auto mesh = kachakacha::model::DevelopPartMesh(
             source, model->options.splitAxis, parameters, 64);
-        auto state = kachakacha::model::BuildFoldPreview(
-            mesh, partModelPanel_->FoldProgress());
+        // 可動折り線(合意10): 折り線ごとの角度⇄%行を更新し、その折り状態を目標に
+        // 全体スライダーで「型紙⇄折り状態」を補間する。
+        const std::vector<double> creaseAngles
+            = kachakacha::model::MeasureCreaseAngles(mesh);
+        std::vector<double> angleDegrees(creaseAngles.size(), 0.0);
+        for (std::size_t index = 0; index < creaseAngles.size(); ++index) {
+            angleDegrees[index] = creaseAngles[index] * 180.0 / 3.14159265358979323846;
+        }
+        partModelPanel_->SetFoldLines(
+            ToQString(model->name), angleDegrees, model->railFoldProgress);
+        const bool customFold = std::any_of(
+            model->railFoldProgress.begin(), model->railFoldProgress.end(),
+            [](double value) { return std::abs(value - 1.0) > 1.0e-12; });
+        auto state = customFold
+            ? kachakacha::model::BuildFoldPreviewToState(
+                mesh,
+                kachakacha::model::BuildPerCreaseFoldState(mesh, model->railFoldProgress),
+                partModelPanel_->FoldProgress())
+            : kachakacha::model::BuildFoldPreview(
+                mesh, partModelPanel_->FoldProgress());
         viewport_->SetPartFoldPreview(std::move(state), mesh.creaseDirections);
     } catch (const std::exception& error) {
         viewport_->SetPartFoldPreview({}, {});

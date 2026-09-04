@@ -176,6 +176,9 @@ struct NamedPartModel {
     std::vector<std::string> openingWireNames;
     bool visible = true;
     std::string sourceSurfaceName; //!< 面入力のときの元面名(板材入力なら空)
+    //! 可動折り線(合意10): 各内部折り線の進行度(1=完成形の折り角、0=平ら)。
+    //! サイズは 部材数-1。空なら全て1(完成形)。部材数が変わる再生成でリセットされる。
+    std::vector<double> railFoldProgress;
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -343,6 +346,8 @@ public:
         std::string sourceSurfaceName,
         PartApproximationOptions options);
     void UpdatePartModelOptions(std::string_view name, PartApproximationOptions options);
+    //! 可動折り線の進行度を設定する(サイズは部材数-1、または空=全て1)。
+    void SetPartModelRailFoldProgress(std::string_view name, std::vector<double> progress);
     bool RemovePartModel(std::string_view name);
     void SetPartModelVisible(std::string_view name, bool visible);
     //! 部材境界を独立した通常ワイヤとして複製する(抽出)。作成したワイヤ名を返す。

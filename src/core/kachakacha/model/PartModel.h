@@ -102,6 +102,24 @@ struct PartMeshDevelopment {
     const PartMeshDevelopment& mesh,
     double progress);
 
+//! 展開平面配置(progress=0)から任意の目標状態 target(progress=1)への補間。
+//! BuildFoldPreview は target=mesh.world の特殊形。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildFoldPreviewToState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<std::vector<geometry::Vector3>>& target,
+    double progress);
+
+//! 完成形(world)での各内部レールの平均折り角(符号付きラジアン、0=平ら)。
+//! サイズは rows-2。可動折り線のUI表示(度)と進行度⇄角度の換算に使う。
+[[nodiscard]] std::vector<double> MeasureCreaseAngles(const PartMeshDevelopment& mesh);
+
+//! 折り線ごとの進行度(1=完成形の折り角、0=平ら、1超・負は外挿)で、
+//! 各帯を剛体のままレール弦まわりに回転した状態を返す(可動折り線、合意10)。
+//! creaseProgress.size() == rows-2。全要素1なら world と一致する。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildPerCreaseFoldState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress);
+
 //! 3D点を近似メッシュ(world)の最近三角形へ対応付け、同じ位相の状態
 //! state(BuildFoldPreview の戻り値など)上の対応点を返す。
 //! band は点が属した帯(0始まり = 部材番号-1)、distanceMillimeters は

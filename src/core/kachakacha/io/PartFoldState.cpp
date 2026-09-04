@@ -116,8 +116,15 @@ PartFoldStateResult AddPartFoldStateModel(
         : model::PartSource(sourcePlateCopy->plate);
     const PartMeshDevelopment mesh = model::DevelopPartMesh(
         meshSource, model.options.splitAxis, parameters, options.columns);
-    const std::vector<std::vector<Vector3>> state
-        = model::BuildFoldPreview(mesh, progress);
+    // 可動折り線(合意10): 折り線ごとの進行度を織り込んだ状態を目標とし、
+    // 全体の曲げ具合(progress)は「展開⇄その折り状態」の補間として掛ける。
+    const bool customFold = std::any_of(
+        model.railFoldProgress.begin(), model.railFoldProgress.end(),
+        [](double value) { return std::abs(value - 1.0) > 1.0e-12; });
+    const std::vector<std::vector<Vector3>> state = customFold
+        ? model::BuildFoldPreviewToState(
+            mesh, model::BuildPerCreaseFoldState(mesh, model.railFoldProgress), progress)
+        : model::BuildFoldPreview(mesh, progress);
 
     PartFoldStateResult result;
 

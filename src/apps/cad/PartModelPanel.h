@@ -18,6 +18,7 @@ class QListWidget;
 class QSlider;
 class QSpinBox;
 class QTreeWidget;
+class QVBoxLayout;
 
 //! 部材タブ(docs/surface-unfolding-spec.md)。部材近似モデルの作成・一覧・
 //! セット状態の操作UI。プロジェクトの変更は行わず、シグナルで依頼するだけ。
@@ -46,6 +47,13 @@ public:
     [[nodiscard]] double FoldProgress() const;      //!< 0(平面)〜1(近似完成形)
     [[nodiscard]] bool FoldPreviewEnabled() const;  //!< 3Dビューで曲げ状態を表示するか
 
+    //! 可動折り線の行(角度⇄%の相互編集)を選択中モデルに合わせて作り直す・更新する。
+    //! fullAngleDegrees は完成形での各折り線の折り角(度)、progress は現在の進行度。
+    void SetFoldLines(
+        const QString& modelName,
+        const std::vector<double>& fullAngleDegrees,
+        const std::vector<double>& progress);
+
     std::function<void()> onCreate;
     std::function<void()> onRecalculate;
     std::function<void()> onRemove;
@@ -56,6 +64,7 @@ public:
     std::function<void()> onMakePlate;
     std::function<void()> onFoldStateChanged;  //!< スライダー・チェック・選択の変化
     std::function<void()> onRealizeFoldState;  //!< この曲げ状態を同じプロジェクトへ板材化
+    std::function<void(int, double)> onRailFoldEdited; //!< 折り線index(0始まり)と新しい進行度
     std::function<void(bool)> onExportFoldMesh; //!< 曲げ状態を保存(true=STEP, false=STL)
     std::function<void()> onExportFoldKcd;     //!< 曲げ状態を別の.kcdへ保存
 
@@ -71,6 +80,13 @@ private:
     QListWidget* setList_ = nullptr;
     QCheckBox* foldPreviewCheck_ = nullptr;
     QDoubleSpinBox* foldThicknessSpin_ = nullptr;
+    QWidget* foldLinesContainer_ = nullptr;
+    QVBoxLayout* foldLinesLayout_ = nullptr;
+    std::vector<QDoubleSpinBox*> foldAngleSpins_;
+    std::vector<QDoubleSpinBox*> foldPercentSpins_;
+    std::vector<double> foldFullAngleDegrees_;
+    QString foldLinesModelName_;
+    bool syncingFoldRows_ = false;
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
     std::array<QWidget*, 4> sections_{};

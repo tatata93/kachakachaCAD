@@ -401,11 +401,22 @@ std::vector<std::vector<Vector3>> BuildFoldPreview(
     const PartMeshDevelopment& mesh,
     double progress)
 {
+    return BuildFoldPreviewToState(mesh, mesh.world, progress);
+}
+
+std::vector<std::vector<Vector3>> BuildFoldPreviewToState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<std::vector<Vector3>>& target,
+    double progress)
+{
     const double t = std::clamp(progress, 0.0, 1.0);
     std::vector<std::vector<Vector3>> result(
         mesh.rows, std::vector<Vector3>(mesh.columns, {0.0, 0.0, 0.0}));
     if (mesh.rows == 0 || mesh.columns == 0) {
         return result;
+    }
+    if (static_cast<int>(target.size()) != mesh.rows) {
+        throw std::invalid_argument("目標状態と近似メッシュの位相が一致していません。");
     }
 
     // 展開形状(z=0)を実形状の位置・向きへ剛体で合わせてから、頂点ごとに補間する。
@@ -447,11 +458,141 @@ std::vector<std::vector<Vector3>> BuildFoldPreview(
             const double side = -dx * axisY + dy * axisX;
             const Vector3 flatWorld = worldAnchor
                 + worldTangent * along + worldSide * side;
-            const Vector3& folded = mesh.world[row][column];
+            const Vector3& folded = target[row][column];
             result[row][column] = flatWorld * (1.0 - t) + folded * t;
         }
     }
     return result;
+}
+
+namespace {
+
+//! 点をレール弦軸まわりに angle(ラジアン)回転する(ロドリゲスの公式)。
+[[nodiscard]] Vector3 RotateAboutAxis(
+    const Vector3& point, const Vector3& origin, const Vector3& axis, double angle)
+{
+    const Vector3 relative = point - origin;
+    const double cosAngle = std::cos(angle);
+    const double sinAngle = std::sin(angle);
+    const Vector3 rotated = relative * cosAngle
+        + Cross(axis, relative) * sinAngle
+        + axis * (Dot(axis, relative) * (1.0 - cosAngle));
+    return origin + rotated;
+}
+
+//! ベクトルから axis 成分を除いた射影(レール直交平面への射影)。
+[[nodiscard]] Vector3 RejectFromAxis(const Vector3& value, const Vector3& axis)
+{
+    return value - axis * Dot(value, axis);
+}
+
+//! 状態 state 上のレール row の弦軸(始点と単位方向)。
+struct RailChord {
+    Vector3 origin;
+    Vector3 direction;
+    bool valid = false;
+};
+
+[[nodiscard]] RailChord MeasureRailChord(
+    const std::vector<std::vector<Vector3>>& state, int row, int columns)
+{
+    RailChord chord;
+    chord.origin = state[row][0];
+    const Vector3 span = state[row][columns - 1] - state[row][0];
+    const double length = span.Length();
+    if (length <= 1.0e-9) {
+        return chord;
+    }
+    chord.direction = span * (1.0 / length);
+    chord.valid = true;
+    return chord;
+}
+
+//! 状態 state における内部レール row の平均折り角(符号付き、0=平ら)。
+//! 弦軸まわりで「前の帯の延長」から「次の帯」までの角度を列ごとに測って平均する。
+[[nodiscard]] double MeasureCreaseAngleInState(
+    const std::vector<std::vector<Vector3>>& state, int row, int columns)
+{
+    const RailChord chord = MeasureRailChord(state, row, columns);
+    if (!chord.valid) {
+        return 0.0;
+    }
+    double sinSum = 0.0;
+    double cosSum = 0.0;
+    int samples = 0;
+    for (int column = 0; column < columns; column += 3) {
+        const Vector3 toPrevious = RejectFromAxis(
+            state[row - 1][column] - state[row][column], chord.direction);
+        const Vector3 toNext = RejectFromAxis(
+            state[row + 1][column] - state[row][column], chord.direction);
+        const double previousLength = toPrevious.Length();
+        const double nextLength = toNext.Length();
+        if (previousLength <= 1.0e-9 || nextLength <= 1.0e-9) {
+            continue;
+        }
+        // 平ら=次の帯が前の帯の延長(-toPrevious)方向。そこからのずれが折り角。
+        const Vector3 straight = toPrevious * (-1.0 / previousLength);
+        const Vector3 next = toNext * (1.0 / nextLength);
+        const double sinValue = Dot(Cross(straight, next), chord.direction);
+        const double cosValue = Dot(straight, next);
+        sinSum += sinValue;
+        cosSum += cosValue;
+        ++samples;
+    }
+    if (samples == 0) {
+        return 0.0;
+    }
+    return std::atan2(sinSum, cosSum);
+}
+
+} // namespace
+
+std::vector<double> MeasureCreaseAngles(const PartMeshDevelopment& mesh)
+{
+    std::vector<double> angles(std::max(0, mesh.rows - 2), 0.0);
+    for (int rail = 1; rail + 1 < mesh.rows; ++rail) {
+        angles[rail - 1] = MeasureCreaseAngleInState(mesh.world, rail, mesh.columns);
+    }
+    return angles;
+}
+
+std::vector<std::vector<Vector3>> BuildPerCreaseFoldState(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress)
+{
+    if (static_cast<int>(creaseProgress.size()) != std::max(0, mesh.rows - 2)) {
+        throw std::invalid_argument("折り線の進行度の数が折り線の本数と一致していません。");
+    }
+    for (const double value : creaseProgress) {
+        if (!std::isfinite(value)) {
+            throw std::invalid_argument("折り線の進行度は有限の値で指定してください。");
+        }
+    }
+    std::vector<std::vector<Vector3>> state = mesh.world;
+    // 手前のレールから順に、後続の帯全体を弦軸まわりに剛体回転する。
+    // 完成形の折り角 θ に対し進行度 t の折り角は tθ なので、回転量は (t-1)θ。
+    for (int rail = 1; rail + 1 < mesh.rows; ++rail) {
+        const double progress = creaseProgress[rail - 1];
+        if (std::abs(progress - 1.0) <= 1.0e-12) {
+            continue;
+        }
+        const RailChord chord = MeasureRailChord(state, rail, mesh.columns);
+        if (!chord.valid) {
+            continue;
+        }
+        const double fullAngle = MeasureCreaseAngleInState(state, rail, mesh.columns);
+        const double delta = (progress - 1.0) * fullAngle;
+        if (std::abs(delta) <= 1.0e-12) {
+            continue;
+        }
+        for (int row = rail + 1; row < mesh.rows; ++row) {
+            for (int column = 0; column < mesh.columns; ++column) {
+                state[row][column] = RotateAboutAxis(
+                    state[row][column], chord.origin, chord.direction, delta);
+            }
+        }
+    }
+    return state;
 }
 
 PartMeshMappedPoint MapPointToPartMeshState(

@@ -942,6 +942,17 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 } else {
                     project.AddPartModel(name, sourceObjectName, options);
                 }
+            } else if (command == "part_model_fold") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const int count = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "fold value count"));
+                std::vector<double> progress;
+                progress.reserve(count);
+                for (int index = 0; index < count; ++index) {
+                    progress.push_back(
+                        ReadDouble(stream, sourceName, lineNumber, "fold progress"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPartModelRailFoldProgress(name, std::move(progress));
             } else if (command == "object_set_parent") {
                 const std::string child = ReadName(stream, sourceName, lineNumber, "set");
                 const std::string parent = ReadName(stream, sourceName, lineNumber, "parent set");
@@ -1495,6 +1506,18 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             output << ' ' << parameter;
         }
         output << '\n';
+        // 可動折り線(合意10): 完成形(全て1)以外のときだけ保存する。
+        const bool customFold = std::any_of(
+            model.railFoldProgress.begin(), model.railFoldProgress.end(),
+            [](double value) { return std::abs(value - 1.0) > 1.0e-12; });
+        if (customFold) {
+            output << "part_model_fold " << model.name << ' '
+                   << model.railFoldProgress.size();
+            for (const double value : model.railFoldProgress) {
+                output << ' ' << value;
+            }
+            output << '\n';
+        }
     }
     for (const auto& namedPlate : project.Plates()) {
         if (!isPartSurfacePlate(namedPlate)) {

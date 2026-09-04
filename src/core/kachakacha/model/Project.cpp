@@ -2759,6 +2759,13 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     }
     model.openingWireNames = newOpeningNames;
 
+    // 可動折り線: 折り線の本数(部材数-1)が変わったらリセット(全て完成形=1)。
+    const std::size_t creaseCount
+        = model.result.parts.size() > 0 ? model.result.parts.size() - 1 : 0;
+    if (!model.railFoldProgress.empty() && model.railFoldProgress.size() != creaseCount) {
+        model.railFoldProgress.clear();
+    }
+
     // --- 自動セット「近似:<名前>」を最新のメンバーで作り直す ---
     const std::string setName = "近似:" + model.name;
     ObjectSet* set = FindObjectSetMutable(setName);
@@ -2859,6 +2866,29 @@ void Project::UpdatePartModelOptions(std::string_view name, PartApproximationOpt
     model->options = std::move(options);
     model->result = result;
     RegeneratePartModelDerivedObjects(*model);
+}
+
+void Project::SetPartModelRailFoldProgress(
+    std::string_view name, std::vector<double> progress)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) {
+            return candidate.name == name;
+        });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    const std::size_t creaseCount
+        = model->result.parts.size() > 0 ? model->result.parts.size() - 1 : 0;
+    if (!progress.empty() && progress.size() != creaseCount) {
+        throw std::invalid_argument("折り線の進行度の数が折り線の本数と一致していません。");
+    }
+    for (const double value : progress) {
+        if (!std::isfinite(value) || value < -4.0 || value > 4.0) {
+            throw std::invalid_argument("折り線の進行度は -4〜4 の範囲で指定してください。");
+        }
+    }
+    model->railFoldProgress = std::move(progress);
 }
 
 bool Project::RemovePartModel(std::string_view name)

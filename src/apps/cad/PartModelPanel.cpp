@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -219,6 +220,15 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     thicknessRow->addWidget(thicknessLabel);
     thicknessRow->addWidget(foldThicknessSpin_, 1);
     foldLayout->addLayout(thicknessRow);
+    // 可動折り線(合意10): 折り線ごとの角度⇄%を相互編集する行。選択モデルに合わせて作り直す。
+    foldLinesContainer_ = new QWidget;
+    foldLinesLayout_ = new QVBoxLayout(foldLinesContainer_);
+    foldLinesLayout_->setContentsMargins(0, 0, 0, 0);
+    foldLinesLayout_->setSpacing(2);
+    foldLinesContainer_->setToolTip(QStringLiteral(
+        "各折り線の折り具合です。角度(°)と進行度(%)はどちらを変えてももう一方が追従します。\n"
+        "100%が近似完成形の折り角、0%は平ら。上の全体スライダーは「型紙⇄この折り状態」の補間です"));
+    foldLayout->addWidget(foldLinesContainer_);
     auto* realizeButton = new QPushButton(QStringLiteral("この曲げ状態を板材化"));
     realizeButton->setToolTip(QStringLiteral(
         "スライダーの曲げ具合の形状を、このプロジェクトへ通常の板材として追加します。\n"
@@ -461,4 +471,93 @@ double PartModelPanel::FoldProgress() const
 bool PartModelPanel::FoldPreviewEnabled() const
 {
     return foldPreviewCheck_->isChecked();
+}
+
+void PartModelPanel::SetFoldLines(
+    const QString& modelName,
+    const std::vector<double>& fullAngleDegrees,
+    const std::vector<double>& progress)
+{
+    const std::size_t count = fullAngleDegrees.size();
+    const bool rebuild = modelName != foldLinesModelName_
+        || count != foldAngleSpins_.size();
+    foldLinesModelName_ = modelName;
+    foldFullAngleDegrees_ = fullAngleDegrees;
+    if (rebuild) {
+        // 既存の行を作り直す。
+        while (QLayoutItem* item = foldLinesLayout_->takeAt(0)) {
+            if (QWidget* widget = item->widget()) {
+                widget->deleteLater();
+            }
+            delete item;
+        }
+        foldAngleSpins_.clear();
+        foldPercentSpins_.clear();
+        for (std::size_t index = 0; index < count; ++index) {
+            auto* row = new QWidget;
+            auto* rowLayout = new QHBoxLayout(row);
+            rowLayout->setContentsMargins(0, 0, 0, 0);
+            rowLayout->setSpacing(4);
+            rowLayout->addWidget(
+                new QLabel(QStringLiteral("折り線%1").arg(index + 1)));
+            auto* angleSpin = new QDoubleSpinBox;
+            angleSpin->setRange(-360.0, 360.0);
+            angleSpin->setDecimals(1);
+            angleSpin->setSingleStep(5.0);
+            angleSpin->setSuffix(QStringLiteral(" °"));
+            auto* percentSpin = new QDoubleSpinBox;
+            percentSpin->setRange(-400.0, 400.0);
+            percentSpin->setDecimals(0);
+            percentSpin->setSingleStep(10.0);
+            percentSpin->setSuffix(QStringLiteral(" %"));
+            rowLayout->addWidget(angleSpin, 1);
+            rowLayout->addWidget(percentSpin, 1);
+            foldLinesLayout_->addWidget(row);
+            foldAngleSpins_.push_back(angleSpin);
+            foldPercentSpins_.push_back(percentSpin);
+            const int railIndex = static_cast<int>(index);
+            connect(angleSpin, &QDoubleSpinBox::valueChanged, this,
+                [this, railIndex](double degrees) {
+                    if (syncingFoldRows_) {
+                        return;
+                    }
+                    const double full = foldFullAngleDegrees_[railIndex];
+                    if (std::abs(full) <= 1.0e-6) {
+                        return; // 完成形が平らな折り線は角度から進行度を決められない。
+                    }
+                    const double value = degrees / full;
+                    syncingFoldRows_ = true;
+                    foldPercentSpins_[railIndex]->setValue(value * 100.0);
+                    syncingFoldRows_ = false;
+                    if (onRailFoldEdited) onRailFoldEdited(railIndex, value);
+                });
+            connect(percentSpin, &QDoubleSpinBox::valueChanged, this,
+                [this, railIndex](double percent) {
+                    if (syncingFoldRows_) {
+                        return;
+                    }
+                    const double value = percent / 100.0;
+                    syncingFoldRows_ = true;
+                    foldAngleSpins_[railIndex]->setValue(
+                        value * foldFullAngleDegrees_[railIndex]);
+                    syncingFoldRows_ = false;
+                    if (onRailFoldEdited) onRailFoldEdited(railIndex, value);
+                });
+        }
+    }
+    // 値の反映(入力中の欄は上書きしない)。
+    syncingFoldRows_ = true;
+    for (std::size_t index = 0; index < count; ++index) {
+        const double value = index < progress.size() ? progress[index] : 1.0;
+        if (!foldPercentSpins_[index]->hasFocus()) {
+            foldPercentSpins_[index]->setValue(value * 100.0);
+        }
+        if (!foldAngleSpins_[index]->hasFocus()) {
+            foldAngleSpins_[index]->setValue(value * fullAngleDegrees[index]);
+        }
+        const bool flatCrease = std::abs(fullAngleDegrees[index]) <= 1.0e-6;
+        foldAngleSpins_[index]->setEnabled(!flatCrease);
+    }
+    syncingFoldRows_ = false;
+    foldLinesContainer_->setVisible(count > 0);
 }

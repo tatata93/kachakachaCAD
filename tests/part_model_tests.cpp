@@ -620,6 +620,147 @@ int main()
             Require(!patterns.front().outerBoundary.points.empty(),
                 "surface-source pattern has an outer boundary");
         }
+
+        // --- 可動折り線(合意10: 折り線ごとの進行度、.kcd保存) ---
+        {
+            Project foldProject = MakeBottleLikeProject();
+            PartApproximationOptions threeParts;
+            threeParts.splitAxis = PartSplitAxis::V;
+            threeParts.automaticBoundaries = false;
+            threeParts.manualBoundaryParameters = {0.34, 0.67};
+            foldProject.AddPartModel("可動", "胴板", threeParts);
+            const auto& foldModel = foldProject.PartModels().back();
+            Require(foldModel.result.parts.size() == 3, "three parts for two creases");
+
+            std::vector<double> rails{0.0, 0.34, 0.67, 1.0};
+            const auto mesh = kachakacha::model::DevelopPartMesh(
+                *foldProject.FindPlate("胴板"), PartSplitAxis::V, rails, 48);
+            const auto angles = kachakacha::model::MeasureCreaseAngles(mesh);
+            Require(angles.size() == 2, "one angle per internal rail");
+            Require(std::abs(angles[0]) > 1.0e-3, "curved loft has a real crease angle");
+
+            // 全て1なら world と一致する。
+            const auto identity = kachakacha::model::BuildPerCreaseFoldState(mesh, {1.0, 1.0});
+            double worstIdentity = 0.0;
+            for (int row = 0; row < mesh.rows; ++row) {
+                for (int column = 0; column < mesh.columns; ++column) {
+                    worstIdentity = std::max(worstIdentity,
+                        (identity[row][column] - mesh.world[row][column]).Length());
+                }
+            }
+            Require(worstIdentity < 1.0e-9, "all-1 crease progress reproduces the world mesh");
+
+            // 折り線1だけ0にすると、その折り角がほぼ0になり、折り線2の角は保たれる。
+            const auto partial = kachakacha::model::BuildPerCreaseFoldState(mesh, {0.0, 1.0});
+            const auto measureAngle = [&](const std::vector<std::vector<Vector3>>& state,
+                                          int rail) {
+                // MeasureCreaseAngles と同じ定義で state 上の折り角を測る。
+                const Vector3 span = state[rail][mesh.columns - 1] - state[rail][0];
+                const Vector3 axis = span * (1.0 / span.Length());
+                double sinSum = 0.0;
+                double cosSum = 0.0;
+                for (int column = 0; column < mesh.columns; column += 3) {
+                    Vector3 toPrevious = state[rail - 1][column] - state[rail][column];
+                    Vector3 toNext = state[rail + 1][column] - state[rail][column];
+                    toPrevious = toPrevious - axis * Dot(toPrevious, axis);
+                    toNext = toNext - axis * Dot(toNext, axis);
+                    if (toPrevious.Length() <= 1.0e-9 || toNext.Length() <= 1.0e-9) {
+                        continue;
+                    }
+                    const Vector3 straight = toPrevious * (-1.0 / toPrevious.Length());
+                    const Vector3 next = toNext * (1.0 / toNext.Length());
+                    sinSum += Dot(Cross(straight, next), axis);
+                    cosSum += Dot(straight, next);
+                }
+                return std::atan2(sinSum, cosSum);
+            };
+            Require(std::abs(measureAngle(partial, 1)) < std::abs(angles[0]) * 0.2 + 1.0e-3,
+                "zeroed crease becomes nearly flat");
+            Require(std::abs(measureAngle(partial, 2) - angles[1]) < std::abs(angles[1]) * 0.2 + 1.0e-3,
+                "other crease keeps its angle");
+            // 剛体回転なのでレール長は変わらない。
+            for (int row = 0; row < mesh.rows; ++row) {
+                double worldLength = 0.0;
+                double stateLength = 0.0;
+                for (int column = 1; column < mesh.columns; ++column) {
+                    worldLength += (mesh.world[row][column] - mesh.world[row][column - 1]).Length();
+                    stateLength += (partial[row][column] - partial[row][column - 1]).Length();
+                }
+                Require(std::abs(worldLength - stateLength) < 1.0e-6,
+                    "per-crease state preserves rail lengths");
+            }
+
+            // 進行度の保存とスクリプト往復。
+            foldProject.SetPartModelRailFoldProgress("可動", {0.5, 1.0});
+            std::ostringstream saved;
+            kachakacha::io::WriteProjectScript(saved, foldProject);
+            Require(saved.str().find("part_model_fold 可動 2 0.5 1") != std::string::npos,
+                "custom fold progress saved to the script");
+            std::istringstream input(saved.str());
+            Project loadedFold = kachakacha::io::LoadProjectScript(input, "fold-progress");
+            Require(loadedFold.PartModels().back().railFoldProgress
+                    == std::vector<double>({0.5, 1.0}),
+                "fold progress survives the round trip");
+
+            // 部材数が変わる再計算でリセットされる。
+            PartApproximationOptions twoParts;
+            twoParts.splitAxis = PartSplitAxis::V;
+            twoParts.automaticBoundaries = false;
+            twoParts.manualBoundaryParameters = {0.5};
+            loadedFold.UpdatePartModelOptions("可動", twoParts);
+            Require(loadedFold.PartModels().back().railFoldProgress.empty(),
+                "fold progress resets when the crease count changes");
+
+            // サイズ不一致・範囲外は拒否。
+            bool sizeGuarded = false;
+            try {
+                foldProject.SetPartModelRailFoldProgress("可動", {0.5});
+            } catch (const std::exception&) {
+                sizeGuarded = true;
+            }
+            Require(sizeGuarded, "fold progress size must match the crease count");
+            bool rangeGuarded = false;
+            try {
+                foldProject.SetPartModelRailFoldProgress("可動", {9.0, 1.0});
+            } catch (const std::exception&) {
+                rangeGuarded = true;
+            }
+            Require(rangeGuarded, "fold progress range is validated");
+
+            // 実体化は折り線ごとの状態を反映する(折り線1=平らでレールが遠ざかる)。
+            kachakacha::io::PartFoldStateOptions foldOptions;
+            foldOptions.progress = 1.0;
+            foldProject.SetPartModelRailFoldProgress("可動", {0.0, 1.0});
+            const auto realized = kachakacha::io::AddPartFoldStateModel(
+                foldProject, foldProject, foldProject.PartModels().back(),
+                foldOptions, "個別曲げ");
+            Require(realized.railWireNames.size() == 4, "per-crease realization creates rails");
+            const auto findWireLocal = [&](const std::string& wireName) {
+                for (const auto& wire : foldProject.Wires()) {
+                    if (wire.name == wireName) {
+                        return wire.wire;
+                    }
+                }
+                throw std::runtime_error("realized rail is missing: " + wireName);
+            };
+            // 同じモデルを完成形(折り指定なし)でも実体化し、後半レールが動いたことを確かめる。
+            foldProject.SetPartModelRailFoldProgress("可動", {});
+            (void)kachakacha::io::AddPartFoldStateModel(
+                foldProject, foldProject, foldProject.PartModels().back(),
+                foldOptions, "通常曲げ");
+            const Vector3 customRail
+                = findWireLocal("個別曲げ_レール4").ControlPoints().front();
+            const Vector3 defaultRail
+                = findWireLocal("通常曲げ_レール4").ControlPoints().front();
+            Require((customRail - defaultRail).Length() > 1.0,
+                "realized state reflects the per-crease fold");
+            const Vector3 customFirst
+                = findWireLocal("個別曲げ_レール1").ControlPoints().front();
+            const Vector3 defaultFirst
+                = findWireLocal("通常曲げ_レール1").ControlPoints().front();
+            Require((customFirst - defaultFirst).Length() < 1.0e-6,
+                "rails before the flattened crease stay in place");
+        }
     } catch (const std::exception& error) {
         std::cerr << "part_model_tests failed: " << error.what() << '\n';
         return EXIT_FAILURE;

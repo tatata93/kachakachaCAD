@@ -667,8 +667,10 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
     const int anchorColumn = mesh.columns / 2;
     const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
     for (int band = 0; band < bandCount; ++band) {
-        // 帯の接平面(型紙の平面形をこの平面に置く)と外向き法線。
-        const Vector3 worldAnchor = mesh.world[band][anchorColumn];
+        // 帯の接平面(型紙の平面形をこの平面に置く)。
+        // 注意: 枠(tangent/side/normal)は元の向きのまま使う。ここで normal を
+        // 反転させると展開片が鏡像になる(実際に踏んだ)。外向きの判定は
+        // 「持ち上げ方向」にだけ適用する。
         const Vector3 worldTangent
             = Normalized(mesh.world[band][nextColumn] - mesh.world[band][anchorColumn]);
         const Vector3 worldUp
@@ -677,13 +679,23 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
         if (normal.Length() <= 1.0e-9) {
             normal = {0.0, 0.0, 1.0};
         }
-        if (Dot(normal, worldAnchor - centroid) < 0.0) {
-            normal = normal * -1.0; // 外向きへそろえる。
-        }
         const Vector3 side = Normalized(Cross(normal, worldTangent));
+        // 帯の中心どうしを対応させて置く(端点基準だと隣の帯と重なりやすい)。
+        const Vector3 worldCenter = (mesh.world[band][anchorColumn]
+            + mesh.world[band + 1][anchorColumn]) * 0.5;
+        Vector3 liftDirection = normal;
+        if (Dot(liftDirection, worldCenter - centroid) < 0.0) {
+            liftDirection = liftDirection * -1.0; // 外向きへ(枠は変えない)。
+        }
+        const Vector3 lift = liftDirection * liftDistanceMillimeters;
 
         const Vector2 developedAnchor = mesh.developed[band][anchorColumn];
         const Vector2 developedNext = mesh.developed[band][nextColumn];
+        const Vector2 developedCenter{
+            (mesh.developed[band][anchorColumn].x
+                + mesh.developed[band + 1][anchorColumn].x) * 0.5,
+            (mesh.developed[band][anchorColumn].y
+                + mesh.developed[band + 1][anchorColumn].y) * 0.5};
         double axisX = developedNext.x - developedAnchor.x;
         double axisY = developedNext.y - developedAnchor.y;
         const double axisLength = std::sqrt(axisX * axisX + axisY * axisY);
@@ -694,7 +706,6 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
             axisX = 1.0;
             axisY = 0.0;
         }
-        const Vector3 lift = normal * liftDistanceMillimeters;
 
         for (int edge = 0; edge < 2; ++edge) {
             const int row = band + edge;
@@ -703,11 +714,11 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
             for (int column = 0; column < mesh.columns; ++column) {
                 // 展開形(型紙と同じ等長の平面形)を帯の接平面へ置き、外向きへ離す。
                 const Vector2& flat = mesh.developed[row][column];
-                const double dx = flat.x - developedAnchor.x;
-                const double dy = flat.y - developedAnchor.y;
+                const double dx = flat.x - developedCenter.x;
+                const double dy = flat.y - developedCenter.y;
                 const double along = dx * axisX + dy * axisY;
                 const double lateral = -dx * axisY + dy * axisX;
-                const Vector3 flatWorld = worldAnchor + lift
+                const Vector3 flatWorld = worldCenter + lift
                     + worldTangent * along + side * lateral;
                 // 目標: 折り線ごとの進行度どおりの剛体折り状態(帯は剛体)。
                 const Vector3 target = transforms[band].Apply(mesh.world[row][column]);

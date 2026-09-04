@@ -770,6 +770,20 @@ int main()
                     const Vector3 worldCenter = mesh.world[band][mesh.columns / 2];
                     Require((flatCenter - worldCenter).Length() > 15.0,
                         "0% places the flat sheet away from the model");
+                    // 鏡像になっていないこと: 展開片の面の向きが元の帯の接平面の
+                    // 向き(Cross(接線, 帯の上方向))と同じ側を向く。
+                    const int anchorColumn = mesh.columns / 2;
+                    const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
+                    const Vector3 worldTangent = mesh.world[band][nextColumn]
+                        - mesh.world[band][anchorColumn];
+                    const Vector3 worldUpDirection = mesh.world[band + 1][anchorColumn]
+                        - mesh.world[band][anchorColumn];
+                    const Vector3 originalNormal = Cross(worldTangent, worldUpDirection);
+                    const Vector3 flatTangent = bottom[nextColumn] - bottom[anchorColumn];
+                    const Vector3 flatUpDirection = top[anchorColumn] - bottom[anchorColumn];
+                    const Vector3 flatNormal = Cross(flatTangent, flatUpDirection);
+                    Require(Dot(flatNormal, originalNormal) > 0.0,
+                        "0% flat sheet is not mirrored");
                 }
             }
 

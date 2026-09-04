@@ -281,10 +281,13 @@ public:
     //! creaseDirections は内部レールの山谷(+1/-1/0, サイズ rails-2)。
     //! rails を空にすると消える。
     //! visibleBands は表示する帯(部材番号-1、0始まり)。空なら全帯を表示。
+    //! detachedBands=true のとき rails は帯ごとの(下,上)ペア(2×帯数 本)で、
+    //! 帯は互いに接続しない(剛体折りの正確表示。曲がった折り線では隙間が出る)。
     void SetPartFoldPreview(
         std::vector<std::vector<kachakacha::geometry::Vector3>> rails,
         std::vector<int> creaseDirections,
-        std::vector<int> visibleBands = {});
+        std::vector<int> visibleBands = {},
+        bool detachedBands = false);
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();
@@ -537,6 +540,7 @@ private:
     bool plateAssemblyApproximationSmoothPaper_ = false;
     std::vector<std::vector<kachakacha::geometry::Vector3>> partFoldPreviewRails_;
     std::vector<int> partFoldPreviewBands_;
+    bool partFoldPreviewDetached_ = false;
     std::vector<int> partFoldPreviewCreases_;
     std::vector<kachakacha::model::Wire> wireOffsetPreviews_;
     MeasurementMode measurementMode_ = MeasurementMode::TwoPoints;

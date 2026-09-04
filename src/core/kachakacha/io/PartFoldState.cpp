@@ -117,37 +117,87 @@ PartFoldStateResult AddPartFoldStateModel(
         : model::PartSource(sourcePlateCopy->plate);
     const PartMeshDevelopment mesh = model::DevelopPartMesh(
         meshSource, model.options.splitAxis, parameters, options.columns);
-    // 可動折り線(合意10): 進行度>0 では各帯を剛体のまま折り線角度だけ変えた
-    // 「常に正しい」形状を実体化する(進行度は各折り線の倍率)。
+    // 可動折り線(合意10)・剛体折り: 進行度>0 では各帯そのものは変形させず、
+    // 帯ごとの剛体変換で折り角だけを変えた「常に正しい」形状を実体化する。
     // 進行度=0 だけは従来どおり平面に置いた展開状態(型紙そのもの)。
-    std::vector<std::vector<Vector3>> state;
-    if (progress <= 1.0e-12) {
-        state = model::BuildFoldPreview(mesh, 0.0);
-    } else {
-        std::vector<double> effective(
-            static_cast<std::size_t>(std::max(0, mesh.rows - 2)), progress);
-        for (std::size_t index = 0;
-             index < effective.size() && index < model.railFoldProgress.size(); ++index) {
-            effective[index] = progress * model.railFoldProgress[index];
-        }
-        state = model::BuildPerCreaseFoldState(mesh, effective);
+    // 完成形(全ての実効進行度が1)はレールを隣の部材と共有し、それ以外は
+    // 帯ごとの縁を持つ(曲がった折り線では隙間が出るが形は正確)。
+    std::vector<double> effective(
+        static_cast<std::size_t>(std::max(0, mesh.rows - 2)), progress);
+    for (std::size_t index = 0;
+         index < effective.size() && index < model.railFoldProgress.size(); ++index) {
+        effective[index] = progress * model.railFoldProgress[index];
     }
+    const bool flatState = progress <= 1.0e-12;
+    const bool worldState = !flatState && std::all_of(
+        effective.begin(), effective.end(),
+        [](double value) { return std::abs(value - 1.0) <= 1.0e-12; });
+    const bool detached = !flatState && !worldState;
+    std::vector<std::vector<Vector3>> state;
+    std::vector<model::PartBandTransform> bandTransforms;
+    if (flatState) {
+        state = model::BuildFoldPreview(mesh, 0.0);
+    } else if (worldState) {
+        state = mesh.world;
+    } else {
+        bandTransforms = model::BuildRigidBandTransforms(mesh, effective);
+    }
+    // 帯 band の行 row(=band または band+1)・列 column の点。
+    const auto statePoint = [&](int band, int row, int column) {
+        return detached
+            ? bandTransforms[static_cast<std::size_t>(band)].Apply(mesh.world[row][column])
+            : state[row][column];
+    };
+    const auto stateRail = [&](int band, int row) {
+        if (!detached) {
+            return state[row];
+        }
+        std::vector<Vector3> rail;
+        rail.reserve(mesh.columns);
+        for (const Vector3& point : mesh.world[row]) {
+            rail.push_back(bandTransforms[static_cast<std::size_t>(band)].Apply(point));
+        }
+        return rail;
+    };
 
     PartFoldStateResult result;
 
-    // 必要なレールのワイヤを一度だけ作る。
-    std::set<int> railRows;
-    for (const int number : numbers) {
-        railRows.insert(number - 1);
-        railRows.insert(number);
-    }
+    // レールのワイヤを作る。共有状態(平面/完成形)は行を共有し、
+    // 剛体折り(detached)は帯ごとの縁として作る。
     std::vector<std::string> railNameByRow(mesh.rows);
-    for (const int row : railRows) {
-        const std::string railName
-            = namePrefix + "_レール" + std::to_string(row + 1);
-        target.AddWire(railName, Wire::Polyline(state[row]));
-        railNameByRow[row] = railName;
-        result.railWireNames.push_back(railName);
+    std::vector<std::string> bottomRailByPart(partCount);
+    std::vector<std::string> topRailByPart(partCount);
+    if (!detached) {
+        std::set<int> railRows;
+        for (const int number : numbers) {
+            railRows.insert(number - 1);
+            railRows.insert(number);
+        }
+        for (const int row : railRows) {
+            const std::string railName
+                = namePrefix + "_レール" + std::to_string(row + 1);
+            target.AddWire(railName, Wire::Polyline(state[row]));
+            railNameByRow[row] = railName;
+            result.railWireNames.push_back(railName);
+        }
+        for (const int number : numbers) {
+            bottomRailByPart[number - 1] = railNameByRow[number - 1];
+            topRailByPart[number - 1] = railNameByRow[number];
+        }
+    } else {
+        for (const int number : numbers) {
+            const int band = number - 1;
+            const std::string bottomName = namePrefix + "_部材"
+                + std::to_string(number) + "縁1";
+            const std::string topName = namePrefix + "_部材"
+                + std::to_string(number) + "縁2";
+            target.AddWire(bottomName, Wire::Polyline(stateRail(band, band)));
+            target.AddWire(topName, Wire::Polyline(stateRail(band, band + 1)));
+            bottomRailByPart[band] = bottomName;
+            topRailByPart[band] = topName;
+            result.railWireNames.push_back(bottomName);
+            result.railWireNames.push_back(topName);
+        }
     }
 
     // 部材ごとのルールド面と厚み付き板材。
@@ -159,7 +209,7 @@ PartFoldStateResult AddPartFoldStateModel(
         const std::string plateName
             = namePrefix + "_部材" + std::to_string(number) + "板";
         target.AddRuledSurface(
-            surfaceName, railNameByRow[number - 1], railNameByRow[number]);
+            surfaceName, bottomRailByPart[number - 1], topRailByPart[number - 1]);
         if (fromSurface) {
             target.AddPlate(
                 plateName,
@@ -208,8 +258,15 @@ PartFoldStateResult AddPartFoldStateModel(
         for (int sample = 0; sample < openingSamples; ++sample) {
             const double parameter
                 = static_cast<double>(sample) / openingSamples;
-            const auto mappedPoint = model::MapPointToPartMeshState(
-                mesh, state, opening.wire.Evaluate(parameter));
+            auto mappedPoint = model::MapPointToPartMeshState(
+                mesh, mesh.world, opening.wire.Evaluate(parameter));
+            if (detached) {
+                mappedPoint.point = bandTransforms[
+                    static_cast<std::size_t>(mappedPoint.band)].Apply(mappedPoint.point);
+            } else {
+                mappedPoint = model::MapPointToPartMeshState(
+                    mesh, state, opening.wire.Evaluate(parameter));
+            }
             if (mappedPoint.distanceMillimeters > meshTolerance) {
                 onMesh = false;
                 break;
@@ -245,8 +302,9 @@ PartFoldStateResult AddPartFoldStateModel(
                 const int centerColumn = mesh.columns / 2;
                 const int nextColumn = std::min(centerColumn + 1, mesh.columns - 1);
                 Vector3 normal = Normalized(Cross(
-                    state[band][nextColumn] - state[band][centerColumn],
-                    state[band + 1][centerColumn] - state[band][centerColumn]));
+                    statePoint(band, band, nextColumn) - statePoint(band, band, centerColumn),
+                    statePoint(band, band + 1, centerColumn)
+                        - statePoint(band, band, centerColumn)));
                 if (normal.Length() <= 1.0e-9) {
                     normal = {0.0, 0.0, 1.0};
                 }

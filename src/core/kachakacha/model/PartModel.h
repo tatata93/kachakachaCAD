@@ -113,10 +113,30 @@ struct PartMeshDevelopment {
 //! サイズは rows-2。可動折り線のUI表示(度)と進行度⇄角度の換算に使う。
 [[nodiscard]] std::vector<double> MeasureCreaseAngles(const PartMeshDevelopment& mesh);
 
+//! 帯(部材)1つぶんの剛体変換。world の点を折り状態の位置へ写す。
+//! 回転は行ベクトル3本で持つ(適用は各行との内積+平行移動)。
+struct PartBandTransform {
+    geometry::Vector3 rotationRowX{1.0, 0.0, 0.0};
+    geometry::Vector3 rotationRowY{0.0, 1.0, 0.0};
+    geometry::Vector3 rotationRowZ{0.0, 0.0, 1.0};
+    geometry::Vector3 translation{0.0, 0.0, 0.0};
+
+    [[nodiscard]] geometry::Vector3 RotateVector(const geometry::Vector3& value) const
+    {
+        return {Dot(rotationRowX, value), Dot(rotationRowY, value), Dot(rotationRowZ, value)};
+    }
+    [[nodiscard]] geometry::Vector3 Apply(const geometry::Vector3& point) const
+    {
+        return RotateVector(point) + translation;
+    }
+};
+
 //! 折り線ごとの進行度(1=完成形の折り角、0=平ら、1超・負は外挿)で、
-//! 各帯を剛体のままレール弦まわりに回転した状態を返す(可動折り線、合意10)。
-//! creaseProgress.size() == rows-2。全要素1なら world と一致する。
-[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildPerCreaseFoldState(
+//! 各帯へ掛かる剛体変換を返す(可動折り線、合意10)。サイズ=帯数(rows-1)。
+//! 帯そのものは一切変形しない。曲がった折り線では隣の帯との間に隙間ができるが、
+//! 形状と寸法は常に正確(部材どうしを繋ぐことより正しさを優先する)。
+//! creaseProgress.size() == rows-2。全要素1なら全て恒等変換(=world)。
+[[nodiscard]] std::vector<PartBandTransform> BuildRigidBandTransforms(
     const PartMeshDevelopment& mesh,
     const std::vector<double>& creaseProgress);
 

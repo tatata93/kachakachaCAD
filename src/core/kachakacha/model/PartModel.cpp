@@ -1,6 +1,7 @@
 #include "kachakacha/model/PartModel.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -467,19 +468,6 @@ std::vector<std::vector<Vector3>> BuildFoldPreviewToState(
 
 namespace {
 
-//! 点をレール弦軸まわりに angle(ラジアン)回転する(ロドリゲスの公式)。
-[[nodiscard]] Vector3 RotateAboutAxis(
-    const Vector3& point, const Vector3& origin, const Vector3& axis, double angle)
-{
-    const Vector3 relative = point - origin;
-    const double cosAngle = std::cos(angle);
-    const double sinAngle = std::sin(angle);
-    const Vector3 rotated = relative * cosAngle
-        + Cross(axis, relative) * sinAngle
-        + axis * (Dot(axis, relative) * (1.0 - cosAngle));
-    return origin + rotated;
-}
-
 //! ベクトルから axis 成分を除いた射影(レール直交平面への射影)。
 [[nodiscard]] Vector3 RejectFromAxis(const Vector3& value, const Vector3& axis)
 {
@@ -556,7 +544,59 @@ std::vector<double> MeasureCreaseAngles(const PartMeshDevelopment& mesh)
     return angles;
 }
 
-std::vector<std::vector<Vector3>> BuildPerCreaseFoldState(
+namespace {
+
+//! 回転行列(行ベクトル3本)をロドリゲスの公式から作る。
+[[nodiscard]] std::array<Vector3, 3> RotationRowsAboutAxis(
+    const Vector3& axis, double angle)
+{
+    const double c = std::cos(angle);
+    const double sn = std::sin(angle);
+    const double t = 1.0 - c;
+    const double x = axis.x;
+    const double y = axis.y;
+    const double z = axis.z;
+    return {
+        Vector3{t * x * x + c, t * x * y - sn * z, t * x * z + sn * y},
+        Vector3{t * x * y + sn * z, t * y * y + c, t * y * z - sn * x},
+        Vector3{t * x * z - sn * y, t * y * z + sn * x, t * z * z + c},
+    };
+}
+
+//! transform の後に「(origin, axis) まわりの angle 回転」を掛けた変換を返す。
+//! result(p) = Rot(transform(p)) = R*(B*p + t - origin) + origin。
+[[nodiscard]] PartBandTransform ComposeRotationAfter(
+    const PartBandTransform& transform,
+    const Vector3& origin,
+    const Vector3& axis,
+    double angle)
+{
+    const std::array<Vector3, 3> rows = RotationRowsAboutAxis(axis, angle);
+    const auto rotate = [&rows](const Vector3& value) {
+        return Vector3{Dot(rows[0], value), Dot(rows[1], value), Dot(rows[2], value)};
+    };
+    PartBandTransform result;
+    // 回転部: R*B(列ベクトルの合成)。行ベクトル表現では
+    // result行i = (Bの各行を列とみなした行列に rows[i] を掛けたもの)。
+    const Vector3 columnX{
+        transform.rotationRowX.x, transform.rotationRowY.x, transform.rotationRowZ.x};
+    const Vector3 columnY{
+        transform.rotationRowX.y, transform.rotationRowY.y, transform.rotationRowZ.y};
+    const Vector3 columnZ{
+        transform.rotationRowX.z, transform.rotationRowY.z, transform.rotationRowZ.z};
+    const Vector3 newColumnX = rotate(columnX);
+    const Vector3 newColumnY = rotate(columnY);
+    const Vector3 newColumnZ = rotate(columnZ);
+    result.rotationRowX = {newColumnX.x, newColumnY.x, newColumnZ.x};
+    result.rotationRowY = {newColumnX.y, newColumnY.y, newColumnZ.y};
+    result.rotationRowZ = {newColumnX.z, newColumnY.z, newColumnZ.z};
+    result.translation = rotate(transform.translation - origin) + origin;
+    return result;
+}
+
+} // namespace
+
+std::vector<PartBandTransform> BuildRigidBandTransforms(
     const PartMeshDevelopment& mesh,
     const std::vector<double>& creaseProgress)
 {
@@ -568,31 +608,35 @@ std::vector<std::vector<Vector3>> BuildPerCreaseFoldState(
             throw std::invalid_argument("折り線の進行度は有限の値で指定してください。");
         }
     }
-    std::vector<std::vector<Vector3>> state = mesh.world;
-    // 手前のレールから順に、後続の帯全体を弦軸まわりに剛体回転する。
-    // 完成形の折り角 θ に対し進行度 t の折り角は tθ なので、回転量は (t-1)θ。
-    for (int rail = 1; rail + 1 < mesh.rows; ++rail) {
+    const int bandCount = std::max(0, mesh.rows - 1);
+    std::vector<PartBandTransform> transforms(
+        static_cast<std::size_t>(bandCount));
+    // 帯0は固定。帯bは「帯b-1の変換」に、レールb(帯b-1との折り線)まわりの
+    // 追加回転 (t-1)θ を掛けたもの。θ・弦軸は world で測り、軸は前帯の変換で写す。
+    for (int band = 1; band < bandCount; ++band) {
+        const int rail = band;
+        const PartBandTransform& previous = transforms[band - 1];
+        transforms[band] = previous;
         const double progress = creaseProgress[rail - 1];
         if (std::abs(progress - 1.0) <= 1.0e-12) {
             continue;
         }
-        const RailChord chord = MeasureRailChord(state, rail, mesh.columns);
+        const RailChord chord = MeasureRailChord(mesh.world, rail, mesh.columns);
         if (!chord.valid) {
             continue;
         }
-        const double fullAngle = MeasureCreaseAngleInState(state, rail, mesh.columns);
+        const double fullAngle = MeasureCreaseAngleInState(mesh.world, rail, mesh.columns);
         const double delta = (progress - 1.0) * fullAngle;
         if (std::abs(delta) <= 1.0e-12) {
             continue;
         }
-        for (int row = rail + 1; row < mesh.rows; ++row) {
-            for (int column = 0; column < mesh.columns; ++column) {
-                state[row][column] = RotateAboutAxis(
-                    state[row][column], chord.origin, chord.direction, delta);
-            }
-        }
+        transforms[band] = ComposeRotationAfter(
+            previous,
+            previous.Apply(chord.origin),
+            Normalized(previous.RotateVector(chord.direction)),
+            delta);
     }
-    return state;
+    return transforms;
 }
 
 PartMeshMappedPoint MapPointToPartMeshState(

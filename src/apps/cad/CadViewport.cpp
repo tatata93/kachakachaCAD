@@ -1166,11 +1166,13 @@ void CadViewport::SetPlateAssemblyApproximationPreview(
 void CadViewport::SetPartFoldPreview(
     std::vector<std::vector<Vector3>> rails,
     std::vector<int> creaseDirections,
-    std::vector<int> visibleBands)
+    std::vector<int> visibleBands,
+    bool detachedBands)
 {
     partFoldPreviewRails_ = std::move(rails);
     partFoldPreviewCreases_ = std::move(creaseDirections);
     partFoldPreviewBands_ = std::move(visibleBands);
+    partFoldPreviewDetached_ = detachedBands;
     update();
 }
 
@@ -3280,6 +3282,33 @@ void CadViewport::paintEvent(QPaintEvent*)
             const QColor edge = selected ? QColor("#c47a13") : surfaceEdgeColor_;
             const double edgeWidth = selected ? 2.5 : surfaceEdgeWidth_;
             const Qt::PenStyle edgeStyle = selected ? Qt::SolidLine : surfaceEdgeStyle_;
+            // 面の開口(窓・ライト): 板材と同じ画面クリップで輪郭の内側を実際に抜く。
+            std::vector<QPainterPath> surfaceOpeningPaths;
+            for (const std::string& openingName : namedSurface.openingWireNames) {
+                const auto opening = std::find_if(
+                    project_->Wires().begin(), project_->Wires().end(),
+                    [&](const auto& wire) { return wire.name == openingName; });
+                if (opening == project_->Wires().end()) {
+                    continue;
+                }
+                QPainterPath path(ProjectPoint(opening->wire.Evaluate(0.0)));
+                for (int sample = 1; sample <= 128; ++sample) {
+                    path.lineTo(ProjectPoint(
+                        opening->wire.Evaluate(static_cast<double>(sample) / 128.0)));
+                }
+                path.closeSubpath();
+                surfaceOpeningPaths.push_back(std::move(path));
+            }
+            painter.save();
+            if (!surfaceOpeningPaths.empty()) {
+                QPainterPath clipPath;
+                clipPath.addRect(QRectF(rect()));
+                for (const QPainterPath& openingPath : surfaceOpeningPaths) {
+                    clipPath.addPath(openingPath);
+                }
+                clipPath.setFillRule(Qt::OddEvenFill);
+                painter.setClipPath(clipPath);
+            }
             if (surface.Kind() == kachakacha::model::SurfaceKind::Planar) {
                 QPainterPath boundary(ProjectPoint(surface.FirstBoundary().Evaluate(0.0)));
                 for (int sample = 1; sample <= 128; ++sample) {
@@ -3352,6 +3381,17 @@ void CadViewport::paintEvent(QPaintEvent*)
                         painter.drawPolygon(patch);
                     }
                 }
+            }
+            painter.restore();
+            // 開口の輪郭線を面の縁色で描き、穴として分かるようにする。
+            if (!surfaceOpeningPaths.empty()) {
+                painter.save();
+                painter.setBrush(Qt::NoBrush);
+                painter.setPen(QPen(edge, std::max(1.0, edgeWidth * 0.8), Qt::SolidLine));
+                for (const QPainterPath& openingPath : surfaceOpeningPaths) {
+                    painter.drawPath(openingPath);
+                }
+                painter.restore();
             }
         }
 
@@ -3581,17 +3621,22 @@ void CadViewport::paintEvent(QPaintEvent*)
                            static_cast<int>(band))
                     != partFoldPreviewBands_.end();
             };
+            // detached: rails は帯ごとの(下,上)ペア。共有行方式(従来)は隣接行が帯。
+            const std::size_t bandTotal = partFoldPreviewDetached_
+                ? partFoldPreviewRails_.size() / 2
+                : partFoldPreviewRails_.size() - 1;
             painter.save();
             painter.setBrush(Qt::NoBrush);
             // 素線(レール間のルールドのあたり)を薄く描く。
             painter.setPen(QPen(QColor(90, 140, 160, 110), 1.1,
                 Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-            for (std::size_t row = 0; row + 1 < partFoldPreviewRails_.size(); ++row) {
-                if (!bandVisible(row)) {
+            for (std::size_t band = 0; band < bandTotal; ++band) {
+                if (!bandVisible(band)) {
                     continue;
                 }
-                const auto& bottom = partFoldPreviewRails_[row];
-                const auto& top = partFoldPreviewRails_[row + 1];
+                const std::size_t bottomRow = partFoldPreviewDetached_ ? band * 2 : band;
+                const auto& bottom = partFoldPreviewRails_[bottomRow];
+                const auto& top = partFoldPreviewRails_[bottomRow + 1];
                 const std::size_t count = std::min(bottom.size(), top.size());
                 for (std::size_t column = 0; column < count; column += 8) {
                     painter.drawLine(
@@ -3600,8 +3645,25 @@ void CadViewport::paintEvent(QPaintEvent*)
             }
             // レール。外縁は実線、内部の折り線は山(赤破線)/谷(青一点鎖線)。
             for (std::size_t row = 0; row < partFoldPreviewRails_.size(); ++row) {
-                const bool bordersVisibleBand
-                    = (row > 0 && bandVisible(row - 1)) || bandVisible(row);
+                std::size_t creaseIndexForRow = 0;
+                bool isInternalCrease = false;
+                bool bordersVisibleBand = false;
+                if (partFoldPreviewDetached_) {
+                    const std::size_t band = row / 2;
+                    bordersVisibleBand = bandVisible(band);
+                    if (row % 2 == 0) { // 帯の下縁 = 折り線 band-1
+                        isInternalCrease = band > 0;
+                        creaseIndexForRow = band - 1;
+                    } else { // 帯の上縁 = 折り線 band
+                        isInternalCrease = band + 1 < bandTotal;
+                        creaseIndexForRow = band;
+                    }
+                } else {
+                    bordersVisibleBand
+                        = (row > 0 && bandVisible(row - 1)) || bandVisible(row);
+                    isInternalCrease = row > 0 && row + 1 < partFoldPreviewRails_.size();
+                    creaseIndexForRow = row > 0 ? row - 1 : 0;
+                }
                 if (!bordersVisibleBand) {
                     continue;
                 }
@@ -3610,8 +3672,8 @@ void CadViewport::paintEvent(QPaintEvent*)
                     continue;
                 }
                 QPen pen(QColor("#1f5f4a"), 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-                if (row > 0 && row + 1 < partFoldPreviewRails_.size()) {
-                    const std::size_t creaseIndex = row - 1;
+                if (isInternalCrease) {
+                    const std::size_t creaseIndex = creaseIndexForRow;
                     const int crease = creaseIndex < partFoldPreviewCreases_.size()
                         ? partFoldPreviewCreases_[creaseIndex]
                         : 0;

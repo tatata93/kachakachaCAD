@@ -639,46 +639,82 @@ int main()
             Require(angles.size() == 2, "one angle per internal rail");
             Require(std::abs(angles[0]) > 1.0e-3, "curved loft has a real crease angle");
 
-            // 全て1なら world と一致する。
-            const auto identity = kachakacha::model::BuildPerCreaseFoldState(mesh, {1.0, 1.0});
+            // 全て1なら全帯が恒等変換=world と一致する。
+            const auto identityTransforms
+                = kachakacha::model::BuildRigidBandTransforms(mesh, {1.0, 1.0});
+            Require(identityTransforms.size() == 3, "one transform per band");
             double worstIdentity = 0.0;
             for (int row = 0; row < mesh.rows; ++row) {
                 for (int column = 0; column < mesh.columns; ++column) {
-                    worstIdentity = std::max(worstIdentity,
-                        (identity[row][column] - mesh.world[row][column]).Length());
+                    for (std::size_t band = 0; band < identityTransforms.size(); ++band) {
+                        worstIdentity = std::max(worstIdentity,
+                            (identityTransforms[band].Apply(mesh.world[row][column])
+                                - mesh.world[row][column]).Length());
+                    }
                 }
             }
             Require(worstIdentity < 1.0e-9, "all-1 crease progress reproduces the world mesh");
 
-            // 折り線1だけ0にすると、その折り角がほぼ0になり、折り線2の角は保たれる。
-            const auto partial = kachakacha::model::BuildPerCreaseFoldState(mesh, {0.0, 1.0});
-            const auto measureAngle = [&](const std::vector<std::vector<Vector3>>& state,
-                                          int rail) {
-                // MeasureCreaseAngles と同じ定義で state 上の折り角を測る。
-                const Vector3 span = state[rail][mesh.columns - 1] - state[rail][0];
-                const Vector3 axis = span * (1.0 / span.Length());
-                double sinSum = 0.0;
-                double cosSum = 0.0;
-                for (int column = 0; column < mesh.columns; column += 3) {
-                    Vector3 toPrevious = state[rail - 1][column] - state[rail][column];
-                    Vector3 toNext = state[rail + 1][column] - state[rail][column];
-                    toPrevious = toPrevious - axis * Dot(toPrevious, axis);
-                    toNext = toNext - axis * Dot(toNext, axis);
-                    if (toPrevious.Length() <= 1.0e-9 || toNext.Length() <= 1.0e-9) {
-                        continue;
+            // 剛体変換なので、どんな進行度でも各帯の形(全点間距離)は完全に保たれる。
+            const auto partialTransforms
+                = kachakacha::model::BuildRigidBandTransforms(mesh, {0.0, 0.35});
+            for (std::size_t band = 0; band < partialTransforms.size(); ++band) {
+                const auto& transform = partialTransforms[band];
+                const int bottomRow = static_cast<int>(band);
+                const Vector3 a = transform.Apply(mesh.world[bottomRow][0]);
+                const Vector3 b = transform.Apply(mesh.world[bottomRow + 1][mesh.columns - 1]);
+                const double folded = (a - b).Length();
+                const double original = (mesh.world[bottomRow][0]
+                    - mesh.world[bottomRow + 1][mesh.columns - 1]).Length();
+                Require(std::abs(folded - original) < 1.0e-9,
+                    "rigid band transforms preserve every in-band distance");
+            }
+
+            // 折り線ごとの状態(行ごとの点列)を変換から作る補助。
+            const auto stateFromTransforms = [&](const std::vector<double>& progressValues) {
+                const auto transforms
+                    = kachakacha::model::BuildRigidBandTransforms(mesh, progressValues);
+                // 行 r は「その行を下縁に持つ帯」の変換で写す(行0は帯0、最終行は最終帯)。
+                std::vector<std::vector<Vector3>> mapped(mesh.rows);
+                for (int row = 0; row < mesh.rows; ++row) {
+                    const std::size_t band = static_cast<std::size_t>(
+                        std::min(row, static_cast<int>(transforms.size()) - 1));
+                    mapped[row].reserve(mesh.columns);
+                    for (int column = 0; column < mesh.columns; ++column) {
+                        mapped[row].push_back(
+                            transforms[band].Apply(mesh.world[row][column]));
                     }
-                    const Vector3 straight = toPrevious * (-1.0 / toPrevious.Length());
-                    const Vector3 next = toNext * (1.0 / toNext.Length());
-                    sinSum += Dot(Cross(straight, next), axis);
-                    cosSum += Dot(straight, next);
                 }
-                return std::atan2(sinSum, cosSum);
+                return mapped;
             };
-            Require(std::abs(measureAngle(partial, 1)) < std::abs(angles[0]) * 0.2 + 1.0e-3,
-                "zeroed crease becomes nearly flat");
-            Require(std::abs(measureAngle(partial, 2) - angles[1]) < std::abs(angles[1]) * 0.2 + 1.0e-3,
-                "other crease keeps its angle");
-            // 剛体回転なのでレール長は変わらない。
+            // 折り線1だけ0にすると、帯1以降が折り線1の弦まわりへ -θ1 だけ回転し、
+            // 折り線2は追加回転なし(帯2の変換=帯1の変換)。
+            const auto zeroFirst
+                = kachakacha::model::BuildRigidBandTransforms(mesh, {0.0, 1.0});
+            {
+                const Vector3 origin = mesh.world[1][0];
+                Vector3 axis = mesh.world[1][mesh.columns - 1] - origin;
+                axis = axis * (1.0 / axis.Length());
+                const Vector3 sample = mesh.world[2][mesh.columns / 2];
+                const Vector3 moved = zeroFirst[1].Apply(sample);
+                const auto reject = [&](const Vector3& value) {
+                    const Vector3 relative = value - origin;
+                    return relative - axis * Dot(relative, axis);
+                };
+                const Vector3 before = reject(sample);
+                const Vector3 after = reject(moved);
+                Require(std::abs(before.Length() - after.Length()) < 1.0e-9,
+                    "rotation keeps the distance to the crease chord");
+                const double rotated = std::atan2(
+                    Dot(Cross(before, after), axis), Dot(before, after));
+                Require(std::abs(rotated + angles[0]) < 1.0e-6,
+                    "zeroed crease rotates the tail by minus the full angle");
+                const Vector3 viaBand2 = zeroFirst[2].Apply(sample);
+                Require((viaBand2 - moved).Length() < 1.0e-9,
+                    "untouched second crease adds no extra rotation");
+            }
+            // 剛体変換なのでレール長も変わらない。
+            const auto partial = stateFromTransforms({0.0, 1.0});
             for (int row = 0; row < mesh.rows; ++row) {
                 double worldLength = 0.0;
                 double stateLength = 0.0;
@@ -734,7 +770,8 @@ int main()
             const auto realized = kachakacha::io::AddPartFoldStateModel(
                 foldProject, foldProject, foldProject.PartModels().back(),
                 foldOptions, "個別曲げ");
-            Require(realized.railWireNames.size() == 4, "per-crease realization creates rails");
+            Require(realized.railWireNames.size() == 6,
+                "per-crease realization creates per-band rail edges");
             const auto findWireLocal = [&](const std::string& wireName) {
                 for (const auto& wire : foldProject.Wires()) {
                     if (wire.name == wireName) {
@@ -749,13 +786,13 @@ int main()
                 foldProject, foldProject, foldProject.PartModels().back(),
                 foldOptions, "通常曲げ");
             const Vector3 customRail
-                = findWireLocal("個別曲げ_レール4").ControlPoints().front();
+                = findWireLocal("個別曲げ_部材3縁2").ControlPoints().front();
             const Vector3 defaultRail
                 = findWireLocal("通常曲げ_レール4").ControlPoints().front();
             Require((customRail - defaultRail).Length() > 1.0,
                 "realized state reflects the per-crease fold");
             const Vector3 customFirst
-                = findWireLocal("個別曲げ_レール1").ControlPoints().front();
+                = findWireLocal("個別曲げ_部材1縁1").ControlPoints().front();
             const Vector3 defaultFirst
                 = findWireLocal("通常曲げ_レール1").ControlPoints().front();
             Require((customFirst - defaultFirst).Length() < 1.0e-6,

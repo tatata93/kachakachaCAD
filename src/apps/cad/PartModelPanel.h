@@ -94,4 +94,5 @@ private:
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
     std::array<QWidget*, 4> sections_{};
+    QWidget* bottomSpacer_ = nullptr; //!< 1区画表示時に項目を上詰めするための余白
 };

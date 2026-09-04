@@ -607,22 +607,37 @@ void MainWindow::UpdatePartFoldPreview()
         }
         partModelPanel_->SetFoldLines(
             ToQString(model->name), angleDegrees, model->railFoldProgress);
-        // 常に「科学的に正しい」表示: 各帯は剛体のまま、折り線の角度だけを変える
-        // (頂点補間は形や辺間隔が歪むため使わない)。マスターは全折り線への倍率。
+        // 常に「科学的に正しい」表示: 各帯そのものは一切変形させず、帯ごとの
+        // 剛体変換で折り角だけを変える。曲がった折り線では帯の間に隙間が出るが、
+        // 形と寸法は常に正確(部材どうしを繋ぐことより正しさを優先)。
         const double master = partModelPanel_->FoldProgress();
         std::vector<double> effective(creaseAngles.size(), master);
         for (std::size_t index = 0;
              index < effective.size() && index < model->railFoldProgress.size(); ++index) {
             effective[index] = master * model->railFoldProgress[index];
         }
-        auto state = kachakacha::model::BuildPerCreaseFoldState(mesh, effective);
+        const auto transforms
+            = kachakacha::model::BuildRigidBandTransforms(mesh, effective);
+        std::vector<std::vector<kachakacha::geometry::Vector3>> bandRails;
+        bandRails.reserve(transforms.size() * 2);
+        for (std::size_t band = 0; band < transforms.size(); ++band) {
+            for (int edge = 0; edge < 2; ++edge) {
+                std::vector<kachakacha::geometry::Vector3> rail;
+                rail.reserve(mesh.columns);
+                const auto& worldRow = mesh.world[band + edge];
+                for (const auto& point : worldRow) {
+                    rail.push_back(transforms[band].Apply(point));
+                }
+                bandRails.push_back(std::move(rail));
+            }
+        }
         // 選んでいる部材だけを表示する(複数選択なら複数、未選択なら全部)。
         std::vector<int> visibleBands;
         for (const int number : partModelPanel_->SelectedPartNumbers()) {
             visibleBands.push_back(number - 1);
         }
         viewport_->SetPartFoldPreview(
-            std::move(state), mesh.creaseDirections, std::move(visibleBands));
+            std::move(bandRails), mesh.creaseDirections, std::move(visibleBands), true);
     } catch (const std::exception& error) {
         viewport_->SetPartFoldPreview({}, {});
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);

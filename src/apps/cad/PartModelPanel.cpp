@@ -298,6 +298,12 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     setLayout->addLayout(stateRow);
     layout->addWidget(setGroup, 1);
     sections_[3] = setGroup;
+
+    // 1区画だけ表示するとき項目が縦へ散らばらないよう、余白を下端へ寄せる。
+    bottomSpacer_ = new QWidget;
+    bottomSpacer_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    bottomSpacer_->setVisible(false);
+    layout->addWidget(bottomSpacer_, 3);
 }
 
 void PartModelPanel::SetVisibleSection(int index)
@@ -306,6 +312,10 @@ void PartModelPanel::SetVisibleSection(int index)
         if (sections_[section] != nullptr) {
             sections_[section]->setVisible(index < 0 || section == index);
         }
+    }
+    if (bottomSpacer_ != nullptr) {
+        // 一覧(伸びるツリー)以外を単独表示するときだけ下の余白を効かせる。
+        bottomSpacer_->setVisible(index >= 0 && index != 1);
     }
 }
 

@@ -476,6 +476,9 @@ inline std::vector<std::pair<QString, QWidget*>> SectionizeVerticalLayout(
             currentLayout->addItem(item);
         }
     }
+    // 1区画だけ表示したとき項目が縦へ均等に散らばらないよう、
+    // 余白は常にパネル下端へ寄せる(各項目は上詰めになる)。
+    source->addStretch(1);
     return sections;
 }
 

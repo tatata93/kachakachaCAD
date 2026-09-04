@@ -5585,8 +5585,10 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         }
     }
     if (plateOpeningSelectionLabel_ != nullptr) {
-        plateOpeningSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚 / 閉じた投影輪郭%2本")
+        plateOpeningSelectionLabel_->setText(
+            QStringLiteral("選択: 板材%1枚 / 面%2枚 / 閉じた投影輪郭%3本")
                 .arg(selectedPlateCount)
+                .arg(selectedSurfaceCount)
                 .arg(selectedClosedProjectedWireCount));
     }
     if (plateReliefSelectionLabel_ != nullptr) {

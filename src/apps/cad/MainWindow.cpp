@@ -2330,7 +2330,7 @@ void MainWindow::RefreshBeginnerGuide()
             plateCount + surfaceCount > 0
                 ? QStringLiteral("次: 近似元を確認して部材近似モデルを作成")
                 : QStringLiteral("次: 近似元の板材または面を選ぶ"),
-            QStringLiteral("1  近似元(板材または面)と分割条件を指定\n2  一覧で部材を確認、型紙を表示\n3  曲げ確認: 部材を選ぶとその部材だけ表示\n4  折り線ごとの角度⇄%で個別に曲げられる"),
+            QStringLiteral("1  近似元(板材または面)と分割条件を指定\n2  一覧で部材を確認、型紙を表示\n3  曲げ確認: スライダー0%=展開を並べた状態→100%=折り曲げ状態\n4  折り角は折り線ごとの角度⇄%で指定。部材を選ぶとその部材だけ表示"),
             QStringLiteral("output"));
         break;
     default:

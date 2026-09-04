@@ -140,6 +140,18 @@ struct PartBandTransform {
     const PartMeshDevelopment& mesh,
     const std::vector<double>& creaseProgress);
 
+//! 曲げ確認用の帯ごとアニメーション状態(オーナー指示の見え方)。
+//! assemblyProgress=0 で各帯の展開形(型紙と同じ平面形)を帯の外向き法線方向へ
+//! liftDistanceMillimeters だけ離した位置に置き、1 で「折り線ごとの進行度
+//! creaseProgress どおりの剛体折り状態(近似モデルの位置)」へ一致する。
+//! 中間は帯ごとに平面形→折り形を補間する(型紙ビューと同じ見え方。帯は互いに独立)。
+//! 返り値は帯ごとの(下レール, 上レール)ペア = 2×帯数 本の点列。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildBandFoldAnimationRails(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress,
+    double assemblyProgress,
+    double liftDistanceMillimeters);
+
 //! 3D点を近似メッシュ(world)の最近三角形へ対応付け、同じ位相の状態
 //! state(BuildFoldPreview の戻り値など)上の対応点を返す。
 //! band は点が属した帯(0始まり = 部材番号-1)、distanceMillimeters は

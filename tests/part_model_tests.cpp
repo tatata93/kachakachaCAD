@@ -713,6 +713,66 @@ int main()
                 Require((viaBand2 - moved).Length() < 1.0e-9,
                     "untouched second crease adds no extra rotation");
             }
+            // 曲げ確認アニメーション: 100%で剛体折り状態(全1ならworld)に一致し、
+            // 0%では各帯の展開形が持ち上がった位置に平面として置かれる。
+            {
+                const auto atTarget = kachakacha::model::BuildBandFoldAnimationRails(
+                    mesh, {1.0, 1.0}, 1.0, 30.0);
+                Require(atTarget.size() == 6, "animation rails come in band pairs");
+                double worstTarget = 0.0;
+                for (int band = 0; band < 3; ++band) {
+                    for (int column = 0; column < mesh.columns; ++column) {
+                        worstTarget = std::max(worstTarget,
+                            (atTarget[band * 2][column] - mesh.world[band][column]).Length());
+                        worstTarget = std::max(worstTarget,
+                            (atTarget[band * 2 + 1][column]
+                                - mesh.world[band + 1][column]).Length());
+                    }
+                }
+                Require(worstTarget < 1.0e-9,
+                    "assembly=100% matches the folded model exactly");
+
+                const auto atFlat = kachakacha::model::BuildBandFoldAnimationRails(
+                    mesh, {1.0, 1.0}, 0.0, 30.0);
+                for (int band = 0; band < 3; ++band) {
+                    const auto& bottom = atFlat[band * 2];
+                    const auto& top = atFlat[band * 2 + 1];
+                    // 平面性: 帯の4隅の張る平面から全点が外れない。
+                    const Vector3 origin = bottom.front();
+                    const Vector3 e1 = bottom.back() - origin;
+                    const Vector3 e2 = top.front() - origin;
+                    const Vector3 planeNormal = Cross(e1, e2);
+                    Require(planeNormal.Length() > 1.0e-9, "flat band is not degenerate");
+                    const Vector3 unit = planeNormal * (1.0 / planeNormal.Length());
+                    double planarity = 0.0;
+                    for (int column = 0; column < mesh.columns; ++column) {
+                        planarity = std::max(planarity,
+                            std::abs(Dot(bottom[column] - origin, unit)));
+                        planarity = std::max(planarity,
+                            std::abs(Dot(top[column] - origin, unit)));
+                    }
+                    Require(planarity < 1.0e-6, "0% shows each part as a flat sheet");
+                    // 等長: 展開の下レール長と一致する(型紙と同じ形)。
+                    double flatLength = 0.0;
+                    double developedLength = 0.0;
+                    for (int column = 1; column < mesh.columns; ++column) {
+                        flatLength += (bottom[column] - bottom[column - 1]).Length();
+                        const double dx = mesh.developed[band][column].x
+                            - mesh.developed[band][column - 1].x;
+                        const double dy = mesh.developed[band][column].y
+                            - mesh.developed[band][column - 1].y;
+                        developedLength += std::sqrt(dx * dx + dy * dy);
+                    }
+                    Require(std::abs(flatLength - developedLength) < 1.0e-6,
+                        "0% keeps the exact pattern lengths");
+                    // 離れた位置: 帯の中心が元の位置からおおむね持ち上がっている。
+                    const Vector3 flatCenter = bottom[mesh.columns / 2];
+                    const Vector3 worldCenter = mesh.world[band][mesh.columns / 2];
+                    Require((flatCenter - worldCenter).Length() > 15.0,
+                        "0% places the flat sheet away from the model");
+                }
+            }
+
             // 剛体変換なのでレール長も変わらない。
             const auto partial = stateFromTransforms({0.0, 1.0});
             for (int row = 0; row < mesh.rows; ++row) {

@@ -639,6 +639,86 @@ std::vector<PartBandTransform> BuildRigidBandTransforms(
     return transforms;
 }
 
+std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress,
+    double assemblyProgress,
+    double liftDistanceMillimeters)
+{
+    const int bandCount = std::max(0, mesh.rows - 1);
+    std::vector<std::vector<Vector3>> rails;
+    rails.reserve(static_cast<std::size_t>(bandCount) * 2);
+    if (bandCount == 0 || mesh.columns < 2) {
+        return rails;
+    }
+    const double t = std::clamp(assemblyProgress, 0.0, 1.0);
+    const std::vector<PartBandTransform> transforms
+        = BuildRigidBandTransforms(mesh, creaseProgress);
+
+    // モデル重心(展開位置を外向きへ離す向きの判定に使う)。
+    Vector3 centroid{0.0, 0.0, 0.0};
+    for (int row = 0; row < mesh.rows; ++row) {
+        for (int column = 0; column < mesh.columns; ++column) {
+            centroid = centroid + mesh.world[row][column];
+        }
+    }
+    centroid = centroid * (1.0 / (mesh.rows * mesh.columns));
+
+    const int anchorColumn = mesh.columns / 2;
+    const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
+    for (int band = 0; band < bandCount; ++band) {
+        // 帯の接平面(型紙の平面形をこの平面に置く)と外向き法線。
+        const Vector3 worldAnchor = mesh.world[band][anchorColumn];
+        const Vector3 worldTangent
+            = Normalized(mesh.world[band][nextColumn] - mesh.world[band][anchorColumn]);
+        const Vector3 worldUp
+            = mesh.world[band + 1][anchorColumn] - mesh.world[band][anchorColumn];
+        Vector3 normal = Normalized(Cross(worldTangent, worldUp));
+        if (normal.Length() <= 1.0e-9) {
+            normal = {0.0, 0.0, 1.0};
+        }
+        if (Dot(normal, worldAnchor - centroid) < 0.0) {
+            normal = normal * -1.0; // 外向きへそろえる。
+        }
+        const Vector3 side = Normalized(Cross(normal, worldTangent));
+
+        const Vector2 developedAnchor = mesh.developed[band][anchorColumn];
+        const Vector2 developedNext = mesh.developed[band][nextColumn];
+        double axisX = developedNext.x - developedAnchor.x;
+        double axisY = developedNext.y - developedAnchor.y;
+        const double axisLength = std::sqrt(axisX * axisX + axisY * axisY);
+        if (axisLength > 1.0e-12) {
+            axisX /= axisLength;
+            axisY /= axisLength;
+        } else {
+            axisX = 1.0;
+            axisY = 0.0;
+        }
+        const Vector3 lift = normal * liftDistanceMillimeters;
+
+        for (int edge = 0; edge < 2; ++edge) {
+            const int row = band + edge;
+            std::vector<Vector3> rail;
+            rail.reserve(mesh.columns);
+            for (int column = 0; column < mesh.columns; ++column) {
+                // 展開形(型紙と同じ等長の平面形)を帯の接平面へ置き、外向きへ離す。
+                const Vector2& flat = mesh.developed[row][column];
+                const double dx = flat.x - developedAnchor.x;
+                const double dy = flat.y - developedAnchor.y;
+                const double along = dx * axisX + dy * axisY;
+                const double lateral = -dx * axisY + dy * axisX;
+                const Vector3 flatWorld = worldAnchor + lift
+                    + worldTangent * along + side * lateral;
+                // 目標: 折り線ごとの進行度どおりの剛体折り状態(帯は剛体)。
+                const Vector3 target = transforms[band].Apply(mesh.world[row][column]);
+                rail.push_back(flatWorld * (1.0 - t) + target * t);
+            }
+            rails.push_back(std::move(rail));
+        }
+    }
+    return rails;
+}
+
 PartMeshMappedPoint MapPointToPartMeshState(
     const PartMeshDevelopment& mesh,
     const std::vector<std::vector<Vector3>>& state,

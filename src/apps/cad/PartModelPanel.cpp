@@ -203,18 +203,19 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     foldSlider_->setRange(0, 100);
     foldSlider_->setValue(100);
     foldSlider_->setToolTip(QStringLiteral(
-        "全ての折り線へ掛ける倍率です。0%=全て平ら / 100%=指定の折り角。\n"
-        "各部材の形は常に正確に保たれます（板材化の0%だけは型紙の平面配置）"));
-    foldLabel_ = new QLabel(QStringLiteral("100%（指定の折り角）"));
+        "組立アニメーションです。0%=各部材の展開形(型紙と同じ)を少し離れた位置に表示、\n"
+        "100%=折り線ごとの角度どおりに折った状態(近似モデルの位置)。\n"
+        "折り角そのものは下の折り線ごとの行で指定します"));
+    foldLabel_ = new QLabel(QStringLiteral("100%（折り曲げ状態）"));
     sliderRow->addWidget(foldSlider_, 1);
     sliderRow->addWidget(foldLabel_);
     foldLayout->addLayout(sliderRow);
     const auto foldChanged = [this] {
         const int value = foldSlider_->value();
         foldLabel_->setText(value == 0
-            ? QStringLiteral("0%（全て平ら）")
-            : value == 100 ? QStringLiteral("100%（指定の折り角）")
-                           : QStringLiteral("%1%（曲げ途中）").arg(value));
+            ? QStringLiteral("0%（展開を並べた状態）")
+            : value == 100 ? QStringLiteral("100%（折り曲げ状態）")
+                           : QStringLiteral("%1%（組立途中）").arg(value));
         if (onFoldStateChanged) onFoldStateChanged();
     };
     connect(foldSlider_, &QSlider::valueChanged, this, [foldChanged](int) { foldChanged(); });
@@ -247,8 +248,8 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     foldLayout->addWidget(foldLinesContainer_);
     auto* realizeButton = new QPushButton(QStringLiteral("この曲げ状態を板材化"));
     realizeButton->setToolTip(QStringLiteral(
-        "スライダーの曲げ具合の形状を、このプロジェクトへ通常の板材として追加します。\n"
-        "0%なら平面に置いた展開状態（窓などの開口も実際の穴になります）"));
+        "スライダー0%なら平面に置いた展開状態（窓などの開口も実際の穴になります）、\n"
+        "それ以外なら折り線ごとの角度どおりの折り状態を、このプロジェクトへ板材として追加します"));
     connect(realizeButton, &QPushButton::clicked, this, [this] {
         if (onRealizeFoldState) onRealizeFoldState();
     });

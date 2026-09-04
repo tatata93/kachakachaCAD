@@ -637,30 +637,28 @@ void MainWindow::UpdatePartFoldPreview()
         }
         partModelPanel_->SetFoldLines(
             ToQString(model->name), angleDegrees, model->railFoldProgress);
-        // 常に「科学的に正しい」表示: 各帯そのものは一切変形させず、帯ごとの
-        // 剛体変換で折り角だけを変える。曲がった折り線では帯の間に隙間が出るが、
-        // 形と寸法は常に正確(部材どうしを繋ぐことより正しさを優先)。
-        const double master = partModelPanel_->FoldProgress();
-        std::vector<double> effective(creaseAngles.size(), master);
+        // 曲げ確認(オーナー指示の見え方): 0%=各部材の展開形(型紙と同じ)を
+        // 外向きへ離した位置に並べ、100%で「折り線ごとの角度どおりの剛体折り状態
+        // (近似モデルの位置)」へ収束する。スライダーは組立アニメーション専用。
+        std::vector<double> individual(creaseAngles.size(), 1.0);
         for (std::size_t index = 0;
-             index < effective.size() && index < model->railFoldProgress.size(); ++index) {
-            effective[index] = master * model->railFoldProgress[index];
+             index < individual.size() && index < model->railFoldProgress.size(); ++index) {
+            individual[index] = model->railFoldProgress[index];
         }
-        const auto transforms
-            = kachakacha::model::BuildRigidBandTransforms(mesh, effective);
-        std::vector<std::vector<kachakacha::geometry::Vector3>> bandRails;
-        bandRails.reserve(transforms.size() * 2);
-        for (std::size_t band = 0; band < transforms.size(); ++band) {
-            for (int edge = 0; edge < 2; ++edge) {
-                std::vector<kachakacha::geometry::Vector3> rail;
-                rail.reserve(mesh.columns);
-                const auto& worldRow = mesh.world[band + edge];
-                for (const auto& point : worldRow) {
-                    rail.push_back(transforms[band].Apply(point));
-                }
-                bandRails.push_back(std::move(rail));
+        // 展開を離す距離: モデルの大きさから決める。
+        kachakacha::geometry::Vector3 low = mesh.world.front().front();
+        kachakacha::geometry::Vector3 high = low;
+        for (const auto& rowPoints : mesh.world) {
+            for (const auto& point : rowPoints) {
+                low = {std::min(low.x, point.x), std::min(low.y, point.y),
+                    std::min(low.z, point.z)};
+                high = {std::max(high.x, point.x), std::max(high.y, point.y),
+                    std::max(high.z, point.z)};
             }
         }
+        const double liftDistance = std::max(25.0, (high - low).Length() * 0.35);
+        auto bandRails = kachakacha::model::BuildBandFoldAnimationRails(
+            mesh, individual, partModelPanel_->FoldProgress(), liftDistance);
         // 選んでいる部材だけを表示する(複数選択なら複数、未選択なら全部)。
         std::vector<int> visibleBands;
         for (const int number : partModelPanel_->SelectedPartNumbers()) {
@@ -711,7 +709,9 @@ void MainWindow::RealizePartFoldState()
             throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
         }
         kachakacha::io::PartFoldStateOptions options;
-        options.progress = partModelPanel_->FoldProgress();
+        // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
+        // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
+        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
         const std::string prefix
@@ -775,7 +775,9 @@ void MainWindow::ExportPartFoldMesh(bool step)
             throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
         }
         kachakacha::io::PartFoldStateOptions options;
-        options.progress = partModelPanel_->FoldProgress();
+        // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
+        // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
+        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 
@@ -837,7 +839,9 @@ void MainWindow::ExportPartFoldKcd()
             throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
         }
         kachakacha::io::PartFoldStateOptions options;
-        options.progress = partModelPanel_->FoldProgress();
+        // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
+        // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
+        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
         options.partNumbers = partModelPanel_->SelectedPartNumbers();
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 

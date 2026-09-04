@@ -1176,6 +1176,76 @@ int main()
             }
         }
 
+        // --- 部材面への後付け開口(#17b) ---
+        {
+            Project openProject = MakeBottleLikeProject();
+            PartApproximationOptions openOptions;
+            openOptions.splitAxis = PartSplitAxis::V;
+            openOptions.automaticBoundaries = true;
+            openOptions.maximumDeviationMillimeters = 0.4;
+            openOptions.maximumPartCount = 8;
+            openOptions.minimumPartWidthMillimeters = 3.0;
+            openProject.AddPartModel("後穴", "胴板", openOptions);
+            const auto& parts = openProject.PartModels().back().result.parts;
+            int ownerPart = 1;
+            for (std::size_t index = 0; index < parts.size(); ++index) {
+                if (parts[index].minimumParameter <= 0.5
+                    && 0.5 <= parts[index].maximumParameter) {
+                    ownerPart = static_cast<int>(index + 1);
+                }
+            }
+            const double vMid = (parts[ownerPart - 1].minimumParameter
+                + parts[ownerPart - 1].maximumParameter) * 0.5;
+            const auto bottleSurface = openProject.FindSurface("胴");
+            Require(bottleSurface.has_value(), "part opening source surface");
+            const Vector3 midPoint = bottleSurface->Evaluate(0.5, vMid);
+            openProject.AddWire("後穴下書き",
+                Wire::Circle({0.0, 40.0, midPoint.z}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, 1.0));
+            openProject.AddPartModelOpening(
+                "後穴", ownerPart, "後穴下書き", {0.0, -1.0, 0.0});
+            Require(openProject.PartModels().back().openingWireNames.size() == 1,
+                "part opening creates a derived hole wire");
+            const std::string derivedHole
+                = openProject.PartModels().back().openingWireNames.front();
+            Require(derivedHole.rfind("後穴_部材", 0) == 0, "derived hole naming");
+            bool holeFound = false;
+            for (const auto& wire : openProject.Wires()) {
+                if (wire.name == derivedHole) {
+                    holeFound = true;
+                    Require(wire.partModelSourceName.has_value()
+                            && *wire.partModelSourceName == "後穴",
+                        "derived hole is marked as model-owned");
+                    Require(wire.wire.IsClosed(1.0e-6), "derived hole is closed");
+                }
+            }
+            Require(holeFound, "derived hole wire exists");
+            // 再計算しても追従する。
+            openProject.UpdatePartModelOptions("後穴", openOptions);
+            Require(openProject.PartModels().back().openingWireNames.size() == 1,
+                "part opening survives recalculation");
+            // 下書きは削除から保護される。
+            bool openingGuarded = false;
+            try {
+                (void)openProject.RemoveWire("後穴下書き");
+            } catch (const std::exception&) {
+                openingGuarded = true;
+            }
+            Require(openingGuarded, "opening source wire is protected");
+            // スクリプト往復で再生成される。
+            std::ostringstream savedOpen;
+            kachakacha::io::WriteProjectScript(savedOpen, openProject);
+            Require(savedOpen.str().find("part_model_opening 後穴") != std::string::npos,
+                "part opening saved to the script");
+            std::istringstream openInput(savedOpen.str());
+            Project loadedOpen = kachakacha::io::LoadProjectScript(openInput, "opening");
+            Require(loadedOpen.PartModels().back().openingWireNames.size() == 1,
+                "part opening regenerated on load");
+            // 解除で派生穴も消える。
+            openProject.RemovePartModelOpening("後穴", "後穴下書き");
+            Require(openProject.PartModels().back().openingWireNames.empty(),
+                "part opening removal cleans the derived wire");
+        }
+
         // --- リネーム(#2): 全参照の一括更新と派生物の連動 ---
         {
             Project renameProject = MakeBottleLikeProject();

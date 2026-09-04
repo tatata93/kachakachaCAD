@@ -1846,6 +1846,9 @@ bool MainWindow::RunCreationSelfTest()
         }
         plateSurface_->setCurrentIndex(sourceComboIndex);
         plateName_->setText(QStringLiteral("__w6板"));
+        plateThickness_->setValue(0.5);
+        plateVariableThickness_->setChecked(false);
+        plateDirection_->setCurrentIndex(0);
         thicknessAlsoSurface_->setChecked(true);
         thicknessAlsoWires_->setChecked(true);
         CreatePlateFromSurface();

@@ -72,6 +72,8 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     };
     partModelPanel_->onSetStateChange = [this](int state) { ChangeSelectedSetState(state); };
     partModelPanel_->onMakePlate = [this] { CreatePlateFromSelectedPart(); };
+    partModelPanel_->onAddPartOpening = [this] { EditSelectedPartOpening(true); };
+    partModelPanel_->onRemovePartOpening = [this] { EditSelectedPartOpening(false); };
     partModelPanel_->onFoldStateChanged = [this] { UpdatePartFoldPreview(); };
     partModelPanel_->onRealizeFoldState = [this] { RealizePartFoldState(); };
     partModelPanel_->onRailFoldEdited = [this](int railIndex, double value) {
@@ -810,6 +812,88 @@ void MainWindow::CreatePlateFromSelectedPart()
             5000);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
+}
+
+void MainWindow::EditSelectedPartOpening(bool add)
+{
+    try {
+        const std::string modelName = ToName(partModelPanel_->SelectedModelName());
+        if (modelName.empty()) {
+            throw std::invalid_argument("一覧で部材近似モデル(または部材)を選択してください。");
+        }
+        std::vector<const kachakacha::model::NamedWire*> selectedWires;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                const auto& wire = project_.Wires()[selection.index];
+                if (!wire.partModelSourceName.has_value()) {
+                    selectedWires.push_back(&wire);
+                }
+            }
+        }
+        if (selectedWires.empty()) {
+            throw std::invalid_argument(
+                "3D画面で下書きの閉じたワイヤーを選んでから押してください。");
+        }
+        Project candidate = project_;
+        int edited = 0;
+        QStringList errors;
+        if (add) {
+            const std::vector<int> numbers = partModelPanel_->SelectedPartNumbers();
+            if (numbers.size() != 1) {
+                throw std::invalid_argument(
+                    "穴を開ける部材を一覧でちょうど1つ選択してください。");
+            }
+            for (const auto* wire : selectedWires) {
+                try {
+                    // 投影方向 = 下書きの作図面の法線。
+                    if (!wire->metadata.sourcePlaneName.has_value()) {
+                        throw std::invalid_argument(
+                            "下書きの作図面が分かりません(平面上で描いたワイヤーを使ってください)。");
+                    }
+                    const auto plane =
+                        candidate.FindWorkPlane(*wire->metadata.sourcePlaneName);
+                    if (!plane.has_value()) {
+                        throw std::invalid_argument("下書きの作図面が見つかりません。");
+                    }
+                    candidate.AddPartModelOpening(
+                        modelName, numbers.front(), wire->name, plane->Normal());
+                    ++edited;
+                } catch (const std::exception& error) {
+                    errors << QStringLiteral("%1: %2").arg(ToQString(wire->name),
+                        QString::fromUtf8(error.what()).section('\n', 0, 0));
+                }
+            }
+        } else {
+            for (const auto* wire : selectedWires) {
+                try {
+                    candidate.RemovePartModelOpening(modelName, wire->name);
+                    ++edited;
+                } catch (const std::exception& error) {
+                    errors << QStringLiteral("%1: %2").arg(ToQString(wire->name),
+                        QString::fromUtf8(error.what()).section('\n', 0, 0));
+                }
+            }
+        }
+        if (edited == 0) {
+            throw std::invalid_argument(errors.join(QStringLiteral(" / ")).toStdString());
+        }
+
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        QString message = add
+            ? QStringLiteral("部材へ穴を%1件追加しました（再計算にも追従します）").arg(edited)
+            : QStringLiteral("後付けの穴を%1件解除しました").arg(edited);
+        if (!errors.isEmpty()) {
+            message += QStringLiteral(" / 一部は失敗: %1")
+                .arg(errors.join(QStringLiteral("、")));
+        }
+        statusBar()->showMessage(message, 6000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
     }
 }
 

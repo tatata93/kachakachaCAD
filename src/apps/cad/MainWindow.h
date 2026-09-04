@@ -77,6 +77,8 @@ private:
     //! 近似ユニット(#15): 3D選択を表へ取り込み、役割どおりに一括近似する。
     void CollectUnitMembersFromSelection();
     void CreateApproximationUnitFromPanel();
+    //! 部材面への後付け開口(#17b)。add=true で追加、false で解除。
+    void EditSelectedPartOpening(bool add);
     void RecalculateSelectedPartModel();
     void RemoveSelectedPartModel();
     void ExtractSelectedPartModelBoundaries();

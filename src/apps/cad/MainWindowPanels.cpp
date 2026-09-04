@@ -1290,8 +1290,8 @@ QWidget* MainWindow::BuildSurfacePanel()
         "内張り・裏打ちの土台に使えます(#12 厚みの統合出力)"));
     thicknessAlsoWires_ = new QCheckBox(QStringLiteral("縁ワイヤも厚み位置へ複製"));
     thicknessAlsoWires_->setToolTip(QStringLiteral(
-        "板材化と同時に、元面の輪郭・断面ワイヤを板の反対側表面の位置へ複製します。\n"
-        "板厚を変えると複製も追従します(#12 厚みの統合出力)"));
+        "板材化と同時に、元面の輪郭・断面ワイヤを厚みぶん法線方向へずらした\n"
+        "独立ワイヤとして複製します(#12 厚みの統合出力)"));
     plateForm->addRow(thicknessAlsoSurface_);
     plateForm->addRow(thicknessAlsoWires_);
     layout->addLayout(plateForm);

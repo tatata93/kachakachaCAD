@@ -248,6 +248,26 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     actionRow->addWidget(extractButton, 1);
     listSectionLayout->addLayout(actionRow);
 
+    // #17b: 部材面への後付け開口。
+    auto* partOpeningRow = new QHBoxLayout;
+    auto* addPartOpeningButton = new QPushButton(QStringLiteral("選択ワイヤを部材へ投影して穴に"));
+    addPartOpeningButton->setToolTip(QStringLiteral(
+        "一覧で部材を1つ選び、3D画面で閉じた下書きワイヤを選んでから押します。\n"
+        "その部材の面へ投影した穴が作られ、再計算・型紙・実体化・板材化にも追従します。\n"
+        "投影方向は下書きの作図面の法線です"));
+    connect(addPartOpeningButton, &QPushButton::clicked, this, [this] {
+        if (onAddPartOpening) onAddPartOpening();
+    });
+    auto* removePartOpeningButton = new QPushButton(QStringLiteral("穴を解除"));
+    removePartOpeningButton->setToolTip(QStringLiteral(
+        "選択した下書きワイヤの後付け穴を、選択中のモデルから外します"));
+    connect(removePartOpeningButton, &QPushButton::clicked, this, [this] {
+        if (onRemovePartOpening) onRemovePartOpening();
+    });
+    partOpeningRow->addWidget(addPartOpeningButton, 2);
+    partOpeningRow->addWidget(removePartOpeningButton, 1);
+    listSectionLayout->addLayout(partOpeningRow);
+
     // #18: 板材化の追従/固定と出力の種類。
     auto* partOutputRow = new QHBoxLayout;
     partPlateFollowCombo_ = new QComboBox;

@@ -193,6 +193,14 @@ struct NamedPartModel {
     std::vector<std::string> scopeSurfaceNames;
     std::vector<std::string> adaptedWireNames;    //!< 派生「_接続」ワイヤ(自動)
     std::vector<std::string> adaptedSurfaceNames; //!< 派生「_接続」面(自動)
+    //! 部材面への後付け開口(#17b): 部材番号(1始まり)と投影元ワイヤ・方向。
+    //! 再生成のたび、その部材面へ投影し直した派生穴が作られる(型紙・実体化にも反映)。
+    struct PartOpening {
+        int partNumber = 1;
+        std::string sourceWireName;
+        geometry::Vector3 direction;
+    };
+    std::vector<PartOpening> partOpenings;
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -377,6 +385,15 @@ public:
         std::string_view name,
         std::vector<std::string> wireNames,
         std::vector<std::string> surfaceNames);
+    //! 部材面へ下書きワイヤを投影して穴を後付けする(#17b)。閉じたワイヤのみ。
+    //! 部材番号付きで記録され、再生成のたび再投影されて追従する。
+    void AddPartModelOpening(
+        std::string_view name,
+        int partNumber,
+        std::string sourceWireName,
+        geometry::Vector3 direction);
+    //! 後付け開口を外す(投影元ワイヤ名で指定)。
+    void RemovePartModelOpening(std::string_view name, std::string_view sourceWireName);
     bool RemovePartModel(std::string_view name);
     void SetPartModelVisible(std::string_view name, bool visible);
     //! 部材境界を独立した通常ワイヤとして複製する(抽出)。作成したワイヤ名を返す。

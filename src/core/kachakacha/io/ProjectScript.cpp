@@ -973,6 +973,17 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.SetPartModelConnectionScope(
                     name, std::move(wireNames), std::move(surfaceNames));
+            } else if (command == "part_model_opening") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const int partNumber = static_cast<int>(
+                    ReadCount(stream, sourceName, lineNumber, "part number"));
+                const std::string wireName =
+                    ReadName(stream, sourceName, lineNumber, "opening source wire");
+                const double dx = ReadDouble(stream, sourceName, lineNumber, "direction x");
+                const double dy = ReadDouble(stream, sourceName, lineNumber, "direction y");
+                const double dz = ReadDouble(stream, sourceName, lineNumber, "direction z");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddPartModelOpening(name, partNumber, wireName, {dx, dy, dz});
             } else if (command == "part_model_fold") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
                 const int count = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "fold value count"));
@@ -1576,6 +1587,14 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                 output << ' ' << scopeName;
             }
             output << '\n';
+        }
+        // 部材面への後付け開口(#17b)。派生穴は読込時に再投影される。
+        for (const auto& record : model.partOpenings) {
+            RequireScriptNameSafe(record.sourceWireName, "Part-model opening source wire");
+            output << "part_model_opening " << model.name << ' '
+                   << record.partNumber << ' ' << record.sourceWireName << ' '
+                   << record.direction.x << ' ' << record.direction.y << ' '
+                   << record.direction.z << '\n';
         }
     }
     for (const auto& namedPlate : project.Plates()) {

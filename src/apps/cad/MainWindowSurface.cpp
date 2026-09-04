@@ -607,6 +607,48 @@ std::optional<double> ParameterOnWire(
 [[nodiscard]] std::string FreeDerivedName(
     const Project& project, const std::string& base, const char* suffix);
 
+//! 面上(近傍)の点の(u,v)パラメータを粗い格子+局所詰めで求める。
+[[nodiscard]] std::pair<double, double> ClosestSurfaceParameters(
+    const kachakacha::model::Surface& surface, Vector3 point)
+{
+    double bestU = 0.5;
+    double bestV = 0.5;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (int uIndex = 0; uIndex <= 16; ++uIndex) {
+        for (int vIndex = 0; vIndex <= 16; ++vIndex) {
+            const double u = uIndex / 16.0;
+            const double v = vIndex / 16.0;
+            const double distance = (surface.Evaluate(u, v) - point).LengthSquared();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestU = u;
+                bestV = v;
+            }
+        }
+    }
+    double step = 1.0 / 16.0;
+    for (int iteration = 0; iteration < 40; ++iteration) {
+        bool improved = false;
+        for (int move = 0; move < 4; ++move) {
+            const double du = move == 0 ? step : move == 1 ? -step : 0.0;
+            const double dv = move == 2 ? step : move == 3 ? -step : 0.0;
+            const double u = std::clamp(bestU + du, 0.0, 1.0);
+            const double v = std::clamp(bestV + dv, 0.0, 1.0);
+            const double distance = (surface.Evaluate(u, v) - point).LengthSquared();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestU = u;
+                bestV = v;
+                improved = true;
+            }
+        }
+        if (!improved) {
+            step *= 0.5;
+        }
+    }
+    return {bestU, bestV};
+}
+
 } // namespace
 
 bool MainWindow::SplitSelectedWiresAtBranchPoints()
@@ -1686,24 +1728,55 @@ void MainWindow::CreatePlateFromSurface()
             }
         }
         if (thicknessAlsoWires_ != nullptr && thicknessAlsoWires_->isChecked()) {
+            // 元面の輪郭・断面を、面上の位置ごとの法線方向へ厚みぶんずらした
+            // 独立ワイヤとして複製する(元線は面上に載っている前提)。
             const auto sourceNamed = std::find_if(
                 candidate.Surfaces().begin(), candidate.Surfaces().end(),
                 [&](const kachakacha::model::NamedSurface& surface) {
                     return surface.name == sourceSurfaceName;
                 });
-            const double throughThickness =
-                direction == PlateThicknessDirection::Negative ? 0.0 : 1.0;
             int createdWires = 0;
             if (sourceNamed != candidate.Surfaces().end()) {
-                for (const std::string& wireName : sourceNamed->sourceWireNames) {
-                    try {
-                        candidate.AddPlateOffsetWire(
-                            FreeDerivedName(candidate, wireName, "_厚み位置"),
-                            wireName, name, throughThickness);
-                        ++createdWires;
-                    } catch (const std::exception&) {
-                        // 板の範囲外へはみ出す線などは黙って飛ばす(残りは作る)。
+                const kachakacha::model::NamedSurface sourceCopy = *sourceNamed;
+                const std::vector<std::string> boundaryNames = sourceCopy.sourceWireNames;
+                for (const std::string& wireName : boundaryNames) {
+                    const auto boundary = std::find_if(
+                        candidate.Wires().begin(), candidate.Wires().end(),
+                        [&](const kachakacha::model::NamedWire& wire) {
+                            return wire.name == wireName;
+                        });
+                    if (boundary == candidate.Wires().end()) {
+                        continue;
                     }
+                    const Wire boundaryGeometry = boundary->wire;
+                    constexpr int kOffsetSamples = 64;
+                    const bool closed = boundaryGeometry.IsClosed();
+                    std::vector<Vector3> points;
+                    points.reserve(kOffsetSamples + 1);
+                    const int last = closed ? kOffsetSamples - 1 : kOffsetSamples;
+                    bool onSurface = true;
+                    for (int sample = 0; sample <= last; ++sample) {
+                        const Vector3 point = boundaryGeometry.Evaluate(
+                            static_cast<double>(sample) / kOffsetSamples);
+                        const auto [u, v] =
+                            ClosestSurfaceParameters(sourceCopy.surface, point);
+                        if ((sourceCopy.surface.Evaluate(u, v) - point).Length() > 1.0) {
+                            onSurface = false; // 面上に載っていない線は複製しない。
+                            break;
+                        }
+                        points.push_back(point
+                            + sourceCopy.surface.Normal(u, v) * farSigned);
+                    }
+                    if (!onSurface || points.size() < 2) {
+                        continue;
+                    }
+                    if (closed) {
+                        points.push_back(points.front());
+                    }
+                    candidate.AddWire(
+                        FreeDerivedName(candidate, wireName, "_厚み位置"),
+                        Wire::Polyline(std::move(points)));
+                    ++createdWires;
                 }
             }
             if (createdWires > 0) {

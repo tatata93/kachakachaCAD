@@ -87,6 +87,8 @@ public:
     std::function<void(bool)> onOverlayVisibility;
     std::function<void(int)> onSetStateChange; //!< kachakacha::model::ObjectSetState の値
     std::function<void()> onMakePlate;
+    std::function<void()> onAddPartOpening;    //!< 選択ワイヤを選択部材へ投影して穴に(#17b)
+    std::function<void()> onRemovePartOpening; //!< 後付け穴の解除(#17b)
     std::function<void()> onFoldStateChanged;  //!< スライダー・チェック・選択の変化
     std::function<void()> onRealizeFoldState;  //!< この曲げ状態を同じプロジェクトへ板材化
     std::function<void(int, double)> onRailFoldEdited; //!< 折り線index(0始まり)と新しい進行度

@@ -2131,6 +2131,12 @@ bool Project::RemoveWire(std::string_view name)
             throw std::invalid_argument(
                 "Wire is used by a part-model connection scope: " + model.name);
         }
+        for (const NamedPartModel::PartOpening& record : model.partOpenings) {
+            if (record.sourceWireName == name) {
+                throw std::invalid_argument(
+                    "Wire is used as a part-model opening source: " + model.name);
+            }
+        }
     }
     for (const WireCoincidentConstraint& constraint : coincidentConstraints_) {
         if (constraint.anchor.wireName == name || constraint.follower.wireName == name) {
@@ -2308,6 +2314,9 @@ void Project::RenameReferences(
             renameList(model.boundaryWireNames);
             renameList(model.openingWireNames);
             renameList(model.adaptedWireNames);
+            for (NamedPartModel::PartOpening& record : model.partOpenings) {
+                renameIn(record.sourceWireName);
+            }
         }
         for (WireCoincidentConstraint& constraint : coincidentConstraints_) {
             renameIn(constraint.anchor.wireName);
@@ -3322,6 +3331,61 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         }
         newOpeningNames.push_back(derivedName);
     }
+    // --- 部材面への後付け開口(#17b): 記録された部材番号の面へ投影し直す ---
+    for (std::size_t extraIndex = 0; extraIndex < model.partOpenings.size(); ++extraIndex) {
+        const NamedPartModel::PartOpening record = model.partOpenings[extraIndex];
+        if (record.partNumber < 1
+            || record.partNumber > static_cast<int>(newSurfaceNames.size())) {
+            continue; // 部材数が減って載らない指定は保留(記録は残す)。
+        }
+        const auto sourceWire = std::find_if(wires_.begin(), wires_.end(),
+            [&](const NamedWire& wire) { return wire.name == record.sourceWireName; });
+        if (sourceWire == wires_.end()) {
+            continue;
+        }
+        const std::string& targetSurfaceName = newSurfaceNames[record.partNumber - 1];
+        const auto targetSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) { return candidate.name == targetSurfaceName; });
+        if (targetSurface == surfaces_.end()) {
+            continue;
+        }
+        const Wire sourceGeometry = sourceWire->wire; // push_backで参照が無効になるため複製
+        std::optional<Wire> projectedOutline;
+        try {
+            projectedOutline = targetSurface->surface.ProjectWireAlongDirection(
+                sourceGeometry, record.direction);
+        } catch (const std::exception&) {
+            continue; // その部材面に載らない場合は保留。
+        }
+        const std::string derivedName = model.name + "_部材"
+            + std::to_string(record.partNumber) + "_穴"
+            + std::to_string(sourceOpeningNames.size() + extraIndex + 1);
+        const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+            return wire.name == derivedName;
+        });
+        if (existing != wires_.end()) {
+            if (!existing->partModelSourceName.has_value()
+                || *existing->partModelSourceName != model.name) {
+                throw std::invalid_argument(
+                    "Part-model opening wire name is already used: " + derivedName);
+            }
+            existing->wire = std::move(*projectedOutline);
+            existing->projection = NamedWire::Projection{
+                record.sourceWireName, targetSurfaceName, record.direction};
+        } else {
+            wires_.push_back(NamedWire{
+                derivedName,
+                std::move(*projectedOutline),
+                {},
+                NamedWire::Projection{
+                    record.sourceWireName, targetSurfaceName, record.direction},
+                model.visible,
+                std::nullopt,
+                model.name,
+            });
+        }
+        newOpeningNames.push_back(derivedName);
+    }
     for (const std::string& oldName : model.openingWireNames) {
         if (std::find(newOpeningNames.begin(), newOpeningNames.end(), oldName)
             != newOpeningNames.end()) {
@@ -3661,6 +3725,63 @@ void Project::SetPartModelConnectionScope(
     }
     model->scopeWireNames = std::move(wireNames);
     model->scopeSurfaceNames = std::move(surfaceNames);
+    RegeneratePartModelDerivedObjects(*model);
+}
+
+void Project::AddPartModelOpening(
+    std::string_view name,
+    int partNumber,
+    std::string sourceWireName,
+    geometry::Vector3 direction)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) { return candidate.name == name; });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part-model name does not exist: " + std::string(name));
+    }
+    if (partNumber < 1 || partNumber > static_cast<int>(model->result.parts.size())) {
+        throw std::invalid_argument("Part number is out of range.");
+    }
+    if (!direction.IsFinite() || direction.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("Opening projection direction must be valid.");
+    }
+    const NamedWire& source = RequireWire(sourceWireName);
+    if (source.partModelSourceName.has_value()) {
+        throw std::invalid_argument(
+            "Part-model derived wires cannot be an opening source: " + sourceWireName);
+    }
+    if (source.metadata.construction) {
+        throw std::invalid_argument(
+            "Construction wire cannot be an opening source: " + sourceWireName);
+    }
+    if (!source.wire.IsClosed()) {
+        throw std::invalid_argument("Opening source wire must be closed: " + sourceWireName);
+    }
+    for (const NamedPartModel::PartOpening& record : model->partOpenings) {
+        if (record.sourceWireName == sourceWireName && record.partNumber == partNumber) {
+            throw std::invalid_argument(
+                "Wire is already an opening of this part: " + sourceWireName);
+        }
+    }
+    model->partOpenings.push_back({partNumber, std::move(sourceWireName), direction});
+    RegeneratePartModelDerivedObjects(*model);
+}
+
+void Project::RemovePartModelOpening(std::string_view name, std::string_view sourceWireName)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) { return candidate.name == name; });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part-model name does not exist: " + std::string(name));
+    }
+    const std::size_t before = model->partOpenings.size();
+    std::erase_if(model->partOpenings, [&](const NamedPartModel::PartOpening& record) {
+        return record.sourceWireName == sourceWireName;
+    });
+    if (model->partOpenings.size() == before) {
+        throw std::invalid_argument(
+            "Wire is not a part opening: " + std::string(sourceWireName));
+    }
     RegeneratePartModelDerivedObjects(*model);
 }
 

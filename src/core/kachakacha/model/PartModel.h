@@ -97,16 +97,12 @@ struct PartMeshDevelopment {
     int columns = 96);
 
 //! 展開状態(progress=0)から折り曲げた近似形状(progress=1)までの中間形状を返す。
-//! スライダー確認用。返り値は world と同じ [row][column]。
+//! 中間は「三角形は剛体のまま、折り目の二面角だけを progress 倍」する等長の曲げ
+//! (辺長・帯幅・素線長はどの瞬間も保存)。0は厳密な展開平面配置、1は world と厳密一致。
+//! 帯間のつなぎ目は共有レールで剛体接続するため、曲がった折り線の中間では
+//! つなぎ目にのみ微小な合わせ誤差が残る(帯の中は常に厳密)。
 [[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildFoldPreview(
     const PartMeshDevelopment& mesh,
-    double progress);
-
-//! 展開平面配置(progress=0)から任意の目標状態 target(progress=1)への補間。
-//! BuildFoldPreview は target=mesh.world の特殊形。
-[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildFoldPreviewToState(
-    const PartMeshDevelopment& mesh,
-    const std::vector<std::vector<geometry::Vector3>>& target,
     double progress);
 
 //! 完成形(world)での各内部レールの平均折り角(符号付きラジアン、0=平ら)。
@@ -144,7 +140,8 @@ struct PartBandTransform {
 //! assemblyProgress=0 で各帯の展開形(型紙と同じ平面形)を帯の外向き法線方向へ
 //! liftDistanceMillimeters だけ離した位置に置き、1 で「折り線ごとの進行度
 //! creaseProgress どおりの剛体折り状態(近似モデルの位置)」へ一致する。
-//! 中間は帯ごとに平面形→折り形を補間する(型紙ビューと同じ見え方。帯は互いに独立)。
+//! 中間も等長の曲げ(三角形剛体+二面角スケール)で、辺長・帯幅・素線長は
+//! どの瞬間も厳密に保存される。帯は互いに独立(隙間許容)。
 //! 返り値は帯ごとの(下レール, 上レール)ペア = 2×帯数 本の点列。
 [[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildBandFoldAnimationRails(
     const PartMeshDevelopment& mesh,

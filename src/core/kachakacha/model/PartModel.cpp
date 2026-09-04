@@ -398,70 +398,278 @@ PartMeshDevelopment DevelopPartMesh(
     return mesh;
 }
 
+namespace {
+
+// 後方の無名名前空間で定義(同一TUの無名名前空間は同一)。
+[[nodiscard]] double MeasureCreaseAngleInState(
+    const std::vector<std::vector<Vector3>>& state, int row, int columns);
+
+//! ヒンジ(共有辺 P→Q)まわりの頂点配置の分解: 辺方向位置 along、辺からの距離 height、
+//! 「前三角形の反対側(=平ら)」を0とする符号付き曲げ角 bendAngle。
+struct HingePlacement {
+    double along = 0.0;
+    double height = 0.0;
+    double bendAngle = 0.0;
+};
+
+//! world 上の三角形 (P,Q,V) と前三角形の第3頂点 prev からヒンジ分解を測る。
+[[nodiscard]] HingePlacement MeasureHinge(
+    const Vector3& worldP,
+    const Vector3& worldQ,
+    const Vector3& worldV,
+    const Vector3& worldPrev)
+{
+    HingePlacement placement;
+    const Vector3 edge = worldQ - worldP;
+    const double edgeLength = edge.Length();
+    if (edgeLength <= 1.0e-12) {
+        return placement;
+    }
+    const Vector3 e = edge * (1.0 / edgeLength);
+    const Vector3 relativeV = worldV - worldP;
+    placement.along = Dot(relativeV, e);
+    const Vector3 perpendicular = relativeV - e * placement.along;
+    placement.height = perpendicular.Length();
+    if (placement.height <= 1.0e-12) {
+        return placement;
+    }
+    Vector3 towardPrev = worldPrev - worldP;
+    towardPrev = towardPrev - e * Dot(towardPrev, e);
+    const double prevLength = towardPrev.Length();
+    if (prevLength <= 1.0e-12) {
+        return placement; // 前三角形が退化: 平ら扱い。
+    }
+    const Vector3 w = towardPrev * (1.0 / prevLength);
+    const Vector3 n = Cross(e, w);
+    const Vector3 direction = perpendicular * (1.0 / placement.height);
+    placement.bendAngle = std::atan2(Dot(direction, n), Dot(direction, w * -1.0));
+    return placement;
+}
+
+//! 再構成側: 配置済みのヒンジ(P,Q)と前三角形第3頂点から、曲げ角 angle で頂点を置く。
+//! 辺長(along/height)は world から測った値そのものを使うため、三角形は厳密に剛体。
+[[nodiscard]] Vector3 PlaceOnHinge(
+    const Vector3& placedP,
+    const Vector3& placedQ,
+    const Vector3& placedPrev,
+    const HingePlacement& placement,
+    double angle)
+{
+    const Vector3 edge = placedQ - placedP;
+    const double edgeLength = edge.Length();
+    if (edgeLength <= 1.0e-12) {
+        return placedP;
+    }
+    const Vector3 e = edge * (1.0 / edgeLength);
+    if (placement.height <= 1.0e-12) {
+        return placedP + e * placement.along;
+    }
+    Vector3 towardPrev = placedPrev - placedP;
+    towardPrev = towardPrev - e * Dot(towardPrev, e);
+    const double prevLength = towardPrev.Length();
+    if (prevLength <= 1.0e-12) {
+        return placedP + e * placement.along;
+    }
+    const Vector3 w = towardPrev * (1.0 / prevLength);
+    const Vector3 n = Cross(e, w);
+    const Vector3 direction = w * (-std::cos(angle)) + n * std::sin(angle);
+    return placedP + e * placement.along + direction * placement.height;
+}
+
+//! 帯 band を「三角形は剛体・折り目の二面角だけ progress 倍」で等長に曲げ直す。
+//! progress=1 は world と厳密一致(先頭三角形を world に固定して行進する)。
+//! progress=0 は先頭三角形の平面上に完全に平らへ展開された形。
+void BendBandStrip(
+    const PartMeshDevelopment& mesh,
+    int band,
+    double progress,
+    std::vector<Vector3>& bottom,
+    std::vector<Vector3>& top)
+{
+    const auto& worldBottom = mesh.world[band];
+    const auto& worldTop = mesh.world[band + 1];
+    if (progress >= 1.0 - 1.0e-9) {
+        bottom = worldBottom;
+        top = worldTop;
+        return;
+    }
+    const int columns = mesh.columns;
+    bottom.assign(columns, Vector3{});
+    top.assign(columns, Vector3{});
+    bottom[0] = worldBottom[0];
+    top[0] = worldTop[0];
+    if (columns < 2) {
+        return;
+    }
+    bottom[1] = worldBottom[1]; // 先頭三角形 (B0,T0,B1) はアンカーとして world のまま。
+    for (int column = 1; column < columns; ++column) {
+        // 三角形B: 頂点 T_c を辺 (T_{c-1}, B_c) まわりに置く(前三角形の第3頂点=B_{c-1})。
+        {
+            const HingePlacement placement = MeasureHinge(
+                worldTop[column - 1], worldBottom[column],
+                worldTop[column], worldBottom[column - 1]);
+            top[column] = PlaceOnHinge(
+                top[column - 1], bottom[column], bottom[column - 1],
+                placement, placement.bendAngle * progress);
+        }
+        // 三角形A(次列): 頂点 B_{c+1} を辺 (B_c, T_c) まわりに置く(前=T_{c-1})。
+        if (column + 1 < columns) {
+            const HingePlacement placement = MeasureHinge(
+                worldBottom[column], worldTop[column],
+                worldBottom[column + 1], worldTop[column - 1]);
+            bottom[column + 1] = PlaceOnHinge(
+                bottom[column], top[column], top[column - 1],
+                placement, placement.bendAngle * progress);
+        }
+    }
+}
+
+//! 3点 (origin, xRef, yRef) から正規直交フレームを作る。
+struct PointFrame {
+    Vector3 origin;
+    Vector3 axisX{1.0, 0.0, 0.0};
+    Vector3 axisY{0.0, 1.0, 0.0};
+    Vector3 axisZ{0.0, 0.0, 1.0};
+};
+
+[[nodiscard]] PointFrame MakePointFrame(
+    const Vector3& origin, const Vector3& xReference, const Vector3& yReference)
+{
+    PointFrame frame;
+    frame.origin = origin;
+    const Vector3 x = Normalized(xReference - origin);
+    if (x.Length() > 1.0e-9) {
+        frame.axisX = x;
+    }
+    Vector3 y = yReference - origin;
+    y = y - frame.axisX * Dot(y, frame.axisX);
+    const Vector3 yUnit = Normalized(y);
+    if (yUnit.Length() > 1.0e-9) {
+        frame.axisY = yUnit;
+    } else {
+        frame.axisY = Normalized(Cross(frame.axisX, Vector3{0.0, 0.0, 1.0}));
+        if (frame.axisY.Length() <= 1.0e-9) {
+            frame.axisY = Normalized(Cross(frame.axisX, Vector3{0.0, 1.0, 0.0}));
+        }
+    }
+    frame.axisZ = Cross(frame.axisX, frame.axisY);
+    return frame;
+}
+
+//! from フレームを to フレームへ写す剛体変換を rows の全点に適用する。
+void AlignFrames(
+    const PointFrame& from,
+    const PointFrame& to,
+    std::vector<std::vector<Vector3>*> rows)
+{
+    for (std::vector<Vector3>* row : rows) {
+        for (Vector3& point : *row) {
+            const Vector3 relative = point - from.origin;
+            const double a = Dot(relative, from.axisX);
+            const double b = Dot(relative, from.axisY);
+            const double c = Dot(relative, from.axisZ);
+            point = to.origin + to.axisX * a + to.axisY * b + to.axisZ * c;
+        }
+    }
+}
+
+//! 点をロドリゲスの公式で軸まわりに回転する。
+[[nodiscard]] Vector3 RotatePointAboutAxis(
+    const Vector3& point, const Vector3& origin, const Vector3& axis, double angle)
+{
+    const Vector3 relative = point - origin;
+    const double c = std::cos(angle);
+    const double sn = std::sin(angle);
+    return origin + relative * c + Cross(axis, relative) * sn
+        + axis * (Dot(axis, relative) * (1.0 - c));
+}
+
+} // namespace
+
 std::vector<std::vector<Vector3>> BuildFoldPreview(
     const PartMeshDevelopment& mesh,
     double progress)
 {
-    return BuildFoldPreviewToState(mesh, mesh.world, progress);
-}
-
-std::vector<std::vector<Vector3>> BuildFoldPreviewToState(
-    const PartMeshDevelopment& mesh,
-    const std::vector<std::vector<Vector3>>& target,
-    double progress)
-{
     const double t = std::clamp(progress, 0.0, 1.0);
-    std::vector<std::vector<Vector3>> result(
-        mesh.rows, std::vector<Vector3>(mesh.columns, {0.0, 0.0, 0.0}));
-    if (mesh.rows == 0 || mesh.columns == 0) {
+    if (mesh.rows < 2 || mesh.columns < 2) {
+        return mesh.world;
+    }
+    if (t >= 1.0 - 1.0e-9) {
+        return mesh.world;
+    }
+    if (t <= 1.0e-9) {
+        // 厳密な展開平面配置(型紙そのもの)。行0中央の位置・向きへ剛体で置く。
+        std::vector<std::vector<Vector3>> result(
+            mesh.rows, std::vector<Vector3>(mesh.columns, Vector3{}));
+        const int anchorColumn = mesh.columns / 2;
+        const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
+        const Vector3 worldAnchor = mesh.world[0][anchorColumn];
+        const Vector3 worldTangent
+            = Normalized(mesh.world[0][nextColumn] - mesh.world[0][anchorColumn]);
+        const Vector3 worldUp = mesh.world[1][anchorColumn] - mesh.world[0][anchorColumn];
+        Vector3 worldNormal = Normalized(Cross(worldTangent, worldUp));
+        if (worldNormal.Length() <= 1.0e-9) {
+            worldNormal = {0.0, 0.0, 1.0};
+        }
+        const Vector3 worldSide = Normalized(Cross(worldNormal, worldTangent));
+        const Vector2 developedAnchor = mesh.developed[0][anchorColumn];
+        const Vector2 developedNext = mesh.developed[0][nextColumn];
+        double axisX = developedNext.x - developedAnchor.x;
+        double axisY = developedNext.y - developedAnchor.y;
+        const double axisLength = std::sqrt(axisX * axisX + axisY * axisY);
+        if (axisLength > 1.0e-12) {
+            axisX /= axisLength;
+            axisY /= axisLength;
+        } else {
+            axisX = 1.0;
+            axisY = 0.0;
+        }
+        for (int row = 0; row < mesh.rows; ++row) {
+            for (int column = 0; column < mesh.columns; ++column) {
+                const Vector2& flat = mesh.developed[row][column];
+                const double dx = flat.x - developedAnchor.x;
+                const double dy = flat.y - developedAnchor.y;
+                const double along = dx * axisX + dy * axisY;
+                const double side = -dx * axisY + dy * axisX;
+                result[row][column] = worldAnchor
+                    + worldTangent * along + worldSide * side;
+            }
+        }
         return result;
     }
-    if (static_cast<int>(target.size()) != mesh.rows) {
-        throw std::invalid_argument("目標状態と近似メッシュの位相が一致していません。");
-    }
 
-    // 展開形状(z=0)を実形状の位置・向きへ剛体で合わせてから、頂点ごとに補間する。
-    // 厳密な等長変形ではないが、平面状態と折り曲げ状態の対応確認には十分。
-    // 合わせ込み: 展開の行0中央付近と実形状の同位置・接線方向を一致させる。
+    // 中間: 帯ごとに等長で曲げ(BendBandStrip)、共有レールで順に剛体接続し、
+    // 帯間の折り角(world の値)も progress 倍する。帯の中は常に厳密な等長。
+    std::vector<std::vector<Vector3>> result(mesh.rows);
+    std::vector<Vector3> bottom;
+    std::vector<Vector3> top;
+    BendBandStrip(mesh, 0, t, bottom, top);
+    result[0] = std::move(bottom);
+    result[1] = std::move(top);
     const int anchorColumn = mesh.columns / 2;
-    const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
-    const Vector3 worldAnchor = mesh.world[0][anchorColumn];
-    const Vector3 worldTangent = Normalized(mesh.world[0][nextColumn] - mesh.world[0][anchorColumn]);
-    Vector3 worldUp{0.0, 0.0, 0.0};
-    if (mesh.rows > 1) {
-        worldUp = mesh.world[1][anchorColumn] - mesh.world[0][anchorColumn];
-    }
-    Vector3 worldNormal = Normalized(Cross(worldTangent, worldUp));
-    if (worldNormal.Length() <= 1.0e-9) {
-        worldNormal = {0.0, 0.0, 1.0};
-    }
-    const Vector3 worldSide = Normalized(Cross(worldNormal, worldTangent));
-
-    const Vector2 developedAnchor = mesh.developed[0][anchorColumn];
-    const Vector2 developedNext = mesh.developed[0][nextColumn];
-    double axisX = developedNext.x - developedAnchor.x;
-    double axisY = developedNext.y - developedAnchor.y;
-    const double axisLength = std::sqrt(axisX * axisX + axisY * axisY);
-    if (axisLength > 1.0e-12) {
-        axisX /= axisLength;
-        axisY /= axisLength;
-    } else {
-        axisX = 1.0;
-        axisY = 0.0;
-    }
-
-    for (int row = 0; row < mesh.rows; ++row) {
-        for (int column = 0; column < mesh.columns; ++column) {
-            const Vector2& flat = mesh.developed[row][column];
-            const double dx = flat.x - developedAnchor.x;
-            const double dy = flat.y - developedAnchor.y;
-            const double along = dx * axisX + dy * axisY;
-            const double side = -dx * axisY + dy * axisX;
-            const Vector3 flatWorld = worldAnchor
-                + worldTangent * along + worldSide * side;
-            const Vector3& folded = target[row][column];
-            result[row][column] = flatWorld * (1.0 - t) + folded * t;
+    for (int band = 1; band + 1 < mesh.rows; ++band) {
+        BendBandStrip(mesh, band, t, bottom, top);
+        // 下レールを配置済みの共有レールへ剛体で合わせる。
+        const std::vector<Vector3>& placed = result[band];
+        const PointFrame from = MakePointFrame(
+            bottom.front(), bottom.back(), bottom[anchorColumn]);
+        const PointFrame to = MakePointFrame(
+            placed.front(), placed.back(), placed[anchorColumn]);
+        AlignFrames(from, to, {&bottom, &top});
+        // 帯間の折り角も progress 倍: world の折り角 θ に対し (t-1)θ を追加回転。
+        const double fullAngle
+            = MeasureCreaseAngleInState(mesh.world, band, mesh.columns);
+        const double delta = (t - 1.0) * fullAngle;
+        if (std::abs(delta) > 1.0e-12) {
+            const Vector3 chordOrigin = placed.front();
+            const Vector3 chord = Normalized(placed.back() - placed.front());
+            if (chord.Length() > 1.0e-9) {
+                for (Vector3& point : top) {
+                    point = RotatePointAboutAxis(point, chordOrigin, chord, delta);
+                }
+            }
         }
+        result[band + 1] = std::move(top);
     }
     return result;
 }
@@ -652,8 +860,13 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
         return rails;
     }
     const double t = std::clamp(assemblyProgress, 0.0, 1.0);
+    // 帯間の折り角(可動折り線の個別値)も t で補間した剛体連鎖を使う。
+    std::vector<double> interpolated(creaseProgress.size(), 1.0);
+    for (std::size_t index = 0; index < creaseProgress.size(); ++index) {
+        interpolated[index] = 1.0 + t * (creaseProgress[index] - 1.0);
+    }
     const std::vector<PartBandTransform> transforms
-        = BuildRigidBandTransforms(mesh, creaseProgress);
+        = BuildRigidBandTransforms(mesh, interpolated);
 
     // モデル重心(展開位置を外向きへ離す向きの判定に使う)。
     Vector3 centroid{0.0, 0.0, 0.0};
@@ -665,67 +878,45 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
     centroid = centroid * (1.0 / (mesh.rows * mesh.columns));
 
     const int anchorColumn = mesh.columns / 2;
-    const int nextColumn = std::min(anchorColumn + 1, mesh.columns - 1);
+    std::vector<Vector3> bottom;
+    std::vector<Vector3> top;
     for (int band = 0; band < bandCount; ++band) {
-        // 帯の接平面(型紙の平面形をこの平面に置く)。
-        // 注意: 枠(tangent/side/normal)は元の向きのまま使う。ここで normal を
-        // 反転させると展開片が鏡像になる(実際に踏んだ)。外向きの判定は
-        // 「持ち上げ方向」にだけ適用する。
-        const Vector3 worldTangent
-            = Normalized(mesh.world[band][nextColumn] - mesh.world[band][anchorColumn]);
+        // 等長の曲げ(三角形剛体+二面角×t)。t=1 で world と厳密一致。
+        BendBandStrip(mesh, band, t, bottom, top);
+        // 中央素線を world の中央素線へ剛体で合わせ、帯を元の位置周辺に保つ。
+        const PointFrame from = MakePointFrame(
+            bottom[anchorColumn], top[anchorColumn],
+            bottom[std::min(anchorColumn + 1, mesh.columns - 1)]);
+        const PointFrame to = MakePointFrame(
+            mesh.world[band][anchorColumn], mesh.world[band + 1][anchorColumn],
+            mesh.world[band][std::min(anchorColumn + 1, mesh.columns - 1)]);
+        AlignFrames(from, to, {&bottom, &top});
+        // 外向きの持ち上げ((1-t) で減衰)。
+        const Vector3 worldTangent = Normalized(
+            mesh.world[band][std::min(anchorColumn + 1, mesh.columns - 1)]
+            - mesh.world[band][anchorColumn]);
         const Vector3 worldUp
             = mesh.world[band + 1][anchorColumn] - mesh.world[band][anchorColumn];
         Vector3 normal = Normalized(Cross(worldTangent, worldUp));
         if (normal.Length() <= 1.0e-9) {
             normal = {0.0, 0.0, 1.0};
         }
-        const Vector3 side = Normalized(Cross(normal, worldTangent));
-        // 帯の中心どうしを対応させて置く(端点基準だと隣の帯と重なりやすい)。
-        const Vector3 worldCenter = (mesh.world[band][anchorColumn]
+        const Vector3 bandCenter = (mesh.world[band][anchorColumn]
             + mesh.world[band + 1][anchorColumn]) * 0.5;
-        Vector3 liftDirection = normal;
-        if (Dot(liftDirection, worldCenter - centroid) < 0.0) {
-            liftDirection = liftDirection * -1.0; // 外向きへ(枠は変えない)。
+        if (Dot(normal, bandCenter - centroid) < 0.0) {
+            normal = normal * -1.0;
         }
-        const Vector3 lift = liftDirection * liftDistanceMillimeters;
-
-        const Vector2 developedAnchor = mesh.developed[band][anchorColumn];
-        const Vector2 developedNext = mesh.developed[band][nextColumn];
-        const Vector2 developedCenter{
-            (mesh.developed[band][anchorColumn].x
-                + mesh.developed[band + 1][anchorColumn].x) * 0.5,
-            (mesh.developed[band][anchorColumn].y
-                + mesh.developed[band + 1][anchorColumn].y) * 0.5};
-        double axisX = developedNext.x - developedAnchor.x;
-        double axisY = developedNext.y - developedAnchor.y;
-        const double axisLength = std::sqrt(axisX * axisX + axisY * axisY);
-        if (axisLength > 1.0e-12) {
-            axisX /= axisLength;
-            axisY /= axisLength;
-        } else {
-            axisX = 1.0;
-            axisY = 0.0;
+        const Vector3 lift = normal * (liftDistanceMillimeters * (1.0 - t));
+        const PartBandTransform& transform
+            = transforms[static_cast<std::size_t>(band)];
+        for (Vector3& point : bottom) {
+            point = transform.Apply(point) + lift;
         }
-
-        for (int edge = 0; edge < 2; ++edge) {
-            const int row = band + edge;
-            std::vector<Vector3> rail;
-            rail.reserve(mesh.columns);
-            for (int column = 0; column < mesh.columns; ++column) {
-                // 展開形(型紙と同じ等長の平面形)を帯の接平面へ置き、外向きへ離す。
-                const Vector2& flat = mesh.developed[row][column];
-                const double dx = flat.x - developedCenter.x;
-                const double dy = flat.y - developedCenter.y;
-                const double along = dx * axisX + dy * axisY;
-                const double lateral = -dx * axisY + dy * axisX;
-                const Vector3 flatWorld = worldCenter + lift
-                    + worldTangent * along + side * lateral;
-                // 目標: 折り線ごとの進行度どおりの剛体折り状態(帯は剛体)。
-                const Vector3 target = transforms[band].Apply(mesh.world[row][column]);
-                rail.push_back(flatWorld * (1.0 - t) + target * t);
-            }
-            rails.push_back(std::move(rail));
+        for (Vector3& point : top) {
+            point = transform.Apply(point) + lift;
         }
+        rails.push_back(bottom);
+        rails.push_back(top);
     }
     return rails;
 }

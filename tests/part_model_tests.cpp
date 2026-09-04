@@ -785,6 +785,38 @@ int main()
                     Require(Dot(flatNormal, originalNormal) > 0.0,
                         "0% flat sheet is not mirrored");
                 }
+
+                // 中間状態も完全に等長: レールの辺長・素線長・対角線長が
+                // どの進行度でも world と厳密に一致する(オーナー要求の核)。
+                for (const double t : {0.25, 0.6, 0.9}) {
+                    const auto rails = kachakacha::model::BuildBandFoldAnimationRails(
+                        mesh, {1.0, 1.0}, t, 30.0);
+                    for (int band = 0; band < 3; ++band) {
+                        const auto& bottom = rails[band * 2];
+                        const auto& top = rails[band * 2 + 1];
+                        for (int column = 0; column < mesh.columns; ++column) {
+                            if (column > 0) {
+                                const double bottomEdge
+                                    = (bottom[column] - bottom[column - 1]).Length();
+                                const double worldBottomEdge = (mesh.world[band][column]
+                                    - mesh.world[band][column - 1]).Length();
+                                Require(std::abs(bottomEdge - worldBottomEdge) < 1.0e-6,
+                                    "intermediate keeps rail edge lengths");
+                                const double diagonal
+                                    = (bottom[column] - top[column - 1]).Length();
+                                const double worldDiagonal = (mesh.world[band][column]
+                                    - mesh.world[band + 1][column - 1]).Length();
+                                Require(std::abs(diagonal - worldDiagonal) < 1.0e-6,
+                                    "intermediate keeps diagonal lengths");
+                            }
+                            const double ruling = (top[column] - bottom[column]).Length();
+                            const double worldRuling = (mesh.world[band + 1][column]
+                                - mesh.world[band][column]).Length();
+                            Require(std::abs(ruling - worldRuling) < 1.0e-6,
+                                "intermediate keeps ruling lengths (band width)");
+                        }
+                    }
+                }
             }
 
             // 剛体変換なのでレール長も変わらない。

@@ -3670,6 +3670,50 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("dimension editor leak checks done");
 
     {
+        // 作業中グループ(オーナー指示): コンボで選ぶと以後の新規がそこへ入る。
+        RecordUndo();
+        project_.CreateObjectSet("__ag前面");
+        RefreshModelViews(false);
+        if (activeGroupCombo_ == nullptr) {
+            return fail("active group combo exists");
+        }
+        const int groupIndex = activeGroupCombo_->findText(QStringLiteral("__ag前面"));
+        if (groupIndex < 0) {
+            return fail("active group combo lists the new group");
+        }
+        activeGroupCombo_->setCurrentIndex(groupIndex);
+        ApplyActiveGroupSelection();
+        if (project_.DefaultObjectSet() != "__ag前面") {
+            return fail("combo selects the active group");
+        }
+        project_.AddWire("__ag線", Wire::Line({600.0, 0.0, 0.0}, {620.0, 0.0, 0.0}));
+        RefreshModelViews(false);
+        bool joined = false;
+        for (const auto& set : project_.ObjectSets()) {
+            if (set.name != "__ag前面") {
+                continue;
+            }
+            for (const auto& member : set.members) {
+                if (member.name == "__ag線") {
+                    joined = true;
+                }
+            }
+        }
+        if (!joined) {
+            return fail("new wire joins the active group");
+        }
+        SetActiveGroupByName(std::string());
+        if (!project_.DefaultObjectSet().empty()) {
+            return fail("active group can be cleared");
+        }
+        if (!project_.RemoveWire("__ag線") || !project_.RemoveObjectSet("__ag前面")) {
+            return fail("clean up active group test objects");
+        }
+        RefreshModelViews(false);
+    }
+    progressMark("active group checks done");
+
+    {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。
         const std::size_t autoWireStart = project_.Wires().size();
         const std::size_t autoSurfaceStart = project_.Surfaces().size();

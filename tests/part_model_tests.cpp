@@ -1186,6 +1186,23 @@ int main()
             Require((surfacePoint("実体曲げ_部材1") - partPoseBefore1).Length() < 1.0e-6
                     && (surfacePoint("実体曲げ_部材2") - partPoseBefore2).Length() < 1.0e-6,
                 "per-part assembly restores the exact pose");
+
+            // 作業中グループは再生成の派生(縁ワイヤ等)を奪わない。
+            liveProject.CreateObjectSet("__作業中");
+            liveProject.SetDefaultObjectSet("__作業中");
+            liveProject.SetPartModelPartAssemblyProgress("実体曲げ", {1}, 0.5);
+            bool derivedStolen = false;
+            for (const auto& set : liveProject.ObjectSets()) {
+                if (set.name == "__作業中") {
+                    derivedStolen = !set.members.empty();
+                }
+            }
+            Require(!derivedStolen,
+                "regeneration does not steal derived objects into the active group");
+            liveProject.SetDefaultObjectSet("");
+            liveProject.SetPartModelPartAssemblyProgress("実体曲げ", {1}, 1.0);
+            Require(liveProject.RemoveObjectSet("__作業中"),
+                "clean up the active-group test set");
         }
 
         // --- 積層(重ね板、合意9) ---

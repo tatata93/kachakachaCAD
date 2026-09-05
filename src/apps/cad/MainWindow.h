@@ -321,6 +321,10 @@ private:
     //! 上部モード切替(ADR 0025)。作図/面・板材/近似モデル/出力。
     enum class WorkMode { Drawing, SurfacePlate, PartModel, Output };
     void SetWorkMode(WorkMode mode);
+    //! ツールバーの作業中グループ選択を反映する(オーナー指示)。
+    void ApplyActiveGroupSelection();
+    //! 作業中グループを名前で切り替える(ツリーの右クリックから)。
+    void SetActiveGroupByName(const std::string& name);
     void SyncWorkModeToTab(int tabIndex);
     //! 数値入力パネル(作業平面・ワイヤ)の内容をゴーストプレビューへ反映する。
     void UpdateNumericPreviews();
@@ -425,6 +429,8 @@ private:
     QAction* finishDrawingAction_ = nullptr;
     QAction* cancelDrawingAction_ = nullptr;
     QComboBox* activePlaneCombo_ = nullptr;
+    //! 作業中グループ(オーナー指示: 新しく作った物が未分類に落ちない)。
+    QComboBox* activeGroupCombo_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QCheckBox* gridPointsVisible_ = nullptr;
     QComboBox* gridSubdivision_ = nullptr;

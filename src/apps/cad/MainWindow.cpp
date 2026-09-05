@@ -1255,6 +1255,21 @@ void MainWindow::BuildMenusAndToolbar()
         modeToolbar->addWidget(planeCaption);
         modeToolbar->addWidget(activePlaneCombo_);
     }
+    {
+        // 作業中グループ(オーナー指示: 以後に作った線・面は自動でここへ入る)。
+        auto* groupCaption = new QLabel(QStringLiteral(" グループ "));
+        groupCaption->setStyleSheet("color: #26323a; font-weight: 600;");
+        modeToolbar->addWidget(groupCaption);
+        activeGroupCombo_ = new QComboBox;
+        activeGroupCombo_->setObjectName("activeGroupCombo");
+        activeGroupCombo_->setMinimumWidth(120);
+        activeGroupCombo_->setToolTip(QStringLiteral(
+            "作業中グループ。以後に作る線・作図点・平面・面・板材は自動でこのグループへ入ります。\n"
+            "（未分類）=自動割り当てなし。一覧のグループ右クリックからも切り替えられます"));
+        connect(activeGroupCombo_, &QComboBox::activated, this,
+            [this](int) { ApplyActiveGroupSelection(); });
+        modeToolbar->addWidget(activeGroupCombo_);
+    }
     modeToolbar->addAction(snapAction_);
 
     // --- 3段目以降: 選択中モードのツール列(モードで表示を切り替える) ---
@@ -1447,6 +1462,37 @@ void MainWindow::BuildMenusAndToolbar()
 
     SetWorkMode(WorkMode::Drawing);
     UpdateHistoryActions();
+}
+
+void MainWindow::ApplyActiveGroupSelection()
+{
+    if (activeGroupCombo_ == nullptr) {
+        return;
+    }
+    const std::string name = activeGroupCombo_->currentIndex() <= 0
+        ? std::string()
+        : ToName(activeGroupCombo_->currentText());
+    SetActiveGroupByName(name);
+}
+
+void MainWindow::SetActiveGroupByName(const std::string& name)
+{
+    try {
+        if (project_.DefaultObjectSet() == name) {
+            return;
+        }
+        project_.SetDefaultObjectSet(name);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            name.empty()
+                ? QStringLiteral("作業中グループを解除しました（以後の新規は未分類）")
+                : QStringLiteral("作業中グループ: %1（以後に作る線・面などはここへ入ります）")
+                      .arg(ToQString(name)),
+            4000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+    }
 }
 
 void MainWindow::SetWorkMode(WorkMode mode)
@@ -5435,6 +5481,23 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
         });
         menu.addSeparator();
     }
+    if (clickedSetName.has_value()) {
+        // 作業中グループ(オーナー指示: 以後の新規オブジェクトの入り先)。
+        const auto& sets = project_.ObjectSets();
+        const auto clickedSet = std::find_if(sets.begin(), sets.end(),
+            [&](const ObjectSet& candidate) { return candidate.name == *clickedSetName; });
+        if (clickedSet != sets.end() && !clickedSet->automatic) {
+            const bool isActive = project_.DefaultObjectSet() == *clickedSetName;
+            QAction* activateAction = menu.addAction(isActive
+                ? QStringLiteral("作業中グループを解除する")
+                : QStringLiteral("ここを作業中グループにする"));
+            connect(activateAction, &QAction::triggered, this,
+                [this, isActive, setName = *clickedSetName] {
+                    SetActiveGroupByName(isActive ? std::string() : setName);
+                });
+            menu.addSeparator();
+        }
+    }
     if (!targets.empty()) {
         QMenu* assignMenu = menu.addMenu(
             QStringLiteral("部材グループへ割り当て（%1個）").arg(targets.size()));
@@ -6100,10 +6163,20 @@ void MainWindow::RefreshModelViews(bool fitView)
         setRoot->setFlags(setRoot->flags() | Qt::ItemIsUserCheckable
             | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
         setRoot->setCheckState(0, set.state == ObjectSetState::Hidden ? Qt::Unchecked : Qt::Checked);
-        setRoot->setIcon(0, style()->standardIcon(QStyle::SP_DirIcon));
-        setRoot->setToolTip(0, QStringLiteral(
-            "部材グループ。チェックで一括表示/非表示。ドラッグで入れ子に移動、"
-            "右クリックで割り当て・出力設定"));
+        const bool activeGroup = !project_.DefaultObjectSet().empty()
+            && set.name == project_.DefaultObjectSet();
+        setRoot->setIcon(0, style()->standardIcon(
+            activeGroup ? QStyle::SP_DirOpenIcon : QStyle::SP_DirIcon));
+        if (activeGroup) {
+            setRoot->setText(0, ToQString(set.name) + QStringLiteral("　◀作業中"));
+        }
+        setRoot->setToolTip(0, activeGroup
+            ? QStringLiteral(
+                  "作業中グループ。以後に作る線・面・板材は自動でここへ入ります。"
+                  "右クリックで解除できます")
+            : QStringLiteral(
+                  "部材グループ。チェックで一括表示/非表示。ドラッグで入れ子に移動、"
+                  "右クリックで割り当て・出力設定・作業中グループ化"));
         QFont setFont = setRoot->font(0);
         setFont.setBold(true);
         setRoot->setFont(0, setFont);
@@ -6268,6 +6341,21 @@ void MainWindow::RefreshPlaneChoices()
         } else if (activePlaneCombo_->count() > 1) {
             activePlaneCombo_->setCurrentIndex(1);
         }
+    }
+
+    if (activeGroupCombo_ != nullptr) {
+        // 作業中グループ(オーナー指示)。project_ 側の値が正。
+        const QSignalBlocker blocker(activeGroupCombo_);
+        activeGroupCombo_->clear();
+        activeGroupCombo_->addItem(QStringLiteral("（未分類）"));
+        for (const auto& set : project_.ObjectSets()) {
+            if (!set.automatic) {
+                activeGroupCombo_->addItem(ToQString(set.name));
+            }
+        }
+        const int activeIndex
+            = activeGroupCombo_->findText(ToQString(project_.DefaultObjectSet()));
+        activeGroupCombo_->setCurrentIndex(activeIndex >= 0 ? activeIndex : 0);
     }
 
     const QString previousEditSource = editWireSourcePlane_->currentText();

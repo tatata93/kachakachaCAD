@@ -1548,6 +1548,73 @@ void ObjectSetHierarchyRoundTripsAndCombinesState()
     }
 }
 
+void DefaultObjectSetCollectsNewObjects()
+{
+    using kachakacha::model::ProjectObjectKind;
+    // 作業中グループ(オーナー指示): 設定後に作った物は自動でそのグループへ入る。
+    kachakacha::model::Project project;
+    project.CreateObjectSet("前面");
+    project.SetDefaultObjectSet("前面");
+    project.AddWire("窓下", Wire::Line({0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}));
+    project.AddWire("窓上", Wire::Line({0.0, 10.0, 0.0}, {20.0, 10.0, 0.0}));
+    project.AddWorkPlane("前面板",
+        kachakacha::model::WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
+    project.AddRuledSurface("窓面", "窓下", "窓上");
+    const auto memberOfFront = [&](ProjectObjectKind kind, const std::string& name) {
+        for (const auto& set : project.ObjectSets()) {
+            if (set.name != "前面") {
+                continue;
+            }
+            for (const auto& member : set.members) {
+                if (member.kind == kind && member.name == name) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    Require(memberOfFront(ProjectObjectKind::Wire, "窓下")
+            && memberOfFront(ProjectObjectKind::Wire, "窓上"),
+        "new wires join the active group");
+    Require(memberOfFront(ProjectObjectKind::WorkPlane, "前面板"),
+        "new work planes join the active group");
+    Require(memberOfFront(ProjectObjectKind::Surface, "窓面"),
+        "new surfaces join the active group");
+
+    // 解除すると入らなくなる。
+    project.SetDefaultObjectSet("");
+    project.AddWire("外れ線", Wire::Line({0.0, 20.0, 0.0}, {20.0, 20.0, 0.0}));
+    Require(!memberOfFront(ProjectObjectKind::Wire, "外れ線"),
+        "clearing the active group stops auto-assignment");
+
+    // 保存 → 読込で作業中グループ設定が残り、読込自体は所属を変えない。
+    project.SetDefaultObjectSet("前面");
+    std::ostringstream saved;
+    WriteProjectScript(saved, project);
+    Require(saved.str().find("default_object_set 前面") != std::string::npos,
+        "default_object_set line is written");
+    std::istringstream savedInput(saved.str());
+    const kachakacha::model::Project loadedDefault = LoadProjectScript(savedInput, "test");
+    Require(loadedDefault.DefaultObjectSet() == "前面",
+        "default object set round trips");
+    bool strayInFront = false;
+    for (const auto& set : loadedDefault.ObjectSets()) {
+        if (set.name == "前面") {
+            for (const auto& member : set.members) {
+                if (member.name == "外れ線") {
+                    strayInFront = true;
+                }
+            }
+        }
+    }
+    Require(!strayInFront, "loading does not reassign objects to the active group");
+
+    // グループ削除で作業中グループは解除される。
+    Require(project.RemoveObjectSet("前面"), "remove the active group");
+    Require(project.DefaultObjectSet().empty(),
+        "removing the active group clears the setting");
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -1580,6 +1647,7 @@ int main(int argc, char* argv[])
         VisibilityRoundTrips();
         ObjectSetExportFlagRoundTrips();
         ObjectSetHierarchyRoundTripsAndCombinesState();
+        DefaultObjectSetCollectsNewObjects();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

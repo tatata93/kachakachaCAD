@@ -458,6 +458,14 @@ public:
     void SetObjectSetParent(std::string_view child, std::string_view parent);
     void AssignObjectToSet(ProjectObjectKind kind, std::string objectName, std::string_view setName);
     void RemoveObjectFromSets(ProjectObjectKind kind, std::string_view objectName);
+    //! 作業中グループ(オーナー指示): 設定すると、以後ユーザー操作で作られた
+    //! 新規オブジェクト(平面・点・線・面・板材など)が自動でこのグループへ入る。
+    //! 空=なし(未分類のまま)。再生成が作る派生オブジェクトは対象外。.kcdへ保存される。
+    void SetDefaultObjectSet(std::string name);
+    [[nodiscard]] const std::string& DefaultObjectSet() const noexcept
+    {
+        return defaultObjectSetName_;
+    }
     //! オブジェクトが属するセットの状態。どのセットにも属さなければ Visible。
     [[nodiscard]] ObjectSetState ObjectStateInSets(
         ProjectObjectKind kind, std::string_view objectName) const;
@@ -540,6 +548,12 @@ private:
     std::vector<NamedBody> bodies_;
     std::vector<NamedPartModel> partModels_;
     std::vector<ObjectSet> objectSets_;
+    //! 作業中グループ名(空=なし)。
+    std::string defaultObjectSetName_;
+    //! 再生成中は作業中グループへの自動割り当てを止める(派生を奪わない)。
+    bool suppressDefaultSetAssign_ = false;
+    //! 新規作成APIの出口から呼ぶ: 作業中グループへの自動割り当て。
+    void AutoAssignToDefaultSet(ProjectObjectKind kind, const std::string& name);
     std::vector<WireCoincidentConstraint> coincidentConstraints_;
     std::vector<WireTangentConstraint> tangentConstraints_;
     std::vector<ReferenceDimension> referenceDimensions_;

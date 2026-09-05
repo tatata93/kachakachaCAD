@@ -1036,6 +1036,10 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const std::string parent = ReadName(stream, sourceName, lineNumber, "parent set");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.SetObjectSetParent(child, parent);
+            } else if (command == "default_object_set") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "set");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetDefaultObjectSet(name);
             } else if (command == "object_set_export") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "set");
                 const int enabled = static_cast<int>(ReadDouble(stream, sourceName, lineNumber, "export flag"));
@@ -1802,6 +1806,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         if (!set.parentName.empty()) {
             output << "object_set_parent " << set.name << ' ' << set.parentName << '\n';
         }
+    }
+    // 作業中グループ(オーナー指示)。全セットの後=最後に書く(読込時、
+    // これより前に作られたオブジェクトへは自動割り当てが走らない)。
+    if (!project.DefaultObjectSet().empty()) {
+        RequireScriptNameSafe(project.DefaultObjectSet(), "Default object set");
+        output << "default_object_set " << project.DefaultObjectSet() << '\n';
     }
 }
 

@@ -527,6 +527,7 @@ void Project::AddWorkPlane(std::string name, WorkPlane plane)
     }
 
     workPlanes_.push_back({std::move(name), plane});
+    AutoAssignToDefaultSet(ProjectObjectKind::WorkPlane, workPlanes_.back().name);
 }
 
 void Project::AddPoint(
@@ -549,6 +550,7 @@ void Project::AddPoint(
         throw std::invalid_argument("Point source plane does not exist: " + *sourcePlaneName);
     }
     points_.push_back({std::move(name), point, std::move(sourcePlaneName)});
+    AutoAssignToDefaultSet(ProjectObjectKind::Point, points_.back().name);
 }
 
 void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
@@ -569,6 +571,7 @@ void Project::AddWire(std::string name, Wire wire, WireMetadata metadata)
 
     wire = ConstrainWire(*this, wire, metadata);
     wires_.push_back({std::move(name), std::move(wire), std::move(metadata), std::nullopt, true, {}});
+    AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
 }
 
 void Project::AddPlanarSurface(std::string name, std::string boundaryWireName)
@@ -598,6 +601,7 @@ void Project::AddPlanarSurface(
         boundaryWireNames,
     });
     surfaces_.back().sourceWireGroups.push_back(std::move(boundaryWireNames));
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
 }
 
 void Project::AddRuledSurface(std::string name, std::string firstSectionName, std::string secondSectionName)
@@ -638,6 +642,7 @@ void Project::AddRuledSurface(
     });
     surfaces_.back().sourceWireGroups = {
         std::move(firstSectionNames), std::move(secondSectionNames)};
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
 }
 
 void Project::AddLoftSurface(std::string name, std::vector<std::string> sectionNames)
@@ -683,6 +688,7 @@ void Project::AddLoftSurface(
         std::move(name), Surface::Loft(std::move(sections)),
         std::move(sectionNames)});
     surfaces_.back().sourceWireGroups = std::move(sectionWireGroups);
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
 }
 
 std::string Project::AddAutoSurface(std::string name, std::vector<std::string> wireNames)
@@ -717,6 +723,7 @@ std::string Project::AddAutoSurface(std::string name, std::vector<std::string> w
         uniqueNames,
     });
     surfaces_.back().autoAssembled = true;
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
     return std::move(result.description);
 }
 
@@ -790,6 +797,7 @@ void Project::AddGuidedLoftSurface(
     for (auto& group : sectionWireGroups) {
         surfaces_.back().sourceWireGroups.push_back(std::move(group));
     }
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
 }
 
 void Project::AddGordonSurface(
@@ -859,6 +867,7 @@ void Project::AddGordonSurface(
         true,
         std::move(guideNames),
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Surface, surfaces_.back().name);
 }
 
 void Project::AddPlate(
@@ -912,6 +921,7 @@ void Project::AddPlate(
         {},
         {},
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Plate, plates_.back().name);
 }
 
 void Project::SetPlateLaminate(std::string_view name, std::string_view basePlateName)
@@ -1012,6 +1022,7 @@ void Project::AddLaminatedPlate(
         {},
     });
     SetPlateLaminate(plates_.back().name, baseName);
+    AutoAssignToDefaultSet(ProjectObjectKind::Plate, plates_.back().name);
 }
 
 void Project::RecomputeLaminateOffsets()
@@ -1082,6 +1093,7 @@ void Project::AddSurfaceJig(
             *surface, range, side, clearanceMillimeters, thicknessMillimeters),
         std::move(sourceSurfaceName),
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Body, bodies_.back().name);
 }
 
 void Project::AddProjectedWire(
@@ -1118,6 +1130,7 @@ void Project::AddProjectedWire(
         true,
         {},
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
 }
 
 void Project::AddPlateOffsetWire(
@@ -1151,6 +1164,7 @@ void Project::AddPlateOffsetWire(
         NamedWire::PlateOffset{
             std::move(sourceWireName), std::move(plateName), throughThickness},
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
 }
 
 Project::TransformBaseNames Project::CollectTransformBases(
@@ -2870,6 +2884,9 @@ void Project::RenameObjectSet(std::string_view oldName, std::string newName)
     if (FindObjectSetMutable(newName) != nullptr) {
         throw std::invalid_argument("Set name already exists: " + newName);
     }
+    if (defaultObjectSetName_ == oldName) {
+        defaultObjectSetName_ = newName; // 作業中グループ名も追従させる。
+    }
     set->name = newName;
     for (ObjectSet& child : objectSets_) {
         if (child.parentName == oldName) {
@@ -3126,6 +3143,15 @@ void Project::ApplyWireConstraints()
 
 void Project::RebuildDependentGeometry()
 {
+    // 再生成が作る派生オブジェクトを作業中グループへ奪わない(保存→復元方式)。
+    const bool previousSuppress = suppressDefaultSetAssign_;
+    suppressDefaultSetAssign_ = true;
+    struct SuppressRestore {
+        bool& flag;
+        bool previous;
+        ~SuppressRestore() { flag = previous; }
+    } suppressRestore{suppressDefaultSetAssign_, previousSuppress};
+
     ApplyWireConstraints();
 
     const auto wireIndex = [this](const std::string& name) {
@@ -4617,6 +4643,28 @@ std::vector<std::string> Project::ExtractPartModelBoundaries(std::string_view na
 
 // ---- セット(グループ) ------------------------------------------------
 
+void Project::SetDefaultObjectSet(std::string name)
+{
+    if (!name.empty() && FindObjectSetMutable(name) == nullptr) {
+        throw std::invalid_argument("部材グループが見つかりません: " + name);
+    }
+    defaultObjectSetName_ = std::move(name);
+}
+
+void Project::AutoAssignToDefaultSet(ProjectObjectKind kind, const std::string& name)
+{
+    // 作業中グループ(オーナー指示: 新しく引いた線が未分類に落ちない)。
+    // 再生成中(派生の作り直し)は奪わない。グループが消えていたら黙って解除。
+    if (suppressDefaultSetAssign_ || defaultObjectSetName_.empty()) {
+        return;
+    }
+    if (FindObjectSetMutable(defaultObjectSetName_) == nullptr) {
+        defaultObjectSetName_.clear();
+        return;
+    }
+    AssignObjectToSet(kind, name, defaultObjectSetName_);
+}
+
 ObjectSet* Project::FindObjectSetMutable(std::string_view name)
 {
     for (ObjectSet& set : objectSets_) {
@@ -4651,6 +4699,9 @@ bool Project::RemoveObjectSet(std::string_view name)
             "Automatic sets are removed with their part model: " + std::string(name));
     }
     const std::string removedParent = set->parentName;
+    if (defaultObjectSetName_ == name) {
+        defaultObjectSetName_.clear(); // 作業中グループが消えたら未分類へ戻す。
+    }
     objectSets_.erase(set);
     // 子グループは削除したグループの親へ付け替える(孤児にしない)。
     for (ObjectSet& candidate : objectSets_) {

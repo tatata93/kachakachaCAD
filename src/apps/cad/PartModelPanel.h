@@ -49,6 +49,8 @@ public:
     [[nodiscard]] bool FoldPreviewEnabled() const;  //!< 3Dビューで曲げ状態を表示するか
     //! 一覧ツリーで指定モデルの行を選択する(セルフテスト・スクリーンショット用)。
     bool SelectModelForTest(const QString& modelName);
+    //! 一覧ツリーで指定モデルの部材行を複数選択する(同上。結合型紙の確認用)。
+    bool SelectPartsForTest(const QString& modelName, const std::vector<int>& partNumbers);
     //! 曲げ確認のチェックとスライダー(0〜100)を直接設定する(同上)。
     void SetFoldPreviewForTest(bool enabled, int percent);
 

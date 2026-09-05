@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -169,6 +170,39 @@ private:
             for (const auto& fold : pattern.foldLines) {
                 drawPath(fold, FoldPen(fold.foldDirection), false);
             }
+            // 折り角の表示: 各折り線の中点へ完成形の折り角(度)を出す。
+            // foldLines[i] は内部レール i+1、角度は MeasureCreaseAngles の i 番。
+            const auto creaseAngles =
+                kachakacha::model::MeasureCreaseAngles((*results_)[index].mesh);
+            QFont angleFont = painter.font();
+            angleFont.setPointSizeF(8.5);
+            angleFont.setBold(false);
+            painter.setFont(angleFont);
+            for (std::size_t foldIndex = 0; foldIndex < pattern.foldLines.size();
+                 ++foldIndex) {
+                const auto& fold = pattern.foldLines[foldIndex];
+                if (foldIndex >= creaseAngles.size() || fold.points.size() < 2) {
+                    continue;
+                }
+                const Vector2& middle = fold.points[fold.points.size() / 2];
+                const QPointF at = map(middle);
+                const double degrees =
+                    std::abs(creaseAngles[foldIndex]) * 180.0 / 3.14159265358979323846;
+                const QString label = QStringLiteral("%1 %2°")
+                    .arg(fold.foldDirection > 0 ? QStringLiteral("山")
+                        : fold.foldDirection < 0 ? QStringLiteral("谷")
+                                                 : QStringLiteral("折"))
+                    .arg(degrees, 0, 'f', 1);
+                const QRectF box(at.x() + 5.0, at.y() - 17.0, 62.0, 14.0);
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor(253, 253, 248, 215));
+                painter.drawRect(box);
+                painter.setBrush(Qt::NoBrush);
+                painter.setPen(fold.foldDirection > 0 ? QColor("#c2402a")
+                    : fold.foldDirection < 0 ? QColor("#2a5fc2")
+                                             : QColor("#5c6670"));
+                painter.drawText(box, Qt::AlignLeft | Qt::AlignVCenter, label);
+            }
             DrawTitle(painter, index,
                 offsetX + (patternBounds.minimumX + patternBounds.maximumX) * 0.5 * scale,
                 offsetY + patternBounds.minimumY * scale - 26.0,
@@ -303,6 +337,8 @@ private:
         painter.drawLine(QPointF(112.0, legendY), QPointF(142.0, legendY));
         painter.setPen(QColor("#26323a"));
         painter.drawText(QPointF(148.0, legendY + 4.0), QStringLiteral("谷折り"));
+        painter.drawText(QPointF(210.0, legendY + 4.0),
+            QStringLiteral("折り線の数字＝完成形の折り角"));
     }
 
     const std::vector<PartPatternResult>* results_;

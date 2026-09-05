@@ -3,6 +3,7 @@
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
+#include "PartPatternViewDialog.h"
 #include "PlatePdfExport.h"
 
 #include "kachakacha/io/PartPatterns.h"
@@ -865,6 +866,42 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         partModelPanel_->SetFoldPreviewForTest(true, percent);
         ShowPartModelTool(2);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("patterns")) {
+        // 型紙ビュー(結合型紙+折り角表示)。部材2つを結合して折り線を出す。
+        kachakacha::model::PartApproximationOptions patternOptions;
+        patternOptions.maximumDeviationMillimeters = 0.4;
+        patternOptions.maximumPartCount = 8;
+        patternOptions.minimumPartWidthMillimeters = 3.0;
+        try {
+            project_.AddPartModel("__型紙確認", "nose_panel_front", patternOptions);
+        } catch (const std::exception& error) {
+            qWarning() << "patterns state:" << error.what();
+            return false;
+        }
+        RefreshModelViews(false);
+        if (partModelModeAction_ != nullptr) {
+            partModelModeAction_->trigger();
+        }
+        if (partModelPanel_ == nullptr
+            || !partModelPanel_->SelectPartsForTest(
+                QStringLiteral("__型紙確認"), {1, 2})) {
+            return false;
+        }
+        ShowSelectedPartPatterns();
+        // 型紙ダイアログは別トップレベルウィンドウのため固定名で直接保存する。
+        QApplication::processEvents();
+        for (QWidget* top : QApplication::topLevelWidgets()) {
+            if (auto* dialog = qobject_cast<PartPatternViewDialog*>(top)) {
+                dialog->resize(1100, 650);
+                QApplication::processEvents();
+                if (!dialog->grab().save(QStringLiteral("_ui-pattern-dialog.png"))) {
+                    qWarning() << "patterns state: dialog grab failed";
+                }
+                break;
+            }
+        }
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else {
@@ -3265,6 +3302,18 @@ bool MainWindow::RunCreationSelfTest()
         partModelPanel_->SetFoldPreviewForTest(false, 100);
         if (viewport_->PartFoldPreviewRailCount() != 0) {
             return fail("fold preview clears when disabled");
+        }
+        // 型紙ビューの折り角表示: 結合型紙の折り線数と折り角数が一致する
+        // (foldLines[i] ↔ MeasureCreaseAngles[i] の対応が前提)。
+        if (partModel.result.parts.size() >= 2) {
+            const auto combined = kachakacha::io::BuildPartPatternWithPreview(
+                project_, partModel, {1, 2});
+            const auto combinedAngles =
+                kachakacha::model::MeasureCreaseAngles(combined.mesh);
+            if (combined.pattern.foldLines.empty()
+                || combined.pattern.foldLines.size() != combinedAngles.size()) {
+                return fail("combined pattern fold lines match crease angles");
+            }
         }
         if (!partModel.boundaryWireNames.empty()) {
             SetApproximationSetsVisible(false);

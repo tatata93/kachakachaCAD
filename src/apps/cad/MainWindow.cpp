@@ -3,6 +3,7 @@
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
+#include "PartPatternViewDialog.h"
 #include "PlatePdfExport.h"
 
 #include "kachakacha/io/PartPatterns.h"

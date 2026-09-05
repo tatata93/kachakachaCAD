@@ -689,6 +689,29 @@ bool PartModelPanel::SelectModelForTest(const QString& modelName)
     return false;
 }
 
+bool PartModelPanel::SelectPartsForTest(
+    const QString& modelName, const std::vector<int>& partNumbers)
+{
+    modelTree_->clearSelection();
+    bool any = false;
+    for (QTreeWidgetItemIterator it(modelTree_); *it != nullptr; ++it) {
+        QTreeWidgetItem* item = *it;
+        if (item->data(0, kModelNameRole).toString() != modelName) {
+            continue;
+        }
+        const QVariant number = item->data(0, kPartNumberRole);
+        if (!number.isValid()) {
+            continue;
+        }
+        if (std::find(partNumbers.begin(), partNumbers.end(), number.toInt())
+            != partNumbers.end()) {
+            item->setSelected(true);
+            any = true;
+        }
+    }
+    return any;
+}
+
 void PartModelPanel::SetFoldPreviewForTest(bool enabled, int percent)
 {
     if (foldSlider_ != nullptr) {

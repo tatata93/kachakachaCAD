@@ -2631,6 +2631,266 @@ void MainWindow::CreateExtrudedSurface()
     }
 }
 
+//! 押し出し(オーナー指示の統合機能)。選択した線・面を指定方向へ距離ぶん
+//! (または指定した面まで)押し出し、チェックした物だけを作る。
+//! 作られた先端ワイヤ・側面・ふたは元の線の編集に追従する派生オブジェクト。
+void MainWindow::ExtrudeSelection()
+{
+    try {
+        std::vector<std::string> wireNames;
+        std::vector<std::string> surfaceNames;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                const auto& wire = project_.Wires()[selection.index];
+                if (wire.metadata.construction || wire.partModelSourceName.has_value()) {
+                    continue;
+                }
+                wireNames.push_back(wire.name);
+            } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Surfaces().size())) {
+                const auto& surface = project_.Surfaces()[selection.index];
+                if (surface.partModelSourceName.has_value()) {
+                    continue;
+                }
+                surfaceNames.push_back(surface.name);
+            }
+        }
+        if (wireNames.empty() && surfaceNames.empty()) {
+            throw std::invalid_argument(
+                "押し出す線または面を3D画面か一覧で選んでください（複数可）。");
+        }
+
+        const bool makeTip = extrudeMakeTipWire_ != nullptr
+            && extrudeMakeTipWire_->isChecked();
+        const bool makeSide = extrudeMakeSide_ != nullptr && extrudeMakeSide_->isChecked();
+        const bool makeCap = extrudeMakeCap_ != nullptr && extrudeMakeCap_->isChecked();
+        const bool makeBottom = extrudeMakeBottom_ != nullptr
+            && extrudeMakeBottom_->isChecked();
+        const bool makePlate = extrudeMakePlate_ != nullptr
+            && extrudeMakePlate_->isChecked();
+        if (!makeTip && !makeSide && !makeCap && !makeBottom && !makePlate) {
+            throw std::invalid_argument(
+                "「押し出しで作るもの」を1つ以上チェックしてください。");
+        }
+        const bool toSurface = extrudeToSurfaceCheck_ != nullptr
+            && extrudeToSurfaceCheck_->isChecked();
+        std::string targetSurfaceName;
+        if (toSurface) {
+            targetSurfaceName = ToName(extrudeTargetSurface_->currentText());
+            if (targetSurfaceName.empty()
+                || !project_.FindSurface(targetSurfaceName).has_value()) {
+                throw std::invalid_argument("到達面を選んでください。");
+            }
+        }
+        const double distance = extrudeDistance_->value();
+        const int directionIndex = extrudeDirection_->currentData().toInt();
+
+        // 方向を決める。自動は「面の法線 / 作図面の法線(なければ+Z)」。
+        const auto automaticDirection = [&](const std::string& surfaceName) {
+            Vector3 direction{0.0, 0.0, 1.0};
+            if (!surfaceName.empty()) {
+                const auto surface = project_.FindSurface(surfaceName);
+                if (surface.has_value()) {
+                    const Vector3 normal = surface->Normal(0.5, 0.5);
+                    if (normal.IsFinite() && normal.LengthSquared() > 1.0e-18) {
+                        direction = normal.Normalized();
+                    }
+                }
+            } else {
+                const std::optional<WorkPlane> plane =
+                    project_.FindWorkPlane(ToName(activePlaneCombo_->currentText()));
+                if (plane.has_value()) {
+                    direction = plane->Normal();
+                }
+            }
+            if (directionIndex == -2) {
+                direction = direction * -1.0;
+            }
+            return direction;
+        };
+        const auto fixedDirection = [&]() {
+            Vector3 direction = AxisDirectionFromIndex(directionIndex / 2);
+            if (directionIndex % 2 == 1) {
+                direction = direction * -1.0;
+            }
+            return direction;
+        };
+
+        Project candidate = project_;
+        QStringList created;
+        std::vector<CadSelection> resulting;
+        int plateCount = 0;
+
+        // --- 線の押し出し ---
+        for (const std::string& wireName : wireNames) {
+            const auto namedWire = std::find_if(candidate.Wires().begin(),
+                candidate.Wires().end(),
+                [&](const kachakacha::model::NamedWire& wire) {
+                    return wire.name == wireName;
+                });
+            if (namedWire == candidate.Wires().end()) {
+                continue;
+            }
+            const bool closed = namedWire->wire.IsClosed(1.0e-6);
+            const Vector3 direction = directionIndex < 0
+                ? automaticDirection(std::string())
+                : fixedDirection();
+            const std::string tipName = FreeDerivedName(candidate, wireName, "_押出先");
+            candidate.AddExtrudedWire(
+                tipName, wireName, direction, toSurface ? 0.0 : distance,
+                targetSurfaceName);
+            if (!makeTip) {
+                candidate.SetWireVisible(tipName, false);
+            } else {
+                created << QStringLiteral("先端 %1").arg(ToQString(tipName));
+            }
+            std::string sideName;
+            if (makeSide) {
+                sideName = FreeDerivedName(candidate, wireName, "_押出面");
+                candidate.AddRuledSurface(sideName, wireName, tipName);
+                created << QStringLiteral("側面 %1").arg(ToQString(sideName));
+            }
+            std::string capName;
+            if (makeCap) {
+                if (!closed) {
+                    throw std::invalid_argument(
+                        "ふた面は閉じた輪郭にだけ作れます: " + wireName);
+                }
+                capName = FreeDerivedName(candidate, wireName, "_ふた");
+                (void)candidate.AddAutoSurface(capName, {tipName});
+                created << QStringLiteral("ふた %1").arg(ToQString(capName));
+            }
+            std::string bottomName;
+            if (makeBottom) {
+                if (!closed) {
+                    throw std::invalid_argument(
+                        "元の位置のふた面は閉じた輪郭にだけ作れます: " + wireName);
+                }
+                bottomName = FreeDerivedName(candidate, wireName, "_底");
+                (void)candidate.AddAutoSurface(bottomName, {wireName});
+                created << QStringLiteral("底 %1").arg(ToQString(bottomName));
+            }
+            if (makePlate) {
+                const std::string plateBase = !sideName.empty() ? sideName
+                    : !capName.empty() ? capName
+                    : !bottomName.empty() ? bottomName : std::string();
+                if (plateBase.empty()) {
+                    throw std::invalid_argument(
+                        "板材にするには側面・ふた・底のどれかも一緒にチェックしてください。");
+                }
+                const std::string plateName
+                    = FreeDerivedName(candidate, plateBase, "_板");
+                candidate.AddPlate(plateName, plateBase,
+                    extrudePlateThickness_->value(),
+                    kachakacha::model::PlateThicknessDirection::Centered,
+                    ToName(extrudePlateMaterial_->currentData().toString()));
+                ++plateCount;
+                created << QStringLiteral("板 %1").arg(ToQString(plateName));
+            }
+        }
+
+        // --- 面の押し出し(厚み方向。厚み化・オフセット面と同じ) ---
+        for (const std::string& surfaceName : surfaceNames) {
+            if (toSurface) {
+                throw std::invalid_argument(
+                    "「選んだ面まで」は線の押し出しだけに使えます。面は距離で指定してください。");
+            }
+            const auto namedSurface = std::find_if(candidate.Surfaces().begin(),
+                candidate.Surfaces().end(),
+                [&](const kachakacha::model::NamedSurface& surface) {
+                    return surface.name == surfaceName;
+                });
+            if (namedSurface == candidate.Surfaces().end()) {
+                continue;
+            }
+            const kachakacha::model::NamedSurface sourceCopy = *namedSurface;
+            // 面の法線側(自動)か固定軸か。固定軸のときは法線成分だけ使う。
+            double signedDistance = distance;
+            if (directionIndex == -2) {
+                signedDistance = -distance;
+            } else if (directionIndex >= 0) {
+                const Vector3 axis = fixedDirection();
+                const Vector3 normal = sourceCopy.surface.Normal(0.5, 0.5);
+                signedDistance = Dot(axis, normal) >= 0.0 ? distance : -distance;
+            }
+            if (makeTip) {
+                // 面の輪郭線を厚み位置へ複製する(面上に載っている線のみ)。
+                int copied = 0;
+                for (const std::string& boundaryName : sourceCopy.sourceWireNames) {
+                    const auto boundary = std::find_if(candidate.Wires().begin(),
+                        candidate.Wires().end(),
+                        [&](const kachakacha::model::NamedWire& wire) {
+                            return wire.name == boundaryName;
+                        });
+                    if (boundary == candidate.Wires().end()) {
+                        continue;
+                    }
+                    const Wire geometry = boundary->wire;
+                    constexpr int kSamples = 64;
+                    const bool closed = geometry.IsClosed();
+                    const int last = closed ? kSamples - 1 : kSamples;
+                    std::vector<Vector3> points;
+                    bool onSurface = true;
+                    for (int sample = 0; sample <= last; ++sample) {
+                        const Vector3 point =
+                            geometry.Evaluate(static_cast<double>(sample) / kSamples);
+                        const auto [u, v] =
+                            ClosestSurfaceParameters(sourceCopy.surface, point);
+                        if ((sourceCopy.surface.Evaluate(u, v) - point).Length() > 1.0) {
+                            onSurface = false;
+                            break;
+                        }
+                        points.push_back(
+                            point + sourceCopy.surface.Normal(u, v) * signedDistance);
+                    }
+                    if (!onSurface || points.size() < 2) {
+                        continue;
+                    }
+                    if (closed) {
+                        points.push_back(points.front());
+                    }
+                    candidate.AddWire(
+                        FreeDerivedName(candidate, boundaryName, "_押出先"),
+                        Wire::Polyline(std::move(points)));
+                    ++copied;
+                }
+                if (copied > 0) {
+                    created << QStringLiteral("先端のワイヤ %1本").arg(copied);
+                }
+            }
+            if (makeSide || makeCap) {
+                const std::string offsetName =
+                    AddOffsetSurfaceLoft(candidate, sourceCopy, signedDistance);
+                created << QStringLiteral("押し出し先の面 %1").arg(ToQString(offsetName));
+            }
+            if (makePlate) {
+                const std::string plateName
+                    = FreeDerivedName(candidate, surfaceName, "_板");
+                candidate.AddPlate(plateName, surfaceName, std::abs(signedDistance),
+                    signedDistance >= 0.0
+                        ? kachakacha::model::PlateThicknessDirection::Positive
+                        : kachakacha::model::PlateThicknessDirection::Negative,
+                    ToName(extrudePlateMaterial_->currentData().toString()));
+                ++plateCount;
+                created << QStringLiteral("板 %1").arg(ToQString(plateName));
+            }
+        }
+
+        if (created.isEmpty()) {
+            throw std::invalid_argument("押し出しで作れる物がありませんでした。");
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("押し出し: %1").arg(created.join(QStringLiteral("、"))), 8000);
+    } catch (const std::exception& error) {
+        ReportOperationError(QStringLiteral("押し出し"), QString::fromUtf8(error.what()));
+    }
+}
+
 void MainWindow::CreateRevolvedSurface()
 {
     try {

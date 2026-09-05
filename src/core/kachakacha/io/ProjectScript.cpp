@@ -852,6 +852,23 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const Vector3 direction = ReadVector3(stream, sourceName, lineNumber, "projection direction");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddProjectedWire(name, sourceWire, targetSurface, direction);
+            } else if (command == "wire_extrude") {
+                // 押し出しの先端ワイヤ(オーナー指示: 押し出し統合)。
+                const std::string name = ReadName(stream, sourceName, lineNumber, "extruded wire");
+                const std::string sourceWire =
+                    ReadName(stream, sourceName, lineNumber, "extrude source wire");
+                const Vector3 direction =
+                    ReadVector3(stream, sourceName, lineNumber, "extrude direction");
+                const double distance =
+                    ReadDouble(stream, sourceName, lineNumber, "extrude distance");
+                std::string targetSurface =
+                    ReadName(stream, sourceName, lineNumber, "extrude target surface");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                if (targetSurface == "-") {
+                    targetSurface.clear();
+                }
+                project.AddExtrudedWire(
+                    name, sourceWire, direction, distance, targetSurface);
             } else if (command == "plate") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "plate");
                 const std::string sourceSurface = ReadName(stream, sourceName, lineNumber, "source surface");
@@ -1170,6 +1187,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
 
     for (const auto& namedWire : project.Wires()) {
         if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()
+            || namedWire.extrude.has_value()
             || namedWire.partModelSourceName.has_value()) {
             continue;
         }
@@ -1281,7 +1299,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
     }
 
     const bool hasProjectedWires = std::any_of(project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
-        return wire.projection.has_value();
+        return wire.projection.has_value() || wire.extrude.has_value();
     });
     if (!project.Surfaces().empty() || hasProjectedWires) {
         output << '\n';
@@ -1375,12 +1393,33 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
     };
 
+    const auto writeExtrudedWire = [&](const auto& namedWire) {
+        // 押し出しの先端ワイヤ(オーナー指示: 押し出し統合)。
+        RequireScriptNameSafe(namedWire.name, "Extruded wire");
+        RequireScriptNameSafe(namedWire.extrude->sourceWireName, "Extrude source wire");
+        output << "wire_extrude " << namedWire.name << ' '
+               << namedWire.extrude->sourceWireName << ' ';
+        WriteVector3(output, namedWire.extrude->direction);
+        output << ' ' << namedWire.extrude->distanceMillimeters << ' ';
+        if (namedWire.extrude->targetSurfaceName.empty()) {
+            output << '-';
+        } else {
+            RequireScriptNameSafe(
+                namedWire.extrude->targetSurfaceName, "Extrude target surface");
+            output << namedWire.extrude->targetSurfaceName;
+        }
+        output << '\n';
+        if (namedWire.metadata.construction) {
+            output << "wire_role " << namedWire.name << " construction\n";
+        }
+    };
+
     std::vector<bool> surfaceWritten(project.Surfaces().size(), false);
     std::vector<bool> projectionWritten(project.Wires().size(), false);
     std::size_t pendingSurfaces = project.Surfaces().size();
     std::size_t pendingProjections = static_cast<std::size_t>(std::count_if(
         project.Wires().begin(), project.Wires().end(), [](const auto& wire) {
-            return wire.projection.has_value();
+            return wire.projection.has_value() || wire.extrude.has_value();
         }));
     while (pendingSurfaces > 0 || pendingProjections > 0) {
         bool madeProgress = false;
@@ -1406,7 +1445,7 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                     if (source == project.Wires().end()) {
                         throw std::logic_error("Surface source wire is missing: " + sourceName);
                     }
-                    if (!source->projection.has_value()) {
+                    if (!source->projection.has_value() && !source->extrude.has_value()) {
                         return true;
                     }
                     return static_cast<bool>(projectionWritten[static_cast<std::size_t>(
@@ -1446,6 +1485,45 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                 continue;
             }
             writeProjectedWire(wire);
+            projectionWritten[wireIndex] = true;
+            --pendingProjections;
+            madeProgress = true;
+        }
+        for (std::size_t wireIndex = 0; wireIndex < project.Wires().size(); ++wireIndex) {
+            const auto& wire = project.Wires()[wireIndex];
+            if (!wire.extrude.has_value() || projectionWritten[wireIndex]) {
+                continue;
+            }
+            const auto source = std::find_if(
+                project.Wires().begin(), project.Wires().end(), [&](const auto& candidate) {
+                    return candidate.name == wire.extrude->sourceWireName;
+                });
+            if (source == project.Wires().end()) {
+                throw std::logic_error(
+                    "Extrude source wire is missing: " + wire.extrude->sourceWireName);
+            }
+            const std::size_t sourceIndex = static_cast<std::size_t>(
+                std::distance(project.Wires().begin(), source));
+            if ((source->projection.has_value() || source->extrude.has_value())
+                && !projectionWritten[sourceIndex]) {
+                continue;
+            }
+            if (!wire.extrude->targetSurfaceName.empty()) {
+                const auto target = std::find_if(
+                    project.Surfaces().begin(), project.Surfaces().end(),
+                    [&](const auto& surface) {
+                        return surface.name == wire.extrude->targetSurfaceName;
+                    });
+                if (target == project.Surfaces().end()) {
+                    throw std::logic_error("Extrude target surface is missing: "
+                        + wire.extrude->targetSurfaceName);
+                }
+                if (!surfaceWritten[static_cast<std::size_t>(
+                        std::distance(project.Surfaces().begin(), target))]) {
+                    continue;
+                }
+            }
+            writeExtrudedWire(wire);
             projectionWritten[wireIndex] = true;
             --pendingProjections;
             madeProgress = true;

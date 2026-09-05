@@ -1622,29 +1622,88 @@ QWidget* MainWindow::BuildSurfacePanel()
     laminateLinkRow->addWidget(laminateClearButton, 1);
     layout->addLayout(laminateLinkRow);
 
-    // --- 押し出し・回転・オフセット面 ---
-    auto* sweepTitle = new QLabel(QStringLiteral("押し出し・回転・オフセット面"));
+    // --- 押し出し(統合。オーナー指示: 厚み化・オフセット面もここへ) ---
+    auto* sweepTitle = new QLabel(QStringLiteral("押し出し"));
     sweepTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(sweepTitle);
+    auto* extrudeHint = new QLabel(QStringLiteral(
+        "3D画面や一覧で押し出す物（線・面。複数可）を選び、方向と距離を決めて"
+        "「押し出す」を押します。閉じた輪郭ならふた面も作れます。"
+        "作られた物は元の線・面の編集に追従します。"));
+    extrudeHint->setWordWrap(true);
+    extrudeHint->setStyleSheet("color: #4a5a63;");
+    layout->addWidget(extrudeHint);
     auto* extrudeForm = new QFormLayout;
     extrudeForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     extrudeDirection_ = new QComboBox;
+    extrudeDirection_->addItem(QStringLiteral("面・作図面の法線（自動）"), -1);
+    extrudeDirection_->addItem(QStringLiteral("法線の反対（自動・逆）"), -2);
     extrudeDirection_->addItem(QStringLiteral("+X"), 0);
     extrudeDirection_->addItem(QStringLiteral("-X"), 1);
     extrudeDirection_->addItem(QStringLiteral("+Y"), 2);
     extrudeDirection_->addItem(QStringLiteral("-Y"), 3);
     extrudeDirection_->addItem(QStringLiteral("+Z"), 4);
     extrudeDirection_->addItem(QStringLiteral("-Z"), 5);
+    extrudeDirection_->setToolTip(QStringLiteral(
+        "自動: 面はその面の法線、線は作図面の法線（作図面が無ければ+Z）"));
     extrudeForm->addRow(QStringLiteral("押し出し方向"), extrudeDirection_);
     extrudeDistance_ = MakePositiveField(20.0);
     extrudeDistance_->setSuffix(QStringLiteral(" mm"));
     extrudeForm->addRow(QStringLiteral("押し出し距離"), extrudeDistance_);
+    extrudeToSurfaceCheck_ = new QCheckBox(QStringLiteral("距離のかわりに選んだ面まで"));
+    extrudeToSurfaceCheck_->setToolTip(QStringLiteral(
+        "押し出し先を面で指定します（線の押し出しのみ）。線の各点をその面まで伸ばします"));
+    extrudeForm->addRow(extrudeToSurfaceCheck_);
+    extrudeTargetSurface_ = new QComboBox;
+    extrudeTargetSurface_->setEnabled(false);
+    extrudeForm->addRow(QStringLiteral("到達面"), extrudeTargetSurface_);
+    connect(extrudeToSurfaceCheck_, &QCheckBox::toggled, this, [this](bool checked) {
+        extrudeTargetSurface_->setEnabled(checked);
+        extrudeDistance_->setEnabled(!checked);
+    });
     layout->addLayout(extrudeForm);
-    auto* extrudeButton = new QPushButton(QStringLiteral("選択ワイヤーを押し出して面を作成"));
+
+    auto* extrudeMakeLabel = new QLabel(QStringLiteral("押し出しで作るもの"));
+    extrudeMakeLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 4px;");
+    layout->addWidget(extrudeMakeLabel);
+    extrudeMakeTipWire_ = new QCheckBox(QStringLiteral("先端のワイヤ"));
+    extrudeMakeTipWire_->setChecked(true);
+    extrudeMakeTipWire_->setToolTip(QStringLiteral(
+        "押し出した先の輪郭線。元の線を編集すると追従します"));
+    extrudeMakeSide_ = new QCheckBox(QStringLiteral("側面（押し出した面）"));
+    extrudeMakeSide_->setChecked(true);
+    extrudeMakeSide_->setToolTip(QStringLiteral("元の輪郭と先端の輪郭の間に張る面"));
+    extrudeMakeCap_ = new QCheckBox(QStringLiteral("先端のふた面（閉じた輪郭のみ）"));
+    extrudeMakeCap_->setToolTip(QStringLiteral(
+        "先端側を塞ぐ面。閉じた輪郭のときだけ作れます"));
+    extrudeMakeBottom_ = new QCheckBox(QStringLiteral("元の位置のふた面（閉じた輪郭のみ）"));
+    extrudeMakeBottom_->setToolTip(QStringLiteral(
+        "元の位置側を塞ぐ面。側面＋両ふたで全面が面付きになります"));
+    extrudeMakePlate_ = new QCheckBox(QStringLiteral("板材にする（厚みを付ける）"));
+    extrudeMakePlate_->setToolTip(QStringLiteral(
+        "面に厚みを与えて実物の板にします。面を押し出したときは厚み化と同じです"));
+    layout->addWidget(extrudeMakeTipWire_);
+    layout->addWidget(extrudeMakeSide_);
+    layout->addWidget(extrudeMakeCap_);
+    layout->addWidget(extrudeMakeBottom_);
+    layout->addWidget(extrudeMakePlate_);
+    auto* extrudePlateForm = new QFormLayout;
+    extrudePlateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    extrudePlateThickness_ = MakePositiveField(0.5);
+    extrudePlateThickness_->setSuffix(QStringLiteral(" mm"));
+    extrudePlateForm->addRow(QStringLiteral("板厚"), extrudePlateThickness_);
+    extrudePlateMaterial_ = new QComboBox;
+    extrudePlateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("プラ板"));
+    extrudePlateMaterial_->addItem(QStringLiteral("紙"), QStringLiteral("紙"));
+    extrudePlateMaterial_->addItem(QStringLiteral("金属"), QStringLiteral("金属"));
+    extrudePlateForm->addRow(QStringLiteral("材料"), extrudePlateMaterial_);
+    layout->addLayout(extrudePlateForm);
+    auto* extrudeButton = new QPushButton(QStringLiteral("押し出す"));
     extrudeButton->setObjectName("primaryButton");
     extrudeButton->setToolTip(QStringLiteral(
-        "3D画面でワイヤーを1本選んでから押します。指定方向へ平行移動した写しとの間に面を張ります"));
-    connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::CreateExtrudedSurface);
+        "選択した線・面を押し出します。線は複数同時でも構いません。\n"
+        "面を選んだ場合は厚み方向の押し出し（＝厚み化・オフセット面）になります"));
+    connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::ExtrudeSelection);
     layout->addWidget(extrudeButton);
 
     auto* revolveForm = new QFormLayout;
@@ -1710,7 +1769,7 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("展開片の分割線"),
         QStringLiteral("板材を分割"),
         QStringLiteral("板材を重ねて積層"),
-        QStringLiteral("押し出し・回転・オフセット面"),
+        QStringLiteral("押し出し"),
     });
 
     auto* scrollArea = new QScrollArea;

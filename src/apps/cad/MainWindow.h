@@ -260,6 +260,13 @@ private:
     void SplitSelectedPlate();
     void AddSelectedSurfaceOpenings();
     void CreateExtrudedSurface();
+    //! 押し出し(オーナー指示の統合機能): 選択したワイヤ・面を、指定方向へ
+    //! 距離ぶん(または指定した面まで)押し出し、チェックした物を作る。
+    //! 先端ワイヤ・側面・ふた面・元位置の面・板材。元の編集に追従する。
+    void ExtrudeSelection();
+    //! 失敗をユーザーへ確実に伝える(オーナー報告「押しても何も起きない」対策)。
+    //! セルフテスト・スクリーンショット中はモーダルを出さずログだけにする。
+    void ReportOperationError(const QString& title, const QString& message);
     void CreateRevolvedSurface();
     void CreateOffsetSurfaceApproximation();
     void RemoveSelectedSurfaceOpenings();
@@ -431,6 +438,8 @@ private:
     QComboBox* activePlaneCombo_ = nullptr;
     //! 作業中グループ(オーナー指示: 新しく作った物が未分類に落ちない)。
     QComboBox* activeGroupCombo_ = nullptr;
+    //! true の間はモーダルダイアログを出さない(自動テスト・撮影中)。
+    bool suppressBlockingDialogs_ = false;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QCheckBox* gridPointsVisible_ = nullptr;
     QComboBox* gridSubdivision_ = nullptr;
@@ -628,6 +637,16 @@ private:
     QSpinBox* laminateCountSpin_ = nullptr;
     QComboBox* extrudeDirection_ = nullptr;
     QDoubleSpinBox* extrudeDistance_ = nullptr;
+    // 統合押し出し(オーナー指示)。
+    QCheckBox* extrudeToSurfaceCheck_ = nullptr;   //!< 距離でなく「面まで」
+    QComboBox* extrudeTargetSurface_ = nullptr;    //!< 到達面
+    QCheckBox* extrudeMakeTipWire_ = nullptr;      //!< 先端のワイヤ
+    QCheckBox* extrudeMakeSide_ = nullptr;         //!< 側面(押し出し面)
+    QCheckBox* extrudeMakeCap_ = nullptr;          //!< 先端のふた面
+    QCheckBox* extrudeMakeBottom_ = nullptr;       //!< 元位置のふた面
+    QCheckBox* extrudeMakePlate_ = nullptr;        //!< 板材化
+    QDoubleSpinBox* extrudePlateThickness_ = nullptr;
+    QComboBox* extrudePlateMaterial_ = nullptr;
     QComboBox* revolveAxis_ = nullptr;
     QDoubleSpinBox* revolveAngle_ = nullptr;
     QSpinBox* revolveSections_ = nullptr;

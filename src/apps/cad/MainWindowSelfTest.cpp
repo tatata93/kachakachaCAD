@@ -156,6 +156,7 @@ using namespace mainwindow_helpers;
 
 bool MainWindow::PrepareManualScreenshot(const QString& state)
 {
+    suppressBlockingDialogs_ = true;
     const auto findSelection = [this](CadSelectionKind kind, std::string_view name)
         -> std::optional<CadSelection> {
         if (kind == CadSelectionKind::WorkPlane) {
@@ -951,6 +952,12 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
 
 bool MainWindow::RunCreationSelfTest()
 {
+    // 自動テスト中はモーダルを出さない(offscreenで応答できずタイムアウトするため)。
+    suppressBlockingDialogs_ = true;
+    struct DialogGuard {
+        bool& flag;
+        ~DialogGuard() { flag = false; }
+    } dialogGuard{suppressBlockingDialogs_};
     const auto fail = [](const char* stage) {
         qWarning() << "self-test failed:" << stage;
         QFile report(QStringLiteral("self-test-failure.txt"));
@@ -3732,6 +3739,82 @@ bool MainWindow::RunCreationSelfTest()
         RefreshModelViews(false);
     }
     progressMark("active group checks done");
+
+    {
+        // 押し出し統合(オーナー指示): 閉じた輪郭を選んで「押し出す」と
+        // 先端ワイヤ・側面・ふた・底・板がまとめて作られ、元の編集に追従する。
+        const std::size_t exWireStart = project_.Wires().size();
+        const std::size_t exSurfaceStart = project_.Surfaces().size();
+        const std::size_t exPlateStart = project_.Plates().size();
+        project_.AddWire("__ex輪郭", Wire::Polyline({
+            {700.0, 0.0, 0.0}, {720.0, 0.0, 0.0}, {720.0, 10.0, 0.0},
+            {700.0, 10.0, 0.0}, {700.0, 0.0, 0.0},
+        }));
+        RefreshModelViews(false);
+        int exWireIndex = -1;
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].name == "__ex輪郭") {
+                exWireIndex = index;
+            }
+        }
+        if (exWireIndex < 0) {
+            return fail("extrude test wire exists");
+        }
+        UpdateSelections({{CadSelectionKind::Wire, exWireIndex}}, true);
+        extrudeDirection_->setCurrentIndex(extrudeDirection_->findData(4)); // +Z
+        extrudeToSurfaceCheck_->setChecked(false);
+        extrudeDistance_->setValue(12.0);
+        extrudeMakeTipWire_->setChecked(true);
+        extrudeMakeSide_->setChecked(true);
+        extrudeMakeCap_->setChecked(true);
+        extrudeMakeBottom_->setChecked(true);
+        extrudeMakePlate_->setChecked(true);
+        extrudePlateThickness_->setValue(0.5);
+        ExtrudeSelection();
+        if (project_.Wires().size() != exWireStart + 2) {
+            return fail("extrude creates the tip wire");
+        }
+        if (project_.Surfaces().size() != exSurfaceStart + 3) {
+            return fail("extrude creates side, cap and bottom surfaces");
+        }
+        if (project_.Plates().size() != exPlateStart + 1) {
+            return fail("extrude creates a plate");
+        }
+        const auto tipWire = std::find_if(project_.Wires().begin(), project_.Wires().end(),
+            [](const kachakacha::model::NamedWire& wire) {
+                return wire.name == "__ex輪郭_押出先";
+            });
+        if (tipWire == project_.Wires().end() || !tipWire->extrude.has_value()) {
+            return fail("extruded tip wire records its source");
+        }
+        if (std::abs(tipWire->wire.Start().z - 12.0) > 1.0e-6) {
+            return fail("extruded tip wire sits at the extrude distance");
+        }
+        // 元を編集すると先端も側面も追従する。
+        project_.UpdateWire("__ex輪郭", Wire::Polyline({
+            {700.0, 0.0, 0.0}, {730.0, 0.0, 0.0}, {730.0, 10.0, 0.0},
+            {700.0, 10.0, 0.0}, {700.0, 0.0, 0.0},
+        }));
+        RefreshModelViews(false);
+        const auto tipAfter = std::find_if(project_.Wires().begin(), project_.Wires().end(),
+            [](const kachakacha::model::NamedWire& wire) {
+                return wire.name == "__ex輪郭_押出先";
+            });
+        if (tipAfter == project_.Wires().end()
+            || (tipAfter->wire.Evaluate(0.25) - Vector3{730.0, 0.0, 12.0}).Length() > 1.0) {
+            return fail("extruded tip follows source edits");
+        }
+        Undo();
+        Undo();
+        UpdateSelections({}, true);
+        RefreshModelViews(false);
+        if (project_.Wires().size() != exWireStart
+            || project_.Surfaces().size() != exSurfaceStart
+            || project_.Plates().size() != exPlateStart) {
+            return fail("undo removes the extrusion");
+        }
+    }
+    progressMark("extrude checks done");
 
     {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。

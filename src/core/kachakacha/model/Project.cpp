@@ -430,6 +430,10 @@ void RequireConstructionWireHasNoModelDependencies(const Project& project, std::
             throw std::invalid_argument("A plate-offset source wire cannot be changed to construction: "
                 + std::string(wireName));
         }
+        if (wire.extrude.has_value() && wire.extrude->sourceWireName == wireName) {
+            throw std::invalid_argument("押し出しの元ワイヤは補助線にできません: "
+                + std::string(wireName));
+        }
     }
     for (const NamedPlate& plate : project.Plates()) {
         if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), wireName)
@@ -1111,7 +1115,8 @@ void Project::AddProjectedWire(
         }
     }
     const NamedWire& source = RequireWire(sourceWireName);
-    if (source.projection.has_value() || source.plateOffset.has_value()) {
+    if (source.projection.has_value() || source.plateOffset.has_value()
+        || source.extrude.has_value()) {
         throw std::invalid_argument("A derived wire cannot be used as another projection source.");
     }
     if (source.metadata.construction) {
@@ -1130,6 +1135,91 @@ void Project::AddProjectedWire(
         true,
         {},
     });
+    AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
+}
+
+namespace {
+
+//! 押し出しの先端ワイヤ形状を作る(固定距離=平行移動そのまま、
+//! 「面まで」=点ごとに方向との交点まで動かした折れ線)。
+[[nodiscard]] Wire BuildExtrudedWireGeometry(
+    const Wire& source,
+    const NamedWire::Extrude& data,
+    const Surface* targetSurface)
+{
+    const geometry::Vector3 unit = data.direction.Normalized();
+    if (targetSurface == nullptr) {
+        return source.Translated(unit * data.distanceMillimeters);
+    }
+    constexpr int kSamples = 96;
+    const bool closed = source.IsClosed();
+    const int last = closed ? kSamples - 1 : kSamples;
+    std::vector<geometry::Vector3> samples;
+    samples.reserve(static_cast<std::size_t>(last) + 1);
+    for (int sample = 0; sample <= last; ++sample) {
+        samples.push_back(source.Evaluate(static_cast<double>(sample) / kSamples));
+    }
+    const auto projected = targetSurface->ProjectPointsAlongDirection(samples, unit);
+    if (projected.size() != samples.size()) {
+        throw std::invalid_argument(
+            "押し出し先の面に届かない点があります。方向や面を確かめてください。");
+    }
+    std::vector<geometry::Vector3> points;
+    points.reserve(projected.size() + 1);
+    for (const auto& hit : projected) {
+        points.push_back(hit.point);
+    }
+    if (closed) {
+        points.push_back(points.front());
+    }
+    return Wire::Polyline(std::move(points));
+}
+
+} // namespace
+
+void Project::AddExtrudedWire(
+    std::string name,
+    std::string sourceWireName,
+    geometry::Vector3 direction,
+    double distanceMillimeters,
+    std::string targetSurfaceName)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("押し出しワイヤの名前を指定してください。");
+    }
+    for (const NamedWire& existingWire : wires_) {
+        if (existingWire.name == name) {
+            throw std::invalid_argument("Wire name already exists: " + name);
+        }
+    }
+    const NamedWire& source = RequireWire(sourceWireName);
+    if (source.metadata.construction) {
+        throw std::invalid_argument(
+            "補助線は押し出しの元にできません: " + sourceWireName);
+    }
+    if (!direction.IsFinite() || direction.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("押し出し方向を指定してください。");
+    }
+    if (targetSurfaceName.empty()
+        && (!std::isfinite(distanceMillimeters)
+            || std::abs(distanceMillimeters) <= 1.0e-9)) {
+        throw std::invalid_argument("押し出し距離を指定してください。");
+    }
+    std::optional<Surface> targetCopy;
+    if (!targetSurfaceName.empty()) {
+        targetCopy = FindSurface(targetSurfaceName);
+        if (!targetCopy.has_value()) {
+            throw std::invalid_argument(
+                "押し出し先の面が見つかりません: " + targetSurfaceName);
+        }
+    }
+    NamedWire::Extrude data{
+        std::move(sourceWireName), direction, distanceMillimeters,
+        std::move(targetSurfaceName)};
+    Wire geometry = BuildExtrudedWireGeometry(
+        source.wire, data, targetCopy.has_value() ? &*targetCopy : nullptr);
+    wires_.push_back({std::move(name), std::move(geometry), {}, std::nullopt, true,
+        std::nullopt, std::nullopt, std::move(data)});
     AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
 }
 
@@ -1269,6 +1359,7 @@ Project::TransformBaseNames Project::CollectTransformBases(
         const NamedWire& wire = requireWireByName(name);
         if (wire.projection.has_value()
             || wire.plateOffset.has_value()
+            || wire.extrude.has_value()
             || wire.partModelSourceName.has_value()) {
             throw std::invalid_argument(derivedMessage("派生ワイヤ", wire.name));
         }
@@ -1460,7 +1551,8 @@ void Project::UpdateWire(std::string_view name, Wire wire)
     Project candidate = *this;
     for (NamedWire& namedWire : candidate.wires_) {
         if (namedWire.name == name) {
-            if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
+            if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()
+                || namedWire.extrude.has_value()) {
                 throw std::invalid_argument("Derived wire must be edited through its source geometry.");
             }
             namedWire.wire = ConstrainWire(candidate, wire, namedWire.metadata);
@@ -1484,7 +1576,8 @@ void Project::UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetada
         if (namedWire.name != name) {
             continue;
         }
-        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()) {
+        if (namedWire.projection.has_value() || namedWire.plateOffset.has_value()
+            || namedWire.extrude.has_value()) {
             throw std::invalid_argument("Derived wire must be edited through its source geometry.");
         }
         if (metadata.construction) {
@@ -1608,7 +1701,8 @@ void Project::SetWireMetadata(std::string_view name, WireMetadata metadata)
 
     for (NamedWire& wire : candidate.wires_) {
         if (wire.name == name) {
-            if (wire.projection.has_value() || wire.plateOffset.has_value()) {
+            if (wire.projection.has_value() || wire.plateOffset.has_value()
+                || wire.extrude.has_value()) {
                 throw std::invalid_argument("Derived wire metadata is controlled by its source geometry.");
             }
             if (metadata.construction) {
@@ -2424,6 +2518,9 @@ bool Project::RemoveWire(std::string_view name)
         if (wire.plateOffset.has_value() && wire.plateOffset->sourceWireName == name) {
             throw std::invalid_argument("Wire is used as a plate-offset source: " + wire.name);
         }
+        if (wire.extrude.has_value() && wire.extrude->sourceWireName == name) {
+            throw std::invalid_argument("押し出しの元として使われています: " + wire.name);
+        }
     }
     for (const NamedPlate& plate : plates_) {
         if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), name)
@@ -2491,6 +2588,9 @@ bool Project::RemoveSurface(std::string_view name)
     for (const NamedWire& wire : wires_) {
         if (wire.projection.has_value() && wire.projection->targetSurfaceName == name) {
             throw std::invalid_argument("Surface is used by projected wire: " + wire.name);
+        }
+        if (wire.extrude.has_value() && wire.extrude->targetSurfaceName == name) {
+            throw std::invalid_argument("押し出しの到達面として使われています: " + wire.name);
         }
     }
     for (const NamedPlate& plate : plates_) {
@@ -2609,6 +2709,9 @@ void Project::RenameReferences(
             if (wire.plateOffset.has_value()) {
                 renameIn(wire.plateOffset->sourceWireName);
             }
+            if (wire.extrude.has_value()) {
+                renameIn(wire.extrude->sourceWireName);
+            }
         }
         for (NamedSurface& surface : surfaces_) {
             renameList(surface.sourceWireNames);
@@ -2652,6 +2755,9 @@ void Project::RenameReferences(
         for (NamedWire& wire : wires_) {
             if (wire.projection.has_value()) {
                 renameIn(wire.projection->targetSurfaceName);
+            }
+            if (wire.extrude.has_value()) {
+                renameIn(wire.extrude->targetSurfaceName);
             }
         }
         for (NamedPlate& plate : plates_) {
@@ -3179,8 +3285,9 @@ void Project::RebuildDependentGeometry()
         // 近似モデル派生の投影ワイヤ(部材の穴)はここで再投影しない。
         // 折り姿勢・部材オフセット適用後の部材面へ再投影すると位置が壊れる/失敗する
         // ため、RegeneratePartModelDerivedObjects 側で自然姿勢から作り直して写す。
-        wireReady[index] = !wires_[index].projection.has_value()
-            || wires_[index].partModelSourceName.has_value();
+        wireReady[index] = (!wires_[index].projection.has_value()
+                               || wires_[index].partModelSourceName.has_value())
+            && !wires_[index].extrude.has_value();
         pendingProjections += wireReady[index] ? 0U : 1U;
     }
     std::vector<bool> surfaceReady(surfaces_.size(), false);
@@ -3311,6 +3418,33 @@ void Project::RebuildDependentGeometry()
             }
             wire.wire = surfaces_[targetIndex].surface.ProjectWireAlongDirection(
                 wires_[sourceIndex].wire, wire.projection->direction);
+            wireReady[index] = true;
+            --pendingProjections;
+            madeProgress = true;
+        }
+
+        // 押し出しの先端ワイヤ(オーナー指示: 押し出し統合)。元ワイヤと、
+        // 「面まで」の場合はその面が確定してから作り直す。
+        for (std::size_t index = 0; index < wires_.size(); ++index) {
+            NamedWire& wire = wires_[index];
+            if (wireReady[index] || !wire.extrude.has_value()) {
+                continue;
+            }
+            const std::size_t sourceIndex = wireIndex(wire.extrude->sourceWireName);
+            if (!wireReady[sourceIndex]) {
+                continue;
+            }
+            const Surface* target = nullptr;
+            if (!wire.extrude->targetSurfaceName.empty()) {
+                const std::size_t targetIndex
+                    = surfaceIndex(wire.extrude->targetSurfaceName);
+                if (!surfaceReady[targetIndex]) {
+                    continue;
+                }
+                target = &surfaces_[targetIndex].surface;
+            }
+            wire.wire = BuildExtrudedWireGeometry(
+                wires_[sourceIndex].wire, *wire.extrude, target);
             wireReady[index] = true;
             --pendingProjections;
             madeProgress = true;

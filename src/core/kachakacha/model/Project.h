@@ -127,6 +127,16 @@ struct NamedWire {
     std::optional<PlateOffset> plateOffset;
     //! 部材近似モデルの派生境界線の場合、そのモデル名。個別編集・保存の対象外。
     std::optional<std::string> partModelSourceName;
+    //! 押し出しの先端ワイヤ(オーナー指示: 押し出しへ統合)。元ワイヤを
+    //! direction へ distance だけ動かした形。targetSurfaceName が非空なら
+    //! 「その面まで」— 点ごとに面との交点まで(折れ線化)。元の編集に追従する。
+    struct Extrude {
+        std::string sourceWireName;
+        geometry::Vector3 direction;
+        double distanceMillimeters = 10.0;
+        std::string targetSurfaceName; //!< 空=固定距離
+    };
+    std::optional<Extrude> extrude;
 };
 
 struct NamedSurface {
@@ -328,6 +338,16 @@ public:
         std::string sourceWireName,
         std::string targetSurfaceName,
         geometry::Vector3 direction);
+    //! 押し出しの先端ワイヤを作る(オーナー指示: 押し出し統合)。元ワイヤを
+    //! direction(正規化して使用)へ distance 動かした派生ワイヤ。
+    //! targetSurfaceName 非空なら「その面まで」(点ごとの交点、折れ線化)。
+    //! 元ワイヤ・先の面の編集に追従して再構築される。
+    void AddExtrudedWire(
+        std::string name,
+        std::string sourceWireName,
+        geometry::Vector3 direction,
+        double distanceMillimeters,
+        std::string targetSurfaceName = {});
     void AddPlateOffsetWire(
         std::string name,
         std::string sourceWireName,

@@ -1464,6 +1464,17 @@ void MainWindow::BuildMenusAndToolbar()
     UpdateHistoryActions();
 }
 
+void MainWindow::ReportOperationError(const QString& title, const QString& message)
+{
+    // 失敗は必ず伝える(オーナー報告「押しても近似されない」対策)。
+    statusBar()->showMessage(message, 10000);
+    if (suppressBlockingDialogs_) {
+        qWarning() << title << message;
+        return;
+    }
+    QMessageBox::warning(this, title, message);
+}
+
 void MainWindow::ApplyActiveGroupSelection()
 {
     if (activeGroupCombo_ == nullptr) {
@@ -6425,6 +6436,7 @@ void MainWindow::RefreshSurfaceChoices()
     refresh(projectionSurface_);
     refresh(plateSurface_);
     refresh(jigSurface_);
+    refresh(extrudeTargetSurface_);
 }
 
 void MainWindow::UpdateSelection(CadSelection selection, bool updateTree)

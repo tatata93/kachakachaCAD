@@ -705,6 +705,94 @@ int main()
             "reversed circle runs the opposite way");
     }
 
+    {
+        // --- 押し出し(オーナー指示: 押し出しへ統合。先端ワイヤは元に追従) ---
+        Project project;
+        project.AddWire("押出元", Wire::Polyline({
+            {0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}, {20.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0}, {0.0, 0.0, 0.0},
+        }));
+        project.AddExtrudedWire("押出先", "押出元", {0.0, 0.0, 1.0}, 12.0);
+        const Wire& tip = RequireWire(project, "押出先").wire;
+        Require(AlmostEqual(tip.Start(), Vector3{0.0, 0.0, 12.0}, 1.0e-9),
+            "extruded wire moves along the direction");
+        Require(tip.IsClosed(1.0e-6), "closed source stays closed after extrusion");
+
+        // 側面(ルールド)と ふた(おまかせ面)が作れる。
+        project.AddRuledSurface("押出側面", "押出元", "押出先");
+        (void)project.AddAutoSurface("押出ふた", {"押出先"});
+        Require(project.FindSurface("押出ふた").has_value(),
+            "cap surface can be built from the extruded wire");
+
+        // 元ワイヤを編集すると先端も側面も追従する。
+        project.UpdateWire("押出元", Wire::Polyline({
+            {0.0, 0.0, 0.0}, {30.0, 0.0, 0.0}, {30.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0}, {0.0, 0.0, 0.0},
+        }));
+        Require(AlmostEqual(
+                RequireWire(project, "押出先").wire.Evaluate(0.25),
+                Vector3{30.0, 0.0, 12.0}, 0.6),
+            "extruded wire follows edits of its source");
+        Require(project.FindSurface("押出側面")->Evaluate(0.25, 1.0).z > 11.9,
+            "side surface follows the extrusion");
+
+        // 派生なので直接は編集・移動できない。
+        bool tipEditRejected = false;
+        try {
+            project.UpdateWire("押出先", Wire::Line({0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}));
+        } catch (const std::invalid_argument&) {
+            tipEditRejected = true;
+        }
+        Require(tipEditRejected, "extruded wire cannot be edited directly");
+        bool tipMoveRejected = false;
+        try {
+            static_cast<void>(project.TranslateObjects(
+                {{ProjectObjectKind::Wire, "押出先"}}, {1.0, 0.0, 0.0}));
+        } catch (const std::invalid_argument&) {
+            tipMoveRejected = true;
+        }
+        Require(tipMoveRejected, "extruded wire cannot be translated directly");
+
+        // 保存・読込で押し出しの関係ごと残る。
+        std::ostringstream saved;
+        kachakacha::io::WriteProjectScript(saved, project);
+        Require(saved.str().find("wire_extrude 押出先 押出元") != std::string::npos,
+            "extrude is saved as wire_extrude");
+        std::istringstream input(saved.str());
+        Project loaded = kachakacha::io::LoadProjectScript(input, "extrude");
+        const auto loadedTip = std::find_if(loaded.Wires().begin(), loaded.Wires().end(),
+            [](const kachakacha::model::NamedWire& wire) { return wire.name == "押出先"; });
+        Require(loadedTip != loaded.Wires().end() && loadedTip->extrude.has_value()
+                && loadedTip->extrude->sourceWireName == "押出元",
+            "extrude relation round trips");
+    }
+
+    {
+        // --- 押し出し「面まで」(オーナー指示: 距離のかわりに到達面を選べる) ---
+        Project project;
+        project.AddWire("床線", Wire::Line({0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}));
+        project.AddWire("天井枠", Wire::Polyline({
+            {-5.0, -5.0, 30.0}, {25.0, -5.0, 30.0}, {25.0, 5.0, 30.0},
+            {-5.0, 5.0, 30.0}, {-5.0, -5.0, 30.0},
+        }));
+        project.AddPlanarSurface("天井", "天井枠");
+        project.AddExtrudedWire("床線_到達", "床線", {0.0, 0.0, 1.0}, 0.0, "天井");
+        const Wire& reached = RequireWire(project, "床線_到達").wire;
+        for (int sample = 0; sample <= 8; ++sample) {
+            const Vector3 point = reached.Evaluate(static_cast<double>(sample) / 8.0);
+            Require(std::abs(point.z - 30.0) < 1.0e-6,
+                "extrude to a surface lands on that surface");
+        }
+        // 到達面として使われている面は消せない。
+        bool removeRejected = false;
+        try {
+            static_cast<void>(project.RemoveSurface("天井"));
+        } catch (const std::invalid_argument&) {
+            removeRejected = true;
+        }
+        Require(removeRejected, "target surface of an extrusion cannot be removed");
+    }
+
     std::cout << "surface tests passed\n";
     return EXIT_SUCCESS;
 }

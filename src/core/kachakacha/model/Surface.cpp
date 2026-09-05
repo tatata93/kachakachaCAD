@@ -251,15 +251,23 @@ std::vector<Wire> PrepareSections(std::vector<Wire> sections, std::size_t requir
                 : "Loft surface requires at least three sections.");
     }
     const bool closed = sections.front().IsClosed();
+    // 向き合わせは端点だけでなく線全体の対応距離で決める(ねじれ防止)。
+    // 端点が対称な開いた断面や、端点が一致する閉じた断面でも正しく判定できる。
+    const auto orientationCost = [](const Wire& previous, const Wire& candidate, bool reversed) {
+        double cost = 0.0;
+        for (int sample = 0; sample <= 16; ++sample) {
+            const double u = static_cast<double>(sample) / 16.0;
+            cost += (previous.Evaluate(u)
+                - candidate.Evaluate(reversed ? 1.0 - u : u)).Length();
+        }
+        return cost;
+    };
     for (std::size_t index = 1; index < sections.size(); ++index) {
         if (sections[index].IsClosed() != closed) {
             throw std::invalid_argument("Surface sections must all be open or all be closed.");
         }
-        const double sameDirection = (sections[index - 1].Start() - sections[index].Start()).LengthSquared()
-            + (sections[index - 1].End() - sections[index].End()).LengthSquared();
-        const double reversedDirection = (sections[index - 1].Start() - sections[index].End()).LengthSquared()
-            + (sections[index - 1].End() - sections[index].Start()).LengthSquared();
-        if (reversedDirection + 1.0e-12 < sameDirection) {
+        if (orientationCost(sections[index - 1], sections[index], true) + 1.0e-9
+            < orientationCost(sections[index - 1], sections[index], false)) {
             sections[index] = sections[index].Reversed();
         }
 
@@ -706,7 +714,7 @@ Surface::Surface(
     std::vector<double> sectionParameters,
     std::vector<double> firstGuideParameters,
     std::vector<double> secondGuideParameters,
-    std::vector<std::vector<geometry::Vector3>> patchSides)
+    std::array<double, 4> patchCorners)
     : kind_(kind),
       boundaries_(std::move(boundaries)),
       guides_(std::move(guides)),
@@ -718,7 +726,7 @@ Surface::Surface(
       minimumV_(minimumV),
       maximumU_(maximumU),
       maximumV_(maximumV),
-      patchSides_(std::move(patchSides))
+      patchCorners_(patchCorners)
 {
 }
 
@@ -777,8 +785,6 @@ Surface Surface::Patch(Wire closedBoundary)
         corners = {0, kLoopSamples / 4, kLoopSamples / 2, kLoopSamples * 3 / 4};
     }
     std::sort(corners.begin(), corners.end());
-    constexpr int kSideSamples = 64;
-    std::vector<std::vector<Vector3>> sides(4);
     for (int side = 0; side < 4; ++side) {
         const int start = corners[static_cast<std::size_t>(side)];
         const int end = corners[static_cast<std::size_t>((side + 1) % 4)];
@@ -786,31 +792,39 @@ Surface Surface::Patch(Wire closedBoundary)
         if (span == 0) {
             throw std::invalid_argument("パッチ面の角の検出に失敗しました。");
         }
-        sides[static_cast<std::size_t>(side)].reserve(kSideSamples + 1);
-        for (int sample = 0; sample <= kSideSamples; ++sample) {
-            const double loopPosition = static_cast<double>(start)
-                + static_cast<double>(span) * sample / kSideSamples;
-            const double parameter =
-                std::fmod(loopPosition, static_cast<double>(kLoopSamples)) / kLoopSamples;
-            sides[static_cast<std::size_t>(side)].push_back(
-                closedBoundary.Evaluate(parameter));
-        }
     }
+    // 角のパラメータだけを記録し、辺は評価時に境界ワイヤをそのまま使う
+    // (サンプル折れ線を挟まない: 選んだ線を必ず通る)。
+    const std::array<double, 4> cornerParameters = {
+        static_cast<double>(corners[0]) / kLoopSamples,
+        static_cast<double>(corners[1]) / kLoopSamples,
+        static_cast<double>(corners[2]) / kLoopSamples,
+        static_cast<double>(corners[3]) / kLoopSamples,
+    };
     return Surface(SurfaceKind::Patch, {std::move(closedBoundary)}, std::nullopt,
-        0.0, 0.0, 1.0, 1.0, {}, {}, {}, {}, std::move(sides));
+        0.0, 0.0, 1.0, 1.0, {}, {}, {}, {}, cornerParameters);
 }
 
 Vector3 Surface::EvaluatePatch(double u, double v) const
 {
     // Coonsの双線形ブレンド: 4辺を混ぜ、角の重複を引く。
-    const auto side = [this](int index, double t) {
-        const std::vector<Vector3>& samples = patchSides_[static_cast<std::size_t>(index)];
-        const double scaled =
-            std::clamp(t, 0.0, 1.0) * static_cast<double>(samples.size() - 1);
-        const std::size_t segment = std::min<std::size_t>(
-            static_cast<std::size_t>(scaled), samples.size() - 2);
-        const double local = scaled - static_cast<double>(segment);
-        return samples[segment] * (1.0 - local) + samples[segment + 1] * local;
+    // 辺は境界ワイヤをそのまま評価する(折れ線近似を挟まない —
+    // 選んだ線を必ず通る、オーナー指示)。
+    const Wire& loop = boundaries_.front();
+    const auto boundaryPoint = [&loop](double parameter) {
+        double wrapped = std::fmod(parameter, 1.0);
+        if (wrapped < 0.0) {
+            wrapped += 1.0;
+        }
+        return loop.Evaluate(wrapped);
+    };
+    const auto side = [&](int index, double t) {
+        const double start = patchCorners_[static_cast<std::size_t>(index)];
+        double span = patchCorners_[static_cast<std::size_t>((index + 1) % 4)] - start;
+        if (span <= 0.0) {
+            span += 1.0;
+        }
+        return boundaryPoint(start + span * std::clamp(t, 0.0, 1.0));
     };
     const Vector3 bottom = side(0, u);        // v=0 (u: 0→1)
     const Vector3 right = side(1, v);         // u=1 (v: 0→1)

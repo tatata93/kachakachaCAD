@@ -3,6 +3,7 @@
 #include "kachakacha/model/Wire.h"
 #include "kachakacha/model/WorkPlane.h"
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -89,7 +90,7 @@ private:
         std::vector<double> sectionParameters = {},
         std::vector<double> firstGuideParameters = {},
         std::vector<double> secondGuideParameters = {},
-        std::vector<std::vector<geometry::Vector3>> patchSides = {});
+        std::array<double, 4> patchCorners = {0.0, 0.25, 0.5, 0.75});
 
     [[nodiscard]] bool ContainsPlanarPoint(double u, double v, double tolerance) const;
 
@@ -115,9 +116,11 @@ private:
     std::vector<GordonGuideData> gordonGuides_;
     double maximumGuideGap_ = 0.0;
 
-    //! パッチ面の4辺サンプル列(辺0: v=0 u昇順 / 辺1: u=1 v昇順 /
-    //! 辺2: v=1 u降順 / 辺3: u=0 v降順。境界を一周する向き)。
-    std::vector<std::vector<geometry::Vector3>> patchSides_;
+    //! パッチ面の4角の境界ワイヤ上パラメータ(周回順)。辺は境界ワイヤを
+    //! そのまま評価する(サンプル折れ線ではなく元の線を必ず通る)。
+    //! 辺0: 角0→角1(v=0, u昇順) / 辺1: 角1→角2(u=1, v昇順) /
+    //! 辺2: 角2→角3(v=1, u降順) / 辺3: 角3→角0(u=0, v降順)。
+    std::array<double, 4> patchCorners_ = {0.0, 0.25, 0.5, 0.75};
 
     [[nodiscard]] geometry::Vector3 EvaluateGordon(double u, double v) const;
     [[nodiscard]] geometry::Vector3 EvaluatePatch(double u, double v) const;

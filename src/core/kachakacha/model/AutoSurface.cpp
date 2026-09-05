@@ -42,7 +42,9 @@ struct Chain {
     const std::vector<std::pair<std::size_t, bool>>& order,
     bool close)
 {
-    constexpr int kSamplesPerWire = 48;
+    // 複数の線を1本へ合成するときの分解能。元の線からのずれを目に見えない
+    // 大きさに抑える(1本だけの鎖は合成せず元の線をそのまま使う=正確に通る)。
+    constexpr int kSamplesPerWire = 128;
     std::vector<Vector3> points;
     points.reserve(order.size() * (kSamplesPerWire + 1) + 1);
     for (const auto& [index, reversed] : order) {
@@ -136,6 +138,87 @@ struct Chain {
     return chains;
 }
 
+//! 断面全体の対応距離(向き判定用)。端点が対称な開断面や、
+//! 端点が一致する閉断面でも正しくねじれない向きを選べる。
+[[nodiscard]] double OrientationCost(
+    const Wire& previous, const Wire& candidate, bool reversed)
+{
+    double cost = 0.0;
+    for (int sample = 0; sample <= 16; ++sample) {
+        const double u = static_cast<double>(sample) / 16.0;
+        cost += (previous.Evaluate(u)
+            - candidate.Evaluate(reversed ? 1.0 - u : u)).Length();
+    }
+    return cost;
+}
+
+//! 閉じた断面のシーム(始点)を target に最も近い位置へ回す(ねじれ防止)。
+//! 円と閉じた折れ線は正確に作り直す。その他の形はそのまま返す(向きのみ揃う)。
+[[nodiscard]] Wire ReseamClosedWire(const Wire& wire, const Vector3& target)
+{
+    if (wire.Kind() == WireKind::Circle) {
+        const auto arc = wire.ArcData();
+        const Vector3 normal = Cross(arc.uAxis, arc.vAxis);
+        if (normal.LengthSquared() <= 1.0e-18) {
+            return wire;
+        }
+        Vector3 direction = target - arc.center;
+        direction = direction - normal * (Dot(direction, normal) / normal.LengthSquared());
+        if (direction.LengthSquared() <= 1.0e-18) {
+            return wire;
+        }
+        const Vector3 newUAxis = direction.Normalized();
+        const Vector3 newVAxis = Cross(normal, newUAxis).Normalized();
+        return Wire::Circle(arc.center, newUAxis, newVAxis, arc.radius);
+    }
+    if (wire.Kind() == WireKind::Polyline && wire.IsClosed(1.0e-9)) {
+        const auto& points = wire.ControlPoints();
+        if (points.size() < 4) {
+            return wire;
+        }
+        // 並びは 先頭==末尾。target へ最も近い頂点を新しい始点にする。
+        const std::size_t vertexCount = points.size() - 1;
+        std::size_t best = 0;
+        double bestDistance = std::numeric_limits<double>::max();
+        for (std::size_t index = 0; index < vertexCount; ++index) {
+            const double distance = (points[index] - target).Length();
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = index;
+            }
+        }
+        if (best == 0) {
+            return wire;
+        }
+        std::vector<Vector3> rotated;
+        rotated.reserve(points.size());
+        for (std::size_t offset = 0; offset < vertexCount; ++offset) {
+            rotated.push_back(points[(best + offset) % vertexCount]);
+        }
+        rotated.push_back(rotated.front());
+        return Wire::Polyline(std::move(rotated));
+    }
+    return wire;
+}
+
+//! 直前の断面に向きとシームを合わせる(ねじれ防止 — オーナー指示)。
+[[nodiscard]] Wire AlignSectionToPrevious(const Wire& previous, Wire section)
+{
+    if (OrientationCost(previous, section, true) + 1.0e-9
+        < OrientationCost(previous, section, false)) {
+        section = section.Reversed();
+    }
+    if (section.IsClosed(1.0e-6) && previous.IsClosed(1.0e-6)) {
+        section = ReseamClosedWire(section, previous.Start());
+        // シームを回した後にもう一度向きを確かめる。
+        if (OrientationCost(previous, section, true) + 1.0e-9
+            < OrientationCost(previous, section, false)) {
+            section = section.Reversed();
+        }
+    }
+    return section;
+}
+
 [[nodiscard]] Vector3 ChainCentroid(const Wire& wire)
 {
     Vector3 sum{0.0, 0.0, 0.0};
@@ -176,9 +259,11 @@ AutoSurfaceResult BuildAutoSurface(const std::vector<Wire>& wires)
         : std::string();
 
     // 1本の閉ループ → 平面、だめならパッチ(穴埋め)。
+    // 平面判定は厳しくする: わずかでも平面から外れる輪郭を平面に押し込むと
+    // 「選んだ線を通らない面」ができるため、その場合はパッチで正確に通す。
     if (chains.size() == 1 && chains.front().closed) {
         try {
-            Surface planar = Surface::Planar(chains.front().geometry, 0.25);
+            Surface planar = Surface::Planar(chains.front().geometry, 1.0e-4);
             return {std::move(planar), "閉じた輪郭から平面" + bridgedNote};
         } catch (const std::exception&) {
         }
@@ -194,19 +279,10 @@ AutoSurfaceResult BuildAutoSurface(const std::vector<Wire>& wires)
             "輪郭を閉じるか、向かい側になる断面の線を追加で選んでください。");
     }
 
-    // 2本 → ルールド。向きは端点どうしの近さで揃える。
+    // 2本 → ルールド。向きとシーム(閉断面)は線全体の対応で揃える(ねじれ防止)。
     if (chains.size() == 2) {
         Wire first = chains[0].geometry;
-        Wire second = chains[1].geometry;
-        if (!first.IsClosed(1.0e-6) && !second.IsClosed(1.0e-6)) {
-            const double straight = (first.Start() - second.Start()).Length()
-                + (first.End() - second.End()).Length();
-            const double flipped = (first.Start() - second.End()).Length()
-                + (first.End() - second.Start()).Length();
-            if (flipped < straight) {
-                second = second.Reversed();
-            }
-        }
+        Wire second = AlignSectionToPrevious(first, chains[1].geometry);
         Surface ruled = Surface::Ruled(std::move(first), std::move(second));
         return {std::move(ruled), "2本の断面からルールド面" + bridgedNote};
     }
@@ -247,15 +323,8 @@ AutoSurfaceResult BuildAutoSurface(const std::vector<Wire>& wires)
     sections.reserve(indices.size());
     for (const std::size_t index : indices) {
         Wire section = chains[index].geometry;
-        if (!sections.empty() && !section.IsClosed(1.0e-6)
-            && !sections.back().IsClosed(1.0e-6)) {
-            const double straight = (section.Start() - sections.back().Start()).Length()
-                + (section.End() - sections.back().End()).Length();
-            const double flipped = (section.Start() - sections.back().End()).Length()
-                + (section.End() - sections.back().Start()).Length();
-            if (flipped < straight) {
-                section = section.Reversed();
-            }
+        if (!sections.empty()) {
+            section = AlignSectionToPrevious(sections.back(), std::move(section));
         }
         sections.push_back(std::move(section));
     }

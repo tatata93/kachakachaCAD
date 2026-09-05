@@ -867,7 +867,10 @@ Wire Wire::Reversed() const
         return CubicBSplineWithKnots(std::move(points), std::move(knots));
     }
     case WireKind::Circle:
-        return Circle(arcCenter_, arcUAxis_, arcVAxis_, arcRadius_);
+        // 逆回り: 始点(シーム)は同じまま巻き方向だけ反転する。
+        // (以前は同じ円を返しており、円どうしのルールド・ロフトで
+        //  巻きの食い違いを直せず面がねじれていた。)
+        return Circle(arcCenter_, arcUAxis_, arcVAxis_ * -1.0, arcRadius_);
     case WireKind::CircularArc:
         return CircularArc(
             arcCenter_,

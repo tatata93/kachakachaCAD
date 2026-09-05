@@ -342,6 +342,8 @@ public:
     [[nodiscard]] std::optional<kachakacha::geometry::Vector3> GizmoCenter() const;
     //! 指定画面位置のギズモつまみ(セルフテスト用に公開)。
     [[nodiscard]] GizmoHandle GizmoHandleAt(QPointF position) const;
+    //! 数値入力ボックス(寸法式)が表示中か(取り残し検査のセルフテスト用)。
+    [[nodiscard]] bool DimensionEditorVisibleForTest() const;
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();

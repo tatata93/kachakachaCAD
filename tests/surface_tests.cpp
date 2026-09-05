@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -611,6 +612,97 @@ int main()
             guarded = std::string(error.what()).find("閉じていません") != std::string::npos;
         }
         Require(guarded, "auto surface explains why it cannot build");
+    }
+
+    {
+        // --- おまかせ面は選んだ線を必ず通る(オーナー指示) ---
+        Project project;
+        // ルールド: v=0/1 の縁が入力ワイヤそのもの。
+        const Wire lowArc = Wire::CircularArcThroughThreePoints(
+            {-20.0, 0.0, 0.0}, {0.0, 14.0, 0.0}, {20.0, 0.0, 0.0});
+        const Wire highArc = Wire::CircularArcThroughThreePoints(
+            {-20.0, 0.0, 30.0}, {0.0, 14.0, 30.0}, {20.0, 0.0, 30.0});
+        project.AddWire("通過下", lowArc);
+        project.AddWire("通過上", highArc);
+        (void)project.AddAutoSurface("通過ルールド", {"通過下", "通過上"});
+        const Surface& ruled = project.Surfaces().back().surface;
+        for (int sample = 0; sample <= 8; ++sample) {
+            const double u = static_cast<double>(sample) / 8.0;
+            Require(AlmostEqual(ruled.Evaluate(u, 0.0), lowArc.Evaluate(u), 1.0e-9),
+                "auto ruled surface passes through the first wire exactly");
+            Require(AlmostEqual(ruled.Evaluate(u, 1.0), highArc.Evaluate(u), 1.0e-9),
+                "auto ruled surface passes through the second wire exactly");
+        }
+
+        // ロフト: 中間断面も v=0.5 でそのまま通る(スプラインは節点を補間する)。
+        const Wire midArc = Wire::CircularArcThroughThreePoints(
+            {-20.0, 0.0, 15.0}, {0.0, 18.0, 15.0}, {20.0, 0.0, 15.0});
+        project.AddWire("通過中", midArc);
+        (void)project.AddAutoSurface("通過ロフト", {"通過下", "通過中", "通過上"});
+        const Surface& loftThrough = project.Surfaces().back().surface;
+        for (int sample = 0; sample <= 8; ++sample) {
+            const double u = static_cast<double>(sample) / 8.0;
+            Require(AlmostEqual(
+                    loftThrough.Evaluate(u, 0.5), midArc.Evaluate(u), 1.0e-9),
+                "auto loft passes through the middle wire exactly");
+        }
+
+        // わずかに平面から外れた輪郭は平面へ丸めず、パッチで正確に通す。
+        project.AddWire("浮き下", Wire::Line({50.0, 0.0, 0.0}, {70.0, 0.0, 0.0}));
+        project.AddWire("浮き右", Wire::Line({70.0, 0.0, 0.0}, {70.0, 12.0, 0.1}));
+        project.AddWire("浮き上", Wire::Line({70.0, 12.0, 0.1}, {50.0, 12.0, 0.0}));
+        project.AddWire("浮き左", Wire::Line({50.0, 12.0, 0.0}, {50.0, 0.0, 0.0}));
+        (void)project.AddAutoSurface("浮き輪郭",
+            {"浮き下", "浮き右", "浮き上", "浮き左"});
+        const auto& lifted = project.Surfaces().back();
+        Require(lifted.surface.Kind() == SurfaceKind::Patch,
+            "slightly non-planar loop is not flattened into a plane");
+        const Vector3 liftedCorner{70.0, 12.0, 0.1};
+        double nearestBoundary = std::numeric_limits<double>::max();
+        for (int sample = 0; sample <= 400; ++sample) {
+            const double t = static_cast<double>(sample) / 400.0;
+            nearestBoundary = std::min({nearestBoundary,
+                (lifted.surface.Evaluate(t, 0.0) - liftedCorner).Length(),
+                (lifted.surface.Evaluate(t, 1.0) - liftedCorner).Length(),
+                (lifted.surface.Evaluate(0.0, t) - liftedCorner).Length(),
+                (lifted.surface.Evaluate(1.0, t) - liftedCorner).Length()});
+        }
+        // 境界そのものは輪郭ワイヤを正確に通る。走査サンプルが頂点の
+        // パラメータへぴったり乗るとは限らないため、判定は走査間隔ぶんだけ緩める
+        // (旧実装は平面へ丸めて 0.1mm 浮いた頂点を通らなかった)。
+        Require(nearestBoundary < 0.05,
+            "patch boundary passes through the lifted corner");
+    }
+
+    {
+        // --- ねじれ防止(オーナー指示): 巻きもシームも食い違う円2つ → まっすぐな筒 ---
+        Project project;
+        project.AddWire("筒下", Wire::Circle(
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 10.0));
+        // 上の円は逆巻き+シームが90度ずれている。
+        project.AddWire("筒上", Wire::Circle(
+            {0.0, 0.0, 20.0}, {0.0, 1.0, 0.0}, {1.0, 0.0, 0.0}, 10.0));
+        (void)project.AddAutoSurface("筒", {"筒上", "筒下"});
+        const Surface& tube = project.Surfaces().back().surface;
+        for (int sample = 0; sample <= 32; ++sample) {
+            const double u = static_cast<double>(sample) / 32.0;
+            const Vector3 bottom = tube.Evaluate(u, 0.0);
+            const Vector3 top = tube.Evaluate(u, 1.0);
+            const Vector3 ruling = top - bottom;
+            Require(std::abs(std::abs(ruling.z) - 20.0) < 1.0e-6
+                    && std::abs(ruling.x) < 1.0e-6 && std::abs(ruling.y) < 1.0e-6,
+                "circle sections build an untwisted straight tube");
+        }
+
+        // 円のReversedは巻きだけ反転する(以前は同じ円を返すバグ)。
+        const Wire circle = Wire::Circle(
+            {0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 5.0);
+        const Wire reversedCircle = circle.Reversed();
+        Require(AlmostEqual(reversedCircle.Start(), circle.Start(), 1.0e-9),
+            "reversed circle keeps its seam");
+        Require(AlmostEqual(
+                reversedCircle.Evaluate(0.25), circle.Evaluate(0.75), 1.0e-9),
+            "reversed circle runs the opposite way");
     }
 
     std::cout << "surface tests passed\n";

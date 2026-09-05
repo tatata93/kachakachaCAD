@@ -1475,6 +1475,15 @@ void MainWindow::SetWorkMode(WorkMode mode)
     if (action != nullptr && !action->isChecked()) {
         action->setChecked(true);
     }
+    // 作図の途中でモードを切り替えたら選択ツールへ戻す。作図ツールと
+    // 数値入力ボックスが残ったままだと、ギズモ等のクリックを奪ってしまう。
+    if (mode != WorkMode::Drawing && viewport_ != nullptr
+        && viewport_->Tool() != ViewportTool::Select) {
+        viewport_->SetTool(ViewportTool::Select);
+        if (selectToolAction_ != nullptr) {
+            selectToolAction_->setChecked(true);
+        }
+    }
     if (syncingWorkMode_ || toolsTabs_ == nullptr) {
         return;
     }

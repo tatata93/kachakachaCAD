@@ -3604,6 +3604,36 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("gizmo checks done");
 
     {
+        // 数値入力ボックスの取り残し対策(オーナー報告: ギズモが数値入力に吸われる)。
+        // 作図の途中でモードを切り替えても選択ツールへ戻り、ボックスが消えること。
+        viewport_->SetActivePlane(kachakacha::model::WorkPlane::FromPointNormal(
+            {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
+        viewport_->SetTool(ViewportTool::DrawLine);
+        const QPointF drawPoint(viewport_->width() * 0.5, viewport_->height() * 0.5);
+        const QPointF globalPoint = viewport_->mapToGlobal(drawPoint.toPoint());
+        QMouseEvent pressEvent(QEvent::MouseButtonPress, drawPoint, globalPoint,
+            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport_, &pressEvent);
+        QApplication::processEvents();
+        if (!viewport_->DimensionEditorVisibleForTest()) {
+            return fail("dimension editor shows while drawing");
+        }
+        SetWorkMode(WorkMode::PartModel);
+        if (viewport_->Tool() != ViewportTool::Select) {
+            return fail("mode switch returns to the select tool");
+        }
+        if (viewport_->DimensionEditorVisibleForTest()) {
+            return fail("mode switch hides the dimension editor");
+        }
+        QMouseEvent releaseEvent(QEvent::MouseButtonRelease, drawPoint, globalPoint,
+            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(viewport_, &releaseEvent);
+        SetWorkMode(WorkMode::Drawing);
+        UpdateSelections({}, true);
+    }
+    progressMark("dimension editor leak checks done");
+
+    {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。
         const std::size_t autoWireStart = project_.Wires().size();
         const std::size_t autoSurfaceStart = project_.Surfaces().size();

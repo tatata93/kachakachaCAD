@@ -2335,6 +2335,11 @@ GizmoHandle CadViewport::GizmoHandleAt(QPointF position) const
     return HitGizmo(position);
 }
 
+bool CadViewport::DimensionEditorVisibleForTest() const
+{
+    return dynamicDimensionEditor_ != nullptr && dynamicDimensionEditor_->isVisible();
+}
+
 CadViewport::GizmoGeometry CadViewport::MakeGizmoGeometry() const
 {
     GizmoGeometry geometry;
@@ -3661,6 +3666,14 @@ void CadViewport::CancelControlPointDrag()
 
 void CadViewport::paintEvent(QPaintEvent*)
 {
+    // 数値入力ボックス(寸法式)の取り残し対策: 作図中でないのに表示が残ると
+    // その下のギズモや選択のクリックを奪う(オーナー報告)。毎描画で検査して隠す。
+    if (dynamicDimensionEditor_ != nullptr && dynamicDimensionEditor_->isVisible()
+        && (!HasDynamicDimensions() || drawingPoints_.empty()
+            || !activePlane_.has_value())) {
+        dynamicDimensionEditor_->hide();
+    }
+
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.fillRect(rect(), backgroundColor_);

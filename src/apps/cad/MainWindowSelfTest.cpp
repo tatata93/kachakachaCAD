@@ -3372,7 +3372,43 @@ bool MainWindow::RunCreationSelfTest()
             }
         }
         progressMark("combined pattern check done");
-        if (!partModelAfterMove.boundaryWireNames.empty()) {
+        if (project_.PartModels().back().result.parts.size() >= 2) {
+            // 部材ごとの組立(オーナー指示: 部材1を選んでスライダーを動かすと
+            // 部材1だけが曲がる)。パネルの部材選択→確定の連鎖で確かめる。
+            const auto partPoint = [this](const std::string& surfaceName) {
+                for (const auto& surface : project_.Surfaces()) {
+                    if (surface.name == surfaceName) {
+                        return surface.surface.Evaluate(0.5, 0.5);
+                    }
+                }
+                throw std::runtime_error("part surface missing: " + surfaceName);
+            };
+            const Vector3 partPose1 = partPoint("__ui_部材近似_部材1");
+            const Vector3 partPose2 = partPoint("__ui_部材近似_部材2");
+            if (!partModelPanel_->SelectPartsForTest(
+                    QStringLiteral("__ui_部材近似"), {1})) {
+                return fail("select part 1 for per-part assembly");
+            }
+            CommitPartAssemblyProgress(0.0);
+            if ((partPoint("__ui_部材近似_部材1") - partPose1).Length() <= 5.0) {
+                return fail("per-part slider bends the selected part");
+            }
+            if ((partPoint("__ui_部材近似_部材2") - partPose2).Length() > 0.05) {
+                return fail("per-part slider keeps unselected parts still");
+            }
+            CommitPartAssemblyProgress(1.0);
+            if ((partPoint("__ui_部材近似_部材1") - partPose1).Length() > 1.0e-6
+                || (partPoint("__ui_部材近似_部材2") - partPose2).Length() > 1.0e-6) {
+                return fail("per-part slider restores the pose");
+            }
+            if (!partModelPanel_->SelectModelForTest(QStringLiteral("__ui_部材近似"))) {
+                return fail("reselect the model after per-part assembly");
+            }
+        }
+        progressMark("per-part assembly checks done");
+        // CommitPartAssemblyProgress も project_ を差し替えるため参照を取り直す。
+        const auto& partModelAfterAssembly = project_.PartModels().back();
+        if (!partModelAfterAssembly.boundaryWireNames.empty()) {
             SetApproximationSetsVisible(false);
             if (project_.ObjectStateInSets(
                     kachakacha::model::ProjectObjectKind::Wire,
@@ -3606,7 +3642,7 @@ bool MainWindow::RunCreationSelfTest()
     {
         // 数値入力ボックスの取り残し対策(オーナー報告: ギズモが数値入力に吸われる)。
         // 作図の途中でモードを切り替えても選択ツールへ戻り、ボックスが消えること。
-        viewport_->SetActivePlane(kachakacha::model::WorkPlane::FromPointNormal(
+        viewport_->SetActiveWorkPlane(kachakacha::model::WorkPlane::FromPointNormal(
             {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
         viewport_->SetTool(ViewportTool::DrawLine);
         const QPointF drawPoint(viewport_->width() * 0.5, viewport_->height() * 0.5);

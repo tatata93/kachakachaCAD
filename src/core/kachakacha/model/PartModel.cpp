@@ -853,20 +853,48 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
     double assemblyProgress,
     double liftDistanceMillimeters)
 {
+    return BuildBandFoldAnimationRails(
+        mesh, creaseProgress, std::vector<double>{assemblyProgress},
+        liftDistanceMillimeters);
+}
+
+std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress,
+    const std::vector<double>& bandAssemblyProgress,
+    double liftDistanceMillimeters)
+{
     const int bandCount = std::max(0, mesh.rows - 1);
     std::vector<std::vector<Vector3>> rails;
     rails.reserve(static_cast<std::size_t>(bandCount) * 2);
     if (bandCount == 0 || mesh.columns < 2) {
         return rails;
     }
-    const double t = std::clamp(assemblyProgress, 0.0, 1.0);
-    // 帯間の折り角(可動折り線の個別値)も t で補間した剛体連鎖を使う。
-    std::vector<double> interpolated(creaseProgress.size(), 1.0);
-    for (std::size_t index = 0; index < creaseProgress.size(); ++index) {
-        interpolated[index] = 1.0 + t * (creaseProgress[index] - 1.0);
-    }
-    const std::vector<PartBandTransform> transforms
-        = BuildRigidBandTransforms(mesh, interpolated);
+    // 帯ごとの進行度(オーナー指示: 選んだ部材だけが曲がる)。不足分は最後の値。
+    const auto bandProgress = [&](int band) {
+        if (bandAssemblyProgress.empty()) {
+            return 1.0;
+        }
+        const std::size_t index = std::min(
+            static_cast<std::size_t>(band), bandAssemblyProgress.size() - 1);
+        return std::clamp(bandAssemblyProgress[index], 0.0, 1.0);
+    };
+    // 帯間の折り角(可動折り線の個別値)も帯の t で補間した剛体連鎖を使う。
+    // 各帯は独立した剛体なので、帯ごとに自分の t で連鎖を評価してよい
+    // (全帯が同じ t なら従来と完全に一致する)。t ごとに連鎖を作り直す。
+    double cachedProgress = std::numeric_limits<double>::quiet_NaN();
+    std::vector<PartBandTransform> transforms;
+    const auto transformsFor = [&](double t) -> const std::vector<PartBandTransform>& {
+        if (!(t == cachedProgress)) {
+            std::vector<double> interpolated(creaseProgress.size(), 1.0);
+            for (std::size_t index = 0; index < creaseProgress.size(); ++index) {
+                interpolated[index] = 1.0 + t * (creaseProgress[index] - 1.0);
+            }
+            transforms = BuildRigidBandTransforms(mesh, interpolated);
+            cachedProgress = t;
+        }
+        return transforms;
+    };
 
     // モデル重心(展開位置を外向きへ離す向きの判定に使う)。
     Vector3 centroid{0.0, 0.0, 0.0};
@@ -881,6 +909,7 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
     std::vector<Vector3> bottom;
     std::vector<Vector3> top;
     for (int band = 0; band < bandCount; ++band) {
+        const double t = bandProgress(band);
         // 等長の曲げ(三角形剛体+二面角×t)。t=1 で world と厳密一致。
         BendBandStrip(mesh, band, t, bottom, top);
         // 中央素線を world の中央素線へ剛体で合わせ、帯を元の位置周辺に保つ。
@@ -908,7 +937,7 @@ std::vector<std::vector<Vector3>> BuildBandFoldAnimationRails(
         }
         const Vector3 lift = normal * (liftDistanceMillimeters * (1.0 - t));
         const PartBandTransform& transform
-            = transforms[static_cast<std::size_t>(band)];
+            = transformsFor(t)[static_cast<std::size_t>(band)];
         for (Vector3& point : bottom) {
             point = transform.Apply(point) + lift;
         }

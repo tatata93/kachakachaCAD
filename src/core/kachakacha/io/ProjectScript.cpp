@@ -1022,6 +1022,15 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     ReadDouble(stream, sourceName, lineNumber, "assembly progress");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.SetPartModelAssemblyProgress(name, progress);
+            } else if (command == "part_model_part_assembly") {
+                // 部材ごとの組立進行度(オーナー指示: 選んだ部材だけが曲がる)。
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const int partNumber = static_cast<int>(
+                    ReadDouble(stream, sourceName, lineNumber, "part number"));
+                const double progress =
+                    ReadDouble(stream, sourceName, lineNumber, "assembly progress");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPartModelPartAssemblyProgress(name, {partNumber}, progress);
             } else if (command == "object_set_parent") {
                 const std::string child = ReadName(stream, sourceName, lineNumber, "set");
                 const std::string parent = ReadName(stream, sourceName, lineNumber, "parent set");
@@ -1610,6 +1619,16 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         if (std::abs(model.assemblyProgress - 1.0) > 1.0e-12) {
             output << "part_model_assembly " << model.name << ' '
                    << model.assemblyProgress << '\n';
+        }
+        // 部材ごとの組立進行度(オーナー指示: 選んだ部材だけが曲がる)。
+        // 一様値(assemblyProgress)と違う部材だけを保存する。
+        for (std::size_t index = 0; index < model.partAssemblyProgress.size(); ++index) {
+            if (std::abs(model.partAssemblyProgress[index] - model.assemblyProgress)
+                > 1.0e-12) {
+                output << "part_model_part_assembly " << model.name << ' '
+                       << (index + 1) << ' '
+                       << model.partAssemblyProgress[index] << '\n';
+            }
         }
         // 接続スコープ(合意13)。派生「_接続」は読込時に再生成される。
         if (!model.scopeWireNames.empty() || !model.scopeSurfaceNames.empty()) {

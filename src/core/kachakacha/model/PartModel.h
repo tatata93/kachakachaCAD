@@ -143,6 +143,15 @@ struct PartBandTransform {
 //! 中間も等長の曲げ(三角形剛体+二面角スケール)で、辺長・帯幅・素線長は
 //! どの瞬間も厳密に保存される。帯は互いに独立(隙間許容)。
 //! 返り値は帯ごとの(下レール, 上レール)ペア = 2×帯数 本の点列。
+//! bandAssemblyProgress は帯ごとの進行度(オーナー指示: 選んだ部材だけが曲がる)。
+//! サイズが帯数に満たない分は最後の値を使う。空なら全帯 1。
+[[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildBandFoldAnimationRails(
+    const PartMeshDevelopment& mesh,
+    const std::vector<double>& creaseProgress,
+    const std::vector<double>& bandAssemblyProgress,
+    double liftDistanceMillimeters);
+
+//! 全帯へ同じ進行度を使う従来形。
 [[nodiscard]] std::vector<std::vector<geometry::Vector3>> BuildBandFoldAnimationRails(
     const PartMeshDevelopment& mesh,
     const std::vector<double>& creaseProgress,

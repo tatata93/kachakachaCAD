@@ -3896,7 +3896,19 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         [](const NamedPartModel::PartOffset& offset) {
             return offset.delta.LengthSquared() > 0.0;
         });
-    const bool assemblyActive = std::abs(model.assemblyProgress - 1.0) > 1.0e-9;
+    // 部材ごとの実効組立進行度(オーナー指示: 選んだ部材だけが曲がる)。
+    const auto effectiveAssemblyOf = [&model](int band) {
+        const std::size_t index = static_cast<std::size_t>(band);
+        const double value = index < model.partAssemblyProgress.size()
+            ? model.partAssemblyProgress[index]
+            : model.assemblyProgress;
+        return std::clamp(value, 0.0, 1.0);
+    };
+    bool assemblyActive = std::abs(model.assemblyProgress - 1.0) > 1.0e-9;
+    for (std::size_t index = 0; index < model.partAssemblyProgress.size(); ++index) {
+        assemblyActive = assemblyActive
+            || std::abs(model.partAssemblyProgress[index] - 1.0) > 1.0e-9;
+    }
     if ((foldActive || offsetActive || assemblyActive) && !model.result.parts.empty()) {
         const PartMeshDevelopment foldMesh = DevelopPartMesh(
             RequirePartModelSource(model), model.options.splitAxis, parameters, 96);
@@ -3919,9 +3931,14 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             }
         }
         const double liftDistance = std::max(25.0, (meshHigh - meshLow).Length() * 0.35);
-        const double assembly = std::clamp(model.assemblyProgress, 0.0, 1.0);
+        std::vector<double> bandAssembly(
+            foldMesh.rows >= 1 ? static_cast<std::size_t>(foldMesh.rows - 1) : 0, 1.0);
+        for (std::size_t index = 0; index < bandAssembly.size(); ++index) {
+            bandAssembly[index] = effectiveAssemblyOf(static_cast<int>(index));
+        }
         const std::vector<std::vector<geometry::Vector3>> bandRails
-            = BuildBandFoldAnimationRails(foldMesh, creaseProgress, assembly, liftDistance);
+            = BuildBandFoldAnimationRails(
+                foldMesh, creaseProgress, bandAssembly, liftDistance);
         const int bandCount = foldMesh.rows - 1;
         const auto offsetOf = [&model](int band) {
             for (const NamedPartModel::PartOffset& offset : model.partOffsets) {
@@ -4269,11 +4286,67 @@ void Project::SetPartModelAssemblyProgress(std::string_view name, double progres
     if (!std::isfinite(progress) || progress < 0.0 || progress > 1.0) {
         throw std::invalid_argument("組立の進行度は0〜1で指定してください。");
     }
-    if (std::abs(model->assemblyProgress - progress) <= 1.0e-12) {
+    if (model->partAssemblyProgress.empty()
+        && std::abs(model->assemblyProgress - progress) <= 1.0e-12) {
         return;
     }
     model->assemblyProgress = progress;
+    model->partAssemblyProgress.clear(); // 一様設定 = 部材ごとの値は破棄する。
     // 実際の部材面・縁・穴と、その上の板材等をこの姿勢へ作り直す。
+    RebuildDependentGeometry();
+}
+
+void Project::SetPartModelPartAssemblyProgress(
+    std::string_view name, const std::vector<int>& partNumbers, double progress)
+{
+    if (partNumbers.empty()) {
+        SetPartModelAssemblyProgress(name, progress);
+        return;
+    }
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) {
+            return candidate.name == name;
+        });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    if (!std::isfinite(progress) || progress < 0.0 || progress > 1.0) {
+        throw std::invalid_argument("組立の進行度は0〜1で指定してください。");
+    }
+    const int partCount = static_cast<int>(model->result.parts.size());
+    for (const int number : partNumbers) {
+        if (number < 1 || number > partCount) {
+            throw std::invalid_argument(
+                "部材番号が範囲外です: " + std::to_string(number));
+        }
+    }
+    // 部材ごとの値へ展開してから指定部材だけを書き換える。
+    if (model->partAssemblyProgress.size()
+        != static_cast<std::size_t>(partCount)) {
+        model->partAssemblyProgress.assign(
+            static_cast<std::size_t>(partCount), model->assemblyProgress);
+    }
+    bool changed = false;
+    for (const int number : partNumbers) {
+        double& value = model->partAssemblyProgress[static_cast<std::size_t>(number - 1)];
+        if (std::abs(value - progress) > 1.0e-12) {
+            value = progress;
+            changed = true;
+        }
+    }
+    if (!changed) {
+        return;
+    }
+    // 全部材が同じ値になったら一様設定へ畳む(保存を簡潔に保つ)。
+    const bool uniform = std::all_of(
+        model->partAssemblyProgress.begin(), model->partAssemblyProgress.end(),
+        [&](double value) {
+            return std::abs(value - model->partAssemblyProgress.front()) <= 1.0e-12;
+        });
+    if (uniform) {
+        model->assemblyProgress = model->partAssemblyProgress.front();
+        model->partAssemblyProgress.clear();
+    }
     RebuildDependentGeometry();
 }
 

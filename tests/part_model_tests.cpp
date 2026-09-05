@@ -1146,6 +1146,46 @@ int main()
             liveProject.SetPartModelAssemblyProgress("実体曲げ", 1.0);
             Require((surfacePoint("実体曲げ_部材1") - beforeAssembly1).Length() < 1.0e-6,
                 "assembly at 100 percent restores the exact pose");
+
+            // --- 部材ごとの組立進行度(オーナー指示: 選んだ部材だけが曲がる) ---
+            const Vector3 partPoseBefore1 = surfacePoint("実体曲げ_部材1");
+            const Vector3 partPoseBefore2 = surfacePoint("実体曲げ_部材2");
+            liveProject.SetPartModelPartAssemblyProgress("実体曲げ", {1}, 0.0);
+            Require((surfacePoint("実体曲げ_部材1") - partPoseBefore1).Length() > 5.0,
+                "per-part assembly moves the chosen part");
+            // 部材2は動かない(姿勢再構築による96列サンプリング差のみ許容)。
+            Require((surfacePoint("実体曲げ_部材2") - partPoseBefore2).Length() < 0.05,
+                "per-part assembly keeps the other parts in place");
+            // 保存・読込で部材ごとの姿勢が残る。
+            std::ostringstream partAssemblySaved;
+            kachakacha::io::WriteProjectScript(partAssemblySaved, liveProject);
+            Require(partAssemblySaved.str().find("part_model_part_assembly 実体曲げ 1 0")
+                    != std::string::npos,
+                "per-part assembly saved to the script");
+            std::istringstream partAssemblyInput(partAssemblySaved.str());
+            Project loadedPartAssembly = kachakacha::io::LoadProjectScript(
+                partAssemblyInput, "part-assembly");
+            bool loadedPartProgress = false;
+            for (const auto& modelEntry : loadedPartAssembly.PartModels()) {
+                if (modelEntry.name == "実体曲げ") {
+                    loadedPartProgress = !modelEntry.partAssemblyProgress.empty()
+                        && std::abs(modelEntry.partAssemblyProgress.front()) < 1.0e-9;
+                }
+            }
+            Require(loadedPartProgress, "per-part assembly survives the round trip");
+            // 全部材を同じ値へ戻すと一様設定へ畳まれ、元の姿勢へ厳密に戻る。
+            liveProject.SetPartModelPartAssemblyProgress("実体曲げ", {1}, 1.0);
+            bool collapsed = false;
+            for (const auto& modelEntry : liveProject.PartModels()) {
+                if (modelEntry.name == "実体曲げ") {
+                    collapsed = modelEntry.partAssemblyProgress.empty()
+                        && std::abs(modelEntry.assemblyProgress - 1.0) < 1.0e-12;
+                }
+            }
+            Require(collapsed, "uniform per-part values collapse to the plain progress");
+            Require((surfacePoint("実体曲げ_部材1") - partPoseBefore1).Length() < 1.0e-6
+                    && (surfacePoint("実体曲げ_部材2") - partPoseBefore2).Length() < 1.0e-6,
+                "per-part assembly restores the exact pose");
         }
 
         // --- 積層(重ね板、合意9) ---

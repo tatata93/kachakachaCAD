@@ -1066,8 +1066,8 @@ void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
 
 void MainWindow::CommitPartAssemblyProgress(double progress)
 {
-    // 組立スライダーの確定(オーナー指示: 実際の近似面が動く)。
-    // 実際の部材面・縁・穴と、その上の板材等をこの姿勢へ作り直す。
+    // 組立スライダーの確定(オーナー指示: 実際の近似面が動く。
+    // 部材を選んでいれば選んだ部材だけが曲がる)。
     try {
         const std::string name = ToName(partModelPanel_->SelectedModelName());
         const NamedPartModel* model = name.empty()
@@ -1076,18 +1076,38 @@ void MainWindow::CommitPartAssemblyProgress(double progress)
         if (model == nullptr) {
             return;
         }
-        if (std::abs(model->assemblyProgress - progress) <= 1.0e-9) {
+        const std::vector<int> partNumbers = partModelPanel_->SelectedPartNumbers();
+        const auto effectiveOf = [model](int partNumber) {
+            const std::size_t index = static_cast<std::size_t>(partNumber - 1);
+            return index < model->partAssemblyProgress.size()
+                ? model->partAssemblyProgress[index]
+                : model->assemblyProgress;
+        };
+        bool changed = false;
+        if (partNumbers.empty()) {
+            changed = !model->partAssemblyProgress.empty()
+                || std::abs(model->assemblyProgress - progress) > 1.0e-9;
+        } else {
+            for (const int number : partNumbers) {
+                changed = changed || std::abs(effectiveOf(number) - progress) > 1.0e-9;
+            }
+        }
+        if (!changed) {
             return;
         }
         Project candidate = project_;
-        candidate.SetPartModelAssemblyProgress(name, progress);
+        candidate.SetPartModelPartAssemblyProgress(name, partNumbers, progress);
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
         statusBar()->showMessage(
-            QStringLiteral("組立 %1% の姿勢を実際の形状へ反映しました")
-                .arg(static_cast<int>(progress * 100.0 + 0.5)),
+            partNumbers.empty()
+                ? QStringLiteral("組立 %1% の姿勢を実際の形状へ反映しました")
+                      .arg(static_cast<int>(progress * 100.0 + 0.5))
+                : QStringLiteral("選択した%1部材を組立 %2% の姿勢にしました")
+                      .arg(partNumbers.size())
+                      .arg(static_cast<int>(progress * 100.0 + 0.5)),
             2500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
@@ -1113,8 +1133,21 @@ void MainWindow::UpdatePartFoldPreview()
             }
         }
         if (model != nullptr) {
-            // スライダー表示を選択中モデルの保存済み組立進行度に合わせる。
-            partModelPanel_->SetAssemblyProgressDisplay(model->assemblyProgress);
+            // スライダー表示を「操作対象の部材」の保存済み組立進行度に合わせる。
+            // 部材を選んでいれば先頭の選択部材、未選択なら一様値(部材ごとの
+            // 値が混在するときは先頭部材)を表示する。
+            const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
+            double displayProgress = model->assemblyProgress;
+            if (!selectedParts.empty()) {
+                const std::size_t index
+                    = static_cast<std::size_t>(selectedParts.front() - 1);
+                if (index < model->partAssemblyProgress.size()) {
+                    displayProgress = model->partAssemblyProgress[index];
+                }
+            } else if (!model->partAssemblyProgress.empty()) {
+                displayProgress = model->partAssemblyProgress.front();
+            }
+            partModelPanel_->SetAssemblyProgressDisplay(displayProgress);
         }
         if (!partModelPanel_->FoldPreviewEnabled() || model == nullptr) {
             viewport_->SetPartFoldPreview({}, {});
@@ -1182,11 +1215,33 @@ void MainWindow::UpdatePartFoldPreview()
             }
         }
         const double liftDistance = std::max(25.0, (high - low).Length() * 0.35);
+        // 部材ごとの進行度(オーナー指示: 選んだ部材だけが曲がる)。
+        // 選択中の部材はスライダーの値、その他は保存済みの実効値で描く。
+        const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
+        const int previewBandCount = std::max(1, mesh.rows - 1);
+        std::vector<double> bandProgress(
+            static_cast<std::size_t>(previewBandCount), 0.0);
+        for (int band = 0; band < previewBandCount; ++band) {
+            const std::size_t index = static_cast<std::size_t>(band);
+            bandProgress[index] = index < model->partAssemblyProgress.size()
+                ? model->partAssemblyProgress[index]
+                : model->assemblyProgress;
+        }
+        const double sliderProgress = partModelPanel_->FoldProgress();
+        if (selectedParts.empty()) {
+            std::fill(bandProgress.begin(), bandProgress.end(), sliderProgress);
+        } else {
+            for (const int number : selectedParts) {
+                if (number >= 1 && number <= previewBandCount) {
+                    bandProgress[static_cast<std::size_t>(number - 1)] = sliderProgress;
+                }
+            }
+        }
         auto bandRails = kachakacha::model::BuildBandFoldAnimationRails(
-            mesh, individual, partModelPanel_->FoldProgress(), liftDistance);
+            mesh, individual, bandProgress, liftDistance);
         // 選んでいる部材だけを表示する(複数選択なら複数、未選択なら全部)。
         std::vector<int> visibleBands;
-        for (const int number : partModelPanel_->SelectedPartNumbers()) {
+        for (const int number : selectedParts) {
             visibleBands.push_back(number - 1);
         }
         viewport_->SetPartFoldPreview(

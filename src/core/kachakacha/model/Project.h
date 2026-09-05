@@ -217,6 +217,11 @@ struct NamedPartModel {
     //! 0=各部材の展開形を持ち上げて並べた状態、1=折り線どおりの完成姿勢。
     //! 1以外では部材面・縁・穴が(その上の板材ごと)この姿勢へ再構築される。
     double assemblyProgress = 1.0;
+    //! 部材ごとの組立進行度(オーナー指示: 選んだ部材だけが曲がる)。
+    //! 空なら全部材が assemblyProgress。非空なら部材N(1始まり)の実効値は
+    //! partAssemblyProgress[N-1](範囲外は assemblyProgress)。各部材は
+    //! 「展開を並べた位置↔完成位置」を独立した剛体として補間し、連鎖しない。
+    std::vector<double> partAssemblyProgress;
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -422,6 +427,10 @@ public:
     //! 組立の進行度(0〜1)を設定する。実際の部材面・縁・穴と、その上の板材等が
     //! この姿勢(0=展開を並べた状態、1=折り上がり)へ再構築される。
     void SetPartModelAssemblyProgress(std::string_view name, double progress);
+    //! 指定した部材(1始まり)だけの組立進行度を変える(オーナー指示:
+    //! 選んだ部材だけが曲がる)。partNumbers が空なら全部材(=一様設定)。
+    void SetPartModelPartAssemblyProgress(
+        std::string_view name, const std::vector<int>& partNumbers, double progress);
     //! 接続スコープを設定し、派生「_接続」オブジェクトを作り直す(空で解除)。
     void SetPartModelConnectionScope(
         std::string_view name,

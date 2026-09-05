@@ -316,6 +316,10 @@ public:
         std::vector<int> creaseDirections,
         std::vector<int> visibleBands = {},
         bool detachedBands = false);
+    [[nodiscard]] std::size_t PartFoldPreviewRailCount() const noexcept
+    {
+        return partFoldPreviewRails_.size();
+    }
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();

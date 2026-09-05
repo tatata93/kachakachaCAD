@@ -1236,11 +1236,8 @@ void MainWindow::BuildMenusAndToolbar()
         addSurfaceTool(QStringLiteral("押出・回転"), QStringLiteral("押し出し・回転・オフセット面"),
             QStringLiteral("押し出し面・回転体・オフセット面を作る"));
         surfaceToolbar_->addSeparator();
-        addSurfaceTool(QStringLiteral("板材化"), QStringLiteral("ワイヤー / 面から3D板を作る"),
-            QStringLiteral("面に厚みを付けて板材にする"));
-        addSurfaceTool(QStringLiteral("厚み位置のワイヤ"),
-            QStringLiteral("板厚位置にワイヤーを作る"),
-            QStringLiteral("板材の任意の厚み位置に輪郭ワイヤーを作る"));
+        addSurfaceTool(QStringLiteral("厚み化"), QStringLiteral("厚み化（ワイヤ・面・板）"),
+            QStringLiteral("面に厚みを設定し、ワイヤ・面・板をチェックで選んで出力する"));
         addSurfaceTool(QStringLiteral("開口"), QStringLiteral("板材に開口"),
             QStringLiteral("板材に窓・穴などの開口を追加する"));
         addSurfaceTool(QStringLiteral("切れ目"), QStringLiteral("展開時の切れ目"),
@@ -2326,15 +2323,10 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 最前面の閉じた輪郭と接続先を選ぶ"),
                 QStringLiteral("1  最前面の閉じた輪郭を選択\n2  Ctrl+クリックで接続先の面/板材\n3  方向を選んで作成"),
                 QStringLiteral("lightcase"));
-        } else if (sectionTitle == QStringLiteral("ワイヤー / 面から3D板を作る")) {
-            setGuide(QStringLiteral("面を板材にする"),
-                QStringLiteral("次: 面を選び、板厚と方向を決める"),
-                QStringLiteral("1  面(または閉じた輪郭)を選択\n2  板厚・厚み方向・材質を指定\n3  板材を作成"),
-                QStringLiteral("plate"));
-        } else if (sectionTitle == QStringLiteral("板厚位置にワイヤーを作る")) {
-            setGuide(QStringLiteral("板厚位置にワイヤーを作る"),
-                QStringLiteral("次: 板材と元ワイヤーを選ぶ"),
-                QStringLiteral("1  板材1枚と輪郭を選択\n2  厚みのどの位置かを0〜1で指定\n3  作成(治具や罫書き線用)"),
+        } else if (sectionTitle == QStringLiteral("厚み化（ワイヤ・面・板）")) {
+            setGuide(QStringLiteral("面に厚みを付ける"),
+                QStringLiteral("次: 面を選び、厚みと出力を決める"),
+                QStringLiteral("1  面(または閉じた輪郭)を選択\n2  厚み・厚み方向を指定\n3  出力[ワイヤ][面][板]をチェックして厚みを適用"),
                 QStringLiteral("plate"));
         } else if (sectionTitle == QStringLiteral("曲面から成形治具")) {
             setGuide(QStringLiteral("曲面から成形治具を作る"),

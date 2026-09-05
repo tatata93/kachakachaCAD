@@ -590,8 +590,9 @@ private:
     QComboBox* plateSurface_ = nullptr;
     QDoubleSpinBox* plateThickness_ = nullptr;
     QCheckBox* plateVariableThickness_ = nullptr;
-    QCheckBox* thicknessAlsoSurface_ = nullptr; //!< 板材化と同時に反対側表面の面も作る(#12)
-    QCheckBox* thicknessAlsoWires_ = nullptr;   //!< 板材化と同時に縁ワイヤを厚み位置へ複製(#12)
+    QCheckBox* thicknessMakeWire_ = nullptr;    //!< 厚み化の出力: 縁ワイヤを厚み位置へ複製
+    QCheckBox* thicknessMakeSurface_ = nullptr; //!< 厚み化の出力: 反対側表面の面を作る
+    QCheckBox* thicknessMakePlate_ = nullptr;   //!< 厚み化の出力: 閉じた3D板材を作る(既定オン)
     QCheckBox* surfaceKeepSectionWires_ = nullptr; //!< 面作成時に構成線もワイヤ化(#13)
     QCheckBox* wrapProjectionOpenings_ = nullptr;  //!< 回り込み投影の閉輪郭を開口登録(#14)
     QDoubleSpinBox* plateEndThickness_ = nullptr;

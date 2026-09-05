@@ -836,6 +836,37 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state.startsWith(QStringLiteral("fold-preview"))) {
+        // 曲げ確認(組立アニメーション)の表示検証。実機のパネル連鎖どおりに
+        // 近似 → 一覧で選択 → チェック+スライダー、で3Dビューへ重ねる。
+        kachakacha::model::PartApproximationOptions foldOptions;
+        foldOptions.maximumDeviationMillimeters = 0.4;
+        foldOptions.maximumPartCount = 8;
+        foldOptions.minimumPartWidthMillimeters = 3.0;
+        try {
+            project_.AddPartModel("__曲げ確認", "nose_panel_front", foldOptions);
+        } catch (const std::exception& error) {
+            qWarning() << "fold-preview state:" << error.what();
+            return false;
+        }
+        RefreshModelViews(false);
+        if (partModelModeAction_ != nullptr) {
+            partModelModeAction_->trigger();
+        }
+        if (partModelPanel_ == nullptr
+            || !partModelPanel_->SelectModelForTest(QStringLiteral("__曲げ確認"))) {
+            return false;
+        }
+        int percent = 100;
+        if (state.endsWith(QStringLiteral("-0"))) {
+            percent = 0;
+        } else if (state.endsWith(QStringLiteral("-50"))) {
+            percent = 50;
+        }
+        partModelPanel_->SetFoldPreviewForTest(true, percent);
+        ShowPartModelTool(2);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else {
         qWarning() << "unknown manual screenshot state:" << state;
         return false;
@@ -963,6 +994,9 @@ bool MainWindow::RunCreationSelfTest()
         || modelExportScope_ == nullptr
         || plateVariableThickness_ == nullptr
         || plateEndThickness_ == nullptr
+        || thicknessMakeWire_ == nullptr
+        || thicknessMakeSurface_ == nullptr
+        || thicknessMakePlate_ == nullptr
         || plateOffsetLayer_ == nullptr
         || lightCaseSelectionLabel_ == nullptr
         || lightCaseReferenceLabel_ == nullptr
@@ -1856,11 +1890,20 @@ bool MainWindow::RunCreationSelfTest()
         plateThickness_->setValue(0.5);
         plateVariableThickness_->setChecked(false);
         plateDirection_->setCurrentIndex(0);
-        thicknessAlsoSurface_->setChecked(true);
-        thicknessAlsoWires_->setChecked(true);
+        // 厚み化: まず板を外して面+ワイヤだけを出力(板は任意出力)。
+        thicknessMakePlate_->setChecked(false);
+        thicknessMakeSurface_->setChecked(true);
+        thicknessMakeWire_->setChecked(true);
         CreatePlateFromSurface();
-        thicknessAlsoSurface_->setChecked(false);
-        thicknessAlsoWires_->setChecked(false);
+        if (project_.Plates().size() != wave6PlateStart
+            || !project_.Surfaces()[wave6SurfaceStart].visible) {
+            return fail("thickness apply without plate keeps source surface");
+        }
+        // 次に板だけを出力(既定の組み合わせ)。
+        thicknessMakeSurface_->setChecked(false);
+        thicknessMakeWire_->setChecked(false);
+        thicknessMakePlate_->setChecked(true);
+        CreatePlateFromSurface();
         bool offsetSurfaceFound = false;
         for (const auto& surface : project_.Surfaces()) {
             offsetSurfaceFound = offsetSurfaceFound
@@ -2857,6 +2900,9 @@ bool MainWindow::RunCreationSelfTest()
     plateThickness_->setValue(0.5);
     plateDirection_->setCurrentIndex(1);
     plateMaterial_->setCurrentIndex(0);
+    thicknessMakeWire_->setChecked(false);
+    thicknessMakeSurface_->setChecked(false);
+    thicknessMakePlate_->setChecked(true);
     CreatePlateFromSurface();
     if (project_.Plates().size() != plateStart + 1
         || project_.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
@@ -3201,6 +3247,24 @@ bool MainWindow::RunCreationSelfTest()
         const auto partPatterns = BuildAllPartPatterns(project_, partModel);
         if (partPatterns.size() != partModel.result.parts.size()) {
             return fail("build one pattern per approximated part");
+        }
+        // 曲げ確認(組立アニメーション)がパネル操作の連鎖で機能する
+        // (オーナー報告「折り曲げ確認が機能してない」の回帰テスト)。
+        if (!partModelPanel_->SelectModelForTest(QStringLiteral("__ui_部材近似"))) {
+            return fail("select part model row for fold preview");
+        }
+        partModelPanel_->SetFoldPreviewForTest(true, 50);
+        if (viewport_->PartFoldPreviewRailCount()
+            != partModel.result.parts.size() * 2) {
+            return fail("fold preview rails follow panel selection");
+        }
+        partModelPanel_->SetFoldPreviewForTest(true, 100);
+        if (viewport_->PartFoldPreviewRailCount() == 0) {
+            return fail("fold preview keeps rails at 100 percent");
+        }
+        partModelPanel_->SetFoldPreviewForTest(false, 100);
+        if (viewport_->PartFoldPreviewRailCount() != 0) {
+            return fail("fold preview clears when disabled");
         }
         if (!partModel.boundaryWireNames.empty()) {
             SetApproximationSetsVisible(false);

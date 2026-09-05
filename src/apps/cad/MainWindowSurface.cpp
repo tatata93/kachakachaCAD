@@ -1697,32 +1697,45 @@ void MainWindow::CreateProtrudingLightCase()
 void MainWindow::CreatePlateFromSurface()
 {
     try {
-        ValidateObjectName(plateName_->text());
+        // 厚み化: 設定した厚みを何にするかを[ワイヤ][面][板]のチェックで選ぶ
+        // (オーナー指示の作り直し。板は任意出力で、面だけ・ワイヤだけでも使える)。
+        const bool makeWire = thicknessMakeWire_ != nullptr && thicknessMakeWire_->isChecked();
+        const bool makeSurface = thicknessMakeSurface_ != nullptr && thicknessMakeSurface_->isChecked();
+        const bool makePlate = thicknessMakePlate_ == nullptr || thicknessMakePlate_->isChecked();
+        if (!makeWire && !makeSurface && !makePlate) {
+            throw std::invalid_argument(
+                "「厚みで作るもの」のワイヤ・面・板から1つ以上をチェックしてください。");
+        }
         const std::string sourceSurfaceName = ToName(plateSurface_->currentText());
         if (!project_.FindSurface(sourceSurfaceName).has_value()) {
-            throw std::invalid_argument("板材にする面を3D画面または一覧で選択してください。");
+            throw std::invalid_argument("厚みを適用する面を3D画面または一覧で選択してください。");
         }
 
         Project candidate = project_;
-        const std::string name = ToName(plateName_->text());
         const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
-        candidate.AddPlate(
-            name,
-            sourceSurfaceName,
-            plateThickness_->value(),
-            plateVariableThickness_->isChecked()
-                ? plateEndThickness_->value() : plateThickness_->value(),
-            direction,
-            ToName(plateMaterial_->currentData().toString()));
-        candidate.SetSurfaceVisible(sourceSurfaceName, false);
-
-        // #12 厚みの追加出力: 反対側表面の面と、縁ワイヤの厚み位置への複製。
         QStringList extraOutputs;
+        std::string name;
+        if (makePlate) {
+            ValidateObjectName(plateName_->text());
+            name = ToName(plateName_->text());
+            candidate.AddPlate(
+                name,
+                sourceSurfaceName,
+                plateThickness_->value(),
+                plateVariableThickness_->isChecked()
+                    ? plateEndThickness_->value() : plateThickness_->value(),
+                direction,
+                ToName(plateMaterial_->currentData().toString()));
+            candidate.SetSurfaceVisible(sourceSurfaceName, false);
+            extraOutputs << QStringLiteral("板 %1").arg(ToQString(name));
+        }
+
+        // 厚み位置への出力: 反対側表面の面と、縁ワイヤの複製。
         const double thickness = plateThickness_->value();
         const double farSigned = direction == PlateThicknessDirection::Positive ? thickness
             : direction == PlateThicknessDirection::Negative ? -thickness
             : thickness * 0.5;
-        if (thicknessAlsoSurface_ != nullptr && thicknessAlsoSurface_->isChecked()) {
+        if (makeSurface) {
             const auto sourceNamed = std::find_if(
                 candidate.Surfaces().begin(), candidate.Surfaces().end(),
                 [&](const kachakacha::model::NamedSurface& surface) {
@@ -1736,7 +1749,7 @@ void MainWindow::CreatePlateFromSurface()
                 extraOutputs << QStringLiteral("厚み位置の面 %1").arg(ToQString(offsetName));
             }
         }
-        if (thicknessAlsoWires_ != nullptr && thicknessAlsoWires_->isChecked()) {
+        if (makeWire) {
             // 元面の輪郭・断面を、面上の位置ごとの法線方向へ厚みぶんずらした
             // 独立ワイヤとして複製する(元線は面上に載っている前提)。
             const auto sourceNamed = std::find_if(
@@ -1790,6 +1803,10 @@ void MainWindow::CreatePlateFromSurface()
             }
             if (createdWires > 0) {
                 extraOutputs << QStringLiteral("厚み位置のワイヤ %1本").arg(createdWires);
+            } else {
+                throw std::invalid_argument(
+                    "縁ワイヤを厚み位置へ複製できませんでした。\n"
+                    "元の面の輪郭・断面が面上に載っているか確認してください。");
             }
         }
 
@@ -1797,20 +1814,21 @@ void MainWindow::CreatePlateFromSurface()
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
-        const int plateIndex = static_cast<int>(project_.Plates().size() - 1);
-        UpdateSelection({CadSelectionKind::Plate, plateIndex}, true);
+        if (makePlate) {
+            const int plateIndex = static_cast<int>(project_.Plates().size() - 1);
+            UpdateSelection({CadSelectionKind::Plate, plateIndex}, true);
+            plateName_->setText(SuggestedPlateName());
+        }
         toolsTabs_->setCurrentIndex(2);
-        plateName_->setText(SuggestedPlateName());
-        statusBar()->showMessage(extraOutputs.isEmpty()
-                ? QStringLiteral("板厚 %1 mm の板材を作成しました").arg(plateThickness_->value())
-                : QStringLiteral("板厚 %1 mm の板材と %2 を作成しました")
-                      .arg(plateThickness_->value())
-                      .arg(extraOutputs.join(QStringLiteral("、"))),
+        statusBar()->showMessage(
+            QStringLiteral("厚み %1 mm を適用しました: %2")
+                .arg(plateThickness_->value())
+                .arg(extraOutputs.join(QStringLiteral("、"))),
             4500);
     } catch (const std::exception& error) {
         const QString message = FriendlyPlateCreationError(error);
         statusBar()->showMessage(message.section('\n', 0, 0), 8000);
-        QMessageBox::warning(this, QStringLiteral("板材化できません"), message);
+        QMessageBox::warning(this, QStringLiteral("厚み化できません"), message);
     }
 }
 

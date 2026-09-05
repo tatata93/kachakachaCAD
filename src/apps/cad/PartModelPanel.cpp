@@ -17,6 +17,7 @@
 #include <QStringList>
 #include <QTableWidget>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -617,10 +618,31 @@ QString PartModelPanel::SelectedModelName() const
             return name;
         }
     }
-    if (modelTree_->topLevelItemCount() == 1) {
-        return modelTree_->topLevelItem(0)->data(0, kModelNameRole).toString();
+    // ユニット見出しの選択は最初の子モデルとして扱う(#16のユニット階層で
+    // 見出しを選ぶと曲げ確認などが黙って効かなくなる不具合の修正)。
+    for (QTreeWidgetItem* item : items) {
+        for (int child = 0; child < item->childCount(); ++child) {
+            const QString name = item->child(child)->data(0, kModelNameRole).toString();
+            if (!name.isEmpty()) {
+                return name;
+            }
+        }
     }
-    return {};
+    // 未選択時: ツリー全体でモデルが1つだけならそれを使う(ユニットで包まれて
+    // いても同じ。以前は最上位1件のときだけだったため、ユニット化すると
+    // 「モデル1つでも自動選択されない」状態になっていた)。
+    QString only;
+    for (QTreeWidgetItemIterator it(modelTree_); *it != nullptr; ++it) {
+        const QString name = (*it)->data(0, kModelNameRole).toString();
+        if (name.isEmpty() || name == only) {
+            continue;
+        }
+        if (!only.isEmpty()) {
+            return {}; // モデルが2つ以上あるときは自動選択しない。
+        }
+        only = name;
+    }
+    return only;
 }
 
 std::vector<int> PartModelPanel::SelectedPartNumbers() const
@@ -648,6 +670,36 @@ QString PartModelPanel::SelectedSetName() const
         return {};
     }
     return item->data(kSetNameRole).toString();
+}
+
+bool PartModelPanel::SelectModelForTest(const QString& modelName)
+{
+    for (QTreeWidgetItemIterator it(modelTree_); *it != nullptr; ++it) {
+        QTreeWidgetItem* item = *it;
+        if (item->data(0, kModelNameRole).toString() != modelName
+            || item->data(0, kPartNumberRole).isValid()) {
+            continue; // 部材行ではなくモデル行を選ぶ。
+        }
+        modelTree_->clearSelection();
+        item->setSelected(true);
+        modelTree_->setCurrentItem(item);
+        modelTree_->scrollToItem(item);
+        return true;
+    }
+    return false;
+}
+
+void PartModelPanel::SetFoldPreviewForTest(bool enabled, int percent)
+{
+    if (foldSlider_ != nullptr) {
+        foldSlider_->setValue(std::clamp(percent, 0, 100));
+    }
+    if (foldPreviewCheck_ != nullptr) {
+        foldPreviewCheck_->setChecked(enabled);
+    }
+    if (onFoldStateChanged) {
+        onFoldStateChanged();
+    }
 }
 
 double PartModelPanel::FoldProgress() const

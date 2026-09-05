@@ -47,6 +47,10 @@ public:
     [[nodiscard]] QString SelectedSetName() const;
     [[nodiscard]] double FoldProgress() const;      //!< 0(平面)〜1(近似完成形)
     [[nodiscard]] bool FoldPreviewEnabled() const;  //!< 3Dビューで曲げ状態を表示するか
+    //! 一覧ツリーで指定モデルの行を選択する(セルフテスト・スクリーンショット用)。
+    bool SelectModelForTest(const QString& modelName);
+    //! 曲げ確認のチェックとスライダー(0〜100)を直接設定する(同上)。
+    void SetFoldPreviewForTest(bool enabled, int percent);
 
     //! 近似ユニット(#15): 取り込んだ対象と役割の表。
     struct UnitMember {

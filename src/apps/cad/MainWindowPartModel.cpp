@@ -1058,6 +1058,11 @@ void MainWindow::UpdatePartFoldPreview()
             : FindPartModel(project_, name);
         if (model == nullptr) {
             partModelPanel_->SetFoldLines(QString(), {}, {});
+            if (partModelPanel_->FoldPreviewEnabled()) {
+                // 黙って消えると「機能していない」ように見えるため理由を出す。
+                statusBar()->showMessage(
+                    QStringLiteral("曲げ確認: 一覧で近似モデルを選択してください"), 4000);
+            }
         }
         if (!partModelPanel_->FoldPreviewEnabled() || model == nullptr) {
             viewport_->SetPartFoldPreview({}, {});

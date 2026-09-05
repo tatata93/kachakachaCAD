@@ -3415,17 +3415,16 @@ bool MainWindow::RunCreationSelfTest()
             > 1.0e-6) {
             return fail("undo surface move");
         }
-        UpdateSelections(
-            {{CadSelectionKind::Surface, static_cast<int>(project_.Surfaces().size() - 1)}},
-            true);
-        DeleteSelection();
-        UpdateSelections({
-            {CadSelectionKind::Wire, static_cast<int>(moveWireStart)},
-            {CadSelectionKind::Wire, static_cast<int>(moveWireStart + 1)},
-        }, true);
-        DeleteSelection();
-        if (project_.Wires().size() != moveWireStart) {
+        // 後片付け(DeleteSelectionは確認モーダルを出すため直接削除する)。
+        UpdateSelections({}, true);
+        if (!project_.RemoveSurface("__mv面")
+            || !project_.RemoveWire("__mv下")
+            || !project_.RemoveWire("__mv上")) {
             return fail("clean up move test objects");
+        }
+        RefreshModelViews(false);
+        if (project_.Wires().size() != moveWireStart) {
+            return fail("clean up move test wires");
         }
     }
     progressMark("mv move test done");

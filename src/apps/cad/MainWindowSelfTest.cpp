@@ -893,7 +893,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         // 型紙ダイアログは別トップレベルウィンドウのため固定名で直接保存する。
         QApplication::processEvents();
         for (QWidget* top : QApplication::topLevelWidgets()) {
-            if (auto* dialog = qobject_cast<PartPatternViewDialog*>(top)) {
+            if (auto* dialog = dynamic_cast<PartPatternViewDialog*>(top)) {
                 dialog->resize(1100, 650);
                 QApplication::processEvents();
                 if (!dialog->grab().save(QStringLiteral("_ui-pattern-dialog.png"))) {

@@ -409,6 +409,102 @@ int main()
     }
 
     {
+        // --- 回転(ギズモ用の中核): 面を軸まわりに回すと元ワイヤごと回る ---
+        Project project;
+        project.AddWire("rotate_a", Wire::Line({10.0, 0.0, 0.0}, {10.0, 6.0, 0.0}));
+        project.AddWire("rotate_b", Wire::Line({20.0, 0.0, 3.0}, {20.0, 6.0, 3.0}));
+        project.AddRuledSurface("rotate_surface", "rotate_a", "rotate_b");
+
+        const Vector3 axisPoint{0.0, 0.0, 0.0};
+        const Vector3 axisDirection{0.0, 0.0, 1.0};
+        const double quarterTurn = 3.14159265358979323846 / 2.0;
+        const int rotated = project.RotateObjects(
+            {{ProjectObjectKind::Surface, "rotate_surface"}},
+            axisPoint, axisDirection, quarterTurn);
+
+        Require(rotated == 2, "surface rotation rotates two source wires");
+        // (10,0,0) を z 軸まわりに +90° → (0,10,0)。
+        Require(AlmostEqual(
+                RequireWire(project, "rotate_a").wire.Start(),
+                Vector3{0.0, 10.0, 0.0},
+                1.0e-8),
+            "surface rotation rotates the source wire start");
+        Require(AlmostEqual(
+                RequireWire(project, "rotate_b").wire.End(),
+                Vector3{-6.0, 20.0, 3.0},
+                1.0e-8),
+            "surface rotation keeps the axis-parallel coordinate");
+        // 面自体も作り直されて回った位置にある。
+        Require(AlmostEqual(
+                project.FindSurface("rotate_surface")->Evaluate(0.0, 0.0),
+                Vector3{0.0, 10.0, 0.0},
+                1.0e-8),
+            "surface rotation rebuilds the ruled surface");
+    }
+
+    {
+        // 作業平面の回転: 平面と平面上のワイヤが一緒に回る。
+        Project project;
+        project.AddWorkPlane(
+            "rotate_paper",
+            WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
+        WireMetadata metadata;
+        metadata.sourcePlaneName = std::string("rotate_paper");
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        project.AddWire(
+            "rotate_paper_line", Wire::Line({4.0, 0.0, 0.0}, {8.0, 0.0, 0.0}), metadata);
+
+        const int rotated = project.RotateObjects(
+            {{ProjectObjectKind::WorkPlane, "rotate_paper"}},
+            {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, 3.14159265358979323846);
+
+        Require(rotated == 2, "work-plane rotation rotates the plane and its wires");
+        Require(AlmostEqual(
+                RequireWire(project, "rotate_paper_line").wire.Start(),
+                Vector3{-4.0, 0.0, 0.0},
+                1.0e-8),
+            "work-plane rotation rotates wires drawn on the plane");
+    }
+
+    {
+        // 派生(投影ワイヤ)は回転も拒否する(移動と同じ収集規則)。
+        Project project;
+        project.AddWire("rotate_boundary", Wire::Polyline({
+            {0.0, 0.0, 0.0},
+            {10.0, 0.0, 0.0},
+            {10.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0},
+            {0.0, 0.0, 0.0},
+        }));
+        project.AddPlanarSurface("rotate_panel", "rotate_boundary");
+        project.AddWire("rotate_draft",
+            Wire::Circle({5.0, 5.0, 8.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.0));
+        project.AddProjectedWire(
+            "rotate_projection", "rotate_draft", "rotate_panel", {0.0, 0.0, -1.0});
+
+        bool rejected = false;
+        try {
+            static_cast<void>(project.RotateObjects(
+                {{ProjectObjectKind::Wire, "rotate_projection"}},
+                {0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, 0.5));
+        } catch (const std::invalid_argument& error) {
+            const std::string message = error.what();
+            rejected = message.find("rotate_projection") != std::string::npos;
+        }
+        Require(rejected, "reject direct rotation of projected wire");
+
+        bool zeroAxisRejected = false;
+        try {
+            static_cast<void>(project.RotateObjects(
+                {{ProjectObjectKind::Wire, "rotate_draft"}},
+                {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, 0.5));
+        } catch (const std::invalid_argument&) {
+            zeroAxisRejected = true;
+        }
+        Require(zeroAxisRejected, "reject a zero-length rotation axis");
+    }
+
+    {
         // --- おまかせ面(オーナー指示): 選択順・向き不問で面が作れる ---
         Project project;
         // 閉じた長方形(4本、順序も向きもバラバラ) → 平面。

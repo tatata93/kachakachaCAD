@@ -1153,18 +1153,10 @@ void Project::AddPlateOffsetWire(
     });
 }
 
-int Project::TranslateObjects(
-    const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
-    const geometry::Vector3& delta)
+Project::TransformBaseNames Project::CollectTransformBases(
+    const std::vector<std::pair<ProjectObjectKind, std::string>>& targets) const
 {
-    if (!delta.IsFinite()) {
-        throw std::invalid_argument("移動量に有限でない値が含まれています。");
-    }
-
-    Project candidate = *this;
-    std::vector<std::string> workPlaneNames;
-    std::vector<std::string> pointNames;
-    std::vector<std::string> wireNames;
+    TransformBaseNames bases;
 
     const auto containsName = [](const std::vector<std::string>& names, std::string_view name) {
         return std::any_of(names.begin(), names.end(), [&](const std::string& current) {
@@ -1183,90 +1175,90 @@ int Project::TranslateObjects(
 
     const auto requireWorkPlane = [&](const std::string& name) -> const NamedWorkPlane& {
         const auto plane = std::find_if(
-            candidate.workPlanes_.begin(), candidate.workPlanes_.end(),
+            workPlanes_.begin(), workPlanes_.end(),
             [&](const NamedWorkPlane& current) {
                 return current.name == name;
             });
-        if (plane == candidate.workPlanes_.end()) {
+        if (plane == workPlanes_.end()) {
             throw std::invalid_argument("移動対象の作業平面が見つかりません: " + name);
         }
         return *plane;
     };
     const auto requirePoint = [&](const std::string& name) -> const NamedPoint& {
         const auto point = std::find_if(
-            candidate.points_.begin(), candidate.points_.end(),
+            points_.begin(), points_.end(),
             [&](const NamedPoint& current) {
                 return current.name == name;
             });
-        if (point == candidate.points_.end()) {
+        if (point == points_.end()) {
             throw std::invalid_argument("移動対象の点が見つかりません: " + name);
         }
         return *point;
     };
-    const auto requireWire = [&](const std::string& name) -> const NamedWire& {
+    const auto requireWireByName = [&](const std::string& name) -> const NamedWire& {
         const auto wire = std::find_if(
-            candidate.wires_.begin(), candidate.wires_.end(),
+            wires_.begin(), wires_.end(),
             [&](const NamedWire& current) {
                 return current.name == name;
             });
-        if (wire == candidate.wires_.end()) {
+        if (wire == wires_.end()) {
             throw std::invalid_argument("移動対象のワイヤが見つかりません: " + name);
         }
         return *wire;
     };
     const auto requireSurface = [&](const std::string& name) -> const NamedSurface& {
         const auto surface = std::find_if(
-            candidate.surfaces_.begin(), candidate.surfaces_.end(),
+            surfaces_.begin(), surfaces_.end(),
             [&](const NamedSurface& current) {
                 return current.name == name;
             });
-        if (surface == candidate.surfaces_.end()) {
+        if (surface == surfaces_.end()) {
             throw std::invalid_argument("移動対象の面が見つかりません: " + name);
         }
         return *surface;
     };
     const auto requirePlate = [&](const std::string& name) -> const NamedPlate& {
         const auto plate = std::find_if(
-            candidate.plates_.begin(), candidate.plates_.end(),
+            plates_.begin(), plates_.end(),
             [&](const NamedPlate& current) {
                 return current.name == name;
             });
-        if (plate == candidate.plates_.end()) {
+        if (plate == plates_.end()) {
             throw std::invalid_argument("移動対象の板材が見つかりません: " + name);
         }
         return *plate;
     };
     const auto requireBody = [&](const std::string& name) -> const NamedBody& {
         const auto body = std::find_if(
-            candidate.bodies_.begin(), candidate.bodies_.end(),
+            bodies_.begin(), bodies_.end(),
             [&](const NamedBody& current) {
                 return current.name == name;
             });
-        if (body == candidate.bodies_.end()) {
+        if (body == bodies_.end()) {
             throw std::invalid_argument("移動対象の治具が見つかりません: " + name);
         }
         return *body;
     };
     const auto requirePartModel = [&](const std::string& name) {
         const auto model = std::find_if(
-            candidate.partModels_.begin(), candidate.partModels_.end(),
+            partModels_.begin(), partModels_.end(),
             [&](const NamedPartModel& current) {
                 return current.name == name;
             });
-        if (model == candidate.partModels_.end()) {
+        if (model == partModels_.end()) {
             throw std::invalid_argument(
                 "移動対象の部材近似モデルが見つかりません: " + name);
         }
     };
 
     const auto addBaseWire = [&](const std::string& name) {
-        const NamedWire& wire = requireWire(name);
+        const NamedWire& wire = requireWireByName(name);
         if (wire.projection.has_value()
             || wire.plateOffset.has_value()
             || wire.partModelSourceName.has_value()) {
             throw std::invalid_argument(derivedMessage("派生ワイヤ", wire.name));
         }
-        addUniqueName(wireNames, wire.name);
+        addUniqueName(bases.wireNames, wire.name);
     };
     const auto expandSurface = [&](const std::string& name) {
         const NamedSurface& surface = requireSurface(name);
@@ -1287,8 +1279,8 @@ int Project::TranslateObjects(
         switch (target.first) {
         case ProjectObjectKind::WorkPlane: {
             const NamedWorkPlane& plane = requireWorkPlane(targetName);
-            addUniqueName(workPlaneNames, plane.name);
-            for (const NamedWire& wire : candidate.wires_) {
+            addUniqueName(bases.workPlaneNames, plane.name);
+            for (const NamedWire& wire : wires_) {
                 if (wire.metadata.sourcePlaneName.has_value()
                     && *wire.metadata.sourcePlaneName == plane.name) {
                     addBaseWire(wire.name);
@@ -1298,7 +1290,7 @@ int Project::TranslateObjects(
         }
         case ProjectObjectKind::Point: {
             const NamedPoint& point = requirePoint(targetName);
-            addUniqueName(pointNames, point.name);
+            addUniqueName(bases.pointNames, point.name);
             break;
         }
         case ProjectObjectKind::Wire:
@@ -1323,26 +1315,99 @@ int Project::TranslateObjects(
                 derivedMessage("部材近似モデル", targetName));
         }
     }
+    return bases;
+}
 
+int Project::TranslateObjects(
+    const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
+    const geometry::Vector3& delta)
+{
+    if (!delta.IsFinite()) {
+        throw std::invalid_argument("移動量に有限でない値が含まれています。");
+    }
+    const TransformBaseNames bases = CollectTransformBases(targets);
     const int movedCount = static_cast<int>(
-        workPlaneNames.size() + pointNames.size() + wireNames.size());
+        bases.workPlaneNames.size() + bases.pointNames.size() + bases.wireNames.size());
     if (movedCount == 0) {
         throw std::invalid_argument("移動できる対象がありません。");
     }
+    const auto containsName = [](const std::vector<std::string>& names, std::string_view name) {
+        return std::any_of(names.begin(), names.end(), [&](const std::string& current) {
+            return current == name;
+        });
+    };
 
+    Project candidate = *this;
     for (NamedWorkPlane& plane : candidate.workPlanes_) {
-        if (containsName(workPlaneNames, plane.name)) {
+        if (containsName(bases.workPlaneNames, plane.name)) {
             plane.plane = plane.plane.Translated(delta);
         }
     }
     for (NamedPoint& point : candidate.points_) {
-        if (containsName(pointNames, point.name)) {
+        if (containsName(bases.pointNames, point.name)) {
             point.point = point.point + delta;
         }
     }
     for (NamedWire& wire : candidate.wires_) {
-        if (containsName(wireNames, wire.name)) {
+        if (containsName(bases.wireNames, wire.name)) {
             wire.wire = ConstrainWire(candidate, wire.wire.Translated(delta), wire.metadata);
+        }
+    }
+
+    candidate.RebuildDependentGeometry();
+    *this = std::move(candidate);
+    return movedCount;
+}
+
+int Project::RotateObjects(
+    const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
+    const geometry::Vector3& axisPoint,
+    const geometry::Vector3& axisDirection,
+    double angleRadians)
+{
+    if (!axisPoint.IsFinite() || !axisDirection.IsFinite()
+        || !std::isfinite(angleRadians)) {
+        throw std::invalid_argument("回転の軸・角度に有限でない値が含まれています。");
+    }
+    if (axisDirection.LengthSquared() <= 1.0e-18) {
+        throw std::invalid_argument("回転軸の方向には0でないベクトルを指定してください。");
+    }
+    const TransformBaseNames bases = CollectTransformBases(targets);
+    const int movedCount = static_cast<int>(
+        bases.workPlaneNames.size() + bases.pointNames.size() + bases.wireNames.size());
+    if (movedCount == 0) {
+        throw std::invalid_argument("回転できる対象がありません。");
+    }
+    const auto containsName = [](const std::vector<std::string>& names, std::string_view name) {
+        return std::any_of(names.begin(), names.end(), [&](const std::string& current) {
+            return current == name;
+        });
+    };
+    const geometry::Vector3 unit = axisDirection.Normalized();
+    const double cosAngle = std::cos(angleRadians);
+    const double sinAngle = std::sin(angleRadians);
+    const auto rotatePoint = [&](const geometry::Vector3& point) {
+        const geometry::Vector3 relative = point - axisPoint;
+        return axisPoint + relative * cosAngle + Cross(unit, relative) * sinAngle
+            + unit * (Dot(unit, relative) * (1.0 - cosAngle));
+    };
+
+    Project candidate = *this;
+    for (NamedWorkPlane& plane : candidate.workPlanes_) {
+        if (containsName(bases.workPlaneNames, plane.name)) {
+            plane.plane = plane.plane.RotateAroundAxis(axisPoint, unit, angleRadians);
+        }
+    }
+    for (NamedPoint& point : candidate.points_) {
+        if (containsName(bases.pointNames, point.name)) {
+            point.point = rotatePoint(point.point);
+        }
+    }
+    for (NamedWire& wire : candidate.wires_) {
+        if (containsName(bases.wireNames, wire.name)) {
+            wire.wire = ConstrainWire(candidate,
+                wire.wire.RotatedAroundAxis(axisPoint, unit, angleRadians),
+                wire.metadata);
         }
     }
 

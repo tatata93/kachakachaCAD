@@ -732,9 +732,12 @@ void PartModelPanel::SetFoldPreviewForTest(bool enabled, int percent)
 {
     if (foldSlider_ != nullptr) {
         // 表示・プレビューだけを動かす(実形状の確定はしない)。
+        // setValue の通知中に SetAssemblyProgressDisplay が再入して旗を戻すため、
+        // 直前の値へ復元する(false 固定にすると確定が漏れて再入バグになる)。
+        const bool previous = syncingAssembly_;
         syncingAssembly_ = true;
         foldSlider_->setValue(std::clamp(percent, 0, 100));
-        syncingAssembly_ = false;
+        syncingAssembly_ = previous;
     }
     if (foldPreviewCheck_ != nullptr) {
         foldPreviewCheck_->setChecked(enabled);
@@ -829,9 +832,10 @@ void PartModelPanel::SetAssemblyProgressDisplay(double progress)
     if (foldSlider_->value() == value) {
         return;
     }
+    const bool previous = syncingAssembly_;
     syncingAssembly_ = true;
     foldSlider_->setValue(value);
-    syncingAssembly_ = false;
+    syncingAssembly_ = previous;
 }
 
 void PartModelPanel::AddUnitMembers(const std::vector<UnitMember>& members)

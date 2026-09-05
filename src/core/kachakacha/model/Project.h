@@ -274,6 +274,13 @@ public:
     //! 選択順・向き・端点一致は不要(自動連結・自動整列・小さな隙間の自動閉合)。
     //! 戻り値は組み立て方の日本語説明。再計算・読込でも同じ手順で作り直される。
     std::string AddAutoSurface(std::string name, std::vector<std::string> wireNames);
+    //! 指定オブジェクト群を軸まわりに回転する(対象の展開・派生の拒否は移動と同じ)。
+    //! 戻り値は実際に回転した基礎オブジェクト数。
+    int RotateObjects(
+        const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
+        const geometry::Vector3& axisPoint,
+        const geometry::Vector3& axisDirection,
+        double angleRadians);
     void AddGordonSurface(
         std::string name,
         std::vector<std::string> sectionNames,
@@ -501,6 +508,15 @@ private:
     void RecomputeLaminateOffsets();
     void RebuildPartModels();
     void RegeneratePartModelDerivedObjects(NamedPartModel& model);
+    //! 移動・回転の共通部: 対象を基礎オブジェクト(平面・点・ワイヤ)へ展開し、
+    //! 派生(投影・厚み位置・近似派生)は日本語メッセージで拒否する。
+    struct TransformBaseNames {
+        std::vector<std::string> workPlaneNames;
+        std::vector<std::string> pointNames;
+        std::vector<std::string> wireNames;
+    };
+    [[nodiscard]] TransformBaseNames CollectTransformBases(
+        const std::vector<std::pair<ProjectObjectKind, std::string>>& targets) const;
     //! 近似元(面 or 板材の厚み中央面)のサンプラを返す。見つからなければ投げる。
     [[nodiscard]] PartSource RequirePartModelSource(const NamedPartModel& model) const;
     [[nodiscard]] ObjectSet* FindObjectSetMutable(std::string_view name);

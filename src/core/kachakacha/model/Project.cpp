@@ -3048,8 +3048,12 @@ void Project::RebuildDependentGeometry()
     std::vector<bool> wireReady(wires_.size(), false);
     std::size_t pendingProjections = 0;
     for (std::size_t index = 0; index < wires_.size(); ++index) {
-        wireReady[index] = !wires_[index].projection.has_value();
-        pendingProjections += wires_[index].projection.has_value() ? 1U : 0U;
+        // 近似モデル派生の投影ワイヤ(部材の穴)はここで再投影しない。
+        // 折り姿勢・部材オフセット適用後の部材面へ再投影すると位置が壊れる/失敗する
+        // ため、RegeneratePartModelDerivedObjects 側で自然姿勢から作り直して写す。
+        wireReady[index] = !wires_[index].projection.has_value()
+            || wires_[index].partModelSourceName.has_value();
+        pendingProjections += wireReady[index] ? 0U : 1U;
     }
     std::vector<bool> surfaceReady(surfaces_.size(), false);
     std::size_t pendingSurfaces = surfaces_.size();
@@ -3492,8 +3496,14 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         if (targetSurface == surfaces_.end()) {
             continue;
         }
-        Wire projectedOutline = targetSurface->surface.ProjectWireAlongDirection(
-            openingSource->wire, opening.projection->direction);
+        std::optional<Wire> projectedOutlineMaybe;
+        try {
+            projectedOutlineMaybe = targetSurface->surface.ProjectWireAlongDirection(
+                openingSource->wire, opening.projection->direction);
+        } catch (const std::exception&) {
+            continue; // 折り姿勢・部材オフセットで投影が外れた開口は保留(#17bと同じ扱い)。
+        }
+        Wire projectedOutline = std::move(*projectedOutlineMaybe);
         const std::string derivedName = model.name + "_部材"
             + std::to_string(ownerIndex + 1) + "_穴"
             + std::to_string(openingIndex + 1);

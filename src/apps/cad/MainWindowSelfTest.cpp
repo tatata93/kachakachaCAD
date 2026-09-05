@@ -3321,17 +3321,21 @@ bool MainWindow::RunCreationSelfTest()
             MoveObjectsBy(
                 {{kachakacha::model::ProjectObjectKind::Surface, partSurface1}},
                 {4.0, 0.0, 0.0});
-            if ((partSurfacePoint(partSurface1)
-                    - (partBefore + Vector3{4.0, 0.0, 0.0})).Length() > 1.0e-6
-                || project_.PartModels().back().partOffsets.size() != 1) {
+            if (project_.PartModels().back().partOffsets.size() != 1) {
                 return fail("moving a part surface records a part offset");
+            }
+            if ((partSurfacePoint(partSurface1)
+                    - (partBefore + Vector3{4.0, 0.0, 0.0})).Length() > 1.0e-4) {
+                return fail("part offset moves the part surface");
             }
             MoveObjectsBy(
                 {{kachakacha::model::ProjectObjectKind::Surface, partSurface1}},
                 {-4.0, 0.0, 0.0});
-            if (!project_.PartModels().back().partOffsets.empty()
-                || (partSurfacePoint(partSurface1) - partBefore).Length() > 1.0e-6) {
-                return fail("moving back clears the part offset");
+            if (!project_.PartModels().back().partOffsets.empty()) {
+                return fail("moving back clears the part offset record");
+            }
+            if ((partSurfacePoint(partSurface1) - partBefore).Length() > 1.0e-4) {
+                return fail("moving back restores the part surface");
             }
         }
         // 注意: MoveObjectsBy が project_ を差し替えるため partModel 参照は

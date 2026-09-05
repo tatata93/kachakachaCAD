@@ -245,9 +245,10 @@ AutoSurfaceResult BuildAutoSurface(const std::vector<Wire>& wires)
         throw std::invalid_argument("面にする線を1本以上選択してください。");
     }
     const double diagonal = BoundingDiagonal(wires);
-    // 「小さな隙間は自動で閉じる」— 模型スケールで1mm程度の隙間は繋がっている
-    // とみなす(断面どうしは通常これより離れているため誤結合しにくい)。
-    const double tolerance = std::clamp(diagonal * 0.02, 1.0, 5.0);
+    // 「ごく小さな隙間だけ自動で閉じる」— 作図の誤差ぶんだけを吸収する。
+    // 模型スケールでは1mmが部品寸法そのものなので、勝手につなぐ量は控えめにする
+    // (Codexレビュー指摘: 最大5mmは大きすぎる)。
+    const double tolerance = std::clamp(diagonal * 0.01, 0.1, 1.0);
     std::vector<Chain> chains = BuildChains(wires, tolerance);
 
     double bridgedGap = 0.0;

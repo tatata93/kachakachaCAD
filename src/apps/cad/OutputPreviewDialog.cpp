@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <vector>
 
 using kachakacha::geometry::Cross;
 using kachakacha::geometry::Dot;
@@ -84,7 +86,7 @@ QPointF OutputMeshView::Project(const Vector3& point) const
 void OutputMeshView::paintEvent(QPaintEvent*)
 {
     QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::Antialiasing, false);
     painter.fillRect(rect(), QColor("#f2f5f6"));
     if (mesh_.triangles.empty()) {
         painter.setPen(QColor("#6a7781"));
@@ -93,39 +95,83 @@ void OutputMeshView::paintEvent(QPaintEvent*)
         return;
     }
 
-    // 奥から手前へ描く(ペインターズアルゴリズム)。
-    const Vector3 forward = ViewDirection();
-    std::vector<std::pair<double, const kachakacha::io::OutputMesh::Triangle*>> ordered;
-    ordered.reserve(mesh_.triangles.size());
-    for (const auto& triangle : mesh_.triangles) {
-        const Vector3 centroid = (mesh_.vertices[static_cast<std::size_t>(triangle.a)]
-                                     + mesh_.vertices[static_cast<std::size_t>(triangle.b)]
-                                     + mesh_.vertices[static_cast<std::size_t>(triangle.c)])
-            * (1.0 / 3.0);
-        ordered.emplace_back(Dot(centroid - center_, forward), &triangle);
-    }
-    std::sort(ordered.begin(), ordered.end(),
-        [](const auto& left, const auto& right) { return left.first > right.first; });
+    // 奥行きバッファで塗る(重なり・穴の前後が正しく見えるようにする。
+    // Codexレビュー指摘: 重心の並べ替えだけでは前後が入れ替わる)。
+    const int imageWidth = std::max(1, width());
+    const int imageHeight = std::max(1, height());
+    QImage canvas(imageWidth, imageHeight, QImage::Format_RGB32);
+    canvas.fill(QColor("#f2f5f6"));
+    std::vector<double> depth(
+        static_cast<std::size_t>(imageWidth) * imageHeight,
+        std::numeric_limits<double>::lowest());
 
-    for (const auto& [depth, triangle] : ordered) {
-        static_cast<void>(depth);
-        const Vector3& a = mesh_.vertices[static_cast<std::size_t>(triangle->a)];
-        const Vector3& b = mesh_.vertices[static_cast<std::size_t>(triangle->b)];
-        const Vector3& c = mesh_.vertices[static_cast<std::size_t>(triangle->c)];
+    const Vector3 forward = ViewDirection();
+    for (const auto& triangle : mesh_.triangles) {
+        const Vector3& a = mesh_.vertices[static_cast<std::size_t>(triangle.a)];
+        const Vector3& b = mesh_.vertices[static_cast<std::size_t>(triangle.b)];
+        const Vector3& c = mesh_.vertices[static_cast<std::size_t>(triangle.c)];
         Vector3 normal = Cross(b - a, c - a);
         if (normal.LengthSquared() <= 1.0e-18) {
             continue;
         }
         normal = normal.Normalized();
-        const double lighting = std::clamp(0.35 + 0.65 * std::abs(Dot(normal, forward)), 0.0, 1.0);
-        QColor color = triangle->fill ? QColor("#e08a2e") : QColor("#7fb2c4");
+        const double lighting =
+            std::clamp(0.35 + 0.65 * std::abs(Dot(normal, forward)), 0.0, 1.0);
+        QColor color = triangle.fill ? QColor("#e08a2e") : QColor("#7fb2c4");
         color = color.lighter(static_cast<int>(70 + lighting * 70));
-        QPolygonF polygon;
-        polygon << Project(a) << Project(b) << Project(c);
-        painter.setBrush(color);
-        painter.setPen(QPen(color.darker(120), 0.3));
-        painter.drawPolygon(polygon);
+        const QRgb rgb = color.rgb();
+
+        const QPointF pa = Project(a);
+        const QPointF pb = Project(b);
+        const QPointF pc = Project(c);
+        // 画面上の三角形をスキャンして、視線方向の深さで手前だけ残す。
+        const double minX = std::floor(std::min({pa.x(), pb.x(), pc.x()}));
+        const double maxX = std::ceil(std::max({pa.x(), pb.x(), pc.x()}));
+        const double minY = std::floor(std::min({pa.y(), pb.y(), pc.y()}));
+        const double maxY = std::ceil(std::max({pa.y(), pb.y(), pc.y()}));
+        const int left = std::max(0, static_cast<int>(minX));
+        const int right = std::min(imageWidth - 1, static_cast<int>(maxX));
+        const int top = std::max(0, static_cast<int>(minY));
+        const int bottom = std::min(imageHeight - 1, static_cast<int>(maxY));
+        if (left > right || top > bottom) {
+            continue;
+        }
+        const double area = (pb.x() - pa.x()) * (pc.y() - pa.y())
+            - (pc.x() - pa.x()) * (pb.y() - pa.y());
+        if (std::abs(area) <= 1.0e-9) {
+            continue;
+        }
+        const double depthA = Dot(a - center_, forward);
+        const double depthB = Dot(b - center_, forward);
+        const double depthC = Dot(c - center_, forward);
+        for (int y = top; y <= bottom; ++y) {
+            auto* line = reinterpret_cast<QRgb*>(canvas.scanLine(y));
+            for (int x = left; x <= right; ++x) {
+                const double px = x + 0.5;
+                const double py = y + 0.5;
+                const double w0 = ((pb.x() - pa.x()) * (py - pa.y())
+                                      - (px - pa.x()) * (pb.y() - pa.y()))
+                    / area;
+                const double w1 = ((px - pa.x()) * (pc.y() - pa.y())
+                                      - (pc.x() - pa.x()) * (py - pa.y()))
+                    / area;
+                const double w2 = 1.0 - w0 - w1;
+                if (w0 < -1.0e-9 || w1 < -1.0e-9 || w2 < -1.0e-9) {
+                    continue;
+                }
+                // w1=b重み, w0=c重み, w2=a重み
+                const double pointDepth = depthA * w2 + depthB * w1 + depthC * w0;
+                const std::size_t index =
+                    static_cast<std::size_t>(y) * imageWidth + static_cast<std::size_t>(x);
+                if (pointDepth <= depth[index]) {
+                    continue;
+                }
+                depth[index] = pointDepth;
+                line[x] = rgb;
+            }
+        }
     }
+    painter.drawImage(0, 0, canvas);
 }
 
 void OutputMeshView::mousePressEvent(QMouseEvent* event)
@@ -182,9 +228,20 @@ void OutputPreviewDialog::SetMesh(kachakacha::io::OutputMesh mesh)
     for (const std::string& note : mesh.notes) {
         notes << QString::fromStdString(note);
     }
-    const QString state = mesh.Closed()
-        ? QStringLiteral("閉じた形です（3Dプリント可）")
-        : QStringLiteral("まだ開いた縁があります");
+    // 「閉じている」＝「正しい部品」ではないので、状態を分けて伝える
+    // (Codexレビュー指摘: 窓の穴を塞いでも "3Dプリント可" と出てしまう)。
+    QString state;
+    if (!mesh.Closed()) {
+        state = QStringLiteral("開いた縁が残っています（このままでは3Dプリントに向きません）");
+    } else if (mesh.filledLoopCount > 0) {
+        state = QStringLiteral("水密です／ただし%1か所は自動でふさいだ形（橙色）です")
+                    .arg(mesh.filledLoopCount);
+    } else {
+        state = QStringLiteral("水密です（自動でふさいだ場所はありません）");
+    }
+    if (mesh.unfillableLoopCount > 0) {
+        state += QStringLiteral("／ふさげない縁 %1か所").arg(mesh.unfillableLoopCount);
+    }
     summary_->setText(QStringLiteral("三角形 %1 / %2\n%3")
                           .arg(mesh.triangles.size())
                           .arg(state, notes.join(QStringLiteral(" / "))));

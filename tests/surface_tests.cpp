@@ -573,7 +573,7 @@ int main()
 
         // 2本(片方は2線に分かれ、0.6mmの隙間あり) → 連結+ルールド。
         project.AddWire("縁A1", Wire::Line({100.0, 0.0, 0.0}, {110.0, 0.0, 0.0}));
-        project.AddWire("縁A2", Wire::Line({110.6, 0.0, 0.0}, {120.0, 0.0, 0.0}));
+        project.AddWire("縁A2", Wire::Line({110.2, 0.0, 0.0}, {120.0, 0.0, 0.0}));
         project.AddWire("縁B", Wire::Line({100.0, 20.0, 4.0}, {120.0, 20.0, 4.0}));
         const std::string ruledNote = project.AddAutoSurface(
             "自動ルールド", {"縁B", "縁A1", "縁A2"});
@@ -593,13 +593,13 @@ int main()
                 && loaded.FindSurface("自動パッチ")->Kind() == SurfaceKind::Patch,
             "auto surface survives the script round trip");
 
-        // 元の線を編集すると追従して作り直される(0.8mm持ち上げ→隙間は自動で
-        // 閉じたまま、平面ではなくなるのでパッチへ再判定される)。
+        // 元の線を編集すると追従して作り直される(0.15mm持ち上げ→自動接続の
+        // 許容内なので閉じたまま、平面ではなくなるのでパッチへ再判定される)。
         const Vector3 beforeEdit = project.FindSurface("自動平面")->Evaluate(0.5, 0.5);
         project.UpdateWire("自動枠上",
-            Wire::Line({0.0, 10.0, 0.8}, {20.0, 10.0, 0.8}));
+            Wire::Line({0.0, 10.0, 0.15}, {20.0, 10.0, 0.15}));
         const Vector3 afterEdit = project.FindSurface("自動平面")->Evaluate(0.5, 0.5);
-        Require((afterEdit - beforeEdit).Length() > 0.2,
+        Require((afterEdit - beforeEdit).Length() > 0.02,
             "auto surface follows source wire edits");
         Require(project.FindSurface("自動平面")->Kind() == SurfaceKind::Patch,
             "auto surface re-plans its kind after edits");

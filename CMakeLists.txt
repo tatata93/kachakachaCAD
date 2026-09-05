@@ -222,6 +222,8 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/PartPatternViewDialog.h
                 src/apps/cad/PlatePdfExport.cpp
                 src/apps/cad/PlatePdfExport.h
+                src/apps/cad/Win95Style.cpp
+                src/apps/cad/Win95Style.h
                 src/apps/cad/main.cpp
             )
 

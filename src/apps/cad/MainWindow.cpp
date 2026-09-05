@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Win95Style.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
@@ -65,6 +66,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QTabBar>
 #include <QStringList>
 #include <QTabWidget>
@@ -157,6 +159,14 @@ using namespace mainwindow_helpers;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
+    // 見た目の設定を先に読む(BuildUi の中で最初の適用が走る)。
+    defaultUiFont_ = QApplication::font();
+    {
+        QSettings settings(
+            QStringLiteral("kachakachaCAD"), QStringLiteral("kachakachaCAD"));
+        useWindows95Theme_ =
+            settings.value(QStringLiteral("ui/windows95"), false).toBool();
+    }
     BuildUi();
     BuildMenusAndToolbar();
 
@@ -721,47 +731,7 @@ void MainWindow::BuildUi()
     toolsDock->setMaximumWidth(560);
 
     statusBar()->showMessage(QStringLiteral("準備完了"));
-    setStyleSheet(R"(
-        QMainWindow { background: #eef0f2; }
-        QDockWidget { color: #26323a; font-weight: 600; }
-        QDockWidget::title { background: #e2e6e9; padding: 7px; text-align: left; }
-        QTabWidget::pane { border: 1px solid #c7cdd2; background: #ffffff; }
-        QTabBar::tab { padding: 8px 12px; background: #e8ebed; }
-        QTabBar::tab:selected { background: #ffffff; color: #075f69; }
-        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox { min-height: 22px; border: 1px solid #aeb7be; background: #ffffff; padding: 1px 4px; }
-        QPushButton { min-height: 24px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 8px; }
-        QPushButton:hover { background: #e8edef; }
-        QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
-        QPushButton#primaryButton:hover { background: #09666e; }
-        QPushButton#primaryButton:disabled { background: #d7dcdf; color: #7c868d; border-color: #bcc4c9; }
-        QPushButton#workflowButton { min-height: 28px; padding: 2px 5px; font-weight: 600; }
-        QToolButton#modeButtonDrawing, QToolButton#modeButtonSurface,
-        QToolButton#modeButtonPartModel, QToolButton#modeButtonOutput {
-            font-weight: 700; font-size: 13px; padding: 4px 12px; margin: 1px;
-            border-radius: 4px; border: 1px solid; }
-        QToolButton#modeButtonDrawing { background: #e2f1f2; color: #075f69; border-color: #77b4b9; }
-        QToolButton#modeButtonDrawing:checked { background: #087780; color: #ffffff; border-color: #075f69; }
-        QToolButton#modeButtonSurface { background: #e4edf8; color: #24507e; border-color: #86a9cf; }
-        QToolButton#modeButtonSurface:checked { background: #2f6db3; color: #ffffff; border-color: #24507e; }
-        QToolButton#modeButtonPartModel { background: #f7ecdf; color: #7d5218; border-color: #cfa877; }
-        QToolButton#modeButtonPartModel:checked { background: #b3762f; color: #ffffff; border-color: #7d5218; }
-        QToolButton#modeButtonOutput { background: #e5f2e9; color: #245c38; border-color: #83bd97; }
-        QToolButton#modeButtonOutput:checked { background: #2f8b57; color: #ffffff; border-color: #245c38; }
-        QPushButton#workflowButton:checked { background: #d7edef; color: #075f69; border: 2px solid #087780; }
-        QGroupBox#beginnerGuide { border: 1px solid #9eabb3; margin-top: 9px; background: #ffffff; }
-        QGroupBox#beginnerGuide::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #42515a; }
-        QLabel#beginnerGuideTitle { color: #17242b; font-weight: 700; font-size: 14px; }
-        QLabel#beginnerGuideNext { color: #075f69; background: #e4f2f3; border-left: 4px solid #087780; padding: 6px; font-weight: 600; }
-        QLabel#beginnerGuideSteps { color: #34444d; }
-        QLabel#beginnerGuideContext { color: #5d6970; background: #f1f3f4; padding: 5px; }
-        QPushButton#guideNextButton { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
-        QToolButton#drawingToolButton { min-height: 32px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 6px; }
-        QToolButton#drawingToolButton:hover { background: #e8edef; }
-        QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
-        QTreeWidget { border: 0; background: #fafbfb; }
-        QTreeWidget::item { min-height: 21px; }
-        QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
-    )");
+    ApplyUiTheme(useWindows95Theme_);
 }
 
 void MainWindow::BuildDrawingActions()
@@ -1019,6 +989,81 @@ void MainWindow::ShowShortcutReference()
         "灰色の矢印\t画面基準で回転（位置固定、ドラッグで連続）"));
 }
 
+void MainWindow::ApplyUiTheme(bool windows95)
+{
+    // 見た目の切り替え(オーナー指示: Windows 95 風と通常版を選べる)。
+    // Win95 風のときはアプリ独自のQSS(角丸・淡い色)を外し、Win95スタイルへ委ねる。
+    useWindows95Theme_ = windows95;
+    if (windows95) {
+        setStyleSheet(QString());
+        if (win95Style_ == nullptr) {
+            win95Style_ = new Win95Style();
+            win95Style_->setParent(qApp);
+        }
+        QApplication::setStyle(win95Style_);
+        QApplication::setPalette(Win95Style::Win95Palette());
+        QApplication::setFont(Win95Style::Win95Font());
+    } else {
+        QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+        QApplication::setPalette(QApplication::style()->standardPalette());
+        QApplication::setFont(defaultUiFont_);
+        setStyleSheet(QStringLiteral(R"(
+        QMainWindow { background: #eef0f2; }
+        QDockWidget { color: #26323a; font-weight: 600; }
+        QDockWidget::title { background: #e2e6e9; padding: 7px; text-align: left; }
+        QTabWidget::pane { border: 1px solid #c7cdd2; background: #ffffff; }
+        QTabBar::tab { padding: 8px 12px; background: #e8ebed; }
+        QTabBar::tab:selected { background: #ffffff; color: #075f69; }
+        QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox { min-height: 22px; border: 1px solid #aeb7be; background: #ffffff; padding: 1px 4px; }
+        QPushButton { min-height: 24px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 8px; }
+        QPushButton:hover { background: #e8edef; }
+        QPushButton#primaryButton { background: #087780; color: white; border: 1px solid #075f69; font-weight: 600; }
+        QPushButton#primaryButton:hover { background: #09666e; }
+        QPushButton#primaryButton:disabled { background: #d7dcdf; color: #7c868d; border-color: #bcc4c9; }
+        QPushButton#workflowButton { min-height: 28px; padding: 2px 5px; font-weight: 600; }
+        QToolButton#modeButtonDrawing, QToolButton#modeButtonSurface,
+        QToolButton#modeButtonPartModel, QToolButton#modeButtonOutput {
+            font-weight: 700; font-size: 13px; padding: 4px 12px; margin: 1px;
+            border-radius: 4px; border: 1px solid; }
+        QToolButton#modeButtonDrawing { background: #e2f1f2; color: #075f69; border-color: #77b4b9; }
+        QToolButton#modeButtonDrawing:checked { background: #087780; color: #ffffff; border-color: #075f69; }
+        QToolButton#modeButtonSurface { background: #e4edf8; color: #24507e; border-color: #86a9cf; }
+        QToolButton#modeButtonSurface:checked { background: #2f6db3; color: #ffffff; border-color: #24507e; }
+        QToolButton#modeButtonPartModel { background: #f7ecdf; color: #7d5218; border-color: #cfa877; }
+        QToolButton#modeButtonPartModel:checked { background: #b3762f; color: #ffffff; border-color: #7d5218; }
+        QToolButton#modeButtonOutput { background: #e5f2e9; color: #245c38; border-color: #83bd97; }
+        QToolButton#modeButtonOutput:checked { background: #2f8b57; color: #ffffff; border-color: #245c38; }
+        QPushButton#workflowButton:checked { background: #d7edef; color: #075f69; border: 2px solid #087780; }
+        QGroupBox#beginnerGuide { border: 1px solid #9eabb3; margin-top: 9px; background: #ffffff; }
+        QGroupBox#beginnerGuide::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; color: #42515a; }
+        QLabel#beginnerGuideTitle { color: #17242b; font-weight: 700; font-size: 14px; }
+        QLabel#beginnerGuideNext { color: #075f69; background: #e4f2f3; border-left: 4px solid #087780; padding: 6px; font-weight: 600; }
+        QLabel#beginnerGuideSteps { color: #34444d; }
+        QLabel#beginnerGuideContext { color: #5d6970; background: #f1f3f4; padding: 5px; }
+        QPushButton#guideNextButton { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
+        QToolButton#drawingToolButton { min-height: 32px; border: 1px solid #8d9aa3; background: #f6f7f8; padding: 2px 6px; }
+        QToolButton#drawingToolButton:hover { background: #e8edef; }
+        QToolButton#drawingToolButton:checked { background: #087780; color: white; border-color: #075f69; font-weight: 600; }
+        QTreeWidget { border: 0; background: #fafbfb; }
+        QTreeWidget::item { min-height: 21px; }
+        QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
+    )"));
+    }
+    QSettings settings(QStringLiteral("kachakachaCAD"), QStringLiteral("kachakachaCAD"));
+    settings.setValue(QStringLiteral("ui/windows95"), windows95);
+    if (windows95Themeaction_ != nullptr
+        && windows95Themeaction_->isChecked() != windows95) {
+        const QSignalBlocker blocker(windows95Themeaction_);
+        windows95Themeaction_->setChecked(windows95);
+    }
+    // 見た目が変わると寸法も変わるので、全ウィジェットへ再適用させる。
+    for (QWidget* widget : QApplication::allWidgets()) {
+        widget->style()->unpolish(widget);
+        widget->style()->polish(widget);
+        widget->update();
+    }
+}
+
 void MainWindow::BuildMenusAndToolbar()
 {
     QAction* newAction = new QAction(style()->standardIcon(QStyle::SP_FileIcon), QStringLiteral("新規"), this);
@@ -1175,6 +1220,18 @@ void MainWindow::BuildMenusAndToolbar()
         }
     });
     settingsMenu->addAction(displaySettingsAction);
+    settingsMenu->addSeparator();
+    windows95Themeaction_ = new QAction(QStringLiteral("Windows 95 風の見た目"), this);
+    windows95Themeaction_->setCheckable(true);
+    windows95Themeaction_->setChecked(useWindows95Theme_);
+    windows95Themeaction_->setToolTip(QStringLiteral(
+        "1995年当時の Windows の見た目(灰色の立体的なボタン・四角い部品)に切り替えます。"
+        "再起動は要りません"));
+    connect(windows95Themeaction_, &QAction::toggled, this,
+        [this](bool checked) { ApplyUiTheme(checked); });
+    settingsMenu->addAction(windows95Themeaction_);
+    settingsMenu->addSeparator();
+
     auto* measurementWindowAction = new QAction(QStringLiteral("測定結果ウィンドウ"), this);
     connect(measurementWindowAction, &QAction::triggered, this, [this] {
         EnsureMeasurementWindow();

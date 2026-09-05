@@ -6,6 +6,7 @@
 #include "kachakacha/model/Project.h"
 
 #include <QColor>
+#include <QFont>
 #include <QList>
 #include <QMainWindow>
 
@@ -269,6 +270,8 @@ private:
     //! 失敗をユーザーへ確実に伝える(オーナー報告「押しても何も起きない」対策)。
     //! セルフテスト・スクリーンショット中はモーダルを出さずログだけにする。
     void ReportOperationError(const QString& title, const QString& message);
+    //! 見た目の切り替え(オーナー指示: Windows 95 風と通常版)。
+    void ApplyUiTheme(bool windows95);
     //! 出力モード(オーナー指示): 出力対象の管理表と3Dプレビュー。
     void AddSelectionToOutputSet();
     void RemoveSelectedOutputSetRow();
@@ -451,6 +454,11 @@ private:
     QComboBox* activeGroupCombo_ = nullptr;
     //! true の間はモーダルダイアログを出さない(自動テスト・撮影中)。
     bool suppressBlockingDialogs_ = false;
+    // 見た目(オーナー指示: Windows 95 風を選べる)。
+    bool useWindows95Theme_ = false;
+    class Win95Style* win95Style_ = nullptr;
+    QAction* windows95Themeaction_ = nullptr;
+    QFont defaultUiFont_;
     // 出力モードの管理表(オーナー指示)。
     QTableWidget* outputSetTable_ = nullptr;
     QLabel* outputSetSummary_ = nullptr;

@@ -298,6 +298,15 @@ void MainWindow::CreateApproximationUnitFromPanel()
             std::vector<int> usedNumbers;
             for (const ApproxTarget& target : targets) {
                 if (target.partNumber > 0) {
+                    // 同じ番号を2つに付けると型紙・組立で取り違える
+                    // (Codexレビュー指摘)。実行前に止める。
+                    if (std::find(usedNumbers.begin(), usedNumbers.end(), target.partNumber)
+                        != usedNumbers.end()) {
+                        throw std::invalid_argument(
+                            "部品番号が重なっています: 部品"
+                            + std::to_string(target.partNumber)
+                            + "。表の「部品」欄を見直してください。");
+                    }
                     usedNumbers.push_back(target.partNumber);
                 }
             }
@@ -424,8 +433,14 @@ void MainWindow::CreateApproximationUnitFromPanel()
             }
             return probes;
         };
-        const auto nearestTargetIndex = [&](const std::vector<Vector3>& probes) {
-            std::size_t best = 0;
+        // プローブが取れない対象は割り当てない(Codexレビュー指摘:
+        // 空のまま部品0へ入れると誤接続になる)。
+        const auto nearestTargetIndex = [&](const std::vector<Vector3>& probes)
+            -> std::optional<std::size_t> {
+            if (probes.empty()) {
+                return std::nullopt;
+            }
+            std::optional<std::size_t> best;
             double bestDistance = std::numeric_limits<double>::infinity();
             for (std::size_t index = 0; index < targets.size(); ++index) {
                 if (modelNames[index].empty()) {
@@ -441,13 +456,22 @@ void MainWindow::CreateApproximationUnitFromPanel()
         };
         std::vector<std::vector<std::string>> scopeWiresPerModel(targets.size());
         std::vector<std::vector<std::string>> scopeSurfacesPerModel(targets.size());
+        QStringList unassignedScope;
         for (const std::string& wireName : keepWires) {
-            scopeWiresPerModel[nearestTargetIndex(probesOfWire(wireName))]
-                .push_back(wireName);
+            const auto index = nearestTargetIndex(probesOfWire(wireName));
+            if (!index.has_value()) {
+                unassignedScope << ToQString(wireName);
+                continue;
+            }
+            scopeWiresPerModel[*index].push_back(wireName);
         }
         for (const std::string& surfaceName : keepSurfaces) {
-            scopeSurfacesPerModel[nearestTargetIndex(probesOfSurface(surfaceName))]
-                .push_back(surfaceName);
+            const auto index = nearestTargetIndex(probesOfSurface(surfaceName));
+            if (!index.has_value()) {
+                unassignedScope << ToQString(surfaceName);
+                continue;
+            }
+            scopeSurfacesPerModel[*index].push_back(surfaceName);
         }
         std::size_t adaptedTotal = 0;
         QStringList scopeWarnings;
@@ -520,6 +544,10 @@ void MainWindow::CreateApproximationUnitFromPanel()
         if (!scopeWarnings.isEmpty()) {
             detail += QStringLiteral("\n接続の注意: %1")
                 .arg(scopeWarnings.join(QStringLiteral(" / ")));
+        }
+        if (!unassignedScope.isEmpty()) {
+            detail += QStringLiteral("\n位置を測れず接続できなかったもの: %1")
+                .arg(unassignedScope.join(QStringLiteral(" / ")));
         }
         partModelPanel_->SetUnitResult(detail, !failures.isEmpty());
         statusBar()->showMessage(message, 8000);

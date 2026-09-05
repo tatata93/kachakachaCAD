@@ -243,6 +243,61 @@ void AddSolid(OutputMesh& mesh, VertexWelder& welder, const Solid& solid, int sa
     return loops;
 }
 
+//! 輪が「平らで、素直な形」かどうか。無理に張ると裏返り・交差した面ができるため、
+//! ふさぐ前に必ず確かめる(Codexレビュー指摘)。
+[[nodiscard]] bool LoopIsFillable(const OutputMesh& mesh, const std::vector<int>& loop)
+{
+    if (loop.size() < 3) {
+        return false;
+    }
+    Vector3 centroid{0.0, 0.0, 0.0};
+    for (const int index : loop) {
+        centroid = centroid + mesh.vertices[static_cast<std::size_t>(index)];
+    }
+    centroid = centroid * (1.0 / static_cast<double>(loop.size()));
+    // 最小二乗に近い法線(ニューウェルの方法)。
+    Vector3 normal{0.0, 0.0, 0.0};
+    double perimeter = 0.0;
+    for (std::size_t index = 0; index < loop.size(); ++index) {
+        const Vector3& a = mesh.vertices[static_cast<std::size_t>(loop[index])];
+        const Vector3& b =
+            mesh.vertices[static_cast<std::size_t>(loop[(index + 1) % loop.size()])];
+        normal = normal
+            + Vector3{(a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x),
+                (a.x - b.x) * (a.y + b.y)};
+        perimeter += (b - a).Length();
+    }
+    if (normal.LengthSquared() <= 1.0e-18 || perimeter <= 1.0e-9) {
+        return false;
+    }
+    normal = normal.Normalized();
+    // 平面からのずれが周長の2%(かつ0.5mm)を超えるなら平らとみなさない。
+    const double allowed = std::max(0.5, perimeter * 0.02);
+    for (const int index : loop) {
+        const Vector3& point = mesh.vertices[static_cast<std::size_t>(index)];
+        if (std::abs(Dot(point - centroid, normal)) > allowed) {
+            return false;
+        }
+    }
+    // 重心から見て一周ぶんきれいに回るか(凹み過ぎ・自己交差の簡易判定)。
+    double turned = 0.0;
+    for (std::size_t index = 0; index < loop.size(); ++index) {
+        Vector3 a = mesh.vertices[static_cast<std::size_t>(loop[index])] - centroid;
+        Vector3 b = mesh.vertices[static_cast<std::size_t>(loop[(index + 1) % loop.size()])]
+            - centroid;
+        a = a - normal * Dot(a, normal);
+        b = b - normal * Dot(b, normal);
+        if (a.LengthSquared() <= 1.0e-18 || b.LengthSquared() <= 1.0e-18) {
+            return false;
+        }
+        a = a.Normalized();
+        b = b.Normalized();
+        const double angle = std::atan2(Dot(Cross(a, b), normal), Dot(a, b));
+        turned += angle;
+    }
+    return std::abs(std::abs(turned) - 2.0 * 3.14159265358979323846) < 0.35;
+}
+
 //! 輪の重心へ扇状に三角形を張って穴をふさぐ。
 void FillLoop(OutputMesh& mesh, VertexWelder& welder, const std::vector<int>& loop)
 {
@@ -365,12 +420,21 @@ OutputMesh BuildOutputMesh(
     if (options.fillOpenBoundaries && !mesh.triangles.empty()) {
         const std::vector<std::vector<int>> loops = FindOpenLoops(mesh);
         for (const std::vector<int>& loop : loops) {
+            if (!LoopIsFillable(mesh, loop)) {
+                ++mesh.unfillableLoopCount;
+                continue;
+            }
             FillLoop(mesh, welder, loop);
             ++mesh.filledLoopCount;
         }
         if (mesh.filledLoopCount > 0) {
             mesh.notes.push_back("開いていた縁を"
                 + std::to_string(mesh.filledLoopCount) + "か所、自動でふさぎました(橙色)");
+        }
+        if (mesh.unfillableLoopCount > 0) {
+            mesh.notes.push_back("平らでない・ねじれた縁が"
+                + std::to_string(mesh.unfillableLoopCount)
+                + "か所あり、無理にふさぐと壊れるので残しました(面を足してください)");
         }
     }
     mesh.openEdgeCount = CountOpenEdges(mesh);

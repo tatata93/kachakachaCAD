@@ -35,6 +35,9 @@ struct OutputMesh {
     std::vector<Triangle> triangles;
     //! 自動でふさいだ輪郭の数。
     int filledLoopCount = 0;
+    //! 平らでない・自分と交わるなどの理由でふさげなかった輪郭の数。
+    //! (無理に張ると裏返った面や交差した面ができ、3Dプリントで壊れるため)
+    int unfillableLoopCount = 0;
     //! 埋めきれずに残った開いた縁の数(0なら閉じた形)。
     int openEdgeCount = 0;
     //! 人が読む説明(何を厚み化した・いくつ埋めた など)。

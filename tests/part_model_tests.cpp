@@ -1113,6 +1113,39 @@ int main()
                 }
             }
             Require(offsetsCleared, "zero delta clears the part offset");
+
+            // --- 組立スライダーの実体反映(オーナー指示: 実際の近似面が動く) ---
+            const Vector3 beforeAssembly1 = surfacePoint("実体曲げ_部材1");
+            const Vector3 plateBeforeAssembly = plateCenter();
+            liveProject.SetPartModelAssemblyProgress("実体曲げ", 0.0);
+            Require((surfacePoint("実体曲げ_部材1") - beforeAssembly1).Length() > 5.0,
+                "assembly progress moves the real part surfaces");
+            Require((plateCenter() - plateBeforeAssembly).Length() > 5.0,
+                "plates on part surfaces follow the assembly progress");
+            // 0%でも部材ごとの縁ワイヤ(独立)のまま。
+            Require(liveProject.PartModels().back().boundaryWireNames.size()
+                    == liveProject.PartModels().back().result.parts.size() * 2,
+                "assembly pose keeps per-part edge wires");
+            // 保存・読込で同じ姿勢が残る。
+            std::ostringstream assemblySaved;
+            kachakacha::io::WriteProjectScript(assemblySaved, liveProject);
+            Require(assemblySaved.str().find("part_model_assembly 実体曲げ 0")
+                    != std::string::npos,
+                "assembly progress saved to the script");
+            std::istringstream assemblyInput(assemblySaved.str());
+            Project loadedAssembly =
+                kachakacha::io::LoadProjectScript(assemblyInput, "assembly");
+            bool loadedProgress = false;
+            for (const auto& modelEntry : loadedAssembly.PartModels()) {
+                if (modelEntry.name == "実体曲げ") {
+                    loadedProgress = std::abs(modelEntry.assemblyProgress) < 1.0e-9;
+                }
+            }
+            Require(loadedProgress, "assembly progress survives the round trip");
+            // 100%へ戻すと元の姿勢へ厳密に戻る。
+            liveProject.SetPartModelAssemblyProgress("実体曲げ", 1.0);
+            Require((surfacePoint("実体曲げ_部材1") - beforeAssembly1).Length() < 1.0e-6,
+                "assembly at 100 percent restores the exact pose");
         }
 
         // --- 積層(重ね板、合意9) ---

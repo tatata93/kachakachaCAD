@@ -1016,6 +1016,12 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 }
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.SetPartModelRailFoldProgress(name, std::move(progress));
+            } else if (command == "part_model_assembly") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const double progress =
+                    ReadDouble(stream, sourceName, lineNumber, "assembly progress");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPartModelAssemblyProgress(name, progress);
             } else if (command == "object_set_parent") {
                 const std::string child = ReadName(stream, sourceName, lineNumber, "set");
                 const std::string parent = ReadName(stream, sourceName, lineNumber, "parent set");
@@ -1599,6 +1605,11 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                 output << ' ' << value;
             }
             output << '\n';
+        }
+        // 組立の進行度(オーナー指示: スライダーで実面が動く)。100%以外のとき保存。
+        if (std::abs(model.assemblyProgress - 1.0) > 1.0e-12) {
+            output << "part_model_assembly " << model.name << ' '
+                   << model.assemblyProgress << '\n';
         }
         // 接続スコープ(合意13)。派生「_接続」は読込時に再生成される。
         if (!model.scopeWireNames.empty() || !model.scopeSurfaceNames.empty()) {

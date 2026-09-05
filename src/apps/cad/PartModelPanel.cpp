@@ -342,6 +342,22 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     };
     connect(foldSlider_, &QSlider::valueChanged, this, [foldChanged](int) { foldChanged(); });
     connect(foldPreviewCheck_, &QCheckBox::toggled, this, [foldChanged](bool) { foldChanged(); });
+    // 組立スライダーの確定(オーナー指示: 実際の近似面も動く)。
+    // ドラッグ中は軽い表示だけ動かし、離した時・キー操作時に実形状を作り直す。
+    connect(foldSlider_, &QSlider::sliderReleased, this, [this] {
+        if (onAssemblyProgressCommitted) {
+            onAssemblyProgressCommitted(
+                static_cast<double>(foldSlider_->value()) / 100.0);
+        }
+    });
+    connect(foldSlider_, &QSlider::valueChanged, this, [this](int value) {
+        if (syncingAssembly_ || foldSlider_->isSliderDown()) {
+            return;
+        }
+        if (onAssemblyProgressCommitted) {
+            onAssemblyProgressCommitted(static_cast<double>(value) / 100.0);
+        }
+    });
     connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
         if (onFoldStateChanged) onFoldStateChanged();
     });
@@ -715,7 +731,10 @@ bool PartModelPanel::SelectPartsForTest(
 void PartModelPanel::SetFoldPreviewForTest(bool enabled, int percent)
 {
     if (foldSlider_ != nullptr) {
+        // 表示・プレビューだけを動かす(実形状の確定はしない)。
+        syncingAssembly_ = true;
         foldSlider_->setValue(std::clamp(percent, 0, 100));
+        syncingAssembly_ = false;
     }
     if (foldPreviewCheck_ != nullptr) {
         foldPreviewCheck_->setChecked(enabled);
@@ -754,7 +773,6 @@ void PartModelPanel::SetFoldLines(
             delete item;
         }
         foldAngleSpins_.clear();
-        foldPercentSpins_.clear();
         for (std::size_t index = 0; index < count; ++index) {
             auto* row = new QWidget;
             auto* rowLayout = new QHBoxLayout(row);
@@ -762,21 +780,17 @@ void PartModelPanel::SetFoldLines(
             rowLayout->setSpacing(4);
             rowLayout->addWidget(
                 new QLabel(QStringLiteral("折り線%1").arg(index + 1)));
+            // %欄は廃止し角度(°)だけにする(オーナー指示)。
             auto* angleSpin = new QDoubleSpinBox;
             angleSpin->setRange(-360.0, 360.0);
             angleSpin->setDecimals(1);
             angleSpin->setSingleStep(5.0);
             angleSpin->setSuffix(QStringLiteral(" °"));
-            auto* percentSpin = new QDoubleSpinBox;
-            percentSpin->setRange(-400.0, 400.0);
-            percentSpin->setDecimals(0);
-            percentSpin->setSingleStep(10.0);
-            percentSpin->setSuffix(QStringLiteral(" %"));
+            angleSpin->setToolTip(QStringLiteral(
+                "この折り線の折り角。編集すると実際の部材面・板材もこの姿勢になります"));
             rowLayout->addWidget(angleSpin, 1);
-            rowLayout->addWidget(percentSpin, 1);
             foldLinesLayout_->addWidget(row);
             foldAngleSpins_.push_back(angleSpin);
-            foldPercentSpins_.push_back(percentSpin);
             const int railIndex = static_cast<int>(index);
             connect(angleSpin, &QDoubleSpinBox::valueChanged, this,
                 [this, railIndex](double degrees) {
@@ -787,23 +801,7 @@ void PartModelPanel::SetFoldLines(
                     if (std::abs(full) <= 1.0e-6) {
                         return; // 完成形が平らな折り線は角度から進行度を決められない。
                     }
-                    const double value = degrees / full;
-                    syncingFoldRows_ = true;
-                    foldPercentSpins_[railIndex]->setValue(value * 100.0);
-                    syncingFoldRows_ = false;
-                    if (onRailFoldEdited) onRailFoldEdited(railIndex, value);
-                });
-            connect(percentSpin, &QDoubleSpinBox::valueChanged, this,
-                [this, railIndex](double percent) {
-                    if (syncingFoldRows_) {
-                        return;
-                    }
-                    const double value = percent / 100.0;
-                    syncingFoldRows_ = true;
-                    foldAngleSpins_[railIndex]->setValue(
-                        value * foldFullAngleDegrees_[railIndex]);
-                    syncingFoldRows_ = false;
-                    if (onRailFoldEdited) onRailFoldEdited(railIndex, value);
+                    if (onRailFoldEdited) onRailFoldEdited(railIndex, degrees / full);
                 });
         }
     }
@@ -811,9 +809,6 @@ void PartModelPanel::SetFoldLines(
     syncingFoldRows_ = true;
     for (std::size_t index = 0; index < count; ++index) {
         const double value = index < progress.size() ? progress[index] : 1.0;
-        if (!foldPercentSpins_[index]->hasFocus()) {
-            foldPercentSpins_[index]->setValue(value * 100.0);
-        }
         if (!foldAngleSpins_[index]->hasFocus()) {
             foldAngleSpins_[index]->setValue(value * fullAngleDegrees[index]);
         }
@@ -822,6 +817,21 @@ void PartModelPanel::SetFoldLines(
     }
     syncingFoldRows_ = false;
     foldLinesContainer_->setVisible(count > 0);
+}
+
+void PartModelPanel::SetAssemblyProgressDisplay(double progress)
+{
+    if (foldSlider_ == nullptr || foldSlider_->isSliderDown()) {
+        return; // ドラッグ中は表示を奪わない。
+    }
+    const int value = std::clamp(
+        static_cast<int>(progress * 100.0 + 0.5), 0, 100);
+    if (foldSlider_->value() == value) {
+        return;
+    }
+    syncingAssembly_ = true;
+    foldSlider_->setValue(value);
+    syncingAssembly_ = false;
 }
 
 void PartModelPanel::AddUnitMembers(const std::vector<UnitMember>& members)

@@ -213,6 +213,10 @@ struct NamedPartModel {
         geometry::Vector3 delta;
     };
     std::vector<PartOffset> partOffsets;
+    //! 組立の進行度(オーナー指示: スライダーで実際の近似面が動く)。
+    //! 0=各部材の展開形を持ち上げて並べた状態、1=折り線どおりの完成姿勢。
+    //! 1以外では部材面・縁・穴が(その上の板材ごと)この姿勢へ再構築される。
+    double assemblyProgress = 1.0;
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -408,6 +412,9 @@ public:
     //! その部材の面・レール・穴と、上に作った板材等が再構築で追従する。
     void SetPartModelPartOffset(
         std::string_view name, int partNumber, const geometry::Vector3& delta);
+    //! 組立の進行度(0〜1)を設定する。実際の部材面・縁・穴と、その上の板材等が
+    //! この姿勢(0=展開を並べた状態、1=折り上がり)へ再構築される。
+    void SetPartModelAssemblyProgress(std::string_view name, double progress);
     //! 接続スコープを設定し、派生「_接続」オブジェクトを作り直す(空で解除)。
     void SetPartModelConnectionScope(
         std::string_view name,

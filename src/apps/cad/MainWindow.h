@@ -87,6 +87,8 @@ private:
     void ChangeSelectedSetState(int state);
     void CreatePlateFromSelectedPart();
     void UpdatePartFoldPreview();
+    //! 組立スライダーの確定値を選択中モデルの実形状へ反映する(オーナー指示)。
+    void CommitPartAssemblyProgress(double progress);
     void SetSelectedPartModelRailFold(int railIndex, double value);
     void PickPartBoundariesFromSelectedWires();
     void RealizePartFoldState();

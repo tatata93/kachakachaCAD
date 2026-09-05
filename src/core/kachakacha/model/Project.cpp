@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace kachakacha::model {
@@ -3817,11 +3818,11 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             || offset.partNumber > static_cast<int>(model.result.parts.size());
     });
 
-    // --- 曲げ状態・部材オフセットの実体反映(オーナー指示) ---
-    // 折り線進行度が完成形(全て1)以外、または部材オフセットがあるとき、
-    // 部材面・境界レール・部材の穴を「剛体折りの現在姿勢+部材ごとの平行移動」へ写す。
-    // 帯そのものは一切変形しない(等長)。この上に作った板材・厚み位置ワイヤは
-    // RebuildDependentGeometry の部材面依存の再構築でこの姿勢へ追従する。
+    // --- 曲げ状態・組立進行・部材オフセットの実体反映(オーナー指示) ---
+    // 折り線進行度が完成形以外、組立スライダーが100%以外、または部材オフセットが
+    // あるとき、部材面・縁・穴をその姿勢へ写す(曲げ確認の表示と同じ計算)。
+    // この上に作った板材・厚み位置ワイヤは RebuildDependentGeometry の
+    // 部材面依存の再構築でこの姿勢へ追従する。
     const bool foldActive = std::any_of(
         model.railFoldProgress.begin(), model.railFoldProgress.end(),
         [](double value) { return std::abs(value - 1.0) > 1.0e-9; });
@@ -3830,7 +3831,8 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         [](const NamedPartModel::PartOffset& offset) {
             return offset.delta.LengthSquared() > 0.0;
         });
-    if ((foldActive || offsetActive) && !model.result.parts.empty()) {
+    const bool assemblyActive = std::abs(model.assemblyProgress - 1.0) > 1.0e-9;
+    if ((foldActive || offsetActive || assemblyActive) && !model.result.parts.empty()) {
         const PartMeshDevelopment foldMesh = DevelopPartMesh(
             RequirePartModelSource(model), model.options.splitAxis, parameters, 96);
         std::vector<double> creaseProgress(
@@ -3840,9 +3842,22 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
              ++index) {
             creaseProgress[index] = model.railFoldProgress[index];
         }
-        const std::vector<PartBandTransform> bandTransforms
-            = BuildRigidBandTransforms(foldMesh, creaseProgress);
-        const int bandCount = static_cast<int>(bandTransforms.size());
+        // 展開を離す距離は曲げ確認の表示と同じ決め方(モデルの大きさから)。
+        geometry::Vector3 meshLow = foldMesh.world.front().front();
+        geometry::Vector3 meshHigh = meshLow;
+        for (const auto& rowPoints : foldMesh.world) {
+            for (const geometry::Vector3& point : rowPoints) {
+                meshLow = {std::min(meshLow.x, point.x), std::min(meshLow.y, point.y),
+                    std::min(meshLow.z, point.z)};
+                meshHigh = {std::max(meshHigh.x, point.x), std::max(meshHigh.y, point.y),
+                    std::max(meshHigh.z, point.z)};
+            }
+        }
+        const double liftDistance = std::max(25.0, (meshHigh - meshLow).Length() * 0.35);
+        const double assembly = std::clamp(model.assemblyProgress, 0.0, 1.0);
+        const std::vector<std::vector<geometry::Vector3>> bandRails
+            = BuildBandFoldAnimationRails(foldMesh, creaseProgress, assembly, liftDistance);
+        const int bandCount = foldMesh.rows - 1;
         const auto offsetOf = [&model](int band) {
             for (const NamedPartModel::PartOffset& offset : model.partOffsets) {
                 if (offset.partNumber == band + 1) {
@@ -3851,17 +3866,17 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             }
             return geometry::Vector3{0.0, 0.0, 0.0};
         };
-        const auto applyBand = [&](int band, const geometry::Vector3& point) {
-            const int clamped = std::clamp(band, 0, bandCount - 1);
-            return bandTransforms[static_cast<std::size_t>(clamped)].Apply(point)
-                + offsetOf(clamped);
-        };
+        // 帯 band の新しい下/上レール点列(部材オフセット込み)。
         const auto transformedRow = [&](int row, int band) {
-            std::vector<geometry::Vector3> points;
-            points.reserve(foldMesh.world[static_cast<std::size_t>(row)].size());
-            for (const geometry::Vector3& point
-                : foldMesh.world[static_cast<std::size_t>(row)]) {
-                points.push_back(applyBand(band, point));
+            const int clamped = std::clamp(band, 0, bandCount - 1);
+            const bool top = row > clamped;
+            std::vector<geometry::Vector3> points
+                = bandRails[static_cast<std::size_t>(clamped) * 2 + (top ? 1 : 0)];
+            const geometry::Vector3 delta = offsetOf(clamped);
+            if (delta.LengthSquared() > 0.0) {
+                for (geometry::Vector3& point : points) {
+                    point = point + delta;
+                }
             }
             return points;
         };
@@ -3935,7 +3950,16 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             named->sourceWireGroups = {
                 {edgeWireNames[partIndex * 2]}, {edgeWireNames[partIndex * 2 + 1]}};
         }
-        // 部材の穴(投影済み)は、属する部材の変換で点単位に写す。
+        // 部材の穴(投影済み): 自然姿勢の帯上での(列位置u, レール間比率s)を測り、
+        // 新しいレール上の同じ位置へ写す(剛体折りにも帯の組立変形にも追従する)。
+        const auto railPointAt = [](const std::vector<geometry::Vector3>& rail, double u) {
+            const double scaled =
+                std::clamp(u, 0.0, 1.0) * static_cast<double>(rail.size() - 1);
+            const std::size_t segment = std::min<std::size_t>(
+                static_cast<std::size_t>(scaled), rail.size() - 2);
+            const double local = scaled - static_cast<double>(segment);
+            return rail[segment] * (1.0 - local) + rail[segment + 1] * local;
+        };
         for (const std::string& openingName : model.openingWireNames) {
             const std::string prefix = model.name + "_部材";
             if (openingName.size() <= prefix.size()
@@ -3948,18 +3972,57 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             } catch (const std::exception&) {
                 continue;
             }
+            band = std::clamp(band, 0, bandCount - 1);
             const auto opening = std::find_if(wires_.begin(), wires_.end(),
                 [&](const NamedWire& wire) { return wire.name == openingName; });
             if (opening == wires_.end()) {
                 continue;
             }
+            const std::vector<geometry::Vector3>& naturalBottom
+                = foldMesh.world[static_cast<std::size_t>(band)];
+            const std::vector<geometry::Vector3>& naturalTop
+                = foldMesh.world[static_cast<std::size_t>(band) + 1];
+            const std::vector<geometry::Vector3> newBottom = transformedRow(band, band);
+            const std::vector<geometry::Vector3> newTop = transformedRow(band + 1, band);
+            const auto mapPoint = [&](const geometry::Vector3& point) {
+                // 粗く列を走査してから前後を細分して u を決める。
+                double bestU = 0.0;
+                double bestS = 0.5;
+                double bestDistance = std::numeric_limits<double>::max();
+                const auto tryAt = [&](double u) {
+                    const geometry::Vector3 bottom = railPointAt(naturalBottom, u);
+                    const geometry::Vector3 top = railPointAt(naturalTop, u);
+                    const geometry::Vector3 axis = top - bottom;
+                    const double lengthSquared = axis.LengthSquared();
+                    const double s = lengthSquared > 1.0e-18
+                        ? std::clamp(Dot(point - bottom, axis) / lengthSquared, 0.0, 1.0)
+                        : 0.5;
+                    const double distance = (point - (bottom + axis * s)).Length();
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        bestU = u;
+                        bestS = s;
+                    }
+                };
+                const int columns = static_cast<int>(naturalBottom.size());
+                for (int column = 0; column < columns; ++column) {
+                    tryAt(static_cast<double>(column) / (columns - 1));
+                }
+                const double step = 1.0 / (columns - 1);
+                const double center = bestU;
+                for (int refine = -8; refine <= 8; ++refine) {
+                    tryAt(center + step * refine / 8.0);
+                }
+                return railPointAt(newBottom, bestU) * (1.0 - bestS)
+                    + railPointAt(newTop, bestU) * bestS;
+            };
             constexpr int kOpeningSamples = 96;
             const bool closed = opening->wire.IsClosed();
             const int last = closed ? kOpeningSamples - 1 : kOpeningSamples;
             std::vector<geometry::Vector3> points;
             points.reserve(static_cast<std::size_t>(kOpeningSamples) + 1);
             for (int sample = 0; sample <= last; ++sample) {
-                points.push_back(applyBand(band,
+                points.push_back(mapPoint(
                     opening->wire.Evaluate(static_cast<double>(sample) / kOpeningSamples)));
             }
             if (closed) {
@@ -3979,7 +4042,9 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     set->automatic = true;
     set->members.clear();
     set->members.push_back({ProjectObjectKind::PartModel, model.name});
-    for (const std::string& wireName : newWireNames) {
+    // 注意: 折り姿勢では境界レールが部材ごとの縁に置き換わるため、
+    // newWireNames ではなく model.boundaryWireNames(最終的な名前)を登録する。
+    for (const std::string& wireName : model.boundaryWireNames) {
         set->members.push_back({ProjectObjectKind::Wire, wireName});
     }
     for (const std::string& wireName : newOpeningNames) {
@@ -4124,6 +4189,26 @@ void Project::SetPartModelPartOffset(
     if (delta.LengthSquared() > 0.0) {
         model->partOffsets.push_back(NamedPartModel::PartOffset{partNumber, delta});
     }
+    RebuildDependentGeometry();
+}
+
+void Project::SetPartModelAssemblyProgress(std::string_view name, double progress)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) {
+            return candidate.name == name;
+        });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    if (!std::isfinite(progress) || progress < 0.0 || progress > 1.0) {
+        throw std::invalid_argument("組立の進行度は0〜1で指定してください。");
+    }
+    if (std::abs(model->assemblyProgress - progress) <= 1.0e-12) {
+        return;
+    }
+    model->assemblyProgress = progress;
+    // 実際の部材面・縁・穴と、その上の板材等をこの姿勢へ作り直す。
     RebuildDependentGeometry();
 }
 

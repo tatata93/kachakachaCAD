@@ -53,6 +53,8 @@ public:
     bool SelectPartsForTest(const QString& modelName, const std::vector<int>& partNumbers);
     //! 曲げ確認のチェックとスライダー(0〜100)を直接設定する(同上)。
     void SetFoldPreviewForTest(bool enabled, int percent);
+    //! 組立スライダーの表示だけを合わせる(確定コールバックは呼ばない)。
+    void SetAssemblyProgressDisplay(double progress);
 
     //! 近似ユニット(#15): 取り込んだ対象と役割の表。
     struct UnitMember {
@@ -96,6 +98,8 @@ public:
     std::function<void()> onAddPartOpening;    //!< 選択ワイヤを選択部材へ投影して穴に(#17b)
     std::function<void()> onRemovePartOpening; //!< 後付け穴の解除(#17b)
     std::function<void()> onFoldStateChanged;  //!< スライダー・チェック・選択の変化
+    //! 組立スライダーの確定(ドラッグを離した時・キー操作)。実形状の再構築に使う。
+    std::function<void(double)> onAssemblyProgressCommitted;
     std::function<void()> onRealizeFoldState;  //!< この曲げ状態を同じプロジェクトへ板材化
     std::function<void(int, double)> onRailFoldEdited; //!< 折り線index(0始まり)と新しい進行度
     std::function<void(bool)> onExportFoldMesh; //!< 曲げ状態を保存(true=STEP, false=STL)
@@ -126,7 +130,7 @@ private:
     QWidget* foldLinesContainer_ = nullptr;
     QVBoxLayout* foldLinesLayout_ = nullptr;
     std::vector<QDoubleSpinBox*> foldAngleSpins_;
-    std::vector<QDoubleSpinBox*> foldPercentSpins_;
+    bool syncingAssembly_ = false;
     std::vector<double> foldFullAngleDegrees_;
     QString foldLinesModelName_;
     bool syncingFoldRows_ = false;

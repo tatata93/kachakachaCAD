@@ -867,6 +867,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             percent = 50;
         }
         partModelPanel_->SetFoldPreviewForTest(true, percent);
+        // スライダー=組立の実体反映(オーナー指示)。実際の部材面もこの姿勢にする。
+        CommitPartAssemblyProgress(percent / 100.0);
         ShowPartModelTool(2);
         viewport_->SetIsometricView();
         viewport_->FitAll();

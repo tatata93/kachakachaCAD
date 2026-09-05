@@ -75,6 +75,9 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     partModelPanel_->onAddPartOpening = [this] { EditSelectedPartOpening(true); };
     partModelPanel_->onRemovePartOpening = [this] { EditSelectedPartOpening(false); };
     partModelPanel_->onFoldStateChanged = [this] { UpdatePartFoldPreview(); };
+    partModelPanel_->onAssemblyProgressCommitted = [this](double progress) {
+        CommitPartAssemblyProgress(progress);
+    };
     partModelPanel_->onRealizeFoldState = [this] { RealizePartFoldState(); };
     partModelPanel_->onRailFoldEdited = [this](int railIndex, double value) {
         SetSelectedPartModelRailFold(railIndex, value);
@@ -1061,6 +1064,36 @@ void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
     }
 }
 
+void MainWindow::CommitPartAssemblyProgress(double progress)
+{
+    // 組立スライダーの確定(オーナー指示: 実際の近似面が動く)。
+    // 実際の部材面・縁・穴と、その上の板材等をこの姿勢へ作り直す。
+    try {
+        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const NamedPartModel* model = name.empty()
+            ? nullptr
+            : FindPartModel(project_, name);
+        if (model == nullptr) {
+            return;
+        }
+        if (std::abs(model->assemblyProgress - progress) <= 1.0e-9) {
+            return;
+        }
+        Project candidate = project_;
+        candidate.SetPartModelAssemblyProgress(name, progress);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("組立 %1% の姿勢を実際の形状へ反映しました")
+                .arg(static_cast<int>(progress * 100.0 + 0.5)),
+            2500);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+    }
+}
+
 void MainWindow::UpdatePartFoldPreview()
 {
     if (viewport_ == nullptr || partModelPanel_ == nullptr) {
@@ -1078,6 +1111,10 @@ void MainWindow::UpdatePartFoldPreview()
                 statusBar()->showMessage(
                     QStringLiteral("曲げ確認: 一覧で近似モデルを選択してください"), 4000);
             }
+        }
+        if (model != nullptr) {
+            // スライダー表示を選択中モデルの保存済み組立進行度に合わせる。
+            partModelPanel_->SetAssemblyProgressDisplay(model->assemblyProgress);
         }
         if (!partModelPanel_->FoldPreviewEnabled() || model == nullptr) {
             viewport_->SetPartFoldPreview({}, {});

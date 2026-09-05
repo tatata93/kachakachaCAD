@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QCursor>
 #include <QPoint>
+#include <QPolygonF>
 #include <QString>
 #include <QStringList>
 #include <QWidget>
@@ -19,6 +20,7 @@ class QEvent;
 class QFrame;
 class QLabel;
 class QLineEdit;
+class QPainter;
 class QTimer;
 
 enum class CadSelectionKind {
@@ -34,6 +36,20 @@ enum class CadSelectionKind {
 struct CadSelection {
     CadSelectionKind kind = CadSelectionKind::None;
     int index = -1;
+};
+
+//! 選択ギズモ(選択モデル周辺の矢印・リング)のつまみ種別。
+//! TranslateX/Y/Z=軸矢印の平行移動、TranslateView=中心四角(画面平行の自由移動、
+//! 選択モデル本体をつかんだドラッグも同じ)、RotateX/Y/Z=軸リングの回転。
+enum class GizmoHandle {
+    None,
+    TranslateX,
+    TranslateY,
+    TranslateZ,
+    TranslateView,
+    RotateX,
+    RotateY,
+    RotateZ,
 };
 
 enum class ViewportTool {
@@ -320,6 +336,12 @@ public:
     {
         return partFoldPreviewRails_.size();
     }
+    //! 選択ギズモ(矢印・リング)が表示されているか(選択ツール+選択あり)。
+    [[nodiscard]] bool GizmoVisible() const;
+    //! 表示中ギズモの中心(選択物のバウンディングボックス中心)。
+    [[nodiscard]] std::optional<kachakacha::geometry::Vector3> GizmoCenter() const;
+    //! 指定画面位置のギズモつまみ(セルフテスト用に公開)。
+    [[nodiscard]] GizmoHandle GizmoHandleAt(QPointF position) const;
     [[nodiscard]] std::size_t PlateAssemblyFoldGuideCount() const noexcept
     {
         return plateAssemblyFoldLines_.size();
@@ -413,6 +435,22 @@ private:
     void OrbitViewByPixels(double horizontalPixels, double verticalPixels);
     [[nodiscard]] CadSelection HitTestWire(QPointF position, double maximumDistance = 9.0) const;
     [[nodiscard]] CadSelection HitTest(QPointF position) const;
+    //! 選択物のバウンディングボックス中心(ギズモの置き場所)。
+    [[nodiscard]] std::optional<kachakacha::geometry::Vector3> ComputeSelectionCenter() const;
+    //! ギズモの画面ジオメトリ(描画と当たり判定で共有)。
+    struct GizmoGeometry {
+        bool valid = false;
+        kachakacha::geometry::Vector3 center;
+        QPointF centerScreen;
+        std::array<QPointF, 3> axisTips;
+        std::array<bool, 3> axisVisible = {false, false, false};
+        std::array<QPolygonF, 3> ringPolylines;
+        //! ほぼ真横から見たリングは線に潰れるため表示・操作しない。
+        std::array<bool, 3> ringVisible = {false, false, false};
+    };
+    [[nodiscard]] GizmoGeometry MakeGizmoGeometry() const;
+    [[nodiscard]] GizmoHandle HitGizmo(QPointF position) const;
+    void PaintGizmo(QPainter& painter) const;
     [[nodiscard]] bool IsSelected(CadSelectionKind kind, int index) const;
     [[nodiscard]] bool HiddenBySet(CadSelectionKind kind, int index) const;
     [[nodiscard]] bool ShouldDisplay(
@@ -484,6 +522,15 @@ private:
     CadSelection reference_;
     CadSelection hoveredSelection_;
     std::vector<CadSelection> selections_;
+    // 選択ギズモ(矢印・リング)のドラッグ状態。
+    GizmoHandle gizmoDragHandle_ = GizmoHandle::None;
+    GizmoHandle gizmoHoverHandle_ = GizmoHandle::None;
+    bool gizmoDragActive_ = false;      //!< しきい値を超えてドラッグ中
+    bool gizmoDragFromObject_ = false;  //!< 選択モデル本体をつかんだドラッグ
+    QPoint gizmoPressPosition_;
+    kachakacha::geometry::Vector3 gizmoDragCenter_{};
+    kachakacha::geometry::Vector3 gizmoDragDelta_{};
+    double gizmoDragAngle_ = 0.0;
     ViewportDisplayMode displayMode_ = ViewportDisplayMode::Design;
     std::vector<CadSelection> isolatedSelections_;
     std::function<void(const std::vector<CadSelection>&)> selectionChanged_;

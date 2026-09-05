@@ -139,6 +139,13 @@ private:
     void MoveObjectsBy(
         const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
         kachakacha::geometry::Vector3 delta);
+    //! 選択の回転(ギズモのリング)。面・板材は元ワイヤごと回す。
+    //! 近似モデルの部材面は未対応(部材オフセットは平行移動のみ)。
+    void RotateObjectsBy(
+        const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
+        kachakacha::geometry::Vector3 axisPoint,
+        kachakacha::geometry::Vector3 axisDirection,
+        double angleRadians);
     void ApplyViewportMirror(
         kachakacha::geometry::Vector3 linePoint,
         kachakacha::geometry::Vector3 lineDirection,

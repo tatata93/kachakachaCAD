@@ -3432,6 +3432,178 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("mv move test done");
 
     {
+        // ギズモ(オーナー指示): 選択モデル周辺の矢印で平行移動、リングで回転、
+        // モデル本体をつかんでドラッグでも移動できる。真上ビュー+固定倍率で
+        // マウスイベントを合成し、画面操作がそのまま形状へ確定することを確かめる。
+        const std::size_t gizmoWireStart = project_.Wires().size();
+        project_.AddWire("__gz線", Wire::Line({500.0, 0.0, 0.0}, {520.0, 0.0, 0.0}));
+        RefreshModelViews(false);
+        SetViewportTool(ViewportTool::Select);
+        UpdateSelections(
+            {{CadSelectionKind::Wire, static_cast<int>(gizmoWireStart)}}, true);
+        viewport_->SetDirectionView({0.0, 0.0, 1.0});
+        QApplication::processEvents();
+        if (!viewport_->GizmoVisible()) {
+            return fail("gizmo appears for a selection");
+        }
+        auto gizmoCenter = viewport_->GizmoCenter();
+        if (!gizmoCenter.has_value()
+            || (*gizmoCenter - Vector3{510.0, 0.0, 0.0}).Length() > 1.0e-6) {
+            return fail("gizmo center sits at the selection bbox center");
+        }
+        viewport_->RestoreViewFraming(*gizmoCenter, 4.0);
+        const auto sendGizmoMouse = [this](QEvent::Type type, QPointF position,
+                                        Qt::MouseButton button, Qt::MouseButtons buttons) {
+            const QPointF rounded(std::round(position.x()), std::round(position.y()));
+            const QPointF globalPosition = viewport_->mapToGlobal(rounded.toPoint());
+            QMouseEvent event(type, rounded, globalPosition, button, buttons, Qt::NoModifier);
+            QApplication::sendEvent(viewport_, &event);
+        };
+        const auto screenAngleAbout = [](QPointF point, QPointF center) {
+            return std::atan2(-(point.y() - center.y()), point.x() - center.x());
+        };
+        const auto wrapAngle = [](double angle) {
+            while (angle > 3.14159265358979323846) {
+                angle -= 2.0 * 3.14159265358979323846;
+            }
+            while (angle < -3.14159265358979323846) {
+                angle += 2.0 * 3.14159265358979323846;
+            }
+            return angle;
+        };
+        const Vector3 originalStart = project_.Wires()[gizmoWireStart].wire.Start();
+        // --- 軸矢印のドラッグ: 画面上のX軸方向へ30px → その分だけX移動する ---
+        {
+            const QPointF centerScreen = viewport_->ScreenPoint(*gizmoCenter);
+            const QPointF xAxisScreen
+                = viewport_->ScreenPoint(*gizmoCenter + Vector3{1.0, 0.0, 0.0})
+                - centerScreen;
+            const double xAxisLength
+                = std::hypot(xAxisScreen.x(), xAxisScreen.y());
+            if (xAxisLength <= 1.0e-6) {
+                return fail("gizmo x axis projects onto the screen");
+            }
+            const QPointF axisDirection = xAxisScreen / xAxisLength;
+            const QPointF grabFloat = centerScreen + axisDirection * 40.0;
+            const QPointF grab(std::round(grabFloat.x()), std::round(grabFloat.y()));
+            if (viewport_->GizmoHandleAt(grab) != GizmoHandle::TranslateX) {
+                return fail("gizmo x arrow hit test");
+            }
+            const QPointF targetFloat = grab + axisDirection * 30.0;
+            const QPointF target(std::round(targetFloat.x()), std::round(targetFloat.y()));
+            const Vector3 beforeStart = project_.Wires()[gizmoWireStart].wire.Start();
+            sendGizmoMouse(QEvent::MouseButtonPress, grab, Qt::LeftButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseMove, target, Qt::NoButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseButtonRelease, target, Qt::LeftButton, Qt::NoButton);
+            QApplication::processEvents();
+            const QPointF totalDelta = target - grab;
+            const double expectedMillimeters
+                = QPointF::dotProduct(totalDelta, xAxisScreen)
+                / (xAxisLength * xAxisLength);
+            const Vector3 afterStart = project_.Wires()[gizmoWireStart].wire.Start();
+            if ((afterStart - (beforeStart + Vector3{expectedMillimeters, 0.0, 0.0}))
+                    .Length() > 1.0e-6) {
+                return fail("gizmo arrow drag moves the selection along the axis");
+            }
+        }
+        // --- 本体をつかんでドラッグ: 選択済みモデル上から動かすと画面平行に移動 ---
+        {
+            gizmoCenter = viewport_->GizmoCenter();
+            if (!gizmoCenter.has_value()) {
+                return fail("gizmo center after arrow drag");
+            }
+            viewport_->RestoreViewFraming(*gizmoCenter, 4.0);
+            const Wire& wire = project_.Wires()[gizmoWireStart].wire;
+            const QPointF grabFloat = viewport_->ScreenPoint(wire.Evaluate(0.3));
+            const QPointF grab(std::round(grabFloat.x()), std::round(grabFloat.y()));
+            if (viewport_->GizmoHandleAt(grab) != GizmoHandle::None) {
+                return fail("grab point on the wire body misses gizmo handles");
+            }
+            const QPointF target = grab + QPointF(0.0, 25.0);
+            const Vector3 beforeStart = project_.Wires()[gizmoWireStart].wire.Start();
+            sendGizmoMouse(QEvent::MouseButtonPress, grab, Qt::LeftButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseMove, target, Qt::NoButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseButtonRelease, target, Qt::LeftButton, Qt::NoButton);
+            QApplication::processEvents();
+            const Vector3 afterStart = project_.Wires()[gizmoWireStart].wire.Start();
+            const Vector3 dragMove = afterStart - beforeStart;
+            if (std::abs(dragMove.Length() - 25.0 / viewport_->ViewScale()) > 1.0e-6
+                || std::abs(dragMove.z) > 1.0e-9) {
+                return fail("grab drag moves the selection parallel to the screen");
+            }
+            if (viewport_->Selections().size() != 1) {
+                return fail("grab drag keeps the selection");
+            }
+        }
+        // --- リングのドラッグ: Zリングを20°回すと実形状も画面と同じ向きに回る ---
+        {
+            gizmoCenter = viewport_->GizmoCenter();
+            if (!gizmoCenter.has_value()) {
+                return fail("gizmo center after grab drag");
+            }
+            viewport_->RestoreViewFraming(*gizmoCenter, 4.0);
+            const QPointF centerScreen = viewport_->ScreenPoint(*gizmoCenter);
+            const double ringRadiusMillimeters = 56.0 / viewport_->ViewScale();
+            const double diagonal = std::sqrt(0.5);
+            const QPointF grabFloat = viewport_->ScreenPoint(*gizmoCenter
+                + Vector3{diagonal * ringRadiusMillimeters,
+                    diagonal * ringRadiusMillimeters, 0.0});
+            const QPointF grab(std::round(grabFloat.x()), std::round(grabFloat.y()));
+            if (viewport_->GizmoHandleAt(grab) != GizmoHandle::RotateZ) {
+                return fail("gizmo z ring hit test");
+            }
+            const double grabRadius
+                = std::hypot(grab.x() - centerScreen.x(), grab.y() - centerScreen.y());
+            const double pressAngle = screenAngleAbout(grab, centerScreen);
+            const double dragAngle = 0.35; // 約20°
+            const QPointF targetFloat = centerScreen
+                + QPointF(grabRadius * std::cos(pressAngle + dragAngle),
+                    -grabRadius * std::sin(pressAngle + dragAngle));
+            const QPointF target(std::round(targetFloat.x()), std::round(targetFloat.y()));
+            const Vector3 beforeStart = project_.Wires()[gizmoWireStart].wire.Start();
+            const double beforeScreenAngle
+                = screenAngleAbout(viewport_->ScreenPoint(beforeStart), centerScreen);
+            const double mouseDelta = wrapAngle(
+                screenAngleAbout(target, centerScreen)
+                - screenAngleAbout(grab, centerScreen));
+            sendGizmoMouse(QEvent::MouseButtonPress, grab, Qt::LeftButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseMove, target, Qt::NoButton, Qt::LeftButton);
+            sendGizmoMouse(QEvent::MouseButtonRelease, target, Qt::LeftButton, Qt::NoButton);
+            QApplication::processEvents();
+            const Vector3 afterStart = project_.Wires()[gizmoWireStart].wire.Start();
+            if ((afterStart - beforeStart).Length() <= 1.0e-6) {
+                return fail("gizmo ring drag rotates the selection");
+            }
+            if (std::abs((afterStart - *gizmoCenter).Length()
+                    - (beforeStart - *gizmoCenter).Length()) > 1.0e-6
+                || std::abs(afterStart.z - beforeStart.z) > 1.0e-9) {
+                return fail("gizmo ring drag keeps the rotation radius");
+            }
+            const double afterScreenAngle
+                = screenAngleAbout(viewport_->ScreenPoint(afterStart), centerScreen);
+            const double wireDelta = wrapAngle(afterScreenAngle - beforeScreenAngle);
+            if (std::abs(wireDelta - mouseDelta) > 0.02) {
+                return fail("gizmo ring drag follows the mouse direction");
+            }
+        }
+        // 3回の操作はそれぞれ1回のUndoで戻る。
+        Undo();
+        Undo();
+        Undo();
+        if ((project_.Wires()[gizmoWireStart].wire.Start() - originalStart).Length()
+            > 1.0e-6) {
+            return fail("undo restores gizmo manipulations");
+        }
+        UpdateSelections({}, true);
+        if (!project_.RemoveWire("__gz線")) {
+            return fail("clean up gizmo test wire");
+        }
+        RefreshModelViews(false);
+        viewport_->SetIsometricView();
+    }
+    progressMark("gizmo checks done");
+
+    {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。
         const std::size_t autoWireStart = project_.Wires().size();
         const std::size_t autoSurfaceStart = project_.Surfaces().size();

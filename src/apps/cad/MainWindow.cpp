@@ -2897,6 +2897,25 @@ void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
             throw std::invalid_argument("移動量を指定してください。");
         }
 
+        // ワイヤ以外(面・板材・作業平面など)が混ざる選択はまとめて移動へ回す
+        // (ギズモのドラッグ移動もここを通る)。コピーはワイヤ専用のまま。
+        bool hasNonWire = false;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind != CadSelectionKind::None
+                && selection.kind != CadSelectionKind::Wire) {
+                hasNonWire = true;
+                break;
+            }
+        }
+        if (hasNonWire) {
+            if (copy) {
+                throw std::invalid_argument(
+                    "コピーはワイヤーのみ対応です。面や板材は移動で動かしてください。");
+            }
+            MoveObjectsBy(SelectedObjectTargets(), delta);
+            return;
+        }
+
         std::vector<int> indices;
         for (const CadSelection& selection : viewport_->Selections()) {
             if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
@@ -3128,6 +3147,56 @@ void MainWindow::MoveObjectsBy(
     }
 }
 
+void MainWindow::RotateObjectsBy(
+    const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
+    Vector3 axisPoint,
+    Vector3 axisDirection,
+    double angleRadians)
+{
+    using kachakacha::model::ProjectObjectKind;
+    try {
+        if (targets.empty()) {
+            throw std::invalid_argument("回転するオブジェクトを選択してください。");
+        }
+        // 近似モデルの部材面は回転未対応(部材オフセットは平行移動のみ)。
+        for (const auto& [kind, name] : targets) {
+            if (kind != ProjectObjectKind::Surface) {
+                continue;
+            }
+            const auto named = std::find_if(
+                project_.Surfaces().begin(), project_.Surfaces().end(),
+                [&](const kachakacha::model::NamedSurface& candidate) {
+                    return candidate.name == name;
+                });
+            if (named == project_.Surfaces().end()
+                || !named->partModelSourceName.has_value()) {
+                continue;
+            }
+            const std::string prefix = *named->partModelSourceName + "_部材";
+            if (name.size() > prefix.size()
+                && name.compare(0, prefix.size(), prefix) == 0
+                && name.find('_', prefix.size()) == std::string::npos) {
+                throw std::invalid_argument(
+                    "部材面の回転はまだできません(部材は平行移動のみ対応): " + name);
+            }
+        }
+        Project candidate = project_;
+        const int rotatedCount
+            = candidate.RotateObjects(targets, axisPoint, axisDirection, angleRadians);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("%1個を %2 度回転しました")
+                .arg(rotatedCount)
+                .arg(angleRadians * 180.0 / kPi, 0, 'f', 1),
+            3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 8000);
+    }
+}
+
 void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, Vector3 planeNormal)
 {
     try {
@@ -3188,6 +3257,20 @@ void MainWindow::ApplyViewportRotation(Vector3 axisPoint, Vector3 axisDirection,
         if (!axisPoint.IsFinite() || !axisDirection.IsFinite() || axisDirection.LengthSquared() <= 1.0e-18
             || !std::isfinite(angleRadians) || std::abs(angleRadians) <= 1.0e-12) {
             throw std::invalid_argument("回転の中心と角度を指定してください。");
+        }
+
+        // ワイヤ以外が混ざる選択はまとめて回転へ回す(ギズモのリングもここを通る)。
+        bool hasNonWire = false;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind != CadSelectionKind::None
+                && selection.kind != CadSelectionKind::Wire) {
+                hasNonWire = true;
+                break;
+            }
+        }
+        if (hasNonWire) {
+            RotateObjectsBy(SelectedObjectTargets(), axisPoint, axisDirection, angleRadians);
+            return;
         }
 
         std::vector<int> indices;

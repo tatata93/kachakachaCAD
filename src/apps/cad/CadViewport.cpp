@@ -2177,6 +2177,343 @@ QPointF CadViewport::ProjectPoint(Vector3 point) const
     };
 }
 
+namespace {
+
+// 選択ギズモ(矢印・リング)の画面上の寸法。
+constexpr double kGizmoArrowPixels = 78.0;
+constexpr double kGizmoRingPixels = 56.0;
+constexpr double kGizmoCenterHalfPixels = 5.0;
+
+[[nodiscard]] Vector3 GizmoAxisOf(GizmoHandle handle)
+{
+    switch (handle) {
+    case GizmoHandle::TranslateX:
+    case GizmoHandle::RotateX:
+        return {1.0, 0.0, 0.0};
+    case GizmoHandle::TranslateY:
+    case GizmoHandle::RotateY:
+        return {0.0, 1.0, 0.0};
+    default:
+        return {0.0, 0.0, 1.0};
+    }
+}
+
+[[nodiscard]] QColor GizmoAxisColor(int axis)
+{
+    switch (axis) {
+    case 0:
+        return QColor("#d9534f");
+    case 1:
+        return QColor("#3f9d44");
+    default:
+        return QColor("#4a7fd6");
+    }
+}
+
+[[nodiscard]] double GizmoDistanceToSegment(QPointF point, QPointF start, QPointF end)
+{
+    const QPointF span = end - start;
+    const double lengthSquared = QPointF::dotProduct(span, span);
+    if (lengthSquared <= 1.0e-9) {
+        return std::hypot(point.x() - start.x(), point.y() - start.y());
+    }
+    const double parameter = std::clamp(
+        QPointF::dotProduct(point - start, span) / lengthSquared, 0.0, 1.0);
+    const QPointF nearest = start + span * parameter;
+    return std::hypot(point.x() - nearest.x(), point.y() - nearest.y());
+}
+
+} // namespace
+
+std::optional<Vector3> CadViewport::ComputeSelectionCenter() const
+{
+    if (project_ == nullptr || selections_.empty()) {
+        return std::nullopt;
+    }
+    bool any = false;
+    Vector3 low{0.0, 0.0, 0.0};
+    Vector3 high{0.0, 0.0, 0.0};
+    const auto extend = [&](Vector3 point) {
+        if (!point.IsFinite()) {
+            return;
+        }
+        if (!any) {
+            low = point;
+            high = point;
+            any = true;
+            return;
+        }
+        low = {std::min(low.x, point.x), std::min(low.y, point.y), std::min(low.z, point.z)};
+        high = {std::max(high.x, point.x), std::max(high.y, point.y), std::max(high.z, point.z)};
+    };
+    for (const CadSelection& selection : selections_) {
+        const int index = selection.index;
+        if (index < 0) {
+            continue;
+        }
+        try {
+            switch (selection.kind) {
+            case CadSelectionKind::WorkPlane:
+                if (index < static_cast<int>(project_->WorkPlanes().size())) {
+                    extend(project_->WorkPlanes()[index].plane.Origin());
+                }
+                break;
+            case CadSelectionKind::Point:
+                if (index < static_cast<int>(project_->Points().size())) {
+                    extend(project_->Points()[index].point);
+                }
+                break;
+            case CadSelectionKind::Wire:
+                if (index < static_cast<int>(project_->Wires().size())) {
+                    const Wire& wire = project_->Wires()[index].wire;
+                    for (int sample = 0; sample <= 16; ++sample) {
+                        extend(wire.Evaluate(static_cast<double>(sample) / 16.0));
+                    }
+                }
+                break;
+            case CadSelectionKind::Surface:
+                if (index < static_cast<int>(project_->Surfaces().size())) {
+                    const auto& surface = project_->Surfaces()[index].surface;
+                    for (int uIndex = 0; uIndex <= 4; ++uIndex) {
+                        for (int vIndex = 0; vIndex <= 4; ++vIndex) {
+                            extend(surface.Evaluate(uIndex / 4.0, vIndex / 4.0));
+                        }
+                    }
+                }
+                break;
+            case CadSelectionKind::Plate:
+                if (index < static_cast<int>(project_->Plates().size())) {
+                    const auto& plate = project_->Plates()[index].plate;
+                    for (int uIndex = 0; uIndex <= 4; ++uIndex) {
+                        for (int vIndex = 0; vIndex <= 4; ++vIndex) {
+                            extend(plate.Evaluate(uIndex / 4.0, vIndex / 4.0, 0.0));
+                            extend(plate.Evaluate(uIndex / 4.0, vIndex / 4.0, 1.0));
+                        }
+                    }
+                }
+                break;
+            case CadSelectionKind::Body:
+                if (index < static_cast<int>(project_->Bodies().size())) {
+                    const auto& body = project_->Bodies()[index].body;
+                    for (int uIndex = 0; uIndex <= 4; ++uIndex) {
+                        for (int vIndex = 0; vIndex <= 4; ++vIndex) {
+                            extend(body.Evaluate(uIndex / 4.0, vIndex / 4.0, 0.0));
+                            extend(body.Evaluate(uIndex / 4.0, vIndex / 4.0, 1.0));
+                        }
+                    }
+                }
+                break;
+            default:
+                break;
+            }
+        } catch (const std::exception&) {
+            // 評価できない選択物は中心計算から外す。
+        }
+    }
+    if (!any) {
+        return std::nullopt;
+    }
+    return (low + high) * 0.5;
+}
+
+bool CadViewport::GizmoVisible() const
+{
+    return tool_ == ViewportTool::Select && displayMode_ == ViewportDisplayMode::Design
+        && ComputeSelectionCenter().has_value();
+}
+
+std::optional<Vector3> CadViewport::GizmoCenter() const
+{
+    if (tool_ != ViewportTool::Select || displayMode_ != ViewportDisplayMode::Design) {
+        return std::nullopt;
+    }
+    return ComputeSelectionCenter();
+}
+
+GizmoHandle CadViewport::GizmoHandleAt(QPointF position) const
+{
+    return HitGizmo(position);
+}
+
+CadViewport::GizmoGeometry CadViewport::MakeGizmoGeometry() const
+{
+    GizmoGeometry geometry;
+    if (pixelsPerMillimeter_ <= 1.0e-9) {
+        return geometry;
+    }
+    const auto center = ComputeSelectionCenter();
+    if (!center.has_value()) {
+        return geometry;
+    }
+    Vector3 shownCenter = *center;
+    if (gizmoDragHandle_ != GizmoHandle::None && gizmoDragActive_) {
+        // ドラッグ中は掴んだ時点の中心を基準に、プレビュー移動分だけずらす。
+        shownCenter = gizmoDragCenter_ + gizmoDragDelta_;
+    }
+    geometry.valid = true;
+    geometry.center = shownCenter;
+    geometry.centerScreen = ProjectPoint(shownCenter);
+    const double arrowLength = kGizmoArrowPixels / pixelsPerMillimeter_;
+    const double ringRadius = kGizmoRingPixels / pixelsPerMillimeter_;
+    const auto viewNormal = CurrentViewBasis()[0];
+    const std::array<Vector3, 3> axes
+        = {Vector3{1.0, 0.0, 0.0}, Vector3{0.0, 1.0, 0.0}, Vector3{0.0, 0.0, 1.0}};
+    for (int axis = 0; axis < 3; ++axis) {
+        const QPointF tip = ProjectPoint(shownCenter + axes[axis] * arrowLength);
+        geometry.axisTips[axis] = tip;
+        const QPointF span = tip - geometry.centerScreen;
+        geometry.axisVisible[axis] = std::hypot(span.x(), span.y()) > 14.0;
+        geometry.ringVisible[axis] = std::abs(Dot(axes[axis], viewNormal)) > 0.25;
+        const Vector3 uAxis = axes[(axis + 1) % 3];
+        const Vector3 vAxis = axes[(axis + 2) % 3];
+        QPolygonF ring;
+        for (int sample = 0; sample <= 48; ++sample) {
+            const double angle = 2.0 * std::numbers::pi * sample / 48.0;
+            ring << ProjectPoint(shownCenter + uAxis * (ringRadius * std::cos(angle))
+                + vAxis * (ringRadius * std::sin(angle)));
+        }
+        geometry.ringPolylines[axis] = ring;
+    }
+    return geometry;
+}
+
+GizmoHandle CadViewport::HitGizmo(QPointF position) const
+{
+    if (tool_ != ViewportTool::Select || displayMode_ != ViewportDisplayMode::Design) {
+        return GizmoHandle::None;
+    }
+    const GizmoGeometry geometry = MakeGizmoGeometry();
+    if (!geometry.valid) {
+        return GizmoHandle::None;
+    }
+    const QPointF toCenter = position - geometry.centerScreen;
+    if (std::abs(toCenter.x()) <= kGizmoCenterHalfPixels + 3.0
+        && std::abs(toCenter.y()) <= kGizmoCenterHalfPixels + 3.0) {
+        return GizmoHandle::TranslateView;
+    }
+    static constexpr std::array<GizmoHandle, 3> translateHandles
+        = {GizmoHandle::TranslateX, GizmoHandle::TranslateY, GizmoHandle::TranslateZ};
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!geometry.axisVisible[axis]) {
+            continue;
+        }
+        if (GizmoDistanceToSegment(position, geometry.centerScreen, geometry.axisTips[axis])
+            <= 8.0) {
+            return translateHandles[axis];
+        }
+    }
+    static constexpr std::array<GizmoHandle, 3> rotateHandles
+        = {GizmoHandle::RotateX, GizmoHandle::RotateY, GizmoHandle::RotateZ};
+    double best = 7.0;
+    GizmoHandle bestHandle = GizmoHandle::None;
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!geometry.ringVisible[axis]) {
+            continue;
+        }
+        const QPolygonF& ring = geometry.ringPolylines[axis];
+        for (int sample = 1; sample < ring.size(); ++sample) {
+            const double distance
+                = GizmoDistanceToSegment(position, ring[sample - 1], ring[sample]);
+            if (distance < best) {
+                best = distance;
+                bestHandle = rotateHandles[axis];
+            }
+        }
+    }
+    return bestHandle;
+}
+
+void CadViewport::PaintGizmo(QPainter& painter) const
+{
+    const GizmoGeometry geometry = MakeGizmoGeometry();
+    if (!geometry.valid) {
+        return;
+    }
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const GizmoHandle active
+        = gizmoDragHandle_ != GizmoHandle::None ? gizmoDragHandle_ : gizmoHoverHandle_;
+    // 回転リング(矢印の後ろに描く)。
+    static constexpr std::array<GizmoHandle, 3> rotateHandles
+        = {GizmoHandle::RotateX, GizmoHandle::RotateY, GizmoHandle::RotateZ};
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!geometry.ringVisible[axis]) {
+            continue;
+        }
+        QColor color = GizmoAxisColor(axis);
+        const bool hot = active == rotateHandles[axis];
+        color.setAlpha(hot ? 235 : 130);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(color, hot ? 2.6 : 1.5));
+        painter.drawPolyline(geometry.ringPolylines[axis]);
+    }
+    // 平行移動の軸矢印。
+    static constexpr std::array<GizmoHandle, 3> translateHandles
+        = {GizmoHandle::TranslateX, GizmoHandle::TranslateY, GizmoHandle::TranslateZ};
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!geometry.axisVisible[axis]) {
+            continue;
+        }
+        QColor color = GizmoAxisColor(axis);
+        const bool hot = active == translateHandles[axis];
+        color.setAlpha(hot ? 255 : 205);
+        const QPointF tip = geometry.axisTips[axis];
+        QPointF direction = tip - geometry.centerScreen;
+        const double length = std::hypot(direction.x(), direction.y());
+        direction /= length;
+        const QPointF start
+            = geometry.centerScreen + direction * (kGizmoCenterHalfPixels + 4.0);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(color, hot ? 3.4 : 2.4, Qt::SolidLine, Qt::RoundCap));
+        painter.drawLine(start, tip - direction * 9.0);
+        const QPointF perpendicular(-direction.y(), direction.x());
+        QPolygonF head;
+        head << tip << tip - direction * 11.0 + perpendicular * 4.5
+             << tip - direction * 11.0 - perpendicular * 4.5;
+        painter.setBrush(color);
+        painter.setPen(Qt::NoPen);
+        painter.drawPolygon(head);
+        painter.setPen(QPen(color, 1.0));
+        painter.drawText(tip + direction * 10.0 + QPointF(-4.0, 4.0),
+            axis == 0 ? QStringLiteral("X")
+                      : axis == 1 ? QStringLiteral("Y") : QStringLiteral("Z"));
+    }
+    // 中心の四角(画面に平行な自由移動)。
+    {
+        QColor color("#f0a11b");
+        const bool hot = active == GizmoHandle::TranslateView;
+        color.setAlpha(hot ? 255 : 215);
+        painter.setBrush(color);
+        painter.setPen(QPen(QColor(60, 60, 60, 180), 1.0));
+        const double half = hot ? kGizmoCenterHalfPixels + 1.5 : kGizmoCenterHalfPixels;
+        painter.drawRect(QRectF(
+            geometry.centerScreen - QPointF(half, half), QSizeF(half * 2.0, half * 2.0)));
+    }
+    // ドラッグ中は量を表示する(移動は軌跡の破線も)。
+    if (gizmoDragHandle_ != GizmoHandle::None && gizmoDragActive_) {
+        const bool rotating = gizmoDragHandle_ == GizmoHandle::RotateX
+            || gizmoDragHandle_ == GizmoHandle::RotateY
+            || gizmoDragHandle_ == GizmoHandle::RotateZ;
+        QString text;
+        if (rotating) {
+            text = QStringLiteral("%1°").arg(
+                gizmoDragAngle_ * 180.0 / std::numbers::pi, 0, 'f', 1);
+        } else {
+            const QPointF origin = ProjectPoint(gizmoDragCenter_);
+            painter.setBrush(Qt::NoBrush);
+            painter.setPen(QPen(QColor(90, 90, 90, 200), 1.2, Qt::DashLine));
+            painter.drawLine(origin, geometry.centerScreen);
+            text = QStringLiteral("Δ(%1, %2, %3) mm")
+                .arg(gizmoDragDelta_.x, 0, 'f', 1)
+                .arg(gizmoDragDelta_.y, 0, 'f', 1)
+                .arg(gizmoDragDelta_.z, 0, 'f', 1);
+        }
+        painter.setPen(QPen(QColor("#333333")));
+        painter.drawText(geometry.centerScreen + QPointF(16.0, -16.0), text);
+    }
+    painter.restore();
+}
+
 void CadViewport::FitAll()
 {
     if (project_ == nullptr) {
@@ -5027,6 +5364,11 @@ void CadViewport::paintEvent(QPaintEvent*)
         painter.restore();
     }
 
+    // 選択ギズモ(オーナー指示: 矢印とリングで平行移動・回転)。
+    if (GizmoVisible()) {
+        PaintGizmo(painter);
+    }
+
     const ViewCubeGeometry cube = MakeViewCubeGeometry(width(), CurrentViewBasis());
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
@@ -5462,6 +5804,26 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+    // 選択ギズモのつまみ(矢印・リング・中心四角)を掴む。
+    if (event->button() == Qt::LeftButton && tool_ == ViewportTool::Select
+        && displayMode_ == ViewportDisplayMode::Design && !selections_.empty()) {
+        const GizmoHandle handle = HitGizmo(event->position());
+        if (handle != GizmoHandle::None) {
+            const auto center = ComputeSelectionCenter();
+            if (center.has_value()) {
+                gizmoDragHandle_ = handle;
+                gizmoDragActive_ = false;
+                gizmoDragFromObject_ = false;
+                gizmoDragCenter_ = *center;
+                gizmoDragDelta_ = Vector3{0.0, 0.0, 0.0};
+                gizmoDragAngle_ = 0.0;
+                gizmoPressPosition_ = event->position().toPoint();
+                setCursor(Qt::ClosedHandCursor);
+                event->accept();
+                return;
+            }
+        }
+    }
     if (event->button() == Qt::LeftButton
         && (tool_ == ViewportTool::TrimWire || tool_ == ViewportTool::ExtendWire)) {
         UpdateHover(event->position());
@@ -5516,6 +5878,28 @@ void CadViewport::mousePressEvent(QMouseEvent* event)
             setCursor(Qt::ClosedHandCursor);
             event->accept();
             return;
+        }
+        // 選択済みモデル本体をつかんだドラッグ(オーナー指示: つかんで移動)。
+        // 動かせば画面に平行な移動、動かさず離せば従来どおりのクリック選択。
+        if (displayMode_ == ViewportDisplayMode::Design
+            && !event->modifiers().testFlag(Qt::ControlModifier)
+            && !event->modifiers().testFlag(Qt::ShiftModifier)
+            && !selections_.empty()) {
+            const CadSelection hit = HitTest(event->position());
+            if (hit.kind != CadSelectionKind::None && IsSelected(hit.kind, hit.index)) {
+                const auto center = ComputeSelectionCenter();
+                if (center.has_value()) {
+                    gizmoDragHandle_ = GizmoHandle::TranslateView;
+                    gizmoDragActive_ = false;
+                    gizmoDragFromObject_ = true;
+                    gizmoDragCenter_ = *center;
+                    gizmoDragDelta_ = Vector3{0.0, 0.0, 0.0};
+                    gizmoDragAngle_ = 0.0;
+                    gizmoPressPosition_ = event->position().toPoint();
+                    event->accept();
+                    return;
+                }
+            }
         }
     }
     if (tool_ != ViewportTool::Select
@@ -5624,6 +6008,59 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         // キューブは「つかんで回す」向き: 上へドラッグ=キューブの上面が奥へ倒れる。
         // キャンバスのオービット(カメラを動かす向き)とは縦方向が逆になる。
         OrbitViewByPixels(delta.x(), -delta.y());
+        lastMousePosition_ = event->position().toPoint();
+        update();
+        event->accept();
+        return;
+    }
+
+    if (gizmoDragHandle_ != GizmoHandle::None && dragButton_ == Qt::LeftButton) {
+        const QPoint totalDelta = event->position().toPoint() - gizmoPressPosition_;
+        if (!gizmoDragActive_ && std::hypot(totalDelta.x(), totalDelta.y()) <= 4.0) {
+            event->accept();
+            return;
+        }
+        gizmoDragActive_ = true;
+        mouseMoved_ = true;
+        setCursor(Qt::ClosedHandCursor);
+        const auto basis = CurrentViewBasis();
+        if (gizmoDragHandle_ == GizmoHandle::TranslateView) {
+            // 画面に平行な自由移動。
+            gizmoDragDelta_ = basis[1] * (totalDelta.x() / pixelsPerMillimeter_)
+                + basis[2] * (-totalDelta.y() / pixelsPerMillimeter_);
+        } else if (gizmoDragHandle_ == GizmoHandle::TranslateX
+            || gizmoDragHandle_ == GizmoHandle::TranslateY
+            || gizmoDragHandle_ == GizmoHandle::TranslateZ) {
+            // 軸矢印: マウス移動を画面上の軸方向へ射影して距離(mm)にする。
+            const Vector3 axis = GizmoAxisOf(gizmoDragHandle_);
+            const QPointF centerScreen = ProjectPoint(gizmoDragCenter_);
+            const QPointF axisScreen = ProjectPoint(gizmoDragCenter_ + axis) - centerScreen;
+            const double axisLengthSquared = QPointF::dotProduct(axisScreen, axisScreen);
+            if (axisLengthSquared > 1.0e-6) {
+                const QPointF mouse(totalDelta);
+                gizmoDragDelta_ = axis
+                    * (QPointF::dotProduct(mouse, axisScreen) / axisLengthSquared);
+            }
+        } else {
+            // 回転リング: 中心まわりの画面角度の変化を積算する。
+            const QPointF center = ProjectPoint(gizmoDragCenter_);
+            const QPointF previous = QPointF(lastMousePosition_) - center;
+            const QPointF current = event->position() - center;
+            if (std::hypot(previous.x(), previous.y()) > 5.0
+                && std::hypot(current.x(), current.y()) > 5.0) {
+                double wrapped = std::atan2(-current.y(), current.x())
+                    - std::atan2(-previous.y(), previous.x());
+                while (wrapped > std::numbers::pi) {
+                    wrapped -= 2.0 * std::numbers::pi;
+                }
+                while (wrapped < -std::numbers::pi) {
+                    wrapped += 2.0 * std::numbers::pi;
+                }
+                const Vector3 axis = GizmoAxisOf(gizmoDragHandle_);
+                const double orientation = Dot(axis, basis[0]) >= 0.0 ? 1.0 : -1.0;
+                gizmoDragAngle_ += orientation * wrapped;
+            }
+        }
         lastMousePosition_ = event->position().toPoint();
         update();
         event->accept();
@@ -5757,6 +6194,18 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
         }
         setToolTip(tooltip);
         update();
+    }
+
+    if (dragButton_ == Qt::NoButton) {
+        // 選択ギズモのつまみのホバー強調。
+        const GizmoHandle hover
+            = hoveredFace == static_cast<int>(ViewCubeFace::None)
+            ? HitGizmo(event->position())
+            : GizmoHandle::None;
+        if (hover != gizmoHoverHandle_) {
+            gizmoHoverHandle_ = hover;
+            update();
+        }
     }
 
     if (dragButton_ == Qt::NoButton
@@ -5920,6 +6369,44 @@ void CadViewport::mouseReleaseEvent(QMouseEvent* event)
                 : Qt::PointingHandCursor);
         event->accept();
         return;
+    }
+
+    if (gizmoDragHandle_ != GizmoHandle::None && event->button() == Qt::LeftButton) {
+        const GizmoHandle handle = gizmoDragHandle_;
+        const bool active = gizmoDragActive_;
+        const bool fromObject = gizmoDragFromObject_;
+        const Vector3 delta = gizmoDragDelta_;
+        const double angle = gizmoDragAngle_;
+        const Vector3 center = gizmoDragCenter_;
+        gizmoDragHandle_ = GizmoHandle::None;
+        gizmoDragActive_ = false;
+        gizmoDragFromObject_ = false;
+        gizmoDragDelta_ = Vector3{0.0, 0.0, 0.0};
+        gizmoDragAngle_ = 0.0;
+        setCursor(Qt::ArrowCursor);
+        if (active) {
+            const bool rotating = handle == GizmoHandle::RotateX
+                || handle == GizmoHandle::RotateY || handle == GizmoHandle::RotateZ;
+            if (rotating) {
+                if (std::abs(angle) > 1.0e-4 && rotationRequested_) {
+                    rotationRequested_(center, GizmoAxisOf(handle), angle);
+                }
+            } else if (delta.LengthSquared() > 1.0e-12 && translationRequested_) {
+                translationRequested_(delta, false);
+            }
+            dragButton_ = Qt::NoButton;
+            update();
+            event->accept();
+            return;
+        }
+        update();
+        if (!fromObject) {
+            // つまみを動かさず離した: 何もしない。
+            dragButton_ = Qt::NoButton;
+            event->accept();
+            return;
+        }
+        // モデル本体を動かさず離した: 通常のクリック選択として続行する。
     }
 
     if (orbitInteraction_) {
@@ -6165,6 +6652,17 @@ void CadViewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->key() == Qt::Key_Escape) {
+        if (gizmoDragHandle_ != GizmoHandle::None) {
+            // ギズモのドラッグを中断(確定しない)。
+            gizmoDragHandle_ = GizmoHandle::None;
+            gizmoDragActive_ = false;
+            gizmoDragFromObject_ = false;
+            gizmoDragDelta_ = Vector3{0.0, 0.0, 0.0};
+            gizmoDragAngle_ = 0.0;
+            dragButton_ = Qt::NoButton;
+            setCursor(Qt::ArrowCursor);
+            update();
+        }
         if (gridOriginDragSource_.has_value()) {
             gridOriginDragSource_.reset();
             gridOriginDragTarget_.reset();

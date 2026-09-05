@@ -1040,6 +1040,9 @@ void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
         RecordUndo();
         project_ = std::move(candidate);
         MarkModified();
+        // 実際の部材面・レール・板材もこの姿勢へ再構築されるため、
+        // ツリー・ビューポートごと更新する(オーナー指示の実体反映)。
+        RefreshModelViews(false);
         UpdatePartFoldPreview();
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);

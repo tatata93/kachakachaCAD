@@ -1116,6 +1116,204 @@ void Project::AddPlateOffsetWire(
     });
 }
 
+int Project::TranslateObjects(
+    const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
+    const geometry::Vector3& delta)
+{
+    if (!delta.IsFinite()) {
+        throw std::invalid_argument("移動量に有限でない値が含まれています。");
+    }
+
+    Project candidate = *this;
+    std::vector<std::string> workPlaneNames;
+    std::vector<std::string> pointNames;
+    std::vector<std::string> wireNames;
+
+    const auto containsName = [](const std::vector<std::string>& names, std::string_view name) {
+        return std::any_of(names.begin(), names.end(), [&](const std::string& current) {
+            return current == name;
+        });
+    };
+    const auto addUniqueName = [&](std::vector<std::string>& names, const std::string& name) {
+        if (!containsName(names, name)) {
+            names.push_back(name);
+        }
+    };
+    const auto derivedMessage = [](std::string_view kind, const std::string& name) {
+        return std::string(kind) + "は移動対象にできません: " + name
+            + "。元(下書き・板材・近似モデル)側を動かしてください。";
+    };
+
+    const auto requireWorkPlane = [&](const std::string& name) -> const NamedWorkPlane& {
+        const auto plane = std::find_if(
+            candidate.workPlanes_.begin(), candidate.workPlanes_.end(),
+            [&](const NamedWorkPlane& current) {
+                return current.name == name;
+            });
+        if (plane == candidate.workPlanes_.end()) {
+            throw std::invalid_argument("移動対象の作業平面が見つかりません: " + name);
+        }
+        return *plane;
+    };
+    const auto requirePoint = [&](const std::string& name) -> const NamedPoint& {
+        const auto point = std::find_if(
+            candidate.points_.begin(), candidate.points_.end(),
+            [&](const NamedPoint& current) {
+                return current.name == name;
+            });
+        if (point == candidate.points_.end()) {
+            throw std::invalid_argument("移動対象の点が見つかりません: " + name);
+        }
+        return *point;
+    };
+    const auto requireWire = [&](const std::string& name) -> const NamedWire& {
+        const auto wire = std::find_if(
+            candidate.wires_.begin(), candidate.wires_.end(),
+            [&](const NamedWire& current) {
+                return current.name == name;
+            });
+        if (wire == candidate.wires_.end()) {
+            throw std::invalid_argument("移動対象のワイヤが見つかりません: " + name);
+        }
+        return *wire;
+    };
+    const auto requireSurface = [&](const std::string& name) -> const NamedSurface& {
+        const auto surface = std::find_if(
+            candidate.surfaces_.begin(), candidate.surfaces_.end(),
+            [&](const NamedSurface& current) {
+                return current.name == name;
+            });
+        if (surface == candidate.surfaces_.end()) {
+            throw std::invalid_argument("移動対象の面が見つかりません: " + name);
+        }
+        return *surface;
+    };
+    const auto requirePlate = [&](const std::string& name) -> const NamedPlate& {
+        const auto plate = std::find_if(
+            candidate.plates_.begin(), candidate.plates_.end(),
+            [&](const NamedPlate& current) {
+                return current.name == name;
+            });
+        if (plate == candidate.plates_.end()) {
+            throw std::invalid_argument("移動対象の板材が見つかりません: " + name);
+        }
+        return *plate;
+    };
+    const auto requireBody = [&](const std::string& name) -> const NamedBody& {
+        const auto body = std::find_if(
+            candidate.bodies_.begin(), candidate.bodies_.end(),
+            [&](const NamedBody& current) {
+                return current.name == name;
+            });
+        if (body == candidate.bodies_.end()) {
+            throw std::invalid_argument("移動対象の治具が見つかりません: " + name);
+        }
+        return *body;
+    };
+    const auto requirePartModel = [&](const std::string& name) {
+        const auto model = std::find_if(
+            candidate.partModels_.begin(), candidate.partModels_.end(),
+            [&](const NamedPartModel& current) {
+                return current.name == name;
+            });
+        if (model == candidate.partModels_.end()) {
+            throw std::invalid_argument(
+                "移動対象の部材近似モデルが見つかりません: " + name);
+        }
+    };
+
+    const auto addBaseWire = [&](const std::string& name) {
+        const NamedWire& wire = requireWire(name);
+        if (wire.projection.has_value()
+            || wire.plateOffset.has_value()
+            || wire.partModelSourceName.has_value()) {
+            throw std::invalid_argument(derivedMessage("派生ワイヤ", wire.name));
+        }
+        addUniqueName(wireNames, wire.name);
+    };
+    const auto expandSurface = [&](const std::string& name) {
+        const NamedSurface& surface = requireSurface(name);
+        if (surface.partModelSourceName.has_value()) {
+            throw std::invalid_argument(
+                derivedMessage("部材近似モデルの派生面", surface.name));
+        }
+        for (const std::string& wireName : surface.sourceWireNames) {
+            addBaseWire(wireName);
+        }
+        for (const std::string& wireName : surface.guideWireNames) {
+            addBaseWire(wireName);
+        }
+    };
+
+    for (const auto& target : targets) {
+        const std::string& targetName = target.second;
+        switch (target.first) {
+        case ProjectObjectKind::WorkPlane: {
+            const NamedWorkPlane& plane = requireWorkPlane(targetName);
+            addUniqueName(workPlaneNames, plane.name);
+            for (const NamedWire& wire : candidate.wires_) {
+                if (wire.metadata.sourcePlaneName.has_value()
+                    && *wire.metadata.sourcePlaneName == plane.name) {
+                    addBaseWire(wire.name);
+                }
+            }
+            break;
+        }
+        case ProjectObjectKind::Point: {
+            const NamedPoint& point = requirePoint(targetName);
+            addUniqueName(pointNames, point.name);
+            break;
+        }
+        case ProjectObjectKind::Wire:
+            addBaseWire(targetName);
+            break;
+        case ProjectObjectKind::Surface:
+            expandSurface(targetName);
+            break;
+        case ProjectObjectKind::Plate: {
+            const NamedPlate& plate = requirePlate(targetName);
+            expandSurface(plate.sourceSurfaceName);
+            break;
+        }
+        case ProjectObjectKind::Body: {
+            const NamedBody& body = requireBody(targetName);
+            expandSurface(body.sourceSurfaceName);
+            break;
+        }
+        case ProjectObjectKind::PartModel:
+            requirePartModel(targetName);
+            throw std::invalid_argument(
+                derivedMessage("部材近似モデル", targetName));
+        }
+    }
+
+    const int movedCount = static_cast<int>(
+        workPlaneNames.size() + pointNames.size() + wireNames.size());
+    if (movedCount == 0) {
+        throw std::invalid_argument("移動できる対象がありません。");
+    }
+
+    for (NamedWorkPlane& plane : candidate.workPlanes_) {
+        if (containsName(workPlaneNames, plane.name)) {
+            plane.plane = plane.plane.Translated(delta);
+        }
+    }
+    for (NamedPoint& point : candidate.points_) {
+        if (containsName(pointNames, point.name)) {
+            point.point = point.point + delta;
+        }
+    }
+    for (NamedWire& wire : candidate.wires_) {
+        if (containsName(wireNames, wire.name)) {
+            wire.wire = ConstrainWire(candidate, wire.wire.Translated(delta), wire.metadata);
+        }
+    }
+
+    candidate.RebuildDependentGeometry();
+    *this = std::move(candidate);
+    return movedCount;
+}
+
 void Project::UpdateWorkPlane(std::string_view name, WorkPlane plane)
 {
     Project candidate = *this;
@@ -3553,6 +3751,122 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
     if (!model.railFoldProgress.empty() && model.railFoldProgress.size() != creaseCount) {
         model.railFoldProgress.clear();
     }
+    // 部材オフセット: 部材数が減って載らない記録は外す。
+    std::erase_if(model.partOffsets, [&](const NamedPartModel::PartOffset& offset) {
+        return offset.partNumber < 1
+            || offset.partNumber > static_cast<int>(model.result.parts.size());
+    });
+
+    // --- 曲げ状態・部材オフセットの実体反映(オーナー指示) ---
+    // 折り線進行度が完成形(全て1)以外、または部材オフセットがあるとき、
+    // 部材面・境界レール・部材の穴を「剛体折りの現在姿勢+部材ごとの平行移動」へ写す。
+    // 帯そのものは一切変形しない(等長)。この上に作った板材・厚み位置ワイヤは
+    // RebuildDependentGeometry の部材面依存の再構築でこの姿勢へ追従する。
+    const bool foldActive = std::any_of(
+        model.railFoldProgress.begin(), model.railFoldProgress.end(),
+        [](double value) { return std::abs(value - 1.0) > 1.0e-9; });
+    const bool offsetActive = std::any_of(
+        model.partOffsets.begin(), model.partOffsets.end(),
+        [](const NamedPartModel::PartOffset& offset) {
+            return offset.delta.LengthSquared() > 0.0;
+        });
+    if ((foldActive || offsetActive) && !model.result.parts.empty()) {
+        const PartMeshDevelopment foldMesh = DevelopPartMesh(
+            RequirePartModelSource(model), model.options.splitAxis, parameters, 96);
+        std::vector<double> creaseProgress(
+            foldMesh.rows >= 2 ? static_cast<std::size_t>(foldMesh.rows - 2) : 0, 1.0);
+        for (std::size_t index = 0;
+             index < creaseProgress.size() && index < model.railFoldProgress.size();
+             ++index) {
+            creaseProgress[index] = model.railFoldProgress[index];
+        }
+        const std::vector<PartBandTransform> bandTransforms
+            = BuildRigidBandTransforms(foldMesh, creaseProgress);
+        const int bandCount = static_cast<int>(bandTransforms.size());
+        const auto offsetOf = [&model](int band) {
+            for (const NamedPartModel::PartOffset& offset : model.partOffsets) {
+                if (offset.partNumber == band + 1) {
+                    return offset.delta;
+                }
+            }
+            return geometry::Vector3{0.0, 0.0, 0.0};
+        };
+        const auto applyBand = [&](int band, const geometry::Vector3& point) {
+            const int clamped = std::clamp(band, 0, bandCount - 1);
+            return bandTransforms[static_cast<std::size_t>(clamped)].Apply(point)
+                + offsetOf(clamped);
+        };
+        const auto transformedRow = [&](int row, int band) {
+            std::vector<geometry::Vector3> points;
+            points.reserve(foldMesh.world[static_cast<std::size_t>(row)].size());
+            for (const geometry::Vector3& point
+                : foldMesh.world[static_cast<std::size_t>(row)]) {
+                points.push_back(applyBand(band, point));
+            }
+            return points;
+        };
+        // レール j は帯 min(j, 帯数-1) に同座標で追従する(帯どうしの隙間は許容)。
+        for (std::size_t railIndex = 0; railIndex < model.boundaryWireNames.size()
+             && railIndex < static_cast<std::size_t>(foldMesh.rows); ++railIndex) {
+            const auto rail = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& wire) {
+                    return wire.name == model.boundaryWireNames[railIndex];
+                });
+            if (rail == wires_.end()) {
+                continue;
+            }
+            rail->wire = Wire::Polyline(transformedRow(
+                static_cast<int>(railIndex),
+                std::min<int>(static_cast<int>(railIndex), bandCount - 1)));
+        }
+        // 部材面 i は帯 i の変換で両縁とも同じ剛体変換(帯は変形しない)。
+        for (std::size_t partIndex = 0; partIndex < model.partSurfaceNames.size()
+             && partIndex + 1 < static_cast<std::size_t>(foldMesh.rows); ++partIndex) {
+            const auto named = std::find_if(surfaces_.begin(), surfaces_.end(),
+                [&](const NamedSurface& candidate) {
+                    return candidate.name == model.partSurfaceNames[partIndex];
+                });
+            if (named == surfaces_.end()) {
+                continue;
+            }
+            const int band = static_cast<int>(partIndex);
+            named->surface = Surface::Ruled(
+                Wire::Polyline(transformedRow(static_cast<int>(partIndex), band)),
+                Wire::Polyline(transformedRow(static_cast<int>(partIndex) + 1, band)));
+        }
+        // 部材の穴(投影済み)は、属する部材の変換で点単位に写す。
+        for (const std::string& openingName : model.openingWireNames) {
+            const std::string prefix = model.name + "_部材";
+            if (openingName.size() <= prefix.size()
+                || openingName.compare(0, prefix.size(), prefix) != 0) {
+                continue;
+            }
+            int band = 0;
+            try {
+                band = std::stoi(openingName.substr(prefix.size())) - 1;
+            } catch (const std::exception&) {
+                continue;
+            }
+            const auto opening = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& wire) { return wire.name == openingName; });
+            if (opening == wires_.end()) {
+                continue;
+            }
+            constexpr int kOpeningSamples = 96;
+            const bool closed = opening->wire.IsClosed();
+            const int last = closed ? kOpeningSamples - 1 : kOpeningSamples;
+            std::vector<geometry::Vector3> points;
+            points.reserve(static_cast<std::size_t>(kOpeningSamples) + 1);
+            for (int sample = 0; sample <= last; ++sample) {
+                points.push_back(applyBand(band,
+                    opening->wire.Evaluate(static_cast<double>(sample) / kOpeningSamples)));
+            }
+            if (closed) {
+                points.push_back(points.front());
+            }
+            opening->wire = Wire::Polyline(std::move(points));
+        }
+    }
 
     // --- 自動セット「近似:<名前>」を最新のメンバーで作り直す ---
     const std::string setName = "近似:" + model.name;
@@ -3683,6 +3997,33 @@ void Project::SetPartModelRailFoldProgress(
         }
     }
     model->railFoldProgress = std::move(progress);
+    // 実際の部材面・レール・穴と、その上の板材等をこの姿勢へ作り直す(オーナー指示)。
+    RebuildDependentGeometry();
+}
+
+void Project::SetPartModelPartOffset(
+    std::string_view name, int partNumber, const geometry::Vector3& delta)
+{
+    const auto model = std::find_if(partModels_.begin(), partModels_.end(),
+        [&](const NamedPartModel& candidate) {
+            return candidate.name == name;
+        });
+    if (model == partModels_.end()) {
+        throw std::invalid_argument("Part model is missing: " + std::string(name));
+    }
+    if (partNumber < 1 || partNumber > static_cast<int>(model->result.parts.size())) {
+        throw std::invalid_argument("部材番号が範囲外です。");
+    }
+    if (!delta.IsFinite()) {
+        throw std::invalid_argument("部材オフセットの値が不正です。");
+    }
+    std::erase_if(model->partOffsets, [&](const NamedPartModel::PartOffset& offset) {
+        return offset.partNumber == partNumber;
+    });
+    if (delta.LengthSquared() > 0.0) {
+        model->partOffsets.push_back(NamedPartModel::PartOffset{partNumber, delta});
+    }
+    RebuildDependentGeometry();
 }
 
 void Project::SetPartModelConnectionScope(

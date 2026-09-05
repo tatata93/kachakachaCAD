@@ -126,6 +126,17 @@ private:
     void AddWire();
     void ApplySelectedEdit();
     void ApplyViewportTranslation(kachakacha::geometry::Vector3 delta, bool copy);
+    //! 選択中オブジェクトの(種類,名前)一覧。まとめ欄の配下選択もそのまま反映される。
+    [[nodiscard]] std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>
+        SelectedObjectTargets() const;
+    //! XYZ入力ダイアログを出して選択を平行移動する(空なら現在の選択を使う)。
+    void PromptMoveSelectedObjects(
+        std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>> targets);
+    //! 選択の平行移動(オーナー指示)。面・板材は元ワイヤごと、近似モデルの部材面は
+    //! 部材オフセットとして記録して動かす(再計算しても保たれる)。
+    void MoveObjectsBy(
+        const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
+        kachakacha::geometry::Vector3 delta);
     void ApplyViewportMirror(
         kachakacha::geometry::Vector3 linePoint,
         kachakacha::geometry::Vector3 lineDirection,

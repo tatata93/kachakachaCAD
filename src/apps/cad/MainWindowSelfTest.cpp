@@ -24,6 +24,8 @@
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QDebug>
 #include <QDesktopServices>
@@ -3303,11 +3305,43 @@ bool MainWindow::RunCreationSelfTest()
         if (viewport_->PartFoldPreviewRailCount() != 0) {
             return fail("fold preview clears when disabled");
         }
+        // 部材ごとの移動(オーナー指示): 部材面の移動は部材オフセットとして記録され、
+        // その部材だけが動く。逆方向へ戻すとオフセットは消える。
+        {
+            const auto partSurfacePoint = [this](const std::string& surfaceName) {
+                for (const auto& surface : project_.Surfaces()) {
+                    if (surface.name == surfaceName) {
+                        return surface.surface.Evaluate(0.5, 0.5);
+                    }
+                }
+                throw std::runtime_error("part surface missing: " + surfaceName);
+            };
+            const std::string partSurface1 = "__ui_部材近似_部材1";
+            const Vector3 partBefore = partSurfacePoint(partSurface1);
+            MoveObjectsBy(
+                {{kachakacha::model::ProjectObjectKind::Surface, partSurface1}},
+                {4.0, 0.0, 0.0});
+            if ((partSurfacePoint(partSurface1)
+                    - (partBefore + Vector3{4.0, 0.0, 0.0})).Length() > 1.0e-6
+                || project_.PartModels().back().partOffsets.size() != 1) {
+                return fail("moving a part surface records a part offset");
+            }
+            MoveObjectsBy(
+                {{kachakacha::model::ProjectObjectKind::Surface, partSurface1}},
+                {-4.0, 0.0, 0.0});
+            if (!project_.PartModels().back().partOffsets.empty()
+                || (partSurfacePoint(partSurface1) - partBefore).Length() > 1.0e-6) {
+                return fail("moving back clears the part offset");
+            }
+        }
+        // 注意: MoveObjectsBy が project_ を差し替えるため partModel 参照は
+        // ここで取り直す(ぶら下がり参照の防止)。
+        const auto& partModelAfterMove = project_.PartModels().back();
         // 型紙ビューの折り角表示: 結合型紙の折り線数と折り角数が一致する
         // (foldLines[i] ↔ MeasureCreaseAngles[i] の対応が前提)。
-        if (partModel.result.parts.size() >= 2) {
+        if (partModelAfterMove.result.parts.size() >= 2) {
             const auto combined = kachakacha::io::BuildPartPatternWithPreview(
-                project_, partModel, {1, 2});
+                project_, partModelAfterMove, {1, 2});
             const auto combinedAngles =
                 kachakacha::model::MeasureCreaseAngles(combined.mesh);
             if (combined.pattern.foldLines.empty()
@@ -3315,7 +3349,7 @@ bool MainWindow::RunCreationSelfTest()
                 return fail("combined pattern fold lines match crease angles");
             }
         }
-        if (!partModel.boundaryWireNames.empty()) {
+        if (!partModelAfterMove.boundaryWireNames.empty()) {
             SetApproximationSetsVisible(false);
             if (project_.ObjectStateInSets(
                     kachakacha::model::ProjectObjectKind::Wire,
@@ -3335,6 +3369,42 @@ bool MainWindow::RunCreationSelfTest()
             return fail("remove part-approximation model");
         }
         RefreshModelViews(false);
+    }
+
+    {
+        // 移動(オーナー指示): 面を指定してXYZ移動すると元ワイヤごと動き、Undoで戻る。
+        const std::size_t moveWireStart = project_.Wires().size();
+        project_.AddWire("__mv下", Wire::Line({300.0, 0.0, 0.0}, {320.0, 0.0, 0.0}));
+        project_.AddWire("__mv上", Wire::Line({300.0, 10.0, 5.0}, {320.0, 10.0, 5.0}));
+        project_.AddRuledSurface("__mv面", "__mv下", "__mv上");
+        RefreshModelViews(false);
+        const Vector3 moveBefore = project_.Surfaces().back().surface.Evaluate(0.5, 0.5);
+        MoveObjectsBy(
+            {{kachakacha::model::ProjectObjectKind::Surface, "__mv面"}},
+            {3.0, -2.0, 1.0});
+        if ((project_.Surfaces().back().surface.Evaluate(0.5, 0.5)
+                - (moveBefore + Vector3{3.0, -2.0, 1.0})).Length() > 1.0e-6
+            || (project_.Wires()[moveWireStart].wire.Start()
+                - Vector3{303.0, -2.0, 1.0}).Length() > 1.0e-6) {
+            return fail("move selected surface with its wires");
+        }
+        Undo();
+        if ((project_.Surfaces().back().surface.Evaluate(0.5, 0.5) - moveBefore).Length()
+            > 1.0e-6) {
+            return fail("undo surface move");
+        }
+        UpdateSelections(
+            {{CadSelectionKind::Surface, static_cast<int>(project_.Surfaces().size() - 1)}},
+            true);
+        DeleteSelection();
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(moveWireStart)},
+            {CadSelectionKind::Wire, static_cast<int>(moveWireStart + 1)},
+        }, true);
+        DeleteSelection();
+        if (project_.Wires().size() != moveWireStart) {
+            return fail("clean up move test objects");
+        }
     }
 
     SetViewportTool(ViewportTool::Select);
@@ -3988,6 +4058,48 @@ bool MainWindow::RunCreationSelfTest()
         if (project_.WorkPlanes().size() != planesBeforeDelete) {
             return fail("origin plane cannot be deleted");
         }
+    }
+
+    {
+        // まとめ欄: 行選択で配下の全選択、チェックで一括表示/非表示(オーナー指示)。
+        QTreeWidgetItem* wireHeader = nullptr;
+        for (QTreeWidgetItemIterator it(modelTree_); *it != nullptr; ++it) {
+            if ((*it)->text(0).startsWith(QStringLiteral("ワイヤー ("))
+                && (*it)->childCount() > 0) {
+                wireHeader = *it;
+                break;
+            }
+        }
+        if (wireHeader == nullptr) {
+            return fail("find wire summary header in tree");
+        }
+        modelTree_->clearSelection();
+        wireHeader->setSelected(true);
+        QApplication::processEvents();
+        int selectableChildren = 0;
+        for (int index = 0; index < wireHeader->childCount(); ++index) {
+            if (!wireHeader->child(index)->isHidden()) {
+                ++selectableChildren;
+            }
+        }
+        if (selectableChildren == 0
+            || viewport_->Selections().size()
+                < static_cast<std::size_t>(selectableChildren)) {
+            return fail("summary row selects all children");
+        }
+        const int firstWireIndex =
+            wireHeader->child(0)->data(0, kSelectionIndexRole).toInt();
+        wireHeader->setCheckState(0, Qt::Unchecked);
+        QApplication::processEvents();
+        if (project_.Wires()[firstWireIndex].visible) {
+            return fail("summary row hides children together");
+        }
+        wireHeader->setCheckState(0, Qt::Checked);
+        QApplication::processEvents();
+        if (!project_.Wires()[firstWireIndex].visible) {
+            return fail("summary row shows children together");
+        }
+        UpdateSelections({}, true);
     }
 
     const std::size_t historySizeBeforeDisplayMode = undoStack_.size();

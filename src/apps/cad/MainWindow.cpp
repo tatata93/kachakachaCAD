@@ -24,6 +24,8 @@
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QDebug>
 #include <QDesktopServices>
@@ -391,6 +393,35 @@ void MainWindow::BuildUi()
     });
 
     connect(modelTree_, &QTreeWidget::itemSelectionChanged, this, [this] {
+        // まとめ欄(グループ見出し・種類見出し・原点・未分類)を選んだら、
+        // その配下のオブジェクト行を全選択へ広げる(オーナー指示)。
+        {
+            const QList<QTreeWidgetItem*> picked = modelTree_->selectedItems();
+            QList<QTreeWidgetItem*> toSelect;
+            const std::function<void(QTreeWidgetItem*)> collect =
+                [&](QTreeWidgetItem* parent) {
+                    for (int index = 0; index < parent->childCount(); ++index) {
+                        QTreeWidgetItem* child = parent->child(index);
+                        if (child->data(0, kSelectionKindRole).isValid()
+                            && !child->isSelected() && !child->isHidden()) {
+                            toSelect.push_back(child);
+                        }
+                        collect(child);
+                    }
+                };
+            for (QTreeWidgetItem* item : picked) {
+                if (!item->data(0, kSelectionKindRole).isValid() && item->childCount() > 0) {
+                    collect(item);
+                }
+            }
+            if (!toSelect.isEmpty()) {
+                modelTree_->blockSignals(true);
+                for (QTreeWidgetItem* item : toSelect) {
+                    item->setSelected(true);
+                }
+                modelTree_->blockSignals(false);
+            }
+        }
         const QList<QTreeWidgetItem*> items = modelTree_->selectedItems();
         std::vector<CadSelection> selections;
         for (QTreeWidgetItem* item : items) {
@@ -444,6 +475,70 @@ void MainWindow::BuildUi()
             statusBar()->showMessage(visible
                     ? QStringLiteral("部材グループを表示しました")
                     : QStringLiteral("部材グループを非表示にしました"), 2000);
+            return;
+        }
+        if (!item->data(0, kSelectionKindRole).isValid() && item->childCount() > 0) {
+            // まとめ欄(種類見出し・原点・未分類)のチェック=配下の一括表示/非表示。
+            if (item->checkState(0) == Qt::PartiallyChecked) {
+                return; // 再構築時の中間状態表示。ユーザークリックでは通らない。
+            }
+            const bool visible = item->checkState(0) == Qt::Checked;
+            std::vector<QTreeWidgetItem*> descendants;
+            const std::function<void(QTreeWidgetItem*)> collect =
+                [&](QTreeWidgetItem* parent) {
+                    for (int index = 0; index < parent->childCount(); ++index) {
+                        QTreeWidgetItem* child = parent->child(index);
+                        if (child->data(0, kSelectionKindRole).isValid()) {
+                            descendants.push_back(child);
+                        }
+                        collect(child);
+                    }
+                };
+            collect(item);
+            if (descendants.empty()) {
+                return;
+            }
+            const auto applyVisible = [this, visible](CadSelectionKind kind, int index) {
+                if (kind == CadSelectionKind::WorkPlane
+                    && index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+                    project_.SetWorkPlaneVisible(project_.WorkPlanes()[index].name, visible);
+                } else if (kind == CadSelectionKind::Point
+                    && index >= 0 && index < static_cast<int>(project_.Points().size())) {
+                    project_.SetPointVisible(project_.Points()[index].name, visible);
+                } else if (kind == CadSelectionKind::Wire
+                    && index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+                    project_.SetWireVisible(project_.Wires()[index].name, visible);
+                } else if (kind == CadSelectionKind::Surface
+                    && index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+                    project_.SetSurfaceVisible(project_.Surfaces()[index].name, visible);
+                } else if (kind == CadSelectionKind::Plate
+                    && index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+                    project_.SetPlateVisible(project_.Plates()[index].name, visible);
+                } else if (kind == CadSelectionKind::Body
+                    && index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+                    project_.SetBodyVisible(project_.Bodies()[index].name, visible);
+                }
+            };
+            RecordUndo();
+            modelTree_->blockSignals(true);
+            for (QTreeWidgetItem* child : descendants) {
+                applyVisible(
+                    static_cast<CadSelectionKind>(child->data(0, kSelectionKindRole).toInt()),
+                    child->data(0, kSelectionIndexRole).toInt());
+                child->setCheckState(0, visible ? Qt::Checked : Qt::Unchecked);
+            }
+            modelTree_->blockSignals(false);
+            MarkModified();
+            RefreshPlaneChoices();
+            viewport_->SetProject(&project_, false);
+            RefreshActiveWorkPlane();
+            RefreshReference();
+            UpdateSelection({}, false);
+            RefreshExportSummary();
+            statusBar()->showMessage(visible
+                    ? QStringLiteral("%1個をまとめて表示しました").arg(descendants.size())
+                    : QStringLiteral("%1個をまとめて非表示にしました").arg(descendants.size()),
+                2500);
             return;
         }
         if (item->parent() == nullptr) {
@@ -1205,6 +1300,17 @@ void MainWindow::BuildMenusAndToolbar()
     transformToolbar_->addAction(meetLinesAction_);
     transformToolbar_->addSeparator();
     transformToolbar_->addAction(setReferenceAction_);
+    {
+        // 選択のXYZ移動(オーナー指示: グループ・面・部材も動かせる)。
+        auto* moveObjectsAction = new QAction(QStringLiteral("移動"), this);
+        moveObjectsAction->setToolTip(QStringLiteral(
+            "選択したワイヤ・面・板材(まとめ欄の配下選択も可)をXYZ指定で平行移動する。\n"
+            "近似モデルの部材面は部材オフセットとして記録され、再計算しても保たれる"));
+        connect(moveObjectsAction, &QAction::triggered, this,
+            [this] { PromptMoveSelectedObjects({}); });
+        transformToolbar_->addSeparator();
+        transformToolbar_->addAction(moveObjectsAction);
+    }
 
     // 面・板材モードのツール列(パラメータは右パネル)。
     surfaceToolbar_ = addToolBar(QStringLiteral("面・板材ツール"));
@@ -2846,6 +2952,177 @@ void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
             2500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+    }
+}
+
+std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>
+MainWindow::SelectedObjectTargets() const
+{
+    std::vector<std::pair<ProjectObjectKind, std::string>> targets;
+    const auto add = [&targets](ProjectObjectKind kind, const std::string& name) {
+        const auto duplicate = std::find_if(targets.begin(), targets.end(),
+            [&](const auto& target) {
+                return target.first == kind && target.second == name;
+            });
+        if (duplicate == targets.end()) {
+            targets.emplace_back(kind, name);
+        }
+    };
+    for (const CadSelection& selection : viewport_->Selections()) {
+        const int index = selection.index;
+        switch (selection.kind) {
+        case CadSelectionKind::WorkPlane:
+            if (index >= 0 && index < static_cast<int>(project_.WorkPlanes().size())) {
+                add(ProjectObjectKind::WorkPlane, project_.WorkPlanes()[index].name);
+            }
+            break;
+        case CadSelectionKind::Point:
+            if (index >= 0 && index < static_cast<int>(project_.Points().size())) {
+                add(ProjectObjectKind::Point, project_.Points()[index].name);
+            }
+            break;
+        case CadSelectionKind::Wire:
+            if (index >= 0 && index < static_cast<int>(project_.Wires().size())) {
+                add(ProjectObjectKind::Wire, project_.Wires()[index].name);
+            }
+            break;
+        case CadSelectionKind::Surface:
+            if (index >= 0 && index < static_cast<int>(project_.Surfaces().size())) {
+                add(ProjectObjectKind::Surface, project_.Surfaces()[index].name);
+            }
+            break;
+        case CadSelectionKind::Plate:
+            if (index >= 0 && index < static_cast<int>(project_.Plates().size())) {
+                add(ProjectObjectKind::Plate, project_.Plates()[index].name);
+            }
+            break;
+        case CadSelectionKind::Body:
+            if (index >= 0 && index < static_cast<int>(project_.Bodies().size())) {
+                add(ProjectObjectKind::Body, project_.Bodies()[index].name);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return targets;
+}
+
+void MainWindow::PromptMoveSelectedObjects(
+    std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>> targets)
+{
+    if (targets.empty()) {
+        targets = SelectedObjectTargets();
+    }
+    if (targets.empty()) {
+        statusBar()->showMessage(
+            QStringLiteral("移動するオブジェクトを3D画面または一覧で選択してください。"), 4000);
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("選択を移動（%1個）").arg(targets.size()));
+    auto* layout = new QFormLayout(&dialog);
+    std::array<QDoubleSpinBox*, 3> fields{};
+    const std::array<QString, 3> labels
+        = {QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Z")};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        auto* field = new QDoubleSpinBox(&dialog);
+        field->setRange(-100000.0, 100000.0);
+        field->setDecimals(3);
+        field->setSuffix(QStringLiteral(" mm"));
+        layout->addRow(labels[axis], field);
+        fields[axis] = field;
+    }
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addRow(buttons);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    MoveObjectsBy(targets, {fields[0]->value(), fields[1]->value(), fields[2]->value()});
+}
+
+void MainWindow::MoveObjectsBy(
+    const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
+    Vector3 delta)
+{
+    try {
+        if (!delta.IsFinite() || delta.LengthSquared() <= 1.0e-18) {
+            throw std::invalid_argument("移動量を指定してください。");
+        }
+        if (targets.empty()) {
+            throw std::invalid_argument("移動するオブジェクトを選択してください。");
+        }
+        // 近似モデルの部材面は「部材オフセット」として記録して動かす
+        // (オーナー指示: 部材ごとに触れる。再計算しても保たれる)。
+        std::vector<std::pair<ProjectObjectKind, std::string>> plainTargets;
+        struct PartMove {
+            std::string modelName;
+            int partNumber = 0;
+        };
+        std::vector<PartMove> partMoves;
+        for (const auto& [kind, name] : targets) {
+            bool handled = false;
+            if (kind == ProjectObjectKind::Surface) {
+                const auto named = std::find_if(
+                    project_.Surfaces().begin(), project_.Surfaces().end(),
+                    [&](const kachakacha::model::NamedSurface& candidate) {
+                        return candidate.name == name;
+                    });
+                if (named != project_.Surfaces().end()
+                    && named->partModelSourceName.has_value()) {
+                    const std::string prefix = *named->partModelSourceName + "_部材";
+                    if (name.size() > prefix.size()
+                        && name.compare(0, prefix.size(), prefix) == 0
+                        && name.find('_', prefix.size()) == std::string::npos) {
+                        try {
+                            partMoves.push_back({*named->partModelSourceName,
+                                std::stoi(name.substr(prefix.size()))});
+                            handled = true;
+                        } catch (const std::exception&) {
+                        }
+                    }
+                }
+            }
+            if (!handled) {
+                plainTargets.emplace_back(kind, name);
+            }
+        }
+        Project candidate = project_;
+        int movedCount = 0;
+        for (const PartMove& move : partMoves) {
+            Vector3 base{0.0, 0.0, 0.0};
+            for (const auto& model : candidate.PartModels()) {
+                if (model.name != move.modelName) {
+                    continue;
+                }
+                for (const auto& offset : model.partOffsets) {
+                    if (offset.partNumber == move.partNumber) {
+                        base = offset.delta;
+                    }
+                }
+            }
+            candidate.SetPartModelPartOffset(move.modelName, move.partNumber, base + delta);
+            ++movedCount;
+        }
+        if (!plainTargets.empty()) {
+            movedCount += candidate.TranslateObjects(plainTargets, delta);
+        }
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        statusBar()->showMessage(
+            QStringLiteral("%1個を (%2, %3, %4) mm 移動しました")
+                .arg(movedCount)
+                .arg(delta.x)
+                .arg(delta.y)
+                .arg(delta.z),
+            3000);
+    } catch (const std::exception& error) {
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 8000);
     }
 }
 
@@ -5108,6 +5385,11 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
             }
             finishSetEdit(QStringLiteral("部材グループから外しました"));
         });
+        QAction* moveAction = menu.addAction(
+            QStringLiteral("選択を移動…（%1個）").arg(targets.size()));
+        connect(moveAction, &QAction::triggered, this, [this, targets] {
+            PromptMoveSelectedObjects(targets);
+        });
         menu.addSeparator();
     }
     if (clickedSetName.has_value()) {
@@ -5601,6 +5883,19 @@ void MainWindow::RefreshModelViews(bool fitView)
             }
             root->setText(0, QStringLiteral("%1 (%2)").arg(title).arg(count));
             container->addChild(root);
+            // まとめ欄: チェックで配下の一括表示/非表示、行選択で配下を全選択。
+            int visibleCount = 0;
+            for (int child = 0; child < root->childCount(); ++child) {
+                if (root->child(child)->checkState(0) == Qt::Checked) {
+                    ++visibleCount;
+                }
+            }
+            root->setFlags(root->flags() | Qt::ItemIsUserCheckable);
+            root->setCheckState(0, visibleCount == 0 ? Qt::Unchecked
+                : visibleCount == root->childCount() ? Qt::Checked
+                                                     : Qt::PartiallyChecked);
+            root->setToolTip(0, QStringLiteral(
+                "チェックで配下をまとめて表示/非表示。行を選ぶと配下を全選択します"));
             root->setExpanded(true);
         };
         section(QStringLiteral("作業平面"), [&](QTreeWidgetItem* root) {
@@ -5743,8 +6038,23 @@ void MainWindow::RefreshModelViews(bool fitView)
         auto* unassignedRoot = new QTreeWidgetItem(modelTree_, {QStringLiteral("未分類")});
         unassignedRoot->setFlags(unassignedRoot->flags() | Qt::ItemIsDropEnabled);
         unassignedRoot->setToolTip(0, QStringLiteral(
-            "どの部材グループにも属さないオブジェクト。右クリックかドラッグで部材へ移せます"));
+            "どの部材グループにも属さないオブジェクト。右クリックかドラッグで部材へ移せます。\n"
+            "チェックで配下をまとめて表示/非表示、行を選ぶと配下を全選択"));
         addKindSections(unassignedRoot, nullptr);
+        if (unassignedRoot->childCount() > 0) {
+            int checkedSections = 0;
+            int uncheckedSections = 0;
+            for (int child = 0; child < unassignedRoot->childCount(); ++child) {
+                const Qt::CheckState state = unassignedRoot->child(child)->checkState(0);
+                if (state == Qt::Checked) ++checkedSections;
+                if (state == Qt::Unchecked) ++uncheckedSections;
+            }
+            unassignedRoot->setFlags(unassignedRoot->flags() | Qt::ItemIsUserCheckable);
+            unassignedRoot->setCheckState(0,
+                uncheckedSections == unassignedRoot->childCount() ? Qt::Unchecked
+                    : checkedSections == unassignedRoot->childCount() ? Qt::Checked
+                                                                      : Qt::PartiallyChecked);
+        }
         unassignedRoot->setExpanded(true);
     }
 

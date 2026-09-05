@@ -1,15 +1,26 @@
+#include "kachakacha/model/Project.h"
 #include "kachakacha/model/Surface.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 using kachakacha::geometry::AlmostEqual;
+using kachakacha::geometry::Vector3;
+using kachakacha::model::NamedWire;
+using kachakacha::model::PlateThicknessDirection;
+using kachakacha::model::Project;
+using kachakacha::model::ProjectObjectKind;
 using kachakacha::model::Surface;
 using kachakacha::model::SurfaceKind;
 using kachakacha::model::Wire;
 using kachakacha::model::WireKind;
+using kachakacha::model::WireMetadata;
+using kachakacha::model::WirePlanePolicy;
+using kachakacha::model::WorkPlane;
 
 namespace {
 
@@ -19,6 +30,19 @@ void Require(bool condition, const char* message)
         std::cerr << "FAILED: " << message << '\n';
         std::exit(EXIT_FAILURE);
     }
+}
+
+const NamedWire& RequireWire(const Project& project, const std::string& name)
+{
+    const auto found = std::find_if(
+        project.Wires().begin(), project.Wires().end(),
+        [&](const NamedWire& wire) {
+            return wire.name == name;
+        });
+    if (found == project.Wires().end()) {
+        throw std::runtime_error("test wire is missing: " + name);
+    }
+    return *found;
 }
 
 } // namespace
@@ -233,6 +257,154 @@ int main()
             trackedProjections.back().point,
             1.0e-5),
         "tracked projection preserves a closed curve");
+
+    {
+        Project project;
+        project.AddWire("ruled_move_a", Wire::Line({0.0, 0.0, 0.0}, {0.0, 8.0, 0.0}));
+        project.AddWire("ruled_move_b", Wire::Line({10.0, 0.0, 2.0}, {10.0, 8.0, 2.0}));
+        project.AddRuledSurface("ruled_move_surface", "ruled_move_a", "ruled_move_b");
+
+        const Surface beforeSurface = *project.FindSurface("ruled_move_surface");
+        const Vector3 beforePoint = beforeSurface.Evaluate(0.35, 0.4);
+        const Vector3 beforeWireStart = RequireWire(project, "ruled_move_a").wire.Start();
+        const Vector3 delta{2.0, -3.0, 5.0};
+
+        const int moved = project.TranslateObjects(
+            {{ProjectObjectKind::Surface, "ruled_move_surface"}}, delta);
+
+        const Surface afterSurface = *project.FindSurface("ruled_move_surface");
+        Require(moved == 2, "surface translation moves two source wires");
+        Require(AlmostEqual(
+                afterSurface.Evaluate(0.35, 0.4), beforePoint + delta, 1.0e-8),
+            "surface translation rebuilds the ruled surface");
+        Require(AlmostEqual(
+                RequireWire(project, "ruled_move_a").wire.Start(),
+                beforeWireStart + delta,
+                1.0e-8),
+            "surface translation moves the source wire");
+    }
+
+    {
+        Project project;
+        project.AddWire("plate_move_a", Wire::Line({0.0, 0.0, 0.0}, {0.0, 6.0, 0.0}));
+        project.AddWire("plate_move_b", Wire::Line({12.0, 0.0, 1.0}, {12.0, 6.0, 1.0}));
+        project.AddRuledSurface("plate_move_surface", "plate_move_a", "plate_move_b");
+        project.AddPlate(
+            "plate_move_plate",
+            "plate_move_surface",
+            0.5,
+            PlateThicknessDirection::Positive,
+            "plastic");
+
+        const Vector3 beforeSurfacePoint =
+            project.FindSurface("plate_move_surface")->Evaluate(0.25, 0.75);
+        const Vector3 beforePlatePoint =
+            project.FindPlate("plate_move_plate")->Evaluate(0.25, 0.75, 0.5);
+        const Vector3 beforeWireStart = RequireWire(project, "plate_move_b").wire.Start();
+        const Vector3 delta{-1.0, 4.0, 3.0};
+
+        const int moved = project.TranslateObjects(
+            {{ProjectObjectKind::Plate, "plate_move_plate"}}, delta);
+
+        Require(moved == 2, "plate translation moves source surface wires");
+        Require(AlmostEqual(
+                project.FindSurface("plate_move_surface")->Evaluate(0.25, 0.75),
+                beforeSurfacePoint + delta,
+                1.0e-8),
+            "plate translation rebuilds the source surface");
+        Require(AlmostEqual(
+                project.FindPlate("plate_move_plate")->Evaluate(0.25, 0.75, 0.5),
+                beforePlatePoint + delta,
+                1.0e-8),
+            "plate translation rebuilds the plate");
+        Require(AlmostEqual(
+                RequireWire(project, "plate_move_b").wire.Start(),
+                beforeWireStart + delta,
+                1.0e-8),
+            "plate translation moves the source wire");
+    }
+
+    {
+        Project project;
+        project.AddWorkPlane(
+            "paper",
+            WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
+        WireMetadata metadata;
+        metadata.sourcePlaneName = std::string("paper");
+        metadata.planePolicy = WirePlanePolicy::ReferenceOnly;
+        project.AddWire("paper_line", Wire::Line({1.0, 2.0, 0.0}, {5.0, 2.0, 0.0}), metadata);
+
+        const Vector3 beforeOrigin = project.FindWorkPlane("paper")->Origin();
+        const Vector3 beforeWireStart = RequireWire(project, "paper_line").wire.Start();
+        const Vector3 delta{3.0, 4.0, 5.0};
+
+        const int moved = project.TranslateObjects({{ProjectObjectKind::WorkPlane, "paper"}}, delta);
+
+        Require(moved == 2, "work-plane translation moves the plane and its source wires");
+        Require(AlmostEqual(project.FindWorkPlane("paper")->Origin(), beforeOrigin + delta, 1.0e-8),
+            "work-plane translation moves the plane");
+        Require(AlmostEqual(
+                RequireWire(project, "paper_line").wire.Start(),
+                beforeWireStart + delta,
+                1.0e-8),
+            "work-plane translation moves wires drawn on the plane");
+    }
+
+    {
+        Project project;
+        project.AddWire("projection_boundary", Wire::Polyline({
+            {0.0, 0.0, 0.0},
+            {10.0, 0.0, 0.0},
+            {10.0, 10.0, 0.0},
+            {0.0, 10.0, 0.0},
+            {0.0, 0.0, 0.0},
+        }));
+        project.AddPlanarSurface("projection_panel", "projection_boundary");
+        project.AddWire("projection_draft",
+            Wire::Circle({5.0, 5.0, 8.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, 1.0));
+        project.AddProjectedWire(
+            "projection_wire", "projection_draft", "projection_panel", {0.0, 0.0, -1.0});
+
+        bool projectedRejected = false;
+        try {
+            static_cast<void>(project.TranslateObjects(
+                {{ProjectObjectKind::Wire, "projection_wire"}}, {1.0, 0.0, 0.0}));
+        } catch (const std::invalid_argument& error) {
+            const std::string message = error.what();
+            projectedRejected = message.find("projection_wire") != std::string::npos
+                && message.find("元(下書き・板材・近似モデル)側") != std::string::npos;
+        }
+        Require(projectedRejected, "reject direct translation of projected wire");
+    }
+
+    {
+        Project project;
+        project.AddWire("duplicate_a", Wire::Line({0.0, 0.0, 0.0}, {0.0, 4.0, 0.0}));
+        project.AddWire("duplicate_b", Wire::Line({8.0, 0.0, 0.0}, {8.0, 4.0, 0.0}));
+        project.AddRuledSurface("duplicate_surface", "duplicate_a", "duplicate_b");
+
+        const Vector3 beforeWireStart = RequireWire(project, "duplicate_a").wire.Start();
+        const Vector3 beforeSurfacePoint =
+            project.FindSurface("duplicate_surface")->Evaluate(0.2, 0.6);
+        const Vector3 delta{0.0, 0.0, 7.0};
+
+        const int moved = project.TranslateObjects({
+            {ProjectObjectKind::Surface, "duplicate_surface"},
+            {ProjectObjectKind::Wire, "duplicate_a"},
+        }, delta);
+
+        Require(moved == 2, "duplicate translation targets are counted once");
+        Require(AlmostEqual(
+                RequireWire(project, "duplicate_a").wire.Start(),
+                beforeWireStart + delta,
+                1.0e-8),
+            "duplicate translation target moves once");
+        Require(AlmostEqual(
+                project.FindSurface("duplicate_surface")->Evaluate(0.2, 0.6),
+                beforeSurfacePoint + delta,
+                1.0e-8),
+            "duplicate translation rebuilds the surface once");
+    }
 
     std::cout << "surface tests passed\n";
     return EXIT_SUCCESS;

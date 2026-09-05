@@ -1007,6 +1007,80 @@ int main()
                 "rails before the flattened crease stay in place");
         }
 
+        // --- 曲げ状態・部材オフセットの実体反映(オーナー指示) ---
+        {
+            Project liveProject = MakeBottleLikeProject();
+            PartApproximationOptions liveOptions;
+            liveOptions.splitAxis = PartSplitAxis::V;
+            liveOptions.automaticBoundaries = false;
+            liveOptions.manualBoundaryParameters = {0.4, 0.7};
+            liveProject.AddPartModel("実体曲げ", "胴板", liveOptions);
+            const auto surfacePoint = [&](const std::string& surfaceName) {
+                for (const auto& surface : liveProject.Surfaces()) {
+                    if (surface.name == surfaceName) {
+                        return surface.surface.Evaluate(0.5, 0.5);
+                    }
+                }
+                throw std::runtime_error("surface missing: " + surfaceName);
+            };
+            const Vector3 before1 = surfacePoint("実体曲げ_部材1");
+            const Vector3 before3 = surfacePoint("実体曲げ_部材3");
+            // 折り線1を平らへ → 実際の部材面が動く。折り線より前の帯は動かない。
+            liveProject.SetPartModelRailFoldProgress("実体曲げ", {0.0, 1.0});
+            Require((surfacePoint("実体曲げ_部材3") - before3).Length() > 1.0,
+                "real part surfaces follow the fold state");
+            Require((surfacePoint("実体曲げ_部材1") - before1).Length() < 1.0e-6,
+                "band before the crease stays in place");
+            // その部材面に作った板材も、折り状態を変えると追従する。
+            liveProject.AddPlate("実体曲げ板", "実体曲げ_部材3", 0.5,
+                PlateThicknessDirection::Centered, "プラ板");
+            const auto plateCenter = [&]() {
+                for (const auto& plate : liveProject.Plates()) {
+                    if (plate.name == "実体曲げ板") {
+                        return plate.plate.Evaluate(0.5, 0.5, 0.5);
+                    }
+                }
+                throw std::runtime_error("plate missing: 実体曲げ板");
+            };
+            const Vector3 plateBefore = plateCenter();
+            liveProject.SetPartModelRailFoldProgress("実体曲げ", {});
+            Require((plateCenter() - plateBefore).Length() > 1.0,
+                "plates on part surfaces follow the fold state");
+            // 部材オフセット: 指定した部材だけが平行移動し、保存・往復する。
+            const Vector3 beforeOffset1 = surfacePoint("実体曲げ_部材1");
+            const Vector3 beforeOffset2 = surfacePoint("実体曲げ_部材2");
+            liveProject.SetPartModelPartOffset("実体曲げ", 2, {5.0, 0.0, 0.0});
+            Require((surfacePoint("実体曲げ_部材2")
+                        - (beforeOffset2 + Vector3{5.0, 0.0, 0.0})).Length() < 1.0e-6,
+                "part offset moves only that part");
+            Require((surfacePoint("実体曲げ_部材1") - beforeOffset1).Length() < 1.0e-6,
+                "other parts stay in place under a part offset");
+            std::ostringstream offsetSaved;
+            kachakacha::io::WriteProjectScript(offsetSaved, liveProject);
+            Require(offsetSaved.str().find("part_model_part_offset 実体曲げ 2 5 0 0")
+                    != std::string::npos,
+                "part offset saved to the script");
+            std::istringstream offsetInput(offsetSaved.str());
+            Project loadedOffset =
+                kachakacha::io::LoadProjectScript(offsetInput, "part-offset");
+            bool loadedHasOffset = false;
+            for (const auto& modelEntry : loadedOffset.PartModels()) {
+                if (modelEntry.name == "実体曲げ") {
+                    loadedHasOffset = modelEntry.partOffsets.size() == 1
+                        && modelEntry.partOffsets.front().partNumber == 2;
+                }
+            }
+            Require(loadedHasOffset, "part offset survives the round trip");
+            liveProject.SetPartModelPartOffset("実体曲げ", 2, {0.0, 0.0, 0.0});
+            bool offsetsCleared = false;
+            for (const auto& modelEntry : liveProject.PartModels()) {
+                if (modelEntry.name == "実体曲げ") {
+                    offsetsCleared = modelEntry.partOffsets.empty();
+                }
+            }
+            Require(offsetsCleared, "zero delta clears the part offset");
+        }
+
         // --- 積層(重ね板、合意9) ---
         {
             Project laminateProject = MakeBottleLikeProject();

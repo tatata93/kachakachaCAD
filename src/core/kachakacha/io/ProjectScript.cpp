@@ -984,6 +984,15 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                 const double dz = ReadDouble(stream, sourceName, lineNumber, "direction z");
                 EnsureLineEnded(stream, sourceName, lineNumber);
                 project.AddPartModelOpening(name, partNumber, wireName, {dx, dy, dz});
+            } else if (command == "part_model_part_offset") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
+                const int partNumber = static_cast<int>(
+                    ReadCount(stream, sourceName, lineNumber, "part number"));
+                const double dx = ReadDouble(stream, sourceName, lineNumber, "offset x");
+                const double dy = ReadDouble(stream, sourceName, lineNumber, "offset y");
+                const double dz = ReadDouble(stream, sourceName, lineNumber, "offset z");
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.SetPartModelPartOffset(name, partNumber, {dx, dy, dz});
             } else if (command == "part_model_fold") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "part model");
                 const int count = static_cast<int>(ReadCount(stream, sourceName, lineNumber, "fold value count"));
@@ -1595,6 +1604,12 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                    << record.partNumber << ' ' << record.sourceWireName << ' '
                    << record.direction.x << ' ' << record.direction.y << ' '
                    << record.direction.z << '\n';
+        }
+        // 部材ごとの平行移動オフセット。読込時に同じ姿勢へ再構築される。
+        for (const auto& offset : model.partOffsets) {
+            output << "part_model_part_offset " << model.name << ' '
+                   << offset.partNumber << ' ' << offset.delta.x << ' '
+                   << offset.delta.y << ' ' << offset.delta.z << '\n';
         }
     }
     for (const auto& namedPlate : project.Plates()) {

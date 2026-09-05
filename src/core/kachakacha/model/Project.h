@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace kachakacha::model {
@@ -201,6 +202,14 @@ struct NamedPartModel {
         geometry::Vector3 direction;
     };
     std::vector<PartOpening> partOpenings;
+    //! 部材ごとの平行移動オフセット(オーナー指示: 部材単位で動かせる)。
+    //! 再生成のたび、剛体折り姿勢のあとに その部材の面・レール・穴へ加算される。
+    //! delta が (0,0,0) の記録は保存されない。partNumber は1始まり。
+    struct PartOffset {
+        int partNumber = 1;
+        geometry::Vector3 delta;
+    };
+    std::vector<PartOffset> partOffsets;
 };
 
 //! セットの表示状態。ReferenceOnly はスナップ・測定可、選択・編集不可(UI側で解釈)。
@@ -301,6 +310,13 @@ public:
         std::string sourceWireName,
         std::string plateName,
         double throughThickness);
+    //! 指定オブジェクト群をまとめて平行移動する。
+    //! 面・板材・治具は、元になっている基礎ワイヤ群を移動して再構築で追従させる。
+    //! 戻り値は実際に移動した基礎オブジェクト数。
+    //! 移動できる対象が1つも無ければ std::invalid_argument を投げる。
+    int TranslateObjects(
+        const std::vector<std::pair<ProjectObjectKind, std::string>>& targets,
+        const geometry::Vector3& delta);
     void UpdateWorkPlane(std::string_view name, WorkPlane plane);
     void UpdateWire(std::string_view name, Wire wire);
     void UpdateWireAndMetadata(std::string_view name, Wire wire, WireMetadata metadata);
@@ -379,7 +395,12 @@ public:
         PartApproximationOptions options);
     void UpdatePartModelOptions(std::string_view name, PartApproximationOptions options);
     //! 可動折り線の進行度を設定する(サイズは部材数-1、または空=全て1)。
+    //! 実際の部材面・レール・穴と、その上に作った板材等もこの姿勢へ再構築される。
     void SetPartModelRailFoldProgress(std::string_view name, std::vector<double> progress);
+    //! 部材ごとの平行移動オフセットを設定する((0,0,0)で解除)。partNumberは1始まり。
+    //! その部材の面・レール・穴と、上に作った板材等が再構築で追従する。
+    void SetPartModelPartOffset(
+        std::string_view name, int partNumber, const geometry::Vector3& delta);
     //! 接続スコープを設定し、派生「_接続」オブジェクトを作り直す(空で解除)。
     void SetPartModelConnectionScope(
         std::string_view name,

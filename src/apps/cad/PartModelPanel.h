@@ -67,6 +67,9 @@ public:
     };
     void AddUnitMembers(const std::vector<UnitMember>& members);
     void ClearUnitMembers();
+    //! ユニット近似の結果・エラーを常設表示する(空文字で消える)。
+    void SetUnitResult(const QString& text, bool isError);
+    [[nodiscard]] QString UnitResultText() const;
     void SetUnitName(const QString& name);
     [[nodiscard]] std::vector<UnitMember> UnitMembers() const { return unitMembers_; }
     [[nodiscard]] QString UnitName() const;
@@ -139,6 +142,7 @@ private:
     bool syncingFoldRows_ = false;
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
+    QLabel* unitResultLabel_ = nullptr; //!< ユニット近似の結果・エラー常設表示
     std::array<QWidget*, 4> sections_{};
     QWidget* bottomSpacer_ = nullptr; //!< 1区画表示時に項目を上詰めするための余白
 };

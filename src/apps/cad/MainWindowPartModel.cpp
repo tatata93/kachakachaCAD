@@ -270,7 +270,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
                     return entry.name == target.name;
                 });
             if (surface == candidate.Surfaces().end()) {
-                throw std::invalid_argument("面が見つかりません: " + target.name);
+                continue; // 見つからない面は作成段階で理由つきの失敗として報告する。
             }
             std::vector<std::string> openingCandidates;
             for (const auto& wire : candidate.Wires()) {
@@ -320,7 +320,10 @@ void MainWindow::CreateApproximationUnitFromPanel()
         }
 
         // 近似モデルを部品番号順に作る。名前は「<ユニット名>_部品N」。
-        std::vector<std::string> modelNames;
+        // 1つの面の失敗でユニット全体を失敗させない(オーナー報告
+        // 「押しても近似されない」対策: 失敗は理由つきで報告し、他は作る)。
+        std::vector<std::string> modelNames; // targets と同じ並び。失敗は空文字。
+        QStringList failures;
         for (const ApproxTarget& target : targets) {
             const std::string base
                 = unitName + "_部品" + std::to_string(target.partNumber);
@@ -334,12 +337,25 @@ void MainWindow::CreateApproximationUnitFromPanel()
                 }
                 modelName = base + "_" + std::to_string(suffix);
             }
-            if (target.isSurface) {
-                candidate.AddPartModelFromSurface(modelName, target.name, options);
-            } else {
-                candidate.AddPartModel(modelName, target.name, options);
+            try {
+                if (target.isSurface) {
+                    candidate.AddPartModelFromSurface(modelName, target.name, options);
+                } else {
+                    candidate.AddPartModel(modelName, target.name, options);
+                }
+                modelNames.push_back(modelName);
+            } catch (const std::exception& error) {
+                failures << QStringLiteral("%1: %2")
+                    .arg(ToQString(target.name))
+                    .arg(QString::fromUtf8(error.what()));
+                modelNames.push_back(std::string());
             }
-            modelNames.push_back(modelName);
+        }
+        if (std::all_of(modelNames.begin(), modelNames.end(),
+                [](const std::string& name) { return name.empty(); })) {
+            throw std::invalid_argument(ToName(
+                QStringLiteral("近似できませんでした。\n%1")
+                    .arg(failures.join(QStringLiteral("\n")))));
         }
 
         // 形状維持(接続)対象を最寄りの近似モデルへ割り当てる(モデルごとに
@@ -412,6 +428,9 @@ void MainWindow::CreateApproximationUnitFromPanel()
             std::size_t best = 0;
             double bestDistance = std::numeric_limits<double>::infinity();
             for (std::size_t index = 0; index < targets.size(); ++index) {
+                if (modelNames[index].empty()) {
+                    continue; // 作成に失敗した部品へは接続を割り当てない。
+                }
                 const double distance = distanceToTarget(targets[index], probes);
                 if (distance < bestDistance) {
                     bestDistance = distance;
@@ -431,12 +450,22 @@ void MainWindow::CreateApproximationUnitFromPanel()
                 .push_back(surfaceName);
         }
         std::size_t adaptedTotal = 0;
+        QStringList scopeWarnings;
         for (std::size_t index = 0; index < modelNames.size(); ++index) {
-            if (scopeWiresPerModel[index].empty() && scopeSurfacesPerModel[index].empty()) {
+            if (modelNames[index].empty()
+                || (scopeWiresPerModel[index].empty()
+                    && scopeSurfacesPerModel[index].empty())) {
                 continue;
             }
-            candidate.SetPartModelConnectionScope(modelNames[index],
-                scopeWiresPerModel[index], scopeSurfacesPerModel[index]);
+            try {
+                candidate.SetPartModelConnectionScope(modelNames[index],
+                    scopeWiresPerModel[index], scopeSurfacesPerModel[index]);
+            } catch (const std::exception& error) {
+                scopeWarnings << QStringLiteral("接続 %1: %2")
+                    .arg(ToQString(modelNames[index]))
+                    .arg(QString::fromUtf8(error.what()));
+                continue;
+            }
             const auto model = std::find_if(
                 candidate.PartModels().begin(), candidate.PartModels().end(),
                 [&](const NamedPartModel& entry) { return entry.name == modelNames[index]; });
@@ -449,7 +478,9 @@ void MainWindow::CreateApproximationUnitFromPanel()
         // ユニットのグループを作り、各モデルの自動セットをその下へ入れる(#16)。
         candidate.CreateObjectSet(unitName);
         for (const std::string& modelName : modelNames) {
-            candidate.SetObjectSetParent("近似:" + modelName, unitName);
+            if (!modelName.empty()) {
+                candidate.SetObjectSetParent("近似:" + modelName, unitName);
+            }
         }
 
         RecordUndo();
@@ -458,13 +489,18 @@ void MainWindow::CreateApproximationUnitFromPanel()
         RefreshModelViews(false);
         partModelPanel_->ClearUnitMembers();
         QStringList assignments;
-        for (const ApproxTarget& target : targets) {
+        std::size_t createdCount = 0;
+        for (std::size_t index = 0; index < targets.size(); ++index) {
+            if (modelNames[index].empty()) {
+                continue;
+            }
+            ++createdCount;
             assignments << QStringLiteral("部品%1=%2")
-                .arg(target.partNumber).arg(ToQString(target.name));
+                .arg(targets[index].partNumber).arg(ToQString(targets[index].name));
         }
         QString message = QStringLiteral(
             "ユニット %1: 近似モデル%2件を作成しました（%3）")
-                .arg(ToQString(unitName)).arg(modelNames.size())
+                .arg(ToQString(unitName)).arg(createdCount)
                 .arg(assignments.join(QStringLiteral("、")));
         if (adaptedTotal > 0) {
             message += QStringLiteral("、接続用に%1個を自動変形").arg(adaptedTotal);
@@ -476,6 +512,16 @@ void MainWindow::CreateApproximationUnitFromPanel()
             message += QStringLiteral("（対象外にした行: %1）")
                 .arg(ignored.join(QStringLiteral("、")));
         }
+        QString detail = message;
+        if (!failures.isEmpty()) {
+            detail += QStringLiteral("\n近似できなかった面: %1")
+                .arg(failures.join(QStringLiteral(" / ")));
+        }
+        if (!scopeWarnings.isEmpty()) {
+            detail += QStringLiteral("\n接続の注意: %1")
+                .arg(scopeWarnings.join(QStringLiteral(" / ")));
+        }
+        partModelPanel_->SetUnitResult(detail, !failures.isEmpty());
         statusBar()->showMessage(message, 8000);
 
         if (partModelPanel_->UnitWantsNewKcd()) {
@@ -498,7 +544,11 @@ void MainWindow::CreateApproximationUnitFromPanel()
             }
         }
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        // 失敗理由を見逃さないよう、パネルにも常設表示する(オーナー報告対策)。
+        if (partModelPanel_ != nullptr) {
+            partModelPanel_->SetUnitResult(QString::fromUtf8(error.what()), true);
+        }
+        statusBar()->showMessage(QString::fromUtf8(error.what()), 12000);
     }
 }
 

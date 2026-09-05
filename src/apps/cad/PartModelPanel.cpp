@@ -148,9 +148,18 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         "「形状維持(接続)」役割は最寄りの近似へ接続する「〜_接続」を自動生成します。\n"
         "近似元の面にある閉じた投影輪郭は開口として自動で写します"));
     connect(createUnitButton, &QPushButton::clicked, this, [this] {
+        SetUnitResult(QString(), false);
         if (onCreateUnit) onCreateUnit();
     });
     createOuter->addWidget(createUnitButton);
+
+    // 結果・エラーの常設表示(オーナー報告「押しても近似されない」対策:
+    // ステータスバーの6秒表示では失敗理由を見逃すため、ここに残す)。
+    unitResultLabel_ = new QLabel;
+    unitResultLabel_->setWordWrap(true);
+    unitResultLabel_->setVisible(false);
+    unitResultLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    createOuter->addWidget(unitResultLabel_);
 
     auto* singleLabel = new QLabel(QStringLiteral("―― 1面だけ手早く近似（従来方式） ――"));
     singleLabel->setStyleSheet("color: #6a7781;");
@@ -841,6 +850,23 @@ void PartModelPanel::SetAssemblyProgressDisplay(double progress)
     syncingAssembly_ = true;
     foldSlider_->setValue(value);
     syncingAssembly_ = previous;
+}
+
+void PartModelPanel::SetUnitResult(const QString& text, bool isError)
+{
+    if (unitResultLabel_ == nullptr) {
+        return;
+    }
+    unitResultLabel_->setText(text);
+    unitResultLabel_->setVisible(!text.isEmpty());
+    unitResultLabel_->setStyleSheet(isError
+        ? QStringLiteral("color: #a01515; font-weight: 600;")
+        : QStringLiteral("color: #0a6b45;"));
+}
+
+QString PartModelPanel::UnitResultText() const
+{
+    return unitResultLabel_ != nullptr ? unitResultLabel_->text() : QString();
 }
 
 void PartModelPanel::AddUnitMembers(const std::vector<UnitMember>& members)

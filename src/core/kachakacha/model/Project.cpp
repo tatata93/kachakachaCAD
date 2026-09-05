@@ -3833,9 +3833,19 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             const std::string adaptedWireName = scopeName + "_接続縁";
             const std::string adaptedSurfaceName = scopeName + "_接続";
             Wire adaptedBoundary = Wire::Polyline(adaptPolyline(boundary, 128));
-            Surface adaptedSurface = Surface::Planar(
-                adaptedBoundary,
-                std::max(0.5, model.result.maximumDeviationMillimeters * 3.0));
+            // スナップで境界が平面から外れることがある。その場合は面を諦めて
+            // 縁ワイヤだけを置く(ユニット作成全体を失敗させない)。
+            std::optional<Surface> adaptedSurfaceMaybe;
+            try {
+                adaptedSurfaceMaybe = Surface::Planar(
+                    adaptedBoundary,
+                    std::max(0.5, model.result.maximumDeviationMillimeters * 3.0));
+            } catch (const std::exception&) {
+                placeAdapted(adaptedWireName, std::move(adaptedBoundary));
+                newAdaptedWireNames.push_back(adaptedWireName);
+                continue;
+            }
+            Surface adaptedSurface = std::move(*adaptedSurfaceMaybe);
             placeAdapted(adaptedWireName, std::move(adaptedBoundary));
             newAdaptedWireNames.push_back(adaptedWireName);
             const auto existing = std::find_if(surfaces_.begin(), surfaces_.end(),

@@ -839,6 +839,24 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("unit-approx")) {
+        // ユニット近似の実機診断(オーナー報告「押しても近似されない」の再現用)。
+        // 読み込んだプロジェクトの surface_3 を近似する(部品3)、surface_5/6/7 を
+        // 形状維持にして実行し、常設の結果表示ごと撮影する。
+        if (partModelModeAction_ != nullptr) {
+            partModelModeAction_->trigger();
+        }
+        partModelPanel_->SetUnitName(QStringLiteral("近似ユニット9"));
+        partModelPanel_->ClearUnitMembers();
+        partModelPanel_->AddUnitMembers({
+            {QStringLiteral("surface_3"), 1, 0, 3},
+            {QStringLiteral("surface_5"), 1, 1, 0},
+            {QStringLiteral("surface_6"), 1, 1, 0},
+            {QStringLiteral("surface_7"), 1, 1, 0},
+        });
+        CreateApproximationUnitFromPanel();
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state.startsWith(QStringLiteral("fold-preview"))) {
         // 曲げ確認(組立アニメーション)の表示検証。実機のパネル連鎖どおりに
         // 近似 → 一覧で選択 → チェック+スライダー、で3Dビューへ重ねる。

@@ -44,6 +44,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/NumericExpression.cpp
     src/core/kachakacha/io/PartFoldState.cpp
     src/core/kachakacha/io/PartPatterns.cpp
+    src/core/kachakacha/io/OutputMesh.cpp
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
@@ -213,6 +214,8 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/MainWindowSurface.cpp
                 src/apps/cad/MainWindowUiHelpers.h
                 src/apps/cad/ModelTreeWidget.h
+                src/apps/cad/OutputPreviewDialog.cpp
+                src/apps/cad/OutputPreviewDialog.h
                 src/apps/cad/PartModelPanel.cpp
                 src/apps/cad/PartModelPanel.h
                 src/apps/cad/PartPatternViewDialog.cpp
@@ -416,6 +419,18 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_apply_test_options(kachakacha_measurement_tests)
 
     add_test(NAME measurement_tests COMMAND kachakacha_measurement_tests)
+
+    add_executable(kachakacha_output_mesh_tests
+        tests/output_mesh_tests.cpp
+    )
+
+    target_link_libraries(kachakacha_output_mesh_tests
+        PRIVATE
+            kachakacha_core
+    )
+    kachakacha_apply_test_options(kachakacha_output_mesh_tests)
+
+    add_test(NAME output_mesh_tests COMMAND kachakacha_output_mesh_tests)
 
     add_executable(kachakacha_planar_export_tests
         tests/planar_export_tests.cpp

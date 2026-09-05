@@ -3817,6 +3817,57 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("extrude checks done");
 
     {
+        // 出力モード(オーナー指示): 表へ追加→プレビューへ反映→自動フタ。
+        const std::size_t outWireStart = project_.Wires().size();
+        project_.AddWire("__out輪郭", Wire::Polyline({
+            {800.0, 0.0, 0.0}, {820.0, 0.0, 0.0}, {820.0, 10.0, 0.0},
+            {800.0, 10.0, 0.0}, {800.0, 0.0, 0.0},
+        }));
+        project_.AddPlanarSurface("__out面", "__out輪郭");
+        RefreshModelViews(false);
+        int outSurfaceIndex = -1;
+        for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+            if (project_.Surfaces()[index].name == "__out面") {
+                outSurfaceIndex = index;
+            }
+        }
+        if (outSurfaceIndex < 0) {
+            return fail("output test surface exists");
+        }
+        ClearOutputSet();
+        UpdateSelections({{CadSelectionKind::Surface, outSurfaceIndex}}, true);
+        AddSelectionToOutputSet();
+        if (CurrentOutputItems().size() != 1) {
+            return fail("output table takes the selection");
+        }
+        ShowOutputPreviewWindow();
+        if (outputPreviewDialog_ == nullptr
+            || outputPreviewDialog_->View()->TriangleCount() == 0) {
+            return fail("output preview builds a mesh");
+        }
+        const double yawBefore = outputPreviewDialog_->View()->YawRadians();
+        outputPreviewDialog_->View()->OrbitForTest(0.3, 0.1);
+        if (std::abs(outputPreviewDialog_->View()->YawRadians() - yawBefore - 0.3) > 1.0e-9) {
+            return fail("output preview can be orbited");
+        }
+        // 表から消えた物は自動で外れる。
+        outputPreviewDialog_->hide();
+        ClearOutputSet();
+        if (!CurrentOutputItems().empty()) {
+            return fail("output table can be cleared");
+        }
+        UpdateSelections({}, true);
+        if (!project_.RemoveSurface("__out面") || !project_.RemoveWire("__out輪郭")) {
+            return fail("clean up output test objects");
+        }
+        RefreshModelViews(false);
+        if (project_.Wires().size() != outWireStart) {
+            return fail("clean up output test wires");
+        }
+    }
+    progressMark("output set checks done");
+
+    {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。
         const std::size_t autoWireStart = project_.Wires().size();
         const std::size_t autoSurfaceStart = project_.Surfaces().size();

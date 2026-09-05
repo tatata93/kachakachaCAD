@@ -7,6 +7,7 @@
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
 
+#include "kachakacha/io/OutputMesh.h"
 #include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
 #include "kachakacha/io/PlanarExport.h"
@@ -147,6 +148,223 @@ using kachakacha::model::RetainedLineEnd;
 using kachakacha::model::TrimWireAtBoundaries;
 
 using namespace mainwindow_helpers;
+
+namespace {
+
+//! 出力表に出す種類名。
+[[nodiscard]] QString OutputKindLabel(kachakacha::model::ProjectObjectKind kind)
+{
+    using kachakacha::model::ProjectObjectKind;
+    switch (kind) {
+    case ProjectObjectKind::Surface: return QStringLiteral("面");
+    case ProjectObjectKind::Plate: return QStringLiteral("板材");
+    case ProjectObjectKind::Body: return QStringLiteral("実体");
+    case ProjectObjectKind::Wire: return QStringLiteral("線");
+    default: return QStringLiteral("その他");
+    }
+}
+
+} // namespace
+
+std::vector<kachakacha::io::OutputItem> MainWindow::CurrentOutputItems() const
+{
+    return outputItems_;
+}
+
+void MainWindow::AddSelectionToOutputSet()
+{
+    using kachakacha::model::ProjectObjectKind;
+    int added = 0;
+    const auto append = [&](ProjectObjectKind kind, const std::string& name) {
+        const auto duplicate = std::find_if(outputItems_.begin(), outputItems_.end(),
+            [&](const kachakacha::io::OutputItem& item) {
+                return item.kind == kind && item.name == name;
+            });
+        if (duplicate != outputItems_.end()) {
+            return;
+        }
+        outputItems_.push_back({kind, name});
+        ++added;
+    };
+    for (const auto& [kind, name] : SelectedObjectTargets()) {
+        if (kind == ProjectObjectKind::Surface || kind == ProjectObjectKind::Plate
+            || kind == ProjectObjectKind::Body || kind == ProjectObjectKind::Wire) {
+            append(kind, name);
+        }
+    }
+    if (added == 0) {
+        ReportOperationError(QStringLiteral("出力するもの"),
+            QStringLiteral("3D画面か一覧で、出力したい面・板材・実体・線を選んでから押してください。"));
+        return;
+    }
+    RefreshOutputSetTable();
+    RefreshOutputPreview();
+    statusBar()->showMessage(
+        QStringLiteral("%1件を出力表へ追加しました").arg(added), 4000);
+}
+
+void MainWindow::RemoveSelectedOutputSetRow()
+{
+    if (outputSetTable_ == nullptr) {
+        return;
+    }
+    const int row = outputSetTable_->currentRow();
+    if (row < 0 || row >= static_cast<int>(outputItems_.size())) {
+        return;
+    }
+    outputItems_.erase(outputItems_.begin() + row);
+    RefreshOutputSetTable();
+    RefreshOutputPreview();
+}
+
+void MainWindow::ClearOutputSet()
+{
+    outputItems_.clear();
+    RefreshOutputSetTable();
+    RefreshOutputPreview();
+}
+
+void MainWindow::RefreshOutputSetTable()
+{
+    if (outputSetTable_ == nullptr) {
+        return;
+    }
+    outputSetTable_->setRowCount(static_cast<int>(outputItems_.size()));
+    for (int row = 0; row < static_cast<int>(outputItems_.size()); ++row) {
+        const kachakacha::io::OutputItem& item = outputItems_[static_cast<std::size_t>(row)];
+        outputSetTable_->setItem(row, 0, new QTableWidgetItem(OutputKindLabel(item.kind)));
+        outputSetTable_->setItem(row, 1, new QTableWidgetItem(ToQString(item.name)));
+    }
+    if (outputSetSummary_ != nullptr) {
+        outputSetSummary_->setText(
+            QStringLiteral("%1件").arg(outputItems_.size()));
+    }
+}
+
+void MainWindow::RefreshOutputPreview()
+{
+    if (outputSetSummary_ == nullptr) {
+        return;
+    }
+    if (outputItems_.empty()) {
+        outputSetSummary_->setText(QStringLiteral("0件"));
+        if (outputPreviewDialog_ != nullptr && outputPreviewDialog_->isVisible()) {
+            outputPreviewDialog_->SetMesh({});
+        }
+        return;
+    }
+    kachakacha::io::OutputMeshOptions options;
+    options.surfaceThicknessMillimeters = outputSurfaceThickness_ != nullptr
+        ? outputSurfaceThickness_->value() : 0.5;
+    options.fillOpenBoundaries = outputAutoFill_ == nullptr || outputAutoFill_->isChecked();
+    try {
+        kachakacha::io::OutputMesh mesh =
+            kachakacha::io::BuildOutputMesh(project_, outputItems_, options);
+        QStringList notes;
+        for (const std::string& note : mesh.notes) {
+            notes << QString::fromStdString(note);
+        }
+        outputSetSummary_->setText(
+            QStringLiteral("%1件 / 三角形%2 / %3%4")
+                .arg(outputItems_.size())
+                .arg(mesh.triangles.size())
+                .arg(mesh.Closed() ? QStringLiteral("閉じた形")
+                                   : QStringLiteral("開いた縁あり"))
+                .arg(notes.isEmpty() ? QString()
+                                     : QStringLiteral("\n") + notes.join(QStringLiteral("\n"))));
+        if (outputPreviewDialog_ != nullptr && outputPreviewDialog_->isVisible()) {
+            outputPreviewDialog_->SetMesh(std::move(mesh));
+        }
+    } catch (const std::exception& error) {
+        outputSetSummary_->setText(QString::fromUtf8(error.what()));
+    }
+}
+
+void MainWindow::ShowOutputPreviewWindow()
+{
+    if (outputItems_.empty()) {
+        ReportOperationError(QStringLiteral("3Dモデルを出力する"),
+            QStringLiteral("先に出力したい物を表へ追加してください。"));
+        return;
+    }
+    if (outputPreviewDialog_ == nullptr) {
+        outputPreviewDialog_ = new OutputPreviewDialog(this);
+    }
+    kachakacha::io::OutputMeshOptions options;
+    options.surfaceThicknessMillimeters = outputSurfaceThickness_ != nullptr
+        ? outputSurfaceThickness_->value() : 0.5;
+    options.fillOpenBoundaries = outputAutoFill_ == nullptr || outputAutoFill_->isChecked();
+    try {
+        outputPreviewDialog_->SetMesh(
+            kachakacha::io::BuildOutputMesh(project_, outputItems_, options));
+    } catch (const std::exception& error) {
+        ReportOperationError(QStringLiteral("3Dモデルを出力する"),
+            QString::fromUtf8(error.what()));
+        return;
+    }
+    outputPreviewDialog_->show();
+    outputPreviewDialog_->raise();
+    if (!suppressBlockingDialogs_) {
+        outputPreviewDialog_->activateWindow();
+    }
+}
+
+void MainWindow::ExportOutputSet(int format)
+{
+    try {
+        if (outputItems_.empty()) {
+            throw std::invalid_argument("先に出力したい物を表へ追加してください。");
+        }
+        const QString filter = format == 0
+            ? QStringLiteral("STL 3Dプリント形状 (*.stl)")
+            : format == 1 ? QStringLiteral("STEP CADモデル (*.step *.stp)")
+                          : QStringLiteral("kachakachaCAD (*.kcd)");
+        const QString suggestion = format == 0 ? QStringLiteral("output.stl")
+            : format == 1 ? QStringLiteral("output.step") : QStringLiteral("output.kcd");
+        const QString path = suppressBlockingDialogs_
+            ? QString()
+            : QFileDialog::getSaveFileName(
+                  this, QStringLiteral("出力するものを保存"), suggestion, filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (format == 0) {
+            kachakacha::io::OutputMeshOptions options;
+            options.surfaceThicknessMillimeters = outputSurfaceThickness_->value();
+            options.fillOpenBoundaries = outputAutoFill_->isChecked();
+            const kachakacha::io::OutputMesh mesh =
+                kachakacha::io::BuildOutputMesh(project_, outputItems_, options);
+            kachakacha::io::WriteOutputMeshStl(path.toStdString(), mesh);
+        } else if (format == 1) {
+            kachakacha::occt::ModelShapeSelection selection;
+            for (const kachakacha::io::OutputItem& item : outputItems_) {
+                if (item.kind == kachakacha::model::ProjectObjectKind::Plate) {
+                    selection.plateNames.push_back(item.name);
+                } else if (item.kind == kachakacha::model::ProjectObjectKind::Body) {
+                    selection.bodyNames.push_back(item.name);
+                }
+            }
+            if (selection.Empty()) {
+                throw std::invalid_argument(
+                    "STEPは板材・実体だけ書き出せます。面や線は先に板材にしてください"
+                    "（押し出しの「板材にする」）。");
+            }
+            const std::filesystem::path nativePath(path.toStdWString());
+            kachakacha::occt::WriteModelStep(nativePath, project_, selection);
+        } else {
+            const std::filesystem::path nativePath(path.toStdWString());
+            std::ofstream output(nativePath, std::ios::binary);
+            if (!output) {
+                throw std::runtime_error("ファイルを書き出せませんでした。");
+            }
+            kachakacha::io::WriteProjectScript(output, project_);
+        }
+        statusBar()->showMessage(
+            QStringLiteral("出力しました: %1").arg(path), 6000);
+    } catch (const std::exception& error) {
+        ReportOperationError(QStringLiteral("出力"), QString::fromUtf8(error.what()));
+    }
+}
 
 QWidget* MainWindow::BuildOutputPanel()
 {
@@ -531,6 +749,88 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(filteredKcdButton, &QPushButton::clicked, this, [this] { ExportProjectExcludingSets(); });
     modelLayout->addWidget(filteredKcdButton);
 
+    // --- 出力するもの(オーナー指示: 出力対象の管理表+3Dプレビュー) ---
+    auto [outputSetContent, outputSetLayout] = beginSection();
+    auto* outputSetHint = new QLabel(QStringLiteral(
+        "出力したい面・板材・実体・線を表に入れます。3D画面や一覧で選んで"
+        "「選択を追加」。表の中身がそのまま .kcd / STL / STEP の出力対象です。"));
+    outputSetHint->setWordWrap(true);
+    outputSetHint->setStyleSheet("color: #5c6670;");
+    outputSetLayout->addWidget(outputSetHint);
+    outputSetTable_ = new QTableWidget(0, 2);
+    outputSetTable_->setHorizontalHeaderLabels(
+        {QStringLiteral("種類"), QStringLiteral("名前")});
+    outputSetTable_->verticalHeader()->setVisible(false);
+    outputSetTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    outputSetTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    outputSetTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    outputSetTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    outputSetTable_->setMinimumHeight(120);
+    outputSetLayout->addWidget(outputSetTable_);
+    auto* outputSetButtons = new QHBoxLayout;
+    auto* addOutputButton = new QPushButton(QStringLiteral("選択を追加"));
+    addOutputButton->setObjectName("primaryButton");
+    connect(addOutputButton, &QPushButton::clicked, this, &MainWindow::AddSelectionToOutputSet);
+    auto* removeOutputButton = new QPushButton(QStringLiteral("選択行を削除"));
+    connect(removeOutputButton, &QPushButton::clicked, this, &MainWindow::RemoveSelectedOutputSetRow);
+    auto* clearOutputButton = new QPushButton(QStringLiteral("全て消す"));
+    connect(clearOutputButton, &QPushButton::clicked, this, &MainWindow::ClearOutputSet);
+    outputSetButtons->addWidget(addOutputButton, 1);
+    outputSetButtons->addWidget(removeOutputButton, 1);
+    outputSetButtons->addWidget(clearOutputButton, 1);
+    outputSetLayout->addLayout(outputSetButtons);
+
+    auto* outputSetForm = new QFormLayout;
+    outputSetForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    outputSurfaceThickness_ = new QDoubleSpinBox;
+    outputSurfaceThickness_->setRange(0.05, 20.0);
+    outputSurfaceThickness_->setDecimals(2);
+    outputSurfaceThickness_->setSingleStep(0.1);
+    outputSurfaceThickness_->setValue(0.5);
+    outputSurfaceThickness_->setSuffix(QStringLiteral(" mm"));
+    outputSurfaceThickness_->setToolTip(QStringLiteral(
+        "厚みの無い面・線を3Dモデルにするときの板厚"));
+    outputSetForm->addRow(QStringLiteral("面・線の板厚"), outputSurfaceThickness_);
+    outputAutoFill_ = new QCheckBox(QStringLiteral("開いている所を自動でふさぐ"));
+    outputAutoFill_->setChecked(true);
+    outputAutoFill_->setToolTip(QStringLiteral(
+        "閉じていない縁を自動で埋めます。埋めた場所はプレビューで橙色になります"));
+    outputSetForm->addRow(outputAutoFill_);
+    outputSetLayout->addLayout(outputSetForm);
+    connect(outputSurfaceThickness_, &QDoubleSpinBox::valueChanged, this,
+        [this](double) { RefreshOutputPreview(); });
+    connect(outputAutoFill_, &QCheckBox::toggled, this,
+        [this](bool) { RefreshOutputPreview(); });
+
+    outputSetSummary_ = new QLabel(QStringLiteral("0件"));
+    outputSetSummary_->setWordWrap(true);
+    outputSetSummary_->setStyleSheet("color: #5c6670;");
+    outputSetLayout->addWidget(outputSetSummary_);
+
+    auto* previewButton = new QPushButton(QStringLiteral("3Dモデルを出力する…"));
+    previewButton->setObjectName("primaryButton");
+    previewButton->setToolTip(QStringLiteral(
+        "別ウィンドウで完成形を確認します。ドラッグで回して、"
+        "自動でふさいだ所(橙色)も見てから保存できます"));
+    connect(previewButton, &QPushButton::clicked, this, &MainWindow::ShowOutputPreviewWindow);
+    outputSetLayout->addWidget(previewButton);
+    auto* outputExportButtons = new QHBoxLayout;
+    auto* setStlButton = new QPushButton(QStringLiteral("STLで保存"));
+    connect(setStlButton, &QPushButton::clicked, this, [this] { ExportOutputSet(0); });
+    auto* setStepButton = new QPushButton(QStringLiteral("STEPで保存"));
+    connect(setStepButton, &QPushButton::clicked, this, [this] { ExportOutputSet(1); });
+    auto* setKcdButton = new QPushButton(QStringLiteral(".kcdで保存"));
+    connect(setKcdButton, &QPushButton::clicked, this, [this] { ExportOutputSet(2); });
+    outputExportButtons->addWidget(setStlButton, 1);
+    outputExportButtons->addWidget(setStepButton, 1);
+    outputExportButtons->addWidget(setKcdButton, 1);
+    outputSetLayout->addLayout(outputExportButtons);
+
+    auto* outputSetSection = new CollapsibleSection(
+        QStringLiteral("出力するもの（表で管理）"), outputSetContent, true);
+    outputSetSection->setProperty("manualAnchor", QStringLiteral("outputSet"));
+    layout->addWidget(outputSetSection);
+
     auto* planarSection = new CollapsibleSection(
         QStringLiteral("作業平面の1:1図面"), planarContent, true);
     planarSection->setProperty("manualAnchor", QStringLiteral("planarOutput"));
@@ -546,6 +846,7 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(modelSection);
     // 出力ツール(上部)で選んだ1セクションだけ表示する(ADR 0025)。
     outputSections_ = {
+        {QStringLiteral("出力するもの（表で管理）"), outputSetSection},
         {QStringLiteral("作業平面の1:1図面"), planarSection},
         {QStringLiteral("ペーパークラフト展開（1:1）"), plateSection},
         {QStringLiteral("3DモデルのSTL / STEP出力"), modelSection},

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CadViewport.h"
+#include "OutputPreviewDialog.h"
+#include "kachakacha/io/OutputMesh.h"
 #include "kachakacha/model/Project.h"
 
 #include <QColor>
@@ -267,6 +269,15 @@ private:
     //! 失敗をユーザーへ確実に伝える(オーナー報告「押しても何も起きない」対策)。
     //! セルフテスト・スクリーンショット中はモーダルを出さずログだけにする。
     void ReportOperationError(const QString& title, const QString& message);
+    //! 出力モード(オーナー指示): 出力対象の管理表と3Dプレビュー。
+    void AddSelectionToOutputSet();
+    void RemoveSelectedOutputSetRow();
+    void ClearOutputSet();
+    void RefreshOutputSetTable();
+    void RefreshOutputPreview();
+    void ShowOutputPreviewWindow();
+    void ExportOutputSet(int format); //!< 0=STL 1=STEP 2=kcd
+    [[nodiscard]] std::vector<kachakacha::io::OutputItem> CurrentOutputItems() const;
     void CreateRevolvedSurface();
     void CreateOffsetSurfaceApproximation();
     void RemoveSelectedSurfaceOpenings();
@@ -440,6 +451,13 @@ private:
     QComboBox* activeGroupCombo_ = nullptr;
     //! true の間はモーダルダイアログを出さない(自動テスト・撮影中)。
     bool suppressBlockingDialogs_ = false;
+    // 出力モードの管理表(オーナー指示)。
+    QTableWidget* outputSetTable_ = nullptr;
+    QLabel* outputSetSummary_ = nullptr;
+    QDoubleSpinBox* outputSurfaceThickness_ = nullptr;
+    QCheckBox* outputAutoFill_ = nullptr;
+    std::vector<kachakacha::io::OutputItem> outputItems_;
+    OutputPreviewDialog* outputPreviewDialog_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QCheckBox* gridPointsVisible_ = nullptr;
     QComboBox* gridSubdivision_ = nullptr;

@@ -1418,6 +1418,9 @@ void MainWindow::BuildMenusAndToolbar()
             outputToolActions_.push_back(action);
             return action;
         };
+        addOutputTool(QStringLiteral("出力するもの"),
+            QStringLiteral("出力するもの（表で管理）"),
+            QStringLiteral("出力対象を表で管理し、3Dモデルを確認して保存する"));
         addOutputTool(QStringLiteral("1:1図面"), QStringLiteral("作業平面の1:1図面"),
             QStringLiteral("作業平面上の線をSVG/DXFの1:1図面として保存"));
         addOutputTool(QStringLiteral("ペーパークラフト展開"),
@@ -6309,6 +6312,34 @@ void MainWindow::RefreshModelViews(bool fitView)
         gordonGuideNames_.end());
     RefreshGordonGuideLabel();
     UpdateNumericPreviews();
+    // 出力表(オーナー指示: 表の変更を逐次プレビューへ反映)。消えた物は表から外す。
+    if (outputSetTable_ != nullptr) {
+        const std::size_t before = outputItems_.size();
+        outputItems_.erase(
+            std::remove_if(outputItems_.begin(), outputItems_.end(),
+                [this](const kachakacha::io::OutputItem& item) {
+                    switch (item.kind) {
+                    case kachakacha::model::ProjectObjectKind::Surface:
+                        return !project_.FindSurface(item.name).has_value();
+                    case kachakacha::model::ProjectObjectKind::Plate:
+                        return !project_.FindPlate(item.name).has_value();
+                    case kachakacha::model::ProjectObjectKind::Body:
+                        return !project_.FindBody(item.name).has_value();
+                    case kachakacha::model::ProjectObjectKind::Wire:
+                        return std::none_of(project_.Wires().begin(), project_.Wires().end(),
+                            [&item](const kachakacha::model::NamedWire& wire) {
+                                return wire.name == item.name;
+                            });
+                    default:
+                        return true;
+                    }
+                }),
+            outputItems_.end());
+        if (before != outputItems_.size()) {
+            RefreshOutputSetTable();
+        }
+        RefreshOutputPreview();
+    }
     UpdateSelection({}, false);
 }
 

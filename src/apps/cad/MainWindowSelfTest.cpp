@@ -3429,6 +3429,42 @@ bool MainWindow::RunCreationSelfTest()
     }
     progressMark("mv move test done");
 
+    {
+        // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。
+        const std::size_t autoWireStart = project_.Wires().size();
+        const std::size_t autoSurfaceStart = project_.Surfaces().size();
+        project_.AddWire("__auto断1", Wire::CircularArcThroughThreePoints(
+            {400.0, 0.0, 0.0}, {420.0, 16.0, 0.0}, {440.0, 0.0, 0.0}));
+        project_.AddWire("__auto断2", Wire::CircularArcThroughThreePoints(
+            {438.0, 0.0, 30.0}, {420.0, 14.0, 30.0}, {402.0, 0.0, 30.0}));
+        project_.AddWire("__auto断3", Wire::CircularArcThroughThreePoints(
+            {404.0, 0.0, 60.0}, {420.0, 12.0, 60.0}, {436.0, 0.0, 60.0}));
+        RefreshModelViews(false);
+        surfaceName_->setText(QStringLiteral("__autoおまかせ"));
+        UpdateSelections({
+            {CadSelectionKind::Wire, static_cast<int>(autoWireStart + 1)},
+            {CadSelectionKind::Wire, static_cast<int>(autoWireStart + 2)},
+            {CadSelectionKind::Wire, static_cast<int>(autoWireStart)},
+        }, true);
+        CreateAutoSurfaceFromSelection();
+        if (project_.Surfaces().size() != autoSurfaceStart + 1
+            || !project_.Surfaces().back().autoAssembled
+            || project_.Surfaces().back().surface.Kind() != SurfaceKind::Loft) {
+            return fail("auto surface button builds from messy selection");
+        }
+        Undo();
+        if (project_.Surfaces().size() != autoSurfaceStart) {
+            return fail("undo auto surface");
+        }
+        UpdateSelections({}, true);
+        if (!project_.RemoveWire("__auto断1") || !project_.RemoveWire("__auto断2")
+            || !project_.RemoveWire("__auto断3")) {
+            return fail("clean up auto surface wires");
+        }
+        RefreshModelViews(false);
+    }
+    progressMark("auto surface checks done");
+
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->FitAll();

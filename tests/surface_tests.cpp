@@ -1,3 +1,4 @@
+#include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/Project.h"
 #include "kachakacha/model/Surface.h"
 
@@ -5,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -404,6 +406,115 @@ int main()
                 beforeSurfacePoint + delta,
                 1.0e-8),
             "duplicate translation rebuilds the surface once");
+    }
+
+    {
+        // --- おまかせ面(オーナー指示): 選択順・向き不問で面が作れる ---
+        Project project;
+        // 閉じた長方形(4本、順序も向きもバラバラ) → 平面。
+        project.AddWire("自動枠右", Wire::Line({20.0, 0.0, 0.0}, {20.0, 10.0, 0.0}));
+        project.AddWire("自動枠下", Wire::Line({0.0, 0.0, 0.0}, {20.0, 0.0, 0.0}));
+        project.AddWire("自動枠上", Wire::Line({0.0, 10.0, 0.0}, {20.0, 10.0, 0.0}));
+        project.AddWire("自動枠左", Wire::Line({0.0, 10.0, 0.0}, {0.0, 0.0, 0.0}));
+        const std::string planarNote = project.AddAutoSurface(
+            "自動平面", {"自動枠右", "自動枠上", "自動枠下", "自動枠左"});
+        Require(project.Surfaces().back().surface.Kind() == SurfaceKind::Planar,
+            "auto surface picks a planar surface for a closed flat loop");
+        Require(project.Surfaces().back().autoAssembled,
+            "auto surface is marked as auto assembled");
+        Require(planarNote.find("平面") != std::string::npos,
+            "auto surface describes the planar result");
+
+        // 閉じているが平面ではない4本 → パッチ面(穴埋め)。角が境界上に載る。
+        project.AddWire("山下", Wire::Line({0.0, 0.0, 20.0}, {20.0, 0.0, 20.0}));
+        project.AddWire("山右", Wire::CircularArcThroughThreePoints(
+            {20.0, 0.0, 20.0}, {22.0, 5.0, 26.0}, {20.0, 10.0, 20.0}));
+        project.AddWire("山上", Wire::Line({20.0, 10.0, 20.0}, {0.0, 10.0, 20.0}));
+        project.AddWire("山左", Wire::CircularArcThroughThreePoints(
+            {0.0, 10.0, 20.0}, {-2.0, 5.0, 26.0}, {0.0, 0.0, 20.0}));
+        (void)project.AddAutoSurface("自動パッチ", {"山上", "山下", "山左", "山右"});
+        const auto& patch = project.Surfaces().back();
+        Require(patch.surface.Kind() == SurfaceKind::Patch,
+            "auto surface falls back to a patch for a non-planar loop");
+        bool cornerOnBoundary = false;
+        const Vector3 corner = patch.surface.Evaluate(0.0, 0.0);
+        for (int sample = 0; sample <= 256; ++sample) {
+            if ((patch.surface.FirstBoundary().Evaluate(sample / 256.0) - corner)
+                    .Length() < 0.5) {
+                cornerOnBoundary = true;
+                break;
+            }
+        }
+        Require(cornerOnBoundary, "patch corner lies on the boundary loop");
+
+        // 3本の断面を順序も向きもバラバラに → 自動整列ロフト。
+        project.AddWire("断面中", Wire::CircularArcThroughThreePoints(
+            {-24.0, 0.0, 70.0}, {0.0, 20.0, 70.0}, {24.0, 0.0, 70.0}));
+        project.AddWire("断面奥", Wire::CircularArcThroughThreePoints(
+            {20.0, 0.0, 90.0}, {0.0, 16.0, 90.0}, {-20.0, 0.0, 90.0})); // 逆向き
+        project.AddWire("断面手前", Wire::CircularArcThroughThreePoints(
+            {-30.0, 0.0, 50.0}, {0.0, 26.0, 50.0}, {30.0, 0.0, 50.0}));
+        const std::string loftNote = project.AddAutoSurface(
+            "自動ロフト", {"断面中", "断面奥", "断面手前"});
+        const auto& loft = project.Surfaces().back();
+        Require(loft.surface.Kind() == SurfaceKind::Loft,
+            "auto surface lofts three open sections");
+        Require(loftNote.find("自動整列") != std::string::npos,
+            "auto surface reports the automatic ordering");
+        // v=0/1 が手前(z=50)と奥(z=90)の断面になっている(順序が整った)。
+        const double lowZ = loft.surface.Evaluate(0.5, 0.0).z;
+        const double highZ = loft.surface.Evaluate(0.5, 1.0).z;
+        Require(std::abs(std::min(lowZ, highZ) - 50.0) < 1.0
+                && std::abs(std::max(lowZ, highZ) - 90.0) < 1.0,
+            "auto loft orders sections along their axis");
+        // 向きが揃っている(v方向の素線がねじれていない): u=0 の両端が同じ側。
+        const Vector3 uZeroLow = loft.surface.Evaluate(0.0, 0.0);
+        const Vector3 uZeroHigh = loft.surface.Evaluate(0.0, 1.0);
+        Require((uZeroLow - uZeroHigh).Length()
+                < (uZeroLow - loft.surface.Evaluate(1.0, 1.0)).Length(),
+            "auto loft aligns section directions");
+
+        // 2本(片方は2線に分かれ、0.6mmの隙間あり) → 連結+ルールド。
+        project.AddWire("縁A1", Wire::Line({100.0, 0.0, 0.0}, {110.0, 0.0, 0.0}));
+        project.AddWire("縁A2", Wire::Line({110.6, 0.0, 0.0}, {120.0, 0.0, 0.0}));
+        project.AddWire("縁B", Wire::Line({100.0, 20.0, 4.0}, {120.0, 20.0, 4.0}));
+        const std::string ruledNote = project.AddAutoSurface(
+            "自動ルールド", {"縁B", "縁A1", "縁A2"});
+        Require(project.Surfaces().back().surface.Kind() == SurfaceKind::Ruled,
+            "auto surface joins chains with a small gap into a ruled surface");
+        Require(ruledNote.find("隙間") != std::string::npos,
+            "auto surface reports the bridged gap");
+
+        // 保存 → 読込で同じ手順で作り直される。
+        std::ostringstream saved;
+        kachakacha::io::WriteProjectScript(saved, project);
+        Require(saved.str().find("surface_auto 自動パッチ 4") != std::string::npos,
+            "auto surface is saved as surface_auto");
+        std::istringstream input(saved.str());
+        Project loaded = kachakacha::io::LoadProjectScript(input, "auto-surface");
+        Require(loaded.FindSurface("自動パッチ").has_value()
+                && loaded.FindSurface("自動パッチ")->Kind() == SurfaceKind::Patch,
+            "auto surface survives the script round trip");
+
+        // 元の線を編集すると追従して作り直される(0.8mm持ち上げ→隙間は自動で
+        // 閉じたまま、平面ではなくなるのでパッチへ再判定される)。
+        const Vector3 beforeEdit = project.FindSurface("自動平面")->Evaluate(0.5, 0.5);
+        project.UpdateWire("自動枠上",
+            Wire::Line({0.0, 10.0, 0.8}, {20.0, 10.0, 0.8}));
+        const Vector3 afterEdit = project.FindSurface("自動平面")->Evaluate(0.5, 0.5);
+        Require((afterEdit - beforeEdit).Length() > 0.2,
+            "auto surface follows source wire edits");
+        Require(project.FindSurface("自動平面")->Kind() == SurfaceKind::Patch,
+            "auto surface re-plans its kind after edits");
+
+        // 閉じない選択は理由つきで拒否される。
+        bool guarded = false;
+        try {
+            (void)project.AddAutoSurface("自動失敗", {"縁B"});
+        } catch (const std::invalid_argument& error) {
+            guarded = std::string(error.what()).find("閉じていません") != std::string::npos;
+        }
+        Require(guarded, "auto surface explains why it cannot build");
     }
 
     std::cout << "surface tests passed\n";

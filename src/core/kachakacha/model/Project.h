@@ -144,6 +144,9 @@ struct NamedSurface {
     //! 面の開口(窓・ライト等): この面へ投影した閉ワイヤの名前。
     //! 面入力の近似モデル・型紙・実体化に反映され、この面から作る板材にも引き継がれる。
     std::vector<std::string> openingWireNames;
+    //! おまかせ面(AddAutoSurface)なら true。再計算・読込のたび sourceWireNames から
+    //! 自動連結・自動整列で作り直される(集成体初期化互換のため末尾)。
+    bool autoAssembled = false;
 };
 
 struct NamedPlate {
@@ -263,6 +266,10 @@ public:
         std::vector<std::string> firstSectionNames,
         std::vector<std::string> secondSectionNames);
     void AddLoftSurface(std::string name, std::vector<std::string> sectionNames);
+    //! おまかせ面(オーナー指示): 選んだ線分群から前提なしに面を組み立てる。
+    //! 選択順・向き・端点一致は不要(自動連結・自動整列・小さな隙間の自動閉合)。
+    //! 戻り値は組み立て方の日本語説明。再計算・読込でも同じ手順で作り直される。
+    std::string AddAutoSurface(std::string name, std::vector<std::string> wireNames);
     void AddGordonSurface(
         std::string name,
         std::vector<std::string> sectionNames,

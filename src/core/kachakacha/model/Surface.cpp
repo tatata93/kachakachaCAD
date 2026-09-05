@@ -705,7 +705,8 @@ Surface::Surface(
     std::vector<Wire> guides,
     std::vector<double> sectionParameters,
     std::vector<double> firstGuideParameters,
-    std::vector<double> secondGuideParameters)
+    std::vector<double> secondGuideParameters,
+    std::vector<std::vector<geometry::Vector3>> patchSides)
     : kind_(kind),
       boundaries_(std::move(boundaries)),
       guides_(std::move(guides)),
@@ -716,8 +717,112 @@ Surface::Surface(
       minimumU_(minimumU),
       minimumV_(minimumV),
       maximumU_(maximumU),
-      maximumV_(maximumV)
+      maximumV_(maximumV),
+      patchSides_(std::move(patchSides))
 {
+}
+
+Surface Surface::Patch(Wire closedBoundary)
+{
+    if (!closedBoundary.IsClosed(1.0e-6)) {
+        throw std::invalid_argument("パッチ面の境界は閉じたワイヤにしてください。");
+    }
+    // 境界を一周サンプリングし、折れの大きい4点を角として4辺に分ける。
+    constexpr int kLoopSamples = 256;
+    std::vector<Vector3> points(kLoopSamples);
+    for (int index = 0; index < kLoopSamples; ++index) {
+        points[index] = closedBoundary.Evaluate(
+            static_cast<double>(index) / kLoopSamples);
+    }
+    std::vector<std::pair<double, int>> turns;
+    turns.reserve(kLoopSamples);
+    for (int index = 0; index < kLoopSamples; ++index) {
+        const Vector3& previous = points[(index + kLoopSamples - 1) % kLoopSamples];
+        const Vector3& current = points[index];
+        const Vector3& next = points[(index + 1) % kLoopSamples];
+        const Vector3 incoming = current - previous;
+        const Vector3 outgoing = next - current;
+        const double incomingLength = incoming.Length();
+        const double outgoingLength = outgoing.Length();
+        if (incomingLength <= 1.0e-12 || outgoingLength <= 1.0e-12) {
+            continue;
+        }
+        const double cosine = std::clamp(
+            Dot(incoming, outgoing) / (incomingLength * outgoingLength), -1.0, 1.0);
+        turns.emplace_back(std::acos(cosine), index);
+    }
+    std::sort(turns.rbegin(), turns.rend());
+    std::vector<int> corners;
+    constexpr int kMinimumSeparation = kLoopSamples / 8;
+    for (const auto& [angle, index] : turns) {
+        if (angle < 0.35) {
+            break; // ~20度未満の折れは角と見なさない。
+        }
+        bool separated = true;
+        for (const int corner : corners) {
+            const int difference = std::abs(corner - index);
+            if (std::min(difference, kLoopSamples - difference) < kMinimumSeparation) {
+                separated = false;
+                break;
+            }
+        }
+        if (separated) {
+            corners.push_back(index);
+        }
+        if (corners.size() == 4) {
+            break;
+        }
+    }
+    if (corners.size() < 4) {
+        corners = {0, kLoopSamples / 4, kLoopSamples / 2, kLoopSamples * 3 / 4};
+    }
+    std::sort(corners.begin(), corners.end());
+    constexpr int kSideSamples = 64;
+    std::vector<std::vector<Vector3>> sides(4);
+    for (int side = 0; side < 4; ++side) {
+        const int start = corners[static_cast<std::size_t>(side)];
+        const int end = corners[static_cast<std::size_t>((side + 1) % 4)];
+        const int span = ((end - start) % kLoopSamples + kLoopSamples) % kLoopSamples;
+        if (span == 0) {
+            throw std::invalid_argument("パッチ面の角の検出に失敗しました。");
+        }
+        sides[static_cast<std::size_t>(side)].reserve(kSideSamples + 1);
+        for (int sample = 0; sample <= kSideSamples; ++sample) {
+            const double loopPosition = static_cast<double>(start)
+                + static_cast<double>(span) * sample / kSideSamples;
+            const double parameter =
+                std::fmod(loopPosition, static_cast<double>(kLoopSamples)) / kLoopSamples;
+            sides[static_cast<std::size_t>(side)].push_back(
+                closedBoundary.Evaluate(parameter));
+        }
+    }
+    return Surface(SurfaceKind::Patch, {std::move(closedBoundary)}, std::nullopt,
+        0.0, 0.0, 1.0, 1.0, {}, {}, {}, {}, std::move(sides));
+}
+
+Vector3 Surface::EvaluatePatch(double u, double v) const
+{
+    // Coonsの双線形ブレンド: 4辺を混ぜ、角の重複を引く。
+    const auto side = [this](int index, double t) {
+        const std::vector<Vector3>& samples = patchSides_[static_cast<std::size_t>(index)];
+        const double scaled =
+            std::clamp(t, 0.0, 1.0) * static_cast<double>(samples.size() - 1);
+        const std::size_t segment = std::min<std::size_t>(
+            static_cast<std::size_t>(scaled), samples.size() - 2);
+        const double local = scaled - static_cast<double>(segment);
+        return samples[segment] * (1.0 - local) + samples[segment + 1] * local;
+    };
+    const Vector3 bottom = side(0, u);        // v=0 (u: 0→1)
+    const Vector3 right = side(1, v);         // u=1 (v: 0→1)
+    const Vector3 top = side(2, 1.0 - u);     // v=1 (u: 1→0 の並びを反転)
+    const Vector3 left = side(3, 1.0 - v);    // u=0 (v: 1→0 の並びを反転)
+    const Vector3 corner00 = side(0, 0.0);
+    const Vector3 corner10 = side(0, 1.0);
+    const Vector3 corner11 = side(2, 0.0);
+    const Vector3 corner01 = side(2, 1.0);
+    return bottom * (1.0 - v) + top * v + left * (1.0 - u) + right * u
+        - (corner00 * (1.0 - u) * (1.0 - v) + corner10 * u * (1.0 - v)
+            + corner01 * (1.0 - u) * v + corner11 * u * v);
 }
 
 Surface Surface::Planar(Wire closedBoundary, double tolerance)
@@ -1023,6 +1128,9 @@ Vector3 Surface::Evaluate(double u, double v) const
     }
     if (kind_ == SurfaceKind::Gordon) {
         return EvaluateGordon(clampedU, clampedV);
+    }
+    if (kind_ == SurfaceKind::Patch) {
+        return EvaluatePatch(clampedU, clampedV);
     }
     if (kind_ == SurfaceKind::GuidedLoft) {
         return EvaluateGuidedSectionLoft(

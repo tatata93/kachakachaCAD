@@ -223,6 +223,8 @@ private:
         int surfaceMode,
         const std::vector<int>& fallbackWireIndices) const;
     void CreateSurfaceFromSelection();
+    //! おまかせ面(オーナー指示): 選んだ線から前提なしに面を作る。
+    void CreateAutoSurfaceFromSelection();
     void AddSelectedGordonGuides();
     void ClearGordonGuides();
     void RefreshGordonGuideLabel();

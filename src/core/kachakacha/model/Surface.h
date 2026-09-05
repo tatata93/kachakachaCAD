@@ -14,6 +14,7 @@ enum class SurfaceKind {
     Loft,
     Gordon,
     GuidedLoft,
+    Patch, //!< 閉じた境界1本の穴埋め面(Coonsブレンド。おまかせ面の非平面フォールバック)
 };
 
 struct SurfaceProjection {
@@ -47,6 +48,9 @@ public:
         Wire secondGuide,
         std::vector<Wire> sections,
         double connectionToleranceMillimeters = 0.05);
+    //! 閉じた境界1本から穴埋め面を作る(Coonsブレンド)。平面でなくてもよい。
+    //! 境界の折れが大きい4点を角として4辺に分け、辺どうしを双線形に混ぜる。
+    [[nodiscard]] static Surface Patch(Wire closedBoundary);
 
     [[nodiscard]] SurfaceKind Kind() const noexcept { return kind_; }
     [[nodiscard]] const Wire& FirstBoundary() const noexcept { return boundaries_.front(); }
@@ -84,7 +88,8 @@ private:
         std::vector<Wire> guides = {},
         std::vector<double> sectionParameters = {},
         std::vector<double> firstGuideParameters = {},
-        std::vector<double> secondGuideParameters = {});
+        std::vector<double> secondGuideParameters = {},
+        std::vector<std::vector<geometry::Vector3>> patchSides = {});
 
     [[nodiscard]] bool ContainsPlanarPoint(double u, double v, double tolerance) const;
 
@@ -110,7 +115,12 @@ private:
     std::vector<GordonGuideData> gordonGuides_;
     double maximumGuideGap_ = 0.0;
 
+    //! パッチ面の4辺サンプル列(辺0: v=0 u昇順 / 辺1: u=1 v昇順 /
+    //! 辺2: v=1 u降順 / 辺3: u=0 v降順。境界を一周する向き)。
+    std::vector<std::vector<geometry::Vector3>> patchSides_;
+
     [[nodiscard]] geometry::Vector3 EvaluateGordon(double u, double v) const;
+    [[nodiscard]] geometry::Vector3 EvaluatePatch(double u, double v) const;
 };
 
 } // namespace kachakacha::model

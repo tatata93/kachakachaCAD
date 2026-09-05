@@ -742,6 +742,18 @@ Project LoadProjectScript(std::istream& input, std::string_view sourceName)
                     sections.push_back(sectionName);
                 }
                 project.AddLoftSurface(name, std::move(sections));
+            } else if (command == "surface_auto") {
+                const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
+                const std::size_t wireCount =
+                    ReadCount(stream, sourceName, lineNumber, "auto surface wire count");
+                std::vector<std::string> wireNames;
+                wireNames.reserve(wireCount);
+                for (std::size_t index = 0; index < wireCount; ++index) {
+                    wireNames.push_back(
+                        ReadName(stream, sourceName, lineNumber, "auto surface wire"));
+                }
+                EnsureLineEnded(stream, sourceName, lineNumber);
+                project.AddAutoSurface(name, std::move(wireNames));
             } else if (command == "surface_gordon") {
                 const std::string name = ReadName(stream, sourceName, lineNumber, "surface");
                 const std::size_t sectionCount = ReadCount(stream, sourceName, lineNumber, "section count");
@@ -1263,6 +1275,16 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
         for (const std::string& guideWireName : namedSurface.guideWireNames) {
             RequireScriptNameSafe(guideWireName, "Surface guide wire");
+        }
+        if (namedSurface.autoAssembled) {
+            // おまかせ面: 読込時に同じ手順(自動連結・整列)で作り直す。
+            output << "surface_auto " << namedSurface.name << ' '
+                   << namedSurface.sourceWireNames.size();
+            for (const std::string& sourceName : namedSurface.sourceWireNames) {
+                output << ' ' << sourceName;
+            }
+            output << '\n';
+            return;
         }
         const bool compoundGroups = !namedSurface.sourceWireGroups.empty()
             && std::any_of(

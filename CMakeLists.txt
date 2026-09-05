@@ -47,6 +47,7 @@ add_library(kachakacha_core STATIC
     src/core/kachakacha/io/PlateFlatPattern.cpp
     src/core/kachakacha/io/PlanarExport.cpp
     src/core/kachakacha/io/ProjectScript.cpp
+    src/core/kachakacha/model/AutoSurface.cpp
     src/core/kachakacha/model/Body.cpp
     src/core/kachakacha/model/Measurement.cpp
     src/core/kachakacha/model/PartModel.cpp

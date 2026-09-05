@@ -1134,6 +1134,18 @@ QWidget* MainWindow::BuildSurfacePanel()
         this, &MainWindow::CreateSurfaceFromSelection);
     layout->addWidget(surfaceCreateButton_);
 
+    auto* autoSurfaceButton = new QPushButton(
+        QStringLiteral("おまかせで面を作る（選択順・向き不問）"));
+    autoSurfaceButton->setObjectName("primaryButton");
+    autoSurfaceButton->setToolTip(QStringLiteral(
+        "選んだ線から前提なしに面を作ります(オーナー指示)。\n"
+        "線は端点の近さで自動連結・自動反転し、小さな隙間は自動で閉じます。\n"
+        "閉じた輪郭1つ→平面またはパッチ面(穴埋め)、2本→ルールド、\n"
+        "3本以上→自動整列してロフト。作れないときは理由を表示します"));
+    connect(autoSurfaceButton, &QPushButton::clicked,
+        this, &MainWindow::CreateAutoSurfaceFromSelection);
+    layout->addWidget(autoSurfaceButton);
+
     auto* gordonTitle = new QLabel(QStringLiteral("断面と外形ガイドから面（Gordon面）"));
     gordonTitle->setProperty("manualAnchor", QStringLiteral("surfaceGordon"));
     gordonTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");

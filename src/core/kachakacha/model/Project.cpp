@@ -1,5 +1,6 @@
 #include "kachakacha/model/Project.h"
 
+#include "kachakacha/model/AutoSurface.h"
 #include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/WireOperations.h"
 
@@ -681,6 +682,41 @@ void Project::AddLoftSurface(
         std::move(name), Surface::Loft(std::move(sections)),
         std::move(sectionNames)});
     surfaces_.back().sourceWireGroups = std::move(sectionWireGroups);
+}
+
+std::string Project::AddAutoSurface(std::string name, std::vector<std::string> wireNames)
+{
+    if (name.empty()) {
+        throw std::invalid_argument("Surface name must not be empty.");
+    }
+    if (FindSurface(name).has_value()) {
+        throw std::invalid_argument("Surface name already exists: " + name);
+    }
+    // 入力順は保ちつつ重複だけ除く(おまかせなので順序に意味は持たせない)。
+    std::vector<std::string> uniqueNames;
+    uniqueNames.reserve(wireNames.size());
+    for (const std::string& wireName : wireNames) {
+        if (std::find(uniqueNames.begin(), uniqueNames.end(), wireName)
+            == uniqueNames.end()) {
+            uniqueNames.push_back(wireName);
+        }
+    }
+    if (uniqueNames.empty()) {
+        throw std::invalid_argument("面にする線を1本以上選択してください。");
+    }
+    std::vector<Wire> geometries;
+    geometries.reserve(uniqueNames.size());
+    for (const std::string& wireName : uniqueNames) {
+        geometries.push_back(RequireWire(wireName).wire);
+    }
+    AutoSurfaceResult result = BuildAutoSurface(geometries);
+    surfaces_.push_back({
+        std::move(name),
+        std::move(result.surface),
+        uniqueNames,
+    });
+    surfaces_.back().autoAssembled = true;
+    return std::move(result.description);
 }
 
 void Project::AddGuidedLoftSurface(
@@ -3079,6 +3115,20 @@ void Project::RebuildDependentGeometry()
                     surface.guideWireNames.begin(), surface.guideWireNames.end(),
                     [&](const std::string& guideName) { return wireReady[wireIndex(guideName)]; });
             if (!sourcesReady) {
+                continue;
+            }
+
+            if (surface.autoAssembled) {
+                // おまかせ面: 保存時と同じ手順(自動連結・自動整列)で作り直す。
+                std::vector<Wire> parts;
+                parts.reserve(surface.sourceWireNames.size());
+                for (const std::string& sourceName : surface.sourceWireNames) {
+                    parts.push_back(wires_[wireIndex(sourceName)].wire);
+                }
+                surface.surface = BuildAutoSurface(parts).surface;
+                surfaceReady[index] = true;
+                --pendingSurfaces;
+                madeProgress = true;
                 continue;
             }
 

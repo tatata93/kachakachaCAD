@@ -1025,6 +1025,45 @@ void MainWindow::UpdateSurfaceCreationPreview()
     }
 }
 
+void MainWindow::CreateAutoSurfaceFromSelection()
+{
+    try {
+        ValidateObjectName(surfaceName_->text());
+        std::vector<std::string> wireNames;
+        for (const CadSelection& selection : viewport_->Selections()) {
+            if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
+                && selection.index < static_cast<int>(project_.Wires().size())) {
+                const auto& named = project_.Wires()[selection.index];
+                if (named.metadata.construction) {
+                    continue; // 補助線は無視して残りで組み立てる。
+                }
+                wireNames.push_back(named.name);
+            }
+        }
+        if (wireNames.empty()) {
+            throw std::invalid_argument(
+                "面にする線を3D画面で1本以上選択してください(補助線以外)。");
+        }
+        Project candidate = project_;
+        const std::string name = ToName(surfaceName_->text());
+        const std::string description = candidate.AddAutoSurface(name, wireNames);
+        RecordUndo();
+        project_ = std::move(candidate);
+        MarkModified();
+        RefreshModelViews(false);
+        const int surfaceIndex = static_cast<int>(project_.Surfaces().size() - 1);
+        UpdateSelection({CadSelectionKind::Surface, surfaceIndex}, true);
+        toolsTabs_->setCurrentIndex(2);
+        surfaceName_->setText(SuggestedSurfaceName());
+        statusBar()->showMessage(
+            QStringLiteral("おまかせで面を作成: %1").arg(ToQString(description)), 6000);
+    } catch (const std::exception& error) {
+        const QString message = QString::fromUtf8(error.what());
+        statusBar()->showMessage(message.section('\n', 0, 0), 8000);
+        QMessageBox::warning(this, QStringLiteral("おまかせで面を作れません"), message);
+    }
+}
+
 void MainWindow::CreateSurfaceFromSelection()
 {
     try {

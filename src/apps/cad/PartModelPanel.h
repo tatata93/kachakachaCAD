@@ -61,6 +61,9 @@ public:
         QString name;
         int kind = 0; //!< 0=ワイヤ 1=面 2=板材
         int role = 0; //!< 0=近似する 1=形状維持(接続) 2=対象外
+        //! 近似部品番号(1始まり)。0=自動で空き番号を順に振る(オーナー指示:
+        //! 近似部品1=オレンジの面、のように面ごとの割り当てを決められる)。
+        int partNumber = 0;
     };
     void AddUnitMembers(const std::vector<UnitMember>& members);
     void ClearUnitMembers();

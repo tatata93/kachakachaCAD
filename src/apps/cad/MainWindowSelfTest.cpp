@@ -2090,23 +2090,25 @@ bool MainWindow::RunCreationSelfTest()
         RefreshModelViews(false);
         partModelPanel_->SetUnitName(QStringLiteral("近似U1"));
         partModelPanel_->ClearUnitMembers();
+        // 部品番号の割り当て(オーナー指示): 側面=部品1を明示、前面=自動(空きの2)。
         partModelPanel_->AddUnitMembers({
-            {QStringLiteral("__w8前面"), 1, 0},
-            {QStringLiteral("__w8側面"), 1, 0},
-            {QStringLiteral("__w8帯"), 0, 1},
+            {QStringLiteral("__w8前面"), 1, 0, 0},
+            {QStringLiteral("__w8側面"), 1, 0, 1},
+            {QStringLiteral("__w8帯"), 0, 1, 0},
         });
         CreateApproximationUnitFromPanel();
         const kachakacha::model::NamedPartModel* frontModel = nullptr;
         const kachakacha::model::NamedPartModel* sideModel = nullptr;
         for (const auto& model : project_.PartModels()) {
-            if (model.name == "近似U1___w8前面") {
+            if (model.name == "近似U1_部品2" && model.sourceSurfaceName == "__w8前面") {
                 frontModel = &model;
-            } else if (model.name == "近似U1___w8側面") {
+            } else if (model.name == "近似U1_部品1"
+                && model.sourceSurfaceName == "__w8側面") {
                 sideModel = &model;
             }
         }
         if (frontModel == nullptr || sideModel == nullptr) {
-            return fail("unit creates one model per approximated surface");
+            return fail("unit assigns part numbers to approximated surfaces");
         }
         // 形状維持ワイヤは最寄り(側面)のモデルのスコープに入り「_接続」が作られる。
         bool keepAssignedToSide = std::find(sideModel->scopeWireNames.begin(),
@@ -2124,7 +2126,7 @@ bool MainWindow::RunCreationSelfTest()
         bool frontSetParented = false;
         for (const auto& set : project_.ObjectSets()) {
             unitSetExists = unitSetExists || set.name == "近似U1";
-            if (set.name == "近似:近似U1___w8前面") {
+            if (set.name == "近似:近似U1_部品2") {
                 frontSetParented = set.parentName == "近似U1";
             }
         }

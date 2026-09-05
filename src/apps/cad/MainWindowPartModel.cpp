@@ -220,6 +220,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
         struct ApproxTarget {
             std::string name;
             bool isSurface = true;
+            int partNumber = 0; //!< 近似部品番号(1始まり)。0=自動
         };
         std::vector<ApproxTarget> targets;
         std::vector<std::string> keepWires;
@@ -232,9 +233,9 @@ void MainWindow::CreateApproximationUnitFromPanel()
             }
             if (member.role == 0) {
                 if (member.kind == 1) {
-                    targets.push_back({memberName, true});
+                    targets.push_back({memberName, true, member.partNumber});
                 } else if (member.kind == 2) {
-                    targets.push_back({memberName, false});
+                    targets.push_back({memberName, false, member.partNumber});
                 } else {
                     ignored << member.name; // ワイヤは近似できない
                 }
@@ -291,10 +292,39 @@ void MainWindow::CreateApproximationUnitFromPanel()
             }
         }
 
-        // 近似モデルを面・板材ごとに作る。
+        // 近似部品番号を確定する(オーナー指示: 部品1=正面の曲面…のように割り当てる)。
+        // 明示された番号を尊重し、自動(0)は空き番号を小さい順に振る。
+        {
+            std::vector<int> usedNumbers;
+            for (const ApproxTarget& target : targets) {
+                if (target.partNumber > 0) {
+                    usedNumbers.push_back(target.partNumber);
+                }
+            }
+            int nextNumber = 1;
+            for (ApproxTarget& target : targets) {
+                if (target.partNumber > 0) {
+                    continue;
+                }
+                while (std::find(usedNumbers.begin(), usedNumbers.end(), nextNumber)
+                    != usedNumbers.end()) {
+                    ++nextNumber;
+                }
+                target.partNumber = nextNumber;
+                usedNumbers.push_back(nextNumber);
+            }
+            std::stable_sort(targets.begin(), targets.end(),
+                [](const ApproxTarget& a, const ApproxTarget& b) {
+                    return a.partNumber < b.partNumber;
+                });
+        }
+
+        // 近似モデルを部品番号順に作る。名前は「<ユニット名>_部品N」。
         std::vector<std::string> modelNames;
         for (const ApproxTarget& target : targets) {
-            std::string modelName = unitName + "_" + target.name;
+            const std::string base
+                = unitName + "_部品" + std::to_string(target.partNumber);
+            std::string modelName = base;
             for (int suffix = 2;; ++suffix) {
                 const bool taken = std::any_of(
                     candidate.PartModels().begin(), candidate.PartModels().end(),
@@ -302,7 +332,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
                 if (!taken) {
                     break;
                 }
-                modelName = unitName + "_" + target.name + "_" + std::to_string(suffix);
+                modelName = base + "_" + std::to_string(suffix);
             }
             if (target.isSurface) {
                 candidate.AddPartModelFromSurface(modelName, target.name, options);
@@ -427,9 +457,15 @@ void MainWindow::CreateApproximationUnitFromPanel()
         MarkModified();
         RefreshModelViews(false);
         partModelPanel_->ClearUnitMembers();
+        QStringList assignments;
+        for (const ApproxTarget& target : targets) {
+            assignments << QStringLiteral("部品%1=%2")
+                .arg(target.partNumber).arg(ToQString(target.name));
+        }
         QString message = QStringLiteral(
-            "ユニット %1: 近似モデル%2件を作成しました")
-                .arg(ToQString(unitName)).arg(modelNames.size());
+            "ユニット %1: 近似モデル%2件を作成しました（%3）")
+                .arg(ToQString(unitName)).arg(modelNames.size())
+                .arg(assignments.join(QStringLiteral("、")));
         if (adaptedTotal > 0) {
             message += QStringLiteral("、接続用に%1個を自動変形").arg(adaptedTotal);
         }

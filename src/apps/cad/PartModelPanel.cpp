@@ -16,6 +16,7 @@
 #include <QSpinBox>
 #include <QStringList>
 #include <QTableWidget>
+#include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
 #include <QVBoxLayout>
@@ -97,20 +98,24 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     });
     createOuter->addWidget(collectButton);
 
-    unitTable_ = new QTableWidget(0, 3);
+    unitTable_ = new QTableWidget(0, 4);
     unitTable_->setHorizontalHeaderLabels({
-        QStringLiteral("対象"), QStringLiteral("種類"), QStringLiteral("役割")});
+        QStringLiteral("対象"), QStringLiteral("種類"), QStringLiteral("役割"),
+        QStringLiteral("部品")});
     unitTable_->verticalHeader()->setVisible(false);
     unitTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
     unitTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     unitTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     unitTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     unitTable_->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    unitTable_->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     unitTable_->setMinimumHeight(96);
     unitTable_->setMaximumHeight(150);
     unitTable_->setToolTip(QStringLiteral(
         "各行の役割: 近似する=部材近似モデルになる / 形状維持(接続)=形は保ったまま\n"
-        "近似の実形状へ接続できるよう「〜_接続」を自動生成 / 対象外=何もしない"));
+        "近似の実形状へ接続できるよう「〜_接続」を自動生成 / 対象外=何もしない\n"
+        "部品: 近似部品番号。例えば部品1=正面の曲面、部品2=側面…のように割り当てる\n"
+        "(自動なら取り込み順に空き番号を振る)。モデル名は「<ユニット名>_部品N」になる"));
     createOuter->addWidget(unitTable_);
 
     auto* unitRowButtons = new QHBoxLayout;
@@ -924,8 +929,25 @@ void PartModelPanel::RefreshUnitTable()
                     return;
                 }
                 unitMembers_[row].role = role;
+                // 部品番号欄の有効/無効を更新する(送信元コンボの即時破棄を避けて遅延)。
+                QTimer::singleShot(0, this, [this] { RefreshUnitTable(); });
             }
         });
         unitTable_->setCellWidget(row, 2, roleCombo);
+        // 近似部品番号(オーナー指示: 面ごとに部品1・2・3…を割り当てる)。
+        auto* numberSpin = new QSpinBox;
+        numberSpin->setRange(0, 99);
+        numberSpin->setSpecialValueText(QStringLiteral("自動"));
+        numberSpin->setToolTip(QStringLiteral(
+            "近似部品番号(1始まり)。自動=取り込み順に空き番号を振る。\n"
+            "モデル名は「<ユニット名>_部品N」になります"));
+        numberSpin->setEnabled(member.kind != 0 && unitMembers_[row].role == 0);
+        numberSpin->setValue(unitMembers_[row].partNumber);
+        connect(numberSpin, &QSpinBox::valueChanged, this, [this, row](int value) {
+            if (row >= 0 && row < static_cast<int>(unitMembers_.size())) {
+                unitMembers_[row].partNumber = value;
+            }
+        });
+        unitTable_->setCellWidget(row, 3, numberSpin);
     }
 }

@@ -3815,23 +3815,60 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             }
             return points;
         };
-        // レール j は帯 min(j, 帯数-1) に同座標で追従する(帯どうしの隙間は許容)。
-        for (std::size_t railIndex = 0; railIndex < model.boundaryWireNames.size()
-             && railIndex < static_cast<std::size_t>(foldMesh.rows); ++railIndex) {
-            const auto rail = std::find_if(wires_.begin(), wires_.end(),
-                [&](const NamedWire& wire) {
-                    return wire.name == model.boundaryWireNames[railIndex];
-                });
-            if (rail == wires_.end()) {
+        // 部材類の独立化(オーナー指示): 折り姿勢・部材オフセットでは部品は
+        // 物理的に別々なので、共有の境界レールをやめて部材ごとの縁ワイヤ2本へ
+        // 置き換える(全部品が繋がったままなのは幾何学的にも物理的にも誤り)。
+        std::vector<std::string> edgeWireNames;
+        edgeWireNames.reserve(model.result.parts.size() * 2);
+        const auto placeEdgeWire = [&](const std::string& edgeName, Wire geometry) {
+            const auto existing = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& wire) { return wire.name == edgeName; });
+            if (existing != wires_.end()) {
+                if (!existing->partModelSourceName.has_value()
+                    || *existing->partModelSourceName != model.name) {
+                    throw std::invalid_argument(
+                        "Part-model edge wire name is already used: " + edgeName);
+                }
+                existing->wire = std::move(geometry);
+            } else {
+                wires_.push_back(NamedWire{edgeName, std::move(geometry), {},
+                    std::nullopt, model.visible, std::nullopt, model.name});
+            }
+        };
+        for (std::size_t partIndex = 0; partIndex < model.result.parts.size()
+             && partIndex + 1 < static_cast<std::size_t>(foldMesh.rows); ++partIndex) {
+            const int band = static_cast<int>(partIndex);
+            const std::string bottomName = model.name + "_部材"
+                + std::to_string(partIndex + 1) + "_縁1";
+            const std::string topName = model.name + "_部材"
+                + std::to_string(partIndex + 1) + "_縁2";
+            placeEdgeWire(bottomName,
+                Wire::Polyline(transformedRow(static_cast<int>(partIndex), band)));
+            placeEdgeWire(topName,
+                Wire::Polyline(transformedRow(static_cast<int>(partIndex) + 1, band)));
+            edgeWireNames.push_back(bottomName);
+            edgeWireNames.push_back(topName);
+        }
+        // 使わなくなった共有境界レールを片付ける。
+        for (const std::string& oldName : model.boundaryWireNames) {
+            if (std::find(edgeWireNames.begin(), edgeWireNames.end(), oldName)
+                != edgeWireNames.end()) {
                 continue;
             }
-            rail->wire = Wire::Polyline(transformedRow(
-                static_cast<int>(railIndex),
-                std::min<int>(static_cast<int>(railIndex), bandCount - 1)));
+            wires_.erase(
+                std::remove_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
+                    return wire.name == oldName
+                        && wire.partModelSourceName.has_value()
+                        && *wire.partModelSourceName == model.name;
+                }),
+                wires_.end());
+            RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
         }
-        // 部材面 i は帯 i の変換で両縁とも同じ剛体変換(帯は変形しない)。
+        model.boundaryWireNames = edgeWireNames;
+        // 部材面 i は帯 i の剛体変換で(帯は変形しない)。元ワイヤは自分の縁2本。
         for (std::size_t partIndex = 0; partIndex < model.partSurfaceNames.size()
-             && partIndex + 1 < static_cast<std::size_t>(foldMesh.rows); ++partIndex) {
+             && partIndex + 1 < static_cast<std::size_t>(foldMesh.rows)
+             && partIndex * 2 + 1 < edgeWireNames.size(); ++partIndex) {
             const auto named = std::find_if(surfaces_.begin(), surfaces_.end(),
                 [&](const NamedSurface& candidate) {
                     return candidate.name == model.partSurfaceNames[partIndex];
@@ -3843,6 +3880,10 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             named->surface = Surface::Ruled(
                 Wire::Polyline(transformedRow(static_cast<int>(partIndex), band)),
                 Wire::Polyline(transformedRow(static_cast<int>(partIndex) + 1, band)));
+            named->sourceWireNames = {
+                edgeWireNames[partIndex * 2], edgeWireNames[partIndex * 2 + 1]};
+            named->sourceWireGroups = {
+                {edgeWireNames[partIndex * 2]}, {edgeWireNames[partIndex * 2 + 1]}};
         }
         // 部材の穴(投影済み)は、属する部材の変換で点単位に写す。
         for (const std::string& openingName : model.openingWireNames) {

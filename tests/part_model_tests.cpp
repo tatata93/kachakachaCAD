@@ -589,11 +589,16 @@ int main()
             Require(flatResult.openingWireNames.size() == 1,
                 "window is a real hole in the flat state too");
             {
+                // 実体化は常に部材ごとの独立した縁2本(オーナー指示: 部材類の独立)。
+                const char* flatEdgeNames[] = {"展開_部材1縁1", "展開_部材1縁2",
+                    "展開_部材2縁1", "展開_部材2縁2"};
+                Require(flatResult.railWireNames.size() == 4,
+                    "flat state has independent edges per part");
                 // 同一平面チェック。
-                const auto& first = findWire(flatTarget, "展開_レール1").ControlPoints();
+                const auto& first = findWire(flatTarget, flatEdgeNames[0]).ControlPoints();
                 const Vector3 origin = first.front();
                 const Vector3 axisA = first.back() - origin;
-                const auto& last = findWire(flatTarget, "展開_レール3").ControlPoints();
+                const auto& last = findWire(flatTarget, flatEdgeNames[3]).ControlPoints();
                 Vector3 axisB{0.0, 0.0, 0.0};
                 for (const auto& candidate : last) {
                     axisB = candidate - origin;
@@ -604,20 +609,29 @@ int main()
                 const Vector3 normal = Cross(axisA, axisB);
                 Require(normal.Length() > 1.0e-9, "flat rails are not degenerate");
                 const Vector3 unit = normal * (1.0 / normal.Length());
-                for (const char* railName : {"展開_レール1", "展開_レール2", "展開_レール3"}) {
+                for (const char* railName : flatEdgeNames) {
                     for (const auto& point : findWire(flatTarget, railName).ControlPoints()) {
                         Require(std::abs(Dot(point - origin, unit)) < 1.0e-6,
                             "flat state lies in a single plane");
                     }
                 }
+                // 隣り合う部材の縁は同じ位置(平面配置では隙間なし)だが別ワイヤ。
+                Require((findWire(flatTarget, "展開_部材1縁2").ControlPoints().front()
+                            - findWire(flatTarget, "展開_部材2縁1").ControlPoints().front())
+                            .Length() < 1.0e-9,
+                    "adjacent flat edges coincide but stay separate wires");
                 // レール長の保存(展開は等長)。
-                for (int rail = 1; rail <= 3; ++rail) {
-                    const double flatLength = polylineLength(findWire(
-                        flatTarget, "展開_レール" + std::to_string(rail)));
-                    const double foldedLength = polylineLength(findWire(
-                        foldProject, "曲げ100_レール" + std::to_string(rail)));
-                    Require(std::abs(flatLength - foldedLength) < 1.0e-6,
-                        "rail lengths are preserved between flat and folded");
+                for (int part = 1; part <= 2; ++part) {
+                    for (int edge = 1; edge <= 2; ++edge) {
+                        const std::string suffix = "_部材" + std::to_string(part)
+                            + "縁" + std::to_string(edge);
+                        const double flatLength =
+                            polylineLength(findWire(flatTarget, "展開" + suffix));
+                        const double foldedLength =
+                            polylineLength(findWire(foldProject, "曲げ100" + suffix));
+                        Require(std::abs(flatLength - foldedLength) < 1.0e-6,
+                            "rail lengths are preserved between flat and folded");
+                    }
                 }
             }
 
@@ -996,13 +1010,13 @@ int main()
             const Vector3 customRail
                 = findWireLocal("個別曲げ_部材3縁2").ControlPoints().front();
             const Vector3 defaultRail
-                = findWireLocal("通常曲げ_レール4").ControlPoints().front();
+                = findWireLocal("通常曲げ_部材3縁2").ControlPoints().front();
             Require((customRail - defaultRail).Length() > 1.0,
                 "realized state reflects the per-crease fold");
             const Vector3 customFirst
                 = findWireLocal("個別曲げ_部材1縁1").ControlPoints().front();
             const Vector3 defaultFirst
-                = findWireLocal("通常曲げ_レール1").ControlPoints().front();
+                = findWireLocal("通常曲げ_部材1縁1").ControlPoints().front();
             Require((customFirst - defaultFirst).Length() < 1.0e-6,
                 "rails before the flattened crease stay in place");
         }
@@ -1031,6 +1045,23 @@ int main()
                 "real part surfaces follow the fold state");
             Require((surfacePoint("実体曲げ_部材1") - before1).Length() < 1.0e-6,
                 "band before the crease stays in place");
+            // 折り姿勢では共有レールをやめ、部材ごとの縁ワイヤになる(部材類の独立化)。
+            {
+                const auto& liveModel = liveProject.PartModels().back();
+                Require(liveModel.boundaryWireNames.size()
+                        == liveModel.result.parts.size() * 2,
+                    "folded live model keeps per-part edge wires");
+                Require(liveModel.boundaryWireNames.front() == "実体曲げ_部材1_縁1",
+                    "per-part edge wires use the part naming");
+                bool sharedRailRemains = false;
+                for (const auto& wire : liveProject.Wires()) {
+                    if (wire.name.find("実体曲げ_境界") == 0) {
+                        sharedRailRemains = true;
+                    }
+                }
+                Require(!sharedRailRemains,
+                    "shared boundary rails are removed in the folded pose");
+            }
             // その部材面に作った板材も、折り状態を変えると追従する。
             liveProject.AddPlate("実体曲げ板", "実体曲げ_部材3", 0.5,
                 PlateThicknessDirection::Centered, "プラ板");
@@ -1046,6 +1077,9 @@ int main()
             liveProject.SetPartModelRailFoldProgress("実体曲げ", {});
             Require((plateCenter() - plateBefore).Length() > 1.0,
                 "plates on part surfaces follow the fold state");
+            Require(liveProject.PartModels().back().boundaryWireNames.size()
+                    == liveProject.PartModels().back().result.parts.size() + 1,
+                "natural live model returns to shared rails");
             // 部材オフセット: 指定した部材だけが平行移動し、保存・往復する。
             const Vector3 beforeOffset1 = surfacePoint("実体曲げ_部材1");
             const Vector3 beforeOffset2 = surfacePoint("実体曲げ_部材2");

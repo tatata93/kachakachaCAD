@@ -714,8 +714,20 @@ void MainWindow::CreatePlateFromSelectedPart()
                     }
                     return nullptr;
                 };
-                const auto* bottom = railWire(model->boundaryWireNames[number - 1]);
-                const auto* top = railWire(model->boundaryWireNames[number]);
+                // レールは部材面の元ワイヤから引く(折り姿勢では部材ごとの縁2本、
+                // 通常時は共有境界。並びの前提を置かない)。
+                const kachakacha::model::NamedSurface* partSurface = nullptr;
+                for (const auto& surface : candidate.Surfaces()) {
+                    if (surface.name == surfaceName) {
+                        partSurface = &surface;
+                        break;
+                    }
+                }
+                if (partSurface == nullptr || partSurface->sourceWireNames.size() < 2) {
+                    continue;
+                }
+                const auto* bottom = railWire(partSurface->sourceWireNames[0]);
+                const auto* top = railWire(partSurface->sourceWireNames[1]);
                 if (bottom == nullptr || top == nullptr) {
                     continue;
                 }
@@ -1159,7 +1171,7 @@ namespace {
     for (int suffix = 0;; ++suffix) {
         const std::string candidate
             = suffix == 0 ? base : base + "_" + std::to_string(suffix + 1);
-        const std::string probe = candidate + "_レール1";
+        const std::string probe = candidate + "_部材1縁1";
         const bool taken = std::any_of(
             project.Wires().begin(), project.Wires().end(),
             [&probe](const kachakacha::model::NamedWire& wire) {

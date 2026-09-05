@@ -162,42 +162,23 @@ PartFoldStateResult AddPartFoldStateModel(
 
     PartFoldStateResult result;
 
-    // レールのワイヤを作る。共有状態(平面/完成形)は行を共有し、
-    // 剛体折り(detached)は帯ごとの縁として作る。
-    std::vector<std::string> railNameByRow(mesh.rows);
+    // レールのワイヤを作る。実体化した部材は物理的に別々の部品なので、
+    // 完成形・平面でも隣とワイヤを共有せず、常に部材ごとの縁2本を持つ
+    // (オーナー指示: 近似して分割した部材類は独立して扱えるように)。
     std::vector<std::string> bottomRailByPart(partCount);
     std::vector<std::string> topRailByPart(partCount);
-    if (!detached) {
-        std::set<int> railRows;
-        for (const int number : numbers) {
-            railRows.insert(number - 1);
-            railRows.insert(number);
-        }
-        for (const int row : railRows) {
-            const std::string railName
-                = namePrefix + "_レール" + std::to_string(row + 1);
-            target.AddWire(railName, Wire::Polyline(state[row]));
-            railNameByRow[row] = railName;
-            result.railWireNames.push_back(railName);
-        }
-        for (const int number : numbers) {
-            bottomRailByPart[number - 1] = railNameByRow[number - 1];
-            topRailByPart[number - 1] = railNameByRow[number];
-        }
-    } else {
-        for (const int number : numbers) {
-            const int band = number - 1;
-            const std::string bottomName = namePrefix + "_部材"
-                + std::to_string(number) + "縁1";
-            const std::string topName = namePrefix + "_部材"
-                + std::to_string(number) + "縁2";
-            target.AddWire(bottomName, Wire::Polyline(stateRail(band, band)));
-            target.AddWire(topName, Wire::Polyline(stateRail(band, band + 1)));
-            bottomRailByPart[band] = bottomName;
-            topRailByPart[band] = topName;
-            result.railWireNames.push_back(bottomName);
-            result.railWireNames.push_back(topName);
-        }
+    for (const int number : numbers) {
+        const int band = number - 1;
+        const std::string bottomName = namePrefix + "_部材"
+            + std::to_string(number) + "縁1";
+        const std::string topName = namePrefix + "_部材"
+            + std::to_string(number) + "縁2";
+        target.AddWire(bottomName, Wire::Polyline(stateRail(band, band)));
+        target.AddWire(topName, Wire::Polyline(stateRail(band, band + 1)));
+        bottomRailByPart[band] = bottomName;
+        topRailByPart[band] = topName;
+        result.railWireNames.push_back(bottomName);
+        result.railWireNames.push_back(topName);
     }
 
     // 部材ごとのルールド面と厚み付き板材。

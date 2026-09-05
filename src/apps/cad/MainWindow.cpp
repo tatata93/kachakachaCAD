@@ -2958,6 +2958,7 @@ void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
 std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>
 MainWindow::SelectedObjectTargets() const
 {
+    using kachakacha::model::ProjectObjectKind;
     std::vector<std::pair<ProjectObjectKind, std::string>> targets;
     const auto add = [&targets](ProjectObjectKind kind, const std::string& name) {
         const auto duplicate = std::find_if(targets.begin(), targets.end(),
@@ -3048,6 +3049,7 @@ void MainWindow::MoveObjectsBy(
     const std::vector<std::pair<kachakacha::model::ProjectObjectKind, std::string>>& targets,
     Vector3 delta)
 {
+    using kachakacha::model::ProjectObjectKind;
     try {
         if (!delta.IsFinite() || delta.LengthSquared() <= 1.0e-18) {
             throw std::invalid_argument("移動量を指定してください。");

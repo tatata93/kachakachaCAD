@@ -940,6 +940,19 @@ bool MainWindow::RunCreationSelfTest()
         }
         return false;
     };
+    // ハング調査用の進捗マーカー(タイムアウト時にどこまで進んだかを残す)。
+    const auto progressMark = [](const char* stage) {
+        QFile report(QStringLiteral("self-test-progress.txt"));
+        if (report.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            report.write(stage);
+            report.write("\n");
+            report.flush();
+        }
+    };
+    {
+        QFile reset(QStringLiteral("self-test-progress.txt"));
+        reset.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+    }
     const std::string initialDrawingPlaneName = ToName(activePlaneCombo_->currentText());
     const std::optional<WorkPlane> initialDrawingPlane = project_.FindWorkPlane(initialDrawingPlaneName);
     if (!initialDrawingPlane.has_value()) {
@@ -3259,6 +3272,7 @@ bool MainWindow::RunCreationSelfTest()
     }
 
     // --- 部材近似モデル(部材タブ、docs/surface-unfolding-spec.md) ---
+    progressMark("part-model block start");
     {
         if (project_.Plates().empty()) {
             return fail("part model self-test needs a plate");
@@ -3305,6 +3319,7 @@ bool MainWindow::RunCreationSelfTest()
         if (viewport_->PartFoldPreviewRailCount() != 0) {
             return fail("fold preview clears when disabled");
         }
+        progressMark("fold preview checks done");
         // 部材ごとの移動(オーナー指示): 部材面の移動は部材オフセットとして記録され、
         // その部材だけが動く。逆方向へ戻すとオフセットは消える。
         {
@@ -3338,6 +3353,7 @@ bool MainWindow::RunCreationSelfTest()
                 return fail("moving back restores the part surface");
             }
         }
+        progressMark("part offset move checks done");
         // 注意: MoveObjectsBy が project_ を差し替えるため partModel 参照は
         // ここで取り直す(ぶら下がり参照の防止)。
         const auto& partModelAfterMove = project_.PartModels().back();
@@ -3353,6 +3369,7 @@ bool MainWindow::RunCreationSelfTest()
                 return fail("combined pattern fold lines match crease angles");
             }
         }
+        progressMark("combined pattern check done");
         if (!partModelAfterMove.boundaryWireNames.empty()) {
             SetApproximationSetsVisible(false);
             if (project_.ObjectStateInSets(
@@ -3374,6 +3391,7 @@ bool MainWindow::RunCreationSelfTest()
         }
         RefreshModelViews(false);
     }
+    progressMark("part-model block done");
 
     {
         // 移動(オーナー指示): 面を指定してXYZ移動すると元ワイヤごと動き、Undoで戻る。
@@ -3410,6 +3428,7 @@ bool MainWindow::RunCreationSelfTest()
             return fail("clean up move test objects");
         }
     }
+    progressMark("mv move test done");
 
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
@@ -4064,6 +4083,7 @@ bool MainWindow::RunCreationSelfTest()
         }
     }
 
+    progressMark("summary row checks start");
     {
         // まとめ欄: 行選択で配下の全選択、チェックで一括表示/非表示(オーナー指示)。
         QTreeWidgetItem* wireHeader = nullptr;
@@ -4105,6 +4125,7 @@ bool MainWindow::RunCreationSelfTest()
         }
         UpdateSelections({}, true);
     }
+    progressMark("summary row checks done");
 
     const std::size_t historySizeBeforeDisplayMode = undoStack_.size();
     UpdateSelections({
@@ -4129,5 +4150,6 @@ bool MainWindow::RunCreationSelfTest()
 
     toolsTabs_->setCurrentIndex(5);
     QApplication::processEvents();
+    progressMark("self-test end");
     return true;
 }

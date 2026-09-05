@@ -51,6 +51,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QPalette>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>

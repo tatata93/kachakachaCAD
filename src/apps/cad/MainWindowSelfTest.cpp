@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "Win95Style.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
@@ -50,6 +51,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QPalette>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -65,6 +67,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QTabBar>
 #include <QStringList>
 #include <QTabWidget>
@@ -3866,6 +3869,38 @@ bool MainWindow::RunCreationSelfTest()
         }
     }
     progressMark("output set checks done");
+
+    {
+        // 見た目の切替(オーナー指示: Windows 95 風と通常版を選べる)。
+        const bool startedWith95 = useWindows95Theme_;
+        ApplyUiTheme(true);
+        if (!useWindows95Theme_) {
+            return fail("windows 95 theme turns on");
+        }
+        if (QApplication::palette().color(QPalette::Button)
+            != QColor(0xC0, 0xC0, 0xC0)) {
+            return fail("windows 95 palette uses the button face grey");
+        }
+        if (QApplication::palette().color(QPalette::Highlight) != QColor(0x00, 0x00, 0x80)) {
+            return fail("windows 95 palette uses navy selection");
+        }
+        if (styleSheet() != QString()) {
+            return fail("windows 95 theme drops the modern stylesheet");
+        }
+        // 部品の寸法もWin95の値になる。
+        if (QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent) != 16) {
+            return fail("windows 95 scrollbars are 16 pixels wide");
+        }
+        if (QApplication::style()->pixelMetric(QStyle::PM_IndicatorWidth) != 13) {
+            return fail("windows 95 check boxes are 13 pixels");
+        }
+        ApplyUiTheme(false);
+        if (useWindows95Theme_ || styleSheet().isEmpty()) {
+            return fail("modern theme comes back");
+        }
+        ApplyUiTheme(startedWith95);
+    }
+    progressMark("theme checks done");
 
     {
         // おまかせ面(オーナー指示): 選択順・向きがバラバラでも面が作れる。

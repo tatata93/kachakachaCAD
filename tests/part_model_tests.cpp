@@ -183,6 +183,107 @@ int main()
             Require(rejected, "non-adjacent parts are rejected");
         }
 
+        // --- 曲げ確認アニメーションのレール数と等長性 ---
+        {
+            Project animationProject = MakeBottleLikeProject();
+            PartApproximationOptions animationOptions;
+            animationOptions.splitAxis = PartSplitAxis::V;
+            animationOptions.automaticBoundaries = false;
+            animationOptions.manualBoundaryParameters = {0.35, 0.7};
+            animationProject.AddPartModel("曲げ確認", "胴板", animationOptions);
+            const auto& animationModel = animationProject.PartModels().back();
+            Require(animationModel.result.parts.size() >= 2,
+                "animation source has multiple parts");
+
+            std::vector<double> railParameters;
+            railParameters.push_back(animationModel.result.parts.front().minimumParameter);
+            for (const auto& part : animationModel.result.parts) {
+                railParameters.push_back(part.maximumParameter);
+            }
+            const auto sourcePlate = animationProject.FindPlate("胴板");
+            Require(sourcePlate.has_value(), "animation source plate exists");
+            const auto mesh = kachakacha::model::DevelopPartMesh(
+                *sourcePlate, animationModel.options.splitAxis, railParameters, 48);
+            const int bandCount = mesh.rows - 1;
+            Require(bandCount == static_cast<int>(animationModel.result.parts.size()),
+                "animation mesh has one band per part");
+            const std::vector<double> individual(
+                static_cast<std::size_t>(mesh.rows - 2), 1.0);
+
+            const auto developedSegmentLength = [&](int row, int column) {
+                const double dx = mesh.developed[row][column].x
+                    - mesh.developed[row][column - 1].x;
+                const double dy = mesh.developed[row][column].y
+                    - mesh.developed[row][column - 1].y;
+                return std::sqrt(dx * dx + dy * dy);
+            };
+            const auto requireDetachedShape = [&](const std::vector<std::vector<Vector3>>& rails,
+                                                   const char* message) {
+                Require(rails.size() == static_cast<std::size_t>(bandCount * 2),
+                    "animation returns detached rail pairs");
+                for (int band = 0; band < bandCount; ++band) {
+                    const auto& bottom = rails[band * 2];
+                    const auto& top = rails[band * 2 + 1];
+                    Require(static_cast<int>(bottom.size()) == mesh.columns,
+                        "animation bottom rail has every column");
+                    Require(static_cast<int>(top.size()) == mesh.columns,
+                        "animation top rail has every column");
+                    for (int column = 1; column < mesh.columns; ++column) {
+                        const double bottomLength
+                            = (bottom[column] - bottom[column - 1]).Length();
+                        const double topLength = (top[column] - top[column - 1]).Length();
+                        Require(std::abs(bottomLength
+                                    - developedSegmentLength(band, column)) < 1.0e-6,
+                            message);
+                        Require(std::abs(topLength
+                                    - developedSegmentLength(band + 1, column)) < 1.0e-6,
+                            message);
+                    }
+                }
+            };
+
+            const auto atWorld = kachakacha::model::BuildBandFoldAnimationRails(
+                mesh, individual, 1.0, 25.0);
+            Require(atWorld.size() == static_cast<std::size_t>(bandCount * 2),
+                "animation rails are one lower/upper pair per band");
+            for (int band = 0; band < bandCount; ++band) {
+                Require(static_cast<int>(atWorld[band * 2].size()) == mesh.columns,
+                    "100% lower rail has every column");
+                Require(static_cast<int>(atWorld[band * 2 + 1].size()) == mesh.columns,
+                    "100% upper rail has every column");
+                for (int column = 0; column < mesh.columns; ++column) {
+                    Require((atWorld[band * 2][column]
+                                - mesh.world[band][column]).Length() < 1.0e-6,
+                        "100% lower rail matches the world mesh row");
+                    Require((atWorld[band * 2 + 1][column]
+                                - mesh.world[band + 1][column]).Length() < 1.0e-6,
+                        "100% upper rail matches the world mesh row");
+                }
+            }
+
+            const auto atFlat = kachakacha::model::BuildBandFoldAnimationRails(
+                mesh, individual, 0.0, 25.0);
+            requireDetachedShape(atFlat, "0% rails keep developed segment lengths");
+            for (int band = 0; band < bandCount; ++band) {
+                const auto& bottom = atFlat[band * 2];
+                const auto& top = atFlat[band * 2 + 1];
+                const Vector3 origin = bottom.front();
+                const Vector3 planeNormal = Cross(bottom.back() - origin, top.front() - origin);
+                Require(planeNormal.Length() > 1.0e-9, "0% animation band is not degenerate");
+                const Vector3 unit = planeNormal * (1.0 / planeNormal.Length());
+                for (int column = 0; column < mesh.columns; ++column) {
+                    Require(std::abs(Dot(bottom[column] - origin, unit)) < 1.0e-6,
+                        "0% animation lower rail is planar");
+                    Require(std::abs(Dot(top[column] - origin, unit)) < 1.0e-6,
+                        "0% animation upper rail is planar");
+                }
+            }
+
+            const auto atHalf = kachakacha::model::BuildBandFoldAnimationRails(
+                mesh, individual, 0.5, 25.0);
+            requireDetachedShape(atHalf, "50% rails keep developed segment lengths");
+        }
+
         // --- 派生: 元断面の編集で境界ワイヤが追従する ---
         const Vector3 before =
             project.Wires()[0].wire.Evaluate(0.5);

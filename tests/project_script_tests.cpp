@@ -1615,6 +1615,87 @@ void DefaultObjectSetCollectsNewObjects()
         "removing the active group clears the setting");
 }
 
+//! 新機能を全部入りにしたプロジェクトが、保存→読込で同じ形に戻るか。
+//! (押し出し・おまかせ面・作業中グループ・部材ごとの姿勢・部材オフセット)
+void EverythingRoundTripsTogether()
+{
+    using kachakacha::model::ProjectObjectKind;
+    kachakacha::model::Project project;
+    project.AddWorkPlane("top",
+        kachakacha::model::WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}));
+    project.CreateObjectSet("作業中グループ");
+    project.SetDefaultObjectSet("作業中グループ");
+
+    // おまかせ面(閉じた輪郭 → 平面)
+    project.AddWire("枠下", Wire::Line({0.0, 0.0, 0.0}, {40.0, 0.0, 0.0}));
+    project.AddWire("枠右", Wire::Line({40.0, 0.0, 0.0}, {40.0, 20.0, 0.0}));
+    project.AddWire("枠上", Wire::Line({40.0, 20.0, 0.0}, {0.0, 20.0, 0.0}));
+    project.AddWire("枠左", Wire::Line({0.0, 20.0, 0.0}, {0.0, 0.0, 0.0}));
+    (void)project.AddAutoSurface("底面", {"枠下", "枠右", "枠上", "枠左"});
+
+    // 押し出し(先端ワイヤ+側面)
+    project.AddExtrudedWire("枠下_押出先", "枠下", {0.0, 0.0, 1.0}, 8.0);
+    project.AddRuledSurface("前壁", "枠下", "枠下_押出先");
+
+    // 近似モデル(部材ごとの姿勢・部材オフセット付き)
+    project.AddWire("胴下", Wire::CircularArcThroughThreePoints(
+        {0.0, 40.0, 0.0}, {20.0, 46.0, 6.0}, {40.0, 40.0, 0.0}));
+    project.AddWire("胴上", Wire::CircularArcThroughThreePoints(
+        {0.0, 40.0, 30.0}, {20.0, 48.0, 36.0}, {40.0, 40.0, 30.0}));
+    project.AddRuledSurface("胴", "胴下", "胴上");
+    kachakacha::model::PartApproximationOptions options;
+    options.maximumDeviationMillimeters = 0.6;
+    options.maximumPartCount = 6;
+    options.minimumPartWidthMillimeters = 2.0;
+    project.AddPartModelFromSurface("胴近似", "胴", options);
+    // 部材数は近似結果によるので、実際にできた数の範囲で指定する。
+    std::size_t partCount = 0;
+    for (const auto& model : project.PartModels()) {
+        if (model.name == "胴近似") {
+            partCount = model.result.parts.size();
+        }
+    }
+    Require(partCount >= 1, "approximation produced parts");
+    project.SetPartModelPartAssemblyProgress("胴近似", {1}, 0.4);
+    project.SetPartModelPartOffset(
+        "胴近似", partCount >= 2 ? 2 : 1, {3.0, 0.0, 0.0});
+
+    std::ostringstream saved;
+    WriteProjectScript(saved, project);
+    std::istringstream input(saved.str());
+    const kachakacha::model::Project loaded = LoadProjectScript(input, "everything");
+
+    Require(loaded.DefaultObjectSet() == "作業中グループ",
+        "active group survives a full round trip");
+    const auto loadedTip = std::find_if(loaded.Wires().begin(), loaded.Wires().end(),
+        [](const kachakacha::model::NamedWire& wire) { return wire.name == "枠下_押出先"; });
+    Require(loadedTip != loaded.Wires().end() && loadedTip->extrude.has_value(),
+        "extrusion survives a full round trip");
+    Require(loaded.FindSurface("底面").has_value() && loaded.FindSurface("前壁").has_value(),
+        "auto surface and extruded side survive a full round trip");
+    bool poseKept = false;
+    bool offsetKept = false;
+    for (const auto& model : loaded.PartModels()) {
+        if (model.name != "胴近似") {
+            continue;
+        }
+        // 部材が1つだけなら一様設定へ畳まれる(仕様どおり)。どちらでも実効値を見る。
+        const double effective = model.partAssemblyProgress.empty()
+            ? model.assemblyProgress
+            : model.partAssemblyProgress.front();
+        poseKept = std::abs(effective - 0.4) < 1.0e-9;
+        offsetKept = model.partOffsets.size() == 1;
+    }
+    Require(poseKept, "per-part pose survives a full round trip");
+    Require(offsetKept, "part offset survives a full round trip");
+
+    // 形も一致する(面の代表点で確認)。
+    Require((loaded.FindSurface("前壁")->Evaluate(0.5, 1.0)
+                - project.FindSurface("前壁")->Evaluate(0.5, 1.0))
+                .Length() < 1.0e-9,
+        "geometry matches after a full round trip");
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -1648,6 +1729,7 @@ int main(int argc, char* argv[])
         ObjectSetExportFlagRoundTrips();
         ObjectSetHierarchyRoundTripsAndCombinesState();
         DefaultObjectSetCollectsNewObjects();
+        EverythingRoundTripsTogether();
         UnknownPlaneIsRejected();
         RemovingPlaneKeepsWireIn3D();
         UpdatingPlaneMovesOnlyLockedWires();

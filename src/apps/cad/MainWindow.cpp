@@ -52,6 +52,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPalette>
+#include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSaveFile>
@@ -1061,9 +1062,19 @@ void MainWindow::ApplyUiTheme(bool windows95)
     // 個別に配色を持ってしまったウィジェット(生成時の配色を抱えたまま)は
     // 空のパレットを入れて親から継ぎ直させる。これをしないと右パネルなどが
     // 前の色のまま残る(実機スクリーンショットで確認)。
-    for (QWidget* widget : QApplication::allWidgets()) {
-        if (widget->testAttribute(Qt::WA_SetPalette)) {
-            widget->setPalette(QPalette());
+    // 配色の入れ替えで消えるウィジェットがあり得るので QPointer で見張る
+    // (生のポインタで回すとダングリングで落ちる)。
+    const QWidgetList widgets = QApplication::allWidgets();
+    std::vector<QPointer<QWidget>> guarded(widgets.begin(), widgets.end());
+    for (QPointer<QWidget>& widget : guarded) {
+        if (widget.isNull() || !widget->testAttribute(Qt::WA_SetPalette)) {
+            continue;
+        }
+        widget->setPalette(QPalette());
+    }
+    for (QPointer<QWidget>& widget : guarded) {
+        if (widget.isNull()) {
+            continue;
         }
         widget->style()->unpolish(widget);
         widget->style()->polish(widget);

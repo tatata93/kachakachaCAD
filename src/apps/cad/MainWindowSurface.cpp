@@ -2665,13 +2665,15 @@ void MainWindow::ExtrudeSelection()
 
         const bool makeTip = extrudeMakeTipWire_ != nullptr
             && extrudeMakeTipWire_->isChecked();
+        const bool makeEdges = extrudeMakeEdges_ != nullptr
+            && extrudeMakeEdges_->isChecked();
         const bool makeSide = extrudeMakeSide_ != nullptr && extrudeMakeSide_->isChecked();
         const bool makeCap = extrudeMakeCap_ != nullptr && extrudeMakeCap_->isChecked();
         const bool makeBottom = extrudeMakeBottom_ != nullptr
             && extrudeMakeBottom_->isChecked();
         const bool makePlate = extrudeMakePlate_ != nullptr
             && extrudeMakePlate_->isChecked();
-        if (!makeTip && !makeSide && !makeCap && !makeBottom && !makePlate) {
+        if (!makeTip && !makeEdges && !makeSide && !makeCap && !makeBottom && !makePlate) {
             throw std::invalid_argument(
                 "「押し出しで作るもの」を1つ以上チェックしてください。");
         }
@@ -2725,6 +2727,9 @@ void MainWindow::ExtrudeSelection()
                 throw std::invalid_argument("線が見つかりません: " + wireName);
             }
             const bool closed = namedWire->wire.IsClosed(1.0e-6);
+            // AddExtrudedWire で線の並びが作り直されると namedWire は使えなく
+            // なるので、必要な形はここで写しておく。
+            const Wire sourceWireCopy = namedWire->wire;
             const Vector3 direction =
                 automaticDirectionChosen ? automaticWireDirection() : fixedDirection();
             const std::string tipName = FreeDerivedName(candidate, wireName, "_押出先");
@@ -2735,6 +2740,62 @@ void MainWindow::ExtrudeSelection()
                 created << QStringLiteral("先端 %1").arg(ToQString(tipName));
             } else {
                 candidate.SetWireVisible(tipName, false);
+            }
+            if (makeEdges) {
+                // 元の輪郭の角 → 先端の同じ位置、を結ぶまっすぐな線。
+                // 折れ線は角ごと、曲線は5等分の位置に引く(角の無い曲線は
+                // どこに引いても同じなので、見て分かる数にとどめる)。
+                const auto namedTip = std::find_if(candidate.Wires().begin(),
+                    candidate.Wires().end(),
+                    [&](const kachakacha::model::NamedWire& wire) {
+                        return wire.name == tipName;
+                    });
+                if (namedTip == candidate.Wires().end()) {
+                    throw std::runtime_error("押し出した先端の線が作れませんでした。");
+                }
+                const Wire& source = sourceWireCopy;
+                const Wire tip = namedTip->wire;
+                std::vector<double> parameters;
+                if (source.Kind() == WireKind::Polyline
+                    || source.Kind() == WireKind::Line) {
+                    // 角の位置を「始点からの長さの割合」で求める。
+                    const auto& points = source.ControlPoints();
+                    std::vector<double> lengths(points.size(), 0.0);
+                    for (std::size_t index = 1; index < points.size(); ++index) {
+                        lengths[index] = lengths[index - 1]
+                            + (points[index] - points[index - 1]).Length();
+                    }
+                    const double total = lengths.empty() ? 0.0 : lengths.back();
+                    if (total > 1.0e-9) {
+                        for (std::size_t index = 0; index < points.size(); ++index) {
+                            parameters.push_back(lengths[index] / total);
+                        }
+                    }
+                }
+                if (parameters.empty()) {
+                    parameters = {0.0, 0.25, 0.5, 0.75, 1.0};
+                }
+                if (closed && parameters.size() > 1) {
+                    parameters.pop_back(); // 閉じた輪郭は始点と終点が同じ角。
+                }
+                int edgeNumber = 0;
+                for (const double parameter : parameters) {
+                    const Vector3 from = source.Evaluate(parameter);
+                    const Vector3 to = tip.Evaluate(parameter);
+                    if ((to - from).Length() < 1.0e-6) {
+                        continue;
+                    }
+                    ++edgeNumber;
+                    const std::string edgeSuffix
+                        = "_稜線" + std::to_string(edgeNumber);
+                    const std::string edgeName
+                        = FreeDerivedName(candidate, wireName, edgeSuffix.c_str());
+                    candidate.AddWire(edgeName,
+                        Wire::Line(from, to), {});
+                }
+                if (edgeNumber > 0) {
+                    created << QStringLiteral("稜線 %1本").arg(edgeNumber);
+                }
             }
             std::vector<std::string> plateBases;
             if (makeSide) {

@@ -670,6 +670,7 @@ private:
     QCheckBox* extrudeToSurfaceCheck_ = nullptr;   //!< 距離でなく「面まで」
     QComboBox* extrudeTargetSurface_ = nullptr;    //!< 到達面
     QCheckBox* extrudeMakeTipWire_ = nullptr;      //!< 先端のワイヤ
+    QCheckBox* extrudeMakeEdges_ = nullptr;        //!< 押し出し方向の稜線(線だけ)
     QCheckBox* extrudeMakeSide_ = nullptr;         //!< 側面(押し出し面)
     QCheckBox* extrudeMakeCap_ = nullptr;          //!< 先端のふた面
     QCheckBox* extrudeMakeBottom_ = nullptr;       //!< 元位置のふた面

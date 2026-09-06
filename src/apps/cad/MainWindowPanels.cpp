@@ -1565,6 +1565,10 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudeMakeTipWire_->setChecked(true);
     extrudeMakeTipWire_->setToolTip(QStringLiteral(
         "押し出した先の輪郭線。元の線を編集すると追従します"));
+    extrudeMakeEdges_ = new QCheckBox(QStringLiteral("押し出し方向の稜線（線だけ）"));
+    extrudeMakeEdges_->setToolTip(QStringLiteral(
+        "元の輪郭の角から先端の角へ、押し出し方向にまっすぐな線を引きます。\n"
+        "面を張らずにワイヤーだけの箱組みを見たいときに使います"));
     extrudeMakeSide_ = new QCheckBox(QStringLiteral("側面（押し出した面）"));
     extrudeMakeSide_->setChecked(true);
     extrudeMakeSide_->setToolTip(QStringLiteral("元の輪郭と先端の輪郭の間に張る面"));
@@ -1578,6 +1582,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudeMakePlate_->setToolTip(QStringLiteral(
         "面に厚みを与えて実物の板にします。面を押し出したときは厚み化と同じです"));
     layout->addWidget(extrudeMakeTipWire_);
+    layout->addWidget(extrudeMakeEdges_);
     layout->addWidget(extrudeMakeSide_);
     layout->addWidget(extrudeMakeCap_);
     layout->addWidget(extrudeMakeBottom_);

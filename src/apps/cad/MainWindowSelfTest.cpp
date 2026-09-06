@@ -3834,6 +3834,7 @@ bool MainWindow::RunCreationSelfTest()
         extrudeToSurfaceCheck_->setChecked(false);
         extrudeDistance_->setValue(12.0);
         extrudeMakeTipWire_->setChecked(true);
+        extrudeMakeEdges_->setChecked(false);
         extrudeMakeSide_->setChecked(true);
         extrudeMakeCap_->setChecked(true);
         extrudeMakeBottom_->setChecked(true);
@@ -3882,6 +3883,58 @@ bool MainWindow::RunCreationSelfTest()
             || project_.Surfaces().size() != exSurfaceStart
             || project_.Plates().size() != exPlateStart) {
             return fail("undo removes the extrusion");
+        }
+
+        // オーナー指示「押し出した距離方向も含めたワイヤ」= 稜線だけの押し出し。
+        // 面も板も作らず、角ごとの線だけができること。
+        project_.AddWire("__ex稜線元", Wire::Polyline({
+            {760.0, 0.0, 0.0}, {780.0, 0.0, 0.0}, {780.0, 10.0, 0.0},
+            {760.0, 10.0, 0.0}, {760.0, 0.0, 0.0},
+        }));
+        RefreshModelViews(false);
+        const std::size_t edgeWireStart = project_.Wires().size();
+        const std::size_t edgeSurfaceStart = project_.Surfaces().size();
+        int edgeSourceIndex = -1;
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].name == "__ex稜線元") {
+                edgeSourceIndex = index;
+            }
+        }
+        if (edgeSourceIndex < 0) {
+            return fail("edge extrude test wire exists");
+        }
+        UpdateSelections({{CadSelectionKind::Wire, edgeSourceIndex}}, true);
+        extrudeMakeTipWire_->setChecked(true);
+        extrudeMakeEdges_->setChecked(true);
+        extrudeMakeSide_->setChecked(false);
+        extrudeMakeCap_->setChecked(false);
+        extrudeMakeBottom_->setChecked(false);
+        extrudeMakePlate_->setChecked(false);
+        extrudeDistance_->setValue(8.0);
+        ExtrudeSelection();
+        // 先端1本 + 角4本(閉じた輪郭なので始点と終点は同じ角)。
+        if (project_.Wires().size() != edgeWireStart + 5) {
+            return fail("edge extrude draws one line per corner");
+        }
+        if (project_.Surfaces().size() != edgeSurfaceStart) {
+            return fail("edge extrude makes no surfaces");
+        }
+        const auto firstEdge = std::find_if(project_.Wires().begin(), project_.Wires().end(),
+            [](const kachakacha::model::NamedWire& wire) {
+                return wire.name == "__ex稜線元_稜線1";
+            });
+        if (firstEdge == project_.Wires().end()
+            || std::abs(firstEdge->wire.Start().z) > 1.0e-6
+            || std::abs(firstEdge->wire.End().z - 8.0) > 1.0e-6) {
+            return fail("edge extrude lines run along the extrude direction");
+        }
+        Undo();
+        Undo();
+        UpdateSelections({}, true);
+        RefreshModelViews(false);
+        extrudeMakeEdges_->setChecked(false);
+        if (project_.Wires().size() != exWireStart) {
+            return fail("undo removes the edge extrusion");
         }
     }
     progressMark("extrude checks done");

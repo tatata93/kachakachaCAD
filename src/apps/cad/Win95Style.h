@@ -41,6 +41,13 @@ public:
         const QStyleOptionComplex* option,
         QPainter* painter,
         const QWidget* widget = nullptr) const override;
+    //! スピンボタン・コンボの▼ボタンを、Windows 95 と同じ幅16px・
+    //! 枠の内側いっぱいの高さに置き直す(基底スタイルの配置は別物のため)。
+    [[nodiscard]] QRect subControlRect(
+        ComplexControl control,
+        const QStyleOptionComplex* option,
+        SubControl subControl,
+        const QWidget* widget = nullptr) const override;
     [[nodiscard]] int pixelMetric(
         PixelMetric metric,
         const QStyleOption* option = nullptr,

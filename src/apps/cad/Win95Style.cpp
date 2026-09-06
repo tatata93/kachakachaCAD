@@ -83,41 +83,64 @@ QRect DrawWin95Edge(QPainter* painter, const QRect& rect, EdgeStyle style)
 }
 
 //! 黒い塗り三角(スクロールバー・スピン・コンボの矢印)。
+//!
+//! 一次資料どおり「決まった大きさの絵」として描く。Windows 95 の矢印は
+//! ビットマップで、枠の大きさに合わせて伸び縮みしない。標準は幅7px・高さ4px
+//! (行ごとに 7,5,3,1 と細る三角)。枠が狭いときだけ小さくする。
+//! 枠いっぱいに引き伸ばすと、実機と似ても似つかない大きな三角になる。
 void DrawWin95Arrow(QPainter* painter, const QRect& rect, Qt::ArrowType arrow, bool enabled)
 {
-    const int size = std::min(rect.width(), rect.height());
-    const int half = std::max(1, (size - 1) / 2);
-    const QPoint center = rect.center();
-    QPolygon polygon;
-    switch (arrow) {
-    case Qt::UpArrow:
-        polygon << QPoint(center.x(), center.y() - half / 2 - 1)
-                << QPoint(center.x() - half, center.y() + half / 2)
-                << QPoint(center.x() + half, center.y() + half / 2);
-        break;
-    case Qt::DownArrow:
-        polygon << QPoint(center.x(), center.y() + half / 2 + 1)
-                << QPoint(center.x() - half, center.y() - half / 2)
-                << QPoint(center.x() + half, center.y() - half / 2);
-        break;
-    case Qt::LeftArrow:
-        polygon << QPoint(center.x() - half / 2 - 1, center.y())
-                << QPoint(center.x() + half / 2, center.y() - half)
-                << QPoint(center.x() + half / 2, center.y() + half);
-        break;
-    case Qt::RightArrow:
-        polygon << QPoint(center.x() + half / 2 + 1, center.y())
-                << QPoint(center.x() - half / 2, center.y() - half)
-                << QPoint(center.x() - half / 2, center.y() + half);
-        break;
-    default:
-        return;
+    const bool vertical = arrow == Qt::UpArrow || arrow == Qt::DownArrow;
+    // 三角の「底辺」の長さ。奇数にして中心が1pxに乗るようにする。
+    const int across = vertical ? rect.width() : rect.height();
+    int base = std::min(7, across - 2);
+    if (base % 2 == 0) {
+        --base;
     }
+    if (base < 3) {
+        base = 3;
+    }
+    const int depth = (base + 1) / 2; // 7→4, 5→3, 3→2
+    const QPoint center = rect.center();
+    // 中心に置く。左上寄せの丸めは実機と同じ(高さが偶数のとき上へ寄る)。
+    const int left = center.x() - base / 2;
+    const int top = center.y() - depth / 2;
+
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, false);
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(enabled ? kText : kShadow);
-    painter->drawPolygon(polygon);
+    painter->setPen(enabled ? kText : kShadow);
+    for (int step = 0; step < depth; ++step) {
+        // 先端から数えて step 行目の長さ。先端が1px、1行ごとに2px広がる。
+        const int run = 1 + step * 2;
+        switch (arrow) {
+        case Qt::DownArrow: {
+            // 上が広く、下が尖る。
+            const int width = base - step * 2;
+            const int x = left + step;
+            painter->drawLine(x, top + step, x + width - 1, top + step);
+            break;
+        }
+        case Qt::UpArrow: {
+            const int x = center.x() - run / 2;
+            painter->drawLine(x, top + step, x + run - 1, top + step);
+            break;
+        }
+        case Qt::RightArrow: {
+            const int height = base - step * 2;
+            const int y = top + step;
+            painter->drawLine(left + step, y, left + step, y + height - 1);
+            break;
+        }
+        case Qt::LeftArrow: {
+            const int y = center.y() - run / 2;
+            painter->drawLine(left + step, y, left + step, y + run - 1);
+            break;
+        }
+        default:
+            painter->restore();
+            return;
+        }
+    }
     painter->restore();
 }
 
@@ -210,6 +233,67 @@ void Win95Style::polish(QWidget* widget)
     }
 }
 
+QRect Win95Style::subControlRect(
+    ComplexControl control,
+    const QStyleOptionComplex* option,
+    SubControl subControl,
+    const QWidget* widget) const
+{
+    // Windows 95 では、スピンの上下ボタンもコンボの▼ボタンも幅は
+    // SM_CXVSCROLL(=16px)で、沈んだ枠の内側いっぱいの高さに収まる。
+    // 基底スタイル(Fusion)の配置のままだと、ボタンが低すぎて矢印がはみ出す。
+    constexpr int kButtonWidth = 16;
+    if (option == nullptr) {
+        return QProxyStyle::subControlRect(control, option, subControl, widget);
+    }
+    const QRect inner = option->rect.adjusted(2, 2, -2, -2);
+    if (inner.width() <= kButtonWidth + 4 || inner.height() < 6) {
+        return QProxyStyle::subControlRect(control, option, subControl, widget);
+    }
+    const QRect buttons(
+        inner.right() - kButtonWidth + 1, inner.top(), kButtonWidth, inner.height());
+    switch (control) {
+    case CC_SpinBox: {
+        const int upHeight = inner.height() / 2;
+        switch (subControl) {
+        case SC_SpinBoxFrame:
+            return option->rect;
+        case SC_SpinBoxUp:
+            return QRect(buttons.left(), buttons.top(), kButtonWidth, upHeight);
+        case SC_SpinBoxDown:
+            return QRect(buttons.left(), buttons.top() + upHeight, kButtonWidth,
+                inner.height() - upHeight);
+        case SC_SpinBoxEditField:
+            return QRect(inner.left() + 1, inner.top(),
+                buttons.left() - inner.left() - 2, inner.height());
+        default:
+            break;
+        }
+        break;
+    }
+    case CC_ComboBox: {
+        switch (subControl) {
+        case SC_ComboBoxFrame:
+            return option->rect;
+        case SC_ComboBoxArrow:
+            return buttons;
+        case SC_ComboBoxEditField:
+            return QRect(inner.left() + 1, inner.top(),
+                buttons.left() - inner.left() - 2, inner.height());
+        case SC_ComboBoxListBoxPopup:
+            return QRect(option->rect.left(), option->rect.bottom() + 1,
+                option->rect.width(), 1);
+        default:
+            break;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return QProxyStyle::subControlRect(control, option, subControl, widget);
+}
+
 int Win95Style::pixelMetric(
     PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
 {
@@ -279,6 +363,9 @@ QSize Win95Style::sizeFromContents(
         size.setWidth(std::max(size.width(), 75));
     } else if (type == CT_MenuBarItem) {
         size.setHeight(std::max(size.height(), 19));
+    } else if (type == CT_ComboBox || type == CT_SpinBox || type == CT_LineEdit) {
+        // 沈んだ枠2px + 文字16px + 余白。Windows 95 の入力欄は21px前後。
+        size.setHeight(std::max(size.height(), 21));
     }
     return size;
 }

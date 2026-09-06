@@ -511,7 +511,11 @@ void MainWindow::CreateApproximationUnitFromPanel()
         project_ = std::move(candidate);
         MarkModified();
         RefreshModelViews(false);
-        partModelPanel_->ClearUnitMembers();
+        if (failures.isEmpty()) {
+            // 全部うまくいったときだけ表を空にして次のユニットに備える。
+            // 失敗があるときは直して押し直せるよう、行を残す(オーナー報告対策)。
+            partModelPanel_->ClearUnitMembers();
+        }
         QStringList assignments;
         std::size_t createdCount = 0;
         for (std::size_t index = 0; index < targets.size(); ++index) {

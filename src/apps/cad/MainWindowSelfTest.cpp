@@ -289,6 +289,11 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
     SetViewportTool(ViewportTool::Select);
     viewport_->SetIsometricView();
     viewport_->SetSurfaceDiagnosticMode(SurfaceDiagnosticMode::Normal);
+    // 撮影する見た目は状態名で決める。設定に残っている見た目に引きずられて
+    // 「通常版のはずの絵が Windows 95 風だった」ということが実際に起きたため、
+    // ここで必ず揃える(設定には保存しない)。
+    ApplyUiTheme(state == QStringLiteral("win95"), false);
+    QApplication::processEvents();
 
     if (state == QStringLiteral("overview") || state == QStringLiteral("view")) {
         showTab(0);
@@ -846,18 +851,20 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         viewport_->FitAll();
     } else if (state == QStringLiteral("unit-approx")) {
         // ユニット近似の実機診断(オーナー報告「押しても近似されない」の再現用)。
-        // 読み込んだプロジェクトの surface_3 を近似する(部品3)、surface_5/6/7 を
-        // 形状維持にして実行し、常設の結果表示ごと撮影する。
+        // オーナーの例そのままに3か所へ番号を割り当てる:
+        // 部品1=前面の平らな面、部品2=下の帯、部品3=上の曲面。
+        // 左右の角(surface_5/6)は形状維持にして、接続の自動変形も一緒に見る。
         if (partModelModeAction_ != nullptr) {
             partModelModeAction_->trigger();
         }
         partModelPanel_->SetUnitName(QStringLiteral("近似ユニット9"));
         partModelPanel_->ClearUnitMembers();
         partModelPanel_->AddUnitMembers({
+            {QStringLiteral("surface_2"), 1, 0, 1},
+            {QStringLiteral("surface_7"), 1, 0, 2},
             {QStringLiteral("surface_3"), 1, 0, 3},
             {QStringLiteral("surface_5"), 1, 1, 0},
             {QStringLiteral("surface_6"), 1, 1, 0},
-            {QStringLiteral("surface_7"), 1, 1, 0},
         });
         CreateApproximationUnitFromPanel();
         viewport_->SetIsometricView();
@@ -907,8 +914,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         ApplyUiTheme(false, true);
     } else if (state == QStringLiteral("win95")) {
         // Windows 95 風の見た目(オーナー指示)の実機確認。
-        // 撮影のためだけなので設定には保存しない。
-        ApplyUiTheme(true, false);
+        // 見た目の適用は上でまとめて済ませてある(設定には保存しない)。
         if (surfaceModeAction_ != nullptr) {
             surfaceModeAction_->trigger();
         }

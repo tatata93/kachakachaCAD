@@ -1698,6 +1698,16 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudePlateMaterial_->addItem(QStringLiteral("金属"), QStringLiteral("金属"));
     extrudePlateForm->addRow(QStringLiteral("材料"), extrudePlateMaterial_);
     layout->addLayout(extrudePlateForm);
+    // 板材を作らないときに板厚・材料を触れてしまうと、効かない設定をいじった
+    // ことになって混乱する。チェックに合わせて出し入れする。
+    const auto updateExtrudePlateFields = [this, extrudePlateForm] {
+        const bool makePlate = extrudeMakePlate_->isChecked();
+        extrudePlateForm->setRowVisible(extrudePlateThickness_, makePlate);
+        extrudePlateForm->setRowVisible(extrudePlateMaterial_, makePlate);
+    };
+    connect(extrudeMakePlate_, &QCheckBox::toggled, this,
+        [updateExtrudePlateFields](bool) { updateExtrudePlateFields(); });
+    updateExtrudePlateFields();
     auto* extrudeButton = new QPushButton(QStringLiteral("押し出す"));
     extrudeButton->setObjectName("primaryButton");
     extrudeButton->setToolTip(QStringLiteral(

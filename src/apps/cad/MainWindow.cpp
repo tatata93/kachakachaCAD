@@ -2643,9 +2643,14 @@ void MainWindow::RefreshBeginnerGuide()
     }
     case 3:
         setGuide(QStringLiteral("製作データを出力"),
-            plateCount + bodyCount > 0 ? QStringLiteral("次: 出力範囲と形式を確認して保存")
-                                       : QStringLiteral("次: 中央画面で板材・治具を選ぶ"),
-            QStringLiteral("1  上のツール列で出力の種類を選択\n2  出力対象を中央画面で選択\n3  1:1図面・展開・STL/STEP/.kcd を保存"),
+            outputItems_.empty()
+                ? QStringLiteral("次: 出したい物を選んで「選択を追加」")
+                : QStringLiteral("次: 3Dモデルを確認してから保存"),
+            QStringLiteral(
+                "1  出したい面・板材・実体・線を3D画面か一覧で選ぶ\n"
+                "2  「選択を追加」で出力表へ入れる（表の中身がそのまま出る）\n"
+                "3  「3Dモデルを出力する…」で完成形を回して確認\n"
+                "4  STL / STEP / .kcd で保存（1:1図面・展開は上のツール列）"),
             QStringLiteral("output"));
         break;
     case 4:

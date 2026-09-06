@@ -1066,11 +1066,16 @@ void MainWindow::ApplyUiTheme(bool windows95)
     // (生のポインタで回すとダングリングで落ちる)。
     const QWidgetList widgets = QApplication::allWidgets();
     std::vector<QPointer<QWidget>> guarded(widgets.begin(), widgets.end());
+    // 生成時の配色を抱えたままのウィジェットがあるため、全員へ配色を配り直す。
+    // (継承任せだと右パネルなどが前のテーマの色で残る。実機で確認)
+    const QPalette themed = windows95
+        ? Win95Style::Win95Palette()
+        : QApplication::style()->standardPalette();
     for (QPointer<QWidget>& widget : guarded) {
-        if (widget.isNull() || !widget->testAttribute(Qt::WA_SetPalette)) {
+        if (widget.isNull()) {
             continue;
         }
-        widget->setPalette(QPalette());
+        widget->setPalette(themed);
     }
     for (QPointer<QWidget>& widget : guarded) {
         if (widget.isNull()) {

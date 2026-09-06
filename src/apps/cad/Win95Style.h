@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QFont>
+#include <QIcon>
 #include <QPalette>
+#include <QPixmap>
 #include <QProxyStyle>
 
 //! Windows 95 風の見た目(オーナー指示。通常の見た目と切り替えられる)。
@@ -23,8 +25,12 @@ public:
 
     //! Windows 標準スキームの配色。
     [[nodiscard]] static QPalette Win95Palette();
-    //! MS UI Gothic 9pt(日本語版 Windows 95 の既定)。無ければ順に代替。
+    //! 日本語版 Windows 95 と同時代の MS P Gothic 9pt。無ければ順に代替。
     [[nodiscard]] static QFont Win95Font();
+    //! 通常テーマの個別QSSを退避する。色見本ボタンだけは役割上その色を保つ。
+    static void SuspendApplicationStyleSheets();
+    //! 退避した個別QSSを通常テーマへ戻す。
+    static void RestoreApplicationStyleSheets();
 
     void drawPrimitive(
         PrimitiveElement element,
@@ -61,6 +67,14 @@ public:
         ContentsType type,
         const QStyleOption* option,
         const QSize& contentsSize,
+        const QWidget* widget = nullptr) const override;
+    [[nodiscard]] QPixmap standardPixmap(
+        StandardPixmap standardPixmap,
+        const QStyleOption* option = nullptr,
+        const QWidget* widget = nullptr) const override;
+    [[nodiscard]] QIcon standardIcon(
+        StandardPixmap standardIcon,
+        const QStyleOption* option = nullptr,
         const QWidget* widget = nullptr) const override;
     void polish(QPalette& palette) override;
     void polish(QWidget* widget) override;

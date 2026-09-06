@@ -17,6 +17,7 @@ CollapsibleSection::CollapsibleSection(
     layout->setSpacing(2);
 
     header_ = new QToolButton;
+    header_->setObjectName(QStringLiteral("collapsibleSectionHeader"));
     header_->setText(title);
     header_->setCheckable(true);
     header_->setChecked(expanded);

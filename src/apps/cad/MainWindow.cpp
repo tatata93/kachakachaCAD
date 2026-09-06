@@ -166,7 +166,7 @@ using namespace mainwindow_helpers;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
-    // 見た目の設定を先に読む(BuildUi の中で最初の適用が走る)。
+    // 見た目の設定を先に読み、全UIを組み終えてから一度だけ適用する。
     defaultUiFont_ = QApplication::font();
     {
         QSettings settings(
@@ -176,6 +176,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
     BuildUi();
     BuildMenusAndToolbar();
+    ApplyUiTheme(useWindows95Theme_, false);
 
     project_.AddWorkPlane("top_XY", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}));
     project_.AddWorkPlane("front_XZ", WorkPlane::FromPointNormal({0.0, 0.0, 0.0}, {0.0, -1.0, 0.0}, {1.0, 0.0, 0.0}));
@@ -738,7 +739,6 @@ void MainWindow::BuildUi()
     toolsDock->setMaximumWidth(560);
 
     statusBar()->showMessage(QStringLiteral("準備完了"));
-    ApplyUiTheme(useWindows95Theme_);
 }
 
 void MainWindow::BuildDrawingActions()
@@ -911,6 +911,10 @@ void MainWindow::BuildDrawingActions()
     alignPlaneAction_->setToolTip(QStringLiteral("作図面を真正面から見る"));
     finishDrawingAction_ = new QAction(style()->standardIcon(QStyle::SP_DialogApplyButton), QStringLiteral("完了"), this);
     cancelDrawingAction_ = new QAction(style()->standardIcon(QStyle::SP_DialogCancelButton), QStringLiteral("取消"), this);
+    finishDrawingAction_->setProperty(
+        "standardPixmap", static_cast<int>(QStyle::SP_DialogApplyButton));
+    cancelDrawingAction_->setProperty(
+        "standardPixmap", static_cast<int>(QStyle::SP_DialogCancelButton));
     finishDrawingAction_->setEnabled(false);
     cancelDrawingAction_->setEnabled(false);
 
@@ -1002,11 +1006,8 @@ void MainWindow::ApplyUiTheme(bool windows95, bool persist)
     // Win95 風のときはアプリ独自のQSS(角丸・淡い色)を外し、Win95スタイルへ委ねる。
     useWindows95Theme_ = windows95;
     if (windows95) {
-        // 一覧・表・入力欄の地は白(COLOR_WINDOW)。ここだけスタイルシートで補う
-        // (部品の描画は Win95Style が行うので、色以外は指定しない)。
-        setStyleSheet(QStringLiteral(
-            "QTreeView, QListView, QTableView, QTextEdit, QPlainTextEdit,"
-            " QAbstractItemView { background-color: #ffffff; color: #000000; }"));
+        // 通常テーマの角丸・淡色・局所的な文字色も一度退避する。色見本は例外。
+        Win95Style::SuspendApplicationStyleSheets();
         if (win95Style_ == nullptr) {
             win95Style_ = new Win95Style();
             win95Style_->setParent(qApp);
@@ -1018,6 +1019,7 @@ void MainWindow::ApplyUiTheme(bool windows95, bool persist)
         QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
         QApplication::setPalette(QApplication::style()->standardPalette());
         QApplication::setFont(defaultUiFont_);
+        Win95Style::RestoreApplicationStyleSheets();
         setStyleSheet(QStringLiteral(R"(
         QMainWindow { background: #eef0f2; }
         QDockWidget { color: #26323a; font-weight: 600; }
@@ -1059,6 +1061,15 @@ void MainWindow::ApplyUiTheme(bool windows95, bool persist)
         QTreeWidget::item { min-height: 21px; }
         QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
     )"));
+    }
+    // QActionは生成時の標準アイコンを保持するため、テーマ切替時に作り直す。
+    for (QAction* action : findChildren<QAction*>()) {
+        bool valid = false;
+        const int standardPixmap = action->property("standardPixmap").toInt(&valid);
+        if (valid) {
+            action->setIcon(QApplication::style()->standardIcon(
+                static_cast<QStyle::StandardPixmap>(standardPixmap)));
+        }
     }
     if (persist) {
         QSettings settings(
@@ -1117,6 +1128,16 @@ void MainWindow::BuildMenusAndToolbar()
     isolateDisplayAction_ = new QAction(QStringLiteral("選択だけ"), this);
     QAction* manualAction = new QAction(QStringLiteral("操作マニュアル"), this);
     QAction* legalAction = new QAction(QStringLiteral("使用ライブラリと権利"), this);
+
+    const auto rememberStandardPixmap = [](QAction* action, QStyle::StandardPixmap pixmap) {
+        action->setProperty("standardPixmap", static_cast<int>(pixmap));
+    };
+    rememberStandardPixmap(newAction, QStyle::SP_FileIcon);
+    rememberStandardPixmap(openAction, QStyle::SP_DialogOpenButton);
+    rememberStandardPixmap(saveAction, QStyle::SP_DialogSaveButton);
+    rememberStandardPixmap(deleteAction, QStyle::SP_TrashIcon);
+    rememberStandardPixmap(undoAction_, QStyle::SP_ArrowBack);
+    rememberStandardPixmap(redoAction_, QStyle::SP_ArrowForward);
 
     auto* displayModeGroup = new QActionGroup(this);
     displayModeGroup->setExclusive(true);

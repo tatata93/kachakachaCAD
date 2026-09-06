@@ -4045,6 +4045,7 @@ bool MainWindow::RunCreationSelfTest()
             || classic.color(QPalette::Highlight) != QColor(0x00, 0x00, 0x80)
             || classic.color(QPalette::HighlightedText) != QColor(0xFF, 0xFF, 0xFF)
             || classic.color(QPalette::Base) != QColor(0xFF, 0xFF, 0xFF)
+            || classic.color(QPalette::AlternateBase) != QColor(0xFF, 0xFF, 0xFF)
             || classic.color(QPalette::Shadow) != QColor(0x00, 0x00, 0x00)) {
             return fail("windows 95 palette matches the standard scheme");
         }
@@ -4052,8 +4053,15 @@ bool MainWindow::RunCreationSelfTest()
         if (classicStyle.pixelMetric(QStyle::PM_ScrollBarExtent) != 16
             || classicStyle.pixelMetric(QStyle::PM_IndicatorWidth) != 13
             || classicStyle.pixelMetric(QStyle::PM_ExclusiveIndicatorWidth) != 12
+            || classicStyle.pixelMetric(QStyle::PM_ToolBarIconSize) != 16
+            || classicStyle.pixelMetric(QStyle::PM_ToolBarFrameWidth) != 2
+            || classicStyle.pixelMetric(QStyle::PM_TabBarTabHSpace) != 12
             || classicStyle.pixelMetric(QStyle::PM_ButtonShiftHorizontal) != 1) {
             return fail("windows 95 metrics match the 1995 guidelines");
+        }
+        const QPixmap classicFileIcon = classicStyle.standardPixmap(QStyle::SP_FileIcon);
+        if (classicFileIcon.isNull() || classicFileIcon.size() != QSize(16, 16)) {
+            return fail("windows 95 standard icons are pixel-sized");
         }
     }
     progressMark("theme checks done");

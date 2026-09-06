@@ -500,4 +500,108 @@ void WriteOutputMeshStl(const std::string& path, const OutputMesh& mesh)
     }
 }
 
+
+namespace {
+
+//! 依存の下流(消しても他が壊れにくい物)から順に消すための並び。
+[[nodiscard]] int RemovalRank(ProjectObjectKind kind)
+{
+    switch (kind) {
+    case ProjectObjectKind::PartModel: return 0;
+    case ProjectObjectKind::Body: return 1;
+    case ProjectObjectKind::Plate: return 2;
+    case ProjectObjectKind::Surface: return 3;
+    case ProjectObjectKind::Wire: return 4;
+    case ProjectObjectKind::Point: return 5;
+    case ProjectObjectKind::WorkPlane:
+    default: return 6;
+    }
+}
+
+[[nodiscard]] const char* KindLabel(ProjectObjectKind kind)
+{
+    switch (kind) {
+    case ProjectObjectKind::PartModel: return "近似モデル";
+    case ProjectObjectKind::Body: return "実体";
+    case ProjectObjectKind::Plate: return "板材";
+    case ProjectObjectKind::Surface: return "面";
+    case ProjectObjectKind::Wire: return "線";
+    case ProjectObjectKind::Point: return "点";
+    case ProjectObjectKind::WorkPlane:
+    default: return "作業平面";
+    }
+}
+
+} // namespace
+
+model::Project BuildOutputProject(
+    const model::Project& project,
+    const std::vector<OutputItem>& items,
+    std::vector<std::string>* keptDependencies)
+{
+    if (keptDependencies != nullptr) {
+        keptDependencies->clear();
+    }
+    Project result = project;
+
+    const auto keep = [&items](ProjectObjectKind kind, const std::string& name) {
+        return std::any_of(items.begin(), items.end(), [&](const OutputItem& item) {
+            return item.kind == kind && item.name == name;
+        });
+    };
+
+    // 表に無い物を全部集める。作業平面・点も対象(参照されていれば消せずに残る)。
+    std::vector<OutputItem> pending;
+    const auto collect = [&](ProjectObjectKind kind, const auto& objects) {
+        for (const auto& object : objects) {
+            if (!keep(kind, object.name)) {
+                pending.push_back({kind, object.name});
+            }
+        }
+    };
+    collect(ProjectObjectKind::PartModel, project.PartModels());
+    collect(ProjectObjectKind::Body, project.Bodies());
+    collect(ProjectObjectKind::Plate, project.Plates());
+    collect(ProjectObjectKind::Surface, project.Surfaces());
+    collect(ProjectObjectKind::Wire, project.Wires());
+    collect(ProjectObjectKind::Point, project.Points());
+    collect(ProjectObjectKind::WorkPlane, project.WorkPlanes());
+    std::stable_sort(pending.begin(), pending.end(), [](const OutputItem& a, const OutputItem& b) {
+        return RemovalRank(a.kind) < RemovalRank(b.kind);
+    });
+
+    const auto removeOne = [&result](const OutputItem& item) {
+        switch (item.kind) {
+        case ProjectObjectKind::PartModel: result.RemovePartModel(item.name); return;
+        case ProjectObjectKind::Body: result.RemoveBody(item.name); return;
+        case ProjectObjectKind::Plate: result.RemovePlate(item.name); return;
+        case ProjectObjectKind::Surface: result.RemoveSurface(item.name); return;
+        case ProjectObjectKind::Wire: result.RemoveWire(item.name); return;
+        case ProjectObjectKind::Point: result.RemovePoint(item.name); return;
+        case ProjectObjectKind::WorkPlane: result.RemoveWorkPlane(item.name); return;
+        }
+    };
+
+    // 消せる物が無くなるまで繰り返す。残った物は表の物が参照している依存。
+    bool progress = true;
+    while (progress && !pending.empty()) {
+        progress = false;
+        for (auto item = pending.begin(); item != pending.end();) {
+            try {
+                removeOne(*item);
+                item = pending.erase(item);
+                progress = true;
+            } catch (const std::exception&) {
+                ++item;
+            }
+        }
+    }
+    if (keptDependencies != nullptr) {
+        for (const OutputItem& item : pending) {
+            keptDependencies->push_back(std::string(KindLabel(item.kind)) + " " + item.name);
+        }
+    }
+    return result;
+}
+
 } // namespace kachakacha::io

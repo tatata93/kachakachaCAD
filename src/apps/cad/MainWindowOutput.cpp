@@ -203,6 +203,42 @@ void MainWindow::AddSelectionToOutputSet()
         QStringLiteral("%1件を出力表へ追加しました").arg(added), 4000);
 }
 
+void MainWindow::AddVisibleModelToOutputSet()
+{
+    using kachakacha::model::ProjectObjectKind;
+    int added = 0;
+    const auto append = [&](ProjectObjectKind kind, const std::string& name) {
+        const auto duplicate = std::find_if(outputItems_.begin(), outputItems_.end(),
+            [&](const kachakacha::io::OutputItem& item) {
+                return item.kind == kind && item.name == name;
+            });
+        if (duplicate == outputItems_.end()) {
+            outputItems_.push_back({kind, name});
+            ++added;
+        }
+    };
+    for (const auto& plate : project_.Plates()) {
+        if (plate.visible) {
+            append(ProjectObjectKind::Plate, plate.name);
+        }
+    }
+    for (const auto& body : project_.Bodies()) {
+        if (body.visible) {
+            append(ProjectObjectKind::Body, body.name);
+        }
+    }
+    if (added == 0) {
+        ReportOperationError(QStringLiteral("出力するもの"),
+            QStringLiteral("3D画面に見えている板材・実体がありません"
+                           "（すでに全部入っている場合もこの表示になります）。"));
+        return;
+    }
+    RefreshOutputSetTable();
+    RefreshOutputPreview();
+    statusBar()->showMessage(
+        QStringLiteral("表示中の%1件を出力表へ追加しました").arg(added), 4000);
+}
+
 void MainWindow::RemoveSelectedOutputSetRow()
 {
     if (outputSetTable_ == nullptr) {
@@ -329,12 +365,30 @@ void MainWindow::ExportOutputSet(int format)
             return;
         }
         if (format == 0) {
-            kachakacha::io::OutputMeshOptions options;
-            options.surfaceThicknessMillimeters = outputSurfaceThickness_->value();
-            options.fillOpenBoundaries = outputAutoFill_->isChecked();
-            const kachakacha::io::OutputMesh mesh =
-                kachakacha::io::BuildOutputMesh(project_, outputItems_, options);
-            kachakacha::io::WriteOutputMeshStl(path.toStdString(), mesh);
+            // 板材・実体だけなら OCCT の本物の立体から高精度で書き出す。
+            // 面や線が混ざるときだけ、板厚を与えたメッシュから書き出す。
+            kachakacha::occt::ModelShapeSelection solids;
+            bool allSolid = true;
+            for (const kachakacha::io::OutputItem& item : outputItems_) {
+                if (item.kind == kachakacha::model::ProjectObjectKind::Plate) {
+                    solids.plateNames.push_back(item.name);
+                } else if (item.kind == kachakacha::model::ProjectObjectKind::Body) {
+                    solids.bodyNames.push_back(item.name);
+                } else {
+                    allSolid = false;
+                }
+            }
+            if (allSolid && !solids.Empty()) {
+                const std::filesystem::path nativePath(path.toStdWString());
+                kachakacha::occt::WriteModelStl(nativePath, project_, solids);
+            } else {
+                kachakacha::io::OutputMeshOptions options;
+                options.surfaceThicknessMillimeters = outputSurfaceThickness_->value();
+                options.fillOpenBoundaries = outputAutoFill_->isChecked();
+                const kachakacha::io::OutputMesh mesh =
+                    kachakacha::io::BuildOutputMesh(project_, outputItems_, options);
+                kachakacha::io::WriteOutputMeshStl(path.toStdString(), mesh);
+            }
         } else if (format == 1) {
             kachakacha::occt::ModelShapeSelection selection;
             for (const kachakacha::io::OutputItem& item : outputItems_) {
@@ -352,12 +406,25 @@ void MainWindow::ExportOutputSet(int format)
             const std::filesystem::path nativePath(path.toStdWString());
             kachakacha::occt::WriteModelStep(nativePath, project_, selection);
         } else {
+            // 表にある物「だけ」の .kcd にする(オーナー指示)。
+            // 表の物が参照している元ワイヤ・作業平面などは消すと壊れるので残る。
+            std::vector<std::string> kept;
+            const Project exportProject =
+                kachakacha::io::BuildOutputProject(project_, outputItems_, &kept);
             const std::filesystem::path nativePath(path.toStdWString());
             std::ofstream output(nativePath, std::ios::binary);
             if (!output) {
                 throw std::runtime_error("ファイルを書き出せませんでした。");
             }
-            kachakacha::io::WriteProjectScript(output, project_);
+            kachakacha::io::WriteProjectScript(output, exportProject);
+            if (!kept.empty()) {
+                statusBar()->showMessage(
+                    QStringLiteral("出力しました: %1（作るのに必要な元の形 %2 件も一緒に入れました）")
+                        .arg(path)
+                        .arg(kept.size()),
+                    8000);
+                return;
+            }
         }
         statusBar()->showMessage(
             QStringLiteral("出力しました: %1").arg(path), 6000);
@@ -737,18 +804,6 @@ QWidget* MainWindow::BuildOutputPanel()
     modelLayout->addWidget(bodyStlButton);
     modelLayout->addWidget(bodyStepButton);
 
-    // 部材グループ単位の .kcd 書き出し(モデルツリーの右クリックで除外を設定)。
-    auto* filteredKcdLabel = new QLabel(QStringLiteral(
-        "「出力しない」に設定した部材グループを除いて .kcd を書き出します。\n"
-        "除外はモデルツリーの部材グループを右クリックして設定します。"));
-    filteredKcdLabel->setWordWrap(true);
-    filteredKcdLabel->setStyleSheet("color: #5c6670;");
-    modelLayout->addWidget(filteredKcdLabel);
-    auto* filteredKcdButton = new QPushButton(QStringLiteral("出力対象のみで .kcd 書き出し"));
-    filteredKcdButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
-    connect(filteredKcdButton, &QPushButton::clicked, this, [this] { ExportProjectExcludingSets(); });
-    modelLayout->addWidget(filteredKcdButton);
-
     // --- 出力するもの(オーナー指示: 出力対象の管理表+3Dプレビュー) ---
     auto [outputSetContent, outputSetLayout] = beginSection();
     auto* outputSetHint = new QLabel(QStringLiteral(
@@ -779,6 +834,14 @@ QWidget* MainWindow::BuildOutputPanel()
     outputSetButtons->addWidget(removeOutputButton, 1);
     outputSetButtons->addWidget(clearOutputButton, 1);
     outputSetLayout->addLayout(outputSetButtons);
+    // 旧「3DモデルのSTL/STEP出力」の「表示中の3Dモデル全体」に当たる近道。
+    auto* addAllVisibleButton =
+        new QPushButton(QStringLiteral("表示中の板材・実体を全部入れる"));
+    addAllVisibleButton->setToolTip(QStringLiteral(
+        "いま3D画面に見えている板材と実体をまとめて表へ入れます"));
+    connect(addAllVisibleButton, &QPushButton::clicked,
+        this, &MainWindow::AddVisibleModelToOutputSet);
+    outputSetLayout->addWidget(addAllVisibleButton);
 
     auto* outputSetForm = new QFormLayout;
     outputSetForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
@@ -826,6 +889,21 @@ QWidget* MainWindow::BuildOutputPanel()
     outputExportButtons->addWidget(setKcdButton, 1);
     outputSetLayout->addLayout(outputExportButtons);
 
+    // 部材グループ単位の .kcd 書き出し(モデルツリーの右クリックで除外を設定)。
+    // 表を使わずプロジェクト丸ごとから抜くだけの近道なので、表の下に添える。
+    auto* filteredKcdLabel = new QLabel(QStringLiteral(
+        "表を使わない近道: 「出力しない」に設定した部材グループだけを除いて、"
+        "プロジェクト全体を .kcd に書き出します。除外はモデルツリーの部材グループを"
+        "右クリックして設定します。"));
+    filteredKcdLabel->setWordWrap(true);
+    filteredKcdLabel->setStyleSheet("color: #5c6670;");
+    outputSetLayout->addWidget(filteredKcdLabel);
+    auto* filteredKcdButton =
+        new QPushButton(QStringLiteral("除外グループ以外を全部 .kcd で保存"));
+    filteredKcdButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    connect(filteredKcdButton, &QPushButton::clicked, this, [this] { ExportProjectExcludingSets(); });
+    outputSetLayout->addWidget(filteredKcdButton);
+
     auto* outputSetSection = new CollapsibleSection(
         QStringLiteral("出力するもの（表で管理）"), outputSetContent, true);
     outputSetSection->setProperty("manualAnchor", QStringLiteral("outputSet"));
@@ -839,17 +917,20 @@ QWidget* MainWindow::BuildOutputPanel()
         QStringLiteral("ペーパークラフト展開（1:1）"), plateContent, false);
     plateSection->setProperty("manualAnchor", QStringLiteral("plateFlatPattern"));
     layout->addWidget(plateSection);
+    // 旧「3DモデルのSTL / STEP出力」は「出力するもの（表で管理）」へ統合した。
+    // 中身の部品(modelExportScope_ など)は要約表示の受け皿として作るだけ作り、
+    // 画面には出さない(既存の RefreshExportSummary が参照するため消せない)。
     auto* modelSection = new CollapsibleSection(
         QStringLiteral("3DモデルのSTL / STEP出力"), modelContent, true);
     modelSection->setObjectName(QStringLiteral("modelOutputSection"));
     modelSection->setProperty("manualAnchor", QStringLiteral("modelOutput"));
+    modelSection->setVisible(false);
     layout->addWidget(modelSection);
     // 出力ツール(上部)で選んだ1セクションだけ表示する(ADR 0025)。
     outputSections_ = {
         {QStringLiteral("出力するもの（表で管理）"), outputSetSection},
         {QStringLiteral("作業平面の1:1図面"), planarSection},
         {QStringLiteral("ペーパークラフト展開（1:1）"), plateSection},
-        {QStringLiteral("3DモデルのSTL / STEP出力"), modelSection},
     };
     layout->addStretch(1);
     auto* scrollArea = new QScrollArea;

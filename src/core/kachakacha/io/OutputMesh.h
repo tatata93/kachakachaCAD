@@ -58,4 +58,14 @@ struct OutputMesh {
 //! メッシュをバイナリSTLとして書き出す。
 void WriteOutputMeshStl(const std::string& path, const OutputMesh& mesh);
 
+//! 出力表の内容だけを含む .kcd 用のプロジェクトを作る(オーナー指示
+//! 「追加されたものを別kcdとして出力する」)。
+//! 表に無い物は依存順に消していく。表の物が参照していて消せない物
+//! (面の元ワイヤ、板材の元面、作業平面など)は残す — 消すと表の物が壊れるため。
+//! 残した物の名前は keptDependencies へ入れる(人へ知らせる用)。
+[[nodiscard]] model::Project BuildOutputProject(
+    const model::Project& project,
+    const std::vector<OutputItem>& items,
+    std::vector<std::string>* keptDependencies = nullptr);
+
 } // namespace kachakacha::io

@@ -275,6 +275,8 @@ private:
     void ApplyUiTheme(bool windows95, bool persist = true);
     //! 出力モード(オーナー指示): 出力対象の管理表と3Dプレビュー。
     void AddSelectionToOutputSet();
+    //! 3D画面に見えている板材・実体をまとめて出力表へ入れる。
+    void AddVisibleModelToOutputSet();
     void RemoveSelectedOutputSetRow();
     void ClearOutputSet();
     void RefreshOutputSetTable();

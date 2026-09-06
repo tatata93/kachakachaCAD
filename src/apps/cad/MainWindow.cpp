@@ -1516,9 +1516,8 @@ void MainWindow::BuildMenusAndToolbar()
         addOutputTool(QStringLiteral("ペーパークラフト展開"),
             QStringLiteral("ペーパークラフト展開（1:1）"),
             QStringLiteral("板材の展開図・組立ガイドを出力"));
-        addOutputTool(QStringLiteral("3Dモデル・.kcd"),
-            QStringLiteral("3DモデルのSTL / STEP出力"),
-            QStringLiteral("立体のSTL/STEP出力と、部材を選んだ.kcd書き出し"));
+        // 「3DモデルのSTL / STEP出力」は「出力するもの（表で管理）」へ統合した。
+        // 同じ物を出す道が2つあると、どちらを押せばよいか分からなくなるため。
         if (!outputToolActions_.empty()) {
             outputToolActions_.front()->setChecked(true);
         }

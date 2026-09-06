@@ -14,6 +14,7 @@
 
 using kachakacha::geometry::Vector3;
 using kachakacha::io::BuildOutputMesh;
+using kachakacha::io::BuildOutputProject;
 using kachakacha::io::OutputItem;
 using kachakacha::io::OutputMesh;
 using kachakacha::io::OutputMeshOptions;
@@ -136,6 +137,33 @@ int main()
         Require(count == mesh.triangles.size(), "stl header matches triangle count");
         input.close();
         std::remove(path.c_str());
+    }
+
+    // --- 表の物だけの .kcd を作る(オーナー指示「追加されたものを別kcdとして出力する」) ---
+    {
+        Project project = MakePanelProject();
+        // 表に入れない、まったく無関係な面をもう1枚足す。
+        project.AddWire("別枠", Wire::Polyline({
+            {50.0, 0.0, 0.0},
+            {60.0, 0.0, 0.0},
+            {60.0, 5.0, 0.0},
+            {50.0, 5.0, 0.0},
+            {50.0, 0.0, 0.0},
+        }));
+        project.AddPlanarSurface("別面", "別枠");
+
+        std::vector<std::string> kept;
+        const Project output = BuildOutputProject(
+            project, {{ProjectObjectKind::Surface, "板面"}}, &kept);
+        Require(output.Surfaces().size() == 1, "only the listed surface survives");
+        Require(output.Surfaces().front().name == "板面", "the listed surface is the kept one");
+        // 板面を作るのに要るワイヤ「枠」は消せないので残る。無関係な「別枠」は消える。
+        Require(output.Wires().size() == 1, "unrelated wire is dropped");
+        Require(output.Wires().front().name == "枠", "the source wire of the listed surface is kept");
+        Require(kept.size() == 1, "the kept dependency is reported");
+        Require(kept.front().find("枠") != std::string::npos, "the reported dependency names the wire");
+        // 元のプロジェクトは変えない。
+        Require(project.Surfaces().size() == 2, "the original project is untouched");
     }
 
     std::cout << "output mesh tests passed\n";

@@ -780,7 +780,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         showTab(3, 1.0);
         finalRevealTab = 3;
-        finalRevealAnchor = QStringLiteral("modelOutput");
+        finalRevealAnchor = QStringLiteral("outputSet");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("display") || state == QStringLiteral("display-grid")) {
@@ -3907,6 +3907,38 @@ bool MainWindow::RunCreationSelfTest()
         outputPreviewDialog_->View()->OrbitForTest(0.3, 0.1);
         if (std::abs(outputPreviewDialog_->View()->YawRadians() - yawBefore - 0.3) > 1.0e-9) {
             return fail("output preview can be orbited");
+        }
+        // .kcd は「表の物だけ」になる(オーナー指示)。元の面は残さない。
+        {
+            std::vector<std::string> kept;
+            const Project trimmed =
+                kachakacha::io::BuildOutputProject(project_, CurrentOutputItems(), &kept);
+            if (trimmed.Surfaces().size() != 1
+                || trimmed.Surfaces().front().name != "__out面") {
+                return fail("output kcd keeps only the listed objects");
+            }
+            if (trimmed.Wires().size() != 1 || trimmed.Wires().front().name != "__out輪郭") {
+                return fail("output kcd keeps the wires the listed objects need");
+            }
+            if (kept.size() != 1) {
+                return fail("output kcd reports the kept dependencies");
+            }
+        }
+        // 「表示中の板材・実体を全部入れる」の近道。
+        AddVisibleModelToOutputSet();
+        std::size_t visiblePlateBodyCount = 0;
+        for (const auto& plate : project_.Plates()) {
+            if (plate.visible) {
+                ++visiblePlateBodyCount;
+            }
+        }
+        for (const auto& body : project_.Bodies()) {
+            if (body.visible) {
+                ++visiblePlateBodyCount;
+            }
+        }
+        if (CurrentOutputItems().size() != visiblePlateBodyCount + 1) {
+            return fail("output table takes every visible plate and body");
         }
         // 表から消えた物は自動で外れる。
         outputPreviewDialog_->hide();

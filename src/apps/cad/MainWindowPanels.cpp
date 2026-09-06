@@ -47,7 +47,9 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QButtonGroup>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollArea>
@@ -1521,13 +1523,48 @@ QWidget* MainWindow::BuildSurfacePanel()
     auto* sweepTitle = new QLabel(QStringLiteral("押し出し"));
     sweepTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(sweepTitle);
+    // 目的を先に選ばせる(Codexレビュー#2: 板にしたいとき、上のチェックと
+    // 下のフォームのどちらを使うのか分からない、という指摘)。
+    // 押し出しと厚み化は同じ道具だが、やりたいことは別なので入口で分ける。
+    auto* extrudePurposeRow = new QHBoxLayout;
+    extrudePurposeSweep_ = new QRadioButton(QStringLiteral("線・面を伸ばす"));
+    extrudePurposeSweep_->setChecked(true);
+    extrudePurposeSweep_->setToolTip(QStringLiteral(
+        "選んだ線や面を、決めた方向へ決めた距離だけ伸ばします"));
+    extrudePurposeThickness_ = new QRadioButton(QStringLiteral("面に厚みを付ける"));
+    extrudePurposeThickness_->setToolTip(QStringLiteral(
+        "選んだ面に板厚を与えて、実物の板材にします（厚み化）。\n"
+        "厚みの向きや、始端と終端で厚みを変えることもできます"));
+    auto* extrudePurposeGroup = new QButtonGroup(this);
+    extrudePurposeGroup->addButton(extrudePurposeSweep_);
+    extrudePurposeGroup->addButton(extrudePurposeThickness_);
+    extrudePurposeRow->addWidget(extrudePurposeSweep_, 1);
+    extrudePurposeRow->addWidget(extrudePurposeThickness_, 1);
+    layout->addLayout(extrudePurposeRow);
+    auto* extrudeBody = new QWidget;
+    auto* extrudeBodyLayout = new QVBoxLayout(extrudeBody);
+    extrudeBodyLayout->setContentsMargins(0, 0, 0, 0);
+    extrudeBodyLayout->setSpacing(6);
+    layout->addWidget(extrudeBody);
+    auto* thicknessBody = new QWidget;
+    auto* thicknessBodyLayout = new QVBoxLayout(thicknessBody);
+    thicknessBodyLayout->setContentsMargins(0, 0, 0, 0);
+    thicknessBodyLayout->setSpacing(6);
+    layout->addWidget(thicknessBody);
+    thicknessBody->setVisible(false);
+    connect(extrudePurposeSweep_, &QRadioButton::toggled, this,
+        [extrudeBody, thicknessBody](bool sweep) {
+            extrudeBody->setVisible(sweep);
+            thicknessBody->setVisible(!sweep);
+        });
+
     auto* extrudeHint = new QLabel(QStringLiteral(
         "3D画面や一覧で押し出す物（線・面。複数可）を選び、方向と距離を決めて"
         "「押し出す」を押します。閉じた輪郭ならふた面も作れます。"
         "作られた物は元の線・面の編集に追従します。"));
     extrudeHint->setWordWrap(true);
     extrudeHint->setStyleSheet("color: #4a5a63;");
-    layout->addWidget(extrudeHint);
+    extrudeBodyLayout->addWidget(extrudeHint);
     auto* extrudeForm = new QFormLayout;
     extrudeForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     extrudeDirection_ = new QComboBox;
@@ -1556,11 +1593,11 @@ QWidget* MainWindow::BuildSurfacePanel()
         extrudeTargetSurface_->setEnabled(checked);
         extrudeDistance_->setEnabled(!checked);
     });
-    layout->addLayout(extrudeForm);
+    extrudeBodyLayout->addLayout(extrudeForm);
 
     auto* extrudeMakeLabel = new QLabel(QStringLiteral("押し出しで作るもの"));
     extrudeMakeLabel->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 4px;");
-    layout->addWidget(extrudeMakeLabel);
+    extrudeBodyLayout->addWidget(extrudeMakeLabel);
     extrudeMakeTipWire_ = new QCheckBox(QStringLiteral("先端のワイヤ"));
     extrudeMakeTipWire_->setChecked(true);
     extrudeMakeTipWire_->setToolTip(QStringLiteral(
@@ -1581,12 +1618,12 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudeMakePlate_ = new QCheckBox(QStringLiteral("板材にする（厚みを付ける）"));
     extrudeMakePlate_->setToolTip(QStringLiteral(
         "面に厚みを与えて実物の板にします。面を押し出したときは厚み化と同じです"));
-    layout->addWidget(extrudeMakeTipWire_);
-    layout->addWidget(extrudeMakeEdges_);
-    layout->addWidget(extrudeMakeSide_);
-    layout->addWidget(extrudeMakeCap_);
-    layout->addWidget(extrudeMakeBottom_);
-    layout->addWidget(extrudeMakePlate_);
+    extrudeBodyLayout->addWidget(extrudeMakeTipWire_);
+    extrudeBodyLayout->addWidget(extrudeMakeEdges_);
+    extrudeBodyLayout->addWidget(extrudeMakeSide_);
+    extrudeBodyLayout->addWidget(extrudeMakeCap_);
+    extrudeBodyLayout->addWidget(extrudeMakeBottom_);
+    extrudeBodyLayout->addWidget(extrudeMakePlate_);
     auto* extrudePlateForm = new QFormLayout;
     extrudePlateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     extrudePlateThickness_ = MakePositiveField(0.5);
@@ -1597,7 +1634,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudePlateMaterial_->addItem(QStringLiteral("紙"), QStringLiteral("紙"));
     extrudePlateMaterial_->addItem(QStringLiteral("金属"), QStringLiteral("金属"));
     extrudePlateForm->addRow(QStringLiteral("材料"), extrudePlateMaterial_);
-    layout->addLayout(extrudePlateForm);
+    extrudeBodyLayout->addLayout(extrudePlateForm);
     // 板材を作らないときに板厚・材料を触れてしまうと、効かない設定をいじった
     // ことになって混乱する。チェックに合わせて出し入れする。
     const auto updateExtrudePlateFields = [this, extrudePlateForm] {
@@ -1614,14 +1651,14 @@ QWidget* MainWindow::BuildSurfacePanel()
         "選択した線・面を押し出します。線は複数同時でも構いません。\n"
         "面を選んだ場合は厚み方向の押し出し（＝厚み化・オフセット面）になります"));
     connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::ExtrudeSelection);
-    layout->addWidget(extrudeButton);
+    extrudeBodyLayout->addWidget(extrudeButton);
 
     // オーナー指示で「厚み化」は押し出しへ統合した。押し出しの一般形が
     // 厚み化なので、同じ画面の続きとして置く(道具列からは外した)。
     auto* plateTitle = new QLabel(QStringLiteral("厚み化（ワイヤ・面・板）"));
     plateTitle->setProperty("manualAnchor", QStringLiteral("plateCreate"));
     plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
-    layout->addWidget(plateTitle);
+    thicknessBodyLayout->addWidget(plateTitle);
 
     // 厚み化の専用フォーム(オーナー指示: UIの使い回しをやめ、厚みの設定と
     // 出力[ワイヤ][面][板]のチェックで何を作るかを選ぶ)。
@@ -1673,7 +1710,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateMaterial_->addItem(QStringLiteral("真鍮板"), QStringLiteral("brass"));
     plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
     plateForm->addRow(QStringLiteral("材質（板のみ）"), plateMaterial_);
-    layout->addLayout(plateForm);
+    thicknessBodyLayout->addLayout(plateForm);
 
     connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);
     connect(plateThickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
@@ -1688,7 +1725,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     plateButton->setToolTip(QStringLiteral(
         "「元の面」の面へ厚みを適用し、チェックした出力(ワイヤ・面・板)を作ります"));
     connect(plateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSurface);
-    layout->addWidget(plateButton);
+    thicknessBodyLayout->addWidget(plateButton);
 
     auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから直接厚み化（板）"));
     wirePlateButton->setToolTip(QStringLiteral(
@@ -1696,11 +1733,11 @@ QWidget* MainWindow::BuildSurfacePanel()
         "通常は1閉輪郭で平板、2断面で曲面板、3断面以上でロフト板。"
         "外形ガイド方式を選んだ場合は、外形2本＋断面1本以上から板を作ります"));
     connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
-    layout->addWidget(wirePlateButton);
+    thicknessBodyLayout->addWidget(wirePlateButton);
 
     auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
     connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
-    layout->addWidget(plateUpdateButton);
+    thicknessBodyLayout->addWidget(plateUpdateButton);
 
     // 板材化後の補助: 投影輪郭を板厚位置へ複製する(旧「厚み位置のワイヤ」タブを
     // 廃止し、厚み化セクションのサブ機能として残す。オーナー指示: 被るタブは消す)。
@@ -1722,7 +1759,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     offsetWireLayout->addWidget(plateOffsetSelectionLabel_);
     offsetWireLayout->addWidget(plateOffsetLayer_);
     offsetWireLayout->addWidget(offsetWireButton);
-    layout->addWidget(offsetWireBox);
+    thicknessBodyLayout->addWidget(offsetWireBox);
 
     auto* revolveTitle = new QLabel(QStringLiteral("回転して面を作る（ろくろ）"));
     revolveTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");

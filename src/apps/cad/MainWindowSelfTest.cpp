@@ -55,6 +55,7 @@
 #include <QPalette>
 #include <QPointer>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollArea>
@@ -673,8 +674,11 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         showTab(2);
-        // 厚み化は押し出しの画面へ統合したので、実機と同じ道具で開く。
+        // 厚み化は押し出しの画面へ統合したので、実機と同じ道具・同じ入口で開く。
         RevealSurfaceGroup(QStringLiteral("押し出し"));
+        if (extrudePurposeThickness_ != nullptr) {
+            extrudePurposeThickness_->setChecked(true);
+        }
         finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateCreate");
         viewport_->SetIsometricView();
@@ -4753,9 +4757,24 @@ bool MainWindow::RunCreationSelfTest()
     // オーナー指示: 厚み化は押し出しへ統合した。押し出しの道具を選ぶと、
     // 厚み化の入力欄も同じ画面に出ていること(別の道具として残っていない)。
     RevealSurfaceGroup(QStringLiteral("押し出し"));
+    QApplication::processEvents();
     if (plateThickness_ == nullptr || extrudeDistance_ == nullptr
-        || plateThickness_->isHidden() || extrudeDistance_->isHidden()) {
-        return fail("thickness controls live inside the extrude tool");
+        || extrudePurposeSweep_ == nullptr || extrudePurposeThickness_ == nullptr) {
+        return fail("the extrude tool has both purposes");
+    }
+    // 入口の二択。初期は「線・面を伸ばす」で、厚みの入力欄は出さない。
+    if (extrudeDistance_->isHidden() || !plateThickness_->isHidden()) {
+        return fail("the extrude tool starts on the sweep purpose");
+    }
+    extrudePurposeThickness_->setChecked(true);
+    QApplication::processEvents();
+    if (plateThickness_->isHidden() || !extrudeDistance_->isHidden()) {
+        return fail("choosing the thickness purpose shows the thickness fields");
+    }
+    extrudePurposeSweep_->setChecked(true);
+    QApplication::processEvents();
+    if (extrudeDistance_->isHidden() || !plateThickness_->isHidden()) {
+        return fail("going back to sweep hides the thickness fields");
     }
     for (QAction* action : surfaceToolActions_) {
         if (action->data().toString() == QStringLiteral("厚み化（ワイヤ・面・板）")) {

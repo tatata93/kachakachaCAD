@@ -29,6 +29,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QRadioButton;
 class QSlider;
 class QSpinBox;
 class QSpinBox;
@@ -669,6 +670,9 @@ private:
     // 統合押し出し(オーナー指示)。
     QCheckBox* extrudeToSurfaceCheck_ = nullptr;   //!< 距離でなく「面まで」
     QComboBox* extrudeTargetSurface_ = nullptr;    //!< 到達面
+    //! 押し出し画面の入口。線・面を伸ばすのか、面に厚みを付けるのか。
+    QRadioButton* extrudePurposeSweep_ = nullptr;
+    QRadioButton* extrudePurposeThickness_ = nullptr;
     QCheckBox* extrudeMakeTipWire_ = nullptr;      //!< 先端のワイヤ
     QCheckBox* extrudeMakeEdges_ = nullptr;        //!< 押し出し方向の稜線(線だけ)
     QCheckBox* extrudeMakeSide_ = nullptr;         //!< 側面(押し出し面)

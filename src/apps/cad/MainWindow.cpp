@@ -55,6 +55,7 @@
 #include <QPalette>
 #include <QPointer>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollArea>

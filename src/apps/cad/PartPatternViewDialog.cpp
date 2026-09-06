@@ -1,5 +1,7 @@
 #include "PartPatternViewDialog.h"
 
+#include "CoreMessageJa.h"
+
 #include "kachakacha/model/PartModel.h"
 
 #include <QFileDialog>
@@ -413,7 +415,7 @@ void PartPatternViewDialog::SaveSvgFiles()
             }
         }
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("保存エラー"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("保存エラー"), TranslateCoreMessage(QString::fromUtf8(error.what())));
         return;
     }
     QMessageBox::information(

@@ -3,6 +3,7 @@
 
 #include "MainWindow.h"
 #include "CollapsibleSection.h"
+#include "CoreMessageJa.h"
 #include "MainWindowUiHelpers.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
@@ -349,7 +350,7 @@ void MainWindow::SelectConnectedSurfaceWireChain()
                 .arg(selectedIndices.size()),
             4500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -743,7 +744,7 @@ bool MainWindow::SplitSelectedWiresAtBranchPoints()
             createdNames.push_back(firstName);
             createdNames.push_back(secondName);
         } catch (const std::exception& error) {
-            warnings << QString::fromUtf8(error.what());
+            warnings << TranslateCoreMessage(QString::fromUtf8(error.what()));
             break;
         }
     }
@@ -1021,7 +1022,7 @@ void MainWindow::UpdateSurfaceCreationPreview()
     } catch (const std::exception& error) {
         viewport_->SetSurfaceCreationPreview(std::nullopt);
         setLabelSuffix(QStringLiteral("この選択では作れません: %1")
-                .arg(QString::fromUtf8(error.what()).section('\n', 0, 0)));
+                .arg(TranslateCoreMessage(QString::fromUtf8(error.what())).section('\n', 0, 0)));
     }
 }
 
@@ -1058,7 +1059,7 @@ void MainWindow::CreateAutoSurfaceFromSelection()
         statusBar()->showMessage(
             QStringLiteral("おまかせで面を作成: %1").arg(ToQString(description)), 6000);
     } catch (const std::exception& error) {
-        const QString message = QString::fromUtf8(error.what());
+        const QString message = TranslateCoreMessage(QString::fromUtf8(error.what()));
         statusBar()->showMessage(message.section('\n', 0, 0), 8000);
         QMessageBox::warning(this, QStringLiteral("おまかせで面を作れません"), message);
     }
@@ -1286,7 +1287,7 @@ void MainWindow::CreateGordonSurfaceFromSelection()
                 .arg(ToQString(name), Number(maximumGap)),
             4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1353,7 +1354,7 @@ void MainWindow::ProjectSelectedWiresToSurface()
         toolsTabs_->setCurrentIndex(2);
         statusBar()->showMessage(QStringLiteral("%1本の平面図ワイヤーを面へ投影しました").arg(createdNames.size()), 4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1580,7 +1581,7 @@ void MainWindow::ProjectSelectedWiresAcrossSurfaces()
                     (void)candidate.RemoveWire(pieceName);
                     skipped << QStringLiteral("%1→%2(%3)")
                         .arg(ToQString(sourceNamed.name), ToQString(surfaceName),
-                            QString::fromUtf8(error.what()).section('\n', 0, 0));
+                            TranslateCoreMessage(QString::fromUtf8(error.what())).section('\n', 0, 0));
                 }
             }
         }
@@ -1608,8 +1609,8 @@ void MainWindow::ProjectSelectedWiresAcrossSurfaces()
         }
         statusBar()->showMessage(message, 8000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 7000);
-        QMessageBox::warning(this, QStringLiteral("回り込み投影"), QString::fromUtf8(error.what()));
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 7000);
+        QMessageBox::warning(this, QStringLiteral("回り込み投影"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -1729,7 +1730,7 @@ void MainWindow::CreateProtrudingLightCase()
                 .arg(targetDisplayName),
             4500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 6500);
     }
 }
 
@@ -2073,7 +2074,7 @@ void MainWindow::CreatePlateOffsetWires()
         statusBar()->showMessage(
             QStringLiteral("板厚位置へ%1本のワイヤーを作成しました").arg(createdNames.size()), 4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 6000);
     }
 }
 
@@ -2114,7 +2115,7 @@ void MainWindow::CreateSurfaceJig()
             : QStringLiteral("造形警告: 厚み %1 mm は必要最小肉厚に不足します").arg(analysis.minimumWallMillimeters, 0, 'f', 2));
         statusBar()->showMessage(QStringLiteral("曲面から成形治具を作成しました"), 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2153,7 +2154,7 @@ void MainWindow::UpdateSelectedBody()
             : QStringLiteral("造形警告: 厚み %1 mm は必要最小肉厚に不足します").arg(analysis.minimumWallMillimeters, 0, 'f', 2));
         statusBar()->showMessage(QStringLiteral("治具の側・隙間・厚みを更新しました"), 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2194,7 +2195,7 @@ void MainWindow::ModifySelectedPlateWires(
         UpdateSelections(selections, true);
         statusBar()->showMessage(successMessageTemplate.arg(wireIndices.size()), 3500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2257,7 +2258,7 @@ void MainWindow::AddSelectedSurfaceOpenings()
                 .arg(picked.wireIndices.size()),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2287,7 +2288,7 @@ void MainWindow::RemoveSelectedSurfaceOpenings()
                 .arg(picked.wireIndices.size()),
             4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2410,7 +2411,7 @@ void MainWindow::SplitSelectedPlate()
             QStringLiteral("板材を%1%の位置で2部品に分割しました").arg(plateSplitPosition_->value()),
             4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2489,7 +2490,7 @@ void MainWindow::AddLaminationToSelectedPlate()
                 .arg(QString::fromStdString(created.front())),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2517,7 +2518,7 @@ void MainWindow::LinkSelectedPlatesAsLaminate()
                 .arg(QString::fromStdString(upperName), QString::fromStdString(baseName)),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2549,7 +2550,7 @@ void MainWindow::ClearSelectedPlateLaminate()
         statusBar()->showMessage(
             QStringLiteral("積層関係を%1件解除しました").arg(cleared), 4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2627,7 +2628,7 @@ void MainWindow::CreateExtrudedSurface()
                 .arg(QString::fromStdString(surfaceName), QString::fromStdString(oppositeName)),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -2786,7 +2787,7 @@ void MainWindow::ExtrudeSelection()
                 extrudeWire(wireName);
             } catch (const std::exception& error) {
                 failures << QStringLiteral("%1: %2")
-                                .arg(ToQString(wireName), QString::fromUtf8(error.what()));
+                                .arg(ToQString(wireName), TranslateCoreMessage(QString::fromUtf8(error.what())));
             }
         }
 
@@ -2883,7 +2884,7 @@ void MainWindow::ExtrudeSelection()
                 }
             } catch (const std::exception& error) {
                 failures << QStringLiteral("%1: %2")
-                                .arg(ToQString(surfaceName), QString::fromUtf8(error.what()));
+                                .arg(ToQString(surfaceName), TranslateCoreMessage(QString::fromUtf8(error.what())));
             }
         }
 
@@ -2907,7 +2908,7 @@ void MainWindow::ExtrudeSelection()
                 failures.join(QStringLiteral("\n")));
         }
     } catch (const std::exception& error) {
-        ReportOperationError(QStringLiteral("押し出し"), QString::fromUtf8(error.what()));
+        ReportOperationError(QStringLiteral("押し出し"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -2968,7 +2969,7 @@ void MainWindow::CreateRevolvedSurface()
                 .arg(sections),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -3035,6 +3036,6 @@ void MainWindow::CreateOffsetSurfaceApproximation()
                 .arg(distance, 0, 'f', 2),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }

@@ -2,6 +2,7 @@
 // MainWindow.cpp から逐語移動(ADR 0018/0022)。
 
 #include "MainWindow.h"
+#include "CoreMessageJa.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
 #include "PartModelPanel.h"
@@ -499,7 +500,7 @@ void MainWindow::UpdateMeasurement(const std::vector<MeasurementPick>& picks)
 
         measurementResultLabel_->setText(QStringLiteral("この組合せは測定できません"));
     } catch (const std::exception& error) {
-        measurementResultLabel_->setText(QString::fromUtf8(error.what()));
+        measurementResultLabel_->setText(TranslateCoreMessage(QString::fromUtf8(error.what())));
         viewport_->SetMeasurementOverlay(std::nullopt, std::nullopt, {});
     }
     UpdateMeasurementWindow();
@@ -611,7 +612,7 @@ void MainWindow::SaveCurrentMeasurement()
         statusBar()->showMessage(
             QStringLiteral("参照寸法を残しました: %1").arg(ToQString(dimension.name)), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("参照寸法"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("参照寸法"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -674,7 +675,7 @@ void MainWindow::RefreshReferenceDimensions()
                 QStringLiteral("%1   [参照切れ]").arg(ToQString(dimension.name)),
                 referenceDimensionList_);
             item->setData(kDimensionNameRole, ToQString(dimension.name));
-            item->setToolTip(QString::fromUtf8(error.what()));
+            item->setToolTip(TranslateCoreMessage(QString::fromUtf8(error.what())));
         }
     }
     referenceDimensionDeleteButton_->setEnabled(referenceDimensionList_->currentRow() >= 0);
@@ -851,7 +852,7 @@ void MainWindow::UpdateMeasurementWindow()
                 break;
             }
         } catch (const std::exception& error) {
-            info = QString::fromUtf8(error.what());
+            info = TranslateCoreMessage(QString::fromUtf8(error.what()));
         }
     } else {
         info = QStringLiteral("線を選択すると、円弧の半径・円周・中心や\n曲線の制御点をここに表示します");
@@ -899,7 +900,7 @@ void MainWindow::CreateCurveCenterPoint()
         statusBar()->showMessage(
             QStringLiteral("中心点「%1」を作成しました").arg(ToQString(name)), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("測定"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("測定"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -946,6 +947,6 @@ void MainWindow::CreateCurveControlPoints()
         statusBar()->showMessage(
             QStringLiteral("制御点に作図点を%1個作成しました").arg(created), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("測定"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("測定"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }

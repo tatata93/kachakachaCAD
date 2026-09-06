@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "Win95Style.h"
 #include "CollapsibleSection.h"
+#include "CoreMessageJa.h"
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
@@ -4582,6 +4583,30 @@ bool MainWindow::RunCreationSelfTest()
     if (toolsTabs_->currentIndex() != 2 || !lightCaseSectionVisible || !createSectionHidden) {
         return fail("surface tool shows only its own section");
     }
+    {
+        // 中核の例外文は英語のまま画面へ出ていた(実機の絵で発見)。
+        // 画面へ出す直前に日本語へ言い換わること。
+        const QString loft = TranslateCoreMessage(
+            QStringLiteral("Projected wire cannot be used as loft section."));
+        if (loft.contains(QStringLiteral("Projected"))
+            || !loft.contains(QStringLiteral("ロフト"))) {
+            return fail("core messages are shown in Japanese");
+        }
+        // 名前を後ろに足す形の文でも、名前は残る。
+        const QString named = TranslateCoreMessage(
+            QStringLiteral("Body name already exists: nose_forming_jig"));
+        if (!named.endsWith(QStringLiteral(": nose_forming_jig"))
+            || named.contains(QStringLiteral("Body name"))) {
+            return fail("core messages keep the object name");
+        }
+        // 最初から日本語の文には手を出さない。
+        const QString japanese = QStringLiteral("面を1つ選んでください。");
+        if (TranslateCoreMessage(japanese) != japanese) {
+            return fail("japanese messages are left alone");
+        }
+    }
+    progressMark("core message translation checked");
+
     // オーナー指示: 厚み化は押し出しへ統合した。押し出しの道具を選ぶと、
     // 厚み化の入力欄も同じ画面に出ていること(別の道具として残っていない)。
     RevealSurfaceGroup(QStringLiteral("押し出し"));

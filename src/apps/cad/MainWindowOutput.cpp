@@ -2,6 +2,7 @@
 // MainWindow.cpp から逐語移動(ADR 0018/0022)。
 
 #include "MainWindow.h"
+#include "CoreMessageJa.h"
 #include "CollapsibleSection.h"
 #include "MainWindowUiHelpers.h"
 #include "PartModelPanel.h"
@@ -312,7 +313,7 @@ void MainWindow::RefreshOutputPreview()
             outputPreviewDialog_->SetMesh(std::move(mesh));
         }
     } catch (const std::exception& error) {
-        outputSetSummary_->setText(QString::fromUtf8(error.what()));
+        outputSetSummary_->setText(TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -335,7 +336,7 @@ void MainWindow::ShowOutputPreviewWindow()
             kachakacha::io::BuildOutputMesh(project_, outputItems_, options));
     } catch (const std::exception& error) {
         ReportOperationError(QStringLiteral("3Dモデルを出力する"),
-            QString::fromUtf8(error.what()));
+            TranslateCoreMessage(QString::fromUtf8(error.what())));
         return;
     }
     outputPreviewDialog_->show();
@@ -429,7 +430,7 @@ void MainWindow::ExportOutputSet(int format)
         statusBar()->showMessage(
             QStringLiteral("出力しました: %1").arg(path), 6000);
     } catch (const std::exception& error) {
-        ReportOperationError(QStringLiteral("出力"), QString::fromUtf8(error.what()));
+        ReportOperationError(QStringLiteral("出力"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -969,7 +970,7 @@ bool MainWindow::ExportFirstBodyForAutomation(const QString& stlPath, const QStr
         return true;
     } catch (const std::exception& error) {
         statusBar()->showMessage(
-            QStringLiteral("治具の自動出力に失敗しました: %1").arg(QString::fromUtf8(error.what())),
+            QStringLiteral("治具の自動出力に失敗しました: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))),
             8000);
         return false;
     }
@@ -1038,7 +1039,7 @@ void MainWindow::ExportPlanar(bool dxf)
         exportSummary_->setText(QStringLiteral("%1本を保存: %2").arg(wires.size()).arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("1:1図面を保存しました: %1").arg(path), 5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1147,9 +1148,9 @@ void MainWindow::ExportSelectedBody(bool step)
     } catch (const std::exception& error) {
         if (bodyExportSummary_ != nullptr) {
             bodyExportSummary_->setStyleSheet("color: #a32734;");
-            bodyExportSummary_->setText(QStringLiteral("3D出力不可: %1").arg(QString::fromUtf8(error.what())));
+            bodyExportSummary_->setText(QStringLiteral("3D出力不可: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))));
         }
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1423,7 +1424,7 @@ void MainWindow::ExportSelectedPlate(bool dxf)
                 .arg(QFileInfo(path).fileName()));
         statusBar()->showMessage(QStringLiteral("板材の1:1展開図を保存しました: %1").arg(path), 5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1474,7 +1475,7 @@ void MainWindow::ExportSelectedPlatePdf()
                 .arg(pdfLayout.PageCount()),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1548,8 +1549,8 @@ void MainWindow::CreateSelectedPlateFlatPatternModel()
     } catch (const std::exception& error) {
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(QStringLiteral("展開部材を作成できません: %1")
-            .arg(QString::fromUtf8(error.what())));
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+            .arg(TranslateCoreMessage(QString::fromUtf8(error.what()))));
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1620,8 +1621,8 @@ void MainWindow::CreatePlateAssemblyStateModel()
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(
             QStringLiteral("曲げ状態を3Dモデル化できません: %1")
-                .arg(QString::fromUtf8(error.what())));
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+                .arg(TranslateCoreMessage(QString::fromUtf8(error.what()))));
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1698,8 +1699,8 @@ void MainWindow::ExportPlateAssemblyState(bool step)
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
         plateFlatPatternSummary_->setText(
             QStringLiteral("曲げ状態を出力できません: %1")
-                .arg(QString::fromUtf8(error.what())));
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+                .arg(TranslateCoreMessage(QString::fromUtf8(error.what()))));
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1923,7 +1924,7 @@ void MainWindow::RefreshExportSummary()
         refreshAssemblyPieceChoices(0);
         UpdatePlateAssemblyGuidePreview();
         plateFlatPatternSummary_->setStyleSheet("color: #a32734;");
-        plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(QString::fromUtf8(error.what())));
+        plateFlatPatternSummary_->setText(QStringLiteral("展開不可: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))));
     }
 }
 
@@ -1996,7 +1997,7 @@ void MainWindow::ExportProjectExcludingSets()
                     progress = true;
                 } catch (const std::exception& error) {
                     blockers.push_back(QStringLiteral("%1: %2")
-                            .arg(ToQString(member->name), QString::fromUtf8(error.what())));
+                            .arg(ToQString(member->name), TranslateCoreMessage(QString::fromUtf8(error.what()))));
                     ++member;
                 }
             }
@@ -2044,6 +2045,6 @@ void MainWindow::ExportProjectExcludingSets()
             5000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this, QStringLiteral(".kcd書き出し"),
-            QString::fromUtf8(error.what()));
+            TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }

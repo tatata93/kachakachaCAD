@@ -204,6 +204,8 @@ if(KACHACAD_BUILD_QT_APP)
                 src/apps/cad/CadViewport.h
                 src/apps/cad/CollapsibleSection.cpp
                 src/apps/cad/CollapsibleSection.h
+                src/apps/cad/CoreMessageJa.cpp
+                src/apps/cad/CoreMessageJa.h
                 src/apps/cad/MainWindow.cpp
                 src/apps/cad/MainWindow.h
                 src/apps/cad/MainWindowMeasure.cpp

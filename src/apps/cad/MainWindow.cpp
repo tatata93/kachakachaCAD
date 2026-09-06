@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "Win95Style.h"
 #include "CollapsibleSection.h"
+#include "CoreMessageJa.h"
 #include "MainWindowUiHelpers.h"
 #include "ModelTreeWidget.h"
 #include "PartModelPanel.h"
@@ -1594,7 +1595,7 @@ void MainWindow::SetActiveGroupByName(const std::string& name)
                       .arg(ToQString(name)),
             4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1820,9 +1821,9 @@ bool MainWindow::LoadProjectFile(const QString& path)
         return true;
     } catch (const std::exception& error) {
         if (IsAutomationInvocation()) {
-            qWarning() << "project load failed:" << QString::fromUtf8(error.what());
+            qWarning() << "project load failed:" << TranslateCoreMessage(QString::fromUtf8(error.what()));
         } else {
-            QMessageBox::critical(this, QStringLiteral("読み込みエラー"), QString::fromUtf8(error.what()));
+            QMessageBox::critical(this, QStringLiteral("読み込みエラー"), TranslateCoreMessage(QString::fromUtf8(error.what())));
         }
         return false;
     }
@@ -1870,7 +1871,7 @@ bool MainWindow::SaveProjectFile(const QString& path)
         statusBar()->showMessage(QStringLiteral("保存しました: %1").arg(path), 4000);
         return true;
     } catch (const std::exception& error) {
-        QMessageBox::critical(this, QStringLiteral("保存エラー"), QString::fromUtf8(error.what()));
+        QMessageBox::critical(this, QStringLiteral("保存エラー"), TranslateCoreMessage(QString::fromUtf8(error.what())));
         return false;
     }
 }
@@ -2700,7 +2701,7 @@ void MainWindow::CommitDrawingDimensions()
             committed = viewport_->CommitDrawingDimensions(drawingRadiusField_->value());
         }
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4500);
     }
 
     if (!committed) {
@@ -2820,7 +2821,7 @@ void MainWindow::AddViewportPoint(Vector3 point)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("作図点を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2842,7 +2843,7 @@ void MainWindow::AddViewportLine(Vector3 start, Vector3 end)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("直線を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2864,7 +2865,7 @@ void MainWindow::AddViewportPolyline(const std::vector<Vector3>& points)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("ポリラインを作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2886,7 +2887,7 @@ void MainWindow::AddViewportRectangle(const std::array<Vector3, 4>& corners)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("矩形を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2909,7 +2910,7 @@ void MainWindow::AddViewportCircle(Vector3 center, double radius)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("円を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2931,7 +2932,7 @@ void MainWindow::AddViewportArc(Vector3 start, Vector3 through, Vector3 end)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("3点円弧を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -2955,7 +2956,7 @@ void MainWindow::AddViewportArcWire(const Wire& arc)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("指定した半径・方向で円弧を作成しました"), 2200);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4500);
     }
 }
 
@@ -2979,7 +2980,7 @@ void MainWindow::AddViewportBezier(const std::array<Vector3, 4>& points)
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("ベジェ曲線を作成しました"), 1800);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 3500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 3500);
     }
 }
 
@@ -3004,7 +3005,7 @@ void MainWindow::AddViewportSpline(const std::vector<Vector3>& throughPoints)
         statusBar()->showMessage(
             QStringLiteral("%1点を通るスプラインを作成しました").arg(throughPoints.size()), 2200);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -3055,7 +3056,7 @@ void MainWindow::ApplyViewportWireEdit(int wireIndex, const Wire& replacement)
         UpdateSelections(selections, true);
         statusBar()->showMessage(QStringLiteral("点またはハンドルを移動しました（元に戻す: Ctrl+Z）"), 2500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -3139,7 +3140,7 @@ void MainWindow::ApplyViewportTranslation(Vector3 delta, bool copy)
                  : QStringLiteral("%1本のワイヤーを移動しました").arg(sources.size()),
             2500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -3312,7 +3313,7 @@ void MainWindow::MoveObjectsBy(
                 .arg(delta.z),
             3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 8000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 8000);
     }
 }
 
@@ -3362,7 +3363,7 @@ void MainWindow::RotateObjectsBy(
                 .arg(angleRadians * 180.0 / kPi, 0, 'f', 1),
             3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 8000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 8000);
     }
 }
 
@@ -3416,7 +3417,7 @@ void MainWindow::ApplyViewportMirror(Vector3 linePoint, Vector3 lineDirection, V
         UpdateSelections(std::move(resultingSelections), true);
         statusBar()->showMessage(QStringLiteral("%1本のワイヤーをミラー複製しました").arg(sources.size()), 2500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -3492,7 +3493,7 @@ void MainWindow::ApplyViewportRotation(Vector3 axisPoint, Vector3 axisDirection,
                 .arg(angleRadians * 180.0 / kPi, 0, 'f', 2),
             3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -3537,7 +3538,7 @@ void MainWindow::ApplySplitWire(int wireIndex, double parameter)
         }, true);
         statusBar()->showMessage(QStringLiteral("ワイヤーを2本に分割しました"), 3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4500);
     }
 }
 
@@ -3611,7 +3612,7 @@ void MainWindow::ApplyDirectLineTrim(int wireIndex, double parameter)
                 : QStringLiteral("指定した中間部分を削除し、曲線を2本に分けました"),
             3500);
     } catch (const std::exception& error) {
-        QString message = QString::fromUtf8(error.what());
+        QString message = TranslateCoreMessage(QString::fromUtf8(error.what()));
         if (message.contains(QStringLiteral("No visible wire boundary"))) {
             message = QStringLiteral("この部分を区切る表示中の線・曲線がありません。");
         } else if (message.contains(QStringLiteral("complete target wire"))) {
@@ -3660,7 +3661,7 @@ void MainWindow::ApplyDirectLineExtend(int wireIndex, double parameter)
         UpdateSelection({CadSelectionKind::Wire, wireIndex}, true);
         statusBar()->showMessage(QStringLiteral("ワイヤーを最初の境界まで延長しました"), 3500);
     } catch (const std::exception& error) {
-        QString message = QString::fromUtf8(error.what());
+        QString message = TranslateCoreMessage(QString::fromUtf8(error.what()));
         if (message.contains(QStringLiteral("No visible wire boundary"))) {
             message = QStringLiteral("選んだ端の先に交わる表示中の線・曲線がありません。");
         }
@@ -3706,7 +3707,7 @@ void MainWindow::ApplyEndpointCoincidence(WireEndpointPick anchor, WireEndpointP
             4500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(
-            QStringLiteral("端点一致を適用できません: %1").arg(QString::fromUtf8(error.what())),
+            QStringLiteral("端点一致を適用できません: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))),
             6000);
     }
 }
@@ -3786,7 +3787,7 @@ void MainWindow::ApplyEndpointContinuity(
             4500);
     } catch (const std::exception& error) {
         statusBar()->showMessage(
-            QStringLiteral("滑らか接続を適用できません: %1").arg(QString::fromUtf8(error.what())),
+            QStringLiteral("滑らか接続を適用できません: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))),
             6000);
     }
 }
@@ -3924,7 +3925,7 @@ void MainWindow::JoinSelectedWires()
         UpdateSelection({CadSelectionKind::Wire, joinedIndex}, true);
         statusBar()->showMessage(QStringLiteral("%1本を1本のポリラインに結合しました").arg(sources.size()), 3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4500);
     }
 }
 
@@ -4039,7 +4040,7 @@ void MainWindow::ApplyWireOffset()
                 .arg(std::abs(distance), 0, 'f', 3),
             3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4500);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4500);
     }
 }
 
@@ -4079,7 +4080,7 @@ void MainWindow::ApplyMeetSelectedLines()
         }, true);
         statusBar()->showMessage(QStringLiteral("2本の直線を交点までトリム・延長しました"), 3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 4000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 4000);
     }
 }
 
@@ -4332,7 +4333,7 @@ void MainWindow::AlignViewportFromPlaneInputs()
         viewport_->AlignToWorkPlane(WorkPlaneFromInputs());
         statusBar()->showMessage(QStringLiteral("作業平面を作らず、この向きへ正対しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("この向きで表示できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("この向きで表示できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4353,7 +4354,7 @@ void MainWindow::AddWorkPlane()
         planeName_->setText(SuggestedPlaneName());
         statusBar()->showMessage(QStringLiteral("作業平面を追加しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("作業平面を作成できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("作業平面を作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4452,7 +4453,7 @@ void MainWindow::AddWire()
         wireName_->setText(SuggestedWireName());
         statusBar()->showMessage(QStringLiteral("ワイヤーを追加しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("ワイヤーを作成できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("ワイヤーを作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4566,7 +4567,7 @@ void MainWindow::ApplySelectedEdit()
         UpdateSelection(selection, true);
         statusBar()->showMessage(QStringLiteral("数値変更を適用しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("変更を適用できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("変更を適用できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4629,7 +4630,7 @@ void MainWindow::ApplyLineChamfer()
         chamferName_->setText(SuggestedChamferName());
         statusBar()->showMessage(QStringLiteral("C面取りを作成しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("C面取りを作成できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("C面取りを作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4691,7 +4692,7 @@ void MainWindow::ApplyLineFillet()
         chamferName_->setText(SuggestedFilletName());
         statusBar()->showMessage(QStringLiteral("R丸めを作成しました"), 3000);
     } catch (const std::exception& error) {
-        QMessageBox::warning(this, QStringLiteral("R丸めを作成できません"), QString::fromUtf8(error.what()));
+        QMessageBox::warning(this, QStringLiteral("R丸めを作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -4791,7 +4792,7 @@ void MainWindow::HandleCornerPairPicked(
         statusBar()->showMessage(
             QStringLiteral("このペアは%1できません: %2")
                 .arg(cornerToolFillet_ ? QStringLiteral("丸め") : QStringLiteral("面取り"))
-                .arg(QString::fromUtf8(error.what())), 6000);
+                .arg(TranslateCoreMessage(QString::fromUtf8(error.what()))), 6000);
         return;
     }
     cornerToolPairs_.push_back({firstWire, firstParameter, secondWire, secondParameter});
@@ -4909,7 +4910,7 @@ void MainWindow::ApplyCornerToolPairs()
             }
             ++created;
         } catch (const std::exception& error) {
-            errors << QString::fromUtf8(error.what());
+            errors << TranslateCoreMessage(QString::fromUtf8(error.what()));
         }
     }
     if (created == 0) {
@@ -4971,7 +4972,7 @@ void MainWindow::ApplyPolylineCornerEdit()
             3000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this,
-            QStringLiteral("角を加工できません"), QString::fromUtf8(error.what()));
+            QStringLiteral("角を加工できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -5026,7 +5027,7 @@ void MainWindow::CreateIntersectionPoints()
             4000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this,
-            QStringLiteral("交点を作成できません"), QString::fromUtf8(error.what()));
+            QStringLiteral("交点を作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -5064,7 +5065,7 @@ void MainWindow::CreateLineBetweenSelectedPoints()
             4000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this,
-            QStringLiteral("線を作成できません"), QString::fromUtf8(error.what()));
+            QStringLiteral("線を作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -5088,7 +5089,7 @@ void MainWindow::CreateLineBetweenPickedPoints(Vector3 first, Vector3 second)
             4000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this,
-            QStringLiteral("線を作成できません"), QString::fromUtf8(error.what()));
+            QStringLiteral("線を作成できません"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -5317,7 +5318,7 @@ void MainWindow::DeleteSelection()
         RefreshModelViews(false);
         statusBar()->showMessage(QStringLiteral("削除しました: %1").arg(name), 3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -5575,7 +5576,7 @@ void MainWindow::ShowModelTreeContextMenu(const QPoint& position)
             return name;
         } catch (const std::exception& error) {
             QMessageBox::warning(this, QStringLiteral("部材グループ"),
-                QString::fromUtf8(error.what()));
+                TranslateCoreMessage(QString::fromUtf8(error.what())));
             return std::nullopt;
         }
     };
@@ -5871,7 +5872,7 @@ void MainWindow::RenameModelTreeItem(QTreeWidgetItem* item)
                 .arg(ToQString(*currentName), ToQString(newName)), 4000);
     } catch (const std::exception& error) {
         QMessageBox::warning(this, QStringLiteral("名前を変更"),
-            QString::fromUtf8(error.what()));
+            TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 
@@ -5999,7 +6000,7 @@ bool MainWindow::HandleModelTreeDrop(
         try {
             project_.SetObjectSetParent(setName, targetSet.value_or(std::string()));
         } catch (const std::exception& error) {
-            problems << QString::fromUtf8(error.what());
+            problems << TranslateCoreMessage(QString::fromUtf8(error.what()));
         }
     }
     for (const auto& [kind, name] : draggedObjects) {
@@ -6010,7 +6011,7 @@ bool MainWindow::HandleModelTreeDrop(
                 project_.RemoveObjectFromSets(kind, name);
             }
         } catch (const std::exception& error) {
-            problems << QString::fromUtf8(error.what());
+            problems << TranslateCoreMessage(QString::fromUtf8(error.what()));
         }
     }
     MarkModified();
@@ -7236,7 +7237,7 @@ void MainWindow::WriteAutosave()
         statusBar()->showMessage(QStringLiteral("自動保存しました"), 1600);
     } catch (const std::exception& error) {
         statusBar()->showMessage(
-            QStringLiteral("自動保存に失敗しました: %1").arg(QString::fromUtf8(error.what())), 5000);
+            QStringLiteral("自動保存に失敗しました: %1").arg(TranslateCoreMessage(QString::fromUtf8(error.what()))), 5000);
     }
 }
 
@@ -7279,7 +7280,7 @@ void MainWindow::OfferAutosaveRecovery()
         setWindowTitle(QStringLiteral("kachakachaCAD - 復元した未保存作業 *"));
         statusBar()->showMessage(QStringLiteral("自動保存から作業を復元しました"), 5000);
     } catch (const std::exception& error) {
-        QMessageBox::critical(this, QStringLiteral("復元エラー"), QString::fromUtf8(error.what()));
+        QMessageBox::critical(this, QStringLiteral("復元エラー"), TranslateCoreMessage(QString::fromUtf8(error.what())));
     }
 }
 

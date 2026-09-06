@@ -3,6 +3,7 @@
 // (ADR 0018: MainWindow.cpp を太らせない)。
 
 #include "MainWindow.h"
+#include "CoreMessageJa.h"
 #include "CadViewport.h"
 #include "PartModelPanel.h"
 #include "PartPatternViewDialog.h"
@@ -167,7 +168,7 @@ void MainWindow::CreatePartModelFromPanel()
                         : QString()),
             6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -356,7 +357,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
             } catch (const std::exception& error) {
                 failures << QStringLiteral("%1: %2")
                     .arg(ToQString(target.name))
-                    .arg(QString::fromUtf8(error.what()));
+                    .arg(TranslateCoreMessage(QString::fromUtf8(error.what())));
                 modelNames.push_back(std::string());
             }
         }
@@ -487,7 +488,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
             } catch (const std::exception& error) {
                 scopeWarnings << QStringLiteral("接続 %1: %2")
                     .arg(ToQString(modelNames[index]))
-                    .arg(QString::fromUtf8(error.what()));
+                    .arg(TranslateCoreMessage(QString::fromUtf8(error.what())));
                 continue;
             }
             const auto model = std::find_if(
@@ -578,9 +579,9 @@ void MainWindow::CreateApproximationUnitFromPanel()
     } catch (const std::exception& error) {
         // 失敗理由を見逃さないよう、パネルにも常設表示する(オーナー報告対策)。
         if (partModelPanel_ != nullptr) {
-            partModelPanel_->SetUnitResult(QString::fromUtf8(error.what()), true);
+            partModelPanel_->SetUnitResult(TranslateCoreMessage(QString::fromUtf8(error.what())), true);
         }
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 12000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 12000);
     }
 }
 
@@ -601,7 +602,7 @@ void MainWindow::RecalculateSelectedPartModel()
         statusBar()->showMessage(
             QStringLiteral("部材近似モデル %1 を再計算しました").arg(ToQString(name)), 4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -624,7 +625,7 @@ void MainWindow::RemoveSelectedPartModel()
         statusBar()->showMessage(
             QStringLiteral("部材近似モデル %1 を削除しました").arg(ToQString(name)), 4000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -651,7 +652,7 @@ void MainWindow::ExtractSelectedPartModelBoundaries()
                 .arg(ToQString(name)),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -700,7 +701,7 @@ void MainWindow::ShowSelectedPartPatterns()
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         dialog->show();
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 6000);
     }
 }
 
@@ -731,7 +732,7 @@ void MainWindow::SetApproximationSetsVisible(bool visible)
                     : QStringLiteral("完成品のみ: 部材境界を隠しました"),
             3000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -750,7 +751,7 @@ void MainWindow::ChangeSelectedSetState(int state)
         MarkModified();
         RefreshModelViews(false);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -944,7 +945,7 @@ void MainWindow::CreatePlateFromSelectedPart()
                 .arg(parts.join(QStringLiteral("、"))),
             5000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -995,7 +996,7 @@ void MainWindow::EditSelectedPartOpening(bool add)
                     ++edited;
                 } catch (const std::exception& error) {
                     errors << QStringLiteral("%1: %2").arg(ToQString(wire->name),
-                        QString::fromUtf8(error.what()).section('\n', 0, 0));
+                        TranslateCoreMessage(QString::fromUtf8(error.what())).section('\n', 0, 0));
                 }
             }
         } else {
@@ -1005,7 +1006,7 @@ void MainWindow::EditSelectedPartOpening(bool add)
                     ++edited;
                 } catch (const std::exception& error) {
                     errors << QStringLiteral("%1: %2").arg(ToQString(wire->name),
-                        QString::fromUtf8(error.what()).section('\n', 0, 0));
+                        TranslateCoreMessage(QString::fromUtf8(error.what())).section('\n', 0, 0));
                 }
             }
         }
@@ -1026,7 +1027,7 @@ void MainWindow::EditSelectedPartOpening(bool add)
         }
         statusBar()->showMessage(message, 6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 6000);
     }
 }
 
@@ -1141,7 +1142,7 @@ void MainWindow::PickPartBoundariesFromSelectedWires()
                 .arg(worstDistance, 0, 'f', 2),
             6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1178,7 +1179,7 @@ void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
         RefreshModelViews(false);
         UpdatePartFoldPreview();
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1228,7 +1229,7 @@ void MainWindow::CommitPartAssemblyProgress(double progress)
                       .arg(static_cast<int>(progress * 100.0 + 0.5)),
             2500);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 6000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 6000);
     }
 }
 
@@ -1366,7 +1367,7 @@ void MainWindow::UpdatePartFoldPreview()
             std::move(bandRails), mesh.creaseDirections, std::move(visibleBands), true);
     } catch (const std::exception& error) {
         viewport_->SetPartFoldPreview({}, {});
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1457,7 +1458,7 @@ void MainWindow::RealizePartFoldState()
                               .arg(result.outlineWireNames.size())),
             6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1521,7 +1522,7 @@ void MainWindow::ExportPartFoldMesh(bool step)
                 .arg(result.openingWireNames.size()),
             6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }
 
@@ -1577,6 +1578,6 @@ void MainWindow::ExportPartFoldKcd()
                 .arg(result.plateNames.size()),
             6000);
     } catch (const std::exception& error) {
-        statusBar()->showMessage(QString::fromUtf8(error.what()), 5000);
+        statusBar()->showMessage(TranslateCoreMessage(QString::fromUtf8(error.what())), 5000);
     }
 }

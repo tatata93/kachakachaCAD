@@ -748,6 +748,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         plateFlatPatternAutoRelief_->setChecked(true);
+        plateFlatPatternShowDetails_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
         plateFlatPatternFidelity_->setValue(10);
         plateAssemblyProgress_->setValue(45);
@@ -762,6 +763,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         plateFlatPatternAutoRelief_->setChecked(true);
+        plateFlatPatternShowDetails_->setChecked(true);
         plateFlatPatternCutDirection_->setCurrentIndex(2);
         plateAssemblyProgress_->setValue(100);
         showTab(3, 0.72);
@@ -1105,6 +1107,7 @@ bool MainWindow::RunCreationSelfTest()
         || toolsTabs_->tabText(5) != QStringLiteral("情報")
         || activePlaneCombo_->count() == 0
         || plateFlatPatternSummary_ == nullptr
+        || plateFlatPatternShowDetails_ == nullptr
         || plateAssemblyGuidePreview_ == nullptr
         || plateAssemblyApproximationPreview_ == nullptr
         || platePdfPaper_ == nullptr

@@ -716,6 +716,8 @@ private:
     QLineEdit* plateFlatPatternName_ = nullptr;
     QComboBox* plateFlatPatternPlane_ = nullptr;
     QCheckBox* plateFlatPatternAutoRelief_ = nullptr;
+    //! 切れ目・折り目・組立途中の詳しい設定を出すか(既定は出さない)。
+    QCheckBox* plateFlatPatternShowDetails_ = nullptr;
     QComboBox* plateFlatPatternAssemblyStrategy_ = nullptr;
     QComboBox* plateFlatPatternCutDirection_ = nullptr;
     QCheckBox* plateFlatPatternAllowNotches_ = nullptr;

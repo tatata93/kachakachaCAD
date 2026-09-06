@@ -2597,8 +2597,8 @@ void MainWindow::RefreshBeginnerGuide()
                                "2  方向（法線=自動 / X・Y・Z）と距離、または到達面を決める\n"
                                "3  作るもの（先端の線・稜線・側面・ふた・底・板材）をチェック\n"
                                "4  「押し出す」。面を選べば厚み化・オフセット面と同じ結果になる\n"
-                               "※ 可変厚み・厚み方向・材質を細かく決めたいときは"
-                               "同じ画面の下「厚み化」を使う"),
+                               "※ 面に板厚を付けたいだけなら、画面の先頭で"
+                               "「面に厚みを付ける」を選ぶ"),
                 QStringLiteral("extrude"));
         } else if (sectionTitle == QStringLiteral("回転して面を作る（ろくろ）")) {
             setGuide(QStringLiteral("断面を回して面を作る"),

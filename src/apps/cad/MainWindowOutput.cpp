@@ -484,8 +484,20 @@ QWidget* MainWindow::BuildOutputPanel()
     plateFlatPatternSummary_->setStyleSheet("color: #5c6670;");
     plateLayout->addWidget(plateFlatPatternSummary_);
 
+    auto* plateHint = new QLabel(QStringLiteral(
+        "3D画面で展開したい板材を1枚選び、用紙を決めて「1:1 PDFを保存」。\n"
+        "切れ目・折り目・組立途中の3D確認は、必要になってから下の詳細を開きます。"));
+    plateHint->setWordWrap(true);
+    plateHint->setStyleSheet("color: #4a5a63;");
+    plateLayout->addWidget(plateHint);
+
     auto* flatModelForm = new QFormLayout;
     flatModelForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    plateFlatPatternShowDetails_ = new QCheckBox(
+        QStringLiteral("切れ目・折り目・組立途中の詳しい設定を出す"));
+    plateFlatPatternShowDetails_->setToolTip(QStringLiteral(
+        "普段は触らなくて構いません。うまく展開できないときや、\n"
+        "組み立てやすさを細かく調整したいときに開きます"));
     plateFlatPatternName_ = new QLineEdit(QStringLiteral("developed_1"));
     plateFlatPatternPlane_ = new QComboBox;
     plateFlatPatternAutoRelief_ = new QCheckBox(
@@ -623,7 +635,8 @@ QWidget* MainWindow::BuildOutputPanel()
     flatModelForm->addRow(plateFlatPatternAutoRelief_);
     flatModelForm->addRow(QStringLiteral("組み立て方"), plateFlatPatternAssemblyStrategy_);
     flatModelForm->addRow(QStringLiteral("切れ目の方向"), plateFlatPatternCutDirection_);
-    flatModelForm->addRow(QStringLiteral("立体再現度"), fidelityControl);
+    flatModelForm->addRow(QStringLiteral("形の忠実さ"), fidelityControl);
+    flatModelForm->addRow(plateFlatPatternShowDetails_);
     flatModelForm->addRow(plateFlatPatternAllowNotches_);
     flatModelForm->addRow(QStringLiteral("切れ込み形状"), plateFlatPatternNotchStyle_);
     flatModelForm->addRow(plateFlatPatternAdvancedSpacing_);
@@ -704,8 +717,11 @@ QWidget* MainWindow::BuildOutputPanel()
     connect(platePdfPaper_, &QComboBox::currentIndexChanged, this, [this] { RefreshExportSummary(); });
     connect(platePdfOverlap_, &QDoubleSpinBox::valueChanged, this, [this] { RefreshExportSummary(); });
     const auto updateReliefControls = [this, fidelityControl, assemblyProgressControl,
-                                       flatModelForm] {
+                                       flatModelForm, assemblyModelButton, assemblyExportRow] {
         const bool enabled = plateFlatPatternAutoRelief_->isChecked();
+        // 詳しい設定は既定で隠す(Codexレビュー#8: 初回に必要なのは
+        // 「板材を1枚選ぶ→用紙→1:1 PDF」だけ)。
+        const bool details = plateFlatPatternShowDetails_->isChecked();
         const bool allowNotches = enabled && plateFlatPatternAllowNotches_->isChecked();
         const ReliefNotchStyle notchStyle = static_cast<ReliefNotchStyle>(
             plateFlatPatternNotchStyle_->currentData().toInt());
@@ -726,17 +742,29 @@ QWidget* MainWindow::BuildOutputPanel()
         assemblyProgressControl->setEnabled(enabled);
         plateAssemblyOutputPiece_->setEnabled(enabled);
         flatModelForm->setRowVisible(fidelityControl, enabled);
-        flatModelForm->setRowVisible(plateFlatPatternAllowNotches_, enabled);
-        flatModelForm->setRowVisible(plateFlatPatternNotchStyle_, allowNotches);
-        flatModelForm->setRowVisible(plateFlatPatternAdvancedSpacing_, enabled);
-        flatModelForm->setRowVisible(plateFlatPatternReliefSpacing_, allowNotches && advancedSpacing);
-        flatModelForm->setRowVisible(plateFlatPatternReliefDepth_, allowNotches);
-        flatModelForm->setRowVisible(plateFlatPatternNotchAngle_, allowNotches);
-        flatModelForm->setRowVisible(plateFlatPatternNotchCurveStrength_, allowNotches && curved);
-        flatModelForm->setRowVisible(plateFlatPatternMinimumBendAngle_, enabled);
-        flatModelForm->setRowVisible(plateFlatPatternFoldSpacing_, advancedSpacing);
+        flatModelForm->setRowVisible(plateFlatPatternCutDirection_, details && enabled);
+        flatModelForm->setRowVisible(plateFlatPatternAllowNotches_, details && enabled);
+        flatModelForm->setRowVisible(plateFlatPatternNotchStyle_, details && allowNotches);
+        flatModelForm->setRowVisible(plateFlatPatternAdvancedSpacing_, details && enabled);
+        flatModelForm->setRowVisible(
+            plateFlatPatternReliefSpacing_, details && allowNotches && advancedSpacing);
+        flatModelForm->setRowVisible(plateFlatPatternReliefDepth_, details && allowNotches);
+        flatModelForm->setRowVisible(plateFlatPatternNotchAngle_, details && allowNotches);
+        flatModelForm->setRowVisible(
+            plateFlatPatternNotchCurveStrength_, details && allowNotches && curved);
+        flatModelForm->setRowVisible(plateFlatPatternMinimumBendAngle_, details && enabled);
+        flatModelForm->setRowVisible(plateFlatPatternFoldSpacing_, details && advancedSpacing);
+        flatModelForm->setRowVisible(plateAssemblyGuidePreview_, details);
+        flatModelForm->setRowVisible(plateAssemblyApproximationPreview_, details);
+        flatModelForm->setRowVisible(assemblyProgressControl, details);
+        flatModelForm->setRowVisible(plateAssemblyOutputPiece_, details && enabled);
+        flatModelForm->setRowVisible(plateFlatPatternCutWidth_, details);
+        assemblyModelButton->setVisible(details);
+        assemblyExportRow->setVisible(details);
         RefreshExportSummary();
     };
+    connect(plateFlatPatternShowDetails_, &QCheckBox::toggled, this,
+        [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAutoRelief_, &QCheckBox::toggled, this,
         [updateReliefControls] { updateReliefControls(); });
     connect(plateFlatPatternAssemblyStrategy_, &QComboBox::currentIndexChanged, this,

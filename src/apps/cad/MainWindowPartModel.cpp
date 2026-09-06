@@ -195,12 +195,13 @@ void MainWindow::CollectUnitMembersFromSelection()
     }
     if (members.empty()) {
         statusBar()->showMessage(QStringLiteral(
-            "3D画面で近似したい部品周辺の面・板材・ワイヤーを選んでから押してください"), 4500);
+            "3D画面で、部材にしたい面・板材(と、つなぎたい周りの線)を選んでから押してください"), 4500);
         return;
     }
     partModelPanel_->AddUnitMembers(members);
     statusBar()->showMessage(QStringLiteral(
-        "%1件を表へ取り込みました。各行の役割（近似する / 形状維持 / 対象外）を確認してください")
+        "%1件を表へ入れました。行ごとの役割（板に分ける / 形を変えずつなぐ / 使わない）"
+        "を確かめてください")
             .arg(members.size()), 5000);
 }
 
@@ -252,7 +253,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
         }
         if (targets.empty()) {
             throw std::invalid_argument(
-                "「近似する」役割の面または板材を表に1つ以上入れてください。");
+                "「板に分ける」にした面または板材を、表に1つ以上入れてください。");
         }
         const PartApproximationOptions options = partModelPanel_->CurrentOptions();
 
@@ -528,30 +529,31 @@ void MainWindow::CreateApproximationUnitFromPanel()
                 .arg(targets[index].partNumber).arg(ToQString(targets[index].name));
         }
         QString message = QStringLiteral(
-            "ユニット %1: 近似モデル%2件を作成しました（%3）")
+            "%1: 部材モデルを%2件作りました（%3）")
                 .arg(ToQString(unitName)).arg(createdCount)
                 .arg(assignments.join(QStringLiteral("、")));
         if (adaptedTotal > 0) {
-            message += QStringLiteral("、接続用に%1個を自動変形").arg(adaptedTotal);
+            message += QStringLiteral("。つなぐために%1個を形を変えずに合わせました")
+                           .arg(adaptedTotal);
         }
         if (autoOpenings > 0) {
-            message += QStringLiteral("、開口%1件を自動で写しました").arg(autoOpenings);
+            message += QStringLiteral("。窓・穴%1件を自動で写しました").arg(autoOpenings);
         }
         if (!ignored.isEmpty()) {
-            message += QStringLiteral("（対象外にした行: %1）")
+            message += QStringLiteral("（使わなかった行: %1）")
                 .arg(ignored.join(QStringLiteral("、")));
         }
         QString detail = message;
         if (!failures.isEmpty()) {
-            detail += QStringLiteral("\n近似できなかった面: %1")
+            detail += QStringLiteral("\n部材にできなかった面: %1")
                 .arg(failures.join(QStringLiteral(" / ")));
         }
         if (!scopeWarnings.isEmpty()) {
-            detail += QStringLiteral("\n接続の注意: %1")
+            detail += QStringLiteral("\nつなぎ方の注意: %1")
                 .arg(scopeWarnings.join(QStringLiteral(" / ")));
         }
         if (!unassignedScope.isEmpty()) {
-            detail += QStringLiteral("\n位置を測れず接続できなかったもの: %1")
+            detail += QStringLiteral("\n位置が測れずつなげなかったもの: %1")
                 .arg(unassignedScope.join(QStringLiteral(" / ")));
         }
         partModelPanel_->SetUnitResult(detail, !failures.isEmpty());

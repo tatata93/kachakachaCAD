@@ -1,5 +1,6 @@
 #include "Win95Style.h"
 
+#include <QAbstractItemView>
 #include <QAbstractScrollArea>
 #include <QApplication>
 #include <QFontDatabase>
@@ -201,6 +202,11 @@ void Win95Style::polish(QWidget* widget)
     QProxyStyle::polish(widget);
     if (auto* area = qobject_cast<QAbstractScrollArea*>(widget)) {
         area->setFrameShape(QFrame::StyledPanel);
+    }
+    // 一覧・表・ツリーの地は白(COLOR_WINDOW)。Win95のエクスプローラと同じ。
+    if (auto* view = qobject_cast<QAbstractItemView*>(widget)) {
+        view->viewport()->setBackgroundRole(QPalette::Base);
+        view->viewport()->setAutoFillBackground(true);
     }
 }
 

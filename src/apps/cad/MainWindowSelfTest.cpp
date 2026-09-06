@@ -4759,21 +4759,22 @@ bool MainWindow::RunCreationSelfTest()
     RevealSurfaceGroup(QStringLiteral("押し出し"));
     QApplication::processEvents();
     if (plateThickness_ == nullptr || extrudeDistance_ == nullptr
-        || extrudePurposeSweep_ == nullptr || extrudePurposeThickness_ == nullptr) {
+        || extrudePurposeSweep_ == nullptr || extrudePurposeThickness_ == nullptr
+        || extrudeSweepBody_ == nullptr || extrudeThicknessBody_ == nullptr) {
         return fail("the extrude tool has both purposes");
     }
     // 入口の二択。初期は「線・面を伸ばす」で、厚みの入力欄は出さない。
-    if (extrudeDistance_->isHidden() || !plateThickness_->isHidden()) {
+    if (extrudeSweepBody_->isHidden() || !extrudeThicknessBody_->isHidden()) {
         return fail("the extrude tool starts on the sweep purpose");
     }
     extrudePurposeThickness_->setChecked(true);
     QApplication::processEvents();
-    if (plateThickness_->isHidden() || !extrudeDistance_->isHidden()) {
+    if (extrudeThicknessBody_->isHidden() || !extrudeSweepBody_->isHidden()) {
         return fail("choosing the thickness purpose shows the thickness fields");
     }
     extrudePurposeSweep_->setChecked(true);
     QApplication::processEvents();
-    if (extrudeDistance_->isHidden() || !plateThickness_->isHidden()) {
+    if (extrudeSweepBody_->isHidden() || !extrudeThicknessBody_->isHidden()) {
         return fail("going back to sweep hides the thickness fields");
     }
     for (QAction* action : surfaceToolActions_) {

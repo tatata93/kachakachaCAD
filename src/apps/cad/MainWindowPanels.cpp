@@ -1542,11 +1542,13 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudePurposeRow->addWidget(extrudePurposeThickness_, 1);
     layout->addLayout(extrudePurposeRow);
     auto* extrudeBody = new QWidget;
+    extrudeSweepBody_ = extrudeBody;
     auto* extrudeBodyLayout = new QVBoxLayout(extrudeBody);
     extrudeBodyLayout->setContentsMargins(0, 0, 0, 0);
     extrudeBodyLayout->setSpacing(6);
     layout->addWidget(extrudeBody);
     auto* thicknessBody = new QWidget;
+    extrudeThicknessBody_ = thicknessBody;
     auto* thicknessBodyLayout = new QVBoxLayout(thicknessBody);
     thicknessBodyLayout->setContentsMargins(0, 0, 0, 0);
     thicknessBodyLayout->setSpacing(6);

@@ -673,6 +673,9 @@ private:
     //! 押し出し画面の入口。線・面を伸ばすのか、面に厚みを付けるのか。
     QRadioButton* extrudePurposeSweep_ = nullptr;
     QRadioButton* extrudePurposeThickness_ = nullptr;
+    //! 上の二択で出し入れする入れ物(どちらが出ているかを試験でも見る)。
+    QWidget* extrudeSweepBody_ = nullptr;
+    QWidget* extrudeThicknessBody_ = nullptr;
     QCheckBox* extrudeMakeTipWire_ = nullptr;      //!< 先端のワイヤ
     QCheckBox* extrudeMakeEdges_ = nullptr;        //!< 押し出し方向の稜線(線だけ)
     QCheckBox* extrudeMakeSide_ = nullptr;         //!< 側面(押し出し面)

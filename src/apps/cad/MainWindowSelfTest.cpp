@@ -3928,13 +3928,20 @@ bool MainWindow::RunCreationSelfTest()
             || std::abs(firstEdge->wire.End().z - 8.0) > 1.0e-6) {
             return fail("edge extrude lines run along the extrude direction");
         }
-        Undo();
+        // 押し出しは1回の取り消しで元へ戻る。試験用に足した線は自分で片付ける。
         Undo();
         UpdateSelections({}, true);
         RefreshModelViews(false);
         extrudeMakeEdges_->setChecked(false);
-        if (project_.Wires().size() != exWireStart) {
+        if (project_.Wires().size() != edgeWireStart) {
             return fail("undo removes the edge extrusion");
+        }
+        if (!project_.RemoveWire("__ex稜線元")) {
+            return fail("clean up the edge extrude test wire");
+        }
+        RefreshModelViews(false);
+        if (project_.Wires().size() != exWireStart) {
+            return fail("clean up leaves no extra wires");
         }
     }
     progressMark("extrude checks done");

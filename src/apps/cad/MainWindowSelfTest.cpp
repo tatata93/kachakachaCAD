@@ -69,6 +69,9 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleOptionButton>
+#include <QStyleOptionComboBox>
+#include <QStyleOptionSpinBox>
 #include <QStyleFactory>
 #include <QTabBar>
 #include <QStringList>
@@ -4606,6 +4609,86 @@ bool MainWindow::RunCreationSelfTest()
         }
     }
     progressMark("core message translation checked");
+
+    {
+        // カーソルでの操作の具合(オーナー指示「実際の画面やカーソル操作の
+        // 具合などを必ず試験すること」)。数値の上下ボタンとチェック枠を、
+        // 画面上の当たり判定そのままの位置で押す。
+        RevealSurfaceGroup(QStringLiteral("押し出し"));
+        QApplication::processEvents();
+        const auto clickWidget = [](QWidget* target, QPoint position) {
+            const QPointF local(position);
+            const QPointF global(target->mapToGlobal(position));
+            QMouseEvent press(QEvent::MouseButtonPress, local, global,
+                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, local, global,
+                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(target, &release);
+            QApplication::processEvents();
+        };
+
+        extrudeDistance_->resize(180, 24);
+        QStyleOptionSpinBox spinOption;
+        spinOption.initFrom(extrudeDistance_);
+        spinOption.rect = extrudeDistance_->rect();
+        spinOption.subControls = QStyle::SC_All;
+        const QRect upButton = extrudeDistance_->style()->subControlRect(
+            QStyle::CC_SpinBox, &spinOption, QStyle::SC_SpinBoxUp, extrudeDistance_);
+        if (upButton.width() < 8 || upButton.height() < 5) {
+            return fail("the spin up button is big enough to hit");
+        }
+        const double distanceBefore = extrudeDistance_->value();
+        clickWidget(extrudeDistance_, upButton.center());
+        if (extrudeDistance_->value() <= distanceBefore) {
+            return fail("clicking the spin up button raises the value");
+        }
+        extrudeDistance_->setValue(distanceBefore);
+
+        QStyleOptionButton checkOption;
+        checkOption.initFrom(extrudeMakePlate_);
+        checkOption.rect = extrudeMakePlate_->rect();
+        const QRect checkBox = extrudeMakePlate_->style()->subElementRect(
+            QStyle::SE_CheckBoxIndicator, &checkOption, extrudeMakePlate_);
+        const bool plateCheckedBefore = extrudeMakePlate_->isChecked();
+        clickWidget(extrudeMakePlate_, checkBox.center());
+        if (extrudeMakePlate_->isChecked() == plateCheckedBefore) {
+            return fail("clicking the check box toggles it");
+        }
+        extrudeMakePlate_->setChecked(plateCheckedBefore);
+
+        // Windows 95 風でも同じ所が押せる寸法か(アプリ全体を着せ替えると
+        // offscreen で不安定になるので、寸法だけスタイルへ直接尋ねる)。
+        if (win95Style_ == nullptr) {
+            win95Style_ = new Win95Style();
+            win95Style_->setParent(qApp);
+        }
+        const QRect classicUp = win95Style_->subControlRect(
+            QStyle::CC_SpinBox, &spinOption, QStyle::SC_SpinBoxUp, extrudeDistance_);
+        const QRect classicDown = win95Style_->subControlRect(
+            QStyle::CC_SpinBox, &spinOption, QStyle::SC_SpinBoxDown, extrudeDistance_);
+        if (classicUp.width() != 16 || classicUp.height() < 5
+            || !extrudeDistance_->rect().contains(classicUp)
+            || !extrudeDistance_->rect().contains(classicDown)
+            || classicUp.intersects(classicDown)) {
+            return fail("the windows 95 spin buttons stay inside the field");
+        }
+        extrudeDirection_->resize(200, 24);
+        QStyleOptionComboBox comboOption;
+        comboOption.initFrom(extrudeDirection_);
+        comboOption.rect = extrudeDirection_->rect();
+        comboOption.subControls = QStyle::SC_All;
+        const QRect classicArrow = win95Style_->subControlRect(
+            QStyle::CC_ComboBox, &comboOption, QStyle::SC_ComboBoxArrow, extrudeDirection_);
+        const QRect classicText = win95Style_->subControlRect(
+            QStyle::CC_ComboBox, &comboOption, QStyle::SC_ComboBoxEditField, extrudeDirection_);
+        if (classicArrow.width() != 16
+            || !extrudeDirection_->rect().contains(classicArrow)
+            || classicText.isEmpty() || classicText.intersects(classicArrow)) {
+            return fail("the windows 95 combo arrow stays inside the box");
+        }
+    }
+    progressMark("cursor operation checked");
 
     // オーナー指示: 厚み化は押し出しへ統合した。押し出しの道具を選ぶと、
     // 厚み化の入力欄も同じ画面に出ていること(別の道具として残っていない)。

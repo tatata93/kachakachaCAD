@@ -615,15 +615,23 @@ QString TranslateCoreMessage(const QString& text)
     // 「英語文: 名前」の形。いちばん長く一致する見出しを使う。
     QString bestJapanese;
     int bestLength = 0;
+    bool bestEndsWithColon = false;
     for (const auto& [english, japanese] : Table()) {
         const QString key = QString::fromUtf8(english);
         if (key.size() > bestLength && text.startsWith(key)) {
             bestJapanese = QString::fromUtf8(japanese);
             bestLength = key.size();
+            bestEndsWithColon = key.endsWith(QLatin1Char(':'));
         }
     }
     if (bestLength > 0) {
-        return bestJapanese + text.mid(bestLength);
+        // 見出しが「:」で終わる文は、後ろに名前が付く形。日本語側は「:」を
+        // 持たない書き方にしてあるので、ここで区切りを入れ直す。
+        const QString rest = text.mid(bestLength);
+        if (bestEndsWithColon) {
+            return bestJapanese + QStringLiteral(":") + rest;
+        }
+        return bestJapanese + rest;
     }
     return text;
 }

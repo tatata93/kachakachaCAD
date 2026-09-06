@@ -69,6 +69,9 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QStyleOptionButton>
+#include <QStyleOptionComboBox>
+#include <QStyleOptionSpinBox>
 #include <QStyleFactory>
 #include <QTabBar>
 #include <QStringList>

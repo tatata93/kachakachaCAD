@@ -1706,6 +1706,9 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::ExtrudeSelection);
     layout->addWidget(extrudeButton);
 
+    auto* revolveTitle = new QLabel(QStringLiteral("回転して面を作る（ろくろ）"));
+    revolveTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(revolveTitle);
     auto* revolveForm = new QFormLayout;
     revolveForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     revolveAxis_ = new QComboBox;
@@ -1735,25 +1738,12 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(revolveButton, &QPushButton::clicked, this, &MainWindow::CreateRevolvedSurface);
     layout->addWidget(revolveButton);
 
-    auto* offsetForm = new QFormLayout;
-    offsetForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    // オフセット面・厚み化は「押し出し」へ統合した(オーナー指示)。
+    // 面を選び、方向=法線(自動)、距離=オフセット量、作るもの=先端の面/板材 で同じ結果。
     offsetSurfaceDistance_ = new QDoubleSpinBox;
     offsetSurfaceDistance_->setRange(-50.0, 50.0);
-    offsetSurfaceDistance_->setDecimals(2);
-    offsetSurfaceDistance_->setSingleStep(0.1);
     offsetSurfaceDistance_->setValue(0.5);
-    offsetSurfaceDistance_->setSuffix(QStringLiteral(" mm"));
-    offsetSurfaceDistance_->setToolTip(QStringLiteral(
-        "法線方向のオフセット量。+は法線側、-は反対側"));
-    offsetForm->addRow(QStringLiteral("オフセット量"), offsetSurfaceDistance_);
-    layout->addLayout(offsetForm);
-    auto* offsetButton = new QPushButton(QStringLiteral("選択面のオフセット面を作成"));
-    offsetButton->setObjectName("primaryButton");
-    offsetButton->setToolTip(QStringLiteral(
-        "3D画面で面を1つ選んでから押します。法線方向へずらした近似面(断面ロフト)を作ります。\n"
-        "内張り・裏打ちの土台に使えます(積層は板材どうしの「積層」も参照)"));
-    connect(offsetButton, &QPushButton::clicked, this, &MainWindow::CreateOffsetSurfaceApproximation);
-    layout->addWidget(offsetButton);
+    offsetSurfaceDistance_->setVisible(false); // 互換のため残す(画面には出さない)
     layout->addStretch(1);
 
     // モードのツール(上部)で選んだ1セクションだけを表示する(ADR 0025)。
@@ -1770,6 +1760,7 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("板材を分割"),
         QStringLiteral("板材を重ねて積層"),
         QStringLiteral("押し出し"),
+        QStringLiteral("回転して面を作る（ろくろ）"),
     });
 
     auto* scrollArea = new QScrollArea;

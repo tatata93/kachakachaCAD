@@ -893,6 +893,12 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         UpdateSelections(std::move(selections), true);
         AddSelectionToOutputSet();
         ShowOutputPreviewWindow();
+        // 別ウィンドウは window.grab() に写らないので、ここで直接保存する。
+        if (outputPreviewDialog_ != nullptr) {
+            outputPreviewDialog_->resize(720, 620);
+            QApplication::processEvents();
+            outputPreviewDialog_->grab().save(QStringLiteral("_ui-output-preview.png"));
+        }
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("win95")) {

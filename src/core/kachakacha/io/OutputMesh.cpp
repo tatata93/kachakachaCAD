@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <sstream>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -340,6 +341,22 @@ void FillLoop(OutputMesh& mesh, VertexWelder& welder, const std::vector<int>& lo
     return open;
 }
 
+//! 0.5 のように短く書く(0.500000 では読みにくい)。
+[[nodiscard]] std::string FormatMillimeters(double value)
+{
+    std::ostringstream stream;
+    stream.precision(2);
+    stream << std::fixed << value;
+    std::string text = stream.str();
+    while (text.size() > 1 && text.back() == '0') {
+        text.pop_back();
+    }
+    if (!text.empty() && text.back() == '.') {
+        text.pop_back();
+    }
+    return text;
+}
+
 } // namespace
 
 OutputMesh BuildOutputMesh(
@@ -403,7 +420,7 @@ OutputMesh BuildOutputMesh(
             model::AutoSurfaceResult built = model::BuildAutoSurface(loopWires);
             AddThickSurface(mesh, welder, built.surface, thickness, options.surfaceSamples, true);
             mesh.notes.push_back(
-                "選んだ線から面を作って厚み" + std::to_string(thickness) + "mmで出力します");
+                "選んだ線から面を作って厚み" + FormatMillimeters(thickness) + "mmで出力します");
         } catch (const std::exception& error) {
             mesh.notes.push_back(
                 std::string("線から面を作れませんでした: ") + error.what());
@@ -412,7 +429,7 @@ OutputMesh BuildOutputMesh(
 
     if (surfaceCount > 0) {
         mesh.notes.push_back("面は厚み"
-            + std::to_string(thickness) + "mmの板として出力します");
+            + FormatMillimeters(thickness) + "mmの板として出力します");
     }
     static_cast<void>(plateCount);
     static_cast<void>(bodyCount);

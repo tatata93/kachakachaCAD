@@ -1058,7 +1058,13 @@ void MainWindow::ApplyUiTheme(bool windows95)
         windows95Themeaction_->setChecked(windows95);
     }
     // 見た目が変わると寸法も変わるので、全ウィジェットへ再適用させる。
+    // 個別に配色を持ってしまったウィジェット(生成時の配色を抱えたまま)は
+    // 空のパレットを入れて親から継ぎ直させる。これをしないと右パネルなどが
+    // 前の色のまま残る(実機スクリーンショットで確認)。
     for (QWidget* widget : QApplication::allWidgets()) {
+        if (widget->testAttribute(Qt::WA_SetPalette)) {
+            widget->setPalette(QPalette());
+        }
         widget->style()->unpolish(widget);
         widget->style()->polish(widget);
         widget->update();
@@ -1413,8 +1419,11 @@ void MainWindow::BuildMenusAndToolbar()
             QStringLiteral("縦横の断面ネットワークから面を作る"));
         addSurfaceTool(QStringLiteral("面へ投影"), QStringLiteral("平面図を面へ投影"),
             QStringLiteral("平面の下書きを面へ投影する（窓・開口の輪郭作りに）"));
-        addSurfaceTool(QStringLiteral("押出・回転"), QStringLiteral("押し出し・回転・オフセット面"),
-            QStringLiteral("押し出し面・回転体・オフセット面を作る"));
+        addSurfaceTool(QStringLiteral("押し出し"), QStringLiteral("押し出し"),
+            QStringLiteral("線・面を押し出して、先端の線・側面・ふた・板材を作る"
+                           "（厚み化・オフセット面もここ）"));
+        addSurfaceTool(QStringLiteral("回転"), QStringLiteral("回転して面を作る（ろくろ）"),
+            QStringLiteral("断面を軸まわりに回して面を作る"));
         surfaceToolbar_->addSeparator();
         addSurfaceTool(QStringLiteral("厚み化"), QStringLiteral("厚み化（ワイヤ・面・板）"),
             QStringLiteral("面に厚みを設定し、ワイヤ・面・板をチェックで選んで出力する"));
@@ -2547,10 +2556,19 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 平らな下書きと投影先の面を選ぶ"),
                 QStringLiteral("1  正面図などの平らな紙に輪郭を描く\n2  下書きワイヤーと投影先の面を選択\n3  投影方向を選んで投影(窓・ライトの輪郭作り)"),
                 QStringLiteral("projection"));
-        } else if (sectionTitle == QStringLiteral("押し出し・回転・オフセット面")) {
-            setGuide(QStringLiteral("押し出し・回転・オフセットで面を増やす"),
-                QStringLiteral("次: 元になるワイヤーまたは面を選ぶ"),
-                QStringLiteral("押し出し: ワイヤー1本+方向と距離\n回転: 断面1本+軸と角度(軸を通す作図点は任意)\nオフセット: 面1つ+ずらす量"),
+        } else if (sectionTitle == QStringLiteral("押し出し")) {
+            setGuide(QStringLiteral("押し出して形を作る"),
+                QStringLiteral("次: 押し出す線または面を選ぶ（複数可）"),
+                QStringLiteral("1  押し出す線・面を3D画面か一覧で選ぶ\n"
+                               "2  方向（法線=自動 / X・Y・Z）と距離、または到達面を決める\n"
+                               "3  作るもの（先端の線・側面・ふた・底・板材）をチェック\n"
+                               "4  「押し出す」。面を選べば厚み化・オフセット面と同じ結果になる"),
+                QStringLiteral("extrude"));
+        } else if (sectionTitle == QStringLiteral("回転して面を作る（ろくろ）")) {
+            setGuide(QStringLiteral("断面を回して面を作る"),
+                QStringLiteral("次: 断面のワイヤーを1本選ぶ"),
+                QStringLiteral("1  断面ワイヤーを選択（軸を通す作図点は任意で1つ）\n"
+                               "2  回転軸・角度・断面数を決める\n3  「選択ワイヤーを回転して面を作成」"),
                 QStringLiteral("surface"));
         } else if (sectionTitle == QStringLiteral("飛び出すライトケース")) {
             setGuide(QStringLiteral("飛び出すライトケースを作る"),

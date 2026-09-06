@@ -15,9 +15,9 @@
 //!  - 浮き上がり: 外 左上=白 / 右下=黒、 内 左上=#DFDFDF / 右下=#808080
 //!  - 押し込み  : 外 左上=#808080 / 右下=白、 内 左上=黒 / 右下=#DFDFDF
 //!  - 彫り込み  : 左上=#808080 / 右下=白(1pxずつ)
+//! 注意: このプロジェクトは AUTOMOC を使っていないため Q_OBJECT は付けない
+//! (付けるとリンクで metaObject 未解決になる。既知のハマりどころ)。
 class Win95Style final : public QProxyStyle {
-    Q_OBJECT
-
 public:
     Win95Style();
 

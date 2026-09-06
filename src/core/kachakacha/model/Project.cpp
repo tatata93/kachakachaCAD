@@ -2255,6 +2255,9 @@ void Project::AddSurfaceOpening(std::string_view surfaceName, std::string wireNa
         throw std::invalid_argument("Wire is already a surface opening: " + wireName);
     }
     surface->openingWireNames.push_back(std::move(wireName));
+    // 近似したあとに元の面へ開口を足しても部材面に穴が開かない、という
+    // オーナー報告の対策。この面から作った近似モデルだけ作り直す。
+    RebuildPartModelsFromSource(surface->name, {});
 }
 
 void Project::RemoveSurfaceOpening(std::string_view surfaceName, std::string_view wireName)
@@ -2271,6 +2274,7 @@ void Project::RemoveSurfaceOpening(std::string_view surfaceName, std::string_vie
             "Wire is not a surface opening: " + std::string(wireName));
     }
     surface->openingWireNames.erase(position);
+    RebuildPartModelsFromSource(surface->name, {});
 }
 
 void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
@@ -2311,6 +2315,7 @@ void Project::AddPlateOpening(std::string_view plateName, std::string wireName)
         throw std::invalid_argument("Plate split line cannot also be an opening: " + wireName);
     }
     plate->openingWireNames.push_back(std::move(wireName));
+    RebuildPartModelsFromSource({}, plate->name);
 }
 
 void Project::RemovePlateOpening(std::string_view plateName, std::string_view wireName)
@@ -2324,6 +2329,7 @@ void Project::RemovePlateOpening(std::string_view plateName, std::string_view wi
             throw std::invalid_argument("Wire is not an opening of this plate: " + std::string(wireName));
         }
         plate.openingWireNames.erase(position);
+        RebuildPartModelsFromSource({}, plate.name);
         return;
     }
     throw std::invalid_argument("Plate name does not exist: " + std::string(plateName));
@@ -3563,6 +3569,21 @@ void Project::RebuildPartModels()
     }
 }
 
+void Project::RebuildPartModelsFromSource(
+    std::string_view surfaceName, std::string_view plateName)
+{
+    for (NamedPartModel& model : partModels_) {
+        const bool fromSurface
+            = !surfaceName.empty() && model.sourceSurfaceName == surfaceName;
+        const bool fromPlate = !plateName.empty() && model.sourcePlateName == plateName;
+        if (!fromSurface && !fromPlate) {
+            continue;
+        }
+        model.result = ApproximatePlateParts(RequirePartModelSource(model), model.options);
+        RegeneratePartModelDerivedObjects(model);
+    }
+}
+
 void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
 {
     // 板材入力のときだけ元板材を引く(開口の投影に使う)。面入力では nullptr。
@@ -3892,6 +3913,38 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         RemoveObjectFromSets(ProjectObjectKind::Wire, oldName);
     }
     model.openingWireNames = newOpeningNames;
+
+    // 派生した穴を、その部材面「自身の開口」としても登録する。
+    // これが無いと、穴の輪郭線は出るのに近似面には穴が開かない
+    // (オーナー報告「元の面を開口したのに近似面には反映されてない」)。
+    // 毎回作り直すので、前回の残りは先に消す。
+    for (const std::string& partSurfaceName : newSurfaceNames) {
+        const auto partSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) { return candidate.name == partSurfaceName; });
+        if (partSurface != surfaces_.end()) {
+            partSurface->openingWireNames.clear();
+        }
+    }
+    for (const std::string& openingName : newOpeningNames) {
+        const auto openingWire = std::find_if(wires_.begin(), wires_.end(),
+            [&](const NamedWire& wire) { return wire.name == openingName; });
+        if (openingWire == wires_.end() || !openingWire->projection.has_value()) {
+            continue;
+        }
+        const std::string targetName = openingWire->projection->targetSurfaceName;
+        const auto targetSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) { return candidate.name == targetName; });
+        if (targetSurface == surfaces_.end()
+            || !targetSurface->partModelSourceName.has_value()
+            || *targetSurface->partModelSourceName != model.name) {
+            continue;
+        }
+        if (std::find(targetSurface->openingWireNames.begin(),
+                targetSurface->openingWireNames.end(), openingName)
+            == targetSurface->openingWireNames.end()) {
+            targetSurface->openingWireNames.push_back(openingName);
+        }
+    }
 
     // --- 接続スコープ(合意13): 近似の実形状へスナップした派生「_接続」を作り直す ---
     std::vector<std::string> newAdaptedWireNames;

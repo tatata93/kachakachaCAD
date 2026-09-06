@@ -458,11 +458,41 @@ int main()
             }
             Require(derivedFound, "derived opening wire exists");
 
-            // 部材面から作った板材に、その開口を穴として付けられる。
+            // 部材面そのものに穴が開いている(オーナー報告の対策)。
+            {
+                bool partSurfaceHasHole = false;
+                for (const auto& surface : openingProject.Surfaces()) {
+                    if (surface.name == "近似穴_部材2") {
+                        partSurfaceHasHole = surface.openingWireNames.size() == 1
+                            && surface.openingWireNames.front() == derivedOpening;
+                    }
+                }
+                Require(partSurfaceHasHole, "the part surface itself carries the opening");
+            }
+            // その部材面から作った板材は、穴を引き継ぐ。
             openingProject.AddPlate(
                 "窓板", "近似穴_部材2", 0.5, PlateThicknessDirection::Centered, "プラ板");
-            openingProject.AddPlateOpening("窓板", derivedOpening);
             Require(openingProject.FindPlate("窓板").has_value(), "part plate with opening");
+            {
+                bool plateInherited = false;
+                for (const auto& plate : openingProject.Plates()) {
+                    if (plate.name == "窓板") {
+                        plateInherited = plate.openingWireNames.size() == 1
+                            && plate.openingWireNames.front() == derivedOpening;
+                    }
+                }
+                Require(plateInherited, "a plate made from the part surface inherits the hole");
+            }
+            // 同じ穴を二重に付けようとすると止まる。
+            {
+                bool duplicateGuarded = false;
+                try {
+                    openingProject.AddPlateOpening("窓板", derivedOpening);
+                } catch (const std::exception&) {
+                    duplicateGuarded = true;
+                }
+                Require(duplicateGuarded, "the same hole cannot be added twice");
+            }
 
             // 型紙にも開口が写る。
             const auto patterned = kachakacha::io::BuildPartPatternWithPreview(
@@ -474,9 +504,10 @@ int main()
             std::ostringstream openingSaved;
             kachakacha::io::WriteProjectScript(openingSaved, openingProject);
             const std::string openingText = openingSaved.str();
+            // 元面から引き継ぐ穴は書かない(書くと読み込みで二重登録になる)。
             Require(openingText.find("plate_opening 窓板 " + derivedOpening)
-                    != std::string::npos,
-                "part-plate opening saved by derived name");
+                    == std::string::npos,
+                "an inherited hole is not written twice");
             std::istringstream openingInput(openingText);
             Project openingLoaded = kachakacha::io::LoadProjectScript(
                 openingInput, "part-model-opening-test");
@@ -669,6 +700,41 @@ int main()
             Require(surfaceModel.partSurfaceNames.size() == 2, "surface input creates part surfaces");
             Require(surfaceModel.openingWireNames.empty(),
                 "surface input has no plate openings to project");
+
+            // オーナー報告: 近似したあとに元の面へ開口を足しても部材面に穴が
+            // 開かなかった。開口の足し引きで、その面から作った近似モデルを
+            // 作り直すようにした。
+            surfaceProject.AddWire("後窓下書き", Wire::Polyline({
+                {-4.0, 40.0, 26.0}, {4.0, 40.0, 26.0}, {4.0, 40.0, 33.0},
+                {-4.0, 40.0, 33.0}, {-4.0, 40.0, 26.0}}));
+            surfaceProject.AddProjectedWire("後窓", "後窓下書き", "胴", {0.0, -1.0, 0.0});
+            surfaceProject.AddSurfaceOpening("胴", "後窓");
+            {
+                const auto& afterModel = surfaceProject.PartModels().back();
+                Require(afterModel.openingWireNames.size() == 1,
+                    "an opening added after approximation reaches the part surfaces");
+                bool derivedHoleFound = false;
+                for (const auto& wire : surfaceProject.Wires()) {
+                    if (wire.name == afterModel.openingWireNames.front()) {
+                        derivedHoleFound = wire.partModelSourceName.has_value()
+                            && *wire.partModelSourceName == "面近似";
+                    }
+                }
+                Require(derivedHoleFound, "the derived hole wire belongs to the part model");
+                bool holeOnPartSurface = false;
+                for (const auto& surface : surfaceProject.Surfaces()) {
+                    if (surface.partModelSourceName.has_value()
+                        && *surface.partModelSourceName == "面近似"
+                        && !surface.openingWireNames.empty()) {
+                        holeOnPartSurface = true;
+                    }
+                }
+                Require(holeOnPartSurface, "the part surface itself carries the opening");
+            }
+            // 外すと部材面からも消える。
+            surfaceProject.RemoveSurfaceOpening("胴", "後窓");
+            Require(surfaceProject.PartModels().back().openingWireNames.empty(),
+                "removing the opening clears it from the part surfaces");
 
             // 派生面を再近似することは禁止。
             bool derivedGuarded = false;

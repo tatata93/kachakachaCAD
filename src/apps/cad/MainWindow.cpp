@@ -732,6 +732,15 @@ void MainWindow::BuildUi()
         UpdateNumericPreviews();
         RefreshBeginnerGuide();
     });
+    // オーナー指示: 複数選んで行う操作は、選んだ物を表で見せる。
+    // モードに関係なく右パネルの一番上へ置き、どの道具からも同じ表を見る。
+    {
+        auto* selectionSection = new CollapsibleSection(
+            QStringLiteral("いま選んでいるもの"), BuildSelectionTablePanel(), true);
+        selectionSection->setObjectName(QStringLiteral("selectionTableSection"));
+        selectionSection->setProperty("manualAnchor", QStringLiteral("selectionTable"));
+        toolsLayout->addWidget(selectionSection);
+    }
     toolsLayout->addWidget(toolsTabs_, 1);
     toolsDock->setWidget(toolsPanel);
     addDockWidget(Qt::RightDockWidgetArea, toolsDock);
@@ -7122,6 +7131,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     UpdatePlateSplitPreview();
     RefreshExportSummary();
     UpdateWireOffsetPreview();
+    RefreshSelectionTable();
     RefreshBeginnerGuide();
 }
 

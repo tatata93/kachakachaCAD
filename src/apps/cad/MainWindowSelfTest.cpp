@@ -4686,6 +4686,87 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("core message translation checked");
 
     {
+        // オーナー指示: 複数選んで行う操作は、選んだ物を表で見せる。
+        // どのモードでも同じ表が選択に追従すること。
+        if (selectionTable_ == nullptr || selectionTableSummary_ == nullptr) {
+            return fail("the shared selection table exists");
+        }
+        const std::size_t selWireStart = project_.Wires().size();
+        project_.AddWire("__sel輪郭1", Wire::Polyline({
+            {900.0, 0.0, 0.0}, {910.0, 0.0, 0.0}, {910.0, 6.0, 0.0},
+            {900.0, 6.0, 0.0}, {900.0, 0.0, 0.0},
+        }));
+        project_.AddWire("__sel線2", Wire::Line({920.0, 0.0, 0.0}, {930.0, 0.0, 0.0}));
+        project_.AddPlanarSurface("__sel面", "__sel輪郭1");
+        RefreshModelViews(false);
+        const auto indexOfWire = [this](const char* name) {
+            for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+                if (project_.Wires()[index].name == name) {
+                    return index;
+                }
+            }
+            return -1;
+        };
+        int surfaceIndex = -1;
+        for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+            if (project_.Surfaces()[index].name == "__sel面") {
+                surfaceIndex = index;
+            }
+        }
+        const int firstWire = indexOfWire("__sel輪郭1");
+        const int secondWire = indexOfWire("__sel線2");
+        if (firstWire < 0 || secondWire < 0 || surfaceIndex < 0) {
+            return fail("selection table test objects exist");
+        }
+        UpdateSelections({
+            {CadSelectionKind::Wire, firstWire},
+            {CadSelectionKind::Wire, secondWire},
+            {CadSelectionKind::Surface, surfaceIndex},
+        }, true);
+        if (selectionTable_->rowCount() != 3) {
+            return fail("the selection table lists every selected object");
+        }
+        if (selectionTable_->item(2, 1) == nullptr
+            || selectionTable_->item(2, 1)->text() != QStringLiteral("__sel面")) {
+            return fail("the selection table shows object names");
+        }
+        // 閉じた輪郭は種類で分かる(開口などの条件を確かめやすくする)。
+        if (selectionTable_->item(0, 0) == nullptr
+            || !selectionTable_->item(0, 0)->text().contains(QStringLiteral("閉"))) {
+            return fail("the selection table marks closed wires");
+        }
+        if (!selectionTableSummary_->text().contains(QStringLiteral("3件"))) {
+            return fail("the selection table counts what is selected");
+        }
+        // 表から1件だけ外せる(3D画面で選び直さなくてよい)。
+        selectionTable_->setCurrentCell(1, 0);
+        RemoveSelectedRowFromSelection();
+        if (selectionTable_->rowCount() != 2
+            || viewport_->Selections().size() != 2) {
+            return fail("a row can be dropped from the selection");
+        }
+        // 表から1件だけ残せる。
+        selectionTable_->setCurrentCell(0, 0);
+        KeepOnlySelectedRowInSelection();
+        if (selectionTable_->rowCount() != 1 || viewport_->Selections().size() != 1) {
+            return fail("a row can be kept alone");
+        }
+        UpdateSelections({}, true);
+        if (selectionTable_->rowCount() != 0) {
+            return fail("clearing the selection empties the table");
+        }
+        if (!project_.RemoveSurface("__sel面") || !project_.RemoveWire("__sel輪郭1")
+            || !project_.RemoveWire("__sel線2")) {
+            return fail("clean up selection table test objects");
+        }
+        RefreshModelViews(false);
+        if (project_.Wires().size() != selWireStart) {
+            return fail("selection table test leaves nothing behind");
+        }
+    }
+    progressMark("selection table checked");
+
+    {
         // カーソルでの操作の具合(オーナー指示「実際の画面やカーソル操作の
         // 具合などを必ず試験すること」)。数値の上下ボタンとチェック枠を、
         // 画面上の当たり判定そのままの位置で押す。

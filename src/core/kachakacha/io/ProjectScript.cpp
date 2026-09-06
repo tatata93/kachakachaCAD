@@ -1573,6 +1573,19 @@ void WriteProjectScript(std::ostream& output, const Project& project)
         }
         return false;
     };
+    // 板材は作られた時点で元面の開口を引き継ぐ。引き継ぐ物まで書くと、
+    // 読み込みで二重登録になって落ちる。書かずに引き継ぎへ任せる。
+    const auto inheritedFromSourceSurface = [&project](
+        const model::NamedPlate& namedPlate, const std::string& openingWireName) {
+        for (const auto& surface : project.Surfaces()) {
+            if (surface.name == namedPlate.sourceSurfaceName) {
+                return std::find(surface.openingWireNames.begin(),
+                           surface.openingWireNames.end(), openingWireName)
+                    != surface.openingWireNames.end();
+            }
+        }
+        return false;
+    };
     const auto writePlateLine = [&output](const model::NamedPlate& namedPlate) {
         RequireScriptNameSafe(namedPlate.name, "Plate");
         RequireScriptNameSafe(namedPlate.sourceSurfaceName, "Plate source surface");
@@ -1615,6 +1628,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
             continue;
         }
         for (const std::string& openingWireName : namedPlate.openingWireNames) {
+            if (inheritedFromSourceSurface(namedPlate, openingWireName)) {
+                continue;
+            }
             RequireScriptNameSafe(openingWireName, "Plate opening wire");
             output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
         }
@@ -1758,6 +1774,9 @@ void WriteProjectScript(std::ostream& output, const Project& project)
                    << range.minimumV << ' ' << range.maximumV << '\n';
         }
         for (const std::string& openingWireName : namedPlate.openingWireNames) {
+            if (inheritedFromSourceSurface(namedPlate, openingWireName)) {
+                continue;
+            }
             RequireScriptNameSafe(openingWireName, "Plate opening wire");
             output << "plate_opening " << namedPlate.name << ' ' << openingWireName << '\n';
         }

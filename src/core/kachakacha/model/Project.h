@@ -544,6 +544,10 @@ private:
     void RebuildDependentGeometry();
     void RecomputeLaminateOffsets();
     void RebuildPartModels();
+    //! 元が変わった近似モデルだけを作り直す(全部作り直すと重いため)。
+    //! 面の開口・板材の開口を足し引きしたときに呼ぶ。
+    void RebuildPartModelsFromSource(
+        std::string_view surfaceName, std::string_view plateName);
     void RegeneratePartModelDerivedObjects(NamedPartModel& model);
     //! 移動・回転の共通部: 対象を基礎オブジェクト(平面・点・ワイヤ)へ展開し、
     //! 派生(投影・厚み位置・近似派生)は日本語メッセージで拒否する。

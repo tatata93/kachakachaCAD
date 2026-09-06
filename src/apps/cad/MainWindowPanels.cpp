@@ -76,6 +76,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -2354,4 +2355,184 @@ QWidget* MainWindow::BuildInfoPanel()
     layout->addWidget(infoLabel_);
     layout->addStretch(1);
     return panel;
+}
+
+//! 右パネル最上部の共通「いま選んでいるもの」表(オーナー指示:
+//! 複数選んで行う操作は、選んだ物を必ず表で見せる)。
+//! 開口・切れ目・分割線・面作成・押し出し・出力・近似 のすべてに効く。
+QWidget* MainWindow::BuildSelectionTablePanel()
+{
+    auto* panel = new QWidget;
+    auto* layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(6, 4, 6, 6);
+    layout->setSpacing(4);
+
+    auto* hint = new QLabel(QStringLiteral(
+        "いま選んでいる物の一覧です。開口・切れ目・面作成・押し出し・出力など、"
+        "まとめて行う操作はこの表の中身が対象になります。"));
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: #5c6670;");
+    layout->addWidget(hint);
+
+    selectionTable_ = new QTableWidget(0, 2);
+    selectionTable_->setHorizontalHeaderLabels(
+        {QStringLiteral("種類"), QStringLiteral("名前")});
+    selectionTable_->verticalHeader()->setVisible(false);
+    selectionTable_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    selectionTable_->setSelectionMode(QAbstractItemView::SingleSelection);
+    selectionTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    selectionTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    selectionTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    selectionTable_->setMinimumHeight(84);
+    selectionTable_->setMaximumHeight(150);
+    layout->addWidget(selectionTable_);
+
+    selectionTableSummary_ = new QLabel(QStringLiteral("選択なし"));
+    selectionTableSummary_->setWordWrap(true);
+    selectionTableSummary_->setStyleSheet("color: #5c6670;");
+    layout->addWidget(selectionTableSummary_);
+
+    auto* buttons = new QHBoxLayout;
+    auto* removeRowButton = new QPushButton(QStringLiteral("この行を外す"));
+    removeRowButton->setToolTip(QStringLiteral(
+        "選び直さずに、この1件だけを選択から外します"));
+    connect(removeRowButton, &QPushButton::clicked,
+        this, &MainWindow::RemoveSelectedRowFromSelection);
+    auto* keepRowButton = new QPushButton(QStringLiteral("この行だけにする"));
+    keepRowButton->setToolTip(QStringLiteral("この1件だけを選んだ状態にします"));
+    connect(keepRowButton, &QPushButton::clicked,
+        this, &MainWindow::KeepOnlySelectedRowInSelection);
+    auto* clearButton = new QPushButton(QStringLiteral("すべて解除"));
+    connect(clearButton, &QPushButton::clicked, this, [this] {
+        UpdateSelections({}, true);
+    });
+    buttons->addWidget(removeRowButton, 1);
+    buttons->addWidget(keepRowButton, 1);
+    buttons->addWidget(clearButton, 1);
+    layout->addLayout(buttons);
+    return panel;
+}
+
+void MainWindow::RefreshSelectionTable()
+{
+    if (selectionTable_ == nullptr) {
+        return;
+    }
+    selectionTableRows_.clear();
+    const auto& selections = viewport_->Selections();
+    struct Row {
+        QString kind;
+        QString name;
+    };
+    std::vector<Row> rows;
+    const auto sizeOf = [this](CadSelectionKind kind) -> int {
+        switch (kind) {
+        case CadSelectionKind::WorkPlane: return static_cast<int>(project_.WorkPlanes().size());
+        case CadSelectionKind::Point: return static_cast<int>(project_.Points().size());
+        case CadSelectionKind::Wire: return static_cast<int>(project_.Wires().size());
+        case CadSelectionKind::Surface: return static_cast<int>(project_.Surfaces().size());
+        case CadSelectionKind::Plate: return static_cast<int>(project_.Plates().size());
+        case CadSelectionKind::Body: return static_cast<int>(project_.Bodies().size());
+        default: return 0;
+        }
+    };
+    for (const CadSelection& selection : selections) {
+        if (selection.index < 0 || selection.index >= sizeOf(selection.kind)) {
+            continue;
+        }
+        QString kindText;
+        QString nameText;
+        switch (selection.kind) {
+        case CadSelectionKind::WorkPlane:
+            kindText = QStringLiteral("作業平面");
+            nameText = ToQString(project_.WorkPlanes()[selection.index].name);
+            break;
+        case CadSelectionKind::Point:
+            kindText = QStringLiteral("作図点");
+            nameText = ToQString(project_.Points()[selection.index].name);
+            break;
+        case CadSelectionKind::Wire: {
+            const auto& wire = project_.Wires()[selection.index];
+            kindText = wire.metadata.construction ? QStringLiteral("補助線")
+                : wire.projection.has_value() ? QStringLiteral("投影線")
+                : wire.extrude.has_value() ? QStringLiteral("押出線")
+                                           : QStringLiteral("線");
+            if (wire.wire.IsClosed(1.0e-6)) {
+                kindText += QStringLiteral("(閉)");
+            }
+            nameText = ToQString(wire.name);
+            break;
+        }
+        case CadSelectionKind::Surface:
+            kindText = project_.Surfaces()[selection.index].partModelSourceName.has_value()
+                ? QStringLiteral("部材面")
+                : QStringLiteral("面");
+            nameText = ToQString(project_.Surfaces()[selection.index].name);
+            break;
+        case CadSelectionKind::Plate:
+            kindText = QStringLiteral("板材");
+            nameText = ToQString(project_.Plates()[selection.index].name);
+            break;
+        case CadSelectionKind::Body:
+            kindText = QStringLiteral("実体");
+            nameText = ToQString(project_.Bodies()[selection.index].name);
+            break;
+        default:
+            continue;
+        }
+        rows.push_back({kindText, nameText});
+        selectionTableRows_.push_back(selection);
+    }
+
+    selectionTable_->setRowCount(static_cast<int>(rows.size()));
+    for (int row = 0; row < static_cast<int>(rows.size()); ++row) {
+        selectionTable_->setItem(row, 0, new QTableWidgetItem(rows[static_cast<std::size_t>(row)].kind));
+        selectionTable_->setItem(row, 1, new QTableWidgetItem(rows[static_cast<std::size_t>(row)].name));
+    }
+    if (selectionTableSummary_ != nullptr) {
+        if (rows.empty()) {
+            selectionTableSummary_->setText(QStringLiteral(
+                "選択なし（3D画面かモデル一覧で選ぶと、ここに並びます）"));
+        } else {
+            // 種類ごとの数も出す。「面を1つだけ」などの条件を確かめやすくする。
+            std::map<QString, int> counts;
+            for (const Row& row : rows) {
+                ++counts[row.kind];
+            }
+            QStringList parts;
+            for (const auto& [kind, count] : counts) {
+                parts << QStringLiteral("%1 %2").arg(kind).arg(count);
+            }
+            selectionTableSummary_->setText(
+                QStringLiteral("%1件（%2）").arg(rows.size()).arg(parts.join(QStringLiteral(" / "))));
+        }
+    }
+}
+
+void MainWindow::RemoveSelectedRowFromSelection()
+{
+    if (selectionTable_ == nullptr) {
+        return;
+    }
+    const int row = selectionTable_->currentRow();
+    if (row < 0 || row >= static_cast<int>(selectionTableRows_.size())) {
+        statusBar()->showMessage(QStringLiteral("外したい行を表で選んでください"), 3000);
+        return;
+    }
+    std::vector<CadSelection> kept = selectionTableRows_;
+    kept.erase(kept.begin() + row);
+    UpdateSelections(std::move(kept), true);
+}
+
+void MainWindow::KeepOnlySelectedRowInSelection()
+{
+    if (selectionTable_ == nullptr) {
+        return;
+    }
+    const int row = selectionTable_->currentRow();
+    if (row < 0 || row >= static_cast<int>(selectionTableRows_.size())) {
+        statusBar()->showMessage(QStringLiteral("残したい行を表で選んでください"), 3000);
+        return;
+    }
+    UpdateSelections({selectionTableRows_[static_cast<std::size_t>(row)]}, true);
 }

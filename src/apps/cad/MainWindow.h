@@ -275,6 +275,12 @@ private:
     //! persist=false のときは設定へ保存しない(撮影・自動テスト用)。
     void ApplyUiTheme(bool windows95, bool persist = true);
     //! 出力モード(オーナー指示): 出力対象の管理表と3Dプレビュー。
+    //! 右パネル最上部の共通「いま選んでいるもの」表(オーナー指示:
+    //! 複数選んで行う操作は、選んだ物を必ず表で見せる)。
+    QWidget* BuildSelectionTablePanel();
+    void RefreshSelectionTable();
+    void RemoveSelectedRowFromSelection();
+    void KeepOnlySelectedRowInSelection();
     void AddSelectionToOutputSet();
     //! 3D画面に見えている板材・実体をまとめて出力表へ入れる。
     void AddVisibleModelToOutputSet();
@@ -469,6 +475,10 @@ private:
     QDoubleSpinBox* outputSurfaceThickness_ = nullptr;
     QCheckBox* outputAutoFill_ = nullptr;
     std::vector<kachakacha::io::OutputItem> outputItems_;
+    //! 共通の選択一覧。表の行と 1:1 で対応する。
+    QTableWidget* selectionTable_ = nullptr;
+    QLabel* selectionTableSummary_ = nullptr;
+    std::vector<CadSelection> selectionTableRows_;
     OutputPreviewDialog* outputPreviewDialog_ = nullptr;
     QDoubleSpinBox* snapStepField_ = nullptr;
     QCheckBox* gridPointsVisible_ = nullptr;

@@ -31,6 +31,8 @@ public:
     void RefreshFromProject(const kachakacha::model::Project& project);
     //! 上部ツールで選んだセクションだけ表示する(0=作成 1=一覧・型紙 2=曲げ 3=セット、負=全部)。
     void SetVisibleSection(int index);
+    //! いま出している区画(道具列で選んだ番号)。-1=全部。
+    [[nodiscard]] int VisibleSection() const noexcept { return visibleSection_; }
     //! 板材コンボを指定名に合わせる(ビューポートの右クリックメニューから)。
     void SelectPlate(const QString& plateName);
 
@@ -144,5 +146,6 @@ private:
     QLabel* foldLabel_ = nullptr;
     QLabel* unitResultLabel_ = nullptr; //!< ユニット近似の結果・エラー常設表示
     std::array<QWidget*, 4> sections_{};
+    int visibleSection_ = 0;
     QWidget* bottomSpacer_ = nullptr; //!< 1区画表示時に項目を上詰めするための余白
 };

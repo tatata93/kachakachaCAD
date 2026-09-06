@@ -11,6 +11,22 @@ namespace {
 const std::vector<std::pair<const char*, const char*>>& Table()
 {
     static const std::vector<std::pair<const char*, const char*>> table = {
+        // UI層(PDF書き出し・作図)にも残っていた英語文。画面へ出る。
+        {"planar work plane is unavailable", "この輪郭の作業平面が見つかりません。元の平面図を選び直してください"},
+        {"Endpoint-radius arc needs its start and end points.", "半径で描く円弧には始点と終点が要ります。2点を指定してください"},
+        {"Start-tangent arc needs its start point.", "接線で描く円弧には始点が要ります。始点を指定してください"},
+        {"Plate PDF contains invalid coordinates.", "展開図の座標が正しくありません。板材を作り直してください"},
+        {"Plate PDF requires a usable outer boundary.", "展開図の外形が取れません。板材の元の面の輪郭を見直してください"},
+        {"Plate PDF boundary has no measurable area.", "展開図の面積がありません。輪郭がつぶれていないか確かめてください"},
+        {"Plate PDF options are invalid.", "PDFの設定が正しくありません。用紙とページ重なりを見直してください"},
+        {"Plate PDF margins and overlap leave no usable page area.", "余白とページ重なりが大きすぎて、紙に何も入りません。重なりを小さくしてください"},
+        {"Plate PDF would require more than 100 pages.", "100ページを超えます。板材を分割するか、大きい用紙を選んでください"},
+        {"Plate PDF output path is empty.", "保存先が指定されていません"},
+        {"Plate PDF output file could not be opened.", "PDFを書き出せません。別のアプリで開いていないか確かめてください"},
+        {"Plate PDF page layout could not be applied.", "PDFの用紙設定を適用できませんでした"},
+        {"Plate PDF drawing could not be started.", "PDFの描き出しを始められませんでした"},
+        {"Plate PDF could not create another page.", "PDFのページを増やせませんでした"},
+        {"Plate PDF output could not be finalized.", "PDFを閉じられませんでした。保存先の空き容量を確かめてください"},
         // 「<用途>」を差し込んで組み立てられる文。前方一致だと用途が英語で残るので、
         // 組み合わせを丸ごと並べる。
         {"Projected wire cannot be used as loft section.", "投影から作られた線はロフトの断面には使えません"},

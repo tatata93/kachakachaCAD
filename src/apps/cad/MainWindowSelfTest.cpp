@@ -899,7 +899,7 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         if (outputModeAction_ != nullptr) {
             outputModeAction_->trigger();
         }
-        ShowOutputTool(QStringLiteral("出力するもの（表で管理）"));
+        ShowOutputTool(QStringLiteral("STL / STEP / .kcd に含めるもの"));
         std::vector<CadSelection> selections;
         for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
             selections.push_back({CadSelectionKind::Surface, index});

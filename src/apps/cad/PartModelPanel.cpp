@@ -76,20 +76,30 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     layout->addLayout(modeRow);
 
     // --- 作成(近似ユニット #15 が主、従来の1面近似は下に併設) ---
-    auto* createGroup = new QGroupBox(QStringLiteral("部材近似モデルを作成"));
+    auto* createGroup = new QGroupBox(QStringLiteral("曲面を、曲げて作れる部材にする"));
     auto* createOuter = new QVBoxLayout(createGroup);
     createOuter->setContentsMargins(8, 4, 8, 8);
     createOuter->setSpacing(5);
 
     unitNameEdit_ = new QLineEdit(QStringLiteral("近似ユニット1"));
     unitNameEdit_->setToolTip(QStringLiteral(
-        "ユニット名。作られる近似モデルと部材グループの名前に使われます"));
+        "このまとまりの名前。作られる部材モデルと部材グループの名前に使われます。\n"
+        "例: 前頭部、側面、屋根"));
     auto* unitNameRow = new QHBoxLayout;
-    unitNameRow->addWidget(new QLabel(QStringLiteral("ユニット名")));
+    unitNameRow->addWidget(new QLabel(QStringLiteral("まとまりの名前")));
     unitNameRow->addWidget(unitNameEdit_, 1);
     createOuter->addLayout(unitNameRow);
 
-    auto* collectButton = new QPushButton(QStringLiteral("選択をユニットの表へ取り込む"));
+    auto* unitSteps = new QLabel(QStringLiteral(
+        "1  車体のうち、まとめて作りたい面・板材を3D画面で選ぶ\n"
+        "2  下の表で行ごとに「板に分ける／形を変えずつなぐ／使わない」を決める\n"
+        "3  「部品」に番号を入れる（同じ番号＝同じ部品。空欄なら自動）\n"
+        "4  「まとめて部材にする」を押す"));
+    unitSteps->setWordWrap(true);
+    unitSteps->setStyleSheet("color: #34444d; background: #f1f3f4; padding: 5px;");
+    createOuter->addWidget(unitSteps);
+
+    auto* collectButton = new QPushButton(QStringLiteral("選んだ物を下の表へ入れる"));
     collectButton->setToolTip(QStringLiteral(
         "近似したい部品の周辺の面・板材・ワイヤーを3D画面でまとめて選んで押します。\n"
         "部材グループごとの選択でも構いません。押すたびに表へ追記されます"));
@@ -112,10 +122,13 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     unitTable_->setMinimumHeight(96);
     unitTable_->setMaximumHeight(150);
     unitTable_->setToolTip(QStringLiteral(
-        "各行の役割: 近似する=部材近似モデルになる / 形状維持(接続)=形は保ったまま\n"
-        "近似の実形状へ接続できるよう「〜_接続」を自動生成 / 対象外=何もしない\n"
-        "部品: 近似部品番号。例えば部品1=正面の曲面、部品2=側面…のように割り当てる\n"
-        "(自動なら取り込み順に空き番号を振る)。モデル名は「<ユニット名>_部品N」になる"));
+        "役割の意味:\n"
+        "・板に分ける（近似する）… 曲面を、平らな板を曲げて作れる形へ置き換える\n"
+        "・形を変えずつなぐ … 形はそのまま。隣の部品の実形状へ合うよう\n"
+        "  「〜_接続」を自動で作る（角や縁の受け側に使う）\n"
+        "・使わない … 何もしない\n"
+        "部品: 同じ番号＝同じ部品。例) 部品1=正面の曲面、部品2=側面、部品3=屋根。\n"
+        "空欄（0）なら取り込み順に空き番号を振る。名前は「<まとまりの名前>_部品N」"));
     createOuter->addWidget(unitTable_);
 
     auto* unitRowButtons = new QHBoxLayout;
@@ -141,12 +154,13 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     unitOutputRow->addWidget(unitOutputCombo_, 1);
     createOuter->addLayout(unitOutputRow);
 
-    auto* createUnitButton = new QPushButton(QStringLiteral("ユニットを近似"));
+    auto* createUnitButton
+        = new QPushButton(QStringLiteral("まとめて部材にする"));
     createUnitButton->setObjectName("primaryButton");
     createUnitButton->setToolTip(QStringLiteral(
-        "「近似する」役割の面・板材ごとに部材近似モデルを作り、\n"
-        "「形状維持(接続)」役割は最寄りの近似へ接続する「〜_接続」を自動生成します。\n"
-        "近似元の面にある閉じた投影輪郭は開口として自動で写します"));
+        "「板に分ける」にした面・板材ごとに部材モデルを作り、\n"
+        "「形を変えずつなぐ」にした物は最寄りの部材へ合わせた「〜_接続」を作ります。\n"
+        "元の面にある閉じた投影輪郭は、窓・穴として自動で写します"));
     connect(createUnitButton, &QPushButton::clicked, this, [this] {
         SetUnitResult(QString(), false);
         if (onCreateUnit) onCreateUnit();
@@ -161,10 +175,30 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     unitResultLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     createOuter->addWidget(unitResultLabel_);
 
-    auto* singleLabel = new QLabel(QStringLiteral("―― 1面だけ手早く近似（従来方式） ――"));
-    singleLabel->setStyleSheet("color: #6a7781;");
-    singleLabel->setAlignment(Qt::AlignCenter);
-    createOuter->addWidget(singleLabel);
+    // 「1面だけ」の入口は、上のまとめて作る手順と競合して迷わせるので畳む
+    // (Codexレビュー#4)。押すと開く。
+    auto* singleToggle
+        = new QPushButton(QStringLiteral("▶ この1面だけを帯状に分ける（詳しい設定）"));
+    singleToggle->setCheckable(true);
+    singleToggle->setStyleSheet("text-align: left; color: #42515a;");
+    singleToggle->setToolTip(QStringLiteral(
+        "面を1つだけ選んで、分割の細かい条件（許容偏差・部材数・境界線）を\n"
+        "自分で決めたいときに使います。上の「まとめて部材にする」で足りるなら不要です"));
+    createOuter->addWidget(singleToggle);
+    auto* singleBody = new QWidget;
+    auto* singleBodyLayout = new QVBoxLayout(singleBody);
+    singleBodyLayout->setContentsMargins(0, 0, 0, 0);
+    singleBodyLayout->setSpacing(5);
+    singleBody->setVisible(false);
+    connect(singleToggle, &QPushButton::toggled, this, [singleToggle, singleBody](bool open) {
+        singleBody->setVisible(open);
+        singleToggle->setText(open
+                ? QStringLiteral("▼ この1面だけを帯状に分ける（詳しい設定）")
+                : QStringLiteral("▶ この1面だけを帯状に分ける（詳しい設定）"));
+    });
+    createOuter->addWidget(singleBody);
+    // 以降の「1面だけ」の部品は、畳める入れ物の中へ入れる。
+    createOuter = singleBodyLayout;
 
     auto* createForm = new QFormLayout;
     createForm->setContentsMargins(0, 0, 0, 0);
@@ -221,7 +255,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     connect(automaticCheck_, &QCheckBox::toggled, this, [this](bool automatic) {
         manualBoundariesEdit_->setEnabled(!automatic);
     });
-    auto* createButton = new QPushButton(QStringLiteral("部材近似モデルを作成"));
+    auto* createButton = new QPushButton(QStringLiteral("この1面を帯状に分ける"));
     createButton->setObjectName("primaryButton");
     connect(createButton, &QPushButton::clicked, this, [this] {
         if (onCreate) onCreate();
@@ -467,6 +501,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
 
 void PartModelPanel::SetVisibleSection(int index)
 {
+    visibleSection_ = index;
     for (int section = 0; section < static_cast<int>(sections_.size()); ++section) {
         if (sections_[section] != nullptr) {
             sections_[section]->setVisible(index < 0 || section == index);
@@ -939,9 +974,10 @@ void PartModelPanel::RefreshUnitTable()
             member.kind == 1 ? QStringLiteral("面")
             : member.kind == 2 ? QStringLiteral("板材") : QStringLiteral("ワイヤ")));
         auto* roleCombo = new QComboBox;
-        roleCombo->addItem(QStringLiteral("近似する"));
-        roleCombo->addItem(QStringLiteral("形状維持（接続）"));
-        roleCombo->addItem(QStringLiteral("対象外"));
+        // 実装の言葉ではなく、何が起きるかで書く(Codexレビュー#3)。
+        roleCombo->addItem(QStringLiteral("板に分ける（近似する）"));
+        roleCombo->addItem(QStringLiteral("形を変えずつなぐ"));
+        roleCombo->addItem(QStringLiteral("使わない"));
         // ワイヤは近似できない(面・板材のみ)。
         if (member.kind == 0 && member.role == 0) {
             unitMembers_[row].role = 1;

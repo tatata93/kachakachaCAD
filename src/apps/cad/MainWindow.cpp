@@ -1512,14 +1512,16 @@ void MainWindow::BuildMenusAndToolbar()
             outputToolActions_.push_back(action);
             return action;
         };
-        addOutputTool(QStringLiteral("出力するもの"),
-            QStringLiteral("出力するもの（表で管理）"),
-            QStringLiteral("出力対象を表で管理し、3Dモデルを確認して保存する"));
-        addOutputTool(QStringLiteral("1:1図面"), QStringLiteral("作業平面の1:1図面"),
-            QStringLiteral("作業平面上の線をSVG/DXFの1:1図面として保存"));
-        addOutputTool(QStringLiteral("ペーパークラフト展開"),
+        // 出す物の種類で3つに分ける(Codexレビュー: 表が全出力に効くと誤解される)。
+        addOutputTool(QStringLiteral("3Dモデル・プロジェクト"),
+            QStringLiteral("STL / STEP / .kcd に含めるもの"),
+            QStringLiteral("出す物を表に入れ、3Dで確かめてから STL / STEP / .kcd へ書き出す"));
+        addOutputTool(QStringLiteral("平面の線図（1:1）"),
+            QStringLiteral("作業平面の1:1図面"),
+            QStringLiteral("作業平面の上の線を、原寸の SVG / DXF として書き出す"));
+        addOutputTool(QStringLiteral("板材の展開図（1:1）"),
             QStringLiteral("ペーパークラフト展開（1:1）"),
-            QStringLiteral("板材の展開図・組立ガイドを出力"));
+            QStringLiteral("板材1枚を紙へ展開し、原寸の PDF / SVG / DXF として書き出す"));
         // 「3DモデルのSTL / STEP出力」は「出力するもの（表で管理）」へ統合した。
         // 同じ物を出す道が2つあると、どちらを押せばよいか分からなくなるため。
         if (!outputToolActions_.empty()) {
@@ -1534,13 +1536,13 @@ void MainWindow::BuildMenusAndToolbar()
     {
         auto* partToolGroup = new QActionGroup(this);
         const std::array<QString, 4> partToolNames = {
-            QStringLiteral("部材近似を作成"), QStringLiteral("一覧・型紙"),
-            QStringLiteral("曲げ確認と出力"), QStringLiteral("セット")};
+            QStringLiteral("部材にする"), QStringLiteral("一覧・型紙"),
+            QStringLiteral("曲げ確認と出力"), QStringLiteral("まとまり")};
         const std::array<QString, 4> partToolTips = {
-            QStringLiteral("板材を選び、帯状の部材へ近似分割する"),
-            QStringLiteral("作成済みモデルの一覧・再計算・板材化・型紙表示"),
-            QStringLiteral("曲げ具合をスライダーで確認し、任意の曲げ状態を出力"),
-            QStringLiteral("派生物のまとまりの表示状態を切り替える")};
+            QStringLiteral("曲面を、平らな板を曲げて作れる部材へ分ける"),
+            QStringLiteral("できた部材の一覧・再計算・板材化・型紙表示"),
+            QStringLiteral("曲げ具合をスライダーで確認し、その姿のまま出力する"),
+            QStringLiteral("部材グループ（まとまり）の表示・出力を切り替える")};
         for (int index = 0; index < 4; ++index) {
             auto* action = new QAction(partToolNames[index], this);
             action->setCheckable(true);
@@ -1689,6 +1691,9 @@ void MainWindow::RevealSurfaceGroup(const QString& title)
     for (QAction* action : surfaceToolActions_) {
         action->setChecked(action->data().toString() == effective);
     }
+    // 道具を変えたら操作ガイドも変える。これが無いと、押し出しを選んでいるのに
+    // 左下の案内が「ワイヤーから面を作る」のまま残る(実機の絵で発見)。
+    RefreshBeginnerGuide();
 }
 
 void MainWindow::ShowOutputTool(const QString& title)
@@ -1715,6 +1720,7 @@ void MainWindow::ShowOutputTool(const QString& title)
     for (QAction* action : outputToolActions_) {
         action->setChecked(action->data().toString() == effective);
     }
+    RefreshBeginnerGuide();
 }
 
 void MainWindow::ShowPartModelTool(int sectionIndex)
@@ -1723,6 +1729,7 @@ void MainWindow::ShowPartModelTool(int sectionIndex)
     if (partModelPanel_ != nullptr) {
         partModelPanel_->SetVisibleSection(sectionIndex);
     }
+    RefreshBeginnerGuide();
 }
 
 void MainWindow::SyncWorkModeToTab(int tabIndex)
@@ -2642,18 +2649,48 @@ void MainWindow::RefreshBeginnerGuide()
         }
         break;
     }
-    case 3:
-        setGuide(QStringLiteral("製作データを出力"),
-            outputItems_.empty()
-                ? QStringLiteral("次: 出したい物を選んで「選択を追加」")
-                : QStringLiteral("次: 3Dモデルを確認してから保存"),
-            QStringLiteral(
-                "1  出したい面・板材・実体・線を3D画面か一覧で選ぶ\n"
-                "2  「選択を追加」で出力表へ入れる（表の中身がそのまま出る）\n"
-                "3  「3Dモデルを出力する…」で完成形を回して確認\n"
-                "4  STL / STEP / .kcd で保存（1:1図面・展開は上のツール列）"),
-            QStringLiteral("output"));
+    case 3: {
+        // 出力モードは道具ごとに出す物も手順も違う。選んだ道具に合わせて案内する
+        // (Codexレビュー#1: 展開を選んでいるのに出力表へ誘導していた)。
+        QString outputTool;
+        for (QAction* action : outputToolActions_) {
+            if (action != nullptr && action->isChecked()) {
+                outputTool = action->data().toString();
+            }
+        }
+        if (outputTool == QStringLiteral("作業平面の1:1図面")) {
+            setGuide(QStringLiteral("平面の線図を原寸で書き出す"),
+                QStringLiteral("次: 書き出す作業平面を選ぶ"),
+                QStringLiteral(
+                    "1  「出力面」で作業平面を選ぶ\n"
+                    "2  「対象」を、その面の全線か、選んだ線だけかで決める\n"
+                    "3  SVG または DXF で書き出す（原寸・mm）"),
+                QStringLiteral("output"));
+        } else if (outputTool == QStringLiteral("ペーパークラフト展開（1:1）")) {
+            setGuide(QStringLiteral("板材を紙へ展開する"),
+                plateCount > 0 ? QStringLiteral("次: 用紙と作り方を決めて書き出す")
+                               : QStringLiteral("次: 3D画面で板材を1枚選ぶ"),
+                QStringLiteral(
+                    "1  展開したい板材を3D画面で1枚選ぶ\n"
+                    "2  作り方（1枚のまま／分けて貼る）と用紙を決める\n"
+                    "3  細かい切れ目・折り目は必要になってから触る\n"
+                    "4  1:1 PDF（または SVG / DXF）で書き出す"),
+                QStringLiteral("output"));
+        } else {
+            setGuide(QStringLiteral("3Dモデル・プロジェクトを書き出す"),
+                outputItems_.empty()
+                    ? QStringLiteral("次: 出したい物を選んで「選択を追加」")
+                    : QStringLiteral("次: 3Dで確かめてから書き出す"),
+                QStringLiteral(
+                    "1  出したい面・板材・実体・線を3D画面か一覧で選ぶ\n"
+                    "2  「選択を追加」で表へ入れる（表の中身がそのまま出る）\n"
+                    "3  「出力前に3Dで確かめる」で回して見る（橙色＝自動でふさいだ所）\n"
+                    "4  STL / STEP / .kcd で書き出す\n"
+                    "※ この表は1:1図面と展開には効きません"),
+                QStringLiteral("output"));
+        }
         break;
+    }
     case 4:
         setGuide(QStringLiteral("見た目を調整"), QStringLiteral("次: 色・太さ・線種を選ぶ"),
             QStringLiteral("1  対象の表示グループを開く\n2  色・太さ・線種・透明度を変更\n3  設定は次回起動にも残る"),
@@ -2664,14 +2701,50 @@ void MainWindow::RefreshBeginnerGuide()
             QStringLiteral("1  2点距離・3点角度・要素から方式を選択\n2  中央画面でガイド順に指定\n3  距離・接線・法線角を確認"),
             QStringLiteral("measure"));
         break;
-    case 6:
-        setGuide(QStringLiteral("部材近似モデルを作る"),
-            plateCount + surfaceCount > 0
-                ? QStringLiteral("次: 近似元を確認して部材近似モデルを作成")
-                : QStringLiteral("次: 近似元の板材または面を選ぶ"),
-            QStringLiteral("1  近似元(板材または面)と分割条件を指定\n2  一覧で部材を確認、型紙を表示\n3  曲げ確認: スライダー0%=展開を並べた状態→100%=折り曲げ状態\n4  折り角は折り線ごとの角度⇄%で指定。部材を選ぶとその部材だけ表示"),
-            QStringLiteral("output"));
+    case 6: {
+        // 近似モデルモードも道具ごとに手順が違う(Codexレビュー#1)。
+        const int partTool
+            = partModelPanel_ != nullptr ? partModelPanel_->VisibleSection() : 0;
+        if (partTool == 1) {
+            setGuide(QStringLiteral("できた部材を確かめる"),
+                QStringLiteral("次: 一覧でモデルか部材を選ぶ"),
+                QStringLiteral(
+                    "1  一覧から部材モデル（または中の部材1枚）を選ぶ\n"
+                    "2  型紙を開いて、幅・長さ・折り角を確かめる\n"
+                    "3  条件を変えたいときは「再計算」\n"
+                    "4  板材にすると、厚みの付いた実物の板になる"),
+                QStringLiteral("output"));
+        } else if (partTool == 2) {
+            setGuide(QStringLiteral("曲げ具合を見て、その姿で出す"),
+                QStringLiteral("次: 一覧で部材を選び、スライダーを動かす"),
+                QStringLiteral(
+                    "1  一覧で見たい部材を選ぶ（選ばないと全部）\n"
+                    "2  スライダー 0%＝平らに並べた形、100%＝組み上がった形\n"
+                    "3  折り角は折り線ごとに角度でも指定できる\n"
+                    "4  この姿のまま板材・STL・STEP・.kcd へ出せる"),
+                QStringLiteral("output"));
+        } else if (partTool == 3) {
+            setGuide(QStringLiteral("まとまりの表示を切り替える"),
+                QStringLiteral("次: まとまりを選んで表示を決める"),
+                QStringLiteral(
+                    "1  部材グループ（まとまり）を選ぶ\n"
+                    "2  表示・非表示、出力に含めるかを決める\n"
+                    "3  ここの設定は .kcd の書き出しにも効く"),
+                QStringLiteral("output"));
+        } else {
+            setGuide(QStringLiteral("曲面を、曲げて作れる部材にする"),
+                plateCount + surfaceCount > 0
+                    ? QStringLiteral("次: 表の役割と部品番号を決めて実行")
+                    : QStringLiteral("次: 3D画面で、まとめて作りたい面・板材を選ぶ"),
+                QStringLiteral(
+                    "1  車体のうち、まとめて作りたい面・板材を3D画面で選ぶ\n"
+                    "2  「選んだ物を下の表へ入れる」\n"
+                    "3  行ごとに 板に分ける／形を変えずつなぐ／使わない を決める\n"
+                    "4  「部品」に番号を入れて（同じ番号＝同じ部品）「まとめて部材にする」"),
+                QStringLiteral("output"));
+        }
         break;
+    }
     default:
         setGuide(QStringLiteral("作業を選んでください"), QStringLiteral("次: 上の製作工程を選ぶ"),
             QStringLiteral("1  平面\n2  作図\n3  面・板\n4  出力"), QStringLiteral("start"));

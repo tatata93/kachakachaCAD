@@ -808,8 +808,10 @@ QWidget* MainWindow::BuildOutputPanel()
     // --- 出力するもの(オーナー指示: 出力対象の管理表+3Dプレビュー) ---
     auto [outputSetContent, outputSetLayout] = beginSection();
     auto* outputSetHint = new QLabel(QStringLiteral(
-        "出力したい面・板材・実体・線を表に入れます。3D画面や一覧で選んで"
-        "「選択を追加」。表の中身がそのまま .kcd / STL / STEP の出力対象です。"));
+        "出したい面・板材・実体・線を表に入れます。3D画面や一覧で選んで"
+        "「選択を追加」。表の中身がそのまま .kcd / STL / STEP になります。\n"
+        "※ この表は「1:1図面」と「ペーパークラフト展開」には使いません"
+        "（あちらは作業平面・板材を直接選びます）。"));
     outputSetHint->setWordWrap(true);
     outputSetHint->setStyleSheet("color: #5c6670;");
     outputSetLayout->addWidget(outputSetHint);
@@ -871,19 +873,25 @@ QWidget* MainWindow::BuildOutputPanel()
     outputSetSummary_->setStyleSheet("color: #5c6670;");
     outputSetLayout->addWidget(outputSetSummary_);
 
-    auto* previewButton = new QPushButton(QStringLiteral("3Dモデルを出力する…"));
+    auto* previewButton
+        = new QPushButton(QStringLiteral("出力前に3Dで確かめる（別ウィンドウ）"));
     previewButton->setObjectName("primaryButton");
     previewButton->setToolTip(QStringLiteral(
         "別ウィンドウで完成形を確認します。ドラッグで回して、"
         "自動でふさいだ所(橙色)も見てから保存できます"));
     connect(previewButton, &QPushButton::clicked, this, &MainWindow::ShowOutputPreviewWindow);
     outputSetLayout->addWidget(previewButton);
+    auto* previewLegend = new QLabel(QStringLiteral(
+        "橙色＝閉じていないので自動でふさいだ所。ここが多いときは元の面を見直します。"));
+    previewLegend->setWordWrap(true);
+    previewLegend->setStyleSheet("color: #8a5a1e;");
+    outputSetLayout->addWidget(previewLegend);
     auto* outputExportButtons = new QHBoxLayout;
-    auto* setStlButton = new QPushButton(QStringLiteral("STLで保存"));
+    auto* setStlButton = new QPushButton(QStringLiteral("STLで書き出す"));
     connect(setStlButton, &QPushButton::clicked, this, [this] { ExportOutputSet(0); });
-    auto* setStepButton = new QPushButton(QStringLiteral("STEPで保存"));
+    auto* setStepButton = new QPushButton(QStringLiteral("STEPで書き出す"));
     connect(setStepButton, &QPushButton::clicked, this, [this] { ExportOutputSet(1); });
-    auto* setKcdButton = new QPushButton(QStringLiteral(".kcdで保存"));
+    auto* setKcdButton = new QPushButton(QStringLiteral(".kcdで書き出す"));
     connect(setKcdButton, &QPushButton::clicked, this, [this] { ExportOutputSet(2); });
     outputExportButtons->addWidget(setStlButton, 1);
     outputExportButtons->addWidget(setStepButton, 1);
@@ -906,7 +914,7 @@ QWidget* MainWindow::BuildOutputPanel()
     outputSetLayout->addWidget(filteredKcdButton);
 
     auto* outputSetSection = new CollapsibleSection(
-        QStringLiteral("出力するもの（表で管理）"), outputSetContent, true);
+        QStringLiteral("STL / STEP / .kcd に含めるもの"), outputSetContent, true);
     outputSetSection->setProperty("manualAnchor", QStringLiteral("outputSet"));
     layout->addWidget(outputSetSection);
 
@@ -929,7 +937,7 @@ QWidget* MainWindow::BuildOutputPanel()
     layout->addWidget(modelSection);
     // 出力ツール(上部)で選んだ1セクションだけ表示する(ADR 0025)。
     outputSections_ = {
-        {QStringLiteral("出力するもの（表で管理）"), outputSetSection},
+        {QStringLiteral("STL / STEP / .kcd に含めるもの"), outputSetSection},
         {QStringLiteral("作業平面の1:1図面"), planarSection},
         {QStringLiteral("ペーパークラフト展開（1:1）"), plateSection},
     };

@@ -861,6 +861,49 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         CreateApproximationUnitFromPanel();
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("extrude")) {
+        // 押し出し(統合)の実機確認。前面の輪郭を選んで押し出しの画面を出す。
+        if (surfaceModeAction_ != nullptr) {
+            surfaceModeAction_->trigger();
+        }
+        RevealSurfaceGroup(QStringLiteral("押し出し"));
+        for (int index = 0; index < static_cast<int>(project_.Wires().size()); ++index) {
+            if (project_.Wires()[index].name == "line_2") {
+                UpdateSelections({{CadSelectionKind::Wire, index}}, true);
+            }
+        }
+        if (extrudeMakeCap_ != nullptr) {
+            extrudeMakeCap_->setChecked(true);
+            extrudeMakeBottom_->setChecked(true);
+            extrudeMakePlate_->setChecked(true);
+            extrudeDistance_->setValue(15.0);
+        }
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("output-set")) {
+        // 出力モードの表とプレビュー(オーナー指示の新機能)の実機確認。
+        if (outputModeAction_ != nullptr) {
+            outputModeAction_->trigger();
+        }
+        ShowOutputTool(QStringLiteral("出力するもの（表で管理）"));
+        std::vector<CadSelection> selections;
+        for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+            selections.push_back({CadSelectionKind::Surface, index});
+        }
+        UpdateSelections(std::move(selections), true);
+        AddSelectionToOutputSet();
+        ShowOutputPreviewWindow();
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
+    } else if (state == QStringLiteral("win95")) {
+        // Windows 95 風の見た目(オーナー指示)の実機確認。
+        ApplyUiTheme(true);
+        if (surfaceModeAction_ != nullptr) {
+            surfaceModeAction_->trigger();
+        }
+        RevealSurfaceGroup(QStringLiteral("押し出し"));
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state.startsWith(QStringLiteral("fold-preview"))) {
         // 曲げ確認(組立アニメーション)の表示検証。実機のパネル連鎖どおりに
         // 近似 → 一覧で選択 → チェック+スライダー、で3Dビューへ重ねる。

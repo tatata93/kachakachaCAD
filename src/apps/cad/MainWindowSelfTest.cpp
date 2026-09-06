@@ -3780,8 +3780,9 @@ bool MainWindow::RunCreationSelfTest()
         if (project_.Surfaces().size() != exSurfaceStart + 3) {
             return fail("extrude creates side, cap and bottom surfaces");
         }
-        if (project_.Plates().size() != exPlateStart + 1) {
-            return fail("extrude creates a plate");
+        // チェックした面(側面・ふた・底)はすべて板になる(Codexレビュー反映)。
+        if (project_.Plates().size() != exPlateStart + 3) {
+            return fail("extrude plates every checked face");
         }
         const auto tipWire = std::find_if(project_.Wires().begin(), project_.Wires().end(),
             [](const kachakacha::model::NamedWire& wire) {

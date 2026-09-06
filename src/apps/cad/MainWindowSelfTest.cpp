@@ -902,9 +902,13 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         }
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("theme-reset")) {
+        // 撮影で切り替えた見た目を既定(通常版)へ戻して保存する。
+        ApplyUiTheme(false, true);
     } else if (state == QStringLiteral("win95")) {
         // Windows 95 風の見た目(オーナー指示)の実機確認。
-        ApplyUiTheme(true);
+        // 撮影のためだけなので設定には保存しない。
+        ApplyUiTheme(true, false);
         if (surfaceModeAction_ != nullptr) {
             surfaceModeAction_->trigger();
         }

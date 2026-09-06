@@ -271,7 +271,8 @@ private:
     //! セルフテスト・スクリーンショット中はモーダルを出さずログだけにする。
     void ReportOperationError(const QString& title, const QString& message);
     //! 見た目の切り替え(オーナー指示: Windows 95 風と通常版)。
-    void ApplyUiTheme(bool windows95);
+    //! persist=false のときは設定へ保存しない(撮影・自動テスト用)。
+    void ApplyUiTheme(bool windows95, bool persist = true);
     //! 出力モード(オーナー指示): 出力対象の管理表と3Dプレビュー。
     void AddSelectionToOutputSet();
     void RemoveSelectedOutputSetRow();

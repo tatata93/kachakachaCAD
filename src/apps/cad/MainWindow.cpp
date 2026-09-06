@@ -991,13 +991,17 @@ void MainWindow::ShowShortcutReference()
         "灰色の矢印\t画面基準で回転（位置固定、ドラッグで連続）"));
 }
 
-void MainWindow::ApplyUiTheme(bool windows95)
+void MainWindow::ApplyUiTheme(bool windows95, bool persist)
 {
     // 見た目の切り替え(オーナー指示: Windows 95 風と通常版を選べる)。
     // Win95 風のときはアプリ独自のQSS(角丸・淡い色)を外し、Win95スタイルへ委ねる。
     useWindows95Theme_ = windows95;
     if (windows95) {
-        setStyleSheet(QString());
+        // 一覧・表・入力欄の地は白(COLOR_WINDOW)。ここだけスタイルシートで補う
+        // (部品の描画は Win95Style が行うので、色以外は指定しない)。
+        setStyleSheet(QStringLiteral(
+            "QTreeView, QListView, QTableView, QTextEdit, QPlainTextEdit,"
+            " QAbstractItemView { background-color: #ffffff; color: #000000; }"));
         if (win95Style_ == nullptr) {
             win95Style_ = new Win95Style();
             win95Style_->setParent(qApp);
@@ -1051,8 +1055,11 @@ void MainWindow::ApplyUiTheme(bool windows95)
         QTreeWidget::item:selected { background: #cce5e7; color: #17242b; }
     )"));
     }
-    QSettings settings(QStringLiteral("kachakachaCAD"), QStringLiteral("kachakachaCAD"));
-    settings.setValue(QStringLiteral("ui/windows95"), windows95);
+    if (persist) {
+        QSettings settings(
+            QStringLiteral("kachakachaCAD"), QStringLiteral("kachakachaCAD"));
+        settings.setValue(QStringLiteral("ui/windows95"), windows95);
+    }
     if (windows95Themeaction_ != nullptr
         && windows95Themeaction_->isChecked() != windows95) {
         const QSignalBlocker blocker(windows95Themeaction_);

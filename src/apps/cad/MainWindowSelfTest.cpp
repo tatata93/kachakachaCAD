@@ -669,6 +669,8 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
             return false;
         }
         showTab(2);
+        // 厚み化は押し出しの画面へ統合したので、実機と同じ道具で開く。
+        RevealSurfaceGroup(QStringLiteral("押し出し"));
         finalRevealTab = 2;
         finalRevealAnchor = QStringLiteral("plateCreate");
         viewport_->SetIsometricView();
@@ -4579,6 +4581,18 @@ bool MainWindow::RunCreationSelfTest()
     }
     if (toolsTabs_->currentIndex() != 2 || !lightCaseSectionVisible || !createSectionHidden) {
         return fail("surface tool shows only its own section");
+    }
+    // オーナー指示: 厚み化は押し出しへ統合した。押し出しの道具を選ぶと、
+    // 厚み化の入力欄も同じ画面に出ていること(別の道具として残っていない)。
+    RevealSurfaceGroup(QStringLiteral("押し出し"));
+    if (plateThickness_ == nullptr || extrudeDistance_ == nullptr
+        || plateThickness_->isHidden() || extrudeDistance_->isHidden()) {
+        return fail("thickness controls live inside the extrude tool");
+    }
+    for (QAction* action : surfaceToolActions_) {
+        if (action->data().toString() == QStringLiteral("厚み化（ワイヤ・面・板）")) {
+            return fail("the separate thickness tool is gone");
+        }
     }
     RevealSurfaceGroup(QStringLiteral("ワイヤーから面"));
     // 出力ツールも同様に1セクションだけ表示する。

@@ -1265,111 +1265,6 @@ QWidget* MainWindow::BuildSurfacePanel()
     lightCaseLayout->addWidget(createLightCaseButton);
     layout->addWidget(lightCaseBox);
 
-    auto* plateTitle = new QLabel(QStringLiteral("厚み化（ワイヤ・面・板）"));
-    plateTitle->setProperty("manualAnchor", QStringLiteral("plateCreate"));
-    plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
-    layout->addWidget(plateTitle);
-
-    // 厚み化の専用フォーム(オーナー指示: UIの使い回しをやめ、厚みの設定と
-    // 出力[ワイヤ][面][板]のチェックで何を作るかを選ぶ)。
-    auto* plateForm = new QFormLayout;
-    plateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    plateName_ = new QLineEdit(QStringLiteral("plate_1"));
-    plateSurface_ = new QComboBox;
-    plateThickness_ = MakePositiveField(0.5);
-    plateThickness_->setSuffix(QStringLiteral(" mm"));
-    plateVariableThickness_ = new QCheckBox(QStringLiteral("終端まで厚みを変化"));
-    plateEndThickness_ = MakePositiveField(0.5);
-    plateEndThickness_->setSuffix(QStringLiteral(" mm"));
-    plateEndThickness_->setEnabled(false);
-    plateDirection_ = new QComboBox;
-    plateDirection_->addItem(QStringLiteral("+側へ（法線矢印側）"), static_cast<int>(PlateThicknessDirection::Positive));
-    plateDirection_->addItem(QStringLiteral("中央（両側へ半分）"), static_cast<int>(PlateThicknessDirection::Centered));
-    plateDirection_->addItem(QStringLiteral("-側へ（矢印と反対）"), static_cast<int>(PlateThicknessDirection::Negative));
-    plateForm->addRow(QStringLiteral("名前"), plateName_);
-    plateForm->addRow(QStringLiteral("元の面"), plateSurface_);
-    plateForm->addRow(QStringLiteral("厚み（始端）"), plateThickness_);
-    plateForm->addRow(plateVariableThickness_);
-    plateForm->addRow(QStringLiteral("厚み（終端）"), plateEndThickness_);
-    plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
-
-    // その厚みを何にするか: 3つのチェックの組み合わせで出力を選ぶ。
-    auto* thicknessOutputs = new QWidget;
-    auto* thicknessOutputLayout = new QHBoxLayout(thicknessOutputs);
-    thicknessOutputLayout->setContentsMargins(0, 0, 0, 0);
-    thicknessOutputLayout->setSpacing(10);
-    thicknessMakeWire_ = new QCheckBox(QStringLiteral("ワイヤ"));
-    thicknessMakeWire_->setToolTip(QStringLiteral(
-        "元面の輪郭・断面を厚みぶん法線方向へずらした独立ワイヤを作ります"));
-    thicknessMakeSurface_ = new QCheckBox(QStringLiteral("面"));
-    thicknessMakeSurface_->setToolTip(QStringLiteral(
-        "厚みぶん法線方向へずらした面(反対側表面、断面ロフト近似)を作ります"));
-    thicknessMakePlate_ = new QCheckBox(QStringLiteral("板"));
-    thicknessMakePlate_->setChecked(true);
-    thicknessMakePlate_->setToolTip(QStringLiteral(
-        "閉じた3D板材を作ります(材質は板にだけ使われます)"));
-    thicknessOutputLayout->addWidget(thicknessMakeWire_);
-    thicknessOutputLayout->addWidget(thicknessMakeSurface_);
-    thicknessOutputLayout->addWidget(thicknessMakePlate_);
-    thicknessOutputLayout->addStretch(1);
-    plateForm->addRow(QStringLiteral("厚みで作るもの"), thicknessOutputs);
-
-    plateMaterial_ = new QComboBox;
-    plateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("styrene"));
-    plateMaterial_->addItem(QStringLiteral("紙・厚紙"), QStringLiteral("paper"));
-    plateMaterial_->addItem(QStringLiteral("真鍮板"), QStringLiteral("brass"));
-    plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
-    plateForm->addRow(QStringLiteral("材質（板のみ）"), plateMaterial_);
-    layout->addLayout(plateForm);
-
-    connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);
-    connect(plateThickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
-        if (!plateVariableThickness_->isChecked()) {
-            plateEndThickness_->setValue(value);
-        }
-    });
-    connect(thicknessMakePlate_, &QCheckBox::toggled, plateMaterial_, &QWidget::setEnabled);
-
-    auto* plateButton = new QPushButton(QStringLiteral("選択した面へ厚みを適用"));
-    plateButton->setObjectName("primaryButton");
-    plateButton->setToolTip(QStringLiteral(
-        "「元の面」の面へ厚みを適用し、チェックした出力(ワイヤ・面・板)を作ります"));
-    connect(plateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSurface);
-    layout->addWidget(plateButton);
-
-    auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから直接厚み化（板）"));
-    wirePlateButton->setToolTip(QStringLiteral(
-        "選択したワイヤーから面を作り、そのまま板にします。\n"
-        "通常は1閉輪郭で平板、2断面で曲面板、3断面以上でロフト板。"
-        "外形ガイド方式を選んだ場合は、外形2本＋断面1本以上から板を作ります"));
-    connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
-    layout->addWidget(wirePlateButton);
-
-    auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
-    connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
-    layout->addWidget(plateUpdateButton);
-
-    // 板材化後の補助: 投影輪郭を板厚位置へ複製する(旧「厚み位置のワイヤ」タブを
-    // 廃止し、厚み化セクションのサブ機能として残す。オーナー指示: 被るタブは消す)。
-    auto* offsetWireBox = new QGroupBox(QStringLiteral("投影輪郭を厚み位置へ複製"));
-    offsetWireBox->setObjectName(QStringLiteral("plateOffsetSection"));
-    offsetWireBox->setProperty("manualAnchor", QStringLiteral("plateOffset"));
-    auto* offsetWireLayout = new QVBoxLayout(offsetWireBox);
-    plateOffsetSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
-    plateOffsetSelectionLabel_->setStyleSheet("color: #5c6670;");
-    plateOffsetLayer_ = new QComboBox;
-    plateOffsetLayer_->addItem(QStringLiteral("+側表面（法線矢印側）"), 1.0);
-    plateOffsetLayer_->addItem(QStringLiteral("板厚の中央"), 0.5);
-    plateOffsetLayer_->addItem(QStringLiteral("-側表面（矢印と反対）"), 0.0);
-    auto* offsetWireButton = new QPushButton(QStringLiteral("選択輪郭をこの位置へ複製"));
-    offsetWireButton->setToolTip(QStringLiteral(
-        "できあがった板材の任意の厚み位置に輪郭ワイヤーを作ります(治具や罫書き線用)。\n"
-        "板材1枚と、その元面へ投影された輪郭を選択してから押します"));
-    connect(offsetWireButton, &QPushButton::clicked, this, &MainWindow::CreatePlateOffsetWires);
-    offsetWireLayout->addWidget(plateOffsetSelectionLabel_);
-    offsetWireLayout->addWidget(plateOffsetLayer_);
-    offsetWireLayout->addWidget(offsetWireButton);
-    layout->addWidget(offsetWireBox);
 
     auto* jigTitle = new QLabel(QStringLiteral("曲面から成形治具"));
     jigTitle->setProperty("manualAnchor", QStringLiteral("surfaceJig"));
@@ -1716,6 +1611,114 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::ExtrudeSelection);
     layout->addWidget(extrudeButton);
 
+    // オーナー指示で「厚み化」は押し出しへ統合した。押し出しの一般形が
+    // 厚み化なので、同じ画面の続きとして置く(道具列からは外した)。
+    auto* plateTitle = new QLabel(QStringLiteral("厚み化（ワイヤ・面・板）"));
+    plateTitle->setProperty("manualAnchor", QStringLiteral("plateCreate"));
+    plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
+    layout->addWidget(plateTitle);
+
+    // 厚み化の専用フォーム(オーナー指示: UIの使い回しをやめ、厚みの設定と
+    // 出力[ワイヤ][面][板]のチェックで何を作るかを選ぶ)。
+    auto* plateForm = new QFormLayout;
+    plateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    plateName_ = new QLineEdit(QStringLiteral("plate_1"));
+    plateSurface_ = new QComboBox;
+    plateThickness_ = MakePositiveField(0.5);
+    plateThickness_->setSuffix(QStringLiteral(" mm"));
+    plateVariableThickness_ = new QCheckBox(QStringLiteral("終端まで厚みを変化"));
+    plateEndThickness_ = MakePositiveField(0.5);
+    plateEndThickness_->setSuffix(QStringLiteral(" mm"));
+    plateEndThickness_->setEnabled(false);
+    plateDirection_ = new QComboBox;
+    plateDirection_->addItem(QStringLiteral("+側へ（法線矢印側）"), static_cast<int>(PlateThicknessDirection::Positive));
+    plateDirection_->addItem(QStringLiteral("中央（両側へ半分）"), static_cast<int>(PlateThicknessDirection::Centered));
+    plateDirection_->addItem(QStringLiteral("-側へ（矢印と反対）"), static_cast<int>(PlateThicknessDirection::Negative));
+    plateForm->addRow(QStringLiteral("名前"), plateName_);
+    plateForm->addRow(QStringLiteral("元の面"), plateSurface_);
+    plateForm->addRow(QStringLiteral("厚み（始端）"), plateThickness_);
+    plateForm->addRow(plateVariableThickness_);
+    plateForm->addRow(QStringLiteral("厚み（終端）"), plateEndThickness_);
+    plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
+
+    // その厚みを何にするか: 3つのチェックの組み合わせで出力を選ぶ。
+    auto* thicknessOutputs = new QWidget;
+    auto* thicknessOutputLayout = new QHBoxLayout(thicknessOutputs);
+    thicknessOutputLayout->setContentsMargins(0, 0, 0, 0);
+    thicknessOutputLayout->setSpacing(10);
+    thicknessMakeWire_ = new QCheckBox(QStringLiteral("ワイヤ"));
+    thicknessMakeWire_->setToolTip(QStringLiteral(
+        "元面の輪郭・断面を厚みぶん法線方向へずらした独立ワイヤを作ります"));
+    thicknessMakeSurface_ = new QCheckBox(QStringLiteral("面"));
+    thicknessMakeSurface_->setToolTip(QStringLiteral(
+        "厚みぶん法線方向へずらした面(反対側表面、断面ロフト近似)を作ります"));
+    thicknessMakePlate_ = new QCheckBox(QStringLiteral("板"));
+    thicknessMakePlate_->setChecked(true);
+    thicknessMakePlate_->setToolTip(QStringLiteral(
+        "閉じた3D板材を作ります(材質は板にだけ使われます)"));
+    thicknessOutputLayout->addWidget(thicknessMakeWire_);
+    thicknessOutputLayout->addWidget(thicknessMakeSurface_);
+    thicknessOutputLayout->addWidget(thicknessMakePlate_);
+    thicknessOutputLayout->addStretch(1);
+    plateForm->addRow(QStringLiteral("厚みで作るもの"), thicknessOutputs);
+
+    plateMaterial_ = new QComboBox;
+    plateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("styrene"));
+    plateMaterial_->addItem(QStringLiteral("紙・厚紙"), QStringLiteral("paper"));
+    plateMaterial_->addItem(QStringLiteral("真鍮板"), QStringLiteral("brass"));
+    plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
+    plateForm->addRow(QStringLiteral("材質（板のみ）"), plateMaterial_);
+    layout->addLayout(plateForm);
+
+    connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);
+    connect(plateThickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (!plateVariableThickness_->isChecked()) {
+            plateEndThickness_->setValue(value);
+        }
+    });
+    connect(thicknessMakePlate_, &QCheckBox::toggled, plateMaterial_, &QWidget::setEnabled);
+
+    auto* plateButton = new QPushButton(QStringLiteral("選択した面へ厚みを適用"));
+    plateButton->setObjectName("primaryButton");
+    plateButton->setToolTip(QStringLiteral(
+        "「元の面」の面へ厚みを適用し、チェックした出力(ワイヤ・面・板)を作ります"));
+    connect(plateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSurface);
+    layout->addWidget(plateButton);
+
+    auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから直接厚み化（板）"));
+    wirePlateButton->setToolTip(QStringLiteral(
+        "選択したワイヤーから面を作り、そのまま板にします。\n"
+        "通常は1閉輪郭で平板、2断面で曲面板、3断面以上でロフト板。"
+        "外形ガイド方式を選んだ場合は、外形2本＋断面1本以上から板を作ります"));
+    connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
+    layout->addWidget(wirePlateButton);
+
+    auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
+    connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
+    layout->addWidget(plateUpdateButton);
+
+    // 板材化後の補助: 投影輪郭を板厚位置へ複製する(旧「厚み位置のワイヤ」タブを
+    // 廃止し、厚み化セクションのサブ機能として残す。オーナー指示: 被るタブは消す)。
+    auto* offsetWireBox = new QGroupBox(QStringLiteral("投影輪郭を厚み位置へ複製"));
+    offsetWireBox->setObjectName(QStringLiteral("plateOffsetSection"));
+    offsetWireBox->setProperty("manualAnchor", QStringLiteral("plateOffset"));
+    auto* offsetWireLayout = new QVBoxLayout(offsetWireBox);
+    plateOffsetSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 投影ワイヤー0本"));
+    plateOffsetSelectionLabel_->setStyleSheet("color: #5c6670;");
+    plateOffsetLayer_ = new QComboBox;
+    plateOffsetLayer_->addItem(QStringLiteral("+側表面（法線矢印側）"), 1.0);
+    plateOffsetLayer_->addItem(QStringLiteral("板厚の中央"), 0.5);
+    plateOffsetLayer_->addItem(QStringLiteral("-側表面（矢印と反対）"), 0.0);
+    auto* offsetWireButton = new QPushButton(QStringLiteral("選択輪郭をこの位置へ複製"));
+    offsetWireButton->setToolTip(QStringLiteral(
+        "できあがった板材の任意の厚み位置に輪郭ワイヤーを作ります(治具や罫書き線用)。\n"
+        "板材1枚と、その元面へ投影された輪郭を選択してから押します"));
+    connect(offsetWireButton, &QPushButton::clicked, this, &MainWindow::CreatePlateOffsetWires);
+    offsetWireLayout->addWidget(plateOffsetSelectionLabel_);
+    offsetWireLayout->addWidget(plateOffsetLayer_);
+    offsetWireLayout->addWidget(offsetWireButton);
+    layout->addWidget(offsetWireBox);
+
     auto* revolveTitle = new QLabel(QStringLiteral("回転して面を作る（ろくろ）"));
     revolveTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(revolveTitle);
@@ -1762,7 +1765,6 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("断面と外形ガイドから面（Gordon面）"),
         QStringLiteral("平面図を面へ投影"),
         QStringLiteral("飛び出すライトケース"),
-        QStringLiteral("厚み化（ワイヤ・面・板）"),
         QStringLiteral("曲面から成形治具"),
         QStringLiteral("板材に開口"),
         QStringLiteral("展開時の切れ目"),

@@ -1442,14 +1442,14 @@ void MainWindow::BuildMenusAndToolbar()
             QStringLiteral("縦横の断面ネットワークから面を作る"));
         addSurfaceTool(QStringLiteral("面へ投影"), QStringLiteral("平面図を面へ投影"),
             QStringLiteral("平面の下書きを面へ投影する（窓・開口の輪郭作りに）"));
-        addSurfaceTool(QStringLiteral("押し出し"), QStringLiteral("押し出し"),
+        // オーナー指示で厚み化は押し出しへ統合済み。押し出しの画面の続きに
+        // 厚み化の詳しい設定(可変厚み・厚み方向・材質)が並ぶ。
+        addSurfaceTool(QStringLiteral("押し出し・厚み化"), QStringLiteral("押し出し"),
             QStringLiteral("線・面を押し出して、先端の線・側面・ふた・板材を作る"
-                           "（厚み化・オフセット面もここ）"));
+                           "。厚み化・オフセット面も同じ画面"));
         addSurfaceTool(QStringLiteral("回転"), QStringLiteral("回転して面を作る（ろくろ）"),
             QStringLiteral("断面を軸まわりに回して面を作る"));
         surfaceToolbar_->addSeparator();
-        addSurfaceTool(QStringLiteral("厚み化"), QStringLiteral("厚み化（ワイヤ・面・板）"),
-            QStringLiteral("面に厚みを設定し、ワイヤ・面・板をチェックで選んで出力する"));
         addSurfaceTool(QStringLiteral("開口"), QStringLiteral("板材に開口"),
             QStringLiteral("板材に窓・穴などの開口を追加する"));
         addSurfaceTool(QStringLiteral("切れ目"), QStringLiteral("展開時の切れ目"),
@@ -2584,7 +2584,9 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("1  押し出す線・面を3D画面か一覧で選ぶ\n"
                                "2  方向（法線=自動 / X・Y・Z）と距離、または到達面を決める\n"
                                "3  作るもの（先端の線・側面・ふた・底・板材）をチェック\n"
-                               "4  「押し出す」。面を選べば厚み化・オフセット面と同じ結果になる"),
+                               "4  「押し出す」。面を選べば厚み化・オフセット面と同じ結果になる\n"
+                               "※ 可変厚み・厚み方向・材質を細かく決めたいときは"
+                               "同じ画面の下「厚み化」を使う"),
                 QStringLiteral("extrude"));
         } else if (sectionTitle == QStringLiteral("回転して面を作る（ろくろ）")) {
             setGuide(QStringLiteral("断面を回して面を作る"),
@@ -2597,11 +2599,6 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("次: 最前面の閉じた輪郭と接続先を選ぶ"),
                 QStringLiteral("1  最前面の閉じた輪郭を選択\n2  Ctrl+クリックで接続先の面/板材\n3  方向を選んで作成"),
                 QStringLiteral("lightcase"));
-        } else if (sectionTitle == QStringLiteral("厚み化（ワイヤ・面・板）")) {
-            setGuide(QStringLiteral("面に厚みを付ける"),
-                QStringLiteral("次: 面を選び、厚みと出力を決める"),
-                QStringLiteral("1  面(または閉じた輪郭)を選択\n2  厚み・厚み方向を指定\n3  出力[ワイヤ][面][板]をチェックして厚みを適用"),
-                QStringLiteral("plate"));
         } else if (sectionTitle == QStringLiteral("曲面から成形治具")) {
             setGuide(QStringLiteral("曲面から成形治具を作る"),
                 QStringLiteral("次: 元になる曲面を選ぶ"),

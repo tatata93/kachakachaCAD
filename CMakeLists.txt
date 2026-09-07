@@ -554,6 +554,9 @@ endif()
 # =======================================================================
 
 add_library(kachakacha_v2_core STATIC
+    src/next/kachakacha/base/Diagnostic.cpp
+    src/next/kachakacha/base/Ids.cpp
+    src/next/kachakacha/base/Uuid.cpp
     src/next/kachakacha/base/Version.cpp
 )
 target_include_directories(kachakacha_v2_core PUBLIC src/next)
@@ -596,6 +599,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(harness_tests tests_v2/harness_tests.cpp)
     kachakacha_add_v2_test(architecture_tests tests_v2/architecture_tests.cpp)
     kachakacha_add_v2_test(scaffold_tests tests_v2/scaffold_tests.cpp)
+    kachakacha_add_v2_test(foundation_tests tests_v2/foundation_tests.cpp)
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
 endif()
 

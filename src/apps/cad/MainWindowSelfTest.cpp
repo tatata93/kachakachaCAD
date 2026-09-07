@@ -4770,10 +4770,23 @@ bool MainWindow::RunCreationSelfTest()
         // オーナー報告: 部材を1つ選んでいるのに全部が動く/板材化で全部出る。
         // 一覧(近似モデルの別の道具の中)で選ばなくても、3D画面・モデルツリーの
         // 選択から対象の部材が決まること。
-        if (project_.PartModels().empty()) {
-            return fail("a part model exists for the active-part check");
-        }
-        const std::string modelName = project_.PartModels().front().name;
+        // この時点でモデルが無ければ、確認用に小さいものを作る。
+        const std::size_t apWireStart = project_.Wires().size();
+        const std::size_t apSurfaceStart = project_.Surfaces().size();
+        project_.AddWire("__ap下", Wire::Polyline({
+            {1000.0, 0.0, 0.0}, {1010.0, 0.0, 0.0}, {1020.0, 0.0, 0.0},
+        }));
+        project_.AddWire("__ap上", Wire::Polyline({
+            {1000.0, 20.0, 3.0}, {1010.0, 20.0, 5.0}, {1020.0, 20.0, 3.0},
+        }));
+        project_.AddRuledSurface("__ap面", "__ap下", "__ap上");
+        kachakacha::model::PartApproximationOptions apOptions;
+        apOptions.splitAxis = kachakacha::model::PartSplitAxis::V;
+        apOptions.automaticBoundaries = false;
+        apOptions.manualBoundaryParameters = {0.5};
+        project_.AddPartModelFromSurface("__ap近似", "__ap面", apOptions);
+        RefreshModelViews(false);
+        const std::string modelName = "__ap近似";
         int partSurfaceIndex = -1;
         int lastPartNumber = 0;
         for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
@@ -4802,6 +4815,17 @@ bool MainWindow::RunCreationSelfTest()
         UpdateSelections({}, true);
         if (!ActivePartNumbers(modelName).empty()) {
             return fail("with nothing selected every part is the target");
+        }
+        if (!project_.RemovePartModel(modelName)) {
+            return fail("clean up the active-part test model");
+        }
+        (void)project_.RemoveSurface("__ap面");
+        (void)project_.RemoveWire("__ap下");
+        (void)project_.RemoveWire("__ap上");
+        RefreshModelViews(false);
+        if (project_.Wires().size() != apWireStart
+            || project_.Surfaces().size() != apSurfaceStart) {
+            return fail("the active-part test leaves nothing behind");
         }
     }
     progressMark("active part checked");

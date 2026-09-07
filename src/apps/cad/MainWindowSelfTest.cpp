@@ -881,6 +881,49 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         CreateApproximationUnitFromPanel();
         viewport_->SetIsometricView();
         viewport_->FitAll();
+    } else if (state == QStringLiteral("window-approx")) {
+        // オーナー報告「近似した窓などが変な形になったりしてる」の実機確認。
+        // 受入モデルの板材の開口を面へも登録し、そのまま部材に分けて、
+        // 部材の境目をまたぐ窓が両方の部材へきれいに開くかを見る。
+        for (const auto& plate : project_.Plates()) {
+            if (plate.name != "nose_panel_front") {
+                continue;
+            }
+            const std::vector<std::string> openings = plate.openingWireNames;
+            for (const std::string& opening : openings) {
+                try {
+                    project_.AddSurfaceOpening("nose_skin", opening);
+                } catch (const std::exception&) {
+                }
+            }
+            break;
+        }
+        kachakacha::model::PartApproximationOptions windowOptions;
+        windowOptions.splitAxis = kachakacha::model::PartSplitAxis::V;
+        windowOptions.maximumDeviationMillimeters = 0.25;
+        windowOptions.maximumPartCount = 12;
+        try {
+            project_.AddPartModelFromSurface("窓近似", "nose_skin", windowOptions);
+        } catch (const std::exception&) {
+        }
+        project_.SetSurfaceVisible("nose_skin", false);
+        std::vector<std::string> plateNames;
+        for (const auto& plate : project_.Plates()) {
+            plateNames.push_back(plate.name);
+        }
+        for (const std::string& plateName : plateNames) {
+            project_.SetPlateVisible(plateName, false);
+        }
+        if (partModelModeAction_ != nullptr) {
+            partModelModeAction_->trigger();
+        }
+        ShowPartModelTool(2);
+        RefreshModelViews(false);
+        partModelPanel_->SelectModelForTest(QStringLiteral("窓近似"));
+        partModelPanel_->SetFoldPreviewForTest(true, 100);
+        RefreshModelViews(false);
+        viewport_->SetIsometricView();
+        viewport_->FitAll();
     } else if (state == QStringLiteral("extrude")) {
         // 押し出し(統合)の実機確認。前面の輪郭を選んで押し出しの画面を出す。
         if (surfaceModeAction_ != nullptr) {

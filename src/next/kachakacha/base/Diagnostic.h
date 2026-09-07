@@ -6,6 +6,7 @@
 
 #include "kachakacha/base/Ids.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -62,16 +63,17 @@ public:
     [[nodiscard]] static Result Success(T value, std::vector<Diagnostic> warnings = {})
     {
         Result result;
-        result.value_ = std::move(value);
-        result.hasValue_ = true;
         result.diagnostics_ = std::move(warnings);
-        // 呼び出し側の取り違えを早く見つけるため、Errorが混ざっていたら値を落とす。
+        // 呼び出し側の取り違えを早く見つけるため、Errorが混ざっていたら値を渡さない。
+        bool hasError = false;
         for (const Diagnostic& diagnostic : result.diagnostics_) {
             if (diagnostic.IsError()) {
-                result.hasValue_ = false;
-                result.value_ = T{};
+                hasError = true;
                 break;
             }
+        }
+        if (!hasError) {
+            result.value_.emplace(std::move(value));
         }
         return result;
     }
@@ -79,7 +81,6 @@ public:
     [[nodiscard]] static Result Failure(std::vector<Diagnostic> errors)
     {
         Result result;
-        result.hasValue_ = false;
         result.diagnostics_ = std::move(errors);
         return result;
     }
@@ -89,8 +90,9 @@ public:
         return Failure(std::vector<Diagnostic>{std::move(error)});
     }
 
-    [[nodiscard]] bool HasValue() const noexcept { return hasValue_; }
-    [[nodiscard]] const T& Value() const { return value_; }
+    [[nodiscard]] bool HasValue() const noexcept { return value_.has_value(); }
+    //! HasValue() が false のときに呼んではならない。
+    [[nodiscard]] const T& Value() const { return *value_; }
     [[nodiscard]] const std::vector<Diagnostic>& Diagnostics() const noexcept
     {
         return diagnostics_;
@@ -106,8 +108,7 @@ public:
     }
 
 private:
-    T value_{};
-    bool hasValue_ = false;
+    std::optional<T> value_;
     std::vector<Diagnostic> diagnostics_;
 };
 

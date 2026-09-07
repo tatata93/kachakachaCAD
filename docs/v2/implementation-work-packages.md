@@ -10,7 +10,7 @@
 | WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 完了(`codex/v2-wp01-build-scaffold`、v2_foundation_tests 22件) | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 未着手 | WP-02 | Document、Feature DAG、Command、Undo |
-| WP-04 | 未着手 | WP-02 | Curve/Wire/Chain、編集、数式 |
+| WP-04 | 進行中(Claude、`codex/v2-wp01-build-scaffold`、曲線20件・数式15件・鎖14件。トリム/延長/フィレットは残り) | WP-02 | Curve/Wire/Chain、編集、数式 |
 | WP-05 | 未着手 | WP-03, WP-04 | `.kcd2` JSON/ZIP保存 |
 | WP-06 | 未着手 | WP-03, WP-04 | OCCT evaluator、GuideSurface |
 | WP-07 | 未着手 | WP-06 | Part作成、押し出し、Boolean、Subshape |

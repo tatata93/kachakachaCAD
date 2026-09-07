@@ -558,6 +558,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Ids.cpp
     src/next/kachakacha/base/Uuid.cpp
     src/next/kachakacha/base/Version.cpp
+    src/next/kachakacha/geometry/ArcBuilders.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/WireChain.cpp
@@ -606,6 +607,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(curve_tests tests_v2/curve_tests.cpp)
     kachakacha_add_v2_test(expression_tests tests_v2/expression_tests.cpp)
     kachakacha_add_v2_test(wire_chain_tests tests_v2/wire_chain_tests.cpp)
+    kachakacha_add_v2_test(arc_builder_tests tests_v2/arc_builder_tests.cpp)
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
 endif()
 

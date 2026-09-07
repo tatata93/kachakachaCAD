@@ -195,7 +195,7 @@ void MainWindow::AddSelectionToOutputSet()
     }
     if (added == 0) {
         ReportOperationError(QStringLiteral("出力するもの"),
-            QStringLiteral("3D画面か一覧で、出力したい面・板材・実体・線を選んでから押してください。"));
+            QStringLiteral("3D画面か一覧で、出力したい面部品・実体・線を選んでから押してください。"));
         return;
     }
     RefreshOutputSetTable();
@@ -836,10 +836,10 @@ QWidget* MainWindow::BuildOutputPanel()
     // --- 出力するもの(オーナー指示: 出力対象の管理表+3Dプレビュー) ---
     auto [outputSetContent, outputSetLayout] = beginSection();
     auto* outputSetHint = new QLabel(QStringLiteral(
-        "出したい面・板材・実体・線を表に入れます。3D画面や一覧で選んで"
+        "出したい面部品・実体・線を表に入れます。3D画面や一覧で選んで"
         "「選択を追加」。表の中身がそのまま .kcd / STL / STEP になります。\n"
         "※ この表は「1:1図面」と「ペーパークラフト展開」には使いません"
-        "（あちらは作業平面・板材を直接選びます）。"));
+        "（あちらは作業平面・面部品を直接選びます）。"));
     outputSetHint->setWordWrap(true);
     outputSetHint->setStyleSheet("color: #5c6670;");
     outputSetLayout->addWidget(outputSetHint);

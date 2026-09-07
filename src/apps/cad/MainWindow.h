@@ -18,6 +18,7 @@
 #include <vector>
 
 class PartModelPanel;
+class SheetPartPanel;
 class QCloseEvent;
 class QAction;
 class QDialog;
@@ -256,9 +257,16 @@ private:
     void CreateGordonSurfaceFromSelection();
     void ProjectSelectedWiresToSurface();
     void CreateProtrudingLightCase();
-    void CreatePlateFromSurface();
-    void CreatePlateFromSelectedWires();
-    void UpdateSelectedPlate();
+    void ApplySelectedSheetPartSettings();
+    void UpdateSelectedSheetPart();
+    void CreateSheetPartFromSelectedWires();
+    void RefreshSheetPartPanel();
+    void ConfigureSheetPartForTest(
+        double startThicknessMillimeters,
+        double endThicknessMillimeters,
+        bool variableThickness,
+        kachakacha::model::PlateThicknessDirection direction,
+        const QString& materialCode);
     void CreatePlateOffsetWires();
     void CreateSurfaceJig();
     void UpdateSelectedBody();
@@ -269,12 +277,13 @@ private:
         const QString& successMessageTemplate);
     void AddSelectedPlateOpenings();
     void RemoveSelectedPlateOpenings();
+    void AddSelectedSheetPartOpenings();
+    void RemoveSelectedSheetPartOpenings();
     void AddSelectedPlateReliefCuts();
     void RemoveSelectedPlateReliefCuts();
     void AddSelectedPlateSplitLines();
     void RemoveSelectedPlateSplitLines();
     void SplitSelectedPlate();
-    void AddSelectedSurfaceOpenings();
     void CreateExtrudedSurface();
     //! 押し出し(オーナー指示の統合機能): 選択したワイヤ・面を、指定方向へ
     //! 距離ぶん(または指定した面まで)押し出し、チェックした物を作る。
@@ -305,7 +314,6 @@ private:
     [[nodiscard]] std::vector<kachakacha::io::OutputItem> CurrentOutputItems() const;
     void CreateRevolvedSurface();
     void CreateOffsetSurfaceApproximation();
-    void RemoveSelectedSurfaceOpenings();
     void AddLaminationToSelectedPlate();
     void LinkSelectedPlatesAsLaminate();
     void ClearSelectedPlateLaminate();
@@ -675,29 +683,15 @@ private:
     QComboBox* lightCaseDirectionMode_ = nullptr;
     QWidget* lightCaseDirectionEditor_ = nullptr;
     std::array<QDoubleSpinBox*, 3> lightCaseDirection_{};
-    QLineEdit* plateName_ = nullptr;
-    QComboBox* plateSurface_ = nullptr;
-    QDoubleSpinBox* plateThickness_ = nullptr;
-    QCheckBox* plateVariableThickness_ = nullptr;
-    QCheckBox* thicknessMakeWire_ = nullptr;    //!< 厚み化の出力: 縁ワイヤを厚み位置へ複製
-    QCheckBox* thicknessMakeSurface_ = nullptr; //!< 厚み化の出力: 反対側表面の面を作る
-    QCheckBox* thicknessMakePlate_ = nullptr;   //!< 厚み化の出力: 閉じた3D板材を作る(既定オン)
+    SheetPartPanel* sheetPartPanel_ = nullptr;
     QCheckBox* surfaceKeepSectionWires_ = nullptr; //!< 面作成時に構成線もワイヤ化(#13)
     QCheckBox* wrapProjectionOpenings_ = nullptr;  //!< 回り込み投影の閉輪郭を開口登録(#14)
-    QDoubleSpinBox* plateEndThickness_ = nullptr;
-    QComboBox* plateDirection_ = nullptr;
     QSpinBox* laminateCountSpin_ = nullptr;
     QComboBox* extrudeDirection_ = nullptr;
     QDoubleSpinBox* extrudeDistance_ = nullptr;
     // 統合押し出し(オーナー指示)。
     QCheckBox* extrudeToSurfaceCheck_ = nullptr;   //!< 距離でなく「面まで」
     QComboBox* extrudeTargetSurface_ = nullptr;    //!< 到達面
-    //! 押し出し画面の入口。線・面を伸ばすのか、面に厚みを付けるのか。
-    QRadioButton* extrudePurposeSweep_ = nullptr;
-    QRadioButton* extrudePurposeThickness_ = nullptr;
-    //! 上の二択で出し入れする入れ物(どちらが出ているかを試験でも見る)。
-    QWidget* extrudeSweepBody_ = nullptr;
-    QWidget* extrudeThicknessBody_ = nullptr;
     QCheckBox* extrudeMakeTipWire_ = nullptr;      //!< 先端のワイヤ
     QCheckBox* extrudeMakeEdges_ = nullptr;        //!< 押し出し方向の稜線(線だけ)
     QCheckBox* extrudeMakeSide_ = nullptr;         //!< 側面(押し出し面)
@@ -713,7 +707,6 @@ private:
     QDoubleSpinBox* laminateThicknessSpin_ = nullptr;
     QDoubleSpinBox* laminateTargetHeightSpin_ = nullptr;
     QLabel* laminateSuggestLabel_ = nullptr;
-    QComboBox* plateMaterial_ = nullptr;
     QLineEdit* jigName_ = nullptr;
     QComboBox* jigSurface_ = nullptr;
     QComboBox* jigSide_ = nullptr;

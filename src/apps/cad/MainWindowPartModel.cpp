@@ -271,7 +271,7 @@ void MainWindow::CollectUnitMembersFromSelection()
     }
     if (members.empty()) {
         statusBar()->showMessage(QStringLiteral(
-            "3D画面で、部材にしたい面・板材(と、つなぎたい周りの線)を選んでから押してください"), 4500);
+            "3D画面で、部材にしたい面部品(と、つなぎたい周りの線)を選んでから押してください"), 4500);
         return;
     }
     partModelPanel_->AddUnitMembers(members);

@@ -624,7 +624,7 @@ void MainWindow::BuildUi()
     workflowLayout->setSpacing(4);
     const std::array<QString, 4> workflowNames = {
         QStringLiteral("1 平面"), QStringLiteral("2 作図"),
-        QStringLiteral("3 面・板"), QStringLiteral("4 出力"),
+        QStringLiteral("3 面部品"), QStringLiteral("4 出力"),
     };
     const std::array<int, 4> workflowTabs = {1, 0, 2, 3};
     for (std::size_t index = 0; index < workflowButtons_.size(); ++index) {
@@ -633,7 +633,7 @@ void MainWindow::BuildUi()
         workflowButtons_[index]->setCheckable(true);
         workflowButtons_[index]->setToolTip(index == 0 ? QStringLiteral("作図する位置と向きを決める")
             : index == 1 ? QStringLiteral("作業平面へ線や曲線を描く")
-            : index == 2 ? QStringLiteral("ワイヤーから面・板・治具を作る")
+            : index == 2 ? QStringLiteral("形状を面部品にして製作条件を決める")
                          : QStringLiteral("1:1図面または3Dモデルを保存する"));
         workflowLayout->addWidget(workflowButtons_[index], 1);
         connect(workflowButtons_[index], &QPushButton::clicked, this, [this, tab = workflowTabs[index]] {
@@ -672,7 +672,7 @@ void MainWindow::BuildUi()
     planePanelWidget_ = BuildPlanePanel();
     toolsTabs_->addTab(planePanelWidget_, QStringLiteral("作業平面"));
     surfacePanelWidget_ = BuildSurfacePanel();
-    toolsTabs_->addTab(surfacePanelWidget_, QStringLiteral("面・板"));
+    toolsTabs_->addTab(surfacePanelWidget_, QStringLiteral("面部品"));
     toolsTabs_->addTab(BuildOutputPanel(), QStringLiteral("出力"));
     toolsTabs_->addTab(BuildDisplayPanel(), QStringLiteral("表示"));
     toolsTabs_->addTab(BuildInfoPanel(), QStringLiteral("情報"));
@@ -1168,10 +1168,10 @@ void MainWindow::BuildMenusAndToolbar()
     designDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+1")));
     finishedDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+2")));
     isolateDisplayAction_->setShortcut(QKeySequence(QStringLiteral("Ctrl+3")));
-    hideSelectedAction_->setToolTip(QStringLiteral("選択した作業平面・ワイヤー・面・板材を隠す"));
-    showAllObjectsAction_->setToolTip(QStringLiteral("隠した作業平面・ワイヤー・面・板材をすべて表示"));
-    designDisplayAction_->setToolTip(QStringLiteral("作業平面、ワイヤー、面、板材、立体を通常どおり表示"));
-    finishedDisplayAction_->setToolTip(QStringLiteral("板材と立体だけを一時表示。設計データや履歴は変更しません"));
+    hideSelectedAction_->setToolTip(QStringLiteral("選択した作業平面・ワイヤー・面部品を隠す"));
+    showAllObjectsAction_->setToolTip(QStringLiteral("隠した作業平面・ワイヤー・面部品をすべて表示"));
+    designDisplayAction_->setToolTip(QStringLiteral("作業平面、ワイヤー、面部品、立体を通常どおり表示"));
+    finishedDisplayAction_->setToolTip(QStringLiteral("製作条件のある面部品と立体だけを一時表示。設計データは変更しません"));
     isolateDisplayAction_->setToolTip(QStringLiteral("現在選択している要素だけを一時表示。設計データや履歴は変更しません"));
 
     connect(newAction, &QAction::triggered, this, &MainWindow::NewProject);
@@ -1336,7 +1336,7 @@ void MainWindow::BuildMenusAndToolbar()
     modeToolbar->setMovable(false);
     modeToolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
     drawingModeAction_ = new QAction(QStringLiteral("作図"), this);
-    surfaceModeAction_ = new QAction(QStringLiteral("面・板材"), this);
+    surfaceModeAction_ = new QAction(QStringLiteral("面部品"), this);
     partModelModeAction_ = new QAction(QStringLiteral("近似モデル"), this);
     outputModeAction_ = new QAction(QStringLiteral("出力"), this);
     auto* modeGroup = new QActionGroup(this);
@@ -1346,7 +1346,7 @@ void MainWindow::BuildMenusAndToolbar()
         modeToolbar->addAction(action);
     }
     drawingModeAction_->setToolTip(QStringLiteral("平面を作り、線・曲線を描き、編集する"));
-    surfaceModeAction_->setToolTip(QStringLiteral("ワイヤーから面・板材・ライトケースを作る"));
+    surfaceModeAction_->setToolTip(QStringLiteral("ワイヤーから面部品を作り、材料・厚み・加工を決める"));
     partModelModeAction_->setToolTip(QStringLiteral("板材を製作用の部材近似モデルにする"));
     outputModeAction_->setToolTip(QStringLiteral("出力対象と形式(.kcd / STL / STEP / 図面)を選んで書き出す"));
     // 各モードボタンに固有色を付ける(QSSはBuildUiのsetStyleSheetにまとめてある)。
@@ -1386,7 +1386,7 @@ void MainWindow::BuildMenusAndToolbar()
         activeGroupCombo_->setObjectName("activeGroupCombo");
         activeGroupCombo_->setMinimumWidth(120);
         activeGroupCombo_->setToolTip(QStringLiteral(
-            "作業中グループ。以後に作る線・作図点・平面・面・板材は自動でこのグループへ入ります。\n"
+            "作業中グループ。以後に作る線・作図点・平面・面部品は自動でこのグループへ入ります。\n"
             "（未分類）=自動割り当てなし。一覧のグループ右クリックからも切り替えられます"));
         connect(activeGroupCombo_, &QComboBox::activated, this,
             [this](int) { ApplyActiveGroupSelection(); });
@@ -1441,7 +1441,7 @@ void MainWindow::BuildMenusAndToolbar()
         // 選択のXYZ移動(オーナー指示: グループ・面・部材も動かせる)。
         auto* moveObjectsAction = new QAction(QStringLiteral("移動"), this);
         moveObjectsAction->setToolTip(QStringLiteral(
-            "選択したワイヤ・面・板材(まとめ欄の配下選択も可)をXYZ指定で平行移動する。\n"
+            "選択したワイヤ・面部品(まとめ欄の配下選択も可)をXYZ指定で平行移動する。\n"
             "近似モデルの部材面は部材オフセットとして記録され、再計算しても保たれる"));
         connect(moveObjectsAction, &QAction::triggered, this,
             [this] { PromptMoveSelectedObjects({}); });
@@ -1449,8 +1449,8 @@ void MainWindow::BuildMenusAndToolbar()
         transformToolbar_->addAction(moveObjectsAction);
     }
 
-    // 面・板材モードのツール列(パラメータは右パネル)。
-    surfaceToolbar_ = addToolBar(QStringLiteral("面・板材ツール"));
+    // 面部品モードのツール列(パラメータは右パネル)。
+    surfaceToolbar_ = addToolBar(QStringLiteral("面部品ツール"));
     surfaceToolbar_->setMovable(false);
     surfaceToolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
     {
@@ -1470,6 +1470,8 @@ void MainWindow::BuildMenusAndToolbar()
             surfaceToolActions_.push_back(action);
             return action;
         };
+        addSurfaceTool(QStringLiteral("材料・厚み"), QString(),
+            QStringLiteral("選択した面部品の材料・厚み・厚み方向を設定する"));
         addSurfaceTool(QStringLiteral("面を作成"), QStringLiteral("ワイヤーから面"),
             QStringLiteral("選択した輪郭・断面ワイヤーから面を作る"));
         addSurfaceTool(QStringLiteral("ゴードン面"),
@@ -1477,16 +1479,13 @@ void MainWindow::BuildMenusAndToolbar()
             QStringLiteral("縦横の断面ネットワークから面を作る"));
         addSurfaceTool(QStringLiteral("面へ投影"), QStringLiteral("平面図を面へ投影"),
             QStringLiteral("平面の下書きを面へ投影する（窓・開口の輪郭作りに）"));
-        // オーナー指示で厚み化は押し出しへ統合済み。押し出しの画面の続きに
-        // 厚み化の詳しい設定(可変厚み・厚み方向・材質)が並ぶ。
-        addSurfaceTool(QStringLiteral("押し出し・厚み化"), QStringLiteral("押し出し"),
-            QStringLiteral("線・面を押し出して、先端の線・側面・ふた・板材を作る"
-                           "。厚み化・オフセット面も同じ画面"));
+        addSurfaceTool(QStringLiteral("押し出し"), QStringLiteral("押し出し"),
+            QStringLiteral("線・面を押し出して、先端の線・側面・ふた・面部品を作る"));
         addSurfaceTool(QStringLiteral("回転"), QStringLiteral("回転して面を作る（ろくろ）"),
             QStringLiteral("断面を軸まわりに回して面を作る"));
         surfaceToolbar_->addSeparator();
-        addSurfaceTool(QStringLiteral("開口"), QStringLiteral("板材に開口"),
-            QStringLiteral("板材に窓・穴などの開口を追加する"));
+        addSurfaceTool(QStringLiteral("開口"), QStringLiteral("面部品に開口"),
+            QStringLiteral("面部品に窓・ライトなどの開口を追加する"));
         addSurfaceTool(QStringLiteral("切れ目"), QStringLiteral("展開時の切れ目"),
             QStringLiteral("展開時に逃がす切れ目を指定する"));
         addSurfaceTool(QStringLiteral("分割線"), QStringLiteral("展開片の分割線"),
@@ -1714,10 +1713,14 @@ void MainWindow::RevealSurfaceGroup(const QString& title)
     const auto known = std::any_of(surfaceSections_.begin(), surfaceSections_.end(),
         [&](const auto& section) { return section.first == effective; });
     if (!known) {
-        effective = surfaceSections_.front().first;
+        const auto firstNamed = std::find_if(
+            surfaceSections_.begin(), surfaceSections_.end(),
+            [](const auto& section) { return !section.first.isEmpty(); });
+        effective = firstNamed != surfaceSections_.end() ? firstNamed->first : QString();
     }
     for (const auto& [sectionTitle, container] : surfaceSections_) {
-        container->setVisible(sectionTitle == effective);
+        // 無名区画は、どの道具でも表示する「選択中の面部品」共通ヘッダー。
+        container->setVisible(sectionTitle.isEmpty() || sectionTitle == effective);
     }
     for (QAction* action : surfaceToolActions_) {
         action->setChecked(action->data().toString() == effective);
@@ -2398,11 +2401,8 @@ void MainWindow::RefreshBeginnerGuide()
         if (wireCount > 0) {
             parts << QStringLiteral("ワイヤー%1本").arg(wireCount);
         }
-        if (surfaceCount > 0) {
-            parts << QStringLiteral("面%1枚").arg(surfaceCount);
-        }
-        if (plateCount > 0) {
-            parts << QStringLiteral("板材%1枚").arg(plateCount);
+        if (surfaceCount + plateCount > 0) {
+            parts << QStringLiteral("面部品%1個").arg(surfaceCount + plateCount);
         }
         if (bodyCount > 0) {
             parts << QStringLiteral("立体%1個").arg(bodyCount);
@@ -2602,7 +2602,7 @@ void MainWindow::RefreshBeginnerGuide()
             QStringLiteral("planes"), 0, QStringLiteral("作図へ進む"));
         break;
     case 2: {
-        // 面・板材モード: 上のツール列で選んだ区画に合わせた手順を出す。
+        // 面部品モード: 上のツール列で選んだ区画に合わせた手順を出す。
         QString sectionTitle;
         for (QAction* action : surfaceToolActions_) {
             if (action != nullptr && action->isChecked()) {
@@ -2610,7 +2610,14 @@ void MainWindow::RefreshBeginnerGuide()
                 break;
             }
         }
-        if (sectionTitle == QStringLiteral("断面と外形ガイドから面（Gordon面）")) {
+        if (sectionTitle.isEmpty()) {
+            setGuide(QStringLiteral("面部品の材料と厚み"),
+                QStringLiteral("次: モデル一覧で面部品を1つ選ぶ"),
+                QStringLiteral("1  [厚み未設定]または設定済みの面部品を選ぶ\n"
+                               "2  材料・厚み・厚み方向を入力\n"
+                               "3  製作条件を設定または更新"),
+                QStringLiteral("plate"));
+        } else if (sectionTitle == QStringLiteral("断面と外形ガイドから面（Gordon面）")) {
             setGuide(QStringLiteral("断面とガイドから面を作る"),
                 QStringLiteral("次: 断面ワイヤーを通し方向の手前から奥の順に選ぶ"),
                 QStringLiteral("1  断面を2本以上、手前から奥の順にCtrl+クリック\n2  外形ガイドを使う場合はガイド2本を先に選ぶ\n3  ゴードン面を作成"),
@@ -2626,9 +2633,9 @@ void MainWindow::RefreshBeginnerGuide()
                 QStringLiteral("1  押し出す線・面を3D画面か一覧で選ぶ\n"
                                "2  方向（法線=自動 / X・Y・Z）と距離、または到達面を決める\n"
                                "3  作るもの（先端の線・稜線・側面・ふた・底・板材）をチェック\n"
-                               "4  「押し出す」。面を選べば厚み化・オフセット面と同じ結果になる\n"
-                               "※ 面に板厚を付けたいだけなら、画面の先頭で"
-                               "「面に厚みを付ける」を選ぶ"),
+                               "4  「押し出す」。面を選ぶと法線方向へ押し出せる\n"
+                               "※ 材料と厚みを付けたいだけなら、面部品を選び、"
+                               "画面の先頭で製作条件を設定する"),
                 QStringLiteral("extrude"));
         } else if (sectionTitle == QStringLiteral("回転して面を作る（ろくろ）")) {
             setGuide(QStringLiteral("断面を回して面を作る"),
@@ -2639,17 +2646,17 @@ void MainWindow::RefreshBeginnerGuide()
         } else if (sectionTitle == QStringLiteral("飛び出すライトケース")) {
             setGuide(QStringLiteral("飛び出すライトケースを作る"),
                 QStringLiteral("次: 最前面の閉じた輪郭と接続先を選ぶ"),
-                QStringLiteral("1  最前面の閉じた輪郭を選択\n2  Ctrl+クリックで接続先の面/板材\n3  方向を選んで作成"),
+                QStringLiteral("1  最前面の閉じた輪郭を選択\n2  Ctrl+クリックで接続先の面部品\n3  方向を選んで作成"),
                 QStringLiteral("lightcase"));
         } else if (sectionTitle == QStringLiteral("曲面から成形治具")) {
             setGuide(QStringLiteral("曲面から成形治具を作る"),
                 QStringLiteral("次: 元になる曲面を選ぶ"),
                 QStringLiteral("1  曲面を1つ選択\n2  型の側・成形の隙間・厚みを指定\n3  治具を作成"),
                 QStringLiteral("jig"));
-        } else if (sectionTitle == QStringLiteral("板材に開口")) {
+        } else if (sectionTitle == QStringLiteral("面部品に開口")) {
             setGuide(QStringLiteral("窓・ライトの開口をあける"),
-                QStringLiteral("次: 板材(または面)と閉じた投影輪郭を選ぶ"),
-                QStringLiteral("1  板材1枚(または面1つ)を選択\n2  Ctrl+クリックで閉じた投影輪郭\n3  開口に追加(面に登録すると近似・板材へ引き継ぎ)"),
+                QStringLiteral("次: 面部品と閉じた投影輪郭を選ぶ"),
+                QStringLiteral("1  面部品を1つ選択\n2  Ctrl+クリックで閉じた投影輪郭\n3  開口に追加(厚み未設定でも製作条件・近似へ引き継ぎ)"),
                 QStringLiteral("openings"));
         } else if (sectionTitle == QStringLiteral("展開時の切れ目")) {
             setGuide(QStringLiteral("展開時の切れ目を指定する"),
@@ -2713,7 +2720,7 @@ void MainWindow::RefreshBeginnerGuide()
                     ? QStringLiteral("次: 出したい物を選んで「選択を追加」")
                     : QStringLiteral("次: 3Dで確かめてから書き出す"),
                 QStringLiteral(
-                    "1  出したい面・板材・実体・線を3D画面か一覧で選ぶ\n"
+                    "1  出したい面部品・実体・線を3D画面か一覧で選ぶ\n"
                     "2  「選択を追加」で表へ入れる（表の中身がそのまま出る）\n"
                     "3  「出力前に3Dで確かめる」で回して見る（橙色＝自動でふさいだ所）\n"
                     "4  STL / STEP / .kcd で書き出す\n"
@@ -2784,9 +2791,9 @@ void MainWindow::RefreshBeginnerGuide()
             setGuide(QStringLiteral("曲面を、曲げて作れる部材にする"),
                 plateCount + surfaceCount > 0
                     ? QStringLiteral("次: 表の役割と部品番号を決めて実行")
-                    : QStringLiteral("次: 3D画面で、まとめて作りたい面・板材を選ぶ"),
+                    : QStringLiteral("次: 3D画面で、まとめて作りたい面部品を選ぶ"),
                 QStringLiteral(
-                    "1  車体のうち、まとめて作りたい面・板材を3D画面で選ぶ\n"
+                    "1  車体のうち、まとめて作りたい面部品を3D画面で選ぶ\n"
                     "2  「選んだ物を下の表へ入れる」\n"
                     "3  行ごとに 板に分ける／形を変えずつなぐ／使わない を決める\n"
                     "4  「部品」に番号を入れて（同じ番号＝同じ部品）「まとめて部材にする」"),
@@ -2796,7 +2803,7 @@ void MainWindow::RefreshBeginnerGuide()
     }
     default:
         setGuide(QStringLiteral("作業を選んでください"), QStringLiteral("次: 上の製作工程を選ぶ"),
-            QStringLiteral("1  平面\n2  作図\n3  面・板\n4  出力"), QStringLiteral("start"));
+            QStringLiteral("1  平面\n2  作図\n3  面部品\n4  出力"), QStringLiteral("start"));
         break;
     }
 }
@@ -6329,22 +6336,39 @@ void MainWindow::RefreshModelViews(bool fitView)
             }
             return count;
         });
-        section(QStringLiteral("面"), [&](QTreeWidgetItem* root) {
+        section(QStringLiteral("面部品"), [&](QTreeWidgetItem* root) {
             int count = 0;
             for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
                 const auto& surface = project_.Surfaces()[index];
                 if (!belongs(ProjectObjectKind::Surface, surface.name)) continue;
-                addObjectItem(root, CadSelectionKind::Surface, index, ToQString(surface.name), surface.visible);
+                const bool hasManufacturingVariant = std::any_of(
+                    project_.Plates().begin(), project_.Plates().end(),
+                    [&](const auto& plate) { return plate.sourceSurfaceName == surface.name; });
+                // 通常の製作部品では、内部に保持する非表示の基準面を二重表示しない。
+                if (hasManufacturingVariant && !surface.visible) continue;
+                const QString suffix = hasManufacturingVariant
+                    ? QStringLiteral("  [基準形状]")
+                    : QStringLiteral("  [厚み未設定]");
+                addObjectItem(root, CadSelectionKind::Surface, index,
+                    ToQString(surface.name) + suffix, surface.visible);
                 ++count;
             }
-            return count;
-        });
-        section(QStringLiteral("板材"), [&](QTreeWidgetItem* root) {
-            int count = 0;
             for (int index = 0; index < static_cast<int>(project_.Plates().size()); ++index) {
                 const auto& plate = project_.Plates()[index];
                 if (!belongs(ProjectObjectKind::Plate, plate.name)) continue;
-                addObjectItem(root, CadSelectionKind::Plate, index, ToQString(plate.name), plate.visible);
+                const QString material = plate.material == "styrene" ? QStringLiteral("プラ板")
+                    : plate.material == "paper" ? QStringLiteral("紙")
+                    : plate.material == "brass" ? QStringLiteral("真鍮")
+                    : ToQString(plate.material);
+                const QString thickness = plate.plate.HasVariableThickness()
+                    ? QStringLiteral("%1→%2 mm")
+                        .arg(plate.plate.Thickness(), 0, 'f', 2)
+                        .arg(plate.plate.EndThickness(), 0, 'f', 2)
+                    : QStringLiteral("%1 mm").arg(plate.plate.Thickness(), 0, 'f', 2);
+                addObjectItem(root, CadSelectionKind::Plate, index,
+                    QStringLiteral("%1  [%2 %3]")
+                        .arg(ToQString(plate.name), material, thickness),
+                    plate.visible);
                 ++count;
             }
             return count;
@@ -6412,7 +6436,7 @@ void MainWindow::RefreshModelViews(bool fitView)
         }
         setRoot->setToolTip(0, activeGroup
             ? QStringLiteral(
-                  "作業中グループ。以後に作る線・面・板材は自動でここへ入ります。"
+                  "作業中グループ。以後に作る線・面部品は自動でここへ入ります。"
                   "右クリックで解除できます")
             : QStringLiteral(
                   "部材グループ。チェックで一括表示/非表示。ドラッグで入れ子に移動、"
@@ -6691,7 +6715,6 @@ void MainWindow::RefreshSurfaceChoices()
         }
     };
     refresh(projectionSurface_);
-    refresh(plateSurface_);
     refresh(jigSurface_);
     refresh(extrudeTargetSurface_);
 }
@@ -6776,12 +6799,6 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     projectionSurface_->setCurrentIndex(surfaceIndex);
                 }
             }
-            if (plateSurface_ != nullptr) {
-                const int surfaceIndex = plateSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
-                if (surfaceIndex >= 0) {
-                    plateSurface_->setCurrentIndex(surfaceIndex);
-                }
-            }
             if (jigSurface_ != nullptr) {
                 const int surfaceIndex = jigSurface_->findText(ToQString(project_.Surfaces()[item.index].name));
                 if (surfaceIndex >= 0) {
@@ -6830,9 +6847,8 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
     }
     if (plateOpeningSelectionLabel_ != nullptr) {
         plateOpeningSelectionLabel_->setText(
-            QStringLiteral("選択: 板材%1枚 / 面%2枚 / 閉じた投影輪郭%3本")
-                .arg(selectedPlateCount)
-                .arg(selectedSurfaceCount)
+            QStringLiteral("選択: 面部品%1個 / 閉じた投影輪郭%2本")
+                .arg(selectedPlateCount + selectedSurfaceCount)
                 .arg(selectedClosedProjectedWireCount));
     }
     if (plateReliefSelectionLabel_ != nullptr) {
@@ -6854,6 +6870,7 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
         plateSplitSelectionLabel_->setText(QStringLiteral("選択: 板材%1枚").arg(selectedPlateCount));
     }
     const CadSelection selection = selections.empty() ? CadSelection{} : selections.back();
+    RefreshSheetPartPanel();
     if (pendingMachiningPickSlot_ >= 0 && selection.kind == CadSelectionKind::Wire
         && selection.index >= 0 && selection.index < static_cast<int>(project_.Wires().size())
         && project_.Wires()[selection.index].wire.Kind() == WireKind::Line) {
@@ -6977,28 +6994,12 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             }
             sources += ToQString(sourceName);
         }
-        infoLabel_->setText(QStringLiteral("<b>%1</b><br><br>種類: %2<br>元ワイヤー: %3")
+        infoLabel_->setText(QStringLiteral(
+            "<b>%1</b><br><br>種類: 面部品（厚み未設定）<br>形状: %2<br>元ワイヤー: %3")
                 .arg(ToQString(named.name), kind, sources));
     } else if (selection.kind == CadSelectionKind::Plate && selection.index >= 0
         && selection.index < static_cast<int>(project_.Plates().size())) {
         const auto& named = project_.Plates()[selection.index];
-        if (plateSurface_ != nullptr) {
-            plateSurface_->setCurrentText(ToQString(named.sourceSurfaceName));
-        }
-        if (plateThickness_ != nullptr) {
-            plateThickness_->setValue(named.plate.Thickness());
-        }
-        if (plateVariableThickness_ != nullptr && plateEndThickness_ != nullptr) {
-            plateVariableThickness_->setChecked(named.plate.HasVariableThickness());
-            plateEndThickness_->setValue(named.plate.EndThickness());
-        }
-        if (plateDirection_ != nullptr) {
-            plateDirection_->setCurrentIndex(plateDirection_->findData(static_cast<int>(named.plate.Direction())));
-        }
-        if (plateMaterial_ != nullptr) {
-            const int materialIndex = plateMaterial_->findData(ToQString(named.material));
-            plateMaterial_->setCurrentIndex(materialIndex >= 0 ? materialIndex : plateMaterial_->count() - 1);
-        }
         const QString direction = named.plate.Direction() == PlateThicknessDirection::Positive
             ? QStringLiteral("+側（法線矢印側）")
             : named.plate.Direction() == PlateThicknessDirection::Centered
@@ -7050,7 +7051,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
             .arg(range.maximumU * 100.0, 0, 'f', 1)
             .arg(range.minimumV * 100.0, 0, 'f', 1)
             .arg(range.maximumV * 100.0, 0, 'f', 1);
-        const QString plateKind = range.IsFull() ? QStringLiteral("板材") : QStringLiteral("分割した板材");
+        const QString plateKind = range.IsFull()
+            ? QStringLiteral("面部品（製作条件あり）")
+            : QStringLiteral("分割した面部品（製作条件あり）");
         const QString thicknessText = named.plate.HasVariableThickness()
             ? QStringLiteral("%1 mm → %2 mm")
                 .arg(named.plate.Thickness()).arg(named.plate.EndThickness())
@@ -7131,9 +7134,9 @@ void MainWindow::UpdateSelections(std::vector<CadSelection> selections, bool upd
                     ? QStringLiteral("板厚位置ワイヤーは元の投影輪郭または板材を編集します")
                     : QStringLiteral("投影ワイヤーは元の平面図を編集します"));
             } else if (selection.kind == CadSelectionKind::Surface) {
-                label->setText(QStringLiteral("面は元の境界・断面ワイヤーを編集します"));
+                label->setText(QStringLiteral("面部品の形状は元の境界・断面ワイヤーを編集します"));
             } else if (selection.kind == CadSelectionKind::Plate) {
-                label->setText(QStringLiteral("板材は元の面と板材欄から作り直します"));
+                label->setText(QStringLiteral("面部品の材料・厚みは面タブ上部で変更します"));
             } else if (selection.kind == CadSelectionKind::Body) {
                 label->setText(QStringLiteral("治具は面タブで側・隙間・厚みを変更します"));
             } else {

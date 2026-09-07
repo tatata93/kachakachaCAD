@@ -39,7 +39,7 @@
 | 作業平面・作図・ワイヤ | `docs/workplane-spec.md`, `docs/wire-and-sketch-spec.md`, ADR 0002/0003 |
 | 面・投影 | ADR 0004, `docs/surface-unfolding-spec.md` |
 | 板・展開・型紙 | ADR 0005〜0017, `docs/surface-unfolding-spec.md` |
-| UI(パネル・ビューポート) | ADR 0018, `docs/usability-review.md` |
+| UI(パネル・ビューポート) | ADR 0018, `docs/usability-review.md`, `docs/sheet-part-ui-spec.md` |
 | .kcd 保存形式 | `docs/project-script-format.md` |
 | ビルド・環境 | `docs/setup-windows.md`, `docs/multi-machine-development.md`, `docs/linux-build.md` |
 | 計画全体 | `docs/roadmap.md`, `docs/minimum-usable-completion-plan.md` |

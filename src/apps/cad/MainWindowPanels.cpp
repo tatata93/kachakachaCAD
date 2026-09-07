@@ -6,6 +6,7 @@
 #include "MainWindowUiHelpers.h"
 #include "PartModelPanel.h"
 #include "PlatePdfExport.h"
+#include "SheetPartPanel.h"
 
 #include "kachakacha/io/PartPatterns.h"
 #include "kachakacha/io/PlateFlatPattern.h"
@@ -47,9 +48,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
-#include <QButtonGroup>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScrollArea>
@@ -980,6 +979,11 @@ QWidget* MainWindow::BuildSurfacePanel()
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(6);
 
+    sheetPartPanel_ = new SheetPartPanel;
+    sheetPartPanel_->onApply = [this] { ApplySelectedSheetPartSettings(); };
+    sheetPartPanel_->onCreateFromWires = [this] { CreateSheetPartFromSelectedWires(); };
+    layout->addWidget(sheetPartPanel_);
+
     auto* createTitle = new QLabel(QStringLiteral("ワイヤーから面"));
     createTitle->setProperty("manualAnchor", QStringLiteral("surfaceCreate"));
     createTitle->setStyleSheet("font-weight: 600; color: #26323a;");
@@ -1311,10 +1315,10 @@ QWidget* MainWindow::BuildSurfacePanel()
     connect(jigUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedBody);
     layout->addWidget(jigUpdateButton);
 
-    auto* openingTitle = new QLabel(QStringLiteral("板材に開口"));
+    auto* openingTitle = new QLabel(QStringLiteral("面部品に開口"));
     openingTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(openingTitle);
-    plateOpeningSelectionLabel_ = new QLabel(QStringLiteral("選択: 板材0枚 / 閉じた投影輪郭0本"));
+    plateOpeningSelectionLabel_ = new QLabel(QStringLiteral("選択: 面部品0個 / 閉じた投影輪郭0本"));
     plateOpeningSelectionLabel_->setStyleSheet("color: #5c6670;");
     layout->addWidget(plateOpeningSelectionLabel_);
 
@@ -1326,34 +1330,17 @@ QWidget* MainWindow::BuildSurfacePanel()
     openingButtonLayout->setSpacing(6);
     auto* addOpeningButton = new QPushButton(QStringLiteral("開口に追加"));
     addOpeningButton->setObjectName("primaryButton");
-    connect(addOpeningButton, &QPushButton::clicked, this, &MainWindow::AddSelectedPlateOpenings);
+    addOpeningButton->setToolTip(QStringLiteral(
+        "形状だけの面部品でも、製作条件ありの面部品でも同じ操作です。\n"
+        "形状へ登録した開口は、後から設定する製作条件や部材近似にも引き継がれます"));
+    connect(addOpeningButton, &QPushButton::clicked,
+        this, &MainWindow::AddSelectedSheetPartOpenings);
     auto* removeOpeningButton = new QPushButton(QStringLiteral("開口から外す"));
-    connect(removeOpeningButton, &QPushButton::clicked, this, &MainWindow::RemoveSelectedPlateOpenings);
+    connect(removeOpeningButton, &QPushButton::clicked,
+        this, &MainWindow::RemoveSelectedSheetPartOpenings);
     openingButtonLayout->addWidget(addOpeningButton, 1);
     openingButtonLayout->addWidget(removeOpeningButton, 1);
     layout->addWidget(openingButtons);
-
-    auto* surfaceOpeningHint = new QLabel(QStringLiteral(
-        "面の段階でも開口を登録できます。面1つ+閉じた投影輪郭を選択:"));
-    surfaceOpeningHint->setWordWrap(true);
-    surfaceOpeningHint->setStyleSheet("color: #5c6670; margin-top: 4px;");
-    layout->addWidget(surfaceOpeningHint);
-    auto* surfaceOpeningButtons = new QWidget;
-    auto* surfaceOpeningLayout = new QHBoxLayout(surfaceOpeningButtons);
-    surfaceOpeningLayout->setContentsMargins(0, 0, 0, 0);
-    surfaceOpeningLayout->setSpacing(6);
-    auto* addSurfaceOpeningButton = new QPushButton(QStringLiteral("面の開口に追加"));
-    addSurfaceOpeningButton->setToolTip(QStringLiteral(
-        "面に登録した開口は、面入力の近似モデル・型紙・実体化と、\n"
-        "この面から後で作る板材へ自動で引き継がれます"));
-    connect(addSurfaceOpeningButton, &QPushButton::clicked,
-        this, &MainWindow::AddSelectedSurfaceOpenings);
-    auto* removeSurfaceOpeningButton = new QPushButton(QStringLiteral("面の開口から外す"));
-    connect(removeSurfaceOpeningButton, &QPushButton::clicked,
-        this, &MainWindow::RemoveSelectedSurfaceOpenings);
-    surfaceOpeningLayout->addWidget(addSurfaceOpeningButton, 1);
-    surfaceOpeningLayout->addWidget(removeSurfaceOpeningButton, 1);
-    layout->addWidget(surfaceOpeningButtons);
 
     auto* reliefTitle = new QLabel(QStringLiteral("展開時の切れ目"));
     reliefTitle->setProperty("manualAnchor", QStringLiteral("plateRelief"));
@@ -1520,46 +1507,15 @@ QWidget* MainWindow::BuildSurfacePanel()
     laminateLinkRow->addWidget(laminateClearButton, 1);
     layout->addLayout(laminateLinkRow);
 
-    // --- 押し出し(統合。オーナー指示: 厚み化・オフセット面もここへ) ---
+    // --- 押し出し。製作条件は上の面部品パネルへ集約する。 ---
     auto* sweepTitle = new QLabel(QStringLiteral("押し出し"));
     sweepTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
     layout->addWidget(sweepTitle);
-    // 目的を先に選ばせる(Codexレビュー#2: 板にしたいとき、上のチェックと
-    // 下のフォームのどちらを使うのか分からない、という指摘)。
-    // 押し出しと厚み化は同じ道具だが、やりたいことは別なので入口で分ける。
-    auto* extrudePurposeRow = new QHBoxLayout;
-    extrudePurposeSweep_ = new QRadioButton(QStringLiteral("線・面を伸ばす"));
-    extrudePurposeSweep_->setChecked(true);
-    extrudePurposeSweep_->setToolTip(QStringLiteral(
-        "選んだ線や面を、決めた方向へ決めた距離だけ伸ばします"));
-    extrudePurposeThickness_ = new QRadioButton(QStringLiteral("面に厚みを付ける"));
-    extrudePurposeThickness_->setToolTip(QStringLiteral(
-        "選んだ面に板厚を与えて、実物の板材にします（厚み化）。\n"
-        "厚みの向きや、始端と終端で厚みを変えることもできます"));
-    auto* extrudePurposeGroup = new QButtonGroup(this);
-    extrudePurposeGroup->addButton(extrudePurposeSweep_);
-    extrudePurposeGroup->addButton(extrudePurposeThickness_);
-    extrudePurposeRow->addWidget(extrudePurposeSweep_, 1);
-    extrudePurposeRow->addWidget(extrudePurposeThickness_, 1);
-    layout->addLayout(extrudePurposeRow);
     auto* extrudeBody = new QWidget;
-    extrudeSweepBody_ = extrudeBody;
     auto* extrudeBodyLayout = new QVBoxLayout(extrudeBody);
     extrudeBodyLayout->setContentsMargins(0, 0, 0, 0);
     extrudeBodyLayout->setSpacing(6);
     layout->addWidget(extrudeBody);
-    auto* thicknessBody = new QWidget;
-    extrudeThicknessBody_ = thicknessBody;
-    auto* thicknessBodyLayout = new QVBoxLayout(thicknessBody);
-    thicknessBodyLayout->setContentsMargins(0, 0, 0, 0);
-    thicknessBodyLayout->setSpacing(6);
-    layout->addWidget(thicknessBody);
-    thicknessBody->setVisible(false);
-    connect(extrudePurposeSweep_, &QRadioButton::toggled, this,
-        [extrudeBody, thicknessBody](bool sweep) {
-            extrudeBody->setVisible(sweep);
-            thicknessBody->setVisible(!sweep);
-        });
 
     auto* extrudeHint = new QLabel(QStringLiteral(
         "3D画面や一覧で押し出す物（線・面。複数可）を選び、方向と距離を決めて"
@@ -1618,9 +1574,9 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudeMakeBottom_ = new QCheckBox(QStringLiteral("元の位置のふた面（閉じた輪郭のみ）"));
     extrudeMakeBottom_->setToolTip(QStringLiteral(
         "元の位置側を塞ぐ面。側面＋両ふたで全面が面付きになります"));
-    extrudeMakePlate_ = new QCheckBox(QStringLiteral("板材にする（厚みを付ける）"));
+    extrudeMakePlate_ = new QCheckBox(QStringLiteral("作った面へ製作条件を付ける"));
     extrudeMakePlate_->setToolTip(QStringLiteral(
-        "面に厚みを与えて実物の板にします。面を押し出したときは厚み化と同じです"));
+        "押し出しでできた面を、そのまま材料・厚みのある面部品にします"));
     extrudeBodyLayout->addWidget(extrudeMakeTipWire_);
     extrudeBodyLayout->addWidget(extrudeMakeEdges_);
     extrudeBodyLayout->addWidget(extrudeMakeSide_);
@@ -1652,98 +1608,11 @@ QWidget* MainWindow::BuildSurfacePanel()
     extrudeButton->setObjectName("primaryButton");
     extrudeButton->setToolTip(QStringLiteral(
         "選択した線・面を押し出します。線は複数同時でも構いません。\n"
-        "面を選んだ場合は厚み方向の押し出し（＝厚み化・オフセット面）になります"));
+        "面を選んだ場合は、その法線方向へ押し出します"));
     connect(extrudeButton, &QPushButton::clicked, this, &MainWindow::ExtrudeSelection);
     extrudeBodyLayout->addWidget(extrudeButton);
 
-    // オーナー指示で「厚み化」は押し出しへ統合した。押し出しの一般形が
-    // 厚み化なので、同じ画面の続きとして置く(道具列からは外した)。
-    auto* plateTitle = new QLabel(QStringLiteral("厚み化（ワイヤ・面・板）"));
-    plateTitle->setProperty("manualAnchor", QStringLiteral("plateCreate"));
-    plateTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
-    thicknessBodyLayout->addWidget(plateTitle);
-
-    // 厚み化の専用フォーム(オーナー指示: UIの使い回しをやめ、厚みの設定と
-    // 出力[ワイヤ][面][板]のチェックで何を作るかを選ぶ)。
-    auto* plateForm = new QFormLayout;
-    plateForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    plateName_ = new QLineEdit(QStringLiteral("plate_1"));
-    plateSurface_ = new QComboBox;
-    plateThickness_ = MakePositiveField(0.5);
-    plateThickness_->setSuffix(QStringLiteral(" mm"));
-    plateVariableThickness_ = new QCheckBox(QStringLiteral("終端まで厚みを変化"));
-    plateEndThickness_ = MakePositiveField(0.5);
-    plateEndThickness_->setSuffix(QStringLiteral(" mm"));
-    plateEndThickness_->setEnabled(false);
-    plateDirection_ = new QComboBox;
-    plateDirection_->addItem(QStringLiteral("+側へ（法線矢印側）"), static_cast<int>(PlateThicknessDirection::Positive));
-    plateDirection_->addItem(QStringLiteral("中央（両側へ半分）"), static_cast<int>(PlateThicknessDirection::Centered));
-    plateDirection_->addItem(QStringLiteral("-側へ（矢印と反対）"), static_cast<int>(PlateThicknessDirection::Negative));
-    plateForm->addRow(QStringLiteral("名前"), plateName_);
-    plateForm->addRow(QStringLiteral("元の面"), plateSurface_);
-    plateForm->addRow(QStringLiteral("厚み（始端）"), plateThickness_);
-    plateForm->addRow(plateVariableThickness_);
-    plateForm->addRow(QStringLiteral("厚み（終端）"), plateEndThickness_);
-    plateForm->addRow(QStringLiteral("厚み方向"), plateDirection_);
-
-    // その厚みを何にするか: 3つのチェックの組み合わせで出力を選ぶ。
-    auto* thicknessOutputs = new QWidget;
-    auto* thicknessOutputLayout = new QHBoxLayout(thicknessOutputs);
-    thicknessOutputLayout->setContentsMargins(0, 0, 0, 0);
-    thicknessOutputLayout->setSpacing(10);
-    thicknessMakeWire_ = new QCheckBox(QStringLiteral("ワイヤ"));
-    thicknessMakeWire_->setToolTip(QStringLiteral(
-        "元面の輪郭・断面を厚みぶん法線方向へずらした独立ワイヤを作ります"));
-    thicknessMakeSurface_ = new QCheckBox(QStringLiteral("面"));
-    thicknessMakeSurface_->setToolTip(QStringLiteral(
-        "厚みぶん法線方向へずらした面(反対側表面、断面ロフト近似)を作ります"));
-    thicknessMakePlate_ = new QCheckBox(QStringLiteral("板"));
-    thicknessMakePlate_->setChecked(true);
-    thicknessMakePlate_->setToolTip(QStringLiteral(
-        "閉じた3D板材を作ります(材質は板にだけ使われます)"));
-    thicknessOutputLayout->addWidget(thicknessMakeWire_);
-    thicknessOutputLayout->addWidget(thicknessMakeSurface_);
-    thicknessOutputLayout->addWidget(thicknessMakePlate_);
-    thicknessOutputLayout->addStretch(1);
-    plateForm->addRow(QStringLiteral("厚みで作るもの"), thicknessOutputs);
-
-    plateMaterial_ = new QComboBox;
-    plateMaterial_->addItem(QStringLiteral("プラ板"), QStringLiteral("styrene"));
-    plateMaterial_->addItem(QStringLiteral("紙・厚紙"), QStringLiteral("paper"));
-    plateMaterial_->addItem(QStringLiteral("真鍮板"), QStringLiteral("brass"));
-    plateMaterial_->addItem(QStringLiteral("その他"), QStringLiteral("other"));
-    plateForm->addRow(QStringLiteral("材質（板のみ）"), plateMaterial_);
-    thicknessBodyLayout->addLayout(plateForm);
-
-    connect(plateVariableThickness_, &QCheckBox::toggled, plateEndThickness_, &QWidget::setEnabled);
-    connect(plateThickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
-        if (!plateVariableThickness_->isChecked()) {
-            plateEndThickness_->setValue(value);
-        }
-    });
-    connect(thicknessMakePlate_, &QCheckBox::toggled, plateMaterial_, &QWidget::setEnabled);
-
-    auto* plateButton = new QPushButton(QStringLiteral("選択した面へ厚みを適用"));
-    plateButton->setObjectName("primaryButton");
-    plateButton->setToolTip(QStringLiteral(
-        "「元の面」の面へ厚みを適用し、チェックした出力(ワイヤ・面・板)を作ります"));
-    connect(plateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSurface);
-    thicknessBodyLayout->addWidget(plateButton);
-
-    auto* wirePlateButton = new QPushButton(QStringLiteral("選択ワイヤーから直接厚み化（板）"));
-    wirePlateButton->setToolTip(QStringLiteral(
-        "選択したワイヤーから面を作り、そのまま板にします。\n"
-        "通常は1閉輪郭で平板、2断面で曲面板、3断面以上でロフト板。"
-        "外形ガイド方式を選んだ場合は、外形2本＋断面1本以上から板を作ります"));
-    connect(wirePlateButton, &QPushButton::clicked, this, &MainWindow::CreatePlateFromSelectedWires);
-    thicknessBodyLayout->addWidget(wirePlateButton);
-
-    auto* plateUpdateButton = new QPushButton(QStringLiteral("選択中の板材へ設定"));
-    connect(plateUpdateButton, &QPushButton::clicked, this, &MainWindow::UpdateSelectedPlate);
-    thicknessBodyLayout->addWidget(plateUpdateButton);
-
-    // 板材化後の補助: 投影輪郭を板厚位置へ複製する(旧「厚み位置のワイヤ」タブを
-    // 廃止し、厚み化セクションのサブ機能として残す。オーナー指示: 被るタブは消す)。
+    // 製作条件を持つ面部品の補助: 投影輪郭を板厚位置へ複製する。
     auto* offsetWireBox = new QGroupBox(QStringLiteral("投影輪郭を厚み位置へ複製"));
     offsetWireBox->setObjectName(QStringLiteral("plateOffsetSection"));
     offsetWireBox->setProperty("manualAnchor", QStringLiteral("plateOffset"));
@@ -1762,7 +1631,7 @@ QWidget* MainWindow::BuildSurfacePanel()
     offsetWireLayout->addWidget(plateOffsetSelectionLabel_);
     offsetWireLayout->addWidget(plateOffsetLayer_);
     offsetWireLayout->addWidget(offsetWireButton);
-    thicknessBodyLayout->addWidget(offsetWireBox);
+    layout->addWidget(offsetWireBox);
 
     auto* revolveTitle = new QLabel(QStringLiteral("回転して面を作る（ろくろ）"));
     revolveTitle->setStyleSheet("font-weight: 600; color: #26323a; margin-top: 10px;");
@@ -1811,7 +1680,7 @@ QWidget* MainWindow::BuildSurfacePanel()
         QStringLiteral("平面図を面へ投影"),
         QStringLiteral("飛び出すライトケース"),
         QStringLiteral("曲面から成形治具"),
-        QStringLiteral("板材に開口"),
+        QStringLiteral("面部品に開口"),
         QStringLiteral("展開時の切れ目"),
         QStringLiteral("展開片の分割線"),
         QStringLiteral("板材を分割"),
@@ -1890,7 +1759,7 @@ QWidget* MainWindow::BuildDisplayPanel()
     constructionForm->addRow(QStringLiteral("線種"), constructionStyle_);
     layout->addWidget(constructionBox);
 
-    auto* surfaceBox = new QGroupBox(QStringLiteral("面"));
+    auto* surfaceBox = new QGroupBox(QStringLiteral("面部品（形状・基準）"));
     auto* surfaceForm = new QFormLayout(surfaceBox);
     surfaceFillColor_ = makeColorButton(QColor("#1f848a"));
     surfaceOpacity_ = makeOpacityField(26.0);
@@ -1904,7 +1773,7 @@ QWidget* MainWindow::BuildDisplayPanel()
     surfaceForm->addRow(QStringLiteral("輪郭線種"), surfaceEdgeStyle_);
     layout->addWidget(surfaceBox);
 
-    auto* plateBox = new QGroupBox(QStringLiteral("板材"));
+    auto* plateBox = new QGroupBox(QStringLiteral("面部品（製作条件あり）"));
     auto* plateForm = new QFormLayout(plateBox);
     plateFillColor_ = makeColorButton(QColor("#b2c2cb"));
     plateOpacity_ = makeOpacityField(62.0);
@@ -1977,7 +1846,7 @@ QWidget* MainWindow::BuildDisplayPanel()
     gridOutsideDrawingCheck_ = new QCheckBox(QStringLiteral("作図モード以外でも表示"));
     gridOutsideDrawingCheck_->setToolTip(QStringLiteral(
         "通常、点グリッドは作図モード(作図面を選んでいるとき)だけ表示します。\n"
-        "面・板材や出力モードでも表示したい場合にチェックしてください"));
+        "面部品や出力モードでも表示したい場合にチェックしてください"));
     gridLayout->addRow(gridOutsideDrawingCheck_);
     dimOtherPlanesCheck_ = new QCheckBox(QStringLiteral("作図面以外の線を常に薄く表示"));
     dimOtherPlanesCheck_->setToolTip(QStringLiteral(
@@ -2464,15 +2333,22 @@ void MainWindow::RefreshSelectionTable()
             break;
         }
         case CadSelectionKind::Surface:
-            kindText = project_.Surfaces()[selection.index].partModelSourceName.has_value()
-                ? QStringLiteral("部材面")
-                : QStringLiteral("面");
-            nameText = ToQString(project_.Surfaces()[selection.index].name);
+            kindText = QStringLiteral("面部品");
+            nameText = ToQString(project_.Surfaces()[selection.index].name)
+                + QStringLiteral(" [厚み未設定]");
             break;
-        case CadSelectionKind::Plate:
-            kindText = QStringLiteral("板材");
-            nameText = ToQString(project_.Plates()[selection.index].name);
+        case CadSelectionKind::Plate: {
+            const auto& plate = project_.Plates()[selection.index];
+            kindText = QStringLiteral("面部品");
+            const QString material = plate.material == "styrene" ? QStringLiteral("プラ板")
+                : plate.material == "paper" ? QStringLiteral("紙")
+                : plate.material == "brass" ? QStringLiteral("真鍮")
+                : ToQString(plate.material);
+            nameText = QStringLiteral("%1 [%2 %3 mm]")
+                .arg(ToQString(plate.name), material)
+                .arg(plate.plate.Thickness(), 0, 'f', 2);
             break;
+        }
         case CadSelectionKind::Body:
             kindText = QStringLiteral("実体");
             nameText = ToQString(project_.Bodies()[selection.index].name);

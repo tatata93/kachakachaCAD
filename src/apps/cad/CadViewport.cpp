@@ -6171,7 +6171,7 @@ void CadViewport::mouseMoveEvent(QMouseEvent* event)
             break;
         case ViewCubeFace::Selection:
             tooltip = unavailableSelection
-                ? QStringLiteral("線・面・板材・作業平面を先に選択")
+                ? QStringLiteral("線・面部品・作業平面を先に選択")
                 : QStringLiteral("選択対象に正対して中央表示");
             break;
         case ViewCubeFace::Edge:

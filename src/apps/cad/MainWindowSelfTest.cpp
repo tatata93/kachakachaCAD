@@ -670,17 +670,13 @@ bool MainWindow::PrepareManualScreenshot(const QString& state)
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("plate-create")) {
-        if (!select({{CadSelectionKind::Surface, "nose_skin"}})) {
+        if (!select({{CadSelectionKind::Plate, "nose_panel_front"}})) {
             return false;
         }
         showTab(2);
-        // 厚み化は押し出しの画面へ統合したので、実機と同じ道具・同じ入口で開く。
-        RevealSurfaceGroup(QStringLiteral("押し出し"));
-        if (extrudePurposeThickness_ != nullptr) {
-            extrudePurposeThickness_->setChecked(true);
-        }
+        RevealSurfaceGroup(QString());
         finalRevealTab = 2;
-        finalRevealAnchor = QStringLiteral("plateCreate");
+        finalRevealAnchor = QStringLiteral("sheetPart");
         viewport_->SetIsometricView();
         viewport_->FitAll();
     } else if (state == QStringLiteral("jig")) {
@@ -1144,7 +1140,7 @@ bool MainWindow::RunCreationSelfTest()
     if (toolsTabs_->count() != 7
         || toolsTabs_->tabText(0) != QStringLiteral("スケッチ")
         || toolsTabs_->tabText(6) != QStringLiteral("部材")
-        || toolsTabs_->tabText(2) != QStringLiteral("面・板")
+        || toolsTabs_->tabText(2) != QStringLiteral("面部品")
         || toolsTabs_->tabText(3) != QStringLiteral("出力")
         || toolsTabs_->tabText(4) != QStringLiteral("表示")
         || toolsTabs_->tabText(5) != QStringLiteral("情報")
@@ -1190,11 +1186,7 @@ bool MainWindow::RunCreationSelfTest()
         || isolateDisplayAction_ == nullptr
         || pointToolAction_ == nullptr
         || modelExportScope_ == nullptr
-        || plateVariableThickness_ == nullptr
-        || plateEndThickness_ == nullptr
-        || thicknessMakeWire_ == nullptr
-        || thicknessMakeSurface_ == nullptr
-        || thicknessMakePlate_ == nullptr
+        || sheetPartPanel_ == nullptr
         || plateOffsetLayer_ == nullptr
         || lightCaseSelectionLabel_ == nullptr
         || lightCaseReferenceLabel_ == nullptr
@@ -2079,43 +2071,15 @@ bool MainWindow::RunCreationSelfTest()
             return fail("surface creation keeps section wires");
         }
 
-        const int sourceComboIndex = plateSurface_->findText(QStringLiteral("__w6ロフト"));
-        if (sourceComboIndex < 0) {
-            return fail("find thickness test surface in combo");
-        }
-        plateSurface_->setCurrentIndex(sourceComboIndex);
-        plateName_->setText(QStringLiteral("__w6板"));
-        plateThickness_->setValue(0.5);
-        plateVariableThickness_->setChecked(false);
-        plateDirection_->setCurrentIndex(0);
-        // 厚み化: まず板を外して面+ワイヤだけを出力(板は任意出力)。
-        thicknessMakePlate_->setChecked(false);
-        thicknessMakeSurface_->setChecked(true);
-        thicknessMakeWire_->setChecked(true);
-        CreatePlateFromSurface();
-        if (project_.Plates().size() != wave6PlateStart
-            || !project_.Surfaces()[wave6SurfaceStart].visible) {
-            return fail("thickness apply without plate keeps source surface");
-        }
-        // 次に板だけを出力(既定の組み合わせ)。
-        thicknessMakeSurface_->setChecked(false);
-        thicknessMakeWire_->setChecked(false);
-        thicknessMakePlate_->setChecked(true);
-        CreatePlateFromSurface();
-        bool offsetSurfaceFound = false;
-        for (const auto& surface : project_.Surfaces()) {
-            offsetSurfaceFound = offsetSurfaceFound
-                || surface.name.find("_オフセット面") != std::string::npos;
-        }
-        int thicknessWireCount = 0;
-        for (const auto& wire : project_.Wires()) {
-            if (wire.name.find("_厚み位置") != std::string::npos) {
-                ++thicknessWireCount;
-            }
-        }
+        ConfigureSheetPartForTest(
+            0.5, 0.5, false, PlateThicknessDirection::Positive,
+            QStringLiteral("styrene"));
+        ApplySelectedSheetPartSettings();
         if (project_.Plates().size() != wave6PlateStart + 1
-            || !offsetSurfaceFound || thicknessWireCount < 1) {
-            return fail("thickness outputs create surface and wires together");
+            || project_.Plates().back().sourceSurfaceName != "__w6ロフト"
+            || project_.Surfaces()[wave6SurfaceStart].visible
+            || viewport_->Selection().kind != CadSelectionKind::Plate) {
+            return fail("surface becomes one manufacturing sheet part");
         }
         drawingModeAction_->trigger();
         project_ = wave6Saved;
@@ -3025,17 +2989,15 @@ bool MainWindow::RunCreationSelfTest()
     RefreshModelViews(false);
 
     surfaceType_->setCurrentIndex(surfaceType_->findData(2));
-    plateName_->setText("__ui_direct_variable_plate");
-    plateThickness_->setValue(0.4);
-    plateVariableThickness_->setChecked(true);
-    plateEndThickness_->setValue(0.9);
-    plateDirection_->setCurrentIndex(1);
+    ConfigureSheetPartForTest(
+        0.4, 0.9, true, PlateThicknessDirection::Centered,
+        QStringLiteral("styrene"));
     UpdateSelections({
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart)},
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 1)},
         {CadSelectionKind::Wire, static_cast<int>(surfaceWireStart + 2)},
     }, true);
-    CreatePlateFromSelectedWires();
+    CreateSheetPartFromSelectedWires();
     if (project_.Surfaces().size() != surfaceStart + 1
         || project_.Plates().size() != plateStart + 1
         || !project_.Plates().back().plate.HasVariableThickness()
@@ -3046,7 +3008,9 @@ bool MainWindow::RunCreationSelfTest()
     if (project_.Surfaces().size() != surfaceStart || project_.Plates().size() != plateStart) {
         return fail("undo direct variable plate");
     }
-    plateVariableThickness_->setChecked(false);
+    ConfigureSheetPartForTest(
+        0.5, 0.5, false, PlateThicknessDirection::Centered,
+        QStringLiteral("styrene"));
 
     surfaceType_->setCurrentIndex(surfaceType_->findData(2));
     surfaceName_->setText("__ui_nose_skin");
@@ -3095,15 +3059,11 @@ bool MainWindow::RunCreationSelfTest()
     }
     const std::string projectedLightName = project_.Wires()[projectedLightIndex].name;
 
-    plateSurface_->setCurrentText("__ui_nose_skin");
-    plateName_->setText("__ui_nose_plate");
-    plateThickness_->setValue(0.5);
-    plateDirection_->setCurrentIndex(1);
-    plateMaterial_->setCurrentIndex(0);
-    thicknessMakeWire_->setChecked(false);
-    thicknessMakeSurface_->setChecked(false);
-    thicknessMakePlate_->setChecked(true);
-    CreatePlateFromSurface();
+    UpdateSelection({CadSelectionKind::Surface, static_cast<int>(surfaceStart)}, true);
+    ConfigureSheetPartForTest(
+        0.5, 0.5, false, PlateThicknessDirection::Centered,
+        QStringLiteral("styrene"));
+    ApplySelectedSheetPartSettings();
     if (project_.Plates().size() != plateStart + 1
         || project_.Plates()[plateStart].sourceSurfaceName != "__ui_nose_skin"
         || std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.5) > 1.0e-12
@@ -3189,12 +3149,10 @@ bool MainWindow::RunCreationSelfTest()
     Redo();
 
     UpdateSelection({CadSelectionKind::Plate, static_cast<int>(plateStart)}, true);
-    plateThickness_->setValue(0.7);
-    plateVariableThickness_->setChecked(true);
-    plateEndThickness_->setValue(1.1);
-    plateDirection_->setCurrentIndex(0);
-    plateMaterial_->setCurrentIndex(1);
-    UpdateSelectedPlate();
+    ConfigureSheetPartForTest(
+        0.7, 1.1, true, PlateThicknessDirection::Positive,
+        QStringLiteral("paper"));
+    ApplySelectedSheetPartSettings();
     if (std::abs(project_.Plates()[plateStart].plate.Thickness() - 0.7) > 1.0e-12
         || std::abs(project_.Plates()[plateStart].plate.EndThickness() - 1.1) > 1.0e-12
         || project_.Plates()[plateStart].plate.Direction() != PlateThicknessDirection::Positive
@@ -3220,7 +3178,8 @@ bool MainWindow::RunCreationSelfTest()
     CreatePlateOffsetWires();
     if (project_.Wires().size() != beforePlateOffsetWire + 1
         || !project_.Wires().back().plateOffset.has_value()
-        || project_.Wires().back().plateOffset->plateName != "__ui_nose_plate") {
+        || project_.Wires().back().plateOffset->plateName
+            != project_.Plates()[plateStart].name) {
         return fail("create plate thickness position wire");
     }
     Undo();
@@ -3232,7 +3191,7 @@ bool MainWindow::RunCreationSelfTest()
         {CadSelectionKind::Plate, static_cast<int>(plateStart)},
         {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
     }, true);
-    AddSelectedPlateOpenings();
+    AddSelectedSheetPartOpenings();
     if (project_.Plates()[plateStart].openingWireNames
         != std::vector<std::string>{projectedLightName}) {
         return fail("add selected plate opening");
@@ -3249,7 +3208,7 @@ bool MainWindow::RunCreationSelfTest()
         {CadSelectionKind::Plate, static_cast<int>(plateStart)},
         {CadSelectionKind::Wire, static_cast<int>(projectedLightIndex)},
     }, true);
-    RemoveSelectedPlateOpenings();
+    RemoveSelectedSheetPartOpenings();
     if (!project_.Plates()[plateStart].openingWireNames.empty()) {
         return fail("remove selected plate opening");
     }
@@ -4412,7 +4371,7 @@ bool MainWindow::RunCreationSelfTest()
     QTreeWidgetItemIterator filteredIterator(modelTree_);
     while (*filteredIterator) {
         QTreeWidgetItem* item = *filteredIterator;
-        if (item->text(0) == QStringLiteral("__ui_nose_skin") && !item->isHidden()) {
+        if (item->text(0).startsWith(QStringLiteral("__ui_nose_skin")) && !item->isHidden()) {
             matchingTreeItemVisible = true;
             break;
         }
@@ -4452,7 +4411,7 @@ bool MainWindow::RunCreationSelfTest()
         if (ancestor != setNode) {
             break;
         }
-        if (item->text(0) == QStringLiteral("__ui_nose_skin")) {
+        if (item->text(0).startsWith(QStringLiteral("__ui_nose_skin"))) {
             surfaceUnderSet = true;
             break;
         }
@@ -4498,7 +4457,7 @@ bool MainWindow::RunCreationSelfTest()
     QTreeWidgetItem* surfaceItem = nullptr;
     QTreeWidgetItemIterator surfaceIterator(modelTree_);
     while (*surfaceIterator) {
-        if ((*surfaceIterator)->text(0) == QStringLiteral("__ui_nose_skin")) {
+        if ((*surfaceIterator)->text(0).startsWith(QStringLiteral("__ui_nose_skin"))) {
             surfaceItem = *surfaceIterator;
             break;
         }
@@ -4770,7 +4729,7 @@ bool MainWindow::RunCreationSelfTest()
             return fail("the selection table lists every selected object");
         }
         if (selectionTable_->item(2, 1) == nullptr
-            || selectionTable_->item(2, 1)->text() != QStringLiteral("__sel面")) {
+            || !selectionTable_->item(2, 1)->text().startsWith(QStringLiteral("__sel面"))) {
             return fail("the selection table shows object names");
         }
         // 閉じた輪郭は種類で分かる(開口などの条件を確かめやすくする)。
@@ -5098,32 +5057,19 @@ bool MainWindow::RunCreationSelfTest()
     }
     progressMark("cursor operation checked");
 
-    // オーナー指示: 厚み化は押し出しへ統合した。押し出しの道具を選ぶと、
-    // 厚み化の入力欄も同じ画面に出ていること(別の道具として残っていない)。
+    // 面と板材は一つの「面部品」として見せる。製作条件の共通ヘッダーは、
+    // 押し出しなど別の加工を選んでいても常に表示する。
     RevealSurfaceGroup(QStringLiteral("押し出し"));
     QApplication::processEvents();
-    if (plateThickness_ == nullptr || extrudeDistance_ == nullptr
-        || extrudePurposeSweep_ == nullptr || extrudePurposeThickness_ == nullptr
-        || extrudeSweepBody_ == nullptr || extrudeThicknessBody_ == nullptr) {
-        return fail("the extrude tool has both purposes");
-    }
-    // 入口の二択。初期は「線・面を伸ばす」で、厚みの入力欄は出さない。
-    if (extrudeSweepBody_->isHidden() || !extrudeThicknessBody_->isHidden()) {
-        return fail("the extrude tool starts on the sweep purpose");
-    }
-    extrudePurposeThickness_->setChecked(true);
-    QApplication::processEvents();
-    if (extrudeThicknessBody_->isHidden() || !extrudeSweepBody_->isHidden()) {
-        return fail("choosing the thickness purpose shows the thickness fields");
-    }
-    extrudePurposeSweep_->setChecked(true);
-    QApplication::processEvents();
-    if (extrudeSweepBody_->isHidden() || !extrudeThicknessBody_->isHidden()) {
-        return fail("going back to sweep hides the thickness fields");
+    QWidget* sheetPartWidget = findChild<QWidget*>(QStringLiteral("sheetPartPanel"));
+    if (sheetPartPanel_ == nullptr || sheetPartWidget == nullptr
+        || sheetPartWidget->isHidden() || extrudeDistance_ == nullptr) {
+        return fail("the sheet-part editor stays visible beside fabrication tools");
     }
     for (QAction* action : surfaceToolActions_) {
-        if (action->data().toString() == QStringLiteral("厚み化（ワイヤ・面・板）")) {
-            return fail("the separate thickness tool is gone");
+        if (action->text().contains(QStringLiteral("厚み化"))
+            || action->data().toString().contains(QStringLiteral("厚み化"))) {
+            return fail("the separate thickness entry is gone");
         }
     }
     RevealSurfaceGroup(QStringLiteral("ワイヤーから面"));

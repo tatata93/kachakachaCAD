@@ -91,7 +91,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     createOuter->addLayout(unitNameRow);
 
     auto* unitSteps = new QLabel(QStringLiteral(
-        "1  車体のうち、まとめて作りたい面・板材を3D画面で選ぶ\n"
+        "1  車体のうち、まとめて作りたい面部品を3D画面で選ぶ\n"
         "2  下の表で行ごとに「板に分ける／形を変えずつなぐ／使わない」を決める\n"
         "3  「部品」に番号を入れる（同じ番号＝同じ部品。空欄なら自動）\n"
         "4  「まとめて部材にする」を押す"));
@@ -101,7 +101,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
 
     auto* collectButton = new QPushButton(QStringLiteral("選んだ物を下の表へ入れる"));
     collectButton->setToolTip(QStringLiteral(
-        "近似したい部品の周辺の面・板材・ワイヤーを3D画面でまとめて選んで押します。\n"
+        "近似したい部品の周辺の面部品・ワイヤーを3D画面でまとめて選んで押します。\n"
         "部材グループごとの選択でも構いません。押すたびに表へ追記されます"));
     connect(collectButton, &QPushButton::clicked, this, [this] {
         if (onCollectUnitMembers) onCollectUnitMembers();
@@ -158,7 +158,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         = new QPushButton(QStringLiteral("まとめて部材にする"));
     createUnitButton->setObjectName("primaryButton");
     createUnitButton->setToolTip(QStringLiteral(
-        "「板に分ける」にした面・板材ごとに部材モデルを作り、\n"
+        "「板に分ける」にした面部品ごとに部材モデルを作り、\n"
         "「形を変えずつなぐ」にした物は最寄りの部材へ合わせた「〜_接続」を作ります。\n"
         "元の面にある閉じた投影輪郭は、窓・穴として自動で写します"));
     connect(createUnitButton, &QPushButton::clicked, this, [this] {
@@ -448,7 +448,7 @@ PartModelPanel::PartModelPanel(QWidget* parent)
     kcdForm->addRow(QStringLiteral(".kcdの出し先"), foldKcdDestination_);
     foldKcdMovable_ = new QComboBox;
     foldKcdMovable_->addItem(
-        QStringLiteral("固定：動かない普通の線・面・板材にする"), 0);
+        QStringLiteral("固定：動かない普通の線・面部品にする"), 0);
     foldKcdMovable_->addItem(
         QStringLiteral("可変：近似モデルごと出して動かせるままにする"), 1);
     foldKcdMovable_->setToolTip(QStringLiteral(
@@ -911,7 +911,7 @@ void PartModelPanel::SetFoldLines(
             angleSpin->setSingleStep(5.0);
             angleSpin->setSuffix(QStringLiteral(" °"));
             angleSpin->setToolTip(QStringLiteral(
-                "この折り線の折り角。編集すると実際の部材面・板材もこの姿勢になります"));
+                "この折り線の折り角。編集すると実際の面部品もこの姿勢になります"));
             rowLayout->addWidget(angleSpin, 1);
             foldLinesLayout_->addWidget(row);
             foldAngleSpins_.push_back(angleSpin);

@@ -22,18 +22,21 @@ V2は、利用者が `面` と `板材` の内部的な違いを意識する現�
 矛盾した場合は上にある文書を優先する。
 
 1. `AGENTS.md` の恒久原則と安全規則
-2. `docs/v2/product-contract.md`
-3. `docs/v2/architecture-and-data.md`
-4. `docs/v2/public-api-contract.md`
-5. `docs/v2/kcd2-format.md`
-6. `docs/v2/geometry-contract.md`
-7. `docs/v2/fabrication-contract.md`
-8. `docs/v2/ui-workflows.md`
-9. `docs/v2/command-catalog.md`
-10. `docs/v2/acceptance-tests.md`
-11. `docs/v2/traceability-matrix.md`
-12. `docs/v2/implementation-work-packages.md`
-13. 既存の `docs/*.md` とADR 0001から0025
+2. `docs/v2/pre-implementation-fixes.md`
+   （オーナー決定事項と、実装前レビューで見つかった規範文書の誤り。
+   他のV2文書と矛盾したらこちらを優先し、他文書のほうを直す）
+3. `docs/v2/product-contract.md`
+4. `docs/v2/architecture-and-data.md`
+5. `docs/v2/public-api-contract.md`
+6. `docs/v2/kcd2-format.md`
+7. `docs/v2/geometry-contract.md`
+8. `docs/v2/fabrication-contract.md`
+9. `docs/v2/ui-workflows.md`
+10. `docs/v2/command-catalog.md`
+11. `docs/v2/acceptance-tests.md`
+12. `docs/v2/traceability-matrix.md`
+13. `docs/v2/implementation-work-packages.md`
+14. 既存の `docs/*.md` とADR 0001から0025
 
 V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先する。旧文書の有用な幾何条件や
 試験資産は、V2と矛盾しない範囲で再利用する。
@@ -43,6 +46,11 @@ V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先�
 以下は実装担当者が再検討してはならない。
 
 1. リポジトリを捨ててゼロから作り直さない。検証済みアルゴリズム、テスト、ビルド、配布処理を再利用する。
+   ただし規模の実態は次のとおりであり、これを前提に計画する。
+   V2は「同一リポジトリ内での全面書き直し + 検証済みアルゴリズムのサルベージ + 旧実装の削除」である。
+   新規記述は約77,500行(V1実測66,987行の約1.16倍)、並存ピークは約144,000行・2アプリと見積もる。
+   再利用するのはビルド基盤、CI、配布処理、ライセンス監査、Windows 95スキン、
+   展開と剛体折りの数学、Gordon曲面の実装、形状ケースである。モデル層とUI層は再利用しない。
 2. データモデル、保存形式、UIの操作単位、依存再計算はV2として作り直す。
 3. V2完成までは現行アプリを残す。V2の全受入ゲートを通過した切替コミットで旧実装を削除する。
 4. 旧 `.kcd` の読込互換は持たない。V2保存形式の一時拡張子は `.kcd2`、正式切替時に `.kcd` とする。
@@ -60,6 +68,7 @@ V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先�
 
 | 文書 | 固定する内容 |
 | --- | --- |
+| `pre-implementation-fixes.md` | 着手前ブロッカー、オーナー決定事項、規範文書の既知の誤り、移植するV1資産 |
 | `product-contract.md` | 製品の完成像、用語、機能範囲、非目標 |
 | `architecture-and-data.md` | モジュール境界、ID、依存グラフ、保存形式、Undo、並列計算 |
 | `public-api-contract.md` | WP間で共有するC++型、Command、評価、出力、UI境界 |
@@ -78,18 +87,21 @@ V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先�
 
 文書と試験を次の接頭辞で結ぶ。
 
+要求IDの接頭辞は次の4つだけとする。
+
 - `PRD`: 製品原則
 - `DOC`: データと依存関係
-- `WIR`: ワイヤーと作図
-- `GEO`: 形状ガイドと部品生成
-- `EXT`: 押し出し
 - `FAB`: 製作近似と型紙
 - `UIX`: 画面操作
-- `MEA`: 測定
-- `EXP`: 保存・出力
-- `PER`: 性能と安定性
+
+`WIR` `GEO` `EXT` `MEA` `EXP` `PER` は**要求IDではなくDiagnosticコードの接頭辞**である
+(`GEO-W001 DisconnectedChain`、`EXT-005 BooleanWouldBeDisconnected` など)。
+要求IDとDiagnosticコードは別の名前空間であり、同じ文字列で両方を指してはならない。
+これらの領域の要求は `PRD` 側で拾う。
 
 各必須要件は最低1つの受入試験IDへ対応させる。対応試験がない機能は完成扱いにしない。
+各受入試験は、`implementation-work-packages.md` のいずれかのWPの
+一次ゲートまたは統合ゲートへ必ず所属させる。所属の無い受入試験を残してはならない。
 
 ## 仕様変更手順
 

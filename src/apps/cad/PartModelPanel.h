@@ -47,6 +47,16 @@ public:
     [[nodiscard]] QString SelectedModelName() const;
     [[nodiscard]] std::vector<int> SelectedPartNumbers() const;
     [[nodiscard]] QString SelectedSetName() const;
+    //! .kcd出力の出し先。0=いま開いている.kcdの中へ、1=別の.kcdファイルへ。
+    [[nodiscard]] int FoldKcdDestination() const;
+    //! .kcd出力の形式。true=可変(近似モデルごと)、false=固定(普通の線・面・板材)。
+    [[nodiscard]] bool FoldKcdKeepsMovable() const;
+    //! 出力の結果(足した物のお知らせ)を出しっぱなしにする。
+    void SetFoldOutputResult(const QString& text, bool warning);
+    //! 出力の結果表示(セルフテスト用)。
+    [[nodiscard]] QString FoldOutputResultForTest() const;
+    //! .kcd出力の選び方を差し替える(セルフテスト用)。
+    void SetFoldKcdChoiceForTest(int destination, bool keepsMovable);
     [[nodiscard]] double FoldProgress() const;      //!< 0(平面)〜1(近似完成形)
     [[nodiscard]] bool FoldPreviewEnabled() const;  //!< 3Dビューで曲げ状態を表示するか
     //! 一覧ツリーで指定モデルの行を選択する(セルフテスト・スクリーンショット用)。
@@ -108,7 +118,7 @@ public:
     std::function<void()> onFoldStateChanged;  //!< スライダー・チェック・選択の変化
     //! 組立スライダーの確定(ドラッグを離した時・キー操作)。実形状の再構築に使う。
     std::function<void(double)> onAssemblyProgressCommitted;
-    std::function<void()> onRealizeFoldState;  //!< この曲げ状態を同じプロジェクトへ板材化
+    std::function<void()> onRealizeFoldState;  //!< 予備(いまは.kcd出力へ統合)
     std::function<void(int, double)> onRailFoldEdited; //!< 折り線index(0始まり)と新しい進行度
     std::function<void(bool)> onExportFoldMesh; //!< 曲げ状態を保存(true=STEP, false=STL)
     std::function<void()> onExportFoldKcd;     //!< 曲げ状態を別の.kcdへ保存
@@ -145,6 +155,9 @@ private:
     QSlider* foldSlider_ = nullptr;
     QLabel* foldLabel_ = nullptr;
     QLabel* unitResultLabel_ = nullptr; //!< ユニット近似の結果・エラー常設表示
+    QComboBox* foldKcdDestination_ = nullptr;
+    QComboBox* foldKcdMovable_ = nullptr;
+    QLabel* foldOutputResult_ = nullptr;
     std::array<QWidget*, 4> sections_{};
     int visibleSection_ = 0;
     QWidget* bottomSpacer_ = nullptr; //!< 1区画表示時に項目を上詰めするための余白

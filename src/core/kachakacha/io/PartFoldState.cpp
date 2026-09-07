@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -17,6 +18,47 @@ using model::NamedWire;
 using model::PartMeshDevelopment;
 using model::Project;
 using model::Wire;
+
+//! 面の上へ点を「置き直す」。帯の境目で切った辺は元の曲面から弦のように離れるため、
+//! そのままだと投影線が面を外れて穴が作れない。いちばん近い場所を探して面の上へ寄せ、
+//! ほんの少しだけ内側へ入れておくと、真上から下ろした投影が必ず当たる。
+[[nodiscard]] Vector3 SnapPointOntoSurface(
+    const model::Surface& surface,
+    const Vector3& point,
+    double inset)
+{
+    double bestU = 0.5;
+    double bestV = 0.5;
+    double lowU = 0.0;
+    double highU = 1.0;
+    double lowV = 0.0;
+    double highV = 1.0;
+    for (int pass = 0; pass < 4; ++pass) {
+        const int steps = pass == 0 ? 24 : 8;
+        double best = std::numeric_limits<double>::max();
+        for (int iu = 0; iu <= steps; ++iu) {
+            const double u = lowU + (highU - lowU) * iu / steps;
+            for (int iv = 0; iv <= steps; ++iv) {
+                const double v = lowV + (highV - lowV) * iv / steps;
+                const double distance = (surface.Evaluate(u, v) - point).LengthSquared();
+                if (distance < best) {
+                    best = distance;
+                    bestU = u;
+                    bestV = v;
+                }
+            }
+        }
+        const double spanU = (highU - lowU) / steps;
+        const double spanV = (highV - lowV) / steps;
+        lowU = std::max(0.0, bestU - spanU);
+        highU = std::min(1.0, bestU + spanU);
+        lowV = std::max(0.0, bestV - spanV);
+        highV = std::min(1.0, bestV + spanV);
+    }
+    const double clampedU = std::clamp(bestU, inset, 1.0 - inset);
+    const double clampedV = std::clamp(bestV, inset, 1.0 - inset);
+    return surface.Evaluate(clampedU, clampedV);
+}
 
 [[nodiscard]] Vector3 Normalized(const Vector3& value)
 {
@@ -297,6 +339,10 @@ PartFoldStateResult AddPartFoldStateModel(
                 railState[static_cast<std::size_t>(sourcePiece.band + 1)]
                     = options.bandRails[static_cast<std::size_t>(sourcePiece.band * 2 + 1)];
             }
+            // 境目で切った辺は元の曲面から弦のように離れるので、
+            // 遠い点が少しあるだけで取り分ごと捨ててはいけない
+            //(捨てると窓そのものが出力から消える)。
+            int farPoints = 0;
             for (const Vector3& point : sourcePiece.points) {
                 auto mappedPoint = model::MapPointToPartMeshState(mesh, mesh.world, point);
                 if (useRails) {
@@ -308,12 +354,13 @@ PartFoldStateResult AddPartFoldStateModel(
                     mappedPoint = model::MapPointToPartMeshState(mesh, state, point);
                 }
                 if (mappedPoint.distanceMillimeters > meshTolerance) {
-                    onMesh = false;
-                    break;
+                    ++farPoints;
                 }
                 moved.points.push_back(mappedPoint.point);
             }
-            if (onMesh && moved.points.size() >= 3) {
+            onMesh = moved.points.size() >= 3
+                && farPoints * 2 <= static_cast<int>(moved.points.size());
+            if (onMesh) {
                 pieces.push_back(std::move(moved));
             }
         }
@@ -356,12 +403,22 @@ PartFoldStateResult AddPartFoldStateModel(
                 centroid = centroid * (1.0 / static_cast<double>(piece.points.size()));
                 bool made = false;
                 std::string lastFailure;
-                for (const double shrink : {0.0, 0.02, 0.06, 0.12}) {
+                const model::Surface* targetSurface = nullptr;
+                for (const auto& candidate : target.Surfaces()) {
+                    if (candidate.name == surfaceNameByPart[owningNumber - 1]) {
+                        targetSurface = &candidate.surface;
+                        break;
+                    }
+                }
+                for (const double shrink : {0.0, 0.004, 0.012, 0.03, 0.08}) {
                     std::vector<Vector3> lifted;
                     lifted.reserve(closed.size());
                     for (const Vector3& point : closed) {
-                        lifted.push_back(
-                            centroid + (point - centroid) * (1.0 - shrink) + normal * 2.0);
+                        Vector3 onSurface = centroid + (point - centroid) * (1.0 - shrink);
+                        if (targetSurface != nullptr) {
+                            onSurface = SnapPointOntoSurface(*targetSurface, onSurface, 0.004 + shrink);
+                        }
+                        lifted.push_back(onSurface + normal * 2.0);
                     }
                     try {
                         target.AddWire(draftName, Wire::Polyline(std::move(lifted)));

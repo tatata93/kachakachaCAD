@@ -249,6 +249,49 @@ void ClipAgainstLimit(
     parameters = std::move(outParameters);
 }
 
+//! 切り口は「帯の境目に沿った1本の直線」になってしまうため、そのままだと
+//! 曲がった面の上で弦(ショートカット)になり、窓の形が崩れる。
+//! 長い辺を細かく割っておけば、後で面へ投影したときに面の縁に沿って曲がる。
+void DensifyLoop(
+    std::vector<geometry::Vector3>& points,
+    std::vector<double>& parameters)
+{
+    const std::size_t count = points.size();
+    if (count < 3) {
+        return;
+    }
+    double perimeter = 0.0;
+    for (std::size_t index = 0; index < count; ++index) {
+        perimeter += (points[(index + 1) % count] - points[index]).Length();
+    }
+    if (perimeter <= 1.0e-9) {
+        return;
+    }
+    const double maximumEdge = perimeter / 96.0;
+    std::vector<geometry::Vector3> outPoints;
+    std::vector<double> outParameters;
+    outPoints.reserve(count * 2 + 8);
+    outParameters.reserve(count * 2 + 8);
+    for (std::size_t index = 0; index < count; ++index) {
+        const std::size_t next = (index + 1) % count;
+        outPoints.push_back(points[index]);
+        outParameters.push_back(parameters[index]);
+        const double length = (points[next] - points[index]).Length();
+        if (length <= maximumEdge) {
+            continue;
+        }
+        const int pieces = std::min(256, static_cast<int>(std::ceil(length / maximumEdge)));
+        for (int step = 1; step < pieces; ++step) {
+            const double ratio = static_cast<double>(step) / pieces;
+            outPoints.push_back(points[index] + (points[next] - points[index]) * ratio);
+            outParameters.push_back(
+                parameters[index] + (parameters[next] - parameters[index]) * ratio);
+        }
+    }
+    points = std::move(outPoints);
+    parameters = std::move(outParameters);
+}
+
 //! 面積がほぼ0の切れ端(境目に沿った線分だけ)を捨てる。
 [[nodiscard]] bool HasArea(const std::vector<geometry::Vector3>& points)
 {
@@ -294,6 +337,7 @@ std::vector<BandLoopPiece> ClipClosedLoopIntoBands(
         if (!HasArea(clippedPoints)) {
             continue;
         }
+        DensifyLoop(clippedPoints, clippedParameters);
         pieces.push_back(BandLoopPiece{static_cast<int>(band), std::move(clippedPoints)});
     }
     return pieces;

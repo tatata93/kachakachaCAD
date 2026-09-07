@@ -4831,6 +4831,151 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("active part checked");
 
     {
+        // オーナー指示: 曲げ状態の出力は「いま見ているものと同じ」でなければならず、
+        // 足りない物は自動で足して、足した物を知らせること。
+        // ファイル選択の出る「別の.kcdへ」は自動試験では押せないので、
+        // 同じ.kcdの中へ出す2通り(可変・固定)を確かめる。
+        const std::size_t koWireStart = project_.Wires().size();
+        const std::size_t koSurfaceStart = project_.Surfaces().size();
+        const std::size_t koPlateStart = project_.Plates().size();
+        project_.AddWire("__ko下", Wire::Polyline({
+            {2000.0, 0.0, 0.0}, {2010.0, 0.0, 0.0}, {2020.0, 0.0, 0.0},
+        }));
+        project_.AddWire("__ko上", Wire::Polyline({
+            {2000.0, 20.0, 3.0}, {2010.0, 20.0, 5.0}, {2020.0, 20.0, 3.0},
+        }));
+        project_.AddRuledSurface("__ko面", "__ko下", "__ko上");
+        kachakacha::model::PartApproximationOptions koOptions;
+        koOptions.splitAxis = kachakacha::model::PartSplitAxis::V;
+        koOptions.automaticBoundaries = false;
+        koOptions.manualBoundaryParameters = {0.5};
+        project_.AddPartModelFromSurface("__ko近似", "__ko面", koOptions);
+        RefreshModelViews(false);
+        ShowPartModelTool(2);
+        QApplication::processEvents();
+        if (!partModelPanel_->SelectModelForTest(QStringLiteral("__ko近似"))) {
+            return fail("the kcd output test model is listed");
+        }
+        QApplication::processEvents();
+
+        // (1) 可変のまま、いまの.kcdの中へ。厚みが無いので板材が自動で足される。
+        const std::size_t platesBeforeMovable = project_.Plates().size();
+        partModelPanel_->SetFoldKcdChoiceForTest(0, true);
+        ExportPartFoldKcd();
+        QApplication::processEvents();
+        if (project_.Plates().size() <= platesBeforeMovable) {
+            return fail("the movable kcd output adds the plates it needs");
+        }
+        int movablePlates = 0;
+        for (const auto& plate : project_.Plates()) {
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name != plate.sourceSurfaceName) {
+                    continue;
+                }
+                if (surface.partModelSourceName.has_value()
+                    && *surface.partModelSourceName == "__ko近似") {
+                    ++movablePlates;
+                }
+                break;
+            }
+        }
+        if (movablePlates == 0) {
+            return fail("the movable kcd output keeps the plates on the part surfaces");
+        }
+        const QString movableMessage = partModelPanel_->FoldOutputResultForTest();
+        if (movableMessage.isEmpty()) {
+            return fail("the movable kcd output reports what it added");
+        }
+
+        // (2) 固定して、いまの.kcdの中へ。動かない普通の面・板材が増える。
+        const std::size_t surfacesBeforeFixed = project_.Surfaces().size();
+        partModelPanel_->SetFoldKcdChoiceForTest(0, false);
+        ExportPartFoldKcd();
+        QApplication::processEvents();
+        if (project_.Surfaces().size() <= surfacesBeforeFixed) {
+            return fail("the fixed kcd output adds plain surfaces to this project");
+        }
+        int plainAdded = 0;
+        for (const auto& surface : project_.Surfaces()) {
+            if (surface.name.rfind("__ko近似", 0) == 0
+                && !surface.partModelSourceName.has_value()) {
+                ++plainAdded;
+            }
+        }
+        if (plainAdded == 0) {
+            return fail("the fixed kcd output makes objects that no longer follow the model");
+        }
+        if (partModelPanel_->FoldOutputResultForTest().isEmpty()) {
+            return fail("the fixed kcd output reports what it made");
+        }
+
+        // 後片付け: 固定で増えた物 → 板材 → 近似モデル → 元の面・線。
+        for (bool progressed = true; progressed;) {
+            progressed = false;
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name.rfind("__ko近似", 0) != 0) {
+                    continue;
+                }
+                if (project_.RemovePlate(plate.name)) {
+                    progressed = true;
+                    break;
+                }
+            }
+        }
+        for (bool progressed = true; progressed;) {
+            progressed = false;
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name.rfind("__ko近似", 0) != 0
+                    || surface.partModelSourceName.has_value()) {
+                    continue;
+                }
+                if (project_.RemoveSurface(surface.name)) {
+                    progressed = true;
+                    break;
+                }
+            }
+        }
+        for (bool progressed = true; progressed;) {
+            progressed = false;
+            for (const auto& wire : project_.Wires()) {
+                if (wire.name.rfind("__ko近似", 0) != 0
+                    || wire.partModelSourceName.has_value()) {
+                    continue;
+                }
+                if (project_.RemoveWire(wire.name)) {
+                    progressed = true;
+                    break;
+                }
+            }
+        }
+        for (bool progressed = true; progressed;) {
+            progressed = false;
+            for (const auto& set : project_.ObjectSets()) {
+                if (set.name.rfind("__ko近似", 0) != 0) {
+                    continue;
+                }
+                if (project_.RemoveObjectSet(set.name)) {
+                    progressed = true;
+                    break;
+                }
+            }
+        }
+        (void)project_.RemovePartModel("__ko近似");
+        (void)project_.RemoveSurface("__ko面");
+        (void)project_.RemoveWire("__ko下");
+        (void)project_.RemoveWire("__ko上");
+        RefreshModelViews(false);
+        if (project_.Wires().size() != koWireStart
+            || project_.Surfaces().size() != koSurfaceStart
+            || project_.Plates().size() != koPlateStart) {
+            return fail("the kcd output test leaves nothing behind");
+        }
+        partModelPanel_->SetFoldKcdChoiceForTest(0, false);
+        partModelPanel_->SetFoldOutputResult(QString(), false);
+    }
+    progressMark("fold kcd output checked");
+
+    {
         // カーソルでの操作の具合(オーナー指示「実際の画面やカーソル操作の
         // 具合などを必ず試験すること」)。数値の上下ボタンとチェック枠を、
         // 画面上の当たり判定そのままの位置で押す。

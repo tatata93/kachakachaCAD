@@ -4,6 +4,7 @@
 #include "kachakacha/model/Measurement.h"
 #include "kachakacha/model/WireOperations.h"
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -1267,17 +1268,34 @@ namespace {
     const std::vector<geometry::Vector3>& points,
     geometry::Vector3 direction)
 {
+    if (points.size() < 3) {
+        return std::nullopt;
+    }
+    // 帯の境目ちょうどに乗った点は、投影線が面の縁をわずかに外れて当たらないことがある。
+    // 落とすと輪郭に弦が渡って窓の形が崩れるので、中心へごくわずか寄せて当て直す。
+    geometry::Vector3 centroid{0.0, 0.0, 0.0};
+    for (const geometry::Vector3& point : points) {
+        centroid = centroid + point;
+    }
+    centroid = centroid * (1.0 / static_cast<double>(points.size()));
+    static constexpr std::array<double, 6> kShrinkFactors{
+        0.0, 0.0005, 0.002, 0.008, 0.03, 0.10};
     std::vector<geometry::Vector3> projected;
     projected.reserve(points.size() + 1);
     for (const geometry::Vector3& point : points) {
-        try {
-            const SurfaceProjection hit = surface.ProjectPointAlongDirection(point, direction);
-            if (projected.empty()
-                || (hit.point - projected.back()).LengthSquared() > 1.0e-12) {
-                projected.push_back(hit.point);
+        for (const double factor : kShrinkFactors) {
+            const geometry::Vector3 nudged = point + (centroid - point) * factor;
+            try {
+                const SurfaceProjection hit
+                    = surface.ProjectPointAlongDirection(nudged, direction);
+                if (projected.empty()
+                    || (hit.point - projected.back()).LengthSquared() > 1.0e-12) {
+                    projected.push_back(hit.point);
+                }
+                break;
+            } catch (const std::exception&) {
+                // もう少し内側で当て直す。
             }
-        } catch (const std::exception&) {
-            // この点は面から外れた。飛ばして続ける。
         }
     }
     if (projected.size() < 3) {

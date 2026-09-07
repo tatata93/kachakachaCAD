@@ -1,5 +1,6 @@
 #include "kachakacha/io/PartFoldState.h"
 #include "kachakacha/io/PartPatterns.h"
+#include "kachakacha/io/OutputMesh.h"
 #include "kachakacha/io/ProjectScript.h"
 #include "kachakacha/model/PartModel.h"
 #include "kachakacha/model/Project.h"
@@ -483,7 +484,29 @@ int main()
                 }
                 Require(std::abs(area - 100.0 * 0.625) < 1.0,
                     "the middle share covers the middle of the window");
+                // 切り口(帯の境目に沿う辺)は1本の長い直線のままにしてはいけない。
+                // 曲がった面の上では弦になり、窓の形が崩れる(オーナー報告)。
+                double longest = 0.0;
+                double perimeter = 0.0;
+                for (std::size_t index = 0; index < middle.size(); ++index) {
+                    const double length
+                        = (middle[(index + 1) % middle.size()] - middle[index]).Length();
+                    longest = std::max(longest, length);
+                    perimeter += length;
+                }
+                Require(longest < perimeter * 0.1,
+                    "the cut edge is split into small steps, not one long chord");
             }
+
+            const auto findFoldWire = [](const Project& project,
+                                          const std::string& name) -> const Wire& {
+                for (const auto& wire : project.Wires()) {
+                    if (wire.name == name) {
+                        return wire.wire;
+                    }
+                }
+                throw std::runtime_error("fold-state wire missing: " + name);
+            };
 
             // オーナー報告: 部材の境目をまたぐ窓が、どの部材にも開かなかった。
             // またぐなら、またぐ全ての部材へ取り分を開ける。
@@ -521,6 +544,67 @@ int main()
                             Require(wire.wire.IsClosed(1.0e-6), "each share stays closed");
                         }
                     }
+                }
+
+                // オーナー報告: 曲げ状態を出すと、またぐ窓が変な形になったり消えたりする。
+                // どの曲げ具合でも、両方の部材に「本物の穴」として出ていなければならない。
+                for (const double progress : {0.0, 0.35, 0.7, 1.0}) {
+                    Project foldOut;
+                    kachakacha::io::PartFoldStateOptions state;
+                    state.progress = progress;
+                    const auto exported = kachakacha::io::AddPartFoldStateModel(
+                        foldOut, straddle, straddleModel, state, "曲げ出し");
+                    Require(exported.openingWireNames.size() == 2,
+                        "both shares of the window survive as holes in the fold state");
+                    Require(exported.outlineWireNames.empty(),
+                        "no share falls back to a bare outline");
+                    int platesWithHole = 0;
+                    for (const auto& plate : foldOut.Plates()) {
+                        platesWithHole += plate.openingWireNames.empty() ? 0 : 1;
+                    }
+                    Require(platesWithHole == 2,
+                        "each exported plate carries its share of the window");
+                    for (const auto& name : exported.openingWireNames) {
+                        const Wire& hole = findFoldWire(foldOut, name);
+                        Require(hole.IsClosed(1.0e-6), "exported hole stays closed");
+                        const auto& points = hole.ControlPoints();
+                        Require(points.size() >= 8, "exported hole keeps its outline detail");
+                        double longest = 0.0;
+                        double perimeter = 0.0;
+                        for (std::size_t index = 1; index < points.size(); ++index) {
+                            const double length = (points[index] - points[index - 1]).Length();
+                            longest = std::max(longest, length);
+                            perimeter += length;
+                        }
+                        Require(longest < perimeter * 0.25,
+                            "exported hole has no long chord cutting across it");
+                    }
+                }
+
+                // 可変のまま別.kcdへ出す道: 近似モデルごと持って行き、
+                // いまの曲げ具合(組立進行度)のまま開き直せる。
+                {
+                    Project movableSource = straddle;
+                    movableSource.SetPartModelPartAssemblyProgress("またぎ", {}, 0.6);
+                    std::vector<std::string> kept;
+                    const Project movable = kachakacha::io::BuildOutputProject(
+                        movableSource,
+                        {{kachakacha::model::ProjectObjectKind::PartModel, "またぎ"}},
+                        &kept);
+                    Require(movable.PartModels().size() == 1,
+                        "the movable export keeps the part model itself");
+                    Require(!kept.empty(),
+                        "the movable export reports what it had to bring along");
+                    std::ostringstream written;
+                    kachakacha::io::WriteProjectScript(written, movable);
+                    std::istringstream readBack(written.str());
+                    const Project reloaded
+                        = kachakacha::io::LoadProjectScript(readBack, "movable");
+                    Require(reloaded.PartModels().size() == 1,
+                        "the movable export round-trips through .kcd");
+                    Require(std::abs(reloaded.PartModels().front().assemblyProgress - 0.6)
+                            < 1.0e-9,
+                        "the movable export opens at the same bend it was written at");
                 }
             }
 

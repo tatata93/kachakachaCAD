@@ -432,35 +432,62 @@ PartModelPanel::PartModelPanel(QWidget* parent)
         "各折り線の折り具合です。角度(°)と進行度(%)はどちらを変えてももう一方が追従します。\n"
         "100%が近似完成形の折り角、0%は平ら。上の全体スライダーは「型紙⇄この折り状態」の補間です"));
     foldLayout->addWidget(foldLinesContainer_);
-    auto* realizeButton = new QPushButton(QStringLiteral("この曲げ状態を板材化"));
-    realizeButton->setToolTip(QStringLiteral(
-        "スライダー0%なら平面に置いた展開状態（窓などの開口も実際の穴になります）、\n"
-        "それ以外なら折り線ごとの角度どおりの折り状態を、このプロジェクトへ板材として追加します"));
-    connect(realizeButton, &QPushButton::clicked, this, [this] {
-        if (onRealizeFoldState) onRealizeFoldState();
-    });
-    foldLayout->addWidget(realizeButton);
-    auto* exportRow = new QHBoxLayout;
-    auto* stlButton = new QPushButton(QStringLiteral("STL保存…"));
-    stlButton->setToolTip(QStringLiteral("この曲げ状態を3Dプリント用STLへ保存します"));
-    auto* stepButton = new QPushButton(QStringLiteral("STEP保存…"));
-    stepButton->setToolTip(QStringLiteral("この曲げ状態をCAD交換用STEPへ保存します"));
-    auto* kcdButton = new QPushButton(QStringLiteral("別の.kcdへ保存…"));
+    auto* outputHint = new QLabel(QStringLiteral(
+        "いま3D画面に出ているとおりの形を出します。"
+        "出すのに足りない物があれば自動で足して、何を足したかお知らせします。"));
+    outputHint->setWordWrap(true);
+    outputHint->setStyleSheet("color: #5c6670;");
+    foldLayout->addWidget(outputHint);
+
+    auto* kcdForm = new QFormLayout;
+    kcdForm->setContentsMargins(0, 0, 0, 0);
+    kcdForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    foldKcdDestination_ = new QComboBox;
+    foldKcdDestination_->addItem(QStringLiteral("いま開いている.kcdの中へ"), 0);
+    foldKcdDestination_->addItem(QStringLiteral("別の.kcdファイルへ"), 1);
+    kcdForm->addRow(QStringLiteral(".kcdの出し先"), foldKcdDestination_);
+    foldKcdMovable_ = new QComboBox;
+    foldKcdMovable_->addItem(
+        QStringLiteral("固定：動かない普通の線・面・板材にする"), 0);
+    foldKcdMovable_->addItem(
+        QStringLiteral("可変：近似モデルごと出して動かせるままにする"), 1);
+    foldKcdMovable_->setToolTip(QStringLiteral(
+        "固定=いまの形のまま二度と動かない普通の物になります。工作データ向け。\n"
+        "可変=近似モデルごと持っていくので、出した先でも分割や曲げをやり直せます"));
+    kcdForm->addRow(QStringLiteral(".kcdの形式"), foldKcdMovable_);
+    foldLayout->addLayout(kcdForm);
+
+    auto* kcdButton = new QPushButton(QStringLiteral(".kcdへ出す"));
+    kcdButton->setObjectName("primaryButton");
     kcdButton->setToolTip(QStringLiteral(
-        "この曲げ状態だけを含む新しいプロジェクト(.kcd)を書き出します"));
+        "上で決めた出し先と形式で、いまの曲げ状態を.kcdへ出します"));
+    connect(kcdButton, &QPushButton::clicked, this, [this] {
+        if (onExportFoldKcd) onExportFoldKcd();
+    });
+    foldLayout->addWidget(kcdButton);
+
+    auto* exportRow = new QHBoxLayout;
+    auto* stlButton = new QPushButton(QStringLiteral("STLで保存…"));
+    stlButton->setToolTip(QStringLiteral(
+        "この曲げ状態を3Dプリント用STLへ保存します（必ず固定の形になります）"));
+    auto* stepButton = new QPushButton(QStringLiteral("STEPで保存…"));
+    stepButton->setToolTip(QStringLiteral(
+        "この曲げ状態をCAD交換用STEPへ保存します（必ず固定の形になります）"));
     connect(stlButton, &QPushButton::clicked, this, [this] {
         if (onExportFoldMesh) onExportFoldMesh(false);
     });
     connect(stepButton, &QPushButton::clicked, this, [this] {
         if (onExportFoldMesh) onExportFoldMesh(true);
     });
-    connect(kcdButton, &QPushButton::clicked, this, [this] {
-        if (onExportFoldKcd) onExportFoldKcd();
-    });
     exportRow->addWidget(stlButton, 1);
     exportRow->addWidget(stepButton, 1);
-    exportRow->addWidget(kcdButton, 1);
     foldLayout->addLayout(exportRow);
+
+    foldOutputResult_ = new QLabel;
+    foldOutputResult_->setWordWrap(true);
+    foldOutputResult_->setVisible(false);
+    foldOutputResult_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    foldLayout->addWidget(foldOutputResult_);
     layout->addWidget(foldGroup);
     sections_[2] = foldGroup;
 
@@ -726,6 +753,51 @@ std::vector<int> PartModelPanel::SelectedPartNumbers() const
     std::sort(numbers.begin(), numbers.end());
     numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
     return numbers;
+}
+
+int PartModelPanel::FoldKcdDestination() const
+{
+    return foldKcdDestination_ != nullptr ? foldKcdDestination_->currentData().toInt() : 0;
+}
+
+bool PartModelPanel::FoldKcdKeepsMovable() const
+{
+    return foldKcdMovable_ != nullptr && foldKcdMovable_->currentData().toInt() == 1;
+}
+
+void PartModelPanel::SetFoldOutputResult(const QString& text, bool warning)
+{
+    if (foldOutputResult_ == nullptr) {
+        return;
+    }
+    foldOutputResult_->setVisible(!text.isEmpty());
+    foldOutputResult_->setText(text);
+    foldOutputResult_->setStyleSheet(
+        warning ? "color: #a32734;" : "color: #35664a;");
+}
+
+QString PartModelPanel::FoldOutputResultForTest() const
+{
+    if (foldOutputResult_ == nullptr || !foldOutputResult_->isVisible()) {
+        return {};
+    }
+    return foldOutputResult_->text();
+}
+
+void PartModelPanel::SetFoldKcdChoiceForTest(int destination, bool keepsMovable)
+{
+    if (foldKcdDestination_ != nullptr) {
+        const int index = foldKcdDestination_->findData(destination);
+        if (index >= 0) {
+            foldKcdDestination_->setCurrentIndex(index);
+        }
+    }
+    if (foldKcdMovable_ != nullptr) {
+        const int index = foldKcdMovable_->findData(keepsMovable ? 1 : 0);
+        if (index >= 0) {
+            foldKcdMovable_->setCurrentIndex(index);
+        }
+    }
 }
 
 QString PartModelPanel::SelectedSetName() const

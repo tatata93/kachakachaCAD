@@ -110,8 +110,8 @@ V1の `io/PlateFlatPattern.h` の `PlateFlatPatternPath` / `PlateFlatPatternPiec
 | 参照 | 現状 | 対応 |
 | --- | --- | --- |
 | `scripts/check-v2.ps1` / `check-v2.sh` | **存在しない**。共通DoD第7項ほか4箇所で必須 | WP-01で作る。作るまでWP-02以降を割り当てない |
-| `vcpkg.json` | **リポジトリに存在しない**（vcpkgはクラシックモード） | WP-01で作る |
-| `docs/adr/0026-wire-first-v2.md` | 両プロンプトが必読に挙げ「読んでいない文書がある状態で編集を始めるな」と規定。**確認できない** | WP-00で作る。無い場合は「無いこと」を統合担当が明示し、必読リストから外す |
+| `vcpkg.json` | **リポジトリに存在しない**（vcpkgはクラシックモード）。置くとマニフェストモードへ切り替わり Qt/OCCT の解決が壊れる | **ADR 0027 で「追加しない」と決定。** 依存は WP-05 着手時に単一ヘッダ同梱で入れる |
+| `docs/adr/0026-wire-first-v2.md` | **存在する**（レビュー時の作業ツリーには無かったが、リポジトリにはある） | 対応不要 |
 | ビルドパス `.\out\build\windows-release\` | **CMakePresetsに存在しない** | 正しくは `build-msvc2022-x64\Release\`。全文書で置換 |
 
 ### B-5. CIがV2ブランチで一度も動かない

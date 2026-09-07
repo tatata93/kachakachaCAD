@@ -116,3 +116,18 @@ OCCT例外により、OCCTヘッダ由来のコードを含むアプリのオブ
 - Microsoft Windowsフォントの文書埋め込み: https://learn.microsoft.com/en-us/typography/fonts/font-faq
 - 特許庁 意匠制度の概要: https://www.jpo.go.jp/system/design/gaiyo/seidogaiyo/torokugaiyo/index.html
 - 特許庁 権利侵害とは: https://www.jpo.go.jp/support/ipr/kenrishingai.html
+
+## Wire-first V2 の依存（2026-09-07 時点）
+
+V2 の追加ターゲット `kachakacha_v2_core` / `kachakacha_v2_occt` / `kachakacha_cad_next` は、
+現時点で **新しい第三者ライブラリを一つも追加していない**。
+
+| ターゲット | 依存 |
+| --- | --- |
+| `kachakacha_v2_core` | C++20標準ライブラリのみ。Qt にも OCCT にも依存しない（`AT-ARC-001` が機械で検査する） |
+| `kachakacha_v2_occt` | Open CASCADE 8.0.1（既存の依存。LGPL-2.1 + 例外条項。本文書の既存節を参照） |
+| `kachakacha_cad_next` | Qt 6.9.2 Widgets（既存の依存。LGPL-3.0。本文書の既存節を参照） |
+
+`.kcd2`（ZIP + JSON）の読み書きに必要な JSON と ZIP のライブラリは、WP-05 の着手時に追加する。
+取得方法は ADR 0027 で決めた（`vcpkg.json` は追加せず、単一ヘッダ／単一ソースの同梱を第一候補とする）。
+追加した時点でこの表と配布物の第三者表示を更新すること。

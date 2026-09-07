@@ -544,3 +544,88 @@ if(KACHACAD_BUILD_TESTS)
     endif()
 
 endif()
+
+# =======================================================================
+# Wire-first V2 (移行中)
+#
+# 現行の kachakacha_cad と並行してビルドする。受入が全部通るまで現行版は消さない。
+# ここより上の現行ターゲットに影響を与えないこと(WP-01の条件)。
+# 依存方向: kachakacha_v2_core は Qt にも OCCT にも依存しない(AT-ARC-001)。
+# =======================================================================
+
+add_library(kachakacha_v2_core STATIC
+    src/next/kachakacha/base/Version.cpp
+)
+target_include_directories(kachakacha_v2_core PUBLIC src/next)
+target_compile_features(kachakacha_v2_core PUBLIC cxx_std_20)
+target_compile_definitions(kachakacha_v2_core
+    PUBLIC KACHACAD_V2_VERSION="${PROJECT_VERSION}")
+if(MSVC)
+    target_compile_options(kachakacha_v2_core PRIVATE /W4 /permissive- /utf-8 /MP)
+else()
+    target_compile_options(kachakacha_v2_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_library(kachakacha_v2_occt STATIC
+    src/next_occt/kachakacha/kernel/KernelInfo.cpp
+)
+target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
+target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)
+target_compile_features(kachakacha_v2_occt PUBLIC cxx_std_20)
+if(MSVC)
+    target_compile_options(kachakacha_v2_occt PRIVATE /W4 /permissive- /utf-8 /MP)
+else()
+    target_compile_options(kachakacha_v2_occt PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
+    target_compile_definitions(kachakacha_v2_occt PUBLIC KACHACAD_V2_WITH_OCCT)
+    target_include_directories(kachakacha_v2_occt PRIVATE ${KACHACAD_OCCT_INCLUDE_DIR})
+endif()
+
+if(KACHACAD_BUILD_TESTS)
+    # V2の試験。1件失敗しても残りが走る土台(src/next/kachakacha/base/TestHarness.h)を使う。
+    function(kachakacha_add_v2_test name source)
+        add_executable(kachakacha_v2_${name} ${source})
+        target_link_libraries(kachakacha_v2_${name} PRIVATE kachakacha_v2_core)
+        target_compile_definitions(kachakacha_v2_${name}
+            PRIVATE KACHACAD_V2_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+        kachakacha_apply_test_options(kachakacha_v2_${name})
+        add_test(NAME v2_${name} COMMAND kachakacha_v2_${name})
+    endfunction()
+
+    kachakacha_add_v2_test(harness_tests tests_v2/harness_tests.cpp)
+    kachakacha_add_v2_test(architecture_tests tests_v2/architecture_tests.cpp)
+    kachakacha_add_v2_test(scaffold_tests tests_v2/scaffold_tests.cpp)
+    target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
+endif()
+
+if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
+    add_executable(kachakacha_cad_next WIN32
+        src/apps/cad_next/main.cpp
+    )
+    target_link_libraries(kachakacha_cad_next
+        PRIVATE
+            kachakacha_v2_core
+            kachakacha_v2_occt
+            Qt6::Widgets
+    )
+    target_compile_features(kachakacha_cad_next PRIVATE cxx_std_20)
+    if(MSVC)
+        target_compile_options(kachakacha_cad_next PRIVATE /W4 /permissive- /utf-8 /MP)
+        # --version と --self-test をコンソールから使えるようにする。
+        set_target_properties(kachakacha_cad_next PROPERTIES WIN32_EXECUTABLE FALSE)
+    else()
+        target_compile_options(kachakacha_cad_next PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    if(KACHACAD_BUILD_TESTS)
+        add_test(
+            NAME v2_cad_next_smoke
+            COMMAND $<TARGET_FILE:kachakacha_cad_next> --self-test
+        )
+        set_tests_properties(v2_cad_next_smoke PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+            TIMEOUT 120
+        )
+    endif()
+endif()

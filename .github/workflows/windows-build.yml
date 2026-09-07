@@ -2,7 +2,12 @@ name: windows-build
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # Wire-first V2 の作業ブランチ。V2の全期間CIが回らないと、
+      # 検証が開発PC1台に集中し、オーナーへ実行ファイルが届かない。
+      - 'codex/v2-**'
+      - 'codex/wire-first-v2-**'
   workflow_dispatch:
 
 permissions:
@@ -63,17 +68,34 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Test
+      - name: Test (existing)
         shell: pwsh
         run: |
           $env:PATH = "C:/occt-install/win64/vc14/bin;$env:PATH"
-          ctest --test-dir build --output-on-failure
+          ctest --test-dir build --output-on-failure -E '^v2_'
+
+      - name: Test (Wire-first V2)
+        shell: pwsh
+        run: |
+          $env:PATH = "C:/occt-install/win64/vc14/bin;$env:PATH"
+          $listing = & ctest --test-dir build -N -R '^v2_' 2>&1
+          $found = ([regex]::Matches(($listing -join "`n"), 'Test\s+#\d+')).Count
+          Write-Host "v2 tests found: $found"
+          if ($found -eq 0) { throw 'no V2 test is registered' }
+          ctest --test-dir build --output-on-failure -R '^v2_'
 
       - name: Package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out/kachakachaCAD | Out-Null
           Copy-Item build/kachakacha_cad.exe out/kachakachaCAD/
+          # V2アプリが存在すれば同梱する。無い時期でも失敗させない。
+          if (Test-Path build/kachakacha_cad_next.exe) {
+            Copy-Item build/kachakacha_cad_next.exe out/kachakachaCAD/
+            Write-Host 'bundled kachakacha_cad_next.exe'
+          } else {
+            Write-Host 'kachakacha_cad_next.exe not built (V1 only)'
+          }
           Copy-Item build/*.dll out/kachakachaCAD/ -ErrorAction SilentlyContinue
           if (Test-Path build/platforms) { Copy-Item build/platforms out/kachakachaCAD/platforms -Recurse }
           # MSVC ランタイムを同梱する(まず VS の Redist、無ければ System32 から)。
@@ -107,10 +129,11 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kachakachaCAD-windows-x64
+          name: kachakachaCAD-windows-x64-${{ github.ref_name }}
           path: kachakachaCAD-windows-x64.zip
 
       - name: Publish rolling release
+        if: github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

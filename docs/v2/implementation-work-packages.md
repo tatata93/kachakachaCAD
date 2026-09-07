@@ -7,7 +7,7 @@
 | ID | 状態 | 依存 | 担当領域 |
 | --- | --- | --- | --- |
 | WP-00 | 完了(`25d9982`、文書監査、Windows 18試験、self-test) | なし | 規範文書と受入基準の凍結 |
-| WP-01 | 進行中(Codex、`codex/v2-wp01-build-scaffold`、2026-09-08) | WP-00 | V2 build scaffold、依存、ライセンス |
+| WP-01 | 完了(`codex/v2-wp01-build-scaffold`、v2試験4本、Windows全試験) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 未着手 | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 未着手 | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 未着手 | WP-02 | Curve/Wire/Chain、編集、数式 |
@@ -115,23 +115,29 @@
 ### 所有
 
 - root `CMakeLists.txt`
-- `vcpkg.json`
+- 依存取得方法の決定(ADR 0027。`vcpkg.json` は追加しない — 理由はADR参照)
 - `scripts/check-v2.ps1`, `scripts/check-v2.sh`
+- `.github/workflows/windows-build.yml`(V2ブランチでCIを回し、`kachakacha_cad_next.exe` を配布zipへ入れる)
 - V2 targetだけの空でない最小source
+- V2試験の土台(`src/next/kachakacha/base/TestHarness.h`。1件失敗で残りを止めない)
 - `docs/licensing-audit.md`
 
 ### 実装
 
 - `kachakacha_v2_core`、`kachakacha_v2_occt`、`kachakacha_cad_next` を追加。
 - 現行targetとtestを壊さない。
-- `nlohmann-json` と `libzip` をmanifestへ固定。
+- 依存の取り方をADR 0027で決める。`vcpkg.json` を置くとvcpkgがマニフェストモードへ
+  切り替わり、Qt/OCCTの解決が壊れるため、初回は追加しない。
 - test-only以外の新依存を追加しない。
 - `check-v2` はconfigure/build/ctestを行い、test未登録なら失敗する。
 
-### Gate
+### Gate(一次)
 
 - 現行 `check.ps1`。
 - `check-v2.ps1`。
+- `AT-ARC-001` 依存境界(V2 coreがQt/OCCTをincludeしない)。
+- `AT-ARC-005` コード衛生(ファイル1500行・関数100行・未完了マーカー)。
+- 試験土台が「1件失敗で残りを停止しない」ことを、土台自身の試験で示す。
 - ライセンス表更新。
 - next exeが空ウィンドウではなく、versionと「V2準備中」を出す最小shell。これは製品機能完成には数えない。
 

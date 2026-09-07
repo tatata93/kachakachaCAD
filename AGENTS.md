@@ -14,7 +14,8 @@
   ②3D空間上でも任意の点・交点から任意の箇所へ直接線を引く。面取り(C/R、任意半径)も2D/3D両方。
 - スケールに主対象は無い(テストケースはHO/Nでよい)。将来は全体n倍・参照寸法基準のスケーリングを行う。
 - 最終的に他人へ配布する。
-- 詳細は `docs/product-principles.md`、面展開の仕様は `docs/surface-unfolding-spec.md`。
+- 詳細は `docs/product-principles.md`。Wire-first V2は `docs/v2/README.md` を入口とし、
+  製作近似と型紙もV2規範文書を優先する。
 
 ## 変えてはいけない中核思想
 
@@ -24,13 +25,14 @@
 - ワイヤーを作業平面の所有物にしない(ADR 0003)。
 - 未決定の大きな仕様は、複数案を提示してから決める。
 
-「三角形メッシュを主編集対象にしない」「押し出し+ブーリアン中心にしない」等の従来の禁止事項は
-**「現段階では優先しない」**に読み替える(オーナー確認済み。将来はやる)。今それらに向けて設計を
-歪めないこと、および今それらの実装を始めないことだけを守る。
+Wire-first V2では押し出し、ワイヤー群からのソリッド化、Booleanの新規/足す/引くを正式範囲とする。
+ただし一般的なソリッドCAD機能を無制限に増やさず、`docs/v2/product-contract.md` の範囲だけを実装する。
+三角形メッシュは表示・検査・STL出力には使えるが、主編集対象や型紙の正本にしない。
 
 ## 読む文書
 
 **常時(毎セッション):** この文書、`docs/product-principles.md`、`docs/refactoring-plan.md`(チェックリストと既知の問題)。
+Wire-first V2に触る場合は加えて `docs/v2/README.md` から規範文書を指定順で全て読む。
 
 **触る領域に応じて:**
 
@@ -43,6 +45,7 @@
 | .kcd 保存形式 | `docs/project-script-format.md` |
 | ビルド・環境 | `docs/setup-windows.md`, `docs/multi-machine-development.md`, `docs/linux-build.md` |
 | 計画全体 | `docs/roadmap.md`, `docs/minimum-usable-completion-plan.md` |
+| Wire-first V2 | `docs/v2/README.md`, ADR 0026, 割り当てWPの規範文書と受入試験 |
 
 ## 役割分担と質問の基準
 
@@ -90,9 +93,12 @@ grep -c "tool_ ==" src/apps/cad/CadViewport.cpp   # 同 128箇所
   (ADR 0018)。1つの `.cpp` が3,000行を超えている場合、その拡大は分割提案とセットでのみ許す。
 - ほぼ同一の関数を3つ以上コピペしない。3回目でパラメータ化する。
 - `ViewportTool` 追加時に `tool_ ==` 比較の散在を増やさない。着手前に上のコマンドで件数を測り、増加を最小化する。
-- 名前参照フィールドを追加したら `docs/refactoring-plan.md` の名前参照一覧に追記する。
+- 旧実装へ名前参照フィールドを追加したら `docs/refactoring-plan.md` の名前参照一覧に追記する。
+  V2では名前参照の新設を禁止し、強い型のUUID参照を使う。
 - `docs/refactoring-plan.md` のチェックリスト項目に着手するときは、**最初に状態を「進行中」へ書き換えて
   コミット・pushする**(複数エージェントの同時着手を防ぐロック代わり)。完了時も同様に更新する。
+- V2は `docs/v2/implementation-work-packages.md` の1パッケージだけを担当し、所有範囲外の公開APIや
+  進捗状態を独断で変更しない。V2の完了判定は同文書と `docs/v2/acceptance-tests.md` に従う。
 
 ## 複数PC開発のガードレール
 

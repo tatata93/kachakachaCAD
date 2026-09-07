@@ -1,28 +1,49 @@
 # Claude development handoff
 
-This repository's binding instructions are in `AGENTS.md`. Read it before changing code.
-Product decisions belong in `docs/`; do not treat this file as a replacement product specification.
+The binding repository instructions are in `AGENTS.md`. Read them before changing code.
 
-For the current Surface/Plate usability work, read these files in order:
+Wire-first V2 is the active architecture direction. Do not continue the former Surface/Plate
+usability design as the future product model. The current application remains runnable only
+until the V2 acceptance gate is complete.
 
-1. `docs/product-principles.md`
-2. `docs/refactoring-plan.md`, especially item 8
-3. `docs/sheet-part-ui-spec.md`
-4. `docs/usability-review.md`
+Read in this exact order:
 
-The intended result is one user-facing **面部品** workflow while preserving the internal
-`Surface` (shape) and `Plate` (manufacturing specification) distinction. Do not reintroduce
-separate ordinary-user screens for surfaces and plates, an explicit source-surface picker,
-or the former multi-output thickness form. Keep `.kcd` read compatibility.
+1. `AGENTS.md`
+2. `docs/product-principles.md`
+3. `docs/refactoring-plan.md`
+4. `docs/v2/README.md`
+5. every normative V2 document listed by `docs/v2/README.md`
+6. `docs/adr/0026-wire-first-v2.md`
+7. legacy specifications only when migrating an existing tested algorithm
 
-When resuming interrupted work:
+Do not invent product behavior. Work on exactly one assigned package from
+`docs/v2/implementation-work-packages.md`. Use the reusable execution prompt in
+`docs/v2/agent-master-prompt.md`, fill in its package, integration branch, and base commit,
+then follow it literally.
 
-1. Run `git status --short --branch` and do not overwrite unrelated changes.
-2. Check the state and branch recorded in `docs/refactoring-plan.md`.
-3. Continue from the latest pushed commit, then run the Windows verification gates in
-   `AGENTS.md`.
-4. Update documentation and self-tests together with UI behavior.
-5. Commit and push all completed work. Do not leave `main` red.
+If you are assigned responsibility for coordinating multiple agents rather than one package,
+use `docs/v2/integration-lead-prompt.md` instead. Do not combine integration-lead ownership
+with an overlapping implementation package.
 
-The reusable implementation prompt and acceptance criteria are in
-`docs/sheet-part-ui-spec.md` under "Claude・別AIへ渡す実装プロンプト".
+Non-negotiable summary:
+
+- Wire and Part are the main user-facing geometry.
+- GuideSurface is reference geometry, not a physical part.
+- Surface, Plate, and Body do not return as separate ordinary-user object types.
+- One Part is one connected closed solid.
+- Dependencies use typed UUID references, never display names.
+- Derived geometry is read-only until explicitly frozen.
+- Core remains independent of Qt and OCCT.
+- UI-only stubs, silent fallback meshes, widened tolerances, skipped tests, and nearest-object
+  reference repair are not acceptable implementations.
+- Old `.kcd` compatibility is not required.
+- A work package is complete only after its specified acceptance tests, Windows/CI gate when
+  applicable, push, and progress-table update.
+
+When resuming:
+
+1. Synchronize and inspect status without overwriting unrelated changes.
+2. Verify the assigned package is available and all dependencies are complete.
+3. Push the in-progress lock before implementation.
+4. Implement contracts and tests together.
+5. Use the exact final report format in `docs/v2/agent-master-prompt.md`.

@@ -1473,6 +1473,82 @@ namespace {
 
 } // namespace
 
+//! 3D画面に出ている曲げ具合を、そのままの帯レール(帯ごとに2本)で返す。
+//! 曲げ確認のプレビューと同じ関数・同じ引数で作るので、これを出力へ渡せば
+//! 「見えている形」と「出てくる形」が一致する。
+//! (オーナー報告「現在の曲げ状態を別kcdやstlで出力すると崩壊する」の対策。
+//!  以前は出力側だけ progress を 0 か 1 に丸め、別の作り方をしていた)
+std::vector<std::vector<kachakacha::geometry::Vector3>>
+MainWindow::CurrentFoldBandRails(const NamedPartModel& model) const
+{
+    try {
+        const kachakacha::model::Surface* sourceSurface = nullptr;
+        const kachakacha::model::Plate* sourcePlate = nullptr;
+        if (!model.sourceSurfaceName.empty()) {
+            for (const auto& surface : project_.Surfaces()) {
+                if (surface.name == model.sourceSurfaceName) {
+                    sourceSurface = &surface.surface;
+                    break;
+                }
+            }
+        } else {
+            for (const auto& plate : project_.Plates()) {
+                if (plate.name == model.sourcePlateName) {
+                    sourcePlate = &plate.plate;
+                    break;
+                }
+            }
+        }
+        if (sourceSurface == nullptr && sourcePlate == nullptr) {
+            return {};
+        }
+        std::vector<double> parameters;
+        parameters.push_back(0.0);
+        for (std::size_t index = 1; index < model.result.parts.size(); ++index) {
+            parameters.push_back(model.result.parts[index].minimumParameter);
+        }
+        parameters.push_back(1.0);
+        const kachakacha::model::PartSource source = sourceSurface != nullptr
+            ? kachakacha::model::PartSource(*sourceSurface)
+            : kachakacha::model::PartSource(*sourcePlate);
+        const auto mesh = kachakacha::model::DevelopPartMesh(
+            source, model.options.splitAxis, parameters, 64);
+        const std::vector<double> creaseAngles
+            = kachakacha::model::MeasureCreaseAngles(mesh);
+        std::vector<double> individual(creaseAngles.size(), 1.0);
+        for (std::size_t index = 0;
+             index < individual.size() && index < model.railFoldProgress.size(); ++index) {
+            individual[index] = model.railFoldProgress[index];
+        }
+        // 出力では部材どうしを離さない(離すのは画面で見るときだけ)。
+        const double liftDistance = 0.0;
+        const std::vector<int> selectedParts = ActivePartNumbers(model.name);
+        const int bandCount = std::max(1, mesh.rows - 1);
+        std::vector<double> bandProgress(static_cast<std::size_t>(bandCount), 0.0);
+        for (int band = 0; band < bandCount; ++band) {
+            const std::size_t index = static_cast<std::size_t>(band);
+            bandProgress[index] = index < model.partAssemblyProgress.size()
+                ? model.partAssemblyProgress[index]
+                : model.assemblyProgress;
+        }
+        const double sliderProgress = partModelPanel_ != nullptr
+            ? partModelPanel_->FoldProgress() : 1.0;
+        if (selectedParts.empty()) {
+            std::fill(bandProgress.begin(), bandProgress.end(), sliderProgress);
+        } else {
+            for (const int number : selectedParts) {
+                if (number >= 1 && number <= bandCount) {
+                    bandProgress[static_cast<std::size_t>(number - 1)] = sliderProgress;
+                }
+            }
+        }
+        return kachakacha::model::BuildBandFoldAnimationRails(
+            mesh, individual, bandProgress, liftDistance);
+    } catch (const std::exception&) {
+        return {}; // 作れないときは、これまでどおり progress から作る。
+    }
+}
+
 void MainWindow::RealizePartFoldState()
 {
     try {
@@ -1487,9 +1563,10 @@ void MainWindow::RealizePartFoldState()
         kachakacha::io::PartFoldStateOptions options;
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
-        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
+        options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
+        options.bandRails = CurrentFoldBandRails(*model);
         const std::string prefix
             = MakeFoldStatePrefix(project_, model->name, options.progress);
 
@@ -1553,9 +1630,10 @@ void MainWindow::ExportPartFoldMesh(bool step)
         kachakacha::io::PartFoldStateOptions options;
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
-        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
+        options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
+        options.bandRails = CurrentFoldBandRails(*model);
 
         Project exportProject;
         const auto result = kachakacha::io::AddPartFoldStateModel(
@@ -1617,9 +1695,10 @@ void MainWindow::ExportPartFoldKcd()
         kachakacha::io::PartFoldStateOptions options;
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
-        options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
+        options.progress = partModelPanel_->FoldProgress();
         options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
+        options.bandRails = CurrentFoldBandRails(*model);
 
         Project exportProject;
         const auto result = kachakacha::io::AddPartFoldStateModel(

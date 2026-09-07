@@ -173,24 +173,26 @@ struct PartMeshMappedPoint {
     const std::vector<std::vector<geometry::Vector3>>& state,
     const geometry::Vector3& point);
 
-//! 閉じた輪郭(開口の窓など)を、点ごとの帯番号にしたがって帯ごとの断片へ切る。
+//! 閉じた輪郭(開口の窓など)を、帯(部材)ごとに切り出す。
 //!
 //! オーナー報告「開口した穴が近似して分割した部品にまたがっているときに
-//! 適応されてない」の対策。これまでは境目をまたぐ穴はどの部材にも属せず、
-//! 輪郭線を出すだけで穴が開かなかった。またぐなら、またぐ全ての部材へ
-//! それぞれの取り分を穴として開けるのが正しい。
+//! 適応されてない」「近似したら内側に謎の面ができてる」の対策。
+//! 境目をまたぐ穴を「区間ごと」に切ると、3つ以上の帯にまたがる窓では
+//! 真ん中の帯の取り分が細い三角2つに割れ、窓の中央が切り抜かれずに
+//! 板が残ってしまう(=謎の面)。帯の範囲で多角形として切り出す。
 //!
-//! points と bands は同じ長さで、輪郭を一周する順に並んでいること
-//! (最後の点と最初の点はつながっているものとして扱う。終点に始点を
-//!  重ねて渡さないこと)。境目には隣り合う2点の中点を足して閉じる。
-//! 同じ帯へ離れた区間が2つ以上ある輪郭(例: 帯をまたいで戻ってくる形)は、
-//! 区間ごとに別の断片として返す。
+//! points と parameters は同じ長さで、輪郭を一周する順に並んでいること
+//! (終点に始点を重ねて渡さないこと)。parameters は分割方向の位置。
+//! boundaries は帯の境目(昇順、帯数+1本)。帯 i は
+//! [boundaries[i], boundaries[i+1]]。
 struct BandLoopPiece {
     int band = 0;                          //!< 帯(0始まり = 部材番号-1)
     std::vector<geometry::Vector3> points; //!< 閉じた輪郭(始点=終点は含めない)
 };
 
-[[nodiscard]] std::vector<BandLoopPiece> SplitClosedLoopByBand(
-    const std::vector<geometry::Vector3>& points, const std::vector<int>& bands);
+[[nodiscard]] std::vector<BandLoopPiece> ClipClosedLoopIntoBands(
+    const std::vector<geometry::Vector3>& points,
+    const std::vector<double>& parameters,
+    const std::vector<double>& boundaries);
 
 } // namespace kachakacha::model

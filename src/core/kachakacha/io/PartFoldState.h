@@ -19,6 +19,14 @@ struct PartFoldStateOptions {
     int columns = 96;             //!< レールのサンプル数(メッシュ解像度)
     //! 面入力の近似モデルを板材化するときの厚み(mm)。板材入力では元板材の厚みを使う。
     double surfaceThicknessMillimeters = 0.5;
+    //! 3D画面に出ている曲げ具合を、見えているとおりに実体化するための帯レール。
+    //! 帯ごとに2本(下・上)で、長さは帯数×2。空でなければ progress より優先する。
+    //!
+    //! オーナー報告「現在の曲げ状態を別kcdやstlで出力すると崩壊する」の対策。
+    //! 画面のプレビューは BuildBandFoldAnimationRails で作っているのに、
+    //! 出力は progress を 0 か 1 に丸めて別の作り方をしていたため、
+    //! 見えている形と出てくる形が食い違っていた。
+    std::vector<std::vector<geometry::Vector3>> bandRails;
 };
 
 struct PartFoldStateResult {

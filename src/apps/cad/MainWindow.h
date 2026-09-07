@@ -104,6 +104,9 @@ private:
     void CommitPartAssemblyProgress(double progress);
     void SetSelectedPartModelRailFold(int railIndex, double value);
     void PickPartBoundariesFromSelectedWires();
+    //! 3D画面に出ている曲げ具合を、そのままの帯レールで返す(出力へ渡す用)。
+    [[nodiscard]] std::vector<std::vector<kachakacha::geometry::Vector3>>
+        CurrentFoldBandRails(const kachakacha::model::NamedPartModel& model) const;
     void RealizePartFoldState();
     void ExportPartFoldMesh(bool step);
     void ExportPartFoldKcd();

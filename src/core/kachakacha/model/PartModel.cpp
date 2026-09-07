@@ -203,68 +203,98 @@ Wire BuildPartBoundaryWire(
     return Wire::Polyline(std::move(points));
 }
 
-std::vector<BandLoopPiece> SplitClosedLoopByBand(
-    const std::vector<geometry::Vector3>& points, const std::vector<int>& bands)
+namespace {
+
+//! 片側の半平面(parameter >= limit なら keepAbove=true)で閉じた多角形を切る。
+//! Sutherland-Hodgman。点と一緒に parameter も線形補間する。
+void ClipAgainstLimit(
+    std::vector<geometry::Vector3>& points,
+    std::vector<double>& parameters,
+    double limit,
+    bool keepAbove)
 {
-    if (points.size() != bands.size() || points.size() < 3) {
+    const std::size_t count = points.size();
+    if (count < 3) {
+        points.clear();
+        parameters.clear();
+        return;
+    }
+    const auto inside = [&](double parameter) {
+        return keepAbove ? parameter >= limit : parameter <= limit;
+    };
+    std::vector<geometry::Vector3> outPoints;
+    std::vector<double> outParameters;
+    outPoints.reserve(count + 4);
+    outParameters.reserve(count + 4);
+    for (std::size_t index = 0; index < count; ++index) {
+        const std::size_t next = (index + 1) % count;
+        const bool insideNow = inside(parameters[index]);
+        const bool insideNext = inside(parameters[next]);
+        if (insideNow) {
+            outPoints.push_back(points[index]);
+            outParameters.push_back(parameters[index]);
+        }
+        if (insideNow != insideNext) {
+            const double span = parameters[next] - parameters[index];
+            const double ratio = std::abs(span) <= 1.0e-15
+                ? 0.0
+                : (limit - parameters[index]) / span;
+            const double clamped = std::clamp(ratio, 0.0, 1.0);
+            outPoints.push_back(
+                points[index] + (points[next] - points[index]) * clamped);
+            outParameters.push_back(limit);
+        }
+    }
+    points = std::move(outPoints);
+    parameters = std::move(outParameters);
+}
+
+//! 面積がほぼ0の切れ端(境目に沿った線分だけ)を捨てる。
+[[nodiscard]] bool HasArea(const std::vector<geometry::Vector3>& points)
+{
+    if (points.size() < 3) {
+        return false;
+    }
+    geometry::Vector3 twiceArea{0.0, 0.0, 0.0};
+    for (std::size_t index = 1; index + 1 < points.size(); ++index) {
+        twiceArea = twiceArea
+            + Cross(points[index] - points.front(), points[index + 1] - points.front());
+    }
+    return twiceArea.Length() * 0.5 > 1.0e-6;
+}
+
+} // namespace
+
+std::vector<BandLoopPiece> ClipClosedLoopIntoBands(
+    const std::vector<geometry::Vector3>& points,
+    const std::vector<double>& parameters,
+    const std::vector<double>& boundaries)
+{
+    if (points.size() != parameters.size() || points.size() < 3
+        || boundaries.size() < 2) {
         return {};
     }
-    const int count = static_cast<int>(points.size());
-    // 全部同じ帯なら切らずにそのまま返す。
-    if (std::all_of(bands.begin(), bands.end(),
-            [&](int band) { return band == bands.front(); })) {
-        return {BandLoopPiece{bands.front(), points}};
-    }
-
-    // 帯が変わる所を1つ見つけて、そこを起点にする。
-    // (起点が区間の途中だと、輪をまたぐ区間が2つに割れてしまう)
-    int start = -1;
-    for (int index = 0; index < count; ++index) {
-        const int previous = (index + count - 1) % count;
-        if (bands[static_cast<std::size_t>(index)] != bands[static_cast<std::size_t>(previous)]) {
-            start = index;
-            break;
-        }
-    }
-    if (start < 0) {
-        return {BandLoopPiece{bands.front(), points}};
-    }
-
     std::vector<BandLoopPiece> pieces;
-    int offset = 0;
-    while (offset < count) {
-        const int first = (start + offset) % count;
-        const int band = bands[static_cast<std::size_t>(first)];
-        int length = 1;
-        while (offset + length < count) {
-            const int next = (start + offset + length) % count;
-            if (bands[static_cast<std::size_t>(next)] != band) {
-                break;
-            }
-            ++length;
+    for (std::size_t band = 0; band + 1 < boundaries.size(); ++band) {
+        const double low = boundaries[band];
+        const double high = boundaries[band + 1];
+        if (high <= low) {
+            continue;
         }
-        const int last = (start + offset + length - 1) % count;
-        const int before = (first + count - 1) % count;
-        const int after = (last + 1) % count;
-
-        BandLoopPiece piece;
-        piece.band = band;
-        piece.points.reserve(static_cast<std::size_t>(length) + 2);
-        // 境目は隣り合う2点の中点で切る(折り線の上で切れる)。
-        piece.points.push_back(
-            (points[static_cast<std::size_t>(before)] + points[static_cast<std::size_t>(first)])
-            * 0.5);
-        for (int step = 0; step < length; ++step) {
-            piece.points.push_back(
-                points[static_cast<std::size_t>((start + offset + step) % count)]);
+        // 帯の外にはみ出さないよう、両側から切る。
+        std::vector<geometry::Vector3> clippedPoints = points;
+        std::vector<double> clippedParameters = parameters;
+        // 最初と最後の帯は、元の範囲の外へ出た分も取り込む(端は切らない)。
+        if (band > 0) {
+            ClipAgainstLimit(clippedPoints, clippedParameters, low, true);
         }
-        piece.points.push_back(
-            (points[static_cast<std::size_t>(last)] + points[static_cast<std::size_t>(after)])
-            * 0.5);
-        if (piece.points.size() >= 3) {
-            pieces.push_back(std::move(piece));
+        if (band + 2 < boundaries.size()) {
+            ClipAgainstLimit(clippedPoints, clippedParameters, high, false);
         }
-        offset += length;
+        if (!HasArea(clippedPoints)) {
+            continue;
+        }
+        pieces.push_back(BandLoopPiece{static_cast<int>(band), std::move(clippedPoints)});
     }
     return pieces;
 }

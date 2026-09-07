@@ -1752,6 +1752,21 @@ void MainWindow::CreatePlateFromSurface()
         }
 
         Project candidate = project_;
+        // 可動面(近似モデルの部材面)は、板材だけを作る。板材は元の面に追従するので
+        // 可動のまま(オーナー指示「厚み化後も可動形式を維持しろ」)。
+        // 厚み位置の面・ワイヤは動かない普通の形になってしまうので作らない。
+        bool movableSource = false;
+        for (const auto& surface : candidate.Surfaces()) {
+            if (surface.name == sourceSurfaceName) {
+                movableSource = surface.partModelSourceName.has_value();
+            }
+        }
+        if (movableSource && (makeSurface || makeWire)) {
+            throw std::invalid_argument(
+                "可動面(部材面)からは板材だけを作れます。"
+                "「厚みで作るもの」は[板]だけにしてください"
+                "（動かない形が要るときは、曲げ確認と出力で書き出してください）");
+        }
         const auto direction = static_cast<PlateThicknessDirection>(plateDirection_->currentData().toInt());
         QStringList extraOutputs;
         std::string name;
@@ -1766,8 +1781,12 @@ void MainWindow::CreatePlateFromSurface()
                     ? plateEndThickness_->value() : plateThickness_->value(),
                 direction,
                 ToName(plateMaterial_->currentData().toString()));
-            candidate.SetSurfaceVisible(sourceSurfaceName, false);
-            extraOutputs << QStringLiteral("板 %1").arg(ToQString(name));
+            if (!movableSource) {
+                candidate.SetSurfaceVisible(sourceSurfaceName, false);
+            }
+            extraOutputs << (movableSource
+                    ? QStringLiteral("可動のままの板 %1").arg(ToQString(name))
+                    : QStringLiteral("板 %1").arg(ToQString(name)));
         }
 
         // 厚み位置への出力: 反対側表面の面と、縁ワイヤの複製。
@@ -2645,16 +2664,16 @@ void MainWindow::ExtrudeSelection()
             if (selection.kind == CadSelectionKind::Wire && selection.index >= 0
                 && selection.index < static_cast<int>(project_.Wires().size())) {
                 const auto& wire = project_.Wires()[selection.index];
-                if (wire.metadata.construction || wire.partModelSourceName.has_value()) {
+                if (wire.metadata.construction) {
                     continue;
                 }
+                // 可動ワイヤ(近似モデルの部材の線)も押し出せる。作られた物は
+                // 元の線に追従するので、近似をやり直しても付いてくる
+                // (オーナー指示「厚み化後も可動形式を維持しろ」)。
                 wireNames.push_back(wire.name);
             } else if (selection.kind == CadSelectionKind::Surface && selection.index >= 0
                 && selection.index < static_cast<int>(project_.Surfaces().size())) {
                 const auto& surface = project_.Surfaces()[selection.index];
-                if (surface.partModelSourceName.has_value()) {
-                    continue;
-                }
                 surfaceNames.push_back(surface.name);
             }
         }
@@ -2870,6 +2889,25 @@ void MainWindow::ExtrudeSelection()
                     throw std::invalid_argument("面が見つかりません");
                 }
                 const kachakacha::model::NamedSurface sourceCopy = *namedSurface;
+                // 可動面(近似モデルの部材面)は、板材にするだけができる。
+                // 板材は元の面に追従するので可動のまま(オーナー指示)。
+                // 先端の線やオフセット面は「動かない普通の形」になってしまうため、
+                // ここでは作らない(固定したいときは曲げ状態の書き出しを使う)。
+                if (sourceCopy.partModelSourceName.has_value()) {
+                    if (!makePlate) {
+                        throw std::invalid_argument(
+                            "可動面(部材面)にできるのは厚みを付けることだけです。"
+                            "「板材にする（厚みを付ける）」にチェックしてください");
+                    }
+                    const std::string plateName
+                        = FreeDerivedName(candidate, surfaceName, "_板");
+                    candidate.AddPlate(plateName, surfaceName,
+                        extrudePlateThickness_->value(),
+                        kachakacha::model::PlateThicknessDirection::Centered,
+                        ToName(extrudePlateMaterial_->currentData().toString()));
+                    created << QStringLiteral("可動のままの板 %1").arg(ToQString(plateName));
+                    continue;
+                }
                 if (!automaticDirectionChosen) {
                     // 軸方向の押し出し: 面の輪郭線をその軸へ押し出して側面・ふたを作る。
                     const std::vector<std::string> boundaries = sourceCopy.sourceWireNames;

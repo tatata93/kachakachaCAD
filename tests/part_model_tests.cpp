@@ -458,6 +458,33 @@ int main()
             }
             Require(derivedFound, "derived opening wire exists");
 
+            // 3つ以上の帯にまたがる窓は、真ん中の帯にも「面のある取り分」が要る。
+            // 区間ごとに切ると真ん中が細い三角2つに割れ、窓の中央が切り抜かれずに
+            // 板が残る(オーナー報告「内側に謎の面」)。
+            {
+                // 4本の境目(=3つの帯)を 0.25 / 0.5 / 0.75 に置き、
+                // 0.1〜0.9 にまたがる正方形の窓を切る。
+                const std::vector<double> boundaries = {0.0, 0.25, 0.75, 1.0};
+                const std::vector<kachakacha::geometry::Vector3> loop = {
+                    {0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}, {10.0, 10.0, 0.0}, {0.0, 10.0, 0.0}};
+                const std::vector<double> parameters = {0.1, 0.1, 0.9, 0.9};
+                const auto clipped = kachakacha::model::ClipClosedLoopIntoBands(
+                    loop, parameters, boundaries);
+                Require(clipped.size() == 3, "a window across three bands gives three shares");
+                Require(clipped[1].band == 1, "the middle share belongs to the middle band");
+                Require(clipped[1].points.size() >= 4,
+                    "the middle share is a real polygon, not a sliver");
+                // 真ん中の帯の取り分は、窓の 0.25〜0.75 の帯(=面積の 5/8)。
+                double area = 0.0;
+                const auto& middle = clipped[1].points;
+                for (std::size_t index = 1; index + 1 < middle.size(); ++index) {
+                    area += Cross(middle[index] - middle.front(),
+                        middle[index + 1] - middle.front()).Length() * 0.5;
+                }
+                Require(std::abs(area - 100.0 * 0.625) < 1.0,
+                    "the middle share covers the middle of the window");
+            }
+
             // オーナー報告: 部材の境目をまたぐ窓が、どの部材にも開かなかった。
             // またぐなら、またぐ全ての部材へ取り分を開ける。
             {
@@ -721,6 +748,93 @@ int main()
                 foldProject, foldProject, foldModel, halfState, "曲げ50");
             Require(halfResult.plateNames.size() == 1,
                 "half-folded state respects the part selection");
+        }
+
+        // --- 見えている曲げ具合をそのまま書き出す(オーナー報告の対策) ---
+        // 以前は出力側だけ progress を 0 か 1 に丸め、画面のプレビューとは
+        // 別の作り方をしていたため、出てくる形が画面と食い違っていた。
+        {
+            Project bendProject = MakeBottleLikeProject();
+            PartApproximationOptions bendOptions;
+            bendOptions.splitAxis = PartSplitAxis::V;
+            bendOptions.automaticBoundaries = false;
+            bendOptions.manualBoundaryParameters = {0.5};
+            bendProject.AddPartModel("曲げ確認", "胴板", bendOptions);
+            const auto& bendModel = bendProject.PartModels().back();
+
+            std::vector<double> parameters{0.0};
+            for (std::size_t index = 1; index < bendModel.result.parts.size(); ++index) {
+                parameters.push_back(bendModel.result.parts[index].minimumParameter);
+            }
+            parameters.push_back(1.0);
+            const auto mesh = kachakacha::model::DevelopPartMesh(
+                kachakacha::model::PartSource(*bendProject.FindPlate("胴板")),
+                bendModel.options.splitAxis, parameters, 64);
+            const auto creases = kachakacha::model::MeasureCreaseAngles(mesh);
+            const std::vector<double> individual(creases.size(), 1.0);
+            const std::vector<double> bandProgress(
+                static_cast<std::size_t>(std::max(1, mesh.rows - 1)), 0.4);
+            const auto rails = kachakacha::model::BuildBandFoldAnimationRails(
+                mesh, individual, bandProgress, 0.0);
+            Require(rails.size() == static_cast<std::size_t>(mesh.rows - 1) * 2,
+                "the visible state gives two rails per part");
+
+            Project bent;
+            kachakacha::io::PartFoldStateOptions bentState;
+            bentState.progress = 0.4;
+            bentState.bandRails = rails;
+            const auto bentResult = kachakacha::io::AddPartFoldStateModel(
+                bent, bendProject, bendModel, bentState, "半折り");
+            Require(bentResult.plateNames.size() == 2, "both parts are written out");
+            // 書き出した部材の縁が、画面に出ていたレールと同じであること。
+            for (std::size_t band = 0; band + 1 < parameters.size(); ++band) {
+                const std::string bottom
+                    = "半折り_部材" + std::to_string(band + 1) + "縁1";
+                bool matched = false;
+                for (const auto& wire : bent.Wires()) {
+                    if (wire.name != bottom) {
+                        continue;
+                    }
+                    const auto& expected = rails[band * 2];
+                    matched = (wire.wire.Start() - expected.front()).Length() < 1.0e-6
+                        && (wire.wire.End() - expected.back()).Length() < 1.0e-6;
+                }
+                Require(matched, "the written part matches what the screen showed");
+            }
+            // 動かない普通の物として出ていること(近似モデルは付いてこない)。
+            Require(bent.PartModels().empty(), "the written project has no part model");
+            for (const auto& wire : bent.Wires()) {
+                Require(!wire.partModelSourceName.has_value(),
+                    "every written wire is an ordinary wire");
+            }
+            for (const auto& surface : bent.Surfaces()) {
+                Require(!surface.partModelSourceName.has_value(),
+                    "every written surface is an ordinary surface");
+            }
+        }
+
+        // --- 可動面(部材面)へ厚みを付けても、可動のまま追従する ---
+        {
+            Project movable = MakeBottleLikeProject();
+            PartApproximationOptions movableOptions;
+            movableOptions.splitAxis = PartSplitAxis::V;
+            movableOptions.automaticBoundaries = false;
+            movableOptions.manualBoundaryParameters = {0.5};
+            movable.AddPartModel("可動", "胴板", movableOptions);
+            movable.AddPlate("可動板", "可動_部材1", 0.4,
+                PlateThicknessDirection::Centered, "プラ板");
+            const auto plateBefore = movable.FindPlate("可動板");
+            Require(plateBefore.has_value(), "a plate can be made on a part surface");
+            const Vector3 before = plateBefore->SourceSurface().Evaluate(0.5, 0.5);
+            // 分割条件を変えると部材面が変わる。板材も付いてくること。
+            PartApproximationOptions changed = movableOptions;
+            changed.manualBoundaryParameters = {0.3};
+            movable.UpdatePartModelOptions("可動", changed);
+            const auto plateAfter = movable.FindPlate("可動板");
+            Require(plateAfter.has_value(), "the plate survives the recalculation");
+            const Vector3 after = plateAfter->SourceSurface().Evaluate(0.5, 0.5);
+            Require((after - before).Length() > 1.0e-6,
+                "the movable plate follows the part surface");
         }
 
         // --- 面からの直接近似(合意8: 厚みは板材化の時点で指定) ---

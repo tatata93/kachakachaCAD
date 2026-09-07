@@ -3523,24 +3523,9 @@ void Project::RebuildDependentGeometry()
         }
     }
     RebuildPartModels();
-    // 部材面(部材近似モデルの派生面)を元にした板材は、部材面の更新後に再構築する。
-    for (NamedPlate& plate : plates_) {
-        const auto sourceSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
-            [&](const NamedSurface& candidate) {
-                return candidate.name == plate.sourceSurfaceName
-                    && candidate.partModelSourceName.has_value();
-            });
-        if (sourceSurface == surfaces_.end()) {
-            continue;
-        }
-        plate.plate = Plate(
-            sourceSurface->surface,
-            plate.plate.Thickness(),
-            plate.plate.EndThickness(),
-            plate.plate.Direction(),
-            plate.plate.Range(),
-            plate.plate.BaseOffset());
-    }
+
+    RefreshPartModelFollowers();
+
     RecomputeLaminateOffsets();
 
     for (NamedWire& wire : wires_) {
@@ -3595,12 +3580,91 @@ PartSource Project::RequirePartModelSource(const NamedPartModel& model) const
     return PartSource(plate->plate);
 }
 
+void Project::RefreshPartModelFollowers()
+{
+    // 部材の線(可動ワイヤ)を元に押し出した線・面は、部材の更新後に作り直す。
+    // これが無いと、近似をやり直したときに1世代前の形のまま取り残される
+    // (オーナー指示「厚み化後も可動形式を維持しろ」)。
+    {
+        const auto isPartDerivedWire = [this](const std::string& name) {
+            const auto wire = std::find_if(wires_.begin(), wires_.end(),
+                [&](const NamedWire& candidate) { return candidate.name == name; });
+            return wire != wires_.end() && wire->partModelSourceName.has_value();
+        };
+        for (std::size_t index = 0; index < wires_.size(); ++index) {
+            if (!wires_[index].extrude.has_value()
+                || wires_[index].partModelSourceName.has_value()
+                || !isPartDerivedWire(wires_[index].extrude->sourceWireName)) {
+                continue;
+            }
+            const NamedWire::Extrude data = *wires_[index].extrude;
+            const NamedWire& source = RequireWire(data.sourceWireName);
+            const Surface* target = nullptr;
+            if (!data.targetSurfaceName.empty()) {
+                const auto named = std::find_if(surfaces_.begin(), surfaces_.end(),
+                    [&](const NamedSurface& candidate) {
+                        return candidate.name == data.targetSurfaceName;
+                    });
+                if (named != surfaces_.end()) {
+                    target = &named->surface;
+                }
+            }
+            wires_[index].wire = BuildExtrudedWireGeometry(source.wire, data, target);
+        }
+        for (NamedSurface& surface : surfaces_) {
+            if (surface.partModelSourceName.has_value()) {
+                continue;
+            }
+            const bool followsPart = std::any_of(surface.sourceWireNames.begin(),
+                surface.sourceWireNames.end(), isPartDerivedWire);
+            if (!followsPart) {
+                continue;
+            }
+            try {
+                // 押し出しで作る形(ルールド・平面)だけ作り直す。
+                if (surface.surface.Kind() == SurfaceKind::Ruled
+                    && surface.sourceWireNames.size() == 2) {
+                    surface.surface = Surface::Ruled(
+                        RequireWire(surface.sourceWireNames[0]).wire,
+                        RequireWire(surface.sourceWireNames[1]).wire);
+                } else if (surface.surface.Kind() == SurfaceKind::Planar
+                    && surface.sourceWireNames.size() == 1) {
+                    surface.surface
+                        = Surface::Planar(RequireWire(surface.sourceWireNames[0]).wire);
+                }
+            } catch (const std::exception&) {
+                // 部材の形が変わって作れなくなった面は、前の形のままにしておく。
+            }
+        }
+    }
+
+    // 部材面(部材近似モデルの派生面)を元にした板材は、部材面の更新後に再構築する。
+    for (NamedPlate& plate : plates_) {
+        const auto sourceSurface = std::find_if(surfaces_.begin(), surfaces_.end(),
+            [&](const NamedSurface& candidate) {
+                return candidate.name == plate.sourceSurfaceName
+                    && candidate.partModelSourceName.has_value();
+            });
+        if (sourceSurface == surfaces_.end()) {
+            continue;
+        }
+        plate.plate = Plate(
+            sourceSurface->surface,
+            plate.plate.Thickness(),
+            plate.plate.EndThickness(),
+            plate.plate.Direction(),
+            plate.plate.Range(),
+            plate.plate.BaseOffset());
+    }
+}
+
 void Project::RebuildPartModels()
 {
     for (NamedPartModel& model : partModels_) {
         model.result = ApproximatePlateParts(RequirePartModelSource(model), model.options);
         RegeneratePartModelDerivedObjects(model);
     }
+    RefreshPartModelFollowers();
 }
 
 void Project::RebuildPartModelsFromSource(
@@ -3782,10 +3846,9 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         const int samples = 96;
         bool measured = true;
         std::vector<geometry::Vector3> loopPoints;
-        std::vector<int> loopBands;
+        std::vector<double> loopBands;
         loopPoints.reserve(static_cast<std::size_t>(samples));
         loopBands.reserve(static_cast<std::size_t>(samples));
-        constexpr double parameterTolerance = 1.0e-6;
         for (int sample = 0; sample < samples; ++sample) {
             const geometry::Vector3 point = opening.wire.Evaluate(
                 static_cast<double>(sample) / samples);
@@ -3799,17 +3862,8 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             }
             const double surfaceParameter = splitAlongV ? projected.v : projected.u;
             const double localParameter = (surfaceParameter - rangeMinimum) / rangeSpan;
-            int band = 0;
-            for (std::size_t partIndex = 0; partIndex < model.result.parts.size(); ++partIndex) {
-                const ApproximatedPart& part = model.result.parts[partIndex];
-                if (localParameter <= part.maximumParameter + parameterTolerance) {
-                    band = static_cast<int>(partIndex);
-                    break;
-                }
-                band = static_cast<int>(partIndex);
-            }
             loopPoints.push_back(point);
-            loopBands.push_back(band);
+            loopBands.push_back(localParameter);
         }
         if (!measured || loopPoints.size() < 3) {
             continue;
@@ -3823,8 +3877,14 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         }
         // 部材の境目をまたぐ開口は、またぐ全ての部材へ取り分を開ける
         // (オーナー報告「またいでいると適応されない」の対策)。
+        std::vector<double> bandBoundaries;
+        bandBoundaries.reserve(model.result.parts.size() + 1);
+        for (const ApproximatedPart& part : model.result.parts) {
+            bandBoundaries.push_back(part.minimumParameter);
+        }
+        bandBoundaries.push_back(1.0);
         const std::vector<BandLoopPiece> loopPieces
-            = SplitClosedLoopByBand(loopPoints, loopBands);
+            = ClipClosedLoopIntoBands(loopPoints, loopBands, bandBoundaries);
         const bool straddles = loopPieces.size() > 1;
         int pieceNumber = 0;
         for (const BandLoopPiece& loopPiece : loopPieces) {
@@ -4504,6 +4564,7 @@ void Project::UpdatePartModelOptions(std::string_view name, PartApproximationOpt
     model->options = std::move(options);
     model->result = result;
     RegeneratePartModelDerivedObjects(*model);
+    RefreshPartModelFollowers();
 }
 
 void Project::SetPartModelRailFoldProgress(

@@ -544,6 +544,11 @@ private:
     void RebuildDependentGeometry();
     void RecomputeLaminateOffsets();
     void RebuildPartModels();
+    //! 部材(可動)の線・面に付いて回る物を作り直す。
+    //! 可動面に厚みを付けた板材、可動の線から押し出した線・面が対象。
+    //! オーナー指示「厚み化後も可動形式を維持しろ」— 近似をやり直しても
+    //! 付いてきてほしいので、部材を作り直すたびにこれを呼ぶ。
+    void RefreshPartModelFollowers();
     //! 元が変わった近似モデルだけを作り直す(全部作り直すと重いため)。
     //! 面の開口・板材の開口を足し引きしたときに呼ぶ。
     void RebuildPartModelsFromSource(

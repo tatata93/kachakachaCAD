@@ -7,7 +7,7 @@
 | ID | 状態 | 依存 | 担当領域 |
 | --- | --- | --- | --- |
 | WP-00 | 完了(`25d9982`、文書監査、Windows 18試験、self-test) | なし | 規範文書と受入基準の凍結 |
-| WP-01 | 未着手 | WP-00 | V2 build scaffold、依存、ライセンス |
+| WP-01 | 進行中(Codex、`codex/v2-wp01-build-scaffold`、2026-09-08) | WP-00 | V2 build scaffold、依存、ライセンス |
 | WP-02 | 未着手 | WP-01 | ID、Diagnostic、Tolerance、基本値型 |
 | WP-03 | 未着手 | WP-02 | Document、Feature DAG、Command、Undo |
 | WP-04 | 未着手 | WP-02 | Curve/Wire/Chain、編集、数式 |

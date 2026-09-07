@@ -498,6 +498,42 @@ int main()
                     "the cut edge is split into small steps, not one long chord");
             }
 
+            // 面に開けた穴は、その面から作ってある板材にも通り、
+            // .kcd の保存→読み込みでも消えないこと。
+            //(面で穴を開けても板材に伝わらず、往復で穴が消えていた。)
+            {
+                Project sheet;
+                sheet.AddWire("_下", Wire::Polyline({
+                    {0.0, 0.0, 0.0}, {50.0, 0.0, 0.0}, {100.0, 0.0, 0.0}}));
+                sheet.AddWire("_上", Wire::Polyline({
+                    {0.0, 60.0, 0.0}, {50.0, 60.0, 10.0}, {100.0, 60.0, 0.0}}));
+                sheet.AddRuledSurface("_胴", "_下", "_上");
+                sheet.AddPlate(
+                    "_胴板", "_胴", 0.5, PlateThicknessDirection::Centered, "プラ板");
+                sheet.AddWire("_窓下書き", Wire::Polyline({
+                    {40.0, 20.0, 40.0}, {60.0, 20.0, 40.0}, {60.0, 40.0, 40.0},
+                    {40.0, 40.0, 40.0}, {40.0, 20.0, 40.0}}));
+                sheet.AddProjectedWire("_窓", "_窓下書き", "_胴", {0.0, 0.0, -1.0});
+                // 板材を作った「後で」面へ開口を足す。
+                sheet.AddSurfaceOpening("_胴", "_窓");
+                Require(sheet.Plates().front().openingWireNames.size() == 1,
+                    "an opening added to the surface reaches the plates made from it");
+                std::ostringstream sheetText;
+                kachakacha::io::WriteProjectScript(sheetText, sheet);
+                std::istringstream sheetBack(sheetText.str());
+                const Project sheetLoaded
+                    = kachakacha::io::LoadProjectScript(sheetBack, "sheet");
+                Require(sheetLoaded.Surfaces().front().openingWireNames.size() == 1,
+                    "the surface keeps its opening through .kcd");
+                Require(sheetLoaded.Plates().front().openingWireNames.size() == 1,
+                    "the plate keeps the inherited opening through .kcd");
+                // 面から外すと、引き継いでいた板材からも外れる。
+                Project removal = sheet;
+                removal.RemoveSurfaceOpening("_胴", "_窓");
+                Require(removal.Plates().front().openingWireNames.empty(),
+                    "removing the surface opening also frees the plates");
+            }
+
             const auto findFoldWire = [](const Project& project,
                                           const std::string& name) -> const Wire& {
                 for (const auto& wire : project.Wires()) {

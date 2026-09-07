@@ -2306,7 +2306,32 @@ void Project::AddSurfaceOpening(std::string_view surfaceName, std::string wireNa
         != surface->openingWireNames.end()) {
         throw std::invalid_argument("Wire is already a surface opening: " + wireName);
     }
-    surface->openingWireNames.push_back(std::move(wireName));
+    const std::string addedName = std::move(wireName);
+    surface->openingWireNames.push_back(addedName);
+    // この面から作ってある板材にも同じ穴を開ける。
+    // 板材を作った「後で」面に開口を足しても板材へ伝わらない、という穴を塞ぐ
+    //(この取りこぼしは .kcd の保存→読み込みでも起きていた)。
+    // 範囲外・別用途など、その板材では成り立たない物は黙って飛ばす。
+    for (NamedPlate& plate : plates_) {
+        if (plate.sourceSurfaceName != surface->name) {
+            continue;
+        }
+        if (std::find(plate.openingWireNames.begin(), plate.openingWireNames.end(), addedName)
+            != plate.openingWireNames.end()) {
+            continue;
+        }
+        if (std::find(plate.reliefCutWireNames.begin(), plate.reliefCutWireNames.end(), addedName)
+                != plate.reliefCutWireNames.end()
+            || std::find(plate.splitWireNames.begin(), plate.splitWireNames.end(), addedName)
+                != plate.splitWireNames.end()) {
+            continue;
+        }
+        if (!OpeningLiesWithinRange(plate.plate.SourceSurface(), RequireWire(addedName),
+                plate.plate.Range())) {
+            continue;
+        }
+        plate.openingWireNames.push_back(addedName);
+    }
     // 近似したあとに元の面へ開口を足しても部材面に穴が開かない、という
     // オーナー報告の対策。この面から作った近似モデルだけ作り直す。
     RebuildPartModelsFromSource(surface->name, {});
@@ -2325,7 +2350,19 @@ void Project::RemoveSurfaceOpening(std::string_view surfaceName, std::string_vie
         throw std::invalid_argument(
             "Wire is not a surface opening: " + std::string(wireName));
     }
+    const std::string removedName(wireName);
     surface->openingWireNames.erase(position);
+    // 引き継いでいた板材からも外す(面から消したのに板材に残ると往復で食い違う)。
+    for (NamedPlate& plate : plates_) {
+        if (plate.sourceSurfaceName != surface->name) {
+            continue;
+        }
+        const auto inherited = std::find(
+            plate.openingWireNames.begin(), plate.openingWireNames.end(), removedName);
+        if (inherited != plate.openingWireNames.end()) {
+            plate.openingWireNames.erase(inherited);
+        }
+    }
     RebuildPartModelsFromSource(surface->name, {});
 }
 

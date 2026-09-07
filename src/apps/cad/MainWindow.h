@@ -14,6 +14,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class PartModelPanel;
@@ -77,6 +78,14 @@ private:
     QWidget* BuildDisplayPanel();
     QWidget* BuildInfoPanel();
     QWidget* BuildPartModelPanelTab();
+    //! 近似モデルの「いま対象にしている部材番号」。
+    //! 一覧で選ばれていればそれを、選ばれていなければ 3D画面・モデルツリーの
+    //! 選択(部材面・部材板・曲げ状態の部材など)から読み取る。
+    //! オーナー報告「部材を1つ選んでいるのに全部が動く」の対策 —
+    //! 一覧は別の道具の中にあり、曲げ確認の画面からは触れなかった。
+    [[nodiscard]] std::vector<int> ActivePartNumbers(std::string_view modelName) const;
+    //! 同じ考えで、対象の近似モデル名を決める。
+    [[nodiscard]] QString ActivePartModelName() const;
     void CreatePartModelFromPanel();
     //! 近似ユニット(#15): 3D選択を表へ取り込み、役割どおりに一括近似する。
     void CollectUnitMembersFromSelection();

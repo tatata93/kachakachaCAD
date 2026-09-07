@@ -91,6 +91,81 @@ QWidget* MainWindow::BuildPartModelPanelTab()
     return partModelPanel_;
 }
 
+namespace {
+
+//! 「<何か>_部材N…」から N を読む。見つからなければ 0。
+[[nodiscard]] int PartNumberInName(const std::string& name, std::size_t searchFrom)
+{
+    static const std::string marker = "_部材";
+    const std::size_t at = name.find(marker, searchFrom);
+    if (at == std::string::npos) {
+        return 0;
+    }
+    std::size_t digit = at + marker.size();
+    int number = 0;
+    bool any = false;
+    while (digit < name.size() && name[digit] >= '0' && name[digit] <= '9') {
+        number = number * 10 + (name[digit] - '0');
+        ++digit;
+        any = true;
+    }
+    return any ? number : 0;
+}
+
+} // namespace
+
+QString MainWindow::ActivePartModelName() const
+{
+    if (partModelPanel_ != nullptr) {
+        const QString selected = partModelPanel_->SelectedModelName();
+        if (!selected.isEmpty()) {
+            return selected;
+        }
+    }
+    // 一覧で選んでいないときは、3D画面・モデルツリーの選択から読み取る。
+    // 「<モデル名>_…」で始まる物のうち、いちばん長く一致するモデルを採る。
+    std::string best;
+    for (const auto& [kind, name] : SelectedObjectTargets()) {
+        for (const auto& model : project_.PartModels()) {
+            const std::string prefix = model.name + "_";
+            if (name.size() > prefix.size()
+                && name.compare(0, prefix.size(), prefix) == 0
+                && model.name.size() > best.size()) {
+                best = model.name;
+            }
+        }
+    }
+    return ToQString(best);
+}
+
+std::vector<int> MainWindow::ActivePartNumbers(std::string_view modelName) const
+{
+    if (partModelPanel_ != nullptr) {
+        const std::vector<int> fromPanel = partModelPanel_->SelectedPartNumbers();
+        if (!fromPanel.empty()) {
+            return fromPanel;
+        }
+    }
+    const std::string model(modelName);
+    if (model.empty()) {
+        return {};
+    }
+    const std::string prefix = model + "_";
+    std::vector<int> numbers;
+    for (const auto& [kind, name] : SelectedObjectTargets()) {
+        if (name.size() <= prefix.size() || name.compare(0, prefix.size(), prefix) != 0) {
+            continue;
+        }
+        const int number = PartNumberInName(name, prefix.size() - 1);
+        if (number > 0) {
+            numbers.push_back(number);
+        }
+    }
+    std::sort(numbers.begin(), numbers.end());
+    numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
+    return numbers;
+}
+
 void MainWindow::CreatePartModelFromPanel()
 {
     try {
@@ -590,7 +665,7 @@ void MainWindow::CreateApproximationUnitFromPanel()
 void MainWindow::RecalculateSelectedPartModel()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("再計算する部材近似モデルを一覧で選択してください。");
         }
@@ -611,7 +686,7 @@ void MainWindow::RecalculateSelectedPartModel()
 void MainWindow::RemoveSelectedPartModel()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("削除する部材近似モデルを一覧で選択してください。");
         }
@@ -634,7 +709,7 @@ void MainWindow::RemoveSelectedPartModel()
 void MainWindow::ExtractSelectedPartModelBoundaries()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("境界を抽出する部材近似モデルを一覧で選択してください。");
         }
@@ -661,7 +736,7 @@ void MainWindow::ExtractSelectedPartModelBoundaries()
 void MainWindow::ShowSelectedPartPatterns()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("型紙を表示する部材近似モデルを一覧で選択してください。");
         }
@@ -676,7 +751,7 @@ void MainWindow::ShowSelectedPartPatterns()
 
         std::vector<kachakacha::io::PartPatternResult> results;
         QStringList captions;
-        const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
+        const std::vector<int> selectedParts = ActivePartNumbers(name);
         if (selectedParts.size() >= 2) {
             // 選択した隣接部材を1枚に結合した型紙。
             results.push_back(
@@ -760,7 +835,7 @@ void MainWindow::ChangeSelectedSetState(int state)
 void MainWindow::CreatePlateFromSelectedPart()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
         }
@@ -772,7 +847,7 @@ void MainWindow::CreatePlateFromSelectedPart()
         if (model == project_.PartModels().end()) {
             throw std::invalid_argument("部材近似モデルが見つかりません: " + name);
         }
-        std::vector<int> numbers = partModelPanel_->SelectedPartNumbers();
+        std::vector<int> numbers = ActivePartNumbers(name);
         if (numbers.empty()) {
             throw std::invalid_argument(
                 "板材にする部材を一覧で選択してください（複数選択可）。");
@@ -954,7 +1029,7 @@ void MainWindow::CreatePlateFromSelectedPart()
 void MainWindow::EditSelectedPartOpening(bool add)
 {
     try {
-        const std::string modelName = ToName(partModelPanel_->SelectedModelName());
+        const std::string modelName = ToName(ActivePartModelName());
         if (modelName.empty()) {
             throw std::invalid_argument("一覧で部材近似モデル(または部材)を選択してください。");
         }
@@ -976,7 +1051,7 @@ void MainWindow::EditSelectedPartOpening(bool add)
         int edited = 0;
         QStringList errors;
         if (add) {
-            const std::vector<int> numbers = partModelPanel_->SelectedPartNumbers();
+            const std::vector<int> numbers = ActivePartNumbers(modelName);
             if (numbers.size() != 1) {
                 throw std::invalid_argument(
                     "穴を開ける部材を一覧でちょうど1つ選択してください。");
@@ -1153,7 +1228,7 @@ void MainWindow::PickPartBoundariesFromSelectedWires()
 void MainWindow::SetSelectedPartModelRailFold(int railIndex, double value)
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         const NamedPartModel* model = name.empty()
             ? nullptr
             : FindPartModel(project_, name);
@@ -1190,14 +1265,14 @@ void MainWindow::CommitPartAssemblyProgress(double progress)
     // 組立スライダーの確定(オーナー指示: 実際の近似面が動く。
     // 部材を選んでいれば選んだ部材だけが曲がる)。
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         const NamedPartModel* model = name.empty()
             ? nullptr
             : FindPartModel(project_, name);
         if (model == nullptr) {
             return;
         }
-        const std::vector<int> partNumbers = partModelPanel_->SelectedPartNumbers();
+        const std::vector<int> partNumbers = ActivePartNumbers(name);
         const auto effectiveOf = [model](int partNumber) {
             const std::size_t index = static_cast<std::size_t>(partNumber - 1);
             return index < model->partAssemblyProgress.size()
@@ -1241,7 +1316,7 @@ void MainWindow::UpdatePartFoldPreview()
         return;
     }
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         const NamedPartModel* model = name.empty()
             ? nullptr
             : FindPartModel(project_, name);
@@ -1257,7 +1332,7 @@ void MainWindow::UpdatePartFoldPreview()
             // スライダー表示を「操作対象の部材」の保存済み組立進行度に合わせる。
             // 部材を選んでいれば先頭の選択部材、未選択なら一様値(部材ごとの
             // 値が混在するときは先頭部材)を表示する。
-            const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
+            const std::vector<int> selectedParts = ActivePartNumbers(name);
             double displayProgress = model->assemblyProgress;
             if (!selectedParts.empty()) {
                 const std::size_t index
@@ -1338,7 +1413,7 @@ void MainWindow::UpdatePartFoldPreview()
         const double liftDistance = std::max(25.0, (high - low).Length() * 0.35);
         // 部材ごとの進行度(オーナー指示: 選んだ部材だけが曲がる)。
         // 選択中の部材はスライダーの値、その他は保存済みの実効値で描く。
-        const std::vector<int> selectedParts = partModelPanel_->SelectedPartNumbers();
+        const std::vector<int> selectedParts = ActivePartNumbers(model->name);
         const int previewBandCount = std::max(1, mesh.rows - 1);
         std::vector<double> bandProgress(
             static_cast<std::size_t>(previewBandCount), 0.0);
@@ -1401,7 +1476,7 @@ namespace {
 void MainWindow::RealizePartFoldState()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
         }
@@ -1413,7 +1488,7 @@ void MainWindow::RealizePartFoldState()
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
         options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
-        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
         const std::string prefix
             = MakeFoldStatePrefix(project_, model->name, options.progress);
@@ -1467,7 +1542,7 @@ void MainWindow::RealizePartFoldState()
 void MainWindow::ExportPartFoldMesh(bool step)
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
         }
@@ -1479,7 +1554,7 @@ void MainWindow::ExportPartFoldMesh(bool step)
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
         options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
-        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 
         Project exportProject;
@@ -1531,7 +1606,7 @@ void MainWindow::ExportPartFoldMesh(bool step)
 void MainWindow::ExportPartFoldKcd()
 {
     try {
-        const std::string name = ToName(partModelPanel_->SelectedModelName());
+        const std::string name = ToName(ActivePartModelName());
         if (name.empty()) {
             throw std::invalid_argument("部材近似モデルを一覧で選択してください。");
         }
@@ -1543,7 +1618,7 @@ void MainWindow::ExportPartFoldKcd()
         // スライダーは組立アニメーション。板材化・出力は 0%=型紙の平面配置、
         // それ以外=折り線ごとの角度どおりの折り状態(帯剛体)を使う。
         options.progress = partModelPanel_->FoldProgress() <= 1.0e-9 ? 0.0 : 1.0;
-        options.partNumbers = partModelPanel_->SelectedPartNumbers();
+        options.partNumbers = ActivePartNumbers(name);
         options.surfaceThicknessMillimeters = partModelPanel_->FoldThicknessMillimeters();
 
         Project exportProject;

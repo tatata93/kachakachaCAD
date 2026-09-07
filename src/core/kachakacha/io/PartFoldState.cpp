@@ -233,7 +233,9 @@ PartFoldStateResult AddPartFoldStateModel(
     for (std::size_t openingIndex = 0; openingIndex < openings.size(); ++openingIndex) {
         const NamedWire& opening = openings[openingIndex];
         std::vector<Vector3> mapped;
+        std::vector<int> mappedBands;
         mapped.reserve(openingSamples + 1);
+        mappedBands.reserve(openingSamples);
         std::set<int> bands;
         bool onMesh = true;
         for (int sample = 0; sample < openingSamples; ++sample) {
@@ -254,16 +256,12 @@ PartFoldStateResult AddPartFoldStateModel(
             }
             bands.insert(mappedPoint.band);
             mapped.push_back(mappedPoint.point);
+            mappedBands.push_back(mappedPoint.band);
         }
         if (!onMesh || mapped.size() < 3) {
             continue;
         }
-        mapped.push_back(mapped.front()); // 閉じる
 
-        const bool singleBand = bands.size() == 1;
-        const int owningNumber = singleBand ? *bands.begin() + 1 : 0;
-        const bool ownerSelected = singleBand
-            && std::find(numbers.begin(), numbers.end(), owningNumber) != numbers.end();
         bool overlapsSelection = false;
         for (const int band : bands) {
             if (std::find(numbers.begin(), numbers.end(), band + 1) != numbers.end()) {
@@ -275,11 +273,26 @@ PartFoldStateResult AddPartFoldStateModel(
             continue;
         }
 
-        if (ownerSelected) {
-            // 1部材に収まる開口は実際の穴として付与する。
+        // 部材の境目をまたぐ開口は、またぐ全ての部材へ「その部材の取り分」を
+        // 穴として開ける(オーナー報告の対策)。1部材に収まる開口はそのまま1つ。
+        const std::vector<model::BandLoopPiece> pieces
+            = model::SplitClosedLoopByBand(mapped, mappedBands);
+        int pieceNumber = 0;
+        bool anyHole = false;
+        for (const model::BandLoopPiece& piece : pieces) {
+            const int owningNumber = piece.band + 1;
+            ++pieceNumber;
+            if (std::find(numbers.begin(), numbers.end(), owningNumber) == numbers.end()) {
+                continue; // 出力しない部材の取り分は作らない。
+            }
+            if (piece.points.size() < 3) {
+                continue;
+            }
+            std::vector<Vector3> closed = piece.points;
+            closed.push_back(closed.front());
             // 帯の法線方向へ少し浮かせた下書きを面へ投影し直す(既存の穴機構に合わせる)。
             try {
-                const int band = owningNumber - 1;
+                const int band = piece.band;
                 const int centerColumn = mesh.columns / 2;
                 const int nextColumn = std::min(centerColumn + 1, mesh.columns - 1);
                 Vector3 normal = Normalized(Cross(
@@ -289,31 +302,73 @@ PartFoldStateResult AddPartFoldStateModel(
                 if (normal.Length() <= 1.0e-9) {
                     normal = {0.0, 0.0, 1.0};
                 }
-                std::vector<Vector3> lifted = mapped;
-                for (Vector3& point : lifted) {
-                    point = point + normal * 2.0;
-                }
-                const std::string draftName = namePrefix + "_穴下書き"
-                    + std::to_string(openingIndex + 1);
+                const std::string suffix = std::to_string(openingIndex + 1)
+                    + (pieces.size() > 1 ? "_" + std::to_string(pieceNumber) : std::string());
+                const std::string draftName = namePrefix + "_穴下書き" + suffix;
                 const std::string holeName = namePrefix + "_部材"
-                    + std::to_string(owningNumber) + "穴"
-                    + std::to_string(openingIndex + 1);
-                target.AddWire(draftName, Wire::Polyline(std::move(lifted)));
-                target.AddProjectedWire(
-                    holeName, draftName,
-                    surfaceNameByPart[owningNumber - 1], normal * -1.0);
-                target.AddPlateOpening(plateNameByPart[owningNumber - 1], holeName);
-                target.SetWireVisible(draftName, false);
+                    + std::to_string(owningNumber) + "穴" + suffix;
+                // 境目で切った取り分は端が帯の縁ぎりぎりに来るので、
+                // 投影線が面を外れることがある。少しだけ内側へ縮めて作り直す。
+                Vector3 centroid{0.0, 0.0, 0.0};
+                for (const Vector3& point : piece.points) {
+                    centroid = centroid + point;
+                }
+                centroid = centroid * (1.0 / static_cast<double>(piece.points.size()));
+                bool made = false;
+                std::string lastFailure;
+                for (const double shrink : {0.0, 0.02, 0.06, 0.12}) {
+                    std::vector<Vector3> lifted;
+                    lifted.reserve(closed.size());
+                    for (const Vector3& point : closed) {
+                        lifted.push_back(
+                            centroid + (point - centroid) * (1.0 - shrink) + normal * 2.0);
+                    }
+                    try {
+                        target.AddWire(draftName, Wire::Polyline(std::move(lifted)));
+                        target.AddProjectedWire(
+                            holeName, draftName,
+                            surfaceNameByPart[owningNumber - 1], normal * -1.0);
+                        target.AddPlateOpening(plateNameByPart[owningNumber - 1], holeName);
+                        target.SetWireVisible(draftName, false);
+                        made = true;
+                        break;
+                    } catch (const std::exception& error) {
+                        lastFailure = error.what();
+                        // 作りかけの下書き・穴を片付けてから次の縮み具合で試す。
+                        try {
+                            (void)target.RemoveWire(holeName);
+                        } catch (const std::exception&) {
+                        }
+                        try {
+                            (void)target.RemoveWire(draftName);
+                        } catch (const std::exception&) {
+                        }
+                    }
+                }
+                if (!made) {
+                    throw std::runtime_error(lastFailure.empty()
+                            ? std::string("hole could not be projected")
+                            : lastFailure);
+                }
                 result.openingWireNames.push_back(holeName);
-                continue;
+                anyHole = true;
             } catch (const std::exception&) {
-                // 穴にできない場合は輪郭線のみ追加する(下へフォールスルー)。
+                // 穴にできない断片は輪郭線だけ足す。
+                const std::string outlineName = namePrefix + "_穴輪郭"
+                    + std::to_string(openingIndex + 1) + "_"
+                    + std::to_string(pieceNumber);
+                target.AddWire(outlineName, Wire::Polyline(std::move(closed)));
+                result.outlineWireNames.push_back(outlineName);
             }
         }
-        const std::string outlineName = namePrefix + "_穴輪郭"
-            + std::to_string(openingIndex + 1);
-        target.AddWire(outlineName, Wire::Polyline(std::move(mapped)));
-        result.outlineWireNames.push_back(outlineName);
+        if (!anyHole && pieces.empty()) {
+            std::vector<Vector3> closed = mapped;
+            closed.push_back(closed.front());
+            const std::string outlineName = namePrefix + "_穴輪郭"
+                + std::to_string(openingIndex + 1);
+            target.AddWire(outlineName, Wire::Polyline(std::move(closed)));
+            result.outlineWireNames.push_back(outlineName);
+        }
     }
 
     return result;

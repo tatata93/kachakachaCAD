@@ -1257,6 +1257,40 @@ void Project::AddPlateOffsetWire(
     AutoAssignToDefaultSet(ProjectObjectKind::Wire, wires_.back().name);
 }
 
+namespace {
+
+//! 輪郭の点を1つずつ面へ投影し、当たった点だけで閉じた輪郭を作る。
+//! 部材の境目で切り分けた取り分は、端が帯の縁ぎりぎりに来るので、
+//! 全ての点が当たることを要求すると穴そのものが消えてしまう。
+[[nodiscard]] std::optional<Wire> ProjectLoopOntoSurfaceLenient(
+    const Surface& surface,
+    const std::vector<geometry::Vector3>& points,
+    geometry::Vector3 direction)
+{
+    std::vector<geometry::Vector3> projected;
+    projected.reserve(points.size() + 1);
+    for (const geometry::Vector3& point : points) {
+        try {
+            const SurfaceProjection hit = surface.ProjectPointAlongDirection(point, direction);
+            if (projected.empty()
+                || (hit.point - projected.back()).LengthSquared() > 1.0e-12) {
+                projected.push_back(hit.point);
+            }
+        } catch (const std::exception&) {
+            // この点は面から外れた。飛ばして続ける。
+        }
+    }
+    if (projected.size() < 3) {
+        return std::nullopt;
+    }
+    if ((projected.front() - projected.back()).LengthSquared() > 1.0e-12) {
+        projected.push_back(projected.front());
+    }
+    return Wire::Polyline(std::move(projected));
+}
+
+} // namespace
+
 Project::TransformBaseNames Project::CollectTransformBases(
     const std::vector<std::pair<ProjectObjectKind, std::string>>& targets) const
 {
@@ -3744,11 +3778,15 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         const double rangeMinimum = openingRangeMinimum;
         const double rangeMaximum = openingRangeMaximum;
         const double rangeSpan = std::max(1.0e-12, rangeMaximum - rangeMinimum);
-        double minimumParameter = 1.0;
-        double maximumParameter = 0.0;
-        const int samples = 48;
+        // 輪郭を一周サンプリングし、点ごとに「どの部材の帯に載るか」を測る。
+        const int samples = 96;
         bool measured = true;
-        for (int sample = 0; sample <= samples; ++sample) {
+        std::vector<geometry::Vector3> loopPoints;
+        std::vector<int> loopBands;
+        loopPoints.reserve(static_cast<std::size_t>(samples));
+        loopBands.reserve(static_cast<std::size_t>(samples));
+        constexpr double parameterTolerance = 1.0e-6;
+        for (int sample = 0; sample < samples; ++sample) {
             const geometry::Vector3 point = opening.wire.Evaluate(
                 static_cast<double>(sample) / samples);
             SurfaceProjection projected{};
@@ -3761,30 +3799,38 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             }
             const double surfaceParameter = splitAlongV ? projected.v : projected.u;
             const double localParameter = (surfaceParameter - rangeMinimum) / rangeSpan;
-            minimumParameter = std::min(minimumParameter, localParameter);
-            maximumParameter = std::max(maximumParameter, localParameter);
-        }
-        if (!measured) {
-            continue;
-        }
-        constexpr double parameterTolerance = 1.0e-6;
-        int ownerIndex = -1;
-        for (std::size_t partIndex = 0; partIndex < model.result.parts.size(); ++partIndex) {
-            const ApproximatedPart& part = model.result.parts[partIndex];
-            if (minimumParameter >= part.minimumParameter - parameterTolerance
-                && maximumParameter <= part.maximumParameter + parameterTolerance) {
-                ownerIndex = static_cast<int>(partIndex);
-                break;
+            int band = 0;
+            for (std::size_t partIndex = 0; partIndex < model.result.parts.size(); ++partIndex) {
+                const ApproximatedPart& part = model.result.parts[partIndex];
+                if (localParameter <= part.maximumParameter + parameterTolerance) {
+                    band = static_cast<int>(partIndex);
+                    break;
+                }
+                band = static_cast<int>(partIndex);
             }
+            loopPoints.push_back(point);
+            loopBands.push_back(band);
         }
-        if (ownerIndex < 0) {
-            continue; // 部材境界をまたぐ開口。
+        if (!measured || loopPoints.size() < 3) {
+            continue;
         }
         const auto openingSource = std::find_if(wires_.begin(), wires_.end(),
             [&](const NamedWire& wire) {
                 return wire.name == opening.projection->sourceWireName;
             });
         if (openingSource == wires_.end()) {
+            continue;
+        }
+        // 部材の境目をまたぐ開口は、またぐ全ての部材へ取り分を開ける
+        // (オーナー報告「またいでいると適応されない」の対策)。
+        const std::vector<BandLoopPiece> loopPieces
+            = SplitClosedLoopByBand(loopPoints, loopBands);
+        const bool straddles = loopPieces.size() > 1;
+        int pieceNumber = 0;
+        for (const BandLoopPiece& loopPiece : loopPieces) {
+        const int ownerIndex = loopPiece.band;
+        ++pieceNumber;
+        if (ownerIndex < 0 || ownerIndex >= static_cast<int>(newSurfaceNames.size())) {
             continue;
         }
         const std::string& targetSurfaceName = newSurfaceNames[ownerIndex];
@@ -3795,15 +3841,27 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
         }
         std::optional<Wire> projectedOutlineMaybe;
         try {
-            projectedOutlineMaybe = targetSurface->surface.ProjectWireAlongDirection(
-                openingSource->wire, opening.projection->direction);
+            if (straddles) {
+                // 切り分けた取り分は元の下書きが無いので、輪郭そのものを投影する。
+                // 端の点は帯の縁ぎりぎりで投影線が面を外れることがあるので、
+                // 1点ずつ投影して当たった点だけを使う(全部を要求すると穴が消える)。
+                projectedOutlineMaybe = ProjectLoopOntoSurfaceLenient(
+                    targetSurface->surface, loopPiece.points, opening.projection->direction);
+            } else {
+                projectedOutlineMaybe = targetSurface->surface.ProjectWireAlongDirection(
+                    openingSource->wire, opening.projection->direction);
+            }
         } catch (const std::exception&) {
             continue; // 折り姿勢・部材オフセットで投影が外れた開口は保留(#17bと同じ扱い)。
+        }
+        if (!projectedOutlineMaybe.has_value()) {
+            continue;
         }
         Wire projectedOutline = std::move(*projectedOutlineMaybe);
         const std::string derivedName = model.name + "_部材"
             + std::to_string(ownerIndex + 1) + "_穴"
-            + std::to_string(openingIndex + 1);
+            + std::to_string(openingIndex + 1)
+            + (straddles ? "_" + std::to_string(pieceNumber) : std::string());
         const auto existing = std::find_if(wires_.begin(), wires_.end(), [&](const NamedWire& wire) {
             return wire.name == derivedName;
         });
@@ -3835,6 +3893,7 @@ void Project::RegeneratePartModelDerivedObjects(NamedPartModel& model)
             });
         }
         newOpeningNames.push_back(derivedName);
+        } // 部材ごとの取り分
     }
     // --- 部材面への後付け開口(#17b): 記録された部材番号の面へ投影し直す ---
     for (std::size_t extraIndex = 0; extraIndex < model.partOpenings.size(); ++extraIndex) {

@@ -4767,6 +4767,46 @@ bool MainWindow::RunCreationSelfTest()
     progressMark("selection table checked");
 
     {
+        // オーナー報告: 部材を1つ選んでいるのに全部が動く/板材化で全部出る。
+        // 一覧(近似モデルの別の道具の中)で選ばなくても、3D画面・モデルツリーの
+        // 選択から対象の部材が決まること。
+        if (project_.PartModels().empty()) {
+            return fail("a part model exists for the active-part check");
+        }
+        const std::string modelName = project_.PartModels().front().name;
+        int partSurfaceIndex = -1;
+        int lastPartNumber = 0;
+        for (int index = 0; index < static_cast<int>(project_.Surfaces().size()); ++index) {
+            const auto& surface = project_.Surfaces()[index];
+            if (!surface.partModelSourceName.has_value()
+                || *surface.partModelSourceName != modelName) {
+                continue;
+            }
+            if (surface.name == modelName + "_部材2") {
+                partSurfaceIndex = index;
+                lastPartNumber = 2;
+            }
+        }
+        if (partSurfaceIndex < 0) {
+            return fail("the second part surface exists");
+        }
+        UpdateSelections({{CadSelectionKind::Surface, partSurfaceIndex}}, true);
+        if (ActivePartModelName() != ToQString(modelName)) {
+            return fail("the selected part surface names its model");
+        }
+        const std::vector<int> active = ActivePartNumbers(modelName);
+        if (active.size() != 1 || active.front() != lastPartNumber) {
+            return fail("selecting one part surface targets only that part");
+        }
+        // 何も選んでいなければ「全部材」(空)に戻る。
+        UpdateSelections({}, true);
+        if (!ActivePartNumbers(modelName).empty()) {
+            return fail("with nothing selected every part is the target");
+        }
+    }
+    progressMark("active part checked");
+
+    {
         // カーソルでの操作の具合(オーナー指示「実際の画面やカーソル操作の
         // 具合などを必ず試験すること」)。数値の上下ボタンとチェック枠を、
         // 画面上の当たり判定そのままの位置で押す。

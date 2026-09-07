@@ -458,6 +458,45 @@ int main()
             }
             Require(derivedFound, "derived opening wire exists");
 
+            // オーナー報告: 部材の境目をまたぐ窓が、どの部材にも開かなかった。
+            // またぐなら、またぐ全ての部材へ取り分を開ける。
+            {
+                Project straddle = MakeBottleLikeProject();
+                straddle.AddWire("大窓下書き", Wire::Polyline({
+                    {-4.0, 40.0, 14.0}, {4.0, 40.0, 14.0}, {4.0, 40.0, 34.0},
+                    {-4.0, 40.0, 34.0}, {-4.0, 40.0, 14.0}}));
+                straddle.AddProjectedWire("大窓", "大窓下書き", "胴", {0.0, -1.0, 0.0});
+                straddle.AddPlateOpening("胴板", "大窓");
+                PartApproximationOptions twoBands;
+                twoBands.splitAxis = PartSplitAxis::V;
+                twoBands.automaticBoundaries = false;
+                twoBands.manualBoundaryParameters = {0.5};
+                straddle.AddPartModel("またぎ", "胴板", twoBands);
+                const auto& straddleModel = straddle.PartModels().back();
+                Require(straddleModel.openingWireNames.size() == 2,
+                    "a window across the boundary opens on both parts");
+                int holesOnPart1 = 0;
+                int holesOnPart2 = 0;
+                for (const auto& surface : straddle.Surfaces()) {
+                    if (surface.name == "またぎ_部材1") {
+                        holesOnPart1 = static_cast<int>(surface.openingWireNames.size());
+                    }
+                    if (surface.name == "またぎ_部材2") {
+                        holesOnPart2 = static_cast<int>(surface.openingWireNames.size());
+                    }
+                }
+                Require(holesOnPart1 == 1 && holesOnPart2 == 1,
+                    "each part surface carries its share of the window");
+                // 取り分は閉じた輪郭で、元の窓より小さい(境目で切れている)。
+                for (const auto& name : straddleModel.openingWireNames) {
+                    for (const auto& wire : straddle.Wires()) {
+                        if (wire.name == name) {
+                            Require(wire.wire.IsClosed(1.0e-6), "each share stays closed");
+                        }
+                    }
+                }
+            }
+
             // 部材面そのものに穴が開いている(オーナー報告の対策)。
             {
                 bool partSurfaceHasHole = false;

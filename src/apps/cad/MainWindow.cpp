@@ -2746,10 +2746,28 @@ void MainWindow::RefreshBeginnerGuide()
                     "4  板材にすると、厚みの付いた実物の板になる"),
                 QStringLiteral("output"));
         } else if (partTool == 2) {
+            // いま何が対象なのかを常に見せる(オーナー報告「1つ選んでいるのに
+            // 全部動く」— 一覧は別の道具の中にあって、ここからは見えなかった)。
+            const QString activeModel = ActivePartModelName();
+            const std::vector<int> activeParts = ActivePartNumbers(ToName(activeModel));
+            QString target;
+            if (activeModel.isEmpty()) {
+                target = QStringLiteral("次: 部材モデルを3D画面か一覧で選ぶ");
+            } else if (activeParts.empty()) {
+                target = QStringLiteral("いまの対象: %1 の全部材（部材を選ぶとその1つだけ）")
+                             .arg(activeModel);
+            } else {
+                QStringList numbers;
+                for (const int number : activeParts) {
+                    numbers << QStringLiteral("部材%1").arg(number);
+                }
+                target = QStringLiteral("いまの対象: %1 の %2")
+                             .arg(activeModel, numbers.join(QStringLiteral("・")));
+            }
             setGuide(QStringLiteral("曲げ具合を見て、その姿で出す"),
-                QStringLiteral("次: 一覧で部材を選び、スライダーを動かす"),
+                target,
                 QStringLiteral(
-                    "1  一覧で見たい部材を選ぶ（選ばないと全部）\n"
+                    "1  対象にしたい部材を3D画面かモデル一覧で選ぶ（選ばないと全部）\n"
                     "2  スライダー 0%＝平らに並べた形、100%＝組み上がった形\n"
                     "3  折り角は折り線ごとに角度でも指定できる\n"
                     "4  この姿のまま板材・STL・STEP・.kcd へ出せる"),

@@ -562,6 +562,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/Document.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/exporters/PatternExport.cpp
+    src/next/kachakacha/exporters/PdfWriter.cpp
     src/next/kachakacha/fabrication/Assembly.cpp
     src/next/kachakacha/fabrication/CurvatureAnalysis.cpp
     src/next/kachakacha/fabrication/FabricationSettings.cpp
@@ -644,6 +645,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(export_tests tests_v2/export_tests.cpp)
     kachakacha_add_v2_test(tool_tests tests_v2/tool_tests.cpp)
     kachakacha_add_v2_test(curve_join_tests tests_v2/curve_join_tests.cpp)
+    kachakacha_add_v2_test(pdf_tests tests_v2/pdf_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

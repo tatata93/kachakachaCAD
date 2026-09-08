@@ -83,10 +83,14 @@ public:
 
     //! いま道具箱に出ているコマンドの数。モードごとに変わる。
     [[nodiscard]] int VisibleCommandCount() const;
+    //! いま道具箱に出ている道具の数。モードごとに変わる。
+    [[nodiscard]] int VisibleToolCount() const;
 
     //! モードごとの手順(ui-workflows §9 / §10 / §11)。1本の並びとして右に出す。
     [[nodiscard]] int ProcessStepCount() const;
     [[nodiscard]] QString ProcessStepText(int row) const;
+    //! その段の「進めない理由」。無ければ空。
+    [[nodiscard]] QString ProcessStepReason(int row) const;
     //! いま入れる段の番号。全部済んでいれば0。
     [[nodiscard]] int CurrentProcessStep() const;
     //! 手順の元になる状況。試験から動かして、手順が変わることを見る。

@@ -291,6 +291,29 @@ void V2MainWindow::RefreshCommandVisibility()
             entry.second->setToolTip(reason);
         }
     }
+    // 道具箱もモードに従う。作図の道具が製作モードに並んでいると、
+    // そのモードで何ができるのかが読めなくなる。
+    for (std::size_t index = 0; index < toolActions_.size(); ++index) {
+        const DrawingTool tool = kToolOrder[index];
+        std::string_view commandId;
+        for (const ToolBinding& binding : kToolBindings) {
+            if (binding.tool == tool) {
+                commandId = binding.commandId;
+            }
+        }
+        const bool visible = commandId.empty()
+            ? (mode_ == UiMode::Drawing)
+            : CommandVisibleInMode(commandId, mode_);
+        toolActions_[index]->setVisible(visible);
+    }
+    if (toolPalette_ != nullptr) {
+        // 出る道具が1つも無いモードでは、道具箱ごと隠す。
+        bool anyVisible = false;
+        for (QAction* action : toolActions_) {
+            anyVisible = anyVisible || action->isVisible();
+        }
+        toolPalette_->setVisible(anyVisible);
+    }
 }
 
 void V2MainWindow::BuildToolPalette()
@@ -433,20 +456,22 @@ void V2MainWindow::RefreshProcessSteps()
         auto* item = new QTreeWidgetItem(processView_);
         item->setText(0, QString::number(step.number));
         item->setText(1, QString::fromStdString(step.titleJa));
-        // 進めない段には理由を並べて出す。理由の無い灰色を作らない。
-        QString state = QString::fromStdString(
-            std::string(kachakacha::v2::app::StepStateNameJa(step.state)));
+        item->setText(2, QString::fromStdString(
+            std::string(kachakacha::v2::app::StepStateNameJa(step.state))));
+        // 進めない段には理由を出す。列に押し込むと切れて読めないので、
+        // その段の下へ1行ぶら下げる。理由の無い灰色を作らない。
         if (!step.blockedReasonJa.empty()) {
-            state += QStringLiteral(" — ")
-                + QString::fromStdString(step.blockedReasonJa);
+            auto* why = new QTreeWidgetItem(item);
+            why->setText(1, QString::fromStdString(step.blockedReasonJa));
+            why->setForeground(1, QColor(0xC0, 0xA0, 0x50));
         }
-        item->setText(2, state);
         if (step.state == kachakacha::v2::app::StepState::Done) {
             item->setForeground(1, QColor(0x40, 0xA0, 0x60));
         } else if (step.state == kachakacha::v2::app::StepState::Blocked) {
             item->setForeground(1, QColor(0x90, 0x90, 0x98));
         }
     }
+    processView_->expandAll();
     for (int column = 0; column < processView_->columnCount(); ++column) {
         processView_->resizeColumnToContents(column);
     }
@@ -471,6 +496,27 @@ QString V2MainWindow::ProcessStepText(int row) const
     auto* item = processView_->topLevelItem(row);
     return item->text(0) + QStringLiteral(" ") + item->text(1) + QStringLiteral(" ")
         + item->text(2);
+}
+
+QString V2MainWindow::ProcessStepReason(int row) const
+{
+    if (processView_ == nullptr || row < 0 || row >= processView_->topLevelItemCount()) {
+        return QString();
+    }
+    auto* item = processView_->topLevelItem(row);
+    if (item->childCount() == 0) {
+        return QString();
+    }
+    return item->child(0)->text(1);
+}
+
+int V2MainWindow::VisibleToolCount() const
+{
+    int count = 0;
+    for (QAction* action : toolActions_) {
+        count += action->isVisible() ? 1 : 0;
+    }
+    return count;
 }
 
 int V2MainWindow::CurrentProcessStep() const

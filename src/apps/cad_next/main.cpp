@@ -612,6 +612,24 @@ struct SelfTestCase {
     return true;
 }
 
+[[nodiscard]] bool CaseToolPaletteFollowsMode(V2MainWindow& window)
+{
+    // 作図の道具が製作モードに並んでいると、そのモードで何ができるのかが読めない。
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    const int drawing = window.VisibleToolCount();
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    const int fabrication = window.VisibleToolCount();
+    window.SetMode(kachakacha::v2::app::UiMode::Output);
+    const int output = window.VisibleToolCount();
+    // 作図モードでいちばん多く、製作と出力では減る。
+    if (drawing <= 0 || fabrication >= drawing || output >= drawing) {
+        return false;
+    }
+    // 戻せば元に戻る。
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    return window.VisibleToolCount() == drawing;
+}
+
 [[nodiscard]] bool CaseProcessStepsFollowMode(V2MainWindow& window)
 {
     // 手順はモードで中身が変わり、番号は1から順に並ぶ(ui-workflows §9 / §10 / §11)。
@@ -654,8 +672,7 @@ struct SelfTestCase {
     }
     bool sawReason = false;
     for (int row = 1; row < window.ProcessStepCount(); ++row) {
-        const QString text = window.ProcessStepText(row);
-        if (!text.contains(QStringLiteral("—"))) {
+        if (window.ProcessStepReason(row).isEmpty()) {
             return false;
         }
         sawReason = true;
@@ -699,6 +716,7 @@ const SelfTestCase kCases[] = {
     {"作業中グループが帯と一覧に出る", &CaseActiveGroupShowsAndCollects},
     {"どちらの見た目でも配置が壊れない", &CaseThemeKeepsLayoutUsable},
     {"狭い画面でも部品がはみ出さない", &CaseSmallWindowStaysUsable},
+    {"道具箱もモードに従う", &CaseToolPaletteFollowsMode},
     {"手順がモードで変わり番号順に並ぶ", &CaseProcessStepsFollowMode},
     {"進めない段には理由が出る", &CaseProcessStepsExplainWhyBlocked},
 };

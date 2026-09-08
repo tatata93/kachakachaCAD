@@ -23,6 +23,7 @@
 #include <QStringList>
 
 #include <iostream>
+#include <cstdint>
 #include <iterator>
 #include <vector>
 
@@ -167,6 +168,54 @@ struct SelfTestCase {
     return window.StatusText() == reason;
 }
 
+[[nodiscard]] bool CaseGuideIsComplete(V2MainWindow& window)
+{
+    // どの道具に入っても、案内の6つがそろっていること。
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        window.RunCommand(command.id);
+        const QString status = window.StatusText();
+        if (status.isEmpty()) {
+            return false;
+        }
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    const QString line = window.StatusText();
+    return line.contains(QStringLiteral("次:")) && line.contains(QStringLiteral("Esc"))
+        && line.contains(QStringLiteral("選択"));
+}
+
+[[nodiscard]] bool CaseFailureRecovery(V2MainWindow& window)
+{
+    // 失敗する操作を3回ずつ繰り返しても、アプリが続き、文書が変わらないこと。
+    const std::uint64_t before = window.Session().GetDocument().Snapshot().revision;
+    for (int round = 0; round < 3; ++round) {
+        // まだ使えないコマンドを押す。
+        window.RunCommand("part.extrude");
+        window.RunCommand("part.boolean_cut");
+        window.RunCommand("fabrication.create");
+        // 点を1つも置かずに確定しようとする。
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Polyline);
+        window.Viewport().FinishTool();
+        window.Viewport().CancelTool();
+        if (window.StatusText().isEmpty()) {
+            return false;
+        }
+    }
+    return window.Session().GetDocument().Snapshot().revision == before;
+}
+
+[[nodiscard]] bool CaseSelectionSurvivesFailure(V2MainWindow& window)
+{
+    // 失敗しても、いま選んでいる道具は変わらないこと。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Circle);
+    const auto before = window.Session().CurrentTool();
+    for (int round = 0; round < 3; ++round) {
+        window.RunCommand("export.step");
+        window.RunCommand("part.from_wire_cage");
+    }
+    return window.Session().CurrentTool() == before;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -179,6 +228,9 @@ const SelfTestCase kCases[] = {
     {"台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
     {"メニューが台帳から出来ている", &CaseMenusComeFromCatalog},
     {"使えないコマンドは理由を出す", &CaseDisabledCommandsExplain},
+    {"案内が6つそろっている", &CaseGuideIsComplete},
+    {"失敗しても続き、文書が変わらない", &CaseFailureRecovery},
+    {"失敗しても選んだ道具が変わらない", &CaseSelectionSurvivesFailure},
 };
 
 } // namespace

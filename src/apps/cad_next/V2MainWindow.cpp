@@ -2,6 +2,7 @@
 
 #include "Win95Style.h"
 
+#include "kachakacha/app/OperationGuide.h"
 #include "kachakacha/base/Version.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/CurveSegment.h"
@@ -287,10 +288,34 @@ void V2MainWindow::SelectTool(DrawingTool tool)
         toolLabel_->setText(QStringLiteral("道具: %1").arg(ToolLabel(tool)));
     }
     // 案内文は core が持っている。画面で作らない。
+    // 道具の名前・いまの手順・次の手順・決め方・やめ方・選択数の6つを必ず出す。
+    RefreshGuide();
+    viewport_->update();
+}
+
+void V2MainWindow::RefreshGuide()
+{
+    const DrawingTool tool = session_->CurrentTool();
+    std::string_view commandId = "selection.activate";
+    for (const ToolBinding& binding : kToolBindings) {
+        if (binding.tool == tool) {
+            commandId = binding.commandId;
+            break;
+        }
+    }
+    const CommandDescriptor* command = FindCommand(commandId);
+    if (command == nullptr) {
+        return;
+    }
+    // いまの進み具合はツールが持っている。画面で数え直さない。
     const auto hover = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
         viewport_->width() * 0.5, viewport_->height() * 0.5});
-    SetStatus(QString::fromUtf8(hover.messageJa.c_str()));
-    viewport_->update();
+    kachakacha::v2::modeling::ToolPrompt prompt;
+    prompt.messageJa = hover.messageJa;
+    prompt.canFinish = true;
+    const auto guide = kachakacha::v2::app::BuildGuide(*command, prompt,
+        selectionCount_, true);
+    SetStatus(QString::fromUtf8(guide.ToStatusLine().c_str()));
 }
 
 void V2MainWindow::SetStatus(const QString& text)

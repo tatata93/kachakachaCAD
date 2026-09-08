@@ -77,6 +77,8 @@ private:
     void BuildToolPalette();
     void BuildPanels();
     void RefreshEntityList();
+    //! 案内を作り直して画面へ出す。6つがそろった形で出す(AT-UIX-002)。
+    void RefreshGuide();
     void SetStatus(const QString& text);
     void AddDiagnostic(const QString& codeAndText);
     void ClearDiagnostics();
@@ -91,6 +93,7 @@ private:
     QLabel* toolLabel_ = nullptr;
     UiTheme theme_ = UiTheme::Normal;
     bool snapEnabled_ = true;
+    int selectionCount_ = 0;
     std::vector<QAction*> toolActions_;
     //! 台帳のIDから作った QAction。並びは台帳と同じ。
     std::vector<std::pair<std::string_view, QAction*>> commandActions_;

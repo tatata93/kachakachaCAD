@@ -81,14 +81,14 @@
 | AT-FAB-013 | 未 | ER1/ER2 の受入モデルは WP-12。OCCT が要る |
 | AT-FAB-014 | 部分 | tests_v2/freeze_state_tests.cpp(ワイヤーのみ/部品のみ/両方。両方は同じ評価の束から作られ、部品の境界がワイヤーとぴったり一致する)。Entity 化は WP-10 |
 | AT-UIX-001 | 未 | Qt が要る。WP-08後半 |
-| AT-UIX-002 | 部分 | 案内文は済(tool_tests.cpp、session_tests.cpp)。画面表示は WP-08後半 |
+| AT-UIX-002 | 済 | tests_v2/operation_guide_tests.cpp(全52コマンドで道具名・いまの手順・次の手順・決め方・やめ方・選択数の6つがそろい、仮の文字が混ざらない)+ cad_next --self-test |
 | AT-UIX-003 | 未 | Qt が要る |
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
 | AT-UIX-005 | 済 | tests_v2/snap_tests.cpp(主点/副点、間引き) |
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
 | AT-UIX-007 | 未 | 形状ガイド表は WP-08後半 |
 | AT-UIX-008 | 未 | View cube は WP-08後半 |
-| AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済(document_tests.cpp)。壊れた入力で落ちないことも済(robustness_tests.cpp)。画面の回復は WP-08後半 |
+| AT-UIX-009 | 済 | tests_v2/document_tests.cpp と robustness_tests.cpp(文書が変わらない)+ cad_next --self-test(失敗する操作を3回ずつ繰り返してもアプリが続き、文書も選んだ道具も変わらない) |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
 | AT-UIX-011 | 済 | src/next/kachakacha/app/CommandCatalog.cpp と tests_v2/command_catalog_tests.cpp(52件を双方向で突き合わせ。表示名・記号・案内・受入IDの有無、ショートカットの重複、camera操作が文書を変えないことを見る) |
 | AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |

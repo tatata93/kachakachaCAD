@@ -626,6 +626,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
@@ -705,6 +706,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(broken_reference_tests tests_v2/broken_reference_tests.cpp)
     kachakacha_add_v2_test(process_step_tests tests_v2/process_step_tests.cpp)
     kachakacha_add_v2_test(export_service_tests tests_v2/export_service_tests.cpp)
+    kachakacha_add_v2_test(acceptance_er_tests tests_v2/acceptance_er_tests.cpp)
     kachakacha_add_v2_test(theme_layout_tests tests_v2/theme_layout_tests.cpp)
     kachakacha_add_v2_test(plane_follow_tests tests_v2/plane_follow_tests.cpp)
     kachakacha_add_v2_test(point_source_tests tests_v2/point_source_tests.cpp)
@@ -759,6 +761,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_er_export_tests tests_v2/kernel_er_export_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_export_tests tests_v2/kernel_export_tests.cpp)
 endif()
 

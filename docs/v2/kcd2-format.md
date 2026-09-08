@@ -789,3 +789,131 @@ WP-05はこの文書から `src/core/kachakacha/io/schema/kcd-v2.schema.json` �
 5. schemaを配布zipの `docs/` へ含める。
 
 この文書とschemaが矛盾する場合は、この文書を先に修正し、同じcommitでschemaを更新する。
+
+## 19. WP-05実装で確定した点
+
+この節はWP-05の実装(`src/next/kachakacha/io/DocumentFile.*`)で確定した内容であり、
+上の各節と食い違う場合はこの節を正とする。次の実装WPで上の節へ吸収する。
+
+### 19.1 ZIP診断コード
+
+```text
+KCD2-Z001  entry名が安全でない(絶対path、drive letter、`..`、backslash、制御文字、空区間)
+KCD2-Z002  同名entry
+KCD2-Z003  構造が途切れている(目録、局所ヘッダ、実データ)
+KCD2-Z004  対応していない圧縮方式(このソフトはstoredだけを書く)
+KCD2-Z005  CRC-32が合わない
+KCD2-Z006  上限超過(entry数、1entryの大きさ、合計、展開倍率)
+KCD2-Z007  ZIPではない
+KCD2-Z008  目録と局所ヘッダでentry名が食い違う
+```
+
+Z008は本仕様の追加である。ZIPはentry名に検査値を持たないため、名前が1バイト化けても
+別名として通ってしまう。局所ヘッダと中央ディレクトリの2箇所に同じ名前が書かれるので、
+読込時に突き合わせる。書き出しは日時を固定値(time=0, date=0x21)にし、
+同じ入力から必ず同じバイト列を出す。
+
+### 19.2 document.json診断コード
+
+```text
+KCD2-D001  format / schemaVersion が違う(このソフトの文書ではない)
+KCD2-D002  型違い、範囲外、UUIDとして不正、有限でない数
+KCD2-D003  知らないenum
+KCD2-D004  参照切れ、重複ID、構造の矛盾
+KCD2-D005  書庫に document.json が無い
+KCD2-D100  警告(この版がまだ扱えない指示のdefinitionを保持した、など)
+```
+
+JSON層の診断(`KCD2-J001`〜`J004`)はそのまま透過する。
+
+### 19.3 §4ルートへの追加key
+
+- `tolerances` に `displayPickPx` と `candidateMenuPx` を含める(GeometryToleranceの全項目)。
+  この2つは省略可能で、欠けた場合は既定値を使う。他の4つは必須とし、正でなければ拒否する。
+- `revision` は0以上の整数でなければならない。負・小数は拒否する。
+
+### 19.4 §6 EntityRecordへの追加key
+
+- `construction`(bool、必須ではない。既定false)。V1の補助線と同等の意味を持つ。
+- `partProperties.manufacturing` に `colorName`(string)と `layerCount`(1以上の整数)を含める。
+  `layerCount` はD-3の積層を専用オブジェクトなしで表すためのもの。
+- `partProperties` はkind=`part` でobject必須、他kindではnull必須。どちらの違反も拒否する。
+
+### 19.5 §7 FeatureRecordへの追加key
+
+- `inputEntityIds`(配列、必須)。DAGの辺をここから作る。
+  §7の例には無かったが、`definition` から辺を再構成すると未実装Featureの辺が消えるため、
+  明示的に持つ。
+
+### 19.6 実装済みdefinitionの形
+
+`create_point`:
+
+```json
+{
+  "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+  "sourcePlaneId": null,
+  "expressions": {
+    "x": {"expression": "10*2", "value": 20.0, "quantity": "length"},
+    "y": {"expression": "0", "value": 0.0, "quantity": "length"},
+    "z": {"expression": "0", "value": 0.0, "quantity": "length"}
+  }
+}
+```
+
+`expressions` の各値は §9.1 になかったが、PRD-092(式を再編集できること)のために必須とする。
+`quantity` は `length | angle | scalar`。
+
+`create_wire`:
+
+```json
+{
+  "wire": {"segments": [], "closed": false},
+  "sourcePlaneId": null,
+  "construction": false
+}
+```
+
+`transform_wire`:
+
+```json
+{
+  "method": "rotate",
+  "inputs": [],
+  "parameters": {
+    "vector": {"x": 0.0, "y": 0.0, "z": 1.0},
+    "point": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "scalar": {"expression": "deg(30)", "value": 0.5235987755982988, "quantity": "angle"}
+  }
+}
+```
+
+method enumは `move copy rotate mirror trim extend split join fillet chamfer offset
+meet_lines coincident tangent curvature`。
+
+`freeze_derived`:
+
+```json
+{"sources": []}
+```
+
+未実装のFeature type(`create_work_plane` `project_wire` `create_guide_surface` `extrude`
+`create_part_from_wire_cage` `boolean` `create_fabrication_model` `create_pattern`)は
+`definition` を空objectとして書く。空でないものを読んだ場合はKCD2-D100の警告を付けて保持し、
+値は捨てない。実装したWPでこの節を更新する。
+
+### 19.7 §8.2 Segmentの現状
+
+`CurveSegment` は一様3次B-splineだけを持つため、`knots` `multiplicities` `weights` は
+まだ書かない。`cubic_b_spline` は `degree`(常に3)、`controlPoints`、`periodic`(常にfalse)を持つ。
+非一様・有理B-splineをWP-06で扱えるようにした時点で、この節と§8.2を同時に更新する。
+`provenance` も同様に未実装であり、書かない。
+
+読込は「近い形へ黙って直さない」。半径0の円弧、掃引角0、長さ0の直線、制御点不足のBezier、
+零ベクトルの法線は、どれも折れ線などへ代替せずKCD2-D002で拒否する。
+
+### 19.8 未知entryの扱い
+
+`document.json` 以外のentryは、この版が意味を知らないものも含めて読み込み時に保持し、
+保存し直したときにそのまま書き戻す。新しい版が付けたサムネイルや追加データを、
+古い版で開いて保存しただけで失わないため。

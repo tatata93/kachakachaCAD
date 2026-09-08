@@ -555,6 +555,8 @@ endif()
 
 add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CommandCatalog.cpp
+    src/next/kachakacha/app/CursorInput.cpp
+    src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
     src/next/kachakacha/app/UiMode.cpp
@@ -688,6 +690,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(ui_mode_tests tests_v2/ui_mode_tests.cpp)
     kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
+    kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
@@ -698,6 +701,18 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(atomic_file_tests tests_v2/atomic_file_tests.cpp)
 
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
+
+    # 画面のコードの型検査。Qt の当て木だけで -fsyntax-only を通す。
+    # 雲(Qt が入らない)でも、core の関数名の取り違えをここで捕まえる。
+    # 本物の組み立てと画面の試験は、Qt のある側で行う。
+    if(UNIX)
+        add_test(
+            NAME v2_qt_stub_typecheck
+            COMMAND ${CMAKE_SOURCE_DIR}/tools/qtstub/typecheck.sh
+                ${CMAKE_SOURCE_DIR} ${CMAKE_CXX_COMPILER}
+        )
+        set_tests_properties(v2_qt_stub_typecheck PROPERTIES TIMEOUT 300)
+    endif()
 
     # カーネル層に触る試験。OCCT が無い構成でも「無いと断る」ことを確かめるため常に作る。
     # OCCT 有りのときは、実行時に OCCT のDLLが見えるように PATH を足して走らせる。

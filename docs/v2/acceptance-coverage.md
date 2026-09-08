@@ -82,7 +82,7 @@
 | AT-FAB-014 | 部分 | tests_v2/freeze_state_tests.cpp(ワイヤーのみ/部品のみ/両方。両方は同じ評価の束から作られ、部品の境界がワイヤーとぴったり一致する)。Entity 化は WP-10 |
 | AT-UIX-001 | 済 | tests_v2/ui_mode_tests.cpp(4モードだけ。旧「面/板材」が無い。台帳の全コマンドがどこかのモードに出る)+ cad_next --self-test(モードを変えても選択・文書が変わらず、出るコマンドだけが変わる) |
 | AT-UIX-002 | 済 | tests_v2/operation_guide_tests.cpp(全52コマンドで道具名・いまの手順・次の手順・決め方・やめ方・選択数の6つがそろい、仮の文字が混ざらない)+ cad_next --self-test |
-| AT-UIX-003 | 未 | Qt が要る |
+| AT-UIX-003 | 済 | tests_v2/cursor_input_tests.cpp(道具ごとに主要欄がちょうど1つで、そこへ自動で焦点が合う。Tab/Shift+Tabで回る。式は全角でも通り「(180/2)*3 = 270 mm」の形で式と値を並べて出す。確定した欄はマウスで動かず、未確定の欄だけ追随する。長さ+角度・du+dv・長さ+du の各組で解け、短すぎる長さは必要な値を言って断り、矛盾すれば最後の変更だけ確定しない。画面の右下・角・入力列より狭い画面のどれでも画面外へ出ない) + cad_next --self-test(焦点と式、Tab/Enter/Esc、画面端での再配置) |
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
 | AT-UIX-005 | 済 | tests_v2/grid_tests.cpp(1/2・1/3・1/4の点数、主副の間隔、細かすぎる副点の省略、UV での原点保持、作業平面が動いても付いていく、壊れた平面参照を別平面へ付け替えない) |
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |

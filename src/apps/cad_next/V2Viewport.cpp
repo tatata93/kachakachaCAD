@@ -817,6 +817,134 @@ void V2Viewport::DrawViewCube(QPainter& painter) const
     painter.restore();
 }
 
+namespace {
+
+//! 入力列の見た目の大きさ。欄の数で高さが決まる。
+constexpr double kCursorRowHeightPx = 18.0;
+constexpr double kCursorPanelWidthPx = 210.0;
+constexpr double kCursorPanelPaddingPx = 6.0;
+
+} // namespace
+
+bool V2Viewport::OpenCursorInput()
+{
+    const auto begun = kachakacha::v2::app::BeginCursorInput(session_->CurrentTool(),
+        workPlane_.normal.LengthSquared() > 0.0);
+    if (!begun.HasValue()) {
+        viewMessage_ = begun.Diagnostics().front().summaryJa;
+        return false;
+    }
+    cursorPanel_ = begun.Value();
+    cursorAnchor_ = Vector3{};
+    update();
+    return true;
+}
+
+void V2Viewport::CloseCursorInput()
+{
+    cursorPanel_ = kachakacha::v2::app::CancelCursorInput(cursorPanel_);
+    update();
+}
+
+bool V2Viewport::FocusNextCursorField(bool backward)
+{
+    const auto moved = kachakacha::v2::app::FocusNextField(cursorPanel_, backward);
+    if (!moved.HasValue()) {
+        viewMessage_ = moved.Diagnostics().front().summaryJa;
+        return false;
+    }
+    cursorPanel_ = moved.Value();
+    update();
+    return true;
+}
+
+bool V2Viewport::TypeIntoCursorField(const QString& text)
+{
+    const auto typed = kachakacha::v2::app::SetFieldText(cursorPanel_,
+        cursorPanel_.focusedIndex, text.toStdString());
+    if (!typed.HasValue()) {
+        viewMessage_ = typed.Diagnostics().front().summaryJa;
+        return false;
+    }
+    cursorPanel_ = typed.Value();
+    update();
+    return true;
+}
+
+bool V2Viewport::CommitCursorField()
+{
+    const auto committed = kachakacha::v2::app::CommitFocusedField(cursorPanel_,
+        cursorAnchor_);
+    if (!committed.HasValue()) {
+        // 断られたら、その欄を赤くして理由を出す。入力列は閉じない。
+        const std::size_t at = cursorPanel_.focusedIndex;
+        if (at < cursorPanel_.states.size()) {
+            cursorPanel_.states[at].error = true;
+            cursorPanel_.states[at].messageJa =
+                committed.Diagnostics().front().summaryJa;
+        }
+        viewMessage_ = committed.Diagnostics().front().summaryJa;
+        if (statusCallback_) {
+            statusCallback_(viewMessage_);
+        }
+        update();
+        return false;
+    }
+    cursorPanel_ = committed.Value().panel;
+    viewMessage_.clear();
+    update();
+    return true;
+}
+
+QRectF V2Viewport::CursorPanelRect() const
+{
+    const double rows = static_cast<double>(std::max<std::size_t>(1,
+        cursorPanel_.fields.size()));
+    const double panelHeight = kCursorPanelPaddingPx * 2.0 + kCursorRowHeightPx * rows;
+    const auto placement = kachakacha::v2::app::PlaceCursorPanel(cursorPosition_.x(),
+        cursorPosition_.y(), kCursorPanelWidthPx, panelHeight,
+        static_cast<double>(std::max(1, width())),
+        static_cast<double>(std::max(1, height())));
+    return QRectF(placement.xPx, placement.yPx, kCursorPanelWidthPx, panelHeight);
+}
+
+void V2Viewport::DrawCursorInput(QPainter& painter) const
+{
+    if (!cursorPanel_.active || cursorPanel_.fields.empty()) {
+        return;
+    }
+    const QRectF box = CursorPanelRect();
+    painter.save();
+    QColor backing = palette_.background;
+    backing.setAlpha(230);
+    painter.setBrush(backing);
+    painter.setPen(QPen(palette_.gridMajor, 1.0));
+    painter.drawRect(box);
+    for (std::size_t index = 0; index < cursorPanel_.fields.size(); ++index) {
+        const auto& field = cursorPanel_.fields[index];
+        const auto& state = cursorPanel_.states[index];
+        const double top = box.top() + kCursorPanelPaddingPx
+            + kCursorRowHeightPx * static_cast<double>(index);
+        const QRectF row(box.left() + kCursorPanelPaddingPx, top,
+            box.width() - kCursorPanelPaddingPx * 2.0, kCursorRowHeightPx);
+        if (index == cursorPanel_.focusedIndex) {
+            QColor focus = palette_.selected;
+            focus.setAlpha(60);
+            painter.fillRect(row, focus);
+        }
+        // 赤表示は「その欄が合っていない」印。入力列は消さない。
+        painter.setPen(QPen(state.error ? QColor(0xE0, 0x40, 0x40)
+                                        : (state.locked ? palette_.selected : palette_.text),
+            1.0));
+        painter.drawText(row, Qt::AlignLeft | Qt::AlignVCenter,
+            QString::fromStdString(field.labelJa));
+        painter.drawText(row, Qt::AlignRight | Qt::AlignVCenter,
+            QString::fromStdString(
+                kachakacha::v2::app::FieldDisplayJa(field, state)));
+    }
+    painter.restore();
+}
+
 void V2Viewport::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
@@ -830,11 +958,29 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawSnap(painter);
     DrawScaleBar(painter);
     DrawViewCube(painter);
+    DrawCursorInput(painter);
 }
 
 void V2Viewport::HoverAt(const QPointF& position)
 {
+    cursorPosition_ = position;
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
+    if (cursorPanel_.active) {
+        // 入力中もマウスでプレビューは動く。ロックした欄だけは動かない。
+        const auto point = mapping_.UnprojectOntoPlane(
+            ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
+        if (point.has_value()) {
+            const Vector3 world = *point - workPlane_.origin;
+            cursorAnchor_ = Vector3{workPlane_.CoordinateU(*point),
+                workPlane_.CoordinateV(*point), 0.0};
+            (void)world;
+            const auto moved = kachakacha::v2::app::UpdateFromPointer(cursorPanel_,
+                cursorAnchor_);
+            if (moved.HasValue()) {
+                cursorPanel_ = moved.Value();
+            }
+        }
+    }
     status_ = hover_.messageJa;
     if (statusCallback_) {
         statusCallback_(status_);
@@ -942,8 +1088,31 @@ void V2Viewport::wheelEvent(QWheelEvent* event)
 void V2Viewport::keyPressEvent(QKeyEvent* event)
 {
     if (event->key() == Qt::Key_Escape) {
+        // Esc は1回だけ。入力列を閉じて、道具も取り消す。別の処理を2段目に作らない。
+        CloseCursorInput();
         CancelTool();
         return;
+    }
+    if (cursorPanel_.active
+        && (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab)) {
+        (void)FocusNextCursorField(event->key() == Qt::Key_Backtab
+            || (event->modifiers() & Qt::ShiftModifier) != 0);
+        return;
+    }
+    if (cursorPanel_.active
+        && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        if (CommitCursorField()) {
+            FinishTool();
+        }
+        return;
+    }
+    if (cursorPanel_.active && !event->text().isEmpty()) {
+        const std::size_t at = cursorPanel_.focusedIndex;
+        const QString grown = QString::fromStdString(cursorPanel_.states[at].text)
+            + event->text();
+        if (TypeIntoCursorField(grown)) {
+            return;
+        }
     }
     if (event->key() == Qt::Key_Backspace) {
         if (session_->UndoLastPoint()) {

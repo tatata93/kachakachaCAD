@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
+#include "kachakacha/app/CursorInput.h"
 
 #include <QColor>
 #include <QPointF>
@@ -121,6 +122,24 @@ public:
     void ReleaseViewCube(const QPointF& position);
     [[nodiscard]] bool ViewCubeDragging() const { return cubeDrag_.active; }
 
+    //! カーソル連動の数値入力(AT-UIX-003)。欄立ても解き方も core が持つ。
+    [[nodiscard]] const kachakacha::v2::app::CursorInputPanel& CursorPanel() const
+    {
+        return cursorPanel_;
+    }
+    //! 最初の点を置いた直後に出す。出せない道具なら false。
+    bool OpenCursorInput();
+    //! いまの欄へ文字を入れる。
+    bool TypeIntoCursorField(const QString& text);
+    //! Tab / Shift+Tab。
+    bool FocusNextCursorField(bool backward);
+    //! Enter。確定できたら true。
+    bool CommitCursorField();
+    //! Esc。入力列を閉じる。
+    void CloseCursorInput();
+    //! 入力列を出す場所。画面端では左または上へ寄る。
+    [[nodiscard]] QRectF CursorPanelRect() const;
+
     //! XYZ回転矢印。感度は core が決める。
     bool RotateByArrow(kachakacha::v2::view::RotationAxis axis,
         kachakacha::v2::view::RotationAxisMode mode,
@@ -148,6 +167,7 @@ private:
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
+    void DrawCursorInput(QPainter& painter) const;
     void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
         const QPointF& center, double scale) const;
 
@@ -176,6 +196,9 @@ private:
     bool cubeMoved_ = false;
     std::optional<kachakacha::v2::view::ViewCubeZone> cubeHoverZone_;
     std::optional<kachakacha::v2::view::Quaternion> selectionFrame_;
+    kachakacha::v2::app::CursorInputPanel cursorPanel_;
+    QPointF cursorPosition_;
+    kachakacha::v2::geometry::Vector3 cursorAnchor_{};
     std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     kachakacha::v2::geometry::Vector3 center_{};

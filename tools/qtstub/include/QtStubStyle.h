@@ -1,0 +1,1 @@
+../QtStubStyle.h

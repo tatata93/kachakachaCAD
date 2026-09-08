@@ -1,0 +1,303 @@
+#pragma once
+//! Qt の当て木、部品の側。宣言だけ。
+#include "QtStubGui.h"
+
+class QObject {
+public:
+    QObject() = default;
+    explicit QObject(QObject*) {}
+    virtual ~QObject() = default;
+    void setObjectName(const QString&);
+    [[nodiscard]] QString objectName() const;
+    [[nodiscard]] QObject* parent() const;
+    void setParent(QObject*);
+    template<class Sender, class Signal, class Slot>
+    static void connect(Sender, Signal, Slot) {}
+    template<class Sender, class Signal, class Context, class Slot>
+    static void connect(Sender, Signal, Context, Slot) {}
+};
+
+class QStyle;
+class QLayout;
+
+class QWidget : public QObject, public QPaintDevice {
+public:
+    QWidget() = default;
+    explicit QWidget(QWidget*) {}
+    [[nodiscard]] int width() const;
+    [[nodiscard]] int height() const;
+    [[nodiscard]] QRect rect() const;
+    using QPaintDevice::width;
+    [[nodiscard]] QSize size() const;
+    [[nodiscard]] QPalette palette() const;
+    [[nodiscard]] QFont font() const;
+    [[nodiscard]] bool isVisible() const;
+    [[nodiscard]] QWidget* window();
+    [[nodiscard]] QPixmap grab();
+    [[nodiscard]] double devicePixelRatioF() const;
+    void setPalette(const QPalette&);
+    void setFont(const QFont&);
+    void setStyleSheet(const QString&);
+    [[nodiscard]] QString styleSheet() const;
+    void setStyle(QStyle*);
+    void setMouseTracking(bool);
+    void setFocusPolicy(Qt::FocusPolicy);
+    void setMinimumSize(int, int);
+    void setMinimumWidth(int);
+    void setFixedSize(int, int);
+    void setWindowTitle(const QString&);
+    void setLayout(QLayout*);
+    void setEnabled(bool);
+    void setVisible(bool);
+    void resize(int, int);
+    void resize(const QSize&);
+    void show();
+    void hide();
+    bool close();
+    void update();
+    void repaint();
+    void render(QPaintDevice*);
+    void setAttribute(int, bool = true);
+    virtual void paintEvent(QPaintEvent*);
+    virtual void mouseMoveEvent(QMouseEvent*);
+    virtual void mousePressEvent(QMouseEvent*);
+    virtual void mouseReleaseEvent(QMouseEvent*);
+    virtual void wheelEvent(QWheelEvent*);
+    virtual void keyPressEvent(QKeyEvent*);
+    virtual void resizeEvent(QResizeEvent*);
+};
+
+class QLayout : public QObject {
+public:
+    void addWidget(QWidget*);
+    void setContentsMargins(int, int, int, int);
+    void setSpacing(int);
+};
+class QBoxLayout : public QLayout {
+public:
+    void addStretch(int = 0);
+};
+class QVBoxLayout : public QBoxLayout {
+public:
+    QVBoxLayout() = default;
+    explicit QVBoxLayout(QWidget*) {}
+};
+class QHBoxLayout : public QBoxLayout {
+public:
+    QHBoxLayout() = default;
+    explicit QHBoxLayout(QWidget*) {}
+};
+
+class QAction : public QObject {
+public:
+    QAction() = default;
+    explicit QAction(QObject*) {}
+    QAction(const QString&, QObject*) {}
+    void setText(const QString&);
+    [[nodiscard]] QString text() const;
+    void setShortcut(const QKeySequence&);
+    [[nodiscard]] QKeySequence shortcut() const;
+    void setCheckable(bool);
+    void setChecked(bool);
+    [[nodiscard]] bool isChecked() const;
+    void setEnabled(bool);
+    [[nodiscard]] bool isEnabled() const;
+    void setVisible(bool);
+    [[nodiscard]] bool isVisible() const;
+    void setToolTip(const QString&);
+    [[nodiscard]] QString toolTip() const;
+    void setStatusTip(const QString&);
+    void setIcon(const QIcon&);
+    void setData(const QVariant&);
+    [[nodiscard]] QVariant data() const;
+    void trigger();
+    void (*triggered)(bool);
+};
+
+class QMenu : public QWidget {
+public:
+    QMenu() = default;
+    explicit QMenu(QWidget*) {}
+    QMenu(const QString&, QWidget*) {}
+    QAction* addAction(const QString&);
+    void addAction(QAction*);
+    template<class Receiver, class Slot>
+    QAction* addAction(const QString&, Receiver, Slot) { return nullptr; }
+    QAction* addSeparator();
+    QMenu* addMenu(const QString&);
+    [[nodiscard]] std::vector<QAction*> actions() const;
+    [[nodiscard]] QString title() const;
+};
+
+class QMenuBar : public QWidget {
+public:
+    QMenu* addMenu(const QString&);
+    void addAction(QAction*);
+    [[nodiscard]] std::vector<QAction*> actions() const;
+};
+
+class QToolBar : public QWidget {
+public:
+    QToolBar() = default;
+    explicit QToolBar(QWidget*) {}
+    QToolBar(const QString&, QWidget*) {}
+    void addAction(QAction*);
+    QAction* addAction(const QString&);
+    QAction* addSeparator();
+    void setToolButtonStyle(Qt::ToolButtonStyle);
+    void setMovable(bool);
+    void setOrientation(Qt::Orientation);
+    [[nodiscard]] std::vector<QAction*> actions() const;
+};
+
+class QStatusBar : public QWidget {
+public:
+    void addWidget(QWidget*, int = 0);
+    void addPermanentWidget(QWidget*, int = 0);
+    void showMessage(const QString&, int = 0);
+};
+
+class QLabel : public QWidget {
+public:
+    QLabel() = default;
+    explicit QLabel(QWidget*) {}
+    QLabel(const QString&, QWidget* = nullptr) {}
+    void setText(const QString&);
+    [[nodiscard]] QString text() const;
+    void setAlignment(Qt::Alignment);
+    void setWordWrap(bool);
+};
+
+class QListWidgetItem {
+public:
+    QListWidgetItem() = default;
+    explicit QListWidgetItem(const QString&) {}
+    [[nodiscard]] QString text() const;
+    void setText(const QString&);
+    void setForeground(const QColor&);
+};
+
+class QAbstractScrollArea : public QWidget {
+public:
+    void setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy);
+    void setVerticalScrollBarPolicy(Qt::ScrollBarPolicy);
+};
+
+class QAbstractItemView : public QAbstractScrollArea {
+public:
+    enum SelectionMode { NoSelection, SingleSelection, MultiSelection, ExtendedSelection };
+    void setSelectionMode(SelectionMode);
+    void setAlternatingRowColors(bool);
+};
+
+class QListWidget : public QAbstractItemView {
+public:
+    QListWidget() = default;
+    explicit QListWidget(QWidget*) {}
+    void addItem(const QString&);
+    void addItem(QListWidgetItem*);
+    void clear();
+    [[nodiscard]] int count() const;
+    [[nodiscard]] QListWidgetItem* item(int) const;
+    [[nodiscard]] QListWidgetItem* currentItem() const;
+};
+
+class QTreeWidgetItem {
+public:
+    QTreeWidgetItem() = default;
+    explicit QTreeWidgetItem(class QTreeWidget*) {}
+    explicit QTreeWidgetItem(QTreeWidgetItem*) {}
+    void setText(int, const QString&);
+    [[nodiscard]] QString text(int) const;
+    void setForeground(int, const QColor&);
+    void setData(int, int, const QVariant&);
+    [[nodiscard]] QVariant data(int, int) const;
+    void addChild(QTreeWidgetItem*);
+    [[nodiscard]] int childCount() const;
+    [[nodiscard]] QTreeWidgetItem* child(int) const;
+    void setExpanded(bool);
+};
+
+class QTreeWidget : public QAbstractItemView {
+public:
+    QTreeWidget() = default;
+    explicit QTreeWidget(QWidget*) {}
+    void setColumnCount(int);
+    void setHeaderLabels(const QStringList&);
+    void setRootIsDecorated(bool);
+    void addTopLevelItem(QTreeWidgetItem*);
+    void clear();
+    [[nodiscard]] int topLevelItemCount() const;
+    [[nodiscard]] QTreeWidgetItem* topLevelItem(int) const;
+    [[nodiscard]] QTreeWidgetItem* currentItem() const;
+    void expandAll();
+    void resizeColumnToContents(int);
+};
+
+class QDockWidget : public QWidget {
+public:
+    QDockWidget() = default;
+    QDockWidget(const QString&, QWidget* = nullptr) {}
+    void setWidget(QWidget*);
+    [[nodiscard]] QWidget* widget() const;
+    void setFeatures(int);
+    void setAllowedAreas(Qt::DockWidgetAreas);
+};
+
+namespace Qt {
+enum ToolBarArea { LeftToolBarArea = 1, RightToolBarArea = 2, TopToolBarArea = 4,
+    BottomToolBarArea = 8 };
+}
+
+class QMainWindow : public QWidget {
+public:
+    QMainWindow() = default;
+    explicit QMainWindow(QWidget*) {}
+    QMenuBar* menuBar();
+    QStatusBar* statusBar();
+    void setCentralWidget(QWidget*);
+    [[nodiscard]] QWidget* centralWidget() const;
+    void addToolBar(QToolBar*);
+    QToolBar* addToolBar(const QString&);
+    void addToolBarBreak();
+    void addToolBar(Qt::ToolBarArea, QToolBar*);
+    void addDockWidget(Qt::DockWidgetArea, QDockWidget*);
+    void addAction(QAction*);
+};
+
+class QTabBar : public QWidget {
+public:
+    enum Shape { RoundedNorth, RoundedSouth };
+};
+
+class QCoreApplication : public QObject {
+public:
+    static void setApplicationName(const QString&);
+    static QStringList arguments();
+    static int exec();
+    static void processEvents();
+};
+
+class QGuiApplication : public QCoreApplication {
+public:
+    static void setPalette(const QPalette&);
+    static QPalette palette();
+    static void setFont(const QFont&);
+};
+
+class QStyle;
+class QApplication : public QGuiApplication {
+public:
+    QApplication(int&, char**) {}
+    static void setStyle(QStyle*);
+    static QStyle* style();
+    static void setPalette(const QPalette&);
+    static void setFont(const QFont&);
+    static QPalette palette();
+    static QFont font();
+    static void processEvents();
+    static int exec();
+    static QWidget* activeWindow();
+    static std::vector<QWidget*> topLevelWidgets();
+    static std::vector<QWidget*> allWidgets();
+};

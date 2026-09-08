@@ -14,6 +14,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "Win95Style.h"
 
+#include "kachakacha/app/CursorInput.h"
 #include "kachakacha/base/Version.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/kernel/KernelInfo.h"
@@ -21,6 +22,7 @@
 #include <QApplication>
 #include <QColor>
 #include <QPointF>
+#include <QRectF>
 #include <QImage>
 #include <QPainter>
 #include <QStringList>
@@ -382,7 +384,7 @@ struct SelfTestCase {
     }
     // 表の色は core の式そのもの。3Dも同じ式を見るので必ず一致する。
     const auto views = kachakacha::v2::modeling::BuildGuideTableView(
-        window.GuideRoleTable(), window.Session().GetDocument().Snapshot().tolerance);
+        window.GuideRoleTable(), window.Session().GetDocument().Snapshot().settings.tolerance);
     for (int row = 0; row < window.GuideRowCount(); ++row) {
         const auto& color = views[static_cast<std::size_t>(row)].color;
         if (window.GuideRowColor(row) != QColor(color.red, color.green, color.blue)) {
@@ -424,6 +426,87 @@ struct SelfTestCase {
     return window.GuideRowCount() == before && window.DiagnosticRowCount() > diagnostics;
 }
 
+[[nodiscard]] bool CaseCursorInputFocusAndExpression(V2MainWindow& window)
+{
+    // 最初の主要欄へ焦点が合い、式が評価され、式と値が並んで出る(AT-UIX-003)。
+    if (!window.ApplyManualState(QStringLiteral("cursor-input"))) {
+        return false;
+    }
+    const auto& panel = window.Viewport().CursorPanel();
+    if (!panel.active || panel.fields.empty()) {
+        return false;
+    }
+    std::size_t lengthAt = panel.fields.size();
+    for (std::size_t index = 0; index < panel.fields.size(); ++index) {
+        if (panel.fields[index].id == "length") {
+            lengthAt = index;
+        }
+    }
+    if (lengthAt == panel.fields.size() || !panel.states[lengthAt].locked) {
+        return false;
+    }
+    if (std::abs(panel.states[lengthAt].value - 270.0) > 1.0e-9) {
+        return false;
+    }
+    return kachakacha::v2::app::FieldDisplayJa(panel.fields[lengthAt],
+               panel.states[lengthAt])
+        == "(180/2)*3 = 270 mm";
+}
+
+[[nodiscard]] bool CaseCursorInputTabEnterEscape(V2MainWindow& window)
+{
+    // Tab で欄が回り、Enter で確定し、Esc で入力列ごと消える。
+    if (!window.ApplyManualState(QStringLiteral("cursor-input"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const std::size_t before = viewport.CursorPanel().focusedIndex;
+    if (!viewport.FocusNextCursorField(false)) {
+        return false;
+    }
+    const std::size_t after = viewport.CursorPanel().focusedIndex;
+    if (after == before) {
+        return false;
+    }
+    if (!viewport.FocusNextCursorField(true) || viewport.CursorPanel().focusedIndex != before) {
+        return false;
+    }
+    // いまの欄には 30deg が入っている。Enter で確定する。
+    if (!viewport.CommitCursorField()) {
+        return false;
+    }
+    if (!viewport.CursorPanel().states[before].locked) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Snapshot().revision;
+    viewport.CloseCursorInput();
+    if (viewport.CursorPanel().active) {
+        return false;
+    }
+    // Esc で消しても文書は変わらない。
+    return window.Session().GetDocument().Snapshot().revision == revision;
+}
+
+[[nodiscard]] bool CaseCursorInputStaysOnScreen(V2MainWindow& window)
+{
+    // 入力列が画面外へ出そうなときは、左または上へ寄る。
+    if (!window.ApplyManualState(QStringLiteral("cursor-input"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const QRectF middle = viewport.CursorPanelRect();
+    if (middle.left() < 0.0 || middle.top() < 0.0) {
+        return false;
+    }
+    // 右下の角へ寄せる。
+    viewport.HoverAt(QPointF(viewport.width() - 2.0, viewport.height() - 2.0));
+    const QRectF corner = viewport.CursorPanelRect();
+    if (corner.right() > viewport.width() || corner.bottom() > viewport.height()) {
+        return false;
+    }
+    return corner.left() >= 0.0 && corner.top() >= 0.0 && corner.left() < middle.left();
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -447,6 +530,9 @@ const SelfTestCase kCases[] = {
     {"回転矢印はカメラだけを回す", &CaseAxisArrowsRotateCameraOnly},
     {"役割テーブルが役割と接続を出す", &CaseGuideTableShowsRolesAndConnection},
     {"役割テーブルを編集できる", &CaseGuideTableEditsRows},
+    {"数値入力が主要欄へ合い式を評価する", &CaseCursorInputFocusAndExpression},
+    {"数値入力のTabとEnterとEscが効く", &CaseCursorInputTabEnterEscape},
+    {"数値入力が画面の外へ出ない", &CaseCursorInputStaysOnScreen},
 };
 
 } // namespace

@@ -357,7 +357,7 @@ void V2MainWindow::RefreshGuideTable()
     }
     guideTableView_->clear();
     const auto views = kachakacha::v2::modeling::BuildGuideTableView(guideTable_,
-        session_->GetDocument().Snapshot().tolerance);
+        session_->GetDocument().Snapshot().settings.tolerance);
     for (const auto& view : views) {
         auto* item = new QTreeWidgetItem(guideTableView_);
         item->setText(0, QString::fromStdString(view.roleLabelJa));
@@ -756,6 +756,22 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     }
     if (name == QStringLiteral("guide-table")) {
         return ApplyGuideTableState();
+    }
+    if (name == QStringLiteral("cursor-input")) {
+        // カーソル連動の数値入力。長さをロックし、角度の欄へ式を入れた形。
+        SelectTool(DrawingTool::Line);
+        viewport_->SetViewDirection(ViewDirection::Top);
+        viewport_->SetVisibleWidthMm(200.0);
+        viewport_->ClickAt(QPointF(viewport_->width() * 0.35, viewport_->height() * 0.6));
+        viewport_->HoverAt(QPointF(viewport_->width() * 0.65, viewport_->height() * 0.4));
+        if (!viewport_->OpenCursorInput()) {
+            return false;
+        }
+        (void)viewport_->TypeIntoCursorField(QStringLiteral("(180/2)*3"));
+        (void)viewport_->CommitCursorField();
+        (void)viewport_->FocusNextCursorField(false);
+        (void)viewport_->TypeIntoCursorField(QStringLiteral("30deg"));
+        return true;
     }
     if (name == QStringLiteral("view-cube")) {
         // ビューキューブをドラッグした後の画面。90度へ吸着していないことを目で見る。

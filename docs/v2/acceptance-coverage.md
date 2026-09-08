@@ -70,8 +70,8 @@
 | AT-FAB-002 | 済 | tests_v2/fabrication_tests.cpp(円錐の厳密展開) |
 | AT-FAB-003 | 済 | tests_v2/fabrication_tests.cpp(二重曲率を展開できないと言う) |
 | AT-FAB-004 | 部分 | 切れ目の制約検査は済(pattern_tests.cpp)。向きの自動選択は WP-09後半 |
-| AT-FAB-005 | 未 | 戦略4種の選択は WP-09後半。設定と評価軸は済 |
-| AT-FAB-006 | 未 | 手動役割は WP-09後半 |
+| AT-FAB-005 | 済 | tests_v2/panel_strategy_tests.cpp(同じ面から4通りを作り、1枚は1連結・別部材は各面別・少数分割は目標内で最小・混合は強曲率部だけ分離。作れない戦略は理由つきで残す) |
+| AT-FAB-006 | 済 | tests_v2/panel_strategy_tests.cpp(7役割の割り当て、矛盾の拒否、壊れた参照を黙って動かさず付け直す/無効にする/消すを選ばせる) |
 | AT-FAB-007 | 済 | tests_v2/opening_clip_tests.cpp(開口またぎ) |
 | AT-FAB-008 | 部分 | 対応辺のIDは済(opening_clip_tests.cpp)。切れ目側は WP-09後半 |
 | AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |

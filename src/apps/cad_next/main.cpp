@@ -16,6 +16,7 @@
 #include "Win95Style.h"
 
 #include "kachakacha/app/CursorInput.h"
+#include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/base/Version.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/kernel/KernelInfo.h"
@@ -611,6 +612,64 @@ struct SelfTestCase {
     return true;
 }
 
+[[nodiscard]] bool CaseProcessStepsFollowMode(V2MainWindow& window)
+{
+    // 手順はモードで中身が変わり、番号は1から順に並ぶ(ui-workflows §9 / §10 / §11)。
+    struct Expect {
+        const char* state;
+        int count;
+    };
+    const Expect wanted[] = {
+        {"steps-part", 7},
+        {"steps-fabrication", 10},
+        {"steps-output", 4},
+    };
+    for (const Expect& item : wanted) {
+        if (!window.ApplyManualState(QString::fromUtf8(item.state))) {
+            return false;
+        }
+        if (window.ProcessStepCount() != item.count) {
+            return false;
+        }
+        for (int row = 0; row < window.ProcessStepCount(); ++row) {
+            const QString text = window.ProcessStepText(row);
+            if (text.isEmpty()) {
+                return false;
+            }
+            if (!text.startsWith(QString::number(row + 1))) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseProcessStepsExplainWhyBlocked(V2MainWindow& window)
+{
+    // 進めない段には必ず理由が並んで出る。理由の無い灰色を作らない。
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    window.SetProcessContext(kachakacha::v2::app::ProcessContext{});
+    if (window.CurrentProcessStep() != 1) {
+        return false;
+    }
+    bool sawReason = false;
+    for (int row = 1; row < window.ProcessStepCount(); ++row) {
+        const QString text = window.ProcessStepText(row);
+        if (!text.contains(QStringLiteral("—"))) {
+            return false;
+        }
+        sawReason = true;
+    }
+    if (!sawReason) {
+        return false;
+    }
+    // 部品を選ぶと進む。
+    kachakacha::v2::app::ProcessContext context;
+    context.selectedPartCount = 1;
+    window.SetProcessContext(context);
+    return window.CurrentProcessStep() == 7;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -640,6 +699,8 @@ const SelfTestCase kCases[] = {
     {"作業中グループが帯と一覧に出る", &CaseActiveGroupShowsAndCollects},
     {"どちらの見た目でも配置が壊れない", &CaseThemeKeepsLayoutUsable},
     {"狭い画面でも部品がはみ出さない", &CaseSmallWindowStaysUsable},
+    {"手順がモードで変わり番号順に並ぶ", &CaseProcessStepsFollowMode},
+    {"進めない段には理由が出る", &CaseProcessStepsExplainWhyBlocked},
 };
 
 } // namespace

@@ -18,6 +18,7 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/app/ProcessSteps.h"
 
 #include <QColor>
 #include <QMainWindow>
@@ -83,6 +84,18 @@ public:
     //! いま道具箱に出ているコマンドの数。モードごとに変わる。
     [[nodiscard]] int VisibleCommandCount() const;
 
+    //! モードごとの手順(ui-workflows §9 / §10 / §11)。1本の並びとして右に出す。
+    [[nodiscard]] int ProcessStepCount() const;
+    [[nodiscard]] QString ProcessStepText(int row) const;
+    //! いま入れる段の番号。全部済んでいれば0。
+    [[nodiscard]] int CurrentProcessStep() const;
+    //! 手順の元になる状況。試験から動かして、手順が変わることを見る。
+    void SetProcessContext(const kachakacha::v2::app::ProcessContext& context);
+    [[nodiscard]] const kachakacha::v2::app::ProcessContext& ProcessContextOf() const
+    {
+        return processContext_;
+    }
+
     //! 作業中グループ(AT-UIX-006)。上の帯と一覧の両方に出る。
     bool SetActiveGroup(const std::optional<kachakacha::v2::base::GroupId>& groupId);
     [[nodiscard]] QString ActiveGroupText() const;
@@ -115,9 +128,13 @@ private:
     [[nodiscard]] bool ApplyGuideTableState();
     //! 作業中グループの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyActiveGroupState();
+    //! 手順の並びの見本。ApplyManualState から呼ぶ。
+    [[nodiscard]] bool ApplyStepsState(const QString& name);
     void RefreshEntityList();
     //! 役割テーブルを画面へ出し直す。色は core の式から取る(画面で作らない)。
     void RefreshGuideTable();
+    //! 手順の並びを作り直す。モードを変えたときと、状況が変わったときに呼ぶ。
+    void RefreshProcessSteps();
     //! 足りない役割の案内だけを消す・足す。ほかの知らせは残す。
     void ClearGuideGuidance();
     void AddGuideGuidance(const QString& text);
@@ -135,6 +152,9 @@ private:
     QListWidget* diagnosticList_ = nullptr;
     QTreeWidget* guideTableView_ = nullptr;
     QDockWidget* guideDock_ = nullptr;
+    QTreeWidget* processView_ = nullptr;
+    QDockWidget* processDock_ = nullptr;
+    kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;

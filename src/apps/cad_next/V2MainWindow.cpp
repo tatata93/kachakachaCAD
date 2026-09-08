@@ -261,6 +261,8 @@ void V2MainWindow::SetMode(UiMode mode)
     if (guideDock_ != nullptr) {
         guideDock_->setVisible(mode == UiMode::Part);
     }
+    // 手順はどのモードでも出す。中身がモードで変わる。
+    RefreshProcessSteps();
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
             .arg(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str())));
 }
@@ -346,6 +348,17 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::RightDockWidgetArea, guideDock);
     guideDock_ = guideDock;
 
+    auto* processDock = new QDockWidget(QStringLiteral("手順"), this);
+    processDock->setObjectName(QStringLiteral("processDock"));
+    processView_ = new QTreeWidget(processDock);
+    processView_->setColumnCount(3);
+    processView_->setHeaderLabels({QStringLiteral("番号"), QStringLiteral("すること"),
+        QStringLiteral("様子")});
+    processView_->setRootIsDecorated(false);
+    processDock->setWidget(processView_);
+    addDockWidget(Qt::RightDockWidgetArea, processDock);
+    processDock_ = processDock;
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
@@ -407,6 +420,63 @@ QString V2MainWindow::GroupRowText(int row) const
         return QString();
     }
     return entityTree_->topLevelItem(row)->text(0);
+}
+
+void V2MainWindow::RefreshProcessSteps()
+{
+    if (processView_ == nullptr) {
+        return;
+    }
+    processView_->clear();
+    const auto steps = kachakacha::v2::app::BuildProcessSteps(mode_, processContext_);
+    for (const auto& step : steps) {
+        auto* item = new QTreeWidgetItem(processView_);
+        item->setText(0, QString::number(step.number));
+        item->setText(1, QString::fromStdString(step.titleJa));
+        // 進めない段には理由を並べて出す。理由の無い灰色を作らない。
+        QString state = QString::fromStdString(
+            std::string(kachakacha::v2::app::StepStateNameJa(step.state)));
+        if (!step.blockedReasonJa.empty()) {
+            state += QStringLiteral(" — ")
+                + QString::fromStdString(step.blockedReasonJa);
+        }
+        item->setText(2, state);
+        if (step.state == kachakacha::v2::app::StepState::Done) {
+            item->setForeground(1, QColor(0x40, 0xA0, 0x60));
+        } else if (step.state == kachakacha::v2::app::StepState::Blocked) {
+            item->setForeground(1, QColor(0x90, 0x90, 0x98));
+        }
+    }
+    for (int column = 0; column < processView_->columnCount(); ++column) {
+        processView_->resizeColumnToContents(column);
+    }
+}
+
+void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)
+{
+    processContext_ = context;
+    RefreshProcessSteps();
+}
+
+int V2MainWindow::ProcessStepCount() const
+{
+    return processView_ == nullptr ? 0 : processView_->topLevelItemCount();
+}
+
+QString V2MainWindow::ProcessStepText(int row) const
+{
+    if (processView_ == nullptr || row < 0 || row >= processView_->topLevelItemCount()) {
+        return QString();
+    }
+    auto* item = processView_->topLevelItem(row);
+    return item->text(0) + QStringLiteral(" ") + item->text(1) + QStringLiteral(" ")
+        + item->text(2);
+}
+
+int V2MainWindow::CurrentProcessStep() const
+{
+    return kachakacha::v2::app::CurrentStepNumber(
+        kachakacha::v2::app::BuildProcessSteps(mode_, processContext_));
 }
 
 void V2MainWindow::RefreshGuideTable()
@@ -748,6 +818,28 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
     update();
 }
 
+bool V2MainWindow::ApplyStepsState(const QString& name)
+{
+    // 手順の並び。モードごとに、途中まで進んだ形を作る。
+    kachakacha::v2::app::ProcessContext context;
+    if (name == QStringLiteral("steps-part")) {
+        SetMode(UiMode::Part);
+        context.extrudeProfileCount = 2;
+    } else if (name == QStringLiteral("steps-fabrication")) {
+        SetMode(UiMode::Fabrication);
+        context.selectedPartCount = 1;
+        context.fabricationBuilt = true;
+        context.panelCount = 4;
+    } else if (name == QStringLiteral("steps-output")) {
+        SetMode(UiMode::Output);
+        context.exportTargetChosen = true;
+    } else {
+        SetMode(UiMode::Drawing);
+    }
+    SetProcessContext(context);
+    return true;
+}
+
 bool V2MainWindow::ApplyActiveGroupState()
 {
     using kachakacha::v2::document::AddGroupCommand;
@@ -902,6 +994,9 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     if (name == QStringLiteral("win95")) {
         ApplyTheme(UiTheme::Windows95);
         return true;
+    }
+    if (name.startsWith(QStringLiteral("steps-"))) {
+        return ApplyStepsState(name);
     }
     if (name == QStringLiteral("active-group")) {
         // 作業中グループ。切り替えたあとに作ったものがそこへ入る。

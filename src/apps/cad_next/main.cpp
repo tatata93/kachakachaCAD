@@ -391,7 +391,12 @@ struct SelfTestCase {
             return false;
         }
     }
-    return true;
+    // 3Dにも同じ行数が出ている(色同期)。
+    if (window.Viewport().GuideRowsShown() != window.GuideRowCount()) {
+        return false;
+    }
+    // 足りない役割の案内は、そろった時点で消えている。
+    return window.DiagnosticRowCount() == 0;
 }
 
 [[nodiscard]] bool CaseGuideTableEditsRows(V2MainWindow& window)
@@ -494,17 +499,29 @@ struct SelfTestCase {
         return false;
     }
     auto& viewport = window.Viewport();
+    // 画面の真ん中では、カーソルの右下に出る。
+    const double midX = viewport.width() * 0.4;
+    const double midY = viewport.height() * 0.4;
+    viewport.HoverAt(QPointF(midX, midY));
     const QRectF middle = viewport.CursorPanelRect();
-    if (middle.left() < 0.0 || middle.top() < 0.0) {
+    if (middle.left() < midX || middle.top() < midY) {
         return false;
     }
-    // 右下の角へ寄せる。
-    viewport.HoverAt(QPointF(viewport.width() - 2.0, viewport.height() - 2.0));
+    if (middle.right() > viewport.width() || middle.bottom() > viewport.height()) {
+        return false;
+    }
+    // 右下の角では、カーソルの左上へ寄る。どちらでも画面の中に収まる。
+    const double cornerX = viewport.width() - 2.0;
+    const double cornerY = viewport.height() - 2.0;
+    viewport.HoverAt(QPointF(cornerX, cornerY));
     const QRectF corner = viewport.CursorPanelRect();
+    if (corner.left() < 0.0 || corner.top() < 0.0) {
+        return false;
+    }
     if (corner.right() > viewport.width() || corner.bottom() > viewport.height()) {
         return false;
     }
-    return corner.left() >= 0.0 && corner.top() >= 0.0 && corner.left() < middle.left();
+    return corner.right() <= cornerX && corner.bottom() <= cornerY;
 }
 
 const SelfTestCase kCases[] = {

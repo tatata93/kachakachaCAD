@@ -371,10 +371,38 @@ void V2MainWindow::RefreshGuideTable()
         item->setForeground(0, color);
         item->setData(0, Qt::UserRole, color);
     }
+    for (int column = 0; column < guideTableView_->columnCount(); ++column) {
+        guideTableView_->resizeColumnToContents(column);
+    }
+    // 3Dへ同じ色で出す。色は core の式が決めるので、表と3Dがずれようがない。
+    viewport_->SetGuideTableRows(views);
+    // 足りない役割の案内は、そのつど出し直す。前の案内を残すと、
+    // 入れ終わったあとも「入っていません」が並んだままになる。
+    ClearGuideGuidance();
     for (const std::string& line : kachakacha::v2::modeling::MissingRoleGuidanceJa(
              guideTable_)) {
-        AddDiagnostic(QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
+        AddGuideGuidance(QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
     }
+}
+
+void V2MainWindow::ClearGuideGuidance()
+{
+    if (diagnosticList_ == nullptr) {
+        return;
+    }
+    for (int row = diagnosticList_->count() - 1; row >= 0; --row) {
+        if (diagnosticList_->item(row)->text().startsWith(QStringLiteral("UI-R009"))) {
+            delete diagnosticList_->takeItem(row);
+        }
+    }
+}
+
+void V2MainWindow::AddGuideGuidance(const QString& text)
+{
+    if (diagnosticList_ == nullptr) {
+        return;
+    }
+    diagnosticList_->addItem(text);
 }
 
 bool V2MainWindow::SetGuideTable(

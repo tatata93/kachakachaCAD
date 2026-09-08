@@ -556,6 +556,7 @@ endif()
 add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CommandCatalog.cpp
     src/next/kachakacha/app/CursorInput.cpp
+    src/next/kachakacha/app/EvaluationQueue.cpp
     src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
@@ -691,6 +692,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
     kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
+    kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)

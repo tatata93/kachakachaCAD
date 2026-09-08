@@ -356,6 +356,9 @@ Result<CursorInputPanel> UpdateFromPointer(const CursorInputPanel& panel,
         if (next.states[index].locked) {
             continue;   // ロックした欄はマウスで動かさない。
         }
+        if (!next.states[index].text.empty()) {
+            continue;   // いま打っている欄も動かさない。打った字が消えてしまう。
+        }
         const std::string& id = next.fields[index].id;
         std::optional<double> value;
         const double planarLength = std::hypot(delta.x, delta.y);

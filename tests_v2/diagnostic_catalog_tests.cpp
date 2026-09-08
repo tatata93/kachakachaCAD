@@ -103,6 +103,48 @@ namespace {
     return codes;
 }
 
+//! そのコードが、どの重さで作られているか。MakeError / MakeWarning / MakeInformation
+//! のどれで作られたかを、コードの直前の語で見る。
+//! 台帳の「種別」と、実際に作っている重さが食い違うのを防ぐ。
+//! これが無いと、台帳に「情報」と書いてあるのに画面へ赤で出る、ということが起きる。
+[[nodiscard]] std::map<std::string, std::set<std::string>> SeveritiesInSource()
+{
+    static const std::vector<std::pair<std::string, std::string>> kMakers = {
+        {"MakeError(", "エラー"}, {"MakeWarning(", "警告"}, {"MakeInformation(", "情報"}};
+    std::map<std::string, std::set<std::string>> found;
+    for (const SourceFile& file : V2Sources()) {
+        for (std::size_t at = 0; at < file.lines.size(); ++at) {
+            // 呼び出しは改行をまたぐので、その行と次の行をつないで見る。
+            std::string window = file.lines[at];
+            if (at + 1 < file.lines.size()) {
+                window += " " + file.lines[at + 1];
+            }
+            for (const auto& maker : kMakers) {
+                std::size_t index = 0;
+                while (true) {
+                    const std::size_t call = window.find(maker.first, index);
+                    if (call == std::string::npos) {
+                        break;
+                    }
+                    const std::size_t open = window.find('"', call);
+                    const std::size_t close = open == std::string::npos
+                        ? std::string::npos
+                        : window.find('"', open + 1);
+                    if (close != std::string::npos) {
+                        const std::string inner =
+                            window.substr(open + 1, close - open - 1);
+                        if (LooksLikeCode(inner)) {
+                            found[inner].insert(maker.second);
+                        }
+                    }
+                    index = call + maker.first.size();
+                }
+            }
+        }
+    }
+    return found;
+}
+
 struct CatalogRow {
     std::string code;
     std::string severity;
@@ -244,6 +286,50 @@ KACHA_V2_TEST(diagnostics, どの行にも日本語の一文がある)
         }
         Require(hasJapanese, row.code + ": 日本語が入っていない");
     }
+}
+
+KACHA_V2_TEST(diagnostics, 台帳の種別が実際に作っている重さと合っている)
+{
+    // 台帳に「情報」と書いてあるのに MakeError で作っていたら落とす。
+    // 画面の色と、台帳の説明が食い違うのを防ぐ。
+    const std::map<std::string, std::set<std::string>> actual = SeveritiesInSource();
+    std::vector<std::string> offenders;
+    for (const CatalogRow& row : ReadCatalog()) {
+        if (row.severity == "未実装") {
+            continue;
+        }
+        const auto found = actual.find(row.code);
+        if (found == actual.end()) {
+            continue;   // 別の道(コピーや転記)で作られているものは、ここでは見ない。
+        }
+        for (const std::string& made : found->second) {
+            if (row.severity.find(made) == std::string::npos) {
+                offenders.push_back(row.code + " は台帳が「" + row.severity
+                    + "」だがソースは「" + made + "」で作っている");
+            }
+        }
+    }
+    std::string report;
+    for (const std::string& line : offenders) {
+        report += line + " / ";
+    }
+    Require(offenders.empty(), "台帳の種別とソースが合う: " + report);
+}
+
+KACHA_V2_TEST(diagnostics, その走査が仕込んだ食い違いを見つける)
+{
+    // 走査そのものが効いているかを、その場の文字列で確かめる。
+    Require(LooksLikeCode("PER-001"), "コードだと分かる");
+    Require(!LooksLikeCode("2026-09-08"), "日付はコードではない");
+    const std::map<std::string, std::set<std::string>> actual = SeveritiesInSource();
+    Require(!actual.empty(), "ソースから重さを拾えている");
+    // 実在するコードの重さが取れていること。
+    // 定数へ入れてから使うコードは拾えない(拾えないものは、この試験では見ない)。
+    const auto found = actual.find("PER-002");
+    Require(found != actual.end(), "PER-002 の重さが取れる");
+    Require(found->second.count("エラー") == 1, "エラーで作っている");
+    Require(actual.size() > 40, "多くのコードで重さが取れている: "
+        + std::to_string(actual.size()));
 }
 
 KACHA_V2_TEST(diagnostics, 種別はエラーか警告か情報のどれか)

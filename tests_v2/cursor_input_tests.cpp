@@ -442,4 +442,50 @@ KACHA_V2_TEST(cursor, カーソルの位置が数値でなければ断る)
     RequireEqual(FirstCode(result.Diagnostics()), "UI-C007", "数値でない");
 }
 
+KACHA_V2_TEST(cursor, 打っている途中でも読めた分は値を見せる)
+{
+    const CursorInputPanel panel = BeginLine();
+    const auto focused = FocusField(panel, "angle").Value();
+    const std::size_t at = focused.focusedIndex;
+    // 途中の「30d」は読めない。式だけを見せ、古い値を出さない。
+    const auto partial = SetFieldText(focused, at, "30d").Value();
+    Require(!partial.states[at].hasValue, "値を出さない");
+    RequireEqual(FieldDisplayJa(partial.fields[at], partial.states[at]), "30d", "式だけ");
+    Require(!partial.states[at].error, "打っている途中で赤くしない");
+    // 読める形になったら、その場で値が出る。
+    const auto full = SetFieldText(partial, at, "30deg").Value();
+    Require(full.states[at].hasValue, "値が出る");
+    RequireEqual(FieldDisplayJa(full.fields[at], full.states[at]), "30deg = 30 deg",
+        "式と値が並ぶ");
+    Require(!full.states[at].locked, "まだ確定はしていない");
+}
+
+KACHA_V2_TEST(cursor, 打っている欄はマウスで消えない)
+{
+    const CursorInputPanel panel = BeginLine();
+    const auto focused = FocusField(panel, "angle").Value();
+    const std::size_t at = focused.focusedIndex;
+    const auto typed = SetFieldText(focused, at, "30deg").Value();
+    const auto moved = UpdateFromPointer(typed, Vector3{99.0, 99.0, 0.0});
+    Require(moved.HasValue(), "動いた");
+    RequireEqual(moved.Value().states[at].text, "30deg", "打った字が残る");
+    RequireNear(moved.Value().states[at].value, 30.0 * kPi / 180.0, 1e-9, "値も残る");
+    // 打っていない欄は追随する。
+    const std::size_t du = IndexOf(moved.Value(), "du");
+    RequireNear(moved.Value().states[du].value, 99.0, 1e-9, "du は追随する");
+}
+
+KACHA_V2_TEST(cursor, 欄を空にすればまたマウスに追随する)
+{
+    const CursorInputPanel panel = BeginLine();
+    const auto focused = FocusField(panel, "du").Value();
+    const std::size_t at = focused.focusedIndex;
+    const auto typed = SetFieldText(focused, at, "12").Value();
+    const auto cleared = SetFieldText(typed, at, "").Value();
+    Require(!cleared.states[at].hasValue, "値が消える");
+    const auto moved = UpdateFromPointer(cleared, Vector3{7.0, 8.0, 0.0});
+    Require(moved.HasValue(), "動いた");
+    RequireNear(moved.Value().states[at].value, 7.0, 1e-9, "また追随する");
+}
+
 KACHA_V2_TEST_MAIN("cursor_input_tests")

@@ -945,6 +945,55 @@ void V2Viewport::DrawCursorInput(QPainter& painter) const
     painter.restore();
 }
 
+void V2Viewport::SetGuideTableRows(
+    const std::vector<kachakacha::v2::modeling::GuideTableRowView>& rows)
+{
+    guideRows_ = rows;
+    update();
+}
+
+void V2Viewport::DrawGuideRows(QPainter& painter) const
+{
+    if (guideRows_.empty()) {
+        return;
+    }
+    painter.save();
+    for (const auto& row : guideRows_) {
+        const QColor color(row.color.red, row.color.green, row.color.blue);
+        const auto from = ToScreen(row.startPoint);
+        const auto to = ToScreen(row.endPoint);
+        if (!from.has_value() || !to.has_value()) {
+            continue;
+        }
+        painter.setPen(QPen(color, 2.0));
+        painter.setBrush(color);
+        painter.drawLine(*from, *to);
+        // 端点。始点は塗り、終点は矢印にする。どちらが先かが目で分かる。
+        painter.drawEllipse(*from, 3.0, 3.0);
+        const double dx = to->x() - from->x();
+        const double dy = to->y() - from->y();
+        const double length = std::hypot(dx, dy);
+        if (length < 1.0e-6) {
+            continue;
+        }
+        const double ux = dx / length;
+        const double uy = dy / length;
+        const double head = 9.0;
+        QPolygonF arrow;
+        arrow << *to
+              << QPointF(to->x() - ux * head - uy * head * 0.45,
+                     to->y() - uy * head + ux * head * 0.45)
+              << QPointF(to->x() - ux * head + uy * head * 0.45,
+                     to->y() - uy * head - ux * head * 0.45);
+        painter.drawPolygon(arrow);
+        // 行の名前を線の真ん中へ。表のどの行かがすぐ分かる。
+        painter.drawText(QPointF((from->x() + to->x()) * 0.5 + 6.0,
+                             (from->y() + to->y()) * 0.5 - 4.0),
+            QString::fromStdString(row.roleLabelJa) + QString::number(row.number));
+    }
+    painter.restore();
+}
+
 void V2Viewport::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
@@ -954,6 +1003,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawWorkPlane(painter);
     DrawAxes(painter);
     DrawDocument(painter);
+    DrawGuideRows(painter);
     DrawPreview(painter);
     DrawSnap(painter);
     DrawScaleBar(painter);

@@ -108,6 +108,9 @@ private:
     void RefreshEntityList();
     //! 役割テーブルを画面へ出し直す。色は core の式から取る(画面で作らない)。
     void RefreshGuideTable();
+    //! 足りない役割の案内だけを消す・足す。ほかの知らせは残す。
+    void ClearGuideGuidance();
+    void AddGuideGuidance(const QString& text);
     //! 案内を作り直して画面へ出す。6つがそろった形で出す(AT-UIX-002)。
     void RefreshGuide();
     void SetStatus(const QString& text);

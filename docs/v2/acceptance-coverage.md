@@ -86,7 +86,7 @@
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
 | AT-UIX-005 | 済 | tests_v2/grid_tests.cpp(1/2・1/3・1/4の点数、主副の間隔、細かすぎる副点の省略、UV での原点保持、作業平面が動いても付いていく、壊れた平面参照を別平面へ付け替えない) |
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
-| AT-UIX-007 | 済 | tests_v2/guide_surface_table_tests.cpp(複数行と役割ごとの1始まり番号、1行への複数ワイヤー追加とつながらない線の拒否、同じワイヤーの二重登録の拒否、同じ役割の中だけでの順序変更、方向反転で並びも各線の向きも逆になり種類は変わらない、両端が外形へ届いたときだけ有効と出る接続列、役割と番号だけで決まる色) + cad_next --self-test(表の色が core の式と一致する=3D色同期、行の追加・移動・反転・断り) |
+| AT-UIX-007 | 済 | tests_v2/guide_surface_table_tests.cpp(複数行と役割ごとの1始まり番号、1行への複数ワイヤー追加とつながらない線の拒否、同じワイヤーの二重登録の拒否、同じ役割の中だけでの順序変更、方向反転で並びも各線の向きも逆になり種類は変わらない、両端が外形へ届いたときだけ有効と出る接続列、役割と番号だけで決まる色) + cad_next --self-test(表の色が core の式と一致し、同じ行が3Dへ色と進行矢印つきで出る=3D色同期。行の追加・移動・反転・断り。役割がそろえば案内が消える) |
 | AT-UIX-008 | 済 | tests_v2/view_orientation_tests.cpp(26区画すべてで正対でき、視線と上向きが直交する。ドラッグ量と回転量が比例し、刻んでも一気でも同じ姿勢になる。89度まで回しても90度へ寄らない。離した瞬間も1時間後も変化0。感度0.25/0.05/1.0deg-px、クリック15度、相対軸は選択が無ければ断る) + cad_next --self-test(キューブの連続回転・非吸着・クリック正対・回転矢印がカメラだけを回す) |
 | AT-UIX-009 | 済 | tests_v2/document_tests.cpp と robustness_tests.cpp(文書が変わらない)+ cad_next --self-test(失敗する操作を3回ずつ繰り返してもアプリが続き、文書も選んだ道具も変わらない) |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
@@ -95,7 +95,7 @@
 | AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない) |
 | AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |
 | AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
-| AT-PER-001 | 部分 | 遅すぎる処理は robustness_tests.cpp が時間で暴く(ExtendCurveToBoundary を直した)。画面の応答は WP-08後半 |
-| AT-PER-002 | 未 | 古い評価の破棄は WP-08後半 |
+| AT-PER-001 | 済 | tests_v2/evaluation_queue_tests.cpp(100ms を超えたところで取消を出し、心拍が250ms以内なら応答していると見る。5秒かかる評価でも200ms毎に心拍を刻めばずっと応答している。心拍は時刻が戻らない) + robustness_tests.cpp(遅すぎる処理を時間で暴く。ExtendCurveToBoundary を直した) |
+| AT-PER-002 | 済 | tests_v2/evaluation_queue_tests.cpp(長い評価の途中で文書が変わると前の評価に取消の合図が立ち、遅れて返った結果は PER-002 で捨てる。20回続けて差し替えても生きているのは最後の1つだけで、19件を捨てる。番号が合っていても版が違えば捨て、どの版を待っていたかを言う。取消の合図は別スレッドから見える) |
 | AT-PER-003 | 済 | tests_v2/scale_tests.cpp(1000ワイヤーの保存・読込・検証。1万本でも動く)。画面側は WP-08後半 |
 | AT-PER-004 | 済 | tests_v2/scale_tests.cpp(500操作。Entity増殖・ID衝突・Undo崩れが無いこと) |

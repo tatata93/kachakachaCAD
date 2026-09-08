@@ -199,6 +199,7 @@ public:
     void clear();
     [[nodiscard]] int count() const;
     [[nodiscard]] QListWidgetItem* item(int) const;
+    QListWidgetItem* takeItem(int);
     [[nodiscard]] QListWidgetItem* currentItem() const;
 };
 
@@ -223,6 +224,7 @@ public:
     QTreeWidget() = default;
     explicit QTreeWidget(QWidget*) {}
     void setColumnCount(int);
+    [[nodiscard]] int columnCount() const;
     void setHeaderLabels(const QStringList&);
     void setRootIsDecorated(bool);
     void addTopLevelItem(QTreeWidgetItem*);

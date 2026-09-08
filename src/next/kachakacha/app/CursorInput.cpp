@@ -154,6 +154,21 @@ Result<CursorInputPanel> SetFieldText(const CursorInputPanel& panel, std::size_t
     next.states[index].error = false;
     next.states[index].messageJa.clear();
     next.focusedIndex = index;
+    // 打っている途中でも、読めた分だけ評価して見せる(§7.1「数式と評価値を同時表示」)。
+    // 途中の「30d」のような読めない形では、値を出さずに式だけを見せる。
+    // ここでは赤くしない。打ち終わる前に赤くすると、打つたびに画面が騒がしくなる。
+    if (next.states[index].text.empty()) {
+        next.states[index].hasValue = false;
+    } else {
+        const auto evaluated = geometry::EvaluateExpression(next.states[index].text,
+            panel.fields[index].kind);
+        if (evaluated.HasValue()) {
+            next.states[index].value = evaluated.Value().value;
+            next.states[index].hasValue = true;
+        } else {
+            next.states[index].hasValue = false;
+        }
+    }
     return Result<CursorInputPanel>::Success(std::move(next));
 }
 

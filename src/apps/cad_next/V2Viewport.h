@@ -17,6 +17,7 @@
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/app/CursorInput.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QColor>
 #include <QPointF>
@@ -122,6 +123,15 @@ public:
     void ReleaseViewCube(const QPointF& position);
     [[nodiscard]] bool ViewCubeDragging() const { return cubeDrag_.active; }
 
+    //! 形状ガイドの役割テーブルを3Dへ出す(AT-UIX-007 の色同期)。
+    //! 色は core の式が決めた値をそのまま使う。画面で作り直さない。
+    void SetGuideTableRows(
+        const std::vector<kachakacha::v2::modeling::GuideTableRowView>& rows);
+    [[nodiscard]] int GuideRowsShown() const
+    {
+        return static_cast<int>(guideRows_.size());
+    }
+
     //! カーソル連動の数値入力(AT-UIX-003)。欄立ても解き方も core が持つ。
     [[nodiscard]] const kachakacha::v2::app::CursorInputPanel& CursorPanel() const
     {
@@ -168,6 +178,7 @@ private:
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
     void DrawCursorInput(QPainter& painter) const;
+    void DrawGuideRows(QPainter& painter) const;
     void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
         const QPointF& center, double scale) const;
 
@@ -196,6 +207,7 @@ private:
     bool cubeMoved_ = false;
     std::optional<kachakacha::v2::view::ViewCubeZone> cubeHoverZone_;
     std::optional<kachakacha::v2::view::Quaternion> selectionFrame_;
+    std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
     QPointF cursorPosition_;
     kachakacha::v2::geometry::Vector3 cursorAnchor_{};

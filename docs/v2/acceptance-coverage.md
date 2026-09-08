@@ -76,10 +76,10 @@
 | AT-FAB-008 | 部分 | 対応辺のIDは済(opening_clip_tests.cpp)。切れ目側は WP-09後半 |
 | AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |
 | AT-FAB-010 | 済 | tests_v2/closed_loop_tests.cpp(貼り合わせを含む輪を折り角の最小二乗で解く。解けない型紙は板を歪めず、いちばん開いている貼り合わせを名指しして断る) |
-| AT-FAB-011 | 未 | 任意状態の実体化は WP-09後半。OCCT が要る |
+| AT-FAB-011 | 部分 | tests_v2/freeze_state_tests.cpp(0/30/100%で対応辺長が一致し、形の外接箱は異なる)。厚みを付けた立体そのものは WP-10 |
 | AT-FAB-012 | 未 | 選択部材出力は WP-10 |
 | AT-FAB-013 | 未 | ER1/ER2 の受入モデルは WP-12。OCCT が要る |
-| AT-FAB-014 | 未 | 任意状態のワイヤーと部品は WP-09後半 |
+| AT-FAB-014 | 部分 | tests_v2/freeze_state_tests.cpp(ワイヤーのみ/部品のみ/両方。両方は同じ評価の束から作られ、部品の境界がワイヤーとぴったり一致する)。Entity 化は WP-10 |
 | AT-UIX-001 | 未 | Qt が要る。WP-08後半 |
 | AT-UIX-002 | 部分 | 案内文は済(tool_tests.cpp、session_tests.cpp)。画面表示は WP-08後半 |
 | AT-UIX-003 | 未 | Qt が要る |

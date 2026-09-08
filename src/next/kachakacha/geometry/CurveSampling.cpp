@@ -58,12 +58,12 @@ void Subdivide(const CurveSegment& segment, double t0, double t1, double toleran
     const double dv = b0.v - a0.v;
     if (std::abs(denominator) < 1.0e-18) {
         // 平行。重なっているかどうかは端点の距離で見る。
-        const auto near = [&](const Point2& p, const Point2& q0, const Point2& q1) {
+        const auto isNear = [&](const Point2& p, const Point2& q0, const Point2& q1) {
             return SegmentPointDistance({p.u, p.v, 0.0}, {q0.u, q0.v, 0.0},
                        {q1.u, q1.v, 0.0})
                 <= toleranceMm;
         };
-        return near(a0, b0, b1) || near(a1, b0, b1) || near(b0, a0, a1) || near(b1, a0, a1);
+        return isNear(a0, b0, b1) || isNear(a1, b0, b1) || isNear(b0, a0, a1) || isNear(b1, a0, a1);
     }
     const double t = (du * d2v - dv * d2u) / denominator;
     const double s = (du * d1v - dv * d1u) / denominator;

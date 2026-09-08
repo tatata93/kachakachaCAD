@@ -327,6 +327,17 @@ void V2MainWindow::BuildPanels()
     treeDock->setWidget(entityTree_);
     addDockWidget(Qt::LeftDockWidgetArea, treeDock);
 
+    auto* guideDock = new QDockWidget(QStringLiteral("形状ガイドの役割"), this);
+    guideDock->setObjectName(QStringLiteral("guideTableDock"));
+    guideTableView_ = new QTreeWidget(guideDock);
+    guideTableView_->setColumnCount(6);
+    guideTableView_->setHeaderLabels({QStringLiteral("役割"), QStringLiteral("番号"),
+        QStringLiteral("線数"), QStringLiteral("接続"), QStringLiteral("方向"),
+        QStringLiteral("元ワイヤー")});
+    guideTableView_->setRootIsDecorated(false);
+    guideDock->setWidget(guideTableView_);
+    addDockWidget(Qt::RightDockWidgetArea, guideDock);
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
@@ -337,6 +348,70 @@ void V2MainWindow::BuildPanels()
     statusLabel_ = new QLabel(this);
     statusBar()->addWidget(toolLabel_);
     statusBar()->addWidget(statusLabel_, 1);
+}
+
+void V2MainWindow::RefreshGuideTable()
+{
+    if (guideTableView_ == nullptr) {
+        return;
+    }
+    guideTableView_->clear();
+    const auto views = kachakacha::v2::modeling::BuildGuideTableView(guideTable_,
+        session_->GetDocument().Snapshot().tolerance);
+    for (const auto& view : views) {
+        auto* item = new QTreeWidgetItem(guideTableView_);
+        item->setText(0, QString::fromStdString(view.roleLabelJa));
+        item->setText(1, QString::number(view.number));
+        item->setText(2, QString::number(static_cast<int>(view.segmentCount)));
+        item->setText(3, QString::fromStdString(view.connectionLabelJa));
+        item->setText(4, QString::fromStdString(view.directionLabelJa));
+        item->setText(5, QString::fromStdString(view.sourceLabelJa));
+        // 色は core の式が決める。画面で作らないので、3Dと必ず同じ色になる。
+        const QColor color(view.color.red, view.color.green, view.color.blue);
+        item->setForeground(0, color);
+        item->setData(0, Qt::UserRole, color);
+    }
+    for (const std::string& line : kachakacha::v2::modeling::MissingRoleGuidanceJa(
+             guideTable_)) {
+        AddDiagnostic(QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
+    }
+}
+
+bool V2MainWindow::SetGuideTable(
+    const kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>& result)
+{
+    if (!result.HasValue()) {
+        for (const auto& diagnostic : result.Diagnostics()) {
+            AddDiagnostic(QStringLiteral("%1 %2")
+                    .arg(QString::fromStdString(diagnostic.code),
+                        QString::fromStdString(diagnostic.summaryJa)));
+        }
+        return false;   // 断られたら表は変えない。
+    }
+    guideTable_ = result.Value();
+    RefreshGuideTable();
+    return true;
+}
+
+int V2MainWindow::GuideRowCount() const
+{
+    return guideTableView_ == nullptr ? 0 : guideTableView_->topLevelItemCount();
+}
+
+QColor V2MainWindow::GuideRowColor(int row) const
+{
+    if (guideTableView_ == nullptr || row < 0 || row >= guideTableView_->topLevelItemCount()) {
+        return QColor();
+    }
+    return guideTableView_->topLevelItem(row)->data(0, Qt::UserRole).value<QColor>();
+}
+
+QString V2MainWindow::GuideRowText(int row, int column) const
+{
+    if (guideTableView_ == nullptr || row < 0 || row >= guideTableView_->topLevelItemCount()) {
+        return QString();
+    }
+    return guideTableView_->topLevelItem(row)->text(column);
 }
 
 void V2MainWindow::SelectTool(DrawingTool tool)
@@ -554,6 +629,44 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
     update();
 }
 
+bool V2MainWindow::ApplyGuideTableState()
+{
+    // 形状ガイドの役割テーブル。外形U2本と断面2枚を入れた形。
+    using kachakacha::v2::modeling::AddSelectionAsNewRow;
+    using kachakacha::v2::modeling::ChainRole;
+    using kachakacha::v2::modeling::GuideSurfaceMethod;
+    using kachakacha::v2::modeling::GuideTableSelection;
+    guideTable_ = kachakacha::v2::modeling::GuideTable{};
+    guideTable_.method = GuideSurfaceMethod::GuidedLoft;
+    const auto make = [&](const char* label, Vector3 from, Vector3 to) {
+        GuideTableSelection selection;
+        selection.sourceWireId = kachakacha::v2::base::EntityId(ids_->Next());
+        selection.label = label;
+        selection.segments.push_back(CurveSegment::MakeLine(from, to).Value());
+        return selection;
+    };
+    struct Entry {
+        ChainRole role;
+        const char* label;
+        Vector3 from;
+        Vector3 to;
+    };
+    const Entry entries[] = {
+        {ChainRole::GuideU, "guide_lower", {0, 0, 0}, {100, 0, 0}},
+        {ChainRole::GuideU, "guide_upper", {0, 0, 40}, {100, 0, 40}},
+        {ChainRole::Section, "sec_left", {0, 0, 0}, {0, 0, 40}},
+        {ChainRole::Section, "sec_right", {100, 0, 0}, {100, 0, 40}},
+    };
+    for (const Entry& entry : entries) {
+        if (!SetGuideTable(AddSelectionAsNewRow(guideTable_, entry.role,
+                make(entry.label, entry.from, entry.to)))) {
+            return false;
+        }
+    }
+    viewport_->SetViewDirection(ViewDirection::Isometric);
+    return true;
+}
+
 bool V2MainWindow::ApplyStaticState(const QString& name)
 {
     ClearDiagnostics();
@@ -640,6 +753,9 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     if (name == QStringLiteral("win95")) {
         ApplyTheme(UiTheme::Windows95);
         return true;
+    }
+    if (name == QStringLiteral("guide-table")) {
+        return ApplyGuideTableState();
     }
     if (name == QStringLiteral("view-cube")) {
         // ビューキューブをドラッグした後の画面。90度へ吸着していないことを目で見る。

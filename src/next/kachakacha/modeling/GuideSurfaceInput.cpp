@@ -405,11 +405,11 @@ struct SampledChain {
         const std::vector<Vector3> edge{along[a], along[a + 1]};
         const geometry::PolylineApproach approach =
             geometry::ClosestApproachBetween(edge, across);
-        const bool near = approach.valid && approach.distanceMm <= toleranceMm;
-        if (near && !inside) {
+        const bool touching = approach.valid && approach.distanceMm <= toleranceMm;
+        if (touching && !inside) {
             ++count;
         }
-        inside = near;
+        inside = touching;
     }
     return count;
 }

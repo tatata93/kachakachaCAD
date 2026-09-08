@@ -19,6 +19,7 @@
 #include "kachakacha/kernel/KernelInfo.h"
 
 #include <QApplication>
+#include <QColor>
 #include <QPointF>
 #include <QImage>
 #include <QPainter>
@@ -267,14 +268,14 @@ struct SelfTestCase {
         return false;
     }
     viewport.DragViewCube(press + QPointF(20.0, 0.0));
-    const double small = kachakacha::v2::view::AngleBetween(start, viewport.Orientation());
+    const double half = kachakacha::v2::view::AngleBetween(start, viewport.Orientation());
     viewport.DragViewCube(press + QPointF(40.0, 0.0));
     const double large = kachakacha::v2::view::AngleBetween(start, viewport.Orientation());
     viewport.ReleaseViewCube(press + QPointF(40.0, 0.0));
-    if (small <= 1.0e-6 || large <= small) {
+    if (half <= 1.0e-6 || large <= half) {
         return false;
     }
-    return std::abs(large - 2.0 * small) < 1.0e-6;
+    return std::abs(large - 2.0 * half) < 1.0e-6;
 }
 
 [[nodiscard]] bool CaseViewCubeDoesNotSnapOrDrift(V2MainWindow& window)
@@ -358,6 +359,71 @@ struct SelfTestCase {
     return refused && !viewport.LastViewMessage().empty();
 }
 
+[[nodiscard]] bool CaseGuideTableShowsRolesAndConnection(V2MainWindow& window)
+{
+    // 役割テーブル(AT-UIX-007)。複数行、番号、接続、色同期を見る。
+    if (!window.ApplyManualState(QStringLiteral("guide-table"))) {
+        return false;
+    }
+    if (window.GuideRowCount() != 4) {
+        return false;
+    }
+    if (window.GuideRowText(0, 0) != QStringLiteral("外形U")
+        || window.GuideRowText(2, 0) != QStringLiteral("断面")) {
+        return false;
+    }
+    if (window.GuideRowText(2, 1) != QStringLiteral("1")
+        || window.GuideRowText(3, 1) != QStringLiteral("2")) {
+        return false;
+    }
+    // 断面の両端が外形へ届いているので「有効」。
+    if (window.GuideRowText(2, 3) != QStringLiteral("有効")) {
+        return false;
+    }
+    // 表の色は core の式そのもの。3Dも同じ式を見るので必ず一致する。
+    const auto views = kachakacha::v2::modeling::BuildGuideTableView(
+        window.GuideRoleTable(), window.Session().GetDocument().Snapshot().tolerance);
+    for (int row = 0; row < window.GuideRowCount(); ++row) {
+        const auto& color = views[static_cast<std::size_t>(row)].color;
+        if (window.GuideRowColor(row) != QColor(color.red, color.green, color.blue)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseGuideTableEditsRows(V2MainWindow& window)
+{
+    // 行への追加、順序変更、方向反転、断りの4つ。
+    if (!window.ApplyManualState(QStringLiteral("guide-table"))) {
+        return false;
+    }
+    // 断面2を上へ。中身が入れ替わり、番号は表の並びのまま。
+    if (!window.SetGuideTable(kachakacha::v2::modeling::MoveRow(window.GuideRoleTable(), 3,
+            -1))) {
+        return false;
+    }
+    if (window.GuideRowText(2, 5) != QStringLiteral("sec_right")) {
+        return false;
+    }
+    // 方向を反転する。
+    if (!window.SetGuideTable(kachakacha::v2::modeling::ReverseRow(window.GuideRoleTable(),
+            2))) {
+        return false;
+    }
+    if (window.GuideRowText(2, 4) != QStringLiteral("逆")) {
+        return false;
+    }
+    // 無い行を指したら断り、表は変わらない。
+    const int before = window.GuideRowCount();
+    const int diagnostics = window.DiagnosticRowCount();
+    if (window.SetGuideTable(kachakacha::v2::modeling::RemoveRow(window.GuideRoleTable(),
+            99))) {
+        return false;
+    }
+    return window.GuideRowCount() == before && window.DiagnosticRowCount() > diagnostics;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -379,6 +445,8 @@ const SelfTestCase kCases[] = {
     {"90度へ吸着せず離した後も回らない", &CaseViewCubeDoesNotSnapOrDrift},
     {"キューブのクリックだけが正対する", &CaseViewCubeClickFacesTheZone},
     {"回転矢印はカメラだけを回す", &CaseAxisArrowsRotateCameraOnly},
+    {"役割テーブルが役割と接続を出す", &CaseGuideTableShowsRolesAndConnection},
+    {"役割テーブルを編集できる", &CaseGuideTableEditsRows},
 };
 
 } // namespace

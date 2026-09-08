@@ -632,13 +632,13 @@ std::optional<kachakacha::v2::view::ViewCubeZone> V2Viewport::ViewCubeZoneAtScre
             }
             continue;
         }
-        double near = (-1.0 - start[axis]) / step[axis];
-        double far = (1.0 - start[axis]) / step[axis];
-        if (near > far) {
-            std::swap(near, far);
+        double entryT = (-1.0 - start[axis]) / step[axis];
+        double exitT = (1.0 - start[axis]) / step[axis];
+        if (entryT > exitT) {
+            std::swap(entryT, exitT);
         }
-        enter = std::max(enter, near);
-        leave = std::min(leave, far);
+        enter = std::max(enter, entryT);
+        leave = std::min(leave, exitT);
     }
     if (enter > leave) {
         return std::nullopt;
@@ -749,8 +749,8 @@ void V2Viewport::DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
     const Vector3 forward = kachakacha::v2::view::ForwardOf(orientation_);
 
     Vector3 normal{};
-    std::array<double*, 3> slots{&normal.x, &normal.y, &normal.z};
-    *slots[static_cast<std::size_t>(faceAxis)] = static_cast<double>(faceSign);
+    std::array<double*, 3> normalSlots{&normal.x, &normal.y, &normal.z};
+    *normalSlots[static_cast<std::size_t>(faceAxis)] = static_cast<double>(faceSign);
     const double facing = normal.x * forward.x + normal.y * forward.y + normal.z * forward.z;
     if (facing > -0.02) {
         return; // 裏を向いている面は描かない。

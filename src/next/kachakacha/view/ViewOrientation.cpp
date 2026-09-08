@@ -192,10 +192,10 @@ Result<ViewCubeZone> ViewCubeZoneAt(const Vector3& cubeLocalPoint, double edgeBa
     }
     const double threshold = 1.0 - edgeBandRatio;
     ViewCubeZone zone{0, 0, 0};
-    std::array<int*, 3> slots{&zone.x, &zone.y, &zone.z};
+    std::array<int*, 3> zoneSlots{&zone.x, &zone.y, &zone.z};
     for (std::size_t index = 0; index < values.size(); ++index) {
         if (std::abs(values[index]) >= threshold) {
-            *slots[index] = values[index] >= 0.0 ? 1 : -1;
+            *zoneSlots[index] = values[index] >= 0.0 ? 1 : -1;
         }
     }
     if (zone.NonZeroCount() == 0) {

@@ -560,10 +560,12 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Version.cpp
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
+    src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/io/Json.cpp
     src/next/kachakacha/io/Zip.cpp
     src/next/kachakacha/io/DocumentFile.cpp
     src/next/kachakacha/geometry/ArcBuilders.cpp
+    src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
@@ -616,6 +618,8 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(wire_chain_tests tests_v2/wire_chain_tests.cpp)
     kachakacha_add_v2_test(arc_builder_tests tests_v2/arc_builder_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
+    kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
+    kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 
 namespace kachakacha::v2::fabrication {
@@ -401,6 +402,88 @@ OpeningClosureCheck CheckOpeningClosure(const OpeningClipResult& result, double 
                 + std::to_string(toleranceMm) + " mm)。"));
     }
     return check;
+}
+
+} // namespace kachakacha::v2::fabrication
+
+namespace kachakacha::v2::fabrication {
+namespace {
+
+//! 点から線分までの距離。近似のずれを測るのに使う。
+[[nodiscard]] double DistanceToSegment(const Vector3& point, const Vector3& start,
+    const Vector3& end)
+{
+    const Vector3 along = end - start;
+    const double lengthSquared = along.LengthSquared();
+    if (lengthSquared <= 0.0) {
+        return (point - start).Length();
+    }
+    const Vector3 offset = point - start;
+    double t = (offset.x * along.x + offset.y * along.y + offset.z * along.z)
+        / lengthSquared;
+    t = std::clamp(t, 0.0, 1.0);
+    return (point - (start + along * t)).Length();
+}
+
+} // namespace
+
+base::Result<OpeningApproximation> CheckOpeningApproximation(
+    const std::vector<Vector3>& original, const std::vector<Vector3>& approximated,
+    double targetMaxDeviationMm)
+{
+    using Out = base::Result<OpeningApproximation>;
+    if (original.size() < 2 || approximated.size() < 2) {
+        return Out::Failure(base::MakeError("FAB-O003",
+            "開口の近似が目標を超えました。",
+            "測るための点が足りません。元と近似のどちらも2点以上要ります。"));
+    }
+    if (!(targetMaxDeviationMm > 0.0) || !geometry::IsFinite(targetMaxDeviationMm)) {
+        return Out::Failure(base::MakeError("FAB-O003",
+            "開口の近似が目標を超えました。", "目標の偏差が正の数ではありません。"));
+    }
+    for (const Vector3& point : original) {
+        if (!point.IsFinite()) {
+            return Out::Failure(base::MakeError("FAB-O003",
+                "開口の近似が目標を超えました。", "元の開口に数値でない点があります。"));
+        }
+    }
+    for (const Vector3& point : approximated) {
+        if (!point.IsFinite()) {
+            return Out::Failure(base::MakeError("FAB-O003",
+                "開口の近似が目標を超えました。",
+                "近似した開口に数値でない点があります。"));
+        }
+    }
+
+    // 元の点それぞれから、近似した折れ線までの距離を測る。
+    // 近似の側の点だけを見ると、間を飛ばした分のずれが見えない。
+    OpeningApproximation result;
+    result.sampleCount = original.size();
+    for (const Vector3& point : original) {
+        double best = 1.0e300;
+        for (std::size_t at = 0; at + 1 < approximated.size(); ++at) {
+            best = std::min(best,
+                DistanceToSegment(point, approximated[at], approximated[at + 1]));
+        }
+        if (best > result.maximumDeviationMm) {
+            result.maximumDeviationMm = best;
+            result.worstPoint = point;
+        }
+    }
+    // 「近似していない」とみなす幅。丸めの誤差より大きく、目で見て違う量より小さい。
+    // 元の曲線をそのまま出したときは、丸めの分しかずれない。
+    constexpr double kExactMm = 1.0e-9;
+    result.exact = result.maximumDeviationMm <= kExactMm;
+    if (result.maximumDeviationMm > targetMaxDeviationMm) {
+        char buffer[128];
+        std::snprintf(buffer, sizeof(buffer),
+            "%.4f mm ずれています(目標は %.4f mm)。いちばんずれたのは (%.3f, %.3f, %.3f) です。",
+            result.maximumDeviationMm, targetMaxDeviationMm, result.worstPoint.x,
+            result.worstPoint.y, result.worstPoint.z);
+        return Out::Failure(base::MakeError("FAB-O003",
+            "開口の近似が目標を超えました。", buffer));
+    }
+    return Out::Success(std::move(result));
 }
 
 } // namespace kachakacha::v2::fabrication

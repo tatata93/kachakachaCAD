@@ -11,6 +11,7 @@
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -59,5 +60,71 @@ struct ReliefValidation {
 //! 切れ目が必要なのに、設定で切れ目を止めている場合を見つける(FAB-C001)。
 [[nodiscard]] std::optional<base::Diagnostic> CheckReliefRequired(
     const FabricationSettings& settings, bool reliefWouldBeNeeded);
+
+// ---- 向きの選び方(§7.4、AT-FAB-004) ----
+
+//! 部材の曲がり具合。向きを選ぶのに使う。
+//!
+//! U方向とV方向で、どちらがどれだけ曲がっているかを持つ。
+//! 二重曲率(両方向に曲がっている)なら、切れ目は曲率の大きい方向へ *直交* して
+//! 進める。曲がっている向きに沿って切っても、そこは開かない。
+struct PanelCurvature {
+    //! U方向の曲率の大きさ(1/mm)。
+    double alongUPerMm = 0.0;
+    //! V方向の曲率の大きさ(1/mm)。
+    double alongVPerMm = 0.0;
+    //! 部材の大きさ。細い方向へ深く切ると千切れるので、これも見る。
+    double widthUMm = 0.0;
+    double widthVMm = 0.0;
+};
+
+//! 選ばれた向きと、その理由。
+//!
+//! 理由を必ず付ける。「なぜかUになった」では利用者が直せない(§7.4)。
+struct ReliefDirectionChoice {
+    //! 実際に使う向き。Auto は返らない(必ず U / V / Both のどれかに決まる)。
+    BendDirection direction = BendDirection::U;
+    std::string reasonJa;
+    //! U と V の両方を評価したか(Both のとき真)。
+    bool evaluatesBoth = false;
+};
+
+// ---- 左右の辺の対応(§7.5、AT-FAB-008) ----
+
+//! 切れ目の左右の辺が、どの点どうしで合わさるか。
+//!
+//! 対応は「正規化した弧長」で取る。端から測った長さの割合が同じ点どうしが合わさる。
+//! こうすると、切れ目の形(直線・V・曲がったV)が変わっても同じ決め方で済む。
+//!
+//! **片方の辺だけを縮めて合わせてはならない。** 縮めると型紙は閉じるが、
+//! 組んだ実物は歪む。合わないなら合わないと言う(FAB-C006)。
+struct ReliefMateCorrespondence {
+    //! 対応する点の、左右それぞれの正規化弧長(0〜1)。同じ数だけ並ぶ。
+    std::vector<double> leftParameters;
+    std::vector<double> rightParameters;
+    //! 左右それぞれの実長。合わせるために縮めたりしない。
+    double leftLengthMm = 0.0;
+    double rightLengthMm = 0.0;
+    //! 組立100%のときに、対応する点どうしが離れる最大量。
+    //! 左右の長さが同じなら0になる。
+    double maximumGapMm = 0.0;
+    ReliefShape shape = ReliefShape::StraightSlit;
+};
+
+//! 左右の辺を対応させる。目標の隙間を超えたら FAB-C006 で断る。
+[[nodiscard]] base::Result<ReliefMateCorrespondence> CorrespondReliefSides(
+    const ReliefCut& cut, double targetMaxGapMm);
+
+//! 向きを決める。Auto のときだけ曲率から選び、それ以外は指定をそのまま使う。
+//!
+//! 縦だけに固定してはならない、という契約をここで守る。
+//! Both のときは U と V の両方を候補にし、片方へ勝手に寄せない。
+[[nodiscard]] base::Result<ReliefDirectionChoice> ChooseReliefDirection(
+    const FabricationSettings& settings, const PanelCurvature& curvature);
+
+//! その向きで作る切れ目の進行方向(型紙の上の単位ベクトル)。
+//! Both のときは2本返る。U / V のときは1本。
+[[nodiscard]] base::Result<std::vector<Point2>> ReliefAdvanceDirections(
+    const ReliefDirectionChoice& choice);
 
 } // namespace kachakacha::v2::fabrication

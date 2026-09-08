@@ -435,4 +435,296 @@ KACHA_V2_TEST(pattern, レイヤーの名前がある)
     }
 }
 
+KACHA_V2_TEST(relief, 指定した向きはそのまま使う)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    PanelCurvature curvature;
+    curvature.alongUPerMm = 0.05;
+    curvature.alongVPerMm = 0.001;
+    curvature.widthUMm = 100.0;
+    curvature.widthVMm = 50.0;
+    for (BendDirection wanted : {BendDirection::U, BendDirection::V}) {
+        kachakacha::v2::fabrication::FabricationSettings settings;
+        settings.reliefDirection = wanted;
+        const auto choice = ChooseReliefDirection(settings, curvature);
+        Require(choice.HasValue(), "決まる");
+        Require(choice.Value().direction == wanted, "指定どおり");
+        Require(!choice.Value().reasonJa.empty(), "理由が出る");
+        Require(!choice.Value().evaluatesBoth, "片方だけ");
+    }
+}
+
+KACHA_V2_TEST(relief, 両方を指定したら両方を候補にする)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    using kachakacha::v2::fabrication::ReliefAdvanceDirections;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Both;
+    PanelCurvature curvature;
+    curvature.alongUPerMm = 0.05;
+    curvature.alongVPerMm = 0.001;
+    const auto choice = ChooseReliefDirection(settings, curvature);
+    Require(choice.HasValue(), "決まる");
+    Require(choice.Value().direction == BendDirection::Both, "両方");
+    Require(choice.Value().evaluatesBoth, "両方を評価する");
+    // 片方へ固定されていないこと。進行方向が2本出る。
+    const auto directions = ReliefAdvanceDirections(choice.Value());
+    Require(directions.HasValue(), "向きが出る");
+    RequireCount(directions.Value().size(), 2, "U と V の2本");
+    Require(directions.Value()[0].u != directions.Value()[1].u
+            || directions.Value()[0].v != directions.Value()[1].v,
+        "2本は別の向き");
+}
+
+KACHA_V2_TEST(relief, 自動は曲率の大きい向きへ直交して切る)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Auto;
+
+    PanelCurvature curvedInU;
+    curvedInU.alongUPerMm = 0.05;
+    curvedInU.alongVPerMm = 0.001;
+    const auto forU = ChooseReliefDirection(settings, curvedInU);
+    Require(forU.HasValue(), "決まる");
+    Require(forU.Value().direction == BendDirection::V, "U に曲がるなら V へ切る");
+    Require(forU.Value().reasonJa.find("直交") != std::string::npos, "理由を言う");
+
+    PanelCurvature curvedInV;
+    curvedInV.alongUPerMm = 0.001;
+    curvedInV.alongVPerMm = 0.05;
+    const auto forV = ChooseReliefDirection(settings, curvedInV);
+    Require(forV.HasValue(), "決まる");
+    Require(forV.Value().direction == BendDirection::U, "V に曲がるなら U へ切る");
+}
+
+KACHA_V2_TEST(relief, 自動は縦だけに固定しない)
+{
+    // 契約が名指しで禁じている「縦だけに固定」を、入力を変えて確かめる。
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Auto;
+    std::set<int> seen;
+    for (double ratio : {0.01, 0.1, 0.5, 0.8, 1.0, 1.25, 2.0, 10.0, 100.0}) {
+        PanelCurvature curvature;
+        curvature.alongUPerMm = 0.02 * ratio;
+        curvature.alongVPerMm = 0.02;
+        curvature.widthUMm = 80.0;
+        curvature.widthVMm = 60.0;
+        const auto choice = ChooseReliefDirection(settings, curvature);
+        Require(choice.HasValue(), "決まる");
+        seen.insert(static_cast<int>(choice.Value().direction));
+        Require(choice.Value().direction != BendDirection::Auto, "自動のままにしない");
+    }
+    Require(seen.size() >= 3, "U と V と Both のどれもが出ること");
+}
+
+KACHA_V2_TEST(relief, 二重曲率が同じくらいなら両方を候補にする)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Auto;
+    PanelCurvature curvature;
+    curvature.alongUPerMm = 0.030;
+    curvature.alongVPerMm = 0.028;
+    const auto choice = ChooseReliefDirection(settings, curvature);
+    Require(choice.HasValue(), "決まる");
+    Require(choice.Value().direction == BendDirection::Both, "両方");
+    Require(choice.Value().evaluatesBoth, "両方を評価する");
+}
+
+KACHA_V2_TEST(relief, 平らな部材では幅の広い方向を選ぶ)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Auto;
+    PanelCurvature flat;
+    flat.widthUMm = 30.0;
+    flat.widthVMm = 90.0;
+    const auto choice = ChooseReliefDirection(settings, flat);
+    Require(choice.HasValue(), "決まる");
+    Require(choice.Value().direction == BendDirection::V, "広い方");
+    Require(choice.Value().reasonJa.find("曲がっていない") != std::string::npos,
+        "理由を言う");
+}
+
+KACHA_V2_TEST(relief, 壊れた曲率は断る)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ChooseReliefDirection;
+    using kachakacha::v2::fabrication::PanelCurvature;
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.reliefDirection = BendDirection::Auto;
+    PanelCurvature broken;
+    broken.alongUPerMm = -1.0;
+    const auto refused = ChooseReliefDirection(settings, broken);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-C007", "向きが決まらない");
+}
+
+KACHA_V2_TEST(relief, 自動のまま向きを聞いたら断る)
+{
+    using kachakacha::v2::fabrication::BendDirection;
+    using kachakacha::v2::fabrication::ReliefAdvanceDirections;
+    using kachakacha::v2::fabrication::ReliefDirectionChoice;
+    ReliefDirectionChoice choice;
+    choice.direction = BendDirection::Auto;
+    const auto refused = ReliefAdvanceDirections(choice);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-C007", "自動のまま");
+}
+
+namespace {
+
+using kachakacha::v2::fabrication::CorrespondReliefSides;
+using kachakacha::v2::fabrication::ReliefMateCorrespondence;
+
+//! まっすぐな側辺。長さを指定して作る。
+[[nodiscard]] std::vector<Point2> StraightSide(double startU, double length, double v)
+{
+    std::vector<Point2> side;
+    for (int at = 0; at <= 8; ++at) {
+        side.push_back(Point2{startU + length * at / 8.0, v});
+    }
+    return side;
+}
+
+} // namespace
+
+KACHA_V2_TEST(relief, 直線の切れ目は隙間なく閉じる)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.cutId = "c1";
+    cut.shape = ReliefShape::StraightSlit;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    const auto result = CorrespondReliefSides(cut, 0.05);
+    Require(result.HasValue(), "対応が取れる");
+    RequireNear(result.Value().maximumGapMm, 0.0, 1e-12, "隙間0");
+    RequireNear(result.Value().leftLengthMm, result.Value().rightLengthMm, 1e-12,
+        "左右同じ長さ");
+    RequireCount(result.Value().leftParameters.size(),
+        result.Value().rightParameters.size(), "対応の数が同じ");
+}
+
+KACHA_V2_TEST(relief, 直線の切れ目に側辺を入れたら断る)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::StraightSlit;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    cut.leftSide = StraightSide(0.0, 20.0, 0.5);
+    const auto refused = CorrespondReliefSides(cut, 0.05);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-C006", "側辺が余計");
+}
+
+KACHA_V2_TEST(relief, V字の左右が同じ長さなら閉じる)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::VNotch;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    cut.leftSide = StraightSide(0.0, 20.0, 0.0);
+    cut.rightSide = StraightSide(0.0, 20.0, 0.0);
+    const auto result = CorrespondReliefSides(cut, 0.05);
+    Require(result.HasValue(), "対応が取れる");
+    RequireNear(result.Value().maximumGapMm, 0.0, 1e-9, "隙間0");
+    Require(result.Value().shape == ReliefShape::VNotch, "形を覚えている");
+}
+
+KACHA_V2_TEST(relief, 左右の長さが違えば隙間として出る)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::VNotch;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    cut.leftSide = StraightSide(0.0, 20.0, 0.0);
+    cut.rightSide = StraightSide(0.0, 20.4, 0.0);
+    // 目標を大きくすれば通る。隙間は長さの差(0.4mm)になる。
+    const auto measured = CorrespondReliefSides(cut, 1.0);
+    Require(measured.HasValue(), "測れる");
+    RequireNear(measured.Value().maximumGapMm, 0.4, 1e-9, "長さの差がそのまま隙間");
+    RequireNear(measured.Value().leftLengthMm, 20.0, 1e-9, "左辺の長さは変えない");
+    RequireNear(measured.Value().rightLengthMm, 20.4, 1e-9, "右辺の長さも変えない");
+}
+
+KACHA_V2_TEST(relief, 隙間が目標を超えたら片辺を縮めずに断る)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::VNotch;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    cut.leftSide = StraightSide(0.0, 20.0, 0.0);
+    cut.rightSide = StraightSide(0.0, 22.0, 0.0);
+    const auto refused = CorrespondReliefSides(cut, 0.05);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-C006", "隙間が目標超え");
+    const std::string& details = refused.Diagnostics().front().detailsJa;
+    Require(details.find("左辺") != std::string::npos, "左辺の長さを言う");
+    Require(details.find("右辺") != std::string::npos, "右辺の長さを言う");
+    Require(details.find("縮めて") != std::string::npos, "縮めないと言う");
+}
+
+KACHA_V2_TEST(relief, 曲がったV字でも同じ決め方で対応が取れる)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::CurvedVNotch;
+    cut.centerPath = StraightSide(0.0, 20.0, 0.0);
+    // 左右とも同じ弧を描く。点の数は左右で違う。
+    for (int at = 0; at <= 12; ++at) {
+        const double t = at / 12.0;
+        cut.leftSide.push_back(Point2{20.0 * t, 3.0 * std::sin(t * 3.14159265358979)});
+    }
+    for (int at = 0; at <= 40; ++at) {
+        const double t = at / 40.0;
+        cut.rightSide.push_back(Point2{20.0 * t, 3.0 * std::sin(t * 3.14159265358979)});
+    }
+    const auto result = CorrespondReliefSides(cut, 0.5);
+    Require(result.HasValue(), "対応が取れる");
+    // 点の数が違っても、正規化弧長で対応するので大きくはずれない。
+    Require(result.Value().maximumGapMm < 0.5, "点の数が違っても収まる");
+    RequireCount(result.Value().leftParameters.size(),
+        result.Value().rightParameters.size(), "対応の数が同じ");
+    for (std::size_t at = 0; at < result.Value().leftParameters.size(); ++at) {
+        RequireNear(result.Value().leftParameters[at],
+            result.Value().rightParameters[at], 1e-12, "同じ割合の点どうし");
+    }
+}
+
+KACHA_V2_TEST(relief, 3つの形すべてで対応が取れる)
+{
+    for (ReliefShape shape : {ReliefShape::StraightSlit, ReliefShape::VNotch,
+             ReliefShape::CurvedVNotch}) {
+        kachakacha::v2::fabrication::ReliefCut cut;
+        cut.shape = shape;
+        cut.centerPath = StraightSide(0.0, 15.0, 0.0);
+        if (shape != ReliefShape::StraightSlit) {
+            cut.leftSide = StraightSide(0.0, 15.0, 0.0);
+            cut.rightSide = StraightSide(0.0, 15.0, 0.0);
+        }
+        const auto result = CorrespondReliefSides(cut, 0.05);
+        Require(result.HasValue(), "対応が取れる");
+        RequireNear(result.Value().maximumGapMm, 0.0, 1e-9, "100%で隙間が目標以内");
+    }
+}
+
+KACHA_V2_TEST(relief, 点が足りない側辺は断る)
+{
+    kachakacha::v2::fabrication::ReliefCut cut;
+    cut.shape = ReliefShape::VNotch;
+    cut.leftSide = {Point2{0.0, 0.0}};
+    cut.rightSide = StraightSide(0.0, 10.0, 0.0);
+    const auto refused = CorrespondReliefSides(cut, 0.05);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-C006", "点が足りない");
+}
+
 KACHA_V2_TEST_MAIN("pattern_tests")

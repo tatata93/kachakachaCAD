@@ -78,4 +78,28 @@ struct OpeningClosureCheck {
 [[nodiscard]] OpeningClosureCheck CheckOpeningClosure(const OpeningClipResult& result,
     double toleranceMm);
 
+//! 開口を近似したときの、元の曲線からのずれ(§8.2、FAB-O003)。
+//!
+//! 「ライトや窓を丸い多角形へ置換してはならない。Arc/B-spline を保持するか、
+//! 明示偏差以内で近似する」という契約を、ここで数で守る。
+//! 近似したなら、どれだけずれたかを言えなければならない。
+//! 言えないまま出すと、円い窓が目に見えて角ばっていても気づけない。
+struct OpeningApproximation {
+    double maximumDeviationMm = 0.0;
+    //! いちばんずれた場所。
+    Vector3 worstPoint{};
+    //! 元の曲線をそのまま保っているか(近似していないか)。
+    bool exact = true;
+    std::size_t sampleCount = 0;
+};
+
+//! 近似した開口が、目標の偏差に収まっているかを測る。
+//!
+//! `original` は元の開口の点列(曲線から十分細かく取ったもの)。
+//! `approximated` は実際に出す線の点列。
+//! 目標を超えたら FAB-O003 で断る。黙って出さない。
+[[nodiscard]] base::Result<OpeningApproximation> CheckOpeningApproximation(
+    const std::vector<Vector3>& original, const std::vector<Vector3>& approximated,
+    double targetMaxDeviationMm);
+
 } // namespace kachakacha::v2::fabrication

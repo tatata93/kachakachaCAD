@@ -368,4 +368,106 @@ KACHA_V2_TEST(opening, 丸い窓が多角形へ置き換わらない)
     RequireCount(found, opening.size(), "元の点がすべて残ること");
 }
 
+namespace {
+
+//! 円の点列。近似の比べもとに使う。
+[[nodiscard]] std::vector<Vector3> CirclePoints(double radius, int count)
+{
+    constexpr double kTwoPi = 6.283185307179586;
+    std::vector<Vector3> points;
+    points.reserve(static_cast<std::size_t>(count) + 1);
+    for (int index = 0; index <= count; ++index) {
+        const double angle = kTwoPi * index / count;
+        points.push_back(Vector3{radius * std::cos(angle), radius * std::sin(angle), 0.0});
+    }
+    return points;
+}
+
+} // namespace
+
+KACHA_V2_TEST(opening, 同じ線をそのまま出せば偏差0)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 128);
+    const auto result = CheckOpeningApproximation(circle, circle, 0.1);
+    Require(result.HasValue(), "通る");
+    RequireNear(result.Value().maximumDeviationMm, 0.0, 1e-12, "ずれ0");
+    Require(result.Value().exact, "近似していない");
+    RequireEqual(std::to_string(result.Value().sampleCount), "129", "点の数");
+}
+
+KACHA_V2_TEST(opening, 細かい多角形なら目標に収まる)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 720);
+    // 128角形。半径20mmなら弦の中央のずれは約 0.006mm。
+    const auto coarse = CirclePoints(20.0, 128);
+    const auto result = CheckOpeningApproximation(circle, coarse, 0.05);
+    Require(result.HasValue(), "通る");
+    Require(result.Value().maximumDeviationMm > 0.0, "多少はずれる");
+    Require(result.Value().maximumDeviationMm < 0.05, "目標に収まる");
+    Require(!result.Value().exact, "近似している");
+}
+
+KACHA_V2_TEST(opening, 粗い多角形は目標を超えて断る)
+{
+    // 契約が名指しで禁じている「丸い窓を多角形へ置換」を、数で捕まえる。
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 720);
+    const auto coarse = CirclePoints(20.0, 8);   // 八角形
+    const auto refused = CheckOpeningApproximation(circle, coarse, 0.1);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-O003", "近似が目標を超えた");
+    // どれだけずれたかを言う。言えないなら直しようがない。
+    Require(refused.Diagnostics().front().detailsJa.find("mm") != std::string::npos,
+        "ずれた量を言う");
+    Require(refused.Diagnostics().front().detailsJa.find("目標") != std::string::npos,
+        "目標も言う");
+}
+
+KACHA_V2_TEST(opening, 細かくするほどずれが小さくなる)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 1440);
+    double previous = 1.0e300;
+    for (int sides : {8, 16, 32, 64, 128}) {
+        const auto result = CheckOpeningApproximation(circle, CirclePoints(20.0, sides),
+            1000.0);
+        Require(result.HasValue(), "測れる");
+        Require(result.Value().maximumDeviationMm < previous, "細かくすれば近づく");
+        previous = result.Value().maximumDeviationMm;
+    }
+}
+
+KACHA_V2_TEST(opening, 点が足りなければ測らずに断る)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 64);
+    const auto refused = CheckOpeningApproximation(circle, {Vector3{0, 0, 0}}, 0.1);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-O003", "点が足りない");
+}
+
+KACHA_V2_TEST(opening, 目標が正の数でなければ断る)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    const auto circle = CirclePoints(20.0, 64);
+    for (double target : {0.0, -1.0}) {
+        const auto refused = CheckOpeningApproximation(circle, circle, target);
+        Require(!refused.HasValue(), "断る");
+        RequireEqual(refused.Diagnostics().front().code, "FAB-O003", "目標が変");
+    }
+}
+
+KACHA_V2_TEST(opening, 数値でない点があれば断る)
+{
+    using kachakacha::v2::fabrication::CheckOpeningApproximation;
+    auto circle = CirclePoints(20.0, 64);
+    auto broken = circle;
+    broken[3] = Vector3{std::nan(""), 0.0, 0.0};
+    const auto refused = CheckOpeningApproximation(circle, broken, 0.1);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(refused.Diagnostics().front().code, "FAB-O003", "数値でない");
+}
+
 KACHA_V2_TEST_MAIN("opening_clip_tests")

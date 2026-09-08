@@ -14,6 +14,7 @@
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 
 #include <string>
+#include <vector>
 
 namespace kachakacha::v2::kernel {
 
@@ -57,5 +58,32 @@ struct MeshMeasure {
 
 [[nodiscard]] base::Result<MeshMeasure> MeasureMesh(modeling::KernelShapeHandle handle,
     double deflectionMm);
+
+// ---- 選んだ部材だけを出す(AT-FAB-012) ----
+
+//! 選んだ形をまとめて1つの出力にする。
+//!
+//! 10部材のうち2つを選んだら、出て来るのは2つの塊だけである。
+//! 見えていない別の部材が混ざってはならない。混ざると、切り出したあとで
+//! 「頼んでいない板が1枚多い」ことになり、材料も時間も無駄になる。
+struct SelectedExport {
+    //! 中身の塊の数。選んだ数と一致していなければならない。
+    std::size_t componentCount = 0;
+    double totalVolumeMm3 = 0.0;
+    //! 出力の中身。
+    std::string content;
+};
+
+//! 選んだ形だけを STEP へ。
+[[nodiscard]] base::Result<SelectedExport> BuildStepForSelection(
+    const std::vector<modeling::KernelShapeHandle>& selected, double toleranceMm);
+
+//! 選んだ形だけを二進 STL へ。
+[[nodiscard]] base::Result<SelectedExport> BuildBinaryStlForSelection(
+    const std::vector<modeling::KernelShapeHandle>& selected, double deflectionMm);
+
+//! いくつの塊が入っているかを数える。出したものを読み返して確かめるのに使う。
+[[nodiscard]] base::Result<std::size_t> CountSolidComponents(
+    const std::vector<modeling::KernelShapeHandle>& selected);
 
 } // namespace kachakacha::v2::kernel

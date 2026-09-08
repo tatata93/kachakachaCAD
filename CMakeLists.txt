@@ -582,6 +582,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/FabricationSettings.cpp
     src/next/kachakacha/fabrication/OpeningClip.cpp
     src/next/kachakacha/fabrication/FreezeState.cpp
+    src/next/kachakacha/fabrication/FreezeMaterialize.cpp
     src/next/kachakacha/fabrication/ManualRole.cpp
     src/next/kachakacha/fabrication/PanelStrategy.cpp
     src/next/kachakacha/fabrication/PatternLayout.cpp

@@ -351,6 +351,104 @@ KACHA_V2_TEST(kernel_export, 同じ部品からは毎回同じSTLが出る)
     ClearShapeCache();
 }
 
+
+// ---- 選んだ部材だけを出す(AT-FAB-012) ----
+
+KACHA_V2_TEST(kernel_export, 10部材のうち2つを選ぶと2つだけ出る)
+{
+    using kachakacha::v2::kernel::BuildStepForSelection;
+    using kachakacha::v2::kernel::CountSolidComponents;
+    ClearShapeCache();
+    // 10個の箱を作る。大きさを変えて、どれが出たか見分けられるようにする。
+    std::vector<KernelShapeHandle> all;
+    for (int index = 0; index < 10; ++index) {
+        all.push_back(MakeBox(10.0 + index, 10.0, 10.0));
+    }
+    RequireEqual(std::to_string(all.size()), "10", "10部材");
+
+    // 2つだけ選ぶ。
+    const std::vector<KernelShapeHandle> chosen{all[2], all[7]};
+    const auto counted = CountSolidComponents(chosen);
+    Require(counted.HasValue(), "数えられる");
+    RequireEqual(std::to_string(counted.Value()), "2", "塊は2つだけ");
+
+    const auto exported = BuildStepForSelection(chosen, Tolerance().modelLinearMm);
+    Require(exported.HasValue(), "出せる");
+    RequireEqual(std::to_string(exported.Value().componentCount), "2", "2つ");
+    Require(!exported.Value().content.empty(), "中身がある");
+    // 体積は選んだ2つぶんだけ。選ばなかった8つが混ざっていない。
+    const double expected = (10.0 + 2) * 10.0 * 10.0 + (10.0 + 7) * 10.0 * 10.0;
+    RequireNear(exported.Value().totalVolumeMm3, expected, 1e-6,
+        "選んだ2つぶんの体積だけ");
+}
+
+KACHA_V2_TEST(kernel_export, 選んだ部材だけをSTLへ出す)
+{
+    using kachakacha::v2::kernel::BuildBinaryStlForSelection;
+    ClearShapeCache();
+    std::vector<KernelShapeHandle> all;
+    for (int index = 0; index < 5; ++index) {
+        all.push_back(MakeBox(10.0 + index, 10.0, 10.0));
+    }
+    const std::vector<KernelShapeHandle> chosen{all[0], all[3]};
+    const auto exported = BuildBinaryStlForSelection(chosen, 0.05);
+    Require(exported.HasValue(), "出せる");
+    RequireEqual(std::to_string(exported.Value().componentCount), "2", "2つ");
+    Require(exported.Value().content.size() > 84, "中身がある");
+    const double expected = 10.0 * 10.0 * 10.0 + 13.0 * 10.0 * 10.0;
+    RequireNear(exported.Value().totalVolumeMm3, expected, 1e-6, "選んだ2つぶん");
+}
+
+KACHA_V2_TEST(kernel_export, 1つも選ばなければ出さずに断る)
+{
+    using kachakacha::v2::kernel::BuildStepForSelection;
+    using kachakacha::v2::kernel::CountSolidComponents;
+    const auto refusedCount = CountSolidComponents({});
+    Require(!refusedCount.HasValue(), "断る");
+    RequireEqual(FirstCode(refusedCount.Diagnostics()), "EXP-013", "書き出せない");
+    const auto refused = BuildStepForSelection({}, Tolerance().modelLinearMm);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "EXP-013", "書き出せない");
+}
+
+KACHA_V2_TEST(kernel_export, 同じ部材を2度選んだら断る)
+{
+    using kachakacha::v2::kernel::BuildStepForSelection;
+    ClearShapeCache();
+    const KernelShapeHandle box = MakeBox(10.0, 10.0, 10.0);
+    const auto refused = BuildStepForSelection({box, box}, Tolerance().modelLinearMm);
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "EXP-013", "2度選んだ");
+}
+
+KACHA_V2_TEST(kernel_export, 表にない部材を選んだら断る)
+{
+    using kachakacha::v2::kernel::BuildStepForSelection;
+    ClearShapeCache();
+    const KernelShapeHandle box = MakeBox(10.0, 10.0, 10.0);
+    const auto refused = BuildStepForSelection({box, KernelShapeHandle{}},
+        Tolerance().modelLinearMm);
+    Require(!refused.HasValue(), "断る");
+}
+
+KACHA_V2_TEST(kernel_export, 選んだ数を変えれば出る数も変わる)
+{
+    using kachakacha::v2::kernel::CountSolidComponents;
+    ClearShapeCache();
+    std::vector<KernelShapeHandle> all;
+    for (int index = 0; index < 6; ++index) {
+        all.push_back(MakeBox(10.0 + index, 10.0, 10.0));
+    }
+    for (std::size_t howMany = 1; howMany <= all.size(); ++howMany) {
+        const std::vector<KernelShapeHandle> chosen(all.begin(),
+            all.begin() + static_cast<std::ptrdiff_t>(howMany));
+        const auto counted = CountSolidComponents(chosen);
+        Require(counted.HasValue(), "数えられる");
+        RequireEqual(std::to_string(counted.Value()), std::to_string(howMany),
+            "選んだ数と同じ");
+    }
+}
+
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_export_tests")

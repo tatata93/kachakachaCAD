@@ -388,6 +388,116 @@ Result<MeshMeasure> MeasureMesh(KernelShapeHandle handle, double deflectionMm)
     }, "三角形の測定");
 }
 
+
+// ---- 選んだ部材だけを出す(AT-FAB-012) ----
+
+namespace {
+
+//! 選んだ形を1つの集まりへまとめる。数はここで数える。
+[[nodiscard]] Result<TopoDS_Compound> GatherSelection(
+    const std::vector<KernelShapeHandle>& selected, std::size_t& componentCount,
+    double& totalVolume)
+{
+    using Out = Result<TopoDS_Compound>;
+    if (selected.empty()) {
+        return Out::Failure(MakeError(kExportFailed,
+            "書き出せませんでした。", "出す部材が1つも選ばれていません。"));
+    }
+    TopoDS_Compound compound;
+    BRep_Builder builder;
+    builder.MakeCompound(compound);
+    componentCount = 0;
+    totalVolume = 0.0;
+    std::vector<std::uint64_t> seen;
+    for (const KernelShapeHandle& handle : selected) {
+        // 同じ形を2度選んでいたら、2つに数えない。
+        if (std::find(seen.begin(), seen.end(), handle.value) != seen.end()) {
+            return Out::Failure(MakeError(kExportFailed, "書き出せませんでした。",
+                "同じ部材が2度選ばれています。"));
+        }
+        seen.push_back(handle.value);
+        TopoDS_Shape shape;
+        if (!LookupShape(handle, shape)) {
+            return Out::Failure(MakeError(kExportFailed, "書き出せませんでした。",
+                "選ばれた部材が表にありません。"));
+        }
+        // 選ばれていないものを混ぜない。渡された形だけを足す。
+        builder.Add(compound, shape);
+        GProp_GProps properties;
+        BRepGProp::VolumeProperties(shape, properties);
+        totalVolume += std::abs(properties.Mass());
+        ++componentCount;
+    }
+    return Out::Success(compound);
+}
+
+} // namespace
+
+Result<std::size_t> CountSolidComponents(const std::vector<KernelShapeHandle>& selected)
+{
+    std::size_t count = 0;
+    double volume = 0.0;
+    const auto gathered = GatherSelection(selected, count, volume);
+    if (!gathered.HasValue()) {
+        return Result<std::size_t>::Failure(gathered.Diagnostics());
+    }
+    // 集まりの中の立体を数え直す。渡した数と合っていることを、読み返して確かめる。
+    std::size_t solids = 0;
+    for (TopExp_Explorer explorer(gathered.Value(), TopAbs_SOLID); explorer.More();
+        explorer.Next()) {
+        ++solids;
+    }
+    return Result<std::size_t>::Success(solids);
+}
+
+Result<SelectedExport> BuildStepForSelection(
+    const std::vector<KernelShapeHandle>& selected, double toleranceMm)
+{
+    using Out = Result<SelectedExport>;
+    // 1つずつ検査してから出す。壊れたものが混ざったまま出さない。
+    for (const KernelShapeHandle& handle : selected) {
+        const auto check = CheckSolidForExport(handle, toleranceMm);
+        if (!check.HasValue()) {
+            return Out::Failure(check.Diagnostics());
+        }
+    }
+    SelectedExport result;
+    const auto gathered = GatherSelection(selected, result.componentCount,
+        result.totalVolumeMm3);
+    if (!gathered.HasValue()) {
+        return Out::Failure(gathered.Diagnostics());
+    }
+    std::string text;
+    for (const KernelShapeHandle& handle : selected) {
+        const auto part = BuildStepText(handle, toleranceMm);
+        if (!part.HasValue()) {
+            return Out::Failure(part.Diagnostics());
+        }
+        text += part.Value();
+    }
+    result.content = std::move(text);
+    return Out::Success(std::move(result));
+}
+
+Result<SelectedExport> BuildBinaryStlForSelection(
+    const std::vector<KernelShapeHandle>& selected, double deflectionMm)
+{
+    using Out = Result<SelectedExport>;
+    SelectedExport result;
+    const auto gathered = GatherSelection(selected, result.componentCount,
+        result.totalVolumeMm3);
+    if (!gathered.HasValue()) {
+        return Out::Failure(gathered.Diagnostics());
+    }
+    const KernelShapeHandle merged = StoreShape(gathered.Value());
+    const auto stl = BuildBinaryStl(merged, deflectionMm);
+    if (!stl.HasValue()) {
+        return Out::Failure(stl.Diagnostics());
+    }
+    result.content = stl.Value();
+    return Out::Success(std::move(result));
+}
+
 #else // KACHACAD_V2_WITH_OCCT
 
 Result<SolidExportCheck> CheckSolidForExport(KernelShapeHandle handle, double toleranceMm)
@@ -419,6 +529,31 @@ Result<MeshMeasure> MeasureMesh(KernelShapeHandle handle, double deflectionMm)
     (void)handle;
     (void)deflectionMm;
     return Result<MeshMeasure>::Failure(MakeError(kExportUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<std::size_t> CountSolidComponents(const std::vector<KernelShapeHandle>& selected)
+{
+    (void)selected;
+    return Result<std::size_t>::Failure(MakeError(kExportUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<SelectedExport> BuildStepForSelection(
+    const std::vector<KernelShapeHandle>& selected, double toleranceMm)
+{
+    (void)selected;
+    (void)toleranceMm;
+    return Result<SelectedExport>::Failure(MakeError(kExportUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<SelectedExport> BuildBinaryStlForSelection(
+    const std::vector<KernelShapeHandle>& selected, double deflectionMm)
+{
+    (void)selected;
+    (void)deflectionMm;
+    return Result<SelectedExport>::Failure(MakeError(kExportUnsupported,
         "この実行ファイルには幾何カーネルが入っていません。", {}));
 }
 

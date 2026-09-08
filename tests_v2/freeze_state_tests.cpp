@@ -1,5 +1,6 @@
 // 任意の組立状態を固定する(AT-FAB-011 / 014)。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/fabrication/FreezeMaterialize.h"
 #include "kachakacha/fabrication/FreezeState.h"
 
 #include <cmath>
@@ -268,6 +269,193 @@ KACHA_V2_TEST(freeze, 出力の名前がすべてそろっている)
         Require(kachakacha::v2::fabrication::FrozenWireKindNameJa(value) != "不明",
             "名前がある");
     }
+}
+
+// ---- 実体にする(AT-FAB-011 / 014 の Entity 化) ----
+
+KACHA_V2_TEST(freeze, 固定するとFrozenのEntityになる)
+{
+    using kachakacha::v2::domain::EditPolicy;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::fabrication::IsDirectlyEditable;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    const Fixture fixture = MakeFixture();
+    const auto bundle = FreezeAssemblyState(fixture.panels, fixture.folds, At(30.0),
+        FreezeOutput::Both, FabricationSettings{});
+    Require(bundle.HasValue(), "固定できる");
+    const auto made = MaterializeFrozenState(bundle.Value(), "車体");
+    Require(made.HasValue(), "実体にできる");
+    Require(!made.Value().entities.empty(), "何か出る");
+    for (const auto& entity : made.Value().entities) {
+        Require(entity.editPolicy == EditPolicy::Frozen, "固定済みになる");
+        Require(IsDirectlyEditable(entity.editPolicy), "固定後は編集できる");
+        Require(!entity.displayName.empty(), "名前がある");
+        Require(entity.displayName.find("30%") != std::string::npos, "割合が名前に入る");
+    }
+    // 固定する前の派生物は直接編集できない。
+    Require(!IsDirectlyEditable(EditPolicy::Derived), "派生は直接編集しない");
+    Require(IsDirectlyEditable(EditPolicy::Source), "正本は編集できる");
+    RequireNear(made.Value().percent, 30.0, 1e-12, "割合を覚えている");
+}
+
+KACHA_V2_TEST(freeze, 出し方でEntityの種類と数が変わる)
+{
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    const Fixture fixture = MakeFixture();
+    const auto count = [&](FreezeOutput output, EntityKind kind) {
+        const auto bundle = FreezeAssemblyState(fixture.panels, fixture.folds, At(30.0),
+            output, FabricationSettings{});
+        Require(bundle.HasValue(), "固定できる");
+        const auto made = MaterializeFrozenState(bundle.Value(), "車体");
+        Require(made.HasValue(), "実体にできる");
+        int found = 0;
+        for (const auto& entity : made.Value().entities) {
+            found += entity.kind == kind ? 1 : 0;
+        }
+        return found;
+    };
+    const int wiresOnlyWires = count(FreezeOutput::WiresOnly, EntityKind::Wire);
+    const int wiresOnlyParts = count(FreezeOutput::WiresOnly, EntityKind::Part);
+    const int partsOnlyWires = count(FreezeOutput::PartsOnly, EntityKind::Wire);
+    const int partsOnlyParts = count(FreezeOutput::PartsOnly, EntityKind::Part);
+    const int bothWires = count(FreezeOutput::Both, EntityKind::Wire);
+    const int bothParts = count(FreezeOutput::Both, EntityKind::Part);
+
+    Require(wiresOnlyWires > 0, "ワイヤーのみ: ワイヤーが出る");
+    RequireEqual(std::to_string(wiresOnlyParts), "0", "ワイヤーのみ: 部品は出ない");
+    RequireEqual(std::to_string(partsOnlyWires), "0", "部品のみ: ワイヤーは出ない");
+    Require(partsOnlyParts > 0, "部品のみ: 部品が出る");
+    RequireEqual(std::to_string(bothWires), std::to_string(wiresOnlyWires),
+        "両方: ワイヤーの数は同じ");
+    RequireEqual(std::to_string(bothParts), std::to_string(partsOnlyParts),
+        "両方: 部品の数も同じ");
+    // 4部材なので部品は4つ。
+    RequireEqual(std::to_string(bothParts), "4", "4部材");
+}
+
+KACHA_V2_TEST(freeze, 固定したものは元を変えても変わらない)
+{
+    using kachakacha::v2::fabrication::IsIndependentOfSource;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    const Fixture fixture = MakeFixture();
+    const auto atThirty = FreezeAssemblyState(fixture.panels, fixture.folds, At(30.0),
+        FreezeOutput::Both, FabricationSettings{});
+    Require(atThirty.HasValue(), "固定できる");
+    const auto frozen = MaterializeFrozenState(atThirty.Value(), "車体");
+    Require(frozen.HasValue(), "実体にできる");
+
+    // 元の製作モデルを 30% から 90% へ動かす。
+    const auto atNinety = FreezeAssemblyState(fixture.panels, fixture.folds, At(90.0),
+        FreezeOutput::Both, FabricationSettings{});
+    Require(atNinety.HasValue(), "動かせる");
+    Require(IsIndependentOfSource(frozen.Value(), atNinety.Value()),
+        "固定したものは動かない");
+
+    // 同じ状態のままなら、当然一致している(試験そのものが空振りしていない証拠)。
+    Require(!IsIndependentOfSource(frozen.Value(), atThirty.Value()),
+        "同じ状態なら一致する");
+}
+
+KACHA_V2_TEST(freeze, 線の無いワイヤーは実体にせずに断る)
+{
+    using kachakacha::v2::fabrication::FreezeBundle;
+    using kachakacha::v2::fabrication::FrozenWire;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    FreezeBundle bundle;
+    bundle.output = FreezeOutput::WiresOnly;
+    FrozenWire empty;
+    empty.sourceId = "A";
+    bundle.wires.push_back(empty);
+    const auto refused = MaterializeFrozenState(bundle, "車体");
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "FAB-E002", "立体が作れない");
+}
+
+KACHA_V2_TEST(freeze, 輪郭が足りない部材は実体にせずに断る)
+{
+    using kachakacha::v2::fabrication::FreezeBundle;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    using kachakacha::v2::fabrication::PanelSolidRequest;
+    FreezeBundle bundle;
+    bundle.output = FreezeOutput::PartsOnly;
+    PanelSolidRequest thin;
+    thin.panelId = "A";
+    thin.outline = {kachakacha::v2::geometry::Vector3{0, 0, 0},
+        kachakacha::v2::geometry::Vector3{1, 0, 0}};
+    bundle.parts.push_back(thin);
+    const auto refused = MaterializeFrozenState(bundle, "車体");
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "FAB-E002", "立体が作れない");
+}
+
+KACHA_V2_TEST(freeze, 厚みが0の部材は実体にせずに断る)
+{
+    using kachakacha::v2::fabrication::FreezeBundle;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    using kachakacha::v2::fabrication::PanelSolidRequest;
+    FreezeBundle bundle;
+    bundle.output = FreezeOutput::PartsOnly;
+    PanelSolidRequest flat;
+    flat.panelId = "A";
+    flat.outline = {kachakacha::v2::geometry::Vector3{0, 0, 0},
+        kachakacha::v2::geometry::Vector3{1, 0, 0},
+        kachakacha::v2::geometry::Vector3{1, 1, 0}};
+    flat.thicknessMm = 0.0;
+    bundle.parts.push_back(flat);
+    const auto refused = MaterializeFrozenState(bundle, "車体");
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "FAB-E002", "厚みが無い");
+}
+
+KACHA_V2_TEST(freeze, もとが無ければ実体にせずに断る)
+{
+    using kachakacha::v2::fabrication::FreezeBundle;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    FreezeBundle empty;
+    empty.output = FreezeOutput::Both;
+    const auto refused = MaterializeFrozenState(empty, "車体");
+    Require(!refused.HasValue(), "断る");
+    RequireEqual(FirstCode(refused.Diagnostics()), "FAB-E003", "もとが無い");
+
+    const Fixture fixture = MakeFixture();
+    const auto bundle = FreezeAssemblyState(fixture.panels, fixture.folds, At(30.0),
+        FreezeOutput::Both, FabricationSettings{});
+    const auto noName = MaterializeFrozenState(bundle.Value(), "");
+    Require(!noName.HasValue(), "断る");
+    RequireEqual(FirstCode(noName.Diagnostics()), "FAB-E003", "名前が無い");
+}
+
+KACHA_V2_TEST(freeze, 実体にしても曲線の種類が変わらない)
+{
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::fabrication::MaterializeFrozenState;
+    const Fixture fixture = MakeFixture();
+    const auto bundle = FreezeAssemblyState(fixture.panels, fixture.folds, At(30.0),
+        FreezeOutput::WiresOnly, FabricationSettings{});
+    Require(bundle.HasValue(), "固定できる");
+    const auto made = MaterializeFrozenState(bundle.Value(), "車体");
+    Require(made.HasValue(), "実体にできる");
+    std::size_t matched = 0;
+    for (const auto& entity : made.Value().entities) {
+        for (const auto& wire : bundle.Value().wires) {
+            if (wire.sourceId != entity.sourceId) {
+                continue;
+            }
+            RequireEqual(std::to_string(entity.segments.size()),
+                std::to_string(wire.segments.size()), "線の数が同じ");
+            for (std::size_t at = 0; at < wire.segments.size(); ++at) {
+                RequireEqual(
+                    std::string(kachakacha::v2::geometry::CurveKindName(
+                        entity.segments[at].Kind())),
+                    std::string(kachakacha::v2::geometry::CurveKindName(
+                        wire.segments[at].Kind())),
+                    "種類が同じ");
+            }
+            ++matched;
+        }
+    }
+    Require(matched > 0, "突き合わせたものがある");
 }
 
 KACHA_V2_TEST_MAIN("freeze_state_tests")

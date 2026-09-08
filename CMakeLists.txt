@@ -570,6 +570,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/ReliefCut.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
     src/next/kachakacha/modeling/SnapEngine.cpp
+    src/next/kachakacha/modeling/ToolController.cpp
     src/next/kachakacha/modeling/SubshapeKey.cpp
     src/next/kachakacha/modeling/WireCage.cpp
     src/next/kachakacha/io/Json.cpp
@@ -640,6 +641,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)
     kachakacha_add_v2_test(pattern_tests tests_v2/pattern_tests.cpp)
     kachakacha_add_v2_test(export_tests tests_v2/export_tests.cpp)
+    kachakacha_add_v2_test(tool_tests tests_v2/tool_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

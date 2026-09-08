@@ -11,8 +11,12 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <QPolygonF>
+
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <utility>
 
 using kachakacha::v2::geometry::CurveKind;
 using kachakacha::v2::geometry::CurveSegment;
@@ -67,25 +71,29 @@ ViewportPalette ViewportPalette::Win95()
 
 namespace {
 
-struct ViewFrame {
-    Vector3 forward;
-    Vector3 up;
-};
-
-[[nodiscard]] ViewFrame FrameFor(ViewDirection direction)
+//! 6面+等角は、ビューキューブの区画として持つ。姿勢は core が作る。
+[[nodiscard]] kachakacha::v2::view::ViewCubeZone ZoneFor(ViewDirection direction)
 {
     switch (direction) {
-    case ViewDirection::Top:    return {{0.0, 0.0, -1.0}, {0.0, 1.0, 0.0}};
-    case ViewDirection::Bottom: return {{0.0, 0.0, 1.0}, {0.0, -1.0, 0.0}};
-    case ViewDirection::Front:  return {{0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
-    case ViewDirection::Back:   return {{0.0, -1.0, 0.0}, {0.0, 0.0, 1.0}};
-    case ViewDirection::Left:   return {{1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}};
-    case ViewDirection::Right:  return {{-1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}};
+    case ViewDirection::Top:    return {0, 0, 1};
+    case ViewDirection::Bottom: return {0, 0, -1};
+    case ViewDirection::Front:  return {0, -1, 0};
+    case ViewDirection::Back:   return {0, 1, 0};
+    case ViewDirection::Left:   return {-1, 0, 0};
+    case ViewDirection::Right:  return {1, 0, 0};
     case ViewDirection::Isometric:
         break;
     }
-    return {{-1.0, -1.0, -1.0}, {0.0, 0.0, 1.0}};
+    return {1, 1, 1};
 }
+
+//! キューブの大きさと余白(px)。
+constexpr double kViewCubeSizePx = 88.0;
+constexpr double kViewCubeMarginPx = 10.0;
+//! これ以上動いたらクリックではなくドラッグとみなす。
+constexpr double kViewCubeDragThresholdPx = 3.0;
+//! 面と辺の境目の帯。0.28 なら中央 44% が面になる。
+constexpr double kViewCubeEdgeBandRatio = 0.28;
 
 //! 円弧を QPainterPath へ描くときの、画面上での中心・半径・角度。
 //! 平行投影なので、画面に対して正対している円弧は楕円ではなく円になる。
@@ -102,7 +110,7 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(320, 240);
-    RebuildMapping();
+    SetViewDirection(direction_);
 }
 
 void V2Viewport::SetPalette(const ViewportPalette& palette)
@@ -114,8 +122,29 @@ void V2Viewport::SetPalette(const ViewportPalette& palette)
 void V2Viewport::SetViewDirection(ViewDirection direction)
 {
     direction_ = direction;
+    const auto oriented = kachakacha::v2::view::OrientationForZone(ZoneFor(direction));
+    if (!oriented.HasValue()) {
+        viewMessage_ = oriented.Diagnostics().front().summaryJa;
+        return;
+    }
+    SetOrientation(oriented.Value());
+}
+
+void V2Viewport::SetOrientation(const kachakacha::v2::view::Quaternion& orientation)
+{
+    if (!orientation.IsFinite() || orientation.Norm() <= 0.0) {
+        viewMessage_ = "視点の値に数値でないものが入っています。";
+        return;
+    }
+    orientation_ = kachakacha::v2::view::Normalized(orientation);
     RebuildMapping();
     update();
+}
+
+void V2Viewport::SetSelectionFrame(
+    const std::optional<kachakacha::v2::view::Quaternion>& frame)
+{
+    selectionFrame_ = frame;
 }
 
 void V2Viewport::SetWorkPlane(const WorkPlaneFrame& plane)
@@ -166,9 +195,9 @@ ScreenMapping V2Viewport::Mapping() const
 
 void V2Viewport::RebuildMapping()
 {
-    const ViewFrame frame = FrameFor(direction_);
-    mapping_ = MakeOrthographicMapping(center_, frame.forward, frame.up, visibleWidthMm_,
-        std::max(1, width()), std::max(1, height()));
+    mapping_ = MakeOrthographicMapping(center_, kachakacha::v2::view::ForwardOf(orientation_),
+        kachakacha::v2::view::UpOf(orientation_), visibleWidthMm_, std::max(1, width()),
+        std::max(1, height()));
     session_->SetMapping(mapping_);
 }
 
@@ -567,6 +596,227 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
         QStringLiteral("%1 mm").arg(chosen, 0, 'g', 4));
 }
 
+QRectF V2Viewport::ViewCubeRect() const
+{
+    const double size = kViewCubeSizePx;
+    return QRectF(width() - size - kViewCubeMarginPx, kViewCubeMarginPx, size, size);
+}
+
+std::optional<kachakacha::v2::view::ViewCubeZone> V2Viewport::ViewCubeZoneAtScreen(
+    const QPointF& position) const
+{
+    const QRectF box = ViewCubeRect();
+    if (!box.contains(position)) {
+        return std::nullopt;
+    }
+    // キューブの中では、画面の右がカメラの右、画面の上がカメラの上になる。
+    // 立方体は一辺2(-1..+1)なので、外接球の半径 sqrt(3) が入る大きさで写す。
+    const double scale = box.width() * 0.5 / 1.7320508075688772;
+    const QPointF center = box.center();
+    const double sx = (position.x() - center.x()) / scale;
+    const double sy = (center.y() - position.y()) / scale;
+    const Vector3 right = kachakacha::v2::view::RightOf(orientation_);
+    const Vector3 up = kachakacha::v2::view::UpOf(orientation_);
+    const Vector3 forward = kachakacha::v2::view::ForwardOf(orientation_);
+    const Vector3 origin = right * sx + up * sy + forward * -4.0;
+
+    // 視線と立方体の交わりを、面ごとの区間で求める(スラブ法)。
+    const std::array<double, 3> start{origin.x, origin.y, origin.z};
+    const std::array<double, 3> step{forward.x, forward.y, forward.z};
+    double enter = -1.0e30;
+    double leave = 1.0e30;
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        if (std::abs(step[axis]) < 1.0e-12) {
+            if (start[axis] < -1.0 || start[axis] > 1.0) {
+                return std::nullopt;
+            }
+            continue;
+        }
+        double near = (-1.0 - start[axis]) / step[axis];
+        double far = (1.0 - start[axis]) / step[axis];
+        if (near > far) {
+            std::swap(near, far);
+        }
+        enter = std::max(enter, near);
+        leave = std::min(leave, far);
+    }
+    if (enter > leave) {
+        return std::nullopt;
+    }
+    const Vector3 hit = origin + forward * enter;
+    const auto zone = kachakacha::v2::view::ViewCubeZoneAt(hit, kViewCubeEdgeBandRatio);
+    if (!zone.HasValue()) {
+        return std::nullopt;
+    }
+    return zone.Value();
+}
+
+bool V2Viewport::PressViewCube(const QPointF& position)
+{
+    if (!ViewCubeRect().contains(position)) {
+        return false;
+    }
+    const auto begun = kachakacha::v2::view::BeginViewCubeDrag(orientation_);
+    if (!begun.HasValue()) {
+        viewMessage_ = begun.Diagnostics().front().summaryJa;
+        return false;
+    }
+    cubeDrag_ = begun.Value();
+    cubePressPosition_ = position;
+    cubeMoved_ = false;
+    return true;
+}
+
+void V2Viewport::DragViewCube(const QPointF& position)
+{
+    if (!cubeDrag_.active) {
+        return;
+    }
+    const double dx = position.x() - cubePressPosition_.x();
+    const double dy = position.y() - cubePressPosition_.y();
+    if (std::hypot(dx, dy) > kViewCubeDragThresholdPx) {
+        cubeMoved_ = true;
+    }
+    if (!cubeMoved_) {
+        return;
+    }
+    const auto rotated = kachakacha::v2::view::UpdateViewCubeDrag(cubeDrag_, dx, dy,
+        kachakacha::v2::view::kViewCubeDegreesPerPixel);
+    if (!rotated.HasValue()) {
+        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        return;
+    }
+    // ドラッグ中は姿勢だけを入れ替える。吸着も慣性もしない。
+    orientation_ = rotated.Value();
+    RebuildMapping();
+    update();
+}
+
+void V2Viewport::ReleaseViewCube(const QPointF& position)
+{
+    if (!cubeDrag_.active) {
+        return;
+    }
+    if (!cubeMoved_) {
+        // 動かしていないならクリック。ここだけが離散の向きを使う。
+        const auto zone = ViewCubeZoneAtScreen(position);
+        (void)kachakacha::v2::view::EndViewCubeDrag(cubeDrag_, orientation_);
+        if (zone.has_value()) {
+            const auto oriented = kachakacha::v2::view::OrientationForZone(*zone);
+            if (oriented.HasValue()) {
+                viewMessage_ = kachakacha::v2::view::ViewCubeZoneLabelJa(*zone) + "へ正対しました。";
+                SetOrientation(oriented.Value());
+            }
+        }
+        return;
+    }
+    const auto released = kachakacha::v2::view::EndViewCubeDrag(cubeDrag_, orientation_);
+    if (released.HasValue()) {
+        orientation_ = released.Value();
+        RebuildMapping();
+        update();
+    }
+}
+
+bool V2Viewport::RotateByArrow(kachakacha::v2::view::RotationAxis axis,
+    kachakacha::v2::view::RotationAxisMode mode,
+    kachakacha::v2::view::AxisArrowModifier modifier, double dragPx)
+{
+    kachakacha::v2::view::AxisArrowRequest request;
+    request.orientation = orientation_;
+    request.mode = mode;
+    request.axis = axis;
+    request.modifier = modifier;
+    request.hasSelectionFrame = selectionFrame_.has_value();
+    if (selectionFrame_.has_value()) {
+        request.selectionFrame = *selectionFrame_;
+    }
+    const auto rotated = kachakacha::v2::view::RotateByAxisArrowDrag(request, dragPx);
+    if (!rotated.HasValue()) {
+        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        return false;
+    }
+    viewMessage_.clear();
+    SetOrientation(rotated.Value());
+    return true;
+}
+
+void V2Viewport::DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
+    const QPointF& center, double scale) const
+{
+    const Vector3 right = kachakacha::v2::view::RightOf(orientation_);
+    const Vector3 up = kachakacha::v2::view::UpOf(orientation_);
+    const Vector3 forward = kachakacha::v2::view::ForwardOf(orientation_);
+
+    Vector3 normal{};
+    std::array<double*, 3> slots{&normal.x, &normal.y, &normal.z};
+    *slots[static_cast<std::size_t>(faceAxis)] = static_cast<double>(faceSign);
+    const double facing = normal.x * forward.x + normal.y * forward.y + normal.z * forward.z;
+    if (facing > -0.02) {
+        return; // 裏を向いている面は描かない。
+    }
+
+    const std::size_t axisA = static_cast<std::size_t>((faceAxis + 1) % 3);
+    const std::size_t axisB = static_cast<std::size_t>((faceAxis + 2) % 3);
+    QPolygonF polygon;
+    const std::array<std::pair<double, double>, 4> corners{
+        std::pair{-1.0, -1.0}, std::pair{1.0, -1.0}, std::pair{1.0, 1.0}, std::pair{-1.0, 1.0}};
+    for (const auto& corner : corners) {
+        Vector3 point = normal;
+        std::array<double*, 3> pointSlots{&point.x, &point.y, &point.z};
+        *pointSlots[axisA] = corner.first;
+        *pointSlots[axisB] = corner.second;
+        const double sx = point.x * right.x + point.y * right.y + point.z * right.z;
+        const double sy = point.x * up.x + point.y * up.y + point.z * up.z;
+        polygon << QPointF(center.x() + sx * scale, center.y() - sy * scale);
+    }
+    QColor fill = palette_.workPlane;
+    fill.setAlpha(static_cast<int>(90 + 110 * std::min(1.0, -facing)));
+    painter.setBrush(fill);
+    painter.setPen(QPen(palette_.text, 1.0));
+    painter.drawPolygon(polygon);
+
+    kachakacha::v2::view::ViewCubeZone zone{0, 0, 0};
+    std::array<int*, 3> zoneSlots{&zone.x, &zone.y, &zone.z};
+    *zoneSlots[static_cast<std::size_t>(faceAxis)] = faceSign;
+    const double cx = normal.x * right.x + normal.y * right.y + normal.z * right.z;
+    const double cy = normal.x * up.x + normal.y * up.y + normal.z * up.z;
+    painter.setPen(QPen(palette_.text, 1.0));
+    painter.drawText(QRectF(center.x() + cx * scale - 26.0, center.y() - cy * scale - 8.0,
+                         52.0, 16.0),
+        Qt::AlignCenter,
+        QString::fromStdString(kachakacha::v2::view::ViewCubeZoneLabelJa(zone)));
+}
+
+void V2Viewport::DrawViewCube(QPainter& painter) const
+{
+    const QRectF box = ViewCubeRect();
+    if (box.width() < 24.0 || box.right() > width() || box.bottom() > height()) {
+        return;
+    }
+    const double scale = box.width() * 0.5 / 1.7320508075688772;
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QColor backing = palette_.background;
+    backing.setAlpha(200);
+    painter.setBrush(backing);
+    painter.setPen(QPen(palette_.gridMajor, 1.0));
+    painter.drawRect(box);
+    for (int axis = 0; axis < 3; ++axis) {
+        for (int sign = -1; sign <= 1; sign += 2) {
+            DrawViewCubeFace(painter, axis, sign, box.center(), scale);
+        }
+    }
+    if (cubeHoverZone_.has_value()) {
+        painter.setPen(QPen(palette_.selected, 1.0));
+        painter.drawText(QRectF(box.left(), box.bottom() - 14.0, box.width(), 14.0),
+            Qt::AlignCenter,
+            QString::fromStdString(
+                kachakacha::v2::view::ViewCubeZoneLabelJa(*cubeHoverZone_)));
+    }
+    painter.restore();
+}
+
 void V2Viewport::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter(this);
@@ -579,6 +829,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawPreview(painter);
     DrawSnap(painter);
     DrawScaleBar(painter);
+    DrawViewCube(painter);
 }
 
 void V2Viewport::HoverAt(const QPointF& position)
@@ -639,6 +890,19 @@ void V2Viewport::CancelTool()
 
 void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 {
+    if (cubeDrag_.active) {
+        DragViewCube(event->position());
+        return;
+    }
+    const auto zone = ViewCubeZoneAtScreen(event->position());
+    if (zone.has_value() != cubeHoverZone_.has_value()
+        || (zone.has_value() && *zone != *cubeHoverZone_)) {
+        cubeHoverZone_ = zone;
+        update();
+    }
+    if (zone.has_value()) {
+        return; // キューブの上ではスナップを探さない。
+    }
     HoverAt(event->position());
 }
 
@@ -648,7 +912,22 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         FinishTool();
         return;
     }
+    if (PressViewCube(event->position())) {
+        return;
+    }
     ClickAt(event->position());
+}
+
+void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (cubeDrag_.active) {
+        ReleaseViewCube(event->position());
+        if (statusCallback_ && !viewMessage_.empty()) {
+            statusCallback_(viewMessage_);
+        }
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 void V2Viewport::wheelEvent(QWheelEvent* event)

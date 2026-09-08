@@ -15,9 +15,11 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/WorkPlane.h"
+#include "kachakacha/view/ViewOrientation.h"
 
 #include <QColor>
 #include <QPointF>
+#include <QRectF>
 #include <QWidget>
 
 #include <functional>
@@ -103,10 +105,35 @@ public:
     //! いまの写し方。スナップ半径がpxで効くので、core と同じものを使う。
     [[nodiscard]] kachakacha::v2::geometry::ScreenMapping Mapping() const;
 
+    //! いまの姿勢(AT-UIX-008)。6面+等角も、この四元数1個で表す。
+    [[nodiscard]] kachakacha::v2::view::Quaternion Orientation() const { return orientation_; }
+    void SetOrientation(const kachakacha::v2::view::Quaternion& orientation);
+
+    //! ビューキューブ。画面の右上に置く。
+    [[nodiscard]] QRectF ViewCubeRect() const;
+    //! 画面のその位置が、キューブのどの区画か。外していれば値を持たない。
+    [[nodiscard]] std::optional<kachakacha::v2::view::ViewCubeZone> ViewCubeZoneAtScreen(
+        const QPointF& position) const;
+
+    //! キューブを押す・動かす・離す。離した瞬間に止まり、90度へ吸着しない。
+    bool PressViewCube(const QPointF& position);
+    void DragViewCube(const QPointF& position);
+    void ReleaseViewCube(const QPointF& position);
+    [[nodiscard]] bool ViewCubeDragging() const { return cubeDrag_.active; }
+
+    //! XYZ回転矢印。感度は core が決める。
+    bool RotateByArrow(kachakacha::v2::view::RotationAxis axis,
+        kachakacha::v2::view::RotationAxisMode mode,
+        kachakacha::v2::view::AxisArrowModifier modifier, double dragPx);
+    //! 相対軸で使う、選んだ部品の姿勢。無ければ相対軸は断る。
+    void SetSelectionFrame(const std::optional<kachakacha::v2::view::Quaternion>& frame);
+    [[nodiscard]] std::string LastViewMessage() const { return viewMessage_; }
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -120,6 +147,9 @@ private:
     void DrawPreview(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
+    void DrawViewCube(QPainter& painter) const;
+    void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
+        const QPointF& center, double scale) const;
 
     //! 曲線1本を、種類を保ったまま QPainterPath へ足す。
     //! 種類ごとに分ける。1つの関数へ詰めると読めなくなる。
@@ -140,6 +170,13 @@ private:
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
     ViewDirection direction_ = ViewDirection::Isometric;
+    kachakacha::v2::view::Quaternion orientation_{};
+    kachakacha::v2::view::ViewCubeDrag cubeDrag_;
+    QPointF cubePressPosition_;
+    bool cubeMoved_ = false;
+    std::optional<kachakacha::v2::view::ViewCubeZone> cubeHoverZone_;
+    std::optional<kachakacha::v2::view::Quaternion> selectionFrame_;
+    std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     kachakacha::v2::geometry::Vector3 center_{};
     double visibleWidthMm_ = 200.0;

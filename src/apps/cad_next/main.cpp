@@ -15,6 +15,7 @@
 #include "Win95Style.h"
 
 #include "kachakacha/base/Version.h"
+#include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/kernel/KernelInfo.h"
 
 #include <QApplication>
@@ -24,6 +25,7 @@
 #include <QStringList>
 
 #include <iostream>
+#include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <vector>
@@ -254,6 +256,108 @@ struct SelfTestCase {
     return drawing > 0 && output > 0 && drawing != output;
 }
 
+[[nodiscard]] bool CaseViewCubeDragIsContinuous(V2MainWindow& window)
+{
+    // ビューキューブのドラッグは、動かした量に比例して連続に回る(PRD-073)。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Front);
+    const auto start = viewport.Orientation();
+    const QPointF press = viewport.ViewCubeRect().center();
+    if (!viewport.PressViewCube(press)) {
+        return false;
+    }
+    viewport.DragViewCube(press + QPointF(20.0, 0.0));
+    const double small = kachakacha::v2::view::AngleBetween(start, viewport.Orientation());
+    viewport.DragViewCube(press + QPointF(40.0, 0.0));
+    const double large = kachakacha::v2::view::AngleBetween(start, viewport.Orientation());
+    viewport.ReleaseViewCube(press + QPointF(40.0, 0.0));
+    if (small <= 1.0e-6 || large <= small) {
+        return false;
+    }
+    return std::abs(large - 2.0 * small) < 1.0e-6;
+}
+
+[[nodiscard]] bool CaseViewCubeDoesNotSnapOrDrift(V2MainWindow& window)
+{
+    // 90度へ吸着せず、離した後も勝手に回らない(PRD-074)。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Front);
+    const auto start = viewport.Orientation();
+    const QPointF press = viewport.ViewCubeRect().center();
+    if (!viewport.PressViewCube(press)) {
+        return false;
+    }
+    // 0.5deg/px なので 178px で 89度。90度へ寄ってはならない。
+    viewport.DragViewCube(press + QPointF(178.0, 0.0));
+    viewport.ReleaseViewCube(press + QPointF(178.0, 0.0));
+    const auto released = viewport.Orientation();
+    const double degrees = kachakacha::v2::view::AngleBetween(start, released) * 180.0
+        / 3.14159265358979323846;
+    if (std::abs(degrees - 89.0) > 1.0e-6) {
+        return false;
+    }
+    // 離した後に何度描き直しても姿勢が変わらないこと。
+    for (int round = 0; round < 5; ++round) {
+        QApplication::processEvents();
+    }
+    return kachakacha::v2::view::AngleBetween(released, viewport.Orientation()) < 1.0e-12;
+}
+
+[[nodiscard]] bool CaseViewCubeClickFacesTheZone(V2MainWindow& window)
+{
+    // 面をクリックしたときだけ、離散の向きを使う。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    const QPointF center = viewport.ViewCubeRect().center();
+    const auto zone = viewport.ViewCubeZoneAtScreen(center);
+    if (!zone.has_value()) {
+        return false;
+    }
+    if (!viewport.PressViewCube(center)) {
+        return false;
+    }
+    viewport.ReleaseViewCube(center);
+    const auto expected = kachakacha::v2::view::OrientationForZone(*zone);
+    if (!expected.HasValue()) {
+        return false;
+    }
+    if (kachakacha::v2::view::AngleBetween(expected.Value(), viewport.Orientation()) > 1.0e-9) {
+        return false;
+    }
+    // キューブの外を指したら区画は無い。
+    return !viewport.ViewCubeZoneAtScreen(QPointF(10.0, viewport.height() - 10.0)).has_value();
+}
+
+[[nodiscard]] bool CaseAxisArrowsRotateCameraOnly(V2MainWindow& window)
+{
+    // 回転矢印はカメラだけを回す。文書は変わらない(PRD-075)。
+    if (!window.ApplyManualState(QStringLiteral("draw-line"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const std::uint64_t revision = window.Session().GetDocument().Snapshot().revision;
+    const auto before = viewport.Orientation();
+    if (!viewport.RotateByArrow(kachakacha::v2::view::RotationAxis::Z,
+            kachakacha::v2::view::RotationAxisMode::World,
+            kachakacha::v2::view::AxisArrowModifier::None, 100.0)) {
+        return false;
+    }
+    const double degrees = kachakacha::v2::view::AngleBetween(before, viewport.Orientation())
+        * 180.0 / 3.14159265358979323846;
+    if (std::abs(degrees - 25.0) > 1.0e-6) {
+        return false;
+    }
+    if (window.Session().GetDocument().Snapshot().revision != revision) {
+        return false;
+    }
+    // 相対軸は、部品を選んでいないと断る。理由が出る。
+    viewport.SetSelectionFrame(std::nullopt);
+    const bool refused = !viewport.RotateByArrow(kachakacha::v2::view::RotationAxis::X,
+        kachakacha::v2::view::RotationAxisMode::Relative,
+        kachakacha::v2::view::AxisArrowModifier::None, 50.0);
+    return refused && !viewport.LastViewMessage().empty();
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -271,6 +375,10 @@ const SelfTestCase kCases[] = {
     {"失敗しても選んだ道具が変わらない", &CaseSelectionSurvivesFailure},
     {"モードを変えても選択と文書が変わらない", &CaseModesKeepSelection},
     {"モードで出るコマンドが変わる", &CaseModesChangeVisibleCommands},
+    {"ビューキューブが連続に回る", &CaseViewCubeDragIsContinuous},
+    {"90度へ吸着せず離した後も回らない", &CaseViewCubeDoesNotSnapOrDrift},
+    {"キューブのクリックだけが正対する", &CaseViewCubeClickFacesTheZone},
+    {"回転矢印はカメラだけを回す", &CaseAxisArrowsRotateCameraOnly},
 };
 
 } // namespace

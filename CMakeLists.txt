@@ -565,6 +565,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
     src/next/kachakacha/modeling/GridModel.cpp
+    src/next/kachakacha/view/ViewOrientation.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/modeling/ExtrudeInput.cpp
     src/next/kachakacha/exporters/PatternExport.cpp
@@ -684,6 +685,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(command_catalog_tests tests_v2/command_catalog_tests.cpp)
     kachakacha_add_v2_test(operation_guide_tests tests_v2/operation_guide_tests.cpp)
     kachakacha_add_v2_test(ui_mode_tests tests_v2/ui_mode_tests.cpp)
+    kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)

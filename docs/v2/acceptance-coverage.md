@@ -87,7 +87,7 @@
 | AT-UIX-005 | 済 | tests_v2/grid_tests.cpp(1/2・1/3・1/4の点数、主副の間隔、細かすぎる副点の省略、UV での原点保持、作業平面が動いても付いていく、壊れた平面参照を別平面へ付け替えない) |
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
 | AT-UIX-007 | 未 | 形状ガイド表は WP-08後半 |
-| AT-UIX-008 | 未 | View cube は WP-08後半 |
+| AT-UIX-008 | 済 | tests_v2/view_orientation_tests.cpp(26区画すべてで正対でき、視線と上向きが直交する。ドラッグ量と回転量が比例し、刻んでも一気でも同じ姿勢になる。89度まで回しても90度へ寄らない。離した瞬間も1時間後も変化0。感度0.25/0.05/1.0deg-px、クリック15度、相対軸は選択が無ければ断る) + cad_next --self-test(キューブの連続回転・非吸着・クリック正対・回転矢印がカメラだけを回す) |
 | AT-UIX-009 | 済 | tests_v2/document_tests.cpp と robustness_tests.cpp(文書が変わらない)+ cad_next --self-test(失敗する操作を3回ずつ繰り返してもアプリが続き、文書も選んだ道具も変わらない) |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
 | AT-UIX-011 | 済 | src/next/kachakacha/app/CommandCatalog.cpp と tests_v2/command_catalog_tests.cpp(52件を双方向で突き合わせ。表示名・記号・案内・受入IDの有無、ショートカットの重複、camera操作が文書を変えないことを見る) |

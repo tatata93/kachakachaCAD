@@ -641,6 +641,18 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         ApplyTheme(UiTheme::Windows95);
         return true;
     }
+    if (name == QStringLiteral("view-cube")) {
+        // ビューキューブをドラッグした後の画面。90度へ吸着していないことを目で見る。
+        (void)ApplyManualState(QStringLiteral("curves"));
+        viewport_->SetViewDirection(ViewDirection::Isometric);
+        viewport_->FitToDocument();
+        const QRectF box = viewport_->ViewCubeRect();
+        const QPointF press = box.center();
+        (void)viewport_->PressViewCube(press);
+        viewport_->DragViewCube(press + QPointF(37.0, -13.0));
+        viewport_->ReleaseViewCube(press + QPointF(37.0, -13.0));
+        return true;
+    }
     if (name == QStringLiteral("mode-part")) {
         (void)ApplyManualState(QStringLiteral("curves"));
         SetMode(kachakacha::v2::app::UiMode::Part);

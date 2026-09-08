@@ -956,4 +956,48 @@ KACHA_V2_TEST(guideSurface, どの入力が一番ずれているかを言える)
     RequireCount(check.worstChainIndex, 2, "3本目が一番ずれている");
 }
 
+// 面をずらす入力は、曲線ではなく既にある面への参照である。
+// 線としての中身が無いことを理由に断ってはならない(PCの kernel_surface_tests で発覚)。
+KACHA_V2_TEST(guideSurface, 面をずらす入力は線を持たなくてよい)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::OffsetGuide;
+    request.offsetDistanceMm = 3.0;
+    GuideChain chain;
+    chain.role = ChainRole::SourceSurface;
+    chain.index = 1;
+    request.chains.push_back(chain);
+    const auto analysis = AnalyzeGuideSurfaceRequest(request, Tolerance());
+    Require(analysis.HasValue(), "線が無くても通ること");
+    Require(analysis.Value().method == GuideSurfaceMethod::OffsetGuide, "作り方");
+}
+
+KACHA_V2_TEST(guideSurface, 面をずらす距離が0なら断る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::OffsetGuide;
+    request.offsetDistanceMm = 0.0;
+    GuideChain chain;
+    chain.role = ChainRole::SourceSurface;
+    chain.index = 1;
+    request.chains.push_back(chain);
+    const auto analysis = AnalyzeGuideSurfaceRequest(request, Tolerance());
+    Require(!analysis.HasValue(), "0は断る");
+}
+
+KACHA_V2_TEST(guideSurface, 面をずらす元が2つあれば断る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::OffsetGuide;
+    request.offsetDistanceMm = 3.0;
+    for (int index = 1; index <= 2; ++index) {
+        GuideChain chain;
+        chain.role = ChainRole::SourceSurface;
+        chain.index = index;
+        request.chains.push_back(chain);
+    }
+    const auto analysis = AnalyzeGuideSurfaceRequest(request, Tolerance());
+    Require(!analysis.HasValue(), "1つだけにさせる");
+}
+
 KACHA_V2_TEST_MAIN("guide_surface_tests")

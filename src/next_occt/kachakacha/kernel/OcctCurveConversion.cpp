@@ -6,6 +6,7 @@
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_BezierCurve.hxx>
@@ -17,6 +18,7 @@
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Dir.hxx>
 
@@ -204,12 +206,22 @@ Result<TopoDS_Wire> ToWire(const std::vector<CurveSegment>& segments, double tol
     }
     return Guarded([&]() -> Result<TopoDS_Wire> {
         BRepBuilderAPI_MakeWire maker;
+        BRep_Builder builder;
         for (const CurveSegment& segment : segments) {
             auto edge = ToEdge(segment);
             if (!edge.HasValue()) {
                 return Result<TopoDS_Wire>::Failure(edge.Diagnostics());
             }
-            maker.Add(edge.Value());
+            TopoDS_Edge shape = edge.Value();
+            // 端点の許容差を、上で認めた継ぎ目の幅に合わせて申告する。
+            // これをしないと OCCT は既定の 1e-7 でしか繋がず、
+            // 利用者が結合許容差として認めた隙間でもワイヤーにならない。
+            // 形を動かすのではなく「この点はこの幅までは同じ点である」と言うだけである。
+            for (TopExp_Explorer explorer(shape, TopAbs_VERTEX); explorer.More();
+                explorer.Next()) {
+                builder.UpdateVertex(TopoDS::Vertex(explorer.Current()), limit);
+            }
+            maker.Add(shape);
         }
         if (!maker.IsDone()) {
             return Result<TopoDS_Wire>::Failure(MakeError(kKernelFailure,

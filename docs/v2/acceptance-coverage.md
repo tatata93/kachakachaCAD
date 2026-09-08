@@ -53,14 +53,14 @@
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |
 | AT-GEO-013 | 部分 | 非連結の検出は済。複数Partへの分割は WP-07 |
-| AT-EXT-001 | 未 | 押し出しは WP-07。OCCT が要る |
-| AT-EXT-002 | 未 | 同上 |
-| AT-EXT-003 | 未 | 同上 |
-| AT-EXT-004 | 部分 | 穴付き輪郭の入力検査は済(guide_surface_tests.cpp)。押し出しは WP-07 |
-| AT-EXT-005 | 部分 | 複数外周の検出は済(同上)。押し出しは WP-07 |
-| AT-EXT-006 | 未 | 終端方式は WP-07 |
-| AT-EXT-007 | 未 | 足す/引くは WP-07 |
-| AT-EXT-008 | 未 | 連続編集は WP-07 |
+| AT-EXT-001 | 部分 | tests_v2/extrude_tests.cpp(体積24000mm3・面数6・部品数を core が予測し、突き合わせる)。OCCT側の実形状は WP-07 後半 |
+| AT-EXT-002 | 部分 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す)。実形状は WP-07 後半 |
+| AT-EXT-003 | 部分 | tests_v2/extrude_tests.cpp(ワイヤーと部品の同時選択)。位置の一致検査は WP-07 後半 |
+| AT-EXT-004 | 部分 | tests_v2/extrude_tests.cpp(穴の分だけ体積が減る。3重の入れ子も分類)。円が多角形にならないことの確認は WP-07 後半 |
+| AT-EXT-005 | 部分 | tests_v2/extrude_tests.cpp(離れた2外周→2部品。事前表示の個数)。commit 個数の一致は WP-07 後半 |
+| AT-EXT-006 | 部分 | tests_v2/extrude_tests.cpp(5方式すべて。平面/円筒/球までの到達距離。届かない先は EXT-003 で拒否)。曲面の厳密trimは WP-07 後半 |
+| AT-EXT-007 | 部分 | tests_v2/extrude_tests.cpp(相手未選択を拒否。非連結の恐れを EXT-005 で警告)。実際の演算は WP-07 後半 |
+| AT-EXT-008 | 未 | 連続編集は WP-07 後半。同じ EntityId のまま再計算する経路が要る |
 | AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) |
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |

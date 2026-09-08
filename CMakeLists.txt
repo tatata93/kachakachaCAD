@@ -562,6 +562,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
+    src/next/kachakacha/modeling/ExtrudeInput.cpp
     src/next/kachakacha/exporters/PatternExport.cpp
     src/next/kachakacha/exporters/PdfWriter.cpp
     src/next/kachakacha/fabrication/Assembly.cpp
@@ -650,6 +651,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)
     kachakacha_add_v2_test(work_plane_tests tests_v2/work_plane_tests.cpp)
+    kachakacha_add_v2_test(extrude_tests tests_v2/extrude_tests.cpp)
     kachakacha_add_v2_test(wire_cage_tests tests_v2/wire_cage_tests.cpp)
     kachakacha_add_v2_test(snap_tests tests_v2/snap_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)

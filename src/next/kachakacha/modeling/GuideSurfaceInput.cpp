@@ -88,7 +88,9 @@ struct SampledChain {
     std::vector<Diagnostic> errors;
     std::map<ChainRole, std::vector<int>> seen;
     for (const GuideChain& chain : request.chains) {
-        if (chain.segments.empty()) {
+        // SourceSurface は「既にある形状ガイドを指す」入力であって、曲線ではない。
+        // 線の中身が無いことを理由に断らない(面をずらす操作で使う)。
+        if (chain.segments.empty() && chain.role != ChainRole::SourceSurface) {
             errors.push_back(MakeError(kBadInput, "中身の無い線が入力にあります。",
                 ChainLabel(chain)));
         }
@@ -846,6 +848,12 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
     }
     if (!errors.empty()) {
         return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
+    }
+
+    // OffsetGuide の入力は曲線ではなく、既にある形状ガイドへの参照である。
+    // 線としての中身を持たないので、点列の検査にはかけない。
+    if (request.method == GuideSurfaceMethod::OffsetGuide) {
+        return AnalyzeOffset(request, tolerance);
     }
 
     std::vector<SampledChain> sampled = SampleAll(request, SamplingToleranceMm(tolerance));

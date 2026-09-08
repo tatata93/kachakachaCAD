@@ -48,7 +48,7 @@
 | AT-GEO-004 | 済 | tests_v2/guide_surface_tests.cpp(両端接続ガイド。オーナー提示ケース) |
 | AT-GEO-005 | 済 | tests_v2/guide_surface_tests.cpp(欠損・2重・順序逆転を固定コードで拒否) |
 | AT-GEO-006 | 済 | tests_v2/guide_surface_tests.cpp(5辺は自動分割せず拒否) |
-| AT-GEO-007 | 部分 | 壊れた参照の判定は WP-06。入力の欠落は済 |
+| AT-GEO-007 | 済 | tests_v2/broken_reference_tests.cpp(指していた断面が消えると壊れた参照になり、近くの断面1や断面3へ移らない。候補は近い順に挙げるが選ばない。相手を選ばずに指し直そうとすると DOC-C008 で断り、候補が1つしかなくても自動では選ばない。選んだ相手へは指し直せる。効かなくする・消すも選べる。並びは毎回同じ) + panel_strategy_tests.cpp(製作側の壊れた参照)|
 | AT-GEO-010 | 済 | tests_v2/wire_cage_tests.cpp(12辺順不同→6面1体) |
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |

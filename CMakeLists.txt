@@ -566,6 +566,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Ids.cpp
     src/next/kachakacha/base/Uuid.cpp
     src/next/kachakacha/base/Version.cpp
+    src/next/kachakacha/document/BrokenReference.cpp
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
     src/next/kachakacha/document/FeatureReevaluation.cpp
@@ -699,6 +700,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)
     kachakacha_add_v2_test(feature_reevaluation_tests tests_v2/feature_reevaluation_tests.cpp)
     kachakacha_add_v2_test(active_group_tests tests_v2/active_group_tests.cpp)
+    kachakacha_add_v2_test(broken_reference_tests tests_v2/broken_reference_tests.cpp)
     kachakacha_add_v2_test(theme_layout_tests tests_v2/theme_layout_tests.cpp)
     kachakacha_add_v2_test(plane_follow_tests tests_v2/plane_follow_tests.cpp)
     kachakacha_add_v2_test(point_source_tests tests_v2/point_source_tests.cpp)

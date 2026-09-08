@@ -67,6 +67,8 @@ private:
     void BuildBody();
     void RefreshTargets();
     void RefreshFormats();
+    //! 行がすべて見える高さにする。
+    static void FitRows(QTreeWidget* view, int rowCount);
     void RefreshSummary();
     void Refresh();
     void Report(const std::vector<kachakacha::v2::base::Diagnostic>& diagnostics);

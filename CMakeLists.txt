@@ -558,6 +558,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CursorInput.cpp
     src/next/kachakacha/app/EvaluationQueue.cpp
     src/next/kachakacha/app/ExportContent.cpp
+    src/next/kachakacha/app/SampleDocument.cpp
     src/next/kachakacha/app/Selection.cpp
     src/next/kachakacha/app/ExportPanel.cpp
     src/next/kachakacha/app/ExportService.cpp
@@ -667,6 +668,9 @@ if(KACHACAD_BUILD_TESTS)
         add_test(NAME v2_${name} COMMAND kachakacha_v2_${name})
     endfunction()
 
+    add_executable(kachakacha_v2_write_sample tools/write_sample/main.cpp)
+    target_link_libraries(kachakacha_v2_write_sample PRIVATE kachakacha_v2_core)
+
     kachakacha_add_v2_test(harness_tests tests_v2/harness_tests.cpp)
     kachakacha_add_v2_test(architecture_tests tests_v2/architecture_tests.cpp)
     kachakacha_add_v2_test(scaffold_tests tests_v2/scaffold_tests.cpp)
@@ -709,6 +713,8 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(broken_reference_tests tests_v2/broken_reference_tests.cpp)
     kachakacha_add_v2_test(process_step_tests tests_v2/process_step_tests.cpp)
     kachakacha_add_v2_test(export_content_tests tests_v2/export_content_tests.cpp)
+    kachakacha_add_v2_test(manual_tests tests_v2/manual_tests.cpp)
+    kachakacha_add_v2_test(sample_document_tests tests_v2/sample_document_tests.cpp)
     kachakacha_add_v2_test(selection_tests tests_v2/selection_tests.cpp)
     kachakacha_add_v2_test(export_panel_tests tests_v2/export_panel_tests.cpp)
     kachakacha_add_v2_test(export_service_tests tests_v2/export_service_tests.cpp)

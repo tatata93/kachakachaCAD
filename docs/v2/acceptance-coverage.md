@@ -27,7 +27,7 @@
 | AT-DOC-003 | 済 | tests_v2/document_tests.cpp(循環を拒否) |
 | AT-DOC-004 | 済 | tests_v2/document_tests.cpp(失敗したら一切変わらない) |
 | AT-DOC-005 | 済 | tests_v2/document_tests.cpp(Undo/Redo、まとめ単位) |
-| AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す) |
+| AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す)+ tests_v2/sample_document_tests.cpp(配る見本 samples/v2-sample.kcd2 が、同じ版から毎回同じバイト列で出て、読み直せて、置き直し忘れると落ちる) |
 | AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、tests_v2/zip_tests.cpp、tests_v2/robustness_tests.cpp(壊れた保存を断る) |
 | AT-EXP-003 | 済 | tests_v2/document_file_tests.cpp(知らない版を断る、古い項目欠落を許す) |
 | AT-EXP-004 | 済 | tests_v2/atomic_file_tests.cpp(途中失敗を注入しても既存が読める。成功時は本体と .bak が両方読み直せる) |

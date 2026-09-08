@@ -2,6 +2,8 @@
 
 #include <QAction>
 #include <QColor>
+#include <QFileDialog>
+#include <QFontMetrics>
 #include <QLabel>
 #include <QToolBar>
 #include <QTreeWidget>
@@ -69,6 +71,8 @@ void V2ExportDock::BuildBody()
     layout->addWidget(messageLabel_);
 
     auto* bar = new QToolBar(body);
+    auto* chooseAction = new QAction(QStringLiteral("出す先を選ぶ…"), bar);
+    bar->addAction(chooseAction);
     overwriteAction_ = new QAction(QStringLiteral("上書きしてよい"), bar);
     overwriteAction_->setCheckable(true);
     bar->addAction(overwriteAction_);
@@ -99,6 +103,16 @@ void V2ExportDock::BuildBody()
                 ChooseFormat(formatRows_[static_cast<std::size_t>(index)].format);
             }
         });
+    QObject::connect(chooseAction, &QAction::triggered, this, [this](bool) {
+        const QString chosen = QFileDialog::getSaveFileName(this,
+            QStringLiteral("出す先を決める"), QString(),
+            QStringLiteral("書き出すファイル (*%1)")
+                .arg(QString::fromStdString(std::string(
+                    kachakacha::v2::app::ExportFormatExtension(state_.format)))));
+        if (!chosen.isEmpty()) {
+            ChoosePath(chosen);
+        }
+    });
     QObject::connect(overwriteAction_, &QAction::triggered, this,
         [this](bool checked) { SetOverwrite(checked); });
     QObject::connect(runAction_, &QAction::triggered, this, [this](bool) { RunNow(); });
@@ -206,6 +220,17 @@ void V2ExportDock::RefreshFormats()
     }
 }
 
+//! 行がすべて見えるだけの高さにする。
+//! 隠れていると、選べる対象があることに気づけない。
+void V2ExportDock::FitRows(QTreeWidget* view, int rowCount)
+{
+    if (view == nullptr || rowCount <= 0) {
+        return;
+    }
+    const int lineHeight = QFontMetrics(view->font()).height() + 6;
+    view->setMinimumHeight(lineHeight * (rowCount + 1) + 8);
+}
+
 void V2ExportDock::RefreshSummary()
 {
     pathLabel_->setText(state_.path.empty()
@@ -224,6 +249,8 @@ void V2ExportDock::Refresh()
 {
     RefreshTargets();
     RefreshFormats();
+    FitRows(targetView_, static_cast<int>(targetRows_.size()));
+    FitRows(formatView_, static_cast<int>(formatRows_.size()));
     RefreshSummary();
 }
 

@@ -44,6 +44,7 @@ public:
     void setFocusPolicy(Qt::FocusPolicy);
     void setMinimumSize(int, int);
     void setMinimumWidth(int);
+    void setMinimumHeight(int);
     void setFixedSize(int, int);
     void setWindowTitle(const QString&);
     [[nodiscard]] QString windowTitle() const;
@@ -267,6 +268,13 @@ public:
     void addToolBar(Qt::ToolBarArea, QToolBar*);
     void addDockWidget(Qt::DockWidgetArea, QDockWidget*);
     void addAction(QAction*);
+};
+
+class QFileDialog : public QWidget {
+public:
+    [[nodiscard]] static QString getSaveFileName(QWidget* parent = nullptr,
+        const QString& caption = QString(), const QString& directory = QString(),
+        const QString& filter = QString());
 };
 
 class QTabBar : public QWidget {

@@ -17,8 +17,8 @@
 | WP-08 | 完了(Qt画面、作図、スナップ、グリッド、測定、ビューキューブ、数値入力、役割テーブル、作業中グループ。cad_next --self-test 28件) | WP-03, WP-04 | Qt shell、作図、snap、grid、測定、view |
 | WP-09 | 完了(v2_fabrication / v2_pattern / v2_panel_strategy / v2_opening_clip / v2_assembly / v2_closed_loop / v2_freeze_state) | WP-06, WP-07 | 製作近似コア、型紙、組立solver |
 | WP-10 | 進行中(Claude。固定の実体化と選択部材出力は完了。部品/製作/出力の画面接続が残り) | WP-08, WP-09 | 部品/製作/出力UI接続 |
-| WP-11 | 進行中(Claude。書き出しの段取り(対象x形式の表・検査・原子的な書き込み)は完了。画面からの接続が残り) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
-| WP-12 | 進行中(Claude。ER1/ER2 の受入モデルは完了。マニュアルと配布が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
+| WP-11 | 完了(Claude, cda2a5b。対象x形式の表・検査・原子的な書き込みに加え、選択と書き出しの棚を画面へ繋いだ。tests_v2/export_panel_tests.cpp 25件、export_content_tests.cpp 15件、selection_tests.cpp 21件、cad_next --self-test 4件) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
+| WP-12 | 進行中(Claude。ER1/ER2 の受入モデル、図つきマニュアル、見本 .kcd2 は完了。配布と切替が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
 | WP-13 | 未着手 | WP-12 | 旧実装削除と最終整理 |
 
 状態は `未着手 / 進行中(担当、branch、date) / blocked(理由、試行) / 完了(commit、試験)` のいずれか。

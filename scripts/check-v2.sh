@@ -6,13 +6,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$(repo_root)"
 
 PRESET="$(resolve_preset "${1:-}")"
-BUILD_DIR=""
-if [ -z "$BUILD_DIR" ]; then
-    case "$PRESET" in
-        linux-core|windows-core) BUILD_DIR="build-core" ;;
-        *) BUILD_DIR="build-msvc2022-x64" ;;
-    esac
-fi
+# ビルド先はpresetのbinaryDirから引く。表を手で持つと、presetを足したときに必ずずれる。
+case "$PRESET" in
+    linux-core|windows-core|macos-core) BUILD_DIR="build-core" ;;
+    linux)                              BUILD_DIR="build-linux" ;;
+    windows-msvc)                       BUILD_DIR="build-msvc2022-x64" ;;
+    *)
+        echo "知らないpresetです: $PRESET" >&2
+        exit 2
+        ;;
+esac
 
 echo "== configure ($PRESET) =="
 cmake --preset "$PRESET"

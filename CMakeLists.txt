@@ -579,6 +579,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/ArcBuilders.cpp
     src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
+    src/next/kachakacha/geometry/CurveJoin.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
@@ -642,6 +643,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(pattern_tests tests_v2/pattern_tests.cpp)
     kachakacha_add_v2_test(export_tests tests_v2/export_tests.cpp)
     kachakacha_add_v2_test(tool_tests tests_v2/tool_tests.cpp)
+    kachakacha_add_v2_test(curve_join_tests tests_v2/curve_join_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

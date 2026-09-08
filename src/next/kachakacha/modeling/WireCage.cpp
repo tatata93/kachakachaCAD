@@ -835,7 +835,13 @@ Result<WireCageAnalysis> AnalyzeWireCage(const std::vector<CageEdgeInput>& input
             patch.normal = flipped[at] ? -faces[at].normal : faces[at].normal;
             patch.areaMm2 = faces[at].areaMm2;
             patch.declared = faces[at].declared;
-            for (std::size_t index = 0; index < faces[at].edges.size(); ++index) {
+            // 面の向きを裏返すときは、辺を1本ずつ逆にするだけでは足りない。
+            // 1周する順そのものも逆にしないと、隣どうしの端点が合わなくなる
+            // (e1 の終点は e2 の始点だが、e1 を逆にすると終点が始点へ移る)。
+            const std::size_t edgeCount = faces[at].edges.size();
+            for (std::size_t step = 0; step < edgeCount; ++step) {
+                const std::size_t index =
+                    flipped[at] ? (edgeCount - 1 - step) : step;
                 patch.edgeIndices.push_back(edges[faces[at].edges[index]].inputIndex);
                 patch.reversed.push_back(faces[at].reversed[index] != flipped[at]);
             }

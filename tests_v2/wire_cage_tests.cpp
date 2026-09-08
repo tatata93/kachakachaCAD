@@ -2,6 +2,7 @@
 // 線の並び順に頼らず、囲めているかを判定する。囲めていないものは断る。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/modeling/SubshapeKey.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/modeling/WireCage.h"
 
 #include <algorithm>
@@ -536,6 +537,49 @@ KACHA_V2_TEST(subshapeKey, 読めない記号を断る)
         Require(!parsed.HasValue(), std::string("断ること: ") + text);
         RequireEqual(parsed.Diagnostics().front().code, std::string("GEO-K001"),
             std::string("診断コード: ") + text);
+    }
+}
+
+KACHA_V2_TEST(wireCage, 面の辺は1周する順に並んでいる)
+{
+    // これが崩れていると、カーネルへ渡したときにワイヤーにならない。
+    // 実際に崩れていて、PC の側でだけ落ちた。ここで数えるようにする。
+    // 「面を1周する順」とは、reversed を守って並べたとき、
+    // 前の線の終点が次の線の始点になっている、ということである。
+    using kachakacha::v2::geometry::ReverseCurve;
+    const std::vector<std::vector<CageEdgeInput>> fixtures{
+        Box(10.0, 10.0, 10.0), Box(200.0, 60.0, 3.0)};
+    for (const auto& edges : fixtures) {
+        const auto result = AnalyzeWireCage(edges, Tolerance());
+        Require(result.HasValue(), "調べられること");
+        for (const auto& shell : result.Value().shells) {
+            for (const auto& patch : shell.patches) {
+                RequireCount(patch.reversed.size(), patch.edgeIndices.size(),
+                    "向きの数と線の数が同じ");
+                std::vector<CurveSegment> loop;
+                for (std::size_t at = 0; at < patch.edgeIndices.size(); ++at) {
+                    const CurveSegment& segment = edges[patch.edgeIndices[at]].segment;
+                    if (!patch.reversed[at]) {
+                        loop.push_back(segment);
+                        continue;
+                    }
+                    const auto flipped = ReverseCurve(segment);
+                    Require(flipped.HasValue(), "逆にできること");
+                    loop.push_back(flipped.Value());
+                }
+                Require(loop.size() >= 3, "面は3本以上の線で囲まれる");
+                for (std::size_t at = 0; at + 1 < loop.size(); ++at) {
+                    const double gap =
+                        (loop[at].EndPoint() - loop[at + 1].StartPoint()).Length();
+                    Require(gap < 1.0e-6,
+                        "前の終点と次の始点が合う: " + std::to_string(gap) + " mm");
+                }
+                const double closing =
+                    (loop.back().EndPoint() - loop.front().StartPoint()).Length();
+                Require(closing < 1.0e-6,
+                    "最後が最初へ戻る: " + std::to_string(closing) + " mm");
+            }
+        }
     }
 }
 

@@ -6,6 +6,7 @@
 #include "kachakacha/base/SourceScan.h"
 #include "kachakacha/base/TestHarness.h"
 
+#include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <sstream>
@@ -236,6 +237,107 @@ KACHA_V2_TEST(architecture, v2_sources_carry_no_unfinished_marker)
     return name;
 }
 
+//! OCCT の型は、使うファイルで include されていなければならない。
+//!
+//! OCCT のヘッダは互いを深く include しているので、書き忘れても
+//! たまたま通ることがある。通らなかったときは PC でだけ落ちる。
+//! 雲には OCCT が入らないので、そこでは気づけない。
+//! 「その型を変数の型か戻り値として書いているなら、その include も書く」
+//! を機械で守る。名前を挙げるだけの行(コメント、文字列)は見ない。
+[[nodiscard]] std::vector<std::string> OcctTypesDeclaredIn(const std::string& line)
+{
+    std::vector<std::string> found;
+    if (line.find("#include") != std::string::npos) {
+        return found;
+    }
+    // 大文字で始まり、下線を1つ挟む OCCT 風の名前。
+    const auto isTypeChar = [](char value) {
+        return std::isalnum(static_cast<unsigned char>(value)) != 0 || value == '_';
+    };
+    for (std::size_t at = 0; at < line.size(); ++at) {
+        if (!(line[at] >= 'A' && line[at] <= 'Z')) {
+            continue;
+        }
+        if (at > 0 && isTypeChar(line[at - 1])) {
+            continue;
+        }
+        std::size_t end = at;
+        while (end < line.size() && isTypeChar(line[end])) {
+            ++end;
+        }
+        const std::string word = line.substr(at, end - at);
+        const std::size_t underscore = word.find('_');
+        if (underscore == std::string::npos || underscore == 0
+            || underscore + 1 >= word.size()) {
+            continue;
+        }
+        // その語のすぐ後ろが「変数名 + 区切り」なら、型として書いている。
+        std::size_t next = end;
+        while (next < line.size() && line[next] == ' ') {
+            ++next;
+        }
+        const bool spaced = next > end;
+        std::size_t nameEnd = next;
+        while (nameEnd < line.size() && isTypeChar(line[nameEnd])) {
+            ++nameEnd;
+        }
+        const bool named = nameEnd > next;
+        const bool closed = nameEnd < line.size()
+            && (line[nameEnd] == ';' || line[nameEnd] == '=' || line[nameEnd] == '('
+                || line[nameEnd] == '{' || line[nameEnd] == ',' || line[nameEnd] == ')');
+        if (spaced && named && closed) {
+            found.push_back(word);
+        }
+        // Result<Type> の形も型として書いている。
+        if (at >= 7 && line.compare(at - 7, 7, "Result<") == 0 && end < line.size()
+            && line[end] == '>') {
+            found.push_back(word);
+        }
+        at = end;
+    }
+    return found;
+}
+
+KACHA_V2_TEST(architecture, occt_types_are_included_where_used)
+{
+    std::vector<std::string> offenders;
+    for (const SourceFile& file : CollectSourceFiles(RepoRoot() / "src" / "next_occt")) {
+        std::vector<std::string> includes;
+        for (const std::string& line : file.lines) {
+            const std::size_t open = line.find("#include <");
+            if (open == std::string::npos) {
+                continue;
+            }
+            const std::size_t close = line.find(".hxx>", open);
+            if (close == std::string::npos) {
+                continue;
+            }
+            includes.push_back(line.substr(open + 10, close - open - 10));
+        }
+        for (std::size_t index = 0; index < file.lines.size(); ++index) {
+            for (const std::string& type : OcctTypesDeclaredIn(file.lines[index])) {
+                if (std::find(includes.begin(), includes.end(), type) != includes.end()) {
+                    continue;
+                }
+                // core 側の型(kachakacha の名前空間)は OCCT ではない。
+                if (type.compare(0, 5, "TopoD") != 0 && type.compare(0, 4, "BRep") != 0
+                    && type.compare(0, 5, "Geom_") != 0 && type.compare(0, 3, "gp_") != 0
+                    && type.compare(0, 4, "Bnd_") != 0 && type.compare(0, 6, "GProp_") != 0
+                    && type.compare(0, 7, "TopAbs_") != 0
+                    && type.compare(0, 8, "TopTools") != 0
+                    && type.compare(0, 9, "IFSelect_") != 0
+                    && type.compare(0, 12, "STEPControl_") != 0) {
+                    continue;
+                }
+                offenders.push_back(file.path.filename().string() + ":"
+                    + std::to_string(index + 1) + " " + type);
+            }
+        }
+    }
+    Require(offenders.empty(),
+        "every OCCT type used is included in that file: " + Join(offenders));
+}
+
 KACHA_V2_TEST(architecture, v2_test_names_are_valid_identifiers)
 {
     std::vector<std::string> offenders;
@@ -324,6 +426,19 @@ KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)
     RequireEqual(TestNameIn("KACHA_V2_TEST(suite,  空白つき 名前 )"), "空白つき 名前",
         "前後の空白だけを落とす");
     Require(TestNameIn("// ふつうの行").empty(), "関係ない行は拾わない");
+
+    // OCCT の include の走査も、その場で試す。
+    const auto declared = OcctTypesDeclaredIn("    TopoDS_Compound compound;");
+    Require(std::find(declared.begin(), declared.end(), "TopoDS_Compound")
+            != declared.end(),
+        "変数の型として書いた OCCT の型を拾う");
+    const auto returned = OcctTypesDeclaredIn("Result<TopoDS_Face> MakeFace()");
+    Require(std::find(returned.begin(), returned.end(), "TopoDS_Face") != returned.end(),
+        "戻り値として書いた OCCT の型も拾う");
+    Require(OcctTypesDeclaredIn("#include <TopoDS_Compound.hxx>").empty(),
+        "include の行そのものは拾わない");
+    Require(OcctTypesDeclaredIn("// TopoDS_Compound を作る").empty(),
+        "名前を挙げるだけの行は拾わない");
 }
 
 KACHA_V2_TEST_MAIN("architecture_tests")

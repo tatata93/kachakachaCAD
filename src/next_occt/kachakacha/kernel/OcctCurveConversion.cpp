@@ -18,6 +18,8 @@
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Wire.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Dir.hxx>

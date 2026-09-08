@@ -12,6 +12,8 @@
 #include <BRepBndLib.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include <BRep_Builder.hxx>
+#include <IFSelect_ReturnStatus.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
@@ -25,6 +27,7 @@
 #include <STEPControl_Writer.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>

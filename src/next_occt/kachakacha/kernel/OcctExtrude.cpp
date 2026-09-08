@@ -33,7 +33,9 @@
 #include <Geom_Surface.hxx>
 #include <Precision.hxx>
 #include <Standard_Failure.hxx>
+#include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>

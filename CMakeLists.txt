@@ -577,6 +577,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/ToolController.cpp
     src/next/kachakacha/modeling/SubshapeKey.cpp
     src/next/kachakacha/modeling/WireCage.cpp
+    src/next/kachakacha/io/AtomicFile.cpp
     src/next/kachakacha/io/Json.cpp
     src/next/kachakacha/io/Zip.cpp
     src/next/kachakacha/io/DocumentFile.cpp
@@ -673,6 +674,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)
     kachakacha_add_v2_test(zip_tests tests_v2/zip_tests.cpp)
     kachakacha_add_v2_test(document_file_tests tests_v2/document_file_tests.cpp)
+    kachakacha_add_v2_test(atomic_file_tests tests_v2/atomic_file_tests.cpp)
 
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
 

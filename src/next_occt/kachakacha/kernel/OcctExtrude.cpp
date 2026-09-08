@@ -295,7 +295,13 @@ void CollectFaceKeys(BRepPrimAPI_MakePrism& prism, const TopoDS_Shape& profileFa
         std::size_t segmentIndex = 0;
         for (TopExp_Explorer explorer(profileFace, TopAbs_EDGE); explorer.More();
             explorer.Next()) {
-            const TopoDS_Shape generated = prism.Generated(explorer.Current());
+            // OCCT は「その辺から作られた形」を一覧で返す。ふつうは1枚。
+            const auto& generatedList = prism.Generated(explorer.Current());
+            if (generatedList.IsEmpty()) {
+                ++segmentIndex;
+                continue;
+            }
+            const TopoDS_Shape generated = generatedList.First();
             if (generated.IsNull()) {
                 ++segmentIndex;
                 continue;

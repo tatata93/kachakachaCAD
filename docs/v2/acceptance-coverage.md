@@ -30,7 +30,7 @@
 | AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す) |
 | AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、tests_v2/zip_tests.cpp、tests_v2/robustness_tests.cpp(壊れた保存を断る) |
 | AT-EXP-003 | 済 | tests_v2/document_file_tests.cpp(知らない版を断る、古い項目欠落を許す) |
-| AT-EXP-004 | 未 | 原子的保存(一時ファイル→改名)は WP-12。形式そのものは済 |
+| AT-EXP-004 | 済 | tests_v2/atomic_file_tests.cpp(途中失敗を注入しても既存が読める。成功時は本体と .bak が両方読み直せる) |
 | AT-WIR-001 | 済 | tests_v2/curve_tests.cpp(5種の曲線が値を保つ) |
 | AT-WIR-002 | 済 | tests_v2/wire_chain_tests.cpp |
 | AT-WIR-003 | 済 | tests_v2/wire_chain_tests.cpp |

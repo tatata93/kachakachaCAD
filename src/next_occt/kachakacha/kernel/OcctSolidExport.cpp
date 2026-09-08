@@ -16,6 +16,9 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
+#include <Message.hxx>
+#include <Message_Messenger.hxx>
+
 #include <Poly_Triangulation.hxx>
 #include <STEPControl_StepModelType.hxx>
 #include <STEPControl_Writer.hxx>
@@ -70,6 +73,9 @@ template<class Function>
     if (box.IsVoid()) {
         return 0.0;
     }
+    // OCCT は形の許容差ぶんだけ箱を膨らませて返す。
+    // 三角形から測った箱と突き合わせるので、その膨らみを外す。
+    box.SetGap(0.0);
     double x0 = 0.0;
     double y0 = 0.0;
     double z0 = 0.0;
@@ -122,6 +128,22 @@ void AppendLittleEndian(std::string& out, std::uint32_t value)
         out.push_back(static_cast<char>((value >> shift) & 0xFFu));
     }
 }
+
+//! OCCT の表示器を一時的に空のものへ差し替える。抜けるときに元へ戻す。
+//! 空の表示器には印字先が1つも無いので、何も出ない。
+class SilentMessenger {
+public:
+    SilentMessenger() : saved_(Message::DefaultMessenger())
+    {
+        Message::SetDefaultMessenger(new Message_Messenger());
+    }
+    ~SilentMessenger() { Message::SetDefaultMessenger(saved_); }
+    SilentMessenger(const SilentMessenger&) = delete;
+    SilentMessenger& operator=(const SilentMessenger&) = delete;
+
+private:
+    occ::handle<Message_Messenger> saved_;
+};
 
 } // namespace
 
@@ -202,6 +224,9 @@ Result<std::string> BuildStepText(KernelShapeHandle handle, double toleranceMm)
         return Result<std::string>::Failure(shape.Diagnostics());
     }
     return Guarded([&]() -> Result<std::string> {
+        // OCCT の STEP 書き出しは標準出力へ統計を吐く。
+        // 試験の出力に混ざって読めなくなるので、書いているあいだは黙らせる。
+        SilentMessenger silence;
         STEPControl_Writer writer;
         const IFSelect_ReturnStatus transferred =
             writer.Transfer(shape.Value(), STEPControl_AsIs);

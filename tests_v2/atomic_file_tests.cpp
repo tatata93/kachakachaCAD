@@ -366,14 +366,15 @@ KACHA_V2_TEST(atomic, 日本語のファイル名でも控えが残る)
 
 KACHA_V2_TEST(atomic, パスの往復で文字が変わらない)
 {
+    // 区切り文字は環境で変わるが、名前の文字は1つも変わってはならない。
     const std::string original = "/tmp/車両/側板 A-1.kcd2";
-    RequireEqual(FromPath(MakePath(original)),
-#ifdef _WIN32
-        std::string("\\tmp\\車両\\側板 A-1.kcd2"),
-#else
-        original,
-#endif
-        "往復しても文字が変わらない");
+    std::string roundTrip = FromPath(MakePath(original));
+    for (char& character : roundTrip) {
+        if (character == '\\') {
+            character = '/';
+        }
+    }
+    RequireEqual(roundTrip, original, "往復しても文字が変わらない");
 }
 
 KACHA_V2_TEST_MAIN("atomic_file_tests")

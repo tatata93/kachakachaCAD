@@ -318,11 +318,11 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         // 直線・円弧・円・ベジェ・B-spline を1つずつ置く。
         // 曲線が曲線のまま描けているかを、画面で確かめるための状態。
         SnapScene scene = session_->Scene();
+        // SnapCurve は既定で作れない(CurveSegment を必ず伴うため)。
+        // その場で全部そろえて作る。
         const auto add = [&](const CurveSegment& segment, bool construction) {
-            SnapCurve curve;
-            curve.segment = segment;
-            curve.construction = construction;
-            scene.curves.push_back(curve);
+            scene.curves.push_back(SnapCurve{kachakacha::v2::base::EntityId{},
+                kachakacha::v2::base::SegmentId{}, segment, construction});
         };
         add(MakeLine({-60, -30, 0}, {-20, -30, 0}), false);
         add(MakeLine({-60, -30, 0}, {-60, 10, 0}), true);

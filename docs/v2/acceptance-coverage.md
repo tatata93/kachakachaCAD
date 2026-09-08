@@ -39,12 +39,12 @@
 | AT-WIR-006 | 済 | tests_v2/wire_edit_tests.cpp |
 | AT-WIR-007 | 済 | tests_v2/arc_builder_tests.cpp、tool_tests.cpp(3モード) |
 | AT-WIR-008 | 済 | tests_v2/expression_tests.cpp |
-| AT-WPL-001 | 未 | 作業平面の11方式は WP-06。OCCT が要る |
-| AT-WPL-002 | 未 | 同上 |
-| AT-WPL-003 | 部分 | 平面へ投影するスナップは済(snap_tests.cpp)。残りは WP-06 |
-| AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)。面の生成は WP-06 |
-| AT-GEO-002 | 済 | tests_v2/guide_surface_tests.cpp(同上) |
-| AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp(同上) |
+| AT-WPL-001 | 済 | tests_v2/work_plane_tests.cpp(11方式すべて。原点・基底・法線・距離・角度を数値検査) |
+| AT-WPL-002 | 済 | tests_v2/work_plane_tests.cpp(一直線3点・非平行2面・円筒でない面・長さ0の辺・直線の曲率法線を固定コードで拒否) |
+| AT-WPL-003 | 部分 | 平面へ投影するスナップは済(snap_tests.cpp)。uv⇔3D往復は work_plane_tests.cpp。平面追従は WP-08 |
+| AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)+ tests_v2/kernel_surface_tests.cpp(面積・穴・境界曲線種類) |
+| AT-GEO-002 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(断面をつなぐ面の側面積) |
+| AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(なめらかにつなぐ面が断面を通る) |
 | AT-GEO-004 | 済 | tests_v2/guide_surface_tests.cpp(両端接続ガイド。オーナー提示ケース) |
 | AT-GEO-005 | 済 | tests_v2/guide_surface_tests.cpp(欠損・2重・順序逆転を固定コードで拒否) |
 | AT-GEO-006 | 済 | tests_v2/guide_surface_tests.cpp(5辺は自動分割せず拒否) |

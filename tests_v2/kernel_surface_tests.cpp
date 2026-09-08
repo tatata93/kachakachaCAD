@@ -668,7 +668,7 @@ KACHA_V2_TEST(kernel_offset, 元の面が無ければ断る)
     RequireEqual(FirstCode(built.Diagnostics()), "KER-S003", "元が無いときの診断コード");
 }
 
-KACHA_V2_TEST(kernel_offset, handle を渡さなければ断る)
+KACHA_V2_TEST(kernel_offset, 番号を渡さなければ断る)
 {
     const auto built = Build(OffsetRequest(3.0));
     Require(!built.HasValue(), "作れたことにしない");

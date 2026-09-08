@@ -601,6 +601,8 @@ endif()
 
 add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/KernelInfo.cpp
+    src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
+    src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
 )
 target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
 target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)
@@ -612,7 +614,16 @@ else()
 endif()
 if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
     target_compile_definitions(kachakacha_v2_occt PUBLIC KACHACAD_V2_WITH_OCCT)
-    target_include_directories(kachakacha_v2_occt PRIVATE ${KACHACAD_OCCT_INCLUDE_DIR})
+    # OCCT のヘッダは、この層とその試験だけが見る。core からは見えない(AT-ARC-001)。
+    target_include_directories(kachakacha_v2_occt PUBLIC ${KACHACAD_OCCT_INCLUDE_DIR})
+    target_link_libraries(kachakacha_v2_occt
+        PRIVATE
+            TKOffset
+            TKBO
+            TKMesh
+            TKDESTEP
+            TKDESTL
+    )
 endif()
 
 if(KACHACAD_BUILD_TESTS)
@@ -656,7 +667,32 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)
     kachakacha_add_v2_test(zip_tests tests_v2/zip_tests.cpp)
     kachakacha_add_v2_test(document_file_tests tests_v2/document_file_tests.cpp)
+
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
+
+    # カーネル層に触る試験。OCCT が無い構成でも「無いと断る」ことを確かめるため常に作る。
+    # OCCT 有りのときは、実行時に OCCT のDLLが見えるように PATH を足して走らせる。
+    add_executable(kachakacha_v2_kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
+    target_link_libraries(kachakacha_v2_kernel_surface_tests
+        PRIVATE
+            kachakacha_v2_core
+            kachakacha_v2_occt
+    )
+    target_compile_definitions(kachakacha_v2_kernel_surface_tests
+        PRIVATE KACHACAD_V2_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+    kachakacha_apply_test_options(kachakacha_v2_kernel_surface_tests)
+    if(KACHACAD_ENABLE_OCCT AND TARGET kachakacha_occt)
+        add_test(
+            NAME v2_kernel_surface_tests
+            COMMAND ${CMAKE_COMMAND} -E env
+                "PATH=${KACHACAD_OCCT_RUNTIME_PATH}$<SEMICOLON>$ENV{PATH}"
+                $<TARGET_FILE:kachakacha_v2_kernel_surface_tests>
+        )
+    else()
+        add_test(NAME v2_kernel_surface_tests
+            COMMAND kachakacha_v2_kernel_surface_tests)
+    endif()
+    set_tests_properties(v2_kernel_surface_tests PROPERTIES TIMEOUT 900)
 endif()
 
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)

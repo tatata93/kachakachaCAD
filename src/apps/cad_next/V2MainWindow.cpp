@@ -150,7 +150,7 @@ V2MainWindow::V2MainWindow()
     viewport_->SetDocumentChangedCallback([this] { RefreshEntityList(); });
 
     SelectTool(DrawingTool::Line);
-    RefreshCommandVisibility();
+    SetMode(UiMode::Drawing);
     ApplyTheme(UiTheme::Normal);
     setWindowTitle(QStringLiteral("kachakachaCAD %1")
             .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
@@ -256,6 +256,11 @@ void V2MainWindow::SetMode(UiMode mode)
         entry.second->setChecked(entry.first == mode);
     }
     RefreshCommandVisibility();
+    // 形状ガイドの役割テーブルは部品モードの道具なので、そのときだけ出す。
+    // 出しっぱなしにすると、作図モードで空の表が場所を取る。
+    if (guideDock_ != nullptr) {
+        guideDock_->setVisible(mode == UiMode::Part);
+    }
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
             .arg(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str())));
 }
@@ -339,6 +344,7 @@ void V2MainWindow::BuildPanels()
     guideTableView_->setRootIsDecorated(false);
     guideDock->setWidget(guideTableView_);
     addDockWidget(Qt::RightDockWidgetArea, guideDock);
+    guideDock_ = guideDock;
 
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
@@ -614,6 +620,9 @@ void V2MainWindow::RefreshEntityList()
             std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
     }
     entityTree_->expandAll();
+    for (int column = 0; column < entityTree_->columnCount(); ++column) {
+        entityTree_->resizeColumnToContents(column);
+    }
     if (groupLabel_ != nullptr) {
         groupLabel_->setText(ActiveGroupText());
     }
@@ -803,6 +812,7 @@ bool V2MainWindow::ApplyGuideTableState()
         }
     }
     viewport_->SetViewDirection(ViewDirection::Isometric);
+    SetMode(UiMode::Part);   // 役割テーブルは部品モードの道具である。
     return true;
 }
 

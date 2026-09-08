@@ -169,4 +169,49 @@ struct WorkPlaneRequest {
 //! 標準面。
 [[nodiscard]] WorkPlaneFrame StandardPlane(StandardPlaneKind kind);
 
+//! 作業平面との結びつき方(architecture-and-data.md §5.1 / §5.3)。
+enum class PlanePolicy {
+    //! 平面を参照しない。平面が動いても3D座標は変わらない。
+    Free3D,
+    //! どの平面の上で描いたかは覚えるが、追従はしない。
+    ReferenceOnly,
+    //! 平面内の UV を保って追従する。平面を動かせば一緒に動く。
+    LockedToPlane,
+};
+
+[[nodiscard]] constexpr std::string_view PlanePolicyName(PlanePolicy policy) noexcept
+{
+    switch (policy) {
+    case PlanePolicy::Free3D:        return "Free3D";
+    case PlanePolicy::ReferenceOnly: return "ReferenceOnly";
+    case PlanePolicy::LockedToPlane: return "LockedToPlane";
+    }
+    return "Unknown";
+}
+
+[[nodiscard]] constexpr std::string_view PlanePolicyNameJa(PlanePolicy policy) noexcept
+{
+    switch (policy) {
+    case PlanePolicy::Free3D:        return "平面に縛られない";
+    case PlanePolicy::ReferenceOnly: return "平面を覚えるだけ";
+    case PlanePolicy::LockedToPlane: return "平面について動く";
+    }
+    return "不明";
+}
+
+//! 平面が動いたときの、点の行き先。
+//!
+//! LockedToPlane のときだけ、元の平面での UV と面からの距離を保って
+//! 新しい平面へ移す。ほかの2つは動かない。
+//!
+//! V1 は「平面上に作った線」を3D座標だけで持っていたので、
+//! 平面を動かすと線だけ取り残された。
+[[nodiscard]] base::Result<Vector3> FollowPlane(const Vector3& point, PlanePolicy policy,
+    const WorkPlaneFrame& before, const WorkPlaneFrame& after);
+
+//! 曲線1本を、種類を保ったまま追従させる。折れ線へ落とさない。
+[[nodiscard]] base::Result<geometry::CurveSegment> FollowPlaneCurve(
+    const geometry::CurveSegment& segment, PlanePolicy policy,
+    const WorkPlaneFrame& before, const WorkPlaneFrame& after);
+
 } // namespace kachakacha::v2::modeling

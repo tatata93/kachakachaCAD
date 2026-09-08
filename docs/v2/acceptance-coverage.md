@@ -41,7 +41,7 @@
 | AT-WIR-008 | 済 | tests_v2/expression_tests.cpp |
 | AT-WPL-001 | 済 | tests_v2/work_plane_tests.cpp(11方式すべて。原点・基底・法線・距離・角度を数値検査) |
 | AT-WPL-002 | 済 | tests_v2/work_plane_tests.cpp(一直線3点・非平行2面・円筒でない面・長さ0の辺・直線の曲率法線を固定コードで拒否) |
-| AT-WPL-003 | 部分 | 平面へ投影するスナップは済(snap_tests.cpp)。uv⇔3D往復は work_plane_tests.cpp。平面追従は WP-08 |
+| AT-WPL-003 | 済 | tests_v2/plane_follow_tests.cpp(Free3D / ReferenceOnly / LockedToPlane の3通り。縛られた点だけが平面内 UV と面からの浮きを保って追従し、ほかの2つは3D座標が変わらない。動かして戻せば元の位置へ戻る。曲線は種類を保ったまま追従し、円弧の半径・掃引角・長さが変わらない。平面をずらしても法線と基準方向は傾かず、回した平面では基準方向も同じだけ回る。2Dでも3Dでも同じ CurveSegment で出る) + snap_tests.cpp(平面へ投影するスナップ)+ work_plane_tests.cpp(uv⇔3D往復) |
 | AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)+ tests_v2/kernel_surface_tests.cpp(面積・穴・境界曲線種類) |
 | AT-GEO-002 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(断面をつなぐ面の側面積) |
 | AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(なめらかにつなぐ面が断面を通る) |

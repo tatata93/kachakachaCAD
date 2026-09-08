@@ -32,6 +32,7 @@ class QAction;
 class QLabel;
 class QListWidget;
 class QToolBar;
+class QDockWidget;
 class QTreeWidget;
 
 //! 見た目。
@@ -133,6 +134,7 @@ private:
     QTreeWidget* entityTree_ = nullptr;
     QListWidget* diagnosticList_ = nullptr;
     QTreeWidget* guideTableView_ = nullptr;
+    QDockWidget* guideDock_ = nullptr;
     kachakacha::v2::modeling::GuideTable guideTable_;
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;

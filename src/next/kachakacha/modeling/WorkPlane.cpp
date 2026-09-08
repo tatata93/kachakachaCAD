@@ -617,3 +617,105 @@ Result<WorkPlaneFrame> BuildWorkPlane(const WorkPlaneRequest& request,
 }
 
 } // namespace kachakacha::v2::modeling
+
+namespace kachakacha::v2::modeling {
+
+Result<Vector3> FollowPlane(const Vector3& point, PlanePolicy policy,
+    const WorkPlaneFrame& before, const WorkPlaneFrame& after)
+{
+    if (!point.IsFinite()) {
+        return Result<Vector3>::Failure(base::MakeError("GEO-P001",
+            "作業平面の値に数値でないものが入っています。", "追従させる点です。"));
+    }
+    if (policy != PlanePolicy::LockedToPlane) {
+        // 縛られていない点は動かない。ここで動かすと、平面を触っただけで
+        // 関係のない線が動いてしまう。
+        return Result<Vector3>::Success(point);
+    }
+    const auto valid = [](const WorkPlaneFrame& frame) {
+        return frame.origin.IsFinite() && frame.uAxis.IsFinite() && frame.vAxis.IsFinite()
+            && frame.normal.IsFinite() && frame.uAxis.LengthSquared() > 0.0
+            && frame.vAxis.LengthSquared() > 0.0 && frame.normal.LengthSquared() > 0.0;
+    };
+    if (!valid(before) || !valid(after)) {
+        return Result<Vector3>::Failure(base::MakeError("GEO-P001",
+            "作業平面の値に数値でないものが入っています。", "動かす前後の平面です。"));
+    }
+    // 元の平面での位置(u, v, 面からの距離)を、新しい平面へそのまま置き直す。
+    const double u = before.CoordinateU(point);
+    const double v = before.CoordinateV(point);
+    const double offset = before.SignedDistance(point);
+    return Result<Vector3>::Success(after.PointAt(u, v) + after.normal * offset);
+}
+
+Result<geometry::CurveSegment> FollowPlaneCurve(const geometry::CurveSegment& segment,
+    PlanePolicy policy, const WorkPlaneFrame& before, const WorkPlaneFrame& after)
+{
+    using geometry::CurveKind;
+    using geometry::CurveSegment;
+    if (policy != PlanePolicy::LockedToPlane) {
+        return Result<CurveSegment>::Success(segment);
+    }
+    const auto move = [&](const Vector3& point) { return FollowPlane(point, policy, before, after); };
+    const auto moveDirection = [&](const Vector3& direction) -> Result<Vector3> {
+        // 向きは原点の分を差し引く。位置と同じ式で動かすと、原点の移動が二重にかかる。
+        const auto head = FollowPlane(direction, policy, before, after);
+        const auto tail = FollowPlane(Vector3{}, policy, before, after);
+        if (!head.HasValue()) {
+            return head;
+        }
+        if (!tail.HasValue()) {
+            return tail;
+        }
+        return Result<Vector3>::Success(head.Value() - tail.Value());
+    };
+    switch (segment.Kind()) {
+    case CurveKind::Line: {
+        const auto start = move(segment.StartPoint());
+        const auto end = move(segment.EndPoint());
+        if (!start.HasValue()) {
+            return Result<CurveSegment>::Failure(start.Diagnostics());
+        }
+        if (!end.HasValue()) {
+            return Result<CurveSegment>::Failure(end.Diagnostics());
+        }
+        return CurveSegment::MakeLine(start.Value(), end.Value());
+    }
+    case CurveKind::CircularArc:
+    case CurveKind::Circle: {
+        const auto center = move(segment.Center());
+        const auto normal = moveDirection(segment.Normal());
+        const auto reference = moveDirection(segment.ReferenceDirection());
+        if (!center.HasValue() || !normal.HasValue() || !reference.HasValue()) {
+            return Result<CurveSegment>::Failure(base::MakeError("GEO-P001",
+                "作業平面の値に数値でないものが入っています。", "円弧の基準です。"));
+        }
+        if (segment.Kind() == CurveKind::Circle) {
+            return CurveSegment::MakeCircle(center.Value(), normal.Value(),
+                reference.Value(), segment.Radius());
+        }
+        return CurveSegment::MakeCircularArc(center.Value(), normal.Value(),
+            reference.Value(), segment.Radius(), segment.StartAngleRad(),
+            segment.SweepAngleRad());
+    }
+    case CurveKind::CubicBezier:
+    case CurveKind::CubicBSpline: {
+        std::vector<Vector3> points;
+        points.reserve(segment.ControlPoints().size());
+        for (const Vector3& point : segment.ControlPoints()) {
+            const auto moved = move(point);
+            if (!moved.HasValue()) {
+                return Result<CurveSegment>::Failure(moved.Diagnostics());
+            }
+            points.push_back(moved.Value());
+        }
+        return segment.Kind() == CurveKind::CubicBezier
+            ? CurveSegment::MakeCubicBezier(points)
+            : CurveSegment::MakeCubicBSpline(points);
+    }
+    }
+    return Result<CurveSegment>::Failure(base::MakeError("GEO-P001",
+        "作業平面の値に数値でないものが入っています。", "知らない曲線の種類です。"));
+}
+
+} // namespace kachakacha::v2::modeling

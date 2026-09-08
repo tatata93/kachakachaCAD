@@ -397,6 +397,10 @@ struct SelfTestCase {
     if (window.Viewport().GuideRowsShown() != window.GuideRowCount()) {
         return false;
     }
+    // 役割テーブルは部品モードの道具。作図モードでは表を出さない。
+    if (window.Mode() != kachakacha::v2::app::UiMode::Part) {
+        return false;
+    }
     // 足りない役割の案内は、そろった時点で消えている。
     return window.DiagnosticRowCount() == 0;
 }

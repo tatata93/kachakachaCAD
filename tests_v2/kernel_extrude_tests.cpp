@@ -3,6 +3,7 @@
 // core が出した予測と、OCCT が作った実物を突き合わせる。
 // 合わなければ BuildExtrude が KER-E002 で断る。ここではその両方を確かめる。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
@@ -536,6 +537,87 @@ KACHA_V2_TEST(kernel_extrude, 側面の境界ワイヤーが取れる)
     Require(built.HasValue(), "作れること");
     RequireEqual(std::to_string(built.Value().sideBoundaryWires.size()), "4",
         "側面は4枚");
+}
+
+KACHA_V2_TEST(kernel_extrude, ワイヤーと部品の点が許容差内で一致する)
+{
+    // AT-EXT-003 の核。同じ押し出しから出したワイヤーと部品の境界が、
+    // 本当に同じ場所にあるかを数で見る。「だいたい同じに見える」では受け入れない。
+    // ここがずれると、ワイヤーを型紙に、部品を立体に使ったときに寸法が食い違う。
+    ExtrudeRequest request = BasicRequest();
+    request.outputs.endProfileWire = true;
+    request.outputs.sideBoundaryWires = true;
+    request.outputs.part = true;
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れること");
+    Require(!built.Value().parts.empty(), "部品が出ること");
+    const GeometryTolerance tolerance;
+    const KernelShapeHandle part = built.Value().parts.front().handle;
+
+    std::size_t checked = 0;
+    const auto checkWire = [&](const std::vector<CurveSegment>& wire,
+                               const char* what) {
+        for (const CurveSegment& segment : wire) {
+            // 両端と中間を見る。曲線は点列へ落として調べる(検査用の点列である)。
+            for (const auto& sample :
+                kachakacha::v2::geometry::SampleCurve(segment, tolerance.modelLinearMm)) {
+                const auto distance =
+                    kachakacha::v2::kernel::DistanceToShapeSurface(part, sample.position);
+                Require(distance.HasValue(), std::string(what) + " の距離が測れること");
+                Require(distance.Value() <= tolerance.modelLinearMm,
+                    std::string(what) + " の点が部品の表面に載っていること: "
+                        + std::to_string(distance.Value()) + " mm");
+                ++checked;
+            }
+        }
+    };
+    for (const auto& wire : built.Value().endProfileWires) {
+        checkWire(wire, "押し出し先の輪郭");
+    }
+    for (const auto& wire : built.Value().sideBoundaryWires) {
+        checkWire(wire, "側面の境界");
+    }
+    Require(checked >= 16, "十分な数の点を見たこと: " + std::to_string(checked));
+}
+
+KACHA_V2_TEST(kernel_extrude, 曲がった輪郭でもワイヤーと部品が一致する)
+{
+    // 直線だけだと、たまたま合っているだけかもしれない。円でも見る。
+    ExtrudeRequest request;
+    request.profiles = {Circle({0, 0, 0}, 10.0)};
+    request.directionMode = ExtrudeDirectionMode::WorldZ;
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 25.0;
+    request.outputs.endProfileWire = true;
+    request.outputs.part = true;
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れること");
+    Require(!built.Value().parts.empty(), "部品が出ること");
+    const GeometryTolerance tolerance;
+    const KernelShapeHandle part = built.Value().parts.front().handle;
+    std::size_t checked = 0;
+    for (const auto& wire : built.Value().endProfileWires) {
+        for (const CurveSegment& segment : wire) {
+            for (const auto& sample :
+                kachakacha::v2::geometry::SampleCurve(segment, tolerance.modelLinearMm)) {
+                const auto distance =
+                    kachakacha::v2::kernel::DistanceToShapeSurface(part, sample.position);
+                Require(distance.HasValue(), "距離が測れること");
+                Require(distance.Value() <= tolerance.modelLinearMm,
+                    "円の点が部品の表面に載っていること: "
+                        + std::to_string(distance.Value()) + " mm");
+                ++checked;
+            }
+        }
+    }
+    Require(checked >= 8, "十分な数の点を見たこと: " + std::to_string(checked));
+}
+
+KACHA_V2_TEST(kernel_extrude, 表にない形の距離は測らずに断る)
+{
+    const auto refused = kachakacha::v2::kernel::DistanceToShapeSurface(
+        KernelShapeHandle{}, Vector3{0, 0, 0});
+    Require(!refused.HasValue(), "断ること");
 }
 
 // =====================================================================

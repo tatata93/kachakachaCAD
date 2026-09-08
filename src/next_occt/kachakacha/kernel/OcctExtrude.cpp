@@ -16,6 +16,8 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
@@ -332,6 +334,31 @@ Result<double> ShapeVolume(KernelShapeHandle handle)
     }, "体積を測る");
 }
 
+Result<double> DistanceToShapeSurface(KernelShapeHandle handle,
+    const geometry::Vector3& point)
+{
+    TopoDS_Shape shape;
+    if (!LookupShape(handle, shape)) {
+        return Result<double>::Failure(MakeError(kExtrudeBooleanTargetMissing,
+            "その番号の形は表にありません。", {}));
+    }
+    if (!point.IsFinite()) {
+        return Result<double>::Failure(MakeError(kExtrudeUnsupported,
+            "測る点に数値でない値が入っています。", {}));
+    }
+    return Guarded([&]() -> Result<double> {
+        const TopoDS_Vertex vertex =
+            BRepBuilderAPI_MakeVertex(gp_Pnt(point.x, point.y, point.z));
+        BRepExtrema_DistShapeShape measure(vertex, shape);
+        measure.Perform();
+        if (!measure.IsDone() || measure.NbSolution() < 1) {
+            return Result<double>::Failure(MakeError(kExtrudeUnsupported,
+                "点から形までの距離を測れませんでした。", {}));
+        }
+        return Result<double>::Success(measure.Value());
+    }, "点から形までの距離を測る");
+}
+
 Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
     const ExtrudeAnalysis& analysis, const GeometryTolerance& tolerance,
     KernelShapeHandle booleanTarget)
@@ -607,6 +634,15 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
 Result<double> ShapeVolume(KernelShapeHandle handle)
 {
     (void)handle;
+    return Result<double>::Failure(MakeError(kExtrudeUnsupported,
+        "この実行ファイルには幾何カーネルが入っていません。", {}));
+}
+
+Result<double> DistanceToShapeSurface(KernelShapeHandle handle,
+    const geometry::Vector3& point)
+{
+    (void)handle;
+    (void)point;
     return Result<double>::Failure(MakeError(kExtrudeUnsupported,
         "この実行ファイルには幾何カーネルが入っていません。", {}));
 }

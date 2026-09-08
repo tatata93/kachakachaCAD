@@ -55,7 +55,7 @@
 | AT-GEO-013 | 部分 | 非連結の検出は済(wire_cage_tests.cpp)。引いて分かれる場合は kernel_extrude_tests.cpp。ワイヤーかごの複数Part分割は WP-08 |
 | AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー) |
 | AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |
-| AT-EXT-003 | 部分 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出す)。点の一致を数値で見る試験は WP-08 |
+| AT-EXT-003 | 済 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出し、ワイヤー上の標本点すべてが部品の表面から modelLinearMm 以内にあることを DistanceToShapeSurface で測る。直線の輪郭と円の輪郭の両方で見る。表にない形の距離は測らずに断る) |
 | AT-EXT-004 | 済 | tests_v2/extrude_tests.cpp(断面積を円弧のまま厳密に計算)+ tests_v2/kernel_extrude_tests.cpp(貫通穴つきの体積が厳密に合う=円が多角形へ化けていない) |
 | AT-EXT-005 | 済 | tests_v2/extrude_tests.cpp(事前の個数)+ tests_v2/kernel_extrude_tests.cpp(実際に2部品。個数が違えば KER-E002 で拒否) |
 | AT-EXT-006 | 済 | tests_v2/extrude_tests.cpp(5方式と到達判定)+ tests_v2/kernel_extrude_tests.cpp(平面・傾いた平面・円筒・球まで厳密に切る。トーラスは拒否) |
@@ -65,7 +65,7 @@
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-004 | 済 | tests_v2/measurement_tests.cpp |
-| AT-MEA-005 | 部分 | 測定が位置を返すところまで済。画面から点を作るのは WP-08 |
+| AT-MEA-005 | 済 | tests_v2/point_source_tests.cpp(測った2点の両端と中点、円・円弧の中心、始点・終点・中点、ベジェとB-splineの制御点、2曲線の最接近から作図点を作れる。円は始点と終点を二重に出さず、直線は中心も制御点も出さない。同じ入力なら同じ並びで出る。数値でない位置からは作らない。「円1の中心」のように由来が分かる名前になり、作った点は作業中グループへ入る) + measurement_tests.cpp(測定が位置を返すところ) |
 | AT-FAB-001 | 済 | tests_v2/fabrication_tests.cpp(円筒の厳密展開) |
 | AT-FAB-002 | 済 | tests_v2/fabrication_tests.cpp(円錐の厳密展開) |
 | AT-FAB-003 | 済 | tests_v2/fabrication_tests.cpp(二重曲率を展開できないと言う) |

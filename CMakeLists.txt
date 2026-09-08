@@ -557,6 +557,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CommandCatalog.cpp
     src/next/kachakacha/app/CursorInput.cpp
     src/next/kachakacha/app/EvaluationQueue.cpp
+    src/next/kachakacha/app/PointSources.cpp
     src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
@@ -698,6 +699,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(active_group_tests tests_v2/active_group_tests.cpp)
     kachakacha_add_v2_test(theme_layout_tests tests_v2/theme_layout_tests.cpp)
     kachakacha_add_v2_test(plane_follow_tests tests_v2/plane_follow_tests.cpp)
+    kachakacha_add_v2_test(point_source_tests tests_v2/point_source_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)

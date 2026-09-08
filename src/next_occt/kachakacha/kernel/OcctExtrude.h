@@ -56,4 +56,11 @@ struct ExtrudeBuildResult {
 //! 形の体積と面の数。突き合わせ用。
 [[nodiscard]] base::Result<double> ShapeVolume(modeling::KernelShapeHandle handle);
 
+//! 点から立体の表面までの距離(AT-EXT-003 の突き合わせ用)。
+//!
+//! 同じ押し出しから出したワイヤーと部品の点が、本当に同じ場所にあるかを
+//! 数で見るために要る。「だいたい同じに見える」では受け入れない。
+[[nodiscard]] base::Result<double> DistanceToShapeSurface(
+    modeling::KernelShapeHandle handle, const geometry::Vector3& point);
+
 } // namespace kachakacha::v2::kernel

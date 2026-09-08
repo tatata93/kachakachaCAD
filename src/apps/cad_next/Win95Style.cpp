@@ -646,7 +646,7 @@ QIcon Win95Style::standardIcon(
         : QIcon(classic);
 }
 
-void Win95Style::drawPrimitive(
+bool Win95Style::DrawPrimitivePart1(
     PrimitiveElement element,
     const QStyleOption* option,
     QPainter* painter,
@@ -663,7 +663,7 @@ void Win95Style::drawPrimitive(
         // IE4以降のフラットツールバーではなく、Windows 95 標準の常時隆起ボタン。
         DrawWin95Edge(painter, option->rect,
             pressed ? EdgeStyle::ButtonSunken : EdgeStyle::ButtonRaised);
-        return;
+        return true;
     }
     case PE_FrameDefaultButton:
         painter->save();
@@ -671,7 +671,7 @@ void Win95Style::drawPrimitive(
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(option->rect.adjusted(0, 0, -1, -1));
         painter->restore();
-        return;
+        return true;
     case PE_PanelLineEdit:
     case PE_FrameLineEdit:
     case PE_Frame:
@@ -680,19 +680,19 @@ void Win95Style::drawPrimitive(
             painter->fillRect(option->rect, enabled ? kWindow : kFace);
         }
         DrawWin95Edge(painter, option->rect, EdgeStyle::FieldSunken);
-        return;
+        return true;
     }
     case PE_FrameGroupBox:
         DrawWin95Edge(painter, option->rect, EdgeStyle::Grouping);
-        return;
+        return true;
     case PE_FrameTabWidget:
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect, EdgeStyle::WindowRaised);
-        return;
+        return true;
     case PE_FrameStatusBarItem:
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect, EdgeStyle::StatusSunken);
-        return;
+        return true;
     case PE_IndicatorCheckBox: {
         QRect box = option->rect;
         box.setSize(QSize(13, 13));
@@ -715,8 +715,22 @@ void Win95Style::drawPrimitive(
             }
             painter->restore();
         }
-        return;
+        return true;
     }
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawPrimitivePart2(
+    PrimitiveElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    const bool enabled = option->state.testFlag(State_Enabled);
+    switch (element) {
     case PE_IndicatorRadioButton: {
         QRect box = option->rect;
         box.setSize(QSize(12, 12));
@@ -743,28 +757,28 @@ void Win95Style::drawPrimitive(
             painter->drawEllipse(dot);
         }
         painter->restore();
-        return;
+        return true;
     }
     case PE_IndicatorArrowUp:
         DrawWin95Arrow(painter, option->rect, Qt::UpArrow, enabled);
-        return;
+        return true;
     case PE_IndicatorArrowDown:
         DrawWin95Arrow(painter, option->rect, Qt::DownArrow, enabled);
-        return;
+        return true;
     case PE_IndicatorArrowLeft:
         DrawWin95Arrow(painter, option->rect, Qt::LeftArrow, enabled);
-        return;
+        return true;
     case PE_IndicatorArrowRight:
         DrawWin95Arrow(painter, option->rect, Qt::RightArrow, enabled);
-        return;
+        return true;
     case PE_IndicatorSpinUp:
     case PE_IndicatorSpinPlus:
         DrawWin95Arrow(painter, option->rect, Qt::UpArrow, enabled);
-        return;
+        return true;
     case PE_IndicatorSpinDown:
     case PE_IndicatorSpinMinus:
         DrawWin95Arrow(painter, option->rect, Qt::DownArrow, enabled);
-        return;
+        return true;
     case PE_FrameFocusRect: {
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, false);
@@ -773,15 +787,15 @@ void Win95Style::drawPrimitive(
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(option->rect.adjusted(0, 0, -1, -1));
         painter->restore();
-        return;
+        return true;
     }
     case PE_PanelMenuBar:
         painter->fillRect(option->rect, kFace);
-        return;
+        return true;
     case PE_PanelToolBar:
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect, EdgeStyle::WindowRaised);
-        return;
+        return true;
     case PE_PanelStatusBar:
         painter->fillRect(option->rect, kFace);
         painter->setPen(kHighlight3d);
@@ -789,11 +803,25 @@ void Win95Style::drawPrimitive(
         painter->setPen(kShadow);
         painter->drawLine(option->rect.left(), option->rect.top() + 1,
             option->rect.right(), option->rect.top() + 1);
-        return;
+        return true;
     case PE_FrameMenu:
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect, EdgeStyle::WindowRaised);
-        return;
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawPrimitivePart3(
+    PrimitiveElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    const bool enabled = option->state.testFlag(State_Enabled);
+    switch (element) {
     case PE_IndicatorBranch: {
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, false);
@@ -819,16 +847,16 @@ void Win95Style::drawPrimitive(
             }
         }
         painter->restore();
-        return;
+        return true;
     }
     case PE_IndicatorMenuCheckMark:
         DrawCheckMark(painter, option->rect, enabled ? kText : kDisabledText);
-        return;
+        return true;
     case PE_IndicatorHeaderArrow:
         DrawWin95Arrow(painter, option->rect,
             option->state.testFlag(State_UpArrow) ? Qt::UpArrow : Qt::DownArrow,
             enabled);
-        return;
+        return true;
     case PE_IndicatorToolBarSeparator: {
         painter->save();
         painter->setPen(kShadow);
@@ -837,7 +865,7 @@ void Win95Style::drawPrimitive(
         painter->setPen(kHighlight3d);
         painter->drawLine(x + 1, option->rect.top() + 2, x + 1, option->rect.bottom() - 2);
         painter->restore();
-        return;
+        return true;
     }
     case PE_IndicatorToolBarHandle: {
         painter->save();
@@ -848,15 +876,34 @@ void Win95Style::drawPrimitive(
         painter->drawLine(option->rect.left() + 3, option->rect.top() + 2,
             option->rect.left() + 3, option->rect.bottom() - 2);
         painter->restore();
-        return;
+        return true;
     }
     default:
         break;
     }
+    return false;
+}
+
+void Win95Style::drawPrimitive(
+    PrimitiveElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    if (DrawPrimitivePart1(element, option, painter, widget)) {
+        return;
+    }
+    if (DrawPrimitivePart2(element, option, painter, widget)) {
+        return;
+    }
+    if (DrawPrimitivePart3(element, option, painter, widget)) {
+        return;
+    }
     QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
-void Win95Style::drawControl(
+
+bool Win95Style::DrawControlPart1(
     ControlElement element,
     const QStyleOption* option,
     QPainter* painter,
@@ -876,11 +923,11 @@ void Win95Style::drawControl(
                 Qt::AlignCenter | Qt::TextShowMnemonic, menuItem->text,
                 option->state.testFlag(State_Enabled));
         }
-        return;
+        return true;
     }
     case CE_MenuBarEmptyArea:
         painter->fillRect(option->rect, kFace);
-        return;
+        return true;
     case CE_MenuItem: {
         const auto* menuItem = qstyleoption_cast<const QStyleOptionMenuItem*>(option);
         if (menuItem == nullptr) {
@@ -897,7 +944,7 @@ void Win95Style::drawControl(
             painter->setPen(kHighlight3d);
             painter->drawLine(option->rect.left() + 2, y + 1,
                 option->rect.right() - 2, y + 1);
-            return;
+            return true;
         }
 
         const int checkWidth = std::max(20, menuItem->maxIconWidth + 6);
@@ -933,8 +980,21 @@ void Win95Style::drawControl(
                 QRect(option->rect.right() - 15, option->rect.top(), 13, option->rect.height()),
                 Qt::RightArrow, enabled);
         }
-        return;
+        return true;
     }
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawControlPart2(
+    ControlElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    switch (element) {
     case CE_PushButtonLabel: {
         QStyleOptionButton shifted;
         if (const auto* button = qstyleoption_cast<const QStyleOptionButton*>(option)) {
@@ -943,7 +1003,7 @@ void Win95Style::drawControl(
                 shifted.rect.translate(1, 1);
             }
             QProxyStyle::drawControl(element, &shifted, painter, widget);
-            return;
+            return true;
         }
         break;
     }
@@ -971,15 +1031,28 @@ void Win95Style::drawControl(
             DrawDisabledText(painter, textRect,
                 Qt::AlignLeft | Qt::AlignVCenter | Qt::TextShowMnemonic,
                 button->text, option->state.testFlag(State_Enabled));
-            return;
+            return true;
         }
         QStyleOptionToolButton shifted = *button;
         if (pressed) {
             shifted.rect.translate(1, 1);
         }
         QProxyStyle::drawControl(element, &shifted, painter, widget);
-        return;
+        return true;
     }
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawControlPart3(
+    ControlElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    switch (element) {
     case CE_TabBarTabShape: {
         const auto* tab = qstyleoption_cast<const QStyleOptionTab*>(option);
         if (tab == nullptr
@@ -1015,7 +1088,7 @@ void Win95Style::drawControl(
             painter->drawLine(rect.left() + 1, rect.bottom(), rect.right(), rect.bottom());
         }
         painter->restore();
-        return;
+        return true;
     }
     case CE_DockWidgetTitle: {
         const auto* dock = qstyleoption_cast<const QStyleOptionDockWidget*>(option);
@@ -1034,19 +1107,32 @@ void Win95Style::drawControl(
             dock->title, Qt::ElideRight, titleRect.width());
         painter->setPen(kWindow);
         painter->drawText(titleRect, Qt::AlignLeft | Qt::AlignVCenter, title);
-        return;
+        return true;
     }
     case CE_HeaderSection: {
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect,
             option->state.testFlag(State_Sunken)
                 ? EdgeStyle::ButtonSunken : EdgeStyle::ButtonRaised);
-        return;
+        return true;
     }
     case CE_ProgressBarGroove:
         painter->fillRect(option->rect, kFace);
         DrawWin95Edge(painter, option->rect, EdgeStyle::FieldSunken);
-        return;
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawControlPart4(
+    ControlElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    switch (element) {
     case CE_ProgressBarContents: {
         // Win95 は塗りつぶしでなく細かいブロックの列。
         const auto* bar = qstyleoption_cast<const QStyleOptionProgressBar*>(option);
@@ -1067,7 +1153,7 @@ void Win95Style::drawControl(
             painter->drawRect(QRect(x, inner.top(), blockWidth - 2, inner.height()));
         }
         painter->restore();
-        return;
+        return true;
     }
     case CE_SizeGrip: {
         painter->save();
@@ -1082,15 +1168,37 @@ void Win95Style::drawControl(
                 option->rect.right() - 1, option->rect.bottom() - inset + 1);
         }
         painter->restore();
-        return;
+        return true;
     }
     default:
         break;
     }
+    return false;
+}
+
+void Win95Style::drawControl(
+    ControlElement element,
+    const QStyleOption* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    if (DrawControlPart1(element, option, painter, widget)) {
+        return;
+    }
+    if (DrawControlPart2(element, option, painter, widget)) {
+        return;
+    }
+    if (DrawControlPart3(element, option, painter, widget)) {
+        return;
+    }
+    if (DrawControlPart4(element, option, painter, widget)) {
+        return;
+    }
     QProxyStyle::drawControl(element, option, painter, widget);
 }
 
-void Win95Style::drawComplexControl(
+
+bool Win95Style::DrawComplexPart1(
     ComplexControl control,
     const QStyleOptionComplex* option,
     QPainter* painter,
@@ -1123,7 +1231,7 @@ void Win95Style::drawComplexControl(
             painter->fillRect(handle, kFace);
             DrawWin95Edge(painter, handle, EdgeStyle::ButtonRaised);
         }
-        return;
+        return true;
     }
     case CC_Slider: {
         const auto* slider = qstyleoption_cast<const QStyleOptionSlider*>(option);
@@ -1155,8 +1263,21 @@ void Win95Style::drawComplexControl(
                         && slider->state.testFlag(State_Sunken)
                     ? EdgeStyle::ButtonSunken : EdgeStyle::ButtonRaised);
         }
-        return;
+        return true;
     }
+    default:
+        break;
+    }
+    return false;
+}
+
+bool Win95Style::DrawComplexPart2(
+    ComplexControl control,
+    const QStyleOptionComplex* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    switch (control) {
     case CC_SpinBox: {
         const auto* spin = qstyleoption_cast<const QStyleOptionSpinBox*>(option);
         if (spin == nullptr) {
@@ -1178,7 +1299,7 @@ void Win95Style::drawComplexControl(
         };
         drawSpinButton(up, Qt::UpArrow, SC_SpinBoxUp);
         drawSpinButton(down, Qt::DownArrow, SC_SpinBoxDown);
-        return;
+        return true;
     }
     case CC_ComboBox: {
         const auto* combo = qstyleoption_cast<const QStyleOptionComboBox*>(option);
@@ -1195,10 +1316,26 @@ void Win95Style::drawComplexControl(
             pressed ? EdgeStyle::ButtonSunken : EdgeStyle::ButtonRaised);
         DrawWin95Arrow(painter, pressed ? arrowRect.translated(1, 1) : arrowRect,
             Qt::DownArrow, combo->state.testFlag(State_Enabled));
-        return;
+        return true;
     }
     default:
         break;
     }
+    return false;
+}
+
+void Win95Style::drawComplexControl(
+    ComplexControl control,
+    const QStyleOptionComplex* option,
+    QPainter* painter,
+    const QWidget* widget) const
+{
+    if (DrawComplexPart1(control, option, painter, widget)) {
+        return;
+    }
+    if (DrawComplexPart2(control, option, painter, widget)) {
+        return;
+    }
     QProxyStyle::drawComplexControl(control, option, painter, widget);
 }
+

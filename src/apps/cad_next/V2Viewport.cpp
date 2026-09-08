@@ -223,124 +223,134 @@ std::optional<QPointF> V2Viewport::ToScreen(const Vector3& world) const
     return QPointF(projected->x, projected->y);
 }
 
+void V2Viewport::AppendLine(QPainterPath& path, const CurveSegment& segment,
+    bool& started) const
+{
+    const auto start = ToScreen(segment.StartPoint());
+    const auto end = ToScreen(segment.EndPoint());
+    if (!start.has_value() || !end.has_value()) {
+        return;
+    }
+    if (!started) {
+        path.moveTo(*start);
+        started = true;
+    } else if ((path.currentPosition() - *start).manhattanLength() > 0.5) {
+        path.moveTo(*start);
+    }
+    path.lineTo(*end);
+}
+
+void V2Viewport::AppendArc(QPainterPath& path, const CurveSegment& segment,
+    bool& started) const
+{
+    // 円弧は折れ線にしない。90度ごとに3次ベジェで表す。
+    // 平行投影では円が楕円になるので、始点・終点・接線を投影して繋ぐ。
+    const double sweep = segment.Kind() == CurveKind::Circle
+        ? 2.0 * kPi
+        : segment.SweepAngleRad();
+    const int pieces = std::max(1,
+        static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 2.0)))
+            * kBezierPerQuarterTurn);
+    const double step = sweep / pieces;
+    const double alpha = (4.0 / 3.0) * std::tan(step / 4.0);
+    const double startAngle = segment.Kind() == CurveKind::Circle
+        ? 0.0
+        : segment.StartAngleRad();
+    const Vector3 center = segment.Center();
+    const Vector3 reference = segment.ReferenceDirection();
+    const Vector3 normal = segment.Normal();
+    const Vector3 other = kachakacha::v2::geometry::Cross(normal, reference);
+    const double radius = segment.Radius();
+    const auto pointAt = [&](double angle) {
+        return center + reference * (radius * std::cos(angle))
+            + other * (radius * std::sin(angle));
+    };
+    const auto tangentAt = [&](double angle) {
+        return reference * (-radius * std::sin(angle))
+            + other * (radius * std::cos(angle));
+    };
+    for (int index = 0; index < pieces; ++index) {
+        const double from = startAngle + step * index;
+        const double to = from + step;
+        const auto s0 = ToScreen(pointAt(from));
+        const auto s1 = ToScreen(pointAt(from) + tangentAt(from) * alpha);
+        const auto s2 = ToScreen(pointAt(to) - tangentAt(to) * alpha);
+        const auto s3 = ToScreen(pointAt(to));
+        if (!s0 || !s1 || !s2 || !s3) {
+            continue;
+        }
+        if (!started || index == 0) {
+            path.moveTo(*s0);
+            started = true;
+        }
+        path.cubicTo(*s1, *s2, *s3);
+    }
+}
+
+void V2Viewport::AppendBezier(QPainterPath& path, const CurveSegment& segment,
+    bool& started) const
+{
+    const auto& control = segment.ControlPoints();
+    if (control.size() != 4) {
+        return;
+    }
+    const auto s0 = ToScreen(control[0]);
+    const auto s1 = ToScreen(control[1]);
+    const auto s2 = ToScreen(control[2]);
+    const auto s3 = ToScreen(control[3]);
+    if (!s0 || !s1 || !s2 || !s3) {
+        return;
+    }
+    path.moveTo(*s0);
+    started = true;
+    path.cubicTo(*s1, *s2, *s3);
+}
+
+void V2Viewport::AppendSpline(QPainterPath& path, const CurveSegment& segment,
+    bool& started) const
+{
+    // 3次B-splineは、区間ごとに3次ベジェへ直せる。折れ線にしない。
+    const auto& control = segment.ControlPoints();
+    if (control.size() < 4) {
+        return;
+    }
+    for (std::size_t index = 0; index + 3 < control.size(); ++index) {
+        const Vector3& a = control[index];
+        const Vector3& b = control[index + 1];
+        const Vector3& c = control[index + 2];
+        const Vector3& d = control[index + 3];
+        const auto s0 = ToScreen((a + b * 4.0 + c) * (1.0 / 6.0));
+        const auto s1 = ToScreen((b * 2.0 + c) * (1.0 / 3.0));
+        const auto s2 = ToScreen((b + c * 2.0) * (1.0 / 3.0));
+        const auto s3 = ToScreen((b + c * 4.0 + d) * (1.0 / 6.0));
+        if (!s0 || !s1 || !s2 || !s3) {
+            continue;
+        }
+        if (!started || index == 0) {
+            path.moveTo(*s0);
+            started = true;
+        }
+        path.cubicTo(*s1, *s2, *s3);
+    }
+}
+
 void V2Viewport::AppendCurve(QPainterPath& path, const CurveSegment& segment,
     bool& started) const
 {
-    const auto moveOrLine = [&](const QPointF& point, bool first) {
-        if (!started || first) {
-            path.moveTo(point);
-            started = true;
-        } else {
-            path.lineTo(point);
-        }
-    };
-
     switch (segment.Kind()) {
-    case CurveKind::Line: {
-        const auto start = ToScreen(segment.StartPoint());
-        const auto end = ToScreen(segment.EndPoint());
-        if (!start.has_value() || !end.has_value()) {
-            return;
-        }
-        if (!started) {
-            path.moveTo(*start);
-            started = true;
-        } else if ((path.currentPosition() - *start).manhattanLength() > 0.5) {
-            path.moveTo(*start);
-        }
-        path.lineTo(*end);
+    case CurveKind::Line:
+        AppendLine(path, segment, started);
         return;
-    }
     case CurveKind::Circle:
-    case CurveKind::CircularArc: {
-        // 円弧は折れ線にしない。90度ごとに3次ベジェで表す。
-        // 平行投影では円が楕円になるので、始点・終点・接線を投影して繋ぐ。
-        const double sweep = segment.Kind() == CurveKind::Circle
-            ? 2.0 * kPi
-            : segment.SweepAngleRad();
-        const int pieces = std::max(1,
-            static_cast<int>(std::ceil(std::abs(sweep) / (kPi / 2.0)))
-                * kBezierPerQuarterTurn);
-        const double step = sweep / pieces;
-        const double alpha = (4.0 / 3.0) * std::tan(step / 4.0);
-        const double startAngle = segment.Kind() == CurveKind::Circle
-            ? 0.0
-            : segment.StartAngleRad();
-        const Vector3 center = segment.Center();
-        const Vector3 reference = segment.ReferenceDirection();
-        const Vector3 normal = segment.Normal();
-        const Vector3 other = kachakacha::v2::geometry::Cross(normal, reference);
-        const double radius = segment.Radius();
-        const auto pointAt = [&](double angle) {
-            return center + reference * (radius * std::cos(angle))
-                + other * (radius * std::sin(angle));
-        };
-        const auto tangentAt = [&](double angle) {
-            return reference * (-radius * std::sin(angle))
-                + other * (radius * std::cos(angle));
-        };
-        for (int index = 0; index < pieces; ++index) {
-            const double from = startAngle + step * index;
-            const double to = from + step;
-            const Vector3 p0 = pointAt(from);
-            const Vector3 p3 = pointAt(to);
-            const Vector3 p1 = p0 + tangentAt(from) * alpha;
-            const Vector3 p2 = p3 - tangentAt(to) * alpha;
-            const auto s0 = ToScreen(p0);
-            const auto s1 = ToScreen(p1);
-            const auto s2 = ToScreen(p2);
-            const auto s3 = ToScreen(p3);
-            if (!s0 || !s1 || !s2 || !s3) {
-                continue;
-            }
-            moveOrLine(*s0, index == 0);
-            path.cubicTo(*s1, *s2, *s3);
-        }
+    case CurveKind::CircularArc:
+        AppendArc(path, segment, started);
         return;
-    }
-    case CurveKind::CubicBezier: {
-        const auto& control = segment.ControlPoints();
-        if (control.size() != 4) {
-            return;
-        }
-        const auto s0 = ToScreen(control[0]);
-        const auto s1 = ToScreen(control[1]);
-        const auto s2 = ToScreen(control[2]);
-        const auto s3 = ToScreen(control[3]);
-        if (!s0 || !s1 || !s2 || !s3) {
-            return;
-        }
-        moveOrLine(*s0, true);
-        path.cubicTo(*s1, *s2, *s3);
+    case CurveKind::CubicBezier:
+        AppendBezier(path, segment, started);
         return;
-    }
-    case CurveKind::CubicBSpline: {
-        // 3次B-splineは、区間ごとに3次ベジェへ直せる。折れ線にしない。
-        const auto& control = segment.ControlPoints();
-        if (control.size() < 4) {
-            return;
-        }
-        for (std::size_t index = 0; index + 3 < control.size(); ++index) {
-            const Vector3& a = control[index];
-            const Vector3& b = control[index + 1];
-            const Vector3& c = control[index + 2];
-            const Vector3& d = control[index + 3];
-            const Vector3 p0 = (a + b * 4.0 + c) * (1.0 / 6.0);
-            const Vector3 p1 = (b * 2.0 + c) * (1.0 / 3.0);
-            const Vector3 p2 = (b + c * 2.0) * (1.0 / 3.0);
-            const Vector3 p3 = (b + c * 4.0 + d) * (1.0 / 6.0);
-            const auto s0 = ToScreen(p0);
-            const auto s1 = ToScreen(p1);
-            const auto s2 = ToScreen(p2);
-            const auto s3 = ToScreen(p3);
-            if (!s0 || !s1 || !s2 || !s3) {
-                continue;
-            }
-            moveOrLine(*s0, index == 0);
-            path.cubicTo(*s1, *s2, *s3);
-        }
+    case CurveKind::CubicBSpline:
+        AppendSpline(path, segment, started);
         return;
-    }
     }
 }
 

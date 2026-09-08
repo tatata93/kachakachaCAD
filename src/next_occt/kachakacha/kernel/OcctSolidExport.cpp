@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctSolidExport.h"
 
 #include <algorithm>
+#include <type_traits>
 #include <cmath>
 #include <string>
 
@@ -129,20 +130,23 @@ void AppendLittleEndian(std::string& out, std::uint32_t value)
     }
 }
 
-//! OCCT の表示器を一時的に空のものへ差し替える。抜けるときに元へ戻す。
-//! 空の表示器には印字先が1つも無いので、何も出ない。
+//! OCCT の印字先を一時的に外す。抜けるときに元へ戻す。
+//! 型の名前は版によって変わるので、書かずに推論させる。
 class SilentMessenger {
 public:
-    SilentMessenger() : saved_(Message::DefaultMessenger())
+    SilentMessenger() : saved_(Message::DefaultMessenger()->Printers())
     {
-        Message::SetDefaultMessenger(new Message_Messenger());
+        Message::DefaultMessenger()->ChangePrinters().Clear();
     }
-    ~SilentMessenger() { Message::SetDefaultMessenger(saved_); }
+    ~SilentMessenger()
+    {
+        Message::DefaultMessenger()->ChangePrinters() = saved_;
+    }
     SilentMessenger(const SilentMessenger&) = delete;
     SilentMessenger& operator=(const SilentMessenger&) = delete;
 
 private:
-    occ::handle<Message_Messenger> saved_;
+    std::decay_t<decltype(Message::DefaultMessenger()->Printers())> saved_;
 };
 
 } // namespace

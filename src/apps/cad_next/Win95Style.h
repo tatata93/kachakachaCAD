@@ -32,6 +32,31 @@ public:
     //! 退避した個別QSSを通常テーマへ戻す。
     static void RestoreApplicationStyleSheets();
 
+    //! 描き分けは要素の種類ごとに分けてある。
+    //! 1つの関数へ全部の case を詰めると読めなくなるので、
+    //! V2の決まり(1関数100行まで)に合わせて分けた。
+    //! 戻り値 true は「ここで描いたので、基底へは渡さない」の意。
+    [[nodiscard]] bool DrawPrimitivePart1(PrimitiveElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawPrimitivePart2(PrimitiveElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawPrimitivePart3(PrimitiveElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawControlPart1(ControlElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawControlPart2(ControlElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawControlPart3(ControlElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawControlPart4(ControlElement element,
+        const QStyleOption* option, QPainter* painter, const QWidget* widget) const;
+    [[nodiscard]] bool DrawComplexPart1(ComplexControl control,
+        const QStyleOptionComplex* option, QPainter* painter,
+        const QWidget* widget) const;
+    [[nodiscard]] bool DrawComplexPart2(ComplexControl control,
+        const QStyleOptionComplex* option, QPainter* painter,
+        const QWidget* widget) const;
+
     void drawPrimitive(
         PrimitiveElement element,
         const QStyleOption* option,

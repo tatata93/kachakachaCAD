@@ -122,7 +122,16 @@ private:
     void DrawScaleBar(QPainter& painter) const;
 
     //! 曲線1本を、種類を保ったまま QPainterPath へ足す。
+    //! 種類ごとに分ける。1つの関数へ詰めると読めなくなる。
     void AppendCurve(class QPainterPath& path,
+        const kachakacha::v2::geometry::CurveSegment& segment, bool& started) const;
+    void AppendLine(class QPainterPath& path,
+        const kachakacha::v2::geometry::CurveSegment& segment, bool& started) const;
+    void AppendArc(class QPainterPath& path,
+        const kachakacha::v2::geometry::CurveSegment& segment, bool& started) const;
+    void AppendBezier(class QPainterPath& path,
+        const kachakacha::v2::geometry::CurveSegment& segment, bool& started) const;
+    void AppendSpline(class QPainterPath& path,
         const kachakacha::v2::geometry::CurveSegment& segment, bool& started) const;
 
     [[nodiscard]] std::optional<QPointF> ToScreen(

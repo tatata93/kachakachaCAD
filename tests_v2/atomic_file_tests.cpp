@@ -12,6 +12,9 @@
 #include <string>
 
 using kachakacha::v2::io::AtomicWriteOptions;
+using kachakacha::v2::io::FromPath;
+using kachakacha::v2::io::MakePath;
+using kachakacha::v2::io::PathExists;
 using kachakacha::v2::io::ReadWholeFile;
 using kachakacha::v2::io::WriteFileAtomically;
 using kachakacha::v2::io::WriteWholeFile;
@@ -32,12 +35,14 @@ namespace {
     std::filesystem::remove_all(directory, code);
     std::filesystem::create_directories(directory, code);
     Require(!code, "作業場所が作れること");
-    return directory.string();
+    // パスは UTF-8 の文字列で持つ。path::string() は Windows で ANSI を返す。
+    return FromPath(directory);
 }
 
 [[nodiscard]] std::string Join(const std::string& directory, const std::string& name)
 {
-    return (std::filesystem::path(directory) / name).string();
+    // 文字列のまま繋ぐ。path を経由すると Windows で日本語が壊れる。
+    return directory + "/" + name;
 }
 
 void WriteExisting(const std::string& path, const std::string& content)
@@ -48,8 +53,7 @@ void WriteExisting(const std::string& path, const std::string& content)
 
 [[nodiscard]] bool Exists(const std::string& path)
 {
-    std::error_code code;
-    return std::filesystem::exists(std::filesystem::path(path), code) && !code;
+    return PathExists(path);
 }
 
 [[nodiscard]] std::string Read(const std::string& path)
@@ -201,8 +205,7 @@ KACHA_V2_TEST(atomic, 保存先が空なら断る)
 
 KACHA_V2_TEST(atomic, 無い場所へは書けないと言う)
 {
-    const std::string path =
-        (std::filesystem::path("/no/such/place/at/all") / "a.kcd2").string();
+    const std::string path = "/no/such/place/at/all/a.kcd2";
     const auto report = WriteFileAtomically(path, "中身");
     Require(!report.HasValue(), "書けたことにしない");
     RequireEqual(FirstCode(report.Diagnostics()), "IO-A001", "診断コード");
@@ -330,6 +333,47 @@ KACHA_V2_TEST(atomic, 控えからも読み直せる)
     auto backup = ReadWholeFile(path + ".bak");
     Require(backup.HasValue(), "控えが読めること");
     Require(LoadDocument(backup.Value()).HasValue(), "控えも文書として読める");
+}
+
+
+KACHA_V2_TEST(atomic, 日本語のフォルダ名でも書ける)
+{
+    // Windows では path(std::string) が ANSI になるため、
+    // ここを文字列のまま扱えていないと日本語のフォルダで保存できない。
+    const std::string directory = Workspace("nested");
+    const std::string nested = directory + "/車両_下回り";
+    std::error_code code;
+    std::filesystem::create_directories(MakePath(nested), code);
+    Require(!code, "フォルダが作れること");
+    const std::string path = Join(nested, "側板.kcd2");
+    const auto report = WriteFileAtomically(path, "中身");
+    Require(report.HasValue(), "書けること");
+    Require(Exists(path), "ファイルがある");
+    RequireEqual(Read(path), "中身", "中身");
+}
+
+KACHA_V2_TEST(atomic, 日本語のファイル名でも控えが残る)
+{
+    const std::string directory = Workspace("jp_backup");
+    const std::string path = Join(directory, "屋根板.kcd2");
+    WriteExisting(path, "古い中身");
+    const auto report = WriteFileAtomically(path, "新しい中身");
+    Require(report.HasValue(), "書けること");
+    RequireEqual(Read(path), "新しい中身", "本体");
+    Require(Exists(path + ".bak"), "控えがある");
+    RequireEqual(Read(path + ".bak"), "古い中身", "控えの中身");
+}
+
+KACHA_V2_TEST(atomic, パスの往復で文字が変わらない)
+{
+    const std::string original = "/tmp/車両/側板 A-1.kcd2";
+    RequireEqual(FromPath(MakePath(original)),
+#ifdef _WIN32
+        std::string("\\tmp\\車両\\側板 A-1.kcd2"),
+#else
+        original,
+#endif
+        "往復しても文字が変わらない");
 }
 
 KACHA_V2_TEST_MAIN("atomic_file_tests")

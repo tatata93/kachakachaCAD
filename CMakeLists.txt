@@ -608,6 +608,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
+    src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
 )
 target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
 target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)
@@ -705,6 +706,7 @@ if(KACHACAD_BUILD_TESTS)
 
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_export_tests tests_v2/kernel_export_tests.cpp)
 endif()
 
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)

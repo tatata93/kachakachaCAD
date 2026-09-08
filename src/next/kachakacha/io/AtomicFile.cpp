@@ -18,7 +18,7 @@ namespace {
 //! Windows で std::filesystem::path(std::string) をそのまま使うと、
 //! ANSI コードページとして解釈されるので、日本語を含むパスが壊れる。
 //! u8path は C++20 で非推奨になったため、自前で UTF-16 へ直して渡す。
-[[nodiscard]] std::filesystem::path ToPath(const std::string& utf8)
+[[nodiscard]] std::filesystem::path ToPathImpl(const std::string& utf8)
 {
 #ifdef _WIN32
     std::wstring wide;
@@ -75,13 +75,13 @@ namespace {
 [[nodiscard]] bool Exists(const std::string& path)
 {
     std::error_code code;
-    return std::filesystem::exists(ToPath(path), code) && !code;
+    return std::filesystem::exists(MakePath(path), code) && !code;
 }
 
 [[nodiscard]] bool Remove(const std::string& path)
 {
     std::error_code code;
-    std::filesystem::remove(ToPath(path), code);
+    std::filesystem::remove(MakePath(path), code);
     return !code;
 }
 
@@ -89,7 +89,7 @@ namespace {
     std::string& errorOut)
 {
     std::error_code code;
-    std::filesystem::rename(ToPath(from), ToPath(to),
+    std::filesystem::rename(MakePath(from), MakePath(to),
         code);
     if (code) {
         errorOut = code.message();
@@ -100,10 +100,57 @@ namespace {
 
 } // namespace
 
+std::filesystem::path MakePath(const std::string& utf8)
+{
+    return ToPathImpl(utf8);
+}
+
+std::string FromPath(const std::filesystem::path& path)
+{
+#ifdef _WIN32
+    const std::wstring wide = path.wstring();
+    std::string utf8;
+    utf8.reserve(wide.size() * 3);
+    for (std::size_t index = 0; index < wide.size(); ++index) {
+        char32_t code = static_cast<char32_t>(wide[index]);
+        if (code >= 0xD800 && code <= 0xDBFF && index + 1 < wide.size()) {
+            const char32_t low = static_cast<char32_t>(wide[index + 1]);
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                ++index;
+            }
+        }
+        if (code < 0x80) {
+            utf8.push_back(static_cast<char>(code));
+        } else if (code < 0x800) {
+            utf8.push_back(static_cast<char>(0xC0 | (code >> 6)));
+            utf8.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+        } else if (code < 0x10000) {
+            utf8.push_back(static_cast<char>(0xE0 | (code >> 12)));
+            utf8.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
+            utf8.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+        } else {
+            utf8.push_back(static_cast<char>(0xF0 | (code >> 18)));
+            utf8.push_back(static_cast<char>(0x80 | ((code >> 12) & 0x3F)));
+            utf8.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
+            utf8.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+        }
+    }
+    return utf8;
+#else
+    return path.string();
+#endif
+}
+
+bool PathExists(const std::string& path)
+{
+    return Exists(path);
+}
+
 bool WriteWholeFile(const std::string& path, std::string_view content,
     std::string& errorOut)
 {
-    std::ofstream stream(ToPath(path),
+    std::ofstream stream(MakePath(path),
         std::ios::binary | std::ios::trunc);
     if (!stream) {
         errorOut = "ファイルを開けませんでした。";
@@ -129,7 +176,7 @@ bool WriteWholeFile(const std::string& path, std::string_view content,
 
 Result<std::string> ReadWholeFile(const std::string& path)
 {
-    std::ifstream stream(ToPath(path), std::ios::binary);
+    std::ifstream stream(MakePath(path), std::ios::binary);
     if (!stream) {
         return Result<std::string>::Failure(MakeError(kAtomicBadPath,
             "ファイルを開けませんでした。", path));

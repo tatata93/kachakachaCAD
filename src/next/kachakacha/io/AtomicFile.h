@@ -16,6 +16,7 @@
 #include "kachakacha/base/Diagnostic.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -50,6 +51,19 @@ struct AtomicWriteReport {
 //! 戻り値が false なら、書き込みが失敗したものとして扱う。
 using ByteWriter = std::function<bool(const std::string& path, std::string_view content,
     std::string& errorOut)>;
+
+//! UTF-8 の文字列を、その環境のパスへ直す。
+//!
+//! Windows で std::filesystem::path(std::string) をそのまま使うと ANSI として
+//! 解釈されるので、日本語を含むパスが壊れる。逆に path::string() も ANSI を返す。
+//! パスは常に UTF-8 の std::string で持ち、境目でだけこれを通すこと。
+[[nodiscard]] std::filesystem::path MakePath(const std::string& utf8);
+
+//! std::filesystem::path を UTF-8 の文字列へ戻す。
+[[nodiscard]] std::string FromPath(const std::filesystem::path& path);
+
+//! そのパスにファイルかフォルダがあるか。
+[[nodiscard]] bool PathExists(const std::string& path);
 
 //! 既定の書き込み。ふつうはこれを使う。
 [[nodiscard]] bool WriteWholeFile(const std::string& path, std::string_view content,

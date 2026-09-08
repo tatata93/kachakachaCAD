@@ -91,8 +91,8 @@
 | AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済(document_tests.cpp)。壊れた入力で落ちないことも済(robustness_tests.cpp)。画面の回復は WP-08後半 |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
 | AT-UIX-011 | 未 | コマンド台帳との突き合わせは WP-12 |
-| AT-EXP-010 | 未 | STEP は OCCT が要る。STL は済(export_tests.cpp) |
-| AT-EXP-011 | 部分 | 潰れた三角形は断る(export_tests.cpp)。B-Rep検査は WP-11後半 |
+| AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |
+| AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない) |
 | AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |
 | AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
 | AT-PER-001 | 部分 | 遅すぎる処理は robustness_tests.cpp が時間で暴く(ExtendCurveToBoundary を直した)。画面の応答は WP-08後半 |

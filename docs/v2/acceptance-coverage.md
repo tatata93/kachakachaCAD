@@ -84,7 +84,7 @@
 | AT-UIX-002 | 済 | tests_v2/operation_guide_tests.cpp(全52コマンドで道具名・いまの手順・次の手順・決め方・やめ方・選択数の6つがそろい、仮の文字が混ざらない)+ cad_next --self-test |
 | AT-UIX-003 | 未 | Qt が要る |
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
-| AT-UIX-005 | 済 | tests_v2/snap_tests.cpp(主点/副点、間引き) |
+| AT-UIX-005 | 済 | tests_v2/grid_tests.cpp(1/2・1/3・1/4の点数、主副の間隔、細かすぎる副点の省略、UV での原点保持、作業平面が動いても付いていく、壊れた平面参照を別平面へ付け替えない) |
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
 | AT-UIX-007 | 未 | 形状ガイド表は WP-08後半 |
 | AT-UIX-008 | 未 | View cube は WP-08後半 |

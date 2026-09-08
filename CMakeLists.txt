@@ -564,6 +564,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Version.cpp
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
+    src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/modeling/ExtrudeInput.cpp
     src/next/kachakacha/exporters/PatternExport.cpp
@@ -665,6 +666,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(extrude_tests tests_v2/extrude_tests.cpp)
     kachakacha_add_v2_test(wire_cage_tests tests_v2/wire_cage_tests.cpp)
     kachakacha_add_v2_test(snap_tests tests_v2/snap_tests.cpp)
+    kachakacha_add_v2_test(grid_tests tests_v2/grid_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)

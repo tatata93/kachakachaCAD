@@ -86,6 +86,8 @@ private:
     void BuildToolPalette();
     void RefreshCommandVisibility();
     void BuildPanels();
+    //! 動かさずに作れる状態(絵だけの状態)。ApplyManualState から呼ぶ。
+    [[nodiscard]] bool ApplyStaticState(const QString& name);
     void RefreshEntityList();
     //! 案内を作り直して画面へ出す。6つがそろった形で出す(AT-UIX-002)。
     void RefreshGuide();

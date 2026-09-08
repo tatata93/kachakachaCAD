@@ -554,7 +554,7 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
     update();
 }
 
-bool V2MainWindow::ApplyManualState(const QString& name)
+bool V2MainWindow::ApplyStaticState(const QString& name)
 {
     ClearDiagnostics();
     if (name == QStringLiteral("empty")) {
@@ -600,6 +600,14 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         if (name.endsWith(QStringLiteral("win95"))) {
             ApplyTheme(UiTheme::Windows95);
         }
+        return true;
+    }
+    return false;
+}
+
+bool V2MainWindow::ApplyManualState(const QString& name)
+{
+    if (ApplyStaticState(name)) {
         return true;
     }
     if (name == QStringLiteral("draw-line")) {

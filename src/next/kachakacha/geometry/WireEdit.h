@@ -78,6 +78,12 @@ struct CornerResult {
 
 [[nodiscard]] CurveSegment TranslateCurve(const CurveSegment& curve, Vector3 delta);
 
+//! 向きを逆にする。種類を保つ。折れ線へ落とさない。
+//!
+//! 面を1周する順に並べた辺は、そのままでは向きがそろっていないことがある。
+//! そこで逆にする必要が出るが、そのたびに折れ線へ落としては形が変わってしまう。
+[[nodiscard]] base::Result<CurveSegment> ReverseCurve(const CurveSegment& curve);
+
 //! 軸まわりの回転。軸は点と方向で与える。
 [[nodiscard]] base::Result<CurveSegment> RotateCurve(const CurveSegment& curve,
     Vector3 axisPoint, Vector3 axisDirection, double angleRad);

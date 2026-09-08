@@ -4,6 +4,7 @@
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 
@@ -67,7 +68,18 @@ template<class Body>
                 "立体を作るところで幾何カーネルが失敗しました。",
                 "面が指している線がありません。"));
         }
-        loop.push_back(edges[index].segment);
+        // core が「この辺は逆向きに使う」と言っているなら、そのとおりにする。
+        // 無視すると、隣どうしの端点が合わずワイヤーにならない。
+        const bool reversed = at < patch.reversed.size() && patch.reversed[at];
+        if (!reversed) {
+            loop.push_back(edges[index].segment);
+            continue;
+        }
+        const auto flipped = geometry::ReverseCurve(edges[index].segment);
+        if (!flipped.HasValue()) {
+            return Result<TopoDS_Face>::Failure(flipped.Diagnostics());
+        }
+        loop.push_back(flipped.Value());
     }
     const auto wire = ToWire(loop, toleranceMm);
     if (!wire.HasValue()) {

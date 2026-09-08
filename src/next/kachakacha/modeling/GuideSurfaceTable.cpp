@@ -1,6 +1,7 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/geometry/WireEdit.h"
 
 #include <algorithm>
 #include <cmath>
@@ -22,35 +23,11 @@ constexpr double kTwoPi = 6.283185307179586;
         "行番号 " + std::to_string(rowIndex + 1) + " は表にありません。");
 }
 
-//! 1本の曲線を、種類を保ったまま逆向きにする。折れ線へ落とさない。
+//! 1本の曲線を、種類を保ったまま逆向きにする。実装は geometry に1つだけ置く。
+//! ここに2つ目を書くと、片方だけ直したときに食い違う。
 [[nodiscard]] Result<CurveSegment> ReverseSegment(const CurveSegment& segment)
 {
-    switch (segment.Kind()) {
-    case CurveKind::Line:
-        return CurveSegment::MakeLine(segment.EndPoint(), segment.StartPoint());
-    case CurveKind::CircularArc:
-        return CurveSegment::MakeCircularArc(segment.Center(), segment.Normal(),
-            segment.ReferenceDirection(), segment.Radius(),
-            segment.StartAngleRad() + segment.SweepAngleRad(), -segment.SweepAngleRad());
-    case CurveKind::Circle: {
-        Result<CurveSegment> arc = CurveSegment::MakeCircularArc(segment.Center(),
-            segment.Normal(), segment.ReferenceDirection(), segment.Radius(),
-            segment.StartAngleRad(), -kTwoPi);
-        return arc;
-    }
-    case CurveKind::CubicBezier: {
-        std::vector<Vector3> points = segment.ControlPoints();
-        std::reverse(points.begin(), points.end());
-        return CurveSegment::MakeCubicBezier(points);
-    }
-    case CurveKind::CubicBSpline: {
-        std::vector<Vector3> points = segment.ControlPoints();
-        std::reverse(points.begin(), points.end());
-        return CurveSegment::MakeCubicBSpline(points);
-    }
-    }
-    return Result<CurveSegment>::Failure(MakeError("UI-R002",
-        "その線は向きを変えられません。", "種類が分かりません。"));
+    return geometry::ReverseCurve(segment);
 }
 
 [[nodiscard]] double DistanceTo(const std::vector<CurveSegment>& segments,

@@ -34,6 +34,17 @@ namespace {
     return diagnostics.empty() ? std::string("(なし)") : diagnostics.front().code;
 }
 
+//! 断られた理由を、そのまま試験の失敗文へ出す。
+//! 「作れる」とだけ出ても、PC の側でしか再現しないものは追えない。
+[[nodiscard]] std::string Why(const std::vector<Diagnostic>& diagnostics)
+{
+    if (diagnostics.empty()) {
+        return "(理由なし)";
+    }
+    return diagnostics.front().code + " " + diagnostics.front().summaryJa + " / "
+        + diagnostics.front().detailsJa;
+}
+
 struct EdgeMaker {
     DeterministicIdGenerator ids{5};
     std::vector<CageEdgeInput> edges;
@@ -149,7 +160,7 @@ KACHA_V2_TEST(kernel_cage, 2つ同時に確定すると2つの立体が出来る
 
     const auto built = BuildWireCageParts(maker.edges, analysis.Value(), plan.Value(),
         tolerance);
-    Require(built.HasValue(), "作れる");
+    Require(built.HasValue(), "作れる: " + Why(built.Diagnostics()));
     RequireEqual(std::to_string(built.Value().size()), "2", "2つの立体");
     // 別々の立体なので、番号も別。
     Require(built.Value()[0].handle.value != built.Value()[1].handle.value,
@@ -178,7 +189,7 @@ KACHA_V2_TEST(kernel_cage, 作った立体の面のキーがcoreの決めたも�
     const auto plan = PlanWireCageParts(analysis.Value(), {0});
     const auto built = BuildWireCageParts(maker.edges, analysis.Value(), plan.Value(),
         tolerance);
-    Require(built.HasValue(), "作れる");
+    Require(built.HasValue(), "作れる: " + Why(built.Diagnostics()));
     RequireEqual(std::to_string(built.Value().front().faceKeys.size()),
         std::to_string(plan.Value().front().faceKeys.size()), "数が同じ");
     for (std::size_t index = 0; index < plan.Value().front().faceKeys.size(); ++index) {

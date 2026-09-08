@@ -637,3 +637,35 @@ Result<CurveSegment> MirrorCurve(const CurveSegment& curve, Vector3 planePoint,
 }
 
 } // namespace kachakacha::v2::geometry
+
+namespace kachakacha::v2::geometry {
+
+base::Result<CurveSegment> ReverseCurve(const CurveSegment& curve)
+{
+    constexpr double kTwoPi = 6.283185307179586;
+    switch (curve.Kind()) {
+    case CurveKind::Line:
+        return CurveSegment::MakeLine(curve.EndPoint(), curve.StartPoint());
+    case CurveKind::CircularArc:
+        return CurveSegment::MakeCircularArc(curve.Center(), curve.Normal(),
+            curve.ReferenceDirection(), curve.Radius(),
+            curve.StartAngleRad() + curve.SweepAngleRad(), -curve.SweepAngleRad());
+    case CurveKind::Circle:
+        return CurveSegment::MakeCircularArc(curve.Center(), curve.Normal(),
+            curve.ReferenceDirection(), curve.Radius(), curve.StartAngleRad(), -kTwoPi);
+    case CurveKind::CubicBezier: {
+        std::vector<Vector3> points = curve.ControlPoints();
+        std::reverse(points.begin(), points.end());
+        return CurveSegment::MakeCubicBezier(points);
+    }
+    case CurveKind::CubicBSpline: {
+        std::vector<Vector3> points = curve.ControlPoints();
+        std::reverse(points.begin(), points.end());
+        return CurveSegment::MakeCubicBSpline(points);
+    }
+    }
+    return base::Result<CurveSegment>::Failure(base::MakeError("GEO-E010",
+        "その線は向きを変えられません。", "種類が分かりません。"));
+}
+
+} // namespace kachakacha::v2::geometry

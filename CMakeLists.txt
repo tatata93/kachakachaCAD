@@ -567,6 +567,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/exporters/PatternExport.cpp
     src/next/kachakacha/exporters/PdfWriter.cpp
     src/next/kachakacha/fabrication/Assembly.cpp
+    src/next/kachakacha/fabrication/ClosedLoop.cpp
     src/next/kachakacha/fabrication/CurvatureAnalysis.cpp
     src/next/kachakacha/fabrication/FabricationSettings.cpp
     src/next/kachakacha/fabrication/OpeningClip.cpp
@@ -664,6 +665,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)
+    kachakacha_add_v2_test(closed_loop_tests tests_v2/closed_loop_tests.cpp)
     kachakacha_add_v2_test(pattern_tests tests_v2/pattern_tests.cpp)
     kachakacha_add_v2_test(panel_strategy_tests tests_v2/panel_strategy_tests.cpp)
     kachakacha_add_v2_test(export_tests tests_v2/export_tests.cpp)

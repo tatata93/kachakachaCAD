@@ -75,7 +75,7 @@
 | AT-FAB-007 | 済 | tests_v2/opening_clip_tests.cpp(開口またぎ) |
 | AT-FAB-008 | 部分 | 対応辺のIDは済(opening_clip_tests.cpp)。切れ目側は WP-09後半 |
 | AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |
-| AT-FAB-010 | 部分 | 木の折りは済。閉ループの最小二乗は WP-09後半 |
+| AT-FAB-010 | 済 | tests_v2/closed_loop_tests.cpp(貼り合わせを含む輪を折り角の最小二乗で解く。解けない型紙は板を歪めず、いちばん開いている貼り合わせを名指しして断る) |
 | AT-FAB-011 | 未 | 任意状態の実体化は WP-09後半。OCCT が要る |
 | AT-FAB-012 | 未 | 選択部材出力は WP-10 |
 | AT-FAB-013 | 未 | ER1/ER2 の受入モデルは WP-12。OCCT が要る |

@@ -72,17 +72,20 @@ V1の3モードより広い。**V1同等は満たしたうえで、PRD-052の残
 
 | V1 `DrawingSnapKind` | V2 §6.1 の優先順位に有るか | 状態 |
 | --- | --- | --- |
-| Point(作図点) | 有 | 未 |
-| Intersection(幾何交点) | 有 | 未 |
-| Endpoint(端点) | 有 | 未 |
-| Midpoint(中点) | 有 | 未 |
-| Center(円・円弧の中心) | 有 | 未 |
-| **ProjectedPoint(作業平面へ法線投影)** | **無い** | **仕様の欠落** |
-| **Extension(既存線分の延長線上)** | **無い** | **仕様の欠落** |
-| Grid | 有 | 未 |
+| Point(作図点) | 有 | **済**(`SnapKind::DrawingPoint`) |
+| Intersection(幾何交点) | 有 | **済**(`SnapKind::Intersection`) |
+| Endpoint(端点) | 有 | **済**(`SnapKind::Endpoint`) |
+| Midpoint(中点) | 有 | **済**(`SnapKind::Midpoint`) |
+| Center(円・円弧の中心) | 有 | **済**(`SnapKind::Center`) |
+| **ProjectedPoint(作業平面へ法線投影)** | 無かった | **済**(`SnapKind::ProjectedOnPlane`) |
+| **Extension(既存線分の延長線上)** | 無かった | **済**(`SnapKind::Extension`) |
+| Grid | 有 | **済**(`SnapKind::GridMajor` / `GridMinor`) |
 
-**ProjectedPoint と Extension は V2 の §6.1 から漏れている。**
-`ui-workflows.md` §6.1 の優先順位へ追加すること。これはオーナー指示により必須。
+V2が新しく足したもの: 接点、垂足、四半点、曲線上最近点、画面交差(候補には出すが吸着しない)。
+
+**ProjectedPoint と Extension は V2 の §6.1 から漏れていたので、`SnapKind` へ入れた。**
+実装は `src/next/kachakacha/modeling/SnapEngine.*`。Qt に依存しないので、
+画面の情報は `ScreenMapping` 1枚だけを受け取る。試験は `tests_v2/snap_tests.cpp`。
 
 あわせて、V2が新しく足そうとしている「接点/垂足」「四半点」「曲線上最近点」は
 V1に無い改善なので、そのまま入れてよい。
@@ -90,8 +93,9 @@ V1に無い改善なので、そのまま入れてよい。
 ### 修飾キー
 
 V1は **Ctrl** でスナップ抑止（操作ガイド `MainWindow.cpp:2442`「Ctrl中: 完全に吸着しない」）。
-V2 `PRD-062` は **Shift**。**既存利用者の再学習になるので、V1と同じ Ctrl にするか、
-両方効くようにすること。** 変えるならオーナー確認。
+V2 `PRD-062` は **Shift**。既存利用者の再学習を避けるため、**両方効く**ようにする。
+`SnapSettings::suppressed` は「どちらかが押されている」を表す1つの真偽値なので、
+どちらのキーでも同じ挙動になる。トグルではなく、離せば直ちに戻る。
 
 ## 5. 測定(3モード)
 

@@ -36,6 +36,14 @@ constexpr int kMaximumFunctionLines = 100;
 #endif
 }
 
+[[nodiscard]] std::string ReadFile(const std::filesystem::path& path)
+{
+    std::ifstream stream(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << stream.rdbuf();
+    return buffer.str();
+}
+
 [[nodiscard]] std::string Join(const std::vector<std::string>& items)
 {
     std::ostringstream text;
@@ -374,6 +382,51 @@ KACHA_V2_TEST(architecture, v2_sources_avoid_names_that_are_macros_elsewhere)
     }
     Require(offenders.empty(),
         "no V2 source names a variable after a Qt or Windows macro: " + Join(offenders));
+}
+
+KACHA_V2_TEST(architecture, every_v2_target_gets_the_shared_compile_options)
+{
+    // V2 の実行ファイルは、どれも同じ規格と警告で組み立てる。
+    // 忘れると、その1つだけが古い規格で組み立てられ、
+    // 雲では通るのに Windows で落ちる。実際に一度そうなった。
+    const std::string text = ReadFile(RepoRoot() / "CMakeLists.txt");
+    std::vector<std::string> offenders;
+    std::istringstream stream(text);
+    std::string line;
+    std::vector<std::string> declared;
+    std::vector<std::string> configured;
+    while (std::getline(stream, line)) {
+        const std::string marker = "add_executable(kachakacha_v2_";
+        const std::size_t at = line.find(marker);
+        if (at != std::string::npos) {
+            const std::size_t start = at + std::string("add_executable(").size();
+            const std::size_t end = line.find_first_of(" )\t", start);
+            if (end != std::string::npos) {
+                declared.push_back(line.substr(start, end - start));
+            }
+        }
+        const std::string applied = "kachakacha_apply_test_options(kachakacha_v2_";
+        const std::size_t used = line.find(applied);
+        if (used != std::string::npos) {
+            const std::size_t start = used
+                + std::string("kachakacha_apply_test_options(").size();
+            const std::size_t end = line.find(')', start);
+            if (end != std::string::npos) {
+                configured.push_back(line.substr(start, end - start));
+            }
+        }
+    }
+    // 台帳から作る試験は関数の中で必ず options を当てているので、
+    // ここで見るのは「直に add_executable したもの」だけである。
+    for (const std::string& name : declared) {
+        if (std::find(configured.begin(), configured.end(), name) == configured.end()) {
+            offenders.push_back(name);
+        }
+    }
+    Require(!declared.empty(), "V2 の実行ファイルが1つ以上ある");
+    Require(offenders.empty(),
+        "every directly declared V2 executable applies the shared options: "
+            + Join(offenders));
 }
 
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)

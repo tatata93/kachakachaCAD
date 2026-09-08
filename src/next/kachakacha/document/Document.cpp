@@ -267,6 +267,22 @@ bool Document::Redo()
     return true;
 }
 
+std::vector<Diagnostic> Document::ResetTo(DocumentSnapshot snapshot)
+{
+    std::vector<Diagnostic> problems = Validate(snapshot);
+    for (const Diagnostic& diagnostic : problems) {
+        if (diagnostic.IsError()) {
+            // 壊れたものを入れない。入れると、そのあとの操作が全部あてにならない。
+            return problems;
+        }
+    }
+    snapshot_ = std::move(snapshot);
+    undoStack_.clear();
+    redoStack_.clear();
+    compoundDepth_ = 0;
+    return problems;
+}
+
 void Document::MarkHistoryBoundary()
 {
     undoStack_.clear();

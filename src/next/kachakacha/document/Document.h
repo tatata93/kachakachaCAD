@@ -119,6 +119,12 @@ public:
     //! ファイルを開く・新規作成・保存はUndo履歴の境界にする。
     void MarkHistoryBoundary();
 
+    //! ファイルを開いたときに中身を入れ替える。Undo履歴は捨てる。
+    //! 開く前の文書へ「元に戻す」で帰れてしまうと、
+    //! いまどのファイルを見ているのかが分からなくなるためである。
+    //! 壊れた文書は入れない。Validate に落ちたら、いまの文書はそのままで診断を返す。
+    [[nodiscard]] std::vector<Diagnostic> ResetTo(DocumentSnapshot snapshot);
+
     // --- 検索 ---
     [[nodiscard]] const Entity* FindEntity(EntityId id) const;
     [[nodiscard]] const Feature* FindFeature(FeatureId id) const;

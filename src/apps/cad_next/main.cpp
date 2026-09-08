@@ -5,6 +5,7 @@
 //!   --self-test     : 画面を出さずに一通り触って、結果を出す
 //!   --manual-state <名前> --snapshot <png> : その状態の絵を保存する
 //!   --size 1366x768 : 窓の大きさを決める(AT-UIX-010 の画面サイズ比べ)
+//!   --open <kcd2>   : 文書を開く。--snapshot と組めば絵だけ撮って終わる
 //!
 //! V1 は画面を出さないと何も確かめられなかったので、
 //! 直したかどうかを人が目で見るしかなかった。
@@ -828,6 +829,55 @@ struct SelfTestCase {
     return hasBytes && dock.LastMessage().contains(QStringLiteral("書き出しました"));
 }
 
+[[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
+{
+    // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
+    if (!Explain("見本を開ける", window.ApplyManualState(QStringLiteral("sample")))) {
+        return false;
+    }
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    if (!Explain((std::string("ものが9つ(実際は ")
+                     + std::to_string(snapshot.entities.size()) + ")").c_str(),
+            snapshot.entities.size() == 9)) {
+        return false;
+    }
+    if (!Explain((std::string("線が30本(実際は ")
+                     + std::to_string(window.Session().Scene().curves.size())
+                     + ")").c_str(),
+            window.Session().Scene().curves.size() == 30)) {
+        return false;
+    }
+    // 開いた直後は「元に戻す」で前の文書へ帰れない。
+    if (!Explain("開いた直後は戻せない",
+            !window.Session().GetDocument().CanUndo())) {
+        return false;
+    }
+    return Explain("一覧にも出ている", window.EntityRowCount() > 0);
+}
+
+//! 文書を開く。絵も頼まれていれば撮って終わる。
+//! 終わってよいときは終了コードを返し、続けてよいときは -1 を返す。
+[[nodiscard]] int OpenAndMaybeShoot(V2MainWindow& window, const QString& path,
+    const QString& snapshot)
+{
+    if (!window.OpenDocumentFile(path)) {
+        std::cerr << "開けませんでした: " << path.toStdString() << '\n';
+        return 5;
+    }
+    std::cout << "opened " << path.toStdString() << " entities="
+              << window.Session().GetDocument().Snapshot().entities.size() << '\n';
+    window.Viewport().FitToDocument();
+    if (snapshot.isEmpty()) {
+        return -1;
+    }
+    if (!SaveSnapshot(window, snapshot)) {
+        std::cerr << "絵を保存できませんでした: " << snapshot.toStdString() << '\n';
+        return 3;
+    }
+    std::cout << "saved " << snapshot.toStdString() << '\n';
+    return 0;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -864,6 +914,7 @@ const SelfTestCase kCases[] = {
     {"書き出しの棚が選択に従う", &CaseExportDockFollowsSelection},
     {"出せない形式は押す前に断る", &CaseExportRefusesImpossibleFormat},
     {"出す先を決めればファイルが出る", &CaseExportWritesFile},
+    {"配る見本が開ける", &CaseSampleDocumentOpens},
 };
 
 } // namespace
@@ -940,6 +991,13 @@ int main(int argc, char** argv)
     }
 
     V2MainWindow window;
+    const QString openPath = ValueAfter(arguments, QStringLiteral("--open"));
+    if (!openPath.isEmpty()) {
+        const int code = OpenAndMaybeShoot(window, openPath, snapshot);
+        if (code >= 0) {
+            return code;
+        }
+    }
     if (!state.isEmpty()) {
         window.resize(windowWidth, windowHeight);
         if (!window.ApplyManualState(state)) {

@@ -20,6 +20,7 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
+#include "kachakacha/document/Document.h"
 
 #include <QColor>
 #include <QMainWindow>
@@ -56,6 +57,11 @@ public:
 
     //! 道具を選ぶ。案内文が出る。
     void SelectTool(kachakacha::v2::modeling::DrawingTool tool);
+
+    //! ファイルを開く。開けなければ理由を知らせに出して false を返す。
+    bool OpenDocumentFile(const QString& path);
+    //! いま開いているファイル。まだ保存していなければ空。
+    [[nodiscard]] QString DocumentPath() const { return documentPath_; }
 
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
     //! 状態の名前は --manual-state で渡すものと同じ。
@@ -136,6 +142,8 @@ private:
     [[nodiscard]] bool ApplyStaticState(const QString& name);
     //! 形状ガイドの役割テーブルの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyGuideTableState();
+    //! 作図の見本。ApplyManualState から呼ぶ。
+    [[nodiscard]] bool ApplyDrawingState(const QString& name);
     //! 選択と書き出しの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplySelectionState(const QString& name);
     //! 作業中グループの見本。ApplyManualState から呼ぶ。
@@ -151,6 +159,10 @@ private:
     void BuildExportDock();
     //! 書き出しの台帳コマンド。棚を出して、形式を選ぶ。
     void RunExportCommand(std::string_view id);
+    //! ファイルの台帳コマンド。新規・開く・保存・名前を付けて保存。
+    void RunFileCommand(std::string_view id);
+    //! 文書を入れ替えて、場面と一覧を作り直す。開いた直後の後始末を1か所にまとめる。
+    void AdoptDocument(kachakacha::v2::document::DocumentSnapshot snapshot);
     //! 頼まれた組合せの中身を作る。作れないものは断る。
     [[nodiscard]] kachakacha::v2::base::Result<std::string> MakeExportContent(
         const kachakacha::v2::app::ExportRequest& request);
@@ -161,6 +173,9 @@ private:
     void RefreshGuide();
     void SetStatus(const QString& text);
     void AddDiagnostic(const QString& codeAndText);
+    //! 診断を知らせと帯の両方へ出す。
+    void ReportDiagnostics(
+        const std::vector<kachakacha::v2::base::Diagnostic>& diagnostics);
     void ClearDiagnostics();
 
     std::unique_ptr<kachakacha::v2::base::IdGenerator> ids_;
@@ -180,6 +195,8 @@ private:
     QLabel* toolLabel_ = nullptr;
     QLabel* groupLabel_ = nullptr;
     UiTheme theme_ = UiTheme::Normal;
+    //! いま開いているファイル。無ければ空(まだ保存していない)。
+    QString documentPath_;
     bool snapEnabled_ = true;
     int selectionCount_ = 0;
     kachakacha::v2::app::UiMode mode_ =

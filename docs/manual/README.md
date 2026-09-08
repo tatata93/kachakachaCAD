@@ -356,6 +356,14 @@ Windows。`kachakacha_cad_next.exe` を起動します。
 
 この見本で、この説明書の 4・5・7・8・12 章がそのまま試せます。
 
+「ファイル」→「開く」から開きます。画面を出さずに開いて確かめるには、
+
+```
+kachakacha_cad_next.exe --open samples\v2-sample.kcd2
+```
+
+と打ちます。`--snapshot` を足すと、開いた絵だけを撮って終わります。
+
 見本を作り直すには次のように打ちます。
 
 ```
@@ -379,7 +387,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 `empty` `grid` `tools` `curves` `curves-win95` `draw-line` `snap` `isometric`
 `win95` `guide` `mode-part` `mode-fabrication` `mode-output` `view-cube`
 `guide-table` `cursor-input` `active-group` `steps-part` `steps-fabrication`
-`steps-output` `select` `export` です。
+`steps-output` `select` `export` `sample` です。
 
 画面の大きさを決めるには `--size 1366x768` を足します。
 

@@ -275,6 +275,9 @@ public:
     [[nodiscard]] static QString getSaveFileName(QWidget* parent = nullptr,
         const QString& caption = QString(), const QString& directory = QString(),
         const QString& filter = QString());
+    [[nodiscard]] static QString getOpenFileName(QWidget* parent = nullptr,
+        const QString& caption = QString(), const QString& directory = QString(),
+        const QString& filter = QString());
 };
 
 class QTabBar : public QWidget {

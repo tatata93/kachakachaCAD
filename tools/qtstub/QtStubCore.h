@@ -70,6 +70,7 @@ public:
     [[nodiscard]] const char* toUtf8() const;
     [[nodiscard]] const char* toLocal8Bit() const;
     [[nodiscard]] bool contains(const QString&) const;
+    void clear();
     [[nodiscard]] bool startsWith(const QString&) const;
     [[nodiscard]] bool endsWith(const QString&) const;
     [[nodiscard]] QString mid(int, int = -1) const;

@@ -1,7 +1,11 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/ExportContent.h"
+#include "kachakacha/app/SampleDocument.h"
+#include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/io/AtomicFile.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include "Win95Style.h"
 
@@ -16,6 +20,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QDockWidget>
+#include <QFileDialog>
 #include <QFont>
 #include <QLabel>
 #include <QListWidget>
@@ -486,6 +491,102 @@ void V2MainWindow::RefreshProcessSteps()
     }
 }
 
+void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snapshot)
+{
+    const auto problems = session_->GetDocument().ResetTo(std::move(snapshot));
+    bool refused = false;
+    for (const auto& diagnostic : problems) {
+        AddDiagnostic(QStringLiteral("%1 %2")
+                .arg(QString::fromStdString(diagnostic.code),
+                    QString::fromStdString(diagnostic.summaryJa)));
+        refused = refused || diagnostic.IsError();
+    }
+    if (refused) {
+        SetStatus(QStringLiteral("開けませんでした。いまの文書はそのままです。"));
+        return;
+    }
+    // 線を場面へ並べ直す。見ている場所は変えない。
+    session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
+        session_->GetDocument().Snapshot(), *ids_));
+    viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+    RefreshEntityList();
+    RefreshExportCounts();
+    viewport_->update();
+}
+
+bool V2MainWindow::OpenDocumentFile(const QString& path)
+{
+    const auto text = kachakacha::v2::io::ReadWholeFile(path.toStdString());
+    if (!text.HasValue()) {
+        ReportDiagnostics(text.Diagnostics());
+        return false;
+    }
+    const auto loaded = kachakacha::v2::io::LoadDocument(text.Value());
+    if (!loaded.HasValue()) {
+        ReportDiagnostics(loaded.Diagnostics());
+        return false;
+    }
+    const std::uint64_t before = session_->GetDocument().Revision();
+    AdoptDocument(loaded.Value().snapshot);
+    if (session_->GetDocument().Snapshot().entities.empty()
+        && !loaded.Value().snapshot.entities.empty()) {
+        // ResetTo が断った。いまの文書はそのままなので、開けたことにしない。
+        (void)before;
+        return false;
+    }
+    documentPath_ = path;
+    SetStatus(QStringLiteral("%1 を開きました。").arg(path));
+    return true;
+}
+
+void V2MainWindow::RunFileCommand(std::string_view id)
+{
+    using kachakacha::v2::io::DocumentFile;
+    const QString filter = QStringLiteral("kachakachaCAD の文書 (*.kcd2)");
+    if (id == "file.new") {
+        AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
+        documentPath_.clear();
+        SetStatus(QStringLiteral("新しい文書にしました。"));
+        return;
+    }
+    if (id == "file.open") {
+        const QString chosen = QFileDialog::getOpenFileName(this,
+            QStringLiteral("開く"), QString(), filter);
+        if (!chosen.isEmpty()) {
+            (void)OpenDocumentFile(chosen);
+        }
+        return;
+    }
+    QString path = documentPath_;
+    if (id == "file.save_as" || path.isEmpty()) {
+        path = QFileDialog::getSaveFileName(this, QStringLiteral("保存する"), QString(),
+            filter);
+        if (path.isEmpty()) {
+            return;
+        }
+        if (!path.endsWith(QStringLiteral(".kcd2"))) {
+            path += QStringLiteral(".kcd2");
+        }
+    }
+    DocumentFile file;
+    file.snapshot = session_->GetDocument().Snapshot();
+    file.metadata.title = path.toStdString();
+    const auto archive = kachakacha::v2::io::SaveDocument(file);
+    if (!archive.HasValue()) {
+        ReportDiagnostics(archive.Diagnostics());
+        return;
+    }
+    const auto written = kachakacha::v2::io::WriteFileAtomically(path.toStdString(),
+        archive.Value());
+    if (!written.HasValue()) {
+        ReportDiagnostics(written.Diagnostics());
+        return;
+    }
+    documentPath_ = path;
+    session_->GetDocument().MarkHistoryBoundary();
+    SetStatus(QStringLiteral("%1 へ保存しました。").arg(path));
+}
+
 void V2MainWindow::RunExportCommand(std::string_view id)
 {
     using kachakacha::v2::app::ExportFormat;
@@ -777,6 +878,18 @@ void V2MainWindow::RefreshGuide()
     SetStatus(QString::fromUtf8(guide.ToStatusLine().c_str()));
 }
 
+void V2MainWindow::ReportDiagnostics(
+    const std::vector<kachakacha::v2::base::Diagnostic>& diagnostics)
+{
+    for (const auto& diagnostic : diagnostics) {
+        const QString text = QStringLiteral("%1 %2")
+            .arg(QString::fromStdString(diagnostic.code),
+                QString::fromStdString(diagnostic.summaryJa));
+        AddDiagnostic(text);
+        SetStatus(text);
+    }
+}
+
 void V2MainWindow::SetStatus(const QString& text)
 {
     if (statusLabel_) {
@@ -950,6 +1063,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         SetStatus(QStringLiteral("全体を表示しました。"));
         return;
     }
+    if (id.rfind("file.", 0) == 0) {
+        RunFileCommand(id);
+        return;
+    }
     if (id.rfind("export.", 0) == 0) {
         RunExportCommand(id);
         return;
@@ -1010,8 +1127,45 @@ bool V2MainWindow::ApplyStepsState(const QString& name)
     return true;
 }
 
+bool V2MainWindow::ApplyDrawingState(const QString& name)
+{
+    if (name == QStringLiteral("draw-line")) {
+        // 道具を選んで2点置く。文書が変わり、一覧に出ることを確かめる。
+        SelectTool(DrawingTool::Line);
+        viewport_->SetViewDirection(ViewDirection::Top);
+        viewport_->SetVisibleWidthMm(200.0);
+        viewport_->ClickAt(QPointF(viewport_->width() * 0.3, viewport_->height() * 0.6));
+        viewport_->HoverAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.4));
+        viewport_->ClickAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.4));
+        RefreshEntityList();
+        return true;
+    }
+    if (name == QStringLiteral("snap")) {
+        // 既にある線の端点へ吸着させる。吸着の印と名前が出る。
+        (void)ApplyManualState(QStringLiteral("curves"));
+        SelectTool(DrawingTool::Line);
+        const auto screen = viewport_->Mapping().Project(Vector3{-20, -30, 0});
+        if (screen.has_value()) {
+            viewport_->HoverAt(QPointF(screen->x, screen->y));
+        }
+        return true;
+    }
+    // isometric
+    (void)ApplyManualState(QStringLiteral("curves"));
+    viewport_->SetViewDirection(ViewDirection::Isometric);
+    viewport_->FitToDocument();
+    return true;
+}
+
 bool V2MainWindow::ApplySelectionState(const QString& name)
 {
+    if (name == QStringLiteral("sample")) {
+        // 配る見本。マニュアルの手順をそのままなぞれる。
+        AdoptDocument(kachakacha::v2::app::BuildSampleDocument().snapshot);
+        viewport_->SetViewDirection(ViewDirection::Top);
+        viewport_->FitToDocument();
+        return true;
+    }
     // 線を2本引いてから、選択の道具で選ぶ。選んだ線の色が変わる。
     // 引いた線は文書のワイヤーなので、書き出しの数にもそのまま出る。
     (void)ApplyManualState(QStringLiteral("draw-line"));
@@ -1161,34 +1315,12 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     if (ApplyStaticState(name)) {
         return true;
     }
-    if (name == QStringLiteral("draw-line")) {
-        // 道具を選んで2点置く。文書が変わり、一覧に出ることを確かめる。
-        SelectTool(DrawingTool::Line);
-        viewport_->SetViewDirection(ViewDirection::Top);
-        viewport_->SetVisibleWidthMm(200.0);
-        viewport_->ClickAt(QPointF(viewport_->width() * 0.3, viewport_->height() * 0.6));
-        viewport_->HoverAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.4));
-        viewport_->ClickAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.4));
-        RefreshEntityList();
-        return true;
+    if (name == QStringLiteral("draw-line") || name == QStringLiteral("snap")
+        || name == QStringLiteral("isometric")) {
+        return ApplyDrawingState(name);
     }
-    if (name == QStringLiteral("snap")) {
-        // 既にある線の端点へ吸着させる。吸着の印と名前が出る。
-        (void)ApplyManualState(QStringLiteral("curves"));
-        SelectTool(DrawingTool::Line);
-        const auto screen = viewport_->Mapping().Project(Vector3{-20, -30, 0});
-        if (screen.has_value()) {
-            viewport_->HoverAt(QPointF(screen->x, screen->y));
-        }
-        return true;
-    }
-    if (name == QStringLiteral("isometric")) {
-        (void)ApplyManualState(QStringLiteral("curves"));
-        viewport_->SetViewDirection(ViewDirection::Isometric);
-        viewport_->FitToDocument();
-        return true;
-    }
-    if (name == QStringLiteral("select") || name == QStringLiteral("export")) {
+    if (name == QStringLiteral("sample") || name == QStringLiteral("select")
+        || name == QStringLiteral("export")) {
         return ApplySelectionState(name);
     }
     if (name == QStringLiteral("win95")) {

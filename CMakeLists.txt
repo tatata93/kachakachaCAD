@@ -557,6 +557,9 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CommandCatalog.cpp
     src/next/kachakacha/app/CursorInput.cpp
     src/next/kachakacha/app/EvaluationQueue.cpp
+    src/next/kachakacha/app/ExportContent.cpp
+    src/next/kachakacha/app/Selection.cpp
+    src/next/kachakacha/app/ExportPanel.cpp
     src/next/kachakacha/app/ExportService.cpp
     src/next/kachakacha/app/PointSources.cpp
     src/next/kachakacha/app/ProcessSteps.cpp
@@ -705,6 +708,9 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(active_group_tests tests_v2/active_group_tests.cpp)
     kachakacha_add_v2_test(broken_reference_tests tests_v2/broken_reference_tests.cpp)
     kachakacha_add_v2_test(process_step_tests tests_v2/process_step_tests.cpp)
+    kachakacha_add_v2_test(export_content_tests tests_v2/export_content_tests.cpp)
+    kachakacha_add_v2_test(selection_tests tests_v2/selection_tests.cpp)
+    kachakacha_add_v2_test(export_panel_tests tests_v2/export_panel_tests.cpp)
     kachakacha_add_v2_test(export_service_tests tests_v2/export_service_tests.cpp)
     kachakacha_add_v2_test(acceptance_er_tests tests_v2/acceptance_er_tests.cpp)
     kachakacha_add_v2_test(theme_layout_tests tests_v2/theme_layout_tests.cpp)
@@ -768,6 +774,8 @@ endif()
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     add_executable(kachakacha_cad_next WIN32
         src/apps/cad_next/main.cpp
+        src/apps/cad_next/V2ExportDock.cpp
+        src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp

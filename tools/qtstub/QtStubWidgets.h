@@ -46,6 +46,7 @@ public:
     void setMinimumWidth(int);
     void setFixedSize(int, int);
     void setWindowTitle(const QString&);
+    [[nodiscard]] QString windowTitle() const;
     void setLayout(QLayout*);
     void setEnabled(bool);
     void setVisible(bool);
@@ -234,6 +235,7 @@ public:
     [[nodiscard]] QTreeWidgetItem* currentItem() const;
     void expandAll();
     void resizeColumnToContents(int);
+    void (*itemClicked)(QTreeWidgetItem*, int);
 };
 
 class QDockWidget : public QWidget {

@@ -17,6 +17,7 @@
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/app/CursorInput.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QColor>
@@ -93,6 +94,19 @@ public:
 
     //! 状態が変わったときに呼ばれる。案内文と診断を画面へ出すのに使う。
     void SetStatusCallback(std::function<void(const std::string&)> callback);
+    //! 選択が変わったときに呼ぶ。数を数え直すのは本体窓の仕事。
+    void SetSelectionChangedCallback(std::function<void()> callback);
+
+    //! いま選んでいるもの。判断は core の Selection にある。
+    [[nodiscard]] const kachakacha::v2::app::SelectionSet& Selection() const noexcept
+    {
+        return selection_;
+    }
+    void SetSelection(kachakacha::v2::app::SelectionSet selection);
+    //! 画面のこの位置で選ぶ。修飾キーで足す・外すが変わる。
+    void SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
+    //! 文書から消えたものを選択から外す。文書が変わったら呼ぶ。
+    void PruneSelection();
     void SetDocumentChangedCallback(std::function<void()> callback);
 
     //! いま出ている案内文。
@@ -220,5 +234,7 @@ private:
     kachakacha::v2::app::HoverResult hover_;
     std::string status_;
     std::function<void(const std::string&)> statusCallback_;
+    std::function<void()> selectionChangedCallback_;
+    kachakacha::v2::app::SelectionSet selection_;
     std::function<void()> documentChangedCallback_;
 };

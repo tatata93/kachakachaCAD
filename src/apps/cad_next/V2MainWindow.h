@@ -12,6 +12,7 @@
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 //! 信号の受け口はラムダで繋ぐ。
 
+#include "V2ExportDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/UiMode.h"
@@ -107,6 +108,11 @@ public:
     [[nodiscard]] QString GroupRowText(int row) const;
     [[nodiscard]] int GroupRowCount() const;
 
+    //! 書き出しの棚(AT-EXP-001)。数は手順の状況から作る。
+    [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
+    //! 手順の状況と文書から数を作り直して棚へ渡す。
+    void RefreshExportCounts();
+
     //! 形状ガイドの役割テーブル(AT-UIX-007)。表は core が持つ。
     [[nodiscard]] const kachakacha::v2::modeling::GuideTable& GuideRoleTable() const
     {
@@ -130,6 +136,8 @@ private:
     [[nodiscard]] bool ApplyStaticState(const QString& name);
     //! 形状ガイドの役割テーブルの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyGuideTableState();
+    //! 選択と書き出しの見本。ApplyManualState から呼ぶ。
+    [[nodiscard]] bool ApplySelectionState(const QString& name);
     //! 作業中グループの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyActiveGroupState();
     //! 手順の並びの見本。ApplyManualState から呼ぶ。
@@ -139,6 +147,13 @@ private:
     void RefreshGuideTable();
     //! 手順の並びを作り直す。モードを変えたときと、状況が変わったときに呼ぶ。
     void RefreshProcessSteps();
+    //! 書き出しの棚を作って、中身を作る手立てを繋ぐ。BuildPanels から呼ぶ。
+    void BuildExportDock();
+    //! 書き出しの台帳コマンド。棚を出して、形式を選ぶ。
+    void RunExportCommand(std::string_view id);
+    //! 頼まれた組合せの中身を作る。作れないものは断る。
+    [[nodiscard]] kachakacha::v2::base::Result<std::string> MakeExportContent(
+        const kachakacha::v2::app::ExportRequest& request);
     //! 足りない役割の案内だけを消す・足す。ほかの知らせは残す。
     void ClearGuideGuidance();
     void AddGuideGuidance(const QString& text);
@@ -157,6 +172,7 @@ private:
     QTreeWidget* guideTableView_ = nullptr;
     QDockWidget* guideDock_ = nullptr;
     QTreeWidget* processView_ = nullptr;
+    V2ExportDock* exportDock_ = nullptr;
     QDockWidget* processDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;

@@ -77,7 +77,7 @@
 | AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |
 | AT-FAB-010 | 済 | tests_v2/closed_loop_tests.cpp(貼り合わせを含む輪を折り角の最小二乗で解く。解けない型紙は板を歪めず、いちばん開いている貼り合わせを名指しして断る) |
 | AT-FAB-011 | 済 | tests_v2/freeze_state_tests.cpp(0/30/100%で対応辺長が一致し、形の外接箱は異なる。30%で固定すると Frozen のEntity になり、名前に割合が入る。固定前の派生物は直接編集できない。線の無いワイヤー・輪郭の足りない部材・厚み0の部材は FAB-E002 で断り、もとが無い・名前が無いときは FAB-E003 で断る) |
-| AT-FAB-012 | 済 | tests_v2/kernel_export_tests.cpp(10部材のうち2つを選ぶと塊は2つだけ出て、体積も選んだ2つぶんだけになる=選ばなかった8つが混ざらない。STL でも同じ。1つも選ばない・同じ部材を2度選ぶ・表にない部材は EXP-013 で断る。選ぶ数を1〜6と変えれば出る数も同じだけ変わる) |
+| AT-FAB-012 | 済 | tests_v2/kernel_export_tests.cpp(10部材のうち2つを選ぶと塊は2つだけ出て、体積も選んだ2つぶんだけになる=選ばなかった8つが混ざらない。STL でも同じ。1つも選ばない・同じ部材を2度選ぶ・表にない部材は EXP-013 で断る。選ぶ数を1〜6と変えれば出る数も同じだけ変わる)+ tests_v2/selection_tests.cpp(画面から拾えるのは許容差の内側だけ。素で押すと入れ替え、Shiftで足し、Ctrlで入切、Altで外す。何も無いところを素で押したときだけ空になる。選んだ順は変わらない。消えたものは選択から外れる)+ tests_v2/export_panel_tests.cpp(対象の数は選択から来る。数が0の対象は選べないが並びからは消えない)+ cad_next --self-test(線を選べて足せて消せる。書き出しの棚が選択に従う) |
 | AT-FAB-013 | 済 | tests_v2/acceptance_er_tests.cpp(幅基準 3520/87 = 40.4598 mm。腰部・窓帯・額が車体面積の1割を超える連続した部材になる=全面三角形にしない。強い二重曲率は肩だけで、そこだけが目標偏差を超える。再現度3/6/9で目標も実際の最大偏差も単調非増加。部材数が上限を超えない。6枚窓と中央前照灯が閉じた輪郭として残り、前照灯を八角形にすると FAB-O003 で断る。30%と100%で対応辺長が変わらず形だけ変わる=しわも縮尺変化も無い。0/30/50/100%のすべてで部材の境界とワイヤーが一致する) + tests_v2/kernel_er_export_tests.cpp(1:1 PDF が出る。部材に厚みを付けて立体にでき、外側・中央・内側で体積は同じ。30% STEP は選んだ数だけの塊で体積が合い、100% STL は三角形にした体積がB-Rep と5%以内で合う。30%と100%で板の量が変わらない) |
 | AT-FAB-014 | 済 | tests_v2/freeze_state_tests.cpp(ワイヤーのみ/部品のみ/両方で出来る Entity の種類と数が変わり、両方のときの数はそれぞれ単独のときと一致する。両方は同じ評価の束から作られ、部品の境界がワイヤーとぴったり一致する。実体にしても曲線の種類が変わらない。固定したあとに元の製作モデルを30%から90%へ動かしても、固定したものは変わらない=値のコピーであって参照ではない) |
 | AT-UIX-001 | 済 | tests_v2/ui_mode_tests.cpp(4モードだけ。旧「面/板材」が無い。台帳の全コマンドがどこかのモードに出る)+ tests_v2/process_step_tests.cpp(モードごとの手順。部品7段・製作10段・出力4段で、番号が1から順に振られ、IDが重ならず、進めない段には必ず理由がある。前の段が済むまで先へ入れない。段が指すコマンドはすべて台帳にある) + cad_next --self-test(モードを変えても選択・文書が変わらず、出るコマンドだけが変わる。手順がモードで変わり番号順に並び、進めない段には理由が並んで出る) |
@@ -92,9 +92,9 @@
 | AT-UIX-010 | 済 | tests_v2/theme_layout_tests.cpp(2画面サイズ x 4拡大率で、入力列が画面の外へ出ず、カーソルを覆い隠さず、欄が10個あっても縦にはみ出さない。細かすぎるグリッドは閾値どおりに消える) + cad_next --self-test(通常とWindows 95の両方で viewport が0の大きさにならず、ビューキューブが画面内に収まり、案内が空にならない。1366x768 と 1920x1080 の両方で部品がはみ出さず、道具箱が空にならない) + _FIX_AND_BUILD.cmd が `--size` と QT_SCALE_FACTOR で2画面サイズ x 4拡大率(100/125/150/200%)+ Win95 の絵を `_claudeout/dpi/` へ撮る |
 | AT-UIX-011 | 済 | src/next/kachakacha/app/CommandCatalog.cpp と tests_v2/command_catalog_tests.cpp(52件を双方向で突き合わせ。表示名・記号・案内・受入IDの有無、ショートカットの重複、camera操作が文書を変えないことを見る) |
 | AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |
-| AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない) |
-| AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |
-| AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
+| AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない)+ tests_v2/export_panel_tests.cpp(対象x形式が成り立たなければ押す前に断り、選んでいた形式も動かさない。出力先が空、既にあるファイルへ承諾なし、対象0のどれでも押せない。出力先を変えたら上書きの承諾は消える)+ tests_v2/export_content_tests.cpp(中身が空にならない。広がりの無い形は紙にしない)+ cad_next --self-test(出せない形式は押す前に断る。出す先を決めればファイルが出る) |
+| AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない)+ tests_v2/export_content_tests.cpp(選んだワイヤーを紙へ置くとき、円弧は円弧のまま残り、辺長は実寸のまま変わらない。原点から離れていても紙の左下へ寄せる。同じ入力からは同じバイト列が出る) |
+| AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない)+ tests_v2/export_content_tests.cpp(選んだワイヤーから 1:1 PDF が出て、中身が空にならない) |
 | AT-PER-001 | 済 | tests_v2/evaluation_queue_tests.cpp(100ms を超えたところで取消を出し、心拍が250ms以内なら応答していると見る。5秒かかる評価でも200ms毎に心拍を刻めばずっと応答している。心拍は時刻が戻らない) + robustness_tests.cpp(遅すぎる処理を時間で暴く。ExtendCurveToBoundary を直した) |
 | AT-PER-002 | 済 | tests_v2/evaluation_queue_tests.cpp(長い評価の途中で文書が変わると前の評価に取消の合図が立ち、遅れて返った結果は PER-002 で捨てる。20回続けて差し替えても生きているのは最後の1つだけで、19件を捨てる。番号が合っていても版が違えば捨て、どの版を待っていたかを言う。取消の合図は別スレッドから見える) |
 | AT-PER-003 | 済 | tests_v2/scale_tests.cpp(1000ワイヤーの保存・読込・検証。1万本でも動く)。画面側は WP-08後半 |

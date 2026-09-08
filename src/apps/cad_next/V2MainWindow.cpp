@@ -1,5 +1,8 @@
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/ExportContent.h"
+#include "kachakacha/app/Selection.h"
+
 #include "Win95Style.h"
 
 #include "kachakacha/app/OperationGuide.h"
@@ -147,7 +150,11 @@ V2MainWindow::V2MainWindow()
     viewport_->SetStatusCallback([this](const std::string& text) {
         SetStatus(QString::fromUtf8(text.c_str()));
     });
-    viewport_->SetDocumentChangedCallback([this] { RefreshEntityList(); });
+    viewport_->SetDocumentChangedCallback([this] {
+        viewport_->PruneSelection();
+        RefreshEntityList();
+    });
+    viewport_->SetSelectionChangedCallback([this] { RefreshExportCounts(); });
 
     SelectTool(DrawingTool::Line);
     SetMode(UiMode::Drawing);
@@ -382,6 +389,8 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::RightDockWidgetArea, processDock);
     processDock_ = processDock;
 
+    BuildExportDock();
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
@@ -477,10 +486,121 @@ void V2MainWindow::RefreshProcessSteps()
     }
 }
 
+void V2MainWindow::RunExportCommand(std::string_view id)
+{
+    using kachakacha::v2::app::ExportFormat;
+    if (exportDock_ == nullptr) {
+        return;
+    }
+    exportDock_->show();
+    if (id == "export.validate") {
+        // 出す前の検査。通っていれば、そのまま出せると言う。
+        const QString reason = exportDock_->ReasonText();
+        SetStatus(reason.isEmpty()
+                ? QStringLiteral("%1 出せます。").arg(exportDock_->SummaryText())
+                : QStringLiteral("%1 出せません。%2")
+                      .arg(exportDock_->SummaryText(), reason));
+        if (!reason.isEmpty()) {
+            AddDiagnostic(reason);
+        }
+        return;
+    }
+    struct FormatBinding {
+        std::string_view id;
+        ExportFormat format;
+    };
+    const FormatBinding kBindings[] = {
+        {"export.stl", ExportFormat::Stl},
+        {"export.step", ExportFormat::Step},
+        {"export.svg", ExportFormat::Svg},
+        {"export.dxf", ExportFormat::Dxf},
+    };
+    for (const FormatBinding& binding : kBindings) {
+        if (binding.id != id) {
+            continue;
+        }
+        if (!exportDock_->ChooseFormat(binding.format)) {
+            SetStatus(exportDock_->LastMessage());
+            return;
+        }
+        SetStatus(QStringLiteral("%1 出す先を決めてください。")
+                .arg(exportDock_->SummaryText()));
+        return;
+    }
+}
+
+void V2MainWindow::BuildExportDock()
+{
+    exportDock_ = new V2ExportDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, exportDock_);
+    exportDock_->SetDiagnosticSink([this](const QString& text) { AddDiagnostic(text); });
+    exportDock_->SetContentMaker(
+        [this](const kachakacha::v2::app::ExportRequest& request) {
+            return MakeExportContent(request);
+        });
+    RefreshExportCounts();
+}
+
+kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
+    const kachakacha::v2::app::ExportRequest& request)
+{
+    using kachakacha::v2::app::ExportFormat;
+    using kachakacha::v2::app::ExportTarget;
+    using Out = kachakacha::v2::base::Result<std::string>;
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    if (request.target == ExportTarget::Project) {
+        kachakacha::v2::io::DocumentFile file;
+        file.snapshot = snapshot;
+        file.metadata.title = windowTitle().toStdString();
+        return kachakacha::v2::app::MakeProjectContent(file);
+    }
+    if (request.target == ExportTarget::SelectedWires) {
+        kachakacha::v2::app::WirePatternRequest wires;
+        wires.title = "ワイヤー";
+        // 選んだものだけを出す。画面に出ているものを勝手に足さない。
+        wires.segments = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
+            session_->Scene());
+        return kachakacha::v2::app::MakeWireContent(wires, request.format,
+            snapshot.settings.tolerance.interactiveJoinMm);
+    }
+    // 立体は面を張らないと出せない。まだ張っていないものを、出せたことにしない。
+    return Out::Failure(kachakacha::v2::base::MakeError("EXP-013",
+        "書き出せませんでした。",
+        std::string(kachakacha::v2::app::ExportTargetNameJa(request.target))
+            + " の中身を作るには、先に立体を作ってください。"));
+}
+
+void V2MainWindow::RefreshExportCounts()
+{
+    if (exportDock_ == nullptr) {
+        return;
+    }
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    int visibleParts = 0;
+    for (const auto& entity : snapshot.entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Part
+            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            ++visibleParts;
+        }
+    }
+    // 選んでいる数は画面が数え直さない。選択の側から取る。
+    kachakacha::v2::app::ProcessContext context = processContext_;
+    if (viewport_ != nullptr) {
+        const auto& selection = viewport_->Selection();
+        context.selectedWireCount = kachakacha::v2::app::SelectedCountOfKind(selection,
+            snapshot, kachakacha::v2::domain::EntityKind::Wire);
+        context.selectedPartCount = kachakacha::v2::app::SelectedCountOfKind(selection,
+            snapshot, kachakacha::v2::domain::EntityKind::Part);
+    }
+    exportDock_->SetCounts(kachakacha::v2::app::ExportCountsFrom(context, visibleParts,
+        true));
+}
+
 void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)
 {
     processContext_ = context;
     RefreshProcessSteps();
+    RefreshExportCounts();
 }
 
 int V2MainWindow::ProcessStepCount() const
@@ -830,6 +950,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         SetStatus(QStringLiteral("全体を表示しました。"));
         return;
     }
+    if (id.rfind("export.", 0) == 0) {
+        RunExportCommand(id);
+        return;
+    }
     if (id == "snap.toggle") {
         snapEnabled_ = !snapEnabled_;
         kachakacha::v2::modeling::SnapSettings settings;
@@ -883,6 +1007,29 @@ bool V2MainWindow::ApplyStepsState(const QString& name)
         SetMode(UiMode::Drawing);
     }
     SetProcessContext(context);
+    return true;
+}
+
+bool V2MainWindow::ApplySelectionState(const QString& name)
+{
+    // 線を2本引いてから、選択の道具で選ぶ。選んだ線の色が変わる。
+    // 引いた線は文書のワイヤーなので、書き出しの数にもそのまま出る。
+    (void)ApplyManualState(QStringLiteral("draw-line"));
+    SelectTool(DrawingTool::Line);
+    viewport_->ClickAt(QPointF(viewport_->width() * 0.3, viewport_->height() * 0.35));
+    viewport_->HoverAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.25));
+    viewport_->ClickAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.25));
+    SelectTool(DrawingTool::Select);
+    for (const auto& curve : session_->Scene().curves) {
+        const auto screen = viewport_->Mapping().Project(curve.segment.Evaluate(0.5));
+        if (screen.has_value()) {
+            viewport_->SelectAt(QPointF(screen->x, screen->y), Qt::ShiftModifier);
+        }
+    }
+    if (name == QStringLiteral("export")) {
+        SetMode(UiMode::Output);
+        RunCommand("export.svg");
+    }
     return true;
 }
 
@@ -975,9 +1122,12 @@ bool V2MainWindow::ApplyStaticState(const QString& name)
         SnapScene scene = session_->Scene();
         // SnapCurve は既定で作れない(CurveSegment を必ず伴うため)。
         // その場で全部そろえて作る。
+        // IDは1本ずつ別にする。同じにすると、1本選んだだけで全部が選ばれて見える。
         const auto add = [&](const CurveSegment& segment, bool construction) {
-            scene.curves.push_back(SnapCurve{kachakacha::v2::base::EntityId{},
-                kachakacha::v2::base::SegmentId{}, segment, construction});
+            scene.curves.push_back(SnapCurve{
+                ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>(),
+                ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>(), segment,
+                construction});
         };
         add(MakeLine({-60, -30, 0}, {-20, -30, 0}), false);
         add(MakeLine({-60, -30, 0}, {-60, 10, 0}), true);
@@ -1036,6 +1186,9 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         viewport_->SetViewDirection(ViewDirection::Isometric);
         viewport_->FitToDocument();
         return true;
+    }
+    if (name == QStringLiteral("select") || name == QStringLiteral("export")) {
+        return ApplySelectionState(name);
     }
     if (name == QStringLiteral("win95")) {
         ApplyTheme(UiTheme::Windows95);

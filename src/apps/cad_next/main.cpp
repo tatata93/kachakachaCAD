@@ -17,9 +17,14 @@
 
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/ProcessSteps.h"
+#include "kachakacha/app/Selection.h"
+#include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/base/Version.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/kernel/KernelInfo.h"
+
+#include <filesystem>
+#include <system_error>
 
 #include <QApplication>
 #include <QColor>
@@ -687,6 +692,115 @@ struct SelfTestCase {
     return window.CurrentProcessStep() == 7;
 }
 
+[[nodiscard]] bool CaseSelectionPicksAndAdds(V2MainWindow& window)
+{
+    // 線の上を押せば選べる。Shift で足せる。何も無いところを素で押せば消える。
+    if (!window.ApplyManualState(QStringLiteral("select"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    if (viewport.Selection().entityIds.size() < 2) {
+        return false;
+    }
+    const auto& curves = window.Session().Scene().curves;
+    if (curves.empty()) {
+        return false;
+    }
+    // 素で1本だけ押すと、その1本だけになる。
+    const auto screen = viewport.Mapping().Project(curves.front().segment.Evaluate(0.5));
+    if (!screen.has_value()) {
+        return false;
+    }
+    viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+    if (viewport.Selection().entityIds.size() != 1) {
+        return false;
+    }
+    // 何も無いところを素で押すと空になる。
+    viewport.SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    return viewport.Selection().entityIds.empty();
+}
+
+[[nodiscard]] bool CaseExportDockFollowsSelection(V2MainWindow& window)
+{
+    // 選んだ数が棚に出る。選ぶのをやめれば、その対象は選べなくなる。
+    if (!window.ApplyManualState(QStringLiteral("export"))) {
+        return false;
+    }
+    auto& dock = window.ExportDock();
+    if (dock.Counts().selectedWires < 2) {
+        return false;
+    }
+    if (dock.State().target != kachakacha::v2::app::ExportTarget::SelectedWires) {
+        return false;
+    }
+    if (dock.State().format != kachakacha::v2::app::ExportFormat::Svg) {
+        return false;
+    }
+    // 出す先が決まっていないので、まだ押せない。理由がそう言っている。
+    if (dock.CanRun()) {
+        return false;
+    }
+    if (!dock.ReasonText().contains(QStringLiteral("EXP-016"))) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    return dock.Counts().selectedWires == 0;
+}
+
+[[nodiscard]] bool CaseExportRefusesImpossibleFormat(V2MainWindow& window)
+{
+    // ワイヤーを STEP では出せない。押す前に分かるようにする。
+    if (!window.ApplyManualState(QStringLiteral("export"))) {
+        return false;
+    }
+    auto& dock = window.ExportDock();
+    if (dock.ChooseFormat(kachakacha::v2::app::ExportFormat::Step)) {
+        return false;
+    }
+    if (!dock.LastMessage().contains(QStringLiteral("EXP-017"))) {
+        return false;
+    }
+    // 断ったのだから、選んでいた形式は動かない。
+    if (dock.State().format != kachakacha::v2::app::ExportFormat::Svg) {
+        return false;
+    }
+    // 選べない形式は薄く出るが、並びからは消えない。
+    if (dock.FormatRowCount() != 6) {
+        return false;
+    }
+    for (int row = 0; row < dock.FormatRowCount(); ++row) {
+        if (dock.FormatRowText(row).isEmpty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseExportWritesFile(V2MainWindow& window)
+{
+    // 出す先を決めれば、実際にファイルが出る。中身は空にならない。
+    if (!window.ApplyManualState(QStringLiteral("export"))) {
+        return false;
+    }
+    auto& dock = window.ExportDock();
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_export");
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path + ".svg"), code);
+    dock.ChoosePath(QString::fromStdString(path));
+    if (!dock.CanRun()) {
+        return false;
+    }
+    if (!dock.RunNow()) {
+        return false;
+    }
+    const auto written = kachakacha::v2::io::MakePath(path + ".svg");
+    const bool exists = std::filesystem::exists(written, code);
+    const bool hasBytes = exists && std::filesystem::file_size(written, code) > 0;
+    std::filesystem::remove(written, code);
+    return hasBytes && dock.LastMessage().contains(QStringLiteral("書き出しました"));
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -719,6 +833,10 @@ const SelfTestCase kCases[] = {
     {"道具箱もモードに従う", &CaseToolPaletteFollowsMode},
     {"手順がモードで変わり番号順に並ぶ", &CaseProcessStepsFollowMode},
     {"進めない段には理由が出る", &CaseProcessStepsExplainWhyBlocked},
+    {"線を選べて足せて消せる", &CaseSelectionPicksAndAdds},
+    {"書き出しの棚が選択に従う", &CaseExportDockFollowsSelection},
+    {"出せない形式は押す前に断る", &CaseExportRefusesImpossibleFormat},
+    {"出す先を決めればファイルが出る", &CaseExportWritesFile},
 };
 
 } // namespace

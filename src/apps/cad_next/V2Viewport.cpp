@@ -490,8 +490,11 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         if (!started) {
             continue;
         }
-        const QColor color = curve.construction ? palette_.construction : palette_.wire;
-        painter.setPen(QPen(color, curve.construction ? 1.0 : 1.6,
+        const bool selected = kachakacha::v2::app::IsSelected(selection_, curve.entityId);
+        const QColor color = selected
+            ? palette_.selected
+            : (curve.construction ? palette_.construction : palette_.wire);
+        painter.setPen(QPen(color, selected ? 2.4 : (curve.construction ? 1.0 : 1.6),
             curve.construction ? Qt::DashLine : Qt::SolidLine));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
@@ -1038,6 +1041,51 @@ void V2Viewport::HoverAt(const QPointF& position)
     update();
 }
 
+void V2Viewport::SetSelectionChangedCallback(std::function<void()> callback)
+{
+    selectionChangedCallback_ = std::move(callback);
+}
+
+void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
+{
+    selection_ = std::move(selection);
+    if (selectionChangedCallback_) {
+        selectionChangedCallback_();
+    }
+    update();
+}
+
+void V2Viewport::PruneSelection()
+{
+    // 消えたものを選んだままにしない。無いものを選んでいることになる。
+    SetSelection(kachakacha::v2::app::PruneSelection(selection_,
+        session_->GetDocument().Snapshot()));
+}
+
+void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
+{
+    using kachakacha::v2::app::SelectionMode;
+    SelectionMode mode = SelectionMode::Replace;
+    if ((modifiers & Qt::ShiftModifier) != 0) {
+        mode = SelectionMode::Add;
+    } else if ((modifiers & Qt::ControlModifier) != 0) {
+        mode = SelectionMode::Toggle;
+    } else if ((modifiers & Qt::AltModifier) != 0) {
+        mode = SelectionMode::Subtract;
+    }
+    const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+        ScreenPoint{position.x(), position.y()},
+        session_->GetDocument().Snapshot().settings.tolerance);
+    SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
+    status_ = selection_.entityIds.empty()
+        ? std::string("選んでいるものはありません。")
+        : std::string("選んでいるもの: ") + std::to_string(selection_.entityIds.size())
+            + " 件";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+}
+
 void V2Viewport::ClickAt(const QPointF& position)
 {
     const auto result = session_->Click(ScreenPoint{position.x(), position.y()});
@@ -1109,6 +1157,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         return;
     }
     if (PressViewCube(event->position())) {
+        return;
+    }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {
+        SelectAt(event->position(), event->modifiers());
         return;
     }
     ClickAt(event->position());

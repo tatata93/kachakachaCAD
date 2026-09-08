@@ -360,6 +360,8 @@ template<class Id>
         inputs.push_back(WriteId(id));
     }
     object["inputEntityIds"] = JsonValue::Array(std::move(inputs));
+    // 派生物の置き場。作業中グループとは別に覚える(§11)。
+    object["derivedGroupId"] = WriteOptionalId(feature.derivedGroupId);
     return JsonValue::Object(std::move(object));
 }
 
@@ -1042,6 +1044,8 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                         loader.ParseId<EntityId>(input.AsString(), place));
                 }
             }
+            feature.derivedGroupId = loader.ParseOptionalId<GroupId>(
+                item.Find("derivedGroupId"), where + ".derivedGroupId");
             snapshot.features.push_back(std::move(feature));
         }
     }

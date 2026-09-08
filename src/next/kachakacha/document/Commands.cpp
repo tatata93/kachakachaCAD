@@ -75,9 +75,15 @@ std::vector<Diagnostic> AddFeatureCommand::Apply(DocumentSnapshot& candidate) co
     candidate.features.push_back(feature_);
     for (Entity entity : outputs_) {
         entity.createdBy = feature_.id;
-        // 既定のまとまりへ入れる。
-        if (!entity.groupId.has_value() && candidate.settings.activeGroupId.has_value()) {
-            entity.groupId = candidate.settings.activeGroupId;
+        if (!entity.groupId.has_value()) {
+            // 派生物は Feature が指す派生グループへ入れ、作業中グループを使わない
+            // (architecture-and-data.md §11)。混ぜると、作業中グループを切り替えた
+            // だけで部品の居場所が変わってしまう。
+            if (feature_.derivedGroupId.has_value()) {
+                entity.groupId = feature_.derivedGroupId;
+            } else if (candidate.settings.activeGroupId.has_value()) {
+                entity.groupId = candidate.settings.activeGroupId;
+            }
         }
         candidate.entities.push_back(std::move(entity));
     }
@@ -399,6 +405,29 @@ std::vector<Diagnostic> UpdateFeatureDefinitionCommand::Apply(
     feature->definition = definition_;
     feature->inputEntityIds = inputEntityIds_;
     ++feature->revision;
+    return diagnostics;
+}
+
+// ---- ActiveGroup ----
+
+SetActiveGroupCommand::SetActiveGroupCommand(std::optional<GroupId> groupId)
+    : groupId_(groupId)
+{
+}
+
+std::vector<Diagnostic> SetActiveGroupCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    if (groupId_.has_value()) {
+        const bool exists = std::any_of(candidate.groups.begin(), candidate.groups.end(),
+            [this](const Group& group) { return group.id == *groupId_; });
+        if (!exists) {
+            diagnostics.push_back(MakeError(kNotFound,
+                "入力に指定されたものが見つかりません。", groupId_->ToString()));
+            return diagnostics;
+        }
+    }
+    candidate.settings.activeGroupId = groupId_;
     return diagnostics;
 }
 

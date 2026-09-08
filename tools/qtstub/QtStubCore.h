@@ -48,6 +48,7 @@ using DockWidgetAreas = int;
 } // namespace Qt
 
 class QString;
+class QStringList;
 class QChar {
 public:
     QChar() = default;
@@ -73,6 +74,8 @@ public:
     [[nodiscard]] bool endsWith(const QString&) const;
     [[nodiscard]] QString mid(int, int = -1) const;
     [[nodiscard]] QString left(int) const;
+    [[nodiscard]] int toInt() const;
+    [[nodiscard]] QStringList split(const QString&) const;
     [[nodiscard]] QString arg(const QString&) const;
     [[nodiscard]] QString arg(const QString&, const QString&) const;
     [[nodiscard]] QString arg(int) const;

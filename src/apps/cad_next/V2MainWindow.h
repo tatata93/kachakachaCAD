@@ -82,6 +82,13 @@ public:
     //! いま道具箱に出ているコマンドの数。モードごとに変わる。
     [[nodiscard]] int VisibleCommandCount() const;
 
+    //! 作業中グループ(AT-UIX-006)。上の帯と一覧の両方に出る。
+    bool SetActiveGroup(const std::optional<kachakacha::v2::base::GroupId>& groupId);
+    [[nodiscard]] QString ActiveGroupText() const;
+    //! 一覧に出ているグループ行の名前。試験で見る。
+    [[nodiscard]] QString GroupRowText(int row) const;
+    [[nodiscard]] int GroupRowCount() const;
+
     //! 形状ガイドの役割テーブル(AT-UIX-007)。表は core が持つ。
     [[nodiscard]] const kachakacha::v2::modeling::GuideTable& GuideRoleTable() const
     {
@@ -105,6 +112,8 @@ private:
     [[nodiscard]] bool ApplyStaticState(const QString& name);
     //! 形状ガイドの役割テーブルの見本。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyGuideTableState();
+    //! 作業中グループの見本。ApplyManualState から呼ぶ。
+    [[nodiscard]] bool ApplyActiveGroupState();
     void RefreshEntityList();
     //! 役割テーブルを画面へ出し直す。色は core の式から取る(画面で作らない)。
     void RefreshGuideTable();
@@ -127,6 +136,7 @@ private:
     kachakacha::v2::modeling::GuideTable guideTable_;
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;
+    QLabel* groupLabel_ = nullptr;
     UiTheme theme_ = UiTheme::Normal;
     bool snapEnabled_ = true;
     int selectionCount_ = 0;

@@ -78,6 +78,21 @@ private:
     bool construction_ = true;
 };
 
+//! 作業中グループを決める(AT-UIX-006)。
+//! これから作る利用者作成Entityは、このグループへ入る。
+//! 派生物(部品・形状ガイド・型紙)は Feature の派生グループへ入るので、
+//! ここを切り替えても居場所が変わらない。
+class SetActiveGroupCommand final : public DocumentCommand {
+public:
+    //! 値を渡さなければ「どのグループにも入れない」に戻す。
+    explicit SetActiveGroupCommand(std::optional<GroupId> groupId);
+    [[nodiscard]] std::string Label() const override { return "作業中グループを決める"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    std::optional<GroupId> groupId_;
+};
+
 //! 基準線にする / 解除する(V1の「基準線に設定」「基準解除」)。
 class SetDatumCommand final : public DocumentCommand {
 public:

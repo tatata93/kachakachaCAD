@@ -8,6 +8,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/Expression.h"
 
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -147,6 +148,12 @@ struct Feature {
 
     //! このFeatureが入力として参照しているEntity。DAGの辺はここから作る。
     std::vector<EntityId> inputEntityIds;
+
+    //! 派生物を置くグループ(architecture-and-data.md §11)。
+    //! 部品・形状ガイド・近似ワイヤー・型紙は派生物であり、
+    //! 作業中グループではなく、ここが指すグループへ入る。
+    //! 指定が無ければ作業中グループへ入る(利用者が自分で作ったもの)。
+    std::optional<GroupId> derivedGroupId;
 };
 
 } // namespace kachakacha::v2::domain

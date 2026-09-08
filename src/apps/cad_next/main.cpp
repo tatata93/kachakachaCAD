@@ -4,6 +4,7 @@
 //!   --version       : 版だけ出す
 //!   --self-test     : 画面を出さずに一通り触って、結果を出す
 //!   --manual-state <名前> --snapshot <png> : その状態の絵を保存する
+//!   --size 1366x768 : 窓の大きさを決める(AT-UIX-010 の画面サイズ比べ)
 //!
 //! V1 は画面を出さないと何も確かめられなかったので、
 //! 直したかどうかを人が目で見るしかなかった。
@@ -23,6 +24,7 @@
 #include <QColor>
 #include <QPointF>
 #include <QRectF>
+#include <QSize>
 #include <QImage>
 #include <QPainter>
 #include <QStringList>
@@ -524,6 +526,87 @@ struct SelfTestCase {
     return corner.right() <= cornerX && corner.bottom() <= cornerY;
 }
 
+[[nodiscard]] bool CaseActiveGroupShowsAndCollects(V2MainWindow& window)
+{
+    // 作業中グループ(AT-UIX-006)。帯に出て、一覧が束ねられ、作ったものが入る。
+    if (!window.ApplyManualState(QStringLiteral("active-group"))) {
+        return false;
+    }
+    if (!window.ActiveGroupText().contains(QStringLiteral("車体"))) {
+        return false;
+    }
+    // 一覧はまとまりで束ねられ、作業中のまとまりに印が付く。
+    bool sawActive = false;
+    for (int row = 0; row < window.GroupRowCount(); ++row) {
+        if (window.GroupRowText(row).contains(QStringLiteral("車体"))
+            && window.GroupRowText(row).contains(QStringLiteral("作業中"))) {
+            sawActive = true;
+        }
+    }
+    if (!sawActive) {
+        return false;
+    }
+    // 作ったものが、そのまとまりへ入っている。
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    if (snapshot.entities.empty()) {
+        return false;
+    }
+    for (const auto& entity : snapshot.entities) {
+        if (!entity.groupId.has_value()
+            || *entity.groupId != *snapshot.settings.activeGroupId) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseThemeKeepsLayoutUsable(V2MainWindow& window)
+{
+    // AT-UIX-010 の骨。両方の見た目で、画面の部品が0の大きさにならず、
+    // 画面の外へ出ない。文字が入る幅がある。
+    for (const UiTheme theme : {UiTheme::Normal, UiTheme::Windows95}) {
+        window.ApplyTheme(theme);
+        QApplication::processEvents();
+        if (window.Viewport().width() <= 0 || window.Viewport().height() <= 0) {
+            return false;
+        }
+        // ビューキューブと数値入力の枠が、画面の中に収まっている。
+        const QRectF cube = window.Viewport().ViewCubeRect();
+        if (cube.right() > window.Viewport().width() || cube.top() < 0.0) {
+            return false;
+        }
+        if (window.StatusText().isEmpty()) {
+            return false;
+        }
+        if (window.Theme() != theme) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseSmallWindowStaysUsable(V2MainWindow& window)
+{
+    // 1366x768 相当の狭い画面でも、部品が0の大きさにならず、はみ出さない。
+    for (const QSize size : {QSize(1366, 768), QSize(1920, 1080)}) {
+        window.resize(size.width(), size.height());
+        QApplication::processEvents();
+        auto& viewport = window.Viewport();
+        if (viewport.width() <= 0 || viewport.height() <= 0) {
+            return false;
+        }
+        const QRectF cube = viewport.ViewCubeRect();
+        if (cube.left() < 0.0 || cube.right() > viewport.width()
+            || cube.bottom() > viewport.height()) {
+            return false;
+        }
+        if (window.VisibleCommandCount() <= 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -550,6 +633,9 @@ const SelfTestCase kCases[] = {
     {"数値入力が主要欄へ合い式を評価する", &CaseCursorInputFocusAndExpression},
     {"数値入力のTabとEnterとEscが効く", &CaseCursorInputTabEnterEscape},
     {"数値入力が画面の外へ出ない", &CaseCursorInputStaysOnScreen},
+    {"作業中グループが帯と一覧に出る", &CaseActiveGroupShowsAndCollects},
+    {"どちらの見た目でも配置が壊れない", &CaseThemeKeepsLayoutUsable},
+    {"狭い画面でも部品がはみ出さない", &CaseSmallWindowStaysUsable},
 };
 
 } // namespace
@@ -606,9 +692,28 @@ int main(int argc, char** argv)
         return failed == 0 ? 0 : 1;
     }
 
+    // AT-UIX-010。画面の大きさを外から決められるようにする。
+    // 1366x768 と 1920x1080 の両方で、同じ状態の絵を撮って見比べる。
+    const QString sizeText = ValueAfter(arguments, QStringLiteral("--size"));
+    int windowWidth = 1180;
+    int windowHeight = 760;
+    if (!sizeText.isEmpty()) {
+        const QStringList parts = sizeText.split(QStringLiteral("x"));
+        if (parts.size() != 2) {
+            std::cerr << "--size は 1366x768 の形で渡してください\n";
+            return 4;
+        }
+        windowWidth = parts.at(0).toInt();
+        windowHeight = parts.at(1).toInt();
+        if (windowWidth < 640 || windowHeight < 400) {
+            std::cerr << "--size が小さすぎます\n";
+            return 4;
+        }
+    }
+
     V2MainWindow window;
     if (!state.isEmpty()) {
-        window.resize(1180, 760);
+        window.resize(windowWidth, windowHeight);
         if (!window.ApplyManualState(state)) {
             std::cerr << "知らない状態です: " << state.toStdString() << '\n';
             return 2;

@@ -567,6 +567,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/base/Version.cpp
     src/next/kachakacha/document/Commands.cpp
     src/next/kachakacha/document/Document.cpp
+    src/next/kachakacha/document/FeatureReevaluation.cpp
     src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceTable.cpp
     src/next/kachakacha/view/ViewOrientation.cpp
@@ -693,6 +694,9 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
     kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
     kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)
+    kachakacha_add_v2_test(feature_reevaluation_tests tests_v2/feature_reevaluation_tests.cpp)
+    kachakacha_add_v2_test(active_group_tests tests_v2/active_group_tests.cpp)
+    kachakacha_add_v2_test(theme_layout_tests tests_v2/theme_layout_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)

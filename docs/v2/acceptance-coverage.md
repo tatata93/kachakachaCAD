@@ -60,7 +60,7 @@
 | AT-EXT-005 | 済 | tests_v2/extrude_tests.cpp(事前の個数)+ tests_v2/kernel_extrude_tests.cpp(実際に2部品。個数が違えば KER-E002 で拒否) |
 | AT-EXT-006 | 済 | tests_v2/extrude_tests.cpp(5方式と到達判定)+ tests_v2/kernel_extrude_tests.cpp(平面・傾いた平面・円筒・球まで厳密に切る。トーラスは拒否) |
 | AT-EXT-007 | 済 | tests_v2/extrude_tests.cpp(相手未選択を拒否)+ tests_v2/kernel_extrude_tests.cpp(足す・穴を引く・2つへ分離する引き。非連結は EXT-005 で拒否) |
-| AT-EXT-008 | 未 | 連続編集は WP-08。同じ EntityId のまま再計算する経路(Feature の再評価)が要る |
+| AT-EXT-008 | 済 | tests_v2/feature_reevaluation_tests.cpp(輪郭の寸法・移動距離・点の位置を変えても、出力の EntityId と安定キーは変わらず形だけが変わる。25回続けて編集してもIDは動かない。上流を変えれば下流へ伝わり、計算し直す順番は上流から。途中を変えたら上流は計算し直さない。種類の違う定義への差し替えは DOC-C006 で断る。core で形を作れない立体は「核が要る」と印をつけて返し、作ったふりをしない) |
 | AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) |
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |
@@ -85,11 +85,11 @@
 | AT-UIX-003 | 済 | tests_v2/cursor_input_tests.cpp(道具ごとに主要欄がちょうど1つで、そこへ自動で焦点が合う。Tab/Shift+Tabで回る。式は全角でも通り「(180/2)*3 = 270 mm」の形で式と値を並べて出す。確定した欄はマウスで動かず、未確定の欄だけ追随する。長さ+角度・du+dv・長さ+du の各組で解け、短すぎる長さは必要な値を言って断り、矛盾すれば最後の変更だけ確定しない。画面の右下・角・入力列より狭い画面のどれでも画面外へ出ない) + cad_next --self-test(焦点と式、Tab/Enter/Esc、画面端での再配置) |
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
 | AT-UIX-005 | 済 | tests_v2/grid_tests.cpp(1/2・1/3・1/4の点数、主副の間隔、細かすぎる副点の省略、UV での原点保持、作業平面が動いても付いていく、壊れた平面参照を別平面へ付け替えない) |
-| AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
+| AT-UIX-006 | 済 | tests_v2/active_group_tests.cpp(切り替えたあとに作った作図点・ワイヤー・作業平面・形状ガイド・部品が全部そこへ入る。切り替える前に作ったものは動かない。派生物は Feature の派生グループへ入り、作業中グループを切り替えても動かない。無いグループは作業中にできず文書も変わらない。元に戻せば作業中グループも戻る。保存して読み直しても、作業中グループも各Entityの所属も Feature の派生グループの指定も保たれる) + cad_next --self-test(帯に出て、一覧がまとまりで束ねられ、作業中に印が付く) |
 | AT-UIX-007 | 済 | tests_v2/guide_surface_table_tests.cpp(複数行と役割ごとの1始まり番号、1行への複数ワイヤー追加とつながらない線の拒否、同じワイヤーの二重登録の拒否、同じ役割の中だけでの順序変更、方向反転で並びも各線の向きも逆になり種類は変わらない、両端が外形へ届いたときだけ有効と出る接続列、役割と番号だけで決まる色) + cad_next --self-test(表の色が core の式と一致し、同じ行が3Dへ色と進行矢印つきで出る=3D色同期。行の追加・移動・反転・断り。役割がそろえば案内が消える) |
 | AT-UIX-008 | 済 | tests_v2/view_orientation_tests.cpp(26区画すべてで正対でき、視線と上向きが直交する。ドラッグ量と回転量が比例し、刻んでも一気でも同じ姿勢になる。89度まで回しても90度へ寄らない。離した瞬間も1時間後も変化0。感度0.25/0.05/1.0deg-px、クリック15度、相対軸は選択が無ければ断る) + cad_next --self-test(キューブの連続回転・非吸着・クリック正対・回転矢印がカメラだけを回す) |
 | AT-UIX-009 | 済 | tests_v2/document_tests.cpp と robustness_tests.cpp(文書が変わらない)+ cad_next --self-test(失敗する操作を3回ずつ繰り返してもアプリが続き、文書も選んだ道具も変わらない) |
-| AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
+| AT-UIX-010 | 済 | tests_v2/theme_layout_tests.cpp(2画面サイズ x 4拡大率で、入力列が画面の外へ出ず、カーソルを覆い隠さず、欄が10個あっても縦にはみ出さない。細かすぎるグリッドは閾値どおりに消える) + cad_next --self-test(通常とWindows 95の両方で viewport が0の大きさにならず、ビューキューブが画面内に収まり、案内が空にならない。1366x768 と 1920x1080 の両方で部品がはみ出さず、道具箱が空にならない) + _FIX_AND_BUILD.cmd が `--size` と QT_SCALE_FACTOR で2画面サイズ x 4拡大率(100/125/150/200%)+ Win95 の絵を `_claudeout/dpi/` へ撮る |
 | AT-UIX-011 | 済 | src/next/kachakacha/app/CommandCatalog.cpp と tests_v2/command_catalog_tests.cpp(52件を双方向で突き合わせ。表示名・記号・案内・受入IDの有無、ショートカットの重複、camera操作が文書を変えないことを見る) |
 | AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |
 | AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない) |

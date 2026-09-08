@@ -8,6 +8,8 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
+#include <map>
+
 #include <QAction>
 #include <QApplication>
 #include <QDockWidget>
@@ -345,9 +347,60 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::BottomDockWidgetArea, diagnosticDock);
 
     toolLabel_ = new QLabel(this);
+    groupLabel_ = new QLabel(this);
     statusLabel_ = new QLabel(this);
     statusBar()->addWidget(toolLabel_);
+    // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
+    statusBar()->addWidget(groupLabel_);
     statusBar()->addWidget(statusLabel_, 1);
+}
+
+bool V2MainWindow::SetActiveGroup(
+    const std::optional<kachakacha::v2::base::GroupId>& groupId)
+{
+    const auto result = session_->GetDocument().Run(
+        kachakacha::v2::document::SetActiveGroupCommand(groupId));
+    if (!result.committed) {
+        for (const auto& diagnostic : result.diagnostics) {
+            AddDiagnostic(QStringLiteral("%1 %2")
+                    .arg(QString::fromStdString(diagnostic.code),
+                        QString::fromStdString(diagnostic.summaryJa)));
+        }
+        return false;
+    }
+    RefreshEntityList();
+    if (groupLabel_ != nullptr) {
+        groupLabel_->setText(ActiveGroupText());
+    }
+    return true;
+}
+
+QString V2MainWindow::ActiveGroupText() const
+{
+    const auto& settings = session_->GetDocument().Snapshot().settings;
+    if (!settings.activeGroupId.has_value()) {
+        return QStringLiteral("まとまり: (なし)");
+    }
+    for (const auto& group : session_->GetDocument().Snapshot().groups) {
+        if (group.id == *settings.activeGroupId) {
+            return QStringLiteral("まとまり: %1")
+                .arg(QString::fromStdString(group.displayName));
+        }
+    }
+    return QStringLiteral("まとまり: (なし)");
+}
+
+int V2MainWindow::GroupRowCount() const
+{
+    return entityTree_ == nullptr ? 0 : entityTree_->topLevelItemCount();
+}
+
+QString V2MainWindow::GroupRowText(int row) const
+{
+    if (entityTree_ == nullptr || row < 0 || row >= entityTree_->topLevelItemCount()) {
+        return QString();
+    }
+    return entityTree_->topLevelItem(row)->text(0);
 }
 
 void V2MainWindow::RefreshGuideTable()
@@ -525,8 +578,34 @@ void V2MainWindow::RefreshEntityList()
     }
     entityTree_->clear();
     const auto& snapshot = session_->GetDocument().Snapshot();
+    // まとまりごとに束ねる。いま作業中のまとまりは名前の後ろに印を付ける。
+    std::map<std::string, QTreeWidgetItem*> byGroup;
+    const auto groupItem = [&](const std::optional<kachakacha::v2::base::GroupId>& id)
+        -> QTreeWidgetItem* {
+        std::string name = "(まとまりなし)";
+        bool active = false;
+        if (id.has_value()) {
+            for (const auto& group : snapshot.groups) {
+                if (group.id == *id) {
+                    name = group.displayName;
+                }
+            }
+            active = snapshot.settings.activeGroupId.has_value()
+                && *snapshot.settings.activeGroupId == *id;
+        }
+        const std::string key = name + (active ? " ←作業中" : "");
+        const auto found = byGroup.find(key);
+        if (found != byGroup.end()) {
+            return found->second;
+        }
+        auto* made = new QTreeWidgetItem(entityTree_);
+        made->setText(0, QString::fromStdString(key));
+        made->setText(1, QStringLiteral("まとまり"));
+        byGroup.emplace(key, made);
+        return made;
+    };
     for (const auto& entity : snapshot.entities) {
-        auto* item = new QTreeWidgetItem(entityTree_);
+        auto* item = new QTreeWidgetItem(groupItem(entity.groupId));
         const QString name = entity.displayName.empty()
             ? QStringLiteral("(名前なし)")
             : QString::fromUtf8(entity.displayName.c_str());
@@ -535,6 +614,9 @@ void V2MainWindow::RefreshEntityList()
             std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
     }
     entityTree_->expandAll();
+    if (groupLabel_ != nullptr) {
+        groupLabel_->setText(ActiveGroupText());
+    }
 }
 
 QAction* V2MainWindow::ActionFor(std::string_view id) const
@@ -655,6 +737,35 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
         viewport_->SetPalette(ViewportPalette::Dark());
     }
     update();
+}
+
+bool V2MainWindow::ApplyActiveGroupState()
+{
+    using kachakacha::v2::document::AddGroupCommand;
+    using kachakacha::v2::document::Group;
+    Group body;
+    body.id = kachakacha::v2::base::GroupId(ids_->Next());
+    body.displayName = "車体";
+    Group derived;
+    derived.id = kachakacha::v2::base::GroupId(ids_->Next());
+    derived.displayName = "派生";
+    derived.parentId = body.id;
+    if (!session_->GetDocument().Run(AddGroupCommand(body)).committed) {
+        return false;
+    }
+    if (!session_->GetDocument().Run(AddGroupCommand(derived)).committed) {
+        return false;
+    }
+    if (!SetActiveGroup(body.id)) {
+        return false;
+    }
+    SelectTool(DrawingTool::Line);
+    viewport_->SetViewDirection(ViewDirection::Top);
+    viewport_->SetVisibleWidthMm(200.0);
+    viewport_->ClickAt(QPointF(viewport_->width() * 0.3, viewport_->height() * 0.6));
+    viewport_->ClickAt(QPointF(viewport_->width() * 0.7, viewport_->height() * 0.4));
+    RefreshEntityList();
+    return true;
 }
 
 bool V2MainWindow::ApplyGuideTableState()
@@ -781,6 +892,11 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     if (name == QStringLiteral("win95")) {
         ApplyTheme(UiTheme::Windows95);
         return true;
+    }
+    if (name == QStringLiteral("active-group")) {
+        // 作業中グループ。切り替えたあとに作ったものがそこへ入る。
+        // 派生物は派生グループへ入り、作業中グループを切り替えても動かない。
+        return ApplyActiveGroupState();
     }
     if (name == QStringLiteral("guide-table")) {
         return ApplyGuideTableState();

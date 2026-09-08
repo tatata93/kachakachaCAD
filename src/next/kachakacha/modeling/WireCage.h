@@ -89,4 +89,22 @@ struct WireCageAnalysis {
 [[nodiscard]] base::Result<WireCageAnalysis> AnalyzeWireCage(
     const std::vector<CageEdgeInput>& edges, const GeometryTolerance& tolerance);
 
+//! 確定する部品1つぶんの計画。
+//!
+//! 1つの閉シェル = 1つの部品である。2つのシェルを同時に確定しても、
+//! 中身が2つ入った1つの部品にはしない(AT-GEO-013)。
+//! まとめてしまうと、片方だけを消す・厚みを変えるといった操作ができなくなり、
+//! 製作モデルも型紙も「どちらの立体のものか」を言えなくなる。
+struct WireCagePart {
+    std::size_t shellIndex = 0;
+    double volumeMm3 = 0.0;
+    bool volumeIsApproximate = false;
+    //! この部品の面の意味的キー。OCCT の面番号は使わない。
+    std::vector<SubshapeKey> faceKeys;
+};
+
+//! 選んだシェルから、部品の計画を作る。選んだ数だけ部品が出る。
+[[nodiscard]] base::Result<std::vector<WireCagePart>> PlanWireCageParts(
+    const WireCageAnalysis& analysis, const std::vector<std::size_t>& chosenShells);
+
 } // namespace kachakacha::v2::modeling

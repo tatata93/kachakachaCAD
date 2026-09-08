@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <map>
 #include <set>
 
@@ -371,6 +372,56 @@ struct CandidatePlane {
 
 //! 面の向きを揃える。隣り合う面が共有する辺を、互いに逆向きに通ること。
 //! 揃えられなければ閉シェルではない(メビウスの帯のような形)。
+//! 面の集まりを、辺を共有しているかどうかで塊に分ける。
+//!
+//! 離れた2つの立体を同時に選ぶと、辺をちょうど2回ずつ使う組合せが
+//! 「2つぶんまとめて」1つ出てくる。これをそのまま1つの殻として扱うと、
+//! 向きが揃わずに候補ごと落ちてしまう(実際に落ちていた)。
+//! 塊に分けてから、それぞれを1つの立体として扱う(AT-GEO-013)。
+[[nodiscard]] std::vector<std::vector<std::size_t>> SplitIntoComponents(
+    const std::vector<LoopCandidate>& loops)
+{
+    std::vector<std::size_t> parent(loops.size());
+    for (std::size_t index = 0; index < parent.size(); ++index) {
+        parent[index] = index;
+    }
+    const std::function<std::size_t(std::size_t)> find =
+        [&parent, &find](std::size_t index) -> std::size_t {
+        while (parent[index] != index) {
+            parent[index] = parent[parent[index]];
+            index = parent[index];
+        }
+        return index;
+    };
+    // 同じ辺を持つ面どうしをつなぐ。
+    std::map<std::size_t, std::vector<std::size_t>> facesOfEdge;
+    for (std::size_t at = 0; at < loops.size(); ++at) {
+        for (const std::size_t edge : loops[at].edgeSet) {
+            facesOfEdge[edge].push_back(at);
+        }
+    }
+    for (const auto& entry : facesOfEdge) {
+        for (std::size_t at = 1; at < entry.second.size(); ++at) {
+            const std::size_t first = find(entry.second.front());
+            const std::size_t other = find(entry.second[at]);
+            if (first != other) {
+                parent[other] = first;
+            }
+        }
+    }
+    // 塊ごとにまとめる。並びは面の番号順で決まるので、毎回同じ順になる。
+    std::map<std::size_t, std::vector<std::size_t>> grouped;
+    for (std::size_t at = 0; at < loops.size(); ++at) {
+        grouped[find(at)].push_back(at);
+    }
+    std::vector<std::vector<std::size_t>> components;
+    components.reserve(grouped.size());
+    for (auto& entry : grouped) {
+        components.push_back(std::move(entry.second));
+    }
+    return components;
+}
+
 [[nodiscard]] bool OrientShell(const std::vector<LoopCandidate>& loops,
     std::vector<bool>& flipped)
 {
@@ -735,11 +786,23 @@ Result<WireCageAnalysis> AnalyzeWireCage(const std::vector<CageEdgeInput>& input
     }
 
     WireCageAnalysis analysis;
+    std::vector<std::vector<LoopCandidate>> shellFaces;
     for (const std::vector<std::size_t>& combination : combinations) {
-        std::vector<LoopCandidate> faces;
+        std::vector<LoopCandidate> whole;
         for (const std::size_t index : combination) {
-            faces.push_back(loops[index]);
+            whole.push_back(loops[index]);
         }
+        // 離れた立体は別々に扱う。まとめて1つの殻にしない。
+        for (const std::vector<std::size_t>& component : SplitIntoComponents(whole)) {
+            std::vector<LoopCandidate> part;
+            part.reserve(component.size());
+            for (const std::size_t at : component) {
+                part.push_back(whole[at]);
+            }
+            shellFaces.push_back(std::move(part));
+        }
+    }
+    for (const std::vector<LoopCandidate>& faces : shellFaces) {
         std::vector<bool> flipped;
         if (!OrientShell(faces, flipped)) {
             analysis.notes.push_back(MakeWarning(kNonManifold,
@@ -829,6 +892,46 @@ Result<WireCageAnalysis> AnalyzeWireCage(const std::vector<CageEdgeInput>& input
                 + " 個の部品になります。続けるなら、この数で作ります。"));
     }
     return Result<WireCageAnalysis>::Success(std::move(analysis));
+}
+
+} // namespace kachakacha::v2::modeling
+
+namespace kachakacha::v2::modeling {
+
+base::Result<std::vector<WireCagePart>> PlanWireCageParts(const WireCageAnalysis& analysis,
+    const std::vector<std::size_t>& chosenShells)
+{
+    using Out = base::Result<std::vector<WireCagePart>>;
+    if (chosenShells.empty()) {
+        return Out::Failure(base::MakeError("GEO-S011",
+            "確定する立体が選ばれていません。", "候補から1つ以上選んでください。"));
+    }
+    std::vector<std::size_t> seen;
+    std::vector<WireCagePart> parts;
+    parts.reserve(chosenShells.size());
+    for (const std::size_t index : chosenShells) {
+        if (index >= analysis.shells.size()) {
+            return Out::Failure(base::MakeError("GEO-S011",
+                "確定する立体が選ばれていません。",
+                "番号 " + std::to_string(index + 1) + " の立体は候補にありません。"));
+        }
+        if (std::find(seen.begin(), seen.end(), index) != seen.end()) {
+            return Out::Failure(base::MakeError("GEO-S010",
+                "同じ立体が2度選ばれています。",
+                "1つの立体からは1つの部品しか作れません。"));
+        }
+        seen.push_back(index);
+        const CageShell& shell = analysis.shells[index];
+        WireCagePart part;
+        part.shellIndex = index;
+        part.volumeMm3 = shell.volumeMm3;
+        part.volumeIsApproximate = shell.volumeIsApproximate;
+        for (const CagePatch& patch : shell.patches) {
+            part.faceKeys.push_back(patch.key);
+        }
+        parts.push_back(std::move(part));
+    }
+    return Out::Success(std::move(parts));
 }
 
 } // namespace kachakacha::v2::modeling

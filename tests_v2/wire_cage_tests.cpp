@@ -331,9 +331,11 @@ KACHA_V2_TEST(wireCage, 線が少なすぎたら断る)
     RequireRejects(builder.edges, "GEO-S001", "3本しかない");
 }
 
-KACHA_V2_TEST(wireCage, 離れた2つの箱は2つの候補にならず断るか分ける)
+KACHA_V2_TEST(wireCage, 離れた2つの箱は2つの立体に分かれる)
 {
-    // 直方体2つを離して置く。つながっていないので、片方だけでは全辺が使われない。
+    // 直方体2つを離して置く。全辺が2回使われる組合せは「両方の箱」だが、
+    // 辺を共有していない塊は別々の立体である(AT-GEO-013)。
+    // 1つの立体に中身を2つ入れると、片方だけを消す・厚みを変えることができなくなる。
     std::vector<CageEdgeInput> edges = Box(10.0, 10.0, 10.0);
     Builder second;
     const Vector3 offset{50.0, 0.0, 0.0};
@@ -359,13 +361,21 @@ KACHA_V2_TEST(wireCage, 離れた2つの箱は2つの候補にならず断るか
         edges.push_back(edge);
     }
     const auto result = AnalyzeWireCage(edges, Tolerance());
-    // 全辺が2回使われる組合せは「両方の箱」なので、面12枚の候補になる。
-    // 黙って片方だけを採ってはいけない。
-    if (result.HasValue()) {
-        RequireCount(result.Value().shells[0].patches.size(), 12, "両方ぶんの面");
-    } else {
-        Require(!result.Diagnostics().empty(), "断るなら理由を言うこと");
+    Require(result.HasValue(), "調べられること");
+    RequireCount(result.Value().shells.size(), 2, "立体は2つ");
+    for (const auto& shell : result.Value().shells) {
+        RequireCount(shell.patches.size(), 6, "それぞれ6面");
+        Require(std::abs(shell.volumeMm3 - 1000.0) < 1.0e-6,
+            "それぞれの体積が箱1つぶん");
     }
+    // 黙って片方だけを採ってはいけない。使い残した辺も無い。
+    RequireCount(result.Value().unusedEdges.size(), 0, "余る線が無い");
+    // 「複数になる」ことを先に知らせる。
+    bool told = false;
+    for (const auto& note : result.Value().notes) {
+        told = told || note.code == "GEO-S007";
+    }
+    Require(told, "いくつになるかを先に知らせること");
 }
 
 KACHA_V2_TEST(wireCage, 平面でない面は根拠が無ければ埋めない)

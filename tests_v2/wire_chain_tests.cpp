@@ -267,4 +267,81 @@ KACHA_V2_TEST(chain, mixed_curve_kinds_chain_together)
     Require(result.Value().order.segments.size() == 2, "both are used");
 }
 
+KACHA_V2_TEST(chain, まっすぐな鎖は自己交差しない)
+{
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeLine({0, 0, 0}, {10, 0, 0}).Value(),
+        CurveSegment::MakeLine({10, 0, 0}, {10, 10, 0}).Value(),
+        CurveSegment::MakeLine({10, 10, 0}, {0, 10, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, false,
+        GeometryTolerance{});
+    Require(result.HasValue(), "交わっていない");
+    Require(result.Value().empty(), "0箇所");
+}
+
+KACHA_V2_TEST(chain, 閉じた四角も自己交差しない)
+{
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeLine({0, 0, 0}, {10, 0, 0}).Value(),
+        CurveSegment::MakeLine({10, 0, 0}, {10, 10, 0}).Value(),
+        CurveSegment::MakeLine({10, 10, 0}, {0, 10, 0}).Value(),
+        CurveSegment::MakeLine({0, 10, 0}, {0, 0, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, true,
+        GeometryTolerance{});
+    Require(result.HasValue(), "交わっていない");
+    Require(result.Value().empty(), "0箇所");
+}
+
+KACHA_V2_TEST(chain, 8の字は自己交差として断る)
+{
+    // 対角線が交わる形。閉じているが、自分と交わっている。
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeLine({0, 0, 0}, {10, 10, 0}).Value(),
+        CurveSegment::MakeLine({10, 10, 0}, {10, 0, 0}).Value(),
+        CurveSegment::MakeLine({10, 0, 0}, {0, 10, 0}).Value(),
+        CurveSegment::MakeLine({0, 10, 0}, {0, 0, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, true,
+        GeometryTolerance{});
+    Require(!result.HasValue(), "断る");
+    RequireEqual(result.Diagnostics().front().code, "GEO-W004", "自己交差");
+    Require(result.Diagnostics().front().detailsJa.find("本目") != std::string::npos,
+        "何本目どうしかを言う");
+}
+
+KACHA_V2_TEST(chain, 離れた線どうしが交わるのも断る)
+{
+    // 1本目と3本目が交わる。隣どうしではないので、端点で触れている言い訳がきかない。
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeLine({0, 5, 0}, {20, 5, 0}).Value(),
+        CurveSegment::MakeLine({20, 5, 0}, {20, 20, 0}).Value(),
+        CurveSegment::MakeLine({10, 20, 0}, {10, 0, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, false,
+        GeometryTolerance{});
+    Require(!result.HasValue(), "断る");
+    RequireEqual(result.Diagnostics().front().code, "GEO-W004", "自己交差");
+}
+
+KACHA_V2_TEST(chain, 隣どうしが端点で触れるのは交差ではない)
+{
+    // まっすぐ折り返す。端点は共有するが、交差ではない。
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeLine({0, 0, 0}, {10, 0, 0}).Value(),
+        CurveSegment::MakeLine({10, 0, 0}, {10, 5, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, false,
+        GeometryTolerance{});
+    Require(result.HasValue(), "交わっていない");
+}
+
+KACHA_V2_TEST(chain, 円と直線の自己交差も見つける)
+{
+    // 円の中を線が通る形。曲線でも見つかること。
+    const std::vector<CurveSegment> segments{
+        CurveSegment::MakeCircle({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, 10.0).Value(),
+        CurveSegment::MakeLine({-20, 0, 0}, {20, 0, 0}).Value()};
+    const auto result = kachakacha::v2::geometry::FindSelfIntersections(segments, false,
+        GeometryTolerance{});
+    Require(!result.HasValue(), "断る");
+    RequireEqual(result.Diagnostics().front().code, "GEO-W004", "自己交差");
+}
+
 KACHA_V2_TEST_MAIN("wire_chain_tests")

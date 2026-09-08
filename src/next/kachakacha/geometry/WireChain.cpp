@@ -1,6 +1,9 @@
 #include "kachakacha/geometry/WireChain.h"
 
+#include "kachakacha/geometry/CurveIntersection.h"
+
 #include <algorithm>
+#include <cstdio>
 #include <map>
 
 namespace kachakacha::v2::geometry {
@@ -274,6 +277,58 @@ Result<ChainAnalysis> AnalyzeChain(std::vector<ChainInput> inputs,
                 + " 本で、選んだのは " + std::to_string(order.size()) + " 本です。"));
     }
     return Result<ChainAnalysis>::Success(std::move(analysis));
+}
+
+} // namespace kachakacha::v2::geometry
+
+namespace kachakacha::v2::geometry {
+
+base::Result<std::vector<SelfIntersection>> FindSelfIntersections(
+    const std::vector<CurveSegment>& segments, bool closed,
+    const GeometryTolerance& tolerance)
+{
+    using Out = base::Result<std::vector<SelfIntersection>>;
+    std::vector<SelfIntersection> found;
+    const std::size_t count = segments.size();
+    for (std::size_t first = 0; first < count; ++first) {
+        for (std::size_t second = first + 1; second < count; ++second) {
+            // 隣どうしは端点で触れる。それは交差ではない。
+            const bool adjacent = second == first + 1;
+            const bool wrapsAround = closed && first == 0 && second + 1 == count;
+            for (const CurveIntersection& crossing :
+                IntersectCurves(segments[first], segments[second], tolerance)) {
+                if (adjacent || wrapsAround) {
+                    // 触れてよいのは端点だけ。線の途中で交わっていたら本物の交差。
+                    const double toEnd =
+                        (crossing.position - segments[first].EndPoint()).Length();
+                    const double toStart =
+                        (crossing.position - segments[second].StartPoint()).Length();
+                    const double toWrapStart =
+                        (crossing.position - segments[first].StartPoint()).Length();
+                    const double toWrapEnd =
+                        (crossing.position - segments[second].EndPoint()).Length();
+                    const double join = tolerance.interactiveJoinMm;
+                    if ((adjacent && toEnd <= join && toStart <= join)
+                        || (wrapsAround && toWrapStart <= join && toWrapEnd <= join)) {
+                        continue;
+                    }
+                }
+                found.push_back(SelfIntersection{first, second, crossing.position});
+            }
+        }
+    }
+    if (!found.empty()) {
+        char buffer[64];
+        std::snprintf(buffer, sizeof(buffer), "(%.3f, %.3f, %.3f)", found.front().position.x,
+            found.front().position.y, found.front().position.z);
+        return Out::Failure(base::MakeError("GEO-W004",
+            "ワイヤーが自分自身と交わっています。",
+            std::to_string(found.size()) + " 箇所で交わっています。例: "
+                + std::string(buffer) + " で "
+                + std::to_string(found.front().firstSegment + 1) + " 本目と "
+                + std::to_string(found.front().secondSegment + 1) + " 本目。"));
+    }
+    return Out::Success(std::move(found));
 }
 
 } // namespace kachakacha::v2::geometry

@@ -81,4 +81,22 @@ struct ChainAnalysis {
 [[nodiscard]] base::Result<ChainAnalysis> AnalyzeChain(std::vector<ChainInput> inputs,
     const GeometryTolerance& tolerance);
 
+//! ワイヤーが自分自身と交わっている場所。
+struct SelfIntersection {
+    std::size_t firstSegment = 0;
+    std::size_t secondSegment = 0;
+    Vector3 position{};
+};
+
+//! ワイヤー単体としての自己交差(GEO-W004)。
+//!
+//! 「輪郭を面にするとき」の自己交差は面を作る側で見ているが、
+//! 型紙や曲げ線として使うワイヤーは面にしないので、そこでは見られない。
+//! 自分と交わるワイヤーは、切っても曲げても意味が決まらないので、ここで断る。
+//!
+//! 隣り合う線が端点で触れているのは交差ではない。閉じた鎖の最初と最後も同じ。
+[[nodiscard]] base::Result<std::vector<SelfIntersection>> FindSelfIntersections(
+    const std::vector<CurveSegment>& segments, bool closed,
+    const GeometryTolerance& tolerance);
+
 } // namespace kachakacha::v2::geometry

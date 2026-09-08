@@ -97,5 +97,5 @@
 | AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
 | AT-PER-001 | 部分 | 遅すぎる処理は robustness_tests.cpp が時間で暴く(ExtendCurveToBoundary を直した)。画面の応答は WP-08後半 |
 | AT-PER-002 | 未 | 古い評価の破棄は WP-08後半 |
-| AT-PER-003 | 部分 | 1000件の文書往復は済(json_tests.cpp、document_file_tests.cpp)。画面は WP-08後半 |
-| AT-PER-004 | 未 | 連続操作は WP-08後半 |
+| AT-PER-003 | 済 | tests_v2/scale_tests.cpp(1000ワイヤーの保存・読込・検証。1万本でも動く)。画面側は WP-08後半 |
+| AT-PER-004 | 済 | tests_v2/scale_tests.cpp(500操作。Entity増殖・ID衝突・Undo崩れが無いこと) |

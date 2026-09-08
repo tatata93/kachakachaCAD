@@ -26,6 +26,7 @@
 #include <QMainWindow>
 #include <QString>
 
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <utility>
@@ -57,6 +58,12 @@ public:
 
     //! 道具を選ぶ。案内文が出る。
     void SelectTool(kachakacha::v2::modeling::DrawingTool tool);
+
+    //! 出す先・開く先を尋ねる手立て。既定は Qt のファイルダイアログ。
+    //! 画面を出さずに試すときは、ここを差し替える。
+    //! 差し替えられないと、自己試験がダイアログの前で止まってしまう。
+    //! 空を返したら「やめた」とみなす。
+    void SetPathChooser(std::function<QString(bool forSave)> chooser);
 
     //! ファイルを開く。開けなければ理由を知らせに出して false を返す。
     bool OpenDocumentFile(const QString& path);
@@ -159,6 +166,8 @@ private:
     void BuildExportDock();
     //! 書き出しの台帳コマンド。棚を出して、形式を選ぶ。
     void RunExportCommand(std::string_view id);
+    //! 出す先・開く先を尋ねる。差し替えが無ければ Qt のダイアログを出す。
+    [[nodiscard]] QString AskForPath(bool forSave);
     //! ファイルの台帳コマンド。新規・開く・保存・名前を付けて保存。
     void RunFileCommand(std::string_view id);
     //! 文書を入れ替えて、場面と一覧を作り直す。開いた直後の後始末を1か所にまとめる。
@@ -197,6 +206,7 @@ private:
     UiTheme theme_ = UiTheme::Normal;
     //! いま開いているファイル。無ければ空(まだ保存していない)。
     QString documentPath_;
+    std::function<QString(bool forSave)> pathChooser_;
     bool snapEnabled_ = true;
     int selectionCount_ = 0;
     kachakacha::v2::app::UiMode mode_ =

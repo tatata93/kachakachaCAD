@@ -52,9 +52,24 @@
 
 ### 動かすもの
 
-Windows。`kachakacha_cad_next.exe` を起動します。
+Windows。配布の zip を好きなところへ展開して、`kachakacha_cad_next.exe` を起動します。
+入れる作業(インストール)は要りません。
+
+zip の中身は次のとおりです。
+
+| 場所 | 中身 |
+| --- | --- |
+| `kachakacha_cad_next.exe` | 本体 |
+| `samples\v2-sample.kcd2` | 見本の文書(16章) |
+| `manual\` | この説明書と図 |
+| `legal\` | 使っている第三者のソフトのライセンス表示 |
 
 版を確かめるには `kachakacha_cad_next.exe --version` と打ちます。
+
+配布のひとまとめは `scripts\package-v2.ps1` で作ります。
+作ったあと、そのひとまとめの exe を実際に動かして
+「自己試験が通る」「見本が開ける」「開いた絵が撮れる」ところまで確かめます。
+通らなければ zip にしません。
 
 ---
 

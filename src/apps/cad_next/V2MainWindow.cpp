@@ -514,6 +514,22 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     viewport_->update();
 }
 
+void V2MainWindow::SetPathChooser(std::function<QString(bool forSave)> chooser)
+{
+    pathChooser_ = std::move(chooser);
+}
+
+QString V2MainWindow::AskForPath(bool forSave)
+{
+    if (pathChooser_) {
+        return pathChooser_(forSave);
+    }
+    const QString filter = QStringLiteral("kachakachaCAD の文書 (*.kcd2)");
+    return forSave
+        ? QFileDialog::getSaveFileName(this, QStringLiteral("保存する"), QString(), filter)
+        : QFileDialog::getOpenFileName(this, QStringLiteral("開く"), QString(), filter);
+}
+
 bool V2MainWindow::OpenDocumentFile(const QString& path)
 {
     const auto text = kachakacha::v2::io::ReadWholeFile(path.toStdString());
@@ -542,7 +558,6 @@ bool V2MainWindow::OpenDocumentFile(const QString& path)
 void V2MainWindow::RunFileCommand(std::string_view id)
 {
     using kachakacha::v2::io::DocumentFile;
-    const QString filter = QStringLiteral("kachakachaCAD の文書 (*.kcd2)");
     if (id == "file.new") {
         AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
         documentPath_.clear();
@@ -550,18 +565,19 @@ void V2MainWindow::RunFileCommand(std::string_view id)
         return;
     }
     if (id == "file.open") {
-        const QString chosen = QFileDialog::getOpenFileName(this,
-            QStringLiteral("開く"), QString(), filter);
+        const QString chosen = AskForPath(false);
         if (!chosen.isEmpty()) {
             (void)OpenDocumentFile(chosen);
+        } else {
+            SetStatus(QStringLiteral("開くのをやめました。"));
         }
         return;
     }
     QString path = documentPath_;
     if (id == "file.save_as" || path.isEmpty()) {
-        path = QFileDialog::getSaveFileName(this, QStringLiteral("保存する"), QString(),
-            filter);
+        path = AskForPath(true);
         if (path.isEmpty()) {
+            SetStatus(QStringLiteral("保存するのをやめました。"));
             return;
         }
         if (!path.endsWith(QStringLiteral(".kcd2"))) {

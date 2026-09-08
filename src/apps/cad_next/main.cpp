@@ -829,6 +829,59 @@ struct SelfTestCase {
     return hasBytes && dock.LastMessage().contains(QStringLiteral("書き出しました"));
 }
 
+[[nodiscard]] bool CaseFileCommandsAskAndGiveUp(V2MainWindow& window)
+{
+    // 出す先を尋ねてやめたら、何も起きない。文書も変わらない。
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    window.RunCommand("file.save_as");
+    if (!Explain("やめたことが出る",
+            window.StatusText().contains(QStringLiteral("やめました")))) {
+        return false;
+    }
+    window.RunCommand("file.open");
+    if (!Explain("開くのもやめられる",
+            window.StatusText().contains(QStringLiteral("やめました")))) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
+[[nodiscard]] bool CaseSaveThenOpenRoundTrips(V2MainWindow& window)
+{
+    // 保存して開き直すと、同じものが戻る。
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("select")))) {
+        return false;
+    }
+    const std::size_t before = window.Session().GetDocument().Snapshot().entities.size();
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_roundtrip.kcd2");
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    window.SetPathChooser([&path](bool) { return QString::fromStdString(path); });
+    window.RunCommand("file.save_as");
+    if (!Explain((std::string("保存できた(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("保存しました")))) {
+        return false;
+    }
+    window.RunCommand("file.new");
+    if (!Explain("新しい文書は空",
+            window.Session().GetDocument().Snapshot().entities.empty())) {
+        return false;
+    }
+    const bool opened = window.OpenDocumentFile(QString::fromStdString(path));
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    if (!Explain("開き直せた", opened)) {
+        return false;
+    }
+    return Explain((std::string("同じ数が戻る(")
+                       + std::to_string(
+                             window.Session().GetDocument().Snapshot().entities.size())
+                       + " と " + std::to_string(before) + ")").c_str(),
+        window.Session().GetDocument().Snapshot().entities.size() == before);
+}
+
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
 {
     // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
@@ -915,7 +968,50 @@ const SelfTestCase kCases[] = {
     {"出せない形式は押す前に断る", &CaseExportRefusesImpossibleFormat},
     {"出す先を決めればファイルが出る", &CaseExportWritesFile},
     {"配る見本が開ける", &CaseSampleDocumentOpens},
+    {"出す先を尋ねてやめられる", &CaseFileCommandsAskAndGiveUp},
+    {"保存して開き直すと同じものが戻る", &CaseSaveThenOpenRoundTrips},
 };
+
+//! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。
+[[nodiscard]] bool RunOneCase(const SelfTestCase& item)
+{
+    // ケースごとに窓を作り直す。前のケースの状態を持ち越さない。
+    V2MainWindow window;
+    // 画面を出さずに試すので、ファイルダイアログを出させない。
+    // 出すと、そこで止まったまま返ってこない。
+    window.SetPathChooser([](bool) { return QString(); });
+    window.resize(1000, 700);
+    window.show();
+    QApplication::processEvents();
+    try {
+        return item.body(window);
+    } catch (const std::exception& error) {
+        std::cout << "  例外: " << error.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cout << "  未知の例外" << std::endl;
+        return false;
+    }
+}
+
+//! 全ケースを動かす。落ちた数を終了コードにする。
+[[nodiscard]] int RunSelfTest()
+{
+    int failed = 0;
+    for (const SelfTestCase& item : kCases) {
+        if (RunOneCase(item)) {
+            std::cout << "PASS " << item.name << std::endl;
+        } else {
+            std::cout << "FAIL " << item.name << std::endl;
+            ++failed;
+        }
+    }
+    const int total = static_cast<int>(std::size(kCases));
+    std::cout << "cad_next self-test: " << (total - failed) << " passed, " << failed
+              << " failed, " << total << " total\n";
+    return failed == 0 ? 0 : 1;
+}
+
 
 } // namespace
 
@@ -939,36 +1035,7 @@ int main(int argc, char** argv)
     const QString snapshot = ValueAfter(arguments, QStringLiteral("--snapshot"));
 
     if (arguments.contains(QStringLiteral("--self-test"))) {
-        int failed = 0;
-        for (const SelfTestCase& item : kCases) {
-            // ケースごとに窓を作り直す。前のケースの状態を持ち越さない。
-            V2MainWindow window;
-            window.resize(1000, 700);
-            window.show();
-            QApplication::processEvents();
-            bool ok = false;
-            try {
-                ok = item.body(window);
-            } catch (const std::exception& error) {
-                std::cout << "FAIL " << item.name << " : " << error.what() << std::endl;
-                ++failed;
-                continue;
-            } catch (...) {
-                std::cout << "FAIL " << item.name << " : 未知の例外" << std::endl;
-                ++failed;
-                continue;
-            }
-            if (ok) {
-                std::cout << "PASS " << item.name << std::endl;
-            } else {
-                std::cout << "FAIL " << item.name << std::endl;
-                ++failed;
-            }
-        }
-        const int total = static_cast<int>(std::size(kCases));
-        std::cout << "cad_next self-test: " << (total - failed) << " passed, " << failed
-                  << " failed, " << total << " total\n";
-        return failed == 0 ? 0 : 1;
+        return RunSelfTest();
     }
 
     // AT-UIX-010。画面の大きさを外から決められるようにする。

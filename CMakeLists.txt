@@ -563,6 +563,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/fabrication/CurvatureAnalysis.cpp
     src/next/kachakacha/fabrication/FabricationSettings.cpp
+    src/next/kachakacha/fabrication/OpeningClip.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
     src/next/kachakacha/modeling/SnapEngine.cpp
     src/next/kachakacha/modeling/SubshapeKey.cpp
@@ -631,6 +632,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(wire_cage_tests tests_v2/wire_cage_tests.cpp)
     kachakacha_add_v2_test(snap_tests tests_v2/snap_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
+    kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

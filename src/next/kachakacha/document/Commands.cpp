@@ -11,6 +11,8 @@ using base::MakeWarning;
 namespace {
 
 constexpr const char* kNotFound = "DOC-C001";
+//! その種類には効かない操作。
+constexpr const char* kNotAllowed = "DOC-C005";
 constexpr const char* kStillUsed = "DOC-C002";
 constexpr const char* kDuplicate = "DOC-C003";
 constexpr const char* kEmptyName = "DOC-C004";
@@ -215,6 +217,68 @@ std::vector<Diagnostic> SetVisibilityCommand::Apply(DocumentSnapshot& candidate)
             return diagnostics;
         }
         entity->visibility = visibility_;
+        ++entity->revision;
+    }
+    return diagnostics;
+}
+
+// ---- 補助線と基準線 ----
+
+SetConstructionCommand::SetConstructionCommand(std::vector<EntityId> entityIds,
+    bool construction)
+    : entityIds_(std::move(entityIds)), construction_(construction)
+{
+}
+
+std::vector<Diagnostic> SetConstructionCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    for (const EntityId& id : entityIds_) {
+        Entity* entity = FindMutable(candidate, id);
+        if (entity == nullptr) {
+            diagnostics.push_back(MakeError(kNotFound,
+                "補助線にするものが見つかりません。", id.ToString()));
+            return diagnostics;
+        }
+        // 部品を補助線にはできない。線に対してだけ意味がある。
+        if (entity->kind != domain::EntityKind::Wire
+            && entity->kind != domain::EntityKind::Point) {
+            diagnostics.push_back(MakeError(kNotAllowed,
+                "この種類は補助線にできません。",
+                std::string(domain::EntityKindNameJa(entity->kind))
+                    + " は補助線になりません。"));
+            return diagnostics;
+        }
+        entity->construction = construction_;
+        ++entity->revision;
+    }
+    return diagnostics;
+}
+
+SetDatumCommand::SetDatumCommand(std::vector<EntityId> entityIds, bool datum)
+    : entityIds_(std::move(entityIds)), datum_(datum)
+{
+}
+
+std::vector<Diagnostic> SetDatumCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    for (const EntityId& id : entityIds_) {
+        Entity* entity = FindMutable(candidate, id);
+        if (entity == nullptr) {
+            diagnostics.push_back(MakeError(kNotFound,
+                "基準線にするものが見つかりません。", id.ToString()));
+            return diagnostics;
+        }
+        if (entity->kind != domain::EntityKind::Wire
+            && entity->kind != domain::EntityKind::WorkPlane) {
+            diagnostics.push_back(MakeError(kNotAllowed,
+                "この種類は基準にできません。",
+                std::string(domain::EntityKindNameJa(entity->kind))
+                    + " は基準線になりません。"));
+            return diagnostics;
+        }
+        entity->datum = datum_;
         ++entity->revision;
     }
     return diagnostics;

@@ -153,6 +153,7 @@ struct Maker {
     snapshot.entities[0].groupId = group.id;
     snapshot.entities[1].visibility = Visibility::Reference;
     snapshot.entities[2].editPolicy = EditPolicy::Derived;
+    snapshot.entities[2].datum = true;
 
     // 部品を1つ。属性が付く唯一の種類。
     {
@@ -445,6 +446,8 @@ KACHA_V2_TEST(documentFile, 表示の状態が往復する)
     Require(entities[0].groupId.has_value(), "グループに入っていること");
     Require(entities[1].visibility == Visibility::Reference, "参照表示");
     Require(entities[2].editPolicy == EditPolicy::Derived, "派生");
+    Require(entities[2].datum, "基準線であること");
+    Require(!entities[1].datum, "基準線でないものは false のまま");
     Require(entities[5].editPolicy == EditPolicy::Frozen, "固定");
     Require(read.Value().snapshot.settings.activeGroupId.has_value(), "選択中のグループ");
 }

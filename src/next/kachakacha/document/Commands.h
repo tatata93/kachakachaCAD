@@ -62,6 +62,37 @@ private:
     domain::Visibility visibility_ = domain::Visibility::Visible;
 };
 
+//! 補助線にする / 戻す(V1の「補助線として作図」「補助線化」)。
+//! 幾何は変えない。作図の下敷きとして扱うかどうかだけを変える。
+class SetConstructionCommand final : public DocumentCommand {
+public:
+    SetConstructionCommand(std::vector<EntityId> entityIds, bool construction);
+    [[nodiscard]] std::string Label() const override
+    {
+        return construction_ ? "補助線にする" : "補助線をやめる";
+    }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    std::vector<EntityId> entityIds_;
+    bool construction_ = true;
+};
+
+//! 基準線にする / 解除する(V1の「基準線に設定」「基準解除」)。
+class SetDatumCommand final : public DocumentCommand {
+public:
+    SetDatumCommand(std::vector<EntityId> entityIds, bool datum);
+    [[nodiscard]] std::string Label() const override
+    {
+        return datum_ ? "基準線にする" : "基準線をやめる";
+    }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    std::vector<EntityId> entityIds_;
+    bool datum_ = true;
+};
+
 //! Featureを無効にする(消さずに効かなくする)。下流は SuppressedInput になる。
 class SetFeatureEnabledCommand final : public DocumentCommand {
 public:

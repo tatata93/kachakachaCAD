@@ -321,6 +321,7 @@ template<class Id>
     object["createdBy"] = WriteId(entity.createdBy);
     object["revision"] = JsonValue::Number(static_cast<double>(entity.revision));
     object["construction"] = JsonValue::Bool(entity.construction);
+    object["datum"] = JsonValue::Bool(entity.datum);
     if (entity.kind == EntityKind::Part) {
         JsonObject part;
         part["purpose"] = JsonValue::String(NameOf(kPartRoles, entity.partRole));
@@ -908,6 +909,7 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
             entity.revision = static_cast<std::uint64_t>(
                 std::max(0.0, loader.Number(item, "revision", where)));
             entity.construction = loader.Bool(item, "construction", where, false);
+            entity.datum = loader.Bool(item, "datum", where, false);
 
             const JsonValue* partProperties = item.Find("partProperties");
             const bool hasPart = partProperties != nullptr && partProperties->IsObject();

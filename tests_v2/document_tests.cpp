@@ -449,4 +449,77 @@ KACHA_V2_TEST(document, validation_catches_an_orphan_entity)
     Require(sawOrphan, "an entity with no creating feature is reported");
 }
 
+KACHA_V2_TEST(document, 補助線にできる)
+{
+    // V1の「補助線として作図」「補助線化」。幾何は変えない。
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made wire = maker.MakePoint("線");
+    wire.entity.kind = EntityKind::Wire;
+    Require(document.Run(AddFeatureCommand(wire.feature, {wire.entity}, "線")).committed,
+        "足せること");
+
+    Require(document.Run(kachakacha::v2::document::SetConstructionCommand(
+                             {wire.entity.id}, true))
+                .committed,
+        "補助線にできること");
+    Require(document.FindEntity(wire.entity.id)->construction, "補助線であること");
+
+    Require(document.Run(kachakacha::v2::document::SetConstructionCommand(
+                             {wire.entity.id}, false))
+                .committed,
+        "戻せること");
+    Require(!document.FindEntity(wire.entity.id)->construction, "戻ったこと");
+
+    // Undo で戻せること。
+    Require(document.Undo(), "取り消せること");
+    Require(document.FindEntity(wire.entity.id)->construction, "補助線に戻ること");
+}
+
+KACHA_V2_TEST(document, 部品は補助線にできない)
+{
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made part = maker.MakePoint("部品");
+    part.entity.kind = EntityKind::Part;
+    Require(document.Run(AddFeatureCommand(part.feature, {part.entity}, "部品")).committed,
+        "足せること");
+    const auto result = document.Run(
+        kachakacha::v2::document::SetConstructionCommand({part.entity.id}, true));
+    Require(!result.committed, "断ること");
+    RequireEqual(result.diagnostics.front().code, std::string("DOC-C005"), "診断コード");
+}
+
+KACHA_V2_TEST(document, 基準線にできる)
+{
+    // V1の「基準線に設定」「基準解除」。
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made wire = maker.MakePoint("線");
+    wire.entity.kind = EntityKind::Wire;
+    Require(document.Run(AddFeatureCommand(wire.feature, {wire.entity}, "線")).committed,
+        "足せること");
+    Require(
+        document.Run(kachakacha::v2::document::SetDatumCommand({wire.entity.id}, true))
+            .committed,
+        "基準にできること");
+    Require(document.FindEntity(wire.entity.id)->datum, "基準であること");
+    Require(
+        document.Run(kachakacha::v2::document::SetDatumCommand({wire.entity.id}, false))
+            .committed,
+        "解除できること");
+    Require(!document.FindEntity(wire.entity.id)->datum, "解除されたこと");
+}
+
+KACHA_V2_TEST(document, 無いものを補助線にしようとしたら断る)
+{
+    Document document(kachakacha::v2::base::DocumentId{});
+    kachakacha::v2::base::DeterministicIdGenerator ids{99};
+    const EntityId missing = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    const auto result =
+        document.Run(kachakacha::v2::document::SetConstructionCommand({missing}, true));
+    Require(!result.committed, "断ること");
+    RequireEqual(result.diagnostics.front().code, std::string("DOC-C001"), "診断コード");
+}
+
 KACHA_V2_TEST_MAIN("document_tests")

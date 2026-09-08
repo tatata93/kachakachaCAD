@@ -103,6 +103,9 @@ struct Entity {
     PartRole partRole = PartRole::FinishedModel;
     std::optional<ManufacturingProperties> manufacturing;
     bool construction = false; //!< 補助線(V1同等性の要件)
+    //! 基準線。測定や位置合わせの基準として印を付けたもの(V1の「基準線に設定」)。
+    //! 幾何は変わらない。表示と、測定のときの既定の相手が変わるだけ。
+    bool datum = false;
 };
 
 } // namespace kachakacha::v2::domain

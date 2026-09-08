@@ -9,6 +9,7 @@ namespace kachakacha::v2::io {
 
 using base::Diagnostic;
 using base::DocumentId;
+using base::DimensionId;
 using base::EntityId;
 using base::FeatureId;
 using base::GroupId;
@@ -19,6 +20,7 @@ using base::SegmentId;
 using base::Uuid;
 using document::DocumentSnapshot;
 using document::Group;
+using document::ReferenceDimension;
 using domain::CreatePointDefinition;
 using domain::CreateWireDefinition;
 using domain::EditPolicy;
@@ -437,6 +439,29 @@ std::string WriteDocumentJson(const DocumentFile& file)
         features.push_back(WriteFeature(feature));
     }
     root["features"] = JsonValue::Array(std::move(features));
+
+    JsonArray dimensions;
+    for (const ReferenceDimension& dimension : snapshot.referenceDimensions) {
+        JsonObject object;
+        object["id"] = WriteId(dimension.id);
+        object["label"] = JsonValue::String(dimension.label);
+        object["kind"] = JsonValue::String(dimension.kind);
+        JsonArray targets;
+        for (const EntityId& target : dimension.targets) {
+            targets.push_back(WriteId(target));
+        }
+        object["targets"] = JsonValue::Array(std::move(targets));
+        JsonArray parameters;
+        for (const double value : dimension.parameters) {
+            parameters.push_back(JsonValue::Number(value));
+        }
+        object["parameters"] = JsonValue::Array(std::move(parameters));
+        object["recordedValue"] = JsonValue::Number(dimension.recordedValue);
+        object["unit"] = JsonValue::String(dimension.unit);
+        object["note"] = JsonValue::String(dimension.noteJa);
+        dimensions.push_back(JsonValue::Object(std::move(object)));
+    }
+    root["referenceDimensions"] = JsonValue::Array(std::move(dimensions));
 
     root["rootOrder"] = JsonValue::Array(ChildOrderOf(snapshot, std::nullopt));
     root["uiState"] = file.uiState.IsObject() ? file.uiState : JsonValue::Object({});
@@ -1021,6 +1046,60 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
         }
     }
 
+    // 残した参照寸法。古い文書には無いので、無ければ空のままにする。
+    if (const JsonValue* found = root.Find("referenceDimensions")) {
+        if (!found->IsArray()) {
+            loader.Fail(kBadValue, "残した寸法の一覧が配列ではありません。",
+                "$.referenceDimensions");
+        } else {
+            const JsonArray& dimensions = found->AsArray();
+            for (std::size_t index = 0; index < dimensions.size(); ++index) {
+                const JsonValue& item = dimensions[index];
+                const std::string where =
+                    "$.referenceDimensions[" + std::to_string(index) + "]";
+                if (!item.IsObject()) {
+                    loader.Fail(kBadValue, "寸法の記述が組ではありません。", where);
+                    continue;
+                }
+                ReferenceDimension dimension;
+                dimension.id = loader.ParseId<DimensionId>(loader.String(item, "id", where),
+                    where + ".id");
+                dimension.label = loader.String(item, "label", where);
+                dimension.kind = loader.String(item, "kind", where);
+                dimension.recordedValue = loader.Number(item, "recordedValue", where);
+                dimension.unit = loader.String(item, "unit", where);
+                dimension.noteJa = loader.String(item, "note", where);
+                if (const JsonArray* targets = loader.ArrayAt(item, "targets", where)) {
+                    for (std::size_t at = 0; at < targets->size(); ++at) {
+                        const JsonValue& target = (*targets)[at];
+                        const std::string place =
+                            where + ".targets[" + std::to_string(at) + "]";
+                        if (target.Type() != JsonType::String) {
+                            loader.Fail(kBadValue, "IDは文字列でなければなりません。",
+                                place);
+                            continue;
+                        }
+                        dimension.targets.push_back(
+                            loader.ParseId<EntityId>(target.AsString(), place));
+                    }
+                }
+                if (const JsonArray* parameters =
+                        loader.ArrayAt(item, "parameters", where)) {
+                    for (std::size_t at = 0; at < parameters->size(); ++at) {
+                        const JsonValue& value = (*parameters)[at];
+                        if (value.Type() != JsonType::Number) {
+                            loader.Fail(kBadValue, "位置は数でなければなりません。",
+                                where + ".parameters[" + std::to_string(at) + "]");
+                            continue;
+                        }
+                        dimension.parameters.push_back(value.AsNumber());
+                    }
+                }
+                snapshot.referenceDimensions.push_back(std::move(dimension));
+            }
+        }
+    }
+
     if (const JsonValue* uiState = root.Find("uiState")) {
         if (!uiState->IsObject()) {
             loader.Fail(kBadValue, "画面の状態が組ではありません。", "$.uiState");
@@ -1038,6 +1117,17 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                 if (!found) {
                     loader.Fail(kBadShape, "無いグループを指しています。",
                         entity.displayName + " -> " + entity.groupId->ToString());
+                }
+            }
+        }
+        for (const ReferenceDimension& dimension : snapshot.referenceDimensions) {
+            for (const EntityId& target : dimension.targets) {
+                const bool found = std::any_of(snapshot.entities.begin(),
+                    snapshot.entities.end(),
+                    [&](const Entity& entity) { return entity.id == target; });
+                if (!found) {
+                    loader.Fail(kBadShape, "残した寸法が、無いものを指しています。",
+                        dimension.label + " -> " + target.ToString());
                 }
             }
         }

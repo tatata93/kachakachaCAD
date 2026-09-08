@@ -24,6 +24,7 @@ enum class IdKind : std::uint8_t {
     Fold,
     Cut,
     Asset,
+    Dimension,
 };
 
 [[nodiscard]] constexpr std::string_view IdKindName(IdKind kind) noexcept
@@ -38,6 +39,7 @@ enum class IdKind : std::uint8_t {
     case IdKind::Fold:     return "Fold";
     case IdKind::Cut:      return "Cut";
     case IdKind::Asset:    return "Asset";
+    case IdKind::Dimension: return "Dimension";
     }
     return "Unknown";
 }
@@ -96,6 +98,7 @@ using PanelId = TypedId<IdKind::Panel>;
 using FoldId = TypedId<IdKind::Fold>;
 using CutId = TypedId<IdKind::Cut>;
 using AssetId = TypedId<IdKind::Asset>;
+using DimensionId = TypedId<IdKind::Dimension>;
 
 //! IDを配る側。試験は固定列を注入して、結果を毎回同じにする。
 class IdGenerator {

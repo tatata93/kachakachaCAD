@@ -124,6 +124,27 @@ private:
     std::string label_;
 };
 
+//! 測った結果を文書へ残す(V1の「残した参照寸法」)。
+class AddReferenceDimensionCommand final : public DocumentCommand {
+public:
+    explicit AddReferenceDimensionCommand(ReferenceDimension dimension);
+    [[nodiscard]] std::string Label() const override { return "寸法を残す"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    ReferenceDimension dimension_;
+};
+
+class RemoveReferenceDimensionCommand final : public DocumentCommand {
+public:
+    explicit RemoveReferenceDimensionCommand(base::DimensionId id);
+    [[nodiscard]] std::string Label() const override { return "残した寸法を消す"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    base::DimensionId id_;
+};
+
 //! グループ操作。
 class AddGroupCommand final : public DocumentCommand {
 public:

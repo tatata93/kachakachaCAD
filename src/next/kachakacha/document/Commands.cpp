@@ -284,6 +284,67 @@ std::vector<Diagnostic> SetDatumCommand::Apply(DocumentSnapshot& candidate) cons
     return diagnostics;
 }
 
+// ---- 残した参照寸法 ----
+
+AddReferenceDimensionCommand::AddReferenceDimensionCommand(ReferenceDimension dimension)
+    : dimension_(std::move(dimension))
+{
+}
+
+std::vector<Diagnostic> AddReferenceDimensionCommand::Apply(
+    DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    if (dimension_.id.IsNil()) {
+        diagnostics.push_back(MakeError(kEmptyName, "寸法のIDがありません。", {}));
+        return diagnostics;
+    }
+    for (const ReferenceDimension& existing : candidate.referenceDimensions) {
+        if (existing.id == dimension_.id) {
+            diagnostics.push_back(MakeError(kDuplicate, "同じIDの寸法があります。",
+                dimension_.id.ToString()));
+            return diagnostics;
+        }
+    }
+    if (dimension_.targets.empty()) {
+        diagnostics.push_back(MakeError(kEmptyName, "何を測ったのかが入っていません。",
+            "測った相手が必要です。"));
+        return diagnostics;
+    }
+    for (const EntityId& target : dimension_.targets) {
+        const bool found = std::any_of(candidate.entities.begin(), candidate.entities.end(),
+            [&](const Entity& entity) { return entity.id == target; });
+        if (!found) {
+            diagnostics.push_back(MakeError(kNotFound, "測った相手が見つかりません。",
+                target.ToString()));
+            return diagnostics;
+        }
+    }
+    candidate.referenceDimensions.push_back(dimension_);
+    return diagnostics;
+}
+
+RemoveReferenceDimensionCommand::RemoveReferenceDimensionCommand(base::DimensionId id)
+    : id_(id)
+{
+}
+
+std::vector<Diagnostic> RemoveReferenceDimensionCommand::Apply(
+    DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    const auto found = std::find_if(candidate.referenceDimensions.begin(),
+        candidate.referenceDimensions.end(),
+        [&](const ReferenceDimension& dimension) { return dimension.id == id_; });
+    if (found == candidate.referenceDimensions.end()) {
+        diagnostics.push_back(MakeError(kNotFound, "その寸法はありません。",
+            id_.ToString()));
+        return diagnostics;
+    }
+    candidate.referenceDimensions.erase(found);
+    return diagnostics;
+}
+
 // ---- Enabled ----
 
 SetFeatureEnabledCommand::SetFeatureEnabledCommand(FeatureId featureId, bool enabled)

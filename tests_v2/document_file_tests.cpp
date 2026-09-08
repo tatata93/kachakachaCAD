@@ -1,5 +1,6 @@
 // `.kcd2` の保存と読み込み。作った文書がそのまま戻ること、壊れた文書を黙って通さないこと。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/io/DocumentFile.h"
 
 #include <algorithm>
@@ -235,6 +236,17 @@ struct Maker {
         snapshot.entities.push_back(std::move(entity));
     }
 
+    // 残した参照寸法。翌日開いても何を測ったか分かること。
+    kachakacha::v2::document::ReferenceDimension dimension;
+    dimension.id = maker.ids.NextTyped<IdKind::Dimension>();
+    dimension.label = "側板の幅";
+    dimension.kind = "two_points";
+    dimension.targets = {snapshot.entities[0].id, snapshot.entities[1].id};
+    dimension.recordedValue = 123.456;
+    dimension.unit = "mm";
+    dimension.noteJa = "屋根の合わせに使う";
+    snapshot.referenceDimensions.push_back(std::move(dimension));
+
     kachakacha::v2::io::JsonObject ui;
     ui["activeMode"] = JsonValue::String("drawing");
     ui["theme"] = JsonValue::String("windows95");
@@ -450,6 +462,41 @@ KACHA_V2_TEST(documentFile, 表示の状態が往復する)
     Require(!entities[1].datum, "基準線でないものは false のまま");
     Require(entities[5].editPolicy == EditPolicy::Frozen, "固定");
     Require(read.Value().snapshot.settings.activeGroupId.has_value(), "選択中のグループ");
+}
+
+KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
+{
+    const DocumentFile original = MakeSampleDocument();
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    RequireCount(read.Value().snapshot.referenceDimensions.size(), 1, "寸法の数");
+    const auto& dimension = read.Value().snapshot.referenceDimensions.front();
+    RequireEqual(dimension.label, std::string("側板の幅"), "名前");
+    RequireEqual(dimension.kind, std::string("two_points"), "種類");
+    RequireEqual(dimension.unit, std::string("mm"), "単位");
+    RequireEqual(dimension.noteJa, std::string("屋根の合わせに使う"), "覚え書き");
+    RequireNear(dimension.recordedValue, 123.456, 1e-12, "残した値");
+    RequireCount(dimension.targets.size(), 2, "測った相手の数");
+}
+
+KACHA_V2_TEST(documentFile, 無いものを指す寸法を断る)
+{
+    const std::string text = WriteDocumentJson(MakeSampleDocument());
+    RequireRejects(Mutate(text, [](auto& root) {
+        root["referenceDimensions"].MutableArray()[0].MutableObject()["targets"]
+            .MutableArray()[0] =
+            JsonValue::String("ffffffff-0000-4000-8000-000000000099");
+    }), "KCD2-D004", "無いものを指す寸法");
+}
+
+KACHA_V2_TEST(documentFile, 古い文書に寸法が無くても読める)
+{
+    const std::string text = WriteDocumentJson(MakeSampleDocument());
+    const auto read = ReadDocumentJson(Mutate(text, [](auto& root) {
+        root.erase("referenceDimensions");
+    }));
+    Require(read.HasValue(), "読めること");
+    Require(read.Value().snapshot.referenceDimensions.empty(), "空になること");
 }
 
 KACHA_V2_TEST(documentFile, 画面の状態を落とさない)

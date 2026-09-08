@@ -522,4 +522,69 @@ KACHA_V2_TEST(document, 無いものを補助線にしようとしたら断る)
     RequireEqual(result.diagnostics.front().code, std::string("DOC-C001"), "診断コード");
 }
 
+KACHA_V2_TEST(document, 測った結果を文書へ残せる)
+{
+    // V1の「残した参照寸法」。その場限りの表示で終わらせない。
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made first = maker.MakePoint("A");
+    Maker::Made second = maker.MakePoint("B");
+    Require(document.Run(AddFeatureCommand(first.feature, {first.entity}, "A")).committed,
+        "A を足せること");
+    Require(document.Run(AddFeatureCommand(second.feature, {second.entity}, "B")).committed,
+        "B を足せること");
+
+    kachakacha::v2::base::DeterministicIdGenerator ids{55};
+    kachakacha::v2::document::ReferenceDimension dimension;
+    dimension.id = ids.NextTyped<kachakacha::v2::base::IdKind::Dimension>();
+    dimension.label = "側板の幅";
+    dimension.kind = "two_points";
+    dimension.targets = {first.entity.id, second.entity.id};
+    dimension.recordedValue = 123.5;
+    dimension.unit = "mm";
+    dimension.noteJa = "屋根の合わせに使う";
+
+    Require(document.Run(
+                    kachakacha::v2::document::AddReferenceDimensionCommand(dimension))
+                .committed,
+        "残せること");
+    RequireEqual(std::to_string(document.Snapshot().referenceDimensions.size()),
+        std::string("1"), "残っていること");
+    RequireEqual(document.Snapshot().referenceDimensions.front().label,
+        std::string("側板の幅"), "名前");
+
+    // 消せること。
+    Require(document.Run(kachakacha::v2::document::RemoveReferenceDimensionCommand(
+                             dimension.id))
+                .committed,
+        "消せること");
+    Require(document.Snapshot().referenceDimensions.empty(), "消えたこと");
+
+    // Undo で戻ること。
+    Require(document.Undo(), "取り消せること");
+    RequireEqual(std::to_string(document.Snapshot().referenceDimensions.size()),
+        std::string("1"), "戻ったこと");
+}
+
+KACHA_V2_TEST(document, 無いものを指す寸法は残せない)
+{
+    Document document(kachakacha::v2::base::DocumentId{});
+    kachakacha::v2::base::DeterministicIdGenerator ids{56};
+    kachakacha::v2::document::ReferenceDimension dimension;
+    dimension.id = ids.NextTyped<kachakacha::v2::base::IdKind::Dimension>();
+    dimension.targets = {ids.NextTyped<kachakacha::v2::base::IdKind::Entity>()};
+    const auto result = document.Run(
+        kachakacha::v2::document::AddReferenceDimensionCommand(dimension));
+    Require(!result.committed, "断ること");
+    RequireEqual(result.diagnostics.front().code, std::string("DOC-C001"), "診断コード");
+
+    // 何を測ったかが空でも断る。
+    kachakacha::v2::document::ReferenceDimension empty;
+    empty.id = ids.NextTyped<kachakacha::v2::base::IdKind::Dimension>();
+    Require(!document.Run(
+                     kachakacha::v2::document::AddReferenceDimensionCommand(empty))
+                 .committed,
+        "相手が無ければ断ること");
+}
+
 KACHA_V2_TEST_MAIN("document_tests")

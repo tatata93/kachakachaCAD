@@ -33,6 +33,23 @@ struct Group {
     std::optional<GroupId> parentId;
 };
 
+//! 残した参照寸法(V1の情報タブにあったもの)。
+//!
+//! 測った結果を、その場限りの表示で終わらせず、文書へ残せる。
+//! 「選択履歴を直近10件」では、翌日開いたときに何を測ったか分からない。
+//! 幾何は持たない。何と何を測ったかという参照と、測った時点の値だけを持つ。
+//! 元の形が変われば値は変わるので、再計算した値と保存した値の両方を見せる。
+struct ReferenceDimension {
+    base::DimensionId id;
+    std::string label;              //!< 利用者が付けた名前
+    std::string kind;               //!< "two_points" / "three_point_angle" など
+    std::vector<EntityId> targets;  //!< 測った相手
+    std::vector<double> parameters; //!< 曲線上の位置(あれば)
+    double recordedValue = 0.0;     //!< 残した時点の値
+    std::string unit;               //!< "mm" または "rad"
+    std::string noteJa;             //!< 覚え書き
+};
+
 struct DocumentSettings {
     geometry::GeometryTolerance tolerance;
     std::optional<GroupId> activeGroupId;
@@ -45,6 +62,8 @@ struct DocumentSnapshot {
     DocumentSettings settings;
     std::vector<Group> groups;
     std::vector<Entity> entities;
+    //! 残した参照寸法。幾何ではないので Feature DAG には入れない。
+    std::vector<ReferenceDimension> referenceDimensions;
     std::vector<Feature> features;
     //! Featureの評価順。依存の上流から並ぶ。
     std::vector<FeatureId> evaluationOrder;

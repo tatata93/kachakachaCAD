@@ -1,0 +1,101 @@
+# 受入試験の台帳
+
+`acceptance-tests.md` の全IDについて、いまどこまで確かめられているかを1行ずつ書く。
+**この表に無いIDがあること、この表に有るのに `acceptance-tests.md` に無いIDがあることは、
+どちらも `tests_v2/coverage_tests.cpp` が失敗させる。**
+「書き忘れて未達成のまま完成にする」ことを機械で防ぐための表である。
+
+状態は3つだけ。
+
+- `済` … 自動試験がある。根拠の欄に試験ファイルを書く。
+- `部分` … 一部だけ確かめている。何が残っているかを書く。
+- `未` … まだ。理由(どのWPか、何が要るか)を書く。
+
+クラウドには OCCT も Qt も入れられない(配布元が拒否する)ため、
+それらを要する項目は PC でしか確かめられない。その旨も理由に書く。
+
+| ID | 状態 | 根拠 / 残り |
+| --- | --- | --- |
+| AT-ARC-001 | 済 | tests_v2/architecture_tests.cpp(core が Qt/OCCT に依存しない) |
+| AT-ARC-002 | 済 | tests_v2/foundation_tests.cpp(TypedId。表示名参照なし) |
+| AT-ARC-003 | 済 | tests_v2/document_tests.cpp(幾何は Feature が正本) |
+| AT-ARC-004 | 部分 | 診断コードは各層で固定。台帳の一元管理は WP-12 |
+| AT-ARC-005 | 済 | tests_v2/architecture_tests.cpp(コード衛生) |
+| AT-ARC-006 | 済 | tests_v2/fabrication_tests.cpp(製作層が core だけに依存) |
+| AT-DOC-001 | 済 | tests_v2/document_tests.cpp |
+| AT-DOC-002 | 済 | tests_v2/document_tests.cpp(位相順の再計算) |
+| AT-DOC-003 | 済 | tests_v2/document_tests.cpp(循環を拒否) |
+| AT-DOC-004 | 済 | tests_v2/document_tests.cpp(失敗したら一切変わらない) |
+| AT-DOC-005 | 済 | tests_v2/document_tests.cpp(Undo/Redo、まとめ単位) |
+| AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す) |
+| AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、zip_tests.cpp(壊れた保存を断る) |
+| AT-EXP-003 | 済 | tests_v2/document_file_tests.cpp(知らない版を断る、古い項目欠落を許す) |
+| AT-EXP-004 | 未 | 原子的保存(一時ファイル→改名)は WP-12。形式そのものは済 |
+| AT-WIR-001 | 済 | tests_v2/curve_tests.cpp(5種の曲線が値を保つ) |
+| AT-WIR-002 | 済 | tests_v2/wire_chain_tests.cpp |
+| AT-WIR-003 | 済 | tests_v2/wire_chain_tests.cpp |
+| AT-WIR-004 | 済 | tests_v2/wire_chain_tests.cpp(分岐と隙間) |
+| AT-WIR-005 | 部分 | 端点接続は済。Segment内部での接続は初回切替の対象外(矛盾16) |
+| AT-WIR-006 | 済 | tests_v2/wire_edit_tests.cpp |
+| AT-WIR-007 | 済 | tests_v2/arc_builder_tests.cpp、tool_tests.cpp(3モード) |
+| AT-WIR-008 | 済 | tests_v2/expression_tests.cpp |
+| AT-WPL-001 | 未 | 作業平面の11方式は WP-06。OCCT が要る |
+| AT-WPL-002 | 未 | 同上 |
+| AT-WPL-003 | 部分 | 平面へ投影するスナップは済(snap_tests.cpp)。残りは WP-06 |
+| AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)。面の生成は WP-06 |
+| AT-GEO-002 | 済 | tests_v2/guide_surface_tests.cpp(同上) |
+| AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp(同上) |
+| AT-GEO-004 | 済 | tests_v2/guide_surface_tests.cpp(両端接続ガイド。オーナー提示ケース) |
+| AT-GEO-005 | 済 | tests_v2/guide_surface_tests.cpp(欠損・2重・順序逆転を固定コードで拒否) |
+| AT-GEO-006 | 済 | tests_v2/guide_surface_tests.cpp(5辺は自動分割せず拒否) |
+| AT-GEO-007 | 部分 | 壊れた参照の判定は WP-06。入力の欠落は済 |
+| AT-GEO-010 | 済 | tests_v2/wire_cage_tests.cpp(12辺順不同→6面1体) |
+| AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
+| AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |
+| AT-GEO-013 | 部分 | 非連結の検出は済。複数Partへの分割は WP-07 |
+| AT-EXT-001 | 未 | 押し出しは WP-07。OCCT が要る |
+| AT-EXT-002 | 未 | 同上 |
+| AT-EXT-003 | 未 | 同上 |
+| AT-EXT-004 | 部分 | 穴付き輪郭の入力検査は済(guide_surface_tests.cpp)。押し出しは WP-07 |
+| AT-EXT-005 | 部分 | 複数外周の検出は済(同上)。押し出しは WP-07 |
+| AT-EXT-006 | 未 | 終端方式は WP-07 |
+| AT-EXT-007 | 未 | 足す/引くは WP-07 |
+| AT-EXT-008 | 未 | 連続編集は WP-07 |
+| AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) |
+| AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
+| AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |
+| AT-MEA-004 | 済 | tests_v2/measurement_tests.cpp |
+| AT-MEA-005 | 部分 | 測定が位置を返すところまで済。画面から点を作るのは WP-08 |
+| AT-FAB-001 | 済 | tests_v2/fabrication_tests.cpp(円筒の厳密展開) |
+| AT-FAB-002 | 済 | tests_v2/fabrication_tests.cpp(円錐の厳密展開) |
+| AT-FAB-003 | 済 | tests_v2/fabrication_tests.cpp(二重曲率を展開できないと言う) |
+| AT-FAB-004 | 部分 | 切れ目の制約検査は済(pattern_tests.cpp)。向きの自動選択は WP-09後半 |
+| AT-FAB-005 | 未 | 戦略4種の選択は WP-09後半。設定と評価軸は済 |
+| AT-FAB-006 | 未 | 手動役割は WP-09後半 |
+| AT-FAB-007 | 済 | tests_v2/opening_clip_tests.cpp(開口またぎ) |
+| AT-FAB-008 | 部分 | 対応辺のIDは済(opening_clip_tests.cpp)。切れ目側は WP-09後半 |
+| AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |
+| AT-FAB-010 | 部分 | 木の折りは済。閉ループの最小二乗は WP-09後半 |
+| AT-FAB-011 | 未 | 任意状態の実体化は WP-09後半。OCCT が要る |
+| AT-FAB-012 | 未 | 選択部材出力は WP-10 |
+| AT-FAB-013 | 未 | ER1/ER2 の受入モデルは WP-12。OCCT が要る |
+| AT-FAB-014 | 未 | 任意状態のワイヤーと部品は WP-09後半 |
+| AT-UIX-001 | 未 | Qt が要る。WP-08後半 |
+| AT-UIX-002 | 部分 | 案内文は済(tool_tests.cpp、session_tests.cpp)。画面表示は WP-08後半 |
+| AT-UIX-003 | 未 | Qt が要る |
+| AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |
+| AT-UIX-005 | 済 | tests_v2/snap_tests.cpp(主点/副点、間引き) |
+| AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
+| AT-UIX-007 | 未 | 形状ガイド表は WP-08後半 |
+| AT-UIX-008 | 未 | View cube は WP-08後半 |
+| AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済。画面の回復は WP-08後半 |
+| AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
+| AT-UIX-011 | 未 | コマンド台帳との突き合わせは WP-12 |
+| AT-EXP-010 | 未 | STEP は OCCT が要る。STL は済(export_tests.cpp) |
+| AT-EXP-011 | 部分 | 潰れた三角形は断る(export_tests.cpp)。B-Rep検査は WP-11後半 |
+| AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |
+| AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
+| AT-PER-001 | 未 | UI応答は WP-08後半 |
+| AT-PER-002 | 未 | 古い評価の破棄は WP-08後半 |
+| AT-PER-003 | 部分 | 1000件の文書往復は済(json_tests.cpp、document_file_tests.cpp)。画面は WP-08後半 |
+| AT-PER-004 | 未 | 連続操作は WP-08後半 |

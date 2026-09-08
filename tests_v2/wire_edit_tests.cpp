@@ -12,7 +12,7 @@ using kachakacha::v2::geometry::Dot;
 using kachakacha::v2::geometry::ExtendCurve;
 using kachakacha::v2::geometry::ExtendCurveToBoundary;
 using kachakacha::v2::geometry::FilletLines;
-using kachakacha::v2::geometry::IntersectCurves;
+using kachakacha::v2::geometry::IntersectCurvesForEditing;
 using kachakacha::v2::geometry::kPi;
 using kachakacha::v2::geometry::MeetLines;
 using kachakacha::v2::geometry::MirrorCurve;
@@ -39,7 +39,7 @@ namespace {
 
 KACHA_V2_TEST(edit, two_crossing_lines_intersect_once)
 {
-    const auto hits = IntersectCurves(L({-10, 0, 0}, {10, 0, 0}), L({0, -10, 0}, {0, 10, 0}),
+    const auto hits = IntersectCurvesForEditing(L({-10, 0, 0}, {10, 0, 0}), L({0, -10, 0}, {0, 10, 0}),
         1.0e-6);
     Require(hits.size() == 1, "an X crossing has one intersection");
     RequireNear(Distance(hits[0].point, Vector3{0, 0, 0}), 0.0, 1.0e-9,
@@ -49,13 +49,13 @@ KACHA_V2_TEST(edit, two_crossing_lines_intersect_once)
 
 KACHA_V2_TEST(edit, parallel_and_skew_lines_do_not_intersect)
 {
-    Require(IntersectCurves(L({0, 0, 0}, {10, 0, 0}), L({0, 5, 0}, {10, 5, 0}), 1.0e-6)
+    Require(IntersectCurvesForEditing(L({0, 0, 0}, {10, 0, 0}), L({0, 5, 0}, {10, 5, 0}), 1.0e-6)
                 .empty(),
         "parallel lines do not meet");
-    Require(IntersectCurves(L({0, 0, 0}, {10, 0, 0}), L({5, -5, 3}, {5, 5, 3}), 1.0e-6)
+    Require(IntersectCurvesForEditing(L({0, 0, 0}, {10, 0, 0}), L({5, -5, 3}, {5, 5, 3}), 1.0e-6)
                 .empty(),
         "skew lines do not meet in 3D");
-    Require(IntersectCurves(L({0, 0, 0}, {4, 0, 0}), L({8, -5, 0}, {8, 5, 0}), 1.0e-6)
+    Require(IntersectCurvesForEditing(L({0, 0, 0}, {4, 0, 0}), L({8, -5, 0}, {8, 5, 0}), 1.0e-6)
                 .empty(),
         "lines that would meet only if extended do not count");
 }

@@ -14,16 +14,21 @@
 namespace kachakacha::v2::geometry {
 
 // ---- 交差 ----
+//
+// 交差そのものは geometry/CurveIntersection.h が持つ。
+// ここに置いていた同名の struct は、そちらと名前がぶつかっていたので取り除いた。
+// 編集(トリム・延長)の中で使う簡易版だけを、別の名前で残す。
 
-struct CurveIntersection {
+struct EditIntersection {
     double parameterA = 0.0;
     double parameterB = 0.0;
     Vector3 point{};
 };
 
-//! 2本の曲線の3D交点をすべて求める。接触や重なりは1点にまとめる。
-[[nodiscard]] std::vector<CurveIntersection> IntersectCurves(const CurveSegment& a,
-    const CurveSegment& b, double toleranceMm);
+//! 編集で使う3D交点。接触や重なりは1点にまとめる。
+//! 画面上だけの交差を見分けたい場合は geometry/CurveIntersection.h を使う。
+[[nodiscard]] std::vector<EditIntersection> IntersectCurvesForEditing(
+    const CurveSegment& a, const CurveSegment& b, double toleranceMm);
 
 // ---- 延長 ----
 

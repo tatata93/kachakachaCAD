@@ -28,7 +28,7 @@
 | AT-DOC-004 | 済 | tests_v2/document_tests.cpp(失敗したら一切変わらない) |
 | AT-DOC-005 | 済 | tests_v2/document_tests.cpp(Undo/Redo、まとめ単位) |
 | AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す) |
-| AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、zip_tests.cpp(壊れた保存を断る) |
+| AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、tests_v2/zip_tests.cpp、tests_v2/robustness_tests.cpp(壊れた保存を断る) |
 | AT-EXP-003 | 済 | tests_v2/document_file_tests.cpp(知らない版を断る、古い項目欠落を許す) |
 | AT-EXP-004 | 未 | 原子的保存(一時ファイル→改名)は WP-12。形式そのものは済 |
 | AT-WIR-001 | 済 | tests_v2/curve_tests.cpp(5種の曲線が値を保つ) |
@@ -88,14 +88,14 @@
 | AT-UIX-006 | 部分 | グループのコマンドは済(document_tests.cpp)。画面は WP-08後半 |
 | AT-UIX-007 | 未 | 形状ガイド表は WP-08後半 |
 | AT-UIX-008 | 未 | View cube は WP-08後半 |
-| AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済。画面の回復は WP-08後半 |
+| AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済(document_tests.cpp)。壊れた入力で落ちないことも済(robustness_tests.cpp)。画面の回復は WP-08後半 |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
 | AT-UIX-011 | 未 | コマンド台帳との突き合わせは WP-12 |
 | AT-EXP-010 | 未 | STEP は OCCT が要る。STL は済(export_tests.cpp) |
 | AT-EXP-011 | 部分 | 潰れた三角形は断る(export_tests.cpp)。B-Rep検査は WP-11後半 |
 | AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |
 | AT-EXP-013 | 済 | tests_v2/pdf_tests.cpp(原寸。座標変換を使わない) |
-| AT-PER-001 | 未 | UI応答は WP-08後半 |
+| AT-PER-001 | 部分 | 遅すぎる処理は robustness_tests.cpp が時間で暴く(ExtendCurveToBoundary を直した)。画面の応答は WP-08後半 |
 | AT-PER-002 | 未 | 古い評価の破棄は WP-08後半 |
 | AT-PER-003 | 部分 | 1000件の文書往復は済(json_tests.cpp、document_file_tests.cpp)。画面は WP-08後半 |
 | AT-PER-004 | 未 | 連続操作は WP-08後半 |

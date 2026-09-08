@@ -44,10 +44,10 @@ constexpr const char* kNotCoplanar = "GEO-E005";
 
 // ---------------- 交差 ----------------
 
-std::vector<CurveIntersection> IntersectCurves(const CurveSegment& a,
+std::vector<EditIntersection> IntersectCurvesForEditing(const CurveSegment& a,
     const CurveSegment& b, double toleranceMm)
 {
-    std::vector<CurveIntersection> found;
+    std::vector<EditIntersection> found;
 
     // 直線どうしは解析的に。
     if (IsLine(a) && IsLine(b)) {
@@ -99,7 +99,7 @@ std::vector<CurveIntersection> IntersectCurves(const CurveSegment& a,
             const Vector3 pointOnA = a.Evaluate(hit);
             const auto onB = b.ClosestPoint(pointOnA);
             const bool duplicate = std::any_of(found.begin(), found.end(),
-                [&](const CurveIntersection& existing) {
+                [&](const EditIntersection& existing) {
                     return Distance(existing.point, pointOnA) <= toleranceMm * 10.0;
                 });
             if (!duplicate) {
@@ -183,48 +183,56 @@ Result<CurveSegment> ExtendCurve(const CurveSegment& curve, int endpointIndex,
 Result<CurveSegment> ExtendCurveToBoundary(const CurveSegment& curve, int endpointIndex,
     const CurveSegment& boundary, double toleranceMm)
 {
-    // 端から少しずつ伸ばして、最初に当たるところで止める。
-    const double step = std::max(toleranceMm * 10.0, 0.01);
-    double reached = 0.0;
-    for (int index = 1; index <= 100000; ++index) {
-        const double distance = step * index;
-        const auto extended = ExtendCurve(curve, endpointIndex, distance);
-        if (!extended.HasValue()) {
-            return extended;
-        }
-        const Vector3 tip = endpointIndex == 0 ? extended.Value().StartPoint()
-                                               : extended.Value().EndPoint();
-        if (boundary.ClosestPoint(tip).distance <= step) {
-            reached = distance;
-            break;
-        }
-        if (distance > 1.0e5) {
-            break;
-        }
+    // 少しずつ伸ばして当たりを探すと、遠い相手のときに何万回も回る。
+    // 画面が固まるので、そうしない。
+    // 一度だけ十分に伸ばし、相手との交点を求め、そこまでの弧長で伸ばし直す。
+    const double tolerance = toleranceMm > 0.0 ? toleranceMm : 1.0e-6;
+    const Vector3 tip = endpointIndex == 0 ? curve.StartPoint() : curve.EndPoint();
+    const double gap = boundary.ClosestPoint(tip).distance;
+    const double curveLength = curve.TotalLength(tolerance);
+    // 伸ばす長さの上限。相手までの距離と自分の長さから決める。
+    const double reach =
+        std::min(std::max({gap * 4.0, curveLength * 10.0, 1.0}), 1.0e4);
+
+    const auto extended = ExtendCurve(curve, endpointIndex, reach);
+    if (!extended.HasValue()) {
+        return extended;   // 円や閉じたものは伸ばせない。その理由をそのまま返す
     }
-    if (!(reached > 0.0)) {
+    const std::vector<EditIntersection> crossings =
+        IntersectCurvesForEditing(extended.Value(), boundary, tolerance);
+    if (crossings.empty()) {
         return Result<CurveSegment>::Failure(MakeError(kNoIntersection,
             "延ばしても相手に届きません。",
             "交わる相手を選ぶか、距離を指定して延ばしてください。"));
     }
-    // 詰める。
-    double low = reached - step;
-    double high = reached + step;
-    for (int iteration = 0; iteration < 60; ++iteration) {
-        const double middle = (low + high) * 0.5;
-        const auto candidate = ExtendCurve(curve, endpointIndex, std::max(1.0e-9, middle));
-        if (!candidate.HasValue()) {
-            break;
+
+    // 伸ばした曲線の上で、元の端がどこにあるかを調べる。
+    const double tipParameter = extended.Value().ClosestPoint(tip).parameter;
+    double best = -1.0;
+    for (const EditIntersection& crossing : crossings) {
+        const double first = std::min(tipParameter, crossing.parameterA);
+        const double second = std::max(tipParameter, crossing.parameterA);
+        const double distance = extended.Value().ArcLength(first, second, tolerance);
+        if (distance <= tolerance) {
+            continue;   // 元の端そのもの。伸ばす必要がない
         }
-        const Vector3 tip = endpointIndex == 0 ? candidate.Value().StartPoint()
-                                               : candidate.Value().EndPoint();
-        if (boundary.ClosestPoint(tip).distance <= toleranceMm) {
-            high = middle;
-        } else {
-            low = middle;
+        // 伸ばした側にある交点だけを採る。
+        const bool forward =
+            endpointIndex == 0 ? crossing.parameterA < tipParameter
+                               : crossing.parameterA > tipParameter;
+        if (!forward) {
+            continue;
+        }
+        if (best < 0.0 || distance < best) {
+            best = distance;
         }
     }
-    return ExtendCurve(curve, endpointIndex, std::max(1.0e-9, (low + high) * 0.5));
+    if (!(best > 0.0)) {
+        return Result<CurveSegment>::Failure(MakeError(kNoIntersection,
+            "延ばしても相手に届きません。",
+            "相手は反対側にあります。反対の端を延ばしてください。"));
+    }
+    return ExtendCurve(curve, endpointIndex, best);
 }
 
 // ---------------- トリム ----------------
@@ -232,8 +240,8 @@ Result<CurveSegment> ExtendCurveToBoundary(const CurveSegment& curve, int endpoi
 Result<CurveSegment> TrimCurve(const CurveSegment& curve, const CurveSegment& boundary,
     double clickParameter, double toleranceMm)
 {
-    const std::vector<CurveIntersection> hits =
-        IntersectCurves(curve, boundary, toleranceMm);
+    const std::vector<EditIntersection> hits =
+        IntersectCurvesForEditing(curve, boundary, toleranceMm);
     if (hits.empty()) {
         return Result<CurveSegment>::Failure(MakeError(kNoIntersection,
             "切る境界と交わっていません。",
@@ -241,7 +249,7 @@ Result<CurveSegment> TrimCurve(const CurveSegment& curve, const CurveSegment& bo
     }
     // クリック位置を挟む2つの区切りを探す。両端も区切りに含める。
     std::vector<double> cuts{0.0, 1.0};
-    for (const CurveIntersection& hit : hits) {
+    for (const EditIntersection& hit : hits) {
         cuts.push_back(hit.parameterA);
     }
     std::sort(cuts.begin(), cuts.end());

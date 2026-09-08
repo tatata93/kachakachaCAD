@@ -63,12 +63,14 @@ public:
                 ok = false;
                 reason = "unexpected non-standard exception";
             }
+            // 1件ごとに流す。長く走る試験でも、どこまで進んだかが分かる。
+            // 溜めておくと、途中で止まったときに何も残らない。
             if (ok) {
-                std::cout << "PASS " << item.suite << " / " << item.name << '\n';
+                std::cout << "PASS " << item.suite << " / " << item.name << std::endl;
             } else {
                 ++failed;
                 std::cout << "FAIL " << item.suite << " / " << item.name << "\n     "
-                          << reason << '\n';
+                          << reason << std::endl;
             }
         }
         std::cout << binaryName << ": " << (cases_.size() - static_cast<std::size_t>(failed))

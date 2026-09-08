@@ -554,6 +554,7 @@ endif()
 # =======================================================================
 
 add_library(kachakacha_v2_core STATIC
+    src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/base/Diagnostic.cpp
     src/next/kachakacha/base/Ids.cpp
     src/next/kachakacha/base/Uuid.cpp
@@ -646,6 +647,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(tool_tests tests_v2/tool_tests.cpp)
     kachakacha_add_v2_test(curve_join_tests tests_v2/curve_join_tests.cpp)
     kachakacha_add_v2_test(pdf_tests tests_v2/pdf_tests.cpp)
+    kachakacha_add_v2_test(session_tests tests_v2/session_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)

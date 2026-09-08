@@ -169,7 +169,7 @@ KACHA_V2_TEST(kernel_cage, 2つ同時に確定すると2つの立体が出来る
     Require(std::abs(first - second) > 1.0, "2つは別の大きさ");
 }
 
-KACHA_V2_TEST(kernel_cage, 作った立体の面のキーが core の決めたものと同じ)
+KACHA_V2_TEST(kernel_cage, 作った立体の面のキーがcoreの決めたものと同じ)
 {
     EdgeMaker maker;
     maker.AddBox(0, 0, 0, 10, 10, 10);

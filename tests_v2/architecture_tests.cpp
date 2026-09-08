@@ -17,6 +17,7 @@ using kachakacha::v2::base::IsIncludeOf;
 using kachakacha::v2::base::LongestFunctionLength;
 using kachakacha::v2::base::SourceFile;
 using kachakacha::v2::test::Require;
+using kachakacha::v2::test::RequireEqual;
 
 namespace {
 
@@ -185,6 +186,75 @@ KACHA_V2_TEST(architecture, v2_sources_carry_no_unfinished_marker)
         "no V2 source carries TODO/FIXME/XXX/HACK: " + Join(offenders));
 }
 
+//! 試験の名前は C++ の識別子になる(KACHA_V2_TEST が名前を関数名に埋め込むため)。
+//! 空白・記号・先頭の数字はコンパイルエラーになる。日本語はそのまま使える。
+//! これを入れた理由: 空白入りの名前を書いて、PC でだけ組めない状態を2回作った。
+//! 雲の側の試験は「登録された名前」しか見ないので、書いた時点では気づけない。
+[[nodiscard]] bool IsIdentifierText(const std::string& text)
+{
+    if (text.empty()) {
+        return false;
+    }
+    // 先頭が数字でもよい。名前は kacha_v2_case_<suite>_<name> の後ろへ入るので、
+    // 識別子の先頭には来ない。
+    for (const char raw : text) {
+        const unsigned char value = static_cast<unsigned char>(raw);
+        if (value >= 0x80) {
+            continue;   // 多バイト文字(日本語など)は識別子に使える。
+        }
+        const bool letter = (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z');
+        const bool digit = value >= '0' && value <= '9';
+        if (!letter && !digit && value != '_') {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! KACHA_V2_TEST(suite, name) の name を取り出す。見つからなければ空。
+[[nodiscard]] std::string TestNameIn(const std::string& line)
+{
+    const std::string marker = "KACHA_V2_TEST(";
+    // 行の先頭にあるものだけを拾う。文字列の中に出てくる同じ並びは拾わない。
+    const std::size_t at = line.rfind(marker, 0);
+    if (at != 0) {
+        return {};
+    }
+    const std::size_t comma = line.find(',', at);
+    const std::size_t close = line.rfind(')');
+    if (comma == std::string::npos || close == std::string::npos || close <= comma) {
+        return {};
+    }
+    std::string name = line.substr(comma + 1, close - comma - 1);
+    // 前後の空白だけを落とす。中の空白は落とさない(それが見たいものである)。
+    while (!name.empty() && name.front() == ' ') {
+        name.erase(name.begin());
+    }
+    while (!name.empty() && name.back() == ' ') {
+        name.pop_back();
+    }
+    return name;
+}
+
+KACHA_V2_TEST(architecture, v2_test_names_are_valid_identifiers)
+{
+    std::vector<std::string> offenders;
+    for (const SourceFile& file : CollectSourceFiles(RepoRoot() / "tests_v2")) {
+        for (std::size_t index = 0; index < file.lines.size(); ++index) {
+            const std::string name = TestNameIn(file.lines[index]);
+            if (name.empty()) {
+                continue;
+            }
+            if (!IsIdentifierText(name)) {
+                offenders.push_back(file.path.filename().string() + ":"
+                    + std::to_string(index + 1) + " \"" + name + "\"");
+            }
+        }
+    }
+    Require(offenders.empty(),
+        "every test name is a valid C++ identifier: " + Join(offenders));
+}
+
 KACHA_V2_TEST(architecture, v2_sources_avoid_names_that_are_macros_elsewhere)
 {
     std::vector<std::string> offenders;
@@ -242,6 +312,18 @@ KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)
         "a longer word that merely starts with the name is not a declaration");
     Require(!DeclaresIdentifier("    value = far + 1;", "far"),
         "reading a name is not declaring it");
+
+    // 試験名の走査も、その場で試す。
+    Require(IsIdentifierText("曲線を曲線のまま描ける"), "日本語だけの名前は通る");
+    Require(IsIdentifierText("draw_a_line"), "英数字と下線も通る");
+    Require(!IsIdentifierText("面のキーが core の決めたものと同じ"), "空白は落とす");
+    Require(!IsIdentifierText("draw-a-line"), "ハイフンは落とす");
+    Require(IsIdentifierText("2本目の線"), "先頭の数字は通る(識別子の途中に入るため)");
+    Require(!IsIdentifierText(""), "空の名前は落とす");
+    RequireEqual(TestNameIn("KACHA_V2_TEST(suite, 名前)"), "名前", "名前を取り出せる");
+    RequireEqual(TestNameIn("KACHA_V2_TEST(suite,  空白つき 名前 )"), "空白つき 名前",
+        "前後の空白だけを落とす");
+    Require(TestNameIn("// ふつうの行").empty(), "関係ない行は拾わない");
 }
 
 KACHA_V2_TEST_MAIN("architecture_tests")

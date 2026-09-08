@@ -331,4 +331,56 @@ KACHA_V2_TEST(export_panel, 文書が無ければ何も出せない)
     Require(!CanRunExport(BeginExportPanel(counts), counts), "押せない");
 }
 
+KACHA_V2_TEST(export_panel, 文書はいつも1件あるので対象を占領しない)
+{
+    // 「この文書」は開いていれば必ず1件ある。数だけで残すと、
+    // ワイヤーを選んでも対象が文書のままになる。
+    ExportCounts counts;
+    counts.project = 1;
+    ExportPanelState state = kachakacha::v2::app::RetargetForCounts(
+        BeginExportPanel(counts), counts);
+    Require(state.target == ExportTarget::Project, "ほかに無ければ文書");
+    counts.selectedWires = 2;
+    state = kachakacha::v2::app::RetargetForCounts(state, counts);
+    Require(state.target == ExportTarget::SelectedWires, "選んだワイヤーへ移る");
+    Require(state.format == ExportFormat::Svg, "形式もその対象のものになる");
+}
+
+KACHA_V2_TEST(export_panel, 自分で選んだ対象は数が変わっても動かない)
+{
+    ExportCounts counts = FullCounts();
+    const auto chosen = kachakacha::v2::app::SetExportPanelTarget(
+        BeginExportPanel(counts), ExportTarget::CurrentPattern, counts);
+    Require(chosen.HasValue(), "選べる");
+    Require(chosen.Value().targetChosenByUser, "自分で選んだ印が付く");
+    counts.selectedWires = 99;
+    const ExportPanelState kept =
+        kachakacha::v2::app::RetargetForCounts(chosen.Value(), counts);
+    Require(kept.target == ExportTarget::CurrentPattern, "動かない");
+}
+
+KACHA_V2_TEST(export_panel, 自分で選んだ対象でも出せなくなれば移る)
+{
+    ExportCounts counts = FullCounts();
+    const auto chosen = kachakacha::v2::app::SetExportPanelTarget(
+        BeginExportPanel(counts), ExportTarget::CurrentPattern, counts);
+    Require(chosen.HasValue(), "選べる");
+    counts.patternPages = 0;
+    const ExportPanelState moved =
+        kachakacha::v2::app::RetargetForCounts(chosen.Value(), counts);
+    Require(moved.target != ExportTarget::CurrentPattern, "移る");
+    Require(ExportCountFor(counts, moved.target) > 0, "出せるものへ移る");
+    Require(!moved.targetChosenByUser, "選び直しの印は消える");
+}
+
+KACHA_V2_TEST(export_panel, 選び直しても出力先は消えない)
+{
+    ExportCounts counts;
+    counts.project = 1;
+    ExportPanelState state = SetExportPanelPath(BeginExportPanel(counts), "/tmp/a");
+    counts.selectedWires = 1;
+    const ExportPanelState moved = kachakacha::v2::app::RetargetForCounts(state, counts);
+    Require(moved.path == "/tmp/a", "出力先はそのまま");
+}
+
 KACHA_V2_TEST_MAIN("export_panel_tests")

@@ -103,6 +103,21 @@ ExportPanelState BeginExportPanel(const ExportCounts& counts)
     return state;
 }
 
+ExportPanelState RetargetForCounts(const ExportPanelState& state,
+    const ExportCounts& counts)
+{
+    // 自分で選んだ対象が、いまも出せるなら動かさない。勝手に移すと選び直しになる。
+    if (state.targetChosenByUser && ExportCountFor(counts, state.target) > 0) {
+        return state;
+    }
+    // そうでなければ、いま出せるものへ移す。
+    // 出力先と上書きの承諾は対象と関係ないので、決めたものを消さない。
+    ExportPanelState next = BeginExportPanel(counts);
+    next.path = state.path;
+    next.overwrite = state.overwrite;
+    return next;
+}
+
 Result<ExportPanelState> SetExportPanelTarget(const ExportPanelState& state,
     ExportTarget target, const ExportCounts& counts)
 {
@@ -114,6 +129,7 @@ Result<ExportPanelState> SetExportPanelTarget(const ExportPanelState& state,
     }
     ExportPanelState next = state;
     next.target = target;
+    next.targetChosenByUser = true;
     if (!ExportFormatAllowed(target, next.format)) {
         const std::vector<ExportFormat> formats = AllowedFormatsFor(target);
         if (formats.empty()) {

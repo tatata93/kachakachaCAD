@@ -119,12 +119,10 @@ void V2ExportDock::SetContentMaker(
 void V2ExportDock::SetCounts(const kachakacha::v2::app::ExportCounts& counts)
 {
     counts_ = counts;
-    // 数が変わって、いま選んでいる対象が0になったら、選び直す。
-    // 出せない対象を選んだまま残すと、押せない理由が分かりにくい。
-    if (kachakacha::v2::app::ExportCountFor(counts_, state_.target) <= 0) {
-        const std::string path = state_.path;
-        state_ = kachakacha::v2::app::BeginExportPanel(counts_);
-        state_.path = path;
+    // 数が変わったら選び直す。自分で選んだ対象が出せる間は動かさない(core が決める)。
+    state_ = kachakacha::v2::app::RetargetForCounts(state_, counts_);
+    if (overwriteAction_ != nullptr) {
+        overwriteAction_->setChecked(state_.overwrite);
     }
     Refresh();
 }
@@ -187,7 +185,6 @@ void V2ExportDock::RefreshTargets()
             // 選べない行は薄くする。消しはしない。
             item->setForeground(0, QColor(128, 128, 128));
         }
-        targetView_->addTopLevelItem(item);
     }
 }
 
@@ -206,7 +203,6 @@ void V2ExportDock::RefreshFormats()
         if (!row.selectable) {
             item->setForeground(0, QColor(128, 128, 128));
         }
-        formatView_->addTopLevelItem(item);
     }
 }
 

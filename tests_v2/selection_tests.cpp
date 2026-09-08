@@ -128,6 +128,36 @@ KACHA_V2_TEST(selection, 近いほうを拾う)
     Require(picked->entityId == Ent(2), "2本目");
 }
 
+KACHA_V2_TEST(selection, 範囲に2本入っていても近いほうを拾う)
+{
+    // 0.5mm(=5px)しか離れていない2本。どちらも許容差(8px)の内側にある。
+    // 「範囲に入った最後の1本」ではなく、いちばん近い1本を返す。
+    SnapScene scene;
+    scene.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
+    scene.curves.push_back(Curve(2, {-40, 0.5, 0}, {40, 0.5, 0}));
+    const auto near1 = PickCurve(scene, TopView(), ScreenPoint{500.0, 500.0}, Tolerance());
+    Require(near1.has_value(), "拾える");
+    Require(near1->entityId == Ent(1), "先に入っているほうでも、近ければそれを返す");
+    // 逆に、あとから入っているほうが近ければ、そちらを返す。
+    const auto near2 = PickCurve(scene, TopView(), ScreenPoint{500.0, 495.0}, Tolerance());
+    Require(near2.has_value(), "拾える");
+    Require(near2->entityId == Ent(2), "近いほう");
+}
+
+KACHA_V2_TEST(selection, 同じ距離なら先に入っているものを返す)
+{
+    // 毎回同じ結果になるようにする。並び順で揺れると、選び直すたびに違うものが選ばれる。
+    SnapScene scene;
+    scene.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
+    scene.curves.push_back(Curve(2, {-40, 0, 0}, {40, 0, 0}));
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const auto picked = PickCurve(scene, TopView(), ScreenPoint{500.0, 500.0},
+            Tolerance());
+        Require(picked.has_value(), "拾える");
+        Require(picked->entityId == Ent(1), "いつも先のほう");
+    }
+}
+
 KACHA_V2_TEST(selection, 拾う範囲は許容差で決まる)
 {
     SnapScene scene = TwoLines();

@@ -1027,8 +1027,9 @@ bool V2MainWindow::ApplySelectionState(const QString& name)
         }
     }
     if (name == QStringLiteral("export")) {
+        // 台帳の export.svg / export.validate は型紙や部品を選んだときの道である。
+        // ここはワイヤーを選んでいるので、棚が自分で対象と形式を決める。
         SetMode(UiMode::Output);
-        RunCommand("export.svg");
     }
     return true;
 }

@@ -50,6 +50,11 @@ struct ExportPanelState {
     ExportFormat format = ExportFormat::Step;
     std::string path;
     bool overwrite = false;
+    //! 対象を利用者が自分で選んだか。
+    //! 選んでいなければ、数が変わるたびに選び直してよい。
+    //! 「この文書」は開いていれば必ず1件あるので、これが無いと
+    //! いつまでも文書が選ばれたままになり、選んだワイヤーへ移らない。
+    bool targetChosenByUser = false;
 };
 
 //! 対象の1行ぶん。数が0の対象も消さずに出す。
@@ -78,6 +83,12 @@ struct ExportFormatRow {
 //! 画面を開いたときの初期状態。
 //! 数がある対象のうち、並びの先頭のものを選ぶ。全部0なら先頭の対象のまま。
 [[nodiscard]] ExportPanelState BeginExportPanel(const ExportCounts& counts);
+
+//! 数が変わったときの選び直し。
+//! 利用者が自分で対象を選んでいれば、それが今も出せる限り動かさない。
+//! 選んでいなければ、いま出せるものへ移す。出力先と上書きの承諾はそのまま持ち越す。
+[[nodiscard]] ExportPanelState RetargetForCounts(const ExportPanelState& state,
+    const ExportCounts& counts);
 
 //! 対象を変える。
 //! いまの形式がその対象で使えるなら、形式は変えない(利用者の指定を勝手に消さない)。

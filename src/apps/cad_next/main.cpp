@@ -720,31 +720,53 @@ struct SelfTestCase {
     return viewport.Selection().entityIds.empty();
 }
 
+//! 落ちたときに、どの見立てが外れたかを言う。
+//! 言わないと、PC でしか出ない失敗を推測で直すことになる。
+[[nodiscard]] bool Explain(const char* what, bool ok)
+{
+    if (!ok) {
+        std::cerr << "  期待が外れた: " << what << '\n';
+    }
+    return ok;
+}
+
 [[nodiscard]] bool CaseExportDockFollowsSelection(V2MainWindow& window)
 {
     // 選んだ数が棚に出る。選ぶのをやめれば、その対象は選べなくなる。
-    if (!window.ApplyManualState(QStringLiteral("export"))) {
+    if (!Explain("export の状態を作れる", window.ApplyManualState(QStringLiteral("export")))) {
         return false;
     }
     auto& dock = window.ExportDock();
-    if (dock.Counts().selectedWires < 2) {
+    if (!Explain((std::string("選んだワイヤーが2本ある(実際は ")
+                     + std::to_string(dock.Counts().selectedWires) + ")").c_str(),
+            dock.Counts().selectedWires >= 2)) {
         return false;
     }
-    if (dock.State().target != kachakacha::v2::app::ExportTarget::SelectedWires) {
+    if (!Explain((std::string("対象が選んだワイヤー(実際は ")
+                     + std::string(kachakacha::v2::app::ExportTargetNameJa(
+                           dock.State().target))
+                     + ")").c_str(),
+            dock.State().target == kachakacha::v2::app::ExportTarget::SelectedWires)) {
         return false;
     }
-    if (dock.State().format != kachakacha::v2::app::ExportFormat::Svg) {
+    if (!Explain((std::string("形式が SVG(実際は ")
+                     + std::string(kachakacha::v2::app::ExportFormatNameJa(
+                           dock.State().format))
+                     + ")").c_str(),
+            dock.State().format == kachakacha::v2::app::ExportFormat::Svg)) {
         return false;
     }
     // 出す先が決まっていないので、まだ押せない。理由がそう言っている。
-    if (dock.CanRun()) {
+    if (!Explain("出す先が空なので押せない", !dock.CanRun())) {
         return false;
     }
-    if (!dock.ReasonText().contains(QStringLiteral("EXP-016"))) {
+    if (!Explain((std::string("理由が EXP-016(実際は ")
+                     + dock.ReasonText().toStdString() + ")").c_str(),
+            dock.ReasonText().contains(QStringLiteral("EXP-016")))) {
         return false;
     }
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
-    return dock.Counts().selectedWires == 0;
+    return Explain("選ぶのをやめれば数も0になる", dock.Counts().selectedWires == 0);
 }
 
 [[nodiscard]] bool CaseExportRefusesImpossibleFormat(V2MainWindow& window)
@@ -754,10 +776,13 @@ struct SelfTestCase {
         return false;
     }
     auto& dock = window.ExportDock();
-    if (dock.ChooseFormat(kachakacha::v2::app::ExportFormat::Step)) {
+    if (!Explain("STEP は断られる", !dock.ChooseFormat(
+            kachakacha::v2::app::ExportFormat::Step))) {
         return false;
     }
-    if (!dock.LastMessage().contains(QStringLiteral("EXP-017"))) {
+    if (!Explain((std::string("知らせが EXP-017(実際は ")
+                     + dock.LastMessage().toStdString() + ")").c_str(),
+            dock.LastMessage().contains(QStringLiteral("EXP-017")))) {
         return false;
     }
     // 断ったのだから、選んでいた形式は動かない。
@@ -788,10 +813,12 @@ struct SelfTestCase {
     std::error_code code;
     std::filesystem::remove(kachakacha::v2::io::MakePath(path + ".svg"), code);
     dock.ChoosePath(QString::fromStdString(path));
-    if (!dock.CanRun()) {
+    if (!Explain((std::string("出す先を決めれば押せる(理由は ")
+                     + dock.ReasonText().toStdString() + ")").c_str(), dock.CanRun())) {
         return false;
     }
-    if (!dock.RunNow()) {
+    if (!Explain((std::string("出せる(知らせは ") + dock.LastMessage().toStdString()
+                     + ")").c_str(), dock.RunNow())) {
         return false;
     }
     const auto written = kachakacha::v2::io::MakePath(path + ".svg");

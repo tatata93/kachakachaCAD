@@ -52,15 +52,15 @@
 | AT-GEO-010 | 済 | tests_v2/wire_cage_tests.cpp(12辺順不同→6面1体) |
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |
-| AT-GEO-013 | 部分 | 非連結の検出は済。複数Partへの分割は WP-07 |
-| AT-EXT-001 | 部分 | tests_v2/extrude_tests.cpp(体積24000mm3・面数6・部品数を core が予測し、突き合わせる)。OCCT側の実形状は WP-07 後半 |
-| AT-EXT-002 | 部分 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す)。実形状は WP-07 後半 |
-| AT-EXT-003 | 部分 | tests_v2/extrude_tests.cpp(ワイヤーと部品の同時選択)。位置の一致検査は WP-07 後半 |
-| AT-EXT-004 | 部分 | tests_v2/extrude_tests.cpp(穴の分だけ体積が減る。3重の入れ子も分類)。円が多角形にならないことの確認は WP-07 後半 |
-| AT-EXT-005 | 部分 | tests_v2/extrude_tests.cpp(離れた2外周→2部品。事前表示の個数)。commit 個数の一致は WP-07 後半 |
-| AT-EXT-006 | 部分 | tests_v2/extrude_tests.cpp(5方式すべて。平面/円筒/球までの到達距離。届かない先は EXT-003 で拒否)。曲面の厳密trimは WP-07 後半 |
-| AT-EXT-007 | 部分 | tests_v2/extrude_tests.cpp(相手未選択を拒否。非連結の恐れを EXT-005 で警告)。実際の演算は WP-07 後半 |
-| AT-EXT-008 | 未 | 連続編集は WP-07 後半。同じ EntityId のまま再計算する経路が要る |
+| AT-GEO-013 | 部分 | 非連結の検出は済(wire_cage_tests.cpp)。引いて分かれる場合は kernel_extrude_tests.cpp。ワイヤーかごの複数Part分割は WP-08 |
+| AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー) |
+| AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |
+| AT-EXT-003 | 部分 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出す)。点の一致を数値で見る試験は WP-08 |
+| AT-EXT-004 | 済 | tests_v2/extrude_tests.cpp(断面積を円弧のまま厳密に計算)+ tests_v2/kernel_extrude_tests.cpp(貫通穴つきの体積が厳密に合う=円が多角形へ化けていない) |
+| AT-EXT-005 | 済 | tests_v2/extrude_tests.cpp(事前の個数)+ tests_v2/kernel_extrude_tests.cpp(実際に2部品。個数が違えば KER-E002 で拒否) |
+| AT-EXT-006 | 済 | tests_v2/extrude_tests.cpp(5方式と到達判定)+ tests_v2/kernel_extrude_tests.cpp(平面・傾いた平面・円筒・球まで厳密に切る。トーラスは拒否) |
+| AT-EXT-007 | 済 | tests_v2/extrude_tests.cpp(相手未選択を拒否)+ tests_v2/kernel_extrude_tests.cpp(足す・穴を引く・2つへ分離する引き。非連結は EXT-005 で拒否) |
+| AT-EXT-008 | 未 | 連続編集は WP-08。同じ EntityId のまま再計算する経路(Feature の再評価)が要る |
 | AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) |
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |

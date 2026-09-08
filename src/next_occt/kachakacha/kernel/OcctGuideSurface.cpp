@@ -11,6 +11,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -66,89 +67,6 @@ using modeling::GuideSurfaceMethod;
 using modeling::GuideSurfaceRequest;
 using modeling::GuideSurfaceResult;
 using modeling::KernelShapeHandle;
-
-// =====================================================================
-//  形状の表(handle → 実体)。core は handle しか知らない。
-// =====================================================================
-
-namespace {
-
-#ifdef KACHACAD_V2_WITH_OCCT
-std::mutex& CacheMutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-std::map<std::uint64_t, TopoDS_Shape>& CacheTable()
-{
-    static std::map<std::uint64_t, TopoDS_Shape> table;
-    return table;
-}
-
-std::uint64_t& NextHandleValue()
-{
-    static std::uint64_t next = 1;
-    return next;
-}
-
-[[nodiscard]] KernelShapeHandle StoreShape(const TopoDS_Shape& shape)
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    const std::uint64_t value = NextHandleValue()++;
-    CacheTable().emplace(value, shape);
-    return KernelShapeHandle{value};
-}
-
-[[nodiscard]] bool LookupShape(KernelShapeHandle handle, TopoDS_Shape& out)
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    const auto found = CacheTable().find(handle.value);
-    if (found == CacheTable().end()) {
-        return false;
-    }
-    out = found->second;
-    return true;
-}
-#else
-std::mutex& CacheMutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-std::map<std::uint64_t, int>& CacheTable()
-{
-    static std::map<std::uint64_t, int> table;
-    return table;
-}
-#endif
-
-} // namespace
-
-bool ReleaseShape(KernelShapeHandle handle)
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    return CacheTable().erase(handle.value) > 0;
-}
-
-bool HasShape(KernelShapeHandle handle)
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    return CacheTable().find(handle.value) != CacheTable().end();
-}
-
-std::size_t CachedShapeCount()
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    return CacheTable().size();
-}
-
-void ClearShapeCache()
-{
-    std::lock_guard<std::mutex> lock(CacheMutex());
-    CacheTable().clear();
-}
 
 #ifdef KACHACAD_V2_WITH_OCCT
 

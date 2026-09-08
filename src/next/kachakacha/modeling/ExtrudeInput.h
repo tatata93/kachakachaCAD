@@ -86,6 +86,10 @@ struct ExtrudeProfile {
     std::vector<CurveSegment> segments;
     bool closed = false;
     EntityId sourceEntityId;
+    //! 線1本ごとの不変ID。側面の意味的キーはこれで作る。
+    //! 空でもよいが、その場合は側面のキーが位置に依存する。
+    //! UI から呼ぶときは必ず入れること(architecture-and-data.md §6)。
+    std::vector<base::SegmentId> segmentIds;
 };
 
 struct ExtrudeRequest {
@@ -122,6 +126,9 @@ struct ExtrudeLoop {
     bool isHole = false;
     std::vector<std::size_t> holes;   //!< 外周のとき、属する穴の profileIndex
     double areaMm2 = 0.0;             //!< 符号なし面積
+    //! 面積が厳密か。直線と円弧だけで出来た輪郭なら厳密に出せる。
+    //! ベジェやB-splineが混ざると標本化した近似になる。
+    bool areaIsExact = true;
 };
 
 struct ExtrudeAnalysis {
@@ -139,6 +146,8 @@ struct ExtrudeAnalysis {
     //! 予測。OCCT が作ったものと突き合わせる。
     double predictedVolumeMm3 = 0.0;
     double predictedProfileAreaMm2 = 0.0;
+    //! 断面積(したがって体積)が厳密か。突き合わせの厳しさをここで変える。
+    bool areaIsExact = true;
     std::size_t predictedFaceCount = 0;
     //! ToTarget のとき、輪郭上の各点が相手へ届くまでの距離の幅。
     double minimumReachMm = 0.0;
@@ -164,6 +173,17 @@ struct ExtrudeResultCheck {
 
 [[nodiscard]] ExtrudeResultCheck CheckExtrudeResult(const ExtrudeAnalysis& analysis,
     double actualVolumeMm3, std::size_t actualFaceCount, std::size_t actualPartCount);
+
+//! 平面に載った閉じた輪郭の符号つき面積。
+//! 直線と円弧だけなら厳密に出す。円が多角形へ化けていないかを、
+//! 出来上がりの体積と突き合わせて見つけるために要る(AT-EXT-004)。
+struct PlanarLoopArea {
+    double signedAreaMm2 = 0.0;
+    bool exact = true;
+};
+
+[[nodiscard]] PlanarLoopArea SignedAreaOnPlane(const std::vector<CurveSegment>& segments,
+    const geometry::PlanarFrame& frame, double samplingToleranceMm);
 
 [[nodiscard]] constexpr std::string_view ExtrudeExtentName(ExtrudeExtentMode mode) noexcept
 {

@@ -36,6 +36,7 @@ struct SampledProfile {
     std::vector<Vector3> points;
     std::vector<Point2> planar;
     double signedArea = 0.0;
+    bool areaIsExact = true;
 };
 
 [[nodiscard]] std::string ProfileLabel(std::size_t index)
@@ -113,6 +114,7 @@ struct SampledProfile {
         loop.profileIndex = index;
         loop.isHole = (depth[index] % 2) == 1;
         loop.areaMm2 = std::abs(sampled[index].signedArea);
+        loop.areaIsExact = sampled[index].areaIsExact;
         loops.push_back(loop);
     }
     // 穴を、いちばん内側の外周へ結びつける。
@@ -241,6 +243,65 @@ struct SampledProfile {
 
 } // namespace
 
+PlanarLoopArea SignedAreaOnPlane(const std::vector<CurveSegment>& segments,
+    const geometry::PlanarFrame& frame, double samplingToleranceMm)
+{
+    PlanarLoopArea result;
+    if (segments.empty()) {
+        return result;
+    }
+    // 1. 線の端点だけを結んだ多角形の面積(靴ひも公式)。
+    std::vector<Vector3> corners;
+    corners.reserve(segments.size());
+    for (const CurveSegment& segment : segments) {
+        corners.push_back(segment.StartPoint());
+    }
+    const std::vector<Point2> flat = geometry::ProjectToFrame(corners, frame);
+    double area = geometry::SignedArea(flat);
+
+    // 2. 弦と実際の曲線のあいだの面積を、線ごとに足す。
+    for (const CurveSegment& segment : segments) {
+        switch (segment.Kind()) {
+        case geometry::CurveKind::Line:
+            break;
+        case geometry::CurveKind::Circle:
+        case geometry::CurveKind::CircularArc: {
+            // 平面の法線から見た向きで、掃引の符号を決める。
+            const double facing = Dot(segment.Normal(), frame.normal) >= 0.0 ? 1.0 : -1.0;
+            const double sweep = segment.Kind() == geometry::CurveKind::Circle
+                ? 2.0 * geometry::kPi * facing
+                : segment.SweepAngleRad() * facing;
+            const double radius = segment.Radius();
+            area += 0.5 * radius * radius * (sweep - std::sin(sweep));
+            break;
+        }
+        case geometry::CurveKind::CubicBezier:
+        case geometry::CurveKind::CubicBSpline: {
+            // 厳密には出せない。細かく標本化した折れ線で近似し、その旨を残す。
+            result.exact = false;
+            const std::vector<geometry::CurvePoint> points =
+                geometry::SampleCurve(segment, samplingToleranceMm);
+            std::vector<Vector3> positions;
+            positions.reserve(points.size());
+            for (const geometry::CurvePoint& point : points) {
+                positions.push_back(point.position);
+            }
+            const std::vector<Point2> local = geometry::ProjectToFrame(positions, frame);
+            // 弦(始点→終点)と曲線で囲まれる面積。
+            for (std::size_t index = 0; index + 1 < local.size(); ++index) {
+                area += 0.5 * (local[index].u * local[index + 1].v
+                    - local[index + 1].u * local[index].v);
+            }
+            area -= 0.5 * (local.front().u * local.back().v
+                - local.back().u * local.front().v);
+            break;
+        }
+        }
+    }
+    result.signedAreaMm2 = area;
+    return result;
+}
+
 Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
     const GeometryTolerance& tolerance)
 {
@@ -358,7 +419,12 @@ Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
             std::vector<Vector3> loop = item.points;
             geometry::RemoveClosingDuplicate(loop, samplingTolerance);
             item.planar = geometry::ProjectToFrame(loop, frame);
-            item.signedArea = geometry::SignedArea(item.planar);
+            // 面積は標本化した折れ線ではなく、曲線そのものから出す。
+            // 折れ線の面積を使うと、円が多角形へ化けても体積が合ってしまう。
+            const PlanarLoopArea exact =
+                SignedAreaOnPlane(item.profile->segments, frame, samplingTolerance);
+            item.signedArea = exact.signedAreaMm2;
+            item.areaIsExact = exact.exact;
         }
         analysis.loops = ClassifyLoops(sampled, samplingTolerance);
     }
@@ -368,6 +434,9 @@ Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
     std::size_t outerCount = 0;
     std::size_t segmentCount = 0;
     for (const ExtrudeLoop& loop : analysis.loops) {
+        if (!loop.areaIsExact) {
+            analysis.areaIsExact = false;
+        }
         if (loop.isHole) {
             holeArea += loop.areaMm2;
         } else {
@@ -528,7 +597,10 @@ ExtrudeResultCheck CheckExtrudeResult(const ExtrudeAnalysis& analysis,
             std::abs(actualVolumeMm3 - analysis.predictedVolumeMm3)
             / analysis.predictedVolumeMm3;
         // 曲面までの押し出しなどで予測が厳密でない場合に備え、比で見る。
-        check.volumeMatches = check.volumeErrorRatio <= 1.0e-6;
+        // 厳密に出せた断面なら、ずれは丸め誤差ぶんしか許さない。
+        // ベジェなどで近似した断面は、標本化のぶんだけ緩める。
+        check.volumeMatches =
+            check.volumeErrorRatio <= (analysis.areaIsExact ? 1.0e-6 : 1.0e-3);
     } else {
         check.volumeMatches = std::abs(actualVolumeMm3) <= 1.0e-9;
     }

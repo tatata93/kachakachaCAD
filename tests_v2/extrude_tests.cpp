@@ -179,8 +179,9 @@ KACHA_V2_TEST(extrude_basic, 円の断面でも体積が合う)
     request.outputs.part = true;
     const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
     Require(analysis.HasValue(), "通ること");
-    // 標本化した多角形の面積なので、厳密な πr²h より少しだけ小さい。
-    RequireNear(analysis.Value().predictedVolumeMm3, kPi * 100.0 * 25.0, 1.0, "体積");
+    // 円は円のまま扱う。多角形へ落として面積を出さない。
+    RequireNear(analysis.Value().predictedVolumeMm3, kPi * 100.0 * 25.0, 1.0e-9, "体積");
+    Require(analysis.Value().areaIsExact, "厳密に出せている");
 }
 
 // =====================================================================
@@ -262,7 +263,8 @@ KACHA_V2_TEST(extrude_hole, 穴の分だけ体積が減る)
     const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
     Require(analysis.HasValue(), "通ること");
     RequireNear(analysis.Value().predictedVolumeMm3,
-        (800.0 - kPi * 25.0) * 30.0, 5.0, "体積");
+        (800.0 - kPi * 25.0) * 30.0, 1.0e-9, "体積");
+    Require(analysis.Value().areaIsExact, "厳密に出せている");
 }
 
 KACHA_V2_TEST(extrude_hole, 内側の輪郭が穴と分かる)
@@ -823,6 +825,128 @@ KACHA_V2_TEST(extrude_robust, 同じ入力からは毎回同じ予測が出る)
             RequireNear(analysis.Value().predictedVolumeMm3, reference, 0.0, "毎回同じ");
         }
     }
+}
+
+
+// =====================================================================
+//  断面積を厳密に出す(AT-EXT-004「円が多角形へ変わらない」の土台)
+// =====================================================================
+
+KACHA_V2_TEST(extrude_area, 半円を含む輪郭の面積が厳密に出る)
+{
+    // 幅40、高さ20の長方形の上に、半径20の半円を載せた形。
+    const auto arc = CurveSegment::MakeCircularArc({20, 20, 0}, {0, 0, 1}, {1, 0, 0},
+        20.0, 0.0, kPi);
+    Require(arc.HasValue(), "半円が作れること");
+    ExtrudeProfile profile;
+    profile.closed = true;
+    profile.segments = {
+        Line({0, 0, 0}, {40, 0, 0}),
+        Line({40, 0, 0}, {40, 20, 0}),
+        arc.Value(),
+        Line({0, 20, 0}, {0, 0, 0}),
+    };
+    ExtrudeRequest request;
+    request.profiles = {profile};
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 10.0;
+    request.outputs.part = true;
+    const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
+    Require(analysis.HasValue(), "通ること");
+    const double expected = 40.0 * 20.0 + 0.5 * kPi * 400.0;
+    RequireNear(analysis.Value().predictedProfileAreaMm2, expected, 1.0e-9, "面積");
+    Require(analysis.Value().areaIsExact, "厳密に出せている");
+}
+
+KACHA_V2_TEST(extrude_area, 角丸長方形の面積が厳密に出る)
+{
+    const double radius = 5.0;
+    const double width = 40.0;
+    const double height = 25.0;
+    const auto arc = [&](Vector3 center, double startAngle) {
+        const auto made = CurveSegment::MakeCircularArc(center, {0, 0, 1}, {1, 0, 0},
+            radius, startAngle, kPi / 2.0);
+        Require(made.HasValue(), "角の円弧が作れること");
+        return made.Value();
+    };
+    ExtrudeProfile profile;
+    profile.closed = true;
+    profile.segments = {
+        Line({radius, 0, 0}, {width - radius, 0, 0}),
+        arc({width - radius, radius, 0}, -kPi / 2.0),
+        Line({width, radius, 0}, {width, height - radius, 0}),
+        arc({width - radius, height - radius, 0}, 0.0),
+        Line({width - radius, height, 0}, {radius, height, 0}),
+        arc({radius, height - radius, 0}, kPi / 2.0),
+        Line({0, height - radius, 0}, {0, radius, 0}),
+        arc({radius, radius, 0}, kPi),
+    };
+    ExtrudeRequest request;
+    request.profiles = {profile};
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 3.0;
+    request.outputs.part = true;
+    const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
+    Require(analysis.HasValue(), "通ること");
+    const double expected = width * height - (4.0 - kPi) * radius * radius;
+    RequireNear(analysis.Value().predictedProfileAreaMm2, expected, 1.0e-9, "面積");
+}
+
+KACHA_V2_TEST(extrude_area, 円弧の向きが逆でも面積が合う)
+{
+    // 時計回りに描いた円。面積の絶対値は同じでなければならない。
+    const auto made = CurveSegment::MakeCircle({0, 0, 0}, {0, 0, -1}, {1, 0, 0}, 7.0);
+    Require(made.HasValue(), "円が作れること");
+    ExtrudeProfile profile;
+    profile.closed = true;
+    profile.segments = {made.Value()};
+    ExtrudeRequest request;
+    request.profiles = {profile};
+    request.directionMode = ExtrudeDirectionMode::WorldZ;
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 2.0;
+    request.outputs.part = true;
+    const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
+    Require(analysis.HasValue(), "通ること");
+    RequireNear(analysis.Value().predictedProfileAreaMm2, kPi * 49.0, 1.0e-9, "面積");
+}
+
+KACHA_V2_TEST(extrude_area, ベジェを含む輪郭は厳密でないと申告する)
+{
+    const auto curve = CurveSegment::MakeCubicBezier(
+        {{40, 0, 0}, {40, 10, 0}, {10, 10, 0}, {0, 0, 0}});
+    Require(curve.HasValue(), "ベジェが作れること");
+    ExtrudeProfile profile;
+    profile.closed = true;
+    profile.segments = {Line({0, 0, 0}, {40, 0, 0}), curve.Value()};
+    ExtrudeRequest request;
+    request.profiles = {profile};
+    request.directionMode = ExtrudeDirectionMode::WorldZ;
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 5.0;
+    request.outputs.part = true;
+    const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
+    Require(analysis.HasValue(), "通ること");
+    Require(!analysis.Value().areaIsExact, "厳密でないと言う");
+    Require(analysis.Value().predictedProfileAreaMm2 > 0.0, "面積は正");
+}
+
+KACHA_V2_TEST(extrude_area, 厳密なときは体積の突き合わせが厳しい)
+{
+    ExtrudeRequest request;
+    request.profiles = {Circle({0, 0, 0}, 10.0)};
+    request.extent = ExtrudeExtentMode::Distance;
+    request.distanceMm = 25.0;
+    request.outputs.part = true;
+    const auto analysis = AnalyzeExtrudeRequest(request, Tolerance());
+    Require(analysis.HasValue(), "通ること");
+    const double exact = kPi * 100.0 * 25.0;
+    Require(CheckExtrudeResult(analysis.Value(), exact, 3, 1).volumeMatches,
+        "厳密な値なら合格");
+    // 円を32角形へ落とすと、面積は 0.6% ほど小さくなる。これは弾かなければならない。
+    const double polygon = 0.5 * 32.0 * std::sin(2.0 * kPi / 32.0) * 100.0 * 25.0;
+    Require(!CheckExtrudeResult(analysis.Value(), polygon, 3, 1).volumeMatches,
+        "多角形へ化けた値は弾く");
 }
 
 KACHA_V2_TEST_MAIN("extrude_tests")

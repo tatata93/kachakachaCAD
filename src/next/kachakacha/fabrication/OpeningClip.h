@@ -71,6 +71,8 @@ struct OpeningClosureCheck {
     double maximumGapMm = 0.0;
     double perimeterDifferenceMm = 0.0;
     bool closed = true;
+    //! 閉じないときの診断(FAB-O002)。閉じていれば空。
+    std::vector<base::Diagnostic> diagnostics;
 };
 
 [[nodiscard]] OpeningClosureCheck CheckOpeningClosure(const OpeningClipResult& result,

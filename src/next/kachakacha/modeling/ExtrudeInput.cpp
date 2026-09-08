@@ -20,10 +20,11 @@ namespace {
 constexpr const char* kNotPlanar = "EXT-001";
 constexpr const char* kOpenForSolid = "EXT-002";
 constexpr const char* kTargetNotReached = "EXT-003";
-constexpr const char* kNoIntersection = "EXT-004";
 constexpr const char* kWouldBeDisconnected = "EXT-005";
 constexpr const char* kZeroDistance = "EXT-006";
 //! 入力そのものが揃っていない場合。上の6つは「押し出しの意味」の診断なので分ける。
+constexpr const char* kBadDirection = "EXT-007";
+constexpr const char* kResultInvalid = "EXT-008";
 constexpr const char* kBadInput = "EXT-010";
 
 [[nodiscard]] double SamplingToleranceMm(const GeometryTolerance& tolerance)
@@ -60,7 +61,7 @@ struct SampledProfile {
         break;
     case ExtrudeDirectionMode::WorkPlaneNormal:
         if (!IsOrthonormalRightHanded(request.workPlane, 1.0e-6)) {
-            return Result<Vector3>::Failure(MakeError(kBadInput,
+            return Result<Vector3>::Failure(MakeError(kBadDirection,
                 "作業平面が正しくありません。", {}));
         }
         raw = request.workPlane.normal;
@@ -74,12 +75,12 @@ struct SampledProfile {
         break;
     }
     if (!raw.IsFinite()) {
-        return Result<Vector3>::Failure(MakeError(kBadInput,
+        return Result<Vector3>::Failure(MakeError(kBadDirection,
             "向きに有限でない数が入っています。", {}));
     }
     // 正規化前の長さで判定する(§8.2)。
     if (raw.Length() <= tolerance.numericEpsilon) {
-        return Result<Vector3>::Failure(MakeError(kBadInput,
+        return Result<Vector3>::Failure(MakeError(kBadDirection,
             "向きの長さが0です。",
             "長さ " + std::to_string(raw.Length()) + "。0でない向きを指定してください。"));
     }
@@ -406,7 +407,7 @@ Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
     if (plane.valid) {
         const double alignment = std::abs(Dot(analysis.direction, plane.normal));
         if (request.outputs.part && alignment <= 1.0e-9) {
-            return Result<ExtrudeAnalysis>::Failure(MakeError(kBadInput,
+            return Result<ExtrudeAnalysis>::Failure(MakeError(kBadDirection,
                 "押し出す向きが輪郭と同じ平面の上にあります。",
                 "この向きでは厚みが出ません。"));
         }
@@ -578,12 +579,18 @@ Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
             "外周 " + std::to_string(analysis.expectedPartCount)
                 + " 個。実際の連結は形を作ってから確かめます。"));
     }
-    (void)kNoIntersection;
 
     // notes は解析結果にも残し、警告としても返す。
     // 先に取り出してから move すること(同じ式の中で読むと順序が決まらない)。
     std::vector<Diagnostic> warnings = analysis.notes;
     return Result<ExtrudeAnalysis>::Success(std::move(analysis), std::move(warnings));
+}
+
+//! 予測と実物が食い違ったときの診断(EXT-008 ResultInvalid)。
+base::Diagnostic MakeResultInvalid(std::string detailsJa)
+{
+    return MakeError(kResultInvalid, "出来た形が、事前に示したものと違います。",
+        std::move(detailsJa));
 }
 
 ExtrudeResultCheck CheckExtrudeResult(const ExtrudeAnalysis& analysis,

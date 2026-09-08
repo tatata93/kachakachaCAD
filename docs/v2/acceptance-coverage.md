@@ -19,7 +19,7 @@
 | AT-ARC-001 | 済 | tests_v2/architecture_tests.cpp(core が Qt/OCCT に依存しない) |
 | AT-ARC-002 | 済 | tests_v2/foundation_tests.cpp(TypedId。表示名参照なし) |
 | AT-ARC-003 | 済 | tests_v2/document_tests.cpp(幾何は Feature が正本) |
-| AT-ARC-004 | 部分 | 診断コードは各層で固定。台帳の一元管理は WP-12 |
+| AT-ARC-004 | 済 | docs/v2/diagnostic-catalog.md と tests_v2/diagnostic_catalog_tests.cpp(154件のコードが一意・非空・種別つき。契約が定めたコードは未実装でも消せない。日本語本文での分岐を検索で禁じる) |
 | AT-ARC-005 | 済 | tests_v2/architecture_tests.cpp(コード衛生) |
 | AT-ARC-006 | 済 | tests_v2/fabrication_tests.cpp(製作層が core だけに依存) |
 | AT-DOC-001 | 済 | tests_v2/document_tests.cpp |

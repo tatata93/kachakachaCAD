@@ -15,6 +15,8 @@ using geometry::Normalized;
 
 namespace {
 
+constexpr const char* kSelfIntersection = "FAB-A002";
+constexpr const char* kMetricDistortion = "FAB-A003";
 constexpr const char* kBadInput = "FAB-A004";
 constexpr const char* kNotConnected = "FAB-A005";
 
@@ -416,6 +418,17 @@ AssemblyMetricCheck CheckAssemblyMetric(const std::vector<AssemblyPanel>& flat,
     check.withinTolerance = check.withinTolerance
         && check.maximumEdgeLengthChangeRelative <= 1.0e-6
         && check.maximumScaleError <= 1.0e-9 && check.flippedTriangleCount == 0;
+    if (!check.withinTolerance) {
+        // 組み立ては剛体変換と折りだけで行う。長さが変わったなら、
+        // どこかで伸び縮みしている。板取りへ流してはならない(§10.2)。
+        check.diagnostics.push_back(MakeError(kMetricDistortion,
+            "組み立てで板が伸び縮みしています。",
+            "辺の長さの変化 " + std::to_string(check.maximumEdgeLengthChangeRelative)
+                + " / 拡大縮小の誤差 " + std::to_string(check.maximumScaleError)
+                + " / 裏返った三角形 " + std::to_string(check.flippedTriangleCount)
+                + " 個。" + (check.worstPanelId.empty()
+                    ? std::string() : "最も悪い板 " + check.worstPanelId + "。")));
+    }
     return check;
 }
 
@@ -456,6 +469,18 @@ AssemblyIntersectionReport FindAssemblyIntersections(const AssemblyResult& place
         }
     }
     (void)PolylineLength;
+    if (!report.hits.empty()) {
+        // 板どうしがぶつかっている。黙って重ねない(§10.2)。
+        double closest = report.hits.front().distanceMm;
+        for (const AssemblyIntersectionReport::Hit& hit : report.hits) {
+            closest = std::min(closest, hit.distanceMm);
+        }
+        report.diagnostics.push_back(MakeError(kSelfIntersection,
+            "組み立てたときに板どうしがぶつかります。",
+            std::to_string(report.hits.size()) + " 箇所。最も近いところで "
+                + std::to_string(closest) + " mm(許容 "
+                + std::to_string(toleranceMm) + " mm)。"));
+    }
     return report;
 }
 

@@ -22,8 +22,6 @@
 namespace kachakacha::v2::kernel {
 
 inline constexpr const char* kExtrudeBuildFailed = "KER-E001";
-inline constexpr const char* kExtrudeMismatch = "KER-E002";
-inline constexpr const char* kExtrudeTargetMissing = "KER-E003";
 inline constexpr const char* kExtrudeBooleanTargetMissing = "KER-E004";
 inline constexpr const char* kExtrudeUnsupported = "KER-E005";
 

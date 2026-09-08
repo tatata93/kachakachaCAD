@@ -79,6 +79,8 @@ struct AssemblyMetricCheck {
     std::size_t flippedTriangleCount = 0;
     std::string worstPanelId;
     bool withinTolerance = true;
+    //! 許容差を超えたときの診断(FAB-A003 MetricDistortion)。
+    std::vector<base::Diagnostic> diagnostics;
 };
 
 [[nodiscard]] AssemblyMetricCheck CheckAssemblyMetric(
@@ -93,6 +95,8 @@ struct AssemblyIntersectionReport {
         Vector3 position{};
     };
     std::vector<Hit> hits;
+    //! ぶつかりを見つけたときの診断(FAB-A002 AssemblySelfIntersection)。
+    std::vector<base::Diagnostic> diagnostics;
 };
 
 [[nodiscard]] AssemblyIntersectionReport FindAssemblyIntersections(

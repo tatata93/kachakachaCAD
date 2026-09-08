@@ -391,6 +391,15 @@ OpeningClosureCheck CheckOpeningClosure(const OpeningClipResult& result, double 
     }
     check.closed = check.closed && check.perimeterDifferenceMm <= toleranceMm
         && check.maximumGapMm <= toleranceMm;
+    if (!check.closed) {
+        // 組み立て直したときに開口が閉じないなら、その型紙は使えない。
+        // 「だいたい合っている」で通さない(fabrication-contract §8.2)。
+        check.diagnostics.push_back(base::MakeError(kNotClosed,
+            "切り分けた開口が、組み立て直しても閉じません。",
+            "継ぎ目の隙間 " + std::to_string(check.maximumGapMm) + " mm / 周長の差 "
+                + std::to_string(check.perimeterDifferenceMm) + " mm(許容 "
+                + std::to_string(toleranceMm) + " mm)。"));
+    }
     return check;
 }
 

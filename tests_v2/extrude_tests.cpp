@@ -630,14 +630,14 @@ KACHA_V2_TEST(extrude_direction, 長さ0の向きは断る)
     ExtrudeRequest request = BasicRequest();
     request.directionMode = ExtrudeDirectionMode::CustomXYZ;
     request.customDirection = {0.0, 0.0, 0.0};
-    RequireRefused(request, "EXT-010", "長さ0の向き");
+    RequireRefused(request, "EXT-007", "長さ0の向き");
 }
 
 KACHA_V2_TEST(extrude_direction, 輪郭と同じ平面の向きでは部品にならない)
 {
     ExtrudeRequest request = BasicRequest();
     request.directionMode = ExtrudeDirectionMode::WorldX;
-    RequireRefused(request, "EXT-010", "厚みが出ない向き");
+    RequireRefused(request, "EXT-007", "厚みが出ない向き");
 }
 
 KACHA_V2_TEST(extrude_direction, 斜めに押すと体積が減る)
@@ -673,7 +673,7 @@ KACHA_V2_TEST(extrude_direction, 壊れた作業平面は断る)
     broken.vAxis = {1, 1, 0};
     broken.normal = {0, 0, 1};
     request.workPlane = broken;
-    RequireRefused(request, "EXT-010", "壊れた作業平面");
+    RequireRefused(request, "EXT-007", "壊れた作業平面");
 }
 
 // =====================================================================

@@ -11,6 +11,7 @@ namespace kachakacha::v2::modeling {
 
 using base::Diagnostic;
 using base::MakeError;
+using base::MakeInformation;
 using base::MakeWarning;
 using base::Result;
 using geometry::PlanarFrame;
@@ -819,7 +820,14 @@ Result<WireCageAnalysis> AnalyzeWireCage(const std::vector<CageEdgeInput>& input
             analysis.unusedEdges.push_back(index);
         }
     }
-    (void)kMultipleSolids;
+    // 閉じた立体が複数見つかったら、そのまま作ると複数の部品になる。
+    // 勝手に1つへまとめず、いくつになるかを先に知らせる(geometry-contract §7.2)。
+    if (analysis.shells.size() > 1) {
+        analysis.notes.push_back(MakeInformation(kMultipleSolids,
+            "閉じた立体が複数あります。",
+            std::to_string(analysis.shells.size())
+                + " 個の部品になります。続けるなら、この数で作ります。"));
+    }
     return Result<WireCageAnalysis>::Success(std::move(analysis));
 }
 

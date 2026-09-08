@@ -434,6 +434,7 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
             finished = prisms;
         } else {
             TopoDS_Shape current = targetPart;
+            const double beforeVolume = VolumeOf(targetPart);
             for (const TopoDS_Shape& prism : prisms) {
                 if (request.booleanMode == ExtrudeBooleanMode::AddToPart) {
                     BRepAlgoAPI_Fuse fuse(current, prism);
@@ -452,6 +453,18 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
                     }
                     current = cut.Shape();
                 }
+            }
+            // 何も変わっていないなら、押し出した形は相手に触れていない。
+            // 「成功した」ことにして、利用者に気づかせないのが V1 の悪癖だった。
+            const double afterVolume = VolumeOf(current);
+            const double scale = std::max(beforeVolume, 1.0e-9);
+            if (std::abs(afterVolume - beforeVolume) / scale <= 1.0e-9) {
+                return Out::Failure(MakeError("EXT-004",
+                    request.booleanMode == ExtrudeBooleanMode::AddToPart
+                        ? "足す形が、相手の部品と重なっていません。"
+                        : "引く形が、相手の部品と交わっていません。",
+                    "体積が " + std::to_string(beforeVolume)
+                        + " mm3 のまま変わりません。位置を確かめてください。"));
             }
             const std::size_t solids = CountOf(current, TopAbs_SOLID);
             if (solids == 0) {
@@ -566,23 +579,21 @@ Result<ExtrudeBuildResult> BuildExtrude(const ExtrudeRequest& request,
             const auto check = modeling::CheckExtrudeResult(analysis,
                 built.totalVolumeMm3, built.totalFaceCount, built.parts.size());
             if (!check.partCountMatches) {
-                return Out::Failure(MakeError(kExtrudeMismatch,
-                    "出来た部品の数が、事前に示した数と違います。",
-                    "予定 " + std::to_string(analysis.expectedPartCount) + " 個 / 実際 "
-                        + std::to_string(built.parts.size()) + " 個。"));
+                return Out::Failure(modeling::MakeResultInvalid(
+                    "部品の数。予定 " + std::to_string(analysis.expectedPartCount)
+                        + " 個 / 実際 " + std::to_string(built.parts.size()) + " 個。"));
             }
             if (!check.faceCountMatches) {
-                return Out::Failure(MakeError(kExtrudeMismatch,
-                    "出来た面の数が、予測と違います。",
-                    "予測 " + std::to_string(analysis.predictedFaceCount) + " 枚 / 実際 "
-                        + std::to_string(built.totalFaceCount) + " 枚。"
+                return Out::Failure(modeling::MakeResultInvalid(
+                    "面の数。予測 " + std::to_string(analysis.predictedFaceCount)
+                        + " 枚 / 実際 " + std::to_string(built.totalFaceCount) + " 枚。"
                         + "輪郭の曲線が別の形へ置き換わった可能性があります。"));
             }
             if (!check.volumeMatches) {
-                return Out::Failure(MakeError(kExtrudeMismatch,
-                    "出来た体積が、予測と合いません。",
-                    "予測 " + std::to_string(analysis.predictedVolumeMm3) + " mm3 / 実際 "
-                        + std::to_string(built.totalVolumeMm3) + " mm3(ずれ "
+                return Out::Failure(modeling::MakeResultInvalid(
+                    "体積。予測 " + std::to_string(analysis.predictedVolumeMm3)
+                        + " mm3 / 実際 " + std::to_string(built.totalVolumeMm3)
+                        + " mm3(ずれ "
                         + std::to_string(check.volumeErrorRatio * 100.0) + " %)。"));
             }
         }

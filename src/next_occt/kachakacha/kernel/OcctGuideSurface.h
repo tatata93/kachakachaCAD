@@ -23,7 +23,8 @@ namespace kachakacha::v2::kernel {
 
 //! 面を作る層の診断コード。
 inline constexpr const char* kSurfaceBuildFailed = "KER-S001";
-inline constexpr const char* kSurfaceMissesInput = "KER-S002";
+//! 出来た面が入力の線を通っていない。geometry-contract §6 の SurfaceFitExceeded。
+inline constexpr const char* kSurfaceMissesInput = "GEO-G008";
 inline constexpr const char* kSurfaceSourceMissing = "KER-S003";
 inline constexpr const char* kSurfaceOffsetImpossible = "KER-S004";
 inline constexpr const char* kSurfaceUnsupportedMethod = "KER-S005";

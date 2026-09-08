@@ -171,6 +171,10 @@ struct ExtrudeResultCheck {
     }
 };
 
+//! 予測と実物が食い違ったときの診断を組み立てる(EXT-008 ResultInvalid)。
+//! カーネル層はこれを使って断る。コードをあちこちに書かない。
+[[nodiscard]] Diagnostic MakeResultInvalid(std::string detailsJa);
+
 [[nodiscard]] ExtrudeResultCheck CheckExtrudeResult(const ExtrudeAnalysis& analysis,
     double actualVolumeMm3, std::size_t actualFaceCount, std::size_t actualPartCount);
 

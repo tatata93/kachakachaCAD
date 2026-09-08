@@ -90,7 +90,7 @@
 | AT-UIX-008 | 未 | View cube は WP-08後半 |
 | AT-UIX-009 | 部分 | 失敗しても文書が変わらないことは済(document_tests.cpp)。壊れた入力で落ちないことも済(robustness_tests.cpp)。画面の回復は WP-08後半 |
 | AT-UIX-010 | 未 | Theme/DPI は WP-08後半 |
-| AT-UIX-011 | 未 | コマンド台帳との突き合わせは WP-12 |
+| AT-UIX-011 | 済 | src/next/kachakacha/app/CommandCatalog.cpp と tests_v2/command_catalog_tests.cpp(52件を双方向で突き合わせ。表示名・記号・案内・受入IDの有無、ショートカットの重複、camera操作が文書を変えないことを見る) |
 | AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |
 | AT-EXP-011 | 済 | tests_v2/export_tests.cpp(潰れた三角形)+ tests_v2/kernel_export_tests.cpp(開いた殻・体積0・自己交差を拒否し、0バイトのファイルを残さない) |
 | AT-EXP-012 | 済 | tests_v2/export_tests.cpp(SVGはA、DXFはARC/SPLINE。折れ線にしない) |

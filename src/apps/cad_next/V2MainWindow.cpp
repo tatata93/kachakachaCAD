@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
+#include <QKeySequence>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QStyleFactory>
@@ -25,7 +26,12 @@
 
 #include <array>
 
+using kachakacha::v2::app::CommandCatalog;
+using kachakacha::v2::app::CommandDescriptor;
+using kachakacha::v2::app::CommandMode;
 using kachakacha::v2::app::DrawingSession;
+using kachakacha::v2::app::FindCommand;
+using kachakacha::v2::app::SelectionPredicate;
 using kachakacha::v2::base::DeterministicIdGenerator;
 using kachakacha::v2::base::DocumentId;
 using kachakacha::v2::geometry::CurveSegment;
@@ -66,6 +72,29 @@ constexpr std::array<DrawingTool, 23> kToolOrder{
     DrawingTool::ConnectTwoPoints,
     DrawingTool::ChamferOrFilletPair,
 };
+
+//! 台帳のコマンドIDと、作図の道具の対応。
+//! 道具の入口も台帳を通す。メニューと道具箱で別の道を作らない。
+struct ToolBinding {
+    std::string_view commandId;
+    DrawingTool tool;
+};
+
+constexpr std::array<ToolBinding, 13> kToolBindings{{
+    {"selection.activate", DrawingTool::Select},
+    {"grid.move_origin", DrawingTool::SetGridOrigin},
+    {"draw.point", DrawingTool::Point},
+    {"draw.line", DrawingTool::Line},
+    {"draw.polyline", DrawingTool::Polyline},
+    {"draw.rectangle", DrawingTool::Rectangle},
+    {"draw.circle", DrawingTool::Circle},
+    {"draw.arc", DrawingTool::Arc},
+    {"draw.bezier", DrawingTool::Bezier},
+    {"draw.spline", DrawingTool::Spline},
+    {"wire.trim", DrawingTool::Trim},
+    {"wire.extend", DrawingTool::Extend},
+    {"measure.open", DrawingTool::Measure},
+}};
 
 [[nodiscard]] QString ToolLabel(DrawingTool tool)
 {
@@ -124,30 +153,54 @@ V2MainWindow::~V2MainWindow() = default;
 
 void V2MainWindow::BuildMenus()
 {
-    QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ファイル(&F)"));
-    fileMenu->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
-
-    QMenu* editMenu = menuBar()->addMenu(QStringLiteral("編集(&E)"));
-    editMenu->addAction(QStringLiteral("元に戻す(&U)"), this, [this] {
-        if (session_->Undo()) {
-            RefreshEntityList();
-            SetStatus(QStringLiteral("元に戻しました。"));
-            viewport_->update();
-        } else {
-            SetStatus(QStringLiteral("戻せる操作がありません。"));
+    // メニューは台帳から作る。台帳に無い項目をここで足さない。
+    struct MenuGroup {
+        const char* titleJa;
+        std::vector<std::string_view> ids;
+    };
+    const std::vector<MenuGroup> groups{
+        {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
+        {"編集(&E)", {"edit.undo", "edit.redo", "selection.activate", "snap.toggle",
+                       "group.set_active"}},
+        {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
+                       "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
+        {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
+                            "wire.coincident", "wire.tangent", "wire.curvature",
+                            "wire.chamfer", "wire.fillet", "wire.project"}},
+        {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
+                       "grid.move_origin"}},
+        {"形(&M)", {"guide.create", "part.extrude", "part.from_wire_cage",
+                     "part.boolean_add", "part.boolean_cut", "derived.freeze"}},
+        {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
+                       "fabrication.preview_update", "fabrication.create_pattern",
+                       "fabrication.set_assembly", "fabrication.freeze_state"}},
+        {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
+                            "export.dxf"}},
+        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.display_settings",
+                       "measure.open"}},
+    };
+    for (const MenuGroup& group : groups) {
+        QMenu* menu = menuBar()->addMenu(QString::fromUtf8(group.titleJa));
+        for (const std::string_view id : group.ids) {
+            const CommandDescriptor* command = FindCommand(id);
+            if (command == nullptr) {
+                continue;
+            }
+            QAction* action = menu->addAction(
+                QString::fromUtf8(std::string(command->labelJa).c_str()));
+            action->setToolTip(
+                QString::fromUtf8(std::string(command->operationGuideJa).c_str()));
+            if (!command->defaultShortcut.empty()) {
+                action->setShortcut(QKeySequence(
+                    QString::fromUtf8(std::string(command->defaultShortcut).c_str())));
+            }
+            QObject::connect(action, &QAction::triggered, this,
+                [this, id] { RunCommand(id); });
+            commandActions_.emplace_back(id, action);
         }
-    });
-    editMenu->addAction(QStringLiteral("やり直す(&R)"), this, [this] {
-        if (session_->Redo()) {
-            RefreshEntityList();
-            SetStatus(QStringLiteral("やり直しました。"));
-            viewport_->update();
-        } else {
-            SetStatus(QStringLiteral("やり直せる操作がありません。"));
-        }
-    });
+    }
 
-    QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("表示(&V)"));
+    QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("視点(&C)"));
     const std::array<ViewDirection, 7> directions{ViewDirection::Top,
         ViewDirection::Bottom, ViewDirection::Front, ViewDirection::Back,
         ViewDirection::Left, ViewDirection::Right, ViewDirection::Isometric};
@@ -159,17 +212,14 @@ void V2MainWindow::BuildMenus()
                         .arg(QString::fromUtf8(ViewDirectionNameJa(direction))));
             });
     }
-    viewMenu->addSeparator();
-    viewMenu->addAction(QStringLiteral("全体を表示"), this, [this] {
-        viewport_->FitToDocument();
-        SetStatus(QStringLiteral("全体を表示しました。"));
-    });
 
     QMenu* themeMenu = menuBar()->addMenu(QStringLiteral("見た目(&T)"));
     themeMenu->addAction(QStringLiteral("通常"), this,
         [this] { ApplyTheme(UiTheme::Normal); });
     themeMenu->addAction(QStringLiteral("Windows 95 風"), this,
         [this] { ApplyTheme(UiTheme::Windows95); });
+    themeMenu->addSeparator();
+    themeMenu->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
 }
 
 void V2MainWindow::BuildToolPalette()
@@ -180,7 +230,24 @@ void V2MainWindow::BuildToolPalette()
     for (const DrawingTool tool : kToolOrder) {
         QAction* action = toolPalette_->addAction(ToolLabel(tool));
         action->setCheckable(true);
-        action->setToolTip(ToolLabel(tool));
+        // 案内は台帳から取る。道具箱で別の文言を作らない。
+        for (const ToolBinding& binding : kToolBindings) {
+            if (binding.tool != tool) {
+                continue;
+            }
+            const CommandDescriptor* command = FindCommand(binding.commandId);
+            if (command != nullptr) {
+                action->setToolTip(QString::fromUtf8(
+                    std::string(command->operationGuideJa).c_str()));
+                if (!command->defaultShortcut.empty()) {
+                    action->setShortcut(QKeySequence(QString::fromUtf8(
+                        std::string(command->defaultShortcut).c_str())));
+                }
+            }
+        }
+        if (action->toolTip().isEmpty()) {
+            action->setToolTip(ToolLabel(tool));
+        }
         toolActions_.push_back(action);
         QObject::connect(action, &QAction::triggered, this,
             [this, tool] { SelectTool(tool); });
@@ -279,6 +346,108 @@ void V2MainWindow::RefreshEntityList()
             std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
     }
     entityTree_->expandAll();
+}
+
+QAction* V2MainWindow::ActionFor(std::string_view id) const
+{
+    for (const auto& entry : commandActions_) {
+        if (entry.first == id) {
+            return entry.second;
+        }
+    }
+    return nullptr;
+}
+
+bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
+{
+    const CommandDescriptor* command = FindCommand(id);
+    if (command == nullptr) {
+        if (reasonOut != nullptr) {
+            *reasonOut = QStringLiteral("知らないコマンドです。");
+        }
+        return false;
+    }
+    bool ok = true;
+    switch (command->predicate) {
+    case SelectionPredicate::Always:
+    case SelectionPredicate::HasDocument:
+        ok = true;
+        break;
+    case SelectionPredicate::HasUndo:
+        ok = session_->GetDocument().CanUndo();
+        break;
+    case SelectionPredicate::HasRedo:
+        ok = session_->GetDocument().CanRedo();
+        break;
+    case SelectionPredicate::HasVisibleGeometry:
+        ok = !session_->Scene().curves.empty() || !session_->Scene().points.empty();
+        break;
+    default:
+        // 選択に依る条件は、選択の仕組みが入るまで押せないままにする。
+        // 隠さずに、理由を出す(command-catalog.md §1)。
+        ok = false;
+        break;
+    }
+    if (!ok && reasonOut != nullptr) {
+        *reasonOut = QString::fromUtf8(
+            std::string(command->predicateFailureJa).c_str());
+    }
+    return ok;
+}
+
+void V2MainWindow::RunCommand(std::string_view id)
+{
+    QString reason;
+    if (!CommandEnabled(id, &reason)) {
+        SetStatus(reason);
+        return;
+    }
+    const CommandDescriptor* command = FindCommand(id);
+    if (command == nullptr) {
+        return;
+    }
+    // 作図の道具は道具へ入る。
+    for (const ToolBinding& binding : kToolBindings) {
+        if (binding.commandId == id) {
+            SelectTool(binding.tool);
+            SetStatus(QString::fromUtf8(
+                std::string(command->operationGuideJa).c_str()));
+            return;
+        }
+    }
+    if (id == "edit.undo") {
+        SetStatus(session_->Undo() ? QStringLiteral("元に戻しました。")
+                                   : QStringLiteral("戻せる操作がありません。"));
+        RefreshEntityList();
+        viewport_->update();
+        return;
+    }
+    if (id == "edit.redo") {
+        SetStatus(session_->Redo() ? QStringLiteral("やり直しました。")
+                                   : QStringLiteral("やり直せる操作がありません。"));
+        RefreshEntityList();
+        viewport_->update();
+        return;
+    }
+    if (id == "view.fit_all") {
+        viewport_->FitToDocument();
+        SetStatus(QStringLiteral("全体を表示しました。"));
+        return;
+    }
+    if (id == "snap.toggle") {
+        snapEnabled_ = !snapEnabled_;
+        kachakacha::v2::modeling::SnapSettings settings;
+        settings.suppressed = !snapEnabled_;
+        session_->SetSnapSettings(settings);
+        SetStatus(snapEnabled_ ? QStringLiteral("吸着を入れました。")
+                               : QStringLiteral("吸着を切りました。"));
+        return;
+    }
+    // まだ入っていないものは、案内を出して何もしない。
+    // 「押せるのに何も起きない」より、いま何ができないかを言う。
+    SetStatus(QStringLiteral("%1: %2 (この操作はまだ入っていません)")
+            .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
+                QString::fromUtf8(std::string(command->operationGuideJa).c_str())));
 }
 
 void V2MainWindow::ApplyTheme(UiTheme theme)

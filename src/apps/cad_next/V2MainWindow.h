@@ -13,6 +13,7 @@
 //! 信号の受け口はラムダで繋ぐ。
 
 #include "V2Viewport.h"
+#include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 
@@ -20,6 +21,8 @@
 #include <QString>
 
 #include <memory>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 class QAction;
@@ -59,6 +62,16 @@ public:
     [[nodiscard]] int EntityRowCount() const;
     [[nodiscard]] int DiagnosticRowCount() const;
 
+    //! コマンドを1つ実行する。メニューも道具箱もショートカットも、
+    //! すべてここを通る。入口を分けない(command-catalog.md §1)。
+    void RunCommand(std::string_view id);
+
+    //! そのコマンドがいま使えるか。使えないときの理由も返す。
+    [[nodiscard]] bool CommandEnabled(std::string_view id, QString* reasonOut) const;
+
+    //! 台帳の1件に対応する QAction。試験で押せるようにする。
+    [[nodiscard]] QAction* ActionFor(std::string_view id) const;
+
 private:
     void BuildMenus();
     void BuildToolPalette();
@@ -77,5 +90,8 @@ private:
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;
     UiTheme theme_ = UiTheme::Normal;
+    bool snapEnabled_ = true;
     std::vector<QAction*> toolActions_;
+    //! 台帳のIDから作った QAction。並びは台帳と同じ。
+    std::vector<std::pair<std::string_view, QAction*>> commandActions_;
 };

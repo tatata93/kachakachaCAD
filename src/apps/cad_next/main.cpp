@@ -9,6 +9,8 @@
 //! 直したかどうかを人が目で見るしかなかった。
 
 #include "V2MainWindow.h"
+
+#include "kachakacha/app/CommandCatalog.h"
 #include "Win95Style.h"
 
 #include "kachakacha/base/Version.h"
@@ -121,6 +123,50 @@ struct SelfTestCase {
     return true;
 }
 
+[[nodiscard]] bool CaseEveryCommandReachable(V2MainWindow& window)
+{
+    // 台帳の全コマンドが、同じ入口から呼べること。
+    // どれを押しても落ちないこと。使えないものは理由が出ること。
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        QString reason;
+        const bool enabled = window.CommandEnabled(command.id, &reason);
+        if (!enabled && reason.isEmpty()) {
+            return false;
+        }
+        window.RunCommand(command.id);
+        if (window.StatusText().isEmpty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseMenusComeFromCatalog(V2MainWindow& window)
+{
+    // メニューの項目は台帳から作る。台帳に無い入口を作らない。
+    int found = 0;
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        if (window.ActionFor(command.id) != nullptr) {
+            ++found;
+        }
+    }
+    return found == static_cast<int>(kachakacha::v2::app::CommandCatalog().size());
+}
+
+[[nodiscard]] bool CaseDisabledCommandsExplain(V2MainWindow& window)
+{
+    // 使えないコマンドは隠さず、押したときに理由を出す。
+    QString reason;
+    if (window.CommandEnabled("part.extrude", &reason)) {
+        return false;
+    }
+    if (reason.isEmpty()) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    return window.StatusText() == reason;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -130,6 +176,9 @@ const SelfTestCase kCases[] = {
     {"元に戻せる", &CaseUndo},
     {"視点を切り替えられる", &CaseViewDirections},
     {"途中でやめられる", &CaseCancel},
+    {"台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
+    {"メニューが台帳から出来ている", &CaseMenusComeFromCatalog},
+    {"使えないコマンドは理由を出す", &CaseDisabledCommandsExplain},
 };
 
 } // namespace

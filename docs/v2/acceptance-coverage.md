@@ -80,7 +80,7 @@
 | AT-FAB-012 | 未 | 選択部材出力は WP-10 |
 | AT-FAB-013 | 未 | ER1/ER2 の受入モデルは WP-12。OCCT が要る |
 | AT-FAB-014 | 部分 | tests_v2/freeze_state_tests.cpp(ワイヤーのみ/部品のみ/両方。両方は同じ評価の束から作られ、部品の境界がワイヤーとぴったり一致する)。Entity 化は WP-10 |
-| AT-UIX-001 | 未 | Qt が要る。WP-08後半 |
+| AT-UIX-001 | 済 | tests_v2/ui_mode_tests.cpp(4モードだけ。旧「面/板材」が無い。台帳の全コマンドがどこかのモードに出る)+ cad_next --self-test(モードを変えても選択・文書が変わらず、出るコマンドだけが変わる) |
 | AT-UIX-002 | 済 | tests_v2/operation_guide_tests.cpp(全52コマンドで道具名・いまの手順・次の手順・決め方・やめ方・選択数の6つがそろい、仮の文字が混ざらない)+ cad_next --self-test |
 | AT-UIX-003 | 未 | Qt が要る |
 | AT-UIX-004 | 済 | tests_v2/snap_tests.cpp(8種+2種、優先順位、抑止キー) |

@@ -32,7 +32,10 @@ using kachakacha::v2::app::CommandDescriptor;
 using kachakacha::v2::app::CommandMode;
 using kachakacha::v2::app::DrawingSession;
 using kachakacha::v2::app::FindCommand;
+using kachakacha::v2::app::CommandVisibleInMode;
 using kachakacha::v2::app::SelectionPredicate;
+using kachakacha::v2::app::UiMode;
+using kachakacha::v2::app::UiModeNameJa;
 using kachakacha::v2::base::DeterministicIdGenerator;
 using kachakacha::v2::base::DocumentId;
 using kachakacha::v2::geometry::CurveSegment;
@@ -135,6 +138,7 @@ V2MainWindow::V2MainWindow()
     setCentralWidget(viewport_);
 
     BuildMenus();
+    BuildModeBar();
     BuildToolPalette();
     BuildPanels();
 
@@ -144,6 +148,7 @@ V2MainWindow::V2MainWindow()
     viewport_->SetDocumentChangedCallback([this] { RefreshEntityList(); });
 
     SelectTool(DrawingTool::Line);
+    RefreshCommandVisibility();
     ApplyTheme(UiTheme::Normal);
     setWindowTitle(QStringLiteral("kachakachaCAD %1")
             .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
@@ -221,6 +226,62 @@ void V2MainWindow::BuildMenus()
         [this] { ApplyTheme(UiTheme::Windows95); });
     themeMenu->addSeparator();
     themeMenu->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
+}
+
+void V2MainWindow::BuildModeBar()
+{
+    modeBar_ = addToolBar(QStringLiteral("モード"));
+    modeBar_->setObjectName(QStringLiteral("modeBar"));
+    modeBar_->setMovable(false);
+    for (const UiMode mode : kachakacha::v2::app::AllUiModes()) {
+        QAction* action = modeBar_->addAction(
+            QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str()));
+        action->setCheckable(true);
+        action->setChecked(mode == mode_);
+        modeActions_.emplace_back(mode, action);
+        QObject::connect(action, &QAction::triggered, this,
+            [this, mode] { SetMode(mode); });
+    }
+    addToolBarBreak();
+}
+
+void V2MainWindow::SetMode(UiMode mode)
+{
+    // モードを変えても、選んでいるものも、作った形も、一切触らない。
+    // 変わるのは「どのコマンドが出ているか」だけである(UIX-001 / 003)。
+    mode_ = mode;
+    for (auto& entry : modeActions_) {
+        entry.second->setChecked(entry.first == mode);
+    }
+    RefreshCommandVisibility();
+    SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
+            .arg(QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str())));
+}
+
+int V2MainWindow::VisibleCommandCount() const
+{
+    int count = 0;
+    for (const auto& entry : commandActions_) {
+        if (entry.second->isVisible()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void V2MainWindow::RefreshCommandVisibility()
+{
+    for (const auto& entry : commandActions_) {
+        const bool visible = CommandVisibleInMode(entry.first, mode_);
+        entry.second->setVisible(visible);
+        QString reason;
+        const bool enabled = CommandEnabled(entry.first, &reason);
+        entry.second->setEnabled(enabled);
+        if (!enabled && !reason.isEmpty()) {
+            // 使えない理由はツールチップへ出す(UIX-002)。隠さない。
+            entry.second->setToolTip(reason);
+        }
+    }
 }
 
 void V2MainWindow::BuildToolPalette()
@@ -570,6 +631,27 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     }
     if (name == QStringLiteral("win95")) {
         ApplyTheme(UiTheme::Windows95);
+        return true;
+    }
+    if (name == QStringLiteral("mode-part")) {
+        (void)ApplyManualState(QStringLiteral("curves"));
+        SetMode(kachakacha::v2::app::UiMode::Part);
+        return true;
+    }
+    if (name == QStringLiteral("mode-fabrication")) {
+        (void)ApplyManualState(QStringLiteral("curves"));
+        SetMode(kachakacha::v2::app::UiMode::Fabrication);
+        return true;
+    }
+    if (name == QStringLiteral("mode-output")) {
+        (void)ApplyManualState(QStringLiteral("curves"));
+        SetMode(kachakacha::v2::app::UiMode::Output);
+        return true;
+    }
+    if (name == QStringLiteral("guide")) {
+        // 案内の6つがそろって出ている画面。
+        (void)ApplyManualState(QStringLiteral("curves"));
+        SelectTool(DrawingTool::Arc);
         return true;
     }
     return false;

@@ -557,6 +557,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/CommandCatalog.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
+    src/next/kachakacha/app/UiMode.cpp
     src/next/kachakacha/base/Diagnostic.cpp
     src/next/kachakacha/base/Ids.cpp
     src/next/kachakacha/base/Uuid.cpp
@@ -680,6 +681,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(diagnostic_catalog_tests tests_v2/diagnostic_catalog_tests.cpp)
     kachakacha_add_v2_test(command_catalog_tests tests_v2/command_catalog_tests.cpp)
     kachakacha_add_v2_test(operation_guide_tests tests_v2/operation_guide_tests.cpp)
+    kachakacha_add_v2_test(ui_mode_tests tests_v2/ui_mode_tests.cpp)
     kachakacha_add_v2_test(robustness_tests tests_v2/robustness_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)

@@ -11,6 +11,7 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/CommandCatalog.h"
+#include "kachakacha/app/UiMode.h"
 #include "Win95Style.h"
 
 #include "kachakacha/base/Version.h"
@@ -216,6 +217,43 @@ struct SelfTestCase {
     return window.Session().CurrentTool() == before;
 }
 
+[[nodiscard]] bool CaseModesKeepSelection(V2MainWindow& window)
+{
+    // モードを切り替えても、選んでいる道具も文書も変わらないこと(UIX-001 / 003)。
+    if (!window.ApplyManualState(QStringLiteral("draw-line"))) {
+        return false;
+    }
+    const auto tool = window.Session().CurrentTool();
+    const std::uint64_t revision = window.Session().GetDocument().Snapshot().revision;
+    const int rows = window.EntityRowCount();
+    for (const auto mode : kachakacha::v2::app::AllUiModes()) {
+        window.SetMode(mode);
+        if (window.Mode() != mode) {
+            return false;
+        }
+        if (window.Session().CurrentTool() != tool) {
+            return false;
+        }
+        if (window.Session().GetDocument().Snapshot().revision != revision) {
+            return false;
+        }
+        if (window.EntityRowCount() != rows) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseModesChangeVisibleCommands(V2MainWindow& window)
+{
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    const int drawing = window.VisibleCommandCount();
+    window.SetMode(kachakacha::v2::app::UiMode::Output);
+    const int output = window.VisibleCommandCount();
+    // 出るコマンドはモードで変わる。共通操作があるので、どちらも0ではない。
+    return drawing > 0 && output > 0 && drawing != output;
+}
+
 const SelfTestCase kCases[] = {
     {"道具を選べる", &CaseToolsExist},
     {"直線を引ける", &CaseDrawLine},
@@ -231,6 +269,8 @@ const SelfTestCase kCases[] = {
     {"案内が6つそろっている", &CaseGuideIsComplete},
     {"失敗しても続き、文書が変わらない", &CaseFailureRecovery},
     {"失敗しても選んだ道具が変わらない", &CaseSelectionSurvivesFailure},
+    {"モードを変えても選択と文書が変わらない", &CaseModesKeepSelection},
+    {"モードで出るコマンドが変わる", &CaseModesChangeVisibleCommands},
 };
 
 } // namespace

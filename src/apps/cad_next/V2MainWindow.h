@@ -14,6 +14,7 @@
 
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
+#include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 
@@ -72,9 +73,18 @@ public:
     //! 台帳の1件に対応する QAction。試験で押せるようにする。
     [[nodiscard]] QAction* ActionFor(std::string_view id) const;
 
+    //! 上位モードを切り替える。選択は消さない。Feature も触らない(UIX-001/003)。
+    void SetMode(kachakacha::v2::app::UiMode mode);
+    [[nodiscard]] kachakacha::v2::app::UiMode Mode() const noexcept { return mode_; }
+
+    //! いま道具箱に出ているコマンドの数。モードごとに変わる。
+    [[nodiscard]] int VisibleCommandCount() const;
+
 private:
     void BuildMenus();
+    void BuildModeBar();
     void BuildToolPalette();
+    void RefreshCommandVisibility();
     void BuildPanels();
     void RefreshEntityList();
     //! 案内を作り直して画面へ出す。6つがそろった形で出す(AT-UIX-002)。
@@ -94,6 +104,10 @@ private:
     UiTheme theme_ = UiTheme::Normal;
     bool snapEnabled_ = true;
     int selectionCount_ = 0;
+    kachakacha::v2::app::UiMode mode_ =
+        kachakacha::v2::app::UiMode::Drawing;
+    QToolBar* modeBar_ = nullptr;
+    std::vector<std::pair<kachakacha::v2::app::UiMode, QAction*>> modeActions_;
     std::vector<QAction*> toolActions_;
     //! 台帳のIDから作った QAction。並びは台帳と同じ。
     std::vector<std::pair<std::string_view, QAction*>> commandActions_;

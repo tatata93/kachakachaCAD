@@ -160,6 +160,8 @@ V2MainWindow::V2MainWindow()
         RefreshEntityList();
     });
     viewport_->SetSelectionChangedCallback([this] { RefreshExportCounts(); });
+    // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
+    viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
 
     SelectTool(DrawingTool::Line);
     SetMode(UiMode::Drawing);

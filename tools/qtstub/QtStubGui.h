@@ -270,6 +270,7 @@ public:
     void drawEllipse(const QPointF&, double, double);
     void drawPath(const QPainterPath&);
     void drawArc(const QRectF&, int, int);
+    void drawRoundedRect(const QRectF&, double, double);
     void drawPolygon(const QPolygonF&);
     void drawPolygon(const QPolygon&);
     void drawPolyline(const QPolygonF&);

@@ -788,6 +788,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2MainWindow.cpp
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp
+        src/apps/cad_next/V2ViewportPanel.cpp
         src/apps/cad_next/V2Viewport.h
         src/apps/cad_next/Win95Style.cpp
         src/apps/cad_next/Win95Style.h

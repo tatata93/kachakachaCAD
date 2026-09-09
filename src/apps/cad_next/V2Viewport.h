@@ -164,16 +164,25 @@ public:
     //! 入力列を出す場所。画面端では左または上へ寄る。
     [[nodiscard]] QRectF CursorPanelRect() const;
 
-    //! XYZ回転矢印(V1同等)。並べ方も当たり判定も core が決める。
-    [[nodiscard]] std::vector<kachakacha::v2::view::AxisArrowButton> AxisArrowButtons() const;
-    //! 画面のその点にある矢印。試験と描画から使う。
-    [[nodiscard]] std::optional<std::size_t> AxisArrowAt(const QPointF& position) const;
-    //! 矢印を押した。引きずれば連続、離すまで動かなければ15度。
-    bool PressAxisArrow(const QPointF& position,
+    //! 視点の操作板(V1同等)。輪・上下左右・画面のまま回す・家・選択に正対。
+    //! 並べ方も当たり判定も core が決める。
+    [[nodiscard]] kachakacha::v2::view::ViewGadgetLayout ViewGadgets() const;
+    //! 画面のその点にある部品。試験と描画から使う。
+    [[nodiscard]] std::optional<std::size_t> ViewGadgetAt(const QPointF& position) const;
+    //! 部品を押した。引きずれば連続、離すまで動かなければ15度。
+    bool PressViewGadget(const QPointF& position,
         kachakacha::v2::view::AxisArrowModifier modifier);
-    void DragAxisArrow(const QPointF& position);
-    void ReleaseAxisArrow(const QPointF& position);
-    [[nodiscard]] bool AxisArrowDragging() const { return arrowDrag_.has_value(); }
+    void DragViewGadget(const QPointF& position);
+    void ReleaseViewGadget(const QPointF& position);
+    [[nodiscard]] bool ViewGadgetDragging() const { return gadgetDrag_.has_value(); }
+    //! 輪の軸の取り方。絶対(世界)と相対(選んだ部品)を切り替える。
+    [[nodiscard]] kachakacha::v2::view::RotationAxisMode RingMode() const noexcept
+    {
+        return ringMode_;
+    }
+    void SetRingMode(kachakacha::v2::view::RotationAxisMode mode);
+    //! 「選択に正対」を押したときに呼ぶ。本体窓が繋ぐ。
+    void SetAlignSelectionCallback(std::function<void()> callback);
 
     //! XYZ回転矢印。感度は core が決める。
     bool RotateByArrow(kachakacha::v2::view::RotationAxis axis,
@@ -202,12 +211,20 @@ private:
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
-    //! 回転矢印を描く。使えないもの(相対軸で選択が無い)は薄く出す。消さない。
-    void DrawAxisArrows(QPainter& painter) const;
-    //! 矢印1つの絵。輪・矢じり・軸の名前。
-    static void DrawAxisArrowGlyph(QPainter& painter, const QRectF& cell,
-        const QColor& ink, bool positive, const QFont& baseFont,
-        std::string_view axisName);
+    //! 部品の種類に応じて回す。輪は世界か部品の軸、それ以外は画面の軸。
+    void ApplyGadgetRotation(const kachakacha::v2::view::ViewGadget& gadget,
+        double degrees, const kachakacha::v2::view::Quaternion& from);
+    //! 視点の操作板を描く。使えないもの(選択が要るもの)は薄く出す。消さない。
+    void DrawViewGadgets(QPainter& painter) const;
+    //! 軸ごとの輪と、その両端の矢じり。
+    void DrawViewRings(QPainter& painter,
+        const kachakacha::v2::view::ViewGadgetLayout& layout) const;
+    //! 輪ではない部品(家・上下左右・画面のまま回す・切替・正対)。
+    void DrawViewButtons(QPainter& painter,
+        const kachakacha::v2::view::ViewGadgetLayout& layout) const;
+    //! 矢じり1つ。置く点と進む向きから三角を作る。
+    static void DrawArrowHead(QPainter& painter, const QPointF& head,
+        const QPointF& tangent, double sizePx, const QColor& ink);
     void DrawCursorInput(QPainter& painter) const;
     void DrawGuideRows(QPainter& painter) const;
     void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
@@ -238,8 +255,8 @@ private:
     bool cubeMoved_ = false;
     std::optional<kachakacha::v2::view::ViewCubeZone> cubeHoverZone_;
     std::optional<kachakacha::v2::view::Quaternion> selectionFrame_;
-    //! いま押している矢印。押した場所と、そこからの姿勢を覚えておく。
-    struct AxisArrowDrag {
+    //! いま押している部品。押した場所と、そこからの姿勢を覚えておく。
+    struct ViewGadgetDrag {
         std::size_t index = 0;
         QPointF pressPosition;
         kachakacha::v2::view::Quaternion orientationAtPress{};
@@ -247,8 +264,11 @@ private:
             kachakacha::v2::view::AxisArrowModifier::None;
         bool moved = false;
     };
-    std::optional<AxisArrowDrag> arrowDrag_;
-    std::optional<std::size_t> arrowHoverIndex_;
+    std::optional<ViewGadgetDrag> gadgetDrag_;
+    std::optional<std::size_t> gadgetHoverIndex_;
+    kachakacha::v2::view::RotationAxisMode ringMode_ =
+        kachakacha::v2::view::RotationAxisMode::World;
+    std::function<void()> alignSelectionCallback_;
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
     QPointF cursorPosition_;

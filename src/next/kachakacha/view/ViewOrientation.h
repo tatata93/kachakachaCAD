@@ -15,6 +15,7 @@
 //! V2 は姿勢を四元数1個で持ち、引き戻しをしない。
 
 #include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/geometry/Vector3.h"
 
 #include <array>
@@ -217,5 +218,98 @@ inline constexpr int kAxisArrowColumns = 6;
 //! 画面のその点にある矢印。無ければ値を持たない。
 [[nodiscard]] std::optional<std::size_t> AxisArrowAtScreen(
     const std::vector<AxisArrowButton>& buttons, double xPx, double yPx);
+
+// ---- 視点の操作板(V1同等。ui-workflows §13.3)----
+//
+// V1 はキューブのまわりに
+//   - 世界の X/Y/Z ごとの色付きの輪(赤・緑・青)と、その両端の矢じり
+//   - 画面の上下・左右へ回す弧の矢印
+//   - 画面の奥行き軸まわりに回す2つの丸矢印
+//   - 既定の視点へ戻す家の印
+//   - 「選択に正対」
+// が並んでいた。並べ方をここに置く。画面に書くと、画面を出さないと確かめられない。
+
+//! 操作板の部品の種類。
+enum class ViewGadgetKind {
+    Home,           //!< 既定の視点へ戻す
+    Roll,           //!< 画面の奥行き軸まわり
+    Orbit,          //!< 画面の上下・左右
+    AxisRing,       //!< 世界の軸まわり(輪の端の矢じり)
+    AlignSelection, //!< 選んだものに正対
+    ModeToggle,     //!< 輪を絶対で使うか、選んだ部品の軸で使うか
+};
+
+//! 向き。種類ごとに意味が変わる。
+enum class ViewGadgetDirection {
+    Positive,
+    Negative,
+    Up,
+    Down,
+    Left,
+    Right,
+};
+
+[[nodiscard]] std::string_view ViewGadgetDirectionNameJa(ViewGadgetDirection direction) noexcept;
+
+//! 操作板の部品1つ。場所は画面の座標(px)。左上が原点。
+struct ViewGadget {
+    ViewGadgetKind kind = ViewGadgetKind::Home;
+    RotationAxis axis = RotationAxis::X;          //!< AxisRing のときだけ意味がある
+    ViewGadgetDirection direction = ViewGadgetDirection::Positive;
+    double xPx = 0.0;
+    double yPx = 0.0;
+    double widthPx = 0.0;
+    double heightPx = 0.0;
+
+    [[nodiscard]] double CenterXPx() const noexcept { return xPx + widthPx * 0.5; }
+    [[nodiscard]] double CenterYPx() const noexcept { return yPx + heightPx * 0.5; }
+};
+
+//! 輪1本ぶんの描き方。画面に落とした点列と、両端の矢じりの向き。
+struct ViewAxisRing {
+    RotationAxis axis = RotationAxis::X;
+    //! 閉じた点列。最後の点は最初の点と同じにしない(閉じるのは描く側)。
+    std::vector<geometry::ScreenPoint> points;
+    //! 矢じりを置く点と、そこでの進む向き(単位ベクトル)。
+    geometry::ScreenPoint positiveHead{};
+    geometry::ScreenPoint positiveTangent{};
+    geometry::ScreenPoint negativeHead{};
+    geometry::ScreenPoint negativeTangent{};
+};
+
+//! 操作板ぜんぶ。
+struct ViewGadgetLayout {
+    std::vector<ViewGadget> gadgets;
+    std::vector<ViewAxisRing> rings;
+    //! 操作板が占める四角。画面に入るかを見るのに使う。
+    double xPx = 0.0;
+    double yPx = 0.0;
+    double widthPx = 0.0;
+    double heightPx = 0.0;
+};
+
+//! 輪の大きさ。キューブの外側へどれだけ出るか。
+inline constexpr double kViewRingRadiusRatio = 0.86;
+//! 矢じりや丸ボタンの一辺。キューブの大きさに対する割合。
+inline constexpr double kViewGadgetButtonRatio = 0.26;
+//! 輪を何点で描くか。多すぎても目には変わらない。
+inline constexpr int kViewRingSampleCount = 72;
+
+//! キューブのまわりに操作板を並べる。輪は姿勢によって形が変わるので姿勢を渡す。
+[[nodiscard]] ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx,
+    double cubeSizePx, const Quaternion& orientation);
+
+//! 画面のその点にある部品。無ければ値を持たない。近いものを1つだけ返す。
+[[nodiscard]] std::optional<std::size_t> ViewGadgetAtScreen(
+    const ViewGadgetLayout& layout, double xPx, double yPx);
+
+//! その部品の説明。押す前に何が起きるか分かるようにする。
+[[nodiscard]] std::string ViewGadgetTooltipJa(const ViewGadget& gadget,
+    RotationAxisMode ringMode);
+
+//! 画面の軸で回す。上下は画面の横軸、左右は画面の縦軸、rollは視線の軸。
+//! 世界の軸ではないので、AxisArrowRequest は使わない。
+[[nodiscard]] base::Result<Quaternion> RotateByScreenAxis(const Quaternion& orientation,
+    ViewGadgetDirection direction, double degrees);
 
 } // namespace kachakacha::v2::view

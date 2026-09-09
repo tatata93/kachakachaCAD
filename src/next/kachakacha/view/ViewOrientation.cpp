@@ -481,4 +481,291 @@ std::optional<std::size_t> AxisArrowAtScreen(const std::vector<AxisArrowButton>&
     return std::nullopt;
 }
 
+// ---- 視点の操作板 ----
+namespace {
+
+//! その軸に垂直な平面を張る2本。輪はこの平面の上に描く。
+void RingBasis(RotationAxis axis, Vector3& first, Vector3& second) noexcept
+{
+    switch (axis) {
+    case RotationAxis::X:
+        first = Vector3{0.0, 1.0, 0.0};
+        second = Vector3{0.0, 0.0, 1.0};
+        return;
+    case RotationAxis::Y:
+        first = Vector3{0.0, 0.0, 1.0};
+        second = Vector3{1.0, 0.0, 0.0};
+        return;
+    case RotationAxis::Z:
+        first = Vector3{1.0, 0.0, 0.0};
+        second = Vector3{0.0, 1.0, 0.0};
+        return;
+    }
+    first = Vector3{1.0, 0.0, 0.0};
+    second = Vector3{0.0, 1.0, 0.0};
+}
+
+//! 世界の点を、キューブと同じ写し方で画面へ落とす。
+[[nodiscard]] geometry::ScreenPoint ToRingScreen(const Vector3& world,
+    const Vector3& right, const Vector3& up, double centerXPx, double centerYPx,
+    double scalePx) noexcept
+{
+    const double sx = world.x * right.x + world.y * right.y + world.z * right.z;
+    const double sy = world.x * up.x + world.y * up.y + world.z * up.z;
+    // 画面のyは下向きなので、上向き成分は引く。
+    return geometry::ScreenPoint{centerXPx + sx * scalePx, centerYPx - sy * scalePx};
+}
+
+//! 中心からいちばん遠い点。輪のどこに矢じりを置くかを決める。
+//! いちばん遠いところは輪が真横を向いている場所なので、矢じりが潰れて見えない、が起きにくい。
+[[nodiscard]] std::size_t FarthestPoint(const std::vector<geometry::ScreenPoint>& points,
+    double centerXPx, double centerYPx) noexcept
+{
+    std::size_t best = 0;
+    double bestDistance = -1.0;
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        const double dx = points[index].x - centerXPx;
+        const double dy = points[index].y - centerYPx;
+        const double distance = dx * dx + dy * dy;
+        if (distance > bestDistance) {
+            bestDistance = distance;
+            best = index;
+        }
+    }
+    return best;
+}
+
+//! その点での進む向き。となりの点との差から取る。長さは1に均す。
+[[nodiscard]] geometry::ScreenPoint TangentAt(
+    const std::vector<geometry::ScreenPoint>& points, std::size_t index) noexcept
+{
+    if (points.size() < 2) {
+        return geometry::ScreenPoint{1.0, 0.0};
+    }
+    const std::size_t next = (index + 1) % points.size();
+    const std::size_t previous = (index + points.size() - 1) % points.size();
+    const double dx = points[next].x - points[previous].x;
+    const double dy = points[next].y - points[previous].y;
+    const double length = std::sqrt(dx * dx + dy * dy);
+    if (!(length > 0.0)) {
+        return geometry::ScreenPoint{1.0, 0.0};
+    }
+    return geometry::ScreenPoint{dx / length, dy / length};
+}
+
+//! 四角を1つ足す。中心と一辺で置く。
+void AddGadget(std::vector<ViewGadget>& gadgets, ViewGadgetKind kind,
+    ViewGadgetDirection direction, RotationAxis axis, double centerXPx, double centerYPx,
+    double sizePx)
+{
+    ViewGadget gadget;
+    gadget.kind = kind;
+    gadget.direction = direction;
+    gadget.axis = axis;
+    gadget.xPx = centerXPx - sizePx * 0.5;
+    gadget.yPx = centerYPx - sizePx * 0.5;
+    gadget.widthPx = sizePx;
+    gadget.heightPx = sizePx;
+    gadgets.push_back(gadget);
+}
+
+} // namespace
+
+std::string_view ViewGadgetDirectionNameJa(ViewGadgetDirection direction) noexcept
+{
+    switch (direction) {
+    case ViewGadgetDirection::Positive: return "進める";
+    case ViewGadgetDirection::Negative: return "戻す";
+    case ViewGadgetDirection::Up:       return "上へ";
+    case ViewGadgetDirection::Down:     return "下へ";
+    case ViewGadgetDirection::Left:     return "左へ";
+    case ViewGadgetDirection::Right:    return "右へ";
+    }
+    return "不明";
+}
+
+std::string ViewGadgetTooltipJa(const ViewGadget& gadget, RotationAxisMode ringMode)
+{
+    switch (gadget.kind) {
+    case ViewGadgetKind::Home:
+        return "既定の視点へ戻す(斜め上から)";
+    case ViewGadgetKind::Roll:
+        return std::string("画面のまま回す(")
+            + (gadget.direction == ViewGadgetDirection::Positive ? "左回り" : "右回り")
+            + ")";
+    case ViewGadgetKind::Orbit:
+        return std::string("視点を")
+            + std::string(ViewGadgetDirectionNameJa(gadget.direction)) + "回す";
+    case ViewGadgetKind::AxisRing:
+        return std::string(RotationAxisModeNameJa(ringMode)) + " "
+            + std::string(RotationAxisName(gadget.axis)) + "軸まわりに"
+            + std::string(ViewGadgetDirectionNameJa(gadget.direction))
+            + "(押すと15度、引きずると連続。Shiftで細かく、Ctrlで粗く)";
+    case ViewGadgetKind::AlignSelection:
+        return "選んだものに正対する";
+    case ViewGadgetKind::ModeToggle:
+        return std::string("輪の軸の取り方を切り替える(いまは ")
+            + std::string(RotationAxisModeNameJa(ringMode)) + ")";
+    }
+    return {};
+}
+
+ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx, double cubeSizePx,
+    const Quaternion& orientation)
+{
+    ViewGadgetLayout layout;
+    if (!(cubeSizePx > 0.0) || !orientation.IsFinite() || orientation.Norm() <= 0.0) {
+        return layout;
+    }
+    const double button = cubeSizePx * kViewGadgetButtonRatio;
+    const double centerX = cubeLeftPx + cubeSizePx * 0.5;
+    const double centerY = cubeTopPx + cubeSizePx * 0.5;
+    // 立方体は一辺2(-1..+1)。外接球の半径 sqrt(3) が入る大きさで写す。
+    const double scale = cubeSizePx * 0.5 / 1.7320508075688772;
+    const double ringRadius = cubeSizePx * kViewRingRadiusRatio * 0.5 / scale;
+    const Vector3 right = RightOf(orientation);
+    const Vector3 up = UpOf(orientation);
+
+    // 軸ごとの輪。決まった順(X→Y→Z)で作る。
+    for (const RotationAxis axis : {RotationAxis::X, RotationAxis::Y, RotationAxis::Z}) {
+        Vector3 first{};
+        Vector3 second{};
+        RingBasis(axis, first, second);
+        ViewAxisRing ring;
+        ring.axis = axis;
+        ring.points.reserve(static_cast<std::size_t>(kViewRingSampleCount));
+        for (int step = 0; step < kViewRingSampleCount; ++step) {
+            const double angle = 6.283185307179586 * static_cast<double>(step)
+                / static_cast<double>(kViewRingSampleCount);
+            const Vector3 point = first * (ringRadius * std::cos(angle))
+                + second * (ringRadius * std::sin(angle));
+            ring.points.push_back(ToRingScreen(point, right, up, centerX, centerY, scale));
+        }
+        const std::size_t farthest = FarthestPoint(ring.points, centerX, centerY);
+        const std::size_t opposite = (farthest + ring.points.size() / 2) % ring.points.size();
+        ring.positiveHead = ring.points[farthest];
+        ring.positiveTangent = TangentAt(ring.points, farthest);
+        ring.negativeHead = ring.points[opposite];
+        ring.negativeTangent = TangentAt(ring.points, opposite);
+        // 戻す側は、進む向きの逆を向く。
+        ring.negativeTangent.x = -ring.negativeTangent.x;
+        ring.negativeTangent.y = -ring.negativeTangent.y;
+        layout.rings.push_back(std::move(ring));
+    }
+    for (const ViewAxisRing& ring : layout.rings) {
+        AddGadget(layout.gadgets, ViewGadgetKind::AxisRing, ViewGadgetDirection::Positive,
+            ring.axis, ring.positiveHead.x, ring.positiveHead.y, button);
+        AddGadget(layout.gadgets, ViewGadgetKind::AxisRing, ViewGadgetDirection::Negative,
+            ring.axis, ring.negativeHead.x, ring.negativeHead.y, button);
+    }
+
+    // キューブの外側。上に家と2つの丸矢印、右に上下、下に左右。
+    const double outer = cubeSizePx * 0.5 + button * 0.9;
+    AddGadget(layout.gadgets, ViewGadgetKind::Home, ViewGadgetDirection::Positive,
+        RotationAxis::X, cubeLeftPx - button * 0.2, cubeTopPx - button * 0.6, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Positive,
+        RotationAxis::Z, centerX - button * 0.8, cubeTopPx - button * 0.6, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Negative,
+        RotationAxis::Z, centerX + button * 0.8, cubeTopPx - button * 0.6, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Up,
+        RotationAxis::X, centerX + outer, centerY - button * 0.9, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Down,
+        RotationAxis::X, centerX + outer, centerY + button * 0.9, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Left,
+        RotationAxis::Y, centerX - button * 1.1, centerY + outer, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Right,
+        RotationAxis::Y, centerX + button * 1.1, centerY + outer, button);
+    AddGadget(layout.gadgets, ViewGadgetKind::ModeToggle, ViewGadgetDirection::Positive,
+        RotationAxis::X, cubeLeftPx + cubeSizePx + button * 0.2, cubeTopPx - button * 0.6,
+        button);
+    // 「選択に正対」は横に長い。四角を作ってから幅だけ広げる。
+    AddGadget(layout.gadgets, ViewGadgetKind::AlignSelection, ViewGadgetDirection::Positive,
+        RotationAxis::X, centerX, centerY + outer + button * 1.3, button);
+    ViewGadget& align = layout.gadgets.back();
+    align.xPx = cubeLeftPx - button * 0.6;
+    align.widthPx = cubeSizePx + button * 1.2;
+
+    double minX = layout.gadgets.front().xPx;
+    double minY = layout.gadgets.front().yPx;
+    double maxX = minX;
+    double maxY = minY;
+    for (const ViewGadget& gadget : layout.gadgets) {
+        minX = std::min(minX, gadget.xPx);
+        minY = std::min(minY, gadget.yPx);
+        maxX = std::max(maxX, gadget.xPx + gadget.widthPx);
+        maxY = std::max(maxY, gadget.yPx + gadget.heightPx);
+    }
+    layout.xPx = minX;
+    layout.yPx = minY;
+    layout.widthPx = maxX - minX;
+    layout.heightPx = maxY - minY;
+    return layout;
+}
+
+std::optional<std::size_t> ViewGadgetAtScreen(const ViewGadgetLayout& layout, double xPx,
+    double yPx)
+{
+    // 重なっているときは、中心がいちばん近いものを返す。毎回同じ結果になる。
+    std::optional<std::size_t> best;
+    double bestDistance = 0.0;
+    for (std::size_t index = 0; index < layout.gadgets.size(); ++index) {
+        const ViewGadget& gadget = layout.gadgets[index];
+        if (xPx < gadget.xPx || xPx > gadget.xPx + gadget.widthPx || yPx < gadget.yPx
+            || yPx > gadget.yPx + gadget.heightPx) {
+            continue;
+        }
+        const double dx = xPx - gadget.CenterXPx();
+        const double dy = yPx - gadget.CenterYPx();
+        const double distance = dx * dx + dy * dy;
+        if (!best.has_value() || distance < bestDistance) {
+            best = index;
+            bestDistance = distance;
+        }
+    }
+    return best;
+}
+
+Result<Quaternion> RotateByScreenAxis(const Quaternion& orientation,
+    ViewGadgetDirection direction, double degrees)
+{
+    if (!orientation.IsFinite() || orientation.Norm() <= 0.0) {
+        return Result<Quaternion>::Failure(NotFinite("いまの姿勢です。"));
+    }
+    if (!geometry::IsFinite(degrees)) {
+        return Result<Quaternion>::Failure(NotFinite("回す角度です。"));
+    }
+    // 画面の軸で回す。カメラの姿勢から取るので、世界のどこを向いていても同じ操作感になる。
+    const Quaternion unit = Normalized(orientation);
+    Vector3 axis{};
+    double sign = 1.0;
+    switch (direction) {
+    case ViewGadgetDirection::Up:
+        axis = RightOf(unit);
+        sign = 1.0;
+        break;
+    case ViewGadgetDirection::Down:
+        axis = RightOf(unit);
+        sign = -1.0;
+        break;
+    case ViewGadgetDirection::Left:
+        axis = UpOf(unit);
+        sign = 1.0;
+        break;
+    case ViewGadgetDirection::Right:
+        axis = UpOf(unit);
+        sign = -1.0;
+        break;
+    case ViewGadgetDirection::Positive:
+        axis = ForwardOf(unit);
+        sign = 1.0;
+        break;
+    case ViewGadgetDirection::Negative:
+        axis = ForwardOf(unit);
+        sign = -1.0;
+        break;
+    }
+    const Quaternion delta = FromAxisAngle(axis, DegreesToRadians(degrees * sign));
+    return Result<Quaternion>::Success(Normalized(Multiply(unit, delta)));
+}
+
 } // namespace kachakacha::v2::view

@@ -9,7 +9,10 @@ public:
         State_On = 8, State_Off = 16, State_NoChange = 32, State_MouseOver = 64,
         State_HasFocus = 128, State_Selected = 256, State_Active = 512, State_Open = 1024,
         State_Children = 2048, State_Item = 4096, State_Sibling = 8192,
-        State_Horizontal = 16384, State_Editing = 32768 };
+        State_Horizontal = 16384, State_Editing = 32768,
+        State_UpArrow = 65536, State_DownArrow = 131072,
+        State_KeyboardFocusChange = 262144, State_ReadOnly = 524288,
+        State_Window = 1048576, State_Small = 2097152, State_Mini = 4194304 };
     class StateFlags {
     public:
         StateFlags() = default;
@@ -48,10 +51,24 @@ public:
     int midLineWidth = 0;
 };
 
+//! 本物では QStyle::SubControls(旗の束)である。testFlag が要る。
+class QStubSubControlFlags {
+public:
+    QStubSubControlFlags() = default;
+    QStubSubControlFlags(int) {}
+    [[nodiscard]] bool testFlag(int) const;
+    QStubSubControlFlags operator|(int) const;
+    QStubSubControlFlags operator&(int) const;
+    QStubSubControlFlags& operator&=(int);
+    QStubSubControlFlags& operator|=(int);
+    explicit operator bool() const;
+    operator int() const;
+};
+
 class QStyleOptionComplex : public QStyleOption {
 public:
-    int subControls = 0;
-    int activeSubControls = 0;
+    QStubSubControlFlags subControls;
+    QStubSubControlFlags activeSubControls;
 };
 
 class QStyleOptionComboBox : public QStyleOptionComplex {
@@ -92,7 +109,7 @@ public:
     QIcon icon;
     QSize iconSize;
     Qt::ToolButtonStyle toolButtonStyle = Qt::ToolButtonIconOnly;
-    int arrowType = 0;
+    Qt::ArrowType arrowType = Qt::NoArrow;
 };
 
 class QStyleOptionTab : public QStyleOption {
@@ -165,7 +182,11 @@ class QStyleHintReturn;
 
 class QStyle : public QObject {
 public:
-    enum StateFlag { State_None = 0 };
+    // 本物の Qt では QStyleOption::state の型は QStyle::State である。
+    // 当て木でも同じ型にしておかないと、片方で作った旗をもう片方へ渡せない。
+    using StateFlag = QStyleOption::StateFlag;
+    using enum QStyleOption::StateFlag;
+    using State = QStyleOption::StateFlags;
     enum PrimitiveElement { PE_Frame, PE_FrameDefaultButton, PE_FrameDockWidget,
         PE_FrameFocusRect, PE_FrameGroupBox, PE_FrameLineEdit, PE_FrameMenu,
         PE_FrameStatusBarItem, PE_FrameTabWidget, PE_FrameWindow, PE_FrameButtonBevel,
@@ -218,7 +239,14 @@ public:
         PM_ExclusiveIndicatorWidth, PM_ExclusiveIndicatorHeight, PM_ToolBarFrameWidth,
         PM_ToolBarHandleExtent, PM_ToolBarItemSpacing, PM_ToolBarItemMargin,
         PM_ToolBarSeparatorExtent, PM_ToolBarExtensionExtent, PM_SmallIconSize,
-        PM_LargeIconSize, PM_FocusFrameVMargin, PM_FocusFrameHMargin, PM_LayoutLeftMargin,
+        PM_LargeIconSize, PM_ToolBarIconSize,
+        PM_DockWidgetTitleMargin, PM_DockWidgetTitleBarButtonMargin,
+        PM_ToolTipLabelFrameWidth, PM_HeaderMargin, PM_HeaderMarkSize,
+        PM_HeaderGripMargin, PM_TabCloseIndicatorWidth, PM_TabCloseIndicatorHeight,
+        PM_ScrollView_ScrollBarSpacing, PM_ScrollView_ScrollBarOverlap,
+        PM_SubMenuOverlap, PM_TreeViewIndentation, PM_TitleBarButtonSize,
+        PM_TitleBarButtonIconSize, PM_LineEditIconSize, PM_LineEditIconMargin, PM_ListViewIconSize, PM_IconViewIconSize,
+        PM_TabBarIconSize, PM_ButtonIconSize, PM_MessageBoxIconSize, PM_FocusFrameVMargin, PM_FocusFrameHMargin, PM_LayoutLeftMargin,
         PM_LayoutTopMargin, PM_LayoutRightMargin, PM_LayoutBottomMargin,
         PM_LayoutHorizontalSpacing, PM_LayoutVerticalSpacing, PM_CustomBase = 0xf0000000 };
     enum ContentsType { CT_PushButton, CT_CheckBox, CT_RadioButton, CT_ToolButton,
@@ -230,7 +258,12 @@ public:
         SH_ScrollBar_LeftClickAbsolutePosition, SH_MenuBar_AltKeyNavigation,
         SH_Menu_KeyboardSearch, SH_UnderlineShortcut, SH_ToolTipLabel_Opacity,
         SH_ComboBox_Popup, SH_Widget_Animate, SH_Menu_SubMenuPopupDelay,
-        SH_TitleBar_NoBorder, SH_FocusFrame_AboveWidget, SH_CustomBase = 0xf0000000 };
+        SH_TitleBar_NoBorder, SH_FocusFrame_AboveWidget,
+        SH_Menu_MouseTracking, SH_MenuBar_MouseTracking, SH_ItemView_ShowDecorationSelected,
+        SH_ItemView_ActivateItemOnSingleClick, SH_Table_GridLineColor,
+        SH_Menu_Scrollable, SH_Menu_SloppySubMenus, SH_ToolBox_SelectedPageTitleBold,
+        SH_Button_FocusPolicy, SH_ComboBox_ListMouseTracking,
+        SH_CustomBase = 0xf0000000 };
     enum SubElement { SE_PushButtonContents, SE_PushButtonFocusRect, SE_CheckBoxIndicator,
         SE_CheckBoxContents, SE_CheckBoxFocusRect, SE_RadioButtonIndicator,
         SE_RadioButtonContents, SE_RadioButtonFocusRect, SE_ProgressBarGroove,
@@ -240,7 +273,13 @@ public:
         SE_DockWidgetFloatButton, SE_DockWidgetTitleBarText, SE_DockWidgetIcon,
         SE_CustomBase = 0xf0000000 };
     enum StandardPixmap { SP_TitleBarCloseButton, SP_TitleBarNormalButton,
-        SP_DockWidgetCloseButton, SP_CustomBase = 0xf0000000 };
+        SP_TitleBarMinButton, SP_TitleBarMaxButton, SP_TitleBarShadeButton,
+        SP_TitleBarUnshadeButton, SP_DockWidgetCloseButton,
+        SP_FileIcon, SP_DirIcon, SP_DirOpenIcon, SP_ComputerIcon, SP_TrashIcon,
+        SP_ArrowBack, SP_ArrowForward,
+        SP_DialogOpenButton, SP_DialogSaveButton, SP_DialogCancelButton,
+        SP_DialogApplyButton, SP_DialogHelpButton,
+        SP_CustomBase = 0xf0000000 };
     virtual QPixmap standardPixmap(StandardPixmap, const QStyleOption* = nullptr,
         const QWidget* = nullptr) const;
     virtual QIcon standardIcon(StandardPixmap, const QStyleOption* = nullptr,

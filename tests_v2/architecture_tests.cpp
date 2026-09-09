@@ -429,6 +429,34 @@ KACHA_V2_TEST(architecture, every_v2_target_gets_the_shared_compile_options)
             + Join(offenders));
 }
 
+KACHA_V2_TEST(architecture, every_screen_source_is_built_and_type_checked)
+{
+    // 画面のファイルを足したのに CMake へ書き忘れると、
+    // 雲では何も起きず、PC のビルドで初めて分かる。実際に一度そうなった。
+    // 雲の側で「並べ忘れ」を捕まえる。
+    const std::filesystem::path dir = RepoRoot() / "src" / "apps" / "cad_next";
+    const std::string cmake = ReadFile(RepoRoot() / "CMakeLists.txt");
+    const std::string typecheck = ReadFile(RepoRoot() / "tools" / "qtstub" / "typecheck.sh");
+    std::vector<std::string> missing;
+    std::vector<std::string> names;
+    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".cpp") {
+            continue;
+        }
+        const std::string name = entry.path().filename().string();
+        names.push_back(name);
+        if (cmake.find("src/apps/cad_next/" + name) == std::string::npos) {
+            missing.push_back(name);
+        }
+    }
+    Require(!names.empty(), "画面のファイルが1つ以上ある");
+    Require(missing.empty(),
+        "every cad_next source is listed in CMakeLists.txt: " + Join(missing));
+    // 型検査は並べずに拾う。並べると、また漏れる。
+    Require(typecheck.find("src/apps/cad_next/*.cpp") != std::string::npos,
+        "typecheck.sh collects cad_next sources with a glob, not a hand-written list");
+}
+
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)
 {
     // 走査が本当に効いているかを、その場で作った文字列で確かめる。

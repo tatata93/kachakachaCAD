@@ -8,6 +8,8 @@ public:
     QPoint(int, int) {}
     [[nodiscard]] int x() const;
     [[nodiscard]] int y() const;
+    QPoint operator-(const QPoint&) const;
+    QPoint operator+(const QPoint&) const;
 };
 
 class QPointF {
@@ -30,6 +32,11 @@ public:
     QSize(int, int) {}
     [[nodiscard]] int width() const;
     [[nodiscard]] int height() const;
+    void setWidth(int);
+    void setHeight(int);
+    [[nodiscard]] QSize expandedTo(const QSize&) const;
+    [[nodiscard]] QSize boundedTo(const QSize&) const;
+    [[nodiscard]] bool isEmpty() const;
     QSize operator*(double) const;
 };
 
@@ -37,6 +44,21 @@ class QRect {
 public:
     QRect() = default;
     QRect(int, int, int, int) {}
+    void setSize(const QSize&);
+    void moveCenter(const QPoint&);
+    void moveTo(int, int);
+    void moveTopLeft(const QPoint&);
+    [[nodiscard]] bool isValid() const;
+    void setTop(int);
+    void setBottom(int);
+    void setLeft(int);
+    void setRight(int);
+    void translate(int, int);
+    void translate(const QPoint&);
+    [[nodiscard]] QPoint topLeft() const;
+    [[nodiscard]] QPoint topRight() const;
+    [[nodiscard]] QPoint bottomLeft() const;
+    [[nodiscard]] QPoint bottomRight() const;
     [[nodiscard]] int x() const;
     [[nodiscard]] int y() const;
     [[nodiscard]] int left() const;
@@ -98,6 +120,7 @@ public:
     QBrush(const QColor&) {}
     QBrush(const QColor&, Qt::BrushStyle) {}
     QBrush(Qt::GlobalColor) {}
+    QBrush(const class QPixmap&) {}
     [[nodiscard]] QColor color() const;
 };
 
@@ -127,6 +150,15 @@ public:
     [[nodiscard]] QString family() const;
     enum Weight { Normal = 400, Bold = 700 };
     void setWeight(Weight);
+    enum StyleStrategy { PreferDefault, PreferBitmap, PreferDevice, PreferOutline,
+        ForceOutline, PreferMatch, PreferQuality, PreferAntialias, NoAntialias };
+    void setStyleStrategy(StyleStrategy);
+    enum StyleHint { Helvetica, SansSerif, Times, Serif, Courier, TypeWriter, System, AnyStyle };
+    void setStyleHint(StyleHint, StyleStrategy = PreferDefault);
+    void setPixelSize(int);
+    void setItalic(bool);
+    void setUnderline(bool);
+    [[nodiscard]] bool bold() const;
 };
 
 class QFontMetrics {
@@ -136,6 +168,8 @@ public:
     [[nodiscard]] int ascent() const;
     [[nodiscard]] int horizontalAdvance(const QString&) const;
     [[nodiscard]] QRect boundingRect(const QString&) const;
+    [[nodiscard]] int descent() const;
+    [[nodiscard]] QString elidedText(const QString&, Qt::TextElideMode, int, int = 0) const;
 };
 
 class QFontDatabase {
@@ -200,6 +234,7 @@ public:
     QPixmap() = default;
     QPixmap(int, int) {}
     QPixmap(const QSize&) {}
+    [[nodiscard]] QRect rect() const;
     void fill(const QColor&);
     [[nodiscard]] bool isNull() const;
     [[nodiscard]] QImage toImage() const;
@@ -212,6 +247,10 @@ class QIcon {
 public:
     QIcon() = default;
     QIcon(const QPixmap&) {}
+    enum Mode { Normal, Disabled, Active, Selected };
+    enum State { Off, On };
+    [[nodiscard]] QPixmap pixmap(const QSize&, Mode = Normal, State = Off) const;
+    [[nodiscard]] QPixmap pixmap(int, int, Mode = Normal, State = Off) const;
     [[nodiscard]] bool isNull() const;
 };
 
@@ -219,7 +258,7 @@ class QPalette {
 public:
     enum ColorRole { Window, WindowText, Base, AlternateBase, Text, Button, ButtonText,
         BrightText, Highlight, HighlightedText, Light, Midlight, Dark, Mid, Shadow,
-        ToolTipBase, ToolTipText, PlaceholderText, NoRole };
+        ToolTipBase, ToolTipText, PlaceholderText, Link, LinkVisited, NoRole };
     enum ColorGroup { Active, Disabled, Inactive, All };
     QPalette() = default;
     void setColor(ColorRole, const QColor&);
@@ -240,6 +279,10 @@ public:
     QPainter() = default;
     explicit QPainter(QPaintDevice*) {}
     void setRenderHint(RenderHint, bool = true);
+    void drawPixmap(const QPoint&, const QPixmap&);
+    void drawPoint(int, int);
+    void drawPoint(const QPoint&);
+    void drawPoint(const QPointF&);
     void setPen(const QPen&);
     void setPen(const QColor&);
     void setPen(Qt::PenStyle);
@@ -261,6 +304,10 @@ public:
     void fillRect(const QRect&, const QBrush&);
     void fillRect(const QRectF&, const QColor&);
     void fillRect(const QRectF&, const QBrush&);
+    void drawRect(int, int, int, int);
+    void drawEllipse(int, int, int, int);
+    void fillRect(int, int, int, int, const QColor&);
+    void fillRect(int, int, int, int, const QBrush&);
     void drawRect(const QRect&);
     void drawRect(const QRectF&);
     void drawLine(const QPointF&, const QPointF&);

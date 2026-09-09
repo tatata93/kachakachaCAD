@@ -11,6 +11,10 @@ public:
     [[nodiscard]] QString objectName() const;
     [[nodiscard]] QObject* parent() const;
     void setParent(QObject*);
+    [[nodiscard]] QVariant property(const char*) const;
+    void setBackgroundRole(QPalette::ColorRole);
+    void setAutoFillBackground(bool);
+    bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}
     template<class Sender, class Signal, class Context, class Slot>
@@ -179,10 +183,20 @@ public:
     void setForeground(const QColor&);
 };
 
-class QAbstractScrollArea : public QWidget {
+class QFrame : public QWidget {
+public:
+    enum Shape { NoFrame, Box, Panel, WinPanel, HLine, VLine, StyledPanel };
+    enum Shadow { Plain, Raised, Sunken };
+    void setFrameShape(Shape);
+    void setFrameShadow(Shadow);
+    void setLineWidth(int);
+};
+
+class QAbstractScrollArea : public QFrame {
 public:
     void setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy);
     void setVerticalScrollBarPolicy(Qt::ScrollBarPolicy);
+    [[nodiscard]] QWidget* viewport() const;
 };
 
 class QAbstractItemView : public QAbstractScrollArea {
@@ -282,7 +296,8 @@ public:
 
 class QTabBar : public QWidget {
 public:
-    enum Shape { RoundedNorth, RoundedSouth };
+    enum Shape { RoundedNorth, RoundedSouth, RoundedWest, RoundedEast,
+        TriangularNorth, TriangularSouth, TriangularWest, TriangularEast };
 };
 
 class QCoreApplication : public QObject {

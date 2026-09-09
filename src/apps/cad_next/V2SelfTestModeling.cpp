@@ -367,6 +367,8 @@ namespace {
         return false;
     }
     return Explain("一覧にも出ている", window.EntityRowCount() > 0);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ModelingCases()

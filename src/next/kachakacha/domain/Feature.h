@@ -127,9 +127,85 @@ struct FreezeDerivedDefinition {
     std::vector<EntityId> sources;
 };
 
+//! 作業平面。作り方と、それに要る入力を持つ。
+//! 出来上がりの枠(原点と3軸)は再計算で出せるので、ここには持たない。
+//! 持つと、入力を変えたのに枠が古いまま、という食い違いが起きる。
+struct CreateWorkPlaneDefinition {
+    //! modeling::WorkPlaneMethod と同じ並び。core への依存を増やさないため数で持つ。
+    int method = 0;
+    std::vector<EntityId> inputs;
+    geometry::Vector3 origin{};
+    geometry::Vector3 normal{0.0, 0.0, 1.0};
+    geometry::Vector3 uDirection{1.0, 0.0, 0.0};
+    geometry::EvaluatedValue offset;   //!< 平行移動の距離など
+};
+
+//! 線を面へ落とす。
+struct ProjectWireDefinition {
+    std::vector<EntityId> inputs;
+    EntityId targetPlaneId;
+    geometry::Vector3 direction{0.0, 0.0, -1.0};
+};
+
+//! 形状ガイドの面。役割ごとの線の並びを持つ。
+struct CreateGuideSurfaceDefinition {
+    //! modeling::GuideSurfaceMethod と同じ並び。
+    int method = 0;
+    //! 役割ごとの鎖。並びは modeling::ChainRole の順。
+    std::vector<WireChainRef> chains;
+    //! 各鎖の役割。chains と同じ長さ。
+    std::vector<int> roles;
+};
+
+//! 押し出し。
+struct ExtrudeDefinition {
+    std::vector<EntityId> profiles;
+    geometry::Vector3 direction{0.0, 0.0, 1.0};
+    geometry::EvaluatedValue distance;
+    //! modeling::ExtrudeExtentMode / ExtrudeBooleanMode と同じ並び。
+    int extentMode = 0;
+    int booleanMode = 0;
+    std::vector<EntityId> targets;
+};
+
+//! 閉じたかごから部品を作る。
+struct CreatePartFromWireCageDefinition {
+    std::vector<EntityId> wires;
+    geometry::EvaluatedValue thickness;
+    //! 板厚をどちらへ付けるか。0=外側 1=中央 2=内側。
+    int placement = 1;
+};
+
+//! 足す・引く。
+struct BooleanDefinition {
+    //! 0=足す 1=引く。
+    int mode = 0;
+    std::vector<EntityId> targets;
+    std::vector<EntityId> tools;
+};
+
+//! 製作モデル。
+struct CreateFabricationModelDefinition {
+    std::vector<EntityId> parts;
+    geometry::EvaluatedValue materialThickness;
+    geometry::EvaluatedValue targetMaxDeviation;
+    int fidelity = 6;
+};
+
+//! 型紙。
+struct CreatePatternDefinition {
+    std::vector<EntityId> fabricationModels;
+    geometry::EvaluatedValue pageWidth;
+    geometry::EvaluatedValue pageHeight;
+    geometry::EvaluatedValue marginMm;
+};
+
 //! 種類ごとの定義。まだ実装していないFeatureは空の定義を持つ。
 using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
-    CreateWireDefinition, TransformWireDefinition, FreezeDerivedDefinition>;
+    CreateWireDefinition, TransformWireDefinition, FreezeDerivedDefinition,
+    CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
+    ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
+    CreateFabricationModelDefinition, CreatePatternDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

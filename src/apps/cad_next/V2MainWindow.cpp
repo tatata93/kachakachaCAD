@@ -1085,6 +1085,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunFileCommand(id);
         return;
     }
+    if (IsPlaneCommand(id)) {
+        RunPlaneCommand(id);
+        return;
+    }
     if (IsWireEditCommand(id)) {
         RunWireEditCommand(id);
         return;

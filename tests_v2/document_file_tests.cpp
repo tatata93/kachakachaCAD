@@ -306,6 +306,10 @@ KACHA_V2_TEST(documentFile, 一通りの中身が往復する)
     const DocumentFile original = MakeSampleDocument();
     const std::string text = WriteDocumentJson(original);
     const auto read = ReadDocumentJson(text);
+    for (const auto& diagnostic : read.Diagnostics()) {
+        Require(!diagnostic.IsError(), "読めること: " + diagnostic.code + " "
+                + diagnostic.summaryJa + " / " + diagnostic.detailsJa);
+    }
     Require(read.HasValue(), "読めること");
     const DocumentFile& loaded = read.Value();
 

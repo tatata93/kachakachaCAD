@@ -245,6 +245,33 @@ template<class Id>
     return JsonValue::Object(std::move(object));
 }
 
+//! IDの並びを書く。新しい定義がどれもこの形なので、1か所にまとめる。
+[[nodiscard]] JsonValue WriteIdArray(const std::vector<EntityId>& ids)
+{
+    JsonArray array;
+    for (const EntityId& id : ids) {
+        array.push_back(WriteId(id));
+    }
+    return JsonValue::Array(std::move(array));
+}
+
+//! 役割1つぶんの鎖。線の参照と、向きを反転するかどうか。
+[[nodiscard]] JsonValue WriteChainRef(const domain::WireChainRef& chain)
+{
+    JsonObject object;
+    JsonArray segments;
+    for (const SegmentRef& reference : chain.segments) {
+        segments.push_back(WriteSegmentRef(reference));
+    }
+    object["segments"] = JsonValue::Array(std::move(segments));
+    JsonArray reversed;
+    for (const bool flipped : chain.reversed) {
+        reversed.push_back(JsonValue::Bool(flipped));
+    }
+    object["reversed"] = JsonValue::Array(std::move(reversed));
+    return JsonValue::Object(std::move(object));
+}
+
 [[nodiscard]] JsonValue WriteDefinition(const Feature& feature)
 {
     JsonObject definition;
@@ -290,6 +317,63 @@ template<class Id>
             sources.push_back(WriteId(id));
         }
         definition["sources"] = JsonValue::Array(std::move(sources));
+    } else if (const auto* plane =
+                   std::get_if<domain::CreateWorkPlaneDefinition>(&feature.definition)) {
+        definition["method"] = JsonValue::Number(static_cast<double>(plane->method));
+        definition["inputs"] = WriteIdArray(plane->inputs);
+        definition["origin"] = WriteVector(plane->origin);
+        definition["normal"] = WriteVector(plane->normal);
+        definition["uDirection"] = WriteVector(plane->uDirection);
+        definition["offset"] = WriteExpression(plane->offset);
+    } else if (const auto* project =
+                   std::get_if<domain::ProjectWireDefinition>(&feature.definition)) {
+        definition["inputs"] = WriteIdArray(project->inputs);
+        definition["targetPlaneId"] = WriteId(project->targetPlaneId);
+        definition["direction"] = WriteVector(project->direction);
+    } else if (const auto* guide =
+                   std::get_if<domain::CreateGuideSurfaceDefinition>(&feature.definition)) {
+        definition["method"] = JsonValue::Number(static_cast<double>(guide->method));
+        JsonArray chains;
+        for (const domain::WireChainRef& chain : guide->chains) {
+            chains.push_back(WriteChainRef(chain));
+        }
+        definition["chains"] = JsonValue::Array(std::move(chains));
+        JsonArray roles;
+        for (const int role : guide->roles) {
+            roles.push_back(JsonValue::Number(static_cast<double>(role)));
+        }
+        definition["roles"] = JsonValue::Array(std::move(roles));
+    } else if (const auto* extrude =
+                   std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
+        definition["profiles"] = WriteIdArray(extrude->profiles);
+        definition["direction"] = WriteVector(extrude->direction);
+        definition["distance"] = WriteExpression(extrude->distance);
+        definition["extentMode"] = JsonValue::Number(static_cast<double>(extrude->extentMode));
+        definition["booleanMode"] = JsonValue::Number(
+            static_cast<double>(extrude->booleanMode));
+        definition["targets"] = WriteIdArray(extrude->targets);
+    } else if (const auto* cage = std::get_if<domain::CreatePartFromWireCageDefinition>(
+                   &feature.definition)) {
+        definition["wires"] = WriteIdArray(cage->wires);
+        definition["thickness"] = WriteExpression(cage->thickness);
+        definition["placement"] = JsonValue::Number(static_cast<double>(cage->placement));
+    } else if (const auto* boolean =
+                   std::get_if<domain::BooleanDefinition>(&feature.definition)) {
+        definition["mode"] = JsonValue::Number(static_cast<double>(boolean->mode));
+        definition["targets"] = WriteIdArray(boolean->targets);
+        definition["tools"] = WriteIdArray(boolean->tools);
+    } else if (const auto* fabrication = std::get_if<domain::CreateFabricationModelDefinition>(
+                   &feature.definition)) {
+        definition["parts"] = WriteIdArray(fabrication->parts);
+        definition["materialThickness"] = WriteExpression(fabrication->materialThickness);
+        definition["targetMaxDeviation"] = WriteExpression(fabrication->targetMaxDeviation);
+        definition["fidelity"] = JsonValue::Number(static_cast<double>(fabrication->fidelity));
+    } else if (const auto* pattern =
+                   std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
+        definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);
+        definition["pageWidth"] = WriteExpression(pattern->pageWidth);
+        definition["pageHeight"] = WriteExpression(pattern->pageHeight);
+        definition["margin"] = WriteExpression(pattern->marginMm);
     }
     return JsonValue::Object(std::move(definition));
 }
@@ -529,6 +613,17 @@ public:
         return *value;
     }
 
+    //! 無くてもよい数。古い文書に項目が無いことがあるので、既定値を返す。
+    [[nodiscard]] double NumberOr(const JsonValue& parent, const char* key,
+        double fallback)
+    {
+        const JsonValue* found = parent.Find(key);
+        if (found == nullptr || found->Type() != JsonType::Number) {
+            return fallback;
+        }
+        return found->AsNumber();
+    }
+
     [[nodiscard]] double Number(const JsonValue& parent, const char* key,
         const std::string& where)
     {
@@ -732,9 +827,58 @@ private:
     return reference;
 }
 
+//! IDの並びを読む。新しい定義がどれもこの形なので、1か所にまとめる。
+[[nodiscard]] std::vector<EntityId> ReadIdArray(Loader& loader, const JsonValue& parent,
+    const char* key, const std::string& where)
+{
+    std::vector<EntityId> ids;
+    const JsonArray* array = loader.ArrayAt(parent, key, where);
+    if (array == nullptr) {
+        return ids;
+    }
+    for (std::size_t index = 0; index < array->size(); ++index) {
+        const JsonValue& item = (*array)[index];
+        const std::string place = where + "." + key + "[" + std::to_string(index) + "]";
+        if (item.Type() != JsonType::String) {
+            loader.Fail(kBadValue, "IDは文字列でなければなりません。", place);
+            continue;
+        }
+        ids.push_back(loader.ParseId<EntityId>(item.AsString(), place));
+    }
+    return ids;
+}
+
+//! 役割1つぶんの鎖を読む。
+[[nodiscard]] domain::WireChainRef ReadChainRef(Loader& loader, const JsonValue& value,
+    const std::string& where)
+{
+    domain::WireChainRef chain;
+    const JsonArray* segments = loader.ArrayAt(value, "segments", where);
+    if (segments != nullptr) {
+        for (std::size_t index = 0; index < segments->size(); ++index) {
+            chain.segments.push_back(ReadSegmentRef(loader, (*segments)[index],
+                where + ".segments[" + std::to_string(index) + "]"));
+        }
+    }
+    const JsonArray* reversed = loader.ArrayAt(value, "reversed", where);
+    if (reversed != nullptr) {
+        for (const JsonValue& item : *reversed) {
+            chain.reversed.push_back(item.Type() == JsonType::Bool && item.AsBool());
+        }
+    }
+    return chain;
+}
+
 void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definition,
     const std::string& where)
 {
+    // 中身の無い定義は、そのまま空にしておく。
+    // 定義を足す前に書かれた文書には、その項目がまだ無い。
+    // 「必要な項目がありません」と言って読めなくすると、古い文書が開けなくなる。
+    // 新しく書いたものは必ず項目を持つので、そちらは下の検査が効く。
+    if (definition.Type() != JsonType::Object || definition.AsObject().empty()) {
+        return;
+    }
     switch (feature.type) {
     case FeatureType::CreatePoint: {
         CreatePointDefinition made;
@@ -809,6 +953,94 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
                     where + ".sources[" + std::to_string(index) + "]"));
             }
         }
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::CreateWorkPlane: {
+        domain::CreateWorkPlaneDefinition made;
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        made.inputs = ReadIdArray(loader, definition, "inputs", where);
+        made.origin = loader.ReadVector(definition, "origin", where);
+        made.normal = loader.ReadVector(definition, "normal", where);
+        made.uDirection = loader.ReadVector(definition, "uDirection", where);
+        made.offset = loader.ReadExpression(definition, "offset", where);
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::ProjectWire: {
+        domain::ProjectWireDefinition made;
+        made.inputs = ReadIdArray(loader, definition, "inputs", where);
+        made.targetPlaneId = loader.ParseId<EntityId>(
+            loader.String(definition, "targetPlaneId", where), where + ".targetPlaneId");
+        made.direction = loader.ReadVector(definition, "direction", where);
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::CreateGuideSurface: {
+        domain::CreateGuideSurfaceDefinition made;
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        const JsonArray* chains = loader.ArrayAt(definition, "chains", where);
+        if (chains != nullptr) {
+            for (std::size_t index = 0; index < chains->size(); ++index) {
+                made.chains.push_back(ReadChainRef(loader, (*chains)[index],
+                    where + ".chains[" + std::to_string(index) + "]"));
+            }
+        }
+        const JsonArray* roles = loader.ArrayAt(definition, "roles", where);
+        if (roles != nullptr) {
+            for (const JsonValue& item : *roles) {
+                made.roles.push_back(item.Type() == JsonType::Number
+                        ? static_cast<int>(item.AsNumber())
+                        : 0);
+            }
+        }
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::Extrude: {
+        domain::ExtrudeDefinition made;
+        made.profiles = ReadIdArray(loader, definition, "profiles", where);
+        made.direction = loader.ReadVector(definition, "direction", where);
+        made.distance = loader.ReadExpression(definition, "distance", where);
+        made.extentMode = static_cast<int>(loader.NumberOr(definition, "extentMode", 0.0));
+        made.booleanMode = static_cast<int>(loader.NumberOr(definition, "booleanMode", 0.0));
+        made.targets = ReadIdArray(loader, definition, "targets", where);
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::CreatePartFromWireCage: {
+        domain::CreatePartFromWireCageDefinition made;
+        made.wires = ReadIdArray(loader, definition, "wires", where);
+        made.thickness = loader.ReadExpression(definition, "thickness", where);
+        made.placement = static_cast<int>(loader.NumberOr(definition, "placement", 1.0));
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::Boolean: {
+        domain::BooleanDefinition made;
+        made.mode = static_cast<int>(loader.NumberOr(definition, "mode", 0.0));
+        made.targets = ReadIdArray(loader, definition, "targets", where);
+        made.tools = ReadIdArray(loader, definition, "tools", where);
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::CreateFabricationModel: {
+        domain::CreateFabricationModelDefinition made;
+        made.parts = ReadIdArray(loader, definition, "parts", where);
+        made.materialThickness = loader.ReadExpression(definition, "materialThickness",
+            where);
+        made.targetMaxDeviation = loader.ReadExpression(definition, "targetMaxDeviation",
+            where);
+        made.fidelity = static_cast<int>(loader.NumberOr(definition, "fidelity", 6.0));
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::CreatePattern: {
+        domain::CreatePatternDefinition made;
+        made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);
+        made.pageWidth = loader.ReadExpression(definition, "pageWidth", where);
+        made.pageHeight = loader.ReadExpression(definition, "pageHeight", where);
+        made.marginMm = loader.ReadExpression(definition, "margin", where);
         feature.definition = std::move(made);
         break;
     }

@@ -168,6 +168,24 @@ private:
     void RunExportCommand(std::string_view id);
     //! 出す先・開く先を尋ねる。差し替えが無ければ Qt のダイアログを出す。
     [[nodiscard]] QString AskForPath(bool forSave);
+    //! 基準のコマンドか。V2PlaneCommands.cpp が持つ。
+    [[nodiscard]] static bool IsPlaneCommand(std::string_view id);
+    void RunPlaneCommand(std::string_view id);
+    //! 標準面を1つ作って、作業中にする。押すたびに XY→YZ→ZX と回る。
+    void CreateStandardWorkPlane();
+    //! 選んでいる作業平面を作業中にする。
+    void ActivateSelectedWorkPlane();
+    //! 作業平面を画面と場面へ反映する。
+    void ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame& frame,
+        const kachakacha::v2::base::EntityId& entityId);
+    //! グリッドの間隔を順ぐりに変える。
+    void CycleGridSpacing();
+    //! 次に作る標準面。
+    kachakacha::v2::modeling::StandardPlaneKind nextStandardPlane_ =
+        kachakacha::v2::modeling::StandardPlaneKind::ZX;
+    //! いま作業中の作業平面。無ければ空。
+    kachakacha::v2::base::EntityId activeWorkPlaneId_;
+
     //! 線の編集コマンドか。V2WireCommands.cpp が持つ。
     [[nodiscard]] static bool IsWireEditCommand(std::string_view id);
     //! 線の編集を通す。判断は core にあり、ここは渡すだけ。

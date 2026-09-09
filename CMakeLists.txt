@@ -734,6 +734,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)
     kachakacha_add_v2_test(zip_tests tests_v2/zip_tests.cpp)
     kachakacha_add_v2_test(document_file_tests tests_v2/document_file_tests.cpp)
+    kachakacha_add_v2_test(feature_definition_tests tests_v2/feature_definition_tests.cpp)
     kachakacha_add_v2_test(atomic_file_tests tests_v2/atomic_file_tests.cpp)
 
     target_link_libraries(kachakacha_v2_scaffold_tests PRIVATE kachakacha_v2_occt)
@@ -788,6 +789,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp
+        src/apps/cad_next/V2PlaneCommands.cpp
         src/apps/cad_next/V2WireCommands.cpp
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp

@@ -1067,6 +1067,65 @@ struct SelfTestCase {
         window.Session().GetDocument().Revision() == before);
 }
 
+[[nodiscard]] bool CaseWorkPlaneIsCreatedAndActivated(V2MainWindow& window)
+{
+    // 作業平面は文書に入る。画面の飾りではない。
+    // 入れないと「この線はどの面の上か」があとで誰にも分からなくなる。
+    const std::size_t before = window.Session().GetDocument().Snapshot().entities.size();
+    window.RunCommand("workplane.create");
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    if (!Explain((std::string("ものが増えた(") + std::to_string(before) + " → "
+                     + std::to_string(snapshot.entities.size()) + ")").c_str(),
+            snapshot.entities.size() == before + 1)) {
+        return false;
+    }
+    int planes = 0;
+    for (const auto& entity : snapshot.entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
+            ++planes;
+        }
+    }
+    if (!Explain("作業平面が1つある", planes == 1)) {
+        return false;
+    }
+    // 押すたびに別の標準面ができる。1つしか作れないと側面図が描けない。
+    window.RunCommand("workplane.create");
+    window.RunCommand("workplane.create");
+    int all = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
+            ++all;
+        }
+    }
+    if (!Explain((std::string("3面できる(実際は ") + std::to_string(all) + ")").c_str(),
+            all == 3)) {
+        return false;
+    }
+    window.RunCommand("workplane.set_active");
+    return Explain((std::string("作業中にできる(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("作業中")));
+}
+
+[[nodiscard]] bool CaseGridSpacingCycles(V2MainWindow& window)
+{
+    // グリッドは見え方の都合なので文書に入れない。
+    // 入れると、開いた相手の画面のグリッドまで変わってしまう。
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    const double first = window.Session().Scene().grid.majorSpacingMm;
+    window.RunCommand("grid.edit");
+    const double second = window.Session().Scene().grid.majorSpacingMm;
+    if (!Explain((std::string("間隔が変わる(") + std::to_string(first) + " → "
+                     + std::to_string(second) + ")").c_str(), first != second)) {
+        return false;
+    }
+    if (!Explain("正の数のまま", second > 0.0)) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
 {
     // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
@@ -1159,6 +1218,8 @@ const SelfTestCase kCases[] = {
     {"操作板の回す部品は15度だけ回る", &CaseViewPanelTurnsFifteenDegrees},
     {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
     {"家で等角ビューへ戻る", &CaseViewPanelHome},
+    {"作業平面を作って作業中にできる", &CaseWorkPlaneIsCreatedAndActivated},
+    {"グリッドの間隔を変えられる", &CaseGridSpacingCycles},
     {"分割で線が増える", &CaseWireSplitMakesMorePieces},
     {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
     {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},

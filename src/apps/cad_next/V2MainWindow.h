@@ -242,13 +242,16 @@ private:
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
     [[nodiscard]] bool UnfoldSelectedSurfaces(
         std::vector<kachakacha::v2::fabrication::PatternPanel>& into);
-    //! 選んだ線を、いまの部材の開口にする。
+    //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
     void AssignOpeningRole();
     //! 部材のもとになった輪郭と、入れた開口。作り直しに使う。
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>
         panelBoundary_;
     std::map<std::string,
         std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelOpenings_;
+    //! 入れた折り線。切らないので開口とは別に持つ。
+    std::map<std::string,
+        std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelFolds_;
     //! 出来た部材。平らなものだけ。
     std::vector<kachakacha::v2::fabrication::PatternPanel> fabricationPanels_;
     //! 並べた型紙。書き出しはこれを使う。

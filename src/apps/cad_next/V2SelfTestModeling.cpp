@@ -659,9 +659,11 @@ namespace {
     }
     viewport.SetSelection(last);
     window.RunCommand("fabrication.assign_role");
-    return Explain((std::string("閉じた輪を求める(") + window.StatusText().toStdString()
+    // 閉じていない線は折り線になる。切らない。
+    return Explain((std::string("折り線として扱う(") + window.StatusText().toStdString()
                        + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("閉じた輪")));
+        window.StatusText().contains(QStringLiteral("折り線"))
+            || window.StatusText().contains(QStringLiteral("載っていません")));
 }
 
 [[nodiscard]] bool CaseSurfaceToPatternEndToEnd(V2MainWindow& window)
@@ -762,7 +764,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},
         {"固定しても元は残る", &CaseFreezeKeepsTheOriginal},
-        {"開口は閉じた輪でなければ断る", &CaseOpeningMustBeClosed},
+        {"閉じていない線は折り線になる", &CaseOpeningMustBeClosed},
         {"配る見本が開ける", &CaseSampleDocumentOpens},
     };
 }

@@ -63,6 +63,9 @@ Result<PatternPanel> BuildPlanarPanel(const PlanarPanelRequest& request,
     for (const auto& opening : request.openings) {
         everything.insert(everything.end(), opening.begin(), opening.end());
     }
+    for (const auto& fold : request.folds) {
+        everything.insert(everything.end(), fold.begin(), fold.end());
+    }
     const PlanarityCheck check = CheckPlanar(everything, toleranceMm);
     if (!check.planar) {
         // 曲がった面は展開が要る。ここで近似すると、切ってから合わないことに気づく。
@@ -81,6 +84,20 @@ Result<PatternPanel> BuildPlanarPanel(const PlanarPanelRequest& request,
     for (const auto& opening : request.openings) {
         panel.openings.push_back(
             geometry::ProjectToFrame(SampleAll(opening, toleranceMm), frame));
+    }
+    for (std::size_t index = 0; index < request.folds.size(); ++index) {
+        PatternPanel::Fold fold;
+        fold.foldId = request.panelId + "-fold" + std::to_string(index + 1);
+        fold.path = geometry::ProjectToFrame(SampleAll(request.folds[index], toleranceMm),
+            frame);
+        const bool mountain = index < request.foldIsMountain.size()
+            ? request.foldIsMountain[index]
+            : true;
+        fold.sense = mountain ? FoldSense::Mountain : FoldSense::Valley;
+        // 角度はまだ決めない。組立状態を入れるときに決まる。
+        // ここで勝手に90度と書くと、決めたことにされてしまう。
+        fold.angleRad = 0.0;
+        panel.folds.push_back(std::move(fold));
     }
     return Out::Success(std::move(panel));
 }
@@ -146,6 +163,19 @@ Result<std::vector<exporters::PatternCurve>> PlacePanelCurves(const PatternPanel
     for (const auto& opening : panel.openings) {
         addLoop(opening, exporters::PatternLine::Opening);
     }
+    // 折り線は閉じない。閉じると、折るところが切り抜かれてしまう。
+    for (const auto& fold : panel.folds) {
+        const bool mountain = fold.sense == FoldSense::Mountain;
+        for (std::size_t index = 0; index + 1 < fold.path.size(); ++index) {
+            const auto line = CurveSegment::MakeLine(place(fold.path[index]),
+                place(fold.path[index + 1]));
+            if (!line.HasValue()) {
+                continue;
+            }
+            curves.push_back(exporters::PatternCurve{exporters::PatternLine::Fold,
+                line.Value(), mountain, fold.foldId});
+        }
+    }
     if (curves.empty()) {
         return Out::Failure(MakeError("FAB-P003", "型紙にする外周がありません。",
             "部材 " + panel.panelId + " から切る線を作れませんでした。"));
@@ -176,6 +206,13 @@ std::optional<std::size_t> PanelForOpening(const std::vector<PlanarPanelRequest>
     }
     // どれにも載っていない。近いほうへ寄せない。頼んでいない壁に穴が開く。
     return std::nullopt;
+}
+
+std::optional<std::size_t> PanelForFold(const std::vector<PlanarPanelRequest>& requests,
+    const std::vector<geometry::CurveSegment>& fold, double toleranceMm)
+{
+    // 決め方は開口と同じ。折り線も、それが引かれている壁のものである。
+    return PanelForOpening(requests, fold, toleranceMm);
 }
 
 } // namespace kachakacha::v2::fabrication

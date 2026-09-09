@@ -33,6 +33,11 @@ struct PlanarPanelRequest {
     std::vector<geometry::CurveSegment> boundary;
     //! 開口(窓など)の線。外周と同じ平面に載っていること。
     std::vector<std::vector<geometry::CurveSegment>> openings;
+    //! 折り線。閉じていない線。外周と同じ平面に載っていること。
+    //! 折り線は切らないので、開口とは別に持つ。混ぜると、折るところが切り抜かれる。
+    std::vector<std::vector<geometry::CurveSegment>> folds;
+    //! 折り線1本ずつの、山折りかどうか。folds と同じ長さ。
+    std::vector<bool> foldIsMountain;
 };
 
 //! 平らかどうかの見立て。

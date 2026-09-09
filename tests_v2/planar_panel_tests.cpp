@@ -285,4 +285,78 @@ KACHA_V2_TEST(planar_panel, どの壁にも載っていない開口は断る)
     Require(!PanelForOpening(requests, {}, 0.001).has_value(), "空は決めない");
 }
 
+KACHA_V2_TEST(planar_panel, 折り線は切る線と別の層に出る)
+{
+    // 折り線を切る線と同じ層に出すと、折るところが切り抜かれる。
+    PlanarPanelRequest request;
+    request.panelId = "側面";
+    request.boundary = Rectangle();
+    request.folds.push_back({Line({0, 30, 0}, {100, 30, 0})});
+    request.foldIsMountain.push_back(true);
+    const auto built = BuildPlanarPanel(request, kTolerance);
+    Require(built.HasValue(), "作れる");
+    Require(built.Value().folds.size() == 1, "折り線が1本ある");
+    Require(built.Value().folds.front().sense
+            == kachakacha::v2::fabrication::FoldSense::Mountain,
+        "山折り");
+
+    PatternPlacement placement;
+    const auto placed = PlacePanelCurves(built.Value(), placement);
+    Require(placed.HasValue(), "紙の上へ置ける");
+    int foldCurves = 0;
+    int outlineCurves = 0;
+    for (const auto& curve : placed.Value()) {
+        if (curve.layer == kachakacha::v2::exporters::PatternLine::Fold) {
+            ++foldCurves;
+            Require(curve.mountainFold, "山折りとして出る");
+        }
+        if (curve.layer == kachakacha::v2::exporters::PatternLine::Outline) {
+            ++outlineCurves;
+        }
+    }
+    // 外周は四角なので、少なくとも4本は出る
+    // (標本の点が角で重なるぶん、長さ0の辺は捨てられる)。
+    Require(outlineCurves >= 4, "外周が出る");
+    Require(foldCurves >= 1, "折り線が出る");
+}
+
+KACHA_V2_TEST(planar_panel, 折り線は閉じない)
+{
+    // 閉じると、折るところが切り抜かれてしまう。
+    PlanarPanelRequest request;
+    request.panelId = "側面";
+    request.boundary = Rectangle();
+    request.folds.push_back({Line({10, 30, 0}, {90, 30, 0})});
+    request.foldIsMountain.push_back(false);
+    const auto built = BuildPlanarPanel(request, kTolerance);
+    Require(built.HasValue(), "作れる");
+    PatternPlacement placement;
+    const auto placed = PlacePanelCurves(built.Value(), placement);
+    Require(placed.HasValue(), "紙の上へ置ける");
+    int foldCurves = 0;
+    for (const auto& curve : placed.Value()) {
+        if (curve.layer == kachakacha::v2::exporters::PatternLine::Fold) {
+            ++foldCurves;
+            Require(!curve.mountainFold, "谷折りとして出る");
+        }
+    }
+    // 折り線は閉じないので、点の数より1本少ない。
+    // 閉じていれば、点の数だけ線が出る。
+    const std::size_t points = built.Value().folds.front().path.size();
+    Require(foldCurves == static_cast<int>(points) - 1,
+        "点の数より1本少ない(閉じていない)");
+}
+
+KACHA_V2_TEST(planar_panel, 平面から外れた折り線は断る)
+{
+    // 折り線も、その壁の上に無ければならない。
+    PlanarPanelRequest request;
+    request.panelId = "側面";
+    request.boundary = Rectangle();
+    request.folds.push_back({Line({0, 30, 5}, {100, 30, 5})});
+    request.foldIsMountain.push_back(true);
+    const auto refused = BuildPlanarPanel(request, kTolerance);
+    Require(!refused.HasValue(), "断る");
+}
+
 KACHA_V2_TEST_MAIN("planar_panel_tests")

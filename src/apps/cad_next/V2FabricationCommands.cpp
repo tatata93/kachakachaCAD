@@ -103,6 +103,7 @@ void V2MainWindow::RunFabricationCreate()
         fabricationPanels_ = unfolded;
         panelBoundary_.clear();
         panelOpenings_.clear();
+        panelFolds_.clear();
         processContext_.fabricationBuilt = true;
         processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
         processContext_.patternBuilt = false;
@@ -129,9 +130,11 @@ void V2MainWindow::RunFabricationCreate()
     // 元の輪郭を覚えておく。あとで開口を足すときに、ここから作り直す。
     panelBoundary_.clear();
     panelOpenings_.clear();
+    panelFolds_.clear();
     for (const auto& request : requests) {
         panelBoundary_[request.panelId] = request.boundary;
         panelOpenings_[request.panelId] = request.openings;
+        panelFolds_[request.panelId] = request.folds;
     }
     processContext_.fabricationBuilt = true;
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
@@ -198,10 +201,10 @@ void V2MainWindow::AssignOpeningRole()
     using kachakacha::v2::fabrication::BuildPlanarPanels;
     using kachakacha::v2::fabrication::PlanarPanelRequest;
 
-    // いまできる役割の割り当ては「開口」だけである。
+    // 役割は選ばせない。線の形で決まる。
+    //   閉じた輪 → 開口(窓)。切り抜く。
+    //   閉じていない線 → 折り線。折るだけで切らない。
     // 外周は部品の輪郭がそのままなので、手で決める必要がない。
-    // 折り線と切れ目は、曲がった面を扱えるようになってから入れる。
-    // 出来ないものを、出来るふりをして並べない。
     if (fabricationPanels_.empty()) {
         SetStatus(QStringLiteral(
             "境界の役割: 先に「製作モデルを作る」で部材にしてください。"));
@@ -227,12 +230,8 @@ void V2MainWindow::AssignOpeningRole()
         return;
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    if (!kachakacha::v2::geometry::SegmentsFormClosedLoop(opening, tolerance)) {
-        // 開いた線は穴にならない。開いたまま切ると、板が2つに割れる。
-        SetStatus(QStringLiteral(
-            "境界の役割: 開口は閉じた輪でなければなりません。線がつながっていません。"));
-        return;
-    }
+    const bool closed = kachakacha::v2::geometry::SegmentsFormClosedLoop(opening,
+        tolerance);
     // 覚えてある元の輪郭から作り直す。前の結果へ足すと、
     // 押すたびに開口が増えていってしまう。
     std::vector<PlanarPanelRequest> requests;
@@ -245,6 +244,8 @@ void V2MainWindow::AssignOpeningRole()
         }
         request.boundary = found->second;
         request.openings = panelOpenings_[panel.panelId];
+        request.folds = panelFolds_[panel.panelId];
+        request.foldIsMountain.assign(request.folds.size(), true);
         requests.push_back(std::move(request));
     }
     if (requests.empty()) {
@@ -262,22 +263,33 @@ void V2MainWindow::AssignOpeningRole()
             "部材と同じ平面の上に描いてください。"));
         return;
     }
-    requests[*chosen].openings.push_back(opening);
+    if (closed) {
+        requests[*chosen].openings.push_back(opening);
+    } else {
+        // 折り線は切らない。切ると、折るところで板が分かれてしまう。
+        requests[*chosen].folds.push_back(opening);
+        requests[*chosen].foldIsMountain.push_back(true);
+    }
     const auto rebuilt = BuildPlanarPanels(requests, tolerance.interactiveJoinMm);
     if (!rebuilt.HasValue()) {
         ReportDiagnostics(rebuilt.Diagnostics());
         return;
     }
     panelOpenings_[requests[*chosen].panelId] = requests[*chosen].openings;
+    panelFolds_[requests[*chosen].panelId] = requests[*chosen].folds;
     fabricationPanels_ = rebuilt.Value();
     processContext_.patternBuilt = false;
     patternPages_.clear();
     SetProcessContext(processContext_);
-    SetStatus(QStringLiteral(
-        "境界の役割: %1 に開口を1つ入れました(いま%2つ)。"
-        "型紙はもう一度作ってください。")
-            .arg(QString::fromStdString(requests[*chosen].panelId))
-            .arg(static_cast<int>(requests[*chosen].openings.size())));
+    SetStatus(closed
+            ? QStringLiteral("境界の役割: %1 に開口を1つ入れました(いま%2つ)。"
+                             "型紙はもう一度作ってください。")
+                  .arg(QString::fromStdString(requests[*chosen].panelId))
+                  .arg(static_cast<int>(requests[*chosen].openings.size()))
+            : QStringLiteral("境界の役割: %1 に折り線を1本入れました(いま%2本)。"
+                             "折り線は切りません。型紙はもう一度作ってください。")
+                  .arg(QString::fromStdString(requests[*chosen].panelId))
+                  .arg(static_cast<int>(requests[*chosen].folds.size())));
 }
 
 bool V2MainWindow::UnfoldSelectedSurfaces(

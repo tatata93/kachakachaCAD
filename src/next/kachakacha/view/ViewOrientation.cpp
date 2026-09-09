@@ -202,24 +202,13 @@ Result<ViewCubeZone> ViewCubeZoneAt(const Vector3& cubeLocalPoint, double edgeBa
     return Result<ViewCubeZone>::Success(zone);
 }
 
-Result<Quaternion> OrientationForZone(const ViewCubeZone& zone)
-{
-    if (zone.NonZeroCount() == 0) {
-        return Result<Quaternion>::Failure(MakeError("UI-V004",
-            "その向きへは正対できません。", "面も辺も角も指していません。"));
-    }
-    // 目からモデルへ向かう向き。区画の外向きの逆。
-    const Vector3 outward{static_cast<double>(zone.x), static_cast<double>(zone.y),
-        static_cast<double>(zone.z)};
-    const double outwardLength = outward.Length();
-    const Vector3 forward = outward * (-1.0 / outwardLength);
+namespace {
 
-    // 上向きは世界Zを使う。真上・真下だけは世界Zが使えないので、-Y を上にする。
-    Vector3 upHint{0.0, 0.0, 1.0};
-    if (zone.x == 0 && zone.y == 0) {
-        // V1 と同じで、上から見たときは奥(+Y)が画面の上になる。
-        upHint = Vector3{0.0, static_cast<double>(zone.z), 0.0};
-    }
+//! 見る向きと上の見当から姿勢を作る。ここだけが回転行列を四元数へ直す。
+//! 2か所に書くと、片方だけ直したときに正対と正対がずれる。
+[[nodiscard]] Result<Quaternion> FromForwardAndUpHint(const Vector3& forward,
+    const Vector3& upHint)
+{
     const double along = forward.x * upHint.x + forward.y * upHint.y + forward.z * upHint.z;
     Vector3 up = upHint - forward * along;
     const double upLength = up.Length();
@@ -258,6 +247,66 @@ Result<Quaternion> OrientationForZone(const ViewCubeZone& zone)
         result = Quaternion{(m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, 0.25 * s};
     }
     return Result<Quaternion>::Success(Normalized(result));
+}
+
+} // namespace
+
+Result<Quaternion> OrientationForZone(const ViewCubeZone& zone)
+{
+    if (zone.NonZeroCount() == 0) {
+        return Result<Quaternion>::Failure(MakeError("UI-V004",
+            "その向きへは正対できません。", "面も辺も角も指していません。"));
+    }
+    // 目からモデルへ向かう向き。区画の外向きの逆。
+    const Vector3 outward{static_cast<double>(zone.x), static_cast<double>(zone.y),
+        static_cast<double>(zone.z)};
+    const double outwardLength = outward.Length();
+    const Vector3 forward = outward * (-1.0 / outwardLength);
+
+    // 上向きは世界Zを使う。真上・真下だけは世界Zが使えないので、-Y を上にする。
+    Vector3 upHint{0.0, 0.0, 1.0};
+    if (zone.x == 0 && zone.y == 0) {
+        // V1 と同じで、上から見たときは奥(+Y)が画面の上になる。
+        upHint = Vector3{0.0, static_cast<double>(zone.z), 0.0};
+    }
+    return FromForwardAndUpHint(forward, upHint);
+}
+
+Result<Quaternion> OrientationFacing(const Vector3& normal, const Vector3& preferredUp)
+{
+    if (!geometry::IsFinite(normal.x) || !geometry::IsFinite(normal.y)
+        || !geometry::IsFinite(normal.z)) {
+        return Result<Quaternion>::Failure(NotFinite("面の法線です。"));
+    }
+    const double length = normal.Length();
+    if (length <= 0.0) {
+        // 0 を勝手に上向きへ丸めない。丸めると、押すたびに違う向きになったように見える。
+        return Result<Quaternion>::Failure(MakeError("UI-V004",
+            "その向きへは正対できません。", "面の法線の長さが0です。"));
+    }
+    // 目からモデルへ向かう向きは、法線の逆。面を表から見る。
+    const Vector3 forward = normal * (-1.0 / length);
+    Vector3 upHint = preferredUp;
+    const double upLength = upHint.Length();
+    if (upLength <= 0.0) {
+        upHint = Vector3{0.0, 0.0, 1.0};
+    } else {
+        upHint = upHint * (1.0 / upLength);
+    }
+    // 上の見当が法線と平行だと上向きが決まらない。決まった順で逃がす。
+    const double along = forward.x * upHint.x + forward.y * upHint.y + forward.z * upHint.z;
+    if (std::abs(along) > 1.0 - 1e-9) {
+        const Vector3 fallbacks[]{{0.0, 1.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 0.0, 1.0}};
+        for (const Vector3& candidate : fallbacks) {
+            const double dot = forward.x * candidate.x + forward.y * candidate.y
+                + forward.z * candidate.z;
+            if (std::abs(dot) <= 1.0 - 1e-9) {
+                upHint = candidate;
+                break;
+            }
+        }
+    }
+    return FromForwardAndUpHint(forward, upHint);
 }
 
 Result<ViewCubeDrag> BeginViewCubeDrag(const Quaternion& orientation)

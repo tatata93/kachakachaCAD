@@ -332,3 +332,28 @@ base::Result<std::vector<SelfIntersection>> FindSelfIntersections(
 }
 
 } // namespace kachakacha::v2::geometry
+
+namespace kachakacha::v2::geometry {
+
+bool SegmentsFormClosedLoop(const std::vector<CurveSegment>& segments,
+    const GeometryTolerance& tolerance)
+{
+    if (segments.empty()) {
+        return false;
+    }
+    // 番号は呼ぶ側が持っていないことがある。ここで別々の番号を振る。
+    // 同じ番号だと AnalyzeChain が「同じ線が並んでいる」と見て断る。
+    std::vector<ChainInput> inputs;
+    inputs.reserve(segments.size());
+    for (std::size_t index = 0; index < segments.size(); ++index) {
+        std::array<std::uint8_t, 16> bytes{};
+        bytes[15] = static_cast<std::uint8_t>((index + 1) & 0xFF);
+        bytes[14] = static_cast<std::uint8_t>(((index + 1) >> 8) & 0xFF);
+        inputs.push_back(ChainInput{base::EntityId{}, base::SegmentId(base::Uuid(bytes)),
+            segments[index]});
+    }
+    const auto analysis = AnalyzeChain(std::move(inputs), tolerance);
+    return analysis.HasValue() && analysis.Value().order.closed;
+}
+
+} // namespace kachakacha::v2::geometry

@@ -17,6 +17,7 @@
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/app/CursorInput.h"
+#include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
@@ -71,6 +72,13 @@ public:
 
     void SetPalette(const ViewportPalette& palette);
     [[nodiscard]] const ViewportPalette& Colors() const noexcept { return palette_; }
+
+    //! 見え方の設定(AT-UIX-010)。形は変えない。
+    void SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
+    [[nodiscard]] const kachakacha::v2::app::DisplaySettings& DisplaySettingsNow() const
+    {
+        return display_;
+    }
 
     void SetViewDirection(ViewDirection direction);
     [[nodiscard]] ViewDirection Direction() const noexcept { return direction_; }
@@ -257,6 +265,7 @@ private:
 
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
+    kachakacha::v2::app::DisplaySettings display_;
     ViewDirection direction_ = ViewDirection::Isometric;
     kachakacha::v2::view::Quaternion orientation_{};
     kachakacha::v2::view::ViewCubeDrag cubeDrag_;

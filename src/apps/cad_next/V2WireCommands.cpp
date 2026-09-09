@@ -27,20 +27,23 @@ struct WireEditBinding {
     std::string_view commandId;
     WireTransformMethod method;
     const char* labelJa;
-    //! 使い切ったら元の線を消すか。分割や結合は消す。オフセットは残す。
+    //! 使い切ったら元の線を消すか。結合は消す。オフセットは残す。
     bool consumesInputs;
+    //! 1本目だけを使い切るか。分割の刃(2本目以降)は残す。
+    //! 残さないと、切っただけで刃が消える。実際にそうなっていた。
+    bool consumesFirstOnly;
     //! 大きさ(面取り量・丸め半径・オフセット距離)が要るか。
     bool needsSize;
 };
 
 constexpr WireEditBinding kWireEdits[] = {
-    {"wire.split", WireTransformMethod::Split, "分割", true, false},
-    {"wire.join", WireTransformMethod::Join, "結合", true, false},
-    {"wire.coincident", WireTransformMethod::Coincident, "端点一致", true, false},
-    {"wire.tangent", WireTransformMethod::Tangent, "接線接続", true, false},
-    {"wire.curvature", WireTransformMethod::Curvature, "曲率接続", true, false},
-    {"wire.chamfer", WireTransformMethod::Chamfer, "C面取り", true, true},
-    {"wire.fillet", WireTransformMethod::Fillet, "R丸め", true, true},
+    {"wire.split", WireTransformMethod::Split, "分割", true, true, false},
+    {"wire.join", WireTransformMethod::Join, "結合", true, false, false},
+    {"wire.coincident", WireTransformMethod::Coincident, "端点一致", true, false, false},
+    {"wire.tangent", WireTransformMethod::Tangent, "接線接続", true, false, false},
+    {"wire.curvature", WireTransformMethod::Curvature, "曲率接続", true, false, false},
+    {"wire.chamfer", WireTransformMethod::Chamfer, "C面取り", true, false, true},
+    {"wire.fillet", WireTransformMethod::Fillet, "R丸め", true, false, true},
 };
 
 [[nodiscard]] const WireEditBinding* FindWireEdit(std::string_view id)
@@ -125,9 +128,20 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         return;
     }
     if (binding->consumesInputs) {
-        RemoveConsumedWires(selection.entityIds);
+        std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
+        if (binding->consumesFirstOnly && !consumed.empty()) {
+            // 分割は1本目を切るだけ。刃にした線は残す。
+            consumed.resize(1);
+        }
+        RemoveConsumedWires(consumed);
     }
     AdoptCurrentDocument();
+    if (binding->consumesFirstOnly) {
+        SetStatus(QStringLiteral("%1: 1本目を%2本にしました。刃にした線は残っています。")
+                .arg(QString::fromUtf8(binding->labelJa))
+                .arg(static_cast<int>(computed.Value().size())));
+        return;
+    }
     SetStatus(QStringLiteral("%1: %2本の線から%3本にしました。")
             .arg(QString::fromUtf8(binding->labelJa))
             .arg(static_cast<int>(inputs.size()))

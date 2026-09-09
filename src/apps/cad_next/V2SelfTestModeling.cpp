@@ -71,9 +71,14 @@ namespace {
                      + std::to_string(after) + ")").c_str(), after > before)) {
         return false;
     }
-    return Explain((std::string("帯に結果が出る(") + window.StatusText().toStdString()
-                       + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("分割")));
+    if (!Explain((std::string("帯に結果が出る(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("分割")))) {
+        return false;
+    }
+    // 刃にした線は残る。残らないと、切っただけで線が1本消える。
+    return Explain("刃は残る",
+        window.StatusText().contains(QStringLiteral("残っています")));
 }
 
 [[nodiscard]] bool CaseWireEditNeedsSelection(V2MainWindow& window)

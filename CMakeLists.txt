@@ -563,6 +563,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/Selection.cpp
     src/next/kachakacha/app/ExportPanel.cpp
     src/next/kachakacha/app/CommandAvailability.cpp
+    src/next/kachakacha/app/DisplaySettings.cpp
     src/next/kachakacha/app/MeasurePanel.cpp
     src/next/kachakacha/app/ExportService.cpp
     src/next/kachakacha/app/PointSources.cpp
@@ -722,6 +723,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(process_step_tests tests_v2/process_step_tests.cpp)
     kachakacha_add_v2_test(export_content_tests tests_v2/export_content_tests.cpp)
     kachakacha_add_v2_test(command_availability_tests tests_v2/command_availability_tests.cpp)
+    kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
     kachakacha_add_v2_test(manual_tests tests_v2/manual_tests.cpp)
     kachakacha_add_v2_test(sample_document_tests tests_v2/sample_document_tests.cpp)
@@ -796,6 +798,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestBasics.cpp
         src/apps/cad_next/V2SelfTestModeling.cpp
         src/apps/cad_next/V2ExportCommands.cpp
+        src/apps/cad_next/V2ViewCommands.cpp
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2MeasureDock.cpp
         src/apps/cad_next/V2MeasureDock.h

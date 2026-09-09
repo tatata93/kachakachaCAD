@@ -9,6 +9,7 @@ using kachakacha::v2::base::EntityId;
 using kachakacha::v2::base::IdKind;
 using kachakacha::v2::base::SegmentId;
 using kachakacha::v2::geometry::AnalyzeChain;
+using kachakacha::v2::geometry::SegmentsFormClosedLoop;
 using kachakacha::v2::geometry::ChainInput;
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::GeometryTolerance;
@@ -342,6 +343,22 @@ KACHA_V2_TEST(chain, 円と直線の自己交差も見つける)
         GeometryTolerance{});
     Require(!result.HasValue(), "断る");
     RequireEqual(result.Diagnostics().front().code, "GEO-W004", "自己交差");
+}
+
+KACHA_V2_TEST(wire_chain, 閉じた四角は閉じた輪として答える)
+{
+    // 「閉じているか」を2か所で別々に判断していたころ、
+    // 押せるかどうかの判断は閉じていると言い、押し出しは開いていると言った。
+    GeometryTolerance tolerance;
+    std::vector<CurveSegment> segments;
+    segments.push_back(CurveSegment::MakeLine({0, 0, 0}, {10, 0, 0}).Value());
+    segments.push_back(CurveSegment::MakeLine({10, 0, 0}, {10, 5, 0}).Value());
+    segments.push_back(CurveSegment::MakeLine({10, 5, 0}, {0, 5, 0}).Value());
+    segments.push_back(CurveSegment::MakeLine({0, 5, 0}, {0, 0, 0}).Value());
+    Require(SegmentsFormClosedLoop(segments, tolerance), "閉じている");
+    segments.pop_back();
+    Require(!SegmentsFormClosedLoop(segments, tolerance), "1辺欠ければ閉じていない");
+    Require(!SegmentsFormClosedLoop({}, tolerance), "空は閉じていない");
 }
 
 KACHA_V2_TEST_MAIN("wire_chain_tests")

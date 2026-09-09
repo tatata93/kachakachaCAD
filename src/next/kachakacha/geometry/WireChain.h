@@ -81,6 +81,15 @@ struct ChainAnalysis {
 [[nodiscard]] base::Result<ChainAnalysis> AnalyzeChain(std::vector<ChainInput> inputs,
     const GeometryTolerance& tolerance);
 
+//! 線の集まりが、閉じた輪になっているか。順不同でよい。
+//!
+//! 「閉じているか」を2か所で別々に判断してはならない。
+//! 実際に、押せるかどうかの判断は閉じていると言い、押し出しは
+//! 開いていると言って断る、という食い違いが起きた。
+//! 番号を振らずに呼べる形をここに置いて、どちらもこれを使う。
+[[nodiscard]] bool SegmentsFormClosedLoop(const std::vector<CurveSegment>& segments,
+    const GeometryTolerance& tolerance);
+
 //! ワイヤーが自分自身と交わっている場所。
 struct SelfIntersection {
     std::size_t firstSegment = 0;

@@ -131,9 +131,14 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
                 break;
             }
             // 1つのワイヤーは1つの鎖として数える。閉じているかは幾何に聞く。
+            // 押し出しの側と同じ関数へ聞く。別々に判断すると食い違う。
             ++facts.wireChains;
-            const auto analysis = geometry::AnalyzeChain(inputs, tolerance);
-            if (analysis.HasValue() && analysis.Value().order.closed) {
+            std::vector<geometry::CurveSegment> segments;
+            segments.reserve(inputs.size());
+            for (const auto& input : inputs) {
+                segments.push_back(input.segment);
+            }
+            if (geometry::SegmentsFormClosedLoop(segments, tolerance)) {
                 ++facts.closedProfiles;
             }
             break;

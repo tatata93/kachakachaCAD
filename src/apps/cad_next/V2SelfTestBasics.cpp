@@ -1012,6 +1012,39 @@ namespace {
         dock.SummaryText().contains(QStringLiteral("測っています")));
 }
 
+[[nodiscard]] bool CaseDisplaySettingsCycle(V2MainWindow& window)
+{
+    // 見え方を変えても形は変わらない。変わったら、見やすくしただけのつもりで
+    // 寸法を変えたことになる。
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    QStringList seen;
+    for (int index = 0; index < 3; ++index) {
+        window.RunCommand("view.display_settings");
+        seen << window.StatusText();
+    }
+    if (!Explain("3回とも違うことを言う",
+            seen.size() == 3 && seen.at(0) != seen.at(1) && seen.at(1) != seen.at(2)
+                && seen.at(0) != seen.at(2))) {
+        return false;
+    }
+    window.RunCommand("view.display_settings");
+    if (!Explain((std::string("4回目で元へ戻る(") + window.StatusText().toStdString()
+                     + ")").c_str(), window.StatusText() == seen.at(0))) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
+[[nodiscard]] bool CaseAlignToSelectionNeedsAPlane(V2MainWindow& window)
+{
+    // 正対は形を変えない。選んでいなければ、何を選ぶかを言う。
+    window.RunCommand("view.align_selection");
+    return Explain((std::string("理由が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("作業平面")));
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1057,6 +1090,8 @@ std::vector<SelfTestCase> BasicCases()
         {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
+        {"見え方は3段で回り形を変えない", &CaseDisplaySettingsCycle},
+        {"正対は平面を選ばないと理由を出す", &CaseAlignToSelectionNeedsAPlane},
     };
 }
 

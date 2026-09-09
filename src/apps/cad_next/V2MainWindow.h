@@ -13,6 +13,7 @@
 //! 信号の受け口はラムダで繋ぐ。
 
 #include "kachakacha/app/CommandAvailability.h"
+#include "kachakacha/app/DisplaySettings.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2Viewport.h"
@@ -139,6 +140,16 @@ public:
     void RefreshMeasurements();
     //! 押せるかどうかの材料を作る。数え方は core が決める。
     [[nodiscard]] kachakacha::v2::app::SelectionFacts BuildFactsForCommands() const;
+    //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
+    [[nodiscard]] static bool IsViewCommand(std::string_view id);
+    void RunViewCommand(std::string_view id);
+    //! 選んだ作業平面へ正対する。形は変わらない。
+    void AlignViewToSelection();
+    //! 選んだものが入っているまとまりを作業中にする。選んでいなければ外す。
+    void ActivateSelectedGroup();
+    //! いまの見え方の段。文書には入らない。
+    kachakacha::v2::app::DisplayStage displayStage_ =
+        kachakacha::v2::app::DisplayStage::All;
 
     //! 形状ガイドの役割テーブル(AT-UIX-007)。表は core が持つ。
     [[nodiscard]] const kachakacha::v2::modeling::GuideTable& GuideRoleTable() const

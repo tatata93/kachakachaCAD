@@ -92,6 +92,20 @@ struct ViewCubeZone {
 //! その区画へ正対する姿勢。ここだけが離散の向きを使う。
 [[nodiscard]] base::Result<Quaternion> OrientationForZone(const ViewCubeZone& zone);
 
+//! 平面の法線に正対する姿勢(AT-UIX-008)。
+//!
+//! 「正対」は、その面を真正面から見ることである。
+//! 面の上に描いた線を測ったり直したりするとき、斜めから見ていると
+//! どこを指しているのかが読めない。
+//!
+//! 法線の長さが0なら決められないので、断る。0を勝手に上向きへ丸めない。
+//! 丸めると、押すたびに違う向きになったように見える。
+//!
+//! 上向き(preferredUp)は、法線と平行なときだけ別の軸へ逃がす。
+//! 逃がし方は決まっているので、同じ面には毎回同じ向きで正対する。
+[[nodiscard]] base::Result<Quaternion> OrientationFacing(const Vector3& normal,
+    const Vector3& preferredUp);
+
 //! ドラッグ1回分の状態。押した瞬間に作り、離すまで持ち回る。
 struct ViewCubeDrag {
     bool active = false;

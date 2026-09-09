@@ -383,10 +383,17 @@ void V2Viewport::AppendCurve(QPainterPath& path, const CurveSegment& segment,
     }
 }
 
+void V2Viewport::SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings)
+{
+    // 見え方だけを変える。文書には何も書かない。
+    display_ = settings;
+    update();
+}
+
 void V2Viewport::DrawGrid(QPainter& painter) const
 {
     const auto& grid = session_->Scene().grid;
-    if (!grid.visible) {
+    if (!grid.visible || !display_.gridVisible) {
         return;
     }
     const double pixelsPerMm = mapping_.PixelsPerMillimeterAt(workPlane_.origin);
@@ -488,6 +495,9 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         bool started = false;
         AppendCurve(path, curve.segment, started);
         if (!started) {
+            continue;
+        }
+        if (curve.construction && !display_.constructionVisible) {
             continue;
         }
         const bool selected = kachakacha::v2::app::IsSelected(selection_, curve.entityId);

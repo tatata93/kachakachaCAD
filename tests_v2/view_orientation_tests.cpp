@@ -804,4 +804,45 @@ KACHA_V2_TEST(view_orientation, 面の名前は1文字でキューブに収ま�
     }
 }
 
+KACHA_V2_TEST(view_orientation, 面の法線へ正対できる)
+{
+    // 「正対」は、その面を真正面から見ること。斜めから見ていると
+    // どこを指しているのかが読めない。
+    const auto facing = OrientationFacing(Vector3{0.0, 0.0, 1.0}, Vector3{0.0, 0.0, 1.0});
+    Require(facing.HasValue(), "上向きの面へ正対できる");
+    const Vector3 forward = ForwardOf(facing.Value());
+    Require(std::abs(forward.z + 1.0) < 1e-9, "法線の逆から見ている");
+}
+
+KACHA_V2_TEST(view_orientation, 正対はビューキューブの正対と食い違わない)
+{
+    // 同じ向きを2通りで作っているので、食い違うと押す場所で結果が変わる。
+    const auto zone = OrientationForZone(ViewCubeZone{0, -1, 0});
+    Require(zone.HasValue(), "前から見る姿勢が作れる");
+    const auto facing = OrientationFacing(Vector3{0.0, -1.0, 0.0}, Vector3{0.0, 0.0, 1.0});
+    Require(facing.HasValue(), "同じ向きへ正対できる");
+    Require(AngleBetween(zone.Value(), facing.Value()) < 1e-6, "同じ姿勢になる");
+}
+
+KACHA_V2_TEST(view_orientation, 長さ0の法線へは正対しない)
+{
+    // 0 を勝手に上向きへ丸めると、押すたびに違う向きになったように見える。
+    const auto facing = OrientationFacing(Vector3{0.0, 0.0, 0.0}, Vector3{0.0, 0.0, 1.0});
+    Require(!facing.HasValue(), "断る");
+    Require(!facing.Diagnostics().empty(), "理由が出る");
+}
+
+KACHA_V2_TEST(view_orientation, 上の見当が法線と平行でも正対できる)
+{
+    // 真上の面に「上は世界Z」では上向きが決まらない。決まった順で逃がす。
+    const auto facing = OrientationFacing(Vector3{0.0, 0.0, 1.0}, Vector3{0.0, 0.0, 1.0});
+    Require(facing.HasValue(), "それでも正対できる");
+    const Vector3 up = UpOf(facing.Value());
+    Require(std::abs(up.Length() - 1.0) < 1e-9, "上向きが決まっている");
+    // 同じ面には毎回同じ向きで正対する。押すたびに変わってはならない。
+    const auto again = OrientationFacing(Vector3{0.0, 0.0, 1.0}, Vector3{0.0, 0.0, 1.0});
+    Require(again.HasValue() && AngleBetween(facing.Value(), again.Value()) < 1e-12,
+        "毎回同じ");
+}
+
 KACHA_V2_TEST_MAIN("view_orientation_tests")

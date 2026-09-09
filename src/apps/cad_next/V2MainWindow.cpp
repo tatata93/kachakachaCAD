@@ -1022,6 +1022,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunExportCommand(id);
         return;
     }
+    if (IsViewCommand(id)) {
+        RunViewCommand(id);
+        return;
+    }
     if (id == "measure.open") {
         // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
         RefreshMeasurements();

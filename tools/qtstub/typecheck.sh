@@ -9,6 +9,7 @@ STATUS=0
 for FILE in \
     "$ROOT/src/apps/cad_next/V2ExportDock.cpp" \
     "$ROOT/src/apps/cad_next/V2MainWindow.cpp" \
+    "$ROOT/src/apps/cad_next/V2WireCommands.cpp" \
     "$ROOT/src/apps/cad_next/V2Viewport.cpp" \
     "$ROOT/src/apps/cad_next/V2ViewportPanel.cpp" \
     "$ROOT/src/apps/cad_next/main.cpp"

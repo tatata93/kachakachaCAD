@@ -70,4 +70,12 @@ struct ReevaluationResult {
 [[nodiscard]] base::Result<ReevaluationResult> ReevaluateFeature(
     const DocumentSnapshot& snapshot, FeatureId featureId);
 
+//! 線の編集を計算する。画面はこれを呼んでから Feature を足す。
+//!
+//! 出す本数は編集によって変わる。分割なら増え、結合なら並び替わる。
+//! だから「先に出力を決めてから計算する」ことができない。先に計算させる。
+[[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> EvaluateWireTransform(
+    const domain::TransformWireDefinition& definition,
+    const std::vector<geometry::CurveSegment>& inputs);
+
 } // namespace kachakacha::v2::document

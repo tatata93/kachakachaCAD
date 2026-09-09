@@ -1,5 +1,8 @@
 #include "kachakacha/document/FeatureReevaluation.h"
 
+#include "kachakacha/geometry/WireConnect.h"
+#include "kachakacha/geometry/WireEdit.h"
+
 #include "kachakacha/geometry/WireEdit.h"
 
 #include <algorithm>
@@ -129,6 +132,101 @@ namespace {
 }
 
 //! ワイヤーの変形。移動・回転・鏡像だけは core で最後まで出せる。
+//! 相手の線が要る編集。入力を全部まとめて受け取って計算する。
+//!
+//! 1本目を「直す線」、残りを「相手」として扱う。選んだ順がそのまま意味になる。
+//! 順を無視して当てにいくと、意図と違う線が消える。
+[[nodiscard]] Result<std::vector<CurveSegment>> ApplyMultiInputTransform(
+    const TransformWireDefinition& definition, const std::vector<CurveSegment>& inputs)
+{
+    using Out = Result<std::vector<CurveSegment>>;
+    // 編集の許容差。文書の許容差を渡せる形にするまでは、対話用の既定値を使う。
+    constexpr double tolerance = 0.01;
+    if (definition.method == WireTransformMethod::Offset) {
+        // オフセットは相手の線が要らない。1本ずつ動かす。
+        std::vector<CurveSegment> offsets;
+        offsets.reserve(inputs.size());
+        for (const CurveSegment& segment : inputs) {
+            const auto moved = geometry::OffsetCurveInPlane(segment,
+                definition.vectorArgument, definition.scalarArgument.value);
+            if (!moved.HasValue()) {
+                return Out::Failure(moved.Diagnostics());
+            }
+            offsets.push_back(moved.Value());
+        }
+        return Out::Success(std::move(offsets));
+    }
+    if (inputs.size() < 2) {
+        return Out::Failure(MakeError("DOC-C007",
+            "この編集は、この場では計算し直せません。",
+            "相手の線が要る編集です。2本以上を選んでください。"));
+    }
+    const CurveSegment& first = inputs[0];
+    const CurveSegment& second = inputs[1];
+    const std::vector<CurveSegment> others(inputs.begin() + 1, inputs.end());
+    switch (definition.method) {
+    case WireTransformMethod::Split:
+        return geometry::SplitCurveAtIntersections(first, others, tolerance);
+    case WireTransformMethod::Join:
+        return geometry::JoinCurves(inputs, tolerance);
+    case WireTransformMethod::Coincident:
+    case WireTransformMethod::Tangent:
+    case WireTransformMethod::Curvature: {
+        const geometry::ConnectContinuity continuity =
+            definition.method == WireTransformMethod::Coincident
+            ? geometry::ConnectContinuity::Position
+            : (definition.method == WireTransformMethod::Tangent
+                      ? geometry::ConnectContinuity::Tangent
+                      : geometry::ConnectContinuity::Curvature);
+        const auto joined = geometry::ConnectCurves(first, second, continuity, tolerance);
+        if (!joined.HasValue()) {
+            return Out::Failure(joined.Diagnostics());
+        }
+        return Out::Success({joined.Value().first, joined.Value().second});
+    }
+    case WireTransformMethod::MeetLines: {
+        const auto met = geometry::MeetLines(first, second, tolerance);
+        if (!met.HasValue()) {
+            return Out::Failure(met.Diagnostics());
+        }
+        return Out::Success({met.Value().first, met.Value().second});
+    }
+    case WireTransformMethod::Chamfer:
+    case WireTransformMethod::Fillet: {
+        const double size = definition.scalarArgument.value;
+        const auto corner = definition.method == WireTransformMethod::Chamfer
+            ? geometry::ChamferLines(first, second, size, tolerance)
+            : geometry::FilletLines(first, second, size, tolerance);
+        if (!corner.HasValue()) {
+            return Out::Failure(corner.Diagnostics());
+        }
+        return Out::Success(
+            {corner.Value().first, corner.Value().corner, corner.Value().second});
+    }
+    case WireTransformMethod::Trim: {
+        const auto trimmed = geometry::TrimCurve(first, second,
+            definition.scalarArgument.value, tolerance);
+        if (!trimmed.HasValue()) {
+            return Out::Failure(trimmed.Diagnostics());
+        }
+        return Out::Success({trimmed.Value()});
+    }
+    case WireTransformMethod::Extend: {
+        const int endpoint = definition.scalarArgument.value >= 0.5 ? 1 : 0;
+        const auto extended = geometry::ExtendCurveToBoundary(first, endpoint, second,
+            tolerance);
+        if (!extended.HasValue()) {
+            return Out::Failure(extended.Diagnostics());
+        }
+        return Out::Success({extended.Value()});
+    }
+    default:
+        break;
+    }
+    return Out::Failure(MakeError("DOC-C007",
+        "この編集は、この場では計算し直せません。", "この編集は扱えません。"));
+}
+
 [[nodiscard]] Result<std::vector<CurveSegment>> ApplyTransform(
     const TransformWireDefinition& definition, const std::vector<CurveSegment>& inputs)
 {
@@ -159,13 +257,14 @@ namespace {
             break;
         }
         default:
-            // トリムや結合は相手の線が要る。ここでは扱わず、断る。
-            return Result<std::vector<CurveSegment>>::Failure(MakeError("DOC-C007",
-                "この編集は、この場では計算し直せません。",
-                "相手の線が要る編集です。"));
+            // 相手の線が要る編集は、1本ずつでは決まらない。下でまとめて扱う。
+            break;
         }
     }
-    return Result<std::vector<CurveSegment>>::Success(std::move(outputs));
+    if (!outputs.empty()) {
+        return Result<std::vector<CurveSegment>>::Success(std::move(outputs));
+    }
+    return ApplyMultiInputTransform(definition, inputs);
 }
 
 //! その Entity の、いまの形。上流の Feature の出力から引く。
@@ -240,6 +339,16 @@ Result<ReevaluationResult> ReevaluateFeature(const DocumentSnapshot& snapshot,
         result.outputs.push_back(std::move(deferred));
     }
     return Result<ReevaluationResult>::Success(std::move(result));
+}
+
+Result<std::vector<CurveSegment>> EvaluateWireTransform(
+    const TransformWireDefinition& definition, const std::vector<CurveSegment>& inputs)
+{
+    if (inputs.empty()) {
+        return Result<std::vector<CurveSegment>>::Failure(MakeError("DOC-C001",
+            "入力に指定されたものが見つかりません。", "線が1本も選ばれていません。"));
+    }
+    return ApplyTransform(definition, inputs);
 }
 
 } // namespace kachakacha::v2::document

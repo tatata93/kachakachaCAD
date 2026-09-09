@@ -996,6 +996,77 @@ struct SelfTestCase {
     return Explain("家がある", false);
 }
 
+//! 交わる2本を引いて、両方を選ぶ。線の編集の試験の下ごしらえ。
+[[nodiscard]] bool DrawCrossingPair(V2MainWindow& window)
+{
+    if (!window.ApplyManualState(QStringLiteral("draw-line"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    // 1本目と交わるように、縦向きに引く。
+    viewport.ClickAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.3));
+    viewport.HoverAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.8));
+    viewport.ClickAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.8));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    return viewport.Selection().entityIds.size() == 2;
+}
+
+[[nodiscard]] bool CaseWireSplitMakesMorePieces(V2MainWindow& window)
+{
+    // 交わる2本を分割すると、1本目が交点で切れて本数が増える。
+    if (!Explain("交わる2本を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    const std::size_t before = window.Session().Scene().curves.size();
+    window.RunCommand("wire.split");
+    const std::size_t after = window.Session().Scene().curves.size();
+    if (!Explain((std::string("線が増えた(") + std::to_string(before) + " → "
+                     + std::to_string(after) + ")").c_str(), after > before)) {
+        return false;
+    }
+    return Explain((std::string("帯に結果が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("分割")));
+}
+
+[[nodiscard]] bool CaseWireEditNeedsSelection(V2MainWindow& window)
+{
+    // 何も選ばずに押したら、選べと言う。黙って何も起きない、をしない。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    for (const char* id : {"wire.split", "wire.join", "wire.coincident", "wire.tangent",
+             "wire.curvature", "wire.chamfer", "wire.fillet"}) {
+        window.RunCommand(id);
+        if (!Explain((std::string("理由が出る: ") + id).c_str(),
+                !window.StatusText().isEmpty())) {
+            return false;
+        }
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
+[[nodiscard]] bool CaseWireConnectRefusesWhenNotAligned(V2MainWindow& window)
+{
+    // 直角に交わる2本を接線接続しようとすると断る。黙って曲線に化けさせない。
+    if (!Explain("交わる2本を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    window.RunCommand("wire.tangent");
+    if (!Explain((std::string("断る理由が出る(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("GEO-E")))) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
 {
     // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
@@ -1088,6 +1159,9 @@ const SelfTestCase kCases[] = {
     {"操作板の回す部品は15度だけ回る", &CaseViewPanelTurnsFifteenDegrees},
     {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
     {"家で等角ビューへ戻る", &CaseViewPanelHome},
+    {"分割で線が増える", &CaseWireSplitMakesMorePieces},
+    {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
+    {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},
 };
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。

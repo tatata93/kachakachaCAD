@@ -1085,6 +1085,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunFileCommand(id);
         return;
     }
+    if (IsWireEditCommand(id)) {
+        RunWireEditCommand(id);
+        return;
+    }
     if (id.rfind("export.", 0) == 0) {
         RunExportCommand(id);
         return;

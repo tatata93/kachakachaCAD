@@ -614,6 +614,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/Measurement.cpp
     src/next/kachakacha/geometry/ScreenMapping.cpp
     src/next/kachakacha/geometry/WireChain.cpp
+    src/next/kachakacha/geometry/WireConnect.cpp
     src/next/kachakacha/geometry/WireEdit.cpp
 )
 target_include_directories(kachakacha_v2_core PUBLIC src/next)
@@ -681,6 +682,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(expression_tests tests_v2/expression_tests.cpp)
     kachakacha_add_v2_test(wire_chain_tests tests_v2/wire_chain_tests.cpp)
     kachakacha_add_v2_test(arc_builder_tests tests_v2/arc_builder_tests.cpp)
+    kachakacha_add_v2_test(wire_connect_tests tests_v2/wire_connect_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
     kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)
@@ -786,6 +788,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp
+        src/apps/cad_next/V2WireCommands.cpp
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp
         src/apps/cad_next/V2ViewportPanel.cpp

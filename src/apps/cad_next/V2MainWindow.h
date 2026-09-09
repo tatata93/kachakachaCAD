@@ -168,6 +168,18 @@ private:
     void RunExportCommand(std::string_view id);
     //! 出す先・開く先を尋ねる。差し替えが無ければ Qt のダイアログを出す。
     [[nodiscard]] QString AskForPath(bool forSave);
+    //! 線の編集コマンドか。V2WireCommands.cpp が持つ。
+    [[nodiscard]] static bool IsWireEditCommand(std::string_view id);
+    //! 線の編集を通す。判断は core にあり、ここは渡すだけ。
+    void RunWireEditCommand(std::string_view id);
+    //! 使い切った線を消す。下流がいて消せなければ、表示だけ消す。
+    void RemoveConsumedWires(
+        const std::vector<kachakacha::v2::base::EntityId>& entityIds);
+    //! 文書が変わったあとの後始末。場面・選択・一覧・件数を作り直す。
+    void AdoptCurrentDocument();
+    //! 面取り量・丸め半径・オフセット距離。数値入力が付くまでの既定値。
+    double wireEditSizeMm_ = 2.0;
+
     //! ファイルの台帳コマンド。新規・開く・保存・名前を付けて保存。
     void RunFileCommand(std::string_view id);
     //! 文書を入れ替えて、場面と一覧を作り直す。開いた直後の後始末を1か所にまとめる。

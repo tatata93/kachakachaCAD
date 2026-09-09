@@ -28,6 +28,12 @@ const std::vector<ParameterDefinition>& ParameterDefinitions()
         {ParameterId::PatternMarginMm, "pattern_margin", "型紙の余白",
             geometry::QuantityKind::Length, 5.0, 0.0, 50.0,
             "余白が広すぎると、1枚に入る部材が減ります。"},
+        {ParameterId::ScaleDenominator, "scale_denominator", "縮尺の分母(1/◯)",
+            geometry::QuantityKind::Scalar, 87.0, 1.0, 1000.0,
+            "1/1 から 1/1000 まで。HO は 87、N は 150 です。"},
+        {ParameterId::RealSizeMm, "real_size", "実寸(mm)",
+            geometry::QuantityKind::Length, 20000.0, 0.0, 1000000.0,
+            "実物の寸法です。縮尺で割った値が下に出ます。"},
     };
     return table;
 }
@@ -121,6 +127,32 @@ base::Result<ParameterSet> SetParameter(const ParameterSet& set, ParameterId id,
         break;
     }
     return Out::Success(std::move(next));
+}
+
+} // namespace kachakacha::v2::app
+
+namespace kachakacha::v2::app {
+
+double ScaledSizeMm(const ParameterSet& set) noexcept
+{
+    const double denominator = ParameterValueOf(set, ParameterId::ScaleDenominator);
+    if (!(denominator > 0.0)) {
+        return 0.0;
+    }
+    return ParameterValueOf(set, ParameterId::RealSizeMm) / denominator;
+}
+
+std::string ScaledSizeTextJa(const ParameterSet& set)
+{
+    const double denominator = ParameterValueOf(set, ParameterId::ScaleDenominator);
+    if (!(denominator > 0.0)) {
+        return "縮尺が決まっていません。";
+    }
+    char buffer[128];
+    std::snprintf(buffer, sizeof(buffer), "%.4f", ScaledSizeMm(set));
+    char scale[64];
+    std::snprintf(scale, sizeof(scale), "%.0f", denominator);
+    return std::string("1/") + scale + " で " + buffer + " mm";
 }
 
 } // namespace kachakacha::v2::app

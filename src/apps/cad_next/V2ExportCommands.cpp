@@ -94,6 +94,10 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         if (request.format == ExportFormat::Pdf) {
             kachakacha::v2::exporters::PdfMetadata metadata;
             metadata.title = "型紙";
+            // 縮尺は紙に書く。書かないと、刷った紙だけを見た人に伝わらない。
+            metadata.referenceScaleDenominator = kachakacha::v2::app::ParameterValueOf(
+                parameterDock_->Values(),
+                kachakacha::v2::app::ParameterId::ScaleDenominator);
             return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
         }
         if (request.format == ExportFormat::Svg) {
@@ -125,6 +129,9 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
             if (request.format == ExportFormat::Pdf) {
                 kachakacha::v2::exporters::PdfMetadata metadata;
                 metadata.title = "部材";
+                metadata.referenceScaleDenominator = kachakacha::v2::app::ParameterValueOf(
+                    parameterDock_->Values(),
+                    kachakacha::v2::app::ParameterId::ScaleDenominator);
                 return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
             }
             if (request.format == ExportFormat::Svg) {

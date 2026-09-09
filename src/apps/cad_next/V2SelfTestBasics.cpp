@@ -1069,8 +1069,9 @@ namespace {
     // 板厚が決め打ちだったころ、プラ板を使い分けられなかった。
     // 変えられないものは、使えないのと同じである。
     auto& dock = window.ParameterDock();
-    if (!Explain((std::string("行が3つ(実際は ") + std::to_string(dock.RowCount())
-                     + ")").c_str(), dock.RowCount() == 3)) {
+    // 打ち替えられる5行と、計算して出るだけの1行。
+    if (!Explain((std::string("行が6つ(実際は ") + std::to_string(dock.RowCount())
+                     + ")").c_str(), dock.RowCount() == 6)) {
         return false;
     }
     if (!Explain("式で入る",
@@ -1126,6 +1127,35 @@ namespace {
         window.StatusText().contains(QStringLiteral("1.2")));
 }
 
+[[nodiscard]] bool CaseScaleShowsTheModelSize(V2MainWindow& window)
+{
+    // 実寸を縮尺で割った値を、手で計算していると桁を間違えても気づけない。
+    auto& dock = window.ParameterDock();
+    if (!Explain("縮尺を1/150にできる",
+            dock.Apply(kachakacha::v2::app::ParameterId::ScaleDenominator,
+                QStringLiteral("150")))) {
+        return false;
+    }
+    if (!Explain("実寸を式で入れられる",
+            dock.Apply(kachakacha::v2::app::ParameterId::RealSizeMm,
+                QStringLiteral("17500+2500")))) {
+        return false;
+    }
+    QString computed;
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (dock.RowName(row).startsWith(QStringLiteral("="))) {
+            computed = dock.RowText(row);
+        }
+    }
+    if (!Explain((std::string("計算した行が出る(") + computed.toStdString()
+                     + ")").c_str(),
+            computed.contains(QStringLiteral("1/150")))) {
+        return false;
+    }
+    return Explain((std::string("133.33mm と出る(") + computed.toStdString()
+                       + ")").c_str(), computed.contains(QStringLiteral("133.3")));
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1174,6 +1204,7 @@ std::vector<SelfTestCase> BasicCases()
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
         {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
         {"決めた板厚が押し出しに効く", &CaseExtrudeUsesTheParameter},
+        {"縮尺で割った寸法が棚に出る", &CaseScaleShowsTheModelSize},
         {"見え方は3段で回り形を変えない", &CaseDisplaySettingsCycle},
         {"正対は平面を選ばないと理由を出す", &CaseAlignToSelectionNeedsAPlane},
     };

@@ -29,6 +29,8 @@ enum class ParameterId {
     ExtrudeDistance,   //!< 押し出しの距離(板厚)
     CornerSize,        //!< 面取り量 / 丸め半径
     PatternMarginMm,   //!< 型紙の余白
+    ScaleDenominator,  //!< 縮尺の分母。1/87 なら 87
+    RealSizeMm,        //!< 実物の寸法(mm)。縮尺で割ると模型の寸法になる
 };
 
 struct ParameterDefinition {
@@ -71,5 +73,14 @@ struct ParameterSet {
 //! 診断だけを返す。呼ぶ側が前の値を保つ。
 [[nodiscard]] base::Result<ParameterSet> SetParameter(const ParameterSet& set,
     ParameterId id, std::string_view text);
+
+//! 実寸を縮尺で割った、模型の寸法(mm)。
+//!
+//! 1/87 で実物 20000mm なら 229.885mm である。
+//! これを手で計算していると、桁を1つ間違えても気づけない。
+[[nodiscard]] double ScaledSizeMm(const ParameterSet& set) noexcept;
+
+//! それを人が読む形にした一言。棚に出す。
+[[nodiscard]] std::string ScaledSizeTextJa(const ParameterSet& set);
 
 } // namespace kachakacha::v2::app

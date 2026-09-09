@@ -61,6 +61,13 @@ void V2ParameterDock::Refresh()
         item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable);
         ++index;
     }
+    // 計算して出るだけの行。打ち替えられない。
+    // 打ち替えられる行と見分けがつくように、名前で「=」と示す。
+    auto* computed = new QTreeWidgetItem(rows_);
+    computed->setText(0, QStringLiteral("= 模型の寸法"));
+    computed->setText(1, QString::fromStdString(
+        kachakacha::v2::app::ScaledSizeTextJa(values_)));
+    computed->setFlags(Qt::ItemIsEnabled);
     rows_->blockSignals(false);
     rows_->resizeColumnToContents(0);
 }

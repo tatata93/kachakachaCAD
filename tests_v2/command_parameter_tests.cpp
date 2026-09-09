@@ -114,4 +114,39 @@ KACHA_V2_TEST(parameters, 別の数は互いに影響しない)
         "板厚は動かない");
 }
 
+KACHA_V2_TEST(parameters, 縮尺で割った寸法が出る)
+{
+    // 手で計算していると、桁を1つ間違えても気づけない。
+    ParameterSet set = DefaultParameters();
+    Require(std::abs(kachakacha::v2::app::ScaledSizeMm(set) - 20000.0 / 87.0) < 1e-9,
+        "既定は 1/87 の 20000mm");
+    const auto changed = SetParameter(set, ParameterId::ScaleDenominator, "150");
+    Require(changed.HasValue(), "N も入る");
+    Require(std::abs(kachakacha::v2::app::ScaledSizeMm(changed.Value())
+                - 20000.0 / 150.0) < 1e-9,
+        "分母を変えると寸法も変わる");
+    const std::string text = kachakacha::v2::app::ScaledSizeTextJa(changed.Value());
+    Require(text.find("1/150") != std::string::npos, "縮尺を言う");
+    Require(text.find("mm") != std::string::npos, "単位を言う");
+}
+
+KACHA_V2_TEST(parameters, 縮尺の分母は0にできない)
+{
+    // 0 で割ると寸法が決まらない。黙って1へ寄せない。
+    const auto refused = SetParameter(DefaultParameters(),
+        ParameterId::ScaleDenominator, "0");
+    Require(!refused.HasValue(), "断る");
+}
+
+KACHA_V2_TEST(parameters, 実寸に式が書ける)
+{
+    // 図面から読んだ寸法をそのまま足し引きできる。
+    const auto changed = SetParameter(DefaultParameters(), ParameterId::RealSizeMm,
+        "17500+2500");
+    Require(changed.HasValue(), "式が通る");
+    Require(std::abs(ParameterValueOf(changed.Value(), ParameterId::RealSizeMm) - 20000.0)
+            < 1e-9,
+        "20000mm になる");
+}
+
 KACHA_V2_TEST_MAIN("command_parameter_tests")

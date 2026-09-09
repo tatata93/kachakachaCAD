@@ -17,6 +17,7 @@
 #include "kachakacha/fabrication/SurfacePatch.h"
 
 #include <string>
+#include <vector>
 
 namespace kachakacha::v2::fabrication {
 
@@ -36,9 +37,14 @@ struct CurvedPanelResult {
 
 //! 面の標本を展開して、型紙の部材にする。
 //!
+//! **標本は行も列も3つ以上要る。** 2つしかないと内側の点が無く、
+//! 角欠損の検査が何も見ずに通ってしまう。通ったことにならない検査を
+//! 通すくらいなら、確かめられないと言うほうがよい。
+//!
 //! `targetMaxDeviationMm` は「どこまでのずれなら許すか」である。
 //! これを超えるずれが残るなら、展開できたことにしない。
 [[nodiscard]] base::Result<CurvedPanelResult> BuildCurvedPanel(const std::string& panelId,
     const SurfacePatchSamples& samples, double targetMaxDeviationMm);
+
 
 } // namespace kachakacha::v2::fabrication

@@ -7,6 +7,7 @@
 #include "kachakacha/fabrication/CurvedPanel.h"
 
 #include <cmath>
+#include <set>
 #include <string>
 
 using kachakacha::v2::fabrication::BuildCurvedPanel;
@@ -159,6 +160,29 @@ KACHA_V2_TEST(curved_panel, 外周は行きと帰りでつながる)
     const double dv = outline.front().v - outline.back().v;
     const double gap = std::sqrt(du * du + dv * dv);
     Require(gap < 40.0, "始めと終わりが近い(8の字になっていない)");
+}
+
+KACHA_V2_TEST(curved_panel, 内側の点が無い標本は確かめられないと言う)
+{
+    // 2列しかない帯には内側の点が無く、角欠損の検査が何も見ずに通る。
+    // 球を細く切って出しても通ってしまうので、そこで断る。
+    // 通ったことにならない検査を通すくらいなら、確かめられないと言うほうがよい。
+    SurfacePatchSamples narrow;
+    narrow.rowCount = 5;
+    narrow.columnCount = 2;
+    for (std::size_t row = 0; row < 5; ++row) {
+        for (std::size_t column = 0; column < 2; ++column) {
+            const double polar = 0.2 + 1.4 * static_cast<double>(row) / 4.0;
+            const double azimuth = 1.4 * static_cast<double>(column);
+            narrow.points.push_back(Vector3{
+                20.0 * std::sin(polar) * std::cos(azimuth),
+                20.0 * std::sin(polar) * std::sin(azimuth),
+                20.0 * std::cos(polar)});
+        }
+    }
+    const auto refused = BuildCurvedPanel("細い帯", narrow, 0.1);
+    Require(!refused.HasValue(), "断る");
+    Require(refused.Diagnostics().front().code == "FAB-P006", "確かめられないと言う");
 }
 
 KACHA_V2_TEST_MAIN("curved_panel_tests")

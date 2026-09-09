@@ -40,6 +40,14 @@ base::Result<CurvedPanelResult> BuildCurvedPanel(const std::string& panelId,
             "面の標本が足りません。",
             "行と列がそれぞれ2つ以上、点の数が行×列でなければなりません。"));
     }
+    if (samples.rowCount < 3 || samples.columnCount < 3) {
+        // 内側の点が無いと、角欠損の検査は何も見ずに通る。
+        // 通ったことにならない検査を通すくらいなら、確かめられないと言う。
+        return Out::Failure(MakeError(kCurvedPanelBadSamples,
+            "この標本では、平らにできるかを確かめられません。",
+            "行と列がそれぞれ3つ以上要ります(内側の点が無いと、"
+            "どんな形でも通ってしまいます)。"));
+    }
     if (!(targetMaxDeviationMm > 0.0)) {
         return Out::Failure(MakeError(kCurvedPanelBadSamples,
             "許すずれが正の数ではありません。",

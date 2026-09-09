@@ -104,6 +104,9 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
     if (request.target == ExportTarget::SelectedWires) {
         kachakacha::v2::app::WirePatternRequest wires;
         wires.title = "ワイヤー";
+        // 余白は数の棚から取る。決め打ちにすると、紙に合わせて詰められない。
+        wires.marginMm = kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+            kachakacha::v2::app::ParameterId::PatternMarginMm);
         // 選んだものだけを出す。画面に出ているものを勝手に足さない。
         wires.segments = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
             session_->Scene());

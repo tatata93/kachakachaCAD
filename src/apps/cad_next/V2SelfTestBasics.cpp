@@ -1064,6 +1064,68 @@ namespace {
         window.StatusText().contains(QStringLiteral("作業平面")));
 }
 
+[[nodiscard]] bool CaseParametersAcceptExpressionsAndRefuseRange(V2MainWindow& window)
+{
+    // 板厚が決め打ちだったころ、プラ板を使い分けられなかった。
+    // 変えられないものは、使えないのと同じである。
+    auto& dock = window.ParameterDock();
+    if (!Explain((std::string("行が3つ(実際は ") + std::to_string(dock.RowCount())
+                     + ")").c_str(), dock.RowCount() == 3)) {
+        return false;
+    }
+    if (!Explain("式で入る",
+            dock.Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
+                QStringLiteral("0.3*2")))) {
+        return false;
+    }
+    const double value = kachakacha::v2::app::ParameterValueOf(dock.Values(),
+        kachakacha::v2::app::ParameterId::ExtrudeDistance);
+    if (!Explain((std::string("0.6mm になる(実際は ") + std::to_string(value)
+                     + ")").c_str(), std::abs(value - 0.6) < 1e-9)) {
+        return false;
+    }
+    // 範囲の外は断る。黙って近い値へ寄せない。
+    if (!Explain("範囲の外は断る",
+            !dock.Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
+                QStringLiteral("999")))) {
+        return false;
+    }
+    const double kept = kachakacha::v2::app::ParameterValueOf(dock.Values(),
+        kachakacha::v2::app::ParameterId::ExtrudeDistance);
+    if (!Explain("断っても前の値が残る", std::abs(kept - 0.6) < 1e-9)) {
+        return false;
+    }
+    return Explain((std::string("理由が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("範囲の外")));
+}
+
+[[nodiscard]] bool CaseExtrudeUsesTheParameter(V2MainWindow& window)
+{
+    // 数の棚で決めた板厚が、実際に押し出しへ効くこと。
+    // 効かなければ、棚はただの飾りである。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    viewport.ClickAt(QPointF(viewport.width() * 0.35, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    if (!Explain("板厚を1.2mmにできる",
+            window.ParameterDock().Apply(
+                kachakacha::v2::app::ParameterId::ExtrudeDistance,
+                QStringLiteral("1.2")))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    return Explain((std::string("その厚みで作ったと言う(")
+                       + window.StatusText().toStdString() + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("1.2")));
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1110,6 +1172,8 @@ std::vector<SelfTestCase> BasicCases()
         {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
+        {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
+        {"決めた板厚が押し出しに効く", &CaseExtrudeUsesTheParameter},
         {"見え方は3段で回り形を変えない", &CaseDisplaySettingsCycle},
         {"正対は平面を選ばないと理由を出す", &CaseAlignToSelectionNeedsAPlane},
     };

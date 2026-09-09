@@ -99,7 +99,7 @@ void V2MainWindow::RunExtrude()
     request.directionMode = ExtrudeDirectionMode::WorkPlaneNormal;
     request.workPlane = viewport_->WorkPlane();
     request.extent = ExtrudeExtentMode::Distance;
-    request.distanceMm = extrudeDistanceMm_;
+    request.distanceMm = ExtrudeDistanceMm();
     request.outputs.part = true;
     request.outputs.endProfileWire = true;
     request.outputs.sideBoundaryWires = true;
@@ -124,7 +124,7 @@ void V2MainWindow::RunExtrude()
     kachakacha::v2::domain::ExtrudeDefinition definition;
     definition.profiles = selection.entityIds;
     definition.direction = request.workPlane.normal;
-    definition.distance.value = extrudeDistanceMm_;
+    definition.distance.value = ExtrudeDistanceMm();
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
     std::vector<CurveSegment> edges;
     for (const auto& wire : built.Value().endProfileWires) {
@@ -141,7 +141,7 @@ void V2MainWindow::RunExtrude()
         partFlatBoundary_[partId.ToString()] = built.Value().endProfileWires.front();
     }
     SetStatus(QStringLiteral("押し出し: 厚み %1 mm の部品を作りました(体積 %2 mm3)。")
-            .arg(extrudeDistanceMm_)
+            .arg(ExtrudeDistanceMm())
             .arg(built.Value().totalVolumeMm3));
 }
 

@@ -16,6 +16,7 @@
 #include "kachakacha/app/DisplaySettings.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
+#include "V2ParameterDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/UiMode.h"
@@ -133,6 +134,9 @@ public:
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
     //! 手順の状況と文書から数を作り直して棚へ渡す。
     void RefreshExportCounts();
+
+    //! 数の棚。板厚や面取り量を式で打てる。
+    [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
 
     //! 測る棚(PRD-070)。選んだものから測れることを全部出す。
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
@@ -262,7 +266,9 @@ private:
     //! 部品の辺を場面へ出し直す。立体そのものはまだ描かない。
     void RefreshPartEdges();
     //! 押し出しの距離。数値入力が付くまでの既定値(プラ板0.5mm)。
-    double extrudeDistanceMm_ = 0.5;
+    //! 押し出しの距離(板厚)。数の棚から取る。決め打ちにすると、
+    //! プラ板を使い分けられない。
+    [[nodiscard]] double ExtrudeDistanceMm() const;
     //! 出す対象の立体を集める。selectedOnly が偽なら見えているものを集める。
     [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle> PartShapesFor(
         bool selectedOnly) const;
@@ -313,7 +319,8 @@ private:
     //! 文書が変わったあとの後始末。場面・選択・一覧・件数を作り直す。
     void AdoptCurrentDocument();
     //! 面取り量・丸め半径・オフセット距離。数値入力が付くまでの既定値。
-    double wireEditSizeMm_ = 2.0;
+    //! 面取り量 / 丸め半径。数の棚から取る。
+    [[nodiscard]] double CornerSizeMm() const;
 
     //! ファイルの台帳コマンド。新規・開く・保存・名前を付けて保存。
     void RunFileCommand(std::string_view id);
@@ -345,6 +352,7 @@ private:
     QTreeWidget* processView_ = nullptr;
     V2ExportDock* exportDock_ = nullptr;
     V2MeasureDock* measureDock_ = nullptr;
+    V2ParameterDock* parameterDock_ = nullptr;
     QDockWidget* processDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;

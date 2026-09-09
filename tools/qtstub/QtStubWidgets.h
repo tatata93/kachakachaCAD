@@ -12,6 +12,7 @@ public:
     [[nodiscard]] QObject* parent() const;
     void setParent(QObject*);
     [[nodiscard]] QVariant property(const char*) const;
+    bool blockSignals(bool);
     void setBackgroundRole(QPalette::ColorRole);
     void setAutoFillBackground(bool);
     void raise();
@@ -235,6 +236,11 @@ public:
     [[nodiscard]] int childCount() const;
     [[nodiscard]] QTreeWidgetItem* child(int) const;
     void setExpanded(bool);
+    enum ItemFlag { NoItemFlags = 0, ItemIsSelectable = 1, ItemIsEditable = 2,
+        ItemIsEnabled = 32 };
+    using ItemFlags = int;
+    void setFlags(ItemFlags);
+    [[nodiscard]] ItemFlags flags() const;
 };
 
 class QTreeWidget : public QAbstractItemView {
@@ -253,6 +259,7 @@ public:
     void expandAll();
     void resizeColumnToContents(int);
     void (*itemClicked)(QTreeWidgetItem*, int);
+    void (*itemChanged)(QTreeWidgetItem*, int);
 };
 
 class QDockWidget : public QWidget {

@@ -159,8 +159,8 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     TransformWireDefinition definition;
     definition.method = binding->method;
     if (binding->needsSize) {
-        definition.scalarArgument.value = wireEditSizeMm_;
-        definition.scalarArgument.expression = std::to_string(wireEditSizeMm_);
+        definition.scalarArgument.value = CornerSizeMm();
+        definition.scalarArgument.expression = std::to_string(CornerSizeMm());
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),

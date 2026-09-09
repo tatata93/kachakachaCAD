@@ -411,6 +411,14 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::RightDockWidgetArea, measureDock_);
     measureDock_->hide();
 
+    // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
+    parameterDock_ = new V2ParameterDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
+    parameterDock_->SetDiagnosticSink([this](const QString& text) {
+        AddDiagnostic(text);
+        SetStatus(text);
+    });
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
@@ -618,6 +626,18 @@ void V2MainWindow::RunFileCommand(std::string_view id)
     SetStatus(QStringLiteral("%1 へ保存しました。").arg(path));
 }
 
+
+double V2MainWindow::ExtrudeDistanceMm() const
+{
+    return kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+        kachakacha::v2::app::ParameterId::ExtrudeDistance);
+}
+
+double V2MainWindow::CornerSizeMm() const
+{
+    return kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+        kachakacha::v2::app::ParameterId::CornerSize);
+}
 
 kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
 {

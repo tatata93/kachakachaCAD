@@ -882,6 +882,103 @@ struct SelfTestCase {
         window.Session().GetDocument().Snapshot().entities.size() == before);
 }
 
+[[nodiscard]] bool CaseAxisArrowsAreOnScreen(V2MainWindow& window)
+{
+    // V1 と同じで、絶対回転と相対回転の矢印が両方とも画面に出ている。
+    auto& viewport = window.Viewport();
+    const auto buttons = viewport.AxisArrowButtons();
+    if (!Explain((std::string("矢印が12個(実際は ") + std::to_string(buttons.size())
+                     + ")").c_str(), buttons.size() == 12)) {
+        return false;
+    }
+    for (const auto& button : buttons) {
+        const bool inside = button.xPx >= 0.0 && button.yPx >= 0.0
+            && button.xPx + button.widthPx <= viewport.width()
+            && button.yPx + button.heightPx <= viewport.height();
+        if (!Explain("矢印が画面の中にある", inside)) {
+            return false;
+        }
+        const auto found = viewport.AxisArrowAt(
+            QPointF(button.xPx + button.widthPx * 0.5, button.yPx + button.heightPx * 0.5));
+        if (!Explain("矢印を押せる", found.has_value())) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CaseAxisArrowClickTurnsFifteenDegrees(V2MainWindow& window)
+{
+    // 絶対回転の矢印をクリックすると15度だけ回る。90度へ飛ばない。
+    auto& viewport = window.Viewport();
+    const auto buttons = viewport.AxisArrowButtons();
+    if (buttons.empty()) {
+        return false;
+    }
+    const auto& button = buttons.front();
+    const QPointF center(button.xPx + button.widthPx * 0.5,
+        button.yPx + button.heightPx * 0.5);
+    const auto before = viewport.Orientation();
+    if (!Explain("矢印を押せる",
+            viewport.PressAxisArrow(center,
+                kachakacha::v2::view::AxisArrowModifier::None))) {
+        return false;
+    }
+    viewport.ReleaseAxisArrow(center);
+    const auto after = viewport.Orientation();
+    const double dot = std::abs(before.w * after.w + before.x * after.x
+        + before.y * after.y + before.z * after.z);
+    const double degrees = 2.0 * std::acos(std::min(1.0, dot)) * 180.0 / 3.14159265358979323846;
+    return Explain((std::string("15度回った(実際は ") + std::to_string(degrees)
+                       + "度)").c_str(),
+        std::abs(degrees - kachakacha::v2::view::kAxisArrowClickDegrees) < 0.5);
+}
+
+[[nodiscard]] bool CaseRelativeArrowNeedsSelection(V2MainWindow& window)
+{
+    // 相対回転は、部品を選んでいないと断る。黙って世界軸で回したりしない。
+    auto& viewport = window.Viewport();
+    viewport.SetSelectionFrame(std::nullopt);
+    const auto buttons = viewport.AxisArrowButtons();
+    std::size_t relative = buttons.size();
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        if (buttons[index].mode == kachakacha::v2::view::RotationAxisMode::Relative) {
+            relative = index;
+            break;
+        }
+    }
+    if (!Explain("相対の矢印がある", relative < buttons.size())) {
+        return false;
+    }
+    const auto& button = buttons[relative];
+    const QPointF center(button.xPx + button.widthPx * 0.5,
+        button.yPx + button.heightPx * 0.5);
+    const auto before = viewport.Orientation();
+    viewport.PressAxisArrow(center, kachakacha::v2::view::AxisArrowModifier::None);
+    viewport.ReleaseAxisArrow(center);
+    const auto after = viewport.Orientation();
+    const bool unchanged = std::abs(before.w - after.w) < 1.0e-12
+        && std::abs(before.x - after.x) < 1.0e-12 && std::abs(before.y - after.y) < 1.0e-12
+        && std::abs(before.z - after.z) < 1.0e-12;
+    if (!Explain("姿勢は変わらない", unchanged)) {
+        return false;
+    }
+    if (!Explain((std::string("理由が UI-V007(実際は ") + viewport.LastViewMessage()
+                     + ")").c_str(),
+            !viewport.LastViewMessage().empty())) {
+        return false;
+    }
+    // 部品を選べば回せる。
+    viewport.SetSelectionFrame(kachakacha::v2::view::Quaternion{1.0, 0.0, 0.0, 0.0});
+    viewport.PressAxisArrow(center, kachakacha::v2::view::AxisArrowModifier::None);
+    viewport.ReleaseAxisArrow(center);
+    const auto rotated = viewport.Orientation();
+    return Explain("選べば回る",
+        std::abs(rotated.w - after.w) > 1.0e-9 || std::abs(rotated.x - after.x) > 1.0e-9
+            || std::abs(rotated.y - after.y) > 1.0e-9
+            || std::abs(rotated.z - after.z) > 1.0e-9);
+}
+
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
 {
     // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
@@ -970,6 +1067,9 @@ const SelfTestCase kCases[] = {
     {"配る見本が開ける", &CaseSampleDocumentOpens},
     {"出す先を尋ねてやめられる", &CaseFileCommandsAskAndGiveUp},
     {"保存して開き直すと同じものが戻る", &CaseSaveThenOpenRoundTrips},
+    {"回転矢印が絶対と相対の両方とも画面に出る", &CaseAxisArrowsAreOnScreen},
+    {"回転矢印を押すと15度だけ回る", &CaseAxisArrowClickTurnsFifteenDegrees},
+    {"相対回転は選択が無ければ断る", &CaseRelativeArrowNeedsSelection},
 };
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。

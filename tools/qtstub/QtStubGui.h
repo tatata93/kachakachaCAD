@@ -123,6 +123,7 @@ public:
     void setBold(bool);
     void setFamily(const QString&);
     [[nodiscard]] int pointSize() const;
+    [[nodiscard]] double pointSizeF() const;
     [[nodiscard]] QString family() const;
     enum Weight { Normal = 400, Bold = 700 };
     void setWeight(Weight);
@@ -268,6 +269,7 @@ public:
     void drawEllipse(const QRectF&);
     void drawEllipse(const QPointF&, double, double);
     void drawPath(const QPainterPath&);
+    void drawArc(const QRectF&, int, int);
     void drawPolygon(const QPolygonF&);
     void drawPolygon(const QPolygon&);
     void drawPolyline(const QPolygonF&);

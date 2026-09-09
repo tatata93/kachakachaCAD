@@ -721,6 +721,114 @@ void V2Viewport::ReleaseViewCube(const QPointF& position)
     }
 }
 
+std::vector<kachakacha::v2::view::AxisArrowButton> V2Viewport::AxisArrowButtons() const
+{
+    const QRectF box = ViewCubeRect();
+    return kachakacha::v2::view::BuildAxisArrowButtons(box.left(), box.bottom(),
+        box.width());
+}
+
+std::optional<std::size_t> V2Viewport::AxisArrowAt(const QPointF& position) const
+{
+    return kachakacha::v2::view::AxisArrowAtScreen(AxisArrowButtons(), position.x(),
+        position.y());
+}
+
+bool V2Viewport::PressAxisArrow(const QPointF& position,
+    kachakacha::v2::view::AxisArrowModifier modifier)
+{
+    const auto index = AxisArrowAt(position);
+    if (!index.has_value()) {
+        return false;
+    }
+    AxisArrowDrag drag;
+    drag.index = *index;
+    drag.pressPosition = position;
+    drag.orientationAtPress = orientation_;
+    drag.modifier = modifier;
+    arrowDrag_ = drag;
+    return true;
+}
+
+void V2Viewport::DragAxisArrow(const QPointF& position)
+{
+    if (!arrowDrag_.has_value()) {
+        return;
+    }
+    const auto buttons = AxisArrowButtons();
+    if (arrowDrag_->index >= buttons.size()) {
+        return;
+    }
+    // 横に引いた量で回す。押した所からの合計で決めるので、途中の丸めが溜まらない。
+    const double dragPx = position.x() - arrowDrag_->pressPosition.x();
+    if (std::abs(dragPx) <= kViewCubeDragThresholdPx && !arrowDrag_->moved) {
+        return;
+    }
+    arrowDrag_->moved = true;
+    const kachakacha::v2::view::AxisArrowButton& button = buttons[arrowDrag_->index];
+    kachakacha::v2::view::AxisArrowRequest request;
+    request.orientation = arrowDrag_->orientationAtPress;
+    request.mode = button.mode;
+    request.axis = button.axis;
+    request.modifier = arrowDrag_->modifier;
+    request.hasSelectionFrame = selectionFrame_.has_value();
+    if (selectionFrame_.has_value()) {
+        request.selectionFrame = *selectionFrame_;
+    }
+    const auto rotated = kachakacha::v2::view::RotateByAxisArrowDrag(request,
+        button.positive ? dragPx : -dragPx);
+    if (!rotated.HasValue()) {
+        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        if (statusCallback_) {
+            statusCallback_(viewMessage_);
+        }
+        arrowDrag_.reset();
+        return;
+    }
+    viewMessage_.clear();
+    SetOrientation(rotated.Value());
+}
+
+void V2Viewport::ReleaseAxisArrow(const QPointF& position)
+{
+    if (!arrowDrag_.has_value()) {
+        return;
+    }
+    const auto buttons = AxisArrowButtons();
+    const bool moved = arrowDrag_->moved;
+    const std::size_t index = arrowDrag_->index;
+    const auto modifier = arrowDrag_->modifier;
+    const auto orientationAtPress = arrowDrag_->orientationAtPress;
+    arrowDrag_.reset();
+    if (moved || index >= buttons.size()) {
+        // 引きずったぶんはもう回してある。離した所では何も足さない。
+        (void)position;
+        return;
+    }
+    // 動かさずに離した = クリック。15度だけ回る。90度ではない。
+    const kachakacha::v2::view::AxisArrowButton& button = buttons[index];
+    kachakacha::v2::view::AxisArrowRequest request;
+    request.orientation = orientationAtPress;
+    request.mode = button.mode;
+    request.axis = button.axis;
+    request.modifier = modifier;
+    request.hasSelectionFrame = selectionFrame_.has_value();
+    if (selectionFrame_.has_value()) {
+        request.selectionFrame = *selectionFrame_;
+    }
+    const auto rotated = kachakacha::v2::view::RotateByAxisArrowClick(request,
+        !button.positive);
+    if (!rotated.HasValue()) {
+        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        if (statusCallback_) {
+            statusCallback_(viewMessage_);
+        }
+        return;
+    }
+    viewMessage_.clear();
+    SetOrientation(rotated.Value());
+}
+
 bool V2Viewport::RotateByArrow(kachakacha::v2::view::RotationAxis axis,
     kachakacha::v2::view::RotationAxisMode mode,
     kachakacha::v2::view::AxisArrowModifier modifier, double dragPx)
@@ -789,6 +897,99 @@ void V2Viewport::DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
                          52.0, 16.0),
         Qt::AlignCenter,
         QString::fromStdString(kachakacha::v2::view::ViewCubeZoneLabelJa(zone)));
+}
+
+void V2Viewport::DrawAxisArrows(QPainter& painter) const
+{
+    const auto buttons = AxisArrowButtons();
+    if (buttons.empty()) {
+        return;
+    }
+    const QRectF box = ViewCubeRect();
+    const double blockHeight =
+        kachakacha::v2::view::AxisArrowBlockHeightPx(box.width());
+    if (box.bottom() + blockHeight > height()) {
+        return; // 画面に入らないなら出さない。はみ出したものは押せない。
+    }
+    // 相対軸は、部品を1つ選んでいないと使えない。
+    // 使えないものは薄く出す。消すと「無い」のか「使えない」のかが分からなくなる。
+    const bool relativeUsable = selectionFrame_.has_value();
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QFont previous = painter.font();
+    QFont compact = previous;
+    compact.setPointSizeF(std::max(6.0, previous.pointSizeF() - 2.0));
+    painter.setFont(compact);
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        const kachakacha::v2::view::AxisArrowButton& button = buttons[index];
+        const QRectF cell(button.xPx, button.yPx, button.widthPx, button.heightPx);
+        const bool usable = button.mode == kachakacha::v2::view::RotationAxisMode::World
+            || relativeUsable;
+        const bool hot = (arrowDrag_.has_value() && arrowDrag_->index == index)
+            || (arrowHoverIndex_.has_value() && *arrowHoverIndex_ == index);
+        QColor face = palette_.background;
+        face.setAlpha(usable ? 210 : 120);
+        painter.setBrush(face);
+        painter.setPen(QPen(hot ? palette_.selected : palette_.gridMajor, hot ? 1.6 : 1.0));
+        painter.drawRect(cell);
+
+        QColor ink = usable ? palette_.text : palette_.construction;
+        // 軸ごとに色を分ける。3D の軸線と同じ色にして、目で対応が取れるようにする。
+        if (usable) {
+            switch (button.axis) {
+            case kachakacha::v2::view::RotationAxis::X: ink = palette_.axisX; break;
+            case kachakacha::v2::view::RotationAxis::Y: ink = palette_.axisY; break;
+            case kachakacha::v2::view::RotationAxis::Z: ink = palette_.axisZ; break;
+            }
+        }
+        painter.setPen(QPen(ink, 1.4));
+        painter.setBrush(Qt::NoBrush);
+        // 回る向きを弧で描く。矢じりは進む側の端に付ける。
+        const QRectF arc = cell.adjusted(cell.width() * 0.22, cell.height() * 0.22,
+            -cell.width() * 0.22, -cell.height() * 0.22);
+        const int spanDegrees = 240 * 16;
+        const int startDegrees = (button.positive ? 150 : 30) * 16;
+        painter.drawArc(arc, startDegrees, button.positive ? -spanDegrees : spanDegrees);
+        const double headSize = std::max(3.0, cell.width() * 0.16);
+        const QPointF head(button.positive ? arc.right() : arc.left(), arc.center().y());
+        QPolygonF arrowHead;
+        if (button.positive) {
+            arrowHead << QPointF(head.x() - headSize, head.y() - headSize)
+                      << QPointF(head.x() + headSize * 0.4, head.y())
+                      << QPointF(head.x() - headSize, head.y() + headSize);
+        } else {
+            arrowHead << QPointF(head.x() + headSize, head.y() - headSize)
+                      << QPointF(head.x() - headSize * 0.4, head.y())
+                      << QPointF(head.x() + headSize, head.y() + headSize);
+        }
+        painter.setBrush(ink);
+        painter.setPen(Qt::NoPen);
+        painter.drawPolygon(arrowHead);
+
+        painter.setPen(QPen(ink, 1.0));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawText(cell, Qt::AlignCenter,
+            QString::fromUtf8(std::string(
+                kachakacha::v2::view::RotationAxisName(button.axis)).c_str()));
+    }
+    // どちらの段が絶対で、どちらが相対かを書く。書かないと見ただけでは分からない。
+    const double labelWidth = 30.0;
+    for (int row = 0; row < 2; ++row) {
+        const auto mode = row == 0 ? kachakacha::v2::view::RotationAxisMode::World
+                                   : kachakacha::v2::view::RotationAxisMode::Relative;
+        const kachakacha::v2::view::AxisArrowButton& first =
+            buttons[static_cast<std::size_t>(row) * 6];
+        const bool usable = mode == kachakacha::v2::view::RotationAxisMode::World
+            || relativeUsable;
+        painter.setPen(QPen(usable ? palette_.text : palette_.construction, 1.0));
+        painter.drawText(QRectF(first.xPx - labelWidth - 2.0, first.yPx, labelWidth,
+                             first.heightPx),
+            Qt::AlignRight | Qt::AlignVCenter,
+            QString::fromUtf8(std::string(
+                kachakacha::v2::view::RotationAxisModeNameJa(mode)).c_str()));
+    }
+    painter.setFont(previous);
+    painter.restore();
 }
 
 void V2Viewport::DrawViewCube(QPainter& painter) const
@@ -1011,6 +1212,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawSnap(painter);
     DrawScaleBar(painter);
     DrawViewCube(painter);
+    DrawAxisArrows(painter);
     DrawCursorInput(painter);
 }
 
@@ -1134,9 +1336,27 @@ void V2Viewport::CancelTool()
 
 void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 {
+    if (arrowDrag_.has_value()) {
+        DragAxisArrow(event->position());
+        return;
+    }
     if (cubeDrag_.active) {
         DragViewCube(event->position());
         return;
+    }
+    // 矢印の上に来たら光らせる。押せる場所が目で分かるようにする。
+    const auto arrow = AxisArrowAt(event->position());
+    if (arrow.has_value() != arrowHoverIndex_.has_value()
+        || (arrow.has_value() && *arrow != *arrowHoverIndex_)) {
+        arrowHoverIndex_ = arrow;
+        update();
+    }
+    if (arrow.has_value()) {
+        const auto buttons = AxisArrowButtons();
+        if (*arrow < buttons.size() && statusCallback_) {
+            statusCallback_(kachakacha::v2::view::AxisArrowTooltipJa(buttons[*arrow]));
+        }
+        return; // 矢印の上ではスナップを探さない。
     }
     const auto zone = ViewCubeZoneAtScreen(event->position());
     if (zone.has_value() != cubeHoverZone_.has_value()
@@ -1156,6 +1376,16 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         FinishTool();
         return;
     }
+    kachakacha::v2::view::AxisArrowModifier modifier =
+        kachakacha::v2::view::AxisArrowModifier::None;
+    if ((event->modifiers() & Qt::ShiftModifier) != 0) {
+        modifier = kachakacha::v2::view::AxisArrowModifier::Fine;
+    } else if ((event->modifiers() & Qt::ControlModifier) != 0) {
+        modifier = kachakacha::v2::view::AxisArrowModifier::Coarse;
+    }
+    if (PressAxisArrow(event->position(), modifier)) {
+        return;
+    }
     if (PressViewCube(event->position())) {
         return;
     }
@@ -1168,6 +1398,13 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
 
 void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (arrowDrag_.has_value()) {
+        ReleaseAxisArrow(event->position());
+        if (statusCallback_ && !viewMessage_.empty()) {
+            statusCallback_(viewMessage_);
+        }
+        return;
+    }
     if (cubeDrag_.active) {
         ReleaseViewCube(event->position());
         if (statusCallback_ && !viewMessage_.empty()) {

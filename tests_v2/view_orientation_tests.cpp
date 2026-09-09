@@ -434,4 +434,124 @@ KACHA_V2_TEST(view, 押した姿勢が壊れていたら断る)
     RequireEqual(FirstCode(result.Diagnostics()), "UI-V001", "姿勢が壊れている");
 }
 
+KACHA_V2_TEST(view_orientation, 回転矢印は絶対と相対の2段で12個ある)
+{
+    // V1 と同じで、絶対回転と相対回転の両方が出ている。片方だけにしない。
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(100.0, 200.0, 60.0);
+    RequireEqual(std::to_string(buttons.size()), std::string("12"), "矢印の数");
+    int world = 0;
+    int relative = 0;
+    for (const auto& button : buttons) {
+        if (button.mode == kachakacha::v2::view::RotationAxisMode::World) {
+            ++world;
+        } else {
+            ++relative;
+        }
+    }
+    RequireEqual(std::to_string(world), std::string("6"), "絶対が6個");
+    RequireEqual(std::to_string(relative), std::string("6"), "相対が6個");
+}
+
+KACHA_V2_TEST(view_orientation, 回転矢印は軸ごとに戻すと進めるがそろっている)
+{
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(100.0, 200.0, 60.0);
+    for (const auto mode : {kachakacha::v2::view::RotationAxisMode::World,
+             kachakacha::v2::view::RotationAxisMode::Relative}) {
+        for (const auto axis : {kachakacha::v2::view::RotationAxis::X,
+                 kachakacha::v2::view::RotationAxis::Y,
+                 kachakacha::v2::view::RotationAxis::Z}) {
+            int forward = 0;
+            int backward = 0;
+            for (const auto& button : buttons) {
+                if (button.mode != mode || button.axis != axis) {
+                    continue;
+                }
+                if (button.positive) {
+                    ++forward;
+                } else {
+                    ++backward;
+                }
+            }
+            RequireEqual(std::to_string(forward), std::string("1"), "進めるが1個");
+            RequireEqual(std::to_string(backward), std::string("1"), "戻すが1個");
+        }
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 回転矢印は重ならずキューブの真下に並ぶ)
+{
+    const double left = 100.0;
+    const double bottom = 200.0;
+    const double size = 60.0;
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(left, bottom, size);
+    const double blockWidth = kachakacha::v2::view::AxisArrowBlockWidthPx(size);
+    for (const auto& button : buttons) {
+        // 帯はキューブの右端にそろえて左へ伸びる。右へは出さない(画面の外になる)。
+        Require(button.xPx >= left + size - blockWidth - 1.0e-9, "帯より左へ出ない");
+        Require(button.xPx + button.widthPx <= left + size + 1.0e-9,
+            "キューブより右へはみ出さない");
+        Require(button.yPx > bottom, "キューブの下にある");
+        Require(button.widthPx > size * 0.2, "押せる大きさがある");
+    }
+    // 同じ段のとなり同士が重ならない。
+    for (std::size_t a = 0; a < buttons.size(); ++a) {
+        for (std::size_t b = a + 1; b < buttons.size(); ++b) {
+            const bool sameRow = std::abs(buttons[a].yPx - buttons[b].yPx) < 1.0e-9;
+            if (!sameRow) {
+                continue;
+            }
+            const bool apart = buttons[a].xPx + buttons[a].widthPx <= buttons[b].xPx + 1.0e-9
+                || buttons[b].xPx + buttons[b].widthPx <= buttons[a].xPx + 1.0e-9;
+            Require(apart, "となり同士が重ならない");
+        }
+    }
+    Require(kachakacha::v2::view::AxisArrowBlockHeightPx(size) > 0.0, "高さがある");
+}
+
+KACHA_V2_TEST(view_orientation, 実際のキューブの大きさで矢印が押せる大きさになる)
+{
+    // 画面のキューブは88px。そこで20pxを切ると、指でも狙いにくい。
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(0.0, 0.0, 88.0);
+    Require(!buttons.empty(), "矢印がある");
+    for (const auto& button : buttons) {
+        Require(button.widthPx >= 20.0, "20px以上");
+        Require(button.heightPx >= 20.0, "20px以上");
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 押した場所からどの矢印か分かる)
+{
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(100.0, 200.0, 60.0);
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        const auto& button = buttons[index];
+        const auto found = kachakacha::v2::view::AxisArrowAtScreen(buttons,
+            button.xPx + button.widthPx * 0.5, button.yPx + button.heightPx * 0.5);
+        Require(found.has_value(), "拾える");
+        RequireEqual(std::to_string(*found), std::to_string(index), "同じ矢印");
+    }
+    Require(!kachakacha::v2::view::AxisArrowAtScreen(buttons, 0.0, 0.0).has_value(),
+        "外は拾わない");
+}
+
+KACHA_V2_TEST(view_orientation, 矢印の説明に軸と向きと取り方が入る)
+{
+    const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(100.0, 200.0, 60.0);
+    for (const auto& button : buttons) {
+        const std::string text = kachakacha::v2::view::AxisArrowTooltipJa(button);
+        Require(text.find(std::string(
+                    kachakacha::v2::view::RotationAxisName(button.axis))) != std::string::npos,
+            "軸の名前");
+        Require(text.find(std::string(kachakacha::v2::view::RotationAxisModeNameJa(
+                    button.mode))) != std::string::npos,
+            "取り方の名前");
+        Require(text.find(button.positive ? "進める" : "戻す") != std::string::npos,
+            "向き");
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 大きさが0なら矢印は出さない)
+{
+    Require(kachakacha::v2::view::BuildAxisArrowButtons(0.0, 0.0, 0.0).empty(), "空");
+}
+
 KACHA_V2_TEST_MAIN("view_orientation_tests")

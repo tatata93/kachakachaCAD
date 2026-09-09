@@ -379,4 +379,106 @@ Result<Quaternion> RotateByAxisArrowClick(const AxisArrowRequest& request, bool 
     return RotateByAxisAngle(request, degrees);
 }
 
+std::string_view RotationAxisName(RotationAxis axis) noexcept
+{
+    switch (axis) {
+    case RotationAxis::X: return "X";
+    case RotationAxis::Y: return "Y";
+    case RotationAxis::Z: return "Z";
+    }
+    return "?";
+}
+
+std::string_view RotationAxisModeNameJa(RotationAxisMode mode) noexcept
+{
+    switch (mode) {
+    case RotationAxisMode::World:    return "絶対";
+    case RotationAxisMode::Relative: return "相対";
+    }
+    return "不明";
+}
+
+std::string AxisArrowTooltipJa(const AxisArrowButton& button)
+{
+    return std::string(RotationAxisModeNameJa(button.mode)) + " "
+        + std::string(RotationAxisName(button.axis)) + "軸まわりに"
+        + (button.positive ? "進める" : "戻す")
+        + "(押すと15度、引きずると連続。Shiftで細かく、Ctrlで粗く)";
+}
+
+namespace {
+
+//! 矢印1つの一辺。帯の幅から、間を引いて6等分する。
+[[nodiscard]] double AxisArrowSizePx(double cubeSizePx) noexcept
+{
+    const double gap = cubeSizePx * kAxisArrowGapRatio;
+    const double width = AxisArrowBlockWidthPx(cubeSizePx);
+    return (width - gap * static_cast<double>(kAxisArrowColumns - 1))
+        / static_cast<double>(kAxisArrowColumns);
+}
+
+} // namespace
+
+double AxisArrowBlockWidthPx(double cubeSizePx) noexcept
+{
+    return cubeSizePx * kAxisArrowBlockWidthRatio;
+}
+
+double AxisArrowBlockHeightPx(double cubeSizePx) noexcept
+{
+    const double gap = cubeSizePx * kAxisArrowGapRatio;
+    // 2段ぶん。段と段のあいだにも同じ間を空ける。
+    return AxisArrowSizePx(cubeSizePx) * 2.0 + gap * 3.0;
+}
+
+std::vector<AxisArrowButton> BuildAxisArrowButtons(double cubeLeftPx, double cubeBottomPx,
+    double cubeSizePx)
+{
+    std::vector<AxisArrowButton> buttons;
+    if (!(cubeSizePx > 0.0)) {
+        return buttons;
+    }
+    const double size = AxisArrowSizePx(cubeSizePx);
+    const double gap = cubeSizePx * kAxisArrowGapRatio;
+    // 帯はキューブの右端にそろえて、左へ伸ばす。
+    const double blockLeft = cubeLeftPx + cubeSizePx - AxisArrowBlockWidthPx(cubeSizePx);
+    const RotationAxis axes[] = {RotationAxis::X, RotationAxis::Y, RotationAxis::Z};
+    const RotationAxisMode modes[] = {RotationAxisMode::World, RotationAxisMode::Relative};
+    // 1段に「軸3つ x 向き2つ」を並べる。幅はキューブに収める。
+    const double stride = size + gap;
+    buttons.reserve(12);
+    for (std::size_t row = 0; row < std::size(modes); ++row) {
+        const double top = cubeBottomPx + gap + static_cast<double>(row) * (size + gap);
+        std::size_t column = 0;
+        for (const RotationAxis axis : axes) {
+            for (const bool positive : {false, true}) {
+                AxisArrowButton button;
+                button.axis = axis;
+                button.mode = modes[row];
+                button.positive = positive;
+                button.xPx = blockLeft + stride * static_cast<double>(column);
+                button.yPx = top;
+                button.widthPx = size;
+                button.heightPx = size;
+                buttons.push_back(button);
+                ++column;
+            }
+        }
+    }
+    return buttons;
+}
+
+std::optional<std::size_t> AxisArrowAtScreen(const std::vector<AxisArrowButton>& buttons,
+    double xPx, double yPx)
+{
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        const AxisArrowButton& button = buttons[index];
+        if (xPx >= button.xPx && xPx <= button.xPx + button.widthPx && yPx >= button.yPx
+            && yPx <= button.yPx + button.heightPx) {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
 } // namespace kachakacha::v2::view

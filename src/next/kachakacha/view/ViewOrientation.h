@@ -18,6 +18,7 @@
 #include "kachakacha/geometry/Vector3.h"
 
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -166,5 +167,55 @@ struct AxisArrowRequest {
 
 //! その要求で回せるか。相対軸で選択が無いときは断る理由を返す。
 [[nodiscard]] base::Result<Vector3> ResolveRotationAxis(const AxisArrowRequest& request);
+
+// ---- 回転矢印の並べ方(V1同等。ui-workflows §13.3)----
+//
+// V1 はビューキューブの下に、絶対回転と相対回転の矢印が並んでいた。
+// 並べ方を画面に書くと、画面を出さないと位置を確かめられない。だからここに置く。
+//
+// 並びは上段が絶対(世界の X/Y/Z)、下段が相対(選んだ部品の X/Y/Z)。
+// 各段に軸ごとの「戻す」「進める」が並ぶので、1段6個、2段で12個になる。
+
+//! 矢印1つ。場所は画面の座標(px)。左上が原点。
+struct AxisArrowButton {
+    RotationAxis axis = RotationAxis::X;
+    RotationAxisMode mode = RotationAxisMode::World;
+    //! 進める向きなら true、戻す向きなら false。
+    bool positive = true;
+    double xPx = 0.0;
+    double yPx = 0.0;
+    double widthPx = 0.0;
+    double heightPx = 0.0;
+};
+
+//! 矢印を並べる帯の幅と、間の広さ。キューブの大きさから決める。
+//! 帯はキューブより広い。6個を1段に並べると、キューブ幅では押せない大きさになるためである。
+//! 帯はキューブの右端にそろえて、左へ伸ばす。キューブは画面の右端にあるので、
+//! 右へ伸ばすと画面の外へ出てしまう。
+inline constexpr double kAxisArrowBlockWidthRatio = 1.8;
+inline constexpr double kAxisArrowGapRatio = 0.05;
+//! 1段に並ぶ数。軸3つ x 向き2つ。
+inline constexpr int kAxisArrowColumns = 6;
+
+//! 軸の名前。画面に出す。
+[[nodiscard]] std::string_view RotationAxisName(RotationAxis axis) noexcept;
+//! 軸の取り方の名前。絶対 / 相対。
+[[nodiscard]] std::string_view RotationAxisModeNameJa(RotationAxisMode mode) noexcept;
+//! 矢印1つの説明。押す前に何が起きるか分かるようにする。
+[[nodiscard]] std::string AxisArrowTooltipJa(const AxisArrowButton& button);
+
+//! キューブの下へ矢印を並べる。cubeLeftPx / cubeBottomPx はキューブの左と下。
+//! 並びは決まった順で、いつも12個返す。相対軸が使えないときも消さない。
+//! 消すと「無い」のか「使えない」のかが分からなくなる。
+[[nodiscard]] std::vector<AxisArrowButton> BuildAxisArrowButtons(double cubeLeftPx,
+    double cubeBottomPx, double cubeSizePx);
+
+//! 並べた矢印がぜんぶ入る高さと幅。キューブの下にどれだけ空ければよいか。
+[[nodiscard]] double AxisArrowBlockHeightPx(double cubeSizePx) noexcept;
+[[nodiscard]] double AxisArrowBlockWidthPx(double cubeSizePx) noexcept;
+
+//! 画面のその点にある矢印。無ければ値を持たない。
+[[nodiscard]] std::optional<std::size_t> AxisArrowAtScreen(
+    const std::vector<AxisArrowButton>& buttons, double xPx, double yPx);
 
 } // namespace kachakacha::v2::view

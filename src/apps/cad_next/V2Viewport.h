@@ -164,6 +164,17 @@ public:
     //! 入力列を出す場所。画面端では左または上へ寄る。
     [[nodiscard]] QRectF CursorPanelRect() const;
 
+    //! XYZ回転矢印(V1同等)。並べ方も当たり判定も core が決める。
+    [[nodiscard]] std::vector<kachakacha::v2::view::AxisArrowButton> AxisArrowButtons() const;
+    //! 画面のその点にある矢印。試験と描画から使う。
+    [[nodiscard]] std::optional<std::size_t> AxisArrowAt(const QPointF& position) const;
+    //! 矢印を押した。引きずれば連続、離すまで動かなければ15度。
+    bool PressAxisArrow(const QPointF& position,
+        kachakacha::v2::view::AxisArrowModifier modifier);
+    void DragAxisArrow(const QPointF& position);
+    void ReleaseAxisArrow(const QPointF& position);
+    [[nodiscard]] bool AxisArrowDragging() const { return arrowDrag_.has_value(); }
+
     //! XYZ回転矢印。感度は core が決める。
     bool RotateByArrow(kachakacha::v2::view::RotationAxis axis,
         kachakacha::v2::view::RotationAxisMode mode,
@@ -191,6 +202,8 @@ private:
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
+    //! 回転矢印を描く。使えないもの(相対軸で選択が無い)は薄く出す。消さない。
+    void DrawAxisArrows(QPainter& painter) const;
     void DrawCursorInput(QPainter& painter) const;
     void DrawGuideRows(QPainter& painter) const;
     void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
@@ -221,6 +234,17 @@ private:
     bool cubeMoved_ = false;
     std::optional<kachakacha::v2::view::ViewCubeZone> cubeHoverZone_;
     std::optional<kachakacha::v2::view::Quaternion> selectionFrame_;
+    //! いま押している矢印。押した場所と、そこからの姿勢を覚えておく。
+    struct AxisArrowDrag {
+        std::size_t index = 0;
+        QPointF pressPosition;
+        kachakacha::v2::view::Quaternion orientationAtPress{};
+        kachakacha::v2::view::AxisArrowModifier modifier =
+            kachakacha::v2::view::AxisArrowModifier::None;
+        bool moved = false;
+    };
+    std::optional<AxisArrowDrag> arrowDrag_;
+    std::optional<std::size_t> arrowHoverIndex_;
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
     QPointF cursorPosition_;

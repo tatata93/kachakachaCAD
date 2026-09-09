@@ -818,11 +818,14 @@ void V2Viewport::DrawViewCube(QPainter& painter) const
     const double scale = box.width() * 0.5 / 1.7320508075688772;
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
+    // 掴める四角をそのまま座として描く。ここが当たり判定と同じ大きさである。
+    // 指しているときは縁を光らせる。掴める物だと目で分かるようにする。
     QColor backing = palette_.background;
-    backing.setAlpha(200);
+    backing.setAlpha(215);
     painter.setBrush(backing);
-    painter.setPen(QPen(palette_.gridMajor, 1.0));
-    painter.drawRect(box);
+    const bool hot = cubeDrag_.active || cubeHoverZone_.has_value();
+    painter.setPen(QPen(hot ? palette_.selected : palette_.gridMajor, hot ? 2.0 : 1.2));
+    painter.drawRoundedRect(box, 4.0, 4.0);
     for (int axis = 0; axis < 3; ++axis) {
         for (int sign = -1; sign <= 1; sign += 2) {
             DrawViewCubeFace(painter, axis, sign, box.center(), scale);

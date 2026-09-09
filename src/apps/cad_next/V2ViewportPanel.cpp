@@ -303,9 +303,10 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
 {
     using kachakacha::v2::view::ViewGadgetDirection;
     using kachakacha::v2::view::ViewGadgetKind;
+    // 記号はボタンいっぱいに出す。小さいと、何のボタンか分からない。
     const QFont previous = painter.font();
     QFont label = previous;
-    label.setPointSizeF(std::max(6.0, previous.pointSizeF() - 1.0));
+    label.setPointSizeF(previous.pointSizeF() + 3.0);
     painter.setFont(label);
     for (std::size_t index = 0; index < layout.gadgets.size(); ++index) {
         const kachakacha::v2::view::ViewGadget& gadget = layout.gadgets[index];
@@ -343,13 +344,19 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
             default:                         text = QStringLiteral("▶"); break;
             }
             break;
-        case ViewGadgetKind::AlignSelection:
+        case ViewGadgetKind::AlignSelection: {
+            // この文字だけは長いので、元の大きさに戻す。
+            painter.setFont(previous);
             text = QStringLiteral("選択に正対");
             break;
+        }
         default:
             break;
         }
         painter.drawText(cell, Qt::AlignCenter, text);
+        if (gadget.kind == ViewGadgetKind::AlignSelection) {
+            painter.setFont(label);
+        }
     }
     painter.setFont(previous);
 }

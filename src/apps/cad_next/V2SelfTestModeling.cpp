@@ -664,6 +664,79 @@ namespace {
         window.StatusText().contains(QStringLiteral("閉じた輪")));
 }
 
+[[nodiscard]] bool CaseSurfaceToPatternEndToEnd(V2MainWindow& window)
+{
+    // 面 → 展開 → 型紙 → 1:1 PDF まで通す。
+    // 曲がった車体を作るときの本筋である。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    // 断面になる線を2本、離して引く。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.65));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.65));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    if (!Explain((std::string("断面が2本ある(実際は ")
+                     + std::to_string(viewport.Selection().entityIds.size())
+                     + ")").c_str(),
+            viewport.Selection().entityIds.size() == 2)) {
+        return false;
+    }
+    window.RunCommand("guide.create");
+    if (!Explain((std::string("面ができる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("面を作りました")))) {
+        return false;
+    }
+    // 出来た面を選んで、展開して部材にする。
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface));
+    window.RunCommand("fabrication.create");
+    if (!Explain((std::string("展開して部材になる(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("部材")))) {
+        return false;
+    }
+    window.RunCommand("fabrication.create_pattern");
+    if (!Explain((std::string("型紙になる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("原寸")))) {
+        return false;
+    }
+    auto& dock = window.ExportDock();
+    if (!Explain("型紙を対象にできる",
+            dock.ChooseTarget(kachakacha::v2::app::ExportTarget::CurrentPattern))) {
+        return false;
+    }
+    if (!Explain("1:1 PDF を選べる",
+            dock.ChooseFormat(kachakacha::v2::app::ExportFormat::Pdf))) {
+        return false;
+    }
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_surface");
+    std::error_code code;
+    const auto written = kachakacha::v2::io::MakePath(path + ".pdf");
+    std::filesystem::remove(written, code);
+    dock.ChoosePath(QString::fromStdString(path));
+    if (!Explain((std::string("出せる(理由は ") + dock.ReasonText().toStdString()
+                     + ")").c_str(), dock.CanRun())) {
+        return false;
+    }
+    if (!Explain("書き出せる", dock.RunNow())) {
+        return false;
+    }
+    const bool hasBytes = std::filesystem::exists(written, code)
+        && std::filesystem::file_size(written, code) > 0;
+    std::filesystem::remove(written, code);
+    return Explain("PDFが出来ている", hasBytes);
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -685,6 +758,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"グリッド原点は押した場所へ動く", &CaseGridOriginAsksWhereToPress},
         {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
+        {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},
         {"固定しても元は残る", &CaseFreezeKeepsTheOriginal},

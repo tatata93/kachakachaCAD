@@ -434,9 +434,11 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::BottomDockWidgetArea, diagnosticDock);
     diagnosticDock_ = diagnosticDock;
 
-    // 高さの割り当てを決める。決めないと「手順」が2行しか見えず、
-    // いま何段目かが読めない。「知らせ」は空のときに広すぎた。
-    resizeDocks({processDock_, exportDock_}, {240, 380}, Qt::Vertical);
+    // 棚の広さを決める。決めないと、部品モードで右が 120px まで狭まり、
+    // 見出しが切れ、手順が2行しか見えなくなる。
+    // 横幅を先に決めてから、縦の割り当てを決める。
+    resizeDocks({exportDock_}, {300}, Qt::Horizontal);
+    resizeDocks({guideDock_, processDock_, exportDock_}, {150, 220, 300}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
 
     toolLabel_ = new QLabel(this);

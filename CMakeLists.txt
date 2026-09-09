@@ -568,6 +568,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/EscapeAction.cpp
     src/next/kachakacha/app/GrabToMove.cpp
     src/next/kachakacha/app/ControlPointPick.cpp
+    src/next/kachakacha/app/EntityNaming.cpp
     src/next/kachakacha/app/MeasurePanel.cpp
     src/next/kachakacha/app/ExportService.cpp
     src/next/kachakacha/app/PointSources.cpp
@@ -739,6 +740,7 @@ if(KACHACAD_BUILD_TESTS)
 kachakacha_add_v2_test(transform_input_tests tests_v2/transform_input_tests.cpp)
 kachakacha_add_v2_test(grab_to_move_tests tests_v2/grab_to_move_tests.cpp)
 kachakacha_add_v2_test(control_point_edit_tests tests_v2/control_point_edit_tests.cpp)
+kachakacha_add_v2_test(entity_naming_tests tests_v2/entity_naming_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)

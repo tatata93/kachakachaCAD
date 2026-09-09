@@ -11,6 +11,8 @@
 
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ControlPointPick.h"
+#include "kachakacha/app/EntityNaming.h"
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -286,9 +288,13 @@ namespace {
         kachakacha::v2::domain::EntityKind::Wire));
     const std::uint64_t revision = window.Session().GetDocument().Revision();
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Move);
+    // 吸着を止めて押す。止めないと、1点目を置いたあとに出る吸着(延長や垂線)へ
+    // 2点目が寄って、同じ場所を押したのに少しだけ離れてしまう。
+    viewport.SetSnapSuppressed(true);
     const QPointF same(viewport.width() * 0.5, viewport.height() * 0.5);
     viewport.ClickAt(same);
     viewport.ClickAt(same);
+    viewport.SetSnapSuppressed(false);
     if (!Explain("文書は変わらない",
             window.Session().GetDocument().Revision() == revision)) {
         return false;
@@ -443,6 +449,83 @@ namespace {
                        + std::to_string(none.size()) + ")").c_str(), none.empty());
 }
 
+[[nodiscard]] bool CaseDisplayStagesHaveTheirOwnKeys(V2MainWindow& window)
+{
+    // V1は Ctrl+1/2/3 で表示モードを **直に** 選べた。回して探さなくてよい。
+    // V2の3段は中身が違う(V1の設計/完成/単独ではない)が、
+    // 「数字で直に選ぶ」ところは同じにする。
+    const struct {
+        const char* key;
+        const char* id;
+    } expected[] = {
+        {"Ctrl+1", "view.stage_all"},
+        {"Ctrl+2", "view.stage_no_grid"},
+        {"Ctrl+3", "view.stage_no_construction"},
+        {"F2", "entity.rename"},
+    };
+    for (const auto& entry : expected) {
+        bool found = false;
+        for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+            if (command.id == entry.id) {
+                found = command.defaultShortcut == entry.key;
+            }
+        }
+        if (!Explain((std::string(entry.key) + " は " + entry.id).c_str(), found)) {
+            return false;
+        }
+    }
+    // 3回とも押して、形が変わらないことを見る。見え方だけの話である。
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    for (const auto& entry : expected) {
+        window.RunCommand(entry.id);
+    }
+    return Explain("形は変わらない",
+        window.Session().GetDocument().Revision() == revision);
+}
+
+[[nodiscard]] bool CaseRenameFromTheList(V2MainWindow& window)
+{
+    // V1は F2 で一覧の名前を変えられた。V2には無かった。
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    kachakacha::v2::base::EntityId target;
+    bool haveTarget = false;
+    for (const auto& entity : snapshot.entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Wire) {
+            target = entity.id;
+            haveTarget = true;
+            break;
+        }
+    }
+    if (!Explain("名前を変える相手がいる", haveTarget)) {
+        return false;
+    }
+    const auto rename = [&window, &target](const char* name) {
+        return window.Session().GetDocument().Run(
+            kachakacha::v2::document::RenameEntityCommand(target, name));
+    };
+    if (!Explain("名前を変えられる", rename("屋根の線").committed)) {
+        return false;
+    }
+    bool renamed = false;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.id == target) {
+            renamed = entity.displayName == "屋根の線";
+        }
+    }
+    if (!Explain("一覧に出る名前が変わった", renamed)) {
+        return false;
+    }
+    // 空の名前は core が断る。文書へは入れない。
+    const auto empty = kachakacha::v2::app::NormalizeEntityName("   ");
+    return Explain("空の名前は断る", !empty.HasValue());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
@@ -459,6 +542,8 @@ std::vector<SelfTestCase> InputCases()
         {"押しただけでは動かない", &CaseGrabWithoutDraggingIsJustAClick},
         {"制御点を掴んで動かせる", &CaseControlPointsAreGrabbable},
         {"制御点は選んだ線にだけ出る", &CaseControlPointsOnlyOnSelected},
+        {"表示の段に数字のキーがある", &CaseDisplayStagesHaveTheirOwnKeys},
+        {"一覧で名前を変えられる", &CaseRenameFromTheList},
     };
 }
 

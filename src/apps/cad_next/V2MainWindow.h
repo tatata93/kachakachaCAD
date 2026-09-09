@@ -48,6 +48,7 @@ class QListWidget;
 class QToolBar;
 class QDockWidget;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 //! 見た目。
 enum class UiTheme {
@@ -157,6 +158,15 @@ public:
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
+    //! 見え方の段を当てる。段の中身は core が決める。
+    void ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage);
+    //! 一覧で名前を書き換え始める(F2)。
+    void BeginRenameSelected();
+    //! 書き換えた名前を文書へ入れる。空や同じ名前は入れない。
+    void RenameEntityFromItem(QTreeWidgetItem* item);
+    //! 一覧の行が、どのものを指しているか。指していなければ nullptr。
+    [[nodiscard]] const kachakacha::v2::base::EntityId* EntityForItem(
+        const QTreeWidgetItem* item) const;
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
@@ -372,6 +382,8 @@ private:
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
     QTreeWidget* entityTree_ = nullptr;
+    //! 一覧の行と、それが指すもの。行に id を持たせられないので横に持つ。
+    std::vector<std::pair<QTreeWidgetItem*, kachakacha::v2::base::EntityId>> entityItems_;
     QListWidget* diagnosticList_ = nullptr;
     QTreeWidget* guideTableView_ = nullptr;
     QDockWidget* guideDock_ = nullptr;

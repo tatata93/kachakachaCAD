@@ -40,7 +40,8 @@ const std::vector<std::string_view>& CommonCommandIds()
         "file.new", "file.open", "file.save", "file.save_as", "edit.undo", "edit.redo",
         "edit.delete", "selection.activate", "measure.open", "view.fit_all",
         "view.align_selection", "view.hide_selected", "view.show_all",
-        "workplane.set_active", "group.set_active", "snap.toggle",
+        "view.stage_all", "view.stage_no_grid", "view.stage_no_construction",
+        "entity.rename", "workplane.set_active", "group.set_active", "snap.toggle",
     };
     return ids;
 }

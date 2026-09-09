@@ -212,8 +212,8 @@ void V2MainWindow::BuildMenus()
     };
     const std::vector<MenuGroup> groups{
         {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
-        {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "selection.activate",
-                       "snap.toggle", "group.set_active"}},
+        {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
+                       "selection.activate", "snap.toggle", "group.set_active"}},
         {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
                        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
@@ -230,7 +230,9 @@ void V2MainWindow::BuildMenus()
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
                             "export.dxf"}},
         {"表示(&V)", {"view.fit_all", "view.align_selection", "view.hide_selected",
-                       "view.show_all", "view.display_settings", "measure.open"}},
+                       "view.show_all", "view.stage_all", "view.stage_no_grid",
+                       "view.stage_no_construction", "view.display_settings",
+                       "measure.open"}},
     };
     for (const MenuGroup& group : groups) {
         QMenu* menu = menuBar()->addMenu(QString::fromUtf8(group.titleJa));
@@ -401,6 +403,13 @@ void V2MainWindow::BuildPanels()
     entityTree_->setColumnCount(2);
     entityTree_->setHeaderLabels(
         {QStringLiteral("名前"), QStringLiteral("種類")});
+    // 名前を書き換えたら文書へ入れる。判断(空か、変わったか)は core にある。
+    QObject::connect(entityTree_, &QTreeWidget::itemChanged, this,
+        [this](QTreeWidgetItem* item, int column) {
+            if (column == 0) {
+                RenameEntityFromItem(item);
+            }
+        });
     treeDock->setWidget(entityTree_);
     addDockWidget(Qt::LeftDockWidgetArea, treeDock);
 
@@ -946,7 +955,11 @@ void V2MainWindow::RefreshEntityList()
     if (!entityTree_) {
         return;
     }
+    // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
+    // 「名前が変わった」と誤って伝わり、名前が入れ替わる。
+    const bool blocked = entityTree_->blockSignals(true);
     entityTree_->clear();
+    entityItems_.clear();
     const auto& snapshot = session_->GetDocument().Snapshot();
     // まとまりごとに束ねる。いま作業中のまとまりは名前の後ろに印を付ける。
     std::map<std::string, QTreeWidgetItem*> byGroup;
@@ -974,12 +987,16 @@ void V2MainWindow::RefreshEntityList()
         byGroup.emplace(key, made);
         return made;
     };
+    entityItems_.clear();
     for (const auto& entity : snapshot.entities) {
         auto* item = new QTreeWidgetItem(groupItem(entity.groupId));
         const QString name = entity.displayName.empty()
             ? QStringLiteral("(名前なし)")
             : QString::fromUtf8(entity.displayName.c_str());
         item->setText(0, name);
+        // F2 で名前を書き換えられるようにする。まとまりの行は変えられない。
+        item->setFlags(item->flags() | Qt::ItemIsEditable);
+        entityItems_.emplace_back(item, entity.id);
         item->setText(1, QString::fromUtf8(
             std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
     }
@@ -990,6 +1007,7 @@ void V2MainWindow::RefreshEntityList()
     if (groupLabel_ != nullptr) {
         groupLabel_->setText(ActiveGroupText());
     }
+    entityTree_->blockSignals(blocked);
 }
 
 QAction* V2MainWindow::ActionFor(std::string_view id) const

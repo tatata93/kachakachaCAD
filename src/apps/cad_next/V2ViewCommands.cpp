@@ -11,9 +11,11 @@
 
 #include <QAction>
 #include <QMenu>
+#include <QTreeWidget>
 #include <QPoint>
 
 #include "kachakacha/app/DisplaySettings.h"
+#include "kachakacha/app/EntityNaming.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/view/ViewOrientation.h"
 
@@ -24,17 +26,32 @@ bool V2MainWindow::IsViewCommand(std::string_view id)
 {
     return id == "view.align_selection" || id == "view.display_settings"
         || id == "group.set_active" || id == "view.hide_selected"
-        || id == "view.show_all" || id == "edit.delete";
+        || id == "view.show_all" || id == "edit.delete"
+        || id == "view.stage_all" || id == "view.stage_no_grid"
+        || id == "view.stage_no_construction" || id == "entity.rename";
 }
 
 void V2MainWindow::RunViewCommand(std::string_view id)
 {
     if (id == "view.display_settings") {
-        displayStage_ = kachakacha::v2::app::NextDisplayStage(displayStage_);
-        viewport_->SetDisplaySettings(
-            kachakacha::v2::app::SettingsForStage(displayStage_));
-        SetStatus(QString::fromUtf8(std::string(
-            kachakacha::v2::app::DisplayStageNameJa(displayStage_)).c_str()));
+        // 押すたびに次の段へ回る。Ctrl+1/2/3 は段を直に選ぶ。
+        ApplyDisplayStage(kachakacha::v2::app::NextDisplayStage(displayStage_));
+        return;
+    }
+    if (id == "view.stage_all") {
+        ApplyDisplayStage(kachakacha::v2::app::DisplayStage::All);
+        return;
+    }
+    if (id == "view.stage_no_grid") {
+        ApplyDisplayStage(kachakacha::v2::app::DisplayStage::NoGrid);
+        return;
+    }
+    if (id == "view.stage_no_construction") {
+        ApplyDisplayStage(kachakacha::v2::app::DisplayStage::NoConstruction);
+        return;
+    }
+    if (id == "entity.rename") {
+        BeginRenameSelected();
         return;
     }
     if (id == "view.align_selection") {
@@ -238,4 +255,73 @@ void V2MainWindow::ShowSelectMenu(const QPoint& at)
         return;
     }
     menu.exec(at);
+}
+
+void V2MainWindow::ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage)
+{
+    // 段の中身は core が決める。画面はそれを当てて、名前をそのまま出すだけ。
+    displayStage_ = stage;
+    viewport_->SetDisplaySettings(kachakacha::v2::app::SettingsForStage(displayStage_));
+    SetStatus(QString::fromUtf8(std::string(
+        kachakacha::v2::app::DisplayStageNameJa(displayStage_)).c_str()));
+}
+
+void V2MainWindow::BeginRenameSelected()
+{
+    if (entityTree_ == nullptr) {
+        return;
+    }
+    QTreeWidgetItem* item = entityTree_->currentItem();
+    if (item == nullptr || EntityForItem(item) == nullptr) {
+        SetStatus(QStringLiteral("名前を変えるものを、一覧で選んでください。"));
+        return;
+    }
+    entityTree_->editItem(item, 0);
+    SetStatus(QStringLiteral("新しい名前を入れて Enter を押してください。"));
+}
+
+void V2MainWindow::RenameEntityFromItem(QTreeWidgetItem* item)
+{
+    using kachakacha::v2::document::RenameEntityCommand;
+    const auto* entityId = EntityForItem(item);
+    if (item == nullptr || entityId == nullptr) {
+        return;
+    }
+    const auto* entity = session_->GetDocument().FindEntity(*entityId);
+    if (entity == nullptr) {
+        return;
+    }
+    const auto normalized =
+        kachakacha::v2::app::NormalizeEntityName(item->text(0).toStdString());
+    if (!normalized.HasValue()) {
+        ReportDiagnostics(normalized.Diagnostics());
+        RefreshEntityList();   // 元の名前へ戻す。空のまま出しっぱなしにしない。
+        return;
+    }
+    if (!kachakacha::v2::app::NameActuallyChanges(entity->displayName,
+            normalized.Value())) {
+        // 同じ名前を入れ直しただけ。履歴を伸ばさない。
+        RefreshEntityList();
+        return;
+    }
+    const auto renamed = session_->GetDocument().Run(
+        RenameEntityCommand(*entityId, normalized.Value()));
+    if (!renamed.committed) {
+        ReportDiagnostics(renamed.diagnostics);
+    } else {
+        SetStatus(QStringLiteral("名前を「%1」にしました。")
+                .arg(QString::fromStdString(normalized.Value())));
+    }
+    RefreshEntityList();
+}
+
+const kachakacha::v2::base::EntityId* V2MainWindow::EntityForItem(
+    const QTreeWidgetItem* item) const
+{
+    for (const auto& entry : entityItems_) {
+        if (entry.first == item) {
+            return &entry.second;
+        }
+    }
+    return nullptr;
 }

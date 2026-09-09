@@ -339,7 +339,13 @@ KACHA_V2_TEST(manual, 手順書がショートカットを台帳どおりに書�
         {"file.new", "Ctrl+N"}, {"file.open", "Ctrl+O"}, {"file.save", "Ctrl+S"},
         {"file.save_as", "Ctrl+Shift+S"}, {"edit.undo", "Ctrl+Z"},
         {"edit.redo", "Ctrl+Y"}, {"draw.line", "L"}, {"draw.circle", "C"},
-        {"draw.arc", "A"}, {"view.fit_all", "F"}, {"part.extrude", "X"},
+        {"draw.arc", "A"}, {"view.fit_all", "F"}, {"part.extrude", "Shift+E"},
+        // V1 で手が覚えたもの。ここがずれると、そのとおりに押しても動かない。
+        {"selection.activate", "V"}, {"draw.point", "D"}, {"draw.bezier", "B"},
+        {"draw.spline", "S"}, {"wire.coincident", "I"}, {"wire.tangent", "T"},
+        {"wire.curvature", "Shift+T"}, {"wire.trim", "X"}, {"wire.extend", "E"},
+        {"measure.open", "M"}, {"draw.polyline", "P"}, {"draw.rectangle", "R"},
+        {"edit.delete", "Del"}, {"view.hide_selected", "Ctrl+H"},
     };
     for (const auto& entry : keys) {
         bool foundInCatalog = false;

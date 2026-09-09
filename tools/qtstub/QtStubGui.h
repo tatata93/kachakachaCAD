@@ -254,6 +254,14 @@ public:
     [[nodiscard]] bool isNull() const;
 };
 
+//! カーソルの形。当て木は形を持つだけでよい。
+class QCursor {
+public:
+    QCursor() = default;
+    QCursor(Qt::CursorShape) {}
+    [[nodiscard]] static QPoint pos();
+};
+
 class QPalette {
 public:
     enum ColorRole { Window, WindowText, Base, AlternateBase, Text, Button, ButtonText,

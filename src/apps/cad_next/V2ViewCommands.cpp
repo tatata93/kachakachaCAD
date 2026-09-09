@@ -7,6 +7,12 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/document/Commands.h"
+
+#include <QAction>
+#include <QMenu>
+#include <QPoint>
+
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -17,7 +23,8 @@
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
     return id == "view.align_selection" || id == "view.display_settings"
-        || id == "group.set_active";
+        || id == "group.set_active" || id == "view.hide_selected"
+        || id == "view.show_all" || id == "edit.delete";
 }
 
 void V2MainWindow::RunViewCommand(std::string_view id)
@@ -38,6 +45,101 @@ void V2MainWindow::RunViewCommand(std::string_view id)
         ActivateSelectedGroup();
         return;
     }
+    if (id == "view.hide_selected") {
+        HideSelected();
+        return;
+    }
+    if (id == "view.show_all") {
+        ShowAllEntities();
+        return;
+    }
+    if (id == "edit.delete") {
+        DeleteSelected();
+        return;
+    }
+}
+
+void V2MainWindow::HideSelected()
+{
+    // 隠すだけ。形は消さない。消してしまうと、隠したつもりが元に戻せなくなる。
+    const auto& selection = viewport_->Selection();
+    if (selection.entityIds.empty()) {
+        SetStatus(QStringLiteral("選択を隠す: 先に選んでください。"));
+        return;
+    }
+    const auto hidden = session_->GetDocument().Run(
+        kachakacha::v2::document::SetVisibilityCommand(selection.entityIds,
+            kachakacha::v2::domain::Visibility::Hidden));
+    if (!hidden.committed) {
+        ReportDiagnostics(hidden.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("%1個を隠しました(Ctrl+Shift+H で全部出せます)。")
+            .arg(static_cast<int>(selection.entityIds.size())));
+}
+
+void V2MainWindow::ShowAllEntities()
+{
+    std::vector<kachakacha::v2::base::EntityId> hidden;
+    for (const auto& entity : session_->GetDocument().Snapshot().entities) {
+        if (entity.visibility == kachakacha::v2::domain::Visibility::Hidden) {
+            hidden.push_back(entity.id);
+        }
+    }
+    if (hidden.empty()) {
+        SetStatus(QStringLiteral("すべて表示: 隠しているものはありません。"));
+        return;
+    }
+    const auto shown = session_->GetDocument().Run(
+        kachakacha::v2::document::SetVisibilityCommand(hidden,
+            kachakacha::v2::domain::Visibility::Visible));
+    if (!shown.committed) {
+        ReportDiagnostics(shown.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("%1個を出しました。").arg(static_cast<int>(hidden.size())));
+}
+
+void V2MainWindow::DeleteSelected()
+{
+    using kachakacha::v2::document::RemoveFeatureCommand;
+    using kachakacha::v2::document::RemovePolicy;
+    const auto selection = viewport_->Selection();
+    if (selection.entityIds.empty()) {
+        SetStatus(QStringLiteral("削除: 先に選んでください。"));
+        return;
+    }
+    int removed = 0;
+    int refused = 0;
+    for (const auto& id : selection.entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr) {
+            continue;
+        }
+        // 下流があるものは消さない。消すと、そこから作った物の作り方が消える。
+        const auto result = session_->GetDocument().Run(RemoveFeatureCommand(
+            entity->createdBy, RemovePolicy::RefuseIfUsed, "削除"));
+        if (result.committed) {
+            ++removed;
+        } else {
+            ++refused;
+        }
+    }
+    viewport_->PruneSelection();
+    AdoptCurrentDocument();
+    if (removed == 0) {
+        SetStatus(QStringLiteral(
+            "削除: どれも消せませんでした。ここから作った物があるためです"
+            "(隠すなら Ctrl+H)。"));
+        return;
+    }
+    SetStatus(refused == 0
+            ? QStringLiteral("%1個を消しました。").arg(removed)
+            : QStringLiteral("%1個を消しました。%2個は、ここから作った物があるので残しました。")
+                  .arg(removed)
+                  .arg(refused));
 }
 
 void V2MainWindow::AlignViewToSelection()
@@ -103,4 +205,37 @@ void V2MainWindow::ActivateSelectedGroup()
     SetStatus(target.has_value()
             ? QStringLiteral("作業中グループを変えました。%1").arg(ActiveGroupText())
             : QStringLiteral("作業中グループを外しました。"));
+}
+
+void V2MainWindow::ShowSelectMenu(const QPoint& at)
+{
+    // 選んでいるものに対してできることを、その場に出す。
+    // メニューに並べるのは台帳のコマンドだけ。ここで別の入口を作らない。
+    // 別に作ると、押せるかどうかの判断も文言も二重になる。
+    static const char* const kEntries[] = {
+        "edit.undo",
+        "edit.redo",
+        "measure.open",
+        "view.align_selection",
+        "wire.split",
+        "wire.join",
+        "view.hide_selected",
+        "view.show_all",
+        "edit.delete",
+        "part.extrude",
+        "fabrication.create",
+        "derived.freeze",
+    };
+    QMenu menu(this);
+    for (const char* id : kEntries) {
+        QAction* action = ActionFor(id);
+        if (action == nullptr) {
+            continue;
+        }
+        menu.addAction(action);
+    }
+    if (menu.isEmpty()) {
+        return;
+    }
+    menu.exec(at);
 }

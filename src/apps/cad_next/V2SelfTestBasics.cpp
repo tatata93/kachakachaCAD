@@ -1257,6 +1257,164 @@ namespace {
                        + ")").c_str(), tried == 3);
 }
 
+[[nodiscard]] bool CaseMiddleDragPansTheView(V2MainWindow& window)
+{
+    // V1では中ボタンでも右ボタンでも画面を動かせた。V2には手立てが無かった。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    const auto before = viewport.ViewCenter();
+    viewport.PanByPixels(40.0, 0.0);
+    const auto moved = viewport.ViewCenter();
+    if (!Explain("横に動く", (moved - before).Length() > 1.0e-9)) {
+        return false;
+    }
+    // 同じだけ戻せば元へ戻る。掴んだ点が指から離れない、ということである。
+    viewport.PanByPixels(-40.0, 0.0);
+    if (!Explain("戻すと元へ戻る",
+            (viewport.ViewCenter() - before).Length() < 1.0e-9)) {
+        return false;
+    }
+    // 動かした量は倍率に比例する。拡大しているほど、同じpxで動く距離は小さい。
+    viewport.SetVisibleWidthMm(200.0);
+    const auto wide = viewport.ViewCenter();
+    viewport.PanByPixels(40.0, 0.0);
+    const double wideMove = (viewport.ViewCenter() - wide).Length();
+    viewport.PanByPixels(-40.0, 0.0);
+    viewport.SetVisibleWidthMm(100.0);
+    const auto close = viewport.ViewCenter();
+    viewport.PanByPixels(40.0, 0.0);
+    const double closeMove = (viewport.ViewCenter() - close).Length();
+    return Explain((std::string("倍率に比例する(") + std::to_string(wideMove) + " / "
+                       + std::to_string(closeMove) + ")").c_str(),
+        std::abs(wideMove - closeMove * 2.0) < 1.0e-6);
+}
+
+[[nodiscard]] bool CaseOrbitTurnsTheView(V2MainWindow& window)
+{
+    // Shift+中ボタンの軌道回転。形は変わらない。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Front);
+    const auto before = viewport.Orientation();
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    viewport.OrbitByPixels(30.0, 0.0);
+    const double turned = kachakacha::v2::view::AngleBetween(before,
+        viewport.Orientation()) * 180.0 / 3.14159265358979323846;
+    if (!Explain((std::string("15度まわる(実際は ") + std::to_string(turned)
+                     + ")").c_str(), std::abs(turned - 15.0) < 1.0e-6)) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == revision);
+}
+
+[[nodiscard]] bool CaseEscapeGoesBackToSelect(V2MainWindow& window)
+{
+    // V1と同じ。やりかけを1つ取り消してから、選択道具へ戻り、選択も解除する。
+    auto& viewport = window.Viewport();
+    // 線を1本引いて、選んでおく。
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    // 作図の途中を作る。1点だけ置く。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.4, viewport.height() * 0.4));
+    if (!Explain("作図の途中になっている", window.Session().HasPlacedPoints())) {
+        return false;
+    }
+    // 1回目のEsc: 作図を捨てて、選択も解除して、選択道具へ戻る。
+    const auto steps = viewport.PressEscape();
+    if (!Explain("作図が消える", !window.Session().HasPlacedPoints())) {
+        return false;
+    }
+    if (!Explain("選択が解除される", viewport.Selection().entityIds.empty())) {
+        return false;
+    }
+    if (!Explain("選択道具へ戻る",
+            window.Session().CurrentTool()
+                == kachakacha::v2::modeling::DrawingTool::Select)) {
+        return false;
+    }
+    if (!Explain("何をしたかを言う", !steps.empty() && !window.StatusText().isEmpty())) {
+        return false;
+    }
+    // 2回目のEsc: もうすることが無い。何も起きないし、何も言わない。
+    return Explain("2回目は何も起きない", viewport.PressEscape().empty());
+}
+
+[[nodiscard]] bool CaseShiftConstrainsAndCtrlSuppressesSnap(V2MainWindow& window)
+{
+    // Shift で水平・垂直へ寄る。Ctrl で吸着が止まる。どちらも押している間だけ。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.3, viewport.height() * 0.5));
+    // Shift 無しなら、斜めに引ける。
+    viewport.SetAxisConstraintByKey(false);
+    viewport.HoverAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.3));
+    const auto slanted = viewport.HoverPosition();
+    // Shift を押すと、同じ場所でも水平に寄る。
+    viewport.SetAxisConstraintByKey(true);
+    viewport.HoverAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.3));
+    const auto flat = viewport.HoverPosition();
+    viewport.SetAxisConstraintByKey(false);
+    if (!Explain("どちらも位置が取れる",
+            slanted.has_value() && flat.has_value())) {
+        return false;
+    }
+    if (!Explain("Shift で寄る", (*slanted - *flat).Length() > 1.0e-6)) {
+        return false;
+    }
+    // 1点目と同じ高さになっている(作業平面の上での水平)。
+    const double anchorHeight = window.Session().ConstraintAnchor().y;
+    if (!Explain((std::string("水平になる(") + std::to_string(flat->y) + " と "
+                     + std::to_string(anchorHeight) + ")").c_str(),
+            std::abs(flat->y - anchorHeight) < 1.0e-6)) {
+        return false;
+    }
+    viewport.CancelTool();
+    // Ctrl は帯の言い方で確かめる。吸着していないときは、そう出る。
+    viewport.SetSnapSuppressedByKey(true);
+    viewport.HoverAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5));
+    const bool saidNoSnap = window.StatusText().contains(QStringLiteral("スナップなし"));
+    viewport.SetSnapSuppressedByKey(false);
+    return Explain((std::string("Ctrl中は吸着しないと言う(")
+                       + window.StatusText().toStdString() + ")").c_str(), saidNoSnap);
+}
+
+[[nodiscard]] bool CaseV1ShortcutsAreBack(V2MainWindow& window)
+{
+    // V1で手が覚えたキーが、V1と同じ道具を出すこと。
+    // ここがずれると、使うほど間違える。
+    const struct {
+        const char* key;
+        const char* id;
+    } expected[] = {
+        {"V", "selection.activate"}, {"D", "draw.point"}, {"L", "draw.line"},
+        {"P", "draw.polyline"}, {"R", "draw.rectangle"}, {"C", "draw.circle"},
+        {"A", "draw.arc"}, {"B", "draw.bezier"}, {"S", "draw.spline"},
+        {"I", "wire.coincident"}, {"T", "wire.tangent"}, {"Shift+T", "wire.curvature"},
+        {"X", "wire.trim"}, {"E", "wire.extend"}, {"M", "measure.open"},
+    };
+    for (const auto& entry : expected) {
+        bool found = false;
+        for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+            if (command.id != entry.id) {
+                continue;
+            }
+            found = command.defaultShortcut == entry.key;
+        }
+        if (!Explain((std::string(entry.key) + " は " + entry.id).c_str(), found)) {
+            return false;
+        }
+    }
+    (void)window;
+    return true;
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1305,6 +1463,11 @@ std::vector<SelfTestCase> BasicCases()
         {"輪は線から少しずれても掴める", &CaseRingIsGrabbableWithSlack},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
+        {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
+        {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},
+        {"Escで選択へ戻り選択も解ける", &CaseEscapeGoesBackToSelect},
+        {"Shiftで水平になりCtrlで吸着が止まる", &CaseShiftConstrainsAndCtrlSuppressesSnap},
+        {"V1のキーが戻っている", &CaseV1ShortcutsAreBack},
         {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
         {"決めた板厚が押し出しに効く", &CaseExtrudeUsesTheParameter},
         {"縮尺で割った寸法が棚に出る", &CaseScaleShowsTheModelSize},

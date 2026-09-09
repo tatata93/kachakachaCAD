@@ -18,6 +18,7 @@
 #include "kachakacha/view/ViewOrientation.h"
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/DisplaySettings.h"
+#include "kachakacha/app/EscapeAction.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
@@ -109,6 +110,31 @@ public:
     //! 画面に収める幅(mm)。小さくすると拡大になる。
     void SetVisibleWidthMm(double value);
     [[nodiscard]] double VisibleWidthMm() const noexcept { return visibleWidthMm_; }
+
+    //! 画面を平行移動する(V1の中ボタン・右ボタンのドラッグ)。
+    void PanByPixels(double dxPx, double dyPx);
+    //! 画面基準で視点を回す(V1の Shift+中ボタン)。
+    void OrbitByPixels(double dxPx, double dyPx);
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ViewCenter() const { return center_; }
+
+    //! Esc。V1と同じで、やりかけを1つ取り消してから選択道具へ戻る。
+    //! 何をしたかを返す。戻り値が空なら、することが無かった。
+    std::vector<kachakacha::v2::app::EscapeStep> PressEscape();
+    //! Esc で「選択道具へ戻す」を頼む先。窓が道具を持っているので外から渡す。
+    void SetBackToSelectCallback(std::function<void()> callback);
+
+    //! 吸着を一時的に止める(V1の Ctrl)。押している間だけ。
+    void SetSnapSuppressedByKey(bool suppressed);
+    //! 道具として吸着を切る(コマンドの入切)。
+    void SetSnapSuppressed(bool suppressed);
+    //! カーソルの形をいまの状態に合わせる。掴めるかどうかを手元で分かるようにする。
+    void RefreshCursorShape();
+    //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
+    void PressRightWithoutMoving();
+    //! 選択道具で右クリックしたときに出すもの。窓が用意する。
+    void SetContextMenuCallback(std::function<void(const QPoint&)> callback);
+    //! 作図の拘束(V1の Shift)。押している間だけ水平・垂直・正方形へ寄せる。
+    void SetAxisConstraintByKey(bool constrained);
     void SetViewCenter(const kachakacha::v2::geometry::Vector3& center);
 
     //! 文書全体が入るように合わせる。
@@ -139,6 +165,11 @@ public:
 
     //! 試験から呼ぶ。マウスを使わずに同じ道を通す。
     void HoverAt(const QPointF& position);
+    //! 直前の当たり判定が出した点。吸着と拘束を通した後の値。
+    [[nodiscard]] std::optional<kachakacha::v2::geometry::Vector3> HoverPosition() const
+    {
+        return hover_.position;
+    }
     void ClickAt(const QPointF& position);
     void FinishTool();
     void CancelTool();
@@ -241,6 +272,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
 private:
@@ -301,6 +333,24 @@ private:
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
     kachakacha::v2::app::DisplaySettings display_;
+    //! Ctrl で吸着を止めているか。押している間だけ真。
+    bool snapSuppressedByKey_ = false;
+    //! Shift で拘束しているか。押している間だけ真。
+    bool axisConstrainedByKey_ = false;
+    //! コマンドとして吸着を切っているか。
+    bool snapSuppressedBySetting_ = false;
+    //! Shift の拘束を当てた点を返す。当てないときはそのまま返す。
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ConstrainedPoint(
+        const kachakacha::v2::geometry::Vector3& point) const;
+    void ApplySnapSettings();
+    std::function<void()> backToSelect_;
+    std::function<void(const QPoint&)> contextMenu_;
+    //! 中ボタン・右ボタンで画面を動かしている最中か。
+    bool panning_ = false;
+    bool orbiting_ = false;
+    QPointF lastDragPosition_;
+    //! 画面を動かしたか。動かさずに右で離したら、道具ごとの意味になる。
+    bool viewDragMoved_ = false;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;

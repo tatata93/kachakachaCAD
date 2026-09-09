@@ -38,7 +38,8 @@ const std::vector<std::string_view>& CommonCommandIds()
     // ui-workflows.md §2 の「共通操作」。モードを切り替えても常に出す。
     static const std::vector<std::string_view> ids{
         "file.new", "file.open", "file.save", "file.save_as", "edit.undo", "edit.redo",
-        "selection.activate", "measure.open", "view.fit_all", "view.align_selection",
+        "edit.delete", "selection.activate", "measure.open", "view.fit_all",
+        "view.align_selection", "view.hide_selected", "view.show_all",
         "workplane.set_active", "group.set_active", "snap.toggle",
     };
     return ids;

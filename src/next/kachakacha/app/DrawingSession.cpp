@@ -87,6 +87,10 @@ HoverResult DrawingSession::Hover(const ScreenPoint& pointer)
         result.position = mapping_.UnprojectOntoPlane(pointer, scene_.workPlane.origin,
             scene_.workPlane.normal);
     }
+    if (result.position.has_value() && adjustPoint_) {
+        // 吸着したあとに寄せる。先に寄せると、寄せた先へまた吸着して元へ戻る。
+        result.position = adjustPoint_(*result.position);
+    }
     if (result.position.has_value()) {
         result.preview = session_->Preview(*result.position);
     }
@@ -131,6 +135,20 @@ ClickResult DrawingSession::FinishTool()
         return result;
     }
     return Commit(finished.Value());
+}
+
+std::size_t DrawingSession::PlacedPointCount() const noexcept
+{
+    return session_ == nullptr ? 0 : session_->Points().size();
+}
+
+geometry::Vector3 DrawingSession::ConstraintAnchor() const noexcept
+{
+    if (session_ == nullptr || session_->Points().empty()) {
+        return geometry::Vector3{};
+    }
+    const bool fromLast = tool_ == DrawingTool::Polyline || tool_ == DrawingTool::Spline;
+    return fromLast ? session_->Points().back() : session_->Points().front();
 }
 
 void DrawingSession::CancelTool()

@@ -1208,6 +1208,23 @@ void V2Viewport::CancelTool()
 
 void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 {
+    // 修飾キーはマウスの便りにも乗っている。ここで拾えば、
+    // 画面に focus が無くても Ctrl と Shift が効く。
+    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
+    SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (panning_) {
+        const QPointF delta = event->position() - lastDragPosition_;
+        if (std::hypot(delta.x(), delta.y()) > 0.0) {
+            viewDragMoved_ = true;
+        }
+        if (orbiting_) {
+            OrbitByPixels(delta.x(), delta.y());
+        } else {
+            PanByPixels(delta.x(), delta.y());
+        }
+        lastDragPosition_ = event->position();
+        return;
+    }
     if (gadgetDrag_.has_value()) {
         DragViewGadget(event->position());
         return;
@@ -1247,8 +1264,16 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 
 void V2Viewport::mousePressEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::RightButton) {
-        FinishTool();
+    setFocus();
+    // 中ボタンと右ボタンは画面を動かす(V1同等)。
+    // Shift+中ボタンは軌道回転。押した時点では動かさず、引きずってから決める。
+    if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
+        panning_ = true;
+        orbiting_ = event->button() == Qt::MiddleButton
+            && (event->modifiers() & Qt::ShiftModifier) != 0;
+        lastDragPosition_ = event->position();
+        viewDragMoved_ = false;
+        RefreshCursorShape();
         return;
     }
     kachakacha::v2::view::AxisArrowModifier modifier =
@@ -1271,6 +1296,19 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
 
 void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (panning_) {
+        const bool moved = viewDragMoved_;
+        const bool wasRight = event->button() == Qt::RightButton;
+        panning_ = false;
+        orbiting_ = false;
+        RefreshCursorShape();
+        // 動かさずに右で離したら、画面を動かす気は無かった。
+        // V1と同じで、道具ごとの「確定 / 取り消し」になる。
+        if (!moved && wasRight) {
+            PressRightWithoutMoving();
+        }
+        return;
+    }
     if (gadgetDrag_.has_value()) {
         ReleaseViewGadget(event->position());
         if (statusCallback_ && !viewMessage_.empty()) {
@@ -1297,12 +1335,24 @@ void V2Viewport::wheelEvent(QWheelEvent* event)
     SetVisibleWidthMm(visibleWidthMm_ * std::pow(0.85, steps));
 }
 
+void V2Viewport::keyReleaseEvent(QKeyEvent* event)
+{
+    // Ctrl と Shift は「押している間だけ」効く。離したら元へ戻す。
+    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
+    SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    QWidget::keyReleaseEvent(event);
+}
+
 void V2Viewport::keyPressEvent(QKeyEvent* event)
 {
+    // Ctrl で吸着を止め、Shift で水平・垂直へ寄せる(V1同等)。
+    // 押しっぱなしのあいだ効くので、押した瞬間と離した瞬間の両方で見る。
+    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
+    SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
     if (event->key() == Qt::Key_Escape) {
-        // Esc は1回だけ。入力列を閉じて、道具も取り消す。別の処理を2段目に作らない。
-        CloseCursorInput();
-        CancelTool();
+        // V1と同じ。やりかけを1つ取り消してから、選択道具へ戻り、選択も解除する。
+        // 何をするかは core(app/EscapeAction)が決める。
+        (void)PressEscape();
         return;
     }
     if (cursorPanel_.active

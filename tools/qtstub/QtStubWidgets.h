@@ -25,6 +25,11 @@ public:
     bool blockSignals(bool);
     void setBackgroundRole(QPalette::ColorRole);
     void setAutoFillBackground(bool);
+    void setFocus();
+    void setFocus(int);
+    void setCursor(Qt::CursorShape);
+    void setCursor(const QCursor&);
+    void unsetCursor();
     void raise();
     void lower();
     bool setProperty(const char*, const QVariant&);
@@ -83,6 +88,7 @@ public:
     virtual void mouseReleaseEvent(QMouseEvent*);
     virtual void wheelEvent(QWheelEvent*);
     virtual void keyPressEvent(QKeyEvent*);
+    virtual void keyReleaseEvent(QKeyEvent*);
     virtual void resizeEvent(QResizeEvent*);
 };
 
@@ -144,6 +150,8 @@ public:
     QAction* addAction(const QString&, Receiver, Slot) { return nullptr; }
     QAction* addSeparator();
     QMenu* addMenu(const QString&);
+    [[nodiscard]] bool isEmpty() const;
+    QAction* exec(const QPoint&);
     [[nodiscard]] std::vector<QAction*> actions() const;
     [[nodiscard]] QString title() const;
 };

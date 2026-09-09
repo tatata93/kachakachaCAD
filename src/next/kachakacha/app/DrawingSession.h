@@ -13,6 +13,7 @@
 #include "kachakacha/modeling/SnapEngine.h"
 #include "kachakacha/modeling/ToolController.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,6 +67,16 @@ public:
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
     void SetSnapSettings(SnapSettings settings) { snapSettings_ = std::move(settings); }
 
+    //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束)。
+    //!
+    //! 吸着より **後** に当てる。先に当てると、寄せた先の点へまた吸着してしまい、
+    //! 水平にしたはずの線が斜めへ戻る。
+    //! 空にすれば当てない。
+    void SetPointAdjuster(std::function<geometry::Vector3(const geometry::Vector3&)> adjust)
+    {
+        adjustPoint_ = std::move(adjust);
+    }
+
     //! ポインタを動かした。
     [[nodiscard]] HoverResult Hover(const ScreenPoint& pointer);
 
@@ -74,6 +85,23 @@ public:
 
     //! 右クリックなどで確定する(ポリラインなど)。
     [[nodiscard]] ClickResult FinishTool();
+
+    //! いま置いてある点の数。Esc がどこまで戻ればよいかの判断に使う。
+    [[nodiscard]] std::size_t PlacedPointCount() const noexcept;
+
+    //! 拘束の基準になる点。
+    //!
+    //! ポリラインとスプラインは **直前に置いた点**、それ以外は **1点目**。
+    //! V1 と同じ決め方である。折れ線は1本ずつ向きを決めたいが、
+    //! 矩形や直線は最初の点から見た向きで決めたいためである。
+    //! 点が無ければ原点を返す(呼ぶ側が HasPlacedPoints で先に見ること)。
+    [[nodiscard]] geometry::Vector3 ConstraintAnchor() const noexcept;
+
+    //! 途中の点があるか。
+    [[nodiscard]] bool HasPlacedPoints() const noexcept
+    {
+        return PlacedPointCount() > 0;
+    }
 
     //! Esc。途中の点を捨てる。
     void CancelTool();
@@ -97,6 +125,7 @@ private:
     SnapScene scene_;
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
+    std::function<geometry::Vector3(const geometry::Vector3&)> adjustPoint_;
 };
 
 } // namespace kachakacha::v2::app

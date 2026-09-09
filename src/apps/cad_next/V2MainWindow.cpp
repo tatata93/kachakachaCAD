@@ -162,6 +162,12 @@ V2MainWindow::V2MainWindow()
         viewport_->PruneSelection();
         RefreshEntityList();
     });
+        // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
+    viewport_->SetBackToSelectCallback([this] {
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    });
+    // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
+    viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
     viewport_->SetSelectionChangedCallback([this] {
         RefreshExportCounts();
         RefreshMeasurements();
@@ -1103,11 +1109,12 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (id == "snap.toggle") {
         snapEnabled_ = !snapEnabled_;
-        kachakacha::v2::modeling::SnapSettings settings;
-        settings.suppressed = !snapEnabled_;
-        session_->SetSnapSettings(settings);
+        // 吸着は「道具として切る」と「Ctrl で一時的に止める」の2つがある。
+        // 画面がその両方をまとめて持つ。片方だけ見ると、Ctrl を離した瞬間に
+        // 切ってあったはずの吸着が戻る。
+        viewport_->SetSnapSuppressed(!snapEnabled_);
         SetStatus(snapEnabled_ ? QStringLiteral("吸着を入れました。")
-                               : QStringLiteral("吸着を切りました。"));
+                               : QStringLiteral("吸着を切りました(Ctrlでも一時的に止められます)。"));
         return;
     }
     // まだ入っていないものは、案内を出して何もしない。

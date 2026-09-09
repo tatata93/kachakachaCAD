@@ -146,6 +146,12 @@ public:
     //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
     [[nodiscard]] bool EnterToolFor(
         const kachakacha::v2::app::CommandDescriptor& command);
+    //! 選んだものを隠す / 全部出す / 消す。
+    void HideSelected();
+    void ShowAllEntities();
+    void DeleteSelected();
+    //! 選択道具で右クリックしたときのメニュー。V1と同じで、ここだけ出す。
+    void ShowSelectMenu(const QPoint& at);
     //! 押せるかどうかの材料を作る。数え方は core が決める。
     [[nodiscard]] kachakacha::v2::app::SelectionFacts BuildFactsForCommands() const;
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。

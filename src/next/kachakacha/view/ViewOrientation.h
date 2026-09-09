@@ -219,24 +219,25 @@ inline constexpr int kAxisArrowColumns = 6;
 [[nodiscard]] std::optional<std::size_t> AxisArrowAtScreen(
     const std::vector<AxisArrowButton>& buttons, double xPx, double yPx);
 
-// ---- 視点の操作板(V1同等。ui-workflows §13.3)----
+// ---- 視点の操作板(V1 の cbc8fbe / ADR 0023 と同じ作り)----
 //
-// V1 はキューブのまわりに
-//   - 世界の X/Y/Z ごとの色付きの輪(赤・緑・青)と、その両端の矢じり
-//   - 画面の上下・左右へ回す弧の矢印
-//   - 画面の奥行き軸まわりに回す2つの丸矢印
-//   - 既定の視点へ戻す家の印
-//   - 「選択に正対」
-// が並んでいた。並べ方をここに置く。画面に書くと、画面を出さないと確かめられない。
+// V1 はキューブのまわりに2系統を置いていた。
+//   1. 回転リング3本(X赤/Y緑/Z青)。キューブと同じ投影で描くので、視点に追従して傾く。
+//      どの軸で回るかが見た目で分かる。両端に逆向きの矢じりがある。
+//   2. 画面基準の矢印。下=左右回し、右=上下回し、上=ロール2つ。位置も向きも変わらない。
+// これに家(等角ビューへ復帰)と「選択に正対」が付く。
+//
+// 掴みやすさの肝は、矢じりの四角だけでなく **輪の線そのものが当たり判定** なところである。
+// 線から5px以内を押せば、近いほうの矢じりの向きへ回る。
+// 矢じりだけを的にすると、視点によっては潰れて狙えなくなる。
 
 //! 操作板の部品の種類。
 enum class ViewGadgetKind {
-    Home,           //!< 既定の視点へ戻す
-    Roll,           //!< 画面の奥行き軸まわり
-    Orbit,          //!< 画面の上下・左右
-    AxisRing,       //!< 世界の軸まわり(輪の端の矢じり)
+    Home,           //!< 等角ビューへ戻す
+    Roll,           //!< 画面の奥行き軸まわり(上の2つ)
+    Orbit,          //!< 画面基準の上下・左右(右と下の矢印)
+    AxisRing,       //!< モデル軸まわり(輪の矢じり)
     AlignSelection, //!< 選んだものに正対
-    ModeToggle,     //!< 輪を絶対で使うか、選んだ部品の軸で使うか
 };
 
 //! 向き。種類ごとに意味が変わる。
@@ -265,16 +266,11 @@ struct ViewGadget {
     [[nodiscard]] double CenterYPx() const noexcept { return yPx + heightPx * 0.5; }
 };
 
-//! 輪1本ぶんの描き方。画面の決まった場所に置く点列と、両端の矢じりの向き。
-//!
-//! 輪は姿勢について動かさない。動かすと、掴みたい矢じりが毎回別の場所へ行ってしまい、
-//! 狙って押せなくなる。輪は「操作の入口」であって、姿勢の表示ではない。
-//! いまどちらを向いているかはキューブの面が示す。
+//! 輪1本ぶん。画面に落とした点列と、両端の矢じり。
 struct ViewAxisRing {
     RotationAxis axis = RotationAxis::X;
     //! 閉じた点列。最後の点は最初の点と同じにしない(閉じるのは描く側)。
     std::vector<geometry::ScreenPoint> points;
-    //! 矢じりを置く点と、そこでの進む向き(単位ベクトル)。
     geometry::ScreenPoint positiveHead{};
     geometry::ScreenPoint positiveTangent{};
     geometry::ScreenPoint negativeHead{};
@@ -292,46 +288,44 @@ struct ViewGadgetLayout {
     double heightPx = 0.0;
 };
 
-//! 輪の大きさ。キューブの外側へどれだけ出るか。
-inline constexpr double kViewRingRadiusRatio = 1.02;
-//! 輪の潰れ具合。短い方の半径が長い方の何倍か。1に近いほど丸くなる。
-inline constexpr double kViewRingFlatten = 0.34;
-//! 輪の傾き(度)。Zは水平、XとYは斜めに置く。3本が重ならずに見分けられる。
-inline constexpr double kViewRingTiltDegreesX = 62.0;
-inline constexpr double kViewRingTiltDegreesY = -62.0;
-inline constexpr double kViewRingTiltDegreesZ = 0.0;
-//! 矢じりや丸ボタンの一辺。キューブの大きさに対する割合。
-inline constexpr double kViewGadgetButtonRatio = 0.32;
-//! 輪を何点で描くか。多すぎても目には変わらない。
-inline constexpr int kViewRingSampleCount = 72;
-//! 操作板がキューブの外へ出るぶん。キューブの大きさに対する割合。
-//! キューブを置くときに、この分だけ余白を空けておけば、操作板がはみ出さない。
-inline constexpr double kViewGadgetOuterMarginRatio = 0.45;
+//! V1 と同じ寸法。キューブは一辺2(-1..+1)で、1単位を kNavigatorScalePx で写す。
+inline constexpr double kNavigatorScalePx = 22.0;
+//! 輪の半径。キューブ(半径1)より外へ出す。
+inline constexpr double kViewRingRadius = 1.95;
+//! 輪を何点で描くか。
+inline constexpr int kViewRingSampleCount = 64;
+//! 矢じりの当たり判定の一辺。
+inline constexpr double kViewRingHeadSizePx = 18.0;
+//! 輪の線からこの距離までは、輪を押したとみなす。ここが掴みやすさの肝。
+inline constexpr double kViewRingGrabPx = 5.0;
 
-//! 輪の傾き(度)。軸ごとに決まっていて、姿勢では変わらない。
-[[nodiscard]] double ViewRingTiltDegrees(RotationAxis axis) noexcept;
-
-//! キューブのまわりに操作板を並べる。
-//! 姿勢は渡さない。渡すと輪が動いてしまい、矢じりを狙って押せなくなるためである。
-[[nodiscard]] ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx,
-    double cubeSizePx);
+//! キューブの中心と大きさから操作板を並べる。
+//! 輪はキューブと同じ投影で描くので、姿勢を渡す。
+[[nodiscard]] ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx,
+    double scalePx, const Quaternion& orientation);
 
 //! 操作板を画面の中へ寄せる。はみ出していたら、はみ出したぶんだけ全体を動かす。
 //! 動かしても入らない(画面より操作板が大きい)ときは false を返し、何も変えない。
-//! 出さない判断は呼び手がする。ここで勝手に縮めると、押せない大きさになる。
 [[nodiscard]] bool FitViewGadgetsIntoScreen(ViewGadgetLayout& layout, double widthPx,
     double heightPx);
 
-//! 画面のその点にある部品。無ければ値を持たない。近いものを1つだけ返す。
+//! 輪ではない部品(家・ロール・上下左右・正対)を拾う。キューブより先に見る。
+[[nodiscard]] std::optional<std::size_t> ViewButtonAtScreen(
+    const ViewGadgetLayout& layout, double xPx, double yPx);
+
+//! 輪を拾う。矢じりの四角か、輪の線から kViewRingGrabPx 以内なら当たり。
+//! 線を押したときは、近いほうの矢じりを返す。キューブより後に見る。
+[[nodiscard]] std::optional<std::size_t> ViewRingAtScreen(const ViewGadgetLayout& layout,
+    double xPx, double yPx);
+
+//! どちらでもよいときに使う。ボタンを先に、輪を後に見る。
 [[nodiscard]] std::optional<std::size_t> ViewGadgetAtScreen(
     const ViewGadgetLayout& layout, double xPx, double yPx);
 
 //! その部品の説明。押す前に何が起きるか分かるようにする。
-[[nodiscard]] std::string ViewGadgetTooltipJa(const ViewGadget& gadget,
-    RotationAxisMode ringMode);
+[[nodiscard]] std::string ViewGadgetTooltipJa(const ViewGadget& gadget);
 
-//! 画面の軸で回す。上下は画面の横軸、左右は画面の縦軸、rollは視線の軸。
-//! 世界の軸ではないので、AxisArrowRequest は使わない。
+//! 画面の軸で回す。上下は画面の横軸、左右は画面の縦軸、ロールは視線の軸。
 [[nodiscard]] base::Result<Quaternion> RotateByScreenAxis(const Quaternion& orientation,
     ViewGadgetDirection direction, double degrees);
 

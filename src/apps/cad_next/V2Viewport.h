@@ -169,18 +169,20 @@ public:
     [[nodiscard]] kachakacha::v2::view::ViewGadgetLayout ViewGadgets() const;
     //! 画面のその点にある部品。試験と描画から使う。
     [[nodiscard]] std::optional<std::size_t> ViewGadgetAt(const QPointF& position) const;
+    //! 輪ではない部品だけ。キューブより先に見る。
+    [[nodiscard]] std::optional<std::size_t> ViewButtonAt(const QPointF& position) const;
+    //! 輪だけ。線から5px以内でも当たる。キューブより後に見る。
+    [[nodiscard]] std::optional<std::size_t> ViewRingAt(const QPointF& position) const;
+    bool PressViewButton(const QPointF& position,
+        kachakacha::v2::view::AxisArrowModifier modifier);
+    bool PressViewRing(const QPointF& position,
+        kachakacha::v2::view::AxisArrowModifier modifier);
     //! 部品を押した。引きずれば連続、離すまで動かなければ15度。
     bool PressViewGadget(const QPointF& position,
         kachakacha::v2::view::AxisArrowModifier modifier);
     void DragViewGadget(const QPointF& position);
     void ReleaseViewGadget(const QPointF& position);
     [[nodiscard]] bool ViewGadgetDragging() const { return gadgetDrag_.has_value(); }
-    //! 輪の軸の取り方。絶対(世界)と相対(選んだ部品)を切り替える。
-    [[nodiscard]] kachakacha::v2::view::RotationAxisMode RingMode() const noexcept
-    {
-        return ringMode_;
-    }
-    void SetRingMode(kachakacha::v2::view::RotationAxisMode mode);
     //! 「選択に正対」を押したときに呼ぶ。本体窓が繋ぐ。
     void SetAlignSelectionCallback(std::function<void()> callback);
 
@@ -211,6 +213,10 @@ private:
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
+    //! 索引を渡して押す。ボタンと輪で拾い方が違うので、押す側は共通にする。
+    bool PressViewGadgetIndex(const QPointF& position,
+        const std::optional<std::size_t>& index,
+        kachakacha::v2::view::AxisArrowModifier modifier);
     //! 部品の種類に応じて回す。輪は世界か部品の軸、それ以外は画面の軸。
     void ApplyGadgetRotation(const kachakacha::v2::view::ViewGadget& gadget,
         double degrees, const kachakacha::v2::view::Quaternion& from);
@@ -269,8 +275,6 @@ private:
     };
     std::optional<ViewGadgetDrag> gadgetDrag_;
     std::optional<std::size_t> gadgetHoverIndex_;
-    kachakacha::v2::view::RotationAxisMode ringMode_ =
-        kachakacha::v2::view::RotationAxisMode::World;
     std::function<void()> alignSelectionCallback_;
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;

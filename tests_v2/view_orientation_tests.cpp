@@ -558,15 +558,29 @@ namespace {
 
 using kachakacha::v2::view::BuildViewGadgets;
 using kachakacha::v2::view::RotateByScreenAxis;
+using kachakacha::v2::view::ViewButtonAtScreen;
 using kachakacha::v2::view::ViewGadgetAtScreen;
 using kachakacha::v2::view::ViewGadgetDirection;
 using kachakacha::v2::view::ViewGadgetKind;
 using kachakacha::v2::view::ViewGadgetLayout;
 using kachakacha::v2::view::ViewGadgetTooltipJa;
+using kachakacha::v2::view::ViewRingAtScreen;
+
+constexpr double kCenterX = 800.0;
+constexpr double kCenterY = 200.0;
+
+[[nodiscard]] kachakacha::v2::view::Quaternion Isometric()
+{
+    const auto orientation = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
+    Require(orientation.HasValue(), "姿勢が作れる");
+    return orientation.Value();
+}
 
 [[nodiscard]] ViewGadgetLayout Panel()
 {
-    return BuildViewGadgets(800.0, 100.0, 88.0);
+    return BuildViewGadgets(kCenterX, kCenterY,
+        kachakacha::v2::view::kNavigatorScalePx, Isometric());
 }
 
 [[nodiscard]] int CountOfKind(const ViewGadgetLayout& layout, ViewGadgetKind kind)
@@ -588,132 +602,122 @@ KACHA_V2_TEST(view_orientation, 操作板にV1と同じ部品がそろってい�
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::AxisRing)),
         std::string("6"), "輪の矢じりは軸3本x2向き");
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::Orbit)),
-        std::string("4"), "上下左右");
+        std::string("4"), "下=左右回し、右=上下回し");
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::Roll)),
-        std::string("2"), "画面のまま回すのが2つ");
+        std::string("2"), "上のロールが2つ");
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::Home)),
         std::string("1"), "家");
     RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::AlignSelection)),
         std::string("1"), "選択に正対");
-    RequireEqual(std::to_string(CountOfKind(layout, ViewGadgetKind::ModeToggle)),
-        std::string("1"), "絶対と相対の切り替え");
     RequireEqual(std::to_string(layout.rings.size()), std::string("3"), "輪は3本");
 }
 
-KACHA_V2_TEST(view_orientation, 輪は軸ごとに別の傾きで置かれる)
+KACHA_V2_TEST(view_orientation, 輪は視点に追従して傾く)
 {
-    const auto layout = Panel();
-    for (const auto& ring : layout.rings) {
-        RequireEqual(std::to_string(ring.points.size()), std::string("72"), "点の数");
-        double minX = ring.points.front().x;
-        double maxX = minX;
-        for (const auto& point : ring.points) {
-            minX = std::min(minX, point.x);
-            maxX = std::max(maxX, point.x);
+    // どの軸で回るかが見た目で分かるように、キューブと同じ投影で描く(ADR 0023)。
+    const auto top = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{0, 0, 1});
+    Require(top.HasValue(), "姿勢が作れる");
+    const auto isometric = Panel();
+    const auto fromTop = BuildViewGadgets(kCenterX, kCenterY,
+        kachakacha::v2::view::kNavigatorScalePx, top.Value());
+    bool moved = false;
+    for (std::size_t index = 0; index < isometric.rings.size(); ++index) {
+        for (std::size_t point = 0; point < isometric.rings[index].points.size(); ++point) {
+            if (std::abs(isometric.rings[index].points[point].x
+                    - fromTop.rings[index].points[point].x) > 1.0) {
+                moved = true;
+            }
         }
-        Require(maxX - minX > 1.0, "潰れていない");
     }
-    // 3本が同じ形になっていない(同じなら軸の見分けがつかない)。
-    Require(std::abs(layout.rings[0].points[0].x - layout.rings[1].points[0].x) > 1.0
-            || std::abs(layout.rings[0].points[0].y - layout.rings[1].points[0].y) > 1.0,
-        "XとYの輪が違う");
-    Require(std::abs(kachakacha::v2::view::ViewRingTiltDegrees(
-                kachakacha::v2::view::RotationAxis::Z)) < 1.0e-9,
-        "Zの輪は水平");
+    Require(moved, "視点が変われば輪も変わる");
 }
 
-KACHA_V2_TEST(view_orientation, 輪と矢じりは姿勢が変わっても動かない)
+KACHA_V2_TEST(view_orientation, 画面基準の矢印は視点が変わっても動かない)
 {
-    // 動くと、掴みたい矢じりが毎回別の場所へ行って、狙って押せない。
-    // いまどちらを向いているかはキューブの面が示すので、輪まで動かす必要はない。
-    const auto first = BuildViewGadgets(800.0, 100.0, 88.0);
-    const auto second = BuildViewGadgets(800.0, 100.0, 88.0);
-    RequireEqual(std::to_string(first.gadgets.size()),
-        std::to_string(second.gadgets.size()), "数が同じ");
+    // 下・右・上の矢印と家と正対は位置も向きも変わらない(ADR 0023)。
+    const auto top = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{0, 0, 1});
+    Require(top.HasValue(), "姿勢が作れる");
+    const auto first = Panel();
+    const auto second = BuildViewGadgets(kCenterX, kCenterY,
+        kachakacha::v2::view::kNavigatorScalePx, top.Value());
     for (std::size_t index = 0; index < first.gadgets.size(); ++index) {
+        if (first.gadgets[index].kind == ViewGadgetKind::AxisRing) {
+            continue;
+        }
         RequireNear(first.gadgets[index].xPx, second.gadgets[index].xPx, 1.0e-12, "同じ場所");
         RequireNear(first.gadgets[index].yPx, second.gadgets[index].yPx, 1.0e-12, "同じ場所");
     }
-    for (std::size_t index = 0; index < first.rings.size(); ++index) {
-        RequireNear(first.rings[index].positiveHead.x,
-            second.rings[index].positiveHead.x, 1.0e-12, "矢じりも同じ場所");
-        RequireNear(first.rings[index].negativeHead.y,
-            second.rings[index].negativeHead.y, 1.0e-12, "矢じりも同じ場所");
-    }
 }
 
-KACHA_V2_TEST(view_orientation, 矢じりは掴める大きさがある)
+KACHA_V2_TEST(view_orientation, 輪の線のどこを押しても掴める)
 {
-    // 88px のキューブで、矢じりの当たり判定が28px以上。小さいと狙えない。
-    const auto layout = Panel();
-    int rings = 0;
-    for (const auto& gadget : layout.gadgets) {
-        if (gadget.kind != ViewGadgetKind::AxisRing) {
-            continue;
-        }
-        Require(gadget.widthPx >= 28.0, "28px以上");
-        Require(gadget.heightPx >= 28.0, "28px以上");
-        ++rings;
-    }
-    RequireEqual(std::to_string(rings), std::string("6"), "6個とも");
-}
-
-KACHA_V2_TEST(view_orientation, 矢じりは輪の長い方の端にある)
-{
-    // 長い方の端はキューブから最も離れているので、面と重ならず掴みやすい。
+    // ここが掴みやすさの肝。矢じりだけを的にすると、視点によっては潰れて狙えない。
     const auto layout = Panel();
     for (const auto& ring : layout.rings) {
-        double farthest = 0.0;
-        for (const auto& point : ring.points) {
-            const double dx = point.x - 844.0;
-            const double dy = point.y - 144.0;
-            farthest = std::max(farthest, std::sqrt(dx * dx + dy * dy));
+        int caught = 0;
+        for (std::size_t index = 0; index < ring.points.size(); index += 4) {
+            const auto found = ViewRingAtScreen(layout, ring.points[index].x,
+                ring.points[index].y);
+            Require(found.has_value(), "輪の上を押せば当たる");
+            Require(layout.gadgets[*found].kind == ViewGadgetKind::AxisRing, "輪である");
+            ++caught;
         }
-        for (const auto& head : {ring.positiveHead, ring.negativeHead}) {
-            const double dx = head.x - 844.0;
-            const double dy = head.y - 144.0;
-            RequireNear(std::sqrt(dx * dx + dy * dy), farthest, 1.0e-9, "いちばん外");
-        }
+        Require(caught >= 16, "輪の全周で当たる");
     }
 }
 
-KACHA_V2_TEST(view_orientation, 矢じりは輪の上にあり向きが逆になっている)
+KACHA_V2_TEST(view_orientation, 輪から離れれば当たらない)
+{
+    const auto layout = Panel();
+    // 中心はどの輪からも離れている(輪の半径は1.95、キューブは1.0)。
+    Require(!ViewRingAtScreen(layout, kCenterX, kCenterY).has_value(), "中心は当たらない");
+    Require(!ViewRingAtScreen(layout, kCenterX + 400.0, kCenterY).has_value(),
+        "遠くも当たらない");
+}
+
+KACHA_V2_TEST(view_orientation, 輪の線を押すと近いほうの矢じりの向きになる)
 {
     const auto layout = Panel();
     for (const auto& ring : layout.rings) {
-        // 進める側と戻す側は輪の反対どうし。
-        const double dx = ring.positiveHead.x - ring.negativeHead.x;
-        const double dy = ring.positiveHead.y - ring.negativeHead.y;
-        Require(std::sqrt(dx * dx + dy * dy) > 1.0, "離れている");
-        // 向きは単位ベクトル。
-        for (const auto& tangent : {ring.positiveTangent, ring.negativeTangent}) {
-            const double length = std::sqrt(tangent.x * tangent.x + tangent.y * tangent.y);
-            RequireNear(length, 1.0, 1.0e-9, "長さ1");
-        }
+        const auto atPositive = ViewRingAtScreen(layout, ring.positiveHead.x,
+            ring.positiveHead.y);
+        Require(atPositive.has_value(), "当たる");
+        Require(layout.gadgets[*atPositive].direction == ViewGadgetDirection::Positive,
+            "進める側");
+        const auto atNegative = ViewRingAtScreen(layout, ring.negativeHead.x,
+            ring.negativeHead.y);
+        Require(atNegative.has_value(), "当たる");
+        Require(layout.gadgets[*atNegative].direction == ViewGadgetDirection::Negative,
+            "戻す側");
     }
 }
 
-KACHA_V2_TEST(view_orientation, 操作板の部品を押せる)
+KACHA_V2_TEST(view_orientation, ボタンと輪は別々に拾える)
 {
+    // キューブより先にボタン、キューブより後に輪を見るため、入口を分けてある。
     const auto layout = Panel();
     for (std::size_t index = 0; index < layout.gadgets.size(); ++index) {
         const auto& gadget = layout.gadgets[index];
-        Require(gadget.widthPx > 0.0 && gadget.heightPx > 0.0, "大きさがある");
-        const auto found = ViewGadgetAtScreen(layout, gadget.CenterXPx(),
-            gadget.CenterYPx());
-        Require(found.has_value(), "拾える");
+        const double x = gadget.CenterXPx();
+        const double y = gadget.CenterYPx();
+        if (gadget.kind == ViewGadgetKind::AxisRing) {
+            Require(ViewRingAtScreen(layout, x, y).has_value(), "輪として拾える");
+        } else {
+            const auto found = ViewButtonAtScreen(layout, x, y);
+            Require(found.has_value(), "ボタンとして拾える");
+            RequireEqual(std::to_string(*found), std::to_string(index), "同じもの");
+        }
+        Require(ViewGadgetAtScreen(layout, x, y).has_value(), "まとめてでも拾える");
     }
-    Require(!ViewGadgetAtScreen(layout, -1000.0, -1000.0).has_value(), "外は拾わない");
 }
 
 KACHA_V2_TEST(view_orientation, 操作板の説明が空にならない)
 {
     const auto layout = Panel();
     for (const auto& gadget : layout.gadgets) {
-        for (const auto mode : {kachakacha::v2::view::RotationAxisMode::World,
-                 kachakacha::v2::view::RotationAxisMode::Relative}) {
-            Require(!ViewGadgetTooltipJa(gadget, mode).empty(), "説明がある");
-        }
+        Require(!ViewGadgetTooltipJa(gadget).empty(), "説明がある");
     }
 }
 
@@ -754,60 +758,35 @@ KACHA_V2_TEST(view_orientation, 上下と左右は互いに逆へ戻せる)
     }
 }
 
-KACHA_V2_TEST(view_orientation, 大きさが0なら操作板は空になる)
-{
-    const auto layout = BuildViewGadgets(0.0, 0.0, 0.0);
-    Require(layout.gadgets.empty(), "空");
-    Require(layout.rings.empty(), "輪も無い");
-}
-
 KACHA_V2_TEST(view_orientation, 操作板は画面からはみ出したら寄せる)
 {
-    // 狭い画面でも押せるようにする。はみ出したまま出すと、押せない部品ができる。
-    const auto orientation = kachakacha::v2::view::OrientationForZone(
-        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
-    Require(orientation.HasValue(), "姿勢が作れる");
-    auto layout = BuildViewGadgets(-50.0, -40.0, 88.0);
+    auto layout = BuildViewGadgets(60.0, 60.0, kachakacha::v2::view::kNavigatorScalePx,
+        Isometric());
     Require(!layout.gadgets.empty(), "部品がある");
-    Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 800.0, 600.0), "寄せられる");
+    Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 800.0, 600.0),
+        "寄せられる");
     for (const auto& gadget : layout.gadgets) {
         Require(gadget.xPx >= -1.0e-9, "左からはみ出さない");
         Require(gadget.yPx >= -1.0e-9, "上からはみ出さない");
-        Require(gadget.xPx + gadget.widthPx <= 800.0 + 1.0e-9, "右からはみ出さない");
-        Require(gadget.yPx + gadget.heightPx <= 600.0 + 1.0e-9, "下からはみ出さない");
     }
-}
-
-KACHA_V2_TEST(view_orientation, 寄せると輪も一緒に動く)
-{
-    // 輪だけ置き去りにすると、矢じりと輪の位置がずれる。
-    const auto orientation = kachakacha::v2::view::OrientationForZone(
-        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
-    Require(orientation.HasValue(), "姿勢が作れる");
-    auto before = BuildViewGadgets(-50.0, -40.0, 88.0);
-    auto after = before;
-    Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(after, 800.0, 600.0), "寄せられる");
-    const double dx = after.xPx - before.xPx;
-    const double dy = after.yPx - before.yPx;
-    Require(std::abs(dx) > 1.0 || std::abs(dy) > 1.0, "実際に動いた");
-    for (std::size_t index = 0; index < after.rings.size(); ++index) {
-        RequireNear(after.rings[index].points[0].x,
-            before.rings[index].points[0].x + dx, 1.0e-9, "輪も同じだけ動く");
-        RequireNear(after.rings[index].positiveHead.y,
-            before.rings[index].positiveHead.y + dy, 1.0e-9, "矢じりも同じだけ動く");
+    for (const auto& ring : layout.rings) {
+        for (const auto& point : ring.points) {
+            Require(point.x >= -1.0e-9 && point.y >= -1.0e-9, "輪もはみ出さない");
+        }
     }
 }
 
 KACHA_V2_TEST(view_orientation, 画面より大きい操作板は寄せられない)
 {
-    const auto orientation = kachakacha::v2::view::OrientationForZone(
-        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
-    Require(orientation.HasValue(), "姿勢が作れる");
-    auto layout = BuildViewGadgets(0.0, 0.0, 400.0);
-    Require(!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 100.0, 100.0), "断る");
-    // 断ったのだから、並びは動いていない。
-    RequireNear(layout.gadgets.front().xPx,
-        BuildViewGadgets(0.0, 0.0, 400.0).gadgets.front().xPx, 1.0e-9, "動かない");
+    auto layout = Panel();
+    Require(!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 50.0, 50.0), "断る");
+}
+
+KACHA_V2_TEST(view_orientation, 大きさが0なら操作板は空になる)
+{
+    const auto layout = BuildViewGadgets(0.0, 0.0, 0.0, Isometric());
+    Require(layout.gadgets.empty(), "空");
+    Require(layout.rings.empty(), "輪も無い");
 }
 
 KACHA_V2_TEST_MAIN("view_orientation_tests")

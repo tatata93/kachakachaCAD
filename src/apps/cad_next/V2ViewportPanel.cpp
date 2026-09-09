@@ -30,9 +30,8 @@ constexpr double kGrabSeatRatio = 0.26;
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
 {
     const QRectF box = ViewCubeRect();
-    // 輪は姿勢について動かさない。動くと矢じりを狙って押せない。
-    auto layout = kachakacha::v2::view::BuildViewGadgets(box.left(), box.top(),
-        box.width());
+    auto layout = kachakacha::v2::view::BuildViewGadgets(box.center().x(),
+        box.center().y(), kachakacha::v2::view::kNavigatorScalePx, orientation_);
     // はみ出していたら寄せる。入らなければ空にして、出さない判断をここで済ませる。
     if (!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout,
             static_cast<double>(width()), static_cast<double>(height()))) {
@@ -47,10 +46,16 @@ std::optional<std::size_t> V2Viewport::ViewGadgetAt(const QPointF& position) con
         position.y());
 }
 
-void V2Viewport::SetRingMode(kachakacha::v2::view::RotationAxisMode mode)
+std::optional<std::size_t> V2Viewport::ViewButtonAt(const QPointF& position) const
 {
-    ringMode_ = mode;
-    update();
+    return kachakacha::v2::view::ViewButtonAtScreen(ViewGadgets(), position.x(),
+        position.y());
+}
+
+std::optional<std::size_t> V2Viewport::ViewRingAt(const QPointF& position) const
+{
+    return kachakacha::v2::view::ViewRingAtScreen(ViewGadgets(), position.x(),
+        position.y());
 }
 
 void V2Viewport::SetAlignSelectionCallback(std::function<void()> callback)
@@ -58,10 +63,10 @@ void V2Viewport::SetAlignSelectionCallback(std::function<void()> callback)
     alignSelectionCallback_ = std::move(callback);
 }
 
-bool V2Viewport::PressViewGadget(const QPointF& position,
+bool V2Viewport::PressViewGadgetIndex(const QPointF& position,
+    const std::optional<std::size_t>& index,
     kachakacha::v2::view::AxisArrowModifier modifier)
 {
-    const auto index = ViewGadgetAt(position);
     if (!index.has_value()) {
         return false;
     }
@@ -72,6 +77,24 @@ bool V2Viewport::PressViewGadget(const QPointF& position,
     drag.modifier = modifier;
     gadgetDrag_ = drag;
     return true;
+}
+
+bool V2Viewport::PressViewGadget(const QPointF& position,
+    kachakacha::v2::view::AxisArrowModifier modifier)
+{
+    return PressViewGadgetIndex(position, ViewGadgetAt(position), modifier);
+}
+
+bool V2Viewport::PressViewButton(const QPointF& position,
+    kachakacha::v2::view::AxisArrowModifier modifier)
+{
+    return PressViewGadgetIndex(position, ViewButtonAt(position), modifier);
+}
+
+bool V2Viewport::PressViewRing(const QPointF& position,
+    kachakacha::v2::view::AxisArrowModifier modifier)
+{
+    return PressViewGadgetIndex(position, ViewRingAt(position), modifier);
 }
 
 void V2Viewport::DragViewGadget(const QPointF& position)
@@ -127,14 +150,6 @@ void V2Viewport::ReleaseViewGadget(const QPointF& position)
         SetViewDirection(ViewDirection::Isometric);
         viewMessage_ = "既定の視点へ戻しました。";
         break;
-    case kachakacha::v2::view::ViewGadgetKind::ModeToggle:
-        SetRingMode(ringMode_ == kachakacha::v2::view::RotationAxisMode::World
-                ? kachakacha::v2::view::RotationAxisMode::Relative
-                : kachakacha::v2::view::RotationAxisMode::World);
-        viewMessage_ = std::string("輪の軸を ")
-            + std::string(kachakacha::v2::view::RotationAxisModeNameJa(ringMode_))
-            + " にしました。";
-        break;
     case kachakacha::v2::view::ViewGadgetKind::AlignSelection:
         if (alignSelectionCallback_) {
             alignSelectionCallback_();
@@ -162,7 +177,7 @@ void V2Viewport::ApplyGadgetRotation(const kachakacha::v2::view::ViewGadget& gad
     if (gadget.kind == ViewGadgetKind::AxisRing) {
         kachakacha::v2::view::AxisArrowRequest request;
         request.orientation = from;
-        request.mode = ringMode_;
+        request.mode = kachakacha::v2::view::RotationAxisMode::World;
         request.axis = gadget.axis;
         request.hasSelectionFrame = selectionFrame_.has_value();
         if (selectionFrame_.has_value()) {
@@ -220,9 +235,8 @@ bool V2Viewport::IsRingHeadHot(kachakacha::v2::view::RotationAxis axis,
 void V2Viewport::DrawViewRings(QPainter& painter,
     const kachakacha::v2::view::ViewGadgetLayout& layout) const
 {
-    // 相対の輪は、部品を1つ選んでいないと使えない。薄く出す。消さない。
-    const bool usable = ringMode_ == kachakacha::v2::view::RotationAxisMode::World
-        || selectionFrame_.has_value();
+    // 輪はモデルの軸まわりなので、いつでも使える(V1と同じ)。
+    const bool usable = true;
     for (const kachakacha::v2::view::ViewAxisRing& ring : layout.rings) {
         QColor ink = palette_.axisX;
         switch (ring.axis) {
@@ -309,10 +323,6 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
             case ViewGadgetDirection::Left:  text = QStringLiteral("◀"); break;
             default:                         text = QStringLiteral("▶"); break;
             }
-            break;
-        case ViewGadgetKind::ModeToggle:
-            text = QString::fromUtf8(std::string(
-                kachakacha::v2::view::RotationAxisModeNameJa(ringMode_)).c_str());
             break;
         case ViewGadgetKind::AlignSelection:
             text = QStringLiteral("選択に正対");

@@ -887,9 +887,9 @@ struct SelfTestCase {
     // V1 と同じで、輪の矢じり・上下左右・画面のまま回す・家・選択に正対がそろっている。
     auto& viewport = window.Viewport();
     const auto layout = viewport.ViewGadgets();
-    if (!Explain((std::string("部品が15個(実際は ")
+    if (!Explain((std::string("部品が14個(実際は ")
                      + std::to_string(layout.gadgets.size()) + ")").c_str(),
-            layout.gadgets.size() == 15)) {
+            layout.gadgets.size() == 14)) {
         return false;
     }
     if (!Explain("輪が3本ある", layout.rings.size() == 3)) {
@@ -907,6 +907,7 @@ struct SelfTestCase {
         if (!Explain("部品を押せる", found.has_value())) {
             return false;
         }
+        (void)gadget;
     }
     return true;
 }
@@ -917,7 +918,11 @@ struct SelfTestCase {
 {
     const QPointF center(gadget.CenterXPx(), gadget.CenterYPx());
     const auto before = viewport.Orientation();
-    viewport.PressViewGadget(center, kachakacha::v2::view::AxisArrowModifier::None);
+    if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
+        viewport.PressViewRing(center, kachakacha::v2::view::AxisArrowModifier::None);
+    } else {
+        viewport.PressViewButton(center, kachakacha::v2::view::AxisArrowModifier::None);
+    }
     viewport.ReleaseViewGadget(center);
     return kachakacha::v2::view::AngleBetween(before, viewport.Orientation()) * 180.0
         / 3.14159265358979323846;
@@ -948,69 +953,47 @@ struct SelfTestCase {
                        + ")").c_str(), checked == 12);
 }
 
-[[nodiscard]] bool CaseRelativeRingNeedsSelection(V2MainWindow& window)
+[[nodiscard]] bool CaseRingIsGrabbableAlongTheWhole(V2MainWindow& window)
 {
-    // 輪を相対にすると、部品を選んでいないと回せない。黙って世界軸で回したりしない。
+    // V1(ADR 0023)と同じで、輪は線のどこを押しても掴める。
+    // 矢じりだけを的にすると、視点によっては潰れて狙えない。
     auto& viewport = window.Viewport();
-    viewport.SetSelectionFrame(std::nullopt);
-    viewport.SetRingMode(kachakacha::v2::view::RotationAxisMode::Relative);
     const auto layout = viewport.ViewGadgets();
-    const kachakacha::v2::view::ViewGadget* ring = nullptr;
-    for (const auto& gadget : layout.gadgets) {
-        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
-            ring = &gadget;
-            break;
+    if (!Explain("輪が3本ある", layout.rings.size() == 3)) {
+        return false;
+    }
+    for (const auto& ring : layout.rings) {
+        for (std::size_t index = 0; index < ring.points.size(); index += 8) {
+            const QPointF at(ring.points[index].x, ring.points[index].y);
+            const auto found = viewport.ViewRingAt(at);
+            if (!Explain("輪の上を押せば当たる", found.has_value())) {
+                return false;
+            }
         }
     }
-    if (!Explain("輪の矢じりがある", ring != nullptr)) {
-        return false;
-    }
-    if (!Explain("姿勢は変わらない", ClickGadgetAndMeasure(viewport, *ring) < 1.0e-9)) {
-        return false;
-    }
-    if (!Explain("理由が出る", !viewport.LastViewMessage().empty())) {
-        return false;
-    }
-    viewport.SetSelectionFrame(kachakacha::v2::view::Quaternion{1.0, 0.0, 0.0, 0.0});
-    return Explain("選べば回る", ClickGadgetAndMeasure(viewport, *ring) > 1.0);
+    // 輪はキューブより後に見るので、キューブの面が輪に隠れない。
+    return Explain("中心はキューブが勝つ",
+        !viewport.ViewButtonAt(QPointF(viewport.ViewCubeRect().center())).has_value());
 }
 
-[[nodiscard]] bool CaseViewPanelHomeAndToggle(V2MainWindow& window)
+[[nodiscard]] bool CaseViewPanelHome(V2MainWindow& window)
 {
-    // 家は既定の視点へ戻す。切り替えは絶対と相対を行き来する。
+    // 家は等角ビューへ戻す。
     auto& viewport = window.Viewport();
     const auto layout = viewport.ViewGadgets();
     for (const auto& gadget : layout.gadgets) {
+        if (gadget.kind != kachakacha::v2::view::ViewGadgetKind::Home) {
+            continue;
+        }
         const QPointF center(gadget.CenterXPx(), gadget.CenterYPx());
-        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::ModeToggle) {
-            const auto before = viewport.RingMode();
-            viewport.PressViewGadget(center,
-                kachakacha::v2::view::AxisArrowModifier::None);
-            viewport.ReleaseViewGadget(center);
-            if (!Explain("切り替わる", viewport.RingMode() != before)) {
-                return false;
-            }
-            viewport.PressViewGadget(center,
-                kachakacha::v2::view::AxisArrowModifier::None);
-            viewport.ReleaseViewGadget(center);
-            if (!Explain("もう一度押すと戻る", viewport.RingMode() == before)) {
-                return false;
-            }
-        }
-        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::Home) {
-            viewport.SetViewDirection(ViewDirection::Top);
-            const auto top = viewport.Orientation();
-            viewport.PressViewGadget(center,
-                kachakacha::v2::view::AxisArrowModifier::None);
-            viewport.ReleaseViewGadget(center);
-            if (!Explain("既定の視点へ戻る",
-                    kachakacha::v2::view::AngleBetween(top, viewport.Orientation())
-                        > 1.0e-6)) {
-                return false;
-            }
-        }
+        viewport.SetViewDirection(ViewDirection::Top);
+        const auto top = viewport.Orientation();
+        viewport.PressViewButton(center, kachakacha::v2::view::AxisArrowModifier::None);
+        viewport.ReleaseViewGadget(center);
+        return Explain("等角ビューへ戻る",
+            kachakacha::v2::view::AngleBetween(top, viewport.Orientation()) > 1.0e-6);
     }
-    return true;
+    return Explain("家がある", false);
 }
 
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
@@ -1103,8 +1086,8 @@ const SelfTestCase kCases[] = {
     {"保存して開き直すと同じものが戻る", &CaseSaveThenOpenRoundTrips},
     {"視点の操作板に部品がそろっている", &CaseViewPanelHasEveryControl},
     {"操作板の回す部品は15度だけ回る", &CaseViewPanelTurnsFifteenDegrees},
-    {"相対の輪は選択が無ければ断る", &CaseRelativeRingNeedsSelection},
-    {"家で既定の視点へ戻り絶対と相対を切り替えられる", &CaseViewPanelHomeAndToggle},
+    {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
+    {"家で等角ビューへ戻る", &CaseViewPanelHome},
 };
 
 //! 1ケースだけ動かす。落ちても続けられるように、例外はここで受ける。

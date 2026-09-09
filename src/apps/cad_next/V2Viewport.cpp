@@ -601,15 +601,13 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 
 QRectF V2Viewport::ViewCubeRect() const
 {
-    // 狭い画面ではキューブを小さくする。大きいままだと操作板が画面に入らず、
-    // まるごと出せなくなってしまう。V1同等の操作板が常に出ることを優先する。
-    // 操作板はキューブのおよそ2.4倍の幅と2.7倍の高さを使う。
-    const double byWidth = static_cast<double>(width()) / 2.6;
-    const double byHeight = static_cast<double>(height()) / 2.9;
-    const double size = std::max(36.0, std::min({kViewCubeSizePx, byWidth, byHeight}));
-    // 操作板は上と右へも少し出るので、余白をその分だけ空ける。
-    const double margin = kViewCubeMarginPx + size * kachakacha::v2::view::kViewGadgetOuterMarginRatio;
-    return QRectF(width() - size - margin, margin, size, size);
+    // V1(ADR 0023)と同じ置き方。中心は右端から84px、上から74px。
+    // キューブは一辺2(-1..+1)を kNavigatorScalePx で写すので、見た目の一辺はその2倍。
+    const double scale = kachakacha::v2::view::kNavigatorScalePx;
+    const double size = scale * 2.0;
+    const double centerX = static_cast<double>(width()) - 84.0;
+    const double centerY = 74.0;
+    return QRectF(centerX - size * 0.5, centerY - size * 0.5, size, size);
 }
 
 std::optional<kachakacha::v2::view::ViewCubeZone> V2Viewport::ViewCubeZoneAtScreen(
@@ -1161,7 +1159,7 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         const auto layout = ViewGadgets();
         if (*gadget < layout.gadgets.size() && statusCallback_) {
             statusCallback_(kachakacha::v2::view::ViewGadgetTooltipJa(
-                layout.gadgets[*gadget], ringMode_));
+                layout.gadgets[*gadget]));
         }
         return; // 操作板の上ではスナップを探さない。
     }
@@ -1190,10 +1188,15 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     } else if ((event->modifiers() & Qt::ControlModifier) != 0) {
         modifier = kachakacha::v2::view::AxisArrowModifier::Coarse;
     }
-    if (PressViewGadget(event->position(), modifier)) {
+    // V1(ADR 0023)と同じ順で見る。ボタン → キューブ → 輪。
+    // 輪を先に見ると、キューブの面が輪の線に隠れて押せなくなる。
+    if (PressViewButton(event->position(), modifier)) {
         return;
     }
     if (PressViewCube(event->position())) {
+        return;
+    }
+    if (PressViewRing(event->position(), modifier)) {
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

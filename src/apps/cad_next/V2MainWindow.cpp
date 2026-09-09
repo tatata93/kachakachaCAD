@@ -400,6 +400,9 @@ void V2MainWindow::BuildPanels()
     processView_->setHeaderLabels({QStringLiteral("番号"), QStringLiteral("すること"),
         QStringLiteral("様子")});
     processView_->setRootIsDecorated(false);
+    // 手順は「いま何段目か」を読むためのものなので、5段は見えていてほしい。
+    // 棚の割り当てだけでは、書き出しの棚に押されて2段まで潰れた。
+    processView_->setMinimumHeight(130);
     processDock->setWidget(processView_);
     addDockWidget(Qt::RightDockWidgetArea, processDock);
     processDock_ = processDock;
@@ -438,7 +441,7 @@ void V2MainWindow::BuildPanels()
     // 見出しが切れ、手順が2行しか見えなくなる。
     // 横幅を先に決めてから、縦の割り当てを決める。
     resizeDocks({exportDock_}, {300}, Qt::Horizontal);
-    resizeDocks({guideDock_, processDock_, exportDock_}, {150, 220, 300}, Qt::Vertical);
+    resizeDocks({guideDock_, processDock_, exportDock_}, {110, 200, 330}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
 
     toolLabel_ = new QLabel(this);

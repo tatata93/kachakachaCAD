@@ -155,18 +155,14 @@ const std::vector<ViewCubeZone>& AllViewCubeZones()
 std::string ViewCubeZoneLabelJa(const ViewCubeZone& zone)
 {
     // 模型は +Y を奥、+Z を上として置く。前は -Y。
+    // 面は1文字にする。キューブは一辺44pxしかないので、2文字だと重なって読めない。
+    // V1(ADR 0023)も1文字で、前面は「正」ではなく「前」だった。
     std::string label;
     label += SignLabel(zone.z, "上", "下");
-    label += SignLabel(zone.y, "背", "正");
+    label += SignLabel(zone.y, "後", "前");
     label += SignLabel(zone.x, "右", "左");
     if (label.empty()) {
-        return "正面";
-    }
-    if (zone.IsFace()) {
-        if (zone.y != 0) {
-            return zone.y > 0 ? "背面" : "正面";
-        }
-        return label + "面";
+        return "前";
     }
     return label;
 }

@@ -111,7 +111,7 @@ KACHA_V2_TEST(view, 面の真ん中を指すと面になる)
     const auto result = ViewCubeZoneAt(Vector3{0.0, -1.0, 0.0}, 0.25);
     Require(result.HasValue(), "面を返す");
     Require(result.Value().IsFace(), "面である");
-    RequireEqual(ViewCubeZoneLabelJa(result.Value()), "正面", "正面");
+    RequireEqual(ViewCubeZoneLabelJa(result.Value()), "前", "前の面");
 }
 
 KACHA_V2_TEST(view, 辺の帯を指すと辺になる)
@@ -787,6 +787,21 @@ KACHA_V2_TEST(view_orientation, 大きさが0なら操作板は空になる)
     const auto layout = BuildViewGadgets(0.0, 0.0, 0.0, Isometric());
     Require(layout.gadgets.empty(), "空");
     Require(layout.rings.empty(), "輪も無い");
+}
+
+KACHA_V2_TEST(view_orientation, 面の名前は1文字でキューブに収まる)
+{
+    // キューブは一辺44pxしかない。2文字だと隣の面と重なって読めない。
+    const std::pair<kachakacha::v2::view::ViewCubeZone, const char*> faces[] = {
+        {{0, 0, 1}, "上"}, {{0, 0, -1}, "下"}, {{0, -1, 0}, "前"},
+        {{0, 1, 0}, "後"}, {{1, 0, 0}, "右"}, {{-1, 0, 0}, "左"},
+    };
+    for (const auto& face : faces) {
+        const std::string label = ViewCubeZoneLabelJa(face.first);
+        RequireEqual(label, std::string(face.second), "面の名前");
+        // UTF-8 の日本語1文字は3バイト。
+        RequireEqual(std::to_string(label.size()), std::string("3"), "1文字");
+    }
 }
 
 KACHA_V2_TEST_MAIN("view_orientation_tests")

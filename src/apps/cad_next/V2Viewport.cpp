@@ -790,8 +790,10 @@ void V2Viewport::DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
     const double cx = normal.x * right.x + normal.y * right.y + normal.z * right.z;
     const double cy = normal.x * up.x + normal.y * up.y + normal.z * up.z;
     painter.setPen(QPen(palette_.text, 1.0));
-    painter.drawText(QRectF(center.x() + cx * scale - 26.0, center.y() - cy * scale - 8.0,
-                         52.0, 16.0),
+    // 枠は面の大きさに合わせる。52pxのままだと隣の面へはみ出して重なる。
+    const double box = scale * 0.9;
+    painter.drawText(QRectF(center.x() + cx * scale - box * 0.5,
+                         center.y() - cy * scale - box * 0.5, box, box),
         Qt::AlignCenter,
         QString::fromStdString(kachakacha::v2::view::ViewCubeZoneLabelJa(zone)));
 }

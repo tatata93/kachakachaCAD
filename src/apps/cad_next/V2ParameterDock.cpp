@@ -58,8 +58,7 @@ void V2ParameterDock::Refresh()
         item->setText(1, QString::fromStdString(
             kachakacha::v2::app::ParameterTextOf(values_, definition.id)));
         item->setData(0, 32, index);
-        item->setFlags(QTreeWidgetItem::ItemIsSelectable | QTreeWidgetItem::ItemIsEnabled
-            | QTreeWidgetItem::ItemIsEditable);
+        item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable);
         ++index;
     }
     rows_->blockSignals(false);

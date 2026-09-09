@@ -236,11 +236,8 @@ public:
     [[nodiscard]] int childCount() const;
     [[nodiscard]] QTreeWidgetItem* child(int) const;
     void setExpanded(bool);
-    enum ItemFlag { NoItemFlags = 0, ItemIsSelectable = 1, ItemIsEditable = 2,
-        ItemIsEnabled = 32 };
-    using ItemFlags = int;
-    void setFlags(ItemFlags);
-    [[nodiscard]] ItemFlags flags() const;
+    void setFlags(Qt::ItemFlags);
+    [[nodiscard]] Qt::ItemFlags flags() const;
 };
 
 class QTreeWidget : public QAbstractItemView {

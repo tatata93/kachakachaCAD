@@ -31,6 +31,10 @@ namespace {
                                  const kachakacha::v2::app::ExtrudeFacts&) {
         return std::optional<kachakacha::v2::app::ExtrudeChoice>(initial);
     });
+    window.SetWorkPlaneChooser([](const WorkPlaneChoice& initial,
+                                   const kachakacha::v2::app::WorkPlaneFacts&) {
+        return std::optional<WorkPlaneChoice>(initial);
+    });
     window.resize(1000, 700);
     window.show();
     QApplication::processEvents();

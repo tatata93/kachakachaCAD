@@ -780,6 +780,63 @@ namespace {
             || window.StatusText().contains(QStringLiteral("載っていません")));
 }
 
+[[nodiscard]] bool CaseWorkPlaneCanBeOffset(V2MainWindow& window)
+{
+    // 原点を通らない平面が作れること。station ごとの断面を置くのに要る。
+    // これまでは標準面しか作れなかったので、工程1が画面では始められなかった。
+    window.RunCommand("workplane.create");
+    if (!Explain((std::string("標準面が作れる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("作業中にしました")))) {
+        return false;
+    }
+    // 出来た平面を選んで、そこから 25mm 離した平面を作る。
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::WorkPlane));
+    window.SetWorkPlaneChooser([](const WorkPlaneChoice&,
+                                   const kachakacha::v2::app::WorkPlaneFacts&) {
+        WorkPlaneChoice choice;
+        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::OffsetFromPlane;
+        choice.offsetMm = 25.0;
+        return std::optional<WorkPlaneChoice>(choice);
+    });
+    window.RunCommand("workplane.create");
+    if (!Explain((std::string("離した平面が作れる(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+        return false;
+    }
+    // 本当に原点から離れていること。名前が変わっただけでは意味がない。
+    return Explain((std::string("原点が動いている(z=")
+                       + std::to_string(window.Viewport().WorkPlane().origin.z)
+                       + ")").c_str(),
+        std::abs(window.Viewport().WorkPlane().origin.z - 25.0) < 1.0e-6);
+}
+
+[[nodiscard]] bool CaseWorkPlaneRefusesWhenNothingSelected(V2MainWindow& window)
+{
+    // 足りないものを黙って補わない。補うと、思っていない平面が出来る。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.SetWorkPlaneChooser([](const WorkPlaneChoice&,
+                                   const kachakacha::v2::app::WorkPlaneFacts&) {
+        WorkPlaneChoice choice;
+        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::ThreePoints;
+        return std::optional<WorkPlaneChoice>(choice);
+    });
+    const std::size_t before =
+        window.Session().GetDocument().Snapshot().entities.size();
+    window.RunCommand("workplane.create");
+    if (!Explain((std::string("足りないと言う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("足りません")))) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Snapshot().entities.size() == before);
+}
+
 [[nodiscard]] bool CaseThickenSurfaceMakesASolid(V2MainWindow& window)
 {
     // オーナーの手順の中心。断面 → 面 → **その面に厚みを付けて立体**。
@@ -935,6 +992,8 @@ std::vector<SelfTestCase> ModelingCases()
         {"グリッド原点は押した場所へ動く", &CaseGridOriginAsksWhereToPress},
         {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
+        {"平面から離した作業平面を作れる", &CaseWorkPlaneCanBeOffset},
+        {"材料が足りない作り方は断る", &CaseWorkPlaneRefusesWhenNothingSelected},
         {"面に厚みを付けて立体にできる", &CaseThickenSurfaceMakesASolid},
         {"面を選ばずに厚みは付けられない", &CaseThickenNeedsASurface},
         {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},

@@ -43,3 +43,14 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/FreezeState.h` | ある曲げ状態を1回だけ評価して固める | 任意状態の固定を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
+
+## この門が見ないもの
+
+**カーネル(`src/next_occt`)の引数の型違いは、この門では捕まらない。**
+雲側に OCCT が無いので、`KACHACAD_V2_WITH_OCCT` の中は一度も構文検査に通らない。
+実際、`FromEdge(edge, tolerance)` と書いて(正しくは `tolerance.modelLinearMm`)、
+PC の MSVC で初めて落ちたことがある。
+
+OCCT の宣言だけのスタブを作れば雲でも見られるが、使っているヘッダが78個あり、
+本物と食い違えば **第二の真実** になって、かえって当てにならなくなる。
+そこで作らない。かわりに **カーネルの変更は小さく刻んで、1往復ずつ PC で確かめる**。

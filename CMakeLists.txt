@@ -570,6 +570,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ControlPointPick.cpp
     src/next/kachakacha/app/ShapeRebuild.cpp
     src/next/kachakacha/app/ExtrudeOptions.cpp
+    src/next/kachakacha/app/WorkPlaneOptions.cpp
     src/next/kachakacha/app/EntityNaming.cpp
     src/next/kachakacha/app/MeasurePanel.cpp
     src/next/kachakacha/app/ExportService.cpp
@@ -747,6 +748,7 @@ kachakacha_add_v2_test(entity_naming_tests tests_v2/entity_naming_tests.cpp)
 kachakacha_add_v2_test(core_ui_wiring_tests tests_v2/core_ui_wiring_tests.cpp)
 kachakacha_add_v2_test(shape_rebuild_tests tests_v2/shape_rebuild_tests.cpp)
 kachakacha_add_v2_test(extrude_options_tests tests_v2/extrude_options_tests.cpp)
+kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
@@ -829,6 +831,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ViewCommands.cpp
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExtrudeDialog.cpp
+        src/apps/cad_next/V2WorkPlaneDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp
         src/apps/cad_next/V2ParameterDock.h
         src/apps/cad_next/V2MeasureDock.cpp

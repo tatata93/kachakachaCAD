@@ -40,7 +40,8 @@ namespace {
 {
     std::vector<geometry::CurveSegment> edges;
     for (TopExp_Explorer explorer(shape, TopAbs_EDGE); explorer.More(); explorer.Next()) {
-        const auto made = FromEdge(TopoDS::Edge(explorer.Current()), tolerance);
+        const auto made =
+            FromEdge(TopoDS::Edge(explorer.Current()), tolerance.modelLinearMm);
         if (made.HasValue()) {
             edges.push_back(made.Value());
         }

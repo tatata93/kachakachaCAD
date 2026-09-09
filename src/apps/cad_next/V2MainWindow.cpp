@@ -186,6 +186,16 @@ V2MainWindow::V2MainWindow()
         }
         return dialog.Choice();
     });
+    // 作業平面の作り方も窓で聞く。11通りあるのに標準面しか作れなかった。
+    SetWorkPlaneChooser([this](const WorkPlaneChoice& initial,
+                            const kachakacha::v2::app::WorkPlaneFacts& facts)
+                            -> std::optional<WorkPlaneChoice> {
+        V2WorkPlaneDialog dialog(initial, facts, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return dialog.Choice();
+    });
     // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
     viewport_->SetControlPointCallback(
         [this](kachakacha::v2::base::EntityId entityId,

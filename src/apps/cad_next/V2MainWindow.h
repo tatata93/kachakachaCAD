@@ -24,6 +24,7 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "V2ExtrudeDialog.h"
+#include "V2WorkPlaneDialog.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctExtrude.h"
@@ -221,6 +222,17 @@ public:
     //! 厚みをどちらへ付けるか。外側・中央・内側。
     kachakacha::v2::fabrication::ThicknessPlacement thicknessPlacement_ =
         kachakacha::v2::fabrication::ThicknessPlacement::Centered;
+    //! 作業平面の作り方を選ばせる。窓を出さない試験では差し替える。
+    void SetWorkPlaneChooser(
+        std::function<std::optional<WorkPlaneChoice>(const WorkPlaneChoice&,
+            const kachakacha::v2::app::WorkPlaneFacts&)>
+            chooser);
+    //! 選んでいるものから、作業平面の可否に要る事実を作る。
+    [[nodiscard]] kachakacha::v2::app::WorkPlaneFacts BuildWorkPlaneFacts() const;
+    //! 選んでいるものと、決めた作り方から、core への要求を作る。
+    [[nodiscard]] kachakacha::v2::base::Result<
+        kachakacha::v2::modeling::WorkPlaneRequest>
+    BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const;
     //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
     //! 値を返さなければ「やめた」。
     void SetExtrudeChooser(
@@ -380,6 +392,9 @@ private:
         const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& shapes,
         kachakacha::v2::app::ExportFormat format);
     //! 出来た立体の handle。文書ではなく画面側が覚える。
+    std::function<std::optional<WorkPlaneChoice>(const WorkPlaneChoice&,
+        const kachakacha::v2::app::WorkPlaneFacts&)>
+        workPlaneChooser_;
     //! 押し出しで前に選んだもの。次に押すときの初期値にする。
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(

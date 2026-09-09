@@ -12,6 +12,8 @@
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/app/CommandParameters.h"
+#include "kachakacha/fabrication/CurvedPanel.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "kachakacha/geometry/WireChain.h"
 
@@ -68,6 +70,11 @@ void V2MainWindow::RunFabricationCreate()
     using kachakacha::v2::fabrication::PlanarPanelRequest;
 
     const auto& selection = viewport_->Selection();
+    // 曲がった面(形状ガイド)は、展開してから部材にする。
+    std::vector<kachakacha::v2::fabrication::PatternPanel> unfolded;
+    if (!UnfoldSelectedSurfaces(unfolded)) {
+        return;
+    }
     std::vector<PlanarPanelRequest> requests;
     for (const auto& id : selection.entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
@@ -86,10 +93,24 @@ void V2MainWindow::RunFabricationCreate()
         request.boundary = found->second;
         requests.push_back(std::move(request));
     }
-    if (requests.empty()) {
+    if (requests.empty() && unfolded.empty()) {
         SetStatus(QStringLiteral(
-            "製作モデルを作る: 平らな1枚を持つ部品を選んでください"
-            "(いまは押し出しで作ったものだけです)。"));
+            "製作モデルを作る: 平らな1枚を持つ部品か、形状ガイドを選んでください。"));
+        return;
+    }
+    if (requests.empty()) {
+        // 曲がった面だけを選んだとき。展開した部材をそのまま使う。
+        fabricationPanels_ = unfolded;
+        panelBoundary_.clear();
+        panelOpenings_.clear();
+        processContext_.fabricationBuilt = true;
+        processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
+        processContext_.patternBuilt = false;
+        patternPages_.clear();
+        SetProcessContext(processContext_);
+        SetStatus(QStringLiteral(
+            "製作モデルを作る: 曲がった面を展開して %1枚の部材にしました。")
+                .arg(static_cast<int>(fabricationPanels_.size())));
         return;
     }
     const double tolerance =
@@ -101,6 +122,10 @@ void V2MainWindow::RunFabricationCreate()
         return;
     }
     fabricationPanels_ = panels.Value();
+    // 展開した面があれば、そのまま足す。平らな部品と混ぜて1つの型紙にできる。
+    for (const auto& panel : unfolded) {
+        fabricationPanels_.push_back(panel);
+    }
     // 元の輪郭を覚えておく。あとで開口を足すときに、ここから作り直す。
     panelBoundary_.clear();
     panelOpenings_.clear();
@@ -244,4 +269,34 @@ void V2MainWindow::AssignOpeningRole()
         "型紙はもう一度作ってください。")
             .arg(QString::fromStdString(requests.front().panelId))
             .arg(static_cast<int>(requests.front().openings.size())));
+}
+
+bool V2MainWindow::UnfoldSelectedSurfaces(
+    std::vector<kachakacha::v2::fabrication::PatternPanel>& into)
+{
+    using kachakacha::v2::fabrication::BuildCurvedPanel;
+
+    // 許すずれは「数」の棚から取る。ここが答えを決めるので、
+    // 決め打ちにすると、通るか通らないかを人が選べない。
+    const double allowed = kachakacha::v2::app::ParameterValueOf(
+        parameterDock_->Values(), kachakacha::v2::app::ParameterId::MaxDeviationMm);
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr
+            || entity->kind != kachakacha::v2::domain::EntityKind::GuideSurface) {
+            continue;
+        }
+        const auto found = guideSamples_.find(id.ToString());
+        if (found == guideSamples_.end()) {
+            continue;
+        }
+        const auto made = BuildCurvedPanel(entity->displayName, found->second, allowed);
+        if (!made.HasValue()) {
+            // 伸ばさずには平らにできない面は断る。近い形へ均して成功にしない。
+            ReportDiagnostics(made.Diagnostics());
+            return false;
+        }
+        into.push_back(made.Value().panel);
+    }
+    return true;
 }

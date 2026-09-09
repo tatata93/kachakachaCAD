@@ -12,6 +12,7 @@
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 //! 信号の受け口はラムダで繋ぐ。
 
+#include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/DisplaySettings.h"
 #include "V2ExportDock.h"
@@ -180,6 +181,8 @@ public:
     //! 出来た面の handle と境界。文書ではなく画面側が覚える。
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> guideShapes_;
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> guideEdges_;
+    //! 面の標本。曲がった面を展開するときに要る。
+    std::map<std::string, kachakacha::v2::fabrication::SurfacePatchSamples> guideSamples_;
 
     //! 選んだ作業平面へ正対する。形は変わらない。
     void AlignViewToSelection();
@@ -236,6 +239,9 @@ private:
     void RunFabricationCommand(std::string_view id);
     void RunFabricationCreate();
     void RunCreatePattern();
+    //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
+    [[nodiscard]] bool UnfoldSelectedSurfaces(
+        std::vector<kachakacha::v2::fabrication::PatternPanel>& into);
     //! 選んだ線を、いまの部材の開口にする。
     void AssignOpeningRole();
     //! 部材のもとになった輪郭と、入れた開口。作り直しに使う。

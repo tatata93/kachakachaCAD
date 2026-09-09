@@ -598,6 +598,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/ManualRole.cpp
     src/next/kachakacha/fabrication/PanelStrategy.cpp
     src/next/kachakacha/fabrication/PatternLayout.cpp
+    src/next/kachakacha/fabrication/CurvedPanel.cpp
     src/next/kachakacha/fabrication/PlanarPanel.cpp
     src/next/kachakacha/fabrication/ReliefCut.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
@@ -726,6 +727,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(process_step_tests tests_v2/process_step_tests.cpp)
     kachakacha_add_v2_test(export_content_tests tests_v2/export_content_tests.cpp)
     kachakacha_add_v2_test(command_availability_tests tests_v2/command_availability_tests.cpp)
+    kachakacha_add_v2_test(curved_panel_tests tests_v2/curved_panel_tests.cpp)
     kachakacha_add_v2_test(command_parameter_tests tests_v2/command_parameter_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)

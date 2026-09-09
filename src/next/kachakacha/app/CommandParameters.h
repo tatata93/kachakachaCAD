@@ -31,6 +31,7 @@ enum class ParameterId {
     PatternMarginMm,   //!< 型紙の余白
     ScaleDenominator,  //!< 縮尺の分母。1/87 なら 87
     RealSizeMm,        //!< 実物の寸法(mm)。縮尺で割ると模型の寸法になる
+    MaxDeviationMm,    //!< 展開で許すずれ(mm)。ここが通るか通らないかを決める
 };
 
 struct ParameterDefinition {

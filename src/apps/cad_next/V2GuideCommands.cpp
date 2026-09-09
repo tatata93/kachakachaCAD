@@ -130,6 +130,8 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     // 形そのものは文書に入れない。画面側が handle と境界の線を覚える。
     guideShapes_[entity.id.ToString()] = built.handle;
     guideEdges_[entity.id.ToString()] = built.boundary;
+    // 標本も覚えておく。曲がった面を展開するときに要る。
+    guideSamples_[entity.id.ToString()] = built.samples;
     guideTable_ = table;
     RefreshGuideTable();
     RefreshPartEdges();

@@ -2,6 +2,7 @@
 //
 // 説明書は人が読むものなので、直し忘れても誰も気づかない。
 // だから、機械で確かめられるところは全部ここで確かめる。
+#include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ExportPanel.h"
 #include "kachakacha/base/TestHarness.h"
 
@@ -39,6 +40,12 @@ namespace {
 [[nodiscard]] std::string Manual()
 {
     return ReadFile(RepoRoot() / "docs/manual/README.md");
+}
+
+//! 作り方の手順書。押すボタンと入れる数字を順に書いたもの。
+[[nodiscard]] std::string HowTo()
+{
+    return ReadFile(RepoRoot() / "docs/manual/作り方.md");
 }
 
 //! 説明書が指している図の名前を集める。![...](images/xxx.png) の形。
@@ -217,6 +224,130 @@ KACHA_V2_TEST(manual, 図を撮る名前をすべて挙げている)
         const std::string stem = name.substr(3, name.size() - 3 - 4);
         Require(text.find("`" + stem + "`") != std::string::npos,
             "17章に載っている名前: " + stem);
+    }
+}
+
+KACHA_V2_TEST(manual, 作り方の手順書がある)
+{
+    const std::string text = HowTo();
+    Require(text.size() > 6000, "中身がある");
+    // 工程は10章。抜けたら気づけるように、見出しを数える。
+    int chapters = 0;
+    std::size_t at = 0;
+    while ((at = text.find("\n## ", at)) != std::string::npos) {
+        ++chapters;
+        at += 4;
+    }
+    Require(chapters >= 10, "章が10以上ある");
+}
+
+KACHA_V2_TEST(manual, 手順書が各工程の思想を書いている)
+{
+    // 「なぜそうするか」を飛ばすと、断られたときに何を直せばよいか分からなくなる。
+    const std::string text = HowTo();
+    int philosophy = 0;
+    std::size_t at = 0;
+    while ((at = text.find("### 思想", at)) != std::string::npos) {
+        ++philosophy;
+        at += 4;
+    }
+    Require(philosophy >= 7, "思想の節が7つ以上ある");
+}
+
+KACHA_V2_TEST(manual, 手順書の書き出しの表が実装と同じ)
+{
+    // README と同じ検査を手順書にもかける。片方だけ古くなるのを防ぐ。
+    const std::string text = HowTo();
+    std::istringstream stream(text);
+    std::string line;
+    int checked = 0;
+    while (std::getline(stream, line)) {
+        if (line.empty() || line.front() != '|') {
+            continue;
+        }
+        const auto cells = Cells(line);
+        if (cells.size() != 2) {
+            continue;
+        }
+        for (ExportTarget target : {ExportTarget::VisibleParts, ExportTarget::SelectedParts,
+                 ExportTarget::SelectedFabricationPanels, ExportTarget::CurrentPattern,
+                 ExportTarget::SelectedWires, ExportTarget::Project}) {
+            if (cells[0] != std::string(ExportTargetNameJa(target))) {
+                continue;
+            }
+            std::string expected;
+            for (ExportFormat format : AllowedFormatsFor(target)) {
+                if (!expected.empty()) {
+                    expected += " / ";
+                }
+                expected += std::string(ExportFormatNameJa(format));
+            }
+            RequireEqual(cells[1], expected, "手順書の形式が実装と同じ: " + cells[0]);
+            ++checked;
+        }
+    }
+    RequireEqual(std::to_string(checked), std::string("6"), "6つの対象を全部見た");
+}
+
+KACHA_V2_TEST(manual, 手順書が挙げている番号が台帳にある)
+{
+    const std::string text = HowTo();
+    const std::string catalog = ReadFile(RepoRoot() / "docs/v2/diagnostic-catalog.md");
+    int found = 0;
+    for (std::size_t index = 0; index + 8 <= text.size(); ++index) {
+        if (text.compare(index, 1, "`") != 0) {
+            continue;
+        }
+        const std::size_t end = text.find('`', index + 1);
+        if (end == std::string::npos) {
+            continue;
+        }
+        const std::string token = text.substr(index + 1, end - index - 1);
+        if (token.size() < 7 || token.size() > 10 || token.find('-') == std::string::npos) {
+            continue;
+        }
+        bool looksLikeCode = true;
+        for (const char letter : token) {
+            const bool upper = letter >= 'A' && letter <= 'Z';
+            const bool digit = letter >= '0' && letter <= '9';
+            if (!upper && !digit && letter != '-') {
+                looksLikeCode = false;
+                break;
+            }
+        }
+        if (!looksLikeCode) {
+            continue;
+        }
+        Require(catalog.find("| " + token + " |") != std::string::npos,
+            "台帳にある番号: " + token);
+        ++found;
+    }
+    Require(found >= 10, "番号を10以上挙げている");
+}
+
+KACHA_V2_TEST(manual, 手順書がショートカットを台帳どおりに書いている)
+{
+    // 押すキーが実装と違うと、そのとおりに押しても動かない。
+    const std::string text = HowTo();
+    const std::pair<const char*, const char*> keys[] = {
+        {"file.new", "Ctrl+N"}, {"file.open", "Ctrl+O"}, {"file.save", "Ctrl+S"},
+        {"file.save_as", "Ctrl+Shift+S"}, {"edit.undo", "Ctrl+Z"},
+        {"edit.redo", "Ctrl+Y"}, {"draw.line", "L"}, {"draw.circle", "C"},
+        {"draw.arc", "A"}, {"view.fit_all", "F"}, {"part.extrude", "X"},
+    };
+    for (const auto& entry : keys) {
+        bool foundInCatalog = false;
+        for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+            if (command.id != entry.first) {
+                continue;
+            }
+            foundInCatalog = true;
+            RequireEqual(std::string(command.defaultShortcut), std::string(entry.second),
+                std::string("台帳のショートカット: ") + entry.first);
+        }
+        Require(foundInCatalog, std::string("台帳にある: ") + entry.first);
+        Require(text.find(std::string("`") + entry.second + "`") != std::string::npos,
+            std::string("手順書に書いてある: ") + entry.second);
     }
 }
 

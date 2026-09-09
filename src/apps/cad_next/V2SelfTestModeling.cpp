@@ -425,7 +425,7 @@ namespace {
     window.RunCommand("fabrication.create");
     return Explain((std::string("何を選ぶか言う(") + window.StatusText().toStdString()
                        + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("部品を1つ")));
+        window.StatusText().contains(QStringLiteral("部品か形状ガイド")));
 }
 
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)

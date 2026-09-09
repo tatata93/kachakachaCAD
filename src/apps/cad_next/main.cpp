@@ -1126,6 +1126,98 @@ struct SelfTestCase {
         window.Session().GetDocument().Revision() == before);
 }
 
+//! 閉じた矩形を1つ引いて選ぶ。形をつくる試験の下ごしらえ。
+[[nodiscard]] bool DrawClosedRectangle(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    viewport.ClickAt(QPointF(viewport.width() * 0.35, viewport.height() * 0.35));
+    viewport.HoverAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
+    viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    return !viewport.Selection().entityIds.empty();
+}
+
+[[nodiscard]] int CountParts(V2MainWindow& window)
+{
+    int parts = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Part) {
+            ++parts;
+        }
+    }
+    return parts;
+}
+
+[[nodiscard]] bool CaseExtrudeMakesAPart(V2MainWindow& window)
+{
+    // 閉じた矩形を押し出すと部品が1つできる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("部品が1つできる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountParts(window) == 1)) {
+        return false;
+    }
+    // 厚みと体積を言う。言わないと、狙った板厚になったか確かめられない。
+    return Explain("厚みを言う", window.StatusText().contains(QStringLiteral("mm")));
+}
+
+[[nodiscard]] bool CasePartCommandsNeedSelection(V2MainWindow& window)
+{
+    // 何も選ばずに押したら、何を選べばよいかを言う。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    const std::uint64_t before = window.Session().GetDocument().Revision();
+    for (const char* id : {"part.extrude", "part.from_wire_cage", "part.boolean_add",
+             "part.boolean_cut"}) {
+        window.RunCommand(id);
+        if (!Explain((std::string("理由が出る: ") + id).c_str(),
+                !window.StatusText().isEmpty())) {
+            return false;
+        }
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == before);
+}
+
+[[nodiscard]] bool CaseExtrudedPartSurvivesSaveAndOpen(V2MainWindow& window)
+{
+    // 作り方は文書に残る。形そのものは残さないが、作り直せる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_part.kcd2");
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    window.SetPathChooser([&path](bool) { return QString::fromStdString(path); });
+    window.RunCommand("file.save_as");
+    if (!Explain("保存できる",
+            window.StatusText().contains(QStringLiteral("保存しました")))) {
+        return false;
+    }
+    window.RunCommand("file.new");
+    const bool opened = window.OpenDocumentFile(QString::fromStdString(path));
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    if (!Explain("開き直せる", opened)) {
+        return false;
+    }
+    return Explain((std::string("部品が戻る(実際は ")
+                       + std::to_string(CountParts(window)) + ")").c_str(),
+        CountParts(window) == 1);
+}
+
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)
 {
     // 配る見本が開けて、線が画面へ並ぶこと(WP-12)。
@@ -1219,6 +1311,9 @@ const SelfTestCase kCases[] = {
     {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
     {"家で等角ビューへ戻る", &CaseViewPanelHome},
     {"作業平面を作って作業中にできる", &CaseWorkPlaneIsCreatedAndActivated},
+    {"押し出しで部品ができる", &CaseExtrudeMakesAPart},
+    {"部品のコマンドは選択が要る", &CasePartCommandsNeedSelection},
+    {"押し出した部品が保存して開き直しても残る", &CaseExtrudedPartSurvivesSaveAndOpen},
     {"グリッドの間隔を変えられる", &CaseGridSpacingCycles},
     {"分割で線が増える", &CaseWireSplitMakesMorePieces},
     {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},

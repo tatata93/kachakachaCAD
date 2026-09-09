@@ -21,6 +21,9 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/document/Document.h"
+#include "kachakacha/modeling/GuideSurfaceResult.h"
+
+#include <map>
 
 #include <QColor>
 #include <QMainWindow>
@@ -168,6 +171,27 @@ private:
     void RunExportCommand(std::string_view id);
     //! 出す先・開く先を尋ねる。差し替えが無ければ Qt のダイアログを出す。
     [[nodiscard]] QString AskForPath(bool forSave);
+    //! 形のコマンドか。V2PartCommands.cpp が持つ。
+    [[nodiscard]] static bool IsPartCommand(std::string_view id);
+    void RunPartCommand(std::string_view id);
+    void RunExtrude();
+    void RunWireCage();
+    void RunBoolean(bool cut);
+    //! 出来た部品を文書へ足す。形は持たせず、作り方だけを持たせる。
+    void AddPartFeature(kachakacha::v2::domain::FeatureType type,
+        kachakacha::v2::domain::FeatureDefinition definition,
+        kachakacha::v2::modeling::KernelShapeHandle handle,
+        const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
+        const char* labelJa);
+    //! 部品の辺を場面へ出し直す。立体そのものはまだ描かない。
+    void RefreshPartEdges();
+    //! 押し出しの距離。数値入力が付くまでの既定値(プラ板0.5mm)。
+    double extrudeDistanceMm_ = 0.5;
+    //! 出来た立体の handle。文書ではなく画面側が覚える。
+    std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
+    //! 部品を見せるための辺。
+    std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> partEdges_;
+
     //! 基準のコマンドか。V2PlaneCommands.cpp が持つ。
     [[nodiscard]] static bool IsPlaneCommand(std::string_view id);
     void RunPlaneCommand(std::string_view id);

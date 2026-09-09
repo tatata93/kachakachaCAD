@@ -1085,6 +1085,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunFileCommand(id);
         return;
     }
+    if (IsPartCommand(id)) {
+        RunPartCommand(id);
+        return;
+    }
     if (IsPlaneCommand(id)) {
         RunPlaneCommand(id);
         return;

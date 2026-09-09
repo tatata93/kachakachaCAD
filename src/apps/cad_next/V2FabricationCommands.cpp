@@ -56,8 +56,11 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         }
         processContext_.fabricationBuilt = !fabricationPanels_.empty();
         SetProcessContext(processContext_);
-        SetStatus(QStringLiteral("組立状態を %1%% にしました"
-                                 "(どの状態でも辺の長さは変わりません)。")
+        // 折り角度がまだ決まっていないので、形は動かない。
+        // 「変えました」とだけ言うと、動かないのを不具合だと思わせる。
+        SetStatus(QStringLiteral(
+            "組立状態を %1%% にしました。折り角度がまだ決まっていないので、"
+            "形はまだ動きません(どの状態でも辺の長さは変わりません)。")
                 .arg(assemblyPercent_));
         return;
     }

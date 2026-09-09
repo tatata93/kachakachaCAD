@@ -1156,6 +1156,107 @@ namespace {
                        + ")").c_str(), computed.contains(QStringLiteral("133.3")));
 }
 
+//! 押して、掴んだものを確かめて、離す。掴みっぱなしにしない。
+[[nodiscard]] V2Viewport::ViewPress PressAndRelease(V2Viewport& viewport,
+    const QPointF& at)
+{
+    const auto result = viewport.PressViewNavigator(at,
+        kachakacha::v2::view::AxisArrowModifier::None);
+    viewport.ReleaseViewGadget(at);
+    viewport.ReleaseViewCube(at);
+    return result;
+}
+
+[[nodiscard]] bool CaseNavigatorTargetsAreGrabbable(V2MainWindow& window)
+{
+    // 「キューブがつかめない」「輪がつかみにくい」を、押す道そのもので確かめる。
+    // これまでの試験は PressViewCube を直に呼んでいたので、
+    // ボタンや輪が先に横取りしていても気づけなかった。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    QApplication::processEvents();
+    const QRectF cube = viewport.ViewCubeRect();
+    if (!Explain((std::string("キューブが出ている(一辺 ")
+                     + std::to_string(static_cast<int>(cube.width())) + "px)").c_str(),
+            cube.width() >= 56.0)) {
+        return false;
+    }
+    // 中心はもちろん、四隅の少し内側でもキューブが掴めること。
+    const QPointF inside[] = {
+        cube.center(),
+        QPointF(cube.left() + 6.0, cube.top() + 6.0),
+        QPointF(cube.right() - 6.0, cube.top() + 6.0),
+        QPointF(cube.left() + 6.0, cube.bottom() - 6.0),
+        QPointF(cube.right() - 6.0, cube.bottom() - 6.0),
+    };
+    for (const QPointF& at : inside) {
+        if (!Explain("キューブの上ではキューブを掴む",
+                PressAndRelease(viewport, at) == V2Viewport::ViewPress::Cube)) {
+            return false;
+        }
+    }
+    // ボタンは中心を押せば必ずそのボタンが掴めること。
+    const auto layout = viewport.ViewGadgets();
+    int buttons = 0;
+    for (std::size_t index = 0; index < layout.gadgets.size(); ++index) {
+        const auto& gadget = layout.gadgets[index];
+        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
+            continue;
+        }
+        ++buttons;
+        const QPointF at(gadget.CenterXPx(), gadget.CenterYPx());
+        if (!Explain("ボタンの真ん中でそのボタンを掴む",
+                PressAndRelease(viewport, at) == V2Viewport::ViewPress::Button)) {
+            return false;
+        }
+    }
+    return Explain((std::string("ボタンが8つある(実際は ") + std::to_string(buttons)
+                       + ")").c_str(), buttons == 8);
+}
+
+[[nodiscard]] bool CaseRingIsGrabbableWithSlack(V2MainWindow& window)
+{
+    // 線の上を1pxの精度でなぞらないと掴めない、では使えない。
+    // 線から少し外れたところでも掴めること。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    QApplication::processEvents();
+    const auto layout = viewport.ViewGadgets();
+    if (!Explain("輪が3本ある", layout.rings.size() == 3)) {
+        return false;
+    }
+    const QRectF cube = viewport.ViewCubeRect();
+    int tried = 0;
+    for (const auto& ring : layout.rings) {
+        for (std::size_t index = 0; index < ring.points.size(); ++index) {
+            const QPointF on(ring.points[index].x, ring.points[index].y);
+            // キューブの上はキューブが勝つ。そこは輪の出番ではない。
+            if (cube.contains(on)) {
+                continue;
+            }
+            // 線の外側へ 6px ずらしても掴めること。
+            const double dx = on.x() - cube.center().x();
+            const double dy = on.y() - cube.center().y();
+            const double length = std::hypot(dx, dy);
+            if (length < 1.0) {
+                continue;
+            }
+            const QPointF off(on.x() + dx / length * 6.0, on.y() + dy / length * 6.0);
+            if (cube.contains(off)) {
+                continue;
+            }
+            ++tried;
+            if (!Explain("線から6pxずれても輪を掴める",
+                    PressAndRelease(viewport, off) == V2Viewport::ViewPress::Ring)) {
+                return false;
+            }
+            break; // 1本につき1か所ためせば足りる。
+        }
+    }
+    return Explain((std::string("3本とも試した(実際は ") + std::to_string(tried)
+                       + ")").c_str(), tried == 3);
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1200,6 +1301,8 @@ std::vector<SelfTestCase> BasicCases()
         {"視点の操作板に部品がそろっている", &CaseViewPanelHasEveryControl},
         {"操作板の回す部品は15度だけ回る", &CaseViewPanelTurnsFifteenDegrees},
         {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
+        {"キューブもボタンも押した道で掴める", &CaseNavigatorTargetsAreGrabbable},
+        {"輪は線から少しずれても掴める", &CaseRingIsGrabbableWithSlack},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
         {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
         {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},

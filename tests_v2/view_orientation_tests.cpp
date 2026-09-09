@@ -557,6 +557,8 @@ KACHA_V2_TEST(view_orientation, 大きさが0なら矢印は出さない)
 namespace {
 
 using kachakacha::v2::view::BuildViewGadgets;
+using kachakacha::v2::view::FitViewGadgetsIntoScreen;
+using kachakacha::v2::view::ViewCubeAtScreen;
 using kachakacha::v2::view::RotateByScreenAxis;
 using kachakacha::v2::view::ViewButtonAtScreen;
 using kachakacha::v2::view::ViewGadgetAtScreen;
@@ -843,6 +845,118 @@ KACHA_V2_TEST(view_orientation, 上の見当が法線と平行でも正対でき
     const auto again = OrientationFacing(Vector3{0.0, 0.0, 1.0}, Vector3{0.0, 0.0, 1.0});
     Require(again.HasValue() && AngleBetween(facing.Value(), again.Value()) < 1e-12,
         "毎回同じ");
+}
+
+KACHA_V2_TEST(view_orientation, キューブは操作板と同じ入れ物に入っている)
+{
+    // 別に持っていたころ、操作板が画面へ入るように寄せられると
+    // キューブだけ動かず、見えている場所と押せる場所がずれた。
+    const auto layout = Panel();
+    Require(layout.cubeSizePx > 0.0, "キューブの大きさがある");
+    Require(ViewCubeAtScreen(layout, kCenterX, kCenterY), "中心はキューブの上");
+    // 操作板の四角がキューブを含んでいること。含まないと、寄せる判断が狂う。
+    Require(layout.xPx <= layout.cubeXPx, "左を含む");
+    Require(layout.yPx <= layout.cubeYPx, "上を含む");
+    Require(layout.xPx + layout.widthPx >= layout.cubeXPx + layout.cubeSizePx,
+        "右を含む");
+    Require(layout.yPx + layout.heightPx >= layout.cubeYPx + layout.cubeSizePx,
+        "下を含む");
+}
+
+KACHA_V2_TEST(view_orientation, 寄せるとキューブも一緒に動く)
+{
+    // ここがずれると、見えているキューブを押しても何も起きない。
+    auto layout = BuildViewGadgets(20.0, 20.0, kachakacha::v2::view::kNavigatorScalePx,
+        Isometric());
+    const double beforeX = layout.cubeXPx;
+    const double beforeY = layout.cubeYPx;
+    const double offsetX = layout.xPx;
+    const double offsetY = layout.yPx;
+    Require(offsetX < 0.0 || offsetY < 0.0, "この置き方でははみ出している");
+    Require(FitViewGadgetsIntoScreen(layout, 900.0, 900.0), "寄せれば入る");
+    Require(std::abs((layout.cubeXPx - beforeX) - (layout.xPx - offsetX)) < 1e-9,
+        "キューブも同じだけ動く(横)");
+    Require(std::abs((layout.cubeYPx - beforeY) - (layout.yPx - offsetY)) < 1e-9,
+        "キューブも同じだけ動く(縦)");
+    // 動いた先で、キューブの中心はやはりキューブの上である。
+    Require(ViewCubeAtScreen(layout, layout.cubeXPx + layout.cubeSizePx * 0.5,
+                layout.cubeYPx + layout.cubeSizePx * 0.5),
+        "動いた先でも押せる");
+}
+
+KACHA_V2_TEST(view_orientation, キューブの上では輪を返さない)
+{
+    // 輪は真横を向くとキューブの中を通る。そこで輪を返すと、
+    // 光る場所と、押したときに実際に動く物が食い違う。
+    const auto layout = Panel();
+    Require(!ViewGadgetAtScreen(layout, kCenterX, kCenterY).has_value(),
+        "キューブの中心では部品を返さない");
+    Require(ViewCubeAtScreen(layout, kCenterX, kCenterY), "そこはキューブである");
+}
+
+KACHA_V2_TEST(view_orientation, どのボタンも指で狙える大きさがある)
+{
+    // 狙って外れる的は、無いのと同じである。
+    const auto layout = Panel();
+    int buttons = 0;
+    for (const auto& gadget : layout.gadgets) {
+        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
+            // 矢じりも同じ決まりで見る。
+            Require(gadget.widthPx >= kachakacha::v2::view::kViewRingHeadSizePx,
+                "矢じりの幅が足りている");
+            Require(gadget.heightPx >= kachakacha::v2::view::kViewRingHeadSizePx,
+                "矢じりの高さが足りている");
+            continue;
+        }
+        ++buttons;
+        Require(gadget.widthPx >= kachakacha::v2::view::kViewButtonMinimumPx,
+            "ボタンの幅が足りている");
+        Require(gadget.heightPx >= kachakacha::v2::view::kViewButtonMinimumPx,
+            "ボタンの高さが足りている");
+    }
+    Require(buttons == 8, "ボタンは8つ(家・ロール2・上下左右4・正対)");
+    Require(kachakacha::v2::view::kViewRingGrabPx >= 10.0,
+        "輪は線から10px以上で掴める");
+    Require(kachakacha::v2::view::kNavigatorScalePx * 2.0 >= 56.0,
+        "キューブの一辺は56px以上");
+}
+
+KACHA_V2_TEST(view_orientation, ボタンはキューブと重ならない)
+{
+    // 重なると、どちらを押したのかが決まらない。
+    const auto layout = Panel();
+    for (const auto& gadget : layout.gadgets) {
+        if (gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing) {
+            continue;
+        }
+        const bool apart = gadget.xPx + gadget.widthPx <= layout.cubeXPx
+            || gadget.xPx >= layout.cubeXPx + layout.cubeSizePx
+            || gadget.yPx + gadget.heightPx <= layout.cubeYPx
+            || gadget.yPx >= layout.cubeYPx + layout.cubeSizePx;
+        Require(apart,
+            std::string("キューブと離れている: ")
+                + std::string(kachakacha::v2::view::ViewGadgetDirectionNameJa(
+                    gadget.direction)));
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 矢じりはキューブの外にある)
+{
+    // キューブの上に矢じりがあると、キューブが勝つので矢じりが押せない。
+    // どの視点でもそうなっていないことを、ぐるりと回して見る。
+    for (int step = 0; step < 12; ++step) {
+        const auto turned = RotateByScreenAxis(Isometric(),
+            kachakacha::v2::view::ViewGadgetDirection::Left, step * 30.0);
+        Require(turned.HasValue(), "回せる");
+        const auto layout = BuildViewGadgets(kCenterX, kCenterY,
+            kachakacha::v2::view::kNavigatorScalePx, turned.Value());
+        for (const auto& ring : layout.rings) {
+            for (const auto& head : {ring.positiveHead, ring.negativeHead}) {
+                Require(!ViewCubeAtScreen(layout, head.x, head.y),
+                    "矢じりがキューブの中に入っていない");
+            }
+        }
+    }
 }
 
 KACHA_V2_TEST_MAIN("view_orientation_tests")

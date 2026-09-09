@@ -695,23 +695,32 @@ ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx, double sca
             kViewRingHeadSizePx, kViewRingHeadSizePx);
     }
 
-    // 画面基準の矢印(位置固定)。下=左右回し、右=上下回し、上=ロール。V1と同じ寸法。
+    // 画面基準の矢印(位置固定)。下=左右回し、右=上下回し、上=ロール。
+    //
+    // どのボタンも短い辺を kViewButtonMinimumPx 以上にする。
+    // これより小さいと、狙って外れる。狙って外れる的は、無いのと同じである。
+    // 置き場所はキューブ(半径 scalePx)の外側。重ねると、どちらを押したのか決まらない。
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Left,
-        RotationAxis::Y, centerXPx - 48.0, centerYPx + 52.0, 38.0, 22.0);
+        RotationAxis::Y, centerXPx - 65.0, centerYPx + 71.0, 52.0, 30.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Right,
-        RotationAxis::Y, centerXPx + 10.0, centerYPx + 52.0, 38.0, 22.0);
+        RotationAxis::Y, centerXPx + 13.0, centerYPx + 71.0, 52.0, 30.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Up,
-        RotationAxis::X, centerXPx + 52.0, centerYPx - 46.0, 22.0, 38.0);
+        RotationAxis::X, centerXPx + 71.0, centerYPx - 63.0, 30.0, 52.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Orbit, ViewGadgetDirection::Down,
-        RotationAxis::X, centerXPx + 52.0, centerYPx + 8.0, 22.0, 38.0);
+        RotationAxis::X, centerXPx + 71.0, centerYPx + 11.0, 30.0, 52.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Positive,
-        RotationAxis::Z, centerXPx - 33.0, centerYPx - 72.0, 22.0, 20.0);
+        RotationAxis::Z, centerXPx - 45.0, centerYPx - 98.0, 30.0, 28.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Roll, ViewGadgetDirection::Negative,
-        RotationAxis::Z, centerXPx + 11.0, centerYPx - 72.0, 22.0, 20.0);
+        RotationAxis::Z, centerXPx + 15.0, centerYPx - 98.0, 30.0, 28.0);
     AddGadget(layout.gadgets, ViewGadgetKind::Home, ViewGadgetDirection::Positive,
-        RotationAxis::X, centerXPx - 94.0, centerYPx - 72.0, 26.0, 24.0);
+        RotationAxis::X, centerXPx - 128.0, centerYPx - 98.0, 36.0, 32.0);
     AddGadget(layout.gadgets, ViewGadgetKind::AlignSelection, ViewGadgetDirection::Positive,
-        RotationAxis::X, centerXPx - 50.0, centerYPx + 80.0, 100.0, 26.0);
+        RotationAxis::X, centerXPx - 68.0, centerYPx + 109.0, 136.0, 32.0);
+
+    // キューブも同じ入れ物へ入れる。別に持つと、寄せたときにずれる。
+    layout.cubeSizePx = scalePx * 2.0;
+    layout.cubeXPx = centerXPx - scalePx;
+    layout.cubeYPx = centerYPx - scalePx;
 
     double minX = layout.gadgets.front().xPx;
     double minY = layout.gadgets.front().yPx;
@@ -731,6 +740,10 @@ ViewGadgetLayout BuildViewGadgets(double centerXPx, double centerYPx, double sca
             maxY = std::max(maxY, point.y);
         }
     }
+    minX = std::min(minX, layout.cubeXPx);
+    minY = std::min(minY, layout.cubeYPx);
+    maxX = std::max(maxX, layout.cubeXPx + layout.cubeSizePx);
+    maxY = std::max(maxY, layout.cubeYPx + layout.cubeSizePx);
     layout.xPx = minX;
     layout.yPx = minY;
     layout.widthPx = maxX - minX;
@@ -775,9 +788,20 @@ bool FitViewGadgetsIntoScreen(ViewGadgetLayout& layout, double widthPx, double h
         ring.negativeHead.x += dx;
         ring.negativeHead.y += dy;
     }
+    layout.cubeXPx += dx;
+    layout.cubeYPx += dy;
     layout.xPx += dx;
     layout.yPx += dy;
     return true;
+}
+
+bool ViewCubeAtScreen(const ViewGadgetLayout& layout, double xPx, double yPx) noexcept
+{
+    if (!(layout.cubeSizePx > 0.0)) {
+        return false;
+    }
+    return xPx >= layout.cubeXPx && xPx <= layout.cubeXPx + layout.cubeSizePx
+        && yPx >= layout.cubeYPx && yPx <= layout.cubeYPx + layout.cubeSizePx;
 }
 
 std::optional<std::size_t> ViewButtonAtScreen(const ViewGadgetLayout& layout, double xPx,
@@ -849,6 +873,11 @@ std::optional<std::size_t> ViewGadgetAtScreen(const ViewGadgetLayout& layout, do
     const auto button = ViewButtonAtScreen(layout, xPx, yPx);
     if (button.has_value()) {
         return button;
+    }
+    if (ViewCubeAtScreen(layout, xPx, yPx)) {
+        // キューブの上では輪を返さない。押したときはキューブが勝つので、
+        // ここで輪を返すと、光る場所と実際に動く物が食い違う。
+        return std::nullopt;
     }
     return ViewRingAtScreen(layout, xPx, yPx);
 }

@@ -295,23 +295,41 @@ struct ViewAxisRing {
 struct ViewGadgetLayout {
     std::vector<ViewGadget> gadgets;
     std::vector<ViewAxisRing> rings;
-    //! 操作板が占める四角。画面に入るかを見るのに使う。
+    //! キューブの四角。**ここに入れておくのが肝である。**
+    //!
+    //! 以前はキューブの場所を画面側が別に持っていた。操作板が画面へ入るように
+    //! 寄せられると、輪と矢印だけが動いてキューブは動かず、
+    //! 見えている場所と押せる場所がずれた。同じ入れ物へ入れておけば、ずれない。
+    double cubeXPx = 0.0;
+    double cubeYPx = 0.0;
+    double cubeSizePx = 0.0;
+    //! 操作板が占める四角。画面に入るかを見るのに使う。キューブも含む。
     double xPx = 0.0;
     double yPx = 0.0;
     double widthPx = 0.0;
     double heightPx = 0.0;
 };
 
-//! V1 と同じ寸法。キューブは一辺2(-1..+1)で、1単位を kNavigatorScalePx で写す。
-inline constexpr double kNavigatorScalePx = 22.0;
+//! キューブは一辺2(-1..+1)で、1単位を kNavigatorScalePx で写す。
+//! つまり見た目の一辺は、この2倍の px になる。
+//!
+//! 22 では一辺44pxで、掴もうとしても外れる。狙って外れる的は、無いのと同じである。
+//! 30 にして一辺60pxにした。
+inline constexpr double kNavigatorScalePx = 30.0;
 //! 輪の半径。キューブ(半径1)より外へ出す。
 inline constexpr double kViewRingRadius = 1.95;
 //! 輪を何点で描くか。
 inline constexpr int kViewRingSampleCount = 64;
-//! 矢じりの当たり判定の一辺。
-inline constexpr double kViewRingHeadSizePx = 18.0;
+//! 矢じりの当たり判定の一辺。**描く座と同じ大きさにする。**
+//! 見えている丸より当たり判定が小さいと、押したのに反応しない。
+inline constexpr double kViewRingHeadSizePx = 26.0;
 //! 輪の線からこの距離までは、輪を押したとみなす。ここが掴みやすさの肝。
-inline constexpr double kViewRingGrabPx = 5.0;
+//!
+//! 5px では、線の上を正確になぞらないと掴めなかった。
+//! 人の手は1pxの精度で止まらない。12px にする。
+inline constexpr double kViewRingGrabPx = 12.0;
+//! ボタン1つの、いちばん短い辺。これより小さい的は作らない。
+inline constexpr double kViewButtonMinimumPx = 26.0;
 
 //! キューブの中心と大きさから操作板を並べる。
 //! 輪はキューブと同じ投影で描くので、姿勢を渡す。
@@ -322,6 +340,11 @@ inline constexpr double kViewRingGrabPx = 5.0;
 //! 動かしても入らない(画面より操作板が大きい)ときは false を返し、何も変えない。
 [[nodiscard]] bool FitViewGadgetsIntoScreen(ViewGadgetLayout& layout, double widthPx,
     double heightPx);
+
+//! キューブの上か。ボタンの次、輪より先に見る。
+//! 輪は真横を向くとキューブの中を通るので、輪を先に見るとキューブが押せなくなる。
+[[nodiscard]] bool ViewCubeAtScreen(const ViewGadgetLayout& layout, double xPx,
+    double yPx) noexcept;
 
 //! 輪ではない部品(家・ロール・上下左右・正対)を拾う。キューブより先に見る。
 [[nodiscard]] std::optional<std::size_t> ViewButtonAtScreen(

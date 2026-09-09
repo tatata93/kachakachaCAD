@@ -611,13 +611,14 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 
 QRectF V2Viewport::ViewCubeRect() const
 {
-    // V1(ADR 0023)と同じ置き方。中心は右端から84px、上から74px。
-    // キューブは一辺2(-1..+1)を kNavigatorScalePx で写すので、見た目の一辺はその2倍。
-    const double scale = kachakacha::v2::view::kNavigatorScalePx;
-    const double size = scale * 2.0;
-    const double centerX = static_cast<double>(width()) - 84.0;
-    const double centerY = 74.0;
-    return QRectF(centerX - size * 0.5, centerY - size * 0.5, size, size);
+    // キューブの場所は操作板が持っている。ここで別に計算しない。
+    // 別に計算していたころ、操作板が画面へ入るように寄せられると
+    // キューブだけ動かず、見えている場所と押せる場所がずれた。
+    const auto layout = ViewGadgets();
+    if (!(layout.cubeSizePx > 0.0)) {
+        return QRectF();
+    }
+    return QRectF(layout.cubeXPx, layout.cubeYPx, layout.cubeSizePx, layout.cubeSizePx);
 }
 
 std::optional<kachakacha::v2::view::ViewCubeZone> V2Viewport::ViewCubeZoneAtScreen(
@@ -1027,8 +1028,13 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawPreview(painter);
     DrawSnap(painter);
     DrawScaleBar(painter);
-    DrawViewCube(painter);
+    // 輪 → キューブ → ボタン の順で描く。
+    // キューブを先に描くと、真横を向いた輪がキューブの上を横切って、
+    // キューブが押せないように見える。押すときはキューブが勝つので、
+    // 描く順も合わせる。
     DrawViewGadgets(painter);
+    DrawViewCube(painter);
+    DrawViewButtonsOnTop(painter);
     DrawCursorInput(painter);
 }
 
@@ -1208,6 +1214,8 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         return;
     }
     // 操作板の上に来たら光らせる。押せる場所が目で分かるようにする。
+    // 見る順は押すときと同じ(ボタン → キューブ → 輪)。
+    // 違う順で見ると、光る場所と実際に動く物が食い違う。
     const auto gadget = ViewGadgetAt(event->position());
     if (gadget.has_value() != gadgetHoverIndex_.has_value()
         || (gadget.has_value() && *gadget != *gadgetHoverIndex_)) {
@@ -1247,15 +1255,8 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     } else if ((event->modifiers() & Qt::ControlModifier) != 0) {
         modifier = kachakacha::v2::view::AxisArrowModifier::Coarse;
     }
-    // V1(ADR 0023)と同じ順で見る。ボタン → キューブ → 輪。
-    // 輪を先に見ると、キューブの面が輪の線に隠れて押せなくなる。
-    if (PressViewButton(event->position(), modifier)) {
-        return;
-    }
-    if (PressViewCube(event->position())) {
-        return;
-    }
-    if (PressViewRing(event->position(), modifier)) {
+    // 順は PressViewNavigator が持っている。ここで書き写さない。
+    if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {

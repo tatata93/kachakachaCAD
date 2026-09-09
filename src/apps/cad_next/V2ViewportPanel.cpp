@@ -21,17 +21,20 @@ namespace {
 //! 別の値にすると、キューブと操作板で押した感じが変わってしまう。
 constexpr double kGadgetDragThresholdPx = 3.0;
 
-//! 矢じりの下に敷く丸い座の大きさ。キューブの大きさに対する割合。
-//! 当たり判定(kViewGadgetButtonRatio)より少し小さくして、座の外側でも押せるようにする。
-constexpr double kGrabSeatRatio = 0.26;
-
 } // namespace
+
+QPointF V2Viewport::NavigatorCenter() const
+{
+    // 操作板の中心。右上に置く。ここから先の場所は全部 core が決める。
+    // 画面側で別に持つと、寄せたときにずれる。
+    return QPointF(static_cast<double>(width()) - 110.0, 110.0);
+}
 
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
 {
-    const QRectF box = ViewCubeRect();
-    auto layout = kachakacha::v2::view::BuildViewGadgets(box.center().x(),
-        box.center().y(), kachakacha::v2::view::kNavigatorScalePx, orientation_);
+    const QPointF center = NavigatorCenter();
+    auto layout = kachakacha::v2::view::BuildViewGadgets(center.x(), center.y(),
+        kachakacha::v2::view::kNavigatorScalePx, orientation_);
     // はみ出していたら寄せる。入らなければ空にして、出さない判断をここで済ませる。
     if (!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout,
             static_cast<double>(width()), static_cast<double>(height()))) {
@@ -89,6 +92,21 @@ bool V2Viewport::PressViewButton(const QPointF& position,
     kachakacha::v2::view::AxisArrowModifier modifier)
 {
     return PressViewGadgetIndex(position, ViewButtonAt(position), modifier);
+}
+
+V2Viewport::ViewPress V2Viewport::PressViewNavigator(const QPointF& position,
+    kachakacha::v2::view::AxisArrowModifier modifier)
+{
+    if (PressViewButton(position, modifier)) {
+        return ViewPress::Button;
+    }
+    if (PressViewCube(position)) {
+        return ViewPress::Cube;
+    }
+    if (PressViewRing(position, modifier)) {
+        return ViewPress::Ring;
+    }
+    return ViewPress::None;
 }
 
 bool V2Viewport::PressViewRing(const QPointF& position,
@@ -257,8 +275,9 @@ void V2Viewport::DrawViewRings(QPainter& painter,
         painter.setBrush(Qt::NoBrush);
         painter.drawPolygon(path);
         // 矢じりの下に丸い座を敷く。掴めるところがどこか、目で分かるようにする。
-        // 座が無いと、細い矢じりだけが手がかりになって狙いにくい。
-        const double grab = std::max(10.0, ViewCubeRect().width() * kGrabSeatRatio);
+        // **座の大きさは当たり判定と同じにする。**
+        // 見えている丸より当たり判定が小さいと、押したのに反応しない。
+        const double grab = kachakacha::v2::view::kViewRingHeadSizePx;
         const double headSize = grab * 0.52;
         const std::pair<kachakacha::v2::geometry::ScreenPoint,
             kachakacha::v2::geometry::ScreenPoint> heads[] = {
@@ -337,6 +356,7 @@ void V2Viewport::DrawViewButtons(QPainter& painter,
 
 void V2Viewport::DrawViewGadgets(QPainter& painter) const
 {
+    // 輪だけを描く。キューブはこのあと、輪の上に描かれる。
     const auto layout = ViewGadgets();
     if (layout.gadgets.empty()) {
         return;
@@ -344,6 +364,19 @@ void V2Viewport::DrawViewGadgets(QPainter& painter) const
     painter.save();
     painter.setRenderHint(QPainter::Antialiasing, true);
     DrawViewRings(painter, layout);
+    painter.restore();
+}
+
+void V2Viewport::DrawViewButtonsOnTop(QPainter& painter) const
+{
+    // ボタンはいちばん上。キューブとは重ならないので順は見た目だけの話だが、
+    // 押す順(ボタンが最優先)と合わせておく。
+    const auto layout = ViewGadgets();
+    if (layout.gadgets.empty()) {
+        return;
+    }
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
     DrawViewButtons(painter, layout);
     painter.restore();
 }

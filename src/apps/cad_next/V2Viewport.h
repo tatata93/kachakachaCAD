@@ -152,6 +152,21 @@ public:
 
     //! ビューキューブ。画面の右上に置く。
     [[nodiscard]] QRectF ViewCubeRect() const;
+
+    //! 操作板を押した結果、何を掴んだか。
+    enum class ViewPress {
+        None,    //!< 操作板ではない。図面の操作へ回す
+        Button,  //!< 家・ロール・上下左右・正対
+        Cube,    //!< ビューキューブ
+        Ring,    //!< 回転リング
+    };
+    //! 操作板を押す。**ボタン → キューブ → 輪** の順で見る。
+    //!
+    //! 輪を先に見ると、真横を向いた輪がキューブの中を通るので、
+    //! キューブが押せなくなる。mousePressEvent もこれを呼ぶ。
+    //! 順を2か所に書くと、必ず食い違う。
+    ViewPress PressViewNavigator(const QPointF& position,
+        kachakacha::v2::view::AxisArrowModifier modifier);
     //! 画面のその位置が、キューブのどの区画か。外していれば値を持たない。
     [[nodiscard]] std::optional<kachakacha::v2::view::ViewCubeZone> ViewCubeZoneAtScreen(
         const QPointF& position) const;
@@ -247,6 +262,9 @@ private:
         double degrees, const kachakacha::v2::view::Quaternion& from);
     //! 視点の操作板を描く。使えないもの(選択が要るもの)は薄く出す。消さない。
     void DrawViewGadgets(QPainter& painter) const;
+    void DrawViewButtonsOnTop(QPainter& painter) const;
+    //! 操作板の中心。ここだけが場所を決める。
+    [[nodiscard]] QPointF NavigatorCenter() const;
     //! その矢じりが、いま指されているか押されているか。
     [[nodiscard]] bool IsRingHeadHot(kachakacha::v2::view::RotationAxis axis,
         bool positive) const;

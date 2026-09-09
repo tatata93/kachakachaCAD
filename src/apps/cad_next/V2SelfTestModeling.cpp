@@ -327,6 +327,73 @@ namespace {
     return Explain("PDFが出来ている", hasBytes);
 }
 
+//! 選んだ部品を、その形式で出して、中身のあるファイルが残るかを見る。
+[[nodiscard]] bool ExportSelectedPartsAs(V2MainWindow& window,
+    kachakacha::v2::app::ExportFormat format, const char* suffix)
+{
+    auto& dock = window.ExportDock();
+    if (!Explain("選んだ部品を対象にできる",
+            dock.ChooseTarget(kachakacha::v2::app::ExportTarget::SelectedParts))) {
+        return false;
+    }
+    if (!Explain("形式を選べる", dock.ChooseFormat(format))) {
+        return false;
+    }
+    const std::string base = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_solid");
+    std::error_code code;
+    const auto written = kachakacha::v2::io::MakePath(base + suffix);
+    std::filesystem::remove(written, code);
+    dock.ChoosePath(QString::fromStdString(base));
+    if (!Explain((std::string("出せる(理由は ") + dock.ReasonText().toStdString()
+                     + ")").c_str(), dock.CanRun())) {
+        return false;
+    }
+    if (!Explain((std::string("書き出せる(") + window.StatusText().toStdString()
+                     + ")").c_str(), dock.RunNow())) {
+        return false;
+    }
+    const bool hasBytes = std::filesystem::exists(written, code)
+        && std::filesystem::file_size(written, code) > 0;
+    std::filesystem::remove(written, code);
+    return Explain((std::string("中身のあるファイルが残る: ") + suffix).c_str(), hasBytes);
+}
+
+[[nodiscard]] bool CaseSolidExportWritesStlAndStep(V2MainWindow& window)
+{
+    // 押し出した部品を STL と STEP で出す。
+    // 同じ形から両方を出す。別々に近似して食い違わせない。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RefreshExportCounts();
+    if (!ExportSelectedPartsAs(window, kachakacha::v2::app::ExportFormat::Stl, ".stl")) {
+        return false;
+    }
+    return ExportSelectedPartsAs(window, kachakacha::v2::app::ExportFormat::Step, ".step");
+}
+
+[[nodiscard]] bool CaseSolidExportNeedsASolid(V2MainWindow& window)
+{
+    // 立体を作っていないのに STL を頼まれたら断る。
+    // 空のファイルを残さない。
+    auto& dock = window.ExportDock();
+    window.RefreshExportCounts();
+    if (!Explain("立体がないので選べない",
+            !dock.ChooseTarget(kachakacha::v2::app::ExportTarget::SelectedParts))) {
+        return false;
+    }
+    return Explain((std::string("理由が出る(") + dock.ReasonText().toStdString()
+                       + ")").c_str(), !dock.ReasonText().isEmpty());
+}
+
 [[nodiscard]] bool CasePatternNeedsFabricationFirst(V2MainWindow& window)
 {
     // 順を飛ばしたら、何を先にすればよいかを言う。
@@ -384,6 +451,8 @@ std::vector<SelfTestCase> ModelingCases()
         {"押し出した部品が保存して開き直しても残る", &CaseExtrudedPartSurvivesSaveAndOpen},
         {"引く→押し出す→部材→型紙→PDFまで通る", &CaseFabricationAndPatternEndToEnd},
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
+        {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
+        {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
         {"配る見本が開ける", &CaseSampleDocumentOpens},
     };
 }

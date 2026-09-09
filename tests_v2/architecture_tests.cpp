@@ -457,6 +457,58 @@ KACHA_V2_TEST(architecture, every_screen_source_is_built_and_type_checked)
         "typecheck.sh collects cad_next sources with a glob, not a hand-written list");
 }
 
+//! `/ "…"` の形で path をつなぐとき、その文字列に非ASCIIが入っているか。
+[[nodiscard]] bool JoinsPathWithNonAsciiLiteral(const std::string& line)
+{
+    // 注釈は見ない。説明のために書いた例まで叱ると、説明が書けなくなる。
+    const std::size_t first = line.find_first_not_of(" \t");
+    if (first != std::string::npos && line.compare(first, 2, "//") == 0) {
+        return false;
+    }
+    const std::string marker = "/ \"";
+    std::size_t at = line.find(marker);
+    while (at != std::string::npos) {
+        const std::size_t start = at + marker.size();
+        const std::size_t end = line.find('"', start);
+        if (end == std::string::npos) {
+            return false;
+        }
+        for (std::size_t index = start; index < end; ++index) {
+            if (static_cast<unsigned char>(line[index]) >= 0x80U) {
+                return true;
+            }
+        }
+        at = line.find(marker, end);
+    }
+    return false;
+}
+
+KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_literals)
+{
+    // Windows の既定コードページは 932 なので、
+    // std::filesystem::path / "作り方.md" と書くと UTF-8 の並びが
+    // CP932 として読まれ、そのファイルは開けない。雲では開けるので気づけない。
+    // 日本語の名前は io::MakePath(UTF-8) を通す。
+    std::vector<std::string> offenders;
+    for (const char* area : {"src/next", "src/next_occt", "src/apps/cad_next", "tests_v2"}) {
+        for (const SourceFile& file : CollectSourceFiles(RepoRoot() / area)) {
+            for (std::size_t index = 0; index < file.lines.size(); ++index) {
+                if (JoinsPathWithNonAsciiLiteral(file.lines[index])) {
+                    offenders.push_back(file.path.filename().string() + ":"
+                        + std::to_string(index + 1));
+                }
+            }
+        }
+    }
+    Require(offenders.empty(),
+        "no path is joined with a narrow literal holding Japanese: " + Join(offenders));
+    // 走査そのものが効いているかを、その場で確かめる。
+    Require(JoinsPathWithNonAsciiLiteral("ReadFile(Root() / \"docs/manual/作り方.md\")"),
+        "the scanner sees a Japanese path literal");
+    Require(!JoinsPathWithNonAsciiLiteral("ReadFile(Root() / \"docs/manual/README.md\")"),
+        "the scanner leaves plain ASCII paths alone");
+}
+
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)
 {
     // 走査が本当に効いているかを、その場で作った文字列で確かめる。

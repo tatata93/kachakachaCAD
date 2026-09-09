@@ -201,6 +201,16 @@ private:
     void RefreshPartEdges();
     //! 押し出しの距離。数値入力が付くまでの既定値(プラ板0.5mm)。
     double extrudeDistanceMm_ = 0.5;
+    //! 出す対象の立体を集める。selectedOnly が偽なら見えているものを集める。
+    [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle> PartShapesFor(
+        bool selectedOnly) const;
+    //! 部材のもとになった部品の立体を集める。
+    [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle>
+        PanelSourceShapes() const;
+    //! 立体を STEP か STL の中身にする。持っていなければ断る。
+    [[nodiscard]] kachakacha::v2::base::Result<std::string> MakeSolidContent(
+        const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& shapes,
+        kachakacha::v2::app::ExportFormat format);
     //! 出来た立体の handle。文書ではなく画面側が覚える。
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
     //! 部品を見せるための辺。

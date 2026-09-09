@@ -4,6 +4,7 @@
 // だから、機械で確かめられるところは全部ここで確かめる。
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/ExportPanel.h"
+#include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <filesystem>
@@ -43,9 +44,14 @@ namespace {
 }
 
 //! 作り方の手順書。押すボタンと入れる数字を順に書いたもの。
+//!
+//! 名前に日本語が入っている。Windows で
+//! std::filesystem::path("作り方.md") と書くと、UTF-8 の並びを
+//! CP932 として読まれて開けない。UTF-8 と分かっている道を通す。
 [[nodiscard]] std::string HowTo()
 {
-    return ReadFile(RepoRoot() / "docs/manual/作り方.md");
+    const std::string root = kachakacha::v2::io::FromPath(RepoRoot());
+    return ReadFile(kachakacha::v2::io::MakePath(root + "/docs/manual/作り方.md"));
 }
 
 //! 説明書が指している図の名前を集める。![...](images/xxx.png) の形。

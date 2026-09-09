@@ -175,6 +175,17 @@ V2MainWindow::V2MainWindow()
         [this](const kachakacha::v2::modeling::TransformPlan& plan) {
             ApplyTransformPlan(plan);
         });
+    // 押し出しの選択肢は窓で聞く。判断は core が持っているので、
+    // ここは窓を出して答えを渡すだけにする。
+    SetExtrudeChooser([this](const kachakacha::v2::app::ExtrudeChoice& initial,
+                          const kachakacha::v2::app::ExtrudeFacts& facts)
+                          -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
+        V2ExtrudeDialog dialog(initial, facts, ExtrudeTargets(), this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return dialog.Choice();
+    });
     // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
     viewport_->SetControlPointCallback(
         [this](kachakacha::v2::base::EntityId entityId,

@@ -81,27 +81,86 @@ void V2MainWindow::RunPartCommand(std::string_view id)
     RunBoolean(id == "part.boolean_cut");
 }
 
+kachakacha::v2::app::ExtrudeFacts V2MainWindow::BuildExtrudeFacts(
+    const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles) const
+{
+    kachakacha::v2::app::ExtrudeFacts facts;
+    for (const auto& profile : profiles) {
+        if (profile.closed) {
+            ++facts.closedProfiles;
+        } else {
+            ++facts.openProfiles;
+        }
+    }
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr) {
+            continue;
+        }
+        if (entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+            ++facts.parts;
+        } else if (entity->kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
+            ++facts.targetPlanes;
+        }
+    }
+    return facts;
+}
+
+std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeTargets() const
+{
+    // 「ある面まで」の相手。いまは作業平面を相手にできる。
+    // 部品の1つの面はまだ選べないので、相手には出さない。
+    // 出しておいて選べないと、選べるつもりで押して断られることになる。
+    std::vector<ExtrudeTargetChoice> targets;
+    for (const auto& entity : session_->GetDocument().Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::WorkPlane) {
+            continue;
+        }
+        targets.push_back(ExtrudeTargetChoice{entity.id,
+            QString::fromStdString(entity.displayName.empty() ? std::string("作業平面")
+                                                              : entity.displayName)});
+    }
+    return targets;
+}
+
 void V2MainWindow::RunExtrude()
 {
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
-    using kachakacha::v2::modeling::ExtrudeDirectionMode;
-    using kachakacha::v2::modeling::ExtrudeExtentMode;
     using kachakacha::v2::modeling::ExtrudeRequest;
 
     const auto& selection = viewport_->Selection();
-    ExtrudeRequest request;
-    request.profiles = ExtrudeProfilesFor(selection.entityIds);
-    if (request.profiles.empty()) {
-        SetStatus(QStringLiteral("押し出し: 先に閉じたワイヤーを選んでください。"));
+    auto profiles = ExtrudeProfilesFor(selection.entityIds);
+    if (profiles.empty()) {
+        SetStatus(QStringLiteral("押し出し: 先にワイヤーを選んでください。"));
         return;
     }
-    request.directionMode = ExtrudeDirectionMode::WorkPlaneNormal;
-    request.workPlane = viewport_->WorkPlane();
-    request.extent = ExtrudeExtentMode::Distance;
-    request.distanceMm = ExtrudeDistanceMm();
-    request.outputs.part = true;
-    request.outputs.endProfileWire = true;
-    request.outputs.sideBoundaryWires = true;
+    // 何を作るか、どこまで押すかを選ばせる。core は7通りの向きと5通りの終端を
+    // 持っているのに、画面が1通りに固定していた。工程の案内はそれを前提に
+    // 書いてあるので、案内と実物が食い違っていた。
+    const auto facts = BuildExtrudeFacts(profiles);
+    kachakacha::v2::app::ExtrudeChoice choice = extrudeChoice_;
+    choice.distanceMm = ExtrudeDistanceMm();
+    choice.hasSelectedPart = facts.parts > 0;
+    if (extrudeChooser_) {
+        const auto answered = extrudeChooser_(choice, facts);
+        if (!answered.has_value()) {
+            SetStatus(QStringLiteral("押し出し: やめました。"));
+            return;
+        }
+        choice = *answered;
+    }
+    const auto checked = kachakacha::v2::app::ValidateExtrudeChoice(choice, facts);
+    if (!checked.HasValue()) {
+        ReportDiagnostics(checked.Diagnostics());
+        return;
+    }
+    extrudeChoice_ = choice;
+    std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
+    if (choice.targetEntityId.has_value()) {
+        targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
+    }
+    ExtrudeRequest request = kachakacha::v2::app::ToExtrudeRequest(choice,
+        std::move(profiles), viewport_->WorkPlane(), targetPlane);
 
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
@@ -116,15 +175,22 @@ void V2MainWindow::RunExtrude()
         ReportDiagnostics(built.Diagnostics());
         return;
     }
-    if (built.Value().parts.empty()) {
+    if (built.Value().parts.empty() && choice.makePart) {
         SetStatus(QStringLiteral("押し出し: 立体になりませんでした。"));
         return;
     }
     kachakacha::v2::domain::ExtrudeDefinition definition;
     definition.profiles = selection.entityIds;
-    definition.direction = request.workPlane.normal;
-    definition.distance.value = ExtrudeDistanceMm();
+    // 向きは実際に押した向きを持つ。作業平面の法線を書き写すと、
+    // 別の向きで押したときに、開き直すと違う向きへ押されてしまう。
+    definition.direction = analysis.Value().direction;
+    definition.distance.value = choice.distanceMm;
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
+    definition.extentMode = static_cast<int>(choice.extent);
+    definition.booleanMode = static_cast<int>(choice.booleanMode);
+    if (choice.targetEntityId.has_value()) {
+        definition.targets.push_back(*choice.targetEntityId);
+    }
     std::vector<CurveSegment> edges;
     for (const auto& wire : built.Value().endProfileWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
@@ -132,8 +198,21 @@ void V2MainWindow::RunExtrude()
     for (const auto& wire : built.Value().sideBoundaryWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
-    const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
-        std::move(definition), built.Value().parts.front().handle, edges, "押し出し");
+    // 出来た立体を全部残す。先頭の1つだけを覚えていたので、
+    // 穴あきの輪郭などで2つ以上出来たときに、残りが消えていた。
+    kachakacha::v2::base::EntityId partId;
+    for (std::size_t index = 0; index < built.Value().parts.size(); ++index) {
+        auto copy = definition;
+        const std::string label = built.Value().parts.size() > 1
+            ? "押し出し " + std::to_string(index + 1)
+            : std::string("押し出し");
+        const auto made = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
+            std::move(copy), built.Value().parts[index].handle,
+            index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str());
+        if (index == 0) {
+            partId = made;
+        }
+    }
     // 型紙にするときは「平らな1枚」が要る。押し出しの端の輪郭がそれである。
     // 立体の辺を全部渡すと、厚みのぶんだけ平面から外れて FAB-P004 で断られる。
     if (!partId.IsNil() && !built.Value().endProfileWires.empty()) {
@@ -337,4 +416,38 @@ std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfi
     // 道を分けると、開いたときだけ違う形が出来る。
     return ProfilesOfImpl(entityIds, session_->Scene(),
         session_->GetDocument().Snapshot().settings.tolerance);
+}
+
+void V2MainWindow::SetExtrudeChooser(
+    std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
+        const kachakacha::v2::app::ExtrudeChoice&,
+        const kachakacha::v2::app::ExtrudeFacts&)>
+        chooser)
+{
+    extrudeChooser_ = std::move(chooser);
+}
+
+std::optional<kachakacha::v2::modeling::WorkPlaneFrame> V2MainWindow::WorkPlaneFrameOf(
+    const kachakacha::v2::base::EntityId& entityId) const
+{
+    const auto* entity = session_->GetDocument().FindEntity(entityId);
+    if (entity == nullptr) {
+        return std::nullopt;
+    }
+    const auto* feature = session_->GetDocument().FindFeature(entity->createdBy);
+    if (feature == nullptr) {
+        return std::nullopt;
+    }
+    const auto* definition =
+        std::get_if<kachakacha::v2::domain::CreateWorkPlaneDefinition>(
+            &feature->definition);
+    if (definition == nullptr) {
+        return std::nullopt;
+    }
+    kachakacha::v2::modeling::WorkPlaneFrame frame;
+    frame.origin = definition->origin;
+    frame.normal = definition->normal;
+    frame.uAxis = definition->uDirection;
+    frame.vAxis = Cross(definition->normal, definition->uDirection);
+    return frame;
 }

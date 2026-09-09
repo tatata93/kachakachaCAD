@@ -24,6 +24,13 @@ namespace {
     // 画面を出さずに試すので、ファイルダイアログを出させない。
     // 出すと、そこで止まったまま返ってこない。
     window.SetPathChooser([](bool) { return QString(); });
+    // 押し出しの窓も同じ理由で出さない。出すと、そこで止まったまま返ってこない。
+    // 既定は「出した窓をそのまま承知した」と同じ結果にする。
+    // 選択肢を確かめるケースは、自分でこれを差し替える。
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
+                                 const kachakacha::v2::app::ExtrudeFacts&) {
+        return std::optional<kachakacha::v2::app::ExtrudeChoice>(initial);
+    });
     window.resize(1000, 700);
     window.show();
     QApplication::processEvents();

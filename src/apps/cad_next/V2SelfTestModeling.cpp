@@ -299,6 +299,89 @@ namespace {
         window.CanExportSelectedParts());
 }
 
+[[nodiscard]] bool CaseExtrudeMakesWiresOnly(V2MainWindow& window)
+{
+    // 「押し出しと同じ要領でワイヤだけ作る」。core は前からできたのに、
+    // 画面が出力を3つとも true に固定していたので選べなかった。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    const int partsBefore = CountParts(window);
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
+                                 const kachakacha::v2::app::ExtrudeFacts&) {
+        kachakacha::v2::app::ExtrudeChoice choice = initial;
+        choice.makePart = false;
+        choice.makeEndProfileWire = true;
+        choice.makeSideBoundaryWires = true;
+        return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
+    });
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("部品は増えない(") + std::to_string(partsBefore)
+                     + " → " + std::to_string(CountParts(window)) + ")").c_str(),
+            CountParts(window) == partsBefore)) {
+        return false;
+    }
+    return Explain((std::string("断られていない(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        !window.StatusText().contains(QStringLiteral("できません"))
+            && !window.StatusText().contains(QStringLiteral("要ります")));
+}
+
+[[nodiscard]] bool CaseExtrudeRefusesImpossibleChoices(V2MainWindow& window)
+{
+    // 通らない組み合わせは、押してから断るのではなく、理由を出して断る。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    const int partsBefore = CountParts(window);
+    // 何も作らない指定。
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
+                                 const kachakacha::v2::app::ExtrudeFacts&) {
+        kachakacha::v2::app::ExtrudeChoice choice = initial;
+        choice.makePart = false;
+        return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
+    });
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("何を作るかが無いと断る(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("何を作るか")))) {
+        return false;
+    }
+    // 相手を選ばずに「全部貫く」。
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
+                                 const kachakacha::v2::app::ExtrudeFacts&) {
+        kachakacha::v2::app::ExtrudeChoice choice = initial;
+        choice.extent = kachakacha::v2::modeling::ExtrudeExtentMode::ThroughAll;
+        return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
+    });
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("貫くのは引くときだけと断る(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("引くときだけ")))) {
+        return false;
+    }
+    return Explain("どちらも文書を変えていない", CountParts(window) == partsBefore);
+}
+
+[[nodiscard]] bool CaseExtrudeCanBeCancelled(V2MainWindow& window)
+{
+    // 窓でやめたら、何も起きない。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    const int partsBefore = CountParts(window);
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice&,
+                                 const kachakacha::v2::app::ExtrudeFacts&) {
+        return std::optional<kachakacha::v2::app::ExtrudeChoice>();
+    });
+    window.RunCommand("part.extrude");
+    if (!Explain("やめたと言う",
+            window.StatusText().contains(QStringLiteral("やめました")))) {
+        return false;
+    }
+    return Explain("部品は増えない", CountParts(window) == partsBefore);
+}
+
 [[nodiscard]] bool CaseFabricationAndPatternEndToEnd(V2MainWindow& window)
 {
     // 引く → 押し出す → 部材にする → 型紙にする → 1:1 PDF まで通す。
@@ -770,6 +853,9 @@ std::vector<SelfTestCase> ModelingCases()
         {"押し出しで部品ができる", &CaseExtrudeMakesAPart},
         {"部品のコマンドは選択が要る", &CasePartCommandsNeedSelection},
         {"押し出した部品が保存して開き直しても残る", &CaseExtrudedPartSurvivesSaveAndOpen},
+        {"押し出しでワイヤーだけ作れる", &CaseExtrudeMakesWiresOnly},
+        {"通らない押し出しは理由を出して断る", &CaseExtrudeRefusesImpossibleChoices},
+        {"押し出しをやめられる", &CaseExtrudeCanBeCancelled},
         {"引く→押し出す→部材→型紙→PDFまで通る", &CaseFabricationAndPatternEndToEnd},
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},

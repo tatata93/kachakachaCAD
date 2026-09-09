@@ -101,6 +101,7 @@ public:
 class QBoxLayout : public QLayout {
 public:
     void addStretch(int = 0);
+    void addLayout(QLayout*, int = 0);
 };
 class QVBoxLayout : public QBoxLayout {
 public:
@@ -321,6 +322,100 @@ public:
     [[nodiscard]] static QString getOpenFileName(QWidget* parent = nullptr,
         const QString& caption = QString(), const QString& directory = QString(),
         const QString& filter = QString());
+};
+
+//! ダイアログ一式。作図の選択肢を並べるのに要る。
+//! 本物と同じ入れ子と名前空間にしておくこと。ずれると MSVC でだけ落ちる。
+class QDialog : public QWidget {
+public:
+    QDialog() = default;
+    explicit QDialog(QWidget*) {}
+    enum DialogCode { Rejected = 0, Accepted = 1 };
+    int exec();
+    void accept();
+    void reject();
+    void setWindowTitle(const QString&);
+    void setModal(bool);
+    [[nodiscard]] int result() const;
+};
+
+class QAbstractButton : public QWidget {
+public:
+    void setText(const QString&);
+    [[nodiscard]] QString text() const;
+    void setChecked(bool);
+    [[nodiscard]] bool isChecked() const;
+    void setCheckable(bool);
+    void click();
+    void (*clicked)(bool);
+    void (*toggled)(bool);
+};
+
+class QPushButton : public QAbstractButton {
+public:
+    QPushButton() = default;
+    explicit QPushButton(QWidget*) {}
+    explicit QPushButton(const QString&, QWidget* = nullptr) {}
+    void setDefault(bool);
+};
+
+class QCheckBox : public QAbstractButton {
+public:
+    QCheckBox() = default;
+    explicit QCheckBox(QWidget*) {}
+    explicit QCheckBox(const QString&, QWidget* = nullptr) {}
+    void (*stateChanged)(int);
+};
+
+class QComboBox : public QWidget {
+public:
+    QComboBox() = default;
+    explicit QComboBox(QWidget*) {}
+    void addItem(const QString&);
+    void addItem(const QString&, const QVariant&);
+    void clear();
+    [[nodiscard]] int count() const;
+    [[nodiscard]] int currentIndex() const;
+    void setCurrentIndex(int);
+    [[nodiscard]] QString currentText() const;
+    [[nodiscard]] QString itemText(int) const;
+    void (*currentIndexChanged)(int);
+};
+
+class QAbstractSpinBox : public QWidget {
+public:
+    void setReadOnly(bool);
+};
+
+class QDoubleSpinBox : public QAbstractSpinBox {
+public:
+    QDoubleSpinBox() = default;
+    explicit QDoubleSpinBox(QWidget*) {}
+    void setRange(double, double);
+    void setDecimals(int);
+    void setSingleStep(double);
+    void setSuffix(const QString&);
+    void setValue(double);
+    [[nodiscard]] double value() const;
+    void (*valueChanged)(double);
+};
+
+class QFormLayout : public QLayout {
+public:
+    QFormLayout() = default;
+    explicit QFormLayout(QWidget*) {}
+    void addRow(const QString&, QWidget*);
+    void addRow(QWidget*);
+};
+
+class QDialogButtonBox : public QWidget {
+public:
+    enum StandardButton { Ok = 0x0400, Cancel = 0x0040 };
+    QDialogButtonBox() = default;
+    explicit QDialogButtonBox(QWidget*) {}
+    QDialogButtonBox(int, QWidget* = nullptr) {}
+    void (*accepted)();
+    void (*rejected)();
 };
 
 class QTabBar : public QWidget {

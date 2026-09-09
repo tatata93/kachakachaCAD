@@ -23,6 +23,8 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
+#include "V2ExtrudeDialog.h"
+#include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
@@ -206,6 +208,26 @@ public:
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
+    //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
+    //! 値を返さなければ「やめた」。
+    void SetExtrudeChooser(
+        std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
+            const kachakacha::v2::app::ExtrudeChoice&,
+            const kachakacha::v2::app::ExtrudeFacts&)>
+            chooser);
+    //! いま覚えている押し出しの選択。次に押したときの初期値になる。
+    [[nodiscard]] const kachakacha::v2::app::ExtrudeChoice& ExtrudeChoice() const
+    {
+        return extrudeChoice_;
+    }
+    //! 選んでいるものから、押し出しの可否に要る事実を作る。
+    [[nodiscard]] kachakacha::v2::app::ExtrudeFacts BuildExtrudeFacts(
+        const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles) const;
+    //! 「ある面まで」の相手に選べるもの。
+    [[nodiscard]] std::vector<ExtrudeTargetChoice> ExtrudeTargets() const;
+    //! その作業平面の枠。相手として押し出しへ渡す。
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::WorkPlaneFrame>
+    WorkPlaneFrameOf(const kachakacha::v2::base::EntityId& entityId) const;
     //! 押し出しの輪郭にまとめる。押し出しと作り直しで同じ道を通す。
     [[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile>
     ExtrudeProfilesFor(
@@ -345,6 +367,12 @@ private:
         const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& shapes,
         kachakacha::v2::app::ExportFormat format);
     //! 出来た立体の handle。文書ではなく画面側が覚える。
+    //! 押し出しで前に選んだもの。次に押すときの初期値にする。
+    kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
+    std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
+        const kachakacha::v2::app::ExtrudeChoice&,
+        const kachakacha::v2::app::ExtrudeFacts&)>
+        extrudeChooser_;
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
     //! 部品を見せるための辺。
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> partEdges_;

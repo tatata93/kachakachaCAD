@@ -617,6 +617,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp
     src/next/kachakacha/geometry/ScreenMapping.cpp
+    src/next/kachakacha/geometry/CurveProjection.cpp
     src/next/kachakacha/geometry/WireChain.cpp
     src/next/kachakacha/geometry/WireConnect.cpp
     src/next/kachakacha/geometry/WireEdit.cpp
@@ -724,6 +725,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(export_content_tests tests_v2/export_content_tests.cpp)
     kachakacha_add_v2_test(command_availability_tests tests_v2/command_availability_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
+    kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
     kachakacha_add_v2_test(manual_tests tests_v2/manual_tests.cpp)
     kachakacha_add_v2_test(sample_document_tests tests_v2/sample_document_tests.cpp)

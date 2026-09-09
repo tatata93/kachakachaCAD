@@ -143,6 +143,8 @@ public:
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
+    //! 選んだ線を作業平面へ落とす。元の線は残す。
+    void ProjectSelectedWires();
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
     [[nodiscard]] static bool IsGuideCommand(std::string_view id);
     void RunGuideCommand(std::string_view id);

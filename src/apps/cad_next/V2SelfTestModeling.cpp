@@ -495,6 +495,27 @@ namespace {
         window.StatusText().contains(QStringLiteral("出せます")));
 }
 
+[[nodiscard]] bool CaseProjectKeepsTheOriginal(V2MainWindow& window)
+{
+    // 落とした先が分かるように、元の線は消さない。
+    // 消すと「どの面へ落としたのか」が後から誰にも分からなくなる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    const std::size_t before =
+        window.Session().GetDocument().Snapshot().entities.size();
+    window.RunCommand("wire.project");
+    if (!Explain((std::string("落とせる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("落としました")))) {
+        return false;
+    }
+    const std::size_t after = window.Session().GetDocument().Snapshot().entities.size();
+    return Explain((std::string("元の線が残る(") + std::to_string(before) + " → "
+                       + std::to_string(after) + ")").c_str(),
+        after == before + 1);
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -510,6 +531,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
+        {"投影は元の線を残す", &CaseProjectKeepsTheOriginal},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},

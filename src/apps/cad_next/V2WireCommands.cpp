@@ -13,6 +13,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/FeatureReevaluation.h"
+#include "kachakacha/geometry/CurveProjection.h"
 
 #include <string>
 #include <utility>
@@ -60,7 +61,66 @@ constexpr WireEditBinding kWireEdits[] = {
 
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
-    return FindWireEdit(id) != nullptr;
+    return FindWireEdit(id) != nullptr || id == "wire.project";
+}
+
+void V2MainWindow::ProjectSelectedWires()
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+    using kachakacha::v2::geometry::ProjectCurvesOntoPlane;
+    using kachakacha::v2::geometry::ProjectionPlane;
+
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    if (inputs.empty()) {
+        SetStatus(QStringLiteral("面へ投影: 先に線を選んでください。"));
+        return;
+    }
+    // 落とす先は、いまの作業平面。どの面へ落としたのかが後から分かるように、
+    // 元の線は消さずに残す。
+    ProjectionPlane plane;
+    plane.origin = viewport_->WorkPlane().origin;
+    plane.normal = viewport_->WorkPlane().normal;
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto projected = ProjectCurvesOntoPlane(inputs, plane, tolerance);
+    if (!projected.HasValue()) {
+        ReportDiagnostics(projected.Diagnostics());
+        return;
+    }
+
+    Feature feature;
+    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::ProjectWire;
+    feature.displayName = "面へ投影";
+    feature.inputEntityIds = selection.entityIds;
+    kachakacha::v2::domain::CreateWireDefinition wire;
+    wire.segments = projected.Value();
+    for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+        wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+    }
+    feature.definition = std::move(wire);
+
+    Entity entity;
+    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    entity.kind = EntityKind::Wire;
+    entity.displayName = "面へ投影";
+    entity.createdBy = feature.id;
+    feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+
+    const auto added = session_->GetDocument().Run(
+        AddFeatureCommand(feature, {entity}, "面へ投影"));
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("面へ投影: %1本を作業平面へ落としました。元の線は残しています。")
+            .arg(static_cast<int>(projected.Value().size())));
 }
 
 void V2MainWindow::RunWireEditCommand(std::string_view id)
@@ -75,6 +135,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     using kachakacha::v2::domain::FeatureType;
     using kachakacha::v2::domain::TransformWireDefinition;
 
+    if (id == "wire.project") {
+        ProjectSelectedWires();
+        return;
+    }
     const WireEditBinding* binding = FindWireEdit(id);
     if (binding == nullptr) {
         return;

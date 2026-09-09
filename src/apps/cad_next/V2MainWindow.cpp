@@ -583,6 +583,9 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
     viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+    // 立体と面を作り方から作り直す。作り直さないと、線だけが残って
+    // 立体が消えたことに気づかないまま、出そうとしたときに初めて分かる。
+    RebuildKernelShapes();
     RefreshEntityList();
     RefreshExportCounts();
     viewport_->update();

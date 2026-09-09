@@ -49,10 +49,12 @@ struct SectionTable {
     std::vector<kachakacha::v2::base::Diagnostic> diagnostics;
 };
 
-[[nodiscard]] SectionTable CollectSectionRows(
+//! 元ワイヤーの並びから表を作る。選択からでも、保存した作り方からでも、
+//! 同じ道を通す。道を分けると、開き直したときだけ違う面が出来る。
+[[nodiscard]] SectionTable CollectSectionRowsFor(
     const kachakacha::v2::document::Document& document,
     const kachakacha::v2::modeling::SnapScene& scene,
-    const kachakacha::v2::app::SelectionSet& selection)
+    const std::vector<kachakacha::v2::base::EntityId>& wireIds)
 {
     using kachakacha::v2::domain::EntityKind;
     using kachakacha::v2::modeling::AddSelectionAsNewRow;
@@ -62,7 +64,7 @@ struct SectionTable {
     // なめらかに通す(ロフト)。2本にロフトは使えないし、
     // 3本をルールドで渡すと真ん中の断面が捨てられる。
     made.table.method = kachakacha::v2::modeling::GuideSurfaceMethod::RuledSections;
-    for (const auto& id : selection.entityIds) {
+    for (const auto& id : wireIds) {
         const auto* entity = document.FindEntity(id);
         if (entity == nullptr || entity->kind != EntityKind::Wire) {
             continue;
@@ -98,6 +100,14 @@ struct SectionTable {
     return made;
 }
 
+[[nodiscard]] SectionTable CollectSectionRows(
+    const kachakacha::v2::document::Document& document,
+    const kachakacha::v2::modeling::SnapScene& scene,
+    const kachakacha::v2::app::SelectionSet& selection)
+{
+    return CollectSectionRowsFor(document, scene, selection.entityIds);
+}
+
 } // namespace
 
 void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable& table,
@@ -118,9 +128,18 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     feature.inputEntityIds = viewport_->Selection().entityIds;
     CreateGuideSurfaceDefinition definition;
     definition.method = static_cast<int>(table.method);
+    // 元ワイヤーを覚える。空のまま保存していたので、開き直しても面を作り直せなかった。
+    // 一覧には名前が残るので、消えたことに気づきにくい。
     for (const auto& row : table.rows) {
         definition.roles.push_back(static_cast<int>(row.role));
-        definition.chains.push_back(kachakacha::v2::domain::WireChainRef{});
+        kachakacha::v2::domain::WireChainRef chain;
+        for (const auto& wireId : row.sourceWireIds) {
+            kachakacha::v2::domain::SegmentRef ref;
+            ref.entityId = wireId;
+            chain.segments.push_back(ref);
+            chain.reversed.push_back(row.reversed);
+        }
+        definition.chains.push_back(std::move(chain));
     }
     feature.definition = std::move(definition);
 
@@ -153,6 +172,40 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
             .arg(sections >= 3 ? QStringLiteral("ロフト") : QStringLiteral("ルールド"))
             .arg(sections)
             .arg(built.maximumDeviationMm, 0, 'f', 4));
+}
+
+bool V2MainWindow::BuildGuideSurfaceInto(
+    const std::vector<kachakacha::v2::base::EntityId>& wireIds,
+    const kachakacha::v2::base::EntityId& output)
+{
+    // 開き直したときの作り直し。作ったときと同じ道を通す。
+    // Feature はもう文書にあるので、ここでは形だけを作って覚える。
+    const SectionTable made =
+        CollectSectionRowsFor(session_->GetDocument(), session_->Scene(), wireIds);
+    if (!made.diagnostics.empty() || made.sections < 2) {
+        return false;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto request =
+        kachakacha::v2::modeling::ToGuideSurfaceRequest(made.table, tolerance);
+    if (!request.HasValue()) {
+        return false;
+    }
+    const auto analysis =
+        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
+    if (!analysis.HasValue()) {
+        return false;
+    }
+    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
+        analysis.Value(), tolerance);
+    if (!built.HasValue()) {
+        return false;
+    }
+    guideShapes_[output.ToString()] = built.Value().handle;
+    guideEdges_[output.ToString()] = built.Value().boundary;
+    guideSamples_[output.ToString()] = built.Value().samples;
+    guideTable_ = made.table;
+    return true;
 }
 
 void V2MainWindow::CreateGuideSurfaceFromSelection()

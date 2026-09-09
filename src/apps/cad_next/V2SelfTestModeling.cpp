@@ -258,6 +258,10 @@ namespace {
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
+    const int shapesBefore = window.KernelShapeCount();
+    if (!Explain("立体の形を覚えている", shapesBefore >= 1)) {
+        return false;
+    }
     const std::string path = kachakacha::v2::io::FromPath(
         std::filesystem::temp_directory_path() / "kacha_selftest_part.kcd2");
     std::error_code code;
@@ -274,9 +278,25 @@ namespace {
     if (!Explain("開き直せる", opened)) {
         return false;
     }
-    return Explain((std::string("部品が戻る(実際は ")
-                       + std::to_string(CountParts(window)) + ")").c_str(),
-        CountParts(window) == 1);
+    if (!Explain((std::string("部品が戻る(実際は ")
+                     + std::to_string(CountParts(window)) + ")").c_str(),
+            CountParts(window) == 1)) {
+        return false;
+    }
+    // 名前が残っただけでは戻ったことにならない。**形**が戻っていること。
+    // 戻っていないと、開き直したあとに STEP や STL で出せない。
+    // 一覧には部品が並んでいるので、出そうとして初めて気づくことになる。
+    if (!Explain((std::string("立体の形も戻る(") + std::to_string(shapesBefore)
+                     + " → " + std::to_string(window.KernelShapeCount()) + ")").c_str(),
+            window.KernelShapeCount() >= shapesBefore)) {
+        return false;
+    }
+    // 出せるところまで確かめる。ここまで通って、初めて戻ったと言える。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    return Explain("開き直したあとも STEP で出せる",
+        window.CanExportSelectedParts());
 }
 
 [[nodiscard]] bool CaseFabricationAndPatternEndToEnd(V2MainWindow& window)

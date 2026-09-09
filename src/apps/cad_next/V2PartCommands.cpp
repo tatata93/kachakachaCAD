@@ -33,7 +33,7 @@ using kachakacha::v2::modeling::SnapCurve;
 
 //! 選んでいるワイヤーを、押し出しの輪郭にまとめる。
 //! Entity ごとに1つの輪郭にする。選んだ順は保つ。
-[[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile> ProfilesOf(
+[[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile> ProfilesOfImpl(
     const std::vector<EntityId>& entityIds,
     const kachakacha::v2::modeling::SnapScene& scene,
     const kachakacha::v2::geometry::GeometryTolerance& tolerance)
@@ -90,8 +90,7 @@ void V2MainWindow::RunExtrude()
 
     const auto& selection = viewport_->Selection();
     ExtrudeRequest request;
-    request.profiles = ProfilesOf(selection.entityIds, session_->Scene(),
-        session_->GetDocument().Snapshot().settings.tolerance);
+    request.profiles = ExtrudeProfilesFor(selection.entityIds);
     if (request.profiles.empty()) {
         SetStatus(QStringLiteral("押し出し: 先に閉じたワイヤーを選んでください。"));
         return;
@@ -329,4 +328,13 @@ void V2MainWindow::RefreshPartEdges()
     append(guideEdges_);
     session_->SetScene(std::move(scene));
     viewport_->update();
+}
+
+std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::ExtrudeProfilesFor(
+    const std::vector<kachakacha::v2::base::EntityId>& entityIds) const
+{
+    // 押し出しと、開き直しの作り直しで、同じ輪郭の作り方を通す。
+    // 道を分けると、開いたときだけ違う形が出来る。
+    return ProfilesOfImpl(entityIds, session_->Scene(),
+        session_->GetDocument().Snapshot().settings.tolerance);
 }

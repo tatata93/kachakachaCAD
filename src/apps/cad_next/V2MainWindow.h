@@ -23,6 +23,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
+#include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/document/Document.h"
@@ -84,6 +85,14 @@ public:
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
     //! 状態の名前は --manual-state で渡すものと同じ。
     [[nodiscard]] bool ApplyManualState(const QString& name);
+    //! 選んだ部品を、いま本当に STEP で出せるか。
+    //! 名前が並んでいるだけで形が無い、を見分けるために試験から呼ぶ。
+    [[nodiscard]] bool CanExportSelectedParts();
+    //! いま形を覚えている数(立体+面)。試験から、開き直しで戻ったかを見る。
+    [[nodiscard]] int KernelShapeCount() const
+    {
+        return static_cast<int>(partShapes_.size() + guideShapes_.size());
+    }
 
     //! いま出ている案内文。
     [[nodiscard]] QString StatusText() const;
@@ -197,6 +206,24 @@ public:
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
+    //! 押し出しの輪郭にまとめる。押し出しと作り直しで同じ道を通す。
+    [[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile>
+    ExtrudeProfilesFor(
+        const std::vector<kachakacha::v2::base::EntityId>& entityIds) const;
+    //! 開き直したときに、立体と面を作り方から作り直す。V2RebuildCommands.cpp が持つ。
+    void RebuildKernelShapes();
+    bool RebuildExtrudeShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    bool RebuildWireCageShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    bool RebuildBooleanShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    bool RebuildGuideSurfaceShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    //! 元ワイヤーから面を作って、その id で覚える。作り直しから呼ぶ。
+    bool BuildGuideSurfaceInto(
+        const std::vector<kachakacha::v2::base::EntityId>& wireIds,
+        const kachakacha::v2::base::EntityId& output);
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
     [[nodiscard]] static bool IsGuideCommand(std::string_view id);
     void RunGuideCommand(std::string_view id);

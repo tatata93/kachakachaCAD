@@ -296,3 +296,11 @@ void V2MainWindow::ValidateSelectedSolid()
             .arg(value.volumeMm3, 0, 'f', 4)
             .arg(value.boundingDiagonalMm, 0, 'f', 3));
 }
+
+bool V2MainWindow::CanExportSelectedParts()
+{
+    // 「出せる」と言えるのは、実際に中身が作れたときだけである。
+    // 一覧に部品が並んでいることは、形があることを意味しない。
+    const auto shapes = PartShapesFor(true);
+    return MakeSolidContent(shapes, kachakacha::v2::app::ExportFormat::Step).HasValue();
+}

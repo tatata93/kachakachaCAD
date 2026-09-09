@@ -138,6 +138,9 @@ public:
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
     void RefreshMeasurements();
+    //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
+    [[nodiscard]] bool EnterToolFor(
+        const kachakacha::v2::app::CommandDescriptor& command);
     //! 押せるかどうかの材料を作る。数え方は core が決める。
     [[nodiscard]] kachakacha::v2::app::SelectionFacts BuildFactsForCommands() const;
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。

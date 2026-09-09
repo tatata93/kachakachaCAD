@@ -959,6 +959,32 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
     return ok;
 }
 
+bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
+{
+    // 作図の道具は道具へ入る。
+    //
+    // ただし、道具へ入るだけでは終わらないものがある。
+    // トリム・延長・グリッド原点は「押す場所」を1回聞く必要があり、
+    // 測定は棚を出す必要がある。これらは道具を選んだあと、受け口へ続ける。
+    // ここで終わりにしてしまい、押しても案内文が出るだけになっていた。
+    const bool continuesAfterTool = command.id == "wire.trim"
+        || command.id == "wire.extend" || command.id == "grid.move_origin"
+        || command.id == "measure.open";
+    for (const ToolBinding& binding : kToolBindings) {
+        if (binding.commandId != command.id) {
+            continue;
+        }
+        SelectTool(binding.tool);
+        if (continuesAfterTool) {
+            return false;
+        }
+        SetStatus(QString::fromUtf8(
+            std::string(command.operationGuideJa).c_str()));
+        return true;
+    }
+    return false;
+}
+
 void V2MainWindow::RunCommand(std::string_view id)
 {
     QString reason;
@@ -970,14 +996,8 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (command == nullptr) {
         return;
     }
-    // 作図の道具は道具へ入る。
-    for (const ToolBinding& binding : kToolBindings) {
-        if (binding.commandId == id) {
-            SelectTool(binding.tool);
-            SetStatus(QString::fromUtf8(
-                std::string(command->operationGuideJa).c_str()));
-            return;
-        }
+    if (EnterToolFor(*command)) {
+        return;
     }
     if (id == "edit.undo") {
         SetStatus(session_->Undo() ? QStringLiteral("元に戻しました。")

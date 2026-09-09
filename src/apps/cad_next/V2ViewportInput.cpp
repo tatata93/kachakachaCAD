@@ -219,6 +219,17 @@ void V2Viewport::PressRightWithoutMoving()
         }
         return;
     }
+    if (tool == DrawingTool::Measure) {
+        // V1と同じ。測定の右クリックは「測ったものを消す」。道具は抜けない。
+        // 測る相手は選択なので、選択を解けば棚も空になる。
+        SetSelection(kachakacha::v2::app::SelectionSet{});
+        status_ = "測定を消しました。";
+        if (statusCallback_) {
+            statusCallback_(status_);
+        }
+        update();
+        return;
+    }
     // ポリラインとスプラインは、右クリックが「ここで確定」である。
     // 点をいくつ置くか決まっていないので、終わりを伝える手立てが要る。
     const std::size_t placed = session_->PlacedPointCount();

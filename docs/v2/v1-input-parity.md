@@ -184,7 +184,7 @@ V2 も同じ(打った文字がそのまま欄に入る)。
 | 4 | 作図中の Ctrl で吸着を止める | **済** | `V2ViewportInput.cpp` SetSnapSuppressedByKey |
 | 5 | 作図中の Shift で水平・垂直・正方形 | **済** | `modeling/DrawingConstraint.h` |
 | 6 | カーソルが状態で変わる | **済** | `V2ViewportInput.cpp` RefreshCursorShape |
-| 7 | 右クリックの意味(選択中はメニュー) | **一部** | 選択中のメニューのみ。道具ごとの意味は残り |
+| 7 | 右クリックの意味が道具ごとに違う | **一部** | 選択=メニュー、ポリライン/スプライン=確定、測定=消す、途中=取り消し。残りは「1点も置いていない作図での『近くの点から引き始める』」だけ |
 | 8 | `S` `T` `X` を V1 の意味へ戻す | **済** | `app/CommandCatalog.cpp` |
 | 9 | `V` `D` `B` `I` `Shift+T` | **済** | 同上 |
 | 10 | Delete で消す | **済** | `edit.delete` |

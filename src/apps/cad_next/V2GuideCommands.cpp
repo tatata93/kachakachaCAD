@@ -58,7 +58,10 @@ struct SectionTable {
     using kachakacha::v2::modeling::AddSelectionAsNewRow;
 
     SectionTable made;
-    made.table.method = kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections;
+    // 作り方は断面の数で決まる。2本なら渡すだけ(ルールド)、3本以上なら
+    // なめらかに通す(ロフト)。2本にロフトは使えないし、
+    // 3本をルールドで渡すと真ん中の断面が捨てられる。
+    made.table.method = kachakacha::v2::modeling::GuideSurfaceMethod::RuledSections;
     for (const auto& id : selection.entityIds) {
         const auto* entity = document.FindEntity(id);
         if (entity == nullptr || entity->kind != EntityKind::Wire) {
@@ -83,6 +86,15 @@ struct SectionTable {
         made.table = added.Value();
         ++made.sections;
     }
+    if (made.sections >= 3) {
+        const auto switched = kachakacha::v2::modeling::SetGuideTableMethod(made.table,
+            kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections);
+        if (!switched.HasValue()) {
+            made.diagnostics = switched.Diagnostics();
+            return made;
+        }
+        made.table = switched.Value();
+    }
     return made;
 }
 
@@ -105,8 +117,7 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     feature.displayName = "形状ガイド";
     feature.inputEntityIds = viewport_->Selection().entityIds;
     CreateGuideSurfaceDefinition definition;
-    definition.method =
-        static_cast<int>(kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections);
+    definition.method = static_cast<int>(table.method);
     for (const auto& row : table.rows) {
         definition.roles.push_back(static_cast<int>(row.role));
         definition.chains.push_back(kachakacha::v2::domain::WireChainRef{});
@@ -138,7 +149,8 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     RefreshEntityList();
     RefreshCommandVisibility();
     SetStatus(QStringLiteral(
-        "形状ガイド: 断面%1枚から面を作りました。線からのずれは最大 %2 mm です。")
+        "形状ガイド: %1で断面%2枚から面を作りました。線からのずれは最大 %3 mm です。")
+            .arg(sections >= 3 ? QStringLiteral("ロフト") : QStringLiteral("ルールド"))
             .arg(sections)
             .arg(built.maximumDeviationMm, 0, 'f', 4));
 }

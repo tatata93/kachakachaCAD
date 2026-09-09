@@ -19,6 +19,7 @@
 #include "kachakacha/domain/Entity.h"
 
 #include <QString>
+#include <QStringList>
 
 #include <string>
 #include <string_view>
@@ -32,15 +33,7 @@ void V2MainWindow::RunExportCommand(std::string_view id)
     }
     exportDock_->show();
     if (id == "export.validate") {
-        // 出す前の検査。通っていれば、そのまま出せると言う。
-        const QString reason = exportDock_->ReasonText();
-        SetStatus(reason.isEmpty()
-                ? QStringLiteral("%1 出せます。").arg(exportDock_->SummaryText())
-                : QStringLiteral("%1 出せません。%2")
-                      .arg(exportDock_->SummaryText(), reason));
-        if (!reason.isEmpty()) {
-            AddDiagnostic(reason);
-        }
+        ValidateSelectedSolid();
         return;
     }
     struct FormatBinding {
@@ -250,4 +243,46 @@ void V2MainWindow::RefreshExportCounts()
     }
     exportDock_->SetCounts(kachakacha::v2::app::ExportCountsFrom(context, visibleParts,
         true));
+}
+
+void V2MainWindow::ValidateSelectedSolid()
+{
+    // 出す前に形そのものを調べる。出してから失敗すると、
+    // 何が悪かったのかを、出来なかったファイルから読み取ることになる。
+    const auto shapes = PartShapesFor(true);
+    if (shapes.empty()) {
+        SetStatus(QStringLiteral(
+            "出力を検査: 選んだ部品の立体がまだありません。先に作ってください。"));
+        return;
+    }
+    const double tolerance =
+        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    const auto checked = kachakacha::v2::kernel::CheckSolidForExport(shapes.front(),
+        tolerance);
+    if (!checked.HasValue()) {
+        ReportDiagnostics(checked.Diagnostics());
+        return;
+    }
+    const auto& value = checked.Value();
+    if (!value.Ok()) {
+        // どこが駄目なのかを言う。「出せません」だけでは直しようがない。
+        QStringList reasons;
+        if (!value.closed) {
+            reasons << QStringLiteral("閉じていません");
+        }
+        if (!value.positiveVolume) {
+            reasons << QStringLiteral("体積がありません");
+        }
+        if (!value.selfIntersectionFree) {
+            reasons << QStringLiteral("自分と交わっています");
+        }
+        SetStatus(QStringLiteral("出力を検査: 出せません(%1)。")
+                .arg(reasons.join(QStringLiteral("、"))));
+        AddDiagnostic(QStringLiteral("EXP-013 %1").arg(reasons.join(QStringLiteral("、"))));
+        return;
+    }
+    SetStatus(QStringLiteral(
+        "出力を検査: 出せます。体積 %1 mm3、外接箱の対角 %2 mm。")
+            .arg(value.volumeMm3, 0, 'f', 4)
+            .arg(value.boundingDiagonalMm, 0, 'f', 3));
 }

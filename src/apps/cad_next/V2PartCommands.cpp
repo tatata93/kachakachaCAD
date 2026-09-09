@@ -19,6 +19,7 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/WireCage.h"
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -131,8 +132,13 @@ void V2MainWindow::RunExtrude()
     for (const auto& wire : built.Value().sideBoundaryWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
-    AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude, std::move(definition),
-        built.Value().parts.front().handle, edges, "押し出し");
+    const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
+        std::move(definition), built.Value().parts.front().handle, edges, "押し出し");
+    // 型紙にするときは「平らな1枚」が要る。押し出しの端の輪郭がそれである。
+    // 立体の辺を全部渡すと、厚みのぶんだけ平面から外れて FAB-P004 で断られる。
+    if (!partId.IsNil() && !built.Value().endProfileWires.empty()) {
+        partFlatBoundary_[partId.ToString()] = built.Value().endProfileWires.front();
+    }
     SetStatus(QStringLiteral("押し出し: 厚み %1 mm の部品を作りました(体積 %2 mm3)。")
             .arg(extrudeDistanceMm_)
             .arg(built.Value().totalVolumeMm3));
@@ -218,7 +224,8 @@ void V2MainWindow::RunBoolean(bool cut)
             .arg(cut ? QStringLiteral("引く") : QStringLiteral("足す")));
 }
 
-void V2MainWindow::AddPartFeature(kachakacha::v2::domain::FeatureType type,
+kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
+    kachakacha::v2::domain::FeatureType type,
     kachakacha::v2::domain::FeatureDefinition definition,
     kachakacha::v2::modeling::KernelShapeHandle handle,
     const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
@@ -248,7 +255,7 @@ void V2MainWindow::AddPartFeature(kachakacha::v2::domain::FeatureType type,
         AddFeatureCommand(feature, {entity}, labelJa));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
-        return;
+        return kachakacha::v2::base::EntityId{};
     }
     // 形そのものは文書に持たない。持つと入力と食い違う。
     // 出来た形の handle と、見せるための辺だけを画面側で覚えておく。
@@ -256,6 +263,7 @@ void V2MainWindow::AddPartFeature(kachakacha::v2::domain::FeatureType type,
     partEdges_[entity.id.ToString()] = edges;
     AdoptCurrentDocument();
     RefreshPartEdges();
+    return entity.id;
 }
 
 void V2MainWindow::RefreshPartEdges()
@@ -263,16 +271,23 @@ void V2MainWindow::RefreshPartEdges()
     // 部品の辺を場面へ足す。立体そのものはまだ描かないので、輪郭で見せる。
     // 描いていないものを「描いた」と言わないため、辺は補助線として出す。
     auto scene = session_->Scene();
-    for (const auto& entry : partEdges_) {
-        const auto id = kachakacha::v2::base::EntityId::Parse(entry.first);
-        if (!id.has_value()) {
-            continue;
+    const auto append = [&](const std::map<std::string,
+                             std::vector<CurveSegment>>& edges) {
+        for (const auto& entry : edges) {
+            const auto id = kachakacha::v2::base::EntityId::Parse(entry.first);
+            if (!id.has_value()) {
+                continue;
+            }
+            for (const auto& segment : entry.second) {
+                scene.curves.push_back(kachakacha::v2::modeling::SnapCurve{*id,
+                    ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>(), segment,
+                    false});
+            }
         }
-        for (const auto& segment : entry.second) {
-            scene.curves.push_back(kachakacha::v2::modeling::SnapCurve{*id,
-                ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>(), segment, false});
-        }
-    }
+    };
+    append(partEdges_);
+    // 形状ガイドの境界も同じように出す。出さないと、作ったのに何も見えない。
+    append(guideEdges_);
     session_->SetScene(std::move(scene));
     viewport_->update();
 }

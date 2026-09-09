@@ -70,8 +70,10 @@ void V2MainWindow::RunFabricationCreate()
             || entity->kind != kachakacha::v2::domain::EntityKind::Part) {
             continue;
         }
-        const auto found = partEdges_.find(id.ToString());
-        if (found == partEdges_.end()) {
+        // 立体の辺ではなく、平らな1枚の輪郭を使う。
+        // 立体の辺には厚みのぶんの高さがあるので、平らにならない。
+        const auto found = partFlatBoundary_.find(id.ToString());
+        if (found == partFlatBoundary_.end()) {
             continue;
         }
         PlanarPanelRequest request;
@@ -81,7 +83,8 @@ void V2MainWindow::RunFabricationCreate()
     }
     if (requests.empty()) {
         SetStatus(QStringLiteral(
-            "製作モデルを作る: 先に部品を選んでください(押し出しで作ったものです)。"));
+            "製作モデルを作る: 平らな1枚を持つ部品を選んでください"
+            "(いまは押し出しで作ったものだけです)。"));
         return;
     }
     const double tolerance =

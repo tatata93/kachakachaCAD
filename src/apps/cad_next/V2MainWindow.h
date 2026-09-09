@@ -143,6 +143,18 @@ public:
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
+    //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
+    [[nodiscard]] static bool IsGuideCommand(std::string_view id);
+    void RunGuideCommand(std::string_view id);
+    //! 選んだ線を断面にして面を作る。
+    void CreateGuideSurfaceFromSelection();
+    //! 出来た面を文書へ足し、画面へ出す。
+    void AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable& table,
+        const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections);
+    //! 出来た面の handle と境界。文書ではなく画面側が覚える。
+    std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> guideShapes_;
+    std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> guideEdges_;
+
     //! 選んだ作業平面へ正対する。形は変わらない。
     void AlignViewToSelection();
     //! 選んだものが入っているまとまりを作業中にする。選んでいなければ外す。
@@ -212,7 +224,8 @@ private:
     void RunWireCage();
     void RunBoolean(bool cut);
     //! 出来た部品を文書へ足す。形は持たせず、作り方だけを持たせる。
-    void AddPartFeature(kachakacha::v2::domain::FeatureType type,
+    //! 足せたら、その部品の EntityId を返す。足せなければ空を返す。
+    kachakacha::v2::base::EntityId AddPartFeature(kachakacha::v2::domain::FeatureType type,
         kachakacha::v2::domain::FeatureDefinition definition,
         kachakacha::v2::modeling::KernelShapeHandle handle,
         const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
@@ -227,6 +240,8 @@ private:
     //! 部材のもとになった部品の立体を集める。
     [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle>
         PanelSourceShapes() const;
+    //! 選んだ部品の立体が出せる形かを調べる。出す前に言う。
+    void ValidateSelectedSolid();
     //! 立体を STEP か STL の中身にする。持っていなければ断る。
     [[nodiscard]] kachakacha::v2::base::Result<std::string> MakeSolidContent(
         const std::vector<kachakacha::v2::modeling::KernelShapeHandle>& shapes,
@@ -235,6 +250,9 @@ private:
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
     //! 部品を見せるための辺。
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> partEdges_;
+    //! 型紙にするときの「平らな1枚」。立体の辺を全部使うと平らにならない。
+    std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>
+        partFlatBoundary_;
 
     //! 基準のコマンドか。V2PlaneCommands.cpp が持つ。
     [[nodiscard]] static bool IsPlaneCommand(std::string_view id);

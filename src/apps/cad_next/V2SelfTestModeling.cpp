@@ -456,6 +456,45 @@ namespace {
 
 } // namespace
 
+[[nodiscard]] bool CaseGuideSurfaceNeedsTwoSections(V2MainWindow& window)
+{
+    // 断面が1枚では渡す相手がいない。作れないことを作れたことにしない。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("guide.create");
+    return Explain((std::string("断面の数を言う(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("断面が2つ以上")));
+}
+
+[[nodiscard]] bool CaseValidateNeedsASolid(V2MainWindow& window)
+{
+    // 立体を作る前に検査を頼まれたら、作ってくださいと言う。
+    window.RunCommand("export.validate");
+    return Explain((std::string("理由が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(), !window.StatusText().isEmpty());
+}
+
+[[nodiscard]] bool CaseValidateAcceptsAnExtrudedPart(V2MainWindow& window)
+{
+    // 押し出した箱は閉じていて体積がある。出せると言えるはずである。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RunCommand("export.validate");
+    return Explain((std::string("出せると言う(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("出せます")));
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -471,6 +510,9 @@ std::vector<SelfTestCase> ModelingCases()
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
+        {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
+        {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
+        {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},
         {"配る見本が開ける", &CaseSampleDocumentOpens},
     };
 }

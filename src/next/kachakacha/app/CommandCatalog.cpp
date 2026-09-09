@@ -197,7 +197,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "派生したものを固定して、独立した実体にします。", true,
             {"AT-DOC-004", "AT-FAB-014"}},
         {"fabrication.create", "製作モデルを作る", CommandMode::Dialog, "fab_new", "",
-            SelectionPredicate::OnePart, "部品を1つ選んでください。",
+            SelectionPredicate::OnePartOrSurface, "部品か形状ガイドを1つ選んでください。",
             "部品から製作モデルを作ります。元の部品は変えません。", true,
             {"AT-FAB-001", "AT-FAB-002", "AT-FAB-003", "AT-FAB-004", "AT-FAB-005"}},
         {"fabrication.assign_role", "境界の役割", CommandMode::Dialog, "fab_role", "",

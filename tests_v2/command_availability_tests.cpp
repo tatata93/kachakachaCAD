@@ -9,6 +9,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/domain/Entity.h"
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -239,6 +240,69 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
     // グループは「0でもよい」ので、ここだけは通る。
     Require(SelectionSatisfies(SelectionPredicate::ZeroOrOneGroup, facts),
         "グループは選ばなくてよい");
+}
+
+KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われている)
+{
+    // 条件を足したのに、どのコマンドにも付け忘れると、
+    // 判断だけがあって効かないものが残る。実際に一度そうなり、
+    // 「部品を1つ選んでください」のまま直ったつもりになっていた。
+    std::set<int> used;
+    for (const auto& command : CommandCatalog()) {
+        used.insert(static_cast<int>(command.predicate));
+    }
+    const SelectionPredicate all[] = {
+        SelectionPredicate::Always,
+        SelectionPredicate::HasDocument,
+        SelectionPredicate::HasUndo,
+        SelectionPredicate::HasRedo,
+        SelectionPredicate::HasVisibleGeometry,
+        SelectionPredicate::OneWorkPlane,
+        SelectionPredicate::OnePlanarFaceOrWorkPlane,
+        SelectionPredicate::ZeroOrOneGroup,
+        SelectionPredicate::OneOrMoreWires,
+        SelectionPredicate::TwoWireChains,
+        SelectionPredicate::OneClosedProfile,
+        SelectionPredicate::OneOrMoreClosedProfiles,
+        SelectionPredicate::OnePart,
+        SelectionPredicate::TwoParts,
+        SelectionPredicate::OneDerivedEntity,
+        SelectionPredicate::OneFabricationModel,
+        SelectionPredicate::OneFabricationPanel,
+        SelectionPredicate::OneOrMorePatterns,
+        SelectionPredicate::OneOrMoreSelectedCurves,
+        SelectionPredicate::OnePartOrSurface,
+    };
+    // まだどのコマンドにも付いていない条件。契約にはあるが、
+    // それを使うコマンドがまだ無い。ここへ書いておけば、
+    // 付け忘れと「まだ無い」の区別がつく。
+    const SelectionPredicate notYetUsed[] = {
+        // 閉じた輪郭ちょうど1つ ── 面を1枚だけ張るコマンドを入れるときに使う。
+        SelectionPredicate::OneClosedProfile,
+        // 曲線を1つ以上 ── 曲線そのものを対象にするコマンドを入れるときに使う。
+        SelectionPredicate::OneOrMoreSelectedCurves,
+    };
+    std::string unused;
+    for (const SelectionPredicate predicate : all) {
+        if (used.find(static_cast<int>(predicate)) != used.end()) {
+            continue;
+        }
+        bool known = false;
+        for (const SelectionPredicate allowed : notYetUsed) {
+            known = known || allowed == predicate;
+        }
+        if (!known) {
+            unused += std::string(
+                kachakacha::v2::app::SelectionBlockReasonJa(predicate)) + " ";
+        }
+    }
+    Require(unused.empty(), "付け忘れた条件が無い: " + unused);
+    // 「まだ無い」ほうも、使われだしたら書き換えること。
+    for (const SelectionPredicate allowed : notYetUsed) {
+        Require(used.find(static_cast<int>(allowed)) == used.end(),
+            "まだ無いと書いた条件が、実は使われている: "
+                + std::string(kachakacha::v2::app::SelectionBlockReasonJa(allowed)));
+    }
 }
 
 KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)

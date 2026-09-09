@@ -354,6 +354,7 @@ private:
     V2MeasureDock* measureDock_ = nullptr;
     V2ParameterDock* parameterDock_ = nullptr;
     QDockWidget* processDock_ = nullptr;
+    QDockWidget* diagnosticDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;
     QLabel* statusLabel_ = nullptr;

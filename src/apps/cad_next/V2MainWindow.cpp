@@ -426,11 +426,18 @@ void V2MainWindow::BuildPanels()
     tabifyDockWidget(parameterDock_, measureDock_);
     exportDock_->raise();
 
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
     diagnosticDock->setWidget(diagnosticList_);
     addDockWidget(Qt::BottomDockWidgetArea, diagnosticDock);
+    diagnosticDock_ = diagnosticDock;
+
+    // 高さの割り当てを決める。決めないと「手順」が2行しか見えず、
+    // いま何段目かが読めない。「知らせ」は空のときに広すぎた。
+    resizeDocks({processDock_, exportDock_}, {240, 380}, Qt::Vertical);
+    resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
 
     toolLabel_ = new QLabel(this);
     groupLabel_ = new QLabel(this);

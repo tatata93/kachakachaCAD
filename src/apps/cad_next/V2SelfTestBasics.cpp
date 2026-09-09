@@ -150,13 +150,21 @@ namespace {
 [[nodiscard]] bool CaseMenusComeFromCatalog(V2MainWindow& window)
 {
     // メニューの項目は台帳から作る。台帳に無い入口を作らない。
-    int found = 0;
+    // 逆に、台帳へ足したのにメニューへ足し忘れたものも、ここで落ちる。
+    // 落ちたときに何を足し忘れたのかが分からないと直せないので、名前を出す。
+    std::string missing;
     for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
         if (window.ActionFor(command.id) != nullptr) {
-            ++found;
+            continue;
         }
+        if (!missing.empty()) {
+            missing += ", ";
+        }
+        missing += std::string(command.id);
     }
-    return found == static_cast<int>(kachakacha::v2::app::CommandCatalog().size());
+    return Explain((std::string("入口が無いコマンド: ")
+                       + (missing.empty() ? std::string("無し") : missing)).c_str(),
+        missing.empty());
 }
 
 [[nodiscard]] bool CaseDisabledCommandsExplain(V2MainWindow& window)

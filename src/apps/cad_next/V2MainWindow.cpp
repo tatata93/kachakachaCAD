@@ -175,6 +175,13 @@ V2MainWindow::V2MainWindow()
         [this](const kachakacha::v2::modeling::TransformPlan& plan) {
             ApplyTransformPlan(plan);
         });
+    // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
+    viewport_->SetControlPointCallback(
+        [this](kachakacha::v2::base::EntityId entityId,
+            kachakacha::v2::base::SegmentId segmentId,
+            const kachakacha::v2::geometry::CurveSegment& replacement) {
+            ReplaceWireSegment(entityId, segmentId, replacement);
+        });
     // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
     viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
     viewport_->SetSelectionChangedCallback([this] {
@@ -205,13 +212,14 @@ void V2MainWindow::BuildMenus()
     };
     const std::vector<MenuGroup> groups{
         {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
-        {"編集(&E)", {"edit.undo", "edit.redo", "selection.activate", "snap.toggle",
-                       "group.set_active"}},
+        {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "selection.activate",
+                       "snap.toggle", "group.set_active"}},
         {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
                        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
                             "wire.coincident", "wire.tangent", "wire.curvature",
-                            "wire.chamfer", "wire.fillet", "wire.project"}},
+                            "wire.chamfer", "wire.fillet", "wire.move", "wire.copy",
+                            "wire.mirror", "wire.rotate", "wire.project"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
                        "grid.move_origin"}},
         {"形(&M)", {"guide.create", "part.extrude", "part.from_wire_cage",
@@ -221,8 +229,8 @@ void V2MainWindow::BuildMenus()
                        "fabrication.set_assembly", "fabrication.freeze_state"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
                             "export.dxf"}},
-        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.display_settings",
-                       "measure.open"}},
+        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.hide_selected",
+                       "view.show_all", "view.display_settings", "measure.open"}},
     };
     for (const MenuGroup& group : groups) {
         QMenu* menu = menuBar()->addMenu(QString::fromUtf8(group.titleJa));

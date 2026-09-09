@@ -10,6 +10,7 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/CommandCatalog.h"
+#include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -378,6 +379,70 @@ namespace {
         window.Session().GetDocument().Revision() == revision);
 }
 
+[[nodiscard]] bool CaseControlPointsAreGrabbable(V2MainWindow& window)
+{
+    // V1では、選んでいるワイヤーの制御点が四角で出て、掴んで引きずれた。
+    // V2には無く、いちど引いた線は消して引き直すしかなかった。
+    auto& viewport = window.Viewport();
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+
+    const auto shown = kachakacha::v2::app::ControlPointsForSelection(
+        window.Session().Scene(), viewport.Selection());
+    if (!Explain((std::string("直線には制御点が2つ出る(実際は ")
+                     + std::to_string(shown.size()) + ")").c_str(),
+            shown.size() == 2)) {
+        return false;
+    }
+    const auto onScreen = viewport.Mapping().Project(shown.front().position);
+    if (!Explain("制御点が画面に出ている", onScreen.has_value())) {
+        return false;
+    }
+    const QPointF at(onScreen->x, onScreen->y);
+    if (!Explain("制御点を掴める", viewport.BeginControlPointDrag(at))) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    viewport.DragControlPoint(at + QPointF(0.0, 50.0));
+    if (!Explain("引きずっている間は文書を変えない",
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    if (!Explain("離すと文書が変わる",
+            viewport.ReleaseControlPointDrag(at + QPointF(0.0, 50.0)))) {
+        return false;
+    }
+    if (!Explain("掴みが終わっている", !viewport.ControlPointDragging())) {
+        return false;
+    }
+    // 種類は変わらない。折れ線へ落ちていたら、ここで気づく。
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("線が残っている", !curves.empty())) {
+        return false;
+    }
+    return Explain("直線のままである",
+        curves.front().segment.Kind() == kachakacha::v2::geometry::CurveKind::Line);
+}
+
+[[nodiscard]] bool CaseControlPointsOnlyOnSelected(V2MainWindow& window)
+{
+    // 全部の線に出すと画面が埋まって、どれを掴んだのか分からなくなる。
+    auto& viewport = window.Viewport();
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    const auto none = kachakacha::v2::app::ControlPointsForSelection(
+        window.Session().Scene(), viewport.Selection());
+    return Explain((std::string("選んでいなければ出ない(実際は ")
+                       + std::to_string(none.size()) + ")").c_str(), none.empty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
@@ -392,6 +457,8 @@ std::vector<SelfTestCase> InputCases()
         {"つぶれた変換は断る", &CaseTransformRefusesDegenerateInput},
         {"選んだ物を掴んで動かせる", &CaseGrabSelectedAndDrag},
         {"押しただけでは動かない", &CaseGrabWithoutDraggingIsJustAClick},
+        {"制御点を掴んで動かせる", &CaseControlPointsAreGrabbable},
+        {"制御点は選んだ線にだけ出る", &CaseControlPointsOnlyOnSelected},
     };
 }
 

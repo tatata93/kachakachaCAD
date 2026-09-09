@@ -12,6 +12,7 @@
 //!
 //! AUTOMOC を使っていないので Q_OBJECT は付けない(V1と同じ制約)。
 
+#include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/WorkPlane.h"
@@ -176,6 +177,21 @@ public:
     bool ReleaseBodyDrag(const QPointF& position);
     [[nodiscard]] bool BodyDragging() const noexcept { return bodyDrag_.active; }
 
+    //! ワイヤーの制御点を掴んで動かす(V1同等)。
+    //! 制御点は選んでいるワイヤーにだけ出す。全部に出すと画面が埋まる。
+    bool BeginControlPointDrag(const QPointF& position);
+    void DragControlPoint(const QPointF& position);
+    //! 離す。動かしていなければ false。文書を変えたら true。
+    bool ReleaseControlPointDrag(const QPointF& position);
+    [[nodiscard]] bool ControlPointDragging() const noexcept
+    {
+        return controlDrag_.active;
+    }
+    //! 制御点を1つ動かした結果を文書へ入れる。窓が引き受ける。
+    void SetControlPointCallback(std::function<void(kachakacha::v2::base::EntityId,
+            kachakacha::v2::base::SegmentId,
+            const kachakacha::v2::geometry::CurveSegment&)> callback);
+
     //! 試験から呼ぶ。マウスを使わずに同じ道を通す。
     void HoverAt(const QPointF& position);
     //! 直前の当たり判定が出した点。吸着と拘束を通した後の値。
@@ -295,6 +311,8 @@ private:
     void DrawWorkPlane(QPainter& painter) const;
     void DrawDocument(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;
+    //! 選んだワイヤーの制御点。掴める場所を見せる。
+    void DrawControlPoints(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
@@ -411,4 +429,16 @@ private:
         kachakacha::v2::geometry::Vector3 delta{};
     };
     BodyDrag bodyDrag_;
+
+    //! 制御点を掴んでいる間の状態。動かした後の形をここに持って、破線で出す。
+    struct ControlDrag {
+        bool active = false;
+        bool moved = false;
+        QPointF startPx;
+        kachakacha::v2::app::ShownControlPoint handle;
+        std::optional<kachakacha::v2::geometry::CurveSegment> preview;
+    };
+    ControlDrag controlDrag_;
+    std::function<void(kachakacha::v2::base::EntityId, kachakacha::v2::base::SegmentId,
+        const kachakacha::v2::geometry::CurveSegment&)> controlPointChanged_;
 };

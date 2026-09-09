@@ -13,6 +13,7 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/modeling/DrawingConstraint.h"
 
@@ -336,5 +337,91 @@ bool V2Viewport::ReleaseBodyDrag(const QPointF& position)
     plan.summaryJa = "移動: " + std::to_string(
         std::round(delta.Length() * 100.0) / 100.0) + "mm";
     transform_(plan);
+    return true;
+}
+
+void V2Viewport::SetControlPointCallback(
+    std::function<void(kachakacha::v2::base::EntityId, kachakacha::v2::base::SegmentId,
+        const kachakacha::v2::geometry::CurveSegment&)> callback)
+{
+    controlPointChanged_ = std::move(callback);
+}
+
+bool V2Viewport::BeginControlPointDrag(const QPointF& position)
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    controlDrag_ = ControlDrag{};
+    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+        return false;
+    }
+    const auto found = kachakacha::v2::app::PickControlPoint(session_->Scene(),
+        selection_, mapping_, ScreenPoint{position.x(), position.y()});
+    if (!found.has_value()) {
+        return false;
+    }
+    controlDrag_.active = true;
+    controlDrag_.startPx = position;
+    controlDrag_.handle = *found;
+    status_ = std::string(found->labelJa) + " を掴みました。";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    RefreshCursorShape();
+    return true;
+}
+
+void V2Viewport::DragControlPoint(const QPointF& position)
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    if (!controlDrag_.active) {
+        return;
+    }
+    if (kachakacha::v2::app::DragIsFarEnough(position.x() - controlDrag_.startPx.x(),
+            position.y() - controlDrag_.startPx.y())) {
+        controlDrag_.moved = true;
+    }
+    const auto onPlane = mapping_.UnprojectOntoPlane(
+        ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
+    if (!onPlane.has_value()) {
+        return;
+    }
+    // 掴んでいる曲線を場面から探し直す。持ち歩くと、途中で文書が変わったときに古くなる。
+    for (const auto& curve : session_->Scene().curves) {
+        if (curve.segmentId != controlDrag_.handle.segmentId) {
+            continue;
+        }
+        auto moved = kachakacha::v2::geometry::WithControlPointMoved(curve.segment,
+            controlDrag_.handle.index, *onPlane);
+        if (moved.HasValue()) {
+            controlDrag_.preview = moved.Value();
+        } else if (!moved.Diagnostics().empty()) {
+            // つぶれる位置では形を作らない。前の形のまま出して、理由を言う。
+            status_ = moved.Diagnostics().front().summaryJa;
+            if (statusCallback_) {
+                statusCallback_(status_);
+            }
+        }
+        break;
+    }
+    update();
+}
+
+bool V2Viewport::ReleaseControlPointDrag(const QPointF& position)
+{
+    if (!controlDrag_.active) {
+        return false;
+    }
+    DragControlPoint(position);
+    const bool moved = controlDrag_.moved;
+    const auto handle = controlDrag_.handle;
+    const auto preview = controlDrag_.preview;
+    controlDrag_ = ControlDrag{};
+    RefreshCursorShape();
+    update();
+    if (!moved || !preview.has_value() || !controlPointChanged_) {
+        // 掴んだだけ。形が変わっていないなら文書へ入れない。
+        return false;
+    }
+    controlPointChanged_(handle.entityId, handle.segmentId, *preview);
     return true;
 }

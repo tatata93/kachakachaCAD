@@ -537,6 +537,36 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         }
         painter.drawRect(QRectF(screen->x() - 2.0, screen->y() - 2.0, 4.0, 4.0));
     }
+    DrawControlPoints(painter);
+}
+
+void V2Viewport::DrawControlPoints(QPainter& painter) const
+{
+    // 選んだワイヤーの制御点だけ出す。掴めることが見えていないと、
+    // 掴めると思わない。四角は当たり判定(9px)より小さく描く。
+    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+        return;
+    }
+    if (controlDrag_.active && controlDrag_.moved && controlDrag_.preview.has_value()) {
+        QPainterPath ghost;
+        bool started = false;
+        AppendCurve(ghost, *controlDrag_.preview, started);
+        if (started) {
+            painter.setPen(QPen(palette_.preview, 1.6, Qt::DashLine));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawPath(ghost);
+        }
+    }
+    painter.setPen(QPen(palette_.selected, 1.0));
+    painter.setBrush(palette_.background);
+    for (const auto& point : kachakacha::v2::app::ControlPointsForSelection(
+             session_->Scene(), selection_)) {
+        const auto screen = ToScreen(point.position);
+        if (!screen.has_value()) {
+            continue;
+        }
+        painter.drawRect(QRectF(screen->x() - 3.0, screen->y() - 3.0, 6.0, 6.0));
+    }
 }
 
 void V2Viewport::DrawPreview(QPainter& painter) const
@@ -1237,6 +1267,10 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
     // 画面に focus が無くても Ctrl と Shift が効く。
     SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (controlDrag_.active) {
+        DragControlPoint(event->position());
+        return;
+    }
     if (bodyDrag_.active) {
         DragBody(event->position());
         return;
@@ -1317,6 +1351,12 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {
+        // 制御点 → 選んだ物、の順で掴む。順を逆にすると、
+        // 制御点が線の上に乗っているので、いつまでも制御点を掴めない。
+        if (event->modifiers() == Qt::NoModifier
+            && BeginControlPointDrag(event->position())) {
+            return;
+        }
         // 選んでいる物の上を押したら、掴んだとみなす(V1同等)。
         // 引きずらずに離せば、ただの選び直しとして扱う。
         if (event->modifiers() == Qt::NoModifier && BeginBodyDrag(event->position())) {
@@ -1330,6 +1370,10 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
 
 void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (controlDrag_.active) {
+        (void)ReleaseControlPointDrag(event->position());
+        return;
+    }
     if (bodyDrag_.active) {
         // 引きずっていなければ選び直しになる。掴んだ場所で選び直す。
         if (!ReleaseBodyDrag(event->position())) {

@@ -442,3 +442,73 @@ void V2MainWindow::ApplyTransformPlan(
     }
     SetStatus(QStringLiteral("%1: %2本を動かしました。").arg(label).arg(changed));
 }
+
+void V2MainWindow::ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,
+    kachakacha::v2::base::SegmentId segmentId,
+    const kachakacha::v2::geometry::CurveSegment& replacement)
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    // 動かした1本だけ差し替える。同じワイヤーの他の線はそのまま持ち越す。
+    std::vector<kachakacha::v2::geometry::CurveSegment> segments;
+    bool replaced = false;
+    for (const auto& curve : session_->Scene().curves) {
+        if (curve.entityId != entityId) {
+            continue;
+        }
+        if (curve.segmentId == segmentId) {
+            segments.push_back(replacement);
+            replaced = true;
+            continue;
+        }
+        segments.push_back(curve.segment);
+    }
+    if (!replaced) {
+        SetStatus(QStringLiteral("動かした線が見つかりませんでした。"));
+        return;
+    }
+    const auto* source = session_->GetDocument().FindEntity(entityId);
+    const QString label = QStringLiteral("制御点を動かす");
+
+    Feature feature;
+    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::CreateWire;
+    feature.displayName = label.toStdString();
+    kachakacha::v2::domain::CreateWireDefinition wire;
+    wire.segments = std::move(segments);
+    for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+        wire.segmentIds.push_back(
+            ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+    }
+    feature.definition = std::move(wire);
+
+    Entity entity;
+    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    entity.kind = EntityKind::Wire;
+    entity.displayName = source != nullptr && !source->displayName.empty()
+        ? source->displayName
+        : label.toStdString();
+    entity.construction = source != nullptr && source->construction;
+    entity.groupId = source != nullptr ? source->groupId : std::nullopt;
+    entity.createdBy = feature.id;
+    feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+
+    const auto added = session_->GetDocument().Run(
+        AddFeatureCommand(feature, {entity}, label.toStdString()));
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    RemoveConsumedWires({entityId});
+    AdoptCurrentDocument();
+    // 直した線をそのまま選んでおく。選び直さずに続けて直せる。
+    kachakacha::v2::app::SelectionSet next;
+    next.entityIds.push_back(entity.id);
+    viewport_->SetSelection(next);
+    SetStatus(label + QStringLiteral("ました。"));
+}

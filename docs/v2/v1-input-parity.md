@@ -190,7 +190,7 @@ V2 も同じ(打った文字がそのまま欄に入る)。
 | 10 | Delete で消す | **済** | `edit.delete` |
 | 11 | 選んだ物を掴んで動かす | **済** | `app/GrabToMove.h` + `V2ViewportInput.cpp` |
 | 11b | ギズモ(矢印・回転リング) | 残り | 掴んで動かすで足りるか、使って決める |
-| 12 | 制御点を掴んで動かす | 残り | |
+| 12 | 制御点を掴んで動かす | **済** | `geometry/ControlPointEdit.h` + `app/ControlPointPick.h` |
 | 13 | Ctrl+H / Ctrl+Shift+H | **済** | `view.hide_selected` / `view.show_all` |
 | 14 | Ctrl+1/2/3(表示モード) | 残り | V2 に同じ考えが無い。まず何にするかを決める |
 | 15 | F2(一覧で名前を変える) | 残り | |

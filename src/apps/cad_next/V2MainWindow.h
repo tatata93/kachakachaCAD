@@ -165,6 +165,10 @@ public:
     [[nodiscard]] bool TransformOneWire(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
         kachakacha::v2::base::EntityId entityId, const QString& labelJa);
+    //! 制御点を1つ動かした結果を文書へ入れる。元のワイヤーは置き換える。
+    void ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,
+        kachakacha::v2::base::SegmentId segmentId,
+        const kachakacha::v2::geometry::CurveSegment& replacement);
     //! 移動・複製・鏡映・回転を、いま選んでいる線へ当てる。
     //! 何をするかは core の PlanTransform が決めたものをそのまま使う。
     void ApplyTransformPlan(const kachakacha::v2::modeling::TransformPlan& plan);

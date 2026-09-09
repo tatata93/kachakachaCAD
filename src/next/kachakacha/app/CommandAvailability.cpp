@@ -48,6 +48,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.patterns >= 1;
     case SelectionPredicate::OneOrMoreSelectedCurves:
         return facts.curves >= 1;
+    case SelectionPredicate::OnePartOrSurface:
+        // どちらか片方が1つ。両方選んでいたら、どちらから作るのか決まらない。
+        return facts.parts + facts.guideSurfaces == 1;
     }
     return false;
 }
@@ -122,6 +125,9 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
             break;
         case domain::EntityKind::Part:
             ++facts.parts;
+            break;
+        case domain::EntityKind::GuideSurface:
+            ++facts.guideSurfaces;
             break;
         case domain::EntityKind::Wire: {
             ++facts.wires;

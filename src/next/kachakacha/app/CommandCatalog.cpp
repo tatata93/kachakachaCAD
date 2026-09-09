@@ -23,6 +23,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneFabricationPanel: return "部材を1つ選んでください。";
     case SelectionPredicate::OneOrMorePatterns: return "型紙を1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreSelectedCurves: return "曲線を1つ以上選んでください。";
+    case SelectionPredicate::OnePartOrSurface: return "部品か形状ガイドを1つ選んでください。";
     }
     return "";
 }

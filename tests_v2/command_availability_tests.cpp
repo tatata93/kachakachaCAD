@@ -171,6 +171,28 @@ KACHA_V2_TEST(availability, 部品の数で分かれる)
         "1つだけの条件は通らなくなる");
 }
 
+KACHA_V2_TEST(availability, 製作は部品からでも形状ガイドからでも始められる)
+{
+    // 平らな部品からも、曲がった面からも型紙は作れる。
+    // 片方しか通さないと、曲がった車体が作れない。
+    Bench parts;
+    parts.selection.entityIds.push_back(parts.AddEntity(EntityKind::Part));
+    Require(SelectionSatisfies(SelectionPredicate::OnePartOrSurface, parts.Facts()),
+        "部品1つで始められる");
+    Bench surface;
+    surface.selection.entityIds.push_back(surface.AddEntity(EntityKind::GuideSurface));
+    const auto facts = surface.Facts();
+    Require(facts.guideSurfaces == 1, "形状ガイドを数える");
+    Require(SelectionSatisfies(SelectionPredicate::OnePartOrSurface, facts),
+        "形状ガイド1つでも始められる");
+    // 両方選んだら、どちらから作るのか決まらない。
+    Bench both;
+    both.selection.entityIds.push_back(both.AddEntity(EntityKind::Part));
+    both.selection.entityIds.push_back(both.AddEntity(EntityKind::GuideSurface));
+    Require(!SelectionSatisfies(SelectionPredicate::OnePartOrSurface, both.Facts()),
+        "両方だと決まらない");
+}
+
 KACHA_V2_TEST(availability, 製作モデルと型紙は画面から数をもらう)
 {
     // 部材も型紙も文書には入らない。画面が覚えているので、そこから渡す。
@@ -207,6 +229,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OneFabricationPanel,
         SelectionPredicate::OneOrMorePatterns,
         SelectionPredicate::OneOrMoreSelectedCurves,
+        SelectionPredicate::OnePartOrSurface,
     };
     for (const SelectionPredicate predicate : needsSelection) {
         Require(!SelectionSatisfies(predicate, facts),
@@ -232,6 +255,7 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
     everything.wireChains = 2;
     everything.closedProfiles = 1;
     everything.parts = 2;
+    everything.guideSurfaces = 1;
     everything.derivedEntities = 1;
     everything.fabricationModels = 1;
     everything.fabricationPanels = 1;
@@ -247,8 +271,8 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
     // それ以外が通らないなら、判断の書き忘れである。
     std::vector<std::string> unexpected;
     for (const std::string& id : unreachable) {
-        const bool wantsExactlyOnePart = id == "fabrication.create" || id == "export.stl"
-            || id == "export.step" || id == "export.validate";
+        const bool wantsExactlyOnePart = id == "export.stl" || id == "export.step"
+            || id == "export.validate" || id == "fabrication.create";
         if (!wantsExactlyOnePart) {
             unexpected.push_back(id);
         }

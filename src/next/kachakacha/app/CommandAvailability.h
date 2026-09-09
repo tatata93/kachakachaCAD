@@ -34,6 +34,8 @@ struct SelectionFacts {
     //! 閉じた輪郭になっているワイヤーの数。
     int closedProfiles = 0;
     int parts = 0;
+    //! 選んだ形状ガイド(曲がった面)の数。
+    int guideSurfaces = 0;
     int derivedEntities = 0;
     int fabricationModels = 0;
     int fabricationPanels = 0;

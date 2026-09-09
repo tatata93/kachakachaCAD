@@ -45,6 +45,8 @@ enum class SelectionPredicate {
     OneFabricationPanel,
     OneOrMorePatterns,
     OneOrMoreSelectedCurves,
+    //! 部品1つ、または形状ガイド1つ。製作はどちらからでも始められる。
+    OnePartOrSurface,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

@@ -156,7 +156,9 @@ SelectionSet SelectAllOfKind(const document::DocumentSnapshot& snapshot,
 {
     SelectionSet selection;
     for (const auto& entity : snapshot.entities) {
-        if (entity.kind == kind) {
+        // 隠したものは選ばない。隠したのに次の操作へ巻き込まれると、
+        // 画面に出ていないものが動いて、なぜ変わったのか分からなくなる。
+        if (entity.kind == kind && entity.visibility == domain::Visibility::Visible) {
             selection.entityIds.push_back(entity.id);
         }
     }

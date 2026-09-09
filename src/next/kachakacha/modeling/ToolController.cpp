@@ -285,11 +285,12 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
     case DrawingTool::Copy:
     case DrawingTool::Mirror:
     case DrawingTool::Rotate:
-        // 変換そのものは WireEdit が行う。ここでは基準の点を集めるだけで、
-        // 集め終わったことを空の出力で伝える。
+        // 変換そのものは WireEdit が行う。ここでは基準の点を集めて渡す。
+        // 何を意味するか(移動量・鏡の面・回す角)は TransformInput が決める。
         if (static_cast<int>(points.size()) != RequiredPointCount()) {
             return fail(kNeedMore, "点が足りません。", {});
         }
+        output.transformPoints = points;
         return Result<ToolOutput>::Success(std::move(output));
 
     default:

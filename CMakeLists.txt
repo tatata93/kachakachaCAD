@@ -606,6 +606,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/SnapEngine.cpp
     src/next/kachakacha/modeling/WorkPlane.cpp
     src/next/kachakacha/modeling/DrawingConstraint.cpp
+    src/next/kachakacha/modeling/TransformInput.cpp
     src/next/kachakacha/modeling/ToolController.cpp
     src/next/kachakacha/modeling/SubshapeKey.cpp
     src/next/kachakacha/modeling/WireCage.cpp
@@ -732,6 +733,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(curved_panel_tests tests_v2/curved_panel_tests.cpp)
     kachakacha_add_v2_test(command_parameter_tests tests_v2/command_parameter_tests.cpp)
     kachakacha_add_v2_test(input_scheme_tests tests_v2/input_scheme_tests.cpp)
+kachakacha_add_v2_test(transform_input_tests tests_v2/transform_input_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
@@ -806,6 +808,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/main.cpp
         src/apps/cad_next/V2SelfTest.cpp
         src/apps/cad_next/V2SelfTestBasics.cpp
+        src/apps/cad_next/V2SelfTestInput.cpp
         src/apps/cad_next/V2SelfTestModeling.cpp
         src/apps/cad_next/V2ExportCommands.cpp
         src/apps/cad_next/V2FreezeCommands.cpp

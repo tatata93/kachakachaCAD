@@ -42,6 +42,8 @@ namespace {
 [[nodiscard]] std::vector<SelfTestCase> AllCases()
 {
     std::vector<SelfTestCase> cases = BasicCases();
+    const std::vector<SelfTestCase> input = InputCases();
+    cases.insert(cases.end(), input.begin(), input.end());
     const std::vector<SelfTestCase> modeling = ModelingCases();
     cases.insert(cases.end(), modeling.begin(), modeling.end());
     return cases;

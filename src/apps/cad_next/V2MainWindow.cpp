@@ -97,7 +97,7 @@ struct ToolBinding {
     DrawingTool tool;
 };
 
-constexpr std::array<ToolBinding, 13> kToolBindings{{
+constexpr std::array<ToolBinding, 17> kToolBindings{{
     {"selection.activate", DrawingTool::Select},
     {"grid.move_origin", DrawingTool::SetGridOrigin},
     {"draw.point", DrawingTool::Point},
@@ -110,6 +110,10 @@ constexpr std::array<ToolBinding, 13> kToolBindings{{
     {"draw.spline", DrawingTool::Spline},
     {"wire.trim", DrawingTool::Trim},
     {"wire.extend", DrawingTool::Extend},
+    {"wire.move", DrawingTool::Move},
+    {"wire.copy", DrawingTool::Copy},
+    {"wire.mirror", DrawingTool::Mirror},
+    {"wire.rotate", DrawingTool::Rotate},
     {"measure.open", DrawingTool::Measure},
 }};
 
@@ -162,10 +166,15 @@ V2MainWindow::V2MainWindow()
         viewport_->PruneSelection();
         RefreshEntityList();
     });
-        // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
+    // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
     viewport_->SetBackToSelectCallback([this] {
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     });
+    // 移動・複製・鏡映・回転。点がそろったら、選んでいる線へ当てる。
+    viewport_->SetTransformCallback(
+        [this](const kachakacha::v2::modeling::TransformPlan& plan) {
+            ApplyTransformPlan(plan);
+        });
     // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
     viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
     viewport_->SetSelectionChangedCallback([this] {

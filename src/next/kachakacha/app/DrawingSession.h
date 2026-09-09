@@ -12,6 +12,7 @@
 #include "kachakacha/document/Document.h"
 #include "kachakacha/modeling/SnapEngine.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/modeling/TransformInput.h"
 
 #include <functional>
 #include <memory>
@@ -48,6 +49,9 @@ struct ClickResult {
     std::string commandLabel;
     std::vector<base::Diagnostic> diagnostics;
     std::vector<base::EntityId> createdEntityIds;
+    //! 移動・複製・鏡映・回転が決まったときの中身。画面側はこれを選択へ当てる。
+    //! 文書を変えるのは画面側なので、ここでは「何をするか」だけを渡す。
+    std::optional<modeling::TransformPlan> transform;
 };
 
 class DrawingSession {

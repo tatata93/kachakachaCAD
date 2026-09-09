@@ -164,12 +164,12 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
-        binding->consumesFirstOnly);
+        binding->consumesFirstOnly, false);
 }
 
 void V2MainWindow::RunWireTransform(
     const kachakacha::v2::domain::TransformWireDefinition& definition,
-    const QString& labelJa, bool consumesFirstOnly)
+    const QString& labelJa, bool consumesFirstOnly, bool keepsSource)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -216,6 +216,15 @@ void V2MainWindow::RunWireTransform(
         AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    if (keepsSource) {
+        // 複製と鏡映は、元の線を残す。消したら複製にならない。
+        AdoptCurrentDocument();
+        SetStatus(QStringLiteral("%1: %2本から%3本を作りました。元の線は残っています。")
+                .arg(labelJa)
+                .arg(static_cast<int>(inputs.size()))
+                .arg(static_cast<int>(computed.Value().size())));
         return;
     }
     std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
@@ -302,8 +311,47 @@ void V2MainWindow::BeginTrimOrExtend(bool trim)
                 : (closest.secondParameter >= 0.5 ? 1.0 : 0.0);
             definition.scalarArgument.kind =
                 kachakacha::v2::geometry::QuantityKind::Scalar;
-            RunWireTransform(definition, label, true);
+            RunWireTransform(definition, label, true, false);
         },
         trim ? "トリム: 捨てる側を1回押してください(Esc でやめます)。"
              : "延長: 延ばしたい端の近くを1回押してください(Esc でやめます)。");
+}
+
+void V2MainWindow::ApplyTransformPlan(
+    const kachakacha::v2::modeling::TransformPlan& plan)
+{
+    using kachakacha::v2::domain::TransformWireDefinition;
+    using kachakacha::v2::domain::WireTransformMethod;
+    using kachakacha::v2::modeling::TransformKind;
+
+    // 選んでいる線が無ければ、当てる相手がいない。黙って何もしない、はしない。
+    if (viewport_->Selection().entityIds.empty()) {
+        SetStatus(QStringLiteral("%1: 先に動かす線を選んでください。")
+                .arg(QString::fromStdString(plan.summaryJa)));
+        return;
+    }
+    TransformWireDefinition definition;
+    switch (plan.kind) {
+    case TransformKind::Move:
+        definition.method = WireTransformMethod::Move;
+        break;
+    case TransformKind::Copy:
+        definition.method = WireTransformMethod::Copy;
+        break;
+    case TransformKind::Mirror:
+        definition.method = WireTransformMethod::Mirror;
+        break;
+    case TransformKind::Rotate:
+        definition.method = WireTransformMethod::Rotate;
+        break;
+    }
+    definition.vectorArgument = plan.vectorArgument;
+    definition.pointArgument = plan.pointArgument;
+    definition.scalarArgument.value = plan.angleRad;
+    definition.scalarArgument.expression = std::to_string(plan.angleRad);
+    definition.scalarArgument.kind = plan.kind == TransformKind::Rotate
+        ? kachakacha::v2::geometry::QuantityKind::Angle
+        : kachakacha::v2::geometry::QuantityKind::Length;
+    RunWireTransform(definition, QString::fromStdString(plan.summaryJa), false,
+        plan.keepsSource);
 }

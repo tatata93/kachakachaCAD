@@ -88,6 +88,9 @@ struct ToolOutput {
     std::vector<CurveSegment> segments;
     //! 作図点だけを作るツール。
     std::vector<Vector3> points;
+    //! 移動・複製・鏡映・回転が集めた基準の点。形は作らないが、これが要る。
+    //! ここに残さないと、確定した瞬間に points_ が空になって、何を指したか消える。
+    std::vector<Vector3> transformPoints;
     //! そのツールが補助線を作ったか。
     bool construction = false;
 };

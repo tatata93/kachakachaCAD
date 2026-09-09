@@ -51,7 +51,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "draw.point", "draw.line", "draw.polyline", "draw.rectangle", "draw.circle",
         "draw.arc", "draw.bezier", "draw.spline", "wire.trim", "wire.extend",
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
-        "wire.chamfer", "wire.fillet", "wire.project", "workplane.create", "grid.edit",
+        "wire.chamfer", "wire.fillet", "wire.move", "wire.copy", "wire.mirror",
+        "wire.rotate", "wire.project", "workplane.create", "grid.edit",
         "grid.move_origin",
     };
     static const std::vector<std::string_view> part{

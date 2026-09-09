@@ -188,6 +188,12 @@ void V2Viewport::SetDocumentChangedCallback(std::function<void()> callback)
     documentChangedCallback_ = std::move(callback);
 }
 
+void V2Viewport::SetTransformCallback(
+    std::function<void(const kachakacha::v2::modeling::TransformPlan&)> callback)
+{
+    transform_ = std::move(callback);
+}
+
 ScreenMapping V2Viewport::Mapping() const
 {
     return mapping_;
@@ -1170,6 +1176,9 @@ void V2Viewport::ClickAt(const QPointF& position)
     if (result.committed && documentChangedCallback_) {
         documentChangedCallback_();
     }
+    if (result.transform.has_value() && transform_) {
+        transform_(*result.transform);
+    }
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     update();
 }
@@ -1187,6 +1196,9 @@ void V2Viewport::FinishTool()
     }
     if (result.committed && documentChangedCallback_) {
         documentChangedCallback_();
+    }
+    if (result.transform.has_value() && transform_) {
+        transform_(*result.transform);
     }
     update();
 }

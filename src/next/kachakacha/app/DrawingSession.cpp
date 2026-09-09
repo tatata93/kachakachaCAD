@@ -166,8 +166,17 @@ ClickResult DrawingSession::Commit(const ToolOutput& output)
     ClickResult result;
     result.placedPoint = true;
     if (output.segments.empty() && output.points.empty()) {
-        // 変換ツールなど、点を集めるだけのもの。文書は変わらない。
+        // 変換ツール。ここでは形を作らない。集めた点が何を意味するかだけを決める。
         result.commandLabel = std::string(modeling::DrawingToolNameJa(tool_));
+        if (!output.transformPoints.empty()) {
+            auto planned = modeling::PlanTransform(tool_, output.transformPoints,
+                scene_.workPlane.normal, document_.Snapshot().settings.tolerance);
+            if (!planned.HasValue()) {
+                result.diagnostics = planned.Diagnostics();
+                return result;
+            }
+            result.transform = planned.Value();
+        }
         return result;
     }
 

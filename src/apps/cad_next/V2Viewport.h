@@ -159,6 +159,10 @@ public:
     //! 文書から消えたものを選択から外す。文書が変わったら呼ぶ。
     void PruneSelection();
     void SetDocumentChangedCallback(std::function<void()> callback);
+    //! 移動・複製・鏡映・回転の点がそろったときに呼ぶ。
+    //! 文書を変えるのは主窓の役目なので、画面はここで手放す。
+    void SetTransformCallback(
+        std::function<void(const kachakacha::v2::modeling::TransformPlan&)> callback);
 
     //! いま出ている案内文。
     [[nodiscard]] const std::string& StatusMessage() const noexcept { return status_; }
@@ -388,4 +392,5 @@ private:
     std::function<void()> selectionChangedCallback_;
     kachakacha::v2::app::SelectionSet selection_;
     std::function<void()> documentChangedCallback_;
+    std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
 };

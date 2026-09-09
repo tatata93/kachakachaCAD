@@ -160,7 +160,10 @@ public:
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
-        const QString& labelJa, bool consumesFirstOnly);
+        const QString& labelJa, bool consumesFirstOnly, bool keepsSource);
+    //! 移動・複製・鏡映・回転を、いま選んでいる線へ当てる。
+    //! 何をするかは core の PlanTransform が決めたものをそのまま使う。
+    void ApplyTransformPlan(const kachakacha::v2::modeling::TransformPlan& plan);
     //! トリム・延長は押した場所で意味が決まる。1回だけ押す場所を聞く。
     void BeginTrimOrExtend(bool trim);
     //! 選んだ線を作業平面へ落とす。元の線は残す。

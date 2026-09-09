@@ -6,6 +6,7 @@
 //!
 //! ケース自体は種類ごとに別のファイルへ置く。
 //!   V2SelfTestBasics.cpp   : 道具・画面・視点・書き出し・ファイル
+//!   V2SelfTestInput.cpp    : V1同等の操作系(マウス・キー・変換の道具)
 //!   V2SelfTestModeling.cpp : 線の編集・作業平面・部品・部材・型紙
 //! こうしておけば、ケースが増えても 1 ファイルが太らない。
 
@@ -29,6 +30,9 @@ struct SelfTestCase {
 
 //! 道具・画面・視点・書き出し・ファイルのケース。
 [[nodiscard]] std::vector<SelfTestCase> BasicCases();
+
+//! V1同等の操作系のケース。
+[[nodiscard]] std::vector<SelfTestCase> InputCases();
 
 //! 線の編集・作業平面・部品・部材・型紙のケース。
 [[nodiscard]] std::vector<SelfTestCase> ModelingCases();

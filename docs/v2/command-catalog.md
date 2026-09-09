@@ -60,6 +60,10 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.trim` | トリム | 対象segment、境界、残す側 | TransformWire | AT-WIR-006 |
 | `wire.extend` | 延長 | 対象端、境界/長さ | TransformWire | AT-WIR-006 |
 | `wire.split` | 分割 | segment、parameter/交点 | TransformWire | AT-WIR-001,006 |
+| `wire.move` | 移動 | ワイヤー、2点 | TransformWire | AT-WIR-006 |
+| `wire.copy` | コピー | ワイヤー、2点 | TransformWire | AT-WIR-006 |
+| `wire.mirror` | ミラー複製 | ワイヤー、鏡の線2点 | TransformWire | AT-WIR-006 |
+| `wire.rotate` | 回転 | ワイヤー、中心と向き2点 | TransformWire | AT-WIR-006 |
 | `wire.join` | 結合 | 2 chain、明示許容/拘束 | TransformWire | AT-WIR-004,006 |
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |

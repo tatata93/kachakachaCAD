@@ -88,6 +88,7 @@ parameter schemaのdiscriminatorにする。
 | `guide.create` | 形状ガイド | method、役割別WireChain表 | GuideSurface | AT-GEO-001から006, AT-UIX-007 |
 | `wire.project` | 面へ投影 | WireChain、対象、方向、hit policy | derived Wire | AT-FAB-007 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
+| `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Extrude | AT-EXT-001 |
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart | AT-GEO-010から013 |
 | `part.boolean_add` | 足す | target Part 1、tool Part 1以上 | Part | AT-EXT-007 |
 | `part.boolean_cut` | 引く | target Part 1、tool Part 1以上 | 1以上のPart | AT-EXT-007 |

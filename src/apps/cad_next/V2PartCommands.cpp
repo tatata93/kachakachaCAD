@@ -64,14 +64,19 @@ using kachakacha::v2::modeling::SnapCurve;
 
 bool V2MainWindow::IsPartCommand(std::string_view id)
 {
-    return id == "part.extrude" || id == "part.from_wire_cage"
-        || id == "part.boolean_add" || id == "part.boolean_cut";
+    return id == "part.extrude" || id == "part.thicken"
+        || id == "part.from_wire_cage" || id == "part.boolean_add"
+        || id == "part.boolean_cut";
 }
 
 void V2MainWindow::RunPartCommand(std::string_view id)
 {
     if (id == "part.extrude") {
         RunExtrude();
+        return;
+    }
+    if (id == "part.thicken") {
+        RunThickenSurface();
         return;
     }
     if (id == "part.from_wire_cage") {
@@ -161,6 +166,11 @@ void V2MainWindow::RunExtrude()
     }
     ExtrudeRequest request = kachakacha::v2::app::ToExtrudeRequest(choice,
         std::move(profiles), viewport_->WorkPlane(), targetPlane);
+    // カーネルには輪郭も側面も常に頼む。画面に出す辺と、型紙に要る「平らな1枚」が
+    // そこから取れるからである。**文書のワイヤーにするかどうかは別の話** で、
+    // それは利用者が選んだとおりにする。
+    request.outputs.endProfileWire = true;
+    request.outputs.sideBoundaryWires = true;
 
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
@@ -198,16 +208,29 @@ void V2MainWindow::RunExtrude()
     for (const auto& wire : built.Value().sideBoundaryWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
+    AdoptExtrudeResult(choice, definition, built.Value(), edges);
+}
+
+void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
+    const kachakacha::v2::domain::ExtrudeDefinition& definition,
+    const kachakacha::v2::kernel::ExtrudeBuildResult& built,
+    const std::vector<CurveSegment>& edges)
+{
     // 出来た立体を全部残す。先頭の1つだけを覚えていたので、
     // 穴あきの輪郭などで2つ以上出来たときに、残りが消えていた。
+    //
+    // ただし「ワイヤーだけ作る」と言われたら、立体は作らない。
+    // カーネルは outputs によらず内部で立体を作るので、
+    // 返ってきたからといって文書へ入れてはいけない。
     kachakacha::v2::base::EntityId partId;
-    for (std::size_t index = 0; index < built.Value().parts.size(); ++index) {
+    const std::size_t partCount = choice.makePart ? built.parts.size() : 0;
+    for (std::size_t index = 0; index < partCount; ++index) {
         auto copy = definition;
-        const std::string label = built.Value().parts.size() > 1
+        const std::string label = built.parts.size() > 1
             ? "押し出し " + std::to_string(index + 1)
             : std::string("押し出し");
         const auto made = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
-            std::move(copy), built.Value().parts[index].handle,
+            std::move(copy), built.parts[index].handle,
             index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str());
         if (index == 0) {
             partId = made;
@@ -215,12 +238,38 @@ void V2MainWindow::RunExtrude()
     }
     // 型紙にするときは「平らな1枚」が要る。押し出しの端の輪郭がそれである。
     // 立体の辺を全部渡すと、厚みのぶんだけ平面から外れて FAB-P004 で断られる。
-    if (!partId.IsNil() && !built.Value().endProfileWires.empty()) {
-        partFlatBoundary_[partId.ToString()] = built.Value().endProfileWires.front();
+    if (!partId.IsNil() && !built.endProfileWires.empty()) {
+        partFlatBoundary_[partId.ToString()] = built.endProfileWires.front();
     }
-    SetStatus(QStringLiteral("押し出し: 厚み %1 mm の部品を作りました(体積 %2 mm3)。")
-            .arg(ExtrudeDistanceMm())
-            .arg(built.Value().totalVolumeMm3));
+    // 頼まれたワイヤーは、画面に出すだけの辺ではなく **文書のワイヤー** にする。
+    // 辺のままだと、選ぶことも、次の押し出しの輪郭にすることもできない。
+    int wires = 0;
+    if (choice.makeEndProfileWire) {
+        for (const auto& wire : built.endProfileWires) {
+            if (!AddPlainWire(wire, "押し出し先の輪郭").IsNil()) {
+                ++wires;
+            }
+        }
+    }
+    if (choice.makeSideBoundaryWires) {
+        for (const auto& wire : built.sideBoundaryWires) {
+            if (!AddPlainWire(wire, "側面の境界").IsNil()) {
+                ++wires;
+            }
+        }
+    }
+    if (partCount == 0) {
+        AdoptCurrentDocument();
+        SetStatus(QStringLiteral("押し出し: ワイヤーを %1 本作りました(立体は作っていません)。")
+                .arg(wires));
+        return;
+    }
+    SetStatus(QStringLiteral("押し出し: 厚み %1 mm の部品を %2 個"
+                             "、ワイヤーを %3 本作りました(体積 %4 mm3)。")
+            .arg(choice.distanceMm)
+            .arg(static_cast<int>(partCount))
+            .arg(wires)
+            .arg(built.totalVolumeMm3));
 }
 
 void V2MainWindow::RunWireCage()
@@ -450,4 +499,56 @@ std::optional<kachakacha::v2::modeling::WorkPlaneFrame> V2MainWindow::WorkPlaneF
     frame.uAxis = definition->uDirection;
     frame.vAxis = Cross(definition->normal, definition->uDirection);
     return frame;
+}
+
+void V2MainWindow::RunThickenSurface()
+{
+    using kachakacha::v2::fabrication::ThicknessPlacement;
+
+    // 面に厚みを付けて立体にする。オーナーの手順の「面を各種距離でソリッド化する」。
+    // ここが無かったので、断面から面までは作れるのに、その面から立体へ戻れなかった。
+    std::vector<kachakacha::v2::base::EntityId> surfaces;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr
+            && entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
+            surfaces.push_back(id);
+        }
+    }
+    if (surfaces.empty()) {
+        SetStatus(QStringLiteral("面に厚みを付ける: 先に形状ガイドの面を選んでください。"));
+        return;
+    }
+    const double thickness = ExtrudeDistanceMm();
+    const ThicknessPlacement placement = thicknessPlacement_;
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    int made = 0;
+    for (const auto& id : surfaces) {
+        const auto found = guideShapes_.find(id.ToString());
+        if (found == guideShapes_.end()) {
+            SetStatus(QStringLiteral("面に厚みを付ける: 選んだ面の形がまだありません。"));
+            return;
+        }
+        const auto built = kachakacha::v2::kernel::ThickenSurface(found->second,
+            thickness, placement, tolerance);
+        if (!built.HasValue()) {
+            ReportDiagnostics(built.Diagnostics());
+            return;
+        }
+        // 作り方は押し出しと同じ枠で持つ。面から作ったことは入力で分かる。
+        kachakacha::v2::domain::ExtrudeDefinition definition;
+        definition.profiles.push_back(id);
+        definition.distance.value = thickness;
+        definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
+        const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
+            std::move(definition), built.Value().handle, built.Value().edges,
+            "面に厚み");
+        if (partId.IsNil()) {
+            return;
+        }
+        ++made;
+    }
+    SetStatus(QStringLiteral("面に厚みを付ける: %1枚の面から厚み %2 mm の部品を作りました。")
+            .arg(made)
+            .arg(thickness));
 }

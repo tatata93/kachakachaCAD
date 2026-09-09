@@ -51,6 +51,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::OnePartOrSurface:
         // どちらか片方が1つ。両方選んでいたら、どちらから作るのか決まらない。
         return facts.parts + facts.guideSurfaces == 1;
+    case SelectionPredicate::OneOrMoreGuideSurfaces:
+        // 面に厚みを付ける。面が1つも無ければ、付ける相手がいない。
+        return facts.guideSurfaces >= 1;
     }
     return false;
 }

@@ -24,6 +24,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneOrMorePatterns: return "型紙を1つ以上選んでください。";
     case SelectionPredicate::OneOrMoreSelectedCurves: return "曲線を1つ以上選んでください。";
     case SelectionPredicate::OnePartOrSurface: return "部品か形状ガイドを1つ選んでください。";
+    case SelectionPredicate::OneOrMoreGuideSurfaces: return "形状ガイドの面を1つ以上選んでください。";
     }
     return "";
 }
@@ -224,6 +225,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreClosedProfiles, "閉じた輪郭を1つ以上選んでください。",
             "輪郭を押し出します。出来る体積と面の数を先に出します。", true,
             {"AT-EXT-001", "AT-EXT-002", "AT-EXT-003", "AT-EXT-004", "AT-EXT-005", "AT-EXT-006", "AT-EXT-007", "AT-EXT-008"}},
+        {"part.thicken", "面に厚みを付ける", CommandMode::Dialog, "thicken", "",
+            SelectionPredicate::OneOrMoreGuideSurfaces,
+            "形状ガイドの面を1つ以上選んでください。",
+            "選んだ面に厚みを付けて立体にします。厚みの付け方は外側・中央・内側から選びます。",
+            true, {"AT-EXT-001"}},
         {"part.from_wire_cage", "ワイヤー群から部品", CommandMode::Dialog, "cage", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "閉じたワイヤーのかごから部品を作ります。", true,

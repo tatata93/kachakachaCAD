@@ -25,6 +25,9 @@
 #include "kachakacha/base/Ids.h"
 #include "V2ExtrudeDialog.h"
 #include "kachakacha/app/ExtrudeOptions.h"
+#include "kachakacha/fabrication/FabricationSettings.h"
+#include "kachakacha/kernel/OcctExtrude.h"
+#include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
@@ -208,6 +211,16 @@ public:
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
+    //! 押し出しの結果を文書へ入れる。作るものは利用者が選んだとおりにする。
+    void AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
+        const kachakacha::v2::domain::ExtrudeDefinition& definition,
+        const kachakacha::v2::kernel::ExtrudeBuildResult& built,
+        const std::vector<kachakacha::v2::geometry::CurveSegment>& edges);
+    //! 選んだ面に厚みを付けて立体にする。工程2の「面をソリッド化する」。
+    void RunThickenSurface();
+    //! 厚みをどちらへ付けるか。外側・中央・内側。
+    kachakacha::v2::fabrication::ThicknessPlacement thicknessPlacement_ =
+        kachakacha::v2::fabrication::ThicknessPlacement::Centered;
     //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
     //! 値を返さなければ「やめた」。
     void SetExtrudeChooser(

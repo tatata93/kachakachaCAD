@@ -33,7 +33,6 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `app/PointSources.h` | 距離・接近・曲線上から作図点を作る | 作図点の作り方を増やすとき |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `geometry/CurveJoin.h` | 曲線のつなぎ(角の処理) | `wire.join` は別の道(`WireConnect`)を通っている。どちらを残すか決めてから |
-| `fabrication/FabricationSettings.h` | 製作の設定(再現度・曲げ方向・切れ目・厚み) | 近似を文書に載せるとき |
 | `fabrication/CurvatureAnalysis.h` | 面の曲がり方の分類 | 近似(V2方式)を繋ぐとき |
 | `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
 | `fabrication/ReliefCut.h` | 二重曲率を逃がす切れ目 | 近似(V2方式)を繋ぐとき |
@@ -43,4 +42,4 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/Assembly.h` | 曲げ具合(組立率)で形を作る | 曲げ具合を繋ぐとき |
 | `fabrication/FreezeState.h` | ある曲げ状態を1回だけ評価して固める | 任意状態の固定を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
-| `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 面の厚み付けを繋ぐとき |
+| `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |

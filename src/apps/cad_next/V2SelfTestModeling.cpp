@@ -315,16 +315,27 @@ namespace {
         choice.makeSideBoundaryWires = true;
         return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
     });
+    const auto countWires = [&window] {
+        int count = 0;
+        for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+            if (entity.kind == kachakacha::v2::domain::EntityKind::Wire) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    const int wiresBefore = countWires();
     window.RunCommand("part.extrude");
     if (!Explain((std::string("部品は増えない(") + std::to_string(partsBefore)
                      + " → " + std::to_string(CountParts(window)) + ")").c_str(),
             CountParts(window) == partsBefore)) {
         return false;
     }
-    return Explain((std::string("断られていない(") + window.StatusText().toStdString()
-                       + ")").c_str(),
-        !window.StatusText().contains(QStringLiteral("できません"))
-            && !window.StatusText().contains(QStringLiteral("要ります")));
+    // 出来たワイヤーは、画面に出すだけの辺ではなく文書のワイヤーであること。
+    // 辺のままだと、選ぶことも、次の押し出しの輪郭にすることもできない。
+    return Explain((std::string("ワイヤーが増える(") + std::to_string(wiresBefore)
+                       + " → " + std::to_string(countWires()) + ")").c_str(),
+        countWires() > wiresBefore);
 }
 
 [[nodiscard]] bool CaseExtrudeRefusesImpossibleChoices(V2MainWindow& window)
@@ -769,6 +780,64 @@ namespace {
             || window.StatusText().contains(QStringLiteral("載っていません")));
 }
 
+[[nodiscard]] bool CaseThickenSurfaceMakesASolid(V2MainWindow& window)
+{
+    // オーナーの手順の中心。断面 → 面 → **その面に厚みを付けて立体**。
+    // ここが無かったので、面までは作れるのに立体へ戻れなかった。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.65));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.65));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    window.RunCommand("guide.create");
+    if (!Explain((std::string("面ができる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("面を作りました")))) {
+        return false;
+    }
+    const int partsBefore = CountParts(window);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface));
+    if (!Explain("面を選んだ状態で押せる", window.CommandEnabled("part.thicken", nullptr))) {
+        return false;
+    }
+    window.RunCommand("part.thicken");
+    if (!Explain((std::string("部品ができる(") + std::to_string(partsBefore) + " → "
+                     + std::to_string(CountParts(window)) + " / "
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountParts(window) > partsBefore)) {
+        return false;
+    }
+    // 名前が増えただけでは立体ではない。本当に出せることまで見る。
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    return Explain("厚みを付けた部品を STEP で出せる", window.CanExportSelectedParts());
+}
+
+[[nodiscard]] bool CaseThickenNeedsASurface(V2MainWindow& window)
+{
+    // 面を選ばずに押したら、理由を出して断る。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    QString reason;
+    if (!Explain("線だけでは押せない",
+            !window.CommandEnabled("part.thicken", &reason))) {
+        return false;
+    }
+    return Explain((std::string("理由が出る(") + reason.toStdString() + ")").c_str(),
+        reason.contains(QStringLiteral("形状ガイド")));
+}
+
 [[nodiscard]] bool CaseSurfaceToPatternEndToEnd(V2MainWindow& window)
 {
     // 面 → 展開 → 型紙 → 1:1 PDF まで通す。
@@ -866,6 +935,8 @@ std::vector<SelfTestCase> ModelingCases()
         {"グリッド原点は押した場所へ動く", &CaseGridOriginAsksWhereToPress},
         {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
+        {"面に厚みを付けて立体にできる", &CaseThickenSurfaceMakesASolid},
+        {"面を選ばずに厚みは付けられない", &CaseThickenNeedsASurface},
         {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},

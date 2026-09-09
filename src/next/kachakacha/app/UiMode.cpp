@@ -57,7 +57,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "grid.move_origin",
     };
     static const std::vector<std::string_view> part{
-        "guide.create", "part.extrude", "part.from_wire_cage", "part.boolean_add",
+        "guide.create", "part.extrude", "part.thicken", "part.from_wire_cage",
+        "part.boolean_add",
         "part.boolean_cut", "derived.freeze",
     };
     static const std::vector<std::string_view> fabrication{

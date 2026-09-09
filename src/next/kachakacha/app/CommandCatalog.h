@@ -47,6 +47,8 @@ enum class SelectionPredicate {
     OneOrMoreSelectedCurves,
     //! 部品1つ、または形状ガイド1つ。製作はどちらからでも始められる。
     OnePartOrSurface,
+    //! 形状ガイドの面を1つ以上。厚みを付けて立体にするときに使う。
+    OneOrMoreGuideSurfaces,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

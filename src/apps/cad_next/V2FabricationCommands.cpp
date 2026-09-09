@@ -13,6 +13,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <string>
 #include <utility>
@@ -31,6 +32,10 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
     }
     if (id == "fabrication.create_pattern") {
         RunCreatePattern();
+        return;
+    }
+    if (id == "fabrication.assign_role") {
+        AssignOpeningRole();
         return;
     }
     if (id == "fabrication.preview_update") {
@@ -96,6 +101,13 @@ void V2MainWindow::RunFabricationCreate()
         return;
     }
     fabricationPanels_ = panels.Value();
+    // 元の輪郭を覚えておく。あとで開口を足すときに、ここから作り直す。
+    panelBoundary_.clear();
+    panelOpenings_.clear();
+    for (const auto& request : requests) {
+        panelBoundary_[request.panelId] = request.boundary;
+        panelOpenings_[request.panelId] = request.openings;
+    }
     processContext_.fabricationBuilt = true;
     processContext_.panelCount = static_cast<int>(fabricationPanels_.size());
     processContext_.patternBuilt = false;
@@ -154,4 +166,82 @@ void V2MainWindow::RunCreatePattern()
     SetStatus(QStringLiteral("型紙を作る: A4 %1ページに %2枚を並べました(原寸)。")
             .arg(static_cast<int>(patternPages_.size()))
             .arg(static_cast<int>(fabricationPanels_.size())));
+}
+
+void V2MainWindow::AssignOpeningRole()
+{
+    using kachakacha::v2::fabrication::BuildPlanarPanels;
+    using kachakacha::v2::fabrication::PlanarPanelRequest;
+
+    // いまできる役割の割り当ては「開口」だけである。
+    // 外周は部品の輪郭がそのままなので、手で決める必要がない。
+    // 折り線と切れ目は、曲がった面を扱えるようになってから入れる。
+    // 出来ないものを、出来るふりをして並べない。
+    if (fabricationPanels_.empty()) {
+        SetStatus(QStringLiteral(
+            "境界の役割: 先に「製作モデルを作る」で部材にしてください。"));
+        return;
+    }
+    const auto& selection = viewport_->Selection();
+    std::vector<kachakacha::v2::geometry::CurveSegment> opening;
+    for (const auto& id : selection.entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr
+            || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
+            continue;
+        }
+        for (const auto& curve : session_->Scene().curves) {
+            if (curve.entityId == id) {
+                opening.push_back(curve.segment);
+            }
+        }
+    }
+    if (opening.empty()) {
+        SetStatus(QStringLiteral(
+            "境界の役割: 開口にしたい線を選んでください(窓など)。"));
+        return;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    if (!kachakacha::v2::geometry::SegmentsFormClosedLoop(opening, tolerance)) {
+        // 開いた線は穴にならない。開いたまま切ると、板が2つに割れる。
+        SetStatus(QStringLiteral(
+            "境界の役割: 開口は閉じた輪でなければなりません。線がつながっていません。"));
+        return;
+    }
+    // 覚えてある元の輪郭から作り直す。前の結果へ足すと、
+    // 押すたびに開口が増えていってしまう。
+    std::vector<PlanarPanelRequest> requests;
+    for (const auto& panel : fabricationPanels_) {
+        PlanarPanelRequest request;
+        request.panelId = panel.panelId;
+        const auto found = panelBoundary_.find(panel.panelId);
+        if (found == panelBoundary_.end()) {
+            continue;
+        }
+        request.boundary = found->second;
+        request.openings = panelOpenings_[panel.panelId];
+        requests.push_back(std::move(request));
+    }
+    if (requests.empty()) {
+        SetStatus(QStringLiteral("境界の役割: 元の輪郭が見つかりません。"));
+        return;
+    }
+    // 開口は1枚目へ入れる。どの部材へ入れるかを選べるようになるまで、
+    // 選べるふりをしない。
+    requests.front().openings.push_back(opening);
+    const auto rebuilt = BuildPlanarPanels(requests, tolerance.interactiveJoinMm);
+    if (!rebuilt.HasValue()) {
+        ReportDiagnostics(rebuilt.Diagnostics());
+        return;
+    }
+    panelOpenings_[requests.front().panelId] = requests.front().openings;
+    fabricationPanels_ = rebuilt.Value();
+    processContext_.patternBuilt = false;
+    patternPages_.clear();
+    SetProcessContext(processContext_);
+    SetStatus(QStringLiteral(
+        "境界の役割: %1 に開口を1つ入れました(いま%2つ)。"
+        "型紙はもう一度作ってください。")
+            .arg(QString::fromStdString(requests.front().panelId))
+            .arg(static_cast<int>(requests.front().openings.size())));
 }

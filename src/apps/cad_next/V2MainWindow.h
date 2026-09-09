@@ -151,6 +151,17 @@ public:
     void BeginTrimOrExtend(bool trim);
     //! 選んだ線を作業平面へ落とす。元の線は残す。
     void ProjectSelectedWires();
+    //! 固定のコマンドか。V2FreezeCommands.cpp が持つ。
+    [[nodiscard]] static bool IsFreezeCommand(std::string_view id);
+    void RunFreezeCommand(std::string_view id);
+    //! 作り方に付いていかない、ただの線を1つ足す。足せたら EntityId を返す。
+    kachakacha::v2::base::EntityId AddPlainWire(
+        std::vector<kachakacha::v2::geometry::CurveSegment> segments,
+        const char* labelJa);
+    //! 選んだものを、作り方に付いていかない形にする。元は隠す。
+    void FreezeSelectedDerived();
+    //! いまの部材を、型紙と同じ形の線にする。
+    void FreezeFabricationState();
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
     [[nodiscard]] static bool IsGuideCommand(std::string_view id);
     void RunGuideCommand(std::string_view id);
@@ -218,6 +229,13 @@ private:
     void RunFabricationCommand(std::string_view id);
     void RunFabricationCreate();
     void RunCreatePattern();
+    //! 選んだ線を、いまの部材の開口にする。
+    void AssignOpeningRole();
+    //! 部材のもとになった輪郭と、入れた開口。作り直しに使う。
+    std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>
+        panelBoundary_;
+    std::map<std::string,
+        std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelOpenings_;
     //! 出来た部材。平らなものだけ。
     std::vector<kachakacha::v2::fabrication::PatternPanel> fabricationPanels_;
     //! 並べた型紙。書き出しはこれを使う。

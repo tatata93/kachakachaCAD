@@ -598,6 +598,72 @@ namespace {
     return Explain("拾い終えて道具へ戻る", !viewport.PickPending());
 }
 
+[[nodiscard]] bool CaseFreezeKeepsTheOriginal(V2MainWindow& window)
+{
+    // 固定しても元は消さない。消すと、どうやって作ったのかをたどれなくなる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    const std::size_t before =
+        window.Session().GetDocument().Snapshot().entities.size();
+    window.RunCommand("derived.freeze");
+    if (!Explain((std::string("固定できる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("付いていかない")))) {
+        return false;
+    }
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    if (!Explain((std::string("ものが増える(") + std::to_string(before) + " → "
+                     + std::to_string(snapshot.entities.size()) + ")").c_str(),
+            snapshot.entities.size() == before + 1)) {
+        return false;
+    }
+    int hidden = 0;
+    for (const auto& entity : snapshot.entities) {
+        if (entity.visibility == kachakacha::v2::domain::Visibility::Hidden) {
+            ++hidden;
+        }
+    }
+    return Explain((std::string("元は隠れているだけ(") + std::to_string(hidden)
+                       + ")").c_str(), hidden >= 1);
+}
+
+[[nodiscard]] bool CaseOpeningMustBeClosed(V2MainWindow& window)
+{
+    // 開いた線は穴にならない。開いたまま切ると、板が2つに割れる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RunCommand("fabrication.create");
+    if (!Explain((std::string("部材になる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("枚の部材")))) {
+        return false;
+    }
+    // 開いた線を1本引いて、開口にしようとする。
+    auto& viewport = window.Viewport();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.45, viewport.height() * 0.45));
+    viewport.ClickAt(QPointF(viewport.width() * 0.55, viewport.height() * 0.55));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire);
+    kachakacha::v2::app::SelectionSet last;
+    if (!wires.entityIds.empty()) {
+        last.entityIds.push_back(wires.entityIds.back());
+    }
+    viewport.SetSelection(last);
+    window.RunCommand("fabrication.assign_role");
+    return Explain((std::string("閉じた輪を求める(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("閉じた輪")));
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -621,6 +687,8 @@ std::vector<SelfTestCase> ModelingCases()
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},
+        {"固定しても元は残る", &CaseFreezeKeepsTheOriginal},
+        {"開口は閉じた輪でなければ断る", &CaseOpeningMustBeClosed},
         {"配る見本が開ける", &CaseSampleDocumentOpens},
     };
 }

@@ -801,6 +801,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestBasics.cpp
         src/apps/cad_next/V2SelfTestModeling.cpp
         src/apps/cad_next/V2ExportCommands.cpp
+        src/apps/cad_next/V2FreezeCommands.cpp
         src/apps/cad_next/V2GuideCommands.cpp
         src/apps/cad_next/V2ViewCommands.cpp
         src/apps/cad_next/V2ExportDock.cpp

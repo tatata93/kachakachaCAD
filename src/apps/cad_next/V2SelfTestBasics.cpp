@@ -124,8 +124,27 @@ namespace {
         if (window.StatusText().isEmpty()) {
             return false;
         }
+        // 押す場所を待っている状態で次へ進むと、次のコマンドがその場所を
+        // 拾ってしまう。1つずつ確かめるので、ここで戻す。
+        window.Viewport().CancelPointPick();
     }
     return true;
+}
+
+[[nodiscard]] bool CaseNoCommandSaysNotImplemented(V2MainWindow& window)
+{
+    // 台帳のどのコマンドも「まだ入っていません」と言わないこと。
+    // これが 1件でも残っていれば、押せるのに何も起きないものがあるということである。
+    std::string leftovers;
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        window.RunCommand(command.id);
+        if (window.StatusText().contains(QStringLiteral("まだ入っていません"))) {
+            leftovers += std::string(command.id) + " ";
+        }
+        window.Viewport().CancelPointPick();
+    }
+    return Explain((std::string("繋がっていないコマンドが無い(") + leftovers
+                       + ")").c_str(), leftovers.empty());
 }
 
 [[nodiscard]] bool CaseMenusComeFromCatalog(V2MainWindow& window)
@@ -1057,6 +1076,7 @@ std::vector<SelfTestCase> BasicCases()
         {"視点を切り替えられる", &CaseViewDirections},
         {"途中でやめられる", &CaseCancel},
         {"台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
+        {"未接続のコマンドが1つも無い", &CaseNoCommandSaysNotImplemented},
         {"メニューが台帳から出来ている", &CaseMenusComeFromCatalog},
         {"使えないコマンドは理由を出す", &CaseDisabledCommandsExplain},
         {"案内が6つそろっている", &CaseGuideIsComplete},

@@ -1022,6 +1022,10 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunExportCommand(id);
         return;
     }
+    if (IsFreezeCommand(id)) {
+        RunFreezeCommand(id);
+        return;
+    }
     if (IsGuideCommand(id)) {
         RunGuideCommand(id);
         return;

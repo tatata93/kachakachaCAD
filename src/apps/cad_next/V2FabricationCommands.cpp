@@ -251,15 +251,24 @@ void V2MainWindow::AssignOpeningRole()
         SetStatus(QStringLiteral("境界の役割: 元の輪郭が見つかりません。"));
         return;
     }
-    // 開口は1枚目へ入れる。どの部材へ入れるかを選べるようになるまで、
-    // 選べるふりをしない。
-    requests.front().openings.push_back(opening);
+    // どの部材のものかは、外周と同じ平面に載っているかで決まる。
+    // 窓は、それが描かれている壁のものである。人に選ばせる必要はない。
+    const auto chosen = kachakacha::v2::fabrication::PanelForOpening(requests, opening,
+        tolerance.interactiveJoinMm);
+    if (!chosen.has_value()) {
+        // 近いほうへ寄せない。寄せると、頼んでいない壁に穴が開く。
+        SetStatus(QStringLiteral(
+            "境界の役割: その線は、どの部材の面にも載っていません。"
+            "部材と同じ平面の上に描いてください。"));
+        return;
+    }
+    requests[*chosen].openings.push_back(opening);
     const auto rebuilt = BuildPlanarPanels(requests, tolerance.interactiveJoinMm);
     if (!rebuilt.HasValue()) {
         ReportDiagnostics(rebuilt.Diagnostics());
         return;
     }
-    panelOpenings_[requests.front().panelId] = requests.front().openings;
+    panelOpenings_[requests[*chosen].panelId] = requests[*chosen].openings;
     fabricationPanels_ = rebuilt.Value();
     processContext_.patternBuilt = false;
     patternPages_.clear();
@@ -267,8 +276,8 @@ void V2MainWindow::AssignOpeningRole()
     SetStatus(QStringLiteral(
         "境界の役割: %1 に開口を1つ入れました(いま%2つ)。"
         "型紙はもう一度作ってください。")
-            .arg(QString::fromStdString(requests.front().panelId))
-            .arg(static_cast<int>(requests.front().openings.size())));
+            .arg(QString::fromStdString(requests[*chosen].panelId))
+            .arg(static_cast<int>(requests[*chosen].openings.size())));
 }
 
 bool V2MainWindow::UnfoldSelectedSurfaces(

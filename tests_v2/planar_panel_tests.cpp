@@ -12,6 +12,7 @@ using kachakacha::v2::fabrication::CheckPlanar;
 using kachakacha::v2::fabrication::PatternPanel;
 using kachakacha::v2::fabrication::PatternPlacement;
 using kachakacha::v2::fabrication::PlacePanelCurves;
+using kachakacha::v2::fabrication::PanelForOpening;
 using kachakacha::v2::fabrication::PlanarPanelRequest;
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::Vector3;
@@ -40,6 +41,16 @@ constexpr double kTolerance = 0.01;
 {
     return {Line({0, 0, z}, {100, 0, z}), Line({100, 0, z}, {100, 60, z}),
         Line({100, 60, z}, {0, 60, z}), Line({0, 60, z}, {0, 0, z})};
+}
+
+//! 好きな位置と大きさの四角。開口の試験に使う。
+[[nodiscard]] std::vector<CurveSegment> RectangleAt(double x, double y, double width,
+    double height, double z)
+{
+    return {Line({x, y, z}, {x + width, y, z}),
+        Line({x + width, y, z}, {x + width, y + height, z}),
+        Line({x + width, y + height, z}, {x, y + height, z}),
+        Line({x, y + height, z}, {x, y, z})};
 }
 
 //! 型紙の部材の外周から、囲む四角の大きさを測る。
@@ -236,6 +247,42 @@ KACHA_V2_TEST(planar_panel, 開口は別のレイヤーに出る)
     }
     Require(outline > 0, "外周がある");
     Require(opening > 0, "開口がある");
+}
+
+KACHA_V2_TEST(planar_panel, 開口はそれが載っている壁のものになる)
+{
+    // 窓は、それが描かれている壁のものである。人に選ばせる必要はない。
+    std::vector<PlanarPanelRequest> requests;
+    PlanarPanelRequest floor;
+    floor.panelId = "床";
+    floor.boundary = RectangleAt(0.0, 0.0, 40.0, 20.0, 0.0);
+    requests.push_back(floor);
+    PlanarPanelRequest wall;
+    wall.panelId = "壁";
+    // z = 10 の高さにある、もう1枚。
+    wall.boundary = RectangleAt(0.0, 0.0, 40.0, 20.0, 10.0);
+    requests.push_back(wall);
+
+    const auto onFloor = PanelForOpening(requests, RectangleAt(5.0, 5.0, 6.0, 4.0, 0.0),
+        0.001);
+    Require(onFloor.has_value() && *onFloor == 0, "床の上の穴は床のもの");
+    const auto onWall = PanelForOpening(requests, RectangleAt(5.0, 5.0, 6.0, 4.0, 10.0),
+        0.001);
+    Require(onWall.has_value() && *onWall == 1, "壁の上の穴は壁のもの");
+}
+
+KACHA_V2_TEST(planar_panel, どの壁にも載っていない開口は断る)
+{
+    // 近いほうへ寄せない。寄せると、頼んでいない壁に穴が開く。
+    std::vector<PlanarPanelRequest> requests;
+    PlanarPanelRequest floor;
+    floor.panelId = "床";
+    floor.boundary = RectangleAt(0.0, 0.0, 40.0, 20.0, 0.0);
+    requests.push_back(floor);
+    const auto nowhere = PanelForOpening(requests, RectangleAt(5.0, 5.0, 6.0, 4.0, 7.5),
+        0.001);
+    Require(!nowhere.has_value(), "どこにも載っていないので決めない");
+    Require(!PanelForOpening(requests, {}, 0.001).has_value(), "空は決めない");
 }
 
 KACHA_V2_TEST_MAIN("planar_panel_tests")

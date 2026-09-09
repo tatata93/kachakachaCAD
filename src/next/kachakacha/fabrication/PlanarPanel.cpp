@@ -154,3 +154,28 @@ Result<std::vector<exporters::PatternCurve>> PlacePanelCurves(const PatternPanel
 }
 
 } // namespace kachakacha::v2::fabrication
+
+namespace kachakacha::v2::fabrication {
+
+std::optional<std::size_t> PanelForOpening(const std::vector<PlanarPanelRequest>& requests,
+    const std::vector<geometry::CurveSegment>& opening, double toleranceMm)
+{
+    if (opening.empty()) {
+        return std::nullopt;
+    }
+    for (std::size_t index = 0; index < requests.size(); ++index) {
+        std::vector<geometry::CurveSegment> together = requests[index].boundary;
+        if (together.empty()) {
+            continue;
+        }
+        together.insert(together.end(), opening.begin(), opening.end());
+        // 外周と開口を一緒にしても平らなら、その開口はその壁のものである。
+        if (CheckPlanar(together, toleranceMm).planar) {
+            return index;
+        }
+    }
+    // どれにも載っていない。近いほうへ寄せない。頼んでいない壁に穴が開く。
+    return std::nullopt;
+}
+
+} // namespace kachakacha::v2::fabrication

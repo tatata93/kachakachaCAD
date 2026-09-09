@@ -19,6 +19,7 @@
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/geometry/CurveSegment.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,16 @@ struct PlanarityCheck {
 //! まとめて作る。1つでも作れなければ、そこで断る。
 [[nodiscard]] base::Result<std::vector<PatternPanel>> BuildPlanarPanels(
     const std::vector<PlanarPanelRequest>& requests, double toleranceMm);
+
+//! その開口が、どの部材のものかを決める。
+//!
+//! 窓は、それが描かれている壁のものである。だから
+//! 「外周と同じ平面に載っているか」で決まる。人に選ばせる必要はない。
+//! どれにも載っていなければ値を返さない。近いほうへ寄せない。
+//! 寄せると、頼んでいない壁に穴が開く。
+[[nodiscard]] std::optional<std::size_t> PanelForOpening(
+    const std::vector<PlanarPanelRequest>& requests,
+    const std::vector<geometry::CurveSegment>& opening, double toleranceMm);
 
 //! 型紙の部材を、原寸のまま紙の上の曲線へ戻す。書き出しはこれを使う。
 //! 置き場所(PatternPlacement)は回転と平行移動だけなので、寸法は変わらない。

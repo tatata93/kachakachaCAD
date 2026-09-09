@@ -22,19 +22,31 @@ param(
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+# 組み立て先は、相対でも絶対でも受ける。ctest からは絶対で渡ってくる。
+if ([System.IO.Path]::IsPathRooted($BuildDir)) {
+    $BuildRoot = $BuildDir
+} else {
+    $BuildRoot = Join-Path $RepoRoot $BuildDir
+}
 $ExeName = "kachakacha_cad_next.exe"
-$BuiltExe = Join-Path $RepoRoot "$BuildDir\$Config\$ExeName"
-$SampleWriter = Join-Path $RepoRoot "$BuildDir\$Config\kachakacha_v2_write_sample.exe"
+$BuiltExe = Join-Path $BuildRoot "$Config\$ExeName"
+$SampleWriter = Join-Path $BuildRoot "$Config\kachakacha_v2_write_sample.exe"
 $DeployTool = "C:\Qt\6.9.2\msvc2022_64\bin\windeployqt.exe"
 $QtPrefix = Split-Path (Split-Path $DeployTool -Parent) -Parent
 
 if (-not $SkipBuild) {
-    cmake --build (Join-Path $RepoRoot $BuildDir) --config $Config --target kachakacha_cad_next kachakacha_v2_write_sample
+    cmake --build $BuildRoot --config $Config --target kachakacha_cad_next kachakacha_v2_write_sample
     if ($LASTEXITCODE -ne 0) { throw "組み立てに失敗しました" }
 }
 
+# 道具がそろっていないときは「やっていない」と言って抜ける。
+# 失敗と区別しないと、Qt を入れていない機械でいつも赤くなり、
+# 本当の失敗に気づけなくなる。ctest はこの 77 を「飛ばした」と読む。
 foreach ($needed in @($BuiltExe, $SampleWriter, $DeployTool)) {
-    if (-not (Test-Path $needed)) { throw "見つかりません: $needed" }
+    if (-not (Test-Path $needed)) {
+        Write-Host "配布ひとまとめは作れません(見つかりません: $needed)"
+        exit 77
+    }
 }
 
 $Output = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDir))

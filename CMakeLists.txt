@@ -844,5 +844,26 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
             TIMEOUT 120
         )
+
+        # 配る形そのものを試す(WP-12)。
+        # 組み立てが通ることと、配ったものが動くことは別である。
+        # 実際、Qt の実行時ファイルが1つ足りないだけで、
+        # 開発機では動くのに配った先では起動しない、ということが起きる。
+        # 道具がそろっていない機械では 77 を返して「飛ばした」と言う。
+        if(WIN32)
+            add_test(
+                NAME v2_package_zip
+                COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                    -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/package-v2.ps1"
+                    -BuildDir "$<SHELL_PATH:${CMAKE_BINARY_DIR}>"
+                    -Config "$<CONFIG>"
+                    -SkipBuild
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            )
+            set_tests_properties(v2_package_zip PROPERTIES
+                SKIP_RETURN_CODE 77
+                TIMEOUT 900
+            )
+        endif()
     endif()
 endif()

@@ -641,6 +641,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
     src/next_occt/kachakacha/kernel/OcctSolidExport.cpp
+    src/next_occt/kachakacha/kernel/OcctBoolean.cpp
 )
 target_include_directories(kachakacha_v2_occt PUBLIC src/next_occt)
 target_link_libraries(kachakacha_v2_occt PUBLIC kachakacha_v2_core)

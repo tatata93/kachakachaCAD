@@ -516,6 +516,30 @@ namespace {
         after == before + 1);
 }
 
+[[nodiscard]] bool CaseBooleanNeedsTwoParts(V2MainWindow& window)
+{
+    // 相手を明示して選ぶ。近い部品を勝手に選ばない。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    for (const char* id : {"part.boolean_add", "part.boolean_cut"}) {
+        window.RunCommand(id);
+        if (!Explain((std::string("2つ要ると言う(") + id + ": "
+                         + window.StatusText().toStdString() + ")").c_str(),
+                window.StatusText().contains(QStringLiteral("部品を2つ")))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -532,6 +556,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
         {"投影は元の線を残す", &CaseProjectKeepsTheOriginal},
+        {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},
         {"押し出した部品は出せると言える", &CaseValidateAcceptsAnExtrudedPart},

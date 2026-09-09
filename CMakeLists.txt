@@ -594,6 +594,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/ManualRole.cpp
     src/next/kachakacha/fabrication/PanelStrategy.cpp
     src/next/kachakacha/fabrication/PatternLayout.cpp
+    src/next/kachakacha/fabrication/PlanarPanel.cpp
     src/next/kachakacha/fabrication/ReliefCut.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
     src/next/kachakacha/modeling/SnapEngine.cpp
@@ -698,6 +699,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(freeze_state_tests tests_v2/freeze_state_tests.cpp)
     kachakacha_add_v2_test(pattern_tests tests_v2/pattern_tests.cpp)
     kachakacha_add_v2_test(panel_strategy_tests tests_v2/panel_strategy_tests.cpp)
+    kachakacha_add_v2_test(planar_panel_tests tests_v2/planar_panel_tests.cpp)
     kachakacha_add_v2_test(export_tests tests_v2/export_tests.cpp)
     kachakacha_add_v2_test(tool_tests tests_v2/tool_tests.cpp)
     kachakacha_add_v2_test(curve_join_tests tests_v2/curve_join_tests.cpp)
@@ -786,9 +788,13 @@ endif()
 if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
     add_executable(kachakacha_cad_next WIN32
         src/apps/cad_next/main.cpp
+        src/apps/cad_next/V2SelfTest.cpp
+        src/apps/cad_next/V2SelfTestBasics.cpp
+        src/apps/cad_next/V2SelfTestModeling.cpp
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp
+        src/apps/cad_next/V2FabricationCommands.cpp
         src/apps/cad_next/V2PartCommands.cpp
         src/apps/cad_next/V2PlaneCommands.cpp
         src/apps/cad_next/V2WireCommands.cpp

@@ -2,6 +2,7 @@
 
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SampleDocument.h"
+#include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -673,6 +674,22 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         file.metadata.title = windowTitle().toStdString();
         return kachakacha::v2::app::MakeProjectContent(file);
     }
+    if (request.target == ExportTarget::CurrentPattern) {
+        if (patternPages_.empty()) {
+            return Out::Failure(kachakacha::v2::base::MakeError("EXP-D001",
+                "ページがありません。",
+                "先に「製作」→「型紙を作る」で型紙を作ってください。"));
+        }
+        if (request.format == ExportFormat::Pdf) {
+            kachakacha::v2::exporters::PdfMetadata metadata;
+            metadata.title = "型紙";
+            return kachakacha::v2::exporters::WritePatternPdf(patternPages_, metadata);
+        }
+        if (request.format == ExportFormat::Svg) {
+            return kachakacha::v2::exporters::WritePatternSvg(patternPages_.front(), "型紙");
+        }
+        return kachakacha::v2::exporters::WritePatternDxf(patternPages_.front());
+    }
     if (request.target == ExportTarget::SelectedWires) {
         kachakacha::v2::app::WirePatternRequest wires;
         wires.title = "ワイヤー";
@@ -1083,6 +1100,10 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (id.rfind("file.", 0) == 0) {
         RunFileCommand(id);
+        return;
+    }
+    if (IsFabricationCommand(id)) {
+        RunFabricationCommand(id);
         return;
     }
     if (IsPartCommand(id)) {

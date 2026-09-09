@@ -21,6 +21,8 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/document/Document.h"
+#include "kachakacha/exporters/PatternExport.h"
+#include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 
 #include <map>
@@ -171,6 +173,18 @@ private:
     void RunExportCommand(std::string_view id);
     //! 出す先・開く先を尋ねる。差し替えが無ければ Qt のダイアログを出す。
     [[nodiscard]] QString AskForPath(bool forSave);
+    //! 製作のコマンドか。V2FabricationCommands.cpp が持つ。
+    [[nodiscard]] static bool IsFabricationCommand(std::string_view id);
+    void RunFabricationCommand(std::string_view id);
+    void RunFabricationCreate();
+    void RunCreatePattern();
+    //! 出来た部材。平らなものだけ。
+    std::vector<kachakacha::v2::fabrication::PatternPanel> fabricationPanels_;
+    //! 並べた型紙。書き出しはこれを使う。
+    std::vector<kachakacha::v2::exporters::PatternPage> patternPages_;
+    //! 組立状態(%)。0 / 30 / 100。
+    int assemblyPercent_ = 0;
+
     //! 形のコマンドか。V2PartCommands.cpp が持つ。
     [[nodiscard]] static bool IsPartCommand(std::string_view id);
     void RunPartCommand(std::string_view id);

@@ -3,6 +3,7 @@
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SampleDocument.h"
 #include "kachakacha/exporters/PdfWriter.h"
+#include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/app/Selection.h"
@@ -161,7 +162,12 @@ V2MainWindow::V2MainWindow()
         viewport_->PruneSelection();
         RefreshEntityList();
     });
-    viewport_->SetSelectionChangedCallback([this] { RefreshExportCounts(); });
+    viewport_->SetSelectionChangedCallback([this] {
+        RefreshExportCounts();
+        RefreshMeasurements();
+        // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
+        RefreshCommandVisibility();
+    });
     // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
     viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
 
@@ -400,6 +406,11 @@ void V2MainWindow::BuildPanels()
 
     BuildExportDock();
 
+    // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
+    measureDock_ = new V2MeasureDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, measureDock_);
+    measureDock_->hide();
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);
@@ -608,11 +619,42 @@ void V2MainWindow::RunFileCommand(std::string_view id)
 }
 
 
+kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
+{
+    kachakacha::v2::app::ExternalCounts external;
+    // 部材も型紙も文書には入らない。画面が覚えているので、そこから渡す。
+    external.fabricationModels = fabricationPanels_.empty() ? 0 : 1;
+    external.fabricationPanels = static_cast<int>(fabricationPanels_.size());
+    external.patterns = static_cast<int>(patternPages_.size());
+    const kachakacha::v2::app::SelectionSet empty;
+    return kachakacha::v2::app::BuildSelectionFacts(
+        viewport_ == nullptr ? empty : viewport_->Selection(),
+        session_->GetDocument().Snapshot(), session_->Scene(),
+        session_->GetDocument().Snapshot().settings.tolerance, external,
+        session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
+}
+
+void V2MainWindow::RefreshMeasurements()
+{
+    if (measureDock_ == nullptr || viewport_ == nullptr) {
+        return;
+    }
+    kachakacha::v2::app::MeasureRequest request;
+    // 選んだものだけを測る。見えているだけのものを勝手に足さない。
+    request.curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
+        session_->Scene());
+    request.toleranceMm =
+        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
+    measureDock_->SetRequest(request);
+}
+
 void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)
 {
     processContext_ = context;
     RefreshProcessSteps();
     RefreshExportCounts();
+    // 文書や部材が変われば押せるものも変わる。
+    RefreshCommandVisibility();
 }
 
 int V2MainWindow::ProcessStepCount() const
@@ -907,27 +949,9 @@ bool V2MainWindow::CommandEnabled(std::string_view id, QString* reasonOut) const
         }
         return false;
     }
-    bool ok = true;
-    switch (command->predicate) {
-    case SelectionPredicate::Always:
-    case SelectionPredicate::HasDocument:
-        ok = true;
-        break;
-    case SelectionPredicate::HasUndo:
-        ok = session_->GetDocument().CanUndo();
-        break;
-    case SelectionPredicate::HasRedo:
-        ok = session_->GetDocument().CanRedo();
-        break;
-    case SelectionPredicate::HasVisibleGeometry:
-        ok = !session_->Scene().curves.empty() || !session_->Scene().points.empty();
-        break;
-    default:
-        // 選択に依る条件は、選択の仕組みが入るまで押せないままにする。
-        // 隠さずに、理由を出す(command-catalog.md §1)。
-        ok = false;
-        break;
-    }
+    // 判断は core にある。ここで数えると、画面を出さないと確かめられなくなる。
+    const bool ok = kachakacha::v2::app::SelectionSatisfies(command->predicate,
+        BuildFactsForCommands());
     if (!ok && reasonOut != nullptr) {
         *reasonOut = QString::fromUtf8(
             std::string(command->predicateFailureJa).c_str());
@@ -996,6 +1020,14 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (id.rfind("export.", 0) == 0) {
         RunExportCommand(id);
+        return;
+    }
+    if (id == "measure.open") {
+        // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
+        RefreshMeasurements();
+        measureDock_->show();
+        measureDock_->raise();
+        SetStatus(measureDock_->SummaryText());
         return;
     }
     if (id == "snap.toggle") {

@@ -961,6 +961,57 @@ namespace {
 
 } // namespace
 
+[[nodiscard]] bool CaseMeasureShowsWhatIsSelected(V2MainWindow& window)
+{
+    // 測る棚は、選んだものから測れることを全部出す。
+    // V1 は測り方を先に選ばせたので、選び間違えると拾い直しだった。
+    window.RunCommand("measure.open");
+    auto& dock = window.MeasureDock();
+    if (!Explain((std::string("何も選んでいなければ言う(")
+                     + dock.SummaryText().toStdString() + ")").c_str(),
+            dock.SummaryText().contains(QStringLiteral("選ばれていません")))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.3, viewport.height() * 0.3));
+    viewport.ClickAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.7));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    window.RunCommand("measure.open");
+    bool sawKind = false;
+    bool sawLength = false;
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (dock.RowLabel(row) == QStringLiteral("種類")
+            && dock.RowValue(row) == QStringLiteral("直線")) {
+            sawKind = true;
+        }
+        if (dock.RowLabel(row) == QStringLiteral("長さ")
+            && dock.RowValue(row).endsWith(QStringLiteral(" mm"))
+            && !dock.RowValue(row).startsWith(QStringLiteral("0.000"))) {
+            sawLength = true;
+        }
+    }
+    if (!Explain((std::string("直線と長さが出る(行は ")
+                     + std::to_string(dock.RowCount()) + ")").c_str(),
+            sawKind && sawLength)) {
+        return false;
+    }
+    // 半径を持たないものに半径を出さない。出すとその値を信じてしまう。
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (!Explain("直線に半径は出ない",
+                dock.RowLabel(row) != QStringLiteral("半径"))) {
+            return false;
+        }
+    }
+    return Explain("測っていることを言う",
+        dock.SummaryText().contains(QStringLiteral("測っています")));
+}
+
 std::vector<SelfTestCase> BasicCases()
 {
     return {
@@ -1005,6 +1056,7 @@ std::vector<SelfTestCase> BasicCases()
         {"操作板の回す部品は15度だけ回る", &CaseViewPanelTurnsFifteenDegrees},
         {"輪は線のどこを押しても掴める", &CaseRingIsGrabbableAlongTheWhole},
         {"家で等角ビューへ戻る", &CaseViewPanelHome},
+        {"測る棚が選んだものを測る", &CaseMeasureShowsWhatIsSelected},
     };
 }
 

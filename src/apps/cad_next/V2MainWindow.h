@@ -12,7 +12,9 @@
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 //! 信号の受け口はラムダで繋ぐ。
 
+#include "kachakacha/app/CommandAvailability.h"
 #include "V2ExportDock.h"
+#include "V2MeasureDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/UiMode.h"
@@ -130,6 +132,13 @@ public:
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
     //! 手順の状況と文書から数を作り直して棚へ渡す。
     void RefreshExportCounts();
+
+    //! 測る棚(PRD-070)。選んだものから測れることを全部出す。
+    [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
+    //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
+    void RefreshMeasurements();
+    //! 押せるかどうかの材料を作る。数え方は core が決める。
+    [[nodiscard]] kachakacha::v2::app::SelectionFacts BuildFactsForCommands() const;
 
     //! 形状ガイドの役割テーブル(AT-UIX-007)。表は core が持つ。
     [[nodiscard]] const kachakacha::v2::modeling::GuideTable& GuideRoleTable() const
@@ -275,6 +284,7 @@ private:
     QDockWidget* guideDock_ = nullptr;
     QTreeWidget* processView_ = nullptr;
     V2ExportDock* exportDock_ = nullptr;
+    V2MeasureDock* measureDock_ = nullptr;
     QDockWidget* processDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;

@@ -144,6 +144,19 @@ namespace {
             all == 3)) {
         return false;
     }
+    // 作業中にするには、どれを作業中にするかを選ぶ。選ばずには決まらない。
+    window.RunCommand("workplane.set_active");
+    if (!Explain((std::string("選ばなければ理由が出る(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("作業平面を1つ")))) {
+        return false;
+    }
+    const auto planeSelection = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::WorkPlane);
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(planeSelection.entityIds.front());
+    window.Viewport().SetSelection(one);
     window.RunCommand("workplane.set_active");
     return Explain((std::string("作業中にできる(") + window.StatusText().toStdString()
                        + ")").c_str(),
@@ -400,14 +413,14 @@ namespace {
     window.RunCommand("fabrication.create_pattern");
     if (!Explain((std::string("順を言う(") + window.StatusText().toStdString()
                      + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("製作モデルを作る")))) {
+            window.StatusText().contains(QStringLiteral("製作モデル")))) {
         return false;
     }
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     window.RunCommand("fabrication.create");
     return Explain((std::string("何を選ぶか言う(") + window.StatusText().toStdString()
                        + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("部品を選んで")));
+        window.StatusText().contains(QStringLiteral("部品を1つ")));
 }
 
 [[nodiscard]] bool CaseSampleDocumentOpens(V2MainWindow& window)

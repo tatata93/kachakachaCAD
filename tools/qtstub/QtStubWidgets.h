@@ -14,6 +14,8 @@ public:
     [[nodiscard]] QVariant property(const char*) const;
     void setBackgroundRole(QPalette::ColorRole);
     void setAutoFillBackground(bool);
+    void raise();
+    void lower();
     bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}

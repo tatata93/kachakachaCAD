@@ -165,5 +165,6 @@ void V2MainWindow::AdoptCurrentDocument()
     viewport_->PruneSelection();
     RefreshEntityList();
     RefreshExportCounts();
+    RefreshCommandVisibility();
     viewport_->update();
 }

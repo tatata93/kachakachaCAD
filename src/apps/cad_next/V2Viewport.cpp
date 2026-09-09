@@ -601,8 +601,15 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 
 QRectF V2Viewport::ViewCubeRect() const
 {
-    const double size = kViewCubeSizePx;
-    return QRectF(width() - size - kViewCubeMarginPx, kViewCubeMarginPx, size, size);
+    // 狭い画面ではキューブを小さくする。大きいままだと操作板が画面に入らず、
+    // まるごと出せなくなってしまう。V1同等の操作板が常に出ることを優先する。
+    // 操作板はキューブのおよそ2.4倍の幅と2.7倍の高さを使う。
+    const double byWidth = static_cast<double>(width()) / 2.6;
+    const double byHeight = static_cast<double>(height()) / 2.9;
+    const double size = std::max(36.0, std::min({kViewCubeSizePx, byWidth, byHeight}));
+    // 操作板は上と右へも少し出るので、余白をその分だけ空ける。
+    const double margin = kViewCubeMarginPx + size * kachakacha::v2::view::kViewGadgetOuterMarginRatio;
+    return QRectF(width() - size - margin, margin, size, size);
 }
 
 std::optional<kachakacha::v2::view::ViewCubeZone> V2Viewport::ViewCubeZoneAtScreen(

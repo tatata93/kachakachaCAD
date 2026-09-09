@@ -26,8 +26,14 @@ constexpr double kGadgetDragThresholdPx = 3.0;
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
 {
     const QRectF box = ViewCubeRect();
-    return kachakacha::v2::view::BuildViewGadgets(box.left(), box.top(), box.width(),
-        orientation_);
+    auto layout = kachakacha::v2::view::BuildViewGadgets(box.left(), box.top(),
+        box.width(), orientation_);
+    // はみ出していたら寄せる。入らなければ空にして、出さない判断をここで済ませる。
+    if (!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout,
+            static_cast<double>(width()), static_cast<double>(height()))) {
+        return kachakacha::v2::view::ViewGadgetLayout{};
+    }
+    return layout;
 }
 
 std::optional<std::size_t> V2Viewport::ViewGadgetAt(const QPointF& position) const
@@ -285,11 +291,6 @@ void V2Viewport::DrawViewGadgets(QPainter& painter) const
 {
     const auto layout = ViewGadgets();
     if (layout.gadgets.empty()) {
-        return;
-    }
-    // 画面に入らないなら出さない。はみ出したものは押せない。
-    if (layout.xPx < 0.0 || layout.yPx < 0.0 || layout.xPx + layout.widthPx > width()
-        || layout.yPx + layout.heightPx > height()) {
         return;
     }
     painter.save();

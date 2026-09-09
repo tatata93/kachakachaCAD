@@ -708,4 +708,54 @@ KACHA_V2_TEST(view_orientation, 姿勢が壊れていれば操作板は空にな
     Require(layout.rings.empty(), "輪も無い");
 }
 
+KACHA_V2_TEST(view_orientation, 操作板は画面からはみ出したら寄せる)
+{
+    // 狭い画面でも押せるようにする。はみ出したまま出すと、押せない部品ができる。
+    const auto orientation = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
+    Require(orientation.HasValue(), "姿勢が作れる");
+    auto layout = BuildViewGadgets(-50.0, -40.0, 88.0, orientation.Value());
+    Require(!layout.gadgets.empty(), "部品がある");
+    Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 800.0, 600.0), "寄せられる");
+    for (const auto& gadget : layout.gadgets) {
+        Require(gadget.xPx >= -1.0e-9, "左からはみ出さない");
+        Require(gadget.yPx >= -1.0e-9, "上からはみ出さない");
+        Require(gadget.xPx + gadget.widthPx <= 800.0 + 1.0e-9, "右からはみ出さない");
+        Require(gadget.yPx + gadget.heightPx <= 600.0 + 1.0e-9, "下からはみ出さない");
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 寄せると輪も一緒に動く)
+{
+    // 輪だけ置き去りにすると、矢じりと輪の位置がずれる。
+    const auto orientation = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
+    Require(orientation.HasValue(), "姿勢が作れる");
+    auto before = BuildViewGadgets(-50.0, -40.0, 88.0, orientation.Value());
+    auto after = before;
+    Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(after, 800.0, 600.0), "寄せられる");
+    const double dx = after.xPx - before.xPx;
+    const double dy = after.yPx - before.yPx;
+    Require(std::abs(dx) > 1.0 || std::abs(dy) > 1.0, "実際に動いた");
+    for (std::size_t index = 0; index < after.rings.size(); ++index) {
+        RequireNear(after.rings[index].points[0].x,
+            before.rings[index].points[0].x + dx, 1.0e-9, "輪も同じだけ動く");
+        RequireNear(after.rings[index].positiveHead.y,
+            before.rings[index].positiveHead.y + dy, 1.0e-9, "矢じりも同じだけ動く");
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 画面より大きい操作板は寄せられない)
+{
+    const auto orientation = kachakacha::v2::view::OrientationForZone(
+        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
+    Require(orientation.HasValue(), "姿勢が作れる");
+    auto layout = BuildViewGadgets(0.0, 0.0, 400.0, orientation.Value());
+    Require(!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 100.0, 100.0), "断る");
+    // 断ったのだから、並びは動いていない。
+    RequireNear(layout.gadgets.front().xPx,
+        BuildViewGadgets(0.0, 0.0, 400.0, orientation.Value()).gadgets.front().xPx, 1.0e-9,
+        "動かない");
+}
+
 KACHA_V2_TEST_MAIN("view_orientation_tests")

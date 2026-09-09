@@ -702,6 +702,51 @@ ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx, double cu
     return layout;
 }
 
+bool FitViewGadgetsIntoScreen(ViewGadgetLayout& layout, double widthPx, double heightPx)
+{
+    if (layout.gadgets.empty()) {
+        return false;
+    }
+    if (!(widthPx > 0.0) || !(heightPx > 0.0)) {
+        return false;
+    }
+    if (layout.widthPx > widthPx || layout.heightPx > heightPx) {
+        return false; // 動かしても入らない。
+    }
+    double dx = 0.0;
+    double dy = 0.0;
+    if (layout.xPx < 0.0) {
+        dx = -layout.xPx;
+    } else if (layout.xPx + layout.widthPx > widthPx) {
+        dx = widthPx - (layout.xPx + layout.widthPx);
+    }
+    if (layout.yPx < 0.0) {
+        dy = -layout.yPx;
+    } else if (layout.yPx + layout.heightPx > heightPx) {
+        dy = heightPx - (layout.yPx + layout.heightPx);
+    }
+    if (dx == 0.0 && dy == 0.0) {
+        return true;
+    }
+    for (ViewGadget& gadget : layout.gadgets) {
+        gadget.xPx += dx;
+        gadget.yPx += dy;
+    }
+    for (ViewAxisRing& ring : layout.rings) {
+        for (geometry::ScreenPoint& point : ring.points) {
+            point.x += dx;
+            point.y += dy;
+        }
+        ring.positiveHead.x += dx;
+        ring.positiveHead.y += dy;
+        ring.negativeHead.x += dx;
+        ring.negativeHead.y += dy;
+    }
+    layout.xPx += dx;
+    layout.yPx += dy;
+    return true;
+}
+
 std::optional<std::size_t> ViewGadgetAtScreen(const ViewGadgetLayout& layout, double xPx,
     double yPx)
 {

@@ -294,10 +294,19 @@ inline constexpr double kViewRingRadiusRatio = 0.86;
 inline constexpr double kViewGadgetButtonRatio = 0.26;
 //! 輪を何点で描くか。多すぎても目には変わらない。
 inline constexpr int kViewRingSampleCount = 72;
+//! 操作板がキューブの外へ出るぶん。キューブの大きさに対する割合。
+//! キューブを置くときに、この分だけ余白を空けておけば、操作板がはみ出さない。
+inline constexpr double kViewGadgetOuterMarginRatio = 0.45;
 
 //! キューブのまわりに操作板を並べる。輪は姿勢によって形が変わるので姿勢を渡す。
 [[nodiscard]] ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx,
     double cubeSizePx, const Quaternion& orientation);
+
+//! 操作板を画面の中へ寄せる。はみ出していたら、はみ出したぶんだけ全体を動かす。
+//! 動かしても入らない(画面より操作板が大きい)ときは false を返し、何も変えない。
+//! 出さない判断は呼び手がする。ここで勝手に縮めると、押せない大きさになる。
+[[nodiscard]] bool FitViewGadgetsIntoScreen(ViewGadgetLayout& layout, double widthPx,
+    double heightPx);
 
 //! 画面のその点にある部品。無ければ値を持たない。近いものを1つだけ返す。
 [[nodiscard]] std::optional<std::size_t> ViewGadgetAtScreen(

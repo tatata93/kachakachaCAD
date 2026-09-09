@@ -188,7 +188,8 @@ V2 も同じ(打った文字がそのまま欄に入る)。
 | 8 | `S` `T` `X` を V1 の意味へ戻す | **済** | `app/CommandCatalog.cpp` |
 | 9 | `V` `D` `B` `I` `Shift+T` | **済** | 同上 |
 | 10 | Delete で消す | **済** | `edit.delete` |
-| 11 | 選んだ物を掴んで動かす / ギズモ | 残り | |
+| 11 | 選んだ物を掴んで動かす | **済** | `app/GrabToMove.h` + `V2ViewportInput.cpp` |
+| 11b | ギズモ(矢印・回転リング) | 残り | 掴んで動かすで足りるか、使って決める |
 | 12 | 制御点を掴んで動かす | 残り | |
 | 13 | Ctrl+H / Ctrl+Shift+H | **済** | `view.hide_selected` / `view.show_all` |
 | 14 | Ctrl+1/2/3(表示モード) | 残り | V2 に同じ考えが無い。まず何にするかを決める |

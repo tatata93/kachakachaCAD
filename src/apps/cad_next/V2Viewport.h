@@ -167,6 +167,15 @@ public:
     //! いま出ている案内文。
     [[nodiscard]] const std::string& StatusMessage() const noexcept { return status_; }
 
+    //! 選んだ物を掴んで動かす(V1同等)。試験からも同じ道を通す。
+    //! 掴めなければ false。掴めたら、引きずるあいだ仮の位置を出す。
+    bool BeginBodyDrag(const QPointF& position);
+    void DragBody(const QPointF& position);
+    //! 離す。動かした量が小さければ何もしない(押しただけ、とみなす)。
+    //! 文書を変えたら true。
+    bool ReleaseBodyDrag(const QPointF& position);
+    [[nodiscard]] bool BodyDragging() const noexcept { return bodyDrag_.active; }
+
     //! 試験から呼ぶ。マウスを使わずに同じ道を通す。
     void HoverAt(const QPointF& position);
     //! 直前の当たり判定が出した点。吸着と拘束を通した後の値。
@@ -393,4 +402,13 @@ private:
     kachakacha::v2::app::SelectionSet selection_;
     std::function<void()> documentChangedCallback_;
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
+    //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
+    struct BodyDrag {
+        bool active = false;
+        bool moved = false;
+        QPointF startPx;
+        kachakacha::v2::geometry::Vector3 startPoint{};
+        kachakacha::v2::geometry::Vector3 delta{};
+    };
+    BodyDrag bodyDrag_;
 };

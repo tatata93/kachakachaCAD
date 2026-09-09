@@ -13,11 +13,13 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/modeling/DrawingConstraint.h"
 
 #include <QCursor>
 
 #include <cmath>
+#include <string>
 #include <utility>
 
 namespace {
@@ -249,4 +251,90 @@ void V2Viewport::PressRightWithoutMoving()
     }
     RefreshCursorShape();
     update();
+}
+
+bool V2Viewport::BeginBodyDrag(const QPointF& position)
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    bodyDrag_ = BodyDrag{};
+    if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
+        return false;
+    }
+    const ScreenPoint pointer{position.x(), position.y()};
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    if (!kachakacha::v2::app::PointerGrabsSelection(session_->Scene(), selection_,
+            mapping_, pointer, tolerance)) {
+        return false;
+    }
+    // 掴んだ位置は作業平面の上で読む。画面の px のままだと、
+    // 視点を回したときにどれだけ動いたのかが決まらない。
+    const auto onPlane = mapping_.UnprojectOntoPlane(pointer, workPlane_.origin,
+        workPlane_.normal);
+    if (!onPlane.has_value()) {
+        return false;
+    }
+    bodyDrag_.active = true;
+    bodyDrag_.startPx = position;
+    bodyDrag_.startPoint = *onPlane;
+    RefreshCursorShape();
+    return true;
+}
+
+void V2Viewport::DragBody(const QPointF& position)
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    if (!bodyDrag_.active) {
+        return;
+    }
+    if (kachakacha::v2::app::DragIsFarEnough(position.x() - bodyDrag_.startPx.x(),
+            position.y() - bodyDrag_.startPx.y())) {
+        bodyDrag_.moved = true;
+    }
+    const auto onPlane = mapping_.UnprojectOntoPlane(
+        ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
+    if (!onPlane.has_value()) {
+        return;
+    }
+    kachakacha::v2::geometry::Vector3 target = *onPlane;
+    if (axisConstrainedByKey_) {
+        // Shift を押していれば、掴んだ場所から水平・垂直へ寄せる。作図と同じ扱い。
+        target = kachakacha::v2::modeling::ApplyAxisConstraint(
+            kachakacha::v2::modeling::DrawingTool::Move, workPlane_,
+            bodyDrag_.startPoint, target);
+    }
+    bodyDrag_.delta = kachakacha::v2::app::DragDelta(bodyDrag_.startPoint, target);
+    if (statusCallback_) {
+        status_ = "移動中: " + std::to_string(
+            std::round(bodyDrag_.delta.Length() * 100.0) / 100.0) + "mm";
+        statusCallback_(status_);
+    }
+    update();
+}
+
+bool V2Viewport::ReleaseBodyDrag(const QPointF& position)
+{
+    if (!bodyDrag_.active) {
+        return false;
+    }
+    DragBody(position);
+    const bool moved = bodyDrag_.moved;
+    const auto delta = bodyDrag_.delta;
+    bodyDrag_ = BodyDrag{};
+    RefreshCursorShape();
+    update();
+    if (!moved) {
+        // 押しただけ。0mm 動かしたことにはしない。
+        return false;
+    }
+    if (!transform_) {
+        return false;
+    }
+    kachakacha::v2::modeling::TransformPlan plan;
+    plan.kind = kachakacha::v2::modeling::TransformKind::Move;
+    plan.vectorArgument = delta;
+    plan.keepsSource = false;
+    plan.summaryJa = "移動: " + std::to_string(
+        std::round(delta.Length() * 100.0) / 100.0) + "mm";
+    transform_(plan);
+    return true;
 }

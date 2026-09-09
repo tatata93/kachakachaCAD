@@ -160,7 +160,11 @@ public:
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
-        const QString& labelJa, bool consumesFirstOnly, bool keepsSource);
+        const QString& labelJa, bool consumesFirstOnly);
+    //! 変換を線1本へ当てて、新しいワイヤーを1本作る。作れたら true。
+    [[nodiscard]] bool TransformOneWire(
+        const kachakacha::v2::domain::TransformWireDefinition& definition,
+        kachakacha::v2::base::EntityId entityId, const QString& labelJa);
     //! 移動・複製・鏡映・回転を、いま選んでいる線へ当てる。
     //! 何をするかは core の PlanTransform が決めたものをそのまま使う。
     void ApplyTransformPlan(const kachakacha::v2::modeling::TransformPlan& plan);

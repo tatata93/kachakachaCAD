@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/CurveProjection.h"
 #include "kachakacha/geometry/Measurement.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -164,12 +165,12 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
-        binding->consumesFirstOnly, false);
+        binding->consumesFirstOnly);
 }
 
 void V2MainWindow::RunWireTransform(
     const kachakacha::v2::domain::TransformWireDefinition& definition,
-    const QString& labelJa, bool consumesFirstOnly, bool keepsSource)
+    const QString& labelJa, bool consumesFirstOnly)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -216,15 +217,6 @@ void V2MainWindow::RunWireTransform(
         AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
-        return;
-    }
-    if (keepsSource) {
-        // 複製と鏡映は、元の線を残す。消したら複製にならない。
-        AdoptCurrentDocument();
-        SetStatus(QStringLiteral("%1: %2本から%3本を作りました。元の線は残っています。")
-                .arg(labelJa)
-                .arg(static_cast<int>(inputs.size()))
-                .arg(static_cast<int>(computed.Value().size())));
         return;
     }
     std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
@@ -311,25 +303,22 @@ void V2MainWindow::BeginTrimOrExtend(bool trim)
                 : (closest.secondParameter >= 0.5 ? 1.0 : 0.0);
             definition.scalarArgument.kind =
                 kachakacha::v2::geometry::QuantityKind::Scalar;
-            RunWireTransform(definition, label, true, false);
+            RunWireTransform(definition, label, true);
         },
         trim ? "トリム: 捨てる側を1回押してください(Esc でやめます)。"
              : "延長: 延ばしたい端の近くを1回押してください(Esc でやめます)。");
 }
 
-void V2MainWindow::ApplyTransformPlan(
+namespace {
+
+//! 変換の中身を、文書へ入れられる形へ写す。判断は core が済ませてある。
+[[nodiscard]] kachakacha::v2::domain::TransformWireDefinition DefinitionFor(
     const kachakacha::v2::modeling::TransformPlan& plan)
 {
     using kachakacha::v2::domain::TransformWireDefinition;
     using kachakacha::v2::domain::WireTransformMethod;
     using kachakacha::v2::modeling::TransformKind;
 
-    // 選んでいる線が無ければ、当てる相手がいない。黙って何もしない、はしない。
-    if (viewport_->Selection().entityIds.empty()) {
-        SetStatus(QStringLiteral("%1: 先に動かす線を選んでください。")
-                .arg(QString::fromStdString(plan.summaryJa)));
-        return;
-    }
     TransformWireDefinition definition;
     switch (plan.kind) {
     case TransformKind::Move:
@@ -352,6 +341,104 @@ void V2MainWindow::ApplyTransformPlan(
     definition.scalarArgument.kind = plan.kind == TransformKind::Rotate
         ? kachakacha::v2::geometry::QuantityKind::Angle
         : kachakacha::v2::geometry::QuantityKind::Length;
-    RunWireTransform(definition, QString::fromStdString(plan.summaryJa), false,
-        plan.keepsSource);
+    return definition;
+}
+
+} // namespace
+
+bool V2MainWindow::TransformOneWire(
+    const kachakacha::v2::domain::TransformWireDefinition& definition,
+    kachakacha::v2::base::EntityId entityId, const QString& labelJa)
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(entityId);
+    const auto inputs = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+    if (inputs.empty()) {
+        return false;
+    }
+    const auto computed =
+        kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
+    if (!computed.HasValue()) {
+        ReportDiagnostics(computed.Diagnostics());
+        return false;
+    }
+    const auto* source = session_->GetDocument().FindEntity(entityId);
+    Feature feature;
+    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::TransformWire;
+    feature.displayName = labelJa.toStdString();
+    feature.inputEntityIds = one.entityIds;
+    kachakacha::v2::domain::CreateWireDefinition wire;
+    wire.segments = computed.Value();
+    for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+        wire.segmentIds.push_back(
+            ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+    }
+    feature.definition = std::move(wire);
+
+    Entity entity;
+    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    entity.kind = EntityKind::Wire;
+    // 名前を引き継ぐ。動かしただけで名前が変わると、一覧で見失う。
+    entity.displayName = source != nullptr && !source->displayName.empty()
+        ? source->displayName
+        : labelJa.toStdString();
+    entity.construction = source != nullptr && source->construction;
+    entity.groupId = source != nullptr ? source->groupId : std::nullopt;
+    entity.createdBy = feature.id;
+    feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+
+    const auto added = session_->GetDocument().Run(
+        AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return false;
+    }
+    return true;
+}
+
+void V2MainWindow::ApplyTransformPlan(
+    const kachakacha::v2::modeling::TransformPlan& plan)
+{
+    const auto selected = viewport_->Selection().entityIds;
+    const QString label = QString::fromStdString(plan.summaryJa);
+    if (selected.empty()) {
+        SetStatus(QStringLiteral("%1: 先に動かす線を選んでください。").arg(label));
+        return;
+    }
+    // ここは線の編集(トリムなど)とは分ける。あちらは複数の線から1本を作るが、
+    // 動かすのは1本を1本のまま動かすことである。まとめて1本にしてしまうと、
+    // 3本を動かしたつもりが1本になり、名前も分け方も失われる。
+    const auto definition = DefinitionFor(plan);
+    int changed = 0;
+    std::vector<kachakacha::v2::base::EntityId> consumed;
+    for (const auto& entityId : selected) {
+        if (!TransformOneWire(definition, entityId, label)) {
+            continue;
+        }
+        ++changed;
+        if (!plan.keepsSource) {
+            consumed.push_back(entityId);
+        }
+    }
+    if (changed == 0) {
+        SetStatus(QStringLiteral("%1: 動かせる線がありませんでした。").arg(label));
+        return;
+    }
+    RemoveConsumedWires(consumed);
+    AdoptCurrentDocument();
+    if (plan.keepsSource) {
+        SetStatus(QStringLiteral("%1: %2本を写しました。元の線は残っています。")
+                .arg(label)
+                .arg(changed));
+        return;
+    }
+    SetStatus(QStringLiteral("%1: %2本を動かしました。").arg(label).arg(changed));
 }

@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
 
@@ -514,6 +515,18 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             curve.construction ? Qt::DashLine : Qt::SolidLine));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
+        if (selected && bodyDrag_.active && bodyDrag_.moved) {
+            // 掴んでいる間の行き先を出す。元の線はそのまま残して、両方見せる。
+            // 出さないと、離すまでどこへ行くのか分からない。
+            QPainterPath ghost;
+            bool ghostStarted = false;
+            AppendCurve(ghost, kachakacha::v2::geometry::TranslateCurve(curve.segment,
+                bodyDrag_.delta), ghostStarted);
+            if (ghostStarted) {
+                painter.setPen(QPen(palette_.preview, 1.6, Qt::DashLine));
+                painter.drawPath(ghost);
+            }
+        }
     }
     painter.setPen(QPen(palette_.point, 1.0));
     painter.setBrush(palette_.point);
@@ -1224,6 +1237,10 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
     // 画面に focus が無くても Ctrl と Shift が効く。
     SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (bodyDrag_.active) {
+        DragBody(event->position());
+        return;
+    }
     if (panning_) {
         const QPointF delta = event->position() - lastDragPosition_;
         if (std::hypot(delta.x(), delta.y()) > 0.0) {
@@ -1300,6 +1317,11 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         return;
     }
     if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {
+        // 選んでいる物の上を押したら、掴んだとみなす(V1同等)。
+        // 引きずらずに離せば、ただの選び直しとして扱う。
+        if (event->modifiers() == Qt::NoModifier && BeginBodyDrag(event->position())) {
+            return;
+        }
         SelectAt(event->position(), event->modifiers());
         return;
     }
@@ -1308,6 +1330,13 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
 
 void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (bodyDrag_.active) {
+        // 引きずっていなければ選び直しになる。掴んだ場所で選び直す。
+        if (!ReleaseBodyDrag(event->position())) {
+            SelectAt(event->position(), event->modifiers());
+        }
+        return;
+    }
     if (panning_) {
         const bool moved = viewDragMoved_;
         const bool wasRight = event->button() == Qt::RightButton;

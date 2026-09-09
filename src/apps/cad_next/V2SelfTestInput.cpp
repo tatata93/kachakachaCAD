@@ -238,9 +238,10 @@ namespace {
     const int beforeCopy = wireCount();
     window.SelectTool(DrawingTool::Copy);
     placeTwo();
-    if (!Explain((std::string("コピーは元を残して増える(") + std::to_string(beforeCopy)
+    // 1本につき1本ずつ増える。まとめて1本にしない。
+    if (!Explain((std::string("コピーは本数が倍になる(") + std::to_string(beforeCopy)
                      + " → " + std::to_string(wireCount()) + ")").c_str(),
-            wireCount() > beforeCopy)) {
+            wireCount() == beforeCopy * 2)) {
         return false;
     }
 
@@ -248,9 +249,9 @@ namespace {
     const int beforeMirror = wireCount();
     window.SelectTool(DrawingTool::Mirror);
     placeTwo();
-    if (!Explain((std::string("ミラーも元を残して増える(") + std::to_string(beforeMirror)
+    if (!Explain((std::string("ミラーも本数が倍になる(") + std::to_string(beforeMirror)
                      + " → " + std::to_string(wireCount()) + ")").c_str(),
-            wireCount() > beforeMirror)) {
+            wireCount() == beforeMirror * 2)) {
         return false;
     }
 
@@ -266,7 +267,8 @@ namespace {
             window.Session().GetDocument().Revision() != rotateFrom)) {
         return false;
     }
-    return Explain((std::string("回転は本数を増やさない(") + std::to_string(beforeRotate)
+    // 3本を回したら3本のまま。1本にまとめない。名前も分け方も残る。
+    return Explain((std::string("回転は本数を変えない(") + std::to_string(beforeRotate)
                        + " → " + std::to_string(wireCount()) + ")").c_str(),
         wireCount() == beforeRotate);
 }
@@ -295,6 +297,87 @@ namespace {
         window.StatusText().contains(QStringLiteral("距離")));
 }
 
+[[nodiscard]] bool CaseGrabSelectedAndDrag(V2MainWindow& window)
+{
+    // V1では、選んでいる線の上を押してそのまま引きずれば付いてきた。
+    // 道具を選んで点を2つ置く、という手順を踏まなくてよい。
+    auto& viewport = window.Viewport();
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+
+    // 線の真ん中を画面へ写して、そこを掴む。
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("線が場面にある", !curves.empty())) {
+        return false;
+    }
+    const auto onScreen = viewport.Mapping().Project(curves.front().segment.Evaluate(0.5));
+    if (!Explain("線が画面に出ている", onScreen.has_value())) {
+        return false;
+    }
+    const QPointF grabAt(onScreen->x, onScreen->y);
+
+    if (!Explain("選んでいる線の上は掴める", viewport.BeginBodyDrag(grabAt))) {
+        return false;
+    }
+    if (!Explain("掴んでいる印がつく", viewport.BodyDragging())) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    viewport.DragBody(grabAt + QPointF(60.0, 0.0));
+    if (!Explain("引きずっている間は文書を変えない",
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    if (!Explain("離すと文書が変わる",
+            viewport.ReleaseBodyDrag(grabAt + QPointF(60.0, 0.0)))) {
+        return false;
+    }
+    if (!Explain("掴みが終わっている", !viewport.BodyDragging())) {
+        return false;
+    }
+    return Explain("実際に文書が変わった",
+        window.Session().GetDocument().Revision() != revision);
+}
+
+[[nodiscard]] bool CaseGrabWithoutDraggingIsJustAClick(V2MainWindow& window)
+{
+    // 押して離しただけを 0mm の移動として文書へ入れない。
+    // 入れてしまうと、選び直すたびに履歴が伸びて、元に戻すが効かなくなる。
+    auto& viewport = window.Viewport();
+    if (!Explain("線を引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain("線が場面にある", !curves.empty())) {
+        return false;
+    }
+    const auto onScreen = viewport.Mapping().Project(curves.front().segment.Evaluate(0.5));
+    if (!Explain("線が画面に出ている", onScreen.has_value())) {
+        return false;
+    }
+    const QPointF at(onScreen->x, onScreen->y);
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    if (!Explain("掴める", viewport.BeginBodyDrag(at))) {
+        return false;
+    }
+    // 手の震えぶん(2px)だけ動かして離す。
+    if (!Explain("動かしていないので何も起きない",
+            !viewport.ReleaseBodyDrag(at + QPointF(2.0, 1.0)))) {
+        return false;
+    }
+    return Explain("文書は変わらない",
+        window.Session().GetDocument().Revision() == revision);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
@@ -307,6 +390,8 @@ std::vector<SelfTestCase> InputCases()
         {"V1のキーが戻っている", &CaseV1ShortcutsAreBack},
         {"移動と複製が本当に効く", &CaseTransformToolsActuallyMove},
         {"つぶれた変換は断る", &CaseTransformRefusesDegenerateInput},
+        {"選んだ物を掴んで動かせる", &CaseGrabSelectedAndDrag},
+        {"押しただけでは動かない", &CaseGrabWithoutDraggingIsJustAClick},
     };
 }
 

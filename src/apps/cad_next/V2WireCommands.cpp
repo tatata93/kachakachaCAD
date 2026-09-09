@@ -14,6 +14,7 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/FeatureReevaluation.h"
 #include "kachakacha/geometry/CurveProjection.h"
+#include "kachakacha/geometry/Measurement.h"
 
 #include <string>
 #include <utility>
@@ -61,7 +62,8 @@ constexpr WireEditBinding kWireEdits[] = {
 
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
-    return FindWireEdit(id) != nullptr || id == "wire.project";
+    return FindWireEdit(id) != nullptr || id == "wire.project" || id == "wire.trim"
+        || id == "wire.extend";
 }
 
 void V2MainWindow::ProjectSelectedWires()
@@ -139,6 +141,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         ProjectSelectedWires();
         return;
     }
+    if (id == "wire.trim" || id == "wire.extend") {
+        BeginTrimOrExtend(id == "wire.trim");
+        return;
+    }
     const WireEditBinding* binding = FindWireEdit(id);
     if (binding == nullptr) {
         return;
@@ -157,6 +163,27 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         definition.scalarArgument.expression = std::to_string(wireEditSizeMm_);
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
+    RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
+        binding->consumesFirstOnly);
+}
+
+void V2MainWindow::RunWireTransform(
+    const kachakacha::v2::domain::TransformWireDefinition& definition,
+    const QString& labelJa, bool consumesFirstOnly)
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    if (inputs.empty()) {
+        SetStatus(QStringLiteral("%1: 先に線を選んでください。").arg(labelJa));
+        return;
+    }
     const auto computed =
         kachakacha::v2::document::EvaluateWireTransform(definition, inputs);
     if (!computed.HasValue()) {
@@ -167,7 +194,7 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     Feature feature;
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::TransformWire;
-    feature.displayName = binding->labelJa;
+    feature.displayName = labelJa.toStdString();
     feature.inputEntityIds = selection.entityIds;
     // 計算した形をそのまま持たせる。持たせないと、開き直したときに形が出ない。
     kachakacha::v2::domain::CreateWireDefinition wire;
@@ -181,33 +208,31 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
     entity.kind = EntityKind::Wire;
-    entity.displayName = binding->labelJa;
+    entity.displayName = labelJa.toStdString();
     entity.createdBy = feature.id;
     feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
 
     const auto added = session_->GetDocument().Run(
-        AddFeatureCommand(feature, {entity}, binding->labelJa));
+        AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
         return;
     }
-    if (binding->consumesInputs) {
-        std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
-        if (binding->consumesFirstOnly && !consumed.empty()) {
-            // 分割は1本目を切るだけ。刃にした線は残す。
-            consumed.resize(1);
-        }
-        RemoveConsumedWires(consumed);
+    std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
+    if (consumesFirstOnly && !consumed.empty()) {
+        // 分割やトリムは1本目を直すだけ。刃や境界にした線は残す。
+        consumed.resize(1);
     }
+    RemoveConsumedWires(consumed);
     AdoptCurrentDocument();
-    if (binding->consumesFirstOnly) {
-        SetStatus(QStringLiteral("%1: 1本目を%2本にしました。刃にした線は残っています。")
-                .arg(QString::fromUtf8(binding->labelJa))
+    if (consumesFirstOnly) {
+        SetStatus(QStringLiteral("%1: 1本目を%2本にしました。相手の線は残っています。")
+                .arg(labelJa)
                 .arg(static_cast<int>(computed.Value().size())));
         return;
     }
     SetStatus(QStringLiteral("%1: %2本の線から%3本にしました。")
-            .arg(QString::fromUtf8(binding->labelJa))
+            .arg(labelJa)
             .arg(static_cast<int>(inputs.size()))
             .arg(static_cast<int>(computed.Value().size())));
 }
@@ -245,4 +270,40 @@ void V2MainWindow::AdoptCurrentDocument()
     RefreshExportCounts();
     RefreshCommandVisibility();
     viewport_->update();
+}
+
+void V2MainWindow::BeginTrimOrExtend(bool trim)
+{
+    using kachakacha::v2::domain::WireTransformMethod;
+
+    // どこを切るか、どちら側へ延ばすかは「押した場所」で決まる。
+    // 選択だけでは決まらないので、1回だけ押す場所を聞く。
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    const QString label = trim ? QStringLiteral("トリム") : QStringLiteral("延長");
+    if (inputs.size() < 2) {
+        SetStatus(QStringLiteral("%1: 線を2本選んでください"
+                                 "(1本目が直す線、2本目が境界です)。")
+                .arg(label));
+        return;
+    }
+    const kachakacha::v2::geometry::CurveSegment target = inputs.front();
+    viewport_->BeginPointPick(
+        [this, trim, target, label](const V2Viewport::PickedPoint& picked) {
+            // 押した場所を、直す線の上の位置(0..1)へ直す。
+            const auto closest = kachakacha::v2::geometry::MeasurePointToCurve(
+                picked.point, target);
+            kachakacha::v2::domain::TransformWireDefinition definition;
+            definition.method = trim ? WireTransformMethod::Trim
+                                     : WireTransformMethod::Extend;
+            // トリムは「捨てる側」を、延長は「延ばす端」を、この数で伝える。
+            definition.scalarArgument.value = trim
+                ? closest.secondParameter
+                : (closest.secondParameter >= 0.5 ? 1.0 : 0.0);
+            definition.scalarArgument.kind =
+                kachakacha::v2::geometry::QuantityKind::Scalar;
+            RunWireTransform(definition, label, true);
+        },
+        trim ? "トリム: 捨てる側を1回押してください(Esc でやめます)。"
+             : "延長: 延ばしたい端の近くを1回押してください(Esc でやめます)。");
 }

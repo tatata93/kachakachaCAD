@@ -540,6 +540,64 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool CaseTrimAsksWhereToPress(V2MainWindow& window)
+{
+    // どこを切るかは押した場所で決まる。選択だけでは決まらない。
+    // 聞いていることを言わないと、押しても何も起きないように見える。
+    if (!Explain("交わる2本を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    window.RunCommand("wire.trim");
+    if (!Explain((std::string("押す場所を聞く(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("押してください")))) {
+        return false;
+    }
+    if (!Explain("拾う待ちになっている", window.Viewport().PickPending())) {
+        return false;
+    }
+    // Esc でやめられる。やめられないと、押すまで何もできなくなる。
+    window.Viewport().CancelTool();
+    return Explain("やめられる", !window.Viewport().PickPending());
+}
+
+[[nodiscard]] bool CaseTrimNeedsTwoWires(V2MainWindow& window)
+{
+    // 1本目が直す線、2本目が境界。1本では境界がない。
+    if (!Explain("線を1本引ける", window.ApplyManualState(QStringLiteral("draw-line")))) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    window.RunCommand("wire.trim");
+    if (!Explain((std::string("2本要ると言う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("線を2本")))) {
+        return false;
+    }
+    return Explain("拾う待ちにならない", !window.Viewport().PickPending());
+}
+
+[[nodiscard]] bool CaseGridOriginAsksWhereToPress(V2MainWindow& window)
+{
+    window.RunCommand("grid.move_origin");
+    if (!Explain((std::string("押す場所を聞く(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("押してください")))) {
+        return false;
+    }
+    // 押すと動く。動いたことを帯で言う。
+    auto& viewport = window.Viewport();
+    viewport.ClickAt(QPointF(viewport.width() * 0.4, viewport.height() * 0.6));
+    if (!Explain((std::string("動かしたと言う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("動かしました")))) {
+        return false;
+    }
+    return Explain("拾い終えて道具へ戻る", !viewport.PickPending());
+}
+
 std::vector<SelfTestCase> ModelingCases()
 {
     return {
@@ -556,6 +614,9 @@ std::vector<SelfTestCase> ModelingCases()
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
         {"投影は元の線を残す", &CaseProjectKeepsTheOriginal},
+        {"トリムは押す場所を聞きやめられる", &CaseTrimAsksWhereToPress},
+        {"トリムは線を2本要る", &CaseTrimNeedsTwoWires},
+        {"グリッド原点は押した場所へ動く", &CaseGridOriginAsksWhereToPress},
         {"足し引きは部品を2つ要る", &CaseBooleanNeedsTwoParts},
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
         {"立体を作る前の検査は理由を出す", &CaseValidateNeedsASolid},

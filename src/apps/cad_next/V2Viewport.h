@@ -73,6 +73,23 @@ public:
     void SetPalette(const ViewportPalette& palette);
     [[nodiscard]] const ViewportPalette& Colors() const noexcept { return palette_; }
 
+    //! 次の1回のクリックを、道具ではなくこちらへ渡す(1点だけ拾う)。
+    //!
+    //! トリムや延長やグリッド原点の移動は「どこを押したか」で意味が決まる。
+    //! 選択だけでは決まらないので、押す場所を1回だけ聞く。
+    //! 聞いている間は帯にそう出す。黙って待つと、何も起きないように見える。
+    struct PickedPoint {
+        //! 作業平面の上の点。
+        kachakacha::v2::geometry::Vector3 point{};
+        //! いちばん近い線。無ければ値を持たない。
+        std::optional<kachakacha::v2::app::PickCandidate> curve;
+    };
+    void BeginPointPick(std::function<void(const PickedPoint&)> handler,
+        const std::string& promptJa);
+    [[nodiscard]] bool PickPending() const { return static_cast<bool>(pickHandler_); }
+    //! 拾うのをやめる。Esc で呼ぶ。
+    void CancelPointPick();
+
     //! 見え方の設定(AT-UIX-010)。形は変えない。
     void SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
     [[nodiscard]] const kachakacha::v2::app::DisplaySettings& DisplaySettingsNow() const
@@ -266,6 +283,8 @@ private:
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
     kachakacha::v2::app::DisplaySettings display_;
+    //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
+    std::function<void(const PickedPoint&)> pickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;
     kachakacha::v2::view::Quaternion orientation_{};
     kachakacha::v2::view::ViewCubeDrag cubeDrag_;

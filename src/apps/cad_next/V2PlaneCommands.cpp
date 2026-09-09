@@ -48,7 +48,8 @@ using kachakacha::v2::modeling::StandardPlaneKind;
 
 bool V2MainWindow::IsPlaneCommand(std::string_view id)
 {
-    return id == "workplane.create" || id == "workplane.set_active" || id == "grid.edit";
+    return id == "workplane.create" || id == "workplane.set_active" || id == "grid.edit"
+        || id == "grid.move_origin";
 }
 
 void V2MainWindow::RunPlaneCommand(std::string_view id)
@@ -63,6 +64,10 @@ void V2MainWindow::RunPlaneCommand(std::string_view id)
     }
     if (id == "grid.edit") {
         CycleGridSpacing();
+        return;
+    }
+    if (id == "grid.move_origin") {
+        MoveGridOriginByClick();
         return;
     }
 }
@@ -226,4 +231,34 @@ void V2MainWindow::CycleGridSpacing()
     SetStatus(QStringLiteral("グリッドの間隔を %1 mm にしました(副点は 1/%2)。")
             .arg(next)
             .arg(scene.grid.subdivision));
+}
+
+void V2MainWindow::MoveGridOriginByClick()
+{
+    // どこへ動かすかは、押した場所で決まる。選択では決まらない。
+    // だから1回だけ押す場所を聞く。聞いていることは帯に出る。
+    viewport_->BeginPointPick(
+        [this](const V2Viewport::PickedPoint& picked) {
+            auto scene = session_->Scene();
+            const auto& plane = viewport_->WorkPlane();
+            // 場面のグリッドは画面用の形なので、core の形へ写してから頼む。
+            kachakacha::v2::modeling::GridDefinition definition;
+            definition.visible = scene.grid.visible;
+            definition.majorSpacingMm = scene.grid.majorSpacingMm;
+            definition.subdivision = scene.grid.subdivision;
+            const auto moved = kachakacha::v2::modeling::MoveGridOrigin(definition, plane,
+                picked.point);
+            if (!moved.HasValue()) {
+                ReportDiagnostics(moved.Diagnostics());
+                return;
+            }
+            scene.grid.origin = plane.PointAt(moved.Value().originUmm,
+                moved.Value().originVmm);
+            session_->SetScene(std::move(scene));
+            viewport_->update();
+            SetStatus(QStringLiteral("グリッド原点: 作業平面の上の (%1, %2) mm へ動かしました。")
+                    .arg(moved.Value().originUmm, 0, 'f', 3)
+                    .arg(moved.Value().originVmm, 0, 'f', 3));
+        },
+        "グリッド原点: 動かす先を1回押してください(Esc でやめます)。");
 }

@@ -1104,8 +1104,51 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     }
 }
 
+void V2Viewport::BeginPointPick(std::function<void(const PickedPoint&)> handler,
+    const std::string& promptJa)
+{
+    pickHandler_ = std::move(handler);
+    // 聞いていることを言う。黙って待つと、何も起きないように見える。
+    status_ = promptJa;
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
+}
+
+void V2Viewport::CancelPointPick()
+{
+    if (!pickHandler_) {
+        return;
+    }
+    pickHandler_ = nullptr;
+    status_ = "拾うのをやめました。";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
+}
+
 void V2Viewport::ClickAt(const QPointF& position)
 {
+    if (pickHandler_) {
+        // 1回だけ拾う。拾ったら道具へ戻す。押しっぱなしにしない。
+        PickedPoint picked;
+        const auto onPlane = mapping_.UnprojectOntoPlane(
+            ScreenPoint{position.x(), position.y()}, workPlane_.origin,
+            workPlane_.normal);
+        if (onPlane.has_value()) {
+            picked.point = *onPlane;
+        }
+        picked.curve = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+            ScreenPoint{position.x(), position.y()},
+            session_->GetDocument().Snapshot().settings.tolerance);
+        auto handler = pickHandler_;
+        pickHandler_ = nullptr;
+        handler(picked);
+        update();
+        return;
+    }
     const auto result = session_->Click(ScreenPoint{position.x(), position.y()});
     if (!result.diagnostics.empty()) {
         status_ = result.diagnostics.front().summaryJa;
@@ -1141,6 +1184,10 @@ void V2Viewport::FinishTool()
 
 void V2Viewport::CancelTool()
 {
+    if (pickHandler_) {
+        CancelPointPick();
+        return;
+    }
     session_->CancelTool();
     hover_.preview.clear();
     status_ = "取り消しました。";

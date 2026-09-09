@@ -143,6 +143,12 @@ public:
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
+    //! 線の編集を1つ実行して Feature を足す。判断は core にある。
+    void RunWireTransform(
+        const kachakacha::v2::domain::TransformWireDefinition& definition,
+        const QString& labelJa, bool consumesFirstOnly);
+    //! トリム・延長は押した場所で意味が決まる。1回だけ押す場所を聞く。
+    void BeginTrimOrExtend(bool trim);
     //! 選んだ線を作業平面へ落とす。元の線は残す。
     void ProjectSelectedWires();
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
@@ -261,6 +267,8 @@ private:
     void RunPlaneCommand(std::string_view id);
     //! 標準面を1つ作って、作業中にする。押すたびに XY→YZ→ZX と回る。
     void CreateStandardWorkPlane();
+    //! 押した場所へグリッドの原点を動かす。
+    void MoveGridOriginByClick();
     //! 選んでいる作業平面を作業中にする。
     void ActivateSelectedWorkPlane();
     //! 作業平面を画面と場面へ反映する。

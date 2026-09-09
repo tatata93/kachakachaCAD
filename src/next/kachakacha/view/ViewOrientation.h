@@ -192,7 +192,7 @@ struct AxisArrowButton {
 //! 帯はキューブより広い。6個を1段に並べると、キューブ幅では押せない大きさになるためである。
 //! 帯はキューブの右端にそろえて、左へ伸ばす。キューブは画面の右端にあるので、
 //! 右へ伸ばすと画面の外へ出てしまう。
-inline constexpr double kAxisArrowBlockWidthRatio = 1.8;
+inline constexpr double kAxisArrowBlockWidthRatio = 2.1;
 inline constexpr double kAxisArrowGapRatio = 0.05;
 //! 1段に並ぶ数。軸3つ x 向き2つ。
 inline constexpr int kAxisArrowColumns = 6;

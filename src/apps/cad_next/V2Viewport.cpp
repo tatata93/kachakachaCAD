@@ -899,6 +899,56 @@ void V2Viewport::DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,
         QString::fromStdString(kachakacha::v2::view::ViewCubeZoneLabelJa(zone)));
 }
 
+//! 矢印1つの絵。回る向きの輪と、その終わりの矢じりと、軸の名前。
+//! ここだけ切り出しておくと、並べる側が読める長さに収まる。
+void V2Viewport::DrawAxisArrowGlyph(QPainter& painter, const QRectF& cell,
+    const QColor& ink, bool positive, const QFont& baseFont,
+    std::string_view axisName)
+{
+    painter.setPen(QPen(ink, 1.6));
+    painter.setBrush(Qt::NoBrush);
+    // 回る向きを弧で描く。上を開けて、開いた口の片側に矢じりを付ける。
+    // 矢じりは弧の終わりに置く。途中に置くと、どちら回りか読めない。
+    const QRectF ring = cell.adjusted(cell.width() * 0.10, cell.height() * 0.10,
+        -cell.width() * 0.10, -cell.height() * 0.10);
+    // Qt の角度は3時が0度で、反時計回りが正。1/16度で渡す。
+    const double startDegrees = positive ? 60.0 : 120.0;
+    const double spanDegrees = positive ? 240.0 : -240.0;
+    painter.drawArc(ring, static_cast<int>(startDegrees * 16.0),
+        static_cast<int>(spanDegrees * 16.0));
+
+    // 弧の終わりの点と、そこでの進む向き。画面のyは下向きなので符号を反転する。
+    const double endRad = (startDegrees + spanDegrees) * 3.14159265358979323846 / 180.0;
+    const double rx = ring.width() * 0.5;
+    const double ry = ring.height() * 0.5;
+    const QPointF head(ring.center().x() + rx * std::cos(endRad),
+        ring.center().y() - ry * std::sin(endRad));
+    // 反時計回りに進むときの接線。時計回り(negative)なら向きが逆になる。
+    const double tangentX = -std::sin(endRad) * (positive ? 1.0 : -1.0);
+    const double tangentY = -std::cos(endRad) * (positive ? 1.0 : -1.0);
+    const double normalX = -tangentY;
+    const double normalY = tangentX;
+    const double headSize = std::max(3.0, cell.width() * 0.20);
+    QPolygonF arrowHead;
+    arrowHead << QPointF(head.x() + tangentX * headSize, head.y() + tangentY * headSize)
+          << QPointF(head.x() + normalX * headSize * 0.55,
+             head.y() + normalY * headSize * 0.55)
+          << QPointF(head.x() - normalX * headSize * 0.55,
+             head.y() - normalY * headSize * 0.55);
+    painter.setBrush(ink);
+    painter.setPen(Qt::NoPen);
+    painter.drawPolygon(arrowHead);
+
+    // 軸の名前は輪の中へ。輪と重ねると、どちらも読めなくなる。
+    QFont letter = baseFont;
+    letter.setPointSizeF(std::max(5.0, cell.height() * 0.34));
+    painter.setFont(letter);
+    painter.setPen(QPen(ink, 1.0));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawText(cell, Qt::AlignCenter,
+        QString::fromUtf8(std::string(axisName).c_str()));
+}
+
 void V2Viewport::DrawAxisArrows(QPainter& painter) const
 {
     const auto buttons = AxisArrowButtons();
@@ -942,35 +992,8 @@ void V2Viewport::DrawAxisArrows(QPainter& painter) const
             case kachakacha::v2::view::RotationAxis::Z: ink = palette_.axisZ; break;
             }
         }
-        painter.setPen(QPen(ink, 1.4));
-        painter.setBrush(Qt::NoBrush);
-        // 回る向きを弧で描く。矢じりは進む側の端に付ける。
-        const QRectF arc = cell.adjusted(cell.width() * 0.22, cell.height() * 0.22,
-            -cell.width() * 0.22, -cell.height() * 0.22);
-        const int spanDegrees = 240 * 16;
-        const int startDegrees = (button.positive ? 150 : 30) * 16;
-        painter.drawArc(arc, startDegrees, button.positive ? -spanDegrees : spanDegrees);
-        const double headSize = std::max(3.0, cell.width() * 0.16);
-        const QPointF head(button.positive ? arc.right() : arc.left(), arc.center().y());
-        QPolygonF arrowHead;
-        if (button.positive) {
-            arrowHead << QPointF(head.x() - headSize, head.y() - headSize)
-                      << QPointF(head.x() + headSize * 0.4, head.y())
-                      << QPointF(head.x() - headSize, head.y() + headSize);
-        } else {
-            arrowHead << QPointF(head.x() + headSize, head.y() - headSize)
-                      << QPointF(head.x() - headSize * 0.4, head.y())
-                      << QPointF(head.x() + headSize, head.y() + headSize);
-        }
-        painter.setBrush(ink);
-        painter.setPen(Qt::NoPen);
-        painter.drawPolygon(arrowHead);
-
-        painter.setPen(QPen(ink, 1.0));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawText(cell, Qt::AlignCenter,
-            QString::fromUtf8(std::string(
-                kachakacha::v2::view::RotationAxisName(button.axis)).c_str()));
+        DrawAxisArrowGlyph(painter, cell, ink, button.positive, compact,
+            kachakacha::v2::view::RotationAxisName(button.axis));
     }
     // どちらの段が絶対で、どちらが相対かを書く。書かないと見ただけでは分からない。
     const double labelWidth = 30.0;

@@ -514,8 +514,8 @@ KACHA_V2_TEST(view_orientation, 実際のキューブの大きさで矢印が押
     const auto buttons = kachakacha::v2::view::BuildAxisArrowButtons(0.0, 0.0, 88.0);
     Require(!buttons.empty(), "矢印がある");
     for (const auto& button : buttons) {
-        Require(button.widthPx >= 20.0, "20px以上");
-        Require(button.heightPx >= 20.0, "20px以上");
+        Require(button.widthPx >= 26.0, "26px以上");
+        Require(button.heightPx >= 26.0, "26px以上");
     }
 }
 

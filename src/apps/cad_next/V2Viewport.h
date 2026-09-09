@@ -204,6 +204,10 @@ private:
     void DrawViewCube(QPainter& painter) const;
     //! 回転矢印を描く。使えないもの(相対軸で選択が無い)は薄く出す。消さない。
     void DrawAxisArrows(QPainter& painter) const;
+    //! 矢印1つの絵。輪・矢じり・軸の名前。
+    static void DrawAxisArrowGlyph(QPainter& painter, const QRectF& cell,
+        const QColor& ink, bool positive, const QFont& baseFont,
+        std::string_view axisName);
     void DrawCursorInput(QPainter& painter) const;
     void DrawGuideRows(QPainter& painter) const;
     void DrawViewCubeFace(QPainter& painter, int faceAxis, int faceSign,

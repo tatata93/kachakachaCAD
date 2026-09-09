@@ -2,6 +2,16 @@
 //! Qt の当て木、部品の側。宣言だけ。
 #include "QtStubGui.h"
 
+#include <initializer_list>
+
+//! 本物の QList のごく一部。初期化子リストから作れれば足りる。
+template<class T>
+class QList {
+public:
+    QList() = default;
+    QList(std::initializer_list<T>) {}
+};
+
 class QObject {
 public:
     QObject() = default;
@@ -264,6 +274,8 @@ public:
     QDockWidget() = default;
     QDockWidget(const QString&, QWidget* = nullptr) {}
     void setWidget(QWidget*);
+    void setMinimumHeight(int);
+    void setMinimumWidth(int);
     [[nodiscard]] QWidget* widget() const;
     void setFeatures(int);
     void setAllowedAreas(Qt::DockWidgetAreas);
@@ -287,6 +299,8 @@ public:
     void addToolBarBreak();
     void addToolBar(Qt::ToolBarArea, QToolBar*);
     void addDockWidget(Qt::DockWidgetArea, QDockWidget*);
+    void tabifyDockWidget(QDockWidget*, QDockWidget*);
+    void resizeDocks(const QList<QDockWidget*>&, const QList<int>&, Qt::Orientation);
     void addAction(QAction*);
 };
 

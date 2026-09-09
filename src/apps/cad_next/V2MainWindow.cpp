@@ -419,6 +419,13 @@ void V2MainWindow::BuildPanels()
         SetStatus(text);
     });
 
+    // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
+    // 「手順」が2行しか見えず、いま何段目かが読めなくなる。
+    // 手順だけは常に見えるように残し、残りは札で切り替える。
+    tabifyDockWidget(exportDock_, parameterDock_);
+    tabifyDockWidget(parameterDock_, measureDock_);
+    exportDock_->raise();
+
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
     diagnosticList_ = new QListWidget(diagnosticDock);

@@ -216,6 +216,9 @@ private:
         double degrees, const kachakacha::v2::view::Quaternion& from);
     //! 視点の操作板を描く。使えないもの(選択が要るもの)は薄く出す。消さない。
     void DrawViewGadgets(QPainter& painter) const;
+    //! その矢じりが、いま指されているか押されているか。
+    [[nodiscard]] bool IsRingHeadHot(kachakacha::v2::view::RotationAxis axis,
+        bool positive) const;
     //! 軸ごとの輪と、その両端の矢じり。
     void DrawViewRings(QPainter& painter,
         const kachakacha::v2::view::ViewGadgetLayout& layout) const;

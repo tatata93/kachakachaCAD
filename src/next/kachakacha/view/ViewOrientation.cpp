@@ -484,55 +484,25 @@ std::optional<std::size_t> AxisArrowAtScreen(const std::vector<AxisArrowButton>&
 // ---- 視点の操作板 ----
 namespace {
 
-//! その軸に垂直な平面を張る2本。輪はこの平面の上に描く。
-void RingBasis(RotationAxis axis, Vector3& first, Vector3& second) noexcept
+//! 輪1本を、決まった大きさと傾きの楕円として作る。
+//! 姿勢は使わない。使うと矢じりが毎回動いて、狙って押せなくなる。
+[[nodiscard]] std::vector<geometry::ScreenPoint> BuildRingPoints(double centerXPx,
+    double centerYPx, double majorPx, double minorPx, double tiltDegrees)
 {
-    switch (axis) {
-    case RotationAxis::X:
-        first = Vector3{0.0, 1.0, 0.0};
-        second = Vector3{0.0, 0.0, 1.0};
-        return;
-    case RotationAxis::Y:
-        first = Vector3{0.0, 0.0, 1.0};
-        second = Vector3{1.0, 0.0, 0.0};
-        return;
-    case RotationAxis::Z:
-        first = Vector3{1.0, 0.0, 0.0};
-        second = Vector3{0.0, 1.0, 0.0};
-        return;
+    std::vector<geometry::ScreenPoint> points;
+    points.reserve(static_cast<std::size_t>(kViewRingSampleCount));
+    const double tilt = DegreesToRadians(tiltDegrees);
+    const double cosTilt = std::cos(tilt);
+    const double sinTilt = std::sin(tilt);
+    for (int step = 0; step < kViewRingSampleCount; ++step) {
+        const double angle = 6.283185307179586 * static_cast<double>(step)
+            / static_cast<double>(kViewRingSampleCount);
+        const double ex = majorPx * std::cos(angle);
+        const double ey = minorPx * std::sin(angle);
+        points.push_back(geometry::ScreenPoint{centerXPx + ex * cosTilt - ey * sinTilt,
+            centerYPx + ex * sinTilt + ey * cosTilt});
     }
-    first = Vector3{1.0, 0.0, 0.0};
-    second = Vector3{0.0, 1.0, 0.0};
-}
-
-//! 世界の点を、キューブと同じ写し方で画面へ落とす。
-[[nodiscard]] geometry::ScreenPoint ToRingScreen(const Vector3& world,
-    const Vector3& right, const Vector3& up, double centerXPx, double centerYPx,
-    double scalePx) noexcept
-{
-    const double sx = world.x * right.x + world.y * right.y + world.z * right.z;
-    const double sy = world.x * up.x + world.y * up.y + world.z * up.z;
-    // 画面のyは下向きなので、上向き成分は引く。
-    return geometry::ScreenPoint{centerXPx + sx * scalePx, centerYPx - sy * scalePx};
-}
-
-//! 中心からいちばん遠い点。輪のどこに矢じりを置くかを決める。
-//! いちばん遠いところは輪が真横を向いている場所なので、矢じりが潰れて見えない、が起きにくい。
-[[nodiscard]] std::size_t FarthestPoint(const std::vector<geometry::ScreenPoint>& points,
-    double centerXPx, double centerYPx) noexcept
-{
-    std::size_t best = 0;
-    double bestDistance = -1.0;
-    for (std::size_t index = 0; index < points.size(); ++index) {
-        const double dx = points[index].x - centerXPx;
-        const double dy = points[index].y - centerYPx;
-        const double distance = dx * dx + dy * dy;
-        if (distance > bestDistance) {
-            bestDistance = distance;
-            best = index;
-        }
-    }
-    return best;
+    return points;
 }
 
 //! その点での進む向き。となりの点との差から取る。長さは1に均す。
@@ -610,41 +580,39 @@ std::string ViewGadgetTooltipJa(const ViewGadget& gadget, RotationAxisMode ringM
     return {};
 }
 
-ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx, double cubeSizePx,
-    const Quaternion& orientation)
+double ViewRingTiltDegrees(RotationAxis axis) noexcept
+{
+    switch (axis) {
+    case RotationAxis::X: return kViewRingTiltDegreesX;
+    case RotationAxis::Y: return kViewRingTiltDegreesY;
+    case RotationAxis::Z: return kViewRingTiltDegreesZ;
+    }
+    return 0.0;
+}
+
+ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx, double cubeSizePx)
 {
     ViewGadgetLayout layout;
-    if (!(cubeSizePx > 0.0) || !orientation.IsFinite() || orientation.Norm() <= 0.0) {
+    if (!(cubeSizePx > 0.0)) {
         return layout;
     }
     const double button = cubeSizePx * kViewGadgetButtonRatio;
     const double centerX = cubeLeftPx + cubeSizePx * 0.5;
     const double centerY = cubeTopPx + cubeSizePx * 0.5;
-    // 立方体は一辺2(-1..+1)。外接球の半径 sqrt(3) が入る大きさで写す。
-    const double scale = cubeSizePx * 0.5 / 1.7320508075688772;
-    const double ringRadius = cubeSizePx * kViewRingRadiusRatio * 0.5 / scale;
-    const Vector3 right = RightOf(orientation);
-    const Vector3 up = UpOf(orientation);
 
-    // 軸ごとの輪。決まった順(X→Y→Z)で作る。
+    // 軸ごとの輪。決まった順(X→Y→Z)で、決まった傾きに置く。
+    const double major = cubeSizePx * kViewRingRadiusRatio * 0.5;
+    const double minor = major * kViewRingFlatten;
     for (const RotationAxis axis : {RotationAxis::X, RotationAxis::Y, RotationAxis::Z}) {
-        Vector3 first{};
-        Vector3 second{};
-        RingBasis(axis, first, second);
         ViewAxisRing ring;
         ring.axis = axis;
-        ring.points.reserve(static_cast<std::size_t>(kViewRingSampleCount));
-        for (int step = 0; step < kViewRingSampleCount; ++step) {
-            const double angle = 6.283185307179586 * static_cast<double>(step)
-                / static_cast<double>(kViewRingSampleCount);
-            const Vector3 point = first * (ringRadius * std::cos(angle))
-                + second * (ringRadius * std::sin(angle));
-            ring.points.push_back(ToRingScreen(point, right, up, centerX, centerY, scale));
-        }
-        const std::size_t farthest = FarthestPoint(ring.points, centerX, centerY);
-        const std::size_t opposite = (farthest + ring.points.size() / 2) % ring.points.size();
-        ring.positiveHead = ring.points[farthest];
-        ring.positiveTangent = TangentAt(ring.points, farthest);
+        ring.points = BuildRingPoints(centerX, centerY, major, minor,
+            ViewRingTiltDegrees(axis));
+        // 矢じりは楕円の長い方の両端。いつも同じ場所なので、狙って押せる。
+        const std::size_t head = 0;
+        const std::size_t opposite = ring.points.size() / 2;
+        ring.positiveHead = ring.points[head];
+        ring.positiveTangent = TangentAt(ring.points, head);
         ring.negativeHead = ring.points[opposite];
         ring.negativeTangent = TangentAt(ring.points, opposite);
         // 戻す側は、進む向きの逆を向く。

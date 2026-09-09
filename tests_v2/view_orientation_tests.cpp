@@ -566,11 +566,7 @@ using kachakacha::v2::view::ViewGadgetTooltipJa;
 
 [[nodiscard]] ViewGadgetLayout Panel()
 {
-    // 斜めから見た姿勢。輪が3本とも潰れずに出る向きにする。
-    const auto orientation = kachakacha::v2::view::OrientationForZone(
-        kachakacha::v2::view::ViewCubeZone{1, -1, 1});
-    Require(orientation.HasValue(), "姿勢が作れる");
-    return BuildViewGadgets(800.0, 100.0, 88.0, orientation.Value());
+    return BuildViewGadgets(800.0, 100.0, 88.0);
 }
 
 [[nodiscard]] int CountOfKind(const ViewGadgetLayout& layout, ViewGadgetKind kind)
@@ -604,7 +600,7 @@ KACHA_V2_TEST(view_orientation, 操作板にV1と同じ部品がそろってい�
     RequireEqual(std::to_string(layout.rings.size()), std::string("3"), "輪は3本");
 }
 
-KACHA_V2_TEST(view_orientation, 輪は軸ごとに別の形で画面へ落ちる)
+KACHA_V2_TEST(view_orientation, 輪は軸ごとに別の傾きで置かれる)
 {
     const auto layout = Panel();
     for (const auto& ring : layout.rings) {
@@ -618,9 +614,67 @@ KACHA_V2_TEST(view_orientation, 輪は軸ごとに別の形で画面へ落ちる
         Require(maxX - minX > 1.0, "潰れていない");
     }
     // 3本が同じ形になっていない(同じなら軸の見分けがつかない)。
-    Require(std::abs(layout.rings[0].points[0].x - layout.rings[1].points[0].x) > 1.0e-9
-            || std::abs(layout.rings[0].points[0].y - layout.rings[1].points[0].y) > 1.0e-9,
+    Require(std::abs(layout.rings[0].points[0].x - layout.rings[1].points[0].x) > 1.0
+            || std::abs(layout.rings[0].points[0].y - layout.rings[1].points[0].y) > 1.0,
         "XとYの輪が違う");
+    Require(std::abs(kachakacha::v2::view::ViewRingTiltDegrees(
+                kachakacha::v2::view::RotationAxis::Z)) < 1.0e-9,
+        "Zの輪は水平");
+}
+
+KACHA_V2_TEST(view_orientation, 輪と矢じりは姿勢が変わっても動かない)
+{
+    // 動くと、掴みたい矢じりが毎回別の場所へ行って、狙って押せない。
+    // いまどちらを向いているかはキューブの面が示すので、輪まで動かす必要はない。
+    const auto first = BuildViewGadgets(800.0, 100.0, 88.0);
+    const auto second = BuildViewGadgets(800.0, 100.0, 88.0);
+    RequireEqual(std::to_string(first.gadgets.size()),
+        std::to_string(second.gadgets.size()), "数が同じ");
+    for (std::size_t index = 0; index < first.gadgets.size(); ++index) {
+        RequireNear(first.gadgets[index].xPx, second.gadgets[index].xPx, 1.0e-12, "同じ場所");
+        RequireNear(first.gadgets[index].yPx, second.gadgets[index].yPx, 1.0e-12, "同じ場所");
+    }
+    for (std::size_t index = 0; index < first.rings.size(); ++index) {
+        RequireNear(first.rings[index].positiveHead.x,
+            second.rings[index].positiveHead.x, 1.0e-12, "矢じりも同じ場所");
+        RequireNear(first.rings[index].negativeHead.y,
+            second.rings[index].negativeHead.y, 1.0e-12, "矢じりも同じ場所");
+    }
+}
+
+KACHA_V2_TEST(view_orientation, 矢じりは掴める大きさがある)
+{
+    // 88px のキューブで、矢じりの当たり判定が28px以上。小さいと狙えない。
+    const auto layout = Panel();
+    int rings = 0;
+    for (const auto& gadget : layout.gadgets) {
+        if (gadget.kind != ViewGadgetKind::AxisRing) {
+            continue;
+        }
+        Require(gadget.widthPx >= 28.0, "28px以上");
+        Require(gadget.heightPx >= 28.0, "28px以上");
+        ++rings;
+    }
+    RequireEqual(std::to_string(rings), std::string("6"), "6個とも");
+}
+
+KACHA_V2_TEST(view_orientation, 矢じりは輪の長い方の端にある)
+{
+    // 長い方の端はキューブから最も離れているので、面と重ならず掴みやすい。
+    const auto layout = Panel();
+    for (const auto& ring : layout.rings) {
+        double farthest = 0.0;
+        for (const auto& point : ring.points) {
+            const double dx = point.x - 844.0;
+            const double dy = point.y - 144.0;
+            farthest = std::max(farthest, std::sqrt(dx * dx + dy * dy));
+        }
+        for (const auto& head : {ring.positiveHead, ring.negativeHead}) {
+            const double dx = head.x - 844.0;
+            const double dy = head.y - 144.0;
+            RequireNear(std::sqrt(dx * dx + dy * dy), farthest, 1.0e-9, "いちばん外");
+        }
+    }
 }
 
 KACHA_V2_TEST(view_orientation, 矢じりは輪の上にあり向きが逆になっている)
@@ -700,10 +754,9 @@ KACHA_V2_TEST(view_orientation, 上下と左右は互いに逆へ戻せる)
     }
 }
 
-KACHA_V2_TEST(view_orientation, 姿勢が壊れていれば操作板は空になる)
+KACHA_V2_TEST(view_orientation, 大きさが0なら操作板は空になる)
 {
-    const auto layout = BuildViewGadgets(0.0, 0.0, 88.0,
-        kachakacha::v2::view::Quaternion{0.0, 0.0, 0.0, 0.0});
+    const auto layout = BuildViewGadgets(0.0, 0.0, 0.0);
     Require(layout.gadgets.empty(), "空");
     Require(layout.rings.empty(), "輪も無い");
 }
@@ -714,7 +767,7 @@ KACHA_V2_TEST(view_orientation, 操作板は画面からはみ出したら寄せ
     const auto orientation = kachakacha::v2::view::OrientationForZone(
         kachakacha::v2::view::ViewCubeZone{1, -1, 1});
     Require(orientation.HasValue(), "姿勢が作れる");
-    auto layout = BuildViewGadgets(-50.0, -40.0, 88.0, orientation.Value());
+    auto layout = BuildViewGadgets(-50.0, -40.0, 88.0);
     Require(!layout.gadgets.empty(), "部品がある");
     Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 800.0, 600.0), "寄せられる");
     for (const auto& gadget : layout.gadgets) {
@@ -731,7 +784,7 @@ KACHA_V2_TEST(view_orientation, 寄せると輪も一緒に動く)
     const auto orientation = kachakacha::v2::view::OrientationForZone(
         kachakacha::v2::view::ViewCubeZone{1, -1, 1});
     Require(orientation.HasValue(), "姿勢が作れる");
-    auto before = BuildViewGadgets(-50.0, -40.0, 88.0, orientation.Value());
+    auto before = BuildViewGadgets(-50.0, -40.0, 88.0);
     auto after = before;
     Require(kachakacha::v2::view::FitViewGadgetsIntoScreen(after, 800.0, 600.0), "寄せられる");
     const double dx = after.xPx - before.xPx;
@@ -750,12 +803,11 @@ KACHA_V2_TEST(view_orientation, 画面より大きい操作板は寄せられな
     const auto orientation = kachakacha::v2::view::OrientationForZone(
         kachakacha::v2::view::ViewCubeZone{1, -1, 1});
     Require(orientation.HasValue(), "姿勢が作れる");
-    auto layout = BuildViewGadgets(0.0, 0.0, 400.0, orientation.Value());
+    auto layout = BuildViewGadgets(0.0, 0.0, 400.0);
     Require(!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout, 100.0, 100.0), "断る");
     // 断ったのだから、並びは動いていない。
     RequireNear(layout.gadgets.front().xPx,
-        BuildViewGadgets(0.0, 0.0, 400.0, orientation.Value()).gadgets.front().xPx, 1.0e-9,
-        "動かない");
+        BuildViewGadgets(0.0, 0.0, 400.0).gadgets.front().xPx, 1.0e-9, "動かない");
 }
 
 KACHA_V2_TEST_MAIN("view_orientation_tests")

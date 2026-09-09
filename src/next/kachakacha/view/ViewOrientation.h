@@ -265,7 +265,11 @@ struct ViewGadget {
     [[nodiscard]] double CenterYPx() const noexcept { return yPx + heightPx * 0.5; }
 };
 
-//! 輪1本ぶんの描き方。画面に落とした点列と、両端の矢じりの向き。
+//! 輪1本ぶんの描き方。画面の決まった場所に置く点列と、両端の矢じりの向き。
+//!
+//! 輪は姿勢について動かさない。動かすと、掴みたい矢じりが毎回別の場所へ行ってしまい、
+//! 狙って押せなくなる。輪は「操作の入口」であって、姿勢の表示ではない。
+//! いまどちらを向いているかはキューブの面が示す。
 struct ViewAxisRing {
     RotationAxis axis = RotationAxis::X;
     //! 閉じた点列。最後の点は最初の点と同じにしない(閉じるのは描く側)。
@@ -289,18 +293,28 @@ struct ViewGadgetLayout {
 };
 
 //! 輪の大きさ。キューブの外側へどれだけ出るか。
-inline constexpr double kViewRingRadiusRatio = 0.86;
+inline constexpr double kViewRingRadiusRatio = 1.02;
+//! 輪の潰れ具合。短い方の半径が長い方の何倍か。1に近いほど丸くなる。
+inline constexpr double kViewRingFlatten = 0.34;
+//! 輪の傾き(度)。Zは水平、XとYは斜めに置く。3本が重ならずに見分けられる。
+inline constexpr double kViewRingTiltDegreesX = 62.0;
+inline constexpr double kViewRingTiltDegreesY = -62.0;
+inline constexpr double kViewRingTiltDegreesZ = 0.0;
 //! 矢じりや丸ボタンの一辺。キューブの大きさに対する割合。
-inline constexpr double kViewGadgetButtonRatio = 0.26;
+inline constexpr double kViewGadgetButtonRatio = 0.32;
 //! 輪を何点で描くか。多すぎても目には変わらない。
 inline constexpr int kViewRingSampleCount = 72;
 //! 操作板がキューブの外へ出るぶん。キューブの大きさに対する割合。
 //! キューブを置くときに、この分だけ余白を空けておけば、操作板がはみ出さない。
 inline constexpr double kViewGadgetOuterMarginRatio = 0.45;
 
-//! キューブのまわりに操作板を並べる。輪は姿勢によって形が変わるので姿勢を渡す。
+//! 輪の傾き(度)。軸ごとに決まっていて、姿勢では変わらない。
+[[nodiscard]] double ViewRingTiltDegrees(RotationAxis axis) noexcept;
+
+//! キューブのまわりに操作板を並べる。
+//! 姿勢は渡さない。渡すと輪が動いてしまい、矢じりを狙って押せなくなるためである。
 [[nodiscard]] ViewGadgetLayout BuildViewGadgets(double cubeLeftPx, double cubeTopPx,
-    double cubeSizePx, const Quaternion& orientation);
+    double cubeSizePx);
 
 //! 操作板を画面の中へ寄せる。はみ出していたら、はみ出したぶんだけ全体を動かす。
 //! 動かしても入らない(画面より操作板が大きい)ときは false を返し、何も変えない。

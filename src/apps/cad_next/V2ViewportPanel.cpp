@@ -21,13 +21,18 @@ namespace {
 //! 別の値にすると、キューブと操作板で押した感じが変わってしまう。
 constexpr double kGadgetDragThresholdPx = 3.0;
 
+//! 矢じりの下に敷く丸い座の大きさ。キューブの大きさに対する割合。
+//! 当たり判定(kViewGadgetButtonRatio)より少し小さくして、座の外側でも押せるようにする。
+constexpr double kGrabSeatRatio = 0.26;
+
 } // namespace
 
 kachakacha::v2::view::ViewGadgetLayout V2Viewport::ViewGadgets() const
 {
     const QRectF box = ViewCubeRect();
+    // 輪は姿勢について動かさない。動くと矢じりを狙って押せない。
     auto layout = kachakacha::v2::view::BuildViewGadgets(box.left(), box.top(),
-        box.width(), orientation_);
+        box.width());
     // はみ出していたら寄せる。入らなければ空にして、出さない判断をここで済ませる。
     if (!kachakacha::v2::view::FitViewGadgetsIntoScreen(layout,
             static_cast<double>(width()), static_cast<double>(height()))) {
@@ -194,6 +199,24 @@ void V2Viewport::DrawArrowHead(QPainter& painter, const QPointF& head,
     painter.drawPolygon(triangle);
 }
 
+//! その矢じりが、いま指されているか押されているか。
+bool V2Viewport::IsRingHeadHot(kachakacha::v2::view::RotationAxis axis,
+    bool positive) const
+{
+    const auto layout = ViewGadgets();
+    const auto index = gadgetDrag_.has_value()
+        ? std::optional<std::size_t>(gadgetDrag_->index)
+        : gadgetHoverIndex_;
+    if (!index.has_value() || *index >= layout.gadgets.size()) {
+        return false;
+    }
+    const auto& gadget = layout.gadgets[*index];
+    return gadget.kind == kachakacha::v2::view::ViewGadgetKind::AxisRing
+        && gadget.axis == axis
+        && (gadget.direction == kachakacha::v2::view::ViewGadgetDirection::Positive)
+            == positive;
+}
+
 void V2Viewport::DrawViewRings(QPainter& painter,
     const kachakacha::v2::view::ViewGadgetLayout& layout) const
 {
@@ -219,11 +242,26 @@ void V2Viewport::DrawViewRings(QPainter& painter,
         painter.setPen(QPen(line, 1.6));
         painter.setBrush(Qt::NoBrush);
         painter.drawPolygon(path);
-        const double headSize = std::max(4.0, ViewCubeRect().width() * 0.09);
-        DrawArrowHead(painter, QPointF(ring.positiveHead.x, ring.positiveHead.y),
-            QPointF(ring.positiveTangent.x, ring.positiveTangent.y), headSize, ink);
-        DrawArrowHead(painter, QPointF(ring.negativeHead.x, ring.negativeHead.y),
-            QPointF(ring.negativeTangent.x, ring.negativeTangent.y), headSize, ink);
+        // 矢じりの下に丸い座を敷く。掴めるところがどこか、目で分かるようにする。
+        // 座が無いと、細い矢じりだけが手がかりになって狙いにくい。
+        const double grab = std::max(10.0, ViewCubeRect().width() * kGrabSeatRatio);
+        const double headSize = grab * 0.52;
+        const std::pair<kachakacha::v2::geometry::ScreenPoint,
+            kachakacha::v2::geometry::ScreenPoint> heads[] = {
+            {ring.positiveHead, ring.positiveTangent},
+            {ring.negativeHead, ring.negativeTangent},
+        };
+        for (const auto& head : heads) {
+            const QPointF at(head.first.x, head.first.y);
+            const bool hot = IsRingHeadHot(ring.axis, &head == &heads[0]);
+            QColor seat = palette_.background;
+            seat.setAlpha(usable ? 225 : 140);
+            painter.setBrush(seat);
+            painter.setPen(QPen(hot ? palette_.selected : ink, hot ? 2.0 : 1.4));
+            painter.drawEllipse(at, grab * 0.5, grab * 0.5);
+            DrawArrowHead(painter, at, QPointF(head.second.x, head.second.y), headSize,
+                ink);
+        }
     }
 }
 

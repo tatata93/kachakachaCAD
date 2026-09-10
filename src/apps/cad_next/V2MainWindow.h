@@ -134,6 +134,8 @@ public:
     [[nodiscard]] int VisibleCommandCount() const;
     //! いま道具箱に出ている道具の数。モードごとに変わる。
     [[nodiscard]] int VisibleToolCount() const;
+    //! 2段目に、その台帳コマンドが道具として出ているか。
+    [[nodiscard]] bool ModeToolVisible(std::string_view id) const;
 
     //! モードごとの手順(ui-workflows §9 / §10 / §11)。1本の並びとして右に出す。
     [[nodiscard]] int ProcessStepCount() const;
@@ -155,6 +157,11 @@ public:
     //! 一覧に出ているグループ行の名前。試験で見る。
     [[nodiscard]] QString GroupRowText(int row) const;
     [[nodiscard]] int GroupRowCount() const;
+    //! 上の帯の「まとまり」コンボ。名前ではなく GroupId で切り替える。
+    [[nodiscard]] int GroupComboCount() const;
+    [[nodiscard]] QString GroupComboText(int index) const;
+    [[nodiscard]] int GroupComboCurrent() const;
+    void SelectGroupCombo(int index);
     //! 一覧の「原点」ノードの子(3面と3軸)。試験で見る。
     [[nodiscard]] int OriginChildCount() const;
     [[nodiscard]] QString OriginChildText(int row) const;
@@ -427,7 +434,12 @@ private:
     void BuildMenus();
     void BuildModeBar();
     void BuildToolPalette();
+    //! 台帳 QAction を2段目のモード別道具として再利用する。
+    void BuildModeToolActions();
     void RefreshCommandVisibility();
+    //! 文書のまとまりと上の帯を同期する。
+    void RefreshActiveGroupCombo();
+    void ActivateGroupByComboIndex(int index);
     void BuildPanels();
     //! 右の札(測る・作業平面・作図・数)。書き出しの棚と重ねる。
     void BuildRightShelves();
@@ -654,6 +666,10 @@ private:
     QToolBar* modeBar_ = nullptr;
     std::vector<std::pair<kachakacha::v2::app::UiMode, QAction*>> modeActions_;
     std::vector<QAction*> toolActions_;
+    std::vector<std::pair<std::string_view, QAction*>> modeToolActions_;
+    QComboBox* groupCombo_ = nullptr;
+    std::vector<std::optional<kachakacha::v2::base::GroupId>> groupComboIds_;
+    bool refreshingGroupCombo_ = false;
     //! 台帳のIDから作った QAction。並びは台帳と同じ。
     std::vector<std::pair<std::string_view, QAction*>> commandActions_;
 };

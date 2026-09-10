@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <system_error>
 
+#include <QAction>
 #include <QApplication>
 #include <QColor>
 #include <QPointF>
@@ -66,9 +67,19 @@ namespace {
     if (!window.ApplyManualState(QStringLiteral("snap"))) {
         return false;
     }
-    // 吸着していれば、案内文が空でない。
-    return !window.Viewport().StatusMessage().empty()
-        || !window.StatusText().isEmpty();
+    // 上の帯にも入切があり、コマンド経路とチェック表示が同期する。
+    QAction* action = window.ActionFor("snap.toggle");
+    if (action == nullptr || !action->isCheckable()) {
+        return false;
+    }
+    const bool before = action->isChecked();
+    window.RunCommand("snap.toggle");
+    if (action->isChecked() == before) {
+        return false;
+    }
+    window.RunCommand("snap.toggle");
+    return action->isChecked() == before
+        && (!window.Viewport().StatusMessage().empty() || !window.StatusText().isEmpty());
 }
 
 [[nodiscard]] bool CaseThemes(V2MainWindow& window)
@@ -571,7 +582,23 @@ namespace {
             return false;
         }
     }
-    return true;
+    // 上の帯でも現在値が見え、選択すると文書の作業中グループが変わる。
+    if (window.GroupComboCount() < 2 || window.GroupComboCurrent() <= 0
+        || !window.GroupComboText(window.GroupComboCurrent()).contains(QStringLiteral("車体"))) {
+        return false;
+    }
+    int bodyIndex = -1;
+    for (int index = 0; index < window.GroupComboCount(); ++index) {
+        if (window.GroupComboText(index).contains(QStringLiteral("車体"))) {
+            bodyIndex = index;
+        }
+    }
+    window.SelectGroupCombo(0);
+    if (window.Session().GetDocument().Snapshot().settings.activeGroupId.has_value()) {
+        return false;
+    }
+    window.SelectGroupCombo(bodyIndex);
+    return bodyIndex > 0 && window.ActiveGroupText().contains(QStringLiteral("車体"));
 }
 
 [[nodiscard]] bool CaseThemeKeepsLayoutUsable(V2MainWindow& window)
@@ -623,20 +650,35 @@ namespace {
 
 [[nodiscard]] bool CaseToolPaletteFollowsMode(V2MainWindow& window)
 {
-    // 作図の道具が製作モードに並んでいると、そのモードで何ができるのかが読めない。
+    // 各モードの2段目には、その工程で使う実操作が出る。共通の選択・測定だけにはしない。
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
     const int drawing = window.VisibleToolCount();
+    if (drawing <= 0 || !window.ModeToolVisible("workplane.create")
+        || window.ModeToolVisible("part.extrude")) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    const int part = window.VisibleToolCount();
+    if (part <= 0 || !window.ModeToolVisible("part.extrude")
+        || window.ModeToolVisible("fabrication.create")) {
+        return false;
+    }
     window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
     const int fabrication = window.VisibleToolCount();
+    if (fabrication <= 0 || !window.ModeToolVisible("fabrication.create")
+        || window.ModeToolVisible("export.step")) {
+        return false;
+    }
     window.SetMode(kachakacha::v2::app::UiMode::Output);
     const int output = window.VisibleToolCount();
-    // 作図モードでいちばん多く、製作と出力では減る。
-    if (drawing <= 0 || fabrication >= drawing || output >= drawing) {
+    if (output <= 0 || !window.ModeToolVisible("export.step")
+        || window.ModeToolVisible("part.extrude")) {
         return false;
     }
     // 戻せば元に戻る。
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
-    return window.VisibleToolCount() == drawing;
+    return window.VisibleToolCount() == drawing && part < drawing
+        && fabrication < drawing && output < drawing;
 }
 
 [[nodiscard]] bool CaseProcessStepsFollowMode(V2MainWindow& window)

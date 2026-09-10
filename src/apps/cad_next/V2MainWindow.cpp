@@ -325,7 +325,7 @@ void V2MainWindow::BuildModeBar()
         QObject::connect(action, &QAction::triggered, this,
             [this, mode] { SetMode(mode); });
     }
-    // V1 の上の帯と同じ並び: モード → 正対 → 選択 → 測定 → 作図面。
+    // V1 の上の帯と同じ並び: モード → 正対 → 選択 → 測定 → 作図面 → まとまり → 吸着。
     // 選択と測定はどのモードでも使う(オーナー指示)。メニューと同じ QAction を並べる。
     modeBar_->addSeparator();
     for (const std::string_view id : {"view.align_workplane", "selection.activate",
@@ -347,6 +347,18 @@ void V2MainWindow::BuildModeBar()
         }
         ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
     });
+    auto* groupLabel = new QLabel(QStringLiteral(" まとまり "), modeBar_);
+    modeBar_->addWidget(groupLabel);
+    groupCombo_ = new QComboBox(modeBar_);
+    groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のまとまり。"));
+    modeBar_->addWidget(groupCombo_);
+    QObject::connect(groupCombo_, &QComboBox::currentIndexChanged, this,
+        [this](int index) { ActivateGroupByComboIndex(index); });
+    if (QAction* snap = ActionFor("snap.toggle"); snap != nullptr) {
+        snap->setCheckable(true);
+        snap->setChecked(snapEnabled_);
+        modeBar_->addAction(snap);
+    }
     addToolBarBreak();
 }
 
@@ -399,26 +411,18 @@ void V2MainWindow::RefreshCommandVisibility()
             entry.second->setToolTip(reason);
         }
     }
-    // 道具箱もモードに従う。作図の道具が製作モードに並んでいると、
-    // そのモードで何ができるのかが読めなくなる。
-    for (std::size_t index = 0; index < toolActions_.size(); ++index) {
-        const DrawingTool tool = kToolOrder[index];
-        std::string_view commandId;
-        for (const ToolBinding& binding : kToolBindings) {
-            if (binding.tool == tool) {
-                commandId = binding.commandId;
-            }
-        }
-        const bool visible = commandId.empty()
-            ? (mode_ == UiMode::Drawing)
-            : CommandVisibleInMode(commandId, mode_);
-        toolActions_[index]->setVisible(visible);
+    // 固有の作図道具は作図モードだけ。ほかのモードは台帳 QAction の専用列を使う。
+    for (QAction* action : toolActions_) {
+        action->setVisible(mode_ == UiMode::Drawing);
     }
     if (toolPalette_ != nullptr) {
         // 出る道具が1つも無いモードでは、道具箱ごと隠す。
         bool anyVisible = false;
         for (QAction* action : toolActions_) {
             anyVisible = anyVisible || action->isVisible();
+        }
+        for (const auto& entry : modeToolActions_) {
+            anyVisible = anyVisible || entry.second->isVisible();
         }
         toolPalette_->setVisible(anyVisible);
     }
@@ -454,6 +458,7 @@ void V2MainWindow::BuildToolPalette()
         QObject::connect(action, &QAction::triggered, this,
             [this, tool] { SelectTool(tool); });
     }
+    BuildModeToolActions();
 }
 
 void V2MainWindow::BuildPanels()
@@ -920,6 +925,9 @@ int V2MainWindow::VisibleToolCount() const
     for (QAction* action : toolActions_) {
         count += action->isVisible() ? 1 : 0;
     }
+    for (const auto& entry : modeToolActions_) {
+        count += entry.second->isVisible() ? 1 : 0;
+    }
     return count;
 }
 
@@ -1202,6 +1210,7 @@ void V2MainWindow::RefreshEntityList()
     if (groupLabel_ != nullptr) {
         groupLabel_->setText(ActiveGroupText());
     }
+    RefreshActiveGroupCombo();
     entityTree_->blockSignals(blocked);
 }
 
@@ -1339,6 +1348,9 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (id == "snap.toggle") {
         snapEnabled_ = !snapEnabled_;
+        if (QAction* action = ActionFor("snap.toggle"); action != nullptr) {
+            action->setChecked(snapEnabled_);
+        }
         // 吸着は「道具として切る」と「Ctrl で一時的に止める」の2つがある。
         // 画面がその両方をまとめて持つ。片方だけ見ると、Ctrl を離した瞬間に
         // 切ってあったはずの吸着が戻る。

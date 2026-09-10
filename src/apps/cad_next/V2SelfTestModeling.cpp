@@ -1096,7 +1096,9 @@ namespace {
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     const auto wires = kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);
-    if (!Explain("四角が描ける", static_cast<int>(wires.entityIds.size()) == wiresBefore + 1)) {
+    if (!Explain((std::string("四角が描ける(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            static_cast<int>(wires.entityIds.size()) == wiresBefore + 1)) {
         return false;
     }
     // 四角と面を選んで、曲面へ投影。

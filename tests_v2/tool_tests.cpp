@@ -111,6 +111,33 @@ KACHA_V2_TEST(tool, 矩形は対角2点で4本の線になる)
     RequireNear(perimeter, 2.0 * (40.0 + 30.0), 1e-6, "周長");
 }
 
+KACHA_V2_TEST(tool, 矩形と円は作業平面の向きに沿う)
+{
+    // XY と決め打ちしていたので、前から見る面(ZX)の上では矩形が「つぶれた」と断られ、
+    // 円は XY に寝たまま出来ていた。作業平面の向きを渡せば、その面の上に出来る。
+    ToolSession rectangle(DrawingTool::Rectangle, {}, Tolerance());
+    rectangle.SetPlane({0.0, 1.0, 0.0}, {1.0, 0.0, 0.0});   // ZX 面: 法線 Y、u = X
+    const auto output = PlaceAll(rectangle, {{0.0, 0.0, 0.0}, {40.0, 0.0, 30.0}});
+    Require(output.has_value(), "ZX 面の上で確定すること");
+    RequireCount(output->segments.size(), 4, "線の数");
+    double perimeter = 0.0;
+    for (const auto& segment : output->segments) {
+        perimeter += segment.TotalLength(1e-9);
+        RequireNear(segment.StartPoint().y, 0.0, 1e-9, "y = 0 の面の上");
+        RequireNear(segment.EndPoint().y, 0.0, 1e-9, "y = 0 の面の上");
+    }
+    RequireNear(perimeter, 2.0 * (40.0 + 30.0), 1e-6, "周長");
+
+    ToolSession circle(DrawingTool::Circle, {}, Tolerance());
+    circle.SetPlane({0.0, 1.0, 0.0}, {1.0, 0.0, 0.0});
+    const auto round = PlaceAll(circle, {{0.0, 0.0, 10.0}, {5.0, 0.0, 10.0}});
+    Require(round.has_value(), "円も ZX 面で確定すること");
+    const auto& arc = round->segments.front();
+    for (double t : {0.0, 0.25, 0.5, 0.75}) {
+        RequireNear(arc.Evaluate(t).y, 0.0, 1e-9, "円は y = 0 の面の上");
+    }
+}
+
 KACHA_V2_TEST(tool, つぶれた矩形を断る)
 {
     ToolSession session(DrawingTool::Rectangle, {}, Tolerance());

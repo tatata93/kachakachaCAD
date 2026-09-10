@@ -185,16 +185,20 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
         if (points.size() != 2) {
             return fail(kNeedMore, "点が足りません。", {});
         }
-        // 2点は対角。作業平面の向きは、いまは XY として扱う。
+        // 2点は対角。辺は作業平面の u 軸と v 軸に沿う(XY と決め打ちしない)。
         const Vector3& a = points[0];
         const Vector3& b = points[1];
-        if (std::abs(a.x - b.x) <= tolerance_.modelLinearMm
-            || std::abs(a.y - b.y) <= tolerance_.modelLinearMm) {
+        const Vector3 u = PlaneU();
+        const Vector3 v = PlaneV();
+        const Vector3 diagonal = b - a;
+        const double du = Dot(diagonal, u);
+        const double dv = Dot(diagonal, v);
+        if (std::abs(du) <= tolerance_.modelLinearMm
+            || std::abs(dv) <= tolerance_.modelLinearMm) {
             return fail(kBadInput, "つぶれた矩形は作れません。",
                 "対角の2点が同じ行か列に乗っています。");
         }
-        const Vector3 corners[4]{{a.x, a.y, a.z}, {b.x, a.y, a.z}, {b.x, b.y, a.z},
-            {a.x, b.y, a.z}};
+        const Vector3 corners[4]{a, a + u * du, a + u * du + v * dv, a + v * dv};
         for (int index = 0; index < 4; ++index) {
             auto made = CurveSegment::MakeLine(corners[index], corners[(index + 1) % 4]);
             if (!made.HasValue()) {
@@ -210,7 +214,7 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
             return fail(kNeedMore, "点が足りません。", {});
         }
         const double radius = (points[1] - points[0]).Length();
-        auto made = CurveSegment::MakeCircle(points[0], {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0},
+        auto made = CurveSegment::MakeCircle(points[0], settings_.planeNormal, PlaneU(),
             radius);
         if (!made.HasValue()) {
             return Result<ToolOutput>::Failure(made.Diagnostics());
@@ -236,7 +240,7 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
         }
         if (settings_.arcMode == ArcMode::EndpointsAndRadius) {
             auto made = geometry::ArcFromEndpointsAndRadius(points[0], points[1],
-                settings_.radiusMm, {0.0, 0.0, 1.0}, false, false);
+                settings_.radiusMm, settings_.planeNormal, false, false);
             if (!made.HasValue()) {
                 return Result<ToolOutput>::Failure(made.Diagnostics());
             }
@@ -249,7 +253,7 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
             return fail(kBadInput, "接線の向きが決まりません。", "2点が同じ位置です。");
         }
         auto made = geometry::ArcFromStartTangentRadiusSweep(points[0], tangent,
-            {0.0, 0.0, 1.0}, settings_.radiusMm, settings_.sweepAngleRad);
+            settings_.planeNormal, settings_.radiusMm, settings_.sweepAngleRad);
         if (!made.HasValue()) {
             return Result<ToolOutput>::Failure(made.Diagnostics());
         }
@@ -336,6 +340,35 @@ bool ToolSession::UndoLastPoint()
     }
     points_.pop_back();
     return true;
+}
+
+void ToolSession::SetPlane(const Vector3& normal, const Vector3& uAxis)
+{
+    if (normal.Length() > 1.0e-12) {
+        settings_.planeNormal = Normalized(normal);
+    }
+    if (uAxis.Length() > 1.0e-12) {
+        settings_.planeUAxis = Normalized(uAxis);
+    }
+}
+
+Vector3 ToolSession::PlaneU() const
+{
+    // u が法線と平行なら(壊れた設定)、法線に直交する適当な向きにする。黙って XY にしない。
+    Vector3 u = settings_.planeUAxis - settings_.planeNormal
+        * Dot(settings_.planeUAxis, settings_.planeNormal);
+    if (u.Length() <= 1.0e-9) {
+        u = Cross(settings_.planeNormal, Vector3{0.0, 0.0, 1.0});
+        if (u.Length() <= 1.0e-9) {
+            u = Cross(settings_.planeNormal, Vector3{0.0, 1.0, 0.0});
+        }
+    }
+    return Normalized(u);
+}
+
+Vector3 ToolSession::PlaneV() const
+{
+    return Normalized(Cross(settings_.planeNormal, PlaneU()));
 }
 
 Result<ToolOutput> ToolSession::Finish()

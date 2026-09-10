@@ -69,6 +69,10 @@ struct ToolSettings {
     double sweepAngleRad = 1.5707963267948966;
     //! 補助線として描くか。
     bool construction = false;
+    //! いま描いている作業平面の向き。矩形の辺、円と円弧の面はこれで決まる。
+    //! XY と決め打ちしていたので、前から見る面(ZX)の上では矩形も円も作れなかった。
+    Vector3 planeNormal{0.0, 0.0, 1.0};
+    Vector3 planeUAxis{1.0, 0.0, 0.0};
 };
 
 //! いま何を待っているか。UIはこれを見て案内文を出す。
@@ -110,6 +114,9 @@ public:
     //! 1点戻す。戻せる点が無ければ false。
     bool UndoLastPoint();
 
+    //! 作業平面の向きを差し替える。平面を変えても、置いた点は捨てない。
+    void SetPlane(const Vector3& normal, const Vector3& uAxis);
+
     //! いまの入力で確定する(ポリラインなどで使う)。
     [[nodiscard]] base::Result<ToolOutput> Finish();
 
@@ -123,6 +130,9 @@ public:
 private:
     [[nodiscard]] int RequiredPointCount() const;
     [[nodiscard]] base::Result<ToolOutput> Build(const std::vector<Vector3>& points) const;
+    //! 作業平面の u 軸・v 軸(法線に直交させたもの)。
+    [[nodiscard]] Vector3 PlaneU() const;
+    [[nodiscard]] Vector3 PlaneV() const;
 
     DrawingTool tool_ = DrawingTool::Line;
     ToolSettings settings_;

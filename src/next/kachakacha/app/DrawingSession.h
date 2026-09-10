@@ -87,6 +87,10 @@ public:
     //! クリックした。吸着した位置をツールへ渡す。
     [[nodiscard]] ClickResult Click(const ScreenPoint& pointer);
 
+    //! 数値入力で決めた点を置く。吸着はしない(数で決めた点を寄せてはならない)。
+    //! 置いたあとの流れはクリックと同じ。
+    [[nodiscard]] ClickResult PlacePoint(const geometry::Vector3& world);
+
     //! 右クリックなどで確定する(ポリラインなど)。
     [[nodiscard]] ClickResult FinishTool();
 

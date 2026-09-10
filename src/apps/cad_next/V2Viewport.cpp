@@ -647,9 +647,68 @@ bool V2Viewport::OpenCursorInput()
         return false;
     }
     cursorPanel_ = begun.Value();
-    cursorAnchor_ = Vector3{};
+    cursorDelta_ = Vector3{};
     update();
     return true;
+}
+
+void V2Viewport::SyncCursorInputWithTool(bool placedPoint, bool committed)
+{
+    // 最初の点を置いた直後に入力列を出す(ui-workflows §7)。確定したら閉じる。
+    // ポリラインは確定せずに点が増えるので、置くたびに新しい基準で出し直す。
+    if (committed || !session_->HasPlacedPoints()) {
+        if (cursorPanel_.active) {
+            CloseCursorInput();
+        }
+        return;
+    }
+    if (placedPoint && kachakacha::v2::app::ToolUsesCursorInput(session_->CurrentTool())) {
+        (void)OpenCursorInput();
+    }
+}
+
+bool V2Viewport::PlacePointFromCursorInput()
+{
+    const auto solved = kachakacha::v2::app::SolveDelta(cursorPanel_, cursorDelta_);
+    if (!solved.HasValue()) {
+        viewMessage_ = solved.Diagnostics().front().summaryJa;
+        if (statusCallback_) {
+            statusCallback_(viewMessage_);
+        }
+        update();
+        return false;
+    }
+    // 欄の値は作業平面の u, v(mm)。基準の点からその分だけ進んだ世界座標に置く。
+    const Vector3 anchor = session_->ConstraintAnchor();
+    const Vector3 world = cursorPanel_.onWorkPlane
+        ? anchor + workPlane_.uAxis * solved.Value().x + workPlane_.vAxis * solved.Value().y
+        : anchor + solved.Value();
+    const auto result = session_->PlacePoint(world);
+    if (!result.diagnostics.empty()) {
+        status_ = result.diagnostics.front().summaryJa;
+    } else if (result.committed) {
+        status_ = result.commandLabel;
+    }
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    if (result.committed && documentChangedCallback_) {
+        documentChangedCallback_();
+    }
+    if (result.transform.has_value() && transform_) {
+        transform_(*result.transform);
+    }
+    SyncCursorInputWithTool(result.placedPoint, result.committed);
+    hover_ = session_->Hover(ScreenPoint{cursorPosition_.x(), cursorPosition_.y()});
+    update();
+    return result.placedPoint;
+}
+
+void V2Viewport::OnToolChanged()
+{
+    if (cursorPanel_.active) {
+        CloseCursorInput();
+    }
 }
 
 void V2Viewport::CloseCursorInput()
@@ -686,7 +745,7 @@ bool V2Viewport::TypeIntoCursorField(const QString& text)
 bool V2Viewport::CommitCursorField()
 {
     const auto committed = kachakacha::v2::app::CommitFocusedField(cursorPanel_,
-        cursorAnchor_);
+        cursorDelta_);
     if (!committed.HasValue()) {
         // 断られたら、その欄を赤くして理由を出す。入力列は閉じない。
         const std::size_t at = cursorPanel_.focusedIndex;
@@ -705,7 +764,8 @@ bool V2Viewport::CommitCursorField()
     cursorPanel_ = committed.Value().panel;
     viewMessage_.clear();
     update();
-    return true;
+    // 主要欄(長さ・半径)が決まれば形は決まる。決まっていなければ次の欄へ。
+    return committed.Value().readyToFinish;
 }
 
 QRectF V2Viewport::CursorPanelRect() const
@@ -847,12 +907,14 @@ void V2Viewport::HoverAt(const QPointF& position)
         const auto point = mapping_.UnprojectOntoPlane(
             ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
         if (point.has_value()) {
-            const Vector3 world = *point - workPlane_.origin;
-            cursorAnchor_ = Vector3{workPlane_.CoordinateU(*point),
-                workPlane_.CoordinateV(*point), 0.0};
-            (void)world;
+            // 欄に出すのは「直前に置いた点から見た」ずれ。絶対位置ではない。
+            const Vector3 anchor = session_->ConstraintAnchor();
+            cursorDelta_ = cursorPanel_.onWorkPlane
+                ? Vector3{workPlane_.CoordinateU(*point) - workPlane_.CoordinateU(anchor),
+                      workPlane_.CoordinateV(*point) - workPlane_.CoordinateV(anchor), 0.0}
+                : *point - anchor;
             const auto moved = kachakacha::v2::app::UpdateFromPointer(cursorPanel_,
-                cursorAnchor_);
+                cursorDelta_);
             if (moved.HasValue()) {
                 cursorPanel_ = moved.Value();
             }
@@ -970,6 +1032,7 @@ void V2Viewport::ClickAt(const QPointF& position)
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
     }
+    SyncCursorInputWithTool(result.placedPoint, result.committed);
     hover_ = session_->Hover(ScreenPoint{position.x(), position.y()});
     update();
 }
@@ -991,6 +1054,7 @@ void V2Viewport::FinishTool()
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
     }
+    SyncCursorInputWithTool(false, result.committed);
     update();
 }
 
@@ -1196,8 +1260,12 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
     }
     if (cursorPanel_.active
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
+        // 主要欄が決まったら、その値で次の点を置く。まだなら次の欄へ移る。
         if (CommitCursorField()) {
-            FinishTool();
+            (void)PlacePointFromCursorInput();
+        } else if (cursorPanel_.active && !cursorPanel_.states.empty()
+            && !cursorPanel_.states[cursorPanel_.focusedIndex].error) {
+            (void)FocusNextCursorField(false);
         }
         return;
     }

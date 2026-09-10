@@ -323,4 +323,25 @@ KACHA_V2_TEST(session, 何度やっても同じ文書になる)
     }
 }
 
+KACHA_V2_TEST(session, 数値で決めた点はそのまま置かれ吸着しない)
+{
+    // カーソル入力(長さ・角度)で決めた点は、寄せてはならない。
+    // 1本目の端点のすぐ近くに 2本目の終点を数で置いても、端点へ吸着しない。
+    Fixture fixture;
+    fixture.session.SelectTool(DrawingTool::Line);
+    Require(fixture.session.Click(fixture.At({10.0, 10.0, 0.0})).placedPoint, "1点目");
+    Require(fixture.session.Click(fixture.At({60.0, 10.0, 0.0})).committed, "1本目");
+    Require(fixture.session.Click(fixture.At({10.0, 30.0, 0.0})).placedPoint, "2本目の1点目");
+    const auto placed = fixture.session.PlacePoint({60.3, 10.0, 0.0});
+    Require(placed.committed, "数で置いた点で確定する");
+    const auto& curves = fixture.session.Scene().curves;
+    Require(!curves.empty(), "線がある");
+    const auto& last = curves.back().segment;
+    RequireNear(last.EndPoint().x, 60.3, 1e-9, "数のとおりに置かれ、60.0 へ寄らない");
+    // 選択道具では形にならない。
+    fixture.session.SelectTool(DrawingTool::Select);
+    const auto refused = fixture.session.PlacePoint({0.0, 0.0, 0.0});
+    Require(!refused.committed, "選択道具では文書が変わらない");
+}
+
 KACHA_V2_TEST_MAIN("session_tests")

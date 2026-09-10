@@ -266,6 +266,12 @@ public:
     }
     //! 最初の点を置いた直後に出す。出せない道具なら false。
     bool OpenCursorInput();
+    //! 点を置いたあとに呼ぶ。数値入力を使う道具なら入力列を開き、確定したら閉じる。
+    void SyncCursorInputWithTool(bool placedPoint, bool committed);
+    //! 入力列の値で次の点を置く(Enter)。置けたら true。
+    bool PlacePointFromCursorInput();
+    //! 道具が変わった。入力列を閉じる。
+    void OnToolChanged();
     //! いまの欄へ文字を入れる。
     bool TypeIntoCursorField(const QString& text);
     //! Tab / Shift+Tab。
@@ -423,7 +429,8 @@ private:
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
     QPointF cursorPosition_;
-    kachakacha::v2::geometry::Vector3 cursorAnchor_{};
+    //! 入力列の基準(直前に置いた点)から見たポインタの位置。作業平面の u, v(mm)。
+    kachakacha::v2::geometry::Vector3 cursorDelta_{};
     std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     kachakacha::v2::geometry::Vector3 center_{};

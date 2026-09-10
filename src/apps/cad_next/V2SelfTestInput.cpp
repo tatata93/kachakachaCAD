@@ -526,11 +526,77 @@ namespace {
     return Explain("空の名前は断る", !empty.HasValue());
 }
 
+[[nodiscard]] bool CaseCursorInputOpensWhileDrawingAndPlacesByNumber(V2MainWindow& window)
+{
+    // 最初の点を置くと入力列が出て、長さを打って Enter すると、その長さで線が決まる
+    // (ui-workflows §7、V1 の「実寸で確定」)。これまでは撮影のときしか開かなかった。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    if (!Explain("道具を選んだ直後は入力列が無い", !viewport.CursorPanel().active)) {
+        return false;
+    }
+    const QPointF first(viewport.width() * 0.5, viewport.height() * 0.5);
+    viewport.ClickAt(first);
+    if (!Explain("1点目で入力列が出る", viewport.CursorPanel().active)) {
+        return false;
+    }
+    // ポインタを右へ。向きはポインタ、長さは数で決まる。
+    viewport.HoverAt(QPointF(first.x() + 120.0, first.y()));
+    if (!Explain("主要欄(長さ)に焦点がある",
+            viewport.CursorPanel().fields[viewport.CursorPanel().focusedIndex].id
+                == "length")) {
+        return false;
+    }
+    const int before = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
+    if (!Explain("長さを打てる", viewport.TypeIntoCursorField(QStringLiteral("50")))) {
+        return false;
+    }
+    if (!Explain("Enter で形が決まる", viewport.CommitCursorField())) {
+        return false;
+    }
+    if (!Explain("数で点が置ける", viewport.PlacePointFromCursorInput())) {
+        return false;
+    }
+    if (!Explain("線が1本増える",
+            CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before + 1)) {
+        return false;
+    }
+    if (!Explain("確定したら入力列は閉じる", !viewport.CursorPanel().active)) {
+        return false;
+    }
+    const auto& curves = window.Session().Scene().curves;
+    if (curves.empty()) {
+        return false;
+    }
+    const auto delta = curves.back().segment.EndPoint() - curves.back().segment.StartPoint();
+    if (!Explain((std::string("長さが 50mm(実際は ") + std::to_string(delta.Length())
+                     + ")").c_str(),
+            std::abs(delta.Length() - 50.0) < 1.0e-6)) {
+        return false;
+    }
+    if (!Explain("向きはポインタの側(+X)", delta.x > 49.9)) {
+        return false;
+    }
+    // Esc で入力列ごとやめられる。文書は変わらない。
+    viewport.ClickAt(first);
+    if (!Explain("次の線でもまた出る", viewport.CursorPanel().active)) {
+        return false;
+    }
+    const auto revision = window.Session().GetDocument().Revision();
+    (void)viewport.PressEscape();
+    return Explain("Esc で閉じて文書は変わらない",
+        !viewport.CursorPanel().active
+            && window.Session().GetDocument().Revision() == revision);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> InputCases()
 {
     return {
+        {"作図中に入力列が出て数で線が決まる", &CaseCursorInputOpensWhileDrawingAndPlacesByNumber},
         {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},
         {"Escで選択へ戻り選択も解ける", &CaseEscapeGoesBackToSelect},

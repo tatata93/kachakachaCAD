@@ -117,11 +117,22 @@ ClickResult DrawingSession::Click(const ScreenPoint& pointer)
             "作業平面が選ばれていないか、視線が平面と平行です。"));
         return result;
     }
+    return PlacePoint(*hover.position);
+}
+
+ClickResult DrawingSession::PlacePoint(const geometry::Vector3& world)
+{
+    ClickResult result;
+    if (session_ == nullptr) {
+        result.diagnostics.push_back(base::MakeError("UI-S001",
+            "その場所では点を置けません。", "道具が選ばれていません。"));
+        return result;
+    }
     // 置く前に、いまの作業平面の向きを道具へ渡す。矩形の辺・円の面はこれで決まる。
     if (scene_.workPlane.active) {
         session_->SetPlane(scene_.workPlane.normal, scene_.grid.uDirection);
     }
-    auto placed = session_->AddPoint(*hover.position);
+    auto placed = session_->AddPoint(world);
     if (!placed.HasValue()) {
         result.diagnostics = placed.Diagnostics();
         return result;

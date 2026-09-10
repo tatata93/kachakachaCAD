@@ -69,6 +69,8 @@ struct ToolSettings {
     double sweepAngleRad = 1.5707963267948966;
     //! 補助線として描くか。
     bool construction = false;
+    //! 指定した点を作図点として残すか(V1 の「指定した点を作図点として残す」)。
+    bool keepPoints = false;
     //! いま描いている作業平面の向き。矩形の辺、円と円弧の面はこれで決まる。
     //! XY と決め打ちしていたので、前から見る面(ZX)の上では矩形も円も作れなかった。
     Vector3 planeNormal{0.0, 0.0, 1.0};
@@ -97,6 +99,8 @@ struct ToolOutput {
     std::vector<Vector3> transformPoints;
     //! そのツールが補助線を作ったか。
     bool construction = false;
+    //! 形を決めるのに指した点(keepPoints のとき)。作図点として文書へ残す。
+    std::vector<Vector3> keptPoints;
 };
 
 //! 作図ツール1つぶんの進行。
@@ -130,6 +134,9 @@ public:
 private:
     [[nodiscard]] int RequiredPointCount() const;
     [[nodiscard]] base::Result<ToolOutput> Build(const std::vector<Vector3>& points) const;
+    //! Build に加えて、keepPoints なら指した点を出力に乗せる。
+    [[nodiscard]] base::Result<ToolOutput> BuildKeepingPoints(
+        const std::vector<Vector3>& points) const;
     //! 作業平面の u 軸・v 軸(法線に直交させたもの)。
     [[nodiscard]] Vector3 PlaneU() const;
     [[nodiscard]] Vector3 PlaneV() const;

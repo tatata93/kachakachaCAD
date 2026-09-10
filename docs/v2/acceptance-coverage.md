@@ -37,7 +37,7 @@
 | AT-WIR-004 | 済 | tests_v2/wire_chain_tests.cpp(分岐と隙間) |
 | AT-WIR-005 | 部分 | 端点接続は済。Segment内部での接続は初回切替の対象外(矛盾16) |
 | AT-WIR-006 | 済 | tests_v2/wire_edit_tests.cpp |
-| AT-WIR-007 | 済 | tests_v2/arc_builder_tests.cpp、tool_tests.cpp(3モード) |
+| AT-WIR-007 | 済 | tests_v2/arc_builder_tests.cpp、tool_tests.cpp(3モード、指定した点を作図点として残す)+ tests_v2/direct_wire_entry_tests.cpp(数値で線を作る: 平面上の直線は作業平面の uv、3D 直線は世界座標、円・円弧・ベジェ、足りない点 UI-D001・半径 0 は UI-D002・一直線の3点は断る、作った線は文書へ入り名前が付き吸着の相手になる)+ tests_v2/session_tests.cpp(指定点は線とひとまとまりで戻る)+ cad_next --self-test(作図の棚で「両端+半径」にすると2点で半径どおりの円弧になり、補助線・指定点が効き、数値で線が作れて半径 0 は断られる) |
 | AT-WIR-008 | 済 | tests_v2/expression_tests.cpp |
 | AT-WPL-001 | 済 | tests_v2/work_plane_tests.cpp(12方式すべて。原点・基底・法線・距離・角度を数値検査。位置と向きの数値指定は法線0・横方向が平行を拒否)+ tests_v2/work_plane_options_tests.cpp(棚の材料集め: 3点と回転軸は数の欄で代える、コンボの基準平面)+ tests_v2/origin_planes_tests.cpp(原点の3面は一度だけ足され、消せず改名できず(DOC-C009)、保存しても原点のまま)+ 自己試験 V2SelfTestPlanes.cpp(一覧の原点ノード6行、軸のチェック、棚で数値指定/コンボの基準平面/足りないと押せない) |
 | AT-WPL-002 | 済 | tests_v2/work_plane_tests.cpp(一直線3点・非平行2面・円筒でない面・長さ0の辺・直線の曲率法線を固定コードで拒否) |

@@ -15,6 +15,7 @@
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/DisplaySettings.h"
+#include "V2DrawingDock.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
@@ -175,6 +176,12 @@ public:
 
     //! 数の棚。板厚や面取り量を式で打てる。
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
+    //! 作図の棚(円弧の作り方・補助線・指定点を残す・数値で線を作る)。
+    [[nodiscard]] V2DrawingDock& DrawingDock() { return *drawingDock_; }
+    //! 道具の設定を場面へ当てる(棚から呼ぶ)。
+    void ApplyToolSettings(const kachakacha::v2::modeling::ToolSettings& settings);
+    //! 棚の「数値で線を作る」。作れなければ理由を棚と帯に出す。
+    void CreateWireFromDock();
 
     //! 測る棚(PRD-070)。選んだものから測れることを全部出す。
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
@@ -406,6 +413,8 @@ private:
     void BuildToolPalette();
     void RefreshCommandVisibility();
     void BuildPanels();
+    //! 右の札(測る・作業平面・作図・数)。書き出しの棚と重ねる。
+    void BuildRightShelves();
     //! 下の帯(道具・作業中グループ・案内文)。
     void BuildStatusBar();
     //! 動かさずに作れる状態(絵だけの状態)。ApplyManualState から呼ぶ。
@@ -608,6 +617,7 @@ private:
     V2ExportDock* exportDock_ = nullptr;
     V2MeasureDock* measureDock_ = nullptr;
     V2ParameterDock* parameterDock_ = nullptr;
+    V2DrawingDock* drawingDock_ = nullptr;
     QDockWidget* processDock_ = nullptr;
     QDockWidget* diagnosticDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;

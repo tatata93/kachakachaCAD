@@ -582,6 +582,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/PointSources.cpp
     src/next/kachakacha/app/ProcessSteps.cpp
     src/next/kachakacha/app/CursorInputSolve.cpp
+    src/next/kachakacha/app/DirectWireEntry.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
     src/next/kachakacha/app/UiMode.cpp
@@ -767,6 +768,7 @@ kachakacha_add_v2_test(fabrication_openings_tests tests_v2/fabrication_openings_
 kachakacha_add_v2_test(fabrication_evaluate_tests tests_v2/fabrication_evaluate_tests.cpp)
 kachakacha_add_v2_test(guide_table_build_tests tests_v2/guide_table_build_tests.cpp)
 kachakacha_add_v2_test(origin_planes_tests tests_v2/origin_planes_tests.cpp)
+kachakacha_add_v2_test(direct_wire_entry_tests tests_v2/direct_wire_entry_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
@@ -847,6 +849,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestGuide.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
+        src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2ExportCommands.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
         src/apps/cad_next/V2GuideCommands.cpp
@@ -856,6 +859,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExtrudeDialog.cpp
         src/apps/cad_next/V2WorkPlaneDock.cpp
         src/apps/cad_next/V2WorkPlaneDock.h
+        src/apps/cad_next/V2DrawingDock.cpp
+        src/apps/cad_next/V2DrawingDock.h
         src/apps/cad_next/V2NumberDialog.cpp
         src/apps/cad_next/V2ChoiceDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp

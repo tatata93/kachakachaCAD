@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace kachakacha::v2::app {
 
@@ -94,6 +95,11 @@ public:
     //! 右クリックなどで確定する(ポリラインなど)。
     [[nodiscard]] ClickResult FinishTool();
 
+    //! 数値で決めた線をそのまま置く(右パネルの「数値で線を作る」)。道具は変えない。
+    //! label を付けると、その名前で一覧に出る。
+    [[nodiscard]] ClickResult AddWire(std::vector<geometry::CurveSegment> segments,
+        bool construction, std::string_view label);
+
     //! いま置いてある点の数。Esc がどこまで戻ればよいかの判断に使う。
     [[nodiscard]] std::size_t PlacedPointCount() const noexcept;
 
@@ -121,9 +127,12 @@ public:
     [[nodiscard]] bool Redo() { return document_.Redo(); }
 
 private:
-    [[nodiscard]] ClickResult Commit(const modeling::ToolOutput& output);
+    [[nodiscard]] ClickResult Commit(const modeling::ToolOutput& output,
+        std::string_view label = {});
     //! 作った形を、次のスナップの相手にも加える。
     void AddToScene(const modeling::ToolOutput& output, base::EntityId entityId);
+    //! 指した点を作図点として文書へ残す(keepPoints)。
+    void AddKeptPoints(const modeling::ToolOutput& output, ClickResult& result);
 
     Document document_;
     base::IdGenerator* ids_ = nullptr;

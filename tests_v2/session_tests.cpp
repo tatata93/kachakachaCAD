@@ -344,4 +344,22 @@ KACHA_V2_TEST(session, 数値で決めた点はそのまま置かれ吸着しな
     Require(!refused.committed, "選択道具では文書が変わらない");
 }
 
+KACHA_V2_TEST(session, 指定した点を残すと線と点がひとまとまりで入る)
+{
+    Fixture fixture;
+    ToolSettings settings;
+    settings.keepPoints = true;
+    fixture.session.SetToolSettings(settings);
+    fixture.session.SelectTool(DrawingTool::Line);
+    Require(fixture.session.Click(fixture.At({10.0, 10.0, 0.0})).placedPoint, "1点目");
+    const auto done = fixture.session.Click(fixture.At({60.0, 10.0, 0.0}));
+    Require(done.committed, "確定");
+    RequireCount(done.createdEntityIds.size(), 3, "線1 + 点2");
+    RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 3, "文書にも3つ");
+    RequireCount(fixture.session.Scene().points.size(), 2, "点は吸着の相手になる");
+    Require(fixture.session.Undo(), "戻せる");
+    RequireCount(fixture.session.GetDocument().Snapshot().entities.size(), 0,
+        "一度で線も点も消える");
+}
+
 KACHA_V2_TEST_MAIN("session_tests")

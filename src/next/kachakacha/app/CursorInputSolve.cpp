@@ -241,6 +241,21 @@ constexpr double kTiny = 1.0e-12;
         Vector3{*radius * std::cos(angle), *radius * std::sin(angle), 0.0});
 }
 
+//! 矩形。幅と高さ。決めていない方はポインタ、向きは常にポインタの側。
+[[nodiscard]] Result<Vector3> SolveRectangle(const CursorInputPanel& panel,
+    const Vector3& pointerDelta)
+{
+    const std::optional<double> width = Locked(panel, "width");
+    const std::optional<double> height = Locked(panel, "height");
+    const double u = width.has_value()
+        ? std::copysign(*width, pointerDelta.x == 0.0 ? 1.0 : pointerDelta.x)
+        : pointerDelta.x;
+    const double v = height.has_value()
+        ? std::copysign(*height, pointerDelta.y == 0.0 ? 1.0 : pointerDelta.y)
+        : pointerDelta.y;
+    return Result<Vector3>::Success(Vector3{u, v, 0.0});
+}
+
 //! 距離1つだけの道具。
 [[nodiscard]] Result<Vector3> SolveDistance(const CursorInputPanel& panel,
     const Vector3& pointerDelta)
@@ -278,6 +293,10 @@ constexpr double kTiny = 1.0e-12;
             actual = delta.y;
         } else if (id == "dz") {
             actual = delta.z;
+        } else if (id == "width") {
+            actual = std::abs(delta.x);
+        } else if (id == "height") {
+            actual = std::abs(delta.y);
         } else if (id == "angle_x" || id == "angle_y" || id == "angle_z") {
             const double total = delta.Length();
             if (total <= kTiny) {
@@ -329,6 +348,9 @@ Result<Vector3> SolveDelta(const CursorInputPanel& panel, const Vector3& pointer
     case DrawingTool::Move:
         solved = SolveDistance(panel, pointerDelta);
         break;
+    case DrawingTool::Rectangle:
+        solved = SolveRectangle(panel, pointerDelta);
+        break;
     default:
         return Result<Vector3>::Failure(MakeError("UI-C001",
             "この道具では数値入力を使いません。", "点を置いて形を決める道具ではありません。"));
@@ -373,6 +395,10 @@ Result<CursorInputPanel> UpdateFromPointer(const CursorInputPanel& panel,
             value = delta.y;
         } else if (id == "dz") {
             value = delta.z;
+        } else if (id == "width") {
+            value = std::abs(delta.x);
+        } else if (id == "height") {
+            value = std::abs(delta.y);
         } else if (id == "angle_x" || id == "angle_y" || id == "angle_z") {
             if (total > 1.0e-12) {
                 const double along = id == "angle_x"

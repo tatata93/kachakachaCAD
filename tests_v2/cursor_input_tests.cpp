@@ -488,4 +488,24 @@ KACHA_V2_TEST(cursor, 欄を空にすればまたマウスに追随する)
     RequireNear(moved.Value().states[at].value, 7.0, 1e-9, "また追随する");
 }
 
+KACHA_V2_TEST(cursor, 矩形は幅と高さで決まり向きはポインタの側)
+{
+    // V1 の「実寸で確定」の矩形欄。幅が主要欄。
+    const auto begun = BeginCursorInput(DrawingTool::Rectangle, true);
+    Require(begun.HasValue(), "矩形にも入力列がある");
+    CursorInputPanel panel = begun.Value();
+    RequireEqual(panel.fields[panel.focusedIndex].id, "width", "主要欄は幅");
+    // 幅 40 を確定。高さはポインタに追随する。
+    panel = SetFieldText(panel, panel.focusedIndex, "40").Value();
+    const auto committed = CommitFocusedField(panel, Vector3{-10.0, 25.0, 0.0});
+    Require(committed.HasValue(), "確定できる");
+    Require(committed.Value().readyToFinish, "幅が決まれば形は決まる");
+    const auto solved = SolveDelta(committed.Value().panel, Vector3{-10.0, 25.0, 0.0});
+    Require(solved.HasValue(), "解ける");
+    RequireNear(solved.Value().x, -40.0, 1e-9, "幅 40、向きはポインタの側(左)");
+    RequireNear(solved.Value().y, 25.0, 1e-9, "高さはポインタ");
+    const std::size_t height = IndexOf(committed.Value().panel, "height");
+    RequireNear(committed.Value().panel.states[height].value, 25.0, 1e-9, "高さの欄も追随");
+}
+
 KACHA_V2_TEST_MAIN("cursor_input_tests")

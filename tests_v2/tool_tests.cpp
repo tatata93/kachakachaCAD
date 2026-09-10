@@ -421,4 +421,26 @@ KACHA_V2_TEST(tool, 点の数が決まったツールは途中で確定できな
     RequireEqual(finish.Diagnostics().front().code, std::string("UI-T003"), "診断コード");
 }
 
+KACHA_V2_TEST(tool, 指定した点を作図点として残せる)
+{
+    // V1 の「指定した点を作図点として残す」。線を作る道具のときだけ点が付く。
+    ToolSettings settings;
+    settings.keepPoints = true;
+    ToolSession session(DrawingTool::Line, settings, Tolerance());
+    Require(!session.AddPoint({0.0, 0.0, 0.0}).Value().has_value(), "1点目");
+    const auto done = session.AddPoint({10.0, 0.0, 0.0});
+    Require(done.HasValue() && done.Value().has_value(), "2点目で確定");
+    RequireEqual(std::to_string(done.Value()->keptPoints.size()), std::string("2"),
+        "指した2点が残る");
+    // 作図点の道具では二重に残さない。
+    ToolSession point(DrawingTool::Point, settings, Tolerance());
+    const auto made = point.AddPoint({1.0, 2.0, 0.0});
+    Require(made.HasValue() && made.Value().has_value(), "作図点");
+    Require(made.Value()->keptPoints.empty(), "作図点は二重にしない");
+    // 既定では残さない。
+    ToolSession plain(DrawingTool::Line, ToolSettings{}, Tolerance());
+    Require(!plain.AddPoint({0.0, 0.0, 0.0}).Value().has_value(), "1点目");
+    Require(plain.AddPoint({10.0, 0.0, 0.0}).Value()->keptPoints.empty(), "既定は残さない");
+}
+
 KACHA_V2_TEST_MAIN("tool_tests")

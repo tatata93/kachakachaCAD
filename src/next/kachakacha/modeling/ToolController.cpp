@@ -323,7 +323,7 @@ Result<std::optional<ToolOutput>> ToolSession::AddPoint(const Vector3& point)
     if (static_cast<int>(points_.size()) < required) {
         return Result<std::optional<ToolOutput>>::Success(std::nullopt);
     }
-    auto built = Build(points_);
+    auto built = BuildKeepingPoints(points_);
     if (!built.HasValue()) {
         // 作れなかった。最後の点を戻して、やり直せるようにする。
         points_.pop_back();
@@ -378,9 +378,21 @@ Result<ToolOutput> ToolSession::Finish()
             "このツールは点の数が決まっています。",
             std::string(DrawingToolNameJa(tool_)) + " は途中で確定できません。"));
     }
-    auto built = Build(points_);
+    auto built = BuildKeepingPoints(points_);
     if (built.HasValue()) {
         points_.clear();
+    }
+    return built;
+}
+
+Result<ToolOutput> ToolSession::BuildKeepingPoints(const std::vector<Vector3>& points) const
+{
+    auto built = Build(points);
+    // 指した点を作図点として残す。形を作る道具のときだけ(作図点の道具は二重になる)。
+    if (built.HasValue() && settings_.keepPoints && !built.Value().segments.empty()) {
+        ToolOutput output = built.Value();
+        output.keptPoints = points;
+        return Result<ToolOutput>::Success(std::move(output));
     }
     return built;
 }

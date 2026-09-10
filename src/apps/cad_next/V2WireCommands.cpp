@@ -9,6 +9,7 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
@@ -582,4 +583,43 @@ void V2MainWindow::ReplaceWireSegment(kachakacha::v2::base::EntityId entityId,
     next.entityIds.push_back(entity.id);
     viewport_->SetSelection(next);
     SetStatus(label + QStringLiteral("ました。"));
+}
+
+void V2MainWindow::ApplyToolSettings(const kachakacha::v2::modeling::ToolSettings& settings)
+{
+    // 円弧の作り方・補助線・指定点を残す。作業平面の向きは置くときに場面から渡される。
+    // 道具の途中の点は捨てる(V1 と同じ。作り方を変えたら最初から)。
+    session_->SetToolSettings(settings);
+    viewport_->OnToolChanged();
+    RefreshGuide();
+    viewport_->update();
+}
+
+void V2MainWindow::CreateWireFromDock()
+{
+    if (drawingDock_ == nullptr) {
+        return;
+    }
+    // 欄の値を core へ。作れるかは core が決め、理由はそのまま棚と帯へ出す。
+    const auto request = drawingDock_->DirectWire();
+    const auto made = kachakacha::v2::app::BuildDirectWire(request, viewport_->WorkPlane());
+    if (!made.HasValue()) {
+        ReportDiagnostics(made.Diagnostics());
+        drawingDock_->ShowMessage(QString::fromStdString(
+            made.Diagnostics().front().summaryJa + " " + made.Diagnostics().front().detailsJa));
+        return;
+    }
+    const QString name = drawingDock_->DirectWireName();
+    const auto added = session_->AddWire(made.Value(), request.construction,
+        name.isEmpty() ? std::string("数値の線") : name.toStdString());
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    drawingDock_->ShowMessage(QString());
+    SetStatus(QStringLiteral("%1: %2 を作りました。")
+            .arg(QString::fromUtf8(std::string(
+                kachakacha::v2::app::DirectWireKindNameJa(request.kind)).c_str()),
+                name.isEmpty() ? QStringLiteral("数値の線") : name));
 }

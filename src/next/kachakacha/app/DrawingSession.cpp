@@ -179,7 +179,27 @@ bool DrawingSession::UndoLastPoint()
     return session_->UndoLastPoint();
 }
 
-ClickResult DrawingSession::Commit(const ToolOutput& output)
+ClickResult DrawingSession::AddWire(std::vector<geometry::CurveSegment> segments,
+    bool construction, std::string_view label)
+{
+    ClickResult result;
+    if (segments.empty()) {
+        result.diagnostics.push_back(base::MakeError("UI-D001", "点が足りません。",
+            "線が1本もありません。"));
+        return result;
+    }
+    // 道具を通さずに置く線(数値入力)。文書へ入れる道はクリックと同じにする。
+    ToolOutput output;
+    output.segments = std::move(segments);
+    output.construction = construction;
+    const DrawingTool previous = tool_;
+    tool_ = DrawingTool::Line;
+    result = Commit(output, label);
+    tool_ = previous;
+    return result;
+}
+
+ClickResult DrawingSession::Commit(const ToolOutput& output, std::string_view label)
 {
     ClickResult result;
     result.placedPoint = true;
@@ -201,7 +221,8 @@ ClickResult DrawingSession::Commit(const ToolOutput& output)
     Feature feature;
     feature.id = ids_->NextTyped<IdKind::Feature>();
     feature.type = FeatureTypeFor(tool_);
-    feature.displayName = std::string(modeling::DrawingToolNameJa(tool_));
+    feature.displayName = label.empty() ? std::string(modeling::DrawingToolNameJa(tool_))
+                                        : std::string(label);
 
     Entity entity;
     entity.id = ids_->NextTyped<IdKind::Entity>();
@@ -233,6 +254,11 @@ ClickResult DrawingSession::Commit(const ToolOutput& output)
     }
 
     const EntityId createdId = entity.id;
+    // 指した点も残すときは、線と点をひとまとまりにする(元に戻すのは一度で済む)。
+    const bool keepPoints = !output.keptPoints.empty();
+    if (keepPoints) {
+        document_.BeginCompound(feature.displayName);
+    }
     const auto commandResult = document_.Run(
         AddFeatureCommand(feature, {entity}, feature.displayName));
     result.committed = commandResult.committed;
@@ -241,8 +267,44 @@ ClickResult DrawingSession::Commit(const ToolOutput& output)
     if (commandResult.committed) {
         result.createdEntityIds.push_back(createdId);
         AddToScene(output, createdId);
+        if (keepPoints) {
+            AddKeptPoints(output, result);
+        }
+    }
+    if (keepPoints) {
+        document_.EndCompound();
     }
     return result;
+}
+
+void DrawingSession::AddKeptPoints(const ToolOutput& output, ClickResult& result)
+{
+    for (const Vector3& point : output.keptPoints) {
+        Feature feature;
+        feature.id = ids_->NextTyped<IdKind::Feature>();
+        feature.type = FeatureTypeFor(DrawingTool::Point);
+        feature.displayName = "指定点";
+        Entity entity;
+        entity.id = ids_->NextTyped<IdKind::Entity>();
+        entity.kind = EntityKind::Point;
+        entity.displayName = feature.displayName;
+        entity.createdBy = feature.id;
+        CreatePointDefinition definition;
+        definition.positionMm = point;
+        definition.xExpression = {"", point.x, geometry::QuantityKind::Length};
+        definition.yExpression = {"", point.y, geometry::QuantityKind::Length};
+        definition.zExpression = {"", point.z, geometry::QuantityKind::Length};
+        feature.definition = std::move(definition);
+        feature.outputs.push_back(FeatureOutput{"point", entity.id, EntityKind::Point});
+        const auto added = document_.Run(AddFeatureCommand(feature, {entity}, "指定点"));
+        if (!added.committed) {
+            result.diagnostics.insert(result.diagnostics.end(), added.diagnostics.begin(),
+                added.diagnostics.end());
+            continue;
+        }
+        result.createdEntityIds.push_back(entity.id);
+        scene_.points.push_back(SnapDrawingPoint{entity.id, point});
+    }
 }
 
 void DrawingSession::AddToScene(const ToolOutput& output, EntityId entityId)

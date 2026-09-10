@@ -363,6 +363,10 @@ void V2MainWindow::SetMode(UiMode mode)
     if (guideDock_ != nullptr) {
         guideDock_->setVisible(mode == UiMode::Part);
     }
+    // 作図モードでは作図の棚を前に出す(V1 の「作図」タブ)。
+    if (drawingDock_ != nullptr && mode == UiMode::Drawing) {
+        drawingDock_->raise();
+    }
     // 手順はどのモードでも出す。中身がモードで変わる。
     RefreshProcessSteps();
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
@@ -506,34 +510,7 @@ void V2MainWindow::BuildPanels()
     processDock_ = processDock;
 
     BuildExportDock();
-
-    // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
-    measureDock_ = new V2MeasureDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, measureDock_);
-    measureDock_->hide();
-
-    // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
-    // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
-    workPlaneDock_ = new V2WorkPlaneDock(this);
-    workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
-    addDockWidget(Qt::RightDockWidgetArea, workPlaneDock_);
-
-    // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
-    parameterDock_ = new V2ParameterDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
-    parameterDock_->SetDiagnosticSink([this](const QString& text) {
-        AddDiagnostic(text);
-        SetStatus(text);
-    });
-
-    // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
-    // 「手順」が2行しか見えず、いま何段目かが読めなくなる。
-    // 手順だけは常に見えるように残し、残りは札で切り替える。
-    tabifyDockWidget(exportDock_, parameterDock_);
-    tabifyDockWidget(parameterDock_, measureDock_);
-    tabifyDockWidget(measureDock_, workPlaneDock_);
-    exportDock_->raise();
-
+    BuildRightShelves();
 
     auto* diagnosticDock = new QDockWidget(QStringLiteral("知らせ"), this);
     diagnosticDock->setObjectName(QStringLiteral("diagnosticDock"));
@@ -549,6 +526,46 @@ void V2MainWindow::BuildPanels()
     resizeDocks({guideDock_, processDock_, exportDock_}, {110, 200, 330}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
     BuildStatusBar();
+}
+
+void V2MainWindow::BuildRightShelves()
+{
+    // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
+    measureDock_ = new V2MeasureDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, measureDock_);
+    measureDock_->hide();
+
+    // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
+    // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
+    workPlaneDock_ = new V2WorkPlaneDock(this);
+    workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
+    addDockWidget(Qt::RightDockWidgetArea, workPlaneDock_);
+
+    // 作図の棚(V1 の「作図」タブ)。円弧の作り方・補助線・指定点・数値で線を作る。
+    drawingDock_ = new V2DrawingDock(this);
+    drawingDock_->SetSettingsHandler(
+        [this](const kachakacha::v2::modeling::ToolSettings& settings) {
+            ApplyToolSettings(settings);
+        });
+    drawingDock_->SetCreateWireHandler([this] { CreateWireFromDock(); });
+    addDockWidget(Qt::RightDockWidgetArea, drawingDock_);
+
+    // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
+    parameterDock_ = new V2ParameterDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
+    parameterDock_->SetDiagnosticSink([this](const QString& text) {
+        AddDiagnostic(text);
+        SetStatus(text);
+    });
+
+    // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
+    // 「手順」が2行しか見えず、いま何段目かが読めなくなる。
+    // 手順だけは常に見えるように残し、残りは札で切り替える。
+    tabifyDockWidget(exportDock_, parameterDock_);
+    tabifyDockWidget(parameterDock_, measureDock_);
+    tabifyDockWidget(measureDock_, workPlaneDock_);
+    tabifyDockWidget(workPlaneDock_, drawingDock_);
+    exportDock_->raise();
 }
 
 void V2MainWindow::BuildStatusBar()

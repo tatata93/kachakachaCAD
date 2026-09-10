@@ -45,6 +45,13 @@ constexpr double kPi = 3.14159265358979323846;
         {"arc_length", "円弧長", QuantityKind::Length, false}};
 }
 
+[[nodiscard]] std::vector<CursorField> MakeRectangleFields()
+{
+    // V1 の「実寸で確定」の矩形欄(幅・高さ)。向きはポインタの側で決まる。
+    return {{"width", "幅", QuantityKind::Length, true},
+        {"height", "高さ", QuantityKind::Length, false}};
+}
+
 [[nodiscard]] std::vector<CursorField> MakeExtrudeFields()
 {
     return {{"distance", "距離", QuantityKind::Length, true}};
@@ -65,7 +72,10 @@ const std::vector<CursorField>& CursorFieldsFor(DrawingTool tool, bool onWorkPla
     static const std::vector<CursorField> circle = MakeCircleFields();
     static const std::vector<CursorField> arc = MakeArcFields();
     static const std::vector<CursorField> extrude = MakeExtrudeFields();
+    static const std::vector<CursorField> rectangle = MakeRectangleFields();
     switch (tool) {
+    case DrawingTool::Rectangle:
+        return rectangle;
     case DrawingTool::Line:
     case DrawingTool::Polyline:
         return onWorkPlane ? planarLine : spatialLine;

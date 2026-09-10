@@ -17,6 +17,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -207,10 +208,17 @@ namespace kachakacha::v2::selftest {
     const int wiresBefore = static_cast<int>(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire)
                                                  .entityIds.size());
+    // 画面の縦横比は環境で違う(窓のある PC では縦長)。mm で指して画面の点に直す。
+    // 壁は z = 0..30 なので、四角は z = 8..20、x = ±8 に置く。
+    const double heightMm = 200.0 * viewport.height() / std::max(1, viewport.width());
+    const auto at = [&](double xMm, double zMm) {
+        return QPointF(viewport.width() * (0.5 + xMm / 200.0),
+            viewport.height() * (0.5 - zMm / heightMm));
+    };
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
-    viewport.ClickAt(QPointF(viewport.width() * 0.46, viewport.height() * 0.46));
-    viewport.HoverAt(QPointF(viewport.width() * 0.54, viewport.height() * 0.38));
-    viewport.ClickAt(QPointF(viewport.width() * 0.54, viewport.height() * 0.38));
+    viewport.ClickAt(at(-8.0, 8.0));
+    viewport.HoverAt(at(8.0, 20.0));
+    viewport.ClickAt(at(8.0, 20.0));
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     const auto wires = kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);

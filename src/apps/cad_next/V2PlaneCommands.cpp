@@ -15,6 +15,9 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/modeling/GridModel.h"
 #include "kachakacha/modeling/WorkPlane.h"
+#include "kachakacha/view/ViewOrientation.h"
+
+#include <QComboBox>
 
 #include <string>
 #include <utility>
@@ -40,7 +43,7 @@ using kachakacha::v2::modeling::StandardPlaneKind;
 bool V2MainWindow::IsPlaneCommand(std::string_view id)
 {
     return id == "workplane.create" || id == "workplane.set_active" || id == "grid.edit"
-        || id == "grid.move_origin";
+        || id == "grid.move_origin" || id == "view.align_workplane";
 }
 
 void V2MainWindow::RunPlaneCommand(std::string_view id)
@@ -51,6 +54,10 @@ void V2MainWindow::RunPlaneCommand(std::string_view id)
     }
     if (id == "workplane.set_active") {
         ActivateSelectedWorkPlane();
+        return;
+    }
+    if (id == "view.align_workplane") {
+        AlignViewToActiveWorkPlane();
         return;
     }
     if (id == "grid.edit") {
@@ -171,23 +178,39 @@ void V2MainWindow::CreateWorkPlaneFromChoice(const WorkPlaneChoice& choice, bool
 
 void V2MainWindow::RefreshWorkPlaneDock()
 {
-    if (workPlaneDock_ == nullptr) {
-        return;
-    }
-    // 文書にある平面をコンボへ並べる。原点の3面は最初から選べる。
+    // 文書にある平面を並べる。原点の3面は最初から選べる。
     std::vector<std::pair<kachakacha::v2::base::EntityId, QString>> planes;
     for (const auto& entity : session_->GetDocument().Snapshot().entities) {
         if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
             planes.emplace_back(entity.id, QString::fromStdString(entity.displayName));
         }
     }
+    if (workPlaneDock_ == nullptr) {
+        return;
+    }
     workPlaneDock_->SetPlanes(planes);
     workPlaneDock_->Refresh(BuildWorkPlaneFacts());
+    // 上の帯の「作図面」コンボも同じ一覧。作業中のものを選んだ状態にする。
+    if (planeCombo_ == nullptr) {
+        return;
+    }
+    refreshingPlaneCombo_ = true;
+    planeCombo_->clear();
+    planeComboIds_.clear();
+    int current = -1;
+    for (const auto& [id, name] : planes) {
+        if (id == activeWorkPlaneId_) {
+            current = static_cast<int>(planeComboIds_.size());
+        }
+        planeComboIds_.push_back(id);
+        planeCombo_->addItem(name);
+    }
+    planeCombo_->setCurrentIndex(current);
+    refreshingPlaneCombo_ = false;
 }
 
 void V2MainWindow::ActivateSelectedWorkPlane()
 {
-    using kachakacha::v2::domain::CreateWorkPlaneDefinition;
     using kachakacha::v2::domain::EntityKind;
     // 選んでいる作業平面を作業中にする。選んでいなければ、最後に作ったものにする。
     const auto& snapshot = session_->GetDocument().Snapshot();
@@ -211,36 +234,43 @@ void V2MainWindow::ActivateSelectedWorkPlane()
             "作業平面がありません。先に「基準」→「作業平面を作る」で作ってください。"));
         return;
     }
-    for (const auto& feature : snapshot.features) {
-        const auto* definition = std::get_if<CreateWorkPlaneDefinition>(&feature.definition);
-        if (definition == nullptr) {
-            continue;
-        }
-        bool makesChosen = false;
-        for (const auto& output : feature.outputs) {
-            makesChosen = makesChosen || output.entityId == chosen;
-        }
-        if (!makesChosen) {
-            continue;
-        }
-        kachakacha::v2::modeling::WorkPlaneFrame frame;
-        frame.origin = definition->origin;
-        frame.normal = definition->normal;
-        frame.uAxis = definition->uDirection;
-        // v 軸は法線と u から出す。持たせると食い違うので持たせない。
-        frame.vAxis = kachakacha::v2::geometry::Vector3{
-            definition->normal.y * definition->uDirection.z
-                - definition->normal.z * definition->uDirection.y,
-            definition->normal.z * definition->uDirection.x
-                - definition->normal.x * definition->uDirection.z,
-            definition->normal.x * definition->uDirection.y
-                - definition->normal.y * definition->uDirection.x};
-        ApplyWorkPlane(frame, chosen);
-        SetStatus(QStringLiteral("%1 を作業中の平面にしました。")
-                .arg(QString::fromStdString(feature.displayName)));
+    if (!ActivateWorkPlaneById(chosen)) {
+        SetStatus(QStringLiteral("その作業平面の作り方が分かりませんでした。"));
+    }
+}
+
+bool V2MainWindow::ActivateWorkPlaneById(const kachakacha::v2::base::EntityId& id)
+{
+    // 作り方ではなく、出来上がった枠(原点・法線・u)を使う。v は法線と u から出す。
+    const auto frame = WorkPlaneFrameOf(id);
+    const auto* entity = session_->GetDocument().FindEntity(id);
+    if (!frame.has_value() || entity == nullptr) {
+        return false;
+    }
+    ApplyWorkPlane(*frame, id);
+    RefreshWorkPlaneDock();
+    SetStatus(QStringLiteral("%1 を作業中の平面にしました。")
+            .arg(QString::fromStdString(entity->displayName)));
+    return true;
+}
+
+void V2MainWindow::AlignViewToActiveWorkPlane()
+{
+    // 上の帯の「正対」。V1 と同じく、作業中の作図面の正面から見る。形は変わらない。
+    const auto* entity = session_->GetDocument().FindEntity(activeWorkPlaneId_);
+    if (entity == nullptr) {
+        SetStatus(QStringLiteral("正対: 作業中の作図面がありません。"));
         return;
     }
-    SetStatus(QStringLiteral("その作業平面の作り方が分かりませんでした。"));
+    const auto orientation = kachakacha::v2::view::OrientationFacing(
+        viewport_->WorkPlane().normal, viewport_->WorkPlane().vAxis);
+    if (!orientation.HasValue()) {
+        ReportDiagnostics(orientation.Diagnostics());
+        return;
+    }
+    viewport_->SetOrientation(orientation.Value());
+    SetStatus(QStringLiteral("%1 に正対しました。形は変わっていません。")
+            .arg(QString::fromStdString(entity->displayName)));
 }
 
 void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame& frame,
@@ -391,4 +421,29 @@ kachakacha::v2::app::WorkPlaneMaterials V2MainWindow::CollectWorkPlaneMaterials(
         materials.secondPlane = WorkPlaneFrameOf(*choice.secondPlaneId);
     }
     return materials;
+}
+
+int V2MainWindow::PlaneComboCount() const
+{
+    return planeCombo_ == nullptr ? 0 : planeCombo_->count();
+}
+
+QString V2MainWindow::PlaneComboText(int index) const
+{
+    if (planeCombo_ == nullptr || index < 0 || index >= planeCombo_->count()) {
+        return QString();
+    }
+    return planeCombo_->itemText(index);
+}
+
+int V2MainWindow::PlaneComboCurrent() const
+{
+    return planeCombo_ == nullptr ? -1 : planeCombo_->currentIndex();
+}
+
+void V2MainWindow::SelectPlaneCombo(int index)
+{
+    if (planeCombo_ != nullptr) {
+        planeCombo_->setCurrentIndex(index);
+    }
 }

@@ -58,6 +58,7 @@ class QAction;
 class QLabel;
 class QListWidget;
 class QToolBar;
+class QComboBox;
 class QDockWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -156,6 +157,16 @@ public:
     [[nodiscard]] QString OriginChildText(int row) const;
     //! 軸の行のチェックを切り替える(一覧を押したのと同じ道)。
     void SetAxisShown(int axis, bool shown);
+    //! 上の帯の「作図面」コンボ。試験で見る・選ぶ。
+    [[nodiscard]] int PlaneComboCount() const;
+    [[nodiscard]] QString PlaneComboText(int index) const;
+    [[nodiscard]] int PlaneComboCurrent() const;
+    void SelectPlaneCombo(int index);
+    //! いま作業中の作業平面の id。無ければ Nil。
+    [[nodiscard]] const kachakacha::v2::base::EntityId& ActiveWorkPlaneId() const
+    {
+        return activeWorkPlaneId_;
+    }
 
     //! 書き出しの棚(AT-EXP-001)。数は手順の状況から作る。
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
@@ -523,8 +534,16 @@ private:
     void RunWorkPlaneCreate();
     //! 棚の「平面を作る」を押したとき。
     void CreateWorkPlaneFromDock();
-    //! 棚へ、いまの選択と文書の平面一覧を出し直す。
+    //! 棚とコンボへ、いまの選択と文書の平面一覧を出し直す。
     void RefreshWorkPlaneDock();
+    //! その作業平面を作業中にする(コンボ・一覧・コマンドが同じ道を通る)。
+    bool ActivateWorkPlaneById(const kachakacha::v2::base::EntityId& id);
+    //! 作業中の作図面に正対する(上の帯の「正対」)。
+    void AlignViewToActiveWorkPlane();
+    //! 上の帯の「作図面」コンボ。
+    QComboBox* planeCombo_ = nullptr;
+    std::vector<kachakacha::v2::base::EntityId> planeComboIds_;
+    bool refreshingPlaneCombo_ = false;
     //! 押した場所へグリッドの原点を動かす。
     void MoveGridOriginByClick();
     //! 選んでいる作業平面を作業中にする。

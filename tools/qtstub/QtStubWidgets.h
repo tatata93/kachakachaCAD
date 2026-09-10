@@ -74,6 +74,7 @@ public:
     void setEnabled(bool);
     void setVisible(bool);
     [[nodiscard]] QWidget* parentWidget() const;
+    void setToolTip(const QString&);
     void resize(int, int);
     void resize(const QSize&);
     void show();
@@ -173,6 +174,7 @@ public:
     void addAction(QAction*);
     QAction* addAction(const QString&);
     QAction* addSeparator();
+    QAction* addWidget(QWidget*);
     void setToolButtonStyle(Qt::ToolButtonStyle);
     void setMovable(bool);
     void setOrientation(Qt::Orientation);

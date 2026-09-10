@@ -214,7 +214,8 @@ KACHA_V2_TEST(commands, 視点と表示の操作は文書を変えない)
 {
     // camera操作と表示設定を Undo へ積まないこと(command-catalog.md §1)。
     for (const std::string_view id : {"view.fit_all", "view.align_selection",
-             "view.display_settings", "snap.toggle", "selection.activate",
+             "view.align_workplane", "view.display_settings", "snap.toggle",
+             "selection.activate",
              "measure.open", "fabrication.set_assembly"}) {
         const CommandDescriptor* item = FindCommand(id);
         Require(item != nullptr, std::string(id) + ": 見つからない");

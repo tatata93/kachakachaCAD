@@ -13,6 +13,7 @@
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/WorkPlane.h"
+#include "kachakacha/view/ViewOrientation.h"
 
 #include <QString>
 
@@ -172,7 +173,8 @@ void UseDock(V2MainWindow& window)
     dock->SetChoice(choice);
     if (!Explain((std::string("足りないと出る(") + dock->NeedsText().toStdString()
                      + ")").c_str(),
-            dock->NeedsText().contains(QStringLiteral("足りません")))) {
+            dock->NeedsText().contains(QStringLiteral("作れません"))
+                && dock->NeedsText().contains(QStringLiteral("線を2つ")))) {
         return false;
     }
     if (!Explain("押せない", !dock->CanCreate())) {
@@ -190,6 +192,72 @@ void UseDock(V2MainWindow& window)
     return Explain((std::string("3点は数で足りる(") + dock->NeedsText().toStdString()
                        + ")").c_str(),
         dock->CanCreate());
+}
+
+[[nodiscard]] bool CaseTopBarPlaneComboSwitchesAndFaces(V2MainWindow& window)
+{
+    // 上の帯の「作図面」コンボ(V1 と同じ)。選ぶと作業中の平面が切り替わり、
+    // 「正対」はその平面の正面から見る。形は変わらない。
+    if (!Explain((std::string("コンボに3面(実際は ") + std::to_string(window.PlaneComboCount())
+                     + ")").c_str(),
+            window.PlaneComboCount() == 3)) {
+        return false;
+    }
+    if (!Explain((std::string("はじめは top_XY(")
+                     + window.PlaneComboText(window.PlaneComboCurrent()).toStdString() + ")")
+                     .c_str(),
+            window.PlaneComboText(window.PlaneComboCurrent()) == QStringLiteral("top_XY"))) {
+        return false;
+    }
+    int side = -1;
+    for (int index = 0; index < window.PlaneComboCount(); ++index) {
+        if (window.PlaneComboText(index) == QStringLiteral("side_YZ")) {
+            side = index;
+        }
+    }
+    if (!Explain("side_YZ がある", side >= 0)) {
+        return false;
+    }
+    const auto revision = window.Session().GetDocument().Revision();
+    window.SelectPlaneCombo(side);
+    if (!Explain((std::string("side_YZ が作業中になる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            std::abs(window.Viewport().WorkPlane().normal.x - 1.0) < 1.0e-9)) {
+        return false;
+    }
+    if (!Explain("文書は変わらない", window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    // 正対: 視線が side_YZ の法線(±X)に沿う。
+    window.RunCommand("view.align_workplane");
+    if (!Explain((std::string("正対したと言う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("side_YZ に正対")))) {
+        return false;
+    }
+    const auto forward = kachakacha::v2::view::ForwardOf(window.Viewport().Orientation());
+    if (!Explain((std::string("視線が X に沿う(") + std::to_string(forward.x) + ")").c_str(),
+            std::abs(std::abs(forward.x) - 1.0) < 1.0e-6)) {
+        return false;
+    }
+    // 棚で平面を作ると、コンボにも増える。
+    UseDock(window);
+    window.RunCommand("workplane.create");
+    WorkPlaneChoice choice;
+    choice.method = WorkPlaneMethod::Standard;
+    choice.standard = StandardPlaneKind::ZX;
+    choice.name = "駅の断面";
+    window.WorkPlaneDock()->SetChoice(choice);
+    window.WorkPlaneDock()->PressCreate();
+    if (!Explain((std::string("コンボに4面(実際は ") + std::to_string(window.PlaneComboCount())
+                     + ")").c_str(),
+            window.PlaneComboCount() == 4)) {
+        return false;
+    }
+    return Explain((std::string("作ったものが作業中(")
+                       + window.PlaneComboText(window.PlaneComboCurrent()).toStdString() + ")")
+                       .c_str(),
+        window.PlaneComboText(window.PlaneComboCurrent()) == QStringLiteral("駅の断面"));
 }
 
 [[nodiscard]] bool CaseOriginPlanesSurviveSaveAndOpen(V2MainWindow& window)
@@ -217,6 +285,7 @@ std::vector<SelfTestCase> PlaneCases()
         {"作業平面の棚で位置と向きを数で指定して作れる", &CaseDockMakesPlaneByPointAndNormal},
         {"作業平面の棚でコンボの基準平面から離せる", &CaseDockOffsetsFromComboPlane},
         {"作業平面の棚は足りないものをその場で言い、押せない", &CaseDockSaysWhatIsMissing},
+        {"上の帯の作図面コンボで切り替わり、正対はその面を向く", &CaseTopBarPlaneComboSwitchesAndFaces},
         {"新しい文書にも原点の3面がある", &CaseOriginPlanesSurviveSaveAndOpen},
     };
 }

@@ -23,6 +23,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFont>
@@ -260,7 +261,8 @@ void V2MainWindow::BuildMenus()
                        "fabrication.set_connection_scope"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
                             "export.dxf"}},
-        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.hide_selected",
+        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.align_workplane",
+                       "view.hide_selected",
                        "view.show_all", "view.stage_all", "view.stage_no_grid",
                        "view.stage_no_construction", "view.display_settings",
                        "measure.open"}},
@@ -322,6 +324,28 @@ void V2MainWindow::BuildModeBar()
         QObject::connect(action, &QAction::triggered, this,
             [this, mode] { SetMode(mode); });
     }
+    // V1 の上の帯と同じ並び: モード → 正対 → 選択 → 測定 → 作図面。
+    // 選択と測定はどのモードでも使う(オーナー指示)。メニューと同じ QAction を並べる。
+    modeBar_->addSeparator();
+    for (const std::string_view id : {"view.align_workplane", "selection.activate",
+             "measure.open"}) {
+        if (QAction* action = ActionFor(id); action != nullptr) {
+            modeBar_->addAction(action);
+        }
+    }
+    modeBar_->addSeparator();
+    auto* planeLabel = new QLabel(QStringLiteral(" 作図面 "), modeBar_);
+    modeBar_->addWidget(planeLabel);
+    planeCombo_ = new QComboBox(modeBar_);
+    planeCombo_->setToolTip(QStringLiteral("作業中の作図面。選ぶと切り替わります。"));
+    modeBar_->addWidget(planeCombo_);
+    QObject::connect(planeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (refreshingPlaneCombo_ || index < 0
+            || index >= static_cast<int>(planeComboIds_.size())) {
+            return;
+        }
+        ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
+    });
     addToolBarBreak();
 }
 
@@ -661,6 +685,9 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     // 原点の基準平面(top_XY / front_XZ / side_YZ)が無ければ足す。V1 と同じく
     // 一覧の最上部に固定で出し、「平面から離す」などの相手として最初から選べるようにする。
     kachakacha::v2::app::EnsureOriginPlanes(session_->GetDocument(), *ids_);
+    // 原点の3面は文書の土台であって操作ではない。開いた直後に「元に戻す」で
+    // 消えてしまわないよう、ここで履歴の境界にする(開く・新規と同じ扱い)。
+    session_->GetDocument().MarkHistoryBoundary();
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));

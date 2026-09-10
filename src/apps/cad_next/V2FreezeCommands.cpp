@@ -111,32 +111,40 @@ void V2MainWindow::FreezeFabricationState()
     // 画面に出ている姿勢(FoldedRailsOf)そのものを使う。別の作り方で作り直すと、
     // 見えている形と出てくる形が食い違う ── V1 で実際に起きた(bandRails の教訓)。
     const auto modelId = CurrentFabricationModelId();
-    const auto* entity = session_->GetDocument().FindEntity(modelId);
-    const auto* feature =
-        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
-    const auto* definition = feature == nullptr
+    const auto* entityPointer = session_->GetDocument().FindEntity(modelId);
+    const auto* feature = entityPointer == nullptr
+        ? nullptr
+        : session_->GetDocument().FindFeature(entityPointer->createdBy);
+    const auto* definitionPointer = feature == nullptr
         ? nullptr
         : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
               &feature->definition);
-    const auto evaluated = fabricationModels_.find(modelId.ToString());
-    if (definition == nullptr || evaluated == fabricationModels_.end()) {
+    const auto evaluatedIterator = fabricationModels_.find(modelId.ToString());
+    if (definitionPointer == nullptr || evaluatedIterator == fabricationModels_.end()) {
         SetStatus(QStringLiteral(
             "現在状態を固定: 先に「製作モデルを作る」で近似モデルを作ってください。"));
         return;
     }
-    if (!evaluated->second.bandMesh.has_value()) {
+    // ここから先は文書へ線や面を足す。足すと entities / features の並びが作り直され、
+    // 上のポインタは指す先を失う。実際にそれで固定の途中で落ちた(パッケージの自己試験)。
+    // 使うものは先に写しておく。
+    const std::string modelName = entityPointer->displayName;
+    const kachakacha::v2::domain::CreateFabricationModelDefinition definition =
+        *definitionPointer;
+    const kachakacha::v2::app::FabricationEvaluation evaluated = evaluatedIterator->second;
+    if (!evaluated.bandMesh.has_value()) {
         // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
         FreezeFlatPanels();
         return;
     }
     // 持ち上げ 0 で取る。画面では帯を離して見せるが、固定するのは本当の位置。
-    const auto rails = kachakacha::v2::app::FoldedRailsOf(*definition, evaluated->second, 0.0);
-    const std::string stateName = kachakacha::v2::app::FoldStateSummaryJa(*definition);
+    const auto rails = kachakacha::v2::app::FoldedRailsOf(definition, evaluated, 0.0);
+    const std::string stateName = kachakacha::v2::app::FoldStateSummaryJa(definition);
     int wires = 0;
     int surfaces = 0;
     int parts = 0;
     for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
-        const std::string label = entity->displayName + " 部材"
+        const std::string label = modelName + " 部材"
             + std::to_string(band / 2 + 1) + " (" + stateName + ")";
         const auto bottom = AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str());
         const auto top = AddPlainWire(PolylineOf(rails[band + 1]), (label + " 上").c_str());
@@ -166,13 +174,12 @@ void V2MainWindow::FreezeFabricationState()
         }
     }
     // 接続スコープの線も、この曲げ状態の形へ寄せて固定する(V1 の PartFoldState と同じ)。
-    const auto state = kachakacha::v2::app::ResolveFoldState(*definition,
-        *evaluated->second.bandMesh);
+    const auto state = kachakacha::v2::app::ResolveFoldState(definition, *evaluated.bandMesh);
     const auto folded = kachakacha::v2::fabrication::FoldBandMesh(
-        *evaluated->second.bandMesh, state.masterProgress);
+        *evaluated.bandMesh, state.masterProgress);
     for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
-             *evaluated->second.bandMesh, folded, ConnectionScopeCurves(*definition),
-             evaluated->second.maximumDeviationMm + 0.35)) {
+             *evaluated.bandMesh, folded, ConnectionScopeCurves(definition),
+             evaluated.maximumDeviationMm + 0.35)) {
         if (!AddPlainWire(PolylineOf(wire.points),
                 (wire.name + " (" + stateName + ")").c_str())
                  .IsNil()) {

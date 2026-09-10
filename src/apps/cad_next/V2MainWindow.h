@@ -17,6 +17,7 @@
 #include "kachakacha/app/DisplaySettings.h"
 #include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
+#include "V2EditDock.h"
 #include "V2GridDock.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
@@ -210,6 +211,8 @@ public:
 
     //! 測る棚(PRD-070)。選んだものから測れることを全部出す。
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
+    //! 編集の棚(V1 の「選択内容の数値編集」)。
+    [[nodiscard]] V2EditDock& EditDock() { return *editDock_; }
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
     void RefreshMeasurements();
     //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
@@ -610,6 +613,17 @@ private:
     void MakeIntersectionPoints();
     //! 選んだ線を基準線にする / やめる。
     void SetSelectedDatum(bool datum);
+    //! 棚を出す命令(測定・数値で編集)か。V2EditCommands.cpp が持つ。
+    [[nodiscard]] static bool IsShelfCommand(std::string_view id);
+    void RunShelfCommand(std::string_view id);
+    //! 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの欄を出し直す。
+    void RefreshEditDock();
+    //! 「変更を適用」。欄の値を core で定義にし、文書へ入れる。
+    void ApplySelectedEdit();
+    //! 「平面内角度」の基準(作成元平面か、作業中の平面)。name にその名前を書く。
+    [[nodiscard]] kachakacha::v2::modeling::WorkPlaneFrame EditAngleFrame(
+        const std::optional<kachakacha::v2::base::EntityId>& sourcePlaneId,
+        QString* name) const;
     //! 線の編集コマンドか。V2WireCommands.cpp が持つ。
     [[nodiscard]] static bool IsWireEditCommand(std::string_view id);
     //! 線の編集を通す。判断は core にあり、ここは渡すだけ。
@@ -655,6 +669,7 @@ private:
     QTreeWidget* processView_ = nullptr;
     V2ExportDock* exportDock_ = nullptr;
     V2MeasureDock* measureDock_ = nullptr;
+    V2EditDock* editDock_ = nullptr;
     V2ParameterDock* parameterDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;

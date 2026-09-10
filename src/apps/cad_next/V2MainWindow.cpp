@@ -207,6 +207,7 @@ V2MainWindow::V2MainWindow()
     viewport_->SetSelectionChangedCallback([this] {
         RefreshExportCounts();
         RefreshMeasurements();
+        RefreshEditDock();
         // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
         RefreshWorkPlaneDock();
         // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
@@ -238,7 +239,8 @@ void V2MainWindow::BuildMenus()
     const std::vector<MenuGroup> groups{
         {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
         {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
-                       "selection.activate", "snap.toggle", "group.set_active"}},
+                       "edit.numeric", "selection.activate", "snap.toggle",
+                       "group.set_active"}},
         {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
                        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
@@ -562,6 +564,11 @@ void V2MainWindow::BuildRightShelves()
     measureDock_->SetKeepHandler([this] { KeepMeasuredDimension(); });
     measureDock_->SetClearHandler([this] { ClearMeasurement(); });
     viewport_->SetMeasurePicksChangedCallback([this] { RefreshMeasurements(); });
+    // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
+    editDock_ = new V2EditDock(this);
+    editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
+    addDockWidget(Qt::RightDockWidgetArea, editDock_);
+    editDock_->hide();
 
     // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
@@ -603,7 +610,8 @@ void V2MainWindow::BuildRightShelves()
     // 手順だけは常に見えるように残し、残りは札で切り替える。
     tabifyDockWidget(exportDock_, parameterDock_);
     tabifyDockWidget(parameterDock_, measureDock_);
-    tabifyDockWidget(measureDock_, workPlaneDock_);
+    tabifyDockWidget(measureDock_, editDock_);
+    tabifyDockWidget(editDock_, workPlaneDock_);
     tabifyDockWidget(workPlaneDock_, drawingDock_);
     tabifyDockWidget(drawingDock_, gridDock_);
     tabifyDockWidget(gridDock_, displayDock_);
@@ -926,66 +934,6 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
         session_->GetDocument().Snapshot(), session_->Scene(),
         session_->GetDocument().Snapshot().settings.tolerance, external,
         session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
-}
-
-void V2MainWindow::RefreshMeasurements()
-{
-    if (measureDock_ == nullptr || viewport_ == nullptr) {
-        return;
-    }
-    measureDock_->SetRequest(CurrentMeasureRequest());
-    measureDock_->SetKeptCount(
-        static_cast<int>(session_->GetDocument().Snapshot().referenceDimensions.size()));
-}
-
-kachakacha::v2::app::MeasureRequest V2MainWindow::CurrentMeasureRequest() const
-{
-    kachakacha::v2::app::MeasureRequest request;
-    // 選んだものだけを測る。見えているだけのものを勝手に足さない。
-    request.curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
-        session_->Scene());
-    request.toleranceMm =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    request.mode = measureDock_->Mode();
-    request.targetIds = viewport_->Selection().entityIds;
-    for (const auto& pick : viewport_->MeasurePicks()) {
-        request.pickedPoints.push_back(pick.point);
-        if (!pick.entityId.IsNil()) {
-            request.targetIds.push_back(pick.entityId);
-        }
-    }
-    return request;
-}
-
-void V2MainWindow::KeepMeasuredDimension()
-{
-    // 名前と値から参照寸法を作るのは core。文書へ入れるのはここ。形は変わらない。
-    const auto dimension = kachakacha::v2::app::MeasureDimensionOf(CurrentMeasureRequest(),
-        measureDock_->DimensionName().toStdString(),
-        ids_->NextTyped<kachakacha::v2::base::IdKind::Dimension>());
-    if (!dimension.HasValue()) {
-        ReportDiagnostics(dimension.Diagnostics());
-        return;
-    }
-    const auto added = session_->GetDocument().Run(
-        kachakacha::v2::document::AddReferenceDimensionCommand(dimension.Value()));
-    if (!added.committed) {
-        ReportDiagnostics(added.diagnostics);
-        return;
-    }
-    RefreshMeasurements();
-    SetStatus(QStringLiteral("寸法「%1」を残しました(%2 %3)。")
-            .arg(QString::fromStdString(dimension.Value().label))
-            .arg(dimension.Value().recordedValue, 0, 'f', 3)
-            .arg(QString::fromStdString(dimension.Value().unit)));
-}
-
-void V2MainWindow::ClearMeasurement()
-{
-    viewport_->ClearMeasurePicks();
-    viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
-    RefreshMeasurements();
-    SetStatus(QStringLiteral("測定を消しました。"));
 }
 
 void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)
@@ -1443,12 +1391,8 @@ void V2MainWindow::RunCommand(std::string_view id)
         RunViewCommand(id);
         return;
     }
-    if (id == "measure.open") {
-        // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
-        RefreshMeasurements();
-        measureDock_->show();
-        measureDock_->raise();
-        SetStatus(measureDock_->SummaryText());
+    if (IsShelfCommand(id)) {
+        RunShelfCommand(id);
         return;
     }
     if (id == "snap.toggle") {

@@ -53,6 +53,9 @@ struct SelfTestCase {
 //! 作図の棚(円弧の作り方・補助線・指定点・数値で線を作る)のケース。
 [[nodiscard]] std::vector<SelfTestCase> DrawingCases();
 
+//! 編集の棚(選んだものの数値編集)のケース。
+[[nodiscard]] std::vector<SelfTestCase> EditCases();
+
 //! 文書にある、その種類のものの数(見えているかは問わない)。
 [[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);
 

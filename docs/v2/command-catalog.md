@@ -82,6 +82,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量 | TransformWire(CornerChamfer)。直線どうしの角を全部 | AT-WIR-006 |
 | `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径 | TransformWire(CornerFillet) | AT-WIR-006 |
 | `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
+| `edit.numeric` | 数値で編集 | 作業平面か線を1つ | 編集の棚を出す。「変更を適用」で UpdateFeatureDefinition(平面は PointNormal に、線は種類を保って点/中心/半径/角度を差し替え)。原点面は UI-E002、種類が混ざった線は UI-E003 | AT-WIR-001, AT-UIX-001 |
 | `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |
 | `workplane.create` | 作業平面を作る | 方式+方式別Entity | WorkPlane | AT-WPL-001,002 |
 | `grid.edit` | グリッド | 間隔、副点、原点 | Document settings | AT-UIX-005 |

@@ -83,6 +83,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "距離や角度を測ります。測った場所から作図点を作れます。", false,
             {"AT-MEA-001", "AT-MEA-002", "AT-MEA-003", "AT-MEA-004", "AT-MEA-005"}},
+        {"edit.numeric", "数値で編集", CommandMode::Modeless, "edit_numeric", "",
+            SelectionPredicate::Always, "",
+            "選んだ作業平面(原点・法線・平面内X)や線(点・中心・軸・半径・角度)の数値を"
+            "欄で直します。種類は変わりません。", false,
+            {"AT-WIR-001", "AT-UIX-001"}},
         {"view.fit_all", "全体表示", CommandMode::Instant, "fit", "F",
             SelectionPredicate::HasVisibleGeometry, "見えているものがありません。",
             "見えているもの全部が入るように視点を合わせます。形は変わりません。", false,

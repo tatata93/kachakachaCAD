@@ -205,6 +205,8 @@ public:
     void BeginTrimOrExtend(bool trim);
     //! 選んだ線を作業平面へ落とす。元の線は残す。
     void ProjectSelectedWires();
+    //! 線を、作業平面の向きに沿って形状ガイドの曲面へ落とす(折れ線になる)。
+    void ProjectSelectedWiresOntoSurface();
     //! 固定のコマンドか。V2FreezeCommands.cpp が持つ。
     [[nodiscard]] static bool IsFreezeCommand(std::string_view id);
     void RunFreezeCommand(std::string_view id);
@@ -251,6 +253,15 @@ public:
     [[nodiscard]] kachakacha::v2::app::FabricationMethod FabricationMethodInUse() const
     {
         return fabricationMethod_;
+    }
+    //! 部材に開いた開口の取り分の数(試験用)。窓が帯の型紙へ届いたかを見る。
+    [[nodiscard]] int FabricationOpeningCount() const
+    {
+        int count = 0;
+        for (const auto& panel : fabricationPanels_) {
+            count += static_cast<int>(panel.openings.size());
+        }
+        return count;
     }
     [[nodiscard]] int FabricationModelCount() const
     {

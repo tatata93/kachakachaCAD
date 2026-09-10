@@ -1,5 +1,7 @@
 #include "kachakacha/app/FabricationEvaluate.h"
 
+#include "kachakacha/app/FabricationOpenings.h"
+
 #include "kachakacha/fabrication/CurvedPanel.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
 
@@ -102,6 +104,83 @@ using fabrication::PatternPanel;
     return Out::Success(std::move(made));
 }
 
+//! 帯近似した面1つぶんの中身。開口を切り出すのに、メッシュと境目を覚えておく。
+struct BandedSource {
+    fabrication::BandApproximationResult bands;
+    fabrication::BandMesh mesh;
+    std::size_t firstPanelIndex = 0;
+};
+
+//! 面1つを帯へ近似し、型紙の部材にする。
+[[nodiscard]] Result<BandedSource> ApproximateSource(
+    const domain::CreateFabricationModelDefinition& definition,
+    const FabricationSource& source, std::vector<PatternPanel>& panels)
+{
+    using Out = Result<BandedSource>;
+    const fabrication::SampledSurface surface(*source.samples);
+    fabrication::BandApproximationOptions options = BandOptionsOf(definition);
+    if (definition.splitAxis == 2) {
+        // 自動: 曲がっている方向を横切るように切る。
+        options.splitAxis = fabrication::ChooseSplitAxis(surface);
+    }
+    const auto bands = fabrication::ApproximateBands(surface, options);
+    if (!bands.HasValue()) {
+        return Out::Failure(bands.Diagnostics());
+    }
+    const auto mesh = fabrication::DevelopBandMesh(surface, options.splitAxis,
+        bands.Value().railParameters, 96);
+    if (!mesh.HasValue()) {
+        return Out::Failure(mesh.Diagnostics());
+    }
+    BandedSource made;
+    made.bands = bands.Value();
+    made.mesh = mesh.Value();
+    made.firstPanelIndex = panels.size();
+    const auto angles = fabrication::MeasureCreaseAngles(made.mesh);
+    for (auto& panel : PanelsFromBandMesh(source.name, made.mesh, angles)) {
+        panels.push_back(std::move(panel));
+    }
+    return Out::Success(std::move(made));
+}
+
+//! 開口を、帯の部材か平らな部材のどちらかへ入れる。どこにも載っていなければ断る。
+//! 帯へ入った開口は planar 側へ渡さない(同じ窓が2回開くのを防ぐ)。
+[[nodiscard]] Result<FabricationMarkings> AssignOpeningsToBands(
+    const FabricationMarkings& markings, const std::vector<BandedSource>& banded,
+    const std::vector<fabrication::PlanarPanelRequest>& planar, double toleranceMm,
+    std::vector<PatternPanel>& panels)
+{
+    using Out = Result<FabricationMarkings>;
+    FabricationMarkings remaining;
+    remaining.folds = markings.folds;
+    for (const auto& opening : markings.openings) {
+        bool placed = false;
+        for (const BandedSource& source : banded) {
+            BandOpeningTarget target;
+            target.mesh = &source.mesh;
+            target.railParameters = source.bands.railParameters;
+            target.firstPanelIndex = source.firstPanelIndex;
+            // 載っているかの許容は「近似の偏差 + 0.35mm」。接続スコープと同じ値。
+            target.snapToleranceMm = source.bands.maximumDeviationMm + 0.35;
+            if (ClipOpeningIntoBandPanels(target, opening, toleranceMm, panels)) {
+                placed = true;
+                break;
+            }
+        }
+        if (placed) {
+            continue;
+        }
+        if (fabrication::PanelForOpening(planar, opening, toleranceMm).has_value()) {
+            remaining.openings.push_back(opening);
+            continue;
+        }
+        return Out::Failure(MakeError("FAB-M003",
+            "その線は、どの部材の面にも載っていません。",
+            "開口や折り線は、部材の面(帯へ近似した面か、平らな面)の上に描いてください。"));
+    }
+    return Out::Success(std::move(remaining));
+}
+
 //! V1 方式: 面を帯へ近似し直す。
 [[nodiscard]] Result<FabricationEvaluation> EvaluateByBands(
     const domain::CreateFabricationModelDefinition& definition,
@@ -112,37 +191,18 @@ using fabrication::PatternPanel;
     FabricationEvaluation made;
     made.method = FabricationMethod::BandApproximation;
     std::vector<fabrication::PlanarPanelRequest> planar;
+    std::vector<BandedSource> banded;
     for (const FabricationSource& source : sources) {
         if (source.samples.has_value()) {
-            const fabrication::SampledSurface surface(*source.samples);
-            fabrication::BandApproximationOptions options = BandOptionsOf(definition);
-            if (definition.splitAxis == 2) {
-                // 自動: 曲がっている方向を横切るように切る。
-                options.splitAxis = fabrication::ChooseSplitAxis(surface);
+            auto approximated = ApproximateSource(definition, source, made.panels);
+            if (!approximated.HasValue()) {
+                return Out::Failure(approximated.Diagnostics());
             }
-            const auto bands = fabrication::ApproximateBands(surface, options);
-            if (!bands.HasValue()) {
-                return Out::Failure(bands.Diagnostics());
-            }
-            const auto mesh = fabrication::DevelopBandMesh(surface, options.splitAxis,
-                bands.Value().railParameters, 96);
-            if (!mesh.HasValue()) {
-                return Out::Failure(mesh.Diagnostics());
-            }
-            const auto angles = fabrication::MeasureCreaseAngles(mesh.Value());
-            for (auto& panel : PanelsFromBandMesh(source.name, mesh.Value(), angles)) {
-                made.panels.push_back(std::move(panel));
-            }
-            made.maximumDeviationMm =
-                std::max(made.maximumDeviationMm, bands.Value().maximumDeviationMm);
-            made.reachedTolerance =
-                made.reachedTolerance && bands.Value().reachedRequestedTolerance;
-            // 帯メッシュは1面ぶんだけ覚える。複数の面を1つの近似モデルにするときは、
-            // 面ごとに近似モデルを作る(曲げ状態は面ごとに別のものなので)。
-            if (!made.bandMesh.has_value()) {
-                made.bands = bands.Value();
-                made.bandMesh = mesh.Value();
-            }
+            made.maximumDeviationMm = std::max(made.maximumDeviationMm,
+                approximated.Value().bands.maximumDeviationMm);
+            made.reachedTolerance = made.reachedTolerance
+                && approximated.Value().bands.reachedRequestedTolerance;
+            banded.push_back(std::move(approximated.Value()));
             continue;
         }
         if (source.flatBoundary.has_value()) {
@@ -152,14 +212,27 @@ using fabrication::PatternPanel;
             planar.push_back(std::move(request));
         }
     }
+    // 開口は、帯の型紙へ切り出す(またぐ窓は、またぐ全ての帯へ)。平らな部材の分は残す。
+    const auto remaining = AssignOpeningsToBands(markings, banded, planar, toleranceMm,
+        made.panels);
+    if (!remaining.HasValue()) {
+        return Out::Failure(remaining.Diagnostics());
+    }
     if (!planar.empty()) {
-        const auto panels = BuildPlanarWithMarkings(std::move(planar), markings, toleranceMm);
+        const auto panels = BuildPlanarWithMarkings(std::move(planar), remaining.Value(),
+            toleranceMm);
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
         for (const auto& panel : panels.Value()) {
             made.panels.push_back(panel);
         }
+    }
+    // 帯メッシュは1面ぶんだけ覚える。複数の面を1つの近似モデルにするときは、
+    // 面ごとに近似モデルを作る(曲げ状態は面ごとに別のものなので)。
+    if (!banded.empty()) {
+        made.bands = std::move(banded.front().bands);
+        made.bandMesh = std::move(banded.front().mesh);
     }
     made.summaryJa = "帯へ近似して " + std::to_string(made.panels.size())
         + " 枚の部材にしました。ずれは最大 " + Rounded(made.maximumDeviationMm) + " mm"

@@ -60,6 +60,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.selectedGuideRows == 1;
     case SelectionPredicate::OneOrMoreGuideRows:
         return facts.guideRows >= 1;
+    case SelectionPredicate::WiresAndOneGuideSurface:
+        // 落とす先はちょうど1枚。2枚選んでいたら、どちらへ落とすのか決まらない。
+        return facts.wires >= 1 && facts.guideSurfaces == 1;
     }
     return false;
 }

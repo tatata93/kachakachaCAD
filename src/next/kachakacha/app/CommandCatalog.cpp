@@ -28,6 +28,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneOrMoreWiresOrGuideSurfaces: return "ワイヤーか形状ガイドの面を1つ以上選んでください。";
     case SelectionPredicate::OneGuideRow: return "役割表の行を1つ選んでください。";
     case SelectionPredicate::OneOrMoreGuideRows: return "役割表に行を1つ以上入れてください。";
+    case SelectionPredicate::WiresAndOneGuideSurface: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。";
     }
     return "";
 }
@@ -261,6 +262,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "線を作業平面や面へ投影します。", true,
             {"AT-FAB-007"}},
+        {"wire.project_surface", "曲面へ投影", CommandMode::Instant, "project_surface", "",
+            SelectionPredicate::WiresAndOneGuideSurface,
+            "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。",
+            "線を、作業平面の向きに沿って形状ガイドの曲面へ落とします。曲がった面に窓を開ける元になります。",
+            true, {"AT-FAB-013"}},
         {"part.extrude", "押し出し", CommandMode::Dialog, "extrude", "Shift+E",
             SelectionPredicate::OneOrMoreClosedProfiles, "閉じた輪郭を1つ以上選んでください。",
             "輪郭を押し出します。出来る体積と面の数を先に出します。", true,

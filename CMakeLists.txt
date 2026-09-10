@@ -571,6 +571,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ShapeRebuild.cpp
     src/next/kachakacha/app/GuideTableBuild.cpp
     src/next/kachakacha/app/SubDocument.cpp
+    src/next/kachakacha/app/FabricationOpenings.cpp
     src/next/kachakacha/app/ExtrudeOptions.cpp
     src/next/kachakacha/app/WorkPlaneOptions.cpp
     src/next/kachakacha/app/FabricationEvaluate.cpp
@@ -616,6 +617,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/BandDevelop.cpp
     src/next/kachakacha/fabrication/BandFold.cpp
     src/next/kachakacha/fabrication/BandMap.cpp
+    src/next/kachakacha/fabrication/SurfaceProjection.cpp
     src/next/kachakacha/modeling/SnapEngine.cpp
     src/next/kachakacha/modeling/WorkPlane.cpp
     src/next/kachakacha/modeling/DrawingConstraint.cpp
@@ -758,6 +760,7 @@ kachakacha_add_v2_test(shape_rebuild_tests tests_v2/shape_rebuild_tests.cpp)
 kachakacha_add_v2_test(extrude_options_tests tests_v2/extrude_options_tests.cpp)
 kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_tests.cpp)
 kachakacha_add_v2_test(band_approximation_tests tests_v2/band_approximation_tests.cpp)
+kachakacha_add_v2_test(surface_projection_tests tests_v2/surface_projection_tests.cpp)
 kachakacha_add_v2_test(fabrication_evaluate_tests tests_v2/fabrication_evaluate_tests.cpp)
 kachakacha_add_v2_test(guide_table_build_tests tests_v2/guide_table_build_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)

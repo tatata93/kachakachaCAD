@@ -1062,6 +1062,77 @@ namespace {
             == kachakacha::v2::app::FabricationMethod::BandApproximation);
 }
 
+[[nodiscard]] bool CaseWindowProjectedOntoCurvedSurfaceOpensInBands(V2MainWindow& window)
+{
+    // 曲がった面に窓を開ける道。前面(ZX 面)に描いた四角を、面へ落として開口にする。
+    // 落ちた線は帯の型紙へ切り出される(またぐなら、またぐ全ての帯へ)。
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    // 前から見る面(ZX)を作って、その上に四角を描く。
+    window.SetWorkPlaneChooser([](const WorkPlaneChoice&,
+                                   const kachakacha::v2::app::WorkPlaneFacts&) {
+        WorkPlaneChoice choice;
+        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::Standard;
+        choice.standard = kachakacha::v2::modeling::StandardPlaneKind::ZX;
+        return std::optional<WorkPlaneChoice>(choice);
+    });
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("workplane.create");
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Front);
+    viewport.SetVisibleWidthMm(200.0);
+    const int wiresBefore = static_cast<int>(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire)
+                                                 .entityIds.size());
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    viewport.ClickAt(QPointF(viewport.width() * 0.46, viewport.height() * 0.46));
+    viewport.HoverAt(QPointF(viewport.width() * 0.54, viewport.height() * 0.38));
+    viewport.ClickAt(QPointF(viewport.width() * 0.54, viewport.height() * 0.38));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);
+    if (!Explain("四角が描ける", static_cast<int>(wires.entityIds.size()) == wiresBefore + 1)) {
+        return false;
+    }
+    // 四角と面を選んで、曲面へ投影。
+    kachakacha::v2::app::SelectionSet both;
+    both.entityIds.push_back(wires.entityIds.back());
+    for (const auto& id : kachakacha::v2::app::SelectAllOfKind(
+             window.Session().GetDocument().Snapshot(),
+             kachakacha::v2::domain::EntityKind::GuideSurface)
+             .entityIds) {
+        both.entityIds.push_back(id);
+    }
+    viewport.SetSelection(both);
+    if (!Explain("曲面へ投影が押せる", window.CommandEnabled("wire.project_surface", nullptr))) {
+        return false;
+    }
+    window.RunCommand("wire.project_surface");
+    if (!Explain((std::string("面へ落ちる(") + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("面へ落とし")))) {
+        return false;
+    }
+    // 落ちた線を開口にする。
+    const auto after = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);
+    kachakacha::v2::app::SelectionSet projected;
+    projected.entityIds.push_back(after.entityIds.back());
+    viewport.SetSelection(projected);
+    window.RunCommand("fabrication.assign_role");
+    if (!Explain((std::string("開口になる(") + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("開口を 1 つ")))) {
+        return false;
+    }
+    return Explain((std::string("帯の型紙に窓の取り分がある(")
+                       + std::to_string(window.FabricationOpeningCount()) + ")").c_str(),
+        window.FabricationOpeningCount() >= 1);
+}
+
 [[nodiscard]] bool CaseFreezeAtBendStateMakesWiresSurfaceAndPart(V2MainWindow& window)
 {
     // 工程3 → 工程2 へ戻る道。いまの曲げ状態(50%)で固定すると、
@@ -1315,6 +1386,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
         {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},
         {"曲げ状態で固定すると線と面と部品になる", &CaseFreezeAtBendStateMakesWiresSurfaceAndPart},
+        {"曲面へ落とした窓が帯の型紙に開く", &CaseWindowProjectedOntoCurvedSurfaceOpensInBands},
         {"面に厚みを付けて立体にできる", &CaseThickenSurfaceMakesASolid},
         {"面を選ばずに厚みは付けられない", &CaseThickenNeedsASurface},
         {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},

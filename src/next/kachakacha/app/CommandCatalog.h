@@ -55,6 +55,8 @@ enum class SelectionPredicate {
     OneGuideRow,
     //! 役割表に行が1つ以上ある。表から面を作る・表を空にするときに使う。
     OneOrMoreGuideRows,
+    //! ワイヤー1つ以上と形状ガイドの面ちょうど1つ。線を曲面へ落とすときに使う。
+    WiresAndOneGuideSurface,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

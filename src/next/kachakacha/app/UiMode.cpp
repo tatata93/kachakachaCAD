@@ -53,7 +53,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "draw.arc", "draw.bezier", "draw.spline", "wire.trim", "wire.extend",
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
         "wire.chamfer", "wire.fillet", "wire.move", "wire.copy", "wire.mirror",
-        "wire.rotate", "wire.project", "workplane.create", "grid.edit",
+        "wire.rotate", "wire.project", "wire.project_surface", "workplane.create", "grid.edit",
         "grid.move_origin",
     };
     static const std::vector<std::string_view> part{

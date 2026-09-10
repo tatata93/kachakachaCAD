@@ -12,6 +12,7 @@
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/fabrication/SurfaceProjection.h"
 #include "kachakacha/document/FeatureReevaluation.h"
 #include "kachakacha/geometry/CurveProjection.h"
 #include "kachakacha/geometry/Measurement.h"
@@ -63,8 +64,8 @@ constexpr WireEditBinding kWireEdits[] = {
 
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
-    return FindWireEdit(id) != nullptr || id == "wire.project" || id == "wire.trim"
-        || id == "wire.extend";
+    return FindWireEdit(id) != nullptr || id == "wire.project"
+        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend";
 }
 
 void V2MainWindow::ProjectSelectedWires()
@@ -126,6 +127,72 @@ void V2MainWindow::ProjectSelectedWires()
             .arg(static_cast<int>(projected.Value().size())));
 }
 
+void V2MainWindow::ProjectSelectedWiresOntoSurface()
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    // 曲がった面に窓を開けるための道。平らに描いた線を、作業平面の向きに沿って
+    // 形状ガイドの面へ落とす。落ちた線は折れ線で、元の線は残す。
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    kachakacha::v2::base::EntityId surfaceId;
+    for (const auto& id : selection.entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
+            surfaceId = id;
+        }
+    }
+    const auto samples = guideSamples_.find(surfaceId.ToString());
+    if (inputs.empty() || surfaceId.IsNil() || samples == guideSamples_.end()) {
+        SetStatus(QStringLiteral(
+            "曲面へ投影: 線を1つ以上と、落とす先の形状ガイドの面を1つ選んでください。"));
+        return;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto projected = kachakacha::v2::fabrication::ProjectCurvesOntoSampledSurface(
+        samples->second, inputs, viewport_->WorkPlane().normal, tolerance.interactiveJoinMm);
+    if (!projected.HasValue()) {
+        ReportDiagnostics(projected.Diagnostics());
+        return;
+    }
+
+    Feature feature;
+    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::ProjectWire;
+    feature.displayName = "曲面へ投影";
+    feature.inputEntityIds = selection.entityIds;
+    kachakacha::v2::domain::CreateWireDefinition wire;
+    wire.segments = projected.Value();
+    for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+        wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+    }
+    feature.definition = std::move(wire);
+
+    Entity entity;
+    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    entity.kind = EntityKind::Wire;
+    entity.displayName = "曲面へ投影";
+    entity.createdBy = feature.id;
+    feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+
+    const auto added = session_->GetDocument().Run(
+        AddFeatureCommand(feature, {entity}, "曲面へ投影"));
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("曲面へ投影: %1本を面へ落とし、%2本の折れ線にしました。"
+                             "元の線は残しています。")
+            .arg(static_cast<int>(inputs.size()))
+            .arg(static_cast<int>(projected.Value().size())));
+}
+
 void V2MainWindow::RunWireEditCommand(std::string_view id)
 {
     using kachakacha::v2::document::AddFeatureCommand;
@@ -140,6 +207,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
 
     if (id == "wire.project") {
         ProjectSelectedWires();
+        return;
+    }
+    if (id == "wire.project_surface") {
+        ProjectSelectedWiresOntoSurface();
         return;
     }
     if (id == "wire.trim" || id == "wire.extend") {

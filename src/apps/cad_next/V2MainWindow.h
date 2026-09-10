@@ -94,6 +94,8 @@ public:
 
     //! ファイルを開く。開けなければ理由を知らせに出して false を返す。
     bool OpenDocumentFile(const QString& path);
+    //! V1 の .kcd を読んで V2 の文書にする。読めないものは名前を挙げて知らせる。
+    bool ImportKcdFile(const QString& path);
     //! いま開いているファイル。まだ保存していなければ空。
     [[nodiscard]] QString DocumentPath() const { return documentPath_; }
 

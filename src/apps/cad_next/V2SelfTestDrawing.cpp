@@ -23,6 +23,7 @@
 #include <QString>
 
 #include <cmath>
+#include <filesystem>
 #include <string>
 
 namespace kachakacha::v2::selftest {
@@ -468,11 +469,54 @@ using kachakacha::v2::modeling::ToolSettings;
         arcs == 2);
 }
 
+[[nodiscard]] bool CaseV1KcdOpensAsDocument(V2MainWindow& window)
+{
+    // V1 の受入例(railway-nose-acceptance.kcd)が「開く」で V2 の文書になる。
+    // 読めないもの(投影・板の範囲と開口・治具)は名前を挙げて知らせ、線と平面とロフトは入る。
+    QString path;
+    for (const char* candidate : {"examples/railway-nose-acceptance.kcd",
+             "../examples/railway-nose-acceptance.kcd",
+             "../../examples/railway-nose-acceptance.kcd"}) {
+        if (std::filesystem::exists(candidate)) {
+            path = QString::fromUtf8(candidate);
+            break;
+        }
+    }
+    if (!Explain("受入例が見つかる(リポジトリの根で動かす)", !path.isEmpty())) {
+        return false;
+    }
+    const int before = window.DiagnosticRowCount();
+    if (!Explain((std::string("開ける(") + window.StatusText().toStdString() + ")").c_str(),
+            window.OpenDocumentFile(path))) {
+        return false;
+    }
+    if (!Explain((std::string("平面が 6 + 原点3(実際は ")
+                     + std::to_string(CountOfKind(window, EntityKind::WorkPlane)) + ")").c_str(),
+            CountOfKind(window, EntityKind::WorkPlane) == 9)) {
+        return false;
+    }
+    if (!Explain((std::string("線が 18(実際は ")
+                     + std::to_string(CountOfKind(window, EntityKind::Wire)) + ")").c_str(),
+            CountOfKind(window, EntityKind::Wire) == 18)) {
+        return false;
+    }
+    if (!Explain("ロフトが1つ", CountOfKind(window, EntityKind::GuideSurface) == 1)) {
+        return false;
+    }
+    if (!Explain("読み飛ばしたものが知らせに並ぶ", window.DiagnosticRowCount() > before)) {
+        return false;
+    }
+    return Explain((std::string("V1 の文書として読んだと言う(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("V1 の文書")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"V1 の .kcd を開くと V2 の文書になる", &CaseV1KcdOpensAsDocument},
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},

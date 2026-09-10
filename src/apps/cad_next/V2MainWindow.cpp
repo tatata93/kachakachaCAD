@@ -10,6 +10,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
+#include "kachakacha/io/KcdImport.h"
 
 #include "Win95Style.h"
 
@@ -772,14 +773,52 @@ QString V2MainWindow::AskForPath(bool forSave)
     if (pathChooser_) {
         return pathChooser_(forSave);
     }
-    const QString filter = QStringLiteral("kachakachaCAD の文書 (*.kcd2)");
+    // 開くときは V1 の .kcd も選べる(読み込んで V2 の文書にする)。保存は kcd2 だけ。
+    const QString filter = forSave
+        ? QStringLiteral("kachakachaCAD の文書 (*.kcd2)")
+        : QStringLiteral("kachakachaCAD の文書 (*.kcd2 *.kcd);;V1 の文書 (*.kcd)");
     return forSave
         ? QFileDialog::getSaveFileName(this, QStringLiteral("保存する"), QString(), filter)
         : QFileDialog::getOpenFileName(this, QStringLiteral("開く"), QString(), filter);
 }
 
+bool V2MainWindow::ImportKcdFile(const QString& path)
+{
+    // V1 の .kcd。読めるものは Feature にし、読めないものは名前を挙げて知らせる。
+    // 開いたあとの保存先は決めない(kcd2 で名前を付けて保存する)。V1 のファイルは触らない。
+    const auto text = kachakacha::v2::io::ReadWholeFile(path.toStdString());
+    if (!text.HasValue()) {
+        ReportDiagnostics(text.Diagnostics());
+        return false;
+    }
+    const auto imported = kachakacha::v2::io::ImportKcdScript(text.Value(), *ids_);
+    if (!imported.HasValue()) {
+        ReportDiagnostics(imported.Diagnostics());
+        return false;
+    }
+    AdoptDocument(imported.Value().snapshot);
+    if (session_->GetDocument().Snapshot().entities.size() < 3
+        && !imported.Value().snapshot.entities.empty()) {
+        return false;   // ResetTo が断った(原点の3面すら無い)。
+    }
+    documentPath_.clear();
+    for (const auto& note : imported.Value().notes) {
+        AddDiagnostic(QString::fromStdString(note.code + " " + note.summaryJa + " "
+            + note.detailsJa));
+    }
+    SetStatus(QStringLiteral("%1 を V1 の文書として読みました(%2 命令、読み飛ばし %3)。"
+                             "保存は kcd2 で名前を付けてください。")
+            .arg(path)
+            .arg(imported.Value().readCommands)
+            .arg(imported.Value().skippedCommands));
+    return true;
+}
+
 bool V2MainWindow::OpenDocumentFile(const QString& path)
 {
+    if (kachakacha::v2::io::LooksLikeKcdPath(path.toStdString())) {
+        return ImportKcdFile(path);
+    }
     const auto text = kachakacha::v2::io::ReadWholeFile(path.toStdString());
     if (!text.HasValue()) {
         ReportDiagnostics(text.Diagnostics());

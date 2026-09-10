@@ -30,7 +30,7 @@
 | AT-EXP-001 | 済 | tests_v2/document_file_tests.cpp(保存して読み直す)+ tests_v2/sample_document_tests.cpp(配る見本 samples/v2-sample.kcd2 が、同じ版から毎回同じバイト列で出て、読み直せて、置き直し忘れると落ちる) |
 | AT-EXP-002 | 済 | tests_v2/document_file_tests.cpp、tests_v2/zip_tests.cpp、tests_v2/robustness_tests.cpp(壊れた保存を断る)+ tests_v2/scene_builder_tests.cpp(壊れた文書は ResetTo が断り、いまの文書はそのまま残る) |
 | AT-EXP-003 | 済 | tests_v2/document_file_tests.cpp(知らない版を断る、古い項目欠落を許す)+ tests_v2/scene_builder_tests.cpp(開くと文書が入れ替わり、Undo履歴は捨てられる。Segment の ID は開き直しても変わらない。開き直しても線が二重にならない)+ cad_next --self-test(配る見本が開ける) |
-| AT-EXP-004 | 済 | tests_v2/atomic_file_tests.cpp(途中失敗を注入しても既存が読める。成功時は本体と .bak が両方読み直せる) |
+| AT-EXP-004 | 済 | tests_v2/atomic_file_tests.cpp(途中失敗を注入しても既存が読める。成功時は本体と .bak が両方読み直せる) + tests_v2/kcd_import_tests.cpp(V1 の .kcd: 平面4通り・線7種・点・紐づけ・表示が読める、受入例 railway-nose-acceptance.kcd が平面6・線18・ロフト1・板2で読め、読めない命令は KCD1-I002 で名前を挙げる、壊れた行と無い名前と一様でない節は KCD1-E001)+ 自己試験(受入例を「開く」で V2 の文書にする) |
 | AT-WIR-001 | 済 | tests_v2/curve_tests.cpp(5種の曲線が値を保つ) |
 | AT-WIR-002 | 済 | tests_v2/wire_chain_tests.cpp |
 | AT-WIR-003 | 済 | tests_v2/wire_chain_tests.cpp |

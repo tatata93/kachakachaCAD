@@ -208,6 +208,10 @@ void V2MainWindow::RebuildKernelShapes()
     const auto snapshot = session_->GetDocument().Snapshot();
     const auto steps = kachakacha::v2::app::PlanShapeRebuild(snapshot);
     if (steps.empty()) {
+        // 作り直すものが無くても、表と画面は空にし直す。ここで返すと前の表が残った。
+        RefreshGuideTable();
+        RefreshPartEdges();
+        RefreshFabricationView();
         return;
     }
     int made = 0;

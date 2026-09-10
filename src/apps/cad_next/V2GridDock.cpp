@@ -100,6 +100,11 @@ V2GridDock::V2GridDock(QWidget* parent)
     scroll->setWidget(body);
     setWidget(scroll);
 
+    ConnectSignals();
+}
+
+void V2GridDock::ConnectSignals()
+{
     QObject::connect(visible_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(spacing_, &QLineEdit::textChanged, this,
         [this](const QString& text) { (void)ApplySpacingExpression(text); });

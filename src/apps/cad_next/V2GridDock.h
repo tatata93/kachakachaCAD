@@ -55,6 +55,7 @@ public:
     [[nodiscard]] QString MessageText() const;
 
 private:
+    void ConnectSignals();
     void Emit();
     void ChooseColor(QPushButton* button, QColor& color, const QString& title);
     static void PaintButton(QPushButton* button, const QColor& color);

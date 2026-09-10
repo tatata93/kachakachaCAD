@@ -165,19 +165,13 @@ namespace {
         window.StatusText().contains(QStringLiteral("作業中")));
 }
 
-[[nodiscard]] bool CaseGridSpacingCycles(V2MainWindow& window)
+[[nodiscard]] bool CaseGridPanelOpensWithoutChangingDocument(V2MainWindow& window)
 {
-    // グリッドは見え方の都合なので文書に入れない。
-    // 入れると、開いた相手の画面のグリッドまで変わってしまう。
+    // grid.edit は値を勝手に巡回せず、明示指定する棚を開く。
     const std::uint64_t before = window.Session().GetDocument().Revision();
-    const double first = window.Session().Scene().grid.majorSpacingMm;
     window.RunCommand("grid.edit");
-    const double second = window.Session().Scene().grid.majorSpacingMm;
-    if (!Explain((std::string("間隔が変わる(") + std::to_string(first) + " → "
-                     + std::to_string(second) + ")").c_str(), first != second)) {
-        return false;
-    }
-    if (!Explain("正の数のまま", second > 0.0)) {
+    if (!Explain("グリッドの棚を案内する",
+            window.StatusText().contains(QStringLiteral("右の「グリッド」")))) {
         return false;
     }
     return Explain("文書は変わらない",
@@ -1152,7 +1146,7 @@ std::vector<SelfTestCase> ModelingCases()
 {
     return {
         {"作業平面を作って作業中にできる", &CaseWorkPlaneIsCreatedAndActivated},
-        {"グリッドの間隔を変えられる", &CaseGridSpacingCycles},
+        {"グリッドは棚を開いて明示指定する", &CaseGridPanelOpensWithoutChangingDocument},
         {"分割で線が増える", &CaseWireSplitMakesMorePieces},
         {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
         {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},

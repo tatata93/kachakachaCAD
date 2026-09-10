@@ -1049,24 +1049,24 @@ namespace {
 
 [[nodiscard]] bool CaseDisplaySettingsCycle(V2MainWindow& window)
 {
-    // 見え方を変えても形は変わらない。変わったら、見やすくしただけのつもりで
-    // 寸法を変えたことになる。
+    // 見え方は棚またはショートカットから直に選ぶ。見え方を変えても形は変わらない。
     const std::uint64_t before = window.Session().GetDocument().Revision();
     QStringList seen;
-    for (int index = 0; index < 3; ++index) {
-        window.RunCommand("view.display_settings");
+    constexpr const char* commands[] = {"view.stage_all", "view.stage_no_grid",
+        "view.stage_no_construction", "view.stage_selection_only"};
+    for (const char* command : commands) {
+        window.RunCommand(command);
         seen << window.StatusText();
     }
-    if (!Explain("3回とも違うことを言う",
-            seen.size() == 3 && seen.at(0) != seen.at(1) && seen.at(1) != seen.at(2)
-                && seen.at(0) != seen.at(2))) {
-        return false;
+    for (int left = 0; left < seen.size(); ++left) {
+        for (int right = left + 1; right < seen.size(); ++right) {
+            if (!Explain("4段はそれぞれ違うことを言う", seen.at(left) != seen.at(right))) {
+                return false;
+            }
+        }
     }
-    window.RunCommand("view.display_settings");
-    if (!Explain((std::string("4回目で元へ戻る(") + window.StatusText().toStdString()
-                     + ")").c_str(), window.StatusText() == seen.at(0))) {
-        return false;
-    }
+    window.RunCommand("view.stage_all");
+    if (!Explain("設計へ直接戻れる", window.StatusText() == seen.at(0))) return false;
     return Explain("文書は変わらない",
         window.Session().GetDocument().Revision() == before);
 }
@@ -1324,7 +1324,7 @@ std::vector<SelfTestCase> BasicCases()
         {"数は式で入り範囲の外は断る", &CaseParametersAcceptExpressionsAndRefuseRange},
         {"決めた板厚が押し出しに効く", &CaseExtrudeUsesTheParameter},
         {"縮尺で割った寸法が棚に出る", &CaseScaleShowsTheModelSize},
-        {"見え方は3段で回り形を変えない", &CaseDisplaySettingsCycle},
+        {"見え方は4段から直接選べて形を変えない", &CaseDisplaySettingsCycle},
         {"正対は平面を選ばないと理由を出す", &CaseAlignToSelectionNeedsAPlane},
     };
 }

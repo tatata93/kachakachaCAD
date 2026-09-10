@@ -169,7 +169,6 @@ void V2MainWindow::AlignViewToSelection()
     using kachakacha::v2::view::OrientationFacing;
 
     // 選んだ作業平面の法線へ正対する。形は変わらない。
-    const auto& snapshot = session_->GetDocument().Snapshot();
     for (const auto& id : viewport_->Selection().entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr

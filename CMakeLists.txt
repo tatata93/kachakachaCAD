@@ -609,6 +609,10 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/PlanarPanel.cpp
     src/next/kachakacha/fabrication/ReliefCut.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
+    src/next/kachakacha/fabrication/BandApproximation.cpp
+    src/next/kachakacha/fabrication/BandDevelop.cpp
+    src/next/kachakacha/fabrication/BandFold.cpp
+    src/next/kachakacha/fabrication/BandMap.cpp
     src/next/kachakacha/modeling/SnapEngine.cpp
     src/next/kachakacha/modeling/WorkPlane.cpp
     src/next/kachakacha/modeling/DrawingConstraint.cpp
@@ -749,6 +753,7 @@ kachakacha_add_v2_test(core_ui_wiring_tests tests_v2/core_ui_wiring_tests.cpp)
 kachakacha_add_v2_test(shape_rebuild_tests tests_v2/shape_rebuild_tests.cpp)
 kachakacha_add_v2_test(extrude_options_tests tests_v2/extrude_options_tests.cpp)
 kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_tests.cpp)
+kachakacha_add_v2_test(band_approximation_tests tests_v2/band_approximation_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)

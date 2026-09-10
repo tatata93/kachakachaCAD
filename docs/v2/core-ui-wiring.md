@@ -33,6 +33,8 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `app/PointSources.h` | 距離・接近・曲線上から作図点を作る | 作図点の作り方を増やすとき |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `geometry/CurveJoin.h` | 曲線のつなぎ(角の処理) | `wire.join` は別の道(`WireConnect`)を通っている。どちらを残すか決めてから |
+| `fabrication/BandApproximation.h` | V1方式の帯近似(貪欲な帯分割・厳密展開・開口の切り出し) | 近似モデルを文書へ載せる次の作業で繋ぐ |
+| `fabrication/BandFold.h` | 帯近似の曲げ具合(0〜1、折り線ごと・帯ごと)と点の対応付け | 同上 |
 | `fabrication/CurvatureAnalysis.h` | 面の曲がり方の分類 | 近似(V2方式)を繋ぐとき |
 | `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
 | `fabrication/ReliefCut.h` | 二重曲率を逃がす切れ目 | 近似(V2方式)を繋ぐとき |

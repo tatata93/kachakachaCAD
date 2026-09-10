@@ -555,6 +555,13 @@ void V2MainWindow::BuildRightShelves()
     measureDock_ = new V2MeasureDock(this);
     addDockWidget(Qt::RightDockWidgetArea, measureDock_);
     measureDock_->hide();
+    measureDock_->SetModeChangedHandler([this] {
+        viewport_->ClearMeasurePicks();
+        RefreshMeasurements();
+    });
+    measureDock_->SetKeepHandler([this] { KeepMeasuredDimension(); });
+    measureDock_->SetClearHandler([this] { ClearMeasurement(); });
+    viewport_->SetMeasurePicksChangedCallback([this] { RefreshMeasurements(); });
 
     // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
@@ -926,13 +933,59 @@ void V2MainWindow::RefreshMeasurements()
     if (measureDock_ == nullptr || viewport_ == nullptr) {
         return;
     }
+    measureDock_->SetRequest(CurrentMeasureRequest());
+    measureDock_->SetKeptCount(
+        static_cast<int>(session_->GetDocument().Snapshot().referenceDimensions.size()));
+}
+
+kachakacha::v2::app::MeasureRequest V2MainWindow::CurrentMeasureRequest() const
+{
     kachakacha::v2::app::MeasureRequest request;
     // 選んだものだけを測る。見えているだけのものを勝手に足さない。
     request.curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
         session_->Scene());
     request.toleranceMm =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    measureDock_->SetRequest(request);
+    request.mode = measureDock_->Mode();
+    request.targetIds = viewport_->Selection().entityIds;
+    for (const auto& pick : viewport_->MeasurePicks()) {
+        request.pickedPoints.push_back(pick.point);
+        if (!pick.entityId.IsNil()) {
+            request.targetIds.push_back(pick.entityId);
+        }
+    }
+    return request;
+}
+
+void V2MainWindow::KeepMeasuredDimension()
+{
+    // 名前と値から参照寸法を作るのは core。文書へ入れるのはここ。形は変わらない。
+    const auto dimension = kachakacha::v2::app::MeasureDimensionOf(CurrentMeasureRequest(),
+        measureDock_->DimensionName().toStdString(),
+        ids_->NextTyped<kachakacha::v2::base::IdKind::Dimension>());
+    if (!dimension.HasValue()) {
+        ReportDiagnostics(dimension.Diagnostics());
+        return;
+    }
+    const auto added = session_->GetDocument().Run(
+        kachakacha::v2::document::AddReferenceDimensionCommand(dimension.Value()));
+    if (!added.committed) {
+        ReportDiagnostics(added.diagnostics);
+        return;
+    }
+    RefreshMeasurements();
+    SetStatus(QStringLiteral("寸法「%1」を残しました(%2 %3)。")
+            .arg(QString::fromStdString(dimension.Value().label))
+            .arg(dimension.Value().recordedValue, 0, 'f', 3)
+            .arg(QString::fromStdString(dimension.Value().unit)));
+}
+
+void V2MainWindow::ClearMeasurement()
+{
+    viewport_->ClearMeasurePicks();
+    viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+    RefreshMeasurements();
+    SetStatus(QStringLiteral("測定を消しました。"));
 }
 
 void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)

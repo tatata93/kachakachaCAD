@@ -9,12 +9,14 @@
 #include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
 #include "V2GridDock.h"
+#include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/DirectWireEntry.h"
+#include "kachakacha/app/MeasurePanel.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -511,11 +513,80 @@ using kachakacha::v2::modeling::ToolSettings;
         window.StatusText().contains(QStringLiteral("V1 の文書")));
 }
 
+[[nodiscard]] bool CaseMeasureModesPickPointsAndKeepDimension(V2MainWindow& window)
+{
+    // 測定の3モード(V1 と同じ)。2点間は押した2点で測り、寸法は文書の線を相手にして残せる。
+    const double pxPerMm = PrepareTopView(window);
+    auto& viewport = window.Viewport();
+    auto& dock = window.MeasureDock();
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    // 相手になる線を1本引いてから測る。
+    window.SelectTool(DrawingTool::Line);
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    window.RunCommand("measure.open");
+    dock.SetMode(kachakacha::v2::app::MeasureMode::TwoPoints);
+    if (!Explain("点を押せと言う", dock.RowCount() == 1
+            && dock.RowValue(0).contains(QStringLiteral("あと 2")))) {
+        return false;
+    }
+    // 線の両端(吸着する)を押す。
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    if (!Explain((std::string("2点で測れる(行 ") + std::to_string(dock.RowCount()) + ")").c_str(),
+            viewport.MeasurePicks().size() == 2 && dock.RowCount() > 3)) {
+        return false;
+    }
+    bool distance = false;
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (dock.RowLabel(row) == QStringLiteral("距離")) {
+            distance = dock.RowValue(row) == QStringLiteral("60.000 mm");
+        }
+    }
+    if (!Explain("距離が 60.000 mm", distance)) {
+        return false;
+    }
+    // 寸法を残す。押した点は線の端に吸着しているので、相手はその線。
+    dock.SetDimensionName(QStringLiteral("幅"));
+    dock.PressKeep();
+    if (!Explain((std::string("寸法が文書に入る(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            window.Session().GetDocument().Snapshot().referenceDimensions.size() == 1
+                && window.Session().GetDocument().Snapshot().referenceDimensions.front().label
+                    == "幅")) {
+        return false;
+    }
+    // 測定を消去 → 押した点が消えて、また点を押せと言う。
+    dock.PressClear();
+    if (!Explain("消去で点が消える", viewport.MeasurePicks().empty()
+            && dock.RowValue(0).contains(QStringLiteral("あと 2")))) {
+        return false;
+    }
+    // 3点角度: 頂点を真ん中にして 90 度。
+    dock.SetMode(kachakacha::v2::app::MeasureMode::ThreePointAngle);
+    viewport.ClickAt(QPointF(center.x() + 20.0 * pxPerMm, center.y() + 40.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x(), center.y() + 40.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x(), center.y() + 20.0 * pxPerMm));
+    bool ninety = false;
+    for (int row = 0; row < dock.RowCount(); ++row) {
+        if (dock.RowLabel(row) == QStringLiteral("角度")) {
+            ninety = dock.RowValue(row).startsWith(QStringLiteral("90.0"));
+        }
+    }
+    if (!Explain("3点角度が 90 度", ninety)) {
+        return false;
+    }
+    // 右クリックで消える(V1 と同じ)。
+    viewport.PressRightWithoutMoving();
+    return Explain("右クリックで測定が消える", viewport.MeasurePicks().empty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
         {"V1 の .kcd を開くと V2 の文書になる", &CaseV1KcdOpensAsDocument},
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},

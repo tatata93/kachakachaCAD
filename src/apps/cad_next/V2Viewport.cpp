@@ -703,6 +703,24 @@ void V2Viewport::OnToolChanged()
     if (cursorPanel_.active) {
         CloseCursorInput();
     }
+    ClearMeasurePicks();
+}
+
+void V2Viewport::ClearMeasurePicks()
+{
+    if (measurePicks_.empty()) {
+        return;
+    }
+    measurePicks_.clear();
+    if (measurePicksChanged_) {
+        measurePicksChanged_();
+    }
+    update();
+}
+
+void V2Viewport::SetMeasurePicksChangedCallback(std::function<void()> callback)
+{
+    measurePicksChanged_ = std::move(callback);
 }
 
 void V2Viewport::CloseCursorInput()
@@ -1008,6 +1026,28 @@ void V2Viewport::ClickAt(const QPointF& position)
         auto handler = pickHandler_;
         pickHandler_ = nullptr;
         handler(picked);
+        update();
+        return;
+    }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure) {
+        // 測定は点を集めるだけ。形は作らない。吸着した位置と、吸着した線を覚える。
+        const auto hovered = session_->Hover(ScreenPoint{position.x(), position.y()});
+        if (!hovered.position.has_value()) {
+            status_ = "その場所では点を取れません。";
+            if (statusCallback_) {
+                statusCallback_(status_);
+            }
+            return;
+        }
+        MeasurePick pick;
+        pick.point = *hovered.position;
+        if (hovered.snap.has_value()) {
+            pick.entityId = hovered.snap->entityId;
+        }
+        measurePicks_.push_back(pick);
+        if (measurePicksChanged_) {
+            measurePicksChanged_();
+        }
         update();
         return;
     }

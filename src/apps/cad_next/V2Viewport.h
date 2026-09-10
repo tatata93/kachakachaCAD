@@ -278,6 +278,19 @@ public:
     bool PlacePointFromCursorInput();
     //! 道具が変わった。入力列を閉じる。
     void OnToolChanged();
+
+    //! 測定で押した点(吸着済み)。V1 の 2点間 / 3点角度 / 要素 で使う。
+    struct MeasurePick {
+        kachakacha::v2::geometry::Vector3 point;
+        kachakacha::v2::base::EntityId entityId;   //!< 吸着した線。無ければ Nil
+    };
+    [[nodiscard]] const std::vector<MeasurePick>& MeasurePicks() const noexcept
+    {
+        return measurePicks_;
+    }
+    void ClearMeasurePicks();
+    //! 測定の点が増えた・消えたときに呼ぶもの。
+    void SetMeasurePicksChangedCallback(std::function<void()> callback);
     //! いまの欄へ文字を入れる。
     bool TypeIntoCursorField(const QString& text);
     //! Tab / Shift+Tab。
@@ -438,6 +451,8 @@ private:
     QPointF cursorPosition_;
     //! 入力列の基準(直前に置いた点)から見たポインタの位置。作業平面の u, v(mm)。
     kachakacha::v2::geometry::Vector3 cursorDelta_{};
+    std::vector<MeasurePick> measurePicks_;
+    std::function<void()> measurePicksChanged_;
     std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     kachakacha::v2::geometry::Vector3 center_{};

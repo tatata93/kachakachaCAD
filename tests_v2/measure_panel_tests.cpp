@@ -5,6 +5,8 @@
 #include "kachakacha/app/MeasurePanel.h"
 #include "kachakacha/base/TestHarness.h"
 
+#include <cmath>
+
 #include <string>
 
 using kachakacha::v2::app::BuildMeasureRows;
@@ -173,6 +175,97 @@ KACHA_V2_TEST(measure, 桁は3桁でそろう)
     RequireEqual(FormatDegreesJa(0.0), std::string("0.000 度"), "度も3桁");
     RequireEqual(FormatPointJa(kachakacha::v2::geometry::Vector3{1.5, -2.25, 0.0}),
         std::string("(1.500, -2.250, 0.000)"), "座標も3桁");
+}
+
+KACHA_V2_TEST(measure, 2点間モードは押した2点で距離と成分と軸の角度を出す)
+{
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::TwoPoints;
+    request.pickedPoints = {{1.0, 2.0, 3.0}};
+    const auto waiting = BuildMeasureRows(request);
+    Require(waiting.size() == 1 && waiting.front().valueJa.find("あと 1") != std::string::npos,
+        "あと1つ押せと言う");
+    request.pickedPoints.push_back({4.0, 6.0, 15.0});
+    const auto rows = BuildMeasureRows(request);
+    bool distance = false;
+    bool dz = false;
+    bool axis = false;
+    for (const auto& row : rows) {
+        distance = distance || (row.labelJa == "距離" && row.valueJa == "13.000 mm");
+        dz = dz || (row.labelJa == "dZ" && row.valueJa == "12.000 mm");
+        axis = axis || row.labelJa == "X軸との角度";
+    }
+    Require(distance && dz && axis, "距離 13、dZ 12、軸との角度が出る");
+    const auto primary = kachakacha::v2::app::MeasurePrimary(request);
+    Require(primary.has_value() && primary->kind == "two_points"
+            && std::abs(primary->value - 13.0) < 1e-9,
+        "残す値は距離");
+}
+
+KACHA_V2_TEST(measure, 3点角度モードは2点目を頂点にして測る)
+{
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::ThreePointAngle;
+    request.pickedPoints = {{10.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 10.0, 0.0}};
+    const auto rows = BuildMeasureRows(request);
+    bool angle = false;
+    for (const auto& row : rows) {
+        angle = angle || (row.labelJa == "角度" && row.valueJa == FormatDegreesJa(3.14159265358979323846 / 2.0));
+    }
+    Require(angle, "90 度");
+    Require(kachakacha::v2::app::MeasurePointCount(request.mode) == 3, "3点押す");
+}
+
+KACHA_V2_TEST(measure, 要素モードは線1本と点で接線と法線を出し2本で角度を出す)
+{
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::Element;
+    const auto rowsEmpty = BuildMeasureRows(request);
+    Require(rowsEmpty.size() == 1, "何を選ぶか言う");
+    request.curves.push_back(CurveSegment::MakeCircle({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, 5.0).Value());
+    request.pickedPoints = {{7.0, 0.0, 0.0}};
+    const auto rows = BuildMeasureRows(request);
+    bool tangent = false;
+    bool normal = false;
+    bool radius = false;
+    for (const auto& row : rows) {
+        tangent = tangent || row.labelJa == "接線の向き";
+        normal = normal || (row.labelJa == "法線(曲率)の向き" && row.valueJa.find("決まりません") == std::string::npos);
+        radius = radius || (row.labelJa == "半径" && row.valueJa == "5.000 mm");
+    }
+    Require(tangent && normal && radius, "接線・法線・半径");
+    request.curves.push_back(CurveSegment::MakeLine({-10, 5, 0}, {10, 5, 0}).Value());
+    const auto two = BuildMeasureRows(request);
+    bool tangentAngle = false;
+    for (const auto& row : two) {
+        tangentAngle = tangentAngle || (row.labelJa == "接線どうしの角度" && row.valueJa == FormatDegreesJa(0.0));
+    }
+    Require(tangentAngle, "円の頂点で直線と接線が平行(0 度)");
+}
+
+KACHA_V2_TEST(measure, 寸法を残すには値と相手が要る)
+{
+    using kachakacha::v2::app::MeasureDimensionOf;
+    MeasureRequest request;
+    request.mode = kachakacha::v2::app::MeasureMode::TwoPoints;
+    request.pickedPoints = {{0, 0, 0}};
+    kachakacha::v2::base::DimensionId id;
+    const auto none = MeasureDimensionOf(request, "幅", id);
+    Require(!none.HasValue(), "測り終えていなければ断る");
+    RequireEqual(none.Diagnostics().front().code, std::string("UI-M001"), "理由の番号");
+    request.pickedPoints.push_back({3, 4, 0});
+    const auto noTarget = MeasureDimensionOf(request, "幅", id);
+    Require(!noTarget.HasValue(), "相手が文書の線でなければ断る");
+    kachakacha::v2::base::DeterministicIdGenerator ids{9};
+    request.targetIds.push_back(ids.NextTyped<kachakacha::v2::base::IdKind::Entity>());
+    const auto made = MeasureDimensionOf(request, "幅",
+        ids.NextTyped<kachakacha::v2::base::IdKind::Dimension>());
+    Require(made.HasValue(), "残せる");
+    RequireEqual(made.Value().label, std::string("幅"), "名前");
+    RequireEqual(made.Value().unit, std::string("mm"), "単位");
+    Require(std::abs(made.Value().recordedValue - 5.0) < 1e-9, "値");
+    const auto unnamed = MeasureDimensionOf(request, "", id);
+    Require(unnamed.HasValue() && unnamed.Value().label == "2点間", "名前が空なら測り方の名前");
 }
 
 KACHA_V2_TEST_MAIN("measure_panel_tests")

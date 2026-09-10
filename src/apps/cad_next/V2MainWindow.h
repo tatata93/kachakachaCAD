@@ -284,6 +284,11 @@ public:
         std::function<std::optional<WorkPlaneChoice>(const WorkPlaneChoice&,
             const kachakacha::v2::app::WorkPlaneFacts&)>
             chooser);
+    //! いまの測定(選んだ線・押した点・測り方)。
+    [[nodiscard]] kachakacha::v2::app::MeasureRequest CurrentMeasureRequest() const;
+    //! 「寸法を残す」「測定を消去」(V1 と同じ)。
+    void KeepMeasuredDimension();
+    void ClearMeasurement();
     //! 選んでいるものから、作業平面の可否に要る事実を作る。
     [[nodiscard]] kachakacha::v2::app::WorkPlaneFacts BuildWorkPlaneFacts() const;
     //! 選んでいるものとコンボの平面から、core へ渡す材料を集める。選んだ順を保つ。

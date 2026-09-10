@@ -221,8 +221,9 @@ void V2Viewport::PressRightWithoutMoving()
     }
     if (tool == DrawingTool::Measure) {
         // V1と同じ。測定の右クリックは「測ったものを消す」。道具は抜けない。
-        // 測る相手は選択なので、選択を解けば棚も空になる。
+        // 測る相手は選択と押した点なので、両方を空にする。
         SetSelection(kachakacha::v2::app::SelectionSet{});
+        ClearMeasurePicks();
         status_ = "測定を消しました。";
         if (statusCallback_) {
             statusCallback_(status_);

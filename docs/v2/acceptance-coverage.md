@@ -62,9 +62,9 @@
 | AT-EXT-006 | 済 | tests_v2/extrude_tests.cpp(5方式と到達判定)+ tests_v2/kernel_extrude_tests.cpp(平面・傾いた平面・円筒・球まで厳密に切る。トーラスは拒否) |
 | AT-EXT-007 | 済 | tests_v2/extrude_tests.cpp(相手未選択を拒否)+ tests_v2/kernel_extrude_tests.cpp(足す・穴を引く・2つへ分離する引き。非連結は EXT-005 で拒否) |
 | AT-EXT-008 | 済 | tests_v2/feature_reevaluation_tests.cpp(輪郭の寸法・移動距離・点の位置を変えても、出力の EntityId と安定キーは変わらず形だけが変わる。25回続けて編集してもIDは動かない。上流を変えれば下流へ伝わり、計算し直す順番は上流から。途中を変えたら上流は計算し直さない。種類の違う定義への差し替えは DOC-C006 で断る。core で形を作れない立体は「核が要る」と印をつけて返し、作ったふりをしない) |
-| AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) |
-| AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp |
-| AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp |
+| AT-MEA-001 | 済 | tests_v2/measurement_tests.cpp(dX/dY/dZ、投影距離、軸との角度) + tests_v2/measure_panel_tests.cpp(2点間モード: 押した2点で距離 13・dZ 12・軸との角度、残す値は距離)+ 自己試験(2点間・3点角度・寸法を残す・消去・右クリック) |
+| AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(3点角度モードは2点目が頂点で 90 度) |
+| AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(要素モード: 線1本と点で接線・法線・半径、2本で接線どうしの角度) |
 | AT-MEA-004 | 済 | tests_v2/measurement_tests.cpp |
 | AT-MEA-005 | 済 | tests_v2/point_source_tests.cpp(測った2点の両端と中点、円・円弧の中心、始点・終点・中点、ベジェとB-splineの制御点、2曲線の最接近から作図点を作れる。円は始点と終点を二重に出さず、直線は中心も制御点も出さない。同じ入力なら同じ並びで出る。数値でない位置からは作らない。「円1の中心」のように由来が分かる名前になり、作った点は作業中グループへ入る) + measurement_tests.cpp(測定が位置を返すところ) |
 | AT-FAB-001 | 済 | tests_v2/fabrication_tests.cpp(円筒の厳密展開) |

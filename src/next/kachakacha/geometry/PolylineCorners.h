@@ -23,8 +23,13 @@ enum class CornerStyle {
 
 //! 並んだ線(ポリラインの各辺)の角をすべて加工する。
 //! 閉じた並び(最後の端が最初の始点と一致)なら、その角も加工する。
+//!
+//! vertexIndex を 0 以上にすると、その頂点(点の番号、0 始まり)の角だけを加工する
+//! (V1 の「ポリラインの角」の「頂点番号」)。頂点 k の角は k-1 番目の辺と k 番目の辺の間。
+//! 閉じた並びでは頂点 0 が最後の辺と最初の辺の角。開いた並びの両端(0 と最後)は角でないので
+//! GEO-E021 で断る。無い番号も断る。
 [[nodiscard]] base::Result<std::vector<geometry::CurveSegment>> ProcessPolylineCorners(
     const std::vector<geometry::CurveSegment>& segments, CornerStyle style, double sizeMm,
-    double toleranceMm);
+    double toleranceMm, int vertexIndex = -1);
 
 } // namespace kachakacha::v2::geometry

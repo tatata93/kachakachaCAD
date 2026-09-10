@@ -202,6 +202,11 @@ struct Maker {
         definition.pointArgument = {1.5, -2.5, 0.0};
         definition.scalarArgument =
             EvaluatedValue{"deg(30)", 0.5235987755982988, QuantityKind::Angle};
+        // 面取りの欄(B の切戻し・残す側・角番号)も往復する。
+        definition.secondScalarMm = 2.5;
+        definition.firstKeepSide = 1;
+        definition.secondKeepSide = 2;
+        definition.cornerIndex = 3;
         feature.definition = definition;
         feature.inputEntityIds.push_back(snapshot.entities[2].id);
         Entity entity;
@@ -413,6 +418,10 @@ KACHA_V2_TEST(documentFile, 式が文字列のまま戻る)
     RequireEqual(transform.scalarArgument.expression, std::string("deg(30)"), "角度の式");
     Require(transform.scalarArgument.kind == QuantityKind::Angle, "角度であること");
     RequireNear(transform.scalarArgument.value, 0.5235987755982988, 1e-15, "評価値");
+    RequireNear(transform.secondScalarMm, 2.5, 1e-12, "B の切戻し");
+    RequireEqual(std::to_string(transform.firstKeepSide), std::string("1"), "A の残す側");
+    RequireEqual(std::to_string(transform.secondKeepSide), std::string("2"), "B の残す側");
+    RequireEqual(std::to_string(transform.cornerIndex), std::string("3"), "角番号");
 }
 
 KACHA_V2_TEST(documentFile, ワイヤー編集の参照が往復する)

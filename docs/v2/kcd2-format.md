@@ -883,13 +883,22 @@ JSON層の診断(`KCD2-J001`〜`J004`)はそのまま透過する。
   "parameters": {
     "vector": {"x": 0.0, "y": 0.0, "z": 1.0},
     "point": {"x": 0.0, "y": 0.0, "z": 0.0},
-    "scalar": {"expression": "deg(30)", "value": 0.5235987755982988, "quantity": "angle"}
+    "scalar": {"expression": "deg(30)", "value": 0.5235987755982988, "quantity": "angle"},
+    "scalar2": 0.0,
+    "keepFirst": 0,
+    "keepSecond": 0,
+    "corner": -1
   }
 }
 ```
 
 method enumは `move copy rotate mirror trim extend split join fillet chamfer offset
-meet_lines coincident tangent curvature`。
+meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
+
+`scalar2` `keepFirst` `keepSecond` `corner` は面取りの欄(V1 の「面取り」欄)。
+`scalar2` は C面取りの B 側の切戻し(mm、0 なら `scalar` と同じ)、`keepFirst` / `keepSecond` は
+残す側(0 自動、1 始点側、2 終点側)、`corner` は角の加工で 1 つの角だけにするときの頂点番号
+(-1 なら全部)。無ければその既定で読む(古い文書はそのまま開ける)。
 
 `freeze_derived`:
 

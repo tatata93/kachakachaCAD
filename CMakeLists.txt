@@ -882,6 +882,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2MeasureDock.h
         src/apps/cad_next/V2EditDock.cpp
         src/apps/cad_next/V2EditDock.h
+        src/apps/cad_next/V2CornerDock.cpp
+        src/apps/cad_next/V2CornerDock.h
         src/apps/cad_next/V2EditCommands.cpp
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp

@@ -6,16 +6,20 @@
 
 #include "V2SelfTest.h"
 
+#include "V2CornerDock.h"
 #include "V2DrawingDock.h"
 #include "V2EditDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
+#include "V2ParameterDock.h"
 #include "V2WorkPlaneDock.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/EntityEdit.h"
 #include "kachakacha/app/Selection.h"
 
+#include <QPointF>
 #include <QString>
 
 #include <cmath>
@@ -241,11 +245,127 @@ using kachakacha::v2::geometry::Vector3;
     return Explain("選んでいないと案内が出る", !dock.IsShowingPlane() && !dock.IsShowingWire());
 }
 
+[[nodiscard]] bool CaseCornerDockSingleVertex(V2MainWindow& window);
+
+[[nodiscard]] bool CaseCornerDockAsymmetricChamferAndKeepSides(V2MainWindow& window)
+{
+    // 面取りの棚: A の切戻し 4・B の切戻し 8、A は始点側・B は終点側を残す(V1 の欄と同じ)。
+    window.RunCommand("file.new");
+    if (!MakeAndSelectWire(window, kachakacha::v2::app::DirectWireKind::PlanarLine,
+            {Vector3{-30.0, 0.0, 0.0}, Vector3{30.0, 0.0, 0.0}}, 0.0, QStringLiteral("横"))) {
+        return false;
+    }
+    const auto firstId = window.Session().Scene().curves.back().entityId;
+    if (!MakeAndSelectWire(window, kachakacha::v2::app::DirectWireKind::PlanarLine,
+            {Vector3{0.0, -30.0, 0.0}, Vector3{0.0, 30.0, 0.0}}, 0.0, QStringLiteral("縦"))) {
+        return false;
+    }
+    const auto secondId = window.Session().Scene().curves.back().entityId;
+    kachakacha::v2::app::SelectionSet pair;
+    pair.entityIds = {firstId, secondId};
+    window.Viewport().SetSelection(pair);
+    auto& dock = window.CornerDock();
+    if (!Explain((std::string("直線 A/B に選んだ順の名前が出る(") + dock.FirstText().toStdString()
+                     + ", " + dock.SecondText().toStdString() + ")").c_str(),
+            dock.FirstText() == QStringLiteral("横") && dock.SecondText() == QStringLiteral("縦"))) {
+        return false;
+    }
+    // 量は数の棚と同じ値。数の棚で打つと棚に映る。
+    if (!Explain("面取り量を入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,
+                QStringLiteral("4")))) {
+        return false;
+    }
+    if (!Explain((std::string("棚の量が 4 になる(") + std::to_string(dock.Choice().sizeMm) + ")").c_str(),
+            std::abs(dock.Choice().sizeMm - 4.0) < 1.0e-9)) {
+        return false;
+    }
+    dock.SetFillet(false);
+    dock.SetSecondSetback(8.0);
+    dock.SetKeepSides(1, 2);
+    dock.PressCreate();
+    const auto& curves = window.Session().Scene().curves;
+    if (!Explain((std::string("2本が 3本(A'・面取り・B')になる(") + window.StatusText().toStdString()
+                     + ", 見える線 " + std::to_string(curves.size()) + ")").c_str(),
+            curves.size() == 3)) {
+        return false;
+    }
+    // A' は始点側 (-30,0)〜(-4,0)、B' は (0,8)〜終点側 (0,30)、面取りは sqrt(4^2+8^2)。
+    bool aOk = false;
+    bool bOk = false;
+    bool cOk = false;
+    for (const auto& curve : curves) {
+        const auto s = curve.segment.StartPoint();
+        const auto e = curve.segment.EndPoint();
+        if (std::abs(s.x + 30.0) < 1e-6 && std::abs(e.x + 4.0) < 1e-6 && std::abs(e.y) < 1e-6) {
+            aOk = true;
+        }
+        if (std::abs(s.y - 8.0) < 1e-6 && std::abs(s.x) < 1e-6 && std::abs(e.y - 30.0) < 1e-6) {
+            bOk = true;
+        }
+        if (std::abs(curve.segment.TotalLength(1e-9) - std::sqrt(80.0)) < 1e-6) {
+            cOk = true;
+        }
+    }
+    if (!Explain("A は始点側が残り B は終点側が残り面取りは非対称", aOk && bOk && cOk)) {
+        return false;
+    }
+    return CaseCornerDockSingleVertex(window);
+}
+
+[[nodiscard]] bool DrawUShapeAndSelect(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    const double pxPerMm = viewport.width() / 200.0;
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Polyline);
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x(), center.y()));
+    viewport.ClickAt(QPointF(center.x(), center.y() - 30.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() - 30.0 * pxPerMm));
+    viewport.FinishTool();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    return window.Session().Scene().curves.size() == 3;
+}
+
+[[nodiscard]] bool CaseCornerDockSingleVertex(V2MainWindow& window)
+{
+    // ポリラインの角: 頂点 1 だけ。コの字を引いて、角は 2 つあるが 1 つだけ落ちる。
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    auto& dock = window.CornerDock();
+    if (!Explain("コの字が 1 本", DrawUShapeAndSelect(window))) {
+        return false;
+    }
+    dock.SetOnlyVertex(true, 1);
+    dock.PressCorner();
+    if (!Explain((std::string("頂点 1 だけ落ちて 4 本になる(") + window.StatusText().toStdString()
+                     + ", 見える線 " + std::to_string(window.Session().Scene().curves.size())
+                     + ")").c_str(),
+            window.Session().Scene().curves.size() == 4)) {
+        return false;
+    }
+    // 頂点 0 は開いた並びの端なので断る(GEO-E021)。文書は変わらない。
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    const auto revision = window.Session().GetDocument().Revision();
+    dock.SetOnlyVertex(true, 0);
+    dock.PressCorner();
+    return Explain((std::string("頂点 0 は断る(") + window.StatusText().toStdString() + ")").c_str(),
+        window.Session().GetDocument().Revision() == revision
+            && window.StatusText().contains(QStringLiteral("GEO-E021")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> EditCases()
 {
     return {
+        {"面取りの棚で非対称の切戻しと残す側と頂点番号が効く", &CaseCornerDockAsymmetricChamferAndKeepSides},
         {"編集の棚で直線の点と長さ・角度を直せる", &CaseEditDockRewritesLinePoints},
         {"編集の棚で円の半径を変えられる", &CaseEditDockChangesCircleRadius},
         {"編集の棚で作業平面を動かし原点面は断る", &CaseEditDockMovesWorkPlaneAndRefusesOrigin},

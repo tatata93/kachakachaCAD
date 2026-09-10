@@ -103,7 +103,15 @@ bool V2ParameterDock::Apply(kachakacha::v2::app::ParameterId id, const QString& 
     }
     values_ = next.Value();
     Refresh();
+    if (changed_) {
+        changed_();
+    }
     return true;
+}
+
+void V2ParameterDock::SetChangedHandler(std::function<void()> handler)
+{
+    changed_ = std::move(handler);
 }
 
 int V2ParameterDock::RowCount() const

@@ -55,14 +55,31 @@ struct CornerResult {
     CurveSegment second;  //!< 加工後の2本目
 };
 
+//! 角の加工の欄(V1 の「面取り」欄と同じ)。
+struct CornerOptions {
+    //! C面取りの 2 本目の切戻し(mm)。0 なら 1 本目と同じ(対称)。丸めでは使わない。
+    double secondSetbackMm = 0.0;
+    //! 残す側。0 自動(角から遠い端を残す)/ 1 始点側を残す / 2 終点側を残す。
+    int firstKeepSide = 0;
+    int secondKeepSide = 0;
+};
+
 //! C面取り。2本の直線の角を、指定した切戻し量で落とす。
 //! 離れている線は交点まで自動で延ばしてから落とす(V1と同じ挙動)。
 [[nodiscard]] base::Result<CornerResult> ChamferLines(const CurveSegment& first,
     const CurveSegment& second, double setbackMm, double toleranceMm);
+//! 欄つき: B の切戻し(非対称)と残す側。
+[[nodiscard]] base::Result<CornerResult> ChamferLines(const CurveSegment& first,
+    const CurveSegment& second, double setbackMm, const CornerOptions& options,
+    double toleranceMm);
 
 //! R面取り(丸め)。2本の直線の角を、指定した半径の円弧で丸める。
 [[nodiscard]] base::Result<CornerResult> FilletLines(const CurveSegment& first,
     const CurveSegment& second, double radiusMm, double toleranceMm);
+//! 欄つき: 残す側。
+[[nodiscard]] base::Result<CornerResult> FilletLines(const CurveSegment& first,
+    const CurveSegment& second, double radiusMm, const CornerOptions& options,
+    double toleranceMm);
 
 //! 2本の直線を、互いの交点まで延ばす(または縮める)。V1の「2線を交点まで」。
 [[nodiscard]] base::Result<std::pair<CurveSegment, CurveSegment>> MeetLines(

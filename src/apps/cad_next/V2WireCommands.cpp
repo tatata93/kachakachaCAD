@@ -262,8 +262,43 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         // 作業平面の中で平行に写す。面の法線は、いま作業中の平面から取る。
         definition.vectorArgument = viewport_->WorkPlane().normal;
     }
+    if (binding->method == WireTransformMethod::Chamfer
+        || binding->method == WireTransformMethod::Fillet) {
+        // 面取りの棚の欄(B の切戻し・残す側)。棚を触っていなければ対称・自動で前と同じ。
+        const V2CornerChoice choice = cornerDock_->Choice();
+        definition.secondScalarMm = choice.secondSetbackMm;
+        definition.firstKeepSide = choice.firstKeepSide;
+        definition.secondKeepSide = choice.secondKeepSide;
+    }
+    if (binding->method == WireTransformMethod::CornerChamfer
+        || binding->method == WireTransformMethod::CornerFillet) {
+        const V2CornerChoice choice = cornerDock_->Choice();
+        definition.cornerIndex = choice.onlyVertex ? choice.vertexIndex : -1;
+    }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
         binding->consumesFirstOnly, binding->consumesInputs);
+}
+
+void V2MainWindow::RefreshCornerDock()
+{
+    if (cornerDock_ == nullptr || viewport_ == nullptr || parameterDock_ == nullptr) {
+        return;
+    }
+    // 量は数の棚が正。直線 A / B は選んだ順の 1 本目と 2 本目。
+    cornerDock_->SetSizeMm(CornerSizeMm());
+    QString names[2];
+    int found = 0;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
+            continue;
+        }
+        if (found < 2) {
+            names[found] = QString::fromStdString(entity->displayName);
+        }
+        ++found;
+    }
+    cornerDock_->SetPairText(names[0], names[1]);
 }
 
 void V2MainWindow::MakeIntersectionPoints()

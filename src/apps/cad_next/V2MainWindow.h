@@ -17,6 +17,7 @@
 #include "kachakacha/app/DisplaySettings.h"
 #include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
+#include "V2CornerDock.h"
 #include "V2EditDock.h"
 #include "V2GridDock.h"
 #include "V2ExportDock.h"
@@ -213,6 +214,10 @@ public:
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
     //! 編集の棚(V1 の「選択内容の数値編集」)。
     [[nodiscard]] V2EditDock& EditDock() { return *editDock_; }
+    //! 面取りの棚(V1 の「面取り」欄)。
+    [[nodiscard]] V2CornerDock& CornerDock() { return *cornerDock_; }
+    //! 面取りの棚を選択と数の棚に合わせる(直線 A/B の名前、量)。
+    void RefreshCornerDock();
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
     void RefreshMeasurements();
     //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
@@ -670,6 +675,7 @@ private:
     V2ExportDock* exportDock_ = nullptr;
     V2MeasureDock* measureDock_ = nullptr;
     V2EditDock* editDock_ = nullptr;
+    V2CornerDock* cornerDock_ = nullptr;
     V2ParameterDock* parameterDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;

@@ -165,7 +165,7 @@ namespace {
             definition.method == WireTransformMethod::CornerChamfer
                 ? geometry::CornerStyle::Chamfer
                 : geometry::CornerStyle::Fillet,
-            definition.scalarArgument.value, tolerance);
+            definition.scalarArgument.value, tolerance, definition.cornerIndex);
     }
     if (inputs.size() < 2) {
         return Out::Failure(MakeError("DOC-C007",
@@ -205,9 +205,14 @@ namespace {
     case WireTransformMethod::Chamfer:
     case WireTransformMethod::Fillet: {
         const double size = definition.scalarArgument.value;
+        // 面取りの欄(B の切戻し・残す側)。無ければ対称・自動で、前と同じ。
+        geometry::CornerOptions options;
+        options.secondSetbackMm = definition.secondScalarMm;
+        options.firstKeepSide = definition.firstKeepSide;
+        options.secondKeepSide = definition.secondKeepSide;
         const auto corner = definition.method == WireTransformMethod::Chamfer
-            ? geometry::ChamferLines(first, second, size, tolerance)
-            : geometry::FilletLines(first, second, size, tolerance);
+            ? geometry::ChamferLines(first, second, size, options, tolerance)
+            : geometry::FilletLines(first, second, size, options, tolerance);
         if (!corner.HasValue()) {
             return Out::Failure(corner.Diagnostics());
         }

@@ -34,6 +34,8 @@ public:
 
     //! 打たれた文字で入れ替える。断ったら false を返し、値は変えない。
     bool Apply(kachakacha::v2::app::ParameterId id, const QString& text);
+    //! 値が変わったあとに呼ぶもの(面取りの棚が同じ値を映す)。
+    void SetChangedHandler(std::function<void()> handler);
 
     //! 出ている行。試験から見る。
     [[nodiscard]] int RowCount() const;
@@ -47,4 +49,5 @@ private:
     QTreeWidget* rows_ = nullptr;
     kachakacha::v2::app::ParameterSet values_;
     std::function<void(const QString&)> sink_;
+    std::function<void()> changed_;
 };

@@ -463,6 +463,12 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
             made.vectorArgument = loader.ReadVector(*parameters, "vector", place);
             made.pointArgument = loader.ReadVector(*parameters, "point", place);
             made.scalarArgument = loader.ReadExpression(*parameters, "scalar", place);
+            // 古い文書には無い。無ければ対称・自動・全部の角(前と同じ意味)。
+            made.secondScalarMm = loader.NumberOr(*parameters, "scalar2", 0.0);
+            made.firstKeepSide = static_cast<int>(loader.NumberOr(*parameters, "keepFirst", 0.0));
+            made.secondKeepSide = static_cast<int>(
+                loader.NumberOr(*parameters, "keepSecond", 0.0));
+            made.cornerIndex = static_cast<int>(loader.NumberOr(*parameters, "corner", -1.0));
         }
         feature.definition = std::move(made);
         break;

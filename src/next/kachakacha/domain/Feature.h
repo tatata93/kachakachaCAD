@@ -127,6 +127,13 @@ struct TransformWireDefinition {
     geometry::Vector3 vectorArgument;   //!< 移動量、軸方向、面法線など
     geometry::Vector3 pointArgument;    //!< 軸上の点、面上の点など
     geometry::EvaluatedValue scalarArgument; //!< 距離、半径、角度など
+    //! C面取りの B 側の切戻し(mm)。0 なら scalarArgument と同じ(対称)。V1 の「B の切戻し」。
+    double secondScalarMm = 0.0;
+    //! 残す側(V1 の「A の残す側」「B の残す側」)。0 自動(角から遠い端)/ 1 始点側 / 2 終点側。
+    int firstKeepSide = 0;
+    int secondKeepSide = 0;
+    //! 角の加工で 1 つの角だけにするときの頂点番号(0 始まり、点の番号)。-1 なら全部。
+    int cornerIndex = -1;
 };
 
 struct FreezeDerivedDefinition {

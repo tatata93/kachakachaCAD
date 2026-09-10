@@ -166,6 +166,38 @@ KACHA_V2_TEST(edit, a_chamfer_cuts_a_right_angle)
         "the second line is shortened by the setback");
 }
 
+KACHA_V2_TEST(edit, 非対称の切戻しと残す側を指定できる)
+{
+    // A は 2mm、B は 5mm 切り戻す(V1 の「A の切戻し」「B の切戻し」)。
+    kachakacha::v2::geometry::CornerOptions options;
+    options.secondSetbackMm = 5.0;
+    const auto result = ChamferLines(L({0, 10, 0}, {0, 0, 0}), L({0, 0, 0}, {10, 0, 0}), 2.0,
+        options, 1.0e-6);
+    Require(result.HasValue(), "非対称でも作れる");
+    RequireNear(result.Value().first.TotalLength(1.0e-9), 8.0, 1.0e-9, "A は 2 縮む");
+    RequireNear(result.Value().second.TotalLength(1.0e-9), 5.0, 1.0e-9, "B は 5 縮む");
+    RequireNear(result.Value().corner.TotalLength(1.0e-9), std::sqrt(29.0), 1.0e-9,
+        "面取りの線は sqrt(2^2+5^2)");
+
+    // 残す側: 角をまたぐ線で、始点側を残すか終点側を残すかを選べる。
+    // A: (-10,0)-(10,0)、B: (0,-10)-(0,10)。交点は原点。自動なら遠い方(どちらも 10)。
+    kachakacha::v2::geometry::CornerOptions keep;
+    keep.firstKeepSide = 1;    // A の始点側 (-10,0) を残す
+    keep.secondKeepSide = 2;   // B の終点側 (0,10) を残す
+    const auto sided = ChamferLines(L({-10, 0, 0}, {10, 0, 0}), L({0, -10, 0}, {0, 10, 0}), 3.0,
+        keep, 1.0e-6);
+    Require(sided.HasValue(), "残す側を指定して作れる");
+    RequireNear(sided.Value().first.StartPoint().x, -10.0, 1.0e-9, "A は始点側が残る");
+    RequireNear(sided.Value().first.EndPoint().x, -3.0, 1.0e-9, "A は角から 3 で切れる");
+    RequireNear(sided.Value().second.EndPoint().y, 10.0, 1.0e-9, "B は終点側が残る");
+    RequireNear(sided.Value().second.StartPoint().y, 3.0, 1.0e-9, "B は角から 3 で切れる");
+    // 残す側が角の近くの端(長さ 0)なら断る。
+    keep.firstKeepSide = 2;
+    const auto bad = ChamferLines(L({-10, 0, 0}, {0, 0, 0}), L({0, -10, 0}, {0, 10, 0}), 3.0,
+        keep, 1.0e-6);
+    Require(!bad.HasValue(), "残す側に長さが無ければ断る");
+}
+
 KACHA_V2_TEST(edit, a_chamfer_joins_end_to_end)
 {
     const auto result = ChamferLines(L({0, 10, 0}, {0, 0, 0}), L({0, 0, 0}, {10, 0, 0}), 3.0,

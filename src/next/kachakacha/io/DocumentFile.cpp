@@ -202,6 +202,13 @@ template<class Id>
         parameters["vector"] = WriteVector(transform->vectorArgument);
         parameters["point"] = WriteVector(transform->pointArgument);
         parameters["scalar"] = WriteExpression(transform->scalarArgument);
+        // 面取りの欄(V1 と同じ): B の切戻し・残す側・角番号。無ければ読むときに既定になる。
+        parameters["scalar2"] = JsonValue::Number(transform->secondScalarMm);
+        parameters["keepFirst"] = JsonValue::Number(
+            static_cast<double>(transform->firstKeepSide));
+        parameters["keepSecond"] = JsonValue::Number(
+            static_cast<double>(transform->secondKeepSide));
+        parameters["corner"] = JsonValue::Number(static_cast<double>(transform->cornerIndex));
         definition["parameters"] = JsonValue::Object(std::move(parameters));
     } else if (const auto* freeze =
                    std::get_if<FreezeDerivedDefinition>(&feature.definition)) {

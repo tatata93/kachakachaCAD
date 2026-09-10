@@ -74,13 +74,13 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.curvature` | 曲率接続 | 2曲線端、動かす側 | TransformWire | AT-WIR-006 |
-| `wire.chamfer` | C面取り | 2辺、距離 | TransformWire | AT-WIR-006 |
-| `wire.fillet` | R丸め | 2辺、半径 | TransformWire | AT-WIR-006 |
+| `wire.chamfer` | C面取り | 2辺(選んだ順に A・B)、A の切戻し(数の棚の面取り量)、面取りの棚の B の切戻し(0 なら対称)・A/B の残す側 | TransformWire(secondScalarMm / firstKeepSide / secondKeepSide) | AT-WIR-006 |
+| `wire.fillet` | R丸め | 2辺、半径、面取りの棚の A/B の残す側 | TransformWire | AT-WIR-006 |
 | `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)。元は残す | AT-WIR-006 |
 | `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
-| `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量 | TransformWire(CornerChamfer)。直線どうしの角を全部 | AT-WIR-006 |
-| `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径 | TransformWire(CornerFillet) | AT-WIR-006 |
+| `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |
+| `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径、同上 | TransformWire(CornerFillet、cornerIndex) | AT-WIR-006 |
 | `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
 | `edit.numeric` | 数値で編集 | 作業平面か線を1つ | 編集の棚を出す。「変更を適用」で UpdateFeatureDefinition(平面は PointNormal に、線は種類を保って点/中心/半径/角度を差し替え)。原点面は UI-E002、種類が混ざった線は UI-E003 | AT-WIR-001, AT-UIX-001 |
 | `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |

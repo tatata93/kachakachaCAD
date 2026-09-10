@@ -286,9 +286,23 @@ Result<CurveSegment> TrimCurve(const CurveSegment& curve, const CurveSegment& bo
 
 namespace {
 
+//! 残す側の端。0 なら角から遠い端、1 なら始点、2 なら終点。
+[[nodiscard]] Vector3 KeptEnd(const CurveSegment& line, const Vector3& corner, int keepSide)
+{
+    if (keepSide == 1) {
+        return line.StartPoint();
+    }
+    if (keepSide == 2) {
+        return line.EndPoint();
+    }
+    return Distance(line.StartPoint(), corner) > Distance(line.EndPoint(), corner)
+        ? line.StartPoint()
+        : line.EndPoint();
+}
+
 //! 2本の直線の無限交点。平行なら false。
 [[nodiscard]] bool LineCorner(const CurveSegment& first, const CurveSegment& second,
-    Vector3& corner, Vector3& firstAway, Vector3& secondAway)
+    Vector3& corner, Vector3& firstAway, Vector3& secondAway, const CornerOptions& options)
 {
     const Vector3 p0 = first.StartPoint();
     const Vector3 d0 = first.EndPoint() - p0;
@@ -305,13 +319,9 @@ namespace {
         return false; // ねじれの位置
     }
     corner = (a + b) * 0.5;
-    // 角から遠い方の端点を、それぞれの「残る側」とする。
-    firstAway = Distance(first.StartPoint(), corner) > Distance(first.EndPoint(), corner)
-        ? first.StartPoint()
-        : first.EndPoint();
-    secondAway = Distance(second.StartPoint(), corner) > Distance(second.EndPoint(), corner)
-        ? second.StartPoint()
-        : second.EndPoint();
+    // 「残す側」が指定されていればその端、無ければ角から遠い方の端点を残す。
+    firstAway = KeptEnd(first, corner, options.firstKeepSide);
+    secondAway = KeptEnd(second, corner, options.secondKeepSide);
     return true;
 }
 
@@ -320,19 +330,28 @@ namespace {
 Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment& second,
     double setbackMm, double toleranceMm)
 {
+    return ChamferLines(first, second, setbackMm, CornerOptions{}, toleranceMm);
+}
+
+Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment& second,
+    double setbackMm, const CornerOptions& options, double toleranceMm)
+{
     (void)toleranceMm;
     if (!IsLine(first) || !IsLine(second)) {
         return Result<CornerResult>::Failure(MakeError(kNotSupported,
             "C面取りは直線どうしにだけ使えます。", {}));
     }
-    if (!(setbackMm > 0.0) || !IsFinite(setbackMm)) {
+    // B の切戻しが 0 なら A と同じ(対称)。V1 の欄と同じ意味。
+    const double secondSetbackMm = options.secondSetbackMm > 0.0 ? options.secondSetbackMm
+                                                                 : setbackMm;
+    if (!(setbackMm > 0.0) || !IsFinite(setbackMm) || !IsFinite(secondSetbackMm)) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "切戻し量は正の値にしてください。", {}));
     }
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway)) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, options)) {
         return Result<CornerResult>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。",
             "平行な線やねじれの位置にある線は面取りできません。"));
@@ -340,13 +359,13 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
     const Vector3 firstDirection = Normalized(firstAway - corner);
     const Vector3 secondDirection = Normalized(secondAway - corner);
     if (Distance(firstAway, corner) < setbackMm
-        || Distance(secondAway, corner) < setbackMm) {
+        || Distance(secondAway, corner) < secondSetbackMm) {
         return Result<CornerResult>::Failure(MakeError(kDegenerate,
             "切戻し量が線の長さより大きいです。",
-            "もっと小さい値にするか、線を長くしてください。"));
+            "もっと小さい値にするか、線を長くしてください。残す側が角の近くの端になっていないかも見てください。"));
     }
     const Vector3 firstPoint = corner + firstDirection * setbackMm;
-    const Vector3 secondPoint = corner + secondDirection * setbackMm;
+    const Vector3 secondPoint = corner + secondDirection * secondSetbackMm;
 
     const auto shortenedFirst = CurveSegment::MakeLine(firstAway, firstPoint);
     const auto chamfer = CurveSegment::MakeLine(firstPoint, secondPoint);
@@ -362,6 +381,12 @@ Result<CornerResult> ChamferLines(const CurveSegment& first, const CurveSegment&
 Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& second,
     double radiusMm, double toleranceMm)
 {
+    return FilletLines(first, second, radiusMm, CornerOptions{}, toleranceMm);
+}
+
+Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& second,
+    double radiusMm, const CornerOptions& options, double toleranceMm)
+{
     (void)toleranceMm;
     if (!IsLine(first) || !IsLine(second)) {
         return Result<CornerResult>::Failure(MakeError(kNotSupported,
@@ -374,7 +399,7 @@ Result<CornerResult> FilletLines(const CurveSegment& first, const CurveSegment& 
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway)) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, options)) {
         return Result<CornerResult>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。", {}));
     }
@@ -433,7 +458,7 @@ Result<std::pair<CurveSegment, CurveSegment>> MeetLines(const CurveSegment& firs
     Vector3 corner;
     Vector3 firstAway;
     Vector3 secondAway;
-    if (!LineCorner(first, second, corner, firstAway, secondAway)) {
+    if (!LineCorner(first, second, corner, firstAway, secondAway, CornerOptions{})) {
         return Result<Pair>::Failure(MakeError(kNoIntersection,
             "2本の直線が交わりません。", {}));
     }

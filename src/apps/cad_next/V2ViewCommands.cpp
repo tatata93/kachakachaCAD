@@ -28,14 +28,19 @@ bool V2MainWindow::IsViewCommand(std::string_view id)
         || id == "group.set_active" || id == "view.hide_selected"
         || id == "view.show_all" || id == "edit.delete"
         || id == "view.stage_all" || id == "view.stage_no_grid"
-        || id == "view.stage_no_construction" || id == "entity.rename";
+        || id == "view.stage_no_construction" || id == "view.stage_selection_only"
+        || id == "entity.rename";
 }
 
 void V2MainWindow::RunViewCommand(std::string_view id)
 {
     if (id == "view.display_settings") {
-        // 押すたびに次の段へ回る。Ctrl+1/2/3 は段を直に選ぶ。
-        ApplyDisplayStage(kachakacha::v2::app::NextDisplayStage(displayStage_));
+        // 右の「表示」の棚を前に出す(V1 の表示設定タブ)。段は Ctrl+1/2/3 で直に選ぶ。
+        ShowDisplayDock();
+        return;
+    }
+    if (id == "view.stage_selection_only") {
+        ApplyDisplayStage(kachakacha::v2::app::DisplayStage::SelectionOnly);
         return;
     }
     if (id == "view.stage_all") {
@@ -260,10 +265,60 @@ void V2MainWindow::ShowSelectMenu(const QPoint& at)
 void V2MainWindow::ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage)
 {
     // 段の中身は core が決める。画面はそれを当てて、名前をそのまま出すだけ。
+    // 太さ・様式・薄くする・グリッドの出し方は人が決めたものなので、段では戻さない。
     displayStage_ = stage;
-    viewport_->SetDisplaySettings(kachakacha::v2::app::SettingsForStage(displayStage_));
+    ApplyDisplaySettings(kachakacha::v2::app::ApplyStage(viewport_->DisplaySettingsNow(),
+        displayStage_));
     SetStatus(QString::fromUtf8(std::string(
         kachakacha::v2::app::DisplayStageNameJa(displayStage_)).c_str()));
+}
+
+void V2MainWindow::ApplyDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings)
+{
+    viewport_->SetDisplaySettings(settings);
+    if (displayDock_ != nullptr) {
+        displayDock_->SetSettings(settings, displayStage_);
+    }
+    viewport_->update();
+}
+
+void V2MainWindow::ShowDisplayDock()
+{
+    if (displayDock_ == nullptr) {
+        return;
+    }
+    displayDock_->SetChoice(CurrentDisplayChoice(), displayStage_);
+    displayDock_->show();
+    displayDock_->raise();
+    SetStatus(QStringLiteral("表示: 右の「表示」で線の太さ・様式・色と段を決めてください。"));
+}
+
+V2DisplayChoice V2MainWindow::CurrentDisplayChoice() const
+{
+    V2DisplayChoice choice;
+    choice.settings = viewport_->DisplaySettingsNow();
+    choice.wireColor = viewport_->Colors().wire;
+    choice.constructionColor = viewport_->Colors().construction;
+    choice.backgroundColor = viewport_->Colors().background;
+    return choice;
+}
+
+void V2MainWindow::ApplyDisplayChoice(const V2DisplayChoice& choice)
+{
+    // 見え方だけ。文書は変えない(AT-UIX-010)。色は画面の持ち物。
+    ViewportPalette palette = viewport_->Colors();
+    if (choice.wireColor.isValid()) {
+        palette.wire = choice.wireColor;
+    }
+    if (choice.constructionColor.isValid()) {
+        palette.construction = choice.constructionColor;
+    }
+    if (choice.backgroundColor.isValid()) {
+        palette.background = choice.backgroundColor;
+    }
+    viewport_->SetPalette(palette);
+    viewport_->SetDisplaySettings(choice.settings);
+    viewport_->update();
 }
 
 void V2MainWindow::BeginRenameSelected()

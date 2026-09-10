@@ -107,6 +107,9 @@ public:
     [[nodiscard]] int blue() const;
     [[nodiscard]] int alpha() const;
     void setAlpha(int);
+    [[nodiscard]] double alphaF() const;
+    void setAlphaF(double);
+    [[nodiscard]] QString name() const;
     [[nodiscard]] QColor lighter(int = 150) const;
     [[nodiscard]] QColor darker(int = 200) const;
     [[nodiscard]] bool isValid() const;

@@ -6,6 +6,7 @@
 //!
 //! グリッドは逆で、**見え方の都合なので文書に入れない。**
 //! 保存して開き直したときに、相手の画面のグリッドまで変わってしまうのは行きすぎである。
+//! 間隔・副点・基準・色は右の「グリッド」の棚(V1 と同じ欄)で決める。
 
 #include "V2MainWindow.h"
 
@@ -61,7 +62,7 @@ void V2MainWindow::RunPlaneCommand(std::string_view id)
         return;
     }
     if (id == "grid.edit") {
-        CycleGridSpacing();
+        ShowGridDock();
         return;
     }
     if (id == "grid.move_origin") {
@@ -289,38 +290,80 @@ void V2MainWindow::ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame
     viewport_->update();
 }
 
-void V2MainWindow::CycleGridSpacing()
+void V2MainWindow::ShowGridDock()
 {
-    using kachakacha::v2::modeling::GridDefinition;
-    using kachakacha::v2::modeling::SetGridSpacing;
-    // 1 → 2 → 5 → 10 → 20 mm と回る。模型でよく使う刻みだけを並べる。
-    const double steps[] = {1.0, 2.0, 5.0, 10.0, 20.0};
-    auto scene = session_->Scene();
-    double next = steps[0];
-    for (std::size_t index = 0; index < std::size(steps); ++index) {
-        if (scene.grid.majorSpacingMm <= steps[index] + 1.0e-9) {
-            next = steps[(index + 1) % std::size(steps)];
-            break;
-        }
-    }
-    // 場面のグリッドは画面用の形なので、core の形へ写してから頼む。
-    // 検査は core にあるので、ここで刻みが正かどうかは見ない。
-    GridDefinition definition;
-    definition.visible = scene.grid.visible;
-    definition.majorSpacingMm = scene.grid.majorSpacingMm;
-    definition.subdivision = scene.grid.subdivision;
-    const auto changed = SetGridSpacing(definition, next, definition.subdivision);
-    if (!changed.HasValue()) {
-        ReportDiagnostics(changed.Diagnostics());
+    if (gridDock_ == nullptr) {
         return;
     }
-    scene.grid.majorSpacingMm = changed.Value().majorSpacingMm;
-    scene.grid.subdivision = changed.Value().subdivision;
+    gridDock_->SetChoice(CurrentGridChoice());
+    gridDock_->show();
+    gridDock_->raise();
+    SetStatus(QStringLiteral("グリッド: 右の「グリッド」で間隔・副点・基準・色を決めてください。"));
+}
+
+V2GridChoice V2MainWindow::CurrentGridChoice() const
+{
+    // 場面のグリッドは画面用の形なので、棚の形(core の GridDefinition)へ写す。
+    const auto& scene = session_->Scene();
+    const auto& plane = viewport_->WorkPlane();
+    V2GridChoice choice;
+    choice.grid.visible = scene.grid.visible;
+    choice.grid.majorSpacingMm = scene.grid.majorSpacingMm;
+    choice.grid.subdivision = scene.grid.subdivision;
+    choice.grid.originUmm = plane.CoordinateU(scene.grid.origin);
+    choice.grid.originVmm = plane.CoordinateV(scene.grid.origin);
+    choice.spacingExpression = QString::number(scene.grid.majorSpacingMm);
+    choice.showInAllModes = viewport_->DisplaySettingsNow().gridInAllModes;
+    choice.dimOffPlaneLines = viewport_->DisplaySettingsNow().dimOffPlaneLines;
+    choice.majorColor = viewport_->Colors().gridMajor;
+    choice.minorColor = viewport_->Colors().gridMinor;
+    choice.backgroundColor = viewport_->Colors().background;
+    return choice;
+}
+
+void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
+{
+    using kachakacha::v2::modeling::SetGridSpacing;
+    // 検査は core にある。ここで刻みが正かどうかは見ない。
+    const auto checked = SetGridSpacing(choice.grid, choice.grid.majorSpacingMm,
+        choice.grid.subdivision);
+    if (!checked.HasValue()) {
+        ReportDiagnostics(checked.Diagnostics());
+        return;
+    }
+    auto scene = session_->Scene();
+    scene.grid.visible = choice.grid.visible;
+    scene.grid.majorSpacingMm = checked.Value().majorSpacingMm;
+    scene.grid.subdivision = checked.Value().subdivision;
+    // 基準は作業平面の上の (u, v)。平面が動けば付いていく(GridModel の決まり 1)。
+    scene.grid.origin = viewport_->WorkPlane().PointAt(choice.grid.originUmm,
+        choice.grid.originVmm);
     session_->SetScene(std::move(scene));
+    // 色は画面の持ち物。無効な色(まだ決めていない)は触らない。
+    ViewportPalette palette = viewport_->Colors();
+    if (choice.majorColor.isValid()) {
+        palette.gridMajor = choice.majorColor;
+    }
+    if (choice.minorColor.isValid()) {
+        palette.gridMinor = choice.minorColor;
+    }
+    if (choice.backgroundColor.isValid()) {
+        palette.background = choice.backgroundColor;
+    }
+    viewport_->SetPalette(palette);
+    auto display = viewport_->DisplaySettingsNow();
+    display.gridInAllModes = choice.showInAllModes;
+    display.dimOffPlaneLines = choice.dimOffPlaneLines;
+    ApplyDisplaySettings(display);
+    RefreshGridSuppression();
     viewport_->update();
-    SetStatus(QStringLiteral("グリッドの間隔を %1 mm にしました(副点は 1/%2)。")
-            .arg(next)
-            .arg(scene.grid.subdivision));
+}
+
+void V2MainWindow::RefreshGridSuppression()
+{
+    // 「作図モード以外でも表示」を外したら、作図モード以外ではグリッドを出さない。
+    viewport_->SetGridSuppressedByMode(!viewport_->DisplaySettingsNow().gridInAllModes
+        && mode_ != kachakacha::v2::app::UiMode::Drawing);
 }
 
 void V2MainWindow::MoveGridOriginByClick()

@@ -323,6 +323,12 @@ public:
     void addAction(QAction*);
 };
 
+class QColorDialog : public QWidget {
+public:
+    [[nodiscard]] static QColor getColor(const QColor& initial = QColor(),
+        QWidget* parent = nullptr, const QString& title = QString());
+};
+
 class QFileDialog : public QWidget {
 public:
     [[nodiscard]] static QString getSaveFileName(QWidget* parent = nullptr,

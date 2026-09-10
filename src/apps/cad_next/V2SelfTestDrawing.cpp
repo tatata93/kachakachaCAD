@@ -6,7 +6,9 @@
 
 #include "V2SelfTest.h"
 
+#include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
+#include "V2GridDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -14,6 +16,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
 
+#include <QColor>
 #include <QPointF>
 #include <QString>
 
@@ -183,11 +186,98 @@ using kachakacha::v2::modeling::ToolSettings;
             && std::abs(made.EndPoint().z - 45.0) < 1.0e-9);
 }
 
+[[nodiscard]] bool CaseGridDockAppliesSpacingSubdivisionAndOrigin(V2MainWindow& window)
+{
+    // グリッドの棚(V1 のグリッド欄)。間隔は式で、副点・基準も棚から。文書は変わらない。
+    const auto revision = window.Session().GetDocument().Revision();
+    auto& dock = window.GridDock();
+    window.RunCommand("grid.edit");
+    if (!Explain("式が読める", dock.ApplySpacingExpression(QStringLiteral("25.4/8")))) {
+        return false;
+    }
+    if (!Explain((std::string("間隔が 3.175(実際は ")
+                     + std::to_string(window.Session().Scene().grid.majorSpacingMm) + ")").c_str(),
+            std::abs(window.Session().Scene().grid.majorSpacingMm - 3.175) < 1.0e-9)) {
+        return false;
+    }
+    if (!Explain("読めない式は当てず理由が出る",
+            !dock.ApplySpacingExpression(QStringLiteral("abc")) && !dock.MessageText().isEmpty()
+                && std::abs(window.Session().Scene().grid.majorSpacingMm - 3.175) < 1.0e-9)) {
+        return false;
+    }
+    V2GridChoice choice = dock.Choice();
+    choice.grid.subdivision = 4;
+    choice.grid.originUmm = 5.0;
+    choice.grid.originVmm = 7.0;
+    choice.showInAllModes = false;
+    dock.SetChoice(choice);
+    dock.Apply();
+    const auto& grid = window.Session().Scene().grid;
+    if (!Explain("副点 1/4", grid.subdivision == 4)) {
+        return false;
+    }
+    const auto expected = window.Viewport().WorkPlane().PointAt(5.0, 7.0);
+    if (!Explain("基準が作業平面の (5, 7)", (grid.origin - expected).Length() < 1.0e-9)) {
+        return false;
+    }
+    // 「作図モード以外でも表示」を外すと、部品モードではグリッドが出ない。
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    if (!Explain("部品モードではグリッドを出さない", window.Viewport().GridSuppressedByMode())) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    if (!Explain("作図モードでは出す", !window.Viewport().GridSuppressedByMode())) {
+        return false;
+    }
+    return Explain("文書は変わらない", window.Session().GetDocument().Revision() == revision);
+}
+
+[[nodiscard]] bool CaseDisplayDockStylesAndStages(V2MainWindow& window)
+{
+    // 表示の棚(V1 の表示タブ)。太さ・様式・色と、設計/完成形/選択だけ。形は変わらない。
+    const auto revision = window.Session().GetDocument().Revision();
+    auto& dock = window.DisplayDock();
+    window.RunCommand("view.display_settings");
+    V2DisplayChoice choice = dock.Choice();
+    choice.settings.wireWidthPx = 3.5;
+    choice.settings.wireStyle = kachakacha::v2::app::LineStyle::Dotted;
+    choice.backgroundColor = QColor(10, 20, 30);
+    dock.SetChoice(choice, kachakacha::v2::app::DisplayStage::All);
+    dock.Apply();
+    const auto& shown = window.Viewport().DisplaySettingsNow();
+    if (!Explain("太さ 3.5 と点線が効く",
+            std::abs(shown.wireWidthPx - 3.5) < 1.0e-9
+                && shown.wireStyle == kachakacha::v2::app::LineStyle::Dotted)) {
+        return false;
+    }
+    if (!Explain("背景色が効く", window.Viewport().Colors().background == QColor(10, 20, 30))) {
+        return false;
+    }
+    // 段を変えても太さは残る。
+    dock.PressStage(kachakacha::v2::app::DisplayStage::SelectionOnly);
+    if (!Explain("選択だけになる", window.Viewport().DisplaySettingsNow().selectionOnly)) {
+        return false;
+    }
+    if (!Explain("段を変えても太さは残る",
+            std::abs(window.Viewport().DisplaySettingsNow().wireWidthPx - 3.5) < 1.0e-9)) {
+        return false;
+    }
+    window.RunCommand("view.stage_all");
+    if (!Explain("設計に戻る",
+            !window.Viewport().DisplaySettingsNow().selectionOnly
+                && window.Viewport().DisplaySettingsNow().gridVisible)) {
+        return false;
+    }
+    return Explain("文書は変わらない", window.Session().GetDocument().Revision() == revision);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},
+        {"表示の棚で太さ・様式・色と段が変わる", &CaseDisplayDockStylesAndStages},
         {"作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},
         {"補助線として作図し指定点を残せる", &CaseConstructionAndKeepPointsFromDock},
         {"数値で線を作れる", &CaseDirectWireFromDock},

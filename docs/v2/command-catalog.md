@@ -40,9 +40,10 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `view.align_selection` | 選択に正対 | 平面/平面Face/作業平面1つ | cameraだけ変更 | AT-UIX-008 |
 | `view.align_workplane` | 正対 | 常時(作業中の作図面) | cameraだけ変更 | AT-UIX-008 |
 | `view.display_settings` | 表示設定 | 常時 | 表示属性だけ変更 | AT-UIX-010 |
-| `view.stage_all` | すべて出す | なし | (表示のみ) | AT-UIX-010 |
+| `view.stage_all` | 設計(すべて出す) | なし | (表示のみ)Ctrl+1 | AT-UIX-010 |
 | `view.stage_no_grid` | グリッドを消す | なし | (表示のみ) | AT-UIX-010 |
-| `view.stage_no_construction` | 補助線も消す | なし | (表示のみ) | AT-UIX-010 |
+| `view.stage_no_construction` | 完成形(補助線も消す) | なし | (表示のみ)Ctrl+2 | AT-UIX-010 |
+| `view.stage_selection_only` | 選択だけ | なし | (表示のみ)Ctrl+3 | AT-UIX-010 |
 | `entity.rename` | 名前を変える | エンティティ、新しい名前 | RenameEntity | AT-DOC-005 |
 | `snap.toggle` | スナップ | 常時 | 通常snap ON/OFF | AT-UIX-004 |
 | `group.set_active` | 作業中グループ | group 0または1 | active group更新 | AT-UIX-006 |

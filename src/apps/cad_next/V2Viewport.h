@@ -94,6 +94,13 @@ public:
 
     //! 見え方の設定(AT-UIX-010)。形は変えない。
     void SetDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
+    //! 作図モード以外でグリッドを出さない(表示設定 gridInAllModes が偽のとき)。
+    void SetGridSuppressedByMode(bool suppressed)
+    {
+        gridSuppressedByMode_ = suppressed;
+        update();
+    }
+    [[nodiscard]] bool GridSuppressedByMode() const noexcept { return gridSuppressedByMode_; }
     [[nodiscard]] const kachakacha::v2::app::DisplaySettings& DisplaySettingsNow() const
     {
         return display_;
@@ -142,7 +149,6 @@ public:
     void FitToDocument();
 
     //! グリッドの主間隔(mm)。
-    void SetGridSpacingMm(double value);
 
     //! 状態が変わったときに呼ばれる。案内文と診断を画面へ出すのに使う。
     void SetStatusCallback(std::function<void(const std::string&)> callback);
@@ -387,6 +393,7 @@ private:
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
     kachakacha::v2::app::DisplaySettings display_;
+    bool gridSuppressedByMode_ = false;
     //! Ctrl で吸着を止めているか。押している間だけ真。
     bool snapSuppressedByKey_ = false;
     //! Shift で拘束しているか。押している間だけ真。
@@ -435,7 +442,6 @@ private:
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     kachakacha::v2::geometry::Vector3 center_{};
     double visibleWidthMm_ = 200.0;
-    double gridSpacingMm_ = 10.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;
     kachakacha::v2::app::HoverResult hover_;
     std::string status_;

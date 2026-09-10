@@ -126,7 +126,8 @@ void V2DrawingDock::BuildDirectWireRows(QFormLayout* form)
             QStringLiteral("点%1 mm").arg(static_cast<int>(index) + 1));
     }
     wireRadius_ = new QDoubleSpinBox(body_);
-    wireRadius_->setRange(0.001, 100000.0);
+    // 0 も入れられる。断るのは core(UI-D002)で、欄が黙って 0.001 に寄せない。
+    wireRadius_->setRange(0.0, 100000.0);
     wireRadius_->setDecimals(3);
     wireRadius_->setSingleStep(1.0);
     wireRadius_->setSuffix(QStringLiteral(" mm"));

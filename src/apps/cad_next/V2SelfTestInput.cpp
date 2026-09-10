@@ -451,16 +451,14 @@ namespace {
 
 [[nodiscard]] bool CaseDisplayStagesHaveTheirOwnKeys(V2MainWindow& window)
 {
-    // V1は Ctrl+1/2/3 で表示モードを **直に** 選べた。回して探さなくてよい。
-    // V2の3段は中身が違う(V1の設計/完成/単独ではない)が、
-    // 「数字で直に選ぶ」ところは同じにする。
+    // V1は Ctrl+1/2/3 で 設計 / 完成形 / 選択だけ を **直に** 選べた。回して探さなくてよい。
     const struct {
         const char* key;
         const char* id;
     } expected[] = {
         {"Ctrl+1", "view.stage_all"},
-        {"Ctrl+2", "view.stage_no_grid"},
-        {"Ctrl+3", "view.stage_no_construction"},
+        {"Ctrl+2", "view.stage_no_construction"},
+        {"Ctrl+3", "view.stage_selection_only"},
         {"F2", "entity.rename"},
     };
     for (const auto& entry : expected) {

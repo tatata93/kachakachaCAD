@@ -264,7 +264,8 @@ void V2MainWindow::BuildMenus()
         {"表示(&V)", {"view.fit_all", "view.align_selection", "view.align_workplane",
                        "view.hide_selected",
                        "view.show_all", "view.stage_all", "view.stage_no_grid",
-                       "view.stage_no_construction", "view.display_settings",
+                       "view.stage_no_construction", "view.stage_selection_only",
+                       "view.display_settings",
                        "measure.open"}},
     };
     for (const MenuGroup& group : groups) {
@@ -367,6 +368,7 @@ void V2MainWindow::SetMode(UiMode mode)
     if (drawingDock_ != nullptr && mode == UiMode::Drawing) {
         drawingDock_->raise();
     }
+    RefreshGridSuppression();
     // 手順はどのモードでも出す。中身がモードで変わる。
     RefreshProcessSteps();
     SetStatus(QStringLiteral("%1モードにしました。選んでいるものはそのままです。")
@@ -550,6 +552,18 @@ void V2MainWindow::BuildRightShelves()
     drawingDock_->SetCreateWireHandler([this] { CreateWireFromDock(); });
     addDockWidget(Qt::RightDockWidgetArea, drawingDock_);
 
+    // グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。見え方だけで、文書は変えない。
+    gridDock_ = new V2GridDock(this);
+    gridDock_->SetApplyHandler([this](const V2GridChoice& choice) { ApplyGridChoice(choice); });
+    gridDock_->SetPickOriginHandler([this] { RunCommand("grid.move_origin"); });
+    addDockWidget(Qt::RightDockWidgetArea, gridDock_);
+    displayDock_ = new V2DisplayDock(this);
+    displayDock_->SetApplyHandler(
+        [this](const V2DisplayChoice& choice) { ApplyDisplayChoice(choice); });
+    displayDock_->SetStageHandler(
+        [this](kachakacha::v2::app::DisplayStage stage) { ApplyDisplayStage(stage); });
+    addDockWidget(Qt::RightDockWidgetArea, displayDock_);
+
     // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
     parameterDock_ = new V2ParameterDock(this);
     addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
@@ -565,6 +579,8 @@ void V2MainWindow::BuildRightShelves()
     tabifyDockWidget(parameterDock_, measureDock_);
     tabifyDockWidget(measureDock_, workPlaneDock_);
     tabifyDockWidget(workPlaneDock_, drawingDock_);
+    tabifyDockWidget(drawingDock_, gridDock_);
+    tabifyDockWidget(gridDock_, displayDock_);
     exportDock_->raise();
 }
 
@@ -1352,6 +1368,13 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
         QApplication::setPalette(QPalette());
         Win95Style::RestoreApplicationStyleSheets();
         viewport_->SetPalette(ViewportPalette::Dark());
+    }
+    // 見た目を変えたら、棚に出している色も同じにする。
+    if (gridDock_ != nullptr) {
+        gridDock_->SetChoice(CurrentGridChoice());
+    }
+    if (displayDock_ != nullptr) {
+        displayDock_->SetChoice(CurrentDisplayChoice(), displayStage_);
     }
     update();
 }

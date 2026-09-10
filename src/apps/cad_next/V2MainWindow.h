@@ -15,7 +15,9 @@
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/DisplaySettings.h"
+#include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
+#include "V2GridDock.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
@@ -178,6 +180,20 @@ public:
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
     //! 作図の棚(円弧の作り方・補助線・指定点を残す・数値で線を作る)。
     [[nodiscard]] V2DrawingDock& DrawingDock() { return *drawingDock_; }
+    //! グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。
+    [[nodiscard]] V2GridDock& GridDock() { return *gridDock_; }
+    [[nodiscard]] V2DisplayDock& DisplayDock() { return *displayDock_; }
+    //! 棚の値を場面と画面へ当てる。文書は変えない。
+    void ApplyGridChoice(const V2GridChoice& choice);
+    void ApplyDisplayChoice(const V2DisplayChoice& choice);
+    //! 見え方の設定を画面と棚へ当てる。
+    void ApplyDisplaySettings(const kachakacha::v2::app::DisplaySettings& settings);
+    //! 棚を前に出す。いまの場面・色を棚へ写してから出す。
+    void ShowGridDock();
+    void ShowDisplayDock();
+    //! 場面と色から棚の値を作る。
+    [[nodiscard]] V2GridChoice CurrentGridChoice() const;
+    [[nodiscard]] V2DisplayChoice CurrentDisplayChoice() const;
     //! 道具の設定を場面へ当てる(棚から呼ぶ)。
     void ApplyToolSettings(const kachakacha::v2::modeling::ToolSettings& settings);
     //! 棚の「数値で線を作る」。作れなければ理由を棚と帯に出す。
@@ -560,8 +576,6 @@ private:
     //! 作業平面を画面と場面へ反映する。
     void ApplyWorkPlane(const kachakacha::v2::modeling::WorkPlaneFrame& frame,
         const kachakacha::v2::base::EntityId& entityId);
-    //! グリッドの間隔を順ぐりに変える。
-    void CycleGridSpacing();
     //! 次に作る標準面(棚の初期値)。作るたびに XY→YZ→ZX と回す。
     kachakacha::v2::modeling::StandardPlaneKind nextStandardPlane_ =
         kachakacha::v2::modeling::StandardPlaneKind::ZX;
@@ -618,6 +632,10 @@ private:
     V2MeasureDock* measureDock_ = nullptr;
     V2ParameterDock* parameterDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
+    V2GridDock* gridDock_ = nullptr;
+    V2DisplayDock* displayDock_ = nullptr;
+    //! 「作図モード以外でも表示」を外したときにグリッドを消す。
+    void RefreshGridSuppression();
     QDockWidget* processDock_ = nullptr;
     QDockWidget* diagnosticDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;

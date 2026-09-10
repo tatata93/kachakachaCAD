@@ -34,17 +34,19 @@ using kachakacha::v2::modeling::WorkPlaneFrame;
 void V2Viewport::DrawGrid(QPainter& painter) const
 {
     const auto& grid = session_->Scene().grid;
-    if (!grid.visible || !display_.gridVisible) {
+    if (!grid.visible || !display_.gridVisible || gridSuppressedByMode_) {
         return;
     }
     const double pixelsPerMm = mapping_.PixelsPerMillimeterAt(workPlane_.origin);
     if (!(pixelsPerMm > 0.0)) {
         return;
     }
+    // 間隔と副点は場面のグリッド(棚で決めたもの)。画面側で別の値を持たない。
+    // 持っていたころ、「グリッド」で間隔を変えても画面が変わらなかった。
+    const double majorMm = std::max(grid.majorSpacingMm, 0.001);
     // 画面で6px を下回る間隔は出さない(geometry-contract §6.3)。
-    const double majorPx = gridSpacingMm_ * pixelsPerMm;
-    const int reach = static_cast<int>(
-        std::ceil(visibleWidthMm_ / std::max(gridSpacingMm_, 1.0e-6)));
+    const double majorPx = majorMm * pixelsPerMm;
+    const int reach = static_cast<int>(std::ceil(visibleWidthMm_ / majorMm));
     const int limited = std::min(reach, 400);
 
     const auto drawSet = [&](double spacingMm, const QColor& color) {
@@ -77,8 +79,11 @@ void V2Viewport::DrawGrid(QPainter& painter) const
         }
     };
     if (majorPx >= 6.0) {
-        drawSet(gridSpacingMm_ * 0.5, palette_.gridMinor);
-        drawSet(gridSpacingMm_, palette_.gridMajor);
+        // 副点: 0 = 主点のみ、2 = 1/2、3 = 1/3、4 = 1/4(V1 と同じ)。
+        if (grid.subdivision >= 2) {
+            drawSet(majorMm / grid.subdivision, palette_.gridMinor);
+        }
+        drawSet(majorMm, palette_.gridMajor);
     }
 }
 
@@ -132,9 +137,39 @@ void V2Viewport::DrawWorkPlane(QPainter& painter) const
     painter.drawPolygon(polygon);
 }
 
+namespace {
+
+[[nodiscard]] Qt::PenStyle PenStyleOf(kachakacha::v2::app::LineStyle style)
+{
+    switch (style) {
+    case kachakacha::v2::app::LineStyle::Solid:  return Qt::SolidLine;
+    case kachakacha::v2::app::LineStyle::Dashed: return Qt::DashLine;
+    case kachakacha::v2::app::LineStyle::Dotted: return Qt::DotLine;
+    }
+    return Qt::SolidLine;
+}
+
+//! その線が作業平面の上にあるか(両端と中央が面から浮いていない)。
+[[nodiscard]] bool CurveOnPlane(const CurveSegment& segment, const WorkPlaneFrame& plane)
+{
+    constexpr double kTolerance = 1.0e-3;
+    for (const double t : {0.0, 0.5, 1.0}) {
+        const Vector3 point = segment.Evaluate(t);
+        if (std::abs(Dot(point - plane.origin, plane.normal)) > kTolerance) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 void V2Viewport::DrawDocument(QPainter& painter) const
 {
     const auto& scene = session_->Scene();
+    // 作図中は、作図面の上にない線を薄くして、自分の線を見やすくする(V1 の #6)。
+    const bool dimming = display_.dimOffPlaneLines
+        && session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select;
     for (const auto& curve : scene.curves) {
         QPainterPath path;
         bool started = false;
@@ -146,13 +181,23 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             continue;
         }
         const bool selected = kachakacha::v2::app::IsSelected(selection_, curve.entityId);
-        const QColor color = selected
+        if (display_.selectionOnly && !selected) {
+            continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
+        }
+        QColor color = selected
             ? palette_.selected
             : (curve.construction ? palette_.construction : palette_.wire);
-        // 太さと様式は V1 の既定と同じ(線 2.0 実線、補助線 1.7 破線、選択 3.2)。
+        if (dimming && !selected && !CurveOnPlane(curve.segment, workPlane_)) {
+            color.setAlphaF(color.alphaF() * 0.24);
+        }
+        // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。
         // 細い実線は高解像度の画面で点線に見えることがある。
-        painter.setPen(QPen(color, selected ? 3.2 : (curve.construction ? 1.7 : 2.0),
-            curve.construction ? Qt::DashLine : Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        const double width = selected
+            ? std::max(3.2, display_.wireWidthPx + 1.2)
+            : (curve.construction ? display_.constructionWidthPx : display_.wireWidthPx);
+        painter.setPen(QPen(color, width,
+            PenStyleOf(curve.construction ? display_.constructionStyle : display_.wireStyle),
+            Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
         if (selected && bodyDrag_.active && bodyDrag_.moved) {
@@ -173,6 +218,10 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     for (const auto& point : scene.points) {
         const auto screen = ToScreen(point.position);
         if (!screen.has_value()) {
+            continue;
+        }
+        if (display_.selectionOnly
+            && !kachakacha::v2::app::IsSelected(selection_, point.entityId)) {
             continue;
         }
         painter.drawRect(QRectF(screen->x() - 2.0, screen->y() - 2.0, 4.0, 4.0));

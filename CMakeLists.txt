@@ -861,6 +861,10 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2WorkPlaneDock.h
         src/apps/cad_next/V2DrawingDock.cpp
         src/apps/cad_next/V2DrawingDock.h
+        src/apps/cad_next/V2GridDock.cpp
+        src/apps/cad_next/V2GridDock.h
+        src/apps/cad_next/V2DisplayDock.cpp
+        src/apps/cad_next/V2DisplayDock.h
         src/apps/cad_next/V2NumberDialog.cpp
         src/apps/cad_next/V2ChoiceDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp

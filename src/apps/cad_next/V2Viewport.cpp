@@ -173,12 +173,6 @@ void V2Viewport::SetViewCenter(const Vector3& center)
     update();
 }
 
-void V2Viewport::SetGridSpacingMm(double value)
-{
-    gridSpacingMm_ = std::max(value, 0.001);
-    update();
-}
-
 void V2Viewport::SetStatusCallback(std::function<void(const std::string&)> callback)
 {
     statusCallback_ = std::move(callback);

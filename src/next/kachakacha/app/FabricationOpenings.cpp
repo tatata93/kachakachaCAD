@@ -3,6 +3,8 @@
 #include "kachakacha/fabrication/BandFold.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -50,6 +52,56 @@ namespace {
     return state;
 }
 
+//! 取り分の輪郭のうち、帯の境目(レール)の上を通る辺に、レールの点を挟む。
+//!
+//! 切り口を2点の直線で済ませると、曲がった面の上では弦になって形が崩れる
+//! (fabrication-contract §8.2、V1 の壊れどころ)。境目に沿って面の上を辿らせる。
+[[nodiscard]] std::vector<Vector3> FollowRailsOnCuts(const BandMesh& mesh,
+    const std::vector<std::vector<Vector3>>& parameterState,
+    const std::vector<double>& railParameters, const std::vector<Vector3>& outline)
+{
+    constexpr double kOnRail = 1.0e-6;
+    std::vector<Vector3> refined;
+    const std::size_t count = outline.size();
+    for (std::size_t index = 0; index < count; ++index) {
+        const Vector3& from = outline[index];
+        const Vector3& to = outline[(index + 1) % count];
+        refined.push_back(from);
+        const auto a = fabrication::MapPointToBandState(mesh, parameterState, from);
+        const auto b = fabrication::MapPointToBandState(mesh, parameterState, to);
+        if (!a.HasValue() || !b.HasValue()) {
+            continue;
+        }
+        for (std::size_t row = 0; row < railParameters.size() && row < mesh.world.size();
+             ++row) {
+            const double rail = railParameters[row];
+            if (std::abs(a.Value().point.x - rail) > kOnRail
+                || std::abs(b.Value().point.x - rail) > kOnRail) {
+                continue;
+            }
+            // 両端がこのレールの上。間の列の点を、進む向きに挟む。
+            const double sFrom = a.Value().point.y;
+            const double sTo = b.Value().point.y;
+            const int columns = mesh.columns;
+            const int first = static_cast<int>(std::ceil(std::min(sFrom, sTo) * (columns - 1)));
+            const int last = static_cast<int>(std::floor(std::max(sFrom, sTo) * (columns - 1)));
+            std::vector<Vector3> between;
+            for (int column = first; column <= last; ++column) {
+                const double s = static_cast<double>(column) / (columns - 1);
+                if (s > std::min(sFrom, sTo) + kOnRail && s < std::max(sFrom, sTo) - kOnRail) {
+                    between.push_back(mesh.world[row][static_cast<std::size_t>(column)]);
+                }
+            }
+            if (sFrom > sTo) {
+                std::reverse(between.begin(), between.end());
+            }
+            refined.insert(refined.end(), between.begin(), between.end());
+            break;
+        }
+    }
+    return refined;
+}
+
 } // namespace
 
 bool ClipOpeningIntoBandPanels(const BandOpeningTarget& target,
@@ -90,8 +142,10 @@ bool ClipOpeningIntoBandPanels(const BandOpeningTarget& target,
             continue;
         }
         std::vector<Point2> outline;
-        outline.reserve(piece.points.size());
-        for (const Vector3& point : piece.points) {
+        const std::vector<Vector3> followed = FollowRailsOnCuts(mesh, parameterState,
+            target.railParameters, piece.points);
+        outline.reserve(followed.size());
+        for (const Vector3& point : followed) {
             const auto mapped = fabrication::MapPointToBandState(mesh, developed, point);
             if (!mapped.HasValue()) {
                 outline.clear();

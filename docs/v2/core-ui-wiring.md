@@ -36,7 +36,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/CurvatureAnalysis.h` | 面の曲がり方の分類 | 近似(V2方式)を繋ぐとき |
 | `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
 | `fabrication/ReliefCut.h` | 二重曲率を逃がす切れ目 | 近似(V2方式)を繋ぐとき |
-| `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し | 近似を繋ぐとき |
+| `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |

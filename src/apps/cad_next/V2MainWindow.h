@@ -372,6 +372,13 @@ private:
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
     //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
     void AssignOpeningRole();
+    //! 選んだ線を接続スコープにし、近似の形へ寄せた「_接続」の線を作る。
+    void SetConnectionScope();
+    //! 定義の接続スコープの線を、名前と線の組で集める。
+    [[nodiscard]] std::vector<
+        std::pair<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>>
+    ConnectionScopeCurves(
+        const kachakacha::v2::domain::CreateFabricationModelDefinition& definition) const;
     //! 定義に書いてある開口・折り線の id から、いまの線を集める。
     [[nodiscard]] kachakacha::v2::app::FabricationMarkings FabricationMarkingsFor(
         const kachakacha::v2::domain::CreateFabricationModelDefinition& definition) const;

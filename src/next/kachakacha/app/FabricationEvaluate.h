@@ -27,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace kachakacha::v2::app {
@@ -104,6 +105,25 @@ struct ResolvedFoldState {
 [[nodiscard]] std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     const domain::CreateFabricationModelDefinition& definition,
     const FabricationEvaluation& evaluation, double liftMm);
+
+//! 接続スコープの線1本を、近似の実形状へ寄せたもの。
+struct AdaptedWire {
+    std::string name;
+    std::vector<geometry::Vector3> points; //!< 折れ線。元の線を標本化して寄せた点列
+    bool closed = false;
+    int snappedPoints = 0;                 //!< 寄せた点の数。0 なら1点も載っていない
+};
+
+//! 接続スコープの線を、近似メッシュの状態 state(完成形なら mesh.world)の上へ寄せる。
+//! V1 の接続スコープ(合意13)そのもの。
+//!
+//! 線を折れ線として標本化し、メッシュに **載っている点だけ** を寄せる。
+//! 離れている点は元のまま残す。寄せる許容は「近似の偏差 + 0.35mm」(V1 と同じ値)。
+//! 元の線は変えない。寄せた結果は別の線(名前に「_接続」)として返す。
+[[nodiscard]] std::vector<AdaptedWire> AdaptConnectionWires(const fabrication::BandMesh& mesh,
+    const std::vector<std::vector<geometry::Vector3>>& state,
+    const std::vector<std::pair<std::string, std::vector<geometry::CurveSegment>>>& wires,
+    double snapToleranceMm, int samplesPerCurve = 24);
 
 //! 曲げ状態の一文。「組立 42%(折り線 2 本のうち 1 本を個別指定)」など。
 [[nodiscard]] std::string FoldStateSummaryJa(

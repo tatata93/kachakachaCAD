@@ -387,6 +387,7 @@ template<class Id>
         definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
         definition["openingWires"] = WriteIdArray(fabrication->openingWires);
         definition["foldWires"] = WriteIdArray(fabrication->foldWires);
+        definition["connectionWires"] = WriteIdArray(fabrication->connectionWires);
         definition["masterPercent"] = JsonValue::Number(fabrication->masterPercent);
         definition["creaseProgress"] = WriteNumberArray(fabrication->creaseProgress);
         definition["bandProgress"] = WriteNumberArray(fabrication->bandProgress);
@@ -1103,6 +1104,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
         made.openingWires = ReadIdArray(loader, definition, "openingWires", where);
         made.foldWires = ReadIdArray(loader, definition, "foldWires", where);
+        made.connectionWires = ReadIdArray(loader, definition, "connectionWires", where);
         made.masterPercent = loader.NumberOr(definition, "masterPercent", 100.0);
         made.creaseProgress = ReadNumberArray(loader, definition, "creaseProgress", where);
         made.bandProgress = ReadNumberArray(loader, definition, "bandProgress", where);

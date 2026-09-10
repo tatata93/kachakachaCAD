@@ -165,6 +165,20 @@ void V2MainWindow::FreezeFabricationState()
             }
         }
     }
+    // 接続スコープの線も、この曲げ状態の形へ寄せて固定する(V1 の PartFoldState と同じ)。
+    const auto state = kachakacha::v2::app::ResolveFoldState(*definition,
+        *evaluated->second.bandMesh);
+    const auto folded = kachakacha::v2::fabrication::FoldBandMesh(
+        *evaluated->second.bandMesh, state.masterProgress);
+    for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
+             *evaluated->second.bandMesh, folded, ConnectionScopeCurves(*definition),
+             evaluated->second.maximumDeviationMm + 0.35)) {
+        if (!AddPlainWire(PolylineOf(wire.points),
+                (wire.name + " (" + stateName + ")").c_str())
+                 .IsNil()) {
+            ++wires;
+        }
+    }
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("現在状態を固定(%1): 線 %2 本、面 %3 枚、部品 %4 個にしました。")
             .arg(QString::fromStdString(stateName))

@@ -296,6 +296,42 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
     return rails.HasValue() ? rails.Value() : std::vector<std::vector<geometry::Vector3>>{};
 }
 
+std::vector<AdaptedWire> AdaptConnectionWires(const BandMesh& mesh,
+    const std::vector<std::vector<geometry::Vector3>>& state,
+    const std::vector<std::pair<std::string, std::vector<geometry::CurveSegment>>>& wires,
+    double snapToleranceMm, int samplesPerCurve)
+{
+    std::vector<AdaptedWire> adapted;
+    const int samples = std::max(2, samplesPerCurve);
+    for (const auto& [name, curves] : wires) {
+        if (curves.empty()) {
+            continue;
+        }
+        AdaptedWire wire;
+        wire.name = name + "_接続";
+        // 線を折れ線として標本化する。曲線1本ごとに samples 個。
+        for (std::size_t index = 0; index < curves.size(); ++index) {
+            const int last = index + 1 == curves.size() ? samples : samples - 1;
+            for (int sample = 0; sample <= last; ++sample) {
+                const geometry::Vector3 original =
+                    curves[index].Evaluate(static_cast<double>(sample) / samples);
+                const auto mapped = fabrication::MapPointToBandState(mesh, state, original);
+                // 載っている点だけを寄せる。離れている点は元のまま残す。
+                if (mapped.HasValue() && mapped.Value().distanceMm <= snapToleranceMm) {
+                    wire.points.push_back(mapped.Value().point);
+                    ++wire.snappedPoints;
+                } else {
+                    wire.points.push_back(original);
+                }
+            }
+        }
+        wire.closed = wire.points.size() >= 3
+            && (wire.points.front() - wire.points.back()).Length() <= 1.0e-6;
+        adapted.push_back(std::move(wire));
+    }
+    return adapted;
+}
+
 std::string FoldStateSummaryJa(const domain::CreateFabricationModelDefinition& definition)
 {
     std::string text = "組立 " + Rounded(definition.masterPercent) + "%";

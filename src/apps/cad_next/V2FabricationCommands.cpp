@@ -77,6 +77,10 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         SetAssemblyPercent(current);
         return;
     }
+    if (id == "fabrication.set_connection_scope") {
+        SetConnectionScope();
+        return;
+    }
     if (id == "fabrication.freeze_output") {
         CycleFreezeOutput();
         return;
@@ -469,3 +473,101 @@ void V2MainWindow::AssignOpeningRole()
             .arg(static_cast<int>(definition.foldWires.size())));
 }
 
+std::vector<std::pair<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>>
+V2MainWindow::ConnectionScopeCurves(
+    const kachakacha::v2::domain::CreateFabricationModelDefinition& definition) const
+{
+    std::vector<std::pair<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>>
+        wires;
+    for (const auto& id : definition.connectionWires) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr) {
+            continue;
+        }
+        std::vector<kachakacha::v2::geometry::CurveSegment> curves;
+        for (const auto& curve : session_->Scene().curves) {
+            if (curve.entityId == id) {
+                curves.push_back(curve.segment);
+            }
+        }
+        if (!curves.empty()) {
+            wires.emplace_back(entity->displayName.empty() ? std::string("線")
+                                                            : entity->displayName,
+                std::move(curves));
+        }
+    }
+    return wires;
+}
+
+void V2MainWindow::SetConnectionScope()
+{
+    using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
+
+    // 選んだ線を接続スコープにする(V1 の合意13)。近似したことで隣の部品と合わなく
+    // なる線を、近似の実形状へ寄せた「_接続」の線として作る。元の線は変えない。
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entity = session_->GetDocument().FindEntity(modelId);
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    const auto evaluated = fabricationModels_.find(modelId.ToString());
+    if (current == nullptr || evaluated == fabricationModels_.end()) {
+        SetStatus(QStringLiteral(
+            "接続スコープ: 先に「製作モデルを作る」で近似モデルを作ってください。"));
+        return;
+    }
+    if (!evaluated->second.bandMesh.has_value()) {
+        SetStatus(QStringLiteral(
+            "接続スコープ: 帯近似(V1方式)の近似モデルにだけ使えます。"));
+        return;
+    }
+    std::vector<kachakacha::v2::base::EntityId> wires;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* picked = session_->GetDocument().FindEntity(id);
+        if (picked != nullptr && picked->kind == kachakacha::v2::domain::EntityKind::Wire
+            && picked->displayName.find("_接続") == std::string::npos) {
+            wires.push_back(id);
+        }
+    }
+    if (wires.empty()) {
+        SetStatus(QStringLiteral("接続スコープ: 近似へ寄せたい線を選んでください。"));
+        return;
+    }
+    auto definition = *current;
+    for (const auto& id : wires) {
+        if (std::find(definition.connectionWires.begin(), definition.connectionWires.end(),
+                id) == definition.connectionWires.end()) {
+            definition.connectionWires.push_back(id);
+        }
+    }
+    auto inputs = feature->inputEntityIds;
+    inputs.insert(inputs.end(), wires.begin(), wires.end());
+    const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
+        feature->id, definition, inputs, "接続スコープを決める"));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    // 寄せた線を作る。完成形(mesh.world)の上へ寄せる。
+    const double snap = evaluated->second.maximumDeviationMm + 0.35;
+    const auto adapted = kachakacha::v2::app::AdaptConnectionWires(
+        *evaluated->second.bandMesh, evaluated->second.bandMesh->world,
+        ConnectionScopeCurves(definition), snap);
+    int made = 0;
+    int snapped = 0;
+    for (const auto& wire : adapted) {
+        if (!AddPlainWire(PolylineOf(wire.points), wire.name.c_str()).IsNil()) {
+            ++made;
+            snapped += wire.snappedPoints;
+        }
+    }
+    AdoptCurrentDocument();
+    RefreshFabricationView();
+    SetStatus(QStringLiteral("接続スコープ: %1 本を近似の形へ寄せました(寄せた点 %2)。"
+                             "元の線はそのままです。")
+            .arg(made)
+            .arg(snapped));
+}

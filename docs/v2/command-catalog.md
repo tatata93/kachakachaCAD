@@ -106,8 +106,9 @@ parameter schemaのdiscriminatorにする。
 | `fabrication.preview_update` | プレビュー更新 | 編集中設定 | Document外preview | AT-PER-001,002 |
 | `fabrication.create_pattern` | 型紙を作る | panel選択、用紙設定 | Pattern | AT-FAB-001,002,007 |
 | `fabrication.set_assembly` | 組立状態 | master%、個別Fold | Fabrication Feature更新 | AT-FAB-009から011 |
-| `fabrication.set_method` | 近似の方式を切り替える | なし | (設定のみ) | AT-FAB-005 |
+| `fabrication.set_method` | 近似の方式を切り替える | なし | (設定のみ) | AT-FAB-015 |
 | `fabrication.freeze_output` | 固定で作るもの | なし | (設定のみ) | AT-FAB-011 |
+| `fabrication.set_connection_scope` | 接続スコープ | ワイヤー | Fabrication Feature更新 + CreateWire | AT-FAB-015 |
 | `fabrication.freeze_state` | 現在状態を固定 | panel、Wire種別、Part方式、板厚位置 | Wire/Part/両方 | AT-FAB-011,012,014 |
 
 `fabrication.preview_update` だけはDocumentへcommitしない。`create` または設定更新の確定時に、

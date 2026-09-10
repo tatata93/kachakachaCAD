@@ -224,6 +224,9 @@ struct CreateFabricationModelDefinition {
     //! 外周と同じ平面に載っているかで決まる(人に選ばせない)。
     std::vector<EntityId> openingWires;
     std::vector<EntityId> foldWires;
+    //! 接続スコープ。近似の実形状へ寄せた「_接続」の線を作る元(V1 の合意13)。
+    //! 元の線は変えない。近似したことで隣の部品と合わなくなるのを、派生の線で埋める。
+    std::vector<EntityId> connectionWires;
 
     //! 曲げ状態。0 = 平ら(型紙)、100 = 近似完成形。
     double masterPercent = 100.0;

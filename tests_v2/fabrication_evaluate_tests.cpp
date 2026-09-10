@@ -8,6 +8,7 @@
 #include <cmath>
 #include <string>
 
+using kachakacha::v2::app::AdaptConnectionWires;
 using kachakacha::v2::app::EvaluateFabrication;
 using kachakacha::v2::app::FabricationMethod;
 using kachakacha::v2::app::FabricationMarkings;
@@ -162,6 +163,34 @@ KACHA_V2_TEST(fabrication_evaluate, 曲げ状態の姿勢は0で平ら100で完�
     const auto none = FoldedRailsOf(definition, EvaluateFabrication(Definition(0),
         {Cylinder()}, FabricationMarkings{}, 0.01).Value(), 5.0);
     Require(none.empty(), "V2 方式には曲げ状態の姿勢が無い");
+}
+
+KACHA_V2_TEST(fabrication_evaluate, 接続スコープの線は近似の形へ寄り離れた点は残る)
+{
+    // V1 の接続スコープ(合意13)。元の線は変えず、寄せた「_接続」の線を別に作る。
+    const auto made = EvaluateFabrication(Definition(1), {Cylinder()}, FabricationMarkings{},
+        0.01);
+    const auto& mesh = *made.Value().bandMesh;
+    // 円筒の上に載っている線(角度 45 度の母線)と、遠く離れた線。
+    const double angle = kPi / 4.0;
+    const auto onSurface = kachakacha::v2::geometry::CurveSegment::MakeLine(
+        Vector3{0.0, 50.0 * std::cos(angle), 50.0 * std::sin(angle)},
+        Vector3{80.0, 50.0 * std::cos(angle), 50.0 * std::sin(angle)});
+    const auto farAway = kachakacha::v2::geometry::CurveSegment::MakeLine(
+        Vector3{0.0, 200.0, 200.0}, Vector3{80.0, 200.0, 200.0});
+    const auto adapted = AdaptConnectionWires(mesh, mesh.world,
+        {{"母線", {onSurface.Value()}}, {"遠い線", {farAway.Value()}}}, 0.6, 8);
+    Require(adapted.size() == 2, "2本");
+    RequireEqual(adapted[0].name, std::string("母線_接続"), "名前に _接続 が付く");
+    Require(adapted[0].snappedPoints == 9, "載っている線は全点が寄る");
+    Require(adapted[1].snappedPoints == 0, "離れた線は1点も寄らない");
+    Require((adapted[1].points.front() - Vector3{0.0, 200.0, 200.0}).Length() < 1e-9,
+        "離れた点は元のまま");
+    // 寄せた点は近似メッシュの上(ルールド面)に載る。円筒そのものではなく、
+    // 近似した角ばった形へ寄るのが要。
+    const auto onMesh = kachakacha::v2::fabrication::MapPointToBandState(mesh, mesh.world,
+        adapted[0].points[4]);
+    Require(onMesh.HasValue() && onMesh.Value().distanceMm < 1e-6, "寄せた点はメッシュ上");
 }
 
 KACHA_V2_TEST(fabrication_evaluate, 曲げ状態の一文)

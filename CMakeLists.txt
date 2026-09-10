@@ -847,6 +847,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2MeasureDock.h
         src/apps/cad_next/V2ExportDock.h
         src/apps/cad_next/V2MainWindow.cpp
+        src/apps/cad_next/V2ManualStates.cpp
         src/apps/cad_next/V2FabricationCommands.cpp
         src/apps/cad_next/V2PartCommands.cpp
         src/apps/cad_next/V2RebuildCommands.cpp

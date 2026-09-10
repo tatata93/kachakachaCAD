@@ -24,7 +24,9 @@
 
 bool V2MainWindow::IsFabricationCommand(std::string_view id)
 {
-    return id.rfind("fabrication.", 0) == 0;
+    // 「現在状態を固定」は固定の側(V2FreezeCommands.cpp)が受ける。
+    // ここで先に取ると、固定へ届かず「固定は部品を選んでから」と返してしまう。
+    return id.rfind("fabrication.", 0) == 0 && !IsFreezeCommand(id);
 }
 
 void V2MainWindow::RunFabricationCommand(std::string_view id)

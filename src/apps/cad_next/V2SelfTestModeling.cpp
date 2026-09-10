@@ -512,6 +512,71 @@ namespace {
     return ExportSelectedPartsAs(window, kachakacha::v2::app::ExportFormat::Step, ".step");
 }
 
+[[nodiscard]] bool CaseSelectedEntitiesExportMakesASmallerDocument(V2MainWindow& window)
+{
+    // 選んだものだけを別の kcd2 にする(V1 の「追加されたものを別 kcd として出力する」)。
+    // 選んだ部品と、それを作るのに要る線は入り、無関係な線は入らない。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    const auto countWires = [&window]() {
+        return static_cast<int>(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(),
+            kachakacha::v2::domain::EntityKind::Wire)
+                                    .entityIds.size());
+    };
+    const int wiresForPart = countWires();
+    // 無関係な線を1本足す。これは別の文書に入ってはいけない。
+    auto& viewport = window.Viewport();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.10, viewport.height() * 0.10));
+    viewport.ClickAt(QPointF(viewport.width() * 0.20, viewport.height() * 0.10));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (!Explain("無関係な線が増える", countWires() == wiresForPart + 1)) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RefreshExportCounts();
+    auto& dock = window.ExportDock();
+    if (!Explain("選んだものだけの文書を対象にできる",
+            dock.ChooseTarget(kachakacha::v2::app::ExportTarget::SelectedEntities))) {
+        return false;
+    }
+    if (!Explain("kcd2 を選べる", dock.ChooseFormat(kachakacha::v2::app::ExportFormat::Kcd2))) {
+        return false;
+    }
+    const std::string base = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_subdocument");
+    std::error_code code;
+    const auto written = kachakacha::v2::io::MakePath(base + ".kcd2");
+    std::filesystem::remove(written, code);
+    dock.ChoosePath(QString::fromStdString(base));
+    if (!Explain((std::string("書き出せる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            dock.CanRun() && dock.RunNow())) {
+        return false;
+    }
+    const bool opened = window.OpenDocumentFile(QString::fromStdString(base + ".kcd2"));
+    std::filesystem::remove(written, code);
+    if (!Explain("出来た文書を開ける", opened)) {
+        return false;
+    }
+    if (!Explain((std::string("部品が作り直される(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            CountParts(window) == 1 && window.KernelShapeCount() >= 1)) {
+        return false;
+    }
+    return Explain((std::string("要る線だけが入る(") + std::to_string(countWires()) + " / "
+                       + std::to_string(wiresForPart) + ")").c_str(),
+        countWires() == wiresForPart);
+}
+
 [[nodiscard]] bool CaseSolidExportNeedsASolid(V2MainWindow& window)
 {
     // 立体を作っていないのに STL を頼まれたら断る。
@@ -1236,6 +1301,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"引く→押し出す→部材→型紙→PDFまで通る", &CaseFabricationAndPatternEndToEnd},
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},
+        {"選んだものだけを別の文書にできる", &CaseSelectedEntitiesExportMakesASmallerDocument},
         {"立体がなければ立体では出せない", &CaseSolidExportNeedsASolid},
         {"投影は元の線を残す", &CaseProjectKeepsTheOriginal},
         {"トリムは押す場所を聞きやめられる", &CaseTrimAsksWhereToPress},

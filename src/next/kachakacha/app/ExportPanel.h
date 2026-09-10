@@ -32,6 +32,8 @@ struct ExportCounts {
     int selectedFabricationPanels = 0;
     int patternPages = 0;
     int selectedWires = 0;
+    //! 選んでいるもの(種類を問わない)。別の文書にするときの元。
+    int selectedEntities = 0;
     //! 文書そのもの。開いていれば1。
     int project = 0;
 };

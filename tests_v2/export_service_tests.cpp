@@ -31,7 +31,7 @@ namespace {
 
 const ExportTarget kTargets[] = {ExportTarget::VisibleParts, ExportTarget::SelectedParts,
     ExportTarget::SelectedFabricationPanels, ExportTarget::CurrentPattern,
-    ExportTarget::SelectedWires, ExportTarget::Project};
+    ExportTarget::SelectedWires, ExportTarget::SelectedEntities, ExportTarget::Project};
 
 const ExportFormat kFormats[] = {ExportFormat::Stl, ExportFormat::Step,
     ExportFormat::Svg, ExportFormat::Dxf, ExportFormat::Pdf, ExportFormat::Kcd2};

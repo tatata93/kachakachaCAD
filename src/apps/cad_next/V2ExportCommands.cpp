@@ -12,6 +12,7 @@
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/SubDocument.h"
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -83,6 +84,24 @@ kachakacha::v2::base::Result<std::string> V2MainWindow::MakeExportContent(
         kachakacha::v2::io::DocumentFile file;
         file.snapshot = snapshot;
         file.metadata.title = windowTitle().toStdString();
+        return kachakacha::v2::app::MakeProjectContent(file);
+    }
+    if (request.target == ExportTarget::SelectedEntities) {
+        // 選んだものと、それを作るのに要る上流だけの別文書(V1 の BuildOutputProject)。
+        const auto made = kachakacha::v2::app::ExtractSubDocument(snapshot,
+            viewport_->Selection().entityIds);
+        if (!made.HasValue()) {
+            return Out::Failure(made.Diagnostics());
+        }
+        // 残したものは名前で知らせる。黙って残すと「選んでいないのに入っている」と見える。
+        if (const auto note = kachakacha::v2::app::KeptDependenciesNote(made.Value())) {
+            AddDiagnostic(QStringLiteral("%1 %2")
+                    .arg(QString::fromStdString(note->code),
+                        QString::fromStdString(note->detailsJa)));
+        }
+        kachakacha::v2::io::DocumentFile file;
+        file.snapshot = made.Value().snapshot;
+        file.metadata.title = windowTitle().toStdString() + " (選んだものだけ)";
         return kachakacha::v2::app::MakeProjectContent(file);
     }
     if (request.target == ExportTarget::CurrentPattern) {
@@ -250,6 +269,7 @@ void V2MainWindow::RefreshExportCounts()
             snapshot, kachakacha::v2::domain::EntityKind::Wire);
         context.selectedPartCount = kachakacha::v2::app::SelectedCountOfKind(selection,
             snapshot, kachakacha::v2::domain::EntityKind::Part);
+        context.selectedEntityCount = static_cast<int>(selection.entityIds.size());
     }
     exportDock_->SetCounts(kachakacha::v2::app::ExportCountsFrom(context, visibleParts,
         true));

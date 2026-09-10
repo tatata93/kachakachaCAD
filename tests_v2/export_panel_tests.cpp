@@ -46,6 +46,7 @@ namespace {
     counts.selectedFabricationPanels = 4;
     counts.patternPages = 1;
     counts.selectedWires = 5;
+    counts.selectedEntities = 6;
     counts.project = 1;
     return counts;
 }
@@ -61,7 +62,7 @@ namespace {
 
 const ExportTarget kTargets[] = {ExportTarget::VisibleParts, ExportTarget::SelectedParts,
     ExportTarget::SelectedFabricationPanels, ExportTarget::CurrentPattern,
-    ExportTarget::SelectedWires, ExportTarget::Project};
+    ExportTarget::SelectedWires, ExportTarget::SelectedEntities, ExportTarget::Project};
 
 //! 試験用の作業場所。
 struct Scratch {

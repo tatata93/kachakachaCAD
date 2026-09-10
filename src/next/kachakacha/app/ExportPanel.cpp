@@ -17,6 +17,7 @@ const ExportTarget kTargetOrder[] = {
     ExportTarget::SelectedFabricationPanels,
     ExportTarget::CurrentPattern,
     ExportTarget::SelectedWires,
+    ExportTarget::SelectedEntities,
     ExportTarget::Project,
 };
 
@@ -38,6 +39,8 @@ ExportCounts ExportCountsFrom(const ProcessContext& context, int visiblePartCoun
         (context.fabricationBuilt && context.panelCount > 0) ? context.panelCount : 0;
     counts.patternPages = context.patternBuilt ? 1 : 0;
     counts.selectedWires = context.selectedWireCount > 0 ? context.selectedWireCount : 0;
+    counts.selectedEntities =
+        context.selectedEntityCount > 0 ? context.selectedEntityCount : 0;
     counts.project = hasDocument ? 1 : 0;
     return counts;
 }
@@ -50,6 +53,7 @@ int ExportCountFor(const ExportCounts& counts, ExportTarget target) noexcept
     case ExportTarget::SelectedFabricationPanels: return counts.selectedFabricationPanels;
     case ExportTarget::CurrentPattern:            return counts.patternPages;
     case ExportTarget::SelectedWires:             return counts.selectedWires;
+    case ExportTarget::SelectedEntities:          return counts.selectedEntities;
     case ExportTarget::Project:                   return counts.project;
     }
     return 0;

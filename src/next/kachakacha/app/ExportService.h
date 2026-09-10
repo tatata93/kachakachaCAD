@@ -31,6 +31,8 @@ enum class ExportTarget {
     SelectedFabricationPanels,
     CurrentPattern,
     SelectedWires,
+    //! 選んだもの(種類を問わない)と、それを作るのに要る上流だけの別文書(kcd2)。
+    SelectedEntities,
     Project,
 };
 

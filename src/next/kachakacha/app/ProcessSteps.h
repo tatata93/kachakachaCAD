@@ -59,6 +59,8 @@ struct ProcessContext {
     int selectedPartCount = 0;
     //! 選ばれているワイヤーの数。
     int selectedWireCount = 0;
+    //! 選ばれているものの数(種類を問わない)。別の文書にするときの元。
+    int selectedEntityCount = 0;
     //! 形状ガイドの役割テーブルに入っている行の数。
     int guideRowCount = 0;
     //! 押し出しの入力輪郭の数。

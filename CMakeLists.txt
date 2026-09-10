@@ -570,6 +570,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ControlPointPick.cpp
     src/next/kachakacha/app/ShapeRebuild.cpp
     src/next/kachakacha/app/GuideTableBuild.cpp
+    src/next/kachakacha/app/SubDocument.cpp
     src/next/kachakacha/app/ExtrudeOptions.cpp
     src/next/kachakacha/app/WorkPlaneOptions.cpp
     src/next/kachakacha/app/FabricationEvaluate.cpp
@@ -759,6 +760,7 @@ kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_test
 kachakacha_add_v2_test(band_approximation_tests tests_v2/band_approximation_tests.cpp)
 kachakacha_add_v2_test(fabrication_evaluate_tests tests_v2/fabrication_evaluate_tests.cpp)
 kachakacha_add_v2_test(guide_table_build_tests tests_v2/guide_table_build_tests.cpp)
+kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)

@@ -164,7 +164,8 @@ KACHA_V2_TEST(manual, 書き出しの表が実装と同じ)
         }
         for (ExportTarget target : {ExportTarget::VisibleParts, ExportTarget::SelectedParts,
                  ExportTarget::SelectedFabricationPanels, ExportTarget::CurrentPattern,
-                 ExportTarget::SelectedWires, ExportTarget::Project}) {
+                 ExportTarget::SelectedWires, ExportTarget::SelectedEntities,
+                 ExportTarget::Project}) {
             if (cells[0] != std::string(ExportTargetNameJa(target))) {
                 continue;
             }
@@ -180,7 +181,7 @@ KACHA_V2_TEST(manual, 書き出しの表が実装と同じ)
             ++checked;
         }
     }
-    RequireEqual(std::to_string(checked), std::string("6"), "6つの対象を全部見た");
+    RequireEqual(std::to_string(checked), std::string("7"), "7つの対象を全部見た");
 }
 
 KACHA_V2_TEST(manual, 挙げている番号が台帳にある)
@@ -277,7 +278,8 @@ KACHA_V2_TEST(manual, 手順書の書き出しの表が実装と同じ)
         }
         for (ExportTarget target : {ExportTarget::VisibleParts, ExportTarget::SelectedParts,
                  ExportTarget::SelectedFabricationPanels, ExportTarget::CurrentPattern,
-                 ExportTarget::SelectedWires, ExportTarget::Project}) {
+                 ExportTarget::SelectedWires, ExportTarget::SelectedEntities,
+                 ExportTarget::Project}) {
             if (cells[0] != std::string(ExportTargetNameJa(target))) {
                 continue;
             }
@@ -292,7 +294,7 @@ KACHA_V2_TEST(manual, 手順書の書き出しの表が実装と同じ)
             ++checked;
         }
     }
-    RequireEqual(std::to_string(checked), std::string("6"), "6つの対象を全部見た");
+    RequireEqual(std::to_string(checked), std::string("7"), "7つの対象を全部見た");
 }
 
 KACHA_V2_TEST(manual, 手順書が挙げている番号が台帳にある)

@@ -30,6 +30,7 @@ const AllowedPair kAllowed[] = {
     {ExportTarget::SelectedWires, ExportFormat::Svg},
     {ExportTarget::SelectedWires, ExportFormat::Dxf},
     {ExportTarget::SelectedWires, ExportFormat::Pdf},
+    {ExportTarget::SelectedEntities, ExportFormat::Kcd2},
     {ExportTarget::Project, ExportFormat::Kcd2},
 };
 
@@ -58,6 +59,7 @@ std::string_view ExportTargetNameJa(ExportTarget target) noexcept
     case ExportTarget::SelectedFabricationPanels: return "選んだ製作部材";
     case ExportTarget::CurrentPattern:            return "いまの型紙";
     case ExportTarget::SelectedWires:             return "選んだワイヤー";
+    case ExportTarget::SelectedEntities:          return "選んだものだけの文書";
     case ExportTarget::Project:                   return "この文書";
     }
     return "不明";

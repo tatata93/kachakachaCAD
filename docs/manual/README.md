@@ -318,6 +318,7 @@ C:\Users\tak01\github\kachakachaCAD\build-msvc2022-x64\Release\kachakacha_cad_ne
 | 選んだ製作部材 | STL / STEP / SVG / DXF / 1:1 PDF |
 | いまの型紙 | SVG / DXF / 1:1 PDF |
 | 選んだワイヤー | SVG / DXF / 1:1 PDF |
+| 選んだものだけの文書 | kcd2 |
 | この文書 | kcd2 |
 
 - 数が 0 のものも一覧から消しません。消すと「選んでいない」のか

@@ -153,8 +153,18 @@ namespace fs = std::filesystem;
     Require(stream.good(), "結線の台帳が読める");
     std::vector<std::string> headers;
     std::string line;
+    // 見るのは「いま届いていないもの」の表だけ。その後の表(届いているが使っていない
+    // もの)にもヘッダ名が並ぶが、あれは届いているので数えてはいけない。
+    bool inTable = false;
     while (std::getline(stream, line)) {
-        if (line.empty() || line.front() != '|') {
+        if (line.rfind("## ", 0) == 0) {
+            if (inTable) {
+                break;
+            }
+            inTable = line.find("届いていないもの") != std::string::npos;
+            continue;
+        }
+        if (!inTable || line.empty() || line.front() != '|') {
             continue;
         }
         const std::size_t open = line.find('`');

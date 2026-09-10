@@ -260,7 +260,7 @@ void V2MainWindow::BuildMenus()
         {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
                        "fabrication.preview_update", "fabrication.create_pattern",
                        "fabrication.set_assembly", "fabrication.set_method",
-                       "fabrication.freeze_state"}},
+                       "fabrication.freeze_output", "fabrication.freeze_state"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
                             "export.dxf"}},
         {"表示(&V)", {"view.fit_all", "view.align_selection", "view.hide_selected",

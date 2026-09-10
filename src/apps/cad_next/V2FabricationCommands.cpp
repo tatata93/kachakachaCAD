@@ -77,6 +77,10 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         SetAssemblyPercent(current);
         return;
     }
+    if (id == "fabrication.freeze_output") {
+        CycleFreezeOutput();
+        return;
+    }
     if (id == "fabrication.set_method") {
         // 次に作る近似モデルの方式を切り替える。両方式を残して選べるようにする。
         fabricationMethod_ = fabricationMethod_
@@ -123,8 +127,8 @@ void V2MainWindow::RunFabricationCreate()
     definition.materialThickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto evaluated =
-        kachakacha::v2::app::EvaluateFabrication(definition, sources, tolerance);
+    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
+        FabricationMarkingsFor(definition), tolerance);
     if (!evaluated.HasValue()) {
         ReportDiagnostics(evaluated.Diagnostics());
         return;
@@ -200,8 +204,8 @@ bool V2MainWindow::RebuildFabricationModel(const kachakacha::v2::domain::Feature
     const auto sources = FabricationSourcesFor(definition->parts);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto evaluated =
-        kachakacha::v2::app::EvaluateFabrication(*definition, sources, tolerance);
+    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(*definition, sources,
+        FabricationMarkingsFor(*definition), tolerance);
     if (!evaluated.HasValue()) {
         return false;
     }
@@ -360,99 +364,108 @@ void V2MainWindow::RunCreatePattern()
             .arg(static_cast<int>(fabricationPanels_.size())));
 }
 
-void V2MainWindow::AssignOpeningRole()
+kachakacha::v2::app::FabricationMarkings V2MainWindow::FabricationMarkingsFor(
+    const kachakacha::v2::domain::CreateFabricationModelDefinition& definition) const
 {
-    using kachakacha::v2::fabrication::BuildPlanarPanels;
-    using kachakacha::v2::fabrication::PlanarPanelRequest;
-
-    // 役割は選ばせない。線の形で決まる。
-    //   閉じた輪 → 開口(窓)。切り抜く。
-    //   閉じていない線 → 折り線。折るだけで切らない。
-    // 外周は部品の輪郭がそのままなので、手で決める必要がない。
-    if (fabricationPanels_.empty()) {
-        SetStatus(QStringLiteral(
-            "境界の役割: 先に「製作モデルを作る」で部材にしてください。"));
-        return;
-    }
-    const auto& selection = viewport_->Selection();
-    std::vector<kachakacha::v2::geometry::CurveSegment> opening;
-    for (const auto& id : selection.entityIds) {
-        const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity == nullptr
-            || entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
-            continue;
-        }
+    kachakacha::v2::app::FabricationMarkings markings;
+    const auto curvesOf = [this](const kachakacha::v2::base::EntityId& id) {
+        std::vector<kachakacha::v2::geometry::CurveSegment> curves;
         for (const auto& curve : session_->Scene().curves) {
             if (curve.entityId == id) {
-                opening.push_back(curve.segment);
+                curves.push_back(curve.segment);
             }
         }
-    }
-    if (opening.empty()) {
-        SetStatus(QStringLiteral(
-            "境界の役割: 開口にしたい線を選んでください(窓など)。"));
-        return;
-    }
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const bool closed = kachakacha::v2::geometry::SegmentsFormClosedLoop(opening,
-        tolerance);
-    // 覚えてある元の輪郭から作り直す。前の結果へ足すと、
-    // 押すたびに開口が増えていってしまう。
-    std::vector<PlanarPanelRequest> requests;
-    for (const auto& panel : fabricationPanels_) {
-        PlanarPanelRequest request;
-        request.panelId = panel.panelId;
-        const auto found = panelBoundary_.find(panel.panelId);
-        if (found == panelBoundary_.end()) {
-            continue;
+        return curves;
+    };
+    for (const auto& id : definition.openingWires) {
+        auto curves = curvesOf(id);
+        if (!curves.empty()) {
+            markings.openings.push_back(std::move(curves));
         }
-        request.boundary = found->second;
-        request.openings = panelOpenings_[panel.panelId];
-        request.folds = panelFolds_[panel.panelId];
-        request.foldIsMountain.assign(request.folds.size(), true);
-        requests.push_back(std::move(request));
     }
-    if (requests.empty()) {
-        SetStatus(QStringLiteral("境界の役割: 元の輪郭が見つかりません。"));
-        return;
+    for (const auto& id : definition.foldWires) {
+        auto curves = curvesOf(id);
+        if (!curves.empty()) {
+            markings.folds.push_back(std::move(curves));
+        }
     }
-    // どの部材のものかは、外周と同じ平面に載っているかで決まる。
-    // 窓は、それが描かれている壁のものである。人に選ばせる必要はない。
-    const auto chosen = kachakacha::v2::fabrication::PanelForOpening(requests, opening,
-        tolerance.interactiveJoinMm);
-    if (!chosen.has_value()) {
-        // 近いほうへ寄せない。寄せると、頼んでいない壁に穴が開く。
+    return markings;
+}
+
+void V2MainWindow::AssignOpeningRole()
+{
+    using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
+
+    // 選んだ線を、いまの近似モデルの開口(閉じていれば)か折り線(開いていれば)にする。
+    // 作り方(定義)へ線の id を足して作り直す。画面の配列へ足すのではない。
+    // 定義に入るので、保存して開き直しても開口は残る。
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entity = session_->GetDocument().FindEntity(modelId);
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    if (current == nullptr) {
         SetStatus(QStringLiteral(
-            "境界の役割: その線は、どの部材の面にも載っていません。"
-            "部材と同じ平面の上に描いてください。"));
+            "境界の役割: 先に「製作モデルを作る」で近似モデルを作ってください。"));
         return;
     }
-    if (closed) {
-        requests[*chosen].openings.push_back(opening);
-    } else {
-        // 折り線は切らない。切ると、折るところで板が分かれてしまう。
-        requests[*chosen].folds.push_back(opening);
-        requests[*chosen].foldIsMountain.push_back(true);
+    std::vector<kachakacha::v2::base::EntityId> wires;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* picked = session_->GetDocument().FindEntity(id);
+        if (picked != nullptr && picked->kind == kachakacha::v2::domain::EntityKind::Wire) {
+            wires.push_back(id);
+        }
     }
-    const auto rebuilt = BuildPlanarPanels(requests, tolerance.interactiveJoinMm);
-    if (!rebuilt.HasValue()) {
-        ReportDiagnostics(rebuilt.Diagnostics());
+    if (wires.empty()) {
+        SetStatus(QStringLiteral("境界の役割: 開口にしたい線を選んでください(窓など)。"));
         return;
     }
-    panelOpenings_[requests[*chosen].panelId] = requests[*chosen].openings;
-    panelFolds_[requests[*chosen].panelId] = requests[*chosen].folds;
-    fabricationPanels_ = rebuilt.Value();
-    processContext_.patternBuilt = false;
+    auto definition = *current;
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    int openings = 0;
+    int folds = 0;
+    for (const auto& id : wires) {
+        std::vector<kachakacha::v2::geometry::CurveSegment> curves;
+        for (const auto& curve : session_->Scene().curves) {
+            if (curve.entityId == id) {
+                curves.push_back(curve.segment);
+            }
+        }
+        if (kachakacha::v2::geometry::SegmentsFormClosedLoop(curves, tolerance)) {
+            definition.openingWires.push_back(id);
+            ++openings;
+        } else {
+            definition.foldWires.push_back(id);
+            ++folds;
+        }
+    }
+    // 先に作れるかを確かめる。定義を書き換えてから断ると、壊れた作り方が残る。
+    const auto sources = FabricationSourcesFor(definition.parts);
+    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
+        FabricationMarkingsFor(definition), tolerance.interactiveJoinMm);
+    if (!evaluated.HasValue()) {
+        ReportDiagnostics(evaluated.Diagnostics());
+        return;
+    }
+    auto inputs = feature->inputEntityIds;
+    inputs.insert(inputs.end(), wires.begin(), wires.end());
+    const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
+        feature->id, definition, inputs, "境界の役割を決める"));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    fabricationModels_[modelId.ToString()] = evaluated.Value();
     patternPages_.clear();
-    SetProcessContext(processContext_);
-    SetStatus(closed
-            ? QStringLiteral("境界の役割: %1 に開口を1つ入れました(いま%2つ)。"
-                             "型紙はもう一度作ってください。")
-                  .arg(QString::fromStdString(requests[*chosen].panelId))
-                  .arg(static_cast<int>(requests[*chosen].openings.size()))
-            : QStringLiteral("境界の役割: %1 に折り線を1本入れました(いま%2本)。"
-                             "折り線は切りません。型紙はもう一度作ってください。")
-                  .arg(QString::fromStdString(requests[*chosen].panelId))
-                  .arg(static_cast<int>(requests[*chosen].folds.size())));
+    RefreshFabricationView();
+    SetStatus(QStringLiteral("境界の役割: 開口を %1 つ、折り線を %2 本入れました"
+                             "(いま開口 %3、折り線 %4)。型紙はもう一度作ってください。")
+            .arg(openings)
+            .arg(folds)
+            .arg(static_cast<int>(definition.openingWires.size()))
+            .arg(static_cast<int>(definition.foldWires.size())));
 }
 

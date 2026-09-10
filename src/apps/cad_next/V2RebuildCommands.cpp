@@ -19,6 +19,7 @@
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctBoolean.h"
+#include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/kernel/OcctWireCage.h"
 
 #include <string>
@@ -165,6 +166,32 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
     return true;
 }
 
+bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& feature,
+    const EntityId& output)
+{
+    const auto* definition =
+        std::get_if<kachakacha::v2::domain::ThickenSurfaceDefinition>(&feature.definition);
+    if (definition == nullptr) {
+        return false;
+    }
+    // 面は先に作り直してある。評価順に従っているので、ここでは必ず見つかる。
+    const auto found = guideShapes_.find(definition->surface.ToString());
+    if (found == guideShapes_.end()) {
+        return false;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto built = kachakacha::v2::kernel::ThickenSurface(found->second,
+        definition->thickness.value,
+        static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(definition->placement),
+        tolerance);
+    if (!built.HasValue()) {
+        return false;
+    }
+    partShapes_[output.ToString()] = built.Value().handle;
+    partEdges_[output.ToString()] = built.Value().edges;
+    return true;
+}
+
 bool V2MainWindow::RebuildGuideSurfaceShape(const kachakacha::v2::domain::Feature& feature,
     const EntityId& output)
 {
@@ -222,6 +249,9 @@ void V2MainWindow::RebuildKernelShapes()
             break;
         case kachakacha::v2::app::ShapeRebuildKind::GuideSurface:
             ok = RebuildGuideSurfaceShape(*feature, step.outputEntityId);
+            break;
+        case kachakacha::v2::app::ShapeRebuildKind::ThickenSurface:
+            ok = RebuildThickenShape(*feature, step.outputEntityId);
             break;
         case kachakacha::v2::app::ShapeRebuildKind::FabricationModel:
             ok = RebuildFabricationModel(*feature, step.outputEntityId);

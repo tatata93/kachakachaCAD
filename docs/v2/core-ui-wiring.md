@@ -39,10 +39,17 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し | 近似を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
-| `fabrication/Assembly.h` | 曲げ具合(組立率)で形を作る | 曲げ具合を繋ぐとき |
-| `fabrication/FreezeState.h` | ある曲げ状態を1回だけ評価して固める | 任意状態の固定を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
+
+## 届いてはいるが、まだ使っていないもの
+
+`#include` で届くだけでは「使っている」ことにならない。門はそこまで見ないので、ここに書く。
+
+| ヘッダ | 届き方 | 使っていない中身 | いつ使うか |
+| --- | --- | --- | --- |
+| `fabrication/Assembly.h` | `FreezeState.h` 経由 | `EvaluateAssembly`(V2方式の折り角つき組立) | V2方式の曲げ状態を持たせるとき。いまは V1方式(BandFold)だけが曲げ状態を持つ |
+| `fabrication/FreezeState.h` | 直接 | `FreezeAssemblyState`(V2方式の固定)。使っているのは `FreezeOutput` の列挙だけ | 同上 |
 
 ## この門が見ないもの
 

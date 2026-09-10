@@ -27,6 +27,7 @@
 #include "V2WorkPlaneDialog.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/fabrication/FreezeState.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
@@ -234,6 +235,12 @@ public:
     [[nodiscard]] kachakacha::v2::base::Result<
         kachakacha::v2::modeling::WorkPlaneRequest>
     BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const;
+    //! 固定で作るものを順に切り替える(ワイヤーのみ → 部品のみ → 両方)。
+    void CycleFreezeOutput();
+    [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputInUse() const
+    {
+        return freezeOutput_;
+    }
     //! 組立率を聞く。窓を出さない試験では差し替える。値を返さなければ「やめた」。
     void SetAssemblyChooser(std::function<std::optional<double>(double current)> chooser);
     //! 組立率を変える。文書の作り方を書き換えるので、元に戻せる。
@@ -281,6 +288,8 @@ public:
         const kachakacha::v2::base::EntityId& output);
     bool RebuildGuideSurfaceShape(const kachakacha::v2::domain::Feature& feature,
         const kachakacha::v2::base::EntityId& output);
+    bool RebuildThickenShape(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
     //! 元ワイヤーから面を作って、その id で覚える。作り直しから呼ぶ。
     bool BuildGuideSurfaceInto(
         const std::vector<kachakacha::v2::base::EntityId>& wireIds,
@@ -291,8 +300,14 @@ public:
     //! 選んだ線を断面にして面を作る。
     void CreateGuideSurfaceFromSelection();
     //! 出来た面を文書へ足し、画面へ出す。
-    void AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable& table,
-        const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections);
+    //! 作った面を文書へ足し、形を覚える。足せたら面の EntityId、だめなら空。
+    kachakacha::v2::base::EntityId AdoptGuideSurface(
+        const kachakacha::v2::modeling::GuideTable& table,
+        const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections,
+        const std::vector<kachakacha::v2::base::EntityId>& inputs, const std::string& label);
+    //! id で指した線から面を作る(固定などが呼ぶ)。作り方は guide.create と同じ。
+    kachakacha::v2::base::EntityId CreateGuideSurfaceFromWires(
+        const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label);
     //! 出来た面の handle と境界。文書ではなく画面側が覚える。
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> guideShapes_;
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> guideEdges_;
@@ -357,14 +372,9 @@ private:
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
     //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
     void AssignOpeningRole();
-    //! 部材のもとになった輪郭と、入れた開口。作り直しに使う。
-    std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>>
-        panelBoundary_;
-    std::map<std::string,
-        std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelOpenings_;
-    //! 入れた折り線。切らないので開口とは別に持つ。
-    std::map<std::string,
-        std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelFolds_;
+    //! 定義に書いてある開口・折り線の id から、いまの線を集める。
+    [[nodiscard]] kachakacha::v2::app::FabricationMarkings FabricationMarkingsFor(
+        const kachakacha::v2::domain::CreateFabricationModelDefinition& definition) const;
     //! 出来た部材(全近似モデルの部材を並べたもの)。型紙はこれを使う。
     std::vector<kachakacha::v2::fabrication::PatternPanel> fabricationPanels_;
     //! 並べた型紙。書き出しはこれを使う。
@@ -373,6 +383,14 @@ private:
     //! 文書には作り方だけが入り、開いたら作り直す(立体と同じ考え)。
     std::map<std::string, kachakacha::v2::app::FabricationEvaluation> fabricationModels_;
     std::function<std::optional<double>(double current)> assemblyChooser_;
+    //! 固定で作るもの。V1 と同じく「ワイヤーのみ / 部品のみ / 両方」。
+    kachakacha::v2::fabrication::FreezeOutput freezeOutput_ =
+        kachakacha::v2::fabrication::FreezeOutput::WiresOnly;
+    //! V2 方式(曲げ状態の形が無い)の固定。型紙の線をそのまま置く。
+    void FreezeFlatPanels();
+    //! 点列を直線でつないだ線にする。
+    [[nodiscard]] static std::vector<kachakacha::v2::geometry::CurveSegment> PolylineOf(
+        const std::vector<kachakacha::v2::geometry::Vector3>& points);
     //! 次に作る近似モデルの方式。V1 方式(帯)と V2 方式(面の分類)を切り替える。
     kachakacha::v2::app::FabricationMethod fabricationMethod_ =
         kachakacha::v2::app::FabricationMethod::BandApproximation;

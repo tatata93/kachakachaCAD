@@ -104,6 +104,7 @@ constexpr NamedEnum<FeatureType> kFeatureTypes[]{
     {FeatureType::CreateFabricationModel, "create_fabrication_model"},
     {FeatureType::CreatePattern, "create_pattern"},
     {FeatureType::FreezeDerived, "freeze_derived"},
+    {FeatureType::ThickenSurface, "thicken_surface"},
 };
 
 constexpr NamedEnum<WireTransformMethod> kTransformMethods[]{
@@ -384,9 +385,16 @@ template<class Id>
             static_cast<double>(fabrication->maximumPartCount));
         definition["minimumPartWidthMm"] = JsonValue::Number(fabrication->minimumPartWidthMm);
         definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
+        definition["openingWires"] = WriteIdArray(fabrication->openingWires);
+        definition["foldWires"] = WriteIdArray(fabrication->foldWires);
         definition["masterPercent"] = JsonValue::Number(fabrication->masterPercent);
         definition["creaseProgress"] = WriteNumberArray(fabrication->creaseProgress);
         definition["bandProgress"] = WriteNumberArray(fabrication->bandProgress);
+    } else if (const auto* thicken =
+                   std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition)) {
+        definition["surface"] = WriteId(thicken->surface);
+        definition["thickness"] = WriteExpression(thicken->thickness);
+        definition["placement"] = JsonValue::Number(static_cast<double>(thicken->placement));
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);
@@ -1093,9 +1101,25 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
             static_cast<int>(loader.NumberOr(definition, "maximumPartCount", 12.0));
         made.minimumPartWidthMm = loader.NumberOr(definition, "minimumPartWidthMm", 4.0);
         made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
+        made.openingWires = ReadIdArray(loader, definition, "openingWires", where);
+        made.foldWires = ReadIdArray(loader, definition, "foldWires", where);
         made.masterPercent = loader.NumberOr(definition, "masterPercent", 100.0);
         made.creaseProgress = ReadNumberArray(loader, definition, "creaseProgress", where);
         made.bandProgress = ReadNumberArray(loader, definition, "bandProgress", where);
+        feature.definition = std::move(made);
+        break;
+    }
+    case FeatureType::ThickenSurface: {
+        domain::ThickenSurfaceDefinition made;
+        if (const JsonValue* one = definition.Find("surface");
+            one != nullptr && one->Type() == JsonType::String) {
+            const auto parsed = EntityId::Parse(one->AsString());
+            if (parsed.has_value()) {
+                made.surface = *parsed;
+            }
+        }
+        made.thickness = loader.ReadExpression(definition, "thickness", where);
+        made.placement = static_cast<int>(loader.NumberOr(definition, "placement", 1.0));
         feature.definition = std::move(made);
         break;
     }

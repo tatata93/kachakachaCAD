@@ -27,6 +27,8 @@ enum class ShapeRebuildKind {
     WireCage,
     Boolean,
     GuideSurface,
+    //! 面に厚みを付けた立体。面が作り直された後に作り直す。
+    ThickenSurface,
     //! 近似モデル。元の面や部品が作り直された後に、作り方から作り直す。
     FabricationModel,
 };

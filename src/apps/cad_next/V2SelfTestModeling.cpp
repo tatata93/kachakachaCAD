@@ -872,10 +872,15 @@ namespace {
             window.StatusText().contains(QStringLiteral("平面から離す")))) {
         return false;
     }
+    // 2本目は吸着を止めて引く。上から見ると1本目と同じ場所なので、
+    // 止めないと1本目の端点へ吸着して z=0 へ落ち、同じ円弧が2本になる。
+    // 人が引くときも Ctrl を押して同じことをする。
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Arc);
+    viewport.SetSnapSuppressed(true);
     viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.60));
     viewport.ClickAt(QPointF(viewport.width() * 0.50, viewport.height() * 0.35));
     viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.60));
+    viewport.SetSnapSuppressed(false);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
@@ -992,6 +997,76 @@ namespace {
             == kachakacha::v2::app::FabricationMethod::BandApproximation);
 }
 
+[[nodiscard]] bool CaseFreezeAtBendStateMakesWiresSurfaceAndPart(V2MainWindow& window)
+{
+    // 工程3 → 工程2 へ戻る道。いまの曲げ状態(50%)で固定すると、
+    // 線・面・部品が普通のものとして文書に入り、その部品を STEP で出せる。
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    window.SetAssemblyChooser([](double) { return std::optional<double>(50.0); });
+    window.RunCommand("fabrication.set_assembly");
+    if (!Explain("50% にできる", window.StatusText().contains(QStringLiteral("50%")))) {
+        return false;
+    }
+    // 作るものを「両方」にする(ワイヤーのみ → 部品のみ → 両方)。
+    window.RunCommand("fabrication.freeze_output");
+    window.RunCommand("fabrication.freeze_output");
+    if (!Explain("両方を作る指定にできる",
+            window.FreezeOutputInUse() == kachakacha::v2::fabrication::FreezeOutput::Both)) {
+        return false;
+    }
+    const auto countKind = [&window](kachakacha::v2::domain::EntityKind kind) {
+        int count = 0;
+        for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+            if (entity.kind == kind
+                && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+                ++count;
+            }
+        }
+        return count;
+    };
+    const int wiresBefore = countKind(kachakacha::v2::domain::EntityKind::Wire);
+    const int surfacesBefore = countKind(kachakacha::v2::domain::EntityKind::GuideSurface);
+    const int partsBefore = CountParts(window);
+    window.RunCommand("fabrication.freeze_state");
+    const QString status = window.StatusText();
+    if (!Explain((std::string("固定できる(") + status.toStdString() + ")").c_str(),
+            status.contains(QStringLiteral("現在状態を固定(")))) {
+        return false;
+    }
+    if (!Explain("線が増える", countKind(kachakacha::v2::domain::EntityKind::Wire) > wiresBefore)) {
+        return false;
+    }
+    if (!Explain("面が増える",
+            countKind(kachakacha::v2::domain::EntityKind::GuideSurface) > surfacesBefore)) {
+        return false;
+    }
+    if (!Explain((std::string("部品が増える(") + std::to_string(partsBefore) + " → "
+                     + std::to_string(CountParts(window)) + ")").c_str(),
+            CountParts(window) > partsBefore)) {
+        return false;
+    }
+    // 固定した名前に曲げ状態が入る(V1 と同じ:「(組立 50%)」)。
+    bool named = false;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.displayName.find("50%") != std::string::npos) {
+            named = true;
+        }
+    }
+    if (!Explain("名前に曲げ状態が入る", named)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    return Explain("固定した部品を STEP で出せる", window.CanExportSelectedParts());
+}
+
 [[nodiscard]] bool CaseThickenSurfaceMakesASolid(V2MainWindow& window)
 {
     // オーナーの手順の中心。断面 → 面 → **その面に厚みを付けて立体**。
@@ -1032,7 +1107,28 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));
-    return Explain("厚みを付けた部品を STEP で出せる", window.CanExportSelectedParts());
+    if (!Explain("厚みを付けた部品を STEP で出せる", window.CanExportSelectedParts())) {
+        return false;
+    }
+    // 保存して開き直しても、面 → 厚み の順で作り直されて、また出せること。
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_thicken.kcd2");
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    window.SetPathChooser([&path](bool) { return QString::fromStdString(path); });
+    window.RunCommand("file.save_as");
+    window.RunCommand("file.new");
+    const bool opened = window.OpenDocumentFile(QString::fromStdString(path));
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    if (!Explain("開き直せる", opened)) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    return Explain((std::string("開き直したあとも出せる(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.CanExportSelectedParts());
 }
 
 [[nodiscard]] bool CaseThickenNeedsASurface(V2MainWindow& window)
@@ -1152,6 +1248,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
         {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},
+        {"曲げ状態で固定すると線と面と部品になる", &CaseFreezeAtBendStateMakesWiresSurfaceAndPart},
         {"面に厚みを付けて立体にできる", &CaseThickenSurfaceMakesASolid},
         {"面を選ばずに厚みは付けられない", &CaseThickenNeedsASurface},
         {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},

@@ -110,8 +110,10 @@ struct SectionTable {
 
 } // namespace
 
-void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable& table,
-    const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections)
+kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(
+    const kachakacha::v2::modeling::GuideTable& table,
+    const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections,
+    const std::vector<kachakacha::v2::base::EntityId>& inputs, const std::string& label)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::CreateGuideSurfaceDefinition;
@@ -124,8 +126,8 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     Feature feature;
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::CreateGuideSurface;
-    feature.displayName = "形状ガイド";
-    feature.inputEntityIds = viewport_->Selection().entityIds;
+    feature.displayName = label;
+    feature.inputEntityIds = inputs;
     CreateGuideSurfaceDefinition definition;
     definition.method = static_cast<int>(table.method);
     // 元ワイヤーを覚える。空のまま保存していたので、開き直しても面を作り直せなかった。
@@ -146,16 +148,16 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
     entity.kind = EntityKind::GuideSurface;
-    entity.displayName = "形状ガイド";
+    entity.displayName = label;
     entity.createdBy = feature.id;
     feature.outputs.push_back(
         FeatureOutput{"surface", entity.id, EntityKind::GuideSurface});
 
     const auto added = session_->GetDocument().Run(
-        AddFeatureCommand(feature, {entity}, "形状ガイド"));
+        AddFeatureCommand(feature, {entity}, label));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
-        return;
+        return kachakacha::v2::base::EntityId{};
     }
     // 形そのものは文書に入れない。画面側が handle と境界の線を覚える。
     guideShapes_[entity.id.ToString()] = built.handle;
@@ -172,6 +174,43 @@ void V2MainWindow::AdoptGuideSurface(const kachakacha::v2::modeling::GuideTable&
             .arg(sections >= 3 ? QStringLiteral("ロフト") : QStringLiteral("ルールド"))
             .arg(sections)
             .arg(built.maximumDeviationMm, 0, 'f', 4));
+    return entity.id;
+}
+
+kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
+    const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label)
+{
+    // 固定など、選択ではなく id で指した線から面を作る。作り方は guide.create と同じ。
+    const SectionTable made =
+        CollectSectionRowsFor(session_->GetDocument(), session_->Scene(), wireIds);
+    if (!made.diagnostics.empty()) {
+        ReportDiagnostics(made.diagnostics);
+        return kachakacha::v2::base::EntityId{};
+    }
+    if (made.sections < 2) {
+        SetStatus(QStringLiteral("形状ガイド: 断面が2つ以上要ります。"));
+        return kachakacha::v2::base::EntityId{};
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto request =
+        kachakacha::v2::modeling::ToGuideSurfaceRequest(made.table, tolerance);
+    if (!request.HasValue()) {
+        ReportDiagnostics(request.Diagnostics());
+        return kachakacha::v2::base::EntityId{};
+    }
+    const auto analysis =
+        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
+    if (!analysis.HasValue()) {
+        ReportDiagnostics(analysis.Diagnostics());
+        return kachakacha::v2::base::EntityId{};
+    }
+    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
+        analysis.Value(), tolerance);
+    if (!built.HasValue()) {
+        ReportDiagnostics(built.Diagnostics());
+        return kachakacha::v2::base::EntityId{};
+    }
+    return AdoptGuideSurface(made.table, built.Value(), made.sections, wireIds, label);
 }
 
 bool V2MainWindow::BuildGuideSurfaceInto(
@@ -243,5 +282,6 @@ void V2MainWindow::CreateGuideSurfaceFromSelection()
         ReportDiagnostics(built.Diagnostics());
         return;
     }
-    AdoptGuideSurface(made.table, built.Value(), made.sections);
+    (void)AdoptGuideSurface(made.table, built.Value(), made.sections,
+        viewport_->Selection().entityIds, "形状ガイド");
 }

@@ -535,14 +535,16 @@ void V2MainWindow::RunThickenSurface()
             ReportDiagnostics(built.Diagnostics());
             return;
         }
-        // 作り方は押し出しと同じ枠で持つ。面から作ったことは入力で分かる。
-        kachakacha::v2::domain::ExtrudeDefinition definition;
-        definition.profiles.push_back(id);
-        definition.distance.value = thickness;
-        definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
-        const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
-            std::move(definition), built.Value().handle, built.Value().edges,
-            "面に厚み");
+        // 作り方は押し出しとは別の枠で持つ。入力が面であって輪郭ではないので、
+        // 押し出しの作り直しの道を通すと「輪郭が無い」と言われて作り直せない。
+        kachakacha::v2::domain::ThickenSurfaceDefinition definition;
+        definition.surface = id;
+        definition.thickness.value = thickness;
+        definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
+        definition.placement = static_cast<int>(placement);
+        const auto partId = AddPartFeature(
+            kachakacha::v2::domain::FeatureType::ThickenSurface, std::move(definition),
+            built.Value().handle, built.Value().edges, "面に厚み");
         if (partId.IsNil()) {
             return;
         }

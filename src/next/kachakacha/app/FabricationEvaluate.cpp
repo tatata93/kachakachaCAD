@@ -27,10 +27,41 @@ using fabrication::PatternPanel;
     return text;
 }
 
+//! 平らな部材を作る。開口と折り線は、外周と同じ平面に載っている部材へ入れる。
+//! 窓は、それが描かれている壁のものである。人に選ばせない。近いほうへ寄せない。
+[[nodiscard]] Result<std::vector<PatternPanel>> BuildPlanarWithMarkings(
+    std::vector<fabrication::PlanarPanelRequest> planar, const FabricationMarkings& markings,
+    double toleranceMm)
+{
+    using Out = Result<std::vector<PatternPanel>>;
+    for (const auto& opening : markings.openings) {
+        const auto chosen = fabrication::PanelForOpening(planar, opening, toleranceMm);
+        if (!chosen.has_value()) {
+            return Out::Failure(MakeError("FAB-M003",
+                "その線は、どの部材の面にも載っていません。",
+                "開口や折り線は、部材と同じ平面の上に描いてください。"));
+        }
+        planar[*chosen].openings.push_back(opening);
+    }
+    for (const auto& fold : markings.folds) {
+        const auto chosen = fabrication::PanelForOpening(planar, fold, toleranceMm);
+        if (!chosen.has_value()) {
+            return Out::Failure(MakeError("FAB-M003",
+                "その線は、どの部材の面にも載っていません。",
+                "開口や折り線は、部材と同じ平面の上に描いてください。"));
+        }
+        // 折り線は切らない。切ると、折るところで板が分かれてしまう。
+        planar[*chosen].folds.push_back(fold);
+        planar[*chosen].foldIsMountain.push_back(true);
+    }
+    return fabrication::BuildPlanarPanels(planar, toleranceMm);
+}
+
 //! V2 方式: 面ごとに「伸ばさずに平らにできるか」を検査して展開する。
 [[nodiscard]] Result<FabricationEvaluation> EvaluateByClassification(
     const domain::CreateFabricationModelDefinition& definition,
-    const std::vector<FabricationSource>& sources, double toleranceMm)
+    const std::vector<FabricationSource>& sources, const FabricationMarkings& markings,
+    double toleranceMm)
 {
     using Out = Result<FabricationEvaluation>;
     FabricationEvaluation made;
@@ -58,7 +89,7 @@ using fabrication::PatternPanel;
         }
     }
     if (!planar.empty()) {
-        const auto panels = fabrication::BuildPlanarPanels(planar, toleranceMm);
+        const auto panels = BuildPlanarWithMarkings(std::move(planar), markings, toleranceMm);
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
@@ -74,7 +105,8 @@ using fabrication::PatternPanel;
 //! V1 方式: 面を帯へ近似し直す。
 [[nodiscard]] Result<FabricationEvaluation> EvaluateByBands(
     const domain::CreateFabricationModelDefinition& definition,
-    const std::vector<FabricationSource>& sources, double toleranceMm)
+    const std::vector<FabricationSource>& sources, const FabricationMarkings& markings,
+    double toleranceMm)
 {
     using Out = Result<FabricationEvaluation>;
     FabricationEvaluation made;
@@ -121,7 +153,7 @@ using fabrication::PatternPanel;
         }
     }
     if (!planar.empty()) {
-        const auto panels = fabrication::BuildPlanarPanels(planar, toleranceMm);
+        const auto panels = BuildPlanarWithMarkings(std::move(planar), markings, toleranceMm);
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
@@ -170,7 +202,8 @@ fabrication::BandApproximationOptions BandOptionsOf(
 
 Result<FabricationEvaluation> EvaluateFabrication(
     const domain::CreateFabricationModelDefinition& definition,
-    const std::vector<FabricationSource>& sources, double toleranceMm)
+    const std::vector<FabricationSource>& sources, const FabricationMarkings& markings,
+    double toleranceMm)
 {
     using Out = Result<FabricationEvaluation>;
     if (sources.empty()) {
@@ -182,8 +215,8 @@ Result<FabricationEvaluation> EvaluateFabrication(
             "どこまでのずれなら許すかを決めてください。"));
     }
     return FabricationMethodOf(definition) == FabricationMethod::BandApproximation
-        ? EvaluateByBands(definition, sources, toleranceMm)
-        : EvaluateByClassification(definition, sources, toleranceMm);
+        ? EvaluateByBands(definition, sources, markings, toleranceMm)
+        : EvaluateByClassification(definition, sources, markings, toleranceMm);
 }
 
 std::vector<PatternPanel> PanelsFromBandMesh(const std::string& baseName,

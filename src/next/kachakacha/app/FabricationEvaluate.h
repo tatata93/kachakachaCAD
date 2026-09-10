@@ -51,6 +51,12 @@ struct FabricationSource {
     std::optional<std::vector<geometry::CurveSegment>> flatBoundary;
 };
 
+//! 開口・折り線にする線。どの部材のものかは、外周と同じ平面に載っているかで決める。
+struct FabricationMarkings {
+    std::vector<std::vector<geometry::CurveSegment>> openings;
+    std::vector<std::vector<geometry::CurveSegment>> folds;
+};
+
 //! 作った結果。文書には入れない。画面が覚えて、開いたら作り直す。
 struct FabricationEvaluation {
     FabricationMethod method = FabricationMethod::ClassifyFaces;
@@ -71,7 +77,8 @@ struct FabricationEvaluation {
 //! 作る。断るときは理由を言う。
 [[nodiscard]] base::Result<FabricationEvaluation> EvaluateFabrication(
     const domain::CreateFabricationModelDefinition& definition,
-    const std::vector<FabricationSource>& sources, double toleranceMm);
+    const std::vector<FabricationSource>& sources, const FabricationMarkings& markings,
+    double toleranceMm);
 
 //! 帯メッシュから型紙の部材を作る。帯1つ = 部材1枚。
 //! 外周は展開した下レール→上レール(逆順)の閉じた輪。折り線は内部レール。

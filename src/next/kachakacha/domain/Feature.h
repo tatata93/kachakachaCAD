@@ -28,6 +28,8 @@ enum class FeatureType {
     CreateFabricationModel,
     CreatePattern,
     FreezeDerived,
+    //! 面に厚みを付けて立体にする。押し出しとは入力が違う(面であって輪郭ではない)。
+    ThickenSurface,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -45,6 +47,7 @@ enum class FeatureType {
     case FeatureType::CreateFabricationModel: return "CreateFabricationModel";
     case FeatureType::CreatePattern:          return "CreatePattern";
     case FeatureType::FreezeDerived:          return "FreezeDerived";
+    case FeatureType::ThickenSurface:         return "ThickenSurface";
     }
     return "Unknown";
 }
@@ -184,6 +187,14 @@ struct BooleanDefinition {
     std::vector<EntityId> tools;
 };
 
+//! 面に厚みを付けて立体にする(工程2の「面をソリッド化する」)。
+struct ThickenSurfaceDefinition {
+    EntityId surface;
+    geometry::EvaluatedValue thickness;
+    //! fabrication::ThicknessPlacement と同じ並び。0=外側 1=中央 2=内側。
+    int placement = 1;
+};
+
 //! 製作モデル(近似モデル)。
 //!
 //! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
@@ -209,6 +220,11 @@ struct CreateFabricationModelDefinition {
     double minimumPartWidthMm = 4.0;
     std::vector<double> manualBoundaries;
 
+    //! 開口(窓など)にする線と、折り線にする線。どの部材のものかは、
+    //! 外周と同じ平面に載っているかで決まる(人に選ばせない)。
+    std::vector<EntityId> openingWires;
+    std::vector<EntityId> foldWires;
+
     //! 曲げ状態。0 = 平ら(型紙)、100 = 近似完成形。
     double masterPercent = 100.0;
     //! 折り線ごとの進行度(0..1)。空なら全部 master に従う。
@@ -230,7 +246,7 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWireDefinition, TransformWireDefinition, FreezeDerivedDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
-    CreateFabricationModelDefinition, CreatePatternDefinition>;
+    CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

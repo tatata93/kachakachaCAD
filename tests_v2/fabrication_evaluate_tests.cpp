@@ -10,6 +10,7 @@
 
 using kachakacha::v2::app::EvaluateFabrication;
 using kachakacha::v2::app::FabricationMethod;
+using kachakacha::v2::app::FabricationMarkings;
 using kachakacha::v2::app::FabricationSource;
 using kachakacha::v2::app::FoldStateSummaryJa;
 using kachakacha::v2::app::FoldedRailsOf;
@@ -80,11 +81,11 @@ KACHA_V2_TEST(fabrication_evaluate, 二重曲面はV2方式が断りV1方式が�
     // V1 方式は帯へ切って許容に収める。
     auto tight0 = Definition(0);
     tight0.targetMaxDeviation.value = 0.1;
-    const auto refused = EvaluateFabrication(tight0, {Sphere()}, 0.01);
+    const auto refused = EvaluateFabrication(tight0, {Sphere()}, FabricationMarkings{}, 0.01);
     Require(!refused.HasValue(), "V2 方式は断る");
     auto tight1 = Definition(1);
     tight1.targetMaxDeviation.value = 0.1;
-    const auto cut = EvaluateFabrication(tight1, {Sphere()}, 0.01);
+    const auto cut = EvaluateFabrication(tight1, {Sphere()}, FabricationMarkings{}, 0.01);
     Require(cut.HasValue(), "V1 方式は切る");
     Require(cut.Value().method == FabricationMethod::BandApproximation, "方式");
     Require(cut.Value().panels.size() >= 2, "帯ごとに部材になる");
@@ -94,11 +95,11 @@ KACHA_V2_TEST(fabrication_evaluate, 二重曲面はV2方式が断りV1方式が�
 
 KACHA_V2_TEST(fabrication_evaluate, 展開できる面はどちらの方式でも通る)
 {
-    const auto classified = EvaluateFabrication(Definition(0), {Cylinder()}, 0.01);
+    const auto classified = EvaluateFabrication(Definition(0), {Cylinder()}, FabricationMarkings{}, 0.01);
     Require(classified.HasValue(), "V2 方式で通る");
     Require(classified.Value().panels.size() == 1, "1枚のまま");
     Require(!classified.Value().bandMesh.has_value(), "帯メッシュは持たない");
-    const auto banded = EvaluateFabrication(Definition(1), {Cylinder()}, 0.01);
+    const auto banded = EvaluateFabrication(Definition(1), {Cylinder()}, FabricationMarkings{}, 0.01);
     Require(banded.HasValue(), "V1 方式でも通る");
     Require(banded.Value().panels.size() >= 2, "帯へ切る");
     // 帯の部材には折り線が付く(最後の帯を除く)。
@@ -108,18 +109,18 @@ KACHA_V2_TEST(fabrication_evaluate, 展開できる面はどちらの方式で�
 
 KACHA_V2_TEST(fabrication_evaluate, 元が無ければ断る)
 {
-    const auto made = EvaluateFabrication(Definition(1), {}, 0.01);
+    const auto made = EvaluateFabrication(Definition(1), {}, FabricationMarkings{}, 0.01);
     Require(!made.HasValue(), "断る");
     RequireEqual(made.Diagnostics().front().code, std::string("FAB-M001"), "FAB-M001");
     auto bad = Definition(1);
     bad.targetMaxDeviation.value = 0.0;
-    RequireEqual(EvaluateFabrication(bad, {Cylinder()}, 0.01).Diagnostics().front().code,
+    RequireEqual(EvaluateFabrication(bad, {Cylinder()}, FabricationMarkings{}, 0.01).Diagnostics().front().code,
         std::string("FAB-M002"), "許容0は FAB-M002");
 }
 
 KACHA_V2_TEST(fabrication_evaluate, 曲げ状態は帯数に合わせて解ける)
 {
-    const auto made = EvaluateFabrication(Definition(1), {Cylinder()}, 0.01);
+    const auto made = EvaluateFabrication(Definition(1), {Cylinder()}, FabricationMarkings{}, 0.01);
     const auto& mesh = *made.Value().bandMesh;
     auto definition = Definition(1);
     definition.masterPercent = 50.0;
@@ -141,7 +142,7 @@ KACHA_V2_TEST(fabrication_evaluate, 曲げ状態は帯数に合わせて解け�
 
 KACHA_V2_TEST(fabrication_evaluate, 曲げ状態の姿勢は0で平ら100で完成形)
 {
-    const auto made = EvaluateFabrication(Definition(1), {Cylinder()}, 0.01);
+    const auto made = EvaluateFabrication(Definition(1), {Cylinder()}, FabricationMarkings{}, 0.01);
     const auto& mesh = *made.Value().bandMesh;
     auto definition = Definition(1);
     definition.masterPercent = 100.0;
@@ -159,7 +160,7 @@ KACHA_V2_TEST(fabrication_evaluate, 曲げ状態の姿勢は0で平ら100で完�
     }
     Require(std::abs(lengthFull - lengthFlat) < 1e-6, "0% でも長さは保つ");
     const auto none = FoldedRailsOf(definition, EvaluateFabrication(Definition(0),
-        {Cylinder()}, 0.01).Value(), 5.0);
+        {Cylinder()}, FabricationMarkings{}, 0.01).Value(), 5.0);
     Require(none.empty(), "V2 方式には曲げ状態の姿勢が無い");
 }
 

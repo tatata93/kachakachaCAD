@@ -81,13 +81,90 @@ namespace {
         window.StatusText().contains(QStringLiteral("残っています")));
 }
 
+[[nodiscard]] bool CaseWireOffsetKeepsOriginals(V2MainWindow& window)
+{
+    if (!Explain("オフセットする2本を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    const auto originals = window.Viewport().Selection().entityIds;
+    const int before = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
+    window.RunCommand("wire.offset");
+    const int after = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
+    if (!Explain((std::string("複製が1組増える(") + std::to_string(before)
+                     + " → " + std::to_string(after) + ")").c_str(),
+            after == before + 1)) {
+        return false;
+    }
+    for (const auto& original : originals) {
+        if (!Explain("元の線が文書に残る",
+                window.Session().GetDocument().FindEntity(original) != nullptr)) {
+            return false;
+        }
+    }
+    return Explain("元を残したと知らせる",
+        window.StatusText().contains(QStringLiteral("元の線は残っています")));
+}
+
+[[nodiscard]] bool CaseMeetLinesConsumesBothInputs(V2MainWindow& window)
+{
+    if (!Explain("交点へ合わせる2本を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    window.RunCommand("wire.meet");
+    int visible = 0;
+    int hidden = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::Wire) {
+            continue;
+        }
+        entity.visibility == kachakacha::v2::domain::Visibility::Hidden
+            ? ++hidden
+            : ++visible;
+    }
+    if (!Explain((std::string("2本を1組に置換する(表示 ") + std::to_string(visible)
+                     + " / 元を非表示 " + std::to_string(hidden) + ")").c_str(),
+            visible == 1 && hidden == 2)) {
+        return false;
+    }
+    return Explain("交点まで合わせたと知らせる",
+        window.StatusText().contains(QStringLiteral("2線を交点まで")));
+}
+
+[[nodiscard]] bool CaseDatumCanBeSetAndCleared(V2MainWindow& window)
+{
+    if (!Explain("基準にする線を引ける", DrawCrossingPair(window))) {
+        return false;
+    }
+    const auto selected = window.Viewport().Selection().entityIds;
+    window.RunCommand("entity.set_datum");
+    for (const auto& id : selected) {
+        const auto* entity = window.Session().GetDocument().FindEntity(id);
+        if (!Explain("基準設定が文書に入る", entity != nullptr && entity->datum)) {
+            return false;
+        }
+    }
+    if (!Explain("設定後も選択が残る",
+            window.Viewport().Selection().entityIds == selected)) {
+        return false;
+    }
+    window.RunCommand("entity.clear_datum");
+    for (const auto& id : selected) {
+        const auto* entity = window.Session().GetDocument().FindEntity(id);
+        if (!Explain("基準設定を解除できる", entity != nullptr && !entity->datum)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] bool CaseWireEditNeedsSelection(V2MainWindow& window)
 {
     // 何も選ばずに押したら、選べと言う。黙って何も起きない、をしない。
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     const std::uint64_t before = window.Session().GetDocument().Revision();
     for (const char* id : {"wire.split", "wire.join", "wire.coincident", "wire.tangent",
-             "wire.curvature", "wire.chamfer", "wire.fillet"}) {
+             "wire.curvature", "wire.chamfer", "wire.fillet", "wire.offset",
+             "wire.meet", "entity.set_datum", "entity.clear_datum"}) {
         window.RunCommand(id);
         if (!Explain((std::string("理由が出る: ") + id).c_str(),
                 !window.StatusText().isEmpty())) {
@@ -1148,6 +1225,9 @@ std::vector<SelfTestCase> ModelingCases()
         {"作業平面を作って作業中にできる", &CaseWorkPlaneIsCreatedAndActivated},
         {"グリッドは棚を開いて明示指定する", &CaseGridPanelOpensWithoutChangingDocument},
         {"分割で線が増える", &CaseWireSplitMakesMorePieces},
+        {"オフセットは元の線を残す", &CaseWireOffsetKeepsOriginals},
+        {"2線を交点まで合わせる", &CaseMeetLinesConsumesBothInputs},
+        {"基準線に設定して解除できる", &CaseDatumCanBeSetAndCleared},
         {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
         {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},
         {"押し出しで部品ができる", &CaseExtrudeMakesAPart},

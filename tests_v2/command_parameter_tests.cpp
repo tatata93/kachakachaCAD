@@ -114,6 +114,22 @@ KACHA_V2_TEST(parameters, 別の数は互いに影響しない)
         "板厚は動かない");
 }
 
+KACHA_V2_TEST(parameters, オフセットは符号で側を選び0は断る)
+{
+    const auto negative = SetParameter(
+        DefaultParameters(), ParameterId::OffsetDistance, "-(180/2)*3");
+    Require(negative.HasValue(), "負の式を受ける");
+    Require(std::abs(ParameterValueOf(
+                         negative.Value(), ParameterId::OffsetDistance)
+                + 270.0)
+            < 1.0e-12,
+        "負の距離になる");
+    const auto zero = SetParameter(
+        DefaultParameters(), ParameterId::OffsetDistance, "180-180");
+    Require(!zero.HasValue(), "0は同じ位置への複製なので断る");
+    RequireEqual(zero.Diagnostics().front().code, std::string("UI-P002"), "理由番号");
+}
+
 KACHA_V2_TEST(parameters, 縮尺で割った寸法が出る)
 {
     // 手で計算していると、桁を1つ間違えても気づけない。

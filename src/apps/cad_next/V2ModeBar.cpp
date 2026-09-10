@@ -8,8 +8,9 @@
 
 namespace {
 
-constexpr std::array<std::string_view, 24> kModeToolIds{
-    "workplane.create", "grid.edit",
+constexpr std::array<std::string_view, 28> kModeToolIds{
+    "workplane.create", "grid.edit", "wire.offset", "wire.meet",
+    "entity.set_datum", "entity.clear_datum",
     "guide.create", "guide.build", "part.extrude", "part.thicken",
     "part.thicken_to_plane", "part.from_wire_cage", "part.boolean_add",
     "part.boolean_cut", "derived.freeze",

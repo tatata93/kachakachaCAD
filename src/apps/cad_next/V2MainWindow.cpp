@@ -243,7 +243,8 @@ void V2MainWindow::BuildMenus()
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
                             "wire.coincident", "wire.tangent", "wire.curvature",
                             "wire.chamfer", "wire.fillet", "wire.move", "wire.copy",
-                            "wire.mirror", "wire.rotate", "wire.project",
+                            "wire.mirror", "wire.rotate", "wire.offset", "wire.meet",
+                            "entity.set_datum", "entity.clear_datum", "wire.project",
                             "wire.project_surface"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
                        "grid.move_origin"}},
@@ -849,6 +850,12 @@ double V2MainWindow::CornerSizeMm() const
 {
     return kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
         kachakacha::v2::app::ParameterId::CornerSize);
+}
+
+double V2MainWindow::OffsetDistanceMm() const
+{
+    return kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+        kachakacha::v2::app::ParameterId::OffsetDistance);
 }
 
 kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const

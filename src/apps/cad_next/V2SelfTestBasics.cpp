@@ -1127,9 +1127,9 @@ namespace {
     // 板厚が決め打ちだったころ、プラ板を使い分けられなかった。
     // 変えられないものは、使えないのと同じである。
     auto& dock = window.ParameterDock();
-    // 打ち替えられる6行と、計算して出るだけの1行。
-    if (!Explain((std::string("行が7つ(実際は ") + std::to_string(dock.RowCount())
-                     + ")").c_str(), dock.RowCount() == 7)) {
+    // 打ち替えられる7行と、計算して出るだけの1行。
+    if (!Explain((std::string("行が8つ(実際は ") + std::to_string(dock.RowCount())
+                     + ")").c_str(), dock.RowCount() == 8)) {
         return false;
     }
     if (!Explain("式で入る",

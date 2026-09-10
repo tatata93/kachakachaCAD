@@ -1,5 +1,6 @@
 #include "kachakacha/app/CommandParameters.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace kachakacha::v2::app {
@@ -22,6 +23,9 @@ const std::vector<ParameterDefinition>& ParameterDefinitions()
         {ParameterId::ExtrudeDistance, "extrude_distance", "板厚(押し出しの距離)",
             geometry::QuantityKind::Length, 0.5, 0.05, 20.0,
             "プラ板は 0.1〜1.0mm あたりを使います。0 では切れず、20mm を超えると板ではありません。"},
+        {ParameterId::OffsetDistance, "wire_offset_distance", "線のオフセット距離(+/-)",
+            geometry::QuantityKind::Length, 1.0, -100000.0, 100000.0,
+            "符号を逆にすると、作図面上でオフセットする側が反対になります。"},
         {ParameterId::CornerSize, "corner_size", "面取り量 / 丸め半径",
             geometry::QuantityKind::Length, 1.0, 0.01, 100.0,
             "0 では角が落ちません。線より大きい量は落としようがありません。"},
@@ -107,6 +111,10 @@ base::Result<ParameterSet> SetParameter(const ParameterSet& set, ParameterId id,
         return Out::Failure(evaluated.Diagnostics());
     }
     const double value = evaluated.Value().value;
+    if (id == ParameterId::OffsetDistance && std::abs(value) <= 1.0e-12) {
+        return Out::Failure(MakeError("UI-P002", "その値は範囲の外です。",
+            "線のオフセット距離は0以外にしてください。符号で側を選べます。"));
+    }
     if (value < definition->minimum || value > definition->maximum) {
         // 黙って近い値へ寄せない。寄せると、頼んだ値と違う物が出来る。
         return Out::Failure(MakeError("UI-P002", "その値は範囲の外です。",

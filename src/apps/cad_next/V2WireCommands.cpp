@@ -49,6 +49,8 @@ constexpr WireEditBinding kWireEdits[] = {
     {"wire.curvature", WireTransformMethod::Curvature, "曲率接続", true, false, false},
     {"wire.chamfer", WireTransformMethod::Chamfer, "C面取り", true, false, true},
     {"wire.fillet", WireTransformMethod::Fillet, "R丸め", true, false, true},
+    {"wire.offset", WireTransformMethod::Offset, "オフセット", false, false, true},
+    {"wire.meet", WireTransformMethod::MeetLines, "2線を交点まで", true, false, false},
 };
 
 [[nodiscard]] const WireEditBinding* FindWireEdit(std::string_view id)
@@ -66,7 +68,8 @@ constexpr WireEditBinding kWireEdits[] = {
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
     return FindWireEdit(id) != nullptr || id == "wire.project"
-        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend";
+        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend"
+        || id == "entity.set_datum" || id == "entity.clear_datum";
 }
 
 void V2MainWindow::ProjectSelectedWires()
@@ -218,6 +221,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         BeginTrimOrExtend(id == "wire.trim");
         return;
     }
+    if (id == "entity.set_datum" || id == "entity.clear_datum") {
+        SetSelectedDatum(id == "entity.set_datum");
+        return;
+    }
     const WireEditBinding* binding = FindWireEdit(id);
     if (binding == nullptr) {
         return;
@@ -232,17 +239,23 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     TransformWireDefinition definition;
     definition.method = binding->method;
     if (binding->needsSize) {
-        definition.scalarArgument.value = CornerSizeMm();
-        definition.scalarArgument.expression = std::to_string(CornerSizeMm());
+        const double size = binding->method == WireTransformMethod::Offset
+            ? OffsetDistanceMm()
+            : CornerSizeMm();
+        definition.scalarArgument.value = size;
+        definition.scalarArgument.expression = std::to_string(size);
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
+    if (binding->method == WireTransformMethod::Offset) {
+        definition.vectorArgument = viewport_->WorkPlane().normal;
+    }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
-        binding->consumesFirstOnly);
+        binding->consumesInputs, binding->consumesFirstOnly);
 }
 
 void V2MainWindow::RunWireTransform(
     const kachakacha::v2::domain::TransformWireDefinition& definition,
-    const QString& labelJa, bool consumesFirstOnly)
+    const QString& labelJa, bool consumesInputs, bool consumesFirstOnly)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -291,13 +304,21 @@ void V2MainWindow::RunWireTransform(
         ReportDiagnostics(added.diagnostics);
         return;
     }
-    std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
-    if (consumesFirstOnly && !consumed.empty()) {
-        // 分割やトリムは1本目を直すだけ。刃や境界にした線は残す。
-        consumed.resize(1);
+    if (consumesInputs) {
+        std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
+        if (consumesFirstOnly && !consumed.empty()) {
+            // 分割やトリムは1本目を直すだけ。刃や境界にした線は残す。
+            consumed.resize(1);
+        }
+        RemoveConsumedWires(consumed);
     }
-    RemoveConsumedWires(consumed);
     AdoptCurrentDocument();
+    if (!consumesInputs) {
+        SetStatus(QStringLiteral("%1: %2本を複製しました。元の線は残っています。")
+                .arg(labelJa)
+                .arg(static_cast<int>(computed.Value().size())));
+        return;
+    }
     if (consumesFirstOnly) {
         SetStatus(QStringLiteral("%1: 1本目を%2本にしました。相手の線は残っています。")
                 .arg(labelJa)
@@ -375,10 +396,33 @@ void V2MainWindow::BeginTrimOrExtend(bool trim)
                 : (closest.secondParameter >= 0.5 ? 1.0 : 0.0);
             definition.scalarArgument.kind =
                 kachakacha::v2::geometry::QuantityKind::Scalar;
-            RunWireTransform(definition, label, true);
+            RunWireTransform(definition, label, true, true);
         },
         trim ? "トリム: 捨てる側を1回押してください(Esc でやめます)。"
              : "延長: 延ばしたい端の近くを1回押してください(Esc でやめます)。");
+}
+
+void V2MainWindow::SetSelectedDatum(bool datum)
+{
+    const auto selected = viewport_->Selection().entityIds;
+    if (selected.empty()) {
+        SetStatus(datum ? QStringLiteral("基準線に設定: 先に線を選んでください。")
+                        : QStringLiteral("基準解除: 先に線を選んでください。"));
+        return;
+    }
+    const auto changed = session_->GetDocument().Run(
+        kachakacha::v2::document::SetDatumCommand(selected, datum));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    // V1 と同じく、続けて編集できるよう選択は維持する。
+    kachakacha::v2::app::SelectionSet kept;
+    kept.entityIds = selected;
+    viewport_->SetSelection(kept);
+    SetStatus(datum ? QStringLiteral("選択した線を基準線に設定しました。")
+                    : QStringLiteral("選択した線の基準設定を解除しました。"));
 }
 
 namespace {

@@ -236,7 +236,7 @@ public:
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
-        const QString& labelJa, bool consumesFirstOnly);
+        const QString& labelJa, bool consumesInputs, bool consumesFirstOnly);
     //! 変換を線1本へ当てて、新しいワイヤーを1本作る。作れたら true。
     [[nodiscard]] bool TransformOneWire(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
@@ -606,9 +606,12 @@ private:
         const std::vector<kachakacha::v2::base::EntityId>& entityIds);
     //! 文書が変わったあとの後始末。場面・選択・一覧・件数を作り直す。
     void AdoptCurrentDocument();
-    //! 面取り量・丸め半径・オフセット距離。数値入力が付くまでの既定値。
     //! 面取り量 / 丸め半径。数の棚から取る。
     [[nodiscard]] double CornerSizeMm() const;
+    //! 平行オフセット距離。符号で作図面上の側を選ぶ。
+    [[nodiscard]] double OffsetDistanceMm() const;
+    //! 選択中の線を基準線にする、または解除する。
+    void SetSelectedDatum(bool datum);
 
     //! ファイルの台帳コマンド。新規・開く・保存・名前を付けて保存。
     void RunFileCommand(std::string_view id);

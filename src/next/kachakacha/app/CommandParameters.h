@@ -27,6 +27,7 @@ namespace kachakacha::v2::app {
 
 enum class ParameterId {
     ExtrudeDistance,   //!< 押し出しの距離(板厚)
+    OffsetDistance,    //!< ワイヤーの平行オフセット距離。符号で側を選ぶ
     CornerSize,        //!< 面取り量 / 丸め半径
     PatternMarginMm,   //!< 型紙の余白
     ScaleDenominator,  //!< 縮尺の分母。1/87 なら 87

@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -96,7 +97,13 @@ V2DisplayDock::V2DisplayDock(QWidget* parent)
     note_->setWordWrap(true);
     layout->addWidget(note_);
     layout->addStretch(1);
-    setWidget(body);
+    // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
+    // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body);
+    setWidget(scroll);
 
     QObject::connect(wireWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(wireStyle_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });

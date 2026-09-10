@@ -224,6 +224,14 @@ public:
     [[nodiscard]] QWidget* viewport() const;
 };
 
+class QScrollArea : public QAbstractScrollArea {
+public:
+    QScrollArea() = default;
+    explicit QScrollArea(QWidget*) {}
+    void setWidget(QWidget*);
+    void setWidgetResizable(bool);
+};
+
 class QAbstractItemView : public QAbstractScrollArea {
 public:
     enum SelectionMode { NoSelection, SingleSelection, MultiSelection, ExtendedSelection };

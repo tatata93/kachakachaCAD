@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -130,7 +131,13 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     });
     layout->addWidget(create_);
     layout->addStretch(1);
-    setWidget(body_);
+    // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
+    // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body_);
+    setWidget(scroll);
 
     QObject::connect(method_, &QComboBox::currentIndexChanged, this, [this] {
         ApplyVisibility();

@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -91,7 +92,13 @@ V2GridDock::V2GridDock(QWidget* parent)
     message_->setWordWrap(true);
     layout->addWidget(message_);
     layout->addStretch(1);
-    setWidget(body);
+    // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
+    // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(body);
+    setWidget(scroll);
 
     QObject::connect(visible_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(spacing_, &QLineEdit::textChanged, this,

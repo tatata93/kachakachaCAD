@@ -1,5 +1,7 @@
 #include "kachakacha/document/FeatureReevaluation.h"
 
+#include "kachakacha/geometry/PolylineCorners.h"
+
 #include "kachakacha/geometry/WireConnect.h"
 #include "kachakacha/geometry/WireEdit.h"
 
@@ -155,6 +157,15 @@ namespace {
             offsets.push_back(moved.Value());
         }
         return Out::Success(std::move(offsets));
+    }
+    if (definition.method == WireTransformMethod::CornerChamfer
+        || definition.method == WireTransformMethod::CornerFillet) {
+        // 角の加工は1本の並びの中で完結する。相手の線は要らない。
+        return geometry::ProcessPolylineCorners(inputs,
+            definition.method == WireTransformMethod::CornerChamfer
+                ? geometry::CornerStyle::Chamfer
+                : geometry::CornerStyle::Fillet,
+            definition.scalarArgument.value, tolerance);
     }
     if (inputs.size() < 2) {
         return Out::Failure(MakeError("DOC-C007",

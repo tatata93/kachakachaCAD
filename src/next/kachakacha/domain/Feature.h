@@ -69,6 +69,9 @@ enum class WireTransformMethod {
     Coincident,
     Tangent,
     Curvature,
+    //! ポリラインの角を全部落とす / 丸める(V1 の「角の加工」)。線1本の中で完結する。
+    CornerChamfer,
+    CornerFillet,
 };
 
 enum class BooleanOperation {

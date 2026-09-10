@@ -54,6 +54,8 @@ constexpr WireEditBinding kWireEdits[] = {
     // オフセットは元の線を残す(V1 と同じ)。距離は数の棚「オフセット距離」。
     {"wire.offset", WireTransformMethod::Offset, "オフセット", false, false, true},
     {"wire.meet_lines", WireTransformMethod::MeetLines, "2線を交点まで", true, false, false},
+    {"wire.corner_chamfer", WireTransformMethod::CornerChamfer, "角の加工(落とす)", true, false, true},
+    {"wire.corner_fillet", WireTransformMethod::CornerFillet, "角の加工(丸める)", true, false, true},
 };
 
 [[nodiscard]] const WireEditBinding* FindWireEdit(std::string_view id)

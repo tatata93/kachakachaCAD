@@ -636,6 +636,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/io/DocumentFileRead.cpp
     src/next/kachakacha/geometry/ArcBuilders.cpp
     src/next/kachakacha/geometry/CurveSampling.cpp
+    src/next/kachakacha/geometry/PolylineCorners.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
     src/next/kachakacha/geometry/CurveJoin.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
@@ -771,6 +772,7 @@ kachakacha_add_v2_test(guide_table_build_tests tests_v2/guide_table_build_tests.
 kachakacha_add_v2_test(origin_planes_tests tests_v2/origin_planes_tests.cpp)
 kachakacha_add_v2_test(direct_wire_entry_tests tests_v2/direct_wire_entry_tests.cpp)
 kachakacha_add_v2_test(intersection_points_tests tests_v2/intersection_points_tests.cpp)
+kachakacha_add_v2_test(polyline_corners_tests tests_v2/polyline_corners_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)

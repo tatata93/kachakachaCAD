@@ -104,6 +104,8 @@ inline constexpr NamedEnum<WireTransformMethod> kTransformMethods[]{
     {WireTransformMethod::Coincident, "coincident"},
     {WireTransformMethod::Tangent, "tangent"},
     {WireTransformMethod::Curvature, "curvature"},
+    {WireTransformMethod::CornerChamfer, "corner_chamfer"},
+    {WireTransformMethod::CornerFillet, "corner_fillet"},
 };
 
 inline constexpr NamedEnum<CurveKind> kCurveKinds[]{

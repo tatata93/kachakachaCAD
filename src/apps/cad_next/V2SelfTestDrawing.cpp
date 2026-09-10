@@ -420,11 +420,60 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("解除で消える", !anyDatum);
 }
 
+[[nodiscard]] bool CasePolylineCornersFromCommand(V2MainWindow& window)
+{
+    // 角の加工: ポリラインの直線どうしの角を全部、面取り量で落とす(V1 の「角の加工」)。
+    const double pxPerMm = PrepareTopView(window);
+    auto& viewport = window.Viewport();
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    const auto drawU = [&] {
+        window.SelectTool(DrawingTool::Polyline);
+        viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+        viewport.ClickAt(QPointF(center.x(), center.y()));
+        viewport.ClickAt(QPointF(center.x(), center.y() - 30.0 * pxPerMm));
+        viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() - 30.0 * pxPerMm));
+        viewport.FinishTool();
+        window.SelectTool(DrawingTool::Select);
+        viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+        return window.Session().Scene().curves.size() == 3;
+    };
+    if (!Explain("コの字のポリラインが1本", drawU())) {
+        return false;
+    }
+    if (!Explain("面取り量を入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,
+                QStringLiteral("4")))) {
+        return false;
+    }
+    window.RunCommand("wire.corner_chamfer");
+    // 元の線は下流(加工した線)があるので消えず、隠れる。見えている線は 5 本。
+    if (!Explain((std::string("2つの角が落ちて5本になる(") + window.StatusText().toStdString()
+                     + ", 見える線 " + std::to_string(window.Session().Scene().curves.size())
+                     + ")").c_str(),
+            window.Session().Scene().curves.size() == 5)) {
+        return false;
+    }
+    // 丸めは円弧になる。新しい文書で同じ形を引いて丸める。
+    window.RunCommand("file.new");
+    if (!Explain("もう一度引ける", drawU())) {
+        return false;
+    }
+    window.RunCommand("wire.corner_fillet");
+    int arcs = 0;
+    for (const auto& curve : window.Session().Scene().curves) {
+        arcs += curve.segment.Kind() == kachakacha::v2::geometry::CurveKind::CircularArc ? 1 : 0;
+    }
+    return Explain((std::string("丸めは円弧2つ(実際は ") + std::to_string(arcs) + ")").c_str(),
+        arcs == 2);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
         {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},

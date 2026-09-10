@@ -79,6 +79,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)。元は残す | AT-WIR-006 |
 | `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
+| `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量 | TransformWire(CornerChamfer)。直線どうしの角を全部 | AT-WIR-006 |
+| `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径 | TransformWire(CornerFillet) | AT-WIR-006 |
 | `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
 | `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |
 | `workplane.create` | 作業平面を作る | 方式+方式別Entity | WorkPlane | AT-WPL-001,002 |

@@ -35,6 +35,8 @@ enum class SelectionPredicate {
     OnePlanarFaceOrWorkPlane,
     ZeroOrOneGroup,
     OneOrMoreWires,
+    //! ワイヤーを2つ以上。交点に点を作るときに使う。
+    TwoOrMoreWires,
     TwoWireChains,
     OneClosedProfile,
     OneOrMoreClosedProfiles,

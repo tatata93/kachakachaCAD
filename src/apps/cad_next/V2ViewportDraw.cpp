@@ -195,9 +195,11 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         const double width = selected
             ? std::max(3.2, display_.wireWidthPx + 1.2)
             : (curve.construction ? display_.constructionWidthPx : display_.wireWidthPx);
-        painter.setPen(QPen(color, width,
-            PenStyleOf(curve.construction ? display_.constructionStyle : display_.wireStyle),
-            Qt::RoundCap, Qt::RoundJoin));
+        // 基準線は一点鎖線(V1 と同じ)。補助線は補助線の様式、ほかは線の様式。
+        const Qt::PenStyle style = curve.datum
+            ? Qt::DashDotLine
+            : PenStyleOf(curve.construction ? display_.constructionStyle : display_.wireStyle);
+        painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
         if (selected && bodyDrag_.active && bodyDrag_.moved) {

@@ -9,7 +9,9 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/DirectWireEntry.h"
+#include "kachakacha/app/IntersectionPoints.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
@@ -49,6 +51,9 @@ constexpr WireEditBinding kWireEdits[] = {
     {"wire.curvature", WireTransformMethod::Curvature, "曲率接続", true, false, false},
     {"wire.chamfer", WireTransformMethod::Chamfer, "C面取り", true, false, true},
     {"wire.fillet", WireTransformMethod::Fillet, "R丸め", true, false, true},
+    // オフセットは元の線を残す(V1 と同じ)。距離は数の棚「オフセット距離」。
+    {"wire.offset", WireTransformMethod::Offset, "オフセット", false, false, true},
+    {"wire.meet_lines", WireTransformMethod::MeetLines, "2線を交点まで", true, false, false},
 };
 
 [[nodiscard]] const WireEditBinding* FindWireEdit(std::string_view id)
@@ -66,7 +71,9 @@ constexpr WireEditBinding kWireEdits[] = {
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
     return FindWireEdit(id) != nullptr || id == "wire.project"
-        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend";
+        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend"
+        || id == "wire.intersection_points" || id == "wire.set_datum"
+        || id == "wire.clear_datum";
 }
 
 void V2MainWindow::ProjectSelectedWires()
@@ -218,6 +225,14 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         BeginTrimOrExtend(id == "wire.trim");
         return;
     }
+    if (id == "wire.intersection_points") {
+        MakeIntersectionPoints();
+        return;
+    }
+    if (id == "wire.set_datum" || id == "wire.clear_datum") {
+        SetSelectedDatum(id == "wire.set_datum");
+        return;
+    }
     const WireEditBinding* binding = FindWireEdit(id);
     if (binding == nullptr) {
         return;
@@ -232,17 +247,105 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     TransformWireDefinition definition;
     definition.method = binding->method;
     if (binding->needsSize) {
-        definition.scalarArgument.value = CornerSizeMm();
-        definition.scalarArgument.expression = std::to_string(CornerSizeMm());
+        // 面取り・丸めは「面取り量」、オフセットは「オフセット距離」。どちらも数の棚。
+        const double size = binding->method == WireTransformMethod::Offset
+            ? kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+                  kachakacha::v2::app::ParameterId::OffsetDistanceMm)
+            : CornerSizeMm();
+        definition.scalarArgument.value = size;
+        definition.scalarArgument.expression = std::to_string(size);
         definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Length;
     }
+    if (binding->method == WireTransformMethod::Offset) {
+        // 作業平面の中で平行に写す。面の法線は、いま作業中の平面から取る。
+        definition.vectorArgument = viewport_->WorkPlane().normal;
+    }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
-        binding->consumesFirstOnly);
+        binding->consumesFirstOnly, binding->consumesInputs);
+}
+
+void V2MainWindow::MakeIntersectionPoints()
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::CreatePointDefinition;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    // 交点は core が求める。無ければ理由(UI-X001)を出して、何も作らない。
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    const auto points = kachakacha::v2::app::IntersectionPointsOf(inputs,
+        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+    if (!points.HasValue()) {
+        ReportDiagnostics(points.Diagnostics());
+        return;
+    }
+    // 点はひとまとまりで入れる。元に戻すのは一度で済む。線は変えない。
+    session_->GetDocument().BeginCompound("交点に点");
+    int made = 0;
+    for (std::size_t index = 0; index < points.Value().size(); ++index) {
+        const auto& point = points.Value()[index];
+        Feature feature;
+        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = FeatureType::CreatePoint;
+        feature.displayName = "交点" + std::to_string(index + 1);
+        feature.inputEntityIds = selection.entityIds;
+        CreatePointDefinition definition;
+        definition.positionMm = point;
+        definition.xExpression = {"", point.x, kachakacha::v2::geometry::QuantityKind::Length};
+        definition.yExpression = {"", point.y, kachakacha::v2::geometry::QuantityKind::Length};
+        definition.zExpression = {"", point.z, kachakacha::v2::geometry::QuantityKind::Length};
+        feature.definition = std::move(definition);
+        Entity entity;
+        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind = EntityKind::Point;
+        entity.displayName = feature.displayName;
+        entity.createdBy = feature.id;
+        feature.outputs.push_back(FeatureOutput{"point", entity.id, EntityKind::Point});
+        const auto added = session_->GetDocument().Run(
+            AddFeatureCommand(feature, {entity}, feature.displayName));
+        if (added.committed) {
+            ++made;
+        } else {
+            ReportDiagnostics(added.diagnostics);
+        }
+    }
+    session_->GetDocument().EndCompound();
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("交点に点: %1 か所に作図点を作りました。線は変わっていません。")
+            .arg(made));
+}
+
+void V2MainWindow::SetSelectedDatum(bool datum)
+{
+    // 基準線は印だけ。形も向きも変わらない(V1 と同じ)。
+    const auto& selection = viewport_->Selection();
+    std::vector<kachakacha::v2::base::EntityId> wires;
+    for (const auto& id : selection.entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Wire) {
+            wires.push_back(id);
+        }
+    }
+    const auto changed = session_->GetDocument().Run(
+        kachakacha::v2::document::SetDatumCommand(wires, datum));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(datum ? QStringLiteral("%1 本を基準線にしました(一点鎖線で出ます)。")
+                          .arg(static_cast<int>(wires.size()))
+                    : QStringLiteral("%1 本の基準線をやめました。")
+                          .arg(static_cast<int>(wires.size())));
 }
 
 void V2MainWindow::RunWireTransform(
     const kachakacha::v2::domain::TransformWireDefinition& definition,
-    const QString& labelJa, bool consumesFirstOnly)
+    const QString& labelJa, bool consumesFirstOnly, bool consumesInputs)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -296,8 +399,17 @@ void V2MainWindow::RunWireTransform(
         // 分割やトリムは1本目を直すだけ。刃や境界にした線は残す。
         consumed.resize(1);
     }
+    if (!consumesInputs) {
+        consumed.clear();   // オフセットは元の線を残す。
+    }
     RemoveConsumedWires(consumed);
     AdoptCurrentDocument();
+    if (!consumesInputs) {
+        SetStatus(QStringLiteral("%1: %2本の線を写しました。元の線は残っています。")
+                .arg(labelJa)
+                .arg(static_cast<int>(computed.Value().size())));
+        return;
+    }
     if (consumesFirstOnly) {
         SetStatus(QStringLiteral("%1: 1本目を%2本にしました。相手の線は残っています。")
                 .arg(labelJa)

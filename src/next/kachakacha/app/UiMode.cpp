@@ -53,7 +53,9 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "draw.point", "draw.line", "draw.polyline", "draw.rectangle", "draw.circle",
         "draw.arc", "draw.bezier", "draw.spline", "wire.trim", "wire.extend",
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
-        "wire.chamfer", "wire.fillet", "wire.move", "wire.copy", "wire.mirror",
+        "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
+        "wire.intersection_points", "wire.set_datum", "wire.clear_datum",
+        "wire.move", "wire.copy", "wire.mirror",
         "wire.rotate", "wire.project", "wire.project_surface", "workplane.create", "grid.edit",
         "grid.move_origin",
     };

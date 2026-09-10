@@ -4,32 +4,35 @@
 #include <QComboBox>
 #include <QToolBar>
 
+#include "kachakacha/app/UiMode.h"
+
 #include <array>
 
 namespace {
 
-constexpr std::array<std::string_view, 24> kModeToolIds{
-    "workplane.create", "grid.edit",
-    "guide.create", "guide.build", "part.extrude", "part.thicken",
-    "part.thicken_to_plane", "part.from_wire_cage", "part.boolean_add",
-    "part.boolean_cut", "derived.freeze",
-    "fabrication.create", "fabrication.assign_role", "fabrication.preview_update",
-    "fabrication.create_pattern", "fabrication.set_assembly", "fabrication.set_method",
-    "fabrication.freeze_state", "fabrication.set_connection_scope",
-    "export.validate", "export.stl", "export.step", "export.svg", "export.dxf",
-};
+using kachakacha::v2::app::AllUiModes;
+using kachakacha::v2::app::CommandIdsForMode;
 
 } // namespace
 
 void V2MainWindow::BuildModeToolActions()
 {
-    for (const std::string_view id : kModeToolIds) {
-        QAction* action = ActionFor(id);
-        if (action == nullptr) {
-            continue;
+    // 並べる命令はモードの台帳(app/UiMode)から取る。ここに別の一覧を持つと、
+    // 台帳へ足した命令が2段目に出ないまま残る。作図の道具(kToolBindings)は
+    // 道具として既に並んでいるので除く。
+    toolPalette_->addSeparator();
+    for (const kachakacha::v2::app::UiMode mode : AllUiModes()) {
+        for (const std::string_view id : CommandIdsForMode(mode)) {
+            if (IsToolBoundCommand(id)) {
+                continue;
+            }
+            QAction* action = ActionFor(id);
+            if (action == nullptr) {
+                continue;
+            }
+            toolPalette_->addAction(action);
+            modeToolActions_.emplace_back(id, action);
         }
-        toolPalette_->addAction(action);
-        modeToolActions_.emplace_back(id, action);
     }
 }
 

@@ -72,6 +72,8 @@ struct SnapCurve {
     SegmentId segmentId;
     CurveSegment segment;
     bool construction = false;
+    //! 基準線(V1 の「基準線に設定」)。一点鎖線で出す。形は同じ。
+    bool datum = false;
 };
 
 struct SnapDrawingPoint {

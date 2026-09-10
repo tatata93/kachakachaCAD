@@ -115,6 +115,8 @@ KACHA_V2_TEST(availability, 開いた線は閉じた輪郭ではない)
         "押し出しは押せない");
     Require(SelectionSatisfies(SelectionPredicate::OneOrMoreWires, facts),
         "ワイヤーとしては選べている");
+    Require(!SelectionSatisfies(SelectionPredicate::TwoOrMoreWires, facts),
+        "1本では交点に点は作れない");
 }
 
 KACHA_V2_TEST(availability, 離れた2本は鎖2つになる)
@@ -220,6 +222,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OneWorkPlane,
         SelectionPredicate::OnePlanarFaceOrWorkPlane,
         SelectionPredicate::OneOrMoreWires,
+        SelectionPredicate::TwoOrMoreWires,
         SelectionPredicate::TwoWireChains,
         SelectionPredicate::OneClosedProfile,
         SelectionPredicate::OneOrMoreClosedProfiles,

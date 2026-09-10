@@ -132,6 +132,8 @@ public:
     [[nodiscard]] bool isEnabled() const;
     void setVisible(bool);
     [[nodiscard]] bool isVisible() const;
+    [[nodiscard]] bool isSeparator() const;
+    [[nodiscard]] bool isCheckable() const;
     void setToolTip(const QString&);
     [[nodiscard]] QString toolTip() const;
     void setStatusTip(const QString&);

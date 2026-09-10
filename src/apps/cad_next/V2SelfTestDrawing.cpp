@@ -9,9 +9,11 @@
 #include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
 #include "V2GridDock.h"
+#include "V2ParameterDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -271,11 +273,160 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("文書は変わらない", window.Session().GetDocument().Revision() == revision);
 }
 
+//! 上から見て 2本の線を引く。1本目は横、2本目は縦(十字)。
+[[nodiscard]] bool DrawCross(V2MainWindow& window, double pxPerMm)
+{
+    auto& viewport = window.Viewport();
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    window.SelectTool(DrawingTool::Line);
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x(), center.y() - 30.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x(), center.y() + 30.0 * pxPerMm));
+    window.SelectTool(DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    return CountOfKind(window, EntityKind::Wire) == 2;
+}
+
+[[nodiscard]] bool CaseOffsetKeepsOriginalAndMeetLinesJoins(V2MainWindow& window)
+{
+    // オフセットは元の線を残して平行に写す。2線を交点まで は2本を交点で合わせる。
+    const double pxPerMm = PrepareTopView(window);
+    if (!Explain("十字を引ける", DrawCross(window, pxPerMm))) {
+        return false;
+    }
+    // 横線だけを選んでオフセット。数の棚の「オフセット距離」を 5 にする。
+    auto& viewport = window.Viewport();
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(viewport.Selection().entityIds.front());
+    viewport.SetSelection(one);
+    if (!Explain("距離を入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::OffsetDistanceMm,
+                QStringLiteral("5")))) {
+        return false;
+    }
+    window.RunCommand("wire.offset");
+    if (!Explain((std::string("線が増え元は残る(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Wire) == 3)) {
+        return false;
+    }
+    const auto& made = window.Session().Scene().curves.back().segment;
+    const double gap = std::abs(made.StartPoint().y - viewport.WorkPlane().origin.y);
+    if (!Explain((std::string("5mm 離れる(実際は ") + std::to_string(gap) + ")").c_str(),
+            std::abs(gap - 5.0) < 1.0e-6)) {
+        return false;
+    }
+    // 2線を交点まで: 離れた2本の直線を引いて合わせる。
+    window.RunCommand("file.new");
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    window.SelectTool(DrawingTool::Line);
+    viewport.ClickAt(QPointF(center.x() - 40.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() - 10.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 10.0 * pxPerMm, center.y() - 10.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x() + 10.0 * pxPerMm, center.y() - 40.0 * pxPerMm));
+    window.SelectTool(DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.meet_lines");
+    if (!Explain((std::string("交点まで延びる(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            window.StatusText().contains(QStringLiteral("2線を交点まで")))) {
+        return false;
+    }
+    // 出来た線は、交点(横線の高さ・縦線の位置)で端が合う。
+    const auto& curves = window.Session().Scene().curves;
+    bool meets = false;
+    for (const auto& a : curves) {
+        for (const auto& b : curves) {
+            if (&a == &b) {
+                continue;
+            }
+            for (const auto& pa : {a.segment.StartPoint(), a.segment.EndPoint()}) {
+                for (const auto& pb : {b.segment.StartPoint(), b.segment.EndPoint()}) {
+                    meets = meets || (pa - pb).Length() < 1.0e-6;
+                }
+            }
+        }
+    }
+    return Explain("端が交点で合う", meets);
+}
+
+[[nodiscard]] bool CaseIntersectionPointsAndDatum(V2MainWindow& window)
+{
+    // 交点に点: 十字の交点に作図点が1つ。線は変わらない。基準線: 印だけ付く。
+    const double pxPerMm = PrepareTopView(window);
+    if (!Explain("十字を引ける", DrawCross(window, pxPerMm))) {
+        return false;
+    }
+    window.RunCommand("wire.intersection_points");
+    if (!Explain((std::string("交点に点が1つ(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Point) == 1
+                && CountOfKind(window, EntityKind::Wire) == 2)) {
+        return false;
+    }
+    const auto& point = window.Session().Scene().points.back().position;
+    if (!Explain("交点は原点", (point - window.Viewport().WorkPlane().origin).Length() < 1.0e-6)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("一度で消える", CountOfKind(window, EntityKind::Point) == 0)) {
+        return false;
+    }
+    // 平行な2本では断る。
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    window.SelectTool(DrawingTool::Line);
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y() + 20.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() + 20.0 * pxPerMm));
+    window.SelectTool(DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.intersection_points");
+    if (!Explain((std::string("交わらなければ断る(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Point) == 0
+                && window.StatusText().contains(QStringLiteral("交点")))) {
+        return false;
+    }
+    // 基準線に設定 → 場面の線に印が付く → 解除で消える。形は同じ。
+    const auto before = window.Session().Scene().curves.front().segment.StartPoint();
+    window.RunCommand("wire.set_datum");
+    const auto& curves = window.Session().Scene().curves;
+    bool allDatum = !curves.empty();
+    for (const auto& curve : curves) {
+        allDatum = allDatum && curve.datum;
+    }
+    if (!Explain("基準線の印が付く", allDatum)) {
+        return false;
+    }
+    if (!Explain("形は同じ",
+            (window.Session().Scene().curves.front().segment.StartPoint() - before).Length()
+                < 1.0e-9)) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.clear_datum");
+    bool anyDatum = false;
+    for (const auto& curve : window.Session().Scene().curves) {
+        anyDatum = anyDatum || curve.datum;
+    }
+    return Explain("解除で消える", !anyDatum);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingCases()
 {
     return {
+        {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
+        {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
         {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},
         {"表示の棚で太さ・様式・色と段が変わる", &CaseDisplayDockStylesAndStages},
         {"作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},

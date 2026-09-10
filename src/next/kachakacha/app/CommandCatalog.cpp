@@ -13,6 +13,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OnePlanarFaceOrWorkPlane: return "平らな面か作業平面を1つ選んでください。";
     case SelectionPredicate::ZeroOrOneGroup: return "グループは1つまで選べます。";
     case SelectionPredicate::OneOrMoreWires: return "ワイヤーを1つ以上選んでください。";
+    case SelectionPredicate::TwoOrMoreWires: return "ワイヤーを2つ以上選んでください。";
     case SelectionPredicate::TwoWireChains: return "鎖を2つ選んでください。";
     case SelectionPredicate::OneClosedProfile: return "閉じた輪郭を1つ選んでください。";
     case SelectionPredicate::OneOrMoreClosedProfiles: return "閉じた輪郭を1つ以上選んでください。";
@@ -214,6 +215,26 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::TwoWireChains, "鎖を2つ選んでください。",
             "角を丸くします。半径は数値で決めます。", true,
             {"AT-WIR-006"}},
+        {"wire.offset", "オフセット", CommandMode::Instant, "offset", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "選んだ線を作業平面の中で「オフセット距離」ぶん平行に写します。元の線は残ります。", true,
+            {"AT-WIR-006"}},
+        {"wire.meet_lines", "2線を交点まで", CommandMode::Instant, "meet_lines", "",
+            SelectionPredicate::TwoWireChains, "鎖を2つ選んでください。",
+            "2本の直線を互いの交点まで延ばす(または縮める)。", true,
+            {"AT-WIR-006"}},
+        {"wire.intersection_points", "交点に点", CommandMode::Instant, "intersection_points", "",
+            SelectionPredicate::TwoOrMoreWires, "ワイヤーを2つ以上選んでください。",
+            "選んだ線どうしの交点すべてに作図点を作ります。線は変わりません。", true,
+            {"AT-MEA-005"}},
+        {"wire.set_datum", "基準線に設定", CommandMode::Instant, "set_datum", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "選んだ線を基準線にします(一点鎖線で出ます)。形は変わりません。", true,
+            {"AT-DOC-005"}},
+        {"wire.clear_datum", "基準解除", CommandMode::Instant, "clear_datum", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "基準線をやめて普通の線に戻します。形は変わりません。", true,
+            {"AT-DOC-005"}},
         {"workplane.create", "作業平面を作る", CommandMode::Dialog, "workplane_new", "",
             SelectionPredicate::Always, "",
             "作業平面を作ります。作り方は12通りあります。", true,

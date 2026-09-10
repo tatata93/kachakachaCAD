@@ -49,7 +49,7 @@ modeling::SnapScene BuildSceneFromDocument(const document::DocumentSnapshot& sna
                     ? wire->segmentIds[index]
                     : ids.NextTyped<base::IdKind::Segment>();
                 scene.curves.push_back(SnapCurve{entity->id, segmentId,
-                    wire->segments[index], wire->construction});
+                    wire->segments[index], wire->construction, entity->datum});
             }
             continue;
         }

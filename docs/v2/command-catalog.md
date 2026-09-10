@@ -76,6 +76,11 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.curvature` | 曲率接続 | 2曲線端、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.chamfer` | C面取り | 2辺、距離 | TransformWire | AT-WIR-006 |
 | `wire.fillet` | R丸め | 2辺、半径 | TransformWire | AT-WIR-006 |
+| `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)。元は残す | AT-WIR-006 |
+| `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
+| `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
+| `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
+| `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |
 | `workplane.create` | 作業平面を作る | 方式+方式別Entity | WorkPlane | AT-WPL-001,002 |
 | `grid.edit` | グリッド | 間隔、副点、原点 | Document settings | AT-UIX-005 |
 | `grid.move_origin` | グリッド原点を移動 | 原点handle、snap先 | Document settings | AT-UIX-005 |

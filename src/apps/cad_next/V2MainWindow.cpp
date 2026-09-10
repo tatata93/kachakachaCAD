@@ -242,7 +242,9 @@ void V2MainWindow::BuildMenus()
                        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
                             "wire.coincident", "wire.tangent", "wire.curvature",
-                            "wire.chamfer", "wire.fillet", "wire.move", "wire.copy",
+                            "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
+                            "wire.intersection_points", "wire.set_datum", "wire.clear_datum",
+                            "wire.move", "wire.copy",
                             "wire.mirror", "wire.rotate", "wire.project",
                             "wire.project_surface"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
@@ -426,6 +428,16 @@ void V2MainWindow::RefreshCommandVisibility()
         }
         toolPalette_->setVisible(anyVisible);
     }
+}
+
+bool V2MainWindow::IsToolBoundCommand(std::string_view id)
+{
+    for (const ToolBinding& binding : kToolBindings) {
+        if (binding.commandId == id) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void V2MainWindow::BuildToolPalette()

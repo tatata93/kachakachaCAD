@@ -28,6 +28,8 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.groups <= 1;
     case SelectionPredicate::OneOrMoreWires:
         return facts.wires >= 1;
+    case SelectionPredicate::TwoOrMoreWires:
+        return facts.wires >= 2;
     case SelectionPredicate::TwoWireChains:
         return facts.wireChains == 2;
     case SelectionPredicate::OneClosedProfile:

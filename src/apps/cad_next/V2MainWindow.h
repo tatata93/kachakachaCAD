@@ -236,7 +236,7 @@ public:
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
-        const QString& labelJa, bool consumesFirstOnly);
+        const QString& labelJa, bool consumesFirstOnly, bool consumesInputs = true);
     //! 変換を線1本へ当てて、新しいワイヤーを1本作る。作れたら true。
     [[nodiscard]] bool TransformOneWire(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
@@ -436,6 +436,8 @@ private:
     void BuildToolPalette();
     //! 台帳 QAction を2段目のモード別道具として再利用する。
     void BuildModeToolActions();
+    //! その命令は作図の道具(kToolBindings)として既に並んでいるか。
+    [[nodiscard]] static bool IsToolBoundCommand(std::string_view id);
     void RefreshCommandVisibility();
     //! 文書のまとまりと上の帯を同期する。
     void RefreshActiveGroupCombo();
@@ -597,6 +599,10 @@ private:
     //! 一覧の「原点」ノードの軸の行(X/Y/Z)。チェックで表示を切り替える。
     std::array<QTreeWidgetItem*, 3> axisItems_{};
 
+    //! 選んだ線どうしの交点に作図点を作る(V1 の「交点に点」)。
+    void MakeIntersectionPoints();
+    //! 選んだ線を基準線にする / やめる。
+    void SetSelectedDatum(bool datum);
     //! 線の編集コマンドか。V2WireCommands.cpp が持つ。
     [[nodiscard]] static bool IsWireEditCommand(std::string_view id);
     //! 線の編集を通す。判断は core にあり、ここは渡すだけ。

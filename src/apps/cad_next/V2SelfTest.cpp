@@ -35,6 +35,7 @@ namespace {
                                    const kachakacha::v2::app::WorkPlaneFacts&) {
         return std::optional<WorkPlaneChoice>(initial);
     });
+    window.SetAssemblyChooser([](double current) { return std::optional<double>(current); });
     window.resize(1000, 700);
     window.show();
     QApplication::processEvents();

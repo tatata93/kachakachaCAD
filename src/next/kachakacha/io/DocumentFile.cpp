@@ -52,7 +52,6 @@ constexpr const char* kNotOurFile = "KCD2-D001";  //!< format / schemaVersion �
 constexpr const char* kBadValue   = "KCD2-D002";  //!< 型違い、範囲外、UUIDでない
 constexpr const char* kBadEnum    = "KCD2-D003";  //!< 知らない enum
 constexpr const char* kBadShape   = "KCD2-D004";  //!< 参照切れ、重複ID、構造の矛盾
-constexpr const char* kNoDocument = "KCD2-D005";  //!< document.json が無い
 
 // ---------------------------------------------------------------- enum 表
 // 名前は kcd2-format.md の lower snake_case。並びは enum 定義順。
@@ -246,6 +245,15 @@ template<class Id>
 }
 
 //! IDの並びを書く。新しい定義がどれもこの形なので、1か所にまとめる。
+[[nodiscard]] JsonValue WriteNumberArray(const std::vector<double>& values)
+{
+    JsonArray array;
+    for (const double value : values) {
+        array.push_back(JsonValue::Number(value));
+    }
+    return JsonValue::Array(std::move(array));
+}
+
 [[nodiscard]] JsonValue WriteIdArray(const std::vector<EntityId>& ids)
 {
     JsonArray array;
@@ -368,6 +376,17 @@ template<class Id>
         definition["materialThickness"] = WriteExpression(fabrication->materialThickness);
         definition["targetMaxDeviation"] = WriteExpression(fabrication->targetMaxDeviation);
         definition["fidelity"] = JsonValue::Number(static_cast<double>(fabrication->fidelity));
+        definition["method"] = JsonValue::Number(static_cast<double>(fabrication->method));
+        definition["splitAxis"] = JsonValue::Number(
+            static_cast<double>(fabrication->splitAxis));
+        definition["automaticBoundaries"] = JsonValue::Bool(fabrication->automaticBoundaries);
+        definition["maximumPartCount"] = JsonValue::Number(
+            static_cast<double>(fabrication->maximumPartCount));
+        definition["minimumPartWidthMm"] = JsonValue::Number(fabrication->minimumPartWidthMm);
+        definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
+        definition["masterPercent"] = JsonValue::Number(fabrication->masterPercent);
+        definition["creaseProgress"] = WriteNumberArray(fabrication->creaseProgress);
+        definition["bandProgress"] = WriteNumberArray(fabrication->bandProgress);
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);
@@ -613,6 +632,16 @@ public:
         return *value;
     }
 
+    //! 無くてもよい真偽。古い文書に項目が無いことがあるので、既定値を返す。
+    [[nodiscard]] bool BoolOr(const JsonValue& parent, const char* key, bool fallback)
+    {
+        const JsonValue* found = parent.Find(key);
+        if (found == nullptr || found->Type() != JsonType::Bool) {
+            return fallback;
+        }
+        return found->AsBool();
+    }
+
     //! 無くてもよい数。古い文書に項目が無いことがあるので、既定値を返す。
     [[nodiscard]] double NumberOr(const JsonValue& parent, const char* key,
         double fallback)
@@ -828,6 +857,31 @@ private:
 }
 
 //! IDの並びを読む。新しい定義がどれもこの形なので、1か所にまとめる。
+//! 無くてもよい数の並び。無ければ空。数でないものが混ざっていれば断る。
+[[nodiscard]] std::vector<double> ReadNumberArray(Loader& loader, const JsonValue& parent,
+    const char* key, const std::string& where)
+{
+    std::vector<double> values;
+    const JsonValue* found = parent.Find(key);
+    if (found == nullptr) {
+        return values;
+    }
+    const JsonArray* array = loader.ArrayAt(parent, key, where);
+    if (array == nullptr) {
+        return values;
+    }
+    for (std::size_t index = 0; index < array->size(); ++index) {
+        const JsonValue& item = (*array)[index];
+        if (item.Type() != JsonType::Number) {
+            loader.Fail(kBadValue, "数であるべき項目が数ではありません。",
+                where + "." + key + "[" + std::to_string(index) + "]");
+            continue;
+        }
+        values.push_back(item.AsNumber());
+    }
+    return values;
+}
+
 [[nodiscard]] std::vector<EntityId> ReadIdArray(Loader& loader, const JsonValue& parent,
     const char* key, const std::string& where)
 {
@@ -1032,6 +1086,16 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.targetMaxDeviation = loader.ReadExpression(definition, "targetMaxDeviation",
             where);
         made.fidelity = static_cast<int>(loader.NumberOr(definition, "fidelity", 6.0));
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        made.splitAxis = static_cast<int>(loader.NumberOr(definition, "splitAxis", 1.0));
+        made.automaticBoundaries = loader.BoolOr(definition, "automaticBoundaries", true);
+        made.maximumPartCount =
+            static_cast<int>(loader.NumberOr(definition, "maximumPartCount", 12.0));
+        made.minimumPartWidthMm = loader.NumberOr(definition, "minimumPartWidthMm", 4.0);
+        made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
+        made.masterPercent = loader.NumberOr(definition, "masterPercent", 100.0);
+        made.creaseProgress = ReadNumberArray(loader, definition, "creaseProgress", where);
+        made.bandProgress = ReadNumberArray(loader, definition, "bandProgress", where);
         feature.definition = std::move(made);
         break;
     }
@@ -1398,52 +1462,6 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
         return Result<DocumentFile>::Success(std::move(file), std::move(diagnostics));
     }
     return Result<DocumentFile>::Success(std::move(file));
-}
-
-Result<std::string> SaveDocument(const DocumentFile& file)
-{
-    std::vector<ZipEntry> entries;
-    entries.push_back(ZipEntry{kDocumentEntry, WriteDocumentJson(file)});
-    for (const ZipEntry& entry : file.sideEntries) {
-        if (entry.path == kDocumentEntry) {
-            return Result<std::string>::Failure(MakeError(kBadShape,
-                "document.json は1つだけです。", entry.path));
-        }
-        entries.push_back(entry);
-    }
-    return WriteZip(entries);
-}
-
-Result<DocumentFile> LoadDocument(std::string_view archive)
-{
-    const auto read = ReadZip(archive);
-    if (!read.HasValue()) {
-        return Result<DocumentFile>::Failure(read.Diagnostics());
-    }
-    const std::vector<ZipEntry>& entries = read.Value();
-    const ZipEntry* document = nullptr;
-    for (const ZipEntry& entry : entries) {
-        if (entry.path == kDocumentEntry) {
-            document = &entry;
-            break;
-        }
-    }
-    if (document == nullptr) {
-        return Result<DocumentFile>::Failure(MakeError(kNoDocument,
-            "文書の本体(document.json)が入っていません。",
-            "このファイルは .kcd2 ではないか、壊れています。"));
-    }
-    auto parsed = ReadDocumentJson(document->data);
-    if (!parsed.HasValue()) {
-        return parsed;
-    }
-    DocumentFile file = parsed.Value();
-    for (const ZipEntry& entry : entries) {
-        if (entry.path != kDocumentEntry) {
-            file.sideEntries.push_back(entry);
-        }
-    }
-    return Result<DocumentFile>::Success(std::move(file), parsed.Diagnostics());
 }
 
 } // namespace kachakacha::v2::io

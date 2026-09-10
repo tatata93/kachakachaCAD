@@ -26,6 +26,7 @@
 #include "V2ExtrudeDialog.h"
 #include "V2WorkPlaneDialog.h"
 #include "kachakacha/app/ExtrudeOptions.h"
+#include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
@@ -233,6 +234,19 @@ public:
     [[nodiscard]] kachakacha::v2::base::Result<
         kachakacha::v2::modeling::WorkPlaneRequest>
     BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const;
+    //! 組立率を聞く。窓を出さない試験では差し替える。値を返さなければ「やめた」。
+    void SetAssemblyChooser(std::function<std::optional<double>(double current)> chooser);
+    //! 組立率を変える。文書の作り方を書き換えるので、元に戻せる。
+    void SetAssemblyPercent(double percent);
+    //! 次に作る近似モデルの方式。試験と帯から読む。
+    [[nodiscard]] kachakacha::v2::app::FabricationMethod FabricationMethodInUse() const
+    {
+        return fabricationMethod_;
+    }
+    [[nodiscard]] int FabricationModelCount() const
+    {
+        return static_cast<int>(fabricationModels_.size());
+    }
     //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
     //! 値を返さなければ「やめた」。
     void SetExtrudeChooser(
@@ -341,8 +355,6 @@ private:
     void RunFabricationCreate();
     void RunCreatePattern();
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
-    [[nodiscard]] bool UnfoldSelectedSurfaces(
-        std::vector<kachakacha::v2::fabrication::PatternPanel>& into);
     //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
     void AssignOpeningRole();
     //! 部材のもとになった輪郭と、入れた開口。作り直しに使う。
@@ -353,12 +365,27 @@ private:
     //! 入れた折り線。切らないので開口とは別に持つ。
     std::map<std::string,
         std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>>> panelFolds_;
-    //! 出来た部材。平らなものだけ。
+    //! 出来た部材(全近似モデルの部材を並べたもの)。型紙はこれを使う。
     std::vector<kachakacha::v2::fabrication::PatternPanel> fabricationPanels_;
     //! 並べた型紙。書き出しはこれを使う。
     std::vector<kachakacha::v2::exporters::PatternPage> patternPages_;
-    //! 組立状態(%)。0 / 30 / 100。
-    int assemblyPercent_ = 0;
+    //! 近似モデルごとの結果。鍵は FabricationModel の EntityId。
+    //! 文書には作り方だけが入り、開いたら作り直す(立体と同じ考え)。
+    std::map<std::string, kachakacha::v2::app::FabricationEvaluation> fabricationModels_;
+    std::function<std::optional<double>(double current)> assemblyChooser_;
+    //! 次に作る近似モデルの方式。V1 方式(帯)と V2 方式(面の分類)を切り替える。
+    kachakacha::v2::app::FabricationMethod fabricationMethod_ =
+        kachakacha::v2::app::FabricationMethod::BandApproximation;
+    //! 選んでいる(または最後に作った)近似モデル。無ければ空の id。
+    [[nodiscard]] kachakacha::v2::base::EntityId CurrentFabricationModelId() const;
+    //! 元になるものを、いま画面が持っている材料から集める。作るときも作り直すときも同じ。
+    [[nodiscard]] std::vector<kachakacha::v2::app::FabricationSource>
+    FabricationSourcesFor(const std::vector<kachakacha::v2::base::EntityId>& ids) const;
+    //! 作り方から近似モデルを作り直し、覚える。開き直しから呼ぶ。
+    bool RebuildFabricationModel(const kachakacha::v2::domain::Feature& feature,
+        const kachakacha::v2::base::EntityId& output);
+    //! 全近似モデルの部材を fabricationPanels_ へ並べ直し、曲げ状態の姿勢を画面へ出す。
+    void RefreshFabricationView();
 
     //! 形のコマンドか。V2PartCommands.cpp が持つ。
     [[nodiscard]] static bool IsPartCommand(std::string_view id);

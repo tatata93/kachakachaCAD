@@ -64,7 +64,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
     static const std::vector<std::string_view> fabrication{
         "fabrication.create", "fabrication.assign_role", "fabrication.preview_update",
         "fabrication.create_pattern", "fabrication.set_assembly",
-        "fabrication.freeze_state",
+        "fabrication.set_method", "fabrication.freeze_state",
     };
     static const std::vector<std::string_view> output{
         "export.validate", "export.stl", "export.step", "export.svg", "export.dxf",

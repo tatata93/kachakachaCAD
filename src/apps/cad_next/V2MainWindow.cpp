@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2NumberDialog.h"
 
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/app/SampleDocument.h"
@@ -196,6 +197,16 @@ V2MainWindow::V2MainWindow()
         }
         return dialog.Choice();
     });
+    // 組立率は窓で聞く。数値1つなので、押し出しのような大きな窓は要らない。
+    SetAssemblyChooser([this](double current) -> std::optional<double> {
+        V2NumberDialog dialog(QStringLiteral("組立状態"),
+            QStringLiteral("組立率(0 = 平ら、100 = 完成形)"), current, 0.0, 100.0,
+            QStringLiteral(" %"), this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return dialog.Value();
+    });
     // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
     viewport_->SetControlPointCallback(
         [this](kachakacha::v2::base::EntityId entityId,
@@ -248,7 +259,8 @@ void V2MainWindow::BuildMenus()
                      "part.boolean_add", "part.boolean_cut", "derived.freeze"}},
         {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
                        "fabrication.preview_update", "fabrication.create_pattern",
-                       "fabrication.set_assembly", "fabrication.freeze_state"}},
+                       "fabrication.set_assembly", "fabrication.set_method",
+                       "fabrication.freeze_state"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
                             "export.dxf"}},
         {"表示(&V)", {"view.fit_all", "view.align_selection", "view.hide_selected",

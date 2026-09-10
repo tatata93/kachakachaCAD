@@ -96,6 +96,13 @@ struct BandApproximationResult {
 [[nodiscard]] base::Result<BandApproximationResult> ApproximateBands(
     const SampledSurface& source, const BandApproximationOptions& options);
 
+//! 面全体を1枚の帯とみなしたときの、その軸での1軸曲げ近似からのずれ(mm)。
+//! どちらの軸で切るべきか(曲がっている方向を横切るように切る)を決めるのに使う。
+[[nodiscard]] double MeasureAxisDeviation(const SampledSurface& source, BandSplitAxis axis);
+
+//! ずれの大きい方の軸。どちらも0なら V。平らな面はどちらで切っても同じ。
+[[nodiscard]] BandSplitAxis ChooseSplitAxis(const SampledSurface& source);
+
 //! 帯の境界(分割軸パラメータ = 一定の線)を、面の上の点列として作る。
 [[nodiscard]] std::vector<Vector3> BuildBandBoundary(const SampledSurface& source,
     BandSplitAxis axis, double parameter, int samples = 64);

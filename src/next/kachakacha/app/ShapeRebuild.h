@@ -27,6 +27,8 @@ enum class ShapeRebuildKind {
     WireCage,
     Boolean,
     GuideSurface,
+    //! 近似モデル。元の面や部品が作り直された後に、作り方から作り直す。
+    FabricationModel,
 };
 
 [[nodiscard]] std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept;

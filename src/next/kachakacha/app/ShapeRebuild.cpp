@@ -21,6 +21,8 @@ using domain::FeatureType;
         return ShapeRebuildKind::Boolean;
     case FeatureType::CreateGuideSurface:
         return ShapeRebuildKind::GuideSurface;
+    case FeatureType::CreateFabricationModel:
+        return ShapeRebuildKind::FabricationModel;
     default:
         return std::nullopt;
     }
@@ -41,6 +43,7 @@ std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept
     case ShapeRebuildKind::WireCage:     return "かごから部品";
     case ShapeRebuildKind::Boolean:      return "足す・引く";
     case ShapeRebuildKind::GuideSurface: return "形状ガイド";
+    case ShapeRebuildKind::FabricationModel: return "近似モデル";
     }
     return "不明";
 }

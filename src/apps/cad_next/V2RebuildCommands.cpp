@@ -195,6 +195,7 @@ void V2MainWindow::RebuildKernelShapes()
     guideShapes_.clear();
     guideEdges_.clear();
     guideSamples_.clear();
+    fabricationModels_.clear();
 
     const auto snapshot = session_->GetDocument().Snapshot();
     const auto steps = kachakacha::v2::app::PlanShapeRebuild(snapshot);
@@ -222,6 +223,9 @@ void V2MainWindow::RebuildKernelShapes()
         case kachakacha::v2::app::ShapeRebuildKind::GuideSurface:
             ok = RebuildGuideSurfaceShape(*feature, step.outputEntityId);
             break;
+        case kachakacha::v2::app::ShapeRebuildKind::FabricationModel:
+            ok = RebuildFabricationModel(*feature, step.outputEntityId);
+            break;
         }
         if (ok) {
             ++made;
@@ -232,6 +236,7 @@ void V2MainWindow::RebuildKernelShapes()
         }
     }
     RefreshPartEdges();
+    RefreshFabricationView();
     RefreshExportCounts();
     if (failed.empty()) {
         return;

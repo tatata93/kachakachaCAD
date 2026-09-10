@@ -233,6 +233,20 @@ Result<BandApproximationResult> ApproximateBands(const SampledSurface& source,
     return Out::Success(std::move(result));
 }
 
+double MeasureAxisDeviation(const SampledSurface& source, BandSplitAxis axis)
+{
+    return source.Valid() ? EstimateChordDeviation(source, axis, 0.0, 1.0) : 0.0;
+}
+
+BandSplitAxis ChooseSplitAxis(const SampledSurface& source)
+{
+    // 曲がっている方向を横切るように切る。切る軸に沿って面が真っ直ぐなら、
+    // いくら切っても帯は曲がらないまま(1枚で済んでしまう)。
+    const double alongU = MeasureAxisDeviation(source, BandSplitAxis::U);
+    const double alongV = MeasureAxisDeviation(source, BandSplitAxis::V);
+    return alongU > alongV + 1.0e-9 ? BandSplitAxis::U : BandSplitAxis::V;
+}
+
 std::vector<Vector3> BuildBandBoundary(const SampledSurface& source, BandSplitAxis axis,
     double parameter, int samples)
 {

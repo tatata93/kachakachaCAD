@@ -15,6 +15,8 @@ using kachakacha::v2::fabrication::BandApproximationOptions;
 using kachakacha::v2::fabrication::BandMesh;
 using kachakacha::v2::fabrication::BandSplitAxis;
 using kachakacha::v2::fabrication::BuildBandFoldRails;
+using kachakacha::v2::fabrication::ChooseSplitAxis;
+using kachakacha::v2::fabrication::MeasureAxisDeviation;
 using kachakacha::v2::fabrication::BuildRigidBandTransforms;
 using kachakacha::v2::fabrication::ClipLoopIntoBands;
 using kachakacha::v2::fabrication::DevelopBandMesh;
@@ -102,6 +104,22 @@ KACHA_V2_TEST(band_approximation, 格子の補間は角と中央で正しい)
     Require((surface.Evaluate(1.0, 1.0) - Vector3{100.0, 60.0, 0.0}).Length() < 1e-9, "対角");
     Require((surface.Evaluate(0.5, 0.5) - Vector3{50.0, 30.0, 0.0}).Length() < 1e-9, "中央");
     Require((surface.Evaluate(0.3, 0.7) - Vector3{30.0, 42.0, 0.0}).Length() < 1e-9, "途中");
+}
+
+KACHA_V2_TEST(band_approximation, 曲がっている方向を横切る軸を選ぶ)
+{
+    // 円筒は v 方向に曲がり、u 方向は真っ直ぐ。u で切っても帯は曲がらないので V を選ぶ。
+    const SampledSurface cylinder(QuarterCylinder());
+    Require(ChooseSplitAxis(cylinder) == BandSplitAxis::V, "曲がる方向を横切る");
+    Require(MeasureAxisDeviation(cylinder, BandSplitAxis::U) < 1e-6, "u は真っ直ぐ");
+    Require(MeasureAxisDeviation(cylinder, BandSplitAxis::V) > 1.0, "v は曲がっている");
+    // 転置した格子(u 方向に曲がる)なら U を選ぶ。
+    const SampledSurface transposed(Grid(17, 33, [](double u, double v) {
+        const double angle = u * kPi / 2.0;
+        return Vector3{v * 80.0, 50.0 * std::cos(angle), 50.0 * std::sin(angle)};
+    }));
+    Require(ChooseSplitAxis(transposed) == BandSplitAxis::U, "転置なら U");
+    Require(ChooseSplitAxis(SampledSurface(FlatSheet())) == BandSplitAxis::V, "平らなら V");
 }
 
 KACHA_V2_TEST(band_approximation, 平らな面は1枚のまま)

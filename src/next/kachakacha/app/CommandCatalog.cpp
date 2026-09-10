@@ -266,6 +266,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "組み立ての途中の状態を決めます。", false,
             {"AT-FAB-009", "AT-FAB-010", "AT-FAB-011"}},
+        {"fabrication.set_method", "近似の方式を切り替える", CommandMode::Instant,
+            "fab_method", "", SelectionPredicate::Always, "",
+            "次に作る近似モデルの方式を、帯へ近似し直す(V1方式)と、"
+            "面を分類して展開する(V2方式)とで切り替えます。", false,
+            {"AT-FAB-005"}},
         {"fabrication.freeze_state", "現在状態を固定", CommandMode::Instant, "fab_freeze", "",
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "いまの状態を固定して、独立したワイヤーや部品にします。", true,

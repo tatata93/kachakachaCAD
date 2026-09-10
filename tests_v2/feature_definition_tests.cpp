@@ -196,6 +196,48 @@ KACHA_V2_TEST(feature_definition, 製作モデルが保存して読み直せる)
     RequireEqual(std::to_string(back.fidelity), std::string("9"), "忠実度");
 }
 
+KACHA_V2_TEST(feature_definition, 近似の方式と曲げ状態が保存して読み直せる)
+{
+    // V1 の part_model_fold / part_model_assembly / part_model_part_assembly と同じことを
+    // 1つの定義で持つ。ここが保存されないと、曲げ具合を決めても開き直すと消える。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    made.method = 1;
+    made.splitAxis = 0;
+    made.automaticBoundaries = false;
+    made.maximumPartCount = 7;
+    made.minimumPartWidthMm = 6.5;
+    made.manualBoundaries = {0.25, 0.75};
+    made.masterPercent = 42.0;
+    made.creaseProgress = {1.0, 0.5};
+    made.bandProgress = {1.0, 0.0, 1.0};
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    RequireEqual(std::to_string(back.method), std::string("1"), "方式");
+    RequireEqual(std::to_string(back.splitAxis), std::string("0"), "分割軸");
+    Require(!back.automaticBoundaries, "手動境界");
+    RequireEqual(std::to_string(back.maximumPartCount), std::string("7"), "上限部材数");
+    RequireNear(back.minimumPartWidthMm, 6.5, 1.0e-12, "最小幅");
+    RequireEqual(std::to_string(back.manualBoundaries.size()), std::string("2"), "境界の数");
+    RequireNear(back.manualBoundaries[1], 0.75, 1.0e-12, "境界の値");
+    RequireNear(back.masterPercent, 42.0, 1.0e-12, "組立率");
+    RequireEqual(std::to_string(back.creaseProgress.size()), std::string("2"), "折り線の数");
+    RequireNear(back.creaseProgress[1], 0.5, 1.0e-12, "折り線の進行度");
+    RequireEqual(std::to_string(back.bandProgress.size()), std::string("3"), "帯の数");
+    RequireNear(back.bandProgress[1], 0.0, 1.0e-12, "帯の進行度");
+}
+
+KACHA_V2_TEST(feature_definition, 古い製作モデルの定義は既定値で読める)
+{
+    // 曲げ状態の項目が無い文書(前の版)も、既定値で開ける。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    RequireEqual(std::to_string(back.method), std::string("0"), "方式は V2 が既定");
+    RequireNear(back.masterPercent, 100.0, 1.0e-12, "完成形が既定");
+    Require(back.creaseProgress.empty() && back.bandProgress.empty(), "個別値は無し");
+    Require(back.automaticBoundaries, "自動分割が既定");
+}
+
 KACHA_V2_TEST(feature_definition, 型紙が保存して読み直せる)
 {
     CreatePatternDefinition made;

@@ -571,6 +571,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ShapeRebuild.cpp
     src/next/kachakacha/app/ExtrudeOptions.cpp
     src/next/kachakacha/app/WorkPlaneOptions.cpp
+    src/next/kachakacha/app/FabricationEvaluate.cpp
     src/next/kachakacha/app/EntityNaming.cpp
     src/next/kachakacha/app/MeasurePanel.cpp
     src/next/kachakacha/app/ExportService.cpp
@@ -621,6 +622,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/SubshapeKey.cpp
     src/next/kachakacha/modeling/WireCage.cpp
     src/next/kachakacha/io/AtomicFile.cpp
+    src/next/kachakacha/io/DocumentArchive.cpp
     src/next/kachakacha/io/Json.cpp
     src/next/kachakacha/io/Zip.cpp
     src/next/kachakacha/io/DocumentFile.cpp
@@ -754,6 +756,7 @@ kachakacha_add_v2_test(shape_rebuild_tests tests_v2/shape_rebuild_tests.cpp)
 kachakacha_add_v2_test(extrude_options_tests tests_v2/extrude_options_tests.cpp)
 kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_tests.cpp)
 kachakacha_add_v2_test(band_approximation_tests tests_v2/band_approximation_tests.cpp)
+kachakacha_add_v2_test(fabrication_evaluate_tests tests_v2/fabrication_evaluate_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
@@ -837,6 +840,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExtrudeDialog.cpp
         src/apps/cad_next/V2WorkPlaneDialog.cpp
+        src/apps/cad_next/V2NumberDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp
         src/apps/cad_next/V2ParameterDock.h
         src/apps/cad_next/V2MeasureDock.cpp
@@ -851,6 +855,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2MainWindow.h
         src/apps/cad_next/V2Viewport.cpp
         src/apps/cad_next/V2ViewportInput.cpp
+        src/apps/cad_next/V2ViewportDraw.cpp
         src/apps/cad_next/V2ViewportPanel.cpp
         src/apps/cad_next/V2Viewport.h
         src/apps/cad_next/Win95Style.cpp

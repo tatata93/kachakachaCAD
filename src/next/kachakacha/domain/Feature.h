@@ -184,12 +184,37 @@ struct BooleanDefinition {
     std::vector<EntityId> tools;
 };
 
-//! 製作モデル。
+//! 製作モデル(近似モデル)。
+//!
+//! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
+//! 開いたときに作り方から作り直す(立体と同じ考え)。
+//! 曲げ状態を文書に持つのは、任意の曲げ具合でワイヤ・面・展開図を出し、
+//! それを保存して開き直しても同じ状態から続けられるようにするため。
+//! V1 は part_model_fold / part_model_assembly / part_model_part_assembly で
+//! 同じことを保存していた。
 struct CreateFabricationModelDefinition {
+    //! 元になるもの。部品か形状ガイド。
     std::vector<EntityId> parts;
     geometry::EvaluatedValue materialThickness;
     geometry::EvaluatedValue targetMaxDeviation;
     int fidelity = 6;
+
+    //! 近似の方式。0 = V2 方式(面を分類して展開できなければ断る)、
+    //! 1 = V1 方式(帯へ近似し直す。二重曲面も切る)。
+    int method = 0;
+    //! 帯近似の決め方(method = 1 のとき)。fabrication::BandApproximationOptions と同じ。
+    int splitAxis = 2; //!< 0 = U、1 = V、2 = 自動(曲がっている方向を横切る)
+    bool automaticBoundaries = true;
+    int maximumPartCount = 12;
+    double minimumPartWidthMm = 4.0;
+    std::vector<double> manualBoundaries;
+
+    //! 曲げ状態。0 = 平ら(型紙)、100 = 近似完成形。
+    double masterPercent = 100.0;
+    //! 折り線ごとの進行度(0..1)。空なら全部 master に従う。
+    std::vector<double> creaseProgress;
+    //! 帯ごとの進行度(0..1)。空なら全部 master に従う。「選んだ部材だけが曲がる」。
+    std::vector<double> bandProgress;
 };
 
 //! 型紙。

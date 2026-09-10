@@ -237,6 +237,13 @@ public:
     void ReleaseViewCube(const QPointF& position);
     [[nodiscard]] bool ViewCubeDragging() const { return cubeDrag_.active; }
 
+    //! 近似モデルの曲げ状態の姿勢(帯ごとの下レール・上レール)。
+    //! 画面のプレビューと固定・出力を同じ点列にする。別の作り方にすると食い違う。
+    void SetFoldPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> rails);
+    [[nodiscard]] int FoldPreviewRailCount() const
+    {
+        return static_cast<int>(foldPreview_.size());
+    }
     //! 形状ガイドの役割テーブルを3Dへ出す(AT-UIX-007 の色同期)。
     //! 色は core の式が決めた値をそのまま使う。画面で作り直さない。
     void SetGuideTableRows(
@@ -313,6 +320,8 @@ private:
     void DrawPreview(QPainter& painter) const;
     //! 選んだワイヤーの制御点。掴める場所を見せる。
     void DrawControlPoints(QPainter& painter) const;
+    //! 近似モデルの曲げ状態。帯のレールを折れ線で出す。
+    void DrawFoldPreview(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
@@ -420,6 +429,7 @@ private:
     kachakacha::v2::app::SelectionSet selection_;
     std::function<void()> documentChangedCallback_;
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> foldPreview_;
     //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
     struct BodyDrag {
         bool active = false;

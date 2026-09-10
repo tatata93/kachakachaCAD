@@ -837,6 +837,161 @@ namespace {
         window.Session().GetDocument().Snapshot().entities.size() == before);
 }
 
+//! 曲がった形状ガイドを作る。XY の円弧と、30mm 上の平面の円弧を渡す(円筒の一部)。
+//! 作業平面11通りと形状ガイドを実際に使って作るので、この道が通ること自体が試験である。
+[[nodiscard]] bool MakeCurvedGuideSurface(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Arc);
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.60));
+    viewport.ClickAt(QPointF(viewport.width() * 0.50, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.60));
+    // 30mm 離した平面を作って、同じ円弧をもう1本引く。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::WorkPlane));
+    if (viewport.Selection().entityIds.empty()) {
+        window.RunCommand("workplane.create");
+        viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(),
+            kachakacha::v2::domain::EntityKind::WorkPlane));
+    }
+    window.SetWorkPlaneChooser([](const WorkPlaneChoice&,
+                                   const kachakacha::v2::app::WorkPlaneFacts&) {
+        WorkPlaneChoice choice;
+        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::OffsetFromPlane;
+        choice.offsetMm = 30.0;
+        return std::optional<WorkPlaneChoice>(choice);
+    });
+    window.RunCommand("workplane.create");
+    if (!Explain((std::string("離した平面が作れる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("平面から離す")))) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Arc);
+    viewport.ClickAt(QPointF(viewport.width() * 0.30, viewport.height() * 0.60));
+    viewport.ClickAt(QPointF(viewport.width() * 0.50, viewport.height() * 0.35));
+    viewport.ClickAt(QPointF(viewport.width() * 0.70, viewport.height() * 0.60));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    if (!Explain((std::string("円弧が2本ある(実際は ")
+                     + std::to_string(viewport.Selection().entityIds.size()) + ")").c_str(),
+            viewport.Selection().entityIds.size() == 2)) {
+        return false;
+    }
+    window.RunCommand("guide.create");
+    if (!Explain((std::string("曲がった面ができる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("面を作りました")))) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface));
+    return true;
+}
+
+[[nodiscard]] bool CaseFabricationModelIsInTheDocument(V2MainWindow& window)
+{
+    // 近似モデルは文書のもの。作ると一覧に出て、保存して開き直しても戻る。
+    // これまでは画面の配列にあるだけで、保存すると消えていた。
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.RunCommand("fabrication.create");
+    if (!Explain((std::string("近似モデルができる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    int models = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::FabricationModel) {
+            ++models;
+        }
+    }
+    if (!Explain("文書に近似モデルがある", models == 1)) {
+        return false;
+    }
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / "kacha_selftest_fabrication.kcd2");
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    window.SetPathChooser([&path](bool) { return QString::fromStdString(path); });
+    window.RunCommand("file.save_as");
+    if (!Explain("保存できる", window.StatusText().contains(QStringLiteral("保存しました")))) {
+        return false;
+    }
+    window.RunCommand("file.new");
+    if (!Explain("新しい文書では消える", window.FabricationModelCount() == 0)) {
+        return false;
+    }
+    const bool opened = window.OpenDocumentFile(QString::fromStdString(path));
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    if (!Explain("開き直せる", opened)) {
+        return false;
+    }
+    return Explain((std::string("近似モデルが作り直される(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.FabricationModelCount() == 1);
+}
+
+[[nodiscard]] bool CaseAssemblyPercentActuallyBends(V2MainWindow& window)
+{
+    // 組立率を変えると、形が本当に動く。これまでは数字が変わるだけだった。
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    if (!Explain((std::string("曲げ状態の姿勢が画面に出る(レール ")
+                     + std::to_string(viewport.FoldPreviewRailCount()) + " 本)").c_str(),
+            viewport.FoldPreviewRailCount() >= 2)) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    window.SetAssemblyChooser([](double) { return std::optional<double>(0.0); });
+    window.RunCommand("fabrication.set_assembly");
+    if (!Explain((std::string("組立率が文書に入る(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.Session().GetDocument().Revision() != revision
+                && window.StatusText().contains(QStringLiteral("0%")))) {
+        return false;
+    }
+    // 元に戻せる。文書の作り方を書き換えているからである。
+    window.RunCommand("edit.undo");
+    return Explain("元に戻せる", window.Session().GetDocument().Revision() == revision);
+}
+
+[[nodiscard]] bool CaseFabricationMethodCanBeSwitched(V2MainWindow& window)
+{
+    // V1 方式と V2 方式を切り替えられる。既定は V1 方式(帯)。
+    if (!Explain("既定は帯近似",
+            window.FabricationMethodInUse()
+                == kachakacha::v2::app::FabricationMethod::BandApproximation)) {
+        return false;
+    }
+    window.RunCommand("fabrication.set_method");
+    if (!Explain((std::string("切り替わる(") + window.StatusText().toStdString() + ")").c_str(),
+            window.FabricationMethodInUse()
+                == kachakacha::v2::app::FabricationMethod::ClassifyFaces)) {
+        return false;
+    }
+    window.RunCommand("fabrication.set_method");
+    return Explain("戻る",
+        window.FabricationMethodInUse()
+            == kachakacha::v2::app::FabricationMethod::BandApproximation);
+}
+
 [[nodiscard]] bool CaseThickenSurfaceMakesASolid(V2MainWindow& window)
 {
     // オーナーの手順の中心。断面 → 面 → **その面に厚みを付けて立体**。
@@ -994,6 +1149,9 @@ std::vector<SelfTestCase> ModelingCases()
         {"形状ガイドは断面2枚から", &CaseGuideSurfaceNeedsTwoSections},
         {"平面から離した作業平面を作れる", &CaseWorkPlaneCanBeOffset},
         {"材料が足りない作り方は断る", &CaseWorkPlaneRefusesWhenNothingSelected},
+        {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
+        {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
+        {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},
         {"面に厚みを付けて立体にできる", &CaseThickenSurfaceMakesASolid},
         {"面を選ばずに厚みは付けられない", &CaseThickenNeedsASurface},
         {"面→展開→型紙→PDFまで通る", &CaseSurfaceToPatternEndToEnd},

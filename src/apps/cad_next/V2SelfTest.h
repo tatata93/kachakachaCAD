@@ -8,6 +8,7 @@
 //!   V2SelfTestBasics.cpp   : 道具・画面・視点・書き出し・ファイル
 //!   V2SelfTestInput.cpp    : V1同等の操作系(マウス・キー・変換の道具)
 //!   V2SelfTestModeling.cpp : 線の編集・作業平面・部品・部材・型紙
+//!   V2SelfTestPlanes.cpp   : 原点の3面・3軸と作業平面の棚
 //! こうしておけば、ケースが増えても 1 ファイルが太らない。
 
 #pragma once
@@ -44,6 +45,9 @@ struct SelfTestCase {
 
 //! 近似(製作モデル)と曲げ状態のケース。
 [[nodiscard]] std::vector<SelfTestCase> FabricationCases();
+
+//! 原点の3面・3軸と、作業平面の棚のケース。
+[[nodiscard]] std::vector<SelfTestCase> PlaneCases();
 
 //! 文書にある、その種類のものの数(見えているかは問わない)。
 [[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);

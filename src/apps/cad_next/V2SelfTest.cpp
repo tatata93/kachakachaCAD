@@ -63,6 +63,8 @@ namespace {
     cases.insert(cases.end(), input.begin(), input.end());
     const std::vector<SelfTestCase> modeling = ModelingCases();
     cases.insert(cases.end(), modeling.begin(), modeling.end());
+    const std::vector<SelfTestCase> planes = PlaneCases();
+    cases.insert(cases.end(), planes.begin(), planes.end());
     const std::vector<SelfTestCase> guide = GuideCases();
     cases.insert(cases.end(), guide.begin(), guide.end());
     const std::vector<SelfTestCase> fabrication = FabricationCases();

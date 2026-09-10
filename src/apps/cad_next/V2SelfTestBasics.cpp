@@ -12,6 +12,7 @@
 #include "Win95Style.h"
 
 #include "kachakacha/app/CursorInput.h"
+#include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
@@ -561,6 +562,10 @@ namespace {
         return false;
     }
     for (const auto& entity : snapshot.entities) {
+        // 原点の3面はどのまとまりにも入らない(V1 と同じく文書の土台)。
+        if (kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
+            continue;
+        }
         if (!entity.groupId.has_value()
             || *entity.groupId != *snapshot.settings.activeGroupId) {
             return false;
@@ -854,8 +859,11 @@ namespace {
         return false;
     }
     window.RunCommand("file.new");
-    if (!Explain("新しい文書は空",
-            window.Session().GetDocument().Snapshot().entities.empty())) {
+    // 新しい文書にも原点の3面だけはある(V1 と同じ)。線は残らない。
+    if (!Explain((std::string("新しい文書は原点の3面だけ(実際は ")
+                     + std::to_string(window.Session().GetDocument().Snapshot().entities.size())
+                     + ")").c_str(),
+            window.Session().GetDocument().Snapshot().entities.size() == 3)) {
         return false;
     }
     const bool opened = window.OpenDocumentFile(QString::fromStdString(path));

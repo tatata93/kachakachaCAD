@@ -16,6 +16,14 @@ constexpr const char* kNotAllowed = "DOC-C005";
 constexpr const char* kStillUsed = "DOC-C002";
 constexpr const char* kDuplicate = "DOC-C003";
 constexpr const char* kEmptyName = "DOC-C004";
+constexpr const char* kOriginPlane = "DOC-C009";
+
+//! 原点の基準平面を作った操作か。消す・改名するのを断るために見る。
+[[nodiscard]] bool IsOriginPlaneFeature(const Feature& feature)
+{
+    const auto* plane = std::get_if<domain::CreateWorkPlaneDefinition>(&feature.definition);
+    return plane != nullptr && plane->isOriginPlane;
+}
 
 [[nodiscard]] Entity* FindMutable(DocumentSnapshot& snapshot, EntityId id)
 {
@@ -113,6 +121,12 @@ std::vector<Diagnostic> RemoveFeatureCommand::Apply(DocumentSnapshot& candidate)
             "消そうとした操作が見つかりません。", featureId_.ToString()));
         return diagnostics;
     }
+    if (IsOriginPlaneFeature(*target)) {
+        diagnostics.push_back(MakeError(kOriginPlane,
+            "原点の基準平面は消せません。",
+            target->displayName + " は原点の平面です。隠すことはできます。"));
+        return diagnostics;
+    }
 
     // この操作の出力を入力にしているFeature(下流)を集める。
     std::set<std::string> removeFeatures{featureId_.ToString()};
@@ -197,6 +211,13 @@ std::vector<Diagnostic> RenameEntityCommand::Apply(DocumentSnapshot& candidate) 
         diagnostics.push_back(MakeError(kEmptyName,
             "名前を空にはできません。", {}));
         return diagnostics;
+    }
+    for (const Feature& feature : candidate.features) {
+        if (feature.id == entity->createdBy && IsOriginPlaneFeature(feature)) {
+            diagnostics.push_back(MakeError(kOriginPlane,
+                "原点の基準平面の名前は変えられません。", entity->displayName));
+            return diagnostics;
+        }
     }
     // 同名は許す(名前は表示用。参照はIDで行う)。
     entity->displayName = newName_;

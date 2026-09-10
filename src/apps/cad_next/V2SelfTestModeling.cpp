@@ -119,6 +119,13 @@ namespace {
 {
     // 作業平面は文書に入る。画面の飾りではない。
     // 入れないと「この線はどの面の上か」があとで誰にも分からなくなる。
+    // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)がある(V1 と同じ)。
+    const int originPlanes = CountOfKind(window, kachakacha::v2::domain::EntityKind::WorkPlane);
+    if (!Explain((std::string("原点の3面がある(実際は ") + std::to_string(originPlanes)
+                     + ")").c_str(),
+            originPlanes == 3)) {
+        return false;
+    }
     const std::size_t before = window.Session().GetDocument().Snapshot().entities.size();
     window.RunCommand("workplane.create");
     const auto& snapshot = window.Session().GetDocument().Snapshot();
@@ -127,26 +134,16 @@ namespace {
             snapshot.entities.size() == before + 1)) {
         return false;
     }
-    int planes = 0;
-    for (const auto& entity : snapshot.entities) {
-        if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
-            ++planes;
-        }
-    }
-    if (!Explain("作業平面が1つある", planes == 1)) {
+    if (!Explain("作業平面が1つ増える",
+            CountOfKind(window, kachakacha::v2::domain::EntityKind::WorkPlane) == 4)) {
         return false;
     }
     // 押すたびに別の標準面ができる。1つしか作れないと側面図が描けない。
     window.RunCommand("workplane.create");
     window.RunCommand("workplane.create");
-    int all = 0;
-    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
-        if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
-            ++all;
-        }
-    }
-    if (!Explain((std::string("3面できる(実際は ") + std::to_string(all) + ")").c_str(),
-            all == 3)) {
+    const int all = CountOfKind(window, kachakacha::v2::domain::EntityKind::WorkPlane);
+    if (!Explain((std::string("3面できる(実際は ") + std::to_string(all - 3) + ")").c_str(),
+            all == 6)) {
         return false;
     }
     // 作業中にするには、どれを作業中にするかを選ぶ。選ばずには決まらない。
@@ -614,9 +611,10 @@ namespace {
         return false;
     }
     const auto& snapshot = window.Session().GetDocument().Snapshot();
-    if (!Explain((std::string("ものが9つ(実際は ")
+    // 見本の9つに、原点の3面が足される。
+    if (!Explain((std::string("ものが12(見本9 + 原点面3、実際は ")
                      + std::to_string(snapshot.entities.size()) + ")").c_str(),
-            snapshot.entities.size() == 9)) {
+            snapshot.entities.size() == 12)) {
         return false;
     }
     if (!Explain((std::string("線が30本(実際は ")
@@ -886,8 +884,9 @@ namespace {
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     window.SetWorkPlaneChooser([](const WorkPlaneChoice&,
                                    const kachakacha::v2::app::WorkPlaneFacts&) {
+        // 3点は数の欄で代えられるので、代えられない「2辺を含む」で試す。
         WorkPlaneChoice choice;
-        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::ThreePoints;
+        choice.method = kachakacha::v2::modeling::WorkPlaneMethod::TwoEdges;
         return std::optional<WorkPlaneChoice>(choice);
     });
     const std::size_t before =

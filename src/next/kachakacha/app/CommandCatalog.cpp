@@ -208,7 +208,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             {"AT-WIR-006"}},
         {"workplane.create", "作業平面を作る", CommandMode::Dialog, "workplane_new", "",
             SelectionPredicate::Always, "",
-            "作業平面を作ります。作り方は11通りあります。", true,
+            "作業平面を作ります。作り方は12通りあります。", true,
             {"AT-WPL-001"}},
         {"grid.edit", "グリッド", CommandMode::Dialog, "grid", "",
             SelectionPredicate::Always, "",

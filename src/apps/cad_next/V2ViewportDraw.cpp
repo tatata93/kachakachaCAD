@@ -94,7 +94,11 @@ void V2Viewport::DrawAxes(QPainter& painter) const
     if (!origin.has_value()) {
         return;
     }
-    for (const auto& axis : axes) {
+    for (int index = 0; index < 3; ++index) {
+        if (!axisVisible_[index]) {
+            continue;
+        }
+        const auto& axis = axes[index];
         const auto end = ToScreen(axis.first);
         if (!end.has_value()) {
             continue;

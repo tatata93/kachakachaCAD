@@ -246,6 +246,12 @@ public:
     }
     //! 形状ガイドの役割テーブルを3Dへ出す(AT-UIX-007 の色同期)。
     //! 色は core の式が決めた値をそのまま使う。画面で作り直さない。
+    //! 原点の軸(0=X 1=Y 2=Z)を出すかどうか。
+    void SetAxisVisible(int axis, bool visible);
+    [[nodiscard]] bool AxisVisible(int axis) const noexcept
+    {
+        return axis >= 0 && axis < 3 && axisVisible_[axis];
+    }
     void SetGuideTableRows(
         const std::vector<kachakacha::v2::modeling::GuideTableRowView>& rows);
     [[nodiscard]] int GuideRowsShown() const
@@ -315,6 +321,8 @@ private:
     void RebuildMapping();
     void DrawGrid(QPainter& painter) const;
     void DrawAxes(QPainter& painter) const;
+    //! 原点の軸 X/Y/Z を出すか。一覧の「原点」ノードのチェックで変える。
+    bool axisVisible_[3] = {true, true, true};
     void DrawWorkPlane(QPainter& painter) const;
     void DrawDocument(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;

@@ -611,6 +611,10 @@ Result<WorkPlaneFrame> BuildWorkPlane(const WorkPlaneRequest& request,
         return BuildTangentThroughPoint(request, tolerance);
     case WorkPlaneMethod::NormalToCurveAtPoint:
         return BuildNormalToCurve(request, tolerance);
+    case WorkPlaneMethod::PointNormal:
+        // 数値で直接。u 軸が法線と平行なら FrameFromNormalAndU が断る。
+        return FrameFromNormalAndU(request.origin, request.normal, request.uHint,
+            tolerance);
     }
     return Result<WorkPlaneFrame>::Failure(MakeError(kUnknownMethod,
         "知らない作り方です。", {}));

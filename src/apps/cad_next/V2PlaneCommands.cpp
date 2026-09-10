@@ -10,6 +10,7 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/SceneBuilder.h"
+#include "kachakacha/app/WorkPlaneOptions.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/modeling/GridModel.h"
@@ -17,13 +18,13 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
 using kachakacha::v2::modeling::StandardPlaneKind;
 
-//! 標準面の順ぐり。押すたびに XY → YZ → ZX と回る。
-//! 選ぶ窓が付くまでのあいだ、これで3面とも作れる。
+//! 標準面の順ぐり。棚の初期値を、作るたびに XY → YZ → ZX と回す。
 [[nodiscard]] StandardPlaneKind NextStandardPlane(StandardPlaneKind current)
 {
     switch (current) {
@@ -32,16 +33,6 @@ using kachakacha::v2::modeling::StandardPlaneKind;
     case StandardPlaneKind::ZX: return StandardPlaneKind::XY;
     }
     return StandardPlaneKind::XY;
-}
-
-[[nodiscard]] const char* StandardPlaneNameJa(StandardPlaneKind kind)
-{
-    switch (kind) {
-    case StandardPlaneKind::XY: return "XY(床)";
-    case StandardPlaneKind::YZ: return "YZ(側面)";
-    case StandardPlaneKind::ZX: return "ZX(正面)";
-    }
-    return "不明";
 }
 
 } // namespace
@@ -55,7 +46,7 @@ bool V2MainWindow::IsPlaneCommand(std::string_view id)
 void V2MainWindow::RunPlaneCommand(std::string_view id)
 {
     if (id == "workplane.create") {
-        CreateStandardWorkPlane();
+        RunWorkPlaneCreate();
         return;
     }
     if (id == "workplane.set_active") {
@@ -72,7 +63,50 @@ void V2MainWindow::RunPlaneCommand(std::string_view id)
     }
 }
 
-void V2MainWindow::CreateStandardWorkPlane()
+void V2MainWindow::RunWorkPlaneCreate()
+{
+    using kachakacha::v2::modeling::WorkPlaneMethod;
+    // 作り方は12通りある。標準面しか作れないと、原点を通らない平面
+    // ── station ごとの断面 ── が置けない。
+    WorkPlaneChoice choice;
+    choice.method = WorkPlaneMethod::Standard;
+    choice.standard = NextStandardPlane(nextStandardPlane_);
+    if (workPlaneChooser_) {
+        // 試験の道。棚を開かず、答えをもらって作る。
+        const auto answered = workPlaneChooser_(choice, BuildWorkPlaneFacts());
+        if (!answered.has_value()) {
+            SetStatus(QStringLiteral("作業平面: やめました。"));
+            return;
+        }
+        CreateWorkPlaneFromChoice(*answered, true);
+        return;
+    }
+    // 本体の道。V1 と同じく右の棚で作り方と数を決め、「平面を作る」で作る。
+    if (workPlaneDock_ == nullptr) {
+        SetStatus(QStringLiteral("作業平面の棚がありません。"));
+        return;
+    }
+    if (workPlaneDock_->Choice().method == WorkPlaneMethod::Standard) {
+        WorkPlaneChoice shown = workPlaneDock_->Choice();
+        shown.standard = choice.standard;
+        workPlaneDock_->SetChoice(shown);
+    }
+    RefreshWorkPlaneDock();
+    workPlaneDock_->show();
+    workPlaneDock_->raise();
+    SetStatus(QStringLiteral(
+        "作業平面: 右の「作業平面」で作り方と数を決め、「平面を作る」を押してください。"));
+}
+
+void V2MainWindow::CreateWorkPlaneFromDock()
+{
+    if (workPlaneDock_ == nullptr) {
+        return;
+    }
+    CreateWorkPlaneFromChoice(workPlaneDock_->Choice(), workPlaneDock_->ActivateAfterCreate());
+}
+
+void V2MainWindow::CreateWorkPlaneFromChoice(const WorkPlaneChoice& choice, bool activate)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::CreateWorkPlaneDefinition;
@@ -83,29 +117,10 @@ void V2MainWindow::CreateStandardWorkPlane()
     using kachakacha::v2::domain::FeatureType;
     using kachakacha::v2::modeling::BuildWorkPlane;
     using kachakacha::v2::modeling::WorkPlaneMethod;
-    using kachakacha::v2::modeling::WorkPlaneRequest;
 
-    // 作り方を選ばせる。11通りあるのに標準面しか作れなかったので、
-    // 原点を通らない平面 ── station ごとの断面 ── が置けなかった。
-    WorkPlaneChoice choice;
-    choice.method = WorkPlaneMethod::Standard;
-    choice.standard = NextStandardPlane(nextStandardPlane_);
-    const auto facts = BuildWorkPlaneFacts();
-    if (workPlaneChooser_) {
-        const auto answered = workPlaneChooser_(choice, facts);
-        if (!answered.has_value()) {
-            SetStatus(QStringLiteral("作業平面: やめました。"));
-            return;
-        }
-        choice = *answered;
-    }
-    const auto checked =
-        kachakacha::v2::app::ValidateWorkPlaneChoice(choice.method, facts);
-    if (!checked.HasValue()) {
-        ReportDiagnostics(checked.Diagnostics());
-        return;
-    }
-    const auto request = BuildWorkPlaneRequest(choice);
+    // 足りるか、数の欄で代えられるかは core が決める。ここは材料を集めて渡すだけ。
+    const auto request = kachakacha::v2::app::BuildWorkPlaneRequest(choice,
+        CollectWorkPlaneMaterials(choice));
     if (!request.HasValue()) {
         ReportDiagnostics(request.Diagnostics());
         return;
@@ -122,9 +137,7 @@ void V2MainWindow::CreateStandardWorkPlane()
     Feature feature;
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = FeatureType::CreateWorkPlane;
-    feature.displayName = choice.method == WorkPlaneMethod::Standard
-        ? std::string(StandardPlaneNameJa(choice.standard))
-        : std::string(kachakacha::v2::modeling::WorkPlaneMethodNameJa(choice.method));
+    feature.displayName = kachakacha::v2::app::WorkPlaneDisplayName(choice);
     CreateWorkPlaneDefinition definition;
     definition.method = static_cast<int>(choice.method);
     definition.origin = built.Value().origin;
@@ -145,10 +158,31 @@ void V2MainWindow::CreateStandardWorkPlane()
         ReportDiagnostics(added.diagnostics);
         return;
     }
-    ApplyWorkPlane(built.Value(), entity.id);
+    if (activate) {
+        ApplyWorkPlane(built.Value(), entity.id);
+    }
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("%1 の作業平面を作って、作業中にしました。")
-            .arg(QString::fromStdString(feature.displayName)));
+    SetStatus(activate
+            ? QStringLiteral("%1 の作業平面を作って、作業中にしました。")
+                  .arg(QString::fromStdString(feature.displayName))
+            : QStringLiteral("%1 の作業平面を作りました。")
+                  .arg(QString::fromStdString(feature.displayName)));
+}
+
+void V2MainWindow::RefreshWorkPlaneDock()
+{
+    if (workPlaneDock_ == nullptr) {
+        return;
+    }
+    // 文書にある平面をコンボへ並べる。原点の3面は最初から選べる。
+    std::vector<std::pair<kachakacha::v2::base::EntityId, QString>> planes;
+    for (const auto& entity : session_->GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
+            planes.emplace_back(entity.id, QString::fromStdString(entity.displayName));
+        }
+    }
+    workPlaneDock_->SetPlanes(planes);
+    workPlaneDock_->Refresh(BuildWorkPlaneFacts());
 }
 
 void V2MainWindow::ActivateSelectedWorkPlane()
@@ -316,40 +350,27 @@ kachakacha::v2::app::WorkPlaneFacts V2MainWindow::BuildWorkPlaneFacts() const
     return facts;
 }
 
-kachakacha::v2::base::Result<kachakacha::v2::modeling::WorkPlaneRequest>
-V2MainWindow::BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const
+kachakacha::v2::app::WorkPlaneMaterials V2MainWindow::CollectWorkPlaneMaterials(
+    const WorkPlaneChoice& choice) const
 {
-    using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::WorkPlaneRequest>;
-    kachakacha::v2::modeling::WorkPlaneRequest request;
-    request.method = choice.method;
-    request.standard = choice.standard;
-    request.offsetMm = choice.offsetMm;
-    request.angleRad = choice.angleDeg * 3.14159265358979323846 / 180.0;
+    kachakacha::v2::app::WorkPlaneMaterials materials;
     // 材料は「いま選んでいるもの」から取る。選んだ順を保つ。
     // 順を変えると、3点で作る平面の向きが変わってしまう。
-    int planes = 0;
     for (const auto& id : viewport_->Selection().entityIds) {
         const auto* entity = session_->GetDocument().FindEntity(id);
         if (entity == nullptr) {
             continue;
         }
         if (entity->kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
-            const auto frame = WorkPlaneFrameOf(id);
-            if (!frame.has_value()) {
-                continue;
+            if (const auto frame = WorkPlaneFrameOf(id); frame.has_value()) {
+                materials.selectedPlanes.push_back(*frame);
             }
-            if (planes == 0) {
-                request.referencePlane = *frame;
-            } else if (planes == 1) {
-                request.secondPlane = *frame;
-            }
-            ++planes;
             continue;
         }
         if (entity->kind == kachakacha::v2::domain::EntityKind::Point) {
             for (const auto& point : session_->Scene().points) {
                 if (point.entityId == id) {
-                    request.points.push_back(point.position);
+                    materials.points.push_back(point.position);
                 }
             }
             continue;
@@ -357,10 +378,17 @@ V2MainWindow::BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const
         if (entity->kind == kachakacha::v2::domain::EntityKind::Wire) {
             for (const auto& curve : session_->Scene().curves) {
                 if (curve.entityId == id) {
-                    request.edges.push_back(curve.segment);
+                    materials.edges.push_back(curve.segment);
                 }
             }
         }
     }
-    return Out::Success(std::move(request));
+    // コンボで決めた平面。選択より優先するかは core が決める。
+    if (choice.referencePlaneId.has_value()) {
+        materials.referencePlane = WorkPlaneFrameOf(*choice.referencePlaneId);
+    }
+    if (choice.secondPlaneId.has_value()) {
+        materials.secondPlane = WorkPlaneFrameOf(*choice.secondPlaneId);
+    }
+    return materials;
 }

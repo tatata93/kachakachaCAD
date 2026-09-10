@@ -136,6 +136,9 @@ struct FreezeDerivedDefinition {
 struct CreateWorkPlaneDefinition {
     //! modeling::WorkPlaneMethod と同じ並び。core への依存を増やさないため数で持つ。
     int method = 0;
+    //! 原点の基準平面(top_XY / front_XZ / side_YZ)。消せず、名前も変えられない。
+    //! V1 の一覧の「原点」ノードに当たる。
+    bool isOriginPlane = false;
     std::vector<EntityId> inputs;
     geometry::Vector3 origin{};
     geometry::Vector3 normal{0.0, 0.0, 1.0};

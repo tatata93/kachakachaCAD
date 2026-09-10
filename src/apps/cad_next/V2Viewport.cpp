@@ -757,6 +757,15 @@ void V2Viewport::DrawCursorInput(QPainter& painter) const
     painter.restore();
 }
 
+void V2Viewport::SetAxisVisible(int axis, bool visible)
+{
+    if (axis < 0 || axis >= 3) {
+        return;
+    }
+    axisVisible_[axis] = visible;
+    update();
+}
+
 void V2Viewport::SetGuideTableRows(
     const std::vector<kachakacha::v2::modeling::GuideTableRowView>& rows)
 {

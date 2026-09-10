@@ -218,6 +218,7 @@ template<class Id>
         definition["normal"] = WriteVector(plane->normal);
         definition["uDirection"] = WriteVector(plane->uDirection);
         definition["offset"] = WriteExpression(plane->offset);
+        definition["isOriginPlane"] = JsonValue::Bool(plane->isOriginPlane);
     } else if (const auto* project =
                    std::get_if<domain::ProjectWireDefinition>(&feature.definition)) {
         definition["inputs"] = WriteIdArray(project->inputs);

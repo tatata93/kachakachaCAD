@@ -24,7 +24,7 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "V2ExtrudeDialog.h"
-#include "V2WorkPlaneDialog.h"
+#include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/fabrication/FreezeState.h"
@@ -39,6 +39,7 @@
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 
+#include <array>
 #include <map>
 
 #include <QColor>
@@ -150,6 +151,11 @@ public:
     //! 一覧に出ているグループ行の名前。試験で見る。
     [[nodiscard]] QString GroupRowText(int row) const;
     [[nodiscard]] int GroupRowCount() const;
+    //! 一覧の「原点」ノードの子(3面と3軸)。試験で見る。
+    [[nodiscard]] int OriginChildCount() const;
+    [[nodiscard]] QString OriginChildText(int row) const;
+    //! 軸の行のチェックを切り替える(一覧を押したのと同じ道)。
+    void SetAxisShown(int axis, bool shown);
 
     //! 書き出しの棚(AT-EXP-001)。数は手順の状況から作る。
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
@@ -230,17 +236,23 @@ public:
     //! 厚みをどちらへ付けるか。外側・中央・内側。
     kachakacha::v2::fabrication::ThicknessPlacement thicknessPlacement_ =
         kachakacha::v2::fabrication::ThicknessPlacement::Centered;
-    //! 作業平面の作り方を選ばせる。窓を出さない試験では差し替える。
+    //! 作業平面の作り方を選ばせる。差し替えると、棚を開く代わりに答えを聞く(試験用)。
     void SetWorkPlaneChooser(
         std::function<std::optional<WorkPlaneChoice>(const WorkPlaneChoice&,
             const kachakacha::v2::app::WorkPlaneFacts&)>
             chooser);
     //! 選んでいるものから、作業平面の可否に要る事実を作る。
     [[nodiscard]] kachakacha::v2::app::WorkPlaneFacts BuildWorkPlaneFacts() const;
-    //! 選んでいるものと、決めた作り方から、core への要求を作る。
-    [[nodiscard]] kachakacha::v2::base::Result<
-        kachakacha::v2::modeling::WorkPlaneRequest>
-    BuildWorkPlaneRequest(const WorkPlaneChoice& choice) const;
+    //! 選んでいるものとコンボの平面から、core へ渡す材料を集める。選んだ順を保つ。
+    [[nodiscard]] kachakacha::v2::app::WorkPlaneMaterials CollectWorkPlaneMaterials(
+        const WorkPlaneChoice& choice) const;
+    //! 決めた作り方で作業平面を作り、文書へ入れる。棚の「平面を作る」と試験が通る道。
+    void CreateWorkPlaneFromChoice(const WorkPlaneChoice& choice, bool activate);
+    //! 作業平面の棚(試験から欄を触る)。
+    [[nodiscard]] V2WorkPlaneDock* WorkPlaneDock() const
+    {
+        return workPlaneDock_;
+    }
     //! 固定で作るものを順に切り替える(ワイヤーのみ → 部品のみ → 両方)。
     void CycleFreezeOutput();
     [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputInUse() const
@@ -383,6 +395,8 @@ private:
     void BuildToolPalette();
     void RefreshCommandVisibility();
     void BuildPanels();
+    //! 下の帯(道具・作業中グループ・案内文)。
+    void BuildStatusBar();
     //! 動かさずに作れる状態(絵だけの状態)。ApplyManualState から呼ぶ。
     [[nodiscard]] bool ApplyStaticState(const QString& name);
     //! 形状ガイドの役割テーブルの見本。ApplyManualState から呼ぶ。
@@ -505,8 +519,12 @@ private:
     //! 基準のコマンドか。V2PlaneCommands.cpp が持つ。
     [[nodiscard]] static bool IsPlaneCommand(std::string_view id);
     void RunPlaneCommand(std::string_view id);
-    //! 標準面を1つ作って、作業中にする。押すたびに XY→YZ→ZX と回る。
-    void CreateStandardWorkPlane();
+    //! 「作業平面を作る」。棚を出して作り方を選ばせる(試験では差し替えた答えで作る)。
+    void RunWorkPlaneCreate();
+    //! 棚の「平面を作る」を押したとき。
+    void CreateWorkPlaneFromDock();
+    //! 棚へ、いまの選択と文書の平面一覧を出し直す。
+    void RefreshWorkPlaneDock();
     //! 押した場所へグリッドの原点を動かす。
     void MoveGridOriginByClick();
     //! 選んでいる作業平面を作業中にする。
@@ -516,11 +534,14 @@ private:
         const kachakacha::v2::base::EntityId& entityId);
     //! グリッドの間隔を順ぐりに変える。
     void CycleGridSpacing();
-    //! 次に作る標準面。
+    //! 次に作る標準面(棚の初期値)。作るたびに XY→YZ→ZX と回す。
     kachakacha::v2::modeling::StandardPlaneKind nextStandardPlane_ =
         kachakacha::v2::modeling::StandardPlaneKind::ZX;
+    V2WorkPlaneDock* workPlaneDock_ = nullptr;
     //! いま作業中の作業平面。無ければ空。
     kachakacha::v2::base::EntityId activeWorkPlaneId_;
+    //! 一覧の「原点」ノードの軸の行(X/Y/Z)。チェックで表示を切り替える。
+    std::array<QTreeWidgetItem*, 3> axisItems_{};
 
     //! 線の編集コマンドか。V2WireCommands.cpp が持つ。
     [[nodiscard]] static bool IsWireEditCommand(std::string_view id);

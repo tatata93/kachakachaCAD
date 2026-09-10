@@ -73,6 +73,7 @@ public:
     void setLayout(QLayout*);
     void setEnabled(bool);
     void setVisible(bool);
+    [[nodiscard]] QWidget* parentWidget() const;
     void resize(int, int);
     void resize(const QSize&);
     void show();
@@ -257,6 +258,10 @@ public:
     void setExpanded(bool);
     void setFlags(Qt::ItemFlags);
     [[nodiscard]] Qt::ItemFlags flags() const;
+    void setCheckState(int, Qt::CheckState);
+    [[nodiscard]] Qt::CheckState checkState(int) const;
+    [[nodiscard]] QTreeWidgetItem* parent() const;
+    void setToolTip(int, const QString&);
 };
 
 class QTreeWidget : public QAbstractItemView {
@@ -384,6 +389,27 @@ public:
     void (*currentIndexChanged)(int);
 };
 
+class QStackedWidget : public QWidget {
+public:
+    QStackedWidget() = default;
+    explicit QStackedWidget(QWidget*) {}
+    int addWidget(QWidget*);
+    void setCurrentIndex(int);
+    [[nodiscard]] int currentIndex() const;
+    [[nodiscard]] int count() const;
+};
+
+class QLineEdit : public QWidget {
+public:
+    QLineEdit() = default;
+    explicit QLineEdit(QWidget*) {}
+    explicit QLineEdit(const QString&, QWidget* = nullptr) {}
+    void setText(const QString&);
+    [[nodiscard]] QString text() const;
+    void setPlaceholderText(const QString&);
+    void (*textChanged)(const QString&);
+};
+
 class QAbstractSpinBox : public QWidget {
 public:
     void setReadOnly(bool);
@@ -408,6 +434,7 @@ public:
     explicit QFormLayout(QWidget*) {}
     void addRow(const QString&, QWidget*);
     void addRow(QWidget*);
+    void setRowVisible(QWidget*, bool);
 };
 
 class QDialogButtonBox : public QWidget {

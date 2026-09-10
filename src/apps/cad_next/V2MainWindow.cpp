@@ -4,6 +4,7 @@
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/app/CommandAvailability.h"
+#include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/app/Selection.h"
@@ -180,16 +181,8 @@ V2MainWindow::V2MainWindow()
         }
         return dialog.Choice();
     });
-    // 作業平面の作り方も窓で聞く。11通りあるのに標準面しか作れなかった。
-    SetWorkPlaneChooser([this](const WorkPlaneChoice& initial,
-                            const kachakacha::v2::app::WorkPlaneFacts& facts)
-                            -> std::optional<WorkPlaneChoice> {
-        V2WorkPlaneDialog dialog(initial, facts, this);
-        if (dialog.exec() != QDialog::Accepted) {
-            return std::nullopt;
-        }
-        return dialog.Choice();
-    });
+    // 作業平面は窓ではなく右の棚(V1 の「平面を作る」タブ)で作る。
+    // 12通りの作り方と数の欄を持ち、「平面を作る」で文書へ入れる。
     // 組立率は窓で聞く。数値1つなので、押し出しのような大きな窓は要らない。
     SetAssemblyChooser([this](double current) -> std::optional<double> {
         V2NumberDialog dialog(QStringLiteral("組立状態"),
@@ -212,12 +205,17 @@ V2MainWindow::V2MainWindow()
     viewport_->SetSelectionChangedCallback([this] {
         RefreshExportCounts();
         RefreshMeasurements();
+        // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
+        RefreshWorkPlaneDock();
         // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
         RefreshCommandVisibility();
     });
     // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
     viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
 
+    // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)を置き、上面 XY を作業中にする。
+    // V1 と同じく、開いた直後から「平面から離す」の相手が選べる。
+    AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
     SelectTool(DrawingTool::Line);
     SetMode(UiMode::Drawing);
     ApplyTheme(UiTheme::Normal);
@@ -439,9 +437,17 @@ void V2MainWindow::BuildPanels()
     // 名前を書き換えたら文書へ入れる。判断(空か、変わったか)は core にある。
     QObject::connect(entityTree_, &QTreeWidget::itemChanged, this,
         [this](QTreeWidgetItem* item, int column) {
-            if (column == 0) {
-                RenameEntityFromItem(item);
+            if (column != 0) {
+                return;
             }
+            // 軸の行はチェックで表示を切り替える。名前の書き換えではない。
+            for (int axis = 0; axis < 3; ++axis) {
+                if (axisItems_[static_cast<std::size_t>(axis)] == item) {
+                    viewport_->SetAxisVisible(axis, item->checkState(0) == Qt::Checked);
+                    return;
+                }
+            }
+            RenameEntityFromItem(item);
         });
     treeDock->setWidget(entityTree_);
     addDockWidget(Qt::LeftDockWidgetArea, treeDock);
@@ -482,6 +488,12 @@ void V2MainWindow::BuildPanels()
     addDockWidget(Qt::RightDockWidgetArea, measureDock_);
     measureDock_->hide();
 
+    // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
+    // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
+    workPlaneDock_ = new V2WorkPlaneDock(this);
+    workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
+    addDockWidget(Qt::RightDockWidgetArea, workPlaneDock_);
+
     // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
     parameterDock_ = new V2ParameterDock(this);
     addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
@@ -495,6 +507,7 @@ void V2MainWindow::BuildPanels()
     // 手順だけは常に見えるように残し、残りは札で切り替える。
     tabifyDockWidget(exportDock_, parameterDock_);
     tabifyDockWidget(parameterDock_, measureDock_);
+    tabifyDockWidget(measureDock_, workPlaneDock_);
     exportDock_->raise();
 
 
@@ -511,7 +524,11 @@ void V2MainWindow::BuildPanels()
     resizeDocks({exportDock_}, {300}, Qt::Horizontal);
     resizeDocks({guideDock_, processDock_, exportDock_}, {110, 200, 330}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
+    BuildStatusBar();
+}
 
+void V2MainWindow::BuildStatusBar()
+{
     toolLabel_ = new QLabel(this);
     groupLabel_ = new QLabel(this);
     statusLabel_ = new QLabel(this);
@@ -569,6 +586,32 @@ QString V2MainWindow::GroupRowText(int row) const
     return entityTree_->topLevelItem(row)->text(0);
 }
 
+int V2MainWindow::OriginChildCount() const
+{
+    if (entityTree_ == nullptr || entityTree_->topLevelItemCount() == 0) {
+        return 0;
+    }
+    return entityTree_->topLevelItem(0)->childCount();
+}
+
+QString V2MainWindow::OriginChildText(int row) const
+{
+    if (row < 0 || row >= OriginChildCount()) {
+        return QString();
+    }
+    return entityTree_->topLevelItem(0)->child(row)->text(0);
+}
+
+void V2MainWindow::SetAxisShown(int axis, bool shown)
+{
+    if (axis < 0 || axis >= 3 || axisItems_[static_cast<std::size_t>(axis)] == nullptr) {
+        return;
+    }
+    // チェックを変えると itemChanged が走り、画面の軸が切り替わる。試験も同じ道を通す。
+    axisItems_[static_cast<std::size_t>(axis)]->setCheckState(0,
+        shown ? Qt::Checked : Qt::Unchecked);
+}
+
 void V2MainWindow::RefreshProcessSteps()
 {
     if (processView_ == nullptr) {
@@ -615,15 +658,29 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
         SetStatus(QStringLiteral("開けませんでした。いまの文書はそのままです。"));
         return;
     }
+    // 原点の基準平面(top_XY / front_XZ / side_YZ)が無ければ足す。V1 と同じく
+    // 一覧の最上部に固定で出し、「平面から離す」などの相手として最初から選べるようにする。
+    kachakacha::v2::app::EnsureOriginPlanes(session_->GetDocument(), *ids_);
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
     viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+    // 作業中の平面が文書に無ければ、上面 XY を作業中にする。
+    if (session_->GetDocument().FindEntity(activeWorkPlaneId_) == nullptr) {
+        const auto top = kachakacha::v2::app::OriginPlaneId(
+            session_->GetDocument().Snapshot(), kachakacha::v2::modeling::StandardPlaneKind::XY);
+        if (top.has_value()) {
+            ApplyWorkPlane(kachakacha::v2::modeling::StandardPlane(
+                               kachakacha::v2::modeling::StandardPlaneKind::XY),
+                *top);
+        }
+    }
     // 立体と面を作り方から作り直す。作り直さないと、線だけが残って
     // 立体が消えたことに気づかないまま、出そうとしたときに初めて分かる。
     RebuildKernelShapes();
     RefreshEntityList();
     RefreshExportCounts();
+    RefreshWorkPlaneDock();
     viewport_->update();
 }
 
@@ -1032,7 +1089,40 @@ void V2MainWindow::RefreshEntityList()
         return made;
     };
     entityItems_.clear();
+    // 原点の基準平面と3軸は、最上部の「原点」に固定して出す(V1 と同じ)。
+    // 消せず、名前も変えられず、まとまりへも入らない。
+    axisItems_.fill(nullptr);
+    auto* originRoot = new QTreeWidgetItem(entityTree_);
+    originRoot->setText(0, QStringLiteral("原点"));
+    originRoot->setText(1, QStringLiteral("原点"));
+    originRoot->setToolTip(0, QStringLiteral(
+        "初期の基準平面(top_XY / front_XZ / side_YZ)と軸。削除やまとまりへの移動はできません"));
     for (const auto& entity : snapshot.entities) {
+        if (!kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
+            continue;
+        }
+        auto* item = new QTreeWidgetItem(originRoot);
+        item->setText(0, QString::fromUtf8(entity.displayName.c_str()));
+        item->setText(1, QStringLiteral("作業平面"));
+        item->setFlags(item->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
+        entityItems_.emplace_back(item, entity.id);
+    }
+    const char* axisNames[3] = {"X軸", "Y軸", "Z軸"};
+    for (int axis = 0; axis < 3; ++axis) {
+        auto* item = new QTreeWidgetItem(originRoot);
+        item->setText(0, QString::fromUtf8(axisNames[axis]));
+        item->setText(1, QStringLiteral("軸"));
+        item->setFlags((item->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsEditable
+            & ~Qt::ItemIsDragEnabled);
+        item->setCheckState(0, viewport_ != nullptr && viewport_->AxisVisible(axis)
+                ? Qt::Checked
+                : Qt::Unchecked);
+        axisItems_[static_cast<std::size_t>(axis)] = item;
+    }
+    for (const auto& entity : snapshot.entities) {
+        if (kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
+            continue;
+        }
         auto* item = new QTreeWidgetItem(groupItem(entity.groupId));
         const QString name = entity.displayName.empty()
             ? QStringLiteral("(名前なし)")

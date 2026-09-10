@@ -493,6 +493,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.normal = loader.ReadVector(definition, "normal", where);
         made.uDirection = loader.ReadVector(definition, "uDirection", where);
         made.offset = loader.ReadExpression(definition, "offset", where);
+        made.isOriginPlane = loader.BoolOr(definition, "isOriginPlane", false);
         feature.definition = std::move(made);
         break;
     }

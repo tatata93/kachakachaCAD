@@ -1021,4 +1021,40 @@ KACHA_V2_TEST(workplane_common, 断っても入力を書き換えない)
     }
 }
 
+// =====================================================================
+//  12. 位置と向きを数値指定(V1 の「数値指定」)
+// =====================================================================
+
+KACHA_V2_TEST(workplane_point_normal, 通過点と法線と横方向から基底ができる)
+{
+    WorkPlaneRequest request;
+    request.method = WorkPlaneMethod::PointNormal;
+    request.origin = {0.0, 0.0, 40.0};
+    request.normal = {0.0, 2.0, 0.0};
+    request.uHint = {1.0, 1.0, 0.0};
+    const WorkPlaneFrame frame = BuildOrFail(request, "数値指定");
+    RequireVector(frame.origin, {0, 0, 40}, 1.0e-12, "原点は通過点");
+    RequireVector(frame.normal, {0, 1, 0}, 1.0e-12, "法線は正規化される");
+    // 横方向は法線に直角な成分だけが残る。
+    RequireVector(frame.uAxis, {1, 0, 0}, 1.0e-12, "u軸");
+    RequireNear(std::abs(Dot(frame.uAxis, frame.normal)), 0.0, 1.0e-12, "u と法線は直角");
+}
+
+KACHA_V2_TEST(workplane_point_normal, 法線が0か横方向が法線と平行なら断る)
+{
+    WorkPlaneRequest zero;
+    zero.method = WorkPlaneMethod::PointNormal;
+    zero.normal = {0.0, 0.0, 0.0};
+    const auto builtZero = BuildWorkPlane(zero, Tolerance());
+    Require(!builtZero.HasValue(), "法線 0 は断る");
+    Require(!builtZero.Diagnostics().front().code.empty(), "理由番号がある");
+
+    WorkPlaneRequest parallel;
+    parallel.method = WorkPlaneMethod::PointNormal;
+    parallel.normal = {0.0, 0.0, 1.0};
+    parallel.uHint = {0.0, 0.0, -3.0};
+    const auto builtParallel = BuildWorkPlane(parallel, Tolerance());
+    Require(!builtParallel.HasValue(), "横方向が法線と平行なら断る");
+}
+
 KACHA_V2_TEST_MAIN("work_plane_tests")

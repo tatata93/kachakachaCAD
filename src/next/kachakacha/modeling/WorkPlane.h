@@ -2,7 +2,7 @@
 
 //! 作業平面(PRD-055、AT-WPL-001 / 002)。
 //!
-//! 11通りの作り方をすべてここで扱う。OCCT は要らない。
+//! 12通りの作り方をすべてここで扱う。OCCT は要らない。
 //! 円筒面や円錐面を根拠にする方式では、カーネルが分かった面の正体
 //! (`AnalyticSurfaceInfo`)だけを受け取る。B-Rep をここへ持ち込まない(AT-ARC-001)。
 //!
@@ -64,7 +64,7 @@ enum class StandardPlaneKind {
     ZX,
 };
 
-//! 作り方。11通り(AT-WPL-001)。
+//! 作り方。12通り(AT-WPL-001)。
 enum class WorkPlaneMethod {
     Standard,             //!< 標準面(XY / YZ / ZX)
     OffsetFromPlane,      //!< 既存の平面から距離だけ離す
@@ -77,6 +77,9 @@ enum class WorkPlaneMethod {
     TangentThroughEdge,   //!< 曲面に接し、その上の辺(母線)を含む
     TangentThroughPoint,  //!< 曲面上の点で接する
     NormalToCurveAtPoint, //!< 曲線上の点で、その曲線に直角
+    //! 位置と向きを数値で指定(V1 の plane_point_normal)。通過点・法線・横方向。
+    //! 末尾に足すのは、保存した番号(int)がずれないようにするため。
+    PointNormal,
 };
 
 [[nodiscard]] constexpr std::string_view WorkPlaneMethodName(
@@ -94,6 +97,7 @@ enum class WorkPlaneMethod {
     case WorkPlaneMethod::TangentThroughEdge:   return "tangent_through_edge";
     case WorkPlaneMethod::TangentThroughPoint:  return "tangent_through_point";
     case WorkPlaneMethod::NormalToCurveAtPoint: return "normal_to_curve_at_point";
+    case WorkPlaneMethod::PointNormal:          return "point_normal";
     }
     return "unknown";
 }
@@ -113,6 +117,7 @@ enum class WorkPlaneMethod {
     case WorkPlaneMethod::TangentThroughEdge:   return "辺を通り接する";
     case WorkPlaneMethod::TangentThroughPoint:  return "点を通り接する";
     case WorkPlaneMethod::NormalToCurveAtPoint: return "点で曲線に直角";
+    case WorkPlaneMethod::PointNormal:          return "位置と向きを数値指定";
     }
     return "不明";
 }
@@ -146,6 +151,11 @@ struct WorkPlaneRequest {
     //! NormalToCurveAtPoint。u 軸を曲率法線に合わせるか。
     //! true にすると、直線では作れない(曲率法線が定義できない)。
     bool useCurvatureNormal = true;
+
+    //! PointNormal。通過点・法線・横方向(u 軸の種)。
+    Vector3 origin{};
+    Vector3 normal{0.0, 0.0, 1.0};
+    Vector3 uHint{1.0, 0.0, 0.0};
 };
 
 //! 作れたら平面を返す。作れなければ GEO-P0xx で断る。
@@ -168,6 +178,17 @@ struct WorkPlaneRequest {
 
 //! 標準面。
 [[nodiscard]] WorkPlaneFrame StandardPlane(StandardPlaneKind kind);
+
+//! 標準面の日本語。V1 の一覧と同じ言い方(上面 XY / 正面 XZ / 側面 YZ)。
+[[nodiscard]] constexpr std::string_view StandardPlaneNameJa(StandardPlaneKind kind) noexcept
+{
+    switch (kind) {
+    case StandardPlaneKind::XY: return "上面 XY";
+    case StandardPlaneKind::YZ: return "側面 YZ";
+    case StandardPlaneKind::ZX: return "正面 XZ";
+    }
+    return "不明";
+}
 
 //! 作業平面との結びつき方(architecture-and-data.md §5.1 / §5.3)。
 enum class PlanePolicy {

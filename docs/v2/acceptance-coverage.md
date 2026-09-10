@@ -39,7 +39,7 @@
 | AT-WIR-006 | 済 | tests_v2/wire_edit_tests.cpp |
 | AT-WIR-007 | 済 | tests_v2/arc_builder_tests.cpp、tool_tests.cpp(3モード) |
 | AT-WIR-008 | 済 | tests_v2/expression_tests.cpp |
-| AT-WPL-001 | 済 | tests_v2/work_plane_tests.cpp(11方式すべて。原点・基底・法線・距離・角度を数値検査) |
+| AT-WPL-001 | 済 | tests_v2/work_plane_tests.cpp(12方式すべて。原点・基底・法線・距離・角度を数値検査。位置と向きの数値指定は法線0・横方向が平行を拒否)+ tests_v2/work_plane_options_tests.cpp(棚の材料集め: 3点と回転軸は数の欄で代える、コンボの基準平面)+ tests_v2/origin_planes_tests.cpp(原点の3面は一度だけ足され、消せず改名できず(DOC-C009)、保存しても原点のまま)+ 自己試験 V2SelfTestPlanes.cpp(一覧の原点ノード6行、軸のチェック、棚で数値指定/コンボの基準平面/足りないと押せない) |
 | AT-WPL-002 | 済 | tests_v2/work_plane_tests.cpp(一直線3点・非平行2面・円筒でない面・長さ0の辺・直線の曲率法線を固定コードで拒否) |
 | AT-WPL-003 | 済 | tests_v2/plane_follow_tests.cpp(Free3D / ReferenceOnly / LockedToPlane の3通り。縛られた点だけが平面内 UV と面からの浮きを保って追従し、ほかの2つは3D座標が変わらない。動かして戻せば元の位置へ戻る。曲線は種類を保ったまま追従し、円弧の半径・掃引角・長さが変わらない。平面をずらしても法線と基準方向は傾かず、回した平面では基準方向も同じだけ回る。2Dでも3Dでも同じ CurveSegment で出る) + snap_tests.cpp(平面へ投影するスナップ)+ work_plane_tests.cpp(uv⇔3D往復) |
 | AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)+ tests_v2/kernel_surface_tests.cpp(面積・穴・境界曲線種類) |

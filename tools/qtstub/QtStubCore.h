@@ -43,6 +43,7 @@ enum ScrollBarPolicy { ScrollBarAsNeeded, ScrollBarAlwaysOff, ScrollBarAlwaysOn 
 enum ArrowType { NoArrow, UpArrow, DownArrow, LeftArrow, RightArrow };
 //! 本物の Qt では ItemFlag は Qt の側にある。QTreeWidgetItem に置いてはならない。
 //! 置いたせいで、雲では通るのに MSVC で落ちた。
+enum CheckState { Unchecked = 0, PartiallyChecked = 1, Checked = 2 };
 enum ItemFlag { NoItemFlags = 0, ItemIsSelectable = 1, ItemIsEditable = 2,
     ItemIsDragEnabled = 4, ItemIsDropEnabled = 8, ItemIsUserCheckable = 16,
     ItemIsEnabled = 32, ItemIsAutoTristate = 64, ItemNeverHasChildren = 128 };

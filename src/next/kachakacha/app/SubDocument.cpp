@@ -81,6 +81,7 @@ std::vector<EntityId> DefinitionEntityReferences(const domain::FeatureDefinition
                 out.Add(value.tools);
             } else if constexpr (std::is_same_v<T, domain::ThickenSurfaceDefinition>) {
                 out.Add(value.surface);
+                out.Add(value.targetPlane);
             } else if constexpr (std::is_same_v<T, domain::CreateFabricationModelDefinition>) {
                 out.Add(value.parts);
                 out.Add(value.openingWires);

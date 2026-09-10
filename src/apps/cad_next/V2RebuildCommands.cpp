@@ -180,11 +180,19 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
         return false;
     }
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto built = kachakacha::v2::kernel::ThickenSurface(found->second,
-        definition->thickness.value,
-        static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(definition->placement),
-        tolerance);
+    // 相手の平面があれば「平面まで」、無ければ厚みで。作ったときと同じ道を通す。
+    const auto frame = definition->targetPlane.has_value()
+        ? WorkPlaneFrameOf(*definition->targetPlane)
+        : std::nullopt;
+    const auto built = frame.has_value()
+        ? kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second, frame->origin,
+              frame->normal, tolerance)
+        : kachakacha::v2::kernel::ThickenSurface(found->second, definition->thickness.value,
+              static_cast<kachakacha::v2::fabrication::ThicknessPlacement>(
+                  definition->placement),
+              tolerance);
     if (!built.HasValue()) {
+        ReportDiagnostics(built.Diagnostics());
         return false;
     }
     partShapes_[output.ToString()] = built.Value().handle;

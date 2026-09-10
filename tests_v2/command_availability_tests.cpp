@@ -236,6 +236,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OneGuideRow,
         SelectionPredicate::OneOrMoreGuideRows,
         SelectionPredicate::WiresAndOneGuideSurface,
+        SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
     };
     for (const SelectionPredicate predicate : needsSelection) {
         Require(!SelectionSatisfies(predicate, facts),
@@ -282,6 +283,7 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneGuideRow,
         SelectionPredicate::OneOrMoreGuideRows,
         SelectionPredicate::WiresAndOneGuideSurface,
+        SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
     };
     // まだどのコマンドにも付いていない条件。契約にはあるが、
     // それを使うコマンドがまだ無い。ここへ書いておけば、

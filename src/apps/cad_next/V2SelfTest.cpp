@@ -65,10 +65,23 @@ namespace {
     cases.insert(cases.end(), modeling.begin(), modeling.end());
     const std::vector<SelfTestCase> guide = GuideCases();
     cases.insert(cases.end(), guide.begin(), guide.end());
+    const std::vector<SelfTestCase> fabrication = FabricationCases();
+    cases.insert(cases.end(), fabrication.begin(), fabrication.end());
     return cases;
 }
 
 } // namespace
+
+int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind)
+{
+    int count = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kind) {
+            ++count;
+        }
+    }
+    return count;
+}
 
 bool Explain(const char* what, bool ok)
 {

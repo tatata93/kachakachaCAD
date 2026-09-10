@@ -98,7 +98,9 @@ parameter schemaのdiscriminatorにする。
 | `wire.project` | 面へ投影 | WireChain、対象、方向、hit policy | derived Wire | AT-FAB-007 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(折れ線) | AT-FAB-013 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
-| `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Extrude | AT-EXT-001 |
+| `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Part | AT-EXT-001 |
+| `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |
+| `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド1と作業平面1。面が平面をまたげば断る | Part | AT-EXT-001 |
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart | AT-GEO-010から013 |
 | `part.boolean_add` | 足す | target Part 1、tool Part 1以上 | Part | AT-EXT-007 |
 | `part.boolean_cut` | 引く | target Part 1、tool Part 1以上 | 1以上のPart | AT-EXT-007 |

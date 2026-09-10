@@ -195,6 +195,8 @@ struct ThickenSurfaceDefinition {
     geometry::EvaluatedValue thickness;
     //! fabrication::ThicknessPlacement と同じ並び。0=外側 1=中央 2=内側。
     int placement = 1;
+    //! 「任意の面まで」のときの相手の作業平面。あれば thickness と placement は使わない。
+    std::optional<EntityId> targetPlane;
 };
 
 //! 製作モデル(近似モデル)。

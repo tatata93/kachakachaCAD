@@ -60,7 +60,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "guide.create", "guide.set_method", "guide.add_row", "guide.append_row",
         "guide.row_up", "guide.row_down", "guide.row_remove", "guide.row_reverse",
         "guide.build", "guide.clear",
-        "part.extrude", "part.thicken", "part.from_wire_cage",
+        "part.extrude", "part.thicken", "part.thickness_placement", "part.thicken_to_plane",
+        "part.from_wire_cage",
         "part.boolean_add",
         "part.boolean_cut", "derived.freeze",
     };

@@ -630,6 +630,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/io/Json.cpp
     src/next/kachakacha/io/Zip.cpp
     src/next/kachakacha/io/DocumentFile.cpp
+    src/next/kachakacha/io/DocumentFileRead.cpp
     src/next/kachakacha/geometry/ArcBuilders.cpp
     src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
@@ -842,6 +843,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestInput.cpp
         src/apps/cad_next/V2SelfTestModeling.cpp
         src/apps/cad_next/V2SelfTestGuide.cpp
+        src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2ExportCommands.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
         src/apps/cad_next/V2GuideCommands.cpp

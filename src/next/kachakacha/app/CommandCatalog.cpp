@@ -29,6 +29,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneGuideRow: return "役割表の行を1つ選んでください。";
     case SelectionPredicate::OneOrMoreGuideRows: return "役割表に行を1つ以上入れてください。";
     case SelectionPredicate::WiresAndOneGuideSurface: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。";
+    case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane: return "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。";
     }
     return "";
 }
@@ -275,6 +276,15 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreGuideSurfaces,
             "形状ガイドの面を1つ以上選んでください。",
             "選んだ面に厚みを付けて立体にします。厚みの付け方は外側・中央・内側から選びます。",
+            true, {"AT-EXT-001"}},
+        {"part.thickness_placement", "厚みの付け方", CommandMode::Instant, "placement", "",
+            SelectionPredicate::Always, "",
+            "面に厚みを付けるときの付け方を、外側・中央・内側の順に切り替えます。", false,
+            {"AT-EXT-001"}},
+        {"part.thicken_to_plane", "面を平面まで立体に", CommandMode::Instant, "thicken_to", "",
+            SelectionPredicate::OneGuideSurfaceAndOneWorkPlane,
+            "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。",
+            "選んだ面と作業平面の間を埋めて立体にします。面が平面をまたいでいれば断ります。",
             true, {"AT-EXT-001"}},
         {"part.from_wire_cage", "ワイヤー群から部品", CommandMode::Dialog, "cage", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",

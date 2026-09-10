@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "kachakacha/domain/Entity.h"
+
 #include <vector>
 
 class V2MainWindow;
@@ -39,6 +41,12 @@ struct SelfTestCase {
 
 //! 形状ガイドの役割表のケース。
 [[nodiscard]] std::vector<SelfTestCase> GuideCases();
+
+//! 近似(製作モデル)と曲げ状態のケース。
+[[nodiscard]] std::vector<SelfTestCase> FabricationCases();
+
+//! 文書にある、その種類のものの数(見えているかは問わない)。
+[[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);
 
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();

@@ -64,7 +64,8 @@ using kachakacha::v2::modeling::SnapCurve;
 
 bool V2MainWindow::IsPartCommand(std::string_view id)
 {
-    return id == "part.extrude" || id == "part.thicken"
+    return id == "part.extrude" || id == "part.thicken" || id == "part.thicken_to_plane"
+        || id == "part.thickness_placement"
         || id == "part.from_wire_cage" || id == "part.boolean_add"
         || id == "part.boolean_cut";
 }
@@ -77,6 +78,22 @@ void V2MainWindow::RunPartCommand(std::string_view id)
     }
     if (id == "part.thicken") {
         RunThickenSurface();
+        return;
+    }
+    if (id == "part.thicken_to_plane") {
+        RunThickenSurfaceToPlane();
+        return;
+    }
+    if (id == "part.thickness_placement") {
+        using kachakacha::v2::fabrication::ThicknessPlacement;
+        // 外側 → 中央 → 内側 → 外側。次に厚みを付けるときに効く。
+        thicknessPlacement_ = thicknessPlacement_ == ThicknessPlacement::Outside
+            ? ThicknessPlacement::Centered
+            : thicknessPlacement_ == ThicknessPlacement::Centered ? ThicknessPlacement::Inside
+                                                                  : ThicknessPlacement::Outside;
+        SetStatus(QStringLiteral("厚みの付け方: %1(次に面へ厚みを付けるときに効きます)")
+                .arg(QString::fromUtf8(
+                    kachakacha::v2::fabrication::ThicknessPlacementNameJa(thicknessPlacement_))));
         return;
     }
     if (id == "part.from_wire_cage") {
@@ -550,7 +567,55 @@ void V2MainWindow::RunThickenSurface()
         }
         ++made;
     }
-    SetStatus(QStringLiteral("面に厚みを付ける: %1枚の面から厚み %2 mm の部品を作りました。")
+    SetStatus(QStringLiteral("面に厚みを付ける: %1枚の面から厚み %2 mm(%3)の部品を作りました。")
             .arg(made)
-            .arg(thickness));
+            .arg(thickness)
+            .arg(QString::fromUtf8(kachakacha::v2::fabrication::ThicknessPlacementNameJa(placement))));
+}
+
+void V2MainWindow::RunThickenSurfaceToPlane()
+{
+    // 「面を任意の面まで立体化」。面と作業平面の間を埋める。
+    // 厚みを数で決めるのではなく、相手で決める。
+    kachakacha::v2::base::EntityId surfaceId;
+    kachakacha::v2::base::EntityId planeId;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr) {
+            continue;
+        }
+        if (entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
+            surfaceId = id;
+        } else if (entity->kind == kachakacha::v2::domain::EntityKind::WorkPlane) {
+            planeId = id;
+        }
+    }
+    const auto frame = planeId.IsNil() ? std::nullopt : WorkPlaneFrameOf(planeId);
+    const auto found = guideShapes_.find(surfaceId.ToString());
+    if (surfaceId.IsNil() || !frame.has_value() || found == guideShapes_.end()) {
+        SetStatus(QStringLiteral(
+            "面を平面まで立体に: 形状ガイドの面を1つと、相手の作業平面を1つ選んでください。"));
+        return;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second,
+        frame->origin, frame->normal, tolerance);
+    if (!built.HasValue()) {
+        ReportDiagnostics(built.Diagnostics());
+        return;
+    }
+    kachakacha::v2::domain::ThickenSurfaceDefinition definition;
+    definition.surface = surfaceId;
+    definition.targetPlane = planeId;
+    definition.thickness.value = built.Value().thicknessMm;
+    definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
+    const auto partId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+        std::move(definition), built.Value().handle, built.Value().edges, "面を平面まで");
+    if (partId.IsNil()) {
+        return;
+    }
+    SetStatus(QStringLiteral(
+        "面を平面まで立体に: 面と平面の間(最大 %1 mm)を埋めて、体積 %2 mm3 の部品にしました。")
+            .arg(built.Value().thicknessMm, 0, 'f', 3)
+            .arg(built.Value().volumeMm3, 0, 'f', 3));
 }

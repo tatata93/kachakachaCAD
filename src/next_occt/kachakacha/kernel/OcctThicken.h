@@ -16,6 +16,7 @@
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
+#include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 
 namespace kachakacha::v2::kernel {
@@ -24,6 +25,8 @@ namespace kachakacha::v2::kernel {
 inline constexpr const char* kThickenFailed = "KER-T001";
 inline constexpr const char* kThickenBadThickness = "KER-T002";
 inline constexpr const char* kThickenSourceMissing = "KER-T003";
+inline constexpr const char* kThickenBadTarget = "KER-T004";
+inline constexpr const char* kThickenTrimFailed = "KER-T005";
 
 struct ThickenedSolid {
     modeling::KernelShapeHandle handle;
@@ -43,5 +46,14 @@ struct ThickenedSolid {
     modeling::KernelShapeHandle sourceShape, double thicknessMm,
     fabrication::ThicknessPlacement placement,
     const geometry::GeometryTolerance& tolerance);
+
+//! 面から、相手の平面まで立体にする(「任意の面まで立体化」)。
+//!
+//! 面と平面の間を埋めた立体を返す。面が平面をまたいでいる、または平面の上に
+//! 載っているときは断る(どちら側を埋めるのか決まらない)。
+//! 厚みは面の点から平面までの最大距離で決まり、`thicknessMm` にはそれが入る。
+[[nodiscard]] base::Result<ThickenedSolid> ThickenSurfaceToPlane(
+    modeling::KernelShapeHandle sourceShape, const geometry::Vector3& planeOrigin,
+    const geometry::Vector3& planeNormal, const geometry::GeometryTolerance& tolerance);
 
 } // namespace kachakacha::v2::kernel

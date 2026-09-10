@@ -18,6 +18,17 @@ enum class FabricationStrategy {
 enum class BendDirection { Auto, U, V, Both };
 enum class ReliefShape { Auto, StraightSlit, VNotch, CurvedVNotch };
 enum class ThicknessPlacement { Outside, Centered, Inside };
+
+//! 厚みの付け方の日本語。画面の帯と手順書で同じ言葉を使う。
+[[nodiscard]] constexpr const char* ThicknessPlacementNameJa(ThicknessPlacement value) noexcept
+{
+    switch (value) {
+    case ThicknessPlacement::Outside:  return "外側";
+    case ThicknessPlacement::Centered: return "中央";
+    case ThicknessPlacement::Inside:   return "内側";
+    }
+    return "不明";
+}
 enum class MaterialKind { Paper, Styrene, Brass, Other };
 
 struct AllowedPanelTypes {

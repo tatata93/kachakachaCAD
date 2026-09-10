@@ -225,6 +225,8 @@ public:
         const std::vector<kachakacha::v2::geometry::CurveSegment>& edges);
     //! 選んだ面に厚みを付けて立体にする。工程2の「面をソリッド化する」。
     void RunThickenSurface();
+    //! 面と作業平面の間を埋めて立体にする(任意の面まで)。
+    void RunThickenSurfaceToPlane();
     //! 厚みをどちらへ付けるか。外側・中央・内側。
     kachakacha::v2::fabrication::ThicknessPlacement thicknessPlacement_ =
         kachakacha::v2::fabrication::ThicknessPlacement::Centered;

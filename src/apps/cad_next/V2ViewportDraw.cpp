@@ -149,8 +149,10 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         const QColor color = selected
             ? palette_.selected
             : (curve.construction ? palette_.construction : palette_.wire);
-        painter.setPen(QPen(color, selected ? 2.4 : (curve.construction ? 1.0 : 1.6),
-            curve.construction ? Qt::DashLine : Qt::SolidLine));
+        // 太さと様式は V1 の既定と同じ(線 2.0 実線、補助線 1.7 破線、選択 3.2)。
+        // 細い実線は高解像度の画面で点線に見えることがある。
+        painter.setPen(QPen(color, selected ? 3.2 : (curve.construction ? 1.7 : 2.0),
+            curve.construction ? Qt::DashLine : Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
         if (selected && bodyDrag_.active && bodyDrag_.moved) {
@@ -268,7 +270,8 @@ void V2Viewport::DrawPreview(QPainter& painter) const
     if (!started) {
         return;
     }
-    painter.setPen(QPen(palette_.preview, 1.4, Qt::DashLine));
+    // 引いている途中の線。V1 と同じく破線 2.4(確定した線は実線)。
+    painter.setPen(QPen(palette_.preview, 2.4, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
 }

@@ -130,6 +130,7 @@ public:
     QPen(const QColor&) {}
     QPen(const QColor&, double) {}
     QPen(const QColor&, double, Qt::PenStyle) {}
+    QPen(const QColor&, double, Qt::PenStyle, Qt::PenCapStyle, Qt::PenJoinStyle) {}
     QPen(const QBrush&, double) {}
     QPen(Qt::PenStyle) {}
     void setWidthF(double);

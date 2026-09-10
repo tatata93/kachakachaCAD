@@ -1115,9 +1115,21 @@ namespace {
         return false;
     }
     window.RunCommand("wire.project_surface");
-    if (!Explain((std::string("面へ落ちる(") + window.StatusText().toStdString() + ")").c_str(),
-            window.StatusText().contains(QStringLiteral("面へ落とし")))) {
-        return false;
+    if (!window.StatusText().contains(QStringLiteral("面へ落とし"))) {
+        // 落ちないときは、四角と面がどこにあるかを出す。PC でしか出ない失敗を推測で直さないため。
+        std::string where = "四角:";
+        for (const auto& curve : window.Session().Scene().curves) {
+            if (curve.entityId == wires.entityIds.back()) {
+                const auto p = curve.segment.StartPoint();
+                where += " (" + std::to_string(p.x) + "," + std::to_string(p.y) + ","
+                    + std::to_string(p.z) + ")";
+            }
+        }
+        where += " 画面 " + std::to_string(viewport.width()) + "x"
+            + std::to_string(viewport.height());
+        return Explain((std::string("面へ落ちる(") + window.StatusText().toStdString() + " "
+                           + where + ")").c_str(),
+            false);
     }
     // 落ちた線を開口にする。
     const auto after = kachakacha::v2::app::SelectAllOfKind(

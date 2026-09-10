@@ -732,7 +732,7 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
 {
     kachakacha::v2::app::ExternalCounts external;
     // 部材も型紙も文書には入らない。画面が覚えているので、そこから渡す。
-    external.fabricationModels = fabricationPanels_.empty() ? 0 : 1;
+    external.fabricationModels = static_cast<int>(fabricationModels_.size());
     external.fabricationPanels = static_cast<int>(fabricationPanels_.size());
     external.patterns = static_cast<int>(patternPages_.size());
     // 役割表も画面が持つ。行を選んでいるかで、行に効くコマンドが押せるかが決まる。

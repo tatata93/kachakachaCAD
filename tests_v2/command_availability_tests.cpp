@@ -291,6 +291,9 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneClosedProfile,
         // 曲線を1つ以上 ── 曲線そのものを対象にするコマンドを入れるときに使う。
         SelectionPredicate::OneOrMoreSelectedCurves,
+        // 部材ちょうど1つ ── 部材の行を選んで効かせるコマンド(切れ目など)を入れるときに使う。
+        // 「境界の役割」に付いていたが、それは線を選ぶ操作なので外した。
+        SelectionPredicate::OneFabricationPanel,
     };
     std::string unused;
     for (const SelectionPredicate predicate : all) {

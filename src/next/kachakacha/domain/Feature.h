@@ -158,6 +158,8 @@ struct CreateGuideSurfaceDefinition {
     std::vector<WireChainRef> chains;
     //! 各鎖の役割。chains と同じ長さ。
     std::vector<int> roles;
+    //! OffsetGuide の離す距離(mm)。他の作り方では 0。
+    double offsetDistanceMm = 0.0;
 };
 
 //! 押し出し。

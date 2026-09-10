@@ -25,6 +25,9 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneOrMoreSelectedCurves: return "曲線を1つ以上選んでください。";
     case SelectionPredicate::OnePartOrSurface: return "部品か形状ガイドを1つ選んでください。";
     case SelectionPredicate::OneOrMoreGuideSurfaces: return "形状ガイドの面を1つ以上選んでください。";
+    case SelectionPredicate::OneOrMoreWiresOrGuideSurfaces: return "ワイヤーか形状ガイドの面を1つ以上選んでください。";
+    case SelectionPredicate::OneGuideRow: return "役割表の行を1つ選んでください。";
+    case SelectionPredicate::OneOrMoreGuideRows: return "役割表に行を1つ以上入れてください。";
     }
     return "";
 }
@@ -217,6 +220,43 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだ線から形状ガイドを作ります。作れない入力は理由を出して断ります。", true,
             {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-004", "AT-GEO-005", "AT-GEO-006", "AT-UIX-007"}},
+        {"guide.set_method", "面の作り方", CommandMode::Dialog, "guide_method", "",
+            SelectionPredicate::Always, "",
+            "面の作り方を7通りから選びます。使わない役割の行が残っていれば断ります。", false,
+            {"AT-GEO-008"}},
+        {"guide.add_row", "選択を表へ", CommandMode::Dialog, "guide_add", "",
+            SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
+            "ワイヤーか形状ガイドの面を1つ以上選んでください。",
+            "選んだ線を役割表の新しい行にします。役割は作り方で使うものから選びます。", false,
+            {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.append_row", "選択を既存行へ追加", CommandMode::Instant, "guide_append", "",
+            SelectionPredicate::OneGuideRow, "役割表の行を1つ選んでください。",
+            "選んだ線を、表で選んでいる行の端へつなぎます。逆向きの線は向きを直して足します。",
+            false, {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.row_up", "行を上へ", CommandMode::Instant, "guide_up", "",
+            SelectionPredicate::OneGuideRow, "役割表の行を1つ選んでください。",
+            "表で選んでいる行を、同じ役割の中で1つ上へ動かします。", false,
+            {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.row_down", "行を下へ", CommandMode::Instant, "guide_down", "",
+            SelectionPredicate::OneGuideRow, "役割表の行を1つ選んでください。",
+            "表で選んでいる行を、同じ役割の中で1つ下へ動かします。", false,
+            {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.row_remove", "行を削除", CommandMode::Instant, "guide_remove", "",
+            SelectionPredicate::OneGuideRow, "役割表の行を1つ選んでください。",
+            "表で選んでいる行を消します。線そのものは消えません。", false,
+            {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.row_reverse", "向きを反転", CommandMode::Instant, "guide_reverse", "",
+            SelectionPredicate::OneGuideRow, "役割表の行を1つ選んでください。",
+            "表で選んでいる行の向きを逆にします。線の並びも各線の向きも逆になります。", false,
+            {"AT-GEO-008", "AT-UIX-007"}},
+        {"guide.build", "表から面を作る", CommandMode::Instant, "guide_build", "",
+            SelectionPredicate::OneOrMoreGuideRows, "役割表に行を1つ以上入れてください。",
+            "役割表のとおりに面を作ります。足りない役割があれば理由を出して断ります。", true,
+            {"AT-GEO-008"}},
+        {"guide.clear", "表を空にする", CommandMode::Instant, "guide_clear", "",
+            SelectionPredicate::OneOrMoreGuideRows, "役割表に行を1つ以上入れてください。",
+            "役割表の行を全部消します。作り方はそのままです。", false,
+            {"AT-GEO-008"}},
         {"wire.project", "面へ投影", CommandMode::Tool, "project", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "線を作業平面や面へ投影します。", true,

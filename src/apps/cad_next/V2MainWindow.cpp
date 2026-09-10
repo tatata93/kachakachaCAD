@@ -247,7 +247,10 @@ void V2MainWindow::BuildMenus()
                             "wire.mirror", "wire.rotate", "wire.project"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
                        "grid.move_origin"}},
-        {"形(&M)", {"guide.create", "part.extrude", "part.thicken",
+        {"形(&M)", {"guide.create", "guide.set_method", "guide.add_row",
+                     "guide.append_row", "guide.row_up", "guide.row_down",
+                     "guide.row_remove", "guide.row_reverse", "guide.build",
+                     "guide.clear", "part.extrude", "part.thicken",
                      "part.from_wire_cage",
                      "part.boolean_add", "part.boolean_cut", "derived.freeze"}},
         {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
@@ -449,6 +452,9 @@ void V2MainWindow::BuildPanels()
         QStringLiteral("線数"), QStringLiteral("接続"), QStringLiteral("方向"),
         QStringLiteral("元ワイヤー")});
     guideTableView_->setRootIsDecorated(false);
+    // 行を選ぶと、行に効くコマンド(上下・削除・反転・既存行へ追加)が押せるようになる。
+    QObject::connect(guideTableView_, &QTreeWidget::itemClicked, this,
+        [this](QTreeWidgetItem*, int) { RefreshCommandVisibility(); });
     guideDock->setWidget(guideTableView_);
     addDockWidget(Qt::RightDockWidgetArea, guideDock);
     guideDock_ = guideDock;
@@ -728,6 +734,9 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
     external.fabricationModels = fabricationPanels_.empty() ? 0 : 1;
     external.fabricationPanels = static_cast<int>(fabricationPanels_.size());
     external.patterns = static_cast<int>(patternPages_.size());
+    // 役割表も画面が持つ。行を選んでいるかで、行に効くコマンドが押せるかが決まる。
+    external.guideRows = static_cast<int>(guideTable_.rows.size());
+    external.selectedGuideRows = CurrentGuideRow().has_value() ? 1 : 0;
     const kachakacha::v2::app::SelectionSet empty;
     return kachakacha::v2::app::BuildSelectionFacts(
         viewport_ == nullptr ? empty : viewport_->Selection(),
@@ -869,6 +878,8 @@ bool V2MainWindow::SetGuideTable(
     }
     guideTable_ = result.Value();
     RefreshGuideTable();
+    // 行の数が変われば「表から面を作る」などの押せる・押せないも変わる。
+    RefreshCommandVisibility();
     return true;
 }
 

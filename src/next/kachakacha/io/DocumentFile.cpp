@@ -352,6 +352,7 @@ template<class Id>
             roles.push_back(JsonValue::Number(static_cast<double>(role)));
         }
         definition["roles"] = JsonValue::Array(std::move(roles));
+        definition["offsetDistanceMm"] = JsonValue::Number(guide->offsetDistanceMm);
     } else if (const auto* extrude =
                    std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
         definition["profiles"] = WriteIdArray(extrude->profiles);
@@ -1057,6 +1058,7 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
                         : 0);
             }
         }
+        made.offsetDistanceMm = loader.NumberOr(definition, "offsetDistanceMm", 0.0);
         feature.definition = std::move(made);
         break;
     }

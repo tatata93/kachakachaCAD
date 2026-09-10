@@ -192,27 +192,6 @@ bool V2MainWindow::RebuildThickenShape(const kachakacha::v2::domain::Feature& fe
     return true;
 }
 
-bool V2MainWindow::RebuildGuideSurfaceShape(const kachakacha::v2::domain::Feature& feature,
-    const EntityId& output)
-{
-    const auto* definition =
-        std::get_if<kachakacha::v2::domain::CreateGuideSurfaceDefinition>(
-            &feature.definition);
-    if (definition == nullptr) {
-        return false;
-    }
-    std::vector<EntityId> wireIds;
-    for (const auto& chain : definition->chains) {
-        for (const auto& ref : chain.segments) {
-            wireIds.push_back(ref.entityId);
-        }
-    }
-    if (wireIds.size() < 2) {
-        return false;
-    }
-    return BuildGuideSurfaceInto(wireIds, output);
-}
-
 void V2MainWindow::RebuildKernelShapes()
 {
     // 覚えていた形をいったん捨てる。捨てないと、開く前の文書の形が混ざる。
@@ -223,6 +202,8 @@ void V2MainWindow::RebuildKernelShapes()
     guideEdges_.clear();
     guideSamples_.clear();
     fabricationModels_.clear();
+    // 役割表も文書の線を指している。前の文書の表を残すと、無い線の行が並ぶ。
+    guideTable_ = kachakacha::v2::modeling::GuideTable{};
 
     const auto snapshot = session_->GetDocument().Snapshot();
     const auto steps = kachakacha::v2::app::PlanShapeRebuild(snapshot);
@@ -268,6 +249,8 @@ void V2MainWindow::RebuildKernelShapes()
     RefreshPartEdges();
     RefreshFabricationView();
     RefreshExportCounts();
+    // 最後に作り直した面の表が残る。開いた直後に表が空だと、何を元に作ったか見えない。
+    RefreshGuideTable();
     if (failed.empty()) {
         return;
     }

@@ -44,9 +44,11 @@
 #include <QColor>
 #include <QMainWindow>
 #include <QString>
+#include <QStringList>
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -290,21 +292,48 @@ public:
         const kachakacha::v2::base::EntityId& output);
     bool RebuildThickenShape(const kachakacha::v2::domain::Feature& feature,
         const kachakacha::v2::base::EntityId& output);
-    //! 元ワイヤーから面を作って、その id で覚える。作り直しから呼ぶ。
-    bool BuildGuideSurfaceInto(
-        const std::vector<kachakacha::v2::base::EntityId>& wireIds,
-        const kachakacha::v2::base::EntityId& output);
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
     [[nodiscard]] static bool IsGuideCommand(std::string_view id);
     void RunGuideCommand(std::string_view id);
-    //! 選んだ線を断面にして面を作る。
+    //! 選んだ線を断面にして面を作る(おまかせ)。
     void CreateGuideSurfaceFromSelection();
-    //! 出来た面を文書へ足し、画面へ出す。
+    //! 表 → 要求 → 検査 → kernel。作るときも開き直すときも同じ道を通す。
+    //! 離した面のときは、表が指す元の面の handle を渡す。
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::GuideSurfaceResult>
+    BuildSurfaceFromTable(const kachakacha::v2::modeling::GuideTable& table, bool report);
     //! 作った面を文書へ足し、形を覚える。足せたら面の EntityId、だめなら空。
     kachakacha::v2::base::EntityId AdoptGuideSurface(
         const kachakacha::v2::modeling::GuideTable& table,
-        const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections,
+        const kachakacha::v2::modeling::GuideSurfaceResult& built,
         const std::vector<kachakacha::v2::base::EntityId>& inputs, const std::string& label);
+
+    //! 役割表の操作(guide.set_method / add_row / append_row / row_* / build / clear)。
+    //! V2GuideTableCommands.cpp が持つ。
+    void RunGuideTableCommand(std::string_view id);
+    void SetGuideMethod();
+    void AddSelectionToGuideTable();
+    void AppendSelectionToGuideRow();
+    void MoveGuideRow(int delta);
+    void RemoveGuideRow();
+    void ReverseGuideRow();
+    void BuildGuideSurfaceFromTable();
+    void ClearGuideTable();
+    //! 表で選んでいる行。選んでいなければ空。
+    [[nodiscard]] std::optional<std::size_t> CurrentGuideRow() const;
+    //! その作り方で使う役割を「外形U・断面」のように並べる。
+    [[nodiscard]] static QString RolesLabelJa(kachakacha::v2::modeling::GuideSurfaceMethod method);
+
+    //! 試験から呼ぶ。表の行を選ぶ。
+    void SelectGuideRow(int row);
+    //! 作り方を聞く窓の代わり。試験では窓を出さずに答えを返す。
+    //! 候補の並びを受け取り、選んだ位置を返す。空は「やめた」。
+    void SetGuideChoiceChooser(
+        std::function<std::optional<int>(const QString& title, const QStringList& items,
+            int initial)>
+            chooser);
+    std::function<std::optional<int>(const QString& title, const QStringList& items,
+        int initial)>
+        guideChoiceChooser_;
     //! id で指した線から面を作る(固定などが呼ぶ)。作り方は guide.create と同じ。
     kachakacha::v2::base::EntityId CreateGuideSurfaceFromWires(
         const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label);

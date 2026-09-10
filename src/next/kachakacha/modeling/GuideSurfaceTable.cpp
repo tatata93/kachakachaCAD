@@ -233,6 +233,31 @@ Result<GuideTable> AddSelectionAsNewRow(const GuideTable& table, ChainRole role,
     return Result<GuideTable>::Success(std::move(next));
 }
 
+Result<GuideTable> AddSourceSurfaceRow(const GuideTable& table, const EntityId& surfaceId,
+    const std::string& label)
+{
+    if (!RoleUsedByMethod(table.method, ChainRole::SourceSurface)) {
+        return Result<GuideTable>::Failure(MakeError("UI-R003",
+            "その作り方では、この役割を使いません。",
+            std::string(GuideSurfaceMethodName(table.method)) + " に "
+                + ChainRoleLabelJa(ChainRole::SourceSurface) + " はありません。"));
+    }
+    for (const GuideTableRow& row : table.rows) {
+        if (row.role == ChainRole::SourceSurface) {
+            return Result<GuideTable>::Failure(MakeError("UI-R010",
+                "元の面はすでに入っています。",
+                "離した面は1枚の面からしか作れません。先に元の面の行を消してください。"));
+        }
+    }
+    GuideTable next = table;
+    GuideTableRow row;
+    row.role = ChainRole::SourceSurface;
+    row.sourceWireIds.push_back(surfaceId);
+    row.sourceLabels.push_back(label);
+    next.rows.push_back(std::move(row));
+    return Result<GuideTable>::Success(std::move(next));
+}
+
 Result<GuideTable> AddSelectionToRow(const GuideTable& table, std::size_t rowIndex,
     const GuideTableSelection& selection, const GeometryTolerance& tolerance)
 {
@@ -364,8 +389,18 @@ Result<GuideSurfaceRequest> ToGuideSurfaceRequest(const GuideTable& table,
     const std::vector<int> numbers = NumberRows(table);
     GuideSurfaceRequest request;
     request.method = table.method;
+    request.offsetDistanceMm = table.offsetDistanceMm;
     for (std::size_t index = 0; index < table.rows.size(); ++index) {
         const GuideTableRow& row = table.rows[index];
+        if (row.role == ChainRole::SourceSurface) {
+            // 元の面は線を持たない。指す先だけを渡す。
+            GuideChain chain;
+            chain.role = row.role;
+            chain.index = numbers[index];
+            chain.sourceEntityId = row.sourceWireIds.front();
+            request.chains.push_back(std::move(chain));
+            continue;
+        }
         if (row.segments.empty()) {
             return Result<GuideSurfaceRequest>::Failure(MakeError("UI-R004",
                 "選んだ線がありません。",

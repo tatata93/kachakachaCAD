@@ -53,6 +53,8 @@ struct GuideTableRow {
 struct GuideTable {
     GuideSurfaceMethod method = GuideSurfaceMethod::LoftSections;
     std::vector<GuideTableRow> rows;
+    //! OffsetGuide の離す距離。表から要求へそのまま渡る。0 は要求の側で断られる。
+    double offsetDistanceMm = 0.0;
 };
 
 //! 選択した線の束。ボタンはこれを受け取る。
@@ -110,6 +112,11 @@ struct GuideTableRowView {
 //! 「選択を新しい外形へ」「選択を新しい断面へ」。
 [[nodiscard]] base::Result<GuideTable> AddSelectionAsNewRow(const GuideTable& table,
     ChainRole role, const GuideTableSelection& selection);
+
+//! 「選択した面を元の面へ」(OffsetGuide)。線ではなく、既にある形状ガイドを指す行。
+//! 元の面は1つだけ。2つ目は断る。
+[[nodiscard]] base::Result<GuideTable> AddSourceSurfaceRow(const GuideTable& table,
+    const EntityId& surfaceId, const std::string& label);
 
 //! 「選択を既存行へ追加」。行の端につながらない線は足さない。
 [[nodiscard]] base::Result<GuideTable> AddSelectionToRow(const GuideTable& table,

@@ -9,6 +9,7 @@
 
 #include <QApplication>
 #include <QString>
+#include <QStringList>
 
 #include <exception>
 #include <iostream>
@@ -36,6 +37,10 @@ namespace {
         return std::optional<WorkPlaneChoice>(initial);
     });
     window.SetAssemblyChooser([](double current) { return std::optional<double>(current); });
+    // 作り方や役割を聞く窓も出さない。既定は「いま選ばれているもの」をそのまま返す。
+    window.SetGuideChoiceChooser([](const QString&, const QStringList&, int initial) {
+        return std::optional<int>(initial);
+    });
     window.resize(1000, 700);
     window.show();
     QApplication::processEvents();
@@ -58,6 +63,8 @@ namespace {
     cases.insert(cases.end(), input.begin(), input.end());
     const std::vector<SelfTestCase> modeling = ModelingCases();
     cases.insert(cases.end(), modeling.begin(), modeling.end());
+    const std::vector<SelfTestCase> guide = GuideCases();
+    cases.insert(cases.end(), guide.begin(), guide.end());
     return cases;
 }
 
@@ -76,6 +83,9 @@ int RunSelfTest()
     const std::vector<SelfTestCase> cases = AllCases();
     int failed = 0;
     for (const SelfTestCase& item : cases) {
+        // 先に名前を出しておく。途中で落ちたとき、どのケースで落ちたかが残る。
+        // 落ちると PASS/FAIL のどちらも出ないので、名前が無いと追えない。
+        std::cout << "RUN  " << item.name << std::endl;
         if (RunOneCase(item)) {
             std::cout << "PASS " << item.name << std::endl;
         } else {

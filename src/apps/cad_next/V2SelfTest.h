@@ -37,6 +37,9 @@ struct SelfTestCase {
 //! 線の編集・作業平面・部品・部材・型紙のケース。
 [[nodiscard]] std::vector<SelfTestCase> ModelingCases();
 
+//! 形状ガイドの役割表のケース。
+[[nodiscard]] std::vector<SelfTestCase> GuideCases();
+
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();
 

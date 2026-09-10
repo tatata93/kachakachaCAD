@@ -272,6 +272,8 @@ public:
     [[nodiscard]] int topLevelItemCount() const;
     [[nodiscard]] QTreeWidgetItem* topLevelItem(int) const;
     [[nodiscard]] QTreeWidgetItem* currentItem() const;
+    void setCurrentItem(QTreeWidgetItem*);
+    [[nodiscard]] int indexOfTopLevelItem(QTreeWidgetItem*) const;
     void editItem(QTreeWidgetItem*, int = 0);
     void expandAll();
     void resizeColumnToContents(int);

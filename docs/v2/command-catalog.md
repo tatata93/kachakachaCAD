@@ -86,6 +86,15 @@ parameter schemaのdiscriminatorにする。
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
 | `guide.create` | 形状ガイド | method、役割別WireChain表 | GuideSurface | AT-GEO-001から006, AT-UIX-007 |
+| `guide.set_method` | 面の作り方 | 常時。使わない役割の行が残っていれば断る | 表の method | AT-GEO-008 |
+| `guide.add_row` | 選択を表へ | ワイヤーか形状ガイドの面1以上。役割は作り方で使うものから選ぶ | 表の行 | AT-GEO-008, AT-UIX-007 |
+| `guide.append_row` | 選択を既存行へ追加 | 表の行1、ワイヤー1以上 | 表の行 | AT-GEO-008, AT-UIX-007 |
+| `guide.row_up` | 行を上へ | 表の行1 | 表の並び | AT-GEO-008, AT-UIX-007 |
+| `guide.row_down` | 行を下へ | 表の行1 | 表の並び | AT-GEO-008, AT-UIX-007 |
+| `guide.row_remove` | 行を削除 | 表の行1 | 表の行 | AT-GEO-008, AT-UIX-007 |
+| `guide.row_reverse` | 向きを反転 | 表の行1 | 表の行 | AT-GEO-008, AT-UIX-007 |
+| `guide.build` | 表から面を作る | 表の行1以上。離した面は右の距離欄を使う | GuideSurface | AT-GEO-008 |
+| `guide.clear` | 表を空にする | 表の行1以上 | 表 | AT-GEO-008 |
 | `wire.project` | 面へ投影 | WireChain、対象、方向、hit policy | derived Wire | AT-FAB-007 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
 | `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Extrude | AT-EXT-001 |

@@ -5,13 +5,15 @@
 //! V2 は役割の表を持ち、選択とは切り離す。
 //!
 //! ここでやるのは3つだけ。
-//!   1. 選んだ線を、断面として表へ並べる
-//!   2. 表を要求へ直して、core に検査してもらう
-//!   3. 通ったら OCCT に作ってもらい、Feature を1つ足す
+//!   1. 表を要求へ直して、core に検査してもらう
+//!   2. 通ったら OCCT に作ってもらい、Feature を1つ足す
+//!   3. 開き直したときに、保存した作り方から同じ道で作り直す
+//! 表そのものを組み立てる操作(役割・向き・順)は V2GuideTableCommands.cpp にある。
 //! 面が作れるかどうかの判断は、1つもここに書かない。
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
@@ -23,100 +25,72 @@
 #include <utility>
 #include <vector>
 
+using kachakacha::v2::app::AutoSectionTable;
+using kachakacha::v2::app::GuideTableDraft;
+using kachakacha::v2::modeling::ChainRole;
+using kachakacha::v2::modeling::GuideSurfaceMethod;
+using kachakacha::v2::modeling::GuideTable;
+
 bool V2MainWindow::IsGuideCommand(std::string_view id)
 {
-    return id == "guide.create";
+    return id.rfind("guide.", 0) == 0;
 }
 
 void V2MainWindow::RunGuideCommand(std::string_view id)
 {
     if (id == "guide.create") {
         CreateGuideSurfaceFromSelection();
+        return;
     }
+    RunGuideTableCommand(id);
 }
 
-namespace {
-
-using kachakacha::v2::modeling::ChainRole;
-using kachakacha::v2::modeling::GuideTable;
-using kachakacha::v2::modeling::GuideTableSelection;
-
-//! 選んだ線を、選んだ順に断面として並べる。
-//! 断面どうしを渡す面(ロフト)が、いちばん素直な作り方である。
-struct SectionTable {
-    GuideTable table;
-    int sections = 0;
-    std::vector<kachakacha::v2::base::Diagnostic> diagnostics;
-};
-
-//! 元ワイヤーの並びから表を作る。選択からでも、保存した作り方からでも、
-//! 同じ道を通す。道を分けると、開き直したときだけ違う面が出来る。
-[[nodiscard]] SectionTable CollectSectionRowsFor(
-    const kachakacha::v2::document::Document& document,
-    const kachakacha::v2::modeling::SnapScene& scene,
-    const std::vector<kachakacha::v2::base::EntityId>& wireIds)
+std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildSurfaceFromTable(
+    const GuideTable& table, bool report)
 {
-    using kachakacha::v2::domain::EntityKind;
-    using kachakacha::v2::modeling::AddSelectionAsNewRow;
-
-    SectionTable made;
-    // 作り方は断面の数で決まる。2本なら渡すだけ(ルールド)、3本以上なら
-    // なめらかに通す(ロフト)。2本にロフトは使えないし、
-    // 3本をルールドで渡すと真ん中の断面が捨てられる。
-    made.table.method = kachakacha::v2::modeling::GuideSurfaceMethod::RuledSections;
-    for (const auto& id : wireIds) {
-        const auto* entity = document.FindEntity(id);
-        if (entity == nullptr || entity->kind != EntityKind::Wire) {
-            continue;
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(table, tolerance);
+    if (!request.HasValue()) {
+        if (report) {
+            ReportDiagnostics(request.Diagnostics());
         }
-        GuideTableSelection chosen;
-        chosen.sourceWireId = id;
-        chosen.label = entity->displayName;
-        for (const auto& curve : scene.curves) {
-            if (curve.entityId == id) {
-                chosen.segments.push_back(curve.segment);
+        return std::nullopt;
+    }
+    // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
+    const auto analysis =
+        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
+    if (!analysis.HasValue()) {
+        if (report) {
+            ReportDiagnostics(analysis.Diagnostics());
+        }
+        return std::nullopt;
+    }
+    // 離した面は、元の面の実体が要る。表が指す形状ガイドの handle を渡す。
+    kachakacha::v2::modeling::KernelShapeHandle source;
+    for (const auto& row : table.rows) {
+        if (row.role == ChainRole::SourceSurface && !row.sourceWireIds.empty()) {
+            const auto found = guideShapes_.find(row.sourceWireIds.front().ToString());
+            if (found != guideShapes_.end()) {
+                source = found->second;
             }
         }
-        if (chosen.segments.empty()) {
-            continue;
-        }
-        const auto added = AddSelectionAsNewRow(made.table, ChainRole::Section, chosen);
-        if (!added.HasValue()) {
-            made.diagnostics = added.Diagnostics();
-            return made;
-        }
-        made.table = added.Value();
-        ++made.sections;
     }
-    if (made.sections >= 3) {
-        const auto switched = kachakacha::v2::modeling::SetGuideTableMethod(made.table,
-            kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections);
-        if (!switched.HasValue()) {
-            made.diagnostics = switched.Diagnostics();
-            return made;
+    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
+        analysis.Value(), tolerance, source);
+    if (!built.HasValue()) {
+        if (report) {
+            ReportDiagnostics(built.Diagnostics());
         }
-        made.table = switched.Value();
+        return std::nullopt;
     }
-    return made;
+    return built.Value();
 }
 
-[[nodiscard]] SectionTable CollectSectionRows(
-    const kachakacha::v2::document::Document& document,
-    const kachakacha::v2::modeling::SnapScene& scene,
-    const kachakacha::v2::app::SelectionSet& selection)
-{
-    return CollectSectionRowsFor(document, scene, selection.entityIds);
-}
-
-} // namespace
-
-kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(
-    const kachakacha::v2::modeling::GuideTable& table,
-    const kachakacha::v2::modeling::GuideSurfaceResult& built, int sections,
+kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable& table,
+    const kachakacha::v2::modeling::GuideSurfaceResult& built,
     const std::vector<kachakacha::v2::base::EntityId>& inputs, const std::string& label)
 {
     using kachakacha::v2::document::AddFeatureCommand;
-    using kachakacha::v2::domain::CreateGuideSurfaceDefinition;
     using kachakacha::v2::domain::Entity;
     using kachakacha::v2::domain::EntityKind;
     using kachakacha::v2::domain::Feature;
@@ -128,22 +102,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(
     feature.type = FeatureType::CreateGuideSurface;
     feature.displayName = label;
     feature.inputEntityIds = inputs;
-    CreateGuideSurfaceDefinition definition;
-    definition.method = static_cast<int>(table.method);
-    // 元ワイヤーを覚える。空のまま保存していたので、開き直しても面を作り直せなかった。
-    // 一覧には名前が残るので、消えたことに気づきにくい。
-    for (const auto& row : table.rows) {
-        definition.roles.push_back(static_cast<int>(row.role));
-        kachakacha::v2::domain::WireChainRef chain;
-        for (const auto& wireId : row.sourceWireIds) {
-            kachakacha::v2::domain::SegmentRef ref;
-            ref.entityId = wireId;
-            chain.segments.push_back(ref);
-            chain.reversed.push_back(row.reversed);
-        }
-        definition.chains.push_back(std::move(chain));
-    }
-    feature.definition = std::move(definition);
+    // 元ワイヤーと役割と向きを覚える。空のまま保存していたので、
+    // 開き直しても面を作り直せなかった。写し方は core に1つだけ置く。
+    feature.definition = kachakacha::v2::app::DefinitionFromGuideTable(table);
 
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
@@ -170,9 +131,10 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(
     RefreshEntityList();
     RefreshCommandVisibility();
     SetStatus(QStringLiteral(
-        "形状ガイド: %1で断面%2枚から面を作りました。線からのずれは最大 %3 mm です。")
-            .arg(sections >= 3 ? QStringLiteral("ロフト") : QStringLiteral("ルールド"))
-            .arg(sections)
+        "形状ガイド: %1で%2行から面を作りました。線からのずれは最大 %3 mm です。")
+            .arg(QString::fromUtf8(std::string(
+                kachakacha::v2::app::GuideSurfaceMethodLabelJa(table.method)).c_str()))
+            .arg(static_cast<int>(table.rows.size()))
             .arg(built.maximumDeviationMm, 0, 'f', 4));
     return entity.id;
 }
@@ -181,8 +143,8 @@ kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
     const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label)
 {
     // 固定など、選択ではなく id で指した線から面を作る。作り方は guide.create と同じ。
-    const SectionTable made =
-        CollectSectionRowsFor(session_->GetDocument(), session_->Scene(), wireIds);
+    const GuideTableDraft made =
+        AutoSectionTable(session_->GetDocument(), session_->Scene(), wireIds);
     if (!made.diagnostics.empty()) {
         ReportDiagnostics(made.diagnostics);
         return kachakacha::v2::base::EntityId{};
@@ -191,66 +153,47 @@ kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
         SetStatus(QStringLiteral("形状ガイド: 断面が2つ以上要ります。"));
         return kachakacha::v2::base::EntityId{};
     }
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto request =
-        kachakacha::v2::modeling::ToGuideSurfaceRequest(made.table, tolerance);
-    if (!request.HasValue()) {
-        ReportDiagnostics(request.Diagnostics());
+    const auto built = BuildSurfaceFromTable(made.table, true);
+    if (!built.has_value()) {
         return kachakacha::v2::base::EntityId{};
     }
-    const auto analysis =
-        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
-    if (!analysis.HasValue()) {
-        ReportDiagnostics(analysis.Diagnostics());
-        return kachakacha::v2::base::EntityId{};
-    }
-    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
-        analysis.Value(), tolerance);
-    if (!built.HasValue()) {
-        ReportDiagnostics(built.Diagnostics());
-        return kachakacha::v2::base::EntityId{};
-    }
-    return AdoptGuideSurface(made.table, built.Value(), made.sections, wireIds, label);
+    return AdoptGuideSurface(made.table, *built, wireIds, label);
 }
 
-bool V2MainWindow::BuildGuideSurfaceInto(
-    const std::vector<kachakacha::v2::base::EntityId>& wireIds,
+bool V2MainWindow::RebuildGuideSurfaceShape(const kachakacha::v2::domain::Feature& feature,
     const kachakacha::v2::base::EntityId& output)
 {
-    // 開き直したときの作り直し。作ったときと同じ道を通す。
+    // 開き直したときの作り直し。作ったときと同じ道(表 → 要求 → kernel)を通す。
     // Feature はもう文書にあるので、ここでは形だけを作って覚える。
-    const SectionTable made =
-        CollectSectionRowsFor(session_->GetDocument(), session_->Scene(), wireIds);
-    if (!made.diagnostics.empty() || made.sections < 2) {
+    const auto* definition =
+        std::get_if<kachakacha::v2::domain::CreateGuideSurfaceDefinition>(
+            &feature.definition);
+    if (definition == nullptr) {
         return false;
     }
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto request =
-        kachakacha::v2::modeling::ToGuideSurfaceRequest(made.table, tolerance);
-    if (!request.HasValue()) {
+    const auto table = kachakacha::v2::app::GuideTableFromDefinition(
+        session_->GetDocument(), session_->Scene(), *definition);
+    if (!table.HasValue()) {
+        ReportDiagnostics(table.Diagnostics());
         return false;
     }
-    const auto analysis =
-        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
-    if (!analysis.HasValue()) {
+    const auto built = BuildSurfaceFromTable(table.Value(), true);
+    if (!built.has_value()) {
         return false;
     }
-    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
-        analysis.Value(), tolerance);
-    if (!built.HasValue()) {
-        return false;
-    }
-    guideShapes_[output.ToString()] = built.Value().handle;
-    guideEdges_[output.ToString()] = built.Value().boundary;
-    guideSamples_[output.ToString()] = built.Value().samples;
-    guideTable_ = made.table;
+    guideShapes_[output.ToString()] = built->handle;
+    guideEdges_[output.ToString()] = built->boundary;
+    guideSamples_[output.ToString()] = built->samples;
+    guideTable_ = table.Value();
     return true;
 }
 
 void V2MainWindow::CreateGuideSurfaceFromSelection()
 {
-    const SectionTable made = CollectSectionRows(session_->GetDocument(),
-        session_->Scene(), viewport_->Selection());
+    // 「おまかせ」。選んだ線を選んだ順に断面として並べる。
+    // 役割を自分で決めたいときは、表のコマンド(guide.add_row など)を使う。
+    const GuideTableDraft made = AutoSectionTable(session_->GetDocument(),
+        session_->Scene(), viewport_->Selection().entityIds);
     if (!made.diagnostics.empty()) {
         ReportDiagnostics(made.diagnostics);
         return;
@@ -262,26 +205,10 @@ void V2MainWindow::CreateGuideSurfaceFromSelection()
                 .arg(made.sections));
         return;
     }
-    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto request =
-        kachakacha::v2::modeling::ToGuideSurfaceRequest(made.table, tolerance);
-    if (!request.HasValue()) {
-        ReportDiagnostics(request.Diagnostics());
+    const auto built = BuildSurfaceFromTable(made.table, true);
+    if (!built.has_value()) {
         return;
     }
-    // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
-    const auto analysis =
-        kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
-    if (!analysis.HasValue()) {
-        ReportDiagnostics(analysis.Diagnostics());
-        return;
-    }
-    const auto built = kachakacha::v2::kernel::BuildGuideSurface(request.Value(),
-        analysis.Value(), tolerance);
-    if (!built.HasValue()) {
-        ReportDiagnostics(built.Diagnostics());
-        return;
-    }
-    (void)AdoptGuideSurface(made.table, built.Value(), made.sections,
-        viewport_->Selection().entityIds, "形状ガイド");
+    (void)AdoptGuideSurface(made.table, *built, viewport_->Selection().entityIds,
+        "形状ガイド");
 }

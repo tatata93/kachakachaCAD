@@ -49,6 +49,7 @@
 | AT-GEO-005 | 済 | tests_v2/guide_surface_tests.cpp(欠損・2重・順序逆転を固定コードで拒否) |
 | AT-GEO-006 | 済 | tests_v2/guide_surface_tests.cpp(5辺は自動分割せず拒否) |
 | AT-GEO-007 | 済 | tests_v2/broken_reference_tests.cpp(指していた断面が消えると壊れた参照になり、近くの断面1や断面3へ移らない。候補は近い順に挙げるが選ばない。相手を選ばずに指し直そうとすると DOC-C008 で断り、候補が1つしかなくても自動では選ばない。選んだ相手へは指し直せる。効かなくする・消すも選べる。並びは毎回同じ) + panel_strategy_tests.cpp(製作側の壊れた参照)|
+| AT-GEO-008 | 済 | tests_v2/guide_table_build_tests.cpp(おまかせは2本でルールド3本でロフト。役割・向き・作り方が保存の形から作り直しで戻る。元の線が消えていれば GEO-R002 で断る。既存行への追加は逆向きの線も向きを直して受ける。離した面は元の面の行と距離を持ち、2枚目は UI-R010 で断る)+ tests_v2/command_availability_tests.cpp(行を選んだときだけ行に効くコマンドが押せる)+ cad_next --self-test(作り方を選び、外形Uと断面を表へ入れ、表から案内付きロフトの面を作り、保存して開き直すと表と面が戻る。使わない役割の行が残っていると作り方を変えられない) |
 | AT-GEO-010 | 済 | tests_v2/wire_cage_tests.cpp(12辺順不同→6面1体) |
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |

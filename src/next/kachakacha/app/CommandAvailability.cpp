@@ -54,6 +54,12 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::OneOrMoreGuideSurfaces:
         // 面に厚みを付ける。面が1つも無ければ、付ける相手がいない。
         return facts.guideSurfaces >= 1;
+    case SelectionPredicate::OneOrMoreWiresOrGuideSurfaces:
+        return facts.wires + facts.guideSurfaces >= 1;
+    case SelectionPredicate::OneGuideRow:
+        return facts.selectedGuideRows == 1;
+    case SelectionPredicate::OneOrMoreGuideRows:
+        return facts.guideRows >= 1;
     }
     return false;
 }
@@ -94,6 +100,8 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.fabricationModels = external.fabricationModels;
     facts.fabricationPanels = external.fabricationPanels;
     facts.patterns = external.patterns;
+    facts.selectedGuideRows = external.selectedGuideRows;
+    facts.guideRows = external.guideRows;
 
     std::vector<base::GroupId> groups;
     for (const auto& id : selection.entityIds) {

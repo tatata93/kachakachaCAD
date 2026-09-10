@@ -231,6 +231,10 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OneOrMorePatterns,
         SelectionPredicate::OneOrMoreSelectedCurves,
         SelectionPredicate::OnePartOrSurface,
+        SelectionPredicate::OneOrMoreGuideSurfaces,
+        SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
+        SelectionPredicate::OneGuideRow,
+        SelectionPredicate::OneOrMoreGuideRows,
     };
     for (const SelectionPredicate predicate : needsSelection) {
         Require(!SelectionSatisfies(predicate, facts),
@@ -272,6 +276,10 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneOrMorePatterns,
         SelectionPredicate::OneOrMoreSelectedCurves,
         SelectionPredicate::OnePartOrSurface,
+        SelectionPredicate::OneOrMoreGuideSurfaces,
+        SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
+        SelectionPredicate::OneGuideRow,
+        SelectionPredicate::OneOrMoreGuideRows,
     };
     // まだどのコマンドにも付いていない条件。契約にはあるが、
     // それを使うコマンドがまだ無い。ここへ書いておけば、
@@ -325,6 +333,8 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
     everything.fabricationPanels = 1;
     everything.patterns = 1;
     everything.curves = 2;
+    everything.selectedGuideRows = 1;
+    everything.guideRows = 1;
     std::vector<std::string> unreachable;
     for (const auto& command : CommandCatalog()) {
         if (!SelectionSatisfies(command.predicate, everything)) {

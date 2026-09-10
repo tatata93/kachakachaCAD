@@ -49,6 +49,12 @@ enum class SelectionPredicate {
     OnePartOrSurface,
     //! 形状ガイドの面を1つ以上。厚みを付けて立体にするときに使う。
     OneOrMoreGuideSurfaces,
+    //! ワイヤーか形状ガイドの面を1つ以上。役割表へ入れるときに使う(離した面は面を指す)。
+    OneOrMoreWiresOrGuideSurfaces,
+    //! 役割表で行を1つ選んでいる。行を動かす・消す・反転する・線を足すときに使う。
+    OneGuideRow,
+    //! 役割表に行が1つ以上ある。表から面を作る・表を空にするときに使う。
+    OneOrMoreGuideRows,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

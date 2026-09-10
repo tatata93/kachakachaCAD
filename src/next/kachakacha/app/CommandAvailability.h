@@ -42,6 +42,9 @@ struct SelectionFacts {
     int patterns = 0;
     //! 選んだ曲線の本数(鎖にまとめる前)。
     int curves = 0;
+    //! 形状ガイドの役割表で選んでいる行の数(0か1)と、表にある行の数。
+    int selectedGuideRows = 0;
+    int guideRows = 0;
 };
 
 //! その条件を、いまの選択が満たしているか。
@@ -56,6 +59,9 @@ struct ExternalCounts {
     int fabricationModels = 0;
     int fabricationPanels = 0;
     int patterns = 0;
+    //! 形状ガイドの役割表。表は画面が持つので、行の数と選んでいる行の数をここで渡す。
+    int selectedGuideRows = 0;
+    int guideRows = 0;
 };
 
 //! 選択と文書と場面から、押せるかどうかの材料を作る。

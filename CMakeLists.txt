@@ -569,6 +569,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/GrabToMove.cpp
     src/next/kachakacha/app/ControlPointPick.cpp
     src/next/kachakacha/app/ShapeRebuild.cpp
+    src/next/kachakacha/app/GuideTableBuild.cpp
     src/next/kachakacha/app/ExtrudeOptions.cpp
     src/next/kachakacha/app/WorkPlaneOptions.cpp
     src/next/kachakacha/app/FabricationEvaluate.cpp
@@ -757,6 +758,7 @@ kachakacha_add_v2_test(extrude_options_tests tests_v2/extrude_options_tests.cpp)
 kachakacha_add_v2_test(work_plane_options_tests tests_v2/work_plane_options_tests.cpp)
 kachakacha_add_v2_test(band_approximation_tests tests_v2/band_approximation_tests.cpp)
 kachakacha_add_v2_test(fabrication_evaluate_tests tests_v2/fabrication_evaluate_tests.cpp)
+kachakacha_add_v2_test(guide_table_build_tests tests_v2/guide_table_build_tests.cpp)
     kachakacha_add_v2_test(display_settings_tests tests_v2/display_settings_tests.cpp)
     kachakacha_add_v2_test(curve_projection_tests tests_v2/curve_projection_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
@@ -833,14 +835,17 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestBasics.cpp
         src/apps/cad_next/V2SelfTestInput.cpp
         src/apps/cad_next/V2SelfTestModeling.cpp
+        src/apps/cad_next/V2SelfTestGuide.cpp
         src/apps/cad_next/V2ExportCommands.cpp
         src/apps/cad_next/V2FreezeCommands.cpp
         src/apps/cad_next/V2GuideCommands.cpp
+        src/apps/cad_next/V2GuideTableCommands.cpp
         src/apps/cad_next/V2ViewCommands.cpp
         src/apps/cad_next/V2ExportDock.cpp
         src/apps/cad_next/V2ExtrudeDialog.cpp
         src/apps/cad_next/V2WorkPlaneDialog.cpp
         src/apps/cad_next/V2NumberDialog.cpp
+        src/apps/cad_next/V2ChoiceDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp
         src/apps/cad_next/V2ParameterDock.h
         src/apps/cad_next/V2MeasureDock.cpp

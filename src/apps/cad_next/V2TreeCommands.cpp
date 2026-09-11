@@ -12,6 +12,7 @@
 #include "kachakacha/domain/Entity.h"
 
 #include <QLabel>
+#include <QLineEdit>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 

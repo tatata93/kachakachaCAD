@@ -15,6 +15,7 @@
 #include <QMenu>
 #include <QDockWidget>
 #include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QPoint>
 
 #include "kachakacha/app/DisplaySettings.h"

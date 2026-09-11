@@ -20,6 +20,7 @@
 | WP-11 | 完了(Claude, cda2a5b。対象x形式の表・検査・原子的な書き込みに加え、選択と書き出しの棚を画面へ繋いだ。tests_v2/export_panel_tests.cpp 25件、export_content_tests.cpp 15件、selection_tests.cpp 21件、cad_next --self-test 4件) | WP-05, WP-07, WP-09 | STL/STEP/SVG/DXF/PDFと保存統合 |
 | WP-12 | 進行中(Claude。ER1/ER2 の受入モデル、図つきマニュアル、見本 .kcd2、文書を開く道、配布 script は完了。実機での配布zip確認と切替が残り) | WP-01..11 | 全受入、マニュアル、配布、切替 |
 | WP-13 | 保留(オーナー指示待ち。「V2が満足いくものになるまでV1は消すな。満足したら指示する」2026-09-09)。準備だけ進める | WP-12 | 旧実装削除と最終整理 |
+| WP-14 | 進行中(Codex, `codex/v2-ui-ux-overhaul`, 2026-09-12。Phase 0 規範統合) | WP-08 | 統合UI/UX、選択、カーソル、スナップ、ToolSession、プロパティ、プレビュー、画面復元 |
 
 状態は `未着手 / 進行中(担当、branch、date) / blocked(理由、試行) / 完了(commit、試験)` のいずれか。
 担当開始時と完了時は、この表だけを変更する独立コミットを先にpushする。

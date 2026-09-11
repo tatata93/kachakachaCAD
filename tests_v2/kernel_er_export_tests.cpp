@@ -3,11 +3,15 @@
 // 「選択panelの1:1 PDF、30% STEP、100% STLが再読込検査を通る」。
 // 出したものを読み返して、体積と外接箱が合うところまで見る。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/app/RailwayNoseSample.h"
 #include "kachakacha/exporters/PatternExport.h"
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/fabrication/FreezeState.h"
 #include "kachakacha/kernel/OcctPanelSolid.h"
+#include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
+#include "kachakacha/kernel/OcctThicken.h"
+#include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <cmath>
 #include <string>
@@ -83,6 +87,53 @@ struct AssemblyFixture {
     return diagnostics.empty() ? std::string("(なし)") : diagnostics.front().code;
 }
 
+[[maybe_unused]] [[nodiscard]] std::string FirstDiagnostic(
+    const std::vector<kachakacha::v2::base::Diagnostic>& diagnostics)
+{
+    if (diagnostics.empty()) {
+        return "(なし)";
+    }
+    return diagnostics.front().code + ": " + diagnostics.front().summaryJa + " "
+        + diagnostics.front().detailsJa;
+}
+
+[[nodiscard]] kachakacha::v2::modeling::GuideSurfaceRequest NoseGuideRequest()
+{
+    using kachakacha::v2::domain::CreateGuideSurfaceDefinition;
+    using kachakacha::v2::domain::CreateWireDefinition;
+    using kachakacha::v2::modeling::ChainRole;
+    using kachakacha::v2::modeling::GuideChain;
+    using kachakacha::v2::modeling::GuideSurfaceMethod;
+    using kachakacha::v2::modeling::GuideSurfaceRequest;
+    const auto file = kachakacha::v2::app::BuildRailwayNoseSampleDocument();
+    const CreateGuideSurfaceDefinition* guideDefinition = nullptr;
+    for (const auto& feature : file.snapshot.features) {
+        if (const auto* found =
+                std::get_if<CreateGuideSurfaceDefinition>(&feature.definition)) {
+            guideDefinition = found;
+            break;
+        }
+    }
+    Require(guideDefinition != nullptr, "流線形前頭部にロフトの作り方がある");
+    GuideSurfaceRequest request;
+    request.method = static_cast<GuideSurfaceMethod>(guideDefinition->method);
+    for (std::size_t index = 0; index < guideDefinition->chains.size(); ++index) {
+        GuideChain chain;
+        chain.role = static_cast<ChainRole>(guideDefinition->roles[index]);
+        chain.index = static_cast<int>(index + 1);
+        chain.sourceEntityId = guideDefinition->chains[index].segments.front().entityId;
+        for (const auto& feature : file.snapshot.features) {
+            const auto* wire = std::get_if<CreateWireDefinition>(&feature.definition);
+            if (wire != nullptr && feature.outputs.front().entityId == chain.sourceEntityId) {
+                chain.segments = wire->segments;
+                break;
+            }
+        }
+        request.chains.push_back(std::move(chain));
+    }
+    return request;
+}
+
 } // namespace
 
 KACHA_V2_TEST(er_export, 1対1のPDFが出る)
@@ -118,6 +169,22 @@ KACHA_V2_TEST(er_export, 1対1のPDFが出る)
 }
 
 #ifdef KACHACAD_V2_WITH_OCCT
+
+KACHA_V2_TEST(er_export, 配布見本のロフト面と厚み付き外板を実際に作れる)
+{
+    const auto request = NoseGuideRequest();
+    const GeometryTolerance tolerance{};
+    const auto analysis = kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(
+        request, tolerance);
+    Require(analysis.HasValue(), "断面を検査できる: " + FirstCode(analysis.Diagnostics()));
+    const auto surface = kachakacha::v2::kernel::BuildGuideSurface(
+        request, analysis.Value(), tolerance);
+    Require(surface.HasValue(), "ロフト面ができる: " + FirstDiagnostic(surface.Diagnostics()));
+    const auto solid = kachakacha::v2::kernel::ThickenSurface(surface.Value().handle, 0.20,
+        ThicknessPlacement::Centered, tolerance);
+    Require(solid.HasValue(), "0.20mmの外板になる: " + FirstCode(solid.Diagnostics()));
+    Require(solid.Value().volumeMm3 > 0.0, "外板に体積がある");
+}
 
 KACHA_V2_TEST(er_export, 部材に厚みを付けて立体にできる)
 {

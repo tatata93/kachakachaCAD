@@ -88,9 +88,13 @@ $Samples = Join-Path $Output "samples"
 New-Item -ItemType Directory -Path $Samples | Out-Null
 & $SampleWriter (Join-Path $Samples "v2-sample.kcd2")
 if ($LASTEXITCODE -ne 0) { throw "見本を作れませんでした" }
+& $SampleWriter --railway-nose (Join-Path $Samples "streamlined-railway-nose-1-87.kcd2")
+if ($LASTEXITCODE -ne 0) { throw "流線形前頭部の見本を作れませんでした" }
 
 # 取扱説明書。図ごと入れる。
 Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual") -Destination (Join-Path $Output "manual") -Recurse -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "docs\manual.html") -Destination (Join-Path $Output "manual.html") -Force
+Copy-Item -LiteralPath (Join-Path $RepoRoot "scripts\OPEN_MANUAL.cmd") -Destination (Join-Path $Output "OPEN_MANUAL.cmd") -Force
 
 # 第三者のライセンス表示。無いものは配らない。
 $Legal = Join-Path $RepoRoot "legal"
@@ -119,6 +123,14 @@ try {
         throw "開いた絵が作られませんでした: $Opened"
     }
     Remove-Item -LiteralPath $Opened -Force
+
+    $NoseOpened = Join-Path $Output "opened-railway-nose.png"
+    & $Deployed --open (Join-Path $Samples "streamlined-railway-nose-1-87.kcd2") --snapshot $NoseOpened
+    if ($LASTEXITCODE -ne 0) { throw "流線形前頭部の見本を開けませんでした" }
+    if (-not (Test-Path $NoseOpened) -or (Get-Item -LiteralPath $NoseOpened).Length -lt 1024) {
+        throw "流線形前頭部の絵が作られませんでした: $NoseOpened"
+    }
+    Remove-Item -LiteralPath $NoseOpened -Force
 }
 finally {
     if ($null -eq $Previous) { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }

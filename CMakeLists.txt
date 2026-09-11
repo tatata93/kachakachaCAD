@@ -559,6 +559,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/EvaluationQueue.cpp
     src/next/kachakacha/app/ExportContent.cpp
     src/next/kachakacha/app/SampleDocument.cpp
+    src/next/kachakacha/app/RailwayNoseSample.cpp
     src/next/kachakacha/app/SceneBuilder.cpp
     src/next/kachakacha/app/Selection.cpp
     src/next/kachakacha/app/ExportPanel.cpp
@@ -800,6 +801,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(measure_panel_tests tests_v2/measure_panel_tests.cpp)
     kachakacha_add_v2_test(manual_tests tests_v2/manual_tests.cpp)
     kachakacha_add_v2_test(sample_document_tests tests_v2/sample_document_tests.cpp)
+    kachakacha_add_v2_test(railway_nose_sample_tests tests_v2/railway_nose_sample_tests.cpp)
     kachakacha_add_v2_test(scene_builder_tests tests_v2/scene_builder_tests.cpp)
     kachakacha_add_v2_test(selection_tests tests_v2/selection_tests.cpp)
     kachakacha_add_v2_test(export_panel_tests tests_v2/export_panel_tests.cpp)

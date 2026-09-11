@@ -18,6 +18,7 @@
 //   - 30% でしわ・縮尺変化・開口の消失がない。
 //   - 100% の閉じ残りが目標偏差内。
 #include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/app/RailwayNoseSample.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/fabrication/BandFold.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
@@ -45,17 +46,10 @@ using kachakacha::v2::test::RequireNear;
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
-//! 1/87 の幅基準。実車 3520mm。
-constexpr double kScale = 87.0;
-constexpr double kBodyWidthMm = 3520.0 / kScale;      // 約 40.46 mm
-constexpr double kBodyHeightMm = 3600.0 / kScale;     // 約 41.38 mm
-//! 前面のふくらみ(平面視で円筒状)と、額から屋根への回り込み。
-constexpr double kPlanBulgeMm = 6.0;
-constexpr double kShoulderRoundMm = 9.0;
-//! 模型の対角。許容差の基準に使う。
-constexpr double kDiagonalMm = 60.0;
+constexpr double kBodyWidthMm = kachakacha::v2::app::kRailwayNoseWidthMm;
+constexpr double kBodyHeightMm = kachakacha::v2::app::kRailwayNoseHeightMm;
+constexpr double kPlanBulgeMm = kachakacha::v2::app::kRailwayNosePlanBulgeMm;
+constexpr double kDiagonalMm = kachakacha::v2::app::kRailwayNoseDiagonalMm;
 
 //! ER の前頭部の面。u は幅方向(0..1、左→右)、v は高さ方向(0..1、下→上)。
 //!
@@ -64,89 +58,23 @@ constexpr double kDiagonalMm = 60.0;
 //! だから **肩だけが二重に曲がる**。実車の前頭部の性質をそのまま持った形である。
 [[nodiscard]] Vector3 ErFront(double u, double v)
 {
-    const double across = 2.0 * (u - 0.5);           // -1..1
-    const double x = across * kBodyWidthMm * 0.5;
-    const double bulge = kPlanBulgeMm * (1.0 - across * across);
-    const double roofBlend = v > 0.7 ? (v - 0.7) / 0.3 : 0.0;
-    const double shoulder = across * across;           // 中央 0、肩 1
-    const double roll = kShoulderRoundMm * roofBlend * roofBlend * shoulder;
-    return Vector3{x, v * kBodyHeightMm, bulge - roll};
+    return kachakacha::v2::app::RailwayNosePoint(u, v);
 }
 
 [[nodiscard]] SurfacePatchSamples SampleErFront(std::size_t rows, std::size_t columns)
 {
-    SurfacePatchSamples samples;
-    samples.rowCount = rows;
-    samples.columnCount = columns;
-    for (std::size_t row = 0; row < rows; ++row) {
-        for (std::size_t column = 0; column < columns; ++column) {
-            samples.points.push_back(ErFront(static_cast<double>(column) / (columns - 1),
-                static_cast<double>(row) / (rows - 1)));
-        }
-    }
-    return samples;
+    return kachakacha::v2::app::BuildRailwayNoseSurfaceSamples(rows, columns);
 }
 
 [[nodiscard]] FabricationSource Front()
 {
-    FabricationSource source;
-    source.name = "前頭部";
-    source.samples = SampleErFront(41, 41);
-    return source;
-}
-
-//! 面の上の閉じた輪郭(u,v の四角)を、面に沿った折れ線の線分にする。
-[[nodiscard]] std::vector<CurveSegment> LoopOnSurface(double u0, double v0, double u1,
-    double v1, int perEdge = 6)
-{
-    std::vector<Vector3> points;
-    const auto edge = [&](double ua, double va, double ub, double vb) {
-        for (int step = 0; step < perEdge; ++step) {
-            const double t = static_cast<double>(step) / perEdge;
-            points.push_back(ErFront(ua + (ub - ua) * t, va + (vb - va) * t));
-        }
-    };
-    edge(u0, v0, u1, v0);
-    edge(u1, v0, u1, v1);
-    edge(u1, v1, u0, v1);
-    edge(u0, v1, u0, v0);
-    std::vector<CurveSegment> segments;
-    for (std::size_t index = 0; index < points.size(); ++index) {
-        segments.push_back(
-            CurveSegment::MakeLine(points[index], points[(index + 1) % points.size()])
-                .Value());
-    }
-    return segments;
-}
-
-//! 前照灯。面の上の円。
-[[nodiscard]] std::vector<CurveSegment> LampOnSurface()
-{
-    std::vector<Vector3> points;
-    constexpr int kSteps = 32;
-    for (int index = 0; index < kSteps; ++index) {
-        const double angle = 2.0 * kPi * index / kSteps;
-        points.push_back(ErFront(0.5 + 0.06 * std::cos(angle), 0.25 + 0.06 * std::sin(angle)));
-    }
-    std::vector<CurveSegment> segments;
-    for (std::size_t index = 0; index < points.size(); ++index) {
-        segments.push_back(
-            CurveSegment::MakeLine(points[index], points[(index + 1) % points.size()])
-                .Value());
-    }
-    return segments;
+    return kachakacha::v2::app::BuildRailwayNoseFabricationSource();
 }
 
 //! 6枚窓(窓帯 v = 0.45..0.62)と中央前照灯。
 [[nodiscard]] FabricationMarkings Openings()
 {
-    FabricationMarkings markings;
-    for (int index = 0; index < 6; ++index) {
-        const double left = 0.08 + index * 0.145;
-        markings.openings.push_back(LoopOnSurface(left, 0.45, left + 0.11, 0.62));
-    }
-    markings.openings.push_back(LampOnSurface());
-    return markings;
+    return kachakacha::v2::app::BuildRailwayNoseOpenings();
 }
 
 [[nodiscard]] CreateFabricationModelDefinition Definition(FabricationMethod method,
@@ -193,7 +121,7 @@ KACHA_V2_TEST(er, 幅基準が1_87で3520mmになる)
     RequireNear(kBodyWidthMm, 40.4598, 1.0e-3, "3520/87 mm");
     const auto samples = SampleErFront(5, 5);
     RequireNear((samples.At(0, 4) - samples.At(0, 0)).x, kBodyWidthMm, 1.0e-9, "面の幅");
-    RequireNear((samples.At(4, 0) - samples.At(0, 0)).y, kBodyHeightMm, 1.0e-9, "面の高さ");
+    RequireNear((samples.At(4, 0) - samples.At(0, 0)).z, kBodyHeightMm, 1.0e-9, "面の高さ");
 }
 
 KACHA_V2_TEST(er, V2方式は肩の二重曲率を理由に断りV1方式は帯へ切る)
@@ -269,8 +197,8 @@ KACHA_V2_TEST(er, 強い二重曲率の肩にだけ追加分割が入る)
         for (std::size_t column = 0; column < 41; ++column) {
             const double across = 2.0 * (static_cast<double>(column) / 40.0 - 0.5);
             samples.points.push_back(Vector3{across * kBodyWidthMm * 0.5,
-                static_cast<double>(row) / 40.0 * kBodyHeightMm,
-                kPlanBulgeMm * (1.0 - across * across)});
+                kPlanBulgeMm * (1.0 - across * across),
+                static_cast<double>(row) / 40.0 * kBodyHeightMm});
         }
     }
     cylinderOnly.samples = samples;

@@ -430,6 +430,24 @@ kachakacha_v2_write_sample samples/v2-sample.kcd2
 見本を直して置き直し忘れると `v2_sample_document_tests` が落ちます。
 説明書の図と中身がずれないようにするためです。
 
+### 流線形前頭部の実用試験
+
+`samples/streamlined-railway-nose-1-87.kcd2` には、ER1 / 初期ER2の丸形前頭部を
+参考にした1/87の**試験用近似形状**が入っています。資料値として使ったのは車体幅
+3520 mmだけです。奥行き、曲率、窓寸法は実車寸法ではありません。
+
+![流線形前頭部のロフト、6枚窓、前照灯](images/v2-railway-nose.png)
+
+見本には、水平断面7本、それらを通るロフト面、厚さ0.20 mmの外板、曲線で作った
+6枚の前面窓と中央上部前照灯、最大24部材の帯近似が入っています。自動試験では、
+ロフト面が全断面を通ること、厚み付き外板に体積があること、窓と灯具が型紙へ残る
+こと、保存後に読み直せることを実際の幾何カーネルで確かめています。
+
+```
+kachakacha_cad_next.exe --open samples\streamlined-railway-nose-1-87.kcd2
+kachakacha_v2_write_sample --railway-nose samples\streamlined-railway-nose-1-87.kcd2
+```
+
 ---
 
 ## 17. 図の作り直し
@@ -444,7 +462,7 @@ kachakacha_cad_next.exe --manual-state <名前> --snapshot docs\manual\images\v2
 `empty` `grid` `tools` `curves` `curves-win95` `draw-line` `snap` `isometric`
 `win95` `guide` `mode-part` `mode-fabrication` `mode-output` `view-cube`
 `guide-table` `cursor-input` `active-group` `steps-part` `steps-fabrication`
-`steps-output` `select` `export` `sample` です。
+`steps-output` `select` `export` `sample` `railway-nose` です。
 
 画面の大きさを決めるには `--size 1366x768` を足します。
 

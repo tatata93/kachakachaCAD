@@ -10,6 +10,7 @@
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ProcessSteps.h"
+#include "kachakacha/app/RailwayNoseSample.h"
 #include "kachakacha/app/SampleDocument.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/UiMode.h"
@@ -93,6 +94,13 @@ bool V2MainWindow::ApplyDrawingState(const QString& name)
 
 bool V2MainWindow::ApplySelectionState(const QString& name)
 {
+    if (name == QStringLiteral("railway-nose")) {
+        AdoptDocument(kachakacha::v2::app::BuildRailwayNoseSampleDocument().snapshot);
+        SetMode(UiMode::Fabrication);
+        viewport_->SetViewDirection(ViewDirection::Isometric);
+        viewport_->FitToDocument();
+        return true;
+    }
     if (name == QStringLiteral("sample")) {
         // 配る見本。マニュアルの手順をそのままなぞれる。
         AdoptDocument(kachakacha::v2::app::BuildSampleDocument().snapshot);
@@ -253,8 +261,8 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         || name == QStringLiteral("isometric")) {
         return ApplyDrawingState(name);
     }
-    if (name == QStringLiteral("sample") || name == QStringLiteral("select")
-        || name == QStringLiteral("export")) {
+    if (name == QStringLiteral("sample") || name == QStringLiteral("railway-nose")
+        || name == QStringLiteral("select") || name == QStringLiteral("export")) {
         return ApplySelectionState(name);
     }
     if (name == QStringLiteral("win95")) {

@@ -87,7 +87,9 @@ namespace {
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     const std::uint64_t before = window.Session().GetDocument().Revision();
     for (const char* id : {"wire.split", "wire.join", "wire.coincident", "wire.tangent",
-             "wire.curvature", "wire.chamfer", "wire.fillet"}) {
+             "wire.curvature", "wire.chamfer", "wire.fillet", "wire.offset",
+             "wire.meet_lines", "wire.intersection_points", "wire.corner_chamfer",
+             "wire.corner_fillet", "wire.set_datum", "wire.clear_datum"}) {
         window.RunCommand(id);
         if (!Explain((std::string("理由が出る: ") + id).c_str(),
                 !window.StatusText().isEmpty())) {

@@ -51,7 +51,8 @@ struct StepBuilder {
         true, "線を1本以上描いてください。",
         {"draw.line", "draw.arc", "draw.circle", "draw.bezier", "draw.spline"});
     builder.Add("draw.edit", "線を整える", true, true, {},
-        {"wire.trim", "wire.extend", "wire.fillet", "wire.chamfer"});
+        {"wire.trim", "wire.extend", "wire.fillet", "wire.chamfer", "wire.offset",
+            "wire.meet_lines", "edit.numeric"});
     return builder.steps;
 }
 

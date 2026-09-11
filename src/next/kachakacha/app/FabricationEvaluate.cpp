@@ -4,6 +4,7 @@
 
 #include "kachakacha/fabrication/CurvedPanel.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <algorithm>
 #include <cmath>
@@ -55,6 +56,20 @@ using fabrication::PatternPanel;
         // 折り線は切らない。切ると、折るところで板が分かれてしまう。
         planar[*chosen].folds.push_back(fold);
         planar[*chosen].foldIsMountain.push_back(true);
+    }
+    for (const auto& cut : markings.reliefCuts) {
+        // 切れ目は開いた線。閉じた線を切ると、それは開口(穴)であって切れ目ではない。
+        if (geometry::SegmentsFormClosedLoop(cut, geometry::GeometryTolerance{})) {
+            return Out::Failure(MakeError("FAB-M005", "切れ目は開いた線にしてください。",
+                "閉じた線は「境界の役割」で開口にしてください。"));
+        }
+        const auto chosen = fabrication::PanelForOpening(planar, cut, toleranceMm);
+        if (!chosen.has_value()) {
+            return Out::Failure(MakeError("FAB-M003",
+                "その線は、どの部材の面にも載っていません。",
+                "切れ目は、平らな部材と同じ平面の上に描いてください(曲がった面の切れ目はまだ入りません)。"));
+        }
+        planar[*chosen].reliefCuts.push_back(cut);
     }
     return fabrication::BuildPlanarPanels(planar, toleranceMm);
 }
@@ -153,6 +168,7 @@ struct BandedSource {
     using Out = Result<FabricationMarkings>;
     FabricationMarkings remaining;
     remaining.folds = markings.folds;
+    remaining.reliefCuts = markings.reliefCuts;
     for (const auto& opening : markings.openings) {
         bool placed = false;
         for (const BandedSource& source : banded) {

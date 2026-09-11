@@ -263,6 +263,7 @@ void V2MainWindow::BuildMenus()
                      "part.from_wire_cage",
                      "part.boolean_add", "part.boolean_cut", "derived.freeze"}},
         {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
+                       "fabrication.assign_relief_cut",
                        "fabrication.preview_update", "fabrication.create_pattern",
                        "fabrication.set_assembly", "fabrication.set_method",
                        "fabrication.freeze_output", "fabrication.freeze_state",

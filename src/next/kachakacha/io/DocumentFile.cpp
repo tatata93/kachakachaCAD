@@ -284,6 +284,7 @@ template<class Id>
         definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
         definition["openingWires"] = WriteIdArray(fabrication->openingWires);
         definition["foldWires"] = WriteIdArray(fabrication->foldWires);
+        definition["reliefCutWires"] = WriteIdArray(fabrication->reliefCutWires);
         definition["connectionWires"] = WriteIdArray(fabrication->connectionWires);
         definition["masterPercent"] = JsonValue::Number(fabrication->masterPercent);
         // 面の範囲(V1 の plate_range)。無ければ読むときに 0〜1 全体。

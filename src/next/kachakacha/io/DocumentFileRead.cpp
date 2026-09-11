@@ -584,6 +584,9 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
         made.openingWires = ReadIdArray(loader, definition, "openingWires", where);
         made.foldWires = ReadIdArray(loader, definition, "foldWires", where);
+        if (definition.Find("reliefCutWires") != nullptr) {
+            made.reliefCutWires = ReadIdArray(loader, definition, "reliefCutWires", where);
+        }
         made.connectionWires = ReadIdArray(loader, definition, "connectionWires", where);
         made.masterPercent = loader.NumberOr(definition, "masterPercent", 100.0);
         made.rangeUMin = loader.NumberOr(definition, "rangeUMin", 0.0);

@@ -18,6 +18,7 @@ using kachakacha::v2::app::FoldedRailsOf;
 using kachakacha::v2::app::ResolveFoldState;
 using kachakacha::v2::domain::CreateFabricationModelDefinition;
 using kachakacha::v2::fabrication::SurfacePatchSamples;
+using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
@@ -138,6 +139,34 @@ KACHA_V2_TEST(fabrication_evaluate, 面の範囲を狭めると標本が範囲�
     RequireEqual(EvaluateFabrication(broken, {Cylinder()}, FabricationMarkings{}, 0.01)
                      .Diagnostics().front().code,
         std::string("FAB-M004"), "最小 > 最大は FAB-M004");
+}
+
+KACHA_V2_TEST(fabrication_evaluate, 切れ目は平らな部材に入り閉じた線は断る)
+{
+    // V1 の plate_relief_cut。平らな部材の上の開いた線が、型紙の切れ目になる。
+    FabricationSource flat;
+    flat.name = "板";
+    const auto line = [](Vector3 a, Vector3 b) {
+        return CurveSegment::MakeLine(a, b).Value();
+    };
+    flat.flatBoundary = std::vector<CurveSegment>{line({0, 0, 0}, {100, 0, 0}),
+        line({100, 0, 0}, {100, 60, 0}), line({100, 60, 0}, {0, 60, 0}), line({0, 60, 0}, {0, 0, 0})};
+    FabricationMarkings markings;
+    markings.reliefCuts.push_back({line({50, 0, 0}, {50, 25, 0})});
+    const auto made = EvaluateFabrication(Definition(0), {flat}, markings, 0.01);
+    Require(made.HasValue(), "切れ目つきで通る");
+    Require(made.Value().panels.size() == 1 && made.Value().panels.front().reliefCuts.size() == 1,
+        "切れ目が 1 本入る");
+    FabricationMarkings closed;
+    closed.reliefCuts.push_back({line({20, 20, 0}, {40, 20, 0}), line({40, 20, 0}, {40, 40, 0}),
+        line({40, 40, 0}, {20, 40, 0}), line({20, 40, 0}, {20, 20, 0})});
+    const auto refused = EvaluateFabrication(Definition(0), {flat}, closed, 0.01);
+    Require(!refused.HasValue(), "閉じた線は断る");
+    RequireEqual(refused.Diagnostics().front().code, std::string("FAB-M005"), "FAB-M005");
+    FabricationMarkings off;
+    off.reliefCuts.push_back({line({50, 0, 30}, {50, 25, 30})});
+    RequireEqual(EvaluateFabrication(Definition(0), {flat}, off, 0.01).Diagnostics().front().code,
+        std::string("FAB-M003"), "載っていなければ FAB-M003");
 }
 
 KACHA_V2_TEST(fabrication_evaluate, 元が無ければ断る)

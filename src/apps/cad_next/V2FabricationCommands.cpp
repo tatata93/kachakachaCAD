@@ -42,7 +42,11 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         return;
     }
     if (id == "fabrication.assign_role") {
-        AssignOpeningRole();
+        AssignOpeningRole(false);
+        return;
+    }
+    if (id == "fabrication.assign_relief_cut") {
+        AssignOpeningRole(true);
         return;
     }
     if (id == "fabrication.preview_update") {
@@ -401,10 +405,16 @@ kachakacha::v2::app::FabricationMarkings V2MainWindow::FabricationMarkingsFor(
             markings.folds.push_back(std::move(curves));
         }
     }
+    for (const auto& id : definition.reliefCutWires) {
+        auto curves = curvesOf(id);
+        if (!curves.empty()) {
+            markings.reliefCuts.push_back(std::move(curves));
+        }
+    }
     return markings;
 }
 
-void V2MainWindow::AssignOpeningRole()
+void V2MainWindow::AssignOpeningRole(bool reliefCut)
 {
     using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
 
@@ -432,7 +442,9 @@ void V2MainWindow::AssignOpeningRole()
         }
     }
     if (wires.empty()) {
-        SetStatus(QStringLiteral("境界の役割: 開口にしたい線を選んでください(窓など)。"));
+        SetStatus(reliefCut
+                ? QStringLiteral("切れ目: 切れ目にしたい開いた線を選んでください。")
+                : QStringLiteral("境界の役割: 開口にしたい線を選んでください(窓など)。"));
         return;
     }
     auto definition = *current;
@@ -440,6 +452,11 @@ void V2MainWindow::AssignOpeningRole()
     int openings = 0;
     int folds = 0;
     for (const auto& id : wires) {
+        if (reliefCut) {
+            // 切れ目(V1 の plate_relief_cut)。閉じているかは core が近似のときに見る(FAB-M005)。
+            definition.reliefCutWires.push_back(id);
+            continue;
+        }
         std::vector<kachakacha::v2::geometry::CurveSegment> curves;
         for (const auto& curve : session_->Scene().curves) {
             if (curve.entityId == id) {
@@ -465,7 +482,7 @@ void V2MainWindow::AssignOpeningRole()
     auto inputs = feature->inputEntityIds;
     inputs.insert(inputs.end(), wires.begin(), wires.end());
     const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
-        feature->id, definition, inputs, "境界の役割を決める"));
+        feature->id, definition, inputs, reliefCut ? "切れ目を入れる" : "境界の役割を決める"));
     if (!changed.committed) {
         ReportDiagnostics(changed.diagnostics);
         return;
@@ -473,6 +490,12 @@ void V2MainWindow::AssignOpeningRole()
     fabricationModels_[modelId.ToString()] = evaluated.Value();
     patternPages_.clear();
     RefreshFabricationView();
+    if (reliefCut) {
+        SetStatus(QStringLiteral("切れ目: %1 本入れました(いま切れ目 %2)。型紙はもう一度作ってください。")
+                .arg(static_cast<int>(wires.size()))
+                .arg(static_cast<int>(definition.reliefCutWires.size())));
+        return;
+    }
     SetStatus(QStringLiteral("境界の役割: 開口を %1 つ、折り線を %2 本入れました"
                              "(いま開口 %3、折り線 %4)。型紙はもう一度作ってください。")
             .arg(openings)

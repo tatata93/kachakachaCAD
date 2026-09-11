@@ -357,6 +357,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだ線を、いまの近似モデルの開口(閉じた輪)か折り線(開いた線)にします。", true,
             {"AT-FAB-006"}},
+        {"fabrication.assign_relief_cut", "切れ目にする", CommandMode::Instant, "fab_relief", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "選んだ開いた線を、いまの近似モデルの切れ目にします(切るが部材は分かれない)。"
+            "平らな部材の上の線だけ。閉じた線は開口にしてください。", true,
+            {"AT-FAB-006"}},
         {"fabrication.preview_update", "プレビュー更新", CommandMode::Instant, "fab_update", "",
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "元の部品の変更を製作モデルへ反映します。", true,

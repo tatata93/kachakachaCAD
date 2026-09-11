@@ -76,6 +76,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("製作モデルを作る"), "fabrication.create", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("プレビュー更新"), "fabrication.preview_update", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("境界の役割(開口 / 折り線)"), "fabrication.assign_role", this));
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("切れ目にする(開いた線)"), "fabrication.assign_relief_cut", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("接続スコープ"), "fabrication.set_connection_scope", this));
     layout->addWidget(buttons);
 

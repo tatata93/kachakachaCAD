@@ -510,7 +510,8 @@ private:
     void RunCreatePattern();
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
     //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
-    void AssignOpeningRole();
+    //! 選んだ線を開口/折り線に(reliefCut=false)、または切れ目に(true)する。
+    void AssignOpeningRole(bool reliefCut);
     //! 選んだ線を接続スコープにし、近似の形へ寄せた「_接続」の線を作る。
     void SetConnectionScope();
     //! 定義の接続スコープの線を、名前と線の組で集める。

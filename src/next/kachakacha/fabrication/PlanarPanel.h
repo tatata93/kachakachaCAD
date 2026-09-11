@@ -38,6 +38,8 @@ struct PlanarPanelRequest {
     std::vector<std::vector<geometry::CurveSegment>> folds;
     //! 折り線1本ずつの、山折りかどうか。folds と同じ長さ。
     std::vector<bool> foldIsMountain;
+    //! 切れ目。開いた線。切るが、外周とはつながっていなくてよい(部材は分かれない)。
+    std::vector<std::vector<geometry::CurveSegment>> reliefCuts;
 };
 
 //! 平らかどうかの見立て。

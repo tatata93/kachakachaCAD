@@ -66,6 +66,9 @@ Result<PatternPanel> BuildPlanarPanel(const PlanarPanelRequest& request,
     for (const auto& fold : request.folds) {
         everything.insert(everything.end(), fold.begin(), fold.end());
     }
+    for (const auto& cut : request.reliefCuts) {
+        everything.insert(everything.end(), cut.begin(), cut.end());
+    }
     const PlanarityCheck check = CheckPlanar(everything, toleranceMm);
     if (!check.planar) {
         // 曲がった面は展開が要る。ここで近似すると、切ってから合わないことに気づく。
@@ -98,6 +101,9 @@ Result<PatternPanel> BuildPlanarPanel(const PlanarPanelRequest& request,
         // ここで勝手に90度と書くと、決めたことにされてしまう。
         fold.angleRad = 0.0;
         panel.folds.push_back(std::move(fold));
+    }
+    for (const auto& cut : request.reliefCuts) {
+        panel.reliefCuts.push_back(geometry::ProjectToFrame(SampleAll(cut, toleranceMm), frame));
     }
     return Out::Success(std::move(panel));
 }
@@ -174,6 +180,16 @@ Result<std::vector<exporters::PatternCurve>> PlacePanelCurves(const PatternPanel
             }
             curves.push_back(exporters::PatternCurve{exporters::PatternLine::Fold,
                 line.Value(), mountain, fold.foldId});
+        }
+    }
+    // 切れ目も閉じない。切るが、部材は分かれない。
+    for (const auto& cut : panel.reliefCuts) {
+        for (std::size_t index = 0; index + 1 < cut.size(); ++index) {
+            const auto line = CurveSegment::MakeLine(place(cut[index]), place(cut[index + 1]));
+            if (line.HasValue()) {
+                curves.push_back(exporters::PatternCurve{exporters::PatternLine::Cut,
+                    line.Value(), false, panel.panelId});
+            }
         }
     }
     if (curves.empty()) {

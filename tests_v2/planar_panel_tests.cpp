@@ -134,6 +134,32 @@ KACHA_V2_TEST(planar_panel, 開口も型紙に載る)
     Require(!panel.Value().openings.front().empty(), "点がある");
 }
 
+KACHA_V2_TEST(planar_panel, 切れ目は型紙に載り閉じずに切る線になる)
+{
+    // V1 の plate_relief_cut。開いた線を切るが、部材は分かれない。
+    PlanarPanelRequest request;
+    request.panelId = "切れ目つき";
+    request.boundary = Rectangle();
+    request.reliefCuts.push_back({Line({50, 0, 0}, {50, 25, 0})});
+    const auto panel = BuildPlanarPanel(request, kTolerance);
+    Require(panel.HasValue(), "作れる");
+    RequireEqual(std::to_string(panel.Value().reliefCuts.size()), std::string("1"), "切れ目1本");
+    Require(panel.Value().reliefCuts.front().size() >= 2, "点がある");
+    kachakacha::v2::fabrication::PatternPlacement placement;
+    placement.panelId = "切れ目つき";
+    const auto placed = PlacePanelCurves(panel.Value(), placement);
+    Require(placed.HasValue(), "線になる");
+    int cuts = 0;
+    for (const auto& curve : placed.Value()) {
+        cuts += curve.layer == kachakacha::v2::exporters::PatternLine::Cut ? 1 : 0;
+    }
+    Require(cuts >= 1, "切れ目の層に出る");
+    // 切れ目が平面から外れていれば、外周と同じく断る。
+    PlanarPanelRequest bent = request;
+    bent.reliefCuts = {{Line({50, 0, 0}, {50, 25, 9})}};
+    Require(!BuildPlanarPanel(bent, kTolerance).HasValue(), "平面から外れた切れ目は断る");
+}
+
 KACHA_V2_TEST(planar_panel, 平らでない部品は断る)
 {
     // 近似して作ると、切ってから合わないことに気づく。だから断る。

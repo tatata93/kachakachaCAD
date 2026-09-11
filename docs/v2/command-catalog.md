@@ -126,6 +126,7 @@ parameter schemaのdiscriminatorにする。
 | --- | --- | --- | --- | --- |
 | `fabrication.create` | 製作モデルを作る | Part/Subshape、strategy、settings | FabricationModel | AT-FAB-001から005 |
 | `fabrication.assign_role` | 境界の役割 | WireChain、role | Fabrication Feature更新 | AT-FAB-006 |
+| `fabrication.assign_relief_cut` | 切れ目にする | 開いたワイヤー1以上 | Fabrication Feature更新(reliefCutWires)。平らな部材の型紙に切れ目(RELIEF 層)。閉じた線は FAB-M005、部材に載っていなければ FAB-M003 | AT-FAB-006 |
 | `fabrication.preview_update` | プレビュー更新 | 編集中設定 | Document外preview | AT-PER-001,002 |
 | `fabrication.create_pattern` | 型紙を作る | panel選択、用紙設定 | Pattern | AT-FAB-001,002,007 |
 | `fabrication.set_assembly` | 組立状態 | master%、個別Fold | Fabrication Feature更新 | AT-FAB-009から011 |

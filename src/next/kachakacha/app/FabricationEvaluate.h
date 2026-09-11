@@ -56,6 +56,9 @@ struct FabricationSource {
 struct FabricationMarkings {
     std::vector<std::vector<geometry::CurveSegment>> openings;
     std::vector<std::vector<geometry::CurveSegment>> folds;
+    //! 切れ目(V1 の plate_relief_cut)。開いた線。閉じていれば FAB-M005 で断る。
+    //! いまは平らな部材にだけ入る(曲がった面の切れ目は未対応)。
+    std::vector<std::vector<geometry::CurveSegment>> reliefCuts;
 };
 
 //! 作った結果。文書には入れない。画面が覚えて、開いたら作り直す。

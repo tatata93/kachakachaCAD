@@ -833,9 +833,18 @@ namespace {
     viewport.SetSelection(last);
     window.RunCommand("fabrication.assign_role");
     // 閉じていない線は折り線になる。切らない。
-    return Explain((std::string("折り線として扱う(") + window.StatusText().toStdString()
+    if (!Explain((std::string("折り線として扱う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("折り線"))
+                || window.StatusText().contains(QStringLiteral("載っていません")))) {
+        return false;
+    }
+    // 同じ開いた線を「切れ目にする」と、切れ目として作り方に入る(V1 の plate_relief_cut)。
+    viewport.SetSelection(last);
+    window.RunCommand("fabrication.assign_relief_cut");
+    return Explain((std::string("切れ目として扱う(") + window.StatusText().toStdString()
                        + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("折り線"))
+        window.StatusText().contains(QStringLiteral("切れ目"))
             || window.StatusText().contains(QStringLiteral("載っていません")));
 }
 

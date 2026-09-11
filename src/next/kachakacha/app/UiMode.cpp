@@ -70,7 +70,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "part.boolean_cut", "derived.freeze",
     };
     static const std::vector<std::string_view> fabrication{
-        "fabrication.create", "fabrication.assign_role", "fabrication.preview_update",
+        "fabrication.create", "fabrication.assign_role", "fabrication.assign_relief_cut",
+        "fabrication.preview_update",
         "fabrication.create_pattern", "fabrication.set_assembly",
         "fabrication.set_method", "fabrication.freeze_output", "fabrication.freeze_state",
         "fabrication.set_connection_scope",

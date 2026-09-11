@@ -586,6 +586,11 @@ void V2MainWindow::AdoptFabricationChoice()
         return;
     }
     // 欄の値の検査は core。断られたら理由を棚に出し、前の値のまま。
+    QString boundaryError;
+    if (!fabricationDock_->ManualBoundariesReadable(&boundaryError)) {
+        fabricationDock_->SetMessage(boundaryError);
+        return;
+    }
     const auto checked = kachakacha::v2::app::CheckFabricationChoice(fabricationDock_->Choice());
     if (!checked.HasValue()) {
         fabricationDock_->SetMessage(QString::fromStdString(checked.Diagnostics().front().code

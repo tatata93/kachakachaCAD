@@ -145,6 +145,9 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
     GuideTable table;
     table.method = static_cast<GuideSurfaceMethod>(definition.method);
     table.offsetDistanceMm = definition.offsetDistanceMm;
+    table.revolveAxisPoint = definition.revolveAxisPoint;
+    table.revolveAxisDirection = definition.revolveAxisDirection;
+    table.revolveAngleRad = definition.revolveAngleRad;
     for (std::size_t index = 0; index < definition.chains.size(); ++index) {
         const auto role = static_cast<ChainRole>(definition.roles[index]);
         auto added = AddDefinitionRow(document, scene, std::move(table), role,
@@ -162,6 +165,9 @@ CreateGuideSurfaceDefinition DefinitionFromGuideTable(const GuideTable& table)
     CreateGuideSurfaceDefinition definition;
     definition.method = static_cast<int>(table.method);
     definition.offsetDistanceMm = table.offsetDistanceMm;
+    definition.revolveAxisPoint = table.revolveAxisPoint;
+    definition.revolveAxisDirection = table.revolveAxisDirection;
+    definition.revolveAngleRad = table.revolveAngleRad;
     for (const auto& row : table.rows) {
         definition.roles.push_back(static_cast<int>(row.role));
         domain::WireChainRef chain;
@@ -224,6 +230,7 @@ std::string_view GuideSurfaceMethodLabelJa(GuideSurfaceMethod method) noexcept
     case GuideSurfaceMethod::GordonNetwork:  return "曲線網(外形U と外形V を通す)";
     case GuideSurfaceMethod::BoundaryFill:   return "境界埋め(閉じた3〜4辺)";
     case GuideSurfaceMethod::OffsetGuide:    return "離した面(元の面と距離)";
+    case GuideSurfaceMethod::Revolve:        return "回転体(断面 1 本を軸のまわりに回す)";
     }
     return "不明";
 }

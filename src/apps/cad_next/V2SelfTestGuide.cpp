@@ -17,6 +17,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -256,32 +257,26 @@ void SelectOne(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
             GuideSurfaceCount(window) == 1)) {
         return false;
     }
-    // 既定は 12 断面。写しは 12 本増え、隠れている。
-    int hidden = 0;
-    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
-        if (entity.kind == kachakacha::v2::domain::EntityKind::Wire
-            && entity.visibility == kachakacha::v2::domain::Visibility::Hidden) {
-            ++hidden;
-        }
-    }
-    if (!Explain((std::string("写しが 12 本増えて隠れる(増えた ")
-                     + std::to_string(CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire)
-                           - before)
-                     + ", 隠れた " + std::to_string(hidden) + ")").c_str(),
-            CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before + 12
-                && hidden == 12)) {
+    // 面そのものを回すので、線は増えない(写しを並べる近似ではない)。
+    if (!Explain("線は増えない",
+            CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before)) {
         return false;
     }
-    // 一度で戻る(写しも面もまとめて)。
+    if (!Explain("作り方は回転体で保存される",
+            window.GuideRoleTable().method == GuideSurfaceMethod::Revolve
+                && std::abs(window.GuideRoleTable().revolveAngleRad - 2.0 * 3.14159265358979323846)
+                    < 1.0e-9)) {
+        return false;
+    }
+    // 一度で戻る。
     window.RunCommand("edit.undo");
-    return Explain("一度で全部戻る", GuideSurfaceCount(window) == 0
-        && CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before);
+    return Explain("一度で戻る", GuideSurfaceCount(window) == 0);
 }
 
 std::vector<SelfTestCase> GuideCases()
 {
     return {
-        {"回転体は写しを隠して形状ガイドを作る", &CaseRevolveMakesHiddenSectionsAndASurface},
+        {"回転体は断面を軸のまわりに回して形状ガイドを作る", &CaseRevolveMakesHiddenSectionsAndASurface},
         {"役割表から平面を作り開き直しても戻る", &CaseGuideTableBuildsPlanarAndSurvivesReopen},
         {"表の行に効くコマンドは行を選んでから", &CaseGuideRowCommandsNeedARow},
     };

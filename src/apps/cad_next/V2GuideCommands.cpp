@@ -68,70 +68,49 @@ void V2MainWindow::CreateRevolvedSurface()
         return kachakacha::v2::app::SelectedCurves(one, session_->Scene());
     };
     const auto& values = parameterDock_->Values();
+    // 断面・軸・角度の検査は core(REV-E001〜E005)。断面の数は回転面では使わない。
     const auto request = kachakacha::v2::app::MakeRevolveRequest(
         wires.empty() ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[0]),
         wires.size() < 2 ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[1]),
-        kachakacha::v2::app::ParameterValueOf(values, kachakacha::v2::app::ParameterId::RevolveAngleDeg),
-        static_cast<int>(kachakacha::v2::app::ParameterValueOf(values,
-            kachakacha::v2::app::ParameterId::RevolveSections)));
+        kachakacha::v2::app::ParameterValueOf(values,
+            kachakacha::v2::app::ParameterId::RevolveAngleDeg));
     if (!request.HasValue()) {
         ReportDiagnostics(request.Diagnostics());
         return;
     }
-    const auto sections = kachakacha::v2::app::BuildRevolvedSections(request.Value(),
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
-    if (!sections.HasValue()) {
-        ReportDiagnostics(sections.Diagnostics());
+    // 回転面は形状ガイドの作り方の 1 つ(Revolve)。断面 1 本の表に軸と角度を添える。
+    // 回した写しを並べてロフトすると、断面の並び順が重心で決められて崩れ、
+    // 一周では最初と最後が重なって断られる。面そのものを回して作る。
+    GuideTableDraft made = AutoSectionTable(session_->GetDocument(), session_->Scene(),
+        {wires[0]});
+    if (!made.diagnostics.empty()) {
+        ReportDiagnostics(made.diagnostics);
         return;
     }
-    // 写し → 面 → 写しを隠す、をひとまとまりに。途中で作れなければ全部戻す(半端を残さない)。
-    const auto revisionBefore = session_->GetDocument().Revision();
-    session_->GetDocument().BeginCompound("回転体");
-    std::vector<kachakacha::v2::base::EntityId> sectionIds{wires[0]};
-    std::vector<kachakacha::v2::base::EntityId> copies;
-    bool ok = true;
-    for (const auto& section : sections.Value()) {
-        kachakacha::v2::domain::TransformWireDefinition definition;
-        definition.method = kachakacha::v2::domain::WireTransformMethod::Rotate;
-        definition.vectorArgument = request.Value().axisDirection;
-        definition.pointArgument = request.Value().axisPoint;
-        definition.scalarArgument.value = section.angleRad;
-        definition.scalarArgument.expression = std::to_string(section.angleRad);
-        definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Angle;
-        if (!TransformOneWire(definition, wires[0],
-                QStringLiteral("回転 %1").arg(static_cast<int>(copies.size()) + 1))) {
-            ok = false;
-            break;
-        }
-        // 写しは文書の末尾に足される。場面も足して、面の材料に使えるようにする。
-        copies.push_back(session_->GetDocument().Snapshot().entities.back().id);
-        sectionIds.push_back(copies.back());
-    }
-    if (ok) {
-        session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
-            session_->GetDocument().Snapshot(), *ids_));
-        const auto surfaceId = CreateGuideSurfaceFromWires(sectionIds, "回転面");
-        ok = !surfaceId.IsNil();
-        if (ok) {
-            // V1 と同じく、回した写しは隠す(一覧には残る。面の作り直しは作り方の線を使う)。
-            (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
-                copies, kachakacha::v2::domain::Visibility::Hidden));
-        }
-    }
-    session_->GetDocument().EndCompound();
-    if (!ok) {
-        // 途中まで入った写しを戻す。何も入っていなければ、前の操作を戻してはいけない。
-        if (session_->GetDocument().Revision() != revisionBefore) {
-            (void)session_->Undo();
-        }
-        AdoptCurrentDocument();
-        SetStatus(QStringLiteral("回転体: 面が作れなかったので、何も残していません。"));
+    const auto switched = kachakacha::v2::modeling::SetGuideTableMethod(made.table,
+        GuideSurfaceMethod::Revolve);
+    if (!switched.HasValue()) {
+        ReportDiagnostics(switched.Diagnostics());
         return;
     }
-    AdoptCurrentDocument();
-    SetStatus(QStringLiteral("回転体: %1° を %2 断面で回して形状ガイドを作りました。")
+    GuideTable table = switched.Value();
+    table.revolveAxisPoint = request.Value().axisPoint;
+    table.revolveAxisDirection = request.Value().axisDirection;
+    table.revolveAngleRad = request.Value().angleDeg * 3.14159265358979323846 / 180.0;
+    const auto built = BuildSurfaceFromTable(table, true);
+    if (!built.has_value()) {
+        return;
+    }
+    const auto surfaceId = AdoptGuideSurface(table, *built, {wires[0], wires[1]}, "回転面");
+    if (surfaceId.IsNil()) {
+        return;
+    }
+    kachakacha::v2::app::SelectionSet next;
+    next.entityIds.push_back(surfaceId);
+    viewport_->SetSelection(next);
+    SetStatus(QStringLiteral("回転体: %1° 回して形状ガイド「回転面」を作りました(ずれ %2 mm)。")
             .arg(request.Value().angleDeg, 0, 'f', 1)
-            .arg(request.Value().sections));
+            .arg(built->maximumDeviationMm, 0, 'f', 4));
 }
 
 std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildSurfaceFromTable(

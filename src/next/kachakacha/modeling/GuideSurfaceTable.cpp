@@ -72,6 +72,7 @@ const std::vector<ChainRole>& RolesForMethod(GuideSurfaceMethod method)
     case GuideSurfaceMethod::GordonNetwork:  return gordon;
     case GuideSurfaceMethod::BoundaryFill:   return fill;
     case GuideSurfaceMethod::OffsetGuide:    return offset;
+    case GuideSurfaceMethod::Revolve:        return sections;
     }
     return sections;
 }
@@ -390,6 +391,9 @@ Result<GuideSurfaceRequest> ToGuideSurfaceRequest(const GuideTable& table,
     GuideSurfaceRequest request;
     request.method = table.method;
     request.offsetDistanceMm = table.offsetDistanceMm;
+    request.revolveAxisPoint = table.revolveAxisPoint;
+    request.revolveAxisDirection = table.revolveAxisDirection;
+    request.revolveAngleRad = table.revolveAngleRad;
     for (std::size_t index = 0; index < table.rows.size(); ++index) {
         const GuideTableRow& row = table.rows[index];
         if (row.role == ChainRole::SourceSurface) {

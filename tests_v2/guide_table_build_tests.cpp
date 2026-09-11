@@ -186,4 +186,21 @@ KACHA_V2_TEST(guide_table_build, 離した面は元の面の行と距離を持�
     Require(definition.offsetDistanceMm == 2.5, "距離が保存の形へ写る");
 }
 
+KACHA_V2_TEST(guide_table_build, 回転体の軸と角度は表から要求と保存の形へ渡る)
+{
+    GuideTable table;
+    table.method = GuideSurfaceMethod::Revolve;
+    table.revolveAxisPoint = {1.0, 2.0, 3.0};
+    table.revolveAxisDirection = {0.0, 1.0, 0.0};
+    table.revolveAngleRad = 1.5;
+    const auto definition = DefinitionFromGuideTable(table);
+    Require(definition.method == static_cast<int>(GuideSurfaceMethod::Revolve), "作り方");
+    Require(definition.revolveAxisPoint.x == 1.0 && definition.revolveAxisDirection.y == 1.0
+            && definition.revolveAngleRad == 1.5,
+        "軸と角度が保存の形へ写る");
+    Require(kachakacha::v2::modeling::RoleUsedByMethod(GuideSurfaceMethod::Revolve,
+                ChainRole::Section),
+        "回転体は断面の役割を使う");
+}
+
 KACHA_V2_TEST_MAIN("guide_table_build")

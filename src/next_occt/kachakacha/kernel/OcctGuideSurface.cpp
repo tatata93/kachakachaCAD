@@ -23,6 +23,9 @@
 #include <BRepOffsetAPI_MakeFilling.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
+#include <gp_Ax1.hxx>
+#include <gp_Dir.hxx>
 #include <BRepTools.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRep_Builder.hxx>
@@ -426,6 +429,43 @@ constexpr int kNetworkPointsPerChain = 9;
         new Geom_OffsetSurface(base, signedDistance)));
 }
 
+//! 回転体(V1 の回転面)。断面の鎖を軸のまわりに角度だけ回す。
+//! 面は回転面(円筒・円錐・球・トーラス・一般の回転面)としてそのまま持つ。
+//! 断面を折れ線へ落としてロフトするのではないので、断面は面の上に厳密に載る。
+[[nodiscard]] Result<TopoDS_Shape> BuildRevolve(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance)
+{
+    using Out = Result<TopoDS_Shape>;
+    std::vector<std::size_t> sections = analysis.sectionOrdering.chainIndices;
+    if (sections.empty()) {
+        sections = IndicesWithRole(request, ChainRole::Section);
+    }
+    if (sections.size() != 1) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed,
+            "回転体の断面は 1 本にしてください。", {}));
+    }
+    const geometry::Vector3 direction = geometry::Normalized(request.revolveAxisDirection);
+    if (direction == geometry::Vector3{}) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed, "回転体の軸の向きが決まりません。", {}));
+    }
+    return Guarded([&]() -> Out {
+        auto wire = WireOf(request, sections.front(), tolerance);
+        if (!wire.HasValue()) {
+            return Out::Failure(wire.Diagnostics());
+        }
+        const gp_Ax1 axis(ToPoint(request.revolveAxisPoint), gp_Dir(ToVector(direction)));
+        BRepPrimAPI_MakeRevol generator(wire.Value(), axis, request.revolveAngleRad,
+            Standard_True);
+        generator.Build();
+        if (!generator.IsDone()) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
+                "断面を回して面を作れませんでした。",
+                "断面が軸をまたいでいないか、軸が断面の平面の中にあるかを確かめてください。"));
+        }
+        return Out::Success(generator.Shape());
+    }, "回転体");
+}
+
 [[nodiscard]] Result<TopoDS_Shape> BuildOffset(const GuideSurfaceRequest& request,
     KernelShapeHandle sourceShape, const GeometryTolerance& tolerance)
 {
@@ -697,6 +737,9 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         break;
     case GuideSurfaceMethod::OffsetGuide:
         built = BuildOffset(request, sourceShape, tolerance);
+        break;
+    case GuideSurfaceMethod::Revolve:
+        built = BuildRevolve(request, analysis, tolerance);
         break;
     }
     if (!built.HasValue()) {

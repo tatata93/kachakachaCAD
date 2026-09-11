@@ -44,7 +44,7 @@
 | AT-WPL-003 | 済 | tests_v2/plane_follow_tests.cpp(Free3D / ReferenceOnly / LockedToPlane の3通り。縛られた点だけが平面内 UV と面からの浮きを保って追従し、ほかの2つは3D座標が変わらない。動かして戻せば元の位置へ戻る。曲線は種類を保ったまま追従し、円弧の半径・掃引角・長さが変わらない。平面をずらしても法線と基準方向は傾かず、回した平面では基準方向も同じだけ回る。2Dでも3Dでも同じ CurveSegment で出る) + snap_tests.cpp(平面へ投影するスナップ)+ work_plane_tests.cpp(uv⇔3D往復) |
 | AT-GEO-001 | 済 | tests_v2/guide_surface_tests.cpp(入力検査)+ tests_v2/kernel_surface_tests.cpp(面積・穴・境界曲線種類) |
 | AT-GEO-002 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(断面をつなぐ面の側面積) |
-| AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(なめらかにつなぐ面が断面を通る)+ tests_v2/revolve_surface_tests.cpp(回転体: 断面を回した写しの並び、軸は線の始点と向き、断面なし・軸が直線でない・角度と数の範囲外・軸上の断面は REV-E001〜E005)+ 自己試験(回転体: 写しは隠れ、形状ガイドが 1 つできる) |
+| AT-GEO-003 | 済 | tests_v2/guide_surface_tests.cpp + tests_v2/kernel_surface_tests.cpp(なめらかにつなぐ面が断面を通る)+ 回転体: guide_surface_tests(作り方 Revolve は断面 1 本と軸と角度で通り、断面 2 本・角度 0・一周超え・軸なし・軸上の断面は断る)、guide_table_build_tests / feature_definition_tests(軸と角度が表・保存の形へ渡る)、revolve_surface_tests(選んだ線と欄の検査 REV-E001〜E005、回した写しの並び)+ 自己試験(回転体: 線は増えず形状ガイドが 1 つできて作り方に残る) |
 | AT-GEO-004 | 済 | tests_v2/guide_surface_tests.cpp(両端接続ガイド。オーナー提示ケース) |
 | AT-GEO-005 | 済 | tests_v2/guide_surface_tests.cpp(欠損・2重・順序逆転を固定コードで拒否) |
 | AT-GEO-006 | 済 | tests_v2/guide_surface_tests.cpp(5辺は自動分割せず拒否) |

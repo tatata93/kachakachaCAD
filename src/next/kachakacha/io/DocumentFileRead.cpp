@@ -531,6 +531,12 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
             }
         }
         made.offsetDistanceMm = loader.NumberOr(definition, "offsetDistanceMm", 0.0);
+        if (definition.Find("revolveAxisPoint") != nullptr) {
+            made.revolveAxisPoint = loader.ReadVector(definition, "revolveAxisPoint", where);
+            made.revolveAxisDirection =
+                loader.ReadVector(definition, "revolveAxisDirection", where);
+        }
+        made.revolveAngleRad = loader.NumberOr(definition, "revolveAngleRad", 0.0);
         feature.definition = std::move(made);
         break;
     }

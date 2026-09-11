@@ -282,11 +282,21 @@ FabricationChoice V2FabricationDock::Choice() const
     const auto parsed = kachakacha::v2::app::ParseBoundaryList(manual_->text().toStdString());
     if (parsed.HasValue()) {
         choice.manualBoundaries = parsed.Value();
-    } else {
-        message_->setText(QString::fromStdString(parsed.Diagnostics().front().code + " "
-            + parsed.Diagnostics().front().summaryJa + " " + parsed.Diagnostics().front().detailsJa));
     }
     return choice;
+}
+
+bool V2FabricationDock::ManualBoundariesReadable(QString* error) const
+{
+    const auto parsed = kachakacha::v2::app::ParseBoundaryList(manual_->text().toStdString());
+    if (parsed.HasValue()) {
+        return true;
+    }
+    if (error != nullptr) {
+        *error = QString::fromStdString(parsed.Diagnostics().front().code + " "
+            + parsed.Diagnostics().front().summaryJa + " " + parsed.Diagnostics().front().detailsJa);
+    }
+    return false;
 }
 
 void V2FabricationDock::SetChoice(const FabricationChoice& choice)

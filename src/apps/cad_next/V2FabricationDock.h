@@ -33,8 +33,10 @@ class V2FabricationDock final : public QDockWidget {
 public:
     explicit V2FabricationDock(QWidget* parent);
 
-    //! いまの欄(手動境界は読めなければ空で返し、理由を棚に出す)。
+    //! いまの欄(手動境界は読めなければ空で返す。読めたかは ManualBoundariesReadable で見る)。
     [[nodiscard]] kachakacha::v2::app::FabricationChoice Choice() const;
+    //! 手動境界の欄が読めるか。読めなければ error に理由(UI-F001)を書く。
+    [[nodiscard]] bool ManualBoundariesReadable(QString* error) const;
     void SetChoice(const kachakacha::v2::app::FabricationChoice& choice);
     //! 欄が変わったら呼ぶもの(画面が値を持ち直す)。
     void SetChoiceChangedHandler(std::function<void()> handler);

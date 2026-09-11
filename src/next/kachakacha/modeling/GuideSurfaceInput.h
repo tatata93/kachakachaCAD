@@ -35,6 +35,8 @@ enum class GuideSurfaceMethod {
     GordonNetwork,
     BoundaryFill,
     OffsetGuide,
+    //! 回転体(V1 の回転面)。断面 1 本を軸のまわりに回す。末尾に足すのは番号を保つため。
+    Revolve,
 };
 
 [[nodiscard]] constexpr std::string_view GuideSurfaceMethodName(
@@ -48,6 +50,7 @@ enum class GuideSurfaceMethod {
     case GuideSurfaceMethod::GordonNetwork:  return "gordon_network";
     case GuideSurfaceMethod::BoundaryFill:   return "boundary_fill";
     case GuideSurfaceMethod::OffsetGuide:    return "offset_guide";
+    case GuideSurfaceMethod::Revolve:        return "revolve";
     }
     return "unknown";
 }
@@ -95,6 +98,10 @@ struct GuideSurfaceRequest {
     std::vector<bool> tangentContinuity;
     //! OffsetGuide: 距離。0は拒否する。
     double offsetDistanceMm = 0.0;
+    //! Revolve: 軸(点と向き)と回す角度。角度は 0 より大きく 2π 以下。
+    geometry::Vector3 revolveAxisPoint{};
+    geometry::Vector3 revolveAxisDirection{0.0, 0.0, 1.0};
+    double revolveAngleRad = 0.0;
 };
 
 // ---- 検査の結果 ----

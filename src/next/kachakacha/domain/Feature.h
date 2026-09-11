@@ -173,6 +173,10 @@ struct CreateGuideSurfaceDefinition {
     std::vector<int> roles;
     //! OffsetGuide の離す距離(mm)。他の作り方では 0。
     double offsetDistanceMm = 0.0;
+    //! Revolve(回転体)の軸と角度。他の作り方では使わない。
+    geometry::Vector3 revolveAxisPoint{};
+    geometry::Vector3 revolveAxisDirection{0.0, 0.0, 1.0};
+    double revolveAngleRad = 0.0;
 };
 
 //! 押し出し。

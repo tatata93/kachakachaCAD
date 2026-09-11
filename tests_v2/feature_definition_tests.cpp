@@ -131,8 +131,14 @@ KACHA_V2_TEST(feature_definition, 形状ガイドが保存して読み直せる)
     chain.reversed = {false, true};
     made.chains.push_back(chain);
     made.roles = {1};
+    made.revolveAxisPoint = {1.0, 2.0, 3.0};
+    made.revolveAxisDirection = {0.0, 1.0, 0.0};
+    made.revolveAngleRad = 1.25;
     const auto back = RoundTrip(FeatureType::CreateGuideSurface, made);
     RequireEqual(std::to_string(back.method), std::string("2"), "作り方");
+    RequireNear(back.revolveAxisPoint.z, 3.0, 1.0e-12, "回転体の軸の点");
+    RequireNear(back.revolveAxisDirection.y, 1.0, 1.0e-12, "回転体の軸の向き");
+    RequireNear(back.revolveAngleRad, 1.25, 1.0e-12, "回転体の角度");
     RequireEqual(std::to_string(back.chains.size()), std::string("1"), "鎖の数");
     RequireEqual(std::to_string(back.chains.front().segments.size()), std::string("2"),
         "線の数");

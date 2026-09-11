@@ -1000,4 +1000,46 @@ KACHA_V2_TEST(guideSurface, 面をずらす元が2つあれば断る)
     Require(!analysis.HasValue(), "1つだけにさせる");
 }
 
+// 回転体(V1 の回転面)。断面 1 本を軸のまわりに回す。写しを並べたロフトではない。
+KACHA_V2_TEST(guideSurface, 回転体は断面1本と軸と角度で通る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::Revolve;
+    request.chains.push_back(OpenLine(ChainRole::Section, 1, {30, 0, -20}, {30, 0, 20}));
+    request.revolveAxisPoint = {0, 0, 0};
+    request.revolveAxisDirection = {0, 0, 1};
+    request.revolveAngleRad = 2.0 * 3.14159265358979323846;
+    const auto analysis = AnalyzeGuideSurfaceRequest(request, Tolerance());
+    Require(analysis.HasValue(), "一周でも通ること");
+    Require(analysis.Value().method == GuideSurfaceMethod::Revolve, "作り方");
+    RequireCount(analysis.Value().sectionOrdering.chainIndices.size(), 1, "断面は 1 本");
+}
+
+KACHA_V2_TEST(guideSurface, 回転体は断面2本や角度0や軸上の断面を断る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::Revolve;
+    request.chains.push_back(OpenLine(ChainRole::Section, 1, {30, 0, -20}, {30, 0, 20}));
+    request.revolveAxisDirection = {0, 0, 1};
+    request.revolveAngleRad = 1.0;
+    Require(AnalyzeGuideSurfaceRequest(request, Tolerance()).HasValue(), "1 本なら通る");
+    GuideSurfaceRequest two = request;
+    two.chains.push_back(OpenLine(ChainRole::Section, 2, {40, 0, -20}, {40, 0, 20}));
+    Require(!AnalyzeGuideSurfaceRequest(two, Tolerance()).HasValue(), "2 本は断る");
+    GuideSurfaceRequest zero = request;
+    zero.revolveAngleRad = 0.0;
+    Require(!AnalyzeGuideSurfaceRequest(zero, Tolerance()).HasValue(), "角度 0 は断る");
+    GuideSurfaceRequest tooFar = request;
+    tooFar.revolveAngleRad = 7.0;
+    Require(!AnalyzeGuideSurfaceRequest(tooFar, Tolerance()).HasValue(), "一周を超えると断る");
+    GuideSurfaceRequest noAxis = request;
+    noAxis.revolveAxisDirection = {0, 0, 0};
+    Require(!AnalyzeGuideSurfaceRequest(noAxis, Tolerance()).HasValue(), "軸が無ければ断る");
+    GuideSurfaceRequest onAxis = request;
+    onAxis.chains = {OpenLine(ChainRole::Section, 1, {0, 0, -20}, {0, 0, 20})};
+    const auto refused = AnalyzeGuideSurfaceRequest(onAxis, Tolerance());
+    Require(!refused.HasValue(), "軸上の断面は断る");
+    RequireEqual(refused.Diagnostics().front().code, std::string("GEO-G009"), "理由の番号");
+}
+
 KACHA_V2_TEST_MAIN("guide_surface_tests")

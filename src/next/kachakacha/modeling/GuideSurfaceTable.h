@@ -55,6 +55,10 @@ struct GuideTable {
     std::vector<GuideTableRow> rows;
     //! OffsetGuide の離す距離。表から要求へそのまま渡る。0 は要求の側で断られる。
     double offsetDistanceMm = 0.0;
+    //! Revolve の軸と角度。表から要求へそのまま渡る。
+    geometry::Vector3 revolveAxisPoint{};
+    geometry::Vector3 revolveAxisDirection{0.0, 0.0, 1.0};
+    double revolveAngleRad = 0.0;
 };
 
 //! 選択した線の束。ボタンはこれを受け取る。

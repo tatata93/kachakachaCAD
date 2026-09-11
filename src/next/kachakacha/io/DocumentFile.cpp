@@ -245,6 +245,10 @@ template<class Id>
         }
         definition["roles"] = JsonValue::Array(std::move(roles));
         definition["offsetDistanceMm"] = JsonValue::Number(guide->offsetDistanceMm);
+        // 回転体の軸と角度。無ければ読むときに既定(回転体でなければ使わない)。
+        definition["revolveAxisPoint"] = WriteVector(guide->revolveAxisPoint);
+        definition["revolveAxisDirection"] = WriteVector(guide->revolveAxisDirection);
+        definition["revolveAngleRad"] = JsonValue::Number(guide->revolveAngleRad);
     } else if (const auto* extrude =
                    std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
         definition["profiles"] = WriteIdArray(extrude->profiles);

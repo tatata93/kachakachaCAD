@@ -920,6 +920,12 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 材料と積層は Feature ではなく Entity の `manufacturing`(`materialName` `layerCount` など)に持つ
 (V1 の plate の材料と plate_laminate に当たる)。
 
+`create_guide_surface` の `definition` も実装済みで、`method`(GuideSurfaceMethod の番号: 0 平面、
+1 ルールド、2 ロフト、3 案内付きロフト、4 曲線網、5 境界埋め、6 離した面、7 回転体)、`chains`、
+`roles`、`offsetDistanceMm` に加えて、2026-09-11 から回転体の `revolveAxisPoint`
+`revolveAxisDirection` `revolveAngleRad`(V1 の回転面。断面 1 本を軸のまわりに回す)を持つ。
+無ければ既定(回転体でなければ使わない)。
+
 ### 19.7 §8.2 Segmentの現状
 
 `CurveSegment` は一様3次B-splineだけを持つため、`knots` `multiplicities` `weights` は

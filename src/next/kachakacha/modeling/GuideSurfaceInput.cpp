@@ -837,6 +837,48 @@ struct SampledChain {
     return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
 }
 
+//! 回転体: 断面 1 本(役割は断面)を、軸のまわりに角度だけ回す。
+[[nodiscard]] Result<GuideSurfaceAnalysis> AnalyzeRevolve(const GuideSurfaceRequest& request,
+    const GeometryTolerance& tolerance, const std::vector<SampledChain>& sampled)
+{
+    std::vector<Diagnostic> errors;
+    const std::vector<std::size_t> sections = IndicesWithRole(request, ChainRole::Section);
+    if (sections.size() != 1 || sections.size() != request.chains.size()) {
+        errors.push_back(MakeError(kBadInput, "回転体の断面は 1 本にしてください。",
+            "断面 " + std::to_string(sections.size()) + " 本、入力 "
+                + std::to_string(request.chains.size()) + " 本。"));
+    }
+    const Vector3 axis = geometry::Normalized(request.revolveAxisDirection);
+    if (axis == Vector3{} || !request.revolveAxisPoint.IsFinite()) {
+        errors.push_back(MakeError(kBadInput, "回転体の軸の向きが決まりません。", {}));
+    }
+    const double fullTurn = 2.0 * 3.14159265358979323846;
+    if (!geometry::IsFinite(request.revolveAngleRad) || !(request.revolveAngleRad > 0.0)
+        || request.revolveAngleRad > fullTurn + 1.0e-9) {
+        errors.push_back(MakeError(kBadInput,
+            "回転体の角度は 0 より大きく 360 度以下にしてください。",
+            std::to_string(request.revolveAngleRad * 180.0 / 3.14159265358979323846) + " 度"));
+    }
+    if (!errors.empty()) {
+        return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
+    }
+    // 断面が軸の上に乗っていれば、回しても面にならない。
+    double farthest = 0.0;
+    for (const Vector3& point : sampled[sections.front()].points) {
+        const Vector3 delta = point - request.revolveAxisPoint;
+        farthest = std::max(farthest, (delta - axis * geometry::Dot(delta, axis)).Length());
+    }
+    if (farthest <= tolerance.modelLinearMm * 10.0) {
+        return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
+            "断面が軸の上にあります(回しても面になりません)。",
+            "断面を軸から離すか、別の線を軸にしてください。"));
+    }
+    GuideSurfaceAnalysis analysis;
+    analysis.method = GuideSurfaceMethod::Revolve;
+    analysis.sectionOrdering.chainIndices = sections;
+    return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
+}
+
 } // namespace
 
 Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceRequest& request,
@@ -885,6 +927,8 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
         return AnalyzeBoundaryFill(request, tolerance, sampled);
     case GuideSurfaceMethod::OffsetGuide:
         return AnalyzeOffset(request, tolerance);
+    case GuideSurfaceMethod::Revolve:
+        return AnalyzeRevolve(request, tolerance, sampled);
     }
     return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
         "知らない作り方です。", {}));

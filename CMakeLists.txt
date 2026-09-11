@@ -585,6 +585,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/DirectWireEntry.cpp
     src/next/kachakacha/app/IntersectionPoints.cpp
     src/next/kachakacha/app/EntityEdit.cpp
+    src/next/kachakacha/app/RevolveSurface.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
     src/next/kachakacha/app/UiMode.cpp
@@ -775,6 +776,7 @@ kachakacha_add_v2_test(origin_planes_tests tests_v2/origin_planes_tests.cpp)
 kachakacha_add_v2_test(direct_wire_entry_tests tests_v2/direct_wire_entry_tests.cpp)
 kachakacha_add_v2_test(intersection_points_tests tests_v2/intersection_points_tests.cpp)
 kachakacha_add_v2_test(entity_edit_tests tests_v2/entity_edit_tests.cpp)
+kachakacha_add_v2_test(revolve_surface_tests tests_v2/revolve_surface_tests.cpp)
 kachakacha_add_v2_test(polyline_corners_tests tests_v2/polyline_corners_tests.cpp)
 kachakacha_add_v2_test(kcd_import_tests tests_v2/kcd_import_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)

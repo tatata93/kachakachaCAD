@@ -378,6 +378,8 @@ public:
     void RunGuideCommand(std::string_view id);
     //! 選んだ線を断面にして面を作る(おまかせ)。
     void CreateGuideSurfaceFromSelection();
+    //! 回転体(V1 の回転面)。1本目の線を 2本目の直線を軸に回した断面を並べ、ロフトする。
+    void CreateRevolvedSurface();
     //! 表 → 要求 → 検査 → kernel。作るときも開き直すときも同じ道を通す。
     //! 離した面のときは、表が指す元の面の handle を渡す。
     [[nodiscard]] std::optional<kachakacha::v2::modeling::GuideSurfaceResult>

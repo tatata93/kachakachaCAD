@@ -96,6 +96,7 @@ parameter schemaのdiscriminatorにする。
 | ID | 表示名 | 入力/主要パラメータ | 出力 | 試験 |
 | --- | --- | --- | --- | --- |
 | `guide.create` | 形状ガイド | method、役割別WireChain表 | GuideSurface | AT-GEO-001から006, AT-UIX-007 |
+| `guide.revolve` | 回転体 | 断面の線1 + 軸の直線1(この順)、回転体の角度(度)、回転体の断面の数 | 回した断面(TransformWire Rotate、隠す)+ 断面のロフトの GuideSurface。V1 の回転面と同じ近似。REV-E001〜E005 | AT-GEO-003 |
 | `guide.set_method` | 面の作り方 | 常時。使わない役割の行が残っていれば断る | 表の method | AT-GEO-008 |
 | `guide.add_row` | 選択を表へ | ワイヤーか形状ガイドの面1以上。役割は作り方で使うものから選ぶ | 表の行 | AT-GEO-008, AT-UIX-007 |
 | `guide.append_row` | 選択を既存行へ追加 | 表の行1、ワイヤー1以上 | 表の行 | AT-GEO-008, AT-UIX-007 |

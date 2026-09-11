@@ -13,7 +13,9 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
@@ -42,7 +44,94 @@ void V2MainWindow::RunGuideCommand(std::string_view id)
         CreateGuideSurfaceFromSelection();
         return;
     }
+    if (id == "guide.revolve") {
+        CreateRevolvedSurface();
+        return;
+    }
     RunGuideTableCommand(id);
+}
+
+void V2MainWindow::CreateRevolvedSurface()
+{
+    using kachakacha::v2::domain::EntityKind;
+    // 1本目が断面、2本目が軸。V1 は X/Y/Z のコンボだったが、V2 は線を選ぶ。
+    std::vector<kachakacha::v2::base::EntityId> wires;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr && entity->kind == EntityKind::Wire) {
+            wires.push_back(id);
+        }
+    }
+    const auto curvesOf = [this](const kachakacha::v2::base::EntityId& id) {
+        kachakacha::v2::app::SelectionSet one;
+        one.entityIds.push_back(id);
+        return kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+    };
+    const auto& values = parameterDock_->Values();
+    const auto request = kachakacha::v2::app::MakeRevolveRequest(
+        wires.empty() ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[0]),
+        wires.size() < 2 ? std::vector<kachakacha::v2::geometry::CurveSegment>{} : curvesOf(wires[1]),
+        kachakacha::v2::app::ParameterValueOf(values, kachakacha::v2::app::ParameterId::RevolveAngleDeg),
+        static_cast<int>(kachakacha::v2::app::ParameterValueOf(values,
+            kachakacha::v2::app::ParameterId::RevolveSections)));
+    if (!request.HasValue()) {
+        ReportDiagnostics(request.Diagnostics());
+        return;
+    }
+    const auto sections = kachakacha::v2::app::BuildRevolvedSections(request.Value(),
+        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm);
+    if (!sections.HasValue()) {
+        ReportDiagnostics(sections.Diagnostics());
+        return;
+    }
+    // 写し → 面 → 写しを隠す、をひとまとまりに。途中で作れなければ全部戻す(半端を残さない)。
+    const auto revisionBefore = session_->GetDocument().Revision();
+    session_->GetDocument().BeginCompound("回転体");
+    std::vector<kachakacha::v2::base::EntityId> sectionIds{wires[0]};
+    std::vector<kachakacha::v2::base::EntityId> copies;
+    bool ok = true;
+    for (const auto& section : sections.Value()) {
+        kachakacha::v2::domain::TransformWireDefinition definition;
+        definition.method = kachakacha::v2::domain::WireTransformMethod::Rotate;
+        definition.vectorArgument = request.Value().axisDirection;
+        definition.pointArgument = request.Value().axisPoint;
+        definition.scalarArgument.value = section.angleRad;
+        definition.scalarArgument.expression = std::to_string(section.angleRad);
+        definition.scalarArgument.kind = kachakacha::v2::geometry::QuantityKind::Angle;
+        if (!TransformOneWire(definition, wires[0],
+                QStringLiteral("回転 %1").arg(static_cast<int>(copies.size()) + 1))) {
+            ok = false;
+            break;
+        }
+        // 写しは文書の末尾に足される。場面も足して、面の材料に使えるようにする。
+        copies.push_back(session_->GetDocument().Snapshot().entities.back().id);
+        sectionIds.push_back(copies.back());
+    }
+    if (ok) {
+        session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
+            session_->GetDocument().Snapshot(), *ids_));
+        const auto surfaceId = CreateGuideSurfaceFromWires(sectionIds, "回転面");
+        ok = !surfaceId.IsNil();
+        if (ok) {
+            // V1 と同じく、回した写しは隠す(一覧には残る。面の作り直しは作り方の線を使う)。
+            (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
+                copies, kachakacha::v2::domain::Visibility::Hidden));
+        }
+    }
+    session_->GetDocument().EndCompound();
+    if (!ok) {
+        // 途中まで入った写しを戻す。何も入っていなければ、前の操作を戻してはいけない。
+        if (session_->GetDocument().Revision() != revisionBefore) {
+            (void)session_->Undo();
+        }
+        AdoptCurrentDocument();
+        SetStatus(QStringLiteral("回転体: 面が作れなかったので、何も残していません。"));
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("回転体: %1° を %2 断面で回して形状ガイドを作りました。")
+            .arg(request.Value().angleDeg, 0, 'f', 1)
+            .arg(request.Value().sections));
 }
 
 std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildSurfaceFromTable(

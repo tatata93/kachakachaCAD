@@ -40,6 +40,12 @@ const std::vector<ParameterDefinition>& ParameterDefinitions()
         {ParameterId::RealSizeMm, "real_size", "実寸(mm)",
             geometry::QuantityKind::Length, 20000.0, 0.0, 1000000.0,
             "実物の寸法です。縮尺で割った値が下に出ます。"},
+        {ParameterId::RevolveAngleDeg, "revolve_angle", "回転体の角度(度)",
+            geometry::QuantityKind::Scalar, 360.0, 0.1, 360.0,
+            "断面を回す角度です。360 で一周。0 では回りません。"},
+        {ParameterId::RevolveSections, "revolve_sections", "回転体の断面の数",
+            geometry::QuantityKind::Scalar, 12.0, 2.0, 72.0,
+            "回した写しの数です。多いほど丸く、面が重くなります。2〜72。"},
     };
     return table;
 }

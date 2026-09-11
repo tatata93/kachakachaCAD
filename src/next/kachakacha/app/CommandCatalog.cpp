@@ -264,6 +264,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだ線から形状ガイドを作ります。作れない入力は理由を出して断ります。", true,
             {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-004", "AT-GEO-005", "AT-GEO-006", "AT-UIX-007"}},
+        {"guide.revolve", "回転体", CommandMode::Instant, "guide_revolve", "",
+            SelectionPredicate::TwoOrMoreWires, "断面の線と軸の直線を、この順に選んでください。",
+            "1本目の線を、2本目の直線を軸に「回転体の角度」だけ回した断面を「回転体の断面の数」だけ"
+            "並べ、その断面のロフトで形状ガイドを作ります(V1 の回転面と同じ近似)。", true,
+            {"AT-GEO-003"}},
         {"guide.set_method", "面の作り方", CommandMode::Dialog, "guide_method", "",
             SelectionPredicate::Always, "",
             "面の作り方を7通りから選びます。使わない役割の行が残っていれば断ります。", false,

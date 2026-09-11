@@ -254,7 +254,7 @@ void V2MainWindow::BuildMenus()
                             "wire.project_surface"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
                        "grid.move_origin"}},
-        {"形(&M)", {"guide.create", "guide.set_method", "guide.add_row",
+        {"形(&M)", {"guide.create", "guide.revolve", "guide.set_method", "guide.add_row",
                      "guide.append_row", "guide.row_up", "guide.row_down",
                      "guide.row_remove", "guide.row_reverse", "guide.build",
                      "guide.clear", "part.extrude", "part.thicken",

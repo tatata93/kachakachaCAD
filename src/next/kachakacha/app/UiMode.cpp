@@ -61,7 +61,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "grid.move_origin",
     };
     static const std::vector<std::string_view> part{
-        "guide.create", "guide.set_method", "guide.add_row", "guide.append_row",
+        "guide.create", "guide.revolve", "guide.set_method", "guide.add_row", "guide.append_row",
         "guide.row_up", "guide.row_down", "guide.row_remove", "guide.row_reverse",
         "guide.build", "guide.clear",
         "part.extrude", "part.thicken", "part.thickness_placement", "part.thicken_to_plane",

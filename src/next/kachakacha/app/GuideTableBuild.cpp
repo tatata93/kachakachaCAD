@@ -37,6 +37,17 @@ std::optional<GuideTableSelection> GuideSelectionOf(const document::Document& do
         }
     }
     if (chosen.segments.empty()) {
+        // 隠した線(回転体の断面の写しなど)は場面に無い。作り方が持つ線をそのまま使う。
+        // 無ければ、面を作り直せない(隠した線を使った面が開き直せなかった)。
+        const auto* feature = document.FindFeature(entity->createdBy);
+        const auto* wire = feature != nullptr
+            ? std::get_if<domain::CreateWireDefinition>(&feature->definition)
+            : nullptr;
+        if (wire != nullptr) {
+            chosen.segments = wire->segments;
+        }
+    }
+    if (chosen.segments.empty()) {
         return std::nullopt;
     }
     return chosen;

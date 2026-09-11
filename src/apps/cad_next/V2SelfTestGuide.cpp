@@ -216,9 +216,72 @@ void SelectOne(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
 
 } // namespace
 
+[[nodiscard]] bool CaseRevolveMakesHiddenSectionsAndASurface(V2MainWindow& window)
+{
+    // 回転体(V1 の回転面): 断面の線と軸の直線をこの順に選び、回した写しをロフトする。
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);   // 上面 XY に描く。軸も同じ面の中。
+    viewport.SetVisibleWidthMm(200.0);
+    const double pxPerMm = viewport.width() / 200.0;
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    // 断面: 軸から 30mm 離れた縦線。軸: 中央の縦線。
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() + 20.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y() - 20.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x(), center.y() + 40.0 * pxPerMm));
+    viewport.ClickAt(QPointF(center.x(), center.y() - 40.0 * pxPerMm));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire)
+                           .entityIds;
+    if (!Explain((std::string("線が2本(実際は ") + std::to_string(wires.size()) + ")").c_str(),
+            wires.size() == 2)) {
+        return false;
+    }
+    // 断面だけ選んで押すと、軸が要ると言う(REV-E002)。
+    SelectOne(window, wires[0]);
+    window.RunCommand("guide.revolve");
+    if (!Explain((std::string("軸が無ければ断る(") + window.StatusText().toStdString() + ")").c_str(),
+            GuideSurfaceCount(window) == 0)) {
+        return false;
+    }
+    kachakacha::v2::app::SelectionSet pair;
+    pair.entityIds = {wires[0], wires[1]};
+    viewport.SetSelection(pair);
+    const int before = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
+    window.RunCommand("guide.revolve");
+    if (!Explain((std::string("形状ガイドが1つできる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            GuideSurfaceCount(window) == 1)) {
+        return false;
+    }
+    // 既定は 12 断面。写しは 12 本増え、隠れている。
+    int hidden = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Wire
+            && entity.visibility == kachakacha::v2::domain::Visibility::Hidden) {
+            ++hidden;
+        }
+    }
+    if (!Explain((std::string("写しが 12 本増えて隠れる(増えた ")
+                     + std::to_string(CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire)
+                           - before)
+                     + ", 隠れた " + std::to_string(hidden) + ")").c_str(),
+            CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before + 12
+                && hidden == 12)) {
+        return false;
+    }
+    // 一度で戻る(写しも面もまとめて)。
+    window.RunCommand("edit.undo");
+    return Explain("一度で全部戻る", GuideSurfaceCount(window) == 0
+        && CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) == before);
+}
+
 std::vector<SelfTestCase> GuideCases()
 {
     return {
+        {"回転体は写しを隠して形状ガイドを作る", &CaseRevolveMakesHiddenSectionsAndASurface},
         {"役割表から平面を作り開き直しても戻る", &CaseGuideTableBuildsPlanarAndSurvivesReopen},
         {"表の行に効くコマンドは行を選んでから", &CaseGuideRowCommandsNeedARow},
     };

@@ -32,6 +32,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::WiresAndOneGuideSurface: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。";
     case SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を2つ以上選んでください。";
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane: return "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。";
+    case SelectionPredicate::OneOrMoreHideable: return "線・部品・面のどれかを選んでください。";
     }
     return "";
 }
@@ -69,7 +70,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "選んだものを消します。下流があるものは、理由を出して断ります。", true,
             {"AT-DOC-005"}},
         {"view.hide_selected", "選択を隠す", CommandMode::Instant, "hide", "Ctrl+H",
-            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            SelectionPredicate::OneOrMoreHideable, "線・部品・面のどれかを選んでください。",
             "選んだものを画面から隠します。形は消えません。", false,
             {"AT-UIX-010"}},
         {"view.show_all", "すべて表示", CommandMode::Instant, "show_all", "Ctrl+Shift+H",

@@ -68,6 +68,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces:
         // 回り込み投影は、またぐ面を全部選ぶ。1枚なら「曲面へ投影」の側。
         return facts.wires >= 1 && facts.guideSurfaces >= 2;
+    case SelectionPredicate::OneOrMoreHideable:
+        // 線・部品・面のどれでも隠せる。作業平面はグリッドの棚で消す。
+        return facts.wires + facts.parts + facts.guideSurfaces >= 1;
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane:
         return facts.guideSurfaces == 1 && facts.workPlanes == 1;
     }

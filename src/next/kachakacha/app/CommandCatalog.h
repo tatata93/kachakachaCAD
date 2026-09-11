@@ -63,6 +63,10 @@ enum class SelectionPredicate {
     WiresAndOneGuideSurface,
     //! 形状ガイドの面ちょうど1つと作業平面ちょうど1つ。面を平面まで立体にするときに使う。
     OneGuideSurfaceAndOneWorkPlane,
+    //! 画面から隠せるもの(線・部品・形状ガイドの面)を1つ以上。
+    //! 立体と面が画面に出るようになったので、線だけでは足りない。
+    //! 隠せないと、見たくない部品が画面に居座る。
+    OneOrMoreHideable,
 };
 
 [[nodiscard]] std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept;

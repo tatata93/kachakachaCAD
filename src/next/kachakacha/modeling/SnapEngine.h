@@ -107,8 +107,7 @@ struct SnapScene {
 struct SnapSettings {
     double highPriorityRadiusPx = 6.0;
     double lowPriorityRadiusPx = 8.0;
-    //! 修飾キーで全スナップを止める。V1は Ctrl、V2仕様は Shift。
-    //! どちらでも止まるように、呼び出し側で押されていれば true にする。
+    //! S キーを押している間、全スナップを止める。
     bool suppressed = false;
     //! 副グリッド点は画面間隔が6pxを下回ると出さない(§6.3)。
     double minimumGridSpacingPx = 6.0;

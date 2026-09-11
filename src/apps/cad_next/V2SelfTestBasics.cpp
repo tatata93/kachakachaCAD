@@ -771,7 +771,7 @@ namespace {
 
 [[nodiscard]] bool CaseSelectionPicksAndAdds(V2MainWindow& window)
 {
-    // 線の上を押せば選べる。Shift で足せる。何も無いところを素で押せば消える。
+    // 線の上を押せば選べる。Ctrl で足せる。何も無いところを素で押せば消える。
     if (!window.ApplyManualState(QStringLiteral("select"))) {
         return false;
     }

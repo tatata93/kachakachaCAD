@@ -726,6 +726,8 @@ std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::PickShapeAt(
     }
     kachakacha::v2::app::PickCandidate candidate;
     candidate.entityId = shapeViews_[hit->shapeIndex].entityId;
+    candidate.kind = kachakacha::v2::app::SelectionElementKind::Object;
+    candidate.hitPoint = hit->point;
     // 形には線の番号が無い。距離は画面上の px ではなく目からの mm だが、
     // 線が拾えなかったときにしか使わないので、比べる相手はいない。
     candidate.distancePx = hit->distanceMm;
@@ -1039,12 +1041,9 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
 {
     using kachakacha::v2::app::SelectionMode;
     SelectionMode mode = SelectionMode::Replace;
-    if ((modifiers & Qt::ShiftModifier) != 0) {
-        mode = SelectionMode::Add;
-    } else if ((modifiers & Qt::ControlModifier) != 0) {
+    // Ctrl だけが選択の追加・解除。Shift は作図拘束、Alt は奥候補へ予約する。
+    if ((modifiers & Qt::ControlModifier) != 0) {
         mode = SelectionMode::Toggle;
-    } else if ((modifiers & Qt::AltModifier) != 0) {
-        mode = SelectionMode::Subtract;
     }
     // 点 → 線 → 塗った形 の順で拾う。点は線の上に載っていることが多いので、
     // 線を先に見ると点が永久に拾えない(オーナー指摘 2026-09-11)。
@@ -1056,9 +1055,10 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
         picked = PickShapeAt(position);
     }
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
-    status_ = selection_.entityIds.empty()
+    const std::size_t selectedItems = kachakacha::v2::app::SelectionItemCount(selection_);
+    status_ = selectedItems == 0
         ? std::string("選んでいるものはありません。")
-        : std::string("選んでいるもの: ") + std::to_string(selection_.entityIds.size())
+        : std::string("選んでいるもの: ") + std::to_string(selectedItems)
             + " 件";
     if (statusCallback_) {
         statusCallback_(status_);
@@ -1215,9 +1215,8 @@ void V2Viewport::CancelTool()
 
 void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 {
-    // 修飾キーはマウスの便りにも乗っている。ここで拾えば、
-    // 画面に focus が無くても Ctrl と Shift が効く。
-    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
+    // Shift はマウスの便りにも乗っているので、作図拘束へ反映する。
+    // 一時スナップ解除の S は修飾キーではないため、キーイベントで保持する。
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
     if (controlDrag_.active) {
         DragControlPoint(event->position());
@@ -1374,18 +1373,26 @@ void V2Viewport::wheelEvent(QWheelEvent* event)
 
 void V2Viewport::keyReleaseEvent(QKeyEvent* event)
 {
-    // Ctrl と Shift は「押している間だけ」効く。離したら元へ戻す。
-    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
+    // S と Shift は「押している間だけ」効く。離したら元へ戻す。
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (event->key() == Qt::Key_S) {
+        SetSnapSuppressedByKey(false);
+        event->accept();
+        return;
+    }
     QWidget::keyReleaseEvent(event);
 }
 
 void V2Viewport::keyPressEvent(QKeyEvent* event)
 {
-    // Ctrl で吸着を止め、Shift で水平・垂直へ寄せる(V1同等)。
+    // S で吸着を止め、Shift で水平・垂直へ寄せる。
     // 押しっぱなしのあいだ効くので、押した瞬間と離した瞬間の両方で見る。
-    SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (event->key() == Qt::Key_S) {
+        SetSnapSuppressedByKey(true);
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape) {
         // 構えている命令があれば、まずそれを解く。やりかけの点より先に、
         // 「待っているもの」をやめるのが素直である。

@@ -12,9 +12,14 @@ namespace {
 using geometry::ScreenPoint;
 using geometry::Vector3;
 
+struct ScreenSegmentApproach {
+    double distancePx = 0.0;
+    double fraction = 0.0;
+};
+
 //! 点と線分の距離。画面の上での話なので px。
-[[nodiscard]] double DistanceToSegmentPx(const ScreenPoint& point, const ScreenPoint& start,
-    const ScreenPoint& end)
+[[nodiscard]] ScreenSegmentApproach ApproachToSegmentPx(const ScreenPoint& point,
+    const ScreenPoint& start, const ScreenPoint& end)
 {
     const double dx = end.x - start.x;
     const double dy = end.y - start.y;
@@ -22,7 +27,7 @@ using geometry::Vector3;
     if (!(lengthSquared > 0.0)) {
         const double ex = point.x - start.x;
         const double ey = point.y - start.y;
-        return std::sqrt(ex * ex + ey * ey);
+        return {std::sqrt(ex * ex + ey * ey), 0.0};
     }
     double t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
     t = std::max(0.0, std::min(1.0, t));
@@ -30,39 +35,118 @@ using geometry::Vector3;
     const double cy = start.y + t * dy;
     const double ex = point.x - cx;
     const double ey = point.y - cy;
-    return std::sqrt(ex * ex + ey * ey);
+    return {std::sqrt(ex * ex + ey * ey), t};
 }
+
+struct CurveApproach {
+    double distancePx = 0.0;
+    double parameter = 0.0;
+    Vector3 point{};
+};
 
 //! 1本の曲線と点の距離。画面へ落としてから測る。
 //! 落とせない点(カメラの後ろ)はまたぐ弦ごと捨てる。
-[[nodiscard]] std::optional<double> CurveDistancePx(const geometry::CurveSegment& segment,
+[[nodiscard]] std::optional<CurveApproach> ApproachToCurvePx(
+    const geometry::CurveSegment& segment,
     const geometry::ScreenMapping& mapping, const ScreenPoint& pointer,
     double toleranceMm)
 {
     const auto samples = geometry::SampleCurve(segment, toleranceMm);
-    std::optional<double> best;
+    std::optional<CurveApproach> best;
     std::optional<ScreenPoint> previous;
+    std::optional<geometry::CurvePoint> previousSample;
     for (const auto& sample : samples) {
         const auto screen = mapping.Project(sample.position);
         if (!screen.has_value()) {
             previous.reset();
+            previousSample.reset();
             continue;
         }
-        if (previous.has_value()) {
-            const double distance = DistanceToSegmentPx(pointer, *previous, *screen);
-            if (!best.has_value() || distance < *best) {
-                best = distance;
+        if (previous.has_value() && previousSample.has_value()) {
+            const auto approach = ApproachToSegmentPx(pointer, *previous, *screen);
+            if (!best.has_value() || approach.distancePx < best->distancePx) {
+                const double t = approach.fraction;
+                best = CurveApproach{approach.distancePx,
+                    previousSample->parameter
+                        + (sample.parameter - previousSample->parameter) * t,
+                    previousSample->position + (sample.position - previousSample->position) * t};
             }
         }
         previous = screen;
+        previousSample = sample;
     }
     if (!best.has_value() && samples.size() == 1) {
         const auto screen = mapping.Project(samples.front().position);
         if (screen.has_value()) {
-            best = DistanceToSegmentPx(pointer, *screen, *screen);
+            const auto approach = ApproachToSegmentPx(pointer, *screen, *screen);
+            best = CurveApproach{approach.distancePx, samples.front().parameter,
+                samples.front().position};
         }
     }
     return best;
+}
+
+[[nodiscard]] bool SameTarget(const SelectionRef& first, const SelectionRef& second)
+{
+    if (first.entityId != second.entityId || first.kind != second.kind
+        || first.segmentId != second.segmentId) {
+        return false;
+    }
+    if (first.subshapeKey.has_value() != second.subshapeKey.has_value()) {
+        return false;
+    }
+    return !first.subshapeKey.has_value()
+        || first.subshapeKey->ToString() == second.subshapeKey->ToString();
+}
+
+[[nodiscard]] std::vector<SelectionRef> EffectiveRefs(const SelectionSet& selection)
+{
+    std::vector<SelectionRef> refs = selection.ordered;
+    for (const base::EntityId id : selection.entityIds) {
+        const bool represented = std::any_of(refs.begin(), refs.end(), [id](const auto& ref) {
+            return ref.entityId == id;
+        });
+        if (!represented) {
+            SelectionRef ref;
+            ref.entityId = id;
+            refs.push_back(ref);
+        }
+    }
+    return refs;
+}
+
+[[nodiscard]] SelectionSet SelectionFromRefs(std::vector<SelectionRef> refs)
+{
+    SelectionSet selection;
+    selection.ordered = std::move(refs);
+    for (const auto& ref : selection.ordered) {
+        if (std::find(selection.entityIds.begin(), selection.entityIds.end(), ref.entityId)
+            == selection.entityIds.end()) {
+            selection.entityIds.push_back(ref.entityId);
+        }
+    }
+    return selection;
+}
+
+[[nodiscard]] SelectionRef RefFromCandidate(const PickCandidate& candidate)
+{
+    SelectionRef ref;
+    ref.entityId = candidate.entityId;
+    ref.kind = candidate.kind;
+    if (!candidate.segmentId.IsNil()) {
+        ref.segmentId = candidate.segmentId;
+    }
+    ref.subshapeKey = candidate.subshapeKey;
+    ref.curveParameter = candidate.curveParameter;
+    ref.hitPoint = candidate.hitPoint;
+    ref.screenDistancePx = candidate.distancePx;
+    return ref;
+}
+
+[[nodiscard]] bool HasEntity(const document::DocumentSnapshot& snapshot, base::EntityId id)
+{
+    return std::any_of(snapshot.entities.begin(), snapshot.entities.end(),
+        [id](const auto& entity) { return entity.id == id; });
 }
 
 } // namespace
@@ -79,19 +163,22 @@ std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
                 CurveLiesOnPlane(curve.segment, focus.plane))) {
             continue;
         }
-        const auto distance = CurveDistancePx(curve.segment, mapping, pointer,
+        const auto approach = ApproachToCurvePx(curve.segment, mapping, pointer,
             tolerance.interactiveJoinMm);
-        if (!distance.has_value() || *distance > tolerance.displayPickPx) {
+        if (!approach.has_value() || approach->distancePx > tolerance.displayPickPx) {
             continue;
         }
         // 同じ距離のときは先に入っているものを残す。毎回同じ結果になる。
-        if (best.has_value() && !(*distance < best->distancePx)) {
+        if (best.has_value() && !(approach->distancePx < best->distancePx)) {
             continue;
         }
         PickCandidate candidate;
         candidate.entityId = curve.entityId;
         candidate.segmentId = curve.segmentId;
-        candidate.distancePx = *distance;
+        candidate.kind = SelectionElementKind::Edge;
+        candidate.curveParameter = approach->parameter;
+        candidate.hitPoint = approach->point;
+        candidate.distancePx = approach->distancePx;
         best = candidate;
     }
     return best;
@@ -119,6 +206,8 @@ std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
         }
         PickCandidate candidate;
         candidate.entityId = point.entityId;
+        candidate.kind = SelectionElementKind::Vertex;
+        candidate.hitPoint = point.position;
         candidate.distancePx = distance;
         best = candidate;
     }
@@ -142,52 +231,65 @@ SelectionSet ApplySelection(const SelectionSet& current,
 {
     if (!picked.has_value()) {
         // 何も無いところを押した。素で押したときだけ空にする。
-        return mode == SelectionMode::Replace ? SelectionSet{} : current;
+        return mode == SelectionMode::Replace ? SelectionSet{}
+                                              : SelectionFromRefs(EffectiveRefs(current));
     }
-    const base::EntityId id = picked->entityId;
-    const bool already = IsSelected(current, id);
-    SelectionSet next;
+    const SelectionRef target = RefFromCandidate(*picked);
+    std::vector<SelectionRef> refs = EffectiveRefs(current);
+    const auto found = std::find_if(refs.begin(), refs.end(), [&](const auto& ref) {
+        return SameTarget(ref, target);
+    });
     switch (mode) {
     case SelectionMode::Replace:
-        next.entityIds.push_back(id);
-        return next;
+        return SelectionFromRefs({target});
     case SelectionMode::Add:
-        next = current;
-        if (!already) {
-            next.entityIds.push_back(id);
+        if (found == refs.end()) {
+            refs.push_back(target);
         }
-        return next;
+        return SelectionFromRefs(std::move(refs));
     case SelectionMode::Toggle:
-        next = current;
-        if (already) {
-            next.entityIds.erase(
-                std::remove(next.entityIds.begin(), next.entityIds.end(), id),
-                next.entityIds.end());
+        if (found != refs.end()) {
+            refs.erase(found);
         } else {
-            next.entityIds.push_back(id);
+            refs.push_back(target);
         }
-        return next;
+        return SelectionFromRefs(std::move(refs));
     case SelectionMode::Subtract:
-        next = current;
-        next.entityIds.erase(
-            std::remove(next.entityIds.begin(), next.entityIds.end(), id),
-            next.entityIds.end());
-        return next;
+        if (found != refs.end()) {
+            refs.erase(found);
+        }
+        return SelectionFromRefs(std::move(refs));
     }
-    return current;
+    return SelectionFromRefs(std::move(refs));
 }
 
 bool IsSelected(const SelectionSet& selection, base::EntityId entityId)
 {
-    return std::find(selection.entityIds.begin(), selection.entityIds.end(), entityId)
-        != selection.entityIds.end();
+    const auto refs = EffectiveRefs(selection);
+    return std::any_of(refs.begin(), refs.end(), [entityId](const auto& ref) {
+        return ref.entityId == entityId;
+    });
+}
+
+bool IsSelected(const SelectionSet& selection, const SelectionRef& target)
+{
+    const auto refs = EffectiveRefs(selection);
+    return std::any_of(refs.begin(), refs.end(), [&](const auto& ref) {
+        return SameTarget(ref, target);
+    });
+}
+
+std::size_t SelectionItemCount(const SelectionSet& selection)
+{
+    return EffectiveRefs(selection).size();
 }
 
 int SelectedCountOfKind(const SelectionSet& selection,
     const document::DocumentSnapshot& snapshot, domain::EntityKind kind)
 {
+    const SelectionSet normalized = SelectionFromRefs(EffectiveRefs(selection));
     int count = 0;
-    for (const base::EntityId id : selection.entityIds) {
+    for (const base::EntityId id : normalized.entityIds) {
         for (const auto& entity : snapshot.entities) {
             if (entity.id == id && entity.kind == kind) {
                 ++count;
@@ -206,34 +308,47 @@ SelectionSet SelectAllOfKind(const document::DocumentSnapshot& snapshot,
         // 隠したものは選ばない。隠したのに次の操作へ巻き込まれると、
         // 画面に出ていないものが動いて、なぜ変わったのか分からなくなる。
         if (entity.kind == kind && entity.visibility == domain::Visibility::Visible) {
-            selection.entityIds.push_back(entity.id);
+            SelectionRef ref;
+            ref.entityId = entity.id;
+            selection.ordered.push_back(ref);
         }
     }
-    return selection;
+    return SelectionFromRefs(std::move(selection.ordered));
 }
 
 SelectionSet PruneSelection(const SelectionSet& selection,
     const document::DocumentSnapshot& snapshot)
 {
-    SelectionSet next;
-    for (const base::EntityId id : selection.entityIds) {
-        for (const auto& entity : snapshot.entities) {
-            if (entity.id == id) {
-                next.entityIds.push_back(id);
-                break;
-            }
+    std::vector<SelectionRef> kept;
+    for (const auto& ref : EffectiveRefs(selection)) {
+        if (HasEntity(snapshot, ref.entityId)) {
+            kept.push_back(ref);
         }
     }
-    return next;
+    return SelectionFromRefs(std::move(kept));
 }
 
 std::vector<geometry::CurveSegment> SelectedCurves(const SelectionSet& selection,
     const modeling::SnapScene& scene)
 {
     std::vector<geometry::CurveSegment> curves;
-    for (const base::EntityId id : selection.entityIds) {
+    std::vector<std::pair<base::EntityId, base::SegmentId>> added;
+    for (const auto& ref : EffectiveRefs(selection)) {
         for (const auto& curve : scene.curves) {
-            if (curve.entityId == id) {
+            if (curve.entityId != ref.entityId) {
+                continue;
+            }
+            if (ref.kind == SelectionElementKind::Edge && ref.segmentId.has_value()
+                && curve.segmentId != *ref.segmentId) {
+                continue;
+            }
+            if (ref.kind != SelectionElementKind::Object
+                && ref.kind != SelectionElementKind::Edge) {
+                continue;
+            }
+            const auto key = std::make_pair(curve.entityId, curve.segmentId);
+            if (std::find(added.begin(), added.end(), key) == added.end()) {
+                added.push_back(key);
                 curves.push_back(curve.segment);
             }
         }

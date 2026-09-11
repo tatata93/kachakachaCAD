@@ -85,7 +85,7 @@
 | AT-UIX-001 | 部分 | 旧4モード試験とtool切替試験はある。WP-14で固定モード廃止、重複棚除去、旧ToolSession状態が残らない画面試験へ改訂する。 |
 | AT-UIX-002 | 部分 | 旧操作ガイドの項目試験はある。WP-14で共通ToolSession、右コンテキストプロパティ、tool-first/事前選択同値、Esc/Backspace/Ctrl+Zを追加する。 |
 | AT-UIX-003 | 部分 | 式、focus、Tab、画面端試験はある。WP-14で右プロパティとカーソル近傍入力の双方向同期を追加する。 |
-| AT-UIX-004 | 部分 | snap候補試験と基本選択はある。WP-14でsub-element複数選択、矩形、Tab/Alt、意味状態、Shift拘束/S解除へ改訂する。 |
+| AT-UIX-004 | 部分 | SelectionRef、同一Entity内の複数Segment/Subshape、Ctrl toggle、Shift拘束、S解除、命中metadataを試験済み。残りは矩形、Tab/Alt候補巡回、Face pick、部分要素だけの意味状態表示。 |
 | AT-UIX-005 | 済 | tests_v2/grid_tests.cpp と cad_next --self-test。WP-14ではモード依存表示だけを新shellへ接続し直す。 |
 | AT-UIX-006 | 済 | tests_v2/active_group_tests.cpp と cad_next --self-test。作業中グループと派生グループの分離、保存再読込を検査済み。 |
 | AT-UIX-007 | 済 | tests_v2/guide_surface_table_tests.cpp と cad_next --self-test。複数役割、複数Wire、順序、反転、両端接続、3D色同期を検査済み。 |

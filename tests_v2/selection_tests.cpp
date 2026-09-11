@@ -1,6 +1,7 @@
 // 選択(ui-workflows §2、V1同等)。
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/modeling/SubshapeKey.h"
 
 #include <array>
 #include <string>
@@ -13,7 +14,10 @@ using kachakacha::v2::app::PruneSelection;
 using kachakacha::v2::app::SelectAllOfKind;
 using kachakacha::v2::app::SelectedCountOfKind;
 using kachakacha::v2::app::SelectedCurves;
+using kachakacha::v2::app::SelectionElementKind;
+using kachakacha::v2::app::SelectionItemCount;
 using kachakacha::v2::app::SelectionMode;
+using kachakacha::v2::app::SelectionRef;
 using kachakacha::v2::app::SelectionSet;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::base::SegmentId;
@@ -30,6 +34,7 @@ using kachakacha::v2::modeling::SnapCurve;
 using kachakacha::v2::modeling::SnapScene;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
+using kachakacha::v2::test::RequireNear;
 
 namespace {
 
@@ -75,6 +80,15 @@ namespace {
     return scene;
 }
 
+//! 同じワイヤーに2線分がある場面。部分選択を物体IDへ潰さない試験に使う。
+[[nodiscard]] SnapScene TwoSegmentsOneWire()
+{
+    SnapScene scene;
+    scene.curves.push_back({Ent(1), Seg(1), Line({-40, 0, 0}, {40, 0, 0}), false});
+    scene.curves.push_back({Ent(1), Seg(2), Line({-40, 20, 0}, {40, 20, 0}), false});
+    return scene;
+}
+
 [[nodiscard]] GeometryTolerance Tolerance()
 {
     GeometryTolerance tolerance;
@@ -109,6 +123,12 @@ KACHA_V2_TEST(selection, 線の上を押せば拾える)
         Tolerance());
     Require(picked.has_value(), "拾える");
     Require(picked->entityId == Ent(1), "1本目");
+    Require(picked->kind == SelectionElementKind::Edge, "辺として拾う");
+    Require(picked->segmentId == Seg(1), "線分IDを失わない");
+    Require(picked->curveParameter.has_value(), "曲線上の位置を持つ");
+    RequireNear(*picked->curveParameter, 0.5, 1.0e-9, "線の中央");
+    RequireNear(picked->hitPoint.x, 0.0, 1.0e-9, "命中位置を持つ");
+    RequireNear(picked->hitPoint.y, 0.0, 1.0e-9, "命中位置を持つ");
 }
 
 KACHA_V2_TEST(selection, 離れたところを押しても拾わない)
@@ -195,6 +215,7 @@ KACHA_V2_TEST(selection, 素で押すと前の選択は消える)
     const SelectionSet next = ApplySelection(current, picked, SelectionMode::Replace);
     Require(next.entityIds.size() == 1, "1つだけ");
     Require(next.entityIds.front() == Ent(1), "押したもの");
+    Require(next.ordered.size() == 1, "部分選択の正本も1つ");
 }
 
 KACHA_V2_TEST(selection, 足すと順に並ぶ)
@@ -233,6 +254,52 @@ KACHA_V2_TEST(selection, 切り替えは入っていれば外す)
     Require(!IsSelected(selection, Ent(4)), "外れる");
 }
 
+KACHA_V2_TEST(selection, 同じワイヤーの複数辺を別々に選べる)
+{
+    const SnapScene scene = TwoSegmentsOneWire();
+    const auto first = PickCurve(scene, TopView(), ScreenPoint{500.0, 500.0}, Tolerance());
+    const auto second = PickCurve(scene, TopView(), ScreenPoint{500.0, 300.0}, Tolerance());
+    Require(first.has_value() && second.has_value(), "2辺を拾える");
+
+    SelectionSet selection;
+    selection = ApplySelection(selection, first, SelectionMode::Toggle);
+    selection = ApplySelection(selection, second, SelectionMode::Toggle);
+    Require(SelectionItemCount(selection) == 2, "部分要素は2件");
+    Require(selection.entityIds.size() == 1, "互換投影の物体IDは重複しない");
+    Require(selection.ordered[0].segmentId == Seg(1), "最初の辺");
+    Require(selection.ordered[1].segmentId == Seg(2), "次の辺");
+    Require(SelectedCurves(selection, scene).size() == 2, "選んだ2辺だけを渡す");
+
+    selection = ApplySelection(selection, first, SelectionMode::Toggle);
+    Require(SelectionItemCount(selection) == 1, "同じ辺だけを外す");
+    Require(selection.ordered.front().segmentId == Seg(2), "もう一方は残る");
+    Require(selection.entityIds.size() == 1, "物体はまだ選択中");
+}
+
+KACHA_V2_TEST(selection, 同じ部品の複数面を別々に選べる)
+{
+    PickCandidate startFace;
+    startFace.entityId = Ent(3);
+    startFace.kind = SelectionElementKind::Face;
+    startFace.subshapeKey = kachakacha::v2::modeling::MakeExtrudeCapStart();
+    PickCandidate endFace = startFace;
+    endFace.subshapeKey = kachakacha::v2::modeling::MakeExtrudeCapEnd();
+
+    SelectionSet selection;
+    selection = ApplySelection(selection, startFace, SelectionMode::Toggle);
+    selection = ApplySelection(selection, endFace, SelectionMode::Toggle);
+    Require(SelectionItemCount(selection) == 2, "同じ部品でも2面");
+    Require(selection.entityIds.size() == 1, "互換投影は1部品");
+    Require(selection.ordered[0].subshapeKey->ToString()
+            != selection.ordered[1].subshapeKey->ToString(),
+        "意味的な面キーを区別する");
+
+    SelectionRef target = selection.ordered.front();
+    Require(IsSelected(selection, target), "面単位で選択を照合できる");
+    selection = ApplySelection(selection, startFace, SelectionMode::Toggle);
+    Require(SelectionItemCount(selection) == 1, "指定した面だけ外す");
+}
+
 KACHA_V2_TEST(selection, 外すのは入っていなくても落ちない)
 {
     SelectionSet selection;
@@ -251,9 +318,9 @@ KACHA_V2_TEST(selection, 何も無いところを素で押すと空になる)
     Require(next.entityIds.empty(), "空になる");
 }
 
-KACHA_V2_TEST(selection, 足す途中で外を押しても選択は消えない)
+KACHA_V2_TEST(selection, 複数選択中に外を押しても選択は消えない)
 {
-    // ここで消すと、選び直しになる。V1もそうしていない。
+    // ここで消すと、選び直しになる。
     SelectionSet selection;
     selection.entityIds.push_back(Ent(1));
     for (SelectionMode mode : {SelectionMode::Add, SelectionMode::Toggle,

@@ -1,7 +1,7 @@
 //! V1同等の操作系のケース(docs/v2/v1-input-parity.md)。
 //!
 //! 中ボタンでの画面移動、Shift+中ボタンの軌道回転、Esc の段取り、
-//! 作図中の Shift と Ctrl、V1のキー配置、そして移動・複製・鏡映・回転。
+//! 作図中の Shift と S、主要キー配置、そして移動・複製・鏡映・回転。
 //! どれも「V1では出来たのに V2で出来なかった」ものなので、
 //! ここへまとめておくと、また落ちたときに何が戻ったのかがすぐ分かる。
 
@@ -116,9 +116,9 @@ namespace {
     return Explain("2回目は何も起きない", viewport.PressEscape().empty());
 }
 
-[[nodiscard]] bool CaseShiftConstrainsAndCtrlSuppressesSnap(V2MainWindow& window)
+[[nodiscard]] bool CaseShiftConstrainsAndSSuppressesSnap(V2MainWindow& window)
 {
-    // Shift で水平・垂直へ寄る。Ctrl で吸着が止まる。どちらも押している間だけ。
+    // Shift で水平・垂直へ寄る。S で吸着が止まる。どちらも押している間だけ。
     auto& viewport = window.Viewport();
     viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetVisibleWidthMm(200.0);
@@ -148,26 +148,25 @@ namespace {
         return false;
     }
     viewport.CancelTool();
-    // Ctrl は帯の言い方で確かめる。吸着していないときは、そう出る。
+    // S は帯の言い方で確かめる。吸着していないときは、そう出る。
     viewport.SetSnapSuppressedByKey(true);
     viewport.HoverAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5));
     const bool saidNoSnap = window.StatusText().contains(QStringLiteral("スナップなし"));
     viewport.SetSnapSuppressedByKey(false);
-    return Explain((std::string("Ctrl中は吸着しないと言う(")
+    return Explain((std::string("S中は吸着しないと言う(")
                        + window.StatusText().toStdString() + ")").c_str(), saidNoSnap);
 }
 
-[[nodiscard]] bool CaseV1ShortcutsAreBack(V2MainWindow& window)
+[[nodiscard]] bool CasePrimaryShortcutsDoNotConflict(V2MainWindow& window)
 {
-    // V1で手が覚えたキーが、V1と同じ道具を出すこと。
-    // ここがずれると、使うほど間違える。
+    // 主要キーが同じ道具を出し、操作中の S と競合しないこと。
     const struct {
         const char* key;
         const char* id;
     } expected[] = {
         {"V", "selection.activate"}, {"D", "draw.point"}, {"L", "draw.line"},
         {"P", "draw.polyline"}, {"R", "draw.rectangle"}, {"C", "draw.circle"},
-        {"A", "draw.arc"}, {"B", "draw.bezier"}, {"S", "draw.spline"},
+        {"A", "draw.arc"}, {"B", "draw.bezier"},
         {"I", "wire.coincident"}, {"T", "wire.tangent"}, {"Shift+T", "wire.curvature"},
         {"X", "wire.trim"}, {"E", "wire.extend"}, {"M", "measure.open"},
     };
@@ -183,8 +182,14 @@ namespace {
             return false;
         }
     }
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        if (command.id == "draw.spline") {
+            return Explain("S は一時スナップ解除専用",
+                command.defaultShortcut.empty());
+        }
+    }
     (void)window;
-    return true;
+    return false;
 }
 
 [[nodiscard]] bool CaseTransformToolsActuallyMove(V2MainWindow& window)
@@ -598,8 +603,8 @@ std::vector<SelfTestCase> InputCases()
         {"中ボタンで画面が動く", &CaseMiddleDragPansTheView},
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},
         {"Escで選択へ戻り選択も解ける", &CaseEscapeGoesBackToSelect},
-        {"Shiftで水平になりCtrlで吸着が止まる", &CaseShiftConstrainsAndCtrlSuppressesSnap},
-        {"V1のキーが戻っている", &CaseV1ShortcutsAreBack},
+        {"Shiftで水平になりSで吸着が止まる", &CaseShiftConstrainsAndSSuppressesSnap},
+        {"主要キーが操作キーと競合しない", &CasePrimaryShortcutsDoNotConflict},
         {"移動と複製が本当に効く", &CaseTransformToolsActuallyMove},
         {"つぶれた変換は断る", &CaseTransformRefusesDegenerateInput},
         {"選んだ物を掴んで動かせる", &CaseGrabSelectedAndDrag},

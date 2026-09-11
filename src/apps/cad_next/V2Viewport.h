@@ -172,7 +172,7 @@ public:
     //! Esc で「選択道具へ戻す」を頼む先。窓が道具を持っているので外から渡す。
     void SetBackToSelectCallback(std::function<void()> callback);
 
-    //! 吸着を一時的に止める(V1の Ctrl)。押している間だけ。
+    //! 吸着を一時的に止める(S)。押している間だけ。
     void SetSnapSuppressedByKey(bool suppressed);
     //! 道具として吸着を切る(コマンドの入切)。
     void SetSnapSuppressed(bool suppressed);

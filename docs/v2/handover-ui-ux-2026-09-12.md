@@ -167,8 +167,12 @@ Windows本番:
 ## 11. 現在の進捗
 
 - Phase 0: 規範統合完了。
-- Phase 1: 着手。対象不足でも選択で満たせるコマンドは入口を無効化せず、
+- Phase 1: 進行中。対象不足でも選択で満たせるコマンドは入口を無効化せず、
   tool-firstで構えて待つようにした。モード切替時は文書と選択を保ち、道具だけ選択へ戻す。
+  `SelectionRef` を導入し、同じWireの複数SegmentIdと同じPartの複数SubshapeKeyを
+  順序付きで保持できる。曲線選択はparameter、3D命中点、画面距離も保持する。
+  UI操作はplain=置換、Ctrl=追加/解除へ変更し、Shiftは作図拘束、Sは押下中の
+  スナップ解除へ分離した。スプラインのSショートカットは競合するため解除した。
 - Phase 2: 未着手。
 - Phase 3: 未着手。
 - Phase 4: 未着手。
@@ -189,7 +193,16 @@ Phase 0直後に判明した次の2件の旧期待値は、Phase 1の最初の�
 - `kachakacha_cad_next.exe --self-test`: 153/153 cases passed
 - `v2_package_zip`: passed
 
-次はSelectionRefを導入し、同じWire内の異なるSegmentIdを同時選択できるようにする。
+SelectionRef移行中の注意:
+
+- `SelectionSet::ordered` が正本。
+- `SelectionSet::entityIds` は未移植コマンド向けの重複なし互換投影であり、新規処理で使わない。
+- viewportの曲線・作図点は部分種別まで結線済み。OCCT形状はまだObject pickであり、
+  Face/EdgeのSubshapeKeyへ結線する作業が残る。
+- `SelectedCurves` はEdge選択なら該当Segmentだけ、Object選択なら従来どおり全Segmentを返す。
+
+次は選択候補列を作り、Tab巡回、Alt+clickの奥候補、左右方向で意味が変わる矩形選択を
+SelectionRefのまま実装する。その後、選択色を物体全体ではなく選んだSegment/Faceだけへ出す。
 
 ## 12. Claudeへ渡す短い指示
 

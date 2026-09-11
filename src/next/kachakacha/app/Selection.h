@@ -20,6 +20,7 @@
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/SnapEngine.h"
+#include "kachakacha/modeling/SubshapeKey.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
 #include <optional>
@@ -27,24 +28,55 @@
 
 namespace kachakacha::v2::app {
 
-//! 修飾キーの意味。V1と同じにする。
+//! 選択の更新方法。UI の既定は Replace、Ctrl は Toggle。
+//! Add / Subtract はコマンドや試験から明示的に使うために残すが、
+//! Shift / Alt には割り当てない。Shift は作図拘束、Alt は奥候補の選択に使う。
 enum class SelectionMode {
     Replace,   //!< 素で押した。前の選択は捨てる。
-    Add,       //!< Shift。足す。
+    Add,       //!< 明示的に足す。
     Toggle,    //!< Ctrl。入っていれば外し、無ければ足す。
-    Subtract,  //!< Alt。外す。
+    Subtract,  //!< 明示的に外す。
 };
 
-//! 選んでいるもの。押した順に並ぶ。同じものは1回しか入らない。
-//! 順を保つのは、形状ガイドの役割が「選んだ順」で決まるためである。
+//! 物体の中のどこを選んだか。EntityId だけへ潰してはならない。
+enum class SelectionElementKind {
+    Object,
+    Vertex,
+    Edge,
+    Face,
+    ControlPoint,
+    WorkPlane,
+};
+
+//! 選択の正本。命中位置などは操作中だけの情報で、.kcd には保存しない。
+struct SelectionRef {
+    base::EntityId entityId;
+    SelectionElementKind kind = SelectionElementKind::Object;
+    std::optional<base::SegmentId> segmentId;
+    std::optional<modeling::SubshapeKey> subshapeKey;
+    std::optional<double> curveParameter;
+    geometry::Vector3 hitPoint{};
+    double screenDistancePx = 0.0;
+};
+
+//! 選んでいるもの。ordered が正本で、押した順と部分要素を保つ。
+//! entityIds は V2 移植途中のコマンド向け互換投影で、物体IDを重複なく並べる。
+//! 新しい処理は ordered を使い、EntityId だけへ潰してはならない。
 struct SelectionSet {
     std::vector<base::EntityId> entityIds;
+    std::vector<SelectionRef> ordered;
 };
+
+using SelectionSnapshot = SelectionSet;
 
 //! 画面上で拾ったもの。
 struct PickCandidate {
     base::EntityId entityId;
     base::SegmentId segmentId;
+    SelectionElementKind kind = SelectionElementKind::Object;
+    std::optional<modeling::SubshapeKey> subshapeKey;
+    std::optional<double> curveParameter;
+    geometry::Vector3 hitPoint{};
     double distancePx = 0.0;
 };
 
@@ -93,6 +125,10 @@ struct PickFocus {
     const std::optional<PickCandidate>& picked, SelectionMode mode);
 
 [[nodiscard]] bool IsSelected(const SelectionSet& selection, base::EntityId entityId);
+[[nodiscard]] bool IsSelected(const SelectionSet& selection, const SelectionRef& target);
+
+//! 部分要素を含む選択件数。画面の「選択中 n 件」はこちらを使う。
+[[nodiscard]] std::size_t SelectionItemCount(const SelectionSet& selection);
 
 //! 選んでいるもののうち、その種類の数。
 [[nodiscard]] int SelectedCountOfKind(const SelectionSet& selection,

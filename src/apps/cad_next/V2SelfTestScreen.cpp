@@ -624,7 +624,7 @@ void DrawOneLine(V2MainWindow& window)
         kachakacha::v2::app::IsSelected(viewport.Selection(), point));
 }
 
-[[nodiscard]] bool CaseShiftClickAddsToSelection(V2MainWindow& window)
+[[nodiscard]] bool CaseCtrlClickTogglesSelection(V2MainWindow& window)
 {
     // 複数選べないと、2本要る操作(トリム・結合・面取り)が全部使えない。
     DrawOneLine(window);
@@ -648,20 +648,22 @@ void DrawOneLine(V2MainWindow& window)
     const auto secondMiddle = viewport.Mapping().Project(
         kachakacha::v2::geometry::Vector3{20.0, 20.0, 0.0});
     viewport.SelectAt(QPointF(firstMiddle->x, firstMiddle->y), Qt::NoModifier);
-    viewport.SelectAt(QPointF(secondMiddle->x, secondMiddle->y), Qt::ShiftModifier);
-    if (!Explain((std::string("Shift で2本選べる(")
-                     + std::to_string(viewport.Selection().entityIds.size())
+    viewport.SelectAt(QPointF(secondMiddle->x, secondMiddle->y), Qt::ControlModifier);
+    if (!Explain((std::string("Ctrl で2本選べる(")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
                      + " 件)").c_str(),
-            viewport.Selection().entityIds.size() == 2)) {
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 2)) {
         return false;
     }
-    // Ctrl で外せる。
+    // 同じものをもう一度 Ctrl で押せば外れる。
     viewport.SelectAt(QPointF(secondMiddle->x, secondMiddle->y), Qt::ControlModifier);
     (void)first;
     return Explain((std::string("Ctrl で外せる(")
-                       + std::to_string(viewport.Selection().entityIds.size())
+                       + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                           viewport.Selection()))
                        + " 件)").c_str(),
-        viewport.Selection().entityIds.size() == 1);
+        kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1);
 }
 
 [[nodiscard]] bool CaseCommandWaitsForItsTargets(V2MainWindow& window)
@@ -721,7 +723,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"モードを変えると選択道具へ戻る", &CaseModeChangeReturnsToSelect},
         {"動かす道具は1回目の押しで相手を選ぶ", &CaseMoveToolPicksItsTargetFirst},
         {"作図点を押して選べる", &CasePointsCanBeSelected},
-        {"Shiftで足しCtrlで外せる", &CaseShiftClickAddsToSelection},
+        {"Ctrlで追加と解除ができる", &CaseCtrlClickTogglesSelection},
         {"命令は相手がそろうまで構えて待つ", &CaseCommandWaitsForItsTargets},
     };
 }

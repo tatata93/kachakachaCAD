@@ -166,7 +166,7 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "制御点4つでベジェ曲線を描きます。", true,
             {"AT-WIR-001"}},
-        {"draw.spline", "スプライン", CommandMode::Tool, "spline", "S",
+        {"draw.spline", "スプライン", CommandMode::Tool, "spline", "",
             SelectionPredicate::Always, "",
             "通る点を並べてスプラインを描きます。", true,
             {"AT-WIR-001"}},

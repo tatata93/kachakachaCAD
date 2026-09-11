@@ -373,9 +373,9 @@ KACHA_V2_TEST(manual, 手順書がショートカットを台帳どおりに書�
         {"file.save_as", "Ctrl+Shift+S"}, {"edit.undo", "Ctrl+Z"},
         {"edit.redo", "Ctrl+Y"}, {"draw.line", "L"}, {"draw.circle", "C"},
         {"draw.arc", "A"}, {"view.fit_all", "F"}, {"part.extrude", "Shift+E"},
-        // V1 で手が覚えたもの。ここがずれると、そのとおりに押しても動かない。
+        // 主要な作図キー。ここがずれると、そのとおりに押しても動かない。
         {"selection.activate", "V"}, {"draw.point", "D"}, {"draw.bezier", "B"},
-        {"draw.spline", "S"}, {"wire.coincident", "I"}, {"wire.tangent", "T"},
+        {"wire.coincident", "I"}, {"wire.tangent", "T"},
         {"wire.curvature", "Shift+T"}, {"wire.trim", "X"}, {"wire.extend", "E"},
         {"measure.open", "M"}, {"draw.polyline", "P"}, {"draw.rectangle", "R"},
         {"edit.delete", "Del"}, {"view.hide_selected", "Ctrl+H"},
@@ -394,6 +394,12 @@ KACHA_V2_TEST(manual, 手順書がショートカットを台帳どおりに書�
         Require(text.find(std::string("`") + entry.second + "`") != std::string::npos,
             std::string("手順書に書いてある: ") + entry.second);
     }
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        if (command.id == "draw.spline") {
+            Require(command.defaultShortcut.empty(), "S は一時スナップ解除専用");
+        }
+    }
+    Require(text.find("`S`") != std::string::npos, "S の一時スナップ解除を手順書に書く");
 }
 
 KACHA_V2_TEST(manual, HTML版はV2の完全マニュアル)

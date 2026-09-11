@@ -119,7 +119,7 @@ bool V2MainWindow::ApplySelectionState(const QString& name)
     for (const auto& curve : session_->Scene().curves) {
         const auto screen = viewport_->Mapping().Project(curve.segment.Evaluate(0.5));
         if (screen.has_value()) {
-            viewport_->SelectAt(QPointF(screen->x, screen->y), Qt::ShiftModifier);
+            viewport_->SelectAt(QPointF(screen->x, screen->y), Qt::ControlModifier);
         }
     }
     if (name == QStringLiteral("export")) {

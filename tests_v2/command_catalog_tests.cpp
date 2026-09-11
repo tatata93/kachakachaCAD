@@ -61,7 +61,10 @@ namespace {
         bool onlyAllowed = true;
         for (const char character : id) {
             const bool lower = character >= 'a' && character <= 'z';
-            if (!lower && character != '.' && character != '_') {
+            // 数字も許す。許していなかったので `export.pdf_1to1` が読み飛ばされ、
+            // 台帳にあるのに実装が無いことを、この門が何か月も見逃していた。
+            const bool digit = character >= '0' && character <= '9';
+            if (!lower && !digit && character != '.' && character != '_') {
                 onlyAllowed = false;
                 break;
             }

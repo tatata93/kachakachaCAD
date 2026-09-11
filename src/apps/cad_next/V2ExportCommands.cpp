@@ -46,6 +46,7 @@ void V2MainWindow::RunExportCommand(std::string_view id)
         {"export.step", ExportFormat::Step},
         {"export.svg", ExportFormat::Svg},
         {"export.dxf", ExportFormat::Dxf},
+        {"export.pdf_1to1", ExportFormat::Pdf},
     };
     for (const FormatBinding& binding : kBindings) {
         if (binding.id != id) {

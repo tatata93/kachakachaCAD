@@ -79,6 +79,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
     };
     static const std::vector<std::string_view> output{
         "export.validate", "export.stl", "export.step", "export.svg", "export.dxf",
+        "export.pdf_1to1",
         "view.display_settings",
     };
     switch (mode) {

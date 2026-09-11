@@ -425,6 +425,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMorePatterns, "型紙を1つ以上選んでください。",
             "型紙をDXFで書き出します。", false,
             {"AT-EXP-012"}},
+        // 紙に出して切るための道。台帳にはあったのに、押せる入口が無かった。
+        {"export.pdf_1to1", "1:1 PDFで保存", CommandMode::Dialog, "pdf", "",
+            SelectionPredicate::OneOrMorePatterns, "型紙を1つ以上選んでください。",
+            "型紙を原寸(1:1)の PDF で書き出します。印刷して切るための紙です。", false,
+            {"AT-EXP-013"}},
     };
     return table;
 }

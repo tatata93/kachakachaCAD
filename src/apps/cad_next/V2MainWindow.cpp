@@ -280,7 +280,7 @@ void V2MainWindow::BuildMenus()
                        "fabrication.freeze_output", "fabrication.freeze_state",
                        "fabrication.set_connection_scope"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
-                            "export.dxf"}},
+                            "export.dxf", "export.pdf_1to1"}},
         {"表示(&V)", {"view.fit_all", "view.align_selection", "view.align_workplane",
                        "view.hide_selected",
                        "view.show_all", "view.stage_all", "view.stage_no_grid",

@@ -7,6 +7,8 @@
 
 #include "V2MainWindow.h"
 
+#include <algorithm>
+
 #include "kachakacha/document/Commands.h"
 
 #include <QAction>
@@ -17,10 +19,13 @@
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/EntityNaming.h"
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/view/FacingPlan.h"
 #include "kachakacha/view/ViewOrientation.h"
 
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
@@ -164,41 +169,210 @@ void V2MainWindow::DeleteSelected()
                   .arg(refused));
 }
 
-void V2MainWindow::AlignViewToSelection()
+void V2MainWindow::AdoptTreeSelection()
 {
-    using kachakacha::v2::view::OrientationFacing;
-
-    // 選んだ作業平面の法線へ正対する。形は変わらない。
-    for (const auto& id : viewport_->Selection().entityIds) {
-        const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity == nullptr
-            || entity->kind != kachakacha::v2::domain::EntityKind::WorkPlane) {
-            continue;
-        }
-        const auto* feature = session_->GetDocument().FindFeature(entity->createdBy);
-        if (feature == nullptr) {
-            continue;
-        }
-        const auto* definition =
-            std::get_if<kachakacha::v2::domain::CreateWorkPlaneDefinition>(
-                &feature->definition);
-        if (definition == nullptr) {
-            continue;
-        }
-        // 作り方ではなく、出来上がった法線を使う。作り直すと、
-        // 平面を作ったときと違う向きになりかねない。
-        const auto orientation = OrientationFacing(definition->normal,
-            kachakacha::v2::geometry::Vector3{0.0, 0.0, 1.0});
-        if (!orientation.HasValue()) {
-            ReportDiagnostics(orientation.Diagnostics());
-            return;
-        }
-        viewport_->SetOrientation(orientation.Value());
-        SetStatus(QStringLiteral("%1 に正対しました。形は変わっていません。")
-                .arg(QString::fromStdString(entity->displayName)));
+    // 左の一覧で選んだものを、3D 画面の選択にする(V1 の modelTree の itemSelectionChanged)。
+    if (entityTree_ == nullptr || viewport_ == nullptr || syncingSelection_) {
         return;
     }
-    SetStatus(QStringLiteral("正対: 作業平面を1つ選んでください。"));
+    const auto idOf = [this](QTreeWidgetItem* item) {
+        for (const auto& [row, id] : entityItems_) {
+            if (row == item) {
+                return id;
+            }
+        }
+        return kachakacha::v2::base::EntityId{};
+    };
+    kachakacha::v2::app::SelectionSet next;
+    const auto add = [&next](const kachakacha::v2::base::EntityId& id) {
+        if (id.IsNil()) {
+            return;
+        }
+        for (const auto& already : next.entityIds) {
+            if (already == id) {
+                return;
+            }
+        }
+        next.entityIds.push_back(id);
+    };
+    for (QTreeWidgetItem* item : entityTree_->selectedItems()) {
+        if (item == nullptr) {
+            continue;
+        }
+        const auto id = idOf(item);
+        if (!id.IsNil()) {
+            add(id);
+            continue;
+        }
+        // まとまりや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
+        for (int child = 0; child < item->childCount(); ++child) {
+            add(idOf(item->child(child)));
+        }
+    }
+    syncingSelection_ = true;
+    viewport_->SetSelection(next);
+    syncingSelection_ = false;
+    // 選択が変わったあとの後始末は、3D 画面で選んだときと同じ道を通す。
+    RefreshExportCounts();
+    RefreshMeasurements();
+    RefreshEditDock();
+    RefreshCornerDock();
+    RefreshFabricationDock();
+    RefreshWorkPlaneDock();
+    RefreshCommandVisibility();
+    viewport_->update();
+}
+
+void V2MainWindow::HighlightTreeForSelection()
+{
+    // 3D 画面で選んだものを、左の一覧でも光らせる(V1 の UpdateSelections の updateTree)。
+    if (entityTree_ == nullptr || viewport_ == nullptr || syncingSelection_) {
+        return;
+    }
+    const auto& selected = viewport_->Selection().entityIds;
+    syncingSelection_ = true;
+    const bool blocked = entityTree_->blockSignals(true);
+    entityTree_->clearSelection();
+    QTreeWidgetItem* last = nullptr;
+    for (const auto& [item, id] : entityItems_) {
+        const bool wanted = std::any_of(selected.begin(), selected.end(),
+            [&id](const kachakacha::v2::base::EntityId& picked) { return picked == id; });
+        if (wanted && item != nullptr) {
+            item->setSelected(true);
+            last = item;
+        }
+    }
+    if (last != nullptr) {
+        // 最後に選んだものが見えるところまで送る。選んだのに画面外では気づけない。
+        entityTree_->scrollToItem(last);
+    }
+    entityTree_->blockSignals(blocked);
+    syncingSelection_ = false;
+}
+
+namespace {
+
+//! 線を標本化する。直線は両端だけ、曲線は V1 と同じ 64 分割。
+void SampleCurve(const kachakacha::v2::geometry::CurveSegment& segment,
+    std::vector<kachakacha::v2::geometry::Vector3>& into)
+{
+    const int samples = segment.Kind() == kachakacha::v2::geometry::CurveKind::Line ? 1 : 64;
+    for (int index = 0; index <= samples; ++index) {
+        into.push_back(segment.Evaluate(static_cast<double>(index)
+            / static_cast<double>(samples)));
+    }
+}
+
+} // namespace
+
+//! 選んだものから、正対に使う点と向きを集める。
+//! 作業平面は四隅と法線、線は標本点、点はその位置。
+//! 線がある作業平面の上に全部載っていれば、その面の向きを使う(V1 と同じ)。
+void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
+{
+    using kachakacha::v2::domain::EntityKind;
+    const auto& document = session_->GetDocument();
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = document.FindEntity(id);
+        if (entity == nullptr) {
+            continue;
+        }
+        if (entity->kind == EntityKind::WorkPlane) {
+            const auto frame = WorkPlaneFrameOf(id);
+            if (!frame.has_value()) {
+                continue;
+            }
+            const double half = 50.0;
+            target.points.push_back(frame->PointAt(-half, -half));
+            target.points.push_back(frame->PointAt(half, -half));
+            target.points.push_back(frame->PointAt(half, half));
+            target.points.push_back(frame->PointAt(-half, half));
+            // 作業平面は向きがはっきりしている。推さずにそのまま使う。
+            target.normal = frame->normal;
+            target.uAxis = frame->uAxis;
+            ++target.count;
+            continue;
+        }
+        const std::size_t before = target.points.size();
+        for (const auto& curve : session_->Scene().curves) {
+            if (curve.entityId == id) {
+                SampleCurve(curve.segment, target.points);
+            }
+        }
+        for (const auto& point : session_->Scene().points) {
+            if (point.entityId == id) {
+                target.points.push_back(point.position);
+            }
+        }
+        if (target.points.size() > before) {
+            ++target.count;
+        }
+    }
+}
+
+void V2MainWindow::AlignViewToSelection()
+{
+    using kachakacha::v2::view::BestFitNormal;
+    using kachakacha::v2::view::PlanFacingSelection;
+
+    // V1 の「選択に正対」は3つを同時にやる ── 向き・真ん中・大きさ。
+    // 向きだけ変えて中身が画面の外にあると「きいていない」ようにしか見えない。
+    FacingTarget target;
+    CollectFacingTarget(target);
+    if (target.points.empty()) {
+        SetStatus(QStringLiteral("正対: 作業平面・線・点のどれかを選んでください。"));
+        return;
+    }
+    const auto viewDirection = kachakacha::v2::view::ForwardOf(viewport_->Orientation());
+    kachakacha::v2::geometry::Vector3 normal;
+    kachakacha::v2::geometry::Vector3 uAxis;
+    if (target.normal.has_value()) {
+        normal = *target.normal;
+        uAxis = target.uAxis.value_or(kachakacha::v2::geometry::Vector3{1.0, 0.0, 0.0});
+    } else {
+        // 面が分かっていないものは、点の並びから推す(V1 と同じ)。
+        const auto guessed = BestFitNormal(target.points, viewDirection);
+        if (!guessed.HasValue()) {
+            ReportDiagnostics(guessed.Diagnostics());
+            return;
+        }
+        normal = guessed.Value();
+        uAxis = FacingUAxisHint(target.points, normal);
+    }
+    const auto plan = PlanFacingSelection(target.points, normal, uAxis, viewDirection);
+    if (!plan.HasValue()) {
+        ReportDiagnostics(plan.Diagnostics());
+        return;
+    }
+    viewport_->SetOrientation(plan.Value().orientation);
+    viewport_->SetViewCenter(plan.Value().center);
+    // 少し余白をつけて収める。ぴったりだと端が画面の縁に貼りつく。
+    viewport_->SetVisibleWidthMm(plan.Value().spanMm * 1.4);
+    viewport_->update();
+    SetStatus(QStringLiteral("%1個に正対しました。形は変わっていません。")
+            .arg(target.count));
+}
+
+//! 面の上の「横」の見当。点の並びのうち、法線と直交する成分がいちばん長いもの。
+kachakacha::v2::geometry::Vector3 V2MainWindow::FacingUAxisHint(
+    const std::vector<kachakacha::v2::geometry::Vector3>& points,
+    const kachakacha::v2::geometry::Vector3& normal)
+{
+    using kachakacha::v2::geometry::Dot;
+    using kachakacha::v2::geometry::Normalized;
+    using kachakacha::v2::geometry::Vector3;
+    const Vector3 unit = Normalized(normal);
+    Vector3 best;
+    double bestLength = 0.0;
+    for (std::size_t index = 1; index < points.size(); ++index) {
+        const Vector3 along = points[index] - points.front();
+        const Vector3 flat = along - unit * Dot(along, unit);
+        if (flat.LengthSquared() > bestLength) {
+            bestLength = flat.LengthSquared();
+            best = flat;
+        }
+    }
+    return best;
 }
 
 void V2MainWindow::ActivateSelectedGroup()
@@ -378,4 +552,31 @@ const kachakacha::v2::base::EntityId* V2MainWindow::EntityForItem(
         }
     }
     return nullptr;
+}
+
+bool V2MainWindow::SelectTreeRowForEntity(const kachakacha::v2::base::EntityId& entityId)
+{
+    if (entityTree_ == nullptr) {
+        return false;
+    }
+    for (const auto& entry : entityItems_) {
+        if (entry.second != entityId) {
+            continue;
+        }
+        entityTree_->clearSelection();
+        entry.first->setSelected(true);
+        // 人が押したときと同じ道を通す。別の入口を作ると、試験が通っても
+        // 人が押したときには動かない、ということが起こる。
+        AdoptTreeSelection();
+        return true;
+    }
+    return false;
+}
+
+int V2MainWindow::TreeSelectedRowCount() const
+{
+    if (entityTree_ == nullptr) {
+        return 0;
+    }
+    return entityTree_->selectedItems().size();
 }

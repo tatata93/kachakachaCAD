@@ -189,6 +189,9 @@ public:
     QPolygonF(std::initializer_list<QPointF>) {}
     QPolygonF& operator<<(const QPointF&);
     [[nodiscard]] int size() const;
+    [[nodiscard]] bool isEmpty() const;
+    [[nodiscard]] QPointF& operator[](int);
+    [[nodiscard]] const QPointF& operator[](int) const;
 };
 
 class QPolygon {
@@ -263,6 +266,7 @@ class QCursor {
 public:
     QCursor() = default;
     QCursor(Qt::CursorShape) {}
+    QCursor(const class QPixmap&, int, int) {}
     [[nodiscard]] static QPoint pos();
 };
 
@@ -287,10 +291,11 @@ public:
 class QPainter {
 public:
     enum RenderHint { Antialiasing = 1, TextAntialiasing = 2, SmoothPixmapTransform = 4 };
-    enum CompositionMode { CompositionMode_SourceOver };
+    enum CompositionMode { CompositionMode_SourceOver, CompositionMode_Clear };
     QPainter() = default;
     explicit QPainter(QPaintDevice*) {}
     void setRenderHint(RenderHint, bool = true);
+    void setCompositionMode(CompositionMode);
     void drawPixmap(const QPoint&, const QPixmap&);
     void drawPoint(int, int);
     void drawPoint(const QPoint&);

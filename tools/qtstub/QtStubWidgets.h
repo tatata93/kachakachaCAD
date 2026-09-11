@@ -10,6 +10,12 @@ class QList {
 public:
     QList() = default;
     QList(std::initializer_list<T>) {}
+    //! 範囲 for に載せられるだけの入れ物。型検査に要るぶんだけ。
+    [[nodiscard]] T* begin() const { return nullptr; }
+    [[nodiscard]] T* end() const { return nullptr; }
+    [[nodiscard]] int size() const { return 0; }
+    [[nodiscard]] bool isEmpty() const { return true; }
+    void push_back(const T&) {}
 };
 
 class QObject {
@@ -274,6 +280,9 @@ public:
     [[nodiscard]] Qt::CheckState checkState(int) const;
     [[nodiscard]] QTreeWidgetItem* parent() const;
     void setToolTip(int, const QString&);
+    void setSelected(bool);
+    [[nodiscard]] bool isSelected() const;
+    [[nodiscard]] bool isHidden() const;
 };
 
 class QTreeWidget : public QAbstractItemView {
@@ -294,8 +303,12 @@ public:
     void editItem(QTreeWidgetItem*, int = 0);
     void expandAll();
     void resizeColumnToContents(int);
+    [[nodiscard]] QList<QTreeWidgetItem*> selectedItems() const;
+    void clearSelection();
+    void scrollToItem(QTreeWidgetItem*);
     void (*itemClicked)(QTreeWidgetItem*, int);
     void (*itemChanged)(QTreeWidgetItem*, int);
+    void (*itemSelectionChanged)();
 };
 
 class QDockWidget : public QWidget {
@@ -329,6 +342,7 @@ public:
     void addToolBar(Qt::ToolBarArea, QToolBar*);
     void addDockWidget(Qt::DockWidgetArea, QDockWidget*);
     void tabifyDockWidget(QDockWidget*, QDockWidget*);
+    void splitDockWidget(QDockWidget*, QDockWidget*, Qt::Orientation);
     void resizeDocks(const QList<QDockWidget*>&, const QList<int>&, Qt::Orientation);
     void addAction(QAction*);
 };

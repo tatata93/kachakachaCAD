@@ -115,6 +115,30 @@ public:
         return workPlane_;
     }
 
+    //! 画面に出す作業平面の1枚。文書の中の作図面を、見えるようにするためだけのもの。
+    struct WorkPlaneView {
+        kachakacha::v2::base::EntityId entityId;
+        kachakacha::v2::modeling::WorkPlaneFrame frame;
+        //! 画面に出す名前(「上面 XY」など)。空なら名前を出さない。
+        QString label;
+        //! いま作業中の面か。作業中だけ色を変える(V1 と同じ)。
+        bool active = false;
+    };
+    //! 出す作業平面を入れ替える。文書が変わるたびに窓が呼ぶ。
+    void SetWorkPlaneViews(std::vector<WorkPlaneView> planes);
+    //! いま作図用の十字カーソルを出しているか。試験から見る。
+    //! カーソルの形そのものは Qt が持っていて読み出せないので、選んだ結果を覚える。
+    [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
+    //! カーソルの下にある線。無ければ Nil。試験から見る。
+    [[nodiscard]] const kachakacha::v2::base::EntityId& HoveredEntityId() const noexcept
+    {
+        return hoveredEntityId_;
+    }
+    [[nodiscard]] int WorkPlaneViewCount() const noexcept
+    {
+        return static_cast<int>(workPlaneViews_.size());
+    }
+
     //! 画面に収める幅(mm)。小さくすると拡大になる。
     void SetVisibleWidthMm(double value);
     [[nodiscard]] double VisibleWidthMm() const noexcept { return visibleWidthMm_; }
@@ -137,6 +161,8 @@ public:
     void SetSnapSuppressed(bool suppressed);
     //! カーソルの形をいまの状態に合わせる。掴めるかどうかを手元で分かるようにする。
     void RefreshCursorShape();
+    //! 作図中の十字カーソル(V1 の白フチ付き十字)。既定の十字は細くて読めない。
+    [[nodiscard]] static QCursor DrawingCrossCursor();
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
     void PressRightWithoutMoving();
     //! 選択道具で右クリックしたときに出すもの。窓が用意する。
@@ -349,6 +375,8 @@ private:
     //! 原点の軸 X/Y/Z を出すか。一覧の「原点」ノードのチェックで変える。
     bool axisVisible_[3] = {true, true, true};
     void DrawWorkPlane(QPainter& painter) const;
+    //! 作業平面を1枚描く。塗り・枠・u/v の目印・名前。
+    void DrawOneWorkPlane(QPainter& painter, const WorkPlaneView& plane) const;
     void DrawDocument(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;
     //! 選んだワイヤーの制御点。掴める場所を見せる。
@@ -455,6 +483,12 @@ private:
     std::function<void()> measurePicksChanged_;
     std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
+    std::vector<WorkPlaneView> workPlaneViews_;
+    //! カーソルの下の線。押さなくても「どれに当たるか」が見えるようにする。
+    kachakacha::v2::base::EntityId hoveredEntityId_;
+    kachakacha::v2::base::SegmentId hoveredSegmentId_;
+    //! 直前に選んだカーソルが作図用の十字だったか。
+    bool drawingCursor_ = false;
     kachakacha::v2::geometry::Vector3 center_{};
     double visibleWidthMm_ = 200.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;

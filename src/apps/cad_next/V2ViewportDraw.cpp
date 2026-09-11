@@ -113,14 +113,40 @@ void V2Viewport::DrawAxes(QPainter& painter) const
     }
 }
 
+//! 作業平面を描く(V1 の作図面と同じ出し方)。
+//!
+//! V1 は **すべての作図面** を、薄い塗りと破線の枠で出していた。
+//! 作業中の1枚だけを、しかも塗らずに点線の枠で出していたので、
+//! グリッドに紛れて「どこに描いているのか分からない」状態になっていた。
+//!
+//! 色は3通り。選んでいる面(橙)・作業中の面(青緑)・そのほか(灰)。
+//! 原点から u(青緑)と v(茶)の短い線を出す。どちらが横でどちらが縦かが読める。
 void V2Viewport::DrawWorkPlane(QPainter& painter) const
 {
-    const double half = visibleWidthMm_ * 0.35;
+    if (!display_.workPlaneVisible) {
+        return;
+    }
+    if (workPlaneViews_.empty()) {
+        // 文書の面がまだ届いていないときも、いま描いている面だけは出す。
+        // 何も出さないと、描く場所が画面から消える。
+        DrawOneWorkPlane(painter, WorkPlaneView{{}, workPlane_, QString(), true});
+        return;
+    }
+    for (const WorkPlaneView& plane : workPlaneViews_) {
+        DrawOneWorkPlane(painter, plane);
+    }
+}
+
+void V2Viewport::DrawOneWorkPlane(QPainter& painter, const WorkPlaneView& plane) const
+{
+    // 大きさは画面に合わせる。固定寸法だと、寄ると枠が画面の外へ出て見えなくなり、
+    // 引くと点にしか見えない。
+    const double half = std::clamp(visibleWidthMm_ * 0.3, 5.0, 5000.0);
     const Vector3 corners[4] = {
-        workPlane_.PointAt(-half, -half),
-        workPlane_.PointAt(half, -half),
-        workPlane_.PointAt(half, half),
-        workPlane_.PointAt(-half, half),
+        plane.frame.PointAt(-half, -half),
+        plane.frame.PointAt(half, -half),
+        plane.frame.PointAt(half, half),
+        plane.frame.PointAt(-half, half),
     };
     QPolygonF polygon;
     for (const Vector3& corner : corners) {
@@ -130,11 +156,40 @@ void V2Viewport::DrawWorkPlane(QPainter& painter) const
         }
         polygon << *screen;
     }
-    QColor edge = palette_.workPlane;
-    edge.setAlpha(140);
-    painter.setPen(QPen(edge, 1.0, Qt::DotLine));
-    painter.setBrush(Qt::NoBrush);
+    const bool selected = !plane.entityId.IsNil()
+        && kachakacha::v2::app::IsSelected(selection_, plane.entityId);
+    QColor fill = selected ? QColor(241, 178, 54, 52)
+        : (plane.active ? QColor(0, 127, 120, 36) : QColor(69, 132, 142, 18));
+    QColor edge = selected ? QColor(0xc4, 0x7a, 0x13)
+        : (plane.active ? QColor(0x00, 0x7f, 0x78) : QColor(0x7d, 0x9a, 0xa0));
+    painter.setBrush(fill);
+    painter.setPen(QPen(edge, selected || plane.active ? 2.2 : 1.0, Qt::DashLine));
     painter.drawPolygon(polygon);
+
+    // 原点と u/v。どちらが横でどちらが縦かを、色で見分ける(V1 と同じ色)。
+    const double tick = half * 0.22;
+    const auto origin = ToScreen(plane.frame.origin);
+    const auto uEnd = ToScreen(plane.frame.PointAt(tick, 0.0));
+    const auto vEnd = ToScreen(plane.frame.PointAt(0.0, tick));
+    if (origin.has_value() && uEnd.has_value() && vEnd.has_value()) {
+        painter.setPen(QPen(QColor(0x25, 0x74, 0x7d), 1.7));
+        painter.drawLine(*origin, *uEnd);
+        painter.setPen(QPen(QColor(0x8b, 0x5a, 0x2b), 1.7));
+        painter.drawLine(*origin, *vEnd);
+    }
+    if (plane.label.isEmpty() || polygon.isEmpty()) {
+        return;
+    }
+    // 名前は左上の角へ。どの面に描いているのかを、数えずに読めるようにする。
+    painter.setPen(QPen(edge, 1.0));
+    painter.drawText(polygon[3] + QPointF(4.0, 14.0),
+        plane.active ? plane.label + QStringLiteral("(作業中)") : plane.label);
+}
+
+void V2Viewport::SetWorkPlaneViews(std::vector<WorkPlaneView> planes)
+{
+    workPlaneViews_ = std::move(planes);
+    update();
 }
 
 namespace {
@@ -184,17 +239,28 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         if (display_.selectionOnly && !selected) {
             continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
         }
+        // カーソルの下の線(V1 と同じ)。選ぶ前に「どれに当たるか」を見せる。
+        const bool hovered = !selected && !hoveredEntityId_.IsNil()
+            && curve.entityId == hoveredEntityId_;
         QColor color = selected
             ? palette_.selected
             : (curve.construction ? palette_.construction : palette_.wire);
+        if (hovered) {
+            // 選択色へ寄せるが、同じにはしない。選んだものと当たっているものは
+            // 見分けられなければならない。
+            color = palette_.selected.lighter(125);
+        }
         if (dimming && !selected && !CurveOnPlane(curve.segment, workPlane_)) {
             color.setAlphaF(color.alphaF() * 0.24);
         }
         // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。
         // 細い実線は高解像度の画面で点線に見えることがある。
-        const double width = selected
+        double width = selected
             ? std::max(3.2, display_.wireWidthPx + 1.2)
             : (curve.construction ? display_.constructionWidthPx : display_.wireWidthPx);
+        if (hovered) {
+            width += 1.4;
+        }
         // 基準線は一点鎖線(V1 と同じ)。補助線は補助線の様式、ほかは線の様式。
         const Qt::PenStyle style = curve.datum
             ? Qt::DashDotLine
@@ -336,35 +402,43 @@ void V2Viewport::DrawSnap(QPainter& painter) const
     if (!screen.has_value()) {
         return;
     }
-    painter.setPen(QPen(palette_.snap, 1.5));
-    painter.setBrush(Qt::NoBrush);
-    const double size = 5.0;
+    const double size = 6.0;
     const SnapKind kind = hover_.snap->kind;
-    switch (kind) {
-    case SnapKind::Endpoint:
-    case SnapKind::DrawingPoint:
-        painter.drawRect(QRectF(screen->x() - size, screen->y() - size, size * 2, size * 2));
-        break;
-    case SnapKind::Midpoint:
-        painter.drawPolygon(QPolygonF({QPointF(screen->x(), screen->y() - size),
-            QPointF(screen->x() + size, screen->y() + size),
-            QPointF(screen->x() - size, screen->y() + size)}));
-        break;
-    case SnapKind::Center:
-    case SnapKind::Quadrant:
-        painter.drawEllipse(*screen, size, size);
-        break;
-    case SnapKind::Intersection:
-    case SnapKind::ScreenIntersection:
-        painter.drawLine(QPointF(screen->x() - size, screen->y() - size),
-            QPointF(screen->x() + size, screen->y() + size));
-        painter.drawLine(QPointF(screen->x() - size, screen->y() + size),
-            QPointF(screen->x() + size, screen->y() - size));
-        break;
-    default:
-        painter.drawEllipse(*screen, size * 0.7, size * 0.7);
-        break;
-    }
+    const auto glyph = [&] {
+        switch (kind) {
+        case SnapKind::Endpoint:
+        case SnapKind::DrawingPoint:
+            painter.drawRect(QRectF(screen->x() - size, screen->y() - size,
+                size * 2, size * 2));
+            break;
+        case SnapKind::Midpoint:
+            painter.drawPolygon(QPolygonF({QPointF(screen->x(), screen->y() - size),
+                QPointF(screen->x() + size, screen->y() + size),
+                QPointF(screen->x() - size, screen->y() + size)}));
+            break;
+        case SnapKind::Center:
+        case SnapKind::Quadrant:
+            painter.drawEllipse(*screen, size, size);
+            break;
+        case SnapKind::Intersection:
+        case SnapKind::ScreenIntersection:
+            painter.drawLine(QPointF(screen->x() - size, screen->y() - size),
+                QPointF(screen->x() + size, screen->y() + size));
+            painter.drawLine(QPointF(screen->x() - size, screen->y() + size),
+                QPointF(screen->x() + size, screen->y() - size));
+            break;
+        default:
+            painter.drawEllipse(*screen, size * 0.7, size * 0.7);
+            break;
+        }
+    };
+    // 白フチを下に敷いてから色を重ねる(V1 と同じ)。
+    // 1本線だけだと、線の上に来たときに記号が背景へ溶けて読めない。
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(QColor(255, 255, 255, 225), 4.0));
+    glyph();
+    painter.setPen(QPen(palette_.snap, 1.8));
+    glyph();
     // 何に吸着したかを、記号だけでなく言葉でも出す(PRD-061)。
     painter.setPen(QPen(palette_.text, 1.0));
     painter.drawText(QPointF(screen->x() + size + 4.0, screen->y() - size),

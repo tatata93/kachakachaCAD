@@ -704,6 +704,10 @@ void V2Viewport::OnToolChanged()
         CloseCursorInput();
     }
     ClearMeasurePicks();
+    // 道具が変わればカーソルの形も変わる。ここで呼ばないと、次に押すまで
+    // 矢印のままで、いま作図できるのかどうかが手元で分からない。
+    RefreshCursorShape();
+    update();
 }
 
 void V2Viewport::ClearMeasurePicks()
@@ -935,6 +939,20 @@ void V2Viewport::HoverAt(const QPointF& position)
     status_ = hover_.messageJa;
     if (statusCallback_) {
         statusCallback_(status_);
+    }
+    // カーソルの下の線を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
+    // V1 は当たっている線を太く出していた。同じにする。
+    const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+        ScreenPoint{position.x(), position.y()},
+        session_->GetDocument().Snapshot().settings.tolerance);
+    const auto previous = hoveredEntityId_;
+    const auto previousSegment = hoveredSegmentId_;
+    hoveredEntityId_ = picked.has_value() ? picked->entityId
+                                          : kachakacha::v2::base::EntityId{};
+    hoveredSegmentId_ = picked.has_value() ? picked->segmentId
+                                           : kachakacha::v2::base::SegmentId{};
+    if (previous != hoveredEntityId_ || previousSegment != hoveredSegmentId_) {
+        RefreshCursorShape();
     }
     update();
 }

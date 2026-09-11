@@ -156,6 +156,23 @@ V2MainWindow::V2MainWindow()
     BuildToolPalette();
     BuildPanels();
 
+    WireViewportCallbacks();
+
+    // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)を置き、上面 XY を作業中にする。
+    // V1 と同じく、開いた直後から「平面から離す」の相手が選べる。
+    AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
+    SelectTool(DrawingTool::Line);
+    SetMode(UiMode::Drawing);
+    ApplyTheme(UiTheme::Normal);
+    setWindowTitle(QStringLiteral("kachakachaCAD %1")
+            .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
+    resize(1180, 760);
+}
+
+//! 画面(V2Viewport)から窓へ戻ってくる知らせを、まとめて繋ぐ。
+//! 繋ぎ先はどれも窓の役目(文書を変える・棚を書き直す)なので、ここに集める。
+void V2MainWindow::WireViewportCallbacks()
+{
     viewport_->SetStatusCallback([this](const std::string& text) {
         SetStatus(QString::fromUtf8(text.c_str()));
     });
@@ -205,6 +222,8 @@ V2MainWindow::V2MainWindow()
     // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
     viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
     viewport_->SetSelectionChangedCallback([this] {
+        // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
+        HighlightTreeForSelection();
         RefreshExportCounts();
         RefreshMeasurements();
         RefreshEditDock();
@@ -217,16 +236,6 @@ V2MainWindow::V2MainWindow()
     });
     // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
     viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
-
-    // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)を置き、上面 XY を作業中にする。
-    // V1 と同じく、開いた直後から「平面から離す」の相手が選べる。
-    AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
-    SelectTool(DrawingTool::Line);
-    SetMode(UiMode::Drawing);
-    ApplyTheme(UiTheme::Normal);
-    setWindowTitle(QStringLiteral("kachakachaCAD %1")
-            .arg(QString::fromStdString(kachakacha::v2::base::ProductVersionString())));
-    resize(1180, 760);
 }
 
 V2MainWindow::~V2MainWindow() = default;
@@ -489,6 +498,10 @@ void V2MainWindow::BuildPanels()
     entityTree_->setColumnCount(2);
     entityTree_->setHeaderLabels(
         {QStringLiteral("名前"), QStringLiteral("種類")});
+    // V1 と同じく、まとめて選べる。左の一覧で選んだものは 3D 画面でも選ばれる。
+    entityTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    QObject::connect(entityTree_, &QTreeWidget::itemSelectionChanged, this,
+        [this] { AdoptTreeSelection(); });
     // 名前を書き換えたら文書へ入れる。判断(空か、変わったか)は core にある。
     QObject::connect(entityTree_, &QTreeWidget::itemChanged, this,
         [this](QTreeWidgetItem* item, int column) {
@@ -533,7 +546,10 @@ void V2MainWindow::BuildPanels()
     // 棚の割り当てだけでは、書き出しの棚に押されて2段まで潰れた。
     processView_->setMinimumHeight(130);
     processDock->setWidget(processView_);
-    addDockWidget(Qt::RightDockWidgetArea, processDock);
+    // 手順は右ではなく左の下へ。右は「いま選んでいる道具の設定」だけにする。
+    // 右に置くと、道具の設定が手順に押されて見えなくなる(オーナー指摘 2026-09-11)。
+    addDockWidget(Qt::LeftDockWidgetArea, processDock);
+    splitDockWidget(treeDock, processDock, Qt::Vertical);
     processDock_ = processDock;
 
     BuildExportDock();
@@ -550,7 +566,9 @@ void V2MainWindow::BuildPanels()
     // 見出しが切れ、手順が2行しか見えなくなる。
     // 横幅を先に決めてから、縦の割り当てを決める。
     resizeDocks({exportDock_}, {300}, Qt::Horizontal);
-    resizeDocks({guideDock_, processDock_, exportDock_}, {110, 200, 330}, Qt::Vertical);
+    resizeDocks({guideDock_, exportDock_}, {110, 330}, Qt::Vertical);
+    // 左は一覧が主で、手順はその下。一覧を潰さない割り当てにする。
+    resizeDocks({processDock_}, {180}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
     BuildStatusBar();
 }
@@ -1212,100 +1230,6 @@ int V2MainWindow::EntityRowCount() const
 int V2MainWindow::DiagnosticRowCount() const
 {
     return diagnosticList_ ? diagnosticList_->count() : 0;
-}
-
-void V2MainWindow::RefreshEntityList()
-{
-    if (!entityTree_) {
-        return;
-    }
-    // 書き換えの便りを止めてから作り直す。止めないと、作り直しの途中で
-    // 「名前が変わった」と誤って伝わり、名前が入れ替わる。
-    const bool blocked = entityTree_->blockSignals(true);
-    entityTree_->clear();
-    entityItems_.clear();
-    const auto& snapshot = session_->GetDocument().Snapshot();
-    // まとまりごとに束ねる。いま作業中のまとまりは名前の後ろに印を付ける。
-    std::map<std::string, QTreeWidgetItem*> byGroup;
-    const auto groupItem = [&](const std::optional<kachakacha::v2::base::GroupId>& id)
-        -> QTreeWidgetItem* {
-        std::string name = "(まとまりなし)";
-        bool active = false;
-        if (id.has_value()) {
-            for (const auto& group : snapshot.groups) {
-                if (group.id == *id) {
-                    name = group.displayName;
-                }
-            }
-            active = snapshot.settings.activeGroupId.has_value()
-                && *snapshot.settings.activeGroupId == *id;
-        }
-        const std::string key = name + (active ? " ←作業中" : "");
-        const auto found = byGroup.find(key);
-        if (found != byGroup.end()) {
-            return found->second;
-        }
-        auto* made = new QTreeWidgetItem(entityTree_);
-        made->setText(0, QString::fromStdString(key));
-        made->setText(1, QStringLiteral("まとまり"));
-        byGroup.emplace(key, made);
-        return made;
-    };
-    entityItems_.clear();
-    // 原点の基準平面と3軸は、最上部の「原点」に固定して出す(V1 と同じ)。
-    // 消せず、名前も変えられず、まとまりへも入らない。
-    axisItems_.fill(nullptr);
-    auto* originRoot = new QTreeWidgetItem(entityTree_);
-    originRoot->setText(0, QStringLiteral("原点"));
-    originRoot->setText(1, QStringLiteral("原点"));
-    originRoot->setToolTip(0, QStringLiteral(
-        "初期の基準平面(top_XY / front_XZ / side_YZ)と軸。削除やまとまりへの移動はできません"));
-    for (const auto& entity : snapshot.entities) {
-        if (!kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
-            continue;
-        }
-        auto* item = new QTreeWidgetItem(originRoot);
-        item->setText(0, QString::fromUtf8(entity.displayName.c_str()));
-        item->setText(1, QStringLiteral("作業平面"));
-        item->setFlags(item->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
-        entityItems_.emplace_back(item, entity.id);
-    }
-    const char* axisNames[3] = {"X軸", "Y軸", "Z軸"};
-    for (int axis = 0; axis < 3; ++axis) {
-        auto* item = new QTreeWidgetItem(originRoot);
-        item->setText(0, QString::fromUtf8(axisNames[axis]));
-        item->setText(1, QStringLiteral("軸"));
-        item->setFlags((item->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsEditable
-            & ~Qt::ItemIsDragEnabled);
-        item->setCheckState(0, viewport_ != nullptr && viewport_->AxisVisible(axis)
-                ? Qt::Checked
-                : Qt::Unchecked);
-        axisItems_[static_cast<std::size_t>(axis)] = item;
-    }
-    for (const auto& entity : snapshot.entities) {
-        if (kachakacha::v2::app::IsOriginPlane(snapshot, entity.id)) {
-            continue;
-        }
-        auto* item = new QTreeWidgetItem(groupItem(entity.groupId));
-        const QString name = entity.displayName.empty()
-            ? QStringLiteral("(名前なし)")
-            : QString::fromUtf8(entity.displayName.c_str());
-        item->setText(0, name);
-        // F2 で名前を書き換えられるようにする。まとまりの行は変えられない。
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        entityItems_.emplace_back(item, entity.id);
-        item->setText(1, QString::fromUtf8(
-            std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
-    }
-    entityTree_->expandAll();
-    for (int column = 0; column < entityTree_->columnCount(); ++column) {
-        entityTree_->resizeColumnToContents(column);
-    }
-    if (groupLabel_ != nullptr) {
-        groupLabel_->setText(ActiveGroupText());
-    }
-    RefreshActiveGroupCombo();
-    entityTree_->blockSignals(blocked);
 }
 
 QAction* V2MainWindow::ActionFor(std::string_view id) const

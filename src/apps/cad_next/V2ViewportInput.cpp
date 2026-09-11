@@ -177,15 +177,52 @@ void V2Viewport::SetSnapSuppressed(bool suppressed)
     ApplySnapSettings();
 }
 
+//! 作図中の十字カーソル(V1 の DrawingCrossCursor)。
+//!
+//! 既定の Qt::CrossCursor は細く小さく、矢印との違いが手元で読めない。
+//! V1 は白フチ付きの大きめの十字を自前で描いていた。作図中かどうかが
+//! ひと目で分かるのは、この形の違いのおかげである。
+//!
+//! QCursor を関数 static の **値** で持つと、QApplication を畳んだ後の
+//! デストラクタで落ちる。V1 と同じく、わざとポインタで持って解放しない。
+QCursor V2Viewport::DrawingCrossCursor()
+{
+    static const QCursor* cursor = [] {
+        constexpr int kSize = 33;
+        constexpr int kCenter = kSize / 2;
+        QPixmap pixmap(kSize, kSize);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(QPen(QColor(255, 255, 255, 235), 3.0));
+        painter.drawLine(kCenter, 0, kCenter, kSize - 1);
+        painter.drawLine(0, kCenter, kSize - 1, kCenter);
+        painter.setPen(QPen(QColor(20, 46, 56, 255), 1.0));
+        painter.drawLine(kCenter, 0, kCenter, kSize - 1);
+        painter.drawLine(0, kCenter, kSize - 1, kCenter);
+        // 中心は小さく開ける。開けないと、狙っている点が十字の下に隠れる。
+        painter.setCompositionMode(QPainter::CompositionMode_Clear);
+        painter.fillRect(kCenter - 2, kCenter - 2, 5, 5, QColor(Qt::transparent));
+        painter.end();
+        return new QCursor(pixmap, kCenter, kCenter);
+    }();
+    return *cursor;
+}
+
 void V2Viewport::RefreshCursorShape()
 {
     // 掴めるかどうかが手元で分かるようにする。V1と同じ使い分け。
+    drawingCursor_ = false;
     if (panning_) {
         setCursor(Qt::ClosedHandCursor);
         return;
     }
     if (orbiting_ || gadgetDrag_.has_value() || cubeDrag_.active) {
         setCursor(Qt::ClosedHandCursor);
+        return;
+    }
+    if (controlDrag_.active || bodyDrag_.active) {
+        setCursor(Qt::SizeAllCursor);
         return;
     }
     if (PickPending()) {
@@ -196,11 +233,21 @@ void V2Viewport::RefreshCursorShape()
         setCursor(Qt::OpenHandCursor);
         return;
     }
-    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {
-        setCursor(Qt::ArrowCursor);
+    const auto tool = session_->CurrentTool();
+    if (tool == kachakacha::v2::modeling::DrawingTool::Select) {
+        // 拾えるものの上では指にする(V1 と同じ)。押せる場所が手元で分かる。
+        setCursor(hover_.snap.has_value() || !hoveredEntityId_.IsNil()
+                ? Qt::PointingHandCursor
+                : Qt::ArrowCursor);
         return;
     }
-    setCursor(Qt::CrossCursor);
+    if (tool == kachakacha::v2::modeling::DrawingTool::Measure) {
+        setCursor(Qt::PointingHandCursor);
+        return;
+    }
+    // 作図中はいつも十字。矢印との違いで「いま描ける」と分かる。
+    drawingCursor_ = true;
+    setCursor(DrawingCrossCursor());
 }
 
 void V2Viewport::SetContextMenuCallback(std::function<void(const QPoint&)> callback)

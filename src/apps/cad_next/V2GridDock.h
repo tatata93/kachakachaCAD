@@ -31,6 +31,8 @@ struct V2GridChoice {
     QString spacingExpression;
     bool showInAllModes = true;
     bool dimOffPlaneLines = true;
+    //! 作図面(作業平面)を画面に出す。消すと、どこに描いているかの手がかりが減る。
+    bool workPlaneVisible = true;
     QColor majorColor;
     QColor minorColor;
     QColor backgroundColor;
@@ -70,6 +72,7 @@ private:
     QPushButton* pickOrigin_ = nullptr;
     QCheckBox* allModes_ = nullptr;
     QCheckBox* dimOffPlane_ = nullptr;
+    QCheckBox* workPlaneVisible_ = nullptr;
     QPushButton* majorColor_ = nullptr;
     QPushButton* minorColor_ = nullptr;
     QPushButton* backgroundColor_ = nullptr;

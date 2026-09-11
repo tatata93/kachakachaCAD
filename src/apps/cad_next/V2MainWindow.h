@@ -120,6 +120,11 @@ public:
 
     //! 一覧に出ている件数。試験で見る。
     [[nodiscard]] int EntityRowCount() const;
+    //! 試験から呼ぶ。一覧のその行を選ぶ(人が左メニューを押したのと同じ道を通る)。
+    //! 行が無ければ false。
+    bool SelectTreeRowForEntity(const kachakacha::v2::base::EntityId& entityId);
+    //! 一覧でいま光っている行の数。3D 画面から写ったかを試験で見る。
+    [[nodiscard]] int TreeSelectedRowCount() const;
     [[nodiscard]] int DiagnosticRowCount() const;
 
     //! コマンドを1つ実行する。メニューも道具箱もショートカットも、
@@ -705,6 +710,31 @@ private:
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
     QTreeWidget* entityTree_ = nullptr;
+    //! 左の一覧で選んだものを、3D 画面の選択にする(V1 と同じ)。
+    //! まとまりの行を選んだら、その下のもの全部へ広げる。
+    void AdoptTreeSelection();
+    //! 3D 画面の選択を、左の一覧の光り方へ写す。最後のものまで送る。
+    void HighlightTreeForSelection();
+    //! 画面から窓へ戻ってくる知らせを、まとめて繋ぐ。組み立ての続き。
+    void WireViewportCallbacks();
+    //! 「選択に正対」の相手。点と、はっきりしている面の向き。
+    struct FacingTarget {
+        std::vector<kachakacha::v2::geometry::Vector3> points;
+        //! 作業平面のように向きがはっきりしているときだけ入る。推さない。
+        std::optional<kachakacha::v2::geometry::Vector3> normal;
+        std::optional<kachakacha::v2::geometry::Vector3> uAxis;
+        //! 正対の相手になったものの数。画面の一文に出す。
+        int count = 0;
+    };
+    void CollectFacingTarget(FacingTarget& target) const;
+    //! 文書の作図面を、画面に出す形へ写す。一覧を作り直すたびに呼ぶ。
+    void RefreshWorkPlaneViews();
+    //! 面の上の「横」の見当。上向き(縦)はここから作る。
+    [[nodiscard]] static kachakacha::v2::geometry::Vector3 FacingUAxisHint(
+        const std::vector<kachakacha::v2::geometry::Vector3>& points,
+        const kachakacha::v2::geometry::Vector3& normal);
+    //! 一覧と 3D 画面が呼び合って回らないようにする印。
+    bool syncingSelection_ = false;
     //! 一覧の行と、それが指すもの。行に id を持たせられないので横に持つ。
     std::vector<std::pair<QTreeWidgetItem*, kachakacha::v2::base::EntityId>> entityItems_;
     QListWidget* diagnosticList_ = nullptr;

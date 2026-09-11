@@ -315,6 +315,7 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
     choice.spacingExpression = QString::number(scene.grid.majorSpacingMm);
     choice.showInAllModes = viewport_->DisplaySettingsNow().gridInAllModes;
     choice.dimOffPlaneLines = viewport_->DisplaySettingsNow().dimOffPlaneLines;
+    choice.workPlaneVisible = viewport_->DisplaySettingsNow().workPlaneVisible;
     choice.majorColor = viewport_->Colors().gridMajor;
     choice.minorColor = viewport_->Colors().gridMinor;
     choice.backgroundColor = viewport_->Colors().background;
@@ -354,6 +355,7 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     auto display = viewport_->DisplaySettingsNow();
     display.gridInAllModes = choice.showInAllModes;
     display.dimOffPlaneLines = choice.dimOffPlaneLines;
+    display.workPlaneVisible = choice.workPlaneVisible;
     ApplyDisplaySettings(display);
     RefreshGridSuppression();
     viewport_->update();

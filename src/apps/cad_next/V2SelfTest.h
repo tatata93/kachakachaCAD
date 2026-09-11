@@ -56,6 +56,9 @@ struct SelfTestCase {
 //! 編集の棚(選んだものの数値編集)のケース。
 [[nodiscard]] std::vector<SelfTestCase> EditCases();
 
+//! 画面の読みやすさ(作図面が見えるか・選択が両向きに伝わるか・カーソル・ホバー)。
+[[nodiscard]] std::vector<SelfTestCase> ScreenCases();
+
 //! 文書にある、その種類のものの数(見えているかは問わない)。
 [[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);
 

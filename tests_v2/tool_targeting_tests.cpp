@@ -5,6 +5,7 @@
 using kachakacha::v2::app::ClickPicksTarget;
 using kachakacha::v2::app::PendingAction;
 using kachakacha::v2::app::PendingCommandAction;
+using kachakacha::v2::app::PredicateCanBeSatisfiedBySelection;
 using kachakacha::v2::app::PredicateIsExact;
 using kachakacha::v2::app::SelectionPredicate;
 using kachakacha::v2::app::ToolAfterModeChange;
@@ -68,6 +69,16 @@ KACHA_V2_TEST(tool_targeting, 以上の条件は足す余地がある)
     Require(!PredicateIsExact(SelectionPredicate::OneOrMoreWires), "1つ以上");
     Require(!PredicateIsExact(SelectionPredicate::TwoOrMoreWires), "2つ以上");
     Require(!PredicateIsExact(SelectionPredicate::OneOrMorePatterns), "1つ以上");
+}
+
+KACHA_V2_TEST(tool_targeting, 対象不足でも選べば始められる)
+{
+    Require(PredicateCanBeSatisfiedBySelection(SelectionPredicate::OneClosedProfile),
+        "押し出しは輪郭を後から選べる");
+    Require(PredicateCanBeSatisfiedBySelection(SelectionPredicate::TwoWireChains),
+        "トリムは線を後から選べる");
+    Require(!PredicateCanBeSatisfiedBySelection(SelectionPredicate::HasUndo),
+        "履歴不足は選択では直らない");
 }
 
 KACHA_V2_TEST(tool_targeting, 足りなければ待つ)

@@ -445,11 +445,19 @@ void V2MainWindow::RefreshCommandVisibility()
         const bool visible = CommandVisibleInMode(entry.first, mode_);
         entry.second->setVisible(visible);
         QString reason;
-        const bool enabled = CommandEnabled(entry.first, &reason);
+        const bool ready = CommandEnabled(entry.first, &reason);
+        const CommandDescriptor* command = FindCommand(entry.first);
+        const bool canSelectTarget = command != nullptr
+            && kachakacha::v2::app::PredicateCanBeSatisfiedBySelection(
+                command->predicate);
+        const bool enabled = ready || canSelectTarget;
         entry.second->setEnabled(enabled);
-        if (!enabled && !reason.isEmpty()) {
-            // 使えない理由はツールチップへ出す(UIX-002)。隠さない。
-            entry.second->setToolTip(reason);
+        if (!ready && !reason.isEmpty()) {
+            // 対象不足なら入口は有効のまま、選ぶ対象をツールチップで示す。
+            const QString suffix = canSelectTarget
+                ? QStringLiteral(" 道具を開始してから対象を選べます。")
+                : QString();
+            entry.second->setToolTip(reason + suffix);
         }
     }
     // 固有の作図道具は作図モードだけ。ほかのモードは台帳 QAction の専用列を使う。

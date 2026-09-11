@@ -166,8 +166,9 @@ Windows本番:
 
 ## 11. 現在の進捗
 
-- Phase 0: 規範統合完了。coverage、command catalogを含むV2の108試験は通過。
-- Phase 1: 未着手。
+- Phase 0: 規範統合完了。
+- Phase 1: 着手。対象不足でも選択で満たせるコマンドは入口を無効化せず、
+  tool-firstで構えて待つようにした。モード切替時は文書と選択を保ち、道具だけ選択へ戻す。
 - Phase 2: 未着手。
 - Phase 3: 未着手。
 - Phase 4: 未着手。
@@ -175,14 +176,20 @@ Windows本番:
 受入台帳ではAT-UIX-001から004、008から011を `部分`、012と013を `未` として再開した。
 既存試験を削除して緑にせず、新仕様を検査する内容へ更新する。
 
-Phase 0直後の `scripts/check-v2.ps1` では110件中108件が通過し、`v2_cad_next_smoke` と
-それを内包する `v2_package_zip` が失敗した。失敗した自己試験は次の2件で、文書変更によるビルド破損ではない。
+Phase 0直後に判明した次の2件の旧期待値は、Phase 1の最初の変更で新仕様に合わせて解消した。
 
 1. `使えないコマンドは理由を出す`: 選択不足でdisableする旧前提と、tool-first開始の新仕様が衝突。
 2. `モードを変えても選択と文書が変わらない`: 直前実装はモード切替でtoolを戻すが、旧試験名と確認対象が不一致。
 
-Phase 1の最初に期待値を隠して緑にせず、CommandAvailabilityとSetMode/ToolSessionの実挙動を調査し、
-新しいAT-UIX-001/002を検査する試験へ置き換える。
+2026-09-12のWindows実機検証結果:
+
+- `scripts/check-v2.ps1`: OK
+- V2: 110/110 tests passed
+- V1を含む全体: 128/128 tests passed
+- `kachakacha_cad_next.exe --self-test`: 153/153 cases passed
+- `v2_package_zip`: passed
+
+次はSelectionRefを導入し、同じWire内の異なるSegmentIdを同時選択できるようにする。
 
 ## 12. Claudeへ渡す短い指示
 

@@ -53,6 +53,13 @@ namespace kachakacha::v2::app {
 //! 決まっていれば、そろった時点で走ってよい(足す余地がない)。
 [[nodiscard]] bool PredicateIsExact(SelectionPredicate predicate) noexcept;
 
+//! 選択または役割表の行を追加すれば満たせる条件か。
+//!
+//! これが true のコマンドは、まだ対象が無くてもUI入口を無効にしない。
+//! コマンドを開始し、必要な対象を選ぶ状態へ入る。
+[[nodiscard]] bool PredicateCanBeSatisfiedBySelection(
+    SelectionPredicate predicate) noexcept;
+
 //! 構えた命令をどうするか。
 enum class PendingAction {
     //! まだ足りない。待つ。

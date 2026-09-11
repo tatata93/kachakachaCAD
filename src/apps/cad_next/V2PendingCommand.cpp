@@ -23,6 +23,7 @@
 
 using kachakacha::v2::app::PendingAction;
 using kachakacha::v2::app::PendingCommandAction;
+using kachakacha::v2::app::PredicateCanBeSatisfiedBySelection;
 
 bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
 {
@@ -34,17 +35,10 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     if (CommandEnabled(id, &reason)) {
         return false;   // いま使える。そのまま走らせる。
     }
-    switch (command->predicate) {
-    case kachakacha::v2::app::SelectionPredicate::Always:
-    case kachakacha::v2::app::SelectionPredicate::HasDocument:
-    case kachakacha::v2::app::SelectionPredicate::HasUndo:
-    case kachakacha::v2::app::SelectionPredicate::HasRedo:
-    case kachakacha::v2::app::SelectionPredicate::HasVisibleGeometry:
+    if (!PredicateCanBeSatisfiedBySelection(command->predicate)) {
         // 選んで直るものではない(戻せる履歴が無い、など)。理由を出して終わる。
         SetStatus(reason);
         return true;
-    default:
-        break;
     }
     // 選べば満たせる。構えて待つ。
     pendingCommandId_ = std::string(id);

@@ -48,6 +48,20 @@ bool PredicateIsExact(SelectionPredicate predicate) noexcept
     }
 }
 
+bool PredicateCanBeSatisfiedBySelection(SelectionPredicate predicate) noexcept
+{
+    switch (predicate) {
+    case SelectionPredicate::Always:
+    case SelectionPredicate::HasDocument:
+    case SelectionPredicate::HasUndo:
+    case SelectionPredicate::HasRedo:
+    case SelectionPredicate::HasVisibleGeometry:
+        return false;
+    default:
+        return true;
+    }
+}
+
 PendingAction PendingCommandAction(SelectionPredicate predicate, bool satisfied,
     bool confirmed) noexcept
 {

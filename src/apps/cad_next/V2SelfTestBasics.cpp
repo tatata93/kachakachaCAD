@@ -181,16 +181,37 @@ namespace {
 
 [[nodiscard]] bool CaseDisabledCommandsExplain(V2MainWindow& window)
 {
-    // 使えないコマンドは隠さず、押したときに理由を出す。
+    // 対象不足は入口を無効にせず、押したあと対象を選ぶ状態へ入る。
+    // 固定モードを廃止するまでの移行中UIでは、押し出し入口は部品表示にある。
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     QString reason;
-    if (window.CommandEnabled("part.extrude", &reason)) {
+    if (!Explain("空の選択では押し出しをまだ実行できない",
+            !window.CommandEnabled("part.extrude", &reason))) {
         return false;
     }
-    if (reason.isEmpty()) {
+    if (!Explain("対象不足の理由がある", !reason.isEmpty())) {
+        return false;
+    }
+    const QAction* action = window.ActionFor("part.extrude");
+    if (!Explain("押し出しの入口がある", action != nullptr)) {
+        return false;
+    }
+    if (!Explain("対象不足でも入口を押せる", action->isEnabled())) {
         return false;
     }
     window.RunCommand("part.extrude");
-    return window.StatusText() == reason;
+    if (!Explain((std::string("押し出しを構えている(実際は ")
+                     + window.PendingCommandLabel().toStdString() + ")")
+                     .c_str(),
+            window.PendingCommandLabel() == QStringLiteral("押し出し"))) {
+        return false;
+    }
+    return Explain((std::string("不足理由と次の操作が見える(実際は ")
+                       + window.StatusText().toStdString() + ")")
+                       .c_str(),
+        window.StatusText().contains(reason)
+            && window.StatusText().contains(QStringLiteral("選ぶと続きます")));
 }
 
 [[nodiscard]] bool CaseGuideIsComplete(V2MainWindow& window)
@@ -243,19 +264,29 @@ namespace {
 
 [[nodiscard]] bool CaseModesKeepSelection(V2MainWindow& window)
 {
-    // モードを切り替えても、選んでいる道具も文書も変わらないこと(UIX-001 / 003)。
+    // 移行中のモード切替は、選択と文書を保ったまま道具だけ選択へ戻す。
     if (!window.ApplyManualState(QStringLiteral("draw-line"))) {
         return false;
     }
-    const auto tool = window.Session().CurrentTool();
-    const std::uint64_t revision = window.Session().GetDocument().Snapshot().revision;
+    const auto snapshot = window.Session().GetDocument().Snapshot();
+    const auto selection = kachakacha::v2::app::SelectAllOfKind(
+        snapshot, kachakacha::v2::domain::EntityKind::Wire);
+    if (selection.entityIds.empty()) {
+        return false;
+    }
+    window.Viewport().SetSelection(selection);
+    const std::uint64_t revision = snapshot.revision;
     const int rows = window.EntityRowCount();
     for (const auto mode : kachakacha::v2::app::AllUiModes()) {
         window.SetMode(mode);
         if (window.Mode() != mode) {
             return false;
         }
-        if (window.Session().CurrentTool() != tool) {
+        if (window.Session().CurrentTool()
+            != kachakacha::v2::modeling::DrawingTool::Select) {
+            return false;
+        }
+        if (window.Viewport().Selection().entityIds != selection.entityIds) {
             return false;
         }
         if (window.Session().GetDocument().Snapshot().revision != revision) {
@@ -1329,11 +1360,11 @@ std::vector<SelfTestCase> BasicCases()
         {"台帳の全コマンドが同じ入口から呼べる", &CaseEveryCommandReachable},
         {"未接続のコマンドが1つも無い", &CaseNoCommandSaysNotImplemented},
         {"メニューが台帳から出来ている", &CaseMenusComeFromCatalog},
-        {"使えないコマンドは理由を出す", &CaseDisabledCommandsExplain},
+        {"対象不足のコマンドは構えて理由を出す", &CaseDisabledCommandsExplain},
         {"案内が6つそろっている", &CaseGuideIsComplete},
         {"失敗しても続き、文書が変わらない", &CaseFailureRecovery},
         {"失敗しても選んだ道具が変わらない", &CaseSelectionSurvivesFailure},
-        {"モードを変えても選択と文書が変わらない", &CaseModesKeepSelection},
+        {"モードを変えると道具だけ選択へ戻る", &CaseModesKeepSelection},
         {"モードで出るコマンドが変わる", &CaseModesChangeVisibleCommands},
         {"ビューキューブが連続に回る", &CaseViewCubeDragIsContinuous},
         {"90度へ吸着せず離した後も回らない", &CaseViewCubeDoesNotSnapOrDrift},

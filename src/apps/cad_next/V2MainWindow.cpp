@@ -1348,18 +1348,8 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (EnterToolFor(*command)) {
         return;
     }
-    if (id == "edit.undo") {
-        SetStatus(session_->Undo() ? QStringLiteral("元に戻しました。")
-                                   : QStringLiteral("戻せる操作がありません。"));
-        RefreshEntityList();
-        viewport_->update();
-        return;
-    }
-    if (id == "edit.redo") {
-        SetStatus(session_->Redo() ? QStringLiteral("やり直しました。")
-                                   : QStringLiteral("やり直せる操作がありません。"));
-        RefreshEntityList();
-        viewport_->update();
+    if (id == "edit.undo" || id == "edit.redo") {
+        RunHistoryCommand(id == "edit.undo");
         return;
     }
     if (id == "view.fit_all") {

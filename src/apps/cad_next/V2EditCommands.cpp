@@ -97,6 +97,20 @@ void V2MainWindow::ClearMeasurement()
     SetStatus(QStringLiteral("測定を消しました。"));
 }
 
+void V2MainWindow::RunHistoryCommand(bool undo)
+{
+    const bool moved = undo ? session_->Undo() : session_->Redo();
+    if (!moved) {
+        SetStatus(undo ? QStringLiteral("戻せる操作がありません。")
+                       : QStringLiteral("やり直せる操作がありません。"));
+        return;
+    }
+    // 文書だけ戻して場面を作り直さないと、消したはずの線が画面に残り、
+    // 立体も古いままになる。文書が変わったあとの後始末を全部通す。
+    AdoptCurrentDocument();
+    SetStatus(undo ? QStringLiteral("元に戻しました。") : QStringLiteral("やり直しました。"));
+}
+
 // ---- 編集の棚 ----
 
 kachakacha::v2::modeling::WorkPlaneFrame V2MainWindow::EditAngleFrame(

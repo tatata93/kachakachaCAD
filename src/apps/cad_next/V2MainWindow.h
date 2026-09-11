@@ -621,6 +621,8 @@ private:
     //! 棚を出す命令(測定・数値で編集)か。V2EditCommands.cpp が持つ。
     [[nodiscard]] static bool IsShelfCommand(std::string_view id);
     void RunShelfCommand(std::string_view id);
+    //! 元に戻す / やり直す。文書を戻したあと、場面(画面の線)と立体も作り直す。
+    void RunHistoryCommand(bool undo);
     //! 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの欄を出し直す。
     void RefreshEditDock();
     //! 「変更を適用」。欄の値を core で定義にし、文書へ入れる。

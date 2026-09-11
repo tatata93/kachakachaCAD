@@ -146,6 +146,28 @@ using kachakacha::v2::geometry::Vector3;
             && std::abs(curve->EndPoint().y) < 1.0e-9);
 }
 
+[[nodiscard]] bool CaseUndoRedrawsScene(V2MainWindow& window)
+{
+    // 元に戻すと、画面の線(場面)も消える。文書だけ戻って線が残っていた。
+    window.RunCommand("file.new");
+    if (!MakeAndSelectWire(window, kachakacha::v2::app::DirectWireKind::PlanarLine,
+            {Vector3{0.0, 0.0, 0.0}, Vector3{40.0, 0.0, 0.0}}, 0.0, QStringLiteral("横"))) {
+        return false;
+    }
+    const std::size_t before = window.Session().Scene().curves.size();
+    window.RunCommand("edit.undo");
+    if (!Explain((std::string("戻すと画面の線が減る(") + std::to_string(before) + " → "
+                     + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
+            window.Session().Scene().curves.size() + 1 == before
+                && CountOfKind(window, EntityKind::Wire) == 0)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    return Explain("やり直すと画面の線が戻る",
+        window.Session().Scene().curves.size() == before
+            && CountOfKind(window, EntityKind::Wire) == 1);
+}
+
 [[nodiscard]] bool CaseEditDockChangesCircleRadius(V2MainWindow& window)
 {
     // 円を選ぶと中心・軸・半径の欄。半径を 20 にすると円のまま半径が変わる。
@@ -367,6 +389,7 @@ std::vector<SelfTestCase> EditCases()
     return {
         {"面取りの棚で非対称の切戻しと残す側と頂点番号が効く", &CaseCornerDockAsymmetricChamferAndKeepSides},
         {"編集の棚で直線の点と長さ・角度を直せる", &CaseEditDockRewritesLinePoints},
+        {"戻すと画面の線も消えやり直すと戻る", &CaseUndoRedrawsScene},
         {"編集の棚で円の半径を変えられる", &CaseEditDockChangesCircleRadius},
         {"編集の棚で作業平面を動かし原点面は断る", &CaseEditDockMovesWorkPlaneAndRefusesOrigin},
     };

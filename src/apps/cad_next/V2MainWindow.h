@@ -64,6 +64,7 @@
 
 class QAction;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QToolBar;
 class QComboBox;
@@ -713,6 +714,7 @@ private:
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
     QTreeWidget* entityTree_ = nullptr;
+    QLineEdit* entityFilter_ = nullptr;
     //! 左の一覧で選んだものを、3D 画面の選択にする(V1 と同じ)。
     //! まとまりの行を選んだら、その下のもの全部へ広げる。
     void AdoptTreeSelection();
@@ -734,6 +736,16 @@ private:
     void RefreshWorkPlaneViews();
     //! 右に出す棚を、いまの道具とモードに合わせる。どれを出すかは core が決める。
     void RefreshRightShelves();
+    //! 左の一覧の棚を組み立てる。組み立てたものを返す(並べ方は呼び出し側が決める)。
+    QDockWidget* BuildEntityTreeDock();
+    //! 一覧を絞り込む(V1 の「名前・種類で絞り込み」)。残すかどうかは core が決める。
+    void ApplyEntityTreeFilter();
+    //! 絞り込みの語を入れる(試験用)。人が打ったのと同じ道を通る。
+public:
+    void SetEntityFilterText(const QString& text);
+    //! いま一覧に見えている行の数(絞り込みで隠れたものを除く)。試験で見る。
+    [[nodiscard]] int VisibleEntityRowCount() const;
+private:
     //! 棚と QDockWidget の対応。無ければ nullptr。
     [[nodiscard]] QDockWidget* DockForShelf(kachakacha::v2::app::Shelf shelf) const;
     //! 面の上の「横」の見当。上向き(縦)はここから作る。

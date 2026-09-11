@@ -16,6 +16,8 @@
 #define QT_VERSION_STR "6.9.2"
 
 namespace Qt {
+enum ContextMenuPolicy { NoContextMenu, DefaultContextMenu, CustomContextMenu };
+
 enum GlobalColor { white, black, transparent, gray, red, blue, green, darkGray, lightGray };
 enum AlignmentFlagValue { AlignLeft = 1, AlignRight = 2, AlignHCenter = 4, AlignTop = 8,
     AlignBottom = 16, AlignVCenter = 32, AlignCenter = 36, TextSingleLine = 64,

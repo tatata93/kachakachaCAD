@@ -29,6 +29,7 @@
 #include <QFileDialog>
 #include <QFont>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QKeySequence>
@@ -484,7 +485,9 @@ void V2MainWindow::BuildToolPalette()
     BuildModeToolActions();
 }
 
-void V2MainWindow::BuildPanels()
+//! 左の一覧(V1 のモデルツリー)を組み立てる。
+//! 絞り込みの欄・名前の書き換え・右クリック・3D 画面との往復をここで繋ぐ。
+QDockWidget* V2MainWindow::BuildEntityTreeDock()
 {
     auto* treeDock = new QDockWidget(QStringLiteral("作ったもの"), this);
     treeDock->setObjectName(QStringLiteral("entityDock"));
@@ -511,8 +514,35 @@ void V2MainWindow::BuildPanels()
             }
             RenameEntityFromItem(item);
         });
-    treeDock->setWidget(entityTree_);
+    // 右クリックは 3D 画面と同じ献立を出す。台帳のコマンドだけを並べる。
+    // 別の入口を作ると、押せるかどうかの判断も文言も二重になる。
+    entityTree_->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(entityTree_, &QTreeWidget::customContextMenuRequested, this,
+        [this](const QPoint& at) { ShowSelectMenu(entityTree_->mapToGlobal(at)); });
+
+    // 絞り込みの欄(V1 の「名前・種類で絞り込み」)。
+    // 物が増えると一覧は数十行になり、目で探すのはすぐに無理になる。
+    auto* treeBody = new QWidget(treeDock);
+    auto* treeLayout = new QVBoxLayout(treeBody);
+    treeLayout->setContentsMargins(4, 4, 4, 4);
+    treeLayout->setSpacing(4);
+    entityFilter_ = new QLineEdit(treeBody);
+    entityFilter_->setClearButtonEnabled(true);
+    entityFilter_->setPlaceholderText(QStringLiteral("名前・種類で絞り込み"));
+    entityFilter_->setToolTip(QStringLiteral(
+        "ワイヤー、作業平面などの種類名か、付けた名前を打つと絞り込みます。"));
+    QObject::connect(entityFilter_, &QLineEdit::textChanged, this,
+        [this] { ApplyEntityTreeFilter(); });
+    treeLayout->addWidget(entityFilter_);
+    treeLayout->addWidget(entityTree_, 1);
+    treeDock->setWidget(treeBody);
     addDockWidget(Qt::LeftDockWidgetArea, treeDock);
+    return treeDock;
+}
+
+void V2MainWindow::BuildPanels()
+{
+    QDockWidget* treeDock = BuildEntityTreeDock();
 
     auto* guideDock = new QDockWidget(QStringLiteral("形状ガイドの役割"), this);
     guideDock->setObjectName(QStringLiteral("guideTableDock"));

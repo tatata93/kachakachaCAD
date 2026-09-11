@@ -194,6 +194,37 @@ void DrawOneLine(V2MainWindow& window)
         shown <= 2);
 }
 
+[[nodiscard]] bool CaseTreeFilterNarrowsTheList(V2MainWindow& window)
+{
+    // 一覧の絞り込み(V1 の「名前・種類で絞り込み」)。
+    // 物が増えると数十行になり、目で探すのはすぐに無理になる。
+    DrawOneLine(window);
+    const int all = window.VisibleEntityRowCount();
+    if (!Explain((std::string("はじめは全部見える(") + std::to_string(all) + " 行)").c_str(),
+            all >= 4)) {
+        return false;
+    }
+    // 種類で絞る。原点の3面だけが残る(軸は「軸」、線は「ワイヤー」)。
+    window.SetEntityFilterText(QStringLiteral("作業平面"));
+    const int planes = window.VisibleEntityRowCount();
+    if (!Explain((std::string("作業平面だけ残る(") + std::to_string(planes) + " 行)").c_str(),
+            planes == 3)) {
+        return false;
+    }
+    // 当たらない語なら何も残らない。
+    window.SetEntityFilterText(QStringLiteral("そんな名前は無い"));
+    if (!Explain((std::string("当たらなければ空(")
+                     + std::to_string(window.VisibleEntityRowCount()) + " 行)").c_str(),
+            window.VisibleEntityRowCount() == 0)) {
+        return false;
+    }
+    // 空に戻せば元どおり。戻らないと、絞り込んだまま迷子になる。
+    window.SetEntityFilterText(QString());
+    return Explain((std::string("空に戻すと全部戻る(")
+                       + std::to_string(window.VisibleEntityRowCount()) + " 行)").c_str(),
+        window.VisibleEntityRowCount() == all);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -206,6 +237,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"カーソルの下の線が分かる", &CaseHoverFindsTheWireUnderTheCursor},
         {"選択に正対すると、その面が画面の真ん中に来る", &CaseFacingSelectionBringsItIntoView},
         {"右の棚がいま使っている道具に付いてくる", &CaseRightShelfFollowsTheTool},
+        {"一覧を名前・種類で絞り込める", &CaseTreeFilterNarrowsTheList},
     };
 }
 

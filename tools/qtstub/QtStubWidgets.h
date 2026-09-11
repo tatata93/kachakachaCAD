@@ -98,11 +98,14 @@ public:
     virtual void keyPressEvent(QKeyEvent*);
     virtual void keyReleaseEvent(QKeyEvent*);
     virtual void resizeEvent(QResizeEvent*);
+    void setContextMenuPolicy(Qt::ContextMenuPolicy);
+    [[nodiscard]] QPoint mapToGlobal(const QPoint&) const;
 };
 
 class QLayout : public QObject {
 public:
     void addWidget(QWidget*);
+    void addWidget(QWidget*, int);
     void setContentsMargins(int, int, int, int);
     void setSpacing(int);
 };
@@ -283,6 +286,8 @@ public:
     void setSelected(bool);
     [[nodiscard]] bool isSelected() const;
     [[nodiscard]] bool isHidden() const;
+    void setHidden(bool);
+    void (*customContextMenuRequested)(const QPoint&);
 };
 
 class QTreeWidget : public QAbstractItemView {
@@ -309,6 +314,7 @@ public:
     void (*itemClicked)(QTreeWidgetItem*, int);
     void (*itemChanged)(QTreeWidgetItem*, int);
     void (*itemSelectionChanged)();
+    void (*customContextMenuRequested)(const QPoint&);
 };
 
 class QDockWidget : public QWidget {
@@ -440,6 +446,7 @@ public:
     [[nodiscard]] QString text() const;
     void setPlaceholderText(const QString&);
     void (*textChanged)(const QString&);
+    void setClearButtonEnabled(bool);
 };
 
 class QAbstractSpinBox : public QWidget {

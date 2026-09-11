@@ -7,6 +7,7 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/EntityNaming.h"
+#include "kachakacha/app/NameFilter.h"
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/domain/Entity.h"
 
@@ -112,6 +113,9 @@ void V2MainWindow::RefreshEntityList()
     RefreshActiveGroupCombo();
     entityTree_->blockSignals(blocked);
     RefreshWorkPlaneViews();
+    // 作り直したら絞り込みをかけ直す。かけ直さないと、線を1本引いただけで
+    // 絞り込みが外れたように見える。
+    ApplyEntityTreeFilter();
 }
 
 //! 文書の作図面を、画面に出す形へ写す。
@@ -142,3 +146,80 @@ void V2MainWindow::RefreshWorkPlaneViews()
     viewport_->SetWorkPlaneViews(std::move(planes));
 }
 
+
+namespace {
+
+//! その行と、その下のものを絞り込む(V1 の ApplyModelTreeFilter と同じ木のたどり方)。
+//!
+//! 自分か祖先が当たれば、下のものごと残す。下のどれかが当たれば、祖先も残す。
+//! こうしないと、まとまりの中の1本を探したときに、まとまりごと消えてしまう。
+//! 残すかどうかの判断は core(app/NameFilter)にある。
+bool ApplyFilterToItem(QTreeWidgetItem* item, const std::string& term, bool ancestorMatches)
+{
+    const bool selfMatches = kachakacha::v2::app::NameMatchesFilter(
+        item->text(0).toStdString(), item->text(1).toStdString(), term);
+    bool descendantMatches = false;
+    for (int index = 0; index < item->childCount(); ++index) {
+        if (ApplyFilterToItem(item->child(index), term, ancestorMatches || selfMatches)) {
+            descendantMatches = true;
+        }
+    }
+    const bool empty = kachakacha::v2::app::TrimmedFilterTerm(term).empty();
+    const bool visible = empty || ancestorMatches || selfMatches || descendantMatches;
+    item->setHidden(!visible);
+    if (!empty && visible && item->childCount() > 0) {
+        item->setExpanded(true);
+    }
+    return selfMatches || descendantMatches;
+}
+
+//! 見えている行を数える(絞り込みで隠れたものと、まとまりの見出しを除く)。
+int CountVisibleLeaves(const QTreeWidgetItem* item)
+{
+    if (item->isHidden()) {
+        return 0;
+    }
+    if (item->childCount() == 0) {
+        return 1;
+    }
+    int count = 0;
+    for (int index = 0; index < item->childCount(); ++index) {
+        count += CountVisibleLeaves(item->child(index));
+    }
+    return count;
+}
+
+} // namespace
+
+void V2MainWindow::ApplyEntityTreeFilter()
+{
+    if (entityTree_ == nullptr || entityFilter_ == nullptr) {
+        return;
+    }
+    const std::string term = entityFilter_->text().toStdString();
+    for (int index = 0; index < entityTree_->topLevelItemCount(); ++index) {
+        (void)ApplyFilterToItem(entityTree_->topLevelItem(index), term, false);
+    }
+}
+
+void V2MainWindow::SetEntityFilterText(const QString& text)
+{
+    if (entityFilter_ == nullptr) {
+        return;
+    }
+    entityFilter_->setText(text);
+    // 欄の便りが届かない場でも同じ結果になるようにする(試験のため)。
+    ApplyEntityTreeFilter();
+}
+
+int V2MainWindow::VisibleEntityRowCount() const
+{
+    if (entityTree_ == nullptr) {
+        return 0;
+    }
+    int count = 0;
+    for (int index = 0; index < entityTree_->topLevelItemCount(); ++index) {
+        count += CountVisibleLeaves(entityTree_->topLevelItem(index));
+    }
+    return count;
+}

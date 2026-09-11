@@ -601,6 +601,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/FeatureReevaluation.cpp
     src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceTable.cpp
+    src/next/kachakacha/app/NameFilter.cpp
     src/next/kachakacha/app/ShelfLayout.cpp
     src/next/kachakacha/view/FacingPlan.cpp
     src/next/kachakacha/view/ViewOrientation.cpp
@@ -755,6 +756,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(facing_plan_tests tests_v2/facing_plan_tests.cpp)
     kachakacha_add_v2_test(shelf_layout_tests tests_v2/shelf_layout_tests.cpp)
+    kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
     kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
     kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)

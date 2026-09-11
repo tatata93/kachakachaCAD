@@ -119,14 +119,14 @@ KACHA_V2_TEST(fabrication_evaluate, 面の範囲を狭めると標本が範囲�
     const auto cropped = EvaluateFabrication(half, {Cylinder()}, FabricationMarkings{}, 0.01);
     Require(cropped.HasValue(), "半分でも通る");
     Require(cropped.Value().panels.size() <= whole.Value().panels.size(), "帯は増えない");
-    // 標本そのものも範囲の中だけ。
-    const auto samples = kachakacha::v2::fabrication::CropSamples(*Cylinder().samples, 0.5, 1.0,
-        0.0, 1.0);
+    // 標本そのものも範囲の中だけ。(一時オブジェクトの中身を参照で持たない。PC で落ちた。)
+    const FabricationSource cylinder = Cylinder();
+    const auto& original = *cylinder.samples;
+    const auto samples = kachakacha::v2::fabrication::CropSamples(original, 0.5, 1.0, 0.0, 1.0);
     Require(samples.HasValue(), "切り出せる");
-    Require(samples.Value().rowCount == Cylinder().samples->rowCount
-            && samples.Value().columnCount == Cylinder().samples->columnCount,
+    Require(samples.Value().rowCount == original.rowCount
+            && samples.Value().columnCount == original.columnCount,
         "格子の数は同じ");
-    const auto& original = *Cylinder().samples;
     const auto first = samples.Value().At(0, 0);
     const auto middle = original.At(0, (original.columnCount - 1) / 2);
     Require((first - middle).Length() < 1.0e-6, "左端が元の真ん中になる");

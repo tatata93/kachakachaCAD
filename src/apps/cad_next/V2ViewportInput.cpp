@@ -12,6 +12,10 @@
 //! ここはそれを Qt へつなぐだけである。
 
 #include "V2Viewport.h"
+#include <QCursor>
+#include <QPainter>
+#include <QPen>
+#include <QPixmap>
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"

@@ -15,6 +15,7 @@
 #include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/DisplaySettings.h"
+#include "kachakacha/app/ShelfLayout.h"
 #include "V2DisplayDock.h"
 #include "V2DrawingDock.h"
 #include "V2CornerDock.h"
@@ -125,6 +126,8 @@ public:
     bool SelectTreeRowForEntity(const kachakacha::v2::base::EntityId& entityId);
     //! 一覧でいま光っている行の数。3D 画面から写ったかを試験で見る。
     [[nodiscard]] int TreeSelectedRowCount() const;
+    //! その棚がいま右に出ているか。試験で見る。
+    [[nodiscard]] bool ShelfShown(kachakacha::v2::app::Shelf shelf) const;
     [[nodiscard]] int DiagnosticRowCount() const;
 
     //! コマンドを1つ実行する。メニューも道具箱もショートカットも、
@@ -729,6 +732,10 @@ private:
     void CollectFacingTarget(FacingTarget& target) const;
     //! 文書の作図面を、画面に出す形へ写す。一覧を作り直すたびに呼ぶ。
     void RefreshWorkPlaneViews();
+    //! 右に出す棚を、いまの道具とモードに合わせる。どれを出すかは core が決める。
+    void RefreshRightShelves();
+    //! 棚と QDockWidget の対応。無ければ nullptr。
+    [[nodiscard]] QDockWidget* DockForShelf(kachakacha::v2::app::Shelf shelf) const;
     //! 面の上の「横」の見当。上向き(縦)はここから作る。
     [[nodiscard]] static kachakacha::v2::geometry::Vector3 FacingUAxisHint(
         const std::vector<kachakacha::v2::geometry::Vector3>& points,

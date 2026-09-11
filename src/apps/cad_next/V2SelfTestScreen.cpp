@@ -10,6 +10,8 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/app/UiMode.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/view/ViewOrientation.h"
 
@@ -151,6 +153,47 @@ void DrawOneLine(V2MainWindow& window)
         std::abs(center.x) < 1.0 && std::abs(center.y) < 1.0);
 }
 
+[[nodiscard]] bool CaseRightShelfFollowsTheTool(V2MainWindow& window)
+{
+    // 右は「いま使っている道具の設定」だけを出す(オーナー指摘)。
+    // 9枚積むと1枚あたりが潰れて、見出しだけが並ぶ画面になる。
+    using kachakacha::v2::app::Shelf;
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    if (!Explain("線のときは作図の棚", window.ShelfShown(Shelf::Drawing))) {
+        return false;
+    }
+    if (!Explain("そのとき編集の棚は出ていない", !window.ShelfShown(Shelf::Edit))) {
+        return false;
+    }
+    if (!Explain("そのとき製作の棚も出ていない", !window.ShelfShown(Shelf::Fabrication))) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (!Explain("選択に戻すと編集の棚", window.ShelfShown(Shelf::Edit))) {
+        return false;
+    }
+    if (!Explain("作図の棚は引っ込む", !window.ShelfShown(Shelf::Drawing))) {
+        return false;
+    }
+    // モードを変えると、選択道具の相手も変わる。
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    if (!Explain("製作モードの選択は製作の棚", window.ShelfShown(Shelf::Fabrication))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    // 出ている棚は、いつでも 2 枚まで。
+    int shown = 0;
+    for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
+        if (window.ShelfShown(shelf)) {
+            ++shown;
+        }
+    }
+    return Explain((std::string("右に出ている棚は2枚まで(実際は ") + std::to_string(shown)
+                       + ")").c_str(),
+        shown <= 2);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -162,6 +205,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"道具を変えるとカーソルの形も変わる", &CaseCursorChangesWithTool},
         {"カーソルの下の線が分かる", &CaseHoverFindsTheWireUnderTheCursor},
         {"選択に正対すると、その面が画面の真ん中に来る", &CaseFacingSelectionBringsItIntoView},
+        {"右の棚がいま使っている道具に付いてくる", &CaseRightShelfFollowsTheTool},
     };
 }
 

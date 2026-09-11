@@ -13,6 +13,7 @@
 
 #include <QAction>
 #include <QMenu>
+#include <QDockWidget>
 #include <QTreeWidget>
 #include <QPoint>
 
@@ -579,4 +580,57 @@ int V2MainWindow::TreeSelectedRowCount() const
         return 0;
     }
     return entityTree_->selectedItems().size();
+}
+
+QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
+{
+    using kachakacha::v2::app::Shelf;
+    switch (shelf) {
+    case Shelf::WorkPlane:   return workPlaneDock_;
+    case Shelf::Drawing:     return drawingDock_;
+    case Shelf::Edit:        return editDock_;
+    case Shelf::Corner:      return cornerDock_;
+    case Shelf::Measure:     return measureDock_;
+    case Shelf::GuideTable:  return guideDock_;
+    case Shelf::Fabrication: return fabricationDock_;
+    case Shelf::Export:      return exportDock_;
+    case Shelf::Grid:        return gridDock_;
+    case Shelf::Display:     return displayDock_;
+    case Shelf::Parameter:   return parameterDock_;
+    case Shelf::None:        break;
+    }
+    return nullptr;
+}
+
+//! 右に出す棚を、いまの道具とモードに合わせる(オーナー指摘 2026-09-11)。
+//!
+//! どれを出すかは core の ShelfLayout が決める。ここでやるのは出し入れだけ。
+//! 画面で決めると、確かめるのに画面を出さなければならなくなる。
+void V2MainWindow::RefreshRightShelves()
+{
+    using kachakacha::v2::app::Shelf;
+    if (drawingDock_ == nullptr || exportDock_ == nullptr) {
+        return;   // まだ組み立てている途中。
+    }
+    const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool());
+    for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
+        QDockWidget* dock = DockForShelf(shelf);
+        if (dock == nullptr) {
+            continue;
+        }
+        const bool show = std::find(wanted.begin(), wanted.end(), shelf) != wanted.end();
+        dock->setVisible(show);
+    }
+    // 先頭を前に出す。2枚出すときは、後ろの1枚は札として残る。
+    if (!wanted.empty()) {
+        if (QDockWidget* front = DockForShelf(wanted.front()); front != nullptr) {
+            front->raise();
+        }
+    }
+}
+
+bool V2MainWindow::ShelfShown(kachakacha::v2::app::Shelf shelf) const
+{
+    const QDockWidget* dock = DockForShelf(shelf);
+    return dock != nullptr && dock->isVisible();
 }

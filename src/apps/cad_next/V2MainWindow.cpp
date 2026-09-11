@@ -390,15 +390,9 @@ void V2MainWindow::SetMode(UiMode mode)
         entry.second->setChecked(entry.first == mode);
     }
     RefreshCommandVisibility();
-    // 形状ガイドの役割テーブルは部品モードの道具なので、そのときだけ出す。
-    // 出しっぱなしにすると、作図モードで空の表が場所を取る。
-    if (guideDock_ != nullptr) {
-        guideDock_->setVisible(mode == UiMode::Part);
-    }
-    // 作図モードでは作図の棚を前に出す(V1 の「作図」タブ)。
-    if (drawingDock_ != nullptr && mode == UiMode::Drawing) {
-        drawingDock_->raise();
-    }
+    // 右に出す棚は「いまの道具とモード」で決まる(core の ShelfLayout)。
+    // 全部出しっぱなしにすると、1枚あたりが 80px まで潰れて見出しだけが並ぶ。
+    RefreshRightShelves();
     RefreshGridSuppression();
     // 手順はどのモードでも出す。中身がモードで変わる。
     RefreshProcessSteps();
@@ -674,7 +668,10 @@ void V2MainWindow::BuildRightShelves()
     tabifyDockWidget(workPlaneDock_, drawingDock_);
     tabifyDockWidget(drawingDock_, gridDock_);
     tabifyDockWidget(gridDock_, displayDock_);
-    exportDock_->raise();
+    // 形状ガイドの役割の表も同じ札の束へ入れる。別の段に置くと、
+    // 部品モードで右が上下に割れて、どちらも潰れる。
+    tabifyDockWidget(displayDock_, guideDock_);
+    RefreshRightShelves();
 }
 
 void V2MainWindow::BuildStatusBar()
@@ -1156,6 +1153,8 @@ void V2MainWindow::SelectTool(DrawingTool tool)
     // 案内文は core が持っている。画面で作らない。
     // 道具の名前・いまの手順・次の手順・決め方・やめ方・選択数の6つを必ず出す。
     RefreshGuide();
+    // その道具の設定だけを右に出す。道具を選んだのに欄が出てこない、をなくす。
+    RefreshRightShelves();
     viewport_->update();
 }
 

@@ -10,6 +10,7 @@
 #include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/domain/Entity.h"
 
+#include <QLabel>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 

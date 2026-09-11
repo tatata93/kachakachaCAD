@@ -332,7 +332,8 @@ public:
     //! 組立率を聞く。窓を出さない試験では差し替える。値を返さなければ「やめた」。
     void SetAssemblyChooser(std::function<std::optional<double>(double current)> chooser);
     //! 組立率を変える。文書の作り方を書き換えるので、元に戻せる。
-    void SetAssemblyPercent(double percent);
+    //! 組立率を当てる。parts が空でなければ、その部材番号だけを曲げる(V1 と同じ)。
+    void SetAssemblyPercent(double percent, const QString& parts = QString());
     //! 次に作る近似モデルの方式。試験と帯から読む。
     [[nodiscard]] kachakacha::v2::app::FabricationMethod FabricationMethodInUse() const
     {
@@ -350,6 +351,11 @@ public:
     [[nodiscard]] int FabricationModelCount() const
     {
         return static_cast<int>(fabricationModels_.size());
+    }
+    //! 選んでいる(または最後に作った)近似モデル。試験から曲げ状態を見るのに使う。
+    [[nodiscard]] kachakacha::v2::base::EntityId CurrentFabricationModel() const
+    {
+        return CurrentFabricationModelId();
     }
     //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
     //! 値を返さなければ「やめた」。

@@ -1,5 +1,6 @@
 #include "kachakacha/app/FabricationOptions.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -17,6 +18,7 @@ constexpr const char* kBadPartCount = "UI-F002";
 constexpr const char* kBadMinimumWidth = "UI-F003";
 constexpr const char* kBadFidelity = "UI-F004";
 constexpr const char* kBadRange = "UI-F005";
+constexpr const char* kBadPartNumber = "UI-F006";
 constexpr int kMaxPartCount = 200;
 constexpr int kMaxFidelity = 20;
 
@@ -143,6 +145,66 @@ FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefini
     choice.rangeVMin = definition.rangeVMin;
     choice.rangeVMax = definition.rangeVMax;
     return choice;
+}
+
+Result<std::vector<int>> ParsePartNumberList(std::string_view text)
+{
+    using Out = Result<std::vector<int>>;
+    const auto numbers = ParseBoundaryList(text);
+    if (!numbers.HasValue()) {
+        // 読めない字は境界の欄と同じ理由になるので、部材番号の理由へ言い直す。
+        return Out::Failure(MakeError(kBadPartNumber, "部材番号が範囲外です。",
+            "1, 3 のように 1 から始まる部材番号をカンマで区切ってください。"));
+    }
+    std::vector<int> parts;
+    for (const double value : numbers.Value()) {
+        const int number = static_cast<int>(value);
+        if (static_cast<double>(number) != value || number < 1) {
+            return Out::Failure(MakeError(kBadPartNumber, "部材番号が範囲外です。",
+                std::to_string(value) + " は 1 以上の整数ではありません。"));
+        }
+        parts.push_back(number);
+    }
+    return Out::Success(std::move(parts));
+}
+
+Result<BandProgressUpdate> UpdateBandProgress(
+    const domain::CreateFabricationModelDefinition& definition, int bandCount,
+    const std::vector<int>& partNumbers, double percent)
+{
+    using Out = Result<BandProgressUpdate>;
+    if (!std::isfinite(percent) || percent < 0.0 || percent > 100.0) {
+        return Out::Failure(MakeError("FAB-M002", "組立率は 0〜100 にしてください。",
+            std::to_string(percent) + " %"));
+    }
+    BandProgressUpdate update;
+    if (partNumbers.empty()) {
+        // 全体を動かしたら全体に従う。個別値は捨てる(V1 と同じ)。
+        update.masterPercent = percent;
+        return Out::Success(std::move(update));
+    }
+    if (bandCount < 1) {
+        return Out::Failure(MakeError(kBadPartNumber, "部材番号が範囲外です。",
+            "まだ部材が1枚もありません。先に製作モデルを作ってください。"));
+    }
+    for (const int number : partNumbers) {
+        if (number < 1 || number > bandCount) {
+            return Out::Failure(MakeError(kBadPartNumber, "部材番号が範囲外です。",
+                std::to_string(number) + " 番はありません(いま "
+                    + std::to_string(bandCount) + " 枚)。"));
+        }
+    }
+    update.masterPercent = definition.masterPercent;
+    // 部材ごとの値へ展開してから、指定の番号だけを書き換える。
+    update.bandProgress.assign(static_cast<std::size_t>(bandCount),
+        std::clamp(definition.masterPercent, 0.0, 100.0) / 100.0);
+    if (definition.bandProgress.size() == static_cast<std::size_t>(bandCount)) {
+        update.bandProgress = definition.bandProgress;
+    }
+    for (const int number : partNumbers) {
+        update.bandProgress[static_cast<std::size_t>(number - 1)] = percent / 100.0;
+    }
+    return Out::Success(std::move(update));
 }
 
 std::string_view SplitAxisNameJa(int splitAxis) noexcept

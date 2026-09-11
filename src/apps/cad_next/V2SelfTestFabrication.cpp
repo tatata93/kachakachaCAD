@@ -160,7 +160,40 @@ namespace kachakacha::v2::selftest {
                 && window.StatusText().contains(QStringLiteral("0%")))) {
         return false;
     }
+    // 部材ごとの曲げ(V1 の part_model_part_assembly)。1 番だけ 100% に戻す。
+    auto& dock = window.FabricationDock();
+    dock.SetAssemblyPercent(100.0);
+    dock.SetPartNumbersText(QStringLiteral("1"));
+    dock.PressApplyAssembly();
+    const auto* entity = window.Session().GetDocument().FindEntity(
+        window.CurrentFabricationModel());
+    const auto* feature = entity == nullptr
+        ? nullptr
+        : window.Session().GetDocument().FindFeature(entity->createdBy);
+    const auto* definition = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    if (!Explain((std::string("1 番だけ曲げが変わる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            definition != nullptr && !definition->bandProgress.empty()
+                && std::abs(definition->bandProgress.front() - 1.0) < 1.0e-9
+                && std::abs(definition->bandProgress.back()) < 1.0e-9)) {
+        return false;
+    }
+    // 無い番号は断る。文書は変わらない。
+    const auto before = window.Session().GetDocument().Revision();
+    dock.SetPartNumbersText(QStringLiteral("999"));
+    dock.PressApplyAssembly();
+    if (!Explain((std::string("無い部材番号は断る(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.Session().GetDocument().Revision() == before
+                && window.StatusText().contains(QStringLiteral("UI-F006")))) {
+        return false;
+    }
+    dock.SetPartNumbersText(QString());
     // 元に戻せる。文書の作り方を書き換えているからである。
+    window.RunCommand("edit.undo");
     window.RunCommand("edit.undo");
     return Explain("元に戻せる", window.Session().GetDocument().Revision() == revision);
 }

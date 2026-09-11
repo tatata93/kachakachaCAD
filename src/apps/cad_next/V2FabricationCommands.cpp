@@ -287,7 +287,7 @@ void V2MainWindow::RefreshFabricationView()
     viewport_->update();
 }
 
-void V2MainWindow::SetAssemblyPercent(double percent)
+void V2MainWindow::SetAssemblyPercent(double percent, const QString& parts)
 {
     using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
     const auto modelId = CurrentFabricationModelId();
@@ -303,12 +303,30 @@ void V2MainWindow::SetAssemblyPercent(double percent)
     if (current == nullptr) {
         return;
     }
+    // 部材番号を挙げたら、その部材だけが曲がる(V1 の part_model_part_assembly)。
+    // 空なら全体。どちらも決めるのは core(UI-F006)。
+    const auto numbers = kachakacha::v2::app::ParsePartNumberList(parts.toStdString());
+    if (!numbers.HasValue()) {
+        ReportDiagnostics(numbers.Diagnostics());
+        return;
+    }
+    const auto found = fabricationModels_.find(modelId.ToString());
+    const int bandCount = found != fabricationModels_.end()
+        ? static_cast<int>(found->second.panels.size())
+        : 0;
+    const auto updated = kachakacha::v2::app::UpdateBandProgress(*current, bandCount,
+        numbers.Value(), percent);
+    if (!updated.HasValue()) {
+        ReportDiagnostics(updated.Diagnostics());
+        return;
+    }
     auto definition = *current;
-    definition.masterPercent = std::clamp(percent, 0.0, 100.0);
-    // 個別値は master を変えたら捨てる。V1 と同じ(個別 override が無い折り線だけ更新、
-    // ではなく、全体を動かしたら全体に従う)。個別に戻したいときは改めて指定する。
-    definition.creaseProgress.clear();
-    definition.bandProgress.clear();
+    definition.masterPercent = updated.Value().masterPercent;
+    definition.bandProgress = updated.Value().bandProgress;
+    // 折り線ごとの値は、全体を動かしたときだけ捨てる(V1 と同じ)。
+    if (numbers.Value().empty()) {
+        definition.creaseProgress.clear();
+    }
     const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
         feature->id, definition, feature->inputEntityIds, "組立状態を変える"));
     if (!changed.committed) {
@@ -316,6 +334,12 @@ void V2MainWindow::SetAssemblyPercent(double percent)
         return;
     }
     RefreshFabricationView();
+    if (!numbers.Value().empty()) {
+        SetStatus(QStringLiteral("選んだ %1 枚の部材を組立 %2%% にしました(他の部材は変わりません)。")
+                .arg(static_cast<int>(numbers.Value().size()))
+                .arg(percent));
+        return;
+    }
     SetStatus(QStringLiteral("組立状態を %1%% にしました(%2)。")
             .arg(definition.masterPercent)
             .arg(QString::fromStdString(

@@ -204,6 +204,12 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     assemblyLayout->addWidget(assembly_);
     assemblyLayout->addWidget(applyAssembly_);
     bend->addRow(QStringLiteral("組立率"), assemblyRow);
+    parts_ = new QLineEdit(bendWidget);
+    parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
+    parts_->setToolTip(QStringLiteral(
+        "部材番号(1 から)を挙げると、その部材だけが曲がります(V1 と同じ)。"
+        "空にして当てると全体が動き、部材ごとの値は捨てます。"));
+    bend->addRow(QStringLiteral("曲げる部材"), parts_);
     freeze_ = new QComboBox(bendWidget);
     freeze_->addItem(QStringLiteral("ワイヤーのみ"));
     freeze_->addItem(QStringLiteral("部品のみ"));
@@ -393,7 +399,18 @@ double V2FabricationDock::AssemblyPercent() const
     return assembly_->value();
 }
 
-void V2FabricationDock::SetAssemblyHandler(std::function<void(double)> handler)
+QString V2FabricationDock::PartNumbersText() const
+{
+    return parts_->text();
+}
+
+void V2FabricationDock::SetPartNumbersText(const QString& text)
+{
+    parts_->setText(text);
+}
+
+void V2FabricationDock::SetAssemblyHandler(
+    std::function<void(double percent, const QString& parts)> handler)
 {
     assemblyHandler_ = std::move(handler);
 }
@@ -401,7 +418,7 @@ void V2FabricationDock::SetAssemblyHandler(std::function<void(double)> handler)
 void V2FabricationDock::PressApplyAssembly()
 {
     if (assemblyHandler_) {
-        assemblyHandler_(assembly_->value());
+        assemblyHandler_(assembly_->value(), parts_->text());
     }
 }
 

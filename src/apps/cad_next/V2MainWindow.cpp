@@ -569,7 +569,9 @@ void V2MainWindow::BuildEditingShelves()
     fabricationDock_ = new V2FabricationDock(this);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
     fabricationDock_->SetChoiceChangedHandler([this] { AdoptFabricationChoice(); });
-    fabricationDock_->SetAssemblyHandler([this](double percent) { SetAssemblyPercent(percent); });
+    fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
+        SetAssemblyPercent(percent, parts);
+    });
     fabricationDock_->SetFreezeOutputHandler(
         [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
     fabricationDock_->SetMaterialHandler(

@@ -46,10 +46,13 @@ public:
     void SetParameterHandler(
         std::function<void(kachakacha::v2::app::ParameterId, double)> handler);
 
-    //! 組立率(0 = 平ら、100 = 完成形)。「当てる」で handler。
+    //! 組立率(0 = 平ら、100 = 完成形)。「当てる」で handler(組立率と部材番号の欄)。
     void SetAssemblyPercent(double percent);
     [[nodiscard]] double AssemblyPercent() const;
-    void SetAssemblyHandler(std::function<void(double)> handler);
+    //! 部材番号の欄(V1 の「選んだ部材だけが曲がる」)。空なら全体。
+    [[nodiscard]] QString PartNumbersText() const;
+    void SetPartNumbersText(const QString& text);
+    void SetAssemblyHandler(std::function<void(double percent, const QString& parts)> handler);
     void PressApplyAssembly();
 
     //! 固定で作るもの。
@@ -103,6 +106,7 @@ private:
     QDoubleSpinBox* deviation_ = nullptr;
     QDoubleSpinBox* assembly_ = nullptr;
     QPushButton* applyAssembly_ = nullptr;
+    QLineEdit* parts_ = nullptr;
     QComboBox* freeze_ = nullptr;
     QDoubleSpinBox* rangeUMin_ = nullptr;
     QDoubleSpinBox* rangeUMax_ = nullptr;
@@ -115,7 +119,7 @@ private:
     std::function<void(const QString&, int)> materialHandler_;
     std::function<void()> choiceChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;
-    std::function<void(double)> assemblyHandler_;
+    std::function<void(double, const QString&)> assemblyHandler_;
     std::function<void(kachakacha::v2::fabrication::FreezeOutput)> freezeHandler_;
     std::function<void(const char*)> runHandler_;
     bool loading_ = false;

@@ -11,6 +11,8 @@ using kachakacha::v2::app::FabricationChoiceOf;
 using kachakacha::v2::app::FabricationMethod;
 using kachakacha::v2::app::FormatBoundaryList;
 using kachakacha::v2::app::ParseBoundaryList;
+using kachakacha::v2::app::ParsePartNumberList;
+using kachakacha::v2::app::UpdateBandProgress;
 using kachakacha::v2::domain::CreateFabricationModelDefinition;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
@@ -89,6 +91,57 @@ KACHA_V2_TEST(fabrication_options, 面の範囲は作り方と往復し壊れて
     outside.rangeVMax = 1.5;
     RequireEqual(CheckFabricationChoice(outside).Diagnostics().front().code,
         std::string("UI-F005"), "1 を超える");
+}
+
+KACHA_V2_TEST(fabrication_options, 部材を挙げるとその帯だけが曲がり空なら全体に従う)
+{
+    // V1 の part_model_part_assembly と同じ:「選んだ部材だけが曲がる」。
+    CreateFabricationModelDefinition definition;
+    definition.masterPercent = 100.0;
+    const auto one = UpdateBandProgress(definition, 4, {2}, 30.0);
+    Require(one.HasValue(), "2 番だけ動かせる");
+    RequireNear(one.Value().masterPercent, 100.0, 1e-12, "全体は変わらない");
+    RequireEqual(std::to_string(one.Value().bandProgress.size()), std::string("4"), "帯の数だけ");
+    RequireNear(one.Value().bandProgress[0], 1.0, 1e-12, "1 番は完成形のまま");
+    RequireNear(one.Value().bandProgress[1], 0.3, 1e-12, "2 番だけ 30%");
+    RequireNear(one.Value().bandProgress[3], 1.0, 1e-12, "4 番も変わらない");
+
+    // 既にある個別値の上に重ねる。挙げていない番号は保つ。
+    CreateFabricationModelDefinition mixed = definition;
+    mixed.bandProgress = one.Value().bandProgress;
+    const auto second = UpdateBandProgress(mixed, 4, {4}, 0.0);
+    Require(second.HasValue(), "4 番も動かせる");
+    RequireNear(second.Value().bandProgress[1], 0.3, 1e-12, "2 番は残る");
+    RequireNear(second.Value().bandProgress[3], 0.0, 1e-12, "4 番が平ら");
+
+    // 空なら全体。個別値は捨てる(V1 と同じ)。
+    const auto all = UpdateBandProgress(mixed, 4, {}, 50.0);
+    Require(all.HasValue(), "全体を動かせる");
+    RequireNear(all.Value().masterPercent, 50.0, 1e-12, "全体が 50%");
+    Require(all.Value().bandProgress.empty(), "個別値は捨てる");
+
+    // 範囲の外は断る。
+    RequireEqual(UpdateBandProgress(definition, 4, {5}, 30.0).Diagnostics().front().code,
+        std::string("UI-F006"), "5 番は無い");
+    RequireEqual(UpdateBandProgress(definition, 0, {1}, 30.0).Diagnostics().front().code,
+        std::string("UI-F006"), "部材が無ければ断る");
+    Require(!UpdateBandProgress(definition, 4, {1}, 120.0).HasValue(), "120% は断る");
+}
+
+KACHA_V2_TEST(fabrication_options, 部材番号の欄はカンマ区切りで読めて整数でなければ断る)
+{
+    const auto parsed = ParsePartNumberList("1, 3");
+    Require(parsed.HasValue(), "読める");
+    RequireEqual(std::to_string(parsed.Value().size()), std::string("2"), "2つ");
+    RequireEqual(std::to_string(parsed.Value()[1]), std::string("3"), "2つ目");
+    Require(ParsePartNumberList("").HasValue() && ParsePartNumberList("").Value().empty(),
+        "空は空");
+    RequireEqual(ParsePartNumberList("1.5").Diagnostics().front().code, std::string("UI-F006"),
+        "小数は断る");
+    RequireEqual(ParsePartNumberList("0").Diagnostics().front().code, std::string("UI-F006"),
+        "0 は断る");
+    RequireEqual(ParsePartNumberList("abc").Diagnostics().front().code, std::string("UI-F006"),
+        "字は断る");
 }
 
 KACHA_V2_TEST_MAIN("fabrication_options")

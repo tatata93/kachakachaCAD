@@ -558,6 +558,143 @@ void DrawOneLine(V2MainWindow& window)
         window.ActionFor("guide.row_up") != nullptr);
 }
 
+[[nodiscard]] bool CaseModeChangeReturnsToSelect(V2MainWindow& window)
+{
+    // 起動が「直線」で、モードを変えても道具が残っていたので、
+    // 画面を押すと線が引けてしまい、選ぶことができなかった。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    if (!Explain("モードを変えると選択道具へ戻る",
+            window.Session().CurrentTool()
+                == kachakacha::v2::modeling::DrawingTool::Select)) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Circle);
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    return Explain("作図モードへ戻しても選択道具",
+        window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select);
+}
+
+[[nodiscard]] bool CaseMoveToolPicksItsTargetFirst(V2MainWindow& window)
+{
+    // 移動の道具で2点を押すと「先に動かす線を選んでください」と断られていた。
+    // **押した後に言われる。** 1回目の押しで相手を選ぶ。
+    DrawOneLine(window);
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Move);
+    const auto middle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
+    if (!Explain("線の真ん中が画面に出る", middle.has_value())) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(middle->x, middle->y));
+    if (!Explain((std::string("1回目の押しで相手が選ばれる(")
+                     + std::to_string(viewport.Selection().entityIds.size()) + " 件)").c_str(),
+            viewport.Selection().entityIds.size() == 1)) {
+        return false;
+    }
+    return Explain((std::string("次に何をするか言う(")
+                       + window.StatusText().toStdString() + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("動かす元の点")));
+}
+
+[[nodiscard]] bool CasePointsCanBeSelected(V2MainWindow& window)
+{
+    // 点は線と同じ文書のものなのに、拾う道が無かった。
+    // 「交点に点」で作った点も作図点も、**選ぶことができなかった**。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Point);
+    auto& viewport = window.Viewport();
+    const auto where = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{12.0, 8.0, 0.0});
+    if (!Explain("置く場所が画面に出る", where.has_value())) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(where->x, where->y));
+    const EntityId point = FirstOfKind(window, EntityKind::Point);
+    if (!Explain("作図点ができる", !point.IsNil())) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.SelectAt(QPointF(where->x, where->y), Qt::NoModifier);
+    return Explain((std::string("その点を押すと選べる(")
+                       + std::to_string(viewport.Selection().entityIds.size())
+                       + " 件)").c_str(),
+        kachakacha::v2::app::IsSelected(viewport.Selection(), point));
+}
+
+[[nodiscard]] bool CaseShiftClickAddsToSelection(V2MainWindow& window)
+{
+    // 複数選べないと、2本要る操作(トリム・結合・面取り)が全部使えない。
+    DrawOneLine(window);
+    const EntityId first = FirstOfKind(window, EntityKind::Wire);
+    // 2本目を別のところへ引く。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    auto& viewport = window.Viewport();
+    const auto a = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{0.0, 20.0, 0.0});
+    const auto b = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{40.0, 20.0, 0.0});
+    if (!Explain("2本目の場所が画面に出る", a.has_value() && b.has_value())) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(a->x, a->y));
+    viewport.ClickAt(QPointF(b->x, b->y));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    const auto firstMiddle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
+    const auto secondMiddle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 20.0, 0.0});
+    viewport.SelectAt(QPointF(firstMiddle->x, firstMiddle->y), Qt::NoModifier);
+    viewport.SelectAt(QPointF(secondMiddle->x, secondMiddle->y), Qt::ShiftModifier);
+    if (!Explain((std::string("Shift で2本選べる(")
+                     + std::to_string(viewport.Selection().entityIds.size())
+                     + " 件)").c_str(),
+            viewport.Selection().entityIds.size() == 2)) {
+        return false;
+    }
+    // Ctrl で外せる。
+    viewport.SelectAt(QPointF(secondMiddle->x, secondMiddle->y), Qt::ControlModifier);
+    (void)first;
+    return Explain((std::string("Ctrl で外せる(")
+                       + std::to_string(viewport.Selection().entityIds.size())
+                       + " 件)").c_str(),
+        viewport.Selection().entityIds.size() == 1);
+}
+
+[[nodiscard]] bool CaseCommandWaitsForItsTargets(V2MainWindow& window)
+{
+    // トリムを押すと、その場で「線を2本選んでください」と言って **終わって** いた。
+    // 選んでから押し直さなければならず、押す順を覚えていないと使えない。
+    DrawOneLine(window);
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    window.RunCommand("wire.offset");
+    if (!Explain((std::string("構えて待つ(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("選ぶと続きます")))) {
+        return false;
+    }
+    if (!Explain((std::string("何を構えているか言える(")
+                     + window.PendingCommandLabel().toStdString() + ")").c_str(),
+            !window.PendingCommandLabel().isEmpty())) {
+        return false;
+    }
+    // 「1つ以上」の条件は、そろっても勝手に走らない(2つ目を選ぶ前に終わってしまう)。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    if (!Explain((std::string("そろっても待つ(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("Enter")))) {
+        return false;
+    }
+    // Esc でやめられる。
+    window.ClearPendingCommand();
+    return Explain("やめれば構えが消える", window.PendingCommandLabel().isEmpty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -581,6 +718,11 @@ std::vector<SelfTestCase> ScreenCases()
         {"並べる数の打ち間違いを断る", &CaseArrayRefusesBadCount},
         {"部品モードでも道具の設定が右に出る", &CasePartModeShowsToolSettings},
         {"上の帯は入口だけに絞られている", &CaseTopBarStaysShort},
+        {"モードを変えると選択道具へ戻る", &CaseModeChangeReturnsToSelect},
+        {"動かす道具は1回目の押しで相手を選ぶ", &CaseMoveToolPicksItsTargetFirst},
+        {"作図点を押して選べる", &CasePointsCanBeSelected},
+        {"Shiftで足しCtrlで外せる", &CaseShiftClickAddsToSelection},
+        {"命令は相手がそろうまで構えて待つ", &CaseCommandWaitsForItsTargets},
     };
 }
 

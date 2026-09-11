@@ -603,6 +603,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceTable.cpp
     src/next/kachakacha/app/ArrayPlan.cpp
+    src/next/kachakacha/app/ToolTargeting.cpp
     src/next/kachakacha/app/NameFilter.cpp
     src/next/kachakacha/app/PlaneFocus.cpp
     src/next/kachakacha/app/ShelfLayout.cpp
@@ -769,6 +770,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
     kachakacha_add_v2_test(pattern_view_tests tests_v2/pattern_view_tests.cpp)
     kachakacha_add_v2_test(array_plan_tests tests_v2/array_plan_tests.cpp)
+    kachakacha_add_v2_test(tool_targeting_tests tests_v2/tool_targeting_tests.cpp)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
     kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
     kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)
@@ -889,6 +891,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDialog.cpp
         src/apps/cad_next/V2PartDock.cpp
+        src/apps/cad_next/V2PendingCommand.cpp
         src/apps/cad_next/V2PatternDock.cpp
         src/apps/cad_next/V2ShapeViews.cpp
         src/apps/cad_next/V2Shelves.cpp

@@ -97,6 +97,46 @@ std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
     return best;
 }
 
+std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance)
+{
+    std::optional<PickCandidate> best;
+    for (const auto& point : scene.points) {
+        const auto screen = mapping.Project(point.position);
+        if (!screen.has_value()) {
+            continue;
+        }
+        const double dx = screen->x - pointer.x;
+        const double dy = screen->y - pointer.y;
+        const double distance = std::sqrt(dx * dx + dy * dy);
+        if (distance > tolerance.displayPickPx) {
+            continue;
+        }
+        // 同じ距離のときは先に入っているものを残す。毎回同じ結果になる。
+        if (best.has_value() && !(distance < best->distancePx)) {
+            continue;
+        }
+        PickCandidate candidate;
+        candidate.entityId = point.entityId;
+        candidate.distancePx = distance;
+        best = candidate;
+    }
+    return best;
+}
+
+std::optional<PickCandidate> PickEntity(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
+{
+    // 点を先に見る。点は線の上に載っていることが多いので、
+    // 線を先に見ると点が永久に拾えない。
+    if (auto point = PickPoint(scene, mapping, pointer, tolerance); point.has_value()) {
+        return point;
+    }
+    return PickCurve(scene, mapping, pointer, tolerance, focus);
+}
+
 SelectionSet ApplySelection(const SelectionSet& current,
     const std::optional<PickCandidate>& picked, SelectionMode mode)
 {

@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 
+#include "kachakacha/app/ToolTargeting.h"
 #include "kachakacha/modeling/MeshPick.h"
 
 #include "kachakacha/geometry/WireEdit.h"
@@ -988,7 +989,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     }
     // カーソルの下の線を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
     // V1 は当たっている線を太く出していた。同じにする。
-    auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+    auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
     if (!picked.has_value()) {
@@ -1009,6 +1010,13 @@ void V2Viewport::HoverAt(const QPointF& position)
 void V2Viewport::SetSelectionChangedCallback(std::function<void()> callback)
 {
     selectionChangedCallback_ = std::move(callback);
+}
+
+void V2Viewport::SetPendingCommandCallbacks(std::function<void()> confirm,
+    std::function<void()> cancel)
+{
+    confirmPending_ = std::move(confirm);
+    cancelPending_ = std::move(cancel);
 }
 
 void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
@@ -1038,12 +1046,13 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     } else if ((modifiers & Qt::AltModifier) != 0) {
         mode = SelectionMode::Subtract;
     }
-    auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+    // 点 → 線 → 塗った形 の順で拾う。点は線の上に載っていることが多いので、
+    // 線を先に見ると点が永久に拾えない(オーナー指摘 2026-09-11)。
+    auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
     if (!picked.has_value()) {
-        // 線が無ければ、塗った形を押したとみなす。見えているのに掴めない、をなくす。
-        // 線を先に見るのは、面の上に線が載っているとき線が拾えなくなるためである。
+        // 線も点も無ければ、塗った形を押したとみなす。
         picked = PickShapeAt(position);
     }
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
@@ -1119,6 +1128,31 @@ void V2Viewport::ClickAt(const QPointF& position)
         measurePicks_.push_back(pick);
         if (measurePicksChanged_) {
             measurePicksChanged_();
+        }
+        update();
+        return;
+    }
+    // 動かす道具(移動・複製・鏡映・回転)は、相手が決まっていないと点に意味がない。
+    // V2 は2点を押した **後** に「先に動かす線を選んでください」と断っていた。
+    // 1回目の押しで相手を選ぶ(オーナー指摘 2026-09-11)。判断は core にある。
+    if (kachakacha::v2::app::ClickPicksTarget(session_->CurrentTool(),
+            !selection_.entityIds.empty(),
+            session_->PlacedPointCount())) {
+        const auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
+            ScreenPoint{position.x(), position.y()},
+            session_->GetDocument().Snapshot().settings.tolerance);
+        if (!picked.has_value()) {
+            status_ = "動かすものを押してください。";
+            if (statusCallback_) {
+                statusCallback_(status_);
+            }
+            return;
+        }
+        SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
+            kachakacha::v2::app::SelectionMode::Replace));
+        status_ = "動かすものを選びました。次に、動かす元の点を押してください。";
+        if (statusCallback_) {
+            statusCallback_(status_);
         }
         update();
         return;
@@ -1353,6 +1387,11 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
     SetSnapSuppressedByKey((event->modifiers() & Qt::ControlModifier) != 0);
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
     if (event->key() == Qt::Key_Escape) {
+        // 構えている命令があれば、まずそれを解く。やりかけの点より先に、
+        // 「待っているもの」をやめるのが素直である。
+        if (cancelPending_) {
+            cancelPending_();
+        }
         // V1と同じ。やりかけを1つ取り消してから、選択道具へ戻り、選択も解除する。
         // 何をするかは core(app/EscapeAction)が決める。
         (void)PressEscape();
@@ -1394,6 +1433,11 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        // 構えている命令があれば「これで」と言う。命令は窓が持っているので、
+        // 画面は伝えるだけにする。
+        if (confirmPending_) {
+            confirmPending_();
+        }
         FinishTool();
         return;
     }

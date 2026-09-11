@@ -68,6 +68,25 @@ struct PickFocus {
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
     const geometry::GeometryTolerance& tolerance, const PickFocus& focus = {});
 
+//! 画面の1点から、いちばん近い **作図点** を拾う(棚卸し追加、オーナー指摘 2026-09-11)。
+//!
+//! 点は線と同じように文書のものなのに、拾う道が無かった。
+//! 「交点に点」で作った点も、「作図点」も、**選ぶことができなかった** ので、
+//! 消すことも、名前を変えることも、次の操作の相手にすることもできなかった。
+//!
+//! 拾う範囲は線と同じ tolerance.displayPickPx。
+[[nodiscard]] std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance);
+
+//! 点 → 線 の順で拾う。
+//!
+//! **点を先に見る。** 点は線の上に載っていることが多く(端点に置いた作図点、
+//! 交点に置いた点)、線を先に見ると点が永久に拾えない。
+[[nodiscard]] std::optional<PickCandidate> PickEntity(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus = {});
+
 //! 拾ったものを選択へ入れる。拾えていなければ、Replace のときだけ空にする。
 //! 足す・外すの途中で、何も無いところを押しても選択は消えない(V1と同じ)。
 [[nodiscard]] SelectionSet ApplySelection(const SelectionSet& current,

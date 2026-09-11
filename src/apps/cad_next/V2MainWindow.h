@@ -62,6 +62,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -753,6 +754,22 @@ private:
     void RefreshRightShelves();
     //! 核の形(立体・面)を三角形にして画面へ渡す。番号が同じなら作り直さない。
     void RefreshShapeViews();
+
+public:
+    //! 構えている命令の表示名。構えていなければ空。試験と帯で見る。
+    [[nodiscard]] QString PendingCommandLabel() const;
+    //! 構えを解く(Esc、モード替え、別の命令)。
+    void ClearPendingCommand();
+    //! 「これで」と言う(Enter)。そろっていれば走る。
+    void ConfirmPendingCommand();
+
+private:
+    //! いま使えない命令なら構えて待つ。構えたら true。
+    bool ArmCommandIfUnsatisfied(std::string_view id);
+    //! 選択が変わったときに呼ぶ。そろっていれば走る(条件によっては Enter を待つ)。
+    void RefreshPendingCommand(bool confirmed);
+    //! 構えている命令の id。空なら構えていない。
+    std::string pendingCommandId_;
     //! 配列(並べて複製する)。
     [[nodiscard]] static bool IsArrayCommand(std::string_view id);
     void RunArrayCommand(std::string_view id);

@@ -202,6 +202,9 @@ public:
     void SetStatusCallback(std::function<void(const std::string&)> callback);
     //! 選択が変わったときに呼ぶ。数を数え直すのは本体窓の仕事。
     void SetSelectionChangedCallback(std::function<void()> callback);
+    //! 構えている命令の「これで(Enter)」と「やめる(Esc)」。
+    //! 命令は窓が持っているので、画面は伝えるだけにする。
+    void SetPendingCommandCallbacks(std::function<void()> confirm, std::function<void()> cancel);
 
     //! いま選んでいるもの。判断は core の Selection にある。
     [[nodiscard]] const kachakacha::v2::app::SelectionSet& Selection() const noexcept
@@ -523,6 +526,8 @@ private:
     std::string status_;
     std::function<void(const std::string&)> statusCallback_;
     std::function<void()> selectionChangedCallback_;
+    std::function<void()> confirmPending_;
+    std::function<void()> cancelPending_;
     kachakacha::v2::app::SelectionSet selection_;
     std::function<void()> documentChangedCallback_;
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;

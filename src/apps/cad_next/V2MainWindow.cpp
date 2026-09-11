@@ -5,6 +5,7 @@
 #include "kachakacha/exporters/PdfWriter.h"
 #include "kachakacha/app/CommandAvailability.h"
 #include "kachakacha/app/OriginPlanes.h"
+#include "kachakacha/app/ToolTargeting.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/app/Selection.h"
@@ -163,7 +164,9 @@ V2MainWindow::V2MainWindow()
     // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)を置き、上面 XY を作業中にする。
     // V1 と同じく、開いた直後から「平面から離す」の相手が選べる。
     AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});
-    SelectTool(DrawingTool::Line);
+    // 起動は「選択」。線の道具で始めると、画面を押した瞬間に線が引けてしまい、
+    // 選ぶことができない(オーナー指摘 2026-09-11)。
+    SelectTool(kachakacha::v2::app::ToolAfterModeChange());
     SetMode(UiMode::Drawing);
     ApplyTheme(UiTheme::Normal);
     setWindowTitle(QStringLiteral("kachakachaCAD %1")
@@ -232,9 +235,13 @@ void V2MainWindow::WireViewportCallbacks()
         });
     // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
     viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
+    viewport_->SetPendingCommandCallbacks([this] { ConfirmPendingCommand(); },
+        [this] { ClearPendingCommand(); });
     viewport_->SetSelectionChangedCallback([this] {
         // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
         HighlightTreeForSelection();
+        // 構えている命令があれば、そろったかを見る。
+        RefreshPendingCommand(false);
         RefreshExportCounts();
         RefreshMeasurements();
         RefreshEditDock();
@@ -402,6 +409,14 @@ void V2MainWindow::SetMode(UiMode mode)
     for (auto& entry : modeActions_) {
         entry.second->setChecked(entry.first == mode);
     }
+    // 道具は白紙へ戻す。前の道具が残っていると、部品モードへ移った直後に
+    // 画面を押して線が引ける。モードを変えるのは「何を相手にするか」を
+    // 変えることなので、道具も戻すのが素直である(オーナー指摘 2026-09-11)。
+    if (session_->CurrentTool() != kachakacha::v2::app::ToolAfterModeChange()) {
+        SelectTool(kachakacha::v2::app::ToolAfterModeChange());
+    }
+    // 構えていた命令も捨てる。別のモードへ移ったなら、その命令はもう関係ない。
+    ClearPendingCommand();
     RefreshCommandVisibility();
     // 右に出す棚は「いまの道具とモード」で決まる(core の ShelfLayout)。
     // 全部出しっぱなしにすると、1枚あたりが 80px まで潰れて見出しだけが並ぶ。
@@ -1266,18 +1281,22 @@ bool V2MainWindow::EnterToolFor(const CommandDescriptor& command)
 
 void V2MainWindow::RunCommand(std::string_view id)
 {
-    QString reason;
-    if (!CommandEnabled(id, &reason)) {
-        SetStatus(reason);
-        return;
-    }
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
         return;
     }
+    // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。
     if (EnterToolFor(*command)) {
         return;
     }
+    // まだ使えない命令は、断って終わりにせず **構えて待つ**。
+    // 「道具を選ぶ → 相手を選ぶ」の順で使えるようにする(オーナー指摘 2026-09-11)。
+    // 選んでも直らないもの(戻せる履歴が無い等)は、ここで理由を出して終わる。
+    if (ArmCommandIfUnsatisfied(id)) {
+        return;
+    }
+    // ここまで来たら走らせる。走る前に構えを解く(別の命令を押したとき用)。
+    ClearPendingCommand();
     if (id == "edit.undo" || id == "edit.redo") {
         RunHistoryCommand(id == "edit.undo");
         return;

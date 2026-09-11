@@ -68,4 +68,27 @@ KACHA_V2_TEST(fabrication_options, 欄の値は範囲の外を断り作り方と
         std::string("UI-F004"), "再現度 21");
 }
 
+KACHA_V2_TEST(fabrication_options, 面の範囲は作り方と往復し壊れていれば断る)
+{
+    FabricationChoice choice;
+    choice.rangeUMin = 0.2;
+    choice.rangeUMax = 0.8;
+    choice.rangeVMin = 0.0;
+    choice.rangeVMax = 0.5;
+    Require(CheckFabricationChoice(choice).HasValue(), "通る");
+    CreateFabricationModelDefinition definition;
+    ApplyFabricationChoice(definition, choice);
+    RequireNear(definition.rangeUMin, 0.2, 1e-12, "u 最小");
+    RequireNear(definition.rangeVMax, 0.5, 1e-12, "v 最大");
+    RequireNear(FabricationChoiceOf(definition).rangeUMax, 0.8, 1e-12, "戻る");
+    FabricationChoice reversed = choice;
+    reversed.rangeUMin = 0.9;
+    RequireEqual(CheckFabricationChoice(reversed).Diagnostics().front().code,
+        std::string("UI-F005"), "最小 > 最大");
+    FabricationChoice outside = choice;
+    outside.rangeVMax = 1.5;
+    RequireEqual(CheckFabricationChoice(outside).Diagnostics().front().code,
+        std::string("UI-F005"), "1 を超える");
+}
+
 KACHA_V2_TEST_MAIN("fabrication_options")

@@ -282,6 +282,46 @@ std::vector<Diagnostic> SetConstructionCommand::Apply(DocumentSnapshot& candidat
     return diagnostics;
 }
 
+SetManufacturingCommand::SetManufacturingCommand(std::vector<EntityId> entityIds,
+    domain::ManufacturingProperties properties)
+    : entityIds_(std::move(entityIds)), properties_(std::move(properties))
+{
+}
+
+std::vector<Diagnostic> SetManufacturingCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    if (entityIds_.empty()) {
+        diagnostics.push_back(MakeError(kNotFound, "入力に指定されたものが見つかりません。",
+            "材料を付けるものを選んでください。"));
+        return diagnostics;
+    }
+    if (properties_.layerCount < 1) {
+        diagnostics.push_back(MakeError("DOC-C010", "この種類には材料を付けられません。",
+            "積層の枚数は 1 以上にしてください。"));
+        return diagnostics;
+    }
+    for (const EntityId& id : entityIds_) {
+        domain::Entity* entity = FindMutable(candidate, id);
+        if (entity == nullptr) {
+            diagnostics.push_back(MakeError(kNotFound,
+                "入力に指定されたものが見つかりません。", id.ToString()));
+            return diagnostics;
+        }
+        const bool allowed = entity->kind == domain::EntityKind::Part
+            || entity->kind == domain::EntityKind::GuideSurface
+            || entity->kind == domain::EntityKind::FabricationModel;
+        if (!allowed) {
+            diagnostics.push_back(MakeError("DOC-C010", "この種類には材料を付けられません。",
+                std::string(domain::EntityKindNameJa(entity->kind)) + " には材料も積層もありません。"));
+            return diagnostics;
+        }
+        entity->manufacturing = properties_;
+        ++entity->revision;
+    }
+    return diagnostics;
+}
+
 SetDatumCommand::SetDatumCommand(std::vector<EntityId> entityIds, bool datum)
     : entityIds_(std::move(entityIds)), datum_(datum)
 {

@@ -67,6 +67,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     layout->addWidget(model_);
 
     layout->addWidget(BuildOptionsForm(body));
+    layout->addWidget(BuildRangeAndMaterial(body));
 
     auto* buttons = new QWidget(body);
     auto* buttonLayout = new QVBoxLayout(buttons);
@@ -140,6 +141,50 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
 
 }
 
+QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
+{
+    // 範囲(V1 の plate_range)と材料・積層(plate の材料、plate_laminate)。
+    auto* widget = new QWidget(body);
+    auto* form = new QFormLayout(widget);
+    form->setContentsMargins(0, 0, 0, 0);
+    const auto makeUnit = [widget](double value) {
+        auto* field = new QDoubleSpinBox(widget);
+        field->setRange(0.0, 1.0);
+        field->setDecimals(3);
+        field->setSingleStep(0.05);
+        field->setValue(value);
+        return field;
+    };
+    auto* uRow = new QWidget(widget);
+    auto* uLayout = new QHBoxLayout(uRow);
+    uLayout->setContentsMargins(0, 0, 0, 0);
+    rangeUMin_ = makeUnit(0.0);
+    rangeUMax_ = makeUnit(1.0);
+    uLayout->addWidget(rangeUMin_);
+    uLayout->addWidget(new QLabel(QStringLiteral("〜"), uRow));
+    uLayout->addWidget(rangeUMax_);
+    form->addRow(QStringLiteral("範囲 u"), uRow);
+    auto* vRow = new QWidget(widget);
+    auto* vLayout = new QHBoxLayout(vRow);
+    vLayout->setContentsMargins(0, 0, 0, 0);
+    rangeVMin_ = makeUnit(0.0);
+    rangeVMax_ = makeUnit(1.0);
+    vLayout->addWidget(rangeVMin_);
+    vLayout->addWidget(new QLabel(QStringLiteral("〜"), vRow));
+    vLayout->addWidget(rangeVMax_);
+    form->addRow(QStringLiteral("範囲 v"), vRow);
+
+    material_ = new QLineEdit(widget);
+    material_->setPlaceholderText(QStringLiteral("プラ板 0.5 など"));
+    form->addRow(QStringLiteral("材料"), material_);
+    layers_ = MakeCount(widget, 1.0, 20.0);
+    layers_->setValue(1.0);
+    form->addRow(QStringLiteral("積層の枚数"), layers_);
+    applyMaterial_ = new QPushButton(QStringLiteral("材料と積層を選んだものに当てる"), widget);
+    form->addRow(applyMaterial_);
+    return widget;
+}
+
 QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
 {
     auto* bendWidget = new QWidget(body);
@@ -188,6 +233,11 @@ void V2FabricationDock::Connect()
             parameterHandler_(ParameterId::MaxDeviationMm, value);
         }
     });
+    QObject::connect(rangeUMin_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(rangeUMax_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(rangeVMin_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(rangeVMax_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(applyMaterial_, &QPushButton::clicked, this, [this] { PressApplyMaterial(); });
     QObject::connect(applyAssembly_, &QPushButton::clicked, this, [this] { PressApplyAssembly(); });
     QObject::connect(freeze_, &QComboBox::currentIndexChanged, this, [this] {
         if (!loading_ && freezeHandler_) {
@@ -225,6 +275,10 @@ FabricationChoice V2FabricationDock::Choice() const
     choice.maximumPartCount = static_cast<int>(maxParts_->value());
     choice.minimumPartWidthMm = minWidth_->value();
     choice.fidelity = static_cast<int>(fidelity_->value());
+    choice.rangeUMin = rangeUMin_->value();
+    choice.rangeUMax = rangeUMax_->value();
+    choice.rangeVMin = rangeVMin_->value();
+    choice.rangeVMax = rangeVMax_->value();
     const auto parsed = kachakacha::v2::app::ParseBoundaryList(manual_->text().toStdString());
     if (parsed.HasValue()) {
         choice.manualBoundaries = parsed.Value();
@@ -250,8 +304,49 @@ void V2FabricationDock::SetChoice(const FabricationChoice& choice)
     maxParts_->setValue(static_cast<double>(choice.maximumPartCount));
     minWidth_->setValue(choice.minimumPartWidthMm);
     fidelity_->setValue(static_cast<double>(choice.fidelity));
+    rangeUMin_->setValue(choice.rangeUMin);
+    rangeUMax_->setValue(choice.rangeUMax);
+    rangeVMin_->setValue(choice.rangeVMin);
+    rangeVMax_->setValue(choice.rangeVMax);
     loading_ = false;
     RefreshMethodRows();
+}
+
+void V2FabricationDock::SetMaterialHandler(
+    std::function<void(const QString& material, int layers)> handler)
+{
+    materialHandler_ = std::move(handler);
+}
+
+void V2FabricationDock::SetMaterial(const QString& material, int layers)
+{
+    material_->setText(material);
+    layers_->setValue(static_cast<double>(layers));
+}
+
+QString V2FabricationDock::MaterialName() const
+{
+    return material_->text();
+}
+
+int V2FabricationDock::LayerCount() const
+{
+    return static_cast<int>(layers_->value());
+}
+
+void V2FabricationDock::PressApplyMaterial()
+{
+    if (materialHandler_) {
+        materialHandler_(material_->text(), LayerCount());
+    }
+}
+
+void V2FabricationDock::SetRange(double uMin, double uMax, double vMin, double vMax)
+{
+    rangeUMin_->setValue(uMin);
+    rangeUMax_->setValue(uMax);
+    rangeVMin_->setValue(vMin);
+    rangeVMax_->setValue(vMax);
 }
 
 void V2FabricationDock::SetChoiceChangedHandler(std::function<void()> handler)

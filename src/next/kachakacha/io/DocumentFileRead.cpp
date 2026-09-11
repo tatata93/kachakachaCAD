@@ -580,6 +580,10 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.foldWires = ReadIdArray(loader, definition, "foldWires", where);
         made.connectionWires = ReadIdArray(loader, definition, "connectionWires", where);
         made.masterPercent = loader.NumberOr(definition, "masterPercent", 100.0);
+        made.rangeUMin = loader.NumberOr(definition, "rangeUMin", 0.0);
+        made.rangeUMax = loader.NumberOr(definition, "rangeUMax", 1.0);
+        made.rangeVMin = loader.NumberOr(definition, "rangeVMin", 0.0);
+        made.rangeVMax = loader.NumberOr(definition, "rangeVMax", 1.0);
         made.creaseProgress = ReadNumberArray(loader, definition, "creaseProgress", where);
         made.bandProgress = ReadNumberArray(loader, definition, "bandProgress", where);
         feature.definition = std::move(made);

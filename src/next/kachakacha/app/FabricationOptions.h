@@ -12,6 +12,7 @@
 //! - UI-F002 部材数の上限は 1〜200 にしてください。
 //! - UI-F003 部材の最小幅は 0 より大きい数にしてください。
 //! - UI-F004 再現度は 1〜20 にしてください。
+//! - UI-F005 面の範囲は 0〜1 の中で、最小を最大より小さくしてください。
 
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/base/Diagnostic.h"
@@ -33,6 +34,11 @@ struct FabricationChoice {
     int fidelity = 6;
     //! 手動境界(分割軸のパラメータ、0 と 1 の間)。automaticBoundaries が false のとき使う。
     std::vector<double> manualBoundaries;
+    //! 面の範囲(V1 の板材の「範囲」)。u は列方向、v は行方向の 0〜1。
+    double rangeUMin = 0.0;
+    double rangeUMax = 1.0;
+    double rangeVMin = 0.0;
+    double rangeVMax = 1.0;
 };
 
 //! 「0.3, 0.6」のような文字を境界の並びにする。空なら空の並び。読めなければ UI-F001。

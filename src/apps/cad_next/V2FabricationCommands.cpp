@@ -619,15 +619,58 @@ void V2MainWindow::RefreshFabricationDock()
         : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
               &feature->definition);
     if (definition != nullptr) {
-        fabricationDock_->SetModelText(QStringLiteral("近似モデル: %1(%2)")
+        QString material;
+        if (entity->manufacturing.has_value() && !entity->manufacturing->materialName.empty()) {
+            material = QStringLiteral(" 材料 %1 × %2 枚")
+                           .arg(QString::fromStdString(entity->manufacturing->materialName))
+                           .arg(entity->manufacturing->layerCount);
+        }
+        fabricationDock_->SetModelText(QStringLiteral("近似モデル: %1(%2)%3")
                 .arg(QString::fromStdString(entity->displayName),
                     QString::fromUtf8(std::string(kachakacha::v2::app::FabricationMethodNameJa(
                         kachakacha::v2::app::FabricationMethodOf(*definition)))
-                                          .c_str())));
+                                          .c_str()),
+                    material));
         fabricationDock_->SetAssemblyPercent(definition->masterPercent);
         return;
     }
     fabricationDock_->SetModelText(
         QStringLiteral("近似モデル: (なし。部品か形状ガイドを選んで「製作モデルを作る」)"));
+}
+
+void V2MainWindow::ApplyMaterialToSelection(const QString& material, int layers)
+{
+    using kachakacha::v2::domain::EntityKind;
+    // 材料は部品・形状ガイド・近似モデルに付く。線には付かない(core が断る)。
+    std::vector<kachakacha::v2::base::EntityId> targets;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr
+            && (entity->kind == EntityKind::Part || entity->kind == EntityKind::GuideSurface
+                || entity->kind == EntityKind::FabricationModel)) {
+            targets.push_back(id);
+        }
+    }
+    if (targets.empty()) {
+        SetStatus(QStringLiteral("材料: 部品か形状ガイドか近似モデルを選んでから当ててください。"));
+        return;
+    }
+    kachakacha::v2::domain::ManufacturingProperties properties;
+    properties.materialName = material.toStdString();
+    properties.nominalThicknessMm = ExtrudeDistanceMm();
+    properties.layerCount = layers;
+    const auto changed = session_->GetDocument().Run(
+        kachakacha::v2::document::SetManufacturingCommand(targets, properties));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    RefreshEntityList();
+    RefreshFabricationDock();
+    SetStatus(QStringLiteral("材料「%1」× %2 枚を %3 個に付けました(板厚 %4 mm)。")
+            .arg(material)
+            .arg(layers)
+            .arg(static_cast<int>(targets.size()))
+            .arg(ExtrudeDistanceMm(), 0, 'f', 3));
 }
 

@@ -620,6 +620,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/ReliefCut.cpp
     src/next/kachakacha/fabrication/Unfold.cpp
     src/next/kachakacha/fabrication/BandApproximation.cpp
+    src/next/kachakacha/fabrication/SurfacePatchCrop.cpp
     src/next/kachakacha/fabrication/BandDevelop.cpp
     src/next/kachakacha/fabrication/BandFold.cpp
     src/next/kachakacha/fabrication/BandMap.cpp

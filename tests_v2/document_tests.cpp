@@ -490,6 +490,45 @@ KACHA_V2_TEST(document, 部品は補助線にできない)
     RequireEqual(result.diagnostics.front().code, std::string("DOC-C005"), "診断コード");
 }
 
+KACHA_V2_TEST(document, 材料と積層は部品に付き線には付かない)
+{
+    // V1 の板材の「材料」「積層」。V2 は Entity の製作の属性に持つ。
+    Maker maker;
+    Document document(kachakacha::v2::base::DocumentId{});
+    Maker::Made part = maker.MakePoint("板");
+    part.entity.kind = EntityKind::Part;
+    Require(document.Run(AddFeatureCommand(part.feature, {part.entity}, "板")).committed,
+        "足せること");
+    kachakacha::v2::domain::ManufacturingProperties properties;
+    properties.materialName = "プラ板";
+    properties.nominalThicknessMm = 0.5;
+    properties.layerCount = 2;
+    Require(document.Run(kachakacha::v2::document::SetManufacturingCommand(
+                             {part.entity.id}, properties))
+                .committed,
+        "付けられること");
+    const auto* stored = document.FindEntity(part.entity.id);
+    Require(stored->manufacturing.has_value() && stored->manufacturing->materialName == "プラ板"
+            && stored->manufacturing->layerCount == 2,
+        "材料と積層が残ること");
+    Require(document.Undo() && !document.FindEntity(part.entity.id)->manufacturing.has_value(),
+        "戻せること");
+
+    Maker::Made wire = maker.MakePoint("線");
+    wire.entity.kind = EntityKind::Wire;
+    Require(document.Run(AddFeatureCommand(wire.feature, {wire.entity}, "線")).committed,
+        "足せること");
+    const auto refused = document.Run(
+        kachakacha::v2::document::SetManufacturingCommand({wire.entity.id}, properties));
+    Require(!refused.committed, "線には付かないこと");
+    RequireEqual(refused.diagnostics.front().code, std::string("DOC-C010"), "診断コード");
+    properties.layerCount = 0;
+    Require(!document.Run(kachakacha::v2::document::SetManufacturingCommand(
+                              {part.entity.id}, properties))
+                 .committed,
+        "積層 0 は断ること");
+}
+
 KACHA_V2_TEST(document, 基準線にできる)
 {
     // V1の「基準線に設定」「基準解除」。

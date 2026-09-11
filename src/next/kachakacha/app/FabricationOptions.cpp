@@ -16,6 +16,7 @@ constexpr const char* kBadBoundaryText = "UI-F001";
 constexpr const char* kBadPartCount = "UI-F002";
 constexpr const char* kBadMinimumWidth = "UI-F003";
 constexpr const char* kBadFidelity = "UI-F004";
+constexpr const char* kBadRange = "UI-F005";
 constexpr int kMaxPartCount = 200;
 constexpr int kMaxFidelity = 20;
 
@@ -98,6 +99,16 @@ Result<FabricationChoice> CheckFabricationChoice(const FabricationChoice& choice
         return Out::Failure(MakeError(kBadFidelity, "再現度は 1〜20 にしてください。",
             std::to_string(choice.fidelity)));
     }
+    const auto inUnit = [](double value) { return std::isfinite(value) && value >= 0.0 && value <= 1.0; };
+    if (!inUnit(choice.rangeUMin) || !inUnit(choice.rangeUMax) || !inUnit(choice.rangeVMin)
+        || !inUnit(choice.rangeVMax) || !(choice.rangeUMin < choice.rangeUMax)
+        || !(choice.rangeVMin < choice.rangeVMax)) {
+        return Out::Failure(MakeError(kBadRange,
+            "面の範囲は 0〜1 の中で、最小を最大より小さくしてください。",
+            "u " + std::to_string(choice.rangeUMin) + "〜" + std::to_string(choice.rangeUMax)
+                + "、v " + std::to_string(choice.rangeVMin) + "〜"
+                + std::to_string(choice.rangeVMax)));
+    }
     return Out::Success(choice);
 }
 
@@ -111,6 +122,10 @@ void ApplyFabricationChoice(domain::CreateFabricationModelDefinition& definition
     definition.minimumPartWidthMm = choice.minimumPartWidthMm;
     definition.fidelity = choice.fidelity;
     definition.manualBoundaries = choice.manualBoundaries;
+    definition.rangeUMin = choice.rangeUMin;
+    definition.rangeUMax = choice.rangeUMax;
+    definition.rangeVMin = choice.rangeVMin;
+    definition.rangeVMax = choice.rangeVMax;
 }
 
 FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefinition& definition)
@@ -123,6 +138,10 @@ FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefini
     choice.minimumPartWidthMm = definition.minimumPartWidthMm;
     choice.fidelity = definition.fidelity;
     choice.manualBoundaries = definition.manualBoundaries;
+    choice.rangeUMin = definition.rangeUMin;
+    choice.rangeUMax = definition.rangeUMax;
+    choice.rangeVMin = definition.rangeVMin;
+    choice.rangeVMax = definition.rangeVMax;
     return choice;
 }
 

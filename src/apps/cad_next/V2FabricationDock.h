@@ -60,6 +60,15 @@ public:
     void SetRunHandler(std::function<void(const char* command)> handler);
     void PressRun(const char* command);
 
+    //! 材料と積層(V1 の板材の「材料」「積層」)。「選んだものに当てる」で handler。
+    void SetMaterialHandler(std::function<void(const QString& material, int layers)> handler);
+    void SetMaterial(const QString& material, int layers);
+    [[nodiscard]] QString MaterialName() const;
+    [[nodiscard]] int LayerCount() const;
+    void PressApplyMaterial();
+    //! 範囲の欄(試験用)。
+    void SetRange(double uMin, double uMax, double vMin, double vMax);
+
     void SetMessage(const QString& text);
     [[nodiscard]] QString MessageText() const;
     //! 選んでいる近似モデルの名前など。
@@ -73,6 +82,7 @@ public:
 
 private:
     QWidget* BuildOptionsForm(QWidget* body);
+    QWidget* BuildRangeAndMaterial(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
     void Connect();
     void Emit();
@@ -92,7 +102,15 @@ private:
     QDoubleSpinBox* assembly_ = nullptr;
     QPushButton* applyAssembly_ = nullptr;
     QComboBox* freeze_ = nullptr;
+    QDoubleSpinBox* rangeUMin_ = nullptr;
+    QDoubleSpinBox* rangeUMax_ = nullptr;
+    QDoubleSpinBox* rangeVMin_ = nullptr;
+    QDoubleSpinBox* rangeVMax_ = nullptr;
+    QLineEdit* material_ = nullptr;
+    QDoubleSpinBox* layers_ = nullptr;
+    QPushButton* applyMaterial_ = nullptr;
     QLabel* message_ = nullptr;
+    std::function<void(const QString&, int)> materialHandler_;
     std::function<void()> choiceChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;
     std::function<void(double)> assemblyHandler_;

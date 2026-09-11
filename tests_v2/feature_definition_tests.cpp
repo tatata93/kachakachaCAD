@@ -211,7 +211,15 @@ KACHA_V2_TEST(feature_definition, 近似の方式と曲げ状態が保存して�
     made.masterPercent = 42.0;
     made.creaseProgress = {1.0, 0.5};
     made.bandProgress = {1.0, 0.0, 1.0};
+    made.rangeUMin = 0.1;
+    made.rangeUMax = 0.9;
+    made.rangeVMin = 0.2;
+    made.rangeVMax = 0.8;
     const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    RequireNear(back.rangeUMin, 0.1, 1.0e-12, "範囲 u 最小");
+    RequireNear(back.rangeUMax, 0.9, 1.0e-12, "範囲 u 最大");
+    RequireNear(back.rangeVMin, 0.2, 1.0e-12, "範囲 v 最小");
+    RequireNear(back.rangeVMax, 0.8, 1.0e-12, "範囲 v 最大");
     RequireEqual(std::to_string(back.method), std::string("1"), "方式");
     RequireEqual(std::to_string(back.splitAxis), std::string("0"), "分割軸");
     Require(!back.automaticBoundaries, "手動境界");
@@ -236,6 +244,9 @@ KACHA_V2_TEST(feature_definition, 古い製作モデルの定義は既定値で�
     RequireNear(back.masterPercent, 100.0, 1.0e-12, "完成形が既定");
     Require(back.creaseProgress.empty() && back.bandProgress.empty(), "個別値は無し");
     Require(back.automaticBoundaries, "自動分割が既定");
+    Require(back.rangeUMin == 0.0 && back.rangeUMax == 1.0 && back.rangeVMin == 0.0
+            && back.rangeVMax == 1.0,
+        "範囲は全体が既定");
 }
 
 KACHA_V2_TEST(feature_definition, 型紙が保存して読み直せる)

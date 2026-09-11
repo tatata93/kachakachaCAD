@@ -287,9 +287,23 @@ Result<FabricationEvaluation> EvaluateFabrication(
         return Out::Failure(MakeError("FAB-M002", "許すずれが正の数ではありません。",
             "どこまでのずれなら許すかを決めてください。"));
     }
+    // 面の範囲(V1 の板材の「範囲」)。曲がった面の標本を範囲の中だけにしてから近似する。
+    // 平らな部品(輪郭)には範囲は無い。
+    std::vector<FabricationSource> cropped = sources;
+    for (FabricationSource& source : cropped) {
+        if (!source.samples.has_value()) {
+            continue;
+        }
+        auto part = fabrication::CropSamples(*source.samples, definition.rangeUMin,
+            definition.rangeUMax, definition.rangeVMin, definition.rangeVMax);
+        if (!part.HasValue()) {
+            return Out::Failure(part.Diagnostics());
+        }
+        source.samples = std::move(part.Value());
+    }
     return FabricationMethodOf(definition) == FabricationMethod::BandApproximation
-        ? EvaluateByBands(definition, sources, markings, toleranceMm)
-        : EvaluateByClassification(definition, sources, markings, toleranceMm);
+        ? EvaluateByBands(definition, cropped, markings, toleranceMm)
+        : EvaluateByClassification(definition, cropped, markings, toleranceMm);
 }
 
 std::vector<PatternPanel> PanelsFromBandMesh(const std::string& baseName,

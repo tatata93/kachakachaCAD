@@ -571,6 +571,8 @@ void V2MainWindow::BuildEditingShelves()
     fabricationDock_->SetAssemblyHandler([this](double percent) { SetAssemblyPercent(percent); });
     fabricationDock_->SetFreezeOutputHandler(
         [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
+    fabricationDock_->SetMaterialHandler(
+        [this](const QString& material, int layers) { ApplyMaterialToSelection(material, layers); });
     addDockWidget(Qt::RightDockWidgetArea, fabricationDock_);
 }
 

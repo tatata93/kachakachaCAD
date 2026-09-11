@@ -245,6 +245,12 @@ struct CreateFabricationModelDefinition {
     //! 元の線は変えない。近似したことで隣の部品と合わなくなるのを、派生の線で埋める。
     std::vector<EntityId> connectionWires;
 
+    //! 面の範囲(V1 の板材の「範囲」)。u は列方向、v は行方向の 0〜1。全体なら 0〜1。
+    double rangeUMin = 0.0;
+    double rangeUMax = 1.0;
+    double rangeVMin = 0.0;
+    double rangeVMax = 1.0;
+
     //! 曲げ状態。0 = 平ら(型紙)、100 = 近似完成形。
     double masterPercent = 100.0;
     //! 折り線ごとの進行度(0..1)。空なら全部 master に従う。

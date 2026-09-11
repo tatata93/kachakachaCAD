@@ -282,6 +282,11 @@ template<class Id>
         definition["foldWires"] = WriteIdArray(fabrication->foldWires);
         definition["connectionWires"] = WriteIdArray(fabrication->connectionWires);
         definition["masterPercent"] = JsonValue::Number(fabrication->masterPercent);
+        // 面の範囲(V1 の plate_range)。無ければ読むときに 0〜1 全体。
+        definition["rangeUMin"] = JsonValue::Number(fabrication->rangeUMin);
+        definition["rangeUMax"] = JsonValue::Number(fabrication->rangeUMax);
+        definition["rangeVMin"] = JsonValue::Number(fabrication->rangeVMin);
+        definition["rangeVMax"] = JsonValue::Number(fabrication->rangeVMax);
         definition["creaseProgress"] = WriteNumberArray(fabrication->creaseProgress);
         definition["bandProgress"] = WriteNumberArray(fabrication->bandProgress);
     } else if (const auto* thicken =

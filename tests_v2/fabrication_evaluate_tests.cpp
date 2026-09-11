@@ -108,6 +108,38 @@ KACHA_V2_TEST(fabrication_evaluate, 展開できる面はどちらの方式で�
     Require(banded.Value().panels.back().folds.empty(), "最後の帯には無い");
 }
 
+KACHA_V2_TEST(fabrication_evaluate, 面の範囲を狭めると標本が範囲の中だけになり壊れた範囲は断る)
+{
+    // V1 の板材の「範囲」。u 0.5〜1.0 だけを使うと、筒の半分だけが近似される。
+    const auto whole = EvaluateFabrication(Definition(1), {Cylinder()}, FabricationMarkings{}, 0.01);
+    Require(whole.HasValue(), "全体で通る");
+    auto half = Definition(1);
+    half.rangeUMin = 0.5;
+    const auto cropped = EvaluateFabrication(half, {Cylinder()}, FabricationMarkings{}, 0.01);
+    Require(cropped.HasValue(), "半分でも通る");
+    Require(cropped.Value().panels.size() <= whole.Value().panels.size(), "帯は増えない");
+    // 標本そのものも範囲の中だけ。
+    const auto samples = kachakacha::v2::fabrication::CropSamples(*Cylinder().samples, 0.5, 1.0,
+        0.0, 1.0);
+    Require(samples.HasValue(), "切り出せる");
+    Require(samples.Value().rowCount == Cylinder().samples->rowCount
+            && samples.Value().columnCount == Cylinder().samples->columnCount,
+        "格子の数は同じ");
+    const auto& original = *Cylinder().samples;
+    const auto first = samples.Value().At(0, 0);
+    const auto middle = original.At(0, (original.columnCount - 1) / 2);
+    Require((first - middle).Length() < 1.0e-6, "左端が元の真ん中になる");
+    const auto last = samples.Value().At(0, samples.Value().columnCount - 1);
+    Require((last - original.At(0, original.columnCount - 1)).Length() < 1.0e-9, "右端は同じ");
+    // 壊れた範囲は断る。
+    auto broken = Definition(1);
+    broken.rangeUMin = 0.8;
+    broken.rangeUMax = 0.2;
+    RequireEqual(EvaluateFabrication(broken, {Cylinder()}, FabricationMarkings{}, 0.01)
+                     .Diagnostics().front().code,
+        std::string("FAB-M004"), "最小 > 最大は FAB-M004");
+}
+
 KACHA_V2_TEST(fabrication_evaluate, 元が無ければ断る)
 {
     const auto made = EvaluateFabrication(Definition(1), {}, FabricationMarkings{}, 0.01);

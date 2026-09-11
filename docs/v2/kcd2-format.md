@@ -911,6 +911,15 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 `definition` を空objectとして書く。空でないものを読んだ場合はKCD2-D100の警告を付けて保持し、
 値は捨てない。実装したWPでこの節を更新する。
 
+`create_fabrication_model` の `definition` は実装済みで、`parts` `materialThickness`
+`targetMaxDeviation` `fidelity` `method` `splitAxis` `automaticBoundaries` `maximumPartCount`
+`minimumPartWidthMm` `manualBoundaries` `openingWires` `foldWires` `connectionWires`
+`masterPercent` `creaseProgress` `bandProgress` に加えて、2026-09-11 から面の範囲
+`rangeUMin` `rangeUMax` `rangeVMin` `rangeVMax`(V1 の plate_range。u は列方向、v は行方向の
+0〜1)を持つ。無ければ 0〜1 全体として読む(古い文書はそのまま開ける)。
+材料と積層は Feature ではなく Entity の `manufacturing`(`materialName` `layerCount` など)に持つ
+(V1 の plate の材料と plate_laminate に当たる)。
+
 ### 19.7 §8.2 Segmentの現状
 
 `CurveSegment` は一様3次B-splineだけを持つため、`knots` `multiplicities` `weights` は

@@ -99,6 +99,7 @@ public:
     [[nodiscard]] QStringList split(const QString&) const;
     [[nodiscard]] QString arg(const QString&) const;
     [[nodiscard]] QString arg(const QString&, const QString&) const;
+    [[nodiscard]] QString arg(const QString&, const QString&, const QString&) const;
     [[nodiscard]] QString arg(int) const;
     [[nodiscard]] QString arg(double, int = 0, char = 'g', int = -1) const;
     [[nodiscard]] QString arg(double, int, char, int, QChar) const;

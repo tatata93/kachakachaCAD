@@ -62,6 +62,20 @@ private:
     domain::Visibility visibility_ = domain::Visibility::Visible;
 };
 
+//! 材料・積層などの製作の属性を付ける(V1 の板材の「材料」「積層」)。
+//! 部品・形状ガイド・近似モデルにだけ付く。線や点には意味が無いので断る(DOC-C010)。
+class SetManufacturingCommand final : public DocumentCommand {
+public:
+    SetManufacturingCommand(std::vector<EntityId> entityIds,
+        domain::ManufacturingProperties properties);
+    [[nodiscard]] std::string Label() const override { return "材料を決める"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    std::vector<EntityId> entityIds_;
+    domain::ManufacturingProperties properties_;
+};
+
 //! 補助線にする / 戻す(V1の「補助線として作図」「補助線化」)。
 //! 幾何は変えない。作図の下敷きとして扱うかどうかだけを変える。
 class SetConstructionCommand final : public DocumentCommand {

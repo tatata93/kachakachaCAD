@@ -21,6 +21,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -395,9 +396,61 @@ namespace kachakacha::v2::selftest {
         !window.StatusText().isEmpty() && window.FabricationModelCount() == 0);
 }
 
+[[nodiscard]] bool CaseFabricationDockRangeAndMaterial(V2MainWindow& window)
+{
+    // 範囲(V1 の plate_range)と材料・積層(plate の材料、plate_laminate)。
+    auto& dock = window.FabricationDock();
+    dock.SetRange(0.2, 0.8, 0.0, 1.0);
+    if (!Explain((std::string("範囲が次に作る作り方に入る(u ")
+                     + std::to_string(window.FabricationChoice().rangeUMin) + "〜"
+                     + std::to_string(window.FabricationChoice().rangeUMax) + ")").c_str(),
+            std::abs(window.FabricationChoice().rangeUMin - 0.2) < 1e-9
+                && std::abs(window.FabricationChoice().rangeUMax - 0.8) < 1e-9)) {
+        return false;
+    }
+    dock.SetRange(0.9, 0.8, 0.0, 1.0);
+    if (!Explain((std::string("壊れた範囲は断る(") + dock.MessageText().toStdString() + ")").c_str(),
+            dock.MessageText().contains(QStringLiteral("UI-F005"))
+                && std::abs(window.FabricationChoice().rangeUMin - 0.2) < 1e-9)) {
+        return false;
+    }
+    dock.SetRange(0.0, 1.0, 0.0, 1.0);
+    // 材料は形状ガイドに付く。線を選んで当てても付かない。
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire));
+    dock.SetMaterial(QStringLiteral("プラ板"), 2);
+    dock.PressApplyMaterial();
+    if (!Explain((std::string("線には付かない(") + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("選んでから")))) {
+        return false;
+    }
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface);
+    if (!Explain("形状ガイドがある", !surfaces.entityIds.empty())) {
+        return false;
+    }
+    window.Viewport().SetSelection(surfaces);
+    dock.PressApplyMaterial();
+    const auto* entity = window.Session().GetDocument().FindEntity(surfaces.entityIds.front());
+    if (!Explain((std::string("材料と積層が付く(") + window.StatusText().toStdString() + ")").c_str(),
+            entity != nullptr && entity->manufacturing.has_value()
+                && entity->manufacturing->materialName == "プラ板"
+                && entity->manufacturing->layerCount == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    entity = window.Session().GetDocument().FindEntity(surfaces.entityIds.front());
+    return Explain("戻すと外れる", entity != nullptr && !entity->manufacturing.has_value());
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"製作の棚の範囲と材料・積層が効く", &CaseFabricationDockRangeAndMaterial},
         {"製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},

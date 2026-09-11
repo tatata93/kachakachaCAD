@@ -10,6 +10,7 @@
 //!
 //! 表示用の三角形は、パネルの編集単位にも型紙の正本にもしない(§4)。
 
+#include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/Vector3.h"
 
@@ -57,6 +58,12 @@ struct SurfacePatchSamples {
             && points.size() == rowCount * columnCount;
     }
 };
+
+//! 面の一部だけを使う(V1 の板材の「範囲」、plate_range)。u は列方向、v は行方向の 0〜1。
+//! 同じ格子の数で、範囲の中を双一次で読み直す。範囲が 0〜1 全体ならそのまま返す。
+//! 範囲が壊れていれば FAB-M004 で断る(最小 >= 最大、0〜1 の外、数でない)。
+[[nodiscard]] base::Result<SurfacePatchSamples> CropSamples(const SurfacePatchSamples& samples,
+    double uMin, double uMax, double vMin, double vMax);
 
 //! 近似の入力になる1枚の面。
 struct FabricationSurfacePatch {

@@ -3,6 +3,9 @@
 プラ板と紙で鉄道模型を作るための CAD です。
 この説明書は、実際の画面を撮ったものと一緒に、全部の機能を順に説明します。
 
+ブラウザーで読む全機能版は [`docs/manual.html`](../manual.html) です。配布zipでは
+`OPEN_MANUAL.cmd` を開くと同じ説明書が表示されます。
+
 図はすべて `kachakacha_cad_next.exe --manual-state <名前> --snapshot <png>` で
 撮ったものです。人が手で撮り直していないので、画面が変われば図も変わります。
 図を作り直す手順は「図の作り直し」にあります。
@@ -64,6 +67,8 @@ zip の中身は次のとおりです。
 | --- | --- |
 | `kachakacha_cad_next.exe` | 本体 |
 | `samples\v2-sample.kcd2` | 見本の文書(16章) |
+| `samples\streamlined-railway-nose-1-87.kcd2` | 1/87流線形前頭部の実用試験 |
+| `manual.html` / `OPEN_MANUAL.cmd` | ブラウザー版の全機能説明書 |
 | `manual\` | この説明書と図 |
 | `legal\` | 使っている第三者のソフトのライセンス表示 |
 

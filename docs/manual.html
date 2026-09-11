@@ -3,666 +3,480 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kachakachaCAD 完全操作マニュアル</title>
+  <meta name="kachakacha-manual-version" content="v2">
+  <title>kachakachaCAD V2 全機能マニュアル</title>
   <style>
-    :root { color-scheme: light; --ink:#1d2930; --muted:#59666d; --line:#c9d1d5; --paper:#fff; --back:#edf0f1; --teal:#087780; --soft:#e4f2f0; --red:#9e2733; }
-    * { box-sizing:border-box; }
-    html { scroll-behavior:smooth; }
-    body { margin:0; color:var(--ink); background:var(--back); font-family:"Yu Gothic UI","Meiryo",sans-serif; font-size:15px; line-height:1.75; letter-spacing:0; }
-    header { color:#fff; background:#26343b; border-bottom:4px solid var(--teal); }
-    header .inner { max-width:1220px; margin:auto; padding:26px 24px 24px; }
-    h1 { margin:0 0 4px; font-size:30px; letter-spacing:0; }
-    header p { margin:0; color:#dce5e8; }
-    .layout { max-width:1220px; margin:auto; display:grid; grid-template-columns:220px minmax(0,1fr); gap:18px; padding:18px; align-items:start; }
-    nav { position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; padding:14px; background:var(--paper); border:1px solid var(--line); border-radius:6px; }
-    nav strong { display:block; margin-bottom:6px; }
-    nav a { display:block; padding:3px 6px; color:#185a60; text-decoration:none; border-left:3px solid transparent; }
-    nav a:hover { background:var(--soft); border-left-color:var(--teal); }
-    article { min-width:0; }
-    section { margin:0 0 16px; padding:24px; background:var(--paper); border:1px solid var(--line); border-radius:6px; scroll-margin-top:12px; }
-    h2 { margin:0 0 14px; font-size:24px; border-bottom:2px solid var(--teal); padding-bottom:7px; letter-spacing:0; }
-    h3 { margin:22px 0 8px; font-size:18px; letter-spacing:0; }
-    h4 { margin:16px 0 5px; font-size:15px; letter-spacing:0; }
-    p { margin:8px 0; }
-    ol,ul { margin:8px 0; padding-left:25px; }
-    li { margin:4px 0; }
-    code,kbd { font-family:Consolas,monospace; background:#eef1f2; border:1px solid #d3dadd; border-radius:3px; padding:1px 5px; }
-    kbd { box-shadow:0 1px 0 #b7c0c4; }
-    table { width:100%; border-collapse:collapse; margin:10px 0; }
-    th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
-    th { background:#edf3f3; }
-    .lead { font-size:17px; }
-    .note,.warning { padding:10px 12px; border-left:4px solid var(--teal); background:var(--soft); }
-    .warning { color:#62202a; border-left-color:var(--red); background:#fff0f1; }
-    .flow { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
-    .flow div { padding:10px; text-align:center; background:var(--soft); border:1px solid #bad5d3; }
-    .recipe { display:grid; grid-template-columns:116px minmax(0,1fr); margin:10px 0 14px; border-top:1px solid var(--line); }
-    .recipe dt,.recipe dd { margin:0; padding:7px 9px; border-bottom:1px solid var(--line); }
-    .recipe dt { font-weight:700; background:#f1f4f5; }
-    figure { margin:14px 0 8px; }
-    figure a { display:block; }
-    figure img { display:block; width:100%; height:auto; border:1px solid #919ea5; background:#f5f6f7; }
-    figcaption { color:var(--muted); font-size:13px; margin-top:4px; }
-    .small { color:var(--muted); font-size:13px; }
-    .tag { display:inline-block; color:#fff; background:var(--teal); border-radius:3px; padding:0 6px; font-size:13px; font-weight:700; }
-    footer { max-width:1220px; margin:auto; padding:0 24px 28px; color:var(--muted); }
-    @media (max-width:860px) { .layout{grid-template-columns:1fr;padding:10px}.flow{grid-template-columns:1fr 1fr}nav{position:static;max-height:none}section{padding:18px}.recipe{grid-template-columns:92px minmax(0,1fr)} }
-    @media print { nav{display:none}.layout{display:block;padding:0}section{break-inside:avoid;border:0}body{background:#fff} }
+    :root {
+      color-scheme: light;
+      --ink: #17252b;
+      --muted: #53636a;
+      --paper: #ffffff;
+      --back: #e8edef;
+      --line: #b8c4c8;
+      --teal: #087d83;
+      --teal-soft: #e3f2f1;
+      --gold: #b27600;
+      --green: #356f4d;
+      --red: #9b2f3f;
+      --red-soft: #fff0f2;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; color: var(--ink); background: var(--back); font-family: "Yu Gothic UI", "Meiryo", sans-serif; font-size: 15px; line-height: 1.7; letter-spacing: 0; }
+    header { background: #26363c; color: #fff; border-bottom: 4px solid var(--teal); }
+    header .inner { max-width: 1320px; margin: auto; padding: 20px 24px; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: 0; }
+    header p { margin: 4px 0 0; color: #dce5e8; }
+    .layout { display: grid; grid-template-columns: 245px minmax(0, 1fr); gap: 18px; max-width: 1320px; margin: auto; padding: 18px; align-items: start; }
+    nav { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
+    nav label { display: block; margin-bottom: 8px; font-weight: 700; }
+    nav input { width: 100%; min-height: 34px; padding: 5px 8px; border: 1px solid #82949b; border-radius: 3px; font: inherit; }
+    nav a { display: block; padding: 3px 6px; color: #155e63; text-decoration: none; border-left: 3px solid transparent; }
+    nav a:hover { background: var(--teal-soft); border-left-color: var(--teal); }
+    .search-status { min-height: 22px; color: var(--muted); font-size: 12px; }
+    article { min-width: 0; }
+    section { margin: 0 0 16px; padding: 22px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; scroll-margin-top: 12px; }
+    h2 { margin: 0 0 12px; padding-bottom: 6px; font-size: 23px; border-bottom: 2px solid var(--teal); letter-spacing: 0; }
+    h3 { margin: 20px 0 7px; font-size: 18px; letter-spacing: 0; }
+    p { margin: 8px 0; }
+    ol, ul { margin: 8px 0; padding-left: 24px; }
+    li { margin: 3px 0; }
+    code, kbd { font-family: Consolas, monospace; background: #eef2f3; border: 1px solid #d1d9dc; border-radius: 3px; padding: 1px 5px; }
+    kbd { box-shadow: 0 1px 0 #aab7bc; }
+    table { width: 100%; margin: 10px 0; border-collapse: collapse; }
+    th, td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: #edf3f3; }
+    tbody tr:nth-child(even) { background: #fafcfc; }
+    figure { margin: 14px 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid #87979d; background: #f5f7f7; }
+    figcaption { margin-top: 4px; color: var(--muted); font-size: 13px; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+    .flow div { padding: 10px; text-align: center; background: var(--teal-soft); border: 1px solid #acd0ce; }
+    .note, .warning, .verified { margin: 10px 0; padding: 10px 12px; border-left: 4px solid var(--teal); background: var(--teal-soft); }
+    .warning { border-left-color: var(--red); background: var(--red-soft); color: #67202b; }
+    .verified { border-left-color: var(--green); background: #e8f4ec; }
+    .small { color: var(--muted); font-size: 13px; }
+    .command-table td:first-child { white-space: nowrap; }
+    .command-table code { font-size: 12px; }
+    .hidden-by-search { display: none; }
+    footer { max-width: 1320px; margin: auto; padding: 0 24px 28px; color: var(--muted); }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; padding: 10px; } nav { position: static; max-height: none; } .flow { grid-template-columns: 1fr 1fr; } section { padding: 16px; } table { display: block; overflow-x: auto; } }
+    @media print { body { background: #fff; } nav { display: none; } .layout { display: block; max-width: none; padding: 0; } section { border: 0; padding: 8px 0; } figure, table { break-inside: avoid; } }
   </style>
 </head>
 <body>
   <header><div class="inner">
-    <h1>kachakachaCAD 完全操作マニュアル</h1>
-    <p>画面の選択から板材工作用の板・開口・治具・出力まで、この1冊だけで操作するための手順書</p>
+    <h1>kachakachaCAD V2 全機能マニュアル</h1>
+    <p>ワイヤー中心の作図から、形状ガイド、部品、製作近似、型紙、3D出力まで</p>
   </div></header>
   <main class="layout">
     <nav aria-label="目次">
-      <strong>目次</strong>
-      <a href="#start">1. 最初に知ること</a>
-      <a href="#view">2. 視点操作</a>
-      <a href="#select">3. 選択・表示</a>
+      <label for="manual-search">説明を検索</label>
+      <input id="manual-search" type="search" placeholder="例: 円弧、窓、STEP">
+      <div id="search-status" class="search-status" aria-live="polite"></div>
+      <a href="#start">1. 基本思想と開始</a>
+      <a href="#screen">2. 画面・ファイル・表示</a>
+      <a href="#drawing">3. 作図と数値入力</a>
       <a href="#planes">4. 作業平面</a>
-      <a href="#grid">5. 点グリッド</a>
-      <a href="#drawing">6. 2D作図</a>
-      <a href="#numeric">7. 数値でワイヤー</a>
-      <a href="#edit">8. 編集・拘束</a>
-      <a href="#measure">9. 測定</a>
-      <a href="#machining">10. 面取り・丸め</a>
-      <a href="#surface">11. ワイヤーから面</a>
-      <a href="#plate">12. 面・ワイヤーから板</a>
-      <a href="#projection">13. 投影と開口</a>
-      <a href="#lightcase">14. 飛び出すライトケース</a>
-      <a href="#jig">15. 成形治具</a>
-      <a href="#split">16. 板材分割</a>
-      <a href="#output">17. 図面・3D出力</a>
-      <a href="#save">18. 保存・復旧</a>
-      <a href="#trouble">19. 困ったとき</a>
-      <a href="#limits">20. 現在の制限</a>
-      <a href="#shortcuts">21. 操作早見表</a>
-      <a href="#all-functions">22. 全機能リファレンス</a>
+      <a href="#editing">5. ワイヤー編集</a>
+      <a href="#measure">6. 測定</a>
+      <a href="#guides">7. 形状ガイド</a>
+      <a href="#parts">8. 部品と押し出し</a>
+      <a href="#fabrication">9. 製作近似と型紙</a>
+      <a href="#output">10. 保存と出力</a>
+      <a href="#railway-test">11. 鉄道前面の実用試験</a>
+      <a href="#limits">12. 制限と診断</a>
+      <a href="#keys">13. マウスとキー</a>
+      <a href="#commands">14. 全コマンド一覧</a>
     </nav>
     <article>
-      <section id="start">
-        <h2>1. 最初に知ること</h2>
-        <p class="lead">このCADでは、<strong>3D空間に紙（作業平面）を置き、その紙へ正対して2D作図し、複数のワイヤーから面部品を作る</strong>のが基本です。</p>
-        <div class="flow"><div>1. 作業平面を決める</div><div>2. ワイヤーを描く</div><div>3. 面部品と開口を作る</div><div>4. 図面・立体を出力</div></div>
-        <figure><a href="manual-assets/overview.png"><img src="manual-assets/overview.png" alt="kachakachaCADの画面全体"></a><figcaption>画像1: 左下の「操作ガイド」は選んだ道具・タブ・選択物に追従し、次にクリックする対象を常に示します。画像をクリックすると原寸で開きます。</figcaption></figure>
+      <section id="start" data-searchable>
+        <h2>1. 基本思想と開始</h2>
+        <p><strong>主役はワイヤーです。</strong>完成形の輪郭、断面、曲面を導く線、窓や切れ目を同じワイヤーとして描きます。厚みのない形状ガイドは複雑な曲面を作る途中の補助で、物理的な完成品は部品です。</p>
+        <div class="flow"><div><strong>1 作図</strong><br>輪郭・断面・案内線</div><div><strong>2 部品</strong><br>押し出し・厚み・演算</div><div><strong>3 製作</strong><br>大きな部材へ近似・型紙</div><div><strong>4 出力</strong><br>kcd2・図面・STL・STEP</div></div>
+        <p class="note"><strong>できないことを、できたことにしません。</strong>線の隙間、自己交差、面のずれ、ゼロ体積などがあれば、理由番号と直し方を表示し、文書を途中状態にしません。</p>
+        <h3>V2で扱うもの</h3>
+        <table><thead><tr><th>種類</th><th>意味</th><th>主な使い方</th></tr></thead><tbody>
+          <tr><td>作図点</td><td>位置だけを持つ基準</td><td>断面位置、交点、測定結果を残す</td></tr>
+          <tr><td>ワイヤー</td><td>直線・円弧・円・ベジェ・B-splineの鎖</td><td>輪郭、断面、ガイド、開口、折り線、切れ目</td></tr>
+          <tr><td>作業平面</td><td>3D空間に置く作図用の紙</td><td>正確な2D作図と投影方向の基準</td></tr>
+          <tr><td>形状ガイド</td><td>厚みのない面</td><td>複雑な曲面の設計、厚み付け、治具、製作近似</td></tr>
+          <tr><td>部品</td><td>体積のある閉じた立体</td><td>完成品、治具、製作部材、STL・STEP出力</td></tr>
+          <tr><td>製作モデル</td><td>完成形とは別の、工作できる近似形</td><td>部材分け、曲げ確認、開口、型紙</td></tr>
+          <tr><td>型紙</td><td>平らにした部材</td><td>SVG・DXF・1:1 PDF出力</td></tr>
+        </tbody></table>
+        <h3>起動と見本</h3>
+        <p>配布zipを展開し、<code>kachakacha_cad_next.exe</code>を起動します。通常見本は<code>samples\v2-sample.kcd2</code>、曲面を含む実用見本は<code>samples\streamlined-railway-nose-1-87.kcd2</code>です。</p>
+      </section>
+
+      <section id="screen" data-searchable>
+        <h2>2. 画面・ファイル・表示</h2>
+        <figure><img src="manual/images/v2-empty.png" alt="V2の起動画面"><figcaption>左が文書の一覧、中央が3D画面、右が現在の工程に対応する棚です。</figcaption></figure>
         <table><thead><tr><th>場所</th><th>役割</th></tr></thead><tbody>
-          <tr><td>上のツールバー</td><td>新規・保存・元に戻す・全体表示・設計/完成形/選択だけ表示・作図・変形をすぐ実行します。</td></tr>
-          <tr><td>左「モデル」</td><td>上端の検索欄で部材名や種類を絞り込みます。チェックで3D表示を切り替え、行のクリックで選択します。まとめ欄（部材グループや「ワイヤー (5)」等の種類見出し・未分類）は、行を選ぶと配下を全選択、チェックで配下をまとめて表示/非表示にできます。</td></tr>
-          <tr><td>選択を移動</td><td>選択したワイヤ・面部品（まとめ欄の配下選択も可）を、作図モードのツール列「移動」または一覧の右クリック「選択を移動…」からXYZ指定で平行移動できます。面部品は元のワイヤごと動きます。近似モデルの部材面は「部材オフセット」として記録され、再計算しても保たれます（投影ワイヤ等の派生は元側を動かします）。</td></tr>
-          <tr><td>作業中グループ</td><td>上部ツールバーの「グループ」で作業中グループを選ぶと、<strong>以後に作る線・作図点・平面・面部品は自動でそのグループへ入ります</strong>（未分類に落ちません）。一覧のグループ右クリック「ここを作業中グループにする」でも切り替えられ、作業中のグループは開いたフォルダアイコン+「◀作業中」で表示されます。（未分類）を選ぶと解除。設定は.kcdに保存されます。近似モデルなどが自動で作る派生オブジェクトは対象外です。</td></tr>
-          <tr><td>ギズモ（矢印・リング）</td><td>選択ツールで何かを選ぶと、選択物の中心に<strong>移動ギズモ</strong>が出ます。赤(X)・緑(Y)・青(Z)の矢印をドラッグするとその軸へ平行移動、同色のリングをドラッグするとその軸まわりに回転します（真横から見て潰れたリングは隠れます）。中央のオレンジの四角、または<strong>選択済みのモデル本体をつかんでドラッグ</strong>すると画面に平行に自由移動できます。量はドラッグ中に表示され、指を離した時に確定します（Escで中断、Undoで戻せます）。部材面は平行移動のみ対応です。</td></tr>
-          <tr><td>左下「操作ガイド」</td><td>消えない手順表示です。水色の欄が次の1操作、その下が全手順です。「詳しい手順」で、このマニュアルの該当箇所を直接開きます。</td></tr>
-          <tr><td>中央「3D画面」</td><td>作図、選択、直接変形、測定を行います。選択中は橙色、マウスを置いた候補は色が変わります。</td></tr>
-          <tr><td>右上「1 平面～4 出力」</td><td>基本工程へ直接移動します。初心者はこの4ボタンを左から順に使えば、9タブを暗記する必要はありません。</td></tr>
-          <tr><td>右「作図と編集」</td><td>作図、作業平面、数値入力、編集、加工、面、出力、表示、情報の9つの詳細タブです。</td></tr>
-          <tr><td>右上のキューブ</td><td>現在の模型と同じ向きに回転し、上下・前後・左右・角への正対、自由回転、選択への正対を行います。</td></tr>
+          <tr><td>上のモード帯</td><td>作図・部品・製作・出力の4工程を切り替えます。文書と選択は維持されます。</td></tr>
+          <tr><td>2段目の道具列</td><td>現在のモードで使う道具だけを表示します。メニューと同じ処理です。</td></tr>
+          <tr><td>左の一覧</td><td>原点の3面・3軸、グループ、ワイヤー、形状ガイド、部品、製作モデルを表示します。名前・種類で絞り込めます。</td></tr>
+          <tr><td>中央の3D画面</td><td>作図、選択、測定、移動、視点操作を行います。</td></tr>
+          <tr><td>右の棚</td><td>作図、作業平面、数値、編集、形状ガイド、製作、出力など、現在の道具に必要な欄を表示します。</td></tr>
+          <tr><td>下の知らせ</td><td>成功内容、使えない理由、問題箇所、直し方を番号付きで表示します。</td></tr>
         </tbody></table>
-        <h3>同梱の確認用モデルを開く</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd><span class="tag">ファイル</span> →「開く」</dd><dt>ファイル</dt><dd><code>review-model.kcd</code></dd><dt>確認</dt><dd>前面窓と左右ライトが開いた前面板、後部板材、成形治具が見えます。</dd></dl>
-        <p class="note">迷ったら <kbd>Esc</kbd>。どの画面・入力欄にいても1回で「入力破棄 → 選択道具 → 選択解除」の白紙状態へ戻ります。直前の編集を戻すときは <kbd>Ctrl</kbd>+<kbd>Z</kbd> です。</p>
-        <h3>初心者向けの進み方</h3>
-        <ol><li>右上「1 平面」で、作図したい位置と向きを確認します。</li><li>「2 作図」で線・円・断面を描きます。左下の水色欄だけを見れば、次に置く点が分かります。</li><li>断面を選び「3 面部品」で形状、材料、厚み、開口、治具を作ります。</li><li>製作条件のある面部品または治具を選び「4 出力」で1:1図面、STL、STEPを保存します。</li></ol>
+        <h3>ファイルと履歴</h3>
+        <p><kbd>Ctrl</kbd>+<kbd>N</kbd>で新規、<kbd>Ctrl</kbd>+<kbd>O</kbd>で開く、<kbd>Ctrl</kbd>+<kbd>S</kbd>で保存します。保存は一時ファイルを検査してから置き換え、以前の内容は<code>.bak</code>へ残します。開いた直後はUndo履歴を空にします。</p>
+        <p>V1の<code>.kcd</code>も読めます。平面、主要な線、点、表示、断面ロフト、厚みをV2へ移します。V2に対応物がないV1命令は名前を知らせて読み飛ばし、元ファイルは変更しません。読み込んだ後は<code>.kcd2</code>で保存します。</p>
+        <h3>選択・グループ・表示</h3>
+        <figure><img src="manual/images/v2-select.png" alt="複数のワイヤーを選択"><figcaption>橙色が選択中です。選んだ順番は面や演算の入力順として保持されます。</figcaption></figure>
+        <ul>
+          <li>左クリックは単独選択、<kbd>Shift</kbd>は追加、<kbd>Ctrl</kbd>は追加または解除、<kbd>Alt</kbd>は解除です。</li>
+          <li>作業中グループを選ぶと、その後に作る点・線・平面・形状ガイド・部品が自動で入ります。派生物は元の下へ入ります。</li>
+          <li><kbd>Ctrl</kbd>+<kbd>H</kbd>で選択を隠し、<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd>で全部表示します。</li>
+          <li><kbd>Ctrl</kbd>+<kbd>1</kbd>は設計表示、<kbd>Ctrl</kbd>+<kbd>2</kbd>はグリッドと補助線を消す完成形、<kbd>Ctrl</kbd>+<kbd>3</kbd>は選択だけです。</li>
+        </ul>
+        <figure><img src="manual/images/v2-active-group.png" alt="作業中グループ"><figcaption>作業中グループは上の欄と一覧の強調で確認できます。</figcaption></figure>
+        <h3>視点</h3>
+        <figure><img src="manual/images/v2-view-cube.png" alt="ビューキューブと回転操作"><figcaption>面・辺・角への正対、連続ドラッグ、世界軸と相対軸の回転を使えます。</figcaption></figure>
+        <p>ホイールは拡大縮小、中または右ドラッグは平行移動、<kbd>Shift</kbd>+中ドラッグは軌道回転です。ビューキューブを離しても慣性回転や90度への自動吸着は起きません。<kbd>F</kbd>で全体表示、選んだ平面には「選択に正対」、作業中の平面には「正対」を使います。</p>
+        <p>「見た目」から標準とWindows 95風を切り替えられます。外観だけが変わり、機能、配置、文書の形は変わりません。</p>
       </section>
 
-      <section id="view">
-        <h2>2. 視点操作</h2>
-        <p class="lead">右上のキューブは模型の現在姿勢と常に同じ向きです。キューブをつかんで動かすと模型とキューブが一緒に連続回転し、離した場所から勝手に別方向へ移りません。</p>
-        <figure><a href="manual-assets/view-controls.png"><img src="manual-assets/view-controls.png" alt="絶対軸と相対軸の回転矢印を備えた視点操作キューブ"></a><figcaption>画像2: 左の「絶対」「相対」でX/Y/Z軸を細かく回転できます。面名と黄色い角は現在の向きを示し、面・角はクリック、キューブ本体はドラッグします。</figcaption></figure>
-        <table><thead><tr><th>操作</th><th>結果</th><th>使う場面</th></tr></thead><tbody>
-          <tr><td>ホイール</td><td>拡大・縮小</td><td>細部へ寄る、全体へ戻る。</td></tr>
-          <tr><td>中ドラッグ</td><td>画面を平行移動</td><td>向きを変えず表示位置だけ動かす。</td></tr>
-          <tr><td>右ドラッグ</td><td>画面を平行移動</td><td>中ボタンの代用。右クリックだけなら作図完了です。</td></tr>
-          <tr><td><kbd>Shift</kbd>+中ドラッグ</td><td>自由回転</td><td>任意の方向から立体を見る。</td></tr>
-          <tr><td>左クリック</td><td>選択または作図</td><td>通常操作。ドラッグしても視点は回りません。</td></tr>
-          <tr><td>「上」「下」「正」「後」「右」「左」</td><td>クリックした標準面へ正対</td><td>2D図のように見る。</td></tr>
-          <tr><td>「3D」または角の黄色い菱形</td><td>斜め視点</td><td>立体形状を確認する。</td></tr>
-          <tr><td>「絶対」X/Y/Zの左右矢印</td><td>世界座標の固定X/Y/Z軸まわりに15°ずつ回転</td><td>模型の向きに影響されない軸で、正確に視点を刻む。左矢印が負、右矢印が正方向。</td></tr>
-          <tr><td>「相対」X/Y/Zの左右矢印</td><td>現在の見え方に追従するX/Y/Z軸まわりに15°ずつ回転</td><td>Xは画面横、Yは画面縦、Zは模型へ向かう奥行き軸。現在姿勢から直感的に傾ける。</td></tr>
-          <tr><td><kbd>Shift</kbd>+絶対/相対の矢印</td><td>5°ずつ回転</td><td>15°では大きいときの微調整。</td></tr>
-          <tr><td>キューブ左右の矢印</td><td>絶対Z軸を15°ずつ回転</td><td>少しだけ側面へ回す。</td></tr>
-          <tr><td>キューブ上の回転矢印</td><td>相対Z軸を15°ずつ回転</td><td>模型の上下が傾いて見えるときに細かく直す。</td></tr>
-          <tr><td>キューブの面または黄色い角をドラッグ</td><td>移動量どおりに連続回転</td><td>つかんだキューブと模型が同時に回り、上下を越えても引っ掛かりません。</td></tr>
-          <tr><td>「選択に正対」</td><td>選択物へ正対して中央表示</td><td>面、板、平面、ワイヤーを真正面から見る。</td></tr>
-          <tr><td>上部「全体表示」</td><td>現在の向きを保ったまま表示中の物が収まる</td><td>模型を見失ったとき。</td></tr>
+      <section id="drawing" data-searchable>
+        <h2>3. 作図と数値入力</h2>
+        <figure><img src="manual/images/v2-tools.png" alt="作図道具"><figcaption>点、直線、連続線、矩形、円、円弧、ベジェ、B-splineを同じワイヤーとして作ります。</figcaption></figure>
+        <table><thead><tr><th>道具</th><th>入力</th><th>終了</th></tr></thead><tbody>
+          <tr><td>作図点</td><td>1点。必要なら指定点を作図後にも残せます。</td><td>1クリック</td></tr>
+          <tr><td>直線</td><td>始点と終点。座標・長さ・角度でも確定できます。</td><td>2点</td></tr>
+          <tr><td>ポリライン</td><td>2点以上。1つのワイヤーに複数直線を保持します。</td><td>右クリック</td></tr>
+          <tr><td>矩形</td><td>対角2点、または幅と高さ。</td><td>2点</td></tr>
+          <tr><td>円</td><td>中心と半径。</td><td>2点</td></tr>
+          <tr><td>円弧</td><td>3点、両端+半径、始点+接線方向・半径・中心角の3方式です。</td><td>方式ごとの最終値</td></tr>
+          <tr><td>ベジェ</td><td>4制御点。</td><td>4点</td></tr>
+          <tr><td>B-spline</td><td>4点以上の制御点。</td><td>右クリック</td></tr>
         </tbody></table>
-        <h3>選択した板を真正面から見る</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>「選択」を押し、中央画面で板を1回クリック。</dd><dt>実行</dt><dd>右上の「選択に正対」。</dd><dt>結果</dt><dd>板の代表面が画面と平行になり、中央へ移動します。</dd><dt>失敗時</dt><dd>何も選ばれていない、または複数種類を選んでいないか左一覧で確認します。</dd></dl>
+        <h3>カーソル横の数値欄</h3>
+        <figure><img src="manual/images/v2-cursor-input.png" alt="カーソルに追従する数値入力"><figcaption>道具が次に必要とする主要欄へ自動で入力位置が移ります。</figcaption></figure>
+        <p>数字を打つとカーソル近くに入力欄が開きます。<kbd>Tab</kbd>で次、<kbd>Shift</kbd>+<kbd>Tab</kbd>で前、<kbd>Enter</kbd>で確定、<kbd>Esc</kbd>で取消です。<code>(180/2)*3</code>、<code>2*pi</code>、単位、全角数字を扱えます。確定済みの値はマウス移動で書き換わりません。</p>
+        <h3>吸着とグリッド</h3>
+        <figure><img src="manual/images/v2-snap.png" alt="端点への吸着"><figcaption>候補は大きな丸と名前で示し、クリックしたときに確定します。</figcaption></figure>
+        <ul>
+          <li>幾何交点と端点をグリッドより優先し、中点なども候補にします。</li>
+          <li><kbd>Ctrl</kbd>を押している間は吸着を完全に止めます。<kbd>F3</kbd>は吸着全体の入切です。</li>
+          <li><kbd>Shift</kbd>は水平・垂直固定、矩形では正方形固定です。</li>
+          <li>グリッドは間隔、副点数、基準、原点を数値または画面上の点で変更できます。</li>
+        </ul>
+        <figure><img src="manual/images/v2-grid.png" alt="主点と副点を持つグリッド"><figcaption>副点は密集時に自動で間引かれ、主点を見失わないようにします。</figcaption></figure>
       </section>
 
-      <section id="select">
-        <h2>3. 選択・表示</h2>
-        <figure><a href="manual-assets/selection-info.png"><img src="manual-assets/selection-info.png" alt="板材を3D画面で選択した状態と選択情報"></a><figcaption>画像3: 中央で板を選ぶと橙色になり、左一覧と「情報」タブも同じ対象を示します。</figcaption></figure>
-        <table><thead><tr><th>操作</th><th>結果</th></tr></thead><tbody>
-          <tr><td>中央で左クリック</td><td>1個だけ選択。背後に候補がある場合は見えている手前側を選びます。</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+左クリック</td><td>現在の選択へ追加、選択済みなら解除。複数ワイヤーを扱うときに使います。</td></tr>
-          <tr><td>空白を左クリック</td><td>選択解除。</td></tr>
-          <tr><td>線・点へマウスを置く</td><td>候補色が変わり、クリック前に対象を確認できます。</td></tr>
-          <tr><td>左のモデル一覧をクリック</td><td>名前で確実に選択。複数は <kbd>Ctrl</kbd>+クリック。</td></tr>
-          <tr><td>左上「名前・種類で絞り込み」</td><td>一覧だけを部材名または「ワイヤー」「板材」などの種類で絞る。3D形状は隠しません。</td></tr>
-          <tr><td>左一覧のチェック</td><td>対象の表示・非表示。選択状態とは別です。</td></tr>
-          <tr><td>上部「完成形」 / <kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>板材と立体だけを一時表示。作業平面、線、面、寸法、グリッドをまとめて退避します。</td></tr>
-          <tr><td>上部「選択だけ」 / <kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>先に選択した要素だけを一時表示。複雑な重なりの点検に使います。</td></tr>
-          <tr><td>上部「設計」 / <kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>通常の設計表示へ戻る。</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>選択中を隠す。</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>すべて再表示。</td></tr>
-          <tr><td><kbd>Delete</kbd></td><td>選択対象を削除。依存物があるときは確認内容に従います。</td></tr>
-        </tbody></table>
-        <figure><a href="manual-assets/model-inspection.png"><img src="manual-assets/model-inspection.png" alt="モデル一覧を名前で絞り込み、完成形だけを表示した状態"></a><figcaption>画像3a: <code>nose_panel</code> で一覧を絞り込み、「完成形」で板材と立体だけを確認しています。</figcaption></figure>
-        <dl class="recipe"><dt>部材を探す</dt><dd>左上へ名前の一部を入力。種類一式なら「板材」「ワイヤー」などを入力します。</dd><dt>完成形を見る</dt><dd>上部「完成形」。表示中の板材と立体だけへ自動で全体表示します。</dd><dt>一部だけ見る</dt><dd>中央または左一覧で対象を複数選び、上部「選択だけ」。</dd><dt>作業へ戻る</dt><dd>上部「設計」。検索欄右端の×で一覧の絞り込みも解除します。</dd></dl>
-        <h3>線・面部品・背景の見た目を変える</h3>
-        <figure><a href="manual-assets/display-settings.png"><img src="manual-assets/display-settings.png" alt="表示タブのワイヤー、補助線、面、板材の設定"></a><figcaption>画像3b: 「表示」タブでは、通常ワイヤーと補助線の色・太さ・線種、面と板材の塗り・透明度・輪郭を別々に変更します。</figcaption></figure>
-        <figure><a href="manual-assets/display-background-grid.png"><img src="manual-assets/display-background-grid.png" alt="表示タブの背景色と点グリッド色の設定"></a><figcaption>画像3c: 下へスクロールすると、背景、点グリッドの大きい主点、小さい副点の色を個別に指定できます。</figcaption></figure>
-        <dl class="recipe"><dt>開く</dt><dd>右の「表示」タブ。</dd><dt>ワイヤー</dt><dd>「通常ワイヤー」または「補助線」で色見本を押し、太さと実線・破線・点線・一点鎖線を選びます。</dd><dt>面部品</dt><dd>「形状・基準」と「製作条件あり」それぞれの塗り色、不透明度、輪郭を指定します。</dd><dt>背景・グリッド</dt><dd>下へスクロールし、背景色、主点色、副点色を指定します。</dd><dt>戻す</dt><dd>最下部の「表示設定を初期値に戻す」。</dd></dl>
-        <p class="note">変更は中央画面へ即時反映され、次回起動にも残ります。選択中の橙色、ホバー候補色、基準線色は操作を見失わないため設定色より優先されます。</p>
-        <p class="note">「設計・完成形・選択だけ」は一時的な見方なので、保存内容や元に戻す履歴を変更しません。左一覧のチェックと「隠す」はプロジェクトに保存される表示設定です。</p>
-        <p class="note">選択順が形状へ影響する操作では、前から後ろなど意図した順に <kbd>Ctrl</kbd>+クリックしてください。「面」タブの選択数表示で確認できます。</p>
-      </section>
-
-      <section id="planes">
+      <section id="planes" data-searchable>
         <h2>4. 作業平面</h2>
-        <p class="lead">作業平面は「3D空間内に自由に置ける紙」です。紙を保存せず、その向きから見るだけにもできます。</p>
-        <figure><a href="manual-assets/workplane.png"><img src="manual-assets/workplane.png" alt="任意の作業平面と作業平面タブ"></a><figcaption>画像4: 選択中の <code>free_paper</code> のように、標準面以外の位置・向きにも紙を置けます。</figcaption></figure>
-        <h3>共通手順</h3>
-        <dl class="recipe"><dt>開く</dt><dd>右の「作業平面」タブ。</dd><dt>入力</dt><dd>名前と「作り方」を選び、方法別の値を入れます。</dd><dt>任意調整</dt><dd>「法線方向オフセット」と「平面内X軸まわり角度」。全方式で使用できます。</dd><dt>見るだけ</dt><dd>「この向きで見る」。モデル一覧に平面は増えません。</dd><dt>保存する</dt><dd>「平面を作成」。左の「作業平面」に追加されます。</dd></dl>
-        <table><thead><tr><th>作り方</th><th>入力するもの</th><th>用途</th></tr></thead><tbody>
-          <tr><td>標準平面</td><td>上面XY / 正面XZ / 側面YZ</td><td>対象物の平面図、正面図、側面図。</td></tr>
-          <tr><td>点 + 法線</td><td>通過点XYZ、法線XYZ、横方向XYZ</td><td>座標と向きが分かっている任意断面。</td></tr>
-          <tr><td>3点</td><td>点A、点B、点CのXYZ</td><td>実形状上の3点を通る面。</td></tr>
-          <tr><td>既存平面からオフセット</td><td>基準平面、共通調整の距離・角度</td><td>同じ向きの断面を前後へ量産。</td></tr>
-          <tr><td>軸まわりに回転</td><td>基準平面、軸の点・向き、基準角度</td><td>傾いた前面や肩部の断面。</td></tr>
+        <p>作業平面はワイヤーの所有者ではありません。平面を動かして追従する線、3D位置を保つ線、参照だけに使う線を区別できます。新しい文書には<code>top_XY</code>、<code>front_XZ</code>、<code>side_YZ</code>とX/Y/Z軸があります。</p>
+        <table><thead><tr><th>作り方</th><th>必要なもの</th><th>用途</th></tr></thead><tbody>
+          <tr><td>基準面</td><td>XY / XZ / YZ</td><td>原点を通る標準面</td></tr>
+          <tr><td>点と法線を数値指定</td><td>原点XYZ、法線XYZ、面内X</td><td>任意姿勢を完全に数値指定</td></tr>
+          <tr><td>3点</td><td>同一直線上でない3点</td><td>既存形状へ合わせる</td></tr>
+          <tr><td>平面から離す</td><td>平面1つ、距離</td><td>平行な断面を置く</td></tr>
+          <tr><td>辺まわりの角度</td><td>平面1つ、直線1本、角度</td><td>基準面を軸まわりに傾ける</td></tr>
+          <tr><td>点を通る平行面</td><td>平面1つ、点1つ</td><td>既存点位置へ平面を移す</td></tr>
+          <tr><td>2平面の中央</td><td>平行な平面2つ</td><td>左右・上下の中央断面</td></tr>
+          <tr><td>2直線から</td><td>直線2本</td><td>同一平面上の辺から決める</td></tr>
+          <tr><td>線上で直角</td><td>曲線1本、位置0〜1</td><td>曲線に直角な断面</td></tr>
+          <tr><td>点を通る接平面</td><td>曲面上の点</td><td>局所的な接線方向で作図</td></tr>
+          <tr><td>円筒・円錐の中央</td><td>対応する面または円形辺</td><td>軸に直角な中央断面</td></tr>
+          <tr><td>辺を通る接平面</td><td>曲面の辺1本</td><td>接続部の作図面</td></tr>
         </tbody></table>
-        <h3>3D上の辺を回転軸にする</h3>
-        <ol><li>「選択」で直線ワイヤーを1本選びます。</li><li>「基準線に設定」を押します。作業平面タブの基準線名が変わります。</li><li>作り方を「軸まわりに回転」にし、「回転軸に使用」を押します。</li><li>基準平面と角度を入力し、「この向きで見る」で確認後、「平面を作成」を押します。</li></ol>
-        <p class="warning">3点は一直線上に置けません。法線ベクトルや軸方向も長さ0にはできません。エラー時は3点または方向値を見直してください。</p>
+        <p class="warning">一直線上の3点、平行でない2平面、ゼロ長の軸などでは作りません。必要な材料と理由が右の棚と知らせに出ます。</p>
       </section>
 
-      <section id="grid">
-        <h2>5. 点グリッド</h2>
-        <p>補助線を大量に描かず、JWCADのような一定間隔の点を目安に作図します。大きい点が主点、小さい点が副点です。主点は狙いやすく、副点は点間隔に応じて弱く吸着します。点へ常時強制的に丸めることはありません。</p>
-        <figure><a href="manual-assets/point-grid.png"><img src="manual-assets/point-grid.png" alt="大きい主点と4分割の小さい副点を表示した正面作図面"></a><figcaption>画像5: 基準X/Yを0.5 mmずらした主点間隔1 mm、1/4副点の作図面。「画面で基準を合わせる」を選ぶと左下にドラッグ手順が出ます。</figcaption></figure>
-        <dl class="recipe"><dt>作図面</dt><dd>「作図」タブ最上部で平面を選び、「正対」。</dd><dt>表示</dt><dd>「点グリッド」の「表示」をオン。</dd><dt>主点間隔</dt><dd>「スナップ」行へ大きい点の間隔。例は <code>1.00 mm</code>。</dd><dt>副点</dt><dd>主点のみ、1/2、1/3、1/4から選択。1/4なら候補間隔は主点間隔の4分の1です。</dd><dt>数値基準</dt><dd>基準X/Yへ点列の開始座標。中心を半ピッチずらすなら両方 <code>0.5 mm</code>。</dd><dt>吸着</dt><dd>「スナップ」をオン。カーソルに最も近い格子点へ常に吸着し、薄い丸が出ます。交点・端点などの構造点が近くにあればそちらを優先します。自由位置に置きたいときは <kbd>Ctrl</kbd> を押しながらクリック。</dd></dl>
-        <h3>図形上の点へグリッドをドラッグして合わせる</h3>
-        <ol><li>「画面で基準を合わせる」を押します。</li><li>中央画面で、動かしたい大きい主点または小さい副点を左ボタンで掴みます。</li><li>ボタンを押したまま、基準にしたいワイヤーの端点または制御点へ移動します。近づくとその点へ正確に吸着します。図形点がない場所へ自由に置くこともできます。</li><li>左ボタンを離します。点列全体が移動し、新しい値が基準X/Y欄へ入ります。</li><li>やり直す場合はもう一度実行。途中で止める場合は <kbd>Esc</kbd>。原点へ戻す場合は「基準を 0, 0 に戻す」です。</li></ol>
-        <p class="note">基準値は作図面内のX/Yで、世界座標のXYZではありません。副点が画面上で密集しすぎる倍率では小点だけを一時的に省略します。主点は約4px以内、副点は画面上の点間隔に合わせた約0.75～2.25px以内だけ吸着するため、主点・副点の間にも自由に線を引けます。</p>
+      <section id="editing" data-searchable>
+        <h2>5. ワイヤー編集</h2>
+        <p>直線だけでなく、円弧、円、ベジェ、B-splineを含む複合ワイヤーを扱います。元の曲線種類を保てない操作は黙って折れ線へ変換しません。</p>
+        <table><thead><tr><th>操作</th><th>使い方</th><th>結果</th></tr></thead><tbody>
+          <tr><td>数値で編集</td><td>作業平面または同種の線からなるワイヤーを1つ選ぶ</td><td>点、中心、軸、半径、角度を種類を保って更新</td></tr>
+          <tr><td>トリム</td><td>対象と境界を選び、残す側を画面で指定</td><td>直線・曲線を交点まで切る</td></tr>
+          <tr><td>延長</td><td>対象端と境界、または長さを指定</td><td>曲線条件を保って伸ばす</td></tr>
+          <tr><td>分割</td><td>線上位置または交点を指定</td><td>元ワイヤーを複数区間へ分ける</td></tr>
+          <tr><td>移動・コピー</td><td>選択後、移動元と移動先の2点</td><td>3D位置を平行移動。コピーは元を残す</td></tr>
+          <tr><td>ミラー・回転</td><td>鏡の2点、または中心と2方向</td><td>元を残した対称複製、指定角度の回転</td></tr>
+          <tr><td>結合</td><td>2つの鎖を選択</td><td>向きと端点を検査して1本へ</td></tr>
+          <tr><td>端点・接線・曲率接続</td><td>2鎖を選び、動かす側を指定</td><td>位置、接線、曲率の連続を段階的に作る</td></tr>
+          <tr><td>C面取り・R丸め</td><td>2辺、残す側、切戻し量または半径</td><td>交点付近を直線または円弧へ置換</td></tr>
+          <tr><td>角の一括加工</td><td>ポリラインと量、必要なら頂点番号</td><td>直線同士の全角または1角を落とす・丸める</td></tr>
+          <tr><td>オフセット</td><td>ワイヤーと平面内距離</td><td>元を残して平行な写しを作る</td></tr>
+          <tr><td>2線を交点まで</td><td>直線2本</td><td>互いの交点まで延長または短縮</td></tr>
+          <tr><td>交点に点</td><td>ワイヤー2本以上</td><td>実3D交点へ作図点を置く</td></tr>
+          <tr><td>基準線</td><td>ワイヤーを選ぶ</td><td>形を変えず一点鎖線表示へ設定・解除</td></tr>
+        </tbody></table>
+        <p class="note">V1の「一致解除」「滑らか解除」に相当するコマンドはありません。V2の端点一致・接線・曲率接続は永続拘束ではなく、実行時に形を変更する操作だからです。解除する場合はUndoまたは数値・制御点編集で形を直します。</p>
       </section>
 
-      <section id="drawing">
-        <h2>6. 2D作図</h2>
-        <p class="lead">最初に「作図面」を選ぶと自動で正対します。以後は中央の3D画面を紙として直接クリックします。</p>
-        <figure><a href="manual-assets/drawing-tools.png"><img src="manual-assets/drawing-tools.png" alt="作図タブと作図ツール"></a><figcaption>画像6: 作図ツール、実寸入力、スナップ、点グリッド、完了・取消が1つのタブにあります。</figcaption></figure>
-        <table><thead><tr><th>道具</th><th>クリックする順番</th><th>確定</th></tr></thead><tbody>
-          <tr><td>作図点 <kbd>D</kbd></td><td>残したい位置を1回クリック</td><td>交点・端点・格子点または自由位置へ、後続作図の基準点を保存。</td></tr>
-          <tr><td>直線 <kbd>L</kbd></td><td>始点 → 終点</td><td>2点目で完成。始点後はカーソル横で長さ・角度を直接入力可。</td></tr>
-          <tr><td>ポリライン <kbd>P</kbd></td><td>始点 → 折れ点を順番に</td><td><kbd>Enter</kbd>、右クリック、または「完了」。</td></tr>
-          <tr><td>矩形 <kbd>R</kbd></td><td>対角の1点目 → 対角の2点目</td><td>2点目で完成。1点目後に幅・高さをカーソル横で入力可。</td></tr>
-          <tr><td>円 <kbd>C</kbd></td><td>中心 → 円周上の点</td><td>2点目で完成。中心後に半径をカーソル横で入力可。</td></tr>
-          <tr><td>円弧 <kbd>A</kbd></td><td>3点、両端＋半径、始点＋接線/法線方向から方式を選択</td><td>3点方式は3点目、ほかは必要点と数値を入れて「この円弧を作成」。</td></tr>
-          <tr><td>ベジェ <kbd>B</kbd></td><td>始点 → 制御点1 → 制御点2 → 終点</td><td>4点目で完成。</td></tr>
-          <tr><td>スプライン <kbd>S</kbd></td><td>通過点を4点以上</td><td><kbd>Enter</kbd>、右クリック、または「完了」。</td></tr>
+      <section id="measure" data-searchable>
+        <h2>6. 測定</h2>
+        <p><kbd>M</kbd>で測定棚を開きます。測定は文書を変えず、必要な結果だけを参照寸法または作図点として残せます。</p>
+        <table><thead><tr><th>モード</th><th>入力</th><th>表示</th></tr></thead><tbody>
+          <tr><td>2点間</td><td>任意の2点</td><td>3D全長、dX、dY、dZ、XY/XZ/YZ投影距離、各軸との角度</td></tr>
+          <tr><td>3点角度</td><td>始点、頂点、終点</td><td>0〜180度の角度</td></tr>
+          <tr><td>要素</td><td>線、円弧、円、曲線</td><td>長さ、両端、半径、中心、接線、法線、曲率</td></tr>
+          <tr><td>2要素</td><td>直線と曲線など</td><td>最短距離、接線角度、法線角度</td></tr>
         </tbody></table>
-        <h3>交点・端点・作図点へ正確に合わせる</h3>
-        <figure><a href="manual-assets/weak-snapping.png"><img src="manual-assets/weak-snapping.png" alt="交差線上へ薄い交点スナップ記号を表示した作図点ツール"></a><figcaption>画像6a: 「作図点」で2線の交点へ重ねた状態。交点の×が出ている間だけ正確な交点へ吸着し、少し離すと自由位置へ戻ります。左一覧には保存済み作図点も表示されます。</figcaption></figure>
-        <ol><li>「スナップ」をオンにします。</li><li>交差する2本の線、既存端点、作図点、線の中点、円・円弧の中心の近くへカーソルを移します。通常は交点が約18px、作図点・端点が約16px、中点・中心が約14px以内で候補になります。</li><li>吸着すると候補を囲む大きな丸が表示され、その内側に種別の記号(交点=×、作図点=丸、端点=四角、中点=三角、中心=丸+中心点)が出ます。格子点は薄い小丸です。構造上の点と格子が同時に候補になる場合は、交点・作図点・端点 &gt; 中点・中心 &gt; 格子の順で優先します。</li><li>大きな丸が出ている間に左クリックすると、その候補の正確な座標を使います。構造点が近くにないときは最寄りの格子点へ常に吸着します(任意位置は<kbd>Ctrl</kbd>)。</li><li>始点を置く前に右クリックすると、約20〜21px以内の交点・作図点・端点だけを広めに探して始点にします。格子点はこの右クリック探索へ含めません。</li><li>候補が近すぎて任意位置を選べない時は、<kbd>Ctrl</kbd>を押しながらクリックします。押している間だけ候補表示と吸着を完全に止めます。</li></ol>
-        <p class="note">右クリックは入力前なら近傍点から開始、入力後なら従来どおりポリライン・スプラインの完了または途中操作の取消です。「作図点」はワイヤーや面にはならない位置基準で、左の一覧から選択・非表示・削除でき、保存して開き直した後もスナップに使えます。</p>
-        <h3>正確な長さ・角度で直線を引く</h3>
-        <ol><li>「直線」を選び、中央画面で始点だけをクリックします。マウスを動かすと、長さ・角度欄がカーソルのそばへ追従します。</li><li>クリックせず、そのまま数字または <code>(</code> を打ち始めます。入力は自動で長さ欄へ入り、例えば <code>(180/2)*3</code> は270 mmになります。</li><li><kbd>Tab</kbd>で角度欄へ移り、作図面の横を0°、縦を90°として角度を入力します。</li><li><kbd>Enter</kbd>。式を計算した実寸の終点で直線が完成します。</li></ol>
-        <p class="note">使用できる式は <code>+ - * / ( )</code>、小数、指数表記、円周率 <code>pi</code> です。入力欄内でも <kbd>Esc</kbd> は1回で数値編集ごと作図全体を取り消し、選択解除まで戻ります。右パネルの実寸欄も同じ式に対応します。</p>
-        <h3>ほかの形を実寸入力する</h3>
-        <dl class="recipe"><dt>矩形</dt><dd>1点目後に幅を入力し、<kbd>Tab</kbd>で高さ、<kbd>Enter</kbd>で完成。</dd><dt>円</dt><dd>中心後に半径を入力し、<kbd>Enter</kbd>で完成。</dd><dt>ポリライン</dt><dd>各区間の長さ・角度を入力して点を追加。右クリックまたは「完了」で全体を完成。</dd><dt>3点円弧・ベジェ</dt><dd>通過点または制御点までの距離・角度を順番に入力。</dd><dt>スプライン</dt><dd>各通過点までの距離・角度を入力し、4点以上で右クリックまたは「完了」。</dd></dl>
-        <h3>円弧を両端と半径で決める</h3>
-        <figure><a href="manual-assets/arc-endpoints-radius.png"><img src="manual-assets/arc-endpoints-radius.png" alt="両端と半径を指定する円弧作図画面"></a><figcaption>画像6b: 始点と終点を置いた後、半径と膨らむ側を数値で決めます。青い予告形状を確認してから作成します。</figcaption></figure>
-        <ol><li>「円弧」を選び、方式を「両端＋半径」にします。</li><li>始点、終点の順に中央画面でクリックします。</li><li>カーソルを動かすと半径と膨らむ側がライブで追従します(右パネルの半径欄にも反映)。ちょうど良い膨らみで3回目のクリックをすると確定します。</li><li>数値で決めたい場合は、半径欄へ数値または計算式(半径は両端距離の半分以上)を入力し、「左へ膨らむ / 右へ膨らむ」を選んで「この円弧を作成」。半径欄へ入力を始めるとドラッグより数値を優先します。</li></ol>
-        <h3>始点から方向を決めて円弧を生やす</h3>
-        <figure><a href="manual-assets/arc-start-direction.png"><img src="manual-assets/arc-start-direction.png" alt="始点、法線角、半径、中心角で円弧を作る画面"></a><figcaption>画像6c: 始点1点から、接線角または法線角、半径、中心角または円弧長を指定します。例は法線角90°、中心角160°です。</figcaption></figure>
-        <ol><li>方式を「始点＋接線/法線方向」にし、円弧を生やす始点をクリックします。既存線上ならスナップ記号を確認して置きます。</li><li>角度基準を「接線角」または「法線角」にします。角度は作図面の横方向が0°、縦方向が90°です。</li><li>方向角と半径を入力し、円弧量を「中心角」または「円弧長」から選びます。</li><li>「左へ曲がる / 右へ曲がる」を選びます。法線角は選んだ曲がる側の円弧中心を向く方向です。</li><li>青い予告と始点の接線ガイドを確認して「この円弧を作成」。</li></ol>
-        <p class="note">中心角と円弧長を切り替えると、現在の半径を使って値を相互変換します。入力済みの値は <code>円弧長 = 半径 × 中心角(rad)</code> の関係を保ちます。既存曲線へ滑らかに追従させ続けたい場合は、作成後に「接線接続」または「曲率接続」も設定します。</p>
-        <h3>作図中の補助操作</h3>
-        <ul><li><kbd>Shift</kbd>を押しながら直線・ポリライン: 水平または垂直へ固定。</li><li><kbd>Shift</kbd>を押しながら矩形: 正方形へ固定。</li><li><kbd>Ctrl</kbd>を押しながらクリック: その点だけ完全にスナップを解除。<kbd>Ctrl</kbd>+<kbd>Shift</kbd>なら吸着なしと水平・垂直/正方形拘束を併用。</li><li>入力前に右クリック: 近くの交点・作図点・端点を始点にする。</li><li>「補助線として作図」: スナップ・寸法基準には使うが、面や切断図へ入れない。</li><li>「指定した点を作図点として残す」: ベジェ・スプラインの確定時に、クリックした通過点・制御点を作図点(<code>線名_点N</code>)としても作ります。</li><li><kbd>Esc</kbd>: どこにフォーカスがあっても1回で「入力破棄 → 選択道具 → 選択解除」まで戻ります。「取消」ボタンは入力中の点だけを破棄します。</li><li>作図道具の使用中は、作図面上にない線・点が自動で薄く表示されます(常時薄くしたい場合は表示タブの「作図面以外の線を常に薄く表示」)。</li><li>ホイール・中ドラッグ・右ドラッグ: 作図中も拡大縮小・平行移動できます。</li></ul>
-        <p class="note">作図は作図面に正対していなくても行えます。斜めから見た3Dビューでも、クリックは「カーソルの視線と作図面の交点」に置かれ、スナップ・予告表示も同じ位置で働きます。正対して作図した場合と結果は同じです。</p>
-        <p class="warning">「作図」タブ内で「選択」に戻さず左クリックすると、現在の作図道具の点が追加されます。選びたいときは <kbd>V</kbd> を押してください。「面」「出力」など担当外のタブへ移ると、安全のため自動で選択モードへ戻ります。</p>
+        <p>測った点・中心・制御点は「点として残す」、値は「寸法を残す」で文書へ追加できます。線上位置は0〜1の値で指定できます。</p>
       </section>
 
-      <section id="numeric">
-        <h2>7. 数値でワイヤーを作る</h2>
-        <p>マウス作図ではなく、座標が決まっている線・円・曲線は「数値入力」タブで直接作れます。</p>
-        <figure><a href="manual-assets/numeric-input.png"><img src="manual-assets/numeric-input.png" alt="3D直線を数値入力する画面"></a><figcaption>画像7: 原点から右2、上4、奥7の点へ引く例は、3D直線の始点(0,0,0)、終点(2,4,7)で入力します。</figcaption></figure>
-        <table><thead><tr><th>種類</th><th>入力</th><th>座標</th></tr></thead><tbody>
-          <tr><td>3D直線</td><td>始点XYZ、終点XYZ</td><td>世界座標。任意方向の線。</td></tr>
-          <tr><td>3Dベジェ曲線</td><td>始点、制御点1、制御点2、終点の各XYZ</td><td>世界座標。原点と終点だけでなく膨らみを2制御点で決めます。</td></tr>
-          <tr><td>平面上の直線</td><td>始点XY、終点XY</td><td>選択した作業平面内座標。</td></tr>
-          <tr><td>平面上の円</td><td>中心XY、半径</td><td>選択した作業平面内。</td></tr>
-          <tr><td>平面上の円弧</td><td>中心XY、半径、開始角、中心角</td><td>作業平面の横方向が0°。</td></tr>
-          <tr><td>平面上のベジェ曲線</td><td>始点、制御点1、制御点2、終点の各XY</td><td>選択した作業平面内。</td></tr>
+      <section id="guides" data-searchable>
+        <h2>7. 形状ガイド</h2>
+        <p>複雑な曲面は、複数のワイヤーを役割表へ入れて作ります。1つの論理的な外形や断面が複数の直線・円弧・ベジェ・B-splineで構成されても、1行へ順に追加できます。両端で閉じる外形や、断面端がガイド途中へ接する形も検査対象です。</p>
+        <figure><img src="manual/images/v2-guide-table.png" alt="形状ガイドの役割表"><figcaption>役割、線の本数、向き、接続状態を表で確認してから面を作ります。</figcaption></figure>
+        <h3>役割表の操作</h3>
+        <ol><li>面の作り方を選びます。</li><li>ワイヤーを選び「選択を表へ」。1本の断面が複数ワイヤーなら、行を選んで「選択を既存行へ追加」。</li><li>行の上下、方向反転、削除で対応を整えます。</li><li>接続欄を確認して「表から面を作る」。入力線との最大ずれが許容外なら作成しません。</li></ol>
+        <table><thead><tr><th>作り方</th><th>役割と条件</th><th>向く形</th></tr></thead><tbody>
+          <tr><td>平面</td><td>閉じた外形1つ、必要なら閉じた穴</td><td>自由な混成曲線で囲んだ平面</td></tr>
+          <tr><td>ルールド</td><td>断面2つ</td><td>2断面を直線的につなぐ面</td></tr>
+          <tr><td>ロフト</td><td>断面3つ以上</td><td>複数断面を滑らかに通る面</td></tr>
+          <tr><td>案内付きロフト</td><td>外形U 2本と、それぞれへ届く断面</td><td>外周と断面の両方を指定する車両前面</td></tr>
+          <tr><td>曲線網</td><td>U 2本以上、V 2本以上、全交差</td><td>縦横の断面網で制御する曲面</td></tr>
+          <tr><td>境界埋め</td><td>閉じた3〜4辺</td><td>周囲だけ決まっている穴埋め面</td></tr>
+          <tr><td>離した面</td><td>元の形状ガイド1つと距離</td><td>面の平行オフセット</td></tr>
+          <tr><td>回転体</td><td>断面1本、軸の直線1本、0〜360度</td><td>円筒、ドーム、旋盤形状</td></tr>
         </tbody></table>
-        <h3>原点から (2, 4, 7) へ直線を作る</h3>
-        <dl class="recipe"><dt>種類</dt><dd>「3D直線」</dd><dt>始点</dt><dd>X=0、Y=0、Z=0</dd><dt>終点</dt><dd>X=2、Y=4、Z=7</dd><dt>関係</dt><dd>「平面拘束なし」</dd><dt>実行</dt><dd>名前を付けて「ワイヤーを追加」。</dd></dl>
-        <h3>ワイヤーと作業平面の関係</h3>
-        <table><thead><tr><th>設定</th><th>意味</th></tr></thead><tbody>
-          <tr><td>平面拘束なし</td><td>完全な3Dワイヤー。作業平面を変えても追従しません。</td></tr>
-          <tr><td>作業平面を編集基準に使用</td><td>平面を座標・角度編集の基準にしますが、ワイヤー自体を平面へ閉じ込めません。</td></tr>
-          <tr><td>作業平面に固定</td><td>ワイヤーを平面上に保ちます。平面を動かすとワイヤーも追従します。</td></tr>
+        <p class="warning">非平面の閉じた輪郭だけから作れる曲面は一意ではありません。ロフト、案内付きロフト、曲線網、境界埋めのどれかを選び、必要な役割を明示します。</p>
+        <h3>投影</h3>
+        <ul><li>「面へ投影」は一般の平面・面へ線を写します。</li><li>「曲面へ投影」は作業平面方向に沿って1枚の形状ガイドへ落とし、窓などの元線を作ります。</li><li>「回り込み投影」は2枚以上の面をまたぐ線を面ごとの区間に分けます。面間を勝手な直線で橋渡ししません。</li></ul>
+      </section>
+
+      <section id="parts" data-searchable>
+        <h2>8. 部品と押し出し</h2>
+        <p>V2には独立した「板材」幾何型はありません。材料、板厚、積層、用途は部品または製作モデルの属性です。形状ガイドは設計補助、部品は体積を持つ実体として区別します。</p>
+        <h3>押し出し</h3>
+        <table><thead><tr><th>項目</th><th>選択肢</th></tr></thead><tbody>
+          <tr><td>入力</td><td>閉じた輪郭、穴、複数の離れた輪郭。開いた線はワイヤー出力だけに利用</td></tr>
+          <tr><td>方向</td><td>作業平面法線、面法線、XYZ数値</td></tr>
+          <tr><td>終端</td><td>距離、対称距離、両側別距離、選択した作業平面まで、貫通するまで</td></tr>
+          <tr><td>出力</td><td>押し出し先の輪郭ワイヤー、側面境界ワイヤー、部品、またはワイヤーと部品の両方</td></tr>
+          <tr><td>演算</td><td>新規、既存部品へ足す、既存部品から引く</td></tr>
+        </tbody></table>
+        <p>作成前に体積、面数、部品数を調べます。元ワイヤーは削除せず、作り方として参照します。閉じていない線で部品を要求した場合、ゼロ体積や閉じていない結果は理由を出して断ります。</p>
+        <h3>ほかの立体化</h3>
+        <ul><li><strong>面に厚み:</strong> 形状ガイドを外側・中央・内側へ厚み付けします。</li><li><strong>面を平面まで:</strong> 形状ガイドと作業平面の間を埋めます。面が相手をまたぐ場合は断ります。</li><li><strong>ワイヤー群から部品:</strong> 閉じた3Dのかごを検出し、1つの閉じた殻につき1部品を作ります。</li><li><strong>足す・引く:</strong> 選択順の1つ目を土台、2つ目を相手にします。何も変わらない演算や空になる結果を成功扱いしません。</li><li><strong>治具:</strong> 面から指定すき間だけ離した当たり面と、厚み付き当て板を1操作で作ります。治具も通常の部品です。</li><li><strong>固定:</strong> 派生形状を独立した実体にします。元は消さずに隠します。</li></ul>
+      </section>
+
+      <section id="fabrication" data-searchable>
+        <h2>9. 製作近似と型紙</h2>
+        <p>理想の部品・形状ガイドを、紙やプラ板で作れる別オブジェクトへ変換します。大きな連続部材を優先し、表示用三角形をそのまま大量の部品にはしません。</p>
+        <figure><img src="manual/images/v2-mode-fabrication.png" alt="製作モード"><figcaption>方式、分割軸、再現度、部材上限、板厚、許すずれ、範囲、組立率を1つの棚で決めます。</figcaption></figure>
+        <h3>作成手順</h3>
+        <ol><li>部品または形状ガイドを1つ選び「製作モデルを作る」。元の完成形は残ります。</li><li>方式をV1型の帯近似、またはV2型の面分類から選びます。</li><li>分割軸、自動または手動境界、部材数上限、最小幅、再現度、板厚、最大許容ずれ、U/V範囲を指定します。</li><li>窓・ライトなどの閉じた線は「境界の役割」、開いた折り線も同じ操作で登録します。切断する開いた線は「切れ目にする」。</li><li>「プレビュー更新」で元形状の変更を反映し、「型紙を作る」で平面部材を作ります。</li><li>組立率0〜100%と、必要なら曲げる部材番号を指定して途中状態を確認します。</li><li>「固定で作るもの」をワイヤーのみ・部品のみ・両方から選び、「現在状態を固定」。任意の曲げ状態を通常の編集・出力対象にします。</li></ol>
+        <h3>開口・折り・切れ目</h3>
+        <table><thead><tr><th>元ワイヤー</th><th>役割</th><th>型紙</th></tr></thead><tbody>
+          <tr><td>閉じた輪</td><td>窓、ライト、扉などの開口</td><td>切り抜き。部材境界をまたぐと各部材へ取り分け</td></tr>
+          <tr><td>閉じていない線</td><td>折り線</td><td>輪郭とは別の折り線層</td></tr>
+          <tr><td>開線を「切れ目にする」</td><td>逃げ切り、スリット</td><td>RELIEF層。部材は分けない</td></tr>
+          <tr><td>接続スコープ</td><td>近似部と周囲の接続線</td><td>近似後の実形状へ寄せた別ワイヤー</td></tr>
+        </tbody></table>
+        <h3>組立状態の約束</h3>
+        <ul><li>0%は平ら、100%は完成形です。途中値はヒンジ軸まわりの剛体回転で、面を頂点ごとに線形補間しません。</li><li>0%、30%、100%で各辺長と部材寸法を保ちます。組立率で寸法が変わる場合は不具合です。</li><li>固定した途中状態はワイヤーと部品にでき、選択した部品だけをSTL・STEPへ出せます。</li><li>再現度を上げたときの最大偏差は増加させず、最大偏差とRMS偏差をmmで確認します。</li></ul>
+        <p class="warning">現状の「切れ目にする」は平らな製作部材上の開いた線が対象です。二重曲率面へ自動でV字・曲線側辺の切れ込みを設計し、それだけで展開可能にする処理はまだ実用経路へ結線されていません。無理な面は許容ずれ付きの帯近似または追加分割を使い、条件を満たさなければ断ります。</p>
+      </section>
+
+      <section id="output" data-searchable>
+        <h2>10. 保存と出力</h2>
+        <figure><img src="manual/images/v2-export.png" alt="出力の棚"><figcaption>先に対象、次に形式、最後に保存先を選びます。0件の対象は隠さず灰色で理由を示します。</figcaption></figure>
+        <table><thead><tr><th>出す対象</th><th>形式</th></tr></thead><tbody>
+          <tr><td>表示している部品</td><td>STL / STEP</td></tr><tr><td>選んだ部品</td><td>STL / STEP</td></tr><tr><td>選んだ製作部材</td><td>STL / STEP / SVG / DXF / 1:1 PDF</td></tr><tr><td>いまの型紙</td><td>SVG / DXF / 1:1 PDF</td></tr><tr><td>選んだワイヤー</td><td>SVG / DXF / 1:1 PDF</td></tr><tr><td>選んだものだけの文書</td><td>kcd2</td></tr><tr><td>この文書</td><td>kcd2</td></tr>
+        </tbody></table>
+        <ul><li>「出力を検査」で閉鎖性、自己交差、体積、選択数などを先に調べます。保存時にも同じ検査を再実行します。</li><li>STLとSTEPは同じ検査済みB-Repから作ります。表示メッシュだけを根拠にしません。</li><li>型紙は1:1で、紙に収まらないからといって自動縮小しません。</li><li>保存先未指定、未対応形式、既存ファイルの未承認上書きは、ファイルを作る前に断ります。0バイトを残しません。</li><li>選択した任意部分は別の<code>.kcd2</code>へ保存できます。参照に必要な上流要素も一緒に収集します。</li></ul>
+      </section>
+
+      <section id="railway-test" data-searchable>
+        <h2>11. 流線形鉄道車両前面の実用試験</h2>
+        <p>全機能説明と同時に、ER1 / 初期ER2の丸形前頭部を参考にした1/87試験体を作りました。これは歴史車両の正確な復元寸法ではなく、円筒に近い腰部と二重曲率の肩、複数窓が混在する実装検査用近似形状です。</p>
+        <figure><img src="manual/images/v2-railway-nose.png" alt="1/87流線形鉄道前面の実用試験"><figcaption>水平7断面を通るロフト外板、6枚の曲線窓、中央上部前照灯を同じ文書で表示しています。</figcaption></figure>
+        <table><thead><tr><th>項目</th><th>値・結果</th></tr></thead><tbody>
+          <tr><td>縮尺と幅</td><td>1/87。資料値3520 mmを換算した40.4598 mm</td></tr>
+          <tr><td>高さ</td><td>約41.38 mm。試験用近似値</td></tr>
+          <tr><td>曲面</td><td>7本の水平断面を通る滑らかなロフト。上部ほど前後・左右の二重曲率を強くする</td></tr>
+          <tr><td>外板</td><td>形状ガイドから厚さ0.20 mmの体積ある部品を生成</td></tr>
+          <tr><td>開口</td><td>左右3枚ずつの角丸窓6個と、中央上部の曲線円形前照灯1個</td></tr>
+          <tr><td>製作近似</td><td>帯近似、再現度6、許容ずれ0.11 mm、最大24部材、最小幅2.0 mm</td></tr>
+          <tr><td>自動検査</td><td>ロフトの断面一致、厚み後の正体積、7開口の型紙保持、保存再読込、同一生成結果を確認</td></tr>
+          <tr><td>カーネル検査</td><td>実OCCTでロフトと厚みを生成し、その前頭部外板をSTEP・STLへ変換</td></tr>
+        </tbody></table>
+        <p class="verified">見本: <code>samples\streamlined-railway-nose-1-87.kcd2</code>。生成器と配布ファイルのバイト一致を毎回の試験で確認します。</p>
+        <p class="small">車体幅以外の奥行き、曲率、窓、灯具寸法は資料で確認した実車寸法ではありません。試験用近似値を実寸として扱わないでください。</p>
+      </section>
+
+      <section id="limits" data-searchable>
+        <h2>12. 制限と診断</h2>
+        <h3>現在の主な制限</h3>
+        <ul><li>二重曲率を1枚の平板へ無伸縮で展開することはできません。許容ずれ内の帯近似、切れ目、追加分割が必要です。</li><li>曲面上の自動V字・曲線切れ込み、のりしろ、自動ネスティングは完成していません。</li><li>円弧の始点法線指定と円弧長入力はまだ画面へ結線されていません。現状は始点の接線方向・半径・中心角で指定します。</li><li>押し出しの「選んだ面まで」は現在、作業平面を終端として使います。一般曲面を終端にする画面操作は未結線です。</li><li>本格的なアセンブリ拘束、干渉解析、FEA、CAM、K-factor自動計算、図枠・公差記号・部品表は対象外です。</li><li>三角形メッシュは表示・検査・STL出力用で、主要編集対象や型紙の正本ではありません。</li><li>形状ガイドそのものはSTL・STEPにできません。厚み付け、押し出し、または途中状態の固定で部品にしてから出します。</li></ul>
+        <h3>よく見る理由番号</h3>
+        <table><thead><tr><th>番号</th><th>意味</th><th>対処</th></tr></thead><tbody>
+          <tr><td><code>GEO-W001</code></td><td>隣り合う線がつながっていない</td><td>端点を吸着または一致させる</td></tr>
+          <tr><td><code>GEO-W003</code></td><td>端点に許容外の隙間</td><td>表示された距離を見て修正</td></tr>
+          <tr><td><code>GEO-W004</code></td><td>自己交差</td><td>交点で分割し、不要区間をトリム</td></tr>
+          <tr><td><code>GEO-G008</code></td><td>作った面が指定線を通らない</td><td>外れた行、順序、方向、断面密度を修正</td></tr>
+          <tr><td><code>UI-R009</code></td><td>形状ガイドの役割不足</td><td>知らせに示された役割の行を追加</td></tr>
+          <tr><td><code>FAB-P005</code></td><td>無伸縮で展開できない</td><td>許容ずれ、分割、近似方式を見直す</td></tr>
+          <tr><td><code>EXP-013</code></td><td>立体を持たない対象の3D出力</td><td>先に部品化または固定</td></tr>
+          <tr><td><code>EXP-015</code></td><td>出すものがない</td><td>対象を選ぶ</td></tr>
+          <tr><td><code>EXP-016</code></td><td>保存先がない</td><td>出す先を選ぶ</td></tr>
+          <tr><td><code>EXP-017</code></td><td>対象と形式が不一致</td><td>対応形式へ変更</td></tr>
+          <tr><td><code>EXP-018</code></td><td>既存ファイルの上書き未承認</td><td>上書きを明示するか別名にする</td></tr>
+        </tbody></table>
+        <p>全理由番号は<code>docs\v2\diagnostic-catalog.md</code>にあります。重い処理には取消経路があり、取消時は文書を変更しません。</p>
+      </section>
+
+      <section id="keys" data-searchable>
+        <h2>13. マウスとキー</h2>
+        <table><thead><tr><th>操作</th><th>結果</th></tr></thead><tbody>
+          <tr><td>左クリック</td><td>選択、点を置く、操作部をつかむ</td></tr><tr><td>中または右ドラッグ</td><td>画面を平行移動</td></tr><tr><td><kbd>Shift</kbd>+中ドラッグ</td><td>視点を連続回転</td></tr><tr><td>ホイール</td><td>拡大縮小</td></tr><tr><td>作図中の右クリック</td><td>ポリライン・スプラインを確定、その他は取消</td></tr><tr><td><kbd>Ctrl</kbd>を押しながら作図</td><td>吸着なし</td></tr><tr><td><kbd>Shift</kbd>を押しながら作図</td><td>水平・垂直、矩形は正方形</td></tr><tr><td><kbd>Backspace</kbd></td><td>最後の点を戻す</td></tr><tr><td><kbd>Esc</kbd></td><td>進行中操作を取消し、選択道具へ戻る</td></tr>
+        </tbody></table>
+        <h3>主要ショートカット</h3>
+        <table><tbody>
+          <tr><th>ファイル</th><td><kbd>Ctrl+N</kbd> 新規 / <kbd>Ctrl+O</kbd> 開く / <kbd>Ctrl+S</kbd> 保存 / <kbd>Ctrl+Shift+S</kbd> 別名保存</td></tr>
+          <tr><th>履歴・表示</th><td><kbd>Ctrl+Z</kbd> Undo / <kbd>Ctrl+Y</kbd> Redo / <kbd>Del</kbd> 削除 / <kbd>F</kbd> 全体 / <kbd>F3</kbd> 吸着</td></tr>
+          <tr><th>作図</th><td><kbd>V</kbd> 選択 / <kbd>D</kbd> 点 / <kbd>L</kbd> 直線 / <kbd>P</kbd> 連続線 / <kbd>R</kbd> 矩形 / <kbd>C</kbd> 円 / <kbd>A</kbd> 円弧 / <kbd>B</kbd> ベジェ / <kbd>S</kbd> B-spline</td></tr>
+          <tr><th>接続・編集</th><td><kbd>I</kbd> 端点一致 / <kbd>T</kbd> 接線 / <kbd>Shift+T</kbd> 曲率 / <kbd>X</kbd> トリム / <kbd>E</kbd> 延長</td></tr>
+          <tr><th>工程</th><td><kbd>M</kbd> 測定 / <kbd>G</kbd> 形状ガイド / <kbd>Shift+E</kbd> 押し出し</td></tr>
         </tbody></table>
       </section>
 
-      <section id="edit">
-        <h2>8. 編集・拘束</h2>
-        <figure><a href="manual-assets/wire-edit.png"><img src="manual-assets/wire-edit.png" alt="ワイヤー編集タブ"></a><figcaption>画像8: 3D画面でワイヤーを選ぶと、平面との関係、寸法拘束、点座標を数値編集できます。</figcaption></figure>
-        <h3>点・制御点をマウスで動かす</h3>
-        <ol><li><kbd>V</kbd>で「選択」にします。</li><li>ワイヤーをクリックして制御点を表示します。</li><li>動かす点を左ドラッグします。作業平面に固定されたワイヤーは、その平面上で動きます。</li><li>誤った場合は <kbd>Ctrl</kbd>+<kbd>Z</kbd>。</li></ol>
-        <h3>座標・半径・平面を数値編集</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>ワイヤーまたは作業平面を1個。</dd><dt>開く</dt><dd>「編集」タブを下へスクロールし「選択内容の数値編集」。</dd><dt>入力</dt><dd>ワイヤーは点のXYZまたは円弧の中心・軸・半径・角度。平面は原点・法線・平面内X。</dd><dt>実行</dt><dd>「変更を適用」。</dd></dl>
-        <h3>直線の長さ・角度を保持</h3>
-        <ol><li>直線を1本選びます。</li><li>「直線の寸法を保持」で長さまたは平面内角度の「固定」をオンにします。</li><li>値を入力します。水平は「水平 0°」、垂直は「垂直 90°」でも指定できます。</li><li>「変更を適用」。以後、端点を動かしても固定値が維持されます。</li></ol>
-        <h3>直接変形</h3>
-        <figure><a href="manual-assets/direct-transforms.png"><img src="manual-assets/direct-transforms.png" alt="複数ワイヤーを選択した編集画面と直接変形ツール"></a><figcaption>画像8a: 変形前に対象を中央で複数選択します。左下ガイドが、基準点・移動先など次に指定する点を1段階ずつ示します。</figcaption></figure>
-        <figure><a href="manual-assets/curve-trim.png"><img src="manual-assets/curve-trim.png" alt="交差境界間のベジェ曲線を赤く予告するトリム道具"></a><figcaption>画像8b: 「トリム」を選び、曲線の消したい部分へマウスを置いた状態です。赤い曲線区間だけがクリック後に消えます。</figcaption></figure>
-        <figure><a href="manual-assets/curve-extend.png"><img src="manual-assets/curve-extend.png" alt="円弧の端から境界までを緑で予告する延長道具"></a><figcaption>画像8c: 「延長」を選び、円弧の伸ばしたい端側へマウスを置いた状態です。緑の破線と丸が最初の到達先を示します。</figcaption></figure>
-        <table><thead><tr><th>機能</th><th>事前選択</th><th>中央画面で指定する順番</th></tr></thead><tbody>
-          <tr><td>移動</td><td>ワイヤー1本以上</td><td>移動元の基準点 → 移動先。</td></tr>
-          <tr><td>コピー</td><td>ワイヤー1本以上</td><td>複製元の基準点 → 複製先。</td></tr>
-          <tr><td>回転</td><td>ワイヤー1本以上</td><td>回転中心 → 角度0°の基準点 → 回転先。</td></tr>
-          <tr><td>ミラー複製</td><td>ワイヤー1本以上</td><td>ミラー軸の1点目 → 2点目。基準線を設定済みならその線を軸として明示できます。</td></tr>
-          <tr><td>分割</td><td>ワイヤー1本</td><td>そのワイヤー上の分割位置。</td></tr>
-          <tr><td>トリム <kbd>X</kbd></td><td>なし</td><td>消したい線・曲線部分へマウスを置く → 赤い区間を確認 → クリック。</td></tr>
-          <tr><td>延長 <kbd>E</kbd></td><td>なし</td><td>伸ばしたい線・曲線の端側へマウスを置く → 緑の到達先を確認 → クリック。</td></tr>
-          <tr><td>端点一致 <kbd>I</kbd></td><td>なし</td><td>固定側の端点 → 追従側の端点。</td></tr>
-          <tr><td>接線接続 <kbd>T</kbd></td><td>なし</td><td>固定側の端点 → 追従するベジェ・スプライン・円弧の端点。</td></tr>
-          <tr><td>曲率接続 <kbd>Shift</kbd>+<kbd>T</kbd></td><td>なし</td><td>固定側の端点 → 追従するベジェの端点。</td></tr>
+      <section id="commands" data-searchable>
+        <h2>14. 全コマンド一覧</h2>
+        <p>現在のコマンド台帳と1対1で対応します。灰色のコマンドは未実装ではなく、必要な選択が不足しています。内部IDは保存形式の機能型とは別の安定した操作IDです。</p>
+        <h3>共通・ファイル・表示</h3>
+        <table class="command-table"><thead><tr><th>操作</th><th>条件・結果</th></tr></thead><tbody>
+          <tr data-command="file.new"><td>新規 <code>file.new</code></td><td>空文書。未保存変更は確認。</td></tr>
+          <tr data-command="file.open"><td>開く <code>file.open</code></td><td>kcd2と対応範囲のV1 kcdを検証して開く。</td></tr>
+          <tr data-command="file.save"><td>保存 <code>file.save</code></td><td>現在の場所へ原子的に保存。</td></tr>
+          <tr data-command="file.save_as"><td>別名保存 <code>file.save_as</code></td><td>新しい場所へ保存。</td></tr>
+          <tr data-command="edit.undo"><td>元に戻す <code>edit.undo</code></td><td>直前の文書操作を戻す。</td></tr>
+          <tr data-command="edit.redo"><td>やり直す <code>edit.redo</code></td><td>Undoを再適用。</td></tr>
+          <tr data-command="edit.delete"><td>削除 <code>edit.delete</code></td><td>下流参照を検査して削除。</td></tr>
+          <tr data-command="view.hide_selected"><td>選択を隠す <code>view.hide_selected</code></td><td>表示だけ隠す。</td></tr>
+          <tr data-command="view.show_all"><td>すべて表示 <code>view.show_all</code></td><td>全要素を再表示。</td></tr>
+          <tr data-command="selection.activate"><td>選択 <code>selection.activate</code></td><td>選択道具へ戻る。</td></tr>
+          <tr data-command="measure.open"><td>測定 <code>measure.open</code></td><td>測定棚を開く。</td></tr>
+          <tr data-command="edit.numeric"><td>数値で編集 <code>edit.numeric</code></td><td>平面・同種曲線ワイヤーを編集。</td></tr>
+          <tr data-command="view.fit_all"><td>全体表示 <code>view.fit_all</code></td><td>可視形状へカメラを合わせる。</td></tr>
+          <tr data-command="view.align_selection"><td>選択に正対 <code>view.align_selection</code></td><td>選択平面へ正対。</td></tr>
+          <tr data-command="view.align_workplane"><td>正対 <code>view.align_workplane</code></td><td>作図面へ正対。</td></tr>
+          <tr data-command="view.display_settings"><td>表示設定 <code>view.display_settings</code></td><td>線幅・色・背景を変更。</td></tr>
+          <tr data-command="view.stage_all"><td>設計表示 <code>view.stage_all</code></td><td>グリッド・補助線も表示。</td></tr>
+          <tr data-command="view.stage_no_grid"><td>グリッドを消す <code>view.stage_no_grid</code></td><td>グリッドだけ非表示。</td></tr>
+          <tr data-command="view.stage_no_construction"><td>完成形 <code>view.stage_no_construction</code></td><td>補助線も非表示。</td></tr>
+          <tr data-command="view.stage_selection_only"><td>選択だけ <code>view.stage_selection_only</code></td><td>選択物だけ表示。</td></tr>
+          <tr data-command="entity.rename"><td>名前を変える <code>entity.rename</code></td><td>選択要素を改名。</td></tr>
+          <tr data-command="snap.toggle"><td>スナップ <code>snap.toggle</code></td><td>吸着の入切。</td></tr>
+          <tr data-command="group.set_active"><td>作業中グループ <code>group.set_active</code></td><td>新規元要素の格納先。</td></tr>
+          <tr data-command="workplane.set_active"><td>作業平面を使用 <code>workplane.set_active</code></td><td>選択平面を作図面へ。</td></tr>
         </tbody></table>
-        <h3>トリム・延長を続けて使う</h3>
-        <ol><li>編集タブで「トリム」または「延長」を選びます。事前選択は不要です。</li><li>中央画面で対象の線・曲線へマウスを置きます。トリムは消える区間が赤、延長は増える区間が緑になります。</li><li>予告が正しければ左クリックします。道具は終了しないため、別のワイヤーも続けて処理できます。</li><li>終了は右クリックまたは <kbd>Esc</kbd>。間違えた操作は1回ごとに <kbd>Ctrl</kbd>+<kbd>Z</kbd> で戻せます。</li></ol>
-        <p class="note">境界には、現在の3D画面に表示されている線・曲線を使い、画面上の見かけではなく実際の3D位置で交差を求めます。トリムで2交点の間を指すと中央区間だけが消えて2本へ分かれ、端側を指すと最寄り交点まで短くなります。延長は指した側の先で最初に交わる有限ワイヤーまで伸びます。</p>
-        <p class="note">直線、開いたポリライン、円弧、ベジェ、B-splineを元の種類と精度を保って処理します。円は2交点でトリムして円弧にできます。円そのものの延長と、閉じたポリラインの直接トリムはできません。投影線・板厚位置線は派生元の平面図を編集します。</p>
-        <h3>複数線をまとめて処理</h3>
-        <ul><li><strong>結合:</strong> 端点がつながる直線・ポリラインを順番に複数選択し「結合」。</li><li><strong>2線を交点まで:</strong> 交わる、または延長すれば交わる直線を2本選び「2線を交点まで」。両方を同じ交点へトリムまたは延長します。</li><li><strong>一致解除:</strong> 関係のあるワイヤーを選び「一致解除」。付随する滑らか接続も解除します。</li><li><strong>滑らか解除:</strong> ワイヤーを選び「滑らか解除」。端点一致は残し、G1/G2だけ解除します。</li></ul>
-        <h3>平行オフセット複製</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>同一作図面にあるワイヤーを1本以上。</dd><dt>設定</dt><dd>「線の左 / 線の右」と距離。左右は始点から終点を見た向きです。</dd><dt>確認</dt><dd>紫色のプレビュー。</dd><dt>実行</dt><dd>「複製」。</dd></dl>
-        <p class="warning">ベジェ・B-splineの厳密な等距離オフセットは未対応です。曲線は必要に応じて複製後に制御点を調整してください。</p>
-      </section>
-
-      <section id="measure">
-        <h2>9. 測定</h2>
-        <p>上部の「測定」または <kbd>M</kbd> で開始し、右の「情報」タブに結果を表示します。形状は変更しません。</p>
-        <figure><a href="manual-assets/selection-info.png"><img src="manual-assets/selection-info.png" alt="情報タブにある測定と選択情報"></a><figcaption>画像9: 「情報」タブ上部で測定方法を選び、結果を参照寸法として残せます。</figcaption></figure>
-        <h3>2点間（3D距離）</h3>
-        <dl class="recipe"><dt>モード</dt><dd>情報タブで「2点間（3D距離）」。</dd><dt>指定</dt><dd>中央画面で1点目 → 2点目。保存済み作図点、ワイヤー端点、曲線上の任意位置を直接クリックできます。</dd><dt>結果</dt><dd>3D距離、X/Y/Z差、XY/YZ/ZX投影距離、各軸との角度。</dd><dt>残す</dt><dd>候補値と寸法名を選び「寸法を残す」。</dd></dl>
-        <p class="note">保存済み作図点とワイヤー上の点は、その点が作図面外でも正確な3D座標を使います。何もない画面位置には奥行きが1つに決まらないため、現在の作図面上の点として指定します。</p>
-        <h3>3点角度（3D）</h3>
-        <figure><a href="manual-assets/measure-3d-angle.png"><img src="manual-assets/measure-3d-angle.png" alt="3D空間の三点角度を測定する画面"></a><figcaption>画像9a: 角の頂点、1方向目、2方向目を順に指定し、紫の2本の腕と3D角度を表示します。</figcaption></figure>
-        <ol><li>モードを「3点角度（3D）」にします。</li><li>角度の頂点を最初にクリックします。</li><li>1本目の向きを示す点、2本目の向きを示す点の順にクリックします。</li><li>3D角度、最小交角、2本の腕の長さを確認します。作図面へ投影せずXYZ座標から計算します。</li></ol>
-        <h3>要素（接線・法線）</h3>
-        <figure><a href="manual-assets/measure-curve-normal.png"><img src="manual-assets/measure-curve-normal.png" alt="曲線の接線と曲率法線角を測定する画面"></a><figcaption>画像9b: 曲線上の指定位置について、接線角だけでなく曲率法線とXYZ軸、または相手要素との角度を表示します。</figcaption></figure>
-        <table><thead><tr><th>選ぶもの</th><th>表示される主な値</th></tr></thead><tbody>
-          <tr><td>ワイヤー1本</td><td>全長、円・円弧なら半径、クリック位置の接線とX/Y/Z軸の角度。曲線なら曲率法線と各軸の角度。</td></tr>
-          <tr><td>ワイヤー2本</td><td>最短距離、クリック位置同士の接線角。両方が曲線なら法線同士、片方が直線なら曲線法線と相手接線の角度。</td></tr>
-          <tr><td>点 + ワイヤー</td><td>点からワイヤーまでの最短距離。</td></tr>
-          <tr><td>ワイヤー + 平面</td><td>線または接線と平面の角度。</td></tr>
-          <tr><td>点 + 平面</td><td>点から平面までの距離。</td></tr>
-          <tr><td>平面2枚</td><td>平面同士の角度、条件により平面間距離。</td></tr>
+        <h3>作図・ワイヤー編集</h3>
+        <table class="command-table"><thead><tr><th>操作</th><th>条件・結果</th></tr></thead><tbody>
+          <tr data-command="draw.point"><td>作図点 <code>draw.point</code></td><td>3D位置または平面UVへ点。</td></tr>
+          <tr data-command="draw.line"><td>直線 <code>draw.line</code></td><td>2点、座標、長さ・方向。</td></tr>
+          <tr data-command="draw.polyline"><td>ポリライン <code>draw.polyline</code></td><td>複数直線を1ワイヤーへ。</td></tr>
+          <tr data-command="draw.rectangle"><td>矩形 <code>draw.rectangle</code></td><td>対角または幅・高さ。</td></tr>
+          <tr data-command="draw.circle"><td>円 <code>draw.circle</code></td><td>中心・半径。</td></tr>
+          <tr data-command="draw.arc"><td>円弧 <code>draw.arc</code></td><td>3点、両端+半径、始点+接線方向・半径・中心角。</td></tr>
+          <tr data-command="draw.bezier"><td>ベジェ <code>draw.bezier</code></td><td>4制御点。</td></tr>
+          <tr data-command="draw.spline"><td>スプライン <code>draw.spline</code></td><td>4点以上のB-spline。</td></tr>
+          <tr data-command="wire.trim"><td>トリム <code>wire.trim</code></td><td>境界と残す側で切る。</td></tr>
+          <tr data-command="wire.extend"><td>延長 <code>wire.extend</code></td><td>境界または長さまで伸ばす。</td></tr>
+          <tr data-command="wire.split"><td>分割 <code>wire.split</code></td><td>線上位置・交点で分ける。</td></tr>
+          <tr data-command="wire.move"><td>移動 <code>wire.move</code></td><td>2点差で移動。</td></tr>
+          <tr data-command="wire.copy"><td>コピー <code>wire.copy</code></td><td>元を残して複製。</td></tr>
+          <tr data-command="wire.mirror"><td>ミラー <code>wire.mirror</code></td><td>指定線を鏡に複製。</td></tr>
+          <tr data-command="wire.rotate"><td>回転 <code>wire.rotate</code></td><td>中心と2方向で回転。</td></tr>
+          <tr data-command="wire.join"><td>結合 <code>wire.join</code></td><td>2鎖を検査して結合。</td></tr>
+          <tr data-command="wire.coincident"><td>端点一致 <code>wire.coincident</code></td><td>2鎖の端点を一致。</td></tr>
+          <tr data-command="wire.tangent"><td>接線接続 <code>wire.tangent</code></td><td>接線方向まで連続化。</td></tr>
+          <tr data-command="wire.curvature"><td>曲率接続 <code>wire.curvature</code></td><td>曲率まで連続化。</td></tr>
+          <tr data-command="wire.chamfer"><td>C面取り <code>wire.chamfer</code></td><td>2辺を直線で接続。</td></tr>
+          <tr data-command="wire.fillet"><td>R丸め <code>wire.fillet</code></td><td>2辺を指定半径で接続。</td></tr>
+          <tr data-command="wire.offset"><td>オフセット <code>wire.offset</code></td><td>平面内に写し。</td></tr>
+          <tr data-command="wire.meet_lines"><td>2線を交点まで <code>wire.meet_lines</code></td><td>2直線を交点へ合わせる。</td></tr>
+          <tr data-command="wire.intersection_points"><td>交点に点 <code>wire.intersection_points</code></td><td>実交点へ作図点。</td></tr>
+          <tr data-command="wire.corner_chamfer"><td>角を落とす <code>wire.corner_chamfer</code></td><td>ポリラインの角をC加工。</td></tr>
+          <tr data-command="wire.corner_fillet"><td>角を丸める <code>wire.corner_fillet</code></td><td>ポリラインの角をR加工。</td></tr>
+          <tr data-command="wire.set_datum"><td>基準線に設定 <code>wire.set_datum</code></td><td>一点鎖線表示へ。</td></tr>
+          <tr data-command="wire.clear_datum"><td>基準解除 <code>wire.clear_datum</code></td><td>通常線へ戻す。</td></tr>
+          <tr data-command="workplane.create"><td>作業平面を作る <code>workplane.create</code></td><td>12通りから平面。</td></tr>
+          <tr data-command="grid.edit"><td>グリッド <code>grid.edit</code></td><td>間隔・副点・原点。</td></tr>
+          <tr data-command="grid.move_origin"><td>グリッド原点 <code>grid.move_origin</code></td><td>画面の点へ原点を合わせる。</td></tr>
         </tbody></table>
-        <p>円・円弧の曲率法線は中心を向く半径方向、ベジェ・B-splineはその位置の曲がる内側です。直線には一意な曲率法線がないため「なし」と表示します。結果が複数あるときは保存する値をプルダウンで選び、名前を付けて「寸法を残す」。左一覧の「参照寸法」と情報タブの一覧から表示切替・削除ができます。「測定を消去」は一時測定だけを消します。</p>
-      </section>
-
-      <section id="machining">
-        <h2>10. 交差線のC面取り・R丸め</h2>
-        <h3>面取りツール（推奨: ペアを次々クリック）</h3>
-        <ol><li>ツール列の「C面取り」または「R面取り」ボタンを押します。</li><li>中央画面で、面取りしたい直線のペアを1本ずつ次々クリックします（1本目は太くハイライト、ペアが完成するとプレビューの破線が出ます）。複数のペアを続けて選べます。</li><li>「加工」の切戻し距離（Cの場合）または半径（Rの場合）を入力すると、全ペアのプレビューが追従します。</li><li><kbd>Enter</kbd> または「作成」ボタンで全ペアへ一括適用します。適用後も道具は続くので、続けて次のペアを選べます。</li></ol>
-        <p class="note">2本が離れていても、延長線上の交点まで自動で延長してから面取りします（AutoCADのFILLETと同じ流儀）。残す側はクリックした位置で決まります: 線上のクリックした側が残ります。ペアを選び直すときは<kbd>Esc</kbd>（1本目の取消は右クリック）。</p>
-        <figure><a href="manual-assets/machining.png"><img src="manual-assets/machining.png" alt="2本の線を3D画面から選ぶ加工タブ"></a><figcaption>画像10: 数値だけで1組ずつ作る従来方式も「加工」欄に残っています。</figcaption></figure>
-        <h3>従来方式（選択済みの2直線へ1組だけ）</h3>
-        <ol><li>「加工」タブで加工種類を「C面取り」または「R丸め」にします。</li><li>直線A/B横の「3D選択」→ 中央でそれぞれをクリック。</li><li>各線の「残す側」を自動・始点側・終点側から選びます。</li><li>切戻し距離（C）または半径（R）を入力し、「作成」。</li></ol>
-      </section>
-
-      <section id="surface">
-        <h2>11. ワイヤーから面を作る</h2>
-        <p>面部品は、まず厚み未設定の形状として作ります。断面を並べて外形を作り、同じ面部品に材料と厚みを設定して製作・展開へ進みます。</p>
-        <p class="note"><strong>迷ったら「おまかせで面を作る（選択順・向き不問）」を押してください。</strong>選んだ線に前提を置かず、端点の近さで自動連結・自動反転し、1mm程度までの小さな隙間は自動で閉じます。全体が閉じた輪郭なら平面（平らでなければ<strong>パッチ面＝穴埋め面</strong>）、2本ならルールド、3本以上なら位置で自動整列してロフトになります。どうしても作れないときは「端が閉じていません（距離 x.x mm）」のように理由を表示します。おまかせで作った面は、元の線を編集すると同じ手順で作り直されて追従します。<strong>できた面は選んだ線を必ず通り、断面の向き・巻き・シーム（円の始点）は自動で揃えられるためねじれません</strong>（わずかに平面から外れる輪郭も平面へ丸めず、線を正確に通るパッチ面になります）。</p>
-        <p class="note">作り方は通常「自動（選択から判定・推奨）」のままで構いません。選択内容から、閉じる輪郭→平面、断面2→曲面、断面3以上→ロフト、他の線の端点が2本以上載る線が2本あればそれを外形ガイドにしたガイド付き面、と判定します。判定結果は選択のたびに面部品タブのラベルへ表示され、作られる面が半透明のプレビューで中央画面に出ます。プレビューが出ない選択は、その理由もラベルに表示されます。判定を上書きしたいときだけ作り方を手動で選んでください。</p>
-        <figure><a href="manual-assets/surface-sections.png"><img src="manual-assets/surface-sections.png" alt="車体前面の5断面と断面割当表"></a><figcaption>画像11: 車体前後方向に並ぶ5断面を、面タブの表へ断面1～5として登録した状態。各行が1つの断面です。</figcaption></figure>
-        <figure><a href="manual-assets/composite-planar-surface.png"><img src="manual-assets/composite-planar-surface.png" alt="複数線分を一つの輪郭に割り当てた自由輪郭平面"></a><figcaption>画像11a: 3本の直線と1本の円弧を表の「輪郭1」へまとめ、元線を残したまま自由輪郭の平面を作成した状態。</figcaption></figure>
-        <table><thead><tr><th>作り方</th><th>必要な選択</th><th>作られる面</th></tr></thead><tbody>
-          <tr><td>閉じた輪郭から平面</td><td>閉じたワイヤー1本、または端点同士で閉じる複数の直線・曲線</td><td>自由輪郭の内側を埋める平面。</td></tr>
-          <tr><td>2断面から曲面</td><td>断面2つ。各断面は1本または端点接続した複数線</td><td>2断面を結ぶ曲面。</td></tr>
-          <tr><td>3断面以上からロフト</td><td>前から後ろなど順番に3断面以上。各断面は複数線に対応</td><td>表の順で全断面を通る曲面。</td></tr>
-          <tr><td>外形ガイド2本＋断面1本以上</td><td>外形2つと断面1つ以上。外形・断面とも複数線に対応</td><td>両外形と全断面を通るガイド付き曲面。直交平面上の外形を持つ前面上部に使います。</td></tr>
-          <tr><td>押し出し面（ツール「押出・回転」）</td><td>ワイヤー1本 + 方向と距離</td><td>ワイヤーを平行移動した写しとの間に張る面。反対側の縁ワイヤーも作られます。</td></tr>
-          <tr><td>回転面（ツール「押出・回転」）</td><td>断面ワイヤー1本 + X/Y/Z軸と角度。軸を通す作図点は任意</td><td>断面を軸まわりに回した回転体（ろくろ形状）。断面数で滑らかさを調整。</td></tr>
-          <tr><td>オフセット面（ツール「押出・回転」）</td><td>面1つ + ずらす量</td><td>法線方向へずらした近似面（断面ロフト）。内張り・裏打ちの土台に。</td></tr>
+        <h3>形状ガイド・部品</h3>
+        <table class="command-table"><thead><tr><th>操作</th><th>条件・結果</th></tr></thead><tbody>
+          <tr data-command="guide.create"><td>形状ガイド <code>guide.create</code></td><td>選択断面から自動方式で面。</td></tr>
+          <tr data-command="guide.revolve"><td>回転体 <code>guide.revolve</code></td><td>断面を直線軸まわりに回す。</td></tr>
+          <tr data-command="guide.set_method"><td>面の作り方 <code>guide.set_method</code></td><td>役割表の方式。</td></tr>
+          <tr data-command="guide.add_row"><td>選択を表へ <code>guide.add_row</code></td><td>新しい役割行。</td></tr>
+          <tr data-command="guide.append_row"><td>既存行へ追加 <code>guide.append_row</code></td><td>複数線分を同じ鎖へ。</td></tr>
+          <tr data-command="guide.row_up"><td>行を上へ <code>guide.row_up</code></td><td>役割内の順序を上へ。</td></tr>
+          <tr data-command="guide.row_down"><td>行を下へ <code>guide.row_down</code></td><td>役割内の順序を下へ。</td></tr>
+          <tr data-command="guide.row_remove"><td>行を削除 <code>guide.row_remove</code></td><td>表から除き元線は残す。</td></tr>
+          <tr data-command="guide.row_reverse"><td>向きを反転 <code>guide.row_reverse</code></td><td>線順と方向を反転。</td></tr>
+          <tr data-command="guide.build"><td>表から面 <code>guide.build</code></td><td>役割・接続を検証して面。</td></tr>
+          <tr data-command="guide.clear"><td>表を空に <code>guide.clear</code></td><td>方式を残して全行削除。</td></tr>
+          <tr data-command="wire.project"><td>面へ投影 <code>wire.project</code></td><td>平面・面へ投影。</td></tr>
+          <tr data-command="wire.wrap_project"><td>回り込み投影 <code>wire.wrap_project</code></td><td>複数面へ区間分割投影。</td></tr>
+          <tr data-command="wire.project_surface"><td>曲面へ投影 <code>wire.project_surface</code></td><td>作図面方向に1曲面へ。</td></tr>
+          <tr data-command="part.extrude"><td>押し出し <code>part.extrude</code></td><td>ワイヤー・部品・両方。</td></tr>
+          <tr data-command="part.thicken"><td>面に厚み <code>part.thicken</code></td><td>形状ガイドを部品化。</td></tr>
+          <tr data-command="part.surface_jig"><td>治具 <code>part.surface_jig</code></td><td>当たり面と当て板。</td></tr>
+          <tr data-command="part.thickness_placement"><td>厚み位置 <code>part.thickness_placement</code></td><td>外・中央・内。</td></tr>
+          <tr data-command="part.thicken_to_plane"><td>平面まで立体 <code>part.thicken_to_plane</code></td><td>面と平面間を立体化。</td></tr>
+          <tr data-command="part.from_wire_cage"><td>かごから部品 <code>part.from_wire_cage</code></td><td>閉じた3Dかごを部品化。</td></tr>
+          <tr data-command="part.boolean_add"><td>足す <code>part.boolean_add</code></td><td>2部品の和。</td></tr>
+          <tr data-command="part.boolean_cut"><td>引く <code>part.boolean_cut</code></td><td>2部品の差。</td></tr>
+          <tr data-command="derived.freeze"><td>現在状態を固定 <code>derived.freeze</code></td><td>派生物を独立実体へ。</td></tr>
         </tbody></table>
-        <dl class="recipe"><dt>作り方</dt><dd>通常は「自動」のまま。必要な場合のみ「閉じた輪郭」「2断面」「ロフト」「外形ガイド付き」から選びます。</dd><dt>連続区間を選ぶ</dt><dd>1つの輪郭・外形・断面に含める線を1本だけ3Dで選び、「接続区間を一括選択」を押します。直線、円弧、ベジェ、B-splineが混在していても端点接続をたどります。分岐点では止まるため、交差する別の外形や断面は混ざりません。</dd><dt>1行を登録</dt><dd>「輪郭を追加」「外形を追加」「断面を追加」の該当ボタンを押します。表の1行が1つの論理的な線になります。登録後は3D選択が自動解除されます。</dd><dt>線分を足す</dt><dd>未完成の行をクリックすると登録済み線が再選択されます。<kbd>Ctrl</kbd>+クリックで次の線を加え、「選択行へ線を追加」。閉輪郭は最後の線を足すまで開いたまま登録できます。</dd><dt>状態を確認</dt><dd>表の「状態」が、平面輪郭なら「閉ループ」、外形や断面なら「開経路」になっていることを確認します。「接続エラー」は隙間、重複、枝分かれ、離れた区間の混在を示します。</dd><dt>次を登録</dt><dd>次の外形・断面を同じ手順で新しい行へ追加します。上下矢印で断面順を直せます。</dd><dt>構成線</dt><dd>「構成線をワイヤにする」をチェックすると、各断面位置の面上の線（<code>面名_構成線N</code>）を独立ワイヤとしても作ります。複数線をつないだ断面も1本の連続線になり、工作の基準線・カット線に使えます。</dd><dt>実行</dt><dd>面名を入力し、「表の輪郭・断面から面を作成」。</dd><dt>結果</dt><dd>左一覧の「面部品」に `[厚み未設定]` として追加。元線は独立したまま残り、編集すると形状も再計算されます。</dd></dl>
-        <p class="note">各輪郭・外形・断面が最初から1本のワイヤーなら、従来どおり3Dで必要本数を順に選んで直接作成する簡易操作も使えます。複数線を含む場合は、選択順を記憶する必要がない表を使用してください。</p>
-        <p class="note">ガイド付きでは各断面の両端を外形ガイドへ合わせます。断面はガイドの端だけでなく途中へ接続できます。また、2本の外形ガイド同士が前後両端でつながり、全体として閉じた外周になる構成も使用できます。ただし表では2本の外形を別々の行へ登録してください。「接続区間を一括選択」は外形同士と断面が集まる分岐点で止まるため、片側の外形だけを登録できます。大きなスナップ丸が出ている位置で端点を置くと確実です。作図時の微小な端点差は0.02 mmまで面生成時に接続として扱いますが、元線の座標は変更しません。断面の向きと並び、2本目ガイドの向きは自動でそろいます。ガイドから0.05 mm以上離れた断面は、誤った面を作らず接続不足として拒否します。</p>
-        <h3>別々に描いた線・曲線から自由形状の平面を作る</h3>
-        <ol><li>直線、円弧、ベジェ、スプラインを組み合わせ、各端点が一周して元へ戻る輪郭を描きます。</li><li>「選択」で輪郭を構成する線をすべて <kbd>Ctrl</kbd>+クリックします。選ぶ順番と各線の向きは問いません。</li><li>「面」タブで作り方を「閉じた輪郭から平面」にし、「選択ワイヤーから面を作成」を押します。</li><li>元の線は残ります。後で制御点を動かすと、端点接続と同一平面を保てる範囲で面も追従します。</li></ol>
-        <p class="note">面ができない場合は表の赤い「接続エラー」の行を選びます。端点間の隙間が0.02 mmを超えていないか、離れた線が同じ行にないか、同じ線を重ねていないか、全線が同じ作図面上にあるかを確認します。曲線は面生成時だけ0.01 mm以下の輪郭誤差で内部変換され、元の曲線は失われません。</p>
-        <p class="warning">面がねじれる場合は表の上下矢印で断面順を直してください。行内の線は端点で一続きになる必要があります。枝分かれ、同じ線の重複、自己交差した閉輪郭は誤った面を作らず、理由を表示して拒否します。補助線は面の断面に使われません。</p>
-      </section>
-
-      <section id="plate">
-        <h2>12. 面部品に材料と厚みを設定する</h2>
-        <p class="lead">形状と板材を別の物として選び直す必要はありません。モデル一覧の「面部品」を選び、面部品タブ上部で材料、厚み、厚み方向を設定します。一定厚みだけでなく始端から終端へ連続的に厚みを変えられます。</p>
-        <figure><a href="manual-assets/plate-create.png"><img src="manual-assets/plate-create.png" alt="選択中の面部品へ材料と厚みを設定する画面"></a><figcaption>画像12a: 選択した面部品の状態と製作条件が常に上部へ出ます。形状だけなら条件を新設し、設定済みなら同じ場所で更新します。</figcaption></figure>
-        <figure><a href="manual-assets/plate-direction.png"><img src="manual-assets/plate-direction.png" alt="曲面板の選択と板厚方向設定"></a><figcaption>画像12: 板を選ぶと中央に法線矢印が出ます。+側・中央・-側のどこへ厚みを置くか決めます。</figcaption></figure>
-        <h3>形状だけの面部品を製作用にする</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>モデル一覧の `[厚み未設定]` の面部品を1つ。</dd><dt>設定</dt><dd>面部品タブ上部で材料、厚み、厚みの向きを選びます。</dd><dt>可変厚み</dt><dd>必要なら「終端まで厚みを変える」をオンにし、終端の厚みを入力。</dd><dt>実行</dt><dd>「この面に製作条件を設定」。</dd><dt>結果</dt><dd>同じ「面部品」一覧へ `[プラ板 0.50 mm]` のように表示され、閉じた3D形状、展開、出力に使えます。</dd><dt>作れない場合</dt><dd>面内部の潰れ、法線を決められない領域、厚みによる表裏の折り返しを作成前に検査し、理由と修正方法を表示します。基準形状は削除しません。</dd></dl>
-        <h3>任意ワイヤーから面部品を一度に作る</h3>
-        <table><thead><tr><th>選択</th><th>結果</th></tr></thead><tbody>
-          <tr><td>閉じたワイヤー1本</td><td>輪郭内の平板。</td></tr>
-          <tr><td>断面ワイヤー2本</td><td>2断面を結ぶ曲面板。</td></tr>
-          <tr><td>断面ワイヤー3本以上</td><td>選択順に全断面を通るロフト板。</td></tr>
-          <tr><td>外形ガイド2本＋断面1本以上</td><td>面の作り方を同名モードにしてから直接作成すると、ガイド付き面と板を一括生成。</td></tr>
+        <h3>製作・出力</h3>
+        <table class="command-table"><thead><tr><th>操作</th><th>条件・結果</th></tr></thead><tbody>
+          <tr data-command="fabrication.create"><td>製作モデル <code>fabrication.create</code></td><td>工作用の別近似モデル。</td></tr>
+          <tr data-command="fabrication.assign_role"><td>境界の役割 <code>fabrication.assign_role</code></td><td>閉輪郭は開口、開線は折り線。</td></tr>
+          <tr data-command="fabrication.assign_relief_cut"><td>切れ目 <code>fabrication.assign_relief_cut</code></td><td>平面部材上の開線をRELIEFへ。</td></tr>
+          <tr data-command="fabrication.preview_update"><td>プレビュー更新 <code>fabrication.preview_update</code></td><td>元形状の変更を反映。</td></tr>
+          <tr data-command="fabrication.create_pattern"><td>型紙 <code>fabrication.create_pattern</code></td><td>製作部材を平面配置。</td></tr>
+          <tr data-command="fabrication.set_assembly"><td>組立状態 <code>fabrication.set_assembly</code></td><td>全体・指定部材の組立率。</td></tr>
+          <tr data-command="fabrication.set_method"><td>近似方式 <code>fabrication.set_method</code></td><td>帯近似と面分類を切替。</td></tr>
+          <tr data-command="fabrication.freeze_output"><td>固定出力 <code>fabrication.freeze_output</code></td><td>ワイヤー・部品・両方。</td></tr>
+          <tr data-command="fabrication.set_connection_scope"><td>接続スコープ <code>fabrication.set_connection_scope</code></td><td>接続線を近似形へ追従。</td></tr>
+          <tr data-command="fabrication.freeze_state"><td>状態を固定 <code>fabrication.freeze_state</code></td><td>任意組立率を独立実体へ。</td></tr>
+          <tr data-command="export.validate"><td>出力検査 <code>export.validate</code></td><td>選択部品を事前検査。</td></tr>
+          <tr data-command="export.stl"><td>STL <code>export.stl</code></td><td>検査済み部品をSTLへ。</td></tr>
+          <tr data-command="export.step"><td>STEP <code>export.step</code></td><td>検査済み部品をSTEPへ。</td></tr>
+          <tr data-command="export.svg"><td>SVG <code>export.svg</code></td><td>型紙・ワイヤーをSVGへ。</td></tr>
+          <tr data-command="export.dxf"><td>DXF <code>export.dxf</code></td><td>型紙・ワイヤーをDXFへ。</td></tr>
         </tbody></table>
-        <ol><li>断面を前から後ろへ <kbd>Ctrl</kbd>+クリックします。</li><li>上部で厚み、厚み方向、材料を指定します。</li><li>「選択線から面部品を一度に作る」。内部の基準形状も保持され、後から製作条件を変更できます。</li></ol>
-        <h3>板厚方向</h3>
-        <table><thead><tr><th>設定</th><th>元の面に対する板の位置</th></tr></thead><tbody>
-          <tr><td>+側へ（法線矢印側）</td><td>元の面を内側境界として、矢印側へ全板厚。</td></tr>
-          <tr><td>中央（両側へ半分）</td><td>元の面を板厚中央として両側へ半分ずつ。</td></tr>
-          <tr><td>-側へ（矢印と反対）</td><td>元の面を外側境界として、矢印と反対へ全板厚。</td></tr>
-        </tbody></table>
-        <p>設定済みの面部品を選ぶと現在値が上部へ表示されます。値を変えて「製作条件を更新」。新しい部品を作り直す必要はありません。</p>
-        <h3>投影輪郭を厚み位置へ複製する（できあがった板材向け）</h3>
-        <ol><li>製作条件のある面部品1つと、その基準形状へ投影された輪郭を1本以上選びます。</li><li>面部品タブの「投影輪郭を厚み位置へ複製」で「+側表面」「板厚の中央」「-側表面」を選びます。</li><li>「選択輪郭をこの位置へ複製」。厚みを変えると派生ワイヤーも追従します。</li></ol>
-        <h3>薄板を重ねて積層する（段差の表現・補強）</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>土台になる板材を1枚。</dd><dt>開く</dt><dd>ツール「積層」（板材を重ねて積層）。</dd><dt>設定</dt><dd>1層の板厚と追加する層数。目標高さを入れると必要層数を提案します。</dd><dt>実行</dt><dd>「選択中の板材の上に積層を追加」。層は「土台_L2」「_L3」…の名前で、下の板の外側へ自動でずれて重なります。</dd><dt>追従</dt><dd>下の板の厚みを変えると上の層の位置も追従します。型紙名にも積層記号（[積層L2 → 土台 の上]）が付きます。</dd></dl>
-        <p class="note">全ての層を自分で別の面に描いた場合は、2枚の板を選んで「選択2枚を積層関係に」（先に選んだ板が下）で関係だけを記録できます。</p>
-      </section>
-
-      <section id="projection">
-        <h2>13. 平面図を曲面へ投影し、窓・ライト穴を開ける</h2>
-        <p>窓やライトなどの開口輪郭は正面図などの平らな紙で正確に描き、それを完成形の曲面へ投影してから板の開口にします。</p>
-        <figure><a href="manual-assets/openings.png"><img src="manual-assets/openings.png" alt="車体曲面へ投影された前面窓とライト輪郭"></a><figcaption>画像13: 白点と橙色で選択された3本が曲面上の投影輪郭。板1枚と一緒に選び、開口へ登録します。</figcaption></figure>
-        <h3>1. 平面図を用意する</h3>
-        <ol><li>窓・ライトを見たい向きの作業平面を作るか選びます。</li><li>「作図」タブでその平面へ正対します。</li><li>矩形、円、ベジェ等で<strong>閉じた輪郭</strong>を描きます。1つの穴につき閉じた1輪郭です。</li></ol>
-        <h3>2. 面へ投影する</h3>
-        <figure><a href="manual-assets/surface-projection.png"><img src="manual-assets/surface-projection.png" alt="平面図ワイヤーを選択して曲面へ投影する画面"></a><figcaption>画像13a: 平面図の3輪郭を中央で直接選び、投影先の面と元の平面を確認して一括投影します。</figcaption></figure>
-        <dl class="recipe"><dt>選ぶ</dt><dd>投影する平面図ワイヤーを1本以上。面そのものは選択不要です。</dd><dt>開く</dt><dd>「面」タブの「平面図を面へ投影」。</dd><dt>設定</dt><dd>「投影先の面」と、輪郭を描いた「平面図」。</dd><dt>実行</dt><dd>「選択ワイヤーを面へ投影」。</dd><dt>結果</dt><dd>曲面に沿う新しい投影ワイヤーが左一覧へ追加されます。</dd></dl>
-        <h3>2-2. 複数の面へ回り込み投影（パノラミックウインドウ）</h3>
-        <p>115系・キハ65のように角をまたいで正面と側面へ回り込む窓は、1つの下書きを複数の面へ分割投影します。</p>
-        <ol><li>下書きの閉じた輪郭と、投影先の面2枚以上を3D画面で一緒に選択します。</li><li>「平面図」で下書きを描いた作業平面を選びます。</li><li>必要なら「閉じた輪郭は面ごとの開口として登録」をチェックしたまま、「複数の面へ回り込み投影」。</li></ol>
-        <p class="note">下書きは「各面に実際に載る区間」ごとに分割され、隣の面との境目で閉じ直した面ごとの輪郭が各面へ投影されます。実物と同じく、角で2枚の板それぞれに窓が開きます。分割された下書き片（<code>元名_面名分</code>、非表示）が投影の派生元として残り、面や下書き片を編集すると投影も追従します。どの面にも載らない区間は飛ばし、その旨を報告します。</p>
-        <h3>3. 面部品へ開口を登録する</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>穴を開ける面部品1つ + 閉じた投影輪郭1本以上。<kbd>Ctrl</kbd>+クリックで同時選択。厚み未設定でも設定済みでも同じです。</dd><dt>確認</dt><dd>「面部品に開口」の表示が「面部品1個 / 閉じた投影輪郭N本」になる。</dd><dt>実行</dt><dd>「開口に追加」。</dd><dt>結果</dt><dd>形状だけの段階なら後の製作条件・部材近似へ引き継がれ、設定済みなら3D表示とSTL/STEPから輪郭内が切り抜かれます。</dd><dt>解除</dt><dd>同じ面部品と輪郭を選び「開口から外す」。</dd></dl>
-        <p class="warning">輪郭全体が1枚の板の範囲内に必要です。窓をまたぐ位置で板が分割されている場合、先に継ぎ目を窓の外へ移すか、各板用の閉じた輪郭に分けてください。</p>
-        <h3>4. 展開図へ手動の切れ目を入れる</h3>
-        <figure><a href="manual-assets/relief-cuts.png"><img src="manual-assets/relief-cuts.png" alt="板材と投影線を選択して展開切れ目へ登録する画面"></a><figcaption>画像13b: 板材1枚と面上の投影線を選ぶと、左下ガイドと面タブの選択数が一致します。「切れ目に追加」で展開データへ登録します。</figcaption></figure>
-        <ol><li>開口と同じ手順で、切れ目の線を平面図に描いて板の元面へ投影します。線は閉じる必要がありません。</li><li>板材1枚と投影後の切れ目ワイヤーを <kbd>Ctrl</kbd>+クリックします。</li><li>「面」タブの「展開時の切れ目」で「切れ目に追加」。解除は同じ2要素を選び「切れ目から外す」です。</li></ol>
-        <p class="note">切れ目は元の3D板を勝手に分割しません。展開SVG/DXF/PDFの切断線と、後述の展開3D板の細いスロットへ反映されます。投影元の線を編集すると切れ目も追従します。</p>
-        <h3>5. 任意の線で展開片を分ける</h3>
-        <ol><li>分けたい位置を平面図へ描き、板の元面へ投影します。直線だけでなく、折れ線や曲線も使えます。</li><li>板材1枚と投影後のワイヤーを <kbd>Ctrl</kbd>+クリックします。</li><li>「面」タブの「展開片の分割線」で「分割線にする」を押します。解除するときは同じ2要素を選んで「分割線を解除」です。</li><li>「出力」タブで展開片数が変わったことを確認します。</li></ol>
-        <p class="note">分割線は途中切れ目と異なり、展開計算の接続を実際に切り、別々の閉じた外周を持つ紙片にします。投影元を編集すれば分割位置も追従します。元の組立3D板は分解されません。</p>
-      </section>
-
-      <section id="lightcase">
-        <h2>14. 本体から飛び出すライトケースを作る</h2>
-        <p class="lead">本体から突き出すライトケースは、最前面の閉じた輪郭を指定方向へ本体面まで伸ばし、根元輪郭とケース側面を一度に作ります。正面向きだけでなく斜めのケースにも使えます。</p>
-        <figure><a href="manual-assets/protruding-light-case.png"><img src="manual-assets/protruding-light-case.png" alt="斜めに飛び出すライトケースと専用操作欄"></a><figcaption>画像14: 橙色のライト最前面輪郭と車体前面板を選択。青緑の基準線と平行に根元まで伸びるケースです。</figcaption></figure>
-        <h3>最前面輪郭と接続先を選ぶ</h3>
-        <ol><li>ライトレンズ最前面の位置・角度に作業平面を置き、円などの<strong>閉じた通常ワイヤー</strong>を描きます。</li><li><kbd>V</kbd>で選択へ戻り、最前面輪郭をクリックします。</li><li><kbd>Ctrl</kbd>を押しながら、根元を置く本体の「面」または「板材」をクリックします。</li><li>「面」タブの「飛び出すライトケース」に、最前面名と接続先名が表示されたことを確認します。</li></ol>
-        <h3>伸ばす方向を決める</h3>
-        <table><thead><tr><th>設定</th><th>使い方</th></tr></thead><tbody>
-          <tr><td>最前面輪郭の法線（自動）</td><td>ライト面に直角なケース。通常の正面向きライトはこれだけで作れます。</td></tr>
-          <tr><td>設定した基準線と平行</td><td>斜めケース。先に軸を表す直線を1本選び、「選択直線を基準に設定」を押します。その後、最前面輪郭と接続先を選び直します。</td></tr>
-          <tr><td>任意方向 XYZ</td><td>既知の方向を数値指定します。例 <code>X=1, Y=0.2, Z=0.1</code> はX方向へ進みながらY/Zにも傾く軸です。</td></tr>
-        </tbody></table>
-        <dl class="recipe"><dt>名前</dt><dd>根元ワイヤー名とケース側面名を入力。</dd><dt>実行</dt><dd>「根元ワイヤーとケース側面を作る」。</dd><dt>結果1</dt><dd>接続先の形状に沿う閉じた根元ワイヤーが追加されます。</dd><dt>結果2</dt><dd>最前面と根元を結ぶケース側面が「面部品」に `[厚み未設定]` で追加されます。</dd><dt>厚み</dt><dd>できたケース側面を選び、面部品タブ上部で材料と厚みを設定します。</dd></dl>
-        <p class="note">最前面輪郭または本体の元断面を後から編集すると、根元ワイヤーとケース側面も追従して再計算されます。接続先に板材を選んだ場合は、その板の元になった設計面へ接続します。</p>
-        <p class="warning">「投影線が面と交差しない」と表示された場合は、方向が接続先の面と平行になっていないか、投影先の範囲から外れていないかを確認してください。同梱の <code>panorama-light-case.kcd</code> で完成例を確認できます。</p>
-      </section>
-
-      <section id="jig">
-        <h2>15. 曲面から成形治具を作る</h2>
-        <p>プラ板を曲面へ押し当てて成形するため、設計面から外型または内型の3D治具を作ります。</p>
-        <figure><a href="manual-assets/forming-jig.png"><img src="manual-assets/forming-jig.png" alt="曲面成形治具の設定欄と選択した車体面"></a><figcaption>画像15: 元になる曲面を選択した状態です。型の側、成形の隙間、厚み、必要最小肉厚を同じ欄で指定します。</figcaption></figure>
-        <dl class="recipe"><dt>元の面</dt><dd>治具へ写す曲面。面を選択すると候補が同期します。</dd><dt>型の側</dt><dd>板を外側から押さえる形なら「外側の型」、内側から支える形なら「内側の型」。</dd><dt>成形の隙間</dt><dd>材料厚や取り外しを考慮したクリアランス。例 <code>0.15 mm</code>。</dd><dt>治具の厚み</dt><dd>3Dプリントする型本体の厚み。</dd><dt>必要最小肉厚</dt><dd>薄すぎる箇所を避ける基準。</dd><dt>実行</dt><dd>「この面から成形治具を作る」。</dd></dl>
-        <p>既存治具を選んで値を変更し「選択中の治具へ設定」で更新できます。治具は板材と同じく任意選択でSTL/STEPへ出力できます。</p>
-      </section>
-
-      <section id="split">
-        <h2>16. 板材を必要な位置で2分割する</h2>
-        <p>CADが勝手に多数の小片へ分けることはありません。選んだ板を、確認した位置で1回につき2部品へ分けます。</p>
-        <figure><a href="manual-assets/plate-split.png"><img src="manual-assets/plate-split.png" alt="板材分割の方向と位置指定"></a><figcaption>画像16: 板を選び、方向と位置を指定します。赤い破線が実行前の分割位置です。</figcaption></figure>
-        <dl class="recipe"><dt>選ぶ</dt><dd>分割する板材を1枚。</dd><dt>方向</dt><dd>「断面に沿う方向（周方向）」または「長手方向（通し方向）」。</dd><dt>位置</dt><dd>スライダーまたは1～99%の数値。赤い破線を中央画面で確認。</dd><dt>実行</dt><dd>「選択中の板材を2分割」。</dd><dt>結果</dt><dd>元板が2枚の板へ置き換わり、可変板厚なら分割位置の厚みを両方が引き継ぎます。</dd></dl>
-        <p class="note">分割線が窓やライト穴を横切る場合、各部品側の半円・窓形の欠き取りへ自動変換されます。出力図では隣り合う部品を部品番号順に合わせると、元の開口輪郭へ戻ります。</p>
-      </section>
-
-      <section id="partmodel">
-        <h2>16-2. 部材近似モデル（近似モデルモード）</h2>
-        <p class="lead">完成品の面部品を「1部材=基本1軸曲げ」の帯へ近似し直し、部材ごとの型紙・曲げ確認・板材化を行います。プラ板や紙で作れる形に落とすための中間モデルです。</p>
-        <h3>作成（近似ユニット・推奨）</h3>
-        <ol><li>近似したい部品の周辺の面部品・ワイヤーを3D画面でまとめて選び（部材グループごとでも可）、「選択をユニットの表へ取り込む」。</li><li>表の各行の役割を選びます: <strong>近似する</strong>=部材近似モデルになる（面部品のみ）／<strong>形状維持（接続）</strong>=形は保ったまま、最寄りの近似の実形状へ接続できるよう変形した「〜_接続」を自動生成／<strong>対象外</strong>。209系の前面のように、水色の近似部分と、形を変えずに接続だけ合わせるオレンジの部分を1つの表で指定できます。</li><li><strong>「部品」列で近似部品番号を割り当てます</strong>: 例えば部品1=正面の曲面、部品2=右の角、部品3=上の帯のように面ごとに番号を振れます（「自動」なら取り込み順に空き番号）。</li><li>「ユニットを近似」。近似する面部品ごとに<strong>「ユニット名_部品N」</strong>の近似モデルが番号順に作られ、全体がユニット名のグループへまとまります（ツリーは ユニット→部品→部材 の3階層）。接続（形状維持）は最寄りの部品へ付くため、ユニット全体で近似後の姿を確認できます。</li></ol>
-        <p class="note">近似元の面に載っている閉じた投影輪郭は、開口として未登録でも自動で開口に登録してから近似します（写し忘れ防止）。出力先で「新しい.kcdにも保存」を選ぶと、作成後にユニットを含むプロジェクトを別ファイルへ保存します。</p>
-        <h3>作成（1面だけ・従来方式）</h3>
-        <dl class="recipe"><dt>近似元</dt><dd>板材または<strong>面</strong>を選べます。面は厚み未定のまま近似し、板材化の時点で「面入力の板厚」を指定します。</dd><dt>分割</dt><dd>許容偏差から自動、または手動境界（0～1）。3D画面でワイヤーを選んで「選択ワイヤーを境界に使う」を押すと、任意の線の位置を境界＝折り線にできます。</dd><dt>実行</dt><dd>「部材近似モデルを作成」。境界レール・部材面が「近似:名前」グループに作られます。</dd></dl>
-        <h3>型紙（部材ごと・結合）</h3>
-        <p>一覧でモデルを選び「型紙を表示」。部材を2つ以上選んで押すと、隣接部材を1枚に結合した型紙になり、部材境界が折り線（山＝赤破線・谷＝青一点鎖線）として入ります。結合型紙の各折り線の中点には<strong>完成形の折り角（度）</strong>が「山 24.6°」のように表示されるので、現物を曲げるときの目安にできます。下のスライダーで平面⇄折り曲げの中間形状も確認できます。</p>
-        <h3>曲げ確認（常に正しい形状）</h3>
-        <ol><li><strong>スライダー（組立 0〜100%）は実際の形状を動かします。</strong>0%=各部材の展開形（型紙と同じ）が少し離れた位置に並び、100%=折り線どおりの完成姿勢。ドラッグ中は軽いプレビューで追従し、指を離すと実際の部材面・縁・穴（とその上の板材）がその姿勢へ作り直されます。姿勢は保存され、開き直しても同じ状態です。「3Dビューで曲げ状態を表示」はドラッグ中の重ね表示です。<strong>一覧で部材を選んでいるときは選んだ部材だけが曲がります</strong>（複数選択なら選んだ部材すべて、未選択なら全部材）。各部材は「展開を並べた位置↔完成位置」を独立した剛体として補間し、隣に釣られて動くことはありません。部材ごとの姿勢も保存されます。</li><li>折り角は折り線ごとの行で角度（°）を編集します（%欄は廃止しました）。編集すると実形状へ即反映されます。</li><li>一覧で部材を選ぶと<strong>その部材だけ</strong>表示されます（複数選択なら複数、未選択なら全部）。各部材の形と辺の間隔は常に正確です。</li><li>一覧でユニット見出しを選んだ場合は先頭のモデルとして扱われます。モデルが1つだけなら未選択でも自動でそのモデルが対象になります。対象を決められないときはステータスバーに「一覧で近似モデルを選択してください」と出ます。</li><li><strong>折り角の編集は実際の形状にも反映されます。</strong>折り線ごとの角度⇄%を変えると、実物の部材面・レール・部材の穴がその姿勢へ作り直され、部材面の上に作った板材や「投影輪郭を厚み位置へ複製」のワイヤも追従します（保存・再読込でも同じ姿勢）。スライダー（0〜100%の組立アニメーション）は表示だけで、実形状は動かしません。</li><li><strong>折り姿勢では部材は独立した部品として扱われます。</strong>共有の境界レールに代わって部材ごとの縁ワイヤ2本（部材N_縁1/縁2）が作られ、各部材は変形しない剛体のまま置かれます（曲がった折り線では隣との間に隙間が出ますが、それが物理的に正しい形です）。完成形（全て100%）に戻すと共有レールに戻ります。</li><li>部材面を「移動」で動かすと部材オフセットとして記録され、その部材の面・レール・穴だけが平行移動します（分割した部材を個別に触れます）。0mmへ戻すと解除されます。</li></ol>
-        <h3>開口・出力</h3>
-        <ol><li>元の面部品に登録した開口（窓・ライト）は、部材内に収まるものが実際の穴として近似・型紙・実体化へ写ります。</li><li>近似の<strong>後から</strong>穴を開けることもできます: 一覧で部材を1つ選び、3D画面で閉じた下書きワイヤを選んで「選択ワイヤを部材へ投影して穴に」。下書きの作図面の法線方向でその部材面へ投影され、部材番号付きで記録されるため再計算・型紙・実体化・板材化にも追従します。「穴を解除」で外せます。</li><li>「選択部材を板材化・出力」は、出力チェック[板材][面][縁ワイヤ]の組み合わせで一括出力できます。板材は「近似に追従（派生）」＝再計算で作り直される板、または「現在の形で固定（独立）」＝レールを独立ワイヤ+ルールド面として複製してから作る板、を選べます。</li><li>「この曲げ状態を板材化」は同じファイル内の「近似:名前」配下へ、「別の.kcdへ保存」「STL/STEP保存」は外部へ出力します。0%は型紙の平面配置（開口も実穴）です。<strong>実体化した部材は常に独立した部品です</strong>: どの曲げ具合でも各部材が自分の縁ワイヤ2本（部材N縁1/縁2）・面・板を持ち、隣とワイヤを共有しません。1部材だけ移動・非表示・削除しても他の部材に影響しません（平面配置では縁同士が同じ位置に重なりますが別ワイヤです）。</li><li><strong>スライダーと一緒に動く3D化が欲しいときは「選択部材を板材化・出力」の「近似に追従（派生）」を使ってください。</strong>部材面の上の追従板は、組立スライダー・折り角の変更・部材の移動にそのまま付いてきます。「この曲げ状態を板材化」はその瞬間の独立コピー（固定）です。</li></ol>
-      </section>
-
-      <section id="output">
-        <h2>17. 1:1図面・展開図・3Dモデルを出力する</h2>
-        <figure><a href="manual-assets/model-output.png"><img src="manual-assets/model-output.png" alt="選択した板材と治具のSTL STEP出力"></a><figcaption>画像17: 板材と治具を中央で直接選択し、「3D画面で選択した部分」だけをSTL/STEPへ保存できます。</figcaption></figure>
-        <h3>作業平面の1:1 SVG / DXF</h3>
-        <figure><a href="manual-assets/planar-output.png"><img src="manual-assets/planar-output.png" alt="作業平面上で選択したワイヤーを1対1出力する画面"></a><figcaption>画像17b: 出力面と対象範囲を確認すると、保存する本数が表示されます。選択した線だけの治工具用図も作れます。</figcaption></figure>
-        <dl class="recipe"><dt>設定</dt><dd>「出力」タブで出力面を選び、「出力面上の全ワイヤー」または「選択したワイヤーのみ」。</dd><dt>実行</dt><dd>「SVGを保存」または「DXFを保存」。</dd><dt>用途</dt><dd>平らなプラ板・紙への印刷、レーザー加工、他2D CADへの受け渡し。単位mm、1:1です。</dd></dl>
-        <h3>ペーパークラフト展開（1:1）</h3>
-        <figure><a href="manual-assets/flat-pattern.png"><img src="manual-assets/flat-pattern.png" alt="縦横の分割、曲げ過程、形状追従の曲線切れ込み、立体再現度を選べる展開設定"></a><figcaption>画像17a: 分割方向、再現度、切れ込み、平面から完成形までの組立位置を同じ場所で確認します。</figcaption></figure>
-        <figure><a href="manual-assets/papercraft-nose-result.svg"><img src="manual-assets/papercraft-nose-result.svg" alt="前面窓と左右ライト穴を部品外周へ組み込んだP1からP5のペーパークラフト展開図"></a><figcaption>画像17c: サンプル前面板の実出力。黒線を切断し、P1からP5を番号順に接合すると、分割された窓と左右ライトの欠き取りが元の開口へ戻ります。灰色破線は折り・曲げ位置です。</figcaption></figure>
-        <p class="note"><strong>生成方式を最初に選びます。</strong>「製作用大部材」は元形状へ少数の長い曲げ板を先に当て、各部材を一枚ずつ展開します。「曲げ紙ペーパークラフト（連続部材）」は、窓とライトを含む一枚の紙を主方向へ滑らかに丸めます。「多面体ペーパークラフト（比較用）」は角面を歪めず展開します。「曲げ帯ペーパークラフト（従来方式）」は従来のプラ板向け結果です。4方式は互いに上書きせず比較できます。ライト穴と窓は開口、短い歪み逃がしはRELIEF_CUT、部材を分ける線はSEPARATING_SEAMとして別に扱います。</p>
-        <h3>製作用大部材: 近似モデルを先に作ってから展開</h3>
-        <ol><li>板材を1枚選び、「生成方式」で「製作用大部材（近似モデル→各部材を展開）」を選びます。</li><li>「最大許容3D偏差」「最小部材幅」「最大部材数」を指定します。最初は板全体を一部材として試し、実測偏差が目標を超えた部材だけ二分します。</li><li>「大部材の向き」は通常「曲率から自動」。曲面を横長の帯で構成したい場合は、プレビューを見ながらUまたはV方向へ長い部材を固定します。</li><li>自動境界は窓・ライト穴の途中を横切りません。特定位置で必ず部材を分ける場合は、面タブの「展開片の分割線」で投影ワイヤーを分割線にしてから再生成します。穴を横切る分割線や最小幅未満の部材は理由付きで拒否されます。</li><li>結果欄で部材数、完全分割線数、開口数、最大3D偏差とRMS偏差を確認します。最大偏差が目標を超えた結果は赤表示で、成功扱いにはなりません。最小幅を下げる、最大部材数を増やす、または手動境界を追加して再計算します。</li><li>「展開から組立まで3D表示」と組立スライダーで各大部材の曲げを確認します。「この曲げ状態を3Dモデル化」は、選択した部材を三角板の集合ではなく一枚の連続ロフト板として追加します。</li><li>「製作用近似モデルを別オブジェクトで作成」で100%状態を元板とは別に残します。「ペーパークラフト部品を作成」またはSVG/DXF/PDF保存では、各大部材が一つの閉じた型紙になり、窓とライトは抜き穴として残ります。</li></ol>
-        <figure><a href="manual-assets/bent-sheet-papercraft-result.svg"><img src="manual-assets/bent-sheet-papercraft-result.svg" alt="窓とライト穴を曲線のまま一枚へ保持した曲げ紙ペーパークラフト展開図"></a><figcaption>画像17d: 曲げ紙方式の実出力。黒実線は一枚につながった外周、赤線は元の投影曲線を保った窓・ライト穴と、二方向目の曲率を逃がす切れ目です。計算用三角形は切断線として出ません。</figcaption></figure>
-        <h4>曲げ紙・連続部材の手順</h4>
-        <ol><li>板材を1枚選び、「生成方式」で「曲げ紙ペーパークラフト（連続部材）」を選びます。</li><li>「展開方針」は通常「部材優先」を選びます。これは少数の長い部材を保ち、完全分割より短い歪み逃がしを先に使います。「バランス」「精度優先」の順に切れ目候補を増やします。</li><li>「最大許容3D偏差」に工作上許せる目標値、「最小部材幅」に切れ目の間や橋として残したい幅をmmで入れます。結果欄の最大3D偏差は実際に組み直した形との比較値で、目標を超えると赤表示になります。</li><li>通常は「曲率から主曲げ方向を自動選択」を使います。断面の向きを意図的に固定するときは「U方向へ滑らかに丸める」または「V方向へ滑らかに丸める」を選びます。</li><li>「立体再現度」を上げると、滑らかな3D確認面と切れ目候補が細かくなります。展開部品を三角形へ分離する値ではありません。</li><li>「曲線Vを併用」をオフにすると、途中に紙のブリッジを残した一本線スリットだけを作ります。オンにすると、最初の強い二方向曲げ箇所へ曲線Vを使い、残りをブリッジ付きスリットにします。左右のVは中央で接触せず、紙のつながりが残ります。</li><li>「切れ込み深さ」は外周から中央ブリッジへ近づく量です。「V字の開き角」で絞り量、「切れ込み曲線追従」でV側辺の曲がりを調整します。窓やライトと交差する線は穴の部分で自動的に分かれます。</li><li>「展開から組立まで3D表示」をオンにし、「組立過程」を0%から100%へ動かします。途中状態は滑らかな局所回転場で計算するため、再現度10でも計算三角形ごとのしわにはなりません。赤線でスリットとVを確認します。</li><li>途中状態を残す場合は、30%などで止めて「この曲げ状態を3Dモデル化」を押します。計算三角形を大量の板へ変換せず、窓・ライト穴を持つ一つの連続曲面板が追加されます。100%だけを別に残す場合は「曲げ紙の完成形を別オブジェクトで作成」を押します。元板は変更されません。</li><li>「ペーパークラフト部品を作成」を押すと、配置平面へ一枚の板として追加され、窓・ライト穴と切れ目も加工形状になります。SVG/DXF/PDFから同じ1:1図を保存できます。現段階ではのりしろを生成しません。</li></ol>
-        <figure><a href="manual-assets/faceted-papercraft-result.svg"><img src="manual-assets/faceted-papercraft-result.svg" alt="再現度6で生成した新しい多面体ペーパークラフトの実展開図"></a><figcaption>画像17e: 多面体方式でサンプル前面板を再現度6へ変換した実出力。黒実線が各紙片の切断外周、灰色破線が剛体面の折り線です。窓・ライト穴の範囲には材料面がなく、P番号ごとに独立して出力できます。</figcaption></figure>
-        <h4>多面体・比較用の手順</h4>
-        <ol><li>板材を1枚選び、「生成方式」でまず「多面体ペーパークラフト（新方式）」を選びます。従来結果と比べるときだけ下段の従来方式へ切り替えます。</li><li>「切れ目の方向」で、上下へ走る「縦だけ」、左右へ走る「横だけ」、曲がりの強い方向を自動判定する「縦横を併用」を選びます。</li><li>「立体再現度」を1から10で指定します。低い値は角ばりが大きい代わりに面と部品が少なく、高い値は折り目を増やして元形状へ近づきます。元の面や板は変更されません。</li><li>窓やライト穴の内側にある近似面は生成されません。したがって組立途中、完成近似モデル、STL/STEPのどの状態でも表示線ではなく実際の穴になります。</li><li>丸い角、フィレット、円錐状の収束を寄せる場合は「必要箇所のV字切れ込みを許可」をオンにします。切断辺の曲がりが「反応する最小曲がり」以上の場合だけ作られます。</li><li>切れ込み形状は「鋭いV字」または「形状追従の曲線切れ込み」を選びます。曲線方式ではVの左右の切断辺そのものが曲がります。</li><li>「組立3Dで折り目・切れ目を表示」と「展開から組立まで3D表示」をオンにします。「組立過程」を0%へ動かすと展開状態、100%で角ばった近似完成形です。途中の各面も伸び縮みしません。</li><li>スライダーを例えば30%で止めて「この曲げ状態を3Dモデル化」を押すと、その角度の厚み付き面群を別オブジェクトとして保存します。同じ位置のSTL/STEPも下のボタンから保存できます。</li><li>再現度で作った100%の完成形だけを残す場合は「近似完成モデルを別オブジェクトで作成」を押します。元板は残り、派生した角面だけが追加・選択されます。</li><li>「ペーパークラフト部品を作成」は平らな展開片を配置平面へ通常のワイヤー・面・板として追加します。直接切断データならSVG/DXF、印刷なら1:1 PDFを使います。現版の新方式はのりしろを生成しません。</li></ol>
-        <table><thead><tr><th>処理方法</th><th>向く工作</th><th>結果</th></tr></thead><tbody>
-          <tr><td>一枚を優先</td><td>接着線と部品数を減らしたい工作</td><td>可能な範囲をつなぎ、伸縮なしで成立しない箇所だけ組立可能な片へ分けます。</td></tr>
-          <tr><td>部品へ分割して接着</td><td>前頭部など形状精度を優先</td><td>複数の独立した平面片。各片にも必要な切れ込みを併用できます。</td></tr>
-          <tr><td>鋭いV字</td><td>直線切断で簡単に作りたい場合</td><td>直線2辺のダーツ。切断点数を抑えます。</td></tr>
-          <tr><td>形状追従の曲線切れ込み</td><td>フィレットやノーズの丸みを細かく寄せる場合</td><td>曲面を展開した曲線を左右の切断辺へ使います。</td></tr>
-        </tbody></table>
-        <p class="note">組立3Dは派生表示で、元の編集形状を三角形メッシュへ変更しません。曲げ紙方式の結果欄には、部材数、完全分割線数、部材を分離しない歪み逃がし数、窓・ライト等の開口数、生成形状を元曲面と直接比較した「最大3D偏差 / RMS」、切り出し寸法からの「寸法誤差」、閉じるV字左右の「継ぎ目」を別々に表示します。これは再現度から換算した推定値ではありません。紙の剛性や曲げ戻りは含まないため、実材料での試作も確認してください。</p>
-        <table><thead><tr><th>展開線</th><th>意味</th></tr></thead><tbody>
-          <tr><td>CUT_OUTER / CUT_OPENING</td><td>外周と窓・ライト穴。切断します。</td></tr>
-          <tr><td>CUT_OUTER（複数）</td><td>各展開片の外周。自動・手動の完全な分割線は、隣り合う2片の外周になります。</td></tr>
-          <tr><td>RELIEF_CUT</td><td>途中で止まる手動切れ目。外周へ組み込まれたV字はCUT_OUTERに一度だけ出力されます。</td></tr>
-          <tr><td>FOLD</td><td>曲面を近似する折り線。SVG/PDFでは破線、DXFでは専用レイヤーです。</td></tr>
-        </tbody></table>
-        <h3>展開結果をCAD内のワイヤーと3D板にする</h3>
-        <dl class="recipe"><dt>選ぶ</dt><dd>展開元の板材を1枚。</dd><dt>設定</dt><dd>展開部材名、配置する作業平面、組み立て方、立体再現度、V字使用可否、3D切り幅。</dd><dt>実行</dt><dd>「ペーパークラフト部品を作成」。</dd><dt>結果</dt><dd>紙片ごとの外周、分割位置で外周へ組み込まれた開口、折り線、途中切れ目が通常のCADワイヤーとして追加され、各紙片が独立した平らな3D板になります。</dd><dt>3D切れ目</dt><dd>RELIEF_CUTを指定幅の細いスロットへ変換します。生成した紙片を個別または複数選択してSTL/STEPへ出力できます。</dd></dl>
-        <h3>曲げ途中の3Dモデルを作成・保存する</h3>
-        <figure><a href="manual-assets/assembly-output.png"><img src="manual-assets/assembly-output.png" alt="45パーセント曲げた特定部品の3Dモデル化とSTL STEP保存"></a><figcaption>画像17c: 曲げ位置と出力部品を決め、同じ状態をCAD内の板、STL、STEPのいずれにも使えます。</figcaption></figure>
-        <figure><a href="manual-assets/bent-sheet-assembled.png"><img src="manual-assets/bent-sheet-assembled.png" alt="100パーセントまで組み立ててV字切れ込みの左右を合わせた曲げ紙モデル"></a><figcaption>画像17f: 曲げ紙方式の100%状態。V字の対応辺は同じ位置まで閉じ、一本線スリットは先端と中央ブリッジを残したまま曲げを逃がします。</figcaption></figure>
-        <dl class="recipe"><dt>選ぶ</dt><dd>元の板材を1枚。</dd><dt>形を決める</dt><dd>「組立過程」を希望位置へ動かします。0%は平面、100%は完成形、その間は曲げ途中です。</dd><dt>部品を絞る</dt><dd>「3D出力する部品」で「全ての分割部品」または「部品Nだけ」を選びます。</dd><dt>CAD内へ追加</dt><dd>「この曲げ状態を3Dモデル化」。元板の局所厚みを持つ編集可能な三角板群として追加され、作成分が全選択されます。</dd><dt>直接保存</dt><dd>「曲げ状態をSTL保存」または「曲げ状態をSTEP保存」。プロジェクトへ追加せず、選んだ部品と現在位置だけを閉じた立体として保存します。</dd></dl>
-        <h3>任意部分のSTL / STEP</h3>
-        <dl class="recipe"><dt>一部分</dt><dd>中央画面で必要な板材・治具を <kbd>Ctrl</kbd>+クリックし、対象を「3D画面で選択した部分」。</dd><dt>モデル全体</dt><dd>対象を「表示中の3Dモデル全体」。不要な部品は先に隠します。</dd><dt>確認</dt><dd>表示される「3D出力対象: N部品（板材N / 治具N）」を確認。</dd><dt>実行</dt><dd>「STLを保存」または「STEPを保存」。</dd></dl>
-        <table><thead><tr><th>形式</th><th>使い分け</th></tr></thead><tbody>
-          <tr><td>STL</td><td>3Dプリンター・スライサー。保存時だけ高精度メッシュへ変換します。</td></tr>
-          <tr><td>STEP</td><td>他の3D CADへ閉じた立体として渡す。板材・治具・登録開口を含みます。</td></tr>
-          <tr><td>SVG / DXF</td><td>2Dの1:1輪郭、または板材の展開輪郭。</td></tr>
-          <tr><td>PDF</td><td>家庭用・事務用プリンターで1:1印刷。大きい板は重なり付き複数ページ。</td></tr>
-        </tbody></table>
-        <p class="note">厚みのない「面」だけはSTL/STEP対象になりません。面を板材にするか、その面から治具を作ってください。</p>
-      </section>
-
-      <section id="save">
-        <h2>18. 保存・元に戻す・異常終了から復旧する</h2>
-        <table><thead><tr><th>操作</th><th>手順</th></tr></thead><tbody>
-          <tr><td>新規</td><td><kbd>Ctrl</kbd>+<kbd>N</kbd>。未保存の変更がある場合は確認してから空のプロジェクトを作ります。</td></tr>
-          <tr><td>開く</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd>。<code>.kcd</code> プロジェクトを選びます。</td></tr>
-          <tr><td>保存</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd>。初回だけ保存先を指定します。</td></tr>
-          <tr><td>名前を付けて保存</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>。別版を残すときに使います。</td></tr>
-          <tr><td>元に戻す</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd>。作図、点移動、板設定など直前の変更を戻します。</td></tr>
-          <tr><td>やり直す</td><td><kbd>Ctrl</kbd>+<kbd>Y</kbd>。戻した変更を再適用します。</td></tr>
-        </tbody></table>
-        <h3>異常終了後</h3>
-        <p>作業中は自動保存されます。正常に保存されなかった内容がある場合、次回起動時に復旧候補が表示されます。復旧したら、まず「名前を付けて保存」で通常の <code>.kcd</code> ファイルとして保存してください。</p>
-        <p class="note">配布フォルダ内の <code>START_REVIEW.cmd</code> から起動すると、必要なQt部品を含む正しい環境で <code>review-model.kcd</code> が開きます。</p>
-      </section>
-
-      <section id="trouble">
-        <h2>19. 困ったとき</h2>
-        <table><thead><tr><th>状態</th><th>対処</th></tr></thead><tbody>
-          <tr><td>視点を変えたいのに形状を選んでしまう</td><td>自由回転は <kbd>Shift</kbd>+中ドラッグ。平行移動は中または右ドラッグ。左ボタンは選択・作図専用です。</td></tr>
-          <tr><td>キューブで意図しない方向へ飛ぶ</td><td>面・角への正対は動かさずクリックした場合だけです。つかんで動かすと、その移動量だけ自由回転します。「全体表示」では向きは変わりません。</td></tr>
-          <tr><td>模型が画面から消えた</td><td>上部「全体表示」→ 右上「3D」。まだ見えない場合は「全て表示」。</td></tr>
-          <tr><td>2Dにしか見えない</td><td>作図面へ正対している状態です。右上「3D」または黄色い角ボタンで斜め視点へ戻します。</td></tr>
-          <tr><td>モデルが横倒し</td><td>キューブ周囲の絶対/相対XYZ回転を使います。通常クリックは15°、<kbd>Shift</kbd>+クリックは5°です。</td></tr>
-          <tr><td>線を選びたいのに点が増える</td><td><kbd>V</kbd> または「選択」を押して作図道具を終了します。</td></tr>
-          <tr><td>トリム・延長の赤/緑予告が出ない</td><td>対象と表示中の境界が、見かけだけでなく実際の3D位置で交わることを確認します。延長は伸ばす端側へマウスを置きます。円そのものは延長できません。</td></tr>
-          <tr><td>クリック位置へ線が来ない</td><td>薄い×・四角・丸が出ている間は候補へ吸着します。その点だけ任意位置へ置くなら<kbd>Ctrl</kbd>を押しながらクリックします。近い点を確実に始点へ使うなら、入力前に右クリックします。</td></tr>
-          <tr><td>面を作れない</td><td>表の各行が端点で一続きか確認します。平面の輪郭1は一周して閉じる必要があります。隙間、枝分かれ、異なる作図面、補助線、別行との線の重複がないかも確認します。</td></tr>
-          <tr><td>ロフトがねじれる</td><td>表の上下矢印で断面を前から後ろの順へ並べ直します。各行をクリックすると、その断面の元線が3Dで強調されます。</td></tr>
-          <tr><td>板厚方向が逆</td><td>板を選び法線矢印を確認し、「+側へ」と「-側へ」を切り替えて「選択中の板材へ設定」。</td></tr>
-          <tr><td>板材化できない警告が出る</td><td>途中で潰れる断面や重複線を直します。板厚で表裏が折り返す場合は板厚を小さくするか、+側・中央・-側を切り替えます。</td></tr>
-          <tr><td>窓・ライトを開口にできない</td><td>平面図ワイヤーではなく、面へ投影した閉じた輪郭を選びます。板1枚と輪郭全体が同じ板範囲内にあることも確認します。</td></tr>
-          <tr><td>飛び出すライトケースを作れない</td><td>最前面は閉じた通常ワイヤー1本、接続先は面または板材1枚を選びます。斜め方向では基準線かXYZが接続先の面を横切る向きか確認します。</td></tr>
-          <tr><td>板を分割できない</td><td>分割線が板の端まで届いているか確認します。開口を横切る分割は、展開時に各部品の外周欠き取りへ変換されます。</td></tr>
-          <tr><td>STL/STEP対象が0</td><td>板材または治具を選ぶか、「表示中の3Dモデル全体」へ変更します。厚みのない面・ワイヤーは3D出力対象外です。</td></tr>
-          <tr><td>Qt platform pluginエラー</td><td><code>kachakacha_cad.exe</code> だけを配布フォルダから取り出していないか確認し、フォルダごと置いたまま <code>START_REVIEW.cmd</code> を実行します。</td></tr>
-          <tr><td>マニュアルを開けない</td><td>アプリの「ヘルプ」→「操作マニュアル」、または配布フォルダの <code>OPEN_MANUAL.cmd</code>。<code>manual-assets</code> フォルダを <code>manual.html</code> と同じ場所に置きます。</td></tr>
-          <tr><td>使用ライブラリや模型データの権利を確認したい</td><td>「ヘルプ」→「使用ライブラリと権利」。配布フォルダの <code>legal</code> にライセンス全文、著作権表示、ソース提供方法があります。</td></tr>
-        </tbody></table>
-        <p>迷ったときは左下「操作ガイド」の水色欄を確認してください。現在の道具が次に求めている点・線を消えずに表示します。画面最下部には、作成完了、エラー、操作できない理由など一時的な結果が表示されます。</p>
-      </section>
-
-      <section id="limits">
-        <h2>20. 現在の制限と実用上の回避方法</h2>
-        <table><thead><tr><th>制限</th><th>現在の回避方法</th></tr></thead><tbody>
-          <tr><td>可変板厚と曲面開口を同じ板へ設定した立体出力</td><td>窓・ライト穴が必要な板は一定板厚で作るか、開口部分を別部品として設計します。</td></tr>
-          <tr><td>ベジェ・B-splineの厳密な平行オフセット</td><td>オフセット複製後、制御点を測定値に合わせて調整します。</td></tr>
-          <tr><td>円の延長、閉じたポリラインの直接トリム</td><td>円は閉じていて端がないため延長できません。円の一部を除く場合は2本以上の境界でトリムします。閉じたポリラインは分割してから不要側を削除します。</td></tr>
-          <tr><td>強い二方向曲面の1:1展開</td><td>「最大3D偏差 / RMS」「寸法誤差」「継ぎ目」を確認します。許容できない場合は再現度・切れ目条件を変えるか、板を少数の製作可能な範囲へ手動分割します。</td></tr>
-          <tr><td>一枚部品の途中で材料が完全に途切れる開口</td><td>開口をまたぐ分割は外周欠き取りへ自動変換されます。残る材料が上下で完全に分離する場合は、手動分割線を追加して別部品にします。</td></tr>
-          <tr><td>面上ワイヤーを曲面上で直接描く高度な方式</td><td>現版では平面図から面へ投影します。平面断面では作業平面へ直接作図できます。</td></tr>
-        </tbody></table>
-        <p class="note">主編集対象はワイヤー、面、板、作業平面です。STLメッシュは出力時に生成するだけで、設計途中の形状を三角形編集へ変換しません。</p>
-      </section>
-
-      <section id="shortcuts">
-        <h2>21. 操作早見表</h2>
-        <table><thead><tr><th>キー / マウス</th><th>機能</th><th>キー / マウス</th><th>機能</th></tr></thead><tbody>
-          <tr><td><kbd>V</kbd></td><td>選択</td><td><kbd>D</kbd></td><td>作図点</td></tr>
-          <tr><td><kbd>L</kbd></td><td>直線</td><td><kbd>P</kbd></td><td>ポリライン</td></tr>
-          <tr><td><kbd>R</kbd></td><td>矩形</td><td><kbd>C</kbd></td><td>円</td></tr>
-          <tr><td><kbd>A</kbd></td><td>円弧</td><td><kbd>B</kbd></td><td>ベジェ</td></tr>
-          <tr><td><kbd>S</kbd></td><td>スプライン</td><td><kbd>I</kbd></td><td>端点一致</td></tr>
-          <tr><td><kbd>T</kbd></td><td>接線接続</td><td><kbd>Shift</kbd>+<kbd>T</kbd></td><td>曲率接続</td></tr>
-          <tr><td><kbd>X</kbd></td><td>トリム</td><td><kbd>E</kbd></td><td>延長</td></tr>
-          <tr><td><kbd>M</kbd></td><td>測定</td><td></td><td></td></tr>
-          <tr><td>入力前の右クリック</td><td>近くの構造点から作図開始</td><td>入力後の<kbd>Enter</kbd> / 右クリック</td><td>完了または取消</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+クリック</td><td>選択中: 複数選択 / 作図中: 吸着なし</td><td><kbd>Delete</kbd></td><td>選択削除</td></tr>
-          <tr><td>ホイール</td><td>拡大縮小</td><td>中 / 右ドラッグ</td><td>平行移動</td></tr>
-          <tr><td><kbd>Shift</kbd>+中ドラッグ</td><td>自由回転</td><td>左ドラッグ</td><td>点移動。視点は回さない</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd></td><td>新規</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td>開く</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>保存</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td>名前を付けて保存</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>元に戻す</td><td><kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>やり直す</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>H</kbd></td><td>選択を隠す</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>H</kbd></td><td>全て表示</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>設計表示</td><td><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>完成形だけ表示</td></tr>
-          <tr><td><kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>選択だけ表示</td><td></td><td></td></tr>
-        </tbody></table>
-        <h3>最短の製作手順</h3>
-        <ol><li>作業平面を選んで正対。</li><li>点グリッドとスナップを設定し、断面や開口平面図を作図。</li><li>断面を順番に複数選択し、面または3D板を作成。</li><li>窓・ライト平面図を面へ投影し、板と一緒に選んで開口へ追加。</li><li>飛び出すライトは最前面輪郭と本体面を選び、根元とケース側面を作成。</li><li>必要なら板を手動分割し、展開精度を確認。</li><li>板・治具を中央で選び、STL/STEPまたは1:1図面を出力。</li></ol>
-        <p class="small">すべての画像はこの製品版を自動操作して撮影しています。画像をクリックすると原寸表示できます。</p>
-      </section>
-
-      <section id="all-functions">
-        <h2>22. 全機能リファレンス</h2>
-        <p class="lead">ここは画面にある全コマンドの索引です。「何を先に選ぶか」「押した後に何をするか」「何が作られるか」を確認できます。詳しい作例は表内の章番号を参照してください。</p>
-
-        <h3>ファイル・履歴・表示</h3>
-        <figure><a href="manual-assets/overview.png"><img src="manual-assets/overview.png" alt="基本操作と表示操作を含む画面全体"></a><figcaption>画像22a: ファイル、履歴、表示は最上段、作図・変形はその右と次の段にあります。無効なボタンは必要な作図面または選択がまだない状態です。</figcaption></figure>
-        <table><thead><tr><th>機能</th><th>事前条件</th><th>操作と結果</th></tr></thead><tbody>
-          <tr><td>新規 / 開く / 保存 / 名前を付けて保存</td><td>保存前の変更があれば確認</td><td>新規プロジェクト、<code>.kcd</code>読込、上書き、別名保存。詳細は18章。</td></tr>
-          <tr><td>元に戻す / やり直す</td><td>編集履歴</td><td>直前の形状・表示設定を戻す/再適用。作図中の点だけを消す操作はEsc。</td></tr>
-          <tr><td>全体表示</td><td>なし</td><td>現在の向きを変えず、表示中モデルが収まる倍率と中心へ合わせます。</td></tr>
-          <tr><td>設計 / 完成形 / 選択だけ</td><td>「選択だけ」は対象選択</td><td>一時的な見え方を切替。保存状態や履歴は変更しません。詳細は3章。</td></tr>
-          <tr><td>隠す / 全て表示</td><td>「隠す」は対象選択</td><td>選択物の保存される表示状態を変更。左一覧のチェックと同じです。</td></tr>
-          <tr><td>削除</td><td>要素を選択</td><td>選択要素と必要な依存関係を確認して削除。Ctrl+Zで復元できます。</td></tr>
-          <tr><td>モデル検索 / 表示チェック</td><td>なし</td><td>名前・「ワイヤー」「板材」等で絞り込み。チェックで個別表示。詳細は3章。</td></tr>
-          <tr><td>名前を変更</td><td>左一覧で項目を選択</td><td><kbd>F2</kbd> または右クリック「名前を変更…」。投影・面部品・開口・近似・積層・拘束・グループ所属など参照する全箇所が一括で追従します。近似モデルの派生（境界・部材面）は単独変更不可で、近似モデル名の変更に連動します。グループ名も同様に変更できます。</td></tr>
-          <tr><td>表示タブ</td><td>なし</td><td>通常線・補助線の色/太さ/線種、面部品の塗り/透明度/輪郭、背景、主点・副点の色を変更。次回起動にも保持します。詳細は3章。</td></tr>
-          <tr><td>視点キューブ</td><td>なし</td><td>面・角クリックで正対、ドラッグで連続回転。絶対/相対X/Y/Z矢印は15°、Shift併用で5°回転。詳細は2章。</td></tr>
-          <tr><td>選択に正対</td><td>作図点・ワイヤー・面部品・平面を選択</td><td>選択形状へ正対し、中央へ拡大表示します。作図点は現在の向きを保って中央へ移します。</td></tr>
-        </tbody></table>
-
-        <h3>作業平面・作図・数値入力</h3>
-        <table><thead><tr><th>機能</th><th>選ぶ/入力するもの</th><th>操作と結果</th></tr></thead><tbody>
-          <tr><td>この向きで見る</td><td>標準面、点+法線、3点、オフセット、軸回転のいずれか</td><td>作業平面を保存せず、その紙へ正対。詳細は4章。</td></tr>
-          <tr><td>平面を作成</td><td>上記方法と名前、共通オフセット・角度</td><td>3D空間へ再利用できる紙を追加。全方式で距離と角度を併用できます。</td></tr>
-          <tr><td>回転軸に使用</td><td>基準線に設定済みの直線</td><td>直線の点と方向を作業平面の回転軸欄へ設定します。</td></tr>
-          <tr><td>選択 / 作図点 / 直線 / ポリライン / 矩形</td><td>作図面</td><td>中央で対象を選ぶ、位置基準点を残す、または左下ガイドの順に点を置く。詳細は6章。</td></tr>
-          <tr><td>円 / 円弧 / ベジェ / スプライン</td><td>作図面</td><td>円弧は3点、両端＋半径、始点＋接線/法線方向から選択。中心・通過点・制御点はガイド順に指定。スプラインは4点以上でEnter。</td></tr>
-          <tr><td>カーソル実寸 / 実寸で確定</td><td>最初の点を配置済み</td><td>数字を打つと主寸法へ自動入力。Tabで副寸法、Enterで確定。直線/ポリライン/円弧/ベジェ/スプラインの距離・角度、矩形の幅・高さ、円の半径に計算式も使えます。</td></tr>
-          <tr><td>補助線として作図</td><td>作図道具</td><td>スナップ・測定には使うが、面と出力から除外する線を作ります。</td></tr>
-          <tr><td>スナップ / 点グリッド</td><td>交点・作図点・端点、主点間隔、1/2・1/3・1/4副点、基準X/Y</td><td>通常は構造点を格子より優先し、外では自由位置。Ctrl中は完全解除。入力前の右クリックは近くの構造点を広めに探して始点にします。「画面で基準を合わせる」は格子点を図形点までドラッグし、基準X/Yへ反映。詳細は5・6章。</td></tr>
-          <tr><td>完了 / 取消</td><td>入力途中</td><td>ポリライン・スプラインを確定、または未確定点を破棄。</td></tr>
-          <tr><td>ワイヤーを追加</td><td>3D直線/ベジェ、平面上の直線/円/円弧/ベジェの値</td><td>座標からワイヤーを作成。平面拘束なし・編集基準・固定を選べます。詳細は7章。</td></tr>
-        </tbody></table>
-
-        <h3>編集・拘束・加工</h3>
-        <table><thead><tr><th>機能</th><th>事前選択</th><th>操作と結果</th></tr></thead><tbody>
-          <tr><td>制御点ドラッグ</td><td>ワイヤー1本</td><td>表示された端点・中心・制御点を直接移動。1ドラッグが1回のUndoです。</td></tr>
-          <tr><td>変更を適用</td><td>ワイヤーまたは作業平面1個</td><td>XYZ、半径、角度、平面との関係、補助線設定を数値更新。</td></tr>
-          <tr><td>長さ固定 / 角度固定 / 半径固定</td><td>対応する直線・円・円弧</td><td>値を保持する拘束を追加。水平0°・垂直90°は角度欄へ即入力。</td></tr>
-          <tr><td>平行オフセット複製</td><td>同一作図面のワイヤー1本以上</td><td>左右と距離を指定し、紫の予告位置へ複製。</td></tr>
-          <tr><td>移動 / コピー</td><td>ワイヤー1本以上</td><td>基準点→移動先。左下ガイドに現在の点を表示。</td></tr>
-          <tr><td>回転 / ミラー複製</td><td>ワイヤー1本以上</td><td>回転は中心→基準→回転先。ミラーは軸2点、または設定済み基準線。</td></tr>
-          <tr><td>分割</td><td>円以外のワイヤー1本</td><td>線上の位置をクリックし2本へ分けます。</td></tr>
-          <tr><td>トリム / 延長</td><td>なし</td><td>線・曲線部分または端側を直接指し、赤い削除区間 / 緑の追加区間を確認してクリック。直線・開ポリライン・円弧・ベジェ・B-splineを元の種類のまま処理します。</td></tr>
-          <tr><td>端点一致 / 接線接続 / 曲率接続</td><td>端点を直接指定</td><td>固定側→追従側。G1は接線、G2は接線と曲率を合わせます。</td></tr>
-          <tr><td>一致解除 / 滑らか解除</td><td>関係するワイヤー</td><td>一致全体、またはG1/G2だけを解除し、現在形状は維持。</td></tr>
-          <tr><td>結合 / 2線を交点まで</td><td>順番に並ぶ複数線 / 直線2本</td><td>1ポリライン化、または選んだ2線を同じ交点までトリム・延長。</td></tr>
-          <tr><td>基準線に設定 / 基準解除</td><td>直線1本 / なし</td><td>ミラー、平面回転、ライトケース方向で使う明示的な基準を設定/解除。</td></tr>
-          <tr><td>C面取り / R丸め</td><td>交差または延長交差する直線2本</td><td>残す側と切戻し/半径を指定して角を加工。詳細は10章。</td></tr>
-        </tbody></table>
-
-        <h3>面部品・治具</h3>
-        <table><thead><tr><th>機能</th><th>事前選択</th><th>操作と結果</th></tr></thead><tbody>
-          <tr><td>表の輪郭・断面から面を作成</td><td>輪郭・外形・断面を1行ずつ登録。各行は端点接続した複数線に対応</td><td>自由輪郭平面、2断面曲面、通常ロフト、外形ガイド付きロフトを作成。単線だけなら3D選択からの簡易作成も可能。詳細は11章。</td></tr>
-          <tr><td>選択ワイヤーを面へ投影</td><td>同じ平面図上のワイヤー1本以上</td><td>指定面へ投影し、元図に追従する面上ワイヤーを作成。詳細は13章。</td></tr>
-          <tr><td>根元ワイヤーとケース側面を作る</td><td>最前面閉輪郭1本 + 面/板1枚</td><td>自動法線、基準線、任意XYZ方向で飛び出すケースを作成。詳細は14章。</td></tr>
-          <tr><td>選択線から面部品を一度に作る</td><td>面作成と同じ断面選択</td><td>内部の基準形状と製作条件のある面部品を一度に作成。</td></tr>
-          <tr><td>この面に製作条件を設定</td><td>厚み未設定の面部品1つ</td><td>材料、始端/終端の厚み、+側/中央/-側を設定。</td></tr>
-          <tr><td>製作条件を更新</td><td>製作条件ありの面部品1つ</td><td>厚み、方向、材料を作り直さず更新。</td></tr>
-          <tr><td>選択輪郭をこの位置へ複製</td><td>板材1枚 + 投影ワイヤー</td><td>+側表面、中央、-側表面へ板厚追従ワイヤーを作成。</td></tr>
-          <tr><td>この面から成形治具を作る</td><td>面1枚</td><td>外型/内型、隙間、厚みを持つ3D治具を作成。詳細は15章。</td></tr>
-          <tr><td>選択中の治具へ設定</td><td>治具1個</td><td>型の側、隙間、厚みを更新し、最小肉厚を再確認。</td></tr>
-          <tr><td>開口に追加 / 開口から外す</td><td>面部品1つ + 閉じた投影輪郭</td><td>厚みの有無に関係なく、窓・ライト穴を形状、展開、STL/STEPへ反映/解除。</td></tr>
-          <tr><td>切れ目に追加 / 切れ目から外す</td><td>板材1枚 + 投影ワイヤー</td><td>途中で止まる切れ目として登録/解除。</td></tr>
-          <tr><td>分割線にする / 分割線を解除</td><td>板材1枚 + 投影ワイヤー</td><td>平面・一方向曲面・二方向曲面の展開計算を切り、独立した紙片へ分ける線として登録/解除。</td></tr>
-          <tr><td>選択中の板材を2分割</td><td>板材1枚</td><td>赤い予告線を確認し、U/V方向の指定位置で2部品だけに分割。詳細は16章。</td></tr>
-        </tbody></table>
-
-        <h3>出力・測定・情報</h3>
-        <table><thead><tr><th>機能</th><th>事前選択/設定</th><th>操作と結果</th></tr></thead><tbody>
-          <tr><td>SVGを保存 / DXFを保存</td><td>作業平面、全線または選択線</td><td>平面上の1:1図面をmm単位で保存。</td></tr>
-          <tr><td>組立3Dで折り目・切れ目を表示</td><td>板材1枚、展開条件</td><td>完成位置へ折り目を青破線、切れ目を赤線で一時表示。</td></tr>
-          <tr><td>展開から組立まで3D表示</td><td>板材1枚、生成方式、立体再現度、組立過程</td><td>曲げ紙方式は滑らかな紙面、多面体方式は剛体パネルとして、平面0%から完成100%まで表示。</td></tr>
-          <tr><td>生成方式</td><td>板材1枚</td><td>少数の大きな製作用部材、連続一枚の曲げ紙、歪みのない多面体、従来の曲げ帯方式を比較切替。</td></tr>
-          <tr><td>曲げ紙/近似完成モデルを別オブジェクトで作成</td><td>板材1枚、曲げ紙または多面体方式、立体再現度</td><td>元板を変更せず100%組立状態を追加。曲げ紙は窓・ライト穴付きの連続Loft板1個、多面体は独立した厚み付き面群。</td></tr>
-          <tr><td>ペーパークラフトとして分割・切れ目を生成</td><td>二方向曲面の板材1枚</td><td>展開可能な曲げ面を維持しつつ、一枚折り／部品分割、V字の使用可否、直線V／形状追従曲線を指定。再現度は全方式へ適用。</td></tr>
-          <tr><td>ペーパークラフト部品を作成</td><td>板材1枚、配置平面、展開方式、切り幅</td><td>編集可能な外周・開口・折り線・切れ目と、紙片またはV字外周を持つ平らな厚み付き板を作成。</td></tr>
-          <tr><td>この曲げ状態を3Dモデル化</td><td>板材1枚、組立過程、全体または部品N</td><td>スライダー位置を局所板厚付きの編集可能な3D板群として追加し、作成分を選択。</td></tr>
-          <tr><td>曲げ状態をSTL / STEP保存</td><td>板材1枚、組立過程、全体または部品N</td><td>平面・途中・完成の任意位置を、選んだ分割部品だけでも閉じた3D形状として保存。</td></tr>
-          <tr><td>1:1 PDF / 展開SVG / 展開DXF</td><td>板材1枚、折り線・切れ目条件</td><td>家庭印刷または切断用の展開データを保存。PDFはA4/A3と重なりを指定。</td></tr>
-          <tr><td>STLを保存 / STEPを保存</td><td>選択した板・治具、または表示中全体</td><td>任意部分またはモデル全体を閉じた3Dモデルとして保存。</td></tr>
-          <tr><td>測定</td><td>2点間、3点角度、要素モード</td><td>3D距離、XYZ差、3点角度、半径、長さ、接線角、曲率法線角を中央画面で測定。詳細は9章。</td></tr>
-          <tr><td>寸法を残す / 測定を消去</td><td>測定結果 / 一時測定</td><td>追従する参照寸法として保存、または形状を変えず一時表示だけ消去。</td></tr>
-          <tr><td>参照寸法の表示 / 削除</td><td>保存済み参照寸法</td><td>情報タブまたはモデル一覧で表示を切替、不要な寸法を削除。</td></tr>
-          <tr><td>選択情報</td><td>任意要素1個</td><td>座標、種類、元形状、板厚、材質、開口、切れ目、工作判定、治具肉厚を表示。</td></tr>
-          <tr><td>詳しい手順</td><td>任意のタブ・道具</td><td>左下ガイドの現在機能に対応する本マニュアルの章を直接開きます。</td></tr>
-          <tr><td>使用ライブラリと権利</td><td>ヘルプメニュー</td><td>Qt、Open CASCADE、模型データの扱いを表示し、同梱した詳細文書を開きます。</td></tr>
-        </tbody></table>
+        <p class="small">PDFとkcd2の保存は出力棚の対象・形式選択から使います。ビューキューブ、パン、ズーム、世界/相対軸回転は文書を変更しないカメラ操作です。</p>
       </section>
     </article>
   </main>
-  <footer>対象: kachakachaCAD 実用レビュー版 / 2026-08-25</footer>
+  <footer><p>kachakachaCAD V2 manual. 実装台帳: <code>docs\v2\command-catalog.md</code> / 理由番号: <code>docs\v2\diagnostic-catalog.md</code></p></footer>
+  <script>
+    (() => {
+      const input = document.getElementById('manual-search');
+      const status = document.getElementById('search-status');
+      const sections = Array.from(document.querySelectorAll('[data-searchable]'));
+      const rows = Array.from(document.querySelectorAll('[data-command]'));
+      input.addEventListener('input', () => {
+        const query = input.value.trim().toLocaleLowerCase('ja');
+        if (!query) {
+          sections.forEach(section => section.classList.remove('hidden-by-search'));
+          rows.forEach(row => row.classList.remove('hidden-by-search'));
+          status.textContent = '';
+          return;
+        }
+        let matches = 0;
+        sections.forEach(section => {
+          const sectionMatches = section.textContent.toLocaleLowerCase('ja').includes(query);
+          section.classList.toggle('hidden-by-search', !sectionMatches);
+          if (sectionMatches) matches += 1;
+        });
+        rows.forEach(row => {
+          const rowMatches = row.textContent.toLocaleLowerCase('ja').includes(query);
+          row.classList.toggle('hidden-by-search', !rowMatches);
+        });
+        status.textContent = matches ? `${matches}章にあります` : '見つかりません';
+      });
+    })();
+  </script>
 </body>
 </html>

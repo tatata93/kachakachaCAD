@@ -43,6 +43,40 @@ namespace {
     return ReadFile(RepoRoot() / "docs/manual/README.md");
 }
 
+[[nodiscard]] std::string HtmlManual()
+{
+    return ReadFile(RepoRoot() / "docs/manual.html");
+}
+
+//! HTML版が指している図を集める。配布物では docs の直下が起点になる。
+[[nodiscard]] std::set<std::string> HtmlReferencedImages(const std::string& text)
+{
+    std::set<std::string> names;
+    const std::string prefix = "src=\"manual/images/";
+    std::size_t at = 0;
+    while ((at = text.find(prefix, at)) != std::string::npos) {
+        const std::size_t start = at + prefix.size();
+        const std::size_t end = text.find('"', start);
+        if (end == std::string::npos) {
+            break;
+        }
+        names.insert(text.substr(start, end - start));
+        at = end;
+    }
+    return names;
+}
+
+[[nodiscard]] int Occurrences(const std::string& text, const std::string& token)
+{
+    int count = 0;
+    std::size_t at = 0;
+    while ((at = text.find(token, at)) != std::string::npos) {
+        ++count;
+        at += token.size();
+    }
+    return count;
+}
+
 //! 作り方の手順書。押すボタンと入れる数字を順に書いたもの。
 //!
 //! 名前に日本語が入っている。Windows で
@@ -133,6 +167,50 @@ KACHA_V2_TEST(manual, 指している図がすべてある)
         Require(std::filesystem::exists(path, code), "図がある: " + name);
         Require(std::filesystem::file_size(path, code) > 0, "図が空でない: " + name);
     }
+}
+
+KACHA_V2_TEST(manual, HTML版がV2の全機能説明になっている)
+{
+    const std::string text = HtmlManual();
+    Require(text.size() > 20000, "全機能を説明するだけの中身がある");
+    Require(text.find("kachakacha-manual-version\" content=\"v2") != std::string::npos,
+        "V2版だと明記している");
+    Require(text.find("全コマンド一覧") != std::string::npos, "全コマンド一覧がある");
+    Require(text.find("流線形鉄道車両前面の実用試験") != std::string::npos,
+        "実用試験の説明がある");
+    Require(text.find("manual-assets/") == std::string::npos,
+        "古いV1画像置き場を参照していない");
+}
+
+KACHA_V2_TEST(manual, HTML版が台帳の全コマンドを一度ずつ説明する)
+{
+    const std::string text = HtmlManual();
+    int checked = 0;
+    for (const auto& command : kachakacha::v2::app::CommandCatalog()) {
+        const std::string marker = "data-command=\"" + std::string(command.id) + "\"";
+        RequireEqual(std::to_string(Occurrences(text, marker)), std::string("1"),
+            "HTML版のコマンド行: " + std::string(command.id));
+        ++checked;
+    }
+    RequireEqual(std::to_string(checked),
+        std::to_string(kachakacha::v2::app::CommandCatalog().size()),
+        "公開コマンドを全部見た");
+}
+
+KACHA_V2_TEST(manual, HTML版が指す図と実用見本がすべてある)
+{
+    const auto names = HtmlReferencedImages(HtmlManual());
+    Require(names.size() >= 10, "HTML版に実画面が10枚以上ある");
+    for (const std::string& name : names) {
+        const std::filesystem::path path = RepoRoot() / "docs/manual/images" / name;
+        std::error_code code;
+        Require(std::filesystem::exists(path, code), "HTML版の図がある: " + name);
+        Require(std::filesystem::file_size(path, code) > 0, "HTML版の図が空でない: " + name);
+    }
+    const auto sample = RepoRoot() / "samples/streamlined-railway-nose-1-87.kcd2";
+    std::error_code code;
+    Require(std::filesystem::exists(sample, code), "流線形前頭部の見本がある");
+    Require(std::filesystem::file_size(sample, code) > 0, "流線形前頭部の見本が空でない");
 }
 
 KACHA_V2_TEST(manual, 置いてある図はすべて使われている)

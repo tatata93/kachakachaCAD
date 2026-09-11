@@ -184,6 +184,16 @@ KACHA_V2_TEST(er_export, 配布見本のロフト面と厚み付き外板を実�
         ThicknessPlacement::Centered, tolerance);
     Require(solid.HasValue(), "0.20mmの外板になる: " + FirstCode(solid.Diagnostics()));
     Require(solid.Value().volumeMm3 > 0.0, "外板に体積がある");
+
+    const std::vector<kachakacha::v2::modeling::KernelShapeHandle> chosen{
+        solid.Value().handle};
+    const auto step = kachakacha::v2::kernel::BuildStepForSelection(chosen, 1.0e-6);
+    Require(step.HasValue(), "前頭部をSTEPにできる: " + FirstCode(step.Diagnostics()));
+    RequireEqual(std::to_string(step.Value().componentCount), std::string("1"),
+        "STEPは前頭部外板1部品");
+    const auto stl = kachakacha::v2::kernel::BuildBinaryStlForSelection(chosen, 0.02);
+    Require(stl.HasValue(), "前頭部をSTLにできる: " + FirstCode(stl.Diagnostics()));
+    Require(stl.Value().content.size() > 84, "前頭部STLに三角形がある");
 }
 
 KACHA_V2_TEST(er_export, 部材に厚みを付けて立体にできる)

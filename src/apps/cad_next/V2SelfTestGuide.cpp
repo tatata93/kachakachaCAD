@@ -7,8 +7,10 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2ParameterDock.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -273,9 +275,86 @@ void SelectOne(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
     return Explain("一度で戻る", GuideSurfaceCount(window) == 0);
 }
 
+[[nodiscard]] bool CaseSurfaceJigMakesContactSurfaceAndSolid(V2MainWindow& window)
+{
+    // 治具(V1 の body_surface_jig)。すき間だけ離した面 + 厚みで当て板を作る。
+    window.RunCommand("file.new");
+    // 断面2本(平行な直線)から、渡すだけの面を作る。治具の元にはこれで足りる。
+    auto& start = window.Viewport();
+    start.SetViewDirection(ViewDirection::Top);
+    start.SetVisibleWidthMm(300.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    start.ClickAt(QPointF(start.width() * 0.3, start.height() * 0.35));
+    start.ClickAt(QPointF(start.width() * 0.7, start.height() * 0.35));
+    start.ClickAt(QPointF(start.width() * 0.3, start.height() * 0.65));
+    start.ClickAt(QPointF(start.width() * 0.7, start.height() * 0.65));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    start.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    window.RunCommand("guide.create");
+    if (!Explain((std::string("元の面ができる(") + window.StatusText().toStdString() + ")").c_str(),
+            GuideSurfaceCount(window) == 1)) {
+        return false;
+    }
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface);
+    if (!Explain("形状ガイドがある", !surfaces.entityIds.empty())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    // 面を選ばずに押すと、面を選べと言う(JIG-E003)。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("part.surface_jig");
+    if (!Explain((std::string("面が無ければ断る(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("JIG-E003"))
+                || window.StatusText().contains(QStringLiteral("選んでください")))) {
+        return false;
+    }
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(surfaces.entityIds.front());
+    viewport.SetSelection(one);
+    // 厚み 0 は側が決まらないので断る。
+    if (!Explain("治具の厚みを入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::JigThicknessMm,
+                QStringLiteral("0")))) {
+        return false;
+    }
+    const auto before = window.Session().GetDocument().Revision();
+    window.RunCommand("part.surface_jig");
+    if (!Explain((std::string("厚み 0 は断る(") + window.StatusText().toStdString() + ")").c_str(),
+            window.Session().GetDocument().Revision() == before
+                && window.StatusText().contains(QStringLiteral("JIG-E002")))) {
+        return false;
+    }
+    // すき間 0.5、厚み 3 で作る。当たり面(形状ガイド)と当て板(部品)が1つずつ増える。
+    const int surfacesBefore = GuideSurfaceCount(window);
+    const int partsBefore = CountOfKind(window, kachakacha::v2::domain::EntityKind::Part);
+    (void)window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::JigClearanceMm,
+        QStringLiteral("0.5"));
+    (void)window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::JigThicknessMm,
+        QStringLiteral("3"));
+    viewport.SetSelection(one);
+    window.RunCommand("part.surface_jig");
+    if (!Explain((std::string("当たり面と当て板ができる(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            GuideSurfaceCount(window) == surfacesBefore + 1
+                && CountOfKind(window, kachakacha::v2::domain::EntityKind::Part)
+                    == partsBefore + 1)) {
+        return false;
+    }
+    // 二手だが一度で戻る。
+    window.RunCommand("edit.undo");
+    return Explain("一度で戻る", GuideSurfaceCount(window) == surfacesBefore
+        && CountOfKind(window, kachakacha::v2::domain::EntityKind::Part) == partsBefore);
+}
+
 std::vector<SelfTestCase> GuideCases()
 {
     return {
+        {"治具は当たり面と当て板を作り一度で戻る", &CaseSurfaceJigMakesContactSurfaceAndSolid},
         {"回転体は断面を軸のまわりに回して形状ガイドを作る", &CaseRevolveMakesHiddenSectionsAndASurface},
         {"役割表から平面を作り開き直しても戻る", &CaseGuideTableBuildsPlanarAndSurvivesReopen},
         {"表の行に効くコマンドは行を選んでから", &CaseGuideRowCommandsNeedARow},

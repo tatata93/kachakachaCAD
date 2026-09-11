@@ -324,6 +324,12 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "形状ガイドの面を1つ以上選んでください。",
             "選んだ面に厚みを付けて立体にします。厚みの付け方は外側・中央・内側から選びます。",
             true, {"AT-EXT-001"}},
+        {"part.surface_jig", "治具を作る", CommandMode::Instant, "jig", "",
+            SelectionPredicate::OneOrMoreGuideSurfaces,
+            "形状ガイドの面を1つ以上選んでください。",
+            "選んだ面に沿った当て板(治具)を作ります。「治具のすき間」だけ離した面に"
+            "「治具の厚み」を付けます。厚みの符号で表側・裏側が決まります。", true,
+            {"AT-EXT-001"}},
         {"part.thickness_placement", "厚みの付け方", CommandMode::Instant, "placement", "",
             SelectionPredicate::Always, "",
             "面に厚みを付けるときの付け方を、外側・中央・内側の順に切り替えます。", false,

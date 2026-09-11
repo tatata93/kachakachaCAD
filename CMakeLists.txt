@@ -587,6 +587,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/EntityEdit.cpp
     src/next/kachakacha/app/RevolveSurface.cpp
     src/next/kachakacha/app/FabricationOptions.cpp
+    src/next/kachakacha/app/SurfaceJig.cpp
     src/next/kachakacha/app/DrawingSession.cpp
     src/next/kachakacha/app/OperationGuide.cpp
     src/next/kachakacha/app/UiMode.cpp
@@ -780,6 +781,7 @@ kachakacha_add_v2_test(intersection_points_tests tests_v2/intersection_points_te
 kachakacha_add_v2_test(entity_edit_tests tests_v2/entity_edit_tests.cpp)
 kachakacha_add_v2_test(revolve_surface_tests tests_v2/revolve_surface_tests.cpp)
 kachakacha_add_v2_test(fabrication_options_tests tests_v2/fabrication_options_tests.cpp)
+kachakacha_add_v2_test(surface_jig_tests tests_v2/surface_jig_tests.cpp)
 kachakacha_add_v2_test(polyline_corners_tests tests_v2/polyline_corners_tests.cpp)
 kachakacha_add_v2_test(kcd_import_tests tests_v2/kcd_import_tests.cpp)
 kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)

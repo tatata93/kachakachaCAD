@@ -43,6 +43,12 @@ const std::vector<ParameterDefinition>& ParameterDefinitions()
         {ParameterId::RevolveAngleDeg, "revolve_angle", "回転体の角度(度)",
             geometry::QuantityKind::Scalar, 360.0, 0.1, 360.0,
             "断面を回す角度です。360 で一周。0 では回りません。"},
+        {ParameterId::JigClearanceMm, "jig_clearance", "治具のすき間",
+            geometry::QuantityKind::Length, 0.2, 0.0, 100.0,
+            "治具と模型の間のすき間です。0 なら面にぴったり当てます。"},
+        {ParameterId::JigThicknessMm, "jig_thickness", "治具の厚み",
+            geometry::QuantityKind::Length, 3.0, -100.0, 100.0,
+            "当て板の厚みです。正なら面の表側、負なら裏側に作ります(どちら側かがこれで決まります)。"},
     };
     return table;
 }

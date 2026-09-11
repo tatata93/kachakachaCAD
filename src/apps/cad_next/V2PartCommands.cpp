@@ -10,6 +10,9 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/SurfaceJig.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
+
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/WireChain.h"
@@ -65,7 +68,7 @@ using kachakacha::v2::modeling::SnapCurve;
 bool V2MainWindow::IsPartCommand(std::string_view id)
 {
     return id == "part.extrude" || id == "part.thicken" || id == "part.thicken_to_plane"
-        || id == "part.thickness_placement"
+        || id == "part.thickness_placement" || id == "part.surface_jig"
         || id == "part.from_wire_cage" || id == "part.boolean_add"
         || id == "part.boolean_cut";
 }
@@ -82,6 +85,10 @@ void V2MainWindow::RunPartCommand(std::string_view id)
     }
     if (id == "part.thicken_to_plane") {
         RunThickenSurfaceToPlane();
+        return;
+    }
+    if (id == "part.surface_jig") {
+        RunSurfaceJig();
         return;
     }
     if (id == "part.thickness_placement") {
@@ -571,6 +578,102 @@ void V2MainWindow::RunThickenSurface()
             .arg(made)
             .arg(thickness)
             .arg(QString::fromUtf8(kachakacha::v2::fabrication::ThicknessPlacementNameJa(placement))));
+}
+
+kachakacha::v2::base::EntityId V2MainWindow::JigContactSurface(
+    kachakacha::v2::base::EntityId sourceId, const kachakacha::v2::app::SurfaceJigPlan& plan)
+{
+    if (!plan.NeedsOffsetSurface()) {
+        return sourceId;   // すき間 0。元の面にぴったり当てる。
+    }
+    // すき間だけ離した面。作り方は「離した面」なので、元の面を直せば治具も付いてくる。
+    kachakacha::v2::modeling::GuideTable table;
+    table.method = kachakacha::v2::modeling::GuideSurfaceMethod::OffsetGuide;
+    table.offsetDistanceMm = plan.offsetDistanceMm;
+    const auto* entity = session_->GetDocument().FindEntity(sourceId);
+    const auto added = kachakacha::v2::modeling::AddSourceSurfaceRow(table, sourceId,
+        entity != nullptr ? entity->displayName : std::string("面"));
+    if (!added.HasValue()) {
+        ReportDiagnostics(added.Diagnostics());
+        return kachakacha::v2::base::EntityId{};
+    }
+    const auto built = BuildSurfaceFromTable(added.Value(), true);
+    if (!built.has_value()) {
+        return kachakacha::v2::base::EntityId{};
+    }
+    return AdoptGuideSurface(added.Value(), *built, {sourceId}, "治具の当たり面");
+}
+
+bool V2MainWindow::AddJigSolid(kachakacha::v2::base::EntityId contactId,
+    const kachakacha::v2::app::SurfaceJigPlan& plan)
+{
+    const auto found = guideShapes_.find(contactId.ToString());
+    if (found == guideShapes_.end()) {
+        SetStatus(QStringLiteral("治具: 当たり面の形がまだありません。"));
+        return false;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto solid = kachakacha::v2::kernel::ThickenSurface(found->second,
+        plan.thicknessMm, plan.placement, tolerance);
+    if (!solid.HasValue()) {
+        ReportDiagnostics(solid.Diagnostics());
+        return false;
+    }
+    kachakacha::v2::domain::ThickenSurfaceDefinition definition;
+    definition.surface = contactId;
+    definition.thickness.value = plan.thicknessMm;
+    definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
+    definition.placement = static_cast<int>(plan.placement);
+    return !AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+        std::move(definition), solid.Value().handle, solid.Value().edges, "治具")
+                .IsNil();
+}
+
+void V2MainWindow::RunSurfaceJig()
+{
+    // 治具(V1 の body_surface_jig)。専用の立体は作らず、V2 の二手で同じものを出す:
+    // 「離した面」で接触面を作り、その面に厚みを付けて当て板にする。
+    // 二手をひとまとまりにするので、元に戻すのは一度で済む。
+    std::vector<kachakacha::v2::base::EntityId> surfaces;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr
+            && entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
+            surfaces.push_back(id);
+        }
+    }
+    const auto& values = parameterDock_->Values();
+    const auto plan = kachakacha::v2::app::PlanSurfaceJig(
+        kachakacha::v2::app::ParameterValueOf(values,
+            kachakacha::v2::app::ParameterId::JigClearanceMm),
+        kachakacha::v2::app::ParameterValueOf(values,
+            kachakacha::v2::app::ParameterId::JigThicknessMm),
+        surfaces.size());
+    if (!plan.HasValue()) {
+        ReportDiagnostics(plan.Diagnostics());
+        return;
+    }
+    const auto revisionBefore = session_->GetDocument().Revision();
+    session_->GetDocument().BeginCompound("治具を作る");
+    const auto contact = JigContactSurface(surfaces.front(), plan.Value());
+    bool ok = !contact.IsNil();
+    if (ok) {
+        ok = AddJigSolid(contact, plan.Value());
+    }
+    session_->GetDocument().EndCompound();
+    if (!ok) {
+        // 途中まで入ったものを戻す。半端な当たり面だけを残さない。
+        if (session_->GetDocument().Revision() != revisionBefore) {
+            (void)session_->Undo();
+            AdoptCurrentDocument();
+        }
+        return;
+    }
+    SetStatus(QStringLiteral("治具: すき間 %1 mm、厚み %2 mm(%3)の当て板を作りました。")
+            .arg(std::abs(plan.Value().offsetDistanceMm), 0, 'f', 3)
+            .arg(plan.Value().thicknessMm, 0, 'f', 3)
+            .arg(QString::fromUtf8(kachakacha::v2::fabrication::ThicknessPlacementNameJa(
+                plan.Value().placement))));
 }
 
 void V2MainWindow::RunThickenSurfaceToPlane()

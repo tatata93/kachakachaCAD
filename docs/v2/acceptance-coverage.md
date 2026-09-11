@@ -54,7 +54,7 @@
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |
 | AT-GEO-013 | 済 | tests_v2/wire_cage_tests.cpp(離れた2つの箱は、面12枚の1つの候補ではなく、6面ずつの2つの立体に分かれる。余る線は無く、いくつになるかを GEO-S007 で先に知らせる) + tests_v2/kernel_wire_cage_tests.cpp(2つ同時に確定すると別々の形として2つ作られ、体積もそれぞれのもの。面の意味的キーは core が決めたものと同じ。選ばない・2度選ぶ・候補にない番号は断る) + kernel_extrude_tests.cpp(引いて分かれる場合) |
-| AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー) |
+| AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー)+ 治具(surface_jig_tests: 表側は外側へ、厚みが負なら裏側へ内側で、すき間 0 なら離さない。負のすき間 JIG-E001・厚み 0 JIG-E002・面の数 JIG-E003)+ 自己試験(当たり面と当て板ができて一度で戻る) |
 | AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |
 | AT-EXT-003 | 済 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出し、ワイヤー上の標本点すべてが部品の表面から modelLinearMm 以内にあることを DistanceToShapeSurface で測る。直線の輪郭と円の輪郭の両方で見る。表にない形の距離は測らずに断る) |
 | AT-EXT-004 | 済 | tests_v2/extrude_tests.cpp(断面積を円弧のまま厳密に計算)+ tests_v2/kernel_extrude_tests.cpp(貫通穴つきの体積が厳密に合う=円が多角形へ化けていない) |

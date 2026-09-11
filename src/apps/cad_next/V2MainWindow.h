@@ -26,6 +26,7 @@
 #include "V2ParameterDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
+#include "kachakacha/app/SurfaceJig.h"
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
@@ -298,6 +299,15 @@ public:
     void RunThickenSurface();
     //! 面と作業平面の間を埋めて立体にする(任意の面まで)。
     void RunThickenSurfaceToPlane();
+    //! 治具を作る(V1 の body_surface_jig)。離した面 + 厚みの2手をひとまとまりで。
+    void RunSurfaceJig();
+    //! 治具の当たり面。すき間 0 なら元の面をそのまま返す。作れなければ空の id。
+    [[nodiscard]] kachakacha::v2::base::EntityId JigContactSurface(
+        kachakacha::v2::base::EntityId sourceId,
+        const kachakacha::v2::app::SurfaceJigPlan& plan);
+    //! 当たり面へ厚みを付けて当て板にする。
+    [[nodiscard]] bool AddJigSolid(kachakacha::v2::base::EntityId contactId,
+        const kachakacha::v2::app::SurfaceJigPlan& plan);
     //! 厚みをどちらへ付けるか。外側・中央・内側。
     kachakacha::v2::fabrication::ThicknessPlacement thicknessPlacement_ =
         kachakacha::v2::fabrication::ThicknessPlacement::Centered;

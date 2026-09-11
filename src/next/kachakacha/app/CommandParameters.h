@@ -34,6 +34,8 @@ enum class ParameterId {
     RealSizeMm,        //!< 実物の寸法(mm)。縮尺で割ると模型の寸法になる
     MaxDeviationMm,    //!< 展開で許すずれ(mm)。ここが通るか通らないかを決める
     RevolveAngleDeg,   //!< 回転体で回す角度(度)。360 で一周
+    JigClearanceMm,    //!< 治具のすき間(mm)。0 なら面にぴったり当てる
+    JigThicknessMm,    //!< 治具の厚み(mm)。正なら面の表側、負なら裏側
 };
 
 struct ParameterDefinition {

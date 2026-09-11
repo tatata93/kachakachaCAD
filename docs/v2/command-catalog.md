@@ -110,6 +110,7 @@ parameter schemaのdiscriminatorにする。
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(折れ線) | AT-FAB-013 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
 | `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Part | AT-EXT-001 |
+| `part.surface_jig` | 治具を作る | 形状ガイドの面1つ、治具のすき間、治具の厚み(符号で表側/裏側) | 当たり面(OffsetGuide、すき間 0 なら作らない)+ 当て板(ThickenSurface)をひとまとまりで。JIG-E001〜E003 | AT-EXT-001 |
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |
 | `part.thicken_to_plane` | 面を平面まで立体に | 形状ガイド1と作業平面1。面が平面をまたげば断る | Part | AT-EXT-001 |
 | `part.from_wire_cage` | ワイヤー群から部品 | scope、patch候補、採用候補 | 1以上のPart | AT-GEO-010から013 |

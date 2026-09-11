@@ -30,6 +30,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::OneGuideRow: return "役割表の行を1つ選んでください。";
     case SelectionPredicate::OneOrMoreGuideRows: return "役割表に行を1つ以上入れてください。";
     case SelectionPredicate::WiresAndOneGuideSurface: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。";
+    case SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces: return "ワイヤーを1つ以上と、落とす先の形状ガイドの面を2つ以上選んでください。";
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane: return "形状ガイドの面を1つと、相手の作業平面を1つ選んでください。";
     }
     return "";
@@ -310,6 +311,12 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "線を作業平面や面へ投影します。", true,
             {"AT-FAB-007"}},
+        {"wire.wrap_project", "回り込み投影", CommandMode::Instant, "wrap_project", "",
+            SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces,
+            "ワイヤーを1つ以上と、落とす先の形状ガイドの面を2つ以上選んでください。",
+            "角をまたぐ線を、面ごとの区間に分けて落とします(パノラミックウインドウなど)。"
+            "面と面の間は橋渡ししません。落とす先が1枚なら「曲面へ投影」を使います。", true,
+            {"AT-FAB-006"}},
         {"wire.project_surface", "曲面へ投影", CommandMode::Instant, "project_surface", "",
             SelectionPredicate::WiresAndOneGuideSurface,
             "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。",

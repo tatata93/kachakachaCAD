@@ -480,9 +480,45 @@ namespace kachakacha::v2::selftest {
     return Explain("戻すと外れる", entity != nullptr && !entity->manufacturing.has_value());
 }
 
+[[nodiscard]] bool CaseWrapProjectionNeedsTwoSurfaces(V2MainWindow& window)
+{
+    // 回り込み投影(V1 の「複数の面へ回り込み投影」)。面が1枚なら「曲面へ投影」の側。
+    window.RunCommand("file.new");
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    // 面の手前に線を1本引く。落とす向きは作業平面の法線。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.35, viewport.height() * 0.50));
+    viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.50));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire);
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::GuideSurface);
+    if (!Explain("線と面がある", !wires.entityIds.empty() && !surfaces.entityIds.empty())) {
+        return false;
+    }
+    // 面1枚と線を選んで押す。1枚では押せない(台帳の条件が 2 枚以上)。
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(wires.entityIds.back());
+    one.entityIds.push_back(surfaces.entityIds.front());
+    viewport.SetSelection(one);
+    const auto before = window.Session().GetDocument().Revision();
+    window.RunCommand("wire.wrap_project");
+    return Explain((std::string("面が1枚なら押せない(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.Session().GetDocument().Revision() == before
+            && window.StatusText().contains(QStringLiteral("2つ以上")));
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"回り込み投影は面が2枚以上要る", &CaseWrapProjectionNeedsTwoSurfaces},
         {"製作の棚の範囲と材料・積層が効く", &CaseFabricationDockRangeAndMaterial},
         {"製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},

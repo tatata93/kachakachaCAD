@@ -65,6 +65,9 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
     case SelectionPredicate::WiresAndOneGuideSurface:
         // 落とす先はちょうど1枚。2枚選んでいたら、どちらへ落とすのか決まらない。
         return facts.wires >= 1 && facts.guideSurfaces == 1;
+    case SelectionPredicate::WiresAndTwoOrMoreGuideSurfaces:
+        // 回り込み投影は、またぐ面を全部選ぶ。1枚なら「曲面へ投影」の側。
+        return facts.wires >= 1 && facts.guideSurfaces >= 2;
     case SelectionPredicate::OneGuideSurfaceAndOneWorkPlane:
         return facts.guideSurfaces == 1 && facts.workPlanes == 1;
     }

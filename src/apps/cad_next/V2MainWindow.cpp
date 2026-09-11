@@ -252,7 +252,7 @@ void V2MainWindow::BuildMenus()
                             "wire.corner_fillet", "wire.set_datum", "wire.clear_datum",
                             "wire.move", "wire.copy",
                             "wire.mirror", "wire.rotate", "wire.project",
-                            "wire.project_surface"}},
+                            "wire.project_surface", "wire.wrap_project"}},
         {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
                        "grid.move_origin"}},
         {"形(&M)", {"guide.create", "guide.revolve", "guide.set_method", "guide.add_row",

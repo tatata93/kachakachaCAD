@@ -47,6 +47,8 @@ enum class SelectionPredicate {
     OneFabricationPanel,
     OneOrMorePatterns,
     OneOrMoreSelectedCurves,
+    //! ワイヤーと、落とす先の形状ガイドの面 2 枚以上。回り込み投影に使う。
+    WiresAndTwoOrMoreGuideSurfaces,
     //! 部品1つ、または形状ガイド1つ。製作はどちらからでも始められる。
     OnePartOrSurface,
     //! 形状ガイドの面を1つ以上。厚みを付けて立体にするときに使う。

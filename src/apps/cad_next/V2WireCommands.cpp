@@ -16,6 +16,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/fabrication/SurfaceProjection.h"
+#include "kachakacha/fabrication/WrapProjection.h"
 #include "kachakacha/document/FeatureReevaluation.h"
 #include "kachakacha/geometry/CurveProjection.h"
 #include "kachakacha/geometry/Measurement.h"
@@ -73,7 +74,8 @@ constexpr WireEditBinding kWireEdits[] = {
 bool V2MainWindow::IsWireEditCommand(std::string_view id)
 {
     return FindWireEdit(id) != nullptr || id == "wire.project"
-        || id == "wire.project_surface" || id == "wire.trim" || id == "wire.extend"
+        || id == "wire.project_surface" || id == "wire.wrap_project"
+        || id == "wire.trim" || id == "wire.extend"
         || id == "wire.intersection_points" || id == "wire.set_datum"
         || id == "wire.clear_datum";
 }
@@ -135,6 +137,84 @@ void V2MainWindow::ProjectSelectedWires()
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("面へ投影: %1本を作業平面へ落としました。元の線は残しています。")
             .arg(static_cast<int>(projected.Value().size())));
+}
+
+void V2MainWindow::WrapProjectSelectedWires()
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    // 角をまたぐ窓(V1 の「複数の面へ回り込み投影」)。線を面ごとの区間に分けて落とす。
+    // どの面へ載るかは core が決める。ここは材料を集めて、出来た区間を文書へ入れるだけ。
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    std::vector<kachakacha::v2::base::EntityId> surfaceIds;
+    std::vector<kachakacha::v2::fabrication::SurfacePatchSamples> samples;
+    for (const auto& id : selection.entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity == nullptr || entity->kind != EntityKind::GuideSurface) {
+            continue;
+        }
+        const auto found = guideSamples_.find(id.ToString());
+        if (found == guideSamples_.end()) {
+            SetStatus(QStringLiteral("回り込み投影: 選んだ面の形がまだありません。"));
+            return;
+        }
+        surfaceIds.push_back(id);
+        samples.push_back(found->second);
+    }
+    if (inputs.empty()) {
+        SetStatus(QStringLiteral("回り込み投影: 落とす線も一緒に選んでください。"));
+        return;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto runs = kachakacha::v2::fabrication::WrapProjectOntoSurfaces(samples, inputs,
+        viewport_->WorkPlane().normal, tolerance.interactiveJoinMm);
+    if (!runs.HasValue()) {
+        ReportDiagnostics(runs.Diagnostics());
+        return;
+    }
+    // 区間はひとまとまりで入れる。元に戻すのは一度で済む。元の線は残す。
+    session_->GetDocument().BeginCompound("回り込み投影");
+    int made = 0;
+    for (const auto& run : runs.Value()) {
+        const auto* surface = session_->GetDocument().FindEntity(surfaceIds[run.surfaceIndex]);
+        const std::string label = "回り込み投影"
+            + (surface != nullptr ? "(" + surface->displayName + ")" : std::string());
+        Feature feature;
+        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = FeatureType::ProjectWire;
+        feature.displayName = label;
+        feature.inputEntityIds = selection.entityIds;
+        kachakacha::v2::domain::CreateWireDefinition wire;
+        wire.segments = run.curves;
+        for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+            wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+        }
+        feature.definition = std::move(wire);
+        Entity entity;
+        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind = EntityKind::Wire;
+        entity.displayName = label;
+        entity.createdBy = feature.id;
+        feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
+        const auto added = session_->GetDocument().Run(
+            AddFeatureCommand(feature, {entity}, label));
+        if (added.committed) {
+            ++made;
+        } else {
+            ReportDiagnostics(added.diagnostics);
+        }
+    }
+    session_->GetDocument().EndCompound();
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("回り込み投影: %1 枚の面へ %2 区間を落としました。元の線は残しています。")
+            .arg(static_cast<int>(samples.size()))
+            .arg(made));
 }
 
 void V2MainWindow::ProjectSelectedWiresOntoSurface()
@@ -217,6 +297,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
 
     if (id == "wire.project") {
         ProjectSelectedWires();
+        return;
+    }
+    if (id == "wire.wrap_project") {
+        WrapProjectSelectedWires();
         return;
     }
     if (id == "wire.project_surface") {

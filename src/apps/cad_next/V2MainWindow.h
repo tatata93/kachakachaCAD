@@ -279,6 +279,8 @@ public:
     void ProjectSelectedWires();
     //! 線を、作業平面の向きに沿って形状ガイドの曲面へ落とす(折れ線になる)。
     void ProjectSelectedWiresOntoSurface();
+    //! 角をまたぐ窓を、面ごとの区間に分けて落とす(V1 の「複数の面へ回り込み投影」)。
+    void WrapProjectSelectedWires();
     //! 固定のコマンドか。V2FreezeCommands.cpp が持つ。
     [[nodiscard]] static bool IsFreezeCommand(std::string_view id);
     void RunFreezeCommand(std::string_view id);

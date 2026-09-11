@@ -72,7 +72,7 @@
 | AT-FAB-003 | 済 | tests_v2/fabrication_tests.cpp(二重曲率を展開できないと言う) |
 | AT-FAB-004 | 済 | tests_v2/pattern_tests.cpp(U / V / Both / Auto で候補が変わる。Auto は曲率の大きい向きへ直交して切り、理由を日本語で言う。二重曲率が同じくらいなら Both にして片方へ寄せない。曲率の比を9通り変えて U と V と Both のどれもが出ることを見る=縦だけに固定していない。Both では進行方向が2本出る。平らな部材では幅の広い方向。壊れた曲率と、自動のままの向きは FAB-C007 で断る) + 切れ目の制約検査(交差/ligament)も同ファイル |
 | AT-FAB-005 | 済 | tests_v2/panel_strategy_tests.cpp(同じ面から4通りを作り、1枚は1連結・別部材は各面別・少数分割は目標内で最小・混合は強曲率部だけ分離。作れない戦略は理由つきで残す) |
-| AT-FAB-006 | 済 | tests_v2/panel_strategy_tests.cpp(7役割の割り当て、矛盾の拒否、壊れた参照を黙って動かさず付け直す/無効にする/消すを選ばせる)+ 切れ目(planar_panel_tests: 切れ目が型紙に載り RELIEF 層の切る線になる、平面から外れれば断る。fabrication_evaluate_tests: 平らな部材に入り、閉じた線は FAB-M005、載っていなければ FAB-M003)+ 自己試験(開いた線を切れ目にできる) |
+| AT-FAB-006 | 済 | tests_v2/panel_strategy_tests.cpp(7役割の割り当て、矛盾の拒否、壊れた参照を黙って動かさず付け直す/無効にする/消すを選ばせる)+ 切れ目(planar_panel_tests: 切れ目が型紙に載り RELIEF 層の切る線になる、平面から外れれば断る。fabrication_evaluate_tests: 平らな部材に入り、閉じた線は FAB-M005、載っていなければ FAB-M003)+ 自己試験(開いた線を切れ目にできる)+ 回り込み投影(wrap_projection_tests: 段違いの2枚で区間が分かれ境目が真ん中に詰まる、区間は自分の面の内側で終わる、1枚に載るなら閉じたまま1区間、面1枚 FAB-J003・線なし/向きなし FAB-J002・当たらない FAB-J001)+ 自己試験(面が1枚なら押せない) |
 | AT-FAB-007 | 済 | tests_v2/opening_clip_tests.cpp(開口またぎ) |
 | AT-FAB-008 | 済 | tests_v2/pattern_tests.cpp(Straight / VNotch / CurvedVNotch の3つとも、正規化弧長で左右の辺を対応させる。同じ長さなら組立100%で隙間0。長さが違えばその差がそのまま隙間として出て、左右どちらの長さも変えない。目標を超えたら FAB-C006 で断り、「片方の辺だけを縮めて合わせることはしません」と言う。点の数が左右で違っても同じ決め方で対応が取れる) + opening_clip_tests.cpp(対応辺のID) |
 | AT-FAB-009 | 済 | tests_v2/assembly_tests.cpp(0/30/100%で寸法不変) |

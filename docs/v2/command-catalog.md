@@ -107,6 +107,7 @@ parameter schemaのdiscriminatorにする。
 | `guide.build` | 表から面を作る | 表の行1以上。離した面は右の距離欄を使う | GuideSurface | AT-GEO-008 |
 | `guide.clear` | 表を空にする | 表の行1以上 | 表 | AT-GEO-008 |
 | `wire.project` | 面へ投影 | WireChain、対象、方向、hit policy | derived Wire | AT-FAB-007 |
+| `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(折れ線) | AT-FAB-013 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
 | `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Part | AT-EXT-001 |

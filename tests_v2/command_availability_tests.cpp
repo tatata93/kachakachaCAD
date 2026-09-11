@@ -345,9 +345,14 @@ KACHA_V2_TEST(availability, 台帳のすべての条件に判断がある)
     everything.curves = 2;
     everything.selectedGuideRows = 1;
     everything.guideRows = 1;
+    // 「ちょうど1枚」と「2枚以上」は同時には満たせない(曲面へ投影 と 回り込み投影)。
+    // 1つの材料で全部を通そうとすると、どちらかを消すことになる。材料を2通り試す。
+    SelectionFacts twoSurfaces = everything;
+    twoSurfaces.guideSurfaces = 2;
     std::vector<std::string> unreachable;
     for (const auto& command : CommandCatalog()) {
-        if (!SelectionSatisfies(command.predicate, everything)) {
+        if (!SelectionSatisfies(command.predicate, everything)
+            && !SelectionSatisfies(command.predicate, twoSurfaces)) {
             unreachable.push_back(std::string(command.id));
         }
     }

@@ -161,6 +161,8 @@ public:
     void SetSnapSuppressed(bool suppressed);
     //! カーソルの形をいまの状態に合わせる。掴めるかどうかを手元で分かるようにする。
     void RefreshCursorShape();
+    //! いま拾う相手を絞る印(作図中は作業平面の上だけ)。判断は core にある。
+    [[nodiscard]] kachakacha::v2::app::PickFocus PickFocusNow() const;
     //! 作図中の十字カーソル(V1 の白フチ付き十字)。既定の十字は細くて読めない。
     [[nodiscard]] static QCursor DrawingCrossCursor();
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。

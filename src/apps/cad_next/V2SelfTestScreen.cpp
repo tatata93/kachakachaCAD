@@ -225,6 +225,49 @@ void DrawOneLine(V2MainWindow& window)
         window.VisibleEntityRowCount() == all);
 }
 
+[[nodiscard]] bool CaseDrawingDoesNotGrabOffPlaneWires(V2MainWindow& window)
+{
+    // 3次元の空間に2次元の図面が何枚も浮いているのが、このCADの形である。
+    // 画面では手前の面と奥の面が重なって見えるので、薄くするだけでは
+    // 別の面の線を掴んでしまう。作図中は作業平面の上の線しか掴まない。
+    DrawOneLine(window);
+    const EntityId wire = FirstOfKind(window, EntityKind::Wire);
+    if (!Explain("XY の上に線が1本ある", !wire.IsNil())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const auto middle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
+    if (!Explain("線の真ん中が画面に出る", middle.has_value())) {
+        return false;
+    }
+    // 選択道具なら掴める。掴めないと、別の面のものを直せなくなる。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.HoverAt(QPointF(middle->x, middle->y));
+    if (!Explain("選択道具なら掴める", viewport.HoveredEntityId() == wire)) {
+        return false;
+    }
+    // 作業平面を別の面(正面 XZ)へ移すと、その線は面の外になる。
+    const auto planes = window.PlaneComboCount();
+    for (int index = 0; index < planes; ++index) {
+        if (window.PlaneComboText(index).contains(QStringLiteral("front"))) {
+            window.SelectPlaneCombo(index);
+            break;
+        }
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.HoverAt(QPointF(middle->x, middle->y));
+    if (!Explain("作図中は別の面の線を掴まない", viewport.HoveredEntityId().IsNil())) {
+        return false;
+    }
+    // 印を外せば掴める。要るときに切れないと、かえって使えない。
+    auto display = viewport.DisplaySettingsNow();
+    display.dimOffPlaneLines = false;
+    window.ApplyDisplaySettings(display);
+    viewport.HoverAt(QPointF(middle->x, middle->y));
+    return Explain("「常に薄く」を外せば掴める", viewport.HoveredEntityId() == wire);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -238,6 +281,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"選択に正対すると、その面が画面の真ん中に来る", &CaseFacingSelectionBringsItIntoView},
         {"右の棚がいま使っている道具に付いてくる", &CaseRightShelfFollowsTheTool},
         {"一覧を名前・種類で絞り込める", &CaseTreeFilterNarrowsTheList},
+        {"作図中は作業平面の外の線を掴まない", &CaseDrawingDoesNotGrabOffPlaneWires},
     };
 }
 

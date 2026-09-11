@@ -20,6 +20,7 @@
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/SnapEngine.h"
+#include "kachakacha/modeling/WorkPlane.h"
 
 #include <optional>
 #include <vector>
@@ -47,12 +48,25 @@ struct PickCandidate {
     double distancePx = 0.0;
 };
 
+//! 拾う相手を絞る印。作図中は作業平面の上の線だけを相手にする(app/PlaneFocus)。
+struct PickFocus {
+    //! 作図の道具を持っているか。
+    bool drawing = false;
+    //! 「作図面以外の線を常に薄く」の印。外れていれば絞らない。
+    bool dimOffPlane = false;
+    //! いまの作業平面。drawing かつ dimOffPlane のときだけ見る。
+    modeling::WorkPlaneFrame plane{};
+};
+
 //! 画面の1点から、いちばん近い線を拾う。
 //! 拾う範囲は tolerance.displayPickPx。範囲の外なら何も返さない。
 //! 同じ距離のものが並んだときは、場面に入っている順で先のものを返す。毎回同じ結果になる。
+//!
+//! focus を渡すと、薄くしている線は拾わない。薄いのに掴めると、見た目と手が食い違う。
+//! 省くと全部拾う(いままでと同じ)。
 [[nodiscard]] std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
-    const geometry::GeometryTolerance& tolerance);
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus = {});
 
 //! 拾ったものを選択へ入れる。拾えていなければ、Replace のときだけ空にする。
 //! 足す・外すの途中で、何も無いところを押しても選択は消えない(V1と同じ)。

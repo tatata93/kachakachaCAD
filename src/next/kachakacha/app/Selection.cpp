@@ -1,5 +1,6 @@
 #include "kachakacha/app/Selection.h"
 
+#include "kachakacha/app/PlaneFocus.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <algorithm>
@@ -68,10 +69,16 @@ using geometry::Vector3;
 
 std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
-    const geometry::GeometryTolerance& tolerance)
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
 {
     std::optional<PickCandidate> best;
     for (const auto& curve : scene.curves) {
+        // 薄くしている線は拾わない。別の面の線を誤って掴むのが、
+        // 面が何枚も浮いているこのCADでいちばん困る事故である。
+        if (!PickableOffPlaneCurve(focus.drawing, focus.dimOffPlane,
+                CurveLiesOnPlane(curve.segment, focus.plane))) {
+            continue;
+        }
         const auto distance = CurveDistancePx(curve.segment, mapping, pointer,
             tolerance.interactiveJoinMm);
         if (!distance.has_value() || *distance > tolerance.displayPickPx) {

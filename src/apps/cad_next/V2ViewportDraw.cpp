@@ -4,6 +4,8 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/app/PlaneFocus.h"
+
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/WireEdit.h"
@@ -205,18 +207,6 @@ namespace {
 }
 
 //! その線が作業平面の上にあるか(両端と中央が面から浮いていない)。
-[[nodiscard]] bool CurveOnPlane(const CurveSegment& segment, const WorkPlaneFrame& plane)
-{
-    constexpr double kTolerance = 1.0e-3;
-    for (const double t : {0.0, 0.5, 1.0}) {
-        const Vector3 point = segment.Evaluate(t);
-        if (std::abs(Dot(point - plane.origin, plane.normal)) > kTolerance) {
-            return false;
-        }
-    }
-    return true;
-}
-
 } // namespace
 
 void V2Viewport::DrawDocument(QPainter& painter) const
@@ -250,7 +240,10 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             // 見分けられなければならない。
             color = palette_.selected.lighter(125);
         }
-        if (dimming && !selected && !CurveOnPlane(curve.segment, workPlane_)) {
+        // 薄くするかどうかの判断は core にある(app/PlaneFocus)。
+        // 掴めるかどうかと同じところから出さないと、薄いのに掴める、が起きる。
+        if (kachakacha::v2::app::DimsOffPlaneCurve(dimming, true, selected,
+                kachakacha::v2::app::CurveLiesOnPlane(curve.segment, workPlane_))) {
             color.setAlphaF(color.alphaF() * 0.24);
         }
         // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。

@@ -698,6 +698,16 @@ bool V2Viewport::PlacePointFromCursorInput()
     return result.placedPoint;
 }
 
+//! いま拾う相手を絞る印。作図中は作業平面の上の線だけを拾う。
+kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
+{
+    kachakacha::v2::app::PickFocus focus;
+    focus.drawing = session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select;
+    focus.dimOffPlane = display_.dimOffPlaneLines;
+    focus.plane = workPlane_;
+    return focus;
+}
+
 void V2Viewport::OnToolChanged()
 {
     if (cursorPanel_.active) {
@@ -944,7 +954,7 @@ void V2Viewport::HoverAt(const QPointF& position)
     // V1 は当たっている線を太く出していた。同じにする。
     const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance);
+        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
     const auto previous = hoveredEntityId_;
     const auto previousSegment = hoveredSegmentId_;
     hoveredEntityId_ = picked.has_value() ? picked->entityId
@@ -991,7 +1001,7 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     }
     const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance);
+        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
     status_ = selection_.entityIds.empty()
         ? std::string("選んでいるものはありません。")

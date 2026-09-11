@@ -42,6 +42,8 @@ struct DisplaySettings {
     bool dimOffPlaneLines = true;
     //! 作図モード以外でもグリッドを出す(V1 の「作図モード以外でも表示」)。
     bool gridInAllModes = true;
+    //! 立体と面を画面に出す。消すと線だけになる(V1 の「ワイヤーフレーム」に当たる)。
+    bool shapesVisible = true;
     //! 作図面(作業平面)を出す(V1 の作図面表示)。
     //! 出さないと、どこに描いているのかが画面から読めない。既定は出す。
     bool workPlaneVisible = true;

@@ -1,5 +1,7 @@
 #include "V2Viewport.h"
 
+#include "kachakacha/modeling/MeshPick.h"
+
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
@@ -698,6 +700,37 @@ bool V2Viewport::PlacePointFromCursorInput()
     return result.placedPoint;
 }
 
+//! 塗った形(立体・面)を画面の点で拾う(棚卸し A-2)。
+//!
+//! 見えているのに掴めない、をなくすためのもの。判断は core(modeling/MeshPick)。
+//! 目から画面の点へ伸ばした光線が、いちばん手前で当たる形を返す。
+std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::PickShapeAt(
+    const QPointF& position) const
+{
+    if (shapeViews_.empty() || !display_.shapesVisible) {
+        return std::nullopt;
+    }
+    const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
+    if (!ray.has_value()) {
+        return std::nullopt;
+    }
+    std::vector<kachakacha::v2::modeling::ShapeMesh> meshes;
+    meshes.reserve(shapeViews_.size());
+    for (const ShapeView& shape : shapeViews_) {
+        meshes.push_back(shape.mesh);
+    }
+    const auto hit = kachakacha::v2::modeling::PickMesh(meshes, ray->origin, ray->direction);
+    if (!hit.has_value() || hit->shapeIndex >= shapeViews_.size()) {
+        return std::nullopt;
+    }
+    kachakacha::v2::app::PickCandidate candidate;
+    candidate.entityId = shapeViews_[hit->shapeIndex].entityId;
+    // 形には線の番号が無い。距離は画面上の px ではなく目からの mm だが、
+    // 線が拾えなかったときにしか使わないので、比べる相手はいない。
+    candidate.distancePx = hit->distanceMm;
+    return candidate;
+}
+
 //! いま拾う相手を絞る印。作図中は作業平面の上の線だけを拾う。
 kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
 {
@@ -909,6 +942,9 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawGrid(painter);
     DrawWorkPlane(painter);
     DrawAxes(painter);
+    // 立体と面を先に塗ってから線を描く。逆にすると、線が面の下に隠れる。
+    // 線はこの道具の主役なので、必ず上に出す。
+    DrawShapes(painter);
     DrawDocument(painter);
     DrawGuideRows(painter);
     DrawPreview(painter);
@@ -952,9 +988,12 @@ void V2Viewport::HoverAt(const QPointF& position)
     }
     // カーソルの下の線を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
     // V1 は当たっている線を太く出していた。同じにする。
-    const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+    auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    if (!picked.has_value()) {
+        picked = PickShapeAt(position);
+    }
     const auto previous = hoveredEntityId_;
     const auto previousSegment = hoveredSegmentId_;
     hoveredEntityId_ = picked.has_value() ? picked->entityId
@@ -999,9 +1038,14 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     } else if ((modifiers & Qt::AltModifier) != 0) {
         mode = SelectionMode::Subtract;
     }
-    const auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+    auto picked = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
         ScreenPoint{position.x(), position.y()},
         session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    if (!picked.has_value()) {
+        // 線が無ければ、塗った形を押したとみなす。見えているのに掴めない、をなくす。
+        // 線を先に見るのは、面の上に線が載っているとき線が拾えなくなるためである。
+        picked = PickShapeAt(position);
+    }
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
     status_ = selection_.entityIds.empty()
         ? std::string("選んでいるものはありません。")

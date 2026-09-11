@@ -22,6 +22,7 @@
 #include "kachakacha/app/EscapeAction.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/ShapeMesh.h"
 
 #include <QColor>
 #include <QPointF>
@@ -126,6 +127,22 @@ public:
     };
     //! 出す作業平面を入れ替える。文書が変わるたびに窓が呼ぶ。
     void SetWorkPlaneViews(std::vector<WorkPlaneView> planes);
+
+    //! 画面に出す形(立体・面)の1つ。核が三角形にしたものを受け取る。
+    struct ShapeView {
+        kachakacha::v2::base::EntityId entityId;
+        kachakacha::v2::modeling::ShapeMesh mesh;
+        //! 面(形状ガイド)なら true。立体より薄く塗り、裏も描く。
+        bool surface = false;
+    };
+    //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
+    void SetShapeViews(std::vector<ShapeView> shapes);
+    [[nodiscard]] int ShapeViewCount() const noexcept
+    {
+        return static_cast<int>(shapeViews_.size());
+    }
+    //! 出ている形の三角形の合計。試験で「本当に描く物があるか」を見る。
+    [[nodiscard]] int ShapeTriangleCount() const noexcept;
     //! いま作図用の十字カーソルを出しているか。試験から見る。
     //! カーソルの形そのものは Qt が持っていて読み出せないので、選んだ結果を覚える。
     [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
@@ -163,6 +180,9 @@ public:
     void RefreshCursorShape();
     //! いま拾う相手を絞る印(作図中は作業平面の上だけ)。判断は core にある。
     [[nodiscard]] kachakacha::v2::app::PickFocus PickFocusNow() const;
+    //! 塗った形を画面の点で拾う。線が拾えなかったときだけ使う。
+    [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> PickShapeAt(
+        const QPointF& position) const;
     //! 作図中の十字カーソル(V1 の白フチ付き十字)。既定の十字は細くて読めない。
     [[nodiscard]] static QCursor DrawingCrossCursor();
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
@@ -379,6 +399,10 @@ private:
     void DrawWorkPlane(QPainter& painter) const;
     //! 作業平面を1枚描く。塗り・枠・u/v の目印・名前。
     void DrawOneWorkPlane(QPainter& painter, const WorkPlaneView& plane) const;
+    //! 立体と面を描く。奥から手前へ塗り、稜線を上から重ねる。
+    void DrawShapes(QPainter& painter) const;
+    //! 形1つ分。塗りと稜線。
+    void DrawOneShape(QPainter& painter, const ShapeView& shape) const;
     void DrawDocument(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;
     //! 選んだワイヤーの制御点。掴める場所を見せる。
@@ -486,6 +510,7 @@ private:
     std::string viewMessage_;
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     std::vector<WorkPlaneView> workPlaneViews_;
+    std::vector<ShapeView> shapeViews_;
     //! カーソルの下の線。押さなくても「どれに当たるか」が見えるようにする。
     kachakacha::v2::base::EntityId hoveredEntityId_;
     kachakacha::v2::base::SegmentId hoveredSegmentId_;

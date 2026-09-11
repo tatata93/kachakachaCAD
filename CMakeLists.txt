@@ -605,7 +605,10 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/NameFilter.cpp
     src/next/kachakacha/app/PlaneFocus.cpp
     src/next/kachakacha/app/ShelfLayout.cpp
+    src/next/kachakacha/modeling/MeshPick.cpp
+    src/next/kachakacha/modeling/ShapeMesh.cpp
     src/next/kachakacha/view/FacingPlan.cpp
+    src/next/kachakacha/view/ShapeShading.cpp
     src/next/kachakacha/view/ViewOrientation.cpp
     src/next/kachakacha/modeling/GuideSurfaceInput.cpp
     src/next/kachakacha/modeling/ExtrudeInput.cpp
@@ -677,6 +680,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
+    src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp
     src/next_occt/kachakacha/kernel/OcctWireCage.cpp
     src/next_occt/kachakacha/kernel/OcctShapeCache.cpp
@@ -760,6 +764,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(shelf_layout_tests tests_v2/shelf_layout_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
+    kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
     kachakacha_add_v2_test(guide_surface_table_tests tests_v2/guide_surface_table_tests.cpp)
     kachakacha_add_v2_test(cursor_input_tests tests_v2/cursor_input_tests.cpp)
     kachakacha_add_v2_test(evaluation_queue_tests tests_v2/evaluation_queue_tests.cpp)
@@ -877,6 +882,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
+        src/apps/cad_next/V2ShapeViews.cpp
         src/apps/cad_next/V2SelfTestDrawing.cpp
         src/apps/cad_next/V2SelfTestEdit.cpp
         src/apps/cad_next/V2ExportCommands.cpp

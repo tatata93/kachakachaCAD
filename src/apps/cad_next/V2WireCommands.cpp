@@ -575,6 +575,8 @@ void V2MainWindow::AdoptCurrentDocument()
     RefreshEntityList();
     RefreshExportCounts();
     RefreshCommandVisibility();
+    // 核の形を画面へ渡す。渡さないと、押し出しても面を作っても画面に何も出ない。
+    RefreshShapeViews();
     viewport_->update();
 }
 

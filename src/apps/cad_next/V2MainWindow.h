@@ -48,6 +48,7 @@
 #include "kachakacha/modeling/GuideSurfaceResult.h"
 
 #include <array>
+#include <cstdint>
 #include <map>
 
 #include <QColor>
@@ -736,6 +737,14 @@ private:
     void RefreshWorkPlaneViews();
     //! 右に出す棚を、いまの道具とモードに合わせる。どれを出すかは core が決める。
     void RefreshRightShelves();
+    //! 核の形(立体・面)を三角形にして画面へ渡す。番号が同じなら作り直さない。
+    void RefreshShapeViews();
+    //! 文字にした id から Entity を探す。核の形の表が文字の鍵を使っているため。
+    [[nodiscard]] static const kachakacha::v2::domain::Entity* FindEntityByIdText(
+        const kachakacha::v2::document::DocumentSnapshot& snapshot,
+        const std::string& idText);
+    //! 作った網を覚えておく表。鍵は形の番号(handle)。作り直しは重い。
+    std::map<std::uint64_t, kachakacha::v2::modeling::ShapeMesh> shapeMeshes_;
     //! 左の一覧の棚を組み立てる。組み立てたものを返す(並べ方は呼び出し側が決める)。
     QDockWidget* BuildEntityTreeDock();
     //! 一覧を絞り込む(V1 の「名前・種類で絞り込み」)。残すかどうかは core が決める。

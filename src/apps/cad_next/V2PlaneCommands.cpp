@@ -316,6 +316,7 @@ V2GridChoice V2MainWindow::CurrentGridChoice() const
     choice.showInAllModes = viewport_->DisplaySettingsNow().gridInAllModes;
     choice.dimOffPlaneLines = viewport_->DisplaySettingsNow().dimOffPlaneLines;
     choice.workPlaneVisible = viewport_->DisplaySettingsNow().workPlaneVisible;
+    choice.shapesVisible = viewport_->DisplaySettingsNow().shapesVisible;
     choice.majorColor = viewport_->Colors().gridMajor;
     choice.minorColor = viewport_->Colors().gridMinor;
     choice.backgroundColor = viewport_->Colors().background;
@@ -356,6 +357,7 @@ void V2MainWindow::ApplyGridChoice(const V2GridChoice& choice)
     display.gridInAllModes = choice.showInAllModes;
     display.dimOffPlaneLines = choice.dimOffPlaneLines;
     display.workPlaneVisible = choice.workPlaneVisible;
+    display.shapesVisible = choice.shapesVisible;
     ApplyDisplaySettings(display);
     RefreshGridSuppression();
     viewport_->update();

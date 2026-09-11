@@ -84,6 +84,11 @@ V2GridDock::V2GridDock(QWidget* parent)
     workPlaneVisible_->setToolTip(QStringLiteral(
         "文書にある作図面を、薄い四角と破線の枠で出します。どこに描いているかが読めます。"));
     form->addRow(workPlaneVisible_);
+    shapesVisible_ = new QCheckBox(QStringLiteral("立体・面を出す"), body);
+    shapesVisible_->setChecked(true);
+    shapesVisible_->setToolTip(QStringLiteral(
+        "押し出しや形状ガイドで作った形を塗って出します。外すと線だけになります。"));
+    form->addRow(shapesVisible_);
 
     majorColor_ = new QPushButton(QStringLiteral("主点色"), body);
     minorColor_ = new QPushButton(QStringLiteral("副点色"), body);
@@ -131,6 +136,7 @@ void V2GridDock::ConnectSignals()
     QObject::connect(allModes_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(dimOffPlane_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(workPlaneVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(shapesVisible_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(majorColor_, &QPushButton::clicked, this,
         [this] { ChooseColor(majorColor_, major_, QStringLiteral("主点色")); });
     QObject::connect(minorColor_, &QPushButton::clicked, this,
@@ -187,6 +193,7 @@ V2GridChoice V2GridDock::Choice() const
     choice.showInAllModes = allModes_->isChecked();
     choice.dimOffPlaneLines = dimOffPlane_->isChecked();
     choice.workPlaneVisible = workPlaneVisible_->isChecked();
+    choice.shapesVisible = shapesVisible_->isChecked();
     choice.majorColor = major_;
     choice.minorColor = minor_;
     choice.backgroundColor = background_;
@@ -212,6 +219,7 @@ void V2GridDock::SetChoice(const V2GridChoice& choice)
     allModes_->setChecked(choice.showInAllModes);
     dimOffPlane_->setChecked(choice.dimOffPlaneLines);
     workPlaneVisible_->setChecked(choice.workPlaneVisible);
+    shapesVisible_->setChecked(choice.shapesVisible);
     major_ = choice.majorColor;
     minor_ = choice.minorColor;
     background_ = choice.backgroundColor;

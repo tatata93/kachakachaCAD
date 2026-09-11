@@ -274,6 +274,113 @@ void DrawOneLine(V2MainWindow& window)
     return Explain("「常に薄く」を外せば掴める", viewport.HoveredEntityId() == wire);
 }
 
+//! 閉じた矩形を1つ引く。押し出しの相手になる。
+[[nodiscard]] bool DrawRectangleForExtrude(V2MainWindow& window)
+{
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    auto& viewport = window.Viewport();
+    const auto first = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{0.0, 0.0, 0.0});
+    const auto second = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{30.0, 20.0, 0.0});
+    if (!first.has_value() || !second.has_value()) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(first->x, first->y));
+    viewport.ClickAt(QPointF(second->x, second->y));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    return !viewport.Selection().entityIds.empty();
+}
+
+[[nodiscard]] bool CaseExtrudedPartAppearsOnScreen(V2MainWindow& window)
+{
+    // V2 は押し出しても画面に何も出なかった。核の形を画面へ渡す道が無く、
+    // 書き出しにしか使っていなかった。工程5から先が目で確かめられない。
+    if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
+        return false;
+    }
+    if (!Explain((std::string("押し出す前は画面に形が無い(")
+                     + std::to_string(window.Viewport().ShapeViewCount()) + ")").c_str(),
+            window.Viewport().ShapeViewCount() == 0)) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("押し出すと画面に形が出る(")
+                     + std::to_string(window.Viewport().ShapeViewCount()) + " 個)").c_str(),
+            window.Viewport().ShapeViewCount() == 1)) {
+        return false;
+    }
+    // 名前が増えただけでは駄目。塗る三角形が本当にあること。
+    return Explain((std::string("塗る三角形がある(")
+                       + std::to_string(window.Viewport().ShapeTriangleCount())
+                       + " 枚)").c_str(),
+        window.Viewport().ShapeTriangleCount() >= 12);
+}
+
+[[nodiscard]] bool CaseShapeCanBePickedOnScreen(V2MainWindow& window)
+{
+    // 見えているのに掴めない、をなくす。塗った面の内側を押して選べること。
+    if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("画面に形が出ている", window.Viewport().ShapeViewCount() == 1)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    // 矩形の真ん中(線の上ではないところ)を押す。
+    const auto middle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{15.0, 10.0, 0.0});
+    if (!Explain("真ん中が画面に出る", middle.has_value())) {
+        return false;
+    }
+    viewport.SelectAt(QPointF(middle->x, middle->y), Qt::NoModifier);
+    if (!Explain((std::string("押すと何か選ばれる(")
+                     + std::to_string(viewport.Selection().entityIds.size())
+                     + " 件)").c_str(),
+            !viewport.Selection().entityIds.empty())) {
+        return false;
+    }
+    // 「立体・面を出す」を外したら、塗りも当たり判定も消える。
+    auto display = viewport.DisplaySettingsNow();
+    display.shapesVisible = false;
+    window.ApplyDisplaySettings(display);
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.SelectAt(QPointF(middle->x, middle->y), Qt::NoModifier);
+    const bool empty = viewport.Selection().entityIds.empty();
+    display.shapesVisible = true;
+    window.ApplyDisplaySettings(display);
+    return Explain("出さない設定なら掴めない", empty);
+}
+
+[[nodiscard]] bool CaseHiddenShapeLeavesTheScreen(V2MainWindow& window)
+{
+    // 「選択を隠す」で形も消えること。名前だけ消えて形が残ると、
+    // 隠したつもりのものが画面に居座る。
+    if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("画面に形が出ている", window.Viewport().ShapeViewCount() == 1)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RunCommand("view.hide_selected");
+    if (!Explain((std::string("隠すと画面から消える(")
+                     + std::to_string(window.Viewport().ShapeViewCount()) + ")").c_str(),
+            window.Viewport().ShapeViewCount() == 0)) {
+        return false;
+    }
+    window.RunCommand("view.show_all");
+    return Explain("出し直すと戻る", window.Viewport().ShapeViewCount() == 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -288,6 +395,9 @@ std::vector<SelfTestCase> ScreenCases()
         {"右の棚がいま使っている道具に付いてくる", &CaseRightShelfFollowsTheTool},
         {"一覧を名前・種類で絞り込める", &CaseTreeFilterNarrowsTheList},
         {"作図中は作業平面の外の線を掴まない", &CaseDrawingDoesNotGrabOffPlaneWires},
+        {"押し出した部品が3D画面に出る", &CaseExtrudedPartAppearsOnScreen},
+        {"塗った形を画面で掴める", &CaseShapeCanBePickedOnScreen},
+        {"隠した形は画面からも消える", &CaseHiddenShapeLeavesTheScreen},
     };
 }
 

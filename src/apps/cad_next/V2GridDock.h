@@ -33,6 +33,8 @@ struct V2GridChoice {
     bool dimOffPlaneLines = true;
     //! 作図面(作業平面)を画面に出す。消すと、どこに描いているかの手がかりが減る。
     bool workPlaneVisible = true;
+    //! 立体と面を画面に出す。消すと線だけになる(V1 のワイヤーフレームに当たる)。
+    bool shapesVisible = true;
     QColor majorColor;
     QColor minorColor;
     QColor backgroundColor;
@@ -73,6 +75,7 @@ private:
     QCheckBox* allModes_ = nullptr;
     QCheckBox* dimOffPlane_ = nullptr;
     QCheckBox* workPlaneVisible_ = nullptr;
+    QCheckBox* shapesVisible_ = nullptr;
     QPushButton* majorColor_ = nullptr;
     QPushButton* minorColor_ = nullptr;
     QPushButton* backgroundColor_ = nullptr;

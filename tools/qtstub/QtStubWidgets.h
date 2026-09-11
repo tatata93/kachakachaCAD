@@ -467,6 +467,18 @@ public:
     void (*valueChanged)(double);
 };
 
+class QSpinBox : public QAbstractSpinBox {
+public:
+    QSpinBox() = default;
+    explicit QSpinBox(QWidget*) {}
+    void setRange(int, int);
+    void setSingleStep(int);
+    void setSuffix(const QString&);
+    void setValue(int);
+    [[nodiscard]] int value() const;
+    void (*valueChanged)(int);
+};
+
 class QFormLayout : public QLayout {
 public:
     QFormLayout() = default;

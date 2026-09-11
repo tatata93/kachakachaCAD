@@ -55,6 +55,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
         "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
         "wire.intersection_points", "wire.corner_chamfer", "wire.corner_fillet",
+        "wire.array_linear", "wire.array_circular",
         "wire.set_datum", "wire.clear_datum", "edit.numeric",
         "wire.move", "wire.copy", "wire.mirror",
         "wire.rotate", "wire.project", "wire.project_surface", "wire.wrap_project", "workplane.create", "grid.edit",

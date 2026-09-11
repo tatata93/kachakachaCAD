@@ -81,6 +81,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
 | `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |
 | `wire.corner_fillet` | 角の加工(丸める) | ワイヤー1以上、丸め半径、同上 | TransformWire(CornerFillet、cornerIndex) | AT-WIR-006 |
+| `wire.array_linear` | 直線に並べる | ワイヤー1つ以上、個数(2〜200)、間隔または端から端まで | 個数-1 だけ TransformWire(Copy)。元は残す。まとめて1回で戻せる。UI-A001〜A003 | AT-WIR-006 |
+| `wire.array_circular` | 円に並べる | ワイヤー1つ以上、個数(2〜200)、全体の角度、中心。軸は作図面の法線 | 個数-1 だけ TransformWire(Rotate)。360度なら最後を元に重ねない。UI-A001/A002/A004/A005 | AT-WIR-006 |
 | `wire.set_datum` | 基準線に設定 | ワイヤー1以上 | SetDatum(true) | AT-DOC-005 |
 | `edit.numeric` | 数値で編集 | 作業平面か線を1つ | 編集の棚を出す。「変更を適用」で UpdateFeatureDefinition(平面は PointNormal に、線は種類を保って点/中心/半径/角度を差し替え)。原点面は UI-E002、種類が混ざった線は UI-E003 | AT-WIR-001, AT-UIX-001 |
 | `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |

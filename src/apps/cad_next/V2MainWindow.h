@@ -32,6 +32,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
+#include "V2ArrayDialog.h"
 #include "V2ExtrudeDialog.h"
 #include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -204,6 +205,11 @@ public:
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
     //! 型紙の下見の棚。出来た型紙を紙の形で見る。
     [[nodiscard]] V2PatternDock& PatternDock() { return *patternDock_; }
+
+    //! 並べ方を聞く手立て。既定は窓を出す。試験では差し替える。
+    //! 2つめの引数が真なら円、偽なら直線。空を返したら「やめた」。
+    void SetArrayChooser(
+        std::function<std::optional<V2ArrayChoice>(const V2ArrayChoice&, bool)> chooser);
     //! 作図の棚(円弧の作り方・補助線・指定点を残す・数値で線を作る)。
     [[nodiscard]] V2DrawingDock& DrawingDock() { return *drawingDock_; }
     //! グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。
@@ -742,6 +748,14 @@ private:
     void RefreshRightShelves();
     //! 核の形(立体・面)を三角形にして画面へ渡す。番号が同じなら作り直さない。
     void RefreshShapeViews();
+    //! 配列(並べて複製する)。
+    [[nodiscard]] static bool IsArrayCommand(std::string_view id);
+    void RunArrayCommand(std::string_view id);
+    void RunLinearArray();
+    void RunCircularArray();
+    std::function<std::optional<V2ArrayChoice>(const V2ArrayChoice&, bool)> arrayChooser_;
+    //! 前に決めた並べ方。次に開いたときの初期値にする。打ち直しを減らす。
+    V2ArrayChoice arrayChoice_;
     //! 文字にした id から Entity を探す。核の形の表が文字の鍵を使っているため。
     [[nodiscard]] static const kachakacha::v2::domain::Entity* FindEntityByIdText(
         const kachakacha::v2::document::DocumentSnapshot& snapshot,

@@ -7,6 +7,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2ArrayDialog.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
 
@@ -20,6 +21,7 @@
 #include <QString>
 
 #include <cmath>
+#include <optional>
 #include <string>
 
 namespace kachakacha::v2::selftest {
@@ -424,6 +426,88 @@ void DrawOneLine(V2MainWindow& window)
     return Explain("前へは戻れない(1枚目)", window.PatternDock().CurrentPage() == 0);
 }
 
+[[nodiscard]] int CountWires(V2MainWindow& window)
+{
+    return CountOfKind(window, EntityKind::Wire);
+}
+
+[[nodiscard]] bool CaseLinearArrayPlacesCopies(V2MainWindow& window)
+{
+    // 窓を10個並べるのに、1つずつ複製して位置を打つのは間違いのもと。
+    DrawOneLine(window);
+    const int before = CountWires(window);
+    if (!Explain("線が1本ある", before == 1)) {
+        return false;
+    }
+    // 5個(元 + 写し4つ)、20mm おき。
+    window.SetArrayChooser([](const V2ArrayChoice&, bool) {
+        V2ArrayChoice choice;
+        choice.count = 5;
+        choice.step = kachakacha::v2::geometry::Vector3{0.0, 20.0, 0.0};
+        choice.spanIsTotal = false;
+        return choice;
+    });
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.array_linear");
+    if (!Explain((std::string("5本になる(実際は ") + std::to_string(CountWires(window))
+                     + ")").c_str(),
+            CountWires(window) == 5)) {
+        return false;
+    }
+    // まとめて1回で戻せる。10個並べたあとに10回押して戻すのでは手間が10倍になる。
+    window.RunCommand("edit.undo");
+    return Explain((std::string("1回で元に戻る(実際は ")
+                       + std::to_string(CountWires(window)) + " 本)").c_str(),
+        CountWires(window) == 1);
+}
+
+[[nodiscard]] bool CaseCircularArrayDoesNotDoubleTheFirst(V2MainWindow& window)
+{
+    // 一周に6個なら、6個目は元の上に重なる。重ねない。
+    DrawOneLine(window);
+    window.SetArrayChooser([](const V2ArrayChoice&, bool) {
+        V2ArrayChoice choice;
+        choice.count = 6;
+        choice.totalAngleDeg = 360.0;
+        choice.center = kachakacha::v2::geometry::Vector3{};
+        return choice;
+    });
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.array_circular");
+    return Explain((std::string("6本になる(実際は ") + std::to_string(CountWires(window))
+                       + ")").c_str(),
+        CountWires(window) == 6);
+}
+
+[[nodiscard]] bool CaseArrayRefusesBadCount(V2MainWindow& window)
+{
+    // 打ち間違いは、画面が固まる前に断る。
+    DrawOneLine(window);
+    window.SetArrayChooser([](const V2ArrayChoice&, bool) {
+        V2ArrayChoice choice;
+        choice.count = 1;   // 1個は並びでない
+        choice.step = kachakacha::v2::geometry::Vector3{10.0, 0.0, 0.0};
+        return choice;
+    });
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    const int before = CountWires(window);
+    window.RunCommand("wire.array_linear");
+    if (!Explain("線は増えない", CountWires(window) == before)) {
+        return false;
+    }
+    // やめたときは、何も変わらないことを言う。
+    window.SetArrayChooser([](const V2ArrayChoice&, bool) {
+        return std::optional<V2ArrayChoice>{};
+    });
+    window.RunCommand("wire.array_linear");
+    return Explain((std::string("やめたと言う(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        window.StatusText().contains(QStringLiteral("やめました")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -442,6 +526,9 @@ std::vector<SelfTestCase> ScreenCases()
         {"塗った形を画面で掴める", &CaseShapeCanBePickedOnScreen},
         {"隠した形は画面からも消える", &CaseHiddenShapeLeavesTheScreen},
         {"型紙を出す前に画面で見られる", &CasePatternPreviewShowsPages},
+        {"直線に並べて一度で戻せる", &CaseLinearArrayPlacesCopies},
+        {"一周に並べても最後が元に重ならない", &CaseCircularArrayDoesNotDoubleTheFirst},
+        {"並べる数の打ち間違いを断る", &CaseArrayRefusesBadCount},
     };
 }
 

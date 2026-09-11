@@ -213,6 +213,15 @@ void V2MainWindow::WireViewportCallbacks()
         }
         return dialog.Value();
     });
+    // 並べ方は窓で聞く。判断(2個以上か・多すぎないか)は core にある。
+    SetArrayChooser([this](const V2ArrayChoice& initial, bool circular)
+                        -> std::optional<V2ArrayChoice> {
+        V2ArrayDialog dialog(initial, circular, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return dialog.Choice();
+    });
     // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
     viewport_->SetControlPointCallback(
         [this](kachakacha::v2::base::EntityId entityId,
@@ -258,6 +267,7 @@ void V2MainWindow::BuildMenus()
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
                             "wire.coincident", "wire.tangent", "wire.curvature",
                             "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
+                            "wire.array_linear", "wire.array_circular",
                             "wire.intersection_points", "wire.corner_chamfer",
                             "wire.corner_fillet", "wire.set_datum", "wire.clear_datum",
                             "wire.move", "wire.copy",
@@ -1375,6 +1385,10 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (IsGuideCommand(id)) {
         RunGuideCommand(id);
+        return;
+    }
+    if (IsArrayCommand(id)) {
+        RunArrayCommand(id);
         return;
     }
     if (IsViewCommand(id)) {

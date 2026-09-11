@@ -68,6 +68,8 @@ zip の中身は次のとおりです。
 | --- | --- |
 | `kachakacha_cad_next.exe` | 本体 |
 | `samples\v2-sample.kcd2` | 見本の文書(16章) |
+| `samples\streamlined-railway-nose-1-87.kcd2` | 流線形鉄道車両前面の1/87実用試験 |
+| `manual.html` | ブラウザーで読む全機能マニュアル |
 | `manual\` | この説明書と図 |
 | `legal\` | 使っている第三者のソフトのライセンス表示 |
 

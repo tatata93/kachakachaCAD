@@ -43,6 +43,37 @@ namespace {
     return ReadFile(RepoRoot() / "docs/manual/README.md");
 }
 
+[[nodiscard]] std::string HtmlManual()
+{
+    return ReadFile(RepoRoot() / "docs/manual.html");
+}
+
+[[nodiscard]] std::set<std::string> ReferencedHtmlImages(const std::string& text)
+{
+    std::set<std::string> names;
+    const std::string prefix = "src=\"manual/images/";
+    std::size_t at = 0;
+    while ((at = text.find(prefix, at)) != std::string::npos) {
+        const std::size_t start = at + prefix.size();
+        const std::size_t end = text.find('"', start);
+        Require(end != std::string::npos, "HTML の画像名が閉じている");
+        names.insert(text.substr(start, end - start));
+        at = end;
+    }
+    return names;
+}
+
+[[nodiscard]] int CountOccurrences(const std::string& text, const std::string& needle)
+{
+    int count = 0;
+    std::size_t at = 0;
+    while ((at = text.find(needle, at)) != std::string::npos) {
+        ++count;
+        at += needle.size();
+    }
+    return count;
+}
+
 //! 作り方の手順書。押すボタンと入れる数字を順に書いたもの。
 //!
 //! 名前に日本語が入っている。Windows で
@@ -363,6 +394,48 @@ KACHA_V2_TEST(manual, 手順書がショートカットを台帳どおりに書�
         Require(text.find(std::string("`") + entry.second + "`") != std::string::npos,
             std::string("手順書に書いてある: ") + entry.second);
     }
+}
+
+KACHA_V2_TEST(manual, HTML版はV2の完全マニュアル)
+{
+    const std::string text = HtmlManual();
+    Require(text.size() > 25000, "HTML に十分な説明がある");
+    Require(text.find("<meta name=\"kachakacha-manual-version\" content=\"v2\">")
+            != std::string::npos,
+        "V2 の説明書である");
+    Require(text.find("全コマンド一覧") != std::string::npos, "全コマンド一覧がある");
+    Require(text.find("流線形鉄道車両前面の実用試験") != std::string::npos,
+        "鉄道車両の実用試験がある");
+    Require(text.find("はじめての1枚") != std::string::npos, "最短手順がある");
+    Require(text.find("manual-assets/") == std::string::npos, "V1 の図を参照しない");
+    Require(text.find("review-model.kcd") == std::string::npos, "V1 の見本を参照しない");
+}
+
+KACHA_V2_TEST(manual, HTML版は全コマンドを一度ずつ説明する)
+{
+    const std::string text = HtmlManual();
+    const auto& commands = kachakacha::v2::app::CommandCatalog();
+    Require(commands.size() >= 90, "V2 のコマンド台帳を読める");
+    for (const auto& command : commands) {
+        const std::string marker = "data-command=\"" + std::string(command.id) + "\"";
+        RequireEqual(std::to_string(CountOccurrences(text, marker)), std::string("1"),
+            "HTML に一度だけある: " + std::string(command.id));
+    }
+}
+
+KACHA_V2_TEST(manual, HTML版が指す図と鉄道見本がある)
+{
+    const auto names = ReferencedHtmlImages(HtmlManual());
+    Require(names.size() >= 15, "HTML に図が15枚以上ある");
+    std::error_code code;
+    for (const std::string& name : names) {
+        const auto path = RepoRoot() / "docs/manual/images" / name;
+        Require(std::filesystem::exists(path, code), "HTML の図がある: " + name);
+        Require(std::filesystem::file_size(path, code) > 0, "HTML の図が空でない: " + name);
+    }
+    const auto sample = RepoRoot() / "samples/streamlined-railway-nose-1-87.kcd2";
+    Require(std::filesystem::exists(sample, code), "流線形前頭部の見本がある");
+    Require(std::filesystem::file_size(sample, code) > 1000, "見本に中身がある");
 }
 
 KACHA_V2_TEST_MAIN("manual_tests")

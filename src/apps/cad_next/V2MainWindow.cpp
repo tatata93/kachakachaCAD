@@ -664,6 +664,11 @@ void V2MainWindow::BuildRightShelves()
         [this](kachakacha::v2::app::DisplayStage stage) { ApplyDisplayStage(stage); });
     addDockWidget(Qt::RightDockWidgetArea, displayDock_);
 
+    // 型紙の下見。出す前に紙の形で見る。見ないまま出すと、
+    // 紙に収まっていないことに、印刷してから気づく。
+    patternDock_ = new V2PatternDock(this);
+    addDockWidget(Qt::RightDockWidgetArea, patternDock_);
+
     // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
     parameterDock_ = new V2ParameterDock(this);
     addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
@@ -701,6 +706,7 @@ void V2MainWindow::BuildRightShelves()
     // 形状ガイドの役割の表も同じ札の束へ入れる。別の段に置くと、
     // 部品モードで右が上下に割れて、どちらも潰れる。
     tabifyDockWidget(displayDock_, guideDock_);
+    tabifyDockWidget(guideDock_, patternDock_);
     RefreshRightShelves();
 }
 

@@ -46,6 +46,8 @@ enum class Shelf {
     Display,
     //! 数(板厚・面取り量)。
     Parameter,
+    //! 型紙の下見。出来た型紙を紙の形で見る。
+    Pattern,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

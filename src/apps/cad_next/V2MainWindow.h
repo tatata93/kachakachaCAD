@@ -25,6 +25,7 @@
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
+#include "V2PatternDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
 #include "kachakacha/app/SurfaceJig.h"
@@ -201,6 +202,8 @@ public:
 
     //! 数の棚。板厚や面取り量を式で打てる。
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
+    //! 型紙の下見の棚。出来た型紙を紙の形で見る。
+    [[nodiscard]] V2PatternDock& PatternDock() { return *patternDock_; }
     //! 作図の棚(円弧の作り方・補助線・指定点を残す・数値で線を作る)。
     [[nodiscard]] V2DrawingDock& DrawingDock() { return *drawingDock_; }
     //! グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。
@@ -776,6 +779,7 @@ private:
     V2FabricationDock* fabricationDock_ = nullptr;
     kachakacha::v2::app::FabricationChoice fabricationChoice_;
     V2ParameterDock* parameterDock_ = nullptr;
+    V2PatternDock* patternDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;
     V2DisplayDock* displayDock_ = nullptr;

@@ -399,6 +399,13 @@ void V2MainWindow::RunCreatePattern()
     processContext_.patternBuilt = true;
     SetProcessContext(processContext_);
     RefreshExportCounts();
+    // 出来た型紙を下見の棚へ渡し、前に出す。
+    // 見ないまま出すと、紙に収まっていないことに印刷してから気づく。
+    if (patternDock_ != nullptr) {
+        patternDock_->SetPages(patternPages_);
+        patternDock_->show();
+        patternDock_->raise();
+    }
     SetStatus(QStringLiteral("型紙を作る: A4 %1ページに %2枚を並べました(原寸)。")
             .arg(static_cast<int>(patternPages_.size()))
             .arg(static_cast<int>(fabricationPanels_.size())));

@@ -7,6 +7,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2PatternDock.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/Selection.h"
@@ -381,6 +382,48 @@ void DrawOneLine(V2MainWindow& window)
     return Explain("出し直すと戻る", window.Viewport().ShapeViewCount() == 1);
 }
 
+[[nodiscard]] bool CasePatternPreviewShowsPages(V2MainWindow& window)
+{
+    // 型紙は作れたが、画面で確かめる道が無かった。SVG や DXF に出して
+    // 別の道具で開くまで、紙に収まっているのかも分からない。
+    if (!Explain("はじめは空", window.PatternDock().PageCount() == 0)) {
+        return false;
+    }
+    if (!Explain("ページを見ていない", window.PatternDock().CurrentPage() == -1)) {
+        return false;
+    }
+    // 部材を作って型紙まで進める。
+    if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part));
+    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create_pattern");
+    if (!Explain((std::string("型紙が下見に出る(")
+                     + std::to_string(window.PatternDock().PageCount()) + " 枚)").c_str(),
+            window.PatternDock().PageCount() >= 1)) {
+        return false;
+    }
+    if (!Explain((std::string("1枚目を見ている(")
+                     + std::to_string(window.PatternDock().CurrentPage()) + ")").c_str(),
+            window.PatternDock().CurrentPage() == 0)) {
+        return false;
+    }
+    // 何枚目か・紙の大きさ・線の数を言う。空の紙が出ていないかを見るため。
+    const QString summary = window.PatternDock().SummaryText();
+    if (!Explain((std::string("枚数と紙の大きさを言う(") + summary.toStdString()
+                     + ")").c_str(),
+            summary.contains(QStringLiteral("mm")) && summary.contains(QStringLiteral("線")))) {
+        return false;
+    }
+    // 端で止まる。輪にすると何枚目にいるのか分からなくなる。
+    window.PatternDock().ShowPage(-1);
+    return Explain("前へは戻れない(1枚目)", window.PatternDock().CurrentPage() == 0);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -398,6 +441,7 @@ std::vector<SelfTestCase> ScreenCases()
         {"押し出した部品が3D画面に出る", &CaseExtrudedPartAppearsOnScreen},
         {"塗った形を画面で掴める", &CaseShapeCanBePickedOnScreen},
         {"隠した形は画面からも消える", &CaseHiddenShapeLeavesTheScreen},
+        {"型紙を出す前に画面で見られる", &CasePatternPreviewShowsPages},
     };
 }
 

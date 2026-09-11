@@ -19,6 +19,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Grid:        return "グリッド";
     case Shelf::Display:     return "表示";
     case Shelf::Parameter:   return "数";
+    case Shelf::Pattern:     return "型紙の下見";
     }
     return "なし";
 }
@@ -28,7 +29,7 @@ const std::vector<Shelf>& AllShelves()
     static const std::vector<Shelf> all{
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
-        Shelf::Parameter,
+        Shelf::Parameter, Shelf::Pattern,
     };
     return all;
 }
@@ -80,7 +81,8 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool)
     case UiMode::Fabrication:
         return {Shelf::Fabrication, Shelf::Parameter};
     case UiMode::Output:
-        return {Shelf::Export};
+        // 出す前に型紙を見る。見ないまま出すと、紙とプラ板を無駄にしてから気づく。
+        return {Shelf::Export, Shelf::Pattern};
     }
     return {Shelf::Edit};
 }

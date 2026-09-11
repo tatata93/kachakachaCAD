@@ -10,6 +10,8 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/FabricationOptions.h"
+
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/app/CommandParameters.h"
@@ -89,10 +91,13 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
     }
     if (id == "fabrication.set_method") {
         // 次に作る近似モデルの方式を切り替える。両方式を残して選べるようにする。
+        // 製作の棚の「方式」と同じ値(棚はこの値を映す)。
         fabricationMethod_ = fabricationMethod_
                 == kachakacha::v2::app::FabricationMethod::BandApproximation
             ? kachakacha::v2::app::FabricationMethod::ClassifyFaces
             : kachakacha::v2::app::FabricationMethod::BandApproximation;
+        fabricationChoice_.method = fabricationMethod_;
+        RefreshFabricationDock();
         SetStatus(QStringLiteral("近似の方式: %1")
                 .arg(QString::fromUtf8(std::string(
                     kachakacha::v2::app::FabricationMethodNameJa(fabricationMethod_))
@@ -125,7 +130,8 @@ void V2MainWindow::RunFabricationCreate()
     for (const auto& source : sources) {
         definition.parts.push_back(source.entityId);
     }
-    definition.method = static_cast<int>(fabricationMethod_);
+    // 製作の棚の欄(方式・分割軸・境界・上限・最小幅・再現度)を作り方へ写す。
+    kachakacha::v2::app::ApplyFabricationChoice(definition, fabricationChoice_);
     definition.targetMaxDeviation.value = kachakacha::v2::app::ParameterValueOf(
         parameterDock_->Values(), kachakacha::v2::app::ParameterId::MaxDeviationMm);
     definition.targetMaxDeviation.kind = kachakacha::v2::geometry::QuantityKind::Length;
@@ -573,3 +579,55 @@ void V2MainWindow::SetConnectionScope()
             .arg(made)
             .arg(snapped));
 }
+
+void V2MainWindow::AdoptFabricationChoice()
+{
+    if (fabricationDock_ == nullptr) {
+        return;
+    }
+    // 欄の値の検査は core。断られたら理由を棚に出し、前の値のまま。
+    const auto checked = kachakacha::v2::app::CheckFabricationChoice(fabricationDock_->Choice());
+    if (!checked.HasValue()) {
+        fabricationDock_->SetMessage(QString::fromStdString(checked.Diagnostics().front().code
+            + " " + checked.Diagnostics().front().summaryJa));
+        return;
+    }
+    fabricationChoice_ = checked.Value();
+    fabricationMethod_ = fabricationChoice_.method;
+    fabricationDock_->SetMessage(QString());
+}
+
+void V2MainWindow::RefreshFabricationDock()
+{
+    if (fabricationDock_ == nullptr || parameterDock_ == nullptr) {
+        return;
+    }
+    fabricationDock_->SetParameterMm(kachakacha::v2::app::ParameterId::ExtrudeDistance,
+        ExtrudeDistanceMm());
+    fabricationDock_->SetParameterMm(kachakacha::v2::app::ParameterId::MaxDeviationMm,
+        kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+            kachakacha::v2::app::ParameterId::MaxDeviationMm));
+    fabricationDock_->SetFreezeOutput(freezeOutput_);
+    // 欄は「次に作る近似モデル」の値。選んでいる近似モデルがあれば、その方式と組立率も出す。
+    fabricationDock_->SetChoice(fabricationChoice_);
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entity = session_->GetDocument().FindEntity(modelId);
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* definition = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    if (definition != nullptr) {
+        fabricationDock_->SetModelText(QStringLiteral("近似モデル: %1(%2)")
+                .arg(QString::fromStdString(entity->displayName),
+                    QString::fromUtf8(std::string(kachakacha::v2::app::FabricationMethodNameJa(
+                        kachakacha::v2::app::FabricationMethodOf(*definition)))
+                                          .c_str())));
+        fabricationDock_->SetAssemblyPercent(definition->masterPercent);
+        return;
+    }
+    fabricationDock_->SetModelText(
+        QStringLiteral("近似モデル: (なし。部品か形状ガイドを選んで「製作モデルを作る」)"));
+}
+

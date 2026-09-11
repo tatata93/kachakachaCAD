@@ -19,6 +19,7 @@
 #include "V2DrawingDock.h"
 #include "V2CornerDock.h"
 #include "V2EditDock.h"
+#include "V2FabricationDock.h"
 #include "V2GridDock.h"
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
@@ -216,6 +217,17 @@ public:
     [[nodiscard]] V2EditDock& EditDock() { return *editDock_; }
     //! 面取りの棚(V1 の「面取り」欄)。
     [[nodiscard]] V2CornerDock& CornerDock() { return *cornerDock_; }
+    //! 製作の棚(V1 の近似モデル画面を 1 枚に)。
+    [[nodiscard]] V2FabricationDock& FabricationDock() { return *fabricationDock_; }
+    //! 製作の棚を、選んでいる近似モデル・数の棚・方式・固定の種類に合わせる。
+    void RefreshFabricationDock();
+    //! 製作の棚の欄を持ち直す。範囲の外なら理由を棚に出し、前の値のまま。
+    void AdoptFabricationChoice();
+    //! 次に作る近似モデルの欄(方式・分割軸・境界・上限・最小幅・再現度)。
+    [[nodiscard]] const kachakacha::v2::app::FabricationChoice& FabricationChoice() const
+    {
+        return fabricationChoice_;
+    }
     //! 面取りの棚を選択と数の棚に合わせる(直線 A/B の名前、量)。
     void RefreshCornerDock();
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
@@ -462,6 +474,8 @@ private:
     void BuildPanels();
     //! 右の札(測る・作業平面・作図・数)。書き出しの棚と重ねる。
     void BuildRightShelves();
+    //! 編集の棚・面取りの棚・製作の棚。BuildRightShelves から呼ぶ。
+    void BuildEditingShelves();
     //! 下の帯(道具・作業中グループ・案内文)。
     void BuildStatusBar();
     //! 動かさずに作れる状態(絵だけの状態)。ApplyManualState から呼ぶ。
@@ -680,6 +694,8 @@ private:
     V2MeasureDock* measureDock_ = nullptr;
     V2EditDock* editDock_ = nullptr;
     V2CornerDock* cornerDock_ = nullptr;
+    V2FabricationDock* fabricationDock_ = nullptr;
+    kachakacha::v2::app::FabricationChoice fabricationChoice_;
     V2ParameterDock* parameterDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;

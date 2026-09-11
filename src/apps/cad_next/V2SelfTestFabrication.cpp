@@ -6,8 +6,11 @@
 
 #include "V2SelfTest.h"
 
+#include "V2FabricationDock.h"
 #include "V2MainWindow.h"
+#include "V2ParameterDock.h"
 
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/io/AtomicFile.h"
 
@@ -343,9 +346,59 @@ namespace kachakacha::v2::selftest {
     return Explain("固定した部品を STEP で出せる", window.CanExportSelectedParts());
 }
 
+[[nodiscard]] bool CaseFabricationDockHoldsOptionsAndMirrorsParameters(V2MainWindow& window)
+{
+    // 製作の棚(V1 の近似モデル画面を 1 枚に)。方式・分割軸・境界・上限は棚の欄。
+    auto& dock = window.FabricationDock();
+    dock.SetSplitAxisIndex(2);   // V 方向
+    dock.SetAutomaticBoundaries(false);
+    dock.SetManualBoundariesText(QStringLiteral("0.25, 0.5"));
+    dock.SetMaximumPartCount(20);
+    const auto& choice = window.FabricationChoice();
+    if (!Explain((std::string("欄が次に作る作り方に入る(軸 ") + std::to_string(choice.splitAxis)
+                     + ", 境界 " + std::to_string(choice.manualBoundaries.size()) + ", 上限 "
+                     + std::to_string(choice.maximumPartCount) + ")").c_str(),
+            choice.splitAxis == 1 && !choice.automaticBoundaries
+                && choice.manualBoundaries.size() == 2 && choice.maximumPartCount == 20)) {
+        return false;
+    }
+    // 読めない境界は理由が棚に出て、前の値のまま。
+    dock.SetManualBoundariesText(QStringLiteral("0.25, abc"));
+    if (!Explain((std::string("読めない境界は断る(") + dock.MessageText().toStdString() + ")").c_str(),
+            dock.MessageText().contains(QStringLiteral("UI-F001"))
+                && window.FabricationChoice().manualBoundaries.size() == 2)) {
+        return false;
+    }
+    // 方式の切替(命令)は棚の方式に映る。固定の種類も同じ。
+    window.RunCommand("fabrication.set_method");
+    if (!Explain("方式が棚に映る",
+            dock.Choice().method == kachakacha::v2::app::FabricationMethod::ClassifyFaces)) {
+        return false;
+    }
+    window.RunCommand("fabrication.freeze_output");
+    if (!Explain("固定の種類が棚に映る",
+            dock.FreezeOutputChoice() == kachakacha::v2::fabrication::FreezeOutput::PartsOnly)) {
+        return false;
+    }
+    // 板厚は数の棚と同じ値。数の棚で打つと棚に映る。
+    if (!Explain("板厚を入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::ExtrudeDistance,
+                QStringLiteral("0.3")))) {
+        return false;
+    }
+    dock.SetSplitAxisIndex(0);
+    // 棚のボタンは台帳の命令を通す。選ばずに押すと理由が出る。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    dock.PressRun("fabrication.create");
+    return Explain((std::string("選ばずに押すと理由が出る(") + window.StatusText().toStdString()
+                       + ")").c_str(),
+        !window.StatusText().isEmpty() && window.FabricationModelCount() == 0);
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
+        {"製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
         {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},

@@ -242,6 +242,7 @@ void V2MainWindow::CycleFreezeOutput()
     freezeOutput_ = freezeOutput_ == FreezeOutput::WiresOnly ? FreezeOutput::PartsOnly
         : freezeOutput_ == FreezeOutput::PartsOnly           ? FreezeOutput::Both
                                                              : FreezeOutput::WiresOnly;
+    RefreshFabricationDock();
     SetStatus(QStringLiteral("固定で作るもの: %1")
             .arg(QString::fromUtf8(std::string(
                 kachakacha::v2::fabrication::FreezeOutputNameJa(freezeOutput_))

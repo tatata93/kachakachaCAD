@@ -1,0 +1,71 @@
+// 製作の棚の欄(app/FabricationOptions.h)。V1 の近似モデル画面の項目。
+#include "kachakacha/app/FabricationOptions.h"
+#include "kachakacha/base/TestHarness.h"
+
+#include <string>
+
+using kachakacha::v2::app::ApplyFabricationChoice;
+using kachakacha::v2::app::CheckFabricationChoice;
+using kachakacha::v2::app::FabricationChoice;
+using kachakacha::v2::app::FabricationChoiceOf;
+using kachakacha::v2::app::FabricationMethod;
+using kachakacha::v2::app::FormatBoundaryList;
+using kachakacha::v2::app::ParseBoundaryList;
+using kachakacha::v2::domain::CreateFabricationModelDefinition;
+using kachakacha::v2::test::Require;
+using kachakacha::v2::test::RequireEqual;
+using kachakacha::v2::test::RequireNear;
+
+KACHA_V2_TEST(fabrication_options, 手動境界はカンマ区切りで読めて全角も通り読めなければ断る)
+{
+    const auto parsed = ParseBoundaryList(" 0.3, 0.6 、0.9");
+    Require(parsed.HasValue(), "読める");
+    RequireEqual(std::to_string(parsed.Value().size()), std::string("3"), "3つ");
+    RequireNear(parsed.Value()[1], 0.6, 1e-12, "2つ目");
+    Require(ParseBoundaryList("").HasValue() && ParseBoundaryList("").Value().empty(), "空は空");
+    const auto bad = ParseBoundaryList("0.3, abc");
+    Require(!bad.HasValue(), "読めない");
+    RequireEqual(bad.Diagnostics().front().code, std::string("UI-F001"), "理由");
+    RequireEqual(FormatBoundaryList({0.25, 0.5}), std::string("0.25, 0.5"), "戻し");
+}
+
+KACHA_V2_TEST(fabrication_options, 欄の値は範囲の外を断り作り方と往復する)
+{
+    FabricationChoice choice;
+    choice.method = FabricationMethod::BandApproximation;
+    choice.splitAxis = 1;
+    choice.automaticBoundaries = false;
+    choice.maximumPartCount = 20;
+    choice.minimumPartWidthMm = 2.5;
+    choice.fidelity = 8;
+    choice.manualBoundaries = {0.5};
+    Require(CheckFabricationChoice(choice).HasValue(), "通る");
+    CreateFabricationModelDefinition definition;
+    ApplyFabricationChoice(definition, choice);
+    RequireEqual(std::to_string(definition.method), std::string("1"), "方式");
+    RequireEqual(std::to_string(definition.splitAxis), std::string("1"), "分割軸");
+    Require(!definition.automaticBoundaries, "手動");
+    RequireEqual(std::to_string(definition.maximumPartCount), std::string("20"), "上限");
+    RequireNear(definition.minimumPartWidthMm, 2.5, 1e-12, "最小幅");
+    RequireEqual(std::to_string(definition.fidelity), std::string("8"), "再現度");
+    RequireEqual(std::to_string(definition.manualBoundaries.size()), std::string("1"), "境界");
+    const auto back = FabricationChoiceOf(definition);
+    Require(back.method == FabricationMethod::BandApproximation && back.splitAxis == 1
+            && !back.automaticBoundaries && back.maximumPartCount == 20 && back.fidelity == 8,
+        "戻る");
+
+    FabricationChoice tooMany = choice;
+    tooMany.maximumPartCount = 0;
+    RequireEqual(CheckFabricationChoice(tooMany).Diagnostics().front().code,
+        std::string("UI-F002"), "上限 0");
+    FabricationChoice thin = choice;
+    thin.minimumPartWidthMm = 0.0;
+    RequireEqual(CheckFabricationChoice(thin).Diagnostics().front().code,
+        std::string("UI-F003"), "最小幅 0");
+    FabricationChoice rough = choice;
+    rough.fidelity = 21;
+    RequireEqual(CheckFabricationChoice(rough).Diagnostics().front().code,
+        std::string("UI-F004"), "再現度 21");
+}
+
+KACHA_V2_TEST_MAIN("fabrication_options")

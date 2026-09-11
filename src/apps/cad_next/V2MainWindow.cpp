@@ -209,6 +209,7 @@ V2MainWindow::V2MainWindow()
         RefreshMeasurements();
         RefreshEditDock();
         RefreshCornerDock();
+        RefreshFabricationDock();
         // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
         RefreshWorkPlaneDock();
         // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
@@ -552,6 +553,27 @@ void V2MainWindow::BuildPanels()
     BuildStatusBar();
 }
 
+void V2MainWindow::BuildEditingShelves()
+{
+    // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
+    editDock_ = new V2EditDock(this);
+    editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
+    addDockWidget(Qt::RightDockWidgetArea, editDock_);
+    editDock_->hide();
+    // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
+    cornerDock_ = new V2CornerDock(this);
+    cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
+    addDockWidget(Qt::RightDockWidgetArea, cornerDock_);
+    // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
+    fabricationDock_ = new V2FabricationDock(this);
+    fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
+    fabricationDock_->SetChoiceChangedHandler([this] { AdoptFabricationChoice(); });
+    fabricationDock_->SetAssemblyHandler([this](double percent) { SetAssemblyPercent(percent); });
+    fabricationDock_->SetFreezeOutputHandler(
+        [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
+    addDockWidget(Qt::RightDockWidgetArea, fabricationDock_);
+}
+
 void V2MainWindow::BuildRightShelves()
 {
     // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
@@ -565,15 +587,7 @@ void V2MainWindow::BuildRightShelves()
     measureDock_->SetKeepHandler([this] { KeepMeasuredDimension(); });
     measureDock_->SetClearHandler([this] { ClearMeasurement(); });
     viewport_->SetMeasurePicksChangedCallback([this] { RefreshMeasurements(); });
-    // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
-    editDock_ = new V2EditDock(this);
-    editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
-    addDockWidget(Qt::RightDockWidgetArea, editDock_);
-    editDock_->hide();
-    // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
-    cornerDock_ = new V2CornerDock(this);
-    cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
-    addDockWidget(Qt::RightDockWidgetArea, cornerDock_);
+    BuildEditingShelves();
 
     // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
@@ -609,12 +623,20 @@ void V2MainWindow::BuildRightShelves()
         AddDiagnostic(text);
         SetStatus(text);
     });
-    parameterDock_->SetChangedHandler([this] { RefreshCornerDock(); });
+    parameterDock_->SetChangedHandler([this] {
+        RefreshCornerDock();
+        RefreshFabricationDock();
+    });
+    fabricationDock_->SetParameterHandler(
+        [this](kachakacha::v2::app::ParameterId id, double value) {
+            (void)parameterDock_->Apply(id, QString::number(value, 'f', 3));
+        });
     cornerDock_->SetSizeHandler([this](double value) {
         (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::CornerSize,
             QString::number(value, 'f', 3));
     });
     RefreshCornerDock();
+    RefreshFabricationDock();
 
     // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
     // 「手順」が2行しか見えず、いま何段目かが読めなくなる。
@@ -623,7 +645,8 @@ void V2MainWindow::BuildRightShelves()
     tabifyDockWidget(parameterDock_, measureDock_);
     tabifyDockWidget(measureDock_, editDock_);
     tabifyDockWidget(editDock_, cornerDock_);
-    tabifyDockWidget(cornerDock_, workPlaneDock_);
+    tabifyDockWidget(cornerDock_, fabricationDock_);
+    tabifyDockWidget(fabricationDock_, workPlaneDock_);
     tabifyDockWidget(workPlaneDock_, drawingDock_);
     tabifyDockWidget(drawingDock_, gridDock_);
     tabifyDockWidget(gridDock_, displayDock_);

@@ -247,13 +247,19 @@ void DrawOneLine(V2MainWindow& window)
     if (!Explain("選択道具なら掴める", viewport.HoveredEntityId() == wire)) {
         return false;
     }
-    // 作業平面を別の面(正面 XZ)へ移すと、その線は面の外になる。
+    // 作業平面を側面 YZ へ移すと、その線は面の外になる。
+    // 正面 XZ では外にならない ── X 軸に沿う線は y=0 なので、XZ の上にも載っている。
     const auto planes = window.PlaneComboCount();
+    bool moved = false;
     for (int index = 0; index < planes; ++index) {
-        if (window.PlaneComboText(index).contains(QStringLiteral("front"))) {
+        if (window.PlaneComboText(index).contains(QStringLiteral("YZ"))) {
             window.SelectPlaneCombo(index);
+            moved = true;
             break;
         }
+    }
+    if (!Explain("側面 YZ へ移せる", moved)) {
+        return false;
     }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
     viewport.HoverAt(QPointF(middle->x, middle->y));

@@ -20,6 +20,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Display:     return "表示";
     case Shelf::Parameter:   return "数";
     case Shelf::Pattern:     return "型紙の下見";
+    case Shelf::Part:        return "部品";
     }
     return "なし";
 }
@@ -29,7 +30,7 @@ const std::vector<Shelf>& AllShelves()
     static const std::vector<Shelf> all{
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
-        Shelf::Parameter, Shelf::Pattern,
+        Shelf::Parameter, Shelf::Pattern, Shelf::Part,
     };
     return all;
 }
@@ -77,7 +78,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool)
         // 選んでいるものを数値で直す欄。これが V1 の「選択内容の数値編集」に当たる。
         return {Shelf::Edit};
     case UiMode::Part:
-        return {Shelf::GuideTable, Shelf::Parameter};
+        // 道具の設定を前に出す。V1 の部品タブに当たる(オーナー指摘 2026-09-11)。
+        // 役割の表は札として後ろに残す。表だけ出していたので、板厚も厚みの
+        // 付け方も治具のすき間も、右のどこにも無かった。
+        return {Shelf::Part, Shelf::GuideTable};
     case UiMode::Fabrication:
         return {Shelf::Fabrication, Shelf::Parameter};
     case UiMode::Output:

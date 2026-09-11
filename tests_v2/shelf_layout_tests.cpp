@@ -117,10 +117,21 @@ KACHA_V2_TEST(shelf_layout, 道具はモードより強い)
 
 KACHA_V2_TEST(shelf_layout, モードごとに選択の棚が変わる)
 {
-    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::GuideTable, "部品は役割の表");
+    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::Part, "部品は部品の棚");
     Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::Fabrication,
         "製作は製作の棚");
     Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::Export, "出力は書き出し");
+}
+
+KACHA_V2_TEST(shelf_layout, どのモードにも道具の設定の棚がある)
+{
+    // 部品モードだけ右が「役割の表」で、道具の設定がどこにも無かった
+    // (オーナー指摘 2026-09-11)。どのモードでも、先頭は設定の棚にする。
+    Require(FrontShelfFor(UiMode::Drawing, DrawingTool::Select) == Shelf::Edit, "作図");
+    Require(FrontShelfFor(UiMode::Part, DrawingTool::Select) == Shelf::Part, "部品");
+    Require(FrontShelfFor(UiMode::Fabrication, DrawingTool::Select) == Shelf::Fabrication,
+        "製作");
+    Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::Export, "出力");
 }
 
 KACHA_V2_TEST(shelf_layout, 面取りは量の欄も一緒に出す)

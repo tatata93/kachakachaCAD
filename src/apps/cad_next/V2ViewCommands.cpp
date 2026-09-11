@@ -599,6 +599,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Display:     return displayDock_;
     case Shelf::Parameter:   return parameterDock_;
     case Shelf::Pattern:     return patternDock_;
+    case Shelf::Part:        return partDock_;
     case Shelf::None:        break;
     }
     return nullptr;

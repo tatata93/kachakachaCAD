@@ -25,6 +25,7 @@
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
+#include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
 #include "kachakacha/app/CommandCatalog.h"
@@ -205,6 +206,10 @@ public:
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
     //! 型紙の下見の棚。出来た型紙を紙の形で見る。
     [[nodiscard]] V2PatternDock& PatternDock() { return *patternDock_; }
+    //! 部品の棚(V1 の部品タブ)。押し出しの距離・板厚・厚みの付け方・治具・回転体。
+    [[nodiscard]] V2PartDock& PartDock() { return *partDock_; }
+    //! 部品の棚を、いまの数と選択に合わせて書き直す。
+    void RefreshPartDock();
 
     //! 並べ方を聞く手立て。既定は窓を出す。試験では差し替える。
     //! 2つめの引数が真なら円、偽なら直線。空を返したら「やめた」。
@@ -764,6 +769,12 @@ private:
     std::map<std::uint64_t, kachakacha::v2::modeling::ShapeMesh> shapeMeshes_;
     //! 左の一覧の棚を組み立てる。組み立てたものを返す(並べ方は呼び出し側が決める)。
     QDockWidget* BuildEntityTreeDock();
+    //! 形状ガイドの役割の表と、表を動かすボタン(表の隣に置く)。
+    QWidget* BuildGuideTableBody(QWidget* parent);
+    //! 手順・書き出し・右の棚・知らせ。BuildPanels の続き。
+    void BuildRemainingPanels(QDockWidget* treeDock);
+    //! 部品の棚と型紙の下見と数の棚。BuildRightShelves の続き。
+    void BuildOutputShelves();
     //! 一覧を絞り込む(V1 の「名前・種類で絞り込み」)。残すかどうかは core が決める。
     void ApplyEntityTreeFilter();
     //! 絞り込みの語を入れる(試験用)。人が打ったのと同じ道を通る。
@@ -794,6 +805,7 @@ private:
     kachakacha::v2::app::FabricationChoice fabricationChoice_;
     V2ParameterDock* parameterDock_ = nullptr;
     V2PatternDock* patternDock_ = nullptr;
+    V2PartDock* partDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;
     V2DisplayDock* displayDock_ = nullptr;

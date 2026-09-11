@@ -11,18 +11,20 @@
 namespace {
 
 using kachakacha::v2::app::AllUiModes;
-using kachakacha::v2::app::CommandIdsForMode;
+using kachakacha::v2::app::TopBarCommandIdsForMode;
 
 } // namespace
 
 void V2MainWindow::BuildModeToolActions()
 {
-    // 並べる命令はモードの台帳(app/UiMode)から取る。ここに別の一覧を持つと、
-    // 台帳へ足した命令が2段目に出ないまま残る。作図の道具(kToolBindings)は
-    // 道具として既に並んでいるので除く。
+    // 2段目に並べるのは **入口になる命令だけ**(app/UiMode の TopBar...)。
+    // 部品モードには 19 個が横一列に並んでいて、名前だけの札から
+    // 何を押せばよいか読めなかった。表の行を動かす・板厚を当てる、といったものは
+    // その欄の隣(右の棚)へ移した。ここに別の一覧は持たない ── 持つと
+    // 台帳へ足した命令が出ないまま残る。作図の道具は道具として既に並ぶので除く。
     toolPalette_->addSeparator();
     for (const kachakacha::v2::app::UiMode mode : AllUiModes()) {
-        for (const std::string_view id : CommandIdsForMode(mode)) {
+        for (const std::string_view id : TopBarCommandIdsForMode(mode)) {
             if (IsToolBoundCommand(id)) {
                 continue;
             }

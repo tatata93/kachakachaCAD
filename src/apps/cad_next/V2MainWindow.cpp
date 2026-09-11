@@ -39,6 +39,7 @@
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -239,6 +240,7 @@ void V2MainWindow::WireViewportCallbacks()
         RefreshEditDock();
         RefreshCornerDock();
         RefreshFabricationDock();
+        RefreshPartDock();
         // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
         RefreshWorkPlaneDock();
         // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
@@ -565,10 +567,53 @@ void V2MainWindow::BuildPanels()
     // 行を選ぶと、行に効くコマンド(上下・削除・反転・既存行へ追加)が押せるようになる。
     QObject::connect(guideTableView_, &QTreeWidget::itemClicked, this,
         [this](QTreeWidgetItem*, int) { RefreshCommandVisibility(); });
-    guideDock->setWidget(guideTableView_);
+    guideDock->setWidget(BuildGuideTableBody(guideDock));
     addDockWidget(Qt::RightDockWidgetArea, guideDock);
     guideDock_ = guideDock;
 
+    BuildRemainingPanels(treeDock);
+}
+
+//! 形状ガイドの役割の表と、表を動かすボタン。
+//! ボタンは表の隣に置く(オーナー指摘 2026-09-11)。上の帯に並べていたので、
+//! どの行に効くのかが見た目から読めなかった。
+QWidget* V2MainWindow::BuildGuideTableBody(QWidget* parent)
+{
+    auto* guideDock = parent;
+    auto* guideBody = new QWidget(guideDock);
+    auto* guideLayout = new QVBoxLayout(guideBody);
+    guideLayout->setContentsMargins(6, 6, 6, 6);
+    guideLayout->setSpacing(4);
+    guideLayout->addWidget(guideTableView_, 1);
+    auto* guideButtons = new QWidget(guideBody);
+    auto* guideButtonLayout = new QVBoxLayout(guideButtons);
+    guideButtonLayout->setContentsMargins(0, 0, 0, 0);
+    guideButtonLayout->setSpacing(2);
+    for (const auto& entry : {
+             std::pair<const char*, const char*>{"面の作り方", "guide.set_method"},
+             {"選択を表へ", "guide.add_row"},
+             {"選択を既存行へ追加", "guide.append_row"},
+             {"行を上へ", "guide.row_up"},
+             {"行を下へ", "guide.row_down"},
+             {"行を削除", "guide.row_remove"},
+             {"向きを反転", "guide.row_reverse"},
+             {"表から面を作る", "guide.build"},
+             {"表を空にする", "guide.clear"},
+             {"回転体を作る", "guide.revolve"}}) {
+        auto* button = new QPushButton(QString::fromUtf8(entry.first), guideButtons);
+        const std::string command = entry.second;
+        QObject::connect(button, &QPushButton::clicked, this,
+            [this, command] { RunCommand(command); });
+        guideButtonLayout->addWidget(button);
+    }
+    guideLayout->addWidget(guideButtons);
+    return guideBody;
+}
+
+//! 手順・書き出し・右の棚・知らせ。BuildPanels の続き。
+//! 1つの関数が 100 行に届いたので分けた。並べる順は変えていない。
+void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
+{
     auto* processDock = new QDockWidget(QStringLiteral("手順"), this);
     processDock->setObjectName(QStringLiteral("processDock"));
     processView_ = new QTreeWidget(processDock);
@@ -605,119 +650,6 @@ void V2MainWindow::BuildPanels()
     resizeDocks({processDock_}, {180}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
     BuildStatusBar();
-}
-
-void V2MainWindow::BuildEditingShelves()
-{
-    // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
-    editDock_ = new V2EditDock(this);
-    editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
-    addDockWidget(Qt::RightDockWidgetArea, editDock_);
-    editDock_->hide();
-    // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
-    cornerDock_ = new V2CornerDock(this);
-    cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
-    addDockWidget(Qt::RightDockWidgetArea, cornerDock_);
-    // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
-    fabricationDock_ = new V2FabricationDock(this);
-    fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
-    fabricationDock_->SetChoiceChangedHandler([this] { AdoptFabricationChoice(); });
-    fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
-        SetAssemblyPercent(percent, parts);
-    });
-    fabricationDock_->SetFreezeOutputHandler(
-        [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
-    fabricationDock_->SetMaterialHandler(
-        [this](const QString& material, int layers) { ApplyMaterialToSelection(material, layers); });
-    addDockWidget(Qt::RightDockWidgetArea, fabricationDock_);
-}
-
-void V2MainWindow::BuildRightShelves()
-{
-    // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
-    measureDock_ = new V2MeasureDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, measureDock_);
-    measureDock_->hide();
-    measureDock_->SetModeChangedHandler([this] {
-        viewport_->ClearMeasurePicks();
-        RefreshMeasurements();
-    });
-    measureDock_->SetKeepHandler([this] { KeepMeasuredDimension(); });
-    measureDock_->SetClearHandler([this] { ClearMeasurement(); });
-    viewport_->SetMeasurePicksChangedCallback([this] { RefreshMeasurements(); });
-    BuildEditingShelves();
-
-    // 作業平面の棚(V1 の「平面を作る」タブ)。作図は平面を決めてから始まるので、
-    // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
-    workPlaneDock_ = new V2WorkPlaneDock(this);
-    workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
-    addDockWidget(Qt::RightDockWidgetArea, workPlaneDock_);
-
-    // 作図の棚(V1 の「作図」タブ)。円弧の作り方・補助線・指定点・数値で線を作る。
-    drawingDock_ = new V2DrawingDock(this);
-    drawingDock_->SetSettingsHandler(
-        [this](const kachakacha::v2::modeling::ToolSettings& settings) {
-            ApplyToolSettings(settings);
-        });
-    drawingDock_->SetCreateWireHandler([this] { CreateWireFromDock(); });
-    addDockWidget(Qt::RightDockWidgetArea, drawingDock_);
-
-    // グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。見え方だけで、文書は変えない。
-    gridDock_ = new V2GridDock(this);
-    gridDock_->SetApplyHandler([this](const V2GridChoice& choice) { ApplyGridChoice(choice); });
-    gridDock_->SetPickOriginHandler([this] { RunCommand("grid.move_origin"); });
-    addDockWidget(Qt::RightDockWidgetArea, gridDock_);
-    displayDock_ = new V2DisplayDock(this);
-    displayDock_->SetApplyHandler(
-        [this](const V2DisplayChoice& choice) { ApplyDisplayChoice(choice); });
-    displayDock_->SetStageHandler(
-        [this](kachakacha::v2::app::DisplayStage stage) { ApplyDisplayStage(stage); });
-    addDockWidget(Qt::RightDockWidgetArea, displayDock_);
-
-    // 型紙の下見。出す前に紙の形で見る。見ないまま出すと、
-    // 紙に収まっていないことに、印刷してから気づく。
-    patternDock_ = new V2PatternDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, patternDock_);
-
-    // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
-    parameterDock_ = new V2ParameterDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
-    parameterDock_->SetDiagnosticSink([this](const QString& text) {
-        AddDiagnostic(text);
-        SetStatus(text);
-    });
-    parameterDock_->SetChangedHandler([this] {
-        RefreshCornerDock();
-        RefreshFabricationDock();
-    });
-    fabricationDock_->SetParameterHandler(
-        [this](kachakacha::v2::app::ParameterId id, double value) {
-            (void)parameterDock_->Apply(id, QString::number(value, 'f', 3));
-        });
-    cornerDock_->SetSizeHandler([this](double value) {
-        (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::CornerSize,
-            QString::number(value, 'f', 3));
-    });
-    RefreshCornerDock();
-    RefreshFabricationDock();
-
-    // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
-    // 「手順」が2行しか見えず、いま何段目かが読めなくなる。
-    // 手順だけは常に見えるように残し、残りは札で切り替える。
-    tabifyDockWidget(exportDock_, parameterDock_);
-    tabifyDockWidget(parameterDock_, measureDock_);
-    tabifyDockWidget(measureDock_, editDock_);
-    tabifyDockWidget(editDock_, cornerDock_);
-    tabifyDockWidget(cornerDock_, fabricationDock_);
-    tabifyDockWidget(fabricationDock_, workPlaneDock_);
-    tabifyDockWidget(workPlaneDock_, drawingDock_);
-    tabifyDockWidget(drawingDock_, gridDock_);
-    tabifyDockWidget(gridDock_, displayDock_);
-    // 形状ガイドの役割の表も同じ札の束へ入れる。別の段に置くと、
-    // 部品モードで右が上下に割れて、どちらも潰れる。
-    tabifyDockWidget(displayDock_, guideDock_);
-    tabifyDockWidget(guideDock_, patternDock_);
-    RefreshRightShelves();
 }
 
 void V2MainWindow::BuildStatusBar()

@@ -2,12 +2,15 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/base/TestHarness.h"
 
+#include <algorithm>
 #include <set>
 #include <string>
+#include <string_view>
 
 using kachakacha::v2::app::AllUiModes;
 using kachakacha::v2::app::CommandCatalog;
 using kachakacha::v2::app::CommandIdsForMode;
+using kachakacha::v2::app::TopBarCommandIdsForMode;
 using kachakacha::v2::app::CommandVisibleInMode;
 using kachakacha::v2::app::CommonCommandIds;
 using kachakacha::v2::app::FindCommand;
@@ -142,6 +145,50 @@ KACHA_V2_TEST(ui_mode, 並びが決まっている)
         RequireEqual(std::to_string(first.size()), std::to_string(second.size()), "件数");
         for (std::size_t index = 0; index < first.size(); ++index) {
             RequireEqual(std::string(first[index]), std::string(second[index]), "並び");
+        }
+    }
+}
+
+KACHA_V2_TEST(ui_mode, 上の帯の命令はモードの命令に入っている)
+{
+    // 上の帯に別の一覧を持つと、台帳に無いものが並びうる。必ず部分集合にする。
+    for (const UiMode mode : AllUiModes()) {
+        const auto& all = CommandIdsForMode(mode);
+        for (const std::string_view id : TopBarCommandIdsForMode(mode)) {
+            const bool found = std::find(all.begin(), all.end(), id) != all.end();
+            Require(found, "上の帯の " + std::string(id) + " がモードの台帳に無い");
+        }
+    }
+}
+
+KACHA_V2_TEST(ui_mode, 上の帯は短く保つ)
+{
+    // 部品モードには 19 個が横一列に並び、何から押すのか読めなかった
+    // (オーナー指摘 2026-09-11)。入口だけに絞る。
+    for (const UiMode mode : AllUiModes()) {
+        const std::size_t count = TopBarCommandIdsForMode(mode).size();
+        Require(count >= 1, "1つ以上ある");
+        Require(count <= 10, "10個まで");
+    }
+}
+
+KACHA_V2_TEST(ui_mode, 上の帯に同じものを2度並べない)
+{
+    for (const UiMode mode : AllUiModes()) {
+        const auto& row = TopBarCommandIdsForMode(mode);
+        std::set<std::string> unique;
+        for (const std::string_view id : row) {
+            unique.insert(std::string(id));
+        }
+        RequireEqual(std::to_string(unique.size()), std::to_string(row.size()), "重なりなし");
+    }
+}
+
+KACHA_V2_TEST(ui_mode, 上の帯の命令は台帳にある)
+{
+    for (const UiMode mode : AllUiModes()) {
+        for (const std::string_view id : TopBarCommandIdsForMode(mode)) {
+            Require(FindCommand(id) != nullptr, "台帳に " + std::string(id) + " がある");
         }
     }
 }

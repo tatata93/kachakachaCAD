@@ -8,6 +8,8 @@
 
 #include "V2MainWindow.h"
 #include "V2ArrayDialog.h"
+#include "V2ParameterDock.h"
+#include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
 
@@ -508,6 +510,54 @@ void DrawOneLine(V2MainWindow& window)
         window.StatusText().contains(QStringLiteral("やめました")));
 }
 
+[[nodiscard]] bool CasePartModeShowsToolSettings(V2MainWindow& window)
+{
+    // 部品モードだけ右が「役割の表」で、板厚も厚みの付け方も治具のすき間も
+    // どこにも無かった(オーナー指摘 2026-09-11)。
+    using kachakacha::v2::app::Shelf;
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (!Explain("部品の棚が出る", window.ShelfShown(Shelf::Part))) {
+        return false;
+    }
+    // 数の棚で板厚を変えると、部品の棚にも映る。別に持つと食い違う。
+    (void)window.ParameterDock().Apply(
+        kachakacha::v2::app::ParameterId::ExtrudeDistance, QStringLiteral("0.75"));
+    const double shown = window.PartDock().ParameterMm(
+        kachakacha::v2::app::ParameterId::ExtrudeDistance);
+    if (!Explain((std::string("数の棚の値が映る(実際は ") + std::to_string(shown)
+                     + ")").c_str(),
+            std::abs(shown - 0.75) < 1.0e-6)) {
+        return false;
+    }
+    // 何を選んでいるかを一言で出す。押す前に「足りない」と分かるようにする。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.PartDock().SetSelectionText(QString());
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    return Explain((std::string("選択の覚え書きが出る(")
+                       + window.PartDock().SelectionText().toStdString() + ")").c_str(),
+        !window.PartDock().SelectionText().isEmpty());
+}
+
+[[nodiscard]] bool CaseTopBarStaysShort(V2MainWindow& window)
+{
+    // 部品モードの2段目に 19 個が横一列に並び、何から押すのか読めなかった。
+    // 入口だけに絞り、残りは右の棚へ移した。
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    const int shown = window.VisibleToolCount();
+    if (!Explain((std::string("2段目は10個まで(実際は ") + std::to_string(shown)
+                     + ")").c_str(),
+            shown <= 10)) {
+        return false;
+    }
+    // 減らしたぶんは消えていない。表を動かすものは右の棚のボタンから押せる。
+    QString reason;
+    (void)window.CommandEnabled("guide.row_up", &reason);
+    return Explain("表を動かす命令は残っている",
+        window.ActionFor("guide.row_up") != nullptr);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ScreenCases()
@@ -529,6 +579,8 @@ std::vector<SelfTestCase> ScreenCases()
         {"直線に並べて一度で戻せる", &CaseLinearArrayPlacesCopies},
         {"一周に並べても最後が元に重ならない", &CaseCircularArrayDoesNotDoubleTheFirst},
         {"並べる数の打ち間違いを断る", &CaseArrayRefusesBadCount},
+        {"部品モードでも道具の設定が右に出る", &CasePartModeShowsToolSettings},
+        {"上の帯は入口だけに絞られている", &CaseTopBarStaysShort},
     };
 }
 

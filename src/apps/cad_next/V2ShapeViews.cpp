@@ -15,7 +15,10 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/domain/Entity.h"
+#include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+
+#include <QStringList>
 
 #include <map>
 #include <string>
@@ -85,4 +88,46 @@ const kachakacha::v2::domain::Entity* V2MainWindow::FindEntityByIdText(
         }
     }
     return nullptr;
+}
+
+//! 部品の棚を、いまの数と選択に合わせて書き直す。
+//!
+//! 値は数の棚と同じものを映す。別に持つと、数の棚で変えたのに
+//! 部品の棚が古いまま、ということが起きる。
+void V2MainWindow::RefreshPartDock()
+{
+    using kachakacha::v2::app::ParameterId;
+    if (partDock_ == nullptr || parameterDock_ == nullptr) {
+        return;
+    }
+    const auto& values = parameterDock_->Values();
+    for (const ParameterId id : {ParameterId::ExtrudeDistance, ParameterId::OffsetDistanceMm,
+             ParameterId::RevolveAngleDeg, ParameterId::JigClearanceMm,
+             ParameterId::JigThicknessMm}) {
+        partDock_->SetParameterMm(id, kachakacha::v2::app::ParameterValueOf(values, id));
+    }
+    partDock_->SetPlacement(thicknessPlacement_);
+    // いま何を選んでいるかを一言で出す。押す前に「足りない」と分かるようにする。
+    const auto facts = BuildFactsForCommands();
+    if (facts.wires + facts.parts + facts.guideSurfaces + facts.workPlanes == 0) {
+        partDock_->SetSelectionText(QStringLiteral("選んでいるものはありません。"));
+        return;
+    }
+    QStringList parts;
+    if (facts.closedProfiles > 0) {
+        parts << QStringLiteral("閉じた輪郭 %1").arg(facts.closedProfiles);
+    }
+    if (facts.wires > 0) {
+        parts << QStringLiteral("線 %1").arg(facts.wires);
+    }
+    if (facts.guideSurfaces > 0) {
+        parts << QStringLiteral("面 %1").arg(facts.guideSurfaces);
+    }
+    if (facts.parts > 0) {
+        parts << QStringLiteral("部品 %1").arg(facts.parts);
+    }
+    if (facts.workPlanes > 0) {
+        parts << QStringLiteral("作図面 %1").arg(facts.workPlanes);
+    }
+    partDock_->SetSelectionText(QStringLiteral("選択: %1").arg(parts.join(QStringLiteral(" / "))));
 }

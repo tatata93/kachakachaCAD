@@ -36,6 +36,16 @@ enum class UiMode {
 //! そのモードで出すコマンド。共通操作は含めない。
 [[nodiscard]] const std::vector<std::string_view>& CommandIdsForMode(UiMode mode);
 
+//! 上の帯(2段目)に並べる命令。モードの命令のうち **入口になるものだけ**。
+//!
+//! 部品モードの2段目には 19 個が横一列に並んでいた。名前だけの札が並び、
+//! 何から押すのか読めない(オーナー指摘 2026-09-11「上部のuiは不親切すぎる」)。
+//! 表の行を動かす・板厚を当てる、といったものは **その欄の隣** にあるべきで、
+//! 右の棚へ移した。ここに残すのは「そこから始める」ものだけである。
+//!
+//! ここに並ぶ id は必ず CommandIdsForMode にも入っている(試験が照合する)。
+[[nodiscard]] const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode);
+
 //! そのコマンドが、そのモードで出るか(共通操作を含めて判断する)。
 [[nodiscard]] bool CommandVisibleInMode(std::string_view commandId, UiMode mode);
 

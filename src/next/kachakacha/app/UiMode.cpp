@@ -92,6 +92,36 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
     return drawing;
 }
 
+const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
+{
+    // 上の帯に残すのは「そこから始める」ものだけ。
+    // 表の行を動かす・板厚を当てる、といったものはその欄の隣(右の棚)にある。
+    static const std::vector<std::string_view> drawing{
+        "workplane.create", "grid.edit", "grid.move_origin",
+        "wire.project", "wire.project_surface", "wire.wrap_project",
+        "wire.array_linear", "wire.array_circular", "edit.numeric",
+    };
+    static const std::vector<std::string_view> part{
+        // 形状ガイドを作る入口と、立体にする入口。細かい欄は「部品」の棚。
+        "guide.create", "guide.add_row", "guide.build",
+        "part.extrude", "part.thicken", "part.boolean_add", "part.boolean_cut",
+    };
+    static const std::vector<std::string_view> fabrication{
+        "fabrication.create", "fabrication.create_pattern", "fabrication.assign_role",
+    };
+    static const std::vector<std::string_view> output{
+        "export.validate", "export.stl", "export.step", "export.svg", "export.dxf",
+        "export.pdf_1to1",
+    };
+    switch (mode) {
+    case UiMode::Drawing:     return drawing;
+    case UiMode::Part:        return part;
+    case UiMode::Fabrication: return fabrication;
+    case UiMode::Output:      return output;
+    }
+    return drawing;
+}
+
 bool CommandVisibleInMode(std::string_view commandId, UiMode mode)
 {
     const auto& common = CommonCommandIds();

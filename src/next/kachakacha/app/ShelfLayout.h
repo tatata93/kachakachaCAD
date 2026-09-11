@@ -48,6 +48,8 @@ enum class Shelf {
     Parameter,
     //! 型紙の下見。出来た型紙を紙の形で見る。
     Pattern,
+    //! 部品(V1 の部品タブ)。押し出しの距離・板厚・厚みの付け方・治具・回転体。
+    Part,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

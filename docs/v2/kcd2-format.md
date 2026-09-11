@@ -861,7 +861,7 @@ JSON層の診断(`KCD2-J001`〜`J004`)はそのまま透過する。
 }
 ```
 
-`expressions` の各値は §9.1 になかったが、PRD-092(式を再編集できること)のために必須とする。
+`expressions` の各値は §9.1 になかったが、PRD-036(式を再編集できること)のために必須とする。
 `quantity` は `length | angle | scalar`。
 
 `create_wire`:

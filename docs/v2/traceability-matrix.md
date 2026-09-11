@@ -49,10 +49,10 @@
 | PRD-053 | 数値欄自動focusとcursor表示 | 08 | AT-UIX-003 |
 | PRD-054 | 2D/3Dが同じWire | 03,04,08 | AT-DOC-001, AT-WPL-003 |
 | PRD-055 | WorkPlane作成方式 | 02,03,08 | AT-WPL-001,002 |
-| PRD-060 | 幾何snapをgridより優先 | 04,08 | AT-UIX-004 |
+| PRD-060 | tool適合、端点、交点、曲線、gridのsnap優先 | 04,08,14 | AT-UIX-004 |
 | PRD-061 | hover ringとlabel | 08 | AT-UIX-004 |
-| PRD-062 | Shiftでsnap完全無効 | 08 | AT-UIX-004 |
-| PRD-063 | 右クリック近傍候補 | 08 | AT-UIX-004 |
+| PRD-062 | Shift拘束/Ctrl選択/S一時snap解除 | 08,14 | AT-UIX-004 |
+| PRD-063 | Tab/Alt/右クリック候補選択 | 08,14 | AT-UIX-004 |
 | PRD-064 | 主点と1/2,1/3,1/4副点 | 08 | AT-UIX-005 |
 | PRD-065 | grid原点の数値/drag | 08 | AT-UIX-005 |
 | PRD-070 | 距離+dX/dY/dZ+投影+軸角 | 04,08 | AT-MEA-001 |
@@ -66,12 +66,20 @@
 | PRD-082 | 出力前検査 | 07,11 | AT-EXP-011 |
 | PRD-083 | 1:1 PDF page/overlap/reference | 11 | AT-EXP-013 |
 | PRD-084 | temp+validate+replace | 05,11 | AT-EXP-004,011 |
-| PRD-090 | 4モード | 08,10 | AT-UIX-001 |
-| PRD-091 | 左下操作ガイド維持 | 08,10 | AT-UIX-002 |
-| PRD-092 | internal typeを選ばせない | 08,10 | AT-UIX-001 |
-| PRD-093 | 理由/箇所/直し方、no crash | 03,08,10 | AT-UIX-009 |
-| PRD-094 | Win95/標準theme同機能 | 08 | AT-UIX-010 |
-| PRD-095 | 説明の適切な配置 | 08,10 | AT-UIX-002,010 |
+| PRD-090 | compact shell、固定mode/ribbon/空commandなし | 14 | AT-UIX-001 |
+| PRD-091 | tree/viewport/context properties/status | 14 | AT-UIX-001,002 |
+| PRD-092 | tool-first標準+有効な事前選択 | 14 | AT-UIX-002 |
+| PRD-093 | 理由番号/箇所/直し方、no crash | 03,08,10,14 | AT-UIX-009 |
+| PRD-094 | Win95/標準theme同機能 | 08,14 | AT-UIX-010 |
+| PRD-095 | 説明の適切な配置とF1 | 08,10,14 | AT-UIX-002,010,011 |
+| PRD-096 | 共通ToolSessionとkey/preview契約 | 14 | AT-UIX-002 |
+| PRD-097 | 安定ID付きsub-element複数選択 | 03,07,14 | AT-UIX-004 |
+| PRD-098 | Hover/Selected/Input/Previewとcursor/mouse | 14 | AT-UIX-004,008 |
+| PRD-099 | context propertiesとcursor入力同期 | 14 | AT-UIX-002,003 |
+| PRD-100 | DPI/狭画面/monitor変更/配置復元 | 14 | AT-UIX-010 |
+| PRD-101 | user-facing板材を設けない | 10,14 | AT-UIX-001,013 |
+| PRD-102 | WireはSketch/WorkPlane非所有 | 03,04,08,14 | AT-WPL-003, AT-UIX-012 |
+| PRD-103 | internal typeを利用者の作業語へ翻訳 | 08,10,14 | AT-UIX-001,007,011 |
 
 ## 3. アーキテクチャ要件
 
@@ -102,11 +110,17 @@
 | FAB-006 | 再計算失敗で直前結果をStale保持 | 03,09 | AT-DOC-004, AT-PER-002 |
 | FAB-007 | 全組立状態で製作用3D Wireを取得 | 09,10 | AT-FAB-009,014 |
 | FAB-008 | Wire/Partは同じ境界評価を使う | 09,11 | AT-FAB-011,014 |
-| UIX-001 | モード変更で選択維持 | 08 | AT-UIX-001 |
-| UIX-002 | 実行不可理由を表示 | 08,10 | AT-UIX-001,009 |
-| UIX-003 | モード変更だけで文書を変更しない | 08 | AT-UIX-001 |
-| UIX-004 | 旧内部種類を通常UIで選ばせない | 08,10 | AT-UIX-001 |
-| UIX-011 | 全UI入口を一意な実装と試験へ結ぶ | 08,10 | AT-UIX-011 |
+| UIX-001 | tool切替で旧ToolSession状態を残さない | 14 | AT-UIX-001 |
+| UIX-002 | 実行不可理由を表示し入力を保持 | 08,10,14 | AT-UIX-002,009 |
+| UIX-003 | UI状態変更だけでDocumentを変更しない | 08,14 | AT-UIX-001,002 |
+| UIX-004 | 旧内部種類と板材を通常UIで選ばせない | 08,10,14 | AT-UIX-001,013 |
+| UIX-005 | sub-elementを安定参照で複数選択 | 03,07,14 | AT-UIX-004 |
+| UIX-006 | cursor/mouse/snap修飾キーを統一 | 14 | AT-UIX-004,008 |
+| UIX-007 | 選択/ToolSessionをcontext propertiesへ表示 | 14 | AT-UIX-002,003 |
+| UIX-008 | WorkPlaneがWireを所有しない | 03,04,08,14 | AT-UIX-012 |
+| UIX-009 | 押し出し4出力と入力保持 | 07,10,14 | AT-UIX-013 |
+| UIX-010 | DPIと画面復元 | 14 | AT-UIX-010 |
+| UIX-011 | 全UI入口を一意な実装と試験へ結ぶ | 08,10,14 | AT-UIX-011 |
 
 ## 5. 幾何契約
 

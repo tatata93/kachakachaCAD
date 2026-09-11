@@ -2,7 +2,7 @@
 
 以下を、V2全体を進行管理するAIへそのまま渡す。
 
-**改訂 2026-09-07**: 実装前レビューの結果を反映。着手前ブロッカー、ゲートの循環、
+**改訂 2026-09-12**: 実装前レビューとUI/UX統合(ADR 0028)を反映。着手前ブロッカー、ゲートの循環、
 並列作業時のビルド競合、CI不在、オーナー確認点の不足を修正した。
 根拠は `docs/v2/pre-implementation-fixes.md`。
 
@@ -43,7 +43,9 @@ B-1〜B-3 は**仕様commitとして先に打ち、実装commitと混ぜない**
 4. `docs/refactoring-plan.md`
 5. `docs/v2/README.md` と、そこに列挙された全規範文書
 
-`docs/adr/0026-wire-first-v2.md` があれば読みます。無ければ作るか、必読リストから外します。
+`docs/adr/0026-wire-first-v2.md` と `docs/adr/0028-integrated-ui-ux-and-tool-session.md` を読みます。
+UIへ触る担当には `docs/v2/ui-ux-integrated-spec.md` と
+`docs/v2/handover-ui-ux-2026-09-12.md` を必ず渡します。無ければ作るか、必読リストから外します。
 **存在しない文書を必読に残したまま担当へ渡さないこと。** 担当が着手できなくなります。
 
 製品仕様は `docs/v2/`、進捗は `docs/v2/implementation-work-packages.md` の表だけを正本とします。

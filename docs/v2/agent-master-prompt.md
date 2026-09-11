@@ -2,7 +2,7 @@
 
 以下を、`ASSIGNED_WORK_PACKAGE` 以下の変数を埋めて実装担当AIへそのまま渡す。要約を渡してはならない。
 
-**改訂 2026-09-07**: 実装前レビューの結果を反映。存在しないファイルへの参照、誤ったビルドパス、
+**改訂 2026-09-12**: 実装前レビューとUI/UX統合(ADR 0028)を反映。存在しないファイルへの参照、誤ったビルドパス、
 「完了」の判定を崩す抜け穴、並列作業時のビルド競合を修正した。
 変更点の根拠は `docs/v2/pre-implementation-fixes.md`。
 
@@ -33,22 +33,24 @@ TARGET_PLATFORM       = <Windows実機 / Linux(core only) / 両方>
    製作近似に触るWP（WP-09 / WP-10）は、**§2.5「近似はどの段階で、何を、どう近似するか」を
    着手前に必ず読むこと。** 段階・入力・処理の順序がそこに書き下ろしてある
 4. `docs/v2/README.md`
-5. `docs/v2/product-contract.md`
-6. `docs/v2/architecture-and-data.md`
-7. `docs/v2/public-api-contract.md`
-8. `docs/v2/kcd2-format.md`
-9. `docs/v2/geometry-contract.md`
-10. `docs/v2/fabrication-contract.md`
-11. `docs/v2/ui-workflows.md`
-12. `docs/v2/command-catalog.md`
-13. `docs/v2/acceptance-tests.md`
-14. `docs/v2/traceability-matrix.md`
-15. `docs/v2/implementation-work-packages.md`
-16. `docs/refactoring-plan.md`
-17. 自分のWPが再利用または置換する旧実装と旧試験
+5. `docs/v2/ui-ux-integrated-spec.md`
+6. `docs/v2/product-contract.md`
+7. `docs/v2/architecture-and-data.md`
+8. `docs/v2/public-api-contract.md`
+9. `docs/v2/kcd2-format.md`
+10. `docs/v2/geometry-contract.md`
+11. `docs/v2/fabrication-contract.md`
+12. `docs/v2/ui-workflows.md`
+13. `docs/v2/command-catalog.md`
+14. `docs/v2/acceptance-tests.md`
+15. `docs/v2/traceability-matrix.md`
+16. `docs/v2/implementation-work-packages.md`
+17. `docs/refactoring-plan.md`
+18. 自分のWPが再利用または置換する旧実装と旧試験
     （`pre-implementation-fixes.md` 第8節に、移植すべき資産がファイル名で列挙してある）
 
-`docs/adr/0026-wire-first-v2.md` があれば読みます。**無ければ、無いことを統合担当へ報告し、
+`docs/adr/0026-wire-first-v2.md` とUIに触る場合は
+`docs/adr/0028-integrated-ui-ux-and-tool-session.md` を読みます。**無ければ、無いことを統合担当へ報告し、
 その旨を作業メモへ書いた上で先へ進んでください。** 存在しない文書を待って止まらないこと。
 
 V2と旧文書が矛盾する場合はV2を優先します。恒久の製品原則と安全規則は常に守ります。

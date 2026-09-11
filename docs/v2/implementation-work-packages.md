@@ -481,9 +481,45 @@ Win95Theme
 
 旧削除とV2機能追加を同一commitにしない。
 
-## 18. 複数AIの統合規則
+## 18. WP-14 UI/UX統合改訂
 
-### 18.1 統合担当
+### 所有
+
+- `docs/v2/ui-ux-integrated-spec.md` と関連UI規範。
+- `src/next/kachakacha/app` のSelectionRef、ToolSession、UI意味状態。Qt/OCCTは入れない。
+- `src/apps/cad_next` の画面骨格、カーソル、マウス、右コンテキストプロパティ、各ツールadapter。
+- `tests_v2` のUIX試験と `cad_next --self-test` のUI操作ケース。
+
+WP-10が所有する製作、曲げ、出力の幾何serviceとDocumentCommandは変更しない。
+WP-14はそれらを共通ToolSessionへ接続するUI adapterだけを所有する。公開契約の変更は
+ADR 0028、`public-api-contract.md`、compile testを先に更新する。
+
+### 実装順
+
+1. Phase 0: 規範、ADR、受入試験、追跡表、未達台帳、引継ぎ書。
+2. Phase 1: sub-element選択、意味状態、cursor/mouse/snap、ToolSession。
+3. Phase 2: 固定4モードと重複棚を統合shellへ置換、context properties、DPI/復元。
+4. Phase 3: 作図、編集、測定、形状ガイド、部品、製作用近似、出力を順に移行。
+5. Phase 4: ER1/初期ER2 1/87の実用操作と画像付きmanual。
+
+### Gate
+
+- AT-UIX-001から013。
+- 既存のAT-WIR、AT-WPL、AT-GEO、AT-EXT、AT-FAB、AT-EXPを退行させない。
+- `scripts/check-v2.ps1` と `kachakacha_cad_next.exe --self-test`。
+- 100/125/150/200% DPIと1366x768/1920x1080の画像確認。
+- UIに `板材` 種別/モード/作成コマンド、空の将来機能、固定4モードを残さない。
+- WorkPlane切替/削除後もWireのUUID、SegmentId、3D座標を保持する。
+
+### 分割とpush
+
+Phaseごとに独立コミットとし、Phase 1以降はSelection、ToolSession、shell、個別機能群をさらに分ける。
+各コミットでbuild、ctest、self-testを緑にしてpushする。途中状態は
+`docs/v2/handover-ui-ux-2026-09-12.md` へ反映する。
+
+## 19. 複数AIの統合規則
+
+### 19.1 統合担当
 
 1人だけが次を所有する。
 
@@ -493,7 +529,7 @@ Win95Theme
 - cross-WP API変更。
 - merge順とrelease branch。
 
-### 18.2 作業担当
+### 19.2 作業担当
 
 - 最新integration branchから `codex/v2-<wp>-<short-name>` を作る。
 - 開始ロックを先にpushする。
@@ -503,7 +539,7 @@ Win95Theme
 - 作業終了時にbranchをpushする。
 - merge後に自分のbranch上だけで続けない。最新integrationへ追従する。
 
-### 18.3 競合予防
+### 19.3 競合予防
 
 - 公開headerは所有WPだけが編集する。
 - root CMakeへ各担当が直接sourceを追記せず、WP別 `sources.cmake` をincludeする。
@@ -513,7 +549,7 @@ Win95Theme
 - tolerance、unit、ID、selection ref、output targetを独自定義しない。
 - 一時adapterには `V2_MIGRATION_ONLY` と削除WPをコメントし、WP-13 testで残存を検出する。
 
-## 19. 引継ぎ報告形式
+## 20. 引継ぎ報告形式
 
 ```text
 WP:

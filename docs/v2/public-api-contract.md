@@ -1018,26 +1018,101 @@ public:
 ## 16. UI境界
 
 ```cpp
+enum class SelectionElementKind {
+    Object,
+    Vertex,
+    Edge,
+    Face,
+    ControlPoint,
+    WorkPlane,
+};
+
+struct SelectionRef {
+    EntityId entityId;
+    SelectionElementKind kind = SelectionElementKind::Object;
+    std::optional<SegmentId> segmentId;
+    std::optional<SubshapeKey> subshapeKey;
+    std::optional<double> curveParameter;
+    geometry::Point3 hitPoint;
+    double screenDistancePx = 0.0;
+};
+
+struct SelectionSnapshot {
+    std::vector<SelectionRef> ordered;
+};
+
+enum class ToolSessionPhase {
+    Idle,
+    AwaitingInput,
+    EditingParameters,
+    PreviewReady,
+    InvalidPreview,
+};
+
+struct ToolInputRequirement {
+    std::string roleId;
+    std::vector<SelectionElementKind> acceptedKinds;
+    std::size_t minimumCount = 0;
+    std::optional<std::size_t> maximumCount;
+    bool ordered = true;
+};
+
+using ToolParameterValue = std::variant<
+    bool,
+    std::int64_t,
+    double,
+    std::string,
+    EntityId,
+    geometry::Point3,
+    geometry::Vector3>;
+
+using ToolParameterMap = std::map<std::string, ToolParameterValue>;
+
+struct ToolPreviewState {
+    std::uint64_t generation = 0;
+    bool visible = false;
+};
+
+struct ToolSessionSnapshot {
+    ToolId toolId;
+    ToolSessionPhase phase = ToolSessionPhase::Idle;
+    std::vector<ToolInputRequirement> requirements;
+    std::map<std::string, std::vector<SelectionRef>> capturedInputs;
+    ToolParameterMap parameters;
+    std::optional<ToolPreviewState> preview;
+    std::vector<Diagnostic> diagnostics;
+    bool canCommit = false;
+    bool canStepBack = false;
+};
+
 class IToolController {
 public:
     virtual ~IToolController() = default;
     virtual ToolId Id() const noexcept = 0;
-    virtual ToolState State() const noexcept = 0;
+    virtual ToolSessionSnapshot Snapshot() const = 0;
     virtual OperationGuideModel Guide() const = 0;
     virtual void Begin(const SelectionSnapshot&) = 0;
+    virtual void SelectionChanged(const SelectionSnapshot&) = 0;
     virtual void PointerMove(const PointerEvent&) = 0;
     virtual void PointerPress(const PointerEvent&) = 0;
     virtual void KeyPress(const KeyEvent&) = 0;
+    virtual bool StepBack() = 0;
     virtual void Cancel() = 0;
     virtual Result<DocumentCommand> BuildCommitCommand() const = 0;
 };
 ```
 
+- `SelectionRef` はEntityIdだけへ縮退させない。SegmentId/SubshapeKeyを失う変換を禁止する。
+- `hitPoint` と `screenDistancePx` はpick時の情報であり、保存形式へ書かない。
+- `SelectionSnapshot::ordered` は利用者が選んだ順を保つ。同一Entityの異なるサブ要素を重複除去しない。
 - ViewportはPointerEventをactive toolへ渡すだけ。
 - Tool controllerはDocumentを直接mutateしない。
 - ControllerはPreview serviceを呼び、commit時にDocumentCommandを返す。
-- OperationGuideModelは各toolが必ず提供し、空stepを禁止する。
+- ToolSessionSnapshotを右コンテキストプロパティとカーソル近傍入力の唯一の状態源にする。
+- OperationGuideModelは各toolが必ず提供し、空stepを禁止する。ビューポート表示は2行以内に要約する。
 - QAction、toolbar、right panel buttonは同じToolIdとcommand registryへbindする。
+- 事前選択とツール開始後の選択は同じ `SelectionChanged` 経路で役割へ取り込む。
+- `StepBack` がfalseを返したときだけEscでToolSessionを終了する。
 
 ## 17. 変更手続き
 

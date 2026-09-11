@@ -9,12 +9,14 @@
 各コマンドは次を必ず定義する。
 
 ```text
-id / labelJa / mode / icon / defaultShortcut / selectionPredicate /
+id / labelJa / categoryPath / icon / defaultShortcut / selectionPredicate /
 parameterSchema / controllerFactory / operationGuide / acceptanceIds
 ```
 
 - IDは保存データのFeature typeとは別であり、UI command registry内で安定させる。
-- 選択不足時は非表示にせずdisableし、`selectionPredicate` の不成立理由を日本語で表示する。
+- `categoryPath` は固定上位モードではなく、メニューと道具バーの配置分類である。
+- 選択不足だけの場合はdisableせずToolSessionを開始し、必要な対象をビューポートから選ばせる。
+- 幾何的または文書状態として開始不能な場合だけdisableし、`selectionPredicate` の不成立理由を日本語で表示する。
 - Documentを変えるコマンドは必ず `DocumentCommand` を1つ返す。直接変更しない。
 - Previewだけの操作、カメラ操作、選択変更はDocumentのUndoへ積まない。
 - 作成されるSource Entityはactive groupへ、Derived EntityはFeature用派生groupへ入れる。
@@ -111,7 +113,7 @@ parameter schemaのdiscriminatorにする。
 | `wire.project` | 面へ投影 | WireChain、対象、方向、hit policy | derived Wire | AT-FAB-007 |
 | `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(折れ線) | AT-FAB-013 |
-| `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Wire/Part/両方 | AT-EXT-001から008 |
+| `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Part/GuideSurface/Wire/Part+Wire | AT-EXT-001から008, AT-UIX-013 |
 | `part.thicken` | 面に厚みを付ける | 形状ガイド、厚み、付け方 | Part | AT-EXT-001 |
 | `part.surface_jig` | 治具を作る | 形状ガイドの面1つ、治具のすき間、治具の厚み(符号で表側/裏側) | 当たり面(OffsetGuide、すき間 0 なら作らない)+ 当て板(ThickenSurface)をひとまとまりで。JIG-E001〜E003 | AT-EXT-001 |
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |

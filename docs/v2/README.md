@@ -25,18 +25,19 @@ V2は、利用者が `面` と `板材` の内部的な違いを意識する現�
 2. `docs/v2/pre-implementation-fixes.md`
    （オーナー決定事項と、実装前レビューで見つかった規範文書の誤り。
    他のV2文書と矛盾したらこちらを優先し、他文書のほうを直す）
-3. `docs/v2/product-contract.md`
-4. `docs/v2/architecture-and-data.md`
-5. `docs/v2/public-api-contract.md`
-6. `docs/v2/kcd2-format.md`
-7. `docs/v2/geometry-contract.md`
-8. `docs/v2/fabrication-contract.md`
-9. `docs/v2/ui-workflows.md`
-10. `docs/v2/command-catalog.md`
-11. `docs/v2/acceptance-tests.md`
-12. `docs/v2/traceability-matrix.md`
-13. `docs/v2/implementation-work-packages.md`
-14. 既存の `docs/*.md` とADR 0001から0025
+3. `docs/v2/ui-ux-integrated-spec.md`
+4. `docs/v2/product-contract.md`
+5. `docs/v2/architecture-and-data.md`
+6. `docs/v2/public-api-contract.md`
+7. `docs/v2/kcd2-format.md`
+8. `docs/v2/geometry-contract.md`
+9. `docs/v2/fabrication-contract.md`
+10. `docs/v2/ui-workflows.md`
+11. `docs/v2/command-catalog.md`
+12. `docs/v2/acceptance-tests.md`
+13. `docs/v2/traceability-matrix.md`
+14. `docs/v2/implementation-work-packages.md`
+15. 既存の `docs/*.md` とADR 0001から0028
 
 V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先する。旧文書の有用な幾何条件や
 試験資産は、V2と矛盾しない範囲で再利用する。
@@ -69,13 +70,14 @@ V2文書と旧文書が矛盾するとき、V2の実装ではV2文書を優先�
 | 文書 | 固定する内容 |
 | --- | --- |
 | `pre-implementation-fixes.md` | 着手前ブロッカー、オーナー決定事項、規範文書の既知の誤り、移植するV1資産 |
+| `ui-ux-integrated-spec.md` | 画面骨格、意味状態、選択、カーソル、マウス、ToolSession、プロパティ、入力、DPI |
 | `product-contract.md` | 製品の完成像、用語、機能範囲、非目標 |
 | `architecture-and-data.md` | モジュール境界、ID、依存グラフ、保存形式、Undo、並列計算 |
 | `public-api-contract.md` | WP間で共有するC++型、Command、評価、出力、UI境界 |
 | `kcd2-format.md` | ZIP構造、JSONキー、enum、Featureごとの保存表現 |
 | `geometry-contract.md` | ワイヤー、輪郭認識、形状ガイド、ソリッド、押し出し、計測の幾何条件 |
 | `fabrication-contract.md` | 部材近似、切れ目、型紙、組立スライダー、任意状態出力 |
-| `ui-workflows.md` | 画面構成、選択、入力、エラー、全コマンドの操作手順 |
+| `ui-workflows.md` | 統合UI規範を各コマンドへ適用する操作手順 |
 | `command-catalog.md` | 全コマンドの安定ID、入力条件、出力、試験 |
 | `acceptance-tests.md` | 完了を判定する自動試験、画像試験、実用シナリオ |
 | `traceability-matrix.md` | 各必須要件と受入試験、担当WPの対応 |

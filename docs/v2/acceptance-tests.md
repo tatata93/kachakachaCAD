@@ -381,22 +381,28 @@ Straight、V、CurvedVの左右辺parameter対応を検査する。100%でmate g
 
 Qt Testまたは既存self-testの独立ケースとして実装し、1件失敗で残りを停止しない。
 
-### AT-UIX-001 モード
+### AT-UIX-001 画面骨格とツール切替
 
-4モード、共通操作、選択維持、右パネル同期を検査する。旧 `面/板材` モードがない。
+メニュー、1段道具バー、モデルツリー、ビューポート、右コンテキストプロパティ、ステータスバーを検査する。
+固定4モード、リボン、常設の巨大コマンド棚、利用者向け `板材` 種別/モード/コマンドがない。
+異なるツールを順に開始し、前ツールの押下表示、入力、Preview、カーソル近傍値が残らない。
 
-### AT-UIX-002 操作ガイド
+### AT-UIX-002 ToolSessionとコンテキストプロパティ
 
-主要全コマンドでツール名、現在手順、次手順、確定、取消、選択数が存在する。
-placeholder文や空欄を許さない。
+主要全コマンドでツール名、現在手順、必要入力、確定、取消、選択数が存在し、通常時は選択プロパティへ戻る。
+ツール先行で不足対象を順に選べる。有効な事前選択を取り込んでも同じCommandと結果になる。
+Escの段階戻り/終了/選択解除、Backspace、Enter、Ctrl+Zの範囲を検査する。placeholder文や空欄を許さない。
 
 ### AT-UIX-003 カーソル入力
 
-直線、円、円弧、押し出しで最初の主要欄へfocusし、式入力、Tab、Enter、Esc、画面端再配置を検査する。
+直線、円、円弧、押し出しで最初の主要欄へfocusし、式入力、Tab、Shift+Tab、Enter、Esc、画面端再配置を検査する。
+右プロパティとカーソル近傍値が同じToolSessionパラメータを双方向更新する。
 
-### AT-UIX-004 スナップ
+### AT-UIX-004 選択、Hover、スナップ
 
-交点と主点が近いと交点を選ぶ。Shift中は自由点。右クリックで全候補。ringサイズとラベルを画像確認する。
+同じワイヤーの複数端点/線分と、同じ部品の複数面をCtrlで同時選択する。矩形選択の左右方向、Tab巡回、
+Alt深部選択、右クリック候補一覧を検査する。端点/作図点、交点、最近点、グリッドの優先順を検査し、
+Shift中は方向拘束、S中は自由点になる。Hover/Selected/Input/Previewの色、ringサイズ、ラベルを画像確認する。
 
 ### AT-UIX-005 グリッド
 
@@ -415,7 +421,8 @@ Derivedは派生groupへ入る。保存再読込でも維持。
 ### AT-UIX-008 View cube
 
 drag量とcamera quaternion、cube quaternionが一致する。release後1秒で変化0。90deg snapなし。
-世界/相対XYZ、0.05/0.25/1deg感度、15deg clickを検査する。
+世界/相対XYZ、0.05/0.25/1deg感度、15deg clickを検査する。ホイールzoom、中ドラッグpan、
+Shift+中ドラッグorbit、右クリックcontextを検査し、右ドラッグでcameraが変化しない。
 
 ### AT-UIX-009 失敗回復
 
@@ -432,6 +439,17 @@ Windows 95/標準theme、100/125/150/200% DPI、1366x768と1920x1080で主要画
 `command-catalog.md` の必須IDと実装registryを双方向比較し、重複、欠損、台帳外IDを拒否する。
 全Descriptorに日本語label、icon、selection predicate、操作ガイド、acceptance IDがあり、Document変更controllerが
 DocumentCommandを返すことを検査する。menu/toolbar/shortcutが同じcontrollerへ到達し、service未接続の空controllerがない。
+
+### AT-UIX-012 ワイヤーの独立性
+
+異なる作業平面で作ったワイヤーがモデルツリー上でSketch/作業平面の子にならない。作業平面の切替、非表示、削除後も
+ワイヤーのEntityId、SegmentId、3D座標が不変である。再編集に平面が必要な場合は別平面を勝手に割り当てず診断を出す。
+
+### AT-UIX-013 押し出し出力と入力保持
+
+同じ閉輪郭から `部品 / 形状ガイド / ワイヤー / 部品+ワイヤー` を作る。ワイヤー出力にFace/Solidがなく、
+部品は閉ソリッドで、部品+ワイヤーは同じ評価bundleの境界が一致する。全方式で入力を削除せず、
+`生成後に入力を隠す` は表示だけを変え、Undoで生成と表示変更を1単位で戻す。
 
 ## 11. 出力試験
 

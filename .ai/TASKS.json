@@ -61,9 +61,9 @@
     "id": "UI-P1-003",
     "title": "Viewport候補循環と奥選択の結線",
     "phase": 1,
-    "status": "ready",
+    "status": "passed",
     "priority": "high",
-    "assigned_to": null,
+    "assigned_to": "claude",
     "dependencies": [
       "UI-P1-002"
     ],
@@ -112,14 +112,17 @@
       "既存のCtrl複数選択、Shift拘束、Sスナップ抑止が退行しない。",
       "`ctest --preset windows-msvc`と`kachakacha_cad_next.exe --self-test`が成功する。"
     ],
-    "last_review": null,
-    "revision_count": 0
+    "last_review": {
+      "decision": "PASS",
+      "attempt": 2
+    },
+    "revision_count": 1
   },
   {
     "id": "UI-P1-004",
     "title": "右クリック選択候補メニュー",
     "phase": 1,
-    "status": "pending",
+    "status": "ready",
     "priority": "high",
     "assigned_to": null,
     "dependencies": [

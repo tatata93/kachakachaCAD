@@ -77,29 +77,40 @@
       "src/apps/cad_next/V2ViewportDraw.cpp",
       "src/apps/cad_next/V2SelfTestScreen.cpp"
     ],
-    "objective": "既存の全候補収集をViewportへ結線し、Tab循環とAltによる奥候補選択を実装する。",
-    "background": "コアは候補を全件返せるが、Viewportは最寄り1件しか消費していない。",
+    "objective": "重なった選択候補をV2Viewportへ結線し、TabとAltで意図した候補を選べるようにする。",
+    "background": "コアは点・曲線の全候補と、形状の手前から奥までの候補を返せる。画面側はまだ最寄りの1件だけを使っているため、重なった線や奥の部品を選び分けられない。",
     "forbidden_changes": [
-      "SelectionまたはMeshPickの候補収集をUI側へ複製しない",
-      "MainWindow、Document、Feature DAG、幾何アルゴリズムを変更しない",
-      "右クリック候補メニューや範囲選択をこのタスクへ混ぜない",
-      "V1を変更または削除しない"
+      "`src/next`の選択・メッシュ候補収集アルゴリズムを別実装へ置き換えない。",
+      "MainWindow、Document、Feature DAG、幾何アルゴリズムを変更しない。",
+      "右クリック候補メニュー、範囲選択、カーソル全面改訂を混ぜない。",
+      "V1を削除・変更しない。"
+    ],
+    "requirements": [
+      "`docs/v2/ui-ux-integrated-spec.md`の選択、Hover、Alt、Tab規定に従う。",
+      "`CollectPickCandidates`と`CollectMeshHits`を再利用する。",
+      "候補順は安定し、同じ位置でTabを押すたび次候補へ循環する。",
+      "Tabだけでは通常選択を変更しない。",
+      "クリックは現在表示中の候補を選ぶ。",
+      "Alt+クリックは現在候補の次、または規定上の奥候補を選ぶ。",
+      "ポインタが別の場所へ移った場合の候補番号リセットを決定的にする。",
+      "Hover、Selection、Previewを同じ状態として扱わない。"
     ],
     "work_steps": [
-      "ViewportのHoverAt、SelectAt、keyPressEventと自己試験を読む",
-      "候補一覧と現在番号をViewportの一箇所で保持する",
-      "曲線候補と形状候補を既存APIから統合する",
-      "Tab、通常クリック、Alt+クリックを候補状態へ結線する",
-      "画面を出さない自己試験を追加する"
+      "関連するViewportのhover/select/key処理と既存自己試験を読む。",
+      "候補一覧と現在番号をViewportの一箇所だけで保持する。",
+      "曲線候補と形状候補を既存の意味を壊さず統合する。",
+      "Hover、Tab、通常クリック、Alt+クリックを同じ候補状態へ結線する。",
+      "画面を出さずに重なりと状態遷移を確認する自己試験を追加する。",
+      "Windowsのbuild、CTest、アプリ自己試験を通す。"
     ],
     "acceptance_tests": [
-      "重なった線でTabを押すたび候補が安定順に循環する",
-      "Tabだけでは通常選択を変更しない",
-      "Tab後の通常クリックは表示中候補を選ぶ",
-      "Alt+クリックは次または奥側の候補を選ぶ",
-      "別位置へ移動すると候補番号は決定的に先頭へ戻る",
-      "Ctrl複数選択、Shift拘束、Sスナップ抑止が退行しない",
-      "Windows CTestとアプリ自己試験が成功する"
+      "重なった2本以上の線でTabを押すと候補が順番に切り替わる。",
+      "Tab操作だけでは`SelectionSet`が変わらない。",
+      "Tab後の通常クリックは表示中候補を選ぶ。",
+      "Alt+クリックは奥側の候補を選ぶ。",
+      "別位置へ移動後は先頭候補から始まり、同位置内では順序が揺れない。",
+      "既存のCtrl複数選択、Shift拘束、Sスナップ抑止が退行しない。",
+      "`ctest --preset windows-msvc`と`kachakacha_cad_next.exe --self-test`が成功する。"
     ],
     "last_review": null,
     "revision_count": 0

@@ -105,6 +105,11 @@ Codex commands. It does not write files, create branches/worktrees, or start an
 agent. Missing optional agent CLIs are warnings in dry run and fatal in execute
 mode.
 
+Claude runs non-interactively with file edits accepted and permission prompts
+disabled. The task worktree is the containment boundary. If the worker exits
+without leaving any task-worktree change, the run stops before configuration or
+build instead of treating a permission request as successful implementation.
+
 ## Task statuses
 
 Only these values are valid:

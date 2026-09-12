@@ -88,6 +88,19 @@ class OrchestratorTests(unittest.TestCase):
         self.assertTrue(forced_dry.execute)
         self.assertTrue(forced_dry.dry_run)
 
+    def test_worker_is_noninteractive_and_accepts_file_edits(self):
+        command = orchestrator.worker_command(
+            Path("worktree"), Path("CURRENT_TASK.md"), None, "claude"
+        )
+        self.assertIn("acceptEdits", command.argv)
+        self.assertIn("--permission-prompts", command.argv)
+        self.assertIn("none", command.argv)
+
+    def test_worker_must_change_the_task_worktree(self):
+        orchestrator.require_worker_changes(" M src/example.cpp")
+        with self.assertRaises(orchestrator.OrchestratorError):
+            orchestrator.require_worker_changes("\n")
+
 
 if __name__ == "__main__":
     unittest.main()

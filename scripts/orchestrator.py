@@ -191,13 +191,19 @@ def render_current_task(task: dict[str, Any]) -> str:
         "work_steps",
         ["Inspect the relevant code", "Implement the smallest change", "Add tests"],
     )
+    requirements = task.get("requirements")
+    requirement_text = (
+        _markdown_list(requirements)
+        if requirements
+        else _markdown_list(task["spec_refs"], code=True)
+    )
     sections = [
         ("TASK ID", task["id"]),
         ("目的", objective),
         ("背景", background),
         ("変更対象候補", _markdown_list(task["files_hint"], code=True)),
         ("変更禁止範囲", _markdown_list(forbidden)),
-        ("必須仕様", _markdown_list(task["spec_refs"], code=True)),
+        ("必須仕様", requirement_text),
         ("作業手順", _numbered_list(work_steps)),
         ("Acceptance Tests", _markdown_list(task["acceptance_tests"])),
         (
@@ -402,7 +408,19 @@ def worker_command(
     )
     if revision_file is not None:
         prompt += f" This is a revision run; also read {revision_file}."
-    return PlannedCommand("Claude worker", (executable, "-p", prompt), worktree)
+    return PlannedCommand(
+        "Claude worker",
+        (
+            executable,
+            "-p",
+            "--permission-mode",
+            "acceptEdits",
+            "--permission-prompts",
+            "none",
+            prompt,
+        ),
+        worktree,
+    )
 
 
 def reviewer_command(
@@ -532,6 +550,13 @@ def collect_git_evidence(worktree: Path, runtime: Path) -> tuple[str, str, str]:
     return status, stat, diff
 
 
+def require_worker_changes(status: str) -> None:
+    if not status.strip():
+        raise OrchestratorError(
+            "Claude worker completed without changing the task worktree"
+        )
+
+
 def make_review_packet(
     task_text: str,
     worker_report: str,
@@ -626,6 +651,8 @@ def run_one_task(
             worker_report = run_command(
                 worker, timeout_seconds, runtime / f"claude-{attempt}.log"
             )
+            worker_status = git_output(["-C", str(worktree), "status", "--short"])
+            require_worker_changes(worker_status)
             command_results: list[tuple[PlannedCommand, str]] = []
             for index, command in enumerate(build_and_test_plan(worktree)):
                 output = run_command(

@@ -8,6 +8,7 @@ never a shell command string, and never performs destructive Git operations.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -18,12 +19,42 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+try:
+    from orchestrator_policy import (
+        DiffMetrics,
+        StagePlan,
+        TaskPolicy,
+        determine_policy,
+        diff_metrics,
+        effort_after_diff,
+        load_review_config,
+        promoted_mode,
+        resolve_review_profile,
+        stages_for_task,
+        validate_policy_fields,
+    )
+except ModuleNotFoundError:
+    from scripts.orchestrator_policy import (
+        DiffMetrics,
+        StagePlan,
+        TaskPolicy,
+        determine_policy,
+        diff_metrics,
+        effort_after_diff,
+        load_review_config,
+        promoted_mode,
+        resolve_review_profile,
+        stages_for_task,
+        validate_policy_fields,
+    )
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AI_DIR = REPO_ROOT / ".ai"
 TASKS_PATH = AI_DIR / "TASKS.json"
 CURRENT_TASK_PATH = AI_DIR / "CURRENT_TASK.md"
 STATE_PATH = AI_DIR / "STATE.md"
+ORCHESTRATOR_CONFIG_PATH = AI_DIR / "ORCHESTRATOR_CONFIG.json"
 ALLOWED_STATUSES = {
     "pending",
     "ready",
@@ -55,6 +86,14 @@ class OrchestratorError(RuntimeError):
     """Expected stop condition with a user-facing explanation."""
 
 
+class CommandFailed(OrchestratorError):
+    """External command failure with captured output for bounded fallback decisions."""
+
+    def __init__(self, message: str, output: str) -> None:
+        super().__init__(message)
+        self.output = output
+
+
 def configure_console_encoding() -> None:
     """Keep Japanese task/report text readable in captured Windows output."""
     for stream in (sys.stdout, sys.stderr):
@@ -68,6 +107,15 @@ class PlannedCommand:
     label: str
     argv: tuple[str, ...]
     cwd: Path
+
+
+@dataclass(frozen=True)
+class StageOutcome:
+    worker_report: str
+    command_results: tuple[tuple[PlannedCommand, str], ...]
+    stat: str
+    policy: TaskPolicy
+    reviewer: str | None
 
 
 def load_tasks(path: Path = TASKS_PATH) -> list[dict[str, Any]]:
@@ -106,8 +154,12 @@ def validate_tasks(tasks: list[dict[str, Any]]) -> None:
         _validate_string_list(task_id, task, "spec_refs", require_values=True)
         _validate_string_list(task_id, task, "files_hint", require_values=True)
         _validate_string_list(task_id, task, "acceptance_tests", require_values=True)
-        if len(task["files_hint"]) > 5:
-            raise OrchestratorError(f"{task_id} exceeds the five-file task limit")
+        if len(task["files_hint"]) > 15:
+            raise OrchestratorError(f"{task_id} exceeds the fifteen-file task limit")
+        try:
+            validate_policy_fields(task)
+        except ValueError as exc:
+            raise OrchestratorError(f"{task_id} has invalid execution policy: {exc}") from exc
         revisions = task.get("revision_count", 0)
         if not isinstance(revisions, int) or revisions < 0:
             raise OrchestratorError(f"{task_id} has an invalid revision_count")
@@ -180,7 +232,14 @@ def resolve_task(tasks: list[dict[str, Any]], requested_id: str | None) -> dict[
     return task
 
 
-def render_current_task(task: dict[str, Any]) -> str:
+def render_current_task(
+    task: dict[str, Any],
+    policy: TaskPolicy | None = None,
+    stage: StagePlan | None = None,
+    stage_number: int = 1,
+    stage_count: int = 1,
+) -> str:
+    policy = policy or determine_policy(task)
     objective = task.get("objective", task["title"])
     background = task.get("background", "See the referenced specifications and current code.")
     forbidden = task.get(
@@ -197,15 +256,23 @@ def render_current_task(task: dict[str, Any]) -> str:
         if requirements
         else _markdown_list(task["spec_refs"], code=True)
     )
+    review_reason = policy.review_reason
+    if task.get("review_diff_reason"):
+        review_reason += f"\n\nLatest diff assessment: {task['review_diff_reason']}"
     sections = [
         ("TASK ID", task["id"]),
+        ("Execution Mode", policy.execution_mode),
+        ("Review Effort", policy.review_effort),
+        ("Execution Reason", policy.execution_reason),
+        ("Review Reason", review_reason),
         ("目的", objective),
         ("背景", background),
         ("変更対象候補", _markdown_list(task["files_hint"], code=True)),
         ("変更禁止範囲", _markdown_list(forbidden)),
         ("必須仕様", requirement_text),
         ("作業手順", _numbered_list(work_steps)),
-        ("Acceptance Tests", _markdown_list(task["acceptance_tests"])),
+        ("Acceptance Tests", _markdown_list(
+            stage.acceptance_tests if stage is not None else task["acceptance_tests"])),
         (
             "完了条件",
             "全Acceptance Testsとローカル検証が成功し、無関係な変更がないこと。",
@@ -216,6 +283,12 @@ def render_current_task(task: dict[str, Any]) -> str:
             "5. git diff要約\n6. 残存問題",
         ),
     ]
+    if stage is not None:
+        stage_body = (
+            f"{stage_number}/{stage_count}: {stage.stage_id} - {stage.title}\n\n"
+            f"{stage.objective}\n\n{_numbered_list(stage.work_steps)}"
+        )
+        sections.insert(5, ("Current Stage", stage_body))
     return "\n\n".join(f"# {title}\n\n{body}" for title, body in sections) + "\n"
 
 
@@ -304,13 +377,17 @@ def run_command(
         raise OrchestratorError(
             f"{command.label} timed out after {timeout_seconds} seconds"
         ) from exc
+    except OSError as exc:
+        raise OrchestratorError(
+            f"{command.label} could not start: {exc.__class__.__name__}: {exc}"
+        ) from exc
     output = completed.stdout or ""
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text(output, encoding="utf-8")
     if completed.returncode != 0:
-        raise OrchestratorError(
-            f"{command.label} failed with exit code {completed.returncode}"
+        raise CommandFailed(
+            f"{command.label} failed with exit code {completed.returncode}", output
         )
     return output
 
@@ -399,13 +476,18 @@ def worker_command(
     worktree: Path,
     task_file: Path,
     revision_file: Path | None,
+    execution_mode: str = "BATCH",
+    stage: StagePlan | None = None,
     executable: str = "claude",
 ) -> PlannedCommand:
     prompt = (
         "Read .ai/prompts/CLAUDE_WORKER.md and AGENTS.md. "
         f"The active assignment is {task_file}. Implement only that task in this worktree. "
-        "Do not commit or push. Finish with the required worker report."
+        f"Execution Mode is {execution_mode}. "
+        "Do not commit or push. Finish with the required worker report and self-review checklist."
     )
+    if stage is not None:
+        prompt += f" Implement only Current Stage {stage.stage_id} ({stage.title}) in this run."
     if revision_file is not None:
         prompt += f" This is a revision run; also read {revision_file}."
     return PlannedCommand(
@@ -428,16 +510,28 @@ def reviewer_command(
     packet_path: Path,
     final_output_path: Path,
     executable: str = "codex",
+    review_effort: str = "MEDIUM",
+    review_config: dict[str, Any] | None = None,
+    use_effort_flag: bool = True,
 ) -> PlannedCommand:
+    config = review_config or read_review_config()
+    actual_effort, depth = resolve_review_profile(review_effort, config)
     prompt = (
         "Read .ai/prompts/CODEX_REVIEWER.md and the review packet at "
-        f"{packet_path}. Review only; do not edit. The first non-empty line must be PASS or REVISE."
+        f"{packet_path}. Review only; do not edit. Review Effort is {review_effort}. "
+        f"Depth instruction: {depth} "
+        "The first non-empty line must be PASS or REVISE."
+    )
+    effort_arguments = (
+        ("-c", f'model_reasoning_effort="{actual_effort}"')
+        if use_effort_flag else ()
     )
     return PlannedCommand(
         "Codex reviewer",
         (
             executable,
             "exec",
+            *effort_arguments,
             "--ephemeral",
             "--sandbox",
             "read-only",
@@ -451,6 +545,132 @@ def reviewer_command(
     )
 
 
+def claude_reviewer_command(
+    worktree: Path,
+    packet_path: Path,
+    review_effort: str,
+    review_config: dict[str, Any],
+    executable: str,
+) -> PlannedCommand:
+    _, depth = resolve_review_profile(review_effort, review_config)
+    prompt = (
+        "Read .ai/prompts/CODEX_REVIEWER.md and the review packet at "
+        f"{packet_path}. Review only; do not edit. You are the fallback independent reviewer. "
+        f"Review Effort is {review_effort}. Depth instruction: {depth} "
+        "The first non-empty line must be PASS or REVISE."
+    )
+    return PlannedCommand(
+        "Claude fallback reviewer",
+        (executable, "-p", "--permission-mode", "plan", "--permission-prompts", "none", prompt),
+        worktree,
+    )
+
+
+def claude_self_review_command(
+    worktree: Path,
+    packet_path: Path,
+    execution_mode: str,
+    review_effort: str,
+    executable: str,
+) -> PlannedCommand:
+    prompt = (
+        "Read .ai/prompts/CLAUDE_WORKER.md and the completed-work packet at "
+        f"{packet_path}. Perform the mandatory worker self-review for {execution_mode} "
+        f"with review depth {review_effort}. Do not edit in this review pass. Compare CURRENT_TASK, "
+        "master specs, complete diff, diff stat, build/tests, TODO/stubs, unrelated changes, "
+        "error handling, and regressions. The first non-empty line must be PASS or REVISE. "
+        "Use REVISE only with concrete corrections for the next worker run."
+    )
+    return PlannedCommand(
+        "Claude self-review",
+        (executable, "-p", "--permission-mode", "plan", "--permission-prompts", "none", prompt),
+        worktree,
+    )
+
+
+def read_review_config() -> dict[str, Any]:
+    try:
+        return load_review_config(ORCHESTRATOR_CONFIG_PATH)
+    except (OSError, ValueError) as exc:
+        raise OrchestratorError(f"Invalid orchestrator review config: {exc}") from exc
+
+
+def run_reviewer(
+    worktree: Path,
+    packet_path: Path,
+    final_output_path: Path,
+    review_effort: str,
+    tools: dict[str, str | None],
+    timeout_seconds: int,
+    log_path: Path,
+) -> tuple[str, str]:
+    config = read_review_config()
+    final_output_path.unlink(missing_ok=True)
+    command = reviewer_command(worktree, packet_path, final_output_path,
+        tools["codex"] or "codex", review_effort, config)
+    command_output = ""
+    try:
+        command_output = run_command(command, timeout_seconds, log_path)
+    except CommandFailed as exc:
+        if _unsupported_effort(exc.output):
+            command = reviewer_command(worktree, packet_path, final_output_path,
+                tools["codex"] or "codex", review_effort, config, False)
+            try:
+                command_output = run_command(command, timeout_seconds, log_path)
+            except CommandFailed as retry_exc:
+                return _maybe_run_claude_reviewer(retry_exc, worktree, packet_path,
+                    final_output_path, review_effort, tools, timeout_seconds, log_path, config)
+        else:
+            return _maybe_run_claude_reviewer(exc, worktree, packet_path,
+                final_output_path, review_effort, tools, timeout_seconds, log_path, config)
+    if not final_output_path.exists():
+        missing = CommandFailed("Codex reviewer did not write a final decision", command_output)
+        if _usage_limit(command_output):
+            return _maybe_run_claude_reviewer(missing, worktree, packet_path,
+                final_output_path, review_effort, tools, timeout_seconds, log_path, config)
+        raise missing
+    return final_output_path.read_text(encoding="utf-8"), "codex"
+
+
+def _maybe_run_claude_reviewer(
+    failure: CommandFailed,
+    worktree: Path,
+    packet_path: Path,
+    final_output_path: Path,
+    review_effort: str,
+    tools: dict[str, str | None],
+    timeout_seconds: int,
+    log_path: Path,
+    config: dict[str, Any],
+) -> tuple[str, str]:
+    if not _usage_limit(failure.output) or config.get("reviewer_fallback") != "claude":
+        raise failure
+    fallback = claude_reviewer_command(worktree, packet_path, review_effort, config,
+        tools["claude"] or "claude")
+    output = run_command(fallback, timeout_seconds, log_path.with_name(log_path.stem + "-claude.log"))
+    final_output_path.write_text(output, encoding="utf-8")
+    return output, "claude-fallback"
+
+
+def _usage_limit(output: str) -> bool:
+    known_prefixes = (
+        "you've hit your usage limit",
+        "you have hit your usage limit",
+        "usage limit reached",
+        "error: usage limit",
+        "error: you've hit your usage limit",
+    )
+    lines = (line.strip().lower() for line in output.splitlines())
+    return any(line.startswith(known_prefixes) for line in lines)
+
+
+def _unsupported_effort(output: str) -> bool:
+    value = output.lower()
+    effort_words = ("reasoning effort", "model_reasoning_effort")
+    failure_words = ("unsupported", "unknown", "invalid")
+    return any(word in value for word in effort_words) and any(word in value for word in failure_words)
+
+
 def format_command(command: PlannedCommand) -> str:
     def quote(value: str) -> str:
         return f'"{value}"' if any(character.isspace() for character in value) else value
@@ -460,6 +680,10 @@ def format_command(command: PlannedCommand) -> str:
 
 def dry_run(task: dict[str, Any], base_ref: str, tools: dict[str, str | None]) -> None:
     branch = ensure_control_checkout_safe()
+    policy = determine_policy(task)
+    stages = stages_for_task(task, policy)
+    review_config = read_review_config()
+    actual_effort, _ = resolve_review_profile(policy.review_effort, review_config)
     worktree = worktree_path(task["id"])
     runtime = worktree / ".ai" / "runtime" / task["id"]
     task_file = runtime / "CURRENT_TASK.md"
@@ -468,9 +692,16 @@ def dry_run(task: dict[str, Any], base_ref: str, tools: dict[str, str | None]) -
     print(f"Control branch: {branch}")
     print(f"Task branch: {task_branch(task['id'])}")
     print(f"Worktree: {worktree}")
-    print(f"Current task bytes: {len(render_current_task(task).encode('utf-8'))}")
+    print(f"Execution Mode: {policy.execution_mode}")
+    print(f"Execution Reason: {policy.execution_reason}")
+    print(f"Review Effort: {policy.review_effort} (Codex: {actual_effort})")
+    print(f"Review Reason: {policy.review_reason}")
+    print("Stages: " + ", ".join(
+        f"{stage.stage_id}{' [review]' if stage.review_after else ''}" for stage in stages))
+    print(f"Current task bytes: {len(render_current_task(task, policy, stages[0], 1, len(stages)).encode('utf-8'))}")
     print(f"PLAN git worktree add -b {task_branch(task['id'])} {worktree} {base_ref}")
-    worker = worker_command(worktree, task_file, None, tools.get("claude") or "claude")
+    worker = worker_command(worktree, task_file, None, policy.execution_mode, stages[0],
+        tools.get("claude") or "claude")
     print(f"PLAN [{worker.label}] {format_command(worker)}")
     for command in build_and_test_plan(worktree):
         print(f"PLAN [{command.label}] {format_command(command)}")
@@ -479,6 +710,8 @@ def dry_run(task: dict[str, Any], base_ref: str, tools: dict[str, str | None]) -
         runtime / "review-packet.md",
         runtime / "review-final.md",
         tools.get("codex") or "codex",
+        policy.review_effort,
+        review_config,
     )
     print(f"PLAN [{review.label}] {format_command(review)}")
     for name, path in tools.items():
@@ -520,6 +753,9 @@ def write_state(task: dict[str, Any], branch: str, note: str) -> None:
         f"- Current branch: `{branch}`\n"
         f"- Current phase: `{task['phase']}`\n"
         f"- Current task ID: `{task['id']}`\n"
+        f"- Execution Mode: `{task.get('execution_mode', 'legacy')}`\n"
+        f"- Review Effort: `{task.get('review_effort', 'legacy')}`\n"
+        f"- Current Stage: `{task.get('current_stage', 'none')}`\n"
         f"- Last PASS task: `{last_passed}`\n"
         f"- Current status: `{task['status']}`\n"
         f"- Current note: {note}\n\n"
@@ -541,11 +777,15 @@ def collect_git_evidence(worktree: Path, runtime: Path) -> tuple[str, str, str]:
     diff = git_output(
         ["-C", str(worktree), "diff", "--no-ext-diff", "HEAD", "--"]
     )
-    untracked = git_output(
-        ["-C", str(worktree), "ls-files", "--others", "--exclude-standard"]
-    )
+    untracked_paths = collect_untracked_paths(worktree)
+    untracked = "\n".join(untracked_paths)
+    untracked_evidence = render_untracked_evidence(worktree, untracked_paths)
+    if untracked_paths:
+        stat = stat + ("\n" if stat else "") + "\n".join(
+            f" {path} | new untracked file" for path in untracked_paths)
     evidence = f"# Status\n\n```text\n{status}\n```\n\n# Diff stat\n\n```text\n{stat}\n```\n\n"
     evidence += f"# Diff\n\n```diff\n{diff}\n```\n\n# Untracked files\n\n```text\n{untracked}\n```\n"
+    evidence += untracked_evidence
     (runtime / "git-evidence.md").write_text(evidence, encoding="utf-8")
     return status, stat, diff
 
@@ -555,6 +795,93 @@ def require_worker_changes(status: str) -> None:
         raise OrchestratorError(
             "Claude worker completed without changing the task worktree"
         )
+
+
+def worktree_fingerprint(worktree: Path) -> str:
+    status = git_output(["-C", str(worktree), "status", "--short"])
+    tracked = git_output(["-C", str(worktree), "diff", "--name-only", "HEAD", "--"])
+    paths = {path for path in tracked.splitlines() if path}
+    paths.update(collect_untracked_paths(worktree))
+    hashes = "\n".join(f"{path}\t{hash_file(worktree / path)}" for path in sorted(paths))
+    return status + "\n" + hashes
+
+
+def require_new_worker_changes(before: str, after: str) -> None:
+    require_worker_changes(after)
+    if before == after:
+        raise OrchestratorError("Claude worker completed without a new stage change")
+
+
+def collect_diff_metrics(worktree: Path) -> DiffMetrics:
+    numstat = git_output(["-C", str(worktree), "diff", "--numstat", "HEAD", "--"])
+    names = git_output(["-C", str(worktree), "diff", "--name-only", "HEAD", "--"])
+    paths = [line for line in names.splitlines() if line.strip()]
+    untracked = collect_untracked_paths(worktree)
+    paths.extend(path for path in untracked if path not in paths)
+    extra_numstat = untracked_numstat(worktree, untracked)
+    if extra_numstat:
+        numstat = numstat + ("\n" if numstat else "") + extra_numstat
+    return diff_metrics(numstat, paths)
+
+
+def collect_untracked_paths(worktree: Path) -> tuple[str, ...]:
+    output = git_output(
+        ["-C", str(worktree), "ls-files", "-z", "--others", "--exclude-standard"]
+    )
+    return tuple(path for path in output.split("\0") if path)
+
+
+def hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        return f"unreadable:{exc.__class__.__name__}"
+    return digest.hexdigest()
+
+
+def untracked_numstat(worktree: Path, paths: Sequence[str]) -> str:
+    rows = []
+    for relative in paths:
+        try:
+            data = (worktree / relative).read_bytes()
+        except OSError:
+            rows.append(f"-\t-\t{relative}")
+            continue
+        if b"\0" in data:
+            rows.append(f"-\t-\t{relative}")
+            continue
+        line_count = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+        rows.append(f"{line_count}\t0\t{relative}")
+    return "\n".join(rows)
+
+
+def render_untracked_evidence(worktree: Path, paths: Sequence[str]) -> str:
+    sections = []
+    limit = 256 * 1024
+    for relative in paths:
+        path = worktree / relative
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            sections.append(f"\n## `{relative}`\n\nUnreadable: {exc.__class__.__name__}\n")
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        header = f"\n## `{relative}`\n\nSize: {len(data)} bytes; SHA-256: `{digest}`\n"
+        if len(data) > limit or b"\0" in data:
+            sections.append(header + "\nContent omitted because the file is binary or over 256 KiB.\n")
+        else:
+            sections.append(header + f"\n```text\n{data.decode('utf-8', errors='replace')}\n```\n")
+    return "\n# Untracked file evidence\n" + "".join(sections) if sections else ""
+
+
+def persist_policy(task: dict[str, Any], policy: TaskPolicy) -> None:
+    task["execution_mode"] = policy.execution_mode
+    task["review_effort"] = policy.review_effort
+    task["execution_reason"] = policy.execution_reason
+    task["review_reason"] = policy.review_reason
 
 
 def make_review_packet(
@@ -581,10 +908,13 @@ def make_review_packet(
 
 
 def parse_review_decision(review: str) -> str:
-    first = next((line.strip() for line in review.splitlines() if line.strip()), "")
-    if first not in {"PASS", "REVISE"}:
-        raise OrchestratorError("Reviewer output must begin with PASS or REVISE")
-    return first
+    verdicts = [line.strip() for line in review.splitlines()
+        if line.strip() in {"PASS", "REVISE"}]
+    if "REVISE" in verdicts:
+        return "REVISE"
+    if "PASS" in verdicts:
+        return "PASS"
+    raise OrchestratorError("Reviewer output must contain a standalone PASS or REVISE line")
 
 
 def write_public_report(
@@ -620,89 +950,185 @@ def commit_passed_worktree(task: dict[str, Any], worktree: Path) -> None:
     )
 
 
-def run_one_task(
+def _run_gates(
+    worktree: Path,
+    runtime: Path,
+    stage_number: int,
+    attempt: int,
+    timeout_seconds: int,
+) -> list[tuple[PlannedCommand, str]]:
+    results: list[tuple[PlannedCommand, str]] = []
+    for index, command in enumerate(build_and_test_plan(worktree)):
+        log = runtime / f"stage-{stage_number}-attempt-{attempt}-gate-{index}-{command.label}.log"
+        results.append((command, run_command(command, timeout_seconds, log)))
+    return results
+
+
+def _escalate_from_diff(
     tasks: list[dict[str, Any]],
     task: dict[str, Any],
-    base_ref: str,
-    timeout_seconds: int,
-    max_revisions: int,
-    auto_commit: bool,
+    policy: TaskPolicy,
+    metrics: DiffMetrics,
+) -> TaskPolicy:
+    mode, mode_reason = promoted_mode(policy.execution_mode, metrics)
+    effort, effort_reason = effort_after_diff(policy.review_effort, metrics)
+    if mode == "GUARDED" and effort in {"LOW", "MEDIUM"}:
+        effort = "HIGH"
+        effort_reason += "; GUARDEDのためHIGHを下限とする"
+    if mode_reason:
+        task["execution_reason"] = policy.execution_reason + "; 自動昇格: " + mode_reason
+    task["execution_mode"] = mode
+    task["review_effort"] = effort
+    if effort != policy.review_effort:
+        task["review_reason"] = policy.review_reason + "; 自動昇格: " + effort_reason
+    else:
+        task["review_reason"] = policy.review_reason
+    task["review_diff_reason"] = effort_reason
+    save_tasks(tasks)
+    return determine_policy(task)
+
+
+def _write_task_files(
+    task: dict[str, Any],
+    policy: TaskPolicy,
+    stage: StagePlan,
+    stage_number: int,
+    stage_count: int,
+    runtime_task: Path,
+) -> str:
+    task_text = render_current_task(task, policy, stage, stage_number, stage_count)
+    runtime_task.write_text(task_text, encoding="utf-8")
+    CURRENT_TASK_PATH.write_text(task_text, encoding="utf-8")
+    return task_text
+
+
+def _review_path(task_id: str, stage: StagePlan, final_stage: bool) -> Path:
+    suffix = "" if final_stage else f"-{stage.stage_id}"
+    return AI_DIR / "reviews" / f"{task_id}{suffix}.md"
+
+
+def _run_stage(
+    tasks: list[dict[str, Any]], task: dict[str, Any], policy: TaskPolicy,
+    stage: StagePlan, stage_number: int, stage_count: int, worktree: Path,
+    runtime: Path, runtime_task: Path, tools: dict[str, str | None],
+    timeout_seconds: int, max_revisions: int, control_branch: str,
+) -> StageOutcome:
+    revision_file: Path | None = None
+    for attempt in range(max_revisions + 1):
+        set_task_status(tasks, task, "in_progress")
+        write_state(task, control_branch,
+            f"Claude worker runs stage {stage.stage_id}, attempt {attempt + 1}")
+        task_text = _write_task_files(task, policy, stage, stage_number, stage_count,
+            runtime_task)
+        before = worktree_fingerprint(worktree)
+        worker = worker_command(worktree, runtime_task, revision_file,
+            policy.execution_mode, stage, tools["claude"] or "claude")
+        worker_log = runtime / f"stage-{stage_number}-claude-{attempt}.log"
+        worker_report = run_command(worker, timeout_seconds, worker_log)
+        require_new_worker_changes(before, worktree_fingerprint(worktree))
+        commands = _run_gates(worktree, runtime, stage_number, attempt, timeout_seconds)
+        policy = _escalate_from_diff(tasks, task, policy, collect_diff_metrics(worktree))
+        task_text = _write_task_files(task, policy, stage, stage_number, stage_count,
+            runtime_task)
+        _, stat, _ = collect_git_evidence(worktree, runtime)
+        self_packet = runtime / f"self-review-packet-stage-{stage_number}.md"
+        make_review_packet(task_text, worker_report, commands,
+            runtime / "git-evidence.md", self_packet)
+        self_command = claude_self_review_command(worktree, self_packet,
+            policy.execution_mode, policy.review_effort, tools["claude"] or "claude")
+        self_review = run_command(self_command, timeout_seconds,
+            runtime / f"self-review-stage-{stage_number}-{attempt}.log")
+        self_decision = parse_review_decision(self_review)
+        combined_report = worker_report + "\n\n# Claude self-review\n\n" + self_review
+        write_public_report(task, combined_report, commands, stat)
+        if self_decision == "REVISE":
+            task["revision_count"] = int(task.get("revision_count", 0)) + 1
+            if attempt >= max_revisions:
+                raise OrchestratorError("Maximum worker self-review revisions reached")
+            set_task_status(tasks, task, "revision")
+            revision_file = runtime / f"self-revision-stage-{stage_number}-{attempt + 1}.md"
+            revision_file.write_text(self_review, encoding="utf-8")
+            write_state(task, control_branch,
+                f"Stage {stage.stage_id} self-review revision {attempt + 1} requested")
+            continue
+        if not stage.review_after:
+            return StageOutcome(combined_report, tuple(commands), stat, policy, None)
+        set_task_status(tasks, task, "review")
+        packet = runtime / f"review-packet-stage-{stage_number}.md"
+        make_review_packet(task_text, combined_report, commands,
+            runtime / "git-evidence.md", packet)
+        final_review = runtime / f"review-final-stage-{stage_number}-{attempt}.md"
+        review, provider = run_reviewer(worktree, packet, final_review,
+            policy.review_effort, tools, timeout_seconds,
+            runtime / f"review-stage-{stage_number}-{attempt}.log")
+        _review_path(task["id"], stage, stage_number == stage_count).write_text(
+            review, encoding="utf-8")
+        decision = parse_review_decision(review)
+        task["last_review"] = {"decision": decision, "attempt": attempt + 1,
+            "stage": stage.stage_id, "reviewer": provider,
+            "review_effort": policy.review_effort}
+        if provider == "claude-fallback":
+            task["last_review"]["reason"] = (
+                "Codex CLI account usage limit; configured Claude fallback used")
+        save_tasks(tasks)
+        if decision == "PASS":
+            return StageOutcome(combined_report, tuple(commands), stat, policy, provider)
+        task["revision_count"] = int(task.get("revision_count", 0)) + 1
+        if attempt >= max_revisions:
+            raise OrchestratorError("Maximum reviewer revisions reached")
+        set_task_status(tasks, task, "revision")
+        revision_file = runtime / f"revision-stage-{stage_number}-{attempt + 1}.md"
+        revision_file.write_text(review, encoding="utf-8")
+        write_state(task, control_branch,
+            f"Stage {stage.stage_id} revision {attempt + 1} requested")
+    raise OrchestratorError("Stage loop ended unexpectedly")
+
+
+def run_one_task(
+    tasks: list[dict[str, Any]], task: dict[str, Any], base_ref: str,
+    timeout_seconds: int, max_revisions: int, auto_commit: bool,
 ) -> None:
     tools = detect_tools()
     require_tools(tools)
     control_branch = ensure_control_checkout_safe()
     if control_branch in DANGEROUS_BRANCHES:
         raise OrchestratorError("Execute mode requires a non-main control branch")
+    policy = determine_policy(task)
+    persist_policy(task, policy)
+    stages = stages_for_task(task, policy)
     worktree = prepare_worktree(task["id"], base_ref)
     runtime = worktree / ".ai" / "runtime" / task["id"]
     runtime.mkdir(parents=True, exist_ok=True)
-    task_text = render_current_task(task)
     runtime_task = runtime / "CURRENT_TASK.md"
-    runtime_task.write_text(task_text, encoding="utf-8")
-    CURRENT_TASK_PATH.write_text(task_text, encoding="utf-8")
     set_task_status(tasks, task, "in_progress")
     write_state(task, control_branch, f"Claude worker owns {worktree}")
-    revision_file: Path | None = None
     try:
-        for attempt in range(max_revisions + 1):
-            worker = worker_command(
-                worktree, runtime_task, revision_file, tools["claude"] or "claude"
-            )
-            worker_report = run_command(
-                worker, timeout_seconds, runtime / f"claude-{attempt}.log"
-            )
-            worker_status = git_output(["-C", str(worktree), "status", "--short"])
-            require_worker_changes(worker_status)
-            command_results: list[tuple[PlannedCommand, str]] = []
-            for index, command in enumerate(build_and_test_plan(worktree)):
-                output = run_command(
-                    command, timeout_seconds, runtime / f"gate-{index}-{command.label}.log"
-                )
-                command_results.append((command, output))
-            set_task_status(tasks, task, "review")
-            _, stat, _ = collect_git_evidence(worktree, runtime)
-            write_public_report(task, worker_report, command_results, stat)
-            packet = runtime / "review-packet.md"
-            make_review_packet(
-                task_text,
-                worker_report,
-                command_results,
-                runtime / "git-evidence.md",
-                packet,
-            )
-            final_review = runtime / f"review-final-{attempt}.md"
-            reviewer = reviewer_command(
-                worktree, packet, final_review, tools["codex"] or "codex"
-            )
-            run_command(reviewer, timeout_seconds, runtime / f"review-{attempt}.log")
-            if not final_review.exists():
-                raise OrchestratorError("Codex reviewer did not write a final decision")
-            review = final_review.read_text(encoding="utf-8")
-            review_path = AI_DIR / "reviews" / f"{task['id']}.md"
-            review_path.write_text(review, encoding="utf-8")
-            decision = parse_review_decision(review)
-            task["last_review"] = {"decision": decision, "attempt": attempt + 1}
-            if decision == "PASS":
-                task["status"] = "passed"
-                task["assigned_to"] = "claude"
-                save_tasks(tasks)
-                promote_ready_tasks(tasks)
-                write_state(task, control_branch, "PASS; inspect and commit the task worktree")
-                if auto_commit:
-                    commit_passed_worktree(task, worktree)
-                print(f"PASS {task['id']} at {worktree}")
-                return
-            task["revision_count"] = int(task.get("revision_count", 0)) + 1
-            if attempt >= max_revisions:
-                raise OrchestratorError("Maximum reviewer revisions reached")
-            set_task_status(tasks, task, "revision")
-            revision_file = runtime / f"revision-{attempt + 1}.md"
-            revision_file.write_text(review, encoding="utf-8")
-            write_state(task, control_branch, f"Revision {attempt + 1} requested")
+        for index, stage in enumerate(stages, 1):
+            task["current_stage"] = f"{index}/{len(stages)} {stage.stage_id}"
+            set_task_status(tasks, task, "in_progress")
+            write_state(task, control_branch, f"Running stage {stage.stage_id}")
+            outcome = _run_stage(tasks, task, policy, stage, index, len(stages), worktree,
+                runtime, runtime_task, tools, timeout_seconds, max_revisions, control_branch)
+            policy = outcome.policy
+        task["status"] = "passed"
+        task["assigned_to"] = "claude"
+        task["current_stage"] = f"{len(stages)}/{len(stages)} complete"
+        save_tasks(tasks)
+        promote_ready_tasks(tasks)
+        write_state(task, control_branch, "PASS; inspect and commit the task worktree")
+        if auto_commit:
+            commit_passed_worktree(task, worktree)
+        print(f"PASS {task['id']} [{policy.execution_mode}/{policy.review_effort}] at {worktree}")
     except OrchestratorError as exc:
         set_task_status(tasks, task, "blocked", str(exc))
         write_state(task, control_branch, f"Blocked: {exc}")
         raise
+    except Exception as exc:
+        error = OrchestratorError(
+            f"Unexpected orchestration failure: {exc.__class__.__name__}: {exc}")
+        set_task_status(tasks, task, "blocked", str(error))
+        write_state(task, control_branch, f"Blocked: {error}")
+        raise error from exc
 
 
 def print_doctor() -> int:

@@ -12,6 +12,11 @@ Review only these inputs:
 - build/test output
 - `git diff --stat` and the complete diff
 
+Honor `Review Effort` and its depth instruction from the invocation. Do not run the
+same diff through a ladder of LOW, MEDIUM, HIGH, and EXTRA_HIGH reviews. In a
+non-final STAGED review, judge the Current Stage and its stage acceptance tests;
+do not reject work merely because a later Stage is still pending.
+
 ## Review checks
 
 1. The diff satisfies every requirement and acceptance test in CURRENT_TASK.

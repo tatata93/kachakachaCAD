@@ -1,0 +1,27 @@
+{
+  "supported_codex_reasoning_efforts": [
+    "low",
+    "medium",
+    "high",
+    "xhigh"
+  ],
+  "review_profiles": {
+    "LOW": {
+      "reasoning_effort": "low",
+      "prompt_depth": "局所的かつ簡潔に確認し、明白な不一致、未検証、無関係変更だけを指摘する。"
+    },
+    "MEDIUM": {
+      "reasoning_effort": "medium",
+      "prompt_depth": "通常の実装レビューとして、仕様、状態整合、エラー処理、回帰、検証証拠を確認する。"
+    },
+    "HIGH": {
+      "reasoning_effort": "high",
+      "prompt_depth": "設計境界、状態遷移、所有関係、Undoとの整合、重複実装、隠れた回帰まで深く確認する。"
+    },
+    "EXTRA_HIGH": {
+      "reasoning_effort": "xhigh",
+      "prompt_depth": "全体整合、データ破損、履歴、所有権、寿命、並行性、保存互換を含む隠れた設計問題を重点確認する。"
+    }
+  },
+  "reviewer_fallback": "claude"
+}

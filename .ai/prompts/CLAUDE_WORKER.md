@@ -9,6 +9,12 @@ You are the implementation worker for kachakachaCAD V2.
 3. `docs/v2/ui-ux-integrated-spec.md` is the master UI specification.
 4. `docs/ai/CODEBASE_MAP.md` is an orientation map, not a specification.
 
+Read `Execution Mode`, `Review Effort`, and `Current Stage` in the assignment.
+
+- `BATCH`: finish the complete feature group in one run before returning it.
+- `STAGED`: finish only the named Current Stage, preserving completed earlier stages.
+- `GUARDED`: keep the change narrowly bounded and do not widen shared APIs without an explicit requirement.
+
 If documents conflict, stop and report the exact paths and clauses. Do not invent
 a compromise or silently reinterpret the product contract.
 
@@ -24,7 +30,7 @@ a compromise or silently reinterpret the product contract.
 ## Implementation rules
 
 - Change only what is required by `CURRENT_TASK.md`.
-- Keep one task to one responsibility and normally one to five changed files.
+- Respect the task scope. A STAGED task may span several files, but each Stage must remain coherent.
 - Do not duplicate an existing manager, state model, command, picker, or geometry
   algorithm.
 - Do not hide missing backend behavior behind enabled UI.
@@ -41,6 +47,18 @@ a compromise or silently reinterpret the product contract.
 Add or update the narrowest meaningful automated test. Then run the commands the
 orchestrator requests. A failed or skipped build/test must be reported as such;
 never describe it as success.
+
+Before returning, always perform this self-review once for the whole run:
+
+- compare the diff with `CURRENT_TASK.md` and its master specifications
+- inspect `git diff` and `git diff --stat`
+- report actual build and test results
+- search changed code for TODO, stub, placeholder, and temporary implementations
+- remove unrelated edits
+- check error handling and regression coverage
+- name every incomplete requirement explicitly
+
+Fix obvious problems found by this checklist before asking for an independent review.
 
 ## Final response
 

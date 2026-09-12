@@ -122,9 +122,9 @@
     "id": "UI-P1-004",
     "title": "右クリック選択候補メニュー",
     "phase": 1,
-    "status": "ready",
+    "status": "passed",
     "priority": "high",
-    "assigned_to": null,
+    "assigned_to": "claude",
     "dependencies": [
       "UI-P1-003"
     ],
@@ -176,14 +176,23 @@
       "既存のTab、Alt+クリック、Ctrl複数選択が退行しない。",
       "`ctest --preset windows-msvc`と`kachakacha_cad_next.exe --self-test`が成功する。"
     ],
-    "last_review": null,
+    "execution_mode": "BATCH",
+    "review_effort": "HIGH",
+    "execution_reason": "既存Viewportとコンテキストメニュー内で完結するUI変更。",
+    "review_reason": "選択状態と入力状態をまたぐ8ファイル489行の差分であり、状態遷移と回帰を深く確認した。",
+    "last_review": {
+      "decision": "PASS",
+      "attempt": 1,
+      "reviewer": "claude-fallback",
+      "reason": "Codex CLI usage limit; manual read-only Claude review completed before fallback automation was finalized"
+    },
     "revision_count": 0
   },
   {
     "id": "UI-P1-005",
     "title": "方向で包含と交差を分ける矩形選択",
     "phase": 1,
-    "status": "pending",
+    "status": "ready",
     "priority": "high",
     "assigned_to": null,
     "dependencies": [

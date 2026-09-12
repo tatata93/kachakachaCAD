@@ -186,9 +186,26 @@ public:
     //! 作図中の十字カーソル(V1 の白フチ付き十字)。既定の十字は細くて読めない。
     [[nodiscard]] static QCursor DrawingCrossCursor();
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
+    //! 選択道具では、押したその場所で候補を集め直してから献立を出す。
+    void PressRightWithoutMoving(const QPointF& position);
+    //! 場所を渡さない版。最後にカーソルがあった場所で同じことをする。
     void PressRightWithoutMoving();
     //! 選択道具で右クリックしたときに出すもの。窓が用意する。
-    void SetContextMenuCallback(std::function<void(const QPoint&)> callback);
+    //!
+    //! 責務の境目はここだけである。**画面は候補の並びと確定を持ち、窓は出すだけ。**
+    //! 渡すのは「出す場所」と「候補の見出し(並びは CandidateLabels と同じ)」で、
+    //! 返ってくるのは選ばれた候補の番号だけ。窓が候補を集め直したり、
+    //! 選択集合へ直に書いたりはしない。二重に持つと、画面に出ている候補と
+    //! 実際に選ばれるものが食い違う。
+    void SetContextMenuCallback(
+        std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)>
+            callback);
+    //! いま持っている候補の見出し。物体の表示名と部分要素の種別を並べる。
+    //! 同じ見出しになるものには通し番号を足して、選び分けられるようにする。
+    [[nodiscard]] std::vector<QString> CandidateLabels() const;
+    //! 候補を1つ、通常の選択として確定する(献立で選んだとき)。
+    //! クリックと同じ道を通す。Replace、Hover、案内文、選択変更の知らせまで同じ。
+    bool SelectCandidate(std::size_t index);
     //! 作図の拘束(V1の Shift)。押している間だけ水平・垂直・正方形へ寄せる。
     void SetAxisConstraintByKey(bool constrained);
     void SetViewCenter(const kachakacha::v2::geometry::Vector3& center);
@@ -499,6 +516,8 @@ private:
     void AdvanceCandidate(bool backward);
     //! いまの候補に合わせて Hover を書き直す。選択には触らない。
     void SyncHoverWithCandidate();
+    //! 「選んでいるもの: n 件」を出す。クリックと献立で同じ文言にする。
+    void ReportSelectionCount();
 
     //! 同じ場所で重なっている候補。Tab も Alt+クリックもここだけを見る。
     //! Hover / Selection / Preview とは別の状態である。混ぜない。
@@ -528,13 +547,18 @@ private:
         const kachakacha::v2::geometry::Vector3& point) const;
     void ApplySnapSettings();
     std::function<void()> backToSelect_;
-    std::function<void(const QPoint&)> contextMenu_;
-    //! 中ボタン・右ボタンで画面を動かしている最中か。
+    std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)>
+        contextMenu_;
+    //! 中ボタンで画面を動かしている最中か。
+    //! 右ボタンはここに入らない。右はカメラを動かさない(ui-ux-integrated-spec §5.2)。
     bool panning_ = false;
     bool orbiting_ = false;
     QPointF lastDragPosition_;
-    //! 画面を動かしたか。動かさずに右で離したら、道具ごとの意味になる。
-    bool viewDragMoved_ = false;
+    //! 右ボタンを押している最中か。押した場所と、そこから動いたかを覚える。
+    //! 動かさずに離したときだけ、道具ごとの意味(選択道具なら献立)になる。
+    bool rightPressed_ = false;
+    QPointF rightPressPosition_;
+    bool rightDragMoved_ = false;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;

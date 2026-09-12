@@ -234,7 +234,12 @@ void V2MainWindow::WireViewportCallbacks()
             ReplaceWireSegment(entityId, segmentId, replacement);
         });
     // 選択道具での右クリック。V1と同じで、ここだけメニューを出す。
-    viewport_->SetContextMenuCallback([this](const QPoint& at) { ShowSelectMenu(at); });
+    // 窓は「出して、選ばれた候補の番号を返す」だけ。候補を集めるのも、
+    // 選択へ入れるのも画面(V2Viewport)の役目である。
+    viewport_->SetContextMenuCallback(
+        [this](const QPoint& at, const std::vector<QString>& candidates) {
+            return ShowSelectMenuWithCandidates(at, candidates);
+        });
     viewport_->SetPendingCommandCallbacks([this] { ConfirmPendingCommand(); },
         [this] { ClearPendingCommand(); });
     viewport_->SetSelectionChangedCallback([this] {

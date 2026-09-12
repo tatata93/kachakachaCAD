@@ -68,6 +68,7 @@
 #include <vector>
 
 class QAction;
+class QMenu;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -269,6 +270,15 @@ public:
     void DeleteSelected();
     //! 選択道具で右クリックしたときのメニュー。V1と同じで、ここだけ出す。
     void ShowSelectMenu(const QPoint& at);
+    //! 候補つきの同じメニュー。選ばれた候補の番号を返す。
+    //! 台帳のコマンドを選んだときと、閉じたときは値を持たない。
+    //! 候補の見出しは画面が作ったものをそのまま並べる。ここでは集め直さない。
+    [[nodiscard]] std::optional<int> ShowSelectMenuWithCandidates(const QPoint& at,
+        const std::vector<QString>& candidateLabels);
+    //! 献立を組むだけ。返すのは候補の区画へ並べた QAction(並びは見出しと同じ)。
+    //! 出すのは呼び出し側なので、試験は exec を通さずに並び順を確かめられる。
+    std::vector<QAction*> BuildSelectMenu(QMenu& menu,
+        const std::vector<QString>& candidateLabels);
     //! 押せるかどうかの材料を作る。数え方は core が決める。
     [[nodiscard]] kachakacha::v2::app::SelectionFacts BuildFactsForCommands() const;
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。

@@ -1,5 +1,6 @@
 #include "V2Viewport.h"
 
+#include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/app/ToolTargeting.h"
 
 #include "kachakacha/geometry/WireEdit.h"
@@ -1021,6 +1022,11 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // 選んだものは、そのまま押した先の候補として出しておく。
     SyncHoverWithCandidate();
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
+    ReportSelectionCount();
+}
+
+void V2Viewport::ReportSelectionCount()
+{
     const std::size_t selectedItems = kachakacha::v2::app::SelectionItemCount(selection_);
     status_ = selectedItems == 0
         ? std::string("選んでいるものはありません。")
@@ -1192,11 +1198,18 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         DragBody(event->position());
         return;
     }
+    if (rightPressed_) {
+        // 右で引きずってもカメラは1mmも動かさない(ui-ux-integrated-spec §5.2)。
+        // 動いた量だけ覚えて、離すときに献立を出すかどうかを決める。
+        if (kachakacha::v2::app::DragIsFarEnough(
+                event->position().x() - rightPressPosition_.x(),
+                event->position().y() - rightPressPosition_.y())) {
+            rightDragMoved_ = true;
+        }
+        return;
+    }
     if (panning_) {
         const QPointF delta = event->position() - lastDragPosition_;
-        if (std::hypot(delta.x(), delta.y()) > 0.0) {
-            viewDragMoved_ = true;
-        }
         if (orbiting_) {
             OrbitByPixels(delta.x(), delta.y());
         } else {
@@ -1245,14 +1258,25 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
 void V2Viewport::mousePressEvent(QMouseEvent* event)
 {
     setFocus();
-    // 中ボタンと右ボタンは画面を動かす(V1同等)。
-    // Shift+中ボタンは軌道回転。押した時点では動かさず、引きずってから決める。
-    if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
+    // 右ボタンはカメラへ割り当てない(ui-ux-integrated-spec §5.2)。
+    // 押した場所だけ覚えて、離すときに「押しただけ」かどうかを決める。
+    if (event->button() == Qt::RightButton) {
+        // 左で掴んでいる最中は右を受けない。掴んだまま献立が出ると、
+        // どこで離したことになるのかが決まらない。
+        if (controlDrag_.active || bodyDrag_.active) {
+            return;
+        }
+        rightPressed_ = true;
+        rightDragMoved_ = false;
+        rightPressPosition_ = event->position();
+        return;
+    }
+    // 中ボタンは画面を動かす(V1同等)。Shift+中ボタンは軌道回転。
+    // 押した時点では動かさず、引きずってから決める。
+    if (event->button() == Qt::MiddleButton) {
         panning_ = true;
-        orbiting_ = event->button() == Qt::MiddleButton
-            && (event->modifiers() & Qt::ShiftModifier) != 0;
+        orbiting_ = (event->modifiers() & Qt::ShiftModifier) != 0;
         lastDragPosition_ = event->position();
-        viewDragMoved_ = false;
         RefreshCursorShape();
         return;
     }
@@ -1287,6 +1311,17 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
 
 void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
 {
+    if (rightPressed_ && event->button() == Qt::RightButton) {
+        const bool moved = rightDragMoved_;
+        rightPressed_ = false;
+        rightDragMoved_ = false;
+        // 引きずった後の解放では献立を出さない。出すと、画面をなぞっただけで
+        // メニューが飛び出す。押しただけのときが右クリックである。
+        if (!moved) {
+            PressRightWithoutMoving(event->position());
+        }
+        return;
+    }
     if (controlDrag_.active) {
         (void)ReleaseControlPointDrag(event->position());
         return;
@@ -1299,16 +1334,9 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
     if (panning_) {
-        const bool moved = viewDragMoved_;
-        const bool wasRight = event->button() == Qt::RightButton;
         panning_ = false;
         orbiting_ = false;
         RefreshCursorShape();
-        // 動かさずに右で離したら、画面を動かす気は無かった。
-        // V1と同じで、道具ごとの「確定 / 取り消し」になる。
-        if (!moved && wasRight) {
-            PressRightWithoutMoving();
-        }
         return;
     }
     if (gadgetDrag_.has_value()) {

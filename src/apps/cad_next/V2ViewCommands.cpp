@@ -406,6 +406,26 @@ void V2MainWindow::ActivateSelectedGroup()
 
 void V2MainWindow::ShowSelectMenu(const QPoint& at)
 {
+    // 候補を渡さない入口(一覧の右クリックなど)。並ぶのは台帳のコマンドだけ。
+    (void)ShowSelectMenuWithCandidates(at, {});
+}
+
+std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
+    const std::vector<QString>& candidateLabels)
+{
+    // 重なっているものは、押した1点だけでは選び分けられない。
+    // 名前と部分要素の種別を先頭に出して、利用者が1件だけ決められるようにする。
+    // 見出しの中身は画面(V2Viewport)が作る。ここで作り直すと、
+    // 出ている候補と選ばれるものが食い違う。
+    std::vector<QAction*> candidateActions;
+    if (!candidateLabels.empty()) {
+        menu.addSection(QStringLiteral("この場所の候補"));
+        candidateActions.reserve(candidateLabels.size());
+        for (const QString& label : candidateLabels) {
+            candidateActions.push_back(menu.addAction(label));
+        }
+        menu.addSeparator();
+    }
     // 選んでいるものに対してできることを、その場に出す。
     // メニューに並べるのは台帳のコマンドだけ。ここで別の入口を作らない。
     // 別に作ると、押せるかどうかの判断も文言も二重になる。
@@ -423,7 +443,6 @@ void V2MainWindow::ShowSelectMenu(const QPoint& at)
         "fabrication.create",
         "derived.freeze",
     };
-    QMenu menu(this);
     for (const char* id : kEntries) {
         QAction* action = ActionFor(id);
         if (action == nullptr) {
@@ -431,10 +450,28 @@ void V2MainWindow::ShowSelectMenu(const QPoint& at)
         }
         menu.addAction(action);
     }
+    return candidateActions;
+}
+
+std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
+    const std::vector<QString>& candidateLabels)
+{
+    QMenu menu(this);
+    const std::vector<QAction*> candidateActions = BuildSelectMenu(menu, candidateLabels);
     if (menu.isEmpty()) {
-        return;
+        return std::nullopt;
     }
-    menu.exec(at);
+    const QAction* chosen = menu.exec(at);
+    if (chosen == nullptr) {
+        return std::nullopt;
+    }
+    for (std::size_t index = 0; index < candidateActions.size(); ++index) {
+        if (candidateActions[index] == chosen) {
+            return static_cast<int>(index);
+        }
+    }
+    // 台帳のコマンドを選んだ。実行は QAction 側で済んでいるので、選択は動かさない。
+    return std::nullopt;
 }
 
 void V2MainWindow::ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage)

@@ -231,8 +231,11 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
         }
         // カーソルの下の線(V1 と同じ)。選ぶ前に「どれに当たるか」を見せる。
+        // 線の番号まで見るのは、同じワイヤーの中で重なっている線を Tab で
+        // 送ったときに、どれを出しているのかが読めるようにするためである。
         const bool hovered = !selected && !hoveredEntityId_.IsNil()
-            && curve.entityId == hoveredEntityId_;
+            && curve.entityId == hoveredEntityId_
+            && (hoveredSegmentId_.IsNil() || curve.segmentId == hoveredSegmentId_);
         QColor color = selected
             ? palette_.selected
             : (curve.construction ? palette_.construction : palette_.wire);
@@ -470,6 +473,15 @@ void V2Viewport::DrawScaleBar(QPainter& painter) const
 void V2Viewport::SetShapeViews(std::vector<ShapeView> shapes)
 {
     shapeViews_ = std::move(shapes);
+    // 当たり判定へ渡す網を作り直す。カーソルが動くたびに三角形を写さないため、
+    // ここで1度だけ並べておく。並びは shapeViews_ と同じ(索引で引き当てる)。
+    pickMeshes_.clear();
+    pickMeshes_.reserve(shapeViews_.size());
+    for (const ShapeView& shape : shapeViews_) {
+        pickMeshes_.push_back(shape.mesh);
+    }
+    // 形が入れ替わったので、覚えていた候補は捨てる。
+    ForgetPickCycle();
     update();
 }
 

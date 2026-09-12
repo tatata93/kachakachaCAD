@@ -1,7 +1,6 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ToolTargeting.h"
-#include "kachakacha/modeling/MeshPick.h"
 
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/geometry/CurveSampling.h"
@@ -20,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 #include <utility>
 
 using kachakacha::v2::geometry::CurveKind;
@@ -701,37 +701,10 @@ bool V2Viewport::PlacePointFromCursorInput()
     return result.placedPoint;
 }
 
-//! 塗った形(立体・面)を画面の点で拾う(棚卸し A-2)。
-//!
-//! 見えているのに掴めない、をなくすためのもの。判断は core(modeling/MeshPick)。
-//! 目から画面の点へ伸ばした光線が、いちばん手前で当たる形を返す。
-std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::PickShapeAt(
-    const QPointF& position) const
+bool V2Viewport::focusNextPrevChild(bool /*next*/)
 {
-    if (shapeViews_.empty() || !display_.shapesVisible) {
-        return std::nullopt;
-    }
-    const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
-    if (!ray.has_value()) {
-        return std::nullopt;
-    }
-    std::vector<kachakacha::v2::modeling::ShapeMesh> meshes;
-    meshes.reserve(shapeViews_.size());
-    for (const ShapeView& shape : shapeViews_) {
-        meshes.push_back(shape.mesh);
-    }
-    const auto hit = kachakacha::v2::modeling::PickMesh(meshes, ray->origin, ray->direction);
-    if (!hit.has_value() || hit->shapeIndex >= shapeViews_.size()) {
-        return std::nullopt;
-    }
-    kachakacha::v2::app::PickCandidate candidate;
-    candidate.entityId = shapeViews_[hit->shapeIndex].entityId;
-    candidate.kind = kachakacha::v2::app::SelectionElementKind::Object;
-    candidate.hitPoint = hit->point;
-    // 形には線の番号が無い。距離は画面上の px ではなく目からの mm だが、
-    // 線が拾えなかったときにしか使わないので、比べる相手はいない。
-    candidate.distancePx = hit->distanceMm;
-    return candidate;
+    // 図面の上では Tab を焦点移動に使わない。候補送りと数値入力欄へ回す。
+    return false;
 }
 
 //! いま拾う相手を絞る印。作図中は作業平面の上の線だけを拾う。
@@ -989,23 +962,11 @@ void V2Viewport::HoverAt(const QPointF& position)
     if (statusCallback_) {
         statusCallback_(status_);
     }
-    // カーソルの下の線を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
+    // カーソルの下の候補を覚える。覚えないと、押すまで「どれに当たるか」が分からない。
     // V1 は当たっている線を太く出していた。同じにする。
-    auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
-        ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
-    if (!picked.has_value()) {
-        picked = PickShapeAt(position);
-    }
-    const auto previous = hoveredEntityId_;
-    const auto previousSegment = hoveredSegmentId_;
-    hoveredEntityId_ = picked.has_value() ? picked->entityId
-                                          : kachakacha::v2::base::EntityId{};
-    hoveredSegmentId_ = picked.has_value() ? picked->segmentId
-                                           : kachakacha::v2::base::SegmentId{};
-    if (previous != hoveredEntityId_ || previousSegment != hoveredSegmentId_) {
-        RefreshCursorShape();
-    }
+    // 重なっているときは1件目だけでなく全部を持つ。持たないと Tab で送れない。
+    RefreshPickCycle(position);
+    SyncHoverWithCandidate();
     update();
 }
 
@@ -1032,6 +993,8 @@ void V2Viewport::SetSelection(kachakacha::v2::app::SelectionSet selection)
 
 void V2Viewport::PruneSelection()
 {
+    // 文書が変わった。覚えていた候補は、もう無いものを指しているかもしれない。
+    ForgetPickCycle();
     // 消えたものを選んだままにしない。無いものを選んでいることになる。
     SetSelection(kachakacha::v2::app::PruneSelection(selection_,
         session_->GetDocument().Snapshot()));
@@ -1045,15 +1008,18 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     if ((modifiers & Qt::ControlModifier) != 0) {
         mode = SelectionMode::Toggle;
     }
-    // 点 → 線 → 塗った形 の順で拾う。点は線の上に載っていることが多いので、
-    // 線を先に見ると点が永久に拾えない(オーナー指摘 2026-09-11)。
-    auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
-        ScreenPoint{position.x(), position.y()},
-        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
-    if (!picked.has_value()) {
-        // 線も点も無ければ、塗った形を押したとみなす。
-        picked = PickShapeAt(position);
+    // 候補は Hover と同じ一箇所(cycle_)から取る。別に拾い直すと、
+    // 画面に出している候補と、押して選ばれるものが食い違う。
+    // 押した場所が Hover と同じなら、Tab で送った番号もそのまま残る。
+    RefreshPickCycle(position);
+    if ((modifiers & Qt::AltModifier) != 0) {
+        // Alt は「もう1つ奥」。いま出している候補の次を選ぶ(§4.2)。
+        // 候補は 点 → 線 → 手前の形 → 奥の形 の順なので、次が奥側になる。
+        AdvanceCandidate(false);
     }
+    const auto picked = CurrentCandidate();
+    // 選んだものは、そのまま押した先の候補として出しておく。
+    SyncHoverWithCandidate();
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
     const std::size_t selectedItems = kachakacha::v2::app::SelectionItemCount(selection_);
     status_ = selectedItems == 0
@@ -1409,6 +1375,15 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         (void)FocusNextCursorField(event->key() == Qt::Key_Backtab
             || (event->modifiers() & Qt::ShiftModifier) != 0);
         return;
+    }
+    if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Backtab) {
+        // 数値入力中でなければ、Tab は重なった候補の送りになる(§4.2)。
+        // 選択は変えない。変えるのはクリックだけである。
+        if (CycleCandidate(event->key() == Qt::Key_Backtab
+                || (event->modifiers() & Qt::ShiftModifier) != 0)) {
+            event->accept();
+            return;
+        }
     }
     if (cursorPanel_.active
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {

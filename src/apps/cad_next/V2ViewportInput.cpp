@@ -6,6 +6,7 @@
 //!   - Esc は、やりかけを1つ取り消してから選択道具へ戻り、選択も解除する
 //!   - 作図中の Ctrl で吸着を一時停止、Shift で水平・垂直・正方形へ固定
 //!   - 掴めるかどうかが分かるカーソル
+//!   - 重なった候補を Tab で送り、Alt+クリックで奥を選ぶ(ui-ux-integrated-spec §4.2)
 //!
 //! どれも「画面が無いと確かめられない」ものではない。
 //! 判断は core(app/EscapeAction、modeling/DrawingConstraint)にある。
@@ -20,10 +21,12 @@
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/modeling/DrawingConstraint.h"
+#include "kachakacha/modeling/MeshPick.h"
 
 #include <QCursor>
 
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -32,6 +35,42 @@ namespace {
 //! 1px あたり何度回すか。ビューキューブと同じにする。
 //! 別の値にすると、同じ手つきなのに回り方が変わる。
 constexpr double kOrbitDegreesPerPixel = 0.5;
+
+//! 候補の並びが前と同じか。同じなら Tab の番号を持ち越せる。
+//!
+//! 位置(距離)は比べない。カーソルが1px動くたびに距離は変わるので、
+//! 距離まで見ると同じ場所でも毎回「別の並び」になってしまう。
+[[nodiscard]] bool SameCandidateOrder(
+    const std::vector<kachakacha::v2::app::PickCandidate>& before,
+    const std::vector<kachakacha::v2::app::PickCandidate>& after)
+{
+    if (before.size() != after.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < before.size(); ++index) {
+        if (before[index].entityId != after[index].entityId
+            || before[index].segmentId != after[index].segmentId
+            || before[index].kind != after[index].kind) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! 候補の種類を一言で。帯に「何を出しているか」を書くために使う。
+[[nodiscard]] const char* CandidateKindNameJa(kachakacha::v2::app::SelectionElementKind kind)
+{
+    using kachakacha::v2::app::SelectionElementKind;
+    switch (kind) {
+    case SelectionElementKind::Object:       return "形";
+    case SelectionElementKind::Vertex:       return "点";
+    case SelectionElementKind::Edge:         return "線";
+    case SelectionElementKind::Face:         return "面";
+    case SelectionElementKind::ControlPoint: return "制御点";
+    case SelectionElementKind::WorkPlane:    return "作業平面";
+    }
+    return "不明";
+}
 
 } // namespace
 
@@ -486,5 +525,149 @@ bool V2Viewport::ReleaseControlPointDrag(const QPointF& position)
         return false;
     }
     controlPointChanged_(handle.entityId, handle.segmentId, *preview);
+    return true;
+}
+
+//! 塗った形(立体・面)を画面の点で、手前から順に拾う(棚卸し A-2)。
+//!
+//! 見えているのに掴めない、をなくすためのもの。判断は core(modeling/CollectMeshHits)。
+//! 手前から並ぶので、Alt+クリックと Tab はこの並びのまま奥へ進める。
+std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidatesAt(
+    const QPointF& position) const
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    std::vector<kachakacha::v2::app::PickCandidate> candidates;
+    if (pickMeshes_.empty() || !display_.shapesVisible) {
+        return candidates;
+    }
+    const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
+    if (!ray.has_value()) {
+        return candidates;
+    }
+    const auto hits = kachakacha::v2::modeling::CollectMeshHits(pickMeshes_, ray->origin,
+        ray->direction);
+    candidates.reserve(hits.size());
+    for (const auto& hit : hits) {
+        if (hit.shapeIndex >= shapeViews_.size()) {
+            continue;
+        }
+        kachakacha::v2::app::PickCandidate candidate;
+        candidate.entityId = shapeViews_[hit.shapeIndex].entityId;
+        candidate.kind = kachakacha::v2::app::SelectionElementKind::Object;
+        candidate.hitPoint = hit.point;
+        // 形には線の番号が無い。距離は画面上の px ではなく目からの mm である。
+        // 形どうしの前後を決めるためだけに使い、線の px と比べない。
+        candidate.distancePx = hit.distanceMm;
+        candidates.push_back(candidate);
+    }
+    return candidates;
+}
+
+std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::PickShapeAt(
+    const QPointF& position) const
+{
+    const auto candidates = CollectShapeCandidatesAt(position);
+    return candidates.empty() ? std::nullopt
+                              : std::optional<kachakacha::v2::app::PickCandidate>{
+                                    candidates.front()};
+}
+
+//! 画面の1点で拾えるものを、優先順位の順に全部並べる。
+//!
+//! 順は ui-ux-integrated-spec §4.3 のとおり **点 → 線 → 形** とする。
+//! 点と線の中の並びは core が決める(同順位は画面上の距離が近い順)。
+//! 形をいちばん後ろに置くのは、線の上を押したのに塗りが勝つと、
+//! 面の内側にある線が永久に掴めなくなるためである。
+std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
+    const QPointF& position) const
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    auto candidates = kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
+        ScreenPoint{position.x(), position.y()},
+        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
+    auto shapes = CollectShapeCandidatesAt(position);
+    candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
+        std::make_move_iterator(shapes.end()));
+    return candidates;
+}
+
+std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::CurrentCandidate() const
+{
+    if (cycle_.candidates.empty() || cycle_.index >= cycle_.candidates.size()) {
+        return std::nullopt;
+    }
+    return cycle_.candidates[cycle_.index];
+}
+
+void V2Viewport::RefreshPickCycle(const QPointF& position)
+{
+    auto collected = CollectCandidatesAt(position);
+    // 番号を持ち越すのは「同じ場所の、同じ並び」のときだけ。
+    // どちらかが崩れたら先頭へ戻す。こうしないと、いくつ目を出しているのかが
+    // カーソルを動かすたびに変わり、Tab の結果が読めなくなる。
+    const double resetPx = session_->GetDocument().Snapshot().settings.tolerance
+                               .displayPickPx;
+    const bool sameSpot = cycle_.valid
+        && std::hypot(position.x() - cycle_.anchorPx.x(),
+               position.y() - cycle_.anchorPx.y()) <= resetPx;
+    if (!sameSpot || !SameCandidateOrder(cycle_.candidates, collected)) {
+        cycle_.anchorPx = position;
+        cycle_.index = 0;
+    }
+    cycle_.candidates = std::move(collected);
+    cycle_.valid = true;
+    if (cycle_.index >= cycle_.candidates.size()) {
+        cycle_.index = 0;
+    }
+}
+
+void V2Viewport::ForgetPickCycle()
+{
+    cycle_ = PickCycle{};
+}
+
+void V2Viewport::AdvanceCandidate(bool backward)
+{
+    const std::size_t count = cycle_.candidates.size();
+    if (count == 0) {
+        return;
+    }
+    cycle_.index = backward ? (cycle_.index + count - 1) % count
+                            : (cycle_.index + 1) % count;
+}
+
+void V2Viewport::SyncHoverWithCandidate()
+{
+    const auto current = CurrentCandidate();
+    const auto previous = hoveredEntityId_;
+    const auto previousSegment = hoveredSegmentId_;
+    hoveredEntityId_ = current.has_value() ? current->entityId
+                                           : kachakacha::v2::base::EntityId{};
+    hoveredSegmentId_ = current.has_value() ? current->segmentId
+                                            : kachakacha::v2::base::SegmentId{};
+    if (previous != hoveredEntityId_ || previousSegment != hoveredSegmentId_) {
+        RefreshCursorShape();
+    }
+}
+
+bool V2Viewport::CycleCandidate(bool backward)
+{
+    // 送る相手は、いまカーソルがあるところの候補。押していなくても送れる。
+    RefreshPickCycle(cursorPosition_);
+    if (cycle_.candidates.size() < 2) {
+        return false;   // 重なっていない。送る先が無い。
+    }
+    AdvanceCandidate(backward);
+    SyncHoverWithCandidate();
+    // どれを出しているかを言う。強調だけでは、何個のうちの何番目かが読めない。
+    const auto current = CurrentCandidate();
+    status_ = std::string("候補 ") + std::to_string(cycle_.index + 1) + "/"
+        + std::to_string(cycle_.candidates.size()) + "("
+        + (current.has_value() ? CandidateKindNameJa(current->kind) : "なし")
+        + ")。クリックで決まります。";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
     return true;
 }

@@ -60,6 +60,156 @@ void DrawOneLine(V2MainWindow& window)
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
 }
 
+//! 指定の2点へ線を1本引く。重なりを作るために場所を変えて呼ぶ。
+[[nodiscard]] bool DrawLineBetween(V2MainWindow& window,
+    const kachakacha::v2::geometry::Vector3& from,
+    const kachakacha::v2::geometry::Vector3& to)
+{
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    auto& viewport = window.Viewport();
+    const auto first = viewport.Mapping().Project(from);
+    const auto second = viewport.Mapping().Project(to);
+    if (!first.has_value() || !second.has_value()) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    viewport.ClickAt(QPointF(first->x, first->y));
+    viewport.ClickAt(QPointF(second->x, second->y));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return true;
+}
+
+//! 交わる2本を引いて、その交点の画面位置を返す。
+//! 横線 y=10、縦線 x=20。交点 (20,10) では2本が同じ画面の点に重なる。
+[[nodiscard]] std::optional<QPointF> DrawCrossingLines(V2MainWindow& window)
+{
+    if (!DrawLineBetween(window, kachakacha::v2::geometry::Vector3{0.0, 10.0, 0.0},
+            kachakacha::v2::geometry::Vector3{40.0, 10.0, 0.0})) {
+        return std::nullopt;
+    }
+    if (!DrawLineBetween(window, kachakacha::v2::geometry::Vector3{20.0, -10.0, 0.0},
+            kachakacha::v2::geometry::Vector3{20.0, 30.0, 0.0})) {
+        return std::nullopt;
+    }
+    const auto cross = window.Viewport().Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 10.0, 0.0});
+    if (!cross.has_value()) {
+        return std::nullopt;
+    }
+    return QPointF(cross->x, cross->y);
+}
+
+[[nodiscard]] bool CaseTabCyclesOverlappingCandidates(V2MainWindow& window)
+{
+    // 重なった線は、いちばん近い1本しか選べなかった。交点の多い図面では、
+    // 奥の線を選ぶために線を動かすしかなく、そこで手が止まる。
+    const auto cross = DrawCrossingLines(window);
+    if (!Explain("交わる2本を引ける", cross.has_value())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.HoverAt(*cross);
+    if (!Explain((std::string("交点では候補が2つ以上ある(実際は ")
+                     + std::to_string(viewport.CandidateCount()) + ")").c_str(),
+            viewport.CandidateCount() >= 2)) {
+        return false;
+    }
+    if (!Explain("はじめは先頭の候補", viewport.CandidateIndex() == 0)) {
+        return false;
+    }
+    const EntityId front = viewport.HoveredEntityId();
+    if (!Explain("先頭の候補を出している", !front.IsNil())) {
+        return false;
+    }
+    // Tab で次の候補へ送る。出すものが変わるだけで、選択は動かない。
+    if (!Explain("Tabで送れる", viewport.CycleCandidate(false))) {
+        return false;
+    }
+    if (!Explain((std::string("候補の番号が進む(実際は ")
+                     + std::to_string(viewport.CandidateIndex()) + ")").c_str(),
+            viewport.CandidateIndex() == 1)) {
+        return false;
+    }
+    const EntityId next = viewport.HoveredEntityId();
+    if (!Explain("別の候補になる", !next.IsNil() && next != front)) {
+        return false;
+    }
+    if (!Explain((std::string("Tabだけでは選択が変わらない(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 0)) {
+        return false;
+    }
+    // 押すと、いま出している候補が選ばれる。別のものが選ばれては送った意味が無い。
+    viewport.SelectAt(*cross, Qt::NoModifier);
+    if (!Explain("Tabの後のクリックは出している候補を選ぶ",
+            kachakacha::v2::app::IsSelected(viewport.Selection(), next))) {
+        return false;
+    }
+    // 候補の数だけ送れば、元の番号へ戻る(順送りで循環する)。
+    const int before = viewport.CandidateIndex();
+    for (int step = 0; step < viewport.CandidateCount(); ++step) {
+        (void)viewport.CycleCandidate(false);
+    }
+    if (!Explain((std::string("一周すると元の番号へ戻る(") + std::to_string(before)
+                     + " → " + std::to_string(viewport.CandidateIndex()) + ")").c_str(),
+            viewport.CandidateIndex() == before)) {
+        return false;
+    }
+    // 別の場所へ移ったら番号を捨てる。捨てないと、次に交点へ来たときに
+    // いくつ目から始まるのかが読めない。
+    viewport.HoverAt(QPointF(cross->x() + 200.0, cross->y() + 200.0));
+    viewport.HoverAt(*cross);
+    if (!Explain((std::string("別の場所へ移った後は先頭から(実際は ")
+                     + std::to_string(viewport.CandidateIndex()) + ")").c_str(),
+            viewport.CandidateIndex() == 0)) {
+        return false;
+    }
+    return Explain("同じ場所の先頭候補は毎回同じ", viewport.HoveredEntityId() == front);
+}
+
+[[nodiscard]] bool CaseAltClickTakesTheDeeperCandidate(V2MainWindow& window)
+{
+    // Alt+クリックは「もう1つ奥」。Tab を押さずに、重なりの下を直接選ぶ。
+    const auto cross = DrawCrossingLines(window);
+    if (!Explain("交わる2本を引ける", cross.has_value())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.HoverAt(*cross);
+    const EntityId front = viewport.HoveredEntityId();
+    if (!Explain("交点で候補が2つ以上ある", viewport.CandidateCount() >= 2)) {
+        return false;
+    }
+    // 素のクリックは手前の候補。ここが変わると、いつもの選択が壊れる。
+    viewport.SelectAt(*cross, Qt::NoModifier);
+    if (!Explain("素のクリックは手前の候補",
+            kachakacha::v2::app::IsSelected(viewport.Selection(), front))) {
+        return false;
+    }
+    // Alt+クリックは次(奥)の候補。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.HoverAt(*cross);
+    viewport.SelectAt(*cross, Qt::AltModifier);
+    if (!Explain((std::string("Alt+クリックで1件だけ選ばれる(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1)) {
+        return false;
+    }
+    if (!Explain("Alt+クリックは手前の候補を選ばない",
+            !kachakacha::v2::app::IsSelected(viewport.Selection(), front))) {
+        return false;
+    }
+    return Explain("選ばれたのは、いま出している奥の候補",
+        kachakacha::v2::app::IsSelected(viewport.Selection(),
+            viewport.HoveredEntityId()));
+}
+
 [[nodiscard]] bool CaseWorkPlanesAreDrawn(V2MainWindow& window)
 {
     // 作業平面が画面に出ていないと「どこに描いているのか」が読めない。
@@ -724,6 +874,8 @@ std::vector<SelfTestCase> ScreenCases()
         {"動かす道具は1回目の押しで相手を選ぶ", &CaseMoveToolPicksItsTargetFirst},
         {"作図点を押して選べる", &CasePointsCanBeSelected},
         {"Ctrlで追加と解除ができる", &CaseCtrlClickTogglesSelection},
+        {"重なった候補をTabで送れる", &CaseTabCyclesOverlappingCandidates},
+        {"Alt+クリックで奥の候補を選べる", &CaseAltClickTakesTheDeeperCandidate},
         {"命令は相手がそろうまで構えて待つ", &CaseCommandWaitsForItsTargets},
     };
 }

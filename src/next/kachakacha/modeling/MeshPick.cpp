@@ -1,5 +1,6 @@
 #include "kachakacha/modeling/MeshPick.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -50,19 +51,19 @@ std::optional<double> RayHitsTriangle(const Vector3& origin, const Vector3& dire
     return distance;
 }
 
-std::optional<MeshHit> PickMesh(const std::vector<ShapeMesh>& shapes, const Vector3& origin,
-    const Vector3& direction)
+std::vector<MeshHit> CollectMeshHits(const std::vector<ShapeMesh>& shapes,
+    const Vector3& origin, const Vector3& direction)
 {
-    std::optional<MeshHit> best;
+    std::vector<MeshHit> hits;
     for (std::size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex) {
         const ShapeMesh& mesh = shapes[shapeIndex];
+        std::optional<MeshHit> nearest;
         for (std::size_t index = 0; index < mesh.triangles.size(); ++index) {
             const auto distance = RayHitsTriangle(origin, direction, mesh.triangles[index]);
             if (!distance.has_value()) {
                 continue;
             }
-            // いちばん手前だけを残す。奥のものを返すと手前の部品が掴めなくなる。
-            if (best.has_value() && !(*distance < best->distanceMm)) {
+            if (nearest.has_value() && !(*distance < nearest->distanceMm)) {
                 continue;
             }
             MeshHit hit;
@@ -70,10 +71,24 @@ std::optional<MeshHit> PickMesh(const std::vector<ShapeMesh>& shapes, const Vect
             hit.triangleIndex = index;
             hit.distanceMm = *distance;
             hit.point = origin + Normalized(direction) * (*distance);
-            best = hit;
+            nearest = hit;
+        }
+        if (nearest.has_value()) {
+            hits.push_back(*nearest);
         }
     }
-    return best;
+    std::stable_sort(hits.begin(), hits.end(), [](const MeshHit& first,
+                                                  const MeshHit& second) {
+        return first.distanceMm < second.distanceMm;
+    });
+    return hits;
+}
+
+std::optional<MeshHit> PickMesh(const std::vector<ShapeMesh>& shapes, const Vector3& origin,
+    const Vector3& direction)
+{
+    const auto hits = CollectMeshHits(shapes, origin, direction);
+    return hits.empty() ? std::nullopt : std::optional<MeshHit>{hits.front()};
 }
 
 } // namespace kachakacha::v2::modeling

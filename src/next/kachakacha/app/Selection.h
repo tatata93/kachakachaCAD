@@ -90,6 +90,13 @@ struct PickFocus {
     modeling::WorkPlaneFrame plane{};
 };
 
+//! 画面の1点にある選択候補を、優先順位と距離の順で全て返す。
+//! 点を線より先にし、同順位では近い候補を先にする。同じEntityの別Segmentは潰さない。
+[[nodiscard]] std::vector<PickCandidate> CollectPickCandidates(
+    const modeling::SnapScene& scene, const geometry::ScreenMapping& mapping,
+    const geometry::ScreenPoint& pointer, const geometry::GeometryTolerance& tolerance,
+    const PickFocus& focus = {});
+
 //! 画面の1点から、いちばん近い線を拾う。
 //! 拾う範囲は tolerance.displayPickPx。範囲の外なら何も返さない。
 //! 同じ距離のものが並んだときは、場面に入っている順で先のものを返す。毎回同じ結果になる。

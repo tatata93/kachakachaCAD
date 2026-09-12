@@ -9,6 +9,7 @@
 using kachakacha::v2::geometry::Dot;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::MeshTriangle;
+using kachakacha::v2::modeling::CollectMeshHits;
 using kachakacha::v2::modeling::PickMesh;
 using kachakacha::v2::modeling::RayHitsTriangle;
 using kachakacha::v2::modeling::RefreshBounds;
@@ -179,6 +180,18 @@ KACHA_V2_TEST(mesh_pick, いちばん手前を返す)
     Require(hit.has_value(), "当たる");
     Require(hit->shapeIndex == 1, "上(手前)のほう");
     RequireNear(hit->distanceMm, 30.0, 1.0e-6, "手前までの距離");
+}
+
+KACHA_V2_TEST(mesh_pick, 奥の形も候補として距離順に返す)
+{
+    const std::vector<ShapeMesh> shapes{FlatSquare(0.0), FlatSquare(20.0)};
+    const auto hits = CollectMeshHits(shapes, Vector3{5.0, 5.0, 50.0},
+        Vector3{0.0, 0.0, -1.0});
+    Require(hits.size() == 2, "2形を返す");
+    Require(hits[0].shapeIndex == 1, "手前が先");
+    Require(hits[1].shapeIndex == 0, "奥も残る");
+    RequireNear(hits[0].distanceMm, 30.0, 1.0e-6, "手前の距離");
+    RequireNear(hits[1].distanceMm, 50.0, 1.0e-6, "奥の距離");
 }
 
 KACHA_V2_TEST(mesh_pick, 目の後ろは当たらない)

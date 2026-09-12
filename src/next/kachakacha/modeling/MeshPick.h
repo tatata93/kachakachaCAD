@@ -9,8 +9,8 @@
 //! やり方は光線と三角形の交わり(Möller–Trumbore)。目から画面の点へ伸ばした
 //! 光線が、どの形のどの三角形に、どれだけ手前で当たるかを見る。
 //!
-//! **いちばん手前のものだけを返す。** 後ろのものまで返すと、
-//! 押すたびに奥の部品が選ばれて、手前のものを掴めなくなる。
+//! 通常選択にはいちばん手前だけを返す。Tab / Altで明示的に選び直せるよう、
+//! 形ごとの命中候補を手前から並べる入口も持つ。
 
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/ShapeMesh.h"
@@ -42,6 +42,11 @@ struct MeshHit {
 
 //! いちばん手前で当たる形。当たらなければ値を持たない。
 [[nodiscard]] std::optional<MeshHit> PickMesh(const std::vector<ShapeMesh>& shapes,
+    const Vector3& origin, const Vector3& direction);
+
+//! 光線に当たる形を、各形のいちばん手前の命中点で代表し、手前から順に返す。
+//! 同じ形の三角形を大量の候補にしない。
+[[nodiscard]] std::vector<MeshHit> CollectMeshHits(const std::vector<ShapeMesh>& shapes,
     const Vector3& origin, const Vector3& direction);
 
 } // namespace kachakacha::v2::modeling

@@ -149,16 +149,13 @@ struct CurveApproach {
         [id](const auto& entity) { return entity.id == id; });
 }
 
-} // namespace
-
-std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
-    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
-    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
+[[nodiscard]] std::vector<PickCandidate> CollectCurvePicks(
+    const modeling::SnapScene& scene, const geometry::ScreenMapping& mapping,
+    const ScreenPoint& pointer, const geometry::GeometryTolerance& tolerance,
+    const PickFocus& focus)
 {
-    std::optional<PickCandidate> best;
+    std::vector<PickCandidate> candidates;
     for (const auto& curve : scene.curves) {
-        // 薄くしている線は拾わない。別の面の線を誤って掴むのが、
-        // 面が何枚も浮いているこのCADでいちばん困る事故である。
         if (!PickableOffPlaneCurve(focus.drawing, focus.dimOffPlane,
                 CurveLiesOnPlane(curve.segment, focus.plane))) {
             continue;
@@ -168,10 +165,6 @@ std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
         if (!approach.has_value() || approach->distancePx > tolerance.displayPickPx) {
             continue;
         }
-        // 同じ距離のときは先に入っているものを残す。毎回同じ結果になる。
-        if (best.has_value() && !(approach->distancePx < best->distancePx)) {
-            continue;
-        }
         PickCandidate candidate;
         candidate.entityId = curve.entityId;
         candidate.segmentId = curve.segmentId;
@@ -179,29 +172,27 @@ std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
         candidate.curveParameter = approach->parameter;
         candidate.hitPoint = approach->point;
         candidate.distancePx = approach->distancePx;
-        best = candidate;
+        candidates.push_back(candidate);
     }
-    return best;
+    std::stable_sort(candidates.begin(), candidates.end(), [](const auto& first,
+                                                        const auto& second) {
+        return first.distancePx < second.distancePx;
+    });
+    return candidates;
 }
 
-std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
-    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
-    const geometry::GeometryTolerance& tolerance)
+[[nodiscard]] std::vector<PickCandidate> CollectPointPicks(
+    const modeling::SnapScene& scene, const geometry::ScreenMapping& mapping,
+    const ScreenPoint& pointer, const geometry::GeometryTolerance& tolerance)
 {
-    std::optional<PickCandidate> best;
+    std::vector<PickCandidate> candidates;
     for (const auto& point : scene.points) {
         const auto screen = mapping.Project(point.position);
         if (!screen.has_value()) {
             continue;
         }
-        const double dx = screen->x - pointer.x;
-        const double dy = screen->y - pointer.y;
-        const double distance = std::sqrt(dx * dx + dy * dy);
+        const double distance = std::hypot(screen->x - pointer.x, screen->y - pointer.y);
         if (distance > tolerance.displayPickPx) {
-            continue;
-        }
-        // 同じ距離のときは先に入っているものを残す。毎回同じ結果になる。
-        if (best.has_value() && !(distance < best->distancePx)) {
             continue;
         }
         PickCandidate candidate;
@@ -209,21 +200,53 @@ std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
         candidate.kind = SelectionElementKind::Vertex;
         candidate.hitPoint = point.position;
         candidate.distancePx = distance;
-        best = candidate;
+        candidates.push_back(candidate);
     }
-    return best;
+    std::stable_sort(candidates.begin(), candidates.end(), [](const auto& first,
+                                                        const auto& second) {
+        return first.distancePx < second.distancePx;
+    });
+    return candidates;
+}
+
+} // namespace
+
+std::vector<PickCandidate> CollectPickCandidates(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
+{
+    std::vector<PickCandidate> candidates = CollectPointPicks(scene, mapping, pointer,
+        tolerance);
+    auto curves = CollectCurvePicks(scene, mapping, pointer, tolerance, focus);
+    candidates.insert(candidates.end(), curves.begin(), curves.end());
+    return candidates;
+}
+
+std::optional<PickCandidate> PickCurve(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
+{
+    const auto candidates = CollectCurvePicks(scene, mapping, pointer, tolerance, focus);
+    return candidates.empty() ? std::nullopt
+                              : std::optional<PickCandidate>{candidates.front()};
+}
+
+std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const auto candidates = CollectPointPicks(scene, mapping, pointer, tolerance);
+    return candidates.empty() ? std::nullopt
+                              : std::optional<PickCandidate>{candidates.front()};
 }
 
 std::optional<PickCandidate> PickEntity(const modeling::SnapScene& scene,
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
     const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
 {
-    // 点を先に見る。点は線の上に載っていることが多いので、
-    // 線を先に見ると点が永久に拾えない。
-    if (auto point = PickPoint(scene, mapping, pointer, tolerance); point.has_value()) {
-        return point;
-    }
-    return PickCurve(scene, mapping, pointer, tolerance, focus);
+    const auto candidates = CollectPickCandidates(scene, mapping, pointer, tolerance, focus);
+    return candidates.empty() ? std::nullopt
+                              : std::optional<PickCandidate>{candidates.front()};
 }
 
 SelectionSet ApplySelection(const SelectionSet& current,

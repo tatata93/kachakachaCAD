@@ -7,6 +7,7 @@
 #include <string>
 
 using kachakacha::v2::app::ApplySelection;
+using kachakacha::v2::app::CollectPickCandidates;
 using kachakacha::v2::app::IsSelected;
 using kachakacha::v2::app::PickCandidate;
 using kachakacha::v2::app::PickCurve;
@@ -31,6 +32,7 @@ using kachakacha::v2::geometry::ScreenMapping;
 using kachakacha::v2::geometry::ScreenPoint;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::SnapCurve;
+using kachakacha::v2::modeling::SnapDrawingPoint;
 using kachakacha::v2::modeling::SnapScene;
 using kachakacha::v2::test::Require;
 using kachakacha::v2::test::RequireEqual;
@@ -176,6 +178,40 @@ KACHA_V2_TEST(selection, 同じ距離なら先に入っているものを返す)
         Require(picked.has_value(), "拾える");
         Require(picked->entityId == Ent(1), "いつも先のほう");
     }
+}
+
+KACHA_V2_TEST(selection, 重なった線を候補として全て返す)
+{
+    SnapScene scene;
+    scene.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
+    scene.curves.push_back(Curve(2, {-40, 0, 0}, {40, 0, 0}));
+    const auto candidates = CollectPickCandidates(scene, TopView(),
+        ScreenPoint{500.0, 500.0}, Tolerance());
+    Require(candidates.size() == 2, "2候補を潰さない");
+    Require(candidates[0].entityId == Ent(1), "同距離なら場面の順");
+    Require(candidates[1].entityId == Ent(2), "奥候補も残す");
+}
+
+KACHA_V2_TEST(selection, 同じワイヤーの重なった別辺も候補に残る)
+{
+    SnapScene scene;
+    scene.curves.push_back({Ent(1), Seg(1), Line({-40, 0, 0}, {40, 0, 0}), false});
+    scene.curves.push_back({Ent(1), Seg(2), Line({-40, 0, 0}, {40, 0, 0}), false});
+    const auto candidates = CollectPickCandidates(scene, TopView(),
+        ScreenPoint{500.0, 500.0}, Tolerance());
+    Require(candidates.size() == 2, "同じ物体でも2候補");
+    Require(candidates[0].segmentId != candidates[1].segmentId, "線分IDで区別する");
+}
+
+KACHA_V2_TEST(selection, 作図点は重なった線より先の候補になる)
+{
+    SnapScene scene = TwoLines();
+    scene.points.push_back(SnapDrawingPoint{Ent(8), Vector3{0.0, 0.0, 0.0}});
+    const auto candidates = CollectPickCandidates(scene, TopView(),
+        ScreenPoint{500.0, 500.0}, Tolerance());
+    Require(candidates.size() >= 2, "点と線が候補になる");
+    Require(candidates.front().entityId == Ent(8), "点が先");
+    Require(candidates.front().kind == SelectionElementKind::Vertex, "頂点候補");
 }
 
 KACHA_V2_TEST(selection, 拾う範囲は許容差で決まる)

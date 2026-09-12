@@ -213,7 +213,26 @@ public:
     }
     void SetSelection(kachakacha::v2::app::SelectionSet selection);
     //! 画面のこの位置で選ぶ。修飾キーで足す・外すが変わる。
+    //! Alt はいま出している候補の **次(奥)** を選ぶ(ui-ux-integrated-spec §4.2)。
     void SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
+
+    //! 重なった候補を1つ送る(Tab / Shift+Tab)。送れたら true。
+    //!
+    //! **通常選択は変えない。** 動くのは「いま出している候補」= Hover だけである。
+    //! 選択まで変えると、送っている途中の候補が次の操作の相手になってしまう。
+    bool CycleCandidate(bool backward);
+    //! カーソルの下に重なっている候補の数。試験から見る。
+    [[nodiscard]] int CandidateCount() const noexcept
+    {
+        return static_cast<int>(cycle_.candidates.size());
+    }
+    //! いま出している候補の番号(0起点)。候補が無ければ 0。
+    [[nodiscard]] int CandidateIndex() const noexcept
+    {
+        return cycle_.candidates.empty() ? 0 : static_cast<int>(cycle_.index);
+    }
+    //! いま出している候補。無ければ値を持たない。
+    [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> CurrentCandidate() const;
     //! 文書から消えたものを選択から外す。文書が変わったら呼ぶ。
     void PruneSelection();
     void SetDocumentChangedCallback(std::function<void()> callback);
@@ -392,6 +411,10 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    //! Tab をこの画面で使う。既定のままだと QWidget::event が Tab を先に取って
+    //! 次の部品へ焦点を移すので、keyPressEvent まで届かない。
+    //! 図面の上での Tab は候補送りと数値入力欄の移動に使う。
+    bool focusNextPrevChild(bool next) override;
 
 private:
     void RebuildMapping();
@@ -460,6 +483,36 @@ private:
     [[nodiscard]] std::optional<QPointF> ToScreen(
         const kachakacha::v2::geometry::Vector3& world) const;
 
+    //! 画面の1点で拾えるものを、優先順位の順に全部集める。
+    //! 点と線は core(app/CollectPickCandidates)、塗った形は core(modeling/CollectMeshHits)。
+    //! ここでは順番に混ぜるだけで、拾い方そのものは書かない。
+    [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> CollectCandidatesAt(
+        const QPointF& position) const;
+    //! 塗った形の候補を手前から順に。奥の形を手前より先に選ばない。
+    [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> CollectShapeCandidatesAt(
+        const QPointF& position) const;
+    //! 候補一覧を集め直す。別の場所へ移ったか中身が変わったら番号を先頭へ戻す。
+    void RefreshPickCycle(const QPointF& position);
+    //! 候補一覧を捨てる。文書が変わったら呼ぶ。無いものを送り続けないため。
+    void ForgetPickCycle();
+    //! 候補の番号を1つ進める(または戻す)。候補が無ければ何もしない。
+    void AdvanceCandidate(bool backward);
+    //! いまの候補に合わせて Hover を書き直す。選択には触らない。
+    void SyncHoverWithCandidate();
+
+    //! 同じ場所で重なっている候補。Tab も Alt+クリックもここだけを見る。
+    //! Hover / Selection / Preview とは別の状態である。混ぜない。
+    struct PickCycle {
+        //! 一度でも集めたか。集めた場所が anchorPx。
+        bool valid = false;
+        //! 集めたときの画面位置。ここから離れたら番号を捨てる。
+        QPointF anchorPx;
+        std::vector<kachakacha::v2::app::PickCandidate> candidates;
+        //! いま出している候補。candidates が空なら意味を持たない。
+        std::size_t index = 0;
+    };
+    PickCycle cycle_;
+
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();
     kachakacha::v2::app::DisplaySettings display_;
@@ -514,6 +567,9 @@ private:
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     std::vector<WorkPlaneView> workPlaneViews_;
     std::vector<ShapeView> shapeViews_;
+    //! 当たり判定へ渡す網だけを並べたもの。SetShapeViews で作り直す。
+    //! カーソルが動くたびに shapeViews_ から作り直すと、三角形を丸ごと写すことになる。
+    std::vector<kachakacha::v2::modeling::ShapeMesh> pickMeshes_;
     //! カーソルの下の線。押さなくても「どれに当たるか」が見えるようにする。
     kachakacha::v2::base::EntityId hoveredEntityId_;
     kachakacha::v2::base::SegmentId hoveredSegmentId_;

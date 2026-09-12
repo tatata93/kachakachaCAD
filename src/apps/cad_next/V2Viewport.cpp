@@ -926,6 +926,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawGuideRows(painter);
     DrawPreview(painter);
     DrawSnap(painter);
+    DrawBoxSelect(painter);
     DrawScaleBar(painter);
     // 輪 → キューブ → ボタン の順で描く。
     // キューブを先に描くと、真横を向いた輪がキューブの上を横切って、
@@ -996,6 +997,9 @@ void V2Viewport::PruneSelection()
 {
     // 文書が変わった。覚えていた候補は、もう無いものを指しているかもしれない。
     ForgetPickCycle();
+    // 引きかけの矩形も捨てる。覚えている「押した時点の選択」には、
+    // もう文書に無いものが入っているかもしれない。
+    CancelBoxSelect();
     // 消えたものを選んだままにしない。無いものを選んでいることになる。
     SetSelection(kachakacha::v2::app::PruneSelection(selection_,
         session_->GetDocument().Snapshot()));
@@ -1003,12 +1007,9 @@ void V2Viewport::PruneSelection()
 
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
-    using kachakacha::v2::app::SelectionMode;
-    SelectionMode mode = SelectionMode::Replace;
-    // Ctrl だけが選択の追加・解除。Shift は作図拘束、Alt は奥候補へ予約する。
-    if ((modifiers & Qt::ControlModifier) != 0) {
-        mode = SelectionMode::Toggle;
-    }
+    // 修飾キーの読み方は矩形選択と同じ一箇所(SelectionModeFor)から取る。
+    // 二重に書くと、クリックと矩形で Ctrl の意味が食い違う。
+    const auto mode = SelectionModeFor(modifiers);
     // 候補は Hover と同じ一箇所(cycle_)から取る。別に拾い直すと、
     // 画面に出している候補と、押して選ばれるものが食い違う。
     // 押した場所が Hover と同じなら、Tab で送った番号もそのまま残る。
@@ -1198,6 +1199,12 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         DragBody(event->position());
         return;
     }
+    if (boxSelect_.active) {
+        // 矩形を引いている。当たり判定もスナップも探さない。
+        // 探すと、引いている途中に Hover が動いて、どこを囲っているのか読めなくなる。
+        DragBoxSelect(event->position());
+        return;
+    }
     if (rightPressed_) {
         // 右で引きずってもカメラは1mmも動かさない(ui-ux-integrated-spec §5.2)。
         // 動いた量だけ覚えて、離すときに献立を出すかどうかを決める。
@@ -1261,9 +1268,9 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     // 右ボタンはカメラへ割り当てない(ui-ux-integrated-spec §5.2)。
     // 押した場所だけ覚えて、離すときに「押しただけ」かどうかを決める。
     if (event->button() == Qt::RightButton) {
-        // 左で掴んでいる最中は右を受けない。掴んだまま献立が出ると、
-        // どこで離したことになるのかが決まらない。
-        if (controlDrag_.active || bodyDrag_.active) {
+        // 左で掴んでいる最中・矩形を引いている最中は右を受けない。
+        // 掴んだまま献立が出ると、どこで離したことになるのかが決まらない。
+        if (controlDrag_.active || bodyDrag_.active || boxSelect_.active) {
             return;
         }
         rightPressed_ = true;
@@ -1303,6 +1310,12 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
         if (event->modifiers() == Qt::NoModifier && BeginBodyDrag(event->position())) {
             return;
         }
+        // 押した瞬間は今までどおり1件を選ぶ。返りを離すまで待たせない。
+        // 同時に矩形選択の構えへ入り、5px 以上引いて離したときだけ矩形として決める。
+        // 構えるのを先にするのは、矩形が「押した時点の選択」から当て直すためである。
+        if (event->button() == Qt::LeftButton && !PickPending()) {
+            BeginBoxSelect(event->position(), event->modifiers());
+        }
         SelectAt(event->position(), event->modifiers());
         return;
     }
@@ -1331,6 +1344,11 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         if (!ReleaseBodyDrag(event->position())) {
             SelectAt(event->position(), event->modifiers());
         }
+        return;
+    }
+    if (boxSelect_.active && event->button() == Qt::LeftButton) {
+        // 引きずっていなければ何もしない。押した時点の選択がそのまま残る。
+        (void)ReleaseBoxSelect(event->position());
         return;
     }
     if (panning_) {
@@ -1388,6 +1406,13 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->key() == Qt::Key_Escape) {
+        if (boxSelect_.active) {
+            // 引いている途中の矩形が先。Esc は「やりかけを1つ」やめる。
+            // これは押している間だけの手つきで、文書へ入りかけた入力ではないので、
+            // core の EscapeAction の段には置かない。
+            CancelBoxSelect();
+            return;
+        }
         // 構えている命令があれば、まずそれを解く。やりかけの点より先に、
         // 「待っているもの」をやめるのが素直である。
         if (cancelPending_) {

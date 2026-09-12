@@ -5,10 +5,19 @@
 
 #include <array>
 #include <string>
+#include <vector>
 
+using kachakacha::v2::app::ApplyBoxSelection;
 using kachakacha::v2::app::ApplySelection;
+using kachakacha::v2::app::BoxSelectionIsMeaningful;
+using kachakacha::v2::app::BoxSelectionKind;
+using kachakacha::v2::app::BoxSelectionMinimumDragPx;
+using kachakacha::v2::app::BoxTouchesSegment;
+using kachakacha::v2::app::CollectBoxPickCandidates;
 using kachakacha::v2::app::CollectPickCandidates;
 using kachakacha::v2::app::IsSelected;
+using kachakacha::v2::app::MakeBoxSelection;
+using kachakacha::v2::app::ScreenBox;
 using kachakacha::v2::app::PickCandidate;
 using kachakacha::v2::app::PickCurve;
 using kachakacha::v2::app::PruneSelection;
@@ -424,6 +433,221 @@ KACHA_V2_TEST(selection, 選んでいない線は取り出されない)
     SelectionSet selection;
     selection.entityIds.push_back(Ent(1));
     Require(SelectedCurves(selection, TwoLines()).size() == 1, "1本だけ");
+}
+
+// --- 矩形選択(ui-ux-integrated-spec §4.2)---------------------------------
+//
+// 画面は 1mm = 10px、原点が (500, 500)。TwoLines の1本目は y=0(画面 y=500)、
+// 2本目は y=20mm(画面 y=300)。どちらも x は -40..40mm(画面 100..900)。
+
+namespace {
+
+[[nodiscard]] std::vector<EntityId> BoxPicks(const SnapScene& scene, ScreenPoint start,
+    ScreenPoint end)
+{
+    const auto request = MakeBoxSelection(start, end);
+    std::vector<EntityId> ids;
+    for (const auto& candidate : CollectBoxPickCandidates(scene, TopView(), request,
+             Tolerance())) {
+        ids.push_back(candidate.entityId);
+    }
+    return ids;
+}
+
+} // namespace
+
+KACHA_V2_TEST(selection, 矩形の向きで取り方が決まる)
+{
+    // 向きだけで決める。修飾キーへ移すと Ctrl の追加・解除と衝突する。
+    Require(MakeBoxSelection(ScreenPoint{100.0, 100.0}, ScreenPoint{200.0, 300.0}).kind
+            == BoxSelectionKind::Contained,
+        "左から右は完全包含");
+    Require(MakeBoxSelection(ScreenPoint{200.0, 300.0}, ScreenPoint{100.0, 100.0}).kind
+            == BoxSelectionKind::Crossing,
+        "右から左は交差");
+    // 上下は意味を変えない。矩形は正規化して持つ。
+    const auto upward = MakeBoxSelection(ScreenPoint{100.0, 300.0},
+        ScreenPoint{200.0, 100.0});
+    Require(upward.kind == BoxSelectionKind::Contained, "右上へ引いても完全包含");
+    RequireNear(upward.box.minY, 100.0, 1.0e-9, "上下は正規化する");
+    RequireNear(upward.box.maxY, 300.0, 1.0e-9, "上下は正規化する");
+}
+
+KACHA_V2_TEST(selection, 左から右は完全に入ったものだけ選ぶ)
+{
+    // 1本目だけを囲む。2本目は画面 y=300 なので入らない。
+    const auto inside = BoxPicks(TwoLines(), ScreenPoint{50.0, 450.0},
+        ScreenPoint{950.0, 550.0});
+    Require(inside.size() == 1, "1本だけ");
+    Require(inside.front() == Ent(1), "囲んだほう");
+    // 端が外へ出ている線は選ばない。ここで選ぶと「囲む」の意味が無くなる。
+    Require(BoxPicks(TwoLines(), ScreenPoint{400.0, 450.0},
+                ScreenPoint{600.0, 550.0}).empty(),
+        "一部だけ入っていても選ばない");
+    // 両方を囲めば両方。並びは場面の並び。
+    const auto both = BoxPicks(TwoLines(), ScreenPoint{50.0, 250.0},
+        ScreenPoint{950.0, 550.0});
+    Require(both.size() == 2, "2本");
+    Require(both[0] == Ent(1) && both[1] == Ent(2), "場面の並び");
+}
+
+KACHA_V2_TEST(selection, 右から左は触れたものも選ぶ)
+{
+    const auto crossing = BoxPicks(TwoLines(), ScreenPoint{600.0, 550.0},
+        ScreenPoint{400.0, 450.0});
+    Require(crossing.size() == 1, "触れた1本");
+    Require(crossing.front() == Ent(1), "触れたほう");
+    // 触れていないものは、交差でも選ばない。
+    Require(BoxPicks(TwoLines(), ScreenPoint{600.0, 420.0},
+                ScreenPoint{400.0, 400.0}).empty(),
+        "どこにも触れていなければ選ばない");
+}
+
+KACHA_V2_TEST(selection, 矩形を跨いだ線も交差で選ぶ)
+{
+    // 線の点(両端)はどちらも矩形の外にある。弦が枠を横切ることを見ないと落ちる。
+    const SnapScene scene = TwoLines();
+    Require(BoxPicks(scene, ScreenPoint{500.0, 400.0}, ScreenPoint{502.0, 600.0}).empty(),
+        "細い矩形に完全には入らない");
+    const auto crossing = BoxPicks(scene, ScreenPoint{502.0, 600.0},
+        ScreenPoint{500.0, 400.0});
+    Require(crossing.size() == 1, "跨いだ1本");
+    Require(crossing.front() == Ent(1), "跨いだ線");
+}
+
+KACHA_V2_TEST(selection, 矩形は物体単位で選ぶ)
+{
+    // 同じワイヤーの片方の線分だけが入っているとき、完全包含では選ばない。
+    // 折れ線の一部だけが選ばれると、次の操作の相手が読めなくなる。
+    const SnapScene scene = TwoSegmentsOneWire();
+    Require(BoxPicks(scene, ScreenPoint{50.0, 450.0}, ScreenPoint{950.0, 550.0}).empty(),
+        "片方の線分だけでは選ばない");
+    const auto crossing = BoxPicks(scene, ScreenPoint{950.0, 550.0},
+        ScreenPoint{50.0, 450.0});
+    Require(crossing.size() == 1, "交差なら物体として1件");
+    Require(crossing.front() == Ent(1), "そのワイヤー");
+    const auto whole = BoxPicks(scene, ScreenPoint{50.0, 250.0},
+        ScreenPoint{950.0, 550.0});
+    Require(whole.size() == 1, "全部囲んでも1件");
+    // 線分IDは付けない。矩形で選ぶのは対象そのものである。
+    const auto candidates = CollectBoxPickCandidates(scene, TopView(),
+        MakeBoxSelection(ScreenPoint{50.0, 250.0}, ScreenPoint{950.0, 550.0}), Tolerance());
+    Require(candidates.size() == 1, "候補も1件");
+    Require(candidates.front().kind == SelectionElementKind::Object, "物体として拾う");
+    Require(candidates.front().segmentId.IsNil(), "線分IDを付けない");
+}
+
+KACHA_V2_TEST(selection, 作図点も矩形で選べる)
+{
+    SnapScene scene = TwoLines();
+    scene.points.push_back(SnapDrawingPoint{Ent(8), Vector3{0.0, 0.0, 0.0}});
+    // 点は真ん中にあるので入る。1本目は端が外へ出るので入らない。
+    const auto inside = BoxPicks(scene, ScreenPoint{450.0, 450.0},
+        ScreenPoint{550.0, 550.0});
+    Require(inside.size() == 1, "点だけ");
+    Require(inside.front() == Ent(8), "作図点");
+}
+
+KACHA_V2_TEST(selection, 5px未満の移動は矩形選択にしない)
+{
+    const ScreenPoint start{500.0, 500.0};
+    Require(!BoxSelectionIsMeaningful(start, start), "動いていない");
+    Require(!BoxSelectionIsMeaningful(start, ScreenPoint{503.0, 503.0}),
+        "4.2px は押しただけ");
+    Require(BoxSelectionIsMeaningful(start, ScreenPoint{505.0, 500.0}),
+        "5px からは矩形");
+    Require(BoxSelectionIsMeaningful(start, ScreenPoint{496.0, 496.0}),
+        "左上へ引いても同じ");
+    RequireNear(BoxSelectionMinimumDragPx(), 5.0, 1.0e-9, "門は 5 logical px");
+}
+
+KACHA_V2_TEST(selection, 矩形は選び直しになる)
+{
+    SelectionSet selection;
+    selection.entityIds.push_back(Ent(9));
+    const auto candidates = CollectBoxPickCandidates(TwoLines(), TopView(),
+        MakeBoxSelection(ScreenPoint{50.0, 450.0}, ScreenPoint{950.0, 550.0}), Tolerance());
+    const SelectionSet next = ApplyBoxSelection(selection, candidates,
+        SelectionMode::Replace);
+    Require(next.entityIds.size() == 1, "囲んだものだけ");
+    Require(next.entityIds.front() == Ent(1), "前の選択は残らない");
+    // 何も囲んでいなければ空になる(空白クリックと同じ)。
+    Require(ApplyBoxSelection(selection, {}, SelectionMode::Replace).entityIds.empty(),
+        "空振りは選択解除");
+}
+
+KACHA_V2_TEST(selection, Ctrl併用の矩形は追加と解除になる)
+{
+    // Ctrl は既存選択へ足す・外す。押し直すたびに全部消えては、
+    // 離れた場所のものをまとめて選べない。
+    SelectionSet selection;
+    selection.entityIds.push_back(Ent(2));
+    const auto first = CollectBoxPickCandidates(TwoLines(), TopView(),
+        MakeBoxSelection(ScreenPoint{50.0, 450.0}, ScreenPoint{950.0, 550.0}), Tolerance());
+    selection = ApplyBoxSelection(selection, first, SelectionMode::Toggle);
+    Require(selection.entityIds.size() == 2, "足される");
+    Require(IsSelected(selection, Ent(2)), "前の選択が残る");
+    Require(IsSelected(selection, Ent(1)), "囲んだものが入る");
+    // もう一度同じ矩形で囲めば外れる。
+    selection = ApplyBoxSelection(selection, first, SelectionMode::Toggle);
+    Require(!IsSelected(selection, Ent(1)), "外れる");
+    Require(IsSelected(selection, Ent(2)), "ほかは残る");
+    Require(SelectionItemCount(selection) == 1, "件数も1件");
+}
+
+KACHA_V2_TEST(selection, 矩形は部分選択と二重にならない)
+{
+    // 線分を1つ選んでいるワイヤーを Ctrl+矩形で囲む。
+    // 物体と線分が二重に入ると、選択件数が物の数と合わなくなる。
+    const SnapScene scene = TwoSegmentsOneWire();
+    const auto edge = PickCurve(scene, TopView(), ScreenPoint{500.0, 500.0}, Tolerance());
+    Require(edge.has_value(), "線分を1つ拾える");
+    SelectionSet selection = ApplySelection(SelectionSet{}, edge, SelectionMode::Toggle);
+    Require(SelectionItemCount(selection) == 1, "1件");
+    const auto candidates = CollectBoxPickCandidates(scene, TopView(),
+        MakeBoxSelection(ScreenPoint{950.0, 550.0}, ScreenPoint{50.0, 250.0}), Tolerance());
+    Require(candidates.size() == 1, "物体1件を集める");
+    const SelectionSet toggled = ApplyBoxSelection(selection, candidates,
+        SelectionMode::Toggle);
+    Require(SelectionItemCount(toggled) == 0, "入っていた物体は外れる");
+    const SelectionSet added = ApplyBoxSelection(SelectionSet{}, candidates,
+        SelectionMode::Toggle);
+    Require(SelectionItemCount(added) == 1, "入っていなければ1件だけ足す");
+}
+
+KACHA_V2_TEST(selection, 同じ物体を2度渡しても1度だけ当てる)
+{
+    // 線と塗った形の両方から同じ物体が上がることがある。
+    std::vector<PickCandidate> candidates;
+    PickCandidate object;
+    object.entityId = Ent(1);
+    object.kind = SelectionElementKind::Object;
+    candidates.push_back(object);
+    candidates.push_back(object);
+    Require(SelectionItemCount(ApplyBoxSelection(SelectionSet{}, candidates,
+                SelectionMode::Replace)) == 1,
+        "選び直しでも1件");
+    Require(SelectionItemCount(ApplyBoxSelection(SelectionSet{}, candidates,
+                SelectionMode::Toggle)) == 1,
+        "切り替えで元へ戻らない");
+}
+
+KACHA_V2_TEST(selection, 矩形に触れるかを線分で判定できる)
+{
+    const ScreenBox box{100.0, 100.0, 200.0, 200.0};
+    Require(box.Contains(ScreenPoint{150.0, 150.0}), "中の点");
+    Require(box.Contains(ScreenPoint{100.0, 200.0}), "枠の上も中");
+    Require(!box.Contains(ScreenPoint{99.0, 150.0}), "外の点");
+    Require(BoxTouchesSegment(box, ScreenPoint{0.0, 150.0}, ScreenPoint{300.0, 150.0}),
+        "横切る");
+    Require(BoxTouchesSegment(box, ScreenPoint{150.0, 0.0}, ScreenPoint{150.0, 300.0}),
+        "縦に横切る");
+    Require(BoxTouchesSegment(box, ScreenPoint{0.0, 0.0}, ScreenPoint{300.0, 300.0}),
+        "斜めに横切る");
+    Require(!BoxTouchesSegment(box, ScreenPoint{0.0, 250.0}, ScreenPoint{300.0, 250.0}),
+        "枠の外を通る");
+    Require(!BoxTouchesSegment(box, ScreenPoint{0.0, 0.0}, ScreenPoint{50.0, 50.0}),
+        "届かない");
 }
 
 KACHA_V2_TEST_MAIN("selection_tests")

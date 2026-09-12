@@ -7,6 +7,7 @@
 //!   - 作図中の Ctrl で吸着を一時停止、Shift で水平・垂直・正方形へ固定
 //!   - 掴めるかどうかが分かるカーソル
 //!   - 重なった候補を Tab で送り、Alt+クリックで奥を選ぶ(ui-ux-integrated-spec §4.2)
+//!   - 左ドラッグの矩形選択。左から右は完全包含、右から左は交差(同 §4.2)
 //!
 //! どれも「画面が無いと確かめられない」ものではない。
 //! 判断は core(app/EscapeAction、modeling/DrawingConstraint)にある。
@@ -644,6 +645,156 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
         candidates.push_back(candidate);
     }
     return candidates;
+}
+
+std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectBoxShapeCandidates(
+    const kachakacha::v2::app::BoxSelection& request) const
+{
+    std::vector<kachakacha::v2::app::PickCandidate> candidates;
+    if (!display_.shapesVisible) {
+        return candidates;
+    }
+    for (const auto& shape : shapeViews_) {
+        // 数えるのは稜線だけにする。三角形の網まで見ると、面の内側の継ぎ目が
+        // 「触れた」を作ってしまい、塗りの中を少しかすめただけで選ばれる。
+        kachakacha::v2::app::BoxReach reach;
+        for (const auto& edge : shape.mesh.edges) {
+            kachakacha::v2::app::AccumulateBoxReach(reach, request.box, mapping_, edge);
+        }
+        if (!reach.Taken(request.kind)) {
+            continue;
+        }
+        kachakacha::v2::app::PickCandidate candidate;
+        candidate.entityId = shape.entityId;
+        candidate.kind = kachakacha::v2::app::SelectionElementKind::Object;
+        if (reach.hitPoint.has_value()) {
+            candidate.hitPoint = *reach.hitPoint;
+        }
+        candidates.push_back(candidate);
+    }
+    return candidates;
+}
+
+kachakacha::v2::app::SelectionMode V2Viewport::SelectionModeFor(
+    Qt::KeyboardModifiers modifiers)
+{
+    // Ctrl だけが選択の追加・解除。Shift は作図拘束、Alt は奥候補へ予約する。
+    return (modifiers & Qt::ControlModifier) != 0
+        ? kachakacha::v2::app::SelectionMode::Toggle
+        : kachakacha::v2::app::SelectionMode::Replace;
+}
+
+void V2Viewport::BeginBoxSelect(const QPointF& position, Qt::KeyboardModifiers modifiers)
+{
+    boxSelect_ = BoxSelect{};
+    boxSelect_.active = true;
+    boxSelect_.startPx = position;
+    boxSelect_.currentPx = position;
+    // 押した時点の選択を覚える。離すときはここから当て直す。
+    boxSelect_.selectionAtPress = selection_;
+    boxSelect_.modifiers = modifiers;
+}
+
+void V2Viewport::DragBoxSelect(const QPointF& position)
+{
+    if (!boxSelect_.active) {
+        return;
+    }
+    boxSelect_.currentPx = position;
+    // 引いている間も「最後にカーソルがあった場所」は進める。
+    // 止めると、離した直後の Tab が古い場所の候補を送る。
+    cursorPosition_ = position;
+    const auto kind = BoxSelectKind();
+    // 離す前に、どちらの取り方になるのかを言う。向きで意味が変わることは
+    // 引いている矩形を見るだけでは分からない。
+    if (!kind.has_value()) {
+        status_ = "矩形選択: あと少し引くと始まります。";
+    } else if (*kind == kachakacha::v2::app::BoxSelectionKind::Contained) {
+        status_ = "矩形選択(左から右): 完全に含まれるものだけを選びます。";
+    } else {
+        status_ = "矩形選択(右から左): 触れたものも選びます。";
+    }
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
+}
+
+QRectF V2Viewport::BoxSelectRect() const
+{
+    if (!boxSelect_.active) {
+        return QRectF();
+    }
+    return QRectF(boxSelect_.startPx, boxSelect_.currentPx).normalized();
+}
+
+std::optional<kachakacha::v2::app::BoxSelectionKind> V2Viewport::BoxSelectKind() const
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    if (!boxSelect_.active) {
+        return std::nullopt;
+    }
+    const ScreenPoint from{boxSelect_.startPx.x(), boxSelect_.startPx.y()};
+    const ScreenPoint to{boxSelect_.currentPx.x(), boxSelect_.currentPx.y()};
+    if (!kachakacha::v2::app::BoxSelectionIsMeaningful(from, to)) {
+        return std::nullopt;   // まだ「押しただけ」。矩形として扱わない。
+    }
+    return kachakacha::v2::app::MakeBoxSelection(from, to).kind;
+}
+
+void V2Viewport::CancelBoxSelect()
+{
+    if (!boxSelect_.active) {
+        return;
+    }
+    boxSelect_ = BoxSelect{};
+    status_ = "矩形選択をやめました。";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
+}
+
+bool V2Viewport::ReleaseBoxSelect(const QPointF& position)
+{
+    using kachakacha::v2::app::BoxSelectionKind;
+    using kachakacha::v2::geometry::ScreenPoint;
+    if (!boxSelect_.active) {
+        return false;
+    }
+    const ScreenPoint from{boxSelect_.startPx.x(), boxSelect_.startPx.y()};
+    const ScreenPoint to{position.x(), position.y()};
+    const auto base = boxSelect_.selectionAtPress;
+    const auto mode = SelectionModeFor(boxSelect_.modifiers);
+    boxSelect_ = BoxSelect{};
+    if (!kachakacha::v2::app::BoxSelectionIsMeaningful(from, to)) {
+        // 押しただけ。押した時点のクリック選択(SelectAt)をそのまま残す。
+        update();
+        return false;
+    }
+    cursorPosition_ = position;
+    const auto request = kachakacha::v2::app::MakeBoxSelection(from, to);
+    // 線と作図点は core が場面から集める。塗った形は画面が持つ網から集める。
+    auto candidates = kachakacha::v2::app::CollectBoxPickCandidates(session_->Scene(),
+        mapping_, request, session_->GetDocument().Snapshot().settings.tolerance,
+        PickFocusNow());
+    auto shapes = CollectBoxShapeCandidates(request);
+    candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
+        std::make_move_iterator(shapes.end()));
+    SetSelection(kachakacha::v2::app::ApplyBoxSelection(base, candidates, mode));
+    // 離した場所の候補を集め直す。矩形の前の候補を出したままだと、
+    // 次の Tab がどこの候補を送っているのか読めない。
+    RefreshPickCycle(position);
+    SyncHoverWithCandidate();
+    status_ = std::string(request.kind == BoxSelectionKind::Contained
+            ? "矩形に完全に含まれるものを選びました。選んでいるもの: "
+            : "矩形に触れたものも選びました。選んでいるもの: ")
+        + std::to_string(kachakacha::v2::app::SelectionItemCount(selection_)) + " 件";
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
+    return true;
 }
 
 std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::PickShapeAt(

@@ -1,6 +1,6 @@
 # TASK ID
 
-UI-P1-004
+UI-P1-005
 
 # Execution Mode
 
@@ -12,70 +12,59 @@ HIGH
 
 # Execution Reason
 
-既存Viewportとコンテキストメニュー内で完結するUI変更。
+事前リスクスコア1
 
 # Review Reason
 
-選択状態と入力状態をまたぐ8ファイル489行の差分であり、状態遷移と回帰を深く確認した。
+BATCHの標準レビュー深度; 自動昇格: 実差分 8ファイル/1061行、2サブシステム、差分スコア6; HIGHを使用
+
+Latest diff assessment: 実差分 8ファイル/1061行、2サブシステム、差分スコア6; HIGHを使用
 
 # Current Stage
 
-1/1: full - 完了
+1/1: full - 一括実装
+
+方向で包含と交差を分ける矩形選択
+
+
 
 # 目的
 
-右クリック位置に重なった選択候補を既存コンテキストメニューの先頭へ表示し、利用者が名前と部分要素種別を見て1件だけ確定できるようにする。同時に右ボタンをカメラ操作から外す。
+方向で包含と交差を分ける矩形選択
 
 # 背景
 
-UI-P1-003でViewportは点・曲線・形状の全候補と現在候補を一箇所に保持できるようになった。一方、現在の右クリックはV1由来のコマンドメニューだけを出し、右ボタンのドラッグはパンにも割り当てられている。仕様では右クリックは候補選択を含むコンテキストメニュー、パンは中ボタン、オービットはShift+中ボタンである。
+See the referenced specifications and current code.
 
 # 変更対象候補
 
+- `src/next/kachakacha/app/Selection.h`
+- `src/next/kachakacha/app/Selection.cpp`
 - `src/apps/cad_next/V2Viewport.h`
 - `src/apps/cad_next/V2Viewport.cpp`
-- `src/apps/cad_next/V2ViewportInput.cpp`
-- `src/apps/cad_next/V2ViewCommands.cpp`
 - `src/apps/cad_next/V2SelfTestScreen.cpp`
 
 # 変更禁止範囲
 
-- `src/next`の候補収集、候補順位、選択集合ロジックを別実装へ置き換えない。
-- 既存のコマンド台帳を複製した独自コマンドメニューを作らない。
-- 候補をEntityIdだけへ潰さず、SegmentIdやSubshapeKeyを保持する。
-- 右ボタンへパン、オービットその他のカメラ操作を割り当てない。
-- 矩形選択、選択フィルター、カーソル全面改訂、V1変更を混ぜない。
+- Do not change files unrelated to this task
+- Do not change V1
 
 # 必須仕様
 
-- 右クリックしたローカル画面位置でUI-P1-003の候補収集を更新し、その同じ候補列を表示と確定に使う。
-- 候補が複数なら既存コンテキストメニューの先頭へ選択候補の区画を置き、その後に既存の台帳由来コマンドを置く。
-- 各候補ラベルにDocumentの物体表示名と日本語の部分要素種別を含め、同名物体や同一物体の別線分・別面も区別できる補助番号を必要に応じて付ける。
-- 候補メニューで選んだ1件をSelectionMode::ReplaceとしてSelectionSetへ反映し、選択変更通知、Hover、状態表示を通常クリックと同じ整合性で更新する。
-- 候補が0件または1件でも既存コマンドメニューを失わず、空白右クリックが既存選択を勝手に消さない。
-- 右ボタン押下中の移動はカメラを一切動かさない。クリック判定距離を超えた右ドラッグの解放ではコンテキストメニューを誤表示しない。
-- 中ボタンドラッグのパンとShift+中ボタンドラッグのオービットは退行させない。
-- Qtメニュー表示と候補確定の責務境界を明示し、候補収集やApplySelectionをMainWindowへ複製しない。
+- `docs/v2/ui-ux-integrated-spec.md#42-基本操作`
 
 # 作業手順
 
-1. V2ViewportのPickCycle、右ボタン処理、V2MainWindow::ShowSelectMenu、既存自己試験を読む。
-2. Viewportから右クリック位置・候補列を既存メニュー生成側へ渡し、選択された候補番号だけをViewportへ返せる小さな境界を設計する。
-3. 候補名と部分要素種別を重複なく読める表示へ整え、既存コマンド区画より前へ追加する。
-4. 右ボタンをpanning_から分離し、移動閾値内のクリックと閾値外の無操作ドラッグを区別する。
-5. 複数候補の表示順、選択反映、空白、単一候補、右ドラッグ、中ボタン操作を自己試験へ追加する。
-6. Windowsのbuild、CTest、アプリ自己試験を通す。
+1. Inspect the relevant code
+2. Implement the smallest change
+3. Add tests
 
 # Acceptance Tests
 
-- 候補が複数ある位置の右クリックで、既存コマンドより前に候補一覧を表示する。
-- 候補には物体表示名と部分要素種別を表示し、同一物体の別Segmentまたは別Subshapeを別項目として保つ。
-- メニュー選択で指定候補だけを通常選択へ反映し、既存選択をReplaceする。
-- 空白または単一候補の右クリックでも既存コマンドメニューを利用でき、既存選択を意図せず消さない。
-- 右ドラッグでカメラが動かず、ドラッグ解放時にメニューを誤表示しない。
-- 中ドラッグのパンとShift+中ドラッグのオービットが従来どおり動く。
-- 既存のTab、Alt+クリック、Ctrl複数選択が退行しない。
-- `ctest --preset windows-msvc`と`kachakacha_cad_next.exe --self-test`が成功する。
+- 左から右は矩形に完全包含された対象だけを選ぶ
+- 右から左は矩形と交差した対象も選ぶ
+- Ctrl併用時は既存選択へ追加または解除する
+- 5 logical px未満の移動を矩形選択として扱わない
 
 # 完了条件
 

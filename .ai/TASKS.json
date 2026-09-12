@@ -192,9 +192,9 @@
     "id": "UI-P1-005",
     "title": "方向で包含と交差を分ける矩形選択",
     "phase": 1,
-    "status": "ready",
+    "status": "passed",
     "priority": "high",
-    "assigned_to": null,
+    "assigned_to": "claude",
     "dependencies": [
       "UI-P1-003"
     ],
@@ -214,14 +214,27 @@
       "Ctrl併用時は既存選択へ追加または解除する",
       "5 logical px未満の移動を矩形選択として扱わない"
     ],
-    "last_review": null,
-    "revision_count": 0
+    "last_review": {
+      "decision": "PASS",
+      "attempt": 1,
+      "stage": "full",
+      "reviewer": "claude-fallback",
+      "review_effort": "HIGH",
+      "reason": "Codex CLI account usage limit; configured Claude fallback used"
+    },
+    "revision_count": 0,
+    "execution_mode": "BATCH",
+    "review_effort": "HIGH",
+    "execution_reason": "事前リスクスコア1",
+    "review_reason": "BATCHの標準レビュー深度; 自動昇格: 実差分 8ファイル/1061行、2サブシステム、差分スコア6; HIGHを使用",
+    "current_stage": "1/1 complete",
+    "review_diff_reason": "実差分 8ファイル/1061行、2サブシステム、差分スコア6; HIGHを使用"
   },
   {
     "id": "UI-P1-006",
     "title": "意味状態別ハイライトと部分要素表示",
     "phase": 1,
-    "status": "pending",
+    "status": "ready",
     "priority": "high",
     "assigned_to": null,
     "dependencies": [
@@ -249,7 +262,7 @@
     "id": "UI-P1-007",
     "title": "選択半径とスナップヒステリシス",
     "phase": 1,
-    "status": "pending",
+    "status": "ready",
     "priority": "high",
     "assigned_to": null,
     "dependencies": [

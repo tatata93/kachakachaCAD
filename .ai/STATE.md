@@ -2,13 +2,13 @@
 
 - Current branch: `codex/v2-ui-ux-overhaul`
 - Current phase: `1`
-- Current task ID: `UI-P1-004`
+- Current task ID: `UI-P1-005`
 - Execution Mode: `BATCH`
 - Review Effort: `HIGH`
 - Current Stage: `1/1 complete`
-- Last PASS task: `UI-P1-004`
+- Last PASS task: `UI-P1-005`
 - Current status: `passed`
-- Current note: PASS after Claude fallback review; Codex CLI reached its usage limit
+- Current note: PASS; inspect and commit the task worktree
 
 ## Important design decisions
 

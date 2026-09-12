@@ -17,6 +17,7 @@
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
+#include <QString>
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"
@@ -27,6 +28,7 @@
 
 #include <cmath>
 #include <iterator>
+#include <map>
 #include <string>
 #include <utility>
 
@@ -293,19 +295,100 @@ void V2Viewport::RefreshCursorShape()
     setCursor(DrawingCrossCursor());
 }
 
-void V2Viewport::SetContextMenuCallback(std::function<void(const QPoint&)> callback)
+void V2Viewport::SetContextMenuCallback(
+    std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)> callback)
 {
     contextMenu_ = std::move(callback);
 }
 
+std::vector<QString> V2Viewport::CandidateLabels() const
+{
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    std::vector<QString> labels;
+    labels.reserve(cycle_.candidates.size());
+    for (const auto& candidate : cycle_.candidates) {
+        // 名前は文書のものをそのまま出す。画面で付け直すと、一覧と食い違う。
+        const auto* entity = session_->GetDocument().FindEntity(candidate.entityId);
+        const QString name = (entity != nullptr && !entity->displayName.empty())
+            ? QString::fromStdString(entity->displayName)
+            : QStringLiteral("名前のないもの");
+        QString label = name + QStringLiteral(" / ")
+            + QString::fromUtf8(CandidateKindNameJa(candidate.kind));
+        // 所属するまとまりも出す(ui-workflows.md §3.2)。
+        // 同じ名前の物が別のまとまりにあるとき、これが無いと見分けられない。
+        if (entity != nullptr && entity->groupId.has_value()) {
+            for (const auto& group : snapshot.groups) {
+                if (group.id == *entity->groupId && !group.displayName.empty()) {
+                    label += QStringLiteral(" (")
+                        + QString::fromStdString(group.displayName) + QStringLiteral(")");
+                    break;
+                }
+            }
+        }
+        labels.push_back(label);
+    }
+    // 同じ見出しになったものへ通し番号を足す。同じ名前の物体も、
+    // 同じ物体の別の線分・別の面も、番号が無いと一覧の上で区別できない。
+    std::map<QString, int> total;
+    for (const QString& label : labels) {
+        ++total[label];
+    }
+    std::map<QString, int> seen;
+    for (QString& label : labels) {
+        if (total[label] < 2) {
+            continue;
+        }
+        const int order = ++seen[label];
+        label += QStringLiteral(" #") + QString::number(order);
+    }
+    return labels;
+}
+
+bool V2Viewport::SelectCandidate(std::size_t index)
+{
+    if (index >= cycle_.candidates.size()) {
+        return false;
+    }
+    // 出している候補もそこへ移す。移さないと、献立で選んだものと
+    // 次のクリックで選ばれるものが食い違う。
+    cycle_.index = index;
+    SyncHoverWithCandidate();
+    SetSelection(kachakacha::v2::app::ApplySelection(selection_, CurrentCandidate(),
+        kachakacha::v2::app::SelectionMode::Replace));
+    ReportSelectionCount();
+    update();
+    return true;
+}
+
 void V2Viewport::PressRightWithoutMoving()
+{
+    // 場所を渡されなければ、最後にカーソルがあった場所で同じことをする。
+    PressRightWithoutMoving(cursorPosition_);
+}
+
+void V2Viewport::PressRightWithoutMoving(const QPointF& position)
 {
     using kachakacha::v2::modeling::DrawingTool;
     const DrawingTool tool = session_->CurrentTool();
     if (tool == DrawingTool::Select) {
         // V1と同じ。選択道具のときだけ、右クリックでメニューを出す。
-        if (contextMenu_) {
-            contextMenu_(QCursor::pos());
+        if (!contextMenu_) {
+            return;
+        }
+        // 出す候補は Hover や Tab と同じ一箇所(cycle_)から取る。
+        // 別に拾い直すと、献立に並ぶものと画面に出ているものが食い違う。
+        RefreshPickCycle(position);
+        // 重なっているときだけ一覧を出す。1件以下では選び分ける相手がいない。
+        std::vector<QString> labels;
+        if (cycle_.candidates.size() >= 2) {
+            labels = CandidateLabels();
+        }
+        const std::optional<int> chosen = contextMenu_(mapToGlobal(position.toPoint()),
+            labels);
+        // 候補を選ばなかった(台帳のコマンドを選んだ・閉じた)なら選択は動かさない。
+        // 空白の右クリックで選んでいたものが消えては、次の操作の相手がいなくなる。
+        if (chosen.has_value() && *chosen >= 0) {
+            (void)SelectCandidate(static_cast<std::size_t>(*chosen));
         }
         return;
     }

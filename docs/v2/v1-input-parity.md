@@ -14,7 +14,7 @@ V1 の `src/apps/cad/CadViewport.cpp` と `MainWindow*.cpp` を読んで書き�
 | 操作 | V1 | V2 のいま |
 | --- | --- | --- |
 | **中ボタンでドラッグ** | **画面を移動(パン)** | **無い** |
-| **右ボタンでドラッグ** | **画面を移動(パン)** | 無い(右は押した瞬間に道具を終える) |
+| **右ボタンでドラッグ** | **画面を移動(パン)** | **割り当てない**(`ui-ux-integrated-spec.md` §5.2)。引きずっても画面は動かず、献立も出ない |
 | **Shift + 中ボタンでドラッグ** | **軌道回転(オービット)** | **無い** |
 | ホイール | 拡大縮小 | 拡大縮小(同じ) |
 
@@ -178,7 +178,7 @@ V2 も同じ(打った文字がそのまま欄に入る)。
 
 | # | 中身 | 状態 | どこ |
 | --- | --- | --- | --- |
-| 1 | 中ボタン / 右ボタンで画面移動 | **済** | `V2ViewportInput.cpp` PanByPixels |
+| 1 | 中ボタンで画面移動 | **済** | `V2ViewportInput.cpp` PanByPixels。右ボタンはカメラへ割り当てない(`ui-ux-integrated-spec.md` §5.2 が V1 と違う)。右は候補一覧つきの献立だけ |
 | 2 | Shift+中ボタンで軌道回転 | **済** | `V2ViewportInput.cpp` OrbitByPixels |
 | 3 | Esc が選択へ戻る(段取り付き) | **済** | `app/EscapeAction.h` PlanEscape |
 | 4 | 作図中の Ctrl で吸着を止める | **済** | `V2ViewportInput.cpp` SetSnapSuppressedByKey |

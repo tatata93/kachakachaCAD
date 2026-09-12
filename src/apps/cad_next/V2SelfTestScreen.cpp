@@ -19,12 +19,22 @@
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/view/ViewOrientation.h"
 
+#include <QAction>
+#include <QApplication>
+#include <QEvent>
+#include <QList>
+#include <QMenu>
+#include <QMouseEvent>
+#include <QPoint>
 #include <QPointF>
 #include <QString>
 
 #include <cmath>
+#include <cstddef>
 #include <optional>
+#include <set>
 #include <string>
+#include <vector>
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -208,6 +218,261 @@ void DrawOneLine(V2MainWindow& window)
     return Explain("選ばれたのは、いま出している奥の候補",
         kachakacha::v2::app::IsSelected(viewport.Selection(),
             viewport.HoveredEntityId()));
+}
+
+//! マウスの便りを画面へ直に送る。押す・動かす・離すを本物と同じ道で通す。
+//! 公開関数を呼ぶだけでは、どのボタンがカメラを動かすのかを確かめられない。
+void SendMouse(V2Viewport& viewport, QEvent::Type type, const QPointF& local,
+    Qt::MouseButton button, Qt::MouseButtons buttons,
+    Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+{
+    QMouseEvent event(type, local, QPointF(viewport.mapToGlobal(local.toPoint())), button,
+        buttons, modifiers);
+    QApplication::sendEvent(&viewport, &event);
+}
+
+[[nodiscard]] bool CaseRightClickListsCandidatesBeforeCommands(V2MainWindow& window)
+{
+    // 重なった候補は、Tab を知らない人には選び分けられない。
+    // 右クリックの献立に名前と部分要素の種別を並べて、目で選べるようにする。
+    const auto cross = DrawCrossingLines(window);
+    if (!Explain("交わる2本を引ける", cross.has_value())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.HoverAt(*cross);
+    if (!Explain((std::string("交点では候補が2つ以上ある(実際は ")
+                     + std::to_string(viewport.CandidateCount()) + ")").c_str(),
+            viewport.CandidateCount() >= 2)) {
+        return false;
+    }
+    const std::vector<QString> labels = viewport.CandidateLabels();
+    if (!Explain("候補の数だけ見出しがある",
+            static_cast<int>(labels.size()) == viewport.CandidateCount())) {
+        return false;
+    }
+    // 名前と種別が両方無いと、どれがどれだか分からない。
+    for (const QString& label : labels) {
+        if (!Explain((std::string("見出しに名前と種別が入る(")
+                         + label.toStdString() + ")").c_str(),
+                label.contains(QStringLiteral(" / "))
+                    && !label.startsWith(QStringLiteral(" / ")))) {
+            return false;
+        }
+    }
+    // 同じ物体の別の線分でも、同じ名前の物体でも、見出しが同じでは選べない。
+    const std::set<QString> unique(labels.begin(), labels.end());
+    if (!Explain((std::string("見出しが重ならない(") + std::to_string(unique.size())
+                     + "/" + std::to_string(labels.size()) + ")").c_str(),
+            unique.size() == labels.size())) {
+        return false;
+    }
+    // 献立を組んで並びだけ見る。出してしまうと、閉じるまで返ってこない。
+    QMenu menu(&window);
+    const std::vector<QAction*> candidateActions = window.BuildSelectMenu(menu, labels);
+    if (!Explain("候補の区画が献立にできる", candidateActions.size() == labels.size())) {
+        return false;
+    }
+    const QList<QAction*> all = menu.actions();
+    const int firstCandidate = static_cast<int>(all.indexOf(candidateActions.front()));
+    const int lastCandidate = static_cast<int>(all.indexOf(candidateActions.back()));
+    if (!Explain("候補が献立に入っている", firstCandidate >= 0 && lastCandidate >= 0)) {
+        return false;
+    }
+    // 候補より前にあってよいのは見出しの区切りだけ。台帳のコマンドは後ろに来る。
+    for (int index = 0; index < firstCandidate; ++index) {
+        if (!Explain("候補より前に押せるものを置かない", all.at(index)->isSeparator())) {
+            return false;
+        }
+    }
+    QAction* undo = window.ActionFor("edit.undo");
+    if (!Explain("台帳のコマンドも残っている", undo != nullptr && all.contains(undo))) {
+        return false;
+    }
+    return Explain("台帳のコマンドは候補の後ろ",
+        static_cast<int>(all.indexOf(undo)) > lastCandidate);
+}
+
+[[nodiscard]] bool CaseRightClickMenuSelectsOneCandidate(V2MainWindow& window)
+{
+    const auto cross = DrawCrossingLines(window);
+    if (!Explain("交わる2本を引ける", cross.has_value())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    // 献立は出さずに、2件目を選んだことにする。出すと閉じるまで返ってこない。
+    std::vector<QString> shown;
+    viewport.SetContextMenuCallback(
+        [&shown](const QPoint&, const std::vector<QString>& candidates) {
+            shown = candidates;
+            return std::optional<int>(1);
+        });
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.HoverAt(*cross);
+    const EntityId front = viewport.HoveredEntityId();
+    // 先に手前の候補を選んでおく。献立の選択がそれを置き換えるかを見る。
+    viewport.SelectAt(*cross, Qt::NoModifier);
+    if (!Explain("先に手前の候補を選んでいる",
+            kachakacha::v2::app::IsSelected(viewport.Selection(), front))) {
+        return false;
+    }
+    viewport.PressRightWithoutMoving(*cross);
+    if (!Explain((std::string("献立へ候補が渡る(") + std::to_string(shown.size())
+                     + " 件)").c_str(),
+            shown.size() >= 2)) {
+        return false;
+    }
+    if (!Explain((std::string("選ばれるのは1件だけ(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1)) {
+        return false;
+    }
+    const EntityId chosen = viewport.HoveredEntityId();
+    if (!Explain("前の選択を置き換える", chosen != front
+            && !kachakacha::v2::app::IsSelected(viewport.Selection(), front))) {
+        return false;
+    }
+    return Explain("選ばれたのは献立で指した候補",
+        kachakacha::v2::app::IsSelected(viewport.Selection(), chosen));
+}
+
+[[nodiscard]] bool CaseRightClickKeepsCommandsWithoutCandidates(V2MainWindow& window)
+{
+    // 候補が無くても、少なくても、いつもの献立は出る。
+    // 出なくなると、右クリックで消す・隠すができなくなる。
+    DrawOneLine(window);
+    auto& viewport = window.Viewport();
+    bool asked = false;
+    std::size_t shownCount = 0;
+    viewport.SetContextMenuCallback(
+        [&asked, &shownCount](const QPoint&, const std::vector<QString>& candidates) {
+            asked = true;
+            shownCount = candidates.size();
+            return std::optional<int>{};
+        });
+    const auto middle = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
+    if (!Explain("線の真ん中が画面に出る", middle.has_value())) {
+        return false;
+    }
+    const QPointF onLine(middle->x, middle->y);
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    viewport.SelectAt(onLine, Qt::NoModifier);
+    const std::size_t selected = kachakacha::v2::app::SelectionItemCount(
+        viewport.Selection());
+    if (!Explain("線を1本選んでいる", selected == 1)) {
+        return false;
+    }
+    // 候補が1件の場所。選び分ける相手がいないので一覧は出さない。
+    viewport.HoverAt(onLine);
+    if (!Explain((std::string("線の上の候補は1件(実際は ")
+                     + std::to_string(viewport.CandidateCount()) + ")").c_str(),
+            viewport.CandidateCount() == 1)) {
+        return false;
+    }
+    viewport.PressRightWithoutMoving(onLine);
+    if (!Explain("1件でも献立は出る", asked)) {
+        return false;
+    }
+    if (!Explain("1件では候補一覧を出さない", shownCount == 0)) {
+        return false;
+    }
+    // 何も無いところ。ここでも献立は出て、選んでいたものは消えない。
+    asked = false;
+    shownCount = 99;
+    const QPointF blank(viewport.width() * 0.08, viewport.height() * 0.92);
+    viewport.HoverAt(blank);
+    if (!Explain("空白には候補が無い", viewport.CandidateCount() == 0)) {
+        return false;
+    }
+    viewport.PressRightWithoutMoving(blank);
+    if (!Explain("空白でも献立は出る", asked && shownCount == 0)) {
+        return false;
+    }
+    return Explain((std::string("空白の右クリックで選択が消えない(実際は ")
+                       + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                           viewport.Selection()))
+                       + " 件)").c_str(),
+        kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == selected);
+}
+
+[[nodiscard]] bool CaseRightDragDoesNotMoveTheCamera(V2MainWindow& window)
+{
+    // 右ドラッグはカメラへ割り当てない(ui-ux-integrated-spec §5.2)。
+    // 割り当てたままだと、候補を選ぶために右を押した拍子に画面が流れる。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    auto& viewport = window.Viewport();
+    int asked = 0;
+    viewport.SetContextMenuCallback([&asked](const QPoint&, const std::vector<QString>&) {
+        ++asked;
+        return std::optional<int>{};
+    });
+    const auto centerBefore = viewport.ViewCenter();
+    const auto orientationBefore = viewport.Orientation();
+    const QPointF start(viewport.width() * 0.5, viewport.height() * 0.5);
+    const QPointF away = start + QPointF(80.0, 50.0);
+    SendMouse(viewport, QEvent::MouseButtonPress, start, Qt::RightButton, Qt::RightButton);
+    SendMouse(viewport, QEvent::MouseMove, away, Qt::NoButton, Qt::RightButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, away, Qt::RightButton, Qt::NoButton);
+    if (!Explain((std::string("右ドラッグで画面が動かない(")
+                     + std::to_string((viewport.ViewCenter() - centerBefore).Length())
+                     + "mm)").c_str(),
+            (viewport.ViewCenter() - centerBefore).Length() < 1.0e-9)) {
+        return false;
+    }
+    if (!Explain("右ドラッグで視点が回らない",
+            kachakacha::v2::view::AngleBetween(orientationBefore, viewport.Orientation())
+                < 1.0e-9)) {
+        return false;
+    }
+    if (!Explain("引きずった後の解放で献立を出さない", asked == 0)) {
+        return false;
+    }
+    // 押しただけ(4px 未満)なら、いつもどおり献立を出す。
+    SendMouse(viewport, QEvent::MouseButtonPress, start, Qt::RightButton, Qt::RightButton);
+    SendMouse(viewport, QEvent::MouseMove, start + QPointF(2.0, 1.0), Qt::NoButton,
+        Qt::RightButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, start + QPointF(2.0, 1.0),
+        Qt::RightButton, Qt::NoButton);
+    return Explain("押しただけなら献立を出す", asked == 1);
+}
+
+[[nodiscard]] bool CaseMiddleDragPansAndShiftOrbits(V2MainWindow& window)
+{
+    // パンは中ボタン、オービットは Shift+中ボタン。右から外した分、ここが唯一の道になる。
+    auto& viewport = window.Viewport();
+    const auto centerBefore = viewport.ViewCenter();
+    const QPointF start(viewport.width() * 0.5, viewport.height() * 0.5);
+    const QPointF moved = start + QPointF(60.0, 0.0);
+    SendMouse(viewport, QEvent::MouseButtonPress, start, Qt::MiddleButton,
+        Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseMove, moved, Qt::NoButton, Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, moved, Qt::MiddleButton,
+        Qt::NoButton);
+    if (!Explain((std::string("中ドラッグで画面が動く(")
+                     + std::to_string((viewport.ViewCenter() - centerBefore).Length())
+                     + "mm)").c_str(),
+            (viewport.ViewCenter() - centerBefore).Length() > 1.0e-6)) {
+        return false;
+    }
+    const auto centerAfterPan = viewport.ViewCenter();
+    const auto orientationBefore = viewport.Orientation();
+    SendMouse(viewport, QEvent::MouseButtonPress, start, Qt::MiddleButton,
+        Qt::MiddleButton, Qt::ShiftModifier);
+    SendMouse(viewport, QEvent::MouseMove, moved, Qt::NoButton, Qt::MiddleButton,
+        Qt::ShiftModifier);
+    SendMouse(viewport, QEvent::MouseButtonRelease, moved, Qt::MiddleButton, Qt::NoButton,
+        Qt::ShiftModifier);
+    if (!Explain("Shift+中ドラッグで視点が回る",
+            kachakacha::v2::view::AngleBetween(orientationBefore, viewport.Orientation())
+                > 1.0e-6)) {
+        return false;
+    }
+    return Explain("Shift+中ドラッグは画面を平行移動しない",
+        (viewport.ViewCenter() - centerAfterPan).Length() < 1.0e-9);
 }
 
 [[nodiscard]] bool CaseWorkPlanesAreDrawn(V2MainWindow& window)
@@ -876,6 +1141,13 @@ std::vector<SelfTestCase> ScreenCases()
         {"Ctrlで追加と解除ができる", &CaseCtrlClickTogglesSelection},
         {"重なった候補をTabで送れる", &CaseTabCyclesOverlappingCandidates},
         {"Alt+クリックで奥の候補を選べる", &CaseAltClickTakesTheDeeperCandidate},
+        {"右クリックの献立は候補を先頭に出す",
+            &CaseRightClickListsCandidatesBeforeCommands},
+        {"献立で選んだ候補だけが選択になる", &CaseRightClickMenuSelectsOneCandidate},
+        {"候補が無くても献立は出て選択も消えない",
+            &CaseRightClickKeepsCommandsWithoutCandidates},
+        {"右ドラッグでカメラが動かない", &CaseRightDragDoesNotMoveTheCamera},
+        {"中ドラッグでパン、Shift+中でオービット", &CaseMiddleDragPansAndShiftOrbits},
         {"命令は相手がそろうまで構えて待つ", &CaseCommandWaitsForItsTargets},
     };
 }

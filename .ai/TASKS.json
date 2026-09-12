@@ -1,0 +1,315 @@
+[
+  {
+    "id": "UI-P1-001",
+    "title": "部分要素を保持する選択モデル",
+    "phase": 1,
+    "status": "passed",
+    "priority": "high",
+    "assigned_to": "codex",
+    "dependencies": [],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#41-選択参照"
+    ],
+    "files_hint": [
+      "src/next/kachakacha/app/Selection.h",
+      "src/next/kachakacha/app/Selection.cpp",
+      "tests_v2/selection_tests.cpp"
+    ],
+    "acceptance_tests": [
+      "同じワイヤーの複数線分を別々に選べる",
+      "同じ部品の複数面を安定キーで別々に選べる",
+      "選択順序を保持し、物体ID投影は重複しない"
+    ],
+    "last_review": {
+      "decision": "PASS",
+      "commit": "4f0db66"
+    },
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-002",
+    "title": "重なった選択候補の全件収集",
+    "phase": 1,
+    "status": "passed",
+    "priority": "high",
+    "assigned_to": "codex",
+    "dependencies": [
+      "UI-P1-001"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#43-候補優先順位"
+    ],
+    "files_hint": [
+      "src/next/kachakacha/app/Selection.h",
+      "src/next/kachakacha/app/Selection.cpp",
+      "src/next/kachakacha/modeling/MeshPick.h",
+      "src/next/kachakacha/modeling/MeshPick.cpp",
+      "tests_v2/selection_tests.cpp"
+    ],
+    "acceptance_tests": [
+      "点と曲線の候補を優先順位と距離の安定順で全件返す",
+      "同一Entityの別Segmentを潰さない",
+      "形状ヒットを手前から奥まで返す"
+    ],
+    "last_review": {
+      "decision": "PASS",
+      "commit": "5c507e3"
+    },
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-003",
+    "title": "Viewport候補循環と奥選択の結線",
+    "phase": 1,
+    "status": "ready",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-002"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#42-基本操作",
+      "docs/v2/ui-ux-integrated-spec.md#43-候補優先順位"
+    ],
+    "files_hint": [
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2ViewportDraw.cpp",
+      "src/apps/cad_next/V2SelfTestScreen.cpp"
+    ],
+    "objective": "既存の全候補収集をViewportへ結線し、Tab循環とAltによる奥候補選択を実装する。",
+    "background": "コアは候補を全件返せるが、Viewportは最寄り1件しか消費していない。",
+    "forbidden_changes": [
+      "SelectionまたはMeshPickの候補収集をUI側へ複製しない",
+      "MainWindow、Document、Feature DAG、幾何アルゴリズムを変更しない",
+      "右クリック候補メニューや範囲選択をこのタスクへ混ぜない",
+      "V1を変更または削除しない"
+    ],
+    "work_steps": [
+      "ViewportのHoverAt、SelectAt、keyPressEventと自己試験を読む",
+      "候補一覧と現在番号をViewportの一箇所で保持する",
+      "曲線候補と形状候補を既存APIから統合する",
+      "Tab、通常クリック、Alt+クリックを候補状態へ結線する",
+      "画面を出さない自己試験を追加する"
+    ],
+    "acceptance_tests": [
+      "重なった線でTabを押すたび候補が安定順に循環する",
+      "Tabだけでは通常選択を変更しない",
+      "Tab後の通常クリックは表示中候補を選ぶ",
+      "Alt+クリックは次または奥側の候補を選ぶ",
+      "別位置へ移動すると候補番号は決定的に先頭へ戻る",
+      "Ctrl複数選択、Shift拘束、Sスナップ抑止が退行しない",
+      "Windows CTestとアプリ自己試験が成功する"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-004",
+    "title": "右クリック選択候補メニュー",
+    "phase": 1,
+    "status": "pending",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-003"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#42-基本操作",
+      "docs/v2/ui-ux-integrated-spec.md#52-カメラ"
+    ],
+    "files_hint": [
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2SelfTestScreen.cpp"
+    ],
+    "acceptance_tests": [
+      "候補が複数ある位置の右クリックで候補一覧を先頭に表示する",
+      "候補には物体名と部分要素種別を表示する",
+      "メニュー選択で指定候補だけを通常選択へ反映する",
+      "右ドラッグをカメラ操作へ割り当てない"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-005",
+    "title": "方向で包含と交差を分ける矩形選択",
+    "phase": 1,
+    "status": "pending",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-003"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#42-基本操作"
+    ],
+    "files_hint": [
+      "src/next/kachakacha/app/Selection.h",
+      "src/next/kachakacha/app/Selection.cpp",
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2SelfTestScreen.cpp"
+    ],
+    "acceptance_tests": [
+      "左から右は矩形に完全包含された対象だけを選ぶ",
+      "右から左は矩形と交差した対象も選ぶ",
+      "Ctrl併用時は既存選択へ追加または解除する",
+      "5 logical px未満の移動を矩形選択として扱わない"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-006",
+    "title": "意味状態別ハイライトと部分要素表示",
+    "phase": 1,
+    "status": "pending",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-003"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#3-意味状態と表示"
+    ],
+    "files_hint": [
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2ViewportDraw.cpp",
+      "src/apps/cad_next/V2SelfTestScreen.cpp"
+    ],
+    "acceptance_tests": [
+      "通常、Hover、選択、Snap、Previewを別の意味状態で描く",
+      "同じワイヤーの選択線分だけを強調し他線分を選択色にしない",
+      "テーマ変更後も意味状態の区別を保つ",
+      "Previewは通常選択できない"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-007",
+    "title": "選択半径とスナップヒステリシス",
+    "phase": 1,
+    "status": "pending",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-003"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#43-候補優先順位",
+      "docs/v2/ui-ux-integrated-spec.md#61-スナップ"
+    ],
+    "files_hint": [
+      "src/next/kachakacha/geometry/GeometryTolerance.h",
+      "src/next/kachakacha/modeling/SnapEngine.h",
+      "src/next/kachakacha/modeling/SnapEngine.cpp",
+      "tests_v2/snap_tests.cpp",
+      "src/apps/cad_next/V2SelfTestInput.cpp"
+    ],
+    "acceptance_tests": [
+      "Edge 6、Vertex 8、Snap 12 logical pxを別の許容値として扱う",
+      "ズーム倍率にかかわらず画面上の選択半径を保つ",
+      "小さなポインタ揺れでスナップ候補が切り替わり続けない",
+      "Sを押している間だけスナップを無効にする"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-008",
+    "title": "カーソル状態とクリック・ドラッグ判定",
+    "phase": 1,
+    "status": "pending",
+    "priority": "medium",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-005",
+      "UI-P1-006"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#51-カーソル",
+      "docs/v2/ui-ux-integrated-spec.md#52-カメラ"
+    ],
+    "files_hint": [
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2ViewportInput.cpp",
+      "src/apps/cad_next/V2SelfTestInput.cpp"
+    ],
+    "acceptance_tests": [
+      "通常形状Hoverで指カーソルを使わない",
+      "パン、回転、作図、禁止対象で規定カーソルへ変わる",
+      "5 logical px未満をクリック、以上をドラッグとして扱う",
+      "カーソルだけに頼らずHover強調と短いラベルを併用する"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-009",
+    "title": "ツール中のカメラ操作分離",
+    "phase": 1,
+    "status": "pending",
+    "priority": "medium",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-004",
+      "UI-P1-008"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#52-カメラ",
+      "docs/v2/ui-ux-integrated-spec.md#7-toolsession"
+    ],
+    "files_hint": [
+      "src/apps/cad_next/V2Viewport.h",
+      "src/apps/cad_next/V2Viewport.cpp",
+      "src/apps/cad_next/V2ViewportInput.cpp",
+      "src/apps/cad_next/V2SelfTestInput.cpp"
+    ],
+    "acceptance_tests": [
+      "中ドラッグでパンしShift+中ドラッグでオービットする",
+      "カメラ操作中にツール点または選択を確定しない",
+      "カメラ操作後も進行中ToolSessionとPreviewを保持する",
+      "右ドラッグはカメラを動かさない"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  },
+  {
+    "id": "UI-P1-010",
+    "title": "Phase 1選択操作の統合退行試験",
+    "phase": 1,
+    "status": "pending",
+    "priority": "high",
+    "assigned_to": null,
+    "dependencies": [
+      "UI-P1-006",
+      "UI-P1-007",
+      "UI-P1-009"
+    ],
+    "spec_refs": [
+      "docs/v2/ui-ux-integrated-spec.md#4-選択モデル",
+      "docs/v2/ui-ux-integrated-spec.md#5-カーソルとマウス",
+      "docs/v2/ui-ux-integrated-spec.md#6-スナップと作図拘束"
+    ],
+    "files_hint": [
+      "tests_v2/selection_tests.cpp",
+      "tests_v2/snap_tests.cpp",
+      "tests_v2/input_scheme_tests.cpp",
+      "src/apps/cad_next/V2SelfTestScreen.cpp",
+      "docs/v2/acceptance-tests.md"
+    ],
+    "acceptance_tests": [
+      "Phase 1の選択、Hover、Cursor、Snap、Mouse、Highlightを一連操作で検証する",
+      "Ctrl、Shift、Alt、S、Tabの役割が競合しない",
+      "Windows全CTestとアプリ自己試験が成功する",
+      "受入試験文書と実装済み試験の対応が一致する"
+    ],
+    "last_review": null,
+    "revision_count": 0
+  }
+]

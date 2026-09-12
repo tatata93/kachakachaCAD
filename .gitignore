@@ -29,3 +29,9 @@ compile_commands.json
 *.bundle
 /_claudeout/
 /_*.ps1
+
+# AI orchestrator runtime output. The ledger, prompts, reports, and reviews under
+# .ai/ are intentionally tracked; only disposable command output is ignored.
+.ai/runtime/
+__pycache__/
+*.pyc

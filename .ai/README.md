@@ -148,5 +148,6 @@ logs, and the task worktree. Then change the ledger to `ready`, `revision`, or
 ## Current machine
 
 At preparation time, `codex`, Git, CMake, CTest, and PowerShell were detected.
-`claude` was not on `PATH`; execute mode will stop with `Claude Code not found`
-until the user installs/enables that CLI. The orchestrator never installs tools.
+Claude Code 2.1.268 was installed by WinGet, but its link directory was absent from
+the inherited `PATH`. The orchestrator also checks WinGet's standard link and
+`~/.local/bin`; it still never installs tools or stores authentication data.

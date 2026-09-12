@@ -4,8 +4,8 @@
 - Current phase: `1 - Selection / Hover / Cursor / Snap / Mouse / Highlight`
 - Current task ID: `UI-P1-003`
 - Last PASS task: `UI-P1-002`
-- Current blocked items: `claude` command is not available on PATH on this PC.
-- Orchestrator mode: preparation verified; real execution is blocked before mutation because the Claude CLI is unavailable.
+- Current blocked items: Claude Code 2.1.268 is installed but reports `loggedIn: false`.
+- Orchestrator mode: preparation verified; real execution is waiting for Claude authentication.
 
 ## Important design decisions
 
@@ -23,7 +23,6 @@
 ## Next action
 
 1. Validate and dry-run `UI-P1-003`.
-2. Make the `claude` CLI available on PATH without storing credentials in this
-   repository.
+2. Complete Claude Code login without storing credentials in this repository.
 3. Run `python scripts/orchestrator.py --execute --task UI-P1-003`.
 4. Review the task worktree and recorded evidence before committing/pushing.

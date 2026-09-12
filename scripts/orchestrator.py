@@ -244,7 +244,28 @@ def detect_tools() -> dict[str, str | None]:
     names = ["claude", "codex", "git", "cmake", "ctest"]
     if os.name == "nt":
         names.append("pwsh")
-    return {name: shutil.which(name) for name in names}
+    tools = {name: shutil.which(name) for name in names}
+    if not tools["claude"]:
+        tools["claude"] = _find_installed_claude()
+    return tools
+
+
+def _find_installed_claude() -> str | None:
+    candidates: list[Path] = []
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.append(
+            Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "claude.exe"
+        )
+    candidates.extend(
+        [
+            Path.home() / ".local" / "bin" / "claude.exe",
+            Path.home() / ".local" / "bin" / "claude",
+        ]
+    )
+    # WinGet uses a symlink whose target can be unreadable in a planning sandbox.
+    # lexists checks the link itself; execute mode still fails safely if it cannot run.
+    return next((str(path) for path in candidates if os.path.lexists(path)), None)
 
 
 def require_tools(tools: dict[str, str | None]) -> None:
@@ -368,7 +389,12 @@ def build_and_test_plan(worktree: Path) -> list[PlannedCommand]:
     ]
 
 
-def worker_command(worktree: Path, task_file: Path, revision_file: Path | None) -> PlannedCommand:
+def worker_command(
+    worktree: Path,
+    task_file: Path,
+    revision_file: Path | None,
+    executable: str = "claude",
+) -> PlannedCommand:
     prompt = (
         "Read .ai/prompts/CLAUDE_WORKER.md and AGENTS.md. "
         f"The active assignment is {task_file}. Implement only that task in this worktree. "
@@ -376,11 +402,14 @@ def worker_command(worktree: Path, task_file: Path, revision_file: Path | None) 
     )
     if revision_file is not None:
         prompt += f" This is a revision run; also read {revision_file}."
-    return PlannedCommand("Claude worker", ("claude", "-p", prompt), worktree)
+    return PlannedCommand("Claude worker", (executable, "-p", prompt), worktree)
 
 
 def reviewer_command(
-    worktree: Path, packet_path: Path, final_output_path: Path
+    worktree: Path,
+    packet_path: Path,
+    final_output_path: Path,
+    executable: str = "codex",
 ) -> PlannedCommand:
     prompt = (
         "Read .ai/prompts/CODEX_REVIEWER.md and the review packet at "
@@ -389,7 +418,7 @@ def reviewer_command(
     return PlannedCommand(
         "Codex reviewer",
         (
-            "codex",
+            executable,
             "exec",
             "--ephemeral",
             "--sandbox",
@@ -423,12 +452,15 @@ def dry_run(task: dict[str, Any], base_ref: str, tools: dict[str, str | None]) -
     print(f"Worktree: {worktree}")
     print(f"Current task bytes: {len(render_current_task(task).encode('utf-8'))}")
     print(f"PLAN git worktree add -b {task_branch(task['id'])} {worktree} {base_ref}")
-    worker = worker_command(worktree, task_file, None)
+    worker = worker_command(worktree, task_file, None, tools.get("claude") or "claude")
     print(f"PLAN [{worker.label}] {format_command(worker)}")
     for command in build_and_test_plan(worktree):
         print(f"PLAN [{command.label}] {format_command(command)}")
     review = reviewer_command(
-        worktree, runtime / "review-packet.md", runtime / "review-final.md"
+        worktree,
+        runtime / "review-packet.md",
+        runtime / "review-final.md",
+        tools.get("codex") or "codex",
     )
     print(f"PLAN [{review.label}] {format_command(review)}")
     for name, path in tools.items():
@@ -588,7 +620,9 @@ def run_one_task(
     revision_file: Path | None = None
     try:
         for attempt in range(max_revisions + 1):
-            worker = worker_command(worktree, runtime_task, revision_file)
+            worker = worker_command(
+                worktree, runtime_task, revision_file, tools["claude"] or "claude"
+            )
             worker_report = run_command(
                 worker, timeout_seconds, runtime / f"claude-{attempt}.log"
             )
@@ -610,7 +644,9 @@ def run_one_task(
                 packet,
             )
             final_review = runtime / f"review-final-{attempt}.md"
-            reviewer = reviewer_command(worktree, packet, final_review)
+            reviewer = reviewer_command(
+                worktree, packet, final_review, tools["codex"] or "codex"
+            )
             run_command(reviewer, timeout_seconds, runtime / f"review-{attempt}.log")
             if not final_review.exists():
                 raise OrchestratorError("Codex reviewer did not write a final decision")

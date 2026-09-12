@@ -86,6 +86,11 @@ struct CurveApproach {
     return best;
 }
 
+//! 矩形選択と認める最小の移動量(logical px)。
+//! GrabToMove の 4px とは別の門である。片方を直したつもりで両方が動くと、
+//! 「掴んだ」と「囲んだ」の境目が勝手に入れ替わる。
+constexpr double kBoxSelectMinimumDragPx = 5.0;
+
 [[nodiscard]] bool SameTarget(const SelectionRef& first, const SelectionRef& second)
 {
     if (first.entityId != second.entityId || first.kind != second.kind
@@ -209,7 +214,191 @@ struct CurveApproach {
     return candidates;
 }
 
+//! 矩形選択の途中集計。物体1つ分。
+struct BoxEntityState {
+    base::EntityId entityId;
+    BoxReach reach;
+};
+
+//! その物体の集計欄。無ければ場面の順で足す。
+//! 返した参照は、次に足すまでのあいだだけ使う。
+[[nodiscard]] BoxEntityState& BoxStateFor(std::vector<BoxEntityState>& states,
+    base::EntityId entityId)
+{
+    for (auto& state : states) {
+        if (state.entityId == entityId) {
+            return state;
+        }
+    }
+    states.push_back(BoxEntityState{entityId, BoxReach{}});
+    return states.back();
+}
+
 } // namespace
+
+bool ScreenBox::Contains(const geometry::ScreenPoint& point) const noexcept
+{
+    return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+}
+
+double BoxSelectionMinimumDragPx() noexcept
+{
+    return kBoxSelectMinimumDragPx;
+}
+
+bool BoxSelectionIsMeaningful(const geometry::ScreenPoint& start,
+    const geometry::ScreenPoint& end) noexcept
+{
+    return std::hypot(end.x - start.x, end.y - start.y) >= kBoxSelectMinimumDragPx;
+}
+
+BoxSelection MakeBoxSelection(const geometry::ScreenPoint& start,
+    const geometry::ScreenPoint& end) noexcept
+{
+    BoxSelection made;
+    made.box.minX = std::min(start.x, end.x);
+    made.box.maxX = std::max(start.x, end.x);
+    made.box.minY = std::min(start.y, end.y);
+    made.box.maxY = std::max(start.y, end.y);
+    // 取り方は横向きだけで決める(§4.2)。上下どちらへ引いても意味は変わらない。
+    made.kind = end.x >= start.x ? BoxSelectionKind::Contained : BoxSelectionKind::Crossing;
+    return made;
+}
+
+bool BoxTouchesSegment(const ScreenBox& box, const geometry::ScreenPoint& start,
+    const geometry::ScreenPoint& end) noexcept
+{
+    if (box.Contains(start) || box.Contains(end)) {
+        return true;
+    }
+    // Liang–Barsky。矩形の中に残る区間があれば触れている。
+    const double dx = end.x - start.x;
+    const double dy = end.y - start.y;
+    double enter = 0.0;
+    double leave = 1.0;
+    // denominator が厳密に0のときだけ「枠と平行」である。近似の0を許容差で丸めると、
+    // わずかに傾いた線が平行扱いになって、触れているのに落ちる。
+    // 傾きが小さいだけなら t が大きくなり、下の判定がそのまま外へ弾く。
+    const auto clip = [&enter, &leave](double denominator, double numerator) {
+        if (denominator == 0.0) {
+            return numerator >= 0.0;
+        }
+        const double t = numerator / denominator;
+        if (denominator < 0.0) {
+            if (t > leave) {
+                return false;
+            }
+            if (t > enter) {
+                enter = t;
+            }
+            return true;
+        }
+        if (t < enter) {
+            return false;
+        }
+        if (t < leave) {
+            leave = t;
+        }
+        return true;
+    };
+    return clip(-dx, start.x - box.minX) && clip(dx, box.maxX - start.x)
+        && clip(-dy, start.y - box.minY) && clip(dy, box.maxY - start.y);
+}
+
+bool BoxReach::Taken(BoxSelectionKind kind) const noexcept
+{
+    if (!projectable) {
+        // 画面に1点も出ていないものは、囲んでも触れてもいない。
+        return false;
+    }
+    return kind == BoxSelectionKind::Crossing ? touched : fullyInside;
+}
+
+void AccumulateBoxReach(BoxReach& reach, const ScreenBox& box,
+    const geometry::ScreenMapping& mapping, const std::vector<geometry::Vector3>& polyline)
+{
+    std::optional<geometry::ScreenPoint> previous;
+    for (const geometry::Vector3& world : polyline) {
+        const auto screen = mapping.Project(world);
+        if (!screen.has_value()) {
+            // 画面へ写せない点がある。「完全に入った」とは言えない。
+            reach.fullyInside = false;
+            previous.reset();
+            continue;
+        }
+        reach.projectable = true;
+        const bool inside = box.Contains(*screen);
+        if (!inside) {
+            reach.fullyInside = false;
+        }
+        // 折れ線が枠を横切るだけでも触れている。細い矩形を線が跨ぐとき、
+        // 点だけを見ていると取りこぼす。
+        const bool crosses = previous.has_value()
+            && BoxTouchesSegment(box, *previous, *screen);
+        if (inside || crosses) {
+            reach.touched = true;
+            if (!reach.hitPoint.has_value()) {
+                reach.hitPoint = world;
+            }
+        }
+        previous = *screen;
+    }
+}
+
+void AccumulateBoxCurve(BoxReach& reach, const ScreenBox& box,
+    const geometry::ScreenMapping& mapping, const geometry::CurveSegment& segment,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const auto samples = geometry::SampleCurve(segment, tolerance.interactiveJoinMm);
+    std::vector<geometry::Vector3> positions;
+    positions.reserve(samples.size());
+    for (const auto& sample : samples) {
+        positions.push_back(sample.position);
+    }
+    AccumulateBoxReach(reach, box, mapping, positions);
+}
+
+void AccumulateBoxPoint(BoxReach& reach, const ScreenBox& box,
+    const geometry::ScreenMapping& mapping, const geometry::Vector3& point)
+{
+    AccumulateBoxReach(reach, box, mapping, std::vector<geometry::Vector3>{point});
+}
+
+std::vector<PickCandidate> CollectBoxPickCandidates(const modeling::SnapScene& scene,
+    const geometry::ScreenMapping& mapping, const BoxSelection& request,
+    const geometry::GeometryTolerance& tolerance, const PickFocus& focus)
+{
+    std::vector<BoxEntityState> states;
+    for (const auto& curve : scene.curves) {
+        // 薄くして掴めなくしている線は、矩形でも掴まない。
+        // 判断はクリックと同じ一箇所(app/PlaneFocus)から出す。
+        if (!PickableOffPlaneCurve(focus.drawing, focus.dimOffPlane,
+                CurveLiesOnPlane(curve.segment, focus.plane))) {
+            continue;
+        }
+        AccumulateBoxCurve(BoxStateFor(states, curve.entityId).reach, request.box, mapping,
+            curve.segment, tolerance);
+    }
+    for (const auto& point : scene.points) {
+        AccumulateBoxPoint(BoxStateFor(states, point.entityId).reach, request.box, mapping,
+            point.position);
+    }
+    std::vector<PickCandidate> candidates;
+    for (const auto& state : states) {
+        if (!state.reach.Taken(request.kind)) {
+            continue;
+        }
+        PickCandidate candidate;
+        candidate.entityId = state.entityId;
+        // 矩形で選ぶのは対象そのもの。線分IDは付けない。
+        candidate.kind = SelectionElementKind::Object;
+        if (state.reach.hitPoint.has_value()) {
+            candidate.hitPoint = *state.reach.hitPoint;
+        }
+        candidates.push_back(candidate);
+    }
+    return candidates;
+}
 
 std::vector<PickCandidate> CollectPickCandidates(const modeling::SnapScene& scene,
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
@@ -282,6 +471,51 @@ SelectionSet ApplySelection(const SelectionSet& current,
             refs.erase(found);
         }
         return SelectionFromRefs(std::move(refs));
+    }
+    return SelectionFromRefs(std::move(refs));
+}
+
+SelectionSet ApplyBoxSelection(const SelectionSet& current,
+    const std::vector<PickCandidate>& candidates, SelectionMode mode)
+{
+    // 同じ物体を線と塗った形の両方から拾うことがある。先に1つへまとめる。
+    // まとめないと、Replace で件数が物の数と合わず、Toggle は2回当たって元へ戻る。
+    std::vector<PickCandidate> unique;
+    unique.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        const bool seen = std::any_of(unique.begin(), unique.end(), [&](const auto& kept) {
+            return kept.entityId == candidate.entityId;
+        });
+        if (!seen) {
+            unique.push_back(candidate);
+        }
+    }
+    if (mode == SelectionMode::Replace) {
+        // 矩形は「これで選び直す」。1件ずつ Replace を重ねると最後の1件しか残らない。
+        std::vector<SelectionRef> refs;
+        refs.reserve(unique.size());
+        for (const auto& candidate : unique) {
+            refs.push_back(RefFromCandidate(candidate));
+        }
+        return SelectionFromRefs(std::move(refs));
+    }
+    std::vector<SelectionRef> refs = EffectiveRefs(current);
+    for (const auto& candidate : unique) {
+        // 照合は物体単位で行う。矩形で選ぶのは対象そのものだからである。
+        // 部分要素ごとに見ると、線分を1つ選んでいるワイヤーを Ctrl+矩形で囲ったときに
+        // 「物体」と「線分」が二重に入り、選択件数が物の数と合わなくなる。
+        const bool already = std::any_of(refs.begin(), refs.end(), [&](const auto& ref) {
+            return ref.entityId == candidate.entityId;
+        });
+        if (mode == SelectionMode::Subtract || (mode == SelectionMode::Toggle && already)) {
+            refs.erase(std::remove_if(refs.begin(), refs.end(), [&](const auto& ref) {
+                return ref.entityId == candidate.entityId;
+            }), refs.end());
+            continue;
+        }
+        if (!already) {
+            refs.push_back(RefFromCandidate(candidate));
+        }
     }
     return SelectionFromRefs(std::move(refs));
 }

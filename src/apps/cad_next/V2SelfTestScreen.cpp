@@ -29,6 +29,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -473,6 +474,239 @@ void SendMouse(V2Viewport& viewport, QEvent::Type type, const QPointF& local,
     }
     return Explain("Shift+中ドラッグは画面を平行移動しない",
         (viewport.ViewCenter() - centerAfterPan).Length() < 1.0e-9);
+}
+
+//! 画面のこの2点へ矩形を引く。押す・動かす・離すを本物と同じ道で通す。
+void DragBox(V2Viewport& viewport, const QPointF& from, const QPointF& to,
+    Qt::KeyboardModifiers modifiers = Qt::NoModifier)
+{
+    SendMouse(viewport, QEvent::MouseButtonPress, from, Qt::LeftButton, Qt::LeftButton,
+        modifiers);
+    SendMouse(viewport, QEvent::MouseMove, to, Qt::NoButton, Qt::LeftButton, modifiers);
+    SendMouse(viewport, QEvent::MouseButtonRelease, to, Qt::LeftButton, Qt::NoButton,
+        modifiers);
+}
+
+//! 矩形選択を試すための下敷き。上から見た画面へ横線を2本、離して引く。
+//!
+//! 画面の位置は投影から取る。px を決め打ちすると、窓の大きさが変わった日に
+//! 「線の上」でも「線の外」でもない場所を押すことになる。
+struct BoxSelectFixture {
+    bool ready = false;
+    //! 画面で下にある線と、上にある線。どちらが世界のどの線かは問わない。
+    EntityId low;
+    EntityId high;
+    //! 下の線だけを完全に囲む枠。
+    double left = 0.0;
+    double right = 0.0;
+    double top = 0.0;
+    double bottom = 0.0;
+    //! 下の線の中ほどだけを通る、左右に狭い枠。
+    double innerLeft = 0.0;
+    double innerRight = 0.0;
+    //! 下の線の上の点。
+    QPointF onLow;
+    //! 上の線も入る枠の上端。
+    double outerTop = 0.0;
+};
+
+[[nodiscard]] BoxSelectFixture MakeBoxSelectFixture(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::Vector3;
+    BoxSelectFixture fixture;
+    auto& viewport = window.Viewport();
+    // 上から見る。線が画面と平行になり、矩形の中に入るかどうかが素直に決まる。
+    viewport.SetViewDirection(ViewDirection::Top);
+    // 見える範囲を決めておく。倍率と注視点が動いたままだと、線が画面の外へ出て
+    // 「押した場所に何も無い」だけの失敗になる。
+    viewport.SetViewCenter(Vector3{0.0, 0.0, 0.0});
+    viewport.SetVisibleWidthMm(120.0);
+    // 操作板は右上にあるので、線は中心より左へ置く。
+    if (!DrawLineBetween(window, Vector3{-40.0, -10.0, 0.0}, Vector3{0.0, -10.0, 0.0})
+        || !DrawLineBetween(window, Vector3{-40.0, 20.0, 0.0}, Vector3{0.0, 20.0, 0.0})) {
+        return fixture;
+    }
+    const auto first = viewport.Mapping().Project(Vector3{-40.0, -10.0, 0.0});
+    const auto firstEnd = viewport.Mapping().Project(Vector3{0.0, -10.0, 0.0});
+    const auto second = viewport.Mapping().Project(Vector3{-40.0, 20.0, 0.0});
+    if (!first.has_value() || !firstEnd.has_value() || !second.has_value()) {
+        return fixture;
+    }
+    // どちらが画面の下に来るかは視点の作り方が決める。画面の値から選ぶ。
+    // 世界の y の向きを当てにすると、視点の定義が変わった日に静かに壊れる。
+    const double lowY = std::max(first->y, second->y);
+    const double highY = std::min(first->y, second->y);
+    // 2本が十分離れていることを確かめてから使う。近いと「完全包含だけ」を
+    // 確かめたつもりで別のことを見てしまう。
+    if (lowY - highY < 40.0) {
+        return fixture;
+    }
+    // 枠は線から 16px 離す。線の当たり判定(8px)と制御点(9px)より広いので、
+    // 枠の角を押しても線を掴んだことにならない。
+    const double middleX = (first->x + firstEnd->x) * 0.5;
+    fixture.left = std::min(first->x, firstEnd->x) - 16.0;
+    fixture.right = std::max(first->x, firstEnd->x) + 16.0;
+    fixture.top = lowY - 16.0;
+    fixture.bottom = lowY + 16.0;
+    fixture.innerLeft = middleX - 10.0;
+    fixture.innerRight = middleX + 10.0;
+    fixture.onLow = QPointF(middleX, lowY);
+    fixture.outerTop = highY - 16.0;
+    // どちらがどのワイヤーかは、押して選んで決める。作った順に頼らない。
+    const auto identify = [&viewport](const QPointF& at) {
+        viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+        viewport.SelectAt(at, Qt::NoModifier);
+        return viewport.Selection().entityIds.size() == 1
+            ? viewport.Selection().entityIds.front()
+            : EntityId{};
+    };
+    fixture.low = identify(fixture.onLow);
+    fixture.high = identify(QPointF(middleX, highY));
+    if (fixture.low.IsNil() || fixture.high.IsNil() || fixture.low == fixture.high) {
+        return fixture;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    fixture.ready = true;
+    return fixture;
+}
+
+[[nodiscard]] bool CaseBoxSelectSplitsByDirection(V2MainWindow& window)
+{
+    // 矩形は向きで意味が変わる(ui-ux-integrated-spec §4.2)。
+    // 変わらないと、囲って選ぶのと触って選ぶのを使い分けられず、
+    // 込み合った図面では毎回「余計なものまで付いてくる」ことになる。
+    const BoxSelectFixture fixture = MakeBoxSelectFixture(window);
+    if (!Explain("離れた横線2本を用意できる", fixture.ready)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    // 左から右。1本目を完全に囲む。2本目は枠の外なので入らない。
+    DragBox(viewport, QPointF(fixture.left, fixture.top),
+        QPointF(fixture.right, fixture.bottom));
+    if (!Explain((std::string("左から右は囲んだものだけを選ぶ(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.low))) {
+        return false;
+    }
+    // 左から右で、端が枠から出ている線は選ばない。ここで選ぶと「囲む」の意味が無い。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    DragBox(viewport, QPointF(fixture.innerLeft, fixture.top),
+        QPointF(fixture.innerRight, fixture.bottom));
+    if (!Explain((std::string("一部だけ入った線は左から右では選ばない(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 0)) {
+        return false;
+    }
+    // 右から左。同じ枠でも、触れている線を選ぶ。
+    DragBox(viewport, QPointF(fixture.innerRight, fixture.bottom),
+        QPointF(fixture.innerLeft, fixture.top));
+    if (!Explain((std::string("右から左は交差した線も選ぶ(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.low))) {
+        return false;
+    }
+    // 2本まとめて囲めば2本。矩形は前の選択を置き換える。
+    DragBox(viewport, QPointF(fixture.left, fixture.outerTop),
+        QPointF(fixture.right, fixture.bottom));
+    if (!Explain((std::string("2本まとめて囲める(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 2)) {
+        return false;
+    }
+    // 引いている間は、どちらの取り方になるのかが画面から読める。
+    SendMouse(viewport, QEvent::MouseButtonPress, QPointF(fixture.left, fixture.top),
+        Qt::LeftButton, Qt::LeftButton);
+    SendMouse(viewport, QEvent::MouseMove, QPointF(fixture.right, fixture.bottom),
+        Qt::NoButton, Qt::LeftButton);
+    const bool showsBox = viewport.BoxSelecting()
+        && viewport.BoxSelectKind().has_value()
+        && *viewport.BoxSelectKind() == kachakacha::v2::app::BoxSelectionKind::Contained;
+    const bool hasSize = viewport.BoxSelectRect().width() > 0.0
+        && viewport.BoxSelectRect().height() > 0.0;
+    SendMouse(viewport, QEvent::MouseButtonRelease, QPointF(fixture.right, fixture.bottom),
+        Qt::LeftButton, Qt::NoButton);
+    if (!Explain("引いている間は完全包含の矩形を出す", showsBox)) {
+        return false;
+    }
+    if (!Explain("矩形の大きさが読める", hasSize)) {
+        return false;
+    }
+    return Explain("離したら矩形は消える", !viewport.BoxSelecting());
+}
+
+[[nodiscard]] bool CaseBoxSelectAddsWithCtrlAndIgnoresSmallDrags(V2MainWindow& window)
+{
+    // Ctrl 併用は既存選択への足し引き、5px 未満はただのクリック。
+    // 小さな手ぶれで矩形が始まると、押しただけのつもりで選択が入れ替わる。
+    const BoxSelectFixture fixture = MakeBoxSelectFixture(window);
+    if (!Explain("離れた横線2本を用意できる", fixture.ready)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    // まず2本目だけを選んでおく。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    DragBox(viewport, QPointF(fixture.left, fixture.outerTop),
+        QPointF(fixture.right, fixture.top - 1.0));
+    if (!Explain((std::string("2本目だけを囲める(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.high))) {
+        return false;
+    }
+    // Ctrl+矩形で1本目を足す。置き換えては、離れた場所のものをまとめて選べない。
+    DragBox(viewport, QPointF(fixture.left, fixture.top),
+        QPointF(fixture.right, fixture.bottom), Qt::ControlModifier);
+    if (!Explain((std::string("Ctrl+矩形は既存選択へ足す(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 2
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.low)
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.high))) {
+        return false;
+    }
+    // 同じところをもう一度 Ctrl+矩形で囲めば外れる。
+    DragBox(viewport, QPointF(fixture.left, fixture.top),
+        QPointF(fixture.right, fixture.bottom), Qt::ControlModifier);
+    if (!Explain((std::string("Ctrl+矩形は入っていれば外す(実際は ")
+                     + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                         viewport.Selection()))
+                     + " 件)").c_str(),
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1
+                && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.high))) {
+        return false;
+    }
+    // 5px 未満しか動かさなければ矩形として扱わない。
+    // 1本目の上で押して少し動かすだけなら、そのままクリックとして1本選ぶ。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    SendMouse(viewport, QEvent::MouseButtonPress, fixture.onLow, Qt::LeftButton,
+        Qt::LeftButton);
+    SendMouse(viewport, QEvent::MouseMove, fixture.onLow + QPointF(3.0, 2.0), Qt::NoButton,
+        Qt::LeftButton);
+    const bool noKindYet = !viewport.BoxSelectKind().has_value();
+    SendMouse(viewport, QEvent::MouseButtonRelease, fixture.onLow + QPointF(3.0, 2.0),
+        Qt::LeftButton, Qt::NoButton);
+    if (!Explain("5px 未満では矩形を出さない", noKindYet)) {
+        return false;
+    }
+    return Explain((std::string("5px 未満はクリックとして1本選ぶ(実際は ")
+                       + std::to_string(kachakacha::v2::app::SelectionItemCount(
+                           viewport.Selection()))
+                       + " 件)").c_str(),
+        kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == 1
+            && kachakacha::v2::app::IsSelected(viewport.Selection(), fixture.low));
 }
 
 [[nodiscard]] bool CaseWorkPlanesAreDrawn(V2MainWindow& window)
@@ -1146,6 +1380,9 @@ std::vector<SelfTestCase> ScreenCases()
         {"献立で選んだ候補だけが選択になる", &CaseRightClickMenuSelectsOneCandidate},
         {"候補が無くても献立は出て選択も消えない",
             &CaseRightClickKeepsCommandsWithoutCandidates},
+        {"矩形選択は向きで包含と交差を分ける", &CaseBoxSelectSplitsByDirection},
+        {"Ctrl+矩形で足し引きし、小さな動きは矩形にしない",
+            &CaseBoxSelectAddsWithCtrlAndIgnoresSmallDrags},
         {"右ドラッグでカメラが動かない", &CaseRightDragDoesNotMoveTheCamera},
         {"中ドラッグでパン、Shift+中でオービット", &CaseMiddleDragPansAndShiftOrbits},
         {"命令は相手がそろうまで構えて待つ", &CaseCommandWaitsForItsTargets},

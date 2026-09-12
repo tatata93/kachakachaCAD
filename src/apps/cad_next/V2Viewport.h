@@ -233,6 +233,28 @@ public:
     //! Alt はいま出している候補の **次(奥)** を選ぶ(ui-ux-integrated-spec §4.2)。
     void SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers);
 
+    //! 矩形選択(ui-ux-integrated-spec §4.2)。
+    //!
+    //! **左から右は完全に含まれたものだけ、右から左は触れたものも。**
+    //! 向きで意味を変えるのは、同じ手つきで「囲って選ぶ」と「触って選ぶ」を
+    //! 使い分けるためである。取り方と当たり判定は core(app/Selection)が決める。
+    //!
+    //! 押した場所で構え、引きずって広げ、離して決める。
+    //! 押した時点の1件選択(SelectAt)は残したまま構えるので、
+    //! 引きずらずに離せば、ただのクリックのままになる。
+    void BeginBoxSelect(const QPointF& position, Qt::KeyboardModifiers modifiers);
+    void DragBoxSelect(const QPointF& position);
+    //! 離す。矩形として扱える大きさなら選択を決め直して true。
+    //! 5 logical px 未満しか動いていなければ何もしない(判断は core)。
+    bool ReleaseBoxSelect(const QPointF& position);
+    //! 引くのをやめる。選択は押した直後のままにする。
+    void CancelBoxSelect();
+    [[nodiscard]] bool BoxSelecting() const noexcept { return boxSelect_.active; }
+    //! いま引いている矩形。引いていなければ空。描画と試験から見る。
+    [[nodiscard]] QRectF BoxSelectRect() const;
+    //! いま引いている矩形の取り方。引いていなければ値を持たない。
+    [[nodiscard]] std::optional<kachakacha::v2::app::BoxSelectionKind> BoxSelectKind() const;
+
     //! 重なった候補を1つ送る(Tab / Shift+Tab)。送れたら true。
     //!
     //! **通常選択は変えない。** 動くのは「いま出している候補」= Hover だけである。
@@ -508,6 +530,18 @@ private:
     //! 塗った形の候補を手前から順に。奥の形を手前より先に選ばない。
     [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> CollectShapeCandidatesAt(
         const QPointF& position) const;
+    //! 矩形に入る塗った形。稜線を core の規則(app/AccumulateBoxReach)で数える。
+    //!
+    //! 線と点は core が場面から集める。形は画面が持っている網なので、ここで見る。
+    //! 数え方は core と同じ1か所に寄せる。別に書くと、線と形で
+    //! 「完全に入った」の意味が食い違う。
+    [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> CollectBoxShapeCandidates(
+        const kachakacha::v2::app::BoxSelection& request) const;
+    //! 修飾キーから選択の更新方法を決める。クリックと矩形で同じ規則にする。
+    [[nodiscard]] static kachakacha::v2::app::SelectionMode SelectionModeFor(
+        Qt::KeyboardModifiers modifiers);
+    //! 引いている矩形を出す。取り方が読めるように、包含と交差で線を変える。
+    void DrawBoxSelect(QPainter& painter) const;
     //! 候補一覧を集め直す。別の場所へ移ったか中身が変わったら番号を先頭へ戻す。
     void RefreshPickCycle(const QPointF& position);
     //! 候補一覧を捨てる。文書が変わったら呼ぶ。無いものを送り続けないため。
@@ -531,6 +565,18 @@ private:
         std::size_t index = 0;
     };
     PickCycle cycle_;
+
+    //! 矩形選択の途中。Hover / Selection / 候補一覧とは別の状態である。混ぜない。
+    struct BoxSelect {
+        bool active = false;
+        QPointF startPx;
+        QPointF currentPx;
+        //! 押した時点の選択。矩形はここから当て直す。押した拍子の1件選択を
+        //! 足し込むと、囲んでいないものが混ざる。
+        kachakacha::v2::app::SelectionSet selectionAtPress;
+        Qt::KeyboardModifiers modifiers = Qt::NoModifier;
+    };
+    BoxSelect boxSelect_;
 
     kachakacha::v2::app::DrawingSession* session_ = nullptr;
     ViewportPalette palette_ = ViewportPalette::Dark();

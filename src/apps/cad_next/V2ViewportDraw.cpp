@@ -442,6 +442,25 @@ void V2Viewport::DrawSnap(QPainter& painter) const
         QString::fromUtf8(std::string(SnapKindLabelJa(kind)).c_str()));
 }
 
+void V2Viewport::DrawBoxSelect(QPainter& painter) const
+{
+    const auto kind = BoxSelectKind();
+    if (!kind.has_value()) {
+        // まだ矩形として扱わない大きさ。枠を出すと「効いている」と誤解させる。
+        return;
+    }
+    // 取り方を線の形で見せる。完全包含は実線、交差は破線。
+    // 色だけで分けると、どちらが厳しい取り方なのかを覚えていないと読めない。
+    const bool contained = *kind == kachakacha::v2::app::BoxSelectionKind::Contained;
+    const QColor ink = palette_.selected;
+    painter.setPen(QPen(ink, 1.4, contained ? Qt::SolidLine : Qt::DashLine));
+    QColor fill = ink;
+    fill.setAlphaF(0.10);
+    painter.setBrush(fill);
+    painter.drawRect(BoxSelectRect());
+    painter.setBrush(Qt::NoBrush);
+}
+
 void V2Viewport::DrawScaleBar(QPainter& painter) const
 {
     const double pixelsPerMm = mapping_.PixelsPerMillimeterAt(center_);

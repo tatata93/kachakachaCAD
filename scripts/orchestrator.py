@@ -55,6 +55,14 @@ class OrchestratorError(RuntimeError):
     """Expected stop condition with a user-facing explanation."""
 
 
+def configure_console_encoding() -> None:
+    """Keep Japanese task/report text readable in captured Windows output."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 @dataclass(frozen=True)
 class PlannedCommand:
     label: str
@@ -699,4 +707,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    configure_console_encoding()
     raise SystemExit(main())

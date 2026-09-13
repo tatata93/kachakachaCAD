@@ -213,3 +213,45 @@ Blockingとする。
 REGRESSION RISKS: 今回のコールバックはSession/Viewport所有境界にあり、ウィンドウ終了、ビュー差し替え、将来の複数ビューに影響する。`P1-EXTRUDE-R1` はR10修正を含む固定範囲でレビューすること。
 
 NEXT_ACTION: Claudeがlifetime-safeな追加修正commitを作成し、`UI-P1-007-S1-R10` をキューへ追加する。
+
+---
+
+# Codex Review: UI-P1-007-S1-R10
+
+REQUEST_ID: UI-P1-007-S1-R10
+TASK_ID: UI-P1-007
+PHASE: UI-P1-007 Stage 1/2 remediation
+BASE: 9b942b9
+HEAD: c224d49
+VERDICT: PASS WITH FIXES
+BLOCKING BEFORE NEXT PHASE: NO
+
+## RESULT
+
+R9で指摘した所有権と寿命の問題は解消した。`DrawingSession` はコールバックを
+無条件に保持せず、購読者が持つトークンの `weak_ptr` で生存を判定する。
+`V2Viewport` の破棄でトークンが消え、以後の `SetScene()` で破棄済み `this` は呼ばれない。
+
+場面交換時のViewport一時状態も無条件に破棄される。候補送り試験は
+`candidatesBefore > 0` を必須前提にし、差し替え後に0件であることを検査している。
+
+## NON-BLOCKING FIXES
+
+1. `NotifySceneChanged()` は呼出し前に全callbackを複製する。先のcallbackが後の購読者を破棄する再入ケースでは、複製済みcallbackが残る。現在の `OnSceneReplaced()` は他Viewportを破棄しないため現行UIのBlockingにはしないが、将来の複数ビュー対応前に「通知中の購読解除」試験と無効化フラグ付き接続を追加すること。
+2. `SceneChangedToken` が `shared_ptr<void>` で、解除の意味が型に表れない。通知が増える段階で専用のmove-only connection型へ整理すると、誤コピーによる予期しない寿命延長を防げる。
+
+## VALIDATION
+
+- 固定範囲の実装、寿命試験2件、Qt自己試験の修正をコードレビューした。
+- Claude側の報告は雲core CTest 127/127 PASS。
+- Codex側のWindows再ビルドはMSBuild環境の `Path`/`PATH` 重複でコンパイラ起動前に停止。これは実装起因とは判定しないが、Windows最新バイナリ検証は未完了。
+
+## CLAUDE PATCH REQUEST
+
+- UI-P1-007のR7〜R10で扱ったBlockingは解消済みとして受け入れる。追加のR11は不要。
+- PC往復でWindows build、CTest全件、自己試験を実施し、失敗があれば別REQUEST_IDで修正する。
+- 上記NON-BLOCKING FIXESを後続の状態基盤作業へ登録する。
+
+REGRESSION RISKS: scene通知は文書開き直し、Undo/Redo、作業平面、グリッド、複数Viewportに影響する。現行の単一Viewport経路は受け入れ可能。
+
+NEXT_ACTION: ClaudeがUI-P1-007を受け入れ済みに更新し、`P1-EXTRUDE-R1` が完成・固定されたら次のレビューを提出する。

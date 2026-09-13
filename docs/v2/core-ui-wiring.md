@@ -34,7 +34,6 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `geometry/CurveJoin.h` | 曲線のつなぎ(角の処理) | `wire.join` は別の道(`WireConnect`)を通っている。どちらを残すか決めてから |
 | `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
-| `fabrication/ReliefCut.h` | 二重曲率を逃がす切れ目 | 近似(V2方式)を繋ぐとき |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
@@ -43,6 +42,11 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 
 ### 繋いだもの
 
+- `fabrication/ReliefCut.h`(2026-09-13)。利用者が引いた切れ目を、型紙にする前に
+  §7.5 の条件で検査するようにした。深すぎる切れ目、開口へ食い込む切れ目、
+  交わる切れ目、先端から縁までの残りが足りない切れ目を断る。
+  それまでは一度も検査されずに型紙へ載っていて、切ってから分かるほかなかった。
+  上限はまだ既定値(深さは部材幅の 55%、残りは 0.5mm)で、画面から変えられない。
 - `fabrication/CurvatureAnalysis.h`(2026-09-13)。V2方式で面を展開するとき、
   断るときも通るときも曲がり方を測るようにした。断る文に
   「円筒の面です」「二重に曲がっています。測った点のうち 62% が…」

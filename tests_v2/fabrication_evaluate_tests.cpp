@@ -169,6 +169,35 @@ KACHA_V2_TEST(fabrication_evaluate, 切れ目は平らな部材に入り閉じ�
         std::string("FAB-M003"), "載っていなければ FAB-M003");
 }
 
+KACHA_V2_TEST(fabrication_evaluate, 千切れる切れ目は型紙にしない)
+{
+    // ここまで、利用者が引いた切れ目は一度も検査されずに型紙へ載っていた。
+    // 深すぎる切れ目は、切った瞬間に部材が千切れる。切ってから分かるのでは遅い。
+    FabricationSource flat;
+    flat.name = "板";
+    const auto line = [](Vector3 a, Vector3 b) {
+        return CurveSegment::MakeLine(a, b).Value();
+    };
+    flat.flatBoundary = std::vector<CurveSegment>{line({0, 0, 0}, {100, 0, 0}),
+        line({100, 0, 0}, {100, 60, 0}), line({100, 60, 0}, {0, 60, 0}),
+        line({0, 60, 0}, {0, 0, 0})};
+
+    // 縦 60mm の板を、下の縁から 59.8mm まで切る。残りは 0.2mm しかない。
+    FabricationMarkings tearing;
+    tearing.reliefCuts.push_back({line({50, 0, 0}, {50, 59.8, 0})});
+    const auto refused = EvaluateFabrication(Definition(0), {flat}, tearing, 0.01);
+    Require(!refused.HasValue(), "断る");
+    const std::string code = refused.Diagnostics().front().code;
+    Require(code == "FAB-C002" || code == "FAB-C005",
+        "深すぎるか、残りが足りないと言う (実際 " + code + ")");
+
+    // 25mm までなら通る。上の試験と同じ切れ目である。
+    FabricationMarkings safe;
+    safe.reliefCuts.push_back({line({50, 0, 0}, {50, 25, 0})});
+    Require(EvaluateFabrication(Definition(0), {flat}, safe, 0.01).HasValue(),
+        "無理のない切れ目は通る");
+}
+
 KACHA_V2_TEST(fabrication_evaluate, 元が無ければ断る)
 {
     const auto made = EvaluateFabrication(Definition(1), {}, FabricationMarkings{}, 0.01);

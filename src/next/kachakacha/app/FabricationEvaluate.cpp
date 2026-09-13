@@ -1,5 +1,7 @@
 #include "kachakacha/app/FabricationEvaluate.h"
 
+#include "kachakacha/fabrication/ReliefCut.h"
+
 #include "kachakacha/app/FabricationOpenings.h"
 
 #include "kachakacha/fabrication/CurvedPanel.h"
@@ -28,6 +30,48 @@ using fabrication::PatternPanel;
         text.pop_back();
     }
     return text;
+}
+
+//! 型紙になった部材の切れ目を、まとめて検査する。断る理由だけを返す。
+//!
+//! 検査の中身は core(fabrication/ReliefCut)にある。ここは型紙の形を
+//! そちらの言葉へ詰め替えるだけである。
+//!
+//! 上限は既定値を使う(深さは部材幅の 55% まで、先端から縁まで 0.5mm 以上)。
+//! 画面から変えられるようにするのは次の段。いまは **検査が無い** ほうが問題である。
+[[nodiscard]] std::vector<base::Diagnostic> CheckReliefCutsOnPanels(
+    const std::vector<PatternPanel>& panels, double toleranceMm)
+{
+    const fabrication::FabricationSettings settings;
+    std::vector<base::Diagnostic> problems;
+    for (const PatternPanel& panel : panels) {
+        if (panel.reliefCuts.empty()) {
+            continue;
+        }
+        fabrication::ReliefPanel target;
+        target.panelId = panel.panelId;
+        target.outline = panel.outline;
+        target.openings = panel.openings;
+        std::vector<fabrication::ReliefCut> cuts;
+        cuts.reserve(panel.reliefCuts.size());
+        for (std::size_t index = 0; index < panel.reliefCuts.size(); ++index) {
+            fabrication::ReliefCut cut;
+            // 名前は「どの部材の何本目か」。番号だけだと、部材が増えたときに追えない。
+            cut.cutId = panel.panelId + " の切れ目 " + std::to_string(index + 1);
+            cut.centerPath = panel.reliefCuts[index];
+            // 利用者が引いたのは1本の線なので、まっすぐな切れ目として見る。
+            cut.shape = fabrication::ReliefShape::StraightSlit;
+            cuts.push_back(std::move(cut));
+        }
+        const auto validated = fabrication::ValidateReliefCuts(target, cuts, settings,
+            toleranceMm);
+        if (!validated.HasValue()) {
+            for (const auto& diagnostic : validated.Diagnostics()) {
+                problems.push_back(diagnostic);
+            }
+        }
+    }
+    return problems;
 }
 
 //! 平らな部材を作る。開口と折り線は、外周と同じ平面に載っている部材へ入れる。
@@ -71,7 +115,20 @@ using fabrication::PatternPanel;
         }
         planar[*chosen].reliefCuts.push_back(cut);
     }
-    return fabrication::BuildPlanarPanels(planar, toleranceMm);
+    auto built = fabrication::BuildPlanarPanels(planar, toleranceMm);
+    if (!built.HasValue()) {
+        return built;
+    }
+    // 切れ目が、部材を千切ったり小片を落としたりしないかを確かめる(§7.5)。
+    //
+    // ここまで、利用者が引いた切れ目は一度も検査されずに型紙へ載っていた。
+    // 深すぎる切れ目、開口へ食い込む切れ目、交わる切れ目は、
+    // 切ってから初めて分かる。材料を使い切ったあとで分かるのがいちばん困る。
+    const auto checked = CheckReliefCutsOnPanels(built.Value(), toleranceMm);
+    if (!checked.empty()) {
+        return Out::Failure(checked);
+    }
+    return built;
 }
 
 //! V2 方式: 面ごとに「伸ばさずに平らにできるか」を検査して展開する。

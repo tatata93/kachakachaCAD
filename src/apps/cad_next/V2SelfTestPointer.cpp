@@ -264,6 +264,105 @@ void PressDragRelease(V2Viewport& viewport, const QPointF& from,
         kachakacha::v2::app::SelectionItemCount(viewport.Selection()) == selectedBefore);
 }
 
+[[nodiscard]] bool CaseCameraDoesNotFinishAGrab(V2MainWindow& window)
+{
+    // 掴んで動かしている最中に中ボタンを押して離すと、そこで移動が
+    // 確定していた。離すボタンを見ていなかったからである(§5.2)。
+    const auto middle = DrawOneLineAndPickMiddle(window);
+    if (!Explain("線を1本引ける", middle.has_value())) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SelectAt(*middle, Qt::NoModifier);
+    if (!Explain("線を選べた",
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) >= 1)) {
+        return false;
+    }
+    const std::uint64_t before = window.Session().GetDocument().Snapshot().revision;
+    // 左で掴んで、門を越えるまで引く。まだ離さない。
+    SendMouse(viewport, QEvent::MouseButtonPress, *middle, Qt::LeftButton, Qt::LeftButton);
+    SendMouse(viewport, QEvent::MouseMove, *middle + QPointF(40.0, 25.0), Qt::NoButton,
+        Qt::LeftButton);
+    // ここで中ボタンを押して離す。掴みを終わらせてはいけない。
+    SendMouse(viewport, QEvent::MouseButtonPress, *middle + QPointF(40.0, 25.0),
+        Qt::MiddleButton, Qt::LeftButton | Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, *middle + QPointF(40.0, 25.0),
+        Qt::MiddleButton, Qt::LeftButton);
+    if (!Explain("中ボタンでは掴みが終わらない",
+            window.Session().GetDocument().Snapshot().revision == before)) {
+        // 後片付け。掴んだままにしない。
+        SendMouse(viewport, QEvent::MouseButtonRelease, *middle + QPointF(40.0, 25.0),
+            Qt::LeftButton, Qt::NoButton);
+        return false;
+    }
+    // 左を離せば、そこで初めて確定する。
+    SendMouse(viewport, QEvent::MouseButtonRelease, *middle + QPointF(40.0, 25.0),
+        Qt::LeftButton, Qt::NoButton);
+    return Explain("左を離したときに確定する",
+        window.Session().GetDocument().Snapshot().revision != before);
+}
+
+[[nodiscard]] bool CaseCameraKeepsTheHalfDrawnLine(V2MainWindow& window)
+{
+    // §5.2「カメラ操作後も進行中 ToolSession と Preview を保持する」。
+    // 引きかけの線があるとき、画面を送っても点は消えない。
+    auto& viewport = window.Viewport();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    const auto start = viewport.Mapping().Project(Vector3{0.0, 0.0, 0.0});
+    if (!Explain("始点を画面へ写せる", start.has_value())) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    viewport.ClickAt(QPointF(start->x, start->y));
+    const std::size_t placed = window.Session().PlacedPointCount();
+    if (!Explain("1点置けた", placed == 1)) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    const std::uint64_t before = window.Session().GetDocument().Snapshot().revision;
+    // 中ボタンで画面を送る。引きかけの点は残る。
+    const QPointF from(viewport.width() * 0.6, viewport.height() * 0.6);
+    SendMouse(viewport, QEvent::MouseButtonPress, from, Qt::MiddleButton,
+        Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseMove, from + QPointF(70.0, 40.0), Qt::NoButton,
+        Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, from + QPointF(70.0, 40.0),
+        Qt::MiddleButton, Qt::NoButton);
+    const bool kept = window.Session().PlacedPointCount() == placed;
+    const bool quiet = window.Session().GetDocument().Snapshot().revision == before;
+    const bool sameTool =
+        window.Session().CurrentTool() == kachakacha::v2::modeling::DrawingTool::Line;
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (!Explain("引きかけの点が残る", kept)) {
+        return false;
+    }
+    if (!Explain("画面を送っただけでは線ができない", quiet)) {
+        return false;
+    }
+    return Explain("道具も変わらない", sameTool);
+}
+
+[[nodiscard]] bool CaseLeftClickDuringPanPlacesNothing(V2MainWindow& window)
+{
+    // 画面を送っている最中の左押しは受けない。受けると、送っている途中に
+    // 作図点が置かれる。中ボタンを押したまま左を押す持ち方は珍しくない。
+    auto& viewport = window.Viewport();
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    const std::size_t placed = window.Session().PlacedPointCount();
+    const QPointF from(viewport.width() * 0.4, viewport.height() * 0.4);
+    SendMouse(viewport, QEvent::MouseButtonPress, from, Qt::MiddleButton,
+        Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseButtonPress, from + QPointF(10.0, 10.0),
+        Qt::LeftButton, Qt::LeftButton | Qt::MiddleButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, from + QPointF(10.0, 10.0),
+        Qt::LeftButton, Qt::MiddleButton);
+    const bool quiet = window.Session().PlacedPointCount() == placed;
+    SendMouse(viewport, QEvent::MouseButtonRelease, from + QPointF(10.0, 10.0),
+        Qt::MiddleButton, Qt::NoButton);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("送っている最中は点が置かれない", quiet);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -275,6 +374,9 @@ std::vector<SelfTestCase> PointerCases()
         {"右でなぞった後は献立を出さない", CaseRightDragDoesNotOpenTheMenu},
         {"カーソルの形が仕様どおり", CaseCursorFollowsTheSpec},
         {"画面を動かしても文書と選択が変わらない", CaseCameraAndObjectDoNotFight},
+        {"中ボタンでは掴みが終わらない", CaseCameraDoesNotFinishAGrab},
+        {"画面を送っても引きかけの線が残る", CaseCameraKeepsTheHalfDrawnLine},
+        {"送っている最中の左押しでは点が置かれない", CaseLeftClickDuringPanPlacesNothing},
     };
 }
 

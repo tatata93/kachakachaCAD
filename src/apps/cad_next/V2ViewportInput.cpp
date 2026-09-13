@@ -1106,10 +1106,21 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     // 中ボタンは画面を動かす(V1同等)。Shift+中ボタンは軌道回転。
     // 押した時点では動かさず、引きずってから決める。
     if (event->button() == Qt::MiddleButton) {
+        // 物を掴んでいる最中・矩形を引いている最中は、画面を動かさない(§5.2)。
+        // 受けると、離したときにどちらの操作が終わったのか決まらない。
+        if (controlDrag_.active || bodyDrag_.active || boxSelect_.active) {
+            return;
+        }
         panning_ = true;
         orbiting_ = (event->modifiers() & Qt::ShiftModifier) != 0;
         lastDragPosition_ = event->position();
         RefreshCursorShape();
+        return;
+    }
+    // 画面を動かしている最中の左押しは受けない(§5.2「カメラ操作中に
+    // ツール入力や選択を誤確定しない」)。受けると、画面を送っている途中に
+    // 作図点が置かれたり、選択が入れ替わったりする。
+    if (panning_) {
         return;
     }
     kachakacha::v2::view::AxisArrowModifier modifier =
@@ -1162,11 +1173,19 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         }
         return;
     }
+    // 掴みを終えるのは、掴み始めた左ボタンだけである。
+    // ボタンを見ないでいたころ、掴んでいる最中に中ボタンを押して離すと、
+    // そこで移動が確定していた(§5.2「カメラ操作中に誤確定しない」)。
     if (controlDrag_.active) {
-        (void)ReleaseControlPointDrag(event->position());
+        if (event->button() == Qt::LeftButton) {
+            (void)ReleaseControlPointDrag(event->position());
+        }
         return;
     }
     if (bodyDrag_.active) {
+        if (event->button() != Qt::LeftButton) {
+            return;
+        }
         // 引きずっていなければ選び直しになる。掴んだ場所で選び直す。
         if (!ReleaseBodyDrag(event->position())) {
             SelectAt(event->position(), event->modifiers());
@@ -1179,6 +1198,9 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
     if (panning_) {
+        if (event->button() != Qt::MiddleButton) {
+            return;   // 画面を動かし終えるのは中ボタンだけ。
+        }
         panning_ = false;
         orbiting_ = false;
         RefreshCursorShape();

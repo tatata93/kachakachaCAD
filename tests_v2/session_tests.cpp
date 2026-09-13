@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 using kachakacha::v2::app::DrawingSession;
@@ -497,18 +499,19 @@ KACHA_V2_TEST(session, 聞き手が先に消えても場面の知らせで落ち
 {
     // UI-P1-007 R9 の指摘。画面は Session より先に消える。
     // 素の関数を預けると、窓を閉じたあとの SetScene で消えた this を呼ぶ。
-    // 札(戻り値)を持っている間だけ呼ばれる形にしてある。
+    // 綱(戻り値)を持っている間だけ呼ばれる形にしてある。
     Fixture fixture;
     int called = 0;
     {
-        const auto token = fixture.session.OnSceneChanged([&called] { ++called; });
+        const auto tie = fixture.session.OnSceneChanged([&called] { ++called; });
+        Require(tie.Connected(), "綱が繋がっている");
         fixture.session.SetScene(PlaneScene());
-        RequireCount(static_cast<std::size_t>(called), 1, "札を持っている間は呼ばれる");
+        RequireCount(static_cast<std::size_t>(called), 1, "綱を持っている間は呼ばれる");
     }
-    // 札を捨てた。ここから先は呼ばれない。呼ばれたら消えた相手を触っている。
+    // 綱を手放した。ここから先は呼ばれない。呼ばれたら消えた相手を触っている。
     fixture.session.SetScene(PlaneScene());
     fixture.session.SetScene(PlaneScene());
-    RequireCount(static_cast<std::size_t>(called), 1, "札を捨てたら呼ばれない");
+    RequireCount(static_cast<std::size_t>(called), 1, "綱を手放したら呼ばれない");
 }
 
 KACHA_V2_TEST(session, 聞き手は何人でも登録できる)
@@ -516,14 +519,51 @@ KACHA_V2_TEST(session, 聞き手は何人でも登録できる)
     Fixture fixture;
     int first = 0;
     int second = 0;
-    const auto tokenA = fixture.session.OnSceneChanged([&first] { ++first; });
+    const auto tieA = fixture.session.OnSceneChanged([&first] { ++first; });
     {
-        const auto tokenB = fixture.session.OnSceneChanged([&second] { ++second; });
+        const auto tieB = fixture.session.OnSceneChanged([&second] { ++second; });
         fixture.session.SetScene(PlaneScene());
     }
     fixture.session.SetScene(PlaneScene());
     RequireCount(static_cast<std::size_t>(first), 2, "残っている相手は呼ばれ続ける");
     RequireCount(static_cast<std::size_t>(second), 1, "消えた相手はもう呼ばれない");
+}
+
+KACHA_V2_TEST(session, 知らせの最中に綱を切られた相手は呼ばれない)
+{
+    // UI-P1-007 R10 の非阻害指摘。写しを取ってから回すので、
+    // 先に呼ばれた相手が後の相手の綱を切っても、写しのほうが残って呼んでしまう。
+    // 呼ぶ直前にもう一度綱を見る。将来ビューを増やしたときに効く。
+    Fixture fixture;
+    int second = 0;
+    DrawingSession::SceneChangedConnection later;
+    const auto first = fixture.session.OnSceneChanged([&later] { later.Disconnect(); });
+    later = fixture.session.OnSceneChanged([&second] { ++second; });
+    fixture.session.SetScene(PlaneScene());
+    RequireCount(static_cast<std::size_t>(second), 0,
+        "知らせの最中に切られた相手は呼ばれない");
+    Require(!later.Connected(), "切れている");
+}
+
+KACHA_V2_TEST(session, 綱は写せないが移せる)
+{
+    // 写せると、手放したつもりの綱が残って呼ばれ続ける。移すのは許す。
+    static_assert(!std::is_copy_constructible_v<DrawingSession::SceneChangedConnection>,
+        "綱は写せない");
+    static_assert(std::is_move_assignable_v<DrawingSession::SceneChangedConnection>,
+        "綱は移せる");
+    Fixture fixture;
+    int called = 0;
+    DrawingSession::SceneChangedConnection moved;
+    {
+        auto tie = fixture.session.OnSceneChanged([&called] { ++called; });
+        moved = std::move(tie);
+    }
+    fixture.session.SetScene(PlaneScene());
+    RequireCount(static_cast<std::size_t>(called), 1, "移した先が持っていれば呼ばれる");
+    moved.Disconnect();
+    fixture.session.SetScene(PlaneScene());
+    RequireCount(static_cast<std::size_t>(called), 1, "切れば呼ばれない");
 }
 
 KACHA_V2_TEST_MAIN("session_tests")

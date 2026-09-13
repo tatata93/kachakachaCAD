@@ -80,13 +80,48 @@ public:
     //! ここを1本にしておくのは、`SetScene` の呼び口が10か所以上あるためである。
     //! 呼び口ごとに後始末を書くと、必ずどれかが抜ける。実際に抜けた。
     //!
-    //! **返ってきた札を持っている間だけ呼ばれる。** 札を捨てれば呼ばれなくなる。
+    //! **返ってきた綱を持っている間だけ呼ばれる。** 綱を手放せば呼ばれなくなる。
     //! 素の `std::function` を持たせると、聞き手(画面)が先に消えたときに
     //! 消えた `this` を呼んでしまう。窓を閉じる・画面を差し替える・
     //! 将来ビューを増やす、のどれでも起きる。
-    //! 札を会員が持つ形にすれば、どちらが先に消えても落ちない。
-    using SceneChangedToken = std::shared_ptr<void>;
-    [[nodiscard]] SceneChangedToken OnSceneChanged(std::function<void()> callback);
+    //! 綱を会員が持つ形にすれば、どちらが先に消えても落ちない。
+    class SceneChangedConnection {
+    public:
+        SceneChangedConnection() = default;
+        SceneChangedConnection(SceneChangedConnection&&) noexcept = default;
+        SceneChangedConnection& operator=(SceneChangedConnection&& other) noexcept
+        {
+            if (this != &other) {
+                Disconnect();
+                alive_ = std::move(other.alive_);
+            }
+            return *this;
+        }
+        // 写せないようにする。写すと、手放したつもりの綱が残って呼ばれ続ける。
+        SceneChangedConnection(const SceneChangedConnection&) = delete;
+        SceneChangedConnection& operator=(const SceneChangedConnection&) = delete;
+        ~SceneChangedConnection() { Disconnect(); }
+
+        //! 綱を切る。以後この聞き手は呼ばれない。二度切っても構わない。
+        void Disconnect() noexcept
+        {
+            if (alive_) {
+                *alive_ = false;
+                alive_.reset();
+            }
+        }
+        [[nodiscard]] bool Connected() const noexcept { return alive_ && *alive_; }
+
+    private:
+        friend class DrawingSession;
+        explicit SceneChangedConnection(std::shared_ptr<bool> alive)
+            : alive_(std::move(alive))
+        {
+        }
+        std::shared_ptr<bool> alive_;
+    };
+
+    [[nodiscard]] SceneChangedConnection OnSceneChanged(std::function<void()> callback);
     [[nodiscard]] const SnapScene& Scene() const noexcept { return scene_; }
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
@@ -175,9 +210,9 @@ private:
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
     modeling::SnapHysteresis snapHysteresis_;
-    //! 場面の入れ替わりを聞いている相手。札(weak_ptr)が切れたものは呼ばない。
+    //! 場面の入れ替わりを聞いている相手。綱が切れたものは呼ばない。
     struct SceneListener {
-        std::weak_ptr<void> token;
+        std::weak_ptr<bool> alive;
         std::function<void()> callback;
     };
 

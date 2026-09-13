@@ -129,9 +129,9 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
     // 場面が入れ替わったら、出している一時表示も捨てる。
     // 呼び口ごとに後始末を書くと、必ずどれかが抜ける。ここ1本にする。
     //
-    // 札は会員が持つ。この画面が先に消えれば札も消え、もう呼ばれない。
+    // 綱は会員が持つ。この画面が先に消えれば綱も切れ、もう呼ばれない。
     // 素の関数を預けると、窓を閉じたあとの SetScene で消えた this を呼ぶ。
-    sceneChangedToken_ = session_->OnSceneChanged([this] { OnSceneReplaced(); });
+    sceneChanged_ = session_->OnSceneChanged([this] { OnSceneReplaced(); });
 }
 
 //! 場面が入れ替わった。文書を開く、Undo/Redo、作業平面やグリッドの変更で通る。

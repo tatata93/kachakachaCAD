@@ -81,13 +81,13 @@ void DrawingSession::SetScene(SnapScene scene)
     NotifySceneChanged();
 }
 
-DrawingSession::SceneChangedToken DrawingSession::OnSceneChanged(
+DrawingSession::SceneChangedConnection DrawingSession::OnSceneChanged(
     std::function<void()> callback)
 {
-    // 札そのものは中身を持たない。生きているかどうかだけを表す。
-    auto token = std::make_shared<char>('\0');
-    sceneListeners_.push_back(SceneListener{token, std::move(callback)});
-    return token;
+    // 綱そのものは「生きているか」だけを表す。
+    auto alive = std::make_shared<bool>(true);
+    sceneListeners_.push_back(SceneListener{alive, std::move(callback)});
+    return SceneChangedConnection(std::move(alive));
 }
 
 void DrawingSession::NotifySceneChanged()
@@ -96,18 +96,26 @@ void DrawingSession::NotifySceneChanged()
     //
     // 呼ぶ前に写しを取る。聞き手の中で場面をもう一度替えられても、
     // いま回している並びが作り替えられないようにするためである。
-    std::vector<std::function<void()>> alive;
-    alive.reserve(sceneListeners_.size());
+    //
+    // 写しは **綱ごと** 取る。関数だけを写すと、先に呼んだ相手が後の相手の綱を
+    // 切っても、写しのほうが残っていて呼んでしまう。呼ぶ直前にもう一度見る。
+    std::vector<SceneListener> snapshot;
+    snapshot.reserve(sceneListeners_.size());
     for (auto listener = sceneListeners_.begin(); listener != sceneListeners_.end();) {
-        if (listener->token.expired()) {
-            listener = sceneListeners_.erase(listener);   // 消えた相手は呼ばない
+        const auto alive = listener->alive.lock();
+        if (!alive || !*alive) {
+            listener = sceneListeners_.erase(listener);   // 切れた相手は呼ばない
             continue;
         }
-        alive.push_back(listener->callback);
+        snapshot.push_back(*listener);
         ++listener;
     }
-    for (const auto& callback : alive) {
-        callback();
+    for (const auto& listener : snapshot) {
+        const auto alive = listener.alive.lock();
+        if (!alive || !*alive) {
+            continue;   // 直前の相手がここの綱を切った。呼ばない。
+        }
+        listener.callback();
     }
 }
 

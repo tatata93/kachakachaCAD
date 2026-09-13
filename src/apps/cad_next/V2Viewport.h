@@ -775,9 +775,9 @@ private:
     double visibleWidthMm_ = 200.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;
     kachakacha::v2::app::HoverResult hover_;
-    //! 場面の入れ替わりを聞いている札。これが消えると呼ばれなくなる。
-    //! この画面より Session のほうが長生きするので、札はこちらが持つ。
-    kachakacha::v2::app::DrawingSession::SceneChangedToken sceneChangedToken_;
+    //! 場面の入れ替わりを聞いている綱。これを手放すと呼ばれなくなる。
+    //! この画面より Session のほうが長生きするので、綱はこちらが持つ。
+    kachakacha::v2::app::DrawingSession::SceneChangedConnection sceneChanged_;
     std::string status_;
     std::function<void(const std::string&)> statusCallback_;
     std::function<void()> selectionChangedCallback_;

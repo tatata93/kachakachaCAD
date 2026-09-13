@@ -160,18 +160,36 @@ void V2MainWindow::RunExtrude()
     using kachakacha::v2::modeling::ExtrudeRequest;
 
     const auto& selection = viewport_->Selection();
+    // 何を選んだかで、押し出しが何を意味するかが決まる(オーナー指示 2026-09-14)。
+    // 読み取りは core(app/ExtrudePlan)。立体と輪郭の順番は問わない。
+    const auto plan = PlanExtrudeFromSelection();
+    if (!plan.readyToPreview) {
+        // 「先にワイヤーを選んでください」で終わらせない。
+        // いま何が決まっていて、次に何を選べばよいのかまで言う。
+        SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
+        return;
+    }
     auto profiles = ExtrudeProfilesFor(selection.entityIds);
     if (profiles.empty()) {
-        SetStatus(QStringLiteral("押し出し: 先にワイヤーを選んでください。"));
+        // 面だけの押し引きは、まだカーネルに道が無い。できないと言う。
+        SetStatus(QStringLiteral("押し出し: 面の押し引きはまだできません。"
+                                 "閉じた輪郭を選んでください。"));
         return;
     }
     // 何を作るか、どこまで押すかを選ばせる。core は7通りの向きと5通りの終端を
     // 持っているのに、画面が1通りに固定していた。工程の案内はそれを前提に
     // 書いてあるので、案内と実物が食い違っていた。
     const auto facts = BuildExtrudeFacts(profiles);
+    // いまの選択をどう読んだかを、決める前に見せる。
+    SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
     kachakacha::v2::app::ExtrudeChoice choice = extrudeChoice_;
     choice.distanceMm = ExtrudeDistanceMm();
     choice.hasSelectedPart = facts.parts > 0;
+    // 立体を選んでいるなら、既定の操作は読み取りに従う(窓を開けるなら切削)。
+    // 覚えていた前回の操作より、いま選んでいるものの意味を優先する。
+    if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
+        choice.booleanMode = plan.defaultOperation;
+    }
     if (extrudeChooser_) {
         const auto answered = extrudeChooser_(choice, facts);
         if (!answered.has_value()) {

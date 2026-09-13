@@ -640,6 +640,55 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return Explain("選択へ戻ったら途中経過も残らない", !viewport.HasPreview());
 }
 
+[[nodiscard]] bool CaseExtrudeReadsTheSelection(V2MainWindow& window)
+{
+    // EX-03 の入口。立体だけを選んだとき、「不正な入力です」で終わらせない。
+    // いま何が決まっていて、次に何を選べばよいのかまで言う。
+    using kachakacha::v2::app::ExtrudeInputKind;
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+
+    // 何も選んでいない。
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    const auto empty = window.PlanExtrudeFromSelection();
+    if (!Explain("何も選んでいなければ Nothing", empty.kind == ExtrudeInputKind::Nothing)) {
+        return false;
+    }
+    if (!Explain("次にすることを言う", !empty.needsJa.empty())) {
+        return false;
+    }
+
+    // 閉じた輪郭を1つ引いて選ぶ。四角を描く。
+    const double pxPerMm = 200.0 / 200.0;
+    (void)pxPerMm;
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    const QPointF corner(viewport.width() * 0.35, viewport.height() * 0.35);
+    viewport.ClickAt(corner);
+    viewport.ClickAt(corner + QPointF(80.0, 60.0));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire));
+    const auto profile = window.PlanExtrudeFromSelection();
+    if (!Explain((std::string("閉じた輪郭だけなら ProfileOnly(実際 ")
+                     + std::string(kachakacha::v2::app::ExtrudeInputKindNameJa(profile.kind))
+                     + ")")
+                     .c_str(),
+            profile.kind == ExtrudeInputKind::ProfileOnly)) {
+        return false;
+    }
+    if (!Explain("すぐ下見できる", profile.readyToPreview)) {
+        return false;
+    }
+    // 読み取った意味が日本語で出ること。内部の言葉を出さないこと。
+    const QString text = window.ExtrudePlanTextJa();
+    if (!Explain((std::string("輪郭として読む(実際 ") + text.toStdString() + ")").c_str(),
+            text.contains(QStringLiteral("輪郭")))) {
+        return false;
+    }
+    return Explain("内部の言葉を出さない", !text.contains(QStringLiteral("Wire")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -660,6 +709,7 @@ std::vector<SelfTestCase> PointerCases()
         {"診断情報をコピーできる", CaseDiagnosticsCopyWorks},
         {"診断の各欄が道具に追従する", CaseDiagnosticsFollowsTheTool},
         {"道具を続けて替えても前の状態が残らない", CaseToolSwitchLeavesNothingBehind},
+        {"押し出しが選択を読んで次を案内する", CaseExtrudeReadsTheSelection},
     };
 }
 

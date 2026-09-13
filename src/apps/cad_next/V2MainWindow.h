@@ -40,6 +40,7 @@
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/fabrication/FreezeState.h"
 #include "kachakacha/app/DiagnosticReport.h"
+#include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
@@ -116,6 +117,12 @@ public:
     //! 貼り板を使わずに中身を見られるので、自己試験からも読める。
     [[nodiscard]] kachakacha::v2::app::DiagnosticSnapshot DiagnosticSnapshotNow() const;
     [[nodiscard]] QString DiagnosticText() const;
+
+    //! 選んだものから、押し出しが何を意味するかを読み取る(オーナー指示 2026-09-14)。
+    //! 立体と輪郭の順番は問わない。型で役割が決まる。
+    [[nodiscard]] kachakacha::v2::app::ExtrudePlan PlanExtrudeFromSelection() const;
+    //! その読み取りを日本語にしたもの。画面と試験が同じ文を見る。
+    [[nodiscard]] QString ExtrudePlanTextJa() const;
     //! 診断を貼り板へ入れる。
 
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。

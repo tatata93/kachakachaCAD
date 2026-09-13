@@ -235,6 +235,17 @@ void AccumulateBoxPoint(BoxReach& reach, const ScreenBox& box,
 [[nodiscard]] bool IsSelected(const SelectionSet& selection, base::EntityId entityId);
 [[nodiscard]] bool IsSelected(const SelectionSet& selection, const SelectionRef& target);
 
+//! その線分が選択に入っているか。
+//!
+//! 物体ごと選んだときはその物体の全線分、線分を選んだときは **その線分だけ**。
+//! EntityId だけで見ると、ワイヤーの1本を選んだだけで折れ線ぜんぶが
+//! 選択色になり、いま何を相手にしているのか読めなくなる(§4.1)。
+//!
+//! 規則は SelectedCurves と同じ1か所から出す。別に書くと、
+//! 「書き出し・測定の対象」と「画面で強調される線」が食い違う。
+[[nodiscard]] bool IsCurveSelected(const SelectionSet& selection, base::EntityId entityId,
+    base::SegmentId segmentId);
+
 //! 部分要素を含む選択件数。画面の「選択中 n 件」はこちらを使う。
 [[nodiscard]] std::size_t SelectionItemCount(const SelectionSet& selection);
 

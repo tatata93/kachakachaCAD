@@ -562,6 +562,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/RailwayNoseSample.cpp
     src/next/kachakacha/app/SceneBuilder.cpp
     src/next/kachakacha/app/Selection.cpp
+    src/next/kachakacha/app/SemanticState.cpp
     src/next/kachakacha/app/ExportPanel.cpp
     src/next/kachakacha/app/CommandAvailability.cpp
     src/next/kachakacha/app/CommandParameters.cpp
@@ -815,6 +816,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(railway_nose_sample_tests tests_v2/railway_nose_sample_tests.cpp)
     kachakacha_add_v2_test(scene_builder_tests tests_v2/scene_builder_tests.cpp)
     kachakacha_add_v2_test(selection_tests tests_v2/selection_tests.cpp)
+    kachakacha_add_v2_test(semantic_state_tests tests_v2/semantic_state_tests.cpp)
     kachakacha_add_v2_test(export_panel_tests tests_v2/export_panel_tests.cpp)
     kachakacha_add_v2_test(export_service_tests tests_v2/export_service_tests.cpp)
     kachakacha_add_v2_test(acceptance_er_tests tests_v2/acceptance_er_tests.cpp)
@@ -888,6 +890,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
+        src/apps/cad_next/V2SelfTestSemantics.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDialog.cpp
         src/apps/cad_next/V2PartDock.cpp

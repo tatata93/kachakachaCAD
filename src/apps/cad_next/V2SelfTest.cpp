@@ -71,6 +71,8 @@ namespace {
     cases.insert(cases.end(), edit.begin(), edit.end());
     const std::vector<SelfTestCase> screen = ScreenCases();
     cases.insert(cases.end(), screen.begin(), screen.end());
+    const std::vector<SelfTestCase> semantics = SemanticStateCases();
+    cases.insert(cases.end(), semantics.begin(), semantics.end());
     const std::vector<SelfTestCase> guide = GuideCases();
     cases.insert(cases.end(), guide.begin(), guide.end());
     const std::vector<SelfTestCase> fabrication = FabricationCases();

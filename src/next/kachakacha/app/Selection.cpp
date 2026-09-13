@@ -104,6 +104,23 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
         || first.subshapeKey->ToString() == second.subshapeKey->ToString();
 }
 
+//! その選択参照が、この線分を覆っているか。
+//!
+//! 物体を選んだ参照は全線分を覆い、線分を選んだ参照はその線分だけを覆う。
+//! 点・面・制御点・作業平面の参照は線を覆わない。
+[[nodiscard]] bool RefCoversCurve(const SelectionRef& ref, base::EntityId entityId,
+    base::SegmentId segmentId)
+{
+    if (ref.entityId != entityId) {
+        return false;
+    }
+    if (ref.kind != SelectionElementKind::Object && ref.kind != SelectionElementKind::Edge) {
+        return false;
+    }
+    return !(ref.kind == SelectionElementKind::Edge && ref.segmentId.has_value()
+        && *ref.segmentId != segmentId);
+}
+
 [[nodiscard]] std::vector<SelectionRef> EffectiveRefs(const SelectionSet& selection)
 {
     std::vector<SelectionRef> refs = selection.ordered;
@@ -536,6 +553,15 @@ bool IsSelected(const SelectionSet& selection, const SelectionRef& target)
     });
 }
 
+bool IsCurveSelected(const SelectionSet& selection, base::EntityId entityId,
+    base::SegmentId segmentId)
+{
+    const auto refs = EffectiveRefs(selection);
+    return std::any_of(refs.begin(), refs.end(), [&](const auto& ref) {
+        return RefCoversCurve(ref, entityId, segmentId);
+    });
+}
+
 std::size_t SelectionItemCount(const SelectionSet& selection)
 {
     return EffectiveRefs(selection).size();
@@ -592,15 +618,7 @@ std::vector<geometry::CurveSegment> SelectedCurves(const SelectionSet& selection
     std::vector<std::pair<base::EntityId, base::SegmentId>> added;
     for (const auto& ref : EffectiveRefs(selection)) {
         for (const auto& curve : scene.curves) {
-            if (curve.entityId != ref.entityId) {
-                continue;
-            }
-            if (ref.kind == SelectionElementKind::Edge && ref.segmentId.has_value()
-                && curve.segmentId != *ref.segmentId) {
-                continue;
-            }
-            if (ref.kind != SelectionElementKind::Object
-                && ref.kind != SelectionElementKind::Edge) {
+            if (!RefCoversCurve(ref, curve.entityId, curve.segmentId)) {
                 continue;
             }
             const auto key = std::make_pair(curve.entityId, curve.segmentId);

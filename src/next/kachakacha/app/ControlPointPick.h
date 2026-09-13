@@ -4,7 +4,8 @@
 //!
 //! V1は9pxで拾っていた。線そのものの当たり判定(8px)より少し広い。
 //! 制御点の方が狙いにくいので、広くしておかないと掴めない。
-//! 制御点は **選んでいるワイヤーにだけ** 出す。全部に出すと画面が埋まる。
+//! 制御点は **選んでいる線分にだけ** 出す。全部に出すと画面が埋まる。
+//! 物体ごと選んでいれば、その物体の全線分が選んでいる線分である。
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/ControlPointEdit.h"
@@ -25,7 +26,8 @@ struct ShownControlPoint {
     std::string_view labelJa;
 };
 
-//! 選んでいるワイヤーの制御点をすべて集める。画面に四角を出すために使う。
+//! 選んでいる線分の制御点をすべて集める。画面に四角を出すために使う。
+//! どの線分を選んでいるかは IsCurveSelected と同じ規則で決める。
 [[nodiscard]] std::vector<ShownControlPoint> ControlPointsForSelection(
     const modeling::SnapScene& scene, const SelectionSet& selection);
 

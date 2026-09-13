@@ -144,4 +144,46 @@ KACHA_V2_TEST(fabrication_options, 部材番号の欄はカンマ区切りで読
         "字は断る");
 }
 
+
+KACHA_V2_TEST(fabrication_options, 切れ目の上限は材料ごとに決められる)
+{
+    // 紙とプラ板と真鍮で、残してよい幅は違う。隠した既定値にしない。
+    FabricationChoice choice;
+    Require(CheckFabricationChoice(choice).HasValue(), "既定は通る");
+    choice.maximumReliefDepthRatio = 0.30;
+    choice.minimumReliefLigamentMm = 0.15;
+    Require(CheckFabricationChoice(choice).HasValue(), "薄い紙向けの値も通る");
+
+    // 幅いっぱいは切れ目ではない。切った時点で2枚になる。
+    choice = FabricationChoice{};
+    choice.maximumReliefDepthRatio = 1.0;
+    const auto tooDeep = CheckFabricationChoice(choice);
+    Require(!tooDeep.HasValue(), "1.0 は断る");
+    RequireEqual(tooDeep.Diagnostics().front().code, std::string("UI-F007"), "UI-F007");
+
+    choice = FabricationChoice{};
+    choice.maximumReliefDepthRatio = 0.0;
+    Require(!CheckFabricationChoice(choice).HasValue(), "0 も断る");
+
+    choice = FabricationChoice{};
+    choice.minimumReliefLigamentMm = 0.0;
+    const auto noLigament = CheckFabricationChoice(choice);
+    Require(!noLigament.HasValue(), "残す幅 0 は断る");
+    RequireEqual(noLigament.Diagnostics().front().code, std::string("UI-F007"), "UI-F007");
+}
+
+KACHA_V2_TEST(fabrication_options, 切れ目の上限は定義と行き来する)
+{
+    kachakacha::v2::domain::CreateFabricationModelDefinition definition;
+    FabricationChoice choice;
+    choice.maximumReliefDepthRatio = 0.42;
+    choice.minimumReliefLigamentMm = 0.25;
+    ApplyFabricationChoice(definition, choice);
+    Require(definition.maximumReliefDepthRatio == 0.42, "定義へ入る");
+    Require(definition.minimumReliefLigamentMm == 0.25, "定義へ入る");
+    const auto back = FabricationChoiceOf(definition);
+    Require(back.maximumReliefDepthRatio == 0.42, "定義から戻る");
+    Require(back.minimumReliefLigamentMm == 0.25, "定義から戻る");
+}
+
 KACHA_V2_TEST_MAIN("fabrication_options")

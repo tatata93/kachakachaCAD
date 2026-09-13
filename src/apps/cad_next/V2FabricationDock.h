@@ -102,6 +102,9 @@ private:
     QDoubleSpinBox* maxParts_ = nullptr;
     QDoubleSpinBox* minWidth_ = nullptr;
     QDoubleSpinBox* fidelity_ = nullptr;
+    //! 切れ目の上限。材料で変わるので、隠した既定値にしない。
+    QDoubleSpinBox* reliefDepth_ = nullptr;
+    QDoubleSpinBox* reliefLigament_ = nullptr;
     QDoubleSpinBox* thickness_ = nullptr;
     QDoubleSpinBox* deviation_ = nullptr;
     QDoubleSpinBox* assembly_ = nullptr;

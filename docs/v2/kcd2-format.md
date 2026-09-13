@@ -918,6 +918,10 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 `masterPercent` `creaseProgress` `bandProgress` に加えて、2026-09-11 から面の範囲
 `rangeUMin` `rangeUMax` `rangeVMin` `rangeVMax`(V1 の plate_range。u は列方向、v は行方向の
 0〜1)を持つ。無ければ 0〜1 全体として読む(古い文書はそのまま開ける)。
+2026-09-13 から切れ目の上限 `maximumReliefDepthRatio`(部材の幅に対する深さの比、
+0 より大きく 1 より小さい)と `minimumReliefLigamentMm`(切れ目の先から向こう側の縁まで
+残す最小の幅)も持つ。紙とプラ板と真鍮で残してよい幅が違うため、文書に付いて回らせる。
+無ければ 0.55 と 0.5(0.3mm 厚のプラ板の値)として読む。
 材料と積層は Feature ではなく Entity の `manufacturing`(`materialName` `layerCount` など)に持つ
 (V1 の plate の材料と plate_laminate に当たる)。
 

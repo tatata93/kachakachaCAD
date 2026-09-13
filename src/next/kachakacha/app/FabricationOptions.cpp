@@ -18,6 +18,7 @@ constexpr const char* kBadPartCount = "UI-F002";
 constexpr const char* kBadMinimumWidth = "UI-F003";
 constexpr const char* kBadFidelity = "UI-F004";
 constexpr const char* kBadRange = "UI-F005";
+constexpr const char* kBadReliefLimit = "UI-F007";
 constexpr const char* kBadPartNumber = "UI-F006";
 constexpr int kMaxPartCount = 200;
 constexpr int kMaxFidelity = 20;
@@ -97,6 +98,22 @@ Result<FabricationChoice> CheckFabricationChoice(const FabricationChoice& choice
             "部材の最小幅は 0 より大きい数にしてください。",
             std::to_string(choice.minimumPartWidthMm) + " mm"));
     }
+    // 切れ目の上限。0 や 1 を超える比を許すと、検査そのものが意味を失う。
+    // 1.0 は「部材の幅いっぱいまで切ってよい」で、切った時点で2枚になる。
+    if (!std::isfinite(choice.maximumReliefDepthRatio)
+        || !(choice.maximumReliefDepthRatio > 0.0)
+        || !(choice.maximumReliefDepthRatio < 1.0)) {
+        return Out::Failure(MakeError(kBadReliefLimit,
+            "切れ目の深さの上限は 0 より大きく 1 より小さい比にしてください。",
+            std::to_string(choice.maximumReliefDepthRatio)
+                + "(1.0 は幅いっぱいで、切った時点で2枚になります)"));
+    }
+    if (!std::isfinite(choice.minimumReliefLigamentMm)
+        || !(choice.minimumReliefLigamentMm > 0.0)) {
+        return Out::Failure(MakeError(kBadReliefLimit,
+            "切れ目の先に残す幅は 0 より大きい数にしてください。",
+            std::to_string(choice.minimumReliefLigamentMm) + " mm"));
+    }
     if (choice.fidelity < 1 || choice.fidelity > kMaxFidelity) {
         return Out::Failure(MakeError(kBadFidelity, "再現度は 1〜20 にしてください。",
             std::to_string(choice.fidelity)));
@@ -123,6 +140,8 @@ void ApplyFabricationChoice(domain::CreateFabricationModelDefinition& definition
     definition.maximumPartCount = choice.maximumPartCount;
     definition.minimumPartWidthMm = choice.minimumPartWidthMm;
     definition.fidelity = choice.fidelity;
+    definition.maximumReliefDepthRatio = choice.maximumReliefDepthRatio;
+    definition.minimumReliefLigamentMm = choice.minimumReliefLigamentMm;
     definition.manualBoundaries = choice.manualBoundaries;
     definition.rangeUMin = choice.rangeUMin;
     definition.rangeUMax = choice.rangeUMax;
@@ -137,6 +156,8 @@ FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefini
     choice.splitAxis = definition.splitAxis;
     choice.automaticBoundaries = definition.automaticBoundaries;
     choice.maximumPartCount = definition.maximumPartCount;
+    choice.maximumReliefDepthRatio = definition.maximumReliefDepthRatio;
+    choice.minimumReliefLigamentMm = definition.minimumReliefLigamentMm;
     choice.minimumPartWidthMm = definition.minimumPartWidthMm;
     choice.fidelity = definition.fidelity;
     choice.manualBoundaries = definition.manualBoundaries;

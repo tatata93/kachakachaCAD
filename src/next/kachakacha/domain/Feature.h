@@ -257,6 +257,14 @@ struct CreateFabricationModelDefinition {
     double rangeVMin = 0.0;
     double rangeVMax = 1.0;
 
+    //! 切れ目の上限(fabrication-contract §7.5)。
+    //!
+    //! 紙とプラ板と真鍮で、残してよい幅は違う。既定は 0.3mm 厚のプラ板の値で、
+    //! 薄い紙ならもっと狭くてよいし、真鍮なら足りない。
+    //! 深さは部材の幅に対する比、残りは先端から向こう側の縁までの最小の幅。
+    double maximumReliefDepthRatio = 0.55;
+    double minimumReliefLigamentMm = 0.5;
+
     //! 曲げ状態。0 = 平ら(型紙)、100 = 近似完成形。
     double masterPercent = 100.0;
     //! 折り線ごとの進行度(0..1)。空なら全部 master に従う。

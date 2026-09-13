@@ -133,6 +133,21 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     minWidth_ = MakeMm(formWidget, 0.0, 1000.0, 0.5);
     minWidth_->setValue(4.0);
     form_->addRow(QStringLiteral("部材の最小幅"), minWidth_);
+    // 切れ目の上限。紙とプラ板と真鍮で、残してよい幅は違う。
+    // 隠した既定値にすると、断られた理由が分かっても直せない。
+    reliefDepth_ = MakeCount(formWidget, 1.0, 99.0);
+    reliefDepth_->setSuffix(QStringLiteral(" %"));
+    reliefDepth_->setValue(55.0);
+    reliefDepth_->setToolTip(
+        QStringLiteral("部材の幅に対する、切れ目の深さの上限。100% は幅いっぱいで、"
+                       "切った時点で2枚になります。"));
+    form_->addRow(QStringLiteral("切れ目の深さの上限"), reliefDepth_);
+    reliefLigament_ = MakeMm(formWidget, 0.01, 100.0, 0.1);
+    reliefLigament_->setValue(0.5);
+    reliefLigament_->setToolTip(
+        QStringLiteral("切れ目の先から向こう側の縁まで、最低これだけ残します。"
+                       "既定は 0.3mm 厚のプラ板の値です。"));
+    form_->addRow(QStringLiteral("切れ目の先に残す幅"), reliefLigament_);
     fidelity_ = MakeCount(formWidget, 1.0, 20.0);
     fidelity_->setValue(6.0);
     form_->addRow(QStringLiteral("再現度"), fidelity_);
@@ -233,6 +248,9 @@ void V2FabricationDock::Connect()
     QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(reliefDepth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
+    QObject::connect(reliefLigament_, &QDoubleSpinBox::valueChanged, this,
+        [this] { Emit(); });
     QObject::connect(fidelity_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(thickness_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         if (!loading_ && parameterHandler_) {
@@ -285,6 +303,9 @@ FabricationChoice V2FabricationDock::Choice() const
     choice.automaticBoundaries = automatic_->isChecked();
     choice.maximumPartCount = static_cast<int>(maxParts_->value());
     choice.minimumPartWidthMm = minWidth_->value();
+    // 欄は % で見せて、中では比で持つ。% のまま比較すると桁を間違える。
+    choice.maximumReliefDepthRatio = reliefDepth_->value() / 100.0;
+    choice.minimumReliefLigamentMm = reliefLigament_->value();
     choice.fidelity = static_cast<int>(fidelity_->value());
     choice.rangeUMin = rangeUMin_->value();
     choice.rangeUMax = rangeUMax_->value();
@@ -324,6 +345,8 @@ void V2FabricationDock::SetChoice(const FabricationChoice& choice)
         kachakacha::v2::app::FormatBoundaryList(choice.manualBoundaries)));
     maxParts_->setValue(static_cast<double>(choice.maximumPartCount));
     minWidth_->setValue(choice.minimumPartWidthMm);
+    reliefDepth_->setValue(choice.maximumReliefDepthRatio * 100.0);
+    reliefLigament_->setValue(choice.minimumReliefLigamentMm);
     fidelity_->setValue(static_cast<double>(choice.fidelity));
     rangeUMin_->setValue(choice.rangeUMin);
     rangeUMax_->setValue(choice.rangeUMax);

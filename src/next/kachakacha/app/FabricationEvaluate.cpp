@@ -37,12 +37,14 @@ using fabrication::PatternPanel;
 //! 検査の中身は core(fabrication/ReliefCut)にある。ここは型紙の形を
 //! そちらの言葉へ詰め替えるだけである。
 //!
-//! 上限は既定値を使う(深さは部材幅の 55% まで、先端から縁まで 0.5mm 以上)。
-//! 画面から変えられるようにするのは次の段。いまは **検査が無い** ほうが問題である。
+//! 上限は近似の定義から来る。紙とプラ板と真鍮で、残してよい幅が違う。
 [[nodiscard]] std::vector<base::Diagnostic> CheckReliefCutsOnPanels(
-    const std::vector<PatternPanel>& panels, double toleranceMm)
+    const std::vector<PatternPanel>& panels, double toleranceMm,
+    double maximumDepthRatio, double minimumLigamentMm)
 {
-    const fabrication::FabricationSettings settings;
+    fabrication::FabricationSettings settings;
+    settings.maximumReliefDepthRatio = maximumDepthRatio;
+    settings.minimumLigamentMm = minimumLigamentMm;
     std::vector<base::Diagnostic> problems;
     for (const PatternPanel& panel : panels) {
         if (panel.reliefCuts.empty()) {
@@ -78,7 +80,7 @@ using fabrication::PatternPanel;
 //! 窓は、それが描かれている壁のものである。人に選ばせない。近いほうへ寄せない。
 [[nodiscard]] Result<std::vector<PatternPanel>> BuildPlanarWithMarkings(
     std::vector<fabrication::PlanarPanelRequest> planar, const FabricationMarkings& markings,
-    double toleranceMm)
+    double toleranceMm, double maximumReliefDepthRatio, double minimumReliefLigamentMm)
 {
     using Out = Result<std::vector<PatternPanel>>;
     for (const auto& opening : markings.openings) {
@@ -124,7 +126,8 @@ using fabrication::PatternPanel;
     // ここまで、利用者が引いた切れ目は一度も検査されずに型紙へ載っていた。
     // 深すぎる切れ目、開口へ食い込む切れ目、交わる切れ目は、
     // 切ってから初めて分かる。材料を使い切ったあとで分かるのがいちばん困る。
-    const auto checked = CheckReliefCutsOnPanels(built.Value(), toleranceMm);
+    const auto checked = CheckReliefCutsOnPanels(built.Value(), toleranceMm,
+        maximumReliefDepthRatio, minimumReliefLigamentMm);
     if (!checked.empty()) {
         return Out::Failure(checked);
     }
@@ -163,7 +166,8 @@ using fabrication::PatternPanel;
         }
     }
     if (!planar.empty()) {
-        const auto panels = BuildPlanarWithMarkings(std::move(planar), markings, toleranceMm);
+        const auto panels = BuildPlanarWithMarkings(std::move(planar), markings, toleranceMm,
+            definition.maximumReliefDepthRatio, definition.minimumReliefLigamentMm);
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
@@ -293,7 +297,8 @@ struct BandedSource {
     }
     if (!planar.empty()) {
         const auto panels = BuildPlanarWithMarkings(std::move(planar), remaining.Value(),
-            toleranceMm);
+            toleranceMm, definition.maximumReliefDepthRatio,
+            definition.minimumReliefLigamentMm);
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }

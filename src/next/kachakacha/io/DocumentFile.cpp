@@ -281,6 +281,10 @@ template<class Id>
         definition["maximumPartCount"] = JsonValue::Number(
             static_cast<double>(fabrication->maximumPartCount));
         definition["minimumPartWidthMm"] = JsonValue::Number(fabrication->minimumPartWidthMm);
+        definition["maximumReliefDepthRatio"] =
+            JsonValue::Number(fabrication->maximumReliefDepthRatio);
+        definition["minimumReliefLigamentMm"] =
+            JsonValue::Number(fabrication->minimumReliefLigamentMm);
         definition["manualBoundaries"] = WriteNumberArray(fabrication->manualBoundaries);
         definition["openingWires"] = WriteIdArray(fabrication->openingWires);
         definition["foldWires"] = WriteIdArray(fabrication->foldWires);

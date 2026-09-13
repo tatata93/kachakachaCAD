@@ -33,6 +33,10 @@ struct FabricationChoice {
     int maximumPartCount = 12;
     double minimumPartWidthMm = 4.0;
     int fidelity = 6;
+    //! 切れ目の上限(fabrication-contract §7.5)。材料で変わる。
+    //! 深さは部材幅に対する比、残りは先端から向こう側の縁までの最小の幅。
+    double maximumReliefDepthRatio = 0.55;
+    double minimumReliefLigamentMm = 0.5;
     //! 手動境界(分割軸のパラメータ、0 と 1 の間)。automaticBoundaries が false のとき使う。
     std::vector<double> manualBoundaries;
     //! 面の範囲(V1 の板材の「範囲」)。u は列方向、v は行方向の 0〜1。

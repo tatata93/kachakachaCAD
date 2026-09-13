@@ -581,6 +581,11 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.maximumPartCount =
             static_cast<int>(loader.NumberOr(definition, "maximumPartCount", 12.0));
         made.minimumPartWidthMm = loader.NumberOr(definition, "minimumPartWidthMm", 4.0);
+        // 古い文書には無い鍵。既定で読む。読めなくしない。
+        made.maximumReliefDepthRatio =
+            loader.NumberOr(definition, "maximumReliefDepthRatio", 0.55);
+        made.minimumReliefLigamentMm =
+            loader.NumberOr(definition, "minimumReliefLigamentMm", 0.5);
         made.manualBoundaries = ReadNumberArray(loader, definition, "manualBoundaries", where);
         made.openingWires = ReadIdArray(loader, definition, "openingWires", where);
         made.foldWires = ReadIdArray(loader, definition, "foldWires", where);

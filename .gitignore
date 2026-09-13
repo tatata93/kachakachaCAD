@@ -35,3 +35,4 @@ compile_commands.json
 .ai/runtime/
 __pycache__/
 *.pyc
+*.bak

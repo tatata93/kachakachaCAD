@@ -189,6 +189,28 @@ KACHA_V2_TEST(feature_definition, 足す引くが保存して読み直せる)
     RequireEqual(std::to_string(back.tools.size()), std::string("2"), "道具の数");
 }
 
+KACHA_V2_TEST(feature_definition, 切れ目の上限が保存して読み直せる)
+{
+    // 材料ごとに変える値なので、文書に付いて回らないと意味がない。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    made.maximumReliefDepthRatio = 0.35;
+    made.minimumReliefLigamentMm = 0.2;
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    RequireNear(back.maximumReliefDepthRatio, 0.35, 1.0e-12, "深さの上限");
+    RequireNear(back.minimumReliefLigamentMm, 0.2, 1.0e-12, "残す幅");
+}
+
+KACHA_V2_TEST(feature_definition, 切れ目の上限が無い古い文書は既定で読める)
+{
+    // 鍵を足したせいで前の文書が開けなくなる、は絶対に避ける。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    RequireNear(back.maximumReliefDepthRatio, 0.55, 1.0e-12, "既定の深さ");
+    RequireNear(back.minimumReliefLigamentMm, 0.5, 1.0e-12, "既定の残す幅");
+}
+
 KACHA_V2_TEST(feature_definition, 製作モデルが保存して読み直せる)
 {
     CreateFabricationModelDefinition made;

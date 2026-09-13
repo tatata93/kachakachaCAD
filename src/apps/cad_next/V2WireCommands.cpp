@@ -9,6 +9,8 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/PointSources.h"
+
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/DirectWireEntry.h"
 #include "kachakacha/app/IntersectionPoints.h"
@@ -76,7 +78,8 @@ bool V2MainWindow::IsWireEditCommand(std::string_view id)
     return FindWireEdit(id) != nullptr || id == "wire.project"
         || id == "wire.project_surface" || id == "wire.wrap_project"
         || id == "wire.trim" || id == "wire.extend"
-        || id == "wire.intersection_points" || id == "wire.set_datum"
+        || id == "wire.intersection_points" || id == "wire.center_points"
+        || id == "wire.key_points" || id == "wire.set_datum"
         || id == "wire.clear_datum";
 }
 
@@ -315,6 +318,10 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         MakeIntersectionPoints();
         return;
     }
+    if (id == "wire.center_points" || id == "wire.key_points") {
+        MakePointsFromCurves(id == "wire.center_points");
+        return;
+    }
     if (id == "wire.set_datum" || id == "wire.clear_datum") {
         SetSelectedDatum(id == "wire.set_datum");
         return;
@@ -437,6 +444,80 @@ void V2MainWindow::MakeIntersectionPoints()
     session_->GetDocument().EndCompound();
     AdoptCurrentDocument();
     SetStatus(QStringLiteral("交点に点: %1 か所に作図点を作りました。線は変わっていません。")
+            .arg(made));
+}
+
+void V2MainWindow::MakePointsFromCurves(bool centersOnly)
+{
+    using kachakacha::v2::app::PointCandidate;
+    using kachakacha::v2::app::PointCandidatesOfCurve;
+    using kachakacha::v2::app::PointSourceKind;
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::Entity;
+    using kachakacha::v2::domain::EntityKind;
+    using kachakacha::v2::domain::Feature;
+    using kachakacha::v2::domain::FeatureOutput;
+    using kachakacha::v2::domain::FeatureType;
+
+    // 候補を挙げるのは core(app/PointSources)。ここは選り分けて文書へ入れるだけ。
+    const auto& selection = viewport_->Selection();
+    const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
+    const QString label = centersOnly ? QStringLiteral("中心に点")
+                                      : QStringLiteral("端点と中点に点");
+    if (inputs.empty()) {
+        SetStatus(label + QStringLiteral(": 先に線を選んでください。"));
+        return;
+    }
+    std::vector<PointCandidate> wanted;
+    for (const auto& curve : inputs) {
+        for (const auto& candidate : PointCandidatesOfCurve(curve, std::nullopt)) {
+            const bool isCenter = candidate.kind == PointSourceKind::CurveCenter;
+            // 中心だけの命令で端点まで作ると、円を1つ選ぶたびに点が3つ増える。
+            if (isCenter != centersOnly) {
+                continue;
+            }
+            wanted.push_back(candidate);
+        }
+    }
+    if (wanted.empty()) {
+        SetStatus(centersOnly
+                ? QStringLiteral("中心に点: 選んだ中に、中心のある線(円・円弧)がありません。")
+                : QStringLiteral("端点と中点に点: 選んだ中に、端点のある線がありません。"));
+        return;
+    }
+    // ひとまとまりで入れる。元に戻すのは一度で済む。線は変えない。
+    session_->GetDocument().BeginCompound(label.toStdString());
+    int made = 0;
+    for (const PointCandidate& candidate : wanted) {
+        const auto definition = kachakacha::v2::app::MakePointDefinition(candidate);
+        if (!definition.HasValue()) {
+            ReportDiagnostics(definition.Diagnostics());
+            continue;
+        }
+        Feature feature;
+        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = FeatureType::CreatePoint;
+        // 名前に由来を入れる。「点17」では、あとから何の点か分からない。
+        feature.displayName = kachakacha::v2::app::PointDisplayNameJa(candidate, "選んだ線");
+        feature.inputEntityIds = selection.entityIds;
+        feature.definition = definition.Value();
+        Entity entity;
+        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind = EntityKind::Point;
+        entity.displayName = feature.displayName;
+        entity.createdBy = feature.id;
+        feature.outputs.push_back(FeatureOutput{"point", entity.id, EntityKind::Point});
+        const auto added = session_->GetDocument().Run(
+            AddFeatureCommand(feature, {entity}, feature.displayName));
+        if (added.committed) {
+            ++made;
+        } else {
+            ReportDiagnostics(added.diagnostics);
+        }
+    }
+    session_->GetDocument().EndCompound();
+    AdoptCurrentDocument();
+    SetStatus(label + QStringLiteral(": %1 か所に作図点を作りました。線は変わっていません。")
             .arg(made));
 }
 

@@ -234,6 +234,17 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::TwoOrMoreWires, "ワイヤーを2つ以上選んでください。",
             "選んだ線どうしの交点すべてに作図点を作ります。線は変わりません。", true,
             {"AT-MEA-005"}},
+        // 形から点を作る(PRD-072)。core(app/PointSources)は書けていたのに、
+        // 画面から呼ぶ道が無かった。車輪の中心も窓の中心も、座標を目で読んで
+        // 手で打ち直すしかなかった。
+        {"wire.center_points", "中心に点", CommandMode::Instant, "center_points", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "選んだ円・円弧の中心に作図点を作ります。線は変わりません。", true,
+            {"AT-MEA-005"}},
+        {"wire.key_points", "端点と中点に点", CommandMode::Instant, "key_points", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "選んだ線の始点・終点・中点に作図点を作ります。線は変わりません。", true,
+            {"AT-MEA-005"}},
         {"wire.corner_chamfer", "角の加工(落とす)", CommandMode::Instant, "corner_chamfer", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだポリラインの直線どうしの角を全部、「面取り量」で平らに落とします。", true,

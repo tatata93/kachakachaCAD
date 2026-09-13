@@ -356,6 +356,72 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("端が交点で合う", meets);
 }
 
+[[nodiscard]] bool CasePointsFromCurveShape(V2MainWindow& window)
+{
+    // 車輪の中心も窓の中心も、それまでは座標を目で読んで手で打ち直すしかなかった。
+    // core(app/PointSources)は書けていたのに、画面から呼ぶ道が無かった。
+    const double pxPerMm = PrepareTopView(window);
+    auto& viewport = window.Viewport();
+    window.RunCommand("file.new");
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+
+    // 円を1つ引く。中心と、円周上の1点。
+    window.SelectTool(DrawingTool::Circle);
+    viewport.ClickAt(center);
+    viewport.ClickAt(QPointF(center.x() + 20.0 * pxPerMm, center.y()));
+    window.SelectTool(DrawingTool::Select);
+    if (!Explain("円を1つ引ける", CountOfKind(window, EntityKind::Wire) == 1)) {
+        return false;
+    }
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.center_points");
+    if (!Explain((std::string("中心に点が1つ(") + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Point) == 1)) {
+        return false;
+    }
+    // 中心は、引きはじめに押した場所である。
+    const auto& made = window.Session().Scene().points.back().position;
+    if (!Explain("点は円の中心にある",
+            (made - viewport.WorkPlane().origin).Length() < 0.5)) {
+        return false;
+    }
+    if (!Explain("線は変わっていない", CountOfKind(window, EntityKind::Wire) == 1)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("一度で消える", CountOfKind(window, EntityKind::Point) == 0)) {
+        return false;
+    }
+
+    // 直線には中心が無い。断って、何も作らない。
+    window.RunCommand("file.new");
+    window.SelectTool(DrawingTool::Line);
+    viewport.ClickAt(QPointF(center.x() - 30.0 * pxPerMm, center.y()));
+    viewport.ClickAt(QPointF(center.x() + 30.0 * pxPerMm, center.y()));
+    window.SelectTool(DrawingTool::Select);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    window.RunCommand("wire.center_points");
+    if (!Explain((std::string("直線では中心を作らない(")
+                     + window.StatusText().toStdString() + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Point) == 0)) {
+        return false;
+    }
+    // 端点と中点なら、直線からも作れる。始点・終点・中点の3つ。
+    window.RunCommand("wire.key_points");
+    if (!Explain((std::string("端点と中点で3つ(実際 ")
+                     + std::to_string(CountOfKind(window, EntityKind::Point)) + ")")
+                     .c_str(),
+            CountOfKind(window, EntityKind::Point) == 3)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("こちらも一度で消える", CountOfKind(window, EntityKind::Point) == 0);
+}
+
 [[nodiscard]] bool CaseIntersectionPointsAndDatum(V2MainWindow& window)
 {
     // 交点に点: 十字の交点に作図点が1つ。線は変わらない。基準線: 印だけ付く。
@@ -591,6 +657,7 @@ std::vector<SelfTestCase> DrawingCases()
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
+        {"形から中心や端点に点を作れる", &CasePointsFromCurveShape},
         {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},
         {"表示の棚で太さ・様式・色と段が変わる", &CaseDisplayDockStylesAndStages},
         {"作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},

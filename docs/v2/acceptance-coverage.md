@@ -66,7 +66,7 @@
 | AT-MEA-002 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(3点角度モードは2点目が頂点で 90 度) |
 | AT-MEA-003 | 済 | tests_v2/measurement_tests.cpp + tests_v2/measure_panel_tests.cpp(要素モード: 線1本と点で接線・法線・半径、2本で接線どうしの角度) |
 | AT-MEA-004 | 済 | tests_v2/measurement_tests.cpp |
-| AT-MEA-005 | 済 | tests_v2/point_source_tests.cpp(測った2点の両端と中点、円・円弧の中心、始点・終点・中点、ベジェとB-splineの制御点、2曲線の最接近から作図点を作れる。円は始点と終点を二重に出さず、直線は中心も制御点も出さない。同じ入力なら同じ並びで出る。数値でない位置からは作らない。「円1の中心」のように由来が分かる名前になり、作った点は作業中グループへ入る) + measurement_tests.cpp(測定が位置を返すところ) |
+| AT-MEA-005 | 済 | tests_v2/point_source_tests.cpp(測った2点の両端と中点、円・円弧の中心、始点・終点・中点、ベジェとB-splineの制御点、2曲線の最接近から作図点を作れる。円は始点と終点を二重に出さず、直線は中心も制御点も出さない。同じ入力なら同じ並びで出る。数値でない位置からは作らない。「円1の中心」のように由来が分かる名前になり、作った点は作業中グループへ入る) + measurement_tests.cpp(測定が位置を返すところ) + cad_next --self-test(形から中心や端点に点を作れる: 円の中心に1つ、直線には中心を作らず断る、端点と中点で3つ、どちらも一度で戻る) |
 | AT-FAB-001 | 済 | tests_v2/fabrication_tests.cpp(円筒の厳密展開) |
 | AT-FAB-002 | 済 | tests_v2/fabrication_tests.cpp(円錐の厳密展開) |
 | AT-FAB-003 | 済 | tests_v2/fabrication_tests.cpp(二重曲率を展開できないと言う) |

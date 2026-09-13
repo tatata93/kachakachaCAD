@@ -688,6 +688,9 @@ private:
 
     //! 選んだ線どうしの交点に作図点を作る(V1 の「交点に点」)。
     void MakeIntersectionPoints();
+    //! 選んだ線の形から作図点を作る。centersOnly なら円・円弧の中心だけ、
+    //! そうでなければ始点・終点・中点。線は変えない。
+    void MakePointsFromCurves(bool centersOnly);
     //! 選んだ線を基準線にする / やめる。
     void SetSelectedDatum(bool datum);
     //! 棚を出す命令(測定・数値で編集)か。V2EditCommands.cpp が持つ。

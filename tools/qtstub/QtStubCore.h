@@ -57,6 +57,7 @@ enum FillRule { OddEvenFill, WindingFill };
 enum BGMode { TransparentMode, OpaqueMode };
 enum TextElideMode { ElideLeft, ElideRight, ElideMiddle, ElideNone };
 enum CursorShape { ArrowCursor, CrossCursor, PointingHandCursor, SizeAllCursor,
+    ForbiddenCursor,
     WaitCursor, OpenHandCursor, ClosedHandCursor, BlankCursor, IBeamCursor };
 using Alignment = int;
 using MouseButtons = int;

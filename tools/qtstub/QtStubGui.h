@@ -341,6 +341,7 @@ public:
     void drawArc(const QRectF&, int, int);
     void drawRoundedRect(const QRectF&, double, double);
     void drawPolygon(const QPolygonF&);
+    void drawPolygon(const QPointF*, int);
     void drawPolygon(const QPolygon&);
     void drawPolyline(const QPolygonF&);
     void drawText(const QPointF&, const QString&);

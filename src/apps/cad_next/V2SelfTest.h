@@ -11,6 +11,7 @@
 //!   V2SelfTestPlanes.cpp   : 原点の3面・3軸と作業平面の棚
 //!   V2SelfTestDrawing.cpp  : 作図の棚
 //!   V2SelfTestSemantics.cpp: 意味状態と部分要素の見え方
+//!   V2SelfTestPointer.cpp  : クリックと引きずりの分け目・カーソルの形
 //! こうしておけば、ケースが増えても 1 ファイルが太らない。
 
 #pragma once
@@ -62,6 +63,9 @@ struct SelfTestCase {
 
 //! 意味状態と部分要素の見え方(通常・Hover・選択・Snap・途中経過の描き分け)。
 [[nodiscard]] std::vector<SelfTestCase> SemanticStateCases();
+
+//! クリックと引きずりの分け目、カーソルの形、カメラと物の取り合い。
+[[nodiscard]] std::vector<SelfTestCase> PointerCases();
 
 //! 文書にある、その種類のものの数(見えているかは問わない)。
 [[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);

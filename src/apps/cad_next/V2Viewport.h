@@ -14,6 +14,8 @@
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/DrawingSession.h"
+#include "kachakacha/app/PointerCursor.h"
+#include "kachakacha/app/PointerGesture.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -224,6 +226,12 @@ public:
         const QPointF& position) const;
     //! 作図中の十字カーソル(V1 の白フチ付き十字)。既定の十字は細くて読めない。
     [[nodiscard]] static QCursor DrawingCrossCursor();
+    //! 軌道回転中のカーソル(§5.1「回転を示すカーソル」)。
+    [[nodiscard]] static QCursor RotateCursor();
+    //! いまの様子を core の判断へ渡す形にまとめる。試験から覗ける。
+    [[nodiscard]] kachakacha::v2::app::PointerCursorContext CursorContextNow() const;
+    //! いまカーソルの下にあるものが、見えているのに掴めないか。
+    [[nodiscard]] bool HoverIsForbidden() const noexcept { return hoverOffPlane_; }
     //! 右クリック(動かさずに離した)。道具ごとに意味が違う(V1同等)。
     //! 選択道具では、押したその場所で候補を集め直してから献立を出す。
     void PressRightWithoutMoving(const QPointF& position);
@@ -583,6 +591,8 @@ private:
     void DrawBoxSelect(QPainter& painter) const;
     //! 候補一覧を集め直す。別の場所へ移ったか中身が変わったら番号を先頭へ戻す。
     void RefreshPickCycle(const QPointF& position);
+    //! 拾えなかったとき、絞りが弾いたのかどうかを調べる。
+    void RefreshForbiddenHover(const QPointF& position);
     //! 候補一覧を捨てる。文書が変わったら呼ぶ。無いものを送り続けないため。
     void ForgetPickCycle();
     //! 候補の番号を1つ進める(または戻す)。候補が無ければ何もしない。
@@ -608,6 +618,8 @@ private:
     //! 矩形選択の途中。Hover / Selection / 候補一覧とは別の状態である。混ぜない。
     struct BoxSelect {
         bool active = false;
+        //! 一度でも門を越えたら、押した場所へ戻して離しても矩形として決める。
+        kachakacha::v2::app::PointerGestureTracker gesture;
         QPointF startPx;
         QPointF currentPx;
         //! 押した時点の選択。矩形はここから当て直す。押した拍子の1件選択を
@@ -642,8 +654,8 @@ private:
     //! 右ボタンを押している最中か。押した場所と、そこから動いたかを覚える。
     //! 動かさずに離したときだけ、道具ごとの意味(選択道具なら献立)になる。
     bool rightPressed_ = false;
-    QPointF rightPressPosition_;
-    bool rightDragMoved_ = false;
+    //! 右ボタンもクリックと引きずりを同じ門で分ける。
+    kachakacha::v2::app::PointerGestureTracker rightGesture_;
     //! 次の1回のクリックを受け取る先。拾い終えたら空へ戻す。
     std::function<void(const PickedPoint&)> pickHandler_;
     ViewDirection direction_ = ViewDirection::Isometric;
@@ -684,6 +696,8 @@ private:
     kachakacha::v2::base::SegmentId hoveredSegmentId_;
     //! 直前に選んだカーソルが作図用の十字だったか。
     bool drawingCursor_ = false;
+    //! 作図中に、作業平面の外の線の上にいる。押しても掴めない。
+    bool hoverOffPlane_ = false;
     kachakacha::v2::geometry::Vector3 center_{};
     double visibleWidthMm_ = 200.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;
@@ -700,7 +714,8 @@ private:
     //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
     struct BodyDrag {
         bool active = false;
-        bool moved = false;
+        //! 押してから離すまでの成り行き。5px の門はここが持つ。
+        kachakacha::v2::app::PointerGestureTracker gesture;
         QPointF startPx;
         kachakacha::v2::geometry::Vector3 startPoint{};
         kachakacha::v2::geometry::Vector3 delta{};
@@ -710,7 +725,7 @@ private:
     //! 制御点を掴んでいる間の状態。動かした後の形をここに持って、破線で出す。
     struct ControlDrag {
         bool active = false;
-        bool moved = false;
+        kachakacha::v2::app::PointerGestureTracker gesture;
         QPointF startPx;
         kachakacha::v2::app::ShownControlPoint handle;
         std::optional<kachakacha::v2::geometry::CurveSegment> preview;

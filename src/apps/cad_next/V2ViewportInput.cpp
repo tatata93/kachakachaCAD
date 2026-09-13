@@ -255,45 +255,96 @@ QCursor V2Viewport::DrawingCrossCursor()
     return *cursor;
 }
 
+//! 回転中のカーソル(§5.1「回転: 回転を示すカーソル」)。
+//!
+//! Qt には回転を示す形が無い。閉じた手で代用していたので、
+//! パンと軌道回転が手元で見分けられなかった。V1 の十字と同じやり方で描く。
+//! QApplication を畳んだ後に落ちないよう、わざとポインタで持って解放しない。
+QCursor V2Viewport::RotateCursor()
+{
+    static const QCursor* cursor = [] {
+        constexpr int kSize = 32;
+        constexpr double kCenter = kSize / 2.0;
+        QPixmap pixmap(kSize, kSize);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        // 白フチ → 本体の順で2度描く。どんな背景でも輪郭が残る。
+        for (int pass = 0; pass < 2; ++pass) {
+            const QColor color = pass == 0 ? QColor(255, 255, 255, 235)
+                                           : QColor(20, 46, 56, 255);
+            painter.setPen(QPen(color, pass == 0 ? 4.0 : 2.0));
+            painter.setBrush(Qt::NoBrush);
+            // 三方だけの円。開けておかないと、ただの丸に見える。
+            painter.drawArc(QRectF(5.0, 5.0, kSize - 10.0, kSize - 10.0), 30 * 16,
+                280 * 16);
+            // 矢の頭。円の終わりに付ける。
+            painter.setBrush(QBrush(color));
+            const QPointF tip[3] = {
+                QPointF(kCenter + 9.0, 3.0),
+                QPointF(kCenter + 2.0, 9.0),
+                QPointF(kCenter + 11.0, 11.0),
+            };
+            painter.drawPolygon(tip, 3);
+        }
+        painter.end();
+        return new QCursor(pixmap, static_cast<int>(kCenter), static_cast<int>(kCenter));
+    }();
+    return *cursor;
+}
+
+//! いまの様子を core へ渡す形にまとめる。
+kachakacha::v2::app::PointerCursorContext V2Viewport::CursorContextNow() const
+{
+    kachakacha::v2::app::PointerCursorContext context;
+    context.panning = panning_ && !orbiting_;
+    context.orbiting = orbiting_;
+    context.draggingBody = bodyDrag_.active;
+    context.draggingControlPoint = controlDrag_.active;
+    context.draggingViewGadget = gadgetDrag_.has_value() || cubeDrag_.active;
+    context.overViewGadget = gadgetHoverIndex_.has_value() || cubeHoverZone_.has_value();
+    // 薄く出ている(作業平面の外の)線の上は、押しても拾えない。
+    // 拾えないことは、押してみるまで分からないと困る(§5.1「禁止対象」)。
+    context.overForbidden = hoverOffPlane_;
+    const auto tool = session_->CurrentTool();
+    // 押すと作図点が置かれる道具かどうか。選択と測るは点を置かない。
+    context.placingPoints = tool != kachakacha::v2::modeling::DrawingTool::Select
+        && tool != kachakacha::v2::modeling::DrawingTool::Measure;
+    return context;
+}
+
 void V2Viewport::RefreshCursorShape()
 {
-    // 掴めるかどうかが手元で分かるようにする。V1と同じ使い分け。
-    drawingCursor_ = false;
-    if (panning_) {
+    // 形の決め方は core(app/PointerCursor)にある。ここは Qt へ写すだけ。
+    // §5.1「クリック可能な通常形状に指カーソルを使わない」。
+    // 以前は線や形の上で指にしていた。指は「別の場所へ行く」印であって、
+    // 図形の印ではない。図形の上に来たことは Hover の強調で伝える。
+    using kachakacha::v2::app::CursorShape;
+    const CursorShape shape = kachakacha::v2::app::ChooseCursorShape(CursorContextNow());
+    drawingCursor_ = shape == CursorShape::Cross;
+    switch (shape) {
+    case CursorShape::ClosedHand:
         setCursor(Qt::ClosedHandCursor);
         return;
-    }
-    if (orbiting_ || gadgetDrag_.has_value() || cubeDrag_.active) {
-        setCursor(Qt::ClosedHandCursor);
-        return;
-    }
-    if (controlDrag_.active || bodyDrag_.active) {
-        setCursor(Qt::SizeAllCursor);
-        return;
-    }
-    if (PickPending()) {
-        setCursor(Qt::PointingHandCursor);
-        return;
-    }
-    if (gadgetHoverIndex_.has_value() || cubeHoverZone_.has_value()) {
+    case CursorShape::OpenHand:
         setCursor(Qt::OpenHandCursor);
         return;
-    }
-    const auto tool = session_->CurrentTool();
-    if (tool == kachakacha::v2::modeling::DrawingTool::Select) {
-        // 拾えるものの上では指にする(V1 と同じ)。押せる場所が手元で分かる。
-        setCursor(hover_.snap.has_value() || !hoveredEntityId_.IsNil()
-                ? Qt::PointingHandCursor
-                : Qt::ArrowCursor);
+    case CursorShape::Rotate:
+        setCursor(RotateCursor());
         return;
-    }
-    if (tool == kachakacha::v2::modeling::DrawingTool::Measure) {
-        setCursor(Qt::PointingHandCursor);
+    case CursorShape::Move:
+        setCursor(Qt::SizeAllCursor);
         return;
+    case CursorShape::Forbidden:
+        setCursor(Qt::ForbiddenCursor);
+        return;
+    case CursorShape::Cross:
+        setCursor(DrawingCrossCursor());
+        return;
+    case CursorShape::Arrow:
+        break;
     }
-    // 作図中はいつも十字。矢印との違いで「いま描ける」と分かる。
-    drawingCursor_ = true;
-    setCursor(DrawingCrossCursor());
+    setCursor(Qt::ArrowCursor);
 }
 
 void V2Viewport::SetContextMenuCallback(
@@ -463,6 +514,7 @@ bool V2Viewport::BeginBodyDrag(const QPointF& position)
     bodyDrag_.active = true;
     bodyDrag_.startPx = position;
     bodyDrag_.startPoint = *onPlane;
+    bodyDrag_.gesture.Begin(pointer);
     RefreshCursorShape();
     return true;
 }
@@ -473,9 +525,12 @@ void V2Viewport::DragBody(const QPointF& position)
     if (!bodyDrag_.active) {
         return;
     }
-    if (kachakacha::v2::app::DragIsFarEnough(position.x() - bodyDrag_.startPx.x(),
-            position.y() - bodyDrag_.startPx.y())) {
-        bodyDrag_.moved = true;
+    (void)bodyDrag_.gesture.Update(ScreenPoint{position.x(), position.y()});
+    if (!bodyDrag_.gesture.IsDrag()) {
+        // まだ「押しただけ」である。ここで先に進むと、選ぼうとして
+        // 1px 手が揺れただけで、掴んだ物が画面の上を滑って見える。
+        // 門を越えるまでは、仮の見せかけも作らない(UI-P1-008)。
+        return;
     }
     const auto onPlane = mapping_.UnprojectOntoPlane(
         ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
@@ -504,7 +559,9 @@ bool V2Viewport::ReleaseBodyDrag(const QPointF& position)
         return false;
     }
     DragBody(position);
-    const bool moved = bodyDrag_.moved;
+    const bool moved = bodyDrag_.gesture.Release(
+        kachakacha::v2::geometry::ScreenPoint{position.x(), position.y()})
+        == kachakacha::v2::app::PointerGesture::Drag;
     const auto delta = bodyDrag_.delta;
     bodyDrag_ = BodyDrag{};
     RefreshCursorShape();
@@ -548,6 +605,7 @@ bool V2Viewport::BeginControlPointDrag(const QPointF& position)
     controlDrag_.active = true;
     controlDrag_.startPx = position;
     controlDrag_.handle = *found;
+    controlDrag_.gesture.Begin(ScreenPoint{position.x(), position.y()});
     status_ = std::string(found->labelJa) + " を掴みました。";
     if (statusCallback_) {
         statusCallback_(status_);
@@ -562,9 +620,10 @@ void V2Viewport::DragControlPoint(const QPointF& position)
     if (!controlDrag_.active) {
         return;
     }
-    if (kachakacha::v2::app::DragIsFarEnough(position.x() - controlDrag_.startPx.x(),
-            position.y() - controlDrag_.startPx.y())) {
-        controlDrag_.moved = true;
+    (void)controlDrag_.gesture.Update(ScreenPoint{position.x(), position.y()});
+    if (!controlDrag_.gesture.IsDrag()) {
+        // 掴んだだけ。門を越えるまでは形を作り直さない。
+        return;
     }
     const auto onPlane = mapping_.UnprojectOntoPlane(
         ScreenPoint{position.x(), position.y()}, workPlane_.origin, workPlane_.normal);
@@ -598,7 +657,9 @@ bool V2Viewport::ReleaseControlPointDrag(const QPointF& position)
         return false;
     }
     DragControlPoint(position);
-    const bool moved = controlDrag_.moved;
+    const bool moved = controlDrag_.gesture.Release(
+        kachakacha::v2::geometry::ScreenPoint{position.x(), position.y()})
+        == kachakacha::v2::app::PointerGesture::Drag;
     const auto handle = controlDrag_.handle;
     const auto preview = controlDrag_.preview;
     controlDrag_ = ControlDrag{};
@@ -693,6 +754,8 @@ void V2Viewport::BeginBoxSelect(const QPointF& position, Qt::KeyboardModifiers m
     // 押した時点の選択を覚える。離すときはここから当て直す。
     boxSelect_.selectionAtPress = selection_;
     boxSelect_.modifiers = modifiers;
+    boxSelect_.gesture.Begin(
+        kachakacha::v2::geometry::ScreenPoint{position.x(), position.y()});
 }
 
 void V2Viewport::DragBoxSelect(const QPointF& position)
@@ -701,6 +764,8 @@ void V2Viewport::DragBoxSelect(const QPointF& position)
         return;
     }
     boxSelect_.currentPx = position;
+    (void)boxSelect_.gesture.Update(
+        kachakacha::v2::geometry::ScreenPoint{position.x(), position.y()});
     // 引いている間も「最後にカーソルがあった場所」は進める。
     // 止めると、離した直後の Tab が古い場所の候補を送る。
     cursorPosition_ = position;
@@ -734,11 +799,11 @@ std::optional<kachakacha::v2::app::BoxSelectionKind> V2Viewport::BoxSelectKind()
     if (!boxSelect_.active) {
         return std::nullopt;
     }
-    const ScreenPoint from{boxSelect_.startPx.x(), boxSelect_.startPx.y()};
-    const ScreenPoint to{boxSelect_.currentPx.x(), boxSelect_.currentPx.y()};
-    if (!kachakacha::v2::app::BoxSelectionIsMeaningful(from, to)) {
+    if (!boxSelect_.gesture.IsDrag()) {
         return std::nullopt;   // まだ「押しただけ」。矩形として扱わない。
     }
+    const ScreenPoint from{boxSelect_.startPx.x(), boxSelect_.startPx.y()};
+    const ScreenPoint to{boxSelect_.currentPx.x(), boxSelect_.currentPx.y()};
     return kachakacha::v2::app::MakeBoxSelection(from, to).kind;
 }
 
@@ -766,8 +831,13 @@ bool V2Viewport::ReleaseBoxSelect(const QPointF& position)
     const ScreenPoint to{position.x(), position.y()};
     const auto base = boxSelect_.selectionAtPress;
     const auto mode = SelectionModeFor(boxSelect_.modifiers);
+    // 引きずったかどうかは **道のり** で決める。離した場所だけを見ると、
+    // 大きく引いてから押した場所へ戻して離したときに、
+    // 引きずらなかったことになってしまう(UI-P1-008)。
+    const bool dragged = boxSelect_.gesture.Release(to)
+        == kachakacha::v2::app::PointerGesture::Drag;
     boxSelect_ = BoxSelect{};
-    if (!kachakacha::v2::app::BoxSelectionIsMeaningful(from, to)) {
+    if (!dragged) {
         // 押しただけ。押した時点のクリック選択(SelectAt)をそのまま残す。
         update();
         return false;
@@ -858,6 +928,33 @@ void V2Viewport::RefreshPickCycle(const QPointF& position)
 void V2Viewport::ForgetPickCycle()
 {
     cycle_ = PickCycle{};
+    hoverOffPlane_ = false;
+}
+
+//! いまカーソルの下にあるものが「見えているのに掴めない」か(§5.1 の禁止対象)。
+//!
+//! 作図中は作業平面の外の線を薄くして、掴まないことにしている(PlaneFocus)。
+//! 薄い線の上で押しても何も起きないので、押してみるまで理由が分からなかった。
+//! 掴めないことはカーソルの形で先に言う。
+//!
+//! 拾えたときは調べない。調べるのは、絞った結果が空になったときだけである。
+//! 毎回2度拾うと、線の多い文書でカーソルが重くなる。
+void V2Viewport::RefreshForbiddenHover(const QPointF& position)
+{
+    using kachakacha::v2::geometry::ScreenPoint;
+    hoverOffPlane_ = false;
+    if (!cycle_.candidates.empty()) {
+        return;   // 拾えた。禁止ではない。
+    }
+    const auto focus = PickFocusNow();
+    if (!focus.drawing || !focus.dimOffPlane) {
+        return;   // 絞っていない。空なのは、そこに何も無いからである。
+    }
+    // 絞りを外して拾い直す。ここで拾えるなら、絞りが弾いたということ。
+    const auto loose = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
+        ScreenPoint{position.x(), position.y()},
+        session_->GetDocument().Snapshot().settings.tolerance);
+    hoverOffPlane_ = loose.has_value();
 }
 
 void V2Viewport::AdvanceCandidate(bool backward)
@@ -905,3 +1002,197 @@ bool V2Viewport::CycleCandidate(bool backward)
     update();
     return true;
 }
+
+// ---------------------------------------------------------------------------
+// マウスの便り。V2Viewport.cpp が行数の上限に近づいたのでこちらへ移した。
+// 中身は移す前と同じで、クリックと引きずりの分け方だけ PointerGesture へ寄せた。
+// ---------------------------------------------------------------------------
+
+void V2Viewport::mouseMoveEvent(QMouseEvent* event)
+{
+    // Shift はマウスの便りにも乗っているので、作図拘束へ反映する。
+    // 一時スナップ解除の S は修飾キーではないため、キーイベントで保持する。
+    SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
+    if (controlDrag_.active) {
+        DragControlPoint(event->position());
+        return;
+    }
+    if (bodyDrag_.active) {
+        DragBody(event->position());
+        return;
+    }
+    if (boxSelect_.active) {
+        // 矩形を引いている。当たり判定もスナップも探さない。
+        // 探すと、引いている途中に Hover が動いて、どこを囲っているのか読めなくなる。
+        DragBoxSelect(event->position());
+        return;
+    }
+    if (rightPressed_) {
+        // 右で引きずってもカメラは1mmも動かさない(ui-ux-integrated-spec §5.2)。
+        // 引きずったかどうかだけ覚えて、離すときに献立を出すか決める。
+        (void)rightGesture_.Update(
+            kachakacha::v2::geometry::ScreenPoint{event->position().x(),
+                event->position().y()});
+        return;
+    }
+    if (panning_) {
+        const QPointF delta = event->position() - lastDragPosition_;
+        if (orbiting_) {
+            OrbitByPixels(delta.x(), delta.y());
+        } else {
+            PanByPixels(delta.x(), delta.y());
+        }
+        lastDragPosition_ = event->position();
+        return;
+    }
+    if (gadgetDrag_.has_value()) {
+        DragViewGadget(event->position());
+        return;
+    }
+    if (cubeDrag_.active) {
+        DragViewCube(event->position());
+        return;
+    }
+    // 操作板の上に来たら光らせる。押せる場所が目で分かるようにする。
+    // 見る順は押すときと同じ(ボタン → キューブ → 輪)。
+    // 違う順で見ると、光る場所と実際に動く物が食い違う。
+    const auto gadget = ViewGadgetAt(event->position());
+    if (gadget.has_value() != gadgetHoverIndex_.has_value()
+        || (gadget.has_value() && *gadget != *gadgetHoverIndex_)) {
+        gadgetHoverIndex_ = gadget;
+        update();
+    }
+    if (gadget.has_value()) {
+        const auto layout = ViewGadgets();
+        if (*gadget < layout.gadgets.size() && statusCallback_) {
+            statusCallback_(kachakacha::v2::view::ViewGadgetTooltipJa(
+                layout.gadgets[*gadget]));
+        }
+        return; // 操作板の上ではスナップを探さない。
+    }
+    const auto zone = ViewCubeZoneAtScreen(event->position());
+    if (zone.has_value() != cubeHoverZone_.has_value()
+        || (zone.has_value() && *zone != *cubeHoverZone_)) {
+        cubeHoverZone_ = zone;
+        update();
+    }
+    if (zone.has_value()) {
+        return; // キューブの上ではスナップを探さない。
+    }
+    HoverAt(event->position());
+}
+
+void V2Viewport::mousePressEvent(QMouseEvent* event)
+{
+    setFocus();
+    // 右ボタンはカメラへ割り当てない(ui-ux-integrated-spec §5.2)。
+    // 押した場所だけ覚えて、離すときに「押しただけ」かどうかを決める。
+    if (event->button() == Qt::RightButton) {
+        // 左で掴んでいる最中・矩形を引いている最中は右を受けない。
+        // 掴んだまま献立が出ると、どこで離したことになるのかが決まらない。
+        if (controlDrag_.active || bodyDrag_.active || boxSelect_.active) {
+            return;
+        }
+        rightPressed_ = true;
+        rightGesture_.Begin(kachakacha::v2::geometry::ScreenPoint{event->position().x(),
+            event->position().y()});
+        return;
+    }
+    // 中ボタンは画面を動かす(V1同等)。Shift+中ボタンは軌道回転。
+    // 押した時点では動かさず、引きずってから決める。
+    if (event->button() == Qt::MiddleButton) {
+        panning_ = true;
+        orbiting_ = (event->modifiers() & Qt::ShiftModifier) != 0;
+        lastDragPosition_ = event->position();
+        RefreshCursorShape();
+        return;
+    }
+    kachakacha::v2::view::AxisArrowModifier modifier =
+        kachakacha::v2::view::AxisArrowModifier::None;
+    if ((event->modifiers() & Qt::ShiftModifier) != 0) {
+        modifier = kachakacha::v2::view::AxisArrowModifier::Fine;
+    } else if ((event->modifiers() & Qt::ControlModifier) != 0) {
+        modifier = kachakacha::v2::view::AxisArrowModifier::Coarse;
+    }
+    // 順は PressViewNavigator が持っている。ここで書き写さない。
+    if (PressViewNavigator(event->position(), modifier) != ViewPress::None) {
+        return;
+    }
+    if (session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select) {
+        // 制御点 → 選んだ物、の順で掴む。順を逆にすると、
+        // 制御点が線の上に乗っているので、いつまでも制御点を掴めない。
+        if (event->modifiers() == Qt::NoModifier
+            && BeginControlPointDrag(event->position())) {
+            return;
+        }
+        // 選んでいる物の上を押したら、掴んだとみなす(V1同等)。
+        // 引きずらずに離せば、ただの選び直しとして扱う。
+        if (event->modifiers() == Qt::NoModifier && BeginBodyDrag(event->position())) {
+            return;
+        }
+        // 押した瞬間は今までどおり1件を選ぶ。返りを離すまで待たせない。
+        // 同時に矩形選択の構えへ入り、5px 以上引いて離したときだけ矩形として決める。
+        // 構えるのを先にするのは、矩形が「押した時点の選択」から当て直すためである。
+        if (event->button() == Qt::LeftButton && !PickPending()) {
+            BeginBoxSelect(event->position(), event->modifiers());
+        }
+        SelectAt(event->position(), event->modifiers());
+        return;
+    }
+    ClickAt(event->position());
+}
+
+void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (rightPressed_ && event->button() == Qt::RightButton) {
+        const auto kind = rightGesture_.Release(
+            kachakacha::v2::geometry::ScreenPoint{event->position().x(),
+                event->position().y()});
+        rightPressed_ = false;
+        rightGesture_.Reset();
+        // 引きずった後の解放では献立を出さない。出すと、画面をなぞっただけで
+        // メニューが飛び出す。押しただけのときが右クリックである。
+        if (kind == kachakacha::v2::app::PointerGesture::Click) {
+            PressRightWithoutMoving(event->position());
+        }
+        return;
+    }
+    if (controlDrag_.active) {
+        (void)ReleaseControlPointDrag(event->position());
+        return;
+    }
+    if (bodyDrag_.active) {
+        // 引きずっていなければ選び直しになる。掴んだ場所で選び直す。
+        if (!ReleaseBodyDrag(event->position())) {
+            SelectAt(event->position(), event->modifiers());
+        }
+        return;
+    }
+    if (boxSelect_.active && event->button() == Qt::LeftButton) {
+        // 引きずっていなければ何もしない。押した時点の選択がそのまま残る。
+        (void)ReleaseBoxSelect(event->position());
+        return;
+    }
+    if (panning_) {
+        panning_ = false;
+        orbiting_ = false;
+        RefreshCursorShape();
+        return;
+    }
+    if (gadgetDrag_.has_value()) {
+        ReleaseViewGadget(event->position());
+        if (statusCallback_ && !viewMessage_.empty()) {
+            statusCallback_(viewMessage_);
+        }
+        return;
+    }
+    if (cubeDrag_.active) {
+        ReleaseViewCube(event->position());
+        if (statusCallback_ && !viewMessage_.empty()) {
+            statusCallback_(viewMessage_);
+        }
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+

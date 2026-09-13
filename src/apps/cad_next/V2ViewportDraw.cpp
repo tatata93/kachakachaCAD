@@ -332,7 +332,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
-        if (entitySelected && bodyDrag_.active && bodyDrag_.moved) {
+        if (entitySelected && bodyDrag_.active && bodyDrag_.gesture.IsDrag()) {
             // 掴んでいる間の行き先を出す。元の線はそのまま残して、両方見せる。
             // 出さないと、離すまでどこへ行くのか分からない。
             QPainterPath ghost;
@@ -426,7 +426,7 @@ void V2Viewport::DrawControlPoints(QPainter& painter) const
     if (session_->CurrentTool() != kachakacha::v2::modeling::DrawingTool::Select) {
         return;
     }
-    if (controlDrag_.active && controlDrag_.moved && controlDrag_.preview.has_value()) {
+    if (controlDrag_.active && controlDrag_.gesture.IsDrag() && controlDrag_.preview.has_value()) {
         QPainterPath ghost;
         bool started = false;
         AppendCurve(ghost, *controlDrag_.preview, started);

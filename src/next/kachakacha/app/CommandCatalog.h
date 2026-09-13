@@ -39,7 +39,9 @@ enum class SelectionPredicate {
     TwoOrMoreWires,
     TwoWireChains,
     OneClosedProfile,
-    OneOrMoreClosedProfiles,
+    //! 閉じた輪郭が1つ以上、または立体1つとその面。押し出しと押し引きの入口。
+    //! 「閉じた輪郭が1つ以上」だけの条件は、これに畳んだ(使い手が居なくなったため)。
+    ClosedProfilesOrSolidFace,
     OnePart,
     TwoParts,
     OneDerivedEntity,

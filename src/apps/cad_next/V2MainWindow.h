@@ -140,6 +140,10 @@ public:
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
     //! 取れなければ理由を出して偽を返す。
+    //! 断ったときに「何枚に分ければ作れるか」を言う一文(製作近似 §5)。
+    //! 分けはしない。言うだけである。相手が無ければ空を返す。
+    [[nodiscard]] QString PanelAdviceTextJa(
+        const std::vector<kachakacha::v2::base::EntityId>& partIds) const;
     bool MaterializeFaceProfileWires();
     //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
     //! 0mm など作れない量なら理由を出して偽を返す。

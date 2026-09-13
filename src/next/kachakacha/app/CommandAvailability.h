@@ -34,6 +34,9 @@ struct SelectionFacts {
     //! 閉じた輪郭になっているワイヤーの数。
     int closedProfiles = 0;
     int parts = 0;
+    //! 立体の面そのものを選んでいる数(EX-02 の押し引き)。
+    //! 作業平面とは別に数える。押し引きの相手は立体の面であって作業平面ではない。
+    int solidFaces = 0;
     //! 選んだ形状ガイド(曲がった面)の数。
     int guideSurfaces = 0;
     int derivedEntities = 0;

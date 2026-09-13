@@ -792,19 +792,23 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     // 場面を差し替える道をひととおり通す。どれも DrawingSession::SetScene を通る。
     struct Route {
         const char* nameJa;
+        //! 掴む前にやっておくこと。「やり直す」は先に取り消しておかないと、
+        //! やり直す相手が無く、場面の差し替えそのものが起きない。
+        std::function<void()> prepare;
         std::function<void()> run;
     };
     const std::vector<Route> kRoutes = {
-        {"開き直す", [&window]() { window.RunCommand("file.new"); }},
-        {"取り消す", [&window]() { window.RunCommand("edit.undo"); }},
-        {"やり直す", [&window]() { window.RunCommand("edit.redo"); }},
-        {"作業平面を替える",
+        {"開き直す", {}, [&window]() { window.RunCommand("file.new"); }},
+        {"取り消す", {}, [&window]() { window.RunCommand("edit.undo"); }},
+        {"やり直す", [&window]() { window.RunCommand("edit.undo"); },
+            [&window]() { window.RunCommand("edit.redo"); }},
+        {"作業平面を替える", {},
             [&window]() {
                 window.Viewport().SetWorkPlane(
                     kachakacha::v2::modeling::StandardPlane(
                         kachakacha::v2::modeling::StandardPlaneKind::ZX));
             }},
-        {"グリッドを変える",
+        {"グリッドを変える", {},
             [&window]() { window.ApplyGridChoice(window.CurrentGridChoice()); }},
     };
     for (const auto& route : kRoutes) {
@@ -814,6 +818,9 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})
             || !DrawLine(window, Vector3{-20.0, 30.0, 0.0}, Vector3{20.0, 30.0, 0.0})) {
             return Explain((nameJa + ": 下ごしらえの線が引ける").c_str(), false);
+        }
+        if (route.prepare) {
+            route.prepare();
         }
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
         // 端点で掴んでから 14px 外へ出る。持ち越しがあるので、まだ端点へ吸い付く。

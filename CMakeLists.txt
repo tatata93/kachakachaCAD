@@ -574,6 +574,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/DiagnosticReport.cpp
     src/next/kachakacha/app/ExtrudePlan.cpp
     src/next/kachakacha/app/FacePushPull.cpp
+    src/next/kachakacha/app/PanelAdvice.cpp
     src/next/kachakacha/app/ExtrudeDrag.cpp
     src/next/kachakacha/app/PointerCursor.cpp
     src/next/kachakacha/app/ControlPointPick.cpp
@@ -689,6 +690,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp

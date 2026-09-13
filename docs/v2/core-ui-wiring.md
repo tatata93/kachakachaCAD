@@ -31,7 +31,6 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `base/TestHarness.h` | 試験の枠組み | **繋がない。**試験の道具である |
 | `app/EvaluationQueue.h` | 重い計算を待たせずに回す仕組み | 計算が待たされるようになってから。いまは同期で足りている |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
-| `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
@@ -45,6 +44,13 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
   `ProcessPolylineCorners` に至っては、名前も同じものが `PolylineCorners.h` にもあり
   (引数だけ違う)、そちらが本物だった。使われていない側を残すと、
   直すときにどちらを直せばよいのか分からなくなる。
+- `fabrication/PanelStrategy.h` と `kernel/OcctFaceAdjacency.h`(2026-09-14)。
+  展開できない面が1枚でもあると全部を断っていた。断るだけでは、
+  切るのか分けるのか形を直すのかが決められない。
+  面ごとの曲がり方(`OcctFaceQuery` の標本 → `CurvatureAnalysis`)と、
+  面どうしの隣り合わせ(`OcctFaceAdjacency`)を集め、4通りの分け方を作り比べて
+  「1枚では作れませんが、3枚に分ければ作れます」まで言う(`app/PanelAdvice`)。
+  **分けはしない。言うだけである。** 実際に分けるかどうかは人が決める。
 - `kernel/OcctFaceQuery.h`(2026-09-14)。立体の面1枚の縁・外向き法線・面積を返す。
   面の押し引き(EX-02)の入口である。取り出した縁を文書のワイヤーにして、
   いままでの押し出しへ渡す。新しい押し出しは作っていないので、

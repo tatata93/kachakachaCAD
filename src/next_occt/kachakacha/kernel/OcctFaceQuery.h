@@ -18,6 +18,7 @@
 //! OCCT の型を外へ出さない。返すのは core の型だけ(AT-ARC-001)。
 
 #include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/fabrication/SurfacePatch.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/geometry/Vector3.h"
@@ -54,6 +55,19 @@ struct FaceBoundary {
 //! 「できないことを、できたことにしない」。
 [[nodiscard]] base::Result<FaceBoundary> FaceBoundaryOf(modeling::KernelShapeHandle handle,
     std::size_t faceIndex, const geometry::GeometryTolerance& tolerance);
+
+//! 面1枚を格子状に標本化したもの。曲がり方を測るために要る。
+struct FaceSamples {
+    fabrication::SurfacePatchSamples samples;
+    double areaMm2 = 0.0;
+};
+
+//! 面を格子状に標本化する。平らでない面も通る(測るためのものだから)。
+//!
+//! 標本の数は既定で 17×17。目標偏差に対して粗すぎる場合は呼ぶ側が増やす。
+//! 面積も一緒に返す。分け方の判断で「大きい面を残す」に要る。
+[[nodiscard]] base::Result<FaceSamples> FaceSamplesOf(modeling::KernelShapeHandle handle,
+    std::size_t faceIndex, std::size_t rowCount = 17, std::size_t columnCount = 17);
 
 //! 立体が持つ面の数。画面が拾った番号を渡す前に確かめるために使う。
 [[nodiscard]] base::Result<std::size_t> ShapeFaceCount(modeling::KernelShapeHandle handle);

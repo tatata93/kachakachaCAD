@@ -1,5 +1,6 @@
 // 部材の分け方(AT-FAB-005)と、手で付ける役割(AT-FAB-006)。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/app/PanelAdvice.h"
 #include "kachakacha/fabrication/ManualRole.h"
 #include "kachakacha/fabrication/PanelStrategy.h"
 
@@ -543,6 +544,60 @@ KACHA_V2_TEST(manual_role, 同じ名前の割り当ては断る)
         {Role("a", ManualRole::FoldLine, MakeWireId(24)),
             Role("a", ManualRole::Opening, MakeWireId(25))});
     Require(!validated.HasValue(), "断る");
+}
+
+KACHA_V2_TEST(strategy, 1枚で無理なら何枚に分ければよいか言う)
+{
+    using kachakacha::v2::app::AdvisePanelStrategy;
+    // 4枚のうち2枚が二重曲率。1枚のままでは目標に収まらない。
+    std::vector<PanelCandidate> panels = FourPlanar();
+    panels[1] = Panel("b", PanelGeometryClass::DoubleCurved, 4.0, 100.0, 0.6);
+    panels[2] = Panel("c", PanelGeometryClass::DoubleCurved, 4.0, 100.0, 0.6);
+    const auto advice = AdvisePanelStrategy(panels, Chain4(),
+        Settings(FabricationStrategy::FewPieces), 0.5);
+    // 見つかっても見つからなくても、必ず次にすることを言う。
+    Require(!advice.messageJa.empty(), "必ず一文を返す");
+    Require(advice.messageJa.find("mm") != std::string::npos, "ずれの数を出す");
+    // 内部の言葉を出さない。
+    Require(advice.messageJa.find("Panel") == std::string::npos
+            && advice.messageJa.find("Strategy") == std::string::npos,
+        "内部の言葉を出さない");
+}
+
+KACHA_V2_TEST(strategy, 平らだけなら1枚のまま作れると言う)
+{
+    using kachakacha::v2::app::AdvisePanelStrategy;
+    const auto advice = AdvisePanelStrategy(FourPlanar(), Chain4(),
+        Settings(FabricationStrategy::FewPieces), 0.5);
+    Require(advice.found, "作れる分け方が見つかる");
+    Require(advice.pieceCount >= 1, "枚数を出す");
+    Require(advice.messageJa.find("作れます") != std::string::npos, "作れると言う");
+}
+
+KACHA_V2_TEST(strategy, 面が無ければ相手が無いと言う)
+{
+    using kachakacha::v2::app::AdvisePanelStrategy;
+    const auto advice = AdvisePanelStrategy({}, {},
+        Settings(FabricationStrategy::FewPieces), 0.5);
+    Require(!advice.found, "見つからない");
+    Require(!advice.messageJa.empty(), "理由を言う");
+}
+
+KACHA_V2_TEST(strategy, 分け方の名前が日本語で出る)
+{
+    using kachakacha::v2::fabrication::FabricationStrategyNameJa;
+    Require(FabricationStrategyNameJa(FabricationStrategy::OnePiece)
+            == std::string_view("1枚のまま"),
+        "1枚のまま");
+    Require(FabricationStrategyNameJa(FabricationStrategy::FewPieces)
+            == std::string_view("少数に分ける"),
+        "少数に分ける");
+    Require(FabricationStrategyNameJa(FabricationStrategy::SeparatePanels)
+            == std::string_view("全部ばらす"),
+        "全部ばらす");
+    Require(FabricationStrategyNameJa(FabricationStrategy::Hybrid)
+            == std::string_view("混ぜる"),
+        "混ぜる");
 }
 
 KACHA_V2_TEST_MAIN("panel_strategy_tests")

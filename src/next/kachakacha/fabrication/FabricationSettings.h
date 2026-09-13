@@ -5,6 +5,7 @@
 #include "kachakacha/base/Diagnostic.h"
 
 #include <string>
+#include <string_view>
 
 namespace kachakacha::v2::fabrication {
 
@@ -14,6 +15,9 @@ enum class FabricationStrategy {
     SeparatePanels,
     Hybrid,
 };
+
+//! 画面に出す名前。ここが唯一の出どころ。
+[[nodiscard]] std::string_view FabricationStrategyNameJa(FabricationStrategy value) noexcept;
 
 enum class BendDirection { Auto, U, V, Both };
 enum class ReliefShape { Auto, StraightSlit, VNotch, CurvedVNotch };

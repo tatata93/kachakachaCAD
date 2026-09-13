@@ -7,6 +7,17 @@
 
 namespace kachakacha::v2::fabrication {
 
+std::string_view FabricationStrategyNameJa(FabricationStrategy value) noexcept
+{
+    switch (value) {
+    case FabricationStrategy::OnePiece:       return "1枚のまま";
+    case FabricationStrategy::FewPieces:      return "少数に分ける";
+    case FabricationStrategy::SeparatePanels: return "全部ばらす";
+    case FabricationStrategy::Hybrid:         return "混ぜる";
+    }
+    return "不明";
+}
+
 using base::Diagnostic;
 using base::MakeError;
 

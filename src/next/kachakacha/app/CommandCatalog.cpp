@@ -16,7 +16,8 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::TwoOrMoreWires: return "ワイヤーを2つ以上選んでください。";
     case SelectionPredicate::TwoWireChains: return "鎖を2つ選んでください。";
     case SelectionPredicate::OneClosedProfile: return "閉じた輪郭を1つ選んでください。";
-    case SelectionPredicate::OneOrMoreClosedProfiles: return "閉じた輪郭を1つ以上選んでください。";
+    case SelectionPredicate::ClosedProfilesOrSolidFace:
+        return "閉じた輪郭を1つ以上、または立体の平らな面を選んでください。";
     case SelectionPredicate::OnePart: return "部品を1つ選んでください。";
     case SelectionPredicate::TwoParts: return "部品を2つ選んでください。";
     case SelectionPredicate::OneDerivedEntity: return "派生したものを1つ選んでください。";
@@ -351,8 +352,10 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "線を、作業平面の向きに沿って形状ガイドの曲面へ落とします。曲がった面に窓を開ける元になります。",
             true, {"AT-FAB-013"}},
         {"part.extrude", "押し出し", CommandMode::Dialog, "extrude", "Shift+E",
-            SelectionPredicate::OneOrMoreClosedProfiles, "閉じた輪郭を1つ以上選んでください。",
-            "輪郭を押し出します。出来る体積と面の数を先に出します。", true,
+            SelectionPredicate::ClosedProfilesOrSolidFace,
+            "閉じた輪郭を1つ以上、または立体の平らな面を選んでください。",
+            "輪郭を押し出します。立体の平らな面を選べば、その面をつまんで押し引きできます。"
+            "出来る体積と面の数を先に出します。", true,
             {"AT-EXT-001", "AT-EXT-002", "AT-EXT-003", "AT-EXT-004", "AT-EXT-005", "AT-EXT-006", "AT-EXT-007", "AT-EXT-008"}},
         {"part.thicken", "面に厚みを付ける", CommandMode::Dialog, "thicken", "",
             SelectionPredicate::OneOrMoreGuideSurfaces,

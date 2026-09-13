@@ -15,13 +15,18 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/app/CommandParameters.h"
+#include "kachakacha/app/PanelAdvice.h"
+#include "kachakacha/fabrication/CurvatureAnalysis.h"
 #include "kachakacha/fabrication/CurvedPanel.h"
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/kernel/OcctFaceAdjacency.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
 
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <utility>
 #include <vector>
@@ -149,6 +154,11 @@ void V2MainWindow::RunFabricationCreate()
         FabricationMarkingsFor(definition), tolerance);
     if (!evaluated.HasValue()) {
         ReportDiagnostics(evaluated.Diagnostics());
+        // 断るだけで終わらせない。何枚に分ければ作れるかまで言う。
+        const QString advice = PanelAdviceTextJa(definition.parts);
+        if (!advice.isEmpty()) {
+            SetStatus(QStringLiteral("%1\n%2").arg(StatusText(), advice));
+        }
         return;
     }
     Feature feature;
@@ -735,3 +745,75 @@ void V2MainWindow::ApplyMaterialToSelection(const QString& material, int layers)
             .arg(ExtrudeDistanceMm(), 0, 'f', 3));
 }
 
+
+//! 断ったときに「何枚に分ければ作れるか」まで言う(製作近似 §5)。
+//!
+//! いままでは「1枚では展開できません」で終わっていた。作る人には、
+//! 切るのか、分けるのか、形を直すのかが決められない。
+//!
+//! 面ごとの曲がり方(kernel/OcctFaceQuery の標本 → CurvatureAnalysis)と、
+//! 面どうしの隣り合わせ(kernel/OcctFaceAdjacency)を集めて、
+//! 4通りの分け方を作り比べる(app/PanelAdvice)。
+//!
+//! **勝手に分けない。** 言うのは「こうすれば作れます」までである。
+QString V2MainWindow::PanelAdviceTextJa(
+    const std::vector<kachakacha::v2::base::EntityId>& partIds) const
+{
+    std::vector<kachakacha::v2::fabrication::PanelCandidate> panels;
+    std::vector<kachakacha::v2::fabrication::PanelAdjacency> adjacencies;
+    const double target = kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+        kachakacha::v2::app::ParameterId::MaxDeviationMm);
+    for (const auto& id : partIds) {
+        const auto found = partShapes_.find(id.ToString());
+        if (found == partShapes_.end()) {
+            continue;
+        }
+        const auto count = kachakacha::v2::kernel::ShapeFaceCount(found->second);
+        if (!count.HasValue()) {
+            continue;
+        }
+        const std::size_t base = panels.size();
+        for (std::size_t face = 0; face < count.Value(); ++face) {
+            const auto sampled = kachakacha::v2::kernel::FaceSamplesOf(found->second, face);
+            if (!sampled.HasValue()) {
+                continue;
+            }
+            const auto measured = kachakacha::v2::fabrication::AnalyzeCurvature(
+                sampled.Value().samples, target);
+            if (!measured.HasValue()) {
+                continue;
+            }
+            kachakacha::v2::fabrication::PanelCandidate candidate;
+            candidate.panelId = std::to_string(face + 1) + "枚目";
+            candidate.classification = measured.Value().classification;
+            candidate.areaMm2 = sampled.Value().areaMm2;
+            candidate.doubleCurvedRatio = measured.Value().doubleCurvedRatio;
+            // 1枚のまま平らにしたときのずれ。Gauss曲率と面の代表長さから見積もる。
+            candidate.flattenDeviationMm = measured.Value().maximumAbsoluteGaussian
+                * std::pow(std::sqrt(std::max(sampled.Value().areaMm2, 0.0)), 3.0) / 8.0;
+            panels.push_back(std::move(candidate));
+        }
+        const auto neighbours = kachakacha::v2::kernel::FaceAdjacenciesOf(found->second,
+            session_->GetDocument().Snapshot().settings.tolerance);
+        if (!neighbours.HasValue()) {
+            continue;
+        }
+        // 立体をまたいで番号がぶつからないよう、この立体の始まりぶんだけずらす。
+        for (auto neighbour : neighbours.Value()) {
+            neighbour.firstIndex += base;
+            neighbour.secondIndex += base;
+            adjacencies.push_back(neighbour);
+        }
+    }
+    if (panels.empty()) {
+        return QString();
+    }
+    // 4通りをすべて作り比べるので、ここの strategy は入口の既定でよい。
+    // どの分け方を選んだかを覚える鍵はまだ無い(保存の形は GUARDED)。
+    kachakacha::v2::fabrication::FabricationSettings settings;
+    settings.panelCountLimit = fabricationChoice_.maximumPartCount;
+    settings.minimumPanelWidthMm = fabricationChoice_.minimumPartWidthMm;
+    const auto advice = kachakacha::v2::app::AdvisePanelStrategy(panels, adjacencies,
+        settings, target);
+    return QString::fromStdString(advice.messageJa);
+}

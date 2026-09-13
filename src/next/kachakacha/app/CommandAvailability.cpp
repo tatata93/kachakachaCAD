@@ -34,8 +34,10 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.wireChains == 2;
     case SelectionPredicate::OneClosedProfile:
         return facts.closedProfiles == 1;
-    case SelectionPredicate::OneOrMoreClosedProfiles:
-        return facts.closedProfiles >= 1;
+    case SelectionPredicate::ClosedProfilesOrSolidFace:
+        // 輪郭から押し出すか、立体の面をつまんで押し引きするか(EX-02)。
+        // 面を押すときは立体を1つに絞る。2つあると、どちらを加工するのか決まらない。
+        return facts.closedProfiles >= 1 || (facts.parts == 1 && facts.solidFaces >= 1);
     case SelectionPredicate::OnePart:
         return facts.parts == 1;
     case SelectionPredicate::TwoParts:
@@ -115,6 +117,21 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.patterns = external.patterns;
     facts.selectedGuideRows = external.selectedGuideRows;
     facts.guideRows = external.guideRows;
+
+    // 立体の面そのものを選んでいる数。物体の並び(entityIds)には出てこないので、
+    // 押した順の並び(ordered)から数える。
+    for (const auto& ref : selection.ordered) {
+        if (ref.kind != SelectionElementKind::Face) {
+            continue;
+        }
+        for (const auto& candidate : snapshot.entities) {
+            if (candidate.id == ref.entityId
+                && candidate.kind == domain::EntityKind::Part) {
+                ++facts.solidFaces;
+                break;
+            }
+        }
+    }
 
     std::vector<base::GroupId> groups;
     for (const auto& id : selection.entityIds) {

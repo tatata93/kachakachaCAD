@@ -98,10 +98,30 @@ KACHA_V2_TEST(availability, 閉じた四角は閉じた輪郭として数える)
     Require(facts.curves == 4, "線は4本");
     Require(facts.wireChains == 1, "鎖は1つ");
     Require(facts.closedProfiles == 1, "閉じた輪郭が1つ");
-    Require(SelectionSatisfies(SelectionPredicate::OneOrMoreClosedProfiles, facts),
+    Require(SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
         "押し出しが押せる");
     Require(SelectionSatisfies(SelectionPredicate::OneClosedProfile, facts),
         "1つだけの条件も満たす");
+}
+
+KACHA_V2_TEST(availability, 立体の面を選べば押し引きとして押せる)
+{
+    // EX-02。輪郭が1つも無くても、立体の面を選んでいれば押し出しは押せる。
+    // ここを通さないと、面を押しても命令が「構えたまま」になって何も起きない。
+    kachakacha::v2::app::SelectionFacts facts;
+    facts.parts = 1;
+    facts.solidFaces = 1;
+    Require(SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
+        "立体1つとその面なら押せる");
+
+    facts.parts = 2;
+    Require(!SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
+        "立体が2つあると、どちらを加工するのか決まらないので押せない");
+
+    facts.parts = 1;
+    facts.solidFaces = 0;
+    Require(!SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
+        "立体だけでは押せない(押す面が決まっていない)");
 }
 
 KACHA_V2_TEST(availability, 開いた線は閉じた輪郭ではない)
@@ -111,7 +131,7 @@ KACHA_V2_TEST(availability, 開いた線は閉じた輪郭ではない)
     bench.selection.entityIds.push_back(bench.AddOpenLine(0.0));
     const auto facts = bench.Facts();
     Require(facts.closedProfiles == 0, "閉じた輪郭は0");
-    Require(!SelectionSatisfies(SelectionPredicate::OneOrMoreClosedProfiles, facts),
+    Require(!SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
         "押し出しは押せない");
     Require(SelectionSatisfies(SelectionPredicate::OneOrMoreWires, facts),
         "ワイヤーとしては選べている");
@@ -225,7 +245,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::TwoOrMoreWires,
         SelectionPredicate::TwoWireChains,
         SelectionPredicate::OneClosedProfile,
-        SelectionPredicate::OneOrMoreClosedProfiles,
+        SelectionPredicate::ClosedProfilesOrSolidFace,
         SelectionPredicate::OnePart,
         SelectionPredicate::TwoParts,
         SelectionPredicate::OneDerivedEntity,
@@ -272,7 +292,7 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneOrMoreWires,
         SelectionPredicate::TwoWireChains,
         SelectionPredicate::OneClosedProfile,
-        SelectionPredicate::OneOrMoreClosedProfiles,
+        SelectionPredicate::ClosedProfilesOrSolidFace,
         SelectionPredicate::OnePart,
         SelectionPredicate::TwoParts,
         SelectionPredicate::OneDerivedEntity,

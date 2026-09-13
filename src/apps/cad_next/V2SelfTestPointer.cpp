@@ -428,6 +428,10 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     for (const auto tool : kTools) {
         const std::uint64_t base = window.Session().GetDocument().Snapshot().revision;
 
+        // 2回の試しは、まったく同じところから始めなければ比べられない。
+        // 選んでいるものも揃える。動かす道具は「相手が決まっているか」で
+        // クリックの意味が変わるので、片方だけ選択が残っていると別物になる。
+        viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         window.SelectTool(tool);
         PlainClick(viewport, spot);
@@ -437,6 +441,7 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         UndoBackTo(window, base);
 
+        viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
         window.SelectTool(tool);
         JitteredClick(viewport, spot);
@@ -459,6 +464,7 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
             return false;
         }
     }
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     return true;
 }

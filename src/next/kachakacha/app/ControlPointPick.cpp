@@ -18,7 +18,10 @@ std::vector<ShownControlPoint> ControlPointsForSelection(const modeling::SnapSce
 {
     std::vector<ShownControlPoint> shown;
     for (const auto& curve : scene.curves) {
-        if (!IsSelected(selection, curve.entityId)) {
+        // 線を選択色で描くかどうかと同じ規則で決める。物体単位で見ると、
+        // 線分を1本選んだだけで同じワイヤーの他の線分にも選択色の四角が出て、
+        // 選んでいない線分まで掴めてしまう(ui-ux-integrated-spec §3)。
+        if (!IsCurveSelected(selection, curve.entityId, curve.segmentId)) {
             continue;
         }
         const auto points = geometry::EditableControlPointsOf(curve.segment);

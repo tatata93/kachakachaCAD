@@ -25,6 +25,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
 
+using kachakacha::v2::app::SemanticState;
 using kachakacha::v2::geometry::CurveKind;
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::ScreenPoint;
@@ -161,9 +162,13 @@ void V2Viewport::DrawOneWorkPlane(QPainter& painter, const WorkPlaneView& plane)
     }
     const bool selected = !plane.entityId.IsNil()
         && kachakacha::v2::app::IsSelected(selection_, plane.entityId);
-    QColor fill = selected ? QColor(241, 178, 54, 52)
+    // 選んだ面の色はテーマの選択色にする。固定の橙だと、テーマを替えたときに
+    // 線の選択色と面の選択色が食い違う。
+    QColor selectedFill = SemanticColor(SemanticState::Selected);
+    selectedFill.setAlpha(52);
+    QColor fill = selected ? selectedFill
         : (plane.active ? QColor(0, 127, 120, 36) : QColor(69, 132, 142, 18));
-    QColor edge = selected ? QColor(0xc4, 0x7a, 0x13)
+    QColor edge = selected ? SemanticColor(SemanticState::Selected)
         : (plane.active ? QColor(0x00, 0x7f, 0x78) : QColor(0x7d, 0x9a, 0xa0));
     painter.setBrush(fill);
     painter.setPen(QPen(edge, selected || plane.active ? 2.2 : 1.0, Qt::DashLine));
@@ -210,6 +215,74 @@ namespace {
 //! その線が作業平面の上にあるか(両端と中央が面から浮いていない)。
 } // namespace
 
+double SemanticInkDistanceGate() noexcept
+{
+    // 64 は「明るさを1段変えただけ」では届かない幅である。
+    // これより近い2色は、線が重なったところで見分けられなかった。
+    return 64.0;
+}
+
+bool SemanticInksAreDistinct(const QColor& first, const QColor& second)
+{
+    const double dr = first.red() - second.red();
+    const double dg = first.green() - second.green();
+    const double db = first.blue() - second.blue();
+    return std::sqrt(dr * dr + dg * dg + db * db) >= SemanticInkDistanceGate();
+}
+
+QColor V2Viewport::SemanticColor(kachakacha::v2::app::SemanticState state) const
+{
+    switch (state) {
+    case SemanticState::Default:  return palette_.wire;
+    case SemanticState::Hover:    return palette_.hover;
+    case SemanticState::Selected: return palette_.selected;
+    case SemanticState::Snap:     return palette_.snap;
+    case SemanticState::Preview:  return palette_.preview;
+    }
+    return palette_.wire;
+}
+
+double V2Viewport::SemanticWidthPx(kachakacha::v2::app::SemanticState state) const
+{
+    switch (state) {
+    case SemanticState::Default:
+        return display_.wireWidthPx;
+    case SemanticState::Hover:
+        // 色だけでなく太さも変える。色が読めない画面でも、当たっている線が分かる。
+        // ただし選択より必ず細くする。Hover は選択と違う軽い強調である(§3 規則1)。
+        // 線の太さの設定がいくつでも、通常 < Hover < 選択 の順を崩さない。
+        return display_.wireWidthPx + 0.6;
+    case SemanticState::Selected:
+        // 細い線の設定でも選択は必ず太くする。太さが同じだと色だけが頼りになる。
+        return std::max(3.2, display_.wireWidthPx + 1.2);
+    case SemanticState::Snap:
+        return 1.8;
+    case SemanticState::Preview:
+        // 確定した線より必ず細くする。途中経過は確定済みより薄く見せる(§3 規則3)。
+        // 下限を固定値にすると、細い線の設定(0.25px〜)で通常より太くなる。
+        return std::max(display_.wireWidthPx * 0.5, display_.wireWidthPx - 0.6);
+    }
+    return display_.wireWidthPx;
+}
+
+QPen V2Viewport::PreviewPen() const
+{
+    // 確定した線より細く、半透明の破線にする(§3 規則3)。
+    // 太さを固定値にすると、細い線の設定で確定した線より太くなる。
+    QColor ink = SemanticColor(SemanticState::Preview);
+    ink.setAlphaF(0.75);
+    return QPen(ink, SemanticWidthPx(SemanticState::Preview), Qt::DashLine, Qt::RoundCap,
+        Qt::RoundJoin);
+}
+
+kachakacha::v2::app::SemanticState V2Viewport::CurveStateOf(
+    kachakacha::v2::base::EntityId entityId,
+    kachakacha::v2::base::SegmentId segmentId) const
+{
+    return kachakacha::v2::app::CurveSemanticState(selection_, entityId, segmentId,
+        hoveredEntityId_, hoveredSegmentId_);
+}
+
 void V2Viewport::DrawDocument(QPainter& painter) const
 {
     const auto& scene = session_->Scene();
@@ -226,38 +299,32 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         if (curve.construction && !display_.constructionVisible) {
             continue;
         }
-        const bool selected = kachakacha::v2::app::IsSelected(selection_, curve.entityId);
-        if (display_.selectionOnly && !selected) {
+        // 「選択だけ」と、掴んで動かす影は **物体単位** で見る。
+        // 線分1本を選んだだけで折れ線の残りが消えたり、片方だけ動いて見えたりすると、
+        // 実際に動くもの(物体まるごと)と画面が食い違う。
+        const bool entitySelected = kachakacha::v2::app::IsSelected(selection_,
+            curve.entityId);
+        if (display_.selectionOnly && !entitySelected) {
             continue;   // 「選択だけ」。選んでいないものは出さない(消してはいない)。
         }
-        // カーソルの下の線(V1 と同じ)。選ぶ前に「どれに当たるか」を見せる。
-        // 線の番号まで見るのは、同じワイヤーの中で重なっている線を Tab で
-        // 送ったときに、どれを出しているのかが読めるようにするためである。
-        const bool hovered = !selected && !hoveredEntityId_.IsNil()
-            && curve.entityId == hoveredEntityId_
-            && (hoveredSegmentId_.IsNil() || curve.segmentId == hoveredSegmentId_);
-        QColor color = selected
-            ? palette_.selected
-            : (curve.construction ? palette_.construction : palette_.wire);
-        if (hovered) {
-            // 選択色へ寄せるが、同じにはしない。選んだものと当たっているものは
-            // 見分けられなければならない。
-            color = palette_.selected.lighter(125);
-        }
+        // 意味状態は core が決める(app/SemanticState)。
+        // 選んだ線分だけが Selected になり、同じワイヤーの残りは通常表示のままになる。
+        const SemanticState state = CurveStateOf(curve.entityId, curve.segmentId);
+        const bool plain = state == SemanticState::Default;
+        // 通常表示のときだけデータ種類(補助線)の色と太さを使う。
+        // 状態が付いた線は状態の色にする(§3「見た目はデータ種類より状態を優先する」)。
+        QColor color = plain && curve.construction ? palette_.construction
+                                                   : SemanticColor(state);
         // 薄くするかどうかの判断は core にある(app/PlaneFocus)。
         // 掴めるかどうかと同じところから出さないと、薄いのに掴める、が起きる。
-        if (kachakacha::v2::app::DimsOffPlaneCurve(dimming, true, selected,
+        if (kachakacha::v2::app::DimsOffPlaneCurve(dimming, true, entitySelected,
                 kachakacha::v2::app::CurveLiesOnPlane(curve.segment, workPlane_))) {
             color.setAlphaF(color.alphaF() * 0.24);
         }
         // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。
         // 細い実線は高解像度の画面で点線に見えることがある。
-        double width = selected
-            ? std::max(3.2, display_.wireWidthPx + 1.2)
-            : (curve.construction ? display_.constructionWidthPx : display_.wireWidthPx);
-        if (hovered) {
-            width += 1.4;
-        }
+        const double width = plain && curve.construction ? display_.constructionWidthPx
+                                                         : SemanticWidthPx(state);
         // 基準線は一点鎖線(V1 と同じ)。補助線は補助線の様式、ほかは線の様式。
         const Qt::PenStyle style = curve.datum
             ? Qt::DashDotLine
@@ -265,7 +332,7 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         painter.setPen(QPen(color, width, style, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(path);
-        if (selected && bodyDrag_.active && bodyDrag_.moved) {
+        if (entitySelected && bodyDrag_.active && bodyDrag_.moved) {
             // 掴んでいる間の行き先を出す。元の線はそのまま残して、両方見せる。
             // 出さないと、離すまでどこへ行くのか分からない。
             QPainterPath ghost;
@@ -273,23 +340,32 @@ void V2Viewport::DrawDocument(QPainter& painter) const
             AppendCurve(ghost, kachakacha::v2::geometry::TranslateCurve(curve.segment,
                 bodyDrag_.delta), ghostStarted);
             if (ghostStarted) {
-                painter.setPen(QPen(palette_.preview, 1.6, Qt::DashLine));
+                // 行き先は確定した形ではない。Preview のペンで出す(§3 規則3)。
+                painter.setPen(PreviewPen());
                 painter.drawPath(ghost);
             }
         }
     }
-    painter.setPen(QPen(palette_.point, 1.0));
-    painter.setBrush(palette_.point);
     for (const auto& point : scene.points) {
         const auto screen = ToScreen(point.position);
         if (!screen.has_value()) {
             continue;
         }
-        if (display_.selectionOnly
-            && !kachakacha::v2::app::IsSelected(selection_, point.entityId)) {
+        const SemanticState state = kachakacha::v2::app::PointSemanticState(selection_,
+            point.entityId, hoveredEntityId_);
+        if (display_.selectionOnly && state != SemanticState::Selected) {
             continue;
         }
-        painter.drawRect(QRectF(screen->x() - 2.0, screen->y() - 2.0, 4.0, 4.0));
+        // 点も状態で描き分ける。選んでも見た目が変わらないと、
+        // 押して選べたのかどうかが画面から読めない。
+        const bool plain = state == SemanticState::Default;
+        const QColor ink = plain ? palette_.point : SemanticColor(state);
+        // 大きさは画面上の px で決める(§3 規則6)。寄っても引いても見失わない。
+        const double half = plain ? 2.0 : 3.5;
+        painter.setPen(QPen(ink, 1.0));
+        painter.setBrush(ink);
+        painter.drawRect(QRectF(screen->x() - half, screen->y() - half, half * 2.0,
+            half * 2.0));
     }
     DrawControlPoints(painter);
     DrawFoldPreview(painter);
@@ -309,7 +385,8 @@ void V2Viewport::DrawFoldPreview(QPainter& painter) const
     }
     // 帯ごとに下レール・上レールの2本が並ぶ。帯を閉じた輪で描くと、
     // 曲げ具合を変えたときに帯が「板」として動くのが見える。
-    painter.setPen(QPen(palette_.preview, 1.4, Qt::SolidLine));
+    // 帯はまだ確定した形ではない。ほかの途中経過と同じ Preview のペンで出す(§3 規則3)。
+    painter.setPen(PreviewPen());
     painter.setBrush(Qt::NoBrush);
     for (std::size_t index = 0; index + 1 < foldPreview_.size(); index += 2) {
         const auto& bottom = foldPreview_[index];
@@ -354,12 +431,12 @@ void V2Viewport::DrawControlPoints(QPainter& painter) const
         bool started = false;
         AppendCurve(ghost, *controlDrag_.preview, started);
         if (started) {
-            painter.setPen(QPen(palette_.preview, 1.6, Qt::DashLine));
+            painter.setPen(PreviewPen());
             painter.setBrush(Qt::NoBrush);
             painter.drawPath(ghost);
         }
     }
-    painter.setPen(QPen(palette_.selected, 1.0));
+    painter.setPen(QPen(SemanticColor(SemanticState::Selected), 1.0));
     painter.setBrush(palette_.background);
     for (const auto& point : kachakacha::v2::app::ControlPointsForSelection(
              session_->Scene(), selection_)) {
@@ -384,8 +461,9 @@ void V2Viewport::DrawPreview(QPainter& painter) const
     if (!started) {
         return;
     }
-    // 引いている途中の線。V1 と同じく破線 2.4(確定した線は実線)。
-    painter.setPen(QPen(palette_.preview, 2.4, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+    // 引いている途中の線。V1 と同じく破線(確定した線は実線)。
+    // 破線・色・半透明で分ける。確定した線より薄く見せる(§3 規則3)。
+    painter.setPen(PreviewPen());
     painter.setBrush(Qt::NoBrush);
     painter.drawPath(path);
 }
@@ -434,7 +512,8 @@ void V2Viewport::DrawSnap(QPainter& painter) const
     painter.setBrush(Qt::NoBrush);
     painter.setPen(QPen(QColor(255, 255, 255, 225), 4.0));
     glyph();
-    painter.setPen(QPen(palette_.snap, 1.8));
+    painter.setPen(QPen(SemanticColor(SemanticState::Snap),
+        SemanticWidthPx(SemanticState::Snap)));
     glyph();
     // 何に吸着したかを、記号だけでなく言葉でも出す(PRD-061)。
     painter.setPen(QPen(palette_.text, 1.0));
@@ -452,7 +531,7 @@ void V2Viewport::DrawBoxSelect(QPainter& painter) const
     // 取り方を線の形で見せる。完全包含は実線、交差は破線。
     // 色だけで分けると、どちらが厳しい取り方なのかを覚えていないと読めない。
     const bool contained = *kind == kachakacha::v2::app::BoxSelectionKind::Contained;
-    const QColor ink = palette_.selected;
+    const QColor ink = SemanticColor(SemanticState::Selected);
     painter.setPen(QPen(ink, 1.4, contained ? Qt::SolidLine : Qt::DashLine));
     QColor fill = ink;
     fill.setAlphaF(0.10);
@@ -540,8 +619,9 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
         && shape.entityId == hoveredEntityId_;
     const Vector3 forward = kachakacha::v2::view::ForwardOf(orientation_);
     const Vector3 light = StandardLightDirection();
-    // 選んでいるものは橙、面は青緑、立体は灰。V1 と同じ使い分け。
-    const QColor base = selected ? QColor(0xe6, 0x9f, 0x00)
+    // 選んでいるものはテーマの選択色、面は青緑、立体は灰。
+    // 選択色を固定で書くと、テーマを替えたときに稜線(テーマの色)と塗りが食い違う。
+    const QColor base = selected ? SemanticColor(SemanticState::Selected)
         : (shape.surface ? QColor(0x45, 0x84, 0x8e) : QColor(0x9a, 0xa5, 0xad));
     // 面は薄く。奥の線が透けて見えないと、面の裏に何があるか分からない。
     const int alpha = shape.surface ? (selected ? 150 : 105) : (selected ? 225 : 200);
@@ -577,8 +657,15 @@ void V2Viewport::DrawOneShape(QPainter& painter, const ShapeView& shape) const
         painter.drawPolygon(polygon);
     }
     // 稜線を上から重ねる。三角形の網だけだと継ぎ目が全部見えて形が読めない。
-    QColor edge = selected ? QColor(0xc4, 0x7a, 0x13)
-        : (hovered ? QColor(0x2f, 0x6f, 0x8f) : QColor(0x3a, 0x44, 0x4a));
+    // 選択と Hover の色はテーマが持つものを使う。ここで固定の色を書くと、
+    // Windows 95 テーマへ替えたときに2つの状態が同じ色になる。
+    QColor edge(0x3a, 0x44, 0x4a);
+    if (selected) {
+        // 塗りより濃くする。同じ色だと稜線が塗りに溶けて、形の境目が読めない。
+        edge = SemanticColor(SemanticState::Selected).darker(125);
+    } else if (hovered) {
+        edge = SemanticColor(SemanticState::Hover);
+    }
     painter.setBrush(Qt::NoBrush);
     painter.setPen(QPen(edge, selected || hovered ? 2.0 : 1.1, Qt::SolidLine, Qt::RoundCap,
         Qt::RoundJoin));

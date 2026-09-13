@@ -56,6 +56,8 @@ ViewportPalette ViewportPalette::Dark()
 ViewportPalette ViewportPalette::Win95()
 {
     // Windows 95 のアプリケーション作業領域は白。線は黒。
+    // 意味状態は16色から **色相の違う** ものを割り当てる。濃紺と青(旧 selected と
+    // preview)のような明るさ違いは、白地では同じ色にしか見えなかった。
     ViewportPalette palette;
     palette.background = QColor(0xFF, 0xFF, 0xFF);
     palette.gridMinor = QColor(0xE4, 0xE4, 0xE4);
@@ -66,7 +68,8 @@ ViewportPalette ViewportPalette::Win95()
     palette.wire = QColor(0x00, 0x00, 0x00);
     palette.construction = QColor(0x80, 0x80, 0x80);
     palette.selected = QColor(0x00, 0x00, 0x80);
-    palette.preview = QColor(0x00, 0x00, 0xC0);
+    palette.hover = QColor(0x00, 0x80, 0x80);
+    palette.preview = QColor(0x80, 0x00, 0x80);
     palette.point = QColor(0x00, 0x00, 0x00);
     palette.snap = QColor(0xC0, 0x00, 0x00);
     palette.workPlane = QColor(0x80, 0x80, 0xC0);
@@ -723,6 +726,9 @@ void V2Viewport::OnToolChanged()
     if (cursorPanel_.active) {
         CloseCursorInput();
     }
+    // 道具を替えると途中の点は捨てられる(DrawingSession::SelectTool)。ここで消さないと、
+    // もう作られない形の途中経過だけが残り、まだ引いている途中に見える(§3 規則3)。
+    hover_.preview.clear();
     ClearMeasurePicks();
     // 道具が変わればカーソルの形も変わる。ここで呼ばないと、次に押すまで
     // 矢印のままで、いま作図できるのかどうかが手元で分からない。
@@ -1166,6 +1172,11 @@ void V2Viewport::FinishTool()
     }
     if (result.transform.has_value() && transform_) {
         transform_(*result.transform);
+    }
+    // 締められたら点は残らない。途中経過を残すと確定した線の上に破線が重なる。
+    // 締められなかったとき(点の数が決まった道具など)は点が残り、まだ引いている途中である。
+    if (session_->PlacedPointCount() == 0) {
+        hover_.preview.clear();
     }
     SyncCursorInputWithTool(false, result.committed);
     update();

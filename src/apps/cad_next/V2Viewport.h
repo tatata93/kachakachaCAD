@@ -21,10 +21,12 @@
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/EscapeAction.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/SemanticState.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/ShapeMesh.h"
 
 #include <QColor>
+#include <QPen>
 #include <QPointF>
 #include <QRectF>
 #include <QWidget>
@@ -48,6 +50,11 @@ enum class ViewDirection {
 [[nodiscard]] const char* ViewDirectionNameJa(ViewDirection direction);
 
 //! 画面の配色。Win95テーマと通常テーマで色を変える。
+//!
+//! 意味状態(ui-ux-integrated-spec §3)の色はここだけが持つ。
+//! **テーマは色を変えるが、状態の区別は変えない。**
+//! どのテーマでも Default / Hover / Selected / Snap / Preview は見分けられる色にする。
+//! 見分けられるかどうかは SemanticInksAreDistinct が数で確かめる。
 struct ViewportPalette {
     QColor background{0x20, 0x24, 0x2C};
     QColor gridMinor{0x2C, 0x32, 0x3C};
@@ -58,15 +65,28 @@ struct ViewportPalette {
     QColor wire{0xE8, 0xE8, 0xE8};
     QColor construction{0x88, 0x88, 0x98};
     QColor selected{0xFF, 0xC0, 0x40};
+    //! カーソルの下の候補。**選択色の明るさ違いにしない。**
+    //! 明るさだけの違いは、線が重なっているところで読めない。
+    QColor hover{0x55, 0xE0, 0x8A};
     QColor preview{0x60, 0xD0, 0xFF};
     QColor point{0xF0, 0xF0, 0xF0};
-    QColor snap{0xFF, 0xE0, 0x60};
+    //! 吸着の記号。選択色(橙)と近い黄では、線の上で見分けられなかった。
+    //! Win95 テーマと同じ赤系にして、テーマをまたいで同じ役割の色にする。
+    QColor snap{0xFF, 0x6B, 0x5A};
     QColor workPlane{0x60, 0x90, 0xC0};
     QColor text{0xE0, 0xE0, 0xE0};
 
     [[nodiscard]] static ViewportPalette Dark();
     [[nodiscard]] static ViewportPalette Win95();
 };
+
+//! 2つの意味状態の色が見分けられるか(RGB のユークリッド距離で見る)。
+//!
+//! 「別の状態を別の色で描く」を目で確かめると、テーマを足したときに崩れる。
+//! 数で門を決めておけば、配色を変えた時点で試験が落ちる。
+[[nodiscard]] bool SemanticInksAreDistinct(const QColor& first, const QColor& second);
+//! 見分けられると認める最小の距離。
+[[nodiscard]] double SemanticInkDistanceGate() noexcept;
 
 class V2Viewport final : public QWidget {
 public:
@@ -75,6 +95,25 @@ public:
 
     void SetPalette(const ViewportPalette& palette);
     [[nodiscard]] const ViewportPalette& Colors() const noexcept { return palette_; }
+
+    //! 意味状態の色(ui-ux-integrated-spec §3)。描画も試験もここだけを見る。
+    //! テーマを変えても、状態と色の対応表は入れ替わらない。
+    [[nodiscard]] QColor SemanticColor(kachakacha::v2::app::SemanticState state) const;
+    //! 意味状態の線幅(logical px)。線の太さは表示設定の太さを土台にする。
+    [[nodiscard]] double SemanticWidthPx(kachakacha::v2::app::SemanticState state) const;
+    //! 途中経過(Preview)を描くペン。作図の途中経過、掴んで動かす影、折り曲げの帯は
+    //! すべてこれで描く。Preview の色・太さ・破線・半透明を1か所で決める(§3 規則3)。
+    [[nodiscard]] QPen PreviewPen() const;
+    //! その線分がいまどの意味状態か。判定は core(app/SemanticState)にある。
+    [[nodiscard]] kachakacha::v2::app::SemanticState CurveStateOf(
+        kachakacha::v2::base::EntityId entityId,
+        kachakacha::v2::base::SegmentId segmentId) const;
+    //! いま出している途中経過(Preview)の本数。
+    //! Preview は文書にも場面にも入れないので、拾えないし選べない(§3 規則3)。
+    [[nodiscard]] int PreviewSegmentCount() const noexcept
+    {
+        return static_cast<int>(hover_.preview.size());
+    }
 
     //! 次の1回のクリックを、道具ではなくこちらへ渡す(1点だけ拾う)。
     //!

@@ -18,15 +18,15 @@ EXTRA_HIGH
 
 STAGEDの標準レビュー深度; 自動昇格: 実差分 14ファイル/593行、5サブシステム、差分スコア10; EXTRA_HIGHを使用
 
-Latest diff assessment: 実差分 22ファイル/1549行、7サブシステム、差分スコア11; EXTRA_HIGHを使用
+Latest diff assessment: 実差分 30ファイル/1817行、7サブシステム、差分スコア11; EXTRA_HIGHを使用
 
 # Current Stage
 
-2/2: integration - 連携と回帰
+1/2: foundation - 基盤
 
-UI連携と回帰確認まで完成させる。
+状態と共通境界を先に完成させる。
 
-1. UI連携と回帰試験を完成させる。
+1. 関連する基盤と状態遷移を実装する。
 
 # 目的
 
@@ -62,10 +62,7 @@ See the referenced specifications and current code.
 
 # Acceptance Tests
 
-- Edge 6、Vertex 8、Snap 12 logical pxを別の許容値として扱う
-- ズーム倍率にかかわらず画面上の選択半径を保つ
-- 小さなポインタ揺れでスナップ候補が切り替わり続けない
-- Sを押している間だけスナップを無効にする
+- 基盤Stageの作業が完了し、既存ビルドと試験が成功する。
 
 # 完了条件
 

@@ -1,45 +1,13 @@
-PASS
+REVISE
 
-Stage 1/2 (foundation) of UI-P1-007 is done and nothing blocks it. I edited nothing.
+1. [SnapEngine.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/modeling/SnapEngine.cpp:314) — 同じ曲線に垂足・接点があると `ClosestOnCurve` を削除し、[§6.1](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/docs/v2/ui-ux-integrated-spec.md:211) の「最近点 > 垂足・接点」を実質的に逆転しています。[snap_tests.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/tests_v2/snap_tests.cpp:825) も逆の挙動を正解として固定しています。また、Extension/Projected の順位も上位仕様にないまま決定されています。削除処理を外して規定順位を試験するか、例外と追加種別の順位をオーナー承認の上位規範へ先に反映してから実装・試験を合わせてください。
 
-**Evidence**
-- **Separate radii:** `GeometryTolerance.h` has three fields: `displayPickPx=8` (points), `edgePickPx=6` (lines) and `snapPickPx=12` (snap). Each radius is used in only one place:
-  - points at `Selection.cpp:144`
-  - lines at `Selection.cpp:114`
-  - snapping at `SnapEngine.cpp:64` and `:246`.
+2. [SnapEngine.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/modeling/SnapEngine.cpp:20) / [SameSnapTarget](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/modeling/SnapEngine.cpp:145) — 固定候補の同一性を所有者IDではなく位置だけで判定しています。例えば別Entityの端点が0.006 mm離れ、1000 px/mmで6 px離れている場合でも、`interactiveJoinMm=0.01` により両方がheld扱いになり、0.2 px程度の揺れで4 pxヒステリシスを迂回して別Entityへ切り替わります。完全同位置では `SameCandidate` が一方を捨てるため、所有者がscene順にも依存します。[V2Viewport.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/apps/cad_next/V2Viewport.cpp:1103) はこの `entityId` を測定入力へ保存するので、誤った所有者が文書参照へ入る可能性があります。`interactiveJoinMm` は接続候補専用です。種類、EntityId、SegmentId、端点側・パラメータ、交点の正規化した相手ID等から安定したSnapTargetKeyを作り、dedupとheld判定を共通化してください。近接別所有者・完全重複・scene順反転の回帰試験も必要です。
 
-  Nothing still uses the old `highPriorityRadiusPx`, `lowPriorityRadiusPx` or `IsHighPrioritySnap`. Tests check that changing one radius leaves the others alone (`snap_tests.cpp:1065`, `selection_tests.cpp:348-362`).
-- **Same radius at any zoom:** radii are measured in screen px on the projected curve (`geometry::ApproachToCurveOnScreen`). The perspective correction from screen fraction back to 3D fraction, `s = t·w0/((1−t)·w1 + t·w0)`, is derived correctly. Zoom is tested for snapping (`snap_tests:1040`) and for circle and Bezier picking when zoomed in (`selection_tests:325`, `:332`). Line picking is shared with Selection instead of duplicated.
-- **Hysteresis:** `ChooseSnap` switches at once to a higher-rank candidate. At the same rank it switches only when the new candidate is more than 4 px closer, and it holds out to 12 + 4 px. Candidates are sorted by rank, then distance, so the held candidate can never outrank the best one. `S` (suppressed) and `Reset` drop the held candidate. Tests cover jitter, the radius edge, higher-rank takeover, and not handing the hold to an overlapping curve (`snap_tests:1092-1310`).
-  - The held candidate keeps `EntityId`s but only compares them and never looks the entity up. A deleted or undone entity cannot cause a bad access; it just stops matching.
-  - No `SnapCandidate` equality comparison exists, so the new `held` field changes no existing behaviour.
-- **Ranking against §6.1 and §4.3:**
-  - `SnapPriorityRank` follows the six levels, and ties go to the closer candidate.
-  - Moving the values in `SnapKind` breaks nothing: the only numeric use is a tie-break inside the sort. The app only names the kinds in `switch` statements, and they are not saved to files.
-- **File format:** save and load are symmetric. A 0, negative or non-number value is rejected with `KCD2-D002`, and a missing key falls back to the default; both are tested. Both samples were regenerated, `v2_sample_document_tests` passes, and `kcd2-format.md` §19.3 matches the code.
-- **Boundaries:** V1 is unchanged, no Qt or OCCT dependency was added under `src/next`, and there are no untracked files. The extra files outside the task's file list all follow from the work: persisting the tolerances, sharing the curve-distance code, docs and samples.
-- **Build and test evidence:** the attempt 3 gates ran after the last source edit (`SnapEngine.h`, 16:21:58).
-  - Configure passed (16:23:08).
-  - Build passed at 16:25:04. Its only two warnings are in `V2ViewportDraw.cpp:537` and `V2Viewport.cpp:1119`, which this diff does not touch.
-  - CTest passed 129/129.
-  - The app self-test passed 168/168.
+3. [DrawingSession.h](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/app/DrawingSession.h:73) / [V2ViewportInput.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/apps/cad_next/V2ViewportInput.cpp:132) — `SetSnapSettings` はheld状態を消さず、実際の消去は次にsuppressed状態で `Resolve` された時だけです。Sを押して離すまでHoverがなかった場合や、Hover前にfocusを失った場合、古い候補が次のHoverへ残ります。またキー押下だけでは `hover_` の再評価も再描画もなく、S中も古いリングとプレビューが表示され続けます。現在の試験はS中に必ずHoverしているため欠陥を隠しています。suppression開始時にヒステリシスを即時リセットし、現在のカーソル位置でHover/表示を更新してください。Hoverなしのpress→release、focus-out、磁石切替を試験してください。
 
-  The worker report's Build and Test sections still quote attempt 2; the attempt 3 logs above supersede them.
+4. [CurveIntersection.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/geometry/CurveIntersection.cpp:365) — `lowerBoundPx` は保証された下限ではありません。[CurveSampling.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/geometry/CurveSampling.cpp:10) は弦中央の誤差しか検査しないため、中央誤差が0でも内部で大きく膨らむ変曲Bezierを受理できます。さらに中央位置のpx/mmと係数2だけで投影誤差を囲み、[410行目](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/geometry/CurveIntersection.cpp:410) で残り区間を打ち切っています。黄金分割も各区間が単峰という未検証の仮定です。高倍率・透視・ループ/変曲曲線では真の最近区間を捨て、6/12 logical px契約を破れます。画面空間で誤差を保証できる適応分割・境界を使用し、単峰性に依存しない探索へ変更してください。強い変曲、ループ、透視、高倍率の境界試験が必要です。
 
-**Not blocking, for Stage 2 or the owner**
-1. **Speed on every pointer move:** closest-point snapping now samples each curve at `interactiveJoinMm` (0.01 mm) instead of length/200. For a circle of radius 100 mm that is about 17 times more samples, and there is no early exit for curves outside the radius. §13 says hover must not slow a normal frame, and this has not been measured.
-   - Suggested fix: skip spans whose lower bound is beyond `snapPickPx + holdMarginPx`.
-   - Add the 10,000-wire performance test.
-2. **Rules the specs don't define:**
-   - Closest-on-curve is dropped when a perpendicular or tangent point on the same curve is in range. Without this, the §6.1 order would make those points impossible to pick.
-   - The extension and project-to-plane snaps are ranked below perpendicular/tangent and above the grid.
+5. [CurveIntersection.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/geometry/CurveIntersection.cpp:432) / [PlaneFocus.cpp](C:/Users/tak01/github/kachakachaCAD-worktrees/ui-p1-007/src/next/kachakacha/app/PlaneFocus.cpp:9) — 「曲線が平面上か」を別実装で二重管理しています。Selection側は始点・中央・終点だけ、Snap側は解析値/制御点を検査するため、3点では平面上だが途中で浮く三次Bezierについて選択とスナップの判定が食い違います。許容値を引数化した単一のgeometry述語へ集約し、SelectionとSnapから共有してください。
 
-   Both are written down in `v1-drawing-parity.md`, but the owner should confirm them.
-3. **Not implemented yet:** stronger snap for candidates suited to the current tool (§6.1) and ranking the tool's required type first (§4.3 item 1, PRD-060). This is recorded honestly in the `SnapEngine.h` header, and no rule was invented.
-4. **Grid:** with a 12 px radius, free placement on the plane becomes impossible when grid points are about 17 px or less apart on screen.
-5. **Stage 2 work:**
-   - Connect `SnapHysteresis` to `DrawingSession.cpp:81-83`, which still calls `ChooseSnap` without it.
-   - Call `Reset` on tool switch and cancel.
-   - Add the `S`-key self-test in `V2SelfTestInput.cpp`.
-6. **Stale comment:** `V2SelfTestScreen.cpp:544` still says lines are hit at 8px; it is now 6px. The test's 16 px margin still holds.
-7. **Two plane checks:** the new `geometry::CurveLiesInPlane` and the existing `app::CurveLiesOnPlane` (`PlaneFocus.cpp`) answer the same question and should be merged later.
+記録済みゲートは configure/build、CTest 129/129、self-test 169/169 とも成功しています。保存キーの往復・欠損時既定値・不正値拒否も整合していますが、上記の仕様逆転、所有権、状態寿命、曲線境界ケースは現行試験で検出されません。レビューのみで、変更は行っていません。

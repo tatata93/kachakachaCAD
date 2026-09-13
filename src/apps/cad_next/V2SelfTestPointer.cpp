@@ -811,51 +811,66 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         {"グリッドを変える", {},
             [&window]() { window.ApplyGridChoice(window.CurrentGridChoice()); }},
     };
-    for (const auto& route : kRoutes) {
-        const std::string nameJa(route.nameJa);
-        // 「開き直す」は文書を空にするので、毎回線を引き直してから始める。
+    // 線の上の点。ここでは候補送りの元(拾える線)が出る。
+    // 端点の 14px 先は線から外れているので、そちらでは候補が出ない。
+    // 見たいものが2つ(リングと候補送り)あり、出る場所が違うので、道ごとに2回通す。
+    const auto middle = viewport.Mapping().Project(Vector3{0.0, 0.0, 0.0});
+    if (!middle.has_value()) {
+        return Explain("線の中ほどが画面に入る", false);
+    }
+    const QPointF onLine(middle->x, middle->y);
+
+    // 下ごしらえ: 空にして線を2本引き、道ごとの前置きを済ませる。
+    const auto prepareScene = [&window, &route = kRoutes](const std::size_t index) {
         window.RunCommand("file.new");
         if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})
             || !DrawLine(window, Vector3{-20.0, 30.0, 0.0}, Vector3{20.0, 30.0, 0.0})) {
-            return Explain((nameJa + ": 下ごしらえの線が引ける").c_str(), false);
+            return false;
         }
-        if (route.prepare) {
-            route.prepare();
+        if (route[index].prepare) {
+            route[index].prepare();
         }
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
-        // 端点で掴んでから 14px 外へ出る。持ち越しがあるので、まだ端点へ吸い付く。
+        return true;
+    };
+
+    for (std::size_t index = 0; index < kRoutes.size(); ++index) {
+        const std::string nameJa(kRoutes[index].nameJa);
+        const auto fail = [&window](const std::string& why) {
+            (void)Explain(why.c_str(), false);
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        };
+
+        // (1) リング。端点で掴んでから 14px 外へ出る。持ち越しがあるのでまだ吸い付く。
+        if (!prepareScene(index)) {
+            return fail(nameJa + ": 下ごしらえの線が引ける");
+        }
         viewport.HoverAt(onEndpoint);
         viewport.HoverAt(justOutside);
-        // 前提を必ず確かめる。掴めていなければ、この試験は何も見ていない。
-        if (!Explain((nameJa + ": 前提 — 14px 先でも持ち越した端点へ吸い付いている").c_str(),
-                viewport.Hover().snap.has_value())) {
-            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-            return false;
+        if (!viewport.Hover().snap.has_value()) {
+            return fail(nameJa + ": 前提 — 14px 先でも持ち越した端点へ吸い付いている");
         }
-        const int candidatesBefore = viewport.CandidateCount();
-        // 候補が無いと、候補送りの道を検証したことにならない。前提として必須にする。
-        if (!Explain((nameJa + ": 前提 — 候補が1つ以上ある").c_str(),
-                candidatesBefore > 0)) {
-            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-            return false;
-        }
-
-        route.run();
-
+        kRoutes[index].run();
         // ここでポインタは動かさない。動かすと古い hover_ を上書きしてしまう。
-        if (!Explain((nameJa + ": 場面を替えたら前のリングが消える").c_str(),
-                !viewport.Hover().snap.has_value())) {
-            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-            return false;
+        if (viewport.Hover().snap.has_value()) {
+            return fail(nameJa + ": 場面を替えたら前のリングが消える");
         }
-        if (!Explain((nameJa + ": 前の候補送りも消える").c_str(),
-                viewport.CandidateCount() == 0)) {
-            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-            return false;
+        if (viewport.HasPreview()) {
+            return fail(nameJa + ": 場面を替えたら前の途中経過が消える");
         }
-        if (!Explain((nameJa + ": 前の途中経過も消える").c_str(), !viewport.HasPreview())) {
-            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-            return false;
+
+        // (2) 候補送り。線の上に乗せると候補が出る。
+        if (!prepareScene(index)) {
+            return fail(nameJa + ": 下ごしらえの線が引ける(候補送り)");
+        }
+        viewport.HoverAt(onLine);
+        if (viewport.CandidateCount() <= 0) {
+            return fail(nameJa + ": 前提 — 線の上では候補が1つ以上ある");
+        }
+        kRoutes[index].run();
+        if (viewport.CandidateCount() != 0) {
+            return fail(nameJa + ": 場面を替えたら前の候補送りが消える");
         }
     }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);

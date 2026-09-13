@@ -269,6 +269,7 @@ namespace {
         return false;
     }
     window.ExtrudeDock().SetDistanceMm(2.0);
+    const std::uint64_t before = window.Session().GetDocument().Revision();
     window.RunCommand("part.extrude");   // 確定
     // 足しなので立体は増えない。増えたら「足す」になっていない。
     if (!Explain((std::string("外へ引いても立体は増えない(足しになっている。帯は ")
@@ -276,9 +277,11 @@ namespace {
             CountParts(window) == 1)) {
         return false;
     }
-    return Explain("何をしたかを言う",
-        window.StatusText().contains(QStringLiteral("mm"))
-            || window.StatusText().contains(QStringLiteral("面")));
+    // 文言ではなく、文書が本当に変わったかで見る。
+    // 「できた」と言うだけで何も変わっていない、を通さないため。
+    return Explain((std::string("文書が本当に変わる(帯は ")
+                       + window.StatusText().toStdString() + ")").c_str(),
+        window.Session().GetDocument().Revision() != before);
 }
 
 [[nodiscard]] bool CasePartCommandsNeedSelection(V2MainWindow& window)

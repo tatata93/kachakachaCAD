@@ -14,6 +14,7 @@
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/DrawingSession.h"
+#include "kachakacha/app/ExtrudeDrag.h"
 #include "kachakacha/app/PointerCursor.h"
 #include "kachakacha/app/PointerGesture.h"
 #include "kachakacha/geometry/ScreenMapping.h"
@@ -195,6 +196,31 @@ public:
     {
         return cursorTool_;
     }
+    //! 押し出しの矢印ハンドルを出す(オーナー指示 2026-09-14 §6)。
+    //! 輪郭の重心を根元に、押し出しの向きへ矢印を出し、引くと距離が変わる。
+    //! preview は、いまの距離で出来上がる形の輪郭(押し出し先と側面)。
+    void ShowExtrudeHandle(const kachakacha::v2::app::ExtrudeHandle& handle,
+        std::vector<std::vector<kachakacha::v2::geometry::Vector3>> preview);
+    //! 矢印を消す。道具を替えたときと、確定・取消のとき。
+    void HideExtrudeHandle();
+    [[nodiscard]] bool ExtrudeHandleShown() const noexcept { return extrudeHandle_.shown; }
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeHandleOrigin() const noexcept
+    {
+        return extrudeHandle_.handle.origin;
+    }
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeHandleDirection() const noexcept
+    {
+        return extrudeHandle_.handle.direction;
+    }
+    [[nodiscard]] double ExtrudeHandleDistanceMm() const noexcept
+    {
+        return extrudeHandle_.handle.distanceMm;
+    }
+    //! 距離が変わったときに呼ぶもの。右の欄が同じ値を出すために要る。
+    void SetExtrudeDistanceCallback(std::function<void(double)> callback);
+    //! Enter で確定、Esc でやめる。中身は窓が持っている。
+    void SetExtrudeCallbacks(std::function<void()> confirm, std::function<void()> cancel);
+
     //! いまカーソルの下で見えているもの(吸着・案内)。診断が読む。
     [[nodiscard]] const kachakacha::v2::app::HoverResult& Hover() const noexcept
     {
@@ -535,6 +561,10 @@ private:
     //! 近似モデルの曲げ状態。帯のレールを折れ線で出す。
     void DrawFoldPreview(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
+    void DrawExtrudeHandle(QPainter& painter) const;
+    //! 矢印を掴んだか。掴んだら true。
+    [[nodiscard]] bool BeginExtrudeDrag(const QPointF& position);
+    void DragExtrude(const QPointF& position);
     void DrawScaleBar(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
     //! 索引を渡して押す。ボタンと輪で拾い方が違うので、押す側は共通にする。
@@ -711,6 +741,22 @@ private:
     bool drawingCursor_ = false;
     //! 作図中に、作業平面の外の線の上にいる。押しても掴めない。
     bool hoverOffPlane_ = false;
+    //! 押し出しの矢印ハンドル。出ている間だけ引ける。
+    struct ExtrudeHandleState {
+        bool shown = false;
+        kachakacha::v2::app::ExtrudeHandle handle;
+        //! いまの距離で出来上がる形の輪郭。破線で出す。
+        std::vector<std::vector<kachakacha::v2::geometry::Vector3>> preview;
+        //! 引いている最中か。
+        bool dragging = false;
+        QPointF pressedPx;
+        //! 引き始めたときの距離。掴んだ場所を基準にする。
+        double distanceAtPressMm = 0.0;
+    };
+    ExtrudeHandleState extrudeHandle_;
+    std::function<void(double)> extrudeDistanceChanged_;
+    std::function<void()> confirmExtrude_;
+    std::function<void()> cancelExtrude_;
     kachakacha::v2::modeling::DrawingTool cursorTool_ =
         kachakacha::v2::modeling::DrawingTool::Select;
     kachakacha::v2::geometry::Vector3 center_{};

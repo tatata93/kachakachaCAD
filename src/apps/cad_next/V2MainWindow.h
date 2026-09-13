@@ -123,6 +123,17 @@ public:
     [[nodiscard]] kachakacha::v2::app::ExtrudePlan PlanExtrudeFromSelection() const;
     //! その読み取りを日本語にしたもの。画面と試験が同じ文を見る。
     [[nodiscard]] QString ExtrudePlanTextJa() const;
+    //! 押し出しの下見を始める。矢印ハンドルと破線が出る。
+    void BeginExtrudePreview();
+    //! 距離が変わったときに、破線と右の欄を合わせる。
+    void UpdateExtrudePreview(double distanceMm);
+    //! 下見をやめる。確定・取消・道具替えのとき。
+    void EndExtrudePreview();
+    //! いまの距離で出来上がる形の輪郭。試験から見る。
+    [[nodiscard]] std::vector<kachakacha::v2::geometry::Vector3> ExtrudeOutline() const
+    {
+        return extrudeOutline_;
+    }
     //! 診断を貼り板へ入れる。
 
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
@@ -656,6 +667,10 @@ private:
         workPlaneChooser_;
     //! 押し出しで前に選んだもの。次に押すときの初期値にする。
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
+    //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
+    std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
+    [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
+    ExtrudePreviewLoops(double distanceMm) const;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
         const kachakacha::v2::app::ExtrudeChoice&,
         const kachakacha::v2::app::ExtrudeFacts&)>

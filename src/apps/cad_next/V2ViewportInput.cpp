@@ -1029,6 +1029,10 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         DragBody(event->position());
         return;
     }
+    if (extrudeHandle_.dragging) {
+        DragExtrude(event->position());
+        return;
+    }
     if (boxSelect_.active) {
         // 矩形を引いている。当たり判定もスナップも探さない。
         // 探すと、引いている途中に Hover が動いて、どこを囲っているのか読めなくなる。
@@ -1126,6 +1130,11 @@ void V2Viewport::mousePressEvent(QMouseEvent* event)
     if (panning_) {
         return;
     }
+    // 押し出しの矢印は、選択より先に見る。矢印の上を押したら掴む。
+    // 後に回すと、矢印の下にある線が選び直されて、矢印が消える。
+    if (BeginExtrudeDrag(event->position())) {
+        return;
+    }
     kachakacha::v2::view::AxisArrowModifier modifier =
         kachakacha::v2::view::AxisArrowModifier::None;
     if ((event->modifiers() & Qt::ShiftModifier) != 0) {
@@ -1174,6 +1183,14 @@ void V2Viewport::mouseReleaseEvent(QMouseEvent* event)
         if (kind == kachakacha::v2::app::PointerGesture::Click) {
             PressRightWithoutMoving(event->position());
         }
+        return;
+    }
+    if (extrudeHandle_.dragging) {
+        if (event->button() != Qt::LeftButton) {
+            return;
+        }
+        DragExtrude(event->position());
+        extrudeHandle_.dragging = false;
         return;
     }
     // 掴みを終えるのは、掴み始めた左ボタンだけである。

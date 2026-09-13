@@ -736,6 +736,12 @@ void V2Viewport::OnToolChanged()
     // もう作られない形の途中経過だけが残り、まだ引いている途中に見える(§3 規則3)。
     hover_.preview.clear();
     ClearMeasurePicks();
+    // 押し出しの下見も残さない。前の道具の手つきが画面に残ると、
+    // いま何をしているのか読めなくなる(オーナー指示 2026-09-14 §4)。
+    if (extrudeHandle_.shown && cancelExtrude_) {
+        cancelExtrude_();
+    }
+    HideExtrudeHandle();
     // 道具が変わればカーソルの形も変わる。ここで呼ばないと、次に押すまで
     // 矢印のままで、いま作図できるのかどうかが手元で分からない。
     RefreshCursorShape();
@@ -938,6 +944,8 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawGuideRows(painter);
     DrawPreview(painter);
     DrawSnap(painter);
+    // 押し出しの矢印は選択の印より上に出す。掴む相手だからである。
+    DrawExtrudeHandle(painter);
     DrawBoxSelect(painter);
     DrawScaleBar(painter);
     // 輪 → キューブ → ボタン の順で描く。
@@ -1242,6 +1250,14 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->key() == Qt::Key_Escape) {
+        if (extrudeHandle_.shown) {
+            // 押し出しの下見が出ているなら、まずそれをやめる。
+            // 手をつけている一時の操作を、いちばん先に片付ける。
+            if (cancelExtrude_) {
+                cancelExtrude_();
+            }
+            return;
+        }
         if (boxSelect_.active) {
             // 引いている途中の矩形が先。Esc は「やりかけを1つ」やめる。
             // これは押している間だけの手つきで、文書へ入りかけた入力ではないので、
@@ -1304,6 +1320,13 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         return;
     }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        if (extrudeHandle_.shown) {
+            // 出ている下見を確定する。空白を押して確定、はしない。
+            if (confirmExtrude_) {
+                confirmExtrude_();
+            }
+            return;
+        }
         // 構えている命令があれば「これで」と言う。命令は窓が持っているので、
         // 画面は伝えるだけにする。
         if (confirmPending_) {

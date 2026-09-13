@@ -192,6 +192,16 @@ void V2MainWindow::WireViewportCallbacks()
         viewport_->PruneSelection();
         RefreshEntityList();
     });
+    // 押し出しの矢印を引いたら、右の欄と破線を合わせる。
+    viewport_->SetExtrudeDistanceCallback([this](double distanceMm) {
+        UpdateExtrudePreview(distanceMm);
+    });
+    // Enter で確定、Esc でやめる。中身は窓が持っている。
+    viewport_->SetExtrudeCallbacks([this] { ConfirmExtrude(); },
+        [this] {
+            EndExtrudePreview();
+            SetStatus(QStringLiteral("押し出し: やめました。"));
+        });
     // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
     viewport_->SetBackToSelectCallback([this] {
         SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
@@ -1200,7 +1210,8 @@ void V2MainWindow::RefreshGuide()
         return;
     }
     // いまの進み具合はツールが持っている。画面で数え直さない。
-    const auto hover = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
+    // 画面の中央はポインタの位置ではないので、吸着の持ち越しを変えない PeekHover で見る。
+    const auto hover = session_->PeekHover(kachakacha::v2::geometry::ScreenPoint{
         viewport_->width() * 0.5, viewport_->height() * 0.5});
     kachakacha::v2::modeling::ToolPrompt prompt;
     prompt.messageJa = hover.messageJa;

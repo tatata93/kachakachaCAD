@@ -1,9 +1,11 @@
 // 選択(ui-workflows §2、V1同等)。
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/modeling/SubshapeKey.h"
 
 #include <array>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -20,6 +22,7 @@ using kachakacha::v2::app::MakeBoxSelection;
 using kachakacha::v2::app::ScreenBox;
 using kachakacha::v2::app::PickCandidate;
 using kachakacha::v2::app::PickCurve;
+using kachakacha::v2::app::PickPoint;
 using kachakacha::v2::app::PruneSelection;
 using kachakacha::v2::app::SelectAllOfKind;
 using kachakacha::v2::app::SelectedCountOfKind;
@@ -104,6 +107,7 @@ namespace {
 {
     GeometryTolerance tolerance;
     tolerance.displayPickPx = 8.0;
+    tolerance.edgePickPx = 6.0;
     return tolerance;
 }
 
@@ -144,7 +148,7 @@ KACHA_V2_TEST(selection, 線の上を押せば拾える)
 
 KACHA_V2_TEST(selection, 離れたところを押しても拾わない)
 {
-    // 8px より遠いところ。1mm = 10px なので、2mm 離せば 20px。
+    // 線の拾い半径(6px)より遠いところ。1mm = 10px なので、2mm 離せば 20px。
     const auto picked = PickCurve(TwoLines(), TopView(), ScreenPoint{500.0, 520.0},
         Tolerance());
     Require(!picked.has_value(), "拾わない");
@@ -161,7 +165,7 @@ KACHA_V2_TEST(selection, 近いほうを拾う)
 
 KACHA_V2_TEST(selection, 範囲に2本入っていても近いほうを拾う)
 {
-    // 0.5mm(=5px)しか離れていない2本。どちらも許容差(8px)の内側にある。
+    // 0.5mm(=5px)しか離れていない2本。どちらも線の拾い半径(6px)の内側にある。
     // 「範囲に入った最後の1本」ではなく、いちばん近い1本を返す。
     SnapScene scene;
     scene.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
@@ -227,13 +231,137 @@ KACHA_V2_TEST(selection, 拾う範囲は許容差で決まる)
 {
     SnapScene scene = TwoLines();
     GeometryTolerance narrow = Tolerance();
-    narrow.displayPickPx = 1.0;
+    narrow.edgePickPx = 1.0;
     Require(!PickCurve(scene, TopView(), ScreenPoint{500.0, 505.0}, narrow).has_value(),
         "狭ければ拾わない");
     GeometryTolerance wide = Tolerance();
-    wide.displayPickPx = 20.0;
+    wide.edgePickPx = 20.0;
     Require(PickCurve(scene, TopView(), ScreenPoint{500.0, 505.0}, wide).has_value(),
         "広ければ拾う");
+}
+
+KACHA_V2_TEST(selection, 線は6px_点は8pxで拾う)
+{
+    // 既定の許容値そのものを使う。7px は線の半径の外で、点の半径の内側。
+    const GeometryTolerance tolerance = GeometryTolerance::Default();
+    SnapScene lineOnly;
+    lineOnly.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
+    Require(PickCurve(lineOnly, TopView(), ScreenPoint{500.0, 505.0}, tolerance).has_value(),
+        "線から 5px なら拾う");
+    Require(!PickCurve(lineOnly, TopView(), ScreenPoint{500.0, 507.0}, tolerance).has_value(),
+        "線から 7px なら拾わない");
+
+    SnapScene pointOnly;
+    pointOnly.points.push_back(SnapDrawingPoint{Ent(8), Vector3{0.0, 0.0, 0.0}});
+    const auto point = PickPoint(pointOnly, TopView(), ScreenPoint{507.0, 500.0}, tolerance);
+    Require(point.has_value(), "作図点から 7px なら拾う");
+    Require(point->kind == SelectionElementKind::Vertex, "頂点として拾う");
+    Require(!PickPoint(pointOnly, TopView(), ScreenPoint{509.0, 500.0}, tolerance).has_value(),
+        "作図点から 9px なら拾わない");
+}
+
+namespace {
+
+//! 拡大表示(1mm = 1000px)で、弦がいちばん曲線から離れる区間の真ん中を線の6pxの境目で押す。
+//! 弦で測ると弦のずれ(最大 interactiveJoinMm = 10px)だけ遠く見え、線の真上でも拾えなくなる。
+void RequireHighZoomEdgeBoundary(const CurveSegment& segment, const std::string& label)
+{
+    const GeometryTolerance tolerance = GeometryTolerance::Default();
+    const auto samples = kachakacha::v2::geometry::SampleCurve(segment,
+        tolerance.interactiveJoinMm);
+    double parameter = 0.0;
+    double sagMm = -1.0;
+    Vector3 chordMiddle{};
+    for (std::size_t index = 1; index < samples.size(); ++index) {
+        const double middle = 0.5 * (samples[index - 1].parameter + samples[index].parameter);
+        const Vector3 chord = (samples[index - 1].position + samples[index].position) * 0.5;
+        const double sag = (segment.Evaluate(middle) - chord).Length();
+        if (sag > sagMm) {
+            sagMm = sag;
+            parameter = middle;
+            chordMiddle = chord;
+        }
+    }
+    const Vector3 onCurve = segment.Evaluate(parameter);
+    const ScreenMapping mapping = MakeOrthographicMapping(onCurve, {0, 0, -1}, {0, 1, 0}, 1.0,
+        1000.0, 1000.0);
+    const double pixelsPerMm = mapping.PixelsPerMillimeterAt(onCurve);
+    Require(sagMm * pixelsPerMm > 3.0,
+        label + ": 前提として弦は曲線から 3px より離れている ("
+            + std::to_string(sagMm * pixelsPerMm) + "px)");
+    // 弦の反対側(曲線の外側)へ、接線と垂直に押す。
+    const Vector3 tangent = kachakacha::v2::geometry::Normalized(segment.FirstDerivative(parameter));
+    Vector3 away = onCurve - chordMiddle;
+    away = kachakacha::v2::geometry::Normalized(away - tangent * Dot(away, tangent));
+
+    SnapScene scene;
+    scene.curves.push_back(SnapCurve{Ent(1), Seg(1), segment, false});
+    const auto pointerAt = [&](double px) {
+        const auto screen = mapping.Project(onCurve + away * (px / pixelsPerMm));
+        Require(screen.has_value(), label + ": 画面へ写せる");
+        return *screen;
+    };
+
+    const ScreenPoint inside = pointerAt(5.0);
+    const auto picked = PickCurve(scene, mapping, inside, tolerance);
+    Require(picked.has_value(), label + ": 曲線から 5px なら拾う");
+    RequireNear(picked->distancePx, 5.0, 1.0e-3, label + ": 画面距離は曲線までの距離");
+    Require(picked->curveParameter.has_value(), label + ": 曲線上の位置を持つ");
+    RequireNear((segment.Evaluate(*picked->curveParameter) - picked->hitPoint).Length(), 0.0,
+        1.0e-12, label + ": パラメータと命中位置は同じ点");
+    RequireNear((picked->hitPoint - onCurve).Length(), 0.0, 1.0e-6,
+        label + ": 命中位置はポインタ直下の曲線上");
+    const auto hitScreen = mapping.Project(picked->hitPoint);
+    Require(hitScreen.has_value(), label + ": 命中位置を写せる");
+    RequireNear(std::hypot(hitScreen->x - inside.x, hitScreen->y - inside.y), picked->distancePx,
+        1.0e-9, label + ": 距離は命中位置までの距離");
+
+    Require(!PickCurve(scene, mapping, pointerAt(7.0), tolerance).has_value(),
+        label + ": 曲線から 7px なら拾わない");
+}
+
+} // namespace
+
+KACHA_V2_TEST(selection, 拡大しても円は曲線から6pxで拾う)
+{
+    const auto circle = CurveSegment::MakeCircle({0, 0, 0}, {0, 0, 1}, {1, 0, 0}, 20.0);
+    Require(circle.HasValue(), "円が作れる");
+    RequireHighZoomEdgeBoundary(circle.Value(), "円");
+}
+
+KACHA_V2_TEST(selection, 拡大してもBezierは曲線から6pxで拾う)
+{
+    const auto bezier = CurveSegment::MakeCubicBezier(
+        {{0, 0, 0}, {10, 20, 0}, {30, 20, 0}, {40, 0, 0}});
+    Require(bezier.HasValue(), "Bezierが作れる");
+    RequireHighZoomEdgeBoundary(bezier.Value(), "Bezier");
+}
+
+KACHA_V2_TEST(selection, 点と線の拾い半径は互いに影響しない)
+{
+    SnapScene scene;
+    scene.curves.push_back(Curve(1, {-40, 0, 0}, {40, 0, 0}));
+    scene.points.push_back(SnapDrawingPoint{Ent(8), Vector3{30.0, 0.0, 0.0}});   // 画面 x=800
+
+    // 点の半径を広げても、線は 7px で拾わない。
+    GeometryTolerance widePoint = Tolerance();
+    widePoint.displayPickPx = 50.0;
+    Require(!PickCurve(scene, TopView(), ScreenPoint{500.0, 507.0}, widePoint).has_value(),
+        "点の半径を広げても線の半径は変わらない");
+    // 点の半径を狭めても、線は 5px で拾う。
+    GeometryTolerance narrowPoint = Tolerance();
+    narrowPoint.displayPickPx = 1.0;
+    Require(PickCurve(scene, TopView(), ScreenPoint{500.0, 505.0}, narrowPoint).has_value(),
+        "点の半径を狭めても線は拾える");
+    // 逆に、線の半径を変えても点は 7px で拾い、9px で拾わない。
+    GeometryTolerance narrowEdge = Tolerance();
+    narrowEdge.edgePickPx = 1.0;
+    Require(PickPoint(scene, TopView(), ScreenPoint{807.0, 500.0}, narrowEdge).has_value(),
+        "線の半径を狭めても点は拾える");
+    GeometryTolerance wideEdge = Tolerance();
+    wideEdge.edgePickPx = 50.0;
+    Require(!PickPoint(scene, TopView(), ScreenPoint{809.0, 500.0}, wideEdge).has_value(),
+        "線の半径を広げても点の半径は変わらない");
 }
 
 KACHA_V2_TEST(selection, 線の端の外を押しても線の上なら拾わない)

@@ -15,9 +15,14 @@ numericEpsilon       = 1e-12
 modelLinearMm        = clamp(max(1e-6, modelDiagonalMm * 1e-9), 1e-6, 1e-3)
 modelAngularRad      = 1e-9
 interactiveJoinMm    = 0.01 既定、UIで0.001から0.1まで変更可
-displayPickPx        = 8
+displayPickPx        = 8   点(頂点・作図点)の拾い半径
+edgePickPx           = 6   線の拾い半径
+snapPickPx           = 12  通常のスナップ候補の吸着半径
 candidateMenuPx      = 14
 ```
+
+- `*Px` はlogical pxとし、ズーム倍率に依らず画面上の同じ距離で判定する。
+- 点・線・スナップの半径は別の許容値であり、互いに流用しない。
 
 - `modelLinearMm` はB-Rep生成と厳密接続判定に使う。
 - `interactiveJoinMm` は接続候補を見つけるためだけに使う。

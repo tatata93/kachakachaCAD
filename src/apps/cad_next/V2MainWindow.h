@@ -129,6 +129,12 @@ public:
     void UpdateExtrudePreview(double distanceMm);
     //! 下見をやめる。確定・取消・道具替えのとき。
     void EndExtrudePreview();
+    //! 出ている下見のとおりに作る。Enter から呼ぶ。
+    void ConfirmExtrude();
+    //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
+    [[nodiscard]] std::optional<kachakacha::v2::app::ExtrudeChoice> PrepareExtrudeChoice(
+        const kachakacha::v2::app::ExtrudePlan& plan,
+        const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles);
     //! いまの距離で出来上がる形の輪郭。試験から見る。
     [[nodiscard]] std::vector<kachakacha::v2::geometry::Vector3> ExtrudeOutline() const
     {

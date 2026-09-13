@@ -70,7 +70,9 @@ public:
     void SetScene(SnapScene scene) { scene_ = std::move(scene); }
     [[nodiscard]] const SnapScene& Scene() const noexcept { return scene_; }
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
-    void SetSnapSettings(SnapSettings settings) { snapSettings_ = std::move(settings); }
+    //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
+    //! 次の Hover まで待つと、Hover が無いまま離したときに古い吸着先が残る。
+    void SetSnapSettings(SnapSettings settings);
 
     //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束)。
     //!
@@ -83,7 +85,14 @@ public:
     }
 
     //! ポインタを動かした。
+    //! 直前に選んだ吸着先を持ち越す(modeling::SnapHysteresis)。小さな揺れで入れ替わらない。
+    //! 持ち越しは、ツールの切替・設定の変更・取消・S の間に捨てる。
     [[nodiscard]] HoverResult Hover(const ScreenPoint& pointer);
+
+    //! Hover と同じ答えを出すが、持ち越しを変えない。
+    //! 案内文のように、ポインタの位置ではない所で様子を見るときに使う。
+    //! Hover を使うと、ポインタと無関係な位置の吸着先を持ち越してしまう。
+    [[nodiscard]] HoverResult PeekHover(const ScreenPoint& pointer);
 
     //! クリックした。吸着した位置をツールへ渡す。
     [[nodiscard]] ClickResult Click(const ScreenPoint& pointer);
@@ -127,6 +136,8 @@ public:
     [[nodiscard]] bool Redo() { return document_.Redo(); }
 
 private:
+    //! Hover と PeekHover の中身。keepHold が真なら持ち越しを更新する。
+    [[nodiscard]] HoverResult Evaluate(const ScreenPoint& pointer, bool keepHold);
     [[nodiscard]] ClickResult Commit(const modeling::ToolOutput& output,
         std::string_view label = {});
     //! 作った形を、次のスナップの相手にも加える。
@@ -142,6 +153,7 @@ private:
     SnapScene scene_;
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
+    modeling::SnapHysteresis snapHysteresis_;
     std::function<geometry::Vector3(const geometry::Vector3&)> adjustPoint_;
 };
 

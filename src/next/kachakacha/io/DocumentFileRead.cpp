@@ -691,6 +691,20 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                 tolerance.displayPickPx = found->AsNumber();
             }
         }
+        // 線とスナップの拾い半径は省略可能。書いてあるなら正の数でなければ断る
+        // (kcd2-format.md §19.3)。0以下を黙って受け取ると、線が拾えない・吸着しない文書になる。
+        const auto readPickPx = [&](const char* key, double& target) {
+            if (const JsonValue* found = tolerances->Find(key)) {
+                if (found->Type() != JsonType::Number || !(found->AsNumber() > 0.0)) {
+                    loader.Fail(kBadValue, "拾い半径は正の数でなければなりません。",
+                        std::string("$.tolerances.") + key);
+                } else {
+                    target = found->AsNumber();
+                }
+            }
+        };
+        readPickPx("edgePickPx", tolerance.edgePickPx);
+        readPickPx("snapPickPx", tolerance.snapPickPx);
         if (const JsonValue* found = tolerances->Find("candidateMenuPx")) {
             if (found->Type() == JsonType::Number) {
                 tolerance.candidateMenuPx = found->AsNumber();

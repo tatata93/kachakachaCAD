@@ -828,8 +828,11 @@ JSON層の診断(`KCD2-J001`〜`J004`)はそのまま透過する。
 
 ### 19.3 §4ルートへの追加key
 
-- `tolerances` に `displayPickPx` と `candidateMenuPx` を含める(GeometryToleranceの全項目)。
-  この2つは省略可能で、欠けた場合は既定値を使う。他の4つは必須とし、正でなければ拒否する。
+- `tolerances` に `displayPickPx`、`edgePickPx`、`snapPickPx`、`candidateMenuPx` を含める
+  (GeometryToleranceの全項目)。この4つは省略可能で、欠けた場合は既定値を使う。
+  `edgePickPx` と `snapPickPx` は、書いてある場合は正の数でなければ `KCD2-D002` で拒否する
+  (数でない値、0、負の値)。
+  他の4つは必須とし、正でなければ拒否する。
 - `revision` は0以上の整数でなければならない。負・小数は拒否する。
 
 ### 19.4 §6 EntityRecordへの追加key

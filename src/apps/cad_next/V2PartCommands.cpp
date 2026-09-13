@@ -154,7 +154,68 @@ std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeTargets() const
     return targets;
 }
 
+//! 押し出しの命令。窓を出す前に、まず画面で見せる。
+//!
+//! 「選ぶ → CADが読む → 下見 → 引くか打つ → Enter で確定」に揃える
+//! (オーナー指示 2026-09-14 §2)。窓で全部決めてから作る道は、
+//! 押す前に何ができるのか見えないので、初めての人には難しい。
 void V2MainWindow::RunExtrude()
+{
+    const auto opening = PlanExtrudeFromSelection();
+    if (!opening.readyToPreview) {
+        // 足りないものを言う。「不正な入力です」で終わらせない。
+        SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
+        return;
+    }
+    if (!viewport_->ExtrudeHandleShown()) {
+        // まだ下見が出ていない。出して待つ。Enter で確定される。
+        BeginExtrudePreview();
+        return;
+    }
+    // すでに下見が出ている状態でもう一度押されたら、確定とみなす。
+    ConfirmExtrude();
+}
+
+//! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
+//!
+//! ConfirmExtrude から切り出したのは、1関数100行の門を越えたためである。
+//! 切る場所は「決める」と「作る」の境目にした。
+std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeChoice(
+    const kachakacha::v2::app::ExtrudePlan& plan,
+    const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles)
+{
+    const auto facts = BuildExtrudeFacts(profiles);
+    // いまの選択をどう読んだかを、決める前に見せる。
+    SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
+    kachakacha::v2::app::ExtrudeChoice choice = extrudeChoice_;
+    // 距離は矢印が持っている値を使う。引いた結果と作る形を必ず一致させる。
+    choice.distanceMm = viewport_->ExtrudeHandleShown()
+        ? viewport_->ExtrudeHandleDistanceMm()
+        : ExtrudeDistanceMm();
+    choice.hasSelectedPart = facts.parts > 0;
+    // 立体を選んでいるなら、既定の操作は読み取りに従う(窓を開けるなら切削)。
+    // 覚えていた前回の操作より、いま選んでいるものの意味を優先する。
+    if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
+        choice.booleanMode = plan.defaultOperation;
+    }
+    if (extrudeChooser_) {
+        const auto answered = extrudeChooser_(choice, facts);
+        if (!answered.has_value()) {
+            SetStatus(QStringLiteral("押し出し: やめました。"));
+            return std::nullopt;
+        }
+        choice = *answered;
+    }
+    const auto checked = kachakacha::v2::app::ValidateExtrudeChoice(choice, facts);
+    if (!checked.HasValue()) {
+        ReportDiagnostics(checked.Diagnostics());
+        return std::nullopt;
+    }
+    return choice;
+}
+
+//! 出ている下見のとおりに作る。
+void V2MainWindow::ConfirmExtrude()
 {
     using kachakacha::v2::modeling::AnalyzeExtrudeRequest;
     using kachakacha::v2::modeling::ExtrudeRequest;
@@ -179,30 +240,11 @@ void V2MainWindow::RunExtrude()
     // 何を作るか、どこまで押すかを選ばせる。core は7通りの向きと5通りの終端を
     // 持っているのに、画面が1通りに固定していた。工程の案内はそれを前提に
     // 書いてあるので、案内と実物が食い違っていた。
-    const auto facts = BuildExtrudeFacts(profiles);
-    // いまの選択をどう読んだかを、決める前に見せる。
-    SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
-    kachakacha::v2::app::ExtrudeChoice choice = extrudeChoice_;
-    choice.distanceMm = ExtrudeDistanceMm();
-    choice.hasSelectedPart = facts.parts > 0;
-    // 立体を選んでいるなら、既定の操作は読み取りに従う(窓を開けるなら切削)。
-    // 覚えていた前回の操作より、いま選んでいるものの意味を優先する。
-    if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
-        choice.booleanMode = plan.defaultOperation;
+    const auto choiceOrNone = PrepareExtrudeChoice(plan, profiles);
+    if (!choiceOrNone.has_value()) {
+        return;   // やめたか、断った。理由はそちらで言っている。
     }
-    if (extrudeChooser_) {
-        const auto answered = extrudeChooser_(choice, facts);
-        if (!answered.has_value()) {
-            SetStatus(QStringLiteral("押し出し: やめました。"));
-            return;
-        }
-        choice = *answered;
-    }
-    const auto checked = kachakacha::v2::app::ValidateExtrudeChoice(choice, facts);
-    if (!checked.HasValue()) {
-        ReportDiagnostics(checked.Diagnostics());
-        return;
-    }
+    const kachakacha::v2::app::ExtrudeChoice choice = *choiceOrNone;
     extrudeChoice_ = choice;
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
@@ -302,6 +344,8 @@ void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
             }
         }
     }
+    // 作り終えたら下見と矢印を片付ける。残すと、もう作られない形が画面に残る。
+    EndExtrudePreview();
     if (partCount == 0) {
         AdoptCurrentDocument();
         SetStatus(QStringLiteral("押し出し: ワイヤーを %1 本作りました(立体は作っていません)。")

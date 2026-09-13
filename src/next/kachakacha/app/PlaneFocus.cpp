@@ -1,21 +1,14 @@
 #include "kachakacha/app/PlaneFocus.h"
 
-#include <cmath>
+#include "kachakacha/geometry/CurveIntersection.h"
 
 namespace kachakacha::v2::app {
-
-using geometry::Dot;
 
 bool CurveLiesOnPlane(const geometry::CurveSegment& segment,
     const modeling::WorkPlaneFrame& plane, double toleranceMm)
 {
-    for (const double at : {0.0, 0.5, 1.0}) {
-        const geometry::Vector3 point = segment.Evaluate(at);
-        if (std::abs(Dot(point - plane.origin, plane.normal)) > toleranceMm) {
-            return false;
-        }
-    }
-    return true;
+    // 判定そのものは geometry に1つだけ置き、スナップと同じ答えを出す。
+    return geometry::CurveLiesInPlane(segment, plane.origin, plane.normal, toleranceMm);
 }
 
 bool DimsOffPlaneCurve(bool drawing, bool enabled, bool selected, bool onPlane) noexcept

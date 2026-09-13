@@ -332,6 +332,34 @@ KACHA_V2_TEST(documentFile, 一通りの中身が往復する)
         "つながりの許容差");
 }
 
+KACHA_V2_TEST(documentFile, 点と線とスナップの拾い半径を別々に読み戻す)
+{
+    DocumentFile original = MakeSampleDocument();
+    original.snapshot.settings.tolerance.displayPickPx = 9.0;
+    original.snapshot.settings.tolerance.edgePickPx = 5.0;
+    original.snapshot.settings.tolerance.snapPickPx = 15.0;
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    const auto& tolerance = read.Value().snapshot.settings.tolerance;
+    RequireNear(tolerance.displayPickPx, 9.0, 0.0, "点の拾い半径");
+    RequireNear(tolerance.edgePickPx, 5.0, 0.0, "線の拾い半径");
+    RequireNear(tolerance.snapPickPx, 15.0, 0.0, "スナップの半径");
+
+    // 省略可能。欠けていれば既定値に戻る(kcd2-format.md §19.3)。
+    const std::string omitted = Mutate(WriteDocumentJson(original), [](auto& root) {
+        root["tolerances"].MutableObject().erase("edgePickPx");
+        root["tolerances"].MutableObject().erase("snapPickPx");
+    });
+    const auto defaulted = ReadDocumentJson(omitted);
+    Require(defaulted.HasValue(), "欠けていても読めること");
+    RequireNear(defaulted.Value().snapshot.settings.tolerance.edgePickPx, 6.0, 0.0,
+        "線の拾い半径は既定値");
+    RequireNear(defaulted.Value().snapshot.settings.tolerance.snapPickPx, 12.0, 0.0,
+        "スナップの半径は既定値");
+    RequireNear(defaulted.Value().snapshot.settings.tolerance.displayPickPx, 9.0, 0.0,
+        "残した点の拾い半径はそのまま");
+}
+
 KACHA_V2_TEST(documentFile, 2回書いても同じ文字列になる)
 {
     const DocumentFile original = MakeSampleDocument();
@@ -812,6 +840,24 @@ KACHA_V2_TEST(documentFile, 許容差が0や負なら断る)
         "0の数値許容差");
     RequireRejects(Mutate(text, setTolerance("modelAngularRad", -1.0)), "KCD2-D002",
         "負の角度許容差");
+}
+
+KACHA_V2_TEST(documentFile, 線とスナップの拾い半径が0や負や数でなければ断る)
+{
+    // 省略は既定値に戻すが、書いてある不正な値は黙って受け取らない(kcd2-format.md §19.3)。
+    const std::string text = WriteDocumentJson(MakeSampleDocument());
+    for (const char* key : {"edgePickPx", "snapPickPx"}) {
+        const std::string name(key);
+        RequireRejects(Mutate(text, [key](auto& root) {
+            root["tolerances"].MutableObject()[key] = JsonValue::Number(0.0);
+        }), "KCD2-D002", name + " が0");
+        RequireRejects(Mutate(text, [key](auto& root) {
+            root["tolerances"].MutableObject()[key] = JsonValue::Number(-6.0);
+        }), "KCD2-D002", name + " が負");
+        RequireRejects(Mutate(text, [key](auto& root) {
+            root["tolerances"].MutableObject()[key] = JsonValue::String("12");
+        }), "KCD2-D002", name + " が文字列");
+    }
 }
 
 KACHA_V2_TEST(documentFile, 版数が負や小数なら断る)

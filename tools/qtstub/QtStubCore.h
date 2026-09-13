@@ -33,6 +33,8 @@ enum MouseButton { NoButton = 0, LeftButton = 1, RightButton = 2, MiddleButton =
 enum KeyboardModifier { NoModifier = 0, ShiftModifier = 1, ControlModifier = 2,
     AltModifier = 4 };
 enum DateFormat { ISODate, TextDate, RFC2822Date };
+enum FocusReason { MouseFocusReason, TabFocusReason, ActiveWindowFocusReason,
+    PopupFocusReason, ShortcutFocusReason, OtherFocusReason };
 enum Key { Key_Escape = 1, Key_Return, Key_Enter, Key_Backspace, Key_Tab, Key_Backtab,
     Key_Space, Key_Delete, Key_Left, Key_Right, Key_Up, Key_Down,
     Key_A, Key_S, Key_D, Key_W, Key_C, Key_V, Key_X, Key_Z };

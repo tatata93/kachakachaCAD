@@ -19,8 +19,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <string>
 
+#include <QEvent>
+#include <QCoreApplication>
+#include <QFocusEvent>
+#include <QKeyEvent>
 #include <QPointF>
 #include <QString>
 
@@ -155,6 +160,151 @@ namespace {
     viewport.SetSnapSuppressedByKey(false);
     return Explain((std::string("S中は吸着しないと言う(")
                        + window.StatusText().toStdString() + ")").c_str(), saidNoSnap);
+}
+
+[[nodiscard]] bool CaseSnapRadiusHoldAndSKeyThroughViewport(V2MainWindow& window)
+{
+    // ui-ux-integrated-spec.md §6.1・§6.2 を、画面と同じ道(HoverAt とキーの知らせ)で確かめる。
+    // 吸着半径 12px は拡大しても画面の上で同じ。境目で手が震えても吸着先を離さない。
+    // S は押している間だけ止め、離すか焦点が外れれば戻す。
+    using kachakacha::v2::geometry::Vector3;
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    const std::size_t curvesBefore = window.Session().Scene().curves.size();
+    viewport.ClickAt(QPointF(viewport.width() * 0.3, viewport.height() * 0.5));
+    viewport.ClickAt(QPointF(viewport.width() * 0.7, viewport.height() * 0.5));
+    if (!Explain("線を1本引ける",
+            window.Session().Scene().curves.size() == curvesBefore + 1)) {
+        return false;
+    }
+    const Vector3 start = window.Session().Scene().curves.back().segment.StartPoint();
+    const Vector3 end = window.Session().Scene().curves.back().segment.EndPoint();
+
+    // 終点から、画面の上で線と直角に offsetPx 離れた点。線の上の最近点も終点になる。
+    const auto besideEnd = [&viewport, start, end](double offsetPx) -> std::optional<QPointF> {
+        const auto startOnScreen = viewport.Mapping().Project(start);
+        const auto endOnScreen = viewport.Mapping().Project(end);
+        if (!startOnScreen.has_value() || !endOnScreen.has_value()) {
+            return std::nullopt;
+        }
+        const double dx = endOnScreen->x - startOnScreen->x;
+        const double dy = endOnScreen->y - startOnScreen->y;
+        const double length = std::sqrt(dx * dx + dy * dy);
+        if (!(length > 0.0)) {
+            return std::nullopt;
+        }
+        return QPointF(endOnScreen->x - dy / length * offsetPx,
+            endOnScreen->y + dx / length * offsetPx);
+    };
+    const auto snapsToEnd = [&viewport, &besideEnd, end](double offsetPx) {
+        const auto at = besideEnd(offsetPx);
+        if (!at.has_value()) {
+            return false;
+        }
+        viewport.HoverAt(*at);
+        const auto position = viewport.HoverPosition();
+        return position.has_value() && (*position - end).Length() < 1.0e-6;
+    };
+
+    for (const double widthMm : {200.0, 20.0}) {
+        viewport.SetVisibleWidthMm(widthMm);
+        viewport.SetViewCenter(end);
+        const std::string zoom = "(画面の幅 " + std::to_string(widthMm) + "mm)";
+        if (!Explain(("線が画面に写る" + zoom).c_str(), besideEnd(0.0).has_value())) {
+            return false;
+        }
+        // 持ち越しを捨て、何も持っていない状態から見る。
+        viewport.CancelTool();
+        if (!Explain(("12px の外では吸わない" + zoom).c_str(), !snapsToEnd(14.0))) {
+            return false;
+        }
+        if (!Explain(("12px の内で吸う" + zoom).c_str(), snapsToEnd(10.0))) {
+            return false;
+        }
+        if (!Explain(("境目の外へ少し揺れても離さない" + zoom).c_str(), snapsToEnd(14.0))) {
+            return false;
+        }
+        if (!Explain(("揺れの幅を越えて離れれば手放す" + zoom).c_str(), !snapsToEnd(17.0))) {
+            return false;
+        }
+    }
+
+    // S はキーの知らせで確かめる。SetSnapSuppressedByKey を直に呼ぶと、キーの道が壊れても気づかない。
+    const auto sendS = [&viewport](QEvent::Type type, bool autoRepeat) {
+        QKeyEvent event(type, Qt::Key_S, Qt::NoModifier, QStringLiteral("s"), autoRepeat);
+        QCoreApplication::sendEvent(&viewport, &event);
+    };
+    // ポインタを動かさずに、いま出ている吸着(リング・プレビューの元)が終点かを見る。
+    const auto hoverIsEnd = [&viewport, end]() {
+        const auto position = viewport.HoverPosition();
+        return position.has_value() && (*position - end).Length() < 1.0e-6;
+    };
+    viewport.CancelTool();
+    if (!Explain("S を押す前は吸う", snapsToEnd(10.0))) {
+        return false;
+    }
+    sendS(QEvent::KeyPress, false);
+    if (!Explain("S を押しただけで、ポインタを動かさなくても吸着が消える", !hoverIsEnd())) {
+        return false;
+    }
+    if (!Explain("S を押している間は吸わない", !snapsToEnd(10.0))) {
+        return false;
+    }
+    sendS(QEvent::KeyRelease, true);
+    if (!Explain("押しっぱなしの自動反復では戻らない", !hoverIsEnd() && !snapsToEnd(10.0))) {
+        return false;
+    }
+    sendS(QEvent::KeyRelease, false);
+    if (!Explain("S を離しただけで、ポインタを動かさなくても吸着が戻る", hoverIsEnd())) {
+        return false;
+    }
+    sendS(QEvent::KeyPress, false);
+    if (!Explain("もう一度 S を押すと止まる", !snapsToEnd(10.0))) {
+        return false;
+    }
+    sendS(QEvent::KeyRelease, false);
+
+    // 持ち越しは次の Hover を待たずに捨てる。境目の外(14px)で持ち越してから、
+    // ポインタを動かさずに抑止を入れて切る。古い吸着先へ戻ってはならない。
+    const auto holdOutsideRadius = [&](const char* how) {
+        viewport.CancelTool();
+        return Explain((std::string("境目の外で持ち越している(") + how + "の前提)").c_str(),
+            snapsToEnd(10.0) && snapsToEnd(14.0));
+    };
+    if (!holdOutsideRadius("S を押して離す")) {
+        return false;
+    }
+    sendS(QEvent::KeyPress, false);
+    sendS(QEvent::KeyRelease, false);
+    if (!Explain("Hover なしで S を押して離しても、境目の外の古い吸着先へ戻らない",
+            !hoverIsEnd() && !snapsToEnd(14.0))) {
+        return false;
+    }
+    if (!holdOutsideRadius("磁石")) {
+        return false;
+    }
+    viewport.SetSnapSuppressed(true);
+    if (!Explain("磁石を切ると、ポインタを動かさなくても吸着が消える", !hoverIsEnd())) {
+        return false;
+    }
+    viewport.SetSnapSuppressed(false);
+    if (!Explain("磁石を戻しても、境目の外の古い吸着先へ戻らない",
+            !hoverIsEnd() && !snapsToEnd(14.0))) {
+        return false;
+    }
+    if (!holdOutsideRadius("焦点が外れる")) {
+        return false;
+    }
+    sendS(QEvent::KeyPress, false);
+    QFocusEvent focusOut(QEvent::FocusOut, Qt::ActiveWindowFocusReason);
+    QCoreApplication::sendEvent(&viewport, &focusOut);
+    if (!Explain("S を押したまま焦点が外れても、境目の外の古い吸着先へ戻らない",
+            !hoverIsEnd() && !snapsToEnd(14.0))) {
+        return false;
+    }
+    return Explain("S を押したまま焦点が外れたら、吸着は戻る", snapsToEnd(10.0));
 }
 
 [[nodiscard]] bool CasePrimaryShortcutsDoNotConflict(V2MainWindow& window)
@@ -604,6 +754,8 @@ std::vector<SelfTestCase> InputCases()
         {"軌道回転で視点が回る", &CaseOrbitTurnsTheView},
         {"Escで選択へ戻り選択も解ける", &CaseEscapeGoesBackToSelect},
         {"Shiftで水平になりSで吸着が止まる", &CaseShiftConstrainsAndSSuppressesSnap},
+        {"吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる",
+            &CaseSnapRadiusHoldAndSKeyThroughViewport},
         {"主要キーが操作キーと競合しない", &CasePrimaryShortcutsDoNotConflict},
         {"移動と複製が本当に効く", &CaseTransformToolsActuallyMove},
         {"つぶれた変換は断る", &CaseTransformRefusesDegenerateInput},

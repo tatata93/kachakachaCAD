@@ -6,24 +6,8 @@ namespace kachakacha::v2::app {
 
 std::string_view SnapKindNameJa(modeling::SnapKind kind) noexcept
 {
-    switch (kind) {
-    case modeling::SnapKind::Intersection:       return "交点";
-    case modeling::SnapKind::Endpoint:           return "端点";
-    case modeling::SnapKind::Center:             return "中心";
-    case modeling::SnapKind::DrawingPoint:       return "作図点";
-    case modeling::SnapKind::Tangent:            return "接点";
-    case modeling::SnapKind::Perpendicular:      return "垂足";
-    case modeling::SnapKind::Midpoint:           return "中点";
-    case modeling::SnapKind::Quadrant:           return "四半点";
-    case modeling::SnapKind::Extension:          return "延長線上";
-    case modeling::SnapKind::ProjectedOnPlane:   return "面へ投影";
-    case modeling::SnapKind::ClosestOnCurve:     return "線上の最近点";
-    case modeling::SnapKind::GridMajor:          return "主グリッド";
-    case modeling::SnapKind::GridMinor:          return "副グリッド";
-    case modeling::SnapKind::FreeOnPlane:        return "面上の自由点";
-    case modeling::SnapKind::ScreenIntersection: return "画面上の交差";
-    }
-    return "不明";
+    // 名前は SnapEngine が持っている。ここで書き写すと、種類が増えたときに片方だけ古くなる。
+    return modeling::SnapKindLabelJa(kind);
 }
 
 namespace {

@@ -89,7 +89,7 @@ KACHA_V2_TEST(grab_to_move, 線から離れたところは掴めない)
     const SnapScene scene = SceneWithOneLine(entityId, segmentId);
     SelectionSet selection;
     selection.entityIds.push_back(entityId);
-    // 線から 200px 離す。当たり判定は displayPickPx(8px)なので届かない。
+    // 線から 200px 離す。線の当たり判定は edgePickPx(6px)なので届かない。
     Require(!PointerGrabsSelection(scene, selection, TopView(), ScreenPoint{500.0, 300.0},
                 GeometryTolerance::Default()),
         "遠いところは掴まない");

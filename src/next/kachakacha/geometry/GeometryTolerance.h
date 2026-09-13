@@ -16,7 +16,11 @@ struct GeometryTolerance {
     double modelLinearMm = 1.0e-6;
     double modelAngularRad = 1.0e-9;
     double interactiveJoinMm = 0.01;
-    double displayPickPx = 8.0;
+    //! 画面上の拾い半径(logical px)。ズームに依らず、同じ画面距離で拾う。
+    //! 点(頂点・作図点)、線、スナップ候補は別の許容値であり、互いに流用しない。
+    double displayPickPx = 8.0;   //!< 点(頂点・作図点)
+    double edgePickPx = 6.0;      //!< 線
+    double snapPickPx = 12.0;     //!< スナップ候補
     double candidateMenuPx = 14.0;
 
     //! 文書の対角長から modelLinearMm を1度だけ決める。

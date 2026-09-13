@@ -1,9 +1,14 @@
 // 作図面の上のものだけを相手にする(薄くする・掴む)。
 #include "kachakacha/app/PlaneFocus.h"
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
+#include <cmath>
+
 using kachakacha::v2::app::CurveLiesOnPlane;
+using kachakacha::v2::app::kOnPlaneToleranceMm;
+using kachakacha::v2::geometry::CurveLiesInPlane;
 using kachakacha::v2::app::DimsOffPlaneCurve;
 using kachakacha::v2::app::PickableOffPlaneCurve;
 using kachakacha::v2::geometry::CurveSegment;
@@ -48,6 +53,22 @@ KACHA_V2_TEST(plane_focus, 許容の中なら上と見る)
     const auto plane = StandardPlane(StandardPlaneKind::XY);
     Require(CurveLiesOnPlane(Line({0.0, 0.0, 1.0e-5}, {40.0, 0.0, 1.0e-5}), plane),
         "1/100000 mm は上");
+}
+
+KACHA_V2_TEST(plane_focus, 両端と真ん中が面の上でも途中で浮く3次曲線は上と見ない)
+{
+    // z(t) = 3t(1-t)(1-2t)。t = 0, 0.5, 1 では面の上だが、t = 0.25 では約 0.28mm 浮く。
+    const auto made = CurveSegment::MakeCubicBezier(
+        {{0.0, 0.0, 0.0}, {10.0, 0.0, 1.0}, {20.0, 0.0, -1.0}, {30.0, 0.0, 0.0}});
+    Require(made.HasValue(), "試験に使う3次曲線が作れる");
+    const CurveSegment& floating = made.Value();
+    Require(std::abs(floating.Evaluate(0.5).z) < 1.0e-12, "前提: 真ん中は面の上");
+    Require(std::abs(floating.Evaluate(0.25).z) > 0.2, "前提: 途中は浮いている");
+    const auto plane = StandardPlane(StandardPlaneKind::XY);
+    Require(!CurveLiesOnPlane(floating, plane), "選択の判定は上と見ない");
+    // スナップが使う判定と同じ答えであること。別々に持つと、掴めるのに吸わない線ができる。
+    Require(!CurveLiesInPlane(floating, plane.origin, plane.normal, kOnPlaneToleranceMm),
+        "スナップの判定も上と見ない");
 }
 
 KACHA_V2_TEST(plane_focus, 作図中だけ薄くする)

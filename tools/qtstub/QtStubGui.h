@@ -362,8 +362,8 @@ class QPaintEvent;
 class QCloseEvent;
 class QEvent {
 public:
-    enum Type { None, MouseButtonPress, MouseButtonRelease, MouseMove, KeyPress, Paint,
-        Resize };
+    enum Type { None, MouseButtonPress, MouseButtonRelease, MouseMove, KeyPress,
+        KeyRelease, Paint, Resize, FocusOut, FocusIn };
     [[nodiscard]] Type type() const;
     void accept();
     void ignore();
@@ -379,9 +379,17 @@ public:
     [[nodiscard]] Qt::KeyboardModifiers modifiers() const;
 };
 
+class QFocusEvent : public QEvent {
+public:
+    QFocusEvent(Type, Qt::FocusReason = Qt::OtherFocusReason) {}
+    [[nodiscard]] Qt::FocusReason reason() const;
+};
+
 class QKeyEvent : public QEvent {
 public:
     QKeyEvent(Type, int, Qt::KeyboardModifiers) {}
+    [[nodiscard]] bool isAutoRepeat() const;
+    QKeyEvent(Type, int, Qt::KeyboardModifiers, const QString&, bool = false) {}
     [[nodiscard]] int key() const;
     [[nodiscard]] Qt::KeyboardModifiers modifiers() const;
     [[nodiscard]] QString text() const;

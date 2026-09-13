@@ -20,9 +20,9 @@ namespace kachakacha::v2::app {
 //! 面に載っているとみなす厚み(mm)。V1 と同じ 1/1000 mm。
 inline constexpr double kOnPlaneToleranceMm = 1.0e-3;
 
-//! その線が作業平面の上にあるか。両端と真ん中が面から浮いていなければ、上とみなす。
-//! 3点で足りるのは、扱う線が直線・円弧・3次曲線で、平面との交わりが
-//! 3点を超えて振れないためである。
+//! その線が作業平面の上にあるか。どの点も面から toleranceMm 以内なら上とみなす。
+//! 判定は geometry::CurveLiesInPlane に任せ、スナップと同じ答えを出す。
+//! 両端と真ん中の3点だけで見ると、途中で浮く3次曲線を「上」と読んでしまう。
 [[nodiscard]] bool CurveLiesOnPlane(const geometry::CurveSegment& segment,
     const modeling::WorkPlaneFrame& plane, double toleranceMm = kOnPlaneToleranceMm);
 

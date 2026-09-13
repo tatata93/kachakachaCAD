@@ -240,6 +240,104 @@ KACHA_V2_TEST(session, 抑止中はスナップなしと出る)
     RequireNear(hover.position->x, 60.1, 1e-6, "指した位置そのもの");
 }
 
+namespace {
+
+//! 2つの作図点を 2mm(画面で 20px)離して置いた場面。どちらも吸着半径 12px に入る位置を指せる。
+struct TwoPointFixture : Fixture {
+    kachakacha::v2::base::EntityId left = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    kachakacha::v2::base::EntityId right = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+
+    TwoPointFixture()
+    {
+        SnapScene scene = PlaneScene();
+        scene.points.push_back({left, {50.0, 50.0, 0.0}});
+        scene.points.push_back({right, {52.0, 50.0, 0.0}});
+        session.SetScene(scene);
+        session.SelectTool(DrawingTool::Line);
+    }
+
+    //! x(mm)を指したときの吸着先。吸着しなければ Nil。
+    [[nodiscard]] kachakacha::v2::base::EntityId HoverAt(double x)
+    {
+        const auto hover = session.Hover(At({x, 50.0, 0.0}));
+        return hover.snap.has_value() ? hover.snap->entityId : kachakacha::v2::base::EntityId{};
+    }
+
+    //! 左の点を持ち越している状態にする。右の点が範囲の外になる位置から入る。
+    void HoldLeft()
+    {
+        Require(HoverAt(49.5) == left, "左の点へ吸着する(左 5px、右 25px)");
+        Require(HoverAt(51.1) == left, "右が少し近くても左を持ち越す(左 11px、右 9px)");
+    }
+};
+
+} // namespace
+
+KACHA_V2_TEST(session, 小さな揺れでは吸着先が入れ替わらない)
+{
+    // ui-ux-integrated-spec.md §6.1。2点の真ん中あたりで手が震えても、リングが行き来しない。
+    TwoPointFixture fixture;
+    Require(fixture.HoverAt(50.9) == fixture.left, "近い左へ吸着する(左 9px、右 11px)");
+    Require(fixture.HoverAt(51.1) == fixture.left, "境目を越えても左のまま(左 11px、右 9px)");
+    Require(fixture.HoverAt(50.9) == fixture.left, "戻っても左のまま");
+    // 揺れの幅(4px)より明らかに近くなったら乗り換える。
+    Require(fixture.HoverAt(51.5) == fixture.right, "右が明らかに近いと右へ(左 15px、右 5px)");
+    Require(fixture.HoverAt(50.9) == fixture.right, "乗り換えたあとは右を持ち越す(左 9px、右 11px)");
+}
+
+KACHA_V2_TEST(session, ツールの切替と取消と設定変更で吸着の持ち越しを捨てる)
+{
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    fixture.session.SelectTool(DrawingTool::Line);
+    Require(fixture.HoverAt(51.1) == fixture.right, "ツールを選び直すと近い右へ吸着する");
+
+    fixture.HoldLeft();
+    fixture.session.CancelTool();
+    Require(fixture.HoverAt(51.1) == fixture.right, "取り消すと近い右へ吸着する");
+
+    fixture.HoldLeft();
+    fixture.session.SetToolSettings(ToolSettings{});
+    Require(fixture.HoverAt(51.1) == fixture.right, "設定を変えると近い右へ吸着する");
+}
+
+KACHA_V2_TEST(session, Sを離したあとは持ち越し無しから始まる)
+{
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    SnapSettings held;
+    held.suppressed = true;
+    fixture.session.SetSnapSettings(held);
+    Require(fixture.HoverAt(51.1).IsNil(), "S の間は吸着しない");
+    fixture.session.SetSnapSettings(SnapSettings{});
+    Require(fixture.HoverAt(51.1) == fixture.right, "離すと、前の左ではなく近い右へ吸着する");
+}
+
+KACHA_V2_TEST(session, 抑止を入れて切るまでHoverが無くても持ち越しは残らない)
+{
+    // S を押して離すまでポインタを動かさない場合、押したまま焦点が外れて解けた場合、
+    // 磁石を切って戻した場合。どれも core へは SetSnapSettings だけが届く。
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    SnapSettings suppressed;
+    suppressed.suppressed = true;
+    fixture.session.SetSnapSettings(suppressed);
+    fixture.session.SetSnapSettings(SnapSettings{});
+    Require(fixture.HoverAt(51.1) == fixture.right,
+        "Hover を挟まずに抑止を入れて切っても、前の左ではなく近い右へ吸着する");
+}
+
+KACHA_V2_TEST(session, 覗き見は吸着の持ち越しを変えない)
+{
+    // 案内文は画面の中央で様子を見る。ポインタと無関係な位置の吸着先を持ち越してはならない。
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    const auto peek = fixture.session.PeekHover(fixture.At({51.9, 50.0, 0.0}));
+    Require(peek.snap.has_value() && peek.snap->entityId == fixture.right,
+        "覗き見の答えは Hover と同じ規則で右になる(左 19px、右 1px)");
+    Require(fixture.HoverAt(51.1) == fixture.left, "覗き見のあとも左を持ち越している");
+}
+
 KACHA_V2_TEST(session, 作業平面が無ければ点を置けないと言う)
 {
     DeterministicIdGenerator ids{41};

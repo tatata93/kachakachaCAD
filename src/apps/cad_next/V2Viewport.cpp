@@ -8,6 +8,7 @@
 #include "kachakacha/geometry/Units.h"
 
 #include <QColor>
+#include <QFocusEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -1232,7 +1233,10 @@ void V2Viewport::keyReleaseEvent(QKeyEvent* event)
     // S と Shift は「押している間だけ」効く。離したら元へ戻す。
     SetAxisConstraintByKey((event->modifiers() & Qt::ShiftModifier) != 0);
     if (event->key() == Qt::Key_S) {
-        SetSnapSuppressedByKey(false);
+        // 押しっぱなしの自動反復でも離した知らせが来る。まだ押しているので解除しない。
+        if (!event->isAutoRepeat()) {
+            SetSnapSuppressedByKey(false);
+        }
         event->accept();
         return;
     }

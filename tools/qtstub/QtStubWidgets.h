@@ -90,6 +90,7 @@ public:
     [[nodiscard]] QPoint mapToGlobal(const QPoint&) const;
     virtual bool focusNextPrevChild(bool);
     void customContextMenuRequested(const QPoint&);
+    virtual void focusOutEvent(QFocusEvent*);
 };
 
 class QLayout : public QObject {
@@ -501,6 +502,7 @@ public:
     static QStringList arguments();
     static int exec();
     static void processEvents();
+    static bool sendEvent(QObject*, QEvent*);
 };
 
 class QGuiApplication : public QCoreApplication {

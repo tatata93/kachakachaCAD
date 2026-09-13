@@ -245,6 +245,8 @@ KACHA_V2_TEST(tolerance, the_default_matches_the_contract)
     RequireNear(tolerance.modelAngularRad, 1.0e-9, 0.0, "modelAngularRad");
     RequireNear(tolerance.interactiveJoinMm, 0.01, 0.0, "interactiveJoinMm");
     RequireNear(tolerance.displayPickPx, 8.0, 0.0, "displayPickPx");
+    RequireNear(tolerance.edgePickPx, 6.0, 0.0, "edgePickPx");
+    RequireNear(tolerance.snapPickPx, 12.0, 0.0, "snapPickPx");
     RequireNear(tolerance.candidateMenuPx, 14.0, 0.0, "candidateMenuPx");
 }
 

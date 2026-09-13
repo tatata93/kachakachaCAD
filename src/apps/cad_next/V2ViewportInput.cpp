@@ -4,7 +4,7 @@
 //!   - 中ボタン(と右ボタン)のドラッグで画面を移動
 //!   - Shift+中ボタンで軌道回転
 //!   - Esc は、やりかけを1つ取り消してから選択道具へ戻り、選択も解除する
-//!   - 作図中の Ctrl で吸着を一時停止、Shift で水平・垂直・正方形へ固定
+//!   - 作図中の S で吸着を一時停止、Shift で水平・垂直・正方形へ固定
 //!   - 掴めるかどうかが分かるカーソル
 //!   - 重なった候補を Tab で送り、Alt+クリックで奥を選ぶ(ui-ux-integrated-spec §4.2)
 //!   - 左ドラッグの矩形選択。左から右は完全包含、右から左は交差(同 §4.2)
@@ -17,6 +17,7 @@
 #include <QBrush>
 #include <QColor>
 #include <QCursor>
+#include <QFocusEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPen>
@@ -37,6 +38,15 @@
 #include <map>
 #include <string>
 #include <utility>
+
+void V2Viewport::focusOutEvent(QFocusEvent* event)
+{
+    // 押している間に焦点が外れると、離した知らせはこの画面へ来ない。
+    // S の吸着抑止と Shift の拘束が残らないよう、両方を解除する。
+    SetSnapSuppressedByKey(false);
+    SetAxisConstraintByKey(false);
+    QWidget::focusOutEvent(event);
+}
 
 namespace {
 
@@ -217,9 +227,18 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
 void V2Viewport::ApplySnapSettings()
 {
     kachakacha::v2::modeling::SnapSettings settings;
-    // 道具として切ってあるか、Ctrl を押している間は吸着しない。
+    // 道具として切ってあるか、S を押している間は吸着しない。
     settings.suppressed = snapSuppressedBySetting_ || snapSuppressedByKey_;
     session_->SetSnapSettings(settings);
+    // ポインタを動かさなくても、いまのカーソル位置の吸着・リング・プレビュー・案内へすぐ効かせる。
+    // 待つと、S を押している間も古いリングとプレビューが出続ける。
+    hover_ = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
+        cursorPosition_.x(), cursorPosition_.y()});
+    status_ = hover_.messageJa;
+    if (statusCallback_) {
+        statusCallback_(status_);
+    }
+    update();
 }
 
 void V2Viewport::SetSnapSuppressed(bool suppressed)

@@ -429,6 +429,8 @@ std::string WriteDocumentJson(const DocumentFile& file)
     tolerances["modelAngularRad"] = JsonValue::Number(tolerance.modelAngularRad);
     tolerances["interactiveJoinMm"] = JsonValue::Number(tolerance.interactiveJoinMm);
     tolerances["displayPickPx"] = JsonValue::Number(tolerance.displayPickPx);
+    tolerances["edgePickPx"] = JsonValue::Number(tolerance.edgePickPx);
+    tolerances["snapPickPx"] = JsonValue::Number(tolerance.snapPickPx);
     tolerances["candidateMenuPx"] = JsonValue::Number(tolerance.candidateMenuPx);
     root["tolerances"] = JsonValue::Object(std::move(tolerances));
 

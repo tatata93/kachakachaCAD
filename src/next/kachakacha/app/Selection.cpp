@@ -1,6 +1,7 @@
 #include "kachakacha/app/Selection.h"
 
 #include "kachakacha/app/PlaneFocus.h"
+#include "kachakacha/geometry/CurveIntersection.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
 #include <algorithm>
@@ -11,80 +12,6 @@ namespace {
 
 using geometry::ScreenPoint;
 using geometry::Vector3;
-
-struct ScreenSegmentApproach {
-    double distancePx = 0.0;
-    double fraction = 0.0;
-};
-
-//! 点と線分の距離。画面の上での話なので px。
-[[nodiscard]] ScreenSegmentApproach ApproachToSegmentPx(const ScreenPoint& point,
-    const ScreenPoint& start, const ScreenPoint& end)
-{
-    const double dx = end.x - start.x;
-    const double dy = end.y - start.y;
-    const double lengthSquared = dx * dx + dy * dy;
-    if (!(lengthSquared > 0.0)) {
-        const double ex = point.x - start.x;
-        const double ey = point.y - start.y;
-        return {std::sqrt(ex * ex + ey * ey), 0.0};
-    }
-    double t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
-    t = std::max(0.0, std::min(1.0, t));
-    const double cx = start.x + t * dx;
-    const double cy = start.y + t * dy;
-    const double ex = point.x - cx;
-    const double ey = point.y - cy;
-    return {std::sqrt(ex * ex + ey * ey), t};
-}
-
-struct CurveApproach {
-    double distancePx = 0.0;
-    double parameter = 0.0;
-    Vector3 point{};
-};
-
-//! 1本の曲線と点の距離。画面へ落としてから測る。
-//! 落とせない点(カメラの後ろ)はまたぐ弦ごと捨てる。
-[[nodiscard]] std::optional<CurveApproach> ApproachToCurvePx(
-    const geometry::CurveSegment& segment,
-    const geometry::ScreenMapping& mapping, const ScreenPoint& pointer,
-    double toleranceMm)
-{
-    const auto samples = geometry::SampleCurve(segment, toleranceMm);
-    std::optional<CurveApproach> best;
-    std::optional<ScreenPoint> previous;
-    std::optional<geometry::CurvePoint> previousSample;
-    for (const auto& sample : samples) {
-        const auto screen = mapping.Project(sample.position);
-        if (!screen.has_value()) {
-            previous.reset();
-            previousSample.reset();
-            continue;
-        }
-        if (previous.has_value() && previousSample.has_value()) {
-            const auto approach = ApproachToSegmentPx(pointer, *previous, *screen);
-            if (!best.has_value() || approach.distancePx < best->distancePx) {
-                const double t = approach.fraction;
-                best = CurveApproach{approach.distancePx,
-                    previousSample->parameter
-                        + (sample.parameter - previousSample->parameter) * t,
-                    previousSample->position + (sample.position - previousSample->position) * t};
-            }
-        }
-        previous = screen;
-        previousSample = sample;
-    }
-    if (!best.has_value() && samples.size() == 1) {
-        const auto screen = mapping.Project(samples.front().position);
-        if (screen.has_value()) {
-            const auto approach = ApproachToSegmentPx(pointer, *screen, *screen);
-            best = CurveApproach{approach.distancePx, samples.front().parameter,
-                samples.front().position};
-        }
-    }
-    return best;
-}
 
 //! 矩形選択と認める最小の移動量(logical px)。
 //! GrabToMove の 4px とは別の門である。片方を直したつもりで両方が動くと、
@@ -182,9 +109,9 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
                 CurveLiesOnPlane(curve.segment, focus.plane))) {
             continue;
         }
-        const auto approach = ApproachToCurvePx(curve.segment, mapping, pointer,
-            tolerance.interactiveJoinMm);
-        if (!approach.has_value() || approach->distancePx > tolerance.displayPickPx) {
+        const auto approach = geometry::ApproachToCurveOnScreen(curve.segment, mapping, pointer,
+            tolerance.edgePickPx);
+        if (!approach.has_value()) {
             continue;
         }
         PickCandidate candidate;

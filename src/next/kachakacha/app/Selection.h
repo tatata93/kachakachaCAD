@@ -99,7 +99,7 @@ struct PickFocus {
     const PickFocus& focus = {});
 
 //! 画面の1点から、いちばん近い線を拾う。
-//! 拾う範囲は tolerance.displayPickPx。範囲の外なら何も返さない。
+//! 拾う範囲は tolerance.edgePickPx。範囲の外なら何も返さない。
 //! 同じ距離のものが並んだときは、場面に入っている順で先のものを返す。毎回同じ結果になる。
 //!
 //! focus を渡すと、薄くしている線は拾わない。薄いのに掴めると、見た目と手が食い違う。
@@ -114,7 +114,7 @@ struct PickFocus {
 //! 「交点に点」で作った点も、「作図点」も、**選ぶことができなかった** ので、
 //! 消すことも、名前を変えることも、次の操作の相手にすることもできなかった。
 //!
-//! 拾う範囲は線と同じ tolerance.displayPickPx。
+//! 拾う範囲は tolerance.displayPickPx。線の edgePickPx とは別の許容値である。
 [[nodiscard]] std::optional<PickCandidate> PickPoint(const modeling::SnapScene& scene,
     const geometry::ScreenMapping& mapping, const geometry::ScreenPoint& pointer,
     const geometry::GeometryTolerance& tolerance);

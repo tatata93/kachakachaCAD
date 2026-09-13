@@ -535,6 +535,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+    //! 焦点が外れたら、押している間だけの S と Shift を解く。
+    void focusOutEvent(QFocusEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     //! Tab をこの画面で使う。既定のままだと QWidget::event が Tab を先に取って
     //! 次の部品へ焦点を移すので、keyPressEvent まで届かない。

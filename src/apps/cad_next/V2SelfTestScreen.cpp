@@ -541,7 +541,7 @@ struct BoxSelectFixture {
     if (lowY - highY < 40.0) {
         return fixture;
     }
-    // 枠は線から 16px 離す。線の当たり判定(8px)と制御点(9px)より広いので、
+    // 枠は線から 16px 離す。線の当たり判定(6px)と制御点(9px)より広いので、
     // 枠の角を押しても線を掴んだことにならない。
     const double middleX = (first->x + firstEnd->x) * 0.5;
     fixture.left = std::min(first->x, firstEnd->x) - 16.0;
@@ -1264,9 +1264,22 @@ struct BoxSelectFixture {
     if (!Explain("作図点ができる", !point.IsNil())) {
         return false;
     }
+    // 置いた点は近くの候補へ吸着することがある。選択試験では、入力した予定位置ではなく
+    // 文書へ確定した点の位置を押す。吸着半径を変えても「点を選べる」という検査を保つ。
+    const auto placed = std::find_if(window.Session().Scene().points.begin(),
+        window.Session().Scene().points.end(),
+        [point](const auto& candidate) { return candidate.entityId == point; });
+    if (!Explain("確定した作図点が画面にある",
+            placed != window.Session().Scene().points.end())) {
+        return false;
+    }
+    const auto placedOnScreen = viewport.Mapping().Project(placed->position);
+    if (!Explain("確定した作図点が画面に出る", placedOnScreen.has_value())) {
+        return false;
+    }
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
-    viewport.SelectAt(QPointF(where->x, where->y), Qt::NoModifier);
+    viewport.SelectAt(QPointF(placedOnScreen->x, placedOnScreen->y), Qt::NoModifier);
     return Explain((std::string("その点を押すと選べる(")
                        + std::to_string(viewport.Selection().entityIds.size())
                        + " 件)").c_str(),

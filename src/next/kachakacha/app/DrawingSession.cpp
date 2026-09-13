@@ -58,9 +58,11 @@ DrawingSession::DrawingSession(base::DocumentId documentId, base::IdGenerator& i
 void DrawingSession::SelectTool(DrawingTool tool)
 {
     // ツールを変えたら途中の点は捨てる。持ち越すと、前のツールの点が混ざる。
+    // 吸着の持ち越しも捨てる。前のツールで選んでいた吸着先を、次のツールへ引き継がない。
     tool_ = tool;
     session_ = std::make_unique<ToolSession>(tool_, toolSettings_,
         document_.Snapshot().settings.tolerance);
+    snapHysteresis_.Reset();
 }
 
 void DrawingSession::SetToolSettings(ToolSettings settings)
@@ -68,9 +70,28 @@ void DrawingSession::SetToolSettings(ToolSettings settings)
     toolSettings_ = std::move(settings);
     session_ = std::make_unique<ToolSession>(tool_, toolSettings_,
         document_.Snapshot().settings.tolerance);
+    snapHysteresis_.Reset();
+}
+
+void DrawingSession::SetSnapSettings(SnapSettings settings)
+{
+    if (settings.suppressed) {
+        snapHysteresis_.Reset();
+    }
+    snapSettings_ = std::move(settings);
 }
 
 HoverResult DrawingSession::Hover(const ScreenPoint& pointer)
+{
+    return Evaluate(pointer, true);
+}
+
+HoverResult DrawingSession::PeekHover(const ScreenPoint& pointer)
+{
+    return Evaluate(pointer, false);
+}
+
+HoverResult DrawingSession::Evaluate(const ScreenPoint& pointer, bool keepHold)
 {
     HoverResult result;
     SnapSettings settings = snapSettings_;
@@ -78,9 +99,16 @@ HoverResult DrawingSession::Hover(const ScreenPoint& pointer)
     if (!session_->Points().empty()) {
         settings.referencePoint = session_->Points().back();
     }
-    const auto candidates = modeling::CollectSnapCandidates(scene_, mapping_, pointer,
-        settings, document_.Snapshot().settings.tolerance);
-    result.snap = modeling::ChooseSnap(candidates, settings);
+    const auto& tolerance = document_.Snapshot().settings.tolerance;
+    if (keepHold) {
+        result.snap = snapHysteresis_.Resolve(scene_, mapping_, pointer, settings, tolerance);
+    } else {
+        // 持ち越しを読むだけで書き換えない。答えは Hover と同じ規則で出す。
+        settings.heldSnap = snapHysteresis_.Held();
+        result.snap = modeling::ChooseSnap(
+            modeling::CollectSnapCandidates(scene_, mapping_, pointer, settings, tolerance),
+            settings);
+    }
     if (result.snap.has_value()) {
         result.position = result.snap->position;
     } else if (scene_.workPlane.active) {
@@ -172,6 +200,7 @@ geometry::Vector3 DrawingSession::ConstraintAnchor() const noexcept
 void DrawingSession::CancelTool()
 {
     session_->Cancel();
+    snapHysteresis_.Reset();
 }
 
 bool DrawingSession::UndoLastPoint()

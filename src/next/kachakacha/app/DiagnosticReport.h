@@ -24,11 +24,8 @@
 
 namespace kachakacha::v2::app {
 
-//! 吸着の種類の名前。
-//!
-//! 本当は SnapEngine.h にあるべきものである。いまそこには Codex の書きかけが
-//! あるので、同じファイルへ同時に入らないよう、ここへ置いている。
-//! 書きかけが入ったら、あちらへ移すこと。
+//! 吸着の種類の名前。SnapEngine の `SnapKindLabelJa` をそのまま使う。
+//! UI-P1-007 が入るまでは、ここに写しを置いていた。写しは消した。
 [[nodiscard]] std::string_view SnapKindNameJa(modeling::SnapKind kind) noexcept;
 
 //! 診断に載せる状態。画面が詰めて渡す。ここは Qt を知らない。

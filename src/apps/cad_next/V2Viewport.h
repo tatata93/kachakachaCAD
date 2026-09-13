@@ -640,6 +640,13 @@ private:
     void RefreshForbiddenHover(const QPointF& position);
     //! 候補一覧を捨てる。文書が変わったら呼ぶ。無いものを送り続けないため。
     void ForgetPickCycle();
+    //! 道具の持ち物(吸着・位置・途中経過・候補送り・禁止の印)をまとめて捨てる。
+    void DiscardHoverState();
+    //! いまのカーソル位置で Hover と候補一覧を取り直す。帯には触らない。
+    void RefreshHoverInPlace();
+    //! 道具を替えた直後に、いまのカーソル位置で一度だけ Hover を取り直す。
+    //! beforeJa は捨てる前に出ていた案内。帯がそれのままのときだけ書き換える。
+    void RefreshHoverAfterToolChange(const std::string& beforeJa);
     //! 候補の番号を1つ進める(または戻す)。候補が無ければ何もしない。
     void AdvanceCandidate(bool backward);
     //! いまの候補に合わせて Hover を書き直す。選択には触らない。

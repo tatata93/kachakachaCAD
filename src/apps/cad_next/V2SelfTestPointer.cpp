@@ -28,6 +28,8 @@
 #include <QString>
 
 #include <cstdint>
+#include <functional>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -689,6 +691,166 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return Explain("内部の言葉を出さない", !text.contains(QStringLiteral("Wire")));
 }
 
+//! 道具を替えたときに、前の道具の吸着・案内・候補送りが残らないこと。
+//! UI-P1-007 R7 の指摘 B1。マウスを **動かさずに** 替えるのが要点である。
+[[nodiscard]] bool CaseToolSwitchDropsTheOldHover(V2MainWindow& window)
+{
+    constexpr kachakacha::v2::modeling::DrawingTool kChain[] = {
+        kachakacha::v2::modeling::DrawingTool::Line,
+        kachakacha::v2::modeling::DrawingTool::Arc,
+        kachakacha::v2::modeling::DrawingTool::Bezier,
+        kachakacha::v2::modeling::DrawingTool::Spline,
+        kachakacha::v2::modeling::DrawingTool::Select,
+    };
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    // 拾う相手を作る。何も無いと候補送りが試せない。
+    if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})) {
+        return Explain("線を1本引ける", false);
+    }
+    if (!DrawLine(window, Vector3{0.0, -20.0, 0.0}, Vector3{0.0, 20.0, 0.0})) {
+        return Explain("線をもう1本引ける", false);
+    }
+    const auto crossing = viewport.Mapping().Project(Vector3{0.0, 0.0, 0.0});
+    if (!crossing.has_value()) {
+        return Explain("交点が画面に入る", false);
+    }
+    const QPointF spot(crossing->x, crossing->y);
+
+    for (std::size_t index = 1; index < std::size(kChain); ++index) {
+        const auto previous = kChain[index - 1];
+        const auto next = kChain[index];
+        window.SelectTool(previous);
+        viewport.HoverAt(spot);
+        // 候補送りを1つ進めておく。進めた番号が次の道具へ残ってはならない。
+        const bool cycled = viewport.CandidateCount() >= 2 && viewport.CycleCandidate(false);
+        const std::string beforeJa = viewport.Hover().messageJa;
+        const std::string previousName(kachakacha::v2::modeling::DrawingToolNameJa(previous));
+        const std::string nextName(kachakacha::v2::modeling::DrawingToolNameJa(next));
+
+        // ここでマウスは動かさない。道具だけを替える。
+        window.SelectTool(next);
+
+        const std::string afterJa = viewport.Hover().messageJa;
+        if (!Explain((previousName + " → " + nextName + ": 前の案内が残らない(実際 "
+                         + afterJa + ")")
+                         .c_str(),
+                afterJa != beforeJa
+                    && afterJa.find(previousName) == std::string::npos)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        if (cycled
+            && !Explain((previousName + " → " + nextName + ": 候補送りが先頭へ戻る").c_str(),
+                viewport.CandidateIndex() == 0)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        if (!Explain((previousName + " → " + nextName + ": 途中経過が残らない").c_str(),
+                !viewport.HasPreview())) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        const auto mismatches
+            = kachakacha::v2::app::DiagnosticMismatches(window.DiagnosticSnapshotNow());
+        if (!mismatches.empty()) {
+            (void)Explain((nextName + ": " + mismatches.front()).c_str(), false);
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+    }
+    return Explain("選択へ戻っても前の道具の物が残らない", !viewport.HasPreview());
+}
+
+//! 文書を差し替える道(開く・Undo/Redo・作業平面・グリッド)で持ち越しが生き残らないこと。
+//! UI-P1-007 R7 の指摘 B2。どれも DrawingSession::SetScene を通る。
+[[nodiscard]] bool CaseSceneSwapDropsTheHold(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})) {
+        return Explain("線を1本引ける", false);
+    }
+    const auto endpoint = viewport.Mapping().Project(Vector3{20.0, 0.0, 0.0});
+    if (!endpoint.has_value()) {
+        return Explain("端点が画面に入る", false);
+    }
+    const QPointF onEndpoint(endpoint->x, endpoint->y);
+    // 12px の外・16px の内。持ち越しがあれば端点へ吸い付き、捨ててあれば吸い付かない。
+    const QPointF justOutside = onEndpoint + QPointF(14.0, 0.0);
+
+    // 場面を差し替える道をひととおり通す。開く・Undo/Redo・グリッド変更は
+    // どれも DrawingSession::SetScene を通る(V2MainWindow::AdoptCurrentDocument ほか)。
+    struct Route {
+        const char* nameJa;
+        std::function<void()> run;
+    };
+    const std::vector<Route> kRoutes = {
+        {"取り消す", [&window]() { window.RunCommand("edit.undo"); }},
+        {"やり直す", [&window]() { window.RunCommand("edit.redo"); }},
+        {"グリッドを変える",
+            [&window]() { window.ApplyGridChoice(window.CurrentGridChoice()); }},
+    };
+    for (const auto& route : kRoutes) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+        // 端点で掴んでから 14px 外へ出る。持ち越しがあるので、まだ端点へ吸い付く。
+        viewport.HoverAt(onEndpoint);
+        viewport.HoverAt(justOutside);
+        const bool heldBefore = viewport.Hover().snap.has_value();
+        route.run();
+        // 場面を替えたあと、マウスを動かさずにもう一度同じ所を見る。
+        // 持ち越しが生きていれば端点へ吸い付き、捨ててあれば 12px の外なので吸い付かない。
+        viewport.HoverAt(justOutside);
+        const bool heldAfter = viewport.Hover().snap.has_value();
+        const std::string nameJa(route.nameJa);
+        if (!Explain((nameJa + ": 場面を替えたら 14px 先の前の吸着先が残らない").c_str(),
+                !heldBefore || !heldAfter)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("場面の差し替えを一通り通せる", true);
+}
+
+//! 取り消した直後、リングと診断情報がいまの session の中身と合っていること。
+//! UI-P1-007 R7 の MISSING TESTS (4)。
+[[nodiscard]] bool CaseCancelLeavesNoStaleRing(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})) {
+        return Explain("線を1本引ける", false);
+    }
+    const auto endpoint = viewport.Mapping().Project(Vector3{20.0, 0.0, 0.0});
+    if (!endpoint.has_value()) {
+        return Explain("端点が画面に入る", false);
+    }
+    const QPointF onEndpoint(endpoint->x, endpoint->y);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(onEndpoint);
+    viewport.HoverAt(onEndpoint + QPointF(14.0, 0.0));
+    viewport.CancelTool();
+    if (!Explain("取り消したら途中経過が残らない", !viewport.HasPreview())) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    if (!Explain("取り消したら置いた点も残らない",
+            window.Session().PlacedPointCount() == 0)) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    const auto mismatches
+        = kachakacha::v2::app::DiagnosticMismatches(window.DiagnosticSnapshotNow());
+    if (!mismatches.empty()) {
+        (void)Explain((std::string("取り消し後の診断: ") + mismatches.front()).c_str(), false);
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("取り消し後のリングがいまの状態と合う", true);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -710,6 +872,9 @@ std::vector<SelfTestCase> PointerCases()
         {"診断の各欄が道具に追従する", CaseDiagnosticsFollowsTheTool},
         {"道具を続けて替えても前の状態が残らない", CaseToolSwitchLeavesNothingBehind},
         {"押し出しが選択を読んで次を案内する", CaseExtrudeReadsTheSelection},
+        {"道具を替えると前の吸着と候補送りが消える", CaseToolSwitchDropsTheOldHover},
+        {"場面を差し替えると吸着の持ち越しが消える", CaseSceneSwapDropsTheHold},
+        {"取り消した直後に古いリングが残らない", CaseCancelLeavesNoStaleRing},
     };
 }
 

@@ -728,6 +728,17 @@ kachakacha::v2::app::PickFocus V2Viewport::PickFocusNow() const
     return focus;
 }
 
+void V2Viewport::DiscardHoverState()
+{
+    // 道具の持ち物はまとめて捨てる。preview だけ消して snap を残すと、
+    // 前の道具が選んでいた吸着先のリングが出たまま、次の道具の点がそこへ寄る。
+    hover_ = kachakacha::v2::app::HoverResult{};
+    // Tab・Alt の候補送りも道具ごとの持ち物である。番号だけ残ると、
+    // 次の道具で Tab を押した拍子に、前の道具で送っていた先が出る。
+    ForgetPickCycle();
+    hoverOffPlane_ = false;
+}
+
 void V2Viewport::OnToolChanged()
 {
     if (cursorPanel_.active) {
@@ -735,7 +746,9 @@ void V2Viewport::OnToolChanged()
     }
     // 道具を替えると途中の点は捨てられる(DrawingSession::SelectTool)。ここで消さないと、
     // もう作られない形の途中経過だけが残り、まだ引いている途中に見える(§3 規則3)。
-    hover_.preview.clear();
+    // 途中経過だけでなく、吸着・位置・候補送りも前の道具のものである。一緒に捨てる。
+    const std::string beforeJa = hover_.messageJa;
+    DiscardHoverState();
     ClearMeasurePicks();
     // 押し出しの下見も残さない。前の道具の手つきが画面に残ると、
     // いま何をしているのか読めなくなる(オーナー指示 2026-09-14 §4)。
@@ -743,10 +756,36 @@ void V2Viewport::OnToolChanged()
         cancelExtrude_();
     }
     HideExtrudeHandle();
+    // 捨てたままだと、マウスを動かすまで新しい道具の吸着もリングも出ない。
+    // いまのカーソル位置で **一度だけ** 見直す。持ち越しは既に捨ててあるので、
+    // ここで前の道具の吸着先が復活することはない。
+    RefreshHoverAfterToolChange(beforeJa);
     // 道具が変わればカーソルの形も変わる。ここで呼ばないと、次に押すまで
     // 矢印のままで、いま作図できるのかどうかが手元で分からない。
     RefreshCursorShape();
     update();
+}
+
+void V2Viewport::RefreshHoverInPlace()
+{
+    hover_ = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
+        cursorPosition_.x(), cursorPosition_.y()});
+    RefreshPickCycle(cursorPosition_);
+    SyncHoverWithCandidate();
+    RefreshForbiddenHover(cursorPosition_);
+}
+
+void V2Viewport::RefreshHoverAfterToolChange(const std::string& beforeJa)
+{
+    RefreshHoverInPlace();
+    // 帯を書き換えるのは、いま出ているのが前の案内のときだけにする。
+    // 断った理由や作った結果が出ているときに上書きすると、読む前に消える。
+    if (status_ == beforeJa || status_.empty()) {
+        status_ = hover_.messageJa;
+        if (statusCallback_) {
+            statusCallback_(status_);
+        }
+    }
 }
 
 void V2Viewport::ClearMeasurePicks()
@@ -1211,7 +1250,11 @@ void V2Viewport::CancelTool()
         return;
     }
     session_->CancelTool();
-    hover_.preview.clear();
+    // core は持ち越しを捨てている(DrawingSession::CancelTool)。画面も同じ所まで戻す。
+    // preview だけ消すと、取り消したのに前のリングと候補送りが残り、
+    // 診断情報が session の中身と食い違う。
+    DiscardHoverState();
+    RefreshHoverInPlace();
     status_ = "取り消しました。";
     if (statusCallback_) {
         statusCallback_(status_);

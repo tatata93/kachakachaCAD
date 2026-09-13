@@ -73,6 +73,13 @@ void DrawingSession::SetToolSettings(ToolSettings settings)
     snapHysteresis_.Reset();
 }
 
+void DrawingSession::SetScene(SnapScene scene)
+{
+    // 場面が入れ替わったら、持ち越していた吸着先は当てにならない。その場で捨てる。
+    scene_ = std::move(scene);
+    snapHysteresis_.Reset();
+}
+
 void DrawingSession::SetSnapSettings(SnapSettings settings)
 {
     if (settings.suppressed) {

@@ -67,7 +67,12 @@ public:
     void SetToolSettings(ToolSettings settings);
     [[nodiscard]] DrawingTool CurrentTool() const noexcept { return tool_; }
 
-    void SetScene(SnapScene scene) { scene_ = std::move(scene); }
+    //! 吸着の相手を差し替える。持ち越しも捨てる。
+    //!
+    //! 文書を開く・Undo/Redo・作業平面やグリッドの変更は、どれもここを通る。
+    //! 場面が入れ替わると、持ち越していた吸着先はもう同じものを指していない。
+    //! 捨てずに残すと、消えた相手の位置へ吸い付いたままになる。
+    void SetScene(SnapScene scene);
     [[nodiscard]] const SnapScene& Scene() const noexcept { return scene_; }
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。

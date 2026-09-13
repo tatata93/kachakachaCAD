@@ -301,6 +301,39 @@ KACHA_V2_TEST(session, ツールの切替と取消と設定変更で吸着の持
     Require(fixture.HoverAt(51.1) == fixture.right, "設定を変えると近い右へ吸着する");
 }
 
+KACHA_V2_TEST(session, 場面を差し替えると吸着の持ち越しを捨てる)
+{
+    // 文書を開く・Undo/Redo・作業平面やグリッドの変更は、どれも SetScene を通る。
+    // 場面が入れ替わっても持ち越しが残ると、もう同じ物ではない相手へ吸い付いたままになる。
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    SnapScene replaced = PlaneScene();
+    replaced.points.push_back({fixture.left, {50.0, 50.0, 0.0}});
+    replaced.points.push_back({fixture.right, {52.0, 50.0, 0.0}});
+    fixture.session.SetScene(replaced);
+    Require(fixture.HoverAt(51.1) == fixture.right,
+        "場面を差し替えると、前の左ではなく近い右へ吸着する");
+}
+
+KACHA_V2_TEST(session, 場面の差し替え後は12pxの外の旧候補へ吸着しない)
+{
+    // 持ち越しがあると、範囲 12px に余裕 4px を足した 16px まで旧候補へ吸い付く。
+    // 差し替えで捨てていれば、14px の位置ではもう何にも吸着しない。
+    TwoPointFixture fixture;
+    fixture.HoldLeft();
+    Require(fixture.HoverAt(48.6) == fixture.left,
+        "捨てる前は 14px でも持ち越した左へ吸着する(範囲 12px + 余裕 4px)");
+    fixture.session.SetScene(PlaneScene());
+    SnapScene replaced = PlaneScene();
+    replaced.points.push_back({fixture.left, {50.0, 50.0, 0.0}});
+    replaced.points.push_back({fixture.right, {52.0, 50.0, 0.0}});
+    fixture.session.SetScene(replaced);
+    Require(fixture.HoverAt(48.6).IsNil(),
+        "差し替えたあとは 14px では吸着しない(旧候補が生き残っていない)");
+    Require(fixture.HoverAt(48.9) == fixture.left,
+        "11px なら普通に吸着する(範囲そのものは変わっていない)");
+}
+
 KACHA_V2_TEST(session, Sを離したあとは持ち越し無しから始まる)
 {
     TwoPointFixture fixture;

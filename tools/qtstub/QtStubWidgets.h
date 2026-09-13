@@ -48,6 +48,7 @@ public:
     [[nodiscard]] QPalette palette() const;
     [[nodiscard]] QFont font() const;
     [[nodiscard]] bool isVisible() const;
+    [[nodiscard]] bool isHidden() const;
     [[nodiscard]] QWidget* window();
     [[nodiscard]] QPixmap grab();
     [[nodiscard]] double devicePixelRatioF() const;

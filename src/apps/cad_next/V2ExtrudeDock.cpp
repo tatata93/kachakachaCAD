@@ -271,19 +271,22 @@ QString V2ExtrudeDock::InputTextJa() const
     return input_->text();
 }
 
+// isVisible() は親(棚・窓)が画面に出ていないと偽になる。
+// 画面を出さない自己試験では、出すと決めた欄まで「出ていない」ことになる。
+// ここで見たいのは「出すと決めたか」なので isHidden() の裏を返す。
 bool V2ExtrudeDock::OperationRowShown() const
 {
-    return boolean_->isVisible();
+    return !boolean_->isHidden();
 }
 
 bool V2ExtrudeDock::ReselectTargetShown() const
 {
-    return reselectTarget_->isVisible();
+    return !reselectTarget_->isHidden();
 }
 
 bool V2ExtrudeDock::ReselectProfileShown() const
 {
-    return reselectProfile_->isVisible();
+    return !reselectProfile_->isHidden();
 }
 
 void V2ExtrudeDock::PressReselectTarget()

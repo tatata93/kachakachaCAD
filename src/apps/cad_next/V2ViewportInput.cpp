@@ -14,18 +14,23 @@
 //! ここはそれを Qt へつなぐだけである。
 
 #include "V2Viewport.h"
+#include <QBrush>
+#include <QColor>
 #include <QCursor>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
+#include <QPoint>
+#include <QPointF>
+#include <QRectF>
 #include <QString>
+#include <QWidget>
 
 #include "kachakacha/app/ControlPointPick.h"
 #include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/modeling/DrawingConstraint.h"
 #include "kachakacha/modeling/MeshPick.h"
-
-#include <QCursor>
 
 #include <cmath>
 #include <iterator>

@@ -24,6 +24,7 @@
 #include <QMouseEvent>
 #include <QPoint>
 #include <QPointF>
+#include <QString>
 
 #include <cstdint>
 #include <optional>

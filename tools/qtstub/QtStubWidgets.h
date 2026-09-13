@@ -4,19 +4,7 @@
 
 #include <initializer_list>
 
-//! 本物の QList のごく一部。初期化子リストから作れれば足りる。
-template<class T>
-class QList {
-public:
-    QList() = default;
-    QList(std::initializer_list<T>) {}
-    //! 範囲 for に載せられるだけの入れ物。型検査に要るぶんだけ。
-    [[nodiscard]] T* begin() const { return nullptr; }
-    [[nodiscard]] T* end() const { return nullptr; }
-    [[nodiscard]] int size() const { return 0; }
-    [[nodiscard]] bool isEmpty() const { return true; }
-    void push_back(const T&) {}
-};
+//! QList は QtStubCore.h にある。ここで作り直さない。
 
 class QObject {
 public:
@@ -100,6 +88,7 @@ public:
     virtual void resizeEvent(QResizeEvent*);
     void setContextMenuPolicy(Qt::ContextMenuPolicy);
     [[nodiscard]] QPoint mapToGlobal(const QPoint&) const;
+    virtual bool focusNextPrevChild(bool);
 };
 
 class QLayout : public QObject {
@@ -166,15 +155,16 @@ public:
     QMenu* addMenu(const QString&);
     [[nodiscard]] bool isEmpty() const;
     QAction* exec(const QPoint&);
-    [[nodiscard]] std::vector<QAction*> actions() const;
+    [[nodiscard]] QList<QAction*> actions() const;
     [[nodiscard]] QString title() const;
+    QAction* addSection(const QString&);
 };
 
 class QMenuBar : public QWidget {
 public:
     QMenu* addMenu(const QString&);
     void addAction(QAction*);
-    [[nodiscard]] std::vector<QAction*> actions() const;
+    [[nodiscard]] QList<QAction*> actions() const;
 };
 
 class QToolBar : public QWidget {
@@ -189,7 +179,7 @@ public:
     void setToolButtonStyle(Qt::ToolButtonStyle);
     void setMovable(bool);
     void setOrientation(Qt::Orientation);
-    [[nodiscard]] std::vector<QAction*> actions() const;
+    [[nodiscard]] QList<QAction*> actions() const;
 };
 
 class QStatusBar : public QWidget {
@@ -534,4 +524,5 @@ public:
     static QWidget* activeWindow();
     static std::vector<QWidget*> topLevelWidgets();
     static std::vector<QWidget*> allWidgets();
+    static bool sendEvent(QObject*, QEvent*);
 };

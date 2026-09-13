@@ -83,6 +83,7 @@ public:
     QRectF(double, double, double, double) {}
     QRectF(const QRect&) {}
     QRectF(const QPointF&, const QSize&) {}
+    QRectF(const QPointF&, const QPointF&) {}
     [[nodiscard]] double x() const;
     [[nodiscard]] double y() const;
     [[nodiscard]] double left() const;
@@ -93,6 +94,7 @@ public:
     [[nodiscard]] double height() const;
     [[nodiscard]] QPointF center() const;
     [[nodiscard]] QRectF adjusted(double, double, double, double) const;
+    [[nodiscard]] QRectF normalized() const;
     [[nodiscard]] bool contains(const QPointF&) const;
     [[nodiscard]] QRect toRect() const;
 };
@@ -139,6 +141,9 @@ public:
     void setWidthF(double);
     void setColor(const QColor&);
     void setStyle(Qt::PenStyle);
+    [[nodiscard]] QColor color() const;
+    [[nodiscard]] double widthF() const;
+    [[nodiscard]] Qt::PenStyle style() const;
 };
 
 class QFont {
@@ -365,6 +370,8 @@ public:
 
 class QMouseEvent : public QEvent {
 public:
+    QMouseEvent(Type, const QPointF&, const QPointF&, Qt::MouseButton, Qt::MouseButtons,
+        Qt::KeyboardModifiers) {}
     [[nodiscard]] QPointF position() const;
     [[nodiscard]] Qt::MouseButton button() const;
     [[nodiscard]] Qt::MouseButtons buttons() const;
@@ -373,6 +380,7 @@ public:
 
 class QKeyEvent : public QEvent {
 public:
+    QKeyEvent(Type, int, Qt::KeyboardModifiers) {}
     [[nodiscard]] int key() const;
     [[nodiscard]] Qt::KeyboardModifiers modifiers() const;
     [[nodiscard]] QString text() const;

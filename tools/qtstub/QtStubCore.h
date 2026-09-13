@@ -33,7 +33,8 @@ enum MouseButton { NoButton = 0, LeftButton = 1, RightButton = 2, MiddleButton =
 enum KeyboardModifier { NoModifier = 0, ShiftModifier = 1, ControlModifier = 2,
     AltModifier = 4 };
 enum Key { Key_Escape = 1, Key_Return, Key_Enter, Key_Backspace, Key_Tab, Key_Backtab,
-    Key_Space, Key_Delete, Key_Left, Key_Right, Key_Up, Key_Down };
+    Key_Space, Key_Delete, Key_Left, Key_Right, Key_Up, Key_Down,
+    Key_A, Key_S, Key_D, Key_W, Key_C, Key_V, Key_X, Key_Z };
 enum ToolButtonStyle { ToolButtonIconOnly, ToolButtonTextOnly, ToolButtonTextBesideIcon,
     ToolButtonTextUnderIcon };
 enum WindowType { Widget = 0, Window = 1 };
@@ -149,4 +150,31 @@ public:
     [[nodiscard]] int toInt() const;
     [[nodiscard]] QString toString() const;
     [[nodiscard]] bool isValid() const;
+};
+
+//! Qt の QList。実物と同じ使い方ができるだけの薄い包み。
+//! std::vector を継承しているので、既存の std::vector を返す関数から作れる。
+template <typename T>
+class QList : public std::vector<T> {
+public:
+    using std::vector<T>::vector;
+    QList() = default;
+    QList(const std::vector<T>& other) : std::vector<T>(other) {}
+    [[nodiscard]] int indexOf(const T& value) const
+    {
+        for (std::size_t i = 0; i < this->size(); ++i) {
+            if ((*this)[i] == value) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+    [[nodiscard]] const T& at(int index) const
+    {
+        return std::vector<T>::at(static_cast<std::size_t>(index));
+    }
+    [[nodiscard]] bool contains(const T& value) const { return indexOf(value) >= 0; }
+    [[nodiscard]] int count() const { return static_cast<int>(this->size()); }
+    void append(const T& value) { this->push_back(value); }
+    [[nodiscard]] bool isEmpty() const { return this->empty(); }
 };

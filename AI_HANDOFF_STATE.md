@@ -5,17 +5,18 @@
 
 ## 現在
 
-REQUEST_ID: P1-EXTRUDE-R1
-TASK_ID: Phase 1 押し出し
-STAGE: 1/1
-STATUS: WORKING(面の押し引きが残っている)
+REQUEST_ID: UI-P1-007-S1-R8
+TASK_ID: UI-P1-007
+STAGE: 1/2
+STATUS: READY_FOR_REVIEW(R7 の B1/B2 を直した)
 REVIEW_STATUS: PENDING_CODEX
-BASE: 4fa218c
-HEAD: 7f13b72
-BUILD_RESULT: PASS
-TEST_RESULT: PASS(PC: CTest 134/134、アプリ自己試験 187/187。雲: core 128/128、当て木 57ファイル)
-REVIEW_SCOPE: 4fa218c..188ea47 のうち、スナップに関わる分
-REVIEW_FOCUS: 捕捉と解除の分離、持ち越しの同一視、道具切替と取消での破棄、既存選択の退行
+BASE: 188ea47
+HEAD: 5f6ccbc
+BUILD_RESULT: PASS(雲 core)
+TEST_RESULT: PASS(雲: core CTest 130/130、当て木 58ファイル。PC は往復待ち)
+REVIEW_SCOPE: 188ea47..5f6ccbc のうち、Viewport の一時状態と DrawingSession::SetScene
+REVIEW_FOCUS: 道具替え・場面差し替え・取消のあとに前の道具の物が残らないこと、
+  帯(status)を無条件に上書きしないこと、候補送りの番号が残らないこと
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -53,8 +54,9 @@ UPDATED_AT: 2026-09-14
 | 近接した端点/中点/中心/交点で安定 | 済 | 同上(重なった別の形へ移らない) |
 | ズームで操作感が変わらない | 済 | `snap_tests`(10 / 1 / 1000 px/mm) |
 | いま吸着している対象が分かる | 済 | 白フチ付きの印 + 帯の `[端点]` 表示 |
-| 道具切替で残らない | 済 | `DrawingSession::SelectTool` で `Reset` |
-| 取消で残らない | 済 | `CancelTool` で `Reset` |
+| 道具切替で残らない | 済 | core `SelectTool` で `Reset` + 画面 `DiscardHoverState`(R8) |
+| 取消で残らない | 済 | core `CancelTool` で `Reset` + 画面 `DiscardHoverState`(R8) |
+| 場面の差し替えで残らない | 済 | `DrawingSession::SetScene` で `Reset`(R8) |
 | S キーで解除 | 済 | 自己試験「Shiftで水平になりSで吸着が止まる」ほか |
 | 既存 Selection を壊さない | 済 | `selection_tests` 136行追加、全体 134/134 |
 | grab-to-move を壊さない | 済 | `grab_to_move_tests` |
@@ -68,11 +70,46 @@ Stage 2 として挙がっていた結線(DrawingSession・道具切替・取消
 利用制限とみなし、オーナー指示にしたがって **CODEX_PENDING_CONTINUE** で進める。
 自分の build / test / 受入試験 / 自己レビューをゲートにする。
 
+## UI-P1-007-S1-R7 の指摘と、どう直したか
+
+Codex は 2026-09-14 に戻ってきて `CODEX_REVIEW.md` に **VERDICT: FAIL** を書いた。
+指摘は2つ。どちらも「前の状態が残る」という同じ形をしていた。
+
+- **B1 道具を替えても前の道具の吸着表示が残る。**
+  `DrawingSession::SelectTool()` は持ち越しを捨てるのに、
+  `V2Viewport::OnToolChanged()` は `hover_.preview` しか消していなかった。
+  `hover_.snap`・位置・案内・Tab/Alt の候補送りは前の道具の値のままだった。
+  → 道具の持ち物をまとめて捨てる `DiscardHoverState()` を足し、
+  いまのカーソル位置で **一度だけ** Hover を取り直す。
+  帯は、いま出ているのが前の案内のときだけ書き換える。
+  断った理由や確定結果は消さない(`RefreshHoverAfterToolChange`)。
+- **B2 場面・文書の差し替えで持ち越しが生き残る。**
+  `DrawingSession::SetScene()` が `scene_` を代入するだけだった。
+  開く・Undo/Redo・作業平面切替・グリッド変更はどれもここを通る。
+  → 明示メソッドにして `snapHysteresis_.Reset()` する。
+
+直しながら **同じ穴がもう1か所** あったので一緒に直した。
+`V2Viewport::CancelTool()` も、core が持ち越しを捨てるのに画面は preview しか
+消しておらず、取り消した直後のリングと診断情報が session の中身と食い違っていた。
+
+指摘された MISSING TESTS はすべて足した。
+
+| Codex の要求 | どこ |
+| --- | --- |
+| (1) 直線→円弧→ベジェ→スプライン→選択、マウスを動かさず残らない | 自己試験「道具を替えると前の吸着と候補送りが消える」 |
+| (2) SetScene 交換後、12px の外・16px の内で旧候補へ吸着しない | core `session` 「場面の差し替え後は12pxの外の旧候補へ吸着しない」 |
+| (3) 開く/Undo/Redo/作業平面切替/グリッド変更の各経路 | 自己試験「場面を差し替えると吸着の持ち越しが消える」 + core「場面を差し替えると吸着の持ち越しを捨てる」 |
+| (4) Cancel 直後のリングと診断情報が現在の状態と一致 | 自己試験「取り消した直後に古いリングが残らない」 |
+
+非阻害の指摘(§6.1 道具に応じた吸着の強さ)は未着手のまま残す。
+候補の種類を道具ごとに変える段でまとめて片づける。
+
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: UI-P1-007-S1-R7 / TASK: UI-P1-007 / STAGE: 1/2
-  BASE: 4fa218c / HEAD: 188ea47
-  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS / TEST: PASS
+- REQUEST_ID: UI-P1-007-S1-R8 / TASK: UI-P1-007 / STAGE: 1/2
+  BASE: 188ea47 / HEAD: 5f6ccbc
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 130/130)
+  前身: UI-P1-007-S1-R7(FAIL)。B1/B2 を直し、MISSING TESTS を全部足した。
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

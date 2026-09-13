@@ -1012,6 +1012,7 @@ def _run_stage(
     stage: StagePlan, stage_number: int, stage_count: int, worktree: Path,
     runtime: Path, runtime_task: Path, tools: dict[str, str | None],
     timeout_seconds: int, max_revisions: int, control_branch: str,
+    resume_existing: bool = False,
 ) -> StageOutcome:
     revision_file: Path | None = None
     for attempt in range(max_revisions + 1):
@@ -1020,12 +1021,25 @@ def _run_stage(
             f"Claude worker runs stage {stage.stage_id}, attempt {attempt + 1}")
         task_text = _write_task_files(task, policy, stage, stage_number, stage_count,
             runtime_task)
-        before = worktree_fingerprint(worktree)
-        worker = worker_command(worktree, runtime_task, revision_file,
-            policy.execution_mode, stage, tools["claude"] or "claude")
-        worker_log = runtime / f"stage-{stage_number}-claude-{attempt}.log"
-        worker_report = run_command(worker, timeout_seconds, worker_log)
-        require_new_worker_changes(before, worktree_fingerprint(worktree))
+        if resume_existing and attempt == 0:
+            metrics = collect_diff_metrics(worktree)
+            if metrics.changed_files == 0:
+                raise OrchestratorError(
+                    "--resume-gates requires existing task-worktree changes"
+                )
+            worker_report = (
+                "# Resumed existing repair\n\n"
+                "The task worktree already contains a repair made after a failed gate. "
+                "The worker step was intentionally skipped; gates and both reviews must "
+                "validate the complete current diff."
+            )
+        else:
+            before = worktree_fingerprint(worktree)
+            worker = worker_command(worktree, runtime_task, revision_file,
+                policy.execution_mode, stage, tools["claude"] or "claude")
+            worker_log = runtime / f"stage-{stage_number}-claude-{attempt}.log"
+            worker_report = run_command(worker, timeout_seconds, worker_log)
+            require_new_worker_changes(before, worktree_fingerprint(worktree))
         commands = _run_gates(worktree, runtime, stage_number, attempt, timeout_seconds)
         policy = _escalate_from_diff(tasks, task, policy, collect_diff_metrics(worktree))
         task_text = _write_task_files(task, policy, stage, stage_number, stage_count,
@@ -1087,12 +1101,15 @@ def _run_stage(
 def run_one_task(
     tasks: list[dict[str, Any]], task: dict[str, Any], base_ref: str,
     timeout_seconds: int, max_revisions: int, auto_commit: bool,
+    resume_gates: bool = False,
 ) -> None:
     tools = detect_tools()
     require_tools(tools)
     control_branch = ensure_control_checkout_safe()
     if control_branch in DANGEROUS_BRANCHES:
         raise OrchestratorError("Execute mode requires a non-main control branch")
+    if resume_gates and task["status"] != "revision":
+        raise OrchestratorError("--resume-gates requires a revision task")
     policy = determine_policy(task)
     persist_policy(task, policy)
     stages = stages_for_task(task, policy)
@@ -1108,7 +1125,8 @@ def run_one_task(
             set_task_status(tasks, task, "in_progress")
             write_state(task, control_branch, f"Running stage {stage.stage_id}")
             outcome = _run_stage(tasks, task, policy, stage, index, len(stages), worktree,
-                runtime, runtime_task, tools, timeout_seconds, max_revisions, control_branch)
+                runtime, runtime_task, tools, timeout_seconds, max_revisions, control_branch,
+                resume_existing=resume_gates and index == 1)
             policy = outcome.policy
         task["status"] = "passed"
         task["assigned_to"] = "claude"
@@ -1155,6 +1173,8 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--execute", action="store_true", help="perform the planned run")
     parser.add_argument("--dry-run", action="store_true", help="force read-only planning")
     parser.add_argument("--auto-commit", action="store_true", help="commit PASS on task branch")
+    parser.add_argument("--resume-gates", action="store_true",
+        help="for a revision task, keep an existing repair and resume at gates/reviews")
     return parser.parse_args(argv)
 
 
@@ -1185,6 +1205,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.timeout,
             args.max_revisions,
             args.auto_commit,
+            args.resume_gates,
         )
         return 0
     except KeyboardInterrupt:

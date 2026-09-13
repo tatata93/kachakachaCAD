@@ -439,6 +439,47 @@ class OrchestratorTests(unittest.TestCase):
             reviewer.assert_not_called()
             self.assertIsNone(outcome.reviewer)
 
+    def test_resume_existing_skips_worker_but_runs_gates_and_reviews(self):
+        value = task()
+        value["status"] = "revision"
+        policy = orchestrator.determine_policy(value)
+        stage = orchestrator.StagePlan("foundation", "foundation", "objective", (),
+            ("works",), True)
+        metrics = orchestrator.DiffMetrics(1, 4, ("src/example.cpp",), 1)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / "runtime"
+            runtime.mkdir()
+            runtime_task = runtime / "CURRENT_TASK.md"
+            with mock.patch.object(orchestrator, "_write_task_files", return_value="task"), \
+                    mock.patch.object(orchestrator, "collect_diff_metrics",
+                        return_value=metrics), \
+                    mock.patch.object(orchestrator, "run_command",
+                        return_value="PASS\nself review") as run, \
+                    mock.patch.object(orchestrator, "_run_gates", return_value=[]), \
+                    mock.patch.object(orchestrator, "_escalate_from_diff",
+                        return_value=policy), \
+                    mock.patch.object(orchestrator, "collect_git_evidence",
+                        return_value=(" M file", "stat", "diff")), \
+                    mock.patch.object(orchestrator, "make_review_packet"), \
+                    mock.patch.object(orchestrator, "write_public_report"), \
+                    mock.patch.object(orchestrator, "set_task_status"), \
+                    mock.patch.object(orchestrator, "write_state"), \
+                    mock.patch.object(orchestrator, "save_tasks"), \
+                    mock.patch.object(orchestrator, "_review_path",
+                        return_value=runtime / "review.md"), \
+                    mock.patch.object(orchestrator, "run_reviewer",
+                        return_value=("PASS\nreview", "codex")):
+                outcome = orchestrator._run_stage([value], value, policy, stage, 1, 2,
+                    root, runtime, runtime_task, {"claude": "claude", "codex": "codex"},
+                    30, 1, "codex/control", resume_existing=True)
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(outcome.reviewer, "codex")
+
+    def test_resume_gates_argument_is_parsed(self):
+        args = orchestrator.parse_arguments(["--execute", "--resume-gates"])
+        self.assertTrue(args.resume_gates)
+
     def test_untracked_content_changes_stage_fingerprint_and_metrics(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

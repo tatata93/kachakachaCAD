@@ -8,7 +8,7 @@
 - Current Stage: `1/2 foundation`
 - Last PASS task: `UI-P1-006`
 - Current status: `revision`
-- Current note: Stage 1 gate failures repaired; rerun foundation review and gates
+- Current note: Stage 1 repair ready; resume from gates and reviews
 
 ## Important design decisions
 

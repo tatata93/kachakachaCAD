@@ -80,7 +80,9 @@ void V2MainWindow::BeginExtrudePreview()
     ExtrudeHandle handle;
     handle.origin = center;
     // 向きはいまの作業平面の法線。V1 と同じで、面に対してまっすぐ押す。
-    handle.direction = viewport_->WorkPlane().normal;
+    // 面を押しているときだけは、その面の外向き法線を使う。作業平面の法線を
+    // 使うと、傾いた面を押したときに面から外れた向きへ押される。
+    handle.direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
     if (extrudeChoice_.reversed) {
         handle.direction = handle.direction * -1.0;
     }
@@ -139,6 +141,9 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 void V2MainWindow::EndExtrudePreview()
 {
     extrudeOutline_.clear();
+    // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
+    // 前の面の向きへ押される。
+    facePushPull_ = false;
     viewport_->HideExtrudeHandle();
     // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
     extrudeShelfShown_ = false;
@@ -225,7 +230,7 @@ void V2MainWindow::RefreshExtrudeFromDock()
     // 向きが変わったら矢印も向き直す。数字はそのまま。
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();
-    handle.direction = viewport_->WorkPlane().normal;
+    handle.direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
     if (extrudeChoice_.reversed) {
         handle.direction = handle.direction * -1.0;
     }

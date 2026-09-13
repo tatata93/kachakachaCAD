@@ -73,6 +73,15 @@ public:
     //! 場面が入れ替わると、持ち越していた吸着先はもう同じものを指していない。
     //! 捨てずに残すと、消えた相手の位置へ吸い付いたままになる。
     void SetScene(SnapScene scene);
+    //! 場面が入れ替わったときに呼ぶもの。
+    //!
+    //! 画面は、持ち越しだけでなく **出している一時表示** も捨てなければならない。
+    //! ここを1本にしておくのは、`SetScene` の呼び口が10か所以上あるためである。
+    //! 呼び口ごとに後始末を書くと、必ずどれかが抜ける。実際に抜けた。
+    void SetSceneChangedCallback(std::function<void()> callback)
+    {
+        sceneChanged_ = std::move(callback);
+    }
     [[nodiscard]] const SnapScene& Scene() const noexcept { return scene_; }
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
@@ -160,6 +169,7 @@ private:
     SnapSettings snapSettings_;
     modeling::SnapHysteresis snapHysteresis_;
     std::function<geometry::Vector3(const geometry::Vector3&)> adjustPoint_;
+    std::function<void()> sceneChanged_;
 };
 
 } // namespace kachakacha::v2::app

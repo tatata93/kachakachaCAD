@@ -78,6 +78,10 @@ void DrawingSession::SetScene(SnapScene scene)
     // 場面が入れ替わったら、持ち越していた吸着先は当てにならない。その場で捨てる。
     scene_ = std::move(scene);
     snapHysteresis_.Reset();
+    // 画面にも知らせる。持ち越しだけ捨てても、出しているリングは消えない。
+    if (sceneChanged_) {
+        sceneChanged_();
+    }
 }
 
 void DrawingSession::SetSnapSettings(SnapSettings settings)

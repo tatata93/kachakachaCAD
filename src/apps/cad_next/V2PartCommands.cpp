@@ -161,7 +161,17 @@ std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeTargets() const
 //! 押す前に何ができるのか見えないので、初めての人には難しい。
 void V2MainWindow::RunExtrude()
 {
-    const auto opening = PlanExtrudeFromSelection();
+    auto opening = PlanExtrudeFromSelection();
+    // 面を押すときは、押す前に面の縁を輪郭にする(EX-02)。
+    // ここを通ると、以降はいつもの「輪郭を押す」と同じ道になる。
+    if (opening.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndFace
+        && !viewport_->ExtrudeHandleShown()) {
+        if (!MaterializeFaceProfileWires()) {
+            return;   // 理由はそちらで言っている。
+        }
+        opening = PlanExtrudeFromSelection();
+        facePushPull_ = true;
+    }
     if (!opening.readyToPreview) {
         // 足りないものを言う。「不正な入力です」で終わらせない。
         SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
@@ -205,6 +215,9 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
+    if (facePushPull_ && !ApplyFacePushPull(choice)) {
+        return std::nullopt;
+    }
     // 窓は据え付けていない。据え付いているのは「詳細...」を押したときと、
     // 画面を出さない試験が差し込んだときだけである。あれば従う。
     if (extrudeChooser_) {
@@ -241,9 +254,8 @@ void V2MainWindow::ConfirmExtrude()
     }
     auto profiles = ExtrudeProfilesFor(selection.entityIds);
     if (profiles.empty()) {
-        // 面だけの押し引きは、まだカーネルに道が無い。できないと言う。
-        SetStatus(QStringLiteral("押し出し: 面の押し引きはまだできません。"
-                                 "閉じた輪郭を選んでください。"));
+        SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
+                                 "閉じた輪郭か、立体の平らな面を選んでください。"));
         return;
     }
     // 何を作るか、どこまで押すかを選ばせる。core は7通りの向きと5通りの終端を

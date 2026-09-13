@@ -226,6 +226,61 @@ namespace {
     return Explain("厚みを言う", window.StatusText().contains(QStringLiteral("mm")));
 }
 
+//! EX-02。立体の平らな面をつまんで押すと、材料が増える。
+[[nodiscard]] bool CaseFacePushPullGrowsTheSolid(V2MainWindow& window)
+{
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
+    if (!Explain("押し出して立体ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    kachakacha::v2::base::EntityId part;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Part) {
+            part = entity.id;
+        }
+    }
+    if (!Explain("立体の名前が引ける", !part.IsNil())) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire);
+
+    // 面を1枚選ぶ。番号は網の面の並びと同じ(OcctTessellate と OcctFaceQuery で揃えてある)。
+    auto& viewport = window.Viewport();
+    kachakacha::v2::app::SelectionSet faceSelection;
+    kachakacha::v2::app::SelectionRef face;
+    face.entityId = part;
+    face.kind = kachakacha::v2::app::SelectionElementKind::Face;
+    face.pickedFaceIndex = 0;
+    faceSelection.ordered.push_back(face);
+    faceSelection.entityIds.push_back(part);
+    viewport.SetSelection(faceSelection);
+
+    window.RunCommand("part.extrude");   // 面の縁を輪郭にして、下見を出す
+    if (!Explain((std::string("面の縁が輪郭になる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountOfKind(window, kachakacha::v2::domain::EntityKind::Wire) > wiresBefore)) {
+        return false;
+    }
+    if (!Explain("矢印が出る", viewport.ExtrudeHandleShown())) {
+        return false;
+    }
+    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.RunCommand("part.extrude");   // 確定
+    // 足しなので立体は増えない。増えたら「足す」になっていない。
+    if (!Explain((std::string("外へ引いても立体は増えない(足しになっている。帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountParts(window) == 1)) {
+        return false;
+    }
+    return Explain("何をしたかを言う",
+        window.StatusText().contains(QStringLiteral("mm"))
+            || window.StatusText().contains(QStringLiteral("面")));
+}
+
 [[nodiscard]] bool CasePartCommandsNeedSelection(V2MainWindow& window)
 {
     // 何も選ばずに押したら、何を選べばよいかを言う。
@@ -1234,6 +1289,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"線を選ばずに編集を押すと理由が出る", &CaseWireEditNeedsSelection},
         {"そろっていない接線接続は断る", &CaseWireConnectRefusesWhenNotAligned},
         {"押し出しで部品ができる", &CaseExtrudeMakesAPart},
+        {"立体の面をつまんで押せる", &CaseFacePushPullGrowsTheSolid},
         {"部品のコマンドは選択が要る", &CasePartCommandsNeedSelection},
         {"押し出した部品が保存して開き直しても残る", &CaseExtrudedPartSurvivesSaveAndOpen},
         {"押し出しでワイヤーだけ作れる", &CaseExtrudeMakesWiresOnly},

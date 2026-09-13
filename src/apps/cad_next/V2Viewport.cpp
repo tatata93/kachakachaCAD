@@ -126,6 +126,23 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
     setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(320, 240);
     SetViewDirection(direction_);
+    // 場面が入れ替わったら、出している一時表示も捨てる。
+    // 呼び口ごとに後始末を書くと、必ずどれかが抜ける。ここ1本にする。
+    session_->SetSceneChangedCallback([this] { OnSceneReplaced(); });
+}
+
+//! 場面が入れ替わった。文書を開く、Undo/Redo、作業平面やグリッドの変更で通る。
+//!
+//! ここで **取り直さない** 。取り直すと、菜単から替えたときのように
+//! ポインタが画面の外にあるときでも、そこに何か出ることになる。
+//! 消しておいて、次にポインタが動いたときに出し直す。
+void V2Viewport::OnSceneReplaced()
+{
+    if (hover_.snap.has_value() || !hover_.preview.empty() || cycle_.valid
+        || hoverOffPlane_) {
+        DiscardHoverState();
+        update();
+    }
 }
 
 void V2Viewport::SetPalette(const ViewportPalette& palette)

@@ -138,6 +138,12 @@ public:
     void ConfirmExtrudeWithDialog();
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
+    //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
+    //! 取れなければ理由を出して偽を返す。
+    bool MaterializeFaceProfileWires();
+    //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
+    //! 0mm など作れない量なら理由を出して偽を返す。
+    bool ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice);
     //! 読み取った入力の片方を外して選び直す(EX-07)。
     //! target が真なら加工する立体、偽なら輪郭・面を外す。もう片方は残す。
     void ReselectExtrudeInput(bool target);
@@ -696,6 +702,10 @@ private:
         const kachakacha::v2::app::ExtrudeFacts&)>
         extrudeChooser_;
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
+    //! 直前に押した面の外向き法線(EX-02)。矢印と押す向きに使う。その場限りの値。
+    kachakacha::v2::geometry::Vector3 faceNormal_{0.0, 0.0, 1.0};
+    //! いまの押し出しが「面の押し引き」か。矢印の向きと足す/引くの決め方が変わる。
+    bool facePushPull_ = false;
     //! 部品を見せるための辺。
     std::map<std::string, std::vector<kachakacha::v2::geometry::CurveSegment>> partEdges_;
     //! 型紙にするときの「平らな1枚」。立体の辺を全部使うと平らにならない。

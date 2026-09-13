@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/modeling/WorkPlane.h"
 
 namespace kachakacha::v2::selftest {
 namespace {
@@ -762,8 +763,12 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return Explain("選択へ戻っても前の道具の物が残らない", !viewport.HasPreview());
 }
 
-//! 文書を差し替える道(開く・Undo/Redo・作業平面・グリッド)で持ち越しが生き残らないこと。
-//! UI-P1-007 R7 の指摘 B2。どれも DrawingSession::SetScene を通る。
+//! 文書を差し替える道(開く・Undo/Redo・作業平面・グリッド)で
+//! 前の場面の吸着表示が生き残らないこと。
+//! UI-P1-007 R7 の指摘 B2 と、R8 の指摘 B1。どれも DrawingSession::SetScene を通る。
+//!
+//! **場面を替えたあと HoverAt を呼んではならない。** 呼ぶと古い hover_ を
+//! 上書きしてしまい、「ポインタを動かさない直後」の残りを見られない。
 [[nodiscard]] bool CaseSceneSwapDropsTheHold(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -781,43 +786,61 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         return Explain("端点が画面に入る", false);
     }
     const QPointF onEndpoint(endpoint->x, endpoint->y);
-    // 12px の外・16px の内。持ち越しがあれば端点へ吸い付き、捨ててあれば吸い付かない。
+    // 12px の外・16px の内。持ち越しがあるので、ここでも端点へ吸い付いている。
     const QPointF justOutside = onEndpoint + QPointF(14.0, 0.0);
 
-    // 場面を差し替える道をひととおり通す。開く・Undo/Redo・グリッド変更は
-    // どれも DrawingSession::SetScene を通る(V2MainWindow::AdoptCurrentDocument ほか)。
+    // 場面を差し替える道をひととおり通す。どれも DrawingSession::SetScene を通る。
     struct Route {
         const char* nameJa;
         std::function<void()> run;
     };
     const std::vector<Route> kRoutes = {
+        {"開き直す", [&window]() { window.RunCommand("file.new"); }},
         {"取り消す", [&window]() { window.RunCommand("edit.undo"); }},
         {"やり直す", [&window]() { window.RunCommand("edit.redo"); }},
+        {"作業平面を替える",
+            [&window]() {
+                window.Viewport().SetWorkPlane(
+                    kachakacha::v2::modeling::StandardPlane(
+                        kachakacha::v2::modeling::StandardPlaneKind::ZX));
+            }},
         {"グリッドを変える",
             [&window]() { window.ApplyGridChoice(window.CurrentGridChoice()); }},
     };
     for (const auto& route : kRoutes) {
+        const std::string nameJa(route.nameJa);
+        // 「開き直す」は文書を空にするので、毎回線を引き直してから始める。
+        window.RunCommand("file.new");
+        if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})
+            || !DrawLine(window, Vector3{-20.0, 30.0, 0.0}, Vector3{20.0, 30.0, 0.0})) {
+            return Explain((nameJa + ": 下ごしらえの線が引ける").c_str(), false);
+        }
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
         // 端点で掴んでから 14px 外へ出る。持ち越しがあるので、まだ端点へ吸い付く。
         viewport.HoverAt(onEndpoint);
         viewport.HoverAt(justOutside);
-        const auto before = viewport.Hover().snap;
-        // 持ち越していたのが線の端点でなければ(格子など)、この道では試せない。
-        if (!before.has_value() || before->entityId.IsNil()) {
-            continue;
+        // 前提を必ず確かめる。掴めていなければ、この試験は何も見ていない。
+        if (!Explain((nameJa + ": 前提 — 14px 先でも持ち越した端点へ吸い付いている").c_str(),
+                viewport.Hover().snap.has_value())) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
         }
+        const int candidatesBefore = viewport.CandidateCount();
+
         route.run();
-        // 場面を替えたあと、マウスを動かさずにもう一度同じ所を見る。
-        // 持ち越しが生きていれば同じ端点へ吸い付く。捨ててあれば 12px の外なので、
-        // その端点へは吸い付かない(格子など別の相手へ吸うのは構わない)。
-        viewport.HoverAt(justOutside);
-        const auto after = viewport.Hover().snap;
-        const bool sameAsBefore = after.has_value()
-            && after->entityId == before->entityId
-            && after->kind == before->kind;
-        const std::string nameJa(route.nameJa);
-        if (!Explain((nameJa + ": 場面を替えたら 14px 先の前の吸着先が残らない").c_str(),
-                !sameAsBefore)) {
+
+        // ここでポインタは動かさない。動かすと古い hover_ を上書きしてしまう。
+        if (!Explain((nameJa + ": 場面を替えたら前のリングが消える").c_str(),
+                !viewport.Hover().snap.has_value())) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        if (!Explain((nameJa + ": 前の候補送りも消える").c_str(),
+                viewport.CandidateCount() == 0 || candidatesBefore == 0)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        if (!Explain((nameJa + ": 前の途中経過も消える").c_str(), !viewport.HasPreview())) {
             window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
             return false;
         }

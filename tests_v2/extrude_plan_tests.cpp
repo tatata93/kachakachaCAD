@@ -1,5 +1,6 @@
 // 選んだものから押し出しの意味を決める(オーナー指示 2026-09-14 の A〜E)。
 #include "kachakacha/app/ExtrudePlan.h"
+#include "kachakacha/app/FacePushPull.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <array>
@@ -178,6 +179,51 @@ KACHA_V2_TEST(extrude_plan, どの組み合わせにも名前がある)
     for (const auto kind : kAll) {
         Require(!kachakacha::v2::app::ExtrudeInputKindNameJa(kind).empty(), "名前がある");
     }
+}
+
+KACHA_V2_TEST(extrude_plan, 面を外へ引くと足しになり中へ押すと引きになる)
+{
+    using kachakacha::v2::app::PlanFacePushPull;
+    // EX-02。作る人は「外へ引けば増える、中へ押せば減る」と思って引く。
+    const auto out = PlanFacePushPull(3.5);
+    Require(out.ready, "外へ引けば作れる");
+    Require(out.booleanMode == ExtrudeBooleanMode::AddToPart, "外は足し");
+    Require(!out.reversed, "外は向きそのまま");
+    Require(out.distanceMm > 3.49 && out.distanceMm < 3.51, "距離はそのまま");
+
+    const auto in = PlanFacePushPull(-2.0);
+    Require(in.ready, "中へ押しても作れる");
+    Require(in.booleanMode == ExtrudeBooleanMode::SubtractFromPart, "中は引き");
+    Require(in.reversed, "中は向きを反転する");
+    Require(in.distanceMm > 1.99 && in.distanceMm < 2.01,
+        "押し出しへ渡す距離は必ず正にする");
+}
+
+KACHA_V2_TEST(extrude_plan, 0mmの押し引きは作らずに次を案内する)
+{
+    using kachakacha::v2::app::PlanFacePushPull;
+    // 0mm は形を変えない。「できた」と言ってはならない。
+    const auto none = PlanFacePushPull(0.0);
+    Require(!none.ready, "0mm では作らない");
+    Require(!none.messageJa.empty(), "次に何をすればよいかを言う");
+    Require(none.messageJa.find("矢印") != std::string::npos, "矢印を引くよう案内する");
+}
+
+KACHA_V2_TEST(extrude_plan, 押し引きの結果を作る人の言葉で言う)
+{
+    using kachakacha::v2::app::DescribeFacePushPullJa;
+    using kachakacha::v2::app::PlanFacePushPull;
+    const auto out = DescribeFacePushPullJa(PlanFacePushPull(5.0));
+    Require(out.find("外へ") != std::string::npos, "外へ引くと言う");
+    Require(out.find("増え") != std::string::npos, "材料が増えると言う");
+    Require(out.find("5.00") != std::string::npos, "距離を出す");
+    const auto in = DescribeFacePushPullJa(PlanFacePushPull(-5.0));
+    Require(in.find("中へ") != std::string::npos, "中へ押すと言う");
+    Require(in.find("減り") != std::string::npos, "材料が減ると言う");
+    // 内部の言葉を出さない。
+    Require(out.find("Boolean") == std::string::npos
+            && out.find("Subtract") == std::string::npos,
+        "内部の言葉を出さない");
 }
 
 KACHA_V2_TEST_MAIN("extrude_plan_tests")

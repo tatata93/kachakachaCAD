@@ -473,6 +473,9 @@ public:
     bool PlacePointFromCursorInput();
     //! 道具が変わった。入力列を閉じる。
     void OnToolChanged();
+    //! 場面が入れ替わった。前の場面の一時表示を捨てる。
+    //! `DrawingSession::SetScene` から必ず呼ばれる。呼び口ごとには書かない。
+    void OnSceneReplaced();
 
     //! 測定で押した点(吸着済み)。V1 の 2点間 / 3点角度 / 要素 で使う。
     struct MeasurePick {

@@ -5,18 +5,19 @@
 
 ## 現在
 
-REQUEST_ID: UI-P1-007-S1-R8
+REQUEST_ID: UI-P1-007-S1-R9
 TASK_ID: UI-P1-007
 STAGE: 1/2
-STATUS: READY_FOR_REVIEW(R7 の B1/B2 を直した)
+STATUS: READY_FOR_REVIEW(R8 の B1 を直した)
 REVIEW_STATUS: PENDING_CODEX
-BASE: 188ea47
-HEAD: 5f6ccbc
+BASE: 5f6ccbc
+HEAD: 9b942b9
 BUILD_RESULT: PASS(雲 core)
-TEST_RESULT: PASS(雲: core CTest 130/130、当て木 58ファイル。PC は往復待ち)
-REVIEW_SCOPE: 188ea47..5f6ccbc のうち、Viewport の一時状態と DrawingSession::SetScene
-REVIEW_FOCUS: 道具替え・場面差し替え・取消のあとに前の道具の物が残らないこと、
-  帯(status)を無条件に上書きしないこと、候補送りの番号が残らないこと
+TEST_RESULT: PASS(雲: core CTest 127/127 + 当て木 59ファイル。PC は往復待ち)
+REVIEW_SCOPE: 5f6ccbc..9b942b9 のうち、場面差し替えと Viewport の一時表示
+REVIEW_FOCUS: SetScene の知らせが1本になっていること、
+  差し替え直後にポインタを動かさなくても旧リング・旧候補送りが消えること、
+  自己試験が前提(掴めていること)を必須にしていること
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -104,18 +105,46 @@ Codex は 2026-09-14 に戻ってきて `CODEX_REVIEW.md` に **VERDICT: FAIL** 
 非阻害の指摘(§6.1 道具に応じた吸着の強さ)は未着手のまま残す。
 候補の種類を道具ごとに変える段でまとめて片づける。
 
+## UI-P1-007-S1-R8 の指摘と、どう直したか
+
+Codex は R8 を **FAIL** にした。指摘は的確だった。
+
+- **B1 場面差し替え直後の旧吸着リングが画面側に残る。**
+  core の持ち越しは捨てたが、画面の `hover_` を捨てていなかった。
+  `SetScene` の呼び口は10か所以上ある。呼び口ごとに後始末を書けば必ず抜ける。
+  → `DrawingSession::SetScene` から必ず呼ばれる知らせを1本足した
+  (`SetSceneChangedCallback`)。画面はそこで `DiscardHoverState()` する。
+  取り直しはしない。菜単から替えたときはポインタが画面の外にありうる。
+- **試験の指摘。** R8 の自己試験は差し替えのあと `HoverAt()` を呼んでいた。
+  古い `hover_` を上書きしてから見ていたので、
+  「ポインタを動かさない直後」の残りを検出できていなかった。
+  → 差し替え後は何も呼ばずに見る。
+- **前提が緩かった。** `!heldBefore || !heldAfter` は前提が崩れても通る。
+  → 「14px 先でも持ち越した端点へ吸い付いている」を必須検査にした。
+- **道が足りなかった。** 実際に通していたのは Undo/Redo/グリッドの3つだけだった。
+  → 開き直しと作業平面変更を足して5つにした。
+
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: UI-P1-007-S1-R8 / TASK: UI-P1-007 / STAGE: 1/2
-  BASE: 188ea47 / HEAD: 5f6ccbc
-  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 130/130)
-  前身: UI-P1-007-S1-R7(FAIL)。B1/B2 を直し、MISSING TESTS を全部足した。
+- REQUEST_ID: UI-P1-007-S1-R9 / TASK: UI-P1-007 / STAGE: 1/2
+  BASE: 5f6ccbc / HEAD: 9b942b9
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 127/127)
+  前身: R7(FAIL) → R8(FAIL)。R8 の B1(画面側の一時表示)を直した。
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)
   BUILD: PASS / TEST: PASS
 
 ## 要確認(Codex 領分に触った)
+
+- **面の押し引きが文書にワイヤーを増やす**(EX-02、2026-09-14)。
+  面を押すと、押した面の縁が「面の縁」という名前のワイヤーとして残る
+  (穴があればその数だけ)。押し出しの記録(`ExtrudeDefinition`)は
+  「どのワイヤーを押したか」で出来ており、面番号は作り直すたびに変わるので
+  記録できない(architecture-and-data.md §6)。縁をワイヤーにすれば、
+  保存の形も Command の作られ方も変えずに、開き直しても作り直せる。
+  代わりの案は `ExtrudeDefinition` へ面の意味的キーを足すことで、そちらは GUARDED。
+  **「面を押したのに線が増える」ことの是非を見てほしい。**
 
 - `docs/manual.html` に3行足した(`help.copy_diagnostics` `wire.center_points`
   `wire.key_points`)。門が全コマンドの説明を求めるため。文言の確認だけ。
@@ -130,8 +159,11 @@ Codex は 2026-09-14 に戻ってきて `CODEX_REVIEW.md` に **VERDICT: FAIL** 
   - 矢印ハンドル・距離同期・下見・Enter/Esc: 完了 `e774350`
   - 右ペイン(入力・距離・方向・範囲・操作・確定): 完了 `5354276` `7f13b72`
   - 入力の選び直し(EX-07): 完了。`app::SelectionWithout` + 棚の2つのボタン。
-  - 面の押し引き(EX-02): **未**。画面が面を拾えず、カーネルにも道が無い。
-    ここだけは往復が要る(雲では OCCT を組み立てられない)。
+  - 面の押し引き(EX-02): 実装済み・PC 確認待ち。
+    `kernel/OcctFaceQuery` が面の縁を返し、`app/FacePushPull` が
+    符号つきの距離を押し出しの言葉へ言い換え、`V2FacePushPull` が
+    縁を文書のワイヤーにしてから、いままでの押し出しへ渡す。
+    雲では OCCT を組み立てられないので、PC の1往復で初めて確かめられる。
 - Phase 2〜5(板材近似): 未着手。
 
 ## 押し出しの受入試験(指示 §33)
@@ -139,8 +171,8 @@ Codex は 2026-09-14 に戻ってきて `CODEX_REVIEW.md` に **VERDICT: FAIL** 
 | ID | 内容 | 状態 |
 | --- | --- | --- |
 | EX-01 | 閉じた輪郭 → 押し出し → ハンドル → Enter → 新規立体 | 済 |
-| EX-02 | 立体の面 → 押し引き | **未**(面を拾えない) |
-| EX-03 | 立体だけ → 「面または輪郭を選んでください」 | 済(案内まで。面選択は EX-02 待ち) |
+| EX-02 | 立体の面 → 押し引き | 実装済み・PC 確認待ち |
+| EX-03 | 立体だけ → 「面または輪郭を選んでください」 | 済 |
 | EX-04 | 立体+輪郭を順不同で選んでも役割が決まる | 済 |
 | EX-05 | 距離の欄と矢印が同期 | 済 |
 | EX-06 | 方向反転で矢印も反転 | 済 |

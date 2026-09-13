@@ -201,7 +201,8 @@ namespace {
     if (!Explain("対象不足でも入口を押せる", action->isEnabled())) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("押し出しを構えている(実際は ")
                      + window.PendingCommandLabel().toStdString() + ")")
                      .c_str(),
@@ -237,7 +238,8 @@ namespace {
     const std::uint64_t before = window.Session().GetDocument().Snapshot().revision;
     for (int round = 0; round < 3; ++round) {
         // まだ使えないコマンドを押す。
-        window.RunCommand("part.extrude");
+        window.RunCommand("part.extrude");   // 一度目は下見
+        window.RunCommand("part.extrude");   // 二度目で確定
         window.RunCommand("part.boolean_cut");
         window.RunCommand("fabrication.create");
         // 点を1つも置かずに確定しようとする。
@@ -1211,7 +1213,8 @@ namespace {
                 QStringLiteral("1.2")))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     return Explain((std::string("その厚みで作ったと言う(")
                        + window.StatusText().toStdString() + ")").c_str(),
         window.StatusText().contains(QStringLiteral("1.2")));

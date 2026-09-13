@@ -961,7 +961,8 @@ struct BoxSelectFixture {
             window.Viewport().ShapeViewCount() == 0)) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("押し出すと画面に形が出る(")
                      + std::to_string(window.Viewport().ShapeViewCount()) + " 個)").c_str(),
             window.Viewport().ShapeViewCount() == 1)) {
@@ -980,7 +981,8 @@ struct BoxSelectFixture {
     if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("画面に形が出ている", window.Viewport().ShapeViewCount() == 1)) {
         return false;
     }
@@ -1018,7 +1020,8 @@ struct BoxSelectFixture {
     if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("画面に形が出ている", window.Viewport().ShapeViewCount() == 1)) {
         return false;
     }
@@ -1049,7 +1052,8 @@ struct BoxSelectFixture {
     if (!Explain("矩形を引ける", DrawRectangleForExtrude(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));

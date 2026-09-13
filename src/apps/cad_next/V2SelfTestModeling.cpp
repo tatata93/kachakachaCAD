@@ -215,7 +215,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("部品が1つできる(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             CountParts(window) == 1)) {
@@ -248,7 +249,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -319,7 +321,8 @@ namespace {
         return count;
     };
     const int wiresBefore = countWires();
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("部品は増えない(") + std::to_string(partsBefore)
                      + " → " + std::to_string(CountParts(window)) + ")").c_str(),
             CountParts(window) == partsBefore)) {
@@ -346,7 +349,8 @@ namespace {
         choice.makePart = false;
         return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
     });
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("何を作るかが無いと断る(")
                      + window.StatusText().toStdString() + ")").c_str(),
             window.StatusText().contains(QStringLiteral("何を作るか")))) {
@@ -359,7 +363,8 @@ namespace {
         choice.extent = kachakacha::v2::modeling::ExtrudeExtentMode::ThroughAll;
         return std::optional<kachakacha::v2::app::ExtrudeChoice>(choice);
     });
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain((std::string("貫くのは引くときだけと断る(")
                      + window.StatusText().toStdString() + ")").c_str(),
             window.StatusText().contains(QStringLiteral("引くときだけ")))) {
@@ -379,7 +384,8 @@ namespace {
                                  const kachakacha::v2::app::ExtrudeFacts&) {
         return std::optional<kachakacha::v2::app::ExtrudeChoice>();
     });
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("やめたと言う",
             window.StatusText().contains(QStringLiteral("やめました")))) {
         return false;
@@ -394,7 +400,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -492,7 +499,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -513,7 +521,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -656,7 +665,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -696,7 +706,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     if (!Explain("部品ができる", CountParts(window) == 1)) {
         return false;
     }
@@ -808,7 +819,8 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定
     window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));

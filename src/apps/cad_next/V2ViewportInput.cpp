@@ -230,13 +230,20 @@ void V2Viewport::ApplySnapSettings()
     // 道具として切ってあるか、S を押している間は吸着しない。
     settings.suppressed = snapSuppressedBySetting_ || snapSuppressedByKey_;
     session_->SetSnapSettings(settings);
-    // ポインタを動かさなくても、いまのカーソル位置の吸着・リング・プレビュー・案内へすぐ効かせる。
+    // ポインタを動かさなくても、いまのカーソル位置の吸着・リング・プレビューへすぐ効かせる。
     // 待つと、S を押している間も古いリングとプレビューが出続ける。
+    const std::string before = hover_.messageJa;
     hover_ = session_->Hover(kachakacha::v2::geometry::ScreenPoint{
         cursorPosition_.x(), cursorPosition_.y()});
-    status_ = hover_.messageJa;
-    if (statusCallback_) {
-        statusCallback_(status_);
+    // 帯を書き換えるのは、いま出ているのが案内のときだけにする。
+    // 断った理由や作った結果が出ているときに上書きすると、
+    // 読む前に消える。実際、つぶれた移動を断った直後に吸着を戻すと、
+    // 理由が案内に置き換わって消えていた。
+    if (status_ == before || status_.empty()) {
+        status_ = hover_.messageJa;
+        if (statusCallback_) {
+            statusCallback_(status_);
+        }
     }
     update();
 }

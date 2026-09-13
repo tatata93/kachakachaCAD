@@ -32,6 +32,7 @@ enum ItemDataRole { DisplayRole = 0, DecorationRole = 1, UserRole = 32 };
 enum MouseButton { NoButton = 0, LeftButton = 1, RightButton = 2, MiddleButton = 4 };
 enum KeyboardModifier { NoModifier = 0, ShiftModifier = 1, ControlModifier = 2,
     AltModifier = 4 };
+enum DateFormat { ISODate, TextDate, RFC2822Date };
 enum Key { Key_Escape = 1, Key_Return, Key_Enter, Key_Backspace, Key_Tab, Key_Backtab,
     Key_Space, Key_Delete, Key_Left, Key_Right, Key_Up, Key_Down,
     Key_A, Key_S, Key_D, Key_W, Key_C, Key_V, Key_X, Key_Z };
@@ -178,4 +179,11 @@ public:
     [[nodiscard]] int count() const { return static_cast<int>(this->size()); }
     void append(const T& value) { this->push_back(value); }
     [[nodiscard]] bool isEmpty() const { return this->empty(); }
+};
+
+//! 日時。本物のごく一部。
+class QDateTime {
+public:
+    static QDateTime currentDateTime();
+    [[nodiscard]] QString toString(Qt::DateFormat) const;
 };

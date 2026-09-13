@@ -14,6 +14,7 @@
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/DiagnosticReport.h"
 #include "kachakacha/app/PointerCursor.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/ScreenMapping.h"
@@ -537,6 +538,108 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return Explain("作業平面の上の線は掴めると言う", !viewport.HoverIsForbidden());
 }
 
+[[nodiscard]] bool CaseDiagnosticsCopyWorks(V2MainWindow& window)
+{
+    // D-001 / D-005。選択道具のまま、未保存の文書でも作れること。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const QString text = window.DiagnosticText();
+    if (!Explain("診断が空でない", !text.isEmpty())) {
+        return false;
+    }
+    for (const QString key : {QStringLiteral("timestamp"), QStringLiteral("activeTool"),
+             QStringLiteral("rightPanelTool"), QStringLiteral("cursorMode"),
+             QStringLiteral("previewOwner"), QStringLiteral("snapOwner"),
+             QStringLiteral("selectionCount")}) {
+        if (!Explain((std::string("必須の欄 ") + key.toStdString() + " がある").c_str(),
+                text.contains(key + QStringLiteral(":")))) {
+            return false;
+        }
+    }
+    // 出してはいけないもの。貼り付ける先が他人の目に触れることを前提にする。
+    if (!Explain("置き場所を出さない", !text.contains(QStringLiteral("C:\\")))) {
+        return false;
+    }
+    // 命令からも呼べること。落ちないことを見る。
+    window.RunCommand("help.copy_diagnostics");
+    return Explain((std::string("知らせが出る(実際 ")
+                       + window.StatusText().toStdString() + ")")
+                       .c_str(),
+        window.StatusText().contains(QStringLiteral("診断情報")));
+}
+
+[[nodiscard]] bool CaseDiagnosticsFollowsTheTool(V2MainWindow& window)
+{
+    // D-002 / D-003。道具を替えたら、診断のどの欄もその道具になること。
+    // ずれていること自体が USER-UI-001 の不具合である。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    if (!Explain((std::string("直線のとき activeTool が直線(実際 ")
+                     + window.DiagnosticSnapshotNow().activeTool + ")")
+                     .c_str(),
+            window.DiagnosticSnapshotNow().activeTool == "直線")) {
+        return false;
+    }
+    // 円弧 → ベジェ。切り替えたあと、右の棚も一緒に動くこと。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Arc);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Bezier);
+    const auto snapshot = window.DiagnosticSnapshotNow();
+    if (!Explain((std::string("activeTool がベジェ(実際 ") + snapshot.activeTool + ")")
+                     .c_str(),
+            snapshot.activeTool == "ベジェ曲線")) {
+        return false;
+    }
+    if (!Explain((std::string("rightPanelTool もベジェ(実際 ")
+                     + snapshot.rightPanelTool + ")")
+                     .c_str(),
+            snapshot.rightPanelTool == "ベジェ曲線")) {
+        return false;
+    }
+    // そろっていないなら、診断がそう言うこと。
+    const auto mismatches = kachakacha::v2::app::DiagnosticMismatches(snapshot);
+    for (const auto& line : mismatches) {
+        (void)Explain((std::string("ずれ: ") + line).c_str(), false);
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("道具・棚・カーソル・途中経過・吸着がそろう", mismatches.empty());
+}
+
+[[nodiscard]] bool CaseToolSwitchLeavesNothingBehind(V2MainWindow& window)
+{
+    // USER-UI-001 の回帰試験。指定どおり
+    // 直線 → 円弧 → ベジェ → スプライン → 選択 と続けて替える。
+    constexpr kachakacha::v2::modeling::DrawingTool kChain[] = {
+        kachakacha::v2::modeling::DrawingTool::Line,
+        kachakacha::v2::modeling::DrawingTool::Arc,
+        kachakacha::v2::modeling::DrawingTool::Bezier,
+        kachakacha::v2::modeling::DrawingTool::Spline,
+        kachakacha::v2::modeling::DrawingTool::Select,
+    };
+    auto& viewport = window.Viewport();
+    const QPointF spot(viewport.width() * 0.5, viewport.height() * 0.5);
+    for (const auto tool : kChain) {
+        window.SelectTool(tool);
+        // 1点置いて途中経過を作ってから次の道具へ移る。
+        // 何も置かずに替えると、残るものが無いので試験にならない。
+        if (tool != kachakacha::v2::modeling::DrawingTool::Select) {
+            viewport.ClickAt(spot);
+            viewport.HoverAt(spot + QPointF(30.0, 20.0));
+        }
+        const auto snapshot = window.DiagnosticSnapshotNow();
+        const std::string name(kachakacha::v2::modeling::DrawingToolNameJa(tool));
+        const auto mismatches = kachakacha::v2::app::DiagnosticMismatches(snapshot);
+        if (!mismatches.empty()) {
+            (void)Explain((name + ": " + mismatches.front()).c_str(), false);
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+        if (!Explain((name + ": 前の道具の点が残らない").c_str(),
+                window.Session().PlacedPointCount() <= 1)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
+    }
+    return Explain("選択へ戻ったら途中経過も残らない", !viewport.HasPreview());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -554,6 +657,9 @@ std::vector<SelfTestCase> PointerCases()
         {"どの道具でも震えたクリックは普通のクリックと同じ", CaseEveryToolTreatsJitterAsAClick},
         {"どの道具でも替えたら前の途中経過が消える", CaseEveryToolClearsThePreviousPreview},
         {"掴めないと言う線は押しても拾えない", CaseForbiddenHoverIsAlsoUnpickable},
+        {"診断情報をコピーできる", CaseDiagnosticsCopyWorks},
+        {"診断の各欄が道具に追従する", CaseDiagnosticsFollowsTheTool},
+        {"道具を続けて替えても前の状態が残らない", CaseToolSwitchLeavesNothingBehind},
     };
 }
 

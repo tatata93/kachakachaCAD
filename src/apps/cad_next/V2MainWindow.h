@@ -39,6 +39,7 @@
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
 #include "kachakacha/fabrication/FreezeState.h"
+#include "kachakacha/app/DiagnosticReport.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctThicken.h"
@@ -110,6 +111,12 @@ public:
     bool ImportKcdFile(const QString& path);
     //! いま開いているファイル。まだ保存していなければ空。
     [[nodiscard]] QString DocumentPath() const { return documentPath_; }
+
+    //! いまの画面の状態を集めた診断(DIAGNOSTICS_FEATURE_SPEC.md)。
+    //! 貼り板を使わずに中身を見られるので、自己試験からも読める。
+    [[nodiscard]] kachakacha::v2::app::DiagnosticSnapshot DiagnosticSnapshotNow() const;
+    [[nodiscard]] QString DiagnosticText() const;
+    //! 診断を貼り板へ入れる。
 
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
     //! 状態の名前は --manual-state で渡すものと同じ。
@@ -687,6 +694,7 @@ private:
     std::array<QTreeWidgetItem*, 3> axisItems_{};
 
     //! 選んだ線どうしの交点に作図点を作る(V1 の「交点に点」)。
+    void CopyDiagnostics();
     void MakeIntersectionPoints();
     //! 選んだ線の形から作図点を作る。centersOnly なら円・円弧の中心だけ、
     //! そうでなければ始点・終点・中点。線は変えない。

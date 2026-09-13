@@ -92,7 +92,7 @@
 | AT-UIX-008 | 部分 | view_orientation/facing/shape mesh試験はある。WP-14でwheel/middle/Shift+middle/right click契約と右drag非回転を追加する。 |
 | AT-UIX-009 | 部分 | 失敗反復とDocument不変は検査済み。WP-14で理由番号、問題位置、修正案、ToolSession入力保持をUI試験へ追加する。 |
 | AT-UIX-010 | 部分 | 2画面サイズx4 DPIと2themeの試験はある。WP-14でdock復元、monitor消失、overflow、初期配置を追加する。 |
-| AT-UIX-011 | 部分 | 52 CommandIdの双方向台帳試験はある。WP-14で全入口の同一ToolSession、F1、未実装空command不在を追加する。 |
+| AT-UIX-011 | 部分 | 52 CommandIdの双方向台帳試験はある。WP-14で全入口の同一ToolSession、F1、未実装空command不在を追加する。 + tests_v2/diagnostic_report_tests.cpp(診断情報: 必須の欄が全部出る、置き場所と利用者名は出さない、未保存でも作れる、そろっていればずれを出さず右の棚が前の道具のままならずれとして出す、見ていない欄はずれと数えない、選択が多すぎるときは20件で切って残りの数を言う) + cad_next --self-test(診断情報をコピーできる / 診断の各欄が道具に追従する / 道具を続けて替えても前の状態が残らない) |
 | AT-UIX-012 | 未 | WP-14でWorkPlane切替/削除後のWire EntityId、SegmentId、3D座標不変とtree非所有を追加する。 |
 | AT-UIX-013 | 未 | WP-14で押し出し4出力、同一評価bundle、入力保持、表示だけ隠す、Undoを追加する。 |
 | AT-EXP-010 | 済 | tests_v2/kernel_export_tests.cpp(同じ部品の STEP と STL で体積・外接箱が出力精度内で一致。精度を上げると近づく) |

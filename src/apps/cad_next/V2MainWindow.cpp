@@ -312,6 +312,7 @@ void V2MainWindow::BuildMenus()
                        "view.stage_no_construction", "view.stage_selection_only",
                        "view.display_settings",
                        "measure.open"}},
+        {"ヘルプ(&H)", {"help.copy_diagnostics"}},
     };
     for (const MenuGroup& group : groups) {
         QMenu* menu = menuBar()->addMenu(QString::fromUtf8(group.titleJa));
@@ -1313,6 +1314,10 @@ void V2MainWindow::RunCommand(std::string_view id)
     ClearPendingCommand();
     if (id == "edit.undo" || id == "edit.redo") {
         RunHistoryCommand(id == "edit.undo");
+        return;
+    }
+    if (id == "help.copy_diagnostics") {
+        CopyDiagnostics();
         return;
     }
     if (id == "view.fit_all") {

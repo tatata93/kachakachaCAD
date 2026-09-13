@@ -571,6 +571,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/GrabToMove.cpp
     src/next/kachakacha/app/PointerGesture.cpp
     src/next/kachakacha/app/DrawingShelfRows.cpp
+    src/next/kachakacha/app/DiagnosticReport.cpp
     src/next/kachakacha/app/PointerCursor.cpp
     src/next/kachakacha/app/ControlPointPick.cpp
     src/next/kachakacha/app/ShapeRebuild.cpp
@@ -791,6 +792,7 @@ kachakacha_add_v2_test(transform_input_tests tests_v2/transform_input_tests.cpp)
 kachakacha_add_v2_test(grab_to_move_tests tests_v2/grab_to_move_tests.cpp)
 kachakacha_add_v2_test(pointer_gesture_tests tests_v2/pointer_gesture_tests.cpp)
 kachakacha_add_v2_test(drawing_shelf_rows_tests tests_v2/drawing_shelf_rows_tests.cpp)
+kachakacha_add_v2_test(diagnostic_report_tests tests_v2/diagnostic_report_tests.cpp)
 kachakacha_add_v2_test(control_point_edit_tests tests_v2/control_point_edit_tests.cpp)
 kachakacha_add_v2_test(entity_naming_tests tests_v2/entity_naming_tests.cpp)
 kachakacha_add_v2_test(core_ui_wiring_tests tests_v2/core_ui_wiring_tests.cpp)
@@ -897,6 +899,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestScreen.cpp
         src/apps/cad_next/V2SelfTestSemantics.cpp
         src/apps/cad_next/V2SelfTestPointer.cpp
+        src/apps/cad_next/V2DiagnosticsCommand.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDialog.cpp
         src/apps/cad_next/V2PartDock.cpp
@@ -959,6 +962,26 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             kachakacha_v2_occt
             Qt6::Widgets
     )
+    # 診断情報に載せる版と枝。分からなければ空のままにする(嘘は書かない)。
+    # 組み立てたときの値なので、あとから枝を替えても更新されない。
+    # 「これは組み立て時の値である」と分かるよう、診断の側でそう書いてある。
+    set(KACHACAD_GIT_COMMIT "")
+    set(KACHACAD_GIT_BRANCH "")
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE KACHACAD_GIT_COMMIT
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --abbrev-ref HEAD
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE KACHACAD_GIT_BRANCH
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+    target_compile_definitions(kachakacha_cad_next PRIVATE
+        KACHACAD_APP_VERSION="${PROJECT_VERSION}"
+        KACHACAD_GIT_COMMIT="${KACHACAD_GIT_COMMIT}"
+        KACHACAD_GIT_BRANCH="${KACHACAD_GIT_BRANCH}")
     target_compile_features(kachakacha_cad_next PRIVATE cxx_std_20)
     if(MSVC)
         target_compile_options(kachakacha_cad_next PRIVATE /W4 /permissive- /utf-8 /MP)

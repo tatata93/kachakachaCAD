@@ -81,6 +81,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.offset` | オフセット | ワイヤー1以上、オフセット距離(数の棚) | TransformWire(Offset)。元は残す | AT-WIR-006 |
 | `wire.meet_lines` | 2線を交点まで | 直線2本 | TransformWire(MeetLines) | AT-WIR-006 |
 | `wire.intersection_points` | 交点に点 | ワイヤー2以上 | 交点ごとに CreatePoint。線は変えない | AT-MEA-005 |
+| `help.copy_diagnostics` | 診断情報をコピー | いつでも | いまの状態を短い文にして貼り板へ。文書は変えない | AT-UIX-011 |
 | `wire.center_points` | 中心に点 | ワイヤー1以上 | 円・円弧の中心に CreatePoint。線は変えない | AT-MEA-005 |
 | `wire.key_points` | 端点と中点に点 | ワイヤー1以上 | 始点・終点・中点に CreatePoint。線は変えない | AT-MEA-005 |
 | `wire.corner_chamfer` | 角の加工(落とす) | ワイヤー1以上、面取り量、面取りの棚の「この頂点の角だけ」+ 頂点番号 | TransformWire(CornerChamfer、cornerIndex)。直線どうしの角を全部、または 1 つ | AT-WIR-006 |

@@ -237,6 +237,13 @@ const std::vector<CommandDescriptor>& CommandCatalog()
         // 形から点を作る(PRD-072)。core(app/PointSources)は書けていたのに、
         // 画面から呼ぶ道が無かった。車輪の中心も窓の中心も、座標を目で読んで
         // 手で打ち直すしかなかった。
+        // 不具合を見つけた瞬間の状態を短い文にして持ち出す。
+        // 何が起きたかを言葉で説明し直すのは難しく、たいてい抜ける。
+        {"help.copy_diagnostics", "診断情報をコピー", CommandMode::Instant,
+            "copy_diagnostics", "", SelectionPredicate::Always, "",
+            "いまの道具・右の棚・カーソル・吸着・選択を短い文にして貼り板へ入れます。"
+            "文書の中身や置き場所は入りません。", false,
+            {"AT-UIX-011"}},
         {"wire.center_points", "中心に点", CommandMode::Instant, "center_points", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだ円・円弧の中心に作図点を作ります。線は変わりません。", true,

@@ -504,6 +504,7 @@ public:
 
 class QGuiApplication : public QCoreApplication {
 public:
+    static QClipboard* clipboard();
     static void setPalette(const QPalette&);
     static QPalette palette();
     static void setFont(const QFont&);

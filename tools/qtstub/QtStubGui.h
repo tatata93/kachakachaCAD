@@ -415,3 +415,10 @@ public:
     [[nodiscard]] QString toString() const;
     bool operator==(const QKeySequence&) const;
 };
+
+//! 貼り板。本物のごく一部。
+class QClipboard {
+public:
+    void setText(const QString&);
+    [[nodiscard]] QString text() const;
+};

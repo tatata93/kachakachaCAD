@@ -189,6 +189,11 @@ public:
     [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
     //! いま途中経過(まだ確定していない形)を出しているか。
     [[nodiscard]] bool HasPreview() const noexcept { return !hover_.preview.empty(); }
+    //! いまカーソルの下で見えているもの(吸着・案内)。診断が読む。
+    [[nodiscard]] const kachakacha::v2::app::HoverResult& Hover() const noexcept
+    {
+        return hover_;
+    }
     //! カーソルの下にある線。無ければ Nil。試験から見る。
     [[nodiscard]] const kachakacha::v2::base::EntityId& HoveredEntityId() const noexcept
     {

@@ -54,6 +54,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "draw.arc", "draw.bezier", "draw.spline", "wire.trim", "wire.extend",
         "wire.split", "wire.join", "wire.coincident", "wire.tangent", "wire.curvature",
         "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
+        "help.copy_diagnostics",
         "wire.intersection_points", "wire.center_points", "wire.key_points",
         "wire.corner_chamfer", "wire.corner_fillet",
         "wire.array_linear", "wire.array_circular",

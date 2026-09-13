@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace kachakacha::v2::app {
 
@@ -73,15 +74,19 @@ public:
     //! 場面が入れ替わると、持ち越していた吸着先はもう同じものを指していない。
     //! 捨てずに残すと、消えた相手の位置へ吸い付いたままになる。
     void SetScene(SnapScene scene);
-    //! 場面が入れ替わったときに呼ぶもの。
+    //! 場面が入れ替わったときに呼ばれる。
     //!
     //! 画面は、持ち越しだけでなく **出している一時表示** も捨てなければならない。
     //! ここを1本にしておくのは、`SetScene` の呼び口が10か所以上あるためである。
     //! 呼び口ごとに後始末を書くと、必ずどれかが抜ける。実際に抜けた。
-    void SetSceneChangedCallback(std::function<void()> callback)
-    {
-        sceneChanged_ = std::move(callback);
-    }
+    //!
+    //! **返ってきた札を持っている間だけ呼ばれる。** 札を捨てれば呼ばれなくなる。
+    //! 素の `std::function` を持たせると、聞き手(画面)が先に消えたときに
+    //! 消えた `this` を呼んでしまう。窓を閉じる・画面を差し替える・
+    //! 将来ビューを増やす、のどれでも起きる。
+    //! 札を会員が持つ形にすれば、どちらが先に消えても落ちない。
+    using SceneChangedToken = std::shared_ptr<void>;
+    [[nodiscard]] SceneChangedToken OnSceneChanged(std::function<void()> callback);
     [[nodiscard]] const SnapScene& Scene() const noexcept { return scene_; }
     void SetMapping(ScreenMapping mapping) { mapping_ = mapping; }
     //! 抑止(S・磁石)を含む吸着の設定。抑止が始まったらその場で持ち越しを捨てる。
@@ -150,6 +155,8 @@ public:
     [[nodiscard]] bool Redo() { return document_.Redo(); }
 
 private:
+    //! 場面が入れ替わったことを、生きている聞き手だけへ知らせる。
+    void NotifySceneChanged();
     //! Hover と PeekHover の中身。keepHold が真なら持ち越しを更新する。
     [[nodiscard]] HoverResult Evaluate(const ScreenPoint& pointer, bool keepHold);
     [[nodiscard]] ClickResult Commit(const modeling::ToolOutput& output,
@@ -168,8 +175,14 @@ private:
     ScreenMapping mapping_;
     SnapSettings snapSettings_;
     modeling::SnapHysteresis snapHysteresis_;
+    //! 場面の入れ替わりを聞いている相手。札(weak_ptr)が切れたものは呼ばない。
+    struct SceneListener {
+        std::weak_ptr<void> token;
+        std::function<void()> callback;
+    };
+
     std::function<geometry::Vector3(const geometry::Vector3&)> adjustPoint_;
-    std::function<void()> sceneChanged_;
+    std::vector<SceneListener> sceneListeners_;
 };
 
 } // namespace kachakacha::v2::app

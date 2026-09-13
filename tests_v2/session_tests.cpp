@@ -493,4 +493,37 @@ KACHA_V2_TEST(session, 指定した点を残すと線と点がひとまとまり
         "一度で線も点も消える");
 }
 
+KACHA_V2_TEST(session, 聞き手が先に消えても場面の知らせで落ちない)
+{
+    // UI-P1-007 R9 の指摘。画面は Session より先に消える。
+    // 素の関数を預けると、窓を閉じたあとの SetScene で消えた this を呼ぶ。
+    // 札(戻り値)を持っている間だけ呼ばれる形にしてある。
+    Fixture fixture;
+    int called = 0;
+    {
+        const auto token = fixture.session.OnSceneChanged([&called] { ++called; });
+        fixture.session.SetScene(PlaneScene());
+        RequireCount(static_cast<std::size_t>(called), 1, "札を持っている間は呼ばれる");
+    }
+    // 札を捨てた。ここから先は呼ばれない。呼ばれたら消えた相手を触っている。
+    fixture.session.SetScene(PlaneScene());
+    fixture.session.SetScene(PlaneScene());
+    RequireCount(static_cast<std::size_t>(called), 1, "札を捨てたら呼ばれない");
+}
+
+KACHA_V2_TEST(session, 聞き手は何人でも登録できる)
+{
+    Fixture fixture;
+    int first = 0;
+    int second = 0;
+    const auto tokenA = fixture.session.OnSceneChanged([&first] { ++first; });
+    {
+        const auto tokenB = fixture.session.OnSceneChanged([&second] { ++second; });
+        fixture.session.SetScene(PlaneScene());
+    }
+    fixture.session.SetScene(PlaneScene());
+    RequireCount(static_cast<std::size_t>(first), 2, "残っている相手は呼ばれ続ける");
+    RequireCount(static_cast<std::size_t>(second), 1, "消えた相手はもう呼ばれない");
+}
+
 KACHA_V2_TEST_MAIN("session_tests")

@@ -78,9 +78,36 @@ void DrawingSession::SetScene(SnapScene scene)
     // 場面が入れ替わったら、持ち越していた吸着先は当てにならない。その場で捨てる。
     scene_ = std::move(scene);
     snapHysteresis_.Reset();
+    NotifySceneChanged();
+}
+
+DrawingSession::SceneChangedToken DrawingSession::OnSceneChanged(
+    std::function<void()> callback)
+{
+    // 札そのものは中身を持たない。生きているかどうかだけを表す。
+    auto token = std::make_shared<char>('\0');
+    sceneListeners_.push_back(SceneListener{token, std::move(callback)});
+    return token;
+}
+
+void DrawingSession::NotifySceneChanged()
+{
     // 画面にも知らせる。持ち越しだけ捨てても、出しているリングは消えない。
-    if (sceneChanged_) {
-        sceneChanged_();
+    //
+    // 呼ぶ前に写しを取る。聞き手の中で場面をもう一度替えられても、
+    // いま回している並びが作り替えられないようにするためである。
+    std::vector<std::function<void()>> alive;
+    alive.reserve(sceneListeners_.size());
+    for (auto listener = sceneListeners_.begin(); listener != sceneListeners_.end();) {
+        if (listener->token.expired()) {
+            listener = sceneListeners_.erase(listener);   // 消えた相手は呼ばない
+            continue;
+        }
+        alive.push_back(listener->callback);
+        ++listener;
+    }
+    for (const auto& callback : alive) {
+        callback();
     }
 }
 

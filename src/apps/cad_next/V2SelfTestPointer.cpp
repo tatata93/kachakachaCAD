@@ -833,6 +833,12 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
             return false;
         }
         const int candidatesBefore = viewport.CandidateCount();
+        // 候補が無いと、候補送りの道を検証したことにならない。前提として必須にする。
+        if (!Explain((nameJa + ": 前提 — 候補が1つ以上ある").c_str(),
+                candidatesBefore > 0)) {
+            window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+            return false;
+        }
 
         route.run();
 
@@ -843,7 +849,7 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
             return false;
         }
         if (!Explain((nameJa + ": 前の候補送りも消える").c_str(),
-                viewport.CandidateCount() == 0 || candidatesBefore == 0)) {
+                viewport.CandidateCount() == 0)) {
             window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
             return false;
         }

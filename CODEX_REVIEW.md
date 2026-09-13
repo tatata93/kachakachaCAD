@@ -92,3 +92,62 @@ BLOCKING BEFORE NEXT PHASE: YES
 P1-EXTRUDE-R1にも影響あり。P1-EXTRUDE-R1の最終レビューはR8修正commitを含む範囲で行うこと。
 
 NEXT_ACTION: Claudeが追加修正commitを作成し、`UI-P1-007-S1-R8` をキューへ追加する。
+
+---
+
+# Codex Review: UI-P1-007-S1-R8
+
+REQUEST_ID: UI-P1-007-S1-R8
+TASK_ID: UI-P1-007
+PHASE: UI-P1-007 Stage 1/2 remediation
+BASE: 188ea47
+HEAD: 5f6ccbc
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+
+## BLOCKERS
+
+### B1. 場面差し替え直後の旧吸着リングが画面側に残る
+
+`DrawingSession::SetScene()` が `snapHysteresis_` をResetする修正は正しい。しかし、
+`V2Viewport` の `hover_.snap` と候補送りは場面差し替え時に破棄されない。
+`V2Viewport::SetWorkPlane()` は `session_->SetScene()` 後に `update()` するため、マウスを
+動かすまで旧sceneの位置にリングが再描画される。文書の開き直し、Undo/Redo、
+グリッド変更の各呼出しでも同様の構造である。
+
+- `src/apps/cad_next/V2Viewport.cpp:165-173`
+- `src/apps/cad_next/V2MainWindow.cpp:823-846`
+- `src/apps/cad_next/V2PlaneCommands.cpp:327-364`
+- `src/apps/cad_next/V2ViewportDraw.cpp:475-485`
+
+R8の自己試験は、場面差し替え直後に `viewport.HoverAt(justOutside)` を呼び、
+古い `hover_` を上書きしてから検査している。これでは「ポインタを動かさない直後」の
+残留を検出できない。
+
+## RESOLVED FROM R7
+
+- 道具切替時は `DiscardHoverState()` でsnap、preview、候補番号、禁止表示を一括破棄しており、R7 B1は解消。
+- `DrawingSession::SetScene()` のコア側ヒステリシスResetは解消。残るのはViewport側の一時表示。
+- Cancel経路の画面側一時状態破棄も適切。
+
+## TEST REVIEW
+
+- `CaseSceneSwapDropsTheHold` は、差し替え後に `HoverAt()` を呼ばず、旧リング・旧候補番号・旧案内が消えたことを検査する必要がある。
+- 同試験の `!heldBefore || !heldAfter` は事前条件 `heldBefore` が成立しなくてもPASSする。`heldBefore` を独立に必須検査すること。
+- コメントは開く/作業平面変更も試すと書いているが、実際のrouteはUndo/Redo/グリッドの3つだけ。開くと作業平面変更の実経路を追加すること。
+- 既存Debugバイナリの `qt_cad_smoke` と `v2_session_tests` はPASS。ただしソースより古いためR8の検証証拠にはしない。
+- 現在のPC再ビルドはMSBuildの環境変数 `Path`/`PATH` 重複でコンパイラ起動前に停止。実装起因のビルド失敗とは判定しないが、Windows検証済みとも判定しない。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで修正すること。
+
+1. scene差し替えをViewportへ通知する単一経路を設け、差し替えと同時に `DiscardHoverState()` 相当を実行する。すべての `SetScene()` 呼出しに手作業の後処理を散らさない。
+2. 開く、Undo、Redo、作業平面変更、グリッド変更の各経路で、ポインタを動かさずに旧snap表示と候補送りが消える試験を追加する。
+3. `heldBefore` を必須の前提検査に変更する。
+4. Windowsでbuild、CTest全件、最新バイナリの自己試験を実行する。
+5. `UI-P1-007-S1-R9` として新しい固定BASE/HEADをキューに追加する。
+
+REGRESSION RISKS: シーン差し替えと同じViewport状態を使う押し出し下見にも影響する。`P1-EXTRUDE-R1` はR9修正を含む固定範囲でレビューすること。
+
+NEXT_ACTION: Claudeが追加修正commitを作成し、`UI-P1-007-S1-R9` をキューへ追加する。

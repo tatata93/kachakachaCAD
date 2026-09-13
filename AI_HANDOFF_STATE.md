@@ -5,18 +5,18 @@
 
 ## 現在
 
-REQUEST_ID: UI-P1-007-S1-R10
-TASK_ID: UI-P1-007
-STAGE: 1/2
-STATUS: READY_FOR_REVIEW(R9 の B1 を直した)
-REVIEW_STATUS: PENDING_CODEX
-BASE: 9b942b9
-HEAD: c224d49
+REQUEST_ID: P1-EXTRUDE-R1
+TASK_ID: Phase 1 押し出し + Phase 2 の入口
+STAGE: 1/1
+STATUS: WORKING(PC の往復で確かめている最中)
+REVIEW_STATUS: NOT_SUBMITTED(機能として固まってから出す)
+BASE: c224d49
+HEAD: (固めてから決める)
 BUILD_RESULT: PASS(雲 core)
-TEST_RESULT: PASS(雲: core CTest 127/127 + 当て木 59ファイル。PC は往復待ち)
-REVIEW_SCOPE: 9b942b9..c224d49 のうち、場面の知らせの寿命と Viewport の一時表示
-REVIEW_FOCUS: 聞き手が先に消えても落ちないこと、場面交換で無条件に捨てること、
-  候補送りの試験が前提を必須にしていること
+TEST_RESULT: PASS(雲: core CTest 127/127 + 当て木 59ファイル)
+REVIEW_SCOPE: 押し出し(EX-01〜08)と、製作近似の入口(面ごとの分割・分け方の助言)
+REVIEW_FOCUS: 面の押し引きが文書へワイヤーを増やす決めごと、
+  splitSolidFaces の既定、面をまとめる道が無いこと
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -138,12 +138,25 @@ Codex は R9 を **FAIL** にした。今度は私が新しく入れた不具合
 - **候補送りの前提が甘かった。** 候補が無くても通っていた。
   → `candidatesBefore > 0` を必須にした。
 
+## UI-P1-007 は受け入れ済み(2026-09-14)
+
+Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害要因は全部片づいた。
+追加の R11 は要らない、と Codex 自身が書いている。
+
+| 版 | 判定 | 何が問題だったか |
+| --- | --- | --- |
+| R7 | FAIL | 道具替えで前の吸着が残る / SetScene で持ち越しが残る |
+| R8 | FAIL | 画面側の一時表示が残る / 試験が Hover を呼び直していて残留を見ていない |
+| R9 | FAIL | 私が入れた寿命の不具合(破棄済み画面のコールバック) |
+| R10 | PASS WITH FIXES | 非阻害2点(知らせ中の解除、綱の型)。どちらも入れた |
+
+非阻害の指摘2点は `ac82541` で入れた。
+残っているのは §6.1「道具に応じた吸着の強さ」で、
+候補の種類を道具ごとに変える段でまとめて片づける。
+
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: UI-P1-007-S1-R10 / TASK: UI-P1-007 / STAGE: 1/2
-  BASE: 9b942b9 / HEAD: c224d49
-  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 127/127)
-  前身: R7 → R8 → R9(いずれも FAIL)。R9 の B1(寿命)を直した。
+- (いまは空。UI-P1-007 は受け入れ済み。P1-EXTRUDE-R1 は機能が固まってから出す)
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

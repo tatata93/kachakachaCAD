@@ -502,6 +502,41 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     return true;
 }
 
+[[nodiscard]] bool CaseForbiddenHoverIsAlsoUnpickable(V2MainWindow& window)
+{
+    // カーソルが「掴めない」と言っている線は、押しても拾えないこと。
+    // Hover は絞り(作業平面の外の線を掴まない)を見ていたのに、
+    // クリックは見ていなかったので、目と手が食い違っていた。
+    //
+    // XY 面に線を引き、作業平面を別の面へ移してから、その線の上を見る。
+    if (!DrawLine(window, Vector3{0.0, 0.0, 0.0}, Vector3{40.0, 0.0, 0.0})) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const auto middle = viewport.Mapping().Project(Vector3{20.0, 0.0, 0.0});
+    if (!Explain("線の真ん中を画面へ写せる", middle.has_value())) {
+        return false;
+    }
+    const QPointF spot(middle->x, middle->y);
+    // 作図の道具に持ち替えると絞りが効く。線は XY 面の上にあるので、
+    // 作業平面が XY のままなら掴める。まずそこを押さえる。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.HoverAt(spot);
+    const bool forbidden = viewport.HoverIsForbidden();
+    // 掴めないと言うなら、押しても選べないこと。言わないなら、どちらでもよい。
+    if (forbidden) {
+        viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Move);
+        viewport.ClickAt(spot);
+        const bool picked =
+            kachakacha::v2::app::SelectionItemCount(viewport.Selection()) > 0;
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        return Explain("掴めないと言った線は押しても選べない", !picked);
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return Explain("作業平面の上の線は掴めると言う", !viewport.HoverIsForbidden());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -518,6 +553,7 @@ std::vector<SelfTestCase> PointerCases()
         {"送っている最中の左押しでは点が置かれない", CaseLeftClickDuringPanPlacesNothing},
         {"どの道具でも震えたクリックは普通のクリックと同じ", CaseEveryToolTreatsJitterAsAClick},
         {"どの道具でも替えたら前の途中経過が消える", CaseEveryToolClearsThePreviousPreview},
+        {"掴めないと言う線は押しても拾えない", CaseForbiddenHoverIsAlsoUnpickable},
     };
 }
 

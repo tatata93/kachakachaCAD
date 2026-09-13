@@ -1083,9 +1083,11 @@ void V2Viewport::ClickAt(const QPointF& position)
         if (onPlane.has_value()) {
             picked.point = *onPlane;
         }
+        // 絞りは Hover と同じものを使う。使わないと、カーソルが「掴めない」と
+        // 言っている薄い線を、押すと拾えてしまう。手と目が食い違う。
         picked.curve = kachakacha::v2::app::PickCurve(session_->Scene(), mapping_,
             ScreenPoint{position.x(), position.y()},
-            session_->GetDocument().Snapshot().settings.tolerance);
+            session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
         auto handler = pickHandler_;
         pickHandler_ = nullptr;
         handler(picked);
@@ -1120,9 +1122,11 @@ void V2Viewport::ClickAt(const QPointF& position)
     if (kachakacha::v2::app::ClickPicksTarget(session_->CurrentTool(),
             !selection_.entityIds.empty(),
             session_->PlacedPointCount())) {
+        // ここも Hover と同じ絞りで拾う。動かす相手も、
+        // 画面で掴めると見えているものだけにする。
         const auto picked = kachakacha::v2::app::PickEntity(session_->Scene(), mapping_,
             ScreenPoint{position.x(), position.y()},
-            session_->GetDocument().Snapshot().settings.tolerance);
+            session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow());
         if (!picked.has_value()) {
             status_ = "動かすものを押してください。";
             if (statusCallback_) {

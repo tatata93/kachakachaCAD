@@ -151,3 +151,65 @@ R8の自己試験は、場面差し替え直後に `viewport.HoverAt(justOutside
 REGRESSION RISKS: シーン差し替えと同じViewport状態を使う押し出し下見にも影響する。`P1-EXTRUDE-R1` はR9修正を含む固定範囲でレビューすること。
 
 NEXT_ACTION: Claudeが追加修正commitを作成し、`UI-P1-007-S1-R9` をキューへ追加する。
+
+---
+
+# Codex Review: UI-P1-007-S1-R9
+
+REQUEST_ID: UI-P1-007-S1-R9
+TASK_ID: UI-P1-007
+PHASE: UI-P1-007 Stage 1/2 remediation
+BASE: 5f6ccbc
+HEAD: 9b942b9
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+
+## BLOCKERS
+
+### B1. DrawingSessionに破棄済みViewportのコールバックが残る
+
+`V2Viewport` はコンストラクタで `session_->SetSceneChangedCallback([this] { ... })`
+を登録するが、デストラクタで解除しない。`DrawingSession` は外部所有の参照として
+Viewportへ渡されるため、Viewportの後までSessionが生存するのが正常な使い方である。
+Viewport破棄後に `SetScene()` が呼ばれると、破棄済み `this` を呼ぶため、
+use-after-freeになる。
+
+- `src/apps/cad_next/V2Viewport.cpp:121-132`
+- `src/next/kachakacha/app/DrawingSession.h:81-84`
+- `src/next/kachakacha/app/DrawingSession.cpp:82-84`
+
+R9の場面差し替え修正そのものに、新しいownership/lifetime不具合が入っているため
+Blockingとする。
+
+## RESOLVED FROM R8
+
+- `SetScene()` から画面への通知は1経路に集約された。
+- 場面差し替え直後に再Hoverせず、旧snapリング、preview、候補送りを破棄する修正は適切。
+- 自己試験は差し替え後の `HoverAt()` を除き、ポインタ静止中の残留を検査する形に改善された。
+- `heldBefore` は独立した必須前提になった。
+
+## UX / STATE NOTES
+
+- `OnSceneReplaced()` の条件は `hover_.position` と `hover_.messageJa` だけが残る場合に一時状態を破棄しない。表示リングのBlockingは解消するが、場面交換の契約としては無条件に破棄する方が一貫する。
+- 候補送り試験の `CandidateCount() == 0 || candidatesBefore == 0` は、事前に候補が無いと経路を検証しない。`candidatesBefore > 0` を前提として別に必須検査すること。
+
+## VALIDATION
+
+- 固定範囲の実装と試験をコードレビューした。
+- Claude側の報告は雲core CTest 127/127 PASS。PC実機検証は待ち。
+- Codex側のWindows再ビルドは引き続きMSBuild環境の `Path`/`PATH` 重複で開始前に停止するため、最新バイナリでの独立検証は未実施。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで修正すること。
+
+1. scene change通知をlifetime-safeにする。少なくとも `V2Viewport` 破棄時に自分が登録したコールバックを解除する。可能ならSessionが接続トークンを返し、所有者の破棄で自動解除する。
+2. `DrawingSession session; { V2Viewport viewport(session); } session.SetScene(...)` 相当の寿命試験を追加し、破棄済みViewportが呼ばれないことを保証する。
+3. `OnSceneReplaced()` は場面交換ごとに一時Hover状態を無条件で破棄する。
+4. 候補送り試験で `candidatesBefore > 0` を必須前提にする。
+5. Windowsでbuild、CTest全件、最新バイナリの自己試験を実行する。
+6. `UI-P1-007-S1-R10` として新しい固定BASE/HEADをキューに追加する。
+
+REGRESSION RISKS: 今回のコールバックはSession/Viewport所有境界にあり、ウィンドウ終了、ビュー差し替え、将来の複数ビューに影響する。`P1-EXTRUDE-R1` はR10修正を含む固定範囲でレビューすること。
+
+NEXT_ACTION: Claudeがlifetime-safeな追加修正commitを作成し、`UI-P1-007-S1-R10` をキューへ追加する。

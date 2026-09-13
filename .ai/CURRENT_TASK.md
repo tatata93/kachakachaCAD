@@ -8,7 +8,7 @@ STAGED
 
 # Review Effort
 
-HIGH
+EXTRA_HIGH
 
 # Execution Reason
 
@@ -16,7 +16,9 @@ HIGH
 
 # Review Reason
 
-STAGEDの標準レビュー深度
+STAGEDの標準レビュー深度; 自動昇格: 実差分 14ファイル/593行、5サブシステム、差分スコア10; EXTRA_HIGHを使用
+
+Latest diff assessment: 実差分 20ファイル/664行、7サブシステム、差分スコア10; EXTRA_HIGHを使用
 
 # Current Stage
 

@@ -211,17 +211,9 @@ void V2MainWindow::WireViewportCallbacks()
         [this](const kachakacha::v2::modeling::TransformPlan& plan) {
             ApplyTransformPlan(plan);
         });
-    // 押し出しの選択肢は窓で聞く。判断は core が持っているので、
-    // ここは窓を出して答えを渡すだけにする。
-    SetExtrudeChooser([this](const kachakacha::v2::app::ExtrudeChoice& initial,
-                          const kachakacha::v2::app::ExtrudeFacts& facts)
-                          -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
-        V2ExtrudeDialog dialog(initial, facts, ExtrudeTargets(), this);
-        if (dialog.exec() != QDialog::Accepted) {
-            return std::nullopt;
-        }
-        return dialog.Choice();
-    });
+    // 押し出しは右の棚で決める(オーナー指示 2026-09-14 §7)。
+    // ここで窓を据え付けない。据え付けると、押すたびに窓が出て、
+    // 「見ながら決める」ができなくなる。窓は「詳細...」を押したときだけ出す。
     // 作業平面は窓ではなく右の棚(V1 の「平面を作る」タブ)で作る。
     // 12通りの作り方と数の欄を持ち、「平面を作る」で文書へ入れる。
     // 組立率は窓で聞く。数値1つなので、押し出しのような大きな窓は要らない。

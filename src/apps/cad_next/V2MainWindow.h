@@ -686,8 +686,6 @@ private:
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
     //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。
     bool extrudeShelfShown_ = false;
-    //! 「詳細...」から来たか。来たときだけ今までの窓を出す。
-    bool extrudeUseDialog_ = false;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(

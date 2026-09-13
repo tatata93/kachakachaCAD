@@ -13,6 +13,7 @@
 
 #include "V2MainWindow.h"
 
+#include "V2ExtrudeDialog.h"
 #include "V2ExtrudeDock.h"
 #include "V2ParameterDock.h"
 #include "V2Viewport.h"
@@ -24,6 +25,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/CurveSampling.h"
 
+#include <QDialog>
 #include <QString>
 
 #include <cmath>
@@ -193,9 +195,21 @@ void V2MainWindow::RefreshExtrudeFromDock()
 
 //! 「詳細...」。細かい設定は今までの窓で決める。
 //! 右へ全部並べると、どれを見ればよいのか分からなくなる。
+//!
+//! 窓はここで据え付けて、終わったら外す。据え付けたままにすると、
+//! ふだんの確定でも窓が出て、「見ながら決める」ができなくなる。
 void V2MainWindow::ConfirmExtrudeWithDialog()
 {
-    extrudeUseDialog_ = true;
+    auto previous = extrudeChooser_;
+    SetExtrudeChooser([this](const kachakacha::v2::app::ExtrudeChoice& initial,
+                          const kachakacha::v2::app::ExtrudeFacts& facts)
+                          -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
+        V2ExtrudeDialog dialog(initial, facts, ExtrudeTargets(), this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return std::nullopt;
+        }
+        return dialog.Choice();
+    });
     ConfirmExtrude();
-    extrudeUseDialog_ = false;
+    SetExtrudeChooser(std::move(previous));
 }

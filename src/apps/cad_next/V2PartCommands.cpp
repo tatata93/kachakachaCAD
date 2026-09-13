@@ -205,9 +205,9 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
-    // 窓を出すのは「詳細...」から来たときだけ。ふだんは右の棚で決める。
-    // 試験は窓の代わりを差し込んで通すので、差し込まれていれば従う。
-    if (extrudeChooser_ && (extrudeUseDialog_ || !extrudeShelfShown_)) {
+    // 窓は据え付けていない。据え付いているのは「詳細...」を押したときと、
+    // 画面を出さない試験が差し込んだときだけである。あれば従う。
+    if (extrudeChooser_) {
         const auto answered = extrudeChooser_(choice, facts);
         if (!answered.has_value()) {
             SetStatus(QStringLiteral("押し出し: やめました。"));

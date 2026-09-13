@@ -13,6 +13,7 @@
 
 #include "V2MainWindow.h"
 
+#include "V2ExtrudeDock.h"
 #include "V2ParameterDock.h"
 #include "V2Viewport.h"
 
@@ -83,6 +84,8 @@ void V2MainWindow::BeginExtrudePreview()
     handle.distanceMm = ExtrudeDistanceMm();
     extrudeOutline_ = outline;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+    // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
+    ShowExtrudeShelf(plan);
     SetStatus(QStringLiteral("押し出し\n%1\n矢印を引くか、数の棚の「押し出し距離」で"
                              "決めてください。Enter で確定、Esc でやめます。")
             .arg(ExtrudePlanTextJa()));
@@ -134,4 +137,65 @@ void V2MainWindow::EndExtrudePreview()
 {
     extrudeOutline_.clear();
     viewport_->HideExtrudeHandle();
+    // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
+    extrudeShelfShown_ = false;
+    RefreshRightShelves();
+}
+
+//! 押し出しの棚を出して、読み取りを映す。
+void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan)
+{
+    const auto& document = session_->GetDocument();
+    const auto nameOf = [&document](const kachakacha::v2::base::EntityId& id) {
+        const auto* entity = document.FindEntity(id);
+        return entity != nullptr && !entity->displayName.empty()
+            ? QString::fromStdString(entity->displayName)
+            : QStringLiteral("名前のないもの");
+    };
+    QString target;
+    if (!plan.targetSolid.IsNil()) {
+        target = nameOf(plan.targetSolid);
+    }
+    QString profiles;
+    for (const auto& id : plan.profiles) {
+        if (!profiles.isEmpty()) {
+            profiles += QStringLiteral("、");
+        }
+        profiles += nameOf(id);
+    }
+    extrudeDock_->ShowPlan(plan, target, profiles);
+    extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleDistanceMm());
+    extrudeShelfShown_ = true;
+    RefreshRightShelves();
+}
+
+//! 棚の欄が変わった。向きと距離を取り直して、下見を作り直す。
+void V2MainWindow::RefreshExtrudeFromDock()
+{
+    if (!viewport_->ExtrudeHandleShown()) {
+        return;
+    }
+    extrudeChoice_.reversed = extrudeDock_->Reversed();
+    extrudeChoice_.extent = extrudeDock_->Symmetric()
+        ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
+        : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+    extrudeChoice_.booleanMode = extrudeDock_->BooleanMode();
+    // 向きが変わったら矢印も向き直す。数字はそのまま。
+    kachakacha::v2::app::ExtrudeHandle handle;
+    handle.origin = viewport_->ExtrudeHandleOrigin();
+    handle.direction = viewport_->WorkPlane().normal;
+    if (extrudeChoice_.reversed) {
+        handle.direction = handle.direction * -1.0;
+    }
+    handle.distanceMm = extrudeDock_->DistanceMm();
+    viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+}
+
+//! 「詳細...」。細かい設定は今までの窓で決める。
+//! 右へ全部並べると、どれを見ればよいのか分からなくなる。
+void V2MainWindow::ConfirmExtrudeWithDialog()
+{
+    extrudeUseDialog_ = true;
+    ConfirmExtrude();
+    extrudeUseDialog_ = false;
 }

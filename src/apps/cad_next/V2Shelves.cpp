@@ -99,6 +99,7 @@ void V2MainWindow::BuildRightShelves()
     tabifyDockWidget(displayDock_, guideDock_);
     tabifyDockWidget(guideDock_, patternDock_);
     tabifyDockWidget(patternDock_, partDock_);
+    tabifyDockWidget(partDock_, extrudeDock_);
     RefreshRightShelves();
 }
 
@@ -120,6 +121,19 @@ void V2MainWindow::BuildOutputShelves()
                         kachakacha::v2::fabrication::ThicknessPlacementNameJa(value))));
         });
     addDockWidget(Qt::RightDockWidgetArea, partDock_);
+
+    // 押し出しの棚。押し出しの最中だけ出す(オーナー指示 2026-09-14 §7)。
+    // 窓で全部決めてから作る道をやめ、右で見ながら決められるようにする。
+    extrudeDock_ = new V2ExtrudeDock(this);
+    extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });
+    extrudeDock_->SetOptionHandler([this] { RefreshExtrudeFromDock(); });
+    extrudeDock_->SetActionHandlers([this] { ConfirmExtrude(); },
+        [this] {
+            EndExtrudePreview();
+            SetStatus(QStringLiteral("押し出し: やめました。"));
+        },
+        [this] { ConfirmExtrudeWithDialog(); });
+    addDockWidget(Qt::RightDockWidgetArea, extrudeDock_);
 
     // 型紙の下見。出す前に紙の形で見る。見ないまま出すと、
     // 紙に収まっていないことに、印刷してから気づく。

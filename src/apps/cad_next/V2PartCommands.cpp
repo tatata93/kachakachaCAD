@@ -193,12 +193,21 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
         ? viewport_->ExtrudeHandleDistanceMm()
         : ExtrudeDistanceMm();
     choice.hasSelectedPart = facts.parts > 0;
+    if (extrudeShelfShown_) {
+        // 棚が出ているなら、そこに出ている値がそのまま作る形になる。
+        choice.reversed = extrudeDock_->Reversed();
+        choice.extent = extrudeDock_->Symmetric()
+            ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
+            : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+    }
     // 立体を選んでいるなら、既定の操作は読み取りに従う(窓を開けるなら切削)。
     // 覚えていた前回の操作より、いま選んでいるものの意味を優先する。
     if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
-    if (extrudeChooser_) {
+    // 窓を出すのは「詳細...」から来たときだけ。ふだんは右の棚で決める。
+    // 試験は窓の代わりを差し込んで通すので、差し込まれていれば従う。
+    if (extrudeChooser_ && (extrudeUseDialog_ || !extrudeShelfShown_)) {
         const auto answered = extrudeChooser_(choice, facts);
         if (!answered.has_value()) {
             SetStatus(QStringLiteral("押し出し: やめました。"));

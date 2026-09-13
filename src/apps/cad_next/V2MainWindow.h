@@ -25,6 +25,7 @@
 #include "V2ExportDock.h"
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
+#include "V2ExtrudeDock.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
@@ -131,6 +132,14 @@ public:
     void EndExtrudePreview();
     //! 出ている下見のとおりに作る。Enter から呼ぶ。
     void ConfirmExtrude();
+    //! 棚の欄が変わったので、下見を作り直す。
+    void RefreshExtrudeFromDock();
+    //! 「詳細...」。細かい設定は今までの窓で決める。
+    void ConfirmExtrudeWithDialog();
+    //! 押し出しの棚を出して、読み取りを映す。
+    void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
+    //! 押し出しの棚。試験から見る。
+    [[nodiscard]] V2ExtrudeDock& ExtrudeDock() { return *extrudeDock_; }
     //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
     [[nodiscard]] std::optional<kachakacha::v2::app::ExtrudeChoice> PrepareExtrudeChoice(
         const kachakacha::v2::app::ExtrudePlan& plan,
@@ -675,6 +684,10 @@ private:
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
+    //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。
+    bool extrudeShelfShown_ = false;
+    //! 「詳細...」から来たか。来たときだけ今までの窓を出す。
+    bool extrudeUseDialog_ = false;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
@@ -872,6 +885,7 @@ private:
     V2ParameterDock* parameterDock_ = nullptr;
     V2PatternDock* patternDock_ = nullptr;
     V2PartDock* partDock_ = nullptr;
+    V2ExtrudeDock* extrudeDock_ = nullptr;
     V2DrawingDock* drawingDock_ = nullptr;
     V2GridDock* gridDock_ = nullptr;
     V2DisplayDock* displayDock_ = nullptr;

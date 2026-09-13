@@ -50,6 +50,9 @@ enum class Shelf {
     Pattern,
     //! 部品(V1 の部品タブ)。押し出しの距離・板厚・厚みの付け方・治具・回転体。
     Part,
+    //! 押し出しの最中だけ出す棚(オーナー指示 2026-09-14 §7)。
+    //! 入力・距離・方向・範囲・操作・確定を1枚に置く。
+    Extrude,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

@@ -299,20 +299,20 @@
       "Sを押している間だけスナップを無効にする"
     ],
     "last_review": {
-      "decision": "REVISE",
-      "attempt": 2,
+      "decision": "PASS",
+      "attempt": 4,
       "stage": "foundation",
       "reviewer": "claude-fallback",
       "review_effort": "EXTRA_HIGH",
       "reason": "Codex CLI account usage limit; configured Claude fallback used"
     },
-    "revision_count": 2,
+    "revision_count": 5,
     "execution_mode": "STAGED",
     "review_effort": "EXTRA_HIGH",
     "execution_reason": "事前リスクスコア4; 複数の操作状態が連携",
     "review_reason": "STAGEDの標準レビュー深度; 自動昇格: 実差分 14ファイル/593行、5サブシステム、差分スコア10; EXTRA_HIGHを使用",
-    "current_stage": "1/2 foundation",
-    "review_diff_reason": "実差分 20ファイル/664行、7サブシステム、差分スコア10; EXTRA_HIGHを使用"
+    "current_stage": "2/2 integration",
+    "review_diff_reason": "実差分 22ファイル/1549行、7サブシステム、差分スコア11; EXTRA_HIGHを使用"
   },
   {
     "id": "UI-P1-008",

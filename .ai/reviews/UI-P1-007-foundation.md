@@ -1,47 +1,45 @@
-REVISE
+PASS
 
-1. **Perpendicular and tangent snaps can no longer be chosen**
-   - **Where:** `src/next/kachakacha/modeling/SnapEngine.cpp:95-111` (`SnapPriorityRank`: ClosestOnCurve is rank 3, Perpendicular/Tangent rank 4), together with `CollectSnapCandidates` at `:175-197` and `:211-220`. The app hits this through `src/next/kachakacha/app/DrawingSession.cpp:76-83`.
-   - **Problem:**
-     - A ClosestOnCurve candidate is added for every curve within 12px of the pointer.
-     - A perpendicular foot or tangent point always lies on that same curve. The ClosestOnCurve sample is always at least as close to the pointer, give or take one sampling step (length/200).
-     - Candidates of different ranks are no longer compared by distance. So whenever a foot or tangent point is within 12px, ClosestOnCurve from the same curve is also within 12px and always wins.
-     - Before this diff, Perpendicular (enum 5) beat ClosestOnCurve (enum 10), so these snaps worked. `DrawingSession::Hover` sets `referencePoint` after the first placed point, so the app is affected now, not only after Stage 2.
-     - Even with the pointer exactly on the foot, the chosen snap is a sampled point on the curve up to half a sampling step away (about 2px on an 80mm line at 10px/mm). The placed coordinate is not the real perpendicular foot.
-     - No test catches this. `tests_v2/snap_tests.cpp:606-623` ("基準点があれば垂足が出る") only checks `HasKind` and never calls `ChooseSnap`. The self-test does not exercise it either.
-   - **Why it matters:**
-     - A snap type listed in §6.1, `geometry-contract.md:120` and `v1-drawing-parity.md:96` silently stops working.
-     - Following the §6.1 list literally makes item 5 impossible to reach. §6.1 ("現在ツールに適合する候補で強さを変える") and §4.3 item 1 ("入力中ツールが要求する型") say a candidate the current input asks for should win.
-     - The worker deferred this as "Stage 2", but Stage 1 already changed the stateless ranking the app uses today. Check 8 (focused regression tests) is not met.
-   - **Required fix:**
-     - Add tests that call `ChooseSnap` (stateless and through `SnapHysteresis::Resolve`) with a reference point set and the pointer at a perpendicular foot and at a tangent point. Assert that the chosen kind is Perpendicular/Tangent and the position is the exact foot or tangent point.
-     - Then make them reachable without inventing behavior. For example, rank reference-point-derived Perpendicular/Tangent above ClosestOnCurve per §4.3 item 1. Or have ClosestOnCurve give way to an on-curve Perpendicular/Tangent from the same entity/segment within `interactiveJoinMm`.
-     - If the owner has to choose between these, stop and escalate the §6.1 conflict. Do not ship the regression.
+Stage 1/2 (foundation) of UI-P1-007 is done and nothing blocks it. I edited nothing.
 
-2. **Invalid values for the new tolerance keys are accepted without an error**
-   - **Where:** `src/next/kachakacha/io/DocumentFileRead.cpp:689-698` and the rule at `:704-707`. `docs/v2/kcd2-format.md` §19.3, edited in this diff.
-   - **Problem:**
-     - `edgePickPx` and `snapPickPx` accept 0, negative or wrong-typed values (a string is silently ignored).
-     - `snapPickPx: 0` or a negative value turns off every snap for that document. `edgePickPx <= 0` makes lines impossible to pick. Nothing is reported.
-     - These keys are new in this diff, and §19.3 was rewritten here without saying what happens to invalid values.
-   - **Why it matters:**
-     - A damaged or hand-edited `.kcd2` quietly changes core interaction, which breaks check 9 (errors must not be swallowed).
-     - The reason given ("`displayPickPx` already behaves this way") copies an existing gap onto new, persisted fields.
-   - **Required fix:**
-     - When a key is present, reject a non-number or a value that is not `> 0` with `kBadValue` at `$.tolerances`, the same way the other four tolerances are handled. Omitted keys still fall back to the defaults.
-     - Update §19.3 to say this.
-     - Add rejection cases to `tests_v2/document_file_tests.cpp` ("点と線とスナップの拾い半径を別々に読み戻す" or a sibling test).
+**Evidence**
+- **Separate radii:** `GeometryTolerance.h` has three fields: `displayPickPx=8` (points), `edgePickPx=6` (lines) and `snapPickPx=12` (snap). Each radius is used in only one place:
+  - points at `Selection.cpp:144`
+  - lines at `Selection.cpp:114`
+  - snapping at `SnapEngine.cpp:64` and `:246`.
 
-**Checked and fine:**
-- **Gates:** they ran after the last edit (11:09:20); configure, build (two unrelated warnings), CTest 129/129 and self-test 168/168 all passed.
-- **Samples:** the `.kcd2` changes only add `"edgePickPx": 6` and `"snapPickPx": 12` to `document.json`.
-- **Enum order:** nothing saves or displays `SnapKind` as an integer, so reordering it is safe.
-- **Lifetimes:** `Collector` now holds references to `settings` and `tolerance`, and both outlive it.
-- **Hysteresis:** the held/rank takeover logic is correct.
-- **Removed API:** nothing still refers to it.
-- **Boundaries:** `src/next` still has no Qt or OCCT.
+  Nothing still uses the old `highPriorityRadiusPx`, `lowPriorityRadiusPx` or `IsHighPrioritySnap`. Tests check that changing one radius leaves the others alone (`snap_tests.cpp:1065`, `selection_tests.cpp:348-362`).
+- **Same radius at any zoom:** radii are measured in screen px on the projected curve (`geometry::ApproachToCurveOnScreen`). The perspective correction from screen fraction back to 3D fraction, `s = t·w0/((1−t)·w1 + t·w0)`, is derived correctly. Zoom is tested for snapping (`snap_tests:1040`) and for circle and Bezier picking when zoomed in (`selection_tests:325`, `:332`). Line picking is shared with Selection instead of duplicated.
+- **Hysteresis:** `ChooseSnap` switches at once to a higher-rank candidate. At the same rank it switches only when the new candidate is more than 4 px closer, and it holds out to 12 + 4 px. Candidates are sorted by rank, then distance, so the held candidate can never outrank the best one. `S` (suppressed) and `Reset` drop the held candidate. Tests cover jitter, the radius edge, higher-rank takeover, and not handing the hold to an overlapping curve (`snap_tests:1092-1310`).
+  - The held candidate keeps `EntityId`s but only compares them and never looks the entity up. A deleted or undone entity cannot cause a bad access; it just stops matching.
+  - No `SnapCandidate` equality comparison exists, so the new `held` field changes no existing behaviour.
+- **Ranking against §6.1 and §4.3:**
+  - `SnapPriorityRank` follows the six levels, and ties go to the closer candidate.
+  - Moving the values in `SnapKind` breaks nothing: the only numeric use is a tie-break inside the sort. The app only names the kinds in `switch` statements, and they are not saved to files.
+- **File format:** save and load are symmetric. A 0, negative or non-number value is rejected with `KCD2-D002`, and a missing key falls back to the default; both are tested. Both samples were regenerated, `v2_sample_document_tests` passes, and `kcd2-format.md` §19.3 matches the code.
+- **Boundaries:** V1 is unchanged, no Qt or OCCT dependency was added under `src/next`, and there are no untracked files. The extra files outside the task's file list all follow from the work: persisting the tolerances, sharing the curve-distance code, docs and samples.
+- **Build and test evidence:** the attempt 3 gates ran after the last source edit (`SnapEngine.h`, 16:21:58).
+  - Configure passed (16:23:08).
+  - Build passed at 16:25:04. Its only two warnings are in `V2ViewportDraw.cpp:537` and `V2Viewport.cpp:1119`, which this diff does not touch.
+  - CTest passed 129/129.
+  - The app self-test passed 168/168.
 
-**Owner confirmation still needed (not blocking this Stage):**
-- `holdMarginPx = 4`
-- The Extension/ProjectedOnPlane rank and the FreeOnPlane rank
-- The stale Ctrl comment at `V2ViewportInput.cpp:7`
+  The worker report's Build and Test sections still quote attempt 2; the attempt 3 logs above supersede them.
+
+**Not blocking, for Stage 2 or the owner**
+1. **Speed on every pointer move:** closest-point snapping now samples each curve at `interactiveJoinMm` (0.01 mm) instead of length/200. For a circle of radius 100 mm that is about 17 times more samples, and there is no early exit for curves outside the radius. §13 says hover must not slow a normal frame, and this has not been measured.
+   - Suggested fix: skip spans whose lower bound is beyond `snapPickPx + holdMarginPx`.
+   - Add the 10,000-wire performance test.
+2. **Rules the specs don't define:**
+   - Closest-on-curve is dropped when a perpendicular or tangent point on the same curve is in range. Without this, the §6.1 order would make those points impossible to pick.
+   - The extension and project-to-plane snaps are ranked below perpendicular/tangent and above the grid.
+
+   Both are written down in `v1-drawing-parity.md`, but the owner should confirm them.
+3. **Not implemented yet:** stronger snap for candidates suited to the current tool (§6.1) and ranking the tool's required type first (§4.3 item 1, PRD-060). This is recorded honestly in the `SnapEngine.h` header, and no rule was invented.
+4. **Grid:** with a 12 px radius, free placement on the plane becomes impossible when grid points are about 17 px or less apart on screen.
+5. **Stage 2 work:**
+   - Connect `SnapHysteresis` to `DrawingSession.cpp:81-83`, which still calls `ChooseSnap` without it.
+   - Call `Reset` on tool switch and cancel.
+   - Add the `S`-key self-test in `V2SelfTestInput.cpp`.
+6. **Stale comment:** `V2SelfTestScreen.cpp:544` still says lines are hit at 8px; it is now 6px. The test's 16 px margin still holds.
+7. **Two plane checks:** the new `geometry::CurveLiesInPlane` and the existing `app::CurveLiesOnPlane` (`PlaneFocus.cpp`) answer the same question and should be merged later.

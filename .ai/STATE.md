@@ -5,10 +5,10 @@
 - Current task ID: `UI-P1-007`
 - Execution Mode: `STAGED`
 - Review Effort: `EXTRA_HIGH`
-- Current Stage: `1/2 foundation`
+- Current Stage: `2/2 integration`
 - Last PASS task: `UI-P1-006`
 - Current status: `revision`
-- Current note: Snap regression repaired; rerun Stage 1 gates and review
+- Current note: Stage 2 file-limit repair ready; resume gates and reviews
 
 ## Important design decisions
 
@@ -20,4 +20,4 @@
 
 ## Next action
 
-Resume Stage 1 from gates, then continue to Stage 2 integration after review PASS.
+Resume Stage 2 from gates and reviews.

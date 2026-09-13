@@ -8,6 +8,7 @@
 //! 値を集めるだけにする。
 
 #include "kachakacha/app/DirectWireEntry.h"
+#include "kachakacha/app/DrawingShelfRows.h"
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QDockWidget>
@@ -28,6 +29,19 @@ class QPushButton;
 class V2DrawingDock final : public QDockWidget {
 public:
     explicit V2DrawingDock(QWidget* parent);
+
+    //! いまの道具を伝える。棚の見出しと、出す欄がこれで決まる。
+    //!
+    //! 道具を替えても棚の中身が変わらず、ベジェ曲線に持ち替えても
+    //! 右に「円弧の作り方」が出たままだった(オーナー指摘 2026-09-13)。
+    void SetTool(kachakacha::v2::modeling::DrawingTool tool);
+    //! いま棚が向いている道具。試験から見る。
+    [[nodiscard]] kachakacha::v2::modeling::DrawingTool Tool() const noexcept
+    {
+        return tool_;
+    }
+    //! 道具ごとの欄が1つも出ていないとき、代わりに出している使い方の一文。
+    [[nodiscard]] QString HintText() const;
 
     //! いまの欄から作った道具の設定(作業平面の向きは含まない。それは場面が持つ)。
     [[nodiscard]] kachakacha::v2::modeling::ToolSettings Settings() const;
@@ -55,6 +69,7 @@ private:
     void BuildArcRows(QFormLayout* form);
     void BuildDirectWireRows(QFormLayout* form);
     void ApplyArcVisibility();
+    void ApplyToolRows();
     void ApplyDirectWireVisibility();
     void EmitSettings();
     [[nodiscard]] std::array<QDoubleSpinBox*, 3> AddVectorRow(QFormLayout* form,
@@ -75,6 +90,11 @@ private:
     QCheckBox* wireConstruction_ = nullptr;
     QPushButton* createWire_ = nullptr;
     QLabel* message_ = nullptr;
+    //! 道具の区画の見出し。欄が無いときは使い方の一文になる。
+    QLabel* toolTitle_ = nullptr;
+    QLabel* hint_ = nullptr;
+    kachakacha::v2::modeling::DrawingTool tool_ =
+        kachakacha::v2::modeling::DrawingTool::Select;
     std::function<void(const kachakacha::v2::modeling::ToolSettings&)> settingsHandler_;
     std::function<void()> createWireHandler_;
     bool loading_ = false;

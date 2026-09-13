@@ -49,13 +49,19 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    auto* toolTitle = new QLabel(QStringLiteral("道具の決め方"), body_);
-    layout->addWidget(toolTitle);
+    toolTitle_ = new QLabel(QStringLiteral("道具の決め方"), body_);
+    layout->addWidget(toolTitle_);
     toolForm_ = new QFormLayout();
     toolForm_->setContentsMargins(0, 0, 0, 0);
     toolForm_->setSpacing(3);
     BuildArcRows(toolForm_);
     layout->addLayout(toolForm_);
+
+    // 決める欄が無い道具のときに、代わりに出す一文。
+    // 空の棚を出すと「壊れた」ようにしか見えない。
+    hint_ = new QLabel(body_);
+    hint_->setWordWrap(true);
+    layout->addWidget(hint_);
 
     construction_ = new QCheckBox(QStringLiteral("補助線として作図"), body_);
     layout->addWidget(construction_);
@@ -88,6 +94,43 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     setWidget(scroll);
     ApplyArcVisibility();
     ApplyDirectWireVisibility();
+    ApplyToolRows();
+}
+
+void V2DrawingDock::SetTool(kachakacha::v2::modeling::DrawingTool tool)
+{
+    tool_ = tool;
+    ApplyToolRows();
+}
+
+QString V2DrawingDock::HintText() const
+{
+    return hint_ == nullptr ? QString() : hint_->text();
+}
+
+//! いまの道具で意味のある欄だけを出す。決め方は core(app/DrawingShelfRows)。
+void V2DrawingDock::ApplyToolRows()
+{
+    const auto rows = kachakacha::v2::app::DrawingShelfRowsFor(tool_);
+    // 見出しに道具の名前を入れる。「作図」だけでは、どの道具の欄か読めない。
+    setWindowTitle(QString::fromStdString(
+        kachakacha::v2::app::DrawingShelfTitleJa(tool_)));
+    toolForm_->setRowVisible(arcMode_, rows.arc);
+    if (rows.arc) {
+        // 半径と中心角は、さらに作り方で決まる。二重に決めない。
+        ApplyArcVisibility();
+    } else {
+        toolForm_->setRowVisible(arcRadius_, false);
+        toolForm_->setRowVisible(arcSweep_, false);
+    }
+    construction_->setVisible(rows.construction);
+    keepPoints_->setVisible(rows.keepPoints);
+    toolTitle_->setVisible(!rows.ToolSectionEmpty());
+    // 欄が無いときだけ、使い方の一文を出す。欄と一文を両方出すと、
+    // どちらを読めばよいのか分からなくなる。
+    hint_->setText(QString::fromUtf8(
+        std::string(kachakacha::v2::app::DrawingToolHintJa(tool_)).c_str()));
+    hint_->setVisible(rows.ToolSectionEmpty());
 }
 
 void V2DrawingDock::BuildArcRows(QFormLayout* form)
@@ -171,6 +214,9 @@ std::array<QDoubleSpinBox*, 3> V2DrawingDock::AddVectorRow(QFormLayout* form,
 
 void V2DrawingDock::ApplyArcVisibility()
 {
+    if (!kachakacha::v2::app::DrawingShelfRowsFor(tool_).arc) {
+        return;   // 円弧の道具でないなら、この区画はそもそも出ていない。
+    }
     const int index = arcMode_->currentIndex();
     const ArcMode mode = index >= 0 && index < static_cast<int>(kArcModes.size())
         ? kArcModes[static_cast<std::size_t>(index)]

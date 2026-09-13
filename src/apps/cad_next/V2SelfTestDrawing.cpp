@@ -356,6 +356,48 @@ using kachakacha::v2::modeling::ToolSettings;
     return Explain("端が交点で合う", meets);
 }
 
+[[nodiscard]] bool CaseShelfFollowsTheTool(V2MainWindow& window)
+{
+    // オーナー指摘 2026-09-13:
+    // 直線や円弧を引いたあとベジェ曲線に持ち替えても、
+    // 右がまだ円弧のままで、ベジェの画面にならなかった。
+    auto& dock = window.DrawingDock();
+
+    window.SelectTool(DrawingTool::Arc);
+    if (!Explain("円弧では棚が円弧を向く", dock.Tool() == DrawingTool::Arc)) {
+        return false;
+    }
+    if (!Explain((std::string("見出しに円弧の名前が入る(実際 ")
+                     + dock.windowTitle().toStdString() + ")")
+                     .c_str(),
+            dock.windowTitle().contains(QStringLiteral("円弧")))) {
+        return false;
+    }
+
+    window.SelectTool(DrawingTool::Bezier);
+    if (!Explain("ベジェでは棚がベジェを向く", dock.Tool() == DrawingTool::Bezier)) {
+        return false;
+    }
+    if (!Explain((std::string("見出しが円弧のままにならない(実際 ")
+                     + dock.windowTitle().toStdString() + ")")
+                     .c_str(),
+            !dock.windowTitle().contains(QStringLiteral("円弧")))) {
+        return false;
+    }
+    // 決める欄が無い道具では、代わりに使い方の一文が出る。空の棚を出さない。
+    if (!Explain((std::string("使い方の一文が出る(実際 ")
+                     + dock.HintText().toStdString() + ")")
+                     .c_str(),
+            !dock.HintText().isEmpty())) {
+        return false;
+    }
+
+    window.SelectTool(DrawingTool::Line);
+    const bool lineTitle = dock.windowTitle().contains(QStringLiteral("直線"));
+    window.SelectTool(DrawingTool::Select);
+    return Explain("直線でも道具の名前が入る", lineTitle);
+}
+
 [[nodiscard]] bool CasePointsFromCurveShape(V2MainWindow& window)
 {
     // 車輪の中心も窓の中心も、それまでは座標を目で読んで手で打ち直すしかなかった。
@@ -658,6 +700,7 @@ std::vector<SelfTestCase> DrawingCases()
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
         {"形から中心や端点に点を作れる", &CasePointsFromCurveShape},
+        {"右の棚が道具に合わせて変わる", &CaseShelfFollowsTheTool},
         {"グリッドの棚で間隔・副点・基準が変わる", &CaseGridDockAppliesSpacingSubdivisionAndOrigin},
         {"表示の棚で太さ・様式・色と段が変わる", &CaseDisplayDockStylesAndStages},
         {"作図の棚で円弧の作り方を変えられる", &CaseArcModeFromDock},

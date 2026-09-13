@@ -652,6 +652,10 @@ void V2MainWindow::RefreshRightShelves()
     if (drawingDock_ == nullptr || exportDock_ == nullptr) {
         return;   // まだ組み立てている途中。
     }
+    // 作図の棚は、中身も道具に合わせる。棚を出すだけでは足りない。
+    // ベジェ曲線に持ち替えたのに「円弧の作り方」が出たままだった
+    // (オーナー指摘 2026-09-13)。
+    drawingDock_->SetTool(session_->CurrentTool());
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool());
     for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
         QDockWidget* dock = DockForShelf(shelf);

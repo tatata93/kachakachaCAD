@@ -275,9 +275,9 @@
     "id": "UI-P1-007",
     "title": "選択半径とスナップヒステリシス",
     "phase": 1,
-    "status": "ready",
+    "status": "revision",
     "priority": "high",
-    "assigned_to": null,
+    "assigned_to": "claude",
     "dependencies": [
       "UI-P1-003"
     ],
@@ -299,7 +299,12 @@
       "Sを押している間だけスナップを無効にする"
     ],
     "last_review": null,
-    "revision_count": 0
+    "revision_count": 0,
+    "execution_mode": "STAGED",
+    "review_effort": "HIGH",
+    "execution_reason": "事前リスクスコア4; 複数の操作状態が連携",
+    "review_reason": "STAGEDの標準レビュー深度",
+    "current_stage": "1/2 foundation"
   },
   {
     "id": "UI-P1-008",

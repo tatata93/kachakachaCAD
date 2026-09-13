@@ -2,13 +2,13 @@
 
 - Current branch: `codex/v2-ui-ux-overhaul`
 - Current phase: `1`
-- Current task ID: `UI-P1-006`
+- Current task ID: `UI-P1-007`
 - Execution Mode: `STAGED`
-- Review Effort: `EXTRA_HIGH`
-- Current Stage: `1/1 complete`
+- Review Effort: `HIGH`
+- Current Stage: `1/2 foundation`
 - Last PASS task: `UI-P1-006`
-- Current status: `passed`
-- Current note: PASS; inspect and commit the task worktree
+- Current status: `revision`
+- Current note: Stage 1 gate failures repaired; rerun foundation review and gates
 
 ## Important design decisions
 

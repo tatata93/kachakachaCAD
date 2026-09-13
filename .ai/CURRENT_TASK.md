@@ -1,6 +1,6 @@
 # TASK ID
 
-UI-P1-006
+UI-P1-007
 
 # Execution Mode
 
@@ -8,29 +8,27 @@ STAGED
 
 # Review Effort
 
-EXTRA_HIGH
+HIGH
 
 # Execution Reason
 
-事前リスクスコア2; 複数の操作状態が連携; 自動昇格: 実差分が10ファイル以上、3サブシステム以上、または2000行以上
+事前リスクスコア4; 複数の操作状態が連携
 
 # Review Reason
 
-BATCHの標準レビュー深度; 自動昇格: 実差分 13ファイル/843行、3サブシステム、差分スコア10; EXTRA_HIGHを使用
-
-Latest diff assessment: 実差分 15ファイル/1091行、3サブシステム、差分スコア10; EXTRA_HIGHを使用
+STAGEDの標準レビュー深度
 
 # Current Stage
 
-1/1: full - 一括実装
+1/2: foundation - 基盤
 
-意味状態別ハイライトと部分要素表示
+状態と共通境界を先に完成させる。
 
-
+1. 関連する基盤と状態遷移を実装する。
 
 # 目的
 
-意味状態別ハイライトと部分要素表示
+選択半径とスナップヒステリシス
 
 # 背景
 
@@ -38,10 +36,11 @@ See the referenced specifications and current code.
 
 # 変更対象候補
 
-- `src/apps/cad_next/V2Viewport.h`
-- `src/apps/cad_next/V2Viewport.cpp`
-- `src/apps/cad_next/V2ViewportDraw.cpp`
-- `src/apps/cad_next/V2SelfTestScreen.cpp`
+- `src/next/kachakacha/geometry/GeometryTolerance.h`
+- `src/next/kachakacha/modeling/SnapEngine.h`
+- `src/next/kachakacha/modeling/SnapEngine.cpp`
+- `tests_v2/snap_tests.cpp`
+- `src/apps/cad_next/V2SelfTestInput.cpp`
 
 # 変更禁止範囲
 
@@ -50,7 +49,8 @@ See the referenced specifications and current code.
 
 # 必須仕様
 
-- `docs/v2/ui-ux-integrated-spec.md#3-意味状態と表示`
+- `docs/v2/ui-ux-integrated-spec.md#43-候補優先順位`
+- `docs/v2/ui-ux-integrated-spec.md#61-スナップ`
 
 # 作業手順
 
@@ -60,10 +60,7 @@ See the referenced specifications and current code.
 
 # Acceptance Tests
 
-- 通常、Hover、選択、Snap、Previewを別の意味状態で描く
-- 同じワイヤーの選択線分だけを強調し他線分を選択色にしない
-- テーマ変更後も意味状態の区別を保つ
-- Previewは通常選択できない
+- 基盤Stageの作業が完了し、既存ビルドと試験が成功する。
 
 # 完了条件
 

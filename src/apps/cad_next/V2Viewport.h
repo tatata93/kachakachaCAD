@@ -187,6 +187,8 @@ public:
     //! いま作図用の十字カーソルを出しているか。試験から見る。
     //! カーソルの形そのものは Qt が持っていて読み出せないので、選んだ結果を覚える。
     [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
+    //! いま途中経過(まだ確定していない形)を出しているか。
+    [[nodiscard]] bool HasPreview() const noexcept { return !hover_.preview.empty(); }
     //! カーソルの下にある線。無ければ Nil。試験から見る。
     [[nodiscard]] const kachakacha::v2::base::EntityId& HoveredEntityId() const noexcept
     {

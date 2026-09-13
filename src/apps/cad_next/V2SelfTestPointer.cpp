@@ -31,6 +31,8 @@
 #include <string>
 #include <vector>
 
+#include "kachakacha/modeling/ToolController.h"
+
 namespace kachakacha::v2::selftest {
 namespace {
 
@@ -363,6 +365,137 @@ void PressDragRelease(V2Viewport& viewport, const QPointF& from,
     return Explain("送っている最中は点が置かれない", quiet);
 }
 
+//! 押して離すだけ。指はまったく動かさない。
+void PlainClick(V2Viewport& viewport, const QPointF& at)
+{
+    SendMouse(viewport, QEvent::MouseButtonPress, at, Qt::LeftButton, Qt::LeftButton);
+    SendMouse(viewport, QEvent::MouseButtonRelease, at, Qt::LeftButton, Qt::NoButton);
+}
+
+//! 押して、門(5px)を越えない範囲で震わせて、離す。
+void JitteredClick(V2Viewport& viewport, const QPointF& at)
+{
+    SendMouse(viewport, QEvent::MouseButtonPress, at, Qt::LeftButton, Qt::LeftButton);
+    for (const QPointF& step : {at + QPointF(1.0, 0.0), at + QPointF(2.0, -2.0),
+             at + QPointF(-1.0, 3.0), at + QPointF(3.0, 1.0)}) {
+        SendMouse(viewport, QEvent::MouseMove, step, Qt::NoButton, Qt::LeftButton);
+    }
+    SendMouse(viewport, QEvent::MouseButtonRelease, at + QPointF(2.0, 2.0), Qt::LeftButton,
+        Qt::NoButton);
+}
+
+//! 文書を、覚えておいた版まで戻す。戻せなければあきらめる。
+void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
+{
+    for (int guard = 0; guard < 16; ++guard) {
+        if (window.Session().GetDocument().Snapshot().revision == revision) {
+            return;
+        }
+        if (!window.Session().Undo()) {
+            return;
+        }
+    }
+}
+
+[[nodiscard]] bool CaseEveryToolTreatsJitterAsAClick(V2MainWindow& window)
+{
+    // 横断の要。**どの道具でも** 、手が少し震えたクリックは、
+    // まったく震えなかったクリックと同じ結果でなければならない。
+    // 道具ごとに門を書いていたころ、これが道具によって違っていた。
+    constexpr kachakacha::v2::modeling::DrawingTool kTools[] = {
+        kachakacha::v2::modeling::DrawingTool::Select,
+        kachakacha::v2::modeling::DrawingTool::Point,
+        kachakacha::v2::modeling::DrawingTool::Line,
+        kachakacha::v2::modeling::DrawingTool::Polyline,
+        kachakacha::v2::modeling::DrawingTool::Rectangle,
+        kachakacha::v2::modeling::DrawingTool::Circle,
+        kachakacha::v2::modeling::DrawingTool::Arc,
+        kachakacha::v2::modeling::DrawingTool::Bezier,
+        kachakacha::v2::modeling::DrawingTool::Spline,
+        kachakacha::v2::modeling::DrawingTool::Move,
+        kachakacha::v2::modeling::DrawingTool::Copy,
+        kachakacha::v2::modeling::DrawingTool::Mirror,
+        kachakacha::v2::modeling::DrawingTool::Rotate,
+        kachakacha::v2::modeling::DrawingTool::Split,
+        kachakacha::v2::modeling::DrawingTool::Trim,
+        kachakacha::v2::modeling::DrawingTool::Extend,
+        kachakacha::v2::modeling::DrawingTool::JoinEndpoints,
+        kachakacha::v2::modeling::DrawingTool::Measure,
+        kachakacha::v2::modeling::DrawingTool::ConnectTwoPoints,
+    };
+    auto& viewport = window.Viewport();
+    const QPointF spot(viewport.width() * 0.45, viewport.height() * 0.55);
+    for (const auto tool : kTools) {
+        const std::uint64_t base = window.Session().GetDocument().Snapshot().revision;
+
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        window.SelectTool(tool);
+        PlainClick(viewport, spot);
+        const std::uint64_t plainRevision =
+            window.Session().GetDocument().Snapshot().revision;
+        const std::size_t plainPoints = window.Session().PlacedPointCount();
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        UndoBackTo(window, base);
+
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        window.SelectTool(tool);
+        JitteredClick(viewport, spot);
+        const std::uint64_t shakyRevision =
+            window.Session().GetDocument().Snapshot().revision;
+        const std::size_t shakyPoints = window.Session().PlacedPointCount();
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        UndoBackTo(window, base);
+
+        const std::string name(
+            kachakacha::v2::modeling::DrawingToolNameJa(tool));
+        if (!Explain((name + ": 震えても文書は同じだけ変わる").c_str(),
+                (plainRevision != base) == (shakyRevision != base))) {
+            return false;
+        }
+        if (!Explain((name + ": 震えても置かれる点の数は同じ(" 
+                         + std::to_string(plainPoints) + " と "
+                         + std::to_string(shakyPoints) + ")").c_str(),
+                plainPoints == shakyPoints)) {
+            return false;
+        }
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return true;
+}
+
+[[nodiscard]] bool CaseEveryToolClearsThePreviousPreview(V2MainWindow& window)
+{
+    // 道具を替えたのに前の道具の途中経過が残っていると、
+    // もう作られない形を「まだ引いている途中」だと読んでしまう(§3 規則3)。
+    auto& viewport = window.Viewport();
+    constexpr kachakacha::v2::modeling::DrawingTool kDrawing[] = {
+        kachakacha::v2::modeling::DrawingTool::Line,
+        kachakacha::v2::modeling::DrawingTool::Rectangle,
+        kachakacha::v2::modeling::DrawingTool::Circle,
+        kachakacha::v2::modeling::DrawingTool::Arc,
+        kachakacha::v2::modeling::DrawingTool::Spline,
+        kachakacha::v2::modeling::DrawingTool::Polyline,
+    };
+    const QPointF spot(viewport.width() * 0.35, viewport.height() * 0.35);
+    for (const auto tool : kDrawing) {
+        window.SelectTool(tool);
+        viewport.ClickAt(spot);
+        viewport.HoverAt(spot + QPointF(40.0, 30.0));
+        const std::string name(kachakacha::v2::modeling::DrawingToolNameJa(tool));
+        // 別の道具へ移る。ここで途中経過も置いた点も捨てられていること。
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        if (!Explain((name + ": 道具を替えたら置いた点が残らない").c_str(),
+                window.Session().PlacedPointCount() == 0)) {
+            return false;
+        }
+        if (!Explain((name + ": 道具を替えたら途中経過が消える").c_str(),
+                !viewport.HasPreview())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> PointerCases()
@@ -377,6 +510,8 @@ std::vector<SelfTestCase> PointerCases()
         {"中ボタンでは掴みが終わらない", CaseCameraDoesNotFinishAGrab},
         {"画面を送っても引きかけの線が残る", CaseCameraKeepsTheHalfDrawnLine},
         {"送っている最中の左押しでは点が置かれない", CaseLeftClickDuringPanPlacesNothing},
+        {"どの道具でも震えたクリックは普通のクリックと同じ", CaseEveryToolTreatsJitterAsAClick},
+        {"どの道具でも替えたら前の途中経過が消える", CaseEveryToolClearsThePreviousPreview},
     };
 }
 

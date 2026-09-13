@@ -37,6 +37,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
+| `kernel/OcctFaceQuery.h` | 立体の面1枚の縁・法線・面積を取り出す | 面の押し引き(EX-02)の画面側を繋ぐとき。カーネル側だけ先に入れて PC で組み立てを確かめる段である |
 
 ### 繋いだもの
 

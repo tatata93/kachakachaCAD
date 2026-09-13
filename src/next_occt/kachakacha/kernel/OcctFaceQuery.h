@@ -1,0 +1,61 @@
+#pragma once
+
+//! 立体の面を1枚取り出して、押し引きできる形にする(EX-02)。
+//!
+//! オーナーの手順の「立体の面をつまんで押す・引く」を通すために要る。
+//! いまの押し出しは輪郭(ワイヤー)からしか始められない。
+//! 面から始めるには、その面の縁を輪郭として取り出す道が要る。
+//!
+//! **新しい押し出しの仕掛けは作らない。** 面の縁を輪郭に直して、
+//! いままでの押し出し(`BuildExtrude`)へそのまま渡す。
+//! 押した先は立体に足し、引いた先は立体から削る。
+//! こうしておくと、突き合わせ(体積・面数の予測)も今までのものがそのまま効く。
+//!
+//! 面の番号は `OcctTessellate` が三角形へ書き込むものと同じ順で数える
+//! (`TopExp_Explorer(shape, TopAbs_FACE)` の順)。画面が拾った番号を
+//! そのままここへ渡せる。順が食い違うと、押した面と別の面が動く。
+//!
+//! OCCT の型を外へ出さない。返すのは core の型だけ(AT-ARC-001)。
+
+#include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/geometry/CurveSegment.h"
+#include "kachakacha/geometry/GeometryTolerance.h"
+#include "kachakacha/geometry/Vector3.h"
+#include "kachakacha/modeling/GuideSurfaceResult.h"
+
+#include <cstddef>
+#include <vector>
+
+namespace kachakacha::v2::kernel {
+
+//! 面を取り出す層の診断コード。
+inline constexpr const char* kFaceSourceMissing = "KER-F001";
+inline constexpr const char* kFaceIndexOutOfRange = "KER-F002";
+inline constexpr const char* kFaceNotPlanar = "KER-F003";
+inline constexpr const char* kFaceBoundaryUnsupported = "KER-F004";
+
+//! 立体の面1枚の縁。
+struct FaceBoundary {
+    //! 外周。閉じている。
+    std::vector<geometry::CurveSegment> outerLoop;
+    //! 穴。1つも無いこともある。
+    std::vector<std::vector<geometry::CurveSegment>> holeLoops;
+    //! 面の上の1点(縁ではなく面そのものの基準)。
+    geometry::Vector3 origin{};
+    //! 立体の外を向く法線。押す向きの既定はこちら、引く向きはこの逆。
+    geometry::Vector3 outwardNormal{0.0, 0.0, 1.0};
+    double areaMm2 = 0.0;
+};
+
+//! 立体の face 番目の面の縁を取り出す。
+//!
+//! 平らな面だけを扱う。曲がった面は KER-F003 で断る。
+//! 曲がった面の押し引きは、まっすぐ押しても元の面と辻褄が合わないためである。
+//! 「できないことを、できたことにしない」。
+[[nodiscard]] base::Result<FaceBoundary> FaceBoundaryOf(modeling::KernelShapeHandle handle,
+    std::size_t faceIndex, const geometry::GeometryTolerance& tolerance);
+
+//! 立体が持つ面の数。画面が拾った番号を渡す前に確かめるために使う。
+[[nodiscard]] base::Result<std::size_t> ShapeFaceCount(modeling::KernelShapeHandle handle);
+
+} // namespace kachakacha::v2::kernel

@@ -24,6 +24,7 @@
 #include "kachakacha/modeling/SubshapeKey.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -58,6 +59,13 @@ struct SelectionRef {
     std::optional<double> curveParameter;
     geometry::Vector3 hitPoint{};
     double screenDistancePx = 0.0;
+    //! いま拾った面の、いまの網の中での番号(EX-02)。
+    //!
+    //! **保存してはならない。** 面番号は形を作り直すたびに変わるので、
+    //! 覚えると、別の面を指したまま気づかない(architecture-and-data.md §6)。
+    //! ここに置くのは、押した面の縁をその場で取り出すためだけである。
+    //! 覚える必要があるものは、必ず `subshapeKey`(意味的キー)にする。
+    std::optional<std::size_t> pickedFaceIndex;
 };
 
 //! 選んでいるもの。ordered が正本で、押した順と部分要素を保つ。
@@ -79,6 +87,8 @@ struct PickCandidate {
     std::optional<double> curveParameter;
     geometry::Vector3 hitPoint{};
     double distancePx = 0.0;
+    //! 拾った面の、いまの網の中での番号(EX-02)。保存してはならない。
+    std::optional<std::size_t> pickedFaceIndex;
 };
 
 //! 拾う相手を絞る印。作図中は作業平面の上の線だけを相手にする(app/PlaneFocus)。

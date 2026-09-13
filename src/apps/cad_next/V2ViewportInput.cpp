@@ -738,6 +738,11 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
         candidate.kind = hit.faceIndex == kachakacha::v2::modeling::kNoFaceIndex
             ? kachakacha::v2::app::SelectionElementKind::Object
             : kachakacha::v2::app::SelectionElementKind::Face;
+        if (hit.faceIndex != kachakacha::v2::modeling::kNoFaceIndex) {
+            // 押し引き(EX-02)で、この面の縁を取り出すために番号を持つ。
+            // その場限りの値である。保存はしない。
+            candidate.pickedFaceIndex = hit.faceIndex;
+        }
         candidate.hitPoint = hit.point;
         // 形には線の番号が無い。距離は画面上の px ではなく目からの mm である。
         // 形どうしの前後を決めるためだけに使い、線の px と比べない。

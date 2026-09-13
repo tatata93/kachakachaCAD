@@ -86,6 +86,7 @@ constexpr double kBoxSelectMinimumDragPx = 5.0;
         ref.segmentId = candidate.segmentId;
     }
     ref.subshapeKey = candidate.subshapeKey;
+    ref.pickedFaceIndex = candidate.pickedFaceIndex;
     ref.curveParameter = candidate.curveParameter;
     ref.hitPoint = candidate.hitPoint;
     ref.screenDistancePx = candidate.distancePx;

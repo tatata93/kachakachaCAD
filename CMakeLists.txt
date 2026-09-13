@@ -688,6 +688,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
+    src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
     src/next_occt/kachakacha/kernel/OcctPanelSolid.cpp
     src/next_occt/kachakacha/kernel/OcctTessellate.cpp
     src/next_occt/kachakacha/kernel/OcctThicken.cpp

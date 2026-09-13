@@ -75,7 +75,12 @@ namespace {
 //! 面を三角形にする。STL と同じ道なので、画面と出力が食い違わない。
 void CollectTriangles(const TopoDS_Shape& shape, ShapeMesh& mesh)
 {
-    for (TopExp_Explorer explorer(shape, TopAbs_FACE); explorer.More(); explorer.Next()) {
+    // 面ごとに番号を振る。三角形の番号では面にならない ── 1枚の面が
+    // 何十枚もの三角形になるので、押すたびに違うものが選ばれてしまう。
+    // 番号は辿った順。**組み立て直すと変わりうる** ので、文書には残さない。
+    std::size_t faceIndex = 0;
+    for (TopExp_Explorer explorer(shape, TopAbs_FACE); explorer.More(); explorer.Next(),
+        ++faceIndex) {
         const TopoDS_Face face = TopoDS::Face(explorer.Current());
         TopLoc_Location location;
         const occ::handle<Poly_Triangulation> facets =
@@ -96,12 +101,14 @@ void CollectTriangles(const TopoDS_Shape& shape, ShapeMesh& mesh)
                 std::swap(second, third);
             }
             MeshTriangle triangle;
+            triangle.faceIndex = faceIndex;
             triangle.points[0] = ToVector(facets->Node(first).Transformed(transform));
             triangle.points[1] = ToVector(facets->Node(second).Transformed(transform));
             triangle.points[2] = ToVector(facets->Node(third).Transformed(transform));
             mesh.triangles.push_back(triangle);
         }
     }
+    mesh.faceCount = faceIndex;
 }
 
 //! 辺を折れ線にする。直線は2点、曲線は粗さに合わせて刻む。

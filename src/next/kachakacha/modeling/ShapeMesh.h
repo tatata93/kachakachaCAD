@@ -26,11 +26,22 @@ namespace kachakacha::v2::modeling {
 
 using geometry::Vector3;
 
+//! どの面にも属していない三角形の印。
+//! 核が面ごとに分けずに渡してきたとき(古い道)に使う。
+inline constexpr std::size_t kNoFaceIndex = static_cast<std::size_t>(-1);
+
 //! 三角形1枚。法線は作るときに決めて持ち回る。描くたびに外積を取り直さない。
 struct MeshTriangle {
     std::array<Vector3, 3> points{};
     //! 外向きの単位法線。長さ0なら潰れた三角形(描かない)。
     Vector3 normal{};
+    //! この三角形が、元の形の何番目の面から来たか。
+    //!
+    //! 面を選べるようにするために要る。三角形の番号では面にならない ──
+    //! 1枚の面が何十枚もの三角形になるので、押すたびに違うものが選ばれてしまう。
+    //! 番号は核が面を辿った順で、その形を組み立て直すまでは変わらない。
+    //! **組み立て直すと変わりうる。** 文書に残す名前としては使わない。
+    std::size_t faceIndex = kNoFaceIndex;
 
     //! 重心。奥行きを測るのに使う。
     [[nodiscard]] Vector3 Center() const noexcept
@@ -49,6 +60,8 @@ struct ShapeMesh {
     Vector3 maximum{};
     //! 閉じた立体か。閉じていれば裏を向いた三角形は描かなくてよい。
     bool closed = false;
+    //! 面の数。0 なら面ごとに分かれていない(古い道)。
+    std::size_t faceCount = 0;
 
     [[nodiscard]] bool Empty() const noexcept { return triangles.empty() && edges.empty(); }
 };

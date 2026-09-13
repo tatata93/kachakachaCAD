@@ -723,7 +723,9 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
     if (!ray.has_value()) {
         return candidates;
     }
-    const auto hits = kachakacha::v2::modeling::CollectMeshHits(pickMeshes_, ray->origin,
+    // 面ごとに1つ拾う。面を選べないと、押し引き(EX-02)が始められない。
+    // 三角形ごとに出すと、1枚の面が何十もの候補になって Tab が回らない。
+    const auto hits = kachakacha::v2::modeling::CollectFaceHits(pickMeshes_, ray->origin,
         ray->direction);
     candidates.reserve(hits.size());
     for (const auto& hit : hits) {
@@ -732,7 +734,10 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectShapeCandidat
         }
         kachakacha::v2::app::PickCandidate candidate;
         candidate.entityId = shapeViews_[hit.shapeIndex].entityId;
-        candidate.kind = kachakacha::v2::app::SelectionElementKind::Object;
+        // 面の番号が付いていれば面として拾う。付いていなければ物体のまま。
+        candidate.kind = hit.faceIndex == kachakacha::v2::modeling::kNoFaceIndex
+            ? kachakacha::v2::app::SelectionElementKind::Object
+            : kachakacha::v2::app::SelectionElementKind::Face;
         candidate.hitPoint = hit.point;
         // 形には線の番号が無い。距離は画面上の px ではなく目からの mm である。
         // 形どうしの前後を決めるためだけに使い、線の px と比べない。

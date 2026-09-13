@@ -1,6 +1,9 @@
 #include "kachakacha/modeling/MeshPick.h"
 
 #include <algorithm>
+#include <map>
+
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -69,6 +72,7 @@ std::vector<MeshHit> CollectMeshHits(const std::vector<ShapeMesh>& shapes,
             MeshHit hit;
             hit.shapeIndex = shapeIndex;
             hit.triangleIndex = index;
+            hit.faceIndex = mesh.triangles[index].faceIndex;
             hit.distanceMm = *distance;
             hit.point = origin + Normalized(direction) * (*distance);
             nearest = hit;
@@ -89,6 +93,50 @@ std::optional<MeshHit> PickMesh(const std::vector<ShapeMesh>& shapes, const Vect
 {
     const auto hits = CollectMeshHits(shapes, origin, direction);
     return hits.empty() ? std::nullopt : std::optional<MeshHit>{hits.front()};
+}
+
+std::vector<MeshHit> CollectFaceHits(const std::vector<ShapeMesh>& shapes,
+    const Vector3& origin, const Vector3& direction)
+{
+    // 面ごとに、いちばん手前の当たりだけを残す。三角形ごとに出すと、
+    // 1枚の面が何十もの候補になって、Tab で送っても同じ面が続く。
+    std::vector<MeshHit> hits;
+    for (std::size_t shapeIndex = 0; shapeIndex < shapes.size(); ++shapeIndex) {
+        const ShapeMesh& mesh = shapes[shapeIndex];
+        std::map<std::size_t, MeshHit> nearestOfFace;
+        for (std::size_t index = 0; index < mesh.triangles.size(); ++index) {
+            const auto distance = RayHitsTriangle(origin, direction, mesh.triangles[index]);
+            if (!distance.has_value()) {
+                continue;
+            }
+            const std::size_t face = mesh.triangles[index].faceIndex;
+            const auto found = nearestOfFace.find(face);
+            if (found != nearestOfFace.end() && !(*distance < found->second.distanceMm)) {
+                continue;
+            }
+            MeshHit hit;
+            hit.shapeIndex = shapeIndex;
+            hit.triangleIndex = index;
+            hit.faceIndex = face;
+            hit.distanceMm = *distance;
+            hit.point = origin + Normalized(direction) * (*distance);
+            nearestOfFace[face] = hit;
+        }
+        for (const auto& entry : nearestOfFace) {
+            hits.push_back(entry.second);
+        }
+    }
+    // 手前から。同じ距離なら形の並び、次に面の番号で決める(毎回同じ順にする)。
+    std::stable_sort(hits.begin(), hits.end(), [](const MeshHit& first, const MeshHit& second) {
+        if (first.distanceMm != second.distanceMm) {
+            return first.distanceMm < second.distanceMm;
+        }
+        if (first.shapeIndex != second.shapeIndex) {
+            return first.shapeIndex < second.shapeIndex;
+        }
+        return first.faceIndex < second.faceIndex;
+    });
+    return hits;
 }
 
 } // namespace kachakacha::v2::modeling

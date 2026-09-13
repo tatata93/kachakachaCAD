@@ -25,8 +25,11 @@ namespace kachakacha::v2::modeling {
 struct MeshHit {
     //! 渡した並びの何番目の形か。
     std::size_t shapeIndex = 0;
-    //! その形の何番目の三角形か。面を選ぶ足がかりになる。
+    //! その形の何番目の三角形か。
     std::size_t triangleIndex = 0;
+    //! その三角形が属する面の番号。面を選ぶのはこちらを使う。
+    //! 面ごとに分かれていない形では kNoFaceIndex。
+    std::size_t faceIndex = kNoFaceIndex;
     //! 目からの距離(mm)。手前ほど小さい。
     double distanceMm = 0.0;
     //! 当たった場所。
@@ -47,6 +50,13 @@ struct MeshHit {
 //! 光線に当たる形を、各形のいちばん手前の命中点で代表し、手前から順に返す。
 //! 同じ形の三角形を大量の候補にしない。
 [[nodiscard]] std::vector<MeshHit> CollectMeshHits(const std::vector<ShapeMesh>& shapes,
+    const Vector3& origin, const Vector3& direction);
+
+//! 光線に当たる **面** を、面ごとに1つだけ、手前から順に返す。
+//!
+//! 面の押し引き(EX-02)で使う。三角形ごとに候補を出すと、
+//! 1枚の面が何十もの候補になって、Tab で送っても同じ面が続く。
+[[nodiscard]] std::vector<MeshHit> CollectFaceHits(const std::vector<ShapeMesh>& shapes,
     const Vector3& origin, const Vector3& direction);
 
 } // namespace kachakacha::v2::modeling

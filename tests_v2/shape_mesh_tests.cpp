@@ -217,4 +217,59 @@ KACHA_V2_TEST(mesh_pick, 向きが長さ0なら当たらない)
         "向きが決まらない");
 }
 
+
+KACHA_V2_TEST(mesh_pick, 面ごとに1つだけ候補を出す)
+{
+    // 面の押し引き(EX-02)。1枚の面が何十もの三角形になるので、
+    // 三角形ごとに候補を出すと、Tab で送っても同じ面が続く。
+    using kachakacha::v2::modeling::CollectFaceHits;
+    using kachakacha::v2::modeling::MeshTriangle;
+    using kachakacha::v2::modeling::ShapeMesh;
+
+    ShapeMesh mesh;
+    // 手前(z=10)の面を三角形2枚で、奥(z=0)の面も2枚で作る。どちらも原点をまたぐ。
+    const auto quad = [&mesh](double z, std::size_t face) {
+        MeshTriangle first;
+        first.points = {Vector3{-10.0, -10.0, z}, Vector3{10.0, -10.0, z},
+            Vector3{10.0, 10.0, z}};
+        first.faceIndex = face;
+        MeshTriangle second;
+        second.points = {Vector3{-10.0, -10.0, z}, Vector3{10.0, 10.0, z},
+            Vector3{-10.0, 10.0, z}};
+        second.faceIndex = face;
+        mesh.triangles.push_back(first);
+        mesh.triangles.push_back(second);
+    };
+    quad(10.0, 0);
+    quad(0.0, 1);
+    kachakacha::v2::modeling::RefreshNormals(mesh);
+    mesh.faceCount = 2;
+
+    // 上から下へ撃つ。両方の面に当たる。
+    const auto hits = CollectFaceHits({mesh}, Vector3{1.0, 1.0, 50.0},
+        Vector3{0.0, 0.0, -1.0});
+    Require(hits.size() == 2, "面の数だけ(三角形の数ではない)");
+    Require(hits.front().faceIndex == 0, "手前の面が先");
+    Require(hits.back().faceIndex == 1, "奥の面が後");
+    Require(hits.front().distanceMm < hits.back().distanceMm, "手前ほど近い");
+}
+
+KACHA_V2_TEST(mesh_pick, 面に分かれていない形でも落ちない)
+{
+    // 古い道(核が面ごとに分けずに渡してくる)。1つの束として扱う。
+    using kachakacha::v2::modeling::CollectFaceHits;
+    using kachakacha::v2::modeling::MeshTriangle;
+    using kachakacha::v2::modeling::ShapeMesh;
+    ShapeMesh mesh;
+    MeshTriangle one;
+    one.points = {Vector3{-5.0, -5.0, 0.0}, Vector3{5.0, -5.0, 0.0}, Vector3{0.0, 5.0, 0.0}};
+    mesh.triangles.push_back(one);
+    kachakacha::v2::modeling::RefreshNormals(mesh);
+    const auto hits = CollectFaceHits({mesh}, Vector3{0.0, 0.0, 20.0},
+        Vector3{0.0, 0.0, -1.0});
+    Require(hits.size() == 1, "1つ");
+    Require(hits.front().faceIndex == kachakacha::v2::modeling::kNoFaceIndex,
+        "面の番号は無い");
+}
+
 KACHA_V2_TEST_MAIN("shape_mesh_tests")

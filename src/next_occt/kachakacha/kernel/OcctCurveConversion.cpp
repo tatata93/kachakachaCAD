@@ -7,6 +7,7 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRep_Builder.hxx>
+#include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_BezierCurve.hxx>
@@ -325,14 +326,28 @@ Result<std::vector<CurveSegment>> FromWire(const TopoDS_Wire& wire, double toler
     using Out = Result<std::vector<CurveSegment>>;
     return Guarded([&]() -> Out {
         std::vector<CurveSegment> segments;
-        for (TopExp_Explorer explorer(wire, TopAbs_EDGE); explorer.More();
-            explorer.Next()) {
-            const TopoDS_Edge edge = TopoDS::Edge(explorer.Current());
-            auto converted = FromEdge(edge, toleranceMm);
+        // **繋がった順に** 取り出す。TopExp_Explorer は位相の並びで返すので、
+        // 端どうしが繋がらない順になることがある。そのまま渡すと、
+        // 戻した線を輪郭として使うときに KER-C003「線がつながっていません」で断られる。
+        // 立体の面の縁を取り出して押し出す道(EX-02)で実際に起きた。
+        for (BRepTools_WireExplorer explorer(wire); explorer.More(); explorer.Next()) {
+            auto converted = FromEdge(explorer.Current(), toleranceMm);
             if (!converted.HasValue()) {
                 return Out::Failure(converted.Diagnostics());
             }
             segments.push_back(converted.Value());
+        }
+        if (segments.empty()) {
+            // 繋がった順に歩けない形(退化した辺など)。位相の並びで取り直す。
+            // 順は保証できないが、黙って空を返すよりはよい。
+            for (TopExp_Explorer explorer(wire, TopAbs_EDGE); explorer.More();
+                explorer.Next()) {
+                auto converted = FromEdge(TopoDS::Edge(explorer.Current()), toleranceMm);
+                if (!converted.HasValue()) {
+                    return Out::Failure(converted.Diagnostics());
+                }
+                segments.push_back(converted.Value());
+            }
         }
         if (segments.empty()) {
             return Out::Failure(MakeError(kCurveUnsupported,

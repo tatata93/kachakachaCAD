@@ -271,10 +271,18 @@ namespace {
     window.ExtrudeDock().SetDistanceMm(2.0);
     const std::uint64_t before = window.Session().GetDocument().Revision();
     window.RunCommand("part.extrude");   // 確定
-    // 足しなので立体は増えない。増えたら「足す」になっていない。
-    if (!Explain((std::string("外へ引いても立体は増えない(足しになっている。帯は ")
+    // 足しなので、見える立体は1つのまま。加工前の立体は隠す。
+    // 隠さないと、加工前と加工後が2つ並んで見える。
+    int visibleParts = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Part
+            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            ++visibleParts;
+        }
+    }
+    if (!Explain((std::string("外へ引いても見える立体は1つ(足しになっている。帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
-            CountParts(window) == 1)) {
+            visibleParts == 1)) {
         return false;
     }
     // 文言ではなく、文書が本当に変わったかで見る。

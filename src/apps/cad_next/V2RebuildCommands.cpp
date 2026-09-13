@@ -61,12 +61,28 @@ bool V2MainWindow::RebuildExtrudeShape(const kachakacha::v2::domain::Feature& fe
     request.outputs.part = true;
     request.outputs.endProfileWire = true;
     request.outputs.sideBoundaryWires = true;
+    // 足す・引くも作り直す。作り直さないと、開いたときだけ足し引きが消えて
+    // 別の立体が2つ並ぶ。相手は定義が覚えている立体である。
+    request.booleanMode =
+        static_cast<kachakacha::v2::modeling::ExtrudeBooleanMode>(definition->booleanMode);
+    kachakacha::v2::modeling::KernelShapeHandle booleanTarget;
+    if (request.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
+        if (definition->targets.empty()) {
+            return false;
+        }
+        const auto found = partShapes_.find(definition->targets.front().ToString());
+        if (found == partShapes_.end()) {
+            return false;   // 相手がまだ出来ていない。作り直せない。
+        }
+        booleanTarget = found->second;
+        request.hasSelectedPart = true;
+    }
     const auto analysis = AnalyzeExtrudeRequest(request, tolerance);
     if (!analysis.HasValue()) {
         return false;
     }
-    const auto built =
-        kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(), tolerance);
+    const auto built = kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(),
+        tolerance, booleanTarget);
     if (!built.HasValue() || built.Value().parts.empty()) {
         return false;
     }

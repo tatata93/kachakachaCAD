@@ -157,6 +157,10 @@ public:
     void ReselectExtrudeInput(bool target);
     //! 押し出しの棚。試験から見る。
     [[nodiscard]] V2ExtrudeDock& ExtrudeDock() { return *extrudeDock_; }
+    //! 足す・引くの相手の形。NewPart なら空の番号。見つからなければ値を返さない。
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::KernelShapeHandle>
+    BooleanTargetShapeFor(const kachakacha::v2::app::ExtrudeChoice& choice,
+        const kachakacha::v2::app::ExtrudePlan& plan);
     //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
     [[nodiscard]] std::optional<kachakacha::v2::app::ExtrudeChoice> PrepareExtrudeChoice(
         const kachakacha::v2::app::ExtrudePlan& plan,

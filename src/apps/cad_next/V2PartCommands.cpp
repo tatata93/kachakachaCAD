@@ -186,6 +186,26 @@ void V2MainWindow::RunExtrude()
     ConfirmExtrude();
 }
 
+//! 足す・引くの相手の形。NewPart なら空の番号を返す。
+//!
+//! ここを渡していなかったので、立体に窓を開ける押し出しは一度も通っていなかった
+//! (KER-E004 で断られていた)。面の押し引き(EX-02)を通したときに露見した。
+std::optional<kachakacha::v2::modeling::KernelShapeHandle>
+V2MainWindow::BooleanTargetShapeFor(const kachakacha::v2::app::ExtrudeChoice& choice,
+    const kachakacha::v2::app::ExtrudePlan& plan)
+{
+    if (choice.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
+        return kachakacha::v2::modeling::KernelShapeHandle{};
+    }
+    const auto found = partShapes_.find(plan.targetSolid.ToString());
+    if (found == partShapes_.end()) {
+        SetStatus(QStringLiteral("押し出し: 足す・引く相手の立体が見つかりません。"
+                                 "加工する立体を選び直してください。"));
+        return std::nullopt;
+    }
+    return found->second;
+}
+
 //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
 //!
 //! ConfirmExtrude から切り出したのは、1関数100行の門を越えたためである。
@@ -286,8 +306,13 @@ void V2MainWindow::ConfirmExtrude()
         ReportDiagnostics(analysis.Diagnostics());
         return;
     }
+    // 足す・引くには相手の形が要る。渡さないと KER-E004 で断られる。
+    const auto booleanTarget = BooleanTargetShapeFor(choice, plan);
+    if (!booleanTarget.has_value()) {
+        return;   // 理由はそちらで言っている。
+    }
     const auto built = kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(),
-        tolerance);
+        tolerance, *booleanTarget);
     if (!built.HasValue()) {
         ReportDiagnostics(built.Diagnostics());
         return;
@@ -305,7 +330,13 @@ void V2MainWindow::ConfirmExtrude()
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.extentMode = static_cast<int>(choice.extent);
     definition.booleanMode = static_cast<int>(choice.booleanMode);
-    if (choice.targetEntityId.has_value()) {
+    // 足す・引くの相手は「加工する立体」である。開き直したときも同じ相手へ当てる。
+    // 覚えないと、開いたら足し引きが消えて別の立体が2つ並ぶ。
+    if (choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart
+        && !plan.targetSolid.IsNil()) {
+        definition.targets.push_back(plan.targetSolid);
+    } else if (choice.targetEntityId.has_value()) {
+        // 「ある面まで」の相手(作業平面)。足し引きの相手とは別物である。
         definition.targets.push_back(*choice.targetEntityId);
     }
     std::vector<CurveSegment> edges;
@@ -316,6 +347,15 @@ void V2MainWindow::ConfirmExtrude()
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
     AdoptExtrudeResult(choice, definition, built.Value(), edges);
+    // 足す・引くで出来たのは「相手を加工した後の形」である。元の立体を出したままだと、
+    // 加工前と加工後が2つ並んで見える。使い切ったものは隠す。
+    // 消さないのは、作り方をたどれなくしないためである(足し引きと同じ扱い)。
+    if (choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart
+        && !plan.targetSolid.IsNil()) {
+        (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
+            {plan.targetSolid}, kachakacha::v2::domain::Visibility::Hidden));
+        AdoptCurrentDocument();
+    }
 }
 
 void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,

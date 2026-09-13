@@ -1,5 +1,7 @@
 #include "kachakacha/fabrication/CurvatureAnalysis.h"
 
+#include <string>
+
 #include <algorithm>
 #include <cmath>
 
@@ -208,6 +210,45 @@ Result<CurvatureAnalysis> AnalyzeCurvature(const SurfacePatchSamples& samples,
         (void)sumRadius;
     }
     return Result<CurvatureAnalysis>::Success(std::move(analysis));
+}
+
+std::string DescribeCurvatureJa(const CurvatureAnalysis& analysis, std::size_t rowCount,
+    std::size_t columnCount)
+{
+    std::string text(PanelGeometryClassNameJa(analysis.classification));
+    text += "の面です。";
+    if (analysis.classification == PanelGeometryClass::DoubleCurved) {
+        // 何%が二重に曲がっているかで、切るのか分けるのかの見当がつく。
+        // ごく一部なら切れ目で足りる。半分を超えるなら分けるしかない。
+        const int percent = static_cast<int>(analysis.doubleCurvedRatio * 100.0 + 0.5);
+        text += "測った点のうち " + std::to_string(percent)
+            + "% が、伸ばさずには平らにできません。";
+    }
+    if (rowCount >= 2 && columnCount >= 2 && analysis.maximumAbsoluteGaussian > 0.0) {
+        // 場所は割合で言う。標本の格子の番号は、作る人には見えないからである。
+        const int downPercent = static_cast<int>(
+            100.0 * static_cast<double>(analysis.worstRow)
+                / static_cast<double>(rowCount - 1) + 0.5);
+        const int acrossPercent = static_cast<int>(
+            100.0 * static_cast<double>(analysis.worstColumn)
+                / static_cast<double>(columnCount - 1) + 0.5);
+        text += "一番曲がっているのは、縦 " + std::to_string(downPercent) + "%、横 "
+            + std::to_string(acrossPercent) + "% のあたりです。";
+    }
+    switch (analysis.classification) {
+    case PanelGeometryClass::Planar:
+        text += "そのまま型紙になります。";
+        break;
+    case PanelGeometryClass::Cylindrical:
+    case PanelGeometryClass::Conical:
+    case PanelGeometryClass::TangentDevelopable:
+        text += "伸ばさずに平らにできます。";
+        break;
+    case PanelGeometryClass::DoubleCurved:
+        text += "切れ目を入れるか、分けるか、帯へ近似し直す(V1方式)かのどれかになります。";
+        break;
+    }
+    return text;
 }
 
 } // namespace kachakacha::v2::fabrication

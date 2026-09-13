@@ -98,8 +98,26 @@ KACHA_V2_TEST(curved_panel, 球は断る)
     Require(!refused.HasValue(), "断る");
     Require(refused.Diagnostics().front().code == "FAB-P005", "展開できないと言う");
     // 何mmずれるかを言う。言わないと、どれだけ無理なのかが分からない。
-    Require(refused.Diagnostics().front().detailsJa.find("mm") != std::string::npos,
-        "ずれを mm で言う");
+    const std::string details = refused.Diagnostics().front().detailsJa;
+    Require(details.find("mm") != std::string::npos, "ずれを mm で言う");
+    // ずれの数だけでは、切ればよいのか分ければよいのかが決められない。
+    // どんな面で、どこがひどいのかまで言う(2026-09-13)。
+    Require(details.find("二重") != std::string::npos,
+        std::string("どんな曲がり方かを言う (実際 ") + details + ")");
+    Require(details.find("あたりです") != std::string::npos, "一番ひどい場所を言う");
+    Require(details.find("切れ目") != std::string::npos, "次にできることを言う");
+}
+
+KACHA_V2_TEST(curved_panel, 通ったときも曲がり方を持って帰る)
+{
+    // 「この面は円筒だから展開できた」を画面で言えるようにする。
+    const auto made = BuildCurvedPanel("円筒", Cylinder(30.0, 1.2, 40.0, 9, 9), 0.5);
+    Require(made.HasValue(), "展開できる");
+    const auto kind = made.Value().analysis.classification;
+    Require(kind == kachakacha::v2::fabrication::PanelGeometryClass::Cylindrical
+            || kind == kachakacha::v2::fabrication::PanelGeometryClass::Conical
+            || kind == kachakacha::v2::fabrication::PanelGeometryClass::TangentDevelopable,
+        "展開できる形として測れている");
 }
 
 KACHA_V2_TEST(curved_panel, 許すずれが答えを決める)

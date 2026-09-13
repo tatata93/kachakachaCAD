@@ -13,6 +13,7 @@
 //! 材料を使い切ったあとで気づくことになる。
 
 #include "kachakacha/base/Diagnostic.h"
+#include "kachakacha/fabrication/CurvatureAnalysis.h"
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/fabrication/SurfacePatch.h"
 
@@ -33,6 +34,10 @@ struct CurvedPanelResult {
     double lengthErrorRelative = 0.0;
     //! 平らにしたときに残るずれ(mm)。
     double distortionMm = 0.0;
+    //! 面の曲がり方。断るときも、通ったときも同じものを測る。
+    //! 通ったときにも持たせるのは、「この面は円筒だから展開できた」を
+    //! 画面で言えるようにするためである。
+    CurvatureAnalysis analysis;
 };
 
 //! 面の標本を展開して、型紙の部材にする。

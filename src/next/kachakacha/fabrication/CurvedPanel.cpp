@@ -1,5 +1,6 @@
 #include "kachakacha/fabrication/CurvedPanel.h"
 
+#include "kachakacha/fabrication/CurvatureAnalysis.h"
 #include "kachakacha/fabrication/Unfold.h"
 
 #include <cmath>
@@ -54,6 +55,19 @@ base::Result<CurvedPanelResult> BuildCurvedPanel(const std::string& panelId,
             "どこまでのずれなら許すかを決めてください。"));
     }
 
+    // 曲がり方を先に測る。断るときに「どんな面なのか」を言うためである。
+    // 「3mm ずれます」だけでは、切ればよいのか分ければよいのかが分からない。
+    // 測れない標本でも先へ進む。測れないことは断る理由にしない
+    // (下の角欠損の検査のほうが、断る条件としては厳しい)。
+    CurvatureAnalysis analysis;
+    const auto measured = AnalyzeCurvature(samples, targetMaxDeviationMm);
+    if (measured.HasValue()) {
+        analysis = measured.Value();
+    }
+    const std::string shape = measured.HasValue()
+        ? DescribeCurvatureJa(analysis, samples.rowCount, samples.columnCount)
+        : std::string();
+
     // 縁だけを見ても分からない。中がふくらんでいても縁は一致してしまう。
     // 角欠損(離散版の Gauss-Bonnet)で、中まで見る。
     const DevelopabilityCheck check = CheckDevelopability(samples);
@@ -62,8 +76,7 @@ base::Result<CurvedPanelResult> BuildCurvedPanel(const std::string& panelId,
             "この面は、伸ばさずには平らにできません。",
             "平らにすると " + Millimeters(check.estimatedDistortionMm)
                 + " ずれます(許すのは " + Millimeters(targetMaxDeviationMm)
-                + " まで)。球のように二重に曲がった面は、切れ目を入れるか"
-                  "分けるしかありません。"));
+                + " まで)。" + shape));
     }
 
     const auto unfolded = UnfoldSamples(samples, targetMaxDeviationMm);
@@ -78,10 +91,11 @@ base::Result<CurvedPanelResult> BuildCurvedPanel(const std::string& panelId,
             "この面は、伸ばさずには平らにできません。",
             "帯を倒したあとに " + Millimeters(strip.maximumPlanarityErrorMm)
                 + " のずれが残ります(許すのは "
-                + Millimeters(targetMaxDeviationMm) + " まで)。"));
+                + Millimeters(targetMaxDeviationMm) + " まで)。" + shape));
     }
 
     CurvedPanelResult made;
+    made.analysis = analysis;
     made.panel.panelId = panelId;
     made.panel.outline = LoopOf(strip);
     made.lengthErrorRelative = strip.maximumLengthErrorRelative;

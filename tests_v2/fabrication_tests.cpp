@@ -13,6 +13,8 @@
 using kachakacha::v2::fabrication::AnalyticSurfaceInfo;
 using kachakacha::v2::fabrication::AnalyticSurfaceKind;
 using kachakacha::v2::fabrication::AnalyzeCurvature;
+using kachakacha::v2::fabrication::CurvatureAnalysis;
+using kachakacha::v2::fabrication::DescribeCurvatureJa;
 using kachakacha::v2::fabrication::CheckLengthPreservation;
 using kachakacha::v2::fabrication::DevelopableStrip;
 using kachakacha::v2::fabrication::FabricationSettings;
@@ -249,6 +251,49 @@ KACHA_V2_TEST(curvature, 円錐も展開できる形と判る)
     Require(kind == PanelGeometryClass::Conical || kind == PanelGeometryClass::Cylindrical,
         "展開できる形であること (実際 " + std::string(PanelGeometryClassNameJa(kind)) + ")");
     Require(kind != PanelGeometryClass::DoubleCurved, "二重曲率ではないこと");
+}
+
+KACHA_V2_TEST(curvature, 測った結果を作る人の言葉で言える)
+{
+    // 「3mm ずれます」だけでは、切ればよいのか分ければよいのかが決まらない。
+    // どんな面で、どのくらいが二重に曲がっていて、どこがひどいのかまで言う。
+    const auto plane = AnalyzeCurvature(PlanePatch(100.0, 60.0), 0.1);
+    Require(plane.HasValue(), "平面を測れること");
+    const std::string planeText = DescribeCurvatureJa(plane.Value(), 8, 8);
+    Require(planeText.find("平面") != std::string::npos, "平面と言う");
+    Require(planeText.find("そのまま型紙になります") != std::string::npos, "次にすることを言う");
+
+    const auto sphere = AnalyzeCurvature(SpherePatch(50.0, 0.8), 0.1);
+    Require(sphere.HasValue(), "球を測れること");
+    const std::string sphereText = DescribeCurvatureJa(sphere.Value(), 8, 8);
+    Require(sphereText.find("%") != std::string::npos, "割合を言う");
+    Require(sphereText.find("切れ目") != std::string::npos, "切るか分けるかを言う");
+    Require(sphereText.find("あたりです") != std::string::npos, "場所を言う");
+
+    const auto cylinder = AnalyzeCurvature(CylinderPatch(30.0, 50.0, 1.2), 0.1);
+    Require(cylinder.HasValue(), "円筒を測れること");
+    const std::string cylinderText = DescribeCurvatureJa(cylinder.Value(), 8, 8);
+    Require(cylinderText.find("伸ばさずに平らにできます") != std::string::npos,
+        "展開できると言う");
+    Require(cylinderText.find("切れ目") == std::string::npos, "切れという話はしない");
+}
+
+KACHA_V2_TEST(curvature, 場所は割合で言うので標本の数に寄らない)
+{
+    // 標本の格子の番号は作る人には見えない。縦横の割合で言う。
+    const auto sphere = AnalyzeCurvature(SpherePatch(50.0, 0.8), 0.1);
+    Require(sphere.HasValue(), "測れること");
+    CurvatureAnalysis moved = sphere.Value();
+    moved.worstRow = 0;
+    moved.worstColumn = 0;
+    const std::string corner = DescribeCurvatureJa(moved, 11, 11);
+    Require(corner.find("縦 0%、横 0%") != std::string::npos,
+        std::string("端は 0% (実際 ") + corner + ")");
+    moved.worstRow = 10;
+    moved.worstColumn = 5;
+    const std::string other = DescribeCurvatureJa(moved, 11, 11);
+    Require(other.find("縦 100%、横 50%") != std::string::npos,
+        std::string("反対の端は 100% (実際 ") + other + ")");
 }
 
 KACHA_V2_TEST(curvature, 球は二重曲率と判る)

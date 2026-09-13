@@ -10,6 +10,9 @@
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/fabrication/SurfacePatch.h"
 
+#include <cstddef>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace kachakacha::v2::fabrication {
@@ -58,5 +61,13 @@ struct CurvatureAnalysis {
 //! 標本から曲がり方を測る。格子が壊れていれば値を返さない。
 [[nodiscard]] base::Result<CurvatureAnalysis> AnalyzeCurvature(
     const SurfacePatchSamples& samples, double targetMaxDeviationMm);
+
+//! 測った結果を、作る人に向けた一文にする。
+//!
+//! 「平らにすると 3mm ずれます」だけでは、次に何をすればよいのか分からない。
+//! どんな種類の曲がり方で、どのくらいの割合が二重に曲がっていて、
+//! 一番ひどいのがどのあたりかまで言う。切る場所を決める手がかりになる。
+[[nodiscard]] std::string DescribeCurvatureJa(const CurvatureAnalysis& analysis,
+    std::size_t rowCount, std::size_t columnCount);
 
 } // namespace kachakacha::v2::fabrication

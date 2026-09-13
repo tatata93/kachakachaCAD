@@ -778,4 +778,29 @@ KACHA_V2_TEST(selection, 矩形に触れるかを線分で判定できる)
         "届かない");
 }
 
+KACHA_V2_TEST(selection, 名前を挙げたものだけ選択から外せる)
+{
+    // EX-07。押し出しの「対象を選び直す」で、輪郭まで消えてはならない。
+    SelectionSet selection;
+    selection.ordered.push_back({Ent(1), SelectionElementKind::Object});
+    selection.ordered.push_back({Ent(2), SelectionElementKind::Object});
+    selection.ordered.push_back({Ent(3), SelectionElementKind::Face});
+    selection.entityIds = {Ent(1), Ent(2), Ent(3)};
+
+    const auto kept = kachakacha::v2::app::SelectionWithout(selection, {Ent(2)});
+    RequireEqual(std::to_string(kept.ordered.size()), std::string("2"), "1つだけ減る");
+    Require(IsSelected(kept, Ent(1)), "外していないものは残る");
+    Require(!IsSelected(kept, Ent(2)), "外したものは消える");
+    Require(IsSelected(kept, Ent(3)), "面として選んだものも残る");
+    Require(kept.ordered[0].entityId == Ent(1) && kept.ordered[1].entityId == Ent(3),
+        "残りの並びは変わらない");
+
+    const auto none = kachakacha::v2::app::SelectionWithout(selection, {});
+    RequireEqual(std::to_string(none.ordered.size()), std::string("3"),
+        "何も挙げなければ何も減らない");
+    const auto all = kachakacha::v2::app::SelectionWithout(selection,
+        {Ent(1), Ent(2), Ent(3)});
+    Require(all.ordered.empty() && all.entityIds.empty(), "全部挙げれば空になる");
+}
+
 KACHA_V2_TEST_MAIN("selection_tests")

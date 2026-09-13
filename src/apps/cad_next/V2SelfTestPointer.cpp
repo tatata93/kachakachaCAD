@@ -768,8 +768,13 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
 {
     window.RunCommand("file.new");
     auto& viewport = window.Viewport();
+    // 吸着の相手になる線。取り消しで消えては試験にならないので、これは残す。
     if (!DrawLine(window, Vector3{-20.0, 0.0, 0.0}, Vector3{20.0, 0.0, 0.0})) {
         return Explain("線を1本引ける", false);
+    }
+    // 取り消し・やり直しの相手になる、別の場所の線。
+    if (!DrawLine(window, Vector3{-20.0, 30.0, 0.0}, Vector3{20.0, 30.0, 0.0})) {
+        return Explain("線をもう1本引ける", false);
     }
     const auto endpoint = viewport.Mapping().Project(Vector3{20.0, 0.0, 0.0});
     if (!endpoint.has_value()) {
@@ -796,15 +801,23 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
         // 端点で掴んでから 14px 外へ出る。持ち越しがあるので、まだ端点へ吸い付く。
         viewport.HoverAt(onEndpoint);
         viewport.HoverAt(justOutside);
-        const bool heldBefore = viewport.Hover().snap.has_value();
+        const auto before = viewport.Hover().snap;
+        // 持ち越していたのが線の端点でなければ(格子など)、この道では試せない。
+        if (!before.has_value() || before->entityId.IsNil()) {
+            continue;
+        }
         route.run();
         // 場面を替えたあと、マウスを動かさずにもう一度同じ所を見る。
-        // 持ち越しが生きていれば端点へ吸い付き、捨ててあれば 12px の外なので吸い付かない。
+        // 持ち越しが生きていれば同じ端点へ吸い付く。捨ててあれば 12px の外なので、
+        // その端点へは吸い付かない(格子など別の相手へ吸うのは構わない)。
         viewport.HoverAt(justOutside);
-        const bool heldAfter = viewport.Hover().snap.has_value();
+        const auto after = viewport.Hover().snap;
+        const bool sameAsBefore = after.has_value()
+            && after->entityId == before->entityId
+            && after->kind == before->kind;
         const std::string nameJa(route.nameJa);
         if (!Explain((nameJa + ": 場面を替えたら 14px 先の前の吸着先が残らない").c_str(),
-                !heldBefore || !heldAfter)) {
+                !sameAsBefore)) {
             window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
             return false;
         }

@@ -262,6 +262,13 @@ void AccumulateBoxPoint(BoxReach& reach, const ScreenBox& box,
 [[nodiscard]] SelectionSet PruneSelection(const SelectionSet& selection,
     const document::DocumentSnapshot& snapshot);
 
+//! 名前の挙がったものだけを選択から外す。残りの並びは変えない。
+//!
+//! 押し出しの「対象を選び直す」「輪郭を選び直す」で使う(EX-07)。
+//! 選択を丸ごと捨てると、外したくないほうまで選び直しになる。
+[[nodiscard]] SelectionSet SelectionWithout(const SelectionSet& selection,
+    const std::vector<base::EntityId>& removed);
+
 //! 選んでいるものの線を集める。書き出しと測定で使う。順は選んだ順。
 [[nodiscard]] std::vector<geometry::CurveSegment> SelectedCurves(
     const SelectionSet& selection, const modeling::SnapScene& scene);

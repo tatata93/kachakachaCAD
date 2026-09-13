@@ -393,6 +393,65 @@ namespace {
     return Explain("部品は増えない", CountParts(window) == partsBefore);
 }
 
+//! EX-07。読み取った入力の片方だけを外して選び直せること。
+[[nodiscard]] bool CaseExtrudeInputCanBeReselected(V2MainWindow& window)
+{
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 一度目は下見
+    window.RunCommand("part.extrude");   // 二度目で確定。立体ができる。
+    if (!Explain("部品ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    // もう1つ輪郭を引いて、立体と一緒に選ぶ。立体+輪郭の読み取りになる。
+    if (!Explain("2つ目の矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    auto both = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Part);
+    const auto wires = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::domain::EntityKind::Wire);
+    for (const auto& ref : wires.ordered) {
+        both.ordered.push_back(ref);
+        both.entityIds.push_back(ref.entityId);
+    }
+    viewport.SetSelection(both);
+    window.RunCommand("part.extrude");
+
+    auto& dock = window.ExtrudeDock();
+    const auto plan = window.PlanExtrudeFromSelection();
+    if (!Explain("立体と輪郭の両方を読む", !plan.targetSolid.IsNil() && !plan.profiles.empty())) {
+        return false;
+    }
+    if (!Explain("両方の「選び直す」が出る",
+            dock.ReselectTargetShown() && dock.ReselectProfileShown())) {
+        return false;
+    }
+    const std::size_t profilesBefore = plan.profiles.size();
+    dock.PressReselectTarget();
+    const auto afterTarget = window.PlanExtrudeFromSelection();
+    if (!Explain("対象だけが外れる", afterTarget.targetSolid.IsNil())) {
+        return false;
+    }
+    if (!Explain("輪郭は残る", afterTarget.profiles.size() == profilesBefore)) {
+        return false;
+    }
+    if (!Explain("外したことを言う",
+            window.StatusText().contains(QStringLiteral("外しました")))) {
+        return false;
+    }
+    if (!Explain("前の入力の下見は残らない", !viewport.ExtrudeHandleShown())) {
+        return false;
+    }
+    dock.PressReselectProfile();
+    const auto afterProfile = window.PlanExtrudeFromSelection();
+    return Explain("輪郭も外せる", afterProfile.profiles.empty());
+}
+
 [[nodiscard]] bool CaseFabricationAndPatternEndToEnd(V2MainWindow& window)
 {
     // 引く → 押し出す → 部材にする → 型紙にする → 1:1 PDF まで通す。
@@ -1180,6 +1239,7 @@ std::vector<SelfTestCase> ModelingCases()
         {"押し出しでワイヤーだけ作れる", &CaseExtrudeMakesWiresOnly},
         {"通らない押し出しは理由を出して断る", &CaseExtrudeRefusesImpossibleChoices},
         {"押し出しをやめられる", &CaseExtrudeCanBeCancelled},
+        {"押し出しの入力を片方だけ選び直せる", &CaseExtrudeInputCanBeReselected},
         {"引く→押し出す→部材→型紙→PDFまで通る", &CaseFabricationAndPatternEndToEnd},
         {"順を飛ばすと何を先にするか言う", &CasePatternNeedsFabricationFirst},
         {"部品をSTLとSTEPで出せる", &CaseSolidExportWritesStlAndStep},

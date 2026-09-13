@@ -46,6 +46,14 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     input_->setWordWrap(true);
     layout->addWidget(input_);
 
+    // 読み取りを外して選び直す道(EX-07)。読み取った当人が外し方まで出す。
+    auto* reselect = new QHBoxLayout();
+    reselectTarget_ = new QPushButton(QStringLiteral("対象を選び直す"), body_);
+    reselectProfile_ = new QPushButton(QStringLiteral("輪郭を選び直す"), body_);
+    reselect->addWidget(reselectTarget_);
+    reselect->addWidget(reselectProfile_);
+    layout->addLayout(reselect);
+
     // 2. いま変えられる主なもの。
     form_ = new QFormLayout();
     form_->setContentsMargins(0, 0, 0, 0);
@@ -96,6 +104,14 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     layout->addStretch(1);
     setWidget(body_);
 
+    ConnectRows();
+    ApplyRows();
+}
+
+//! 欄の便りを繋ぐ。組み立てと分けてあるのは、1関数100行の門のためである。
+//! 切る場所は「並べる」と「繋ぐ」の境目にした。
+void V2ExtrudeDock::ConnectRows()
+{
     QObject::connect(distance_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         if (!loading_ && distanceHandler_) {
             distanceHandler_(value);
@@ -128,7 +144,16 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
             detailsHandler_();
         }
     });
-    ApplyRows();
+    QObject::connect(reselectTarget_, &QPushButton::clicked, this, [this] {
+        if (reselectTargetHandler_) {
+            reselectTargetHandler_();
+        }
+    });
+    QObject::connect(reselectProfile_, &QPushButton::clicked, this, [this] {
+        if (reselectProfileHandler_) {
+            reselectProfileHandler_();
+        }
+    });
 }
 
 void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
@@ -176,6 +201,10 @@ void V2ExtrudeDock::ApplyRows()
     form_->setRowVisible(extent_, ready);
     confirm_->setEnabled(ready);
     details_->setEnabled(ready);
+    // 外せる物があるときだけ出す。読み取っていない物の「選び直す」を出すと、
+    // 押しても何も起きないボタンになる。
+    reselectTarget_->setVisible(!plan_.targetSolid.IsNil());
+    reselectProfile_->setVisible(!plan_.profiles.empty());
     result_->setText(ready
             ? QStringLiteral("矢印を引くか、距離を打ってください。Enter で確定します。")
             : QString());
@@ -230,6 +259,13 @@ void V2ExtrudeDock::SetActionHandlers(std::function<void()> confirm,
     detailsHandler_ = std::move(details);
 }
 
+void V2ExtrudeDock::SetReselectHandlers(std::function<void()> target,
+    std::function<void()> profile)
+{
+    reselectTargetHandler_ = std::move(target);
+    reselectProfileHandler_ = std::move(profile);
+}
+
 QString V2ExtrudeDock::InputTextJa() const
 {
     return input_->text();
@@ -238,6 +274,30 @@ QString V2ExtrudeDock::InputTextJa() const
 bool V2ExtrudeDock::OperationRowShown() const
 {
     return boolean_->isVisible();
+}
+
+bool V2ExtrudeDock::ReselectTargetShown() const
+{
+    return reselectTarget_->isVisible();
+}
+
+bool V2ExtrudeDock::ReselectProfileShown() const
+{
+    return reselectProfile_->isVisible();
+}
+
+void V2ExtrudeDock::PressReselectTarget()
+{
+    if (reselectTargetHandler_) {
+        reselectTargetHandler_();
+    }
+}
+
+void V2ExtrudeDock::PressReselectProfile()
+{
+    if (reselectProfileHandler_) {
+        reselectProfileHandler_();
+    }
 }
 
 void V2ExtrudeDock::PressConfirm()

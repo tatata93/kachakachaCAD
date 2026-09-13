@@ -56,16 +56,29 @@ public:
     //! 確定・取消・詳細。
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel,
         std::function<void()> details);
+    //! 「選び直す」(EX-07)。読み取った対象・輪郭のどちらかを外して選び直す。
+    //!
+    //! 選択を触れば読み直されるので機能としては足りていたが、
+    //! **初めての人には、いま何を外せばよいのかが分からない。**
+    //! 読み取った当人(棚)が、外し方まで出す。
+    void SetReselectHandlers(std::function<void()> target, std::function<void()> profile);
 
     //! 試験から見る。
     [[nodiscard]] QString InputTextJa() const;
     [[nodiscard]] bool OperationRowShown() const;
+    //! 「選び直す」のボタンが出ているか。試験から見る。
+    [[nodiscard]] bool ReselectTargetShown() const;
+    [[nodiscard]] bool ReselectProfileShown() const;
     void PressConfirm();
     void PressCancel();
     void PressReverse();
+    void PressReselectTarget();
+    void PressReselectProfile();
 
 private:
     void ApplyRows();
+    //! 欄の便りを繋ぐ。組み立てと分けてある(1関数100行の門)。
+    void ConnectRows();
 
     QWidget* body_ = nullptr;
     QLabel* input_ = nullptr;
@@ -74,6 +87,8 @@ private:
     QPushButton* reverse_ = nullptr;
     QComboBox* extent_ = nullptr;
     QComboBox* boolean_ = nullptr;
+    QPushButton* reselectTarget_ = nullptr;
+    QPushButton* reselectProfile_ = nullptr;
     QLabel* result_ = nullptr;
     QPushButton* details_ = nullptr;
     QPushButton* confirm_ = nullptr;
@@ -88,4 +103,6 @@ private:
     std::function<void()> confirmHandler_;
     std::function<void()> cancelHandler_;
     std::function<void()> detailsHandler_;
+    std::function<void()> reselectTargetHandler_;
+    std::function<void()> reselectProfileHandler_;
 };

@@ -538,6 +538,18 @@ SelectionSet PruneSelection(const SelectionSet& selection,
     return SelectionFromRefs(std::move(kept));
 }
 
+SelectionSet SelectionWithout(const SelectionSet& selection,
+    const std::vector<base::EntityId>& removed)
+{
+    std::vector<SelectionRef> kept;
+    for (const auto& ref : EffectiveRefs(selection)) {
+        if (std::find(removed.begin(), removed.end(), ref.entityId) == removed.end()) {
+            kept.push_back(ref);
+        }
+    }
+    return SelectionFromRefs(std::move(kept));
+}
+
 std::vector<geometry::CurveSegment> SelectedCurves(const SelectionSet& selection,
     const modeling::SnapScene& scene)
 {

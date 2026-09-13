@@ -138,6 +138,9 @@ public:
     void ConfirmExtrudeWithDialog();
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
+    //! 読み取った入力の片方を外して選び直す(EX-07)。
+    //! target が真なら加工する立体、偽なら輪郭・面を外す。もう片方は残す。
+    void ReselectExtrudeInput(bool target);
     //! 押し出しの棚。試験から見る。
     [[nodiscard]] V2ExtrudeDock& ExtrudeDock() { return *extrudeDock_; }
     //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。

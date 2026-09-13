@@ -133,6 +133,8 @@ void V2MainWindow::BuildOutputShelves()
             SetStatus(QStringLiteral("押し出し: やめました。"));
         },
         [this] { ConfirmExtrudeWithDialog(); });
+    extrudeDock_->SetReselectHandlers([this] { ReselectExtrudeInput(true); },
+        [this] { ReselectExtrudeInput(false); });
     addDockWidget(Qt::RightDockWidgetArea, extrudeDock_);
 
     // 型紙の下見。出す前に紙の形で見る。見ないまま出すと、

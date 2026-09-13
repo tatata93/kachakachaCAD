@@ -29,6 +29,7 @@
 #include <QString>
 
 #include <cmath>
+#include <string>
 #include <vector>
 
 namespace {
@@ -169,6 +170,45 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleDistanceMm());
     extrudeShelfShown_ = true;
     RefreshRightShelves();
+}
+
+//! 読み取った入力の片方を外して選び直す(EX-07)。
+//!
+//! 選択を丸ごと捨てない。外したいほうだけ外す。
+//! 「対象を選び直す」で輪郭まで消えたら、二度手間になる。
+void V2MainWindow::ReselectExtrudeInput(bool target)
+{
+    const auto plan = PlanExtrudeFromSelection();
+    std::vector<kachakacha::v2::base::EntityId> removed;
+    if (target) {
+        if (plan.targetSolid.IsNil()) {
+            SetStatus(QStringLiteral("押し出し: 外せる対象がありません。"));
+            return;
+        }
+        removed.push_back(plan.targetSolid);
+    } else {
+        if (plan.profiles.empty()) {
+            SetStatus(QStringLiteral("押し出し: 外せる輪郭がありません。"));
+            return;
+        }
+        removed = plan.profiles;
+    }
+    // 下見は前の入力で作ったものである。入力が変わるので必ず消す。
+    if (viewport_->ExtrudeHandleShown()) {
+        viewport_->HideExtrudeHandle();
+        extrudeOutline_.clear();
+    }
+    viewport_->SetSelection(
+        kachakacha::v2::app::SelectionWithout(viewport_->Selection(), removed));
+    // 外したあとの読み取りをそのまま映す。棚は出したままにする。
+    // 消すと、いま何を選び直しているのかが画面から消える。
+    const auto after = PlanExtrudeFromSelection();
+    ShowExtrudeShelf(after);
+    SetStatus(QStringLiteral("押し出し: %1を外しました。%2")
+            .arg(target ? QStringLiteral("対象") : QStringLiteral("輪郭"),
+                QString::fromStdString(after.needsJa.empty()
+                        ? std::string("選び直したら、もう一度押し出してください。")
+                        : after.needsJa)));
 }
 
 //! 棚の欄が変わった。向きと距離を取り直して、下見を作り直す。

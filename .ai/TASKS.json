@@ -234,9 +234,9 @@
     "id": "UI-P1-006",
     "title": "意味状態別ハイライトと部分要素表示",
     "phase": 1,
-    "status": "ready",
+    "status": "passed",
     "priority": "high",
-    "assigned_to": null,
+    "assigned_to": "claude",
     "dependencies": [
       "UI-P1-003"
     ],
@@ -255,8 +255,21 @@
       "テーマ変更後も意味状態の区別を保つ",
       "Previewは通常選択できない"
     ],
-    "last_review": null,
-    "revision_count": 0
+    "last_review": {
+      "decision": "PASS",
+      "attempt": 4,
+      "stage": "full",
+      "reviewer": "claude-fallback",
+      "review_effort": "EXTRA_HIGH",
+      "reason": "Codex CLI account usage limit; configured Claude fallback used"
+    },
+    "revision_count": 3,
+    "execution_mode": "STAGED",
+    "review_effort": "EXTRA_HIGH",
+    "execution_reason": "事前リスクスコア2; 複数の操作状態が連携; 自動昇格: 実差分が10ファイル以上、3サブシステム以上、または2000行以上",
+    "review_reason": "BATCHの標準レビュー深度; 自動昇格: 実差分 13ファイル/843行、3サブシステム、差分スコア10; EXTRA_HIGHを使用",
+    "current_stage": "1/1 complete",
+    "review_diff_reason": "実差分 15ファイル/1091行、3サブシステム、差分スコア10; EXTRA_HIGHを使用"
   },
   {
     "id": "UI-P1-007",
@@ -292,7 +305,7 @@
     "id": "UI-P1-008",
     "title": "カーソル状態とクリック・ドラッグ判定",
     "phase": 1,
-    "status": "pending",
+    "status": "ready",
     "priority": "medium",
     "assigned_to": null,
     "dependencies": [

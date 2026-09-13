@@ -2,11 +2,11 @@
 
 - Current branch: `codex/v2-ui-ux-overhaul`
 - Current phase: `1`
-- Current task ID: `UI-P1-005`
-- Execution Mode: `BATCH`
-- Review Effort: `HIGH`
+- Current task ID: `UI-P1-006`
+- Execution Mode: `STAGED`
+- Review Effort: `EXTRA_HIGH`
 - Current Stage: `1/1 complete`
-- Last PASS task: `UI-P1-005`
+- Last PASS task: `UI-P1-006`
 - Current status: `passed`
 - Current note: PASS; inspect and commit the task worktree
 

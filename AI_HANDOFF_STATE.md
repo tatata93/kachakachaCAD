@@ -12,8 +12,9 @@ STATUS: WORKING(PC の往復で確かめている最中)
 REVIEW_STATUS: NOT_SUBMITTED(機能として固まってから出す)
 BASE: c224d49
 HEAD: (固めてから決める)
-BUILD_RESULT: PASS(雲 core)
-TEST_RESULT: PASS(雲: core CTest 127/127 + 当て木 59ファイル)
+BUILD_RESULT: PASS(PC MSVC / 雲 core)
+TEST_RESULT: PASS(PC: CTest 134/134、アプリ自己試験 192/192。雲: core 127/127、当て木 59ファイル)
+PC_VERIFIED_AT: ce369eb(2026-09-14。push 済み)
 REVIEW_SCOPE: 押し出し(EX-01〜08)と、製作近似の入口(面ごとの分割・分け方の助言)
 REVIEW_FOCUS: 面の押し引きが文書へワイヤーを増やす決めごと、
   splitSolidFaces の既定、面をまとめる道が無いこと
@@ -162,6 +163,18 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)
   BUILD: PASS / TEST: PASS
 
+## この往復で見つかった、前からあった欠陥
+
+- **足す・引く押し出しが一度も通っていなかった。** `BuildExtrude` に相手の形を
+  渡していなかったので、立体に窓を開ける押し出しは毎回 KER-E004 で断られていた。
+  開き直しで足し引きをやり直す道も無かった。両方入れ、使い切った元の立体を隠す
+  ところまで直した(`e97655a`)。
+- **`FromWire` が辺を繋がった順に返していなかった。** `TopExp_Explorer` は位相の
+  並びで返す。戻した線を輪郭として使うと KER-C003 で断られる。
+  `BRepTools_WireExplorer` に替えた(`ce369eb`)。
+- どちらも **面の押し引きを通したから露見した。** 実際に通す道を作らないと、
+  こういう穴は見つからない。
+
 ## 要確認(Codex 領分に触った)
 
 - **`.kcd2` に鍵を1つ足した**(2026-09-14)。`create_fabrication_model` の
@@ -199,7 +212,7 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
   - 矢印ハンドル・距離同期・下見・Enter/Esc: 完了 `e774350`
   - 右ペイン(入力・距離・方向・範囲・操作・確定): 完了 `5354276` `7f13b72`
   - 入力の選び直し(EX-07): 完了。`app::SelectionWithout` + 棚の2つのボタン。
-  - 面の押し引き(EX-02): 実装済み・PC 確認待ち。
+  - 面の押し引き(EX-02): 完了(PC 確認済み)。
     `kernel/OcctFaceQuery` が面の縁を返し、`app/FacePushPull` が
     符号つきの距離を押し出しの言葉へ言い換え、`V2FacePushPull` が
     縁を文書のワイヤーにしてから、いままでの押し出しへ渡す。
@@ -211,7 +224,7 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 | ID | 内容 | 状態 |
 | --- | --- | --- |
 | EX-01 | 閉じた輪郭 → 押し出し → ハンドル → Enter → 新規立体 | 済 |
-| EX-02 | 立体の面 → 押し引き | 実装済み・PC 確認待ち |
+| EX-02 | 立体の面 → 押し引き | 済(PC 自己試験「立体の面をつまんで押せる」) |
 | EX-03 | 立体だけ → 「面または輪郭を選んでください」 | 済 |
 | EX-04 | 立体+輪郭を順不同で選んでも役割が決まる | 済 |
 | EX-05 | 距離の欄と矢印が同期 | 済 |

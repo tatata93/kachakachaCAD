@@ -5,19 +5,18 @@
 
 ## 現在
 
-REQUEST_ID: UI-P1-007-S1-R9
+REQUEST_ID: UI-P1-007-S1-R10
 TASK_ID: UI-P1-007
 STAGE: 1/2
-STATUS: READY_FOR_REVIEW(R8 の B1 を直した)
+STATUS: READY_FOR_REVIEW(R9 の B1 を直した)
 REVIEW_STATUS: PENDING_CODEX
-BASE: 5f6ccbc
-HEAD: 9b942b9
+BASE: 9b942b9
+HEAD: c224d49
 BUILD_RESULT: PASS(雲 core)
 TEST_RESULT: PASS(雲: core CTest 127/127 + 当て木 59ファイル。PC は往復待ち)
-REVIEW_SCOPE: 5f6ccbc..9b942b9 のうち、場面差し替えと Viewport の一時表示
-REVIEW_FOCUS: SetScene の知らせが1本になっていること、
-  差し替え直後にポインタを動かさなくても旧リング・旧候補送りが消えること、
-  自己試験が前提(掴めていること)を必須にしていること
+REVIEW_SCOPE: 9b942b9..c224d49 のうち、場面の知らせの寿命と Viewport の一時表示
+REVIEW_FOCUS: 聞き手が先に消えても落ちないこと、場面交換で無条件に捨てること、
+  候補送りの試験が前提を必須にしていること
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -124,12 +123,27 @@ Codex は R8 を **FAIL** にした。指摘は的確だった。
 - **道が足りなかった。** 実際に通していたのは Undo/Redo/グリッドの3つだけだった。
   → 開き直しと作業平面変更を足して5つにした。
 
+## UI-P1-007-S1-R9 の指摘と、どう直したか
+
+Codex は R9 を **FAIL** にした。今度は私が新しく入れた不具合だった。
+
+- **B1 破棄済み Viewport のコールバックが Session に残る。**
+  素の `std::function` を Session へ預けていた。画面は Session より先に消えるので、
+  窓を閉じたあとの `SetScene` で消えた `this` を呼ぶ。
+  → 札(`shared_ptr`)を会員が持つ形にした。`OnSceneChanged` が札を返し、
+  札を持っている間だけ呼ばれる。どちらが先に消えても落ちない。
+  core に寿命の試験を2つ足した。
+- **`OnSceneReplaced` の条件が甘かった。** リングが出ているときだけ捨てていたので、
+  位置や案内文だけが生き延びる。→ 無条件に捨てる。
+- **候補送りの前提が甘かった。** 候補が無くても通っていた。
+  → `candidatesBefore > 0` を必須にした。
+
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: UI-P1-007-S1-R9 / TASK: UI-P1-007 / STAGE: 1/2
-  BASE: 5f6ccbc / HEAD: 9b942b9
+- REQUEST_ID: UI-P1-007-S1-R10 / TASK: UI-P1-007 / STAGE: 1/2
+  BASE: 9b942b9 / HEAD: c224d49
   CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 127/127)
-  前身: R7(FAIL) → R8(FAIL)。R8 の B1(画面側の一時表示)を直した。
+  前身: R7 → R8 → R9(いずれも FAIL)。R9 の B1(寿命)を直した。
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

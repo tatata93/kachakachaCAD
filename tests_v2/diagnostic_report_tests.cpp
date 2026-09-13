@@ -28,7 +28,8 @@ namespace {
     snapshot.activeTool = "ベジェ曲線";
     snapshot.rightPanelMode = "道具";
     snapshot.rightPanelTool = "ベジェ曲線";
-    snapshot.cursorMode = "ベジェ曲線";
+    snapshot.cursorMode = "十字";
+    snapshot.cursorOwner = "ベジェ曲線";
     snapshot.previewOwner = "ベジェ曲線";
     snapshot.snapOwner = "ベジェ曲線";
     snapshot.snapType = "端点";
@@ -45,7 +46,8 @@ KACHA_V2_TEST(diagnostic, 必須の欄がすべて出る)
     const std::string text = FormatDiagnosticReport(Sample());
     for (const char* key : {"timestamp", "version", "commit", "branch", "dirty",
              "document", "activePart", "activeWorkPlane", "activeTool",
-             "rightPanelMode", "rightPanelTool", "cursorMode", "previewOwner",
+             "rightPanelMode", "rightPanelTool", "cursorMode", "cursorOwner",
+             "previewOwner",
              "snapOwner", "snapType", "snapTarget", "selectionCount"}) {
         Require(text.find(std::string(key) + ":") != std::string::npos,
             std::string(key) + " が出る");
@@ -106,12 +108,27 @@ KACHA_V2_TEST(diagnostic, 右の棚が前の道具のままならずれとして
     Require(text.find("mismatch:") != std::string::npos, "本文にも出る");
 }
 
+KACHA_V2_TEST(diagnostic, カーソルの形は道具の名前と照合しない)
+{
+    // cursorMode は「十字」「矢印」であって、道具の名前ではない。
+    // 照合すると、正しく動いていても毎回ずれになる。
+    DiagnosticSnapshot snapshot = Sample();
+    snapshot.cursorMode = "矢印";
+    Require(DiagnosticMismatches(snapshot).empty(), "形の違いはずれではない");
+    // 作り直していないカーソルは、cursorOwner で分かる。
+    snapshot.cursorOwner = "円弧";
+    const auto found = DiagnosticMismatches(snapshot);
+    Require(found.size() == 1, "1件");
+    Require(found.front().find("cursorOwner") != std::string::npos, "欄の名前を言う");
+}
+
 KACHA_V2_TEST(diagnostic, 見ていない欄はずれと数えない)
 {
     // 空の欄は「まだ繋いでいない」ということ。ずれと数えると毎回出る。
     DiagnosticSnapshot snapshot = Sample();
     snapshot.previewOwner.clear();
     snapshot.snapOwner.clear();
+    snapshot.cursorOwner.clear();
     Require(DiagnosticMismatches(snapshot).empty(), "空はずれではない");
 }
 

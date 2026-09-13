@@ -86,10 +86,14 @@ kachakacha::v2::app::DiagnosticSnapshot V2MainWindow::DiagnosticSnapshotNow() co
         // カーソルも画面が実際に出している形から読む。
         snapshot.cursorMode = std::string(kachakacha::v2::app::CursorShapeNameJa(
             kachakacha::v2::app::ChooseCursorShape(viewport_->CursorContextNow())));
+        snapshot.cursorOwner = std::string(
+            kachakacha::v2::modeling::DrawingToolNameJa(viewport_->CursorTool()));
         // 途中経過を出しているのは、いまの道具のはずである。
-        snapshot.previewOwner = viewport_->HasPreview()
-            ? std::string(kachakacha::v2::modeling::DrawingToolNameJa(tool))
-            : std::string("(なし)");
+        // 出していないときは空にする。「なし」と書くと、そろっていないことになる。
+        if (viewport_->HasPreview()) {
+            snapshot.previewOwner = std::string(
+                kachakacha::v2::modeling::DrawingToolNameJa(tool));
+        }
         const auto& hover = viewport_->Hover();
         if (hover.snap.has_value()) {
             snapshot.snapOwner = std::string(

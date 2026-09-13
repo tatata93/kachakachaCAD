@@ -584,13 +584,13 @@ void UndoBackTo(V2MainWindow& window, std::uint64_t revision)
     const auto snapshot = window.DiagnosticSnapshotNow();
     if (!Explain((std::string("activeTool がベジェ(実際 ") + snapshot.activeTool + ")")
                      .c_str(),
-            snapshot.activeTool == "ベジェ曲線")) {
+            snapshot.activeTool == "ベジェ")) {
         return false;
     }
     if (!Explain((std::string("rightPanelTool もベジェ(実際 ")
                      + snapshot.rightPanelTool + ")")
                      .c_str(),
-            snapshot.rightPanelTool == "ベジェ曲線")) {
+            snapshot.rightPanelTool == "ベジェ")) {
         return false;
     }
     // そろっていないなら、診断がそう言うこと。

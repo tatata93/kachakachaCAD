@@ -71,7 +71,8 @@ std::vector<std::string> DiagnosticMismatches(const DiagnosticSnapshot& snapshot
         }
     };
     check("rightPanelTool", snapshot.rightPanelTool);
-    check("cursorMode", snapshot.cursorMode);
+    // cursorMode は形の名前(十字・矢印)なので照合しない。道具の名前ではない。
+    check("cursorOwner", snapshot.cursorOwner);
     check("previewOwner", snapshot.previewOwner);
     check("snapOwner", snapshot.snapOwner);
     return found;
@@ -101,6 +102,7 @@ std::string FormatDiagnosticReport(const DiagnosticSnapshot& snapshot)
     AddLine(text, "rightPanelMode", OrNone(snapshot.rightPanelMode));
     AddLine(text, "rightPanelTool", OrNone(snapshot.rightPanelTool));
     AddLine(text, "cursorMode", OrNone(snapshot.cursorMode));
+    AddLine(text, "cursorOwner", OrNone(snapshot.cursorOwner));
     AddLine(text, "previewOwner", OrNone(snapshot.previewOwner));
     AddLine(text, "snapOwner", OrNone(snapshot.snapOwner));
     AddLine(text, "snapType", OrNone(snapshot.snapType));

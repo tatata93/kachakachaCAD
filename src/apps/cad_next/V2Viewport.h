@@ -189,6 +189,12 @@ public:
     [[nodiscard]] bool DrawingCursorShown() const noexcept { return drawingCursor_; }
     //! いま途中経過(まだ確定していない形)を出しているか。
     [[nodiscard]] bool HasPreview() const noexcept { return !hover_.preview.empty(); }
+    //! カーソルを最後に作り直したときの道具。
+    //! いまの道具とずれていたら、替えたのに作り直していないということ。
+    [[nodiscard]] kachakacha::v2::modeling::DrawingTool CursorTool() const noexcept
+    {
+        return cursorTool_;
+    }
     //! いまカーソルの下で見えているもの(吸着・案内)。診断が読む。
     [[nodiscard]] const kachakacha::v2::app::HoverResult& Hover() const noexcept
     {
@@ -705,6 +711,8 @@ private:
     bool drawingCursor_ = false;
     //! 作図中に、作業平面の外の線の上にいる。押しても掴めない。
     bool hoverOffPlane_ = false;
+    kachakacha::v2::modeling::DrawingTool cursorTool_ =
+        kachakacha::v2::modeling::DrawingTool::Select;
     kachakacha::v2::geometry::Vector3 center_{};
     double visibleWidthMm_ = 200.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;

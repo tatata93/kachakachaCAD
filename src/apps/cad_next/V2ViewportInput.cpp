@@ -325,6 +325,9 @@ void V2Viewport::RefreshCursorShape()
     // 以前は線や形の上で指にしていた。指は「別の場所へ行く」印であって、
     // 図形の印ではない。図形の上に来たことは Hover の強調で伝える。
     using kachakacha::v2::app::CursorShape;
+    // どの道具で作り直したかを覚える。診断がここを見て、
+    // 「道具を替えたのにカーソルを作り直していない」を見つける。
+    cursorTool_ = session_->CurrentTool();
     const CursorShape shape = kachakacha::v2::app::ChooseCursorShape(CursorContextNow());
     drawingCursor_ = shape == CursorShape::Cross;
     switch (shape) {

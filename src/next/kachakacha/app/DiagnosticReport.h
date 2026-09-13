@@ -52,7 +52,13 @@ struct DiagnosticSnapshot {
     std::string activeTool;
     std::string rightPanelMode;
     std::string rightPanelTool;
+    //! カーソルの **形** の名前(十字・矢印など)。道具の名前ではないので、
+    //! そろっているかの照合には使わない。読む人のために出すだけである。
     std::string cursorMode;
+    //! カーソルを最後に計算し直したときの道具。
+    //! ここが activeTool とずれていたら、道具を替えたのにカーソルを
+    //! 作り直していない、ということである。
+    std::string cursorOwner;
     std::string previewOwner;
     std::string snapOwner;
 

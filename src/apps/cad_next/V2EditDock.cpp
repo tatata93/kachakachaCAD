@@ -2,13 +2,17 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStackedWidget>
+#include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
 

@@ -19,6 +19,7 @@
 #include "kachakacha/view/ViewOrientation.h"
 
 #include <QComboBox>
+#include <QString>
 
 #include <string>
 #include <utility>

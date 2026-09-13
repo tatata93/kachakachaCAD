@@ -2,9 +2,12 @@
 
 #include <QAction>
 #include <QColor>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QFontMetrics>
 #include <QLabel>
+#include <QObject>
+#include <QString>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>

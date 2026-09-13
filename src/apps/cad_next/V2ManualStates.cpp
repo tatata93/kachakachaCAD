@@ -18,6 +18,7 @@
 #include "kachakacha/modeling/SnapEngine.h"
 
 #include <QPointF>
+#include <QRectF>
 #include <QString>
 
 #include <string>

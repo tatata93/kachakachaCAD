@@ -1,5 +1,8 @@
 #include "V2ParameterDock.h"
 
+#include <QDockWidget>
+#include <QObject>
+#include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>

@@ -1,10 +1,13 @@
 #include "V2MeasureDock.h"
 
 #include <QComboBox>
+#include <QDockWidget>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QObject>
 #include <QPushButton>
+#include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>

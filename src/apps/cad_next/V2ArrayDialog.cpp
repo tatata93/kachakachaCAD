@@ -1,13 +1,16 @@
 #include "V2ArrayDialog.h"
 
-#include <QComboBox>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLabel>
+#include <QObject>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace {
 

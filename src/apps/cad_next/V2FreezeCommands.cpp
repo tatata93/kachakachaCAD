@@ -16,6 +16,8 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/document/Commands.h"
 
+#include <QString>
+
 #include <string>
 #include <utility>
 #include <vector>

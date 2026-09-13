@@ -1,9 +1,14 @@
 #include "V2ChoiceDialog.h"
 
 #include <QComboBox>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QObject>
+#include <QString>
+#include <QStringList>
 #include <QVBoxLayout>
+#include <QWidget>
 
 V2ChoiceDialog::V2ChoiceDialog(const QString& title, const QString& label,
     const QStringList& items, int initialIndex, QWidget* parent)

@@ -22,6 +22,8 @@
 #include "kachakacha/kernel/OcctThicken.h"
 #include "kachakacha/kernel/OcctWireCage.h"
 
+#include <QString>
+
 #include <string>
 #include <vector>
 

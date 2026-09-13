@@ -11,11 +11,15 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/WireEdit.h"
 
+#include <QColor>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
-
+#include <QPointF>
 #include <QPolygonF>
+#include <QRectF>
+#include <QString>
+
 
 #include <algorithm>
 #include <array>

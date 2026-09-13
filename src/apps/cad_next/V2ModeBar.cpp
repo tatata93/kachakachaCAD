@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QString>
 #include <QToolBar>
 
 #include "kachakacha/app/UiMode.h"

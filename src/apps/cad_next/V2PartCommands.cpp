@@ -23,6 +23,8 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/WireCage.h"
 
+#include <QString>
+
 #include <map>
 #include <string>
 #include <utility>

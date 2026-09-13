@@ -23,24 +23,31 @@
 
 #include <map>
 
+#include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QColor>
 #include <QComboBox>
+#include <QDialog>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFont>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
-#include <QKeySequence>
 #include <QMenuBar>
+#include <QObject>
+#include <QPalette>
+#include <QPoint>
+#include <QPushButton>
 #include <QStatusBar>
+#include <QString>
 #include <QStyleFactory>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#include <QPushButton>
 #include <QVBoxLayout>
 #include <QWidget>
 

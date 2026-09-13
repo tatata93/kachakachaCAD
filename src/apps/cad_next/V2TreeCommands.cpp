@@ -13,6 +13,7 @@
 
 #include <QLabel>
 #include <QLineEdit>
+#include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 

@@ -3,14 +3,22 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/view/PatternView.h"
 
+#include <QColor>
+#include <QDockWidget>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QObject>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
 #include <QPointF>
+#include <QPolygonF>
 #include <QPushButton>
+#include <QRectF>
+#include <QString>
 #include <QVBoxLayout>
+#include <QWidget>
 
 #include <algorithm>
 #include <string>

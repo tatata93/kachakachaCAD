@@ -6,9 +6,14 @@
 
 #include "V2Viewport.h"
 
+#include <QColor>
 #include <QFont>
 #include <QPainter>
+#include <QPen>
+#include <QPointF>
 #include <QPolygonF>
+#include <QRectF>
+#include <QString>
 
 #include <algorithm>
 #include <cmath>

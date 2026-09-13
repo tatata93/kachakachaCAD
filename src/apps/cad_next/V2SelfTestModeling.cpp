@@ -24,11 +24,12 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QImage>
+#include <QPainter>
 #include <QPointF>
 #include <QRectF>
 #include <QSize>
-#include <QImage>
-#include <QPainter>
+#include <QString>
 #include <QStringList>
 
 #include <iostream>

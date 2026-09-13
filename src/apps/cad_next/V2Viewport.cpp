@@ -7,15 +7,21 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/Units.h"
 
+#include <QColor>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
-#include <QResizeEvent>
-#include <QWheelEvent>
-
+#include <QPointF>
 #include <QPolygonF>
+#include <QRectF>
+#include <QResizeEvent>
+#include <QString>
+#include <QWheelEvent>
+#include <QWidget>
+
 
 #include <algorithm>
 #include <array>

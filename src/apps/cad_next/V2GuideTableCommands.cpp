@@ -14,6 +14,9 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include <QDialog>
+#include <QString>
+#include <QStringList>
 #include <QTreeWidget>
 
 #include <string>

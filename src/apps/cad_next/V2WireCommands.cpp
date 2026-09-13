@@ -23,6 +23,8 @@
 #include "kachakacha/geometry/CurveProjection.h"
 #include "kachakacha/geometry/Measurement.h"
 
+#include <QString>
+
 #include <optional>
 #include <string>
 #include <utility>

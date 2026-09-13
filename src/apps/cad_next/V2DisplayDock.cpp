@@ -1,13 +1,18 @@
 #include "V2DisplayDock.h"
 
+#include <QColor>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
 

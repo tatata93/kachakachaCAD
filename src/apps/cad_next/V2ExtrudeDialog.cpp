@@ -2,11 +2,15 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLabel>
+#include <QObject>
+#include <QString>
 #include <QVBoxLayout>
+#include <QWidget>
 
 namespace {
 

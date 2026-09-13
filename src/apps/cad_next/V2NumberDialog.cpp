@@ -1,9 +1,13 @@
 #include "V2NumberDialog.h"
 
+#include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QObject>
+#include <QString>
 #include <QVBoxLayout>
+#include <QWidget>
 
 V2NumberDialog::V2NumberDialog(const QString& title, const QString& label, double initial,
     double minimum, double maximum, const QString& suffix, QWidget* parent)

@@ -19,6 +19,8 @@
 #include "kachakacha/fabrication/PlanarPanel.h"
 #include "kachakacha/geometry/WireChain.h"
 
+#include <QString>
+
 #include <algorithm>
 #include <string>
 #include <utility>

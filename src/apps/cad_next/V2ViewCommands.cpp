@@ -12,11 +12,12 @@
 #include "kachakacha/document/Commands.h"
 
 #include <QAction>
-#include <QMenu>
 #include <QDockWidget>
+#include <QMenu>
+#include <QPoint>
+#include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#include <QPoint>
 
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/EntityNaming.h"

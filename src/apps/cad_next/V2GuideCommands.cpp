@@ -23,6 +23,8 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include <QString>
+
 #include <string>
 #include <utility>
 #include <vector>

@@ -18,6 +18,7 @@
 
 #include <QApplication>
 #include <QImage>
+#include <QString>
 #include <QStringList>
 
 #include <iostream>

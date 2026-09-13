@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -382,6 +383,147 @@ KACHA_V2_TEST(architecture, v2_sources_avoid_names_that_are_macros_elsewhere)
     }
     Require(offenders.empty(),
         "no V2 source names a variable after a Qt or Windows macro: " + Join(offenders));
+}
+
+namespace {
+
+//! 注釈と文字列を落とした本文。Qt の型を数えるのに使う。
+//! 落とさないと、注釈に書いた型名や、案内文の中の語まで数えてしまう。
+[[nodiscard]] std::string BodyWithoutCommentsOrStrings(const std::vector<std::string>& lines)
+{
+    std::string body;
+    bool inBlockComment = false;
+    for (const std::string& line : lines) {
+        bool inString = false;
+        for (std::size_t index = 0; index < line.size(); ++index) {
+            if (inBlockComment) {
+                if (line[index] == '*' && index + 1 < line.size() && line[index + 1] == '/') {
+                    inBlockComment = false;
+                    ++index;
+                }
+                continue;
+            }
+            if (inString) {
+                if (line[index] == '\\') {
+                    ++index;   // 逃がし文字。次の1文字は読み飛ばす。
+                } else if (line[index] == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (line[index] == '/' && index + 1 < line.size()) {
+                if (line[index + 1] == '/') {
+                    break;   // 行末まで注釈。
+                }
+                if (line[index + 1] == '*') {
+                    inBlockComment = true;
+                    ++index;
+                    continue;
+                }
+            }
+            if (line[index] == '"') {
+                inString = true;
+                continue;
+            }
+            body.push_back(line[index]);
+        }
+        body.push_back('\n');
+    }
+    return body;
+}
+
+//! その本文が名前を出している Qt の型。`Qt::` の名前空間は数えない。
+[[nodiscard]] std::set<std::string> QtTypesNamedIn(const std::string& body)
+{
+    const auto isWordChar = [](unsigned char value) {
+        return std::isalnum(value) != 0 || value == '_';
+    };
+    std::set<std::string> found;
+    for (std::size_t index = 0; index + 1 < body.size(); ++index) {
+        if (body[index] != 'Q') {
+            continue;
+        }
+        if (index > 0 && isWordChar(static_cast<unsigned char>(body[index - 1]))) {
+            continue;   // 語の途中。
+        }
+        if (std::isupper(static_cast<unsigned char>(body[index + 1])) == 0) {
+            continue;   // Qt:: など。型の名前ではない。
+        }
+        std::size_t end = index + 1;
+        while (end < body.size() && isWordChar(static_cast<unsigned char>(body[end]))) {
+            ++end;
+        }
+        std::string name = body.substr(index, end - index);
+        index = end - 1;
+        if (name == "QStringLiteral") {
+            continue;   // 巨大マクロ。頭書きは QString のもの。
+        }
+        found.insert(std::move(name));
+    }
+    return found;
+}
+
+//! そのファイルが自分で書いている Qt の頭書き。
+[[nodiscard]] std::set<std::string> QtIncludesIn(const std::vector<std::string>& lines)
+{
+    std::set<std::string> found;
+    for (const std::string& line : lines) {
+        const std::size_t open = line.find('<');
+        const std::size_t close = line.find('>');
+        if (line.find("#include") == std::string::npos || open == std::string::npos
+            || close == std::string::npos || close < open + 2) {
+            continue;
+        }
+        const std::string name = line.substr(open + 1, close - open - 1);
+        if (name.size() >= 2 && name[0] == 'Q'
+            && std::isupper(static_cast<unsigned char>(name[1])) != 0) {
+            found.insert(name);
+        }
+    }
+    return found;
+}
+
+} // namespace
+
+KACHA_V2_TEST(architecture, screen_sources_include_the_qt_headers_they_use)
+{
+    // **当て木では捕まえられない失敗を、ここで捕まえる。**
+    //
+    // tools/qtstub は1枚の頭書きで全部の型を出すので、`#include <QMouseEvent>`
+    // を書き忘れても雲の型検査は通る。本物の Qt では通らない。
+    // この抜けで PC の組み立てを何度も落とした。関数を別のファイルへ移したとき、
+    // 移した先に頭書きが無い、が典型である。
+    //
+    // 決まりは単純にする。**.cpp が名前を出している Qt の型は、
+    // その .cpp が自分で include する。** 他の頭書き経由で通っていても書く。
+    // 余分な include は害が無く、抜けは PC でしか分からない。
+    std::vector<std::string> offenders;
+    for (const SourceFile& file : CollectSourceFiles(RepoRoot() / "src/apps/cad_next")) {
+        if (file.path.extension() != ".cpp") {
+            continue;   // 頭書き(.h)は、実装の側が include するので見ない。
+        }
+        const std::set<std::string> used =
+            QtTypesNamedIn(BodyWithoutCommentsOrStrings(file.lines));
+        const std::set<std::string> included = QtIncludesIn(file.lines);
+        for (const std::string& name : used) {
+            if (included.count(name) == 0) {
+                offenders.push_back(file.path.filename().string() + ": " + name);
+            }
+        }
+    }
+    Require(offenders.empty(),
+        "every cad_next .cpp includes the Qt headers for the types it names: "
+            + Join(offenders));
+    // 走査そのものが効いているかを、その場で確かめる。
+    const std::vector<std::string> planted{"#include <QString>", "QMouseEvent event;"};
+    const auto plantedUsed = QtTypesNamedIn(BodyWithoutCommentsOrStrings(planted));
+    Require(plantedUsed.count("QMouseEvent") == 1, "the scanner sees a used type");
+    Require(QtIncludesIn(planted).count("QString") == 1, "the scanner sees an include");
+    // 注釈と文字列の中の型名は数えない。
+    const std::vector<std::string> quiet{"// QMouseEvent はここでは使わない",
+        "const char* text = \"QMouseEvent\";"};
+    Require(QtTypesNamedIn(BodyWithoutCommentsOrStrings(quiet)).empty(),
+        "the scanner ignores comments and strings");
 }
 
 KACHA_V2_TEST(architecture, every_v2_target_gets_the_shared_compile_options)

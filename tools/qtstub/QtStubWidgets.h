@@ -89,6 +89,7 @@ public:
     void setContextMenuPolicy(Qt::ContextMenuPolicy);
     [[nodiscard]] QPoint mapToGlobal(const QPoint&) const;
     virtual bool focusNextPrevChild(bool);
+    void customContextMenuRequested(const QPoint&);
 };
 
 class QLayout : public QObject {

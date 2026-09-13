@@ -31,7 +31,6 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `base/TestHarness.h` | 試験の枠組み | **繋がない。**試験の道具である |
 | `app/EvaluationQueue.h` | 重い計算を待たせずに回す仕組み | 計算が待たされるようになってから。いまは同期で足りている |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
-| `geometry/CurveJoin.h` | 曲線のつなぎ(角の処理) | `wire.join` は別の道(`WireConnect`)を通っている。どちらを残すか決めてから |
 | `fabrication/PanelStrategy.h` | 部材の分け方(1枚/少数/分割/混合) | 近似(V2方式)を繋ぐとき |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
@@ -41,6 +40,11 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 
 ### 繋いだもの
 
+- `geometry/CurveJoin.h`(2026-09-13)**消した**。繋いだのではなく、畳んだ。
+  同じ仕事をする道が2つあり、画面が通っていたのは `WireConnect` のほうだった。
+  `ProcessPolylineCorners` に至っては、名前も同じものが `PolylineCorners.h` にもあり
+  (引数だけ違う)、そちらが本物だった。使われていない側を残すと、
+  直すときにどちらを直せばよいのか分からなくなる。
 - `app/PointSources.h`(2026-09-13)。「中心に点」(`wire.center_points`)と
   「端点と中点に点」(`wire.key_points`)から使う。車輪の中心も窓の中心も、
   それまでは座標を目で読んで手で打ち直すしかなかった。

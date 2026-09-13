@@ -698,6 +698,18 @@ void V2MainWindow::BuildStatusBar()
     // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
     statusBar()->addWidget(groupLabel_);
     statusBar()->addWidget(statusLabel_, 1);
+    // 帯を右クリックしても診断を取れるようにする(DIAGNOSTICS_FEATURE_SPEC)。
+    // おかしいと思った瞬間に、献立を辿らずに取れるほうがよい。
+    // 辿っているあいだに状態が変わってしまうことがある。
+    statusBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(statusBar(), &QWidget::customContextMenuRequested, this,
+        [this](const QPoint& at) {
+            QMenu menu(this);
+            QAction* copy = menu.addAction(QStringLiteral("診断情報をコピー"));
+            if (menu.exec(statusBar()->mapToGlobal(at)) == copy) {
+                RunCommand("help.copy_diagnostics");
+            }
+        });
 }
 
 bool V2MainWindow::SetActiveGroup(

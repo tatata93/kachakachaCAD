@@ -661,7 +661,6 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/CurveSampling.cpp
     src/next/kachakacha/geometry/PolylineCorners.cpp
     src/next/kachakacha/geometry/CurveIntersection.cpp
-    src/next/kachakacha/geometry/CurveJoin.cpp
     src/next/kachakacha/geometry/CurveSegment.cpp
     src/next/kachakacha/geometry/Expression.cpp
     src/next/kachakacha/geometry/Measurement.cpp

@@ -13,7 +13,8 @@
 #include "kachakacha/fabrication/Unfold.h"
 #include "kachakacha/geometry/ArcBuilders.h"
 #include "kachakacha/geometry/CurveIntersection.h"
-#include "kachakacha/geometry/CurveJoin.h"
+#include "kachakacha/geometry/PolylineCorners.h"
+#include "kachakacha/geometry/WireConnect.h"
 #include "kachakacha/geometry/Expression.h"
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -353,16 +354,14 @@ KACHA_V2_TEST(robust, おかしな曲線をつなごうとしても落ちない)
     curves.push_back(geo::CurveSegment::MakeCubicBezier(
         {{0, 0, 0}, {3, 5, 0}, {7, 5, 0}, {10, 0, 0}})
                          .Value());
-    const geo::CurveEnd ends[]{geo::CurveEnd::Start, geo::CurveEnd::End};
-    const geo::JoinContinuity kinds[]{geo::JoinContinuity::Position,
-        geo::JoinContinuity::Tangent, geo::JoinContinuity::Curvature};
-    const geo::JoinAnchor anchors[]{geo::JoinAnchor::KeepFirst, geo::JoinAnchor::KeepSecond,
-        geo::JoinAnchor::Midpoint};
+    // つなぎは WireConnect を通す(2026-09-13 に CurveJoin を畳んだ)。
+    const geo::ConnectContinuity kinds[]{geo::ConnectContinuity::Position,
+        geo::ConnectContinuity::Tangent, geo::ConnectContinuity::Curvature};
+    const geo::CornerStyle styles[]{geo::CornerStyle::Chamfer, geo::CornerStyle::Fillet};
     for (int round = 0; round < 2000; ++round) {
         RequireValueOrReason(
-            geo::JoinCurves(curves[random.Int(3)], ends[random.Int(2)],
-                curves[random.Int(3)], ends[random.Int(2)], kinds[random.Int(3)],
-                anchors[random.Int(3)], tolerance),
+            geo::ConnectCurves(curves[random.Int(3)], curves[random.Int(3)],
+                kinds[random.Int(3)], tolerance.modelLinearMm),
             "接続");
         std::vector<geo::CurveSegment> polyline;
         const int count = random.Int(5);
@@ -370,8 +369,8 @@ KACHA_V2_TEST(robust, おかしな曲線をつなごうとしても落ちない)
             polyline.push_back(curves[random.Int(3)]);
         }
         RequireValueOrReason(
-            geo::ProcessPolylineCorners(polyline, random.Nasty(), random.Int(2) == 0,
-                tolerance),
+            geo::ProcessPolylineCorners(polyline, styles[random.Int(2)], random.Nasty(),
+                tolerance.modelLinearMm),
             "角の加工");
     }
 }

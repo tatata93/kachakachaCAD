@@ -140,6 +140,7 @@ void ApplyFabricationChoice(domain::CreateFabricationModelDefinition& definition
     definition.maximumPartCount = choice.maximumPartCount;
     definition.minimumPartWidthMm = choice.minimumPartWidthMm;
     definition.fidelity = choice.fidelity;
+    definition.splitSolidFaces = choice.splitSolidFaces;
     definition.maximumReliefDepthRatio = choice.maximumReliefDepthRatio;
     definition.minimumReliefLigamentMm = choice.minimumReliefLigamentMm;
     definition.manualBoundaries = choice.manualBoundaries;
@@ -156,6 +157,7 @@ FabricationChoice FabricationChoiceOf(const domain::CreateFabricationModelDefini
     choice.splitAxis = definition.splitAxis;
     choice.automaticBoundaries = definition.automaticBoundaries;
     choice.maximumPartCount = definition.maximumPartCount;
+    choice.splitSolidFaces = definition.splitSolidFaces;
     choice.maximumReliefDepthRatio = definition.maximumReliefDepthRatio;
     choice.minimumReliefLigamentMm = definition.minimumReliefLigamentMm;
     choice.minimumPartWidthMm = definition.minimumPartWidthMm;

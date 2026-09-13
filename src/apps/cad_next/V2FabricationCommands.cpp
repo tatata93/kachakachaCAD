@@ -208,6 +208,12 @@ std::vector<kachakacha::v2::app::FabricationSource> V2MainWindow::FabricationSou
             continue;
         }
         if (entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+            if (fabricationChoice_.splitSolidFaces) {
+                // 立体を面ごとに分ける。箱なら6枚の型紙になる。
+                // 面を1枚ずつ取れるようになったので、ここで初めてできる(EX-02 の副産物)。
+                AppendSolidFaceSources(id, source.name, sources);
+                continue;
+            }
             // 立体の辺ではなく、平らな1枚の輪郭を使う。
             // 立体の辺には厚みのぶんの高さがあるので、平らにならない。
             const auto found = partFlatBoundary_.find(id.ToString());
@@ -745,6 +751,41 @@ void V2MainWindow::ApplyMaterialToSelection(const QString& material, int layers)
             .arg(ExtrudeDistanceMm(), 0, 'f', 3));
 }
 
+
+//! 立体の面を1枚ずつ、近似の元にする(2026-09-14)。
+//!
+//! これまで立体は「平らな1枚」しか部材にできなかった。箱を選んでも1枚しか出ない。
+//! 面を1枚ずつ取れるようになった(kernel/OcctFaceQuery)ので、
+//! 面ごとに標本を取って、面ごとの部材にする。
+//!
+//! **面をまとめて1枚の部材にすることは、まだできない。**
+//! いまの部材は「1枚の格子」で出来ていて、別々の面の格子を1つに繋ぐ道が無い。
+//! そこは作り直しが要る。まとめたときの枚数は `PanelAdviceTextJa` が言うので、
+//! いまは「何枚になるはずか」を読みながら、面ごとに切って貼る形になる。
+void V2MainWindow::AppendSolidFaceSources(const kachakacha::v2::base::EntityId& partId,
+    const std::string& partName,
+    std::vector<kachakacha::v2::app::FabricationSource>& sources) const
+{
+    const auto found = partShapes_.find(partId.ToString());
+    if (found == partShapes_.end()) {
+        return;
+    }
+    const auto count = kachakacha::v2::kernel::ShapeFaceCount(found->second);
+    if (!count.HasValue()) {
+        return;
+    }
+    for (std::size_t face = 0; face < count.Value(); ++face) {
+        const auto sampled = kachakacha::v2::kernel::FaceSamplesOf(found->second, face);
+        if (!sampled.HasValue()) {
+            continue;   // 取れない面は飛ばす。飛ばしたことは断りの文で分かる。
+        }
+        kachakacha::v2::app::FabricationSource source;
+        source.entityId = partId;
+        source.name = partName + " 面" + std::to_string(face + 1);
+        source.samples = sampled.Value().samples;
+        sources.push_back(std::move(source));
+    }
+}
 
 //! 断ったときに「何枚に分ければ作れるか」まで言う(製作近似 §5)。
 //!

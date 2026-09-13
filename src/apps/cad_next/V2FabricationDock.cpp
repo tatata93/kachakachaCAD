@@ -127,6 +127,11 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     manual_ = new QLineEdit(formWidget);
     manual_->setPlaceholderText(QStringLiteral("0.3, 0.6(分割軸の 0〜1)"));
     form_->addRow(QStringLiteral("手動境界"), manual_);
+    // 立体を面ごとに分ける。箱なら6枚の型紙になる。
+    // 切らないと、立体からは「平らな1枚」しか型紙にならない。
+    splitSolidFaces_ = new QCheckBox(QStringLiteral("立体を面ごとに分ける"), formWidget);
+    splitSolidFaces_->setChecked(false);
+    form_->addRow(QStringLiteral("立体の扱い"), splitSolidFaces_);
     maxParts_ = MakeCount(formWidget, 1.0, 200.0);
     maxParts_->setValue(12.0);
     form_->addRow(QStringLiteral("部材数の上限"), maxParts_);
@@ -245,6 +250,7 @@ void V2FabricationDock::Connect()
     });
     QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
@@ -284,6 +290,9 @@ void V2FabricationDock::RefreshMethodRows()
     form_->setRowVisible(manual_, band);
     form_->setRowVisible(maxParts_, band);
     form_->setRowVisible(minWidth_, band);
+    // 面ごとに分けるのは V2 方式(面を分類して展開)の話である。
+    // 帯へ近似し直す V1 方式では、そもそも面の分類をしない。
+    form_->setRowVisible(splitSolidFaces_, !band);
 }
 
 void V2FabricationDock::Emit()
@@ -301,6 +310,7 @@ FabricationChoice V2FabricationDock::Choice() const
     const int axisIndex = splitAxis_->currentIndex();
     choice.splitAxis = axisIndex >= 0 && axisIndex < 3 ? kSplitAxisValues[axisIndex] : 2;
     choice.automaticBoundaries = automatic_->isChecked();
+    choice.splitSolidFaces = splitSolidFaces_->isChecked();
     choice.maximumPartCount = static_cast<int>(maxParts_->value());
     choice.minimumPartWidthMm = minWidth_->value();
     // 欄は % で見せて、中では比で持つ。% のまま比較すると桁を間違える。
@@ -341,6 +351,7 @@ void V2FabricationDock::SetChoice(const FabricationChoice& choice)
         }
     }
     automatic_->setChecked(choice.automaticBoundaries);
+    splitSolidFaces_->setChecked(choice.splitSolidFaces);
     manual_->setText(QString::fromStdString(
         kachakacha::v2::app::FormatBoundaryList(choice.manualBoundaries)));
     maxParts_->setValue(static_cast<double>(choice.maximumPartCount));

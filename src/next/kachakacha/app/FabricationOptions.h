@@ -33,6 +33,8 @@ struct FabricationChoice {
     int maximumPartCount = 12;
     double minimumPartWidthMm = 4.0;
     int fidelity = 6;
+    //! 立体を面ごとに分けるか。偽なら「平らな1枚」だけを部材にする。
+    bool splitSolidFaces = false;
     //! 切れ目の上限(fabrication-contract §7.5)。材料で変わる。
     //! 深さは部材幅に対する比、残りは先端から向こう側の縁までの最小の幅。
     double maximumReliefDepthRatio = 0.55;

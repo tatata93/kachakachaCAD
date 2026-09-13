@@ -140,6 +140,10 @@ public:
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
     //! 取れなければ理由を出して偽を返す。
+    //! 立体の面を1枚ずつ、近似の元にする。「立体を面ごとに分ける」を選んだとき。
+    void AppendSolidFaceSources(const kachakacha::v2::base::EntityId& partId,
+        const std::string& partName,
+        std::vector<kachakacha::v2::app::FabricationSource>& sources) const;
     //! 断ったときに「何枚に分ければ作れるか」を言う一文(製作近似 §5)。
     //! 分けはしない。言うだけである。相手が無ければ空を返す。
     [[nodiscard]] QString PanelAdviceTextJa(

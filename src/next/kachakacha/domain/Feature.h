@@ -262,6 +262,12 @@ struct CreateFabricationModelDefinition {
     //! 紙とプラ板と真鍮で、残してよい幅は違う。既定は 0.3mm 厚のプラ板の値で、
     //! 薄い紙ならもっと狭くてよいし、真鍮なら足りない。
     //! 深さは部材の幅に対する比、残りは先端から向こう側の縁までの最小の幅。
+    //! 立体を面ごとに分けるか(EX-02 のあと、2026-09-14)。
+    //!
+    //! 偽なら、いままでどおり立体の「平らな1枚」だけを部材にする。
+    //! 真なら、立体の面を1枚ずつ部材にする。箱を6枚の型紙にできる。
+    //! 古い文書は偽で読む。開いたときに部材の数が変わらないようにするためである。
+    bool splitSolidFaces = false;
     double maximumReliefDepthRatio = 0.55;
     double minimumReliefLigamentMm = 0.5;
 

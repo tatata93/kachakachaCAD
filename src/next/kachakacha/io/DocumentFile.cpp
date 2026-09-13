@@ -281,6 +281,7 @@ template<class Id>
         definition["maximumPartCount"] = JsonValue::Number(
             static_cast<double>(fabrication->maximumPartCount));
         definition["minimumPartWidthMm"] = JsonValue::Number(fabrication->minimumPartWidthMm);
+        definition["splitSolidFaces"] = JsonValue::Bool(fabrication->splitSolidFaces);
         definition["maximumReliefDepthRatio"] =
             JsonValue::Number(fabrication->maximumReliefDepthRatio);
         definition["minimumReliefLigamentMm"] =

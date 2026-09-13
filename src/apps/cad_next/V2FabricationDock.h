@@ -98,6 +98,8 @@ private:
     QFormLayout* form_ = nullptr;
     QComboBox* splitAxis_ = nullptr;
     QCheckBox* automatic_ = nullptr;
+    //! 立体を面ごとに分けるか。V2 方式(面を分類して展開)だけが使う。
+    QCheckBox* splitSolidFaces_ = nullptr;
     QLineEdit* manual_ = nullptr;
     QDoubleSpinBox* maxParts_ = nullptr;
     QDoubleSpinBox* minWidth_ = nullptr;

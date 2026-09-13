@@ -925,6 +925,10 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 0 より大きく 1 より小さい)と `minimumReliefLigamentMm`(切れ目の先から向こう側の縁まで
 残す最小の幅)も持つ。紙とプラ板と真鍮で残してよい幅が違うため、文書に付いて回らせる。
 無ければ 0.55 と 0.5(0.3mm 厚のプラ板の値)として読む。
+2026-09-14 から `splitSolidFaces`(立体を面ごとに分けるか)も持つ。
+真なら立体の面を1枚ずつ部材にする(箱なら6枚)。偽ならいままでどおり
+「平らな1枚」だけを部材にする。**無ければ偽として読む。**
+偽を既定にするのは、古い文書を開いたときに部材の数が変わらないようにするためである。
 材料と積層は Feature ではなく Entity の `manufacturing`(`materialName` `layerCount` など)に持つ
 (V1 の plate の材料と plate_laminate に当たる)。
 

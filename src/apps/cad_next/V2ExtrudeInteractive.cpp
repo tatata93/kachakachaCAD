@@ -83,12 +83,15 @@ void V2MainWindow::BeginExtrudePreview()
     }
     center = center * (1.0 / static_cast<double>(outline.size()));
 
+    // 輪郭を先に覚える。向きは輪郭の平面から決めるので、
+    // 覚える前に向きを聞くと、前の輪郭の平面で答えてしまう。
+    extrudeOutline_ = outline;
+
     ExtrudeHandle handle;
     handle.origin = center;
     // 向きは1か所(ExtrudeDirectionNow)から取る。矢印・下見・確定を必ず揃える。
     handle.direction = ExtrudeDirectionNow();
     handle.distanceMm = ExtrudeDistanceMm();
-    extrudeOutline_ = outline;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
     ShowExtrudeShelf(plan);

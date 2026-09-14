@@ -386,10 +386,25 @@ Result<ExtrudeAnalysis> AnalyzeExtrudeRequest(const ExtrudeRequest& request,
                 "輪郭が平面に載っていません。",
                 "点が3つ未満か、すべて一直線に並んでいます。"));
         } else if (plane.maximumDeviationMm > limit) {
+            // どの輪郭が浮いているのかを言う。数だけでは直しようがない。
+            std::size_t worstProfile = 0;
+            double worst = 0.0;
+            for (std::size_t index = 0; index < sampled.size(); ++index) {
+                for (const Vector3& point : sampled[index].points) {
+                    const double away =
+                        std::abs(geometry::Dot(point - plane.origin, plane.normal));
+                    if (away > worst) {
+                        worst = away;
+                        worstProfile = index;
+                    }
+                }
+            }
             errors.push_back(MakeError(kNotPlanar,
                 "輪郭が同じ平面に載っていません。",
-                "平面からの最大のずれ " + std::to_string(plane.maximumDeviationMm)
-                    + " mm(許容 " + std::to_string(limit) + " mm)。"));
+                "輪郭は " + std::to_string(sampled.size()) + " つ。"
+                    + "平面からの最大のずれ " + std::to_string(plane.maximumDeviationMm)
+                    + " mm(許容 " + std::to_string(limit) + " mm)。"
+                    + ProfileLabel(worstProfile) + " がいちばん外れています。"));
         }
     }
     if (!errors.empty()) {

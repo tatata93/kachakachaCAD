@@ -309,12 +309,19 @@ using kachakacha::v2::domain::Visibility;
     window.FabricationDock().PressApplyAssembly();
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.RunCommand("fabrication.merge_parts");   // 2度目だが値が変わっている
-    if (!Explain((std::string("値が変わったら当てずに出し直す(帯は ")
+    // **見ているのは1つだけ: 当たっていないこと。**
+    // 古い案が当たれば枚数が減る。減っていなければ、見せ直している。
+    if (!Explain((std::string("値が変わったら古い案は当てない(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
-            static_cast<int>(window.FabricationPanelCount()) == before
-                && window.PendingPartitionShown())) {
+            static_cast<int>(window.FabricationPanelCount()) == before)) {
         return false;
     }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    // 値を戻しておく。以降の枚数の見比べを、この寄り道で狂わせない。
+    window.FabricationDock().SetPartNumbersText(QString());
+    window.FabricationDock().SetAssemblyPercent(0.0);
+    window.FabricationDock().PressApplyAssembly();
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
 

@@ -909,6 +909,34 @@ Write-Host ''
 Write-Host ("review pipeline self-test: {0} passed, {1} failed, {2} total" -f $script:Passed, $script:Failed, ($script:Passed + $script:Failed))
 foreach ($f in $script:Failures) { Write-Host ("  - " + $f) -ForegroundColor Red }
 
+# When something failed, show what the pipeline itself said. A self-test that
+# reports "it did not work" without the reason is the same fault it is meant to
+# catch. The work root is kept too, so the evidence is still on disk.
+if ($script:Failed -gt 0) {
+    Write-Host ''
+    Write-Host '--- what the pipeline said (dispatcher log, last 60 lines) ---'
+    if (Test-Path -LiteralPath $paths.Dispatcher) {
+        $logLines = @([System.IO.File]::ReadAllLines($paths.Dispatcher))
+        $from = [Math]::Max(0, $logLines.Count - 60)
+        for ($i = $from; $i -lt $logLines.Count; $i++) { Write-Host ('  ' + $logLines[$i]) }
+    } else {
+        Write-Host '  (no dispatcher log)'
+    }
+    foreach ($kind in @('precheck-raw-*.txt', 'precheck-*.json')) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $paths.Logs -File -ErrorAction SilentlyContinue |
+                            Where-Object { $_.Name -like $kind } | Select-Object -First 3)) {
+            Write-Host ''
+            Write-Host ("--- " + $file.Name + " ---")
+            $text = [System.IO.File]::ReadAllText($file.FullName)
+            $cut = [Math]::Min(1500, $text.Length)
+            Write-Host ('  ' + $text.Substring(0, $cut).Replace("`n", "`n  "))
+        }
+    }
+    Write-Host ''
+    Write-Host ("the work root is kept for inspection: " + $WorkRoot)
+    exit 1
+}
+
 if (-not $KeepWorkRoot) {
     try {
         Invoke-Process -FilePath $gitExe -Arguments @('worktree', 'prune') -WorkingDirectory $repo | Out-Null

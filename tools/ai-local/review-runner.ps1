@@ -84,15 +84,17 @@ if (-not $DryRun) {
     $recheck = ''
     try {
         $recheck = (& (Join-Path $PSScriptRoot 'review-precheck.ps1') `
-            -RepoRoot $RepoRoot -ManifestPath $ManifestPath | Out-String)
-    } catch { $recheck = '' }
-    $recheckResult = $null
-    if ($recheck -and $recheck.Trim().Length -gt 0) {
-        try { $recheckResult = $recheck | ConvertFrom-Json } catch { $recheckResult = $null }
-    }
+            -RepoRoot $RepoRoot -ManifestPath $ManifestPath 2>&1 | Out-String)
+    } catch { $recheck = ('the precheck threw: ' + $_.Exception.Message) }
+    $recheckResult = ConvertFrom-JsonLoose -Text $recheck
     if ($null -eq $recheckResult -or -not [bool]$recheckResult.ok) {
-        $why = 'the precheck gave no answer'
-        if ($recheckResult) { $why = [string]$recheckResult.message }
+        $why = 'the precheck gave no answer it could read back'
+        if ($recheckResult) {
+            $why = [string]$recheckResult.message
+        } elseif ($recheck) {
+            $excerptLength = [Math]::Min(1200, $recheck.Length)
+            $why = $why + ': ' + $recheck.Substring(0, $excerptLength)
+        }
         Say ("$requestId is no longer fit to review: " + $why) 'WARN'
         exit 7
     }

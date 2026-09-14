@@ -128,6 +128,19 @@ function Read-JsonFile {
     try { return ($text | ConvertFrom-Json) } catch { return $null }
 }
 
+# Pull the JSON out of whatever a script printed. A stray warning line alongside
+# the answer must not make the answer unreadable; that turns a question we could
+# have answered into silence.
+function ConvertFrom-JsonLoose {
+    param([string]$Text)
+    if (-not $Text) { return $null }
+    try { return ($Text | ConvertFrom-Json) } catch { }
+    $start = $Text.IndexOf('{')
+    $end = $Text.LastIndexOf('}')
+    if ($start -lt 0 -or $end -le $start) { return $null }
+    try { return ($Text.Substring($start, $end - $start + 1) | ConvertFrom-Json) } catch { return $null }
+}
+
 function Get-QueueFiles {
     param([Parameter(Mandatory=$true)][string]$Directory)
     if (-not (Test-Path -LiteralPath $Directory)) { return @() }

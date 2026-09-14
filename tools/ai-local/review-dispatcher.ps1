@@ -65,19 +65,26 @@ function Invoke-ValidatePass {
         $answerText = ''
         try {
             $answerText = (& (Join-Path $PSScriptRoot 'review-precheck.ps1') `
-                -RepoRoot $RepoRoot -ManifestPath $file.FullName | Out-String)
+                -RepoRoot $RepoRoot -ManifestPath $file.FullName 2>&1 | Out-String)
         } catch {
-            $answerText = ''
+            $answerText = ('the precheck threw: ' + $_.Exception.Message)
         }
-        $parsed = $null
-        if ($answerText -and $answerText.Trim().Length -gt 0) {
-            try { $parsed = $answerText | ConvertFrom-Json } catch { $parsed = $null }
-        }
+        $parsed = ConvertFrom-JsonLoose -Text $answerText
         $ok = $false
         $message = 'the precheck gave no answer'
         if ($parsed) {
             $ok = [bool]$parsed.ok
             $message = [string]$parsed.message
+        } else {
+            # Keep what it actually said. Without this, a broken check looks
+            # exactly like a refused request, and neither can be investigated.
+            $excerptLength = [Math]::Min(1200, $answerText.Length)
+            $excerpt = ''
+            if ($excerptLength -gt 0) { $excerpt = $answerText.Substring(0, $excerptLength) }
+            $message = 'the precheck gave no answer it could read back: ' + $excerpt
+            try {
+                Write-TextAtomic -Path (Join-Path $paths.Logs ('precheck-raw-' + $name + '.txt')) -Text $answerText | Out-Null
+            } catch { }
         }
         if ($ok) {
             $target = Join-Path $paths.Ready $name

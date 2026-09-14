@@ -662,7 +662,20 @@ function Invoke-ManifestPrecheck {
 }
 
 if ($ManifestPath) {
-    $r = Invoke-ManifestPrecheck -Path $ManifestPath
+    # A check that falls over must say so in words. "the precheck gave no answer"
+    # is not a reason anybody can act on, and it hid a real fault for a whole
+    # round trip. Whatever happens here, the answer is written down.
+    $r = $null
+    try {
+        $r = Invoke-ManifestPrecheck -Path $ManifestPath
+    } catch {
+        $r = New-CheckResult -Ok $false -Code 'AIR-E099' `
+            -Message ('the precheck itself failed: ' + $_.Exception.Message) -Data $null
+        Add-Member -InputObject $r -NotePropertyName 'problems' `
+            -NotePropertyValue @(('AIR-E099 ' + $_.Exception.Message), ($_.ScriptStackTrace))
+    }
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($ManifestPath)
+    try { Write-JsonAtomic -Path (Join-Path $paths.Logs ('precheck-' + $name + '.json')) -Value $r | Out-Null } catch { }
     if (-not $Quiet) { $r | ConvertTo-Json -Depth 8 }
     if ($r.ok) { exit 0 } else { exit 1 }
 }

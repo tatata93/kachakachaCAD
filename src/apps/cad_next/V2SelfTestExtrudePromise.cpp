@@ -212,6 +212,8 @@ namespace {
     both.ordered.push_back(solid);
     viewport.SetSelection(both);
     window.RunCommand("part.extrude");   // 下見と棚
+    // 読み取り結果をここで控える。断られたときに、CAD が何を輪郭と見たかが要る。
+    const std::string readAs = window.StatusText().toStdString();
     // 人が「足す」を選ぶ。
     window.ExtrudeDock().ChooseBoolean(
         kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart);
@@ -238,8 +240,8 @@ namespace {
             found = true;
         }
     }
-    return Explain((std::string("選んだ演算のまま作られる(帯は ")
-                       + window.StatusText().toStdString() + ")").c_str(),
+    return Explain((std::string("選んだ演算のまま作られる(読み取り: ") + readAs
+                       + " / 帯は " + window.StatusText().toStdString() + ")").c_str(),
         found);
 }
 

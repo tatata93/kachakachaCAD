@@ -87,8 +87,8 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("続けて正対できる", true);
 }
 
-//! VF-03/04。立体の面(平らな面)へ正対する。親の立体全体を Fit しないこと。
-[[nodiscard]] bool CaseFacingASolidFace(V2MainWindow& window)
+//! 立体を1つ作る。前の試験の残りに頼らない。
+[[nodiscard]] EntityId MakeOneSolid(V2MainWindow& window)
 {
     window.RunCommand("file.new");
     auto& viewport = window.Viewport();
@@ -102,7 +102,14 @@ using kachakacha::v2::domain::EntityKind;
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
     window.RunCommand("part.extrude");
     window.RunCommand("part.extrude");
-    const EntityId part = FirstOfKind(window, EntityKind::Part);
+    return FirstOfKind(window, EntityKind::Part);
+}
+
+//! VF-03/04。立体の面(平らな面)へ正対する。親の立体全体を Fit しないこと。
+[[nodiscard]] bool CaseFacingASolidFace(V2MainWindow& window)
+{
+    const EntityId part = MakeOneSolid(window);
+    auto& viewport = window.Viewport();
     if (!Explain("立体ができる", !part.IsNil())) {
         return false;
     }
@@ -146,8 +153,8 @@ using kachakacha::v2::domain::EntityKind;
 //! VF-05。立体そのものを選んでも断らない。中央と大きさは合わせる。
 [[nodiscard]] bool CaseFacingASolidDoesNotRefuse(V2MainWindow& window)
 {
-    const EntityId part = FirstOfKind(window, EntityKind::Part);
-    if (!Explain("前の試験の立体が残っている", !part.IsNil())) {
+    const EntityId part = MakeOneSolid(window);
+    if (!Explain("立体を作れる", !part.IsNil())) {
         return false;
     }
     auto& viewport = window.Viewport();

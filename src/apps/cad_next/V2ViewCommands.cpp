@@ -444,21 +444,21 @@ void V2MainWindow::AlignViewToSelection()
         SetStatus(QStringLiteral("正対: 作業平面・線・点のどれかを選んでください。"));
         return;
     }
-    const auto viewDirection = kachakacha::v2::view::ForwardOf(viewport_->Orientation());
+    // `PlanFacingSelection` は「いま見ている側に留まる」。正対のたびに裏へ回り込むと、
+    // 押すたびに模型が裏返って見えるためである。
+    // 「反対側から正対」は、**渡す視線を裏返して** その決まりに乗る。
+    // ここで法線を裏返すと、向こう側で元へ戻されてしまう。
+    const auto realDirection = kachakacha::v2::view::ForwardOf(viewport_->Orientation());
+    const auto viewDirection = facingFromBehind_ ? realDirection * -1.0 : realDirection;
     kachakacha::v2::geometry::Vector3 normal;
     kachakacha::v2::geometry::Vector3 uAxis;
     if (target.normal.has_value()) {
         normal = *target.normal;
         uAxis = target.uAxis.value_or(kachakacha::v2::geometry::Vector3{1.0, 0.0, 0.0});
-        // 裏返しに正対しない。いま見ている側に近いほうから見る。
-        // 「反対側から正対」を押したときだけ、わざと裏へ回る。
-        const bool facingAway = kachakacha::v2::geometry::Dot(normal, viewDirection) > 0.0;
-        if (facingAway != facingFromBehind_) {
-            normal = normal * -1.0;
-        }
     } else if (target.keepOrientation) {
         // 立体そのものには「正面」が無い。向きは変えず、中央と大きさだけ合わせる。
-        normal = viewDirection * -1.0;
+        // 立体そのものには「正面」が無い。いまの向きのままにする。
+        normal = realDirection * -1.0;
         uAxis = kachakacha::v2::view::RightOf(viewport_->Orientation());
     } else {
         // 面が分かっていないものは、点の並びから推す(V1 と同じ)。

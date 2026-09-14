@@ -174,48 +174,24 @@ namespace {
         return false;
     }
     // 立体 + 輪郭。読み取りの既定は「切削」。
-    // **選ぶのは新しく引いた矩形だけ。** 全部の線を選ぶと、1つ目の矩形
-    // (押し出しに使い切った分)まで輪郭に入り、2枚が同じ平面に載っていないと
-    // EXT-001 で断られる。ここで見たいのは演算の選び方であって、平面の話ではない。
-    std::vector<kachakacha::v2::base::EntityId> wiresBefore;
+    //
+    // 輪郭は **立体を作ったときの矩形をそのまま使う。** 2枚目を引き直すと、
+    // 引いた場所や吸着しだいで別の平面に載ることがあり、
+    // 「輪郭が同じ平面に載っていません」(EXT-001)で断られてしまう。
+    // ここで見たいのは棚で選んだ演算が残るかであって、平面の話ではない。
+    auto& viewport = window.Viewport();
+    kachakacha::v2::base::EntityId rectangle;
     for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
         if (entity.kind == kachakacha::v2::domain::EntityKind::Wire) {
-            wiresBefore.push_back(entity.id);
+            rectangle = entity.id;
+            break;
         }
     }
-    if (!Explain("2つ目の矩形を引ける", DrawClosedRectangle(window))) {
+    if (!Explain("立体を作った矩形が残っている", !rectangle.IsNil())) {
         return false;
-    }
-    auto& viewport = window.Viewport();
-    // 増えた線のうち **最後の1本だけ** を選ぶ。押し出しは出力の線も増やすので、
-    // 増えた分を全部入れると、別の平面の線まで輪郭になる。
-    std::vector<kachakacha::v2::base::EntityId> added;
-    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
-        if (entity.kind != kachakacha::v2::domain::EntityKind::Wire) {
-            continue;
-        }
-        if (std::find(wiresBefore.begin(), wiresBefore.end(), entity.id)
-            == wiresBefore.end()) {
-            added.push_back(entity.id);
-        }
-    }
-    if (!Explain((std::string("新しい矩形を選べる(増えた線 ")
-                     + std::to_string(added.size()) + " 本)").c_str(),
-            !added.empty())) {
-        return false;
-    }
-    // 断られたときに形が分かるように、矩形の隅を控える。
-    std::string corners;
-    for (const auto& curve : window.Session().Scene().curves) {
-        if (curve.entityId != added.back()) {
-            continue;
-        }
-        const auto point = curve.segment.StartPoint();
-        corners += "(" + std::to_string(point.x) + "," + std::to_string(point.y) + ","
-            + std::to_string(point.z) + ")";
     }
     kachakacha::v2::app::SelectionSet both;
-    both.entityIds.push_back(added.back());
+    both.entityIds.push_back(rectangle);
     both.entityIds.push_back(part);
     kachakacha::v2::app::SelectionRef solid;
     solid.entityId = part;
@@ -250,8 +226,7 @@ namespace {
             found = true;
         }
     }
-    return Explain((std::string("選んだ演算のまま作られる(隅: ") + corners
-                       + " / 読み取り: " + readAs
+    return Explain((std::string("選んだ演算のまま作られる(読み取り: ") + readAs
                        + " / 帯は " + window.StatusText().toStdString() + ")").c_str(),
         found);
 }

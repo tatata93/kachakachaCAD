@@ -6,19 +6,23 @@
       "request_id": "P1-EXTRUDE-R7",
       "base_commit": "cac4d722f091445dc856ff799c27e660c4b646db",
       "review_profile": "HIGH_RISK",
-      "scope_ja": "Phase 1 押し出し。R6 の指摘2件を直した分。詳細の窓が渡された決めごとを欄へ映すようにし、向きの解き方を1か所(ExtrudeDirectionForMode)へ集めて7通りすべてを解くようにした。覚える形とカーネルへ渡す形を分け(PreparedExtrudeChoice)、畳むのは『輪郭に垂直』だけにした。",
+      "scope_ja": "Phase 1 押し出し。R6 の指摘2件を直した分。詳細の窓が渡された決めごとを欄へ映すようにし、向きの解き方を1か所(ExtrudeDirectionForMode)へ集めて7通りすべてを解くようにした。覚える形とカーネルへ渡す形を分け(PreparedExtrudeChoice)、畳むのは『輪郭に垂直』だけにした。さらに棚が7通りすべてを名前で出せるようにして、棚の値を読まない特例(DockCanShowDirection)を消した。",
       "paths": [
         "src/apps/cad_next/V2ExtrudeDialog.cpp",
         "src/apps/cad_next/V2ExtrudeDialog.h",
         "src/apps/cad_next/V2ExtrudeInteractive.cpp",
+        "src/apps/cad_next/V2ExtrudeDock.cpp",
+        "src/apps/cad_next/V2ExtrudeDock.h",
         "src/apps/cad_next/V2PartCommands.cpp",
         "src/apps/cad_next/V2MainWindow.h",
-        "src/apps/cad_next/V2SelfTestExtrudePromise.cpp"
+        "src/apps/cad_next/V2SelfTestExtrudePromise.cpp",
+        "tools/qtstub/include/QtStubWidgets.h"
       ],
       "focus": [
         "7通りの向きが、矢印・下見・確定・保存・次回の初期値まで同じものになっているか",
         "『輪郭に垂直』だけを畳む判断が正しいか。残り5通りを畳まないことで、こちらとカーネルの解き方がずれる場面が無いか",
         "面の押し引きが決めた向きを覚えないための退避(rememberedDirection)に抜けが無いか",
+        "棚が3つ目の項目を出し入れするところで、選択や合図(signal)の扱いに穴が無いか",
         "窓が渡された値を映すようになったことで、逆に古い値を持ち回る場面が生まれていないか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"

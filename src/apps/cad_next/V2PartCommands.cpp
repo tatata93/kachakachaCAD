@@ -274,8 +274,14 @@ void V2MainWindow::ConfirmExtrude()
         SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
         return;
     }
-    auto profiles = facePushPull_ ? FaceProfilesNow()
-                                  : ExtrudeProfilesFor(selection.entityIds);
+    // 輪郭は **読み取りが輪郭と決めたものだけ。** 選んだもの全部ではない。
+    //
+    // 足す・引くでは立体も一緒に選ぶ。選択をそのまま輪郭にすると、
+    // 加工される立体まで輪郭に数えられ、「輪郭が同じ平面に載っていません」
+    // (EXT-001)で断られる。棚には「対象立体」と「輪郭」が別々に出ているのに、
+    // 実行だけが選択を読み直していた。開き直しの作り直しは
+    // 作り方の `profiles` を使っているので、そちらとも食い違っていた。
+    auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
     if (profiles.empty()) {
         SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
                                  "閉じた輪郭か、立体の平らな面を選んでください。"));
@@ -374,7 +380,10 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     }
     kachakacha::v2::domain::ExtrudeDefinition definition;
     // 面の押し引きは、いま作った縁のワイヤーが押し出しの元になる。
-    definition.profiles = facePushPull_ ? faceWires : viewport_->Selection().entityIds;
+    // 記録する輪郭も、読み取りが輪郭と決めたものだけ。選択を読み直さない。
+    // 読み直すと、足す・引くの相手の立体まで輪郭として記録され、
+    // 開き直したときに違うものを押そうとする。
+    definition.profiles = facePushPull_ ? faceWires : plan.profiles;
     // 向きは実際に押した向きを持つ。作業平面の法線を書き写すと、
     // 別の向きで押したときに、開き直すと違う向きへ押されてしまう。
     definition.direction = analysis.direction;

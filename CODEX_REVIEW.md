@@ -807,3 +807,226 @@ REGRESSION RISKS: 曲げ半径は保存形式・再評価・任意状態出力�
 安全に完了できる操作列としては認定しない。
 
 NEXT_ACTION: ClaudeがQ1-Q5-R3を追加commitで提出する。後続Phaseは先行してよいがQ4/Q5依存部分をR3後に再試験する。
+
+---
+
+## レビュー履歴の保持規則
+
+`CODEX_REVIEW.md` はREQUEST_ID単位の追記専用ログとして扱う。Claude側の
+`AI_HANDOFF_STATE.md` に処理済みと記録されるまで、未処理レビューを削除、置換、単純上書きしない。
+修正版が提出された場合も旧結果を残し、R1 FAILからR2 PASSのような経緯を追跡可能にする。
+
+---
+
+# Codex Review: P1-EXTRUDE-R4
+
+REQUEST_ID: P1-EXTRUDE-R4
+PHASE: 1 押し出し
+BASE: bd375c9
+HEAD: 906dd7e
+REVIEW_SCOPE: `bd375c9..906dd7e` の押し出し、transaction、失敗時復元、Windows検証
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T22:20:50+09:00
+
+## RESULT
+
+R3のtransaction入れ子、失敗後キャッシュ再構築、TrimCurveの範囲外アクセスは改善された。
+内側abortは外側transactionを失敗扱いにし、押し出し失敗後はDocument正本からSceneとキャッシュを
+再構築する。以前停止した `v2_robustness_tests` も今回は完走した。ただし、右棚の方向選択が実形状へ
+接続されておらず、公式Windows検証も固定HEADでは完走しないため受入不可である。
+
+## BLOCKERS
+
+### B1. 右棚の「方向」は表示だけで、矢印・下見・確定へ反映されない
+
+右棚には「面に垂直」「作業平面に垂直」があり変更通知も出るが、
+`RefreshExtrudeFromDock()` は反転、範囲、演算しか読み取らない。
+`ExtrudeBaseDirectionNow()` は面法線または輪郭の適合平面法線を常に選び、コンボの値を参照しない。
+さらに確定時は非面入力を無条件で `CustomXYZ` に上書きするため、「詳細...」で選んだ方向も失われる。
+
+- `src/apps/cad_next/V2ExtrudeDock.cpp:69-72,125`
+- `src/apps/cad_next/V2ExtrudeInteractive.cpp:108-142,265-280`
+- `src/apps/cad_next/V2PartCommands.cpp:219-227`
+
+UIが示す状態とCADの解釈が異なる。方向を一つの状態モデルへ統合し、右棚、詳細画面、矢印、下見、
+確定結果、保存定義が同じ値を使うこと。面の押し引きで変更不能なら、該当欄を隠すか理由付きで無効化する。
+
+### B2. 固定HEADで公式Windows検証ゲートが失敗する
+
+`scripts/check.ps1` を実行するとbuildは成功し、`v2_robustness_tests` もPASSしたが、141件中2件が失敗した。
+`v2_cad_next_smoke` は自己試験中に120秒でtimeoutし、`v2_package_zip` は同梱exeの自己試験が非0で終了した。
+結果は139/141 PASS、CTest終了コード8である。提出後の `f479814` が時間切れ修正を含むことは確認したが、
+固定HEAD `906dd7e` の判定へ混ぜない。
+
+## UX / STATE PROBLEMS
+
+- 内部処理が出した具体的診断を、`CommitExtrude()` の一般的な失敗文が上書きする経路がある。
+  利用者が直すべき対象、方向、演算を特定できる診断を最後まで保持すること。
+
+## MISSING TESTS
+
+1. 右棚の方向を切り替え、矢印、下見頂点、確定形状、保存後定義が同じ方向になるUI自己試験。
+2. 「詳細...」で方向を選んだ後、確定処理がその選択を上書きしない試験。
+3. Part作成後、最初のWire追加後、対象非表示化後に失敗を注入し、Document、履歴、各キャッシュ、
+   Scene、選択、Previewが開始前と同一になる試験。現行の不交差Boolean拒否はcommit前に止まり、
+   部分確定後のrollbackを直接検査していない。
+4. 公式 `scripts/check.ps1` と単独 `--self-test` の完走。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで修正すること。
+
+1. 押し出し方向を単一の状態モデルへ統合し、右棚と詳細画面から選んだ方向を矢印、下見、確定、保存へ接続する。
+2. `PrepareExtrudeChoice()` で利用者の方向指定を無条件上書きしない。変更不能な組合せはUIで先に説明して無効化する。
+3. 部分確定後の失敗注入試験を追加し、Document外状態を含む完全復元を検証する。
+4. 具体的な失敗理由を一般メッセージで失わない。
+5. 公式Windowsゲートを完走させ、新しいREQUEST_ID `P1-EXTRUDE-R5` と固定BASE/HEADを提出する。
+
+## 初見ユーザーの操作列
+
+### 押し出し
+
+1. 「押し出し」を選ぶ。
+2. 閉じた輪郭または面を選び、右棚に表示された入力解釈を確認する。
+3. 作るもの、方向、範囲、演算を選ぶ。
+4. 矢印または距離欄で寸法を決め、下見と数値が一致することを確認する。
+5. Enterまたは「確定」で作る。Escまたは「キャンセル」でDocumentを変えず終了する。
+
+固定HEADでは手順3の方向指定が動作へ反映されないため、この操作列を完了可能とは認定しない。
+
+### Surfaceを近似して70%曲げ、Wireを生成
+
+この固定範囲の主対象ではない。`Q1-Q5-R3` で確認する。
+
+REGRESSION RISKS: 方向状態の修正は面押し引き、別作業平面の輪郭、反転、対称押し出し、Boolean、
+保存再読込へ波及する。transaction変更は全Document操作へ波及するため、失敗注入試験を維持すること。
+
+NEXT_ACTION: 上記を追加commitで修正し、`P1-EXTRUDE-R5` を提出する。R1〜R4は履歴として残す。
+
+---
+
+# Codex Review: Q1-Q5-R3
+
+REQUEST_ID: Q1-Q5-R3
+PHASE: Q1-Q5（正対・まとまり・HO見本・総合試験・曲げ半径・部材編集）
+BASE: bd375c9
+HEAD: 906dd7e
+REVIEW_SCOPE: `bd375c9..906dd7e` の部材番号、分割・統合、状態保持、Windows検証
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T22:20:50+09:00
+
+## RESULT
+
+R2の無効部材番号の丸めは修正され、変更操作では有効な1部材だけを要求する。分割・統合も現在の
+`manualBoundaries` から同じ境界候補を作り、Documentへ保存してUndo/Redoと再読込を通すようになった。
+しかし、UIが約束する事前比較をせず即時確定し、結果不一致時もrollbackせず、分割のたびに利用者が設定した
+曲げ状態とLOCK値を全消去する。実製作データを安全に編集できないためFAILとする。
+
+## BLOCKERS
+
+### B1. 「前と後を見せてから決める」と表示するが、Split/Mergeは即時確定する
+
+コマンド説明は変更前後を見て決められると明記する一方、両コマンドは `CommandMode::Instant` であり、
+`ApplyBandPartition()` は候補を受け取ると直ちに `ApplyBandBoundaries()` でDocumentを変更する。
+Viewportの比較下見、適用、キャンセルという判断段階がない。
+
+- `src/next/kachakacha/app/CommandCatalog.cpp:462-470`
+- `src/apps/cad_next/V2PanelEditCommands.cpp:116-142`
+
+候補をツールセッション所有のPreviewとして表示し、部材数、最小幅、誤差、接着線の変化を比較してから
+明示的に適用できるようにする。キャンセル、Esc、ツール切替ではDocumentを変更してはならない。
+
+### B2. Previewと確定結果が不一致でも、誤ったDocumentを確定したままにする
+
+`ApplyBandPartition()` は先に境界をcommit・再構築し、その後に実部材数を比較する。不一致時は状態欄へ
+警告するだけでrollbackしない。Previewと確定結果が違う場合に利用者のモデルを変更したまま残すのは不可。
+
+- `src/apps/cad_next/V2PanelEditCommands.cpp:125-142`
+
+候補を正本へ入れる前にstageして評価するか、一つのtransaction内で再評価し、不一致ならDocumentと
+Sceneを開始前へ戻すこと。成功時はUndo一回、失敗時はUndo履歴を増やさない。
+
+### B3. 一部材の分割・統合で、全ての手入力曲げ設定を無言で消す
+
+境界変更時に `bandProgress`、`creaseProgress`、`bendRadiusMm`、`bendRadiusLock` を全消去し、
+`unfoldBaseRail` も0へ戻す。別部材の70%組立状態やLOCK半径まで失われるため、AUTO再計算が利用者入力を
+勝手に消してはならないという受入条件に反する。
+
+- `src/apps/cad_next/V2PanelEditCommands.cpp:82-91`
+
+変化しない部材は安定IDまたは境界対応で値を保持する。分割された部材の継承規則、統合時の競合規則、
+展開基準の再対応を仕様化し、不可避な破棄だけをPreviewで明示して適用前に選ばせる。
+
+### B4. 境界と最小幅の非有限値検査に抜けがある
+
+`ValidRailParameters()` は最後の要素を `isfinite` で検査せず、端点の `abs(NaN)` 比較もfalseになるため、
+`{0, 0.5, NaN}` を有効と扱い得る。`minimumPartWidthMm` や幅がNaNの場合も最小幅拒否をすり抜ける。
+
+- `src/next/kachakacha/fabrication/BandPartition.cpp:21-35,56-66`
+
+全rail、全利用幅、最小幅を先に有限値検査し、最小幅は0以上に制限する。NaN、Inf、逆順、重複端点を
+core試験へ追加する。
+
+### B5. 固定HEADで公式Windows検証ゲートが失敗する
+
+`scripts/check.ps1` はbuild成功、`v2_robustness_tests` PASSまで改善したが、`v2_cad_next_smoke` timeoutと
+`v2_package_zip` の自己試験失敗により139/141 PASS、CTest終了コード8だった。提出後の修正commitは
+固定範囲の判定に含めない。
+
+## UX / STATE PROBLEMS
+
+- 表示目的では無効番号を部材1へ代替するため、入力欄に999が残ったまま右棚が部材1の値を表示し得る。
+  変更は拒否できても、現在どの部材を読んでいるかが一致しない。無効表示と理由をその場に出すこと。
+- 部材幅は中央列だけから求められる。先細りや二重曲率面では端部が最小幅未満でも通り得るため、
+  複数列の最小実幅で判定・表示すること。
+
+## MISSING TESTS
+
+1. Preview表示中のApply/Cancel/Esc/ツール切替。取消時Document、履歴、Sceneが完全不変。
+2. 確定結果不一致を注入し、commitもUndo履歴も残らない試験。
+3. 3部材へ異なるLOCK半径、組立率、折り線率、展開基準を設定し、中央分割・統合後の継承、
+   Undo/Redo、保存再読込を検査する試験。
+4. rail末尾NaN、途中Inf、重複、逆順、NaN/Inf幅、NaN/負の最小幅を拒否するcore試験。
+5. 幅が変化する面で中央は合格、端は不合格となるケース。
+6. 公式 `scripts/check.ps1` と単独 `--self-test` の完走。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで修正すること。
+
+1. Split/MergeをPreview所有の対話ツールにし、変更前後と製作指標を表示してApply/Cancelを提供する。
+2. Previewと再評価結果が不一致なら全状態をrollbackし、警告だけで確定状態を残さない。
+3. 境界変更時に未変更部材の組立率、曲げ率、AUTO/LOCK半径、展開基準を保持する安定した再対応規則を実装する。
+4. BandPartitionの全数値を有限値検査し、変形面の最小実幅を用いる。
+5. 無効な部材番号では別部材の値を表示せず、入力欄の近くに理由を示す。
+6. 公式Windowsゲートを完走させ、新しいREQUEST_ID `Q1-Q5-R4` と固定BASE/HEADを提出する。
+
+## 初見ユーザーの操作列
+
+### 押し出し
+
+1. 「押し出し」を選ぶ。
+2. 閉じた輪郭または面を選び、入力解釈を確認する。
+3. 出力、方向、距離、演算を決め、下見を確認する。
+4. Enterまたは「確定」で作る。Escまたは「キャンセル」で中止する。
+
+押し出し自体の判定は `P1-EXTRUDE-R4` を参照する。
+
+### Surfaceを近似して70%曲げ、Wireを生成
+
+1. 「製作モデルを作る」を選ぶ。
+2. Surfaceまたは連続Faceを選び、CADの入力解釈を確認する。
+3. 候補ごとの部材数、誤差、切れ目を比較して採用する。
+4. ApproxPartを選び、対象部材とAUTO/LOCK半径を確認する。
+5. 組立率を70%へ動かし、割合、実寸曲げ値、Viewport形状が同期することを確認する。
+6. 「現在状態を固定」でWireを生成し、元ApproxPartが可変状態のまま残ることを確認する。
+
+固定HEADでは部材の分割・統合を事前比較できず、実行すると手入力した曲げ状態が消えるため、
+実用上安全な操作列として認定しない。
+
+REGRESSION RISKS: 状態再対応は保存形式、部材番号、任意状態出力、型紙へ波及する。Preview導入は
+ActiveTool、PreviewOwner、Cancel、Undo/Redoと結線し、Line→Select→Approximation切替でも残留を試験すること。
+
+NEXT_ACTION: 上記を追加commitで修正し、`Q1-Q5-R4` を提出する。R1〜R3は履歴として残す。

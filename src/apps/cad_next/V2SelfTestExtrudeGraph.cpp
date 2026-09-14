@@ -10,6 +10,8 @@
 #include "V2SelfTest.h"
 
 #include "V2ExtrudeDock.h"
+
+#include "kachakacha/modeling/ExtrudeInput.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -325,6 +327,76 @@ using kachakacha::v2::domain::Visibility;
     return Explain("隠したのも一緒にやり直される", VisibleParts(window) == 1);
 }
 
+//! Codex P1-EXTRUDE-R3 B2。**途中で断られたときに、覚えている形まで戻ること。**
+//!
+//! 文書だけ戻して、覚えている立体・辺・場面が新しいままだと、
+//! 文書に無い立体が画面と書き出しに残る。
+//! 断らせるのは本物の道でやる。足す押し出しを、重ならない場所へ置く。
+[[nodiscard]] bool CaseRefusedExtrudeLeavesNoTrace(V2MainWindow& window)
+{
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");
+    const EntityId part = LastOfKind(window, EntityKind::Part);
+    if (!Explain("立体ができる", !part.IsNil())) {
+        return false;
+    }
+
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    const int partsBefore = CountOfKind(window, EntityKind::Part);
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    const int shapesBefore = window.KernelShapeCount();
+    const int visibleBefore = VisibleParts(window);
+
+    // 同じ場所へ、同じ大きさで、もっと短く足す。すっぽり中へ入るので
+    // 体積が変わらず、EXT-004「重なっていません」で断られる。
+    if (!Explain("2つ目の矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    auto both = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire);
+    both.entityIds.push_back(part);
+    kachakacha::v2::app::SelectionRef solid;
+    solid.entityId = part;
+    both.ordered.push_back(solid);
+    viewport.SetSelection(both);
+    const int wiresWithSecond = CountOfKind(window, EntityKind::Wire);
+
+    window.RunCommand("part.extrude");   // 下見と棚
+    window.ExtrudeDock().ChooseBoolean(
+        kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart);
+    window.ExtrudeDock().TypeDistanceMm(1.0);
+    window.RunCommand("part.extrude");   // 確定。ここで断られる。
+
+    if (!Explain((std::string("断られる(帯は ") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            CountOfKind(window, EntityKind::Part) == partsBefore)) {
+        return false;
+    }
+    // 2つ目の矩形は人が引いたものなので残る。押し出しが増やした分だけが無いこと。
+    if (!Explain((std::string("線は引いた分のまま(")
+                     + std::to_string(CountOfKind(window, EntityKind::Wire)) + " 本)").c_str(),
+            CountOfKind(window, EntityKind::Wire) == wiresWithSecond)) {
+        return false;
+    }
+    if (!Explain("隠された立体が無い", VisibleParts(window) == visibleBefore)) {
+        return false;
+    }
+    // ここが本題。覚えている形も増えていないこと。
+    if (!Explain((std::string("覚えている形も増えない(") + std::to_string(shapesBefore)
+                     + " → " + std::to_string(window.KernelShapeCount()) + ")").c_str(),
+            window.KernelShapeCount() == shapesBefore)) {
+        return false;
+    }
+    // 断られたのだから、版番号は2つ目の矩形を引いたところから進んでいない。
+    return Explain("断ったあとに取り消すと、2つ目の矩形を引く前へ戻る",
+        window.Session().GetDocument().Revision() != revision
+            && window.Session().GetDocument().CanUndo());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudeGraphCases()
@@ -337,6 +409,8 @@ std::vector<SelfTestCase> ExtrudeGraphCases()
         {"面の押し引きは保存して開き直しても残る", CaseFacePushPullSurvivesSaveAndReopen},
         {"面の押し引きは1回の取り消しとやり直しで往復する",
             CaseFacePushPullRoundTripsInOneUndo},
+        {"断られた押し出しは覚えている形にも跡を残さない",
+            CaseRefusedExtrudeLeavesNoTrace},
     };
 }
 

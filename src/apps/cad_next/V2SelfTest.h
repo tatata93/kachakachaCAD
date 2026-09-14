@@ -61,6 +61,9 @@ struct SelfTestCase {
 //! 画面の読みやすさ(作図面が見えるか・選択が両向きに伝わるか・カーソル・ホバー)。
 [[nodiscard]] std::vector<SelfTestCase> ScreenCases();
 
+//! 押し出しの約束(下見中は文書不変・1操作1取り消し・選んだ演算の保持)。
+[[nodiscard]] std::vector<SelfTestCase> ExtrudePromiseCases();
+
 //! HO 流線形前頭部を使った総合試験(TM / UI-TM)。
 [[nodiscard]] std::vector<SelfTestCase> HoModelCases();
 

@@ -276,7 +276,8 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         return ApplyDrawingState(name);
     }
     if (name == QStringLiteral("sample") || name == QStringLiteral("railway-nose")
-        || name == QStringLiteral("select") || name == QStringLiteral("export")) {
+        || name == QStringLiteral("railway-nose-ho") || name == QStringLiteral("select")
+        || name == QStringLiteral("export")) {
         return ApplySelectionState(name);
     }
     if (name == QStringLiteral("win95")) {

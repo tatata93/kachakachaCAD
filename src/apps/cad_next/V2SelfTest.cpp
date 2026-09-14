@@ -73,9 +73,11 @@ namespace {
     const std::vector<SelfTestCase> facing = FacingCases();
     const std::vector<SelfTestCase> groups = GroupCases();
     const std::vector<SelfTestCase> hoModel = HoModelCases();
+    const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     cases.insert(cases.end(), screen.begin(), screen.end());
     cases.insert(cases.end(), facing.begin(), facing.end());
     cases.insert(cases.end(), groups.begin(), groups.end());
+    cases.insert(cases.end(), promise.begin(), promise.end());
     cases.insert(cases.end(), hoModel.begin(), hoModel.end());
     const std::vector<SelfTestCase> semantics = SemanticStateCases();
     cases.insert(cases.end(), semantics.begin(), semantics.end());

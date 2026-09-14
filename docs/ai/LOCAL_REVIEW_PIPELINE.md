@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(14 の場面・30 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -84,7 +84,21 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 - **REQUEST_ID と BASE は Claude が固定します。**
 - **HEAD は機械が固定します。**実際にビルドした commit しか対象になりません。
 - このファイルが無いビルドでは、Codex は一度も起動しません。
-- 同じ REQUEST_ID は二度受け付けません。直したら `R5 → R6` にします。
+- **レビュー済みの REQUEST_ID は二度受け付けません。**直したら `R5 → R6` にします。
+  ただし「Codex が入っていなかった」等でレビューが**実際には行われなかった**場合は、
+  同じ REQUEST_ID をもう一度出せます。番号を使い切るのはレビューの成立だけです。
+- 1回のビルドで複数の依頼を出すこともできます。同じ HEAD を共有する形です。
+
+```json
+{
+  "schema_version": 1,
+  "kind": "review_request_declarations",
+  "requests": [
+    { "request_id": "P1-EXTRUDE-R5", "base_commit": "...", "review_effort": "HIGH" },
+    { "request_id": "Q1-Q5-R4",      "base_commit": "...", "review_effort": "HIGH" }
+  ]
+}
+```
 
 ## 守っていること
 

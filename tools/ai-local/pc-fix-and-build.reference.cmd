@@ -150,8 +150,14 @@ if defined APP_SELFTEST_RC (
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\ai-local\review-enqueue.ps1" -RepoRoot "%~dp0." -ReviewCommit "!REVIEW_HEAD!" -TestedCommit "!TESTED_HEAD!" -BuildResult "!BUILD_WORD!" -TestResult "!TEST_WORD!" -SelfTestResult "!APP_WORD!" -Branch "!TEST_BRANCH!" -CtestEvidence "!CTEST_EVIDENCE!" -LogPath "_claudeout/run.txt" >> "%LOG%" 2>&1
 echo enqueue_rc=!ERRORLEVEL! >> "%LOG%"
 
+REM 古い版のまま居座っている見張りだけを引き取らせる。
+REM 今の版で動いているものには触らない(レビュー中かもしれない)。
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\ai-local\stop-stale-dispatcher.ps1" -RepoRoot "%~dp0." >> "%LOG%" 2>&1
+
 REM 常駐の見張りを起こす。既に動いていれば二つ目は自分で黙って終わる。
 start "" /min powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\ai-local\review-dispatcher.ps1" -RepoRoot "%~dp0."
+REM 見張りが鍵を掴むまで少し待つ。待たずに数えると「動いていない」と出る。
+timeout /t 5 /nobreak > nul
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\ai-local\queue-status.ps1" -RepoRoot "%~dp0." >> "%LOG%" 2>&1
 
 echo DONE >> "%LOG%"

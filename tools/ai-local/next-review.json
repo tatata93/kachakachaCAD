@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "kind": "review_request_declaration",
-  "request_id": "AI-REVIEW-PIPELINE-R1",
+  "request_id": "AI-REVIEW-PIPELINE-R2",
   "base_commit": "f78d91bfb7c8658a64771f8f9fcec09c4910232f",
   "review_effort": "HIGH",
-  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤の新設。tools/ai-local/ の PowerShell 一式、docs/ai/CODEX_REVIEW_POLICY.md、docs/ai/LOCAL_REVIEW_PIPELINE.md、.gitignore の .ai-runtime/ 追加。製品コード(src/)には触れていない。",
+  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R1 は PC に Codex の実行ファイルが 見つからず ERROR で終わったため(レビューは成立していない)、番号を R2 に上げた。tools/ai-local/ の PowerShell 一式、docs/ai/ の規約・仕組み・JSON の形、.gitignore の .ai-runtime/ 追加。製品コード(src/)には触れていない。",
   "focus": [
     "依頼が無いときに Codex が起動し得る経路が本当に無いか",
     "原子的な取得(File.Move)が二重レビューを防ぎ切れているか",
@@ -12,7 +12,9 @@
     "落ちた後の復旧が、結果が既にある場合とまだ無い場合を取り違えないか",
     "tmp→rename の書き込みと *.tmp を読まない規則に抜けが無いか",
     "Codex の実 interface を調べてから使う経路に、想像した option が混じっていないか",
-    "Windows PowerShell 5.1 で動かない構文(ArgumentList, 三項, ?? など)が残っていないか"
+    "Windows PowerShell 5.1 で動かない構文(ArgumentList, 三項, ?? など)が残っていないか",
+    "レビューが成立しなかったときに REQUEST_ID を使い切らない扱いが正しいか",
+    "居座った古い常駐だけを引き取らせる判定が、レビュー中のものを巻き込まないか"
   ],
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
 }

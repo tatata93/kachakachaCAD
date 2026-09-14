@@ -158,6 +158,19 @@ function Invoke-Pass {
     Invoke-ClaimAndRunPass
 }
 
+# A resident dispatcher keeps running its own code from the moment it started.
+# When a new version of these scripts arrives from the cloud, the old resident
+# would quietly keep the old behaviour, so it stands down instead; the next
+# build starts a fresh one.
+function Get-ScriptSignature {
+    $stamp = ''
+    foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File |
+                        Where-Object { $_.Name -like '*.ps1' } | Sort-Object Name)) {
+        $stamp += $file.Name + '=' + $file.LastWriteTimeUtc.Ticks + ';'
+    }
+    return $stamp
+}
+
 try {
     Say "startup recovery scan"
     & (Join-Path $PSScriptRoot 'review-recover.ps1') -RepoRoot $RepoRoot -Quiet | Out-Null
@@ -175,8 +188,13 @@ try {
     $watcher.EnableRaisingEvents = $true
     Say "watching $($paths.Incoming) (a full scan also runs every $IntervalSeconds seconds)"
 
+    $signatureAtStart = Get-ScriptSignature
     while ($true) {
         Invoke-Pass
+        if ((Get-ScriptSignature) -ne $signatureAtStart) {
+            Say "the review scripts changed; standing down so the next build starts the new one"
+            exit 0
+        }
         # WaitForChanged returns early on an event and otherwise times out; either
         # way the next thing that happens is a full scan, so a lost event is
         # only a delay.

@@ -17,6 +17,20 @@
 - 詳細は `docs/product-principles.md`。Wire-first V2は `docs/v2/README.md` を入口とし、
   製作近似と型紙もV2規範文書を優先する。
 
+## レビューの通し方(2026-09-14 以降)
+
+Codex に「仕事はありますか」と探させません。**PC が本当にビルドしてテストに通ったときだけ、
+PowerShell の常駐が Codex を1回だけ起こします。**
+
+- Codex 側の規約: `docs/ai/CODEX_REVIEW_POLICY.md`(これが現行。答えの形もここ)
+- 仕組み: `docs/ai/LOCAL_REVIEW_PIPELINE.md`
+- JSON の形: `docs/ai/review-schemas.md`
+- 依頼の出し方: `tools/ai-local/next-review.json` をコミットに含める
+- いまの状態: `tools\ai-local\queue-status.cmd`
+
+`.ai/prompts/CODEX_REVIEWER.md` は `scripts/orchestrator.py` 経路のための古い契約です。
+ローカル・イベント駆動の経路では `docs/ai/CODEX_REVIEW_POLICY.md` が優先します。
+
 ## 変えてはいけない中核思想
 
 - プラ板・紙・3Dプリントとして**実際に作れること**を常に優先する。工作できない見た目だけの形状を作らない。

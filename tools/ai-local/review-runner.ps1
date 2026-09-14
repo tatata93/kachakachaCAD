@@ -101,7 +101,8 @@ function Write-ReviewResult {
         [string]$ReviewerCommand,
         [string]$StartedUtc,
         [string[]]$Notes,
-        [string]$Reviewer = 'codex'
+        [string]$Reviewer = 'codex',
+        [string]$LedgerEvent = 'review_completed'
     )
     $finished = Get-UtcStamp
     $streak = Get-ConsecutiveBlockingCount -RepoRoot $RepoRoot -RootRequestId $rootId
@@ -136,8 +137,10 @@ function Write-ReviewResult {
     }
     if ($Verdict -eq 'PASS') { $result['consecutive_blocking'] = 0 }
     Write-JsonAtomic -Path $resultJson -Value ([pscustomobject]$result) | Out-Null
+    # An infrastructure failure is not a verdict. Only a real review closes a
+    # REQUEST_ID; otherwise the same id could never be tried again.
     Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
-        event = 'review_completed'; request_id = $requestId; root_request_id = $rootId
+        event = $LedgerEvent; request_id = $requestId; root_request_id = $rootId
         base_commit = $baseCommit; review_commit = $reviewCommit
         verdict = $Verdict; next_action = $effectiveNext
         blocking_count = $BlockingCount; reviewer = $Reviewer; exit_code = $ExitCode
@@ -220,7 +223,8 @@ if ($null -eq $interface -or -not $interface.probe_ok) {
     Write-TextAtomic -Path $resultText -Text "reviewer unavailable on this machine" | Out-Null
     Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
         -ExitCode 127 -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
-        -Notes @('no codex executable was found or it does not support "codex exec"') -Reviewer 'none' | Out-Null
+        -Notes @('no codex executable was found or it does not support "codex exec"') -Reviewer 'none' `
+        -LedgerEvent 'review_unavailable' | Out-Null
     exit 4
 }
 
@@ -271,7 +275,7 @@ if ($add.ExitCode -ne 0) {
     Write-TextAtomic -Path $resultText -Text ("review worktree could not be created:`n" + $add.StdErr) | Out-Null
     Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
         -ExitCode $add.ExitCode -ReviewerCommand $commandLine -StartedUtc (Get-UtcStamp) `
-        -Notes @('git worktree add failed') | Out-Null
+        -Notes @('git worktree add failed') -LedgerEvent 'review_unavailable' | Out-Null
     exit 5
 }
 

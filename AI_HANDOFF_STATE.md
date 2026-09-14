@@ -11,10 +11,10 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R1
+REQUEST_ID: AI-REVIEW-PIPELINE-R2
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
-STATUS: READY_FOR_CODEX(新しい経路の最初の1件。この依頼自身が新経路を通る)
+STATUS: READY_FOR_CODEX(R1 は PC に Codex の実行ファイルが無く ERROR。番号を上げた)
 REVIEW_STATUS: PENDING_CODEX
 BASE: f78d91b
 HEAD: (PC が決める。ビルドして試験に通った commit)
@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(12 項目)
+  ＋ PC で `review-selftest.ps1`(14 の場面・30 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -147,6 +147,16 @@ PC へ束を送る前に通す。その検査つきで 134/134 が通る。
 R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
+
+- REQUEST_ID: AI-REVIEW-PIPELINE-R1
+  REVIEWED_HEAD: 4eee58f
+  ACTION: (レビュー不成立。Codex の実行ファイルが PC で見つからず ERROR)
+  FIX_COMMIT: -
+  RESULT: **判定は出ていない。**基盤側は起動せず、理由を
+    `.ai-runtime/results/AI-REVIEW-PIPELINE-R1.json` に残した。
+    当時の版が誤って「レビュー済み」として台帳に書いたため、番号は使い切られた。
+    台帳は追記専用なので書き換えず、AI-REVIEW-PIPELINE-R2 として出し直す。
+    以後は `review_unavailable` として記録し、番号を使い切らない。
 
 読んだだけでは「処理済み」にしない。**直して、build して、試験を通して、
 commit して、新しい REQUEST_ID で再レビューを出す** まで未解決として扱う。

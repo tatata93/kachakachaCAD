@@ -42,29 +42,114 @@ function New-CheckResult {
     }
 }
 
-function Get-CodexCandidates {
-    $list = New-Object System.Collections.ArrayList
-    if ($env:KACHA_CODEX_EXE) { [void]$list.Add($env:KACHA_CODEX_EXE) }
-    foreach ($name in @('codex', 'codex.cmd', 'codex.exe')) {
-        $cmd = Get-Command $name -ErrorAction SilentlyContinue
-        if ($cmd) { [void]$list.Add($cmd.Source) }
+# Where a reviewer command can plausibly live on Windows. Everything here is
+# looked at, and what was found is written down, so that "no reviewer" is a
+# reported fact with evidence rather than a guess.
+function Get-ReviewerSearchRoots {
+    $roots = @()
+    if ($env:APPDATA)      { $roots += (Join-Path $env:APPDATA 'npm') }
+    if ($env:LOCALAPPDATA) {
+        $roots += (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links')
+        $roots += (Join-Path $env:LOCALAPPDATA 'pnpm')
+        $roots += (Join-Path $env:LOCALAPPDATA 'Yarn\bin')
+        $roots += (Join-Path $env:LOCALAPPDATA 'Programs')
+        $roots += (Join-Path $env:LOCALAPPDATA 'Programs\codex')
+        $roots += (Join-Path $env:LOCALAPPDATA 'npm')
     }
-    $guesses = @()
-    if ($env:APPDATA)      { $guesses += (Join-Path $env:APPDATA 'npm\codex.cmd') }
-    if ($env:APPDATA)      { $guesses += (Join-Path $env:APPDATA 'npm\codex') }
-    if ($env:LOCALAPPDATA) { $guesses += (Join-Path $env:LOCALAPPDATA 'Programs\codex\codex.exe') }
-    if ($env:USERPROFILE)  { $guesses += (Join-Path $env:USERPROFILE '.codex\bin\codex.exe') }
-    if ($env:USERPROFILE)  { $guesses += (Join-Path $env:USERPROFILE '.cargo\bin\codex.exe') }
-    foreach ($g in $guesses) {
-        if (Test-Path -LiteralPath $g) { [void]$list.Add($g) }
+    if ($env:USERPROFILE) {
+        $roots += (Join-Path $env:USERPROFILE '.codex\bin')
+        $roots += (Join-Path $env:USERPROFILE '.codex')
+        $roots += (Join-Path $env:USERPROFILE '.local\bin')
+        $roots += (Join-Path $env:USERPROFILE '.cargo\bin')
+        $roots += (Join-Path $env:USERPROFILE '.bun\bin')
+        $roots += (Join-Path $env:USERPROFILE 'bin')
+        $roots += (Join-Path $env:USERPROFILE 'AppData\Local\Programs')
     }
-    $seen = @{}
+    if ($env:ProgramFiles)       { $roots += (Join-Path $env:ProgramFiles 'nodejs') }
+    if (${env:ProgramFiles(x86)}) { $roots += (Join-Path ${env:ProgramFiles(x86)} 'nodejs') }
     $unique = @()
-    foreach ($item in $list) {
+    $seen = @{}
+    foreach ($r in $roots) {
+        $key = $r.ToLowerInvariant()
+        if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $unique += $r }
+    }
+    return $unique
+}
+
+function Find-ReviewerExecutables {
+    param([Parameter(Mandatory=$true)][string]$Name)
+    $found = @()
+    if ($Name -eq 'codex' -and $env:KACHA_CODEX_EXE) { $found += $env:KACHA_CODEX_EXE }
+    if ($Name -eq 'claude' -and $env:KACHA_CLAUDE_EXE) { $found += $env:KACHA_CLAUDE_EXE }
+
+    foreach ($suffix in @('', '.cmd', '.exe', '.bat', '.ps1')) {
+        $cmd = Get-Command ($Name + $suffix) -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Source) { $found += $cmd.Source }
+    }
+    # where.exe knows about PATHEXT entries Get-Command can miss.
+    try {
+        $where = Invoke-Process -FilePath 'where.exe' -Arguments @($Name) -WorkingDirectory $RepoRoot -TimeoutSeconds 30
+        if ($where.ExitCode -eq 0) {
+            foreach ($line in ($where.StdOut -split "`r?`n")) {
+                if ($line.Trim().Length -gt 0) { $found += $line.Trim() }
+            }
+        }
+    } catch { }
+
+    foreach ($root in (Get-ReviewerSearchRoots)) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        foreach ($suffix in @('.cmd', '.exe', '.bat', '.ps1', '')) {
+            $candidate = Join-Path $root ($Name + $suffix)
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found += $candidate }
+        }
+        # One level down as well: Programs\<tool>\<tool>.exe is a common shape.
+        try {
+            foreach ($child in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+                foreach ($suffix in @('.cmd', '.exe', '.bat')) {
+                    $candidate = Join-Path $child.FullName ($Name + $suffix)
+                    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found += $candidate }
+                }
+            }
+        } catch { }
+    }
+
+    $unique = @()
+    $seen = @{}
+    foreach ($item in $found) {
+        if (-not $item) { continue }
         $key = $item.ToLowerInvariant()
         if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $unique += $item }
     }
     return $unique
+}
+
+# A written record of where we looked. Without it, "no reviewer found" is not
+# actionable from the other side of the machine.
+function Write-ReviewerSearchReport {
+    $roots = @()
+    foreach ($root in (Get-ReviewerSearchRoots)) {
+        $exists = Test-Path -LiteralPath $root
+        $entries = @()
+        if ($exists) {
+            try {
+                foreach ($file in @(Get-ChildItem -LiteralPath $root -File -ErrorAction SilentlyContinue)) {
+                    if ($file.Name -like 'codex*' -or $file.Name -like 'claude*') { $entries += $file.Name }
+                }
+            } catch { }
+        }
+        $roots += [pscustomobject]@{ path = $root; exists = $exists; reviewer_like_files = $entries }
+    }
+    $report = [pscustomobject]@{
+        schema_version = 1
+        kind           = 'reviewer_search'
+        probed_utc     = Get-UtcStamp
+        path_variable  = $env:PATH
+        codex_found    = @(Find-ReviewerExecutables -Name 'codex')
+        claude_found   = @(Find-ReviewerExecutables -Name 'claude')
+        roots          = $roots
+    }
+    Write-JsonAtomic -Path (Join-Path $paths.Logs 'reviewer-search.json') -Value $report | Out-Null
+    return $report
 }
 
 # Read the real help text and keep only the flags it mentions. This is the whole
@@ -130,8 +215,9 @@ function Resolve-CodexInterface {
             return $cached
         }
     }
+    Write-ReviewerSearchReport | Out-Null
     $best = $null
-    foreach ($candidate in (Get-CodexCandidates)) {
+    foreach ($candidate in (Find-ReviewerExecutables -Name 'codex')) {
         $probe = Get-CodexInterface -Exe $candidate
         if ($null -eq $best) { $best = $probe }
         if ($probe.probe_ok) { $best = $probe; break }
@@ -141,7 +227,7 @@ function Resolve-CodexInterface {
             schema_version = 1; kind = 'codex_interface'; probed_utc = Get-UtcStamp
             executable = ''; version = ''; has_exec = $false; supported_flags = @()
             help_excerpt = ''; probe_ok = $false
-            probe_note = 'no codex executable found on PATH or in the usual install locations'
+            probe_note = 'no codex executable found; see .ai-runtime/logs/reviewer-search.json for every place that was looked at'
         }
     }
     Write-JsonAtomic -Path $paths.Interface -Value $best | Out-Null

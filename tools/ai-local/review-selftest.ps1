@@ -15,6 +15,8 @@ Every case below is one of the promises the owner asked for:
   10 half-written file     -> never read, and cleaned up
   11 three blockings       -> a person is asked to decide
   12 the reviewer edits    -> reported, and the edit is dropped
+  13 no reviewer installed -> reported, and the REQUEST_ID is not used up
+  14 two requests, one HEAD-> both reviewed, once each
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -286,6 +288,57 @@ if ($roResult) { $noteText = (@($roResult.notes) -join ' ') }
 Check 'a reviewer that edits files is reported' ($noteText -like '*read-only*') ("notes=" + $noteText)
 Check 'the edit did not survive into the repository' (-not (Test-Path -LiteralPath (Join-Path $repo 'reviewer-was-here.txt'))) 'the file reached the repository'
 $env:KACHA_STUB_WRITE_FILE = ''
+
+# 13 ------------------------------------------------------------------------
+# An installation problem must not consume a REQUEST_ID. Only a real review does.
+$goodStub = $env:KACHA_CODEX_EXE
+$env:KACHA_CODEX_EXE = (Join-Path $WorkRoot 'no-such-reviewer.cmd')
+Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'no reviewer case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'no reviewer case')
+$noHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-NOCODEX-R1' -Base $baseCommit -Review $noHead -Tested $noHead | Out-Null
+Run-Dispatcher | Out-Null
+$noResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-NOCODEX-R1.json')
+Check 'a missing reviewer is reported, not hidden' `
+    (($null -ne $noResult) -and $noResult.verdict -eq 'ERROR') 'no ERROR result'
+Check 'a missing reviewer does not count as a review' `
+    (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-NOCODEX-R1')) 'it was counted as reviewed'
+
+$env:KACHA_CODEX_EXE = $goodStub
+Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
+Enqueue -RequestId 'T-NOCODEX-R1' -Base $baseCommit -Review $noHead -Tested $noHead | Out-Null
+Check 'the same request may be queued again once the reviewer is back' `
+    (Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-NOCODEX-R1.json')) 'it was refused'
+Run-Dispatcher | Out-Null
+$retry = Read-JsonFile -Path (Join-Path $paths.Results 'T-NOCODEX-R1.json')
+Check 'the retry is reviewed for real' (($null -ne $retry) -and $retry.verdict -eq 'PASS') 'no PASS on retry'
+
+# 14 ------------------------------------------------------------------------
+# One build can carry several REQUEST_IDs that share the same HEAD.
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'two requests case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'two requests case')
+$twoHead = (Git @('rev-parse', 'HEAD')).Trim()
+$manyPath = Join-Path $repo 'next-review-many.json'
+Write-JsonAtomic -Path $manyPath -Value ([pscustomobject]@{
+    schema_version = 1
+    kind = 'review_request_declarations'
+    requests = @(
+        [pscustomobject]@{ request_id = 'T-MANY-A-R1'; base_commit = $baseCommit; review_effort = 'LOW'; scope_ja = 'a' },
+        [pscustomobject]@{ request_id = 'T-MANY-B-R1'; base_commit = $baseCommit; review_effort = 'LOW'; scope_ja = 'b' }
+    )
+}) | Out-Null
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $manyPath `
+    -ReviewCommit $twoHead -TestedCommit $twoHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+$beforeMany = Stub-CallCount
+Check 'both requests reach the queue' `
+    ((Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-MANY-A-R1.json')) -and
+     (Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-MANY-B-R1.json'))) 'one of them is missing'
+Run-Dispatcher | Out-Null
+Check 'both requests are reviewed, once each' ((Stub-CallCount) -eq ($beforeMany + 2)) ("calls=" + (Stub-CallCount))
+Check 'the first of the pair has a result' (Test-Path -LiteralPath (Join-Path $paths.Results 'T-MANY-A-R1.json')) 'no result for A'
+Check 'the second of the pair has a result' (Test-Path -LiteralPath (Join-Path $paths.Results 'T-MANY-B-R1.json')) 'no result for B'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

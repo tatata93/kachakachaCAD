@@ -835,6 +835,16 @@ $damage = Get-ReviewLedgerDamage -RepoRoot $repo
 Check 'a line that follows a broken one starts on its own line' ($damage -le 1) ("damaged=" + $damage)
 $found = @(Get-ReviewLedgerEntries -RepoRoot $repo -RequestId 'T-AFTER-BREAK')
 Check 'the line written after the break can still be read back' ($found.Count -eq 1) ("found=" + $found.Count)
+# One unreadable line must not stop everything for ever. The queue keeps working.
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'after the damage' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'after the damage')
+$damagedHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-AFTERDAMAGE-R1' -Base $baseCommit -Review $damagedHead -Tested $damagedHead | Out-Null
+Run-Dispatcher | Out-Null
+Check 'work carries on even though a ledger line is unreadable' `
+    (Test-Path -LiteralPath (Join-Path $paths.Results 'T-AFTERDAMAGE-R1.json')) 'the queue stopped instead'
+Check 'the unreadable line is kept where a person can see it' `
+    (Test-Path -LiteralPath (Join-Path $paths.Logs 'review-ledger.damaged.jsonl')) 'it was not kept'
 
 # 32 ------------------------------------------------------------------------
 # Danger is an area, not one tree. A small careful change in the older model code

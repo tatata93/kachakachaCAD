@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(35 の場面・86 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(35 の場面・88 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)

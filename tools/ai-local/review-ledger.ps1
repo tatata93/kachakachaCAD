@@ -77,13 +77,25 @@ function Get-ReviewLedgerDamage {
     if (-not (Test-Path -LiteralPath $paths.Ledger)) { return 0 }
     $lines = @(Read-LedgerLines -Path $paths.Ledger)
     $damaged = 0
+    $damagedText = @()
     for ($index = 0; $index -lt $lines.Count; $index++) {
         $line = $lines[$index]
         if (-not $line -or $line.Trim().Length -eq 0) { continue }
         # The very last line may be half written at this instant. That is a write
         # in progress, not damage, and calling it damage would refuse good work.
         if ($index -eq ($lines.Count - 1)) { continue }
-        try { $null = $line | ConvertFrom-Json } catch { $damaged++ }
+        try { $null = $line | ConvertFrom-Json } catch { $damaged++; $damagedText += $line }
+    }
+    # Keep the unreadable lines where a person can look at them. They are never
+    # removed from the ledger itself - that file is only ever appended to.
+    if ($damaged -gt 0) {
+        $keep = Join-Path $paths.Logs 'review-ledger.damaged.jsonl'
+        try {
+            if (-not (Test-Path -LiteralPath $keep)) {
+                [System.IO.File]::WriteAllText($keep, (($damagedText -join "`r`n") + "`r`n"),
+                    (New-Object System.Text.UTF8Encoding($false)))
+            }
+        } catch { }
     }
     return $damaged
 }
@@ -142,11 +154,23 @@ function Test-AlreadyReviewed {
         [Parameter(Mandatory=$true)][string]$RepoRoot,
         [Parameter(Mandatory=$true)][string]$RequestId
     )
-    $entries = Get-ReviewLedgerEntries -RepoRoot $RepoRoot -RequestId $RequestId
-    foreach ($e in $entries) {
+    foreach ($e in (Get-ReviewLedgerEntries -RepoRoot $RepoRoot -RequestId $RequestId)) {
         if ($e.event -eq 'review_completed') { return $true }
     }
-    return $false
+    # The ledger is the record, but it is not the only one. A result file for this
+    # request is also proof that it was reviewed. Two sources mean one unreadable
+    # line cannot make the answer unknowable.
+    $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
+    $resultPath = Join-Path $paths.Results ($RequestId + '.json')
+    $result = Read-JsonFile -Path $resultPath
+    if ($null -eq $result) { return $false }
+    $outcome = ''
+    $verdict = ''
+    foreach ($p in $result.PSObject.Properties) {
+        if ($p.Name -eq 'outcome') { $outcome = [string]$p.Value }
+        if ($p.Name -eq 'verdict') { $verdict = [string]$p.Value }
+    }
+    return ($outcome -eq 'REVIEWED' -and @('PASS', 'BLOCKING', 'STOP') -contains $verdict)
 }
 
 # The same commit must not be reviewed twice under different request ids either.
@@ -225,7 +249,11 @@ function Get-ConsecutiveBlockingCount {
             # Everything a person has already looked at stops counting.
             if ($loggedAt -and $loggedAt -le $clearedAt) { break }
         }
-        if ([string]$entries[$i].next_action -eq 'FIX_AND_REVIEW') { $count++ } else { break }
+        # Count the VERDICT, not what we decided to do about it. The third
+        # blocking review has its next_action raised to HUMAN_DECISION_REQUIRED,
+        # and counting that field made the counter forget the review was blocking
+        # at all - so the fourth try sailed straight through.
+        if ([string]$entries[$i].verdict -eq 'BLOCKING') { $count++ } else { break }
     }
     return $count
 }

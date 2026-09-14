@@ -130,6 +130,10 @@ if ($status.unprocessed_results.Count -gt 0) {
     }
     Write-Host ''
 }
+if ($ledgerDamage -ne 0) {
+    Write-Host ("  the ledger has {0} line(s) that cannot be read (kept in logs\review-ledger.damaged.jsonl)" -f $ledgerDamage) -ForegroundColor Yellow
+    Write-Host ''
+}
 Write-Host '  recent ledger entries:'
 foreach ($e in $ledgerTail) {
     $verdict = ''

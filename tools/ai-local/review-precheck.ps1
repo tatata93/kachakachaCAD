@@ -616,10 +616,15 @@ function Invoke-ManifestPrecheck {
         }
     }
 
+    # A line nobody can read is worth saying out loud, every time. It is not worth
+    # stopping all future work for ever: "already reviewed" is also answered by the
+    # result files, so one bad line does not make the question unanswerable. The
+    # unreadable lines are kept in logs/review-ledger.damaged.jsonl.
     $damage = Get-ReviewLedgerDamage -RepoRoot $RepoRoot
     if ($damage -gt 0) {
-        $problems += ("AIR-E061 the ledger has " + $damage +
-                      " line(s) that cannot be read; it cannot answer whether this was reviewed already")
+        Write-AiLog -Message ('precheck: the ledger has ' + $damage +
+            ' line(s) that cannot be read; they are kept in logs/review-ledger.damaged.jsonl') `
+            -Level 'WARN' -LogPath $paths.Dispatcher -Quiet:$Quiet
     }
 
     $gitExe = Resolve-GitExe

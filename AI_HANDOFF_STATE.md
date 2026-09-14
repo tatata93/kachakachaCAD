@@ -9,28 +9,73 @@ REQUEST_ID: P1-EXTRUDE-R4
 TASK_ID: Phase 1 押し出し
 PHASE: 1
 STAGE: 1/1
-STATUS: PC_VERIFICATION_PENDING(R3 の B1〜B3 を直した)
-REVIEW_STATUS: NOT_SUBMITTED(PC の build / CTest / 自己試験が通ってから出す)
+STATUS: READY_FOR_CODEX(R3 の B1〜B3 を直した)
+REVIEW_STATUS: PENDING_CODEX
 BASE: bd375c9
-HEAD: (PC が通った commit を Claude が固定して入れる)
-REVIEW_SCOPE: bd375c9..HEAD のうち、押し出し・Document の入れ子・並びの外読み
+HEAD: 906dd7e
+REVIEW_SCOPE: bd375c9..906dd7e のうち、押し出し・Document の入れ子・並びの外読み
 REVIEW_FOCUS: 内側の取りやめを外側が飲み込まないこと。断られたときに
   覚えている形と場面まで戻ること。Windows の Debug が止まらないこと
+BUILD: PASS(Windows MSVC 2022 x64 / 雲 core g++)
+TEST: PASS(**Windows CTest 141/141、アプリ自己試験 225/225**、
+  雲 core 134/134、並びの検査つき Debug 134/134、Qt 当て木 69 files)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
 REQUEST_ID: Q1-Q5-R3
 TASK_ID: Q1〜Q5(正対・まとまり・HO見本・総合試験・曲げ半径・部材編集)
 PHASE: Q1-Q5
-STATUS: PC_VERIFICATION_PENDING(R2 の B1〜B3 を直した)
-REVIEW_STATUS: NOT_SUBMITTED(同上)
+STATUS: READY_FOR_CODEX(R2 の B1〜B3 を直した)
+REVIEW_STATUS: PENDING_CODEX
 BASE: bd375c9
-HEAD: (PC が通った commit を Claude が固定して入れる)
-REVIEW_SCOPE: bd375c9..HEAD のうち、Q1〜Q5 に関わる分
+HEAD: 906dd7e
+REVIEW_SCOPE: bd375c9..906dd7e のうち、Q1〜Q5 に関わる分
 REVIEW_FOCUS: 無い部材番号を丸めないこと。分ける前に見せた候補と、
   決めたあとに変える境目が同じものであること
+BUILD / TEST: 上と同じ固定範囲。同じ数字
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+## この固定範囲で、ほかに直したこと(Codex の指摘の外)
+
+Codex の指摘を直す途中で、**同じ形の間違いがもう1か所** 見つかったので直した。
+
+### 押し出しが選んだもの全部を輪郭にしていた(EXT-001)
+
+`ExtrudeProfilesFor(selection.entityIds)` と書いてあり、足す・引くで
+一緒に選ぶ立体まで輪郭に数えていた。だから
+「輪郭が同じ平面に載っていません」で断られていた。
+棚には「対象立体」と「輪郭」が別々に出ている。読み取りは正しく分けている。
+**実行だけが選択を読み直していた。** R2 の B2 で直したのと同じ形である。
+記録する `definition.profiles` も同じだったので直した。
+
+### 押し出しの向きの決めどころが2つあった(EXT-007)
+
+矢印と下見は輪郭の平面へ向くようにしたのに、確定だけが作業平面の法線を
+使っていた。別の平面に引いた輪郭(HO の窓など)を選ぶと
+「この向きでは厚みが出ません」で断られていた。確定も同じ1か所から取る。
+
+### HO の見本の面が一度も作られていなかった
+
+面の作り方が持つ「鎖」の指し先は **1本のワイヤー** であって曲線1本ではない。
+曲線の数だけ指し先を並べていたので `UI-R006` で断られ続けていた。
+V1 の見本(`RailwayNoseSample.cpp`)は最初から正しく書いてある。
+これを捕まえる core 試験を足した(雲で止まるので PC の往復が要らない)。
+
+作り方は PC で全部試して選んだ。断面を通すロフトだけが通る。
+案内付きロフトは断面から 0.19mm 外れ、曲線網は面が張れない。
+**使われない案内線は全部消した**(§44)。
+
+### 雲で捕まえられなかった間違いを、雲で捕まえるようにした
+
+往復が 12 分かかるので、PC でしか出ない間違いは高くつく。門を2つ足した。
+
+- `tools/bounds-check.sh`: 並びの外読み。`_GLIBCXX_DEBUG` つきで core 全試験。
+  Windows の Debug は `vector subscript out of range` で止まるが、
+  雲の Release + g++ は黙って素通りする。**実際に1件出た**(`TrimCurve`)。
+- `architecture_tests` の「画面の関数の中身がある」: 宣言だけ残して中身を消した
+  関数。型検査も CMake も見ないので、PC の link で初めて分かる。
+  **実際に1件出た**(`ApplyBandBoundaries`)。
 
 ## P1-EXTRUDE-R3 の指摘と、どう直したか
 
@@ -139,12 +184,12 @@ commit して、新しい REQUEST_ID で再レビューを出す** まで未解�
   REVIEWED_HEAD: bd375c9
   ACTION: FIX_AND_REVIEW
   FIX_COMMIT: 12bfded, 77a359d(入れ子の取りやめ・後始末・並びの外読み)
-  RESULT: PC 検証待ち。通ったら P1-EXTRUDE-R4 を提出(R3 は FAIL のまま)
+  RESULT: P1-EXTRUDE-R4 を 906dd7e で提出(R3 は FAIL のまま)
 - REQUEST_ID: Q1-Q5-R2
   REVIEWED_HEAD: bd375c9
   ACTION: FIX_AND_REVIEW
   FIX_COMMIT: 12bfded, 77a359d(番号を丸めない・見せた候補をそのまま使う)
-  RESULT: PC 検証待ち。通ったら Q1-Q5-R3 を提出(R2 は FAIL のまま)
+  RESULT: Q1-Q5-R3 を 906dd7e で提出(R2 は FAIL のまま)
 
 ## P1-EXTRUDE-R2 の指摘と、どう直したか
 
@@ -285,8 +330,8 @@ PASS(PC MSVC 2022 x64 Release / 雲 core g++)
 
 ### TEST
 
-- PC: CTest **134/134**、アプリ自己試験 **192/192**(`ce369eb` で確認)
-- 雲: core CTest 127/127、Qt 当て木の型検査 59 ファイル
+- PC: CTest **141/141**、アプリ自己試験 **225/225**(`906dd7e` で確認、2026-09-14)
+- 雲: core CTest 134/134、並びの検査つき Debug 134/134、Qt 当て木 69 ファイル
 
 ### ACCEPTANCE(押し出しの受入試験 EX-01〜08)
 
@@ -459,6 +504,20 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
+- REQUEST_ID: P1-EXTRUDE-R4 / TASK: Phase 1 押し出し / PHASE: 1
+  BASE: bd375c9 / HEAD: 906dd7e
+  REVIEW_STATUS: PENDING_CODEX
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(Windows + 雲)
+  TEST: PASS(Windows CTest 141/141、自己試験 225/225、雲 core 134/134)
+  前身: P1-EXTRUDE-R3(FAIL)。B1〜B3 を直し、MISSING TESTS を足した。
+  **HEAD は Claude が固定した。最新 commit から選ばせない。**
+- REQUEST_ID: Q1-Q5-R3 / TASK: Q1〜Q5 / PHASE: Q1-Q5
+  BASE: bd375c9 / HEAD: 906dd7e
+  REVIEW_STATUS: PENDING_CODEX
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(Windows + 雲)
+  TEST: PASS(同じ固定範囲、同じ数字)
+  前身: Q1-Q5-R2(FAIL)。B1〜B3 を直した。
+  **HEAD は Claude が固定した。最新 commit から選ばせない。**
 - REQUEST_ID: P1-EXTRUDE-R3 / TASK: Phase 1 押し出し / PHASE: 1
   BASE: 253e446 / HEAD: bd375c9
   REVIEW_STATUS: PENDING_CODEX

@@ -842,8 +842,11 @@ Check 'the line written after the break can still be read back' ($found.Count -e
 $v1Profile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('src/core/kachakacha/model/Part.cpp') `
     -DiffText "diff --git a/src/core/kachakacha/model/Part.cpp b/src/core/kachakacha/model/Part.cpp`n@@ -1 +1 @@`n+    width = 2.0;"
 Check 'the older model code is HIGH_RISK too' ($v1Profile.profile -eq 'HIGH_RISK') ("profile=" + $v1Profile.profile)
-$uiProfile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('src/apps/cad_next/V2Toolbar.cpp') `
-    -DiffText "diff --git a/src/apps/cad_next/V2Toolbar.cpp b/src/apps/cad_next/V2Toolbar.cpp`n@@ -1 +1 @@`n+    button->setText(tr(\"Draw\"));"
+# No backslash escapes in a PowerShell double-quoted string: \" does not escape a
+# quote, it ends the string early and the rest becomes further arguments. That is
+# how a diff line here turned into a parameter and stopped the whole self-test.
+$uiDiff = "diff --git a/src/apps/cad_next/V2Toolbar.cpp b/src/apps/cad_next/V2Toolbar.cpp`n@@ -1 +1 @@`n+    button->setText(tr('Draw'));"
+$uiProfile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('src/apps/cad_next/V2Toolbar.cpp') -DiffText $uiDiff
 Check 'a small button change is not HIGH_RISK' ($uiProfile.profile -ne 'HIGH_RISK') ("profile=" + $uiProfile.profile)
 
 # 33 ------------------------------------------------------------------------

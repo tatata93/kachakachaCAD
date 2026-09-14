@@ -768,6 +768,29 @@ KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_l
     return out;
 }
 
+//! PowerShell の二重引用符の中で `\"` はエスケープではない。
+//! バックスラッシュはそのままの文字で、引用符はそこで文字列を**閉じる**。
+//! 続きは次の引数として解釈され、型が合わずにスクリプトごと止まる。
+//! 自己試験が丸ごと止まった原因がこれだった。雲で先に落とす。
+[[nodiscard]] bool HasBackslashEscapedQuote(const std::string& line)
+{
+    char quote = '\0';
+    for (std::size_t index = 0; index < line.size(); ++index) {
+        const char c = line[index];
+        if (quote == '\0') {
+            if (c == '\'' || c == '"') { quote = c; }
+            else if (c == '#') { break; }
+            continue;
+        }
+        if (quote == '"') {
+            if (c == '`') { ++index; continue; }
+            if (c == '\\' && index + 1 < line.size() && line[index + 1] == '"') { return true; }
+        }
+        if (c == quote) { quote = '\0'; }
+    }
+    return false;
+}
+
 //! レビュー基盤の PowerShell に、Windows PowerShell 5.1 で動かない書き方が
 //! 混じっていないかを見る。PC でしか動かせない道具なので、雲の側で先に落とす。
 [[nodiscard]] std::vector<std::string> PowerShell7OnlyTokensIn(const std::string& line)
@@ -853,6 +876,29 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
     }
     Require(nonAscii.empty(),
         "every review script is pure ASCII, so PowerShell 5.1 can parse it: " + Join(nonAscii));
+
+    std::vector<std::string> escaped;
+    for (const std::string& relative : required) {
+        if (relative.size() < 4 || relative.substr(relative.size() - 4) != ".ps1") { continue; }
+        std::istringstream stream(ReadFile(RepoRoot() / relative));
+        std::string line;
+        int number = 0;
+        while (std::getline(stream, line)) {
+            ++number;
+            if (HasBackslashEscapedQuote(line)) {
+                escaped.push_back(relative + ":" + std::to_string(number));
+            }
+        }
+    }
+    Require(escaped.empty(),
+        "no review script tries to escape a quote with a backslash: " + Join(escaped));
+    // 走査そのものが効いているかを、その場で確かめる。
+    Require(HasBackslashEscapedQuote("$x = \"say \\\"hi\\\"\""),
+        "the scanner sees a backslash before a quote inside a double quoted string");
+    Require(!HasBackslashEscapedQuote("$x = 'a \\\" inside single quotes'"),
+        "a single quoted string may hold a backslash and a quote");
+    Require(!HasBackslashEscapedQuote("$x = \"a backtick escape `\" is fine\""),
+        "the backtick is the escape character PowerShell actually uses");
 
     // 実行時領域は git に入れない。入れると PC ごとの事情が共有されてしまう。
     const std::string ignore = ReadFile(RepoRoot() / ".gitignore");

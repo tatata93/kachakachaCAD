@@ -646,7 +646,8 @@ function Invoke-ManifestPrecheck {
     if ($humanNeeded) {
         $problems += ("AIR-E060 " + $root + " has been blocked " + $streak +
                       " times in a row; a person has to decide before another review is started. " +
-                      "When they have: tools\ai-local\clear-hold.cmd " + $root + " \"why it is fine to carry on\"")
+                      "When they have: tools\ai-local\clear-hold.cmd " + $root +
+                      " followed by a short note saying why it is fine to carry on")
     }
 
     $ok = ($problems.Count -eq 0)

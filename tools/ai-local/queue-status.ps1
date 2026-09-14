@@ -20,17 +20,20 @@ $RepoRoot = Get-RepoRoot -Hint $RepoRoot
 $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
 
 function Count-Dir {
-    param([string]$Dir)
-    return (@(Get-QueueFiles -Directory $Dir)).Count
+    param([string]$Dir, [switch]$ResultsOnly)
+    $files = @(Get-QueueFiles -Directory $Dir)
+    if ($ResultsOnly) {
+        # results/ holds both the result and the request it came from; counting
+        # both makes every finished review look like two.
+        $files = @($files | Where-Object { $_.Name -notlike '*.request.json' })
+    }
+    return $files.Count
 }
 
+# Looking must not change anything. Taking the lock to find out whether it is
+# taken can knock over a dispatcher that is starting at that moment.
 $lockPath = Join-Path $paths.Locks 'dispatcher.lock'
-$dispatcherRunning = $false
-if (Test-Path -LiteralPath $lockPath) {
-    # If the lock can be opened exclusively, nobody is holding it.
-    $probe = New-SingletonLock -Path $lockPath
-    if ($null -eq $probe) { $dispatcherRunning = $true } else { $probe.Dispose() }
-}
+$dispatcherRunning = Test-SingletonLockHeld -Path $lockPath
 
 $pending = @()
 foreach ($f in (Get-QueueFiles -Directory $paths.Incoming)) { $pending += [pscustomobject]@{ state='incoming';   name=$f.Name } }
@@ -63,7 +66,7 @@ $status = [pscustomobject]@{
         incoming   = Count-Dir $paths.Incoming
         ready      = Count-Dir $paths.Ready
         processing = Count-Dir $paths.Processing
-        results    = Count-Dir $paths.Results
+        results    = Count-Dir $paths.Results -ResultsOnly
         failed     = Count-Dir $paths.Failed
         stale      = Count-Dir $paths.Stale
     }

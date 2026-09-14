@@ -730,19 +730,45 @@ KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_l
         "the scanner leaves plain ASCII paths alone");
 }
 
+//! 行から、注釈と文字列の中身を落とす。
+//! `#` は**引用符の外**にあるときだけ注釈の始まりである。
+//! Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R5 B2)。文字列の中の `#` を注釈と
+//! 見なしていたため、`$x="#"; $y=$a ?? $b` が素通りしていた。
+[[nodiscard]] std::string PowerShellCodeOutsideStrings(const std::string& line)
+{
+    std::string out;
+    char quote = '\0';
+    for (std::size_t index = 0; index < line.size(); ++index) {
+        const char c = line[index];
+        if (quote != '\0') {
+            if (c == '`' && quote == '"') { ++index; continue; }
+            if (c == quote) { quote = '\0'; }
+            continue;  // 文字列の中身は落とす
+        }
+        if (c == '\'' || c == '"') { quote = c; continue; }
+        if (c == '#') { break; }  // ここから先は注釈
+        out.push_back(c);
+    }
+    return out;
+}
+
 //! レビュー基盤の PowerShell に、Windows PowerShell 5.1 で動かない書き方が
 //! 混じっていないかを見る。PC でしか動かせない道具なので、雲の側で先に落とす。
 [[nodiscard]] std::vector<std::string> PowerShell7OnlyTokensIn(const std::string& line)
 {
     std::vector<std::string> hits;
-    // 行内の注釈は見ない。説明文に書いてあるのは違反ではない。
-    const std::string body = line.substr(0, line.find('#'));
+    const std::string body = PowerShellCodeOutsideStrings(line);
     static const char* const tokens[] = {
         "??", "?.", "&&", "||", "-AsHashtable", "-Parallel", ".ArgumentList",
         "$IsWindows", "$IsLinux",
     };
     for (const char* token : tokens) {
         if (body.find(token) != std::string::npos) { hits.push_back(token); }
+    }
+    // 三項演算子 `<条件> ? <A> : <B>` も 7 だけのもの。
+    // 引用符の外に ` ? ` と ` : ` が両方あるときだけ数える。
+    if (body.find(" ? ") != std::string::npos && body.find(" : ") != std::string::npos) {
+        hits.push_back("ternary ? :");
     }
     return hits;
 }
@@ -802,6 +828,67 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
         "the scanner leaves an explanation in a comment alone");
     Require(PowerShell7OnlyTokensIn("$psi.Arguments = $line").empty(),
         "the scanner leaves the 5.1 way alone");
+    // 植えた違反で確かめる(Codex の指摘そのもの)。
+    Require(!PowerShell7OnlyTokensIn("$x = \"#\"; $y = $a ?? $b").empty(),
+        "a hash inside a string does not hide what comes after it");
+    Require(!PowerShell7OnlyTokensIn("$y = $ok ? 1 : 0").empty(),
+        "the scanner sees the PowerShell 7 ternary");
+    Require(PowerShell7OnlyTokensIn("$text = 'use ? : when you have 7'").empty(),
+        "a ternary written inside a string is not a ternary");
+    Require(PowerShell7OnlyTokensIn("$map = @{ 'a' = 1 }  # ?? and && are 7 only").empty(),
+        "the list of forbidden operators may be written in a comment");
+}
+
+//! 台帳へ書く出来事の名前を、スクリプトから拾う。
+//! `event = 'name'` と `event = $Variable` の両方に当たるので、変数のときは拾わない。
+[[nodiscard]] std::vector<std::string> LedgerEventNamesIn(const std::string& line)
+{
+    std::vector<std::string> names;
+    const std::string marker = "event = '";
+    std::size_t at = line.find(marker);
+    while (at != std::string::npos) {
+        const std::size_t start = at + marker.size();
+        const std::size_t end = line.find('\'', start);
+        if (end == std::string::npos) { break; }
+        names.push_back(line.substr(start, end - start));
+        at = line.find(marker, end);
+    }
+    return names;
+}
+
+KACHA_V2_TEST(architecture, every_ledger_event_the_scripts_write_is_written_down)
+{
+    // Codex の指摘(AI-REVIEW-PIPELINE-DOCS-R5 B2)。
+    // 文書に載っていない出来事を台帳へ書くと、読む側は意味を推測するしかない。
+    // 書ける名前は、必ず review-schemas.md に説明がある状態を保つ。
+    const std::filesystem::path scripts = RepoRoot() / "tools/ai-local";
+    const std::string schemas = ReadFile(RepoRoot() / "docs/ai/review-schemas.md");
+    Require(!schemas.empty(), "docs/ai/review-schemas.md is readable");
+
+    std::set<std::string> written;
+    for (const auto& entry : std::filesystem::directory_iterator(scripts)) {
+        if (!entry.is_regular_file()) { continue; }
+        if (entry.path().extension() != ".ps1") { continue; }
+        std::istringstream stream(ReadFile(entry.path()));
+        std::string line;
+        while (std::getline(stream, line)) {
+            for (const std::string& name : LedgerEventNamesIn(line)) { written.insert(name); }
+        }
+    }
+    Require(written.size() >= 8, "the scan found the ledger events at all");
+
+    std::vector<std::string> undocumented;
+    for (const std::string& name : written) {
+        if (schemas.find("`" + name + "`") == std::string::npos) { undocumented.push_back(name); }
+    }
+    Require(undocumented.empty(),
+        "every ledger event is described in review-schemas.md: " + Join(undocumented));
+
+    // 走査そのものが効いているかを、その場で確かめる。
+    const auto found = LedgerEventNamesIn("        event = 'review_timeout'; request_id = $x");
+    Require(found.size() == 1 && found.front() == "review_timeout", "the scanner reads a literal event name");
+    Require(LedgerEventNamesIn("        event = $LedgerEvent; request_id = $x").empty(),
+        "the scanner leaves a variable alone");
 }
 
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)

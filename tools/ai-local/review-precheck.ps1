@@ -215,6 +215,7 @@ function Get-CodexInterface {
         probe_revision   = $script:ProbeRevision
         probed_utc       = Get-UtcStamp
         executable       = $Exe
+        executable_stamp = ''
         version          = ''
         has_exec         = $false
         supported_flags  = @()
@@ -222,6 +223,10 @@ function Get-CodexInterface {
         probe_ok         = $false
         probe_note       = ''
     }
+    try {
+        $item = Get-Item -LiteralPath $Exe -ErrorAction Stop
+        $probe.executable_stamp = ($item.Length.ToString() + '@' + $item.LastWriteTimeUtc.Ticks.ToString())
+    } catch { }
     $dir = $RepoRoot
     try {
         $v = Invoke-Process -FilePath $Exe -Arguments @('--version') -WorkingDirectory $dir -TimeoutSeconds 60
@@ -261,6 +266,13 @@ function Get-CodexInterface {
     # A sandbox shim answers --version and --help perfectly and then cannot read a
     # single file, because its host process is not installed. That is not a usable
     # reviewer, and it must not be allowed to look like one.
+    # A reviewer that cannot be held to read-only is not a reviewer we can use.
+    # Checking the worktree afterwards only catches what it did inside the
+    # worktree; nothing catches what it did outside.
+    if ($probe.probe_ok -and ($found -notcontains '--sandbox')) {
+        $probe.probe_ok = $false
+        $probe.probe_note = 'this installation cannot be held to a read-only sandbox (no --sandbox), so it is not used'
+    }
     if ($probe.probe_ok -and ($Exe -like '*\.sandbox-bin\*')) {
         $hostExe = Join-Path (Split-Path -Parent $Exe) 'codex-code-mode-host.exe'
         if (-not (Test-Path -LiteralPath $hostExe)) {
@@ -269,6 +281,23 @@ function Get-CodexInterface {
         }
     }
     return [pscustomobject]$probe
+}
+
+# An upgrade replaces the file in place. A remembered answer about the old file
+# is not an answer about the new one.
+function Test-CachedExecutableUnchanged {
+    param($Cached)
+    $stamp = ''
+    foreach ($p in $Cached.PSObject.Properties) {
+        if ($p.Name -eq 'executable_stamp') { $stamp = [string]$p.Value }
+    }
+    if (-not $stamp) { return $false }
+    try {
+        $item = Get-Item -LiteralPath $Cached.executable -ErrorAction Stop
+        return ($stamp -eq ($item.Length.ToString() + '@' + $item.LastWriteTimeUtc.Ticks.ToString()))
+    } catch {
+        return $false
+    }
 }
 
 function Resolve-CodexInterface {
@@ -285,7 +314,8 @@ function Resolve-CodexInterface {
         # reviewer at any moment, and a remembered "no reviewer here" would keep
         # the queue stopped long after that stopped being true.
         if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
-            $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
+            $cached.executable -and (Test-Path -LiteralPath $cached.executable) -and
+            (Test-CachedExecutableUnchanged -Cached $cached)) {
             return $cached
         }
     }
@@ -332,12 +362,17 @@ function Get-ClaudeInterface {
         probe_revision  = $script:ProbeRevision
         probed_utc      = Get-UtcStamp
         executable      = $Exe
+        executable_stamp = ''
         version         = ''
         supported_flags = @()
         help_excerpt    = ''
         probe_ok        = $false
         probe_note      = ''
     }
+    try {
+        $item = Get-Item -LiteralPath $Exe -ErrorAction Stop
+        $probe.executable_stamp = ($item.Length.ToString() + '@' + $item.LastWriteTimeUtc.Ticks.ToString())
+    } catch { }
     try {
         $v = Invoke-Process -FilePath $Exe -Arguments @('--version') -WorkingDirectory $RepoRoot -TimeoutSeconds 60
         if ($v.ExitCode -eq 0) { $probe.version = $v.StdOut.Trim() }
@@ -362,6 +397,10 @@ function Get-ClaudeInterface {
     $excerptLength = [Math]::Min(4000, $text.Length)
     $probe.help_excerpt = $text.Substring(0, $excerptLength)
     $probe.probe_ok = (($found -contains '-p') -or ($found -contains '--print'))
+    if ($probe.probe_ok -and ($found -notcontains '--permission-mode')) {
+        $probe.probe_ok = $false
+        $probe.probe_note = 'this installation cannot be held to a read-only plan mode (no --permission-mode), so it is not used'
+    }
     if (-not $probe.probe_ok -and -not $probe.probe_note) {
         $probe.probe_note = 'this installation does not advertise a one-shot print mode'
     }
@@ -380,7 +419,8 @@ function Resolve-ClaudeInterface {
             }
         }
         if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
-            $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
+            $cached.executable -and (Test-Path -LiteralPath $cached.executable) -and
+            (Test-CachedExecutableUnchanged -Cached $cached)) {
             return $cached
         }
     }
@@ -518,6 +558,41 @@ function Invoke-ManifestPrecheck {
         $problems += ('AIR-E023 selftest_result is ' + $selftest + '; this goes back to the implementer')
     }
 
+    # The id becomes a file name and a directory name in two places. Anything but
+    # a plain name can point outside the runtime area and the worktree root.
+    if (-not (Test-SafeRequestId -RequestId ([string]$manifest.request_id))) {
+        $problems += ("AIR-E014 '" + [string]$manifest.request_id +
+                      "' is not a plain name; a request id is used as a file and folder name")
+    }
+    $expectedName = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+    if ($expectedName -ne [string]$manifest.request_id) {
+        $problems += ("AIR-E015 the file is called '" + $expectedName + "' but says it is '" +
+                      [string]$manifest.request_id + "'")
+    }
+    # The request must be about THIS checkout.
+    try {
+        $declaredRoot = [System.IO.Path]::GetFullPath([string]$manifest.repo_path).TrimEnd('\', '/')
+        $actualRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+        if ($declaredRoot.ToLowerInvariant() -ne $actualRoot.ToLowerInvariant()) {
+            $problems += ("AIR-E016 this request was made for " + $declaredRoot + ", not " + $actualRoot)
+        }
+    } catch {
+        $problems += 'AIR-E016 repo_path is not a usable path'
+    }
+    # A moving name such as HEAD or main is not a fixed review target.
+    foreach ($field in @('base_commit', 'review_commit', 'tested_commit')) {
+        $value = [string]$manifest.$field
+        if ($value -notmatch '^[0-9a-f]{40}$') {
+            $problems += ("AIR-E017 " + $field + " must be a full commit id, not '" + $value + "'")
+        }
+    }
+
+    $damage = Get-ReviewLedgerDamage -RepoRoot $RepoRoot
+    if ($damage -gt 0) {
+        $problems += ("AIR-E061 the ledger has " + $damage +
+                      " line(s) that cannot be read; it cannot answer whether this was reviewed already")
+    }
+
     $gitExe = Resolve-GitExe
     if (-not (Test-CommitExists -RepoRoot $RepoRoot -Commit $manifest.review_commit -GitExe $gitExe)) {
         $problems += ('AIR-E030 REVIEW_HEAD ' + (Get-ShortSha $manifest.review_commit) + ' is not in this repository')
@@ -537,6 +612,12 @@ function Invoke-ManifestPrecheck {
     }
     $streak = Get-ConsecutiveBlockingCount -RepoRoot $RepoRoot -RootRequestId $root
     $humanNeeded = ($streak -ge 3)
+    # Three blocking results in a row means the loop is not converging. Handing it
+    # to a person has to actually stop the queue, not merely be noted.
+    if ($humanNeeded) {
+        $problems += ("AIR-E060 " + $root + " has been blocked " + $streak +
+                      " times in a row; a person has to decide before another review is started")
+    }
 
     $ok = ($problems.Count -eq 0)
     $code = 'BLOCKED'

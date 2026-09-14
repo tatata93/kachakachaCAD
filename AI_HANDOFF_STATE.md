@@ -11,10 +11,10 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R5(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
+REQUEST_ID: AI-REVIEW-PIPELINE-R6(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
-STATUS: READY_FOR_CODEX(R1 は PC に Codex の実行ファイルが無く ERROR。番号を上げた)
+STATUS: READY_FOR_CODEX(R5 の5区間で **16件の BLOCKING** を受け、全部直した)
 REVIEW_STATUS: PENDING_CODEX
 BASE: f78d91b
 HEAD: (PC が決める。ビルドして試験に通った commit)
@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(21 の場面・54 の確認)
+  ＋ PC で `review-selftest.ps1`(28 の場面・67 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -34,7 +34,8 @@ UPDATED_AT: 2026-09-14
 - P1-EXTRUDE-R5 … R4 の指摘を直した分。BASE は R4 の HEAD、HEAD は PC が決める
 - Q1-Q5-R4 … R3 の指摘を直した分。同上
 
-R1〜R4 は FAIL の履歴として残す。**書き換えない。**
+R1〜R4 は**レビュー不成立**の履歴として残す。判定は一度も出ていない。
+**書き換えない。**不成立を FAIL と呼ばない(規約 §3 と同じ理由)。
 
 ### 解決済み: Codex CLI の場所(2026-09-14)
 
@@ -188,6 +189,56 @@ PC へ束を送る前に通す。その検査つきで 134/134 が通る。
 R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
+
+- REQUEST_ID: AI-REVIEW-PIPELINE-DOCS-R5 / JUDGE-R5 / PROCESS-R5 / QUEUE-R5 / TESTS-R5
+  REVIEWED_HEAD: f024a28
+  ACTION: FIX_AND_REVIEW(**本物の Codex による初めての成立したレビュー**。
+    5区間すべて BLOCKING、合計16件)
+  FIX_COMMIT: (この commit)
+  RESULT: 16件すべて直した。R5 は BLOCKING のまま残す。R6 で出し直す。
+    所要時間は 2分半〜5分半(区間あたり)。60分級は無くなった。
+
+  DOCS-R5 (3件)
+    1. **packet の差分が文字化けしていた。**git の出力をコンソールのコードページで
+       読んでいたため、日本語が二重変換されていた。レビューアーはずっと壊れた
+       差分を読んでいた。→ 標準出力を UTF-8 として読む。日本語の回帰試験を追加。
+    2. 文書間で欄の名前が食い違っていた(review_effort / review_profile)、
+       結果の reviewer 列挙に claude-fallback が無い。→ 統一した。
+    3. R1〜R4 を「FAIL の履歴」と書いていた。**不成立は不合格ではない。**→ 訂正。
+
+  JUDGE-R5 (7件)
+    1. 3回連続 BLOCKING を数えるだけで、受付を止めていなかった。→ AIR-E060 で断る。
+    2. read-only にできないレビューアーも「使える」と数えていた。
+       → --sandbox / --permission-mode が無ければ使わない。
+    3. 台帳の書き込み失敗を無視していた。→ 判定を決める行は失敗したら止まる。
+       読めない行があるときは「履歴なし」と答えず AIR-E061 で断る。
+    4. `+++history_` を見出しと誤認して、危険な変更行を見落としていた。
+       → `@@` で hunk の中だけを数える。
+    5. REQUEST_ID を経路として検証していなかった。→ 平たい名前だけ受け付ける。
+    6. repo_path を照合せず、HEAD のような動く名前も受け付けていた。
+       → 現在の checkout と照合し、40桁の commit id だけ受け付ける。
+    7. 状態表示が dispatcher の鍵を書き換えていた。→ 触らずに見るだけの確認に。
+
+  PROCESS-R5 (4件)
+    1. worktree の削除境界が `..` で回避できた。→ 解決した絶対パスで直下のみ。
+    2. 再試行で前回の返答を成功として使い回せた。→ 起動前に必ず消す。
+    3. packet を作る git の失敗を無視していた。空の packet を「変更なし」として
+       レビューさせ得た。→ INFRA_ERROR にして起動しない。
+    4. 規約外・矛盾した判定を正常なレビューとして確定していた。
+       → 厳密に検証し、外れたら MALFORMED / 人の判断へ。番号も使い切らない。
+
+  QUEUE-R5 (2件)
+    1. 取得の経過時間を、投入時のファイル更新時刻から測っていた。File.Move は
+       時刻を変えないので、長く待った依頼が取得直後に「詰まり」と誤判定され得た。
+       → 取得時に時刻を打ち、owner の claimed_utc を基準にする。
+    2. コマンドラインだけで dispatcher を止めていた。別 checkout の正常な
+       dispatcher まで巻き込み得た。→ この runtime の鍵が記録した pid だけ止める。
+
+  TESTS-R5 (2件)
+    1. 自己試験の -WorkRoot に既存のディレクトリを渡すと消していた。
+       → 自分で作った一意の子だけを作り、それだけを消す。
+    2. 5.1 互換の走査に抜けがあった(文字列の中の `#` を注釈と見なす、三項を見ない)。
+       → 引用符の外だけを見るようにし、三項も見る。植えた違反で確かめる。
 
 - REQUEST_ID: AI-REVIEW-PIPELINE-R4
   REVIEWED_HEAD: e91bfc8

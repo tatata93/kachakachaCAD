@@ -113,6 +113,10 @@ function Invoke-ClaimAndRunPass {
             Say "$name is already claimed by someone else" 'WARN'
             continue
         }
+        # File.Move keeps the old write time, so a request that waited a long time
+        # in ready would look like a claim made long ago. Stamp it at the moment it
+        # is claimed, before anyone can judge its age.
+        try { (Get-Item -LiteralPath $claimPath).LastWriteTime = (Get-Date) } catch { }
         $manifest = Read-JsonFile -Path $claimPath
         $requestId = ''
         if ($manifest) { $requestId = [string]$manifest.request_id }

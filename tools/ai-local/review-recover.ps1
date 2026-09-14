@@ -60,15 +60,30 @@ foreach ($file in (Get-QueueFiles -Directory $paths.Processing)) {
     $manifest = Read-JsonFile -Path $file.FullName
     $requestId = ''
     $budget = 1200
+
     if ($manifest) {
         $requestId = [string]$manifest.request_id
         foreach ($p in $manifest.PSObject.Properties) {
             if ($p.Name -eq 'timeout_seconds' -and $p.Value) { $budget = [int]$p.Value }
         }
     }
+    # How old the claim is, measured from when it was CLAIMED. The owner file says
+    # so; the claim file's own write time is only a fallback, and between the move
+    # and the owner file being written there is a moment where neither is reliable,
+    # so a fresh-looking claim with no owner yet is given room rather than killed.
+    $claimedAt = $file.LastWriteTime
+    $haveClaimTime = $false
+    if ($owner) {
+        foreach ($p in $owner.PSObject.Properties) {
+            if ($p.Name -eq 'claimed_utc' -and $p.Value) {
+                try { $claimedAt = ([datetime]$p.Value).ToLocalTime(); $haveClaimTime = $true } catch { }
+            }
+        }
+    }
+    $ageSeconds = ((Get-Date) - $claimedAt).TotalSeconds
+    if (-not $haveClaimTime -and $ageSeconds -lt 300) { continue }
     # A live owner is not proof of progress. Past its own time limit plus ten
     # minutes, a claim is stuck, and waiting the default four hours helps nobody.
-    $ageSeconds = ((Get-Date) - $file.LastWriteTime).TotalSeconds
     $stuck = ($ageSeconds -gt ($budget + 600))
     if ($ownerAlive -and -not $stuck -and ($ageSeconds / 60.0) -lt $StaleMinutes) { continue }
     if ($ownerAlive -and $stuck) {

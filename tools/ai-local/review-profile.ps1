@@ -70,13 +70,32 @@ function Get-RiskSignals {
         }
     }
     if ($DiffText) {
-        # Only added and removed lines count. A risky name that merely sits in the
-        # surrounding context was not touched by this change.
+        # Only added and removed lines count, and only inside code. A risky name
+        # that merely sits in the surrounding context was not touched; a risky name
+        # written in a document is prose about the danger, not the danger. A page
+        # explaining what a transaction is does not become a transaction.
+        # These names are product concepts, so they only mean anything inside the
+        # product's own code. In a document they are prose about the danger, and in
+        # this pipeline's own scripts the list of dangerous names is itself one of
+        # the lines - which is how a documentation-only change was read as
+        # HIGH_RISK twice today.
+        $inProductCode = $false
+        $inHunk = $false
         foreach ($line in ($DiffText -split "`r?`n")) {
+            if ($line -like 'diff --git *') {
+                $inProductCode = ($line -like '*src/*' -or $line -like '*tests_v2/*')
+                $inHunk = $false
+                continue
+            }
+            # Only inside a hunk is a leading + or - a changed line. Outside one,
+            # "+++history_" is a file header; inside one it is an added line that
+            # happens to start with a plus, and skipping it hid a real change.
+            if ($line -like '@@*') { $inHunk = $true; continue }
+            if (-not $inHunk) { continue }
+            if (-not $inProductCode) { continue }
             if ($line.Length -lt 2) { continue }
             $first = $line.Substring(0, 1)
             if ($first -ne '+' -and $first -ne '-') { continue }
-            if ($line -like '+++*' -or $line -like '---*') { continue }
             foreach ($token in $script:HighRiskTokens) {
                 if ($line -like ('*' + $token + '*')) { $signals += ('name:' + $token) }
             }
@@ -94,11 +113,14 @@ function Get-ChangedLineCount {
     param([string]$DiffText)
     if (-not $DiffText) { return 0 }
     $count = 0
+    $inHunk = $false
     foreach ($line in ($DiffText -split "`r?`n")) {
+        if ($line -like 'diff --git *') { $inHunk = $false; continue }
+        if ($line -like '@@*') { $inHunk = $true; continue }
+        if (-not $inHunk) { continue }
         if ($line.Length -lt 1) { continue }
         $first = $line.Substring(0, 1)
         if ($first -ne '+' -and $first -ne '-') { continue }
-        if ($line -like '+++*' -or $line -like '---*') { continue }
         $count++
     }
     return $count
@@ -125,6 +147,28 @@ function Get-ProfileRank {
         'NORMAL'    { return 2 }
         'HIGH_RISK' { return 3 }
         default     { return 0 }
+    }
+}
+
+# The reviewer accepts a fixed set of lowercase names. An old manifest can still
+# carry "HIGH", and passing that straight through makes the reviewer refuse the
+# whole run with a 400. Anything unrecognised becomes medium rather than being
+# handed on untouched.
+function ConvertTo-KnownEffort {
+    param([string]$Effort)
+    switch (([string]$Effort).ToLowerInvariant()) {
+        'none'    { return 'none' }
+        'minimal' { return 'minimal' }
+        'low'     { return 'low' }
+        'medium'  { return 'medium' }
+        'high'    { return 'high' }
+        'xhigh'   { return 'xhigh' }
+        'max'     { return 'max' }
+        'quick'     { return 'low' }
+        'normal'    { return 'medium' }
+        'high_risk' { return 'high' }
+        'extra_high' { return 'xhigh' }
+        default   { return 'medium' }
     }
 }
 

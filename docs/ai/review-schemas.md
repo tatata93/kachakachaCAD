@@ -25,6 +25,8 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
 ```
 
 - `request_id` と `base_commit` だけが必須です。
+- 正規の欄は `review_profile` です。古い `review_effort`(LOW/MEDIUM/HIGH/EXTRA_HIGH)も
+  読み取りますが、新しく書くときは使いません。
 - `review_profile` は**省略してよい**。機械が変更の中身から測ります。書いた場合、
   機械はそれより**深くはしますが浅くはしません**(`force_profile: true` のときだけ従います)。
 - `paths` は**見せる範囲**を狭めます。ビルドした commit は変わりません。
@@ -99,7 +101,7 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
   "base_commit": "<40桁>",
   "review_commit": "<40桁>",
   "tested_commit": "<40桁>",
-  "reviewer": "codex | none",
+  "reviewer": "codex | claude-fallback | none",
   "reviewer_command": "実際に走らせた1行",
   "started_utc": "...", "finished_utc": "...",
   "outcome": "REVIEWED | TIMEOUT | INFRA_ERROR | RETRYABLE_ERROR",
@@ -143,12 +145,13 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
 | `request_rejected` | 依頼の点検で落ちた |
 | `duplicate_request` | 同じ REQUEST_ID をもう一度出そうとした |
 | `review_started` | Codex を起動した |
+| `review_started` | レビューアーを起動した(profile・effort・差分の大きさ・待ち時間つき) |
 | `review_completed` | 判定が出た。**この番号はここで使い切られる** |
-| `review_started` | Codex を起動した(profile・effort・差分の大きさ・待ち時間つき) |
 | `review_invocation` | 1回の起動の記録(実際のコマンド・所要時間・結果) |
 | `review_timeout` | 時間切れで打ち切った。**不合格ではない。**番号は残る |
 | `review_infra_error` | 起動できなかった。番号は残る |
 | `review_retryable_error` | 起動したが落ちた・何も答えなかった。番号は残る |
+| `review_malformed` | 答えは返ったが規約の形ではない。**不合格ではない。**番号は残る |
 | `request_too_large` | 1回で読むには広すぎる。区間に分けて出し直す |
 | `review_unavailable` | (古い名前。上の3つに分かれた) |
 | `claim_recovered` | 落ちた dispatcher の取得を queue へ戻した |

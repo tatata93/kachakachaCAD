@@ -24,6 +24,13 @@ Every case below is one of the promises the owner asked for:
   19 a change too wide    -> refused whole, accepted in declared segments
   20 the same commit      -> not reviewed twice, even under a new number
   21 a reviewer that hangs-> stopped for real, recorded as TIMEOUT not FAIL
+  22 Japanese in a diff   -> reaches the reviewer unbroken
+  23 an unsafe request id -> refused at the door
+  24 a contradictory answer-> MALFORMED, and the number is not spent
+  25 a packet that is empty-> INFRA_ERROR, no reviewer started
+  26 three blocks in a row -> the fourth try is refused, not reviewed
+  27 looking at the queue  -> does not disturb the dispatcher's lock
+  28 a long wait then a claim -> busy, not stuck
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -31,6 +38,8 @@ and touches nothing in the real checkout.
 
 [CmdletBinding()]
 param(
+    # The PARENT to work under, not the work root itself. A uniquely named child is
+    # created inside it and only that child is ever removed.
     [string]$WorkRoot,
     [switch]$KeepWorkRoot
 )
@@ -58,10 +67,20 @@ function Check {
     }
 }
 
-if (-not $WorkRoot) {
-    $WorkRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('kacha-review-selftest-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+# This script deletes its work root when it is done. It therefore only ever works
+# in a directory it created itself, under a unique name. Handing it an existing
+# directory used to wipe that directory; a caller who passed a repository path by
+# mistake would have lost it.
+$workRootParent = $WorkRoot
+if (-not $workRootParent) { $workRootParent = [System.IO.Path]::GetTempPath() }
+if (-not (Test-Path -LiteralPath $workRootParent)) {
+    New-Item -ItemType Directory -Path $workRootParent -Force | Out-Null
 }
-if (Test-Path -LiteralPath $WorkRoot) { Remove-Item -LiteralPath $WorkRoot -Recurse -Force }
+$WorkRoot = Join-Path $workRootParent ('kacha-review-selftest-' + [Guid]::NewGuid().ToString('N').Substring(0, 12))
+if (Test-Path -LiteralPath $WorkRoot) {
+    Write-Host ("FAIL the work root " + $WorkRoot + " already exists; refusing to touch it") -ForegroundColor Red
+    exit 1
+}
 New-Item -ItemType Directory -Path $WorkRoot -Force | Out-Null
 
 $repo = Join-Path $WorkRoot 'repo'
@@ -130,6 +149,8 @@ if (-not $verdict) { $verdict = "PASS" }
 $next = "PROCEED"
 $blocking = 0
 if ($verdict -ne "PASS") { $next = "FIX_AND_REVIEW"; $blocking = 1 }
+if ($verdict -eq "CONTRADICT") { $verdict = "PASS"; $next = "FIX_AND_REVIEW"; $blocking = 3 }
+if ($verdict -eq "NONSENSE") { $verdict = "MAYBE"; $next = "PROCEED"; $blocking = 0 }
 $gitForStub = $env:KACHA_GIT_EXE
 if (-not $gitForStub) { $gitForStub = "git" }
 $head = (& $gitForStub rev-parse HEAD) 2>$null
@@ -560,6 +581,161 @@ Check 'a timeout does not use up the REQUEST_ID' `
     (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-SLOW-R1')) 'it was counted as reviewed'
 $env:KACHA_CODEX_EXE = $goodStub
 Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
+
+# 22 ------------------------------------------------------------------------
+# The fixed diff handed to the reviewer must be the fixed diff, byte for byte.
+# Codex found this one: the output was being decoded with the console code page,
+# so every Japanese word came back as rubbish and the reviewer read rubbish.
+$japanesePath = Join-Path $repo 'nihongo.txt'
+$japaneseLines = @('1行目 レビュー', '2行目 断り方', '3行目 曲げ半径')
+[System.IO.File]::WriteAllText($japanesePath, ($japaneseLines -join "`r`n"),
+    (New-Object System.Text.UTF8Encoding($false)))
+Git @('add', '-A'); Git @('commit', '-q', '-m', '日本語を含む変更')
+$jpHead = (Git @('rev-parse', 'HEAD')).Trim()
+$jpDecl = Join-Path $repo 'next-review-jp.json'
+Write-JsonAtomic -Path $jpDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-UTF8-R1'; base_commit = $baseCommit
+    scope_ja = '日本語の見出しと本文が壊れないこと'; paths = @('nihongo.txt')
+}) | Out-Null
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $jpDecl `
+    -ReviewCommit $jpHead -TestedCommit $jpHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+Run-Dispatcher | Out-Null
+$jpDiffPath = Join-Path (Join-Path $paths.Processing 'T-UTF8-R1') 'diff.patch'
+$jpDiff = ''
+if (Test-Path -LiteralPath $jpDiffPath) { $jpDiff = [System.IO.File]::ReadAllText($jpDiffPath) }
+Check 'the packet keeps Japanese as Japanese' ($jpDiff -like '*1行目 レビュー*') 'the text came back mangled'
+Check 'the packet keeps every changed line separate' `
+    (($jpDiff -like '*2行目 断り方*') -and ($jpDiff -like '*3行目 曲げ半径*')) 'lines were lost or joined'
+$jpRequestPath = Join-Path (Join-Path $paths.Processing 'T-UTF8-R1') 'request.md'
+$jpRequest = ''
+if (Test-Path -LiteralPath $jpRequestPath) { $jpRequest = [System.IO.File]::ReadAllText($jpRequestPath) }
+Check 'what to look at survives into the request the reviewer reads' `
+    ($jpRequest -like '*日本語の見出しと本文が壊れないこと*') 'the scope came back mangled'
+
+# 23 ------------------------------------------------------------------------
+# A request id becomes a file name and a folder name, so nothing else is accepted.
+foreach ($bad in @('..', '../escape', 'a\\b', 'with space')) {
+    $badDecl = Join-Path $repo 'next-review-bad.json'
+    Write-JsonAtomic -Path $badDecl -Value ([pscustomobject]@{
+        schema_version = 1; kind = 'review_request_declaration'
+        request_id = $bad; base_commit = $baseCommit; scope_ja = 'bad id'
+    }) | Out-Null
+    & (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $badDecl `
+        -ReviewCommit $headCommit -TestedCommit $headCommit -BuildResult 'PASS' -TestResult 'PASS' `
+        -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+}
+$queuedNames = @(Get-QueueFiles -Directory $paths.Incoming | ForEach-Object { $_.Name })
+Check 'a request id that is not a plain name never reaches the queue' `
+    ($queuedNames.Count -eq 0) ("queued=" + ($queuedNames -join ','))
+
+# 24 ------------------------------------------------------------------------
+# An answer that contradicts itself is not a result anyone can act on.
+$env:KACHA_STUB_VERDICT = 'CONTRADICT'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'contradiction case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'contradiction case')
+$badHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-CONTRADICT-R1' -Base $baseCommit -Review $badHead -Tested $badHead | Out-Null
+Run-Dispatcher | Out-Null
+$badResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-CONTRADICT-R1.json')
+Check 'PASS with blocking items is not accepted as a PASS' `
+    (($null -ne $badResult) -and $badResult.verdict -eq 'MALFORMED') `
+    ("verdict=" + $(if ($badResult) { $badResult.verdict } else { 'none' }))
+Check 'an answer that breaks the contract does not use up the REQUEST_ID' `
+    (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-CONTRADICT-R1')) 'it was counted as reviewed'
+
+$env:KACHA_STUB_VERDICT = 'NONSENSE'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'nonsense case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'nonsense case')
+$nonsenseHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-NONSENSE-R1' -Base $baseCommit -Review $nonsenseHead -Tested $nonsenseHead | Out-Null
+Run-Dispatcher | Out-Null
+$nonsenseResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-NONSENSE-R1.json')
+Check 'a verdict that is not one of the three is not accepted' `
+    (($null -ne $nonsenseResult) -and $nonsenseResult.verdict -eq 'MALFORMED') `
+    ("verdict=" + $(if ($nonsenseResult) { $nonsenseResult.verdict } else { 'none' }))
+$env:KACHA_STUB_VERDICT = 'PASS'
+
+# 25 ------------------------------------------------------------------------
+# A packet that could not be built is not handed over as "nothing changed".
+$emptyDecl = Join-Path $repo 'next-review-empty.json'
+Write-JsonAtomic -Path $emptyDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-EMPTY-R1'; base_commit = $baseCommit; scope_ja = 'nothing here'
+    paths = @('no/such/path/at/all')
+}) | Out-Null
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $emptyDecl `
+    -ReviewCommit $nonsenseHead -TestedCommit $nonsenseHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+$beforeEmpty = Stub-CallCount
+Run-Dispatcher | Out-Null
+$emptyResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-EMPTY-R1.json')
+Check 'an empty packet is an infrastructure error, not a clean change' `
+    (($null -ne $emptyResult) -and $emptyResult.outcome -eq 'INFRA_ERROR') `
+    ("outcome=" + $(if ($emptyResult) { $emptyResult.outcome } else { 'none' }))
+Check 'no reviewer is started for an empty packet' ((Stub-CallCount) -eq $beforeEmpty) ("calls=" + (Stub-CallCount))
+
+# 26 ------------------------------------------------------------------------
+# Three blocking results in a row must actually stop the queue, not just be noted.
+$env:KACHA_STUB_VERDICT = 'BLOCKING'
+for ($n = 1; $n -le 3; $n++) {
+    Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value ("stop-loop-" + $n) -Encoding ASCII
+    Git @('add', '-A'); Git @('commit', '-q', '-m', ("stop loop " + $n))
+    $h = (Git @('rev-parse', 'HEAD')).Trim()
+    Enqueue -RequestId ('T-STOPLOOP-R' + $n) -Base $baseCommit -Review $h -Tested $h | Out-Null
+    Run-Dispatcher | Out-Null
+}
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'stop-loop-4' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'stop loop 4')
+$fourthHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STOPLOOP-R4' -Base $baseCommit -Review $fourthHead -Tested $fourthHead | Out-Null
+$beforeFourth = Stub-CallCount
+Run-Dispatcher | Out-Null
+Check 'a fourth try after three blocks is refused, not reviewed' `
+    ((Stub-CallCount) -eq $beforeFourth) ("calls=" + (Stub-CallCount))
+Check 'the refusal is written down where a person will see it' `
+    (Test-Path -LiteralPath (Join-Path $paths.Failed 'T-STOPLOOP-R4.json')) 'no refusal record'
+$env:KACHA_STUB_VERDICT = 'PASS'
+
+# 27 ------------------------------------------------------------------------
+# Looking at the queue must not disturb the dispatcher that is working in it.
+$lockPath = Join-Path $paths.Locks 'dispatcher.lock'
+$held = New-SingletonLock -Path $lockPath
+Check 'the lock can be taken' ($null -ne $held) 'the lock was not free'
+if ($held) {
+    $sizeBefore = (Get-Item -LiteralPath $lockPath).Length
+    & (Join-Path $Tools 'queue-status.ps1') -RepoRoot $repo -Json | Out-Null
+    $sizeAfter = (Get-Item -LiteralPath $lockPath).Length
+    Check 'looking at the queue leaves the lock alone' ($sizeBefore -eq $sizeAfter) `
+        ("before=" + $sizeBefore + " after=" + $sizeAfter)
+    $held.Dispose()
+}
+
+# 28 ------------------------------------------------------------------------
+# A request that waited a long time and was claimed a moment ago is busy, not stuck.
+$oldWait = Join-Path $paths.Ready 'T-WAITED-R1.json'
+Write-JsonAtomic -Path $oldWait -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request'; request_id = 'T-WAITED-R1'
+    root_request_id = 'T-WAITED'; created_utc = (Get-UtcStamp); repo_path = $repo
+    base_commit = $baseCommit; review_commit = $fourthHead; tested_commit = $fourthHead
+    build_result = 'PASS'; test_result = 'PASS'; selftest_result = 'PASS'
+    timeout_seconds = 600
+}) | Out-Null
+# Make it look like it has been sitting there for hours, the way a real backlog does.
+(Get-Item -LiteralPath $oldWait).LastWriteTime = (Get-Date).AddHours(-5)
+$claimed = Join-Path $paths.Processing 'T-WAITED-R1.json'
+Move-QueueItemAtomic -Source $oldWait -Destination $claimed | Out-Null
+(Get-Item -LiteralPath $claimed).LastWriteTime = (Get-Date)
+Write-JsonAtomic -Path (Join-Path $paths.Processing 'T-WAITED-R1.json.owner') -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_claim'; request_id = 'T-WAITED-R1'
+    pid = $PID; machine = $env:COMPUTERNAME; claimed_utc = (Get-UtcStamp)
+}) | Out-Null
+& (Join-Path $Tools 'review-recover.ps1') -RepoRoot $repo -Quiet | Out-Null
+Check 'a claim made moments ago is left alone however long it waited before' `
+    (Test-Path -LiteralPath $claimed) 'a healthy claim was taken away'
+Remove-Item -LiteralPath $claimed -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $paths.Processing 'T-WAITED-R1.json.owner') -Force -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------------------
 Write-Host ''

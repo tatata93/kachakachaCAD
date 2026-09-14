@@ -16,7 +16,11 @@ Set-StrictMode -Version 1.0
 function Add-ReviewLedgerEntry {
     param(
         [Parameter(Mandatory=$true)][string]$RepoRoot,
-        [Parameter(Mandatory=$true)][hashtable]$Entry
+        [Parameter(Mandatory=$true)][hashtable]$Entry,
+        # A line that MUST reach the ledger. If it cannot, the caller is stopped
+        # rather than carrying on: a missing review_completed would let the same
+        # REQUEST_ID be used again and overwrite a result that already exists.
+        [switch]$Required
     )
     $paths = Initialize-AiRuntime -RepoRoot $RepoRoot
     if (-not $Entry.ContainsKey('schema_version')) { $Entry['schema_version'] = 1 }
@@ -42,7 +46,26 @@ function Add-ReviewLedgerEntry {
         }
     }
     Write-AiLog -Message "ledger write failed for $($Entry['request_id'])" -Level 'ERROR' -LogPath $paths.Dispatcher
+    if ($Required) {
+        throw ("the ledger could not be written for " + [string]$Entry['request_id'] +
+               " (" + [string]$Entry['event'] + "); stopping rather than losing the record")
+    }
     return $false
+}
+
+# How many lines in the ledger could not be read back. A ledger that cannot be
+# read in full cannot answer "has this been reviewed already", so the answer must
+# not be guessed from what survived.
+function Get-ReviewLedgerDamage {
+    param([Parameter(Mandatory=$true)][string]$RepoRoot)
+    $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
+    if (-not (Test-Path -LiteralPath $paths.Ledger)) { return 0 }
+    $damaged = 0
+    foreach ($line in [System.IO.File]::ReadAllLines($paths.Ledger)) {
+        if (-not $line -or $line.Trim().Length -eq 0) { continue }
+        try { $null = $line | ConvertFrom-Json } catch { $damaged++ }
+    }
+    return $damaged
 }
 
 function Get-ReviewLedgerEntries {

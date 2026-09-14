@@ -149,6 +149,20 @@ function Add-OneRequest {
         Say "a declaration without request_id or base_commit is ignored" 'ERROR'
         return 2
     }
+    # The id becomes a file name and a folder name. Refuse anything else here, at
+    # the only door, rather than discovering it three scripts later.
+    if (-not (Test-SafeRequestId -RequestId $requestId)) {
+        Say ("'" + $requestId + "' is not a plain name; a request id is used as a file and folder name") 'ERROR'
+        return 2
+    }
+    # A moving name such as HEAD or main is not a fixed review target. Resolve it
+    # now, so that what is written down cannot mean something else later.
+    $resolvedBase = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('rev-parse', ($baseCommit + '^{commit}'))
+    if ($resolvedBase.ExitCode -ne 0) {
+        Say ("base_commit '" + $baseCommit + "' is not a commit in this repository") 'ERROR'
+        return 2
+    }
+    $baseCommit = $resolvedBase.StdOut.Trim()
 
     # A REQUEST_ID is used up by a real review, not by an attempt. If the reviewer
     # was simply unavailable, the same id may be queued again; if it was reviewed,
@@ -300,7 +314,8 @@ function Add-OneRequest {
 
     $target = Join-Path $paths.Incoming ($requestId + '.json')
     Write-JsonAtomic -Path $target -Value ([pscustomobject]$manifest) | Out-Null
-    Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+    # Without this line the same id could be queued twice.
+    Add-ReviewLedgerEntry -Required -RepoRoot $RepoRoot -Entry @{
         event = 'request_enqueued'; request_id = $requestId
         root_request_id = $manifest.root_request_id
         base_commit = $baseCommit; review_commit = $ReviewCommit; tested_commit = $TestedCommit

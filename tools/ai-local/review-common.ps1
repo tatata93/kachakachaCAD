@@ -155,6 +155,53 @@ function Move-QueueItemAtomic {
     }
 }
 
+# A request id becomes a file name and a directory name. Anything that is not a
+# plain name can escape the runtime area and the worktree root, so nothing else
+# is accepted anywhere in the pipeline.
+function Test-SafeRequestId {
+    param([string]$RequestId)
+    if (-not $RequestId) { return $false }
+    if ($RequestId.Length -gt 120) { return $false }
+    if ($RequestId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { return $false }
+    if ($RequestId -like '*..*') { return $false }
+    return $true
+}
+
+# True when a path is a direct child of a root, compared after both have been
+# resolved. A string comparison alone lets "root\..\elsewhere" through.
+function Test-PathIsDirectChildOf {
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Root
+    )
+    try {
+        $fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+        $fullRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+        $parent = [System.IO.Path]::GetDirectoryName($fullPath)
+        if (-not $parent) { return $false }
+        return ($parent.TrimEnd('\', '/').ToLowerInvariant() -eq $fullRoot.ToLowerInvariant())
+    } catch {
+        return $false
+    }
+}
+
+# Ask whether a lock is held without touching it. New-SingletonLock truncates and
+# writes, which is fine for the holder and wrong for anyone merely looking: a
+# dispatcher starting at that moment could see its own lock disturbed.
+function Test-SingletonLockHeld {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    try {
+        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open,
+                                         [System.IO.FileAccess]::Read,
+                                         [System.IO.FileShare]::None)
+        $stream.Dispose()
+        return $false
+    } catch {
+        return $true
+    }
+}
+
 function New-SingletonLock {
     param([Parameter(Mandatory=$true)][string]$Path)
     $dir = Split-Path -Parent $Path
@@ -165,7 +212,10 @@ function New-SingletonLock {
         $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::OpenOrCreate,
                                          [System.IO.FileAccess]::ReadWrite,
                                          [System.IO.FileShare]::None)
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes(('pid={0} started={1}' -f $PID, (Get-UtcStamp)))
+        # Who holds this, from where. stop-stale-dispatcher.ps1 reads it so that it
+        # can retire THIS runtime's dispatcher and leave other checkouts alone.
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes(
+            ('pid={0} started={1} machine={2}' -f $PID, (Get-UtcStamp), $env:COMPUTERNAME))
         $stream.SetLength(0)
         $stream.Write($bytes, 0, $bytes.Length)
         $stream.Flush()
@@ -173,6 +223,28 @@ function New-SingletonLock {
     } catch {
         return $null
     }
+}
+
+function Get-SingletonLockOwner {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = ''
+    try {
+        # Shared read: looking must never disturb the holder.
+        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open,
+                                         [System.IO.FileAccess]::Read,
+                                         [System.IO.FileShare]::ReadWrite)
+        try {
+            $reader = New-Object System.IO.StreamReader($stream)
+            $text = $reader.ReadToEnd()
+        } finally { $stream.Dispose() }
+    } catch { return $null }
+    if (-not $text) { return $null }
+    $owner = [pscustomobject]@{ pid = 0; started = ''; machine = '' }
+    if ($text -match 'pid=(?<v>\d+)')          { $owner.pid = [int]$Matches['v'] }
+    if ($text -match 'started=(?<v>\S+)')      { $owner.started = $Matches['v'] }
+    if ($text -match 'machine=(?<v>\S+)')      { $owner.machine = $Matches['v'] }
+    return $owner
 }
 
 function Test-ProcessAlive {
@@ -261,6 +333,12 @@ function Invoke-Process {
     }
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+    # Read the output as UTF-8, whatever the console code page says. Without this
+    # the bytes git writes are decoded as CP932 on this machine and every Japanese
+    # word in a diff comes back as rubbish. The reviewer then reads rubbish and has
+    # no way to know. Codex caught this.
+    $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $psi.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
     # Stdin is redirected and then closed at once. A tool that decides to read
     # from stdin must see end-of-input immediately; inheriting a console here is
     # how an unattended run waits forever for something nobody will type.

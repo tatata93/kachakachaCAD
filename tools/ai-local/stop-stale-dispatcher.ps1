@@ -51,15 +51,19 @@ foreach ($claim in $inFlight) {
     }
     $ownerPath = Join-Path $paths.Processing ($claim.Name + '.owner')
     $claimed = $claim.LastWriteTime
+    $haveClaimTime = $false
     $owner = Read-JsonFile -Path $ownerPath
     if ($owner) {
         foreach ($p in $owner.PSObject.Properties) {
             if ($p.Name -eq 'claimed_utc' -and $p.Value) {
-                try { $claimed = ([datetime]$p.Value).ToLocalTime() } catch { }
+                try { $claimed = ([datetime]$p.Value).ToLocalTime(); $haveClaimTime = $true } catch { }
             }
         }
     }
     $age = ((Get-Date) - $claimed).TotalSeconds
+    # No owner file yet means the claim was made moments ago and the dispatcher has
+    # not finished writing it down. That is a busy dispatcher, not a stuck one.
+    if (-not $haveClaimTime -and $age -lt 300) { $busy += $claim; continue }
     # The time limit, plus ten minutes for the reviewer to be shut down and
     # written up. Past that, nothing is coming.
     if ($age -gt ($budget + 600)) { $stuck += $claim } else { $busy += $claim }
@@ -74,6 +78,16 @@ if ($stuck.Count -gt 0) {
          "); the dispatcher holding it is stuck and will be retired") 'WARN'
 }
 
+# Only this runtime's dispatcher is ours to retire. Matching on the command line
+# alone would also catch a healthy dispatcher serving another checkout on the same
+# machine, and stopping that one would be someone else's outage.
+$lockOwner = Get-SingletonLockOwner -Path (Join-Path $paths.Locks 'dispatcher.lock')
+if ($null -eq $lockOwner -or $lockOwner.pid -le 0) {
+    Say "no dispatcher is recorded as holding this runtime's lock; nothing is stopped"
+    if (-not $Quiet) { Write-Output 'stopped=0 (no owner recorded)' }
+    exit 0
+}
+
 $stopped = 0
 $processes = @()
 try {
@@ -85,9 +99,14 @@ try {
 
 foreach ($process in $processes) {
     if ($process.ProcessId -eq $PID) { continue }
+    # The lock says which process owns THIS runtime. Nothing else is touched.
+    if ([int]$process.ProcessId -ne [int]$lockOwner.pid) { continue }
     $commandLine = [string]$process.CommandLine
     if (-not $commandLine) { continue }
-    if ($commandLine -notlike '*review-dispatcher.ps1*') { continue }
+    if ($commandLine -notlike '*review-dispatcher.ps1*') {
+        Say ("pid " + $process.ProcessId + " holds the lock but is not a dispatcher; left alone") 'WARN'
+        continue
+    }
     if ($commandLine -like '*stop-stale-dispatcher*') { continue }
 
     $startTime = $null

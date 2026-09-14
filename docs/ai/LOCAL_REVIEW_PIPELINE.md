@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(20 の場面・51 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(21 の場面・54 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -74,12 +74,16 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
   "kind": "review_request_declaration",
   "request_id": "P1-EXTRUDE-R5",
   "base_commit": "570473e...",
-  "review_effort": "HIGH",
+  "review_profile": "QUICK | NORMAL | HIGH_RISK",
   "scope_ja": "何を見てほしいか",
   "focus": ["観点1", "観点2"],
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
 }
 ```
+
+正規の欄は `review_profile` です。`review_effort` は古い名前として読み取りますが、
+新しく書くときは使いません。**省略してよい**(機械が変更の中身から測ります)。
+正式な形は `docs/ai/review-schemas.md`。
 
 - **REQUEST_ID と BASE は Claude が固定します。**
 - **HEAD は機械が固定します。**実際にビルドした commit しか対象になりません。
@@ -96,8 +100,8 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
   "schema_version": 1,
   "kind": "review_request_declarations",
   "requests": [
-    { "request_id": "P1-EXTRUDE-R5", "base_commit": "...", "review_effort": "HIGH" },
-    { "request_id": "Q1-Q5-R4",      "base_commit": "...", "review_effort": "HIGH" }
+    { "request_id": "P1-EXTRUDE-R5", "base_commit": "...", "review_profile": "HIGH_RISK" },
+    { "request_id": "Q1-Q5-R4",      "base_commit": "...", "review_profile": "HIGH_RISK" }
   ]
 }
 ```

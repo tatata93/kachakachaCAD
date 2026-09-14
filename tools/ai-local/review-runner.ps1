@@ -28,6 +28,7 @@ Set-StrictMode -Version 1.0
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'review-common.ps1')
 . (Join-Path $PSScriptRoot 'review-ledger.ps1')
+. (Join-Path $PSScriptRoot 'review-profile.ps1')
 
 $RepoRoot = Get-RepoRoot -Hint $RepoRoot
 $paths = Initialize-AiRuntime -RepoRoot $RepoRoot
@@ -52,6 +53,11 @@ function Get-ManifestValue {
 }
 
 $requestId = [string]$manifest.request_id
+if (-not (Test-SafeRequestId -RequestId $requestId)) {
+    Write-AiLog -Message ("runner: '" + $requestId + "' is not a plain name; nothing is started") `
+        -Level 'ERROR' -LogPath $paths.Dispatcher -Quiet:$Quiet
+    exit 2
+}
 $rootId = Get-RootRequestId -RequestId $requestId
 $reviewCommit = [string]$manifest.review_commit
 $baseCommit = [string]$manifest.base_commit
@@ -65,7 +71,7 @@ if ($DryRun.IsPresent -eq $false -and (Test-AlreadyReviewed -RepoRoot $RepoRoot 
 # fix that has not answered in ten minutes is stuck; a dangerous change deserves
 # longer. Nothing here is "wait an hour and hope".
 $reviewProfile = [string](Get-ManifestValue 'review_profile' 'NORMAL')
-$reviewEffort = [string](Get-ManifestValue 'review_effort' 'medium')
+$reviewEffort = ConvertTo-KnownEffort -Effort ([string](Get-ManifestValue 'review_effort' 'medium'))
 if ($TimeoutSeconds -le 0) {
     $TimeoutSeconds = [int](Get-ManifestValue 'timeout_seconds' 1200)
 }
@@ -99,9 +105,13 @@ $worktreePath = Join-Path $worktreeRoot $requestId
 function Remove-ReviewWorktree {
     param([string]$Path)
     if (-not $Path) { return }
-    # Only ever the throwaway review worktree. The implementer's checkout and its
-    # uncommitted work are never touched by this script.
-    if ($Path -notlike (Join-Path $worktreeRoot '*')) { return }
+    # Only ever the throwaway review worktree, and only ever a direct child of the
+    # worktree root, compared after the path has been resolved. A string test alone
+    # lets "<root>\..\somewhere-else" through, and this call deletes recursively.
+    if (-not (Test-PathIsDirectChildOf -Path $Path -Root $worktreeRoot)) {
+        Say ("refusing to remove " + $Path + ": it is not a review worktree under " + $worktreeRoot) 'ERROR'
+        return
+    }
     $r = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'remove', '--force', $Path)
     if ($r.ExitCode -ne 0 -and (Test-Path -LiteralPath $Path)) {
         try { Remove-Item -LiteralPath $Path -Recurse -Force } catch { }
@@ -164,7 +174,10 @@ function Write-ReviewResult {
     Write-JsonAtomic -Path $resultJson -Value ([pscustomobject]$result) | Out-Null
     # An infrastructure failure is not a verdict. Only a real review closes a
     # REQUEST_ID; otherwise the same id could never be tried again.
-    Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+    # This line decides whether the REQUEST_ID is spent. Losing it would let the
+    # same id be used again and overwrite a result that already exists, so a
+    # failure here stops the runner instead of being shrugged off.
+    Add-ReviewLedgerEntry -Required -RepoRoot $RepoRoot -Entry @{
         event = $LedgerEvent; request_id = $requestId; root_request_id = $rootId
         base_commit = $baseCommit; review_commit = $reviewCommit
         outcome = $Outcome; verdict = $Verdict; next_action = $effectiveNext
@@ -213,14 +226,34 @@ if ($pathFilter.Count -gt 0) { $pathArguments = @('--') + $pathFilter }
 
 $commits = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
     'log', '--no-color', '--oneline', ($baseCommit + '..' + $reviewCommit)) + $pathArguments)
-Write-TextAtomic -Path $commitsPath -Text $commits.StdOut | Out-Null
-
 $stat = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
     'diff', '--no-color', '--stat', $baseCommit, $reviewCommit) + $pathArguments)
-Write-TextAtomic -Path $statPath -Text $stat.StdOut | Out-Null
-
 $diff = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
     'diff', '--no-color', $baseCommit, $reviewCommit) + $pathArguments)
+
+# If any of those failed, the packet would be empty and the reviewer would
+# honestly report that nothing changed. An empty packet is not a clean change.
+$packetProblems = @()
+if ($commits.ExitCode -ne 0) { $packetProblems += ('git log failed: ' + $commits.StdErr.Trim()) }
+if ($stat.ExitCode -ne 0)    { $packetProblems += ('git diff --stat failed: ' + $stat.StdErr.Trim()) }
+if ($diff.ExitCode -ne 0)    { $packetProblems += ('git diff failed: ' + $diff.StdErr.Trim()) }
+if ($diff.ExitCode -eq 0 -and $diff.StdOut.Trim().Length -eq 0) {
+    $packetProblems += 'the fixed diff is empty; there is nothing to review in this range'
+}
+if ($packetProblems.Count -gt 0) {
+    $why = ($packetProblems -join '; ')
+    Say ("the review packet could not be built: " + $why) 'ERROR'
+    Write-TextAtomic -Path $resultText -Text ("review packet could not be built:`n" + $why) | Out-Null
+    Write-ReviewResult -Verdict 'INFRA_ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
+        -ExitCode 1 -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
+        -Notes @($packetProblems) -Reviewer 'none' `
+        -LedgerEvent 'review_infra_error' -Outcome 'INFRA_ERROR' | Out-Null
+    Remove-ReviewWorktree -Path $worktreePath
+    exit 6
+}
+
+Write-TextAtomic -Path $commitsPath -Text $commits.StdOut | Out-Null
+Write-TextAtomic -Path $statPath -Text $stat.StdOut | Out-Null
 Write-TextAtomic -Path $diffPath -Text $diff.StdOut | Out-Null
 
 $focusText = ''
@@ -446,7 +479,7 @@ $invocation = [ordered]@{
     finished_utc        = ''
     duration_seconds    = -1
 }
-Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+Add-ReviewLedgerEntry -Required -RepoRoot $RepoRoot -Entry @{
     event = 'review_started'; request_id = $requestId; root_request_id = $rootId
     base_commit = $baseCommit; review_commit = $reviewCommit
     reviewer = $reviewerKind; review_profile = $reviewProfile; review_effort = $reviewEffort
@@ -460,6 +493,9 @@ Say ("starting " + $reviewerKind + " once for " + $requestId + " at " + (Get-Sho
      " files=" + $invocation.changed_file_count + " lines=" + $invocation.changed_lines +
      " diff=" + $invocation.diff_bytes + "B timeout=" + $TimeoutSeconds + "s" +
      " waited=" + $waitSeconds + "s")
+
+# A file left by an earlier attempt would be read as this attempt's answer.
+if (Test-Path -LiteralPath $lastMsgPath) { Remove-Item -LiteralPath $lastMsgPath -Force }
 
 $run = $null
 $notes = @()
@@ -481,6 +517,7 @@ Write-TextAtomic -Path $stdoutPath -Text $stdoutText | Out-Null
 
 $answer = ''
 if (Test-Path -LiteralPath $lastMsgPath) {
+    # Only a file this invocation created counts; the old one was removed above.
     $answer = [System.IO.File]::ReadAllText($lastMsgPath)
 }
 if (-not $answer -or $answer.Trim().Length -eq 0) { $answer = $stdoutText }
@@ -527,18 +564,34 @@ if (-not $verdict) {
     }
 }
 if ($verdict -eq 'REVISE') { $verdict = 'BLOCKING' }
-if (-not $verdict) {
-    $verdict = 'MALFORMED'
-    $notes += 'the reviewer answered, but not in the required form'
-}
-if (-not $nextAction) {
-    switch ($verdict) {
-        'PASS'     { $nextAction = 'PROCEED' }
-        'BLOCKING' { $nextAction = 'FIX_AND_REVIEW' }
-        'STOP'     { $nextAction = 'STOP' }
-        default    { $nextAction = 'HUMAN_DECISION_REQUIRED' }
 
+# The answer is checked against the contract, not merely searched for words that
+# look like one. An unknown verdict, a pair that contradicts itself, or a count
+# that disagrees with the verdict is not a result we can act on, and it must not
+# quietly use up the REQUEST_ID.
+$allowedVerdicts = @('PASS', 'BLOCKING', 'STOP')
+$allowedNext = @{ 'PASS' = 'PROCEED'; 'BLOCKING' = 'FIX_AND_REVIEW'; 'STOP' = 'STOP' }
+$contractProblems = @()
+if (-not $verdict) {
+    $contractProblems += 'the answer has no VERDICT line'
+} elseif ($allowedVerdicts -notcontains $verdict) {
+    $contractProblems += ("VERDICT is '" + $verdict + "', which is not PASS, BLOCKING or STOP")
+} else {
+    if ($nextAction -and $nextAction -ne $allowedNext[$verdict]) {
+        $contractProblems += ("VERDICT " + $verdict + " does not go with NEXT_ACTION " + $nextAction)
     }
+    if (-not $nextAction) { $nextAction = $allowedNext[$verdict] }
+    if ($verdict -eq 'BLOCKING' -and $blockingText -and $blockingCount -lt 1) {
+        $contractProblems += 'BLOCKING was answered with a BLOCKING_COUNT of zero'
+    }
+    if ($verdict -eq 'PASS' -and $blockingCount -gt 0) {
+        $contractProblems += 'PASS was answered with blocking items'
+    }
+}
+if ($contractProblems.Count -gt 0) {
+    $verdict = 'MALFORMED'
+    $nextAction = 'HUMAN_DECISION_REQUIRED'
+    foreach ($problem in $contractProblems) { $notes += ('the answer breaks the contract: ' + $problem) }
 }
 
 # A command that timed out, fell over, or never started did not review anything.
@@ -568,6 +621,11 @@ if ($outcome -ne 'REVIEWED') {
     $nextAction = 'RETRY'
     if ($outcome -eq 'INFRA_ERROR') { $nextAction = 'HUMAN_DECISION_REQUIRED' }
     $notes += 'this is not a review result; the REQUEST_ID is not used up'
+} elseif ($verdict -eq 'MALFORMED') {
+    # The reviewer ran and answered, but not in a form anyone can act on. That is
+    # a problem with the answer, not with the change, so a person looks at it and
+    # the number is not spent on it.
+    $ledgerEvent = 'review_malformed'
 }
 if ($verdict -eq 'BLOCKING' -and $blockingCount -eq 0) { $blockingCount = 1 }
 

@@ -221,11 +221,10 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     // ここを作業平面の法線のままにすると、矢印は輪郭の平面へ向いているのに
     // 作る形だけ別の向きへ進む。別の平面に引いた輪郭では
     // 「この向きでは厚みが出ません」(EXT-007)で断られる。
-    if (extrudeShelfShown_ && !facePushPull_
-        && DockCanShowDirection(extrudeChoice_.direction)) {
+    if (extrudeShelfShown_ && !facePushPull_) {
         // 棚が出ているなら、そこに出ている向きの決め方がそのまま作る形になる。
-        // ただし棚が表せる2つのときだけ。詳細の窓で選んだ向きを、棚の既定値で
-        // 黙って上書きしない(Codex P1-EXTRUDE-R4 B1、R5 B1)。
+        // 棚は7通りすべてを名前で出せるので、詳細の窓で選んだ向きも
+        // 棚を通って戻ってくる(Codex P1-EXTRUDE-R4 B1、R5 B1、R6 B2)。
         choice.direction = extrudeDock_->DirectionMode();
         extrudeChoice_.direction = choice.direction;
     }

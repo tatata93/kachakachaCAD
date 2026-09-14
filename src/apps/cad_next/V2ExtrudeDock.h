@@ -25,6 +25,7 @@
 #include <QString>
 
 #include <functional>
+#include <optional>
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -95,6 +96,8 @@ private:
     QLabel* input_ = nullptr;
     QDoubleSpinBox* distance_ = nullptr;
     QComboBox* direction_ = nullptr;
+    //! 棚のふだんの2つでは表せない決め方。3つ目に名前で出している間だけ入る。
+    std::optional<kachakacha::v2::modeling::ExtrudeDirectionMode> advancedDirection_;
     QPushButton* reverse_ = nullptr;
     QComboBox* extent_ = nullptr;
     QComboBox* boolean_ = nullptr;

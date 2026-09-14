@@ -428,6 +428,8 @@ public:
     void setCurrentIndex(int);
     [[nodiscard]] QString currentText() const;
     [[nodiscard]] QString itemText(int) const;
+    void setItemText(int, const QString&);
+    void removeItem(int);
     void (*currentIndexChanged)(int);
 };
 

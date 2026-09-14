@@ -747,9 +747,6 @@ private:
         workPlaneChooser_;
     //! 押し出しで前に選んだもの。次に押すときの初期値にする。
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
-    //! 棚の欄で表せる決め方か(「面に垂直」「作業平面に垂直」の2つだけ)。
-    [[nodiscard]] static bool DockCanShowDirection(
-        kachakacha::v2::modeling::ExtrudeDirectionMode mode);
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
     //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。

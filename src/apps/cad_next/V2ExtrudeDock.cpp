@@ -1,5 +1,6 @@
 #include "V2ExtrudeDock.h"
 
+#include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 
 #include <QComboBox>
@@ -21,6 +22,9 @@
 namespace {
 
 using kachakacha::v2::modeling::ExtrudeBooleanMode;
+
+//! 「詳細で決めた向き」が並ぶ場所。選ばれている間だけ生える3つ目。
+constexpr int kAdvancedDirectionIndex = 2;
 
 //! 操作の欄に並べる順。立体を選んでいるときだけ出す。
 constexpr ExtrudeBooleanMode kBooleans[] = {
@@ -256,14 +260,25 @@ void V2ExtrudeDock::TypeDistanceMm(double value)
 
 //! 棚で選んでいる向きの決め方。
 //!
-//! 欄に出ているのは「面に垂直」と「作業平面に垂直」の2つ。
+//! ふだん出ているのは「面に垂直」と「作業平面に垂直」の2つ。
 //! 前者は選んだ輪郭(または面)の平面の法線、後者はいま作図している面の法線。
 //! **ここを読まないと、欄は見た目だけで何も変わらない**(Codex R4 B1)。
+//!
+//! 詳細の窓で X 方向や自由な向きを決めたときは、3つ目としてその名前が出る。
+//! 出さずにいると、棚は「作業平面に垂直」と見せながら別の向きへ押すことになり、
+//! そのうえ棚の欄をひとつ触っただけで、決めた向きが黙って捨てられていた
+//! (Codex P1-EXTRUDE-R6 B2)。
 kachakacha::v2::modeling::ExtrudeDirectionMode V2ExtrudeDock::DirectionMode() const
 {
-    return direction_ != nullptr && direction_->currentIndex() == 1
-        ? kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal
-        : kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+    if (direction_ == nullptr) {
+        return kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+    }
+    const int index = direction_->currentIndex();
+    if (index == kAdvancedDirectionIndex && advancedDirection_.has_value()) {
+        return *advancedDirection_;
+    }
+    return index == 1 ? kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal
+                      : kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
 }
 
 void V2ExtrudeDock::ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMode mode)
@@ -271,8 +286,33 @@ void V2ExtrudeDock::ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMo
     if (direction_ == nullptr) {
         return;
     }
-    direction_->setCurrentIndex(
-        mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal ? 1 : 0);
+    // 出し入れの途中で「人が選んだ」ことにしない。棚を映すだけである。
+    const bool blocked = direction_->blockSignals(true);
+    const bool plain
+        = mode == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal
+        || mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal;
+    if (plain) {
+        advancedDirection_.reset();
+        if (direction_->count() > kAdvancedDirectionIndex) {
+            direction_->removeItem(kAdvancedDirectionIndex);
+        }
+        direction_->setCurrentIndex(
+            mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal ? 1
+                                                                                    : 0);
+    } else {
+        advancedDirection_ = mode;
+        const QString label
+            = QStringLiteral("詳細で決めた向き(%1)")
+                  .arg(QString::fromUtf8(std::string(
+                      kachakacha::v2::app::ExtrudeDirectionNameJa(mode)).c_str()));
+        if (direction_->count() > kAdvancedDirectionIndex) {
+            direction_->setItemText(kAdvancedDirectionIndex, label);
+        } else {
+            direction_->addItem(label);
+        }
+        direction_->setCurrentIndex(kAdvancedDirectionIndex);
+    }
+    direction_->blockSignals(blocked);
 }
 
 double V2ExtrudeDock::DistanceMm() const

@@ -57,8 +57,13 @@ $all = @(Get-ReviewLedgerEntries -RepoRoot $RepoRoot)
 $start = [Math]::Max(0, $all.Count - $Recent)
 for ($i = $start; $i -lt $all.Count; $i++) { $ledgerTail += $all[$i] }
 
+# 読めない台帳の行があるなら、見るたびに言う。黙って抱え込まない。
+$ledgerDamage = 0
+try { $ledgerDamage = Get-ReviewLedgerDamage -RepoRoot $RepoRoot } catch { $ledgerDamage = -1 }
+
 $status = [pscustomobject]@{
     checked_utc        = Get-UtcStamp
+    ledger_damaged_lines = $ledgerDamage
     repo_root          = $RepoRoot
     runtime_root       = $paths.Root
     dispatcher_running = $dispatcherRunning

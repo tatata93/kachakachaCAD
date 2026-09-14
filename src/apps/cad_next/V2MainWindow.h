@@ -889,6 +889,13 @@ public:
     void SplitFabricationPart();
     //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
     void SetUnfoldBaseRail();
+    //! 帯の境目を文書へ書き、以後は自動で切り直さない(§32)。
+    bool ApplyBandBoundaries(const std::vector<double>& inner, const QString& what,
+        const std::string& messageJa);
+    //! いまの境目から1本抜いた並び(2枚を1枚にする)。中の境目だけを返す。
+    [[nodiscard]] std::vector<double> RailsWithoutBoundary(std::size_t first) const;
+    //! いまの境目に1本足した並び(1枚を2枚に分ける)。中の境目だけを返す。
+    [[nodiscard]] std::vector<double> RailsWithExtraBoundary(std::size_t which) const;
     //! いま決まっている、展開の基準にする辺。試験から見る。
     [[nodiscard]] int UnfoldBaseRailNow() const;
     //! いまの製作モデルの部材の数。

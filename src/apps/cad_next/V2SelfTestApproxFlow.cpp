@@ -13,6 +13,8 @@
 #include "V2SelfTest.h"
 
 #include "V2FabricationDock.h"
+
+#include "kachakacha/app/FabricationEvaluate.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -231,6 +233,79 @@ using kachakacha::v2::domain::Visibility;
         static_cast<int>(window.FabricationPanelCount()) == panels);
 }
 
+//! §32。部材を1つにする・分けるが、**本当に分け方を変える**。
+//! 見せるだけでなく、枚数が変わり、取り消しで戻り、開き直しても残ること。
+[[nodiscard]] bool CaseMergeAndSplitChangeThePartition(V2MainWindow& window)
+{
+    if (!MakeSurfaceFromScratch(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    // 帯近似(V1 方式)でないと、境目のパラメータで分け方を持てない。
+    if (window.FabricationMethodInUse()
+        != kachakacha::v2::app::FabricationMethod::BandApproximation) {
+        window.RunCommand("fabrication.set_method");
+        viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+            window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    }
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    const int before = static_cast<int>(window.FabricationPanelCount());
+    if (!Explain((std::string("部材が2枚以上ある(") + std::to_string(before)
+                     + " 枚)").c_str(),
+            before >= 2)) {
+        return false;
+    }
+
+    // 1枚目と2枚目を1つにする。枚数が1減る。
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1, 2"));
+    window.RunCommand("fabrication.merge_parts");
+    const int merged = static_cast<int>(window.FabricationPanelCount());
+    if (!Explain((std::string("1つにすると枚数が減る(") + std::to_string(before)
+                     + " → " + std::to_string(merged) + " 枚。帯は "
+                     + window.StatusText().toStdString() + ")").c_str(),
+            merged == before - 1)) {
+        return false;
+    }
+
+    // 取り消すと戻る。分け方は文書のものなので、履歴に乗っている。
+    window.RunCommand("edit.undo");
+    if (!Explain("取り消すと枚数が戻る",
+            static_cast<int>(window.FabricationPanelCount()) == before)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    if (!Explain("やり直すと枚数がまた減る",
+            static_cast<int>(window.FabricationPanelCount()) == merged)) {
+        return false;
+    }
+
+    // 1枚目を2つに分ける。枚数が1増える。
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.RunCommand("fabrication.split_part");
+    const int split = static_cast<int>(window.FabricationPanelCount());
+    if (!Explain((std::string("分けると枚数が増える(") + std::to_string(merged) + " → "
+                     + std::to_string(split) + " 枚。帯は "
+                     + window.StatusText().toStdString() + ")").c_str(),
+            split == merged + 1)) {
+        return false;
+    }
+
+    // 保存して開き直しても、決めた分け方が残る。
+    // 「決めたのに開き直すと戻る」を作らない。
+    if (!Explain("保存して開き直せる",
+            window.SaveAndReopen(QStringLiteral("kacha_selftest_partition.kcd2")))) {
+        return false;
+    }
+    return Explain((std::string("開き直しても決めた分け方が残る(")
+                       + std::to_string(window.FabricationPanelCount()) + " 枚)").c_str(),
+        static_cast<int>(window.FabricationPanelCount()) == split);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ApproximationFlowCases()
@@ -242,6 +317,8 @@ std::vector<SelfTestCase> ApproximationFlowCases()
             CaseApproximationBendsAndOutputs},
         {"近似は1回の取り消しで戻り、保存して開き直しても残る",
             CaseApproximationUndoAndReopen},
+        {"部材を1つにする・分けるが本当に分け方を変える",
+            CaseMergeAndSplitChangeThePartition},
     };
 }
 

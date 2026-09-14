@@ -14,12 +14,15 @@
 #include "V2FabricationDock.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/fabrication/PanelEdit.h"
 
 #include <QString>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -105,9 +108,96 @@ void V2MainWindow::MergeFabricationParts()
                 .arg(QString::fromStdString(preview.messageJa)));
         return;
     }
-    // 前と後を見せる。実際に作り直すのは、型紙の作り方そのものを持てるようになってから。
-    SetStatus(QStringLiteral("部材を1つにする: %1")
-            .arg(QString::fromStdString(preview.messageJa)));
+    // 前と後を見せてから、実際に分け方を変える。
+    // 帯近似の分け方は「境目のパラメータ」で持てる(`manualBoundaries`)。
+    // 面の番号を保存するわけではないので、architecture-and-data.md §6 とぶつからない。
+    const std::size_t first = std::min(numbers[0], numbers[1]);
+    if (!ApplyBandBoundaries(RailsWithoutBoundary(first),
+            QStringLiteral("部材を1つにする"), preview.messageJa)) {
+        return;
+    }
+}
+
+//! いまの帯の境目から、部材 first と first+1 の間の1本を抜いた並びを返す。
+//! 返るのは中の境目だけ(両端の 0 と 1 は含めない)。
+std::vector<double> V2MainWindow::RailsWithoutBoundary(std::size_t first) const
+{
+    const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
+    std::vector<double> inner;
+    if (found == fabricationModels_.end() || !found->second.bands.has_value()) {
+        return inner;
+    }
+    const auto& rails = found->second.bands->railParameters;
+    for (std::size_t index = 1; index + 1 < rails.size(); ++index) {
+        if (index == first + 1) {
+            continue;   // ここが2枚の間の境目。抜くと1枚になる。
+        }
+        inner.push_back(rails[index]);
+    }
+    return inner;
+}
+
+//! いまの帯の境目に、部材 which の真ん中で1本足した並びを返す。
+std::vector<double> V2MainWindow::RailsWithExtraBoundary(std::size_t which) const
+{
+    const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
+    std::vector<double> inner;
+    if (found == fabricationModels_.end() || !found->second.bands.has_value()) {
+        return inner;
+    }
+    const auto& rails = found->second.bands->railParameters;
+    for (std::size_t index = 1; index + 1 < rails.size(); ++index) {
+        inner.push_back(rails[index]);
+    }
+    if (which + 1 < rails.size()) {
+        inner.push_back(0.5 * (rails[which] + rails[which + 1]));
+    }
+    std::sort(inner.begin(), inner.end());
+    return inner;
+}
+
+//! 分け方を文書へ書く。以後は自動で切り直さない(人が決めたほうを残す)。
+bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
+    const QString& what, const std::string& messageJa)
+{
+    using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
+
+    const auto* entity = session_->GetDocument().FindEntity(CurrentFabricationModelId());
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    if (current == nullptr) {
+        SetStatus(QStringLiteral("%1: 近似の作り方が見つかりません。").arg(what));
+        return false;
+    }
+    auto definition = *current;
+    definition.automaticBoundaries = false;
+    definition.manualBoundaries = inner;
+    // 帯の数が変わるので、帯ごとに持っていた値は捨てる。
+    // 古い並びを新しい帯へ当てると、別の部材の半径が当たってしまう。
+    definition.bandProgress.clear();
+    definition.creaseProgress.clear();
+    definition.bendRadiusMm.clear();
+    definition.bendRadiusLock.clear();
+    definition.unfoldBaseRail = 0;
+    const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
+        feature->id, definition, feature->inputEntityIds, what.toStdString()));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return false;
+    }
+    AdoptCurrentDocument();
+    RefreshFabricationView();
+    RefreshBendRadius();
+    SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。"
+                             "以後は自動で切り直しません。")
+            .arg(what)
+            .arg(QString::fromStdString(messageJa))
+            .arg(static_cast<int>(FabricationPanelCount())));
+    return true;
 }
 
 //! 「部材を分ける」。棚の「曲げる部材」で挙げた1つを2つに分ける。
@@ -141,8 +231,18 @@ void V2MainWindow::SplitFabricationPart()
     }
     const auto preview = kachakacha::v2::fabrication::PreviewSplit(whole, panels, 0,
         moved);
-    SetStatus(QStringLiteral("部材を分ける: %1")
-            .arg(QString::fromStdString(preview.messageJa)));
+    if (!preview.possible) {
+        SetStatus(QStringLiteral("部材を分ける: %1")
+                .arg(QString::fromStdString(preview.messageJa)));
+        return;
+    }
+    if (numbers.front() >= count) {
+        SetStatus(QStringLiteral("部材を分ける: 1 から %1 までの番号を書いてください。")
+                .arg(static_cast<int>(count)));
+        return;
+    }
+    (void)ApplyBandBoundaries(RailsWithExtraBoundary(numbers.front()),
+        QStringLiteral("部材を分ける"), preview.messageJa);
 }
 
 //! 棚の「曲げる部材」に書いた番号。0 起点へ直して返す。

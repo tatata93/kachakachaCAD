@@ -17,6 +17,7 @@ Every case below is one of the promises the owner asked for:
   12 the reviewer edits    -> reported, and the edit is dropped
   13 no reviewer installed -> reported, and the REQUEST_ID is not used up
   14 two requests, one HEAD-> both reviewed, once each
+  15 codex cannot run     -> the sanctioned fallback reviews, and says so
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -94,6 +95,13 @@ $ErrorActionPreference = "Stop"
 $argsList = @($args)
 Add-Content -LiteralPath $env:KACHA_STUB_LOG -Value ((Get-Location).Path + " -- " + ($argsList -join " "))
 if ($argsList -contains "--version") { Write-Output "codex-stub 0.0.0"; exit 0 }
+if ($argsList -contains "--help" -and -not ($argsList[0] -eq "exec")) {
+    Write-Output "Usage: claude [options] [prompt]"
+    Write-Output "  -p, --print                    print the answer and exit"
+    Write-Output "      --permission-mode <MODE>   plan | acceptEdits"
+    Write-Output "      --permission-prompts <M>   none | ask"
+    exit 0
+}
 if ($argsList.Count -ge 2 -and $argsList[0] -eq "exec" -and $argsList -contains "--help") {
     Write-Output "Usage: codex exec [OPTIONS] [PROMPT]"
     Write-Output "  -C, --cd <DIR>                 working directory"
@@ -143,6 +151,9 @@ $env:KACHA_GIT_EXE = $gitExe
 $env:KACHA_STUB_LOG = $stubLog
 $env:KACHA_STUB_VERDICT = 'PASS'
 $env:KACHA_STUB_WRITE_FILE = ''
+# The self-test must never reach a real reviewer installed on this machine.
+$env:KACHA_REVIEW_FALLBACK = 'none'
+$env:KACHA_CLAUDE_EXE = (Join-Path $WorkRoot 'no-such-claude.cmd')
 Set-Content -LiteralPath $stubLog -Value '' -Encoding ASCII
 
 $paths = Initialize-AiRuntime -RepoRoot $repo
@@ -339,6 +350,29 @@ Run-Dispatcher | Out-Null
 Check 'both requests are reviewed, once each' ((Stub-CallCount) -eq ($beforeMany + 2)) ("calls=" + (Stub-CallCount))
 Check 'the first of the pair has a result' (Test-Path -LiteralPath (Join-Path $paths.Results 'T-MANY-A-R1.json')) 'no result for A'
 Check 'the second of the pair has a result' (Test-Path -LiteralPath (Join-Path $paths.Results 'T-MANY-B-R1.json')) 'no result for B'
+
+# 15 ------------------------------------------------------------------------
+# When codex cannot run here, the sanctioned fallback reviewer takes the request,
+# and the result says plainly that it was the fallback.
+$env:KACHA_CODEX_EXE = (Join-Path $WorkRoot 'no-such-reviewer.cmd')
+$env:KACHA_CLAUDE_EXE = $goodStub
+$env:KACHA_REVIEW_FALLBACK = 'claude'
+Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $paths.Logs 'claude-interface.json') -Force -ErrorAction SilentlyContinue
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'fallback case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'fallback case')
+$fbHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-FALLBACK-R1' -Base $baseCommit -Review $fbHead -Tested $fbHead | Out-Null
+Run-Dispatcher | Out-Null
+$fbResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-FALLBACK-R1.json')
+Check 'the fallback reviewer takes the request when codex cannot run' `
+    (($null -ne $fbResult) -and $fbResult.verdict -eq 'PASS') 'no PASS from the fallback'
+Check 'the result says it was the fallback, not codex' `
+    (($null -ne $fbResult) -and $fbResult.reviewer -eq 'claude-fallback') `
+    ("reviewer=" + $(if ($fbResult) { $fbResult.reviewer } else { 'none' }))
+$env:KACHA_CODEX_EXE = $goodStub
+$env:KACHA_CLAUDE_EXE = (Join-Path $WorkRoot 'no-such-claude.cmd')
+$env:KACHA_REVIEW_FALLBACK = 'none'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

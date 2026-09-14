@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(14 の場面・30 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(15 の場面・32 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -115,6 +115,10 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | FileSystemWatcher の取りこぼし | 起動時・毎周・1件処理ごとに全走査もする |
 | Codex が source を書き換える | `--sandbox read-only`(実装が持っていれば)＋ 事後に `git status` で検出し破棄・記録 |
 | 存在しない CLI option を使う | `codex exec --help` を実物で読み、**見えた option しか渡さない** |
+| どこを探したか分からない | `logs/reviewer-search.json` に PATH と探した場所を全部書く |
+| 指定したのと別のレビューアーが使われる | `KACHA_CODEX_EXE` を指定したら、**それ以外は使わない**(無ければ「無い」) |
+| レビュー中に古い常駐を止めてしまう | `processing/` に取得中の依頼があるときは誰も止めない |
+| レビューが成立しなかったのに番号を使い切る | 起動できない・落ちた・何も言わない場合は `review_unavailable` |
 | 同じ所を延々と往復 | 同じ root request で3回続けて BLOCKING なら `HUMAN_DECISION_REQUIRED` |
 | 過去の履歴が消える | 台帳は追記専用。`CODEX_REVIEW.md` も追記のみ |
 
@@ -133,6 +137,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ai-local\review-dispat
 :: 基盤そのものを検査する
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\ai-local\review-selftest.ps1
 ```
+
+## レビューアーの見つけ方
+
+1. `KACHA_CODEX_EXE` が指定されていれば、**それだけ**を使います。
+   そこに無ければ「レビューアーは無い」と答えます。別のものを黙って使いません。
+2. 指定が無ければ `where.exe` と PATH、npm・WinGet・pnpm・yarn・cargo・bun・
+   `.local\bin`・`.codex\bin`・`Programs` の3段下までを探します。
+3. 見つけた候補に `codex exec --help` を実際に尋ね、**そこに見えた option だけ**を渡します。
+4. `.sandbox-bin` の中にあるものは最後に回します。これは殻(shim)で、
+   隣に `codex-code-mode-host.exe` が無いと `--version` にも `--help` にも
+   正しく答えるのに、ファイルを1つも読めません。隣に host が無ければ「使えない」と断ります。
+5. どれも使えないとき、`.ai/ORCHESTRATOR_CONFIG.json` の `reviewer_fallback` が
+   `claude` なら、読み取り専用の代役が引き受けます。結果の `reviewer` は
+   **`claude-fallback`** と書かれます。Codex のレビューとして扱いません。
+   代役を止めるときは `KACHA_REVIEW_FALLBACK=none` にします。
+
+探した場所と結果は毎回 `.ai-runtime/logs/reviewer-search.json` に残ります。
 
 ## GitHub の扱い
 

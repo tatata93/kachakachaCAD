@@ -58,6 +58,7 @@ function Get-ReviewerSearchRoots {
     }
     if ($env:USERPROFILE) {
         $roots += (Join-Path $env:USERPROFILE '.codex\bin')
+        $roots += (Join-Path $env:USERPROFILE '.codex\.sandbox-bin')
         $roots += (Join-Path $env:USERPROFILE '.codex')
         $roots += (Join-Path $env:USERPROFILE '.local\bin')
         $roots += (Join-Path $env:USERPROFILE '.cargo\bin')
@@ -79,8 +80,17 @@ function Get-ReviewerSearchRoots {
 function Find-ReviewerExecutables {
     param([Parameter(Mandatory=$true)][string]$Name)
     $found = @()
-    if ($Name -eq 'codex' -and $env:KACHA_CODEX_EXE) { $found += $env:KACHA_CODEX_EXE }
-    if ($Name -eq 'claude' -and $env:KACHA_CLAUDE_EXE) { $found += $env:KACHA_CLAUDE_EXE }
+
+    # An explicit override is the answer, not a first guess. If someone names the
+    # reviewer command, a different one must never be substituted quietly; if the
+    # named file is not there, the honest result is "no reviewer".
+    $override = ''
+    if ($Name -eq 'codex')  { $override = $env:KACHA_CODEX_EXE }
+    if ($Name -eq 'claude') { $override = $env:KACHA_CLAUDE_EXE }
+    if ($override) {
+        if (Test-Path -LiteralPath $override -PathType Leaf) { return @($override) }
+        return @()
+    }
 
     foreach ($suffix in @('', '.cmd', '.exe', '.bat', '.ps1')) {
         $cmd = Get-Command ($Name + $suffix) -ErrorAction SilentlyContinue
@@ -98,19 +108,9 @@ function Find-ReviewerExecutables {
 
     foreach ($root in (Get-ReviewerSearchRoots)) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
-        foreach ($suffix in @('.cmd', '.exe', '.bat', '.ps1', '')) {
-            $candidate = Join-Path $root ($Name + $suffix)
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found += $candidate }
+        foreach ($candidate in (Find-NamedExecutable -Root $root -Name $Name -Depth 3)) {
+            $found += $candidate
         }
-        # One level down as well: Programs\<tool>\<tool>.exe is a common shape.
-        try {
-            foreach ($child in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
-                foreach ($suffix in @('.cmd', '.exe', '.bat')) {
-                    $candidate = Join-Path $child.FullName ($Name + $suffix)
-                    if (Test-Path -LiteralPath $candidate -PathType Leaf) { $found += $candidate }
-                }
-            }
-        } catch { }
     }
 
     $unique = @()
@@ -120,7 +120,39 @@ function Find-ReviewerExecutables {
         $key = $item.ToLowerInvariant()
         if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $unique += $item }
     }
-    return $unique
+    # A command inside a .sandbox-bin directory is a shim that needs a host process
+    # beside it. It answers --version and --help even when it cannot do any work,
+    # so it is tried last, after every ordinary installation.
+    $ordinary = @()
+    $shims = @()
+    foreach ($item in $unique) {
+        if ($item -like '*\.sandbox-bin\*') { $shims += $item } else { $ordinary += $item }
+    }
+    return @($ordinary + $shims)
+}
+
+# A bounded walk. Depth is small on purpose: an unbounded search of a whole disk
+# at every probe would cost more than the review it is trying to start.
+function Find-NamedExecutable {
+    param(
+        [Parameter(Mandatory=$true)][string]$Root,
+        [Parameter(Mandatory=$true)][string]$Name,
+        [int]$Depth = 2
+    )
+    $hits = @()
+    foreach ($suffix in @('.cmd', '.exe', '.bat', '.ps1')) {
+        $candidate = Join-Path $Root ($Name + $suffix)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $hits += $candidate }
+    }
+    if ($Depth -le 0) { return $hits }
+    try {
+        foreach ($child in @(Get-ChildItem -LiteralPath $Root -Directory -Force -ErrorAction SilentlyContinue)) {
+            # Package trees are large and never hold the launcher we want.
+            if ($child.Name -eq 'node_modules' -or $child.Name -eq '.git') { continue }
+            $hits += (Find-NamedExecutable -Root $child.FullName -Name $Name -Depth ($Depth - 1))
+        }
+    } catch { }
+    return $hits
 }
 
 # A written record of where we looked. Without it, "no reviewer found" is not
@@ -137,7 +169,20 @@ function Write-ReviewerSearchReport {
                 }
             } catch { }
         }
-        $roots += [pscustomobject]@{ path = $root; exists = $exists; reviewer_like_files = $entries }
+        $allFiles = @()
+        if ($exists -and ($root -like '*.codex*')) {
+            # The one place worth listing in full: a shim here explains a reviewer
+            # that starts and then cannot read anything.
+            try {
+                foreach ($file in @(Get-ChildItem -LiteralPath $root -File -Force -ErrorAction SilentlyContinue)) {
+                    $allFiles += $file.Name
+                }
+            } catch { }
+        }
+        $roots += [pscustomobject]@{
+            path = $root; exists = $exists
+            reviewer_like_files = $entries; all_files = $allFiles
+        }
     }
     $report = [pscustomobject]@{
         schema_version = 1
@@ -204,6 +249,16 @@ function Get-CodexInterface {
     if (-not $probe.has_exec -and -not $probe.probe_note) {
         $probe.probe_note = 'this installation does not advertise "codex exec"'
     }
+    # A sandbox shim answers --version and --help perfectly and then cannot read a
+    # single file, because its host process is not installed. That is not a usable
+    # reviewer, and it must not be allowed to look like one.
+    if ($probe.probe_ok -and ($Exe -like '*\.sandbox-bin\*')) {
+        $hostExe = Join-Path (Split-Path -Parent $Exe) 'codex-code-mode-host.exe'
+        if (-not (Test-Path -LiteralPath $hostExe)) {
+            $probe.probe_ok = $false
+            $probe.probe_note = 'a sandbox shim with no codex-code-mode-host.exe beside it: it cannot read files'
+        }
+    }
     return [pscustomobject]$probe
 }
 
@@ -234,6 +289,90 @@ function Resolve-CodexInterface {
     return $best
 }
 
+# The sanctioned stand-in. .ai/ORCHESTRATOR_CONFIG.json already names a read-only
+# fallback reviewer, so when Codex cannot run on this machine the queue does not
+# simply stop. A fallback review is always recorded as a fallback review; it is
+# never presented as Codex.
+function Get-FallbackReviewerName {
+    if ($env:KACHA_REVIEW_FALLBACK) { return $env:KACHA_REVIEW_FALLBACK }
+    $configPath = Join-Path $RepoRoot '.ai\ORCHESTRATOR_CONFIG.json'
+    $config = Read-JsonFile -Path $configPath
+    if ($null -eq $config) { return 'none' }
+    foreach ($p in $config.PSObject.Properties) {
+        if ($p.Name -eq 'reviewer_fallback' -and $p.Value) { return [string]$p.Value }
+    }
+    return 'none'
+}
+
+function Get-ClaudeInterface {
+    param([string]$Exe)
+    $probe = [ordered]@{
+        schema_version  = 1
+        kind            = 'claude_interface'
+        probed_utc      = Get-UtcStamp
+        executable      = $Exe
+        version         = ''
+        supported_flags = @()
+        help_excerpt    = ''
+        probe_ok        = $false
+        probe_note      = ''
+    }
+    try {
+        $v = Invoke-Process -FilePath $Exe -Arguments @('--version') -WorkingDirectory $RepoRoot -TimeoutSeconds 60
+        if ($v.ExitCode -eq 0) { $probe.version = $v.StdOut.Trim() }
+    } catch {
+        $probe.probe_note = 'version probe failed: ' + $_.Exception.Message
+        return [pscustomobject]$probe
+    }
+    $help = $null
+    try {
+        $help = Invoke-Process -FilePath $Exe -Arguments @('--help') -WorkingDirectory $RepoRoot -TimeoutSeconds 60
+    } catch {
+        $probe.probe_note = 'help probe failed: ' + $_.Exception.Message
+        return [pscustomobject]$probe
+    }
+    $text = ($help.StdOut + "`n" + $help.StdErr)
+    $found = @()
+    foreach ($flag in @('--print', '--permission-mode', '--permission-prompts', '--allowed-tools', '--model')) {
+        if ($text -like ('*' + $flag + '*')) { $found += $flag }
+    }
+    if ($text -match '(?m)(^|\s)-p(\s|,|$)') { $found += '-p' }
+    $probe.supported_flags = $found
+    $excerptLength = [Math]::Min(4000, $text.Length)
+    $probe.help_excerpt = $text.Substring(0, $excerptLength)
+    $probe.probe_ok = (($found -contains '-p') -or ($found -contains '--print'))
+    if (-not $probe.probe_ok -and -not $probe.probe_note) {
+        $probe.probe_note = 'this installation does not advertise a one-shot print mode'
+    }
+    return [pscustomobject]$probe
+}
+
+function Resolve-ClaudeInterface {
+    param([switch]$Force)
+    $cachePath = Join-Path $paths.Logs 'claude-interface.json'
+    if (-not $Force -and (Test-Path -LiteralPath $cachePath)) {
+        $cached = Read-JsonFile -Path $cachePath
+        if ($cached -and $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
+            return $cached
+        }
+    }
+    $best = $null
+    foreach ($candidate in (Find-ReviewerExecutables -Name 'claude')) {
+        $probe = Get-ClaudeInterface -Exe $candidate
+        if ($null -eq $best) { $best = $probe }
+        if ($probe.probe_ok) { $best = $probe; break }
+    }
+    if ($null -eq $best) {
+        $best = [pscustomobject]@{
+            schema_version = 1; kind = 'claude_interface'; probed_utc = Get-UtcStamp
+            executable = ''; version = ''; supported_flags = @(); help_excerpt = ''
+            probe_ok = $false; probe_note = 'no claude executable found'
+        }
+    }
+    Write-JsonAtomic -Path $cachePath -Value $best | Out-Null
+    return $best
+}
+
 function Get-WorktreeRoot {
     if ($env:KACHA_AI_WORKTREE_ROOT) { return $env:KACHA_AI_WORKTREE_ROOT }
     $sibling = Join-Path (Split-Path -Parent $RepoRoot) 'kachakachaCAD-worktrees'
@@ -259,8 +398,18 @@ function Invoke-MachinePrecheck {
     if (-not $insideRepo) { $problems += "AIR-E002 $RepoRoot is not a git working tree" }
 
     $codex = Resolve-CodexInterface -Force:$Refresh
+    $fallbackName = Get-FallbackReviewerName
+    $fallback = $null
+    if ($fallbackName -eq 'claude') { $fallback = Resolve-ClaudeInterface -Force:$Refresh }
     if (-not $codex.probe_ok) {
-        $problems += ('AIR-E003 no usable reviewer command: ' + $codex.probe_note)
+        if ($fallback -and $fallback.probe_ok) {
+            # Not a problem that stops the queue, but it is written down every time.
+            Write-AiLog -Message ('precheck: codex is not usable (' + $codex.probe_note +
+                '); the sanctioned fallback reviewer will be used') -Level 'WARN' `
+                -LogPath $paths.Dispatcher -Quiet:$Quiet
+        } else {
+            $problems += ('AIR-E003 no usable reviewer command: ' + $codex.probe_note)
+        }
     }
 
     $worktreeRoot = Get-WorktreeRoot
@@ -283,6 +432,8 @@ function Invoke-MachinePrecheck {
         repo_root      = $RepoRoot
         git_exe        = $gitExe
         codex          = $codex
+        fallback_name  = $fallbackName
+        fallback       = $fallback
         worktree_root  = $worktreeRoot
         worktree_ok    = $worktreeOk
         problems       = $problems

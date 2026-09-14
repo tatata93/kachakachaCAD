@@ -11,7 +11,7 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R2
+REQUEST_ID: AI-REVIEW-PIPELINE-R3
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
 STATUS: READY_FOR_CODEX(R1 は PC に Codex の実行ファイルが無く ERROR。番号を上げた)
@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(14 の場面・30 の確認)
+  ＋ PC で `review-selftest.ps1`(15 の場面・32 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -35,6 +35,33 @@ UPDATED_AT: 2026-09-14
 - Q1-Q5-R4 … R3 の指摘を直した分。同上
 
 R1〜R4 は FAIL の履歴として残す。**書き換えない。**
+
+### 人に見てほしいこと(CODEX_INSTALL_ATTENTION)
+
+**この PC で Codex CLI が実際には動けない。**基盤は正しく動き、Codex も
+正しく断った。ごまかしていない。事実だけ並べる。
+
+- 見つかった実行ファイル: `C:\Users\tak01\.codex\.sandbox-bin\codex.exe`
+  (`codex-cli 0.153.4`。`codex exec` の option は `--output-last-message`,
+  `--ephemeral`, `--sandbox`, `-C`, `-c` すべて揃っている)
+- 実際に起動した結果(AI-REVIEW-PIPELINE-R2、2分):
+  「`codex-code-mode-host.exe` が無く、規約も packet も差分も読めない。
+  推測で判定は作らない」
+- つまりこれは**殻(shim)**で、本体が隣に無い。`.sandbox-bin` は最後に回し、
+  隣に host が無いものは「使えない」と断るようにした。
+- ほかに `codex` という名前の実行ファイルは、探した範囲(PATH・npm・WinGet・
+  pnpm・yarn・cargo・bun・`.local\bin`・`Programs` の3段下)には無かった。
+  全記録は `.ai-runtime\logs\reviewer-search.json`。
+
+**お願いしたいこと(どちらか一つ)**
+
+1. Codex CLI の本体の場所を教えてください。環境変数
+   `KACHA_CODEX_EXE` にその道筋を入れれば、基盤はそれだけを使います。
+2. または、そのまま代役で進めてよければ何もしなくて構いません。
+   `.ai/ORCHESTRATOR_CONFIG.json` の `reviewer_fallback: claude` に従い、
+   読み取り専用の代役がレビューします。結果には必ず
+   `reviewer: claude-fallback` と書かれ、Codex のレビューとは区別されます。
+   **ただしこれは身内の目です。** Codex の独立した目の代わりにはなりません。
 
 ### 人が見るところ
 
@@ -148,6 +175,14 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
 
+- REQUEST_ID: AI-REVIEW-PIPELINE-R2
+  REVIEWED_HEAD: 9e7f7d1
+  ACTION: (レビュー不成立。Codex は起動したが殻で、ファイルを読めなかった)
+  FIX_COMMIT: -
+  RESULT: **判定は出ていない。**Codex 自身が「読めないので推測で判定は作らない」と
+    答えた。基盤はその答えを所定の形でないものとして ERROR にした。
+    以後、殻は使わない・起動できても答えが無ければ番号を使い切らない、に直した。
+    AI-REVIEW-PIPELINE-R3 として出し直す。
 - REQUEST_ID: AI-REVIEW-PIPELINE-R1
   REVIEWED_HEAD: 4eee58f
   ACTION: (レビュー不成立。Codex の実行ファイルが PC で見つからず ERROR)

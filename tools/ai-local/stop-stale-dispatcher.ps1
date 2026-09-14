@@ -34,6 +34,16 @@ foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Objec
     if ($file.LastWriteTime -gt $newest) { $newest = $file.LastWriteTime }
 }
 
+# Never interrupt a review that is under way. A claim in processing/ means a
+# reviewer is running right now; the stale dispatcher can be retired at the next
+# build instead. Losing a long review to save a few minutes is a bad trade.
+$inFlight = @(Get-QueueFiles -Directory $paths.Processing)
+if ($inFlight.Count -gt 0) {
+    Say ("a review is under way (" + $inFlight[0].Name + "); no dispatcher is retired now")
+    if (-not $Quiet) { Write-Output 'stopped=0 (review in flight)' }
+    exit 0
+}
+
 $stopped = 0
 $processes = @()
 try {

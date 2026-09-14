@@ -57,10 +57,10 @@ $workDir = Join-Path $paths.Processing $requestId
 if (-not (Test-Path -LiteralPath $workDir)) {
     New-Item -ItemType Directory -Path $workDir -Force | Out-Null
 }
-$packetPath   = Join-Path $workDir 'packet.md'
-$diffPath     = Join-Path $workDir 'diff.patch'
-$statPath     = Join-Path $workDir 'diffstat.txt'
-$commitsPath  = Join-Path $workDir 'commits.txt'
+# The packet goes INSIDE the pinned worktree. A reviewer running read-only in that
+# directory can always read it; a path somewhere else on the disk may be outside
+# what its sandbox allows, and then the review fails for no good reason.
+$packetDirName = '.ai-review-packet'
 $lastMsgPath  = Join-Path $workDir 'reviewer-last-message.txt'
 $stdoutPath   = Join-Path $workDir 'reviewer-stdout.txt'
 $resultJson   = Join-Path $paths.Results ($requestId + '.json')
@@ -130,7 +130,7 @@ function Write-ReviewResult {
         consecutive_blocking = ($streak + 1)
         exit_code            = $ExitCode
         review_text_file     = $resultText
-        packet_file          = $packetPath
+        packet_file          = (Join-Path $workDir 'packet.md')
         worktree             = $worktreePath
         notes                = @($Notes)
         processed_by_claude  = $false
@@ -148,6 +148,28 @@ function Write-ReviewResult {
     } | Out-Null
     return $result
 }
+
+# ------------------------------------------------------------- worktree -----
+# A detached worktree at a fixed commit. The branch may move under us during the
+# review; this checkout cannot.
+Remove-ReviewWorktree -Path $worktreePath
+$add = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
+    'worktree', 'add', '--detach', $worktreePath, $reviewCommit)
+if ($add.ExitCode -ne 0) {
+    Say ("could not create the review worktree: " + $add.StdErr.Trim()) 'ERROR'
+    Write-TextAtomic -Path $resultText -Text ("review worktree could not be created:`n" + $add.StdErr) | Out-Null
+    Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
+        -ExitCode $add.ExitCode -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
+        -Notes @('git worktree add failed') -LedgerEvent 'review_unavailable' | Out-Null
+    exit 5
+}
+
+$packetDir    = Join-Path $worktreePath $packetDirName
+New-Item -ItemType Directory -Path $packetDir -Force | Out-Null
+$packetPath   = Join-Path $packetDir 'packet.md'
+$diffPath     = Join-Path $packetDir 'diff.patch'
+$statPath     = Join-Path $packetDir 'diffstat.txt'
+$commitsPath  = Join-Path $packetDir 'commits.txt'
 
 # ---------------------------------------------------------------- packet ----
 
@@ -213,45 +235,80 @@ Write-TextAtomic -Path $packetPath -Text $packet | Out-Null
 # ------------------------------------------------------------- reviewer ----
 
 $interface = Read-JsonFile -Path $paths.Interface
+$fallbackInterface = Read-JsonFile -Path (Join-Path $paths.Logs 'claude-interface.json')
 if ($null -eq $interface -or -not $interface.probe_ok) {
     # Probe once here rather than assume anything about the installed reviewer.
     & (Join-Path $PSScriptRoot 'review-precheck.ps1') -RepoRoot $RepoRoot -Machine -Refresh -Quiet | Out-Null
     $interface = Read-JsonFile -Path $paths.Interface
+    $fallbackInterface = Read-JsonFile -Path (Join-Path $paths.Logs 'claude-interface.json')
 }
-if ($null -eq $interface -or -not $interface.probe_ok) {
+
+# Which reviewer is actually going to run. Codex is the reviewer; the fallback is
+# only reached when Codex cannot run here, and it is named as a fallback in the
+# result so that nobody later mistakes it for an independent Codex review.
+$reviewerKind = 'codex'
+$reviewerExe = ''
+$reviewerFlags = @()
+$reviewerVersion = ''
+if ($null -ne $interface -and $interface.probe_ok) {
+    $reviewerExe = [string]$interface.executable
+    $reviewerVersion = [string]$interface.version
+    foreach ($f in @($interface.supported_flags)) { $reviewerFlags += [string]$f }
+} elseif ($null -ne $fallbackInterface -and $fallbackInterface.probe_ok) {
+    $reviewerKind = 'claude-fallback'
+    $reviewerExe = [string]$fallbackInterface.executable
+    $reviewerVersion = [string]$fallbackInterface.version
+    foreach ($f in @($fallbackInterface.supported_flags)) { $reviewerFlags += [string]$f }
+    $codexNote = 'codex is not usable on this machine'
+    if ($null -ne $interface) { $codexNote = [string]$interface.probe_note }
+    Say ("codex cannot run here (" + $codexNote + "); using the sanctioned fallback reviewer") 'WARN'
+}
+
+if (-not $reviewerExe) {
     Say "no usable reviewer command on this machine; nothing is started" 'ERROR'
     Write-TextAtomic -Path $resultText -Text "reviewer unavailable on this machine" | Out-Null
     Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
         -ExitCode 127 -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
-        -Notes @('no codex executable was found or it does not support "codex exec"') -Reviewer 'none' `
+        -Notes @('no reviewer command on this machine; see .ai-runtime/logs/reviewer-search.json') -Reviewer 'none' `
         -LedgerEvent 'review_unavailable' | Out-Null
+    Remove-ReviewWorktree -Path $worktreePath
     exit 4
 }
 
-$flags = @()
-foreach ($f in @($interface.supported_flags)) { $flags += [string]$f }
+$flags = $reviewerFlags
 
-$prompt = "Read docs/ai/CODEX_REVIEW_POLICY.md in this working tree, then review the packet at $packetPath. " +
+# Every path in the prompt is relative to the working tree the reviewer is started
+# in, so nothing depends on what its sandbox lets it reach outside that directory.
+$prompt = "Read docs/ai/CODEX_REVIEW_POLICY.md in this working tree, then review the packet at " +
+          "./$packetDirName/packet.md (the fixed diff is ./$packetDirName/diff.patch). " +
           "REQUEST_ID is $requestId. BASE is $baseCommit and HEAD is $reviewCommit; review exactly that range and nothing else. " +
           "This is a read-only review: do not modify any file. " +
           "Answer in the exact block the policy describes."
 
-$arguments = @('exec')
-if ($flags -contains '-c') {
-    $effortMap = @{ 'LOW' = 'low'; 'MEDIUM' = 'medium'; 'HIGH' = 'high'; 'EXTRA_HIGH' = 'xhigh' }
-    $effortKey = [string]$manifest.review_effort
-    if ($effortMap.ContainsKey($effortKey)) {
-        $arguments += @('-c', ('model_reasoning_effort="' + $effortMap[$effortKey] + '"'))
+$arguments = @()
+if ($reviewerKind -eq 'codex') {
+    $arguments += 'exec'
+    if ($flags -contains '-c') {
+        $effortMap = @{ 'LOW' = 'low'; 'MEDIUM' = 'medium'; 'HIGH' = 'high'; 'EXTRA_HIGH' = 'xhigh' }
+        $effortKey = [string]$manifest.review_effort
+        if ($effortMap.ContainsKey($effortKey)) {
+            $arguments += @('-c', ('model_reasoning_effort="' + $effortMap[$effortKey] + '"'))
+        }
     }
+    if ($flags -contains '--ephemeral')   { $arguments += '--ephemeral' }
+    if ($flags -contains '--sandbox')     { $arguments += @('--sandbox', 'read-only') }
+    if ($flags -contains '--output-last-message') { $arguments += @('--output-last-message', $lastMsgPath) }
+    if ($flags -contains '-C')            { $arguments += @('-C', $worktreePath) }
+    elseif ($flags -contains '--cd')      { $arguments += @('--cd', $worktreePath) }
+} else {
+    if ($flags -contains '-p')                    { $arguments += '-p' }
+    elseif ($flags -contains '--print')           { $arguments += '--print' }
+    if ($flags -contains '--permission-mode')     { $arguments += @('--permission-mode', 'plan') }
+    if ($flags -contains '--permission-prompts')  { $arguments += @('--permission-prompts', 'none') }
 }
-if ($flags -contains '--ephemeral')   { $arguments += '--ephemeral' }
-if ($flags -contains '--sandbox')     { $arguments += @('--sandbox', 'read-only') }
-if ($flags -contains '--output-last-message') { $arguments += @('--output-last-message', $lastMsgPath) }
-if ($flags -contains '-C')            { $arguments += @('-C', $worktreePath) }
-elseif ($flags -contains '--cd')      { $arguments += @('--cd', $worktreePath) }
 $arguments += $prompt
 
-$commandLine = ('{0} {1}' -f $interface.executable, (ConvertTo-CommandLine -Arguments $arguments))
+$commandLine = ('{0} {1}' -f $reviewerExe, (ConvertTo-CommandLine -Arguments $arguments))
 
 if ($DryRun) {
     Say "DRY_RUN for $requestId; the reviewer is not started"
@@ -262,35 +319,22 @@ if ($DryRun) {
         note = $commandLine
     } | Out-Null
     Write-Output $commandLine
+    Remove-ReviewWorktree -Path $worktreePath
     exit 0
-}
-
-# A detached worktree at a fixed commit. The branch may move under us during the
-# review; this checkout cannot.
-Remove-ReviewWorktree -Path $worktreePath
-$add = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
-    'worktree', 'add', '--detach', $worktreePath, $reviewCommit)
-if ($add.ExitCode -ne 0) {
-    Say ("could not create the review worktree: " + $add.StdErr.Trim()) 'ERROR'
-    Write-TextAtomic -Path $resultText -Text ("review worktree could not be created:`n" + $add.StdErr) | Out-Null
-    Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
-        -ExitCode $add.ExitCode -ReviewerCommand $commandLine -StartedUtc (Get-UtcStamp) `
-        -Notes @('git worktree add failed') -LedgerEvent 'review_unavailable' | Out-Null
-    exit 5
 }
 
 $startedUtc = Get-UtcStamp
 Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
     event = 'review_started'; request_id = $requestId; root_request_id = $rootId
     base_commit = $baseCommit; review_commit = $reviewCommit
-    reviewer = 'codex'; note = $commandLine
+    reviewer = $reviewerKind; note = $commandLine
 } | Out-Null
-Say "starting the reviewer once for $requestId at $(Get-ShortSha $reviewCommit)"
+Say "starting $reviewerKind once for $requestId at $(Get-ShortSha $reviewCommit)"
 
 $run = $null
 $notes = @()
 try {
-    $run = Invoke-Process -FilePath $interface.executable -Arguments $arguments `
+    $run = Invoke-Process -FilePath $reviewerExe -Arguments $arguments `
         -WorkingDirectory $worktreePath -TimeoutSeconds $TimeoutSeconds
 } catch {
     $notes += ('the reviewer could not be started: ' + $_.Exception.Message)
@@ -313,10 +357,19 @@ if (-not $answer -or $answer.Trim().Length -eq 0) { $answer = $stdoutText }
 
 # The reviewer is read-only. If the pinned checkout came back dirty, that is
 # reported; the change is dropped from the throwaway worktree only.
+# The packet directory is ours, not the reviewer's doing, so it is not counted.
 $dirty = Invoke-Git -RepoRoot $worktreePath -GitExe $gitExe -Arguments @('status', '--porcelain')
-if ($dirty.ExitCode -eq 0 -and $dirty.StdOut.Trim().Length -gt 0) {
+$touched = @()
+if ($dirty.ExitCode -eq 0) {
+    foreach ($line in ($dirty.StdOut -split "`r?`n")) {
+        if ($line.Trim().Length -eq 0) { continue }
+        if ($line -like ('*' + $packetDirName + '*')) { continue }
+        $touched += $line
+    }
+}
+if ($touched.Count -gt 0) {
     $notes += 'the reviewer modified files; a review is read-only, so the edits were dropped'
-    Write-TextAtomic -Path (Join-Path $workDir 'reviewer-touched-files.txt') -Text $dirty.StdOut | Out-Null
+    Write-TextAtomic -Path (Join-Path $workDir 'reviewer-touched-files.txt') -Text ($touched -join "`n") | Out-Null
 }
 
 # ---------------------------------------------------------------- verdict ---
@@ -356,6 +409,23 @@ if (-not $nextAction) {
         default    { $nextAction = 'HUMAN_DECISION_REQUIRED' }
     }
 }
+
+# A reviewer that answered badly has still reviewed: that REQUEST_ID is spent and
+# a person needs to look. A reviewer that never really ran (it fell over, it was
+# stopped, it said nothing at all) has not reviewed, so the number survives.
+$ledgerEvent = 'review_completed'
+$reviewerReallyRan = ($null -ne $run) -and ($exitCode -eq 0) -and
+                     ($answer -and $answer.Trim().Length -gt 0)
+if (-not $reviewerReallyRan) {
+    $ledgerEvent = 'review_unavailable'
+    $verdict = 'ERROR'
+    $nextAction = 'HUMAN_DECISION_REQUIRED'
+    if ($null -eq $run) {
+        $notes += 'the reviewer could not be started at all'
+    } else {
+        $notes += ("the reviewer did not finish (exit " + $exitCode + "); this does not use up the REQUEST_ID")
+    }
+}
 if ($verdict -eq 'BLOCKING' -and $blockingCount -eq 0) { $blockingCount = 1 }
 
 $header = @"
@@ -364,7 +434,7 @@ $header = @"
 REQUEST_ID: $requestId
 BASE: $baseCommit
 HEAD: $reviewCommit
-REVIEWER: codex ($($interface.version))
+REVIEWER: $reviewerKind ($reviewerVersion)
 STARTED: $startedUtc
 VERDICT: $verdict
 NEXT_ACTION: $nextAction
@@ -373,8 +443,16 @@ NEXT_ACTION: $nextAction
 Write-TextAtomic -Path $resultText -Text ($header + $answer) | Out-Null
 
 $result = Write-ReviewResult -Verdict $verdict -NextAction $nextAction -BlockingCount $blockingCount `
-    -ExitCode $exitCode -ReviewerCommand $commandLine -StartedUtc $startedUtc -Notes $notes
+    -ExitCode $exitCode -ReviewerCommand $commandLine -StartedUtc $startedUtc -Notes $notes `
+    -LedgerEvent $ledgerEvent -Reviewer $reviewerKind
 
+# Keep the packet as evidence; the worktree it lived in is about to go.
+try {
+    Copy-Item -LiteralPath $packetPath -Destination (Join-Path $workDir 'packet.md') -Force
+    Copy-Item -LiteralPath $statPath -Destination (Join-Path $workDir 'diffstat.txt') -Force
+    Copy-Item -LiteralPath $commitsPath -Destination (Join-Path $workDir 'commits.txt') -Force
+    Copy-Item -LiteralPath $diffPath -Destination (Join-Path $workDir 'diff.patch') -Force
+} catch { }
 Remove-ReviewWorktree -Path $worktreePath
 Say "$requestId reviewed: $verdict -> $($result.next_action)"
 if (-not $Quiet) { $result | ConvertTo-Json -Depth 8 }

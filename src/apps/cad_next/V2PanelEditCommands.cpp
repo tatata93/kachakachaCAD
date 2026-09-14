@@ -15,6 +15,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/document/Commands.h"
 #include "kachakacha/fabrication/BandPartition.h"
 
 #include <QString>
@@ -59,6 +60,53 @@ bool V2MainWindow::CurrentBandPartition(std::vector<double>& railParameters,
         widthsMm.push_back(std::sqrt(du * du + dv * dv));
     }
     return !railParameters.empty();
+}
+
+//! 分け方を文書へ書く。以後は自動で切り直さない(人が決めたほうを残す)。
+bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
+    const QString& what, const std::string& messageJa)
+{
+    using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
+
+    const auto* entity = session_->GetDocument().FindEntity(CurrentFabricationModelId());
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    if (current == nullptr) {
+        SetStatus(QStringLiteral("%1: 近似の作り方が見つかりません。").arg(what));
+        return false;
+    }
+    auto definition = *current;
+    definition.automaticBoundaries = false;
+    definition.manualBoundaries = inner;
+    // 帯の数が変わるので、帯ごとに持っていた値は捨てる。
+    // 古い並びを新しい帯へ当てると、別の部材の値が当たってしまう。
+    definition.bandProgress.clear();
+    definition.creaseProgress.clear();
+    definition.bendRadiusMm.clear();
+    definition.bendRadiusLock.clear();
+    definition.unfoldBaseRail = 0;
+    const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
+        feature->id, definition, feature->inputEntityIds, what.toStdString()));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return false;
+    }
+    AdoptCurrentDocument();
+    // 境目を変えたら、帯へ切り直さないと枚数が変わらない。
+    // 覚えている近似は前の切り方のままである。
+    RebuildKernelShapes();
+    RefreshFabricationView();
+    RefreshBendRadius();
+    SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。"
+                             "以後は自動で切り直しません。")
+            .arg(what)
+            .arg(QString::fromStdString(messageJa))
+            .arg(static_cast<int>(FabricationPanelCount())));
+    return true;
 }
 
 //! 見せる相手と、決めたあとに変える境目を、**同じ1つの候補から**作る。

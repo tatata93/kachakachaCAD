@@ -599,6 +599,85 @@ KACHA_V2_TEST(architecture, every_screen_source_is_built_and_type_checked)
         "typecheck.sh collects cad_next sources with a glob, not a hand-written list");
 }
 
+//! `V2MainWindow.h` が名乗っている関数のうち、中身がどこにも無いものを探す。
+//!
+//! 型検査(`-fsyntax-only`)は中身の有無を見ない。CMake も、ファイルが
+//! 並んでいれば通す。だから **宣言だけ残して中身を消す** と、
+//! 雲では何も起きず、PC の link で初めて分かる。実際に一度そうなった
+//! (`ApplyBandBoundaries`、2026-09-14)。往復が1回まるごと無駄になる。
+[[nodiscard]] std::vector<std::string> ScreenMethodsWithoutBodies()
+{
+    const std::filesystem::path dir = RepoRoot() / "src" / "apps" / "cad_next";
+    const std::string header = ReadFile(dir / "V2MainWindow.h");
+    std::string sources;
+    for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".cpp") {
+            sources += ReadFile(entry.path());
+            sources += '\n';
+        }
+    }
+    std::vector<std::string> missing;
+    std::istringstream lines(header);
+    std::string line;
+    while (std::getline(lines, line)) {
+        const std::size_t open = line.find('(');
+        if (open == std::string::npos) {
+            continue;
+        }
+        // 宣言だけの行。中身が同じ行にあるもの(`{ ... }`)は見ない。
+        if (line.find('{') != std::string::npos || line.find(';') == std::string::npos) {
+            continue;
+        }
+        const std::size_t first = line.find_first_not_of(" \t");
+        if (first == std::string::npos || line.compare(first, 2, "//") == 0) {
+            continue;
+        }
+        // `(` の直前の語を、行にある分だけ全部拾う。
+        // `std::function<QString(bool)> Foo() const;` のように括弧が2つある行では、
+        // どちらが関数の名前かは形だけでは決まらない。**1つでも中身があれば良し**
+        // にすれば、名乗ったのに中身が無い行だけが残る。
+        std::vector<std::string> candidates;
+        for (std::size_t at = line.find('('); at != std::string::npos;
+            at = line.find('(', at + 1)) {
+            std::size_t end = at;
+            while (end > 0 && (std::isalnum(static_cast<unsigned char>(line[end - 1])) != 0
+                       || line[end - 1] == '_')) {
+                --end;
+            }
+            if (end == at) {
+                continue;
+            }
+            const std::string name = line.substr(end, at - end);
+            // 大文字で始まる関数だけを見る。変数や型は見ない。
+            if (name.empty() || std::isupper(static_cast<unsigned char>(name.front())) == 0
+                || name == "QString" || name == "QStringLiteral") {
+                continue;
+            }
+            candidates.push_back(name);
+        }
+        if (candidates.empty()) {
+            continue;
+        }
+        bool found = false;
+        for (const std::string& name : candidates) {
+            if (sources.find("V2MainWindow::" + name) != std::string::npos) {
+                found = true;
+            }
+        }
+        if (!found) {
+            missing.push_back(candidates.front());
+        }
+    }
+    return missing;
+}
+
+KACHA_V2_TEST(architecture, every_screen_method_has_a_body)
+{
+    const auto missing = ScreenMethodsWithoutBodies();
+    Require(missing.empty(),
+        "V2MainWindow.h で名乗っている関数の中身がどこにも無い: " + Join(missing));
+}
+
 //! `/ "…"` の形で path をつなぐとき、その文字列に非ASCIIが入っているか。
 [[nodiscard]] bool JoinsPathWithNonAsciiLiteral(const std::string& line)
 {

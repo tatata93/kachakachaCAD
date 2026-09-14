@@ -24,8 +24,13 @@ namespace kachakacha::v2::app {
 
 //! 利用者が決めたひと組。`ExtrudeRequest` へ写す前の、画面に出す形。
 struct ExtrudeChoice {
+    //! 既定は「面に垂直」。**棚が最初に見せているものと同じにしておく。**
+    //! ここだけ WorkPlaneNormal にしてあったので、棚は「面に垂直」と出しながら
+    //! 矢印と下見は作業平面の法線へ進んでいた。輪郭が作業平面と違う平面に
+    //! 載っているときだけ食い違うので、試験でも見つからなかった
+    //! (Codex P1-EXTRUDE-R5 B1)。
     modeling::ExtrudeDirectionMode direction =
-        modeling::ExtrudeDirectionMode::WorkPlaneNormal;
+        modeling::ExtrudeDirectionMode::ProfileNormal;
     //! CustomXYZ / SelectedVector のとき。
     geometry::Vector3 customDirection{0.0, 0.0, 1.0};
     bool reversed = false;

@@ -221,8 +221,11 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     // ここを作業平面の法線のままにすると、矢印は輪郭の平面へ向いているのに
     // 作る形だけ別の向きへ進む。別の平面に引いた輪郭では
     // 「この向きでは厚みが出ません」(EXT-007)で断られる。
-    if (extrudeShelfShown_ && !facePushPull_) {
+    if (extrudeShelfShown_ && !facePushPull_
+        && DockCanShowDirection(extrudeChoice_.direction)) {
         // 棚が出ているなら、そこに出ている向きの決め方がそのまま作る形になる。
+        // ただし棚が表せる2つのときだけ。詳細の窓で選んだ向きを、棚の既定値で
+        // 黙って上書きしない(Codex P1-EXTRUDE-R4 B1、R5 B1)。
         choice.direction = extrudeDock_->DirectionMode();
         extrudeChoice_.direction = choice.direction;
     }
@@ -318,7 +321,12 @@ void V2MainWindow::ConfirmExtrude()
         return;   // やめたか、断った。理由はそちらで言っている。
     }
     const kachakacha::v2::app::ExtrudeChoice choice = *choiceOrNone;
+    // 人が選んだ「決め方」を覚えておく。作る形へ渡す値は CustomXYZ に畳んである
+    // ので、そのまま覚えると次に棚を出したとき決め方が失われ、表示と食い違う
+    // (Codex P1-EXTRUDE-R5 B1)。畳む前の決め方を戻す。
+    const auto chosenDirectionMode = extrudeChoice_.direction;
     extrudeChoice_ = choice;
+    extrudeChoice_.direction = chosenDirectionMode;
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
         targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);

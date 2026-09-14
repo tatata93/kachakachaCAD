@@ -297,7 +297,29 @@ using kachakacha::v2::domain::Visibility;
                 && static_cast<int>(window.FabricationPanelCount()) == before)) {
         return false;
     }
+    // 案を見せたあとで**値を変えたら、その案は当てない。**
+    // 番号と指示名しか見ていなかったので、見せていない形が確定し得た
+    // (Codex Q1-Q5-R4 B1)。
+    window.RunCommand("fabrication.merge_parts");   // 1度目: 見せる
+    if (!Explain("案が出ている", window.PendingPartitionShown())) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QString());
+    window.FabricationDock().SetAssemblyPercent(40.0);
+    window.FabricationDock().PressApplyAssembly();
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.RunCommand("fabrication.merge_parts");   // 2度目だが値が変わっている
+    if (!Explain((std::string("値が変わったら当てずに出し直す(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            static_cast<int>(window.FabricationPanelCount()) == before
+                && window.PendingPartitionShown())) {
+        return false;
+    }
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+
     // もう一度出して、2度目で決める。
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.RunCommand("fabrication.merge_parts");
     window.RunCommand("fabrication.merge_parts");
     const int merged = static_cast<int>(window.FabricationPanelCount());

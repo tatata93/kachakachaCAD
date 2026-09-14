@@ -287,6 +287,95 @@ namespace {
     return Explain("保存された向きも矢印と同じ", matched);
 }
 
+//! 輪郭の平面と作業平面が別の向きのとき、棚の表示どおりに押せるか。
+//!
+//! これまでの試験は、上面に引いた矩形で両方の法線を Z に揃えていたので、
+//! 2つの決め方がどちらも `abs(z) > 0.9` になり、**取り違えても通っていた**
+//! (Codex P1-EXTRUDE-R5 の MISSING TESTS)。ここでは作業平面だけを傾ける。
+[[nodiscard]] bool CaseDirectionFollowsWhatTheShelfShows(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    // 作業平面だけを傾ける。輪郭はさっき引いた面(法線 Z)のまま。
+    kachakacha::v2::modeling::WorkPlaneFrame tilted;
+    tilted.origin = {0.0, 0.0, 0.0};
+    tilted.normal = {1.0, 0.0, 0.0};
+    tilted.uAxis = {0.0, 1.0, 0.0};
+    tilted.vAxis = {0.0, 0.0, 1.0};
+    viewport.SetWorkPlane(tilted);
+
+    window.RunCommand("part.extrude");   // 下見と棚
+    if (!Explain("矢印が出る", viewport.ExtrudeHandleShown())) {
+        return false;
+    }
+    // **棚を触る前**の向きが、棚が見せているものと同じであること。
+    // ここが食い違っていた。棚は「面に垂直」と出しながら、矢印と下見は
+    // 作業平面の法線(X)へ進んでいた。
+    const bool shelfShowsProfile = window.ExtrudeDock().DirectionMode()
+        == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+    if (!Explain("棚は最初『面に垂直』を見せている", shelfShowsProfile)) {
+        return false;
+    }
+    const auto firstDirection = window.ExtrudeDirectionNow();
+    if (!Explain((std::string("触る前の矢印が輪郭の法線へ向く(x=")
+                     + std::to_string(firstDirection.x) + " z="
+                     + std::to_string(firstDirection.z) + ")").c_str(),
+            std::abs(firstDirection.z) > 0.9 && std::abs(firstDirection.x) < 0.1)) {
+        return false;
+    }
+
+    // 「作業平面に垂直」を選ぶと、今度は作業平面の法線(X)へ向くこと。
+    window.ExtrudeDock().ChooseDirection(
+        kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal);
+    window.RefreshExtrudeFromDock();
+    const auto workPlaneDirection = window.ExtrudeDirectionNow();
+    if (!Explain((std::string("作業平面に垂直では作業平面の法線へ向く(x=")
+                     + std::to_string(workPlaneDirection.x) + ")").c_str(),
+            std::abs(workPlaneDirection.x) > 0.9)) {
+        return false;
+    }
+
+    // 戻したら、また輪郭の法線へ。2つの決め方が本当に別の向きを出している。
+    window.ExtrudeDock().ChooseDirection(
+        kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal);
+    window.RefreshExtrudeFromDock();
+    const auto backDirection = window.ExtrudeDirectionNow();
+    if (!Explain("面に垂直へ戻すと輪郭の法線へ戻る",
+            std::abs(backDirection.z) > 0.9 && std::abs(backDirection.x) < 0.1)) {
+        return false;
+    }
+
+    // 確定した形と保存された向きも、見せていた向きと同じであること。
+    window.ExtrudeDock().TypeDistanceMm(3.0);
+    window.RunCommand("part.extrude");
+    if (!Explain("立体ができる", CountParts(window) == 1)) {
+        return false;
+    }
+    bool matched = false;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::ExtrudeDefinition>(&feature.definition);
+        if (definition == nullptr) {
+            continue;
+        }
+        const auto& saved = definition->direction;
+        matched = std::abs(std::abs(saved.z) - 1.0) < 1.0e-6 && std::abs(saved.x) < 1.0e-6;
+    }
+    if (!Explain("保存された向きも輪郭の法線", matched)) {
+        return false;
+    }
+    // 2回目を始めたとき、棚の表示が「面に垂直」のまま残っていること。
+    // 確定のときに向きを CustomXYZ へ畳むので、そのまま覚えると決め方が失われる。
+    window.RunCommand("select.all");
+    window.RunCommand("part.extrude");
+    return Explain("次に始めても棚の決め方が残っている",
+        window.ExtrudeDock().DirectionMode()
+            == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudePromiseCases()
@@ -297,6 +386,8 @@ std::vector<SelfTestCase> ExtrudePromiseCases()
         {"押し出しは1回の取り消しで完全に戻る", CaseExtrudeIsOneUndoStep},
         {"棚で選んだ演算のまま作られる", CaseChosenBooleanSurvivesConfirm},
         {"棚で選んだ向きが矢印と確定と保存まで通る", CaseShelfDirectionReachesTheShape},
+        {"輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
+            CaseDirectionFollowsWhatTheShelfShows},
     };
 }
 

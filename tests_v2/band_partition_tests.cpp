@@ -16,7 +16,10 @@ using kachakacha::v2::fabrication::DescribeBandPartitionJa;
 using kachakacha::v2::fabrication::PreviewBandMerge;
 using kachakacha::v2::fabrication::PreviewBandSplit;
 using kachakacha::v2::fabrication::ValidRailParameters;
+using kachakacha::v2::fabrication::BandValueRemap;
+using kachakacha::v2::fabrication::RemapForMerge;
 using kachakacha::v2::test::Require;
+using kachakacha::v2::test::RequireEqual;
 using kachakacha::v2::test::RequireNear;
 
 namespace {
@@ -228,6 +231,45 @@ KACHA_V2_TEST(band_partition, 数が合わない古い値は引き継がない)
     const auto after = kachakacha::v2::fabrication::RemapForSplit(before, 3, 0);
     Require(after.bendRadiusMm.empty(), "半径は引き継がない");
     Require(after.bendRadiusLock.empty(), "固定も引き継がない");
+}
+
+KACHA_V2_TEST(band_partition, 統合で消える組立率も前もって言う)
+{
+    // 「捨てるほうは前もって見せる」を、半径についてだけ守っていた。
+    // その部材に組立率だけを入れてあると、黙って消えていた
+    // (Codex Q1-Q5-R4 B2)。
+    BandValueRemap before;
+    before.bandProgress = {0.2, 0.9, 0.2};       // 真ん中だけ人が動かしてある
+    before.bendRadiusMm = {0.0, 0.0, 0.0};
+    before.bendRadiusLock = {0, 0, 0};           // 半径は誰も固定していない
+    before.creaseProgress = {0.5, 0.5};
+    const auto after = RemapForMerge(before, 3, 0);
+    Require(after.droppedParts.size() == 1, "消えるものがあると言う");
+    Require(after.droppedParts.front() == 2, "消えるのは部材2");
+    Require(after.droppedValues.size() == 1, "何が消えるかを1つ挙げる");
+    RequireEqual(after.droppedValues.front().what, std::string("組立率"),
+        "消えるのは組立率だと言う");
+
+    // 半径だけのときも今までどおり言う。
+    BandValueRemap radiusOnly;
+    radiusOnly.bandProgress = {0.3, 0.3, 0.3};   // 全部同じ。組立率は失われない
+    radiusOnly.bendRadiusMm = {0.0, 1.5, 0.0};
+    radiusOnly.bendRadiusLock = {0, 1, 0};
+    radiusOnly.creaseProgress = {0.5, 0.5};
+    const auto radiusAfter = RemapForMerge(radiusOnly, 3, 0);
+    Require(radiusAfter.droppedValues.size() == 1, "半径だけが消えると言う");
+    RequireEqual(radiusAfter.droppedValues.front().what, std::string("曲げ半径"),
+        "消えるのは曲げ半径だと言う");
+
+    // 何も入っていなければ、消えるものは無い。
+    BandValueRemap plain;
+    plain.bandProgress = {0.4, 0.4, 0.4};
+    plain.bendRadiusMm = {0.0, 0.0, 0.0};
+    plain.bendRadiusLock = {0, 0, 0};
+    plain.creaseProgress = {0.5, 0.5};
+    const auto plainAfter = RemapForMerge(plain, 3, 0);
+    Require(plainAfter.droppedValues.empty(), "失うものが無ければ何も言わない");
+    Require(plainAfter.droppedParts.empty(), "番号も挙げない");
 }
 
 KACHA_V2_TEST_MAIN("band_partition_tests")

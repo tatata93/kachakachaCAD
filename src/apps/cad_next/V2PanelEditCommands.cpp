@@ -191,6 +191,51 @@ kachakacha::v2::fabrication::BandValueRemap V2MainWindow::BandValuesNow() const
     return values;
 }
 
+//! 案を見せた相手の指紋。**どの模型の、どの値に対して見せた案か。**
+//!
+//! 案を見せたあとで別の製作模型を選んだり、組立率や半径を変えたりしても、
+//! 番号と指示名しか見ていなかったので「2度目」と判定して当ててしまえた。
+//! 見せていない形が、見せた形として確定し得た(Codex Q1-Q5-R4 B1)。
+//! ここで、案がどの状態に対するものだったかを一緒に覚える。
+std::string V2MainWindow::FabricationInputSignature() const
+{
+    const auto* definition = CurrentFabricationDefinition();
+    if (definition == nullptr) {
+        return {};
+    }
+    std::string text = CurrentFabricationModelId().ToString();
+    text += '|';
+    // 分け方そのもの。
+    for (const double rail : definition->manualBoundaries) {
+        text += std::to_string(static_cast<long long>(std::llround(rail * 1000000.0)));
+        text += ',';
+    }
+    text += '|';
+    // 引き継ぐ値。案はこれらの上に組み立てられている。
+    for (const double value : definition->bandProgress) {
+        text += std::to_string(static_cast<long long>(std::llround(value * 1000000.0)));
+        text += ',';
+    }
+    text += '|';
+    for (const double value : definition->creaseProgress) {
+        text += std::to_string(static_cast<long long>(std::llround(value * 1000000.0)));
+        text += ',';
+    }
+    text += '|';
+    for (const double value : definition->bendRadiusMm) {
+        text += std::to_string(static_cast<long long>(std::llround(value * 1000000.0)));
+        text += ',';
+    }
+    text += '|';
+    for (const int lock : definition->bendRadiusLock) {
+        text += std::to_string(lock);
+        text += ',';
+    }
+    text += '|';
+    text += std::to_string(definition->unfoldBaseRail);
+    return text;
+}
+
 //! 見せている案を捨てる。文書は触らない(そもそも触っていない)。
 void V2MainWindow::ForgetPendingPartition()
 {
@@ -207,8 +252,18 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
     const kachakacha::v2::fabrication::BandPartitionPreview& preview,
     const kachakacha::v2::fabrication::BandValueRemap& carried)
 {
+    // 「2度目」は、**同じ指示・同じ番号・同じ相手・同じ値**のときだけ。
+    // どれか1つでも変わっていれば、見せた案はもう今の形の案ではない。
+    const std::string signature = FabricationInputSignature();
     const bool sameAsShown = pendingPartition_.has_value()
-        && pendingPartition_->what == what && pendingPartition_->numbers == numbers;
+        && pendingPartition_->what == what && pendingPartition_->numbers == numbers
+        && pendingPartition_->signature == signature && !signature.empty();
+    if (pendingPartition_.has_value() && !sameAsShown
+        && pendingPartition_->what == what && pendingPartition_->numbers == numbers) {
+        // 同じ指示・同じ番号なのに相手か値が変わった。黙って当てない。
+        SetStatus(QStringLiteral(
+            "%1: 見せてからモデルか値が変わりました。いまの形で出し直します。").arg(what));
+    }
     if (!preview.possible) {
         ForgetPendingPartition();
         SetStatus(QStringLiteral("%1: %2").arg(what,
@@ -220,15 +275,19 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
         PendingPartition pending;
         pending.what = what;
         pending.numbers = numbers;
+        pending.signature = signature;
         pending.preview = preview;
         pending.carried = carried;
         pendingPartition_ = std::move(pending);
+        // 何が消えるのかを、番号だけでなく名前で言う。
         QString dropped;
-        for (const std::size_t part : carried.droppedParts) {
+        for (const auto& lost : carried.droppedValues) {
             if (!dropped.isEmpty()) {
                 dropped += QStringLiteral("、");
             }
-            dropped += QStringLiteral("部材%1").arg(static_cast<int>(part));
+            dropped += QStringLiteral("部材%1の%2")
+                           .arg(static_cast<int>(lost.part))
+                           .arg(QString::fromStdString(lost.what));
         }
         SetStatus(QStringLiteral("%1(まだ変えていません): %2%3 "
                                  "もう一度同じ指示を出すと、この形にします。"
@@ -238,8 +297,7 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
                     kachakacha::v2::fabrication::DescribeBandPartitionJa(preview)))
                 .arg(dropped.isEmpty()
                         ? QString()
-                        : QStringLiteral(" %1 に入れてある半径は引き継げません。")
-                              .arg(dropped)));
+                        : QStringLiteral(" %1 は引き継げません。").arg(dropped)));
         return;
     }
     const PendingPartition decided = *pendingPartition_;

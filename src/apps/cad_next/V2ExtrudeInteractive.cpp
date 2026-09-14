@@ -100,6 +100,17 @@ void V2MainWindow::BeginExtrudePreview()
             .arg(ExtrudePlanTextJa()));
 }
 
+//! 棚の欄で表せる決め方かどうか。
+//!
+//! 棚は「面に垂直」と「作業平面に垂直」の2つしか出せない。詳細の窓で選んだ
+//! 世界の軸や自由な向きは出せないので、棚の値で上書きしてはいけない。
+bool V2MainWindow::DockCanShowDirection(
+    kachakacha::v2::modeling::ExtrudeDirectionMode mode)
+{
+    return mode == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal
+        || mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal;
+}
+
 //! 押し出す向き。**ここだけが決める。**
 //!
 //! 矢印・下見・確定形状が、みな同じ向きでなければならない。
@@ -229,6 +240,11 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
         profiles += nameOf(id);
     }
     extrudeDock_->ShowPlan(plan, target, profiles);
+    // 棚に、いま効いている向きの決め方を映す。**見えているものが本当に効く。**
+    // 映さないでおくと、棚の初期表示と手に持っている値が食い違ったまま動き出す。
+    if (DockCanShowDirection(extrudeChoice_.direction)) {
+        extrudeDock_->ChooseDirection(extrudeChoice_.direction);
+    }
     extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleDistanceMm());
     extrudeShelfShown_ = true;
     RefreshRightShelves();

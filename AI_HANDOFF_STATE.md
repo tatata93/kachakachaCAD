@@ -11,7 +11,7 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: P1-EXTRUDE-R5 / Q1-Q5-R4 / DIAG-REFUSAL-R1(製品側へ戻る)
+REQUEST_ID: P1-EXTRUDE-R6 / Q1-Q5-R5 / DIAG-REFUSAL-R2
 TASK_ID: Phase 1 押し出し / Q1〜Q5 / 断り方の作り
 STATUS: READY_FOR_CODEX
 REVIEW_STATUS: PENDING_CODEX
@@ -26,6 +26,26 @@ REVIEW_SCOPE:
 BUILD / TEST: PC が決める。雲: core 134/134、Qt 当て木 69 files
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+### 製品側の初回レビュー(R5 / R4 / R1、HEAD a156422)
+
+**3件とも BLOCKING。全部直した。**判定は書き換えない。
+
+- P1-EXTRUDE-R5 … 棚は「面に垂直」と出しながら、矢印と下見は作業平面の法線へ
+  進んでいた。`ExtrudeChoice` の既定が `WorkPlaneNormal`、棚の初期表示が
+  `ProfileNormal` で食い違っていた。輪郭が作業平面と同じ平面にある間は
+  同じ向きになるので、既存の試験(両方 Z)では見つからなかった。
+  → 既定を棚に揃え、棚を出すときに手持ちの決め方を映し、確定で CustomXYZ に
+  畳んでも決め方を失わないようにした。作業平面だけを傾ける試験を足した。
+- Q1-Q5-R4 B1 … 見せた案が、**どの模型のどの値に対する案か**を持っていなかった。
+  案を見せたあとで模型を替えたり組立率を変えたりしても「2度目」と判定し、
+  見せていない形が確定し得た。→ 模型 ID と引き継ぐ値の指紋を案に持たせ、
+  変わっていたら当てずに出し直す。自己試験に入れた。
+- Q1-Q5-R4 B2 … 統合で捨てる値を、**半径についてだけ**前もって見せていた。
+  その部材に組立率だけを入れてあると黙って消えた。→ 失われる設定を種類ごとに
+  返し、「部材2の組立率」のように名前で言う。core の試験を足した。
+- DIAG-REFUSAL-R1 … 範囲の切り方が悪く、部材分割の変更が混ざっていた。
+  R2 では Diagnostic.h とその置き換えを受けたファイルだけに絞る。
 
 ### レビュー基盤は止まっている(HUMAN_DECISION_REQUIRED)
 

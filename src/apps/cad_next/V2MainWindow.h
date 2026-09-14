@@ -736,6 +736,9 @@ private:
         workPlaneChooser_;
     //! 押し出しで前に選んだもの。次に押すときの初期値にする。
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
+    //! 棚の欄で表せる決め方か(「面に垂直」「作業平面に垂直」の2つだけ)。
+    [[nodiscard]] static bool DockCanShowDirection(
+        kachakacha::v2::modeling::ExtrudeDirectionMode mode);
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
     //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。
@@ -916,6 +919,8 @@ public:
     struct PendingPartition {
         QString what;
         std::vector<std::size_t> numbers;
+        //! どの模型の、どの値に対して見せた案か。変わっていたら当てない。
+        std::string signature;
         kachakacha::v2::fabrication::BandPartitionPreview preview;
         kachakacha::v2::fabrication::BandValueRemap carried;
     };
@@ -923,6 +928,8 @@ public:
 public:
     //! 見せている案を捨てる。やめたとき・道具を替えたときに通る。
     void ForgetPendingPartition();
+    //! 案を見せた相手と値の指紋。案が古くなっていないかを見る。
+    [[nodiscard]] std::string FabricationInputSignature() const;
     //! いま案を見せているか。試験から見る。
     [[nodiscard]] bool PendingPartitionShown() const
     {

@@ -3,10 +3,10 @@
   "kind": "review_request_declarations",
   "requests": [
     {
-      "request_id": "P1-EXTRUDE-R5",
+      "request_id": "P1-EXTRUDE-R6",
       "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
       "review_profile": "HIGH_RISK",
-      "scope_ja": "Phase 1 押し出し。R4 の指摘を直した分。棚で選んだ向きが矢印と確定と保存まで通ること、内側の取りやめを外側が飲み込まないこと、断られたときに覚えている形と場面まで戻ること。",
+      "scope_ja": "Phase 1 押し出し。R5 の指摘(棚の表示と矢印・下見・確定の向きが食い違う)を直した分。既定を棚の初期表示に揃え、棚を出すときに手に持っている決め方を映し、確定で CustomXYZ に畳んでも決め方を失わないようにした。",
       "paths": [
         "src/apps/cad_next/V2PartCommands.cpp",
         "src/apps/cad_next/V2ExtrudeInteractive.cpp",
@@ -14,21 +14,23 @@
         "src/apps/cad_next/V2ExtrudeDock.h",
         "src/apps/cad_next/V2ExtrudeDialog.cpp",
         "src/apps/cad_next/V2SelfTestExtrudePromise.cpp",
-        "src/apps/cad_next/V2EditCommands.cpp"
+        "src/apps/cad_next/V2EditCommands.cpp",
+        "src/next/kachakacha/app/ExtrudeOptions.h",
+        "src/apps/cad_next/V2MainWindow.h",
+        "tests_v2/extrude_options_tests.cpp"
       ],
       "focus": [
-        "棚で選んだ向きが、矢印・確定・保存・開き直しまで同じ値で通るか",
-        "「詳細...」で人が選んだ向きを、あとから上書きしていないか",
-        "途中で失敗したときに、Document の外に持っている覚えも一緒に戻るか",
-        "R4 の MISSING TESTS(向きの通し試験、取りやめの注入)が本当に増えているか"
+        "棚に出ている決め方が、矢印・下見・確定・保存・次回の表示まで同じものか",
+        "詳細の窓で選んだ向きを、棚の既定値で上書きしていないか",
+        "輪郭の平面と作業平面が別の向きのときの試験が、本当に取り違えを見つけるか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "request_id": "Q1-Q5-R4",
+      "request_id": "Q1-Q5-R5",
       "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
       "review_profile": "HIGH_RISK",
-      "scope_ja": "Q1〜Q5。R3 の指摘を直した分。部材の分割と統合を「見せてから決める」にしたこと、無い部材番号を丸めないこと、分ける前に見せた候補と決めたあとの境目が同じものであること。",
+      "scope_ja": "Q1〜Q5。R4 の指摘を直した分。見せた案をどの模型のどの値に対するものか結び付け、統合で失われる利用者の設定(半径だけでなく組立率も)を前もって見せるようにした。",
       "paths": [
         "src/next/kachakacha/fabrication/BandPartition.cpp",
         "src/next/kachakacha/fabrication/BandPartition.h",
@@ -44,25 +46,21 @@
         "tests_v2/band_partition_tests.cpp"
       ],
       "focus": [
-        "1度目は見せるだけ、2度目で決める、が道具を替えても取り消しても崩れないか",
-        "無い部材番号を丸めずに断るか。断るときに理由番号と一文があるか",
-        "分割・統合をまたいで、曲げ半径と固定の印が正しく引き継がれるか",
-        "数が合わないときの取りやめが、本当に元の状態へ戻すか",
-        "R3 の MISSING TESTS(取り消し・再読込をまたぐ3部材の引き継ぎ)が増えているか"
+        "案の指紋が、模型・分け方・引き継ぐ値の変化をすべて捉えているか",
+        "統合で失われる設定の見せ方に、まだ抜けている種類が無いか",
+        "取り消し・やり直し・再読込をまたいで引き継ぎが保つか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "request_id": "DIAG-REFUSAL-R1",
+      "request_id": "DIAG-REFUSAL-R2",
       "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
       "review_profile": "NORMAL",
-      "scope_ja": "断り方の作り。理由の無い断り方を作れなくした(Result::Failure が必ず 診断を持ち、GEN-E000 を足した)。あわせて 24 か所の直読みを FirstSummaryJa() に替えた。Windows の Debug で異常終了していた件の直し。",
+      "scope_ja": "断り方の作り。R1 は範囲の切り方が悪く、部材分割の変更が混ざっていた。今回は Diagnostic.h と、その置き換えを受けたファイルだけに絞る。",
       "paths": [
         "src/next/kachakacha/base/Diagnostic.h",
         "src/next/kachakacha/app/CursorInputSolve.cpp",
         "src/next/kachakacha/app/MeasurePanel.cpp",
-        "src/apps/cad_next/V2MainWindow.cpp",
-        "src/apps/cad_next/V2MainWindow.h",
         "src/apps/cad_next/V2Viewport.cpp",
         "src/apps/cad_next/V2ViewportInput.cpp",
         "src/apps/cad_next/V2ViewportPanel.cpp",
@@ -71,9 +69,8 @@
         "tests_v2/foundation_tests.cpp"
       ],
       "focus": [
-        "理由の無い失敗を作れる道が本当に残っていないか",
-        "24 か所の置き換えで、出る文言が変わってしまった所が無いか",
-        "GEN-E000 が出るのは「不具合」のときだけで、正当な断りに混ざっていないか"
+        "理由の無い失敗を作れる道が残っていないか",
+        "置き換えで出る文言が変わってしまった所が無いか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     }

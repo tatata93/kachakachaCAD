@@ -267,10 +267,24 @@ BandValueRemap RemapForMerge(const BandValueRemap& before, std::size_t partsBefo
     after.bendRadiusMm = MergeList(before.bendRadiusMm, partsBefore, first);
     after.bendRadiusLock = MergeList(before.bendRadiusLock, partsBefore, first);
     // 捨てた部材を言う。黙って消さない。
-    const bool hadValue = Usable(before.bendRadiusLock, partsBefore)
-        && before.bendRadiusLock[first + 1] != 0;
-    if (hadValue) {
-        after.droppedParts.push_back(first + 2);   // 1 起点で言う
+    //
+    // **その部材に人が入れたものを全部見る。**半径の固定だけを見ていたので、
+    // 組立率だけを入れてある部材は黙って消えていた(Codex Q1-Q5-R4 B2)。
+    const std::size_t dropped = first + 1;
+    const bool hadRadius = Usable(before.bendRadiusLock, partsBefore)
+        && before.bendRadiusLock[dropped] != 0;
+    // 組立率は「全体と違う値が入っている」ときだけ人が入れたものとみなす。
+    // 全部同じなら、1つにしても失われるものは無い。
+    const bool hadProgress = Usable(before.bandProgress, partsBefore)
+        && std::abs(before.bandProgress[dropped] - before.bandProgress[first]) > 1.0e-9;
+    if (hadRadius) {
+        after.droppedValues.push_back({dropped + 1, "曲げ半径"});
+    }
+    if (hadProgress) {
+        after.droppedValues.push_back({dropped + 1, "組立率"});
+    }
+    if (hadRadius || hadProgress) {
+        after.droppedParts.push_back(dropped + 1);   // 1 起点で言う
     }
     if (before.creaseProgress.size() + 1 == partsBefore) {
         std::vector<double> creases;

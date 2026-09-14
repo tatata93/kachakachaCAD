@@ -76,6 +76,18 @@ struct BandValueRemap {
     int unfoldBaseRail = 0;
     //! 引き継げずに捨てた部材の番号(1 起点)。前もって見せるために返す。
     std::vector<std::size_t> droppedParts;
+    //! 捨てた値が何だったか。番号だけでは「何が消えるのか」が言えない。
+    //!
+    //! 半径の固定だけを見ていたので、その部材に**組立率だけ**を入れてあると
+    //! 黙って消えていた。「捨てるほうは前もって見せる」という約束を、
+    //! 半径についてだけ守っていた(Codex Q1-Q5-R4 B2)。
+    struct DroppedValue {
+        //! 1 起点の部材番号。
+        std::size_t part = 0;
+        //! 何が消えるか。`"曲げ半径"` か `"組立率"`。
+        std::string what;
+    };
+    std::vector<DroppedValue> droppedValues;
 };
 
 //! 分けたとき(部材 `which` が2枚になる)の引き継ぎ。

@@ -160,11 +160,26 @@ KACHA_V2_TEST(extrude_options, 決めたことが一文になる)
     ExtrudeChoice choice;
     choice.distanceMm = 1.5;
     const std::string text = ExtrudeSummaryJa(choice);
-    Require(text.find("作業平面に垂直") != std::string::npos, "向きが出る");
+    Require(text.find("輪郭に垂直") != std::string::npos, "向きが出る");
     Require(text.find("1.5mm") != std::string::npos, "距離が出る");
     Require(text.find("部品") != std::string::npos, "作るものが出る");
     choice.reversed = true;
     Require(ExtrudeSummaryJa(choice).find("逆向き") != std::string::npos, "逆向きが出る");
+}
+
+KACHA_V2_TEST(extrude_options, 何も選ばないときの向きが棚の初期表示と同じ)
+{
+    // 棚は最初「面に垂直」を見せる。手に持っている既定がそれと違うと、
+    // 棚は「面に垂直」と言いながら矢印と下見は別の向きへ進む。
+    // 輪郭が作業平面と同じ平面にある間は同じ向きになるので気づけない
+    // (Codex P1-EXTRUDE-R5 B1)。
+    const ExtrudeChoice choice;
+    RequireEqual(std::string(ExtrudeDirectionNameJa(choice.direction)),
+        std::string("輪郭に垂直"), "選ばないときは輪郭に垂直(棚の「面に垂直」と同じもの)");
+    // core の要求の既定とも揃っていること。片方だけ動かすと同じ穴が開く。
+    const kachakacha::v2::modeling::ExtrudeRequest request;
+    Require(request.directionMode == choice.direction,
+        "画面の既定と、core の要求の既定が同じ向きである");
 }
 
 KACHA_V2_TEST(extrude_options, 決めたことがそのまま要求へ写る)

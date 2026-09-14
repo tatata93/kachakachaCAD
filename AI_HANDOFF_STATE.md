@@ -5,18 +5,41 @@
 
 ## 現在
 
-REQUEST_ID: P1-EXTRUDE-R1
+REQUEST_ID: P1-EXTRUDE-R2
 TASK_ID: Phase 1 押し出し
 PHASE: 1
 STAGE: 1/1
-STATUS: READY_FOR_CODEX
+STATUS: READY_FOR_CODEX(R1 の指摘4件を直した)
 REVIEW_STATUS: PENDING_CODEX
-BASE: deefcd6
-HEAD: ce369eb
-REVIEW_SCOPE: deefcd6..ce369eb のうち、押し出しに関わる分
-REVIEW_FOCUS: 下を見よ(CLAUDE_NOTES)
+BASE: ce369eb
+HEAD: 253e446
+REVIEW_SCOPE: ce369eb..253e446 のうち、押し出しに関わる分
+REVIEW_FOCUS: R1 の B1〜B4 が解けているか。向きの単一化、下見中の文書不変、
+  1操作1取り消し、選んだ演算の保持
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+## P1-EXTRUDE-R1 の指摘と、どう直したか
+
+Codex は R1 を **FAIL** にした。4件とも本物だった。
+
+| # | 指摘 | 直し方 |
+| --- | --- | --- |
+| B1 | 傾いた面で矢印と下見が別方向へ進む | 向きを決める場所を `ExtrudeDirectionNow()` 1か所にした |
+| B2 | 下見を出しただけで文書が変わり、やめても戻らない | 縁は窓がその場限りで抱え、確定のときだけ文書へ入れる |
+| B3 | 1回の押し出しが複数の取り消しに分裂する | `BeginCompound`/`EndCompound` で1つにまとめた |
+| B4 | 棚で選んだ演算が確定時に既定へ戻される | 既定を当てるのは入力を最初に読んだときだけにした |
+
+MISSING TESTS のうち、面の押し引きの取消・1操作1取り消し・選んだ演算の保持を足した。
+残り(`FromWire` の外周+穴/逆向き辺の回帰、穴の途中失敗)は
+カーネルの試験なので PC の往復で足す。
+
+## UX PROBLEMS への答え
+
+- 「面の縁」が通常ワイヤーとして一覧へ出る件。**確定するまで作らない** ようにしたので、
+  やめれば1本も増えない。確定したものは押し出しの元になっているので、
+  一覧に出ること自体は正しい(押し出しの記録が指している)。
+  派生入力としてまとめて畳む表示は、まとまり(Q2)の上に載せる形で後続に回す。
 
 ### IMPLEMENTED(P1 で入れたもの)
 
@@ -219,11 +242,15 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: P1-EXTRUDE-R1 / TASK: Phase 1 押し出し / PHASE: 1
-  BASE: deefcd6 / HEAD: ce369eb
+- REQUEST_ID: P1-EXTRUDE-R2 / TASK: Phase 1 押し出し / PHASE: 1
+  BASE: ce369eb / HEAD: 253e446
   REVIEW_STATUS: PENDING_CODEX
-  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(PC+雲) / TEST: PASS(PC 134/134・192/192)
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 130/130)
+  前身: P1-EXTRUDE-R1(FAIL)。B1〜B4 を直した。
   **HEAD は Claude が固定した。最新 commit から選ばせない。**
+- REQUEST_ID: Q1-Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
+  BASE: ce369eb / HEAD: 253e446
+  REVIEW_STATUS: PENDING_CODEX(P1-EXTRUDE-R2 と同じ範囲に含まれる)
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

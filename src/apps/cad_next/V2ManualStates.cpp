@@ -11,6 +11,10 @@
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ProcessSteps.h"
 #include "kachakacha/app/RailwayNoseHoSample.h"
+#include "kachakacha/io/AtomicFile.h"
+
+#include <filesystem>
+#include <system_error>
 #include "kachakacha/app/RailwayNoseSample.h"
 #include "kachakacha/app/SampleDocument.h"
 #include "kachakacha/app/Selection.h"
@@ -340,4 +344,23 @@ bool V2MainWindow::ApplyManualState(const QString& name)
         return true;
     }
     return false;
+}
+
+bool V2MainWindow::SaveAndReopen(const QString& fileName)
+{
+    const std::string path = kachakacha::v2::io::FromPath(
+        std::filesystem::temp_directory_path() / fileName.toStdString());
+    std::error_code code;
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    const auto previousChooser = pathChooser_;
+    SetPathChooser([&path](bool) { return QString::fromStdString(path); });
+    RunCommand("file.save_as");
+    SetPathChooser(previousChooser);
+    if (!StatusText().contains(QStringLiteral("保存しました"))) {
+        return false;
+    }
+    RunCommand("file.new");
+    const bool opened = OpenDocumentFile(QString::fromStdString(path));
+    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
+    return opened;
 }

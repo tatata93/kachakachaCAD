@@ -61,6 +61,9 @@ struct SelfTestCase {
 //! 画面の読みやすさ(作図面が見えるか・選択が両向きに伝わるか・カーソル・ホバー)。
 [[nodiscard]] std::vector<SelfTestCase> ScreenCases();
 
+//! HO 流線形前頭部を使った総合試験(TM / UI-TM)。
+[[nodiscard]] std::vector<SelfTestCase> HoModelCases();
+
 //! 整理用のまとまりの実用試験(GR-01〜10)。
 [[nodiscard]] std::vector<SelfTestCase> GroupCases();
 

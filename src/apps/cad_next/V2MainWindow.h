@@ -175,6 +175,9 @@ public:
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
     //! 状態の名前は --manual-state で渡すものと同じ。
     [[nodiscard]] bool ApplyManualState(const QString& name);
+    //! いまの文書を一時の場所へ保存して、開き直す。試験から使う。
+    //! 保存と読み込みの道は本物と同じものを通す。別の道を作らない。
+    [[nodiscard]] bool SaveAndReopen(const QString& fileName);
     //! 選んだ部品を、いま本当に STEP で出せるか。
     //! 名前が並んでいるだけで形が無い、を見分けるために試験から呼ぶ。
     [[nodiscard]] bool CanExportSelectedParts();

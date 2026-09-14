@@ -284,20 +284,8 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("まとまりが2つある", groupsBefore == 2)) {
         return false;
     }
-    const std::string path = kachakacha::v2::io::FromPath(
-        std::filesystem::temp_directory_path() / "kacha_selftest_group.kcd2");
-    std::error_code code;
-    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
-    window.SetPathChooser([&path](bool) { return QString::fromStdString(path); });
-    window.RunCommand("file.save_as");
-    if (!Explain("保存できる",
-            window.StatusText().contains(QStringLiteral("保存しました")))) {
-        return false;
-    }
-    window.RunCommand("file.new");
-    const bool opened = window.OpenDocumentFile(QString::fromStdString(path));
-    std::filesystem::remove(kachakacha::v2::io::MakePath(path), code);
-    if (!Explain("開き直せる", opened)) {
+    if (!Explain("保存して開き直せる",
+            window.SaveAndReopen(QStringLiteral("kacha_selftest_group.kcd2")))) {
         return false;
     }
     const auto& after = window.Session().GetDocument().Snapshot();

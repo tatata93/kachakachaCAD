@@ -228,6 +228,24 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     assemblyLayout->addWidget(assembly_);
     assemblyLayout->addWidget(applyAssembly_);
     bend->addRow(QStringLiteral("組立率"), assemblyRow);
+    // 半径。曲げ具合と同じことの言い換えである。どちらから入れてもよい(§30)。
+    auto* radiusRow = new QWidget(bendWidget);
+    auto* radiusLayout = new QHBoxLayout(radiusRow);
+    radiusLayout->setContentsMargins(0, 0, 0, 0);
+    radius_ = new QDoubleSpinBox(radiusRow);
+    radius_->setRange(0.0, 100000.0);
+    radius_->setDecimals(2);
+    radius_->setSingleStep(0.5);
+    radius_->setSuffix(QStringLiteral(" mm"));
+    radius_->setToolTip(QStringLiteral(
+        "いまの組立率での半径です。手元の丸棒や治具の径へ合わせたいときは、"
+        "その値を入れて「固定」を押してください。近似をやり直しても戻りません。"));
+    lockRadius_ = new QPushButton(QStringLiteral("固定"), radiusRow);
+    radiusState_ = new QLabel(QStringLiteral("自動"), radiusRow);
+    radiusLayout->addWidget(radius_);
+    radiusLayout->addWidget(lockRadius_);
+    radiusLayout->addWidget(radiusState_);
+    bend->addRow(QStringLiteral("半径"), radiusRow);
     parts_ = new QLineEdit(bendWidget);
     parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
     parts_->setToolTip(QStringLiteral(
@@ -251,6 +269,8 @@ void V2FabricationDock::Connect()
     QObject::connect(splitAxis_, &QComboBox::currentIndexChanged, this, [this] { Emit(); });
     QObject::connect(automatic_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
+    QObject::connect(lockRadius_, &QPushButton::clicked, this,
+        [this] { PressLockRadius(); });
     QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
@@ -529,4 +549,49 @@ void V2FabricationDock::SetMaximumPartCount(int count)
 void V2FabricationDock::SetSplitAxisIndex(int index)
 {
     splitAxis_->setCurrentIndex(index);
+}
+
+double V2FabricationDock::RadiusMm() const
+{
+    return radius_ == nullptr ? 0.0 : radius_->value();
+}
+
+bool V2FabricationDock::RadiusLocked() const
+{
+    return radiusLocked_;
+}
+
+void V2FabricationDock::ShowRadius(const kachakacha::v2::fabrication::BendRadius& bend,
+    double percent)
+{
+    if (radius_ == nullptr) {
+        return;
+    }
+    loading_ = true;
+    const auto shown = kachakacha::v2::fabrication::RadiusAtPercent(bend, percent);
+    radius_->setValue(shown.value_or(0.0));
+    radius_->setEnabled(shown.has_value());
+    radiusLocked_ = bend.lock == kachakacha::v2::fabrication::ValueLock::Locked;
+    if (radiusState_ != nullptr) {
+        radiusState_->setText(QString::fromUtf8(
+            std::string(kachakacha::v2::fabrication::ValueLockNameJa(bend.lock)).c_str()));
+    }
+    if (lockRadius_ != nullptr) {
+        lockRadius_->setText(radiusLocked_ ? QStringLiteral("固定を外す")
+                                           : QStringLiteral("固定"));
+    }
+    loading_ = false;
+}
+
+void V2FabricationDock::SetRadiusHandler(std::function<void(double, bool)> handler)
+{
+    radiusHandler_ = std::move(handler);
+}
+
+void V2FabricationDock::PressLockRadius()
+{
+    if (radiusHandler_) {
+        // 押すと自動と固定が入れ替わる。いま欄に出ている半径をそのまま渡す。
+        radiusHandler_(RadiusMm(), !radiusLocked_);
+    }
 }

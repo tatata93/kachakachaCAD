@@ -16,6 +16,7 @@
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/RailwayNoseHoSample.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/fabrication/BendRadius.h"
 
 #include <QString>
 
@@ -259,6 +260,54 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("元の近似モデルは残る", window.FabricationModelCount() >= 1);
 }
 
+//! UI-TM-13/14。実寸の半径を入れて固定でき、作り直しても戻らない。
+[[nodiscard]] bool CaseHoRadiusAutoAndLock(V2MainWindow& window)
+{
+    if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
+        return false;
+    }
+    if (!Explain("近似モデルが見本に入っている", window.FabricationModelCount() >= 1)) {
+        return false;
+    }
+    // まず 100% にして、自動の半径が出ることを見る。
+    window.SetAssemblyChooser([](double) { return std::optional<double>(100.0); });
+    window.RunCommand("fabrication.set_assembly");
+    window.RefreshBendRadius();
+    const auto measured = window.BendRadiusNow();
+    if (!Explain((std::string("自動の半径が出る(R = ")
+                     + std::to_string(measured.radiusMm) + "mm)").c_str(),
+            measured.radiusMm > 0.0
+                && measured.lock == kachakacha::v2::fabrication::ValueLock::Auto)) {
+        return false;
+    }
+    // 手元の丸棒の径へ合わせる。22.00mm で固定。
+    window.ApplyBendRadius(22.0, true);
+    if (!Explain((std::string("固定できる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.BendRadiusNow().lock
+                == kachakacha::v2::fabrication::ValueLock::Locked)) {
+        return false;
+    }
+    const auto locked = kachakacha::v2::fabrication::RadiusAtPercent(
+        window.BendRadiusNow(), 100.0);
+    if (!Explain("入れた値になる",
+            locked.has_value() && std::abs(*locked - 22.0) < 1.0e-6)) {
+        return false;
+    }
+    // 近似を測り直しても戻らない。
+    window.RefreshBendRadius();
+    const auto after = kachakacha::v2::fabrication::RadiusAtPercent(
+        window.BendRadiusNow(), 100.0);
+    if (!Explain("作り直しても自動値へ戻らない",
+            after.has_value() && std::abs(*after - 22.0) < 1.0e-6)) {
+        return false;
+    }
+    // 固定を外すと自動へ戻る。
+    window.ApplyBendRadius(0.0, false);
+    return Explain("固定を外すと自動へ戻る",
+        window.BendRadiusNow().lock == kachakacha::v2::fabrication::ValueLock::Auto);
+}
+
 //! UI-TM-19。見本を保存して開き直しても、まとまりと中身が残る。
 [[nodiscard]] bool CaseHoSampleSurvivesSaveAndOpen(V2MainWindow& window)
 {
@@ -316,6 +365,7 @@ std::vector<SelfTestCase> HoModelCases()
         {"HOの見本の輪郭を押し出せる", CaseHoExtrudeFromSampleProfile},
         {"HOの見本で曲げ具合を0から100まで動かせる", CaseHoApproximateAndBend},
         {"HOの見本の曲げ状態から線と面を作れる", CaseHoOutputsFromBendStates},
+        {"HOの見本で実寸半径を入れて固定できる", CaseHoRadiusAutoAndLock},
         {"HOの見本が保存して開き直しても残る", CaseHoSampleSurvivesSaveAndOpen},
         {"HOの見本の上でも道具替えが綺麗", CaseHoToolSwitchStaysClean},
     };

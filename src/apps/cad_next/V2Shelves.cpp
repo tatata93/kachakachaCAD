@@ -28,6 +28,11 @@ void V2MainWindow::BuildEditingShelves()
     fabricationDock_->SetChoiceChangedHandler([this] { AdoptFabricationChoice(); });
     fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
         SetAssemblyPercent(percent, parts);
+        // 曲げ具合と半径は同じことの言い換えである。片方を動かしたら両方を映す。
+        RefreshBendRadius();
+    });
+    fabricationDock_->SetRadiusHandler([this](double radiusMm, bool locked) {
+        ApplyBendRadius(radiusMm, locked);
     });
     fabricationDock_->SetFreezeOutputHandler(
         [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });

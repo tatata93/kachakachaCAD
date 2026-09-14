@@ -39,6 +39,7 @@
 #include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/fabrication/BendRadius.h"
 #include "kachakacha/fabrication/FreezeState.h"
 #include "kachakacha/app/DiagnosticReport.h"
 #include "kachakacha/app/ExtrudePlan.h"
@@ -842,6 +843,21 @@ private:
     void CollectFacingTarget(FacingTarget& target) const;
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
     void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
+public:
+    //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。
+    void RefreshBendRadius();
+    //! いまの組立率(0〜100)。近似モデルが無ければ 100。
+    [[nodiscard]] double AssemblyPercentNow() const;
+    //! 「固定」「固定を外す」を押した。試験からも呼ぶ。
+    void ApplyBendRadius(double radiusMm, bool locked);
+    //! いまの曲げと半径。試験から見る。
+    [[nodiscard]] const kachakacha::v2::fabrication::BendRadius& BendRadiusNow() const
+    {
+        return bendRadius_;
+    }
+private:
+    //! 曲げた先の半径。自動か固定かをここが持つ。
+    kachakacha::v2::fabrication::BendRadius bendRadius_;
     //! 整理用まとまりの操作(§7〜13)。
     [[nodiscard]] static bool IsGroupCommand(std::string_view id);
     void RunGroupCommand(std::string_view id);

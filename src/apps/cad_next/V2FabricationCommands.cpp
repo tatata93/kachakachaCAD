@@ -681,6 +681,8 @@ void V2MainWindow::RefreshFabricationDock()
     }
     fabricationDock_->SetParameterMm(kachakacha::v2::app::ParameterId::ExtrudeDistance,
         ExtrudeDistanceMm());
+    // 半径の欄も映す。固定してあれば測り直しても触らない(§31)。
+    RefreshBendRadius();
     fabricationDock_->SetParameterMm(kachakacha::v2::app::ParameterId::MaxDeviationMm,
         kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
             kachakacha::v2::app::ParameterId::MaxDeviationMm));

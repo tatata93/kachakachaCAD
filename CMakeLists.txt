@@ -648,6 +648,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/SurfacePatchCrop.cpp
     src/next/kachakacha/fabrication/WrapProjection.cpp
     src/next/kachakacha/fabrication/BandDevelop.cpp
+    src/next/kachakacha/fabrication/BendRadius.cpp
     src/next/kachakacha/fabrication/BandFold.cpp
     src/next/kachakacha/fabrication/BandMap.cpp
     src/next/kachakacha/fabrication/SurfaceProjection.cpp
@@ -778,6 +779,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(ui_mode_tests tests_v2/ui_mode_tests.cpp)
     kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(facing_plan_tests tests_v2/facing_plan_tests.cpp)
+    kachakacha_add_v2_test(bend_radius_tests tests_v2/bend_radius_tests.cpp)
     kachakacha_add_v2_test(group_tree_tests tests_v2/group_tree_tests.cpp)
     kachakacha_add_v2_test(railway_nose_ho_tests tests_v2/railway_nose_ho_tests.cpp)
     kachakacha_add_v2_test(shelf_layout_tests tests_v2/shelf_layout_tests.cpp)
@@ -914,6 +916,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestPointer.cpp
         src/apps/cad_next/V2DiagnosticsCommand.cpp
         src/apps/cad_next/V2ExtrudePlanCommand.cpp
+        src/apps/cad_next/V2BendRadiusCommands.cpp
         src/apps/cad_next/V2EntityTree.cpp
         src/apps/cad_next/V2GroupCommands.cpp
         src/apps/cad_next/V2FacePushPull.cpp

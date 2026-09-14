@@ -14,6 +14,7 @@
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/FabricationOptions.h"
+#include "kachakacha/fabrication/BendRadius.h"
 #include "kachakacha/fabrication/FreezeState.h"
 
 #include <QDockWidget>
@@ -57,6 +58,14 @@ public:
 
     //! 固定で作るもの。
     [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputChoice() const;
+    //! 半径の欄に出ている値と、自動か固定か。試験と窓から読む。
+    [[nodiscard]] double RadiusMm() const;
+    [[nodiscard]] bool RadiusLocked() const;
+    //! 半径の欄を映す。近似が測り直したときに呼ぶ。
+    void ShowRadius(const kachakacha::v2::fabrication::BendRadius& bend, double percent);
+    //! 「固定/自動」を押したときに呼ぶもの。押した時点の半径と曲げ具合を渡す。
+    void SetRadiusHandler(std::function<void(double, bool)> handler);
+    void PressLockRadius();
     void SetFreezeOutput(kachakacha::v2::fabrication::FreezeOutput value);
     void SetFreezeOutputHandler(
         std::function<void(kachakacha::v2::fabrication::FreezeOutput)> handler);
@@ -110,6 +119,11 @@ private:
     QDoubleSpinBox* thickness_ = nullptr;
     QDoubleSpinBox* deviation_ = nullptr;
     QDoubleSpinBox* assembly_ = nullptr;
+    //! 曲げた先の半径(§30・§31)。曲げ具合と同じことの言い換えである。
+    //! 「自動」は近似が測った値、「固定」は人が入れた値。作り直しても戻さない。
+    QDoubleSpinBox* radius_ = nullptr;
+    QPushButton* lockRadius_ = nullptr;
+    QLabel* radiusState_ = nullptr;
     QPushButton* applyAssembly_ = nullptr;
     QLineEdit* parts_ = nullptr;
     QComboBox* freeze_ = nullptr;
@@ -125,6 +139,8 @@ private:
     std::function<void()> choiceChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;
     std::function<void(double, const QString&)> assemblyHandler_;
+    std::function<void(double, bool)> radiusHandler_;
+    bool radiusLocked_ = false;
     std::function<void(kachakacha::v2::fabrication::FreezeOutput)> freezeHandler_;
     std::function<void(const char*)> runHandler_;
     bool loading_ = false;

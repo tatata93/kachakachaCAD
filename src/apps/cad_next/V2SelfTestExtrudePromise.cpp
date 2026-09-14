@@ -187,19 +187,25 @@ namespace {
         return false;
     }
     auto& viewport = window.Viewport();
-    kachakacha::v2::app::SelectionSet both;
+    // 増えた線のうち **最後の1本だけ** を選ぶ。押し出しは出力の線も増やすので、
+    // 増えた分を全部入れると、別の平面の線まで輪郭になる。
+    std::vector<kachakacha::v2::base::EntityId> added;
     for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
         if (entity.kind != kachakacha::v2::domain::EntityKind::Wire) {
             continue;
         }
         if (std::find(wiresBefore.begin(), wiresBefore.end(), entity.id)
             == wiresBefore.end()) {
-            both.entityIds.push_back(entity.id);
+            added.push_back(entity.id);
         }
     }
-    if (!Explain("新しい矩形だけを選べる", !both.entityIds.empty())) {
+    if (!Explain((std::string("新しい矩形を選べる(増えた線 ")
+                     + std::to_string(added.size()) + " 本)").c_str(),
+            !added.empty())) {
         return false;
     }
+    kachakacha::v2::app::SelectionSet both;
+    both.entityIds.push_back(added.back());
     both.entityIds.push_back(part);
     kachakacha::v2::app::SelectionRef solid;
     solid.entityId = part;

@@ -156,7 +156,6 @@ struct HoGroups {
     GroupId root;
     GroupId sections;
     GroupId sectionWires;
-    GroupId guides;
     GroupId sourceSurfaces;
     GroupId extrudeTests;
     GroupId approximation;
@@ -169,7 +168,6 @@ struct HoGroups {
     groups.root = builder.AddGroup("RailwayNose_HO");
     groups.sections = builder.AddGroup("Sections", groups.root);
     groups.sectionWires = builder.AddGroup("SectionWires", groups.root);
-    groups.guides = builder.AddGroup("Guides", groups.root);
     groups.sourceSurfaces = builder.AddGroup("SourceSurfaces", groups.root);
     groups.extrudeTests = builder.AddGroup("ExtrudeTests", groups.root);
     groups.approximation = builder.AddGroup("Approximation", groups.root);
@@ -196,50 +194,32 @@ struct HoSections {
 }
 
 //! 案内線。面を作るときに実際に使う(§20)。飾りにしない。
-//! 面の外形を決める線。**ちょうど2本。**
+//! 面を作るのに使う線は断面だけである。
 //!
-//! 案内付きロフトは「外形の線2本と断面」で面を作る。2本は面の左右の縁、
-//! つまり裾のいちばん外(u = ±1)を前後に走る線である。
-//! 断面だけで渡すと、断面と断面の間で縁が痩せる。外形を渡せばそれが起きない。
+//! 案内付きロフトは断面を背骨に沿って送る作りで、出来る面は送りの近似である。
+//! HO の前頭部では断面から 0.19mm 外れ、
+//! `GEO-G008`「出来た面が、指定した線を通っていません」で断られた。
+//! 許容は 0.0001mm なので、送る作りでは原理的に届かない。
 //!
-//! 屋根の中央や肩の線は入れない。**入れても使われないからである。**
-//! 使われない線を「案内線」として置くのは飾りで、オーナー指示 §44 が禁じている。
-struct HoGuides {
-    AddedWire left;
-    AddedWire right;
-};
+//! 断面を通すロフトなら断面をそのまま通る。だから見本はそちらで作る。
+//! そして **使われない線は置かない。** 置けば飾りで、オーナー指示 §44 が禁じている。
+//! (この許容値そのものの是非は AI_HANDOFF_STATE.md へ書いて Codex へ渡した。)
 
-[[nodiscard]] HoGuides MakeGuides(HoBuilder& builder, const HoGroups& groups)
-{
-    HoGuides made;
-    made.left = builder.AddWire("SkirtGuide_L", HoNoseSkirtGuide(true), groups.guides);
-    made.right = builder.AddWire("SkirtGuide_R", HoNoseSkirtGuide(false), groups.guides);
-    return made;
-}
-
-//! 断面と外形の線から前頭部の面を作る。案内付きロフト。
+//! 断面から前頭部の面を作る。断面を通すロフト。
 //!
-//! 外形の線は左右の裾の縁ちょうど2本で、面の左右の縁そのものである。
-//! 断面だけで作ると、断面と断面の間で縁が痩せる。
-//!
-//! 曲線網にはしない。OCCT の埋めは、この本数の拘束では
-//! 「境界から面を張れませんでした」(KER-S001)で断られる。
+//! **出来た面が、渡した断面をそのまま通る。** これが選んだ理由である。
+//! 案内付きロフトは送りの近似なので断面から 0.19mm 外れ、
+//! 曲線網は「境界から面を張れませんでした」で断られた。
 //! 通らない作り方を書いておいて、開くたびに断られるほうが悪い。
 [[nodiscard]] EntityId MakeNoseSurface(HoBuilder& builder, const HoGroups& groups,
-    const HoSections& sections, const HoGuides& guides)
+    const HoSections& sections)
 {
     Feature feature;
     feature.id = builder.ids.NextTyped<IdKind::Feature>();
     feature.type = FeatureType::CreateGuideSurface;
     feature.displayName = "NoseSurface";
     CreateGuideSurfaceDefinition definition;
-    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::GuidedLoft);
-    // 外形の線。ちょうど2本。
-    for (const AddedWire* guide : {&guides.left, &guides.right}) {
-        definition.chains.push_back(ChainOf(*guide));
-        definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideU));
-        feature.inputEntityIds.push_back(guide->entityId);
-    }
+    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::LoftSections);
     // 断面。前端から車体側まで、並び順のまま。
     for (const AddedWire& section : sections.wires) {
         definition.chains.push_back(ChainOf(section));
@@ -389,8 +369,7 @@ io::DocumentFile BuildRailwayNoseHoSampleDocument()
 
     const HoGroups groups = MakeGroups(builder);
     const HoSections sections = MakeSections(builder, groups);
-    const HoGuides guides = MakeGuides(builder, groups);
-    const EntityId surface = MakeNoseSurface(builder, groups, sections, guides);
+    const EntityId surface = MakeNoseSurface(builder, groups, sections);
     MakeExtrudeTests(builder, groups);
     MakeApproximation(builder, groups, surface);
 

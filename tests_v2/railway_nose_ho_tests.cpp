@@ -4,6 +4,7 @@
 #include "kachakacha/app/RailwayNoseHoSample.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/io/DocumentFile.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <algorithm>
 #include <cmath>
@@ -159,9 +160,6 @@ KACHA_V2_TEST(railway_nose_ho, 見本を作れて中身がそろっている)
         Require(HasEntityNamed(snapshot, HoNoseSectionName(station)),
             HoNoseSectionName(station) + " がある");
     }
-    for (const char* guide : {"SkirtGuide_L", "SkirtGuide_R"}) {
-        Require(HasEntityNamed(snapshot, guide), std::string(guide) + " がある");
-    }
     Require(HasEntityNamed(snapshot, "NoseSurface"), "面がある");
     Require(HasEntityNamed(snapshot, "NoseApproximation"), "近似モデルがある");
     Require(HasEntityNamed(snapshot, "FloorSolid"), "押し出し試験の立体がある");
@@ -175,8 +173,7 @@ KACHA_V2_TEST(railway_nose_ho, まとまりの形が指定どおり)
     const auto file = BuildRailwayNoseHoSampleDocument();
     const auto& snapshot = file.snapshot;
     const char* expected[] = {"RailwayNose_HO", "RailwayNose_HO/Sections",
-        "RailwayNose_HO/SectionWires", "RailwayNose_HO/Guides",
-        "RailwayNose_HO/SourceSurfaces", "RailwayNose_HO/ExtrudeTests",
+        "RailwayNose_HO/SectionWires", "RailwayNose_HO/SourceSurfaces", "RailwayNose_HO/ExtrudeTests",
         "RailwayNose_HO/Approximation", "RailwayNose_HO/GeneratedExamples"};
     for (const char* want : expected) {
         bool found = false;
@@ -248,30 +245,37 @@ KACHA_V2_TEST(railway_nose_ho, 面の作り方が役割表へ戻せる)
     Require(checked, "面の作り方が1つ以上ある");
 }
 
-KACHA_V2_TEST(railway_nose_ho, 案内線が面を作るのに使われている)
+KACHA_V2_TEST(railway_nose_ho, 面の入力はすべて面を作るのに使われる)
 {
-    // §20 / §44。飾りの線ではないこと。
+    // §20 / §44。飾りの線を置かないこと。
+    //
+    // 面の作り方が名乗っている線は、その作り方が **実際に使うもの** だけであること。
+    // 断面を通すロフトは断面しか使わないので、案内線を名乗ってはいけない。
     const auto file = BuildRailwayNoseHoSampleDocument();
     const auto& snapshot = file.snapshot;
-    std::vector<kachakacha::v2::base::EntityId> guides;
-    for (const auto& entity : snapshot.entities) {
-        const std::string& name = entity.displayName;
-        if (name == "SkirtGuide_L" || name == "SkirtGuide_R") {
-            guides.push_back(entity.id);
-        }
-    }
-    RequireEqual(std::to_string(guides.size()), std::string("2"), "外形の線は2本");
+    bool checked = false;
     for (const auto& feature : snapshot.features) {
-        if (feature.displayName != "NoseSurface") {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::CreateGuideSurfaceDefinition>(
+                &feature.definition);
+        if (definition == nullptr) {
             continue;
         }
-        for (const auto& guide : guides) {
-            const bool used = std::find(feature.inputEntityIds.begin(),
-                                  feature.inputEntityIds.end(), guide)
-                != feature.inputEntityIds.end();
-            Require(used, "案内線が面の入力になっている");
+        checked = true;
+        // 断面を通すロフトが使うのは断面だけ。ほかの役割の行があってはいけない。
+        for (const int role : definition->roles) {
+            RequireEqual(std::to_string(role),
+                std::to_string(
+                    static_cast<int>(kachakacha::v2::modeling::ChainRole::Section)),
+                feature.displayName + ": 断面以外の役割を名乗っていない");
         }
+        // 名乗った線は全部、入力としても数えられていること。
+        Require(definition->chains.size() == feature.inputEntityIds.size(),
+            feature.displayName + ": 名乗った線の数と入力の数が同じ");
+        Require(definition->chains.size() >= 2,
+            feature.displayName + ": 断面が2本以上ある");
     }
+    Require(checked, "面の作り方が1つ以上ある");
 }
 
 KACHA_V2_TEST(railway_nose_ho, 保存して開き直しても中身が残る)
@@ -294,7 +298,7 @@ KACHA_V2_TEST(railway_nose_ho, 保存して開き直しても中身が残る)
             ++nested;
         }
     }
-    RequireEqual(std::to_string(nested), std::string("7"), "入れ子が残る");
+    RequireEqual(std::to_string(nested), std::string("6"), "入れ子が残る");
     Require(loaded.Value().metadata.description.find("1/80") != std::string::npos,
         "縮尺を書いてある");
     Require(loaded.Value().metadata.description.find("16.5mm") != std::string::npos,

@@ -58,14 +58,7 @@ inline constexpr double kHoNoseDepthMm = 18.0;
 [[nodiscard]] std::vector<geometry::CurveSegment> HoNoseSection(double stationMm);
 
 //! 案内線。面を作るときに実際に使う(飾りにしない、§20)。
-//! 裾のいちばん外(u = ±1)を前後に走る線。面の左右の縁そのもの。
-//!
-//! 案内付きロフトは「外形の線2本と断面」で面を作る。この2本がその外形である。
-//! 断面だけで作ると、断面と断面の間で縁が痩せる。
-//!
-//! 屋根の中央や肩の線は置かない。**置いても面を作るのに使われないからである。**
-//! 使われない線を「案内線」として置くのは飾りで、オーナー指示 §44 が禁じている。
-[[nodiscard]] std::vector<geometry::CurveSegment> HoNoseSkirtGuide(bool left);
+
 
 //! HO 総合試験の見本。作業平面・断面・案内線・面・押し出し試験・近似を含む。
 [[nodiscard]] io::DocumentFile BuildRailwayNoseHoSampleDocument();

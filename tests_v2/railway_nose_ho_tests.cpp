@@ -1,5 +1,6 @@
 // HO(日本型 1/80・16.5mm)の流線形前頭部 総合試験モデル。TM-01〜14。
 #include "kachakacha/app/GroupTree.h"
+#include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/RailwayNoseHoSample.h"
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/io/DocumentFile.h"
@@ -207,6 +208,45 @@ KACHA_V2_TEST(railway_nose_ho, 完成形を書き込まず作り方として持�
         }
         Require(madeBy, entity.displayName + ": 作り方がある");
     }
+}
+
+KACHA_V2_TEST(railway_nose_ho, 面の作り方が役割表へ戻せる)
+{
+    // ここが通らないと、面は一度も作られない。
+    // 2026-09-14 に実際そうなっていた。鎖の指し先を曲線1本ごとに並べていたので、
+    // 同じワイヤーを何度も入れることになり UI-R006 で断られていた。
+    // 画面では「面が作れない」としか見えず、雲の試験は素通りしていた。
+    //
+    // 鎖の1つの指し先は「1本のワイヤー」である。曲線1本ではない。
+    const auto file = BuildRailwayNoseHoSampleDocument();
+    kachakacha::v2::document::Document document{kachakacha::v2::base::DocumentId{}};
+    const auto problems = document.ResetTo(file.snapshot);
+    for (const auto& problem : problems) {
+        Require(!problem.IsError(), "見本が読めること: " + problem.code);
+    }
+    kachakacha::v2::modeling::SnapScene scene;   // 空でよい。作り方の線を読む。
+    bool checked = false;
+    for (const auto& feature : file.snapshot.features) {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::CreateGuideSurfaceDefinition>(
+                &feature.definition);
+        if (definition == nullptr) {
+            continue;
+        }
+        const auto table = kachakacha::v2::app::GuideTableFromDefinition(document, scene,
+            *definition);
+        Require(table.HasValue(),
+            feature.displayName + ": 役割表へ戻せる"
+                + (table.HasValue() ? std::string()
+                                    : " (" + table.Diagnostics().front().code + " "
+                                        + table.Diagnostics().front().summaryJa + " "
+                                        + table.Diagnostics().front().detailsJa + ")"));
+        RequireEqual(std::to_string(table.Value().rows.size()),
+            std::to_string(definition->chains.size()),
+            feature.displayName + ": 行の数が鎖の数と同じ");
+        checked = true;
+    }
+    Require(checked, "面の作り方が1つ以上ある");
 }
 
 KACHA_V2_TEST(railway_nose_ho, 案内線が面を作るのに使われている)

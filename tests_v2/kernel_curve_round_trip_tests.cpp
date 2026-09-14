@@ -25,7 +25,7 @@ using kachakacha::v2::test::RequireNear;
 
 namespace {
 
-[[maybe_unused]] [[nodiscard]] CurveSegment Line(Vector3 a, Vector3 b)
+[[maybe_unused]] [[nodiscard]] CurveSegment StraightSegment(Vector3 a, Vector3 b)
 {
     const auto made = CurveSegment::MakeLine(a, b);
     Require(made.HasValue(), "直線が作れること");
@@ -33,13 +33,17 @@ namespace {
 }
 
 //! 反時計回りの正方形。閉じている。
-[[maybe_unused]] [[nodiscard]] std::vector<CurveSegment> Square(double size, double z = 0.0)
+//!
+//! 名前を `Square` にしてはいけない。OCCT が同じ名前の関数を大域に置いており、
+//! 無名名前空間の中身も大域の一員なので、`Square(40.0)` がどちらとも取れて
+//! MSVC が止まる。雲は OCCT を組み立てないので、ここは PC でしか出ない。
+[[maybe_unused]] [[nodiscard]] std::vector<CurveSegment> SquareLoop(double size, double z = 0.0)
 {
     return {
-        Line({0.0, 0.0, z}, {size, 0.0, z}),
-        Line({size, 0.0, z}, {size, size, z}),
-        Line({size, size, z}, {0.0, size, z}),
-        Line({0.0, size, z}, {0.0, 0.0, z}),
+        StraightSegment({0.0, 0.0, z}, {size, 0.0, z}),
+        StraightSegment({size, 0.0, z}, {size, size, z}),
+        StraightSegment({size, size, z}, {0.0, size, z}),
+        StraightSegment({0.0, size, z}, {0.0, 0.0, z}),
     };
 }
 
@@ -71,7 +75,7 @@ KACHA_V2_TEST(kernel_curve_round_trip_absent, カーネルが無い版では試�
 
 KACHA_V2_TEST(kernel_curve_round_trip, 閉じた輪が繋がった順で戻る)
 {
-    const auto square = Square(40.0);
+    const auto square = SquareLoop(40.0);
     const auto wire = kachakacha::v2::kernel::ToWire(square, 1.0e-6);
     Require(wire.HasValue(), "ワイヤーが作れること");
     const auto back = kachakacha::v2::kernel::FromWire(wire.Value(), 1.0e-6);
@@ -89,7 +93,7 @@ KACHA_V2_TEST(kernel_curve_round_trip, 戻した輪はもう一度ワイヤー�
 {
     // ここが本題。面の押し引きは、戻した線をそのまま輪郭として押し出す。
     // 繋がった順で戻らないと、ここで KER-C003 になる。
-    const auto wire = kachakacha::v2::kernel::ToWire(Square(40.0), 1.0e-6);
+    const auto wire = kachakacha::v2::kernel::ToWire(SquareLoop(40.0), 1.0e-6);
     Require(wire.HasValue(), "ワイヤーが作れること");
     const auto back = kachakacha::v2::kernel::FromWire(wire.Value(), 1.0e-6);
     Require(back.HasValue(), "戻せること");
@@ -105,10 +109,10 @@ KACHA_V2_TEST(kernel_curve_round_trip, 逆向きに並べた輪も繋がった�
 {
     // 時計回り。向きが変わっても、繋がっていることは変わらない。
     std::vector<CurveSegment> reversed = {
-        Line({0.0, 0.0, 0.0}, {0.0, 40.0, 0.0}),
-        Line({0.0, 40.0, 0.0}, {40.0, 40.0, 0.0}),
-        Line({40.0, 40.0, 0.0}, {40.0, 0.0, 0.0}),
-        Line({40.0, 0.0, 0.0}, {0.0, 0.0, 0.0}),
+        StraightSegment({0.0, 0.0, 0.0}, {0.0, 40.0, 0.0}),
+        StraightSegment({0.0, 40.0, 0.0}, {40.0, 40.0, 0.0}),
+        StraightSegment({40.0, 40.0, 0.0}, {40.0, 0.0, 0.0}),
+        StraightSegment({40.0, 0.0, 0.0}, {0.0, 0.0, 0.0}),
     };
     const auto wire = kachakacha::v2::kernel::ToWire(reversed, 1.0e-6);
     Require(wire.HasValue(), "ワイヤーが作れること");
@@ -127,8 +131,8 @@ KACHA_V2_TEST(kernel_curve_round_trip, 円弧は円弧のまま戻る)
     Require(arc.HasValue(), "円弧が作れること");
     const std::vector<CurveSegment> chain = {
         arc.Value(),
-        Line(arc.Value().EndPoint(), {0.0, 0.0, 0.0}),
-        Line({0.0, 0.0, 0.0}, arc.Value().StartPoint()),
+        StraightSegment(arc.Value().EndPoint(), {0.0, 0.0, 0.0}),
+        StraightSegment({0.0, 0.0, 0.0}, arc.Value().StartPoint()),
     };
     const auto wire = kachakacha::v2::kernel::ToWire(chain, 1.0e-6);
     Require(wire.HasValue(), "ワイヤーが作れること");
@@ -152,8 +156,8 @@ KACHA_V2_TEST(kernel_curve_round_trip, 繋がっていない並びは勝手に�
 {
     // 「できないことを、できたことにしない」。
     std::vector<CurveSegment> broken = {
-        Line({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}),
-        Line({20.0, 0.0, 0.0}, {30.0, 0.0, 0.0}),
+        StraightSegment({0.0, 0.0, 0.0}, {10.0, 0.0, 0.0}),
+        StraightSegment({20.0, 0.0, 0.0}, {30.0, 0.0, 0.0}),
     };
     const auto wire = kachakacha::v2::kernel::ToWire(broken, 1.0e-6);
     Require(!wire.HasValue(), "断ること");

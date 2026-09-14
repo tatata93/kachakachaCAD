@@ -129,13 +129,21 @@ struct HoBuilder {
 };
 
 //! 1本のワイヤー全体を、面の入力の「鎖」1つにする。
+//!
+//! **鎖の1つの指し先は「1本のワイヤー」である。曲線1本ではない。**
+//! 役割表を作り直す側は、指し先ごとにそのワイヤーの曲線をまとめて読む。
+//! だから曲線の数だけ指し先を並べると、同じワイヤーを何度も入れることになり、
+//! 「そのワイヤーは、すでに別の行に入っています」(UI-R006)で断られる。
+//! 実際そうなっていて、HO の見本の面が一度も作れていなかった。
+//! V1 の見本(`RailwayNoseSample.cpp`)は最初からこう書いてある。
 [[nodiscard]] WireChainRef ChainOf(const AddedWire& wire)
 {
     WireChainRef chain;
-    for (const auto& segment : wire.segmentIds) {
-        chain.segments.push_back(SegmentRef{wire.entityId, segment, 0.0, 1.0});
-        chain.reversed.push_back(false);
+    if (wire.segmentIds.empty()) {
+        return chain;
     }
+    chain.segments.push_back(SegmentRef{wire.entityId, wire.segmentIds.front(), 0.0, 1.0});
+    chain.reversed.push_back(false);
     return chain;
 }
 

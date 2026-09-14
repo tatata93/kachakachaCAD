@@ -104,17 +104,28 @@ function Write-JsonAtomic {
     return $Path
 }
 
+# WithBom: put a UTF-8 byte order mark at the front.
+#
+# Windows PowerShell 5.1 reads a file with no BOM using the machine's ANSI code
+# page - CP932 on this machine - so every Japanese line in a UTF-8 file comes
+# back as mojibake. The reviewer reads the packet with `Get-Content`, so the
+# scope and the focus it was given arrived as garbage - the word for "extrude"
+# reached it as four unrelated characters (Codex AI-REVIEW-PIPELINE-DOCS-R5 B1).
+# A BOM makes every Windows
+# tool - Get-Content, Notepad, the editors - read it as UTF-8 without being told.
 function Write-TextAtomic {
     param(
         [Parameter(Mandatory=$true)][string]$Path,
-        [Parameter(Mandatory=$true)][string]$Text
+        [Parameter(Mandatory=$true)][string]$Text,
+        [switch]$WithBom
     )
     $dir = Split-Path -Parent $Path
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
     $tmp = "$Path.tmp"
-    [System.IO.File]::WriteAllText($tmp, $Text, (New-Object System.Text.UTF8Encoding($false)))
+    $encoding = New-Object System.Text.UTF8Encoding($WithBom.IsPresent)
+    [System.IO.File]::WriteAllText($tmp, $Text, $encoding)
     if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
     [System.IO.File]::Move($tmp, $Path)
     return $Path
@@ -123,7 +134,9 @@ function Write-TextAtomic {
 function Read-JsonFile {
     param([Parameter(Mandatory=$true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $text = [System.IO.File]::ReadAllText($Path)
+    # Say UTF-8 out loud. A declaration file written by an editor that left no
+    # BOM must not be read through the machine's code page.
+    $text = [System.IO.File]::ReadAllText($Path, (New-Object System.Text.UTF8Encoding($false)))
     if (-not $text -or $text.Trim().Length -eq 0) { return $null }
     try { return ($text | ConvertFrom-Json) } catch { return $null }
 }

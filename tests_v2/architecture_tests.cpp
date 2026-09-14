@@ -739,30 +739,59 @@ KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_l
     // 二重引用符の中でも `$(...)` の中は**コードである**。
     // Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R6 B1)。中身をまるごと落としていたので
     // `"$($a ?? $b)"` が素通りしていた。入れ子も数える。
+    //
+    // `$(...)` の中の括弧だけを数えていたら、その中の文字列に入っている括弧まで
+    // 数えてしまい、`"$(')'; $x = $a ?? $b)"` で途中から数が合わなくなって
+    // 残りを文字列と読み違えていた(Codex AI-REVIEW-PIPELINE-TESTS-R7 B1)。
+    // 引用符・逃がし・注釈を、どの深さでも同じように追う。
+    struct Context {
+        char kind;         //!< 'C' コード / 'S' 単引用 / 'D' 二重引用
+        int parenDepth;    //!< 'C' のとき、その `$(` から数えた括弧の深さ
+    };
+    std::vector<Context> stack;
+    stack.push_back(Context{'C', 0});
     std::string out;
-    char quote = '\0';
-    int subexpressionDepth = 0;
     for (std::size_t index = 0; index < line.size(); ++index) {
         const char c = line[index];
-        if (subexpressionDepth > 0) {
-            if (c == '(') { ++subexpressionDepth; }
-            if (c == ')') { --subexpressionDepth; }
-            out.push_back(c);
+        const char kind = stack.back().kind;
+        if (kind == 'S') {
+            // 単引用の中では、逃がしは `''` だけ。
+            if (c == '\'') {
+                if (index + 1 < line.size() && line[index + 1] == '\'') { ++index; continue; }
+                stack.pop_back();
+            }
             continue;
         }
-        if (quote != '\0') {
-            if (c == '`' && quote == '"') { ++index; continue; }
-            if (c == '$' && quote == '"' && index + 1 < line.size() && line[index + 1] == '(') {
-                subexpressionDepth = 1;
-                index += 1;
+        if (kind == 'D') {
+            if (c == '`') { ++index; continue; }
+            if (c == '"') {
+                if (index + 1 < line.size() && line[index + 1] == '"') { ++index; continue; }
+                stack.pop_back();
+                continue;
+            }
+            if (c == '$' && index + 1 < line.size() && line[index + 1] == '(') {
+                ++index;
+                stack.push_back(Context{'C', 1});
                 out.push_back(' ');
                 continue;
             }
-            if (c == quote) { quote = '\0'; }
-            continue;  // 文字列の中身は落とす
+            continue;   // 文字列の中身は落とす
         }
-        if (c == '\'' || c == '"') { quote = c; continue; }
-        if (c == '#') { break; }  // ここから先は注釈
+        // ここからコード。
+        if (c == '#') { break; }   // ここから先は注釈
+        if (c == '\'') { stack.push_back(Context{'S', 0}); continue; }
+        if (c == '"') { stack.push_back(Context{'D', 0}); continue; }
+        if (stack.size() > 1) {
+            if (c == '(') { ++stack.back().parenDepth; }
+            else if (c == ')') {
+                --stack.back().parenDepth;
+                if (stack.back().parenDepth <= 0) {
+                    stack.pop_back();
+                    out.push_back(' ');
+                    continue;
+                }
+            }
+        }
         out.push_back(c);
     }
     return out;
@@ -927,10 +956,21 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
         "a nested subexpression is still code");
     Require(PowerShell7OnlyTokensIn("Write-Host \"a plain ?? in text\"").empty(),
         "text inside an expanding string is still text");
+    // Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R7 B1)。
+    // `$(...)` の中の文字列に括弧が入っていても、数を見失わないこと。
+    Require(!PowerShell7OnlyTokensIn("Write-Host \"$(')'; $x = $a ?? $b)\"").empty(),
+        "a bracket inside a string inside a subexpression does not hide the code after it");
+    Require(!PowerShell7OnlyTokensIn("Write-Host \"$(\"\")\" ; $y = $a ?? $b").empty(),
+        "code after a subexpression is still code");
+    Require(PowerShell7OnlyTokensIn("Write-Host \"$('a ?? b')\"").empty(),
+        "text inside a string inside a subexpression is still text");
+    Require(PowerShell7OnlyTokensIn("$x = 'it''s ?? fine'").empty(),
+        "a doubled quote does not end a single quoted string");
 }
 
 //! 台帳へ書く出来事の名前を、スクリプトから拾う。
-//! `event = 'name'` と `event = $Variable` の両方に当たるので、変数のときは拾わない。
+//! `event = 'name'` のように、その場に名前が書いてあるものだけを拾う。
+//! `event = $Variable` は下の走査が引き受ける。
 [[nodiscard]] std::vector<std::string> LedgerEventNamesIn(const std::string& line)
 {
     // `event=` に続く文字列そのものを拾う。空白の有無も引用符の種類も問わない。
@@ -959,6 +999,100 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
     return names;
 }
 
+//! `$` で始まる名前を読み取る。読めなければ空。
+[[nodiscard]] std::string PowerShellVariableAt(const std::string& line, std::size_t at)
+{
+    if (at >= line.size() || line[at] != '$') { return {}; }
+    std::size_t end = at + 1;
+    while (end < line.size()
+        && (std::isalnum(static_cast<unsigned char>(line[end])) != 0 || line[end] == '_')) {
+        ++end;
+    }
+    if (end == at + 1) { return {}; }
+    return line.substr(at + 1, end - at - 1);
+}
+
+//! `key` のすぐ後ろにある値を読む。`'名前'` なら名前を、`$変数` なら変数名を返す。
+//! 見つけたものが名前なのか変数なのかを、呼ぶ側が区別できるようにして返す。
+struct LedgerEventUse {
+    std::string literal;    //!< その場に書いてある名前
+    std::string variable;   //!< 変数で渡している名前
+};
+
+[[nodiscard]] std::vector<LedgerEventUse> LedgerEventUsesIn(
+    const std::string& line, const std::string& key, bool requireEquals)
+{
+    std::vector<LedgerEventUse> uses;
+    std::size_t at = line.find(key);
+    while (at != std::string::npos) {
+        // 注釈より後ろは見ない。
+        const std::string before = line.substr(0, at);
+        if (PowerShellCodeOutsideStrings(before).size() != before.size()) { break; }
+        std::size_t cursor = at + key.size();
+        while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+        if (requireEquals) {
+            if (cursor >= line.size() || line[cursor] != '=') {
+                at = line.find(key, at + key.size());
+                continue;
+            }
+            ++cursor;
+            while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+        }
+        if (cursor >= line.size()) { break; }
+        const char c = line[cursor];
+        if (c == '\'' || c == '"') {
+            const std::size_t start = cursor + 1;
+            const std::size_t end = line.find(c, start);
+            if (end == std::string::npos) { break; }
+            uses.push_back(LedgerEventUse{line.substr(start, end - start), std::string()});
+            at = line.find(key, end);
+            continue;
+        }
+        const std::string variable = PowerShellVariableAt(line, cursor);
+        if (!variable.empty()) {
+            uses.push_back(LedgerEventUse{std::string(), variable});
+        }
+        at = line.find(key, cursor);
+    }
+    return uses;
+}
+
+//! `$name = '値'` と `[string]$name = '値'` から、その変数に入り得る名前を拾う。
+[[nodiscard]] std::vector<std::string> StringsAssignedTo(
+    const std::string& line, const std::string& variable)
+{
+    std::vector<std::string> values;
+    const std::string needle = "$" + variable;
+    std::size_t at = line.find(needle);
+    while (at != std::string::npos) {
+        const std::string before = line.substr(0, at);
+        if (PowerShellCodeOutsideStrings(before).size() != before.size()) { break; }
+        const std::size_t after = at + needle.size();
+        // 名前の切れ目でなければ、別の変数である。
+        const bool wholeName = after >= line.size()
+            || (std::isalnum(static_cast<unsigned char>(line[after])) == 0
+                && line[after] != '_');
+        if (wholeName) {
+            std::size_t cursor = after;
+            while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+            if (cursor < line.size() && line[cursor] == '=') {
+                ++cursor;
+                while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+                if (cursor < line.size() && (line[cursor] == '\'' || line[cursor] == '"')) {
+                    const char quote = line[cursor];
+                    const std::size_t start = cursor + 1;
+                    const std::size_t end = line.find(quote, start);
+                    if (end != std::string::npos) {
+                        values.push_back(line.substr(start, end - start));
+                    }
+                }
+            }
+        }
+        at = line.find(needle, at + needle.size());
+    }
+    return values;
+}
+
 KACHA_V2_TEST(architecture, every_ledger_event_the_scripts_write_is_written_down)
 {
     // Codex の指摘(AI-REVIEW-PIPELINE-DOCS-R5 B2)。
@@ -968,16 +1102,48 @@ KACHA_V2_TEST(architecture, every_ledger_event_the_scripts_write_is_written_down
     const std::string schemas = ReadFile(RepoRoot() / "docs/ai/review-schemas.md");
     Require(!schemas.empty(), "docs/ai/review-schemas.md is readable");
 
-    std::set<std::string> written;
+    // まず全部の行を手元に集める。変数で渡している出来事は、
+    // その変数に何が入るかを別の行から探さなければ名前が分からない。
+    std::vector<std::string> allLines;
     for (const auto& entry : std::filesystem::directory_iterator(scripts)) {
         if (!entry.is_regular_file()) { continue; }
         if (entry.path().extension() != ".ps1") { continue; }
         std::istringstream stream(ReadFile(entry.path()));
         std::string line;
-        while (std::getline(stream, line)) {
-            for (const std::string& name : LedgerEventNamesIn(line)) { written.insert(name); }
+        while (std::getline(stream, line)) { allLines.push_back(line); }
+    }
+
+    std::set<std::string> written;
+    std::set<std::string> variables;
+    for (const std::string& line : allLines) {
+        for (const std::string& name : LedgerEventNamesIn(line)) { written.insert(name); }
+        // 変数で渡している分。`event = $x` と `-LedgerEvent $x` の両方を見る。
+        // Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R7 B2)。変数を黙って見逃していたので、
+        // 文書に無い名前を変数越しに書いても、この関所は通っていた。
+        for (const auto& use : LedgerEventUsesIn(line, "event", true)) {
+            if (!use.variable.empty()) { variables.insert(use.variable); }
+        }
+        for (const auto& use : LedgerEventUsesIn(line, "-LedgerEvent", false)) {
+            if (!use.literal.empty()) { written.insert(use.literal); }
+            if (!use.variable.empty()) { variables.insert(use.variable); }
         }
     }
+    // 変数に入る名前を、同じ道具箱の中から集める。
+    std::vector<std::string> unresolved;
+    for (const std::string& variable : variables) {
+        std::size_t found = 0;
+        for (const std::string& line : allLines) {
+            for (const std::string& value : StringsAssignedTo(line, variable)) {
+                written.insert(value);
+                ++found;
+            }
+        }
+        // 何が入るのか分からない変数を、分からないまま通さない。
+        if (found == 0) { unresolved.push_back(variable); }
+    }
+    Require(unresolved.empty(),
+        "every ledger event passed through a variable can be traced to a name: "
+            + Join(unresolved));
     Require(written.size() >= 8, "the scan found the ledger events at all");
 
     std::vector<std::string> undocumented;
@@ -998,6 +1164,21 @@ KACHA_V2_TEST(architecture, every_ledger_event_the_scripts_write_is_written_down
     Require(doubled.size() == 1 && doubled.front() == "review_timeout", "either quote character works");
     Require(LedgerEventNamesIn("        # event = 'not_a_real_event'").empty(),
         "an event name written in a comment is not an event");
+
+    // 変数で渡す出来事も追えること。追えなければ、文書に無い名前を
+    // 変数越しに書くだけでこの関所を抜けられる(Codex TESTS-R7 B2)。
+    const auto viaVariable = LedgerEventUsesIn("        event = $LedgerEvent; x = 1", "event", true);
+    Require(viaVariable.size() == 1 && viaVariable.front().variable == "LedgerEvent",
+        "the scanner sees which variable carries the event name");
+    const auto viaArgument = LedgerEventUsesIn("    -LedgerEvent 'review_timeout' -Outcome 'X'",
+        "-LedgerEvent", false);
+    Require(viaArgument.size() == 1 && viaArgument.front().literal == "review_timeout",
+        "the scanner reads an event name passed as an argument");
+    const auto assigned = StringsAssignedTo("$ledgerEvent = 'undocumented_event'", "ledgerEvent");
+    Require(assigned.size() == 1 && assigned.front() == "undocumented_event",
+        "the scanner reads what a variable is set to");
+    Require(StringsAssignedTo("$ledgerEventOther = 'x'", "ledgerEvent").empty(),
+        "a longer variable name is a different variable");
 }
 
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)

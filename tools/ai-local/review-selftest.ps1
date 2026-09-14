@@ -334,6 +334,19 @@ $noteText = ''
 if ($roResult) { $noteText = (@($roResult.notes) -join ' ') }
 Check 'a reviewer that edits files is reported' ($noteText -like '*read-only*') ("notes=" + $noteText)
 Check 'the edit did not survive into the repository' (-not (Test-Path -LiteralPath (Join-Path $repo 'reviewer-was-here.txt'))) 'the file reached the repository'
+# The stub writes into the detached review worktree, not into $repo, so looking
+# for the file in $repo is true even when cleanup is broken. Look where it was
+# actually written (Codex AI-REVIEW-PIPELINE-TESTS-R7 B3).
+$roWorktree = ''
+if ($roResult) { $roWorktree = [string]$roResult.worktree }
+Check 'the review worktree the reviewer wrote in is taken away' `
+    (($roWorktree -ne '') -and (-not (Test-Path -LiteralPath $roWorktree))) `
+    ("worktree=" + $roWorktree)
+$roStrayFile = ''
+if ($roWorktree -ne '') { $roStrayFile = (Join-Path $roWorktree 'reviewer-was-here.txt') }
+Check 'the file the reviewer wrote is gone with it' `
+    (($roStrayFile -eq '') -or (-not (Test-Path -LiteralPath $roStrayFile))) `
+    ("file=" + $roStrayFile)
 $env:KACHA_STUB_WRITE_FILE = ''
 
 # 13 ------------------------------------------------------------------------
@@ -536,6 +549,27 @@ Check 'each declared segment becomes its own request' `
 $beforeSeg = Stub-CallCount
 Run-Dispatcher | Out-Null
 Check 'the segments are reviewed once each' ((Stub-CallCount) -eq ($beforeSeg + 2)) ("calls=" + (Stub-CallCount))
+# Two reviews is not the point. The point is that each one was given a smaller
+# diff. Handing the whole change to both would pass the count and defeat the
+# splitting entirely (Codex AI-REVIEW-PIPELINE-TESTS-R7 B6).
+$segDiffA = ''
+$segDiffB = ''
+$segPathA = Join-Path (Join-Path $paths.Processing 'T-SEG-A-R1') 'diff.patch'
+$segPathB = Join-Path (Join-Path $paths.Processing 'T-SEG-B-R1') 'diff.patch'
+if (Test-Path -LiteralPath $segPathA) { $segDiffA = [System.IO.File]::ReadAllText($segPathA) }
+if (Test-Path -LiteralPath $segPathB) { $segDiffB = [System.IO.File]::ReadAllText($segPathB) }
+Check 'the first segment is given its own files' `
+    (($segDiffA -like '*wide/file1.txt*') -and ($segDiffA -like '*wide/file2.txt*')) `
+    ('A did not contain its own files')
+Check 'the first segment is not given the other segment' `
+    (($segDiffA -ne '') -and ($segDiffA -notlike '*wide/file3.txt*') -and ($segDiffA -notlike '*wide/file4.txt*')) `
+    ('A also contained B')
+Check 'the second segment is given its own files' `
+    (($segDiffB -like '*wide/file3.txt*') -and ($segDiffB -like '*wide/file4.txt*')) `
+    ('B did not contain its own files')
+Check 'the second segment is not given the other segment' `
+    (($segDiffB -ne '') -and ($segDiffB -notlike '*wide/file1.txt*') -and ($segDiffB -notlike '*wide/file2.txt*')) `
+    ('B also contained A')
 $env:KACHA_MAX_REVIEW_LINES = ''
 
 # 20 ------------------------------------------------------------------------
@@ -556,6 +590,12 @@ Check 'the same commit is not reviewed again under a new number' `
 # 21 ------------------------------------------------------------------------
 # A reviewer that will not finish is stopped, and that is not a failing review.
 $slowStub = Join-Path $WorkRoot 'slow-stub.cmd'
+# The child writes down its own process id. Killing only the parent .cmd and
+# orphaning the child would still finish inside the time limit, so measuring
+# the clock proves nothing (Codex AI-REVIEW-PIPELINE-TESTS-R7 B4).
+$slowPidFile = Join-Path $WorkRoot 'slow-child-pid.txt'
+if (Test-Path -LiteralPath $slowPidFile) { Remove-Item -LiteralPath $slowPidFile -Force }
+$env:KACHA_SLOW_PID_FILE = $slowPidFile
 @"
 @echo off
 if "%1"=="--version" ( echo codex-stub 0.0.0 & exit /b 0 )
@@ -567,7 +607,7 @@ if "%1"=="exec" if "%2"=="--help" (
   echo       --output-last-message ^<F^>
   exit /b 0
 )
-powershell -NoProfile -Command "Start-Sleep -Seconds 120"
+powershell -NoProfile -Command "[System.IO.File]::WriteAllText('%KACHA_SLOW_PID_FILE%', [string]`$PID); Start-Sleep -Seconds 120"
 exit /b 0
 "@ | Set-Content -LiteralPath $slowStub -Encoding ASCII
 $env:KACHA_CODEX_EXE = $slowStub
@@ -587,6 +627,24 @@ Check 'being stopped is recorded as a timeout, not as a verdict' `
     ("outcome=" + $(if ($slowResult) { $slowResult.outcome } else { 'none' }))
 Check 'a timeout does not use up the REQUEST_ID' `
     (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-SLOW-R1')) 'it was counted as reviewed'
+# The child that was actually sleeping must be gone too, not just the shim.
+$slowChildPid = 0
+if (Test-Path -LiteralPath $slowPidFile) {
+    $slowPidText = ([System.IO.File]::ReadAllText($slowPidFile)).Trim()
+    $parsedPid = 0
+    if ([int]::TryParse($slowPidText, [ref]$parsedPid)) { $slowChildPid = $parsedPid }
+}
+Check 'the slow reviewer really started a child' ($slowChildPid -gt 0) `
+    ("pid file=" + $slowPidFile)
+$slowChildAlive = $false
+if ($slowChildPid -gt 0) {
+    $stillThere = Get-Process -Id $slowChildPid -ErrorAction SilentlyContinue
+    if ($stillThere) { $slowChildAlive = $true }
+}
+Check 'the child the reviewer started is stopped as well' (-not $slowChildAlive) `
+    ("pid " + $slowChildPid + " is still running")
+if ($slowChildAlive) { Stop-ProcessTree -ProcessId $slowChildPid }
+$env:KACHA_SLOW_PID_FILE = ''
 $env:KACHA_CODEX_EXE = $goodStub
 Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
 
@@ -630,9 +688,51 @@ $jpRequest = ''
 if (Test-Path -LiteralPath $jpRequestPath) { $jpRequest = [System.IO.File]::ReadAllText($jpRequestPath) }
 Check 'what to look at survives into the request the reviewer reads' `
     ($jpRequest -like ('*' + $wordScope + '*')) 'the scope came back mangled'
+# The reviewer reads the packet with Get-Content, and Windows PowerShell 5.1
+# reads a file with no byte order mark through the machine code page. Reading
+# the bytes ourselves as UTF-8 proves nothing about what the reviewer sees, so
+# read them the way the reviewer does (Codex AI-REVIEW-PIPELINE-DOCS-R5 B1).
+$jpAsToolsRead = ''
+if (Test-Path -LiteralPath $jpRequestPath) {
+    $jpAsToolsRead = (Get-Content -Raw -LiteralPath $jpRequestPath)
+}
+Check 'the reviewer reading the packet the ordinary way still sees Japanese' `
+    ($jpAsToolsRead -like ('*' + $wordScope + '*')) 'the scope reached the reviewer mangled'
+$jpDiffAsToolsRead = ''
+if (Test-Path -LiteralPath $jpDiffPath) {
+    $jpDiffAsToolsRead = (Get-Content -Raw -LiteralPath $jpDiffPath)
+}
+Check 'the reviewer reading the diff the ordinary way still sees Japanese' `
+    ($jpDiffAsToolsRead -like ('*1 ' + $wordReview + '*')) 'the diff reached the reviewer mangled'
 
 # 23 ------------------------------------------------------------------------
 # A request id becomes a file name and a folder name, so nothing else is accepted.
+# Checking only that `incoming` stayed empty is not enough: an id like
+# `../escape` that was accepted would write OUTSIDE incoming and still leave it
+# empty (Codex AI-REVIEW-PIPELINE-TESTS-R7 B5). Check each id on its own, and
+# count what exists around the runtime before and after.
+function Get-TreeInventory {
+    param(
+        [Parameter(Mandatory=$true)][string]$Root,
+        [switch]$Recurse
+    )
+    if (-not (Test-Path -LiteralPath $Root)) { return @() }
+    if ($Recurse) {
+        return @(Get-ChildItem -LiteralPath $Root -Recurse -Force -ErrorAction SilentlyContinue |
+                 ForEach-Object { $_.FullName } | Sort-Object)
+    }
+    return @(Get-ChildItem -LiteralPath $Root -Force -ErrorAction SilentlyContinue |
+             ForEach-Object { $_.FullName } | Sort-Object)
+}
+function Get-BadIdInventory {
+    # Everything under the runtime, plus what sits next to it. An id that escapes
+    # lands in one of the two.
+    $items = @(Get-TreeInventory -Root $paths.Root -Recurse)
+    $items += (Get-TreeInventory -Root (Split-Path -Parent $paths.Root))
+    $items += (Get-TreeInventory -Root (Split-Path -Parent (Split-Path -Parent $paths.Root)))
+    return $items
+}
+$inventoryBefore = Get-BadIdInventory
 foreach ($bad in @('..', '../escape', 'a\\b', 'with space')) {
     $badDecl = Join-Path $repo 'next-review-bad.json'
     Write-JsonAtomic -Path $badDecl -Value ([pscustomobject]@{
@@ -642,7 +742,17 @@ foreach ($bad in @('..', '../escape', 'a\\b', 'with space')) {
     & (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $badDecl `
         -ReviewCommit $headCommit -TestedCommit $headCommit -BuildResult 'PASS' -TestResult 'PASS' `
         -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+    $queuedNow = @(Get-QueueFiles -Directory $paths.Incoming | ForEach-Object { $_.Name })
+    Check ("a request id that is not a plain name is refused: " + $bad) `
+        ($queuedNow.Count -eq 0) ("queued=" + ($queuedNow -join ','))
 }
+$inventoryAfter = Get-BadIdInventory
+$strayPaths = @(Compare-Object -ReferenceObject @($inventoryBefore) -DifferenceObject @($inventoryAfter) |
+                Where-Object { $_.SideIndicator -eq '=>' } |
+                ForEach-Object { [string]$_.InputObject } |
+                Where-Object { $_ -notlike ('*' + [System.IO.Path]::DirectorySeparatorChar + 'logs' + [System.IO.Path]::DirectorySeparatorChar + '*') })
+Check 'a refused request id leaves nothing behind outside the queue' `
+    ($strayPaths.Count -eq 0) ("stray=" + ($strayPaths -join ','))
 $queuedNames = @(Get-QueueFiles -Directory $paths.Incoming | ForEach-Object { $_.Name })
 Check 'a request id that is not a plain name never reaches the queue' `
     ($queuedNames.Count -eq 0) ("queued=" + ($queuedNames -join ','))

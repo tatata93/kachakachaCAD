@@ -314,9 +314,9 @@ if ($packetProblems.Count -gt 0) {
     exit 6
 }
 
-Write-TextAtomic -Path $commitsPath -Text $commits.StdOut | Out-Null
-Write-TextAtomic -Path $statPath -Text $stat.StdOut | Out-Null
-Write-TextAtomic -Path $diffPath -Text $diff.StdOut | Out-Null
+Write-TextAtomic -Path $commitsPath -Text $commits.StdOut -WithBom | Out-Null
+Write-TextAtomic -Path $statPath -Text $stat.StdOut -WithBom | Out-Null
+Write-TextAtomic -Path $diffPath -Text $diff.StdOut -WithBom | Out-Null
 
 $focusText = ''
 foreach ($p in $manifest.PSObject.Properties) {
@@ -369,7 +369,7 @@ deleted after the review. Do not edit it.
 
 The rules for your answer are in docs/ai/CODEX_REVIEW_POLICY.md in this tree.
 "@
-Write-TextAtomic -Path $packetPath -Text $packet | Out-Null
+Write-TextAtomic -Path $packetPath -Text $packet -WithBom | Out-Null
 
 # ------------------------------------------------------------- reviewer ----
 
@@ -474,8 +474,15 @@ $(($shownFiles -join "`n"))$fileTail
 
 ``./docs/ai/CODEX_REVIEW_POLICY.md`` in this working tree. This is a read-only
 review: do not modify any file. Your first non-empty line must be VERDICT.
+
+## Reading these files
+
+Every file in ``./$packetDirName/`` is UTF-8 and contains Japanese. If you read
+one with Windows PowerShell, pass the encoding: ``Get-Content -Raw -Encoding UTF8``.
+Without it PowerShell 5.1 falls back to the machine code page and the Japanese
+arrives as mojibake.
 "@
-Write-TextAtomic -Path $requestPath -Text $requestText | Out-Null
+Write-TextAtomic -Path $requestPath -Text $requestText -WithBom | Out-Null
 
 $prompt = "Read ./$packetDirName/request.md and do exactly what it says. Answer in the form it names, starting with VERDICT on the first non-empty line."
 
@@ -737,7 +744,7 @@ VERDICT: $verdict
 NEXT_ACTION: $nextAction
 
 "@
-Write-TextAtomic -Path $resultText -Text ($header + $answer) | Out-Null
+Write-TextAtomic -Path $resultText -Text ($header + $answer) -WithBom | Out-Null
 
 $finishedUtc = Get-UtcStamp
 $invocation.finished_utc = $finishedUtc

@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(29 の場面・73 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(35 の場面・86 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -124,7 +124,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | どこを探したか分からない | `logs/reviewer-search.json` に PATH と探した場所を全部書く |
 | 指定したのと別のレビューアーが使われる | `KACHA_CODEX_EXE` を指定したら、**それ以外は使わない**(無ければ「無い」) |
 | レビュー中に古い常駐を止めてしまう | `processing/` に取得中の依頼があるときは誰も止めない |
-| レビューが成立しなかったのに番号を使い切る | 起動できない・落ちた・何も言わない場合は `review_unavailable` |
+| レビューが成立しなかったのに番号を使い切る | 起動できない・落ちた・何も言わない・規約外の答え、のそれぞれに `review_infra_error` / `review_retryable_error` / `review_timeout` / `review_malformed` を付ける(`review_unavailable` は古い履歴にだけ出る名前) |
 | 同じ所を延々と往復 | 同じ root request で3回続けて BLOCKING なら `HUMAN_DECISION_REQUIRED` |
 | 過去の履歴が消える | 台帳は追記専用。`CODEX_REVIEW.md` も追記のみ |
 
@@ -184,8 +184,17 @@ Codex はレビュー対象を探しません。ビルドもテストもやり�
 | `INFRA_ERROR` | 起動できなかった | 残る |
 | `RETRYABLE_ERROR` | 起動したが落ちた・何も答えなかった | 残る |
 
-連続 BLOCKING の数え方にも、成立したレビューだけを数えます。
+連続 BLOCKING の数え方には、成立したレビューのうち **BLOCKING だけ**を数えます。
 時間切れ3回は「3回の不合格」ではありません。
+**`STOP` は数に入れません。**`STOP` は1回で人へ渡す判定だからです。
+
+3回続いたら基盤が受付を止めます。人が見終わったら、こう言えば再開します。
+
+```
+tools\ai-local\clear-hold.cmd AI-REVIEW-PIPELINE-JUDGE "見た。続けてよい"
+```
+
+その時点までのレビューは数から外れます。**消しません。**記録は残ります。
 
 ### 毎回記録するもの
 

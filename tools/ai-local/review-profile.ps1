@@ -21,14 +21,30 @@ without being told to (`force_profile`).
 
 Set-StrictMode -Version 1.0
 
-# Paths whose contents are dangerous by nature.
+# Paths whose contents are dangerous by nature. This is written by area, not by
+# one particular tree: V1 still has its own model, persistence and geometry, and a
+# careful three-line change there is exactly as dangerous as one in V2. Listing
+# only src/next/ let a small change to src/core/kachakacha/model/ be called QUICK.
 $script:HighRiskPaths = @(
     'src/next/kachakacha/document/',
     'src/next/kachakacha/io/',
     'src/next/kachakacha/geometry/',
     'src/next/kachakacha/fabrication/',
     'src/next/kachakacha/domain/',
-    'src/next_occt/'
+    'src/next/kachakacha/modeling/',
+    'src/next/kachakacha/exporters/',
+    'src/next_occt/',
+    'src/core/kachakacha/model/',
+    'src/core/kachakacha/io/',
+    'src/core/kachakacha/geometry/',
+    'src/occt/'
+)
+
+# The same areas, wherever they live. A new tree tomorrow gets the same treatment
+# without anyone having to remember to add it here.
+$script:HighRiskAreas = @(
+    '/document/', '/model/', '/io/', '/geometry/', '/fabrication/',
+    '/domain/', '/modeling/', '/kernel/', '/exporters/'
 )
 
 # Names whose appearance in a diff means the same thing wherever they live.
@@ -62,10 +78,23 @@ function Get-RiskSignals {
     $signals = @()
     foreach ($file in $ChangedFiles) {
         $normalised = ($file -replace '\\', '/')
+        $matched = $false
         foreach ($risky in $script:HighRiskPaths) {
             if ($normalised -like ($risky + '*')) {
                 $signals += ('path:' + $risky)
+                $matched = $true
                 break
+            }
+        }
+        if ($matched) { continue }
+        # Anything under src/ that lives in one of the dangerous areas counts,
+        # whichever tree it belongs to.
+        if ($normalised -like 'src/*') {
+            foreach ($area in $script:HighRiskAreas) {
+                if ($normalised -like ('*' + $area + '*')) {
+                    $signals += ('area:' + $area.Trim('/'))
+                    break
+                }
             }
         }
     }

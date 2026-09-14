@@ -11,22 +11,33 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R7(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
+REQUEST_ID: AI-REVIEW-PIPELINE-R8
+  実際に固定されるのは区間ごとの依頼で、それぞれ別の REQUEST_ID・別の範囲を持つ。
+  - AI-REVIEW-PIPELINE-QUEUE-R8   … review-dispatcher / review-enqueue /
+      review-recover / stop-stale-dispatcher
+  - AI-REVIEW-PIPELINE-PROCESS-R8 … review-common / review-runner(HIGH_RISK)
+  - AI-REVIEW-PIPELINE-JUDGE-R8   … review-profile / review-ledger /
+      review-precheck / queue-status / clear-hold
+  - AI-REVIEW-PIPELINE-TESTS-R8   … review-selftest / tests_v2/architecture_tests.cpp
+  - AI-REVIEW-PIPELINE-DOCS-R8    … docs/ai/ / AI_HANDOFF_STATE.md / AGENTS.md /
+      .gitignore(QUICK)
+  BASE は5区間とも f78d91b。HEAD は PC が固定する。
+  連続 BLOCKING の数は区間ごとに別々に数える
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
-STATUS: READY_FOR_CODEX(R5 で16件、R6 で17件の BLOCKING。全部直した。
-  **同じ root で3回続けば基盤が自動で人へ渡す。次が3回目になる区間がある。**)
+STATUS: **HUMAN_DECISION_REQUIRED**(R5 で16件、R6 で17件、R7 で14件。
+  合計47件すべて直したが、5区間とも3回連続 BLOCKING に達した。
+  規約どおり基盤が受付を止めている。再開は人の判断で)
 REVIEW_STATUS: PENDING_CODEX
 BASE: f78d91b
 HEAD: (PC が決める。ビルドして試験に通った commit)
-REVIEW_SCOPE: tools/ai-local/ 一式、docs/ai/CODEX_REVIEW_POLICY.md、
-  docs/ai/LOCAL_REVIEW_PIPELINE.md、.gitignore の .ai-runtime/ 追加
+REVIEW_SCOPE: 上の5区間が示す範囲。区間の合計が、この依頼の全体
 REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二重レビューが
   防げているか。レビュー中に HEAD が進んでも対象が動かないか。
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(29 の場面・73 の確認)
+  ＋ PC で `review-selftest.ps1`(35 の場面・86 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -191,6 +202,25 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
   自己試験そのものが構文エラーで落ちた(review_selftest_rc=1)。雲では気づけない。
   **レビュー基盤の .ps1 は純 ASCII に保つ。**日本語が要るところは実行時に
   コードポイントから組む。雲側の関所(architecture_tests)で毎回見る。
+
+- REQUEST_ID: AI-REVIEW-PIPELINE-{DOCS,JUDGE,PROCESS,QUEUE,TESTS}-R7
+  REVIEWED_HEAD: e0dfeec
+  ACTION: FIX_AND_REVIEW(5区間すべて BLOCKING、合計14件)
+  FIX_COMMIT: (この commit)
+  RESULT: 14件すべて直した。R7 は BLOCKING のまま残す。
+
+  **これで DOCS / JUDGE / PROCESS / QUEUE / TESTS は3回連続 BLOCKING。**
+  規約どおり、基盤が受付を止め、人の判断を待つ(AIR-E060)。
+  再開するときは `tools\ai-local\clear-hold.cmd <区間名> "理由"`。
+
+  DOCS 4件 … STOP と3回連続の扱いが規約間で矛盾 / 不成立の台帳イベント名が旧仕様 /
+    「JSON は4つだけ」の範囲が不正確 / 進捗台帳が区間ごとの実依頼と一致しない
+  JUDGE 2件 … 危険な置き場所が `src/next` だけで、`src/core` の模型・保存・幾何が
+    QUICK に落ちた / 途中で切れた台帳の行に次の行を連結してしまう
+  PROCESS 3件 … `.ps1` のレビューアーを起動できない(探索は受け付けるのに) /
+    MALFORMED や時間切れが3回連続の数に入る / 桁あふれの BLOCKING_COUNT で落ちる
+  QUEUE 2件 … 復旧が他の checkout の worktree を消し得る /
+    pid の使い回しで無関係なプロセスを止め得る
 
 - REQUEST_ID: AI-REVIEW-PIPELINE-{DOCS,JUDGE,PROCESS,QUEUE,TESTS}-R6
   REVIEWED_HEAD: 6fcd411

@@ -121,11 +121,16 @@ function Invoke-ClaimAndRunPass {
         $requestId = ''
         if ($manifest) { $requestId = [string]$manifest.request_id }
         $ownerPath = Join-Path $paths.Processing ($name + '.owner')
+        $ownStart = ''
+        try { $ownStart = (Get-Process -Id $PID).StartTime.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } catch { }
         Write-JsonAtomic -Path $ownerPath -Value ([pscustomobject]@{
             schema_version = 1
             kind = 'review_claim'
             request_id = $requestId
             pid = $PID
+            # The pid alone is not an identity: Windows hands numbers back out.
+            process_started_utc = $ownStart
+            repo_root = $RepoRoot
             machine = $env:COMPUTERNAME
             claimed_utc = Get-UtcStamp
         }) | Out-Null

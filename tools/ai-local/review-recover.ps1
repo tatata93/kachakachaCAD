@@ -50,11 +50,31 @@ foreach ($file in (Get-QueueFiles -Directory $paths.Processing)) {
     $owner = Read-JsonFile -Path $ownerPath
     $ownerAlive = $false
     if ($owner -and $owner.pid) {
-        $ownerAlive = Test-ProcessAlive -ProcessId ([int]$owner.pid)
+        # Identity, not just a number: the pid together with the moment that
+        # process started, on this machine, working in this checkout. Windows
+        # reuses process ids, and stopping a stranger's process tree because it
+        # inherited a number would be unforgivable.
+        $ownerStart = ''
+        $ownerRepo = ''
+        foreach ($p in $owner.PSObject.Properties) {
+            if ($p.Name -eq 'process_started_utc') { $ownerStart = [string]$p.Value }
+            if ($p.Name -eq 'repo_root') { $ownerRepo = [string]$p.Value }
+        }
+        $ownerAlive = Test-ProcessAlive -ProcessId ([int]$owner.pid) -StartedUtc $ownerStart
         if ($ownerAlive -and $owner.machine -and $env:COMPUTERNAME -and
             $owner.machine -ne $env:COMPUTERNAME) {
-            # A pid from another machine means nothing here.
             $ownerAlive = $false
+        }
+        if ($ownerAlive -and $ownerRepo) {
+            try {
+                $a = [System.IO.Path]::GetFullPath($ownerRepo).TrimEnd('\', '/').ToLowerInvariant()
+                $b = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/').ToLowerInvariant()
+                if ($a -ne $b) { $ownerAlive = $false }
+            } catch { $ownerAlive = $false }
+        }
+        if (-not $ownerAlive -and $ownerStart) {
+            # Not our process after all. Requeue the claim, but never stop anything.
+            $stuck = $false
         }
     }
     $manifest = Read-JsonFile -Path $file.FullName
@@ -148,12 +168,31 @@ function Get-WorktreeRoot {
 }
 $worktreeRoot = Get-WorktreeRoot
 if (Test-Path -LiteralPath $worktreeRoot) {
+    # The worktree root can be shared with another checkout. A directory sitting in
+    # it is not ours simply because we have no claim for it, so only worktrees that
+    # THIS repository has registered are touched, and a directory git refuses to
+    # remove is never deleted by hand.
+    $listed = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'list', '--porcelain')
+    $ours = @{}
+    foreach ($line in ($listed.StdOut -split "`r?`n")) {
+        if ($line -notlike 'worktree *') { continue }
+        $candidate = $line.Substring(9).Trim()
+        try { $candidate = [System.IO.Path]::GetFullPath($candidate).TrimEnd('\', '/').ToLowerInvariant() } catch { continue }
+        $ours[$candidate] = $true
+    }
     foreach ($dir in @(Get-ChildItem -LiteralPath $worktreeRoot -Directory)) {
         $claim = Join-Path $paths.Processing ($dir.Name + '.json')
         if (Test-Path -LiteralPath $claim) { continue }
+        $full = ''
+        try { $full = [System.IO.Path]::GetFullPath($dir.FullName).TrimEnd('\', '/').ToLowerInvariant() } catch { continue }
+        if (-not $ours.ContainsKey($full)) {
+            Say "$($dir.Name) is not a worktree of this repository; left alone"
+            continue
+        }
         $r = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'remove', '--force', $dir.FullName)
         if ($r.ExitCode -ne 0 -and (Test-Path -LiteralPath $dir.FullName)) {
-            try { Remove-Item -LiteralPath $dir.FullName -Recurse -Force } catch { }
+            Say "git would not remove $($dir.Name) ($($r.StdErr.Trim())); left alone" 'WARN'
+            continue
         }
         $removedWorktrees++
         Say "removed the leftover review worktree $($dir.Name)"

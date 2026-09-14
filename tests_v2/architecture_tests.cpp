@@ -804,6 +804,7 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
         "tools/ai-local/review-recover.ps1",
         "tools/ai-local/queue-status.ps1",
         "tools/ai-local/stop-stale-dispatcher.ps1",
+        "tools/ai-local/clear-hold.ps1",
         "tools/ai-local/review-selftest.ps1",
         "tools/ai-local/start-dispatcher.cmd",
         "docs/ai/CODEX_REVIEW_POLICY.md",

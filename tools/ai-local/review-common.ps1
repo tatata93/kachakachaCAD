@@ -263,11 +263,29 @@ function Get-SingletonLockOwner {
 }
 
 function Test-ProcessAlive {
-    param([Parameter(Mandatory=$true)][int]$ProcessId)
+    param(
+        [Parameter(Mandatory=$true)][int]$ProcessId,
+        # Windows reuses process ids. A pid on its own therefore does not identify
+        # a process; the pid together with the moment it started does. Without
+        # this, a recovery could stop a stranger's process that happened to
+        # inherit the number.
+        [string]$StartedUtc = ''
+    )
     if ($ProcessId -le 0) { return $false }
     try {
         $p = Get-Process -Id $ProcessId -ErrorAction Stop
-        return ($null -ne $p)
+        if ($null -eq $p) { return $false }
+        if ($StartedUtc) {
+            $expected = $null
+            try { $expected = ([datetime]$StartedUtc).ToUniversalTime() } catch { $expected = $null }
+            if ($expected) {
+                $actual = $p.StartTime.ToUniversalTime()
+                # A couple of seconds of slack: the two times are recorded by
+                # different clocks a moment apart.
+                if ([Math]::Abs(($actual - $expected).TotalSeconds) -gt 5) { return $false }
+            }
+        }
+        return $true
     } catch {
         return $false
     }
@@ -350,7 +368,16 @@ function Invoke-Process {
     # CreateProcess cannot start a .cmd or .bat directly, and an npm-installed
     # reviewer is usually a .cmd shim. Route those through the command processor.
     $extension = [System.IO.Path]::GetExtension($FilePath)
-    if ($extension -and ($extension.ToLowerInvariant() -eq '.cmd' -or $extension.ToLowerInvariant() -eq '.bat')) {
+    $lowered = ''
+    if ($extension) { $lowered = $extension.ToLowerInvariant() }
+    if ($lowered -eq '.ps1') {
+        # Discovery accepts a .ps1 launcher, so running one has to work. With
+        # UseShellExecute off, Windows cannot start a script file by itself.
+        $shell = 'powershell.exe'
+        $psi.FileName = $shell
+        $psi.Arguments = ConvertTo-CommandLine -Arguments (@(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $FilePath) + $Arguments)
+    } elseif ($lowered -eq '.cmd' -or $lowered -eq '.bat') {
         $comspec = $env:ComSpec
         if (-not $comspec) { $comspec = 'cmd.exe' }
         $psi.FileName = $comspec

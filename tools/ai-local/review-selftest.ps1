@@ -32,6 +32,12 @@ Every case below is one of the promises the owner asked for:
   27 looking at the queue  -> does not disturb the dispatcher's lock
   28 a long wait then a claim -> busy, not stuck
   29 arguments to a .cmd shim -> arrive the way a batch file expects
+  30 a person clears a hold -> work starts again, and it is written down
+  31 a ledger line cut off  -> the next one does not get glued to it
+  32 danger is an area      -> the older model code counts too
+  33 a .ps1 launcher       -> can actually be run
+  34 the three-strike count-> only a real blocking verdict adds to it
+  35 an impossible count   -> a broken answer, not a crash
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -152,6 +158,7 @@ $blocking = 0
 if ($verdict -ne "PASS") { $next = "FIX_AND_REVIEW"; $blocking = 1 }
 if ($verdict -eq "CONTRADICT") { $verdict = "PASS"; $next = "FIX_AND_REVIEW"; $blocking = 3 }
 if ($verdict -eq "NONSENSE") { $verdict = "MAYBE"; $next = "PROCEED"; $blocking = 0 }
+if ($verdict -eq "HUGECOUNT") { $verdict = "BLOCKING"; $next = "FIX_AND_REVIEW"; $blocking = "99999999999999999999" }
 $gitForStub = $env:KACHA_GIT_EXE
 if (-not $gitForStub) { $gitForStub = "git" }
 $head = (& $gitForStub rev-parse HEAD) 2>$null
@@ -797,6 +804,105 @@ $probedInterface = Read-JsonFile -Path $paths.Interface
 Check 'the probe learned the options from the shim' `
     (($null -ne $probedInterface) -and (@($probedInterface.supported_flags).Count -gt 0)) `
     'the probe came back with no options'
+
+# 30 ------------------------------------------------------------------------
+# A rule that hands work to a person must let that person hand it back.
+$heldRoot = 'T-STOPLOOP'
+$streakBefore = Get-ConsecutiveBlockingCount -RepoRoot $repo -RootRequestId $heldRoot
+Check 'three blocks in a row are counted' ($streakBefore -ge 3) ("streak=" + $streakBefore)
+& (Join-Path $Tools 'clear-hold.ps1') -RepoRoot $repo -RootRequestId $heldRoot -Note 'self test' | Out-Null
+$streakAfter = Get-ConsecutiveBlockingCount -RepoRoot $repo -RootRequestId $heldRoot
+Check 'a person can clear the hold' ($streakAfter -eq 0) ("streak=" + $streakAfter)
+$env:KACHA_STUB_VERDICT = 'PASS'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'after the hold' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'after the hold')
+$afterHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STOPLOOP-R5' -Base $baseCommit -Review $afterHead -Tested $afterHead | Out-Null
+Run-Dispatcher | Out-Null
+Check 'work starts again once a person has cleared it' `
+    (Test-Path -LiteralPath (Join-Path $paths.Results 'T-STOPLOOP-R5.json')) 'it is still held'
+Check 'clearing a hold is written down, not hidden' `
+    (Test-Path -LiteralPath (Join-Path (Join-Path $paths.Root 'human-decisions') ($heldRoot + '.cleared.json'))) `
+    'no record of the decision'
+
+# 31 ------------------------------------------------------------------------
+# A ledger line that was cut off must not swallow the next one.
+$brokenLedger = (Get-AiRuntimePaths -RepoRoot $repo).Ledger
+$before = [System.IO.File]::ReadAllText($brokenLedger)
+[System.IO.File]::AppendAllText($brokenLedger, '{"event":"half_written_line",')
+Add-ReviewLedgerEntry -RepoRoot $repo -Entry @{ event = 'review_started'; request_id = 'T-AFTER-BREAK' } | Out-Null
+$damage = Get-ReviewLedgerDamage -RepoRoot $repo
+Check 'a line that follows a broken one starts on its own line' ($damage -le 1) ("damaged=" + $damage)
+$found = @(Get-ReviewLedgerEntries -RepoRoot $repo -RequestId 'T-AFTER-BREAK')
+Check 'the line written after the break can still be read back' ($found.Count -eq 1) ("found=" + $found.Count)
+
+# 32 ------------------------------------------------------------------------
+# Danger is an area, not one tree. A small careful change in the older model code
+# is exactly as dangerous as one in the newer.
+$v1Profile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('src/core/kachakacha/model/Part.cpp') `
+    -DiffText "diff --git a/src/core/kachakacha/model/Part.cpp b/src/core/kachakacha/model/Part.cpp`n@@ -1 +1 @@`n+    width = 2.0;"
+Check 'the older model code is HIGH_RISK too' ($v1Profile.profile -eq 'HIGH_RISK') ("profile=" + $v1Profile.profile)
+$uiProfile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('src/apps/cad_next/V2Toolbar.cpp') `
+    -DiffText "diff --git a/src/apps/cad_next/V2Toolbar.cpp b/src/apps/cad_next/V2Toolbar.cpp`n@@ -1 +1 @@`n+    button->setText(tr(\"Draw\"));"
+Check 'a small button change is not HIGH_RISK' ($uiProfile.profile -ne 'HIGH_RISK') ("profile=" + $uiProfile.profile)
+
+# 33 ------------------------------------------------------------------------
+# A reviewer written as a .ps1 must actually be runnable, since discovery accepts one.
+$psStub = Join-Path $WorkRoot 'ps-stub.ps1'
+$psOut = Join-Path $WorkRoot 'ps-stub-out.txt'
+@"
+param()
+Set-Content -LiteralPath '$psOut' -Value ('args=' + (@(`$args) -join '|')) -Encoding ASCII
+exit 0
+"@ | Set-Content -LiteralPath $psStub -Encoding UTF8
+Invoke-Process -FilePath $psStub -Arguments @('exec', 'two') -WorkingDirectory $WorkRoot -TimeoutSeconds 60 | Out-Null
+$psText = ''
+if (Test-Path -LiteralPath $psOut) { $psText = [System.IO.File]::ReadAllText($psOut) }
+Check 'a .ps1 launcher can be run at all' ($psText -like '*args=exec|two*') ("output=" + $psText.Trim())
+
+# 34 ------------------------------------------------------------------------
+# Nothing but a real blocking verdict may add to the three-strike count.
+$countRoot = 'T-STREAK'
+$env:KACHA_STUB_VERDICT = 'BLOCKING'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'streak-1' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'streak 1')
+$s1 = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STREAK-R1' -Base $baseCommit -Review $s1 -Tested $s1 | Out-Null
+Run-Dispatcher | Out-Null
+$afterOne = Get-ConsecutiveBlockingCount -RepoRoot $repo -RootRequestId $countRoot
+Check 'a blocking verdict adds one' ($afterOne -eq 1) ("streak=" + $afterOne)
+
+$env:KACHA_STUB_VERDICT = 'NONSENSE'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'streak-2' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'streak 2')
+$s2 = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STREAK-R2' -Base $baseCommit -Review $s2 -Tested $s2 | Out-Null
+Run-Dispatcher | Out-Null
+$afterBad = Get-ConsecutiveBlockingCount -RepoRoot $repo -RootRequestId $countRoot
+Check 'an answer in the wrong shape does not add to the count' ($afterBad -eq 1) ("streak=" + $afterBad)
+
+$env:KACHA_STUB_VERDICT = 'PASS'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'streak-3' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'streak 3')
+$s3 = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STREAK-R3' -Base $baseCommit -Review $s3 -Tested $s3 | Out-Null
+Run-Dispatcher | Out-Null
+$afterPass = Get-ConsecutiveBlockingCount -RepoRoot $repo -RootRequestId $countRoot
+Check 'a passing review clears the count' ($afterPass -eq 0) ("streak=" + $afterPass)
+
+# 35 ------------------------------------------------------------------------
+# A count that does not fit in a number is a broken answer, not a crash.
+$env:KACHA_STUB_VERDICT = 'HUGECOUNT'
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'huge count' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'huge count')
+$hugeHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-HUGE-R1' -Base $baseCommit -Review $hugeHead -Tested $hugeHead | Out-Null
+Run-Dispatcher | Out-Null
+$hugeResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-HUGE-R1.json')
+Check 'a count too big for a number is a broken answer' `
+    (($null -ne $hugeResult) -and $hugeResult.verdict -eq 'MALFORMED') `
+    ("verdict=" + $(if ($hugeResult) { $hugeResult.verdict } else { 'none' }))
+$env:KACHA_STUB_VERDICT = 'PASS'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

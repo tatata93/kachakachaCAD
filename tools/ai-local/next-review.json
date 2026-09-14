@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "kind": "review_request_declaration",
-  "request_id": "AI-REVIEW-PIPELINE-R7",
+  "request_id": "AI-REVIEW-PIPELINE-R8",
   "base_commit": "f78d91bfb7c8658a64771f8f9fcec09c4910232f",
-  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R5 で16件、R6 で17件の BLOCKING を受け、すべて直した。R1〜R4 はレビュー不成立(判定なし)。製品コード(src/)には触れていない。",
+  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R5 で16件、R6 で17件、R7 で受けた分もすべて直した。R1〜R4 はレビュー不成立(判定なし)。製品コード(src/)には触れていない。",
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md",
   "segments": [
     {
@@ -45,7 +45,8 @@
         "tools/ai-local/review-profile.ps1",
         "tools/ai-local/review-ledger.ps1",
         "tools/ai-local/review-precheck.ps1",
-        "tools/ai-local/queue-status.ps1"
+        "tools/ai-local/queue-status.ps1",
+        "tools/ai-local/clear-hold.ps1"
       ],
       "scope_ja": "危険度の判定・追記専用台帳・依頼と機械の点検・状態表示。",
       "focus": [

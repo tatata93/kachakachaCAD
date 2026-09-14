@@ -1,7 +1,16 @@
 # レビュー基盤の JSON の形(schema_version 1)
 
-`.ai-runtime/` を流れるファイルはこの4つだけです。すべて `schema_version: 1`。
-形を変えるときは番号を上げ、古い番号を読む側で断ります(黙って読み替えない)。
+ここに書くのは、**別のプログラムどうしの約束になる4種類**です。
+すべて `schema_version: 1`。形を変えるときは番号を上げ、古い番号は読む側で断ります
+(黙って読み替えない)。
+
+1番目(依頼の宣言)は git 管理下にあり、`.ai-runtime/` の外です。
+残りは `.ai-runtime/` の中にあります。
+
+`.ai-runtime/logs/` にはほかにも JSON がありますが、それらは**その場の記録**であって
+約束ではありません(`codex-interface.json`, `claude-interface.json`,
+`reviewer-search.json`, `<lock>.owner.json`, `human-decisions/*.cleared.json`)。
+人と Claude が読むためのもので、形が変わっても誰も断りません。
 
 ## 1. 依頼の宣言 `tools/ai-local/next-review.json`(git 管理・Claude が書く)
 
@@ -168,4 +177,5 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
 | `request_too_large` | 1回で読むには広すぎる。区間に分けて出し直す |
 | `review_unavailable` | (古い名前。上の3つに分かれた) |
 | `claim_recovered` | 落ちた dispatcher の取得を queue へ戻した |
+| `human_decision` | 人が3回連続 BLOCKING の止まりを解いた(`clear-hold.cmd`)。それ以前のレビューは数から外れる。**消えはしない** |
 | `dry_run` | 起動するはずのコマンドだけ記録した |

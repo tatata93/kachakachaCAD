@@ -183,10 +183,22 @@ function Write-ReviewResult {
     )
     $finished = Get-UtcStamp
     $streak = Get-ConsecutiveBlockingCount -RepoRoot $RepoRoot -RootRequestId $rootId
+    # What this result does to the streak. A timeout, an infrastructure failure or
+    # an answer in the wrong shape says nothing about the change, so it leaves the
+    # count where it was. Only a real BLOCKING adds to it, and a PASS clears it.
+    $streakAfter = $streak
+    if ($Outcome -eq 'REVIEWED') {
+        if ($Verdict -eq 'BLOCKING') { $streakAfter = $streak + 1 }
+        elseif ($Verdict -eq 'PASS') { $streakAfter = 0 }
+    }
     $effectiveNext = $NextAction
     # Only a real review can be part of a blocking streak. Three timeouts in a row
     # are an infrastructure problem, not three rejections.
-    if ($Outcome -eq 'REVIEWED' -and $NextAction -ne 'PROCEED' -and ($streak + 1) -ge 3) {
+    # STOP is already a handover to a person; it does not wait for a third strike.
+    if ($Outcome -eq 'REVIEWED' -and $NextAction -eq 'STOP') {
+        $Notes += "the reviewer answered STOP; this goes to a person now, not after three tries"
+    }
+    if ($Outcome -eq 'REVIEWED' -and $Verdict -eq 'BLOCKING' -and $streakAfter -ge 3) {
         $effectiveNext = 'HUMAN_DECISION_REQUIRED'
         $Notes += "three blocking results in a row on $rootId; a person has to decide"
     }
@@ -210,7 +222,7 @@ function Write-ReviewResult {
         review_effort        = $reviewEffort
         invocation           = $Invocation
         blocking_count       = $BlockingCount
-        consecutive_blocking = ($streak + 1)
+        consecutive_blocking = $streakAfter
         exit_code            = $ExitCode
         review_text_file     = $resultText
         packet_file          = (Join-Path $workDir 'packet.md')
@@ -218,7 +230,7 @@ function Write-ReviewResult {
         notes                = @($Notes)
         processed_by_claude  = $false
     }
-    if ($Verdict -eq 'PASS') { $result['consecutive_blocking'] = 0 }
+
     Write-JsonAtomic -Path $resultJson -Value ([pscustomobject]$result) | Out-Null
     # An infrastructure failure is not a verdict. Only a real review closes a
     # REQUEST_ID; otherwise the same id could never be tried again.
@@ -600,8 +612,17 @@ $verdict = Get-Field -Text $answer -Name 'VERDICT'
 $nextAction = Get-Field -Text $answer -Name 'NEXT_ACTION'
 $blockingText = Get-Field -Text $answer -Name 'BLOCKING_COUNT'
 $blockingCount = 0
-$blockingCountIsNumber = ($blockingText -match '^\d+$')
-if ($blockingCountIsNumber) { $blockingCount = [int]$blockingText }
+# A digit string can still be too big for an integer. Casting it would throw
+# before the answer could be called MALFORMED, and the runner would die instead
+# of writing down what went wrong.
+$blockingCountIsNumber = $false
+if ($blockingText -match '^\d+$') {
+    $parsed = 0
+    if ([int]::TryParse($blockingText, [ref]$parsed) -and $parsed -ge 0 -and $parsed -le 1000) {
+        $blockingCountIsNumber = $true
+        $blockingCount = $parsed
+    }
+}
 
 # The contract says the FIRST non-empty line is the verdict. An answer that was
 # cut off halfway, or that buries the verdict after a paragraph of preamble, is

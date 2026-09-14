@@ -109,7 +109,8 @@ BLOCKING_COUNT: <整数>
   1. ビルド 2. 関連テスト 3. 回帰テスト 4. コミット の順に行い、
   **新しい REQUEST_ID**(R1 → R2)で再提出します。
 - **元の REQUEST_ID を PASS 扱いに書き換えてはいけません。** 履歴は証拠です。
-- 同じ root request で 3 回続けて BLOCKING / STOP になった場合、
-  基盤側が自動的に `HUMAN_DECISION_REQUIRED` に切り替えます。人間に渡してください。
+- 同じ root request で **3 回続けて BLOCKING** になった場合、基盤側が自動的に
+  `HUMAN_DECISION_REQUIRED` に切り替えて受付を止めます。人間に渡してください。
+- **`STOP` は1回で人間に渡します。**3回待ちません。数にも入りません。
 - 過去 Phase の BLOCKING は、後続 Phase が進んでいても無視しません。
   影響する後続 Phase は作り直し・再テスト・再レビューの対象です。

@@ -34,7 +34,22 @@ function Add-ReviewLedgerEntry {
                                              [System.IO.FileAccess]::Write,
                                              [System.IO.FileShare]::Read)
             try {
-                $bytes = [System.Text.Encoding]::UTF8.GetBytes($line + "`r`n")
+                # If the last writer died mid-line, this file does not end with a
+                # newline. Appending straight onto it would glue the two together
+                # into one broken line, and from then on the whole ledger reads as
+                # damaged and every request is refused. Close the old line first.
+                $prefix = ''
+                if ($stream.Length -gt 0) {
+                    $probe = [System.IO.File]::Open($paths.Ledger, [System.IO.FileMode]::Open,
+                                                    [System.IO.FileAccess]::Read,
+                                                    [System.IO.FileShare]::ReadWrite)
+                    try {
+                        $probe.Seek(-1, [System.IO.SeekOrigin]::End) | Out-Null
+                        $last = $probe.ReadByte()
+                        if ($last -ne 10 -and $last -ne 13) { $prefix = "`r`n" }
+                    } finally { $probe.Dispose() }
+                }
+                $bytes = [System.Text.Encoding]::UTF8.GetBytes($prefix + $line + "`r`n")
                 $stream.Write($bytes, 0, $bytes.Length)
                 $stream.Flush()
             } finally {
@@ -160,8 +175,39 @@ function Test-AlreadyDispatched {
 }
 
 # Three blocking verdicts in a row on the same root request means the loop is not
-# converging. Counting stops at the first non-blocking verdict, so a PASS in the
-# middle resets the streak.
+# converging. Counting stops at the first verdict that is not BLOCKING, so a PASS
+# in the middle resets the streak.
+#
+# STOP is not counted here at all. STOP already means "a person has to decide",
+# once, immediately. Folding it into a three-strike count would make it weaker
+# than it is.
+#
+# A person can clear a streak with clear-hold.cmd. Without that, a rule meant to
+# hand work to a human would be a dead end instead.
+function Get-HumanDecisionPath {
+    param(
+        [Parameter(Mandatory=$true)][string]$RepoRoot,
+        [Parameter(Mandatory=$true)][string]$RootRequestId
+    )
+    $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
+    return (Join-Path (Join-Path $paths.Root 'human-decisions') ($RootRequestId + '.cleared.json'))
+}
+
+function Get-HumanClearedUtc {
+    param(
+        [Parameter(Mandatory=$true)][string]$RepoRoot,
+        [Parameter(Mandatory=$true)][string]$RootRequestId
+    )
+    $note = Read-JsonFile -Path (Get-HumanDecisionPath -RepoRoot $RepoRoot -RootRequestId $RootRequestId)
+    if ($null -eq $note) { return $null }
+    foreach ($p in $note.PSObject.Properties) {
+        if ($p.Name -eq 'cleared_utc' -and $p.Value) {
+            try { return [datetime]$p.Value } catch { return $null }
+        }
+    }
+    return $null
+}
+
 function Get-ConsecutiveBlockingCount {
     param(
         [Parameter(Mandatory=$true)][string]$RepoRoot,
@@ -170,14 +216,16 @@ function Get-ConsecutiveBlockingCount {
     $entries = @(Get-ReviewLedgerEntries -RepoRoot $RepoRoot -RootRequestId $RootRequestId |
                  Where-Object { $_.event -eq 'review_completed' })
     if ($entries.Count -eq 0) { return 0 }
+    $clearedAt = Get-HumanClearedUtc -RepoRoot $RepoRoot -RootRequestId $RootRequestId
     $count = 0
     for ($i = $entries.Count - 1; $i -ge 0; $i--) {
-        $action = [string]$entries[$i].next_action
-        if ($action -eq 'FIX_AND_REVIEW' -or $action -eq 'STOP' -or $action -eq 'HUMAN_DECISION_REQUIRED') {
-            $count++
-        } else {
-            break
+        if ($clearedAt) {
+            $loggedAt = $null
+            try { $loggedAt = [datetime]$entries[$i].logged_utc } catch { $loggedAt = $null }
+            # Everything a person has already looked at stops counting.
+            if ($loggedAt -and $loggedAt -le $clearedAt) { break }
         }
+        if ([string]$entries[$i].next_action -eq 'FIX_AND_REVIEW') { $count++ } else { break }
     }
     return $count
 }

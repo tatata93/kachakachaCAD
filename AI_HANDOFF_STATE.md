@@ -5,33 +5,94 @@
 
 ## 現在
 
-REQUEST_ID: P1-EXTRUDE-R3
+REQUEST_ID: P1-EXTRUDE-R4
 TASK_ID: Phase 1 押し出し
 PHASE: 1
 STAGE: 1/1
-STATUS: READY_FOR_CODEX(R2 の B1・B2 を直した)
-REVIEW_STATUS: PENDING_CODEX
-BASE: 253e446
-HEAD: bd375c9
-REVIEW_SCOPE: 253e446..bd375c9 のうち、押し出しに関わる分
-REVIEW_FOCUS: R2 の B1(失敗時の原子性)と B2(Feature の入力 UUID)が解けているか。
-  Document::Transaction が既存の compound / 入れ子 / 早期 return / 保存直前の
-  revision を壊していないか
+STATUS: PC_VERIFICATION_PENDING(R3 の B1〜B3 を直した)
+REVIEW_STATUS: NOT_SUBMITTED(PC の build / CTest / 自己試験が通ってから出す)
+BASE: bd375c9
+HEAD: (PC が通った commit を Claude が固定して入れる)
+REVIEW_SCOPE: bd375c9..HEAD のうち、押し出し・Document の入れ子・並びの外読み
+REVIEW_FOCUS: 内側の取りやめを外側が飲み込まないこと。断られたときに
+  覚えている形と場面まで戻ること。Windows の Debug が止まらないこと
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
-REQUEST_ID: Q1-Q5-R2
-TASK_ID: Q1〜Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
+REQUEST_ID: Q1-Q5-R3
+TASK_ID: Q1〜Q5(正対・まとまり・HO見本・総合試験・曲げ半径・部材編集)
 PHASE: Q1-Q5
-STATUS: READY_FOR_CODEX(R1 の B1〜B4 を直した)
-REVIEW_STATUS: PENDING_CODEX
-BASE: 253e446
-HEAD: bd375c9
-REVIEW_SCOPE: 253e446..bd375c9 のうち、Q1〜Q5 に関わる分
-REVIEW_FOCUS: 曲げ半径が本当に形へ効いているか。まとまりの原子性。
-  Q4 が本番の指示だけを通っているか。複数正対の契約
+STATUS: PC_VERIFICATION_PENDING(R2 の B1〜B3 を直した)
+REVIEW_STATUS: NOT_SUBMITTED(同上)
+BASE: bd375c9
+HEAD: (PC が通った commit を Claude が固定して入れる)
+REVIEW_SCOPE: bd375c9..HEAD のうち、Q1〜Q5 に関わる分
+REVIEW_FOCUS: 無い部材番号を丸めないこと。分ける前に見せた候補と、
+  決めたあとに変える境目が同じものであること
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+## P1-EXTRUDE-R3 の指摘と、どう直したか
+
+Codex は R3 を **FAIL** にした。3件とも本物だった。
+
+### B1 内側の取りやめを外側が飲み込む
+
+`AbortCompound()` は入れ子の深さが残っていると深さを1つ減らすだけで、
+外側を失敗にしていなかった。だから
+「外側で A を足す → 内側で B を足す → 内側が取りやめ → 外側が閉じる」で
+A も B も残る。呼ぶ側が返り値を見落としただけで、原子的なはずの操作が
+半分だけ保存される。
+
+一度でも内側が取りやめたら印を立て、いちばん外側で閉じるときにまとめて戻す。
+`Transaction::Commit()` は **「本当に残ったか」を返す**(`[[nodiscard]]`)。
+偽が返ったら、呼んだ側は画面と覚えている形も戻さなければならない。
+
+### B2 文書だけ戻して、覚えている形と場面が戻らない
+
+`AddPartFeature()` は確定の前に `partShapes_` と `partEdges_` を更新し、
+場面まで作り直していた。そのあとで失敗すると、文書だけが戻り、
+文書に無い立体や辺が画面と書き出しに残る。
+
+文書を変えるところを `CommitExtrudeAtomically()` に閉じこめ、
+**どの道で抜けても** 呼ぶ側が `AdoptCurrentDocument()` と
+`RebuildKernelShapes()` を通すようにした。戻ったあとの文書が正本である。
+
+### B3 Windows の Debug が止まる
+
+`TrimCurve` が並びの外を読んでいた。押した場所を挟む区切りを探す繰り返しは
+「見つからなければ最後まで進む」ので、そのまま次を読むと外に出る。
+押した場所が線の外(0〜1 の外、NaN)だと必ずそうなる。
+先に断るようにした(GEO-E022)。
+
+**雲側が素通りしていたのが本当の問題である。** Release + g++ には
+並びの検査が無い。`tools/bounds-check.sh` を足した。
+`_GLIBCXX_DEBUG` つきの Debug ビルドで core の試験を全部回す。
+PC へ束を送る前に通す。その検査つきで 134/134 が通る。
+
+## Q1-Q5-R2 の指摘と、どう直したか
+
+### B1 無い部材番号が最後の部材へ丸められる
+
+部材が3枚のときに「999」と書くと、黙って3枚目の半径が変わっていた。
+人は「999 は無いから何も起きない」と思っている。**丸めない。**
+番号はちょうど1つ、範囲の中だけを受ける。それ以外は理由を言って断る。
+見るだけ(棚の表示)は1枚目を見せる。変えるときは番号が要る。
+
+### B2 分ける前に見せた相手と、実際に変える境目が別物
+
+見せるほうは架空の分け方の上で「後半を動かす」判断をし、
+決めるほうは選んだ部材の真ん中に境目を足していた。別物である。
+
+`fabrication/BandPartition` を足した。**見せる形と、決めたあとに使う形を、
+同じ1つの候補から作る。** `PreviewBandSplit` / `PreviewBandMerge` は
+「できるか」と「できたあとの境目の並び」を一緒に返し、画面はそれを
+そのまま文書へ書く。書いたあとで、言ったとおりの枚数になったかを
+その場で突き合わせる。細くなりすぎる分け方は断る(折るところが残らない)。
+
+### B3 Windows の検証が完走しない
+
+R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
 
@@ -74,6 +135,16 @@ commit して、新しい REQUEST_ID で再レビューを出す** まで未解�
   ACTION: FIX_AND_REVIEW
   FIX_COMMIT: 18d6e2b, bd375c9
   RESULT: 再レビュー Q1-Q5-R2 を提出(元の Q1-Q5 は FAIL のまま)
+- REQUEST_ID: P1-EXTRUDE-R3
+  REVIEWED_HEAD: bd375c9
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 12bfded, 77a359d(入れ子の取りやめ・後始末・並びの外読み)
+  RESULT: PC 検証待ち。通ったら P1-EXTRUDE-R4 を提出(R3 は FAIL のまま)
+- REQUEST_ID: Q1-Q5-R2
+  REVIEWED_HEAD: bd375c9
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 12bfded, 77a359d(番号を丸めない・見せた候補をそのまま使う)
+  RESULT: PC 検証待ち。通ったら Q1-Q5-R3 を提出(R2 は FAIL のまま)
 
 ## P1-EXTRUDE-R2 の指摘と、どう直したか
 

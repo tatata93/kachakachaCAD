@@ -12,8 +12,8 @@ STAGE: 1/1
 STATUS: READY_FOR_CODEX(R3 の B1〜B3 を直した)
 REVIEW_STATUS: PENDING_CODEX
 BASE: bd375c9
-HEAD: 906dd7e
-REVIEW_SCOPE: bd375c9..906dd7e のうち、押し出し・Document の入れ子・並びの外読み
+HEAD: f479814
+REVIEW_SCOPE: bd375c9..f479814 のうち、押し出し・Document の入れ子・並びの外読み
 REVIEW_FOCUS: 内側の取りやめを外側が飲み込まないこと。断られたときに
   覚えている形と場面まで戻ること。Windows の Debug が止まらないこと
 BUILD: PASS(Windows MSVC 2022 x64 / 雲 core g++)
@@ -28,8 +28,8 @@ PHASE: Q1-Q5
 STATUS: READY_FOR_CODEX(R2 の B1〜B3 を直した)
 REVIEW_STATUS: PENDING_CODEX
 BASE: bd375c9
-HEAD: 906dd7e
-REVIEW_SCOPE: bd375c9..906dd7e のうち、Q1〜Q5 に関わる分
+HEAD: f479814
+REVIEW_SCOPE: bd375c9..f479814 のうち、Q1〜Q5 に関わる分
 REVIEW_FOCUS: 無い部材番号を丸めないこと。分ける前に見せた候補と、
   決めたあとに変える境目が同じものであること
 BUILD / TEST: 上と同じ固定範囲。同じ数字
@@ -184,12 +184,12 @@ commit して、新しい REQUEST_ID で再レビューを出す** まで未解�
   REVIEWED_HEAD: bd375c9
   ACTION: FIX_AND_REVIEW
   FIX_COMMIT: 12bfded, 77a359d(入れ子の取りやめ・後始末・並びの外読み)
-  RESULT: P1-EXTRUDE-R4 を 906dd7e で提出(R3 は FAIL のまま)
+  RESULT: P1-EXTRUDE-R4 を f479814 で提出(R3 は FAIL のまま)
 - REQUEST_ID: Q1-Q5-R2
   REVIEWED_HEAD: bd375c9
   ACTION: FIX_AND_REVIEW
   FIX_COMMIT: 12bfded, 77a359d(番号を丸めない・見せた候補をそのまま使う)
-  RESULT: Q1-Q5-R3 を 906dd7e で提出(R2 は FAIL のまま)
+  RESULT: Q1-Q5-R3 を f479814 で提出(R2 は FAIL のまま)
 
 ## P1-EXTRUDE-R2 の指摘と、どう直したか
 
@@ -330,7 +330,7 @@ PASS(PC MSVC 2022 x64 Release / 雲 core g++)
 
 ### TEST
 
-- PC: CTest **141/141**、アプリ自己試験 **225/225**(`906dd7e` で確認、2026-09-14)
+- PC: CTest **141/141**、アプリ自己試験 **225/225**(`f479814` で確認、2026-09-14)
 - 雲: core CTest 134/134、並びの検査つき Debug 134/134、Qt 当て木 69 ファイル
 
 ### ACCEPTANCE(押し出しの受入試験 EX-01〜08)
@@ -505,14 +505,14 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
 - REQUEST_ID: P1-EXTRUDE-R4 / TASK: Phase 1 押し出し / PHASE: 1
-  BASE: bd375c9 / HEAD: 906dd7e
+  BASE: bd375c9 / HEAD: f479814
   REVIEW_STATUS: PENDING_CODEX
   CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(Windows + 雲)
   TEST: PASS(Windows CTest 141/141、自己試験 225/225、雲 core 134/134)
   前身: P1-EXTRUDE-R3(FAIL)。B1〜B3 を直し、MISSING TESTS を足した。
   **HEAD は Claude が固定した。最新 commit から選ばせない。**
 - REQUEST_ID: Q1-Q5-R3 / TASK: Q1〜Q5 / PHASE: Q1-Q5
-  BASE: bd375c9 / HEAD: 906dd7e
+  BASE: bd375c9 / HEAD: f479814
   REVIEW_STATUS: PENDING_CODEX
   CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(Windows + 雲)
   TEST: PASS(同じ固定範囲、同じ数字)
@@ -665,6 +665,28 @@ HO の前頭部で実際に測ったところ、
   `wire.key_points`)。門が全コマンドの説明を求めるため。文言の確認だけ。
 - `samples/*.kcd2` を書き直した。保存の鍵が増えたため(切れ目の上限、選択半径)。
 
+## STATUS: COMPLETE_PENDING_CODEX(2026-09-14)
+
+作業キューは空になった。
+
+| 見るところ | 状態 |
+| --- | --- |
+| 実装キュー | 空(Q1〜Q5、§27〜33 すべて実装して PC で通った) |
+| 修正キュー | 空 |
+| 未処理の Codex Blocking | 無し(R3 と Q1-Q5-R2 の6件をすべて直し、再提出した) |
+| 回帰の直し | 空(PC の CTest 141/141、自己試験 225/225) |
+| HO 総合試験 | 全通(面が作れ、近似・曲げ・出力まで通る) |
+
+`COMPLETE` にしないのは、**まだレビューを受けていない提出が2つある** ためである。
+
+- `P1-EXTRUDE-R4`(bd375c9..f479814)
+- `Q1-Q5-R3`(同じ範囲)
+
+加えて、Codex の判断を待っているものが2件ある(下の CODEX_REVIEW_REQUIRED)。
+人の判断を待っているものが2件ある(下の HUMAN_DECISION_REQUIRED)。
+どれも「動かないから止まっている」のではなく、
+**勝手に決めてはいけないから止めている** ものである。
+
 ## 作業キュー(オーナー指示 2026-09-14 第2便。上から順に)
 
 **総合完成条件**は「HO ゲージの流線形前面を、この CAD で実際に設計し、板材近似し、
@@ -673,11 +695,11 @@ HO の前頭部で実際に測ったところ、
 
 | # | 名前 | 中身 | 状態 |
 | --- | --- | --- | --- |
-| Q1 | 選択に正対の完成 | WorkPlane / 平面Face / 曲面Face / 平面Surface / 曲面Surface。向き+注視点+中央+Fit を1操作で。VF-01〜08 | 実装済み・PC 確認待ち |
-| Q2 | 左ツリーの Group / Folder | 整理用コンテナ。作成・改名・D&D・入れ子・表示切替・解除・Undo/Redo・Save/Load。GR-01〜10 | 実装済み・PC 確認待ち |
-| Q3 | HO 流線形前面 総合テストモデル | 1/80・16.5mm。WorkPlane→Wire→Guide→Surface。完成 BRep のハードコード禁止 | 文書は出来た・PC 確認待ち |
-| Q4 | 総合試験 | 押し出し・板材近似・展開・任意曲げ出力まで通す。TM-01〜14 / UI-TM-01〜19 | 一次分を実装・PC 確認待ち |
-| Q5 | ApproxPart の細部 | 部材ごとの選択・実寸半径入力・AUTO/LOCK・部材の分割/統合・展開基準辺 | 半径・AUTO/LOCK・分割/統合の判断は実装済み。**分けた結果を型紙へ反映する道が無い**(下記)|
+| Q1 | 選択に正対の完成 | WorkPlane / 平面Face / 曲面Face / 平面Surface / 曲面Surface。向き+注視点+中央+Fit を1操作で。VF-01〜08 | **PC で確認済み。** 複数選んだときの契約も決めた(向きは最初の1つ、収まりは全部) |
+| Q2 | 左ツリーの Group / Folder | 整理用コンテナ。作成・改名・D&D・入れ子・表示切替・解除・Undo/Redo・Save/Load。GR-01〜10 | **PC で確認済み。** 作成と複数引きずりは1回の取り消しで戻る |
+| Q3 | HO 流線形前面 総合テストモデル | 1/80・16.5mm。WorkPlane→Wire→Surface。完成 BRep のハードコード禁止 | **PC で確認済み。** 面が本当に作れるところまで通した |
+| Q4 | 総合試験 | 押し出し・板材近似・展開・任意曲げ出力まで通す。TM-01〜14 / UI-TM-01〜19 | **PC で確認済み。** 何も無い文書から本番の指示だけで通る |
+| Q5 | ApproxPart の細部 | 部材ごとの選択・実寸半径入力・AUTO/LOCK・部材の分割/統合・展開基準辺 | **PC で確認済み。** 半径は文書が持ち実際に形を変える。分割/統合は境目を文書へ書いて枚数が変わる。展開の基準にする辺も入れた |
 
 進行中の押し出し・近似の作業は中断しない。安全な区切りで取り込む。
 

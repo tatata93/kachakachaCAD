@@ -5,19 +5,165 @@
 
 ## 現在
 
-REQUEST_ID: P1-EXTRUDE-R2
+REQUEST_ID: P1-EXTRUDE-R3
 TASK_ID: Phase 1 押し出し
 PHASE: 1
 STAGE: 1/1
-STATUS: READY_FOR_CODEX(R1 の指摘4件を直した)
+STATUS: READY_FOR_CODEX(R2 の B1・B2 を直した)
 REVIEW_STATUS: PENDING_CODEX
-BASE: ce369eb
-HEAD: 253e446
-REVIEW_SCOPE: ce369eb..253e446 のうち、押し出しに関わる分
-REVIEW_FOCUS: R1 の B1〜B4 が解けているか。向きの単一化、下見中の文書不変、
-  1操作1取り消し、選んだ演算の保持
+BASE: 253e446
+HEAD: bd375c9
+REVIEW_SCOPE: 253e446..bd375c9 のうち、押し出しに関わる分
+REVIEW_FOCUS: R2 の B1(失敗時の原子性)と B2(Feature の入力 UUID)が解けているか。
+  Document::Transaction が既存の compound / 入れ子 / 早期 return / 保存直前の
+  revision を壊していないか
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+REQUEST_ID: Q1-Q5-R2
+TASK_ID: Q1〜Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
+PHASE: Q1-Q5
+STATUS: READY_FOR_CODEX(R1 の B1〜B4 を直した)
+REVIEW_STATUS: PENDING_CODEX
+BASE: 253e446
+HEAD: bd375c9
+REVIEW_SCOPE: 253e446..bd375c9 のうち、Q1〜Q5 に関わる分
+REVIEW_FOCUS: 曲げ半径が本当に形へ効いているか。まとまりの原子性。
+  Q4 が本番の指示だけを通っているか。複数正対の契約
+CREATED_AT: 2026-09-14
+UPDATED_AT: 2026-09-14
+
+## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
+
+読んだだけでは「処理済み」にしない。**直して、build して、試験を通して、
+commit して、新しい REQUEST_ID で再レビューを出す** まで未解決として扱う。
+前の版を PASS 扱いへ書き換えない。
+
+- REQUEST_ID: UI-P1-007-S1-R7
+  REVIEWED_HEAD: 188ea47
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 5f6ccbc
+  RESULT: 再レビュー UI-P1-007-S1-R8 を提出(R7 は FAIL のまま)
+- REQUEST_ID: UI-P1-007-S1-R8
+  REVIEWED_HEAD: 5f6ccbc
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 9b942b9
+  RESULT: 再レビュー UI-P1-007-S1-R9 を提出(R8 は FAIL のまま)
+- REQUEST_ID: UI-P1-007-S1-R9
+  REVIEWED_HEAD: 9b942b9
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: c224d49
+  RESULT: 再レビュー UI-P1-007-S1-R10 を提出(R9 は FAIL のまま)
+- REQUEST_ID: UI-P1-007-S1-R10
+  REVIEWED_HEAD: c224d49
+  ACTION: PROCEED(PASS WITH FIXES。非阻害2件も入れた)
+  FIX_COMMIT: ac82541
+  RESULT: UI-P1-007 は受け入れ済み。R11 は不要と Codex 自身が書いている
+- REQUEST_ID: P1-EXTRUDE-R1
+  REVIEWED_HEAD: ce369eb
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 51c1258
+  RESULT: 再レビュー P1-EXTRUDE-R2 を提出(R1 は FAIL のまま)
+- REQUEST_ID: P1-EXTRUDE-R2
+  REVIEWED_HEAD: 253e446
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 7e35fa3
+  RESULT: 再レビュー P1-EXTRUDE-R3 を提出(R2 は FAIL のまま)
+- REQUEST_ID: Q1-Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
+  REVIEWED_HEAD: 253e446
+  ACTION: FIX_AND_REVIEW
+  FIX_COMMIT: 18d6e2b, bd375c9
+  RESULT: 再レビュー Q1-Q5-R2 を提出(元の Q1-Q5 は FAIL のまま)
+
+## P1-EXTRUDE-R2 の指摘と、どう直したか
+
+Codex は R2 を **FAIL** にした。2件とも本物だった。
+
+### B1 失敗時の疑似 rollback が無関係な直前操作を取り消しうる
+
+面の縁の追加が最初に失敗すると、`EndCompound()` は中身が変わっていないので
+履歴を増やさない。そのあとの無条件な `Undo()` は、押し出しより前に
+利用者がやっていた別の操作を取り消してしまう。
+
+直し方。`Document` に `AbortCompound()` と、RAII の `Transaction` を足した。
+`Commit()` を呼ばずに抜けたら、**履歴を増やさずに** 始める前の状態へ戻す。
+一度入れてから取り消す方式では、押す前の別の操作が巻き添えになる。
+ここは「無かったこと」にする。
+
+あわせて `AdoptExtrudeResult()` が成否を返すようにし、
+面の縁・全 Part / Wire 出力・Boolean 元の非表示の全部を検査して、
+1件でも失敗したら transaction を abort するようにした。
+
+### B2 面境界ワイヤーが押し出し Feature の依存関係へ登録されない
+
+`AddPartFeature()` が Viewport の元選択を読み直していたので、
+definition が指す UUID と、依存グラフが指す UUID が食い違っていた。
+面の縁を直しても押し出しが計算し直されない。
+
+直し方。`AddPartFeature()` へ入力 UUID を明示して渡す。
+面の押し引きでは確定時に作った縁のワイヤー群、Boolean では対象の立体を含める。
+
+### 足した試験(Codex の MISSING TESTS)
+
+| Codex の要求 | どこ |
+| --- | --- |
+| (1) compound の最初・途中・最後で失敗、文書・版・履歴・表示が不変、直前の操作を取り消さない | core `compound_abort_tests`(6件) |
+| (2) 面の縁の編集で押し出しが計算し直す対象に入る | 自己試験「面の縁を直すと押し出しが計算し直す対象に入る」 |
+| (3) 面押し引きを保存・再読込して同じ形へ再構築 | 自己試験「面の押し引きは保存して開き直しても残る」 |
+| (4) Boolean・輪郭併産・面押し引きが1回の Undo/Redo で往復 | 自己試験「面の押し引きは1回の取り消しとやり直しで往復する」 |
+
+## Q1-Q5 の指摘と、どう直したか
+
+Codex は Q1-Q5 を **FAIL** にした。
+
+### B1 Windows のリンクが通らない
+
+`MergeFabricationParts` / `SplitFabricationPart` / `fabrication::MergePieces` /
+`PreviewMerge` / `SplitPiece` が未解決だった。
+これは固定 HEAD(253e446)の時点の話で、CMake の結線は次の `ffee7bc` で
+入っている。いまの `CMakeLists.txt` には
+`V2PanelEditCommands.cpp`(921〜922行)と `fabrication/PanelEdit.cpp`(652行)が
+どちらも入っている。**PC の往復で確かめる。**
+
+### B2 曲げ半径が Document にも形状にも反映されない
+
+3つとも本当だった。半径は画面が1つだけ持っていて、保存で消え、
+取り消しで戻らず、形は一切動かなかった。測り方も、型紙の外周の 1/4 を
+90 度と決めつけていた。
+
+直し方。
+
+- **測る。** `fabrication/BandBendRadius` を足した。折り線が受け持つ長さ
+  L(両隣の帯の幅の半分ずつ)と、その折り線の角 θ から `R = L / θ`。
+  円を多角形で近似したときの `θ = (w_i + w_{i+1}) / (2R)` そのものである。
+  半径 50mm の円筒で試すと 49.87mm が出る。当て推量ではない。
+- **置く。** `CreateFabricationModelDefinition` へ `bendRadiusMm` と
+  `bendRadiusLock` を足した。部材ごとに持ち、保存・取り消し・やり直し・
+  再計算のすべてに乗る。自動の部材は 0 を書き、どれも固定していなければ
+  鍵ごと書かない(中身が同じ文書が1バイト違う、を避ける)。
+- **効かせる。** 固定した半径は、その折り線の角を `θ = L / R` へ合わせる
+  倍率になり、`FoldBandMesh` と `BuildBandFoldRails` へ渡る。
+  帯の幅は動かさないので、どの半径でも面内長は変わらない。
+  自己試験は座標の指紋を取って、形が本当に動いたことを見る。
+
+### B3 まとまり作成と複数ドラッグが一操作一 Undo になっていない
+
+`Document::Transaction` でまとめた。1つでも断られたら全部やめる。
+輪になる移動が混じったときに、ほかだけ移って半分だけ移った状態にしない。
+
+### B4 Q4 総合試験が近似作成ワークフローを試していない
+
+そのとおりだった。近似済みの見本を開いて数を数えるだけだった。
+`V2SelfTestApproxFlow` を足して、何も無い文書から本番の指示だけで
+作業平面 → 線 → 形状ガイドの面 → 方式を見比べる → 近似を作る →
+0/50/70/100% → 70% の状態から線と面を作る、まで通す。
+
+### UX 指摘: 複数対象の正対
+
+契約を決めた。**向きは、向きを持つ相手のうち最初の1つが決める。
+収まりは選んだもの全部が決める。** 向きの違うものが混じっていたら帯でそう言う。
+最後に選んだものが黙って向きを奪う作りだと、どちらの向きになるか人には分からない。
+命令の一覧にも書き、自己試験で固定した。
 
 ## P1-EXTRUDE-R1 の指摘と、どう直したか
 
@@ -242,15 +388,20 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- REQUEST_ID: P1-EXTRUDE-R2 / TASK: Phase 1 押し出し / PHASE: 1
-  BASE: ce369eb / HEAD: 253e446
+- REQUEST_ID: P1-EXTRUDE-R3 / TASK: Phase 1 押し出し / PHASE: 1
+  BASE: 253e446 / HEAD: bd375c9
   REVIEW_STATUS: PENDING_CODEX
-  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲) / TEST: PASS(雲 core 130/130)
-  前身: P1-EXTRUDE-R1(FAIL)。B1〜B4 を直した。
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲 core)/ TEST: PASS(雲 core 132/132、
+  Qt 当て木の型検査 69 ファイル)
+  前身: P1-EXTRUDE-R2(FAIL)。B1・B2 を直し、MISSING TESTS を4件とも足した。
   **HEAD は Claude が固定した。最新 commit から選ばせない。**
-- REQUEST_ID: Q1-Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
-  BASE: ce369eb / HEAD: 253e446
-  REVIEW_STATUS: PENDING_CODEX(P1-EXTRUDE-R2 と同じ範囲に含まれる)
+- REQUEST_ID: Q1-Q5-R2 / TASK: Q1〜Q5 / PHASE: Q1-Q5
+  BASE: 253e446 / HEAD: bd375c9
+  REVIEW_STATUS: PENDING_CODEX
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(雲 core)/ TEST: PASS(雲 core 132/132)
+  前身: Q1-Q5(FAIL)。B2・B3・B4 と正対の契約を直した。
+  B1(Windows リンク)は固定 HEAD より後の `ffee7bc` で結線済み。PC の往復で確かめる。
+  **HEAD は Claude が固定した。最新 commit から選ばせない。**
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

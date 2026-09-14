@@ -1030,3 +1030,61 @@ REGRESSION RISKS: 状態再対応は保存形式、部材番号、任意状態�
 ActiveTool、PreviewOwner、Cancel、Undo/Redoと結線し、Line→Select→Approximation切替でも残留を試験すること。
 
 NEXT_ACTION: 上記を追加commitで修正し、`Q1-Q5-R4` を提出する。R1〜R3は履歴として残す。
+
+---
+
+# Codex Review Addendum: P1-EXTRUDE-R4
+
+REQUEST_ID: P1-EXTRUDE-R4
+PHASE: 1 押し出し
+BASE: bd375c9
+HEAD: f479814
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T22:20:50+09:00
+
+## CORRECTION
+
+レビュー中にClaude側が固定HEADを `906dd7e` から `f479814` へ更新したため、先の記録を削除せず
+訂正を追記する。`f479814` のコード差分は `v2_cad_next_smoke` のCTest上限を120秒から900秒へ
+変えただけであり、B1の押し出し方向未結線には影響しない。
+
+更新HEAD相当で `scripts/check.ps1` を再実行した。最初の `qt_cad_smoke` は184.38秒でPASSし、
+`v2_robustness_tests` も140.04秒でPASSした。しかし `v2_cad_next_smoke` は時間上限ではなく
+89.38秒で「吸着半径は拡大しても同じで揺れでは離さずSの間だけ止まる」の途中に異常終了した。
+続く `v2_package_zip` も配布版exeの自己試験が非0で失敗した。最終結果は139/141 PASS、
+CTest終了コード8である。Handoff記載のWindows 141/141・自己試験225/225は再現できなかった。
+
+BLOCKERS、CLAUDE PATCH REQUEST、MISSING TESTSは直前のP1-EXTRUDE-R4レビューを継続する。
+検証についてはtimeout値を延ばすだけでなく、吸着半径ケース付近の異常終了をDebug/Release双方で
+再現・修正し、配布版を含む公式ゲートを連続実行して安定性を確認すること。
+
+CLAUDE PATCH REQUEST: 直前のP1-EXTRUDE-R4修正要求に加え、自己試験の異常終了を修正し、
+`P1-EXTRUDE-R5` では公式 `scripts/check.ps1` の全141件と配布版自己試験の実測結果を提出する。
+
+NEXT_ACTION: P1-EXTRUDE-R4はFAILのまま。追加commitで修正し、`P1-EXTRUDE-R5` を提出する。
+
+---
+
+# Codex Review Addendum: Q1-Q5-R3
+
+REQUEST_ID: Q1-Q5-R3
+PHASE: Q1-Q5（正対・まとまり・HO見本・総合試験・曲げ半径・部材編集）
+BASE: bd375c9
+HEAD: f479814
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T22:20:50+09:00
+
+## CORRECTION
+
+固定HEAD更新に伴う追記である。`f479814` はCTestの時間上限変更だけなので、B1〜B4の部材編集・
+数値検証問題には影響しない。更新HEAD相当のWindows公式試験も、上記P1追記と同じく
+`v2_cad_next_smoke` の吸着半径ケース付近と `v2_package_zip` で失敗し、139/141 PASSだった。
+
+BLOCKERS、CLAUDE PATCH REQUEST、MISSING TESTSは直前のQ1-Q5-R3レビューを継続する。
+
+CLAUDE PATCH REQUEST: 直前のQ1-Q5-R3修正要求に加え、自己試験の異常終了を修正し、
+`Q1-Q5-R4` では公式Windowsゲートと配布版自己試験を完走させる。
+
+NEXT_ACTION: Q1-Q5-R3はFAILのまま。追加commitで修正し、`Q1-Q5-R4` を提出する。

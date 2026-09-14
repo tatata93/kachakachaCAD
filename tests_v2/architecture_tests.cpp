@@ -816,6 +816,27 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
     Require(offenders.empty(),
         "nothing in the review pipeline needs PowerShell 7: " + Join(offenders));
 
+    // Windows PowerShell 5.1 reads a file with no byte order mark as the machine's
+    // ANSI code page, which is CP932 here. A single Japanese character written
+    // straight into a .ps1 therefore breaks the parser on the PC while looking
+    // perfectly fine in the cloud. It happened once; the scripts stay pure ASCII
+    // and build any Japanese they need from code points at run time.
+    std::vector<std::string> nonAscii;
+    for (const std::string& relative : required) {
+        if (relative.size() < 4 || relative.substr(relative.size() - 4) != ".ps1") { continue; }
+        const std::string text = ReadFile(RepoRoot() / relative);
+        int number = 1;
+        for (std::size_t index = 0; index < text.size(); ++index) {
+            if (text[index] == '\n') { ++number; continue; }
+            if (static_cast<unsigned char>(text[index]) > 127u) {
+                nonAscii.push_back(relative + ":" + std::to_string(number));
+                break;
+            }
+        }
+    }
+    Require(nonAscii.empty(),
+        "every review script is pure ASCII, so PowerShell 5.1 can parse it: " + Join(nonAscii));
+
     // 実行時領域は git に入れない。入れると PC ごとの事情が共有されてしまう。
     const std::string ignore = ReadFile(RepoRoot() / ".gitignore");
     Require(ignore.find(".ai-runtime/") != std::string::npos,

@@ -586,17 +586,26 @@ Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
 # The fixed diff handed to the reviewer must be the fixed diff, byte for byte.
 # Codex found this one: the output was being decoded with the console code page,
 # so every Japanese word came back as rubbish and the reviewer read rubbish.
+# The text is built from code points on purpose. These scripts must stay pure
+# ASCII: Windows PowerShell 5.1 reads a file with no byte order mark as CP932, so
+# a Japanese character written straight into a .ps1 breaks the parser. It broke
+# this very file once.
+function Get-Text { param([int[]]$Codes) $t = ''; foreach ($c in $Codes) { $t += [char]$c }; return $t }
+$wordReview   = Get-Text @(0x30EC, 0x30D3, 0x30E5, 0x30FC)          # review
+$wordRefusal  = Get-Text @(0x65AD, 0x308A, 0x65B9)                  # the way of refusing
+$wordRadius   = Get-Text @(0x66F2, 0x3052, 0x534A, 0x5F84)          # bend radius
+$wordScope    = Get-Text @(0x65E5, 0x672C, 0x8A9E, 0x306E, 0x898B, 0x51FA, 0x3057)  # Japanese heading
 $japanesePath = Join-Path $repo 'nihongo.txt'
-$japaneseLines = @('1行目 レビュー', '2行目 断り方', '3行目 曲げ半径')
+$japaneseLines = @(('1 ' + $wordReview), ('2 ' + $wordRefusal), ('3 ' + $wordRadius))
 [System.IO.File]::WriteAllText($japanesePath, ($japaneseLines -join "`r`n"),
     (New-Object System.Text.UTF8Encoding($false)))
-Git @('add', '-A'); Git @('commit', '-q', '-m', '日本語を含む変更')
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'a change with japanese in it')
 $jpHead = (Git @('rev-parse', 'HEAD')).Trim()
 $jpDecl = Join-Path $repo 'next-review-jp.json'
 Write-JsonAtomic -Path $jpDecl -Value ([pscustomobject]@{
     schema_version = 1; kind = 'review_request_declaration'
     request_id = 'T-UTF8-R1'; base_commit = $baseCommit
-    scope_ja = '日本語の見出しと本文が壊れないこと'; paths = @('nihongo.txt')
+    scope_ja = $wordScope; paths = @('nihongo.txt')
 }) | Out-Null
 & (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $jpDecl `
     -ReviewCommit $jpHead -TestedCommit $jpHead -BuildResult 'PASS' -TestResult 'PASS' `
@@ -605,14 +614,14 @@ Run-Dispatcher | Out-Null
 $jpDiffPath = Join-Path (Join-Path $paths.Processing 'T-UTF8-R1') 'diff.patch'
 $jpDiff = ''
 if (Test-Path -LiteralPath $jpDiffPath) { $jpDiff = [System.IO.File]::ReadAllText($jpDiffPath) }
-Check 'the packet keeps Japanese as Japanese' ($jpDiff -like '*1行目 レビュー*') 'the text came back mangled'
+Check 'the packet keeps Japanese as Japanese' ($jpDiff -like ('*1 ' + $wordReview + '*')) 'the text came back mangled'
 Check 'the packet keeps every changed line separate' `
-    (($jpDiff -like '*2行目 断り方*') -and ($jpDiff -like '*3行目 曲げ半径*')) 'lines were lost or joined'
+    (($jpDiff -like ('*2 ' + $wordRefusal + '*')) -and ($jpDiff -like ('*3 ' + $wordRadius + '*'))) 'lines were lost or joined'
 $jpRequestPath = Join-Path (Join-Path $paths.Processing 'T-UTF8-R1') 'request.md'
 $jpRequest = ''
 if (Test-Path -LiteralPath $jpRequestPath) { $jpRequest = [System.IO.File]::ReadAllText($jpRequestPath) }
 Check 'what to look at survives into the request the reviewer reads' `
-    ($jpRequest -like '*日本語の見出しと本文が壊れないこと*') 'the scope came back mangled'
+    ($jpRequest -like ('*' + $wordScope + '*')) 'the scope came back mangled'
 
 # 23 ------------------------------------------------------------------------
 # A request id becomes a file name and a folder name, so nothing else is accepted.

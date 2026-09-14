@@ -190,6 +190,12 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
 
+- 自分のミス(Codex の指摘ではない)
+  `.ps1` に日本語を直接書いたため、PC の PowerShell 5.1 が CP932 として読み、
+  自己試験そのものが構文エラーで落ちた(review_selftest_rc=1)。雲では気づけない。
+  **レビュー基盤の .ps1 は純 ASCII に保つ。**日本語が要るところは実行時に
+  コードポイントから組む。雲側の関所(architecture_tests)で毎回見る。
+
 - REQUEST_ID: AI-REVIEW-PIPELINE-DOCS-R5 / JUDGE-R5 / PROCESS-R5 / QUEUE-R5 / TESTS-R5
   REVIEWED_HEAD: f024a28
   ACTION: FIX_AND_REVIEW(**本物の Codex による初めての成立したレビュー**。

@@ -1,90 +1,81 @@
 {
   "schema_version": 1,
-  "kind": "review_request_declaration",
-  "request_id": "AI-REVIEW-PIPELINE-R8",
-  "base_commit": "f78d91bfb7c8658a64771f8f9fcec09c4910232f",
-  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R5 で16件、R6 で17件、R7 で受けた分もすべて直した。R1〜R4 はレビュー不成立(判定なし)。製品コード(src/)には触れていない。",
-  "policy": "docs/ai/CODEX_REVIEW_POLICY.md",
-  "segments": [
+  "kind": "review_request_declarations",
+  "requests": [
     {
-      "name": "QUEUE",
+      "request_id": "P1-EXTRUDE-R5",
+      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "review_profile": "HIGH_RISK",
+      "scope_ja": "Phase 1 押し出し。R4 の指摘を直した分。棚で選んだ向きが矢印と確定と保存まで通ること、内側の取りやめを外側が飲み込まないこと、断られたときに覚えている形と場面まで戻ること。",
       "paths": [
-        "tools/ai-local/review-dispatcher.ps1",
-        "tools/ai-local/review-enqueue.ps1",
-        "tools/ai-local/review-recover.ps1",
-        "tools/ai-local/stop-stale-dispatcher.ps1"
+        "src/apps/cad_next/V2PartCommands.cpp",
+        "src/apps/cad_next/V2ExtrudeInteractive.cpp",
+        "src/apps/cad_next/V2ExtrudeDock.cpp",
+        "src/apps/cad_next/V2ExtrudeDock.h",
+        "src/apps/cad_next/V2ExtrudeDialog.cpp",
+        "src/apps/cad_next/V2SelfTestExtrudePromise.cpp",
+        "src/apps/cad_next/V2EditCommands.cpp"
       ],
-      "scope_ja": "queue の受け取り・原子的な取得・復旧・居座った常駐の引き取り。",
       "focus": [
-        "依頼が無いときに起動し得る経路が無いか",
-        "File.Move による取得が二重レビューを防ぎ切れているか",
-        "取得が時間切れを超えたときの「詰まっている」判定が、動いているものを巻き込まないか",
-        "広すぎる変更を断る判定(AIR-E050)が、分けられない変更を不当に止めないか",
-        "R5 で指摘された箇所の直し方が、別の抜けを作っていないか"
-      ]
+        "棚で選んだ向きが、矢印・確定・保存・開き直しまで同じ値で通るか",
+        "「詳細...」で人が選んだ向きを、あとから上書きしていないか",
+        "途中で失敗したときに、Document の外に持っている覚えも一緒に戻るか",
+        "R4 の MISSING TESTS(向きの通し試験、取りやめの注入)が本当に増えているか"
+      ],
+      "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "name": "PROCESS",
+      "request_id": "Q1-Q5-R4",
+      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "review_profile": "HIGH_RISK",
+      "scope_ja": "Q1〜Q5。R3 の指摘を直した分。部材の分割と統合を「見せてから決める」にしたこと、無い部材番号を丸めないこと、分ける前に見せた候補と決めたあとの境目が同じものであること。",
       "paths": [
-        "tools/ai-local/review-common.ps1",
-        "tools/ai-local/review-runner.ps1"
+        "src/next/kachakacha/fabrication/BandPartition.cpp",
+        "src/next/kachakacha/fabrication/BandPartition.h",
+        "src/next/kachakacha/fabrication/PanelEdit.cpp",
+        "src/next/kachakacha/io/DocumentFileRead.cpp",
+        "src/next/kachakacha/app/CommandCatalog.cpp",
+        "src/apps/cad_next/V2PanelEditCommands.cpp",
+        "src/apps/cad_next/V2BendRadiusCommands.cpp",
+        "src/apps/cad_next/V2FabricationCommands.cpp",
+        "src/apps/cad_next/V2FabricationDock.cpp",
+        "src/apps/cad_next/V2FabricationDock.h",
+        "src/apps/cad_next/V2SelfTestApproxFlow.cpp",
+        "tests_v2/band_partition_tests.cpp"
       ],
-      "profile": "HIGH_RISK",
-      "scope_ja": "外部コマンドの起動・時間切れ・標準入出力・使い捨て worktree の固定。",
       "focus": [
-        "木ごと殺す処理と、読み取りの待ちに上限を付けた変更に抜けが無いか",
-        "detached worktree の固定が、レビュー中の branch 前進から守れているか",
-        "packet を worktree の中に置いたことで読み取り専用の検査に穴が開いていないか",
-        "存在しない CLI option を渡し得る経路が残っていないか",
-        "R5 で指摘された箇所の直し方が、別の抜けを作っていないか"
-      ]
+        "1度目は見せるだけ、2度目で決める、が道具を替えても取り消しても崩れないか",
+        "無い部材番号を丸めずに断るか。断るときに理由番号と一文があるか",
+        "分割・統合をまたいで、曲げ半径と固定の印が正しく引き継がれるか",
+        "数が合わないときの取りやめが、本当に元の状態へ戻すか",
+        "R3 の MISSING TESTS(取り消し・再読込をまたぐ3部材の引き継ぎ)が増えているか"
+      ],
+      "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "name": "JUDGE",
+      "request_id": "DIAG-REFUSAL-R1",
+      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "review_profile": "NORMAL",
+      "scope_ja": "断り方の作り。理由の無い断り方を作れなくした(Result::Failure が必ず 診断を持ち、GEN-E000 を足した)。あわせて 24 か所の直読みを FirstSummaryJa() に替えた。Windows の Debug で異常終了していた件の直し。",
       "paths": [
-        "tools/ai-local/review-profile.ps1",
-        "tools/ai-local/review-ledger.ps1",
-        "tools/ai-local/review-precheck.ps1",
-        "tools/ai-local/queue-status.ps1",
-        "tools/ai-local/clear-hold.ps1"
+        "src/next/kachakacha/base/Diagnostic.h",
+        "src/next/kachakacha/app/CursorInputSolve.cpp",
+        "src/next/kachakacha/app/MeasurePanel.cpp",
+        "src/apps/cad_next/V2MainWindow.cpp",
+        "src/apps/cad_next/V2MainWindow.h",
+        "src/apps/cad_next/V2Viewport.cpp",
+        "src/apps/cad_next/V2ViewportInput.cpp",
+        "src/apps/cad_next/V2ViewportPanel.cpp",
+        "src/apps/cad_next/V2WireCommands.cpp",
+        "src/apps/cad_next/V2GridDock.cpp",
+        "tests_v2/foundation_tests.cpp"
       ],
-      "scope_ja": "危険度の判定・追記専用台帳・依頼と機械の点検・状態表示。",
       "focus": [
-        "危険度の判定が、増減行だけを見て文脈を数えないこと",
-        "TIMEOUT/INFRA_ERROR/RETRYABLE_ERROR が不合格に化けないこと",
-        "検査を変えたときに古い判定が残らないこと(probe_revision)",
-        "同じ commit を別番号で二度レビューしない判定(AIR-E041)",
-        "R5 で指摘された箇所の直し方が、別の抜けを作っていないか"
-      ]
-    },
-    {
-      "name": "TESTS",
-      "paths": [
-        "tools/ai-local/review-selftest.ps1",
-        "tests_v2/architecture_tests.cpp"
+        "理由の無い失敗を作れる道が本当に残っていないか",
+        "24 か所の置き換えで、出る文言が変わってしまった所が無いか",
+        "GEN-E000 が出るのは「不具合」のときだけで、正当な断りに混ざっていないか"
       ],
-      "profile": "NORMAL",
-      "scope_ja": "基盤そのものの自己試験と、雲側の関所。",
-      "focus": [
-        "21 の場面が、実際に約束を押さえているか(素通りする確認が無いか)",
-        "自己試験が本物のレビューアーに届かないよう固定できているか",
-        "R5 で指摘された箇所の直し方が、別の抜けを作っていないか"
-      ]
-    },
-    {
-      "name": "DOCS",
-      "paths": [
-        "docs/ai/",
-        "AI_HANDOFF_STATE.md",
-        "AGENTS.md",
-        ".gitignore"
-      ],
-      "profile": "QUICK",
-      "scope_ja": "規約・仕組み・JSON の形・進捗台帳。",
-      "focus": [
-        "書いてあることと、実装の振る舞いが食い違っていないか",
-        "R5 で指摘された箇所の直し方が、別の抜けを作っていないか"
-      ]
+      "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     }
   ]
 }

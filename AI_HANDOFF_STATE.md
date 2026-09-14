@@ -11,43 +11,42 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R8
-  実際に固定されるのは区間ごとの依頼で、それぞれ別の REQUEST_ID・別の範囲を持つ。
-  - AI-REVIEW-PIPELINE-QUEUE-R8   … review-dispatcher / review-enqueue /
-      review-recover / stop-stale-dispatcher
-  - AI-REVIEW-PIPELINE-PROCESS-R8 … review-common / review-runner(HIGH_RISK)
-  - AI-REVIEW-PIPELINE-JUDGE-R8   … review-profile / review-ledger /
-      review-precheck / queue-status / clear-hold
-  - AI-REVIEW-PIPELINE-TESTS-R8   … review-selftest / tests_v2/architecture_tests.cpp
-  - AI-REVIEW-PIPELINE-DOCS-R8    … docs/ai/ / AI_HANDOFF_STATE.md / AGENTS.md /
-      .gitignore(QUICK)
-  BASE は5区間とも f78d91b。HEAD は PC が固定する。
-  連続 BLOCKING の数は区間ごとに別々に数える
-TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
-PHASE: 基盤
-STATUS: **HUMAN_DECISION_REQUIRED**(R5 で16件、R6 で17件、R7 で14件。
-  合計47件すべて直したが、5区間とも3回連続 BLOCKING に達した。
-  規約どおり基盤が受付を止めている。再開は人の判断で)
+REQUEST_ID: P1-EXTRUDE-R5 / Q1-Q5-R4 / DIAG-REFUSAL-R1(製品側へ戻る)
+TASK_ID: Phase 1 押し出し / Q1〜Q5 / 断り方の作り
+STATUS: READY_FOR_CODEX
 REVIEW_STATUS: PENDING_CODEX
-BASE: f78d91b
-HEAD: (PC が決める。ビルドして試験に通った commit)
-REVIEW_SCOPE: 上の5区間が示す範囲。区間の合計が、この依頼の全体
-REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二重レビューが
-  防げているか。レビュー中に HEAD が進んでも対象が動かないか。
-  落ちた後に queue が戻るか。想像した CLI option が混じっていないか
-BUILD: PC で確認する
-TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(35 の場面・86 の確認)
+BASE: f479814(3件とも同じ。R4・R3 を出したときの HEAD)
+HEAD: PC が決める。ビルドして試験に通った commit
+REVIEW_SCOPE:
+  - P1-EXTRUDE-R5 … 押し出しの UI と確定(7ファイル・129行)
+  - Q1-Q5-R4 … 部材の分割と統合、曲げ半径、保存(12ファイル・532行)
+  - DIAG-REFUSAL-R1 … 理由の無い断り方を作れなくした分(11ファイル・112行)
+  基盤(tools/ai-local/, docs/ai/)は**範囲に入れない**。
+  同じ HEAD でも、見せる範囲を分けている
+BUILD / TEST: PC が決める。雲: core 134/134、Qt 当て木 69 files
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
-### 次に出す(新しい経路で)
+### レビュー基盤は止まっている(HUMAN_DECISION_REQUIRED)
 
-- P1-EXTRUDE-R5 … R4 の指摘を直した分。BASE は R4 の HEAD、HEAD は PC が決める
-- Q1-Q5-R4 … R3 の指摘を直した分。同上
+R5 で16件、R6 で17件、R7 で14件。**合計47件をすべて直した**が、5区間とも
+3回連続 BLOCKING に達したので、規約どおり基盤が受付を止めている(AIR-E060)。
+判定は出ている(すべて BLOCKING)。**書き換えない。**
 
-R1〜R4 は**レビュー不成立**の履歴として残す。判定は一度も出ていない。
-**書き換えない。**不成立を FAIL と呼ばない(規約 §3 と同じ理由)。
+もう1周見せるときは、区間ごとにこう言う。
+
+```
+tools\ai-local\clear-hold.cmd AI-REVIEW-PIPELINE-JUDGE "見た。続けてよい"
+```
+
+そのうえで `tools/ai-local/next-review.json` に基盤の依頼(R8)を書けば、
+次のビルドから再開する。いまは製品側を優先している。
+
+### 基盤の R1〜R4 について
+
+AI-REVIEW-PIPELINE の R1〜R4 は**レビュー不成立**の履歴として残す。
+判定は一度も出ていない。**書き換えない。**
+不成立を FAIL と呼ばない(規約 §3 と同じ理由)。
 
 ### 解決済み: Codex CLI の場所(2026-09-14)
 

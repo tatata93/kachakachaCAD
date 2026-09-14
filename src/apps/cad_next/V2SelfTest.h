@@ -34,6 +34,10 @@ struct SelfTestCase {
 //! 言わないと、PC でしか出ない失敗を推測で直すことになる。
 [[nodiscard]] bool Explain(const char* what, bool ok);
 
+//! 落ちていなくても言う。調べた結果そのものが要るときに使う。
+//! 雲で確かめられないこと(OCCT の作り方の当たり外れ)を PC から持ち帰る道。
+void Note(const char* what);
+
 //! 道具・画面・視点・書き出し・ファイルのケース。
 [[nodiscard]] std::vector<SelfTestCase> BasicCases();
 

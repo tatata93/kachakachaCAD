@@ -494,11 +494,9 @@ using kachakacha::v2::domain::EntityKind;
         }
         const auto built = window.TryBuildSurface(trial);
         made += built.isEmpty() ? 1 : 0;
-        (void)Explain((std::string(attempt.name) + ": "
-                          + (built.isEmpty() ? std::string("作れた")
-                                             : built.toStdString()))
-                          .c_str(),
-            true);
+        Note((std::string(attempt.name) + ": "
+                 + (built.isEmpty() ? std::string("作れた") : built.toStdString()))
+                 .c_str());
     }
     return Explain((std::string("少なくとも1つの作り方で面ができる(通ったのは ")
                        + std::to_string(made) + " 通り)").c_str(),

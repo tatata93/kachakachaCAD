@@ -115,6 +115,11 @@ bool Explain(const char* what, bool ok)
     return ok;
 }
 
+void Note(const char* what)
+{
+    std::cerr << "  調べた: " << what << '\n';
+}
+
 int RunSelfTest()
 {
     const std::vector<SelfTestCase> cases = AllCases();

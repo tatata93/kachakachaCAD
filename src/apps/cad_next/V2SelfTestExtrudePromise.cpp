@@ -188,7 +188,10 @@ namespace {
                 == kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart)) {
         return false;
     }
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    // 1回目より長く押す。同じ場所へ同じ大きさで短く押すと、
+    // 足した形が元の立体の中へすっぽり入り、体積が変わらないので
+    // 「重なっていません」(EXT-004)で断られる。それは正しい断り方である。
+    window.ExtrudeDock().SetDistanceMm(20.0);
     window.RunCommand("part.extrude");   // 確定
     // 保存された作り方が「足す」になっていること。表示だけ合っていて実行が違う、を防ぐ。
     bool found = false;

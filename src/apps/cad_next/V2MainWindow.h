@@ -476,6 +476,9 @@ public:
         }
         return count;
     }
+    //! 直前の作り直しで作れなかったものの名前。作れていれば空。
+    //! 帯はすぐ書き換わるので、試験と診断の一覧がここを読む。
+    [[nodiscard]] const QString& RebuildProblems() const { return rebuildProblems_; }
     [[nodiscard]] int FabricationModelCount() const
     {
         return static_cast<int>(fabricationModels_.size());
@@ -871,6 +874,8 @@ private:
     };
     //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
     bool facingFromBehind_ = false;
+    //! 直前の作り直しで作れなかったものの名前。作れていれば空。
+    QString rebuildProblems_;
     void CollectFacingTarget(FacingTarget& target) const;
     //! 向きを持つ相手が見つかった。最初の1つだけが向きを決める。
     static void NoteFacingDirection(FacingTarget& target,

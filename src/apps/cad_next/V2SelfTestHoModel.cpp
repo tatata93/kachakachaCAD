@@ -59,6 +59,21 @@ using kachakacha::v2::domain::EntityKind;
     return count;
 }
 
+//! 近似モデルが無いときに、何が作れなかったのかを言う。
+//! 「近似モデルが見本に入っている」とだけ書いて落ちると、原因が残らない。
+[[nodiscard]] std::string WhyNoModel(V2MainWindow& window)
+{
+    std::string text = "近似モデルが見本に入っている";
+    if (window.FabricationModelCount() >= 1) {
+        return text;
+    }
+    const std::string problems = window.RebuildProblems().toStdString();
+    text += problems.empty() ? "(作り直せなかったものは無い。元の面が空か)"
+                             : "(作り直せなかったもの: " + problems + ")";
+    text += " 帯は " + window.StatusText().toStdString();
+    return text;
+}
+
 } // namespace
 
 //! TM-01/04〜09。見本が開けて、中身とまとまりがそろっている。
@@ -149,7 +164,8 @@ using kachakacha::v2::domain::EntityKind;
     one.entityIds.push_back(surface);
     viewport.SetSelection(one);
     window.RunCommand("view.align_selection");
-    if (!Explain((std::string("曲がった面でも断らない(帯は ")
+    if (!Explain((std::string("曲がった面でも断らない(作り直せなかったもの: "
+                     + window.RebuildProblems().toStdString() + " / 帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             !window.StatusText().contains(QStringLiteral("選んでください")))) {
         return false;
@@ -194,7 +210,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
         return false;
     }
-    if (!Explain("近似モデルが見本に入っている", window.FabricationModelCount() >= 1)) {
+    if (!Explain(WhyNoModel(window).c_str(), window.FabricationModelCount() >= 1)) {
         return false;
     }
     // 0 → 25 → 50 → 75 → 100 と動かす。どれも通ること。
@@ -266,7 +282,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
         return false;
     }
-    if (!Explain("近似モデルが見本に入っている", window.FabricationModelCount() >= 1)) {
+    if (!Explain(WhyNoModel(window).c_str(), window.FabricationModelCount() >= 1)) {
         return false;
     }
     // まず 100% にして、自動の半径が出ることを見る。
@@ -315,7 +331,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
         return false;
     }
-    if (!Explain("近似モデルが見本に入っている", window.FabricationModelCount() >= 1)) {
+    if (!Explain(WhyNoModel(window).c_str(), window.FabricationModelCount() >= 1)) {
         return false;
     }
     window.SetAssemblyChooser([](double) { return std::optional<double>(100.0); });

@@ -228,6 +228,7 @@ void V2MainWindow::RebuildKernelShapes()
     guideEdges_.clear();
     guideSamples_.clear();
     fabricationModels_.clear();
+    rebuildProblems_.clear();
     // 役割表も文書の線を指している。前の文書の表を残すと、無い線の行が並ぶ。
     guideTable_ = kachakacha::v2::modeling::GuideTable{};
 
@@ -293,6 +294,9 @@ void V2MainWindow::RebuildKernelShapes()
         }
         names += QString::fromStdString(name);
     }
+    // 帯はすぐ次の操作で書き換わる。作り直せなかったものは窓が覚えておく。
+    // 覚えていないと、試験が落ちたときに「何が作れなかったのか」が残らない。
+    rebuildProblems_ = names;
     SetStatus(QStringLiteral("開きました。%1個の形を作り直しました。"
                              "%2 は作り直せませんでした。")
             .arg(made)

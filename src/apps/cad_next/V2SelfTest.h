@@ -64,6 +64,9 @@ struct SelfTestCase {
 //! 押し出しの約束(下見中は文書不変・1操作1取り消し・選んだ演算の保持)。
 [[nodiscard]] std::vector<SelfTestCase> ExtrudePromiseCases();
 
+//! 押し出しの依存関係(面の縁の線・相手の立体を入力として記録しているか)。
+[[nodiscard]] std::vector<SelfTestCase> ExtrudeGraphCases();
+
 //! HO 流線形前頭部を使った総合試験(TM / UI-TM)。
 [[nodiscard]] std::vector<SelfTestCase> HoModelCases();
 

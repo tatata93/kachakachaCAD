@@ -337,14 +337,15 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
     const kachakacha::v2::kernel::ExtrudeBuildResult& built)
 {
-    session_->GetDocument().BeginCompound("押し出し");
+    // まとめの係。`Commit()` を呼ばずに抜けたら、始める前へ戻り履歴も増えない。
+    // 「一度入れてから取り消す」方式だと、押す前にやっていた別の操作を
+    // 取り消してしまう(Codex P1-EXTRUDE-R2 B1)。
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+        "押し出し");
     std::vector<kachakacha::v2::base::EntityId> faceWires;
     if (facePushPull_ && !CommitFaceProfileWires(faceWires)) {
-        // 途中で入らなかった。まとめごと捨てる。外周だけ残さない。
-        session_->GetDocument().EndCompound();
-        (void)session_->GetDocument().Undo();
+        // 途中で入らなかった。まとめごと無かったことにする。外周だけ残さない。
         ForgetFaceProfile();
-        AdoptCurrentDocument();
         return;
     }
     kachakacha::v2::domain::ExtrudeDefinition definition;
@@ -373,14 +374,30 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     for (const auto& wire : built.sideBoundaryWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
-    AdoptExtrudeResult(choice, definition, built, edges);
+    // 押し出しが何に依っているかを明示して渡す。画面の選択を読み直させない。
+    // 読み直すと、記録が指す番号と依存の番号が食い違い、
+    // 元を編集しても作り直されない(R2 B2)。
+    std::vector<kachakacha::v2::base::EntityId> inputs = definition.profiles;
+    if (boolean && !plan.targetSolid.IsNil()) {
+        inputs.push_back(plan.targetSolid);
+    }
+    if (!AdoptExtrudeResult(choice, definition, built, edges, inputs)) {
+        ForgetFaceProfile();
+        return;   // まとめごと無かったことにする。途中の形を残さない。
+    }
     // 使い切った元の立体は隠す。出したままだと加工前と加工後が2つ並んで見える。
     // 消さないのは、作り方をたどれなくしないためである(足し引きと同じ扱い)。
     if (boolean && !plan.targetSolid.IsNil()) {
-        (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
-            {plan.targetSolid}, kachakacha::v2::domain::Visibility::Hidden));
+        const auto hidden = session_->GetDocument().Run(
+            kachakacha::v2::document::SetVisibilityCommand({plan.targetSolid},
+                kachakacha::v2::domain::Visibility::Hidden));
+        if (!hidden.committed) {
+            ReportDiagnostics(hidden.diagnostics);
+            ForgetFaceProfile();
+            return;
+        }
     }
-    session_->GetDocument().EndCompound();
+    transaction.Commit();
     ForgetFaceProfile();
     AdoptCurrentDocument();
 }
@@ -399,10 +416,11 @@ std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::FaceProfiles
     return profiles;
 }
 
-void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
+bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
     const kachakacha::v2::domain::ExtrudeDefinition& definition,
     const kachakacha::v2::kernel::ExtrudeBuildResult& built,
-    const std::vector<CurveSegment>& edges)
+    const std::vector<CurveSegment>& edges,
+    const std::vector<kachakacha::v2::base::EntityId>& inputs)
 {
     // 出来た立体を全部残す。先頭の1つだけを覚えていたので、
     // 穴あきの輪郭などで2つ以上出来たときに、残りが消えていた。
@@ -419,7 +437,10 @@ void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
             : std::string("押し出し");
         const auto made = AddPartFeature(kachakacha::v2::domain::FeatureType::Extrude,
             std::move(copy), built.parts[index].handle,
-            index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str());
+            index == 0 ? edges : std::vector<CurveSegment>{}, label.c_str(), inputs);
+        if (made.IsNil()) {
+            return false;   // 1つでも入らなければ、全体を無かったことにする。
+        }
         if (index == 0) {
             partId = made;
         }
@@ -434,25 +455,26 @@ void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     int wires = 0;
     if (choice.makeEndProfileWire) {
         for (const auto& wire : built.endProfileWires) {
-            if (!AddPlainWire(wire, "押し出し先の輪郭").IsNil()) {
-                ++wires;
+            if (AddPlainWire(wire, "押し出し先の輪郭").IsNil()) {
+                return false;
             }
+            ++wires;
         }
     }
     if (choice.makeSideBoundaryWires) {
         for (const auto& wire : built.sideBoundaryWires) {
-            if (!AddPlainWire(wire, "側面の境界").IsNil()) {
-                ++wires;
+            if (AddPlainWire(wire, "側面の境界").IsNil()) {
+                return false;
             }
+            ++wires;
         }
     }
     // 作り終えたら下見と矢印を片付ける。残すと、もう作られない形が画面に残る。
     EndExtrudePreview();
     if (partCount == 0) {
-        AdoptCurrentDocument();
         SetStatus(QStringLiteral("押し出し: ワイヤーを %1 本作りました(立体は作っていません)。")
                 .arg(wires));
-        return;
+        return true;
     }
     SetStatus(QStringLiteral("押し出し: 厚み %1 mm の部品を %2 個"
                              "、ワイヤーを %3 本作りました(体積 %4 mm3)。")
@@ -460,6 +482,7 @@ void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
             .arg(static_cast<int>(partCount))
             .arg(wires)
             .arg(built.totalVolumeMm3));
+    return true;
 }
 
 void V2MainWindow::RunWireCage()
@@ -585,7 +608,7 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     kachakacha::v2::domain::FeatureDefinition definition,
     kachakacha::v2::modeling::KernelShapeHandle handle,
     const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
-    const char* labelJa)
+    const char* labelJa, const std::vector<kachakacha::v2::base::EntityId>& inputs)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -597,7 +620,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
     feature.type = type;
     feature.displayName = labelJa;
-    feature.inputEntityIds = viewport_->Selection().entityIds;
+    // 何に依っているかは **呼ぶ側が渡す。** 画面の選択を読み直すと、
+    // 記録が指す番号と依存の番号が食い違い、元を編集しても作り直されない(R2 B2)。
+    feature.inputEntityIds = inputs.empty() ? viewport_->Selection().entityIds : inputs;
     feature.definition = std::move(definition);
 
     Entity entity;

@@ -233,6 +233,23 @@ void Document::EndCompound()
     compoundLabel_.clear();
 }
 
+void Document::AbortCompound()
+{
+    if (compoundDepth_ == 0) {
+        return;
+    }
+    --compoundDepth_;
+    if (compoundDepth_ > 0 || !compoundBefore_.has_value()) {
+        return;
+    }
+    // 始める前へ戻す。**履歴は増やさない。**
+    // 一度入れてから取り消す方式だと、押す前に利用者がやっていた別の操作を
+    // 取り消してしまう。ここは「無かったこと」にする。
+    snapshot_ = *compoundBefore_;
+    compoundBefore_.reset();
+    compoundLabel_.clear();
+}
+
 std::string Document::UndoLabel() const
 {
     return undoStack_.empty() ? std::string() : undoStack_.back().label;

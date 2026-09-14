@@ -406,10 +406,13 @@ public:
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
     //! 押し出しの結果を文書へ入れる。作るものは利用者が選んだとおりにする。
-    void AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
+    //! 出来た形を文書へ足す。1つでも入らなければ偽を返す。
+    //! 呼ぶ側はまとめごと無かったことにする。途中の形を残さない。
+    [[nodiscard]] bool AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
         const kachakacha::v2::domain::ExtrudeDefinition& definition,
         const kachakacha::v2::kernel::ExtrudeBuildResult& built,
-        const std::vector<kachakacha::v2::geometry::CurveSegment>& edges);
+        const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
+        const std::vector<kachakacha::v2::base::EntityId>& inputs);
     //! 選んだ面に厚みを付けて立体にする。工程2の「面をソリッド化する」。
     void RunThickenSurface();
     //! 面と作業平面の間を埋めて立体にする(任意の面まで)。
@@ -691,11 +694,14 @@ private:
     void RunBoolean(bool cut);
     //! 出来た部品を文書へ足す。形は持たせず、作り方だけを持たせる。
     //! 足せたら、その部品の EntityId を返す。足せなければ空を返す。
+    //! `inputs` は「何に依っているか」。空なら画面の選択を使う(旧来の呼び口)。
+    //! 押し出しは必ず明示して渡す。記録と依存の番号を必ず一致させるため。
     kachakacha::v2::base::EntityId AddPartFeature(kachakacha::v2::domain::FeatureType type,
         kachakacha::v2::domain::FeatureDefinition definition,
         kachakacha::v2::modeling::KernelShapeHandle handle,
         const std::vector<kachakacha::v2::geometry::CurveSegment>& edges,
-        const char* labelJa);
+        const char* labelJa,
+        const std::vector<kachakacha::v2::base::EntityId>& inputs = {});
     //! 部品の辺を場面へ出し直す。立体そのものはまだ描かない。
     void RefreshPartEdges();
     //! 押し出しの距離。数値入力が付くまでの既定値(プラ板0.5mm)。

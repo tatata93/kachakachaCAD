@@ -850,6 +850,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     kachakacha_add_v2_test(scale_tests tests_v2/scale_tests.cpp)
     kachakacha_add_v2_test(measurement_tests tests_v2/measurement_tests.cpp)
     kachakacha_add_v2_test(document_tests tests_v2/document_tests.cpp)
+    kachakacha_add_v2_test(compound_abort_tests tests_v2/compound_abort_tests.cpp)
     kachakacha_add_v2_test(json_tests tests_v2/json_tests.cpp)
     kachakacha_add_v2_test(zip_tests tests_v2/zip_tests.cpp)
     kachakacha_add_v2_test(document_file_tests tests_v2/document_file_tests.cpp)
@@ -923,6 +924,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GroupCommands.cpp
         src/apps/cad_next/V2FacePushPull.cpp
         src/apps/cad_next/V2SelfTestExtrudePromise.cpp
+        src/apps/cad_next/V2SelfTestExtrudeGraph.cpp
         src/apps/cad_next/V2SelfTestFacing.cpp
         src/apps/cad_next/V2SelfTestGroup.cpp
         src/apps/cad_next/V2SelfTestHoModel.cpp

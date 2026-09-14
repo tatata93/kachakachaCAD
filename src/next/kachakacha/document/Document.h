@@ -117,6 +117,45 @@ public:
     //! 連続ドラッグを1つのUndo単位にまとめる。Begin と End で挟む。
     void BeginCompound(std::string label);
     void EndCompound();
+    //! まとめを **無かったことにする。** 始める前の状態へ戻し、履歴も増やさない。
+    //!
+    //! 途中で1つでも失敗したときに使う。「一度入れてから取り消す」のではない ──
+    //! それだと、押す前に利用者がやっていた別の操作を取り消してしまう。
+    //! 入れ子の中では効かない(いちばん外側だけが戻せる)。
+    void AbortCompound();
+
+    //! まとめを開けたら必ず閉じる係。途中で return しても閉じ忘れない。
+    //!
+    //! 何も言わずに壊れたら `AbortCompound`、`Commit()` を呼べば `EndCompound`。
+    //! 「成功と言わなければ失敗」にしておくと、返り値の見落としが事故にならない。
+    class Transaction {
+    public:
+        Transaction(Document& document, std::string label) : document_(&document)
+        {
+            document_->BeginCompound(std::move(label));
+        }
+        Transaction(const Transaction&) = delete;
+        Transaction& operator=(const Transaction&) = delete;
+        Transaction(Transaction&&) = delete;
+        Transaction& operator=(Transaction&&) = delete;
+        ~Transaction()
+        {
+            if (document_ != nullptr) {
+                document_->AbortCompound();
+            }
+        }
+        //! ここまでを1つの操作として残す。
+        void Commit()
+        {
+            if (document_ != nullptr) {
+                document_->EndCompound();
+                document_ = nullptr;
+            }
+        }
+
+    private:
+        Document* document_ = nullptr;
+    };
     [[nodiscard]] bool InCompound() const noexcept { return compoundDepth_ > 0; }
 
     [[nodiscard]] bool CanUndo() const noexcept { return !undoStack_.empty(); }

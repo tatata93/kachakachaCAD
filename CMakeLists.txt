@@ -1033,9 +1033,12 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
             NAME v2_cad_next_smoke
             COMMAND $<TARGET_FILE:kachakacha_cad_next> --self-test
         )
+        # 自己試験は増える一方である(2026-09-14 で 225 件、PC で約 200 秒)。
+        # 120 秒のままだと、落ちてもいないのに時間切れで赤くなる。
+        # 増えるたびに直すのではなく、余裕を持たせておく。
         set_tests_properties(v2_cad_next_smoke PROPERTIES
             ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-            TIMEOUT 120
+            TIMEOUT 900
         )
 
         # 配る形そのものを試す(WP-12)。

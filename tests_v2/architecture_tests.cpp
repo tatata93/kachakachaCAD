@@ -730,6 +730,77 @@ KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_l
         "the scanner leaves plain ASCII paths alone");
 }
 
+//! レビュー基盤の PowerShell に、Windows PowerShell 5.1 で動かない書き方が
+//! 混じっていないかを見る。PC でしか動かせない道具なので、雲の側で先に落とす。
+[[nodiscard]] std::vector<std::string> PowerShell7OnlyTokensIn(const std::string& line)
+{
+    std::vector<std::string> hits;
+    // 行内の注釈は見ない。説明文に書いてあるのは違反ではない。
+    const std::string body = line.substr(0, line.find('#'));
+    static const char* const tokens[] = {
+        "??", "?.", "&&", "||", "-AsHashtable", "-Parallel", ".ArgumentList",
+        "$IsWindows", "$IsLinux",
+    };
+    for (const char* token : tokens) {
+        if (body.find(token) != std::string::npos) { hits.push_back(token); }
+    }
+    return hits;
+}
+
+KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_windows_powershell)
+{
+    // レビュー基盤は PC の上でしか動かない。動かないものを動くことにしないために、
+    // 「ファイルがあること」と「5.1 で死ぬ書き方が無いこと」だけは雲で毎回見る。
+    const std::vector<std::string> required = {
+        "tools/ai-local/review-common.ps1",
+        "tools/ai-local/review-precheck.ps1",
+        "tools/ai-local/review-enqueue.ps1",
+        "tools/ai-local/review-dispatcher.ps1",
+        "tools/ai-local/review-runner.ps1",
+        "tools/ai-local/review-ledger.ps1",
+        "tools/ai-local/review-recover.ps1",
+        "tools/ai-local/queue-status.ps1",
+        "tools/ai-local/review-selftest.ps1",
+        "tools/ai-local/start-dispatcher.cmd",
+        "docs/ai/CODEX_REVIEW_POLICY.md",
+        "docs/ai/LOCAL_REVIEW_PIPELINE.md",
+    };
+    std::vector<std::string> missing;
+    for (const std::string& relative : required) {
+        if (!std::filesystem::exists(RepoRoot() / relative)) { missing.push_back(relative); }
+    }
+    Require(missing.empty(), "the review pipeline is complete: " + Join(missing));
+
+    std::vector<std::string> offenders;
+    for (const std::string& relative : required) {
+        if (relative.size() < 4 || relative.substr(relative.size() - 4) != ".ps1") { continue; }
+        std::istringstream stream(ReadFile(RepoRoot() / relative));
+        std::string line;
+        int number = 0;
+        while (std::getline(stream, line)) {
+            ++number;
+            for (const std::string& token : PowerShell7OnlyTokensIn(line)) {
+                offenders.push_back(relative + ":" + std::to_string(number) + " " + token);
+            }
+        }
+    }
+    Require(offenders.empty(),
+        "nothing in the review pipeline needs PowerShell 7: " + Join(offenders));
+
+    // 実行時領域は git に入れない。入れると PC ごとの事情が共有されてしまう。
+    const std::string ignore = ReadFile(RepoRoot() / ".gitignore");
+    Require(ignore.find(".ai-runtime/") != std::string::npos,
+        ".ai-runtime/ is ignored by git");
+
+    // 走査そのものが効いているかを、その場で確かめる。
+    Require(!PowerShell7OnlyTokensIn("$x = $a ?? $b").empty(),
+        "the scanner sees a PowerShell 7 only operator");
+    Require(PowerShell7OnlyTokensIn("# ?? is not available in 5.1").empty(),
+        "the scanner leaves an explanation in a comment alone");
+    Require(PowerShell7OnlyTokensIn("$psi.Arguments = $line").empty(),
+        "the scanner leaves the 5.1 way alone");
+}
+
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)
 {
     // 走査が本当に効いているかを、その場で作った文字列で確かめる。

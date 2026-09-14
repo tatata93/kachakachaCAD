@@ -5,36 +5,43 @@
 
 ## 現在
 
-REQUEST_ID: P1-EXTRUDE-R4
-TASK_ID: Phase 1 押し出し
-PHASE: 1
-STAGE: 1/1
-STATUS: READY_FOR_CODEX(R3 の B1〜B3 を直した)
+**レビューの通し方が変わった。** Codex に10分ごとに仕事を探させるのはやめた。
+PC が本当にビルドしてテストに通ったときだけ、PowerShell の常駐が Codex を1回起こす。
+仕組みは `docs/ai/LOCAL_REVIEW_PIPELINE.md`、Codex 側の規約は
+`docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
+をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
+
+REQUEST_ID: AI-REVIEW-PIPELINE-R1
+TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
+PHASE: 基盤
+STATUS: READY_FOR_CODEX(新しい経路の最初の1件。この依頼自身が新経路を通る)
 REVIEW_STATUS: PENDING_CODEX
-BASE: bd375c9
-HEAD: f479814
-REVIEW_SCOPE: bd375c9..f479814 のうち、押し出し・Document の入れ子・並びの外読み
-REVIEW_FOCUS: 内側の取りやめを外側が飲み込まないこと。断られたときに
-  覚えている形と場面まで戻ること。Windows の Debug が止まらないこと
-BUILD: PASS(Windows MSVC 2022 x64 / 雲 core g++)
-TEST: PASS(**Windows CTest 141/141、アプリ自己試験 225/225**、
-  雲 core 134/134、並びの検査つき Debug 134/134、Qt 当て木 69 files)
+BASE: f78d91b
+HEAD: (PC が決める。ビルドして試験に通った commit)
+REVIEW_SCOPE: tools/ai-local/ 一式、docs/ai/CODEX_REVIEW_POLICY.md、
+  docs/ai/LOCAL_REVIEW_PIPELINE.md、.gitignore の .ai-runtime/ 追加
+REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二重レビューが
+  防げているか。レビュー中に HEAD が進んでも対象が動かないか。
+  落ちた後に queue が戻るか。想像した CLI option が混じっていないか
+BUILD: PC で確認する
+TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
+  ＋ PC で `review-selftest.ps1`(12 項目)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
-REQUEST_ID: Q1-Q5-R3
-TASK_ID: Q1〜Q5(正対・まとまり・HO見本・総合試験・曲げ半径・部材編集)
-PHASE: Q1-Q5
-STATUS: READY_FOR_CODEX(R2 の B1〜B3 を直した)
-REVIEW_STATUS: PENDING_CODEX
-BASE: bd375c9
-HEAD: f479814
-REVIEW_SCOPE: bd375c9..f479814 のうち、Q1〜Q5 に関わる分
-REVIEW_FOCUS: 無い部材番号を丸めないこと。分ける前に見せた候補と、
-  決めたあとに変える境目が同じものであること
-BUILD / TEST: 上と同じ固定範囲。同じ数字
-CREATED_AT: 2026-09-14
-UPDATED_AT: 2026-09-14
+### 次に出す(新しい経路で)
+
+- P1-EXTRUDE-R5 … R4 の指摘を直した分。BASE は R4 の HEAD、HEAD は PC が決める
+- Q1-Q5-R4 … R3 の指摘を直した分。同上
+
+R1〜R4 は FAIL の履歴として残す。**書き換えない。**
+
+### 人が見るところ
+
+- いまの queue: `tools\ai-local\queue-status.cmd`
+- 常駐が止まっていたら: `tools\ai-local\start-dispatcher.cmd`
+- レビュー結果: `.ai-runtime\results\<REQUEST_ID>.md`
+- 起きたこと全部(追記専用): `.ai-runtime\logs\review-ledger.jsonl`
 
 ## この固定範囲で、ほかに直したこと(Codex の指摘の外)
 

@@ -36,3 +36,7 @@ compile_commands.json
 __pycache__/
 *.pyc
 *.bak
+
+# ローカル・イベント駆動レビュー基盤の実行時領域。
+# 依頼・結果・台帳・鍵・使い捨て worktree はこの PC の中だけのもの。
+.ai-runtime/

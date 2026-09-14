@@ -916,6 +916,10 @@ public:
     //! 部材ごとの曲げと半径。測った値に、固定してある分を重ねたもの。
     [[nodiscard]] std::vector<kachakacha::v2::fabrication::BendRadius>
     BendRadiiNow() const;
+    //! その作り方で面を作れるか試す。文書は変えない。
+    //! 作れたら空、作れなければ断った理由を返す。試験が作り方を選ぶために使う。
+    [[nodiscard]] QString TryBuildSurface(
+        const kachakacha::v2::domain::CreateGuideSurfaceDefinition& definition);
     //! いまの近似モデルの作り方。無ければ空。
     [[nodiscard]] const kachakacha::v2::domain::CreateFabricationModelDefinition*
     CurrentFabricationDefinition() const;

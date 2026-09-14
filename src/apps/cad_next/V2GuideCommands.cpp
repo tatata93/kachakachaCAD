@@ -282,3 +282,27 @@ void V2MainWindow::CreateGuideSurfaceFromSelection()
     (void)AdoptGuideSurface(made.table, *built, viewport_->Selection().entityIds,
         "形状ガイド");
 }
+
+//! その作り方で面を作れるか試す。**文書は変えない。**
+//!
+//! 雲側は OCCT を組み立てられないので、どの作り方なら作れるかを机上で決めると
+//! 往復が増える。ここを通せば、1回の往復で全部の作り方の結果が分かる。
+QString V2MainWindow::TryBuildSurface(
+    const kachakacha::v2::domain::CreateGuideSurfaceDefinition& definition)
+{
+    const auto table = kachakacha::v2::app::GuideTableFromDefinition(
+        session_->GetDocument(), session_->Scene(), definition);
+    if (!table.HasValue()) {
+        const auto& first = table.Diagnostics().front();
+        return QString::fromStdString(first.code + " " + first.summaryJa + " "
+            + first.detailsJa);
+    }
+    const QString before = StatusText();
+    const auto built = BuildSurfaceFromTable(table.Value(), true);
+    const QString why = StatusText();
+    SetStatus(before);
+    if (built.has_value()) {
+        return QString();
+    }
+    return why.isEmpty() ? QStringLiteral("理由が出ませんでした。") : why;
+}

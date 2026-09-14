@@ -16,12 +16,15 @@
 #include "kachakacha/app/GroupTree.h"
 #include "kachakacha/app/RailwayNoseHoSample.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/BendRadius.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QString>
 
 #include <cmath>
 #include <cstddef>
+#include <variant>
 #include <string>
 #include <vector>
 
@@ -418,6 +421,90 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("開き直しても形が同じ", shapeOf() == after);
 }
 
+//! HO の前頭部の面が、どの作り方なら作れるのかを実際に試して言う。
+//!
+//! 雲側は OCCT を組み立てられないので、作り方を選ぶ判断が机上になる。
+//! 一度で答えが出るように、同じ線の組で全部の作り方を試し、
+//! 通ったもの・断られた理由・ずれをその場に出す。
+//!
+//! ここは「少なくとも1つの作り方で面ができる」ことを見る。
+//! 1つも通らなければ、この見本は作れない。それは隠さない。
+[[nodiscard]] bool CaseHoSurfaceMethodSurvey(V2MainWindow& window)
+{
+    using kachakacha::v2::domain::CreateGuideSurfaceDefinition;
+    using kachakacha::v2::modeling::ChainRole;
+    using kachakacha::v2::modeling::GuideSurfaceMethod;
+
+    if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
+        return false;
+    }
+    const CreateGuideSurfaceDefinition* source = nullptr;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        if (const auto* definition =
+                std::get_if<CreateGuideSurfaceDefinition>(&feature.definition)) {
+            source = definition;
+        }
+    }
+    if (!Explain("面の作り方が見本にある", source != nullptr)) {
+        return false;
+    }
+    // いまの作り方の並びから、前後に走る線と断面を拾い分ける。
+    std::vector<std::size_t> along;
+    std::vector<std::size_t> across;
+    for (std::size_t index = 0; index < source->chains.size(); ++index) {
+        const auto role = static_cast<ChainRole>(source->roles[index]);
+        if (role == ChainRole::GuideU) {
+            along.push_back(index);
+        } else {
+            across.push_back(index);
+        }
+    }
+    if (!Explain("前後の線と断面がそろう", !along.empty() && across.size() >= 2)) {
+        return false;
+    }
+
+    struct Attempt {
+        const char* name;
+        GuideSurfaceMethod method;
+        ChainRole alongRole;
+        ChainRole acrossRole;
+        bool useAlong;
+    };
+    const Attempt attempts[] = {
+        {"ロフト(断面だけ)", GuideSurfaceMethod::LoftSections, ChainRole::GuideU,
+            ChainRole::Section, false},
+        {"案内付きロフト", GuideSurfaceMethod::GuidedLoft, ChainRole::GuideU,
+            ChainRole::Section, true},
+        {"曲線網", GuideSurfaceMethod::GordonNetwork, ChainRole::GuideU,
+            ChainRole::GuideV, true},
+    };
+    int made = 0;
+    for (const Attempt& attempt : attempts) {
+        CreateGuideSurfaceDefinition trial;
+        trial.method = static_cast<int>(attempt.method);
+        if (attempt.useAlong) {
+            for (const std::size_t index : along) {
+                trial.chains.push_back(source->chains[index]);
+                trial.roles.push_back(static_cast<int>(attempt.alongRole));
+            }
+        }
+        for (const std::size_t index : across) {
+            trial.chains.push_back(source->chains[index]);
+            trial.roles.push_back(static_cast<int>(attempt.acrossRole));
+        }
+        const auto built = window.TryBuildSurface(trial);
+        made += built.isEmpty() ? 1 : 0;
+        (void)Explain((std::string(attempt.name) + ": "
+                          + (built.isEmpty() ? std::string("作れた")
+                                             : built.toStdString()))
+                          .c_str(),
+            true);
+    }
+    return Explain((std::string("少なくとも1つの作り方で面ができる(通ったのは ")
+                       + std::to_string(made) + " 通り)").c_str(),
+        made > 0);
+}
+
 //! UI-TM-19。見本を保存して開き直しても、まとまりと中身が残る。
 [[nodiscard]] bool CaseHoSampleSurvivesSaveAndOpen(V2MainWindow& window)
 {
@@ -479,6 +566,8 @@ std::vector<SelfTestCase> HoModelCases()
         {"HOの見本が保存して開き直しても残る", CaseHoSampleSurvivesSaveAndOpen},
         {"曲げ半径は部材ごとに持ち、保存して開き直しても形ごと残る",
             CaseHoRadiusIsPerPartAndPersisted},
+        {"HOの前頭部の面がどの作り方で作れるかを実際に試す",
+            CaseHoSurfaceMethodSurvey},
         {"HOの見本の上でも道具替えが綺麗", CaseHoToolSwitchStaysClean},
     };
 }

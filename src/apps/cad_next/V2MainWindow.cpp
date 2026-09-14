@@ -1189,6 +1189,9 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
     session_->SelectTool(tool);
+    // 道具を替えたら、見せているだけの案は捨てる。
+    // 文書は触っていないので、捨てるだけで元どおりである。
+    ForgetPendingPartition();
     viewport_->OnToolChanged();
     for (std::size_t index = 0; index < toolActions_.size(); ++index) {
         toolActions_[index]->setChecked(kToolOrder[index] == tool);

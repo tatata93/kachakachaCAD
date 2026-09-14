@@ -19,6 +19,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/domain/Feature.h"
 
 #include <QString>
@@ -264,6 +265,7 @@ using kachakacha::v2::domain::Visibility;
     // 番号の扱いを先に見る。**丸めない。** 無い番号なら何も変わらない。
     window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
     window.RunCommand("fabrication.merge_parts");
+    window.RunCommand("fabrication.merge_parts");
     if (!Explain((std::string("無い番号は断る(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             static_cast<int>(window.FabricationPanelCount()) == before)) {
@@ -271,13 +273,32 @@ using kachakacha::v2::domain::Visibility;
     }
     window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
     window.RunCommand("fabrication.split_part");
+    window.RunCommand("fabrication.split_part");
     if (!Explain("無い番号では分けない",
             static_cast<int>(window.FabricationPanelCount()) == before)) {
         return false;
     }
 
-    // 1枚目と2枚目を1つにする。枚数が1減る。
+    // 1枚目と2枚目を1つにする。
+    // **1度目は見せるだけ。** 押した瞬間に変わってはいけない。
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.RunCommand("fabrication.merge_parts");
+    if (!Explain((std::string("1度目は見せるだけで変わらない(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            static_cast<int>(window.FabricationPanelCount()) == before
+                && window.PendingPartitionShown())) {
+        return false;
+    }
+    // やめれば何も起きない。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (!Explain("道具を替えると案が消える",
+            !window.PendingPartitionShown()
+                && static_cast<int>(window.FabricationPanelCount()) == before)) {
+        return false;
+    }
+    // もう一度出して、2度目で決める。
+    window.RunCommand("fabrication.merge_parts");
     window.RunCommand("fabrication.merge_parts");
     const int merged = static_cast<int>(window.FabricationPanelCount());
     if (!Explain((std::string("1つにすると枚数が減る(") + std::to_string(before)
@@ -301,6 +322,7 @@ using kachakacha::v2::domain::Visibility;
 
     // 1枚目を2つに分ける。枚数が1増える。
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.RunCommand("fabrication.split_part");
     window.RunCommand("fabrication.split_part");
     const int split = static_cast<int>(window.FabricationPanelCount());
     if (!Explain((std::string("分けると枚数が増える(") + std::to_string(merged) + " → "

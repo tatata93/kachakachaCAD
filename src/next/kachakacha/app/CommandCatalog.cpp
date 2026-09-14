@@ -463,11 +463,16 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "fab_merge", "", SelectionPredicate::OneFabricationModel,
             "製作モデルを1つ選んでください。",
             "隣り合う2つの部材を1つにします。接着線が1本減ります。"
-            "ずれが増えることもありますが、前と後を見せてから決められます。", true,
+            "**1度目は前と後を見せるだけで、文書は変えません。**"
+            "もう一度同じ指示を出すと、その形にします。"
+            "やめるときは Esc か道具を替えてください。", true,
             {"AT-FAB-005"}},
         {"fabrication.split_part", "部材を分ける", CommandMode::Instant, "fab_split", "",
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
-            "1つの部材を2つに分けます。ずれは減りますが、貼り合わせが増えます。", true,
+            "1つの部材を2つに分けます。ずれは減りますが、貼り合わせが増えます。"
+            "**1度目は前と後を見せるだけで、文書は変えません。**"
+            "もう一度同じ指示を出すと、その形にします。"
+            "やめるときは Esc か道具を替えてください。", true,
             {"AT-FAB-005"}},
         {"fabrication.set_unfold_base", "展開の基準にする辺", CommandMode::Instant,
             "fab_unfold_base", "", SelectionPredicate::OneFabricationModel,

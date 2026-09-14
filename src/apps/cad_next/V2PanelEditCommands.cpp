@@ -191,6 +191,62 @@ kachakacha::v2::fabrication::BandValueRemap V2MainWindow::BandValuesNow() const
     return values;
 }
 
+//! 見せている案を捨てる。文書は触らない(そもそも触っていない)。
+void V2MainWindow::ForgetPendingPartition()
+{
+    pendingPartition_.reset();
+}
+
+//! 1度目は見せるだけ。2度目で当てる。
+//!
+//! 「前と後を見せてから決める」と説明しているのに、押した瞬間に変わっていた
+//! (Codex Q1-Q5-R3 B1)。1度目は文書を一切触らず、前と後を帯に出す。
+//! 同じ指示をもう一度出したら当てる。番号を変えたら、その番号で見せ直す。
+void V2MainWindow::ProposeOrApplyPartition(const QString& what,
+    const std::vector<std::size_t>& numbers,
+    const kachakacha::v2::fabrication::BandPartitionPreview& preview,
+    const kachakacha::v2::fabrication::BandValueRemap& carried)
+{
+    const bool sameAsShown = pendingPartition_.has_value()
+        && pendingPartition_->what == what && pendingPartition_->numbers == numbers;
+    if (!preview.possible) {
+        ForgetPendingPartition();
+        SetStatus(QStringLiteral("%1: %2").arg(what,
+            QString::fromStdString(
+                kachakacha::v2::fabrication::DescribeBandPartitionJa(preview))));
+        return;
+    }
+    if (!sameAsShown) {
+        PendingPartition pending;
+        pending.what = what;
+        pending.numbers = numbers;
+        pending.preview = preview;
+        pending.carried = carried;
+        pendingPartition_ = std::move(pending);
+        QString dropped;
+        for (const std::size_t part : carried.droppedParts) {
+            if (!dropped.isEmpty()) {
+                dropped += QStringLiteral("、");
+            }
+            dropped += QStringLiteral("部材%1").arg(static_cast<int>(part));
+        }
+        SetStatus(QStringLiteral("%1(まだ変えていません): %2%3 "
+                                 "もう一度同じ指示を出すと、この形にします。"
+                                 "やめるときは Esc か道具を替えてください。")
+                .arg(what)
+                .arg(QString::fromStdString(
+                    kachakacha::v2::fabrication::DescribeBandPartitionJa(preview)))
+                .arg(dropped.isEmpty()
+                        ? QString()
+                        : QStringLiteral(" %1 に入れてある半径は引き継げません。")
+                              .arg(dropped)));
+        return;
+    }
+    const PendingPartition decided = *pendingPartition_;
+    ForgetPendingPartition();
+    ApplyBandPartition(decided.preview, decided.what, decided.carried);
+}
+
 //! 「部材を1つにする」。棚の「曲げる部材」で挙げた番号と、その次を1枚にする。
 void V2MainWindow::MergeFabricationParts()
 {
@@ -210,9 +266,8 @@ void V2MainWindow::MergeFabricationParts()
         return;
     }
     const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
-    ApplyBandPartition(
+    ProposeOrApplyPartition(QStringLiteral("部材を1つにする"), numbers,
         kachakacha::v2::fabrication::PreviewBandMerge(rails, widths, numbers.front()),
-        QStringLiteral("部材を1つにする"),
         kachakacha::v2::fabrication::RemapForMerge(BandValuesNow(), parts,
             numbers.front()));
 }
@@ -238,9 +293,9 @@ void V2MainWindow::SplitFabricationPart()
     const auto* definition = CurrentFabricationDefinition();
     const double minimumMm = definition == nullptr ? 4.0 : definition->minimumPartWidthMm;
     const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
-    ApplyBandPartition(kachakacha::v2::fabrication::PreviewBandSplit(rails, widths,
-                           numbers.front(), minimumMm),
-        QStringLiteral("部材を分ける"),
+    ProposeOrApplyPartition(QStringLiteral("部材を分ける"), numbers,
+        kachakacha::v2::fabrication::PreviewBandSplit(rails, widths, numbers.front(),
+            minimumMm),
         kachakacha::v2::fabrication::RemapForSplit(BandValuesNow(), parts,
             numbers.front()));
 }

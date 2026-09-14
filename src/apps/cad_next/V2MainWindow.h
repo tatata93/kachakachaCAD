@@ -898,12 +898,36 @@ public:
     [[nodiscard]] bool CurrentBandPartition(std::vector<double>& railParameters,
         std::vector<double>& widthsMm) const;
     //! 見せた候補をそのまま文書へ書く。見せた形と出来た形を食い違わせない。
+    //! 1度目は見せるだけ、2度目で当てる。
+    void ProposeOrApplyPartition(const QString& what,
+        const std::vector<std::size_t>& numbers,
+        const kachakacha::v2::fabrication::BandPartitionPreview& preview,
+        const kachakacha::v2::fabrication::BandValueRemap& carried);
     void ApplyBandPartition(
         const kachakacha::v2::fabrication::BandPartitionPreview& preview,
         const QString& what,
         const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま部材ごとに持っている値。引き継ぎの元になる。
     [[nodiscard]] kachakacha::v2::fabrication::BandValueRemap BandValuesNow() const;
+    //! 分け方を変える前に見せている案。1度目の指示で用意し、2度目で当てる。
+    //!
+    //! **1度目では文書を変えない。** 前と後を見てから決められるようにする
+    //! (Codex Q1-Q5-R3 B1)。やめる・道具を替える・別の指示を出すと消える。
+    struct PendingPartition {
+        QString what;
+        std::vector<std::size_t> numbers;
+        kachakacha::v2::fabrication::BandPartitionPreview preview;
+        kachakacha::v2::fabrication::BandValueRemap carried;
+    };
+    std::optional<PendingPartition> pendingPartition_;
+public:
+    //! 見せている案を捨てる。やめたとき・道具を替えたときに通る。
+    void ForgetPendingPartition();
+    //! いま案を見せているか。試験から見る。
+    [[nodiscard]] bool PendingPartitionShown() const
+    {
+        return pendingPartition_.has_value();
+    }
     //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
     void SetUnfoldBaseRail();
     //! 帯の境目を文書へ書き、以後は自動で切り直さない(§32)。

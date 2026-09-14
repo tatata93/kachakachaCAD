@@ -3,6 +3,7 @@
 //! 試験では作らない。試験が置き場所を書き換えると、
 //! 「置き直し忘れ」を落とす試験そのものが意味を失うためである。
 #include "kachakacha/app/SampleDocument.h"
+#include "kachakacha/app/RailwayNoseHoSample.h"
 #include "kachakacha/app/RailwayNoseSample.h"
 #include "kachakacha/io/AtomicFile.h"
 
@@ -11,21 +12,26 @@
 
 int main(int argc, char** argv)
 {
-    const bool railwayNose = argc == 3 && std::string(argv[1]) == "--railway-nose";
-    if ((!railwayNose && argc != 2) || (railwayNose && argc != 3)) {
-        std::cerr << "使い方: kachakacha_v2_write_sample [--railway-nose] <出す先の .kcd2>\n";
+    const std::string first = argc >= 2 ? argv[1] : std::string();
+    const bool railwayNose = argc == 3 && first == "--railway-nose";
+    const bool railwayNoseHo = argc == 3 && first == "--railway-nose-ho";
+    const bool named = railwayNose || railwayNoseHo;
+    if ((!named && argc != 2) || (named && argc != 3)) {
+        std::cerr << "使い方: kachakacha_v2_write_sample "
+                     "[--railway-nose | --railway-nose-ho] <出す先の .kcd2>\n";
         return 2;
     }
-    const auto archive = railwayNose
-        ? kachakacha::v2::app::BuildRailwayNoseSampleArchive()
-        : kachakacha::v2::app::BuildSampleArchive();
+    const auto archive = railwayNoseHo
+        ? kachakacha::v2::app::BuildRailwayNoseHoSampleArchive()
+        : railwayNose ? kachakacha::v2::app::BuildRailwayNoseSampleArchive()
+                      : kachakacha::v2::app::BuildSampleArchive();
     if (!archive.HasValue()) {
         for (const auto& diagnostic : archive.Diagnostics()) {
             std::cerr << diagnostic.code << ' ' << diagnostic.summaryJa << '\n';
         }
         return 1;
     }
-    const char* output = railwayNose ? argv[2] : argv[1];
+    const char* output = named ? argv[2] : argv[1];
     const auto written = kachakacha::v2::io::WriteFileAtomically(output, archive.Value());
     if (!written.HasValue()) {
         for (const auto& diagnostic : written.Diagnostics()) {

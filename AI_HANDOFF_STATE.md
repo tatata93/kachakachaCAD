@@ -279,7 +279,7 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 | --- | --- | --- | --- |
 | Q1 | 選択に正対の完成 | WorkPlane / 平面Face / 曲面Face / 平面Surface / 曲面Surface。向き+注視点+中央+Fit を1操作で。VF-01〜08 | 実装済み・PC 確認待ち |
 | Q2 | 左ツリーの Group / Folder | 整理用コンテナ。作成・改名・D&D・入れ子・表示切替・解除・Undo/Redo・Save/Load。GR-01〜10 | 実装済み・PC 確認待ち |
-| Q3 | HO 流線形前面 総合テストモデル | 1/80・16.5mm。WorkPlane→Wire→Guide→Surface。完成 BRep のハードコード禁止 | 未 |
+| Q3 | HO 流線形前面 総合テストモデル | 1/80・16.5mm。WorkPlane→Wire→Guide→Surface。完成 BRep のハードコード禁止 | 文書は出来た・PC 確認待ち |
 | Q4 | 総合試験 | 押し出し・板材近似・展開・任意曲げ出力まで通す。TM-01〜14 / UI-TM-01〜19 | 未 |
 
 進行中の押し出し・近似の作業は中断しない。安全な区切りで取り込む。

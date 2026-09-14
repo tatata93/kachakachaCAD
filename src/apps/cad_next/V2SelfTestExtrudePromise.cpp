@@ -204,6 +204,16 @@ namespace {
             !added.empty())) {
         return false;
     }
+    // 断られたときに形が分かるように、矩形の隅を控える。
+    std::string corners;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (curve.entityId != added.back()) {
+            continue;
+        }
+        const auto point = curve.segment.StartPoint();
+        corners += "(" + std::to_string(point.x) + "," + std::to_string(point.y) + ","
+            + std::to_string(point.z) + ")";
+    }
     kachakacha::v2::app::SelectionSet both;
     both.entityIds.push_back(added.back());
     both.entityIds.push_back(part);
@@ -240,7 +250,8 @@ namespace {
             found = true;
         }
     }
-    return Explain((std::string("選んだ演算のまま作られる(読み取り: ") + readAs
+    return Explain((std::string("選んだ演算のまま作られる(隅: ") + corners
+                       + " / 読み取り: " + readAs
                        + " / 帯は " + window.StatusText().toStdString() + ")").c_str(),
         found);
 }

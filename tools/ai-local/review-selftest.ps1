@@ -31,6 +31,7 @@ Every case below is one of the promises the owner asked for:
   26 three blocks in a row -> the fourth try is refused, not reviewed
   27 looking at the queue  -> does not disturb the dispatcher's lock
   28 a long wait then a claim -> busy, not stuck
+  29 arguments to a .cmd shim -> arrive the way a batch file expects
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -769,6 +770,33 @@ Check 'a claim made moments ago is left alone however long it waited before' `
     (Test-Path -LiteralPath $claimed) 'a healthy claim was taken away'
 Remove-Item -LiteralPath $claimed -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $paths.Processing 'T-WAITED-R1.json.owner') -Force -ErrorAction SilentlyContinue
+
+# 29 ------------------------------------------------------------------------
+# Arguments must reach a .cmd shim the way a batch file expects them. Quoting all
+# of them makes %1 arrive as \"exec\" instead of exec, and then the shim falls
+# through to whatever comes next; that made the probe sleep for two minutes.
+$echoStub = Join-Path $WorkRoot 'echo-stub.cmd'
+$echoOut = Join-Path $WorkRoot 'echo-stub-out.txt'
+@"
+@echo off
+if "%1"=="exec" ( echo FIRST-IS-EXEC >> "$echoOut" ) else ( echo FIRST-IS-%1 >> "$echoOut" )
+echo SECOND-IS-%2 >> "$echoOut"
+exit /b 0
+"@ | Set-Content -LiteralPath $echoStub -Encoding ASCII
+Invoke-Process -FilePath $echoStub -Arguments @('exec', 'a&b') -WorkingDirectory $WorkRoot -TimeoutSeconds 60 | Out-Null
+$echoText = ''
+if (Test-Path -LiteralPath $echoOut) { $echoText = [System.IO.File]::ReadAllText($echoOut) }
+Check 'a plain argument reaches a .cmd shim unquoted' ($echoText -like '*FIRST-IS-EXEC*') `
+    ("output=" + $echoText.Trim())
+Check 'an argument with an ampersand survives instead of becoming a second command' `
+    ($echoText -like '*SECOND-IS-*a&b*') ("output=" + $echoText.Trim())
+
+# And the probe itself must have understood the shim, which is the thing that
+# actually broke: if it had not, supported_flags would be empty.
+$probedInterface = Read-JsonFile -Path $paths.Interface
+Check 'the probe learned the options from the shim' `
+    (($null -ne $probedInterface) -and (@($probedInterface.supported_flags).Count -gt 0)) `
+    'the probe came back with no options'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

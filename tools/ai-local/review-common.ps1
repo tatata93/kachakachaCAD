@@ -303,15 +303,16 @@ function ConvertTo-CommandLineArgument {
 function ConvertTo-CommandLine {
     param(
         [Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Arguments,
-        # For cmd.exe every argument is quoted whether it needs it or not. Inside
-        # double quotes cmd stops treating & | < > ^ as operators, which is the
-        # only reason a path with an ampersand in it does not become two commands.
-        [switch]$AlwaysQuote
+        # For cmd.exe, an argument holding & | < > ^ ( ) ! or % must be quoted, or
+        # cmd reads it as command syntax. Quoting EVERY argument is not the answer:
+        # a batch file sees the quotes in %1, so "exec" stops matching exec and the
+        # script falls through to whatever comes next. That broke the probe.
+        [switch]$ForCmd
     )
     $parts = @()
     foreach ($a in $Arguments) {
-        if ($AlwaysQuote) {
-            $parts += ('"' + ($a -replace '"', '\"') + '"')
+        if ($ForCmd -and $a.Length -gt 0 -and ($a -match '[&|<>^()!%]') -and ($a -notmatch '[\s"]')) {
+            $parts += ('"' + $a + '"')
         } else {
             $parts += (ConvertTo-CommandLineArgument -Value $a)
         }
@@ -355,7 +356,7 @@ function Invoke-Process {
         $psi.FileName = $comspec
         # /d skips AutoRun, /s makes cmd take everything between the outer quotes
         # as the command line verbatim instead of trying to parse it again.
-        $inner = ConvertTo-CommandLine -Arguments (@($FilePath) + $Arguments) -AlwaysQuote
+        $inner = ConvertTo-CommandLine -Arguments (@($FilePath) + $Arguments) -ForCmd
         $psi.Arguments = '/d /s /c "' + $inner + '"'
     } else {
         $psi.FileName = $FilePath

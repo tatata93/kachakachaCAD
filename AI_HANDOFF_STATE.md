@@ -26,7 +26,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(28 の場面・70 の確認)
+  ＋ PC で `review-selftest.ps1`(29 の場面・73 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 

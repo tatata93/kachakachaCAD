@@ -39,7 +39,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `selection.activate` | 選択 | 常時 | 選択toolへ戻る | AT-UIX-001 |
 | `measure.open` | 測定 | 常時 | 非モーダル測定窓 | AT-MEA-001から005 |
 | `view.fit_all` | 全体表示 | 可視幾何あり | cameraだけ変更 | AT-UIX-008 |
-| `view.align_selection` | 選択に正対 | 平面/平面Face/作業平面1つ | cameraだけ変更 | AT-UIX-008 |
+| `view.align_selection` | 選択に正対 | 作業平面/立体の面/面/線のどれか | camera(向き・注視点・倍率)だけ変更 | AT-UIX-008 |
+| `view.align_selection_back` | 反対側から正対 | 同上 | camera だけ変更(裏側から) | AT-UIX-008 |
 | `view.align_workplane` | 正対 | 常時(作業中の作図面) | cameraだけ変更 | AT-UIX-008 |
 | `view.display_settings` | 表示設定 | 常時 | 表示属性だけ変更 | AT-UIX-010 |
 | `view.stage_all` | 設計(すべて出す) | なし | (表示のみ)Ctrl+1 | AT-UIX-010 |

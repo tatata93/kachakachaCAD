@@ -575,6 +575,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ExtrudePlan.cpp
     src/next/kachakacha/app/FacePushPull.cpp
     src/next/kachakacha/app/PanelAdvice.cpp
+    src/next/kachakacha/app/SurfaceFacing.cpp
     src/next/kachakacha/app/ExtrudeDrag.cpp
     src/next/kachakacha/app/PointerCursor.cpp
     src/next/kachakacha/app/ControlPointPick.cpp
@@ -909,6 +910,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2DiagnosticsCommand.cpp
         src/apps/cad_next/V2ExtrudePlanCommand.cpp
         src/apps/cad_next/V2FacePushPull.cpp
+        src/apps/cad_next/V2SelfTestFacing.cpp
         src/apps/cad_next/V2ExtrudeHandle.cpp
         src/apps/cad_next/V2ExtrudeInteractive.cpp
         src/apps/cad_next/V2ArrayCommands.cpp

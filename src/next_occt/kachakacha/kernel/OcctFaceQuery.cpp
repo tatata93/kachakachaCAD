@@ -8,10 +8,12 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepLProp_SLProps.hxx>
 #include <BRepGProp.hxx>
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <Geom_Surface.hxx>
 #include <TopAbs_Orientation.hxx>
@@ -22,6 +24,7 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
 #include <gp_Ax1.hxx>
+#include <gp_Dir.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
@@ -73,6 +76,93 @@ Result<std::size_t> ShapeFaceCount(modeling::KernelShapeHandle handle)
         ++count;
     }
     return Out::Success(count);
+}
+
+namespace {
+
+//! uv での向きを取り出す。取れなければ偽。
+[[nodiscard]] bool PoseAtUv(const TopoDS_Face& face, double u, double v, FacePose& out)
+{
+    BRepAdaptor_Surface surface(face, Standard_True);
+    BRepLProp_SLProps properties(surface, u, v, 1, 1.0e-7);
+    if (!properties.IsNormalDefined()) {
+        return false;
+    }
+    gp_Dir normal = properties.Normal();
+    // 面が裏返っていれば法線も裏返す。裏返さないと、裏から覗いた向きになる。
+    if (face.Orientation() == TopAbs_REVERSED) {
+        normal.Reverse();
+    }
+    out.point = FromPoint(properties.Value());
+    out.normal = geometry::Vector3{normal.X(), normal.Y(), normal.Z()};
+    if (properties.IsTangentUDefined()) {
+        gp_Dir along;
+        properties.TangentU(along);
+        out.uAxis = geometry::Vector3{along.X(), along.Y(), along.Z()};
+    }
+    out.planar = surface.GetType() == GeomAbs_Plane;
+    return true;
+}
+
+} // namespace
+
+Result<FacePose> FacePoseNear(modeling::KernelShapeHandle handle, std::size_t faceIndex,
+    const geometry::Vector3& nearPoint, const geometry::GeometryTolerance& tolerance)
+{
+    using Out = Result<FacePose>;
+    (void)tolerance;
+    TopoDS_Shape shape;
+    if (!LookupShape(handle, shape) || shape.IsNull()) {
+        return Out::Failure(MakeError(kFaceSourceMissing, "元になる立体がありません。", {}));
+    }
+    TopoDS_Face face;
+    if (!FindFace(shape, faceIndex, face) || face.IsNull()) {
+        return Out::Failure(MakeError(kFaceIndexOutOfRange, "その番号の面がありません。",
+            {}));
+    }
+    try {
+        double u0 = 0.0;
+        double u1 = 0.0;
+        double v0 = 0.0;
+        double v1 = 0.0;
+        BRepTools::UVBounds(face, u0, u1, v0, v1);
+        FacePose pose;
+        // まず押した場所のいちばん近くを狙う。曲面には1つの法線が無いためである。
+        const occ::handle<Geom_Surface> surface = BRep_Tool::Surface(face);
+        if (!surface.IsNull()) {
+            GeomAPI_ProjectPointOnSurf projection(ToPoint(nearPoint), surface, u0, u1, v0, v1);
+            if (projection.IsDone() && projection.NbPoints() > 0) {
+                Standard_Real u = 0.0;
+                Standard_Real v = 0.0;
+                projection.LowerDistanceParameters(u, v);
+                if (PoseAtUv(face, u, v, pose)) {
+                    return Out::Success(pose);
+                }
+            }
+        }
+        // 押した場所で決まらないときは面の真ん中。
+        if (PoseAtUv(face, 0.5 * (u0 + u1), 0.5 * (v0 + v1), pose)) {
+            return Out::Success(pose);
+        }
+        // それも駄目なら、少しずらした4か所を試す。特異点(極など)を避けるためである。
+        constexpr double kOffsets[] = {0.25, 0.75};
+        for (const double du : kOffsets) {
+            for (const double dv : kOffsets) {
+                if (PoseAtUv(face, u0 + (u1 - u0) * du, v0 + (v1 - v0) * dv, pose)) {
+                    return Out::Success(pose);
+                }
+            }
+        }
+        return Out::Failure(MakeError(kFaceBoundaryUnsupported,
+            "その面の向きが決まりません。",
+            "面の真ん中でも端でも向きが取れませんでした。別の面を選んでください。"));
+    } catch (const std::exception& error) {
+        return Out::Failure(MakeError(kFaceBoundaryUnsupported,
+            std::string("面の向きを取れませんでした: ") + error.what(), {}));
+    } catch (...) {
+        return Out::Failure(MakeError(kFaceBoundaryUnsupported,
+            "面の向きを取れませんでした。", {}));
+    }
 }
 
 Result<FaceSamples> FaceSamplesOf(modeling::KernelShapeHandle handle,
@@ -202,6 +292,14 @@ Result<FaceBoundary> FaceBoundaryOf(modeling::KernelShapeHandle handle,
 }
 
 #else
+
+Result<FacePose> FacePoseNear(modeling::KernelShapeHandle, std::size_t,
+    const geometry::Vector3&, const geometry::GeometryTolerance&)
+{
+    return Result<FacePose>::Failure(MakeError(kFaceSourceMissing,
+        "面の向きを取れませんでした。",
+        "この組み立てには幾何カーネルが入っていません。"));
+}
 
 Result<FaceSamples> FaceSamplesOf(modeling::KernelShapeHandle, std::size_t, std::size_t,
     std::size_t)

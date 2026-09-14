@@ -166,8 +166,8 @@ KACHA_V2_TEST(availability, 作業平面を1つ選べば作業中にできる)
     const auto facts = bench.Facts();
     Require(facts.workPlanes == 1, "作業平面が1つ");
     Require(SelectionSatisfies(SelectionPredicate::OneWorkPlane, facts), "押せる");
-    Require(SelectionSatisfies(SelectionPredicate::OnePlanarFaceOrWorkPlane, facts),
-        "平らな面の条件も満たす");
+    Require(SelectionSatisfies(SelectionPredicate::AnythingToFace, facts),
+        "正対の条件も満たす");
 }
 
 KACHA_V2_TEST(availability, 作業平面を2つ選ぶとどちらか決まらない)
@@ -240,7 +240,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
     const auto facts = bench.Facts();
     const SelectionPredicate needsSelection[] = {
         SelectionPredicate::OneWorkPlane,
-        SelectionPredicate::OnePlanarFaceOrWorkPlane,
+        SelectionPredicate::AnythingToFace,
         SelectionPredicate::OneOrMoreWires,
         SelectionPredicate::TwoOrMoreWires,
         SelectionPredicate::TwoWireChains,
@@ -287,7 +287,7 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::HasRedo,
         SelectionPredicate::HasVisibleGeometry,
         SelectionPredicate::OneWorkPlane,
-        SelectionPredicate::OnePlanarFaceOrWorkPlane,
+        SelectionPredicate::AnythingToFace,
         SelectionPredicate::ZeroOrOneGroup,
         SelectionPredicate::OneOrMoreWires,
         SelectionPredicate::TwoWireChains,

@@ -69,6 +69,28 @@ struct FaceSamples {
 [[nodiscard]] base::Result<FaceSamples> FaceSamplesOf(modeling::KernelShapeHandle handle,
     std::size_t faceIndex, std::size_t rowCount = 17, std::size_t columnCount = 17);
 
+//! 面の上の1点と、そこでの向き。「選択に正対」が要る(Q1)。
+struct FacePose {
+    //! 面の上の点。押した場所をいちばん近い面上の点へ寄せたもの。
+    geometry::Vector3 point{};
+    //! 立体の外を向く法線。この向きから見ると正対になる。
+    geometry::Vector3 normal{0.0, 0.0, 1.0};
+    //! 面の上の「横」の向き。画面の上下を決めるのに使う。
+    geometry::Vector3 uAxis{1.0, 0.0, 0.0};
+    //! 平らな面か。曲がっていれば偽。
+    bool planar = false;
+};
+
+//! 面の、指定した点にいちばん近い場所での向きを返す。
+//!
+//! 曲面には1つの法線が無いので、**押した場所の近く** の法線を使う(オーナー指示 §4)。
+//! 押した場所が分からないときは面の真ん中を使う。
+//! 特異点などで向きが決まらないときは、面の真ん中、それも駄目なら
+//! 標本から作った近似平面の法線へ落とす。**断って終わらない。**
+[[nodiscard]] base::Result<FacePose> FacePoseNear(modeling::KernelShapeHandle handle,
+    std::size_t faceIndex, const geometry::Vector3& nearPoint,
+    const geometry::GeometryTolerance& tolerance);
+
 //! 立体が持つ面の数。画面が拾った番号を渡す前に確かめるために使う。
 [[nodiscard]] base::Result<std::size_t> ShapeFaceCount(modeling::KernelShapeHandle handle);
 

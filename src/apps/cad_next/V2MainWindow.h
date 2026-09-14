@@ -831,8 +831,21 @@ private:
         std::optional<kachakacha::v2::geometry::Vector3> uAxis;
         //! 正対の相手になったものの数。画面の一文に出す。
         int count = 0;
+        //! 向きを変えない相手か(立体そのものなど)。中央と大きさだけ合わせる。
+        bool keepOrientation = false;
     };
+    //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
+    bool facingFromBehind_ = false;
     void CollectFacingTarget(FacingTarget& target) const;
+    //! 立体を正対の相手にする。面を選んでいればその面だけ。集まったら真。
+    [[nodiscard]] bool AppendSolidFacing(const kachakacha::v2::base::EntityId& id,
+        FacingTarget& target) const;
+    //! 形状ガイドの面を正対の相手にする。集まったら真。
+    [[nodiscard]] bool AppendSurfaceFacing(const kachakacha::v2::base::EntityId& id,
+        FacingTarget& target) const;
+    //! 画面に出している網の点を集める。向きは推させる。集まったら真。
+    [[nodiscard]] bool AppendMeshPoints(const kachakacha::v2::base::EntityId& id,
+        FacingTarget& target) const;
     //! 文書の作図面を、画面に出す形へ写す。一覧を作り直すたびに呼ぶ。
     void RefreshWorkPlaneViews();
     //! 右に出す棚を、いまの道具とモードに合わせる。どれを出すかは core が決める。

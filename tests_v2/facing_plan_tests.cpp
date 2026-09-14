@@ -1,5 +1,6 @@
 // 「選択に正対」の決め方(V1 の CadViewport::AlignToSelection の移植)。
 #include "kachakacha/base/TestHarness.h"
+#include "kachakacha/app/SurfaceFacing.h"
 #include "kachakacha/view/FacingPlan.h"
 
 #include <cmath>
@@ -177,6 +178,78 @@ KACHA_V2_TEST(facing_plan, 点が無ければ平面も推せない)
     const auto normal = BestFitNormal({}, kFromAbove);
     Require(!normal.HasValue(), "空は断る");
     RequireEqual(FirstCode(normal.Diagnostics()), std::string(kFacingNoPoints), "UI-V008");
+}
+
+namespace {
+
+//! 平らな格子。z = 0 の面に 3×3。
+[[nodiscard]] kachakacha::v2::fabrication::SurfacePatchSamples FlatGrid()
+{
+    kachakacha::v2::fabrication::SurfacePatchSamples samples;
+    samples.rowCount = 3;
+    samples.columnCount = 3;
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            samples.points.push_back(Vector3{static_cast<double>(column),
+                static_cast<double>(row), 0.0});
+        }
+    }
+    return samples;
+}
+
+} // namespace
+
+KACHA_V2_TEST(facing, 平らな格子の向きが面の法線になる)
+{
+    using kachakacha::v2::app::SurfaceFacingPose;
+    const auto pose = SurfaceFacingPose(FlatGrid());
+    Require(pose.has_value(), "向きが決まる");
+    const Vector3 unit = kachakacha::v2::geometry::Normalized(pose->normal);
+    RequireNear(std::abs(unit.z), 1.0, 1.0e-9, "法線は面に垂直");
+    RequireNear(std::abs(unit.x) + std::abs(unit.y), 0.0, 1.0e-9, "面の中を向かない");
+    Require(pose->uAxis.LengthSquared() > 0.0, "横の向きも出る");
+}
+
+KACHA_V2_TEST(facing, 曲がった格子は真ん中あたりの向きを返す)
+{
+    using kachakacha::v2::app::SurfaceFacingPose;
+    // 円筒の一部。列方向へ曲げる。真ん中は上を向く。
+    kachakacha::v2::fabrication::SurfacePatchSamples samples;
+    samples.rowCount = 3;
+    samples.columnCount = 5;
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 5; ++column) {
+            const double angle = (static_cast<double>(column) - 2.0) * 0.3;
+            samples.points.push_back(Vector3{10.0 * std::sin(angle),
+                static_cast<double>(row), 10.0 * std::cos(angle)});
+        }
+    }
+    const auto pose = SurfaceFacingPose(samples);
+    Require(pose.has_value(), "向きが決まる");
+    const Vector3 unit = kachakacha::v2::geometry::Normalized(pose->normal);
+    // 真ん中(column = 2)のあたりは、ほぼ +z か -z を向く。どちら向きかは問わない。
+    Require(std::abs(unit.z) > 0.8,
+        "真ん中あたりの向きになる(端の向きに引きずられない)");
+}
+
+KACHA_V2_TEST(facing, 真ん中が潰れていても周りから向きを拾う)
+{
+    using kachakacha::v2::app::SurfaceFacingPose;
+    // 真ん中の1列を同じ点にして潰す(円錐の頂点のような形)。
+    auto samples = FlatGrid();
+    samples.points[1 * 3 + 1] = samples.points[1 * 3 + 2];
+    const auto pose = SurfaceFacingPose(samples);
+    Require(pose.has_value(), "潰れていても断らずに向きを出す");
+}
+
+KACHA_V2_TEST(facing, 格子が小さすぎれば向きを出さない)
+{
+    using kachakacha::v2::app::SurfaceFacingPose;
+    kachakacha::v2::fabrication::SurfacePatchSamples samples;
+    samples.rowCount = 1;
+    samples.columnCount = 1;
+    samples.points.push_back(Vector3{});
+    Require(!SurfaceFacingPose(samples).has_value(), "1点では面にならない");
 }
 
 KACHA_V2_TEST_MAIN("facing_plan_tests")

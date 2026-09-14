@@ -32,7 +32,9 @@ enum class SelectionPredicate {
     HasRedo,
     HasVisibleGeometry,
     OneWorkPlane,
-    OnePlanarFaceOrWorkPlane,
+    //! 正対できる相手が1つ以上。作業平面・立体の面・立体・形状ガイド・線・点。
+    //! 「平らな面か作業平面」だけでは、立体の面も曲がった面も選べなかった。
+    AnythingToFace,
     ZeroOrOneGroup,
     OneOrMoreWires,
     //! ワイヤーを2つ以上。交点に点を作るときに使う。

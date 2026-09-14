@@ -21,9 +21,12 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.hasVisibleGeometry;
     case SelectionPredicate::OneWorkPlane:
         return facts.workPlanes == 1;
-    case SelectionPredicate::OnePlanarFaceOrWorkPlane:
-        // どちらか片方が1つ。両方選んでいたら、どちらの上に置くのか決まらない。
-        return facts.workPlanes + facts.planarFaces == 1;
+    case SelectionPredicate::AnythingToFace:
+        // 正対できる相手。向きがはっきりしているもの(作業平面・面)だけでなく、
+        // 立体・線・点も相手にする。中央と大きさは、どれでも合わせられる。
+        return facts.workPlanes + facts.planarFaces + facts.solidFaces + facts.parts
+                + facts.guideSurfaces + facts.wires
+            >= 1;
     case SelectionPredicate::ZeroOrOneGroup:
         return facts.groups <= 1;
     case SelectionPredicate::OneOrMoreWires:

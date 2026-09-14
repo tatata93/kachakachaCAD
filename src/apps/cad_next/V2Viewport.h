@@ -179,6 +179,11 @@ public:
     };
     //! 出す形を入れ替える。形が変わるたびに窓が呼ぶ。
     void SetShapeViews(std::vector<ShapeView> shapes);
+    //! いま出している形。「選択に正対」が、立体の広がりを知るために読む。
+    [[nodiscard]] const std::vector<ShapeView>& ShapeViews() const noexcept
+    {
+        return shapeViews_;
+    }
     [[nodiscard]] int ShapeViewCount() const noexcept
     {
         return static_cast<int>(shapeViews_.size());

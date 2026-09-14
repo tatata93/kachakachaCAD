@@ -7,6 +7,9 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/SurfaceFacing.h"
+#include "kachakacha/kernel/OcctFaceQuery.h"
+
 #include <algorithm>
 
 #include "kachakacha/document/Commands.h"
@@ -32,7 +35,8 @@
 
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
-    return id == "view.align_selection" || id == "view.display_settings"
+    return id == "view.align_selection" || id == "view.align_selection_back"
+        || id == "view.display_settings"
         || id == "group.set_active" || id == "view.hide_selected"
         || id == "view.show_all" || id == "edit.delete"
         || id == "view.stage_all" || id == "view.stage_no_grid"
@@ -67,8 +71,12 @@ void V2MainWindow::RunViewCommand(std::string_view id)
         BeginRenameSelected();
         return;
     }
-    if (id == "view.align_selection") {
+    if (id == "view.align_selection" || id == "view.align_selection_back") {
+        // 「反対側から正対」は、同じ道を裏側から通るだけである。
+        // 別の道にすると、真ん中・大きさ・選択の残し方が食い違う。
+        facingFromBehind_ = id == "view.align_selection_back";
         AlignViewToSelection();
+        facingFromBehind_ = false;
         return;
     }
     if (id == "group.set_active") {
@@ -296,6 +304,13 @@ void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
             ++target.count;
             continue;
         }
+        if (entity->kind == EntityKind::GuideSurface) {
+            // 形状ガイドの面。標本の格子から向きを出す。曲がっていれば真ん中の向き。
+            if (AppendSurfaceFacing(id, target)) {
+                ++target.count;
+            }
+            continue;
+        }
         const std::size_t before = target.points.size();
         for (const auto& curve : session_->Scene().curves) {
             if (curve.entityId == id) {
@@ -309,8 +324,109 @@ void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
         }
         if (target.points.size() > before) {
             ++target.count;
+            continue;
+        }
+        if (entity->kind == EntityKind::Part) {
+            // 立体そのもの。線も点も持たないので、いままでは何も集まらず、
+            // 「作業平面・線・点のどれかを選んでください」と断っていた。
+            // 面を選んでいればその面、選んでいなければ立体全体を相手にする。
+            if (AppendSolidFacing(id, target)) {
+                ++target.count;
+            }
         }
     }
+}
+
+//! 立体を正対の相手にする。面を選んでいればその面、そうでなければ立体全体。
+//!
+//! 面を1枚だけ選んでいるときに立体全体を Fit するのは禁止(オーナー指示 §44)。
+//! 選んだ面が画面いっぱいになるようにする。
+bool V2MainWindow::AppendSolidFacing(const kachakacha::v2::base::EntityId& id,
+    FacingTarget& target) const
+{
+    const auto shape = partShapes_.find(id.ToString());
+    if (shape == partShapes_.end()) {
+        return false;
+    }
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    // 面を選んでいるか。選んでいれば、その面だけを相手にする。
+    for (const auto& ref : viewport_->Selection().ordered) {
+        if (ref.entityId != id
+            || ref.kind != kachakacha::v2::app::SelectionElementKind::Face
+            || !ref.pickedFaceIndex.has_value()) {
+            continue;
+        }
+        const auto sampled = kachakacha::v2::kernel::FaceSamplesOf(shape->second,
+            *ref.pickedFaceIndex);
+        const auto pose = kachakacha::v2::kernel::FacePoseNear(shape->second,
+            *ref.pickedFaceIndex, ref.hitPoint, tolerance);
+        if (!sampled.HasValue() || !pose.HasValue()) {
+            continue;
+        }
+        for (const auto& point : sampled.Value().samples.points) {
+            target.points.push_back(point);
+        }
+        target.normal = pose.Value().normal;
+        target.uAxis = pose.Value().uAxis;
+        return true;
+    }
+    // 面を選んでいない。立体の網の点をそのまま相手にする(向きは推す)。
+    return AppendMeshPoints(id, target);
+}
+
+//! 画面に出している形の広がりを集める。向きは決めない。
+//!
+//! 三角形を全部入れると何万点にもなるので、外接箱の8隅だけを使う。
+//! 中央と大きさはこれで決まる。向きは「いまのまま」にする ──
+//! 立体そのものに「正面」は無いので、勝手に回すと押すたびに向きが変わる。
+bool V2MainWindow::AppendMeshPoints(const kachakacha::v2::base::EntityId& id,
+    FacingTarget& target) const
+{
+    bool found = false;
+    for (const auto& view : viewport_->ShapeViews()) {
+        if (view.entityId != id || view.mesh.Empty()) {
+            continue;
+        }
+        const auto& low = view.mesh.minimum;
+        const auto& high = view.mesh.maximum;
+        for (int corner = 0; corner < 8; ++corner) {
+            target.points.push_back(kachakacha::v2::geometry::Vector3{
+                (corner & 1) != 0 ? high.x : low.x,
+                (corner & 2) != 0 ? high.y : low.y,
+                (corner & 4) != 0 ? high.z : low.z});
+        }
+        found = true;
+    }
+    if (found) {
+        target.keepOrientation = true;
+    }
+    return found;
+}
+
+//! 形状ガイドの面を正対の相手にする。標本の格子から向きを出す。
+//!
+//! 曲がった面には1つの法線が無い。真ん中の標本の周りから出す(オーナー指示 §5)。
+bool V2MainWindow::AppendSurfaceFacing(const kachakacha::v2::base::EntityId& id,
+    FacingTarget& target) const
+{
+    const auto found = guideSamples_.find(id.ToString());
+    if (found == guideSamples_.end()) {
+        return AppendMeshPoints(id, target);
+    }
+    const auto& samples = found->second;
+    if (samples.rowCount < 2 || samples.columnCount < 2
+        || samples.points.size() < samples.rowCount * samples.columnCount) {
+        return AppendMeshPoints(id, target);
+    }
+    for (const auto& point : samples.points) {
+        target.points.push_back(point);
+    }
+    const auto pose = kachakacha::v2::app::SurfaceFacingPose(samples);
+    if (pose.has_value()) {
+        target.normal = pose->normal;
+        target.uAxis = pose->uAxis;
+    }
+    return true;
 }
 
 void V2MainWindow::AlignViewToSelection()
@@ -332,6 +448,16 @@ void V2MainWindow::AlignViewToSelection()
     if (target.normal.has_value()) {
         normal = *target.normal;
         uAxis = target.uAxis.value_or(kachakacha::v2::geometry::Vector3{1.0, 0.0, 0.0});
+        // 裏返しに正対しない。いま見ている側に近いほうから見る。
+        // 「反対側から正対」を押したときだけ、わざと裏へ回る。
+        const bool facingAway = kachakacha::v2::geometry::Dot(normal, viewDirection) > 0.0;
+        if (facingAway != facingFromBehind_) {
+            normal = normal * -1.0;
+        }
+    } else if (target.keepOrientation) {
+        // 立体そのものには「正面」が無い。向きは変えず、中央と大きさだけ合わせる。
+        normal = viewDirection * -1.0;
+        uAxis = kachakacha::v2::view::RightOf(viewport_->Orientation());
     } else {
         // 面が分かっていないものは、点の並びから推す(V1 と同じ)。
         const auto guessed = BestFitNormal(target.points, viewDirection);
@@ -347,13 +473,18 @@ void V2MainWindow::AlignViewToSelection()
         ReportDiagnostics(plan.Diagnostics());
         return;
     }
+    // 選択は変えない。正対したら選び直し、では作図へ進めない(オーナー指示 §1-8)。
+    const auto keptSelection = viewport_->Selection();
     viewport_->SetOrientation(plan.Value().orientation);
     viewport_->SetViewCenter(plan.Value().center);
     // 少し余白をつけて収める。ぴったりだと端が画面の縁に貼りつく。
     viewport_->SetVisibleWidthMm(plan.Value().spanMm * 1.4);
+    viewport_->SetSelection(keptSelection);
     viewport_->update();
-    SetStatus(QStringLiteral("%1個に正対しました。形は変わっていません。")
-            .arg(target.count));
+    SetStatus(QStringLiteral("%1個に%2正対しました。真ん中に寄せて、大きさも合わせました。"
+                             "形は変わっていません。")
+            .arg(target.count)
+            .arg(facingFromBehind_ ? QStringLiteral("反対側から") : QString()));
 }
 
 //! 面の上の「横」の見当。点の並びのうち、法線と直交する成分がいちばん長いもの。
@@ -435,6 +566,7 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         "edit.redo",
         "measure.open",
         "view.align_selection",
+        "view.align_selection_back",
         "wire.split",
         "wire.join",
         "view.hide_selected",

@@ -10,7 +10,8 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::HasRedo: return "やり直せる操作がありません。";
     case SelectionPredicate::HasVisibleGeometry: return "見えているものがありません。";
     case SelectionPredicate::OneWorkPlane: return "作業平面を1つ選んでください。";
-    case SelectionPredicate::OnePlanarFaceOrWorkPlane: return "平らな面か作業平面を1つ選んでください。";
+    case SelectionPredicate::AnythingToFace:
+        return "作業平面・立体の面・面・線のどれかを選んでください。";
     case SelectionPredicate::ZeroOrOneGroup: return "グループは1つまで選べます。";
     case SelectionPredicate::OneOrMoreWires: return "ワイヤーを1つ以上選んでください。";
     case SelectionPredicate::TwoOrMoreWires: return "ワイヤーを2つ以上選んでください。";
@@ -96,8 +97,17 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "見えているもの全部が入るように視点を合わせます。形は変わりません。", false,
             {"AT-UIX-008"}},
         {"view.align_selection", "選択に正対", CommandMode::Instant, "align", "",
-            SelectionPredicate::OnePlanarFaceOrWorkPlane, "平らな面か作業平面を1つ選んでください。",
-            "選んだ平面に正対します。形は変わりません。", false,
+            SelectionPredicate::AnythingToFace,
+            "作業平面・立体の面・面・線のどれかを選んでください。",
+            "選んだものに正対します。向きだけでなく、真ん中と大きさも合わせます。"
+            "形は変わりません。", false,
+            {"AT-UIX-008"}},
+        {"view.align_selection_back", "反対側から正対", CommandMode::Instant,
+            "align_back", "",
+            SelectionPredicate::AnythingToFace,
+            "作業平面・立体の面・面・線のどれかを選んでください。",
+            "選んだものの裏側から正対します。板の裏を見たいときに使います。"
+            "形は変わりません。", false,
             {"AT-UIX-008"}},
         {"view.align_workplane", "正対", CommandMode::Instant, "align_workplane", "",
             SelectionPredicate::Always, "",

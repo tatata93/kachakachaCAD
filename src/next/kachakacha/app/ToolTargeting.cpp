@@ -30,7 +30,6 @@ bool PredicateIsExact(SelectionPredicate predicate) noexcept
 {
     switch (predicate) {
     case SelectionPredicate::OneWorkPlane:
-    case SelectionPredicate::OnePlanarFaceOrWorkPlane:
     case SelectionPredicate::TwoWireChains:
     case SelectionPredicate::OneClosedProfile:
     case SelectionPredicate::OnePart:

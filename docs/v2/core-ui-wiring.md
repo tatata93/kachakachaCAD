@@ -33,6 +33,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |
+| `fabrication/PanelEdit.h` | 面の集まりを部材へ組み替える(どの面をどの部材に入れるか) | 面を分類する方式(V2方式)の分け方を人が決められるようにするとき。帯近似(V1方式)の分け方は境目のパラメータで決まるので `fabrication/BandPartition.h` を通した。こちらは面の集合を持つ側で、**決めた分け方を文書へ残す道がまだ無い**(AI_HANDOFF_STATE.md の HUMAN_DECISION) |
 | `fabrication/ClosedLoop.h` | 閉じた輪の折り角を解く | 曲げ具合を繋ぐとき |
 | `fabrication/FreezeMaterialize.h` | 固めたものを文書のものに変える | 任意状態の固定を繋ぐとき |
 | `kernel/OcctPanelSolid.h` | 平らな輪郭に厚みを付けて立体にする | 曲げ状態の固定を繋ぐとき。曲がった面の厚み付けは `OcctThicken.h` が受け持つ |
@@ -51,6 +52,11 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
   面どうしの隣り合わせ(`OcctFaceAdjacency`)を集め、4通りの分け方を作り比べて
   「1枚では作れませんが、3枚に分ければ作れます」まで言う(`app/PanelAdvice`)。
   **分けはしない。言うだけである。** 実際に分けるかどうかは人が決める。
+- `fabrication/BandPartition.h`(2026-09-14)。帯の境目を人が決める(§32)。
+  「部材を1つにする」「部材を分ける」から使う。見せる前後の姿と、決めたあとに
+  書き込む境目を **同じ1つの候補から** 作る。別々に作ると、
+  「分けられます」と言った相手と実際に変える境目が食い違う。
+  境目はパラメータなので、面の番号を保存せずに文書へ残せる。
 - `kernel/OcctFaceQuery.h`(2026-09-14)。立体の面1枚の縁・外向き法線・面積を返す。
   面の押し引き(EX-02)の入口である。取り出した縁を文書のワイヤーにして、
   いままでの押し出しへ渡す。新しい押し出しは作っていないので、

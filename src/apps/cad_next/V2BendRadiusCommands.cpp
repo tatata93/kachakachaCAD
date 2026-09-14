@@ -37,14 +37,53 @@ namespace {
 
 using kachakacha::v2::domain::CreateFabricationModelDefinition;
 
-//! いま画面が相手にしている部材の番号。棚に書いていなければ 0 番。
-[[nodiscard]] std::size_t FirstPartOr(const std::vector<std::size_t>& numbers,
-    std::size_t count)
+//! 棚に書いた番号から、相手の部材をちょうど1枚決める。
+//!
+//! **丸めない。** 部材が3枚のときに「999」と書いたら、
+//! 黙って3枚目を変えるのではなく、断る(Codex Q1-Q5-R2 B1)。
+//! 人は「999 は無いから何も起きない」と思っている。
+//! 何も書いていなければ1枚目を見せる。それは見るだけで、変えるときは番号が要る。
+struct PartChoice {
+    bool ok = false;
+    std::size_t index = 0;
+    QString whyJa;
+};
+
+[[nodiscard]] PartChoice ChoosePart(const std::vector<std::size_t>& numbers,
+    std::size_t count, bool forChange)
 {
-    if (numbers.empty() || count == 0) {
-        return 0;
+    PartChoice chosen;
+    if (count == 0) {
+        chosen.whyJa = QStringLiteral("曲げる部材がありません。");
+        return chosen;
     }
-    return std::min(numbers.front(), count - 1);
+    if (numbers.empty()) {
+        if (forChange) {
+            chosen.whyJa = QStringLiteral(
+                "棚の「曲げる部材」に、相手の部材の番号を1つ書いてください"
+                "(1 から %1 まで)。")
+                               .arg(static_cast<int>(count));
+            return chosen;
+        }
+        chosen.ok = true;   // 見るだけなら1枚目。
+        return chosen;
+    }
+    if (numbers.size() != 1) {
+        chosen.whyJa = QStringLiteral(
+            "半径は部材1枚ずつ決めます。番号を1つだけ書いてください"
+            "(いまは %1 個あります)。")
+                           .arg(static_cast<int>(numbers.size()));
+        return chosen;
+    }
+    if (numbers.front() >= count) {
+        chosen.whyJa = QStringLiteral("FAB-G001 その部材がありません。"
+                                      "1 から %1 までの番号を書いてください。")
+                           .arg(static_cast<int>(count));
+        return chosen;
+    }
+    chosen.ok = true;
+    chosen.index = numbers.front();
+    return chosen;
 }
 
 } // namespace
@@ -68,7 +107,9 @@ kachakacha::v2::fabrication::BendRadius V2MainWindow::BendRadiusNow() const
     if (bends.empty()) {
         return {};
     }
-    return bends[FirstPartOr(SelectedPartNumbers(), bends.size())];
+    // 見るだけ。番号がおかしければ1枚目を見せる。変えるほうは断る。
+    const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
+    return bends[chosen.ok ? chosen.index : 0];
 }
 
 //! いまの近似モデルの作り方。無ければ空。
@@ -132,8 +173,8 @@ void V2MainWindow::RefreshBendRadius()
         fabricationDock_->ShowRadius(kachakacha::v2::fabrication::BendRadius{}, percent);
         return;
     }
-    const std::size_t part = FirstPartOr(SelectedPartNumbers(), bends.size());
-    fabricationDock_->ShowRadius(bends[part], percent);
+    const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
+    fabricationDock_->ShowRadius(bends[chosen.ok ? chosen.index : 0], percent);
 }
 
 //! いまの組立率。近似モデルが無ければ 100%。
@@ -161,7 +202,12 @@ void V2MainWindow::ApplyBendRadius(double radiusMm, bool locked)
             "半径: 先に「製作モデルを作る」で帯近似の近似モデルを作ってください。"));
         return;
     }
-    const std::size_t part = FirstPartOr(SelectedPartNumbers(), bends.size());
+    const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), true);
+    if (!chosen.ok) {
+        SetStatus(QStringLiteral("半径: %1").arg(chosen.whyJa));
+        return;
+    }
+    const std::size_t part = chosen.index;
     const double percent = AssemblyPercentNow();
 
     auto definition = *current;

@@ -96,7 +96,7 @@ void V2MainWindow::CreateGroupFromSelection()
             }
         }
         if (ok) {
-            transaction.Commit();
+            ok = transaction.Commit();
         }
         // Commit していなければ、まとまりも中身の移動もまとめて無かったことになる。
     }
@@ -292,7 +292,7 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
             }
         }
         if (ok) {
-            transaction.Commit();
+            ok = transaction.Commit();
         }
         // ここを抜けるときに、Commit していなければ始める前へ戻る。
     }

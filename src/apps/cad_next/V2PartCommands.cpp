@@ -337,6 +337,31 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
     const kachakacha::v2::kernel::ExtrudeBuildResult& built)
 {
+    const bool kept = CommitExtrudeAtomically(choice, plan, analysis, built);
+    ForgetFaceProfile();
+    // **どの道で抜けても、ここを必ず通る。**
+    //
+    // 覚えている形と場面は、文書の写しでしかない。途中で失敗して文書が戻ったのに
+    // 写しだけが新しいままだと、文書に無い立体や辺が画面と書き出しに残る
+    // (Codex P1-EXTRUDE-R3 B2)。だから通っても通らなくても、
+    // 戻ったあとの文書から作り直す。
+    AdoptCurrentDocument();
+    RebuildKernelShapes();
+    if (!kept) {
+        SetStatus(QStringLiteral("押し出し: 途中で作れなかったので、"
+                                 "押す前の状態へ戻しました。"));
+    }
+}
+
+//! 文書を変えるところだけ。ここを抜けた時点で、まとめは閉じているか戻っている。
+//!
+//! 呼ぶ側が必ず後始末(場面と覚えている形の作り直し)をするので、
+//! ここでは早く抜けてよい。
+bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeChoice& choice,
+    const kachakacha::v2::app::ExtrudePlan& plan,
+    const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
+    const kachakacha::v2::kernel::ExtrudeBuildResult& built)
+{
     // まとめの係。`Commit()` を呼ばずに抜けたら、始める前へ戻り履歴も増えない。
     // 「一度入れてから取り消す」方式だと、押す前にやっていた別の操作を
     // 取り消してしまう(Codex P1-EXTRUDE-R2 B1)。
@@ -345,8 +370,7 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
     std::vector<kachakacha::v2::base::EntityId> faceWires;
     if (facePushPull_ && !CommitFaceProfileWires(faceWires)) {
         // 途中で入らなかった。まとめごと無かったことにする。外周だけ残さない。
-        ForgetFaceProfile();
-        return;
+        return false;
     }
     kachakacha::v2::domain::ExtrudeDefinition definition;
     // 面の押し引きは、いま作った縁のワイヤーが押し出しの元になる。
@@ -382,8 +406,7 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
         inputs.push_back(plan.targetSolid);
     }
     if (!AdoptExtrudeResult(choice, definition, built, edges, inputs)) {
-        ForgetFaceProfile();
-        return;   // まとめごと無かったことにする。途中の形を残さない。
+        return false;   // まとめごと無かったことにする。途中の形を残さない。
     }
     // 使い切った元の立体は隠す。出したままだと加工前と加工後が2つ並んで見える。
     // 消さないのは、作り方をたどれなくしないためである(足し引きと同じ扱い)。
@@ -393,13 +416,10 @@ void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choic
                 kachakacha::v2::domain::Visibility::Hidden));
         if (!hidden.committed) {
             ReportDiagnostics(hidden.diagnostics);
-            ForgetFaceProfile();
-            return;
+            return false;
         }
     }
-    transaction.Commit();
-    ForgetFaceProfile();
-    AdoptCurrentDocument();
+    return transaction.Commit();
 }
 
 //! 抱えている面の縁を、押し出しの輪郭にする。文書へは入れない。

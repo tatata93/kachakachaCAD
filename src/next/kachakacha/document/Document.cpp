@@ -207,6 +207,7 @@ void Document::BeginCompound(std::string label)
     if (compoundDepth_ == 0) {
         compoundLabel_ = std::move(label);
         compoundBefore_ = snapshot_;
+        compoundSpoiled_ = false;
     }
     ++compoundDepth_;
 }
@@ -218,6 +219,16 @@ void Document::EndCompound()
     }
     --compoundDepth_;
     if (compoundDepth_ > 0 || !compoundBefore_.has_value()) {
+        return;
+    }
+    // 内側が一度でも取りやめていたら、外側で閉じても残さない。
+    // 「外側で A を足す → 内側で B を足す → 内側が取りやめ → 外側が閉じる」で
+    // A も B も残る、という半分だけ成功した状態を作らないためである。
+    if (compoundSpoiled_) {
+        snapshot_ = *compoundBefore_;
+        compoundBefore_.reset();
+        compoundLabel_.clear();
+        compoundSpoiled_ = false;
         return;
     }
     // 中身が変わっていなければ履歴を汚さない。
@@ -239,7 +250,14 @@ void Document::AbortCompound()
         return;
     }
     --compoundDepth_;
-    if (compoundDepth_ > 0 || !compoundBefore_.has_value()) {
+    if (compoundDepth_ > 0) {
+        // 内側の取りやめ。ここでは戻せない(外側がまだ続いている)ので、
+        // 印だけ立てて、いちばん外側で閉じるときにまとめて戻す。
+        compoundSpoiled_ = true;
+        return;
+    }
+    if (!compoundBefore_.has_value()) {
+        compoundSpoiled_ = false;
         return;
     }
     // 始める前へ戻す。**履歴は増やさない。**
@@ -248,6 +266,7 @@ void Document::AbortCompound()
     snapshot_ = *compoundBefore_;
     compoundBefore_.reset();
     compoundLabel_.clear();
+    compoundSpoiled_ = false;
 }
 
 std::string Document::UndoLabel() const

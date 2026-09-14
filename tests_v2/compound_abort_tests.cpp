@@ -153,7 +153,7 @@ void RunAbortedExtrude(Fixture& fixture, std::size_t stepCount, std::size_t fail
     const auto hidden = fixture.document.Run(
         SetVisibilityCommand({fixture.earlier}, Visibility::Hidden));
     Require(hidden.committed, "元を隠せること");
-    transaction.Commit();
+    Require(transaction.Commit(), "残ること");
 }
 
 }  // namespace
@@ -212,7 +212,7 @@ KACHA_V2_TEST(compound_abort, a_successful_run_is_one_undo_step)
                  .Run(SetVisibilityCommand({fixture.earlier}, Visibility::Hidden))
                  .committed,
         "元を隠せること");
-    transaction.Commit();
+    Require(transaction.Commit(), "残ること");
 
     Require(fixture.document.Snapshot().entities.size() == 4, "4つになること");
     Require(VisibilityOf(fixture.document.Snapshot(), fixture.earlier)
@@ -254,11 +254,73 @@ KACHA_V2_TEST(compound_abort, an_abort_inside_an_abort_still_returns_to_the_star
                          .committed,
                 "内側の段が通ること");
             // 内側は Commit する。外側が失敗したら、内側ごと戻る。
-            inner.Commit();
+            Require(inner.Commit(), "内側は閉じられること");
         }
         // 外側は Commit しない。
     }
     fixture.RequireSameAs(before, "入れ子の外側で失敗");
+}
+
+KACHA_V2_TEST(compound_abort, an_inner_abort_is_not_swallowed_by_an_outer_commit)
+{
+    // Codex P1-EXTRUDE-R3 B1。逆の順。
+    // 「外側で A を足す → 内側で B を足す → 内側が取りやめ → 外側が閉じる」。
+    // 内側の取りやめを外側が飲み込むと、A も B も残ってしまう。
+    // 呼ぶ側が返り値を見落としただけで、原子的なはずの操作が半分だけ保存される。
+    Fixture fixture;
+    const auto before = fixture.Capture();
+    bool outerKept = true;
+    {
+        Document::Transaction outer(fixture.document, "外側");
+        const auto first = fixture.maker.Make("外側で作った点");
+        Require(fixture.document.Run(
+                        AddFeatureCommand(first.feature, {first.entity}, "外側"))
+                     .committed,
+            "外側の段が通ること");
+        {
+            Document::Transaction inner(fixture.document, "内側");
+            const auto nested = fixture.maker.Make("内側で作った点");
+            Require(fixture.document.Run(
+                            AddFeatureCommand(nested.feature, {nested.entity}, "内側"))
+                         .committed,
+                "内側の段が通ること");
+            // 内側は Commit しない。ここで取りやめる。
+        }
+        Require(fixture.document.CompoundSpoiled(),
+            "内側が取りやめたことが外側に伝わること");
+        // 外側は閉じる。それでも残ってはいけない。
+        outerKept = outer.Commit();
+    }
+    Require(!outerKept, "外側で閉じても『残った』とは言わないこと");
+    fixture.RequireSameAs(before, "内側の取りやめを外側が飲み込まない");
+}
+
+KACHA_V2_TEST(compound_abort, an_inner_abort_spoils_even_a_later_successful_step)
+{
+    // 内側が取りやめたあとに外側でさらに足しても、まとめては残らない。
+    // 「途中で1つ失敗したが、あとの分だけ残った」を作らない。
+    Fixture fixture;
+    const auto before = fixture.Capture();
+    bool outerKept = true;
+    {
+        Document::Transaction outer(fixture.document, "外側");
+        {
+            Document::Transaction inner(fixture.document, "内側");
+            const auto nested = fixture.maker.Make("内側で作った点");
+            Require(fixture.document.Run(
+                            AddFeatureCommand(nested.feature, {nested.entity}, "内側"))
+                         .committed,
+                "内側の段が通ること");
+        }
+        const auto later = fixture.maker.Make("あとから作った点");
+        Require(fixture.document.Run(
+                        AddFeatureCommand(later.feature, {later.entity}, "あと"))
+                     .committed,
+            "あとの段が通ること");
+        outerKept = outer.Commit();
+    }
+    Require(!outerKept, "残ったとは言わないこと");
+    fixture.RequireSameAs(before, "あとの段も含めて全部戻ること");
 }
 
 KACHA_V2_TEST_MAIN("compound_abort_tests")

@@ -261,8 +261,23 @@ using kachakacha::v2::domain::Visibility;
         return false;
     }
 
+    // 番号の扱いを先に見る。**丸めない。** 無い番号なら何も変わらない。
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
+    window.RunCommand("fabrication.merge_parts");
+    if (!Explain((std::string("無い番号は断る(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            static_cast<int>(window.FabricationPanelCount()) == before)) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("999"));
+    window.RunCommand("fabrication.split_part");
+    if (!Explain("無い番号では分けない",
+            static_cast<int>(window.FabricationPanelCount()) == before)) {
+        return false;
+    }
+
     // 1枚目と2枚目を1つにする。枚数が1減る。
-    window.FabricationDock().SetPartNumbersText(QStringLiteral("1, 2"));
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.RunCommand("fabrication.merge_parts");
     const int merged = static_cast<int>(window.FabricationPanelCount());
     if (!Explain((std::string("1つにすると枚数が減る(") + std::to_string(before)

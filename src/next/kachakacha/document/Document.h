@@ -145,18 +145,28 @@ public:
             }
         }
         //! ここまでを1つの操作として残す。
-        void Commit()
+        //!
+        //! 内側のまとめが取りやめになっていたら、ここで閉じても残らない。
+        //! 返り値は「本当に残ったか」。いちばん外側で偽になったら、
+        //! 呼んだ側は画面と覚えている形も戻さなければならない。
+        [[nodiscard]] bool Commit()
         {
-            if (document_ != nullptr) {
-                document_->EndCompound();
-                document_ = nullptr;
+            if (document_ == nullptr) {
+                return false;
             }
+            const bool outermost = document_->compoundDepth_ == 1;
+            const bool spoiled = document_->CompoundSpoiled();
+            document_->EndCompound();
+            document_ = nullptr;
+            return !(outermost && spoiled);
         }
 
     private:
         Document* document_ = nullptr;
     };
     [[nodiscard]] bool InCompound() const noexcept { return compoundDepth_ > 0; }
+    //! 内側のまとめが取りやめになっているか。いちばん外側で閉じても残らない。
+    [[nodiscard]] bool CompoundSpoiled() const noexcept { return compoundSpoiled_; }
 
     [[nodiscard]] bool CanUndo() const noexcept { return !undoStack_.empty(); }
     [[nodiscard]] bool CanRedo() const noexcept { return !redoStack_.empty(); }
@@ -196,6 +206,13 @@ private:
     int compoundDepth_ = 0;
     std::string compoundLabel_;
     std::optional<DocumentSnapshot> compoundBefore_;
+    //! 内側のまとめが「無かったこと」になった印。
+    //!
+    //! 入れ子の内側が失敗したのに外側がそのまま閉じると、
+    //! 失敗した分まで残ってしまう。呼ぶ側が返り値を見落とすと、
+    //! 原子的なはずの操作が半分だけ保存される。
+    //! だから一度でも内側が取りやめたら、いちばん外側も取りやめる。
+    bool compoundSpoiled_ = false;
 };
 
 } // namespace kachakacha::v2::document

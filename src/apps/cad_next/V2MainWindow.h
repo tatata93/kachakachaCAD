@@ -39,6 +39,7 @@
 #include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/fabrication/BandPartition.h"
 #include "kachakacha/fabrication/BendRadius.h"
 #include "kachakacha/fabrication/FreezeState.h"
 #include "kachakacha/app/DiagnosticReport.h"
@@ -156,6 +157,12 @@ public:
     //! 抱えていた縁を捨てる。取消・道具替え・確定のあと。
     void ForgetFaceProfile();
     //! 出来た形を文書へ入れる。1回の操作は1回の取り消しで戻る。
+    //! 文書を変えるところだけ。残ったら真。呼ぶ側が必ず後始末をする。
+    [[nodiscard]] bool CommitExtrudeAtomically(
+        const kachakacha::v2::app::ExtrudeChoice& choice,
+        const kachakacha::v2::app::ExtrudePlan& plan,
+        const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
+        const kachakacha::v2::kernel::ExtrudeBuildResult& built);
     void CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choice,
         const kachakacha::v2::app::ExtrudePlan& plan,
         const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
@@ -884,9 +891,16 @@ private:
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
     void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
 public:
-    //! 部材の分割と統合(§32)。判断は core(`fabrication/PanelEdit`)がする。
+    //! 部材の分割と統合(§32)。判断は core(`fabrication/BandPartition`)がする。
     void MergeFabricationParts();
     void SplitFabricationPart();
+    //! いまの帯の境目と、部材ごとの幅。近似がまだなら偽。
+    [[nodiscard]] bool CurrentBandPartition(std::vector<double>& railParameters,
+        std::vector<double>& widthsMm) const;
+    //! 見せた候補をそのまま文書へ書く。見せた形と出来た形を食い違わせない。
+    void ApplyBandPartition(
+        const kachakacha::v2::fabrication::BandPartitionPreview& preview,
+        const QString& what);
     //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
     void SetUnfoldBaseRail();
     //! 帯の境目を文書へ書き、以後は自動で切り直さない(§32)。

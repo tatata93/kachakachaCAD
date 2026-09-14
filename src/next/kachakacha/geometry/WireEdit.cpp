@@ -15,6 +15,7 @@ constexpr const char* kNotExtendable = "GEO-E002";
 constexpr const char* kNotSupported = "GEO-E003";
 constexpr const char* kDegenerate = "GEO-E004";
 constexpr const char* kNotCoplanar = "GEO-E005";
+constexpr const char* kClickOffCurve = "GEO-E022";
 
 [[nodiscard]] bool IsLine(const CurveSegment& curve)
 {
@@ -247,16 +248,35 @@ Result<CurveSegment> TrimCurve(const CurveSegment& curve, const CurveSegment& bo
             "切る境界と交わっていません。",
             "交わっている線を境界に選んでください。"));
     }
+    // 押した場所が線の上でなければ、どこを切るのか決まらない。
+    // 区切りを探す繰り返しは「見つからなければ最後まで進む」ので、
+    // そのまま次を読むと並びの外を読む。**先に断る。**
+    // (Codex P1-EXTRUDE-R3 B3。Windows の Debug ではここで止まっていた。)
+    if (!std::isfinite(clickParameter) || clickParameter < 0.0 || clickParameter > 1.0) {
+        return Result<CurveSegment>::Failure(MakeError(kClickOffCurve,
+            "押した場所が線の上にありません。",
+            "線の上の、切り落としたい側を押してください。"));
+    }
     // クリック位置を挟む2つの区切りを探す。両端も区切りに含める。
     std::vector<double> cuts{0.0, 1.0};
     for (const EditIntersection& hit : hits) {
-        cuts.push_back(hit.parameterA);
+        // 交点の位置そのものがおかしいこともある。線の上のものだけ使う。
+        if (std::isfinite(hit.parameterA) && hit.parameterA > 0.0
+            && hit.parameterA < 1.0) {
+            cuts.push_back(hit.parameterA);
+        }
     }
     std::sort(cuts.begin(), cuts.end());
     std::size_t index = 0;
     while (index + 1 < cuts.size() && !(clickParameter >= cuts[index]
                && clickParameter <= cuts[index + 1])) {
         ++index;
+    }
+    if (index + 1 >= cuts.size()) {
+        // ここへは来ないはずだが、来たら並びの外を読むより断るほうがよい。
+        return Result<CurveSegment>::Failure(MakeError(kClickOffCurve,
+            "押した場所が線の上にありません。",
+            "線の上の、切り落としたい側を押してください。"));
     }
     const double removeLow = cuts[index];
     const double removeHigh = cuts[index + 1];

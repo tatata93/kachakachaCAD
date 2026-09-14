@@ -887,6 +887,10 @@ public:
     //! 部材の分割と統合(§32)。判断は core(`fabrication/PanelEdit`)がする。
     void MergeFabricationParts();
     void SplitFabricationPart();
+    //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
+    void SetUnfoldBaseRail();
+    //! いま決まっている、展開の基準にする辺。試験から見る。
+    [[nodiscard]] int UnfoldBaseRailNow() const;
     //! いまの製作モデルの部材の数。
     [[nodiscard]] std::size_t FabricationPanelCount() const;
     //! 棚の「曲げる部材」に書いた番号。0 起点。

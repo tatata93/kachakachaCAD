@@ -99,7 +99,7 @@ std::string V2MainWindow::FabricationShapeSignature() const
     const auto state = kachakacha::v2::app::ResolveFoldState(*definition,
         *found->second.bandMesh);
     const auto folded = kachakacha::v2::fabrication::FoldBandMesh(*found->second.bandMesh,
-        state.masterProgress, state.creaseFactors);
+        state.masterProgress, state.creaseFactors, state.unfoldBaseRail);
     std::string text;
     for (const auto& row : folded) {
         // 全部の点を並べると長い。行の端と真ん中だけで足りる。
@@ -209,4 +209,76 @@ void V2MainWindow::ApplyBendRadius(double radiusMm, bool locked)
     RefreshFabricationView();
     RefreshBendRadius();
     SetStatus(message);
+}
+
+//! いま決まっている、展開の基準にする辺(§33)。
+int V2MainWindow::UnfoldBaseRailNow() const
+{
+    const auto* definition = CurrentFabricationDefinition();
+    const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
+    if (definition == nullptr || found == fabricationModels_.end()
+        || !found->second.bandMesh.has_value()) {
+        return 0;
+    }
+    return kachakacha::v2::app::ResolveFoldState(*definition, *found->second.bandMesh)
+        .unfoldBaseRail;
+}
+
+//! 展開の基準にする辺を決める(§33)。
+//!
+//! 展開すると、既定では先頭の辺が動かない。しかし人が作るときは
+//! 「この辺は動かしたくない」がある。床板の縁を基準にすれば、
+//! 展開しても床板がその場に残り、まわりの板だけが開く。
+//!
+//! 相手は棚の「曲げる部材」に書いた番号で選ぶ。番号 n の **手前の境目** が基準になる。
+//! 1 を書けば先頭の辺(既定に戻る)、2 を書けば1枚目と2枚目の境目である。
+void V2MainWindow::SetUnfoldBaseRail()
+{
+    using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
+
+    const auto* entity = session_->GetDocument().FindEntity(CurrentFabricationModelId());
+    const auto* feature =
+        entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
+    if (current == nullptr || found == fabricationModels_.end()
+        || !found->second.bandMesh.has_value()) {
+        SetStatus(QStringLiteral(
+            "展開の基準にする辺: 先に「製作モデルを作る」で帯近似の近似モデルを"
+            "作ってください。"));
+        return;
+    }
+    const auto numbers = SelectedPartNumbers();
+    if (numbers.size() != 1) {
+        SetStatus(QStringLiteral(
+            "展開の基準にする辺: 棚の「曲げる部材」に、基準にする部材の番号を"
+            "1つ書いてください。その部材の手前の境目が基準になります。"));
+        return;
+    }
+    const int rails = found->second.bandMesh->rows;
+    const int wanted = static_cast<int>(numbers.front());
+    if (wanted < 0 || wanted >= rails) {
+        SetStatus(QStringLiteral("展開の基準にする辺: 1 から %1 までの番号を"
+                                 "書いてください。")
+                .arg(rails - 1));
+        return;
+    }
+    auto definition = *current;
+    definition.unfoldBaseRail = wanted;
+    const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
+        feature->id, definition, feature->inputEntityIds, "展開の基準にする辺を決める"));
+    if (!changed.committed) {
+        ReportDiagnostics(changed.diagnostics);
+        return;
+    }
+    AdoptCurrentDocument();
+    RefreshFabricationView();
+    SetStatus(wanted == 0
+            ? QStringLiteral("展開の基準にする辺: 先頭の辺(既定)に戻しました。")
+            : QStringLiteral("展開の基準にする辺: 部材%1 の手前の境目にしました。"
+                             "展開してもこの辺は動きません。")
+                  .arg(wanted + 1));
 }

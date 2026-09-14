@@ -938,6 +938,11 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 部材の数は近似をやり直すと変わるので、古い値を理由に開けなくしない。
 固定した半径は、その折り線の角を `θ = L / R` へ合わせる形で **実際の形に効く**。
 帯の幅 L は動かさないので、どの半径でも面内長は変わらない。
+同じく 2026-09-14 から `unfoldBaseRail`(展開の基準にする辺。帯の境目の番号、0 が先頭)
+も持つ。既定(0)なら書かない。範囲の外なら先頭へ戻して読む。
+帯の数は近似をやり直すと変わるので、古い基準を理由に開けなくしない。
+基準の辺は、展開しても **いまの形の位置に残る**。剛体で置き直すだけなので、
+面内長も帯の幅も変わらない。
 材料と積層は Feature ではなく Entity の `manufacturing`(`materialName` `layerCount` など)に持つ
 (V1 の plate の材料と plate_laminate に当たる)。
 

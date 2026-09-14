@@ -103,6 +103,8 @@ struct ResolvedFoldState {
     std::vector<double> creaseFactors;
     //! 測った半径に、保存してある固定を重ねたもの。画面へ出すのはこれ。
     std::vector<fabrication::BendRadius> bends;
+    //! 展開の基準にする辺(§33)。範囲の外なら 0 に直してある。
+    int unfoldBaseRail = 0;
 };
 
 [[nodiscard]] ResolvedFoldState ResolveFoldState(

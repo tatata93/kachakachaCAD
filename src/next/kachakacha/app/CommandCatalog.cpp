@@ -469,6 +469,13 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "1つの部材を2つに分けます。ずれは減りますが、貼り合わせが増えます。", true,
             {"AT-FAB-005"}},
+        {"fabrication.set_unfold_base", "展開の基準にする辺", CommandMode::Instant,
+            "fab_unfold_base", "", SelectionPredicate::OneFabricationModel,
+            "製作モデルを1つ選んでください。",
+            "展開したときに動かさない辺を決めます。棚の「曲げる部材」に書いた番号の"
+            "手前の境目が基準になります。床板の縁を基準にすれば、展開しても"
+            "床板はその場に残り、まわりの板だけが開きます。", true,
+            {"AT-FAB-011"}},
         {"export.validate", "出力を検査", CommandMode::Instant, "validate", "",
             SelectionPredicate::OnePart, "部品を1つ選んでください。",
             "書き出せる形かどうかを先に確かめます。", false,

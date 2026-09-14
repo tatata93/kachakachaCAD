@@ -606,6 +606,8 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
             ReadNumberArray(loader, definition, "bendRadiusLock", where)) {
             made.bendRadiusLock.push_back(value >= 0.5 ? 1 : 0);
         }
+        made.unfoldBaseRail =
+            static_cast<int>(loader.NumberOr(definition, "unfoldBaseRail", 0.0));
         feature.definition = std::move(made);
         break;
     }

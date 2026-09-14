@@ -315,6 +315,11 @@ template<class Id>
             }
             definition["bendRadiusLock"] = JsonValue::Array(std::move(locks));
         }
+        // 展開の基準にする辺(§33)。既定(先頭)なら書かない。
+        if (fabrication->unfoldBaseRail != 0) {
+            definition["unfoldBaseRail"] =
+                JsonValue::Number(static_cast<double>(fabrication->unfoldBaseRail));
+        }
     } else if (const auto* thicken =
                    std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition)) {
         definition["surface"] = WriteId(thicken->surface);

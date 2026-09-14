@@ -315,6 +315,7 @@ void V2MainWindow::BuildMenus()
                        "fabrication.preview_update", "fabrication.create_pattern",
                        "fabrication.set_assembly", "fabrication.set_method",
                        "fabrication.merge_parts", "fabrication.split_part",
+                       "fabrication.set_unfold_base",
                        "fabrication.freeze_output", "fabrication.freeze_state",
                        "fabrication.set_connection_scope"}},
         {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",

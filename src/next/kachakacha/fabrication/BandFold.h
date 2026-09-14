@@ -31,6 +31,16 @@ namespace kachakacha::v2::fabrication {
 [[nodiscard]] std::vector<std::vector<Vector3>> FoldBandMesh(const BandMesh& mesh,
     double progress, const std::vector<double>& creaseFactors);
 
+//! 展開の基準にするレールつき(§33)。
+//!
+//! 既定(0)では先頭のレールが動かない。人が「この辺は動かしたくない」と
+//! 決めたら、そのレールを **いまの形の位置へ剛体で置き直す**。
+//! 床板の縁を基準にすれば、展開しても床板はその場に残り、まわりだけが開く。
+//! 置き直すだけなので、面内長も帯の幅も変わらない。
+//! 範囲の外なら既定に戻る。基準が消えたことを理由に開けなくしない。
+[[nodiscard]] std::vector<std::vector<Vector3>> FoldBandMesh(const BandMesh& mesh,
+    double progress, const std::vector<double>& creaseFactors, int baseRail);
+
 //! 完成形(world)での各内部レールの平均折り角(符号付きラジアン、0 = 平ら)。
 //! サイズは CreaseCount()。可動折り線の表示(度)と進行度⇄角度の換算に使う。
 [[nodiscard]] std::vector<double> MeasureCreaseAngles(const BandMesh& mesh);

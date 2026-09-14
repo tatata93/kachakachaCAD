@@ -95,6 +95,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `workplane.create` | 作業平面を作る | 方式+方式別Entity | WorkPlane | AT-WPL-001,002 |
 | `fabrication.merge_parts` | 部材を1つにする | 製作モデル1つ | 部材の分け方を変える | AT-FAB-005 |
 | `fabrication.split_part` | 部材を分ける | 製作モデル1つ | 部材の分け方を変える | AT-FAB-005 |
+| `fabrication.set_unfold_base` | 展開の基準にする辺 | 製作モデル1つ + 棚の「曲げる部材」の番号 | Fabrication Feature 更新(`unfoldBaseRail`)。展開しても動かさない辺を決める | AT-FAB-011 |
 | `group.create` | グループ化 | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
 | `group.dissolve` | グループを解く | まとまりの行 | Groupを消し中身は親へ | AT-UIX-006 |
 | `group.rename` | グループの名前を変える | まとまりの行 | Group displayName | AT-UIX-006 |

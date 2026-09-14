@@ -221,6 +221,61 @@ KACHA_V2_TEST(band_bend_radius, 平らなところは半径を入れても曲げ
     Require(moved < 1.0e-6, "平らなところは動かない");
 }
 
+KACHA_V2_TEST(band_bend_radius, 展開の基準にした辺は動かない)
+{
+    // §33。展開すると、既定では先頭の辺が動かない。
+    // 基準を選べば、その辺がその場に残り、まわりの板だけが開く。
+    const BandMesh mesh = MakeCylinderMesh();
+    Require(mesh.rows >= 4, "辺が4本以上ある");
+    const int base = mesh.rows / 2;
+
+    const auto standard = FoldBandMesh(mesh, 0.0, {}, 0);
+    const auto anchored = FoldBandMesh(mesh, 0.0, {}, base);
+    Require(standard.size() == anchored.size(), "行の数は同じ");
+
+    // 基準にした辺は、いまの形の位置に残っている。
+    const auto row = static_cast<std::size_t>(base);
+    double worstOnBase = 0.0;
+    for (std::size_t column = 0; column < anchored[row].size(); ++column) {
+        worstOnBase = std::max(worstOnBase,
+            (anchored[row][column] - mesh.world[row][column]).Length());
+    }
+    Require(worstOnBase < 1.0e-6,
+        "基準の辺は動かない(ずれ " + std::to_string(worstOnBase) + "mm)");
+
+    // 既定のままなら、その辺は動いていたはずである。
+    double worstDefault = 0.0;
+    for (std::size_t column = 0; column < standard[row].size(); ++column) {
+        worstDefault = std::max(worstDefault,
+            (standard[row][column] - mesh.world[row][column]).Length());
+    }
+    Require(worstDefault > 1.0e-3, "基準を選ばなければ、その辺は動いていた");
+
+    // 置き直しただけなので、板の長さはどちらも同じ。
+    const std::size_t middle = static_cast<std::size_t>(mesh.columns) / 2;
+    RequireNear(RungLength(anchored, middle), RungLength(standard, middle), 1.0e-9,
+        "基準を変えても面内長は変わらない");
+}
+
+KACHA_V2_TEST(band_bend_radius, 範囲の外の基準は先頭へ戻す)
+{
+    // 帯の数は近似をやり直すと変わる。古い基準を理由に開けなくしない。
+    const BandMesh mesh = MakeCylinderMesh();
+    const auto standard = FoldBandMesh(mesh, 0.0, {}, 0);
+    for (const int base : {-1, mesh.rows, mesh.rows + 5}) {
+        const auto made = FoldBandMesh(mesh, 0.0, {}, base);
+        Require(made.size() == standard.size(), "行の数は同じ");
+        double worst = 0.0;
+        for (std::size_t row = 0; row < made.size(); ++row) {
+            for (std::size_t column = 0; column < made[row].size(); ++column) {
+                worst = std::max(worst,
+                    (made[row][column] - standard[row][column]).Length());
+            }
+        }
+        Require(worst < 1.0e-9, "既定と同じ形になる");
+    }
+}
+
 KACHA_V2_TEST(band_bend_radius, 部材ごとの半径を一文にできる)
 {
     std::vector<BendRadius> bends;

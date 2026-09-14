@@ -444,6 +444,12 @@ ResolvedFoldState ResolveFoldState(
         fabrication::MeasureBandBendRadii(mesh, angles), definition.bendRadiusMm,
         definition.bendRadiusLock);
     state.creaseFactors = fabrication::BendRadiusCreaseFactors(mesh, angles, state.bends);
+    // 展開の基準にする辺。帯の数は近似をやり直すと変わるので、
+    // 範囲の外なら黙って先頭へ戻す。基準が消えたことを理由に開けなくしない。
+    state.unfoldBaseRail = (definition.unfoldBaseRail > 0
+                               && definition.unfoldBaseRail < mesh.rows)
+        ? definition.unfoldBaseRail
+        : 0;
     return state;
 }
 

@@ -178,7 +178,8 @@ void V2MainWindow::FreezeFabricationState()
     // 接続スコープの線も、この曲げ状態の形へ寄せて固定する(V1 の PartFoldState と同じ)。
     const auto state = kachakacha::v2::app::ResolveFoldState(definition, *evaluated.bandMesh);
     const auto folded = kachakacha::v2::fabrication::FoldBandMesh(
-        *evaluated.bandMesh, state.masterProgress, state.creaseFactors);
+        *evaluated.bandMesh, state.masterProgress, state.creaseFactors,
+        state.unfoldBaseRail);
     for (const auto& wire : kachakacha::v2::app::AdaptConnectionWires(
              *evaluated.bandMesh, folded, ConnectionScopeCurves(definition),
              evaluated.maximumDeviationMm + 0.35)) {

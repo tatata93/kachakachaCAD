@@ -100,6 +100,10 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         SplitFabricationPart();
         return;
     }
+    if (id == "fabrication.set_unfold_base") {
+        SetUnfoldBaseRail();
+        return;
+    }
     if (id == "fabrication.set_connection_scope") {
         SetConnectionScope();
         return;

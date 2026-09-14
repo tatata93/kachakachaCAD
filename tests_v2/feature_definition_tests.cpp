@@ -219,6 +219,19 @@ KACHA_V2_TEST(feature_definition, 部材ごとの曲げ半径と固定が保存�
     Require(back.bendRadiusLock[2] == 1, "3枚目は固定");
 }
 
+KACHA_V2_TEST(feature_definition, 展開の基準にする辺が保存して読み直せる)
+{
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    made.unfoldBaseRail = 3;
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    Require(back.unfoldBaseRail == 3, "基準の辺が残る");
+    CreateFabricationModelDefinition plain;
+    plain.parts = {Ent(1)};
+    Require(RoundTrip(FeatureType::CreateFabricationModel, plain).unfoldBaseRail == 0,
+        "書いていない古い文書は先頭が基準");
+}
+
 KACHA_V2_TEST(feature_definition, 曲げ半径が無い古い文書は全部自動で読める)
 {
     CreateFabricationModelDefinition made;

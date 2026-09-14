@@ -316,6 +316,36 @@ struct RailChord {
     return result;
 }
 
+//! 展開の基準にするレールを、いまの形の位置へ戻す(§33)。
+//!
+//! 展開すると、既定では先頭のレールが動かない。しかし人が作るときは
+//! 「この辺は動かしたくない」がある。床板の縁を基準にすれば、
+//! 展開しても床板がその場に残り、まわりの板だけが開く。
+//!
+//! 面内長は触らない。**剛体で置き直すだけ** である。
+void AnchorToBaseRail(Rows& rows, const BandMesh& mesh, int baseRail)
+{
+    if (baseRail <= 0 || baseRail >= static_cast<int>(rows.size())
+        || baseRail >= static_cast<int>(mesh.world.size())) {
+        return;
+    }
+    const auto row = static_cast<std::size_t>(baseRail);
+    if (rows[row].size() < 2 || mesh.world[row].size() < 2) {
+        return;
+    }
+    const std::size_t anchor = std::min(rows[row].size(), mesh.world[row].size()) / 2;
+    const PointFrame from = MakePointFrame(rows[row].front(), rows[row].back(),
+        rows[row][anchor]);
+    const PointFrame to = MakePointFrame(mesh.world[row].front(), mesh.world[row].back(),
+        mesh.world[row][anchor]);
+    std::vector<std::vector<Vector3>*> all;
+    all.reserve(rows.size());
+    for (auto& one : rows) {
+        all.push_back(&one);
+    }
+    AlignFrames(from, to, all);
+}
+
 } // namespace
 
 Rows FoldBandMesh(const BandMesh& mesh, double progress)
@@ -325,6 +355,12 @@ Rows FoldBandMesh(const BandMesh& mesh, double progress)
 
 Rows FoldBandMesh(const BandMesh& mesh, double progress,
     const std::vector<double>& creaseFactors)
+{
+    return FoldBandMesh(mesh, progress, creaseFactors, 0);
+}
+
+Rows FoldBandMesh(const BandMesh& mesh, double progress,
+    const std::vector<double>& creaseFactors, int baseRail)
 {
     const double t = std::clamp(progress, 0.0, 1.0);
     // 半径を固定した折り線があると、100% でも world とは違う形になる。
@@ -339,7 +375,9 @@ Rows FoldBandMesh(const BandMesh& mesh, double progress,
         return mesh.world;
     }
     if (t <= 1.0e-9) {
-        return PlaceFlatDevelopment(mesh);
+        Rows flat = PlaceFlatDevelopment(mesh);
+        AnchorToBaseRail(flat, mesh, baseRail);
+        return flat;
     }
     // 中間: 帯ごとに等長で曲げ、共有レールで順に剛体接続し、
     // 帯間の折り角(world の値)も progress 倍する。帯の中は常に厳密な等長。
@@ -378,6 +416,7 @@ Rows FoldBandMesh(const BandMesh& mesh, double progress,
         }
         result[static_cast<std::size_t>(band) + 1] = std::move(top);
     }
+    AnchorToBaseRail(result, mesh, baseRail);
     return result;
 }
 

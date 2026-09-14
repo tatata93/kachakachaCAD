@@ -205,6 +205,15 @@ std::string V2MainWindow::FabricationInputSignature() const
     }
     std::string text = CurrentFabricationModelId().ToString();
     text += '|';
+    // 全体の曲げ状態。ここを入れ忘れていたので、案を見せたあとに組立率を
+    // 動かしても「同じ状態」と読めてしまった。自己試験がそれを見つけた。
+    text += std::to_string(static_cast<long long>(std::llround(definition->masterPercent * 1000.0)));
+    text += '|';
+    // 近似の方式と、自動で切るかどうか。どちらも分け方そのものを変える。
+    text += std::to_string(definition->method);
+    text += ',';
+    text += definition->automaticBoundaries ? '1' : '0';
+    text += '|';
     // 分け方そのもの。
     for (const double rail : definition->manualBoundaries) {
         text += std::to_string(static_cast<long long>(std::llround(rail * 1000000.0)));

@@ -75,11 +75,13 @@ namespace {
     const std::vector<SelfTestCase> hoModel = HoModelCases();
     const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
+    const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();
     cases.insert(cases.end(), screen.begin(), screen.end());
     cases.insert(cases.end(), facing.begin(), facing.end());
     cases.insert(cases.end(), groups.begin(), groups.end());
     cases.insert(cases.end(), promise.begin(), promise.end());
     cases.insert(cases.end(), graph.begin(), graph.end());
+    cases.insert(cases.end(), approxFlow.begin(), approxFlow.end());
     cases.insert(cases.end(), hoModel.begin(), hoModel.end());
     const std::vector<SelfTestCase> semantics = SemanticStateCases();
     cases.insert(cases.end(), semantics.begin(), semantics.end());

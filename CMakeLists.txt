@@ -927,6 +927,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2FacePushPull.cpp
         src/apps/cad_next/V2SelfTestExtrudePromise.cpp
         src/apps/cad_next/V2SelfTestExtrudeGraph.cpp
+        src/apps/cad_next/V2SelfTestApproxFlow.cpp
         src/apps/cad_next/V2SelfTestFacing.cpp
         src/apps/cad_next/V2SelfTestGroup.cpp
         src/apps/cad_next/V2SelfTestHoModel.cpp

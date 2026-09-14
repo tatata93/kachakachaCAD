@@ -860,10 +860,22 @@ private:
         int count = 0;
         //! 向きを変えない相手か(立体そのものなど)。中央と大きさだけ合わせる。
         bool keepOrientation = false;
+        //! 複数選んだときの決まり(Q1 の契約、Codex Q1-Q5 の UX 指摘)。
+        //!
+        //! **向きは、向きを持つ相手のうち最初の1つが決める。**
+        //! **収まりは、選んだもの全部が決める。**
+        //! 最後に選んだものが黙って向きを奪う、という動きは分かりにくい。
+        //! 向きの違う相手が混じっていたら、真になって帯にそう出る。
+        //! 何も言わずにどれか1つの向きになるのが、いちばん困る。
+        bool mixedDirections = false;
     };
     //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
     bool facingFromBehind_ = false;
     void CollectFacingTarget(FacingTarget& target) const;
+    //! 向きを持つ相手が見つかった。最初の1つだけが向きを決める。
+    static void NoteFacingDirection(FacingTarget& target,
+        const kachakacha::v2::geometry::Vector3& normal,
+        const kachakacha::v2::geometry::Vector3& uAxis);
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
     void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
 public:

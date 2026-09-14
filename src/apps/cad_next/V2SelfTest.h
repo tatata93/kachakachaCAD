@@ -64,6 +64,12 @@ struct SelfTestCase {
 //! 押し出しの約束(下見中は文書不変・1操作1取り消し・選んだ演算の保持)。
 [[nodiscard]] std::vector<SelfTestCase> ExtrudePromiseCases();
 
+//! 何も無いところから面を作り、本番の指示だけで近似・曲げ・出力まで通す(Q4)。
+[[nodiscard]] std::vector<SelfTestCase> ApproximationFlowCases();
+
+//! 曲がった形状ガイドの面を、本番の指示だけで作る。近似の試験の下ごしらえ。
+[[nodiscard]] bool MakeCurvedGuideSurface(V2MainWindow& window);
+
 //! 押し出しの依存関係(面の縁の線・相手の立体を入力として記録しているか)。
 [[nodiscard]] std::vector<SelfTestCase> ExtrudeGraphCases();
 

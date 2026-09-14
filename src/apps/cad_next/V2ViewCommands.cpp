@@ -281,6 +281,29 @@ void SampleCurve(const kachakacha::v2::geometry::CurveSegment& segment,
 //! 選んだものから、正対に使う点と向きを集める。
 //! 作業平面は四隅と法線、線は標本点、点はその位置。
 //! 線がある作業平面の上に全部載っていれば、その面の向きを使う(V1 と同じ)。
+//! 向きを持つ相手が見つかった。**最初の1つだけが向きを決める。**
+//!
+//! 最後に選んだものが黙って上書きする作りだと、2枚選んだときに
+//! どちらの向きになるかが人には分からない。ここは先着で決め、
+//! 向きの違うものが混じっていたことは帯で伝える。
+void V2MainWindow::NoteFacingDirection(FacingTarget& target,
+    const kachakacha::v2::geometry::Vector3& normal,
+    const kachakacha::v2::geometry::Vector3& uAxis)
+{
+    using kachakacha::v2::geometry::Dot;
+    using kachakacha::v2::geometry::Normalized;
+    if (!target.normal.has_value()) {
+        target.normal = normal;
+        target.uAxis = uAxis;
+        return;
+    }
+    // だいたい同じ向き(裏表は問わない)なら、混ざっているとは言わない。
+    const double alignment = std::abs(Dot(Normalized(*target.normal), Normalized(normal)));
+    if (alignment < 0.999) {
+        target.mixedDirections = true;
+    }
+}
+
 void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
 {
     using kachakacha::v2::domain::EntityKind;
@@ -301,8 +324,7 @@ void V2MainWindow::CollectFacingTarget(FacingTarget& target) const
             target.points.push_back(frame->PointAt(half, half));
             target.points.push_back(frame->PointAt(-half, half));
             // 作業平面は向きがはっきりしている。推さずにそのまま使う。
-            target.normal = frame->normal;
-            target.uAxis = frame->uAxis;
+            NoteFacingDirection(target, frame->normal, frame->uAxis);
             ++target.count;
             continue;
         }
@@ -368,8 +390,7 @@ bool V2MainWindow::AppendSolidFacing(const kachakacha::v2::base::EntityId& id,
         for (const auto& point : sampled.Value().samples.points) {
             target.points.push_back(point);
         }
-        target.normal = pose.Value().normal;
-        target.uAxis = pose.Value().uAxis;
+        NoteFacingDirection(target, pose.Value().normal, pose.Value().uAxis);
         return true;
     }
     // 面を選んでいない。立体の網の点をそのまま相手にする(向きは推す)。
@@ -425,8 +446,7 @@ bool V2MainWindow::AppendSurfaceFacing(const kachakacha::v2::base::EntityId& id,
     }
     const auto pose = kachakacha::v2::app::SurfaceFacingPose(samples);
     if (pose.has_value()) {
-        target.normal = pose->normal;
-        target.uAxis = pose->uAxis;
+        NoteFacingDirection(target, pose->normal, pose->uAxis);
     }
     return true;
 }
@@ -484,9 +504,13 @@ void V2MainWindow::AlignViewToSelection()
     viewport_->SetSelection(keptSelection);
     viewport_->update();
     SetStatus(QStringLiteral("%1個に%2正対しました。真ん中に寄せて、大きさも合わせました。"
-                             "形は変わっていません。")
+                             "形は変わっていません。%3")
             .arg(target.count)
-            .arg(facingFromBehind_ ? QStringLiteral("反対側から") : QString()));
+            .arg(facingFromBehind_ ? QStringLiteral("反対側から") : QString())
+            .arg(target.mixedDirections
+                    ? QStringLiteral("向きの違うものが混じっていたので、"
+                                     "最初の1つの向きに合わせ、全部が入る大きさにしました。")
+                    : QString()));
 }
 
 //! 面の上の「横」の見当。点の並びのうち、法線と直交する成分がいちばん長いもの。

@@ -183,6 +183,63 @@ using kachakacha::v2::domain::EntityKind;
 }
 
 
+//! Q1 の契約(Codex Q1-Q5 の UX 指摘)。向きの違う相手を複数選んだとき、
+//! **向きは最初の1つが決め、収まりは全部が決める。** そしてそれを帯で言う。
+//! 黙ってどれか1つの向きになるのが、いちばん困る。
+[[nodiscard]] bool CaseFacingManyTargetsFollowsTheFirst(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    std::vector<EntityId> planes;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::WorkPlane) {
+            planes.push_back(entity.id);
+        }
+    }
+    if (!Explain("向きの違う作業平面が2枚以上ある", planes.size() >= 2)) {
+        return false;
+    }
+    // まず1枚目だけに正対して、その向きを覚える。
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(planes[0]);
+    viewport.SetSelection(one);
+    window.RunCommand("view.align_selection");
+    const auto onlyFirst = kachakacha::v2::view::ForwardOf(viewport.Orientation());
+
+    // 2枚目だけに正対すると、別の向きになるはずである。
+    kachakacha::v2::app::SelectionSet other;
+    other.entityIds.push_back(planes[1]);
+    viewport.SetSelection(other);
+    window.RunCommand("view.align_selection");
+    const auto onlySecond = kachakacha::v2::view::ForwardOf(viewport.Orientation());
+    if (!Explain("2枚は向きが違う",
+            std::abs(kachakacha::v2::geometry::Dot(onlyFirst, onlySecond)) < 0.9)) {
+        return false;
+    }
+
+    // 両方を選ぶ。順番は1枚目が先。向きは1枚目に合う。
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    kachakacha::v2::app::SelectionSet both;
+    both.entityIds.push_back(planes[0]);
+    both.entityIds.push_back(planes[1]);
+    viewport.SetSelection(both);
+    window.RunCommand("view.align_selection");
+    const auto together = kachakacha::v2::view::ForwardOf(viewport.Orientation());
+    if (!Explain((std::string("向きは最初の1つに合う(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            kachakacha::v2::geometry::Dot(together, onlyFirst) > 0.99)) {
+        return false;
+    }
+    // 混じっていたことを黙っていない。
+    if (!Explain("向きが混じっていたと帯で言う",
+            window.StatusText().contains(QStringLiteral("向きの違うものが混じっていた")))) {
+        return false;
+    }
+    // 収まりは全部が決める。選択も残る。
+    return Explain("選んだものは選ばれたまま",
+        viewport.Selection().entityIds.size() == 2);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> FacingCases()
@@ -191,6 +248,8 @@ std::vector<SelfTestCase> FacingCases()
         {"作業平面へ続けて正対しても前の相手を引きずらない", &CaseFacingWorkPlanesInSequence},
         {"立体の面へ正対できる", &CaseFacingASolidFace},
         {"立体そのものを選んでも正対を断らない", &CaseFacingASolidDoesNotRefuse},
+        {"向きの違う相手を複数選ぶと最初の1つの向きに合わせて全部を収める",
+            &CaseFacingManyTargetsFollowsTheFirst},
     };
 }
 

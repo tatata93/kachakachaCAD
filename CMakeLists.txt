@@ -649,6 +649,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/fabrication/WrapProjection.cpp
     src/next/kachakacha/fabrication/BandDevelop.cpp
     src/next/kachakacha/fabrication/BendRadius.cpp
+    src/next/kachakacha/fabrication/PanelEdit.cpp
     src/next/kachakacha/fabrication/BandFold.cpp
     src/next/kachakacha/fabrication/BandMap.cpp
     src/next/kachakacha/fabrication/SurfaceProjection.cpp
@@ -917,6 +918,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2DiagnosticsCommand.cpp
         src/apps/cad_next/V2ExtrudePlanCommand.cpp
         src/apps/cad_next/V2BendRadiusCommands.cpp
+        src/apps/cad_next/V2PanelEditCommands.cpp
         src/apps/cad_next/V2EntityTree.cpp
         src/apps/cad_next/V2GroupCommands.cpp
         src/apps/cad_next/V2FacePushPull.cpp

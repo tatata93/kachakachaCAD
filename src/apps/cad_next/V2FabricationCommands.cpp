@@ -92,6 +92,14 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         SetAssemblyPercent(current);
         return;
     }
+    if (id == "fabrication.merge_parts") {
+        MergeFabricationParts();
+        return;
+    }
+    if (id == "fabrication.split_part") {
+        SplitFabricationPart();
+        return;
+    }
     if (id == "fabrication.set_connection_scope") {
         SetConnectionScope();
         return;

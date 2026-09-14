@@ -1,6 +1,7 @@
 // 部材の分け方(AT-FAB-005)と、手で付ける役割(AT-FAB-006)。
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/app/PanelAdvice.h"
+#include "kachakacha/fabrication/PanelEdit.h"
 #include "kachakacha/fabrication/ManualRole.h"
 #include "kachakacha/fabrication/PanelStrategy.h"
 
@@ -598,6 +599,122 @@ KACHA_V2_TEST(strategy, 分け方の名前が日本語で出る)
     Require(FabricationStrategyNameJa(FabricationStrategy::Hybrid)
             == std::string_view("混ぜる"),
         "混ぜる");
+}
+
+namespace {
+
+//! 4枚を全部ばらした状態から始める。統合と分割の相手にする。
+[[nodiscard]] kachakacha::v2::fabrication::PanelPartition Separated()
+{
+    const auto built = BuildPanelPartition(FourPlanar(), Chain4(),
+        Settings(FabricationStrategy::SeparatePanels), 0.5);
+    Require(built.HasValue(), "全部ばらせる");
+    return built.Value();
+}
+
+} // namespace
+
+KACHA_V2_TEST(panel_edit, 隣り合う2部材を1つにできる)
+{
+    using kachakacha::v2::fabrication::MergePieces;
+    const auto before = Separated();
+    RequireEqual(std::to_string(before.PieceCount()), std::string("4"), "はじめは4枚");
+    const auto merged = MergePieces(before, FourPlanar(), Chain4(), 0, 1);
+    Require(merged.HasValue(), "1つにできる");
+    RequireEqual(std::to_string(merged.Value().PieceCount()), std::string("3"),
+        "1枚減る");
+    // 面が消えていない。全部どこかの部材に入っている。
+    std::size_t total = 0;
+    for (const auto& piece : merged.Value().pieces) {
+        total += piece.panelIndices.size();
+    }
+    RequireEqual(std::to_string(total), std::string("4"), "面は消えない");
+}
+
+KACHA_V2_TEST(panel_edit, 隣り合っていない2部材は1つにしない)
+{
+    using kachakacha::v2::fabrication::MergePieces;
+    // 鎖は 0-1-2-3。0 と 3 は隣り合っていない。
+    const auto merged = MergePieces(Separated(), FourPlanar(), Chain4(), 0, 3);
+    Require(!merged.HasValue(), "断る");
+    RequireEqual(FirstCode(merged.Diagnostics()), std::string("FAB-G002"),
+        "隣り合っていないと言う");
+}
+
+KACHA_V2_TEST(panel_edit, 統合の前と後を見せる)
+{
+    using kachakacha::v2::fabrication::PreviewMerge;
+    const auto preview = PreviewMerge(Separated(), FourPlanar(), Chain4(), 0, 1);
+    Require(preview.possible, "できる");
+    RequireEqual(std::to_string(preview.pieceCountBefore), std::string("4"), "前は4枚");
+    RequireEqual(std::to_string(preview.pieceCountAfter), std::string("3"), "後は3枚");
+    Require(preview.messageJa.find("部材") != std::string::npos, "枚数を出す");
+    Require(preview.messageJa.find("mm") != std::string::npos, "ずれを出す");
+}
+
+KACHA_V2_TEST(panel_edit, 誤差が増えても統合を禁止しない)
+{
+    using kachakacha::v2::fabrication::MergePieces;
+    using kachakacha::v2::fabrication::PreviewMerge;
+    // 2枚目のずれを大きくする。1つにすればその部材のずれが増える。
+    std::vector<PanelCandidate> panels = FourPlanar();
+    panels[1] = Panel("b", PanelGeometryClass::Cylindrical, 3.0);
+    const auto before = BuildPanelPartition(panels, Chain4(),
+        Settings(FabricationStrategy::SeparatePanels), 0.5);
+    Require(before.HasValue(), "ばらせる");
+    const auto preview = PreviewMerge(before.Value(), panels, Chain4(), 0, 1);
+    Require(preview.possible, "ずれが増えても禁止しない");
+    Require(preview.maximumDeviationAfterMm >= preview.maximumDeviationBeforeMm - 1e-9,
+        "ずれが増えることを隠さない");
+    const auto merged = MergePieces(before.Value(), panels, Chain4(), 0, 1);
+    Require(merged.HasValue(), "実際に1つにできる");
+}
+
+KACHA_V2_TEST(panel_edit, 1つの部材を2つに分けられる)
+{
+    using kachakacha::v2::fabrication::SplitPiece;
+    // まず1枚にまとめてから分ける。
+    const auto one = BuildPanelPartition(FourPlanar(), Chain4(),
+        Settings(FabricationStrategy::OnePiece), 0.5);
+    Require(one.HasValue(), "1枚にできる");
+    RequireEqual(std::to_string(one.Value().PieceCount()), std::string("1"), "1枚");
+    const auto split = SplitPiece(one.Value(), FourPlanar(), 0, {2, 3});
+    Require(split.HasValue(), "分けられる");
+    RequireEqual(std::to_string(split.Value().PieceCount()), std::string("2"), "2枚になる");
+    std::size_t total = 0;
+    for (const auto& piece : split.Value().pieces) {
+        total += piece.panelIndices.size();
+    }
+    RequireEqual(std::to_string(total), std::string("4"), "面は消えない");
+}
+
+KACHA_V2_TEST(panel_edit, 全部か0枚では分けたことにならない)
+{
+    using kachakacha::v2::fabrication::SplitPiece;
+    const auto one = BuildPanelPartition(FourPlanar(), Chain4(),
+        Settings(FabricationStrategy::OnePiece), 0.5);
+    Require(one.HasValue(), "1枚にできる");
+    Require(!SplitPiece(one.Value(), FourPlanar(), 0, {}).HasValue(), "0枚は断る");
+    Require(!SplitPiece(one.Value(), FourPlanar(), 0, {0, 1, 2, 3}).HasValue(),
+        "全部は断る");
+}
+
+KACHA_V2_TEST(panel_edit, 分けたところは貼り合わせになる)
+{
+    using kachakacha::v2::fabrication::JointKind;
+    using kachakacha::v2::fabrication::SplitPiece;
+    const auto one = BuildPanelPartition(FourPlanar(), Chain4(),
+        Settings(FabricationStrategy::OnePiece), 0.5);
+    Require(one.HasValue(), "1枚にできる");
+    const auto split = SplitPiece(one.Value(), FourPlanar(), 0, {2, 3});
+    Require(split.HasValue(), "分けられる");
+    bool separated = false;
+    for (const auto& joint : split.Value().joints) {
+        if (joint.kind == JointKind::Separate) {
+            separated = true;
+        }
+    }
+    Require(separated, "分け目は貼り合わせになる");
 }
 
 KACHA_V2_TEST_MAIN("panel_strategy_tests")

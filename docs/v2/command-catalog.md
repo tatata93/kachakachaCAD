@@ -93,6 +93,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `edit.numeric` | 数値で編集 | 作業平面か線を1つ | 編集の棚を出す。「変更を適用」で UpdateFeatureDefinition(平面は PointNormal に、線は種類を保って点/中心/半径/角度を差し替え)。原点面は UI-E002、種類が混ざった線は UI-E003 | AT-WIR-001, AT-UIX-001 |
 | `wire.clear_datum` | 基準解除 | ワイヤー1以上 | SetDatum(false) | AT-DOC-005 |
 | `workplane.create` | 作業平面を作る | 方式+方式別Entity | WorkPlane | AT-WPL-001,002 |
+| `fabrication.merge_parts` | 部材を1つにする | 製作モデル1つ | 部材の分け方を変える | AT-FAB-005 |
+| `fabrication.split_part` | 部材を分ける | 製作モデル1つ | 部材の分け方を変える | AT-FAB-005 |
 | `group.create` | グループ化 | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
 | `group.dissolve` | グループを解く | まとまりの行 | Groupを消し中身は親へ | AT-UIX-006 |
 | `group.rename` | グループの名前を変える | まとまりの行 | Group displayName | AT-UIX-006 |

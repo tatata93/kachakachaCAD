@@ -861,6 +861,13 @@ private:
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
     void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
 public:
+    //! 部材の分割と統合(§32)。判断は core(`fabrication/PanelEdit`)がする。
+    void MergeFabricationParts();
+    void SplitFabricationPart();
+    //! いまの製作モデルの部材の数。
+    [[nodiscard]] std::size_t FabricationPanelCount() const;
+    //! 棚の「曲げる部材」に書いた番号。0 起点。
+    [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;
     //! 押し出す向き。矢印・下見・確定形状はすべてここから取る。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionNow() const;
     //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。

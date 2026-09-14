@@ -606,3 +606,204 @@ Undo/Redo、保存再読込まで通すこと。作業平面・ワイヤー・�
 REGRESSION RISKS: Q2は全Document履歴、Q5は保存形式・再評価・任意状態出力、Q4は受入ゲートの信頼性へ影響する。後続Phase実装済みであること自体はFAIL理由ではない。
 
 NEXT_ACTION: 上記を追加commitで直し、古い未レビュー順を維持したままQ2/Q4/Q5の再レビューを提出する。P1-EXTRUDE-R3は別固定範囲で扱う。
+
+---
+
+# Codex Review: P1-EXTRUDE-R3
+
+REQUEST_ID: P1-EXTRUDE-R3
+PHASE: 1 押し出し
+BASE: 253e446
+HEAD: bd375c9
+REVIEW_SCOPE: `253e446..bd375c9` のうち押し出し、Document transaction、依存関係の差分
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T17:30:00+09:00
+
+## RESULT
+
+R2のB2は解消した。押し出しFeatureの入力UUIDはprofile wire群とBoolean対象から明示的に作られ、
+definitionと依存グラフが一致する。`Document::Transaction` と各追加処理の成否伝播も導入され、
+「失敗後に無条件Undoする」実装は除去された。ただしtransactionの入れ子とDocument外状態の
+rollbackが未完成であり、失敗時に見た目と文書が食い違う経路が残る。
+
+## BLOCKERS
+
+### B1. 内側transactionのabortが外側へ伝播せず、失敗分を確定できる
+
+`AbortCompound()` は入れ子深さが残っていると深さを1つ減らすだけで、snapshotを戻さず、
+外側transactionを失敗状態にも設定しない。したがって「外側でAを追加 -> 内側でBを追加 ->
+内側がabort -> 外側がcommit」の順ではAとBの両方が残る。内側の失敗を呼出側が見落とすと、
+原子的であるはずの操作が部分成功として保存される。
+
+- `src/next/kachakacha/document/Document.cpp:236-249`
+- `tests_v2/compound_abort_tests.cpp` は「内側commit、外側abort」だけで逆順を試していない
+
+入れ子を正式に禁止して診断するか、内側abortで外側全体をpoisonして最外周commitを拒否すること。
+入れ子ごとのsavepointを提供するなら、各深さのsnapshotを保持してその深さまで戻す必要がある。
+
+### B2. transactionがDocumentだけを戻し、OCCT/UI側キャッシュを戻さない
+
+`AddPartFeature()` はtransactionの確定前に `partShapes_`、`partEdges_` を更新し、
+`AdoptCurrentDocument()` と `RefreshPartEdges()` まで実行する。`AdoptExtrudeResult()` も全ワイヤーの
+追加が終わる前に `partFlatBoundary_` を更新する。その後のワイヤー追加または元立体の非表示化が
+失敗すると、Document snapshotだけがdestructorで戻るが、これらのキャッシュとSceneは再構築されない。
+Documentに存在しない立体や辺が画面・出力キャッシュへ残り得る。
+
+- `src/apps/cad_next/V2PartCommands.cpp:448-451`
+- `src/apps/cad_next/V2PartCommands.cpp:643-646`
+
+全副作用をtransaction確定後に適用するか、失敗時にDocument復元後の正本からSceneと全キャッシュを
+必ず再構築すること。Documentだけを検査する試験では不十分である。
+
+### B3. Windows検証ゲートが完走しない
+
+Debugビルドは成功したが、`scripts/check.ps1` は139件中122件まで通過後、
+`v2_robustness_tests` で停止した。単体実行では最初の9ケースをPASSした直後、
+「おかしな曲線を編集しても落ちない」の開始箇所で出力が止まり、CPU消費も止まった。
+Debug assertionのモーダル待ちと整合し、以前報告された `vector subscript out of range` が未解消の
+可能性が高い。全検証を完走できない固定HEADは受入不可である。
+
+## MISSING TESTS
+
+1. 内側abort後に外側commitを試し、失敗分が残らないか外側commit自体が拒否される。
+2. 立体作成後、1本目のワイヤー追加後、元立体非表示化の各地点で失敗を注入し、Document、履歴、
+   `partShapes_`、`partEdges_`、`partFlatBoundary_`、Scene、選択、Previewが開始前と同一になる。
+3. 面押し引きのprofile wireを編集・削除し、dirty伝播、再評価、壊れた参照診断を確認する。
+4. `v2_robustness_tests` の曲線編集ケースを非対話で完走させ、assertion dialogを出さない。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで直すこと。
+
+1. transactionの入れ子契約を確定し、内側abortを外側commitが飲み込めない実装と試験を追加する。
+2. 押し出し確定中のDocument外キャッシュとSceneをstageするか、全失敗経路で復元後のDocumentから
+   再構築する。副作用を含む失敗注入試験を追加する。
+3. `v2_robustness_tests` の「おかしな曲線を編集」開始直後のDebug assertionを修正し、CTest全件を
+   非対話で完走させる。
+4. 修正を `P1-EXTRUDE-R4` として新しい固定BASE/HEADで提出する。R1〜R3は残す。
+
+REGRESSION RISKS: transactionは全Document操作、キャッシュ再構築は表示・出力・Undo/Redoへ波及する。
+P1を利用する後続PhaseはR4で押し出し、保存再読込、Undo/Redoを再試験すること。
+
+## 初見ユーザーの操作列
+
+### 押し出し
+
+1. 「押し出し」を選ぶ。
+2. 画面で閉じた輪郭または面を選ぶ。足す/引く場合は対象立体も選ぶ。
+3. 右棚でCADの入力解釈と作るものを確認する。
+4. 画面の矢印を動かすか距離を入力し、下見と数値が一致することを確認する。
+5. Enterまたは「確定」で作成し、Escまたは「キャンセル」で文書を変えず終了する。
+
+### Surfaceを近似して70%曲げ、Wireを生成
+
+このレビュー範囲の主対象ではない。Q1-Q5-R2で本番コマンド経路と任意状態生成を確認する。
+
+NEXT_ACTION: ClaudeがP1-EXTRUDE-R4を追加commitで提出する。後続履歴は戻さない。
+
+---
+
+# Codex Review: Q1-Q5-R2
+
+REQUEST_ID: Q1-Q5-R2
+PHASE: Q1-Q5（正対・まとまり・HO見本・総合試験・曲げ半径・部材編集）
+BASE: 253e446
+HEAD: bd375c9
+REVIEW_SCOPE: `253e446..bd375c9` のうちQ1〜Q5関連差分
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+REVIEWED_AT: 2026-09-14T17:30:00+09:00
+
+## RESULT
+
+R1のWindowsリンク不成立、まとまり操作の複数Undo、曲げ半径の画面内だけの保存、完成済みfixtureだけを
+見る総合試験は改善された。Split/Mergeは `manualBoundaries` をDocumentへ保存して再構築するところまで
+実装されており、単なる表示だけではない。本番作図操作からSurfaceを作る自己試験も追加された。
+一方、部材番号の扱いとSplitの事前判定が実操作と一致せず、Windows検証も完走しない。
+
+## BLOCKERS
+
+### B1. 無効な部材番号が最後の部材へ丸められ、別部材を変更する
+
+`FirstPartOr()` は入力番号が範囲外でも `min(numbers.front(), count - 1)` により最後の部材を返す。
+たとえば部材が3枚の時に「999」と入力するとエラーではなく部材3の曲げ半径が変更される。
+また入力欄は複数部材を表すが、曲げ半径の適用は先頭1件だけであり、利用者の意図がUIから判別できない。
+
+- `src/apps/cad_next/V2BendRadiusCommands.cpp:41-47`
+- `src/apps/cad_next/V2BendRadiusCommands.cpp:148-208`
+
+曲げ半径操作は「有効な部材を正確に1つ」に制限するか、明示的に全指定部材へ適用すること。
+範囲外番号は登録済み理由番号で拒否し、別部材へ丸めてはならない。
+
+### B2. Splitの可否判定と実際に分割する部材が一致しない
+
+`SplitFabricationPart()` は、現在の部材分割を使わず全panelを架空の1部材へまとめ、後半半分を動かす
+`PreviewSplit` を実行する。その後、実際には選択部材のrail中点へ境界を追加する。つまり「分割可能」と
+表示する判定対象と、確定時に変更する境界が別物である。選択部材固有の穴、境界、強曲率を見ずに
+確定でき、Previewと確定結果が一致する保証がない。
+
+- `src/apps/cad_next/V2PanelEditCommands.cpp:207-248`
+
+現在の `manualBoundaries` と選択部材から実際の分割候補を作り、その同一候補をPreview、診断、確定へ
+渡すこと。Preview用の架空partitionを作らない。分割後の部材数、境界、穴、Undo/Redo、再読込を検査する。
+
+### B3. Windows検証ゲートとV2自己試験が完走しない
+
+DebugビルドとCTest #1〜#122は通ったが、#123 `v2_robustness_tests` が曲線編集ケース開始時に停止した。
+さらに `kachakacha_cad_next.exe --self-test` は多数のケースをPASSした後、
+「中ドラッグでパン、Shift+中でオービット」の実行中に終了コード1となり、完了集計を出さなかった。
+リンク回復だけでは配布可能とは判断できない。
+
+## UX / STATE PROBLEMS
+
+- 半径は「部材Nの半径」と表示されるが、実装は各bandの次にあるcrease角から導く。最後のbandには
+  次のcreaseがないため、どの折り線を操作する値かを「部材Nの次の折り線」等で明示すべきである。
+- 近似方式の比較自己試験は作成、Undo、方式変更、再作成を通すが、初見ユーザーが同じ画面で候補を
+  並べて比較するUXは確認できない。自動候補を一方的に採用しない契約にはまだ弱い。
+- Q1の複数面正対は最初の面を基準にする規則が加わったが、向きが混在する場合の表示と選択誘導を
+  実画面で追加確認する必要がある。
+
+## MISSING TESTS
+
+1. 部材数3で番号0、4、999、複数番号を入力し、誤った部材を変更せず明示診断する。
+2. 穴または異なる曲率を持つ選択部材を分割し、Previewと確定後の同一境界を比較する。
+3. Split/Mergeを一回Undo/Redoし、保存再読込後も `manualBoundaries` と部材数が一致する。
+4. 2つのApproxPartで別々のAUTO/LOCK半径を保持し、70%の表示、形状、任意状態Wire/Surface、
+   保存再読込を同じ幾何から検証する。
+5. DebugのCTest全139件とV2自己試験を、assertion dialogなしで完走する。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで直すこと。
+
+1. 曲げ半径の対象番号を厳密検証し、範囲外や曖昧な複数指定を理由付きで拒否する。丸めない。
+2. SplitのPreview、診断、確定を同じ選択部材・同じ境界候補から生成し、実結果との差をなくす。
+3. `v2_robustness_tests` のDebug assertionとV2自己試験の入力操作中の終了コード1を修正する。
+4. 上記MISSING TESTSを追加し、`Q1-Q5-R3` として固定BASE/HEADを提出する。R1/R2は残す。
+
+REGRESSION RISKS: 曲げ半径は保存形式・再評価・任意状態出力、部材境界は型紙・穴・部材番号の安定性へ
+影響する。Q4/Q5を使う後続PhaseはR3後に再レビュー対象とする。
+
+## 初見ユーザーの操作列
+
+### 押し出し
+
+1. 「押し出し」を選ぶ。
+2. 閉じた輪郭または面を選び、右棚で入力解釈を確認する。
+3. 必要なら立体、輪郭、面の出力を選び、矢印または数値で距離を決める。
+4. 下見を確認し、Enterまたは「確定」で作る。Escまたは「キャンセル」で中止する。
+
+### Surfaceを近似して70%曲げ、Wireを生成
+
+1. 「製作モデルを作る」を選ぶ。
+2. Surfaceを選び、右棚で対象と近似方式を確認する。
+3. 方式候補を切り替えて誤差と部材数を比較し、採用する。
+4. 作成されたApproxPartを選び、組立率を70%へ動かす。
+5. 対象部材番号と曲げ半径のAUTO/LOCK状態を確認する。
+6. 「現在の曲げ状態からワイヤーを作る」を実行し、元ApproxPartが残ることを確認する。
+
+現状は手順3の候補比較が同時比較にならず、手順5で無効番号が別部材へ丸められるため、説明書なしで
+安全に完了できる操作列としては認定しない。
+
+NEXT_ACTION: ClaudeがQ1-Q5-R3を追加commitで提出する。後続Phaseは先行してよいがQ4/Q5依存部分をR3後に再試験する。

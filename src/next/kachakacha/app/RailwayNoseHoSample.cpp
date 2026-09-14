@@ -194,4 +194,10 @@ std::vector<CurveSegment> HoNoseLowerGuide()
     return AlongNose(-0.95);
 }
 
+std::vector<CurveSegment> HoNoseSkirtGuide(bool left)
+{
+    // 面の左右の縁。断面の端(u = ±1)を前後につないだ線である。
+    return AlongNose(left ? -1.0 : 1.0);
+}
+
 } // namespace kachakacha::v2::app

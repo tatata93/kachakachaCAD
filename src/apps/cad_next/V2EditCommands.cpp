@@ -109,7 +109,12 @@ void V2MainWindow::RunHistoryCommand(bool undo)
     }
     // 文書だけ戻して場面を作り直さないと、消したはずの線が画面に残り、
     // 立体も古いままになる。文書が変わったあとの後始末を全部通す。
+    //
+    // 形も作り直す。覚えている形は文書の写しでしかない。作り直さないと、
+    // 取り消したはずの近似モデルが数のうえでは残り、
+    // 作り方を戻したのに形が前のまま、ということが起きる。
     AdoptCurrentDocument();
+    RebuildKernelShapes();
     SetStatus(undo ? QStringLiteral("元に戻しました。") : QStringLiteral("やり直しました。"));
 }
 

@@ -1234,9 +1234,14 @@ void V2MainWindow::ReportDiagnostics(
     const std::vector<kachakacha::v2::base::Diagnostic>& diagnostics)
 {
     for (const auto& diagnostic : diagnostics) {
-        const QString text = QStringLiteral("%1 %2")
+        QString text = QStringLiteral("%1 %2")
             .arg(QString::fromStdString(diagnostic.code),
                 QString::fromStdString(diagnostic.summaryJa));
+        // 手当ての手がかりは細かいほうに書いてある。
+        // 「出来た面が線を通っていません」だけでは、どれだけ外れたのか分からない。
+        if (!diagnostic.detailsJa.empty()) {
+            text += QStringLiteral(" ") + QString::fromStdString(diagnostic.detailsJa);
+        }
         AddDiagnostic(text);
         SetStatus(text);
     }

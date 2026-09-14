@@ -96,8 +96,8 @@ using kachakacha::v2::domain::EntityKind;
             return false;
         }
     }
-    for (const char* guide : {"RoofCenterGuide", "ShoulderGuide_L", "ShoulderGuide_R",
-             "LowerGuide"}) {
+    for (const char* guide : {"SkirtGuide_L", "LowerGuide", "ShoulderGuide_L",
+             "RoofCenterGuide", "ShoulderGuide_R", "SkirtGuide_R"}) {
         if (!Explain((std::string(guide) + " がある").c_str(),
                 !ByName(window, guide).IsNil())) {
             return false;
@@ -196,7 +196,7 @@ using kachakacha::v2::domain::EntityKind;
             window.Viewport().ExtrudeHandleShown())) {
         return false;
     }
-    window.ExtrudeDock().SetDistanceMm(1.0);
+    window.ExtrudeDock().TypeDistanceMm(1.0);
     window.RunCommand("part.extrude");   // 確定
     return Explain((std::string("立体が増える(") + std::to_string(before) + " → "
                        + std::to_string(CountKind(window, EntityKind::Part)) + ")")

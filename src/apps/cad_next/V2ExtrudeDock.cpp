@@ -239,6 +239,19 @@ void V2ExtrudeDock::SetDistanceMm(double value)
     loading_ = false;
 }
 
+//! 人が距離を打ったのと同じ扱いにする。試験も本物と同じ道を通す。
+//!
+//! `SetDistanceMm` は棚を書き直すための道で、知らせを止めてある。
+//! 試験がそれを使うと、矢印は前の距離のままになり、
+//! 「棚に出ている値」と「実際に作る形」が食い違ったまま試験が通ってしまう。
+void V2ExtrudeDock::TypeDistanceMm(double value)
+{
+    distance_->setValue(value);
+    if (distanceHandler_) {
+        distanceHandler_(value);
+    }
+}
+
 double V2ExtrudeDock::DistanceMm() const
 {
     return distance_->value();

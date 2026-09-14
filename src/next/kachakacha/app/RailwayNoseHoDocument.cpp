@@ -189,26 +189,41 @@ struct HoSections {
 
 //! 案内線。面を作るときに実際に使う(§20)。飾りにしない。
 struct HoGuides {
-    AddedWire roof;
-    AddedWire shoulderLeft;
-    AddedWire shoulderRight;
-    AddedWire lower;
+    //! 左の縁から右の縁まで、順に並べる。**並び順が面の縁を決める。**
+    //! 曲線網は、最初と最後を面の縁として使い、間の線で内側の形を決める。
+    std::vector<AddedWire> acrossNose;
+
+    [[nodiscard]] const AddedWire& Roof() const { return acrossNose[3]; }
 };
 
 [[nodiscard]] HoGuides MakeGuides(HoBuilder& builder, const HoGroups& groups)
 {
     HoGuides made;
-    made.roof = builder.AddWire("RoofCenterGuide", HoNoseRoofCenterGuide(),
-        groups.guides);
-    made.shoulderLeft = builder.AddWire("ShoulderGuide_L", HoNoseShoulderGuide(true),
-        groups.guides);
-    made.shoulderRight = builder.AddWire("ShoulderGuide_R", HoNoseShoulderGuide(false),
-        groups.guides);
-    made.lower = builder.AddWire("LowerGuide", HoNoseLowerGuide(), groups.guides);
+    // 左の縁 → 裾 → 肩 → 屋根の中央 → 肩 → 右の縁。
+    made.acrossNose.push_back(
+        builder.AddWire("SkirtGuide_L", HoNoseSkirtGuide(true), groups.guides));
+    made.acrossNose.push_back(
+        builder.AddWire("LowerGuide", HoNoseLowerGuide(), groups.guides));
+    made.acrossNose.push_back(
+        builder.AddWire("ShoulderGuide_L", HoNoseShoulderGuide(true), groups.guides));
+    made.acrossNose.push_back(
+        builder.AddWire("RoofCenterGuide", HoNoseRoofCenterGuide(), groups.guides));
+    made.acrossNose.push_back(
+        builder.AddWire("ShoulderGuide_R", HoNoseShoulderGuide(false), groups.guides));
+    made.acrossNose.push_back(
+        builder.AddWire("SkirtGuide_R", HoNoseSkirtGuide(false), groups.guides));
     return made;
 }
 
-//! 断面と案内線から前頭部の面を作る。案内付きロフト。
+//! 断面と案内線から前頭部の面を作る。曲線網。
+//!
+//! 案内付きロフト(`MakePipeShell`)ではない。あれは **平らな断面** を
+//! 背骨に沿って送る作りで、前面中央が前へ膨らむこの形の断面は平らではない。
+//! 断面の上で x が動くので、送る作りでは受け取ってもらえない。
+//!
+//! 曲線網なら、前後に走る線と断面を **どちらも拘束として** 使う。
+//! 前後の線の最初と最後(左右の裾の縁)、断面の最初と最後(前端と車体側)が
+//! 面の縁になり、間の線が内側の形を決める。案内線が飾りにならない。
 [[nodiscard]] EntityId MakeNoseSurface(HoBuilder& builder, const HoGroups& groups,
     const HoSections& sections, const HoGuides& guides)
 {
@@ -217,18 +232,18 @@ struct HoGuides {
     feature.type = FeatureType::CreateGuideSurface;
     feature.displayName = "NoseSurface";
     CreateGuideSurfaceDefinition definition;
-    // 案内付きロフト。断面だけで作ると、断面と断面の間で肩が痩せる。
-    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::GuidedLoft);
+    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::GordonNetwork);
+    // 前後に走る線(U)。左の縁から右の縁まで、並び順のまま。
+    for (const AddedWire& guide : guides.acrossNose) {
+        definition.chains.push_back(ChainOf(guide));
+        definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideU));
+        feature.inputEntityIds.push_back(guide.entityId);
+    }
+    // 断面(V)。前端から車体側まで、並び順のまま。
     for (const AddedWire& section : sections.wires) {
         definition.chains.push_back(ChainOf(section));
-        definition.roles.push_back(static_cast<int>(modeling::ChainRole::Section));
+        definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideV));
         feature.inputEntityIds.push_back(section.entityId);
-    }
-    for (const AddedWire* guide : {&guides.roof, &guides.shoulderLeft,
-             &guides.shoulderRight, &guides.lower}) {
-        definition.chains.push_back(ChainOf(*guide));
-        definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideU));
-        feature.inputEntityIds.push_back(guide->entityId);
     }
     feature.definition = std::move(definition);
     Entity entity;

@@ -62,6 +62,12 @@ inline constexpr double kHoNoseDepthMm = 18.0;
 [[nodiscard]] std::vector<geometry::CurveSegment> HoNoseShoulderGuide(bool left);
 [[nodiscard]] std::vector<geometry::CurveSegment> HoNoseLowerGuide();
 
+//! 裾のいちばん外(u = ±1)を前後に走る線。面の左右の縁そのもの。
+//!
+//! 曲線網で面を作るので、縁になる線が要る。縁が無いと、どこまでが面なのかが
+//! 決まらない。肩や裾の線は、その内側の形を決める。
+[[nodiscard]] std::vector<geometry::CurveSegment> HoNoseSkirtGuide(bool left);
+
 //! HO 総合試験の見本。作業平面・断面・案内線・面・押し出し試験・近似を含む。
 [[nodiscard]] io::DocumentFile BuildRailwayNoseHoSampleDocument();
 [[nodiscard]] base::Result<std::string> BuildRailwayNoseHoSampleArchive();

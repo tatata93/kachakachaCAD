@@ -151,7 +151,7 @@ using kachakacha::v2::domain::Visibility;
     }
     const auto wiresBefore = AllOfKind(window, EntityKind::Wire);
     window.RunCommand("part.extrude");
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.ExtrudeDock().TypeDistanceMm(2.0);
     window.RunCommand("part.extrude");
 
     const auto& snapshot = window.Session().GetDocument().Snapshot();
@@ -190,7 +190,7 @@ using kachakacha::v2::domain::Visibility;
     }
     const auto wiresBefore = AllOfKind(window, EntityKind::Wire);
     window.RunCommand("part.extrude");
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.ExtrudeDock().TypeDistanceMm(2.0);
     window.RunCommand("part.extrude");
 
     const auto& snapshot = window.Session().GetDocument().Snapshot();
@@ -229,7 +229,7 @@ using kachakacha::v2::domain::Visibility;
         return false;
     }
     window.RunCommand("part.extrude");
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.ExtrudeDock().TypeDistanceMm(2.0);
     window.RunCommand("part.extrude");
 
     const int partsBefore = CountOfKind(window, EntityKind::Part);
@@ -283,7 +283,7 @@ using kachakacha::v2::domain::Visibility;
     const int visibleBefore = VisibleParts(window);
 
     window.RunCommand("part.extrude");
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.ExtrudeDock().TypeDistanceMm(2.0);
     window.RunCommand("part.extrude");
 
     const int partsAfter = CountOfKind(window, EntityKind::Part);

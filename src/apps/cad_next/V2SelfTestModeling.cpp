@@ -273,7 +273,7 @@ namespace {
                 == wiresBefore)) {
         return false;
     }
-    window.ExtrudeDock().SetDistanceMm(2.0);
+    window.ExtrudeDock().TypeDistanceMm(2.0);
     const std::uint64_t before = window.Session().GetDocument().Revision();
     window.RunCommand("part.extrude");   // 確定
     // 足しなので、見える立体は1つのまま。加工前の立体は隠す。

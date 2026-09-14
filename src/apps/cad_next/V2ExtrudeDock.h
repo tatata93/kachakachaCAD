@@ -41,6 +41,8 @@ public:
         const QString& profileNamesJa);
     //! 距離を映す(矢印を引いたとき)。欄と矢印は常に同じ値を出す。
     void SetDistanceMm(double value);
+    //! 人が距離を打ったのと同じ扱いにする(矢印と下見も追う)。試験から呼ぶ。
+    void TypeDistanceMm(double value);
     [[nodiscard]] double DistanceMm() const;
     //! いま欄で選んでいる操作。
     [[nodiscard]] kachakacha::v2::modeling::ExtrudeBooleanMode BooleanMode() const;

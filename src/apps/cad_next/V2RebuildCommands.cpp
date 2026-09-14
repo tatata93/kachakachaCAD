@@ -272,9 +272,16 @@ void V2MainWindow::RebuildKernelShapes()
         if (ok) {
             ++made;
         } else {
-            failed.push_back(step.displayName.empty()
-                    ? std::string(ShapeRebuildKindNameJa(step.kind))
-                    : step.displayName);
+            // 名前だけでは直せない。**なぜ作れなかったか** を一緒に残す。
+            // 断った理由は、いま帯に出ている一文がいちばん近い。
+            std::string name = step.displayName.empty()
+                ? std::string(ShapeRebuildKindNameJa(step.kind))
+                : step.displayName;
+            const std::string why = StatusText().toStdString();
+            if (!why.empty()) {
+                name += "(" + why + ")";
+            }
+            failed.push_back(std::move(name));
         }
     }
     RefreshPartEdges();

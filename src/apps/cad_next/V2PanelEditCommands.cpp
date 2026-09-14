@@ -190,6 +190,9 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
         return false;
     }
     AdoptCurrentDocument();
+    // 境目を変えたら、帯へ切り直さないと枚数が変わらない。
+    // 覚えている近似は前の切り方のままである。
+    RebuildKernelShapes();
     RefreshFabricationView();
     RefreshBendRadius();
     SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。"

@@ -158,8 +158,8 @@ KACHA_V2_TEST(railway_nose_ho, 見本を作れて中身がそろっている)
         Require(HasEntityNamed(snapshot, HoNoseSectionName(station)),
             HoNoseSectionName(station) + " がある");
     }
-    for (const char* guide : {"RoofCenterGuide", "ShoulderGuide_L", "ShoulderGuide_R",
-             "LowerGuide"}) {
+    for (const char* guide : {"SkirtGuide_L", "LowerGuide", "ShoulderGuide_L",
+             "RoofCenterGuide", "ShoulderGuide_R", "SkirtGuide_R"}) {
         Require(HasEntityNamed(snapshot, guide), std::string(guide) + " がある");
     }
     Require(HasEntityNamed(snapshot, "NoseSurface"), "面がある");
@@ -218,11 +218,12 @@ KACHA_V2_TEST(railway_nose_ho, 案内線が面を作るのに使われている)
     for (const auto& entity : snapshot.entities) {
         const std::string& name = entity.displayName;
         if (name == "RoofCenterGuide" || name == "ShoulderGuide_L"
-            || name == "ShoulderGuide_R" || name == "LowerGuide") {
+            || name == "ShoulderGuide_R" || name == "LowerGuide"
+            || name == "SkirtGuide_L" || name == "SkirtGuide_R") {
             guides.push_back(entity.id);
         }
     }
-    RequireEqual(std::to_string(guides.size()), std::string("4"), "案内線は4本");
+    RequireEqual(std::to_string(guides.size()), std::string("6"), "案内線は6本");
     for (const auto& feature : snapshot.features) {
         if (feature.displayName != "NoseSurface") {
             continue;

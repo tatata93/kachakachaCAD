@@ -1,4 +1,6 @@
 #include "V2MainWindow.h"
+
+#include "V2EntityTree.h"
 #include "V2NumberDialog.h"
 
 #include "kachakacha/app/ExportContent.h"
@@ -284,7 +286,8 @@ void V2MainWindow::BuildMenus()
         {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
         {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
                        "edit.numeric", "selection.activate", "snap.toggle",
-                       "group.set_active"}},
+                       "group.set_active", "group.create", "group.dissolve",
+                       "group.rename"}},
         {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
                        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
         {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
@@ -543,7 +546,7 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
 {
     auto* treeDock = new QDockWidget(QStringLiteral("作ったもの"), this);
     treeDock->setObjectName(QStringLiteral("entityDock"));
-    entityTree_ = new QTreeWidget(treeDock);
+    entityTree_ = new V2EntityTree(treeDock);
     entityTree_->setColumnCount(2);
     entityTree_->setHeaderLabels(
         {QStringLiteral("名前"), QStringLiteral("種類")});
@@ -564,7 +567,18 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
                     return;
                 }
             }
+            // まとまりの行。チェックは出し隠し、文字は名前の書き換え。
+            if (RenameOrToggleGroupFromItem(item)) {
+                return;
+            }
             RenameEntityFromItem(item);
+        });
+    // 引きずって移す(オーナー指示 §9)。木の中だけで動かす。
+    // Qt に行を動かさせず、**落ちた先を聞いて文書のほうを変える。**
+    // 木は文書から作り直すので、木だけ動かしても次の作り直しで元へ戻る。
+    entityTree_->SetDropHandler(
+        [this](const std::vector<QTreeWidgetItem*>& moved, QTreeWidgetItem* onto) {
+            DropTreeItemsOnto(moved, onto);
         });
     // 右クリックは 3D 画面と同じ献立を出す。台帳のコマンドだけを並べる。
     // 別の入口を作ると、押せるかどうかの判断も文言も二重になる。
@@ -1382,6 +1396,10 @@ void V2MainWindow::RunCommand(std::string_view id)
     }
     if (IsArrayCommand(id)) {
         RunArrayCommand(id);
+        return;
+    }
+    if (IsGroupCommand(id)) {
+        RunGroupCommand(id);
         return;
     }
     if (IsViewCommand(id)) {

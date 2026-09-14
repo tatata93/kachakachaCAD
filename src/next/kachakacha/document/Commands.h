@@ -197,6 +197,47 @@ private:
     std::optional<GroupId> groupId_;
 };
 
+//! まとまりの名前を変える。中身には触らない。
+class RenameGroupCommand final : public DocumentCommand {
+public:
+    RenameGroupCommand(GroupId groupId, std::string displayName);
+    [[nodiscard]] std::string Label() const override { return "まとまりの名前を変える"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    GroupId groupId_;
+    std::string displayName_;
+};
+
+//! まとまりを別のまとまりの下へ移す(入れ子)。中身は一緒に付いていく。
+//!
+//! 輪(自分の子孫の下へ移す)は断る。輪ができると、木を辿るときに終わらない。
+class SetGroupParentCommand final : public DocumentCommand {
+public:
+    SetGroupParentCommand(GroupId groupId, std::optional<GroupId> parentId);
+    [[nodiscard]] std::string Label() const override { return "まとまりを移す"; }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    GroupId groupId_;
+    std::optional<GroupId> parentId_;
+};
+
+//! まとまりごと出す/隠す。**中身の visibility は書き換えない。**
+class SetGroupVisibilityCommand final : public DocumentCommand {
+public:
+    SetGroupVisibilityCommand(GroupId groupId, bool visible);
+    [[nodiscard]] std::string Label() const override
+    {
+        return visible_ ? "まとまりを出す" : "まとまりを隠す";
+    }
+    [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
+
+private:
+    GroupId groupId_;
+    bool visible_ = true;
+};
+
 //! まとまりを消す。中の物は親のまとまりへ移す(消さない)。
 class RemoveGroupCommand final : public DocumentCommand {
 public:

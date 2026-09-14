@@ -67,6 +67,8 @@ using MouseButtons = int;
 using KeyboardModifiers = int;
 using WindowFlags = int;
 using DockWidgetAreas = int;
+enum DropAction { CopyAction, MoveAction, LinkAction, IgnoreAction, TargetMoveAction };
+
 } // namespace Qt
 
 class QString;

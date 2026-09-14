@@ -430,3 +430,12 @@ public:
     void setText(const QString&);
     [[nodiscard]] QString text() const;
 };
+
+//! 落としたときの便り。位置と、どう扱ったかだけを持つ。
+class QDropEvent : public QEvent {
+public:
+    QDropEvent() = default;
+    [[nodiscard]] QPointF position() const;
+    void setDropAction(Qt::DropAction);
+    void accept();
+};

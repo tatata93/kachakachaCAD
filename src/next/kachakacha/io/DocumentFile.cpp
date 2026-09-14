@@ -449,7 +449,7 @@ std::string WriteDocumentJson(const DocumentFile& file)
         object["id"] = WriteId(group.id);
         object["displayName"] = JsonValue::String(group.displayName);
         object["parentGroupId"] = WriteOptionalId(group.parentId);
-        object["state"] = JsonValue::String("visible");
+        object["state"] = JsonValue::String(group.visible ? "visible" : "hidden");
         object["childOrder"] = JsonValue::Array(ChildOrderOf(snapshot, group.id));
         groups.push_back(JsonValue::Object(std::move(object)));
     }

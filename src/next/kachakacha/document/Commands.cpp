@@ -552,6 +552,124 @@ std::vector<Diagnostic> MoveEntitiesToGroupCommand::Apply(DocumentSnapshot& cand
     return diagnostics;
 }
 
+namespace {
+
+[[nodiscard]] Group* FindGroupMutable(DocumentSnapshot& candidate, const GroupId& id)
+{
+    for (Group& group : candidate.groups) {
+        if (group.id == id) {
+            return &group;
+        }
+    }
+    return nullptr;
+}
+
+//! candidate の中で、`maybeDescendant` が `ancestor` の子孫か。自分自身も真とする。
+//!
+//! まとまりを自分の子孫の下へ移すと輪ができる。輪ができると木を辿れなくなる。
+[[nodiscard]] bool IsDescendantOf(const DocumentSnapshot& candidate,
+    const GroupId& maybeDescendant, const GroupId& ancestor)
+{
+    std::optional<GroupId> walk = maybeDescendant;
+    // まとまりの数だけ辿れば必ず終わる。壊れた文書で無限に回らないための保険。
+    for (std::size_t step = 0; step <= candidate.groups.size() && walk.has_value(); ++step) {
+        if (*walk == ancestor) {
+            return true;
+        }
+        std::optional<GroupId> next;
+        for (const Group& group : candidate.groups) {
+            if (group.id == *walk) {
+                next = group.parentId;
+                break;
+            }
+        }
+        walk = next;
+    }
+    return false;
+}
+
+} // namespace
+
+RenameGroupCommand::RenameGroupCommand(GroupId groupId, std::string displayName)
+    : groupId_(groupId), displayName_(std::move(displayName))
+{
+}
+
+std::vector<Diagnostic> RenameGroupCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    if (displayName_.empty()) {
+        diagnostics.push_back(MakeError(kEmptyName, "名前が空です。",
+            "まとまりの名前を入れてください。"));
+        return diagnostics;
+    }
+    Group* group = FindGroupMutable(candidate, groupId_);
+    if (group == nullptr) {
+        diagnostics.push_back(MakeError(kNotFound, "名前を変えるまとまりが見つかりません。",
+            groupId_.ToString()));
+        return diagnostics;
+    }
+    group->displayName = displayName_;
+    return diagnostics;
+}
+
+SetGroupParentCommand::SetGroupParentCommand(GroupId groupId,
+    std::optional<GroupId> parentId)
+    : groupId_(groupId), parentId_(parentId)
+{
+}
+
+std::vector<Diagnostic> SetGroupParentCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    Group* group = FindGroupMutable(candidate, groupId_);
+    if (group == nullptr) {
+        diagnostics.push_back(MakeError(kNotFound, "移すまとまりが見つかりません。",
+            groupId_.ToString()));
+        return diagnostics;
+    }
+    if (parentId_.has_value()) {
+        if (*parentId_ == groupId_) {
+            diagnostics.push_back(MakeError(kNotAllowed,
+                "まとまりを自分の中へは入れられません。", {}));
+            return diagnostics;
+        }
+        if (FindGroupMutable(candidate, *parentId_) == nullptr) {
+            diagnostics.push_back(MakeError(kNotFound, "移し先のまとまりが見つかりません。",
+                parentId_->ToString()));
+            return diagnostics;
+        }
+        if (IsDescendantOf(candidate, *parentId_, groupId_)) {
+            diagnostics.push_back(MakeError(kNotAllowed,
+                "まとまりを自分の中のまとまりへは入れられません。",
+                "輪ができると、まとまりの木を辿れなくなります。"));
+            return diagnostics;
+        }
+    }
+    group->parentId = parentId_;
+    return diagnostics;
+}
+
+SetGroupVisibilityCommand::SetGroupVisibilityCommand(GroupId groupId, bool visible)
+    : groupId_(groupId), visible_(visible)
+{
+}
+
+std::vector<Diagnostic> SetGroupVisibilityCommand::Apply(DocumentSnapshot& candidate) const
+{
+    std::vector<Diagnostic> diagnostics;
+    Group* group = FindGroupMutable(candidate, groupId_);
+    if (group == nullptr) {
+        diagnostics.push_back(MakeError(kNotFound, "出し隠しするまとまりが見つかりません。",
+            groupId_.ToString()));
+        return diagnostics;
+    }
+    // 中身の visibility は触らない。触ると、出し直したときに
+    // 利用者が1つずつ隠していたものまで全部出てしまう。
+    group->visible = visible_;
+    return diagnostics;
+}
+
 RemoveGroupCommand::RemoveGroupCommand(GroupId groupId) : groupId_(groupId) {}
 
 std::vector<Diagnostic> RemoveGroupCommand::Apply(DocumentSnapshot& candidate) const

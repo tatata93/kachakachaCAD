@@ -574,6 +574,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/DiagnosticReport.cpp
     src/next/kachakacha/app/ExtrudePlan.cpp
     src/next/kachakacha/app/FacePushPull.cpp
+    src/next/kachakacha/app/GroupTree.cpp
     src/next/kachakacha/app/PanelAdvice.cpp
     src/next/kachakacha/app/SurfaceFacing.cpp
     src/next/kachakacha/app/ExtrudeDrag.cpp
@@ -775,6 +776,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(ui_mode_tests tests_v2/ui_mode_tests.cpp)
     kachakacha_add_v2_test(view_orientation_tests tests_v2/view_orientation_tests.cpp)
     kachakacha_add_v2_test(facing_plan_tests tests_v2/facing_plan_tests.cpp)
+    kachakacha_add_v2_test(group_tree_tests tests_v2/group_tree_tests.cpp)
     kachakacha_add_v2_test(shelf_layout_tests tests_v2/shelf_layout_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
@@ -909,6 +911,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestPointer.cpp
         src/apps/cad_next/V2DiagnosticsCommand.cpp
         src/apps/cad_next/V2ExtrudePlanCommand.cpp
+        src/apps/cad_next/V2EntityTree.cpp
+        src/apps/cad_next/V2GroupCommands.cpp
         src/apps/cad_next/V2FacePushPull.cpp
         src/apps/cad_next/V2SelfTestFacing.cpp
         src/apps/cad_next/V2ExtrudeHandle.cpp

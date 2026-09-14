@@ -7,6 +7,8 @@
 
 #include "V2MainWindow.h"
 
+#include "V2EntityTree.h"
+
 #include "kachakacha/app/SurfaceFacing.h"
 #include "kachakacha/kernel/OcctFaceQuery.h"
 
@@ -565,6 +567,8 @@ std::vector<QAction*> V2MainWindow::BuildSelectMenu(QMenu& menu,
         "edit.undo",
         "edit.redo",
         "measure.open",
+        "group.create",
+        "group.dissolve",
         "view.align_selection",
         "view.align_selection_back",
         "wire.split",

@@ -27,10 +27,20 @@ using domain::Entity;
 using domain::EntityKind;
 using domain::Feature;
 
+//! 整理用のまとまり(フォルダ)。
+//!
+//! **幾何ではない。** ここへ入れても、依存も参照も所有も変わらない。
+//! まとまりを解いても中身は消えない(オーナー指示 2026-09-14 §7・§11)。
 struct Group {
     GroupId id;
     std::string displayName;
     std::optional<GroupId> parentId;
+    //! まとまりごと隠しているか。
+    //!
+    //! **中身の visibility は書き換えない。** 書き換えると、まとまりを出し直した
+    //! ときに、利用者が1つずつ隠していたものまで全部出てしまう(§12)。
+    //! 実際に見えるかどうかは「自分が見える && 先祖のまとまりが全部見える」。
+    bool visible = true;
 };
 
 //! 残した参照寸法(V1の情報タブにあったもの)。

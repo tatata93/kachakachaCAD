@@ -42,7 +42,8 @@ const std::vector<std::string_view>& CommonCommandIds()
         "view.align_selection", "view.align_selection_back", "view.align_workplane", "view.hide_selected", "view.show_all",
         "view.stage_all", "view.stage_no_grid", "view.stage_no_construction",
         "view.stage_selection_only",
-        "entity.rename", "workplane.set_active", "group.set_active", "snap.toggle",
+        "entity.rename", "workplane.set_active", "group.set_active",
+        "group.create", "group.dissolve", "group.rename", "snap.toggle",
     };
     return ids;
 }

@@ -14,6 +14,8 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/GroupTree.h"
+
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/kernel/OcctTessellate.h"
@@ -48,8 +50,9 @@ void V2MainWindow::RefreshShapeViews()
                 continue;
             }
             const auto* entity = FindEntityByIdText(snapshot, entry.first);
+            // まとまりごと隠しているかも見る。中身の visibility は書き換えない。
             if (entity == nullptr
-                || entity->visibility != kachakacha::v2::domain::Visibility::Visible) {
+                || !kachakacha::v2::app::EntityEffectivelyVisible(snapshot, *entity)) {
                 continue;
             }
             V2Viewport::ShapeView view;

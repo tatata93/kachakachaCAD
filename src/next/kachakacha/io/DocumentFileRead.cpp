@@ -739,6 +739,11 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
             group.displayName = loader.String(item, "displayName", where);
             group.parentId = loader.ParseOptionalId<GroupId>(item.Find("parentGroupId"),
                 where + ".parentGroupId");
+            // 古い文書には無い。無ければ出ているものとして読む。
+            if (const JsonValue* state = item.Find("state");
+                state != nullptr && state->Type() == JsonType::String) {
+                group.visible = state->AsString() != "hidden";
+            }
             snapshot.groups.push_back(std::move(group));
         }
     }

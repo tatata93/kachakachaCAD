@@ -6,6 +6,8 @@
 
 #include "V2MainWindow.h"
 
+#include "V2EntityTree.h"
+
 #include "kachakacha/app/EntityNaming.h"
 #include "kachakacha/app/NameFilter.h"
 #include "kachakacha/app/OriginPlanes.h"
@@ -17,6 +19,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -33,31 +36,27 @@ void V2MainWindow::RefreshEntityList()
     entityTree_->clear();
     entityItems_.clear();
     const auto& snapshot = session_->GetDocument().Snapshot();
-    // まとまりごとに束ねる。いま作業中のまとまりは名前の後ろに印を付ける。
-    std::map<std::string, QTreeWidgetItem*> byGroup;
+    // まとまりを **入れ子のまま** 出す。名前で束ねると、
+    // 同じ名前の別のまとまりが1つに見えてしまう(オーナー指示 §9・§10)。
+    std::map<std::string, QTreeWidgetItem*> byGroupId;
+    BuildGroupItems(byGroupId);
+    QTreeWidgetItem* looseItem = nullptr;
     const auto groupItem = [&](const std::optional<kachakacha::v2::base::GroupId>& id)
         -> QTreeWidgetItem* {
-        std::string name = "(まとまりなし)";
-        bool active = false;
         if (id.has_value()) {
-            for (const auto& group : snapshot.groups) {
-                if (group.id == *id) {
-                    name = group.displayName;
-                }
+            const auto found = byGroupId.find(id->ToString());
+            if (found != byGroupId.end() && found->second != nullptr) {
+                return found->second;
             }
-            active = snapshot.settings.activeGroupId.has_value()
-                && *snapshot.settings.activeGroupId == *id;
         }
-        const std::string key = name + (active ? " ←作業中" : "");
-        const auto found = byGroup.find(key);
-        if (found != byGroup.end()) {
-            return found->second;
+        if (looseItem == nullptr) {
+            looseItem = new QTreeWidgetItem(entityTree_);
+            looseItem->setText(0, QStringLiteral("(まとまりなし)"));
+            looseItem->setText(1, QStringLiteral("まとまり"));
+            looseItem->setFlags((looseItem->flags() | Qt::ItemIsDropEnabled)
+                & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
         }
-        auto* made = new QTreeWidgetItem(entityTree_);
-        made->setText(0, QString::fromStdString(key));
-        made->setText(1, QStringLiteral("まとまり"));
-        byGroup.emplace(key, made);
-        return made;
+        return looseItem;
     };
     entityItems_.clear();
     // 原点の基準平面と3軸は、最上部の「原点」に固定して出す(V1 と同じ)。
@@ -224,4 +223,52 @@ int V2MainWindow::VisibleEntityRowCount() const
         count += CountVisibleLeaves(entityTree_->topLevelItem(index));
     }
     return count;
+}
+
+//! まとまりの行を、入れ子のまま作る。
+//!
+//! 親から順に作る。親がまだ無ければその場で親を作りにいく。
+//! 先に場所を取ってから親を作るのは、壊れた文書に輪があっても止まるためである。
+void V2MainWindow::BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId)
+{
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    groupItems_.clear();
+    std::function<QTreeWidgetItem*(const kachakacha::v2::base::GroupId&)> make;
+    make = [&](const kachakacha::v2::base::GroupId& id) -> QTreeWidgetItem* {
+        const std::string key = id.ToString();
+        if (const auto found = byGroupId.find(key); found != byGroupId.end()) {
+            return found->second;
+        }
+        const kachakacha::v2::document::Group* group = nullptr;
+        for (const auto& candidate : snapshot.groups) {
+            if (candidate.id == id) {
+                group = &candidate;
+                break;
+            }
+        }
+        if (group == nullptr) {
+            return nullptr;
+        }
+        byGroupId.emplace(key, nullptr);
+        QTreeWidgetItem* parent = group->parentId.has_value() ? make(*group->parentId)
+                                                              : nullptr;
+        auto* made = parent != nullptr ? new QTreeWidgetItem(parent)
+                                       : new QTreeWidgetItem(entityTree_);
+        const bool active = snapshot.settings.activeGroupId.has_value()
+            && *snapshot.settings.activeGroupId == id;
+        made->setText(0, QString::fromStdString(
+            group->displayName + (active ? " ←作業中" : "")));
+        made->setText(1, QStringLiteral("まとまり"));
+        // まとまりは名前を変えられる。引きずって別のまとまりへ移せる。
+        made->setFlags(made->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled
+            | Qt::ItemIsDropEnabled | Qt::ItemIsUserCheckable);
+        made->setCheckState(0, group->visible ? Qt::Checked : Qt::Unchecked);
+        byGroupId[key] = made;
+        groupItems_.emplace_back(made, id);
+        return made;
+    };
+    // まとまりが空でも木に出す。出さないと、作った直後に何も見えない。
+    for (const auto& group : snapshot.groups) {
+        (void)make(group.id);
+    }
 }

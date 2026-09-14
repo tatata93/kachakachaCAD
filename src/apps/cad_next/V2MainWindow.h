@@ -814,7 +814,7 @@ private:
     std::unique_ptr<kachakacha::v2::app::DrawingSession> session_;
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
-    QTreeWidget* entityTree_ = nullptr;
+    class V2EntityTree* entityTree_ = nullptr;
     QLineEdit* entityFilter_ = nullptr;
     //! 左の一覧で選んだものを、3D 画面の選択にする(V1 と同じ)。
     //! まとまりの行を選んだら、その下のもの全部へ広げる。
@@ -837,6 +837,36 @@ private:
     //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
     bool facingFromBehind_ = false;
     void CollectFacingTarget(FacingTarget& target) const;
+    //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
+    void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
+    //! 整理用まとまりの操作(§7〜13)。
+    [[nodiscard]] static bool IsGroupCommand(std::string_view id);
+    void RunGroupCommand(std::string_view id);
+    void CreateGroupFromSelection();
+    void DissolveSelectedGroup();
+    void RenameSelectedGroup();
+    //! いま左の一覧で選んでいるまとまり。
+    [[nodiscard]] std::optional<kachakacha::v2::base::GroupId> SelectedGroupId() const;
+    //! 次に作るまとまりの名前。同じ名前が並ばないように番号を送る。
+    [[nodiscard]] std::string NextGroupName() const;
+
+public:
+    //! 木の行が書き換わった。まとまりの行なら名前か出し隠しとして扱い、真を返す。
+    bool RenameOrToggleGroupFromItem(QTreeWidgetItem* item);
+    //! 引きずって落とした。落ちた先のまとまりへ入れる。試験からも呼ぶ。
+    void DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
+        QTreeWidgetItem* onto);
+    //! 左の一覧。試験が行を引くために読む。
+    [[nodiscard]] class V2EntityTree* EntityTree() const { return entityTree_; }
+    //! まとまりの行。試験が引きずる相手を引くために読む。
+    [[nodiscard]] const std::vector<std::pair<QTreeWidgetItem*,
+        kachakacha::v2::base::GroupId>>&
+    GroupItems() const
+    {
+        return groupItems_;
+    }
+
+private:
     //! 立体を正対の相手にする。面を選んでいればその面だけ。集まったら真。
     [[nodiscard]] bool AppendSolidFacing(const kachakacha::v2::base::EntityId& id,
         FacingTarget& target) const;
@@ -908,6 +938,8 @@ private:
     bool syncingSelection_ = false;
     //! 一覧の行と、それが指すもの。行に id を持たせられないので横に持つ。
     std::vector<std::pair<QTreeWidgetItem*, kachakacha::v2::base::EntityId>> entityItems_;
+    //! まとまりの行。引きずり・改名・出し隠しの相手を引くのに要る。
+    std::vector<std::pair<QTreeWidgetItem*, kachakacha::v2::base::GroupId>> groupItems_;
     QListWidget* diagnosticList_ = nullptr;
     QTreeWidget* guideTableView_ = nullptr;
     QDockWidget* guideDock_ = nullptr;

@@ -6,20 +6,82 @@
 ## 現在
 
 REQUEST_ID: P1-EXTRUDE-R1
-TASK_ID: Phase 1 押し出し + Phase 2 の入口
+TASK_ID: Phase 1 押し出し
+PHASE: 1
 STAGE: 1/1
-STATUS: WORKING(PC の往復で確かめている最中)
-REVIEW_STATUS: NOT_SUBMITTED(機能として固まってから出す)
-BASE: c224d49
-HEAD: (固めてから決める)
-BUILD_RESULT: PASS(PC MSVC / 雲 core)
-TEST_RESULT: PASS(PC: CTest 134/134、アプリ自己試験 192/192。雲: core 127/127、当て木 59ファイル)
-PC_VERIFIED_AT: ce369eb(2026-09-14。push 済み)
-REVIEW_SCOPE: 押し出し(EX-01〜08)と、製作近似の入口(面ごとの分割・分け方の助言)
-REVIEW_FOCUS: 面の押し引きが文書へワイヤーを増やす決めごと、
-  splitSolidFaces の既定、面をまとめる道が無いこと
+STATUS: READY_FOR_CODEX
+REVIEW_STATUS: PENDING_CODEX
+BASE: deefcd6
+HEAD: ce369eb
+REVIEW_SCOPE: deefcd6..ce369eb のうち、押し出しに関わる分
+REVIEW_FOCUS: 下を見よ(CLAUDE_NOTES)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
+
+### IMPLEMENTED(P1 で入れたもの)
+
+- 選択の読み取り(A〜E)。立体と輪郭の順番を問わず、対象と輪郭の役割を決める
+  (`app/ExtrudePlan`)。読み取り結果を日本語で出す。
+- 矢印ハンドル。輪郭の重心を根元に、押し出しの向きへ出す。引くと距離が変わる。
+  距離の欄と矢印は常に同じ値(`app/ExtrudeDrag`、`V2ExtrudeHandle`)。
+- 右の棚(`V2ExtrudeDock`)。入力・距離・方向・方向反転・範囲・操作・結果・確定/取消。
+  **いまの入力で意味のない欄は出さない。** 細かい設定は「詳細...」の窓へ回す。
+- 窓(モーダル)を据え付けるのをやめた。「詳細...」のときだけ出す。
+- 面の押し引き(EX-02)。`kernel/OcctFaceQuery` が面の縁・外向き法線・面積を返し、
+  `app/FacePushPull` が符号つきの距離を押し出しの言葉へ言い換え、
+  `V2FacePushPull` が縁を文書のワイヤーにしてから、いままでの押し出しへ渡す。
+- 入力の選び直し(EX-07)。「対象を選び直す」「輪郭を選び直す」。片方だけ外れる。
+- 面を拾えるようにした。`OcctTessellate` → `ShapeMesh` → `MeshPick` → 画面まで
+  面番号を通し、面ごとに1つだけ候補を出す。
+- **足す・引く押し出しに相手の形を渡すようにした。** 渡していなかったので、
+  立体に窓を開ける押し出しは一度も通っていなかった(KER-E004)。
+  開き直しの作り直しでも足し引きをやり直す。使い切った元の立体は隠す。
+- **`FromWire` が辺を繋がった順に返すようにした。** 位相の並びのままだと、
+  戻した線を輪郭として使えない(KER-C003)。
+
+### BUILD
+
+PASS(PC MSVC 2022 x64 Release / 雲 core g++)
+
+### TEST
+
+- PC: CTest **134/134**、アプリ自己試験 **192/192**(`ce369eb` で確認)
+- 雲: core CTest 127/127、Qt 当て木の型検査 59 ファイル
+
+### ACCEPTANCE(押し出しの受入試験 EX-01〜08)
+
+| ID | 内容 | 結果 |
+| --- | --- | --- |
+| EX-01 | 閉じた輪郭 → 押し出し → ハンドル → Enter → 新規立体 | PASS(自己試験「押し出しで部品ができる」) |
+| EX-02 | 立体の面 → 押し引き | PASS(自己試験「立体の面をつまんで押せる」) |
+| EX-03 | 立体だけ → 何を選べばよいか言う | PASS(自己試験「押し出しが選択を読んで次を案内する」) |
+| EX-04 | 立体+輪郭を順不同で選んでも役割が決まる | PASS(`extrude_plan_tests`) |
+| EX-05 | 距離の欄と矢印が同期 | PASS(`extrude_drag_tests` + 棚の結線) |
+| EX-06 | 方向反転で矢印も反転 | PASS(同上) |
+| EX-07 | 入力の差し替え | PASS(自己試験「押し出しの入力を片方だけ選び直せる」) |
+| EX-08 | 道具を替えると下見・棚・一時状態が残らない | PASS(自己試験「道具を替えると前の吸着と候補送りが消える」ほか) |
+
+### KNOWN_ISSUES
+
+- 面の押し引きは、押した面の縁を **文書のワイヤーとして残す**(穴があればその数だけ)。
+  押し出しの記録が「どのワイヤーを押したか」で出来ており、面番号は作り直すたびに
+  変わるので記録できないためである(architecture-and-data.md §6)。
+  線を残さない案は保存の形を変えることになる(GUARDED)。
+- 曲がった面の押し引きは断る(KER-F003)。まっすぐ押しても元の面と辻褄が合わない。
+- `docs/manual.html` に3行足してある(Codex 領分。文言の確認だけ)。
+
+### CLAUDE_NOTES(Codex に重点確認してほしい点)
+
+1. 面の押し引きが文書にワイヤーを増やす決めごとの是非。代案は
+   `ExtrudeDefinition` へ面の意味的キーを足すこと(GUARDED)。
+2. 足す・引くで使い切った元の立体を **隠す** 扱いでよいか(消さない)。
+   足し引きの命令(`part.boolean_*`)と同じにしてある。
+3. `FromWire` を `BRepTools_WireExplorer` に替えたことの影響。
+   ほかの呼び口(押し出しの結果、形状ガイド、書き出し)で並びが変わりうる。
+4. 面番号(`pickedFaceIndex`)を選択に **一時的に** 持たせた扱い。保存はしていない。
+5. `ApplyFacePushPull` が向きを `CustomXYZ` + 面の外向き法線で渡していること。
+   輪郭の法線に任せると縁の回り方しだいで裏返る、という判断でよいか。
+
 
 ## UI-P1-007 が止まっていた理由と、どう直したか
 
@@ -157,7 +219,11 @@ Codex は R10 を **PASS WITH FIXES** にした。R7〜R10 で挙がった阻害
 
 ## PENDING_CODEX_REVIEWS(古い順。消さない)
 
-- (いまは空。UI-P1-007 は受け入れ済み。P1-EXTRUDE-R1 は機能が固まってから出す)
+- REQUEST_ID: P1-EXTRUDE-R1 / TASK: Phase 1 押し出し / PHASE: 1
+  BASE: deefcd6 / HEAD: ce369eb
+  REVIEW_STATUS: PENDING_CODEX
+  CLAUDE_SELF_REVIEW: PASS / BUILD: PASS(PC+雲) / TEST: PASS(PC 134/134・192/192)
+  **HEAD は Claude が固定した。最新 commit から選ばせない。**
 - REQUEST_ID: P1-EXTRUDE-R1 / TASK: 押し出しUI / STAGE: 途中
   BASE: 4fa218c / HEAD: 188ea47
   CLAUDE_SELF_REVIEW: 未(機能として未完成。完成まで送らない)

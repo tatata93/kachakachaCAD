@@ -1,5 +1,7 @@
 #include "kachakacha/app/SceneBuilder.h"
 
+#include "kachakacha/app/GroupTree.h"
+
 #include "kachakacha/domain/Feature.h"
 
 #include <variant>
@@ -35,7 +37,9 @@ modeling::SnapScene BuildSceneFromDocument(const document::DocumentSnapshot& sna
     modeling::SnapScene scene;
     for (const domain::Feature& feature : snapshot.features) {
         const domain::Entity* entity = EntityOf(snapshot, feature);
-        if (entity == nullptr || entity->visibility != Visibility::Visible) {
+        // まとまりごと隠しているかも見る。中身の visibility は書き換えないので、
+        // ここで両方を見ないと、隠したまとまりの中身が画面に残る。
+        if (entity == nullptr || !EntityEffectivelyVisible(snapshot, *entity)) {
             continue;
         }
         if (!feature.enabled) {

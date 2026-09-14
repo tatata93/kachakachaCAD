@@ -239,6 +239,7 @@ public:
 class QAbstractItemView : public QAbstractScrollArea {
 public:
     enum SelectionMode { NoSelection, SingleSelection, MultiSelection, ExtendedSelection };
+    enum DragDropMode { NoDragDrop, DragOnly, DropOnly, DragDrop, InternalMove };
     void setSelectionMode(SelectionMode);
     void setAlternatingRowColors(bool);
 };
@@ -304,10 +305,20 @@ public:
     [[nodiscard]] QList<QTreeWidgetItem*> selectedItems() const;
     void clearSelection();
     void scrollToItem(QTreeWidgetItem*);
+    [[nodiscard]] QTreeWidgetItem* itemAt(const QPoint&) const;
+    void setDragEnabled(bool);
+    void setAcceptDrops(bool);
+    void setDropIndicatorShown(bool);
+    void setDragDropMode(DragDropMode);
     void (*itemClicked)(QTreeWidgetItem*, int);
     void (*itemChanged)(QTreeWidgetItem*, int);
     void (*itemSelectionChanged)();
     void (*customContextMenuRequested)(const QPoint&);
+
+protected:
+    //! 本物では仮想。当て木でも仮想にしておかないと、
+    //! 引きずって落とす受け口の付け替えが型検査を通らない。
+    virtual void dropEvent(class QDropEvent*);
 };
 
 class QDockWidget : public QWidget {

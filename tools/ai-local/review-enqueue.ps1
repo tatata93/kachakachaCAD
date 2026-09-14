@@ -184,6 +184,7 @@ function Add-OneRequest {
         review_effort   = [string](Get-Prop $Declaration 'review_effort' 'MEDIUM')
         scope_ja        = [string](Get-Prop $Declaration 'scope_ja' '')
         focus           = @(Get-Prop $Declaration 'focus' @())
+        paths           = @(Get-Prop $Declaration 'paths' @())
         policy          = [string](Get-Prop $Declaration 'policy' 'docs/ai/CODEX_REVIEW_POLICY.md')
     }
 

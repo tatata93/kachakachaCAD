@@ -125,15 +125,18 @@ function Find-ReviewerExecutables {
         $key = $item.ToLowerInvariant()
         if (-not $seen.ContainsKey($key)) { $seen[$key] = $true; $unique += $item }
     }
-    # A command inside a .sandbox-bin directory is a shim that needs a host process
-    # beside it. It answers --version and --help even when it cannot do any work,
-    # so it is tried last, after every ordinary installation.
+    # Some copies of the command are internal plumbing of the application rather
+    # than the command a person would run: the sandbox shim needs a host process
+    # beside it, and the plugin app-server is not a CLI at all. Both answer
+    # --version and --help perfectly, so they are tried last, after every ordinary
+    # installation such as ...\Programs\OpenAI\Codex\bin\codex.exe.
     $ordinary = @()
-    $shims = @()
+    $internal = @()
     foreach ($item in $unique) {
-        if ($item -like '*\.sandbox-bin\*') { $shims += $item } else { $ordinary += $item }
+        $isInternal = ($item -like '*\.sandbox-bin\*') -or ($item -like '*\.plugin-appserver\*')
+        if ($isInternal) { $internal += $item } else { $ordinary += $item }
     }
-    return @($ordinary + $shims)
+    return @($ordinary + $internal)
 }
 
 # A bounded walk. Depth is small on purpose: an unbounded search of a whole disk
@@ -278,7 +281,10 @@ function Resolve-CodexInterface {
                 if ($p.Name -eq 'probe_revision') { $cachedRevision = [int]$p.Value }
             }
         }
-        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and
+        # A "yes" may be remembered; a "no" may not. Someone can install the
+        # reviewer at any moment, and a remembered "no reviewer here" would keep
+        # the queue stopped long after that stopped being true.
+        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
             $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
             return $cached
         }
@@ -373,7 +379,7 @@ function Resolve-ClaudeInterface {
                 if ($p.Name -eq 'probe_revision') { $cachedRevision = [int]$p.Value }
             }
         }
-        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and
+        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
             $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
             return $cached
         }

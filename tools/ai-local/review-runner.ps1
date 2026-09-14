@@ -173,16 +173,28 @@ $commitsPath  = Join-Path $packetDir 'commits.txt'
 
 # ---------------------------------------------------------------- packet ----
 
-$commits = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
-    'log', '--no-color', '--oneline', ($baseCommit + '..' + $reviewCommit))
+# A request may narrow the packet to certain paths. HEAD stays what the machine
+# really built, so the evidence still matches; only the part put in front of the
+# reviewer is narrowed, and the packet says so out loud.
+$pathFilter = @()
+foreach ($p in $manifest.PSObject.Properties) {
+    if ($p.Name -eq 'paths' -and $p.Value) {
+        foreach ($item in @($p.Value)) { if ($item) { $pathFilter += [string]$item } }
+    }
+}
+$pathArguments = @()
+if ($pathFilter.Count -gt 0) { $pathArguments = @('--') + $pathFilter }
+
+$commits = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
+    'log', '--no-color', '--oneline', ($baseCommit + '..' + $reviewCommit)) + $pathArguments)
 Write-TextAtomic -Path $commitsPath -Text $commits.StdOut | Out-Null
 
-$stat = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
-    'diff', '--no-color', '--stat', $baseCommit, $reviewCommit)
+$stat = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
+    'diff', '--no-color', '--stat', $baseCommit, $reviewCommit) + $pathArguments)
 Write-TextAtomic -Path $statPath -Text $stat.StdOut | Out-Null
 
-$diff = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
-    'diff', '--no-color', $baseCommit, $reviewCommit)
+$diff = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
+    'diff', '--no-color', $baseCommit, $reviewCommit) + $pathArguments)
 Write-TextAtomic -Path $diffPath -Text $diff.StdOut | Out-Null
 
 $focusText = ''
@@ -218,6 +230,12 @@ $scopeText
 ## Focus
 
 - $focusText
+
+## Path filter
+
+$(if ($pathFilter.Count -gt 0) { 'This packet covers only: ' + ($pathFilter -join ', ') +
+  '. Changes to other paths in this range are deliberately out of scope for this request.' }
+  else { 'None: the whole BASE..HEAD range is in scope.' })
 
 ## Files in this packet
 

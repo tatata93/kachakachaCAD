@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(16 の場面・35 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(17 の場面・39 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -87,6 +87,8 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 - **レビュー済みの REQUEST_ID は二度受け付けません。**直したら `R5 → R6` にします。
   ただし「Codex が入っていなかった」等でレビューが**実際には行われなかった**場合は、
   同じ REQUEST_ID をもう一度出せます。番号を使い切るのはレビューの成立だけです。
+- `paths` を書くと、**見せる範囲だけ**を狭められます。ビルドした commit は変わりません。
+  例: `"paths": ["src/", "tests_v2/"]` で、基盤の変更を混ぜずに製品側だけを見てもらう。
 - 1回のビルドで複数の依頼を出すこともできます。同じ HEAD を共有する形です。
 
 ```json
@@ -145,15 +147,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ai-local\review-selfte
 2. 指定が無ければ `where.exe` と PATH、npm・WinGet・pnpm・yarn・cargo・bun・
    `.local\bin`・`.codex\bin`・`Programs` の3段下までを探します。
 3. 見つけた候補に `codex exec --help` を実際に尋ね、**そこに見えた option だけ**を渡します。
-4. `.sandbox-bin` の中にあるものは最後に回します。これは殻(shim)で、
-   隣に `codex-code-mode-host.exe` が無いと `--version` にも `--help` にも
-   正しく答えるのに、ファイルを1つも読めません。隣に host が無ければ「使えない」と断ります。
+4. `.sandbox-bin` と `.plugin-appserver` の中にあるものは最後に回します。
+   これらはアプリの内部部品で、人が叩く CLI ではありません。`--version` にも
+   `--help` にも正しく答えるのに、殻の方はファイルを1つも読めません。
+   隣に `codex-code-mode-host.exe` が無ければ「使えない」と断ります。
+   ふつうの導入(`...\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe` など)が先です。
 5. どれも使えないとき、`.ai/ORCHESTRATOR_CONFIG.json` の `reviewer_fallback` が
    `claude` なら、読み取り専用の代役が引き受けます。結果の `reviewer` は
    **`claude-fallback`** と書かれます。Codex のレビューとして扱いません。
    代役を止めるときは `KACHA_REVIEW_FALLBACK=none` にします。
 
 探した場所と結果は毎回 `.ai-runtime/logs/reviewer-search.json` に残ります。
+
+**「使える」は覚えますが、「使えない」は覚えません。**レビューアーはいつ入るか
+分からないので、「この機械には無い」を覚え込むと、入った後も queue が止まったままに
+なります。検査の中身を変えたときも(`probe_revision`)前の答えは捨てます。
 
 ## GitHub の扱い
 

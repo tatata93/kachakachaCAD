@@ -242,10 +242,15 @@ function Invoke-Process {
     }
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+    # Stdin is redirected and then closed at once. A tool that decides to read
+    # from stdin must see end-of-input immediately; inheriting a console here is
+    # how an unattended run waits forever for something nobody will type.
+    $psi.RedirectStandardInput = $true
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.WorkingDirectory = $WorkingDirectory
     $proc = [System.Diagnostics.Process]::Start($psi)
+    try { $proc.StandardInput.Close() } catch { }
     # Read both pipes before waiting, otherwise a full pipe buffer deadlocks.
     $outTask = $proc.StandardOutput.ReadToEndAsync()
     $errTask = $proc.StandardError.ReadToEndAsync()

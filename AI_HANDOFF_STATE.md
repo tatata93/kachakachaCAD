@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(16 の場面・35 の確認)
+  ＋ PC で `review-selftest.ps1`(17 の場面・39 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -36,7 +36,21 @@ UPDATED_AT: 2026-09-14
 
 R1〜R4 は FAIL の履歴として残す。**書き換えない。**
 
-### 人に見てほしいこと(CODEX_INSTALL_ATTENTION)
+### 解決済み: Codex CLI の場所(2026-09-14)
+
+オーナーが Codex CLI を入れてくれた。基盤は自分で見つけた。
+
+```
+C:\Users\tak01\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe
+```
+
+`.codex\.sandbox-bin`(殻)と `.codex\plugins\.plugin-appserver`(アプリの内部部品)は
+候補の最後に回すので、こちらが選ばれる。`AI-REVIEW-PIPELINE-R4` から
+**本物の Codex がレビューしている。**
+
+以下は、そこへ至るまでの記録として残す。
+
+### 経緯(CODEX_INSTALL_ATTENTION)
 
 **この PC で Codex CLI が実際には動けない。**基盤は正しく動き、Codex も
 正しく断った。ごまかしていない。事実だけ並べる。

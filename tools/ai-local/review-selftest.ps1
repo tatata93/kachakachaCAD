@@ -19,6 +19,7 @@ Every case below is one of the promises the owner asked for:
   14 two requests, one HEAD-> both reviewed, once each
   15 codex cannot run     -> the sanctioned fallback reviews, and says so
   16 a stale probe answer -> thrown away, not trusted
+  17 a path filter        -> narrows what is shown, not what was built
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -397,6 +398,40 @@ Check 'the stale flag list is not used' `
 $staleResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-STALE-R1.json')
 Check 'the request is still reviewed after the stale answer is dropped' `
     (($null -ne $staleResult) -and $staleResult.verdict -eq 'PASS') 'no PASS'
+
+# 17 ------------------------------------------------------------------------
+# A request may narrow what the reviewer is shown without changing what was built.
+New-Item -ItemType Directory -Path (Join-Path $repo 'inside') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $repo 'outside') -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $repo 'inside\wanted.txt') -Value 'in scope' -Encoding ASCII
+Set-Content -LiteralPath (Join-Path $repo 'outside\ignored.txt') -Value 'out of scope' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'path filter case')
+$filterHead = (Git @('rev-parse', 'HEAD')).Trim()
+$filterDecl = Join-Path $repo 'next-review-filter.json'
+Write-JsonAtomic -Path $filterDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-PATHS-R1'; base_commit = $baseCommit; review_effort = 'LOW'
+    scope_ja = 'path filter'; paths = @('inside/')
+}) | Out-Null
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $filterDecl `
+    -ReviewCommit $filterHead -TestedCommit $filterHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+Run-Dispatcher | Out-Null
+$filterPacket = ''
+$filterDiff = ''
+$packetCopy = Join-Path (Join-Path $paths.Processing 'T-PATHS-R1') 'packet.md'
+$diffCopy = Join-Path (Join-Path $paths.Processing 'T-PATHS-R1') 'diff.patch'
+if (Test-Path -LiteralPath $packetCopy) { $filterPacket = [System.IO.File]::ReadAllText($packetCopy) }
+if (Test-Path -LiteralPath $diffCopy) { $filterDiff = [System.IO.File]::ReadAllText($diffCopy) }
+Check 'the narrowed packet holds the paths that were asked for' `
+    ($filterDiff -like '*inside/wanted.txt*') 'the wanted path is missing'
+Check 'the narrowed packet leaves the other paths out' `
+    (-not ($filterDiff -like '*outside/ignored.txt*')) 'an out of scope path was shown'
+Check 'the packet says that it was narrowed' `
+    ($filterPacket -like '*This packet covers only*') 'the packet does not say so'
+$filterResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-PATHS-R1.json')
+Check 'a narrowed request still reviews the commit that was built' `
+    (($null -ne $filterResult) -and $filterResult.review_commit -eq $filterHead) 'wrong review commit'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

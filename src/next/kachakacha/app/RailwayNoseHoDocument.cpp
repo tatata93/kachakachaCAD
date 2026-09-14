@@ -196,42 +196,35 @@ struct HoSections {
 }
 
 //! 案内線。面を作るときに実際に使う(§20)。飾りにしない。
+//! 面の外形を決める線。**ちょうど2本。**
+//!
+//! 案内付きロフトは「外形の線2本と断面」で面を作る。2本は面の左右の縁、
+//! つまり裾のいちばん外(u = ±1)を前後に走る線である。
+//! 断面だけで渡すと、断面と断面の間で縁が痩せる。外形を渡せばそれが起きない。
+//!
+//! 屋根の中央や肩の線は入れない。**入れても使われないからである。**
+//! 使われない線を「案内線」として置くのは飾りで、オーナー指示 §44 が禁じている。
 struct HoGuides {
-    //! 左の縁から右の縁まで、順に並べる。**並び順が面の縁を決める。**
-    //! 曲線網は、最初と最後を面の縁として使い、間の線で内側の形を決める。
-    std::vector<AddedWire> acrossNose;
-
-    [[nodiscard]] const AddedWire& Roof() const { return acrossNose[3]; }
+    AddedWire left;
+    AddedWire right;
 };
 
 [[nodiscard]] HoGuides MakeGuides(HoBuilder& builder, const HoGroups& groups)
 {
     HoGuides made;
-    // 左の縁 → 裾 → 肩 → 屋根の中央 → 肩 → 右の縁。
-    made.acrossNose.push_back(
-        builder.AddWire("SkirtGuide_L", HoNoseSkirtGuide(true), groups.guides));
-    made.acrossNose.push_back(
-        builder.AddWire("LowerGuide", HoNoseLowerGuide(), groups.guides));
-    made.acrossNose.push_back(
-        builder.AddWire("ShoulderGuide_L", HoNoseShoulderGuide(true), groups.guides));
-    made.acrossNose.push_back(
-        builder.AddWire("RoofCenterGuide", HoNoseRoofCenterGuide(), groups.guides));
-    made.acrossNose.push_back(
-        builder.AddWire("ShoulderGuide_R", HoNoseShoulderGuide(false), groups.guides));
-    made.acrossNose.push_back(
-        builder.AddWire("SkirtGuide_R", HoNoseSkirtGuide(false), groups.guides));
+    made.left = builder.AddWire("SkirtGuide_L", HoNoseSkirtGuide(true), groups.guides);
+    made.right = builder.AddWire("SkirtGuide_R", HoNoseSkirtGuide(false), groups.guides);
     return made;
 }
 
-//! 断面と案内線から前頭部の面を作る。曲線網。
+//! 断面と外形の線から前頭部の面を作る。案内付きロフト。
 //!
-//! 案内付きロフト(`MakePipeShell`)ではない。あれは **平らな断面** を
-//! 背骨に沿って送る作りで、前面中央が前へ膨らむこの形の断面は平らではない。
-//! 断面の上で x が動くので、送る作りでは受け取ってもらえない。
+//! 外形の線は左右の裾の縁ちょうど2本で、面の左右の縁そのものである。
+//! 断面だけで作ると、断面と断面の間で縁が痩せる。
 //!
-//! 曲線網なら、前後に走る線と断面を **どちらも拘束として** 使う。
-//! 前後の線の最初と最後(左右の裾の縁)、断面の最初と最後(前端と車体側)が
-//! 面の縁になり、間の線が内側の形を決める。案内線が飾りにならない。
+//! 曲線網にはしない。OCCT の埋めは、この本数の拘束では
+//! 「境界から面を張れませんでした」(KER-S001)で断られる。
+//! 通らない作り方を書いておいて、開くたびに断られるほうが悪い。
 [[nodiscard]] EntityId MakeNoseSurface(HoBuilder& builder, const HoGroups& groups,
     const HoSections& sections, const HoGuides& guides)
 {
@@ -240,17 +233,17 @@ struct HoGuides {
     feature.type = FeatureType::CreateGuideSurface;
     feature.displayName = "NoseSurface";
     CreateGuideSurfaceDefinition definition;
-    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::GordonNetwork);
-    // 前後に走る線(U)。左の縁から右の縁まで、並び順のまま。
-    for (const AddedWire& guide : guides.acrossNose) {
-        definition.chains.push_back(ChainOf(guide));
+    definition.method = static_cast<int>(modeling::GuideSurfaceMethod::GuidedLoft);
+    // 外形の線。ちょうど2本。
+    for (const AddedWire* guide : {&guides.left, &guides.right}) {
+        definition.chains.push_back(ChainOf(*guide));
         definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideU));
-        feature.inputEntityIds.push_back(guide.entityId);
+        feature.inputEntityIds.push_back(guide->entityId);
     }
-    // 断面(V)。前端から車体側まで、並び順のまま。
+    // 断面。前端から車体側まで、並び順のまま。
     for (const AddedWire& section : sections.wires) {
         definition.chains.push_back(ChainOf(section));
-        definition.roles.push_back(static_cast<int>(modeling::ChainRole::GuideV));
+        definition.roles.push_back(static_cast<int>(modeling::ChainRole::Section));
         feature.inputEntityIds.push_back(section.entityId);
     }
     feature.definition = std::move(definition);

@@ -19,6 +19,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -167,13 +168,32 @@ namespace {
         return false;
     }
     // 立体 + 輪郭。読み取りの既定は「切削」。
+    // **選ぶのは新しく引いた矩形だけ。** 全部の線を選ぶと、1つ目の矩形
+    // (押し出しに使い切った分)まで輪郭に入り、2枚が同じ平面に載っていないと
+    // EXT-001 で断られる。ここで見たいのは演算の選び方であって、平面の話ではない。
+    std::vector<kachakacha::v2::base::EntityId> wiresBefore;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kachakacha::v2::domain::EntityKind::Wire) {
+            wiresBefore.push_back(entity.id);
+        }
+    }
     if (!Explain("2つ目の矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
     auto& viewport = window.Viewport();
-    auto both = kachakacha::v2::app::SelectAllOfKind(
-        window.Session().GetDocument().Snapshot(),
-        kachakacha::v2::domain::EntityKind::Wire);
+    kachakacha::v2::app::SelectionSet both;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind != kachakacha::v2::domain::EntityKind::Wire) {
+            continue;
+        }
+        if (std::find(wiresBefore.begin(), wiresBefore.end(), entity.id)
+            == wiresBefore.end()) {
+            both.entityIds.push_back(entity.id);
+        }
+    }
+    if (!Explain("新しい矩形だけを選べる", !both.entityIds.empty())) {
+        return false;
+    }
     both.entityIds.push_back(part);
     kachakacha::v2::app::SelectionRef solid;
     solid.entityId = part;

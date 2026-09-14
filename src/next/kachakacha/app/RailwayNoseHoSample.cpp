@@ -176,24 +176,6 @@ namespace {
 
 } // namespace
 
-std::vector<CurveSegment> HoNoseRoofCenterGuide()
-{
-    // 屋根の真ん中を前後に走る線。前面中央の膨らみはこの線に出る。
-    return AlongNose(0.0);
-}
-
-std::vector<CurveSegment> HoNoseShoulderGuide(bool left)
-{
-    // 肩(屋根から側面へ回り込むところ)。曲率がいちばん変わる。
-    return AlongNose(left ? -0.55 : 0.55);
-}
-
-std::vector<CurveSegment> HoNoseLowerGuide()
-{
-    // 裾。絞りの効き方はこの線に出る。左側を代表にする。
-    return AlongNose(-0.95);
-}
-
 std::vector<CurveSegment> HoNoseSkirtGuide(bool left)
 {
     // 面の左右の縁。断面の端(u = ±1)を前後につないだ線である。

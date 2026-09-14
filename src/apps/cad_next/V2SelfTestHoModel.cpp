@@ -99,12 +99,19 @@ using kachakacha::v2::domain::EntityKind;
             return false;
         }
     }
-    for (const char* guide : {"SkirtGuide_L", "LowerGuide", "ShoulderGuide_L",
-             "RoofCenterGuide", "ShoulderGuide_R", "SkirtGuide_R"}) {
+    for (const char* guide : {"SkirtGuide_L", "SkirtGuide_R"}) {
         if (!Explain((std::string(guide) + " がある").c_str(),
                 !ByName(window, guide).IsNil())) {
             return false;
         }
+    }
+    // 見本が「開けた」と言えるのは、面が本当に出来たときだけである。
+    // 物が並んでいるだけで通すと、面が作れないことに気づかないまま
+    // ほかの試験が総崩れになる(2026-09-14 に実際そうなった)。
+    if (!Explain((std::string("面が本当に作れる(作り直せなかったもの: ")
+                     + window.RebuildProblems().toStdString() + ")").c_str(),
+            window.RebuildProblems().isEmpty())) {
+        return false;
     }
     if (!Explain("面がある", !ByName(window, "NoseSurface").IsNil())) {
         return false;

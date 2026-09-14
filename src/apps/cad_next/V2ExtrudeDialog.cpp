@@ -23,32 +23,62 @@ using kachakacha::v2::app::ExtentUsesTarget;
     return QString::fromUtf8(std::string(value).c_str());
 }
 
+//! 並びの何番目か。見つからなければ 0。
+template <typename Mode>
+[[nodiscard]] int IndexOf(const std::vector<Mode>& modes, Mode mode)
+{
+    for (std::size_t i = 0; i < modes.size(); ++i) {
+        if (modes[i] == mode) {
+            return static_cast<int>(i);
+        }
+    }
+    return 0;
+}
+
 } // namespace
 
-V2ExtrudeDialog::V2ExtrudeDialog(const kachakacha::v2::app::ExtrudeChoice& initial,
-    const kachakacha::v2::app::ExtrudeFacts& facts,
-    std::vector<ExtrudeTargetChoice> targets, QWidget* parent)
-    : QDialog(parent)
-    , facts_(facts)
-    , targets_(std::move(targets))
+int V2ExtrudeDialog::DirectionIndexOf(
+    kachakacha::v2::modeling::ExtrudeDirectionMode mode)
 {
-    setWindowTitle(QStringLiteral("押し出し"));
-    auto* layout = new QVBoxLayout(this);
-    auto* form = new QFormLayout();
+    return IndexOf(kachakacha::v2::app::ExtrudeDirections(), mode);
+}
 
+int V2ExtrudeDialog::ExtentIndexOf(kachakacha::v2::modeling::ExtrudeExtentMode mode)
+{
+    return IndexOf(kachakacha::v2::app::ExtrudeExtents(), mode);
+}
+
+int V2ExtrudeDialog::BooleanIndexOf(kachakacha::v2::modeling::ExtrudeBooleanMode mode)
+{
+    return IndexOf(kachakacha::v2::app::ExtrudeBooleans(), mode);
+}
+
+void V2ExtrudeDialog::BuildDirectionRows(
+    QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial)
+{
     direction_ = new QComboBox(this);
     for (const auto mode : kachakacha::v2::app::ExtrudeDirections()) {
         direction_->addItem(Text(kachakacha::v2::app::ExtrudeDirectionNameJa(mode)));
     }
+    // いま効いている決め方を出す。出さないと、窓を開いて何も触らずに確定した
+    // だけで、向きが並びの先頭(作業平面に垂直)へ黙って変わる
+    // (Codex P1-EXTRUDE-R6 B1)。
+    direction_->setCurrentIndex(DirectionIndexOf(initial.direction));
     form->addRow(QStringLiteral("押す向き"), direction_);
 
     reversed_ = new QCheckBox(QStringLiteral("逆向きにする"), this);
+    reversed_->setChecked(initial.reversed);
     form->addRow(reversed_);
+}
 
+void V2ExtrudeDialog::BuildExtentRows(
+    QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial)
+{
     extent_ = new QComboBox(this);
     for (const auto mode : kachakacha::v2::app::ExtrudeExtents()) {
         extent_->addItem(Text(kachakacha::v2::app::ExtrudeExtentNameJa(mode)));
     }
+    extent_->setCurrentIndex(ExtentIndexOf(initial.extent));
     form->addRow(QStringLiteral("どこまで"), extent_);
 
     distance_ = new QDoubleSpinBox(this);
@@ -71,8 +101,20 @@ V2ExtrudeDialog::V2ExtrudeDialog(const kachakacha::v2::app::ExtrudeChoice& initi
     for (const auto& choice : targets_) {
         target_->addItem(choice.labelJa);
     }
+    if (initial.targetEntityId.has_value()) {
+        for (std::size_t i = 0; i < targets_.size(); ++i) {
+            if (targets_[i].entityId == *initial.targetEntityId) {
+                target_->setCurrentIndex(static_cast<int>(i));
+                break;
+            }
+        }
+    }
     form->addRow(QStringLiteral("届かせる相手"), target_);
+}
 
+void V2ExtrudeDialog::BuildOutputRows(
+    QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial)
+{
     makePart_ = new QCheckBox(QStringLiteral("部品(立体)を作る"), this);
     makePart_->setChecked(initial.makePart);
     form->addRow(makePart_);
@@ -87,11 +129,30 @@ V2ExtrudeDialog::V2ExtrudeDialog(const kachakacha::v2::app::ExtrudeChoice& initi
     for (const auto mode : kachakacha::v2::app::ExtrudeBooleans()) {
         boolean_->addItem(Text(kachakacha::v2::app::ExtrudeBooleanNameJa(mode)));
     }
+    boolean_->setCurrentIndex(BooleanIndexOf(initial.booleanMode));
     form->addRow(QStringLiteral("部品どうしの演算"), boolean_);
 
     zeroConfirmed_ = new QCheckBox(
         QStringLiteral("距離0のまま、ワイヤーだけ作ることを承知する"), this);
+    zeroConfirmed_->setChecked(initial.zeroDistanceConfirmed);
     form->addRow(zeroConfirmed_);
+}
+
+V2ExtrudeDialog::V2ExtrudeDialog(const kachakacha::v2::app::ExtrudeChoice& initial,
+    const kachakacha::v2::app::ExtrudeFacts& facts,
+    std::vector<ExtrudeTargetChoice> targets, QWidget* parent)
+    : QDialog(parent)
+    , initialCustomDirection_(initial.customDirection)
+    , facts_(facts)
+    , targets_(std::move(targets))
+{
+    setWindowTitle(QStringLiteral("押し出し"));
+    auto* layout = new QVBoxLayout(this);
+    auto* form = new QFormLayout();
+
+    BuildDirectionRows(form, initial);
+    BuildExtentRows(form, initial);
+    BuildOutputRows(form, initial);
 
     layout->addLayout(form);
     summary_ = new QLabel(this);
@@ -136,6 +197,8 @@ kachakacha::v2::app::ExtrudeChoice V2ExtrudeDialog::Choice() const
     if (booleanIndex >= 0 && booleanIndex < static_cast<int>(booleans.size())) {
         choice.booleanMode = booleans[static_cast<std::size_t>(booleanIndex)];
     }
+    // 窓に XYZ の欄は無い。渡された自由な向きをそのまま返す。
+    choice.customDirection = initialCustomDirection_;
     choice.reversed = reversed_->isChecked();
     choice.distanceMm = distance_->value();
     choice.secondDistanceMm = secondDistance_->value();

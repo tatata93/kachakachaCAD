@@ -119,6 +119,44 @@ public:
         return diagnostics_.empty() ? std::string("理由が入っていません(不具合)。")
                                     : diagnostics_.front().summaryJa;
     }
+    //! 最初の理由そのもの。理由が1つも無ければ、そう言う理由を返す。
+    //!
+    //! **並びの外を読む道を1本も残さない。**`Failure` は必ず理由を持つが、
+    //! 既定で作った `Result` は空でありうる。
+    [[nodiscard]] Diagnostic FirstDiagnostic() const
+    {
+        return diagnostics_.empty()
+            ? MakeError("GEN-E000", "理由の付いていない失敗です。",
+                  "断るときは理由番号と一文を付けてください(不具合)。")
+            : diagnostics_.front();
+    }
+    //! 最初の理由の細かい説明。理由が1つも無ければ空。
+    //!
+    //! 一文だけ安全に読めるようにしても、隣で `Diagnostics().front().detailsJa`
+    //! と書けば同じ場所で並びの外を読む。**読む口を全部そろえる**
+    //! (Codex DIAG-REFUSAL-R2 B1)。
+    [[nodiscard]] std::string FirstDetailsJa() const
+    {
+        return diagnostics_.empty() ? std::string() : diagnostics_.front().detailsJa;
+    }
+    //! 最初の理由の番号。理由が1つも無ければ空。
+    [[nodiscard]] std::string FirstCode() const
+    {
+        return diagnostics_.empty() ? std::string() : diagnostics_.front().code;
+    }
+    //! 「番号 一文 細かい説明」。画面へ出すときの決まった並べ方。
+    [[nodiscard]] std::string FirstMessageJa() const
+    {
+        std::string text = FirstCode();
+        if (!text.empty()) { text += ' '; }
+        text += FirstSummaryJa();
+        const std::string details = FirstDetailsJa();
+        if (!details.empty()) {
+            text += ' ';
+            text += details;
+        }
+        return text;
+    }
     [[nodiscard]] bool HasError() const noexcept
     {
         for (const Diagnostic& diagnostic : diagnostics_) {

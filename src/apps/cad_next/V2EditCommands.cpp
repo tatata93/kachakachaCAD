@@ -185,7 +185,7 @@ void V2MainWindow::RefreshEditDock()
         const auto fields = kachakacha::v2::app::WireEditFieldsOf(*wire);
         if (!fields.HasValue()) {
             editDock_->ShowNothing(QString::fromStdString(
-                fields.FirstSummaryJa() + " " + fields.Diagnostics().front().detailsJa));
+                fields.FirstSummaryJa() + " " + fields.FirstDetailsJa()));
             return;
         }
         kachakacha::v2::app::WireEditFields shown = fields.Value();

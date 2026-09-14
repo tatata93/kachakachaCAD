@@ -228,10 +228,10 @@ struct Reader {
         const auto frame = modeling::FrameFromNormalAndU(origin.Value(), normal.Value(),
             hint.Value(), tolerance);
         if (!frame.HasValue()) {
-            return frame.Diagnostics().front();
+            return frame.FirstDiagnostic();
         }
         const auto added = AddPlane(reader, name, frame.Value(), WorkPlaneMethod::PointNormal, {});
-        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
     }
     if (line.command == "plane_offset") {
         if (line.args.size() < 3) {
@@ -240,14 +240,14 @@ struct Reader {
         const auto source = PlaneNamed(reader, line, line.args[1]);
         const auto distance = Number(line, 2);
         if (!source.HasValue() || !distance.HasValue()) {
-            return source.HasValue() ? distance.Diagnostics().front()
-                                     : source.Diagnostics().front();
+            return source.HasValue() ? distance.FirstDiagnostic()
+                                     : source.FirstDiagnostic();
         }
         WorkPlaneFrame frame = source.Value();
         frame.origin = frame.origin + frame.normal * distance.Value();
         const auto added = AddPlane(reader, name, frame, WorkPlaneMethod::OffsetFromPlane,
             {reader.planes[line.args[1]]});
-        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
     }
     if (line.command == "plane_rotate") {
         const auto source = PlaneNamed(reader, line, line.args.size() > 1 ? line.args[1] : "");
@@ -266,11 +266,11 @@ struct Reader {
             Rotate(base.normal, axisDirection.Value(), angle),
             Rotate(base.uAxis, axisDirection.Value(), angle), tolerance);
         if (!frame.HasValue()) {
-            return frame.Diagnostics().front();
+            return frame.FirstDiagnostic();
         }
         const auto added = AddPlane(reader, name, frame.Value(), WorkPlaneMethod::AngleAboutEdge,
             {reader.planes[line.args[1]]});
-        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+        return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
     }
     // plane_three
     modeling::WorkPlaneRequest request;
@@ -279,16 +279,16 @@ struct Reader {
          index += 3) {
         const auto point = Point(line, index);
         if (!point.HasValue()) {
-            return point.Diagnostics().front();
+            return point.FirstDiagnostic();
         }
         request.points.push_back(point.Value());
     }
     const auto frame = modeling::BuildWorkPlane(request, tolerance);
     if (!frame.HasValue()) {
-        return frame.Diagnostics().front();
+        return frame.FirstDiagnostic();
     }
     const auto added = AddPlane(reader, name, frame.Value(), WorkPlaneMethod::ThreePoints, {});
-    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
 }
 
 // ---- 線 ----
@@ -428,10 +428,10 @@ struct Reader {
     }
     const auto curve = CurveOf(line);
     if (!curve.HasValue()) {
-        return curve.Diagnostics().front();
+        return curve.FirstDiagnostic();
     }
     const auto added = AddWire(reader, line.args[0], curve.Value());
-    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
 }
 
 [[nodiscard]] std::optional<Diagnostic> ReadPoint(Reader& reader, const Line& line)
@@ -441,7 +441,7 @@ struct Reader {
     }
     const auto position = Point(line, 1);
     if (!position.HasValue()) {
-        return position.Diagnostics().front();
+        return position.FirstDiagnostic();
     }
     Feature feature;
     feature.type = FeatureType::CreatePoint;
@@ -455,7 +455,7 @@ struct Reader {
     if (added.HasValue()) {
         reader.points[line.args[0]] = added.Value();
     }
-    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
 }
 
 // ---- 紐づけ・表示 ----
@@ -557,7 +557,7 @@ struct Reader {
     if (added.HasValue()) {
         reader.surfaces[line.args[0]] = added.Value();
     }
-    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
 }
 
 //! plate 名前 面 厚み 向き 材料 → 面に厚み(ThickenSurface)。材料は持たない。
@@ -572,7 +572,7 @@ struct Reader {
     }
     const auto thickness = Number(line, 2);
     if (!thickness.HasValue()) {
-        return thickness.Diagnostics().front();
+        return thickness.FirstDiagnostic();
     }
     Feature feature;
     feature.type = FeatureType::ThickenSurface;
@@ -587,7 +587,7 @@ struct Reader {
     if (added.HasValue()) {
         reader.surfaces[line.args[0]] = added.Value();
     }
-    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.Diagnostics().front());
+    return added.HasValue() ? std::nullopt : std::optional<Diagnostic>(added.FirstDiagnostic());
 }
 
 [[nodiscard]] std::optional<Diagnostic> ReadLine(Reader& reader, const Line& line)

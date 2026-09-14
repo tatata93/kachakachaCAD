@@ -19,6 +19,7 @@
 #include <vector>
 
 class QCheckBox;
+class QFormLayout;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
@@ -44,12 +45,29 @@ public:
     void SetBooleanIndex(int index);
     void SetDistanceMm(double value);
     void SetOutputs(bool part, bool endWire, bool sideWires);
+    //! 並びの何番目がその決め方か。無ければ 0。窓を初期値に合わせるのに使う。
+    [[nodiscard]] static int DirectionIndexOf(
+        kachakacha::v2::modeling::ExtrudeDirectionMode mode);
+    [[nodiscard]] static int ExtentIndexOf(
+        kachakacha::v2::modeling::ExtrudeExtentMode mode);
+    [[nodiscard]] static int BooleanIndexOf(
+        kachakacha::v2::modeling::ExtrudeBooleanMode mode);
+    //! 欄を作って初期値を入れる。作るところと繋ぐところを分けておく。
+    void BuildDirectionRows(
+        QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial);
+    void BuildExtentRows(
+        QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial);
+    void BuildOutputRows(
+        QFormLayout* form, const kachakacha::v2::app::ExtrudeChoice& initial);
     //! 欄の出し入れと、いま何が起きるかの一文を作り直す。
     void Refresh();
     //! いまの選択が通るか。通らないなら断り文が入る。
     [[nodiscard]] bool CurrentChoiceIsValid(QString* reasonOut) const;
 
 private:
+    //! 窓に欄が無いものは、渡された値をそのまま返す。
+    //! 落とすと、窓を開いて閉じただけで自由な向きが (0,0,1) に化ける。
+    kachakacha::v2::geometry::Vector3 initialCustomDirection_{0.0, 0.0, 1.0};
     kachakacha::v2::app::ExtrudeFacts facts_;
     std::vector<ExtrudeTargetChoice> targets_;
     QComboBox* direction_ = nullptr;

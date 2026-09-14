@@ -57,7 +57,7 @@ $all = @(Get-ReviewLedgerEntries -RepoRoot $RepoRoot)
 $start = [Math]::Max(0, $all.Count - $Recent)
 for ($i = $start; $i -lt $all.Count; $i++) { $ledgerTail += $all[$i] }
 
-# 読めない台帳の行があるなら、見るたびに言う。黙って抱え込まない。
+# If the ledger holds a line nobody can read, say so every time it is looked at.
 $ledgerDamage = 0
 try { $ledgerDamage = Get-ReviewLedgerDamage -RepoRoot $RepoRoot } catch { $ledgerDamage = -1 }
 

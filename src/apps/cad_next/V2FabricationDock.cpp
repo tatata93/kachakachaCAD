@@ -355,8 +355,8 @@ bool V2FabricationDock::ManualBoundariesReadable(QString* error) const
         return true;
     }
     if (error != nullptr) {
-        *error = QString::fromStdString(parsed.Diagnostics().front().code + " "
-            + parsed.FirstSummaryJa() + " " + parsed.Diagnostics().front().detailsJa);
+        *error = QString::fromStdString(parsed.FirstCode() + " "
+            + parsed.FirstSummaryJa() + " " + parsed.FirstDetailsJa());
     }
     return false;
 }

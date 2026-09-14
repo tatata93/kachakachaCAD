@@ -7,6 +7,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2ExtrudeDialog.h"
 #include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
@@ -23,6 +24,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -376,6 +378,118 @@ namespace {
             == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal);
 }
 
+//! Codex P1-EXTRUDE-R6 B1。詳細の窓を開いて何も触らずに閉じても、
+//! 決めごとが変わらないこと。
+//!
+//! 窓は渡された値を欄へ映していなかったので、開いて確定するだけで
+//! 向きが並びの先頭(作業平面に垂直)へ、演算が「新しい部品」へ黙って戻っていた。
+[[nodiscard]] bool CaseDialogKeepsWhatItWasGiven(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::ExtrudeBooleanMode;
+    using kachakacha::v2::modeling::ExtrudeDirectionMode;
+    using kachakacha::v2::modeling::ExtrudeExtentMode;
+
+    kachakacha::v2::app::ExtrudeChoice initial;
+    initial.direction = ExtrudeDirectionMode::WorldY;
+    initial.customDirection = {0.0, 0.0, 7.0};
+    initial.reversed = true;
+    initial.extent = ExtrudeExtentMode::SymmetricDistance;
+    initial.distanceMm = 3.25;
+    initial.secondDistanceMm = 1.5;
+    initial.booleanMode = ExtrudeBooleanMode::SubtractFromPart;
+    initial.hasSelectedPart = true;
+    initial.makePart = true;
+    initial.makeEndProfileWire = true;
+
+    kachakacha::v2::app::ExtrudeFacts facts;
+    facts.closedProfiles = 1;
+    facts.parts = 1;
+
+    V2ExtrudeDialog dialog(initial, facts, {}, &window);
+    const auto answered = dialog.Choice();
+    if (!Explain("開いて何も触らなければ向きが変わらない",
+            answered.direction == initial.direction)) {
+        return false;
+    }
+    if (!Explain("欄に無い自由な向きも落とさない",
+            std::abs(answered.customDirection.z - 7.0) < 1.0e-9)) {
+        return false;
+    }
+    if (!Explain("逆向きも残る", answered.reversed == initial.reversed)) {
+        return false;
+    }
+    if (!Explain("どこまで押すかも残る", answered.extent == initial.extent)) {
+        return false;
+    }
+    if (!Explain("演算も残る", answered.booleanMode == initial.booleanMode)) {
+        return false;
+    }
+    return Explain("作るものも残る",
+        answered.makePart == initial.makePart
+            && answered.makeEndProfileWire == initial.makeEndProfileWire);
+}
+
+//! Codex P1-EXTRUDE-R6 B2。詳細の窓で選んだ「世界の軸」が、
+//! 矢印・確定・保存・次回の初期値まで通ること。
+//!
+//! 棚が出せるのは2通りだけなので、残り5通りは確定のときに
+//! 棚を触る前の決め方へ戻され、選んでも何も起きなかった。
+//! 矢印と下見も、2通り以外はすべて作業平面の法線を向いていた。
+[[nodiscard]] bool CaseDialogDirectionReachesTheShape(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::ExtrudeDirectionMode;
+    window.RunCommand("file.new");
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 下見と棚
+    if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+    // 窓の代わりに「X方向を選んだ」という答えを差し込む。
+    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
+                                 const kachakacha::v2::app::ExtrudeFacts&)
+                                 -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
+        auto answered = initial;
+        answered.direction = ExtrudeDirectionMode::WorldX;
+        return answered;
+    });
+    window.ExtrudeDock().TypeDistanceMm(4.0);
+    window.RunCommand("part.extrude");   // 確定
+    window.SetExtrudeChooser(nullptr);
+    if (!Explain((std::string("立体ができる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountParts(window) == 1)) {
+        return false;
+    }
+    bool matched = false;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::ExtrudeDefinition>(&feature.definition);
+        if (definition == nullptr) {
+            continue;
+        }
+        const auto& saved = definition->direction;
+        matched = std::abs(std::abs(saved.x) - 1.0) < 1.0e-6
+            && std::abs(saved.z) < 1.0e-6;
+    }
+    if (!Explain("保存された向きが X 方向", matched)) {
+        return false;
+    }
+    if (!Explain("覚えている決め方も X 方向のまま",
+            window.ExtrudeChoice().direction == ExtrudeDirectionMode::WorldX)) {
+        return false;
+    }
+    // 次に始めたときの矢印も X を向くこと。棚は出せないので上書きもしない。
+    window.RunCommand("select.all");
+    window.RunCommand("part.extrude");
+    const auto direction = window.ExtrudeDirectionNow();
+    return Explain((std::string("次の矢印も X 方向(x=")
+                       + std::to_string(direction.x) + " z="
+                       + std::to_string(direction.z) + ")").c_str(),
+        std::abs(direction.x) > 0.9 && std::abs(direction.z) < 0.1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudePromiseCases()
@@ -388,6 +502,9 @@ std::vector<SelfTestCase> ExtrudePromiseCases()
         {"棚で選んだ向きが矢印と確定と保存まで通る", CaseShelfDirectionReachesTheShape},
         {"輪郭と作業平面が別の向きでも棚の表示どおりに押せる",
             CaseDirectionFollowsWhatTheShelfShows},
+        {"詳細の窓は渡した決めごとをそのまま見せる", CaseDialogKeepsWhatItWasGiven},
+        {"詳細の窓で選んだ向きが矢印と確定と次回まで通る",
+            CaseDialogDirectionReachesTheShape},
     };
 }
 

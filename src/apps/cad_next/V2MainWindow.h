@@ -173,6 +173,17 @@ public:
     //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
     //! 0mm など作れない量なら理由を出して偽を返す。
     bool ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice);
+    //! 決めたひと組。**覚える形** と **カーネルへ渡す形** を分けて持つ。
+    //!
+    //! 分けないと、渡すために向きを畳んだ値がそのまま覚えられて、
+    //! 次に棚や窓を出したとき「数値で決める」に化ける。逆に覚える形だけに
+    //! すると、矢印と作る形が別々に向きを当て直すことになる。
+    struct PreparedExtrudeChoice {
+        //! 人が選んだ決め方のまま。次の初期値になる。
+        kachakacha::v2::app::ExtrudeChoice remembered;
+        //! 向きを解いたもの。作る形はこれで作る。
+        kachakacha::v2::app::ExtrudeChoice resolved;
+    };
     //! 読み取った入力の片方を外して選び直す(EX-07)。
     //! target が真なら加工する立体、偽なら輪郭・面を外す。もう片方は残す。
     void ReselectExtrudeInput(bool target);
@@ -183,7 +194,7 @@ public:
     BooleanTargetShapeFor(const kachakacha::v2::app::ExtrudeChoice& choice,
         const kachakacha::v2::app::ExtrudePlan& plan);
     //! 決めごと(距離・向き・演算)を整える。やめたら値を返さない。
-    [[nodiscard]] std::optional<kachakacha::v2::app::ExtrudeChoice> PrepareExtrudeChoice(
+    [[nodiscard]] std::optional<PreparedExtrudeChoice> PrepareExtrudeChoice(
         const kachakacha::v2::app::ExtrudePlan& plan,
         const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles);
     //! いまの距離で出来上がる形の輪郭。試験から見る。
@@ -930,6 +941,17 @@ public:
     void ForgetPendingPartition();
     //! 案を見せた相手と値の指紋。案が古くなっていないかを見る。
     [[nodiscard]] std::string FabricationInputSignature() const;
+    //! 「曲げる部材」の欄が、書いてあるのに読めない状態か(空欄とは違う)。
+    [[nodiscard]] bool PartNumbersUnreadable() const;
+    //! 文書に入った境目が、当てようとした境目と同じか。
+    [[nodiscard]] bool BoundariesMatch(const std::vector<double>& inner) const;
+    //! 見せた案と、いま出した案が同じものか。
+    [[nodiscard]] static bool SamePartitionProposal(
+        const kachakacha::v2::fabrication::BandPartitionPreview& shown,
+        const kachakacha::v2::fabrication::BandPartitionPreview& now);
+    //! 捨てる値の言い方。見せるときと済んだあとで同じ文を使う。
+    [[nodiscard]] static QString DroppedValuesTextJa(
+        const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま案を見せているか。試験から見る。
     [[nodiscard]] bool PendingPartitionShown() const
     {
@@ -951,6 +973,11 @@ public:
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionNow() const;
     //! 反転を掛ける前の押し出しの向き。反転は棚が持つので二重に掛けない。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeBaseDirectionNow() const;
+    //! 決め方ひとつを向きひとつに解く。**7通りすべてここで解く。**
+    //! 矢印・下見・確定・保存する作り方が、みなここを通る。
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionForMode(
+        kachakacha::v2::modeling::ExtrudeDirectionMode mode,
+        const kachakacha::v2::geometry::Vector3& custom) const;
     //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。
     void RefreshBendRadius();
     //! いまの組立率(0〜100)。近似モデルが無ければ 100。

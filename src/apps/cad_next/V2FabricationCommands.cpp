@@ -677,7 +677,7 @@ void V2MainWindow::AdoptFabricationChoice()
     }
     const auto checked = kachakacha::v2::app::CheckFabricationChoice(fabricationDock_->Choice());
     if (!checked.HasValue()) {
-        fabricationDock_->SetMessage(QString::fromStdString(checked.Diagnostics().front().code
+        fabricationDock_->SetMessage(QString::fromStdString(checked.FirstCode()
             + " " + checked.FirstSummaryJa()));
         return;
     }

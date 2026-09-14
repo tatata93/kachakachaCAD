@@ -293,7 +293,7 @@ QString V2MainWindow::TryBuildSurface(
     const auto table = kachakacha::v2::app::GuideTableFromDefinition(
         session_->GetDocument(), session_->Scene(), definition);
     if (!table.HasValue()) {
-        const auto& first = table.Diagnostics().front();
+        const auto first = table.FirstDiagnostic();
         return QString::fromStdString(first.code + " " + first.summaryJa + " "
             + first.detailsJa);
     }

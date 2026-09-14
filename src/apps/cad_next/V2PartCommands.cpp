@@ -209,7 +209,7 @@ V2MainWindow::BooleanTargetShapeFor(const kachakacha::v2::app::ExtrudeChoice& ch
 //!
 //! ConfirmExtrude から切り出したのは、1関数100行の門を越えたためである。
 //! 切る場所は「決める」と「作る」の境目にした。
-std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeChoice(
+std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeChoice(
     const kachakacha::v2::app::ExtrudePlan& plan,
     const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles)
 {
@@ -229,20 +229,9 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
         choice.direction = extrudeDock_->DirectionMode();
         extrudeChoice_.direction = choice.direction;
     }
-    if (!facePushPull_) {
-        // 決め方はもう決まっている。ここでは **その決め方で出した向き** を渡す。
-        // 渡さないと、輪郭の平面の法線を core がもう一度当て直すことになり、
-        // 矢印と食い違う余地が残る。反転を掛ける前の向きを渡す
-        // (反転は下の棚の値で掛かる)。
-        const kachakacha::v2::modeling::ExtrudeDirectionMode chosen = choice.direction;
-        if (chosen == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal
-            || chosen == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal) {
-            choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-            choice.customDirection = ExtrudeBaseDirectionNow();
-        }
-        // それ以外(詳細の窓で世界の軸や自由な向きを選んだ場合)は
-        // **人が選んだものをそのまま残す。** 上書きしない(Codex R4 B1)。
-    }
+    // 向きの畳み込みは **ここではやらない。** 窓で選び直される前に畳むと、
+    // 人が選んだ決め方が失われる(Codex P1-EXTRUDE-R6 B2)。
+    // 畳むのは、窓の答えまで決まった後、作る形を作る直前だけである。
     // 距離は矢印が持っている値を使う。引いた結果と作る形を必ず一致させる。
     choice.distanceMm = viewport_->ExtrudeHandleShown()
         ? viewport_->ExtrudeHandleDistanceMm()
@@ -263,6 +252,9 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     } else if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
+    // 面の押し引きは向きを面の法線へ畳む。覚えている決め方は退避しておく。
+    const auto rememberedDirection = extrudeChoice_.direction;
+    const auto rememberedCustom = extrudeChoice_.customDirection;
     if (facePushPull_ && !ApplyFacePushPull(choice)) {
         return std::nullopt;
     }
@@ -281,7 +273,27 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
         ReportDiagnostics(checked.Diagnostics());
         return std::nullopt;
     }
-    return choice;
+    PreparedExtrudeChoice prepared;
+    prepared.remembered = choice;
+    prepared.resolved = choice;
+    if (facePushPull_) {
+        // 面の押し引きが決めた向きは、その面だけのものである。覚えると、
+        // 次にふつうの押し出しをしたとき、その面の法線を引きずる。
+        prepared.remembered.direction = rememberedDirection;
+        prepared.remembered.customDirection = rememberedCustom;
+    } else if (choice.direction
+        == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal) {
+        // 「輪郭に垂直」だけは、こちらとカーネルで当て方が違う。
+        // こちらは下見に出している折れ線から当て、カーネルは輪郭そのものから
+        // 当てるので、符号が食い違う余地が残る。**矢印で見えている向きを渡す。**
+        // 残る5通りはこちらとカーネルの解き方が同じなので、畳まずに渡す。
+        // 畳まなければ、向きが使えない値のときカーネルが理由を言える。
+        prepared.resolved.direction
+            = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
+        prepared.resolved.customDirection = ExtrudeDirectionForMode(
+            choice.direction, choice.customDirection);
+    }
+    return prepared;
 }
 
 //! 出ている下見のとおりに作る。
@@ -316,17 +328,16 @@ void V2MainWindow::ConfirmExtrude()
     // 何を作るか、どこまで押すかを選ばせる。core は7通りの向きと5通りの終端を
     // 持っているのに、画面が1通りに固定していた。工程の案内はそれを前提に
     // 書いてあるので、案内と実物が食い違っていた。
-    const auto choiceOrNone = PrepareExtrudeChoice(plan, profiles);
-    if (!choiceOrNone.has_value()) {
+    const auto preparedOrNone = PrepareExtrudeChoice(plan, profiles);
+    if (!preparedOrNone.has_value()) {
         return;   // やめたか、断った。理由はそちらで言っている。
     }
-    const kachakacha::v2::app::ExtrudeChoice choice = *choiceOrNone;
-    // 人が選んだ「決め方」を覚えておく。作る形へ渡す値は CustomXYZ に畳んである
-    // ので、そのまま覚えると次に棚を出したとき決め方が失われ、表示と食い違う
-    // (Codex P1-EXTRUDE-R5 B1)。畳む前の決め方を戻す。
-    const auto chosenDirectionMode = extrudeChoice_.direction;
-    extrudeChoice_ = choice;
-    extrudeChoice_.direction = chosenDirectionMode;
+    // 作る形はこちら。向きは解いてある。
+    const kachakacha::v2::app::ExtrudeChoice choice = preparedOrNone->resolved;
+    // 覚えるのはこちら。人が選んだ決め方のまま持つ。窓で「X方向」や
+    // 「選んだ線の向き」を選んでも、次に棚と窓へそのまま出る
+    // (Codex P1-EXTRUDE-R5 B1、R6 B2)。
+    extrudeChoice_ = preparedOrNone->remembered;
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
         targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);

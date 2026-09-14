@@ -110,6 +110,55 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
     return true;
 }
 
+//! いま文書に入っている境目が、当てようとした境目と同じか。
+//!
+//! 枚数が合っていても切り方が違えば、見せた形とは別物である。
+bool V2MainWindow::BoundariesMatch(const std::vector<double>& inner) const
+{
+    const auto* definition = CurrentFabricationDefinition();
+    if (definition == nullptr) {
+        return false;
+    }
+    if (definition->manualBoundaries.size() != inner.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < inner.size(); ++index) {
+        if (std::abs(definition->manualBoundaries[index] - inner[index]) > 1.0e-9) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! 見せた案と、いま出した案が同じものか。
+//!
+//! 「2度目」は同じ形を当てるときだけである。指紋で入力の変化を見ているが、
+//! 入力を数え上げる限り必ず数え漏れる(実際、全体の組立率を漏らしていた)。
+//! **出てきた案そのものを見比べる**ほうが確かである(Codex Q1-Q5-R5 B1)。
+bool V2MainWindow::SamePartitionProposal(
+    const kachakacha::v2::fabrication::BandPartitionPreview& shown,
+    const kachakacha::v2::fabrication::BandPartitionPreview& now)
+{
+    if (shown.possible != now.possible || shown.partsBefore != now.partsBefore
+        || shown.partsAfter != now.partsAfter
+        || shown.railParameters.size() != now.railParameters.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < shown.railParameters.size(); ++index) {
+        if (std::abs(shown.railParameters[index] - now.railParameters[index]) > 1.0e-9) {
+            return false;
+        }
+    }
+    for (const auto& pair : {std::pair<double, double>{shown.widthBeforeMm, now.widthBeforeMm},
+             std::pair<double, double>{shown.firstWidthMm, now.firstWidthMm},
+             std::pair<double, double>{shown.secondWidthMm, now.secondWidthMm}}) {
+        if (std::abs(pair.first - pair.second) > 1.0e-6) {
+            return false;
+        }
+    }
+    return true;
+}
+
 //! 見せる相手と、決めたあとに変える境目を、**同じ1つの候補から**作る。
 //!
 //! 別々に作ると「分けられます」と言った相手と実際に変える境目が食い違い、
@@ -139,7 +188,9 @@ void V2MainWindow::ApplyBandPartition(
             session_->GetDocument(), what.toStdString());
         if (ApplyBandBoundaries(inner, what, preview.messageJa, carried)) {
             actual = FabricationPanelCount();
-            ok = actual == preview.partsAfter;
+            // 枚数だけでは足りない。**同じ枚数で違う切り方**になっていても
+            // 通ってしまう(Codex Q1-Q5-R5 B1)。境目そのものを見比べる。
+            ok = actual == preview.partsAfter && BoundariesMatch(inner);
         }
         if (ok) {
             ok = transaction.Commit();
@@ -158,21 +209,33 @@ void V2MainWindow::ApplyBandPartition(
                 .arg(static_cast<int>(actual)));
         return;
     }
-    QString dropped;
-    for (const std::size_t part : carried.droppedParts) {
-        if (!dropped.isEmpty()) {
-            dropped += QStringLiteral("、");
-        }
-        dropped += QStringLiteral("部材%1").arg(static_cast<int>(part));
-    }
+    // 捨てたものは、見せたときと**同じ言い方**で言う。
+    // 前もって「組立率」と見せておきながら、済んだあとで「半径」と言っていた
+    // (Codex Q1-Q5-R5 B2)。事実と違うことを言わない。
+    const QString dropped = DroppedValuesTextJa(carried);
     SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。以後は自動で切り直しません。%4")
             .arg(what)
             .arg(QString::fromStdString(preview.messageJa))
             .arg(static_cast<int>(actual))
             .arg(dropped.isEmpty()
                     ? QString()
-                    : QStringLiteral("%1 に入れてあった半径は引き継げないので捨てました。")
-                          .arg(dropped)));
+                    : QStringLiteral("%1 は引き継げないので捨てました。").arg(dropped)));
+}
+
+//! 捨てる値の言い方。**見せるときと済んだあとで、同じ文を使う。**
+QString V2MainWindow::DroppedValuesTextJa(
+    const kachakacha::v2::fabrication::BandValueRemap& carried)
+{
+    QString text;
+    for (const auto& lost : carried.droppedValues) {
+        if (!text.isEmpty()) {
+            text += QStringLiteral("、");
+        }
+        text += QStringLiteral("部材%1の%2")
+                    .arg(static_cast<int>(lost.part))
+                    .arg(QString::fromStdString(lost.what));
+    }
+    return text;
 }
 
 //! いま部材ごとに持っている値。引き継ぎの元になる。
@@ -266,7 +329,9 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
     const std::string signature = FabricationInputSignature();
     const bool sameAsShown = pendingPartition_.has_value()
         && pendingPartition_->what == what && pendingPartition_->numbers == numbers
-        && pendingPartition_->signature == signature && !signature.empty();
+        && pendingPartition_->signature == signature && !signature.empty()
+        // 指紋だけでなく、**いま出した案そのもの**が見せたものと同じであること。
+        && SamePartitionProposal(pendingPartition_->preview, preview);
     if (pendingPartition_.has_value() && !sameAsShown
         && pendingPartition_->what == what && pendingPartition_->numbers == numbers) {
         // 同じ指示・同じ番号なのに相手か値が変わった。黙って当てない。
@@ -289,15 +354,7 @@ void V2MainWindow::ProposeOrApplyPartition(const QString& what,
         pending.carried = carried;
         pendingPartition_ = std::move(pending);
         // 何が消えるのかを、番号だけでなく名前で言う。
-        QString dropped;
-        for (const auto& lost : carried.droppedValues) {
-            if (!dropped.isEmpty()) {
-                dropped += QStringLiteral("、");
-            }
-            dropped += QStringLiteral("部材%1の%2")
-                           .arg(static_cast<int>(lost.part))
-                           .arg(QString::fromStdString(lost.what));
-        }
+        const QString dropped = DroppedValuesTextJa(carried);
         SetStatus(QStringLiteral("%1(まだ変えていません): %2%3 "
                                  "もう一度同じ指示を出すと、この形にします。"
                                  "やめるときは Esc か道具を替えてください。")
@@ -368,6 +425,23 @@ void V2MainWindow::SplitFabricationPart()
 }
 
 //! 棚の「曲げる部材」に書いた番号。0 起点へ直して返す。
+//! 棚の「曲げる部材」の欄が、空欄なのか、書いてあって読めないのか。
+//!
+//! どちらも空の並びを返していたので、`abc` と書いてあっても「空欄」と同じ
+//! 扱いになり、部材1の半径を出していた(Codex Q1-Q5-R5 B3)。
+//! **書いてあるのに読めないことは、空欄とは違う。**
+bool V2MainWindow::PartNumbersUnreadable() const
+{
+    if (fabricationDock_ == nullptr) {
+        return false;
+    }
+    const QString text = fabricationDock_->PartNumbersText().trimmed();
+    if (text.isEmpty()) {
+        return false;   // 空欄。読めないのではない
+    }
+    return !kachakacha::v2::app::ParsePartNumberList(text.toStdString()).HasValue();
+}
+
 std::vector<std::size_t> V2MainWindow::SelectedPartNumbers() const
 {
     std::vector<std::size_t> numbers;

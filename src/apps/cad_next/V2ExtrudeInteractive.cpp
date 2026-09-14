@@ -133,36 +133,69 @@ Vector3 V2MainWindow::ExtrudeDirectionNow() const
 //! (Codex P1-EXTRUDE-R4 B1)。
 Vector3 V2MainWindow::ExtrudeBaseDirectionNow() const
 {
-    Vector3 direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
-    // 面の押し引きは押す面が向きを決める。棚の欄は効かない(欄も隠してある)。
-    if (!facePushPull_
-        && extrudeChoice_.direction
-            != kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal) {
-        // 「作業平面に垂直」を選んだ。作図している面の向きで押す。
-        return direction;
+    // 面の押し引きは押す面が向きを決める。棚も窓も効かない(欄も隠してある)。
+    if (facePushPull_) {
+        return faceNormal_;
     }
-    if (!facePushPull_) {
-        // 輪郭が自分の平面を持っているなら、そちらの法線で押す。
-        //
-        // 作業平面の法線で押すと、別の平面に引いてある輪郭
-        // (例えば前頭部の窓は x = 一定の面に載っている)を選んだときに、
-        // 向きが輪郭の平面の中に寝てしまい「厚みが出ません」(EXT-007)で断られる。
-        // 人は選んだ輪郭を押したいのであって、いま作図している面の向きへ
-        // 押したいわけではない。
-        //
-        // 作業平面の上に引いた輪郭では、この法線は作業平面の法線と同じになる。
-        // 向きは作業平面の法線に合わせておく。矢印の向きが今までと変わらない。
-        const auto plane = kachakacha::v2::geometry::FitPlane(extrudeOutline_);
-        if (plane.valid && plane.normal.IsFinite()
-            && plane.normal.Length() > 1.0e-9) {
-            Vector3 fitted = plane.normal;
-            if (kachakacha::v2::geometry::Dot(fitted, direction) < 0.0) {
-                fitted = fitted * -1.0;
-            }
-            direction = fitted;
+    return ExtrudeDirectionForMode(
+        extrudeChoice_.direction, extrudeChoice_.customDirection);
+}
+
+//! 決め方ひとつを、向きひとつに解く。**7通りすべてここで解く。**
+//!
+//! ここが2通りしか解いていなかったので、詳細の窓で「X方向」や「選んだ線の向き」を
+//! 選んでも、矢印と下見だけは作業平面の法線へ進んでいた。作る形はカーネルが
+//! 別に解いていたので、見えているものと出来るものが違っていた
+//! (Codex P1-EXTRUDE-R6 B2)。
+//!
+//! 解き方はカーネル(modeling/ExtrudeInput.cpp の ResolveDirection)と同じにする。
+//! 違うのは「輪郭に垂直」のときだけで、こちらは下見に出している折れ線から
+//! 当てる。向きの符号を作業平面に合わせるのも、矢印が今までと同じ側を向くため。
+Vector3 V2MainWindow::ExtrudeDirectionForMode(
+    kachakacha::v2::modeling::ExtrudeDirectionMode mode,
+    const Vector3& custom) const
+{
+    using kachakacha::v2::modeling::ExtrudeDirectionMode;
+    const Vector3 workPlaneNormal = viewport_->WorkPlane().normal;
+    const auto usable = [&](const Vector3& value) {
+        return value.IsFinite() && value.Length() > 1.0e-9;
+    };
+    switch (mode) {
+    case ExtrudeDirectionMode::WorkPlaneNormal:
+        return workPlaneNormal;
+    case ExtrudeDirectionMode::WorldX:
+        return Vector3{1.0, 0.0, 0.0};
+    case ExtrudeDirectionMode::WorldY:
+        return Vector3{0.0, 1.0, 0.0};
+    case ExtrudeDirectionMode::WorldZ:
+        return Vector3{0.0, 0.0, 1.0};
+    case ExtrudeDirectionMode::SelectedVector:
+    case ExtrudeDirectionMode::CustomXYZ:
+        // 使えない値でも黙って別の向きへ倒さない。矢印だけは描けるように
+        // 作業平面の法線を借りるが、断るのはカーネルの仕事である。
+        return usable(custom) ? custom : workPlaneNormal;
+    case ExtrudeDirectionMode::ProfileNormal:
+        break;
+    }
+    // 輪郭が自分の平面を持っているなら、そちらの法線で押す。
+    //
+    // 作業平面の法線で押すと、別の平面に引いてある輪郭
+    // (例えば前頭部の窓は x = 一定の面に載っている)を選んだときに、
+    // 向きが輪郭の平面の中に寝てしまい「厚みが出ません」(EXT-007)で断られる。
+    // 人は選んだ輪郭を押したいのであって、いま作図している面の向きへ
+    // 押したいわけではない。
+    //
+    // 作業平面の上に引いた輪郭では、この法線は作業平面の法線と同じになる。
+    // 向きは作業平面の法線に合わせておく。矢印の向きが今までと変わらない。
+    const auto plane = kachakacha::v2::geometry::FitPlane(extrudeOutline_);
+    if (plane.valid && usable(plane.normal)) {
+        Vector3 fitted = plane.normal;
+        if (kachakacha::v2::geometry::Dot(fitted, workPlaneNormal) < 0.0) {
+            fitted = fitted * -1.0;
         }
+        return fitted;
     }
-    return direction;
+    return workPlaneNormal;
 }
 
 std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double distanceMm) const

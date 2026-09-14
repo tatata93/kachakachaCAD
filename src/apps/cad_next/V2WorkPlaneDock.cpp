@@ -258,7 +258,7 @@ void V2WorkPlaneDock::RefreshNeeds()
     // 押してから断らない。いま何が足りないかを、その場で出す。
     const QString reason = checked.Diagnostics().empty()
         ? QString()
-        : QString::fromStdString(checked.Diagnostics().front().detailsJa);
+        : QString::fromStdString(checked.FirstDetailsJa());
     needs_->setText(QStringLiteral("このままでは作れません: %1").arg(reason));
     create_->setEnabled(false);
     canCreate_ = false;

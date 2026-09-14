@@ -107,7 +107,11 @@ kachakacha::v2::fabrication::BendRadius V2MainWindow::BendRadiusNow() const
     if (bends.empty()) {
         return {};
     }
-    // 見るだけ。番号を書いていなければ1枚目。書いてあって読めないなら空。
+    // 見るだけ。番号を書いていなければ1枚目。**書いてあって読めないなら空。**
+    // 読めない字を空欄と同じに扱うと、まったく違う部材の半径を見せてしまう。
+    if (PartNumbersUnreadable()) {
+        return {};
+    }
     const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
     if (!chosen.ok) {
         return SelectedPartNumbers().empty() ? bends.front()

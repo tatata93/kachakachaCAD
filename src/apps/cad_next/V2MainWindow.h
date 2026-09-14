@@ -149,7 +149,20 @@ public:
     //! 分けはしない。言うだけである。相手が無ければ空を返す。
     [[nodiscard]] QString PanelAdviceTextJa(
         const std::vector<kachakacha::v2::base::EntityId>& partIds) const;
-    bool MaterializeFaceProfileWires();
+    //! 押す面の縁をその場限りの輪郭として取り出す。文書は変えない。
+    bool PickFaceProfile();
+    //! 抱えていた縁を文書へ入れる。確定のときだけ、compound の中で呼ぶ。
+    bool CommitFaceProfileWires(std::vector<kachakacha::v2::base::EntityId>& made);
+    //! 抱えていた縁を捨てる。取消・道具替え・確定のあと。
+    void ForgetFaceProfile();
+    //! 出来た形を文書へ入れる。1回の操作は1回の取り消しで戻る。
+    void CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choice,
+        const kachakacha::v2::app::ExtrudePlan& plan,
+        const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
+        const kachakacha::v2::kernel::ExtrudeBuildResult& built);
+    //! 抱えている面の縁を、押し出しの輪郭にする。文書へは入れない。
+    [[nodiscard]] std::vector<kachakacha::v2::modeling::ExtrudeProfile>
+    FaceProfilesNow() const;
     //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
     //! 0mm など作れない量なら理由を出して偽を返す。
     bool ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice);
@@ -718,6 +731,10 @@ private:
         const kachakacha::v2::app::ExtrudeFacts&)>
         extrudeChooser_;
     std::map<std::string, kachakacha::v2::modeling::KernelShapeHandle> partShapes_;
+    //! 押す面の縁。**確定するまで文書へ入れない。** その場限りの値。
+    std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> faceProfileLoops_;
+    //! その縁を持っている立体。足す・引くの相手になる。
+    kachakacha::v2::base::EntityId faceProfileSolid_;
     //! 直前に押した面の外向き法線(EX-02)。矢印と押す向きに使う。その場限りの値。
     kachakacha::v2::geometry::Vector3 faceNormal_{0.0, 0.0, 1.0};
     //! いまの押し出しが「面の押し引き」か。矢印の向きと足す/引くの決め方が変わる。
@@ -844,6 +861,8 @@ private:
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
     void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
 public:
+    //! 押し出す向き。矢印・下見・確定形状はすべてここから取る。
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionNow() const;
     //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。
     void RefreshBendRadius();
     //! いまの組立率(0〜100)。近似モデルが無ければ 100。

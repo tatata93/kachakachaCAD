@@ -161,15 +161,14 @@ std::vector<ExtrudeTargetChoice> V2MainWindow::ExtrudeTargets() const
 //! 押す前に何ができるのか見えないので、初めての人には難しい。
 void V2MainWindow::RunExtrude()
 {
-    auto opening = PlanExtrudeFromSelection();
-    // 面を押すときは、押す前に面の縁を輪郭にする(EX-02)。
-    // ここを通ると、以降はいつもの「輪郭を押す」と同じ道になる。
+    const auto opening = PlanExtrudeFromSelection();
+    // 面を押すときは、押す面の縁を **その場限りの輪郭として** 取り出す。
+    // 文書はまだ変えない。下見を出しただけで文書が変わってはいけない(R1 B2)。
     if (opening.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndFace
         && !viewport_->ExtrudeHandleShown()) {
-        if (!MaterializeFaceProfileWires()) {
+        if (!PickFaceProfile()) {
             return;   // 理由はそちらで言っている。
         }
-        opening = PlanExtrudeFromSelection();
         facePushPull_ = true;
     }
     if (!opening.readyToPreview) {
@@ -230,9 +229,12 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
             ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
             : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
     }
-    // 立体を選んでいるなら、既定の操作は読み取りに従う(窓を開けるなら切削)。
-    // 覚えていた前回の操作より、いま選んでいるものの意味を優先する。
-    if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
+    // 既定の操作を当てるのは **入力を最初に読んだときだけ** である(R1 B4)。
+    // 確定のたびに当て直すと、棚で選んだ「足す/引く/新しい部品」が
+    // 表示はそのままに、実行だけ別の演算になる。
+    if (extrudeShelfShown_) {
+        choice.booleanMode = extrudeDock_->BooleanMode();
+    } else if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
     if (facePushPull_ && !ApplyFacePushPull(choice)) {
@@ -272,7 +274,8 @@ void V2MainWindow::ConfirmExtrude()
         SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
         return;
     }
-    auto profiles = ExtrudeProfilesFor(selection.entityIds);
+    auto profiles = facePushPull_ ? FaceProfilesNow()
+                                  : ExtrudeProfilesFor(selection.entityIds);
     if (profiles.empty()) {
         SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
                                  "閉じた輪郭か、立体の平らな面を選んでください。"));
@@ -321,41 +324,79 @@ void V2MainWindow::ConfirmExtrude()
         SetStatus(QStringLiteral("押し出し: 立体になりませんでした。"));
         return;
     }
+    CommitExtrude(choice, plan, analysis.Value(), built.Value());
+}
+
+//! 出来た形を文書へ入れる。**1回の操作は1回の取り消しで戻る**(R1 B3)。
+//!
+//! 面の縁のワイヤー、押し出しの Feature とその出力、足し引きの相手の非表示 ──
+//! これらは1つの操作である。ばらばらに入れると、1回取り消しても
+//! 元の立体が出てくるだけで加工後の立体が残る、という中途半端な形になる。
+void V2MainWindow::CommitExtrude(const kachakacha::v2::app::ExtrudeChoice& choice,
+    const kachakacha::v2::app::ExtrudePlan& plan,
+    const kachakacha::v2::modeling::ExtrudeAnalysis& analysis,
+    const kachakacha::v2::kernel::ExtrudeBuildResult& built)
+{
+    session_->GetDocument().BeginCompound("押し出し");
+    std::vector<kachakacha::v2::base::EntityId> faceWires;
+    if (facePushPull_ && !CommitFaceProfileWires(faceWires)) {
+        // 途中で入らなかった。まとめごと捨てる。外周だけ残さない。
+        session_->GetDocument().EndCompound();
+        (void)session_->GetDocument().Undo();
+        ForgetFaceProfile();
+        AdoptCurrentDocument();
+        return;
+    }
     kachakacha::v2::domain::ExtrudeDefinition definition;
-    definition.profiles = selection.entityIds;
+    // 面の押し引きは、いま作った縁のワイヤーが押し出しの元になる。
+    definition.profiles = facePushPull_ ? faceWires : viewport_->Selection().entityIds;
     // 向きは実際に押した向きを持つ。作業平面の法線を書き写すと、
     // 別の向きで押したときに、開き直すと違う向きへ押されてしまう。
-    definition.direction = analysis.Value().direction;
+    definition.direction = analysis.direction;
     definition.distance.value = choice.distanceMm;
     definition.distance.kind = kachakacha::v2::geometry::QuantityKind::Length;
     definition.extentMode = static_cast<int>(choice.extent);
     definition.booleanMode = static_cast<int>(choice.booleanMode);
     // 足す・引くの相手は「加工する立体」である。開き直したときも同じ相手へ当てる。
-    // 覚えないと、開いたら足し引きが消えて別の立体が2つ並ぶ。
-    if (choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart
-        && !plan.targetSolid.IsNil()) {
+    const bool boolean =
+        choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    if (boolean && !plan.targetSolid.IsNil()) {
         definition.targets.push_back(plan.targetSolid);
     } else if (choice.targetEntityId.has_value()) {
         // 「ある面まで」の相手(作業平面)。足し引きの相手とは別物である。
         definition.targets.push_back(*choice.targetEntityId);
     }
     std::vector<CurveSegment> edges;
-    for (const auto& wire : built.Value().endProfileWires) {
+    for (const auto& wire : built.endProfileWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
-    for (const auto& wire : built.Value().sideBoundaryWires) {
+    for (const auto& wire : built.sideBoundaryWires) {
         edges.insert(edges.end(), wire.begin(), wire.end());
     }
-    AdoptExtrudeResult(choice, definition, built.Value(), edges);
-    // 足す・引くで出来たのは「相手を加工した後の形」である。元の立体を出したままだと、
-    // 加工前と加工後が2つ並んで見える。使い切ったものは隠す。
+    AdoptExtrudeResult(choice, definition, built, edges);
+    // 使い切った元の立体は隠す。出したままだと加工前と加工後が2つ並んで見える。
     // 消さないのは、作り方をたどれなくしないためである(足し引きと同じ扱い)。
-    if (choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart
-        && !plan.targetSolid.IsNil()) {
+    if (boolean && !plan.targetSolid.IsNil()) {
         (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
             {plan.targetSolid}, kachakacha::v2::domain::Visibility::Hidden));
-        AdoptCurrentDocument();
     }
+    session_->GetDocument().EndCompound();
+    ForgetFaceProfile();
+    AdoptCurrentDocument();
+}
+
+//! 抱えている面の縁を、押し出しの輪郭にする。文書へは入れない。
+std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::FaceProfilesNow() const
+{
+    std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    for (const auto& loop : faceProfileLoops_) {
+        kachakacha::v2::modeling::ExtrudeProfile profile;
+        profile.segments = loop;
+        profile.closed = kachakacha::v2::geometry::SegmentsFormClosedLoop(loop, tolerance);
+        profiles.push_back(std::move(profile));
+    }
+    return profiles;
 }
 
 void V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,

@@ -61,8 +61,14 @@ void V2MainWindow::BeginExtrudePreview()
     if (!plan.readyToPreview) {
         return;
     }
-    const auto curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
-        session_->Scene());
+    // 面の押し引きは、抱えている縁を使う。文書にはまだ入れていない(R1 B2)。
+    std::vector<kachakacha::v2::geometry::CurveSegment> curves;
+    if (facePushPull_ && !faceProfileLoops_.empty()) {
+        curves = faceProfileLoops_.front();
+    } else {
+        curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
+            session_->Scene());
+    }
     if (curves.empty()) {
         return;
     }
@@ -79,13 +85,8 @@ void V2MainWindow::BeginExtrudePreview()
 
     ExtrudeHandle handle;
     handle.origin = center;
-    // 向きはいまの作業平面の法線。V1 と同じで、面に対してまっすぐ押す。
-    // 面を押しているときだけは、その面の外向き法線を使う。作業平面の法線を
-    // 使うと、傾いた面を押したときに面から外れた向きへ押される。
-    handle.direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
-    if (extrudeChoice_.reversed) {
-        handle.direction = handle.direction * -1.0;
-    }
+    // 向きは1か所(ExtrudeDirectionNow)から取る。矢印・下見・確定を必ず揃える。
+    handle.direction = ExtrudeDirectionNow();
     handle.distanceMm = ExtrudeDistanceMm();
     extrudeOutline_ = outline;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
@@ -96,17 +97,27 @@ void V2MainWindow::BeginExtrudePreview()
             .arg(ExtrudePlanTextJa()));
 }
 
+//! 押し出す向き。**ここだけが決める。**
+//!
+//! 矢印・下見・確定形状が、みな同じ向きでなければならない。
+//! 下見だけ作業平面の法線を使っていたので、傾いた面を押し引きすると
+//! 矢印と下見が別の方へ進んでいた(Codex P1-EXTRUDE-R1 B1)。
+Vector3 V2MainWindow::ExtrudeDirectionNow() const
+{
+    Vector3 direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
+    if (extrudeChoice_.reversed) {
+        direction = direction * -1.0;
+    }
+    return direction;
+}
+
 std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double distanceMm) const
 {
     std::vector<std::vector<Vector3>> loops;
     if (extrudeOutline_.empty()) {
         return loops;
     }
-    Vector3 direction = viewport_->WorkPlane().normal;
-    if (extrudeChoice_.reversed) {
-        direction = direction * -1.0;
-    }
-    const Vector3 offset = direction * distanceMm;
+    const Vector3 offset = ExtrudeDirectionNow() * distanceMm;
     // 押し出した先の輪郭。
     std::vector<Vector3> moved;
     moved.reserve(extrudeOutline_.size());
@@ -144,6 +155,9 @@ void V2MainWindow::EndExtrudePreview()
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
+    // 抱えていた縁も捨てる。**文書には入れていない** ので、
+    // やめれば文書は始める前とまったく同じである(R1 B2)。
+    ForgetFaceProfile();
     viewport_->HideExtrudeHandle();
     // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
     extrudeShelfShown_ = false;
@@ -230,10 +244,7 @@ void V2MainWindow::RefreshExtrudeFromDock()
     // 向きが変わったら矢印も向き直す。数字はそのまま。
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();
-    handle.direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
-    if (extrudeChoice_.reversed) {
-        handle.direction = handle.direction * -1.0;
-    }
+    handle.direction = ExtrudeDirectionNow();
     handle.distanceMm = extrudeDock_->DistanceMm();
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
 }

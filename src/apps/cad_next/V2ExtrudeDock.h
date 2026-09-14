@@ -72,11 +72,16 @@ public:
     void PressConfirm();
     void PressCancel();
     void PressReverse();
+    //! 「操作」の欄を選ぶ。人が選んだのと同じ扱いにする。
+    void ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode mode);
     void PressReselectTarget();
     void PressReselectProfile();
 
 private:
     void ApplyRows();
+    //! 入力(加工する立体と輪郭)が同じか。
+    [[nodiscard]] static bool SameInputs(const kachakacha::v2::app::ExtrudePlan& left,
+        const kachakacha::v2::app::ExtrudePlan& right);
     //! 欄の便りを繋ぐ。組み立てと分けてある(1関数100行の門)。
     void ConnectRows();
 
@@ -97,6 +102,8 @@ private:
 
     kachakacha::v2::app::ExtrudePlan plan_;
     bool reversed_ = false;
+    //! 人が「操作」の欄を選んだか。選んだら既定で上書きしない(R1 B4)。
+    bool operationChosenByUser_ = false;
     bool loading_ = false;
     std::function<void(double)> distanceHandler_;
     std::function<void()> optionHandler_;

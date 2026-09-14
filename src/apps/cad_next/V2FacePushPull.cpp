@@ -51,7 +51,13 @@ namespace {
 
 } // namespace
 
-bool V2MainWindow::MaterializeFaceProfileWires()
+//! 押す面の縁を **その場限りの輪郭として** 取り出す。文書はまだ変えない。
+//!
+//! 下見を出しただけで文書が変わってはいけない(Codex P1-EXTRUDE-R1 B2)。
+//! Esc でも棚のキャンセルでも道具替えでも、確定していない縁が残ってしまう。
+//! 道具の約束は「文書が変わるのは確定のときだけ」である。
+//! ここでは縁を窓が抱えるだけにして、確定のときにまとめて文書へ入れる。
+bool V2MainWindow::PickFaceProfile()
 {
     const auto& selection = viewport_->Selection();
     const auto face = PickedFaceOf(selection);
@@ -71,14 +77,36 @@ bool V2MainWindow::MaterializeFaceProfileWires()
         ReportDiagnostics(boundary.Diagnostics());
         return false;
     }
-    // 縁を文書のワイヤーにする。外周が1本、穴があればその数だけ増える。
-    std::vector<kachakacha::v2::base::EntityId> made;
-    const auto add = [&](const std::vector<kachakacha::v2::geometry::CurveSegment>& loop,
-                         const std::string& label) {
-        if (loop.empty()) {
-            return true;
+    // 外周と穴を、その場限りの輪郭として抱える。**まだ文書へは入れない。**
+    faceProfileLoops_.clear();
+    if (!boundary.Value().outerLoop.empty()) {
+        faceProfileLoops_.push_back(boundary.Value().outerLoop);
+    }
+    for (const auto& hole : boundary.Value().holeLoops) {
+        if (!hole.empty()) {
+            faceProfileLoops_.push_back(hole);
         }
-        const auto result = session_->AddWire(loop, false, label);
+    }
+    if (faceProfileLoops_.empty()) {
+        SetStatus(QStringLiteral("押し出し: その面からは輪郭を取れませんでした。"));
+        return false;
+    }
+    faceProfileSolid_ = face->entityId;
+    faceNormal_ = boundary.Value().outwardNormal;
+    return true;
+}
+
+//! 抱えていた縁を、いま文書へ入れる。確定のときだけ呼ぶ。
+//!
+//! 途中で1つでも入らなければ、**1つも入れない。** 外周だけ残ると、
+//! 開いているはずの窓が塞がった形が作られる。
+//! 呼ぶ側が compound の中で呼ぶので、失敗したら compound ごと捨てる。
+bool V2MainWindow::CommitFaceProfileWires(
+    std::vector<kachakacha::v2::base::EntityId>& made)
+{
+    for (std::size_t index = 0; index < faceProfileLoops_.size(); ++index) {
+        const std::string label = index == 0 ? "面の縁" : "面の縁(穴)";
+        const auto result = session_->AddWire(faceProfileLoops_[index], false, label);
         if (!result.committed) {
             ReportDiagnostics(result.diagnostics);
             return false;
@@ -86,40 +114,15 @@ bool V2MainWindow::MaterializeFaceProfileWires()
         for (const auto& id : result.createdEntityIds) {
             made.push_back(id);
         }
-        return true;
-    };
-    if (!add(boundary.Value().outerLoop, "面の縁")) {
-        return false;
     }
-    for (const auto& hole : boundary.Value().holeLoops) {
-        if (!add(hole, "面の縁(穴)")) {
-            return false;
-        }
-    }
-    if (made.empty()) {
-        SetStatus(QStringLiteral("押し出し: その面からは輪郭を取れませんでした。"));
-        return false;
-    }
-    // 場面を作り直さないと、いま作ったワイヤーが押し出しから見えない。
-    AdoptCurrentDocument();
-    // 選び直す。立体は相手として残し、面のかわりに縁のワイヤーを選ぶ。
-    kachakacha::v2::app::SelectionSet next;
-    kachakacha::v2::app::SelectionRef solid;
-    solid.entityId = face->entityId;
-    solid.kind = kachakacha::v2::app::SelectionElementKind::Object;
-    next.ordered.push_back(solid);
-    next.entityIds.push_back(face->entityId);
-    for (const auto& id : made) {
-        kachakacha::v2::app::SelectionRef ref;
-        ref.entityId = id;
-        ref.kind = kachakacha::v2::app::SelectionElementKind::Object;
-        next.ordered.push_back(ref);
-        next.entityIds.push_back(id);
-    }
-    viewport_->SetSelection(next);
-    // 押す向きは面の外向き法線。矢印もこの向きで出す。
-    faceNormal_ = boundary.Value().outwardNormal;
-    return true;
+    return !made.empty();
+}
+
+//! 抱えていた縁を捨てる。取消・道具替え・確定のあとに呼ぶ。
+void V2MainWindow::ForgetFaceProfile()
+{
+    faceProfileLoops_.clear();
+    faceProfileSolid_ = kachakacha::v2::base::EntityId{};
 }
 
 bool V2MainWindow::ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice)

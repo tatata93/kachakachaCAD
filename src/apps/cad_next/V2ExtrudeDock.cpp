@@ -124,7 +124,13 @@ void V2ExtrudeDock::ConnectRows()
     };
     QObject::connect(direction_, &QComboBox::currentIndexChanged, this, [option] { option(); });
     QObject::connect(extent_, &QComboBox::currentIndexChanged, this, [option] { option(); });
-    QObject::connect(boolean_, &QComboBox::currentIndexChanged, this, [option] { option(); });
+    QObject::connect(boolean_, &QComboBox::currentIndexChanged, this, [this, option] {
+        if (!loading_) {
+            // 人が選んだ。以後、棚を出し直しても既定へ戻さない。
+            operationChosenByUser_ = true;
+        }
+        option();
+    });
     QObject::connect(reverse_, &QPushButton::clicked, this, [this, option] {
         reversed_ = !reversed_;
         option();
@@ -156,9 +162,17 @@ void V2ExtrudeDock::ConnectRows()
     });
 }
 
+//! 入力(加工する立体と輪郭)が同じか。演算の既定を当て直すかの判断に使う。
+bool V2ExtrudeDock::SameInputs(const kachakacha::v2::app::ExtrudePlan& left,
+    const kachakacha::v2::app::ExtrudePlan& right)
+{
+    return left.targetSolid == right.targetSolid && left.profiles == right.profiles;
+}
+
 void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
     const QString& targetNameJa, const QString& profileNamesJa)
 {
+    const kachakacha::v2::app::ExtrudePlan previous = plan_;
     plan_ = plan;
     QString text;
     if (!targetNameJa.isEmpty()) {
@@ -174,15 +188,23 @@ void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
         text += QString::fromStdString(plan.needsJa);
     }
     input_->setText(text.trimmed());
-    // 既定の操作は読み取りに従う(立体に輪郭を当てるなら切削)。
-    loading_ = true;
-    for (int index = 0; index < static_cast<int>(std::size(kBooleans)); ++index) {
-        if (kBooleans[index] == plan.defaultOperation) {
-            boolean_->setCurrentIndex(index);
-            break;
+    // 既定の操作を当てるのは **入力が変わったときだけ** である(R1 B4)。
+    // 棚を出し直すたびに当て直すと、人が選んだ「足す/引く/新しい部品」が
+    // 黙って戻る。入力が同じなら、選んだままにしておく。
+    const bool inputChanged = plan.kind != previous.kind || !SameInputs(plan, previous);
+    if (inputChanged || !operationChosenByUser_) {
+        loading_ = true;
+        for (int index = 0; index < static_cast<int>(std::size(kBooleans)); ++index) {
+            if (kBooleans[index] == plan.defaultOperation) {
+                boolean_->setCurrentIndex(index);
+                break;
+            }
+        }
+        loading_ = false;
+        if (inputChanged) {
+            operationChosenByUser_ = false;
         }
     }
-    loading_ = false;
     ApplyRows();
 }
 
@@ -322,5 +344,17 @@ void V2ExtrudeDock::PressReverse()
     reversed_ = !reversed_;
     if (optionHandler_) {
         optionHandler_();
+    }
+}
+
+void V2ExtrudeDock::ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode mode)
+{
+    for (int index = 0; index < static_cast<int>(std::size(kBooleans)); ++index) {
+        if (kBooleans[index] == mode) {
+            boolean_->setCurrentIndex(index);
+            // 欄を選んだのと同じ扱いにする。試験も本物と同じ道を通す。
+            operationChosenByUser_ = true;
+            break;
+        }
     }
 }

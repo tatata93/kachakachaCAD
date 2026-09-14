@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "kind": "review_request_declaration",
-  "request_id": "AI-REVIEW-PIPELINE-R3",
+  "request_id": "AI-REVIEW-PIPELINE-R4",
   "base_commit": "f78d91bfb7c8658a64771f8f9fcec09c4910232f",
   "review_effort": "HIGH",
-  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R1 はレビューアー不在、R2 は Codex が殻で読めず、どちらもレビューは成立していない。tools/ai-local/ の PowerShell 一式、docs/ai/ の規約・仕組み・JSON の形、.gitignore の .ai-runtime/ 追加。製品コード(src/)には触れていない。",
+  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R1〜R3 はいずれも レビュー不成立(レビューアー不在 / 殻 / 古い判定の残留)。判定は出ていない。tools/ai-local/ の PowerShell 一式、docs/ai/ の規約・仕組み・JSON の形、.gitignore の .ai-runtime/ 追加。製品コード(src/)には触れていない。",
   "focus": [
     "依頼が無いときに Codex が起動し得る経路が本当に無いか",
     "原子的な取得(File.Move)が二重レビューを防ぎ切れているか",
@@ -17,7 +17,8 @@
     "居座った古い常駐だけを引き取らせる判定が、レビュー中のものを巻き込まないか",
     "殻(.sandbox-bin)を「使えない」と断る判定が、正しい導入を巻き込まないか",
     "代役(claude-fallback)が Codex のレビューと取り違えられない書き方になっているか",
-    "packet を worktree の中に置いたことで、読み取り専用の検査に穴が開いていないか"
+    "packet を worktree の中に置いたことで、読み取り専用の検査に穴が開いていないか",
+    "検査を変えたときに、前に書いた判定が残って効き続ける場所がほかに無いか"
   ],
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
 }

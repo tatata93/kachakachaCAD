@@ -234,14 +234,11 @@ Write-TextAtomic -Path $packetPath -Text $packet | Out-Null
 
 # ------------------------------------------------------------- reviewer ----
 
+# Always ask the precheck rather than reading the cached answer directly: only the
+# precheck knows whether that answer was written by the current set of checks.
+& (Join-Path $PSScriptRoot 'review-precheck.ps1') -RepoRoot $RepoRoot -Machine -Quiet | Out-Null
 $interface = Read-JsonFile -Path $paths.Interface
 $fallbackInterface = Read-JsonFile -Path (Join-Path $paths.Logs 'claude-interface.json')
-if ($null -eq $interface -or -not $interface.probe_ok) {
-    # Probe once here rather than assume anything about the installed reviewer.
-    & (Join-Path $PSScriptRoot 'review-precheck.ps1') -RepoRoot $RepoRoot -Machine -Refresh -Quiet | Out-Null
-    $interface = Read-JsonFile -Path $paths.Interface
-    $fallbackInterface = Read-JsonFile -Path (Join-Path $paths.Logs 'claude-interface.json')
-}
 
 # Which reviewer is actually going to run. Codex is the reviewer; the fallback is
 # only reached when Codex cannot run here, and it is named as a fallback in the

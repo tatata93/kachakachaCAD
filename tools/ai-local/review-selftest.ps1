@@ -18,6 +18,7 @@ Every case below is one of the promises the owner asked for:
   13 no reviewer installed -> reported, and the REQUEST_ID is not used up
   14 two requests, one HEAD-> both reviewed, once each
   15 codex cannot run     -> the sanctioned fallback reviews, and says so
+  16 a stale probe answer -> thrown away, not trusted
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -373,6 +374,29 @@ Check 'the result says it was the fallback, not codex' `
 $env:KACHA_CODEX_EXE = $goodStub
 $env:KACHA_CLAUDE_EXE = (Join-Path $WorkRoot 'no-such-claude.cmd')
 $env:KACHA_REVIEW_FALLBACK = 'none'
+
+# 16 ------------------------------------------------------------------------
+# An answer cached by an older set of checks is not an answer to today's question.
+Write-JsonAtomic -Path $paths.Interface -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'codex_interface'; probe_revision = 0
+    probed_utc = (Get-UtcStamp); executable = $goodStub; version = 'stale 0.0.0'
+    has_exec = $true; supported_flags = @('--nonsense-flag'); help_excerpt = ''
+    probe_ok = $true; probe_note = 'written by an older probe'
+}) | Out-Null
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'stale probe case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'stale probe case')
+$staleHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-STALE-R1' -Base $baseCommit -Review $staleHead -Tested $staleHead | Out-Null
+Run-Dispatcher | Out-Null
+$freshInterface = Read-JsonFile -Path $paths.Interface
+Check 'a probe answer from an older set of checks is thrown away' `
+    (($null -ne $freshInterface) -and ([int]$freshInterface.probe_revision) -gt 0) `
+    ("probe_revision=" + $(if ($freshInterface) { $freshInterface.probe_revision } else { 'none' }))
+Check 'the stale flag list is not used' `
+    ((@($freshInterface.supported_flags) -notcontains '--nonsense-flag')) 'the stale flags survived'
+$staleResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-STALE-R1.json')
+Check 'the request is still reviewed after the stale answer is dropped' `
+    (($null -ne $staleResult) -and $staleResult.verdict -eq 'PASS') 'no PASS'
 
 # ---------------------------------------------------------------------------
 Write-Host ''

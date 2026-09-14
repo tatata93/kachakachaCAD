@@ -32,6 +32,11 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Get-RepoRoot -Hint $RepoRoot
 $paths = Initialize-AiRuntime -RepoRoot $RepoRoot
 
+# Bump this whenever what the probe CHECKS changes. A cached answer written by an
+# older set of checks is not an answer to the current question, and quietly
+# trusting it is how a shim stayed "usable" for two whole review attempts.
+$script:ProbeRevision = 2
+
 function New-CheckResult {
     param([bool]$Ok, [string]$Code, [string]$Message, $Data)
     return [pscustomobject]@{
@@ -204,6 +209,7 @@ function Get-CodexInterface {
     $probe = [ordered]@{
         schema_version   = 1
         kind             = 'codex_interface'
+        probe_revision   = $script:ProbeRevision
         probed_utc       = Get-UtcStamp
         executable       = $Exe
         version          = ''
@@ -266,7 +272,14 @@ function Resolve-CodexInterface {
     param([switch]$Force)
     if (-not $Force -and (Test-Path -LiteralPath $paths.Interface)) {
         $cached = Read-JsonFile -Path $paths.Interface
-        if ($cached -and $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
+        $cachedRevision = 0
+        if ($cached) {
+            foreach ($p in $cached.PSObject.Properties) {
+                if ($p.Name -eq 'probe_revision') { $cachedRevision = [int]$p.Value }
+            }
+        }
+        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and
+            $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
             return $cached
         }
     }
@@ -279,7 +292,8 @@ function Resolve-CodexInterface {
     }
     if ($null -eq $best) {
         $best = [pscustomobject]@{
-            schema_version = 1; kind = 'codex_interface'; probed_utc = Get-UtcStamp
+            schema_version = 1; kind = 'codex_interface'
+            probe_revision = $script:ProbeRevision; probed_utc = Get-UtcStamp
             executable = ''; version = ''; has_exec = $false; supported_flags = @()
             help_excerpt = ''; probe_ok = $false
             probe_note = 'no codex executable found; see .ai-runtime/logs/reviewer-search.json for every place that was looked at'
@@ -309,6 +323,7 @@ function Get-ClaudeInterface {
     $probe = [ordered]@{
         schema_version  = 1
         kind            = 'claude_interface'
+        probe_revision  = $script:ProbeRevision
         probed_utc      = Get-UtcStamp
         executable      = $Exe
         version         = ''
@@ -352,7 +367,14 @@ function Resolve-ClaudeInterface {
     $cachePath = Join-Path $paths.Logs 'claude-interface.json'
     if (-not $Force -and (Test-Path -LiteralPath $cachePath)) {
         $cached = Read-JsonFile -Path $cachePath
-        if ($cached -and $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
+        $cachedRevision = 0
+        if ($cached) {
+            foreach ($p in $cached.PSObject.Properties) {
+                if ($p.Name -eq 'probe_revision') { $cachedRevision = [int]$p.Value }
+            }
+        }
+        if ($cached -and $cachedRevision -eq $script:ProbeRevision -and
+            $cached.executable -and (Test-Path -LiteralPath $cached.executable)) {
             return $cached
         }
     }
@@ -364,7 +386,8 @@ function Resolve-ClaudeInterface {
     }
     if ($null -eq $best) {
         $best = [pscustomobject]@{
-            schema_version = 1; kind = 'claude_interface'; probed_utc = Get-UtcStamp
+            schema_version = 1; kind = 'claude_interface'
+            probe_revision = $script:ProbeRevision; probed_utc = Get-UtcStamp
             executable = ''; version = ''; supported_flags = @(); help_excerpt = ''
             probe_ok = $false; probe_note = 'no claude executable found'
         }

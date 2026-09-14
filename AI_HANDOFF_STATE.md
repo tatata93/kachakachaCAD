@@ -11,7 +11,7 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R3
+REQUEST_ID: AI-REVIEW-PIPELINE-R4
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
 STATUS: READY_FOR_CODEX(R1 は PC に Codex の実行ファイルが無く ERROR。番号を上げた)
@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(15 の場面・32 の確認)
+  ＋ PC で `review-selftest.ps1`(16 の場面・35 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -175,6 +175,14 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
 
+- REQUEST_ID: AI-REVIEW-PIPELINE-R3
+  REVIEWED_HEAD: 522d903
+  ACTION: (レビュー不成立。殻を弾く直しは入っていたが、**古い判定が残っていた**)
+  FIX_COMMIT: -
+  RESULT: **判定は出ていない。**殻を「使えない」と断る検査は入れたのに、
+    前に書いた `codex-interface.json`(使える、と書いてある)をそのまま信じたため、
+    また殻を起動した。検査を変えたら前の答えは答えでなくなる。
+    `probe_revision` を付けて、古い検査が書いた答えは捨てるようにした。
 - REQUEST_ID: AI-REVIEW-PIPELINE-R2
   REVIEWED_HEAD: 9e7f7d1
   ACTION: (レビュー不成立。Codex は起動したが殻で、ファイルを読めなかった)

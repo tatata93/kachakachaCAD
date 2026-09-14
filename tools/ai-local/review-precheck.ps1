@@ -531,6 +531,10 @@ function Invoke-ManifestPrecheck {
     }
 
     $root = Get-RootRequestId -RequestId $manifest.request_id
+    if (Test-CommitAlreadyReviewed -RepoRoot $RepoRoot -RootRequestId $root -ReviewCommit $manifest.review_commit) {
+        $problems += ('AIR-E041 ' + $root + ' has already been reviewed at ' +
+                      (Get-ShortSha $manifest.review_commit) + '; the same commit is not reviewed twice')
+    }
     $streak = Get-ConsecutiveBlockingCount -RepoRoot $RepoRoot -RootRequestId $root
     $humanNeeded = ($streak -ge 3)
 

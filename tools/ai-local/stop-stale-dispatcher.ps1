@@ -34,14 +34,44 @@ foreach ($file in @(Get-ChildItem -LiteralPath $PSScriptRoot -File | Where-Objec
     if ($file.LastWriteTime -gt $newest) { $newest = $file.LastWriteTime }
 }
 
-# Never interrupt a review that is under way. A claim in processing/ means a
-# reviewer is running right now; the stale dispatcher can be retired at the next
-# build instead. Losing a long review to save a few minutes is a bad trade.
+# Never interrupt a review that is really under way. But "a claim exists" is not
+# the same as "work is happening": a dispatcher that hung cannot be rescued by
+# waiting for it, and it would hold the queue for ever. A claim that has outlived
+# its own time limit by a wide margin counts as stuck, not as busy.
 $inFlight = @(Get-QueueFiles -Directory $paths.Processing)
-if ($inFlight.Count -gt 0) {
-    Say ("a review is under way (" + $inFlight[0].Name + "); no dispatcher is retired now")
+$busy = @()
+$stuck = @()
+foreach ($claim in $inFlight) {
+    $manifest = Read-JsonFile -Path $claim.FullName
+    $budget = 1200
+    if ($manifest) {
+        foreach ($p in $manifest.PSObject.Properties) {
+            if ($p.Name -eq 'timeout_seconds' -and $p.Value) { $budget = [int]$p.Value }
+        }
+    }
+    $ownerPath = Join-Path $paths.Processing ($claim.Name + '.owner')
+    $claimed = $claim.LastWriteTime
+    $owner = Read-JsonFile -Path $ownerPath
+    if ($owner) {
+        foreach ($p in $owner.PSObject.Properties) {
+            if ($p.Name -eq 'claimed_utc' -and $p.Value) {
+                try { $claimed = ([datetime]$p.Value).ToLocalTime() } catch { }
+            }
+        }
+    }
+    $age = ((Get-Date) - $claimed).TotalSeconds
+    # The time limit, plus ten minutes for the reviewer to be shut down and
+    # written up. Past that, nothing is coming.
+    if ($age -gt ($budget + 600)) { $stuck += $claim } else { $busy += $claim }
+}
+if ($busy.Count -gt 0) {
+    Say ("a review is under way (" + $busy[0].Name + "); no dispatcher is retired now")
     if (-not $Quiet) { Write-Output 'stopped=0 (review in flight)' }
     exit 0
+}
+if ($stuck.Count -gt 0) {
+    Say ("a claim has outlived its own time limit (" + $stuck[0].Name +
+         "); the dispatcher holding it is stuck and will be retired") 'WARN'
 }
 
 $stopped = 0
@@ -63,12 +93,16 @@ foreach ($process in $processes) {
     $startTime = $null
     try { $startTime = (Get-Process -Id $process.ProcessId -ErrorAction Stop).StartTime } catch { $startTime = $null }
     if ($null -eq $startTime) { continue }
-    if ($startTime -ge $newest) {
+    # A stuck dispatcher is retired whatever code it is running: waiting longer
+    # cannot help it, and nothing else can free the queue.
+    if ($stuck.Count -eq 0 -and $startTime -ge $newest) {
         Say ("dispatcher pid " + $process.ProcessId + " is running current code; left alone")
         continue
     }
     try {
-        Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+        # The tree, not just the shell: a hung dispatcher usually has a reviewer
+        # still running underneath it.
+        Stop-ProcessTree -ProcessId ([int]$process.ProcessId)
         $stopped++
         Say ("retired dispatcher pid " + $process.ProcessId + " (started " + $startTime.ToString('s') +
              ", scripts changed " + $newest.ToString('s') + ")")

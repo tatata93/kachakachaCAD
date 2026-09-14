@@ -20,6 +20,10 @@ Every case below is one of the promises the owner asked for:
   15 codex cannot run     -> the sanctioned fallback reviews, and says so
   16 a stale probe answer -> thrown away, not trusted
   17 a path filter        -> narrows what is shown, not what was built
+  18 how deep to look     -> decided by what changed, not by the label
+  19 a change too wide    -> refused whole, accepted in declared segments
+  20 the same commit      -> not reviewed twice, even under a new number
+  21 a reviewer that hangs-> stopped for real, recorded as TIMEOUT not FAIL
 
 It creates its own git repository under the temp directory, uses a stub reviewer,
 and touches nothing in the real checkout.
@@ -35,6 +39,7 @@ Set-StrictMode -Version 1.0
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'review-common.ps1')
 . (Join-Path $PSScriptRoot 'review-ledger.ps1')
+. (Join-Path $PSScriptRoot 'review-profile.ps1')
 
 $Tools = $PSScriptRoot
 $script:Passed = 0
@@ -314,7 +319,7 @@ Enqueue -RequestId 'T-NOCODEX-R1' -Base $baseCommit -Review $noHead -Tested $noH
 Run-Dispatcher | Out-Null
 $noResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-NOCODEX-R1.json')
 Check 'a missing reviewer is reported, not hidden' `
-    (($null -ne $noResult) -and $noResult.verdict -eq 'ERROR') 'no ERROR result'
+    (($null -ne $noResult) -and $noResult.outcome -eq 'INFRA_ERROR') 'no INFRA_ERROR result'
 Check 'a missing reviewer does not count as a review' `
     (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-NOCODEX-R1')) 'it was counted as reviewed'
 
@@ -432,6 +437,129 @@ Check 'the packet says that it was narrowed' `
 $filterResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-PATHS-R1.json')
 Check 'a narrowed request still reviews the commit that was built' `
     (($null -ne $filterResult) -and $filterResult.review_commit -eq $filterHead) 'wrong review commit'
+
+# 18 ------------------------------------------------------------------------
+# How hard to look is decided by what changed, not by what the request calls it.
+$quietProfile = Resolve-ReviewProfile -Declared '' -ChangedFiles @('docs/v2/notes.md') `
+    -DiffText "+++ b/docs/v2/notes.md`n+a new sentence"
+Check 'documents alone are a QUICK review' ($quietProfile.profile -eq 'QUICK') ("profile=" + $quietProfile.profile)
+Check 'a QUICK review asks for low effort' ($quietProfile.effort -eq 'low') ("effort=" + $quietProfile.effort)
+
+$riskyProfile = Resolve-ReviewProfile -Declared 'QUICK' `
+    -ChangedFiles @('src/next/kachakacha/document/Document.cpp') `
+    -DiffText "+++ b/src/next/kachakacha/document/Document.cpp`n+    BeginCompound();"
+Check 'a change inside the document model is HIGH_RISK whatever it was called' `
+    ($riskyProfile.profile -eq 'HIGH_RISK') ("profile=" + $riskyProfile.profile)
+Check 'raising the profile says why' ($riskyProfile.reason -like '*raised from QUICK*') ("reason=" + $riskyProfile.reason)
+
+$askedHigher = Resolve-ReviewProfile -Declared 'HIGH_RISK' -ChangedFiles @('docs/v2/notes.md') `
+    -DiffText "+++ b/docs/v2/notes.md`n+a new sentence"
+Check 'a request may ask for a deeper look than the machine measured' `
+    ($askedHigher.profile -eq 'HIGH_RISK') ("profile=" + $askedHigher.profile)
+
+$contextOnly = Resolve-ReviewProfile -Declared '' -ChangedFiles @('tools/ai-local/x.ps1') `
+    -DiffText " BeginCompound();`n+Write-Host 'hello'"
+Check 'a risky name only in the surrounding context does not raise the profile' `
+    ($contextOnly.profile -ne 'HIGH_RISK') ("profile=" + $contextOnly.profile)
+
+# 19 ------------------------------------------------------------------------
+# A change too wide to read in one sitting is not handed over whole.
+$wideDecl = Join-Path $repo 'next-review-wide.json'
+New-Item -ItemType Directory -Path (Join-Path $repo 'wide') -Force | Out-Null
+for ($i = 1; $i -le 6; $i++) {
+    $lines = @()
+    for ($j = 1; $j -le 40; $j++) { $lines += ("line " + $j) }
+    Set-Content -LiteralPath (Join-Path $repo ('wide\file' + $i + '.txt')) -Value $lines -Encoding ASCII
+}
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'a wide change')
+$wideHead = (Git @('rev-parse', 'HEAD')).Trim()
+Write-JsonAtomic -Path $wideDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-WIDE-R1'; base_commit = $baseCommit; scope_ja = 'wide'
+}) | Out-Null
+$env:KACHA_MAX_REVIEW_LINES = '100'
+$beforeWide = Stub-CallCount
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $wideDecl `
+    -ReviewCommit $wideHead -TestedCommit $wideHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+Check 'a change too wide for one review is not queued' `
+    (-not (Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-WIDE-R1.json'))) 'it was queued anyway'
+Check 'the reason for refusing a wide change is written down' `
+    (Test-Path -LiteralPath (Join-Path $paths.Failed 'T-WIDE-R1.json')) 'no refusal record'
+Run-Dispatcher | Out-Null
+Check 'a refused wide change starts no reviewer' ((Stub-CallCount) -eq $beforeWide) ("calls=" + (Stub-CallCount))
+
+# The same change, declared in segments, goes through as separate reviews.
+Write-JsonAtomic -Path $wideDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-SEG-R1'; base_commit = $baseCommit; scope_ja = 'segmented'
+    segments = @(
+        [pscustomobject]@{ name = 'A'; paths = @('wide/file1.txt', 'wide/file2.txt') },
+        [pscustomobject]@{ name = 'B'; paths = @('wide/file3.txt', 'wide/file4.txt') }
+    )
+}) | Out-Null
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $wideDecl `
+    -ReviewCommit $wideHead -TestedCommit $wideHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+Check 'each declared segment becomes its own request' `
+    ((Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-SEG-A-R1.json')) -and
+     (Test-Path -LiteralPath (Join-Path $paths.Incoming 'T-SEG-B-R1.json'))) 'a segment is missing'
+$beforeSeg = Stub-CallCount
+Run-Dispatcher | Out-Null
+Check 'the segments are reviewed once each' ((Stub-CallCount) -eq ($beforeSeg + 2)) ("calls=" + (Stub-CallCount))
+$env:KACHA_MAX_REVIEW_LINES = ''
+
+# 20 ------------------------------------------------------------------------
+# The same commit is not reviewed twice, even under a new request id.
+Write-JsonAtomic -Path $wideDecl -Value ([pscustomobject]@{
+    schema_version = 1; kind = 'review_request_declaration'
+    request_id = 'T-SEG-A-R2'; base_commit = $baseCommit; scope_ja = 'same commit again'
+    paths = @('wide/file1.txt')
+}) | Out-Null
+$beforeSame = Stub-CallCount
+& (Join-Path $Tools 'review-enqueue.ps1') -RepoRoot $repo -DeclarationPath $wideDecl `
+    -ReviewCommit $wideHead -TestedCommit $wideHead -BuildResult 'PASS' -TestResult 'PASS' `
+    -SelfTestResult 'PASS' -Branch 'work' -Quiet | Out-Null
+Run-Dispatcher | Out-Null
+Check 'the same commit is not reviewed again under a new number' `
+    ((Stub-CallCount) -eq $beforeSame) ("calls=" + (Stub-CallCount))
+
+# 21 ------------------------------------------------------------------------
+# A reviewer that will not finish is stopped, and that is not a failing review.
+$slowStub = Join-Path $WorkRoot 'slow-stub.cmd'
+@"
+@echo off
+if "%1"=="--version" ( echo codex-stub 0.0.0 & exit /b 0 )
+echo slow-stub called >> "$stubLog"
+if "%1"=="exec" if "%2"=="--help" (
+  echo Usage: codex exec [OPTIONS] [PROMPT]
+  echo   -C, --cd ^<DIR^>
+  echo       --sandbox ^<MODE^>
+  echo       --output-last-message ^<F^>
+  exit /b 0
+)
+powershell -NoProfile -Command "Start-Sleep -Seconds 120"
+exit /b 0
+"@ | Set-Content -LiteralPath $slowStub -Encoding ASCII
+$env:KACHA_CODEX_EXE = $slowStub
+Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
+Set-Content -LiteralPath (Join-Path $repo 'a.txt') -Value 'slow case' -Encoding ASCII
+Git @('add', '-A'); Git @('commit', '-q', '-m', 'slow case')
+$slowHead = (Git @('rev-parse', 'HEAD')).Trim()
+Enqueue -RequestId 'T-SLOW-R1' -Base $baseCommit -Review $slowHead -Tested $slowHead | Out-Null
+$slowStart = Get-Date
+& (Join-Path $Tools 'review-dispatcher.ps1') -RepoRoot $repo -Once -TimeoutSeconds 5 -Quiet | Out-Null
+$slowSeconds = ((Get-Date) - $slowStart).TotalSeconds
+$slowResult = Read-JsonFile -Path (Join-Path $paths.Results 'T-SLOW-R1.json')
+Check 'a reviewer that will not finish is actually stopped' ($slowSeconds -lt 90) `
+    ("it took " + [int]$slowSeconds + "s")
+Check 'being stopped is recorded as a timeout, not as a verdict' `
+    (($null -ne $slowResult) -and $slowResult.outcome -eq 'TIMEOUT') `
+    ("outcome=" + $(if ($slowResult) { $slowResult.outcome } else { 'none' }))
+Check 'a timeout does not use up the REQUEST_ID' `
+    (-not (Test-AlreadyReviewed -RepoRoot $repo -RequestId 'T-SLOW-R1')) 'it was counted as reviewed'
+$env:KACHA_CODEX_EXE = $goodStub
+Remove-Item -LiteralPath $paths.Interface -Force -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------------------
 Write-Host ''

@@ -11,7 +11,7 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R4
+REQUEST_ID: AI-REVIEW-PIPELINE-R5(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
 STATUS: READY_FOR_CODEX(R1 は PC に Codex の実行ファイルが無く ERROR。番号を上げた)
@@ -25,7 +25,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(17 の場面・39 の確認)
+  ＋ PC で `review-selftest.ps1`(21 の場面・54 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -189,6 +189,15 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
 
 ## PROCESSED_CODEX_REVIEWS(処理済みのレビュー。消さない)
 
+- REQUEST_ID: AI-REVIEW-PIPELINE-R4
+  REVIEWED_HEAD: e91bfc8
+  ACTION: (レビュー不成立。時間切れの打ち切りが**効かなかった**)
+  FIX_COMMIT: -
+  RESULT: **判定は出ていない。**本物の Codex が起動し、約180KB の差分を
+    effort=high で読み始めたが、1時間の上限で止まらなかった。
+    原因は親プロセスだけを殺していたこと。子が出力管を掴んだままなので、
+    読み取りの待ちが永遠に返らない。木ごと殺す・待ちに上限を付ける、に直した。
+    あわせて、そもそも「大きい差分を全部 High」をやめた(下記)。
 - REQUEST_ID: AI-REVIEW-PIPELINE-R3
   REVIEWED_HEAD: 522d903
   ACTION: (レビュー不成立。殻を弾く直しは入っていたが、**古い判定が残っていた**)

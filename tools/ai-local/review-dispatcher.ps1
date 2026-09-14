@@ -26,7 +26,7 @@ param(
     [switch]$Once,
     [switch]$DryRun,
     [int]$IntervalSeconds = 15,
-    [int]$TimeoutSeconds = 3600,
+    [int]$TimeoutSeconds = 0,
     [switch]$Quiet
 )
 
@@ -128,6 +128,8 @@ function Invoke-ClaimAndRunPass {
 
         $exitCode = 0
         try {
+            # Zero means "use the limit the profile set for this request". A
+            # caller may still insist, which is what the self-test does.
             & (Join-Path $PSScriptRoot 'review-runner.ps1') -RepoRoot $RepoRoot `
                 -ManifestPath $claimPath -TimeoutSeconds $TimeoutSeconds -DryRun:$DryRun -Quiet | Out-Null
             $exitCode = $LASTEXITCODE

@@ -14,15 +14,37 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
   "kind": "review_request_declaration",
   "request_id": "P1-EXTRUDE-R5",
   "base_commit": "<40桁>",
-  "review_effort": "LOW | MEDIUM | HIGH | EXTRA_HIGH",
+  "review_profile": "QUICK | NORMAL | HIGH_RISK",
+  "force_profile": false,
   "scope_ja": "何を見てほしいか(日本語の一段落)",
   "focus": ["観点", "観点"],
+  "paths": ["src/", "tests_v2/"],
+  "allow_large": false,
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
 }
 ```
 
-複数出すときは `kind` を `review_request_declarations` にして `requests` に並べます。
-`request_id` と `base_commit` は必須、ほかは省略できます(既定は上の通り)。
+- `request_id` と `base_commit` だけが必須です。
+- `review_profile` は**省略してよい**。機械が変更の中身から測ります。書いた場合、
+  機械はそれより**深くはしますが浅くはしません**(`force_profile: true` のときだけ従います)。
+- `paths` は**見せる範囲**を狭めます。ビルドした commit は変わりません。
+- `allow_large` は、大きすぎる変更を1回で見てもらう必要があるときだけ。
+- 複数出すときは `kind` を `review_request_declarations` にして `requests` に並べます。
+- 1つの依頼を分けて見てもらうときは `segments` を書きます。
+
+```json
+{
+  "request_id": "P1-EXTRUDE-R5",
+  "base_commit": "...",
+  "segments": [
+    { "name": "QUEUE", "paths": ["tools/ai-local/review-dispatcher.ps1"] },
+    { "name": "PARSER", "paths": ["tools/ai-local/review-runner.ps1"], "profile": "HIGH_RISK" }
+  ]
+}
+```
+
+`P1-EXTRUDE-R5` + 区間 `QUEUE` は `P1-EXTRUDE-QUEUE-R5` になります。
+区間ごとに履歴が分かれるので、連続 BLOCKING の数え方も区間ごとです。
 
 ## 2. 依頼 `.ai-runtime/incoming|ready|processing/<REQUEST_ID>.json`(機械が書く)
 
@@ -44,7 +66,18 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
   "test_result": "PASS",
   "selftest_result": "PASS | SKIPPED",
   "evidence": { "ctest": "...", "selftest": "...", "log": "_claudeout/run.txt" },
-  "review_effort": "HIGH",
+  "review_profile": "HIGH_RISK",
+  "review_effort": "high",
+  "profile_reason": "なぜその深さになったか",
+  "profile_declared": "QUICK",
+  "profile_measured": "HIGH_RISK",
+  "risk_signals": ["path:src/next/kachakacha/document/", "name:BeginCompound"],
+  "changed_files": ["..."],
+  "changed_file_count": 12,
+  "changed_lines": 340,
+  "diff_bytes": 21044,
+  "timeout_seconds": 2400,
+  "paths": ["src/", "tests_v2/"],
   "scope_ja": "...",
   "focus": ["..."],
   "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
@@ -69,8 +102,21 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
   "reviewer": "codex | none",
   "reviewer_command": "実際に走らせた1行",
   "started_utc": "...", "finished_utc": "...",
-  "verdict": "PASS | BLOCKING | STOP | ERROR",
-  "next_action": "PROCEED | FIX_AND_REVIEW | STOP | HUMAN_DECISION_REQUIRED",
+  "outcome": "REVIEWED | TIMEOUT | INFRA_ERROR | RETRYABLE_ERROR",
+  "verdict": "PASS | BLOCKING | STOP | MALFORMED  (outcome が REVIEWED のときだけ)",
+  "next_action": "PROCEED | FIX_AND_REVIEW | STOP | RETRY | HUMAN_DECISION_REQUIRED",
+  "review_profile": "HIGH_RISK",
+  "review_effort": "high",
+  "invocation": {
+    "reviewer": "codex", "executable": "...", "version": "codex-cli 0.153.4",
+    "reasoning_effort": "high", "review_profile": "HIGH_RISK",
+    "command_line": "実際に走らせた1行",
+    "base_commit": "...", "review_commit": "...",
+    "changed_file_count": 12, "changed_lines": 340, "diff_bytes": 21044,
+    "path_filter": ["src/"], "timeout_seconds": 2400,
+    "queued_utc": "...", "started_utc": "...", "finished_utc": "...",
+    "queued_to_start_seconds": 2, "duration_seconds": 214
+  },
   "blocking_count": 0,
   "consecutive_blocking": 0,
   "exit_code": 0,
@@ -98,6 +144,12 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
 | `duplicate_request` | 同じ REQUEST_ID をもう一度出そうとした |
 | `review_started` | Codex を起動した |
 | `review_completed` | 判定が出た。**この番号はここで使い切られる** |
-| `review_unavailable` | Codex が居ない等で、レビューが成立しなかった(番号は残る) |
+| `review_started` | Codex を起動した(profile・effort・差分の大きさ・待ち時間つき) |
+| `review_invocation` | 1回の起動の記録(実際のコマンド・所要時間・結果) |
+| `review_timeout` | 時間切れで打ち切った。**不合格ではない。**番号は残る |
+| `review_infra_error` | 起動できなかった。番号は残る |
+| `review_retryable_error` | 起動したが落ちた・何も答えなかった。番号は残る |
+| `request_too_large` | 1回で読むには広すぎる。区間に分けて出し直す |
+| `review_unavailable` | (古い名前。上の3つに分かれた) |
 | `claim_recovered` | 落ちた dispatcher の取得を queue へ戻した |
 | `dry_run` | 起動するはずのコマンドだけ記録した |

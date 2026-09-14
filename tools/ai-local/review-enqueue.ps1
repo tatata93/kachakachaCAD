@@ -31,6 +31,7 @@ Set-StrictMode -Version 1.0
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'review-common.ps1')
 . (Join-Path $PSScriptRoot 'review-ledger.ps1')
+. (Join-Path $PSScriptRoot 'review-profile.ps1')
 
 $RepoRoot = Get-RepoRoot -Hint $RepoRoot
 $paths = Initialize-AiRuntime -RepoRoot $RepoRoot
@@ -77,6 +78,47 @@ if ($null -ne $requestsProperty) {
 } else {
     $declarations += $declaration
 }
+
+# A declaration may split itself into segments. Each segment becomes its own
+# request over its own paths, so a wide change is read in pieces that make sense
+# instead of being handed over whole. The segment name goes before the revision
+# suffix, so P1-EXTRUDE-R5 with segment QUEUE becomes P1-EXTRUDE-QUEUE-R5 and
+# keeps its own history.
+function Expand-Segments {
+    param($Declaration)
+    $segments = Get-Prop $Declaration 'segments' $null
+    if ($null -eq $segments) { return @($Declaration) }
+    $expanded = @()
+    foreach ($segment in @($segments)) {
+        $name = [string](Get-Prop $segment 'name' '')
+        if (-not $name) { continue }
+        $baseId = [string](Get-Prop $Declaration 'request_id' '')
+        $id = $baseId + '-' + $name
+        if ($baseId -match '^(?<head>.+)-R(?<n>\d+)$') {
+            $id = $Matches['head'] + '-' + $name + '-R' + $Matches['n']
+        }
+        $copy = [pscustomobject]@{
+            request_id    = $id
+            base_commit   = [string](Get-Prop $Declaration 'base_commit' '')
+            review_profile = [string](Get-Prop $segment 'profile' (Get-Prop $Declaration 'review_profile' ''))
+            force_profile = [bool](Get-Prop $segment 'force_profile' (Get-Prop $Declaration 'force_profile' $false))
+            scope_ja      = [string](Get-Prop $segment 'scope_ja' (Get-Prop $Declaration 'scope_ja' ''))
+            focus         = @(Get-Prop $segment 'focus' (Get-Prop $Declaration 'focus' @()))
+            paths         = @(Get-Prop $segment 'paths' @())
+            policy        = [string](Get-Prop $Declaration 'policy' 'docs/ai/CODEX_REVIEW_POLICY.md')
+            allow_large   = [bool](Get-Prop $segment 'allow_large' $false)
+        }
+        $expanded += $copy
+    }
+    if ($expanded.Count -eq 0) { return @($Declaration) }
+    return $expanded
+}
+
+$flattened = @()
+foreach ($item in $declarations) {
+    foreach ($piece in (Expand-Segments -Declaration $item)) { $flattened += $piece }
+}
+$declarations = $flattened
 if ($declarations.Count -eq 0) {
     Say "next-review.json declares no request; nothing is enqueued" 'WARN'
     exit 0
@@ -160,6 +202,64 @@ function Add-OneRequest {
         return 1
     }
 
+    # What actually changed, measured now, so that the profile and the size guard
+    # are decided from the change itself rather than from what someone called it.
+    $pathFilter = @()
+    foreach ($item in @(Get-Prop $Declaration 'paths' @())) { if ($item) { $pathFilter += [string]$item } }
+    $pathArguments = @()
+    if ($pathFilter.Count -gt 0) { $pathArguments = @('--') + $pathFilter }
+
+    $names = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
+        'diff', '--no-color', '--name-only', $baseCommit, $ReviewCommit) + $pathArguments)
+    $changedFiles = @()
+    foreach ($line in ($names.StdOut -split "`r?`n")) {
+        if ($line.Trim().Length -gt 0) { $changedFiles += $line.Trim() }
+    }
+    $diff = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments (@(
+        'diff', '--no-color', $baseCommit, $ReviewCommit) + $pathArguments)
+    $diffText = $diff.StdOut
+
+    $profile = Resolve-ReviewProfile -Declared ([string](Get-Prop $Declaration 'review_profile' (Get-Prop $Declaration 'review_effort' ''))) `
+        -ChangedFiles $changedFiles -DiffText $diffText `
+        -ForceDeclared ([bool](Get-Prop $Declaration 'force_profile' $false))
+
+    # A change too wide to read in one sitting is not handed over whole. The
+    # implementer declares segments that make sense; the machine will not guess a
+    # split, because guessing one can cut an atomic change in half.
+    $maxFiles = 40
+    $maxLines = 2500
+    if ($env:KACHA_MAX_REVIEW_FILES) { $maxFiles = [int]$env:KACHA_MAX_REVIEW_FILES }
+    if ($env:KACHA_MAX_REVIEW_LINES) { $maxLines = [int]$env:KACHA_MAX_REVIEW_LINES }
+    $allowLarge = [bool](Get-Prop $Declaration 'allow_large' $false)
+    if (-not $allowLarge -and (($changedFiles.Count -gt $maxFiles) -or ($profile.changed_lines -gt $maxLines))) {
+        $groups = @()
+        foreach ($file in $changedFiles) {
+            $top = (($file -replace '\\', '/') -split '/')[0]
+            if ($groups -notcontains $top) { $groups += $top }
+        }
+        $reason = ("AIR-E050 this change is too wide for one review (" + $changedFiles.Count +
+                   " files, " + $profile.changed_lines + " changed lines; limits are " +
+                   $maxFiles + " and " + $maxLines + "). Declare segments in next-review.json " +
+                   "so it is read in pieces that make sense, or set allow_large when the change " +
+                   "really must be judged whole. Top level groups here: " + ($groups -join ', '))
+        Say $reason 'WARN'
+        Write-JsonAtomic -Path (Join-Path $paths.Failed ($requestId + '.json')) -Value ([pscustomobject]@{
+            schema_version = 1; kind = 'review_request_refused'; request_id = $requestId
+            root_request_id = (Get-RootRequestId -RequestId $requestId)
+            created_utc = Get-UtcStamp; base_commit = $baseCommit
+            review_commit = $ReviewCommit; tested_commit = $TestedCommit
+            changed_files = $changedFiles.Count; changed_lines = $profile.changed_lines
+            reason = $reason; next_owner = 'claude'
+        }) | Out-Null
+        Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+            event = 'request_too_large'; request_id = $requestId
+            root_request_id = (Get-RootRequestId -RequestId $requestId)
+            base_commit = $baseCommit; review_commit = $ReviewCommit
+            next_action = 'FIX_AND_REVIEW'; note = $reason
+        } | Out-Null
+        return 1
+    }
+
     $manifest = [ordered]@{
         schema_version  = 1
         kind            = 'review_request'
@@ -181,10 +281,20 @@ function Add-OneRequest {
             selftest = $SelfTestEvidence
             log      = $LogPath
         }
-        review_effort   = [string](Get-Prop $Declaration 'review_effort' 'MEDIUM')
+        review_profile  = $profile.profile
+        review_effort   = $profile.effort
+        profile_reason  = $profile.reason
+        profile_declared = $profile.declared
+        profile_measured = $profile.measured
+        risk_signals    = @($profile.risk_signals)
+        changed_files   = @($changedFiles)
+        changed_file_count = $changedFiles.Count
+        changed_lines   = $profile.changed_lines
+        diff_bytes      = $diffText.Length
+        timeout_seconds = $profile.timeout_seconds
         scope_ja        = [string](Get-Prop $Declaration 'scope_ja' '')
         focus           = @(Get-Prop $Declaration 'focus' @())
-        paths           = @(Get-Prop $Declaration 'paths' @())
+        paths           = $pathFilter
         policy          = [string](Get-Prop $Declaration 'policy' 'docs/ai/CODEX_REVIEW_POLICY.md')
     }
 
@@ -195,12 +305,16 @@ function Add-OneRequest {
         root_request_id = $manifest.root_request_id
         base_commit = $baseCommit; review_commit = $ReviewCommit; tested_commit = $TestedCommit
         build_result = $BuildResult; test_result = $TestResult; selftest_result = $SelfTestResult
-        note = 'build and tests passed on this machine'
+        review_profile = $profile.profile; review_effort = $profile.effort
+        changed_file_count = $changedFiles.Count; changed_lines = $profile.changed_lines
+        note = 'build and tests passed on this machine; ' + $profile.reason
     } | Out-Null
     # Only the status code leaves this function; anything written to the output
     # stream would be returned alongside it and break the caller's comparison.
-    Say ("$requestId queued for review at " + (Get-ShortSha $ReviewCommit) +
-         " (base " + (Get-ShortSha $baseCommit) + ") -> " + $target)
+    Say ("$requestId queued at " + (Get-ShortSha $ReviewCommit) + " (base " + (Get-ShortSha $baseCommit) +
+         ") profile=" + $profile.profile + " effort=" + $profile.effort +
+         " files=" + $changedFiles.Count + " lines=" + $profile.changed_lines +
+         " because " + $profile.reason)
     return 0
 }
 

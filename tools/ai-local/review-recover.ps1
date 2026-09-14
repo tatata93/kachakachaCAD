@@ -57,12 +57,31 @@ foreach ($file in (Get-QueueFiles -Directory $paths.Processing)) {
             $ownerAlive = $false
         }
     }
-    $ageMinutes = ((Get-Date) - $file.LastWriteTime).TotalMinutes
-    if ($ownerAlive -and $ageMinutes -lt $StaleMinutes) { continue }
-
     $manifest = Read-JsonFile -Path $file.FullName
     $requestId = ''
-    if ($manifest) { $requestId = [string]$manifest.request_id }
+    $budget = 1200
+    if ($manifest) {
+        $requestId = [string]$manifest.request_id
+        foreach ($p in $manifest.PSObject.Properties) {
+            if ($p.Name -eq 'timeout_seconds' -and $p.Value) { $budget = [int]$p.Value }
+        }
+    }
+    # A live owner is not proof of progress. Past its own time limit plus ten
+    # minutes, a claim is stuck, and waiting the default four hours helps nobody.
+    $ageSeconds = ((Get-Date) - $file.LastWriteTime).TotalSeconds
+    $stuck = ($ageSeconds -gt ($budget + 600))
+    if ($ownerAlive -and -not $stuck -and ($ageSeconds / 60.0) -lt $StaleMinutes) { continue }
+    if ($ownerAlive -and $stuck) {
+        Say ("$($file.Name) has been claimed for " + [int]$ageSeconds + "s with a limit of " +
+             $budget + "s; the process holding it is stopped") 'WARN'
+        if ($owner -and $owner.pid) { Stop-ProcessTree -ProcessId ([int]$owner.pid) }
+        Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+            event = 'review_timeout'; request_id = $requestId
+            root_request_id = (Get-RootRequestId -RequestId $requestId)
+            outcome = 'TIMEOUT'; next_action = 'RETRY'
+            note = ('the claim outlived its limit of ' + $budget + 's; this is not a review result')
+        } | Out-Null
+    }
 
     $resultPath = Join-Path $paths.Results ($requestId + '.json')
     $hasResult = ($requestId -and (Test-Path -LiteralPath $resultPath))

@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(17 の場面・39 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(20 の場面・51 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -139,6 +139,55 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\ai-local\review-dispat
 :: 基盤そのものを検査する
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\ai-local\review-selftest.ps1
 ```
+
+## どこまで深く読むか、どれだけ渡すか
+
+**危険度は変更の中身で決まります。Phase の大きさでは決めません。**
+
+| PROFILE | 中身 | effort | 上限 |
+| --- | --- | --- | --- |
+| QUICK | 小さなUI修正、文書、テストの手直し、明白な小変更 | low | 10分 |
+| NORMAL | ふつうの機能実装 | medium | 20分 |
+| HIGH_RISK | Transaction、所有関係と寿命、Undo/Redo、保存と読み込み、Document の模型、OCCT の位相、近似部材の保存構造、幾何の算法 | high | 40分 |
+
+機械は変更したファイルの置き場所と、**差分の増減行に出てくる名前**から測ります
+(周りの文脈にあるだけの名前は数えません)。依頼が profile を書いていた場合、
+機械は**深くはしますが浅くはしません**。`force_profile: true` のときだけ従います。
+
+`tools/ai-local/review-profile.ps1` に、危ない置き場所と名前の一覧があります。
+
+### 1回で読むには広すぎるとき
+
+既定で **40ファイル / 2500行** を超えたら、依頼は積まれません(`AIR-E050`)。
+`segments` で意味のある単位に分けて出し直します。**機械は勝手に分けません。**
+まとめて見ないと意味が無い変更を、機械の都合で切ってしまうからです。
+どうしても丸ごと見てほしいときだけ `allow_large: true` を書きます。
+
+### Codex に最初から渡すもの
+
+REQUEST_ID / BASE / HEAD / 対象範囲 / PROFILE / **PC で既に通った build・CTest・
+自己試験の結果** / 変更ファイルの一覧 / 見てほしい観点 / 読む順番。
+Codex はレビュー対象を探しません。ビルドもテストもやり直しません。
+リポジトリ全体を見て回らず、差分と変更されたテストから読み始めます。
+
+### 起動に失敗したときは、不合格ではありません
+
+| outcome | 意味 | 番号を使い切るか |
+| --- | --- | --- |
+| `REVIEWED` | 本当にレビューされた。`verdict` が判定 | 使い切る |
+| `TIMEOUT` | 上限まで待って打ち切った | 残る |
+| `INFRA_ERROR` | 起動できなかった | 残る |
+| `RETRYABLE_ERROR` | 起動したが落ちた・何も答えなかった | 残る |
+
+連続 BLOCKING の数え方にも、成立したレビューだけを数えます。
+時間切れ3回は「3回の不合格」ではありません。
+
+### 毎回記録するもの
+
+実際のコマンドライン、実行ファイル、版、reasoning effort、PROFILE と
+そう決めた理由、BASE、HEAD、変更ファイル数、変更行数、差分のバイト数、
+上限秒、queue に入ってから起動までの秒数、開始・終了時刻、所要秒数。
+`review_started` と `review_invocation` として台帳に残ります。
 
 ## レビューアーの見つけ方
 

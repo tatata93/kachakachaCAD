@@ -82,6 +82,19 @@ function Test-AlreadyReviewed {
     return $false
 }
 
+# The same commit must not be reviewed twice under different request ids either.
+function Test-CommitAlreadyReviewed {
+    param(
+        [Parameter(Mandatory=$true)][string]$RepoRoot,
+        [Parameter(Mandatory=$true)][string]$RootRequestId,
+        [Parameter(Mandatory=$true)][string]$ReviewCommit
+    )
+    foreach ($e in (Get-ReviewLedgerEntries -RepoRoot $RepoRoot -RootRequestId $RootRequestId -ReviewCommit $ReviewCommit)) {
+        if ($e.event -eq 'review_completed') { return $true }
+    }
+    return $false
+}
+
 function Test-AlreadyDispatched {
     param(
         [Parameter(Mandatory=$true)][string]$RepoRoot,

@@ -20,7 +20,7 @@ param(
     [Parameter(Mandatory=$true)][string]$ManifestPath,
     [string]$RepoRoot,
     [switch]$DryRun,
-    [int]$TimeoutSeconds = 3600,
+    [int]$TimeoutSeconds = 0,
     [switch]$Quiet
 )
 
@@ -43,6 +43,14 @@ if ($null -eq $manifest) {
     Say "manifest is not readable JSON: $ManifestPath" 'ERROR'
     exit 2
 }
+function Get-ManifestValue {
+    param([string]$Name, $Default = '')
+    foreach ($p in $manifest.PSObject.Properties) {
+        if ($p.Name -eq $Name -and $null -ne $p.Value) { return $p.Value }
+    }
+    return $Default
+}
+
 $requestId = [string]$manifest.request_id
 $rootId = Get-RootRequestId -RequestId $requestId
 $reviewCommit = [string]$manifest.review_commit
@@ -51,6 +59,15 @@ $baseCommit = [string]$manifest.base_commit
 if ($DryRun.IsPresent -eq $false -and (Test-AlreadyReviewed -RepoRoot $RepoRoot -RequestId $requestId)) {
     Say "$requestId already has a review recorded; refusing to review it twice" 'WARN'
     exit 3
+}
+
+# The profile decided at enqueue time carries its own patience. A documentation
+# fix that has not answered in ten minutes is stuck; a dangerous change deserves
+# longer. Nothing here is "wait an hour and hope".
+$reviewProfile = [string](Get-ManifestValue 'review_profile' 'NORMAL')
+$reviewEffort = [string](Get-ManifestValue 'review_effort' 'medium')
+if ($TimeoutSeconds -le 0) {
+    $TimeoutSeconds = [int](Get-ManifestValue 'timeout_seconds' 1200)
 }
 
 $workDir = Join-Path $paths.Processing $requestId
@@ -102,12 +119,16 @@ function Write-ReviewResult {
         [string]$StartedUtc,
         [string[]]$Notes,
         [string]$Reviewer = 'codex',
-        [string]$LedgerEvent = 'review_completed'
+        [string]$LedgerEvent = 'review_completed',
+        [string]$Outcome = 'REVIEWED',
+        $Invocation = $null
     )
     $finished = Get-UtcStamp
     $streak = Get-ConsecutiveBlockingCount -RepoRoot $RepoRoot -RootRequestId $rootId
     $effectiveNext = $NextAction
-    if ($NextAction -ne 'PROCEED' -and ($streak + 1) -ge 3) {
+    # Only a real review can be part of a blocking streak. Three timeouts in a row
+    # are an infrastructure problem, not three rejections.
+    if ($Outcome -eq 'REVIEWED' -and $NextAction -ne 'PROCEED' -and ($streak + 1) -ge 3) {
         $effectiveNext = 'HUMAN_DECISION_REQUIRED'
         $Notes += "three blocking results in a row on $rootId; a person has to decide"
     }
@@ -124,8 +145,12 @@ function Write-ReviewResult {
         reviewer_command     = $ReviewerCommand
         started_utc          = $StartedUtc
         finished_utc         = $finished
+        outcome              = $Outcome
         verdict              = $Verdict
         next_action          = $effectiveNext
+        review_profile       = $reviewProfile
+        review_effort        = $reviewEffort
+        invocation           = $Invocation
         blocking_count       = $BlockingCount
         consecutive_blocking = ($streak + 1)
         exit_code            = $ExitCode
@@ -142,7 +167,8 @@ function Write-ReviewResult {
     Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
         event = $LedgerEvent; request_id = $requestId; root_request_id = $rootId
         base_commit = $baseCommit; review_commit = $reviewCommit
-        verdict = $Verdict; next_action = $effectiveNext
+        outcome = $Outcome; verdict = $Verdict; next_action = $effectiveNext
+        review_profile = $reviewProfile; review_effort = $reviewEffort
         blocking_count = $BlockingCount; reviewer = $Reviewer; exit_code = $ExitCode
         note = (@($Notes) -join '; ')
     } | Out-Null
@@ -158,9 +184,9 @@ $add = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @(
 if ($add.ExitCode -ne 0) {
     Say ("could not create the review worktree: " + $add.StdErr.Trim()) 'ERROR'
     Write-TextAtomic -Path $resultText -Text ("review worktree could not be created:`n" + $add.StdErr) | Out-Null
-    Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
+    Write-ReviewResult -Verdict 'INFRA_ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
         -ExitCode $add.ExitCode -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
-        -Notes @('git worktree add failed') -LedgerEvent 'review_unavailable' | Out-Null
+        -Notes @('git worktree add failed') -LedgerEvent 'review_infra_error' -Outcome 'INFRA_ERROR' | Out-Null
     exit 5
 }
 
@@ -282,33 +308,87 @@ if ($null -ne $interface -and $interface.probe_ok) {
 if (-not $reviewerExe) {
     Say "no usable reviewer command on this machine; nothing is started" 'ERROR'
     Write-TextAtomic -Path $resultText -Text "reviewer unavailable on this machine" | Out-Null
-    Write-ReviewResult -Verdict 'ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
+    Write-ReviewResult -Verdict 'INFRA_ERROR' -NextAction 'HUMAN_DECISION_REQUIRED' -BlockingCount 0 `
         -ExitCode 127 -ReviewerCommand '' -StartedUtc (Get-UtcStamp) `
         -Notes @('no reviewer command on this machine; see .ai-runtime/logs/reviewer-search.json') -Reviewer 'none' `
-        -LedgerEvent 'review_unavailable' | Out-Null
+        -LedgerEvent 'review_infra_error' -Outcome 'INFRA_ERROR' | Out-Null
     Remove-ReviewWorktree -Path $worktreePath
     exit 4
 }
 
 $flags = $reviewerFlags
 
-# Every path in the prompt is relative to the working tree the reviewer is started
-# in, so nothing depends on what its sandbox lets it reach outside that directory.
-$prompt = "Read docs/ai/CODEX_REVIEW_POLICY.md in this working tree, then review the packet at " +
-          "./$packetDirName/packet.md (the fixed diff is ./$packetDirName/diff.patch). " +
-          "REQUEST_ID is $requestId. BASE is $baseCommit and HEAD is $reviewCommit; review exactly that range and nothing else. " +
-          "This is a read-only review: do not modify any file. " +
-          "Answer in the exact block the policy describes."
+# Everything the reviewer needs is in the prompt itself. It is never asked to
+# work out what changed, to find the request, or to re-establish what the machine
+# already proved. Every path is relative to the working tree it starts in, so
+# nothing depends on what its sandbox lets it reach elsewhere.
+$changedFileList = @()
+foreach ($item in @(Get-ManifestValue 'changed_files' @())) { $changedFileList += [string]$item }
+$shownFiles = $changedFileList
+$fileTail = ''
+if ($shownFiles.Count -gt 60) {
+    $shownFiles = $shownFiles[0..59]
+    $fileTail = " (and " + ($changedFileList.Count - 60) + " more, all listed in ./$packetDirName/diffstat.txt)"
+}
+$pathNote = 'the whole range'
+if ($pathFilter.Count -gt 0) { $pathNote = 'only these paths: ' + ($pathFilter -join ', ') }
+
+# All of it goes into one file inside the reviewer's own working tree, and the
+# command line stays a single short line. A prompt with newlines in it does not
+# survive a .cmd shim, and a long file list does not survive a command line length
+# limit; a file in the working tree survives both.
+$requestPath = Join-Path $packetDir 'request.md'
+$requestText = @"
+# Review request $requestId
+
+You are reviewing one fixed change for kachakachaCAD. Everything you need is here.
+
+REQUEST_ID: $requestId
+BASE: $baseCommit
+HEAD: $reviewCommit
+SCOPE: $pathNote
+PROFILE: $reviewProfile (reasoning effort $reviewEffort)
+
+## Already proved on this machine - do not repeat any of it
+
+- build: $($manifest.build_result)
+- ctest: $($manifest.test_result) $($manifest.evidence.ctest)
+- application self-test: $($manifest.selftest_result) $($manifest.evidence.selftest)
+
+**Do not build. Do not run tests. Do not run the application.** They passed here
+already, on this machine, before you were started.
+
+## What to look at
+
+$($manifest.scope_ja)
+
+## Read in this order
+
+1. ``./$packetDirName/diffstat.txt`` and ``./$packetDirName/diff.patch`` - the fixed
+   diff, BASE..HEAD. Read this first and read all of it.
+2. The changed tests inside that diff. Do they actually hold this change down?
+3. Only then, other files, and only the ones the diff makes you need.
+
+**Do not survey the repository.** Do not open files the diff does not point at.
+
+## Changed files ($($changedFileList.Count))
+
+$(($shownFiles -join "`n"))$fileTail
+
+## The rules for your answer
+
+``./docs/ai/CODEX_REVIEW_POLICY.md`` in this working tree. This is a read-only
+review: do not modify any file. Your first non-empty line must be VERDICT.
+"@
+Write-TextAtomic -Path $requestPath -Text $requestText | Out-Null
+
+$prompt = "Read ./$packetDirName/request.md and do exactly what it says. Answer in the form it names, starting with VERDICT on the first non-empty line."
 
 $arguments = @()
 if ($reviewerKind -eq 'codex') {
     $arguments += 'exec'
-    if ($flags -contains '-c') {
-        $effortMap = @{ 'LOW' = 'low'; 'MEDIUM' = 'medium'; 'HIGH' = 'high'; 'EXTRA_HIGH' = 'xhigh' }
-        $effortKey = [string]$manifest.review_effort
-        if ($effortMap.ContainsKey($effortKey)) {
-            $arguments += @('-c', ('model_reasoning_effort="' + $effortMap[$effortKey] + '"'))
-        }
+    if ($flags -contains '-c' -and $reviewEffort) {
+        $arguments += @('-c', ('model_reasoning_effort="' + $reviewEffort + '"'))
     }
     if ($flags -contains '--ephemeral')   { $arguments += '--ephemeral' }
     if ($flags -contains '--sandbox')     { $arguments += @('--sandbox', 'read-only') }
@@ -339,12 +419,47 @@ if ($DryRun) {
 }
 
 $startedUtc = Get-UtcStamp
+$queuedUtc = [string](Get-ManifestValue 'created_utc' '')
+$waitSeconds = -1
+if ($queuedUtc) {
+    try { $waitSeconds = [int]((([datetime]$startedUtc) - ([datetime]$queuedUtc)).TotalSeconds) } catch { $waitSeconds = -1 }
+}
+$invocation = [ordered]@{
+    reviewer            = $reviewerKind
+    executable          = $reviewerExe
+    version             = $reviewerVersion
+    model               = [string](Get-ManifestValue 'model' '')
+    reasoning_effort    = $reviewEffort
+    review_profile      = $reviewProfile
+    profile_reason      = [string](Get-ManifestValue 'profile_reason' '')
+    command_line        = $commandLine
+    base_commit         = $baseCommit
+    review_commit       = $reviewCommit
+    changed_file_count  = [int](Get-ManifestValue 'changed_file_count' 0)
+    changed_lines       = [int](Get-ManifestValue 'changed_lines' 0)
+    diff_bytes          = [int](Get-ManifestValue 'diff_bytes' 0)
+    path_filter         = @($pathFilter)
+    timeout_seconds     = $TimeoutSeconds
+    queued_utc          = $queuedUtc
+    started_utc         = $startedUtc
+    queued_to_start_seconds = $waitSeconds
+    finished_utc        = ''
+    duration_seconds    = -1
+}
 Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
     event = 'review_started'; request_id = $requestId; root_request_id = $rootId
     base_commit = $baseCommit; review_commit = $reviewCommit
-    reviewer = $reviewerKind; note = $commandLine
+    reviewer = $reviewerKind; review_profile = $reviewProfile; review_effort = $reviewEffort
+    changed_file_count = $invocation.changed_file_count; changed_lines = $invocation.changed_lines
+    diff_bytes = $invocation.diff_bytes; timeout_seconds = $TimeoutSeconds
+    queued_to_start_seconds = $waitSeconds
+    note = $commandLine
 } | Out-Null
-Say "starting $reviewerKind once for $requestId at $(Get-ShortSha $reviewCommit)"
+Say ("starting " + $reviewerKind + " once for " + $requestId + " at " + (Get-ShortSha $reviewCommit) +
+     " profile=" + $reviewProfile + " effort=" + $reviewEffort +
+     " files=" + $invocation.changed_file_count + " lines=" + $invocation.changed_lines +
+     " diff=" + $invocation.diff_bytes + "B timeout=" + $TimeoutSeconds + "s" +
+     " waited=" + $waitSeconds + "s")
 
 $run = $null
 $notes = @()
@@ -413,8 +528,8 @@ if (-not $verdict) {
 }
 if ($verdict -eq 'REVISE') { $verdict = 'BLOCKING' }
 if (-not $verdict) {
-    $verdict = 'ERROR'
-    $notes += 'the reviewer did not answer in the required form'
+    $verdict = 'MALFORMED'
+    $notes += 'the reviewer answered, but not in the required form'
 }
 if (-not $nextAction) {
     switch ($verdict) {
@@ -422,24 +537,37 @@ if (-not $nextAction) {
         'BLOCKING' { $nextAction = 'FIX_AND_REVIEW' }
         'STOP'     { $nextAction = 'STOP' }
         default    { $nextAction = 'HUMAN_DECISION_REQUIRED' }
+
     }
 }
 
-# A reviewer that answered badly has still reviewed: that REQUEST_ID is spent and
-# a person needs to look. A reviewer that never really ran (it fell over, it was
-# stopped, it said nothing at all) has not reviewed, so the number survives.
+# A command that timed out, fell over, or never started did not review anything.
+# That is not a failing review and it must never be turned into one. Each of these
+# gets its own name, and none of them uses up the REQUEST_ID.
+$outcome = 'REVIEWED'
 $ledgerEvent = 'review_completed'
-$reviewerReallyRan = ($null -ne $run) -and ($exitCode -eq 0) -and
-                     ($answer -and $answer.Trim().Length -gt 0)
-if (-not $reviewerReallyRan) {
-    $ledgerEvent = 'review_unavailable'
-    $verdict = 'ERROR'
-    $nextAction = 'HUMAN_DECISION_REQUIRED'
-    if ($null -eq $run) {
-        $notes += 'the reviewer could not be started at all'
-    } else {
-        $notes += ("the reviewer did not finish (exit " + $exitCode + "); this does not use up the REQUEST_ID")
-    }
+if ($null -eq $run) {
+    $outcome = 'INFRA_ERROR'
+    $ledgerEvent = 'review_infra_error'
+    $notes += 'the reviewer could not be started at all'
+} elseif ($run.TimedOut) {
+    $outcome = 'TIMEOUT'
+    $ledgerEvent = 'review_timeout'
+    $notes += ("the reviewer was still going after " + $TimeoutSeconds + " seconds and was stopped")
+} elseif ($exitCode -ne 0) {
+    $outcome = 'RETRYABLE_ERROR'
+    $ledgerEvent = 'review_retryable_error'
+    $notes += ("the reviewer ended with exit " + $exitCode)
+} elseif (-not $answer -or $answer.Trim().Length -eq 0) {
+    $outcome = 'RETRYABLE_ERROR'
+    $ledgerEvent = 'review_retryable_error'
+    $notes += 'the reviewer ended without saying anything'
+}
+if ($outcome -ne 'REVIEWED') {
+    $verdict = $outcome
+    $nextAction = 'RETRY'
+    if ($outcome -eq 'INFRA_ERROR') { $nextAction = 'HUMAN_DECISION_REQUIRED' }
+    $notes += 'this is not a review result; the REQUEST_ID is not used up'
 }
 if ($verdict -eq 'BLOCKING' -and $blockingCount -eq 0) { $blockingCount = 1 }
 
@@ -449,21 +577,47 @@ $header = @"
 REQUEST_ID: $requestId
 BASE: $baseCommit
 HEAD: $reviewCommit
+SCOPE: $pathNote
+PROFILE: $reviewProfile (effort $reviewEffort) - $(Get-ManifestValue 'profile_reason' '')
+SIZE: $(Get-ManifestValue 'changed_file_count' 0) files, $(Get-ManifestValue 'changed_lines' 0) changed lines
 REVIEWER: $reviewerKind ($reviewerVersion)
 STARTED: $startedUtc
+OUTCOME: $outcome
 VERDICT: $verdict
 NEXT_ACTION: $nextAction
 
 "@
 Write-TextAtomic -Path $resultText -Text ($header + $answer) | Out-Null
 
+$finishedUtc = Get-UtcStamp
+$invocation.finished_utc = $finishedUtc
+try { $invocation.duration_seconds = [int]((([datetime]$finishedUtc) - ([datetime]$startedUtc)).TotalSeconds) } catch { }
+$invocation['outcome'] = $outcome
+$invocation['verdict'] = $verdict
+# Its own append-only log, so that "what did we actually run, and how long did it
+# take" can be answered without opening every result file.
+Add-ReviewLedgerEntry -RepoRoot $RepoRoot -Entry @{
+    event = 'review_invocation'; request_id = $requestId; root_request_id = $rootId
+    base_commit = $baseCommit; review_commit = $reviewCommit
+    outcome = $outcome; verdict = $verdict
+    reviewer = $reviewerKind; review_profile = $reviewProfile; review_effort = $reviewEffort
+    duration_seconds = $invocation.duration_seconds
+    queued_to_start_seconds = $waitSeconds
+    changed_file_count = $invocation.changed_file_count
+    changed_lines = $invocation.changed_lines
+    diff_bytes = $invocation.diff_bytes
+    note = $commandLine
+} | Out-Null
+
 $result = Write-ReviewResult -Verdict $verdict -NextAction $nextAction -BlockingCount $blockingCount `
     -ExitCode $exitCode -ReviewerCommand $commandLine -StartedUtc $startedUtc -Notes $notes `
-    -LedgerEvent $ledgerEvent -Reviewer $reviewerKind
+    -LedgerEvent $ledgerEvent -Reviewer $reviewerKind -Outcome $outcome `
+    -Invocation ([pscustomobject]$invocation)
 
 # Keep the packet as evidence; the worktree it lived in is about to go.
 try {
     Copy-Item -LiteralPath $packetPath -Destination (Join-Path $workDir 'packet.md') -Force
+    Copy-Item -LiteralPath $requestPath -Destination (Join-Path $workDir 'request.md') -Force
     Copy-Item -LiteralPath $statPath -Destination (Join-Path $workDir 'diffstat.txt') -Force
     Copy-Item -LiteralPath $commitsPath -Destination (Join-Path $workDir 'commits.txt') -Force
     Copy-Item -LiteralPath $diffPath -Destination (Join-Path $workDir 'diff.patch') -Force

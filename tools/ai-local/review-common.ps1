@@ -220,6 +220,25 @@ function ConvertTo-CommandLine {
     return ($parts -join ' ')
 }
 
+# taskkill /T is the only reliable way to end a process and everything it started
+# on Windows PowerShell 5.1; .NET Framework has no Kill($true).
+function Stop-ProcessTree {
+    param([Parameter(Mandatory=$true)][int]$ProcessId)
+    if ($ProcessId -le 0) { return }
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'taskkill.exe'
+        $psi.Arguments = ('/T /F /PID ' + $ProcessId)
+        $psi.UseShellExecute = $false
+        $psi.CreateNoWindow = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $killer = [System.Diagnostics.Process]::Start($psi)
+        $killer.WaitForExit(15000) | Out-Null
+    } catch { }
+    try { (Get-Process -Id $ProcessId -ErrorAction Stop).Kill() } catch { }
+}
+
 function Invoke-Process {
     param(
         [Parameter(Mandatory=$true)][string]$FilePath,
@@ -258,12 +277,19 @@ function Invoke-Process {
     if ($TimeoutSeconds -gt 0) {
         if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
             $timedOut = $true
-            try { $proc.Kill() } catch { }
+            # Kill the whole tree. Killing only the parent leaves its children
+            # holding the output pipe, and then the read below never finishes:
+            # the timeout fires and the caller hangs anyway. That happened.
+            Stop-ProcessTree -ProcessId $proc.Id
         }
     }
-    $proc.WaitForExit()
-    $out = $outTask.Result
-    $err = $errTask.Result
+    # Bounded from here on. Anything still holding a pipe must not be able to keep
+    # this function waiting for ever.
+    $proc.WaitForExit(30000) | Out-Null
+    $out = ''
+    $err = ''
+    if ($outTask.Wait(20000)) { $out = $outTask.Result }
+    if ($errTask.Wait(20000)) { $err = $errTask.Result }
     return [pscustomobject]@{
         ExitCode = $proc.ExitCode
         StdOut   = $out

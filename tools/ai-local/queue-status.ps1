@@ -69,10 +69,25 @@ $status = [pscustomobject]@{
     }
     pending            = $pending
     unprocessed_results = @($unprocessed | ForEach-Object {
+        $duration = -1
+        $profile = ''
+        $outcome = 'REVIEWED'
+        foreach ($p in $_.PSObject.Properties) {
+            if ($p.Name -eq 'outcome') { $outcome = [string]$p.Value }
+            if ($p.Name -eq 'review_profile') { $profile = [string]$p.Value }
+            if ($p.Name -eq 'invocation' -and $p.Value) {
+                foreach ($q in $p.Value.PSObject.Properties) {
+                    if ($q.Name -eq 'duration_seconds') { $duration = [int]$q.Value }
+                }
+            }
+        }
         [pscustomobject]@{
             request_id = $_.request_id
+            outcome = $outcome
             verdict = $_.verdict
             next_action = $_.next_action
+            review_profile = $profile
+            duration_seconds = $duration
             review_commit = (Get-ShortSha $_.review_commit)
             finished_utc = $_.finished_utc
         }
@@ -106,7 +121,9 @@ if ($pending.Count -gt 0) {
 if ($status.unprocessed_results.Count -gt 0) {
     Write-Host '  reviews Claude has not folded in yet:' -ForegroundColor Yellow
     foreach ($r in $status.unprocessed_results) {
-        Write-Host ("    {0}  {1} -> {2}  @{3}" -f $r.request_id, $r.verdict, $r.next_action, $r.review_commit)
+        Write-Host ("    {0}  [{1}] {2} -> {3}  @{4}  {5} {6}s" -f `
+            $r.request_id, $r.outcome, $r.verdict, $r.next_action, $r.review_commit,
+            $r.review_profile, $r.duration_seconds)
     }
     Write-Host ''
 }

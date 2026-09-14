@@ -1,24 +1,84 @@
 {
   "schema_version": 1,
   "kind": "review_request_declaration",
-  "request_id": "AI-REVIEW-PIPELINE-R4",
+  "request_id": "AI-REVIEW-PIPELINE-R5",
   "base_commit": "f78d91bfb7c8658a64771f8f9fcec09c4910232f",
-  "review_effort": "HIGH",
-  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R1〜R3 はいずれも レビュー不成立(レビューアー不在 / 殻 / 古い判定の残留)。判定は出ていない。tools/ai-local/ の PowerShell 一式、docs/ai/ の規約・仕組み・JSON の形、.gitignore の .ai-runtime/ 追加。製品コード(src/)には触れていない。",
-  "focus": [
-    "依頼が無いときに Codex が起動し得る経路が本当に無いか",
-    "原子的な取得(File.Move)が二重レビューを防ぎ切れているか",
-    "detached worktree の固定が、レビュー中の branch 前進から本当に守れているか",
-    "落ちた後の復旧が、結果が既にある場合とまだ無い場合を取り違えないか",
-    "tmp→rename の書き込みと *.tmp を読まない規則に抜けが無いか",
-    "Codex の実 interface を調べてから使う経路に、想像した option が混じっていないか",
-    "Windows PowerShell 5.1 で動かない構文(ArgumentList, 三項, ?? など)が残っていないか",
-    "レビューが成立しなかったときに REQUEST_ID を使い切らない扱いが正しいか",
-    "居座った古い常駐だけを引き取らせる判定が、レビュー中のものを巻き込まないか",
-    "殻(.sandbox-bin)を「使えない」と断る判定が、正しい導入を巻き込まないか",
-    "代役(claude-fallback)が Codex のレビューと取り違えられない書き方になっているか",
-    "packet を worktree の中に置いたことで、読み取り専用の検査に穴が開いていないか",
-    "検査を変えたときに、前に書いた判定が残って効き続ける場所がほかに無いか"
-  ],
-  "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
+  "scope_ja": "Claude/Codex レビューのローカル・イベント駆動基盤。R1〜R4 はいずれも レビュー不成立(レビューアー不在 / 殻 / 古い判定の残留 / 時間切れで止まらなかった)。判定は一度も出ていない。製品コード(src/)には触れていない。",
+  "policy": "docs/ai/CODEX_REVIEW_POLICY.md",
+  "segments": [
+    {
+      "name": "QUEUE",
+      "paths": [
+        "tools/ai-local/review-dispatcher.ps1",
+        "tools/ai-local/review-enqueue.ps1",
+        "tools/ai-local/review-recover.ps1",
+        "tools/ai-local/stop-stale-dispatcher.ps1"
+      ],
+      "scope_ja": "queue の受け取り・原子的な取得・復旧・居座った常駐の引き取り。",
+      "focus": [
+        "依頼が無いときに起動し得る経路が無いか",
+        "File.Move による取得が二重レビューを防ぎ切れているか",
+        "取得が時間切れを超えたときの「詰まっている」判定が、動いているものを巻き込まないか",
+        "広すぎる変更を断る判定(AIR-E050)が、分けられない変更を不当に止めないか"
+      ]
+    },
+    {
+      "name": "PROCESS",
+      "paths": [
+        "tools/ai-local/review-common.ps1",
+        "tools/ai-local/review-runner.ps1"
+      ],
+      "profile": "HIGH_RISK",
+      "scope_ja": "外部コマンドの起動・時間切れ・標準入出力・使い捨て worktree の固定。",
+      "focus": [
+        "木ごと殺す処理と、読み取りの待ちに上限を付けた変更に抜けが無いか",
+        "detached worktree の固定が、レビュー中の branch 前進から守れているか",
+        "packet を worktree の中に置いたことで読み取り専用の検査に穴が開いていないか",
+        "存在しない CLI option を渡し得る経路が残っていないか"
+      ]
+    },
+    {
+      "name": "JUDGE",
+      "paths": [
+        "tools/ai-local/review-profile.ps1",
+        "tools/ai-local/review-ledger.ps1",
+        "tools/ai-local/review-precheck.ps1",
+        "tools/ai-local/queue-status.ps1"
+      ],
+      "scope_ja": "危険度の判定・追記専用台帳・依頼と機械の点検・状態表示。",
+      "focus": [
+        "危険度の判定が、増減行だけを見て文脈を数えないこと",
+        "TIMEOUT/INFRA_ERROR/RETRYABLE_ERROR が不合格に化けないこと",
+        "検査を変えたときに古い判定が残らないこと(probe_revision)",
+        "同じ commit を別番号で二度レビューしない判定(AIR-E041)"
+      ]
+    },
+    {
+      "name": "TESTS",
+      "paths": [
+        "tools/ai-local/review-selftest.ps1",
+        "tests_v2/architecture_tests.cpp"
+      ],
+      "profile": "NORMAL",
+      "scope_ja": "基盤そのものの自己試験と、雲側の関所。",
+      "focus": [
+        "21 の場面が、実際に約束を押さえているか(素通りする確認が無いか)",
+        "自己試験が本物のレビューアーに届かないよう固定できているか"
+      ]
+    },
+    {
+      "name": "DOCS",
+      "paths": [
+        "docs/ai/",
+        "AI_HANDOFF_STATE.md",
+        "AGENTS.md",
+        ".gitignore"
+      ],
+      "profile": "QUICK",
+      "scope_ja": "規約・仕組み・JSON の形・進捗台帳。",
+      "focus": [
+        "書いてあることと、実装の振る舞いが食い違っていないか"
+      ]
+    }
+  ]
 }

@@ -758,6 +758,7 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
         "tools/ai-local/review-dispatcher.ps1",
         "tools/ai-local/review-runner.ps1",
         "tools/ai-local/review-ledger.ps1",
+        "tools/ai-local/review-profile.ps1",
         "tools/ai-local/review-recover.ps1",
         "tools/ai-local/queue-status.ps1",
         "tools/ai-local/stop-stale-dispatcher.ps1",

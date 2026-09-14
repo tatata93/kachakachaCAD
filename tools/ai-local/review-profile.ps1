@@ -1,0 +1,206 @@
+<#
+review-profile.ps1 - decide how hard to look, from what actually changed.
+
+The rule the owner set: risk is a property of the change, not of the phase it
+belongs to. A large phase full of documentation is not dangerous. Three lines
+inside a Document transaction are.
+
+  QUICK      small UI fixes, documents, test edits, obvious small changes
+             -> reasoning effort low
+  NORMAL     ordinary feature work
+             -> reasoning effort medium
+  HIGH_RISK  transactions, ownership and lifetime, undo/redo, save and load,
+             the document model, OCCT topology, the stored approximation
+             structure, geometry algorithms
+             -> reasoning effort high
+
+A declaration may name a profile. The machine may raise it when the diff touches
+something dangerous, and says why. It never lowers what a person asked for
+without being told to (`force_profile`).
+#>
+
+Set-StrictMode -Version 1.0
+
+# Paths whose contents are dangerous by nature.
+$script:HighRiskPaths = @(
+    'src/next/kachakacha/document/',
+    'src/next/kachakacha/io/',
+    'src/next/kachakacha/geometry/',
+    'src/next/kachakacha/fabrication/',
+    'src/next/kachakacha/domain/',
+    'src/next_occt/'
+)
+
+# Names whose appearance in a diff means the same thing wherever they live.
+$script:HighRiskTokens = @(
+    'BeginCompound', 'EndCompound', 'AbortCompound', 'Transaction',
+    'Undo', 'Redo', 'PushHistory', 'history_',
+    'DocumentFile', 'Serialize', 'kcd2',
+    'TopoDS_', 'BRep', 'Sewing', 'ShapeFix',
+    'shared_ptr', 'unique_ptr', 'weak_ptr',
+    'ApproxPart', 'manualBoundaries', 'bendRadius',
+    'reinterpret_cast', 'const_cast', 'memcpy'
+)
+
+# Paths that carry no risk on their own.
+$script:QuietPaths = @('docs/', 'tests_v2/', 'tools/qtstub/', 'samples/', '.github/')
+
+function Test-QuietPath {
+    param([string]$Path)
+    if ($Path -like '*.md') { return $true }
+    foreach ($quiet in $script:QuietPaths) {
+        if ($Path -like ($quiet + '*')) { return $true }
+    }
+    return $false
+}
+
+function Get-RiskSignals {
+    param(
+        [AllowEmptyCollection()][string[]]$ChangedFiles,
+        [string]$DiffText
+    )
+    $signals = @()
+    foreach ($file in $ChangedFiles) {
+        $normalised = ($file -replace '\\', '/')
+        foreach ($risky in $script:HighRiskPaths) {
+            if ($normalised -like ($risky + '*')) {
+                $signals += ('path:' + $risky)
+                break
+            }
+        }
+    }
+    if ($DiffText) {
+        # Only added and removed lines count. A risky name that merely sits in the
+        # surrounding context was not touched by this change.
+        foreach ($line in ($DiffText -split "`r?`n")) {
+            if ($line.Length -lt 2) { continue }
+            $first = $line.Substring(0, 1)
+            if ($first -ne '+' -and $first -ne '-') { continue }
+            if ($line -like '+++*' -or $line -like '---*') { continue }
+            foreach ($token in $script:HighRiskTokens) {
+                if ($line -like ('*' + $token + '*')) { $signals += ('name:' + $token) }
+            }
+        }
+    }
+    $unique = @()
+    $seen = @{}
+    foreach ($signal in $signals) {
+        if (-not $seen.ContainsKey($signal)) { $seen[$signal] = $true; $unique += $signal }
+    }
+    return $unique
+}
+
+function Get-ChangedLineCount {
+    param([string]$DiffText)
+    if (-not $DiffText) { return 0 }
+    $count = 0
+    foreach ($line in ($DiffText -split "`r?`n")) {
+        if ($line.Length -lt 1) { continue }
+        $first = $line.Substring(0, 1)
+        if ($first -ne '+' -and $first -ne '-') { continue }
+        if ($line -like '+++*' -or $line -like '---*') { continue }
+        $count++
+    }
+    return $count
+}
+
+function ConvertTo-KnownProfile {
+    param([string]$Name)
+    switch (([string]$Name).ToUpperInvariant()) {
+        'QUICK'      { return 'QUICK' }
+        'LOW'        { return 'QUICK' }
+        'NORMAL'     { return 'NORMAL' }
+        'MEDIUM'     { return 'NORMAL' }
+        'HIGH_RISK'  { return 'HIGH_RISK' }
+        'HIGH'       { return 'HIGH_RISK' }
+        'EXTRA_HIGH' { return 'HIGH_RISK' }
+        default      { return '' }
+    }
+}
+
+function Get-ProfileRank {
+    param([string]$Profile)
+    switch ($Profile) {
+        'QUICK'     { return 1 }
+        'NORMAL'    { return 2 }
+        'HIGH_RISK' { return 3 }
+        default     { return 0 }
+    }
+}
+
+function Get-EffortForProfile {
+    param([string]$Profile)
+    switch ($Profile) {
+        'QUICK'     { return 'low' }
+        'HIGH_RISK' { return 'high' }
+        default     { return 'medium' }
+    }
+}
+
+# How long to wait before calling it a timeout. A deep read of a dangerous change
+# deserves patience; a documentation fix does not.
+function Get-TimeoutForProfile {
+    param([string]$Profile)
+    switch ($Profile) {
+        'QUICK'     { return 600 }
+        'HIGH_RISK' { return 2400 }
+        default     { return 1200 }
+    }
+}
+
+function Resolve-ReviewProfile {
+    param(
+        [string]$Declared,
+        [AllowEmptyCollection()][string[]]$ChangedFiles,
+        [string]$DiffText,
+        [bool]$ForceDeclared = $false
+    )
+    $signals = @(Get-RiskSignals -ChangedFiles $ChangedFiles -DiffText $DiffText)
+    $changedLines = Get-ChangedLineCount -DiffText $DiffText
+    $allQuiet = $true
+    foreach ($file in $ChangedFiles) {
+        if (-not (Test-QuietPath -Path ($file -replace '\\', '/'))) { $allQuiet = $false; break }
+    }
+
+    $measured = 'NORMAL'
+    $reason = 'ordinary feature work'
+    if ($signals.Count -gt 0) {
+        $measured = 'HIGH_RISK'
+        $shown = $signals
+        if ($shown.Count -gt 6) { $shown = $shown[0..5] }
+        $reason = 'the change touches ' + ($shown -join ', ')
+    } elseif ($allQuiet -and $ChangedFiles.Count -gt 0) {
+        $measured = 'QUICK'
+        $reason = 'only documents, tests and other quiet paths changed'
+    } elseif ($changedLines -gt 0 -and $changedLines -le 200) {
+        $measured = 'QUICK'
+        $reason = "a small change ($changedLines changed lines) with nothing dangerous in it"
+    }
+
+    $declaredProfile = ConvertTo-KnownProfile -Name $Declared
+    $chosen = $measured
+    $note = $reason
+    if ($declaredProfile) {
+        if ($ForceDeclared) {
+            $chosen = $declaredProfile
+            $note = "the request insists on $declaredProfile; measured $measured ($reason)"
+        } elseif ((Get-ProfileRank $declaredProfile) -gt (Get-ProfileRank $measured)) {
+            $chosen = $declaredProfile
+            $note = "the request asked for $declaredProfile; measured $measured ($reason)"
+        } elseif ((Get-ProfileRank $measured) -gt (Get-ProfileRank $declaredProfile)) {
+            $chosen = $measured
+            $note = "raised from $declaredProfile to $measured because $reason"
+        }
+    }
+
+    return [pscustomobject]@{
+        profile          = $chosen
+        declared         = $declaredProfile
+        measured         = $measured
+        reason           = $note
+        effort           = (Get-EffortForProfile -Profile $chosen)
+        timeout_seconds  = (Get-TimeoutForProfile -Profile $chosen)
+        risk_signals     = $signals
+        changed_lines    = $changedLines
+    }
+}

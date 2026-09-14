@@ -320,8 +320,22 @@ struct RailChord {
 
 Rows FoldBandMesh(const BandMesh& mesh, double progress)
 {
+    return FoldBandMesh(mesh, progress, {});
+}
+
+Rows FoldBandMesh(const BandMesh& mesh, double progress,
+    const std::vector<double>& creaseFactors)
+{
     const double t = std::clamp(progress, 0.0, 1.0);
-    if (mesh.rows < 2 || mesh.columns < 2 || t >= 1.0 - 1.0e-9) {
+    // 半径を固定した折り線があると、100% でも world とは違う形になる。
+    // だから「t が 1 なら world をそのまま返す」近道は、そのときだけ使わない。
+    bool anyFactor = false;
+    for (const double factor : creaseFactors) {
+        if (std::abs(factor - 1.0) > 1.0e-9) {
+            anyFactor = true;
+        }
+    }
+    if (mesh.rows < 2 || mesh.columns < 2 || (t >= 1.0 - 1.0e-9 && !anyFactor)) {
         return mesh.world;
     }
     if (t <= 1.0e-9) {
@@ -347,7 +361,12 @@ Rows FoldBandMesh(const BandMesh& mesh, double progress)
         AlignFrames(from, to, {&bottom, &top});
         // 帯間の折り角も progress 倍: world の折り角 θ に対し (t-1)θ を追加回転。
         const double fullAngle = MeasureCreaseAngleInState(mesh.world, band, mesh.columns);
-        const double delta = (t - 1.0) * fullAngle;
+        // 半径を固定した折り線は、測った角の factor 倍まで曲げる。
+        // 帯の幅は変えないので、面内長は変わらない(§10.1)。
+        const auto crease = static_cast<std::size_t>(band) - 1;
+        const double factor =
+            crease < creaseFactors.size() ? creaseFactors[crease] : 1.0;
+        const double delta = (t * factor - 1.0) * fullAngle;
         if (std::abs(delta) > 1.0e-12) {
             const Vector3 chordOrigin = placed.front();
             const Vector3 chord = Normalized(placed.back() - placed.front());

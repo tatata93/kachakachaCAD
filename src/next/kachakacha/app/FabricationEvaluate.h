@@ -19,6 +19,7 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/fabrication/BandApproximation.h"
+#include "kachakacha/fabrication/BandBendRadius.h"
 #include "kachakacha/fabrication/BandFold.h"
 #include "kachakacha/fabrication/PatternLayout.h"
 #include "kachakacha/fabrication/SurfacePatch.h"
@@ -97,6 +98,11 @@ struct ResolvedFoldState {
     std::vector<double> creaseProgress;
     std::vector<double> bandProgress;
     double masterProgress = 1.0;
+    //! 部材ごとに固定した半径から出した、折り線ごとの倍率(自動なら 1.0)。
+    //! 形を作るときに渡す。渡さないと「表示だけ変わって形は同じ」になる。
+    std::vector<double> creaseFactors;
+    //! 測った半径に、保存してある固定を重ねたもの。画面へ出すのはこれ。
+    std::vector<fabrication::BendRadius> bends;
 };
 
 [[nodiscard]] ResolvedFoldState ResolveFoldState(

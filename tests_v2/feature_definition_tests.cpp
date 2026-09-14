@@ -201,6 +201,33 @@ KACHA_V2_TEST(feature_definition, 切れ目の上限が保存して読み直せ�
     RequireNear(back.minimumReliefLigamentMm, 0.2, 1.0e-12, "残す幅");
 }
 
+KACHA_V2_TEST(feature_definition, 部材ごとの曲げ半径と固定が保存して読み直せる)
+{
+    // 画面が覚えていると保存で消える。作り方として文書に残っていること(§31)。
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    made.bendRadiusMm = {22.0, 0.0, 8.5};
+    made.bendRadiusLock = {1, 0, 1};
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    Require(back.bendRadiusMm.size() == 3, "半径の数");
+    Require(back.bendRadiusLock.size() == 3, "固定の数");
+    RequireNear(back.bendRadiusMm[0], 22.0, 1.0e-12, "1枚目の半径");
+    RequireNear(back.bendRadiusMm[1], 0.0, 1.0e-12, "2枚目は自動なので0");
+    RequireNear(back.bendRadiusMm[2], 8.5, 1.0e-12, "3枚目の半径");
+    Require(back.bendRadiusLock[0] == 1, "1枚目は固定");
+    Require(back.bendRadiusLock[1] == 0, "2枚目は自動");
+    Require(back.bendRadiusLock[2] == 1, "3枚目は固定");
+}
+
+KACHA_V2_TEST(feature_definition, 曲げ半径が無い古い文書は全部自動で読める)
+{
+    CreateFabricationModelDefinition made;
+    made.parts = {Ent(1)};
+    const auto back = RoundTrip(FeatureType::CreateFabricationModel, made);
+    Require(back.bendRadiusMm.empty(), "半径は空");
+    Require(back.bendRadiusLock.empty(), "固定も空");
+}
+
 KACHA_V2_TEST(feature_definition, 切れ目の上限が無い古い文書は既定で読める)
 {
     // 鍵を足したせいで前の文書が開けなくなる、は絶対に避ける。

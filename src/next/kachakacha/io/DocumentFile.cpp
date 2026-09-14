@@ -299,6 +299,22 @@ template<class Id>
         definition["rangeVMax"] = JsonValue::Number(fabrication->rangeVMax);
         definition["creaseProgress"] = WriteNumberArray(fabrication->creaseProgress);
         definition["bandProgress"] = WriteNumberArray(fabrication->bandProgress);
+        // 部材ごとに固定した曲げ半径。画面に覚えさせると保存で消えるので、
+        // 作り方として文書に残す(§31、Codex Q1-Q5 B2)。
+        //
+        // 何も固定していないときは書かない。書くと、いままでの文書と見本が
+        // 中身は同じなのに1バイト違う、ということになる。
+        if (!fabrication->bendRadiusMm.empty()) {
+            definition["bendRadiusMm"] = WriteNumberArray(fabrication->bendRadiusMm);
+        }
+        if (!fabrication->bendRadiusLock.empty()) {
+            JsonArray locks;
+            locks.reserve(fabrication->bendRadiusLock.size());
+            for (const int value : fabrication->bendRadiusLock) {
+                locks.push_back(JsonValue::Number(static_cast<double>(value)));
+            }
+            definition["bendRadiusLock"] = JsonValue::Array(std::move(locks));
+        }
     } else if (const auto* thicken =
                    std::get_if<domain::ThickenSurfaceDefinition>(&feature.definition)) {
         definition["surface"] = WriteId(thicken->surface);

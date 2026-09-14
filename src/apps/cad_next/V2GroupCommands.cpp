@@ -75,21 +75,35 @@ void V2MainWindow::CreateGroupFromSelection()
     group.parentId = SelectedGroupId();
     group.displayName = NextGroupName();
     const auto id = group.id;
-    const auto added = session_->GetDocument().Run(AddGroupCommand(std::move(group)));
-    if (!added.committed) {
-        ReportDiagnostics(added.diagnostics);
-        return;
-    }
+    // まとまりを作るのと、中身を入れるのは、人から見れば1つの操作である。
+    // 別々に入れると、1回の取り消しで中身だけ戻り、空のまとまりが残る。
     const auto chosen = viewport_->Selection().entityIds;
-    if (!chosen.empty()) {
-        const auto moved = session_->GetDocument().Run(
-            MoveEntitiesToGroupCommand(chosen, id));
-        if (!moved.committed) {
-            ReportDiagnostics(moved.diagnostics);
-            return;
+    bool ok = true;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(
+            session_->GetDocument(), "まとまりにする");
+        const auto added = session_->GetDocument().Run(AddGroupCommand(std::move(group)));
+        if (!added.committed) {
+            ReportDiagnostics(added.diagnostics);
+            ok = false;
         }
+        if (ok && !chosen.empty()) {
+            const auto moved = session_->GetDocument().Run(
+                MoveEntitiesToGroupCommand(chosen, id));
+            if (!moved.committed) {
+                ReportDiagnostics(moved.diagnostics);
+                ok = false;
+            }
+        }
+        if (ok) {
+            transaction.Commit();
+        }
+        // Commit していなければ、まとまりも中身の移動もまとめて無かったことになる。
     }
     AdoptCurrentDocument();
+    if (!ok) {
+        return;
+    }
     SetStatus(chosen.empty()
             ? QStringLiteral("まとまりを作りました。名前は F2 で変えられます。")
             : QStringLiteral("%1個をまとまりにしました。名前は F2 で変えられます。")
@@ -252,29 +266,40 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
     if (entities.empty() && groups.empty()) {
         return;
     }
-    bool changed = false;
-    for (const GroupId& group : groups) {
-        const auto done = session_->GetDocument().Run(
-            SetGroupParentCommand(group, destination));
-        if (!done.committed) {
-            ReportDiagnostics(done.diagnostics);
-            continue;   // 輪になる移動などは断る。ほかは続ける。
+    // 一度に引きずった分は、人から見れば1つの操作である。
+    // 1つでも断られたら全部やめる。半分だけ移った状態を作らない。
+    // 輪になる移動が1つ混じっていたときに、ほかだけ移ってしまうと、
+    // どこまで移ったのかが利用者に分からなくなる。
+    bool ok = true;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(
+            session_->GetDocument(), "まとまりへ移す");
+        for (const GroupId& group : groups) {
+            const auto done = session_->GetDocument().Run(
+                SetGroupParentCommand(group, destination));
+            if (!done.committed) {
+                ReportDiagnostics(done.diagnostics);
+                ok = false;
+                break;
+            }
         }
-        changed = true;
-    }
-    if (!entities.empty()) {
-        const auto done = session_->GetDocument().Run(
-            MoveEntitiesToGroupCommand(entities, destination));
-        if (!done.committed) {
-            ReportDiagnostics(done.diagnostics);
-        } else {
-            changed = true;
+        if (ok && !entities.empty()) {
+            const auto done = session_->GetDocument().Run(
+                MoveEntitiesToGroupCommand(entities, destination));
+            if (!done.committed) {
+                ReportDiagnostics(done.diagnostics);
+                ok = false;
+            }
         }
-    }
-    if (!changed) {
-        return;
+        if (ok) {
+            transaction.Commit();
+        }
+        // ここを抜けるときに、Commit していなければ始める前へ戻る。
     }
     AdoptCurrentDocument();
+    if (!ok) {
+        return;
+    }
     SetStatus(destination.has_value()
             ? QStringLiteral("まとまりへ移しました。中身と参照は変えていません。")
             : QStringLiteral("まとまりの外へ出しました。中身と参照は変えていません。"));

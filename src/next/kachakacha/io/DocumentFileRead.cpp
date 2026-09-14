@@ -601,6 +601,11 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         made.rangeVMax = loader.NumberOr(definition, "rangeVMax", 1.0);
         made.creaseProgress = ReadNumberArray(loader, definition, "creaseProgress", where);
         made.bandProgress = ReadNumberArray(loader, definition, "bandProgress", where);
+        made.bendRadiusMm = ReadNumberArray(loader, definition, "bendRadiusMm", where);
+        for (const double value :
+            ReadNumberArray(loader, definition, "bendRadiusLock", where)) {
+            made.bendRadiusLock.push_back(value >= 0.5 ? 1 : 0);
+        }
         feature.definition = std::move(made);
         break;
     }

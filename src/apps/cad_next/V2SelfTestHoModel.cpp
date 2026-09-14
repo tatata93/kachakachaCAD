@@ -308,6 +308,100 @@ using kachakacha::v2::domain::EntityKind;
         window.BendRadiusNow().lock == kachakacha::v2::fabrication::ValueLock::Auto);
 }
 
+//! Q1-Q5 B2。部材ごとに違う半径を固定でき、保存して開き直しても残り、
+//! **形の座標が実際に変わる**。表示だけ変わって形が同じ、を通さない。
+[[nodiscard]] bool CaseHoRadiusIsPerPartAndPersisted(V2MainWindow& window)
+{
+    if (!Explain("HO の見本を開ける", OpenHoSample(window))) {
+        return false;
+    }
+    if (!Explain("近似モデルが見本に入っている", window.FabricationModelCount() >= 1)) {
+        return false;
+    }
+    window.SetAssemblyChooser([](double) { return std::optional<double>(100.0); });
+    window.RunCommand("fabrication.set_assembly");
+
+    const auto measured = window.BendRadiiNow();
+    if (!Explain((std::string("部材ごとの半径が出る(") + std::to_string(measured.size())
+                     + " 枚)").c_str(),
+            measured.size() >= 2)) {
+        return false;
+    }
+    const auto shapeOf = [&window]() {
+        return window.FabricationShapeSignature();
+    };
+    const auto before = shapeOf();
+    if (!Explain("形の指紋が取れる", !before.empty())) {
+        return false;
+    }
+
+    // 1枚目と2枚目に違う半径を入れる。棚の「曲げる部材」で相手を選ぶ。
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    window.ApplyBendRadius(22.0, true);
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("2"));
+    window.ApplyBendRadius(9.0, true);
+
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    const auto first = window.BendRadiusNow();
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("2"));
+    const auto second = window.BendRadiusNow();
+    if (!Explain((std::string("部材ごとに違う値を持てる(1枚目 ")
+                     + std::to_string(first.radiusMm) + " / 2枚目 "
+                     + std::to_string(second.radiusMm) + ")").c_str(),
+            std::abs(first.radiusMm - second.radiusMm) > 1.0)) {
+        return false;
+    }
+    if (!Explain("どちらも固定になる",
+            first.lock == kachakacha::v2::fabrication::ValueLock::Locked
+                && second.lock == kachakacha::v2::fabrication::ValueLock::Locked)) {
+        return false;
+    }
+
+    // 形が本当に変わること。ここを見ないと「表示だけ」を見逃す。
+    const auto after = shapeOf();
+    if (!Explain("固定すると形の座標が変わる", !after.empty() && after != before)) {
+        return false;
+    }
+
+    // 1回の取り消しで、直前に入れた 2枚目ぶんだけが戻る。
+    window.RunCommand("edit.undo");
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("2"));
+    if (!Explain("取り消すと2枚目が自動へ戻る",
+            window.BendRadiusNow().lock
+                == kachakacha::v2::fabrication::ValueLock::Auto)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("2"));
+    if (!Explain("やり直すと2枚目が戻る",
+            window.BendRadiusNow().lock
+                == kachakacha::v2::fabrication::ValueLock::Locked)) {
+        return false;
+    }
+
+    // 保存して開き直しても残ること。画面が覚えているだけなら、ここで消える。
+    if (!Explain("保存して開き直せる",
+            window.SaveAndReopen(QStringLiteral("kacha_selftest_ho_radius.kcd2")))) {
+        return false;
+    }
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
+    const auto firstBack = window.BendRadiusNow();
+    window.FabricationDock().SetPartNumbersText(QStringLiteral("2"));
+    const auto secondBack = window.BendRadiusNow();
+    if (!Explain((std::string("開き直しても1枚目の半径が残る(")
+                     + std::to_string(firstBack.radiusMm) + ")").c_str(),
+            firstBack.lock == kachakacha::v2::fabrication::ValueLock::Locked
+                && std::abs(firstBack.radiusMm - first.radiusMm) < 1.0e-6)) {
+        return false;
+    }
+    if (!Explain("開き直しても2枚目の半径が残る",
+            secondBack.lock == kachakacha::v2::fabrication::ValueLock::Locked
+                && std::abs(secondBack.radiusMm - second.radiusMm) < 1.0e-6)) {
+        return false;
+    }
+    return Explain("開き直しても形が同じ", shapeOf() == after);
+}
+
 //! UI-TM-19。見本を保存して開き直しても、まとまりと中身が残る。
 [[nodiscard]] bool CaseHoSampleSurvivesSaveAndOpen(V2MainWindow& window)
 {
@@ -367,6 +461,8 @@ std::vector<SelfTestCase> HoModelCases()
         {"HOの見本の曲げ状態から線と面を作れる", CaseHoOutputsFromBendStates},
         {"HOの見本で実寸半径を入れて固定できる", CaseHoRadiusAutoAndLock},
         {"HOの見本が保存して開き直しても残る", CaseHoSampleSurvivesSaveAndOpen},
+        {"曲げ半径は部材ごとに持ち、保存して開き直しても形ごと残る",
+            CaseHoRadiusIsPerPartAndPersisted},
         {"HOの見本の上でも道具替えが綺麗", CaseHoToolSwitchStaysClean},
     };
 }

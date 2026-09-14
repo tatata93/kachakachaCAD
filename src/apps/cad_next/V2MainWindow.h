@@ -882,14 +882,18 @@ public:
     [[nodiscard]] double AssemblyPercentNow() const;
     //! 「固定」「固定を外す」を押した。試験からも呼ぶ。
     void ApplyBendRadius(double radiusMm, bool locked);
-    //! いまの曲げと半径。試験から見る。
-    [[nodiscard]] const kachakacha::v2::fabrication::BendRadius& BendRadiusNow() const
-    {
-        return bendRadius_;
-    }
+    //! いま棚に出ている部材の曲げと半径。試験から見る。
+    //! 値は画面ではなく **文書** が持つ。ここは読み出すだけ。
+    [[nodiscard]] kachakacha::v2::fabrication::BendRadius BendRadiusNow() const;
+    //! 部材ごとの曲げと半径。測った値に、固定してある分を重ねたもの。
+    [[nodiscard]] std::vector<kachakacha::v2::fabrication::BendRadius>
+    BendRadiiNow() const;
+    //! いまの近似モデルの作り方。無ければ空。
+    [[nodiscard]] const kachakacha::v2::domain::CreateFabricationModelDefinition*
+    CurrentFabricationDefinition() const;
+    //! いまの曲げ状態での形の指紋。試験が「形が本当に変わったか」を見るために読む。
+    [[nodiscard]] std::string FabricationShapeSignature() const;
 private:
-    //! 曲げた先の半径。自動か固定かをここが持つ。
-    kachakacha::v2::fabrication::BendRadius bendRadius_;
     //! 整理用まとまりの操作(§7〜13)。
     [[nodiscard]] static bool IsGroupCommand(std::string_view id);
     void RunGroupCommand(std::string_view id);

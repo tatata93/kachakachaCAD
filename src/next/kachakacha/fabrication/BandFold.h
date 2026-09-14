@@ -25,6 +25,12 @@ namespace kachakacha::v2::fabrication {
 [[nodiscard]] std::vector<std::vector<Vector3>> FoldBandMesh(const BandMesh& mesh,
     double progress);
 
+//! 折り線ごとの倍率つき。半径を固定した折り線は、測った角の factor 倍まで曲げる。
+//! 帯そのものは変形しないので、どの倍率でも面内長は変わらない。
+//! 数が足りない分は 1.0(測ったとおり)。
+[[nodiscard]] std::vector<std::vector<Vector3>> FoldBandMesh(const BandMesh& mesh,
+    double progress, const std::vector<double>& creaseFactors);
+
 //! 完成形(world)での各内部レールの平均折り角(符号付きラジアン、0 = 平ら)。
 //! サイズは CreaseCount()。可動折り線の表示(度)と進行度⇄角度の換算に使う。
 [[nodiscard]] std::vector<double> MeasureCreaseAngles(const BandMesh& mesh);

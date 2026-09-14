@@ -23,6 +23,7 @@
 #include "kachakacha/modeling/ToolController.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <system_error>
 #include <string>
@@ -303,6 +304,178 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("入れ子も残る", nested);
 }
 
+//! Q1-Q5 B3。まとまりを作るのと中身を入れるのは1つの操作である。
+//! 1回の取り消しで、空のまとまりが残ってはいけない。
+[[nodiscard]] bool CaseGroupCreateIsOneUndoStep(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = DrawOneLine(window, 0.0);
+    const EntityId second = DrawOneLine(window, 10.0);
+    if (!Explain("線が2本引ける", !first.IsNil() && !second.IsNil())) {
+        return false;
+    }
+    const std::size_t groupsBefore =
+        window.Session().GetDocument().Snapshot().groups.size();
+    kachakacha::v2::app::SelectionSet both;
+    both.entityIds.push_back(first);
+    both.entityIds.push_back(second);
+    window.Viewport().SetSelection(both);
+    window.RunCommand("group.create");
+
+    GroupId group;
+    if (!Explain("まとまりができる", LastGroup(window, group))) {
+        return false;
+    }
+    if (!Explain("中身が2つ入る",
+            kachakacha::v2::app::EntitiesUnderGroup(
+                window.Session().GetDocument().Snapshot(), group)
+                    .size()
+                == 2)) {
+        return false;
+    }
+
+    window.RunCommand("edit.undo");
+    const auto& afterUndo = window.Session().GetDocument().Snapshot();
+    if (!Explain((std::string("1回の取り消しでまとまりごと戻る(まとまり ")
+                     + std::to_string(afterUndo.groups.size()) + " 個)").c_str(),
+            afterUndo.groups.size() == groupsBefore)) {
+        return false;
+    }
+    // 中身だけ戻って空のまとまりが残る、が起きていないこと。
+    for (const auto& entity : afterUndo.entities) {
+        if (!Explain("線がどのまとまりにも入っていない", !entity.groupId.has_value())) {
+            return false;
+        }
+    }
+
+    window.RunCommand("edit.redo");
+    GroupId again;
+    if (!Explain("1回のやり直しでまとまりが戻る", LastGroup(window, again))) {
+        return false;
+    }
+    return Explain("中身も一緒に戻る",
+        kachakacha::v2::app::EntitiesUnderGroup(
+            window.Session().GetDocument().Snapshot(), again)
+                .size()
+            == 2);
+}
+
+//! Q1-Q5 B3。複数を一度に引きずったら、1回の取り消しで全部戻る。
+[[nodiscard]] bool CaseGroupDropIsOneUndoStep(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId first = DrawOneLine(window, 0.0);
+    const EntityId second = DrawOneLine(window, 10.0);
+    if (!Explain("線が2本引ける", !first.IsNil() && !second.IsNil())) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("group.create");
+    GroupId destination;
+    if (!Explain("行き先のまとまりができる", LastGroup(window, destination))) {
+        return false;
+    }
+    QTreeWidgetItem* onto = ItemOfGroup(window, destination);
+    QTreeWidgetItem* firstItem = window.ItemOfEntity(first);
+    QTreeWidgetItem* secondItem = window.ItemOfEntity(second);
+    if (!Explain("木に行がそろう",
+            onto != nullptr && firstItem != nullptr && secondItem != nullptr)) {
+        return false;
+    }
+    window.DropTreeItemsOnto({firstItem, secondItem}, onto);
+    if (!Explain("2つとも移る",
+            kachakacha::v2::app::EntitiesUnderGroup(
+                window.Session().GetDocument().Snapshot(), destination)
+                    .size()
+                == 2)) {
+        return false;
+    }
+
+    window.RunCommand("edit.undo");
+    if (!Explain("1回の取り消しで2つとも戻る",
+            kachakacha::v2::app::EntitiesUnderGroup(
+                window.Session().GetDocument().Snapshot(), destination)
+                .empty())) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    return Explain("1回のやり直しで2つとも戻る",
+        kachakacha::v2::app::EntitiesUnderGroup(
+            window.Session().GetDocument().Snapshot(), destination)
+                .size()
+            == 2);
+}
+
+//! Q1-Q5 B3。輪になる移動が1つ混じっていたら、ほかも移さない。
+//! 半分だけ移った状態にすると、どこまで移ったのかが分からなくなる。
+[[nodiscard]] bool CaseGroupDropRollsBackWhenOneIsRefused(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const EntityId wire = DrawOneLine(window, 0.0);
+    if (!Explain("線が引ける", !wire.IsNil())) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("group.create");
+    GroupId outer;
+    if (!Explain("親ができる", LastGroup(window, outer))) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("group.create");
+    GroupId inner;
+    if (!Explain("2つ目ができる", LastGroup(window, inner))) {
+        return false;
+    }
+    // 2つ目を1つ目の下へ引きずって入れ子にする。
+    QTreeWidgetItem* outerItem = ItemOfGroup(window, outer);
+    QTreeWidgetItem* innerFirst = ItemOfGroup(window, inner);
+    if (!Explain("2つの行がある", outerItem != nullptr && innerFirst != nullptr)) {
+        return false;
+    }
+    window.DropTreeItemsOnto({innerFirst}, outerItem);
+    bool nested = false;
+    for (const auto& group : window.Session().GetDocument().Snapshot().groups) {
+        if (group.id == inner && group.parentId.has_value() && *group.parentId == outer) {
+            nested = true;
+        }
+    }
+    if (!Explain("入れ子になっている", nested)) {
+        return false;
+    }
+
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    // 親を子の下へ落とす。輪になるので断られる。
+    // 一緒に線も引きずる。断られたら線も移らないこと。
+    QTreeWidgetItem* innerItem = ItemOfGroup(window, inner);
+    QTreeWidgetItem* wireItem = window.ItemOfEntity(wire);
+    outerItem = ItemOfGroup(window, outer);
+    (void)innerFirst;
+    if (!Explain("行がそろう",
+            innerItem != nullptr && wireItem != nullptr && outerItem != nullptr)) {
+        return false;
+    }
+    window.DropTreeItemsOnto({outerItem, wireItem}, innerItem);
+
+    if (!Explain((std::string("断られたら文書は変わらない(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    const auto* entity = window.Session().GetDocument().FindEntity(wire);
+    if (!Explain("線も移っていない", entity != nullptr && !entity->groupId.has_value())) {
+        return false;
+    }
+    for (const auto& group : window.Session().GetDocument().Snapshot().groups) {
+        if (group.id == outer) {
+            if (!Explain("親は親のまま", !group.parentId.has_value())) {
+                return false;
+            }
+        }
+    }
+    return Explain("半分だけ移った状態にならない", true);
+}
+
 std::vector<SelfTestCase> GroupCases()
 {
     return {
@@ -311,6 +484,10 @@ std::vector<SelfTestCase> GroupCases()
         {"まとまりごと隠しても中身の設定は変わらない", CaseGroupVisibility},
         {"まとまりを解いても中身は消えない", CaseGroupDissolveKeepsChildren},
         {"まとまりの階層が保存して開き直しても残る", CaseGroupSurvivesSaveAndOpen},
+        {"まとまりを作るのは1回の取り消しで戻る", CaseGroupCreateIsOneUndoStep},
+        {"一度に引きずった分は1回の取り消しで戻る", CaseGroupDropIsOneUndoStep},
+        {"1つでも断られたら引きずった分は全部戻る",
+            CaseGroupDropRollsBackWhenOneIsRefused},
     };
 }
 

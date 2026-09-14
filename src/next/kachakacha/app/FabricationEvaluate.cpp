@@ -437,6 +437,13 @@ ResolvedFoldState ResolveFoldState(
             state.bandProgress[index] = std::clamp(definition.bandProgress[index], 0.0, 1.0);
         }
     }
+    // 部材ごとに固定した半径を、いま測った形へ重ねる。
+    // ここで倍率まで出しておくと、形を作るところが半径を知らなくてよい。
+    const auto angles = fabrication::MeasureCreaseAngles(mesh);
+    state.bends = fabrication::ApplyStoredBendRadii(
+        fabrication::MeasureBandBendRadii(mesh, angles), definition.bendRadiusMm,
+        definition.bendRadiusLock);
+    state.creaseFactors = fabrication::BendRadiusCreaseFactors(mesh, angles, state.bends);
     return state;
 }
 
@@ -455,6 +462,12 @@ std::vector<std::vector<geometry::Vector3>> FoldedRailsOf(
         creaseRelative[index] = state.masterProgress > 1.0e-9
             ? std::min(1.0, state.creaseProgress[index] / state.masterProgress)
             : 1.0;
+    }
+    // 固定した半径は、測った角への倍率として折り線ごとに掛かる。
+    for (std::size_t index = 0; index < creaseRelative.size(); ++index) {
+        if (index < state.creaseFactors.size()) {
+            creaseRelative[index] *= state.creaseFactors[index];
+        }
     }
     const auto rails = fabrication::BuildBandFoldRails(*evaluation.bandMesh,
         creaseRelative, state.bandProgress, liftMm);

@@ -245,7 +245,14 @@ template<class Function>
             if (!wire.HasValue()) {
                 return Out::Failure(wire.Diagnostics());
             }
-            shell.Add(wire.Value(), Standard_False, Standard_True);
+            // 断面はすでに正しい場所に置いてある。**動かさせない。**
+            //
+            // 「合わせ直す」(WithCorrection)を頼むと、OCCT は断面を
+            // 背骨と直角になるように回してから使う。前面中央が前へ膨らむ形の
+            // 断面は平らではないので、回されると大きくずれる。
+            // HO の前頭部で 8.4mm ずれ、出来た面が指定した線を通らなかった
+            // (GEO-G008、2026-09-14)。
+            shell.Add(wire.Value(), Standard_False, Standard_False);
         }
         shell.Build();
         if (!shell.IsDone()) {

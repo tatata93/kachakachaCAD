@@ -40,9 +40,15 @@ namespace {
     viewport.SetViewCenter(kachakacha::v2::geometry::Vector3{});
     viewport.SetVisibleWidthMm(200.0);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    // 吸着を止めて引く。止めないと、先に作った立体の角へ隅が吸い付き、
+    // 矩形が作図面から少し浮く。そうなると
+    // 「輪郭が同じ平面に載っていません」(EXT-001)で断られる。
+    // ここで見たいのは演算の選び方であって、吸着の話ではない。
+    viewport.SetSnapSuppressed(true);
     viewport.ClickAt(QPointF(viewport.width() * 0.35, viewport.height() * 0.35));
     viewport.HoverAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
     viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
+    viewport.SetSnapSuppressed(false);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),

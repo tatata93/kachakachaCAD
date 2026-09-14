@@ -107,9 +107,13 @@ kachakacha::v2::fabrication::BendRadius V2MainWindow::BendRadiusNow() const
     if (bends.empty()) {
         return {};
     }
-    // 見るだけ。番号がおかしければ1枚目を見せる。変えるほうは断る。
+    // 見るだけ。番号を書いていなければ1枚目。書いてあって読めないなら空。
     const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
-    return bends[chosen.ok ? chosen.index : 0];
+    if (!chosen.ok) {
+        return SelectedPartNumbers().empty() ? bends.front()
+                                             : kachakacha::v2::fabrication::BendRadius{};
+    }
+    return bends[chosen.index];
 }
 
 //! いまの近似モデルの作り方。無ければ空。
@@ -173,7 +177,13 @@ void V2MainWindow::RefreshBendRadius()
         fabricationDock_->ShowRadius(kachakacha::v2::fabrication::BendRadius{}, percent);
         return;
     }
+    // 無い番号を書いたまま部材1の値を出すと、いまどの部材を読んでいるのかが
+    // 画面と食い違う。読めないときは、値を出さずに理由だけを出す。
     const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
+    if (!chosen.ok && !SelectedPartNumbers().empty()) {
+        fabricationDock_->ShowRadiusUnavailable(chosen.whyJa);
+        return;
+    }
     fabricationDock_->ShowRadius(bends[chosen.ok ? chosen.index : 0], percent);
 }
 

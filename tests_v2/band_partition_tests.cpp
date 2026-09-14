@@ -7,6 +7,7 @@
 #include "kachakacha/fabrication/BandPartition.h"
 
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -134,6 +135,99 @@ KACHA_V2_TEST(band_partition, 前と後を一文で言える)
     const auto refused = PreviewBandSplit(ThreeParts(), ThreeWidths(), 9, 4.0);
     Require(DescribeBandPartitionJa(refused) == refused.messageJa,
         "断ったときは理由だけを言う");
+}
+
+KACHA_V2_TEST(band_partition, 有限でない値をすべて断る)
+{
+    // Codex Q1-Q5-R3 B4。NaN との比較はどちらもなりたたないので、
+    // 大小を比べるだけだと末尾の NaN が素通りする。先に全部を見る。
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    Require(!ValidRailParameters({0.0, 0.5, nan}), "末尾が NaN");
+    Require(!ValidRailParameters({0.0, nan, 1.0}), "途中が NaN");
+    Require(!ValidRailParameters({nan, 0.5, 1.0}), "先頭が NaN");
+    Require(!ValidRailParameters({0.0, inf, 1.0}), "途中が無限大");
+    Require(!ValidRailParameters({0.0, -inf, 1.0}), "途中が負の無限大");
+
+    // 幅と、細すぎる基準も同じように見る。
+    Require(!PreviewBandSplit(ThreeParts(), {12.0, nan, 12.0}, 1, 4.0).possible,
+        "幅が NaN なら断る");
+    Require(!PreviewBandSplit(ThreeParts(), {12.0, inf, 12.0}, 1, 4.0).possible,
+        "幅が無限大なら断る");
+    Require(!PreviewBandSplit(ThreeParts(), {12.0, -1.0, 12.0}, 1, 4.0).possible,
+        "幅が負なら断る");
+    Require(!PreviewBandSplit(ThreeParts(), ThreeWidths(), 1, nan).possible,
+        "基準が NaN なら断る");
+    Require(!PreviewBandSplit(ThreeParts(), ThreeWidths(), 1, -1.0).possible,
+        "基準が負なら断る");
+    Require(!PreviewBandMerge(ThreeParts(), {12.0, nan, 12.0}, 0).possible,
+        "1つにするときも幅を見る");
+    // 断ったときは境目を出さない。出すと、それを書き込んでしまう。
+    Require(PreviewBandSplit(ThreeParts(), ThreeWidths(), 1, nan).railParameters.empty(),
+        "断ったら境目を出さない");
+}
+
+KACHA_V2_TEST(band_partition, 分けても変えていない部材の値は残る)
+{
+    // Codex Q1-Q5-R3 B3。3枚目に半径を固定してあるのに、
+    // 1枚目を分けたせいでそれが消えるのは、利用者の入力を勝手に捨てることである。
+    kachakacha::v2::fabrication::BandValueRemap before;
+    before.bandProgress = {0.3, 0.5, 0.7};
+    before.bendRadiusMm = {0.0, 0.0, 8.5};
+    before.bendRadiusLock = {0, 0, 1};
+    before.creaseProgress = {0.4, 0.6};
+    before.unfoldBaseRail = 2;
+
+    const auto after = kachakacha::v2::fabrication::RemapForSplit(before, 3, 0);
+    Require(after.bandProgress.size() == 4, "部材が4枚になる");
+    // 分けた2枚は元の値を引き継ぐ。
+    RequireNear(after.bandProgress[0], 0.3, 1.0e-12, "分けた片方");
+    RequireNear(after.bandProgress[1], 0.3, 1.0e-12, "分けたもう片方");
+    // **後ろの部材の値はずれるだけで消えない。**
+    RequireNear(after.bandProgress[2], 0.5, 1.0e-12, "2枚目だったもの");
+    RequireNear(after.bandProgress[3], 0.7, 1.0e-12, "3枚目だったもの");
+    Require(after.bendRadiusLock.size() == 4, "固定の数も合う");
+    Require(after.bendRadiusLock[3] == 1, "3枚目の固定が残る");
+    RequireNear(after.bendRadiusMm[3], 8.5, 1.0e-12, "3枚目の半径が残る");
+    // 展開の基準は、分けた場所より後ろなので1つずれる。
+    Require(after.unfoldBaseRail == 3, "基準の辺がずれる");
+}
+
+KACHA_V2_TEST(band_partition, 1つにすると後ろの1枚の値だけを捨てる)
+{
+    kachakacha::v2::fabrication::BandValueRemap before;
+    before.bandProgress = {0.3, 0.5, 0.7};
+    before.bendRadiusMm = {22.0, 9.0, 8.5};
+    before.bendRadiusLock = {1, 1, 1};
+    before.creaseProgress = {0.4, 0.6};
+    before.unfoldBaseRail = 2;
+
+    const auto after = kachakacha::v2::fabrication::RemapForMerge(before, 3, 0);
+    Require(after.bandProgress.size() == 2, "部材が2枚になる");
+    RequireNear(after.bendRadiusMm[0], 22.0, 1.0e-12, "先の1枚の値が残る");
+    RequireNear(after.bendRadiusMm[1], 8.5, 1.0e-12, "3枚目の値も残る");
+    // 捨てたものは黙っていない。
+    Require(after.droppedParts.size() == 1, "捨てた部材を1つ言う");
+    Require(after.droppedParts.front() == 2, "捨てたのは部材2");
+    // 消えるのは境目 first+1 = 1。基準は 2 なので、番号が1つ前へずれる。
+    Require(after.unfoldBaseRail == 1, "基準の辺は番号がずれるだけ");
+
+    // 消える辺そのものが基準だったときは、先頭へ戻す。無い辺は基準にできない。
+    kachakacha::v2::fabrication::BandValueRemap onTheSeam = before;
+    onTheSeam.unfoldBaseRail = 1;
+    Require(kachakacha::v2::fabrication::RemapForMerge(onTheSeam, 3, 0).unfoldBaseRail == 0,
+        "無くなる辺が基準なら先頭へ戻す");
+}
+
+KACHA_V2_TEST(band_partition, 数が合わない古い値は引き継がない)
+{
+    // 前に捨てられた並びを無理に当てると、別の部材の値が当たる。
+    kachakacha::v2::fabrication::BandValueRemap before;
+    before.bendRadiusMm = {22.0};      // 部材は3枚あるのに1つしか無い
+    before.bendRadiusLock = {1};
+    const auto after = kachakacha::v2::fabrication::RemapForSplit(before, 3, 0);
+    Require(after.bendRadiusMm.empty(), "半径は引き継がない");
+    Require(after.bendRadiusLock.empty(), "固定も引き継がない");
 }
 
 KACHA_V2_TEST_MAIN("band_partition_tests")

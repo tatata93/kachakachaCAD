@@ -583,6 +583,24 @@ void V2FabricationDock::ShowRadius(const kachakacha::v2::fabrication::BendRadius
     loading_ = false;
 }
 
+void V2FabricationDock::ShowRadiusUnavailable(const QString& whyJa)
+{
+    if (radius_ == nullptr) {
+        return;
+    }
+    loading_ = true;
+    radius_->setValue(0.0);
+    radius_->setEnabled(false);
+    radiusLocked_ = false;
+    if (radiusState_ != nullptr) {
+        radiusState_->setText(whyJa);
+    }
+    if (lockRadius_ != nullptr) {
+        lockRadius_->setText(QStringLiteral("固定"));
+    }
+    loading_ = false;
+}
+
 void V2FabricationDock::SetRadiusHandler(std::function<void(double, bool)> handler)
 {
     radiusHandler_ = std::move(handler);

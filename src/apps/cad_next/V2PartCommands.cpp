@@ -221,10 +221,24 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     // ここを作業平面の法線のままにすると、矢印は輪郭の平面へ向いているのに
     // 作る形だけ別の向きへ進む。別の平面に引いた輪郭では
     // 「この向きでは厚みが出ません」(EXT-007)で断られる。
+    if (extrudeShelfShown_ && !facePushPull_) {
+        // 棚が出ているなら、そこに出ている向きの決め方がそのまま作る形になる。
+        choice.direction = extrudeDock_->DirectionMode();
+        extrudeChoice_.direction = choice.direction;
+    }
     if (!facePushPull_) {
-        choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
-        // 反転を掛ける前の向きを渡す。反転は下の棚の値で掛かる。
-        choice.customDirection = ExtrudeBaseDirectionNow();
+        // 決め方はもう決まっている。ここでは **その決め方で出した向き** を渡す。
+        // 渡さないと、輪郭の平面の法線を core がもう一度当て直すことになり、
+        // 矢印と食い違う余地が残る。反転を掛ける前の向きを渡す
+        // (反転は下の棚の値で掛かる)。
+        const kachakacha::v2::modeling::ExtrudeDirectionMode chosen = choice.direction;
+        if (chosen == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal
+            || chosen == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal) {
+            choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
+            choice.customDirection = ExtrudeBaseDirectionNow();
+        }
+        // それ以外(詳細の窓で世界の軸や自由な向きを選んだ場合)は
+        // **人が選んだものをそのまま残す。** 上書きしない(Codex R4 B1)。
     }
     // 距離は矢印が持っている値を使う。引いた結果と作る形を必ず一致させる。
     choice.distanceMm = viewport_->ExtrudeHandleShown()

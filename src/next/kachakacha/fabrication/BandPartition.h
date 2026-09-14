@@ -54,4 +54,36 @@ struct BandPartitionPreview {
 //! 「3枚 → 4枚。部材2(12.24mm)を 6.12mm と 6.12mm に分けます」のような一文。
 [[nodiscard]] std::string DescribeBandPartitionJa(const BandPartitionPreview& preview);
 
+//! 境目を変えたときに、部材ごとに持っていた値をどう引き継ぐか(§32)。
+//!
+//! **変えていない部材の値は消さない。** 3枚目に半径を固定してあるのに、
+//! 1枚目を分けたせいでそれが消えるのは、利用者の入力を勝手に捨てることである。
+//!
+//! 引き継ぎの決まり。
+//!   - 変える場所より手前の部材は、そのまま。
+//!   - 分けた部材は、**2枚とも元の値を引き継ぐ。** 半径は物理的な丸みなので、
+//!     半分に分けても丸みは変わらない。
+//!   - 1つにした部材は、**先の1枚の値を引き継ぐ。** 2つの値は両立しないので、
+//!     どちらかを選ぶしかない。捨てるほうは前もって見せる。
+//!   - 変える場所より後ろの部材は、番号がずれるぶんだけずらす。
+//!
+//! 数が合わない並び(前に捨てられたものなど)は空のまま返す。
+struct BandValueRemap {
+    std::vector<double> bandProgress;
+    std::vector<double> creaseProgress;
+    std::vector<double> bendRadiusMm;
+    std::vector<int> bendRadiusLock;
+    int unfoldBaseRail = 0;
+    //! 引き継げずに捨てた部材の番号(1 起点)。前もって見せるために返す。
+    std::vector<std::size_t> droppedParts;
+};
+
+//! 分けたとき(部材 `which` が2枚になる)の引き継ぎ。
+[[nodiscard]] BandValueRemap RemapForSplit(const BandValueRemap& before,
+    std::size_t partsBefore, std::size_t which);
+
+//! 1つにしたとき(部材 `first` と `first + 1` が1枚になる)の引き継ぎ。
+[[nodiscard]] BandValueRemap RemapForMerge(const BandValueRemap& before,
+    std::size_t partsBefore, std::size_t first);
+
 } // namespace kachakacha::v2::fabrication

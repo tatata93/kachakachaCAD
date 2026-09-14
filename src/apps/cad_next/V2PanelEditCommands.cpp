@@ -15,7 +15,9 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/document/Document.h"
 #include "kachakacha/document/Commands.h"
+#include "kachakacha/document/Document.h"
 #include "kachakacha/fabrication/BandPartition.h"
 
 #include <QString>
@@ -63,8 +65,13 @@ bool V2MainWindow::CurrentBandPartition(std::vector<double>& railParameters,
 }
 
 //! 分け方を文書へ書く。以後は自動で切り直さない(人が決めたほうを残す)。
+//!
+//! 部材ごとに持っていた値(組立率・折り線の進み・半径と固定・展開の基準)は
+//! **引き継ぐ。** 変えていない部材の値まで消すのは、利用者の入力を勝手に
+//! 捨てることである(Codex Q1-Q5-R3 B3)。引き継ぎの決まりは core が持つ。
 bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
-    const QString& what, const std::string& messageJa)
+    const QString& what, const std::string& messageJa,
+    const kachakacha::v2::fabrication::BandValueRemap& carried)
 {
     using kachakacha::v2::document::UpdateFeatureDefinitionCommand;
 
@@ -82,13 +89,11 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
     auto definition = *current;
     definition.automaticBoundaries = false;
     definition.manualBoundaries = inner;
-    // 帯の数が変わるので、帯ごとに持っていた値は捨てる。
-    // 古い並びを新しい帯へ当てると、別の部材の値が当たってしまう。
-    definition.bandProgress.clear();
-    definition.creaseProgress.clear();
-    definition.bendRadiusMm.clear();
-    definition.bendRadiusLock.clear();
-    definition.unfoldBaseRail = 0;
+    definition.bandProgress = carried.bandProgress;
+    definition.creaseProgress = carried.creaseProgress;
+    definition.bendRadiusMm = carried.bendRadiusMm;
+    definition.bendRadiusLock = carried.bendRadiusLock;
+    definition.unfoldBaseRail = carried.unfoldBaseRail;
     const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
         feature->id, definition, feature->inputEntityIds, what.toStdString()));
     if (!changed.committed) {
@@ -101,11 +106,7 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
     RebuildKernelShapes();
     RefreshFabricationView();
     RefreshBendRadius();
-    SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。"
-                             "以後は自動で切り直しません。")
-            .arg(what)
-            .arg(QString::fromStdString(messageJa))
-            .arg(static_cast<int>(FabricationPanelCount())));
+    (void)messageJa;
     return true;
 }
 
@@ -114,7 +115,8 @@ bool V2MainWindow::ApplyBandBoundaries(const std::vector<double>& inner,
 //! 別々に作ると「分けられます」と言った相手と実際に変える境目が食い違い、
 //! 見せた前後の姿と出来上がりがずれる(Codex Q1-Q5-R2 B2)。
 void V2MainWindow::ApplyBandPartition(
-    const kachakacha::v2::fabrication::BandPartitionPreview& preview, const QString& what)
+    const kachakacha::v2::fabrication::BandPartitionPreview& preview, const QString& what,
+    const kachakacha::v2::fabrication::BandValueRemap& carried)
 {
     const QString text =
         QString::fromStdString(kachakacha::v2::fabrication::DescribeBandPartitionJa(preview));
@@ -127,19 +129,66 @@ void V2MainWindow::ApplyBandPartition(
     for (std::size_t index = 1; index + 1 < preview.railParameters.size(); ++index) {
         inner.push_back(preview.railParameters[index]);
     }
-    if (!ApplyBandBoundaries(inner, what, preview.messageJa)) {
-        return;
+    // まとめて1つの操作にする。**見せた形と出来た形が違ったら、書かずに戻す。**
+    // 警告だけ出して違う形を残すと、利用者のモデルが黙って変わる
+    // (Codex Q1-Q5-R3 B2)。
+    bool ok = false;
+    std::size_t actual = 0;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(
+            session_->GetDocument(), what.toStdString());
+        if (ApplyBandBoundaries(inner, what, preview.messageJa, carried)) {
+            actual = FabricationPanelCount();
+            ok = actual == preview.partsAfter;
+        }
+        if (ok) {
+            ok = transaction.Commit();
+        }
+        // Commit していなければ、ここを抜けるときに書く前へ戻る。
     }
-    // 言ったとおりの枚数になったか、その場で突き合わせる。
-    // 言うだけ言って違う形になっていた、を通さない。
-    const std::size_t actual = FabricationPanelCount();
-    if (actual != preview.partsAfter) {
-        SetStatus(QStringLiteral("%1: 見せた形と出来た形が違います"
-                                 "(%2 枚と言って %3 枚になりました)。")
+    AdoptCurrentDocument();
+    RebuildKernelShapes();
+    RefreshFabricationView();
+    RefreshBendRadius();
+    if (!ok) {
+        SetStatus(QStringLiteral("%1: 見せた形と出来た形が違ったので、"
+                                 "何も変えずに戻しました(%2 枚と言って %3 枚)。")
                 .arg(what)
                 .arg(static_cast<int>(preview.partsAfter))
                 .arg(static_cast<int>(actual)));
+        return;
     }
+    QString dropped;
+    for (const std::size_t part : carried.droppedParts) {
+        if (!dropped.isEmpty()) {
+            dropped += QStringLiteral("、");
+        }
+        dropped += QStringLiteral("部材%1").arg(static_cast<int>(part));
+    }
+    SetStatus(QStringLiteral("%1: %2 いまは %3 枚です。以後は自動で切り直しません。%4")
+            .arg(what)
+            .arg(QString::fromStdString(preview.messageJa))
+            .arg(static_cast<int>(actual))
+            .arg(dropped.isEmpty()
+                    ? QString()
+                    : QStringLiteral("%1 に入れてあった半径は引き継げないので捨てました。")
+                          .arg(dropped)));
+}
+
+//! いま部材ごとに持っている値。引き継ぎの元になる。
+kachakacha::v2::fabrication::BandValueRemap V2MainWindow::BandValuesNow() const
+{
+    kachakacha::v2::fabrication::BandValueRemap values;
+    const auto* definition = CurrentFabricationDefinition();
+    if (definition == nullptr) {
+        return values;
+    }
+    values.bandProgress = definition->bandProgress;
+    values.creaseProgress = definition->creaseProgress;
+    values.bendRadiusMm = definition->bendRadiusMm;
+    values.bendRadiusLock = definition->bendRadiusLock;
+    values.unfoldBaseRail = definition->unfoldBaseRail;
+    return values;
 }
 
 //! 「部材を1つにする」。棚の「曲げる部材」で挙げた番号と、その次を1枚にする。
@@ -160,9 +209,12 @@ void V2MainWindow::MergeFabricationParts()
             "作ってください。"));
         return;
     }
+    const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
     ApplyBandPartition(
         kachakacha::v2::fabrication::PreviewBandMerge(rails, widths, numbers.front()),
-        QStringLiteral("部材を1つにする"));
+        QStringLiteral("部材を1つにする"),
+        kachakacha::v2::fabrication::RemapForMerge(BandValuesNow(), parts,
+            numbers.front()));
 }
 
 //! 「部材を分ける」。棚の「曲げる部材」で挙げた1つを、その真ん中で2つに分ける。
@@ -185,9 +237,12 @@ void V2MainWindow::SplitFabricationPart()
     // 細くなりすぎる分け方は core が断る。基準は近似の作り方が持つ最小幅。
     const auto* definition = CurrentFabricationDefinition();
     const double minimumMm = definition == nullptr ? 4.0 : definition->minimumPartWidthMm;
+    const std::size_t parts = rails.empty() ? 0 : rails.size() - 1;
     ApplyBandPartition(kachakacha::v2::fabrication::PreviewBandSplit(rails, widths,
                            numbers.front(), minimumMm),
-        QStringLiteral("部材を分ける"));
+        QStringLiteral("部材を分ける"),
+        kachakacha::v2::fabrication::RemapForSplit(BandValuesNow(), parts,
+            numbers.front()));
 }
 
 //! 棚の「曲げる部材」に書いた番号。0 起点へ直して返す。

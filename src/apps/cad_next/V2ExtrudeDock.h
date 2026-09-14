@@ -44,6 +44,10 @@ public:
     //! 人が距離を打ったのと同じ扱いにする(矢印と下見も追う)。試験から呼ぶ。
     void TypeDistanceMm(double value);
     [[nodiscard]] double DistanceMm() const;
+    //! 棚で選んでいる向きの決め方。0 = 面(輪郭)に垂直、1 = 作業平面に垂直。
+    [[nodiscard]] kachakacha::v2::modeling::ExtrudeDirectionMode DirectionMode() const;
+    //! 向きの欄を選び直す。棚を書き直すときと、試験から使う。
+    void ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMode mode);
     //! いま欄で選んでいる操作。
     [[nodiscard]] kachakacha::v2::modeling::ExtrudeBooleanMode BooleanMode() const;
     //! 両側へ押すか。

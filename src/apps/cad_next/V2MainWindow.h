@@ -900,12 +900,16 @@ public:
     //! 見せた候補をそのまま文書へ書く。見せた形と出来た形を食い違わせない。
     void ApplyBandPartition(
         const kachakacha::v2::fabrication::BandPartitionPreview& preview,
-        const QString& what);
+        const QString& what,
+        const kachakacha::v2::fabrication::BandValueRemap& carried);
+    //! いま部材ごとに持っている値。引き継ぎの元になる。
+    [[nodiscard]] kachakacha::v2::fabrication::BandValueRemap BandValuesNow() const;
     //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
     void SetUnfoldBaseRail();
     //! 帯の境目を文書へ書き、以後は自動で切り直さない(§32)。
     bool ApplyBandBoundaries(const std::vector<double>& inner, const QString& what,
-        const std::string& messageJa);
+        const std::string& messageJa,
+        const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま決まっている、展開の基準にする辺。試験から見る。
     [[nodiscard]] int UnfoldBaseRailNow() const;
     //! いまの製作モデルの部材の数。

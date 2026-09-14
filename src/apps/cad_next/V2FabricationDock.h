@@ -63,6 +63,11 @@ public:
     [[nodiscard]] bool RadiusLocked() const;
     //! 半径の欄を映す。近似が測り直したときに呼ぶ。
     void ShowRadius(const kachakacha::v2::fabrication::BendRadius& bend, double percent);
+    //! どの部材も読めないときに、理由だけを出す。値は出さない。
+    //!
+    //! 無い番号を書いたまま部材1の値を出すと、いまどの部材を読んでいるのかが
+    //! 画面と食い違う(Codex Q1-Q5-R3 の UX 指摘)。
+    void ShowRadiusUnavailable(const QString& whyJa);
     //! 「固定/自動」を押したときに呼ぶもの。押した時点の半径と曲げ具合を渡す。
     void SetRadiusHandler(std::function<void(double, bool)> handler);
     void PressLockRadius();

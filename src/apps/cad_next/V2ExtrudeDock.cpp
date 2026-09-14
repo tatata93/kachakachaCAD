@@ -218,7 +218,9 @@ void V2ExtrudeDock::ApplyRows()
     form_->setRowVisible(boolean_, hasTarget);
     const bool ready = plan_.readyToPreview;
     form_->setRowVisible(distance_, ready);
-    form_->setRowVisible(direction_, ready);
+    // 面をつまんで押しているときは、向きは押す面が決める。
+    // 選べない欄を出すと「選んだのに効かない」ことになるので、そのときは隠す。
+    form_->setRowVisible(direction_, ready && !plan_.profileIsFace);
     form_->setRowVisible(reverse_, ready);
     form_->setRowVisible(extent_, ready);
     confirm_->setEnabled(ready);
@@ -250,6 +252,27 @@ void V2ExtrudeDock::TypeDistanceMm(double value)
     if (distanceHandler_) {
         distanceHandler_(value);
     }
+}
+
+//! 棚で選んでいる向きの決め方。
+//!
+//! 欄に出ているのは「面に垂直」と「作業平面に垂直」の2つ。
+//! 前者は選んだ輪郭(または面)の平面の法線、後者はいま作図している面の法線。
+//! **ここを読まないと、欄は見た目だけで何も変わらない**(Codex R4 B1)。
+kachakacha::v2::modeling::ExtrudeDirectionMode V2ExtrudeDock::DirectionMode() const
+{
+    return direction_ != nullptr && direction_->currentIndex() == 1
+        ? kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal
+        : kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+}
+
+void V2ExtrudeDock::ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMode mode)
+{
+    if (direction_ == nullptr) {
+        return;
+    }
+    direction_->setCurrentIndex(
+        mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal ? 1 : 0);
 }
 
 double V2ExtrudeDock::DistanceMm() const

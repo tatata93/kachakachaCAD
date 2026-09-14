@@ -115,9 +115,21 @@ Vector3 V2MainWindow::ExtrudeDirectionNow() const
 }
 
 //! 反転を掛ける前の向き。反転は棚が持っているので、二重に掛けないために分ける。
+//!
+//! **向きの決め方は1か所(`extrudeChoice_.direction`)が持つ。**
+//! 棚も、詳細の窓も、矢印も、下見も、確定も、保存する作り方も、全部ここを通る。
+//! 棚に欄があるのに読んでいなかったので、選んでも何も変わらなかった
+//! (Codex P1-EXTRUDE-R4 B1)。
 Vector3 V2MainWindow::ExtrudeBaseDirectionNow() const
 {
     Vector3 direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
+    // 面の押し引きは押す面が向きを決める。棚の欄は効かない(欄も隠してある)。
+    if (!facePushPull_
+        && extrudeChoice_.direction
+            != kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal) {
+        // 「作業平面に垂直」を選んだ。作図している面の向きで押す。
+        return direction;
+    }
     if (!facePushPull_) {
         // 輪郭が自分の平面を持っているなら、そちらの法線で押す。
         //
@@ -272,6 +284,10 @@ void V2MainWindow::RefreshExtrudeFromDock()
         ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
         : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
     extrudeChoice_.booleanMode = extrudeDock_->BooleanMode();
+    // 向きの欄も読む。読まないと、選んでも何も変わらない。
+    if (!facePushPull_) {
+        extrudeChoice_.direction = extrudeDock_->DirectionMode();
+    }
     // 向きが変わったら矢印も向き直す。数字はそのまま。
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();

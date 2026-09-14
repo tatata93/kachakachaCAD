@@ -20,6 +20,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -232,6 +233,60 @@ namespace {
 }
 
 
+//! Codex P1-EXTRUDE-R4 B1。棚の「方向」が、矢印・下見・確定・保存まで通ること。
+//!
+//! 欄に出ているだけで何も変わらないなら、それは嘘の欄である。
+[[nodiscard]] bool CaseShelfDirectionReachesTheShape(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    // 上面に矩形を引く。輪郭の平面の法線も、作業平面の法線も Z になる。
+    if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 下見と棚
+    if (!Explain("矢印が出る", viewport.ExtrudeHandleShown())) {
+        return false;
+    }
+    // 「面に垂直」と「作業平面に垂直」を行き来しても、矢印が向きを失わないこと。
+    for (const auto mode :
+        {kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal,
+            kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal}) {
+        window.ExtrudeDock().ChooseDirection(mode);
+        window.RefreshExtrudeFromDock();
+        if (!Explain("棚の向きが窓へ伝わる",
+                window.ExtrudeDock().DirectionMode() == mode)) {
+            return false;
+        }
+        const auto direction = window.ExtrudeDirectionNow();
+        if (!Explain((std::string("矢印の向きが決まる(")
+                         + std::to_string(direction.z) + ")").c_str(),
+                std::abs(direction.z) > 0.9)) {
+            return false;
+        }
+    }
+
+    window.ExtrudeDock().TypeDistanceMm(4.0);
+    window.RunCommand("part.extrude");   // 確定
+    if (!Explain((std::string("立体ができる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountParts(window) == 1)) {
+        return false;
+    }
+    // 保存された作り方の向きが、矢印と同じであること。
+    bool matched = false;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::ExtrudeDefinition>(&feature.definition);
+        if (definition == nullptr) {
+            continue;
+        }
+        const auto& saved = definition->direction;
+        matched = std::abs(std::abs(saved.z) - 1.0) < 1.0e-6;
+    }
+    return Explain("保存された向きも矢印と同じ", matched);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudePromiseCases()
@@ -241,6 +296,7 @@ std::vector<SelfTestCase> ExtrudePromiseCases()
             CaseFacePushPullCancelLeavesDocumentUntouched},
         {"押し出しは1回の取り消しで完全に戻る", CaseExtrudeIsOneUndoStep},
         {"棚で選んだ演算のまま作られる", CaseChosenBooleanSurvivesConfirm},
+        {"棚で選んだ向きが矢印と確定と保存まで通る", CaseShelfDirectionReachesTheShape},
     };
 }
 

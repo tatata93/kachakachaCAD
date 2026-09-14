@@ -43,20 +43,31 @@ using kachakacha::v2::domain::Feature;
 using kachakacha::v2::domain::Visibility;
 
 //! 閉じた矩形を1つ引いて選ぶ。押し出しの相手になる。
-[[nodiscard]] bool DrawClosedRectangle(V2MainWindow& window)
+//! `left` / `top` は画面の割合。離れた場所へ引きたいときに変える。
+[[nodiscard]] bool DrawClosedRectangleAt(V2MainWindow& window, double left, double top,
+    double right, double bottom)
 {
     auto& viewport = window.Viewport();
     viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetViewCenter(kachakacha::v2::geometry::Vector3{});
     viewport.SetVisibleWidthMm(200.0);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
-    viewport.ClickAt(QPointF(viewport.width() * 0.35, viewport.height() * 0.35));
-    viewport.HoverAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
-    viewport.ClickAt(QPointF(viewport.width() * 0.65, viewport.height() * 0.65));
+    // 吸着を止める。止めないと先に作った立体の角へ隅が吸い付き、
+    // 矩形が作図面から浮いて「輪郭が同じ平面に載っていません」になる。
+    viewport.SetSnapSuppressed(true);
+    viewport.ClickAt(QPointF(viewport.width() * left, viewport.height() * top));
+    viewport.HoverAt(QPointF(viewport.width() * right, viewport.height() * bottom));
+    viewport.ClickAt(QPointF(viewport.width() * right, viewport.height() * bottom));
+    viewport.SetSnapSuppressed(false);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
     return !viewport.Selection().entityIds.empty();
+}
+
+[[nodiscard]] bool DrawClosedRectangle(V2MainWindow& window)
+{
+    return DrawClosedRectangleAt(window, 0.35, 0.35, 0.65, 0.65);
 }
 
 [[nodiscard]] EntityId LastOfKind(V2MainWindow& window, EntityKind kind)
@@ -350,14 +361,27 @@ using kachakacha::v2::domain::Visibility;
     const int shapesBefore = window.KernelShapeCount();
     const int visibleBefore = VisibleParts(window);
 
-    // 同じ場所へ、同じ大きさで、もっと短く足す。すっぽり中へ入るので
-    // 体積が変わらず、EXT-004「重なっていません」で断られる。
-    if (!Explain("2つ目の矩形を引ける", DrawClosedRectangle(window))) {
+    // 離れた場所へ矩形を引いて、そこから「足す」を頼む。
+    // 触れていない2つを足すと離ればなれになるので、
+    // EXT-005「足した結果が離ればなれになります」で断られる。
+    // 断り方そのものは正しい。見るのはそのあとである。
+    const std::vector<EntityId> wireIdsBefore = AllOfKind(window, EntityKind::Wire);
+    if (!Explain("離れた場所へ矩形を引ける",
+            DrawClosedRectangleAt(window, 0.05, 0.05, 0.20, 0.20))) {
         return false;
     }
     auto& viewport = window.Viewport();
-    auto both = kachakacha::v2::app::SelectAllOfKind(
-        window.Session().GetDocument().Snapshot(), EntityKind::Wire);
+    EntityId apart;
+    for (const auto& id : AllOfKind(window, EntityKind::Wire)) {
+        if (!Contains(wireIdsBefore, id)) {
+            apart = id;
+        }
+    }
+    if (!Explain("離れた矩形を選べる", !apart.IsNil())) {
+        return false;
+    }
+    kachakacha::v2::app::SelectionSet both;
+    both.entityIds.push_back(apart);
     both.entityIds.push_back(part);
     kachakacha::v2::app::SelectionRef solid;
     solid.entityId = part;
@@ -368,7 +392,7 @@ using kachakacha::v2::domain::Visibility;
     window.RunCommand("part.extrude");   // 下見と棚
     window.ExtrudeDock().ChooseBoolean(
         kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart);
-    window.ExtrudeDock().TypeDistanceMm(1.0);
+    window.ExtrudeDock().TypeDistanceMm(5.0);
     window.RunCommand("part.extrude");   // 確定。ここで断られる。
 
     if (!Explain((std::string("断られる(帯は ") + window.StatusText().toStdString()

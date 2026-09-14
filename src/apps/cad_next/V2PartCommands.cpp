@@ -217,6 +217,15 @@ std::optional<kachakacha::v2::app::ExtrudeChoice> V2MainWindow::PrepareExtrudeCh
     // いまの選択をどう読んだかを、決める前に見せる。
     SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
     kachakacha::v2::app::ExtrudeChoice choice = extrudeChoice_;
+    // 向きも矢印が持っている値を使う。矢印・下見・確定を1か所から取る。
+    // ここを作業平面の法線のままにすると、矢印は輪郭の平面へ向いているのに
+    // 作る形だけ別の向きへ進む。別の平面に引いた輪郭では
+    // 「この向きでは厚みが出ません」(EXT-007)で断られる。
+    if (!facePushPull_) {
+        choice.direction = kachakacha::v2::modeling::ExtrudeDirectionMode::CustomXYZ;
+        // 反転を掛ける前の向きを渡す。反転は下の棚の値で掛かる。
+        choice.customDirection = ExtrudeBaseDirectionNow();
+    }
     // 距離は矢印が持っている値を使う。引いた結果と作る形を必ず一致させる。
     choice.distanceMm = viewport_->ExtrudeHandleShown()
         ? viewport_->ExtrudeHandleDistanceMm()

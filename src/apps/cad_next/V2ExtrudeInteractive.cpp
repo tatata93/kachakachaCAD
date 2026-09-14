@@ -107,6 +107,16 @@ void V2MainWindow::BeginExtrudePreview()
 //! 矢印と下見が別の方へ進んでいた(Codex P1-EXTRUDE-R1 B1)。
 Vector3 V2MainWindow::ExtrudeDirectionNow() const
 {
+    Vector3 direction = ExtrudeBaseDirectionNow();
+    if (extrudeChoice_.reversed) {
+        direction = direction * -1.0;
+    }
+    return direction;
+}
+
+//! 反転を掛ける前の向き。反転は棚が持っているので、二重に掛けないために分ける。
+Vector3 V2MainWindow::ExtrudeBaseDirectionNow() const
+{
     Vector3 direction = facePushPull_ ? faceNormal_ : viewport_->WorkPlane().normal;
     if (!facePushPull_) {
         // 輪郭が自分の平面を持っているなら、そちらの法線で押す。
@@ -128,9 +138,6 @@ Vector3 V2MainWindow::ExtrudeDirectionNow() const
             }
             direction = fitted;
         }
-    }
-    if (extrudeChoice_.reversed) {
-        direction = direction * -1.0;
     }
     return direction;
 }

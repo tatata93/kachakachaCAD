@@ -914,6 +914,8 @@ public:
     [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;
     //! 押し出す向き。矢印・下見・確定形状はすべてここから取る。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionNow() const;
+    //! 反転を掛ける前の押し出しの向き。反転は棚が持つので二重に掛けない。
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeBaseDirectionNow() const;
     //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。
     void RefreshBendRadius();
     //! いまの組立率(0〜100)。近似モデルが無ければ 100。

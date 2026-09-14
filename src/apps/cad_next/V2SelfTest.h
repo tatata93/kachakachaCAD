@@ -61,6 +61,9 @@ struct SelfTestCase {
 //! 画面の読みやすさ(作図面が見えるか・選択が両向きに伝わるか・カーソル・ホバー)。
 [[nodiscard]] std::vector<SelfTestCase> ScreenCases();
 
+//! 整理用のまとまりの実用試験(GR-01〜10)。
+[[nodiscard]] std::vector<SelfTestCase> GroupCases();
+
 //! 「選択に正対」の実用試験(VF-01〜08)。
 [[nodiscard]] std::vector<SelfTestCase> FacingCases();
 

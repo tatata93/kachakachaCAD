@@ -71,8 +71,10 @@ namespace {
     cases.insert(cases.end(), edit.begin(), edit.end());
     const std::vector<SelfTestCase> screen = ScreenCases();
     const std::vector<SelfTestCase> facing = FacingCases();
+    const std::vector<SelfTestCase> groups = GroupCases();
     cases.insert(cases.end(), screen.begin(), screen.end());
     cases.insert(cases.end(), facing.begin(), facing.end());
+    cases.insert(cases.end(), groups.begin(), groups.end());
     const std::vector<SelfTestCase> semantics = SemanticStateCases();
     cases.insert(cases.end(), semantics.begin(), semantics.end());
     const std::vector<SelfTestCase> pointer = PointerCases();

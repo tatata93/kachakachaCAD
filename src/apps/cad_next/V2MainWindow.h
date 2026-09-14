@@ -856,6 +856,9 @@ public:
     //! 引きずって落とした。落ちた先のまとまりへ入れる。試験からも呼ぶ。
     void DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
         QTreeWidgetItem* onto);
+    //! その物の行。無ければ空。試験が引きずる相手を引くのに使う。
+    [[nodiscard]] QTreeWidgetItem* ItemOfEntity(
+        const kachakacha::v2::base::EntityId& id) const;
     //! 左の一覧。試験が行を引くために読む。
     [[nodiscard]] class V2EntityTree* EntityTree() const { return entityTree_; }
     //! まとまりの行。試験が引きずる相手を引くために読む。

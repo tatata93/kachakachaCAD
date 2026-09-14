@@ -279,3 +279,13 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
             ? QStringLiteral("まとまりへ移しました。中身と参照は変えていません。")
             : QStringLiteral("まとまりの外へ出しました。中身と参照は変えていません。"));
 }
+
+QTreeWidgetItem* V2MainWindow::ItemOfEntity(const kachakacha::v2::base::EntityId& id) const
+{
+    for (const auto& entry : entityItems_) {
+        if (entry.second == id) {
+            return entry.first;
+        }
+    }
+    return nullptr;
+}

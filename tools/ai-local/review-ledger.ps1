@@ -60,12 +60,41 @@ function Get-ReviewLedgerDamage {
     param([Parameter(Mandatory=$true)][string]$RepoRoot)
     $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
     if (-not (Test-Path -LiteralPath $paths.Ledger)) { return 0 }
+    $lines = @(Read-LedgerLines -Path $paths.Ledger)
     $damaged = 0
-    foreach ($line in [System.IO.File]::ReadAllLines($paths.Ledger)) {
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
         if (-not $line -or $line.Trim().Length -eq 0) { continue }
+        # The very last line may be half written at this instant. That is a write
+        # in progress, not damage, and calling it damage would refuse good work.
+        if ($index -eq ($lines.Count - 1)) { continue }
         try { $null = $line | ConvertFrom-Json } catch { $damaged++ }
     }
     return $damaged
+}
+
+# Reading while someone is appending is normal, not damage. The writer holds the
+# file with FileShare.Read, so a read can still collide with the moment it opens;
+# a sharing violation is retried rather than reported as a broken ledger, and an
+# unfinished last line is simply not there yet.
+function Read-LedgerLines {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        try {
+            $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open,
+                                             [System.IO.FileAccess]::Read,
+                                             [System.IO.FileShare]::ReadWrite)
+            try {
+                $reader = New-Object System.IO.StreamReader($stream, (New-Object System.Text.UTF8Encoding($false)))
+                $text = $reader.ReadToEnd()
+            } finally { $stream.Dispose() }
+            return @($text -split "`r?`n")
+        } catch {
+            Start-Sleep -Milliseconds 50
+        }
+    }
+    throw ("the ledger at " + $Path + " could not be read")
 }
 
 function Get-ReviewLedgerEntries {
@@ -78,7 +107,7 @@ function Get-ReviewLedgerEntries {
     $paths = Get-AiRuntimePaths -RepoRoot $RepoRoot
     if (-not (Test-Path -LiteralPath $paths.Ledger)) { return @() }
     $entries = @()
-    foreach ($line in [System.IO.File]::ReadAllLines($paths.Ledger)) {
+    foreach ($line in (Read-LedgerLines -Path $paths.Ledger)) {
         if (-not $line -or $line.Trim().Length -eq 0) { continue }
         $obj = $null
         try { $obj = $line | ConvertFrom-Json } catch { continue }

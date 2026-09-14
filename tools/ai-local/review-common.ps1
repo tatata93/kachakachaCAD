@@ -203,7 +203,10 @@ function Test-SingletonLockHeld {
 }
 
 function New-SingletonLock {
-    param([Parameter(Mandatory=$true)][string]$Path)
+    param(
+        [Parameter(Mandatory=$true)][string]$Path,
+        [string]$RepoRootForOwner = ''
+    )
     $dir = Split-Path -Parent $Path
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
@@ -212,39 +215,51 @@ function New-SingletonLock {
         $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::OpenOrCreate,
                                          [System.IO.FileAccess]::ReadWrite,
                                          [System.IO.FileShare]::None)
-        # Who holds this, from where. stop-stale-dispatcher.ps1 reads it so that it
-        # can retire THIS runtime's dispatcher and leave other checkouts alone.
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes(
-            ('pid={0} started={1} machine={2}' -f $PID, (Get-UtcStamp), $env:COMPUTERNAME))
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes(('pid={0} started={1}' -f $PID, (Get-UtcStamp)))
         $stream.SetLength(0)
         $stream.Write($bytes, 0, $bytes.Length)
         $stream.Flush()
+        # Who holds this, in a file anyone can read. The lock itself cannot be
+        # opened by anyone else, so it cannot answer that question.
+        try {
+            Write-JsonAtomic -Path (Get-SingletonLockOwnerPath -Path $Path) -Value ([pscustomobject]@{
+                schema_version = 1
+                kind = 'lock_owner'
+                pid = $PID
+                started = Get-UtcStamp
+                machine = $env:COMPUTERNAME
+                repo_root = $RepoRootForOwner
+            }) | Out-Null
+        } catch { }
         return $stream
     } catch {
         return $null
     }
 }
 
+# The lock file itself is held with FileShare.None, so nobody else can open it at
+# all - not even to read who holds it. The owner therefore lives in a separate
+# file beside it. Reading the lock to learn its owner always failed, which made
+# stop-stale-dispatcher.ps1 believe there was never an owner and retire nothing.
+function Get-SingletonLockOwnerPath {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    return ($Path + '.owner.json')
+}
+
 function Get-SingletonLockOwner {
     param([Parameter(Mandatory=$true)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    $text = ''
-    try {
-        # Shared read: looking must never disturb the holder.
-        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open,
-                                         [System.IO.FileAccess]::Read,
-                                         [System.IO.FileShare]::ReadWrite)
-        try {
-            $reader = New-Object System.IO.StreamReader($stream)
-            $text = $reader.ReadToEnd()
-        } finally { $stream.Dispose() }
-    } catch { return $null }
-    if (-not $text) { return $null }
-    $owner = [pscustomobject]@{ pid = 0; started = ''; machine = '' }
-    if ($text -match 'pid=(?<v>\d+)')          { $owner.pid = [int]$Matches['v'] }
-    if ($text -match 'started=(?<v>\S+)')      { $owner.started = $Matches['v'] }
-    if ($text -match 'machine=(?<v>\S+)')      { $owner.machine = $Matches['v'] }
-    return $owner
+    $ownerPath = Get-SingletonLockOwnerPath -Path $Path
+    if (-not (Test-Path -LiteralPath $ownerPath)) { return $null }
+    $owner = Read-JsonFile -Path $ownerPath
+    if ($null -eq $owner) { return $null }
+    $result = [pscustomobject]@{ pid = 0; started = ''; machine = ''; repo_root = '' }
+    foreach ($p in $owner.PSObject.Properties) {
+        if ($p.Name -eq 'pid') { $result.pid = [int]$p.Value }
+        if ($p.Name -eq 'started') { $result.started = [string]$p.Value }
+        if ($p.Name -eq 'machine') { $result.machine = [string]$p.Value }
+        if ($p.Name -eq 'repo_root') { $result.repo_root = [string]$p.Value }
+    }
+    return $result
 }
 
 function Test-ProcessAlive {
@@ -286,9 +301,21 @@ function ConvertTo-CommandLineArgument {
 }
 
 function ConvertTo-CommandLine {
-    param([Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Arguments)
+    param(
+        [Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Arguments,
+        # For cmd.exe every argument is quoted whether it needs it or not. Inside
+        # double quotes cmd stops treating & | < > ^ as operators, which is the
+        # only reason a path with an ampersand in it does not become two commands.
+        [switch]$AlwaysQuote
+    )
     $parts = @()
-    foreach ($a in $Arguments) { $parts += (ConvertTo-CommandLineArgument -Value $a) }
+    foreach ($a in $Arguments) {
+        if ($AlwaysQuote) {
+            $parts += ('"' + ($a -replace '"', '\"') + '"')
+        } else {
+            $parts += (ConvertTo-CommandLineArgument -Value $a)
+        }
+    }
     return ($parts -join ' ')
 }
 
@@ -326,7 +353,10 @@ function Invoke-Process {
         $comspec = $env:ComSpec
         if (-not $comspec) { $comspec = 'cmd.exe' }
         $psi.FileName = $comspec
-        $psi.Arguments = '/c ' + (ConvertTo-CommandLine -Arguments (@($FilePath) + $Arguments))
+        # /d skips AutoRun, /s makes cmd take everything between the outer quotes
+        # as the command line verbatim instead of trying to parse it again.
+        $inner = ConvertTo-CommandLine -Arguments (@($FilePath) + $Arguments) -AlwaysQuote
+        $psi.Arguments = '/d /s /c "' + $inner + '"'
     } else {
         $psi.FileName = $FilePath
         $psi.Arguments = ConvertTo-CommandLine -Arguments $Arguments
@@ -351,28 +381,43 @@ function Invoke-Process {
     # Read both pipes before waiting, otherwise a full pipe buffer deadlocks.
     $outTask = $proc.StandardOutput.ReadToEndAsync()
     $errTask = $proc.StandardError.ReadToEndAsync()
+    # Zero is not "wait for ever". Every call gets a limit, because the one place
+    # that waited without one is the place that hung for an hour.
+    $limit = $TimeoutSeconds
+    if ($limit -le 0) { $limit = 300 }
     $timedOut = $false
-    if ($TimeoutSeconds -gt 0) {
-        if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
-            $timedOut = $true
-            # Kill the whole tree. Killing only the parent leaves its children
-            # holding the output pipe, and then the read below never finishes:
-            # the timeout fires and the caller hangs anyway. That happened.
-            Stop-ProcessTree -ProcessId $proc.Id
-        }
+    if (-not $proc.WaitForExit($limit * 1000)) {
+        $timedOut = $true
+        # Kill the whole tree. Killing only the parent leaves its children holding
+        # the output pipe, and then the read below never finishes: the limit fires
+        # and the caller hangs anyway. That happened.
+        Stop-ProcessTree -ProcessId $proc.Id
     }
-    # Bounded from here on. Anything still holding a pipe must not be able to keep
-    # this function waiting for ever.
-    $proc.WaitForExit(30000) | Out-Null
+    # Confirm it really ended before asking anything about it. ExitCode on a
+    # process that is still running throws, and that exception would surface as a
+    # crash rather than as a timeout.
+    $ended = $proc.WaitForExit(30000)
+    if (-not $ended) {
+        Stop-ProcessTree -ProcessId $proc.Id
+        $ended = $proc.WaitForExit(15000)
+        $timedOut = $true
+    }
     $out = ''
     $err = ''
     if ($outTask.Wait(20000)) { $out = $outTask.Result }
     if ($errTask.Wait(20000)) { $err = $errTask.Result }
+    $code = 1
+    if ($ended) {
+        try { $code = $proc.ExitCode } catch { $code = 1 }
+    } else {
+        $timedOut = $true
+    }
     return [pscustomobject]@{
-        ExitCode = $proc.ExitCode
+        ExitCode = $code
         StdOut   = $out
         StdErr   = $err
         TimedOut = $timedOut
+        Ended    = $ended
         CommandLine = ('{0} {1}' -f $psi.FileName, $psi.Arguments)
     }
 }

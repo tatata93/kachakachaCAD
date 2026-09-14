@@ -47,7 +47,7 @@ function Say {
 # Two dispatchers would fight over the same requests. The second one says so and
 # leaves instead of starting a duplicate review.
 $lockPath = Join-Path $paths.Locks 'dispatcher.lock'
-$lockStream = New-SingletonLock -Path $lockPath
+$lockStream = New-SingletonLock -Path $lockPath -RepoRootForOwner $RepoRoot
 if ($null -eq $lockStream) {
     Say "another dispatcher already owns $lockPath; this one exits" 'WARN'
     exit 10
@@ -213,5 +213,11 @@ try {
 } finally {
     if ($lockStream) {
         try { $lockStream.Dispose() } catch { }
+        # The owner file outlives nothing: once the lock is free, it must not
+        # name a process that is gone.
+        try {
+            $ownerPath = Get-SingletonLockOwnerPath -Path $lockPath
+            if (Test-Path -LiteralPath $ownerPath) { Remove-Item -LiteralPath $ownerPath -Force }
+        } catch { }
     }
 }

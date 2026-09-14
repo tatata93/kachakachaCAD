@@ -61,7 +61,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | `tools/ai-local/review-ledger.ps1` | 追記専用台帳の読み書きと、重複・連続 BLOCKING の判定 |
 | `tools/ai-local/review-recover.ps1` | 落ちた後の後始末(取り残し・書きかけ・迷子の worktree) |
 | `tools/ai-local/queue-status.ps1` | いまの queue を1画面で見る |
-| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(21 の場面・54 の確認) |
+| `tools/ai-local/review-selftest.ps1` | 上の約束を、使い捨ての git リポジトリで実際に確かめる(28 の場面・70 の確認) |
 | `tools/ai-local/start-dispatcher.cmd` | 常駐を1回だけ起動する |
 
 ## 依頼の出し方(Claude 側)
@@ -119,7 +119,7 @@ AI が queue を見張る役をしません。見張るのは `review-dispatcher
 | 途中で落ちる | `review-recover.ps1` が取得済みを queue に戻す。起動時に必ず走る |
 | 書きかけの JSON を読む | 書き込みは必ず `*.tmp` → rename。読む側は `*.tmp` を見ない |
 | FileSystemWatcher の取りこぼし | 起動時・毎周・1件処理ごとに全走査もする |
-| Codex が source を書き換える | `--sandbox read-only`(実装が持っていれば)＋ 事後に `git status` で検出し破棄・記録 |
+| Codex が source を書き換える | **read-only にできる実装しか使いません。** Codex は `--sandbox read-only`、代役は `--permission-mode plan`。どちらも持たない実装は `probe_ok=false` にして起動しません。事後に `git status` でも見ますが、それは最後の確認であって唯一の防ぎ方ではありません |
 | 存在しない CLI option を使う | `codex exec --help` を実物で読み、**見えた option しか渡さない** |
 | どこを探したか分からない | `logs/reviewer-search.json` に PATH と探した場所を全部書く |
 | 指定したのと別のレビューアーが使われる | `KACHA_CODEX_EXE` を指定したら、**それ以外は使わない**(無ければ「無い」) |
@@ -178,7 +178,8 @@ Codex はレビュー対象を探しません。ビルドもテストもやり�
 
 | outcome | 意味 | 番号を使い切るか |
 | --- | --- | --- |
-| `REVIEWED` | 本当にレビューされた。`verdict` が判定 | 使い切る |
+| `REVIEWED`(verdict が PASS/BLOCKING/STOP) | 本当にレビューされた | 使い切る |
+| `REVIEWED`(verdict が MALFORMED) | 動いたが、答えが規約の形でない | 残る |
 | `TIMEOUT` | 上限まで待って打ち切った | 残る |
 | `INFRA_ERROR` | 起動できなかった | 残る |
 | `RETRYABLE_ERROR` | 起動したが落ちた・何も答えなかった | 残る |

@@ -708,18 +708,42 @@ Check 'the refusal is written down where a person will see it' `
 $env:KACHA_STUB_VERDICT = 'PASS'
 
 # 27 ------------------------------------------------------------------------
-# Looking at the queue must not disturb the dispatcher that is working in it.
+# Looking at the queue must not disturb the lock. The test runs against an
+# UNLOCKED file on purpose: with the lock held, a wrong implementation would fail
+# to open it and the test would pass for the wrong reason. Content and time are
+# both compared, because an overwrite of the same length changes neither size.
 $lockPath = Join-Path $paths.Locks 'dispatcher.lock'
-$held = New-SingletonLock -Path $lockPath
+$ownerPath = $lockPath + '.owner.json'
+Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
+$marker = 'do-not-touch-' + [Guid]::NewGuid().ToString('N')
+[System.IO.File]::WriteAllText($lockPath, $marker, (New-Object System.Text.UTF8Encoding($false)))
+(Get-Item -LiteralPath $lockPath).LastWriteTime = (Get-Date).AddHours(-1)
+$stampBefore = (Get-Item -LiteralPath $lockPath).LastWriteTimeUtc.Ticks
+& (Join-Path $Tools 'queue-status.ps1') -RepoRoot $repo -Json | Out-Null
+$contentAfter = [System.IO.File]::ReadAllText($lockPath)
+$stampAfter = (Get-Item -LiteralPath $lockPath).LastWriteTimeUtc.Ticks
+Check 'looking at the queue does not rewrite the lock' ($contentAfter -eq $marker) 'the lock content changed'
+Check 'looking at the queue does not even touch the lock' ($stampBefore -eq $stampAfter) 'the lock time changed'
+
+Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $ownerPath -Force -ErrorAction SilentlyContinue
+$held = New-SingletonLock -Path $lockPath -RepoRootForOwner $repo
 Check 'the lock can be taken' ($null -ne $held) 'the lock was not free'
 if ($held) {
-    $sizeBefore = (Get-Item -LiteralPath $lockPath).Length
-    & (Join-Path $Tools 'queue-status.ps1') -RepoRoot $repo -Json | Out-Null
-    $sizeAfter = (Get-Item -LiteralPath $lockPath).Length
-    Check 'looking at the queue leaves the lock alone' ($sizeBefore -eq $sizeAfter) `
-        ("before=" + $sizeBefore + " after=" + $sizeAfter)
+    # The holder keeps the lock exclusive, so who holds it has to be readable
+    # from somewhere else. This is what stop-stale-dispatcher.ps1 relies on.
+    $owner = Get-SingletonLockOwner -Path $lockPath
+    Check 'who holds the lock can be read while it is held' `
+        (($null -ne $owner) -and ([int]$owner.pid -eq $PID)) `
+        ("owner=" + $(if ($owner) { $owner.pid } else { 'none' }))
+    Check 'the owner says which checkout it belongs to' `
+        (($null -ne $owner) -and $owner.repo_root -eq $repo) `
+        ("repo_root=" + $(if ($owner) { $owner.repo_root } else { 'none' }))
+    Check 'a held lock reads as held' (Test-SingletonLockHeld -Path $lockPath) 'it read as free'
     $held.Dispose()
 }
+Remove-Item -LiteralPath $ownerPath -Force -ErrorAction SilentlyContinue
+Check 'a free lock reads as free' (-not (Test-SingletonLockHeld -Path $lockPath)) 'it read as held'
 
 # 28 ------------------------------------------------------------------------
 # A request that waited a long time and was claimed a moment ago is busy, not stuck.

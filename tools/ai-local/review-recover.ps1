@@ -85,7 +85,10 @@ foreach ($file in (Get-QueueFiles -Directory $paths.Processing)) {
     # A live owner is not proof of progress. Past its own time limit plus ten
     # minutes, a claim is stuck, and waiting the default four hours helps nobody.
     $stuck = ($ageSeconds -gt ($budget + 600))
-    if ($ownerAlive -and -not $stuck -and ($ageSeconds / 60.0) -lt $StaleMinutes) { continue }
+    # A live owner is left alone unless it is past its own limit. Requeueing a
+    # claim whose reviewer is still running would have two reviewers on the same
+    # request at once; an old wall-clock rule is not a reason to risk that.
+    if ($ownerAlive -and -not $stuck) { continue }
     if ($ownerAlive -and $stuck) {
         Say ("$($file.Name) has been claimed for " + [int]$ageSeconds + "s with a limit of " +
              $budget + "s; the process holding it is stopped") 'WARN'

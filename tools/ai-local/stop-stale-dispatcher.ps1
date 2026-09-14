@@ -81,7 +81,20 @@ if ($stuck.Count -gt 0) {
 # Only this runtime's dispatcher is ours to retire. Matching on the command line
 # alone would also catch a healthy dispatcher serving another checkout on the same
 # machine, and stopping that one would be someone else's outage.
-$lockOwner = Get-SingletonLockOwner -Path (Join-Path $paths.Locks 'dispatcher.lock')
+$lockPath = Join-Path $paths.Locks 'dispatcher.lock'
+$lockOwner = Get-SingletonLockOwner -Path $lockPath
+if ($lockOwner -and $lockOwner.repo_root) {
+    # An owner file left behind by another checkout is not ours to act on.
+    try {
+        $ownerRoot = [System.IO.Path]::GetFullPath($lockOwner.repo_root).TrimEnd('\', '/')
+        $thisRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/')
+        if ($ownerRoot.ToLowerInvariant() -ne $thisRoot.ToLowerInvariant()) {
+            Say ("the lock here is owned by " + $ownerRoot + "; nothing is stopped") 'WARN'
+            if (-not $Quiet) { Write-Output 'stopped=0 (another checkout)' }
+            exit 0
+        }
+    } catch { }
+}
 if ($null -eq $lockOwner -or $lockOwner.pid -le 0) {
     Say "no dispatcher is recorded as holding this runtime's lock; nothing is stopped"
     if (-not $Quiet) { Write-Output 'stopped=0 (no owner recorded)' }
@@ -122,6 +135,10 @@ foreach ($process in $processes) {
         # The tree, not just the shell: a hung dispatcher usually has a reviewer
         # still running underneath it.
         Stop-ProcessTree -ProcessId ([int]$process.ProcessId)
+        try {
+            $ownerPath = Get-SingletonLockOwnerPath -Path $lockPath
+            if (Test-Path -LiteralPath $ownerPath) { Remove-Item -LiteralPath $ownerPath -Force }
+        } catch { }
         $stopped++
         Say ("retired dispatcher pid " + $process.ProcessId + " (started " + $startTime.ToString('s') +
              ", scripts changed " + $newest.ToString('s') + ")")

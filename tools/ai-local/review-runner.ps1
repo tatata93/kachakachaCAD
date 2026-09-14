@@ -76,6 +76,28 @@ if ($TimeoutSeconds -le 0) {
     $TimeoutSeconds = [int](Get-ManifestValue 'timeout_seconds' 1200)
 }
 
+# The precheck ran when the request was accepted. Between then and now other
+# requests may have been accepted too, and one of them may have made this one
+# wrong: the same commit already reviewed, or a third block in a row on this root.
+# So it is asked again, here, immediately before anything is started.
+if (-not $DryRun) {
+    $recheck = ''
+    try {
+        $recheck = (& (Join-Path $PSScriptRoot 'review-precheck.ps1') `
+            -RepoRoot $RepoRoot -ManifestPath $ManifestPath | Out-String)
+    } catch { $recheck = '' }
+    $recheckResult = $null
+    if ($recheck -and $recheck.Trim().Length -gt 0) {
+        try { $recheckResult = $recheck | ConvertFrom-Json } catch { $recheckResult = $null }
+    }
+    if ($null -eq $recheckResult -or -not [bool]$recheckResult.ok) {
+        $why = 'the precheck gave no answer'
+        if ($recheckResult) { $why = [string]$recheckResult.message }
+        Say ("$requestId is no longer fit to review: " + $why) 'WARN'
+        exit 7
+    }
+}
+
 $workDir = Join-Path $paths.Processing $requestId
 if (-not (Test-Path -LiteralPath $workDir)) {
     New-Item -ItemType Directory -Path $workDir -Force | Out-Null
@@ -112,9 +134,35 @@ function Remove-ReviewWorktree {
         Say ("refusing to remove " + $Path + ": it is not a review worktree under " + $worktreeRoot) 'ERROR'
         return
     }
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    # Git has to agree that this is one of its worktrees for this repository.
+    # A directory that merely sits in the right place, or one another process
+    # has locked, is not ours to delete recursively.
+    $listed = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'list', '--porcelain')
+    $known = $false
+    $full = ''
+    try { $full = [System.IO.Path]::GetFullPath($Path).TrimEnd('\', '/').ToLowerInvariant() } catch { }
+    foreach ($line in ($listed.StdOut -split "`r?`n")) {
+        if ($line -notlike 'worktree *') { continue }
+        $candidate = $line.Substring(9).Trim()
+        try { $candidate = [System.IO.Path]::GetFullPath($candidate).TrimEnd('\', '/').ToLowerInvariant() } catch { continue }
+        if ($candidate -eq $full) { $known = $true; break }
+    }
+    if (-not $known) {
+        Say ("refusing to remove " + $Path + ": git does not list it as a worktree of this repository") 'ERROR'
+        return
+    }
     $r = Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'remove', '--force', $Path)
     if ($r.ExitCode -ne 0 -and (Test-Path -LiteralPath $Path)) {
-        try { Remove-Item -LiteralPath $Path -Recurse -Force } catch { }
+        # Git refused. Something is holding it, or it is locked. Set it aside
+        # rather than deleting a directory whose state we do not understand.
+        $parked = Join-Path $paths.Stale ((Split-Path -Leaf $Path) + '-' + (Get-Date).ToString('yyyyMMdd-HHmmss'))
+        try {
+            Move-Item -LiteralPath $Path -Destination $parked -Force
+            Say ("git would not remove " + $Path + " (" + $r.StdErr.Trim() + "); it was moved to " + $parked) 'WARN'
+        } catch {
+            Say ("git would not remove " + $Path + " and it could not be moved aside: " + $_.Exception.Message) 'ERROR'
+        }
     }
     Invoke-Git -RepoRoot $RepoRoot -GitExe $gitExe -Arguments @('worktree', 'prune') | Out-Null
 }
@@ -552,7 +600,18 @@ $verdict = Get-Field -Text $answer -Name 'VERDICT'
 $nextAction = Get-Field -Text $answer -Name 'NEXT_ACTION'
 $blockingText = Get-Field -Text $answer -Name 'BLOCKING_COUNT'
 $blockingCount = 0
-if ($blockingText -match '^\d+$') { $blockingCount = [int]$blockingText }
+$blockingCountIsNumber = ($blockingText -match '^\d+$')
+if ($blockingCountIsNumber) { $blockingCount = [int]$blockingText }
+
+# The contract says the FIRST non-empty line is the verdict. An answer that was
+# cut off halfway, or that buries the verdict after a paragraph of preamble, is
+# not the agreed form and must not be read as one.
+$firstLine = ''
+foreach ($line in ($answer -split "`r?`n")) {
+    if ($line.Trim().Length -eq 0) { continue }
+    $firstLine = $line.Trim()
+    break
+}
 
 if (-not $verdict) {
     # Fall back to the old contract: first non-empty line is PASS or REVISE.
@@ -572,20 +631,30 @@ if ($verdict -eq 'REVISE') { $verdict = 'BLOCKING' }
 $allowedVerdicts = @('PASS', 'BLOCKING', 'STOP')
 $allowedNext = @{ 'PASS' = 'PROCEED'; 'BLOCKING' = 'FIX_AND_REVIEW'; 'STOP' = 'STOP' }
 $contractProblems = @()
+if ($firstLine -notlike 'VERDICT*') {
+    $contractProblems += 'the first non-empty line is not VERDICT'
+}
 if (-not $verdict) {
     $contractProblems += 'the answer has no VERDICT line'
 } elseif ($allowedVerdicts -notcontains $verdict) {
     $contractProblems += ("VERDICT is '" + $verdict + "', which is not PASS, BLOCKING or STOP")
 } else {
-    if ($nextAction -and $nextAction -ne $allowedNext[$verdict]) {
+    if (-not $nextAction) {
+        $contractProblems += 'the answer has no NEXT_ACTION line'
+    } elseif ($nextAction -ne $allowedNext[$verdict]) {
         $contractProblems += ("VERDICT " + $verdict + " does not go with NEXT_ACTION " + $nextAction)
     }
-    if (-not $nextAction) { $nextAction = $allowedNext[$verdict] }
-    if ($verdict -eq 'BLOCKING' -and $blockingText -and $blockingCount -lt 1) {
-        $contractProblems += 'BLOCKING was answered with a BLOCKING_COUNT of zero'
-    }
-    if ($verdict -eq 'PASS' -and $blockingCount -gt 0) {
-        $contractProblems += 'PASS was answered with blocking items'
+    if (-not $blockingText) {
+        $contractProblems += 'the answer has no BLOCKING_COUNT line'
+    } elseif (-not $blockingCountIsNumber) {
+        $contractProblems += ("BLOCKING_COUNT is '" + $blockingText + "', which is not a whole number")
+    } else {
+        if ($verdict -eq 'BLOCKING' -and $blockingCount -lt 1) {
+            $contractProblems += 'BLOCKING was answered with a BLOCKING_COUNT of zero'
+        }
+        if ($verdict -ne 'BLOCKING' -and $blockingCount -gt 0) {
+            $contractProblems += ($verdict + ' was answered with blocking items')
+        }
     }
 }
 if ($contractProblems.Count -gt 0) {

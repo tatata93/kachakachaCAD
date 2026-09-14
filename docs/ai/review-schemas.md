@@ -105,7 +105,7 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
   "reviewer_command": "実際に走らせた1行",
   "started_utc": "...", "finished_utc": "...",
   "outcome": "REVIEWED | TIMEOUT | INFRA_ERROR | RETRYABLE_ERROR",
-  "verdict": "PASS | BLOCKING | STOP | MALFORMED  (outcome が REVIEWED のときだけ)",
+  "verdict": "PASS | BLOCKING | STOP | MALFORMED  (outcome が REVIEWED のとき) / outcome と同じ値(それ以外のとき)",
   "next_action": "PROCEED | FIX_AND_REVIEW | STOP | RETRY | HUMAN_DECISION_REQUIRED",
   "review_profile": "HIGH_RISK",
   "review_effort": "high",
@@ -132,6 +132,19 @@ Claude が **REQUEST_ID と BASE を固定する**ためのファイル。HEAD �
 
 読み物は同じ名前の `.md`。Codex の答えがそのまま入っています。
 `processed_by_claude` は Claude が取り込んだ後に `true` にします。
+
+**番号を使い切るのは、台帳に `review_completed` が載ったときだけです。**
+
+| outcome | verdict | 台帳 | 番号 |
+| --- | --- | --- | --- |
+| `REVIEWED` | `PASS` / `BLOCKING` / `STOP` | `review_completed` | 使い切る |
+| `REVIEWED` | `MALFORMED` | `review_malformed` | **残る** |
+| `TIMEOUT` | `TIMEOUT` | `review_timeout` | 残る |
+| `INFRA_ERROR` | `INFRA_ERROR` | `review_infra_error` | 残る |
+| `RETRYABLE_ERROR` | `RETRYABLE_ERROR` | `review_retryable_error` | 残る |
+
+`MALFORMED` だけが `REVIEWED` でありながら番号を使い切りません。
+レビューアーは動いたが、答えが規約の形でなかった、という状態です。
 
 ## 4. 台帳 `.ai-runtime/logs/review-ledger.jsonl`(追記専用)
 

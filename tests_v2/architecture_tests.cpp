@@ -736,12 +736,28 @@ KACHA_V2_TEST(architecture, paths_with_japanese_names_do_not_go_through_narrow_l
 //! 見なしていたため、`$x="#"; $y=$a ?? $b` が素通りしていた。
 [[nodiscard]] std::string PowerShellCodeOutsideStrings(const std::string& line)
 {
+    // 二重引用符の中でも `$(...)` の中は**コードである**。
+    // Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R6 B1)。中身をまるごと落としていたので
+    // `"$($a ?? $b)"` が素通りしていた。入れ子も数える。
     std::string out;
     char quote = '\0';
+    int subexpressionDepth = 0;
     for (std::size_t index = 0; index < line.size(); ++index) {
         const char c = line[index];
+        if (subexpressionDepth > 0) {
+            if (c == '(') { ++subexpressionDepth; }
+            if (c == ')') { --subexpressionDepth; }
+            out.push_back(c);
+            continue;
+        }
         if (quote != '\0') {
             if (c == '`' && quote == '"') { ++index; continue; }
+            if (c == '$' && quote == '"' && index + 1 < line.size() && line[index + 1] == '(') {
+                subexpressionDepth = 1;
+                index += 1;
+                out.push_back(' ');
+                continue;
+            }
             if (c == quote) { quote = '\0'; }
             continue;  // 文字列の中身は落とす
         }
@@ -858,21 +874,40 @@ KACHA_V2_TEST(architecture, the_local_review_pipeline_is_present_and_runs_on_win
         "a ternary written inside a string is not a ternary");
     Require(PowerShell7OnlyTokensIn("$map = @{ 'a' = 1 }  # ?? and && are 7 only").empty(),
         "the list of forbidden operators may be written in a comment");
+    Require(!PowerShell7OnlyTokensIn("Write-Host \"$($a ?? $b)\"").empty(),
+        "code inside an expanding string is still code");
+    Require(!PowerShell7OnlyTokensIn("Write-Host \"x $( $y = $( $a ?? $b ) ) z\"").empty(),
+        "a nested subexpression is still code");
+    Require(PowerShell7OnlyTokensIn("Write-Host \"a plain ?? in text\"").empty(),
+        "text inside an expanding string is still text");
 }
 
 //! 台帳へ書く出来事の名前を、スクリプトから拾う。
 //! `event = 'name'` と `event = $Variable` の両方に当たるので、変数のときは拾わない。
 [[nodiscard]] std::vector<std::string> LedgerEventNamesIn(const std::string& line)
 {
+    // `event=` に続く文字列そのものを拾う。空白の有無も引用符の種類も問わない。
+    // 注釈の中は拾わない。Codex の指摘(AI-REVIEW-PIPELINE-TESTS-R6 B3)。
     std::vector<std::string> names;
-    const std::string marker = "event = '";
-    std::size_t at = line.find(marker);
+    std::size_t at = line.find("event");
     while (at != std::string::npos) {
-        const std::size_t start = at + marker.size();
-        const std::size_t end = line.find('\'', start);
+        // 注釈より後ろは見ない。引用符の外にある `#` だけが注釈の始まり。
+        const std::string before = line.substr(0, at);
+        const std::string beforeCode = PowerShellCodeOutsideStrings(before);
+        if (beforeCode.size() != before.size()) { break; }
+        std::size_t cursor = at + 5;
+        while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+        if (cursor >= line.size() || line[cursor] != '=') { at = line.find("event", at + 5); continue; }
+        ++cursor;
+        while (cursor < line.size() && line[cursor] == ' ') { ++cursor; }
+        if (cursor >= line.size()) { break; }
+        const char quote = line[cursor];
+        if (quote != '\'' && quote != '"') { at = line.find("event", cursor); continue; }
+        const std::size_t start = cursor + 1;
+        const std::size_t end = line.find(quote, start);
         if (end == std::string::npos) { break; }
         names.push_back(line.substr(start, end - start));
-        at = line.find(marker, end);
+        at = line.find("event", end);
     }
     return names;
 }
@@ -910,6 +945,12 @@ KACHA_V2_TEST(architecture, every_ledger_event_the_scripts_write_is_written_down
     Require(found.size() == 1 && found.front() == "review_timeout", "the scanner reads a literal event name");
     Require(LedgerEventNamesIn("        event = $LedgerEvent; request_id = $x").empty(),
         "the scanner leaves a variable alone");
+    const auto tight = LedgerEventNamesIn("        event='review_timeout'");
+    Require(tight.size() == 1 && tight.front() == "review_timeout", "spacing does not hide an event name");
+    const auto doubled = LedgerEventNamesIn("        event = \"review_timeout\"");
+    Require(doubled.size() == 1 && doubled.front() == "review_timeout", "either quote character works");
+    Require(LedgerEventNamesIn("        # event = 'not_a_real_event'").empty(),
+        "an event name written in a comment is not an event");
 }
 
 KACHA_V2_TEST(architecture, the_scanner_itself_detects_a_planted_violation)

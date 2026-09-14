@@ -11,10 +11,11 @@ PC が本当にビルドしてテストに通ったときだけ、PowerShell の
 `docs/ai/CODEX_REVIEW_POLICY.md` にある。依頼は `tools/ai-local/next-review.json`
 をコミットに含めて出す。**REQUEST_ID と BASE は Claude が決め、HEAD は機械が決める。**
 
-REQUEST_ID: AI-REVIEW-PIPELINE-R6(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
+REQUEST_ID: AI-REVIEW-PIPELINE-R7(QUEUE / PROCESS / JUDGE / TESTS / DOCS の5区間)
 TASK_ID: Claude/Codex レビューのローカル・イベント駆動基盤
 PHASE: 基盤
-STATUS: READY_FOR_CODEX(R5 の5区間で **16件の BLOCKING** を受け、全部直した)
+STATUS: READY_FOR_CODEX(R5 で16件、R6 で17件の BLOCKING。全部直した。
+  **同じ root で3回続けば基盤が自動で人へ渡す。次が3回目になる区間がある。**)
 REVIEW_STATUS: PENDING_CODEX
 BASE: f78d91b
 HEAD: (PC が決める。ビルドして試験に通った commit)
@@ -25,7 +26,7 @@ REVIEW_FOCUS: 依頼が無いのに Codex が起きる経路が無いか。二�
   落ちた後に queue が戻るか。想像した CLI option が混じっていないか
 BUILD: PC で確認する
 TEST: 雲 core 134/134、Qt 当て木、静的検査(PowerShell 5.1 で動かない構文が無いこと)
-  ＋ PC で `review-selftest.ps1`(28 の場面・67 の確認)
+  ＋ PC で `review-selftest.ps1`(28 の場面・70 の確認)
 CREATED_AT: 2026-09-14
 UPDATED_AT: 2026-09-14
 
@@ -68,15 +69,10 @@ C:\Users\tak01\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe
   pnpm・yarn・cargo・bun・`.local\bin`・`Programs` の3段下)には無かった。
   全記録は `.ai-runtime\logs\reviewer-search.json`。
 
-**お願いしたいこと(どちらか一つ)**
-
-1. Codex CLI の本体の場所を教えてください。環境変数
-   `KACHA_CODEX_EXE` にその道筋を入れれば、基盤はそれだけを使います。
-2. または、そのまま代役で進めてよければ何もしなくて構いません。
-   `.ai/ORCHESTRATOR_CONFIG.json` の `reviewer_fallback: claude` に従い、
-   読み取り専用の代役がレビューします。結果には必ず
-   `reviewer: claude-fallback` と書かれ、Codex のレビューとは区別されます。
-   **ただしこれは身内の目です。** Codex の独立した目の代わりにはなりません。
+**この依頼は済んでいます。**オーナーが Codex CLI を入れ、基盤が
+`...\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe` を自分で見つけました。
+R4 以降は本物の Codex がレビューしています。上は R1〜R3 当時の記録です。
+`KACHA_CODEX_EXE` を指定すれば今でもその実行ファイルだけを使います。
 
 ### 人が見るところ
 
@@ -195,6 +191,29 @@ R3 B3 と同じ `TrimCurve` である。上を参照。
   自己試験そのものが構文エラーで落ちた(review_selftest_rc=1)。雲では気づけない。
   **レビュー基盤の .ps1 は純 ASCII に保つ。**日本語が要るところは実行時に
   コードポイントから組む。雲側の関所(architecture_tests)で毎回見る。
+
+- REQUEST_ID: AI-REVIEW-PIPELINE-{DOCS,JUDGE,PROCESS,QUEUE,TESTS}-R6
+  REVIEWED_HEAD: 6fcd411
+  ACTION: FIX_AND_REVIEW(5区間すべて BLOCKING、合計17件)
+  FIX_COMMIT: (この commit)
+  RESULT: 17件すべて直した。R6 は BLOCKING のまま残す。R7 で出し直す。
+
+  **いちばん重い指摘(QUEUE B1): R5 の直しが新しい穴を作っていた。**
+  dispatcher は鍵を `FileShare.None` で掴むので、その鍵を開いて所有者を読むことは
+  **絶対にできない**。つまり「この runtime の鍵が記録した pid だけ止める」という
+  R5 の直しは、常に「所有者なし」と答え、**古い常駐を一つも退役させなくなっていた**。
+  → 所有者は鍵の隣の別ファイルに書く。鍵そのものは触らない。
+
+  QUEUE 2件 … 上記 / `StaleMinutes` で生きた owner の claim を回収し得た(二重実行)
+  PROCESS 5件 … 実行直前の再検証が無い / 途中で切れた回答を PASS と受理 /
+    `.cmd` の引数を cmd 用にエスケープしていない / 終了未確認で ExitCode を読む /
+    git が拒否した worktree を生で再帰削除
+  JUDGE 3件 … override を変えても古い cache を使う / fallback を切っても
+    古い cache が残る / 台帳の追記と読み取りの競合を「破損」と誤判定
+  DOCS 4件 … outcome/verdict の列挙が実装と不一致 / 解決済みの依頼が現在形で残る /
+    自己試験の件数が古い / read-only が任意対応のように読める
+  TESTS 3件 … 展開文字列の `$()` の中を見ていない / 鍵の非破壊試験が
+    失敗し得ない書き方 / 台帳イベントの走査が空白と引用符に依存
 
 - REQUEST_ID: AI-REVIEW-PIPELINE-DOCS-R5 / JUDGE-R5 / PROCESS-R5 / QUEUE-R5 / TESTS-R5
   REVIEWED_HEAD: f024a28

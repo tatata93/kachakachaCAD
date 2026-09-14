@@ -215,6 +215,7 @@ function Get-CodexInterface {
         probe_revision   = $script:ProbeRevision
         probed_utc       = Get-UtcStamp
         executable       = $Exe
+        override         = [string]$env:KACHA_CODEX_EXE
         executable_stamp = ''
         version          = ''
         has_exec         = $false
@@ -285,6 +286,18 @@ function Get-CodexInterface {
 
 # An upgrade replaces the file in place. A remembered answer about the old file
 # is not an answer about the new one.
+# A remembered answer belongs to the question that produced it. Naming a
+# different reviewer, or clearing the name, is a different question: the old
+# answer must not be reused, or an explicit override would be quietly ignored.
+function Test-CachedOverrideMatches {
+    param($Cached, [string]$Override)
+    $cachedOverride = ''
+    foreach ($p in $Cached.PSObject.Properties) {
+        if ($p.Name -eq 'override') { $cachedOverride = [string]$p.Value }
+    }
+    return ($cachedOverride -eq $Override)
+}
+
 function Test-CachedExecutableUnchanged {
     param($Cached)
     $stamp = ''
@@ -315,6 +328,7 @@ function Resolve-CodexInterface {
         # the queue stopped long after that stopped being true.
         if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
             $cached.executable -and (Test-Path -LiteralPath $cached.executable) -and
+            (Test-CachedOverrideMatches -Cached $cached -Override ([string]$env:KACHA_CODEX_EXE)) -and
             (Test-CachedExecutableUnchanged -Cached $cached)) {
             return $cached
         }
@@ -362,6 +376,7 @@ function Get-ClaudeInterface {
         probe_revision  = $script:ProbeRevision
         probed_utc      = Get-UtcStamp
         executable      = $Exe
+        override        = [string]$env:KACHA_CLAUDE_EXE
         executable_stamp = ''
         version         = ''
         supported_flags = @()
@@ -420,6 +435,7 @@ function Resolve-ClaudeInterface {
         }
         if ($cached -and $cachedRevision -eq $script:ProbeRevision -and $cached.probe_ok -and
             $cached.executable -and (Test-Path -LiteralPath $cached.executable) -and
+            (Test-CachedOverrideMatches -Cached $cached -Override ([string]$env:KACHA_CLAUDE_EXE)) -and
             (Test-CachedExecutableUnchanged -Cached $cached)) {
             return $cached
         }
@@ -469,7 +485,20 @@ function Invoke-MachinePrecheck {
     $codex = Resolve-CodexInterface -Force:$Refresh
     $fallbackName = Get-FallbackReviewerName
     $fallback = $null
-    if ($fallbackName -eq 'claude') { $fallback = Resolve-ClaudeInterface -Force:$Refresh }
+    if ($fallbackName -eq 'claude') {
+        $fallback = Resolve-ClaudeInterface -Force:$Refresh
+    } else {
+        # Say so in the file the runner reads. Leaving an older "yes" there would
+        # let a switched-off fallback keep running.
+        $fallback = [pscustomobject]@{
+            schema_version = 1; kind = 'claude_interface'
+            probe_revision = $script:ProbeRevision; probed_utc = Get-UtcStamp
+            executable = ''; override = ''; executable_stamp = ''; version = ''
+            supported_flags = @(); help_excerpt = ''; probe_ok = $false
+            probe_note = ('the fallback reviewer is turned off (reviewer_fallback = ' + $fallbackName + ')')
+        }
+        Write-JsonAtomic -Path (Join-Path $paths.Logs 'claude-interface.json') -Value $fallback | Out-Null
+    }
     if (-not $codex.probe_ok) {
         if ($fallback -and $fallback.probe_ok) {
             # Not a problem that stops the queue, but it is written down every time.

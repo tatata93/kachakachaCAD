@@ -3,73 +3,60 @@
   "kind": "review_request_declarations",
   "requests": [
     {
-      "request_id": "P1-EXTRUDE-R6",
-      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "request_id": "P1-EXTRUDE-R7",
+      "base_commit": "cac4d722f091445dc856ff799c27e660c4b646db",
       "review_profile": "HIGH_RISK",
-      "scope_ja": "Phase 1 押し出し。R5 の指摘(棚の表示と矢印・下見・確定の向きが食い違う)を直した分。既定を棚の初期表示に揃え、棚を出すときに手に持っている決め方を映し、確定で CustomXYZ に畳んでも決め方を失わないようにした。",
+      "scope_ja": "Phase 1 押し出し。R6 の指摘2件を直した分。詳細の窓が渡された決めごとを欄へ映すようにし、向きの解き方を1か所(ExtrudeDirectionForMode)へ集めて7通りすべてを解くようにした。覚える形とカーネルへ渡す形を分け(PreparedExtrudeChoice)、畳むのは『輪郭に垂直』だけにした。",
       "paths": [
-        "src/apps/cad_next/V2PartCommands.cpp",
-        "src/apps/cad_next/V2ExtrudeInteractive.cpp",
-        "src/apps/cad_next/V2ExtrudeDock.cpp",
-        "src/apps/cad_next/V2ExtrudeDock.h",
         "src/apps/cad_next/V2ExtrudeDialog.cpp",
-        "src/apps/cad_next/V2SelfTestExtrudePromise.cpp",
-        "src/apps/cad_next/V2EditCommands.cpp",
-        "src/next/kachakacha/app/ExtrudeOptions.h",
+        "src/apps/cad_next/V2ExtrudeDialog.h",
+        "src/apps/cad_next/V2ExtrudeInteractive.cpp",
+        "src/apps/cad_next/V2PartCommands.cpp",
         "src/apps/cad_next/V2MainWindow.h",
-        "tests_v2/extrude_options_tests.cpp"
+        "src/apps/cad_next/V2SelfTestExtrudePromise.cpp"
       ],
       "focus": [
-        "棚に出ている決め方が、矢印・下見・確定・保存・次回の表示まで同じものか",
-        "詳細の窓で選んだ向きを、棚の既定値で上書きしていないか",
-        "輪郭の平面と作業平面が別の向きのときの試験が、本当に取り違えを見つけるか"
+        "7通りの向きが、矢印・下見・確定・保存・次回の初期値まで同じものになっているか",
+        "『輪郭に垂直』だけを畳む判断が正しいか。残り5通りを畳まないことで、こちらとカーネルの解き方がずれる場面が無いか",
+        "面の押し引きが決めた向きを覚えないための退避(rememberedDirection)に抜けが無いか",
+        "窓が渡された値を映すようになったことで、逆に古い値を持ち回る場面が生まれていないか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "request_id": "Q1-Q5-R5",
-      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "request_id": "Q1-Q5-R6",
+      "base_commit": "cac4d722f091445dc856ff799c27e660c4b646db",
       "review_profile": "HIGH_RISK",
-      "scope_ja": "Q1〜Q5。R4 の指摘を直した分。見せた案をどの模型のどの値に対するものか結び付け、統合で失われる利用者の設定(半径だけでなく組立率も)を前もって見せるようにした。",
+      "scope_ja": "Q1〜Q5。R5 の指摘3件を直した分。見せた案と確定時に作り直した案を指紋で突き合わせ、統合で消える値を前もって同じ言い回しで言い、部材番号が読めないときは測らずに断るようにした。",
       "paths": [
-        "src/next/kachakacha/fabrication/BandPartition.cpp",
-        "src/next/kachakacha/fabrication/BandPartition.h",
-        "src/next/kachakacha/fabrication/PanelEdit.cpp",
-        "src/next/kachakacha/io/DocumentFileRead.cpp",
-        "src/next/kachakacha/app/CommandCatalog.cpp",
         "src/apps/cad_next/V2PanelEditCommands.cpp",
         "src/apps/cad_next/V2BendRadiusCommands.cpp",
         "src/apps/cad_next/V2FabricationCommands.cpp",
-        "src/apps/cad_next/V2FabricationDock.cpp",
-        "src/apps/cad_next/V2FabricationDock.h",
-        "src/apps/cad_next/V2SelfTestApproxFlow.cpp",
-        "tests_v2/band_partition_tests.cpp"
+        "src/apps/cad_next/V2FabricationDock.cpp"
       ],
       "focus": [
-        "案の指紋が、模型・分け方・引き継ぐ値の変化をすべて捉えているか",
-        "統合で失われる設定の見せ方に、まだ抜けている種類が無いか",
-        "取り消し・やり直し・再読込をまたいで引き継ぎが保つか"
+        "案の指紋に、まだ入っていない入力が無いか",
+        "境界が一致しているかの確かめ方が、数だけでなく中身を見ているか",
+        "読めない部材番号の断り方が、黙って既定値へ落ちる道を残していないか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"
     },
     {
-      "request_id": "DIAG-REFUSAL-R2",
-      "base_commit": "f479814c9e4eb351ab97302dfeedfe5e59b7705f",
+      "request_id": "DIAG-REFUSAL-R3",
+      "base_commit": "cac4d722f091445dc856ff799c27e660c4b646db",
       "review_profile": "NORMAL",
-      "scope_ja": "断り方の作り。R1 は範囲の切り方が悪く、部材分割の変更が混ざっていた。今回は Diagnostic.h と、その置き換えを受けたファイルだけに絞る。",
+      "scope_ja": "断り方の作り。R2 の指摘を直した分。Diagnostics().front() を直に読んでいた26か所を、Result の FirstDiagnostic / FirstCode / FirstMessageJa / FirstDetailsJa へ通した。",
       "paths": [
         "src/next/kachakacha/base/Diagnostic.h",
-        "src/next/kachakacha/app/CursorInputSolve.cpp",
-        "src/next/kachakacha/app/MeasurePanel.cpp",
-        "src/apps/cad_next/V2Viewport.cpp",
-        "src/apps/cad_next/V2ViewportInput.cpp",
-        "src/apps/cad_next/V2ViewportPanel.cpp",
+        "src/next/kachakacha/io/KcdImport.cpp",
+        "src/apps/cad_next/V2GuideCommands.cpp",
         "src/apps/cad_next/V2WireCommands.cpp",
-        "src/apps/cad_next/V2GridDock.cpp",
-        "tests_v2/foundation_tests.cpp"
+        "src/apps/cad_next/V2EditCommands.cpp",
+        "src/apps/cad_next/V2WorkPlaneDock.cpp"
       ],
       "focus": [
-        "理由の無い失敗を作れる道が残っていないか",
+        "空の診断を読む道が本当に全部塞がったか",
+        "戻り値の寿命(参照が宙に浮く)を作っていないか",
         "置き換えで出る文言が変わってしまった所が無いか"
       ],
       "policy": "docs/ai/CODEX_REVIEW_POLICY.md"

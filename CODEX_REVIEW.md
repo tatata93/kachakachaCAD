@@ -402,3 +402,192 @@ BLOCKING BEFORE NEXT PHASE: YES
 レビューで、説明書なしに `Surface選択 -> 候補比較 -> 採用 -> 70% -> Wire生成` が行えるか検証する。
 
 NEXT_ACTION: Claudeが追加修正commitを作成し、`P1-EXTRUDE-R2` をキューへ追加する。
+
+---
+
+# Codex Review: P1-EXTRUDE-R2
+
+REQUEST_ID: P1-EXTRUDE-R2
+TASK_ID: Phase 1 押し出し
+PHASE: 1
+BASE: ce369eb
+HEAD: 253e446
+REVIEW_SCOPE: `ce369eb..253e446` のうち押し出し関連差分のみ
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+
+## RESULT
+
+R1のB1、B2、B4は解消した。矢印・下見・確定は同じ解析済み方向を使い、面境界は
+下見中の一時データになり、利用者が選んだBoolean演算も確定時に保持される。正常終了時を
+compoundへまとめた方向性も正しい。ただし、失敗時の原子性とFeature依存関係にBlockingが残る。
+
+## BLOCKERS
+
+### B1. 失敗時の疑似rollbackが無関係な直前操作をUndoし得る
+
+面境界ワイヤーの最初の追加が失敗すると、`EndCompound()` は変更がないため履歴を追加しない。
+その直後の無条件な `Undo()` は、押し出しより前に利用者が行った別操作を取り消す。
+途中まで追加できた場合も「一度commitしてUndoする」方式で、失敗を原子的に破棄していない。
+
+- `src/apps/cad_next/V2PartCommands.cpp:335-385`
+- `src/next/kachakacha/document/Document.cpp:205-234`
+
+さらに `AdoptExtrudeResult()` は結果を返さず、Feature/ワイヤー追加の個別失敗を無視する。
+Boolean元の非表示化も結果を検査しないため、途中失敗した部分状態を正常終了としてcompoundへ
+確定できる。Documentに `AbortCompound()` 相当またはRAII transactionを設け、開始前snapshotへ
+履歴を増やさず戻す必要がある。全追加と表示変更の成否を伝播し、一件でも失敗したら全体を破棄すること。
+
+### B2. 面境界ワイヤーが押し出しFeatureの依存関係へ登録されない
+
+面押し引きではdefinitionの `profiles` に確定時生成した `faceWires` を保存する一方、
+`AddPartFeature()` の `inputEntityIds` はViewportの元選択を読み直す。そのため再構築が読むUUIDと、
+Documentの評価順・dirty伝播・削除cascade・壊れた参照判定が読むUUIDが一致しない。
+
+- `src/apps/cad_next/V2PartCommands.cpp:350-376`
+- `src/apps/cad_next/V2PartCommands.cpp:590-605`
+- `src/apps/cad_next/V2RebuildCommands.cpp:43-53`
+
+面境界ワイヤーを編集または削除しても押し出しが再評価されず、保存後の再構築順も保証されない。
+`AddPartFeature()` 内で現在選択を推測せず、profile wire群とBoolean対象を明示入力として渡し、
+definition参照とFeature依存参照を一致させること。
+
+## MISSING TESTS
+
+1. compound内の最初、途中、最後の各Commandを意図的に失敗させ、Document、revision、履歴、表示が完全不変で、直前の別操作をUndoしない。
+2. 面押し引きの境界ワイヤー編集で押し出しがdirtyになり再評価される。境界削除ではcascadeまたは登録済み理由番号で壊れた参照になる。
+3. 面押し引きを保存・再読込し、依存順どおり同じ形状へ再構築できる。
+4. Boolean、複数輪郭、輪郭併産、面押し引きの各確定が一回のUndo/Redoで完全往復する。
+
+## VALIDATION
+
+- 固定差分をコードレビューし、R1の4項目に対する変更と追加自己試験を確認した。
+- Windows実機の全体ビルドは、同じ固定HEADに含まれるQ1〜Q5の未解決シンボルで停止した。
+  押し出し単独の不具合とは数えないが、このHEADをWindows検証済みとは扱えない。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで直すこと。
+
+1. Documentへ「履歴を追加せずcompound開始前へ戻す」正式なabort APIまたはRAII transactionを追加する。
+2. 面境界、全Part/Wire出力、Boolean元表示変更の全結果を検査し、一件でも失敗したらtransactionをabortする。`AdoptExtrudeResult()` は成功/失敗を返す。
+3. 押し出しFeature作成APIへ入力UUIDを明示して渡す。面押し引きでは生成profile wire群、Booleanでは対象Partを含め、definitionと依存グラフを一致させる。
+4. 上記MISSING TESTSを追加し、`P1-EXTRUDE-R3` として固定BASE/HEADを提出する。
+
+REGRESSION RISKS: Document transactionは全コマンドのUndo/Redoへ波及するため、既存compound、入れ子禁止、例外/早期return、保存直前のrevisionを回帰試験すること。
+
+NEXT_ACTION: P1-EXTRUDE-R3を追加commitで提出する。Q1〜Q5は履歴を戻さず進めてよいが、押し出しを使う総合試験はR3後に再実行する。
+
+---
+
+# Codex Review: Q1-Q5（正対・まとまり・HO見本・総合試験・曲げ半径）
+
+REQUEST_ID: Q1-Q5(正対・まとまり・HO見本・総合試験・曲げ半径)
+PHASE: Q1-Q5
+BASE: ce369eb
+HEAD: 253e446
+REVIEW_SCOPE: `ce369eb..253e446` のうちQ1〜Q5関連差分
+VERDICT: FAIL
+BLOCKING BEFORE NEXT PHASE: YES
+
+## BLOCKERS
+
+### B1. Windows本番ビルドがリンクエラーで成立しない
+
+`scripts/check.ps1` は次の未解決シンボルで終了コード1となった。
+
+- `V2MainWindow::MergeFabricationParts()`
+- `V2MainWindow::SplitFabricationPart()`
+- `fabrication::MergePieces(...)`
+- `fabrication::PreviewMerge(...)`
+- `fabrication::SplitPiece(...)`
+
+Q5後半のボタン、宣言、試験に対し、実装またはCMake結線が固定HEADに揃っていない。
+core試験だけが緑でもWindows配布物は作れないためBlockingとする。
+
+### B2. 曲げ半径がDocumentにも形状にも反映されない
+
+現在のAUTO/LOCKは `V2MainWindow` が一個だけ持つ `bendRadius_` であり、ApproxPartごとの
+製作パラメータではない。保存形式にもFeature definitionにも入らず、保存・再読込で消える。
+`ApplyBendRadius()` は表示値を変えるだけで近似面・ワイヤーを再生成しない。
+
+- `src/apps/cad_next/V2MainWindow.h:879-886`
+- `src/apps/cad_next/V2BendRadiusCommands.cpp:60-125`
+- `src/next/kachakacha/document/Feature.h:227-275`
+
+また `MeasureBend()` は3D曲げを測らず、先頭パネル外周長の1/4を90度の円弧と仮定している。
+複数部材、非90度、異なる曲率では実寸表示が事実と異なる。半径とLOCK状態を部材ごとの
+Document正本へ置き、保存、Undo/Redo、再評価、実際の曲げ形状と同期させること。
+
+### B3. まとまり作成と複数ドラッグ移動が一操作一Undoになっていない
+
+`CreateGroupFromSelection()` はグループ作成とEntity移動を別々に `Document::Run()` する。
+一回UndoするとEntityだけ戻り、空のまとまりが残る。移動失敗時にも空グループが残る。
+`DropTreeItemsOnto()` は選択グループごとに親変更を個別commitした後、Entityを別commitするため、
+途中失敗とUndoで部分移動状態になる。
+
+- `src/apps/cad_next/V2GroupCommands.cpp:67-97`
+- `src/apps/cad_next/V2GroupCommands.cpp:218-280`
+
+いずれも一つの原子的Command/transactionにし、失敗時は文書を変えず、一回Undoで完全に戻すこと。
+
+### B4. Q4総合試験が近似作成ワークフローを試していない
+
+「見本の面を板材近似」とする試験は、既にFabricationModelが埋め込まれたHO見本を開き、
+`FabricationModelCount() >= 1` を確認するだけである。Surfaceを選択して実際の
+`fabrication.create` を通しておらず、候補比較、採用、依存生成、Undoを検査しない。
+
+- `src/apps/cad_next/V2SelfTestHoModel.cpp:192-215`
+- `src/apps/cad_next/RailwayNoseHoDocument.cpp`
+
+完成済みfixtureの存在確認では受入試験にならない。少なくとも事前生成FabricationModelを持たない
+Surfaceから本番コマンドで近似を作り、0/50/70/100%、任意状態Wire/Surface生成、元ApproxPart非破壊、
+Undo/Redo、保存再読込まで通すこと。作業平面・ワイヤー・ガイド・Surface生成も本番経路を通す
+別のend-to-end試験を追加すること。
+
+## UX / STATE PROBLEMS
+
+- Q1の複数面選択は点群を全て蓄積しつつ法線を最後の面で上書きする。異なる向きの面を選んだ時の
+  意味がUIに示されない。単一対象へ制限するか、平均/主面など明示した規則と試験を設けること。
+- trimmed Surfaceの正対で矩形UV領域の標本が実面外に出る可能性がある。穴付き・強いtrim・極を含む面で検証すること。
+- Q3のHO見本をFeature定義から組み立てる方針は妥当だが、完成済み近似をQ4の操作受入試験へ流用してはならない。
+
+## MISSING TESTS
+
+1. Windows Debug/Release build、CTest全件、自己試験。
+2. まとまり作成、複数グループ/EntityのD&Dについて成功時一回Undo/Redo、各段階失敗時無変更。
+3. ApproxPartを二つ作り、異なる半径とAUTO/LOCKを保持して保存・再読込し、形状座標も変わる。
+4. 半径変更時に展開長を保ち、割合表示、実寸値、下見、任意状態出力が同じ幾何から導かれる。
+5. 空Documentから本番コマンドだけでHO試験体のSurface生成、近似、70%曲げ、Wire生成まで進む。
+
+## CLAUDE PATCH REQUEST
+
+履歴をreset/rebaseせず追加commitで修正すること。
+
+1. Q5後半のSplit/Merge実装とCMake結線を揃え、Windowsの全リンクを回復する。
+2. 曲げ半径とAUTO/LOCKをApproxPart/部材ごとのFeature definitionへ移し、保存、Undo/Redo、再評価、実形状へ接続する。外周長÷4の仮測定を実寸として表示しない。
+3. まとまり作成と複数D&Dを原子的にし、失敗時rollbackと一回Undo/Redoを試験する。
+4. Q4を完成済みfixtureの存在確認から、本番コマンドを通るend-to-end試験へ置き換える。
+5. Q1の複数対象正対の契約を決め、UIの利用可否、説明、試験を一致させる。
+6. 修正後はQ2、Q4、Q5を少なくとも再レビュー対象とし、固定BASE/HEADと新しいREQUEST_IDを提示する。
+
+## 初見ユーザーの操作列
+
+### 押し出し
+
+1. 「押し出し」を選ぶ。
+2. 画面で閉じた輪郭を選ぶ。既存立体を加工する場合は対象立体も選ぶ。
+3. 右棚の入力解釈と作るもの（立体・輪郭）を確認する。
+4. 画面の矢印を動かすか距離を入力し、下見を確認する。
+5. 「確定」またはEnterで作る。Escまたは「キャンセル」で文書を変えず終了する。
+
+### Surfaceを近似し、70%曲げてWireを生成
+
+現固定HEADでは、初見利用者が信頼できる操作列として認定できない。見本は近似済みで、半径は
+表示だけ、総合試験も実際の近似作成を通っていない。目標操作列は
+`近似を選ぶ -> Surfaceを選ぶ -> 候補を比較して採用 -> 対象部材を選ぶ -> 70%へ動かす -> 現在状態からワイヤーを作る`
+であり、各段階で対象、解釈、結果、確定/取消を右棚とViewportの両方へ一致表示する必要がある。
+
+REGRESSION RISKS: Q2は全Document履歴、Q5は保存形式・再評価・任意状態出力、Q4は受入ゲートの信頼性へ影響する。後続Phase実装済みであること自体はFAIL理由ではない。
+
+NEXT_ACTION: 上記を追加commitで直し、古い未レビュー順を維持したままQ2/Q4/Q5の再レビューを提出する。P1-EXTRUDE-R3は別固定範囲で扱う。

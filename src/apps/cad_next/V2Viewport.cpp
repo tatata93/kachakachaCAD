@@ -159,7 +159,7 @@ void V2Viewport::SetViewDirection(ViewDirection direction)
     direction_ = direction;
     const auto oriented = kachakacha::v2::view::OrientationForZone(ZoneFor(direction));
     if (!oriented.HasValue()) {
-        viewMessage_ = oriented.Diagnostics().front().summaryJa;
+        viewMessage_ = oriented.FirstSummaryJa();
         return;
     }
     SetOrientation(oriented.Value());
@@ -493,7 +493,7 @@ bool V2Viewport::PressViewCube(const QPointF& position)
     }
     const auto begun = kachakacha::v2::view::BeginViewCubeDrag(orientation_);
     if (!begun.HasValue()) {
-        viewMessage_ = begun.Diagnostics().front().summaryJa;
+        viewMessage_ = begun.FirstSummaryJa();
         return false;
     }
     cubeDrag_ = begun.Value();
@@ -518,7 +518,7 @@ void V2Viewport::DragViewCube(const QPointF& position)
     const auto rotated = kachakacha::v2::view::UpdateViewCubeDrag(cubeDrag_, dx, dy,
         kachakacha::v2::view::kViewCubeDegreesPerPixel);
     if (!rotated.HasValue()) {
-        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        viewMessage_ = rotated.FirstSummaryJa();
         return;
     }
     // ドラッグ中は姿勢だけを入れ替える。吸着も慣性もしない。
@@ -568,7 +568,7 @@ bool V2Viewport::RotateByArrow(kachakacha::v2::view::RotationAxis axis,
     }
     const auto rotated = kachakacha::v2::view::RotateByAxisArrowDrag(request, dragPx);
     if (!rotated.HasValue()) {
-        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        viewMessage_ = rotated.FirstSummaryJa();
         return false;
     }
     viewMessage_.clear();
@@ -671,7 +671,7 @@ bool V2Viewport::OpenCursorInput()
     const auto begun = kachakacha::v2::app::BeginCursorInput(session_->CurrentTool(),
         workPlane_.normal.LengthSquared() > 0.0);
     if (!begun.HasValue()) {
-        viewMessage_ = begun.Diagnostics().front().summaryJa;
+        viewMessage_ = begun.FirstSummaryJa();
         return false;
     }
     cursorPanel_ = begun.Value();
@@ -699,7 +699,7 @@ bool V2Viewport::PlacePointFromCursorInput()
 {
     const auto solved = kachakacha::v2::app::SolveDelta(cursorPanel_, cursorDelta_);
     if (!solved.HasValue()) {
-        viewMessage_ = solved.Diagnostics().front().summaryJa;
+        viewMessage_ = solved.FirstSummaryJa();
         if (statusCallback_) {
             statusCallback_(viewMessage_);
         }
@@ -835,7 +835,7 @@ bool V2Viewport::FocusNextCursorField(bool backward)
 {
     const auto moved = kachakacha::v2::app::FocusNextField(cursorPanel_, backward);
     if (!moved.HasValue()) {
-        viewMessage_ = moved.Diagnostics().front().summaryJa;
+        viewMessage_ = moved.FirstSummaryJa();
         return false;
     }
     cursorPanel_ = moved.Value();
@@ -848,7 +848,7 @@ bool V2Viewport::TypeIntoCursorField(const QString& text)
     const auto typed = kachakacha::v2::app::SetFieldText(cursorPanel_,
         cursorPanel_.focusedIndex, text.toStdString());
     if (!typed.HasValue()) {
-        viewMessage_ = typed.Diagnostics().front().summaryJa;
+        viewMessage_ = typed.FirstSummaryJa();
         return false;
     }
     cursorPanel_ = typed.Value();
@@ -866,9 +866,9 @@ bool V2Viewport::CommitCursorField()
         if (at < cursorPanel_.states.size()) {
             cursorPanel_.states[at].error = true;
             cursorPanel_.states[at].messageJa =
-                committed.Diagnostics().front().summaryJa;
+                committed.FirstSummaryJa();
         }
-        viewMessage_ = committed.Diagnostics().front().summaryJa;
+        viewMessage_ = committed.FirstSummaryJa();
         if (statusCallback_) {
             statusCallback_(viewMessage_);
         }

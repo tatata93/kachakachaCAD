@@ -78,10 +78,22 @@ public:
         return result;
     }
 
+    //! 断る。**理由が1つも無い断り方は作らせない。**
+    //!
+    //! 「できないことを、できたことにしない」の裏側として、
+    //! 「断るなら理由を言う」がある。理由の無い失敗は、画面が
+    //! `Diagnostics().front()` を読んだ瞬間に並びの外を読む。
+    //! Release では気づかず、Windows の Debug では落ちる。
+    //! ここで必ず1つ入れておけば、読む側は数えなくてよくなる。
     [[nodiscard]] static Result Failure(std::vector<Diagnostic> errors)
     {
         Result result;
         result.diagnostics_ = std::move(errors);
+        if (result.diagnostics_.empty()) {
+            result.diagnostics_.push_back(MakeError("GEN-E000",
+                "理由の付いていない失敗です。",
+                "断るときは理由番号と一文を付けてください(不具合)。"));
+        }
         return result;
     }
 
@@ -96,6 +108,16 @@ public:
     [[nodiscard]] const std::vector<Diagnostic>& Diagnostics() const noexcept
     {
         return diagnostics_;
+    }
+    //! 最初の理由の一文。理由が1つも無ければ、そう言う。
+    //!
+    //! `Diagnostics().front()` を直に書くと、理由を付け忘れた失敗で
+    //! **並びの外を読む**。Release では気づかず、Windows の Debug では落ちる。
+    //! 落ちるより「理由が入っていません」と出たほうが、直しようがある。
+    [[nodiscard]] std::string FirstSummaryJa() const
+    {
+        return diagnostics_.empty() ? std::string("理由が入っていません(不具合)。")
+                                    : diagnostics_.front().summaryJa;
     }
     [[nodiscard]] bool HasError() const noexcept
     {

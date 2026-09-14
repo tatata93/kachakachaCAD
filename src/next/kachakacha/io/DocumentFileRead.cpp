@@ -304,7 +304,7 @@ private:
     if (!made.HasValue()) {
         // 幾何として成り立たないものを、近い形へ黙って直さない。
         std::string reason = made.Diagnostics().empty() ? std::string()
-                                                        : made.Diagnostics().front().summaryJa;
+                                                        : made.FirstSummaryJa();
         loader.Fail(kBadValue, "線として成り立たない記述です。", where + ": " + reason);
         return {fallback, id};
     }

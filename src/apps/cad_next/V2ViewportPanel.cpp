@@ -212,7 +212,7 @@ void V2Viewport::ApplyGadgetRotation(const kachakacha::v2::view::ViewGadget& gad
         rotated = kachakacha::v2::view::RotateByScreenAxis(from, gadget.direction, degrees);
     }
     if (!rotated.HasValue()) {
-        viewMessage_ = rotated.Diagnostics().front().summaryJa;
+        viewMessage_ = rotated.FirstSummaryJa();
         if (statusCallback_) {
             statusCallback_(viewMessage_);
         }

@@ -157,7 +157,7 @@ bool V2GridDock::ApplySpacingExpression(const QString& expression)
         expression.toStdString(), kachakacha::v2::geometry::QuantityKind::Length);
     if (!evaluated.HasValue()) {
         message_->setText(QStringLiteral("主点間隔: %1")
-                .arg(QString::fromStdString(evaluated.Diagnostics().front().summaryJa)));
+                .arg(QString::fromStdString(evaluated.FirstSummaryJa())));
         return false;
     }
     if (!(evaluated.Value().value > 0.0)) {

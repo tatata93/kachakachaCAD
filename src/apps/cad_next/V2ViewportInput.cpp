@@ -675,7 +675,7 @@ void V2Viewport::DragControlPoint(const QPointF& position)
             controlDrag_.preview = moved.Value();
         } else if (!moved.Diagnostics().empty()) {
             // つぶれる位置では形を作らない。前の形のまま出して、理由を言う。
-            status_ = moved.Diagnostics().front().summaryJa;
+            status_ = moved.FirstSummaryJa();
             if (statusCallback_) {
                 statusCallback_(status_);
             }

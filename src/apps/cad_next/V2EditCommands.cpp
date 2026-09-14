@@ -185,7 +185,7 @@ void V2MainWindow::RefreshEditDock()
         const auto fields = kachakacha::v2::app::WireEditFieldsOf(*wire);
         if (!fields.HasValue()) {
             editDock_->ShowNothing(QString::fromStdString(
-                fields.Diagnostics().front().summaryJa + " " + fields.Diagnostics().front().detailsJa));
+                fields.FirstSummaryJa() + " " + fields.Diagnostics().front().detailsJa));
             return;
         }
         kachakacha::v2::app::WireEditFields shown = fields.Value();
@@ -232,7 +232,7 @@ void V2MainWindow::ApplySelectedEdit()
             editDock_->PlaneFields(), tolerance);
         if (!edited.HasValue()) {
             ReportDiagnostics(edited.Diagnostics());
-            editDock_->SetMessage(QString::fromStdString(edited.Diagnostics().front().summaryJa));
+            editDock_->SetMessage(QString::fromStdString(edited.FirstSummaryJa()));
             return;
         }
         const auto changed = session_->GetDocument().Run(UpdateFeatureDefinitionCommand(
@@ -255,7 +255,7 @@ void V2MainWindow::ApplySelectedEdit()
             EditAngleFrame(fields.sourcePlaneId, nullptr), *ids_);
         if (!edited.HasValue()) {
             ReportDiagnostics(edited.Diagnostics());
-            editDock_->SetMessage(QString::fromStdString(edited.Diagnostics().front().summaryJa));
+            editDock_->SetMessage(QString::fromStdString(edited.FirstSummaryJa()));
             return;
         }
         // 形と補助線の印をひとまとまりで入れる。元に戻すのは一度で済む。

@@ -445,7 +445,7 @@ Result<CursorCommitResult> CommitFocusedField(const CursorInputPanel& panel,
         if (!evaluated.HasValue()) {
             // 赤くして、その欄だけ確定しない。ほかの欄は触らない。
             next.states[index].error = true;
-            next.states[index].messageJa = evaluated.Diagnostics().front().summaryJa;
+            next.states[index].messageJa = evaluated.FirstSummaryJa();
             CursorCommitResult failed{std::move(next), false};
             return Result<CursorCommitResult>::Failure(evaluated.Diagnostics());
         }
@@ -465,7 +465,7 @@ Result<CursorCommitResult> CommitFocusedField(const CursorInputPanel& panel,
         // 矛盾。最後の変更だけを取り消し、その欄を赤くする。
         CursorInputPanel reverted = panel;
         reverted.states[index].error = true;
-        reverted.states[index].messageJa = solved.Diagnostics().front().summaryJa;
+        reverted.states[index].messageJa = solved.FirstSummaryJa();
         return Result<CursorCommitResult>::Failure(solved.Diagnostics());
     }
     const auto refreshed = UpdateFromPointer(next, pointerDelta);

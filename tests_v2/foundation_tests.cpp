@@ -292,4 +292,19 @@ KACHA_V2_TEST(tolerance, it_is_decided_once_and_carried_not_recomputed)
         "a carried tolerance keeps the value it was created with");
 }
 
+KACHA_V2_TEST(foundation, 理由の無い断り方は作れない)
+{
+    // 「できないことを、できたことにしない」の裏側は「断るなら理由を言う」。
+    // 理由の無い失敗を画面が読むと `Diagnostics().front()` で並びの外を読む。
+    // Release では気づかず、Windows の Debug では落ちる。
+    const auto refused = kachakacha::v2::base::Result<int>::Failure(
+        std::vector<kachakacha::v2::base::Diagnostic>{});
+    kachakacha::v2::test::Require(!refused.HasValue(), "断っていること");
+    kachakacha::v2::test::Require(!refused.Diagnostics().empty(),
+        "理由が必ず1つ入ること");
+    kachakacha::v2::test::RequireEqual(refused.Diagnostics().front().code,
+        std::string("GEN-E000"), "付け忘れと分かる理由番号");
+    kachakacha::v2::test::Require(!refused.FirstSummaryJa().empty(), "一文も出る");
+}
+
 KACHA_V2_TEST_MAIN("foundation_tests")

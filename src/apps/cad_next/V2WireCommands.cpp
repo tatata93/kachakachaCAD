@@ -924,7 +924,7 @@ void V2MainWindow::CreateWireFromDock()
     if (!made.HasValue()) {
         ReportDiagnostics(made.Diagnostics());
         drawingDock_->ShowMessage(QString::fromStdString(
-            made.Diagnostics().front().summaryJa + " " + made.Diagnostics().front().detailsJa));
+            made.FirstSummaryJa() + " " + made.Diagnostics().front().detailsJa));
         return;
     }
     const QString name = drawingDock_->DirectWireName();

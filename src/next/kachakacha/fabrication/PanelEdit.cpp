@@ -152,7 +152,7 @@ PanelEditPreview PreviewMerge(const PanelPartition& partition,
         preview.maximumDeviationAfterMm = preview.maximumDeviationBeforeMm;
         preview.messageJa = merged.Diagnostics().empty()
             ? std::string("1つにできません。")
-            : merged.Diagnostics().front().summaryJa;
+            : merged.FirstSummaryJa();
         return preview;
     }
     preview.possible = true;
@@ -227,7 +227,7 @@ PanelEditPreview PreviewSplit(const PanelPartition& partition,
         preview.maximumDeviationAfterMm = preview.maximumDeviationBeforeMm;
         preview.messageJa = split.Diagnostics().empty()
             ? std::string("分けられません。")
-            : split.Diagnostics().front().summaryJa;
+            : split.FirstSummaryJa();
         return preview;
     }
     preview.possible = true;

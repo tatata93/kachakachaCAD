@@ -99,7 +99,7 @@ namespace {
     const auto measured = geometry::MeasureTwoPoints(request.pickedPoints[0],
         request.pickedPoints[1]);
     if (!measured.HasValue()) {
-        rows.push_back(MeasureRow{"2点間", measured.Diagnostics().front().summaryJa});
+        rows.push_back(MeasureRow{"2点間", measured.FirstSummaryJa()});
         return rows;
     }
     const auto& m = measured.Value();
@@ -135,7 +135,7 @@ namespace {
     const auto measured = geometry::MeasureThreePointAngle(request.pickedPoints[1],
         request.pickedPoints[0], request.pickedPoints[2]);
     if (!measured.HasValue()) {
-        rows.push_back(MeasureRow{"3点角度", measured.Diagnostics().front().summaryJa});
+        rows.push_back(MeasureRow{"3点角度", measured.FirstSummaryJa()});
         return rows;
     }
     rows.push_back(MeasureRow{"頂点", FormatPointJa(request.pickedPoints[1])});
@@ -169,12 +169,12 @@ namespace {
             closest.secondParameter);
         rows.push_back(MeasureRow{"接線どうしの角度",
             tangent.HasValue() ? FormatDegreesJa(tangent.Value().acute.Value())
-                               : tangent.Diagnostics().front().summaryJa});
+                               : tangent.FirstSummaryJa()});
         const auto normal = geometry::MeasureNormalAngle(first, closest.firstParameter, second,
             closest.secondParameter);
         rows.push_back(MeasureRow{"法線どうしの角度",
             normal.HasValue() ? FormatDegreesJa(normal.Value().acute.Value())
-                              : normal.Diagnostics().front().summaryJa});
+                              : normal.FirstSummaryJa()});
         return rows;
     }
     if (request.pickedPoints.empty()) {

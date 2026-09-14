@@ -191,7 +191,7 @@ bool V2ExtrudeDialog::CurrentChoiceIsValid(QString* reasonOut) const
         return true;
     }
     if (reasonOut != nullptr && !checked.Diagnostics().empty()) {
-        *reasonOut = QString::fromStdString(checked.Diagnostics().front().summaryJa);
+        *reasonOut = QString::fromStdString(checked.FirstSummaryJa());
     }
     return false;
 }

@@ -608,6 +608,16 @@ QString V2ExtrudeDock::InputTextJa() const
     return input_->text();
 }
 
+QString V2ExtrudeDock::TargetTextJa() const
+{
+    return targetValue_->text();
+}
+
+QString V2ExtrudeDock::ProfileTextJa() const
+{
+    return profileValue_->text();
+}
+
 // isVisible() は親(棚・窓)が画面に出ていないと偽になる。
 // 画面を出さない自己試験では、出すと決めた欄まで「出ていない」ことになる。
 // ここで見たいのは「出すと決めたか」なので isHidden() の裏を返す。

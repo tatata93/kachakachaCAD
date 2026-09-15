@@ -675,6 +675,154 @@ struct OutputCounts {
     return true;
 }
 
+//! いま画面に出ている立体の、上下の広がり(mm)。押せたかどうかを高さで見る。
+[[nodiscard]] double SolidHeightMm(V2MainWindow& window)
+{
+    double height = -1.0;
+    for (const auto& shape : window.Viewport().ShapeViews()) {
+        if (shape.surface || shape.mesh.Empty()) {
+            continue;
+        }
+        height = shape.mesh.maximum.z - shape.mesh.minimum.z;
+    }
+    return height;
+}
+
+//! HP-EX-03。**立体の面を画面から拾って**押す。
+//!
+//! 面を押す道は、これまで `SelectionRef` を手で組んで `pickedFaceIndex = 0` と
+//! 書く試験しか無かった。それでは「人が面を拾えるか」を何も確かめていない。
+//! ここでは素のクリックで面を拾い、棚と札と下見が見えることまで見る。
+[[nodiscard]] bool CaseHumanPathPushAFace(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");   // 確定。これが押す相手になる。
+    if (!Explain("押す相手の立体ができる", CountOfKind(window, EntityKind::Part) == 1)) {
+        return false;
+    }
+    const double before = SolidHeightMm(window);
+    if (!Explain((std::string("立体の高さが読める(") + std::to_string(before)
+                     + "mm)").c_str(),
+            before > 0.0)) {
+        return false;
+    }
+
+    // **道具を先に構えてから、立体の真ん中を素で押す。**
+    // 構えている間、押し出しが求めているのは輪郭なので、面が前に出る(§6)。
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("part.extrude");
+    viewport.SelectAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5),
+        Qt::NoModifier);
+    bool pickedFace = false;
+    for (const auto& ref : viewport.Selection().ordered) {
+        if (ref.kind == kachakacha::v2::app::SelectionElementKind::Face
+            && ref.pickedFaceIndex.has_value()) {
+            pickedFace = true;
+        }
+    }
+    // ここが本題。**手で番号を書かずに、押した場所から面が拾えたか。**
+    if (!Explain((std::string("素のクリックで面が拾える(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            pickedFace)) {
+        return false;
+    }
+
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("矢印が出る(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            viewport.ExtrudeHandleShown())) {
+        return false;
+    }
+    if (!Explain("押し出しの棚が見えている", window.ShelfShown(Shelf::Extrude))) {
+        return false;
+    }
+    if (!Explain("3D に役割の札が出ている", !viewport.ToolRoleLabels().empty())) {
+        return false;
+    }
+    // 見える距離を打ってから、**3D を触らずに** Enter。
+    window.ExtrudeDock().TypeDistanceMm(12.0);
+    window.RefreshExtrudeFromDock();
+    if (!Explain("Enter を窓が受け取る", window.HandleToolKey(Qt::Key_Return, nullptr))) {
+        return false;
+    }
+    if (!Explain((std::string("立体は増えない(")
+                     + std::to_string(CountOfKind(window, EntityKind::Part))
+                     + "個)").c_str(),
+            CountOfKind(window, EntityKind::Part) == 1)) {
+        return false;
+    }
+    const double after = SolidHeightMm(window);
+    return Explain((std::string("面を押したぶん高くなる(") + std::to_string(before)
+                       + "mm → " + std::to_string(after) + "mm)").c_str(),
+        after > before + 1.0);
+}
+
+//! HP-UI-02。**選んだものが画面に出ている**(§7)。
+//!
+//! これまで「対象」と「輪郭」は1本の文字列だった。どちらを選び直すのかが
+//! 読めず、3D のどれがその役割なのかも分からなかった。
+//! ここでは、右の棚の2欄と 3D の札の両方が、選んだものを名前で指すことを見る。
+[[nodiscard]] bool CaseHumanPathSelectionIsVisible(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!Explain("押し出しの棚が見えている", window.ShelfShown(Shelf::Extrude))) {
+        return false;
+    }
+    // 輪郭の欄に名前が出ていること。「(選んでいません)」のままではない。
+    const QString profileText = window.ExtrudeDock().ProfileTextJa();
+    if (!Explain((std::string("輪郭の欄に名前が出ている(")
+                     + profileText.toStdString() + ")").c_str(),
+            !profileText.isEmpty()
+                && profileText != QStringLiteral("(選んでいません)"))) {
+        return false;
+    }
+    // **対象と輪郭は別の欄である。**1本の文字列に混ぜない。
+    const QString targetText = window.ExtrudeDock().TargetTextJa();
+    if (!Explain((std::string("対象の欄は別に出ている(") + targetText.toStdString()
+                     + ")").c_str(),
+            !targetText.isEmpty() && targetText != profileText)) {
+        return false;
+    }
+    // 3D の札も、その輪郭を指していること。
+    bool sawProfileLabel = false;
+    for (const auto& label : window.Viewport().ToolRoleLabels()) {
+        if (label.text.startsWith(QStringLiteral("PROFILE"))) {
+            sawProfileLabel = true;
+        }
+    }
+    if (!Explain("3D に PROFILE の札が出ている", sawProfileLabel)) {
+        return false;
+    }
+    // 一番下の一行にも、同じものが並んでいること。
+    const std::string footer = window.ToolFooterTextJa().toStdString();
+    if (!Explain((std::string("一番下の一行にも出ている(") + footer + ")").c_str(),
+            footer.find("PROFILE=") != std::string::npos
+                && footer.find("TARGET=") != std::string::npos)) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return Explain("やめると札も一行も消える",
+        window.Viewport().ToolRoleLabels().empty()
+            && window.ToolFooterTextJa().isEmpty());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -700,6 +848,9 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-SF-03 Esc で何も作らずやめる", CaseHumanPathSurfaceCancel},
         {"HP-SF-04 作り方を変えても入れたものが消えない",
             CaseHumanPathSurfaceMethodKeepsInput},
+        {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
+        {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
+            CaseHumanPathSelectionIsVisible},
     };
 }
 

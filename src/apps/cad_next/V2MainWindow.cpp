@@ -741,6 +741,11 @@ void V2MainWindow::ShowToolFooter(const QString& line)
     toolFooterLabel_->setText(line);
 }
 
+QString V2MainWindow::ToolFooterTextJa() const
+{
+    return toolFooterLabel_ == nullptr ? QString() : toolFooterLabel_->text();
+}
+
 void V2MainWindow::BuildStatusBar()
 {
     toolLabel_ = new QLabel(this);

@@ -150,6 +150,8 @@ public:
     void RefreshExtrudePickSlot();
     //! 一番下の一行を書き直す。道具が動いていなければ空にする。
     void ShowToolFooter(const QString& line);
+    //! 一番下の一行に、いま出ている言葉。試験から読む。
+    [[nodiscard]] QString ToolFooterTextJa() const;
     //! 下見をやめる。確定・取消・道具替えのとき。
     void EndExtrudePreview();
     //! 出ている下見のとおりに作る。Enter から呼ぶ。

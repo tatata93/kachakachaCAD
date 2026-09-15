@@ -76,6 +76,10 @@ public:
 
     //! 試験から見る。
     [[nodiscard]] QString InputTextJa() const;
+    //! 「1. 入力」の2欄に、いま出ている言葉。**画面に出ているものそのもの。**
+    //! 試験が「選んだものが人に見えているか」を見るために要る(§7)。
+    [[nodiscard]] QString TargetTextJa() const;
+    [[nodiscard]] QString ProfileTextJa() const;
     [[nodiscard]] bool OperationRowShown() const;
     //! 「選び直す」のボタンが出ているか。試験から見る。
     [[nodiscard]] bool ReselectTargetShown() const;

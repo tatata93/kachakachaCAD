@@ -26,7 +26,12 @@
 namespace kachakacha::v2::app {
 
 enum class ParameterId {
-    ExtrudeDistance,   //!< 押し出しの距離(板厚)
+    //! 板材の厚み。プラ板・紙の厚みなので 0.05〜20mm。
+    //! **押し出しの距離とは別物である。** 同じ数にしていたので、
+    //! 車体1つ分(100mm級)を押そうとすると板厚の上限 20mm で断られていた。
+    ExtrudeDistance,
+    //! 押し出す距離。板厚の上限を引き継がない(ExtrudeDistance とは別 state)。
+    ExtrudeLengthMm,
     CornerSize,        //!< 面取り量 / 丸め半径
     OffsetDistanceMm,  //!< オフセットの距離(正なら平面の u×法線 の側、負なら逆)
     PatternMarginMm,   //!< 型紙の余白

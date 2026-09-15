@@ -14,6 +14,7 @@ using kachakacha::v2::app::ExtrudeDirectionNameJa;
 using kachakacha::v2::app::ExtrudeExtentNameJa;
 using kachakacha::v2::app::ExtrudeFacts;
 using kachakacha::v2::app::ExtrudeSummaryJa;
+using kachakacha::v2::app::SuggestExtrudeDistanceMm;
 using kachakacha::v2::app::ExtentUsesDistance;
 using kachakacha::v2::app::ExtentUsesSecondDistance;
 using kachakacha::v2::app::ExtentUsesTarget;
@@ -219,6 +220,29 @@ KACHA_V2_TEST(extrude_options, 面までのときは相手の平面が写る)
     Require(request.targetKind == kachakacha::v2::modeling::ExtrudeTargetKind::Plane,
         "相手は平面");
     Require(request.targetPlane.origin.z == 10.0, "その平面が写っている");
+}
+
+KACHA_V2_TEST(extrude, 押し始めの距離は見える大きさにする)
+{
+    using kachakacha::v2::test::Require;
+    // 既定が 0.5mm(板厚)だったので、100mm の輪郭を押しても下見が
+    // 線の太さと区別できなかった(UX-AUDIT-EXTRUDE-SURFACE-R1)。
+
+    // 1. 覚えている値が輪郭に対して妥当なら、そのまま使う。**毎回同じ数にしない。**
+    Require(SuggestExtrudeDistanceMm(18.0, 100.0) == 18.0, "妥当な記憶値はそのまま");
+    Require(SuggestExtrudeDistanceMm(5.0, 100.0) == 5.0, "1/20 ちょうどもそのまま");
+    Require(SuggestExtrudeDistanceMm(0.5, 8.0) == 0.5, "小さい輪郭なら 0.5mm も見える");
+
+    // 2. 見えない値のときだけ寄せる。寄せた先は輪郭の大きさで変わる。
+    const double forBig = SuggestExtrudeDistanceMm(0.5, 100.0);
+    Require(forBig > 0.5, "見えない値は寄せる");
+    Require(forBig >= 100.0 / 20.0, "寄せた先は見える大きさ");
+    const double forSmall = SuggestExtrudeDistanceMm(0.01, 10.0);
+    Require(forSmall > 0.01 && forSmall < forBig, "輪郭が小さければ寄せる先も小さい");
+
+    // 3. 輪郭の大きさが分からなければ、覚えている値のまま。
+    Require(SuggestExtrudeDistanceMm(0.5, 0.0) == 0.5, "差し渡しが取れなければそのまま");
+    Require(SuggestExtrudeDistanceMm(0.5, -1.0) == 0.5, "おかしな差し渡しでも触らない");
 }
 
 KACHA_V2_TEST_MAIN("extrude_options_tests")

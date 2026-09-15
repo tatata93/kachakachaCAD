@@ -59,10 +59,17 @@ enum class Shelf {
 
 //! いまの道具とモードで、右に出す棚。並びは前に出るものが先。
 //! 空にはならない(どの道具にも、少なくとも1枚は出す棚がある)。
-[[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool);
+//!
+//! `extruding` は「押し出しの下見を出している最中か」。ここを渡さないと
+//! `Shelf::Extrude` がどの組み合わせにも現れず、`RefreshRightShelves` が
+//! **毎回その棚を隠していた**。棚に値を入れた直後に自分で隠していたので、
+//! 押し出しの欄は一度も画面に出ていなかった。
+[[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
+    bool extruding = false);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
-[[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool);
+[[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
+    bool extruding = false);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

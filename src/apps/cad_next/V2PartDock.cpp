@@ -57,7 +57,7 @@ V2PartDock::V2PartDock(QWidget* parent)
 
     extrudeDistance_ = MakeField(body, -10000.0, 10000.0, QStringLiteral(" mm"));
     extrudeDistance_->setToolTip(QStringLiteral(
-        "押し出しの距離。負なら逆へ出ます。数の棚の「押し出しの距離」と同じ値です。"));
+        "押し出しの距離。板厚とは別の数です。"));
     form->addRow(QStringLiteral("押し出しの距離"), extrudeDistance_);
 
     thickness_ = MakeField(body, 0.0, 1000.0, QStringLiteral(" mm"));
@@ -122,7 +122,7 @@ V2PartDock::V2PartDock(QWidget* parent)
             }
         });
     };
-    notify(ParameterId::ExtrudeDistance, extrudeDistance_);
+    notify(ParameterId::ExtrudeLengthMm, extrudeDistance_);
     notify(ParameterId::ExtrudeDistance, thickness_);
     notify(ParameterId::OffsetDistanceMm, offsetDistance_);
     notify(ParameterId::RevolveAngleDeg, revolveAngle_);
@@ -140,9 +140,11 @@ V2PartDock::V2PartDock(QWidget* parent)
 QDoubleSpinBox* V2PartDock::FieldFor(ParameterId id) const
 {
     switch (id) {
-    // 板厚と押し出しの距離は V2 では同じ数(数の棚の「押し出しの距離」)。
-    // 別の数にすると、板から立体を出すときに2か所へ同じ値を打つことになる。
-    case ParameterId::ExtrudeDistance:  return extrudeDistance_;
+    // **板厚と押し出しの距離は別の数である。**
+    // 同じ数にしていたので、板厚の上限 20mm が押し出しへ漏れ、
+    // 100mm 級の形を押せなかった。
+    case ParameterId::ExtrudeLengthMm:  return extrudeDistance_;
+    case ParameterId::ExtrudeDistance:  return thickness_;
     case ParameterId::OffsetDistanceMm: return offsetDistance_;
     case ParameterId::RevolveAngleDeg:  return revolveAngle_;
     case ParameterId::JigClearanceMm:   return jigClearance_;
@@ -161,11 +163,6 @@ void V2PartDock::SetParameterMm(ParameterId id, double value)
     const bool blocked = field->blockSignals(true);
     field->setValue(value);
     field->blockSignals(blocked);
-    if (id == ParameterId::ExtrudeDistance && thickness_ != nullptr) {
-        const bool second = thickness_->blockSignals(true);
-        thickness_->setValue(value);
-        thickness_->blockSignals(second);
-    }
 }
 
 double V2PartDock::ParameterMm(ParameterId id) const

@@ -179,6 +179,27 @@ std::string ExtrudeSummaryJa(const ExtrudeChoice& choice)
     return text;
 }
 
+double SuggestExtrudeDistanceMm(double rememberedMm, double profileSpanMm)
+{
+    if (!(profileSpanMm > 0.0) || !std::isfinite(profileSpanMm)) {
+        return rememberedMm;   // 輪郭の大きさが分からない。覚えている値のまま。
+    }
+    if (!std::isfinite(rememberedMm) || rememberedMm <= 0.0) {
+        rememberedMm = 0.0;
+    }
+    // 差し渡しの 1/20 あれば、下見は線の太さと区別できる。
+    const double visible = profileSpanMm / 20.0;
+    if (rememberedMm >= visible) {
+        return rememberedMm;
+    }
+    // 見えない。差し渡しの 1/4 を、きりのよい数へ丸める。
+    // 丸めるのは、打ち直すときに読みやすい数にするためである。
+    const double wanted = profileSpanMm / 4.0;
+    const double magnitude = std::pow(10.0, std::floor(std::log10(wanted)));
+    const double rounded = std::round(wanted / magnitude) * magnitude;
+    return rounded > 0.0 ? rounded : wanted;
+}
+
 modeling::ExtrudeRequest ToExtrudeRequest(const ExtrudeChoice& choice,
     std::vector<modeling::ExtrudeProfile> profiles,
     const modeling::WorkPlaneFrame& workPlane,

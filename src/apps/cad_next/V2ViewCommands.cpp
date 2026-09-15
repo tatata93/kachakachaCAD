@@ -818,7 +818,8 @@ void V2MainWindow::RefreshRightShelves()
     // ベジェ曲線に持ち替えたのに「円弧の作り方」が出たままだった
     // (オーナー指摘 2026-09-13)。
     drawingDock_->SetTool(session_->CurrentTool());
-    const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool());
+    const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
+        extrudeShelfShown_);
     for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
         QDockWidget* dock = DockForShelf(shelf);
         if (dock == nullptr) {

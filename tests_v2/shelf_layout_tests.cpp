@@ -158,4 +158,74 @@ KACHA_V2_TEST(shelf_layout, 名前は重ならない)
     Require(names.size() == AllShelves().size(), "全部ちがう名前");
 }
 
+KACHA_V2_TEST(shelf, 押し出しの最中は押し出しの棚が前に出る)
+{
+    // これが無かったので `Shelf::Extrude` はどの組み合わせにも現れず、
+    // `RefreshRightShelves` が毎回その棚を隠していた。
+    // 棚に値を入れた直後に自分で隠すので、押し出しの欄は一度も出なかった
+    // (UX-AUDIT-EXTRUDE-SURFACE-R1 BUGS #1)。
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        for (const DrawingTool tool : kAllTools) {
+            const auto shelves = ShelvesFor(mode, tool, true);
+            Require(!shelves.empty(), "棚が出る");
+            Require(shelves.front() == Shelf::Extrude, "押し出しの棚が先頭");
+            Require(FrontShelfFor(mode, tool, true) == Shelf::Extrude,
+                "前に出るのも押し出しの棚");
+            Require(std::find(shelves.begin(), shelves.end(), Shelf::Extrude)
+                    != shelves.end(),
+                "並びの中にもある");
+        }
+    }
+}
+
+KACHA_V2_TEST(shelf, 押し出しが終われば元の棚へ戻る)
+{
+    // 確定・取消のあとは、ふだんの棚に戻らなければならない。
+    // 押し出しの棚が出たままだと、いま何をしているのか読めなくなる。
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        const auto after = ShelvesFor(mode, DrawingTool::Select, false);
+        Require(std::find(after.begin(), after.end(), Shelf::Extrude) == after.end(),
+            "押し出しの棚は残らない");
+        Require(FrontShelfFor(mode, DrawingTool::Select, false) == after.front(),
+            "前に出るのは並びの先頭");
+    }
+}
+
+KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
+{
+    // 台帳にあるのに、どの組み合わせでも出ない棚を作らない。
+    // 押し出しの棚がまさにそれだった。
+    std::set<int> reachable;
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        for (const DrawingTool tool : kAllTools) {
+            for (const bool extruding : {false, true}) {
+                for (const Shelf shelf : ShelvesFor(mode, tool, extruding)) {
+                    reachable.insert(static_cast<int>(shelf));
+                }
+            }
+        }
+    }
+    // いまのところ、この2枚だけは自分の命令が `show()` + `raise()` で出している。
+    // **押し出しの棚と同じ壊れ方をする形である**(次に棚を作り直したときに消える)。
+    // ここに並べてあるのは「知っていて残している」という印で、
+    // 3枚目が増えたらこの関所が鳴る。
+    const std::set<int> openedByOwnCommand{
+        static_cast<int>(Shelf::WorkPlane),   // workplane.create が出す
+        static_cast<int>(Shelf::Display),     // view.display_settings が出す
+    };
+    std::string missing;
+    for (const Shelf shelf : AllShelves()) {
+        const int id = static_cast<int>(shelf);
+        if (reachable.count(id) == 0 && openedByOwnCommand.count(id) == 0) {
+            missing += std::string(ShelfNameJa(shelf)) + " ";
+        }
+    }
+    Require(missing.empty(), "出ない棚が無い: " + missing);
+    Require(reachable.count(static_cast<int>(Shelf::Extrude)) == 1,
+        "押し出しの棚は、棚の決め方そのものから出る(命令が一瞬出すのではない)");
+}
+
 KACHA_V2_TEST_MAIN("shelf_layout_tests")

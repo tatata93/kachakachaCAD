@@ -149,4 +149,40 @@ KACHA_V2_TEST(parameters, 実寸に式が書ける)
         "20000mm になる");
 }
 
+KACHA_V2_TEST(parameters, 押し出しの距離は板厚の上限を引き継がない)
+{
+    using kachakacha::v2::app::DefaultParameters;
+    using kachakacha::v2::app::ParameterId;
+    using kachakacha::v2::app::ParameterValueOf;
+    using kachakacha::v2::app::SetParameter;
+    using kachakacha::v2::test::Require;
+
+    // 同じ数にしていたので、板厚の上限 20mm が押し出しへ漏れ、
+    // 100mm 級の形を押そうとすると断られていた
+    // (UX-AUDIT-EXTRUDE-SURFACE-R1 BUGS #2)。
+    const auto base = DefaultParameters();
+
+    const auto thick = SetParameter(base, ParameterId::ExtrudeDistance, "40");
+    Require(!thick.HasValue(), "板厚 40mm は板ではないので断る");
+
+    const auto pushed = SetParameter(base, ParameterId::ExtrudeLengthMm, "120");
+    Require(pushed.HasValue(), "押し出し 120mm は通る");
+    Require(ParameterValueOf(pushed.Value(), ParameterId::ExtrudeLengthMm) == 120.0,
+        "打った値がそのまま入る");
+
+    // 別の数であること。片方を変えても、もう片方は動かない。
+    Require(ParameterValueOf(pushed.Value(), ParameterId::ExtrudeDistance)
+            == ParameterValueOf(base, ParameterId::ExtrudeDistance),
+        "押し出しを変えても板厚は動かない");
+    const auto thinner = SetParameter(base, ParameterId::ExtrudeDistance, "0.3");
+    Require(thinner.HasValue(), "板厚 0.3mm は通る");
+    Require(ParameterValueOf(thinner.Value(), ParameterId::ExtrudeLengthMm)
+            == ParameterValueOf(base, ParameterId::ExtrudeLengthMm),
+        "板厚を変えても押し出しは動かない");
+
+    // 押し出しにも歯止めはある。ただし板厚とは別の数である。
+    Require(!SetParameter(base, ParameterId::ExtrudeLengthMm, "5000").HasValue(),
+        "打ち間違いの大きさは断る");
+}
+
 KACHA_V2_TEST_MAIN("command_parameter_tests")

@@ -170,6 +170,10 @@ V2MainWindow::V2MainWindow()
 
     WireViewportCallbacks();
 
+    // Enter / Esc は窓が先に受ける。右の欄に焦点があっても効くようにする
+    // (オーナー指示 2026-09-15 §14)。3D を一度クリックして焦点を戻す、を無くす。
+    qApp->installEventFilter(this);
+
     // 空の文書にも原点の3面(top_XY / front_XZ / side_YZ)を置き、上面 XY を作業中にする。
     // V1 と同じく、開いた直後から「平面から離す」の相手が選べる。
     AdoptDocument(kachakacha::v2::document::DocumentSnapshot{});

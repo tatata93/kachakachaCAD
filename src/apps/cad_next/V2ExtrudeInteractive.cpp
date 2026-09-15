@@ -28,6 +28,7 @@
 #include <QDialog>
 #include <QString>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -87,11 +88,30 @@ void V2MainWindow::BeginExtrudePreview()
     // 覚える前に向きを聞くと、前の輪郭の平面で答えてしまう。
     extrudeOutline_ = outline;
 
+    // 輪郭の差し渡し。押し始めの距離が見える大きさかを決めるのに使う。
+    Vector3 lowest = outline.front();
+    Vector3 highest = outline.front();
+    for (const Vector3& point : outline) {
+        lowest = Vector3{std::min(lowest.x, point.x), std::min(lowest.y, point.y),
+            std::min(lowest.z, point.z)};
+        highest = Vector3{std::max(highest.x, point.x), std::max(highest.y, point.y),
+            std::max(highest.z, point.z)};
+    }
+    const double spanMm = (highest - lowest).Length();
+
     ExtrudeHandle handle;
     handle.origin = center;
     // 向きは1か所(ExtrudeDirectionNow)から取る。矢印・下見・確定を必ず揃える。
     handle.direction = ExtrudeDirectionNow();
-    handle.distanceMm = ExtrudeDistanceMm();
+    // 距離は覚えている値。ただし輪郭に対して細すぎると下見が見えないので、
+    // そのときだけ見える値へ寄せる(core が決める)。
+    const double suggested = kachakacha::v2::app::SuggestExtrudeDistanceMm(
+        ExtrudeDistanceMm(), spanMm);
+    if (suggested != ExtrudeDistanceMm()) {
+        parameterDock_->Apply(kachakacha::v2::app::ParameterId::ExtrudeLengthMm,
+            QString::number(suggested, 'f', 2));
+    }
+    handle.distanceMm = suggested;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
     ShowExtrudeShelf(plan);

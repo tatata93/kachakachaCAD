@@ -94,6 +94,14 @@ public:
     V2MainWindow();
     ~V2MainWindow() override;
 
+    //! 窓のところで Enter / Esc を受ける。焦点がどこにあっても同じように効く。
+    //! 3D を一度クリックして焦点を戻す必要を無くすため(オーナー指示 §14)。
+    bool eventFilter(QObject* target, QEvent* event) override;
+    //! いま Enter / Esc を引き受ける道具が動いているか。試験からも見る。
+    [[nodiscard]] bool ToolWantsConfirmKeys() const;
+    //! 合図を道具へ渡す。受け止めたら true。試験は窓を出さずにここを叩く。
+    bool HandleToolKey(int key, QObject* target);
+
     [[nodiscard]] V2Viewport& Viewport() { return *viewport_; }
     [[nodiscard]] kachakacha::v2::app::DrawingSession& Session() { return *session_; }
 

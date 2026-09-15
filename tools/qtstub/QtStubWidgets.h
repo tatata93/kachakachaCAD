@@ -26,6 +26,9 @@ public:
     void unsetCursor();
     void raise();
     void lower();
+    void installEventFilter(QObject*);
+    void removeEventFilter(QObject*);
+    virtual bool eventFilter(QObject*, QEvent*);
     bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}
@@ -459,6 +462,7 @@ public:
 class QAbstractSpinBox : public QWidget {
 public:
     void setReadOnly(bool);
+    void interpretText();
 };
 
 class QDoubleSpinBox : public QAbstractSpinBox {
@@ -518,7 +522,14 @@ public:
     static int exec();
     static void processEvents();
     static bool sendEvent(QObject*, QEvent*);
+    static QWidget* focusWidget();
 };
+
+//! 本物の Qt の qApp に当たるもの。当て木では唯一の実体を1つ返す。
+//! 使うのは QObject の口(installEventFilter)だけなので、基底で足りる。
+[[nodiscard]] QCoreApplication* QtStubApplication();
+
+#define qApp (QtStubApplication())
 
 class QGuiApplication : public QCoreApplication {
 public:
@@ -544,4 +555,11 @@ public:
     static std::vector<QWidget*> topLevelWidgets();
     static std::vector<QWidget*> allWidgets();
     static bool sendEvent(QObject*, QEvent*);
+    static QWidget* focusWidget();
 };
+
+//! 本物の Qt の qApp に当たるもの。当て木では唯一の実体を1つ返す。
+//! 使うのは QObject の口(installEventFilter)だけなので、基底で足りる。
+[[nodiscard]] QCoreApplication* QtStubApplication();
+
+#define qApp (QtStubApplication())

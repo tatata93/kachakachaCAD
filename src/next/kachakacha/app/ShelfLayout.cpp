@@ -36,8 +36,14 @@ const std::vector<Shelf>& AllShelves()
     return all;
 }
 
-std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool)
+std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding)
 {
+    // 押し出しの下見を出している間は、押し出しの棚が前に出る。
+    // **道具やモードより優先する。** いま手をつけている操作の欄が
+    // 見えていなければ、距離も向きも演算も確定も触れない。
+    if (extruding) {
+        return {Shelf::Extrude, Shelf::Part};
+    }
     switch (tool) {
     case DrawingTool::Measure:
         // 測るときは測る欄だけ。ほかの棚は測る手を邪魔する。
@@ -92,9 +98,9 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool)
     return {Shelf::Edit};
 }
 
-Shelf FrontShelfFor(UiMode mode, DrawingTool tool)
+Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding)
 {
-    const std::vector<Shelf> shelves = ShelvesFor(mode, tool);
+    const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

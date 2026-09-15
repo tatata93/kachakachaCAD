@@ -95,6 +95,18 @@ struct ExtrudeFacts {
 [[nodiscard]] base::Result<ExtrudeChoice> ValidateExtrudeChoice(
     const ExtrudeChoice& choice, const ExtrudeFacts& facts);
 
+//! 押し出しを始めるときの距離。**覚えている値を使う。ただし見えないなら直す。**
+//!
+//! 既定が 0.5mm(板厚)だったので、100mm の輪郭を押しても下見が線の太さと
+//! 区別できず、「押したのに何も起きない」と読めていた。
+//! 輪郭の差し渡し `profileSpanMm` に対して細すぎる値だけを、見える値へ寄せる。
+//! **どんなときも同じ数にはしない。** 覚えている値が妥当ならそのまま使う。
+//!
+//! - 覚えている値が差し渡しの 1/20 以上 → そのまま
+//! - それ未満 → 差し渡しの 1/4 を、桁に合わせて丸めた値
+//! - 差し渡しが取れない(輪郭が無い)→ 覚えている値のまま
+[[nodiscard]] double SuggestExtrudeDistanceMm(double rememberedMm, double profileSpanMm);
+
 //! 決まったことを一文にする。押す前に、何が起きるかを見せるため。
 [[nodiscard]] std::string ExtrudeSummaryJa(const ExtrudeChoice& choice);
 

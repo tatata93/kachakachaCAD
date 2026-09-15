@@ -19,9 +19,17 @@ using base::MakeError;
 const std::vector<ParameterDefinition>& ParameterDefinitions()
 {
     static const std::vector<ParameterDefinition> table = {
-        {ParameterId::ExtrudeDistance, "extrude_distance", "板厚(押し出しの距離)",
+        {ParameterId::ExtrudeDistance, "extrude_distance", "板厚",
             geometry::QuantityKind::Length, 0.5, 0.05, 20.0,
             "プラ板は 0.1〜1.0mm あたりを使います。0 では切れず、20mm を超えると板ではありません。"},
+        // 押し出しの距離。**板厚の上限を引き継がない。**
+        // 同じ数にしていたので、100mm 級の形を押そうとすると
+        // 「板厚 は 0.05 から 20.00 mm までです」で断られていた。
+        // 安全のための上限は別に持つ。模型は 1/87〜1/80 なので、
+        // 1m を超える押し出しは打ち間違いとみなしてよい。
+        {ParameterId::ExtrudeLengthMm, "extrude_length", "押し出しの距離",
+            geometry::QuantityKind::Length, 10.0, 0.01, 2000.0,
+            "0 では厚みが出ません。2000mm を超える値は打ち間違いとみなします。"},
         {ParameterId::CornerSize, "corner_size", "面取り量 / 丸め半径",
             geometry::QuantityKind::Length, 1.0, 0.01, 100.0,
             "0 では角が落ちません。線より大きい量は落としようがありません。"},

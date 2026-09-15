@@ -173,6 +173,19 @@ struct ExtrudeInputState {
 [[nodiscard]] std::vector<PickedKind> SortKindsForSlot(ExtrudeSlot slot,
     const std::vector<PickedKind>& kinds);
 
+//! 素のクリックで、前の選択に **足す** べきか(§5)。
+//!
+//! 道具が入力を集めている間、役割の違うものは足す。立体と輪郭は役割が違うので、
+//! 輪郭を選んだあとに相手の立体を素でクリックしても輪郭は残る。
+//! 同じ役割のものは置き換える(輪郭を選び直せる)。
+//!
+//! **「いま足りないスロット」で決めてはいけない。**
+//! 輪郭が入った時点でスロットは None になるので、それで判断すると
+//! 次に相手の立体を押した瞬間に輪郭が消える。判断に使うのは
+//! 「道具が動いているか」である。
+[[nodiscard]] bool PlainClickShouldAdd(bool toolActive, PickedKind picked,
+    const std::vector<PickedKind>& already) noexcept;
+
 //! 「状態」欄に出す行(§15)。診断コードに頼らず、通った道も言う。
 //!
 //! `targetNameJa` / `profileNamesJa` は画面が渡す表示名。

@@ -11,6 +11,7 @@
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/kernel/OcctSolidExport.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/io/AtomicFile.h"
 #include "kachakacha/io/DocumentFile.h"
 #include "kachakacha/io/KcdImport.h"
@@ -714,6 +715,15 @@ void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
     BuildStatusBar();
 }
 
+//! 一番下の一行を書き直す。道具が動いていなければ空にする。
+void V2MainWindow::ShowToolFooter(const QString& line)
+{
+    if (toolFooterLabel_ == nullptr) {
+        return;
+    }
+    toolFooterLabel_->setText(line);
+}
+
 void V2MainWindow::BuildStatusBar()
 {
     toolLabel_ = new QLabel(this);
@@ -723,6 +733,15 @@ void V2MainWindow::BuildStatusBar()
     // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
     statusBar()->addWidget(groupLabel_);
     statusBar()->addWidget(statusLabel_, 1);
+    // 正本の footer。いまの道具の入力を一行で並べる(§15)。
+    // 右の棚を閉じていても、何で押そうとしているのかが分かる。
+    toolFooterLabel_ = new QLabel(this);
+    statusBar()->addPermanentWidget(toolFooterLabel_);
+    // 合図の説明は **いつでも** 出す。
+    // 出していないと、Ctrl も Tab も知らない人には使えない。
+    keyHintLabel_ = new QLabel(
+        QString::fromUtf8(kachakacha::v2::app::ToolKeyHintJa().c_str()), this);
+    statusBar()->addPermanentWidget(keyHintLabel_);
     // 帯を右クリックしても診断を取れるようにする(DIAGNOSTICS_FEATURE_SPEC)。
     // おかしいと思った瞬間に、献立を辿らずに取れるほうがよい。
     // 辿っているあいだに状態が変わってしまうことがある。

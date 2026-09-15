@@ -273,4 +273,33 @@ KACHA_V2_TEST(extrude_input, 輪郭が入れば求めるものが変わる)
     Require(NextNeededSlot(state) == ExtrudeSlot::None, "相手が入れば足りている");
 }
 
+KACHA_V2_TEST(extrude_input, 素のクリックで足すかは道具が動いているかで決まる)
+{
+    using kachakacha::v2::app::PickedKind;
+    using kachakacha::v2::app::PlainClickShouldAdd;
+    // 道具が動いていなければ、いつもどおり置き換える。
+    Require(!PlainClickShouldAdd(false, PickedKind::Solid, {PickedKind::ClosedWire}),
+        "道具が動いていない");
+    // 役割が違えば足す。輪郭を選んだあとに相手の立体を素で押しても消えない。
+    Require(PlainClickShouldAdd(true, PickedKind::Solid, {PickedKind::ClosedWire}),
+        "輪郭のあとに立体");
+    Require(PlainClickShouldAdd(true, PickedKind::ClosedWire, {PickedKind::Solid}),
+        "立体のあとに輪郭");
+    // 同じ役割なら置き換える。輪郭を選び直せる。
+    Require(!PlainClickShouldAdd(true, PickedKind::ClosedWire, {PickedKind::OpenWire}),
+        "線と線");
+    Require(!PlainClickShouldAdd(true, PickedKind::Solid, {PickedKind::SolidFace}),
+        "立体と面は同じ役割");
+    // 何も選んでいなければ足すも何もない。
+    Require(!PlainClickShouldAdd(true, PickedKind::Solid, {}), "まだ何も無い");
+    // **ここが落とし穴だった。**
+    // 「いま足りないスロット」で判断すると、輪郭が入った時点で None になり、
+    // 次に相手の立体を押した瞬間に輪郭が消える。判断に使うのは道具の動作である。
+    ExtrudeInputState state;
+    state.profiles = {Id(1)};
+    Require(NextNeededSlot(state) == ExtrudeSlot::None, "スロットは足りている");
+    Require(PlainClickShouldAdd(true, PickedKind::Solid, {PickedKind::ClosedWire}),
+        "それでも足せる");
+}
+
 KACHA_V2_TEST_MAIN("extrude_input_state_tests")

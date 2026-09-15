@@ -109,6 +109,13 @@ using kachakacha::v2::domain::EntityKind;
             !window.Viewport().ToolRoleLabels().empty())) {
         return false;
     }
+    // うすい面が敷かれていること(§8)。線だけだと厚みが読めない。
+    if (!Explain((std::string("下見にうすい面が敷かれている(")
+                     + std::to_string(window.Viewport().ExtrudePreviewFaces().size())
+                     + "枚)").c_str(),
+            !window.Viewport().ExtrudePreviewFaces().empty())) {
+        return false;
+    }
     // 下見も出ていること。線だけでなく、押した先の輪郭が動いていること。
     const auto& loops = window.Viewport().ExtrudeHandlePreview();
     const auto outline = window.ExtrudeOutline();

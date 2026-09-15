@@ -272,4 +272,27 @@ std::vector<std::string> ExtrudeStatusLinesJa(const ExtrudeInputState& state,
     return lines;
 }
 
+bool PlainClickShouldAdd(bool toolActive, PickedKind picked,
+    const std::vector<PickedKind>& already) noexcept
+{
+    if (!toolActive || already.empty()) {
+        return false;
+    }
+    if (picked == PickedKind::None || picked == PickedKind::Other) {
+        return false;
+    }
+    const auto solidish = [](PickedKind kind) {
+        return kind == PickedKind::Solid || kind == PickedKind::SolidFace;
+    };
+    const auto wireish = [](PickedKind kind) {
+        return kind == PickedKind::ClosedWire || kind == PickedKind::OpenWire;
+    };
+    for (const PickedKind had : already) {
+        if ((solidish(had) && solidish(picked)) || (wireish(had) && wireish(picked))) {
+            return false;   // 同じ役割。置き換える。
+        }
+    }
+    return true;
+}
+
 } // namespace kachakacha::v2::app

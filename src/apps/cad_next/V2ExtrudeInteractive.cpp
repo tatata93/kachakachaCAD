@@ -20,6 +20,8 @@
 
 #include "kachakacha/app/ExtrudeDrag.h"
 #include "kachakacha/app/ExtrudeInputState.h"
+#include "kachakacha/app/ExtrudePreview.h"
+#include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/app/SceneBuilder.h"
@@ -126,6 +128,7 @@ void V2MainWindow::BeginExtrudePreview()
     }
     handle.distanceMm = suggested;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+    viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
     ShowExtrudeShelf(plan);
     SetStatus(QStringLiteral("押し出し\n%1\n矢印を引くか、数の棚の「押し出し距離」で"
@@ -263,6 +266,17 @@ std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double dista
     return loops;
 }
 
+//! 下見に敷くうすい面(§8)。**ソリッドを作るときだけ。**
+//! ワイヤーしか作らないのに面が見えると、作られないものが見えることになる。
+std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewFaces(double distanceMm) const
+{
+    if (extrudeOutline_.empty() || !extrudeChoice_.makePart) {
+        return {};
+    }
+    return kachakacha::v2::app::ExtrudeSweptFaces(extrudeOutline_,
+        ExtrudeDirectionNow() * distanceMm);
+}
+
 void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 {
     if (!viewport_->ExtrudeHandleShown()) {
@@ -276,6 +290,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
     handle.direction = viewport_->ExtrudeHandleDirection();
     handle.distanceMm = distanceMm;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(distanceMm));
+    viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(distanceMm));
 }
 
 void V2MainWindow::EndExtrudePreview()
@@ -285,6 +300,7 @@ void V2MainWindow::EndExtrudePreview()
     extrudeSnapshot_.reset();
     // 拾い方もふだんへ戻す。道具が終われば、特別な並べ替えはしない。
     viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
+    viewport_->SetToolPickActive(false);
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
@@ -293,6 +309,8 @@ void V2MainWindow::EndExtrudePreview()
     ForgetFaceProfile();
     viewport_->HideExtrudeHandle();
     viewport_->HideToolRoleLabels();
+    viewport_->SetExtrudePreviewFaces({});
+    ShowToolFooter(QString());
     // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
     extrudeShelfShown_ = false;
     RefreshRightShelves();
@@ -357,6 +375,8 @@ void V2MainWindow::RefreshExtrudePickSlot()
     if (extrudeDock_ != nullptr) {
         state.operation = extrudeDock_->BooleanMode();
     }
+    // **並べ替えだけを動かす。**「道具が動いているか」はここでは触らない。
+    // 触ると、構えて待っている間に足せなくなる。
     viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
 }
 
@@ -437,11 +457,17 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
     // 3D の中にも、いまの役割を出す(§7)。棚の名前だけでは、
     // **画面のどの線がその役割なのかが分からない。**
     RefreshExtrudeRoleLabels(state);
+    // 一番下の一行(正本の footer)。棚を閉じていても、いまの入力が読める。
+    ShowToolFooter(QString::fromUtf8(kachakacha::v2::app::ExtrudeFooterLine(state,
+        targetName, profileNames).c_str()));
     // 拾う候補の並べ替えは、**いま足りないスロット**に合わせる(§6)。
     // ずっと「輪郭」に留めておくと、輪郭が入ったあとに相手の立体を押しても
     // その面が輪郭として拾われ、「面と輪郭の両方が選ばれています」で止まる。
     // 足りているなら None。ふだんの拾い方へ戻す。**候補は捨てない。**
     viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
+    // 下見が出ている間は、まだ入力を集めている(§5)。
+    // 素のクリックで、役割の違うものを足せるままにする。
+    viewport_->SetToolPickActive(true);
 }
 
 //! 読み取った入力の片方を外して選び直す(EX-07)。
@@ -511,6 +537,7 @@ void V2MainWindow::RefreshExtrudeFromDock()
     handle.direction = ExtrudeDirectionNow();
     handle.distanceMm = extrudeDock_->DistanceMm();
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+    viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
 }
 
 //! 「詳細...」。細かい設定は今までの窓で決める。
@@ -556,6 +583,7 @@ void V2MainWindow::ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& 
     handle.direction = ExtrudeDirectionNow();
     handle.distanceMm = extrudeChoice_.distanceMm;
     viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+    viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
     SetStatus(QStringLiteral("押し出し\n%1\nこのとおりでよければ Enter で確定します。")
             .arg(QString::fromStdString(
                 kachakacha::v2::app::ExtrudeSummaryJa(extrudeChoice_))));

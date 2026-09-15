@@ -60,6 +60,13 @@ void V2Viewport::ShowExtrudeHandle(const kachakacha::v2::app::ExtrudeHandle& han
     update();
 }
 
+void V2Viewport::SetExtrudePreviewFaces(
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces)
+{
+    extrudeHandle_.faces = std::move(faces);
+    update();
+}
+
 void V2Viewport::HideExtrudeHandle()
 {
     extrudeHandle_ = ExtrudeHandleState{};
@@ -209,6 +216,30 @@ void V2Viewport::DrawExtrudeHandle(QPainter& painter) const
     if (!base.has_value() || !tip.has_value()) {
         return;
     }
+    // うすい面を一番下に敷く(§8)。線だけだと厚みがついたのか読めない。
+    // 濃く塗ると元の図が沈むので、透かして塗る。縁は描かない(線が別に出る)。
+    if (!extrudeHandle_.faces.empty()) {
+        QColor fill = palette_.preview;
+        fill.setAlpha(46);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(fill);
+        for (const auto& face : extrudeHandle_.faces) {
+            QPolygonF path;
+            bool complete = true;
+            for (const auto& point : face) {
+                const auto screen = ToScreen(point);
+                if (!screen.has_value()) {
+                    complete = false;
+                    break;
+                }
+                path << *screen;
+            }
+            if (complete && path.size() >= 3) {
+                painter.drawPolygon(path);
+            }
+        }
+    }
+
     // 出来上がる形を先に、細い破線で出す。矢印はその上に描く。
     painter.setBrush(Qt::NoBrush);
     painter.setPen(QPen(palette_.preview, 1.0, Qt::DashLine));

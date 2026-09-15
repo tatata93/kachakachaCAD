@@ -148,6 +148,8 @@ public:
     void UpdateExtrudePreview(double distanceMm);
     //! 拾う候補の並べ替えを、いま足りないスロットに合わせる(§6)。
     void RefreshExtrudePickSlot();
+    //! 一番下の一行を書き直す。道具が動いていなければ空にする。
+    void ShowToolFooter(const QString& line);
     //! 下見をやめる。確定・取消・道具替えのとき。
     void EndExtrudePreview();
     //! 出ている下見のとおりに作る。Enter から呼ぶ。
@@ -855,6 +857,9 @@ private:
     V2SurfaceDock* surfaceDock_ = nullptr;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;
+    //! 下見に敷くうすい面(§8)。ソリッドを作るときだけ返す。
+    [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
+    ExtrudePreviewFaces(double distanceMm) const;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(
         const kachakacha::v2::app::ExtrudeChoice&,
         const kachakacha::v2::app::ExtrudeFacts&)>
@@ -1238,6 +1243,10 @@ private:
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;
     QLabel* groupLabel_ = nullptr;
+    //! 一番下の一行(UI の正本の footer)。いまの道具の入力が全部並ぶ。
+    QLabel* toolFooterLabel_ = nullptr;
+    //! 合図の説明。**いつでも見えている。**Ctrl を知らなくても使えるように。
+    QLabel* keyHintLabel_ = nullptr;
     UiTheme theme_ = UiTheme::Normal;
     //! いま開いているファイル。無ければ空(まだ保存していない)。
     QString documentPath_;

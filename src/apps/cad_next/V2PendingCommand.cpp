@@ -47,6 +47,8 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     // 押し出しを構えているなら、拾う候補も押し出しが求めるものを前へ出す(§6)。
     if (id == "part.extrude") {
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
+        // 構えている間はずっと、素のクリックで役割の違うものを足せる(§5)。
+        viewport_->SetToolPickActive(true);
     }
     SetStatus(QStringLiteral("%1: %2(選ぶと続きます。Esc でやめます)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
@@ -62,6 +64,7 @@ void V2MainWindow::ClearPendingCommand()
     if (pendingCommandId_ == "part.extrude" && viewport_ != nullptr
         && !viewport_->ExtrudeHandleShown()) {
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
+        viewport_->SetToolPickActive(false);
     }
     pendingCommandId_.clear();
 }

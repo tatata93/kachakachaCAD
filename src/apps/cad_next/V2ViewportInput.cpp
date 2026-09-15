@@ -1014,29 +1014,24 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
 {
     using kachakacha::v2::app::PickedKind;
     using kachakacha::v2::app::SelectionMode;
-    if (pickSlot_ == kachakacha::v2::app::ExtrudeSlot::None
-        || mode != SelectionMode::Replace || !picked.has_value()) {
+    if (mode != SelectionMode::Replace || !picked.has_value()) {
         return mode;
     }
-    const PickedKind wanted = PickedKindOf(*picked);
-    if (wanted == PickedKind::None || wanted == PickedKind::Other) {
-        return mode;
-    }
-    // いま選んでいるものに、同じ役割のものがあるか。
+    // 決まりは core にある。**スロットではなく「道具が動いているか」で決める。**
+    // スロットは輪郭が入った時点で None になるので、それで判断すると
+    // 次に相手の立体を押した瞬間に輪郭が消える。
+    std::vector<PickedKind> already;
+    already.reserve(selection_.ordered.size());
     for (const auto& ref : selection_.ordered) {
         kachakacha::v2::app::PickCandidate existing;
         existing.entityId = ref.entityId;
         existing.kind = ref.kind;
-        const PickedKind had = PickedKindOf(existing);
-        const bool bothSolidish = (had == PickedKind::Solid || had == PickedKind::SolidFace)
-            && (wanted == PickedKind::Solid || wanted == PickedKind::SolidFace);
-        const bool bothWires = (had == PickedKind::ClosedWire || had == PickedKind::OpenWire)
-            && (wanted == PickedKind::ClosedWire || wanted == PickedKind::OpenWire);
-        if (bothSolidish || bothWires) {
-            return mode;   // 同じ役割。置き換える。
-        }
+        already.push_back(PickedKindOf(existing));
     }
-    return selection_.ordered.empty() ? mode : SelectionMode::Add;
+    return kachakacha::v2::app::PlainClickShouldAdd(toolPickActive_, PickedKindOf(*picked),
+               already)
+        ? SelectionMode::Add
+        : mode;
 }
 
 void V2Viewport::SetPickSlot(kachakacha::v2::app::ExtrudeSlot slot)

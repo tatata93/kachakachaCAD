@@ -13,6 +13,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/SurfacePreview.h"
+#include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -124,6 +125,11 @@ void V2MainWindow::RefreshSurfaceDock()
                 : QStringLiteral("名前のないもの"));
     }
     surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value());
+    // 一番下の一行(正本の footer)。**まだ文書に入っていないこと**も、ここで言う。
+    ShowToolFooter(surfaceShelfShown_
+            ? QString::fromUtf8(kachakacha::v2::app::SurfaceFooterLine(surfaceInput_,
+                  surfaceSnapshot_.has_value()).c_str())
+            : QString());
 }
 
 //! いまの入力で出来上がる面を、線で出す(§12)。**文書へは何も書かない。**
@@ -249,6 +255,7 @@ void V2MainWindow::EndSurfacePreview()
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
     }
+    ShowToolFooter(QString());
     RefreshRightShelves();
 }
 

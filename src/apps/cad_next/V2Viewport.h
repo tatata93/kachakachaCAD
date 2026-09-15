@@ -207,6 +207,16 @@ public:
     //! preview は、いまの距離で出来上がる形の輪郭(押し出し先と側面)。
     void ShowExtrudeHandle(const kachakacha::v2::app::ExtrudeHandle& handle,
         std::vector<std::vector<kachakacha::v2::geometry::Vector3>> preview);
+    //! 下見にうすい面を敷く(§8)。線だけだと厚みがついたのか読めない。
+    //! 空を渡せば線だけに戻る。
+    void SetExtrudePreviewFaces(
+        std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces);
+    //! いま敷いている面。試験から読む。
+    [[nodiscard]] const std::vector<std::vector<kachakacha::v2::geometry::Vector3>>&
+    ExtrudePreviewFaces() const noexcept
+    {
+        return extrudeHandle_.faces;
+    }
     //! 矢印を消す。道具を替えたときと、確定・取消のとき。
     void HideExtrudeHandle();
     [[nodiscard]] bool ExtrudeHandleShown() const noexcept { return extrudeHandle_.shown; }
@@ -308,6 +318,15 @@ public:
     {
         return pickSlot_;
     }
+    //! いま道具が入力を集めている最中か(§5)。
+    //!
+    //! **スロットとは別の話である。**スロットは「次に何を求めているか」で、
+    //! 並べ替えに使う。こちらは「道具が動いている間ずっと」で、
+    //! 素のクリックで役割の違うものを **足す** かどうかに使う。
+    //! 一緒にすると、輪郭が入った時点で足せなくなり、
+    //! 相手の立体を押した瞬間に輪郭が消える。
+    void SetToolPickActive(bool active) noexcept { toolPickActive_ = active; }
+    [[nodiscard]] bool ToolPickActive() const noexcept { return toolPickActive_; }
     //! 塗った形を画面の点で拾う。線が拾えなかったときだけ使う。
     [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> PickShapeAt(
         const QPointF& position) const;
@@ -819,6 +838,8 @@ private:
         kachakacha::v2::app::ExtrudeHandle handle;
         //! いまの距離で出来上がる形の輪郭。破線で出す。
         std::vector<std::vector<kachakacha::v2::geometry::Vector3>> preview;
+        //! うすく塗る面。線の下に敷く。
+        std::vector<std::vector<kachakacha::v2::geometry::Vector3>> faces;
         //! 引いている最中か。
         bool dragging = false;
         QPointF pressedPx;
@@ -833,6 +854,8 @@ private:
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;
+    //! 道具が入力を集めている最中か。素のクリックで足すかどうかを決める。
+    bool toolPickActive_ = false;
     kachakacha::v2::modeling::DrawingTool cursorTool_ =
         kachakacha::v2::modeling::DrawingTool::Select;
     kachakacha::v2::geometry::Vector3 center_{};

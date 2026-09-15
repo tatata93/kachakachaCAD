@@ -271,6 +271,10 @@ bool V2MainWindow::ApplyManualState(const QString& name)
     if (ApplyStaticState(name)) {
         return true;
     }
+    if (name.startsWith(QStringLiteral("ui-"))) {
+        // 正本と見比べる場面(§20)。V2UiShotStates.cpp が持つ。
+        return ApplyUiShotState(name);
+    }
     if (name == QStringLiteral("draw-line") || name == QStringLiteral("snap")
         || name == QStringLiteral("isometric")) {
         return ApplyDrawingState(name);

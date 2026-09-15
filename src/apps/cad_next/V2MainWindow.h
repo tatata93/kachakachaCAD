@@ -197,6 +197,13 @@ public:
     //! その番号のものを画面のどこで指すか。取れなければ空。
     [[nodiscard]] std::optional<kachakacha::v2::geometry::Vector3> PointForRoleLabel(
         const kachakacha::v2::base::EntityId& id) const;
+    //! 正本と見比べる場面を作る(§20)。V2UiShotStates.cpp が持つ。
+    //! 名前は `ui-extrude-*` / `ui-surface-*`。
+    bool ApplyUiShotState(const QString& name);
+    bool ApplyExtrudeShotState(const QString& name);
+    bool ApplySurfaceShotState(const QString& name);
+    bool DrawRectangleForShot();
+    bool PickAnyCurveForShot();
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! 選んだものから分かる事実。作り方を薦めるのに使う。

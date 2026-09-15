@@ -73,6 +73,17 @@ if exist "%EXE%" (
     echo shot_%%S=!ERRORLEVEL! >> "%LOG%"
     taskkill /F /IM kachakacha_cad_next.exe > nul 2>&1
   )
+  REM UI mock comparison shots (owner instruction 2026-09-15 section 20).
+  REM These go into _claudeout\ui with numbers so they line up with the mock.
+  if not exist "%~dp0_claudeout\ui" mkdir "%~dp0_claudeout\ui"
+  for %%U in (01:ui-extrude-profile-only 02:ui-extrude-with-target 03:ui-extrude-outputs 04:ui-surface-recommend 05:ui-surface-method 06:ui-surface-preview 07:ui-surface-manual-order) do (
+    for /f "tokens=1,2 delims=:" %%A in ("%%U") do (
+      %RUNAPP% 120 "%EXE%" --manual-state %%B --snapshot "%~dp0_claudeout\ui\%%A_%%B.png" >> "%LOG%" 2>&1
+      echo uishot_%%A=!ERRORLEVEL! >> "%LOG%"
+      taskkill /F /IM kachakacha_cad_next.exe > nul 2>&1
+    )
+  )
+
   REM WP-12: write the sample, open it for real, and take a snapshot.
   "%~dp0build-msvc2022-x64\Release\kachakacha_v2_write_sample.exe" "%~dp0samples\v2-sample.kcd2" >> "%LOG%" 2>&1
   echo write_sample=!ERRORLEVEL! >> "%LOG%"

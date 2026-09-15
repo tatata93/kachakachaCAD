@@ -292,6 +292,7 @@ void V2MainWindow::EndExtrudePreview()
     // やめれば文書は始める前とまったく同じである(R1 B2)。
     ForgetFaceProfile();
     viewport_->HideExtrudeHandle();
+    viewport_->HideToolRoleLabels();
     // 棚も片付ける。前の操作の欄が残ると、いま何をしているのか読めなくなる。
     extrudeShelfShown_ = false;
     RefreshRightShelves();
@@ -334,10 +335,29 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     extrudeShelfShown_ = true;
     RefreshRightShelves();
     RefreshExtrudeStatus(plan);
-    // 拾う候補を、押し出しが求めるものに合う順へ並べ替える(§6)。
-    // 押し出し中に選び直すのは輪郭か面なので、そちらを前へ出す。
-    // **捨てはしない。**線しか無いところでは、これまでどおり線が拾える。
-    viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
+}
+
+//! 拾う候補の並べ替えを、**いま足りないスロット**に合わせる(§6)。
+//!
+//! 構えて待っている間にも要る。輪郭を拾ったあと「輪郭」に留めておくと、
+//! 次に相手の立体を押したときにその面が輪郭として拾われ、
+//! 「面と輪郭の両方が選ばれています」で止まってしまう。
+void V2MainWindow::RefreshExtrudePickSlot()
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+    const auto plan = PlanExtrudeFromSelection();
+    kachakacha::v2::app::ExtrudeInputState state;
+    if (!plan.targetSolid.IsNil()) {
+        state.target = plan.targetSolid;
+    }
+    state.profiles = plan.profiles;
+    state.profileIsFace = plan.profileIsFace;
+    if (extrudeDock_ != nullptr) {
+        state.operation = extrudeDock_->BooleanMode();
+    }
+    viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
 }
 
 //! 下見を出している間に選択が変わった。**写しを作り直して、下見も出し直す。**
@@ -414,6 +434,14 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
     }
     // 作るものが1つも無いなら確定させない。理由は上の行に出ている。
     extrudeDock_->ShowStatusLines(lines, plan.readyToPreview && state.outputs.Any());
+    // 3D の中にも、いまの役割を出す(§7)。棚の名前だけでは、
+    // **画面のどの線がその役割なのかが分からない。**
+    RefreshExtrudeRoleLabels(state);
+    // 拾う候補の並べ替えは、**いま足りないスロット**に合わせる(§6)。
+    // ずっと「輪郭」に留めておくと、輪郭が入ったあとに相手の立体を押しても
+    // その面が輪郭として拾われ、「面と輪郭の両方が選ばれています」で止まる。
+    // 足りているなら None。ふだんの拾い方へ戻す。**候補は捨てない。**
+    viewport_->SetPickSlot(kachakacha::v2::app::NextNeededSlot(state));
 }
 
 //! 読み取った入力の片方を外して選び直す(EX-07)。

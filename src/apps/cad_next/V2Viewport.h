@@ -229,6 +229,20 @@ public:
     {
         return extrudeHandle_.preview;
     }
+    //! 3D の中の、一時的な役割の札(§7)。どの線がいまどの役割かを見せる。
+    //! 位置は画面が出す。中身(言葉)は core が決める。
+    struct PlacedRoleLabel {
+        kachakacha::v2::geometry::Vector3 at;
+        QString text;
+    };
+    void ShowToolRoleLabels(std::vector<PlacedRoleLabel> labels);
+    void HideToolRoleLabels();
+    //! いま出ている札。試験から読む。
+    [[nodiscard]] const std::vector<PlacedRoleLabel>& ToolRoleLabels() const noexcept
+    {
+        return toolRoleLabels_;
+    }
+
     //! 道具の下見(押し出しの矢印以外)。**文書へ書かずに出来上がりを見せる。**
     //! いまは「面を作る」が使う(オーナー指示 2026-09-15 §12)。
     void ShowToolPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines);
@@ -603,6 +617,8 @@ private:
     void DrawExtrudeHandle(QPainter& painter) const;
     //! 道具の下見の線。細い破線で出す。
     void DrawToolPreview(QPainter& painter) const;
+    //! 3D の中の役割の札。線の上に小さく出す。
+    void DrawToolRoleLabels(QPainter& painter) const;
     //! 矢印を掴んだか。掴んだら true。
     [[nodiscard]] bool BeginExtrudeDrag(const QPointF& position);
     void DragExtrude(const QPointF& position);
@@ -812,6 +828,8 @@ private:
     ExtrudeHandleState extrudeHandle_;
     //! 道具の下見の線。空なら何も描かない。
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreview_;
+    //! 3D の中の役割の札。空なら何も描かない。
+    std::vector<PlacedRoleLabel> toolRoleLabels_;
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;

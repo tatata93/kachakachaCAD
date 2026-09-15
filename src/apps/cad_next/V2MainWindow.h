@@ -37,6 +37,7 @@
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
 #include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/app/ToolRoleLabels.h"
 
 #include "V2ExtrudeDialog.h"
 #include "V2WorkPlaneDock.h"
@@ -145,6 +146,8 @@ public:
     void BeginExtrudePreview();
     //! 距離が変わったときに、破線と右の欄を合わせる。
     void UpdateExtrudePreview(double distanceMm);
+    //! 拾う候補の並べ替えを、いま足りないスロットに合わせる(§6)。
+    void RefreshExtrudePickSlot();
     //! 下見をやめる。確定・取消・道具替えのとき。
     void EndExtrudePreview();
     //! 出ている下見のとおりに作る。Enter から呼ぶ。
@@ -185,6 +188,13 @@ public:
     //! いまの入力で出来上がる面を、**文書へ書かずに**線で出す(§12)。
     //! 作れないときは下見を消す。見えない形は確定させない。
     void RefreshSurfacePreview();
+    //! 3D の中の役割の札(§7)。V2ToolRoleLabels.cpp が持つ。
+    void ShowRoleLabels(const std::vector<kachakacha::v2::app::ToolRoleLabel>& labels);
+    void RefreshSurfaceRoleLabels();
+    void RefreshExtrudeRoleLabels(const kachakacha::v2::app::ExtrudeInputState& state);
+    //! その番号のものを画面のどこで指すか。取れなければ空。
+    [[nodiscard]] std::optional<kachakacha::v2::geometry::Vector3> PointForRoleLabel(
+        const kachakacha::v2::base::EntityId& id) const;
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! 選んだものから分かる事実。作り方を薦めるのに使う。

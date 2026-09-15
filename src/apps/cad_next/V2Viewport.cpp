@@ -1008,6 +1008,8 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawToolPreview(painter);
     // 押し出しの矢印は選択の印より上に出す。掴む相手だからである。
     DrawExtrudeHandle(painter);
+    // 役割の札は一番上。線や矢印に隠れると読めない。
+    DrawToolRoleLabels(painter);
     DrawBoxSelect(painter);
     DrawScaleBar(painter);
     // 輪 → キューブ → ボタン の順で描く。

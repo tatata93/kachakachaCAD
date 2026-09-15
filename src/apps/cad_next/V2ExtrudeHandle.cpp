@@ -108,6 +108,38 @@ void V2Viewport::DrawToolPreview(QPainter& painter) const
     }
 }
 
+void V2Viewport::ShowToolRoleLabels(std::vector<PlacedRoleLabel> labels)
+{
+    toolRoleLabels_ = std::move(labels);
+    update();
+}
+
+void V2Viewport::HideToolRoleLabels()
+{
+    if (toolRoleLabels_.empty()) {
+        return;
+    }
+    toolRoleLabels_.clear();
+    update();
+}
+
+//! 役割の札。白フチを下に敷いてから色を重ねる。どんな背景でも読める。
+void V2Viewport::DrawToolRoleLabels(QPainter& painter) const
+{
+    for (const auto& label : toolRoleLabels_) {
+        const auto screen = ToScreen(label.at);
+        if (!screen.has_value()) {
+            continue;
+        }
+        // 線の真上に置くと線に重なって読めない。少し上へ逃がす。
+        const QPointF at(screen->x() + 6.0, screen->y() - 6.0);
+        painter.setPen(QPen(QColor(255, 255, 255, 235), 3.0));
+        painter.drawText(at, label.text);
+        painter.setPen(QPen(palette_.selected, 1.0));
+        painter.drawText(at, label.text);
+    }
+}
+
 void V2Viewport::SetExtrudeDistanceCallback(std::function<void(double)> callback)
 {
     extrudeDistanceChanged_ = std::move(callback);

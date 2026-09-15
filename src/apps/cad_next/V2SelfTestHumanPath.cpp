@@ -104,6 +104,11 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("押し出しの棚が見えている", window.ShelfShown(Shelf::Extrude))) {
         return false;
     }
+    // 3D の中に役割の札が出ていること(§7)。
+    if (!Explain("3D に PROFILE の札が出ている",
+            !window.Viewport().ToolRoleLabels().empty())) {
+        return false;
+    }
     // 下見も出ていること。線だけでなく、押した先の輪郭が動いていること。
     const auto& loops = window.Viewport().ExtrudeHandlePreview();
     const auto outline = window.ExtrudeOutline();
@@ -363,14 +368,18 @@ struct OutputCounts {
 
     // 立体と輪郭の両方を選ぶ。**道具を先に構えて、Ctrl 無しで選ぶ。**
     // 素のクリックだけだと後の1つに置き換わり、相手がいなくなる。
+    //
+    // 順は「輪郭 → 相手の立体」。構えた直後に求めているのは輪郭なので、
+    // 先に立体を押すと **その面が輪郭として拾われる**(それはそれで正しい。
+    // 面を押す道である)。画面が次に何を求めているかのとおりに押す。
     auto& viewport = window.Viewport();
     viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
     window.RunCommand("part.extrude");   // 構える
-    viewport.SelectAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5),
-        Qt::NoModifier);   // 立体
-    if (!Explain("輪郭をもう一度拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+    if (!Explain("輪郭を拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
         return false;
     }
+    viewport.SelectAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5),
+        Qt::NoModifier);   // 相手の立体
     if (!Explain((std::string("対象と輪郭の両方が選べている(")
                      + std::to_string(viewport.Selection().entityIds.size())
                      + " 件)").c_str(),
@@ -545,6 +554,16 @@ struct OutputCounts {
                 && !window.Viewport().ToolPreview().empty())) {
         return false;
     }
+    // 3D の中に役割の札が出ていること(§7)。
+    // 棚に「境界 1本」と出ていても、画面のどの線かが分からないと選び直せない。
+    const auto& labels = window.Viewport().ToolRoleLabels();
+    if (!Explain((std::string("3D に役割の札が出ている(")
+                     + (labels.empty() ? std::string("なし")
+                                       : labels.front().text.toStdString())
+                     + ")").c_str(),
+            !labels.empty())) {
+        return false;
+    }
     // ここが本題。**確定するまで文書へ書かない**(§12)。
     return Explain("下見だけで、文書の面は増えていない",
         CountOfKind(window, EntityKind::GuideSurface) == before);
@@ -576,7 +595,9 @@ struct OutputCounts {
     if (!Explain("棚が片付く", !window.ShelfShown(Shelf::Surface))) {
         return false;
     }
-    return Explain("下見の線が消える", window.Viewport().ToolPreview().empty());
+    return Explain("下見の線と札が消える",
+        window.Viewport().ToolPreview().empty()
+            && window.Viewport().ToolRoleLabels().empty());
 }
 
 //! HP-SF-03。Esc でやめると、**何も作られていない**。

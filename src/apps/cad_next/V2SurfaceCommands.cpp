@@ -100,6 +100,7 @@ void V2MainWindow::AddSelectionToSurfaceSlot(ChainRole role)
     }
     surfaceInput_ = kachakacha::v2::app::WithSurfaceEntries(surfaceInput_, role, ids, false);
     RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
     SetStatus(QStringLiteral("面を作る: %1を %2 本にしました。")
             .arg(QString::fromUtf8(
@@ -170,6 +171,7 @@ void V2MainWindow::RunSurfaceCreate()
         surfaceShelfShown_ = true;
         RefreshRightShelves();
         RefreshSurfacePreview();
+        RefreshSurfaceRoleLabels();
         RefreshSurfaceDock();
         SetStatus(QStringLiteral("面を作る\n作り方: %1\n右の棚で作り方と入力を決めて、"
                                  "Enter で確定します。Esc でやめます。")
@@ -187,6 +189,7 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = true;
     RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
     SetStatus(QStringLiteral("面を作る: 作り方を「%1」にしました。"
                              "入れたものはそのまま残っています。")
@@ -202,6 +205,7 @@ void V2MainWindow::ChooseSurfaceOrdering(SurfaceOrdering ordering)
         surfaceInput_.explicitOrder = surfaceInput_.sections;
     }
     RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
 }
 
@@ -219,6 +223,7 @@ void V2MainWindow::MoveSurfaceSection(int from, int to)
     surfaceInput_.explicitOrder = order;
     surfaceInput_.ordering = SurfaceOrdering::ManualLock;
     RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
 }
 
@@ -231,6 +236,7 @@ void V2MainWindow::ResetSurfaceInput()
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = chosen;
     RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
     SetStatus(QStringLiteral("面を作る: 入力を空にしました。作り方はそのままです。"));
 }
@@ -241,6 +247,7 @@ void V2MainWindow::EndSurfacePreview()
     surfaceSnapshot_.reset();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
+        viewport_->HideToolRoleLabels();
     }
     RefreshRightShelves();
 }
@@ -311,6 +318,7 @@ void V2MainWindow::ConfirmSurface()
 {
     if (!surfaceSnapshot_.has_value()) {
         RefreshSurfacePreview();
+        RefreshSurfaceRoleLabels();
         RefreshSurfaceDock();
         if (!surfaceSnapshot_.has_value()) {
             ReportSurfaceNotReady();

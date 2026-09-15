@@ -619,6 +619,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ExtrudeInputState.cpp
     src/next/kachakacha/app/SurfaceInputState.cpp
     src/next/kachakacha/app/SurfacePreview.cpp
+    src/next/kachakacha/app/ToolRoleLabels.cpp
     src/next/kachakacha/app/ToolKeys.cpp
     src/next/kachakacha/app/ToolTargeting.cpp
     src/next/kachakacha/app/NameFilter.cpp
@@ -796,6 +797,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(extrude_input_state_tests tests_v2/extrude_input_state_tests.cpp)
     kachakacha_add_v2_test(surface_input_state_tests tests_v2/surface_input_state_tests.cpp)
     kachakacha_add_v2_test(surface_preview_tests tests_v2/surface_preview_tests.cpp)
+    kachakacha_add_v2_test(tool_role_labels_tests tests_v2/tool_role_labels_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)
     kachakacha_add_v2_test(plane_focus_tests tests_v2/plane_focus_tests.cpp)
     kachakacha_add_v2_test(shape_mesh_tests tests_v2/shape_mesh_tests.cpp)
@@ -952,6 +954,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceCommands.cpp
         src/apps/cad_next/V2SurfaceDock.cpp
         src/apps/cad_next/V2ToolKeys.cpp
+        src/apps/cad_next/V2ToolRoleLabels.cpp
         src/apps/cad_next/V2PatternDock.cpp
         src/apps/cad_next/V2ShapeViews.cpp
         src/apps/cad_next/V2Shelves.cpp

@@ -257,4 +257,20 @@ KACHA_V2_TEST(extrude_input, 候補はスロットに合う順へ並べ替える
     Require(unchanged == none, "並びを変えない");
 }
 
+KACHA_V2_TEST(extrude_input, 輪郭が入れば求めるものが変わる)
+{
+    // 拾う候補の並べ替えは、いま足りないスロットに合わせる(§6)。
+    // ずっと「輪郭」に留めておくと、輪郭が入ったあとに相手の立体を押しても
+    // **その面が輪郭として拾われ**、「面と輪郭の両方」で止まってしまう。
+    ExtrudeInputState state;
+    Require(NextNeededSlot(state) == ExtrudeSlot::Profile, "はじめは輪郭");
+    state.profiles = {Id(1)};
+    Require(NextNeededSlot(state) == ExtrudeSlot::None,
+        "新しい部品なら、輪郭が入れば足りている");
+    state.operation = kachakacha::v2::modeling::ExtrudeBooleanMode::SubtractFromPart;
+    Require(NextNeededSlot(state) == ExtrudeSlot::Target, "引くなら相手が要る");
+    state.target = Id(2);
+    Require(NextNeededSlot(state) == ExtrudeSlot::None, "相手が入れば足りている");
+}
+
 KACHA_V2_TEST_MAIN("extrude_input_state_tests")

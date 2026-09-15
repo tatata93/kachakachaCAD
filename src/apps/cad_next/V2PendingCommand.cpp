@@ -87,6 +87,10 @@ void V2MainWindow::RefreshPendingCommand(bool confirmed)
         ClearPendingCommand();
         return;
     }
+    if (pendingCommandId_ == "part.extrude") {
+        // 構えている間も、拾い方は「いま足りないもの」に合わせて動かす(§6)。
+        RefreshExtrudePickSlot();
+    }
     QString reason;
     const bool satisfied = CommandEnabled(pendingCommandId_, &reason);
     const PendingAction action =

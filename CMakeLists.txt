@@ -615,6 +615,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/FeatureReevaluation.cpp
     src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceTable.cpp
+    src/next/kachakacha/modeling/SurfaceDeviationLimit.cpp
     src/next/kachakacha/app/ArrayPlan.cpp
     src/next/kachakacha/app/ExtrudeInputState.cpp
     src/next/kachakacha/app/ExtrudePreview.cpp
@@ -800,6 +801,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(extrude_preview_tests tests_v2/extrude_preview_tests.cpp)
     kachakacha_add_v2_test(surface_input_state_tests tests_v2/surface_input_state_tests.cpp)
     kachakacha_add_v2_test(surface_preview_tests tests_v2/surface_preview_tests.cpp)
+    kachakacha_add_v2_test(surface_deviation_limit_tests tests_v2/surface_deviation_limit_tests.cpp)
     kachakacha_add_v2_test(tool_role_labels_tests tests_v2/tool_role_labels_tests.cpp)
     kachakacha_add_v2_test(tool_footer_tests tests_v2/tool_footer_tests.cpp)
     kachakacha_add_v2_test(name_filter_tests tests_v2/name_filter_tests.cpp)

@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/modeling/SurfaceDeviationLimit.h"
 
 #include <algorithm>
 #include <cmath>
@@ -764,7 +765,13 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     Deviation deviation;
     if (request.method != GuideSurfaceMethod::OffsetGuide) {
         deviation = MeasureDeviation(shape, request, tolerance);
-        const double limit = std::max(tolerance.modelLinearMm * 10.0, 1.0e-4);
+        // 許容は作り方で決まる。決め方は core にある
+        // (modeling/SurfaceDeviationLimit.h)。**ここには数を書かない。**
+        // 通す作り方(平面・ルールド・ロフト・回転体)はこれまでどおり厳しく、
+        // 近づける作り方(案内付きロフト・曲線網・境界埋め)は
+        // 後の板材の曲げ近似が許している量までとする。
+        const double limit = kachakacha::v2::modeling::SurfaceDeviationLimitMm(
+            request.method, tolerance);
         if (deviation.measured && deviation.maximumMm > limit) {
             return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceMissesInput,
                 "出来た面が、指定した線を通っていません。",
@@ -784,6 +791,15 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     result.areaMm2 = AreaOf(shape);
 
     std::vector<Diagnostic> warnings;
+    // 通ったときも、外れた量は言う。**黙って通さない。**
+    // 近づけて作る面は、指定した線の上に乗っていない。そのことを知らずに
+    // 板取りへ進むと、紙とプラ板を切ってから気づくことになる。
+    if (const std::string note = kachakacha::v2::modeling::SurfaceDeviationNoteJa(
+            request.method, deviation.maximumMm, tolerance);
+        !note.empty()) {
+        warnings.push_back(base::MakeWarning("KER-S102", note,
+            "通す作り方(ロフト・ルールド)なら、線の上に乗ります。"));
+    }
     if (!face.IsNull()) {
         const TopoDS_Wire outer = BRepTools::OuterWire(face);
         if (!outer.IsNull()) {

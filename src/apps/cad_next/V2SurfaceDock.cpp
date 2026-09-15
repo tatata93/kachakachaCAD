@@ -216,7 +216,8 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
 }
 
 void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
-    const std::vector<QString>& sectionNamesJa, bool previewShown)
+    const std::vector<QString>& sectionNamesJa, bool previewShown,
+    const QString& deviationNoteJa)
 {
     loading_ = true;
     shown_ = state;
@@ -273,7 +274,7 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     // 4. 状態。
     QString text;
     for (const std::string& line : kachakacha::v2::app::SurfaceStatusLinesJa(state,
-             previewShown)) {
+             previewShown, deviationNoteJa.toStdString())) {
         if (!text.isEmpty()) {
             text += QStringLiteral("\n");
         }

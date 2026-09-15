@@ -293,7 +293,7 @@ std::string SurfaceCountProblemJa(const SurfaceInputState& state)
 }
 
 std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
-    bool previewShown)
+    bool previewShown, const std::string& deviationNoteJa)
 {
     std::vector<std::string> lines;
     for (const SurfaceSlotView& view : SurfaceSlotsFor(state)) {
@@ -325,6 +325,9 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
     lines.push_back(previewShown
             ? "✓ 下見を表示中(まだ文書へ保存していません)"
             : "× 下見が作れませんでした。確定を押すと理由が出ます");
+    if (!deviationNoteJa.empty()) {
+        lines.push_back("! " + deviationNoteJa);
+    }
     if (state.ordering == SurfaceOrdering::ManualLock) {
         lines.push_back("断面順: 手動固定(画面の並びのまま作ります)");
     } else {

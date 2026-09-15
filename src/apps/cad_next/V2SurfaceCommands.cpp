@@ -17,6 +17,7 @@
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/SurfaceDeviationLimit.h"
 
 #include <QString>
 
@@ -124,7 +125,17 @@ void V2MainWindow::RefreshSurfaceDock()
                 ? QString::fromStdString(entity->displayName)
                 : QStringLiteral("名前のないもの"));
     }
-    surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value());
+    // 下見に出ている面が、指定した線からどれだけ外れているか。
+    // **近づけて作る面は線の上に乗っていない。**知らずに板取りへ進むと、
+    // 紙とプラ板を切ってから気づくことになる。
+    QString deviation;
+    if (surfaceSnapshot_.has_value()) {
+        const auto note = kachakacha::v2::modeling::SurfaceDeviationNoteJa(
+            surfaceInput_.method, surfaceSnapshot_->built.maximumDeviationMm,
+            session_->GetDocument().Snapshot().settings.tolerance);
+        deviation = QString::fromStdString(note);
+    }
+    surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value(), deviation);
     // 一番下の一行(正本の footer)。**まだ文書に入っていないこと**も、ここで言う。
     ShowToolFooter(surfaceShelfShown_
             ? QString::fromUtf8(kachakacha::v2::app::SurfaceFooterLine(surfaceInput_,

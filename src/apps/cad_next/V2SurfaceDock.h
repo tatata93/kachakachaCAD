@@ -32,7 +32,8 @@ public:
 
     //! いまの入力を映す。作り方・役割・順序・状態を一度に書き直す。
     void ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
-        const std::vector<QString>& sectionNamesJa, bool previewShown);
+        const std::vector<QString>& sectionNamesJa, bool previewShown,
+        const QString& deviationNoteJa = QString());
 
     //! 作り方を選んだ。
     void SetMethodHandler(

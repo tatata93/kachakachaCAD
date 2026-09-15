@@ -156,8 +156,12 @@ struct SurfaceSelectionFacts {
 [[nodiscard]] std::string SurfaceCountProblemJa(const SurfaceInputState& state);
 
 //! 「4. 状態」に出す行(§15)。入力数・不足・生成可否・下見の様子。
+//!
+//! `deviationNoteJa` は、近づけて作る面が線からどれだけ外れているか
+//! (`modeling/SurfaceDeviationLimit.h` が作る言葉)。空なら出さない。
+//! **下見に出ている面のことなので、ここに出さないと人は知らずに確定する。**
 [[nodiscard]] std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
-    bool previewShown);
+    bool previewShown, const std::string& deviationNoteJa = {});
 
 //! 画面に並べる主要6方式(UIの正本「1. 作り方」)。並びを2か所に書かない。
 [[nodiscard]] const std::vector<modeling::GuideSurfaceMethod>& MainSurfaceMethods();

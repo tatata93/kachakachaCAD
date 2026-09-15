@@ -29,6 +29,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | --- | --- | --- |
 | `base/SourceScan.h` | ソース木の走査 | **繋がない。**試験の道具である |
 | `base/TestHarness.h` | 試験の枠組み | **繋がない。**試験の道具である |
+| `app/SurfaceInputState.h` | 「面を作る」の入力スロット(作り方/断面/ガイド/境界/断面順) | **Stage 3 の次のコミットで繋ぐ。**この行はそのときに消す |
 | `app/EvaluationQueue.h` | 重い計算を待たせずに回す仕組み | 計算が待たされるようになってから。いまは同期で足りている |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |

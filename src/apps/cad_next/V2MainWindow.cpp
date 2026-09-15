@@ -1125,61 +1125,6 @@ int V2MainWindow::CurrentProcessStep() const
         kachakacha::v2::app::BuildProcessSteps(mode_, processContext_));
 }
 
-void V2MainWindow::RefreshGuideTable()
-{
-    if (guideTableView_ == nullptr) {
-        return;
-    }
-    guideTableView_->clear();
-    const auto views = kachakacha::v2::modeling::BuildGuideTableView(guideTable_,
-        session_->GetDocument().Snapshot().settings.tolerance);
-    for (const auto& view : views) {
-        auto* item = new QTreeWidgetItem(guideTableView_);
-        item->setText(0, QString::fromStdString(view.roleLabelJa));
-        item->setText(1, QString::number(view.number));
-        item->setText(2, QString::number(static_cast<int>(view.segmentCount)));
-        item->setText(3, QString::fromStdString(view.connectionLabelJa));
-        item->setText(4, QString::fromStdString(view.directionLabelJa));
-        item->setText(5, QString::fromStdString(view.sourceLabelJa));
-        // 色は core の式が決める。画面で作らないので、3Dと必ず同じ色になる。
-        const QColor color(view.color.red, view.color.green, view.color.blue);
-        item->setForeground(0, color);
-        item->setData(0, Qt::UserRole, color);
-    }
-    for (int column = 0; column < guideTableView_->columnCount(); ++column) {
-        guideTableView_->resizeColumnToContents(column);
-    }
-    // 3Dへ同じ色で出す。色は core の式が決めるので、表と3Dがずれようがない。
-    viewport_->SetGuideTableRows(views);
-    // 足りない役割の案内は、そのつど出し直す。前の案内を残すと、
-    // 入れ終わったあとも「入っていません」が並んだままになる。
-    ClearGuideGuidance();
-    for (const std::string& line : kachakacha::v2::modeling::MissingRoleGuidanceJa(
-             guideTable_)) {
-        AddGuideGuidance(QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
-    }
-}
-
-void V2MainWindow::ClearGuideGuidance()
-{
-    if (diagnosticList_ == nullptr) {
-        return;
-    }
-    for (int row = diagnosticList_->count() - 1; row >= 0; --row) {
-        if (diagnosticList_->item(row)->text().startsWith(QStringLiteral("UI-R009"))) {
-            delete diagnosticList_->takeItem(row);
-        }
-    }
-}
-
-void V2MainWindow::AddGuideGuidance(const QString& text)
-{
-    if (diagnosticList_ == nullptr) {
-        return;
-    }
-    diagnosticList_->addItem(text);
-}
-
 bool V2MainWindow::SetGuideTable(
     const kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>& result)
 {

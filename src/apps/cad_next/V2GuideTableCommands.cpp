@@ -14,10 +14,12 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include <QColor>
 #include <QDialog>
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
+#include <QTreeWidgetItem>
 
 #include <string>
 #include <vector>
@@ -308,4 +310,68 @@ void V2MainWindow::ClearGuideTable()
     RefreshCommandVisibility();
     SetStatus(QStringLiteral("表を空にしました。作り方は %1 のままです。")
             .arg(Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(method))));
+}
+
+//! 役割表の見た目を書き直す(V2MainWindow.cpp から移した。
+//! あちらが 1500 行の上限に当たったため。中身は変えていない)。
+void V2MainWindow::RefreshGuideTable()
+{
+    if (guideTableView_ == nullptr) {
+        return;
+    }
+    guideTableView_->clear();
+    const auto views = kachakacha::v2::modeling::BuildGuideTableView(guideTable_,
+        session_->GetDocument().Snapshot().settings.tolerance);
+    for (const auto& view : views) {
+        auto* item = new QTreeWidgetItem(guideTableView_);
+        item->setText(0, QString::fromStdString(view.roleLabelJa));
+        item->setText(1, QString::number(view.number));
+        item->setText(2, QString::number(static_cast<int>(view.segmentCount)));
+        item->setText(3, QString::fromStdString(view.connectionLabelJa));
+        item->setText(4, QString::fromStdString(view.directionLabelJa));
+        item->setText(5, QString::fromStdString(view.sourceLabelJa));
+        // 色は core の式が決める。画面で作らないので、3Dと必ず同じ色になる。
+        const QColor color(view.color.red, view.color.green, view.color.blue);
+        item->setForeground(0, color);
+        item->setData(0, Qt::UserRole, color);
+    }
+    for (int column = 0; column < guideTableView_->columnCount(); ++column) {
+        guideTableView_->resizeColumnToContents(column);
+    }
+    // 3Dへ同じ色で出す。色は core の式が決めるので、表と3Dがずれようがない。
+    viewport_->SetGuideTableRows(views);
+    // 足りない役割の案内は、そのつど出し直す。前の案内を残すと、
+    // 入れ終わったあとも「入っていません」が並んだままになる。
+    ClearGuideGuidance();
+    // **まだ何も入れていない表について「入っていません」と言わない。**
+    // 「面を作る」が入口になったので、役割表は自分で開いた人だけが使う。
+    // 空のままの表の不足を知らせへ並べると、何もしていないのに
+    // 赤い行が出たままになり、本当の失敗が埋もれる(01〜03 の絵で見えた)。
+    if (!guideTable_.rows.empty()) {
+        for (const std::string& line : kachakacha::v2::modeling::MissingRoleGuidanceJa(
+                 guideTable_)) {
+            AddGuideGuidance(
+                QStringLiteral("UI-R009 %1").arg(QString::fromStdString(line)));
+        }
+    }
+}
+
+void V2MainWindow::ClearGuideGuidance()
+{
+    if (diagnosticList_ == nullptr) {
+        return;
+    }
+    for (int row = diagnosticList_->count() - 1; row >= 0; --row) {
+        if (diagnosticList_->item(row)->text().startsWith(QStringLiteral("UI-R009"))) {
+            delete diagnosticList_->takeItem(row);
+        }
+    }
+}
+
+void V2MainWindow::AddGuideGuidance(const QString& text)
+{
+    if (diagnosticList_ == nullptr) {
+        return;
+    }
+    diagnosticList_->addItem(text);
 }

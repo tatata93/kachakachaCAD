@@ -121,6 +121,9 @@ bool V2MainWindow::ApplyExtrudeShotState(const QString& name)
     }
     extrudeDock_->ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode::SubtractFromPart);
     RefreshExtrudeFromDock();
+    // 2枚目の矩形を引いたところで上から見に戻っている。斜めから見せる。
+    viewport_->SetViewDirection(ViewDirection::Isometric);
+    viewport_->FitToDocument();
     return true;
 }
 

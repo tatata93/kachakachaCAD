@@ -149,6 +149,12 @@ struct SurfaceSelectionFacts {
 //! いまの入力で作れるか。作れないなら、何が足りないかを言う。
 [[nodiscard]] bool SurfaceReadyToBuild(const SurfaceInputState& state);
 
+//! 本数が合っていないときの理由。合っていれば空(§15)。
+//!
+//! 「まだ作れません」だけでは、**足りないのか多すぎるのかが分からない。**
+//! ルールドに断面を3本入れたときは「2本にするか、ロフトにしてください」と言う。
+[[nodiscard]] std::string SurfaceCountProblemJa(const SurfaceInputState& state);
+
 //! 「4. 状態」に出す行(§15)。入力数・不足・生成可否・下見の様子。
 [[nodiscard]] std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
     bool previewShown);

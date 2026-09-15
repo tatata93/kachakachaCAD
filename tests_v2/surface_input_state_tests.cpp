@@ -20,6 +20,7 @@ using kachakacha::v2::app::RecommendSurfaceMethod;
 using kachakacha::v2::app::RoleForSurfaceSlot;
 using kachakacha::v2::app::SurfaceInputState;
 using kachakacha::v2::app::SurfaceOrdering;
+using kachakacha::v2::app::SurfaceCountProblemJa;
 using kachakacha::v2::app::SurfaceReadyToBuild;
 using kachakacha::v2::app::SurfaceSectionOrder;
 using kachakacha::v2::app::SurfaceSelectionFacts;
@@ -233,6 +234,35 @@ KACHA_V2_TEST(surface_input, 欄が空なら平面も曲線網も作れない)
     Require(!SurfaceReadyToBuild(gordon), "U だけでは作れない");
     gordon = WithSurfaceEntries(gordon, ChainRole::GuideU, {Id(3)}, false);
     Require(SurfaceReadyToBuild(gordon), "U と V が揃えば作れる");
+}
+
+KACHA_V2_TEST(surface_input, 本数が合わないときは足りないのか多いのかを言う)
+{
+    // 「まだ作れません」だけでは、何を直せばよいのか分からない。
+    // ルールドに3本入れて「生成可能」と出し、押したら断る、では最悪である。
+    SurfaceInputState ruled;
+    ruled.method = GuideSurfaceMethod::RuledSections;
+    ruled = WithSurfaceEntries(ruled, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
+    Require(!SurfaceReadyToBuild(ruled), "3本のルールドは作れない");
+    const auto why = SurfaceCountProblemJa(ruled);
+    Require(why.find("2本") != std::string::npos, std::string("2本と言う: ") + why);
+    Require(why.find("ロフト") != std::string::npos, "ロフトへの逃げ道も言う");
+
+    SurfaceInputState ok;
+    ok.method = GuideSurfaceMethod::RuledSections;
+    ok = WithSurfaceEntries(ok, ChainRole::Section, {Id(1), Id(2)}, false);
+    Require(SurfaceReadyToBuild(ok), "2本なら作れる");
+    Require(SurfaceCountProblemJa(ok).empty(), "合っていれば何も言わない");
+
+    // 状態の行にも、その理由がそのまま出る。
+    const auto lines = SurfaceStatusLinesJa(ruled, false);
+    bool said = false;
+    for (const auto& line : lines) {
+        if (line.find("2本") != std::string::npos) {
+            said = true;
+        }
+    }
+    Require(said, "状態の行に理由が出る");
 }
 
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

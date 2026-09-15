@@ -232,7 +232,9 @@ bool SurfaceReadyToBuild(const SurfaceInputState& state)
     // 断面で作る方式は、本数の下限がある。
     switch (state.method) {
     case GuideSurfaceMethod::RuledSections:
-        return state.sections.size() >= 2;
+        // **2本ちょうど。**3本あるのに「生成可能」と出して、押したら断る、
+        // では何を直せばよいのか分からない。
+        return state.sections.size() == 2;
     case GuideSurfaceMethod::LoftSections:
         return state.sections.size() >= 2;
     case GuideSurfaceMethod::GuidedLoft:
@@ -250,6 +252,44 @@ bool SurfaceReadyToBuild(const SurfaceInputState& state)
         return !state.sections.empty();
     }
     return false;
+}
+
+std::string SurfaceCountProblemJa(const SurfaceInputState& state)
+{
+    const std::size_t sections = state.sections.size();
+    switch (state.method) {
+    case GuideSurfaceMethod::RuledSections:
+        if (sections > 2) {
+            return "ルールドは断面2本です(いま" + std::to_string(sections)
+                + "本)。2本だけにするか、「ロフト」にしてください";
+        }
+        if (sections < 2) {
+            return "ルールドは断面2本です(いま" + std::to_string(sections) + "本)";
+        }
+        return {};
+    case GuideSurfaceMethod::LoftSections:
+        if (sections < 2) {
+            return "ロフトは断面2本以上です(いま" + std::to_string(sections) + "本)";
+        }
+        return {};
+    case GuideSurfaceMethod::GuidedLoft:
+        if (sections < 2) {
+            return "案内付きロフトは断面2本以上です(いま" + std::to_string(sections)
+                + "本)";
+        }
+        if (state.guides.empty()) {
+            return "案内付きロフトはガイドが要ります";
+        }
+        return {};
+    case GuideSurfaceMethod::GordonNetwork:
+        if (state.sections.empty() || state.guides.empty()) {
+            return "曲線網は断面(U)とガイド(V)の両方が要ります";
+        }
+        return {};
+    default:
+        break;
+    }
+    return {};
 }
 
 std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
@@ -275,7 +315,8 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
         }
     }
     if (!SurfaceReadyToBuild(state)) {
-        lines.push_back("× まだ作れません");
+        const std::string why = SurfaceCountProblemJa(state);
+        lines.push_back(why.empty() ? std::string("× まだ作れません") : "× " + why);
         return lines;
     }
     lines.push_back("✓ 生成可能");

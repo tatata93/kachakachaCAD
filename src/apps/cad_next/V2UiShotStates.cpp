@@ -145,13 +145,17 @@ bool V2MainWindow::ApplySurfaceShotState(const QString& name)
     std::vector<kachakacha::v2::base::EntityId> sections;
     const double heights[3] = {0.0, 25.0, 50.0};
     const double halves[3] = {40.0, 30.0, 16.0};
+    const char* const labels[3] = {"断面1", "断面2", "断面3"};
     for (int index = 0; index < 3; ++index) {
-        const auto id = AddPlainWire(RectangleAt(heights[index], halves[index]), "断面");
+        const auto id = AddPlainWire(RectangleAt(heights[index], halves[index]),
+            labels[index]);
         if (id.IsNil()) {
             return false;
         }
         sections.push_back(id);
     }
+    // **足しただけでは画面に出ない。**場面づくりでも、ふだんの道を通す。
+    AdoptCurrentDocument();
     viewport_->SetViewDirection(ViewDirection::Isometric);
     viewport_->FitToDocument();
     kachakacha::v2::app::SelectionSet all;

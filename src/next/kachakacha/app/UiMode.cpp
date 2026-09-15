@@ -65,6 +65,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "grid.move_origin",
     };
     static const std::vector<std::string_view> part{
+        "surface.create",
         "guide.create", "guide.revolve", "guide.set_method", "guide.add_row", "guide.append_row",
         "guide.row_up", "guide.row_down", "guide.row_remove", "guide.row_reverse",
         "guide.build", "guide.clear",
@@ -107,8 +108,10 @@ const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
         "wire.array_linear", "wire.array_circular", "edit.numeric",
     };
     static const std::vector<std::string_view> part{
-        // 形状ガイドを作る入口と、立体にする入口。細かい欄は「部品」の棚。
-        "guide.create", "guide.add_row", "guide.build",
+        // **面を作る入口は1つ**(オーナー指示 §10)。
+        // 「形状ガイド / 選択を表へ / 表から面を作る」の3つを並べていたので、
+        // 人から見て別物の道が2本あるように見えていた。
+        "surface.create",
         "part.extrude", "part.thicken", "part.boolean_add", "part.boolean_cut",
     };
     static const std::vector<std::string_view> fabrication{

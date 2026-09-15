@@ -102,6 +102,8 @@ void V2MainWindow::BuildRightShelves()
     // 形状ガイドの役割の表も同じ札の束へ入れる。別の段に置くと、
     // 部品モードで右が上下に割れて、どちらも潰れる。
     tabifyDockWidget(displayDock_, guideDock_);
+    tabifyDockWidget(guideDock_, surfaceDock_);
+
     tabifyDockWidget(guideDock_, patternDock_);
     tabifyDockWidget(patternDock_, partDock_);
     tabifyDockWidget(partDock_, extrudeDock_);
@@ -129,6 +131,30 @@ void V2MainWindow::BuildOutputShelves()
 
     // 押し出しの棚。押し出しの最中だけ出す(オーナー指示 2026-09-14 §7)。
     // 窓で全部決めてから作る道をやめ、右で見ながら決められるようにする。
+    // 「面を作る」の棚。作っている最中だけ出す(UI の正本)。
+    surfaceDock_ = new V2SurfaceDock(this);
+    surfaceDock_->SetMethodHandler(
+        [this](kachakacha::v2::modeling::GuideSurfaceMethod method) {
+            ChooseSurfaceMethod(method);
+        });
+    surfaceDock_->SetAddHandler([this](kachakacha::v2::modeling::ChainRole role) {
+        AddSelectionToSurfaceSlot(role);
+    });
+    surfaceDock_->SetOrderingHandler(
+        [this](kachakacha::v2::app::SurfaceOrdering ordering) {
+            ChooseSurfaceOrdering(ordering);
+        });
+    surfaceDock_->SetMoveSectionHandler([this](int from, int to) {
+        MoveSurfaceSection(from, to);
+    });
+    surfaceDock_->SetActionHandlers([this] { ConfirmSurface(); },
+        [this] {
+            EndSurfacePreview();
+            SetStatus(QStringLiteral("面を作る: やめました。"));
+        },
+        [this] { ResetSurfaceInput(); });
+    addDockWidget(Qt::RightDockWidgetArea, surfaceDock_);
+
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });
     extrudeDock_->SetOptionHandler([this] { RefreshExtrudeFromDock(); });

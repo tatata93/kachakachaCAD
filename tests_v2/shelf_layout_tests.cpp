@@ -202,8 +202,10 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
              UiMode::Output}) {
         for (const DrawingTool tool : kAllTools) {
             for (const bool extruding : {false, true}) {
-                for (const Shelf shelf : ShelvesFor(mode, tool, extruding)) {
-                    reachable.insert(static_cast<int>(shelf));
+                for (const bool surfacing : {false, true}) {
+                    for (const Shelf shelf : ShelvesFor(mode, tool, extruding, surfacing)) {
+                        reachable.insert(static_cast<int>(shelf));
+                    }
                 }
             }
         }
@@ -226,6 +228,24 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
     Require(missing.empty(), "出ない棚が無い: " + missing);
     Require(reachable.count(static_cast<int>(Shelf::Extrude)) == 1,
         "押し出しの棚は、棚の決め方そのものから出る(命令が一瞬出すのではない)");
+    Require(reachable.count(static_cast<int>(Shelf::Surface)) == 1,
+        "「面を作る」の棚も、棚の決め方そのものから出る");
+}
+
+KACHA_V2_TEST(shelf, 面を作る最中はその棚が前に出る)
+{
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        const auto shelves = ShelvesFor(mode, DrawingTool::Select, false, true);
+        Require(!shelves.empty(), "棚が出る");
+        Require(shelves.front() == Shelf::Surface, "「面を作る」の棚が先頭");
+        Require(FrontShelfFor(mode, DrawingTool::Select, false, true) == Shelf::Surface,
+            "前に出るのもその棚");
+    }
+    // 押し出しのほうが先。両方は起きないが、起きたときに黙って混ぜない。
+    Require(ShelvesFor(UiMode::Part, DrawingTool::Select, true, true).front()
+            == Shelf::Extrude,
+        "押し出しが先");
 }
 
 KACHA_V2_TEST_MAIN("shelf_layout_tests")

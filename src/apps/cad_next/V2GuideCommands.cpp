@@ -37,11 +37,17 @@ using kachakacha::v2::modeling::GuideTable;
 
 bool V2MainWindow::IsGuideCommand(std::string_view id)
 {
-    return id.rfind("guide.", 0) == 0;
+    // 「面を作る」も同じ係が受ける。中では今までの表をそのまま使う。
+    return id.rfind("guide.", 0) == 0 || id == "surface.create";
 }
 
 void V2MainWindow::RunGuideCommand(std::string_view id)
 {
+    if (id == "surface.create") {
+        // **人が使う入口はこれ1つ**(オーナー指示 §10)。
+        RunSurfaceCreate();
+        return;
+    }
     if (id == "guide.create") {
         CreateGuideSurfaceFromSelection();
         return;

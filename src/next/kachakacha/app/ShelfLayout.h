@@ -34,7 +34,7 @@ enum class Shelf {
     Corner,
     //! 測る(PRD-070)。
     Measure,
-    //! 形状ガイドの役割の表。
+    //! 形状ガイドの役割の表(旧)。menu の guide.* が書く。
     GuideTable,
     //! 製作(V1 の近似モデル画面)。
     Fabrication,
@@ -53,6 +53,9 @@ enum class Shelf {
     //! 押し出しの最中だけ出す棚(オーナー指示 2026-09-14 §7)。
     //! 入力・距離・方向・範囲・操作・確定を1枚に置く。
     Extrude,
+    //! 「面を作る」の欄(作り方・入力・断面順・状態)。
+    //! UI の正本のとおり、4つの段を1枚に置く。
+    Surface,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -65,11 +68,11 @@ enum class Shelf {
 //! **毎回その棚を隠していた**。棚に値を入れた直後に自分で隠していたので、
 //! 押し出しの欄は一度も画面に出ていなかった。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false);
+    bool extruding = false, bool surfacing = false);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
 [[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false);
+    bool extruding = false, bool surfacing = false);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

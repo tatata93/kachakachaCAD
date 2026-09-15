@@ -313,7 +313,16 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "グリッドの原点を、作図点や幾何点へ合わせます。", false,
             {"AT-UIX-005"}},
-        {"guide.create", "形状ガイド", CommandMode::Dialog, "guide", "G",
+        // **人が使う入口はこれ1つ**(オーナー指示 2026-09-15 §10)。
+        // 「形状ガイド」と役割表の2本立ては、人から見て別物に見えていた。
+        // 中では今までの GuideTable をそのまま使う。
+        {"surface.create", "面を作る", CommandMode::Dialog, "surface", "G",
+            SelectionPredicate::OneOrMoreWiresOrGuideSurfaces,
+            "線を1つ以上、または形状ガイドの面を選んでください。",
+            "選んだものから面を作ります。作り方は選択内容から薦めますが、"
+            "右の棚でいつでも変えられます。方式を変えても入れたものは消えません。",
+            true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-008", "AT-UIX-007"}},
+        {"guide.create", "形状ガイド(旧)", CommandMode::Dialog, "guide", "",
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "選んだ線から形状ガイドを作ります。作れない入力は理由を出して断ります。", true,
             {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-004", "AT-GEO-005", "AT-GEO-006", "AT-UIX-007"}},

@@ -7,6 +7,8 @@
 
 #include "V2MainWindow.h"
 
+#include "V2SurfaceDock.h"
+
 #include "V2EntityTree.h"
 
 #include "kachakacha/app/SurfaceFacing.h"
@@ -799,6 +801,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Pattern:     return patternDock_;
     case Shelf::Part:        return partDock_;
     case Shelf::Extrude:     return extrudeDock_;
+    case Shelf::Surface:     return surfaceDock_;
     case Shelf::None:        break;
     }
     return nullptr;
@@ -819,7 +822,7 @@ void V2MainWindow::RefreshRightShelves()
     // (オーナー指摘 2026-09-13)。
     drawingDock_->SetTool(session_->CurrentTool());
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
-        extrudeShelfShown_);
+        extrudeShelfShown_, surfaceShelfShown_);
     for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
         QDockWidget* dock = DockForShelf(shelf);
         if (dock == nullptr) {

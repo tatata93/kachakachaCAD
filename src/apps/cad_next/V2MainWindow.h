@@ -26,6 +26,7 @@
 #include "V2MeasureDock.h"
 #include "V2ParameterDock.h"
 #include "V2ExtrudeDock.h"
+#include "V2SurfaceDock.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
@@ -35,6 +36,8 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
+#include "kachakacha/app/SurfaceInputState.h"
+
 #include "V2ExtrudeDialog.h"
 #include "V2WorkPlaneDock.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -153,6 +156,38 @@ public:
     void RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 下見の最中に選択が変わった。写しを作り直して、下見も出し直す。
     void RefreshExtrudeForSelectionChange();
+
+    // ---- 「面を作る」(オーナー指示 2026-09-15 §10〜§13)
+    //! 人が使う入口。1度目で棚を出し、2度目で作る。
+    void RunSurfaceCreate();
+    //! 作り方を変える。**入れたものは捨てない。**
+    void ChooseSurfaceMethod(kachakacha::v2::modeling::GuideSurfaceMethod method);
+    //! 断面順の決め方を変える。
+    void ChooseSurfaceOrdering(kachakacha::v2::app::SurfaceOrdering ordering);
+    //! 断面を1つ動かす。手動固定にする。
+    void MoveSurfaceSection(int from, int to);
+    //! 選んでいるものを、その役割へ入れる。
+    void AddSelectionToSurfaceSlot(kachakacha::v2::modeling::ChainRole role);
+    //! 入力を空にする。作り方は残す。
+    void ResetSurfaceInput();
+    //! 作る。
+    void ConfirmSurface();
+    //! 棚を片付ける。
+    void EndSurfacePreview();
+    //! 棚へいまの入力を映す。
+    void RefreshSurfaceDock();
+    //! 選んだものから分かる事実。作り方を薦めるのに使う。
+    [[nodiscard]] kachakacha::v2::app::SurfaceSelectionFacts SurfaceFactsNow() const;
+    //! 入力から表を組み立てる。**作る直前の1回だけ。**
+    [[nodiscard]] kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>
+    SurfaceTableFromInput() const;
+    //! 「面を作る」の棚。試験から見る。
+    [[nodiscard]] V2SurfaceDock& SurfaceDock() { return *surfaceDock_; }
+    //! いまの入力。試験から見る。
+    [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
+    {
+        return surfaceInput_;
+    }
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
@@ -785,6 +820,11 @@ private:
     std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> extrudeStartLoops_;
     //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。
     bool extrudeShelfShown_ = false;
+    //! 「面を作る」の棚を出しているか。
+    bool surfaceShelfShown_ = false;
+    //! 「面を作る」の入力。**画面の欄と1対1。**
+    kachakacha::v2::app::SurfaceInputState surfaceInput_;
+    V2SurfaceDock* surfaceDock_ = nullptr;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;
     std::function<std::optional<kachakacha::v2::app::ExtrudeChoice>(

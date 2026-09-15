@@ -22,6 +22,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Pattern:     return "型紙の下見";
     case Shelf::Part:        return "部品";
     case Shelf::Extrude:    return "押し出し";
+    case Shelf::Surface:    return "面を作る";
     }
     return "なし";
 }
@@ -31,18 +32,24 @@ const std::vector<Shelf>& AllShelves()
     static const std::vector<Shelf> all{
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
-        Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude,
+        Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
     };
     return all;
 }
 
-std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding)
+std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
+    bool surfacing)
 {
-    // 押し出しの下見を出している間は、押し出しの棚が前に出る。
+    // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
     // 見えていなければ、距離も向きも演算も確定も触れない。
     if (extruding) {
         return {Shelf::Extrude, Shelf::Part};
+    }
+    // 「面を作る」の最中も同じ。作り方・入力・断面順・状態が見えていなければ、
+    // 方式も役割も順序も触れない。
+    if (surfacing) {
+        return {Shelf::Surface, Shelf::Part};
     }
     switch (tool) {
     case DrawingTool::Measure:
@@ -98,9 +105,9 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding)
     return {Shelf::Edit};
 }
 
-Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding)
+Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing)
 {
-    const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding);
+    const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding, surfacing);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

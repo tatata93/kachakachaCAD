@@ -17,6 +17,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/ToolController.h"
 
+#include <QApplication>
 #include <QPointF>
 #include <QString>
 
@@ -176,11 +177,17 @@ bool V2MainWindow::ApplySurfaceShotState(const QString& name)
 //! 正本と見比べる場面か。名前は `ui-` で始める。
 bool V2MainWindow::ApplyUiShotState(const QString& name)
 {
+    bool ok = false;
     if (name.startsWith(QStringLiteral("ui-extrude-"))) {
-        return ApplyExtrudeShotState(name);
+        ok = ApplyExtrudeShotState(name);
+    } else if (name.startsWith(QStringLiteral("ui-surface-"))) {
+        ok = ApplySurfaceShotState(name);
+    } else {
+        return false;
     }
-    if (name.startsWith(QStringLiteral("ui-surface-"))) {
-        return ApplySurfaceShotState(name);
-    }
-    return false;
+    // 撮る直前に、棚の前後をもう一度決める。
+    // 途中で別の棚が前に出ていると、見比べる絵にならない。
+    RefreshRightShelves();
+    QApplication::processEvents();
+    return ok;
 }

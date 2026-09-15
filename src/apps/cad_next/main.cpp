@@ -122,6 +122,14 @@ int main(int argc, char** argv)
     }
     if (!state.isEmpty()) {
         window.resize(windowWidth, windowHeight);
+        if (state.startsWith(QStringLiteral("ui-"))) {
+            // 正本と見比べる場面は、**見えている画面のまま作る**(§20)。
+            // 隠したまま作ると、見えていないカードは押せず(押させない作りにした)、
+            // 棚の前後もその場では決まらない。撮ってから「実は後ろだった」では
+            // 見比べる意味がない。
+            window.show();
+            QApplication::processEvents();
+        }
         if (!window.ApplyManualState(state)) {
             std::cerr << "知らない状態です: " << state.toStdString() << '\n';
             return 2;

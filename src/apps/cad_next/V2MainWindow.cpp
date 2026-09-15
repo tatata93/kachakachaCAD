@@ -51,6 +51,7 @@
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -162,7 +163,23 @@ V2MainWindow::V2MainWindow()
     viewport_ = new V2Viewport(*session_);
     viewport_->SetWorkPlane(plane);
     viewport_->SetViewDirection(ViewDirection::Top);
-    setCentralWidget(viewport_);
+    // 正本の一番下の帯。3D の下に置く(UI の正本の footer)。
+    // 状態の帯へ相乗りさせると、日本語の案内に押されて右が切れる。
+    auto* central = new QWidget(this);
+    auto* column = new QVBoxLayout(central);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->setSpacing(0);
+    column->addWidget(viewport_, 1);
+    auto* footer = new QWidget(central);
+    auto* footerRow = new QHBoxLayout(footer);
+    footerRow->setContentsMargins(8, 2, 8, 2);
+    toolFooterLabel_ = new QLabel(footer);
+    keyHintLabel_ = new QLabel(
+        QString::fromUtf8(kachakacha::v2::app::ToolKeyHintJa().c_str()), footer);
+    footerRow->addWidget(toolFooterLabel_, 1);
+    footerRow->addWidget(keyHintLabel_, 0);
+    column->addWidget(footer, 0);
+    setCentralWidget(central);
 
     BuildMenus();
     BuildModeBar();
@@ -733,15 +750,6 @@ void V2MainWindow::BuildStatusBar()
     // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
     statusBar()->addWidget(groupLabel_);
     statusBar()->addWidget(statusLabel_, 1);
-    // 正本の footer。いまの道具の入力を一行で並べる(§15)。
-    // 右の棚を閉じていても、何で押そうとしているのかが分かる。
-    toolFooterLabel_ = new QLabel(this);
-    statusBar()->addPermanentWidget(toolFooterLabel_);
-    // 合図の説明は **いつでも** 出す。
-    // 出していないと、Ctrl も Tab も知らない人には使えない。
-    keyHintLabel_ = new QLabel(
-        QString::fromUtf8(kachakacha::v2::app::ToolKeyHintJa().c_str()), this);
-    statusBar()->addPermanentWidget(keyHintLabel_);
     // 帯を右クリックしても診断を取れるようにする(DIAGNOSTICS_FEATURE_SPEC)。
     // おかしいと思った瞬間に、献立を辿らずに取れるほうがよい。
     // 辿っているあいだに状態が変わってしまうことがある。

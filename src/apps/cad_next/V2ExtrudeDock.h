@@ -53,6 +53,9 @@ public:
     [[nodiscard]] kachakacha::v2::modeling::ExtrudeBooleanMode BooleanMode() const;
     //! 両側へ押すか。
     [[nodiscard]] bool Symmetric() const;
+    //! 棚で選んでいる終端。詳細の窓で決めたものは3つ目に名前で出る。
+    [[nodiscard]] kachakacha::v2::modeling::ExtrudeExtentMode ExtentMode() const;
+    void ChooseExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode);
     //! 向きを反転しているか。
     [[nodiscard]] bool Reversed() const;
 
@@ -100,6 +103,8 @@ private:
     std::optional<kachakacha::v2::modeling::ExtrudeDirectionMode> advancedDirection_;
     QPushButton* reverse_ = nullptr;
     QComboBox* extent_ = nullptr;
+    //! 棚のふだんの2つでは表せない終端。3つ目に出している間だけ入る。
+    std::optional<kachakacha::v2::modeling::ExtrudeExtentMode> advancedExtent_;
     QComboBox* boolean_ = nullptr;
     QPushButton* reselectTarget_ = nullptr;
     QPushButton* reselectProfile_ = nullptr;

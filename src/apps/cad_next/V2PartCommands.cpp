@@ -257,8 +257,10 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     if (facePushPull_ && !ApplyFacePushPull(choice)) {
         return std::nullopt;
     }
-    // 窓は据え付けていない。据え付いているのは「詳細...」を押したときと、
-    // 画面を出さない試験が差し込んだときだけである。あれば従う。
+    // 決めごとを外から差し替える口。ふだんは空である。
+    // 「詳細...」の窓はここを通らない。窓は決めたことを棚と矢印へ映して戻り、
+    // 作るのは確定である(Codex P1-EXTRUDE-R7 B1)。ここを使うのは、
+    // 画面を出さない自己試験だけになった。あれば従う。
     if (extrudeChooser_) {
         const auto answered = extrudeChooser_(choice, facts);
         if (!answered.has_value()) {

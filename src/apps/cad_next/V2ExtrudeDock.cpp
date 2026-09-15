@@ -26,6 +26,9 @@ using kachakacha::v2::modeling::ExtrudeBooleanMode;
 //! 「詳細で決めた向き」が並ぶ場所。選ばれている間だけ生える3つ目。
 constexpr int kAdvancedDirectionIndex = 2;
 
+//! 「詳細で決めた範囲」が並ぶ場所。選ばれている間だけ生える3つ目。
+constexpr int kAdvancedExtentIndex = 2;
+
 //! 操作の欄に並べる順。立体を選んでいるときだけ出す。
 constexpr ExtrudeBooleanMode kBooleans[] = {
     ExtrudeBooleanMode::AddToPart,
@@ -331,7 +334,57 @@ kachakacha::v2::modeling::ExtrudeBooleanMode V2ExtrudeDock::BooleanMode() const
 
 bool V2ExtrudeDock::Symmetric() const
 {
-    return extent_->currentIndex() == 1;
+    return ExtentMode() == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance;
+}
+
+//! 棚で選んでいる終端。
+//!
+//! ふだん出ているのは「片側」と「両側」の2つ。詳細の窓で「選んだ面まで」や
+//! 「両方向に別々の距離」を決めたときは、3つ目としてその名前が出る。
+//! 出さずにいると、棚の欄をひとつ触るだけでその終端が黙って「片側」へ
+//! 戻っていた。向きで起きていたのと同じことである。
+kachakacha::v2::modeling::ExtrudeExtentMode V2ExtrudeDock::ExtentMode() const
+{
+    if (extent_ == nullptr) {
+        return kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+    }
+    const int index = extent_->currentIndex();
+    if (index == kAdvancedExtentIndex && advancedExtent_.has_value()) {
+        return *advancedExtent_;
+    }
+    return index == 1 ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
+                      : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+}
+
+void V2ExtrudeDock::ChooseExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode)
+{
+    if (extent_ == nullptr) {
+        return;
+    }
+    const bool blocked = extent_->blockSignals(true);
+    const bool plain = mode == kachakacha::v2::modeling::ExtrudeExtentMode::Distance
+        || mode == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance;
+    if (plain) {
+        advancedExtent_.reset();
+        if (extent_->count() > kAdvancedExtentIndex) {
+            extent_->removeItem(kAdvancedExtentIndex);
+        }
+        extent_->setCurrentIndex(
+            mode == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance ? 1 : 0);
+    } else {
+        advancedExtent_ = mode;
+        const QString label
+            = QStringLiteral("詳細で決めた範囲(%1)")
+                  .arg(QString::fromUtf8(std::string(
+                      kachakacha::v2::app::ExtrudeExtentNameJa(mode)).c_str()));
+        if (extent_->count() > kAdvancedExtentIndex) {
+            extent_->setItemText(kAdvancedExtentIndex, label);
+        } else {
+            extent_->addItem(label);
+        }
+        extent_->setCurrentIndex(kAdvancedExtentIndex);
+    }
+    extent_->blockSignals(blocked);
 }
 
 bool V2ExtrudeDock::Reversed() const

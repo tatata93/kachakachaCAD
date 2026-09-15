@@ -450,18 +450,48 @@ namespace {
     if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
         return false;
     }
-    // 窓の代わりに「斜めの向きを数値で決めた」という答えを差し込む。
-    window.SetExtrudeChooser([](const kachakacha::v2::app::ExtrudeChoice& initial,
-                                 const kachakacha::v2::app::ExtrudeFacts&)
-                                 -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
-        auto answered = initial;
-        answered.direction = ExtrudeDirectionMode::CustomXYZ;
-        answered.customDirection = {0.6, 0.0, 0.8};
-        return answered;
-    });
-    window.ExtrudeDock().TypeDistanceMm(4.0);
+    // 窓が「斜めの向きを数値で決めた」と答えたのと同じことをする。
+    // **窓は作らない。** 決めたことを棚と矢印と下見へ映して戻るだけである。
+    // 長さは1でない値を渡す。向きに長さを持たせたまま矢印へ使うと、
+    // 下見だけが伸びて、出来る形と食い違う(Codex P1-EXTRUDE-R7 B2)。
+    auto chosen = window.ExtrudeChoice();
+    chosen.direction = ExtrudeDirectionMode::CustomXYZ;
+    chosen.customDirection = {4.2, 0.0, 5.6};   // 長さ7、向きは (0.6, 0, 0.8)
+    chosen.distanceMm = 4.0;
+    window.ApplyExtrudeChoice(chosen);
+
+    // **確定する前に**、矢印と下見が決めたとおりになっていること。
+    // ここを見ないと「次に始めたときには合っている」しか言えない
+    // (Codex P1-EXTRUDE-R7 B1)。
+    const auto shownDirection = window.ExtrudeDirectionNow();
+    if (!Explain((std::string("確定前の矢印が決めた向きを向く(x=")
+                     + std::to_string(shownDirection.x) + " z="
+                     + std::to_string(shownDirection.z) + ")").c_str(),
+            std::abs(shownDirection.x - 0.6) < 1.0e-6
+                && std::abs(shownDirection.z - 0.8) < 1.0e-6)) {
+        return false;
+    }
+    if (!Explain((std::string("確定前の矢印の長さが1(len=")
+                     + std::to_string(shownDirection.Length()) + ")").c_str(),
+            std::abs(shownDirection.Length() - 1.0) < 1.0e-9)) {
+        return false;
+    }
+    // 下見も同じだけ進んでいること。長さの二重掛けはここに出る。
+    const auto& loops = window.Viewport().ExtrudeHandlePreview();
+    const auto outline = window.ExtrudeOutline();
+    bool movedRight = false;
+    if (!loops.empty() && !outline.empty() && loops.front().size() == outline.size()) {
+        const auto moved = loops.front().front() - outline.front();
+        movedRight = std::abs(moved.Length() - 4.0) < 1.0e-6;
+    }
+    if (!Explain("確定前の下見も、打った距離だけ進んでいる", movedRight)) {
+        return false;
+    }
+    if (!Explain("棚も『詳細で決めた向き』を見せている",
+            window.ExtrudeDock().DirectionMode() == ExtrudeDirectionMode::CustomXYZ)) {
+        return false;
+    }
     window.RunCommand("part.extrude");   // 確定
-    window.SetExtrudeChooser(nullptr);
     if (!Explain((std::string("立体ができる(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             CountParts(window) == 1)) {

@@ -137,7 +137,7 @@ void V2MainWindow::BuildOutputShelves()
             EndExtrudePreview();
             SetStatus(QStringLiteral("押し出し: やめました。"));
         },
-        [this] { ConfirmExtrudeWithDialog(); });
+        [this] { EditExtrudeWithDialog(); });
     extrudeDock_->SetReselectHandlers([this] { ReselectExtrudeInput(true); },
         [this] { ReselectExtrudeInput(false); });
     addDockWidget(Qt::RightDockWidgetArea, extrudeDock_);

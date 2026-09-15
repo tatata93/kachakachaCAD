@@ -583,6 +583,16 @@ void V2FabricationDock::ShowRadius(const kachakacha::v2::fabrication::BendRadius
     loading_ = false;
 }
 
+bool V2FabricationDock::RadiusUsable() const
+{
+    return radius_ != nullptr && radius_->isEnabled();
+}
+
+QString V2FabricationDock::RadiusStateTextJa() const
+{
+    return radiusState_ == nullptr ? QString() : radiusState_->text();
+}
+
 void V2FabricationDock::ShowRadiusUnavailable(const QString& whyJa)
 {
     if (radius_ == nullptr) {

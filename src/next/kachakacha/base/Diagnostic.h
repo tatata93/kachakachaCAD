@@ -90,9 +90,7 @@ public:
         Result result;
         result.diagnostics_ = std::move(errors);
         if (result.diagnostics_.empty()) {
-            result.diagnostics_.push_back(MakeError("GEN-E000",
-                "理由の付いていない失敗です。",
-                "断るときは理由番号と一文を付けてください(不具合)。"));
+            result.diagnostics_.push_back(MissingReason());
         }
         return result;
     }
@@ -109,15 +107,16 @@ public:
     {
         return diagnostics_;
     }
-    //! 最初の理由の一文。理由が1つも無ければ、そう言う。
+    //! 理由が1つも無いときに代わりに出す理由。**出どころは1か所。**
     //!
-    //! `Diagnostics().front()` を直に書くと、理由を付け忘れた失敗で
-    //! **並びの外を読む**。Release では気づかず、Windows の Debug では落ちる。
-    //! 落ちるより「理由が入っていません」と出たほうが、直しようがある。
-    [[nodiscard]] std::string FirstSummaryJa() const
+    //! ここを配らずに読む口ごとに空文字を返していたので、既定で作った
+    //! `Result` では `FirstMessageJa()` が番号の無い一文になり、
+    //! 「断るときは番号と一文を出す」という約束を、断り方そのものが
+    //! 破っていた(Codex DIAG-REFUSAL-R3 B1)。
+    [[nodiscard]] static Diagnostic MissingReason()
     {
-        return diagnostics_.empty() ? std::string("理由が入っていません(不具合)。")
-                                    : diagnostics_.front().summaryJa;
+        return MakeError("GEN-E000", "理由の付いていない失敗です。",
+            "断るときは理由番号と一文を付けてください(不具合)。");
     }
     //! 最初の理由そのもの。理由が1つも無ければ、そう言う理由を返す。
     //!
@@ -125,35 +124,42 @@ public:
     //! 既定で作った `Result` は空でありうる。
     [[nodiscard]] Diagnostic FirstDiagnostic() const
     {
-        return diagnostics_.empty()
-            ? MakeError("GEN-E000", "理由の付いていない失敗です。",
-                  "断るときは理由番号と一文を付けてください(不具合)。")
-            : diagnostics_.front();
+        return diagnostics_.empty() ? MissingReason() : diagnostics_.front();
     }
-    //! 最初の理由の細かい説明。理由が1つも無ければ空。
+    //! 最初の理由の一文。理由が1つも無ければ、そう言う。
+    //!
+    //! `Diagnostics().front()` を直に書くと、理由を付け忘れた失敗で
+    //! **並びの外を読む**。Release では気づかず、Windows の Debug では落ちる。
+    //! 落ちるより「理由が入っていません」と出たほうが、直しようがある。
+    [[nodiscard]] std::string FirstSummaryJa() const
+    {
+        return FirstDiagnostic().summaryJa;
+    }
+    //! 最初の理由の細かい説明。
     //!
     //! 一文だけ安全に読めるようにしても、隣で `Diagnostics().front().detailsJa`
     //! と書けば同じ場所で並びの外を読む。**読む口を全部そろえる**
     //! (Codex DIAG-REFUSAL-R2 B1)。
     [[nodiscard]] std::string FirstDetailsJa() const
     {
-        return diagnostics_.empty() ? std::string() : diagnostics_.front().detailsJa;
+        return FirstDiagnostic().detailsJa;
     }
-    //! 最初の理由の番号。理由が1つも無ければ空。
+    //! 最初の理由の番号。
     [[nodiscard]] std::string FirstCode() const
     {
-        return diagnostics_.empty() ? std::string() : diagnostics_.front().code;
+        return FirstDiagnostic().code;
     }
     //! 「番号 一文 細かい説明」。画面へ出すときの決まった並べ方。
+    //! 理由が1つも無いときも、この並びのまま出す。
     [[nodiscard]] std::string FirstMessageJa() const
     {
-        std::string text = FirstCode();
+        const Diagnostic first = FirstDiagnostic();
+        std::string text = first.code;
         if (!text.empty()) { text += ' '; }
-        text += FirstSummaryJa();
-        const std::string details = FirstDetailsJa();
-        if (!details.empty()) {
+        text += first.summaryJa;
+        if (!first.detailsJa.empty()) {
             text += ' ';
-            text += details;
+            text += first.detailsJa;
         }
         return text;
     }

@@ -221,6 +221,13 @@ public:
     {
         return extrudeHandle_.handle.distanceMm;
     }
+    //! いま下見に出している輪郭。**画面に出ているものそのもの。**
+    //! 試験が「見えているとおりに作られるか」を見るために要る。
+    [[nodiscard]] const std::vector<std::vector<kachakacha::v2::geometry::Vector3>>&
+    ExtrudeHandlePreview() const noexcept
+    {
+        return extrudeHandle_.preview;
+    }
     //! 距離が変わったときに呼ぶもの。右の欄が同じ値を出すために要る。
     void SetExtrudeDistanceCallback(std::function<void(double)> callback);
     //! Enter で確定、Esc でやめる。中身は窓が持っている。

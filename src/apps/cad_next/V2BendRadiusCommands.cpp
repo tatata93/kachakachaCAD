@@ -109,13 +109,14 @@ kachakacha::v2::fabrication::BendRadius V2MainWindow::BendRadiusNow() const
     }
     // 見るだけ。番号を書いていなければ1枚目。**書いてあって読めないなら空。**
     // 読めない字を空欄と同じに扱うと、まったく違う部材の半径を見せてしまう。
-    if (PartNumbersUnreadable()) {
+    const auto selection = ReadPartNumbers();
+    if (selection.unreadable) {
         return {};
     }
-    const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
+    const auto chosen = ChoosePart(selection.numbers, bends.size(), false);
     if (!chosen.ok) {
-        return SelectedPartNumbers().empty() ? bends.front()
-                                             : kachakacha::v2::fabrication::BendRadius{};
+        return selection.numbers.empty() ? bends.front()
+                                         : kachakacha::v2::fabrication::BendRadius{};
     }
     return bends[chosen.index];
 }
@@ -183,8 +184,18 @@ void V2MainWindow::RefreshBendRadius()
     }
     // 無い番号を書いたまま部材1の値を出すと、いまどの部材を読んでいるのかが
     // 画面と食い違う。読めないときは、値を出さずに理由だけを出す。
-    const auto chosen = ChoosePart(SelectedPartNumbers(), bends.size(), false);
-    if (!chosen.ok && !SelectedPartNumbers().empty()) {
+    //
+    // 読めない字は、番号の並びとしては空になる。空欄と同じ道を通していたので、
+    // `abc` と書いても部材1の半径が出ていた。**読めないことを先に言う**
+    // (Codex Q1-Q5-R6 B1)。
+    const auto selection = ReadPartNumbers();
+    if (selection.unreadable) {
+        fabricationDock_->ShowRadiusUnavailable(
+            QString::fromStdString(selection.whyJa));
+        return;
+    }
+    const auto chosen = ChoosePart(selection.numbers, bends.size(), false);
+    if (!chosen.ok && !selection.numbers.empty()) {
         fabricationDock_->ShowRadiusUnavailable(chosen.whyJa);
         return;
     }

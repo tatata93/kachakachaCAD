@@ -372,11 +372,55 @@ using kachakacha::v2::domain::Visibility;
         static_cast<int>(window.FabricationPanelCount()) == split);
 }
 
+//! Codex Q1-Q5-R6 B1。読めない部材番号で、別の部材の半径を見せないこと。
+//!
+//! 読めない字は番号の並びとしては空になる。空欄と同じ道を通していたので、
+//! `abc` と書いても部材1の半径が出ていた。見るのは **棚の実際の更新** である。
+[[nodiscard]] bool CaseUnreadablePartNumbersShowNoRadius(V2MainWindow& window)
+{
+    if (!MakeSurfaceFromScratch(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    auto& dock = window.FabricationDock();
+    // まず空欄。1枚目の半径が出る。
+    dock.SetPartNumbersText(QString());
+    window.RefreshBendRadius();
+    if (!Explain("空欄なら半径の欄は触れる", dock.RadiusUsable())) {
+        return false;
+    }
+    // 読めない字を書く。**値ではなく理由が出る。**
+    dock.SetPartNumbersText(QStringLiteral("abc"));
+    window.RefreshBendRadius();
+    if (!Explain((std::string("読めない番号では半径を出さない(欄は ")
+                     + (dock.RadiusUsable() ? "触れる" : "触れない") + ")").c_str(),
+            !dock.RadiusUsable())) {
+        return false;
+    }
+    if (!Explain((std::string("読めない理由が出ている(")
+                     + dock.RadiusStateTextJa().toStdString() + ")").c_str(),
+            !dock.RadiusStateTextJa().isEmpty())) {
+        return false;
+    }
+    // 読める番号へ戻すと、また出る。塞ぎっぱなしにしない。
+    dock.SetPartNumbersText(QStringLiteral("1"));
+    window.RefreshBendRadius();
+    return Explain("読める番号へ戻せば、また半径が出る", dock.RadiusUsable());
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ApproximationFlowCases()
 {
     return {
+        {"読めない部材番号では半径を出さず、理由を出す",
+            CaseUnreadablePartNumbersShowNoRadius},
         {"何も無いところから面を作り、方式を見比べて近似できる",
             CaseApproximationFromScratch},
         {"近似を0/50/70/100%へ動かし、途中の状態から線と面を作れる",

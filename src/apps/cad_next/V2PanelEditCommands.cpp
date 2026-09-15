@@ -424,39 +424,47 @@ void V2MainWindow::SplitFabricationPart()
             numbers.front()));
 }
 
-//! 棚の「曲げる部材」に書いた番号。0 起点へ直して返す。
-//! 棚の「曲げる部材」の欄が、空欄なのか、書いてあって読めないのか。
+//! 棚の「曲げる部材」の欄を、**一度だけ**読む。
 //!
 //! どちらも空の並びを返していたので、`abc` と書いてあっても「空欄」と同じ
 //! 扱いになり、部材1の半径を出していた(Codex Q1-Q5-R5 B3)。
 //! **書いてあるのに読めないことは、空欄とは違う。**
-bool V2MainWindow::PartNumbersUnreadable() const
+//!
+//! 読み取りを呼ぶ場所ごとに
+//! 別々に解析していたので、片方だけが読めない字を弾き、もう片方は空欄と同じに
+//! 扱って部材1の半径を見せていた(Codex Q1-Q5-R6 B1)。
+//! **どちらなのかを型で持ち、読むのは1回にする。**
+V2MainWindow::PartNumberSelection V2MainWindow::ReadPartNumbers() const
 {
+    PartNumberSelection selection;
     if (fabricationDock_ == nullptr) {
-        return false;
+        return selection;   // 棚が無い。空欄と同じ
     }
     const QString text = fabricationDock_->PartNumbersText().trimmed();
     if (text.isEmpty()) {
-        return false;   // 空欄。読めないのではない
+        return selection;   // 空欄。読めないのではない
     }
-    return !kachakacha::v2::app::ParsePartNumberList(text.toStdString()).HasValue();
+    selection.blank = false;
+    const auto parsed = kachakacha::v2::app::ParsePartNumberList(text.toStdString());
+    if (!parsed.HasValue()) {
+        selection.unreadable = true;
+        selection.whyJa = parsed.FirstMessageJa();
+        return selection;
+    }
+    for (const int number : parsed.Value()) {
+        if (number >= 1) {
+            selection.numbers.push_back(static_cast<std::size_t>(number - 1));
+        }
+    }
+    return selection;
+}
+
+bool V2MainWindow::PartNumbersUnreadable() const
+{
+    return ReadPartNumbers().unreadable;
 }
 
 std::vector<std::size_t> V2MainWindow::SelectedPartNumbers() const
 {
-    std::vector<std::size_t> numbers;
-    if (fabricationDock_ == nullptr) {
-        return numbers;
-    }
-    const auto parsed = kachakacha::v2::app::ParsePartNumberList(
-        fabricationDock_->PartNumbersText().toStdString());
-    if (!parsed.HasValue()) {
-        return numbers;
-    }
-    for (const int number : parsed.Value()) {
-        if (number >= 1) {
-            numbers.push_back(static_cast<std::size_t>(number - 1));
-        }
-    }
-    return numbers;
+    return ReadPartNumbers().numbers;
 }

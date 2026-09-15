@@ -307,4 +307,46 @@ KACHA_V2_TEST(foundation, 理由の無い断り方は作れない)
     kachakacha::v2::test::Require(!refused.FirstSummaryJa().empty(), "一文も出る");
 }
 
+KACHA_V2_TEST(foundation, 理由の読み口はどれも同じ理由を出す)
+{
+    // 番号・一文・細かい説明を、口ごとに別々に作っていた。理由が1つも無い
+    // `Result` では `FirstDiagnostic()` だけが代わりの理由を作り、
+    // `FirstCode()` と `FirstDetailsJa()` は空を返していたので、
+    // 「番号 一文 細かい説明」と説明してある `FirstMessageJa()` が
+    // **番号の無い一文**になっていた(Codex DIAG-REFUSAL-R3 B1)。
+    using kachakacha::v2::base::Diagnostic;
+    using kachakacha::v2::test::Require;
+    using kachakacha::v2::test::RequireEqual;
+
+    // 1. 理由があるとき。4つの口が、その理由のとおりを出す。
+    const auto refused = kachakacha::v2::base::Result<int>::Failure(
+        kachakacha::v2::base::MakeError("TST-009", "押せません。", "向きが寝ています。"));
+    RequireEqual(refused.FirstCode(), std::string("TST-009"), "番号を出す");
+    RequireEqual(refused.FirstSummaryJa(), std::string("押せません。"), "一文を出す");
+    RequireEqual(refused.FirstDetailsJa(), std::string("向きが寝ています。"),
+        "細かい説明を出す");
+    RequireEqual(refused.FirstMessageJa(),
+        std::string("TST-009 押せません。 向きが寝ています。"), "並べ方も決まっている");
+    const Diagnostic first = refused.FirstDiagnostic();
+    RequireEqual(first.code, refused.FirstCode(), "理由そのものと番号が合う");
+    RequireEqual(first.summaryJa, refused.FirstSummaryJa(), "理由そのものと一文が合う");
+    RequireEqual(first.detailsJa, refused.FirstDetailsJa(), "理由そのものと説明が合う");
+
+    // 2. 理由が1つも無いとき。**どの口も、同じ代わりの理由を出す。**
+    const kachakacha::v2::base::Result<int> empty;
+    Require(!empty.HasValue(), "既定で作ったものは値を持たない");
+    Require(empty.Diagnostics().empty(), "理由も入っていない");
+    const Diagnostic fallback = empty.FirstDiagnostic();
+    RequireEqual(fallback.code, std::string("GEN-E000"), "付け忘れと分かる番号");
+    RequireEqual(empty.FirstCode(), fallback.code, "番号の口も同じものを出す");
+    RequireEqual(empty.FirstSummaryJa(), fallback.summaryJa, "一文の口も同じ");
+    RequireEqual(empty.FirstDetailsJa(), fallback.detailsJa, "説明の口も同じ");
+    Require(empty.FirstMessageJa().rfind("GEN-E000 ", 0) == 0,
+        "理由が無くても、出す文は番号から始まる");
+    Require(empty.FirstMessageJa().find(fallback.summaryJa) != std::string::npos,
+        "その文に一文も入っている");
+    Require(empty.FirstMessageJa().find(fallback.detailsJa) != std::string::npos,
+        "その文に細かい説明も入っている");
+}
+
 KACHA_V2_TEST_MAIN("foundation_tests")

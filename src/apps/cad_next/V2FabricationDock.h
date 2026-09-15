@@ -60,6 +60,10 @@ public:
     [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputChoice() const;
     //! 半径の欄に出ている値と、自動か固定か。試験と窓から読む。
     [[nodiscard]] double RadiusMm() const;
+    //! 半径の欄がいま触れるか。触れないなら、値ではなく理由が出ている。
+    [[nodiscard]] bool RadiusUsable() const;
+    //! 半径の欄のそばに出ている一文。試験から読む。
+    [[nodiscard]] QString RadiusStateTextJa() const;
     [[nodiscard]] bool RadiusLocked() const;
     //! 半径の欄を映す。近似が測り直したときに呼ぶ。
     void ShowRadius(const kachakacha::v2::fabrication::BendRadius& bend, double percent);

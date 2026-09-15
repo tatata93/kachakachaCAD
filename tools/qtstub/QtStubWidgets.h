@@ -67,6 +67,7 @@ public:
     [[nodiscard]] QString windowTitle() const;
     void setLayout(QLayout*);
     void setEnabled(bool);
+    [[nodiscard]] bool isEnabled() const;
     void setVisible(bool);
     [[nodiscard]] QWidget* parentWidget() const;
     void setToolTip(const QString&);

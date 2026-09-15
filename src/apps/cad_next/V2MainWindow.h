@@ -137,7 +137,10 @@ public:
     //! 棚の欄が変わったので、下見を作り直す。
     void RefreshExtrudeFromDock();
     //! 「詳細...」。細かい設定は今までの窓で決める。
-    void ConfirmExtrudeWithDialog();
+    //! 「詳細...」。窓で決めて、棚と矢印と下見へ映して戻る。**作らない。**
+    void EditExtrudeWithDialog();
+    //! 決めたひと組を棚と矢印と下見へ映す。試験からも呼ぶ。
+    void ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& choice);
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
@@ -964,6 +967,15 @@ public:
     [[nodiscard]] int UnfoldBaseRailNow() const;
     //! いまの製作モデルの部材の数。
     [[nodiscard]] std::size_t FabricationPanelCount() const;
+    //! 棚の「曲げる部材」の欄を1回だけ読んだ結果。
+    //! **空欄と、書いてあって読めない字を、型で分ける。**
+    struct PartNumberSelection {
+        bool blank = true;                  //!< 何も書いていない
+        bool unreadable = false;            //!< 書いてあるが読めない
+        std::string whyJa;                  //!< 読めない理由
+        std::vector<std::size_t> numbers;   //!< 0 起点
+    };
+    [[nodiscard]] PartNumberSelection ReadPartNumbers() const;
     //! 棚の「曲げる部材」に書いた番号。0 起点。
     [[nodiscard]] std::vector<std::size_t> SelectedPartNumbers() const;
     //! 押し出す向き。矢印・下見・確定形状はすべてここから取る。

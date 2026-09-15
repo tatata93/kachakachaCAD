@@ -149,9 +149,18 @@ Vector3 V2MainWindow::ExtrudeDirectionForMode(
     const auto usable = [&](const Vector3& value) {
         return value.IsFinite() && value.Length() > 1.0e-9;
     };
+    // **長さ1で返す。** 距離は別に持っているので、向きが長さを持っていると
+    // 二重に掛かる。`{0,0,7}` を選んで距離 4mm と打つと、矢印と下見だけが
+    // 28mm 進み、出来る形は 4mm だった(Codex P1-EXTRUDE-R6 B2 の続き、R7 B2)。
+    // カーネル(ResolveDirection)も同じところで単位にしている。
+    const auto unit = [&](const Vector3& value) {
+        return usable(value)
+            ? kachakacha::v2::geometry::Normalized(value, 1.0e-12)
+            : workPlaneNormal;
+    };
     switch (mode) {
     case ExtrudeDirectionMode::WorkPlaneNormal:
-        return workPlaneNormal;
+        return unit(workPlaneNormal);
     case ExtrudeDirectionMode::WorldX:
         return Vector3{1.0, 0.0, 0.0};
     case ExtrudeDirectionMode::WorldY:
@@ -162,7 +171,7 @@ Vector3 V2MainWindow::ExtrudeDirectionForMode(
     case ExtrudeDirectionMode::CustomXYZ:
         // 使えない値でも黙って別の向きへ倒さない。矢印だけは描けるように
         // 作業平面の法線を借りるが、断るのはカーネルの仕事である。
-        return usable(custom) ? custom : workPlaneNormal;
+        return unit(custom);
     case ExtrudeDirectionMode::ProfileNormal:
         break;
     }
@@ -182,9 +191,9 @@ Vector3 V2MainWindow::ExtrudeDirectionForMode(
         if (kachakacha::v2::geometry::Dot(fitted, workPlaneNormal) < 0.0) {
             fitted = fitted * -1.0;
         }
-        return fitted;
+        return unit(fitted);
     }
-    return workPlaneNormal;
+    return unit(workPlaneNormal);
 }
 
 std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double distanceMm) const
@@ -334,22 +343,49 @@ void V2MainWindow::RefreshExtrudeFromDock()
 }
 
 //! 「詳細...」。細かい設定は今までの窓で決める。
-//! 右へ全部並べると、どれを見ればよいのか分からなくなる。
+//!
+//! 窓で決めても、**そこでは作らない。**決めたことを棚と矢印と下見へ映して戻す。
+//! 作るのは「確定」である。棚のほかの欄と同じ扱いにする。
+//!
+//! 窓が答えたその足で作っていたので、画面に出ている矢印と下見は窓を開く前の
+//! ままだった。見ながら決めることができず、「見えているものが本当に効く」も
+//! 守れていなかった(Codex P1-EXTRUDE-R7 B1)。
 //!
 //! 窓はここで据え付けて、終わったら外す。据え付けたままにすると、
 //! ふだんの確定でも窓が出て、「見ながら決める」ができなくなる。
-void V2MainWindow::ConfirmExtrudeWithDialog()
+void V2MainWindow::EditExtrudeWithDialog()
 {
-    auto previous = extrudeChooser_;
-    SetExtrudeChooser([this](const kachakacha::v2::app::ExtrudeChoice& initial,
-                          const kachakacha::v2::app::ExtrudeFacts& facts)
-                          -> std::optional<kachakacha::v2::app::ExtrudeChoice> {
-        V2ExtrudeDialog dialog(initial, facts, ExtrudeTargets(), this);
-        if (dialog.exec() != QDialog::Accepted) {
-            return std::nullopt;
-        }
-        return dialog.Choice();
-    });
-    ConfirmExtrude();
-    SetExtrudeChooser(std::move(previous));
+    if (!viewport_->ExtrudeHandleShown()) {
+        SetStatus(QStringLiteral("押し出し: 先に押し出しを始めてください。"));
+        return;
+    }
+    const auto plan = PlanExtrudeFromSelection();
+    auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
+    const auto facts = BuildExtrudeFacts(profiles);
+    V2ExtrudeDialog dialog(extrudeChoice_, facts, ExtrudeTargets(), this);
+    if (dialog.exec() != QDialog::Accepted) {
+        SetStatus(QStringLiteral("押し出し: 詳細をやめました。"));
+        return;
+    }
+    ApplyExtrudeChoice(dialog.Choice());
+}
+
+//! 窓が答えたひと組を、棚と矢印と下見へ映す。**作らない。**
+void V2MainWindow::ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& choice)
+{
+    extrudeChoice_ = choice;
+    // 棚は7通りの向きと5通りの終端をすべて名前で出せる。決めたとおりを映す。
+    extrudeDock_->ChooseDirection(extrudeChoice_.direction);
+    extrudeDock_->ChooseExtent(extrudeChoice_.extent);
+    extrudeDock_->ChooseBoolean(extrudeChoice_.booleanMode);
+    extrudeDock_->SetDistanceMm(extrudeChoice_.distanceMm);
+    // 矢印と下見を作り直す。ここで初めて、画面が決めたとおりになる。
+    kachakacha::v2::app::ExtrudeHandle handle;
+    handle.origin = viewport_->ExtrudeHandleOrigin();
+    handle.direction = ExtrudeDirectionNow();
+    handle.distanceMm = extrudeChoice_.distanceMm;
+    viewport_->ShowExtrudeHandle(handle, ExtrudePreviewLoops(handle.distanceMm));
+    SetStatus(QStringLiteral("押し出し\n%1\nこのとおりでよければ Enter で確定します。")
+            .arg(QString::fromStdString(
+                kachakacha::v2::app::ExtrudeSummaryJa(extrudeChoice_))));
 }

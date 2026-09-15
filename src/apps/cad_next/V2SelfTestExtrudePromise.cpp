@@ -477,14 +477,16 @@ namespace {
         return false;
     }
     // 下見も同じだけ進んでいること。長さの二重掛けはここに出る。
+    // 下見の1本目はいまの輪郭、2本目が押し出した先の輪郭である。
     const auto& loops = window.Viewport().ExtrudeHandlePreview();
     const auto outline = window.ExtrudeOutline();
-    bool movedRight = false;
-    if (!loops.empty() && !outline.empty() && loops.front().size() == outline.size()) {
-        const auto moved = loops.front().front() - outline.front();
-        movedRight = std::abs(moved.Length() - 4.0) < 1.0e-6;
+    double movedMm = -1.0;
+    if (loops.size() >= 2 && !outline.empty() && loops[1].size() == outline.size()) {
+        movedMm = (loops[1].front() - outline.front()).Length();
     }
-    if (!Explain("確定前の下見も、打った距離だけ進んでいる", movedRight)) {
+    if (!Explain((std::string("確定前の下見も、打った距離だけ進んでいる(")
+                     + std::to_string(movedMm) + "mm)").c_str(),
+            std::abs(movedMm - 4.0) < 1.0e-6)) {
         return false;
     }
     if (!Explain("棚も『詳細で決めた向き』を見せている",

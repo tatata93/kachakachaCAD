@@ -73,6 +73,8 @@ namespace {
     const std::vector<SelfTestCase> facing = FacingCases();
     const std::vector<SelfTestCase> groups = GroupCases();
     const std::vector<SelfTestCase> hoModel = HoModelCases();
+    const std::vector<SelfTestCase> humanPath = HumanPathCases();
+    cases.insert(cases.end(), humanPath.begin(), humanPath.end());
     const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
     const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();

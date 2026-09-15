@@ -95,6 +95,12 @@ void Note(const char* what);
 //! 文書にある、その種類のものの数(見えているかは問わない)。
 [[nodiscard]] int CountOfKind(V2MainWindow& window, kachakacha::v2::domain::EntityKind kind);
 
+//! 人の道の試験(オーナー指示 2026-09-15 §16)。
+//!
+//! 選ぶのは実際に拾う道(`SelectAt`)だけ。棚が **見えているか** を必ず見る。
+//! 不可視の widget を直に叩くだけの試験は、ここには置かない。
+[[nodiscard]] std::vector<SelfTestCase> HumanPathCases();
+
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();
 

@@ -312,6 +312,22 @@ void V2SurfaceDock::SetActionHandlers(std::function<void()> confirm,
     resetHandler_ = std::move(reset);
 }
 
+bool V2SurfaceDock::ClickMethodCard(GuideSurfaceMethod method)
+{
+    const auto& main = kachakacha::v2::app::MainSurfaceMethods();
+    for (std::size_t index = 0; index < methodCards_.size() && index < main.size(); ++index) {
+        if (main[index] != method) {
+            continue;
+        }
+        if (!methodCards_[index]->isVisible()) {
+            return false;   // 見えていないものは押せない。
+        }
+        methodCards_[index]->click();
+        return true;
+    }
+    return false;
+}
+
 void V2SurfaceDock::PressMethod(GuideSurfaceMethod method)
 {
     if (methodHandler_) {

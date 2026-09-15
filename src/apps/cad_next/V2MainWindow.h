@@ -104,6 +104,10 @@ public:
     [[nodiscard]] bool ToolWantsConfirmKeys() const;
     //! 合図を道具へ渡す。受け止めたら true。試験は窓を出さずにここを叩く。
     bool HandleToolKey(int key, QObject* target);
+    //! 押し出しの Enter / Esc。
+    bool HandleExtrudeToolKey(int key, QObject* target);
+    //! 「面を作る」の Enter / Esc。
+    bool HandleSurfaceToolKey(int key);
 
     [[nodiscard]] V2Viewport& Viewport() { return *viewport_; }
     [[nodiscard]] kachakacha::v2::app::DrawingSession& Session() { return *session_; }
@@ -172,10 +176,17 @@ public:
     void ResetSurfaceInput();
     //! 作る。
     void ConfirmSurface();
+    //! なぜ作れないかを言う。断り方を1か所にまとめる。
+    void ReportSurfaceNotReady();
     //! 棚を片付ける。
     void EndSurfacePreview();
     //! 棚へいまの入力を映す。
     void RefreshSurfaceDock();
+    //! いまの入力で出来上がる面を、**文書へ書かずに**線で出す(§12)。
+    //! 作れないときは下見を消す。見えない形は確定させない。
+    void RefreshSurfacePreview();
+    //! いま下見が出ているか。試験から見る。
+    [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! 選んだものから分かる事実。作り方を薦めるのに使う。
     [[nodiscard]] kachakacha::v2::app::SurfaceSelectionFacts SurfaceFactsNow() const;
     //! 入力から表を組み立てる。**作る直前の1回だけ。**
@@ -824,6 +835,13 @@ private:
     bool surfaceShelfShown_ = false;
     //! 「面を作る」の入力。**画面の欄と1対1。**
     kachakacha::v2::app::SurfaceInputState surfaceInput_;
+    //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。
+    //! 確定のときに選び直さない。見たものと違う面が出来るのを防ぐ。
+    struct SurfaceSnapshot {
+        kachakacha::v2::modeling::GuideTable table;
+        kachakacha::v2::modeling::GuideSurfaceResult built;
+    };
+    std::optional<SurfaceSnapshot> surfaceSnapshot_;
     V2SurfaceDock* surfaceDock_ = nullptr;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;

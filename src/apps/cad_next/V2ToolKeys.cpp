@@ -44,16 +44,49 @@ namespace {
 } // namespace
 
 //! いま Enter と Esc を引き受ける道具が動いているか。
+//! 押し出しと「面を作る」。どちらも右の棚で入力してから Enter で確定する。
 bool V2MainWindow::ToolWantsConfirmKeys() const
 {
-    return viewport_ != nullptr && viewport_->ExtrudeHandleShown();
+    if (viewport_ == nullptr) {
+        return false;
+    }
+    return viewport_->ExtrudeHandleShown() || surfaceShelfShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
-    if (!ToolWantsConfirmKeys()) {
+    if (viewport_ == nullptr) {
         return false;
     }
+    if (viewport_->ExtrudeHandleShown()) {
+        return HandleExtrudeToolKey(key, target);
+    }
+    if (surfaceShelfShown_) {
+        return HandleSurfaceToolKey(key);
+    }
+    return false;
+}
+
+//! 「面を作る」の Enter / Esc(§12・§14)。
+//!
+//! ここには打ち込む欄との取り合いが無い。距離のような数値を打つ欄が無く、
+//! 入力はどれも押して選ぶものだからである。Enter は素直に確定にする。
+bool V2MainWindow::HandleSurfaceToolKey(int key)
+{
+    if (key == Qt::Key_Escape) {
+        EndSurfacePreview();
+        SetStatus(QStringLiteral("面を作る: やめました。何も作っていません。"));
+        return true;
+    }
+    if (key != Qt::Key_Return && key != Qt::Key_Enter) {
+        return false;
+    }
+    ConfirmSurface();
+    return true;
+}
+
+bool V2MainWindow::HandleExtrudeToolKey(int key, QObject* target)
+{
     using kachakacha::v2::app::ToolKeyAction;
     kachakacha::v2::app::ToolKeyContext context;
     context.previewActive = true;   // ここへ来た時点で動いている

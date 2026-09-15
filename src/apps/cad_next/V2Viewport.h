@@ -229,6 +229,17 @@ public:
     {
         return extrudeHandle_.preview;
     }
+    //! 道具の下見(押し出しの矢印以外)。**文書へ書かずに出来上がりを見せる。**
+    //! いまは「面を作る」が使う(オーナー指示 2026-09-15 §12)。
+    void ShowToolPreview(std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines);
+    void HideToolPreview();
+    //! いま下見に出している線。試験が「見えているとおりか」を見るために要る。
+    [[nodiscard]] const std::vector<std::vector<kachakacha::v2::geometry::Vector3>>&
+    ToolPreview() const noexcept
+    {
+        return toolPreview_;
+    }
+
     //! 距離が変わったときに呼ぶもの。右の欄が同じ値を出すために要る。
     void SetExtrudeDistanceCallback(std::function<void(double)> callback);
     //! Enter で確定、Esc でやめる。中身は窓が持っている。
@@ -590,6 +601,8 @@ private:
     void DrawFoldPreview(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawExtrudeHandle(QPainter& painter) const;
+    //! 道具の下見の線。細い破線で出す。
+    void DrawToolPreview(QPainter& painter) const;
     //! 矢印を掴んだか。掴んだら true。
     [[nodiscard]] bool BeginExtrudeDrag(const QPointF& position);
     void DragExtrude(const QPointF& position);
@@ -797,6 +810,8 @@ private:
         double distanceAtPressMm = 0.0;
     };
     ExtrudeHandleState extrudeHandle_;
+    //! 道具の下見の線。空なら何も描かない。
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreview_;
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;

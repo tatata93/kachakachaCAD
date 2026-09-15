@@ -1004,6 +1004,8 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawGuideRows(painter);
     DrawPreview(painter);
     DrawSnap(painter);
+    // 道具の下見(面を作る)は、文書の線の上・矢印の下に出す。
+    DrawToolPreview(painter);
     // 押し出しの矢印は選択の印より上に出す。掴む相手だからである。
     DrawExtrudeHandle(painter);
     DrawBoxSelect(painter);

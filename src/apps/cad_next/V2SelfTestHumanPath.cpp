@@ -22,12 +22,14 @@
 #include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 #include "V2PartDock.h"
+#include "V2SurfaceDock.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
+#include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -522,6 +524,129 @@ struct OutputCounts {
         viewport.Selection().entityIds.size() >= afterSolid + 1);
 }
 
+//! HP-SF-01。「面を作る」を押すと棚が見え、下見が出て、**文書はまだ増えていない**。
+[[nodiscard]] bool CaseHumanPathSurfacePreviewOnly(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    const int before = CountOfKind(window, EntityKind::GuideSurface);
+    window.RunCommand("surface.create");
+    if (!Explain("「面を作る」の棚が見えている", window.ShelfShown(Shelf::Surface))) {
+        return false;
+    }
+    if (!Explain((std::string("下見が出ている(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.SurfacePreviewShown()
+                && !window.Viewport().ToolPreview().empty())) {
+        return false;
+    }
+    // ここが本題。**確定するまで文書へ書かない**(§12)。
+    return Explain("下見だけで、文書の面は増えていない",
+        CountOfKind(window, EntityKind::GuideSurface) == before);
+}
+
+//! HP-SF-02。Enter で確定すると面が1枚でき、棚と下見が片付く。
+[[nodiscard]] bool CaseHumanPathSurfaceConfirmWithEnter(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    if (!Explain("下見が出ている", window.SurfacePreviewShown())) {
+        return false;
+    }
+    // **3D を触らずに** Enter。焦点が右の棚にあっても効くこと(§14)。
+    if (!Explain("Enter を窓が受け取る", window.HandleToolKey(Qt::Key_Return, nullptr))) {
+        return false;
+    }
+    if (!Explain((std::string("面が1枚できる(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountOfKind(window, EntityKind::GuideSurface) == 1)) {
+        return false;
+    }
+    if (!Explain("棚が片付く", !window.ShelfShown(Shelf::Surface))) {
+        return false;
+    }
+    return Explain("下見の線が消える", window.Viewport().ToolPreview().empty());
+}
+
+//! HP-SF-03。Esc でやめると、**何も作られていない**。
+[[nodiscard]] bool CaseHumanPathSurfaceCancel(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    if (!Explain("棚が見えている", window.ShelfShown(Shelf::Surface))) {
+        return false;
+    }
+    if (!Explain("Esc を窓が受け取る", window.HandleToolKey(Qt::Key_Escape, nullptr))) {
+        return false;
+    }
+    if (!Explain("棚が片付く", !window.ShelfShown(Shelf::Surface))) {
+        return false;
+    }
+    return Explain((std::string("何も作られていない(帯は ")
+                       + window.StatusText().toStdString() + ")").c_str(),
+        CountOfKind(window, EntityKind::GuideSurface) == 0
+            && window.Viewport().ToolPreview().empty());
+}
+
+//! HP-SF-04。作り方を変えても、入れたものは消えない(§11)。
+[[nodiscard]] bool CaseHumanPathSurfaceMethodKeepsInput(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    // 閉じた同一平面の輪郭1本 → 平面を薦める(§11)。境界欄へ入っている。
+    if (!Explain((std::string("平面を薦めて境界へ入れる(")
+                     + std::to_string(window.SurfaceInput().boundaries.size())
+                     + "本)").c_str(),
+            window.SurfaceInput().method
+                    == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary
+                && window.SurfaceInput().boundaries.size() == 1)) {
+        return false;
+    }
+    // 人が作り方を変える。**見えているカードを押す。**
+    if (!Explain("ロフトのカードが見えていて押せる",
+            window.SurfaceDock().ClickMethodCard(
+                kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections))) {
+        return false;
+    }
+    if (!Explain("入れた境界は残っている", window.SurfaceInput().boundaries.size() == 1)) {
+        return false;
+    }
+    if (!Explain("ロフトになっている",
+            window.SurfaceInput().method
+                == kachakacha::v2::modeling::GuideSurfaceMethod::LoftSections)) {
+        return false;
+    }
+    // ロフトは断面が要る。まだ作れないので、下見も出ない。
+    if (!Explain("まだ作れないので下見は出ない", !window.SurfacePreviewShown())) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return true;
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -540,6 +665,13 @@ std::vector<SelfTestCase> HumanPathCases()
             CaseHumanPathPreviewAndCommitAgree},
         {"HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
             CaseHumanPathToolFirstWithoutCtrl},
+        {"HP-SF-01 面を作る棚と下見が見え、文書はまだ増えない",
+            CaseHumanPathSurfacePreviewOnly},
+        {"HP-SF-02 Enter で面が1枚できて棚が片付く",
+            CaseHumanPathSurfaceConfirmWithEnter},
+        {"HP-SF-03 Esc で何も作らずやめる", CaseHumanPathSurfaceCancel},
+        {"HP-SF-04 作り方を変えても入れたものが消えない",
+            CaseHumanPathSurfaceMethodKeepsInput},
     };
 }
 

@@ -66,6 +66,48 @@ void V2Viewport::HideExtrudeHandle()
     update();
 }
 
+void V2Viewport::ShowToolPreview(
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines)
+{
+    toolPreview_ = std::move(lines);
+    update();
+}
+
+void V2Viewport::HideToolPreview()
+{
+    if (toolPreview_.empty()) {
+        return;
+    }
+    toolPreview_.clear();
+    update();
+}
+
+//! 道具の下見。押し出しの矢印と同じ描き方にする。
+//! **出来上がりの線であって、文書の線ではない。**同じ見た目にすると取り違える。
+void V2Viewport::DrawToolPreview(QPainter& painter) const
+{
+    if (toolPreview_.empty()) {
+        return;
+    }
+    painter.setBrush(Qt::NoBrush);
+    painter.setPen(QPen(palette_.preview, 1.0, Qt::DashLine));
+    for (const auto& line : toolPreview_) {
+        QPolygonF path;
+        bool complete = true;
+        for (const auto& point : line) {
+            const auto screen = ToScreen(point);
+            if (!screen.has_value()) {
+                complete = false;
+                break;
+            }
+            path << *screen;
+        }
+        if (complete && path.size() >= 2) {
+            painter.drawPolyline(path);
+        }
+    }
+}
+
 void V2Viewport::SetExtrudeDistanceCallback(std::function<void(double)> callback)
 {
     extrudeDistanceChanged_ = std::move(callback);

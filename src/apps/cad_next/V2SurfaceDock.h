@@ -48,6 +48,10 @@ public:
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel,
         std::function<void()> reset);
 
+    //! **見えているカードを実際に押す。**人の道の試験はこちらを使う。
+    //! 見えていなければ偽を返す。不可視の widget を叩いて通したことにしない。
+    [[nodiscard]] bool ClickMethodCard(kachakacha::v2::modeling::GuideSurfaceMethod method);
+
     //! 試験から押す。窓を出さずに同じ道を通す。
     void PressMethod(kachakacha::v2::modeling::GuideSurfaceMethod method);
     void PressAdd(kachakacha::v2::modeling::ChainRole role);

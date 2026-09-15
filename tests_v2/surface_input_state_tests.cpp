@@ -15,7 +15,9 @@
 
 using kachakacha::v2::app::MainSurfaceMethods;
 using kachakacha::v2::app::OtherSurfaceMethods;
+using kachakacha::v2::app::DefaultSurfaceIntakeSlot;
 using kachakacha::v2::app::RecommendSurfaceMethod;
+using kachakacha::v2::app::RoleForSurfaceSlot;
 using kachakacha::v2::app::SurfaceInputState;
 using kachakacha::v2::app::SurfaceOrdering;
 using kachakacha::v2::app::SurfaceReadyToBuild;
@@ -183,6 +185,54 @@ KACHA_V2_TEST(surface_input, 主要6方式とその他が重ならない)
                 != OtherSurfaceMethods().end();
         Require(listed, "どこかに出る");
     }
+}
+
+KACHA_V2_TEST(surface_input, 平面の境界欄は外形として渡る)
+{
+    // 正本の欄は「断面 / ガイド / 境界」の3つ。内部の役割は外形・穴・境界辺と細かい。
+    // 繋ぎ方を間違えると、**平面は欄から1本も入れられない。**
+    ChainRole role = ChainRole::Section;
+    Require(RoleForSurfaceSlot(GuideSurfaceMethod::PlanarBoundary,
+                ChainRole::BoundarySide, role),
+        "平面は境界欄を使う");
+    Require(role == ChainRole::OuterBoundary, "中では外形になる");
+    Require(!RoleForSurfaceSlot(GuideSurfaceMethod::PlanarBoundary, ChainRole::Section,
+                role),
+        "平面は断面欄を使わない");
+    Require(DefaultSurfaceIntakeSlot(GuideSurfaceMethod::PlanarBoundary)
+            == ChainRole::BoundarySide,
+        "選んだものは境界欄へ入る");
+}
+
+KACHA_V2_TEST(surface_input, 曲線網は断面をUガイドをVにする)
+{
+    // 正本に U/V を別に入れる欄が無い(UI_DEVIATION_REQUEST)。
+    // 「断面 = U、ガイド = V」として実装した。欄は増やしていない。
+    ChainRole role = ChainRole::Section;
+    Require(RoleForSurfaceSlot(GuideSurfaceMethod::GordonNetwork, ChainRole::Section, role),
+        "断面欄を使う");
+    Require(role == ChainRole::GuideU, "断面欄は U");
+    Require(RoleForSurfaceSlot(GuideSurfaceMethod::GordonNetwork, ChainRole::GuideU, role),
+        "ガイド欄を使う");
+    Require(role == ChainRole::GuideV, "ガイド欄は V");
+}
+
+KACHA_V2_TEST(surface_input, 欄が空なら平面も曲線網も作れない)
+{
+    // 直す前は、平面のとき3つの欄が全部「この方式では不要」になり、
+    // **何も入っていないのに「生成可能」と出ていた。**
+    SurfaceInputState planar;
+    planar.method = GuideSurfaceMethod::PlanarBoundary;
+    Require(!SurfaceReadyToBuild(planar), "空の平面は作れない");
+    planar = WithSurfaceEntries(planar, ChainRole::BoundarySide, {Id(1)}, false);
+    Require(SurfaceReadyToBuild(planar), "境界を1本入れれば作れる");
+
+    SurfaceInputState gordon;
+    gordon.method = GuideSurfaceMethod::GordonNetwork;
+    gordon = WithSurfaceEntries(gordon, ChainRole::Section, {Id(1), Id(2)}, false);
+    Require(!SurfaceReadyToBuild(gordon), "U だけでは作れない");
+    gordon = WithSurfaceEntries(gordon, ChainRole::GuideU, {Id(3)}, false);
+    Require(SurfaceReadyToBuild(gordon), "U と V が揃えば作れる");
 }
 
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

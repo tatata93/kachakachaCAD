@@ -131,20 +131,64 @@ SurfaceInputState WithSurfaceEntries(const SurfaceInputState& state, ChainRole r
     return next;
 }
 
+bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& role) noexcept
+{
+    // 画面の欄と内部の役割は、名前が同じでも一致しない。
+    // ここを飛ばすと、平面(外形)も曲線網(外形U/V)も **欄から入れられない。**
+    switch (slot) {
+    case ChainRole::Section:
+        if (method == GuideSurfaceMethod::GordonNetwork) {
+            role = ChainRole::GuideU;   // U/V ネットワークの U
+            return true;
+        }
+        role = ChainRole::Section;
+        return modeling::RoleUsedByMethod(method, ChainRole::Section);
+    case ChainRole::GuideU:
+        if (method == GuideSurfaceMethod::GordonNetwork) {
+            role = ChainRole::GuideV;   // 同じく V
+            return true;
+        }
+        role = ChainRole::GuideU;
+        return modeling::RoleUsedByMethod(method, ChainRole::GuideU);
+    case ChainRole::BoundarySide:
+        if (method == GuideSurfaceMethod::PlanarBoundary) {
+            role = ChainRole::OuterBoundary;   // 平面の「境界」は外形のこと
+            return true;
+        }
+        role = ChainRole::BoundarySide;
+        return modeling::RoleUsedByMethod(method, ChainRole::BoundarySide);
+    default:
+        break;
+    }
+    return false;
+}
+
+ChainRole DefaultSurfaceIntakeSlot(GuideSurfaceMethod method) noexcept
+{
+    switch (method) {
+    case GuideSurfaceMethod::PlanarBoundary:
+    case GuideSurfaceMethod::BoundaryFill:
+        return ChainRole::BoundarySide;
+    case GuideSurfaceMethod::OffsetGuide:
+        return ChainRole::SourceSurface;
+    default:
+        break;
+    }
+    return ChainRole::Section;
+}
+
 std::vector<SurfaceSlotView> SurfaceSlotsFor(const SurfaceInputState& state)
 {
     // 画面に出す欄は「断面 / ガイド / 境界」の3つで固定する(UI の正本「2. 入力」)。
     // 作り方で並びが入れ替わると、どこを見ればよいのか分からなくなる。
-    static const ChainRole kShown[] = {ChainRole::Section, ChainRole::GuideU,
-        ChainRole::BoundarySide};
-    const auto& used = modeling::RolesForMethod(state.method);
     std::vector<SurfaceSlotView> views;
-    for (const ChainRole role : kShown) {
+    for (int index = 0; index < 3; ++index) {
+        const ChainRole slot = SurfaceSlotKey(index);
         SurfaceSlotView view;
-        view.role = role;
-        view.count = SurfaceSlotEntries(state, role).size();
-        const bool methodUses = std::find(used.begin(), used.end(), role) != used.end();
-        if (!methodUses) {
+        view.role = slot;
+        view.count = SurfaceSlotEntries(state, slot).size();
+        ChainRole role = slot;
+        if (!RoleForSurfaceSlot(state.method, slot, role)) {
             // **この作り方では使わない。入っていても捨てない。**
             view.state = SurfaceSlotState::NotUsedByMethod;
         } else {
@@ -194,11 +238,12 @@ bool SurfaceReadyToBuild(const SurfaceInputState& state)
     case GuideSurfaceMethod::GuidedLoft:
         return state.sections.size() >= 2 && !state.guides.empty();
     case GuideSurfaceMethod::PlanarBoundary:
-        return !state.boundaries.empty() || !state.sections.empty();
+        return !state.boundaries.empty();
     case GuideSurfaceMethod::BoundaryFill:
         return !state.boundaries.empty();
     case GuideSurfaceMethod::GordonNetwork:
-        return !state.guides.empty();
+        // 断面 = U、ガイド = V。**両方要る**(header の UI_DEVIATION_REQUEST)。
+        return !state.sections.empty() && !state.guides.empty();
     case GuideSurfaceMethod::OffsetGuide:
         return !state.sourceSurfaces.empty();
     case GuideSurfaceMethod::Revolve:
@@ -234,9 +279,11 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
         return lines;
     }
     lines.push_back("✓ 生成可能");
+    // 入力は揃っているのに下見が出ていない = カーネルが断った、ということ。
+    // 「作れます」と出したまま黙らない(できないことを、できたことにしない)。
     lines.push_back(previewShown
             ? "✓ 下見を表示中(まだ文書へ保存していません)"
-            : "… 下見を作ります");
+            : "× 下見が作れませんでした。確定を押すと理由が出ます");
     if (state.ordering == SurfaceOrdering::ManualLock) {
         lines.push_back("断面順: 手動固定(画面の並びのまま作ります)");
     } else {

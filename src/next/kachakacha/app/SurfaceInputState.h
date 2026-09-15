@@ -97,6 +97,34 @@ struct SurfaceSelectionFacts {
 [[nodiscard]] modeling::GuideSurfaceMethod RecommendSurfaceMethod(
     const SurfaceSelectionFacts& facts) noexcept;
 
+//! 画面の欄は「断面 / ガイド / 境界」の3つ(UIの正本「2. 入力」)。
+//! その3つを表す鍵。内部の役割(ChainRole)はもう少し細かい。
+//!
+//!   断面 → Section(曲線網のときだけ 外形U)
+//!   ガイド → 外形U(曲線網のときだけ 外形V)
+//!   境界 → 境界辺(平面のときだけ 外形)
+//!
+//! **UI_DEVIATION_REQUEST(正本の曖昧点)**
+//!   正本の「面を作る」は入力欄が3つで、その中に「曲線網(U/Vネットワーク)」が
+//!   ある。U と V を別々に入れる欄が正本に無い。ここでは
+//!   「断面 = U、ガイド = V」として実装した。正本の
+//!   「案内付きロフト = 断面 + ガイド」と同じ読み方で、欄を増やしていない。
+//!   別の割り当てが正しければ指示をください。欄は勝手に増やしていない。
+[[nodiscard]] constexpr modeling::ChainRole SurfaceSlotKey(int index) noexcept
+{
+    return index == 0 ? modeling::ChainRole::Section
+                      : (index == 1 ? modeling::ChainRole::GuideU
+                                    : modeling::ChainRole::BoundarySide);
+}
+
+//! 画面の欄が、その作り方で受け持つ内部の役割。使わない欄なら偽を返す。
+[[nodiscard]] bool RoleForSurfaceSlot(modeling::GuideSurfaceMethod method,
+    modeling::ChainRole slot, modeling::ChainRole& role) noexcept;
+
+//! 選んだものを最初に入れる欄。「面を作る」を押した直後に使う。
+[[nodiscard]] modeling::ChainRole DefaultSurfaceIntakeSlot(
+    modeling::GuideSurfaceMethod method) noexcept;
+
 //! いまの入力を、作り方から見てどう扱うか(§11)。
 //!
 //! **入力を捨てない。**使うか、使わないか、足りないかを言うだけ。

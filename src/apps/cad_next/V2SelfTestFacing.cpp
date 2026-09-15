@@ -6,6 +6,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 
@@ -101,6 +102,10 @@ using kachakacha::v2::domain::EntityKind;
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::Wire));
     window.RunCommand("part.extrude");
+    // 厚みをここで決める。**押し始めの距離は輪郭の大きさで変わる**ので、
+    // 決めずにおくと、この試験が「向きを変えないか」ではなく
+    // 「押し始めの距離がいくつか」を見ることになる。
+    window.ExtrudeDock().TypeDistanceMm(0.5);
     window.RunCommand("part.extrude");
     return FirstOfKind(window, EntityKind::Part);
 }

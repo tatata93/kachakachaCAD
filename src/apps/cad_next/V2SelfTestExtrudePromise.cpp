@@ -166,6 +166,10 @@ namespace {
         return false;
     }
     window.RunCommand("part.extrude");
+    // 1回目の厚みをここで決める。**押し始めの距離は輪郭の大きさで変わる**ので、
+    // 決めずにおくと、2回目の 20mm が1回目の中に収まって
+    // 「重なっていません」(EXT-004)で断られる。
+    window.ExtrudeDock().TypeDistanceMm(4.0);
     window.RunCommand("part.extrude");
     kachakacha::v2::base::EntityId part;
     for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {

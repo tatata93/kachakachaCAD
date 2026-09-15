@@ -359,12 +359,26 @@ struct OutputCounts {
     const int partsAfterFirst = CountOfKind(window, EntityKind::Part);
     const int wiresAfterFirst = CountOfKind(window, EntityKind::Wire);
 
-    // 立体と輪郭を選んで、ワイヤーだけを作る。相手は切られてはいけない。
+    // 立体と輪郭の両方を選ぶ。**道具を先に構えて、Ctrl 無しで選ぶ。**
+    // 素のクリックだけだと後の1つに置き換わり、相手がいなくなる。
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("part.extrude");   // 構える
+    viewport.SelectAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5),
+        Qt::NoModifier);   // 立体
     if (!Explain("輪郭をもう一度拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
         return false;
     }
+    if (!Explain((std::string("対象と輪郭の両方が選べている(")
+                     + std::to_string(viewport.Selection().entityIds.size())
+                     + " 件)").c_str(),
+            viewport.Selection().entityIds.size() >= 2)) {
+        return false;
+    }
     window.RunCommand("part.extrude");
-    if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
+    if (!Explain((std::string("矢印が出る(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.Viewport().ExtrudeHandleShown())) {
         return false;
     }
     window.ExtrudeDock().ChooseBoolean(
@@ -380,7 +394,8 @@ struct OutputCounts {
     }
     const int wiresMade = CountOfKind(window, EntityKind::Wire) - wiresAfterFirst;
     if (!Explain((std::string("HP-EX-OUTPUT-07 ワイヤーはできる(")
-                     + std::to_string(wiresMade) + "本)").c_str(),
+                     + std::to_string(wiresMade) + "本 帯は "
+                     + window.StatusText().toStdString() + ")").c_str(),
             wiresMade > 0)) {
         return false;
     }

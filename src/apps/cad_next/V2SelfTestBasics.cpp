@@ -5,6 +5,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2ExtrudeDock.h"
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/CommandCatalog.h"
@@ -1161,9 +1162,10 @@ namespace {
     // 板厚が決め打ちだったころ、プラ板を使い分けられなかった。
     // 変えられないものは、使えないのと同じである。
     auto& dock = window.ParameterDock();
-    // 打ち替えられる10行(治具のすき間と厚みを足した)と、計算して出るだけの1行。
-    if (!Explain((std::string("行が11(実際は ") + std::to_string(dock.RowCount())
-                     + ")").c_str(), dock.RowCount() == 11)) {
+    // 打ち替えられる11行(押し出しの距離を板厚から分けたぶん1つ増えた)と、
+    // 計算して出るだけの1行。
+    if (!Explain((std::string("行が12(実際は ") + std::to_string(dock.RowCount())
+                     + ")").c_str(), dock.RowCount() == 12)) {
         return false;
     }
     if (!Explain("式で入る",
@@ -1195,8 +1197,12 @@ namespace {
 
 [[nodiscard]] bool CaseExtrudeUsesTheParameter(V2MainWindow& window)
 {
-    // 数の棚で決めた板厚が、実際に押し出しへ効くこと。
+    // 数の棚で決めた「押し出しの距離」が、実際に押し出しへ効くこと。
     // 効かなければ、棚はただの飾りである。
+    //
+    // **板厚とは別の数である**(オーナー指示 2026-09-15 §3)。
+    // 同じ数にしていたので、板厚の上限 20mm が押し出しへ漏れ、
+    // 100mm 級の形を押せなかった。ここでは分かれていることも確かめる。
     auto& viewport = window.Viewport();
     viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetVisibleWidthMm(200.0);
@@ -1207,17 +1213,33 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Wire));
-    if (!Explain("板厚を1.2mmにできる",
+    if (!Explain("押し出しの距離を1.2mmにできる",
             window.ParameterDock().Apply(
-                kachakacha::v2::app::ParameterId::ExtrudeDistance,
+                kachakacha::v2::app::ParameterId::ExtrudeLengthMm,
                 QStringLiteral("1.2")))) {
         return false;
     }
     window.RunCommand("part.extrude");   // 一度目は下見
+    // 下見は「見える大きさ」へ寄せることがある。**打った値をそのまま使わせる。**
+    window.ExtrudeDock().TypeDistanceMm(1.2);
     window.RunCommand("part.extrude");   // 二度目で確定
-    return Explain((std::string("その厚みで作ったと言う(")
-                       + window.StatusText().toStdString() + ")").c_str(),
-        window.StatusText().contains(QStringLiteral("1.2")));
+    if (!Explain((std::string("その距離で作ったと言う(")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("1.2")))) {
+        return false;
+    }
+    // **板厚の上限は押し出しへ漏れない。**100mm 級を打てること。
+    if (!Explain("押し出しの距離に 120mm を打てる",
+            window.ParameterDock().Apply(
+                kachakacha::v2::app::ParameterId::ExtrudeLengthMm,
+                QStringLiteral("120")))) {
+        return false;
+    }
+    // 板厚のほうは板のままであること。20mm を超える板は断る。
+    return Explain("板厚は板のまま(40mm は断る)",
+        !window.ParameterDock().Apply(
+            kachakacha::v2::app::ParameterId::ExtrudeDistance,
+            QStringLiteral("40")));
 }
 
 [[nodiscard]] bool CaseScaleShowsTheModelSize(V2MainWindow& window)

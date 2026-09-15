@@ -694,6 +694,9 @@ private:
     kachakacha::v2::app::ExtrudeSlot pickSlot_ = kachakacha::v2::app::ExtrudeSlot::None;
     [[nodiscard]] kachakacha::v2::app::PickedKind PickedKindOf(
         const kachakacha::v2::app::PickCandidate& candidate) const;
+    //! 輪郭がもう入っているなら、拾った面は相手の立体を指している(§5)。
+    [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> AsSolidIfProfileTaken(
+        const std::optional<kachakacha::v2::app::PickCandidate>& picked) const;
     [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForToolPick(
         const std::optional<kachakacha::v2::app::PickCandidate>& picked,
         kachakacha::v2::app::SelectionMode mode) const;

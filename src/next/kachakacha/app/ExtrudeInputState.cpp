@@ -295,4 +295,18 @@ bool PlainClickShouldAdd(bool toolActive, PickedKind picked,
     return true;
 }
 
+bool FacePickMeansItsSolid(bool toolActive, PickedKind picked,
+    const std::vector<PickedKind>& already) noexcept
+{
+    if (!toolActive || picked != PickedKind::SolidFace) {
+        return false;
+    }
+    for (const PickedKind had : already) {
+        if (had == PickedKind::ClosedWire || had == PickedKind::OpenWire) {
+            return true;   // 輪郭が入っている。この面は相手の立体を指している。
+        }
+    }
+    return false;
+}
+
 } // namespace kachakacha::v2::app

@@ -972,6 +972,32 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::SortCandidatesForSlo
     return fits;
 }
 
+//! 拾った面を、その面ではなく立体として受け直す(§5)。決まりは core にある。
+std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::AsSolidIfProfileTaken(
+    const std::optional<kachakacha::v2::app::PickCandidate>& picked) const
+{
+    if (!picked.has_value()) {
+        return picked;
+    }
+    std::vector<kachakacha::v2::app::PickedKind> already;
+    already.reserve(selection_.ordered.size());
+    for (const auto& ref : selection_.ordered) {
+        kachakacha::v2::app::PickCandidate existing;
+        existing.entityId = ref.entityId;
+        existing.kind = ref.kind;
+        already.push_back(PickedKindOf(existing));
+    }
+    if (!kachakacha::v2::app::FacePickMeansItsSolid(toolPickActive_, PickedKindOf(*picked),
+            already)) {
+        return picked;
+    }
+    kachakacha::v2::app::PickCandidate solid = *picked;
+    solid.kind = kachakacha::v2::app::SelectionElementKind::Object;
+    solid.subshapeKey.reset();
+    solid.pickedFaceIndex.reset();
+    return solid;
+}
+
 //! その候補が、押し出しから見て何に当たるか。
 kachakacha::v2::app::PickedKind V2Viewport::PickedKindOf(
     const kachakacha::v2::app::PickCandidate& candidate) const

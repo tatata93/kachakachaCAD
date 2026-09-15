@@ -1106,9 +1106,12 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
         // 候補は 点 → 線 → 手前の形 → 奥の形 の順なので、次が奥側になる。
         AdvanceCandidate(false);
     }
-    const auto picked = CurrentCandidate();
+    auto picked = CurrentCandidate();
     // 選んだものは、そのまま押した先の候補として出しておく。
     SyncHoverWithCandidate();
+    // 輪郭がもう入っているなら、拾った面は **相手の立体** を指している(§5)。
+    // そのまま面として受けると「面と輪郭の両方」で止まり、理由が分からない。
+    picked = AsSolidIfProfileTaken(picked);
     // 道具が入力を待っている間は、役割が違うものを足す(§5)。
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,

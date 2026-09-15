@@ -186,6 +186,15 @@ struct ExtrudeInputState {
 [[nodiscard]] bool PlainClickShouldAdd(bool toolActive, PickedKind picked,
     const std::vector<PickedKind>& already) noexcept;
 
+//! 拾った面を、**その面ではなく立体として** 受けるべきか(§5・§6)。
+//!
+//! 立体を素で押すと、いちばん手前の面が拾える。押す面を選ぶ道である。
+//! しかし輪郭がもう入っているときは、その面は押す相手ではありえない。
+//! 「面と輪郭の両方が選ばれています」で止まるだけで、人には理由が分からない。
+//! そこでは、その面が乗っている立体を **相手** として受ける。
+[[nodiscard]] bool FacePickMeansItsSolid(bool toolActive, PickedKind picked,
+    const std::vector<PickedKind>& already) noexcept;
+
 //! 「状態」欄に出す行(§15)。診断コードに頼らず、通った道も言う。
 //!
 //! `targetNameJa` / `profileNamesJa` は画面が渡す表示名。

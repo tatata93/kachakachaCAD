@@ -302,4 +302,25 @@ KACHA_V2_TEST(extrude_input, 素のクリックで足すかは道具が動いて
         "それでも足せる");
 }
 
+KACHA_V2_TEST(extrude_input, 輪郭が入っているとき拾った面は相手の立体になる)
+{
+    using kachakacha::v2::app::FacePickMeansItsSolid;
+    using kachakacha::v2::app::PickedKind;
+    // 立体を素で押すと、いちばん手前の面が拾える。押す面を選ぶ道である。
+    Require(!FacePickMeansItsSolid(true, PickedKind::SolidFace, {}),
+        "何も無ければ、面は面のまま");
+    Require(!FacePickMeansItsSolid(true, PickedKind::SolidFace, {PickedKind::Solid}),
+        "立体しか無くても、面は面のまま");
+    // **ここが直したところ。**
+    // 輪郭がもう入っているなら、その面は押す相手ではありえない。
+    // そのまま面として受けると「面と輪郭の両方が選ばれています」で止まり、
+    // 人には理由が分からない。
+    Require(FacePickMeansItsSolid(true, PickedKind::SolidFace, {PickedKind::ClosedWire}),
+        "輪郭が入っていれば、面はその立体を指す");
+    Require(!FacePickMeansItsSolid(false, PickedKind::SolidFace, {PickedKind::ClosedWire}),
+        "道具が動いていなければ、いつもどおり面を拾う");
+    Require(!FacePickMeansItsSolid(true, PickedKind::Solid, {PickedKind::ClosedWire}),
+        "面でなければ関係ない");
+}
+
 KACHA_V2_TEST_MAIN("extrude_input_state_tests")

@@ -16,6 +16,7 @@
 
 #include <QColor>
 #include <QDialog>
+#include <QListWidget>
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>

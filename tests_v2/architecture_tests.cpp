@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -463,6 +464,62 @@ namespace {
     return found;
 }
 
+//! 窓の持ち物の名前 → その Qt の型(`QListWidget* diagnosticList_ = nullptr;`)。
+//!
+//! 名前を出さずに `diagnosticList_->addItem(...)` とだけ書いたファイルは、
+//! **型の名前をどこにも書いていない。**それでも本物の Qt では
+//! その頭書きが要る。名前だけの走査では、この抜けを捕まえられなかった
+//! (V2GuideTableCommands.cpp へ関数を移したとき、PC で落ちた)。
+[[nodiscard]] std::map<std::string, std::string> QtMemberTypes(
+    const std::vector<std::string>& lines)
+{
+    std::map<std::string, std::string> members;
+    for (const std::string& line : lines) {
+        const std::size_t star = line.find("* ");
+        if (star == std::string::npos || line.find('Q') == std::string::npos) {
+            continue;
+        }
+        std::size_t begin = line.find_first_not_of(" \t");
+        if (begin == std::string::npos || line[begin] != 'Q') {
+            continue;
+        }
+        const std::string type = line.substr(begin, star - begin);
+        if (type.empty() || type.find(' ') != std::string::npos) {
+            continue;
+        }
+        std::size_t nameStart = star + 2;
+        std::size_t nameEnd = nameStart;
+        while (nameEnd < line.size()
+            && (std::isalnum(static_cast<unsigned char>(line[nameEnd])) != 0
+                || line[nameEnd] == '_')) {
+            ++nameEnd;
+        }
+        if (nameEnd == nameStart || line[nameEnd - 1] != '_') {
+            continue;   // 持ち物の名前は末尾が `_`。引数や局所変数は見ない。
+        }
+        members.emplace(line.substr(nameStart, nameEnd - nameStart), type);
+    }
+    return members;
+}
+
+//! その本文が矢印で触っている持ち物(`diagnosticList_->`)。
+[[nodiscard]] std::set<std::string> MembersReachedIn(const std::string& body)
+{
+    std::set<std::string> found;
+    std::size_t at = 0;
+    while ((at = body.find("_->", at)) != std::string::npos) {
+        std::size_t begin = at;
+        while (begin > 0
+            && (std::isalnum(static_cast<unsigned char>(body[begin - 1])) != 0
+                || body[begin - 1] == '_')) {
+            --begin;
+        }
+        found.insert(body.substr(begin, at + 1 - begin));
+        at += 3;
+    }
+    return found;
+}
+
 //! そのファイルが自分で書いている Qt の頭書き。
 [[nodiscard]] std::set<std::string> QtIncludesIn(const std::vector<std::string>& lines)
 {
@@ -498,12 +555,28 @@ KACHA_V2_TEST(architecture, screen_sources_include_the_qt_headers_they_use)
     // その .cpp が自分で include する。** 他の頭書き経由で通っていても書く。
     // 余分な include は害が無く、抜けは PC でしか分からない。
     std::vector<std::string> offenders;
+    std::vector<std::string> windowHeader;
+    for (const SourceFile& file : CollectSourceFiles(RepoRoot() / "src/apps/cad_next")) {
+        if (file.path.filename() == "V2MainWindow.h") {
+            windowHeader = file.lines;
+        }
+    }
+    const auto windowMembers = QtMemberTypes(windowHeader);
+    Require(windowMembers.count("diagnosticList_") == 1,
+        "the scanner reads the window's Qt members");
     for (const SourceFile& file : CollectSourceFiles(RepoRoot() / "src/apps/cad_next")) {
         if (file.path.extension() != ".cpp") {
             continue;   // 頭書き(.h)は、実装の側が include するので見ない。
         }
-        const std::set<std::string> used =
-            QtTypesNamedIn(BodyWithoutCommentsOrStrings(file.lines));
+        const std::string body = BodyWithoutCommentsOrStrings(file.lines);
+        std::set<std::string> used = QtTypesNamedIn(body);
+        // 型の名前を書かずに窓の持ち物を触っているものも数える。
+        for (const std::string& member : MembersReachedIn(body)) {
+            const auto found = windowMembers.find(member);
+            if (found != windowMembers.end()) {
+                used.insert(found->second);
+            }
+        }
         const std::set<std::string> included = QtIncludesIn(file.lines);
         for (const std::string& name : used) {
             if (included.count(name) == 0) {
@@ -524,6 +597,10 @@ KACHA_V2_TEST(architecture, screen_sources_include_the_qt_headers_they_use)
         "const char* text = \"QMouseEvent\";"};
     Require(QtTypesNamedIn(BodyWithoutCommentsOrStrings(quiet)).empty(),
         "the scanner ignores comments and strings");
+    // 矢印で触っているだけのものも見えているか、その場で確かめる。
+    Require(MembersReachedIn("diagnosticList_->addItem(text);").count("diagnosticList_")
+            == 1,
+        "the scanner sees a member reached through the arrow");
 }
 
 KACHA_V2_TEST(architecture, every_v2_target_gets_the_shared_compile_options)

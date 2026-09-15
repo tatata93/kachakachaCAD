@@ -52,12 +52,22 @@ echo build_rc=!BUILD_RC! >> "%LOG%"
 findstr /C:": error" "%~dp0_claudeout\build.txt" >> "%LOG%" 2>&1
 
 echo [4] tests >> "%LOG%"
+REM A failed build must never look green. Running ctest on a stale binary
+REM reported "148 tests passed" while the build had errors (2026-09-15).
+if not "!BUILD_RC!"=="0" (
+  echo tests skipped: the build failed, so the binaries are stale >> "%LOG%"
+  set "TEST_RC=1"
+  echo test_rc=!TEST_RC! >> "%LOG%"
+  set "CTEST_EVIDENCE=build failed; tests not run"
+  goto :after_tests
+)
 "%CTEST%" --preset windows-msvc > "%~dp0_claudeout\ctest.txt" 2>&1
 set "TEST_RC=!ERRORLEVEL!"
 type "%~dp0_claudeout\ctest.txt" >> "%LOG%"
 echo test_rc=!TEST_RC! >> "%LOG%"
 set "CTEST_EVIDENCE="
 for /f "usebackq delims=" %%E in (`findstr /C:"tests passed" "%~dp0_claudeout\ctest.txt"`) do set "CTEST_EVIDENCE=%%E"
+:after_tests
 
 echo [4b] review pipeline self-test >> "%LOG%"
 REM レビュー基盤そのものの検査。製品のテストとは別に、毎回ここで動かす。

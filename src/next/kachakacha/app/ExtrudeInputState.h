@@ -162,6 +162,17 @@ struct ExtrudeInputState {
 //! いまの入力で下見を出せるか。
 [[nodiscard]] bool ReadyForPreview(const ExtrudeInputState& state) noexcept;
 
+//! 拾った候補を、いま要求しているスロットに合う順へ並べ替える(§6)。
+//!
+//! ふだんの優先順は **点 → 線 → 形** で固定だった。面の上に線が載っていると
+//! 線が先に取れるので、面を押したいのに元の輪郭が選ばれていた。
+//!
+//! ここでは **並びを変えるだけで、候補を捨てない。** 捨てると
+//! 「見えているのに掴めない」が起きる。Tab と右クリックの送りもそのまま効く。
+//! 合うものが1つも無ければ、渡された並びをそのまま返す。
+[[nodiscard]] std::vector<PickedKind> SortKindsForSlot(ExtrudeSlot slot,
+    const std::vector<PickedKind>& kinds);
+
 //! 「状態」欄に出す行(§15)。診断コードに頼らず、通った道も言う。
 //!
 //! `targetNameJa` / `profileNamesJa` は画面が渡す表示名。

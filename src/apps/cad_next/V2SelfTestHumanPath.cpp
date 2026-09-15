@@ -26,6 +26,7 @@
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ExtrudeInputState.h"
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -438,6 +439,74 @@ struct OutputCounts {
         matched);
 }
 
+//! HP-EX-02。道具を先に構えて、対象と輪郭を **Ctrl 無しで** 選べる。
+//!
+//! これまでは素のクリックが選択を置き換えていたので、立体を選んでから
+//! 輪郭をクリックすると立体が外れた。**Ctrl を知らないと押し出せなかった。**
+[[nodiscard]] bool CaseHumanPathToolFirstWithoutCtrl(V2MainWindow& window)
+{
+    // まず立体を1つ作る。これが「引く」相手になる。
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    window.RunCommand("part.extrude");
+    if (!Explain("相手の立体ができる", CountOfKind(window, EntityKind::Part) == 1)) {
+        return false;
+    }
+    // もう1本、輪郭を引く。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    if (!Explain("2本目の矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("輪郭が増えた", CountOfKind(window, EntityKind::Wire) > wiresBefore)) {
+        return false;
+    }
+
+    // **道具を先に構える。**何も選んでいない状態で押し出しを押す。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("構えて待つ(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            !window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+
+    // 立体を素でクリック。
+    auto& viewport = window.Viewport();
+    bool clickedSolid = false;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind != EntityKind::Part) {
+            continue;
+        }
+        // 立体の真ん中あたりを押す。
+        viewport.SelectAt(QPointF(viewport.width() * 0.5, viewport.height() * 0.5),
+            Qt::NoModifier);
+        clickedSolid = !viewport.Selection().entityIds.empty();
+        break;
+    }
+    if (!Explain("立体を素のクリックで拾える", clickedSolid)) {
+        return false;
+    }
+    const std::size_t afterSolid = viewport.Selection().entityIds.size();
+
+    // **Ctrl を押さずに**輪郭をクリックする。立体が外れてはいけない。
+    if (!Explain("輪郭を素のクリックで拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    return Explain((std::string("Ctrl 無しでも前の選択が残る(")
+                       + std::to_string(afterSolid) + " → "
+                       + std::to_string(viewport.Selection().entityIds.size())
+                       + " 件)").c_str(),
+        viewport.Selection().entityIds.size() >= afterSolid + 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -454,6 +523,8 @@ std::vector<SelfTestCase> HumanPathCases()
             CaseHumanPathExtrudeOutputsAndUndo},
         {"HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
             CaseHumanPathPreviewAndCommitAgree},
+        {"HP-EX-02 道具を先に構えても Ctrl 無しで選べる",
+            CaseHumanPathToolFirstWithoutCtrl},
     };
 }
 

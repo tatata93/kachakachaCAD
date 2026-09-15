@@ -32,6 +32,7 @@
 #include "kachakacha/app/GrabToMove.h"
 #include "kachakacha/modeling/DrawingConstraint.h"
 #include "kachakacha/modeling/MeshPick.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <cmath>
 #include <iterator>
@@ -936,7 +937,116 @@ std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::CollectCandidatesAt(
     auto shapes = CollectShapeCandidatesAt(position);
     candidates.insert(candidates.end(), std::make_move_iterator(shapes.begin()),
         std::make_move_iterator(shapes.end()));
-    return candidates;
+    return SortCandidatesForSlot(std::move(candidates));
+}
+
+//! 道具が求めているスロットに合うものを前へ出す(§6)。
+//!
+//! ふだんの順は 点 → 線 → 形 で固定だった。面の上に線が載っていると線が
+//! 先に取れるので、**面を押したいのに元の輪郭が選ばれていた。**
+//!
+//! **候補は捨てない。並べ替えるだけ。**捨てると「見えているのに掴めない」が
+//! 起きる。Tab と右クリックの送りは、この並びのまま奥へ進む。
+std::vector<kachakacha::v2::app::PickCandidate> V2Viewport::SortCandidatesForSlot(
+    std::vector<kachakacha::v2::app::PickCandidate> candidates) const
+{
+    using kachakacha::v2::app::ExtrudeSlot;
+    using kachakacha::v2::app::PickedKind;
+    if (pickSlot_ == ExtrudeSlot::None || candidates.size() < 2) {
+        return candidates;
+    }
+    const auto kindOf = [this](const kachakacha::v2::app::PickCandidate& candidate) {
+        return PickedKindOf(candidate);
+    };
+    std::vector<kachakacha::v2::app::PickCandidate> fits;
+    std::vector<kachakacha::v2::app::PickCandidate> rest;
+    for (auto& candidate : candidates) {
+        if (kachakacha::v2::app::PickFitsSlot(pickSlot_, kindOf(candidate))) {
+            fits.push_back(std::move(candidate));
+        } else {
+            rest.push_back(std::move(candidate));
+        }
+    }
+    fits.insert(fits.end(), std::make_move_iterator(rest.begin()),
+        std::make_move_iterator(rest.end()));
+    return fits;
+}
+
+//! その候補が、押し出しから見て何に当たるか。
+kachakacha::v2::app::PickedKind V2Viewport::PickedKindOf(
+    const kachakacha::v2::app::PickCandidate& candidate) const
+{
+    using kachakacha::v2::app::PickedKind;
+    if (candidate.kind == kachakacha::v2::app::SelectionElementKind::Face) {
+        return PickedKind::SolidFace;
+    }
+    const auto* entity = session_->GetDocument().FindEntity(candidate.entityId);
+    if (entity == nullptr) {
+        return PickedKind::Other;
+    }
+    if (entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+        return PickedKind::Solid;
+    }
+    if (entity->kind != kachakacha::v2::domain::EntityKind::Wire) {
+        return PickedKind::Other;
+    }
+    kachakacha::v2::app::SelectionSet one;
+    one.entityIds.push_back(candidate.entityId);
+    const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+    const bool closed = !curves.empty()
+        && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,
+            session_->GetDocument().Snapshot().settings.tolerance);
+    return closed ? PickedKind::ClosedWire : PickedKind::OpenWire;
+}
+
+//! 道具が入力を待っている間、素のクリックをどう読むか(§5)。
+//!
+//! これまでは素のクリックが必ず選択を置き換えていた。立体を選んでから
+//! 輪郭をクリックすると立体が外れるので、**Ctrl を知らないと押し出せなかった。**
+//!
+//! 道具が待っている間は、**役割が違うものは足す**。立体と輪郭は役割が違うので、
+//! 立体を選んだあとに輪郭を素でクリックしても立体は残る。
+//! 同じ役割のものは、これまでどおり置き換える(輪郭を選び直せる)。
+//! Ctrl はそのまま「任意の複数選択」として残る。
+kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
+    const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+    kachakacha::v2::app::SelectionMode mode) const
+{
+    using kachakacha::v2::app::PickedKind;
+    using kachakacha::v2::app::SelectionMode;
+    if (pickSlot_ == kachakacha::v2::app::ExtrudeSlot::None
+        || mode != SelectionMode::Replace || !picked.has_value()) {
+        return mode;
+    }
+    const PickedKind wanted = PickedKindOf(*picked);
+    if (wanted == PickedKind::None || wanted == PickedKind::Other) {
+        return mode;
+    }
+    // いま選んでいるものに、同じ役割のものがあるか。
+    for (const auto& ref : selection_.ordered) {
+        kachakacha::v2::app::PickCandidate existing;
+        existing.entityId = ref.entityId;
+        existing.kind = ref.kind;
+        const PickedKind had = PickedKindOf(existing);
+        const bool bothSolidish = (had == PickedKind::Solid || had == PickedKind::SolidFace)
+            && (wanted == PickedKind::Solid || wanted == PickedKind::SolidFace);
+        const bool bothWires = (had == PickedKind::ClosedWire || had == PickedKind::OpenWire)
+            && (wanted == PickedKind::ClosedWire || wanted == PickedKind::OpenWire);
+        if (bothSolidish || bothWires) {
+            return mode;   // 同じ役割。置き換える。
+        }
+    }
+    return selection_.ordered.empty() ? mode : SelectionMode::Add;
+}
+
+void V2Viewport::SetPickSlot(kachakacha::v2::app::ExtrudeSlot slot)
+{
+    if (pickSlot_ == slot) {
+        return;
+    }
+    pickSlot_ = slot;
+    // 並びが変わるので、出している候補の番号は先頭へ戻す。
+    ForgetPickCycle();
 }
 
 std::optional<kachakacha::v2::app::PickCandidate> V2Viewport::CurrentCandidate() const

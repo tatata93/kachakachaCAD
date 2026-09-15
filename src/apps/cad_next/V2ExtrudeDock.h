@@ -104,9 +104,20 @@ private:
         const kachakacha::v2::app::ExtrudePlan& right);
     //! 欄の便りを繋ぐ。組み立てと分けてある(1関数100行の門)。
     void ConnectRows();
+    //! 見出しと「1. 入力」を組み立てる。
+    void BuildHeaderAndInputRows(class QVBoxLayout* layout);
 
     QWidget* body_ = nullptr;
+    //! 見出しの下に出す、いまの様子(「プレビュー可能」など)。
+    QLabel* state_ = nullptr;
+    //! 入力の2欄。**対象と輪郭を別に出す**(UI の正本「1. 入力」)。
+    QLabel* targetValue_ = nullptr;
+    QLabel* profileLabel_ = nullptr;
+    QLabel* profileValue_ = nullptr;
+    //! 読み取りの全文。狭いときのために持つが、ふだんは出さない。
     QLabel* input_ = nullptr;
+    //! 下見を作り直す。
+    QPushButton* rePreview_ = nullptr;
     QDoubleSpinBox* distance_ = nullptr;
     QComboBox* direction_ = nullptr;
     //! 棚のふだんの2つでは表せない決め方。3つ目に名前で出している間だけ入る。

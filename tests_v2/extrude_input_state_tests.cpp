@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 #include <cstdint>
 #include <string>
 
@@ -225,6 +226,35 @@ KACHA_V2_TEST(extrude_input, 足りないものを名前で言う)
     Require(said, "何を選べばよいかを言う");
     Require(!ExtrudeOutputsTextJa(OutputsForPreset(ExtrudeOutputPreset::SolidOnly)).empty(),
         "出力の一言が出る");
+}
+
+KACHA_V2_TEST(extrude_input, 候補はスロットに合う順へ並べ替える)
+{
+    using kachakacha::v2::app::SortKindsForSlot;
+    // ふだんの並びは 点 → 線 → 形 で固定だった。面の上に線が載っていると
+    // 線が先に取れるので、面を押したいのに元の輪郭が選ばれていた。
+    const std::vector<PickedKind> asPicked{PickedKind::ClosedWire, PickedKind::SolidFace,
+        PickedKind::Solid};
+
+    // 輪郭を求めているとき。閉じた輪郭と面が前に出る。
+    const auto forProfile = SortKindsForSlot(ExtrudeSlot::Profile, asPicked);
+    Require(forProfile.size() == asPicked.size(), "**捨てない**");
+    Require(forProfile.front() == PickedKind::ClosedWire, "合うものが先頭");
+    Require(forProfile.back() == PickedKind::Solid, "合わないものは後ろ");
+
+    // 対象を求めているとき。立体と面が前に出る。
+    const auto forTarget = SortKindsForSlot(ExtrudeSlot::Target, asPicked);
+    Require(forTarget.size() == asPicked.size(), "**捨てない**");
+    Require(forTarget.front() == PickedKind::SolidFace || forTarget.front() == PickedKind::Solid,
+        "立体側が先頭");
+    Require(std::find(forTarget.begin(), forTarget.end(), PickedKind::ClosedWire)
+            != forTarget.end(),
+        "輪郭も並びに残る(Tab で届く)");
+
+    // 合うものが1つも無ければ、そのままの並び。
+    const std::vector<PickedKind> none{PickedKind::OpenWire, PickedKind::Other};
+    const auto unchanged = SortKindsForSlot(ExtrudeSlot::Profile, none);
+    Require(unchanged == none, "並びを変えない");
 }
 
 KACHA_V2_TEST_MAIN("extrude_input_state_tests")

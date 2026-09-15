@@ -23,6 +23,7 @@
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/EscapeAction.h"
+#include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SemanticState.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -272,6 +273,16 @@ public:
     void RefreshCursorShape();
     //! いま拾う相手を絞る印(作図中は作業平面の上だけ)。判断は core にある。
     [[nodiscard]] kachakacha::v2::app::PickFocus PickFocusNow() const;
+    //! いま道具が求めているスロット。拾った候補の並べ替えに使う(§6)。
+    //!
+    //! **候補を捨てるのではなく、合うものを前に出すだけ。**
+    //! 捨てると「見えているのに掴めない」が起きる。Tab と右クリックの送りは
+    //! そのまま効く。窓が押し出しを始めたときに立て、終わったら戻す。
+    void SetPickSlot(kachakacha::v2::app::ExtrudeSlot slot);
+    [[nodiscard]] kachakacha::v2::app::ExtrudeSlot PickSlot() const noexcept
+    {
+        return pickSlot_;
+    }
     //! 塗った形を画面の点で拾う。線が拾えなかったときだけ使う。
     [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> PickShapeAt(
         const QPointF& position) const;
@@ -632,6 +643,14 @@ private:
     //! 画面の1点で拾えるものを、優先順位の順に全部集める。
     //! 点と線は core(app/CollectPickCandidates)、塗った形は core(modeling/CollectMeshHits)。
     //! ここでは順番に混ぜるだけで、拾い方そのものは書かない。
+    kachakacha::v2::app::ExtrudeSlot pickSlot_ = kachakacha::v2::app::ExtrudeSlot::None;
+    [[nodiscard]] kachakacha::v2::app::PickedKind PickedKindOf(
+        const kachakacha::v2::app::PickCandidate& candidate) const;
+    [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForToolPick(
+        const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+        kachakacha::v2::app::SelectionMode mode) const;
+    [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> SortCandidatesForSlot(
+        std::vector<kachakacha::v2::app::PickCandidate> candidates) const;
     [[nodiscard]] std::vector<kachakacha::v2::app::PickCandidate> CollectCandidatesAt(
         const QPointF& position) const;
     //! 塗った形の候補を手前から順に。奥の形を手前より先に選ばない。

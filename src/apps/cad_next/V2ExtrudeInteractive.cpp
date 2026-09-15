@@ -283,6 +283,8 @@ void V2MainWindow::EndExtrudePreview()
     extrudeOutline_.clear();
     // 留め置いた写しも捨てる。次の押し出しが前の入力で作られないように。
     extrudeSnapshot_.reset();
+    // 拾い方もふだんへ戻す。道具が終われば、特別な並べ替えはしない。
+    viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
@@ -332,6 +334,10 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     extrudeShelfShown_ = true;
     RefreshRightShelves();
     RefreshExtrudeStatus(plan);
+    // 拾う候補を、押し出しが求めるものに合う順へ並べ替える(§6)。
+    // 押し出し中に選び直すのは輪郭か面なので、そちらを前へ出す。
+    // **捨てはしない。**線しか無いところでは、これまでどおり線が拾える。
+    viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
 }
 
 //! 下見を出している間に選択が変わった。**写しを作り直して、下見も出し直す。**

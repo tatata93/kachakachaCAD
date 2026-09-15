@@ -15,6 +15,8 @@
 
 #include "V2MainWindow.h"
 
+#include "V2Viewport.h"
+
 #include "kachakacha/app/ToolTargeting.h"
 
 #include <QString>
@@ -42,6 +44,10 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
     }
     // 選べば満たせる。構えて待つ。
     pendingCommandId_ = std::string(id);
+    // 押し出しを構えているなら、拾う候補も押し出しが求めるものを前へ出す(§6)。
+    if (id == "part.extrude") {
+        viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
+    }
     SetStatus(QStringLiteral("%1: %2(選ぶと続きます。Esc でやめます)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
                 QString::fromUtf8(std::string(command->predicateFailureJa).c_str())));
@@ -51,6 +57,12 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
 
 void V2MainWindow::ClearPendingCommand()
 {
+    // 構えを解いたら、拾い方もふだんへ戻す。
+    // ただし下見が出ている間は、押し出しが続いているので戻さない。
+    if (pendingCommandId_ == "part.extrude" && viewport_ != nullptr
+        && !viewport_->ExtrudeHandleShown()) {
+        viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
+    }
     pendingCommandId_.clear();
 }
 

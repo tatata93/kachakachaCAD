@@ -193,6 +193,23 @@ ExtrudeInputState ApplyPick(const ExtrudeInputState& state, const PickedEntity& 
     return next;   // 使えないものは、何も変えない。
 }
 
+std::vector<PickedKind> SortKindsForSlot(ExtrudeSlot slot,
+    const std::vector<PickedKind>& kinds)
+{
+    std::vector<PickedKind> fits;
+    std::vector<PickedKind> rest;
+    for (const PickedKind kind : kinds) {
+        if (PickFitsSlot(slot, kind)) {
+            fits.push_back(kind);
+        } else {
+            rest.push_back(kind);
+        }
+    }
+    // **捨てない。**合うものを前へ出すだけ。後ろは Tab と右クリックで届く。
+    fits.insert(fits.end(), rest.begin(), rest.end());
+    return fits;
+}
+
 bool ReadyForPreview(const ExtrudeInputState& state) noexcept
 {
     return NextNeededSlot(state) == ExtrudeSlot::None && state.HasProfile();

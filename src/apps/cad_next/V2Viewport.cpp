@@ -1105,7 +1105,10 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     const auto picked = CurrentCandidate();
     // 選んだものは、そのまま押した先の候補として出しておく。
     SyncHoverWithCandidate();
-    SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked, mode));
+    // 道具が入力を待っている間は、役割が違うものを足す(§5)。
+    // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
+    SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
+        ModeForToolPick(picked, mode)));
     ReportSelectionCount();
 }
 

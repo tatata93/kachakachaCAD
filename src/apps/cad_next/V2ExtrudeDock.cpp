@@ -41,6 +41,53 @@ constexpr ExtrudeBooleanMode kBooleans[] = {
 
 } // namespace
 
+//! 見出しと「1. 入力」(UI の正本の header-card と section 1)。
+//!
+//! 組み立てを分けてあるのは、1関数100行の門のためである。
+//! 切る場所は「入力の欄」と「結果の欄」の境目にした。
+void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
+{
+    // 見出しと、いまの様子(UI の正本の header-card)。
+    state_ = new QLabel(body_);
+    state_->setWordWrap(true);
+    layout->addWidget(state_);
+    auto* note = new QLabel(QStringLiteral(
+        "選んだものを読み取りました。違うときは各欄の「選び直す」を押してください。"),
+        body_);
+    note->setWordWrap(true);
+    layout->addWidget(note);
+
+    // 1. 入力。**対象と輪郭を別の欄にする**(UI の正本「1. 入力」)。
+    // 1本の文字列にしていたので、どちらを選び直すのか読めなかった。
+    layout->addWidget(new QLabel(QStringLiteral("1. 入力"), body_));
+    auto* targetRow = new QHBoxLayout();
+    targetRow->addWidget(new QLabel(QStringLiteral("対象"), body_));
+    targetValue_ = new QLabel(body_);
+    targetValue_->setWordWrap(true);
+    targetRow->addWidget(targetValue_, 1);
+    reselectTarget_ = new QPushButton(QStringLiteral("選び直す"), body_);
+    targetRow->addWidget(reselectTarget_);
+    layout->addLayout(targetRow);
+
+    auto* profileRow = new QHBoxLayout();
+    profileValue_ = new QLabel(body_);
+    profileValue_->setWordWrap(true);
+    profileLabel_ = new QLabel(QStringLiteral("輪郭"), body_);
+    profileRow->addWidget(profileLabel_);
+    profileRow->addWidget(profileValue_, 1);
+    reselectProfile_ = new QPushButton(QStringLiteral("選び直す"), body_);
+    profileRow->addWidget(reselectProfile_);
+    layout->addLayout(profileRow);
+
+    // 読み取りの全文は、欄が狭いときのために残す。
+    input_ = new QLabel(body_);
+    input_->setWordWrap(true);
+    input_->setVisible(false);
+
+    layout->addWidget(new QLabel(QStringLiteral("2. 結果"), body_));
+
+}
+
 V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     : QDockWidget(QStringLiteral("押し出し"), parent)
 {
@@ -50,19 +97,7 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
-    // 1. いまの入力。CADが何をどう読んだかを、まずここで見せる。
-    layout->addWidget(new QLabel(QStringLiteral("入力"), body_));
-    input_ = new QLabel(body_);
-    input_->setWordWrap(true);
-    layout->addWidget(input_);
-
-    // 読み取りを外して選び直す道(EX-07)。読み取った当人が外し方まで出す。
-    auto* reselect = new QHBoxLayout();
-    reselectTarget_ = new QPushButton(QStringLiteral("対象を選び直す"), body_);
-    reselectProfile_ = new QPushButton(QStringLiteral("輪郭を選び直す"), body_);
-    reselect->addWidget(reselectTarget_);
-    reselect->addWidget(reselectProfile_);
-    layout->addLayout(reselect);
+    BuildHeaderAndInputRows(layout);
 
     // 2. いま変えられる主なもの。
     form_ = new QFormLayout();
@@ -117,18 +152,22 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     form_->addRow(QString(), outSideWires_);
     layout->addLayout(form_);
 
-    // 3. 状態と、確定・取消。
+    // 3. 状態と、下の3つのボタン(UI の正本「3. 状態」と actions)。
+    layout->addWidget(new QLabel(QStringLiteral("3. 状態"), body_));
     result_ = new QLabel(body_);
     result_->setWordWrap(true);
     layout->addWidget(result_);
 
     details_ = new QPushButton(QStringLiteral("詳細..."), body_);
     layout->addWidget(details_);
+    // 並びは正本のとおり: キャンセル / 再プレビュー / 確定。
     auto* buttons = new QHBoxLayout();
-    confirm_ = new QPushButton(QStringLiteral("確定"), body_);
-    cancel_ = new QPushButton(QStringLiteral("キャンセル"), body_);
-    buttons->addWidget(confirm_);
+    cancel_ = new QPushButton(QStringLiteral("キャンセル Esc"), body_);
+    rePreview_ = new QPushButton(QStringLiteral("再プレビュー"), body_);
+    confirm_ = new QPushButton(QStringLiteral("確定 Enter"), body_);
     buttons->addWidget(cancel_);
+    buttons->addWidget(rePreview_);
+    buttons->addWidget(confirm_);
     layout->addLayout(buttons);
     layout->addStretch(1);
     setWidget(body_);
@@ -193,6 +232,12 @@ void V2ExtrudeDock::ConnectRows()
             cancelHandler_();
         }
     });
+    QObject::connect(rePreview_, &QPushButton::clicked, this, [this] {
+        // 下見を作り直す。いまの欄のとおりに出し直すだけで、文書は変えない。
+        if (optionHandler_) {
+            optionHandler_();
+        }
+    });
     QObject::connect(details_, &QPushButton::clicked, this, [this] {
         if (detailsHandler_) {
             detailsHandler_();
@@ -236,6 +281,15 @@ void V2ExtrudeDock::ShowPlan(const kachakacha::v2::app::ExtrudePlan& plan,
         text += QString::fromStdString(plan.needsJa);
     }
     input_->setText(text.trimmed());
+    // 2欄に分けて出す。**どちらを選び直すのかが読める。**
+    targetValue_->setText(targetNameJa.isEmpty() ? QStringLiteral("(選んでいません)")
+                                                 : targetNameJa);
+    profileLabel_->setText(plan.profileIsFace ? QStringLiteral("面")
+                                              : QStringLiteral("輪郭"));
+    profileValue_->setText(profileNamesJa.isEmpty() ? QStringLiteral("(選んでいません)")
+                                                    : profileNamesJa);
+    state_->setText(plan.readyToPreview ? QStringLiteral("押し出し — プレビュー可能")
+                                        : QStringLiteral("押し出し — 入力が足りません"));
     // 既定の操作を当てるのは **入力が変わったときだけ** である(R1 B4)。
     // 棚を出し直すたびに当て直すと、人が選んだ「足す/引く/新しい部品」が
     // 黙って戻る。入力が同じなら、選んだままにしておく。

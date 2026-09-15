@@ -25,6 +25,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/CommandParameters.h"
+#include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/modeling/ToolController.h"
@@ -219,6 +220,180 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("Esc では立体が増えない", CountOfKind(window, EntityKind::Part) == 1);
 }
 
+//! 出力を選んで押し出し、出来たものを数える。**人と同じ道で選ぶ。**
+struct OutputCounts {
+    int parts = 0;
+    int wires = 0;
+    bool ok = false;
+};
+
+[[nodiscard]] OutputCounts ExtrudeWithOutputs(V2MainWindow& window,
+    kachakacha::v2::app::ExtrudeOutputPreset preset, bool confirm)
+{
+    OutputCounts counts;
+    window.RunCommand("file.new");
+    if (!DrawRectangleByHand(window)) {
+        return counts;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    if (!ClickOnAnyCurve(window, Qt::NoModifier)) {
+        return counts;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!window.Viewport().ExtrudeHandleShown()) {
+        return counts;
+    }
+    // 棚の「出力」欄を、人が選ぶのと同じ道で動かす。
+    window.ExtrudeDock().ShowOutputs(
+        kachakacha::v2::app::OutputsForPreset(preset));
+    window.RefreshExtrudeFromDock();
+    if (confirm) {
+        window.RunCommand("part.extrude");
+    }
+    counts.parts = CountOfKind(window, EntityKind::Part);
+    counts.wires = CountOfKind(window, EntityKind::Wire) - wiresBefore;
+    counts.ok = true;
+    return counts;
+}
+
+//! HP-EX-OUTPUT-01〜05。選んだ出力のとおりの物が文書に出来る。
+[[nodiscard]] bool CaseHumanPathExtrudeOutputs(V2MainWindow& window)
+{
+    using kachakacha::v2::app::ExtrudeOutputPreset;
+
+    // 01 ソリッドのみ。ワイヤーは増えない。
+    const auto solid = ExtrudeWithOutputs(window, ExtrudeOutputPreset::SolidOnly, true);
+    if (!Explain("HP-EX-OUTPUT-01 ソリッドのみで立体が1つできる",
+            solid.ok && solid.parts == 1)) {
+        return false;
+    }
+    if (!Explain((std::string("HP-EX-OUTPUT-01 ワイヤーは増えない(")
+                     + std::to_string(solid.wires) + "本)").c_str(),
+            solid.wires == 0)) {
+        return false;
+    }
+
+    // 04 押し出し先ワイヤーのみ。立体は出来ず、ワイヤーが1本増える。
+    const auto endOnly = ExtrudeWithOutputs(window, ExtrudeOutputPreset::EndWireOnly, true);
+    if (!Explain((std::string("HP-EX-OUTPUT-04 立体は作らない(")
+                     + std::to_string(endOnly.parts) + "個)").c_str(),
+            endOnly.ok && endOnly.parts == 0)) {
+        return false;
+    }
+    if (!Explain((std::string("HP-EX-OUTPUT-04 終端の輪郭だけが増える(")
+                     + std::to_string(endOnly.wires) + "本)").c_str(),
+            endOnly.wires == 1)) {
+        return false;
+    }
+
+    // 02 ワイヤーのみ。立体は出来ず、開始側・終端・側面が増える。
+    const auto wiresOnly = ExtrudeWithOutputs(window, ExtrudeOutputPreset::WiresOnly, true);
+    if (!Explain((std::string("HP-EX-OUTPUT-02 立体は作らない(")
+                     + std::to_string(wiresOnly.parts) + "個)").c_str(),
+            wiresOnly.ok && wiresOnly.parts == 0)) {
+        return false;
+    }
+    if (!Explain((std::string("HP-EX-OUTPUT-02 終端だけより多くのワイヤーが増える(")
+                     + std::to_string(wiresOnly.wires) + "本)").c_str(),
+            wiresOnly.wires > endOnly.wires)) {
+        return false;
+    }
+
+    // 03 ワイヤー + ソリッド。両方できる。**別々の物として。**
+    const auto both = ExtrudeWithOutputs(window, ExtrudeOutputPreset::WiresAndSolid, true);
+    if (!Explain((std::string("HP-EX-OUTPUT-03 立体もワイヤーもできる(立体")
+                     + std::to_string(both.parts) + "個 ワイヤー"
+                     + std::to_string(both.wires) + "本)").c_str(),
+            both.ok && both.parts == 1 && both.wires == wiresOnly.wires)) {
+        return false;
+    }
+    return Explain("HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる", true);
+}
+
+//! HP-EX-OUTPUT-06。全部 OFF は確定できず、理由が出る。
+[[nodiscard]] bool CaseHumanPathExtrudeNoOutputRefused(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+    kachakacha::v2::app::ExtrudeOutputs none;
+    none.body = false;
+    window.ExtrudeDock().ShowOutputs(none);
+    window.RefreshExtrudeFromDock();
+    const int partsBefore = CountOfKind(window, EntityKind::Part);
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    window.RunCommand("part.extrude");   // 確定しようとする
+    if (!Explain((std::string("HP-EX-OUTPUT-06 何も作られない(帯は ")
+                     + window.StatusText().toStdString() + ")").c_str(),
+            CountOfKind(window, EntityKind::Part) == partsBefore
+                && CountOfKind(window, EntityKind::Wire) == wiresBefore)) {
+        return false;
+    }
+    return Explain("HP-EX-OUTPUT-06 断る理由が出る",
+        window.StatusText().contains(QStringLiteral("EXT-U001"))
+            || window.StatusText().contains(QStringLiteral("何を作るか")));
+}
+
+//! HP-EX-OUTPUT-07。ソリッドを作らないなら、足す・引くは起きない。
+//! HP-EX-OUTPUT-08。1回の取り消しで、その押し出しの出力が全部戻る。
+[[nodiscard]] bool CaseHumanPathExtrudeOutputsAndUndo(V2MainWindow& window)
+{
+    using kachakacha::v2::app::ExtrudeOutputPreset;
+    // まず立体を1つ作る。これが「足す・引く」の相手になる。
+    const auto first = ExtrudeWithOutputs(window, ExtrudeOutputPreset::SolidOnly, true);
+    if (!Explain("相手の立体ができる", first.ok && first.parts == 1)) {
+        return false;
+    }
+    const int partsAfterFirst = CountOfKind(window, EntityKind::Part);
+    const int wiresAfterFirst = CountOfKind(window, EntityKind::Wire);
+
+    // 立体と輪郭を選んで、ワイヤーだけを作る。相手は切られてはいけない。
+    if (!Explain("輪郭をもう一度拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+    window.ExtrudeDock().ChooseBoolean(
+        kachakacha::v2::modeling::ExtrudeBooleanMode::SubtractFromPart);
+    window.ExtrudeDock().ShowOutputs(
+        kachakacha::v2::app::OutputsForPreset(ExtrudeOutputPreset::WiresOnly));
+    window.RefreshExtrudeFromDock();
+    window.RunCommand("part.extrude");   // 確定
+    if (!Explain((std::string("HP-EX-OUTPUT-07 相手の立体はそのまま(")
+                     + std::to_string(CountOfKind(window, EntityKind::Part)) + "個)").c_str(),
+            CountOfKind(window, EntityKind::Part) == partsAfterFirst)) {
+        return false;
+    }
+    const int wiresMade = CountOfKind(window, EntityKind::Wire) - wiresAfterFirst;
+    if (!Explain((std::string("HP-EX-OUTPUT-07 ワイヤーはできる(")
+                     + std::to_string(wiresMade) + "本)").c_str(),
+            wiresMade > 0)) {
+        return false;
+    }
+    // HP-EX-OUTPUT-08 1回の取り消しで、その押し出しの出力が全部戻る。
+    window.RunCommand("edit.undo");
+    if (!Explain((std::string("HP-EX-OUTPUT-08 1回の取り消しでワイヤーが全部戻る(")
+                     + std::to_string(CountOfKind(window, EntityKind::Wire)) + " → "
+                     + std::to_string(wiresAfterFirst) + ")").c_str(),
+            CountOfKind(window, EntityKind::Wire) == wiresAfterFirst)) {
+        return false;
+    }
+    return Explain("HP-EX-OUTPUT-08 立体も増えも減りもしない",
+        CountOfKind(window, EntityKind::Part) == partsAfterFirst);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -228,6 +403,11 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-UI-01 押し出しの最中は棚が見えている", CaseHumanPathExtrudePanelStaysVisible},
         {"HP-UI-03 右の欄へ打ったあとも Enter と Esc が効く",
             CaseHumanPathConfirmKeysAfterTyping},
+        {"HP-EX-OUTPUT-01〜04 選んだ出力のとおりに作られる",
+            CaseHumanPathExtrudeOutputs},
+        {"HP-EX-OUTPUT-06 全部 OFF は確定できない", CaseHumanPathExtrudeNoOutputRefused},
+        {"HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
+            CaseHumanPathExtrudeOutputsAndUndo},
     };
 }
 

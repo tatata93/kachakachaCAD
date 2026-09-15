@@ -163,9 +163,29 @@ KACHA_V2_TEST(extrude_options, 決めたことが一文になる)
     const std::string text = ExtrudeSummaryJa(choice);
     Require(text.find("輪郭に垂直") != std::string::npos, "向きが出る");
     Require(text.find("1.5mm") != std::string::npos, "距離が出る");
-    Require(text.find("部品") != std::string::npos, "作るものが出る");
+    // 画面の「出力」と同じ言葉で出す。
+    Require(text.find("ソリッド") != std::string::npos, "作るものが出る");
     choice.reversed = true;
     Require(ExtrudeSummaryJa(choice).find("逆向き") != std::string::npos, "逆向きが出る");
+
+    // 4項目が並ぶこと。開始側の輪郭は今まで作れなかった。
+    ExtrudeChoice all;
+    all.makePart = true;
+    all.makeStartProfileWire = true;
+    all.makeEndProfileWire = true;
+    all.makeSideBoundaryWires = true;
+    const std::string every = ExtrudeSummaryJa(all);
+    Require(every.find("開始側の輪郭") != std::string::npos, "開始側が出る");
+    Require(every.find("先の輪郭") != std::string::npos, "押し出し先が出る");
+    Require(every.find("側面") != std::string::npos, "側面が出る");
+
+    // ソリッドを作らないなら、足す・引くは起きない。起きないものを書かない。
+    ExtrudeChoice wireOnly;
+    wireOnly.makePart = false;
+    wireOnly.makeEndProfileWire = true;
+    wireOnly.booleanMode = kachakacha::v2::modeling::ExtrudeBooleanMode::SubtractFromPart;
+    const std::string quiet = ExtrudeSummaryJa(wireOnly);
+    Require(quiet.find("引く") == std::string::npos, "起きない演算は書かない");
 }
 
 KACHA_V2_TEST(extrude_options, 何も選ばないときの向きが棚の初期表示と同じ)

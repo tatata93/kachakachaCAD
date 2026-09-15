@@ -3,6 +3,7 @@
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDockWidget>
 #include <QObject>
@@ -12,9 +13,11 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QString>
+#include <QStringList>
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <cstddef>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -93,9 +96,28 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
                     .c_str()));
     }
     form_->addRow(QStringLiteral("操作"), boolean_);
+
+    // 出力プリセットと、その中身の4項目(UI の正本「2. 結果」)。
+    // **見た目だけの欄ではない。**選んだとおりの物が文書に出来る。
+    outputPreset_ = new QComboBox(body_);
+    for (const auto preset : kachakacha::v2::app::ExtrudeOutputPresets()) {
+        outputPreset_->addItem(QString::fromUtf8(
+            std::string(kachakacha::v2::app::ExtrudeOutputPresetNameJa(preset)).c_str()));
+    }
+    form_->addRow(QStringLiteral("出力プリセット"), outputPreset_);
+
+    outBody_ = new QCheckBox(QStringLiteral("ソリッド / 面"), body_);
+    outStartWire_ = new QCheckBox(QStringLiteral("開始側の輪郭ワイヤー"), body_);
+    outEndWire_ = new QCheckBox(QStringLiteral("押し出し先の輪郭ワイヤー"), body_);
+    outSideWires_ = new QCheckBox(QStringLiteral("側面ワイヤー"), body_);
+    outBody_->setChecked(true);
+    form_->addRow(QStringLiteral("出力"), outBody_);
+    form_->addRow(QString(), outStartWire_);
+    form_->addRow(QString(), outEndWire_);
+    form_->addRow(QString(), outSideWires_);
     layout->addLayout(form_);
 
-    // 3. 結果と、確定・取消。
+    // 3. 状態と、確定・取消。
     result_ = new QLabel(body_);
     result_->setWordWrap(true);
     layout->addWidget(result_);
@@ -131,6 +153,25 @@ void V2ExtrudeDock::ConnectRows()
     };
     QObject::connect(direction_, &QComboBox::currentIndexChanged, this, [option] { option(); });
     QObject::connect(extent_, &QComboBox::currentIndexChanged, this, [option] { option(); });
+    // 出力プリセット → 4項目。
+    QObject::connect(outputPreset_, &QComboBox::currentIndexChanged, this,
+        [this, option] {
+            if (loading_) {
+                return;
+            }
+            SyncOutputRows(true);
+            option();
+        });
+    // 4項目 → プリセットの名前。どちらを触っても表示が食い違わない。
+    for (QCheckBox* box : {outBody_, outStartWire_, outEndWire_, outSideWires_}) {
+        QObject::connect(box, &QCheckBox::toggled, this, [this, option] {
+            if (loading_) {
+                return;
+            }
+            SyncOutputRows(false);
+            option();
+        });
+    }
     QObject::connect(boolean_, &QComboBox::currentIndexChanged, this, [this, option] {
         if (!loading_) {
             // 人が選んだ。以後、棚を出し直しても既定へ戻さない。
@@ -236,9 +277,11 @@ void V2ExtrudeDock::ApplyRows()
     // 押しても何も起きないボタンになる。
     reselectTarget_->setVisible(!plan_.targetSolid.IsNil());
     reselectProfile_->setVisible(!plan_.profiles.empty());
-    result_->setText(ready
-            ? QStringLiteral("矢印を引くか、距離を打ってください。Enter で確定します。")
-            : QString());
+    // 「状態」の中身は `ShowStatusLines` が持つ(UI の正本「3. 状態」)。
+    // ここで書くと、通った道を出したあとに一言で上書きしてしまう。
+    if (!ready) {
+        result_->setText(QString());
+    }
 }
 
 void V2ExtrudeDock::SetDistanceMm(double value)
@@ -316,6 +359,95 @@ void V2ExtrudeDock::ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMo
         direction_->setCurrentIndex(kAdvancedDirectionIndex);
     }
     direction_->blockSignals(blocked);
+}
+
+kachakacha::v2::app::ExtrudeOutputs V2ExtrudeDock::Outputs() const
+{
+    kachakacha::v2::app::ExtrudeOutputs outputs;
+    outputs.body = outBody_ != nullptr && outBody_->isChecked();
+    outputs.startWire = outStartWire_ != nullptr && outStartWire_->isChecked();
+    outputs.endWire = outEndWire_ != nullptr && outEndWire_->isChecked();
+    outputs.sideWires = outSideWires_ != nullptr && outSideWires_->isChecked();
+    return outputs;
+}
+
+void V2ExtrudeDock::ShowOutputs(const kachakacha::v2::app::ExtrudeOutputs& outputs)
+{
+    if (outBody_ == nullptr) {
+        return;
+    }
+    const bool was = loading_;
+    loading_ = true;
+    outBody_->setChecked(outputs.body);
+    outStartWire_->setChecked(outputs.startWire);
+    outEndWire_->setChecked(outputs.endWire);
+    outSideWires_->setChecked(outputs.sideWires);
+    SyncOutputRows(false);
+    loading_ = was;
+}
+
+//! 出力の欄どうしを合わせる。
+//!
+//! プリセットを選んだら4項目をそのとおりにする。4項目を触ったら、
+//! いまの組み合わせに当たるプリセットの名前へ変える(無ければ「カスタム」)。
+//! **どちらを触っても、画面の2つの表示が食い違わない。**
+void V2ExtrudeDock::SyncOutputRows(bool fromPreset)
+{
+    using kachakacha::v2::app::ExtrudeOutputPresets;
+    if (outputPreset_ == nullptr || outBody_ == nullptr) {
+        return;
+    }
+    const auto& presets = ExtrudeOutputPresets();
+    const bool was = loading_;
+    loading_ = true;
+    if (fromPreset) {
+        const int index = outputPreset_->currentIndex();
+        if (index >= 0 && index < static_cast<int>(presets.size())
+            && presets[static_cast<std::size_t>(index)]
+                != kachakacha::v2::app::ExtrudeOutputPreset::Custom) {
+            const auto wanted = kachakacha::v2::app::OutputsForPreset(
+                presets[static_cast<std::size_t>(index)]);
+            outBody_->setChecked(wanted.body);
+            outStartWire_->setChecked(wanted.startWire);
+            outEndWire_->setChecked(wanted.endWire);
+            outSideWires_->setChecked(wanted.sideWires);
+        }
+    } else {
+        const auto preset = kachakacha::v2::app::PresetForOutputs(Outputs());
+        for (std::size_t index = 0; index < presets.size(); ++index) {
+            if (presets[index] == preset) {
+                outputPreset_->setCurrentIndex(static_cast<int>(index));
+                break;
+            }
+        }
+    }
+    // ソリッドを作らないなら、足す・引くは起きない。触れる欄にしておくと
+    // 「選んだのに効かない」ことになる(オーナー指示)。
+    if (boolean_ != nullptr) {
+        const bool applies = outBody_->isChecked();
+        boolean_->setEnabled(applies);
+        boolean_->setToolTip(applies
+                ? QStringLiteral("足す・引く・新しい部品。加工する立体があるときに効きます。")
+                : QStringLiteral("ソリッドを作らないので、足す・引くは起きません。"));
+    }
+    loading_ = was;
+}
+
+void V2ExtrudeDock::ShowStatusLines(const std::vector<QString>& lines, bool canConfirm)
+{
+    if (result_ != nullptr) {
+        QString text;
+        for (const QString& line : lines) {
+            if (!text.isEmpty()) {
+                text += QStringLiteral("\n");
+            }
+            text += line;
+        }
+        result_->setText(text);
+    }
+    if (confirm_ != nullptr) {
+        confirm_->setEnabled(canConfirm);
+    }
 }
 
 double V2ExtrudeDock::DistanceMm() const

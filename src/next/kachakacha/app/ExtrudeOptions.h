@@ -43,7 +43,10 @@ struct ExtrudeChoice {
     std::optional<base::EntityId> targetEntityId;
 
     //! 何を作るか。1つも選ばないのは通さない。
+    //! 画面の「出力」4項目と1対1(app/ExtrudeInputState.h の ExtrudeOutputs)。
     bool makePart = true;
+    //! 開始側の輪郭ワイヤー。**元の輪郭を作り変えず、新しく作る。**
+    bool makeStartProfileWire = false;
     bool makeEndProfileWire = false;
     bool makeSideBoundaryWires = false;
 

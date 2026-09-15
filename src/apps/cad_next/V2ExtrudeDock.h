@@ -18,6 +18,7 @@
 //!
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 
+#include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 
@@ -86,8 +87,17 @@ public:
     void ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode mode);
     void PressReselectTarget();
     void PressReselectProfile();
+    //! いま選んでいる出力。確定はこの値で作る。
+    [[nodiscard]] kachakacha::v2::app::ExtrudeOutputs Outputs() const;
+    //! 出力を映す。プリセットの名前も一緒に合わせる。
+    void ShowOutputs(const kachakacha::v2::app::ExtrudeOutputs& outputs);
+    //! 「状態」に出す行(UI の正本「3. 状態」)。
+    void ShowStatusLines(const std::vector<QString>& lines, bool canConfirm);
 
 private:
+    //! 出力の欄どうしを合わせる。プリセットを選んだら4項目、
+    //! 4項目を触ったらプリセットの名前。
+    void SyncOutputRows(bool fromPreset);
     void ApplyRows();
     //! 入力(加工する立体と輪郭)が同じか。
     [[nodiscard]] static bool SameInputs(const kachakacha::v2::app::ExtrudePlan& left,
@@ -106,6 +116,13 @@ private:
     //! 棚のふだんの2つでは表せない終端。3つ目に出している間だけ入る。
     std::optional<kachakacha::v2::modeling::ExtrudeExtentMode> advancedExtent_;
     QComboBox* boolean_ = nullptr;
+    //! 出力プリセット(UI の正本「2. 結果」)。
+    QComboBox* outputPreset_ = nullptr;
+    //! 出力の4項目。プリセットと必ず同じものを指す。
+    class QCheckBox* outBody_ = nullptr;
+    class QCheckBox* outStartWire_ = nullptr;
+    class QCheckBox* outEndWire_ = nullptr;
+    class QCheckBox* outSideWires_ = nullptr;
     QPushButton* reselectTarget_ = nullptr;
     QPushButton* reselectProfile_ = nullptr;
     QLabel* result_ = nullptr;

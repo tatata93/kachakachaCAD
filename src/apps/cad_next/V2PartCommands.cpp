@@ -193,7 +193,9 @@ std::optional<kachakacha::v2::modeling::KernelShapeHandle>
 V2MainWindow::BooleanTargetShapeFor(const kachakacha::v2::app::ExtrudeChoice& choice,
     const kachakacha::v2::app::ExtrudePlan& plan)
 {
-    if (choice.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
+    // ソリッドを作らないなら、足す・引く相手は要らない(オーナー指示)。
+    if (!choice.makePart
+        || choice.booleanMode == kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart) {
         return kachakacha::v2::modeling::KernelShapeHandle{};
     }
     const auto found = partShapes_.find(plan.targetSolid.ToString());
@@ -248,6 +250,13 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     // 表示はそのままに、実行だけ別の演算になる。
     if (extrudeShelfShown_) {
         choice.booleanMode = extrudeDock_->BooleanMode();
+        // 出力は棚の「結果」欄がそのまま正本になる。
+        // **見た目だけの欄にしない。**選んだとおりの物が文書に出来る。
+        const auto outputs = extrudeDock_->Outputs();
+        choice.makePart = outputs.body;
+        choice.makeStartProfileWire = outputs.startWire;
+        choice.makeEndProfileWire = outputs.endWire;
+        choice.makeSideBoundaryWires = outputs.sideWires;
     } else if (plan.kind == kachakacha::v2::app::ExtrudeInputKind::SolidAndProfile) {
         choice.booleanMode = plan.defaultOperation;
     }
@@ -343,6 +352,16 @@ void V2MainWindow::ConfirmExtrude()
     if (choice.targetEntityId.has_value()) {
         targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
     }
+    // 開始側の輪郭を作るなら、押す前の輪郭をここで控える。
+    // **元の輪郭を作り変えるのではなく、新しい文書のワイヤーとして作る。**
+    std::vector<std::vector<CurveSegment>> startLoops;
+    if (choice.makeStartProfileWire) {
+        for (const auto& profile : profiles) {
+            if (!profile.segments.empty()) {
+                startLoops.push_back(profile.segments);
+            }
+        }
+    }
     ExtrudeRequest request = kachakacha::v2::app::ToExtrudeRequest(choice,
         std::move(profiles), viewport_->WorkPlane(), targetPlane);
     // カーネルには輪郭も側面も常に頼む。画面に出す辺と、型紙に要る「平らな1枚」が
@@ -350,6 +369,11 @@ void V2MainWindow::ConfirmExtrude()
     // それは利用者が選んだとおりにする。
     request.outputs.endProfileWire = true;
     request.outputs.sideBoundaryWires = true;
+    // ソリッドを作らないなら、演算そのものを行わない。
+    // 行ってしまうと、相手の立体がカーネルの中で切られる。
+    if (!choice.makePart) {
+        request.booleanMode = kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    }
 
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
@@ -373,7 +397,9 @@ void V2MainWindow::ConfirmExtrude()
         SetStatus(QStringLiteral("押し出し: 立体になりませんでした。"));
         return;
     }
+    extrudeStartLoops_ = std::move(startLoops);
     CommitExtrude(choice, plan, analysis.Value(), built.Value());
+    extrudeStartLoops_.clear();
 }
 
 //! 出来た形を文書へ入れる。**1回の操作は1回の取り消しで戻る**(R1 B3)。
@@ -435,8 +461,10 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     definition.extentMode = static_cast<int>(choice.extent);
     definition.booleanMode = static_cast<int>(choice.booleanMode);
     // 足す・引くの相手は「加工する立体」である。開き直したときも同じ相手へ当てる。
-    const bool boolean =
-        choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    // **ソリッドを作らないなら、足す・引くは起きない**(オーナー指示)。
+    // 起きない演算で相手を隠すと、押していない立体が画面から消える。
+    const bool boolean = choice.makePart
+        && choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
     if (boolean && !plan.targetSolid.IsNil()) {
         definition.targets.push_back(plan.targetSolid);
     } else if (choice.targetEntityId.has_value()) {
@@ -525,6 +553,16 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     // 頼まれたワイヤーは、画面に出すだけの辺ではなく **文書のワイヤー** にする。
     // 辺のままだと、選ぶことも、次の押し出しの輪郭にすることもできない。
     int wires = 0;
+    // 開始側の輪郭。**押す前の輪郭を写した、新しいワイヤーである。**
+    // 元のワイヤーを作り変えて代用しない(オーナー指示)。
+    if (choice.makeStartProfileWire) {
+        for (const auto& loop : extrudeStartLoops_) {
+            if (AddPlainWire(loop, "押し出し元の輪郭").IsNil()) {
+                return false;
+            }
+            ++wires;
+        }
+    }
     if (choice.makeEndProfileWire) {
         for (const auto& wire : built.endProfileWires) {
             if (AddPlainWire(wire, "押し出し先の輪郭").IsNil()) {

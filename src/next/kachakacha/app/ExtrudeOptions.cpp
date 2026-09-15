@@ -113,9 +113,11 @@ bool ExtentUsesTarget(ExtrudeExtentMode mode) noexcept
 Result<ExtrudeChoice> ValidateExtrudeChoice(const ExtrudeChoice& choice,
     const ExtrudeFacts& facts)
 {
-    if (!choice.makePart && !choice.makeEndProfileWire && !choice.makeSideBoundaryWires) {
+    if (!choice.makePart && !choice.makeStartProfileWire && !choice.makeEndProfileWire
+        && !choice.makeSideBoundaryWires) {
         return Refuse("EXT-U001", "何を作るかが決まっていません。",
-            "部品・押し出し先の輪郭・側面の境界のうち、少なくとも1つを選んでください。");
+            "ソリッド・開始側の輪郭・押し出し先の輪郭・側面のうち、"
+            "少なくとも1つを入れてください。");
     }
     if (choice.makePart && facts.closedProfiles == 0) {
         // 開いた輪郭からは立体にならない。ワイヤーだけなら開いていてもよい。
@@ -163,16 +165,29 @@ std::string ExtrudeSummaryJa(const ExtrudeChoice& choice)
         }
     }
     text += " / 作るもの:";
-    if (choice.makePart) {
-        text += "部品";
+    {
+        // 4項目を同じ並べ方で出す。画面の「出力」と言葉を揃える。
+        bool first = true;
+        const auto add = [&text, &first](bool on, const char* word) {
+            if (!on) {
+                return;
+            }
+            if (!first) {
+                text += "・";
+            }
+            text += word;
+            first = false;
+        };
+        add(choice.makePart, "ソリッド");
+        add(choice.makeStartProfileWire, "開始側の輪郭");
+        add(choice.makeEndProfileWire, "先の輪郭");
+        add(choice.makeSideBoundaryWires, "側面");
+        if (first) {
+            text += "なし";
+        }
     }
-    if (choice.makeEndProfileWire) {
-        text += choice.makePart ? "・先の輪郭" : "先の輪郭";
-    }
-    if (choice.makeSideBoundaryWires) {
-        text += (choice.makePart || choice.makeEndProfileWire) ? "・側面" : "側面";
-    }
-    if (choice.booleanMode != ExtrudeBooleanMode::NewPart) {
+    // ソリッドを作らないなら、足す・引くは起きない。起きないものを書かない。
+    if (choice.booleanMode != ExtrudeBooleanMode::NewPart && choice.makePart) {
         text += " / ";
         text += ExtrudeBooleanNameJa(choice.booleanMode);
     }

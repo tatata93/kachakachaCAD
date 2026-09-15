@@ -19,6 +19,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ExtrudeDrag.h"
+#include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
 #include "kachakacha/app/SceneBuilder.h"
@@ -229,9 +230,20 @@ std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double dista
     for (const Vector3& point : extrudeOutline_) {
         moved.push_back(point + offset);
     }
+    // **下見は「選んだ出力」を映す**(オーナー指示)。
+    // 「押し出し先ワイヤーのみ」で側面まで描くと、作られないものが見える。
+    //
+    // ただし元の輪郭と押し出し先の輪郭は、何を選んでいても必ず出す。
+    // 出さないと、どこからどこまで押しているのかが読めない
+    // (オーナー指示 §8「元輪郭 / 終端輪郭 / 方向 / 距離 が一目で区別できること」)。
     loops.push_back(extrudeOutline_);
     loops.push_back(moved);
-    // 側面の線。全部の点に出すと真っ黒になるので、間引いて出す。
+    // 側面の線。ソリッドを作るか、側面ワイヤーを頼まれたときだけ出す。
+    // 全部の点に出すと真っ黒になるので、間引いて出す。
+    const bool showSides = extrudeChoice_.makePart || extrudeChoice_.makeSideBoundaryWires;
+    if (!showSides) {
+        return loops;
+    }
     const std::size_t step = std::max<std::size_t>(1, extrudeOutline_.size() / 12);
     for (std::size_t index = 0; index < extrudeOutline_.size(); index += step) {
         loops.push_back({extrudeOutline_[index], extrudeOutline_[index] + offset});
@@ -296,8 +308,62 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     // 棚のふだんの2つで表せない決め方も、棚が3つ目に名前で出す。
     extrudeDock_->ChooseDirection(extrudeChoice_.direction);
     extrudeDock_->SetDistanceMm(viewport_->ExtrudeHandleDistanceMm());
+    // 出力の欄に、いま作ろうとしているものを映す。
+    kachakacha::v2::app::ExtrudeOutputs outputs;
+    outputs.body = extrudeChoice_.makePart;
+    outputs.startWire = extrudeChoice_.makeStartProfileWire;
+    outputs.endWire = extrudeChoice_.makeEndProfileWire;
+    outputs.sideWires = extrudeChoice_.makeSideBoundaryWires;
+    extrudeDock_->ShowOutputs(outputs);
     extrudeShelfShown_ = true;
     RefreshRightShelves();
+    RefreshExtrudeStatus(plan);
+}
+
+//! 「状態」欄を書き直す(UI の正本「3. 状態」、オーナー指示 §15)。
+//!
+//! 診断コードだけに頼らない。**通った道も言う。**
+//! 「✓ 対象: 部品1」「✓ 入力は有効です」「確定すると 部品1 に「引く」で適用します」。
+void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& plan)
+{
+    if (extrudeDock_ == nullptr) {
+        return;
+    }
+    const auto& document = session_->GetDocument();
+    const auto nameOf = [&document](const kachakacha::v2::base::EntityId& id) {
+        const auto* entity = document.FindEntity(id);
+        return entity != nullptr && !entity->displayName.empty()
+            ? entity->displayName
+            : std::string("名前のないもの");
+    };
+    // 画面の欄をそのまま、core の入力スロットへ写して聞く。
+    kachakacha::v2::app::ExtrudeInputState state;
+    if (!plan.targetSolid.IsNil()) {
+        state.target = plan.targetSolid;
+    }
+    state.profiles = plan.profiles;
+    state.profileIsFace = plan.profileIsFace;
+    state.operation = extrudeDock_->BooleanMode();
+    state.extent = extrudeDock_->ExtentMode();
+    state.direction = extrudeDock_->DirectionMode();
+    state.distanceMm = extrudeDock_->DistanceMm();
+    state.outputs = extrudeDock_->Outputs();
+
+    std::string targetName;
+    if (!plan.targetSolid.IsNil()) {
+        targetName = nameOf(plan.targetSolid);
+    }
+    std::vector<std::string> profileNames;
+    for (const auto& id : plan.profiles) {
+        profileNames.push_back(nameOf(id));
+    }
+    std::vector<QString> lines;
+    for (const std::string& line : kachakacha::v2::app::ExtrudeStatusLinesJa(state,
+             targetName, profileNames, viewport_->ExtrudeHandleShown())) {
+        lines.push_back(QString::fromStdString(line));
+    }
+    // 作るものが1つも無いなら確定させない。理由は上の行に出ている。
+    extrudeDock_->ShowStatusLines(lines, plan.readyToPreview && state.outputs.Any());
 }
 
 //! 読み取った入力の片方を外して選び直す(EX-07)。
@@ -354,6 +420,13 @@ void V2MainWindow::RefreshExtrudeFromDock()
     if (!facePushPull_) {
         extrudeChoice_.direction = extrudeDock_->DirectionMode();
     }
+    // 出力の欄も読む。**選んだとおりの物を作る。**
+    const auto outputs = extrudeDock_->Outputs();
+    extrudeChoice_.makePart = outputs.body;
+    extrudeChoice_.makeStartProfileWire = outputs.startWire;
+    extrudeChoice_.makeEndProfileWire = outputs.endWire;
+    extrudeChoice_.makeSideBoundaryWires = outputs.sideWires;
+    RefreshExtrudeStatus(PlanExtrudeFromSelection());
     // 向きが変わったら矢印も向き直す。数字はそのまま。
     kachakacha::v2::app::ExtrudeHandle handle;
     handle.origin = viewport_->ExtrudeHandleOrigin();

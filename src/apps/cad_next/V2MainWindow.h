@@ -149,6 +149,8 @@ public:
     void EditExtrudeWithDialog();
     //! 決めたひと組を棚と矢印と下見へ映す。試験からも呼ぶ。
     void ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& choice);
+    //! 「状態」欄を書き直す。通った道も、足りないものも、ここに出す。
+    void RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
@@ -760,6 +762,9 @@ private:
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
+    //! 「開始側の輪郭ワイヤー」を作るときの、押す前の輪郭。確定の間だけ持つ。
+    //! **元の輪郭は触らない。**ここから新しい文書のワイヤーを作る。
+    std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> extrudeStartLoops_;
     //! 押し出しの棚を出しているか。出している間だけ右に並ぶ。
     bool extrudeShelfShown_ = false;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>

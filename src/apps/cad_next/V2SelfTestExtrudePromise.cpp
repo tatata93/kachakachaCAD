@@ -429,8 +429,8 @@ namespace {
             && answered.makeEndProfileWire == initial.makeEndProfileWire);
 }
 
-//! Codex P1-EXTRUDE-R6 B2。詳細の窓で選んだ向きが、
-//! 矢印・確定・保存・次回の初期値まで通ること。
+//! Codex P1-EXTRUDE-R6 B2 / R7 B1 B2。詳細の窓で選んだ向きが、
+//! **確定する前の**矢印と下見、そして確定・保存・次回の初期値まで通ること。
 //!
 //! 棚が出せるのは2通りだけなので、残り5通りは確定のときに
 //! 棚を触る前の決め方へ戻され、選んでも何も起きなかった。
@@ -517,8 +517,12 @@ namespace {
             window.ExtrudeChoice().direction == ExtrudeDirectionMode::CustomXYZ)) {
         return false;
     }
-    if (!Explain("覚えている向きの数も落ちていない",
-            std::abs(window.ExtrudeChoice().customDirection.x - 0.6) < 1.0e-9)) {
+    // 覚えているのは **人が入れた数そのもの。** 矢印のために単位にした値ではない。
+    // 単位にしたものを覚えると、次に窓を開いたとき入れた数が消えている。
+    if (!Explain((std::string("覚えている向きの数も落ちていない(x=")
+                     + std::to_string(window.ExtrudeChoice().customDirection.x) + ")").c_str(),
+            std::abs(window.ExtrudeChoice().customDirection.x - 4.2) < 1.0e-9
+                && std::abs(window.ExtrudeChoice().customDirection.z - 5.6) < 1.0e-9)) {
         return false;
     }
     // 次に始めたとき、棚がその決め方を名前で見せること。

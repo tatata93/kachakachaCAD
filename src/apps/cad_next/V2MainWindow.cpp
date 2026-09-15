@@ -262,6 +262,8 @@ void V2MainWindow::WireViewportCallbacks()
         HighlightTreeForSelection();
         // 構えている命令があれば、そろったかを見る。
         RefreshPendingCommand(false);
+        // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
+        RefreshExtrudeForSelectionChange();
         RefreshExportCounts();
         RefreshMeasurements();
         RefreshEditDock();

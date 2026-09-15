@@ -313,23 +313,23 @@ void V2MainWindow::ConfirmExtrude()
     using kachakacha::v2::modeling::ExtrudeRequest;
 
     const auto& selection = viewport_->Selection();
-    // 何を選んだかで、押し出しが何を意味するかが決まる(オーナー指示 2026-09-14)。
-    // 読み取りは core(app/ExtrudePlan)。立体と輪郭の順番は問わない。
-    const auto plan = PlanExtrudeFromSelection();
-    if (!plan.readyToPreview) {
-        // 「先にワイヤーを選んでください」で終わらせない。
-        // いま何が決まっていて、次に何を選べばよいのかまで言う。
+    // **下見を出した瞬間の写しから作る。選択を読み直さない**(オーナー指示 §9)。
+    //
+    // これまではここで `PlanExtrudeFromSelection()` を呼んでいた。
+    // 下見を出したあとに選択が変わると、画面に出ているものと作られるものが
+    // 別になる。「Previewに見えていない入力でCommitしない」を守れない。
+    if (!extrudeSnapshot_.has_value()) {
+        // 写しが無い = 下見を出していない。何が足りないかを言って終わる。
         SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
         return;
     }
-    // 輪郭は **読み取りが輪郭と決めたものだけ。** 選んだもの全部ではない。
-    //
-    // 足す・引くでは立体も一緒に選ぶ。選択をそのまま輪郭にすると、
-    // 加工される立体まで輪郭に数えられ、「輪郭が同じ平面に載っていません」
-    // (EXT-001)で断られる。棚には「対象立体」と「輪郭」が別々に出ているのに、
-    // 実行だけが選択を読み直していた。開き直しの作り直しは
-    // 作り方の `profiles` を使っているので、そちらとも食い違っていた。
-    auto profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
+    const auto plan = extrudeSnapshot_->plan;
+    if (!plan.readyToPreview) {
+        SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
+        return;
+    }
+    // 輪郭も写しから取る。**読み取りが輪郭と決めたものだけ。** 選んだもの全部ではない。
+    auto profiles = extrudeSnapshot_->profiles;
     if (profiles.empty()) {
         SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
                                  "閉じた輪郭か、立体の平らな面を選んでください。"));

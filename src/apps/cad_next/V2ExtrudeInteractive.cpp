@@ -63,6 +63,18 @@ void V2MainWindow::BeginExtrudePreview()
     if (!plan.readyToPreview) {
         return;
     }
+    // **下見を出すときに、入力をそのまま留め置く**(オーナー指示 §9)。
+    // 確定はこの写しから作る。選択を読み直さない。
+    ExtrudeSnapshot snapshot;
+    snapshot.plan = plan;
+    snapshot.facePushPull = facePushPull_;
+    snapshot.profiles = facePushPull_ ? FaceProfilesNow() : ExtrudeProfilesFor(plan.profiles);
+    if (snapshot.profiles.empty()) {
+        SetStatus(QStringLiteral("押し出し: 押す輪郭が取れませんでした。"
+                                 "閉じた輪郭か、立体の平らな面を選んでください。"));
+        return;
+    }
+    extrudeSnapshot_ = std::move(snapshot);
     // 面の押し引きは、抱えている縁を使う。文書にはまだ入れていない(R1 B2)。
     std::vector<kachakacha::v2::geometry::CurveSegment> curves;
     if (facePushPull_ && !faceProfileLoops_.empty()) {
@@ -269,6 +281,8 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 void V2MainWindow::EndExtrudePreview()
 {
     extrudeOutline_.clear();
+    // 留め置いた写しも捨てる。次の押し出しが前の入力で作られないように。
+    extrudeSnapshot_.reset();
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
@@ -318,6 +332,36 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
     extrudeShelfShown_ = true;
     RefreshRightShelves();
     RefreshExtrudeStatus(plan);
+}
+
+//! 下見を出している間に選択が変わった。**写しを作り直して、下見も出し直す。**
+//!
+//! 黙って読み直す道(確定のときに選択を読む)は塞いだ(オーナー指示 §9)。
+//! 代わりに、選択が変わったことを入力へ明示に映して、見えているものを合わせる。
+//! こうすれば「画面に出ていないもので作る」が起きない。
+void V2MainWindow::RefreshExtrudeForSelectionChange()
+{
+    if (!viewport_->ExtrudeHandleShown() || facePushPull_) {
+        return;   // 下見が無い / 面の押し引きは選択で変わらない
+    }
+    const auto plan = PlanExtrudeFromSelection();
+    if (!plan.readyToPreview) {
+        // 押せない選択になった。下見は出したままにせず、片付けて理由を言う。
+        EndExtrudePreview();
+        SetStatus(QStringLiteral("押し出し\n%1").arg(ExtrudePlanTextJa()));
+        return;
+    }
+    if (extrudeSnapshot_.has_value() && extrudeSnapshot_->plan.profiles == plan.profiles
+        && extrudeSnapshot_->plan.targetSolid == plan.targetSolid) {
+        RefreshExtrudeStatus(plan);
+        return;   // 入力は変わっていない。作り直さない。
+    }
+    // 入力が変わった。始めからやり直す(写し・輪郭・矢印・下見・棚)。
+    const double keepDistance = viewport_->ExtrudeHandleDistanceMm();
+    BeginExtrudePreview();
+    if (viewport_->ExtrudeHandleShown()) {
+        UpdateExtrudePreview(keepDistance);
+    }
 }
 
 //! 「状態」欄を書き直す(UI の正本「3. 状態」、オーナー指示 §15)。

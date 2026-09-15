@@ -36,6 +36,7 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace kachakacha::v2::selftest {
@@ -394,6 +395,49 @@ struct OutputCounts {
         CountOfKind(window, EntityKind::Part) == partsAfterFirst);
 }
 
+//! HP-EX-SNAP-01。下見と確定が同じ写しから作られる(オーナー指示 §9)。
+//!
+//! 下見を出したあとに選択が変わったら、**写しを作り直して下見も出し直す**。
+//! 黙って読み直して、画面に出ていないもので作ってはいけない。
+[[nodiscard]] bool CaseHumanPathPreviewAndCommitAgree(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))) {
+        return false;
+    }
+    if (!Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    window.RunCommand("part.extrude");
+    if (!Explain("矢印が出る", window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+    // 下見に出ている輪郭と距離を控える。**これが確定に使われなければならない。**
+    const auto shownOutline = window.ExtrudeOutline();
+    const double shownDistance = window.Viewport().ExtrudeHandleDistanceMm();
+    if (!Explain("下見に輪郭が出ている", !shownOutline.empty())) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 確定
+    if (!Explain("立体ができる", CountOfKind(window, EntityKind::Part) == 1)) {
+        return false;
+    }
+    // 保存された作り方の距離が、下見に出ていた距離と同じであること。
+    bool matched = false;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        const auto* definition =
+            std::get_if<kachakacha::v2::domain::ExtrudeDefinition>(&feature.definition);
+        if (definition == nullptr) {
+            continue;
+        }
+        matched = std::abs(definition->distance.value - shownDistance) < 1.0e-6;
+    }
+    return Explain((std::string("確定は下見と同じ距離で作る(")
+                       + std::to_string(shownDistance) + "mm)").c_str(),
+        matched);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -408,6 +452,8 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-EX-OUTPUT-06 全部 OFF は確定できない", CaseHumanPathExtrudeNoOutputRefused},
         {"HP-EX-OUTPUT-07/08 演算は起きず、取り消しは1回で戻る",
             CaseHumanPathExtrudeOutputsAndUndo},
+        {"HP-EX-SNAP-01 下見と確定が同じ写しから作られる",
+            CaseHumanPathPreviewAndCommitAgree},
     };
 }
 

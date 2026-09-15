@@ -151,6 +151,8 @@ public:
     void ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& choice);
     //! 「状態」欄を書き直す。通った道も、足りないものも、ここに出す。
     void RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& plan);
+    //! 下見の最中に選択が変わった。写しを作り直して、下見も出し直す。
+    void RefreshExtrudeForSelectionChange();
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
@@ -762,6 +764,22 @@ private:
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
+    //! 下見を出した瞬間の入力を、そのまま留め置いたもの(オーナー指示 §9)。
+    //!
+    //! **下見と確定は、必ずこの同じ写しから作る。**
+    //! これまでは確定のときに `PlanExtrudeFromSelection()` で選択を読み直していた。
+    //! 下見を出したあとに選択が変わると、画面に出ているものと作られるものが
+    //! 別になる。「Previewに見えていない入力でCommitしない」を守れない。
+    //!
+    //! 選択が変わったら、**この写しを作り直して下見も出し直す**。
+    //! 黙って読み直すのではなく、見えているものを合わせる。
+    struct ExtrudeSnapshot {
+        kachakacha::v2::app::ExtrudePlan plan;
+        std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
+        //! 面を押しているか。面の縁は `faceProfileLoops_` が持つ。
+        bool facePushPull = false;
+    };
+    std::optional<ExtrudeSnapshot> extrudeSnapshot_;
     //! 「開始側の輪郭ワイヤー」を作るときの、押す前の輪郭。確定の間だけ持つ。
     //! **元の輪郭は触らない。**ここから新しい文書のワイヤーを作る。
     std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> extrudeStartLoops_;

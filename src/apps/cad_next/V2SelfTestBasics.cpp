@@ -27,6 +27,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QColor>
+#include <QFontDatabase>
 #include <QImage>
 #include <QPainter>
 #include <QPointF>
@@ -89,7 +90,9 @@ namespace {
     window.ApplyTheme(UiTheme::Windows95);
     const bool win95 = window.Theme() == UiTheme::Windows95;
     window.ApplyTheme(UiTheme::Normal);
-    return win95 && window.Theme() == UiTheme::Normal;
+    const auto systemFont = QFontDatabase::systemFont(QFontDatabase::GeneralFont);
+    return win95 && window.Theme() == UiTheme::Normal
+        && QApplication::font().family() == systemFont.family();
 }
 
 [[nodiscard]] bool CaseUndo(V2MainWindow& window)

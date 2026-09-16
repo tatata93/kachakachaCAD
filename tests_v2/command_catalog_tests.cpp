@@ -307,10 +307,10 @@ KACHA_V2_TEST(commands, どのコマンドにもメニューの入口がある)
     // 全体を見ると、道具の割り当て表にも同じ id があるので、
     // メニューから抜け落ちても見つからない。
     const std::string all = buffer.str();
-    const std::string begin = "const std::vector<MenuGroup> groups{";
+    const std::string begin = "void V2MainWindow::BuildMenus()";
     const std::size_t from = all.find(begin);
     Require(from != std::string::npos, "メニューの並びが見つかる");
-    const std::size_t to = all.find("\n    };", from);
+    const std::size_t to = all.find("\nvoid V2MainWindow::SetMode", from);
     Require(to != std::string::npos, "メニューの並びの終わりが見つかる");
     const std::string text = all.substr(from, to - from);
 

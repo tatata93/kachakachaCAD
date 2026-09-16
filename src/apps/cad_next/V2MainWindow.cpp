@@ -35,6 +35,7 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFont>
+#include <QFontDatabase>
 #include <QHeaderView>
 #include <QKeySequence>
 #include <QLabel>
@@ -305,61 +306,11 @@ V2MainWindow::~V2MainWindow() = default;
 
 void V2MainWindow::BuildMenus()
 {
-    // メニューは台帳から作る。台帳に無い項目をここで足さない。
-    struct MenuGroup {
-        const char* titleJa;
-        std::vector<std::string_view> ids;
-    };
-    const std::vector<MenuGroup> groups{
-        {"ファイル(&F)", {"file.new", "file.open", "file.save", "file.save_as"}},
-        {"編集(&E)", {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
-                       "edit.numeric", "selection.activate", "snap.toggle",
-                       "group.set_active", "group.create", "group.dissolve",
-                       "group.rename"}},
-        {"作図(&D)", {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
-                       "draw.circle", "draw.arc", "draw.bezier", "draw.spline"}},
-        {"編集操作(&W)", {"wire.trim", "wire.extend", "wire.split", "wire.join",
-                            "wire.coincident", "wire.tangent", "wire.curvature",
-                            "wire.chamfer", "wire.fillet", "wire.offset", "wire.meet_lines",
-                            "wire.array_linear", "wire.array_circular",
-                            "wire.intersection_points", "wire.center_points",
-                            "wire.key_points", "wire.corner_chamfer",
-                            "wire.corner_fillet", "wire.set_datum", "wire.clear_datum",
-                            "wire.move", "wire.copy",
-                            "wire.mirror", "wire.rotate", "wire.project",
-                            "wire.project_surface", "wire.wrap_project"}},
-        {"基準(&P)", {"workplane.create", "workplane.set_active", "grid.edit",
-                       "grid.move_origin"}},
-        {"形(&M)", {"surface.create", "guide.create", "guide.revolve", "guide.set_method", "guide.add_row",
-                     "guide.append_row", "guide.row_up", "guide.row_down",
-                     "guide.row_remove", "guide.row_reverse", "guide.build",
-                     "guide.clear", "part.extrude", "part.thicken",
-                     "part.thickness_placement", "part.thicken_to_plane",
-                     "part.surface_jig",
-                     "part.from_wire_cage",
-                     "part.boolean_add", "part.boolean_cut", "derived.freeze"}},
-        {"製作(&B)", {"fabrication.create", "fabrication.assign_role",
-                       "fabrication.assign_relief_cut",
-                       "fabrication.preview_update", "fabrication.create_pattern",
-                       "fabrication.set_assembly", "fabrication.set_method",
-                       "fabrication.merge_parts", "fabrication.split_part",
-                       "fabrication.set_unfold_base",
-                       "fabrication.freeze_output", "fabrication.freeze_state",
-                       "fabrication.set_connection_scope"}},
-        {"書き出し(&X)", {"export.validate", "export.stl", "export.step", "export.svg",
-                            "export.dxf", "export.pdf_1to1"}},
-        {"表示(&V)", {"view.fit_all", "view.align_selection", "view.align_selection_back",
-                          "view.align_workplane",
-                       "view.hide_selected",
-                       "view.show_all", "view.stage_all", "view.stage_no_grid",
-                       "view.stage_no_construction", "view.stage_selection_only",
-                       "view.display_settings",
-                       "measure.open"}},
-        {"ヘルプ(&H)", {"help.copy_diagnostics"}},
-    };
-    for (const MenuGroup& group : groups) {
-        QMenu* menu = menuBar()->addMenu(QString::fromUtf8(group.titleJa));
-        for (const std::string_view id : group.ids) {
+    // 1024px 幅でも文字を潰さないよう、上段は8分類だけにする。
+    // 詳細な編集・基準・視点・見た目は、意味の近い分類のサブメニューへ入れる。
+    const auto addCommands = [this](QMenu* menu,
+                                 std::initializer_list<std::string_view> ids) {
+        for (const std::string_view id : ids) {
             const CommandDescriptor* command = FindCommand(id);
             if (command == nullptr) {
                 continue;
@@ -376,9 +327,63 @@ void V2MainWindow::BuildMenus()
                 [this, id] { RunCommand(id); });
             commandActions_.emplace_back(id, action);
         }
-    }
+    };
 
-    QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("視点(&C)"));
+    QMenu* file = menuBar()->addMenu(QStringLiteral("ファイル(&F)"));
+    addCommands(file, {"file.new", "file.open", "file.save", "file.save_as"});
+    file->addSeparator();
+    file->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
+
+    QMenu* edit = menuBar()->addMenu(QStringLiteral("編集(&E)"));
+    addCommands(edit, {"edit.undo", "edit.redo", "edit.delete", "entity.rename",
+        "edit.numeric", "selection.activate", "snap.toggle"});
+    QMenu* wire = edit->addMenu(QStringLiteral("ワイヤー編集(&W)"));
+    addCommands(wire, {"wire.trim", "wire.extend", "wire.split", "wire.join",
+        "wire.coincident", "wire.tangent", "wire.curvature", "wire.chamfer",
+        "wire.fillet", "wire.offset", "wire.meet_lines", "wire.array_linear",
+        "wire.array_circular", "wire.intersection_points", "wire.center_points",
+        "wire.key_points", "wire.corner_chamfer", "wire.corner_fillet",
+        "wire.set_datum", "wire.clear_datum", "wire.move", "wire.copy",
+        "wire.mirror", "wire.rotate", "wire.project", "wire.project_surface",
+        "wire.wrap_project"});
+    QMenu* groups = edit->addMenu(QStringLiteral("まとまり(&G)"));
+    addCommands(groups, {"group.set_active", "group.create", "group.dissolve",
+        "group.rename"});
+
+    QMenu* drawing = menuBar()->addMenu(QStringLiteral("作図(&D)"));
+    addCommands(drawing, {"draw.point", "draw.line", "draw.polyline", "draw.rectangle",
+        "draw.circle", "draw.arc", "draw.bezier", "draw.spline"});
+    QMenu* datum = drawing->addMenu(QStringLiteral("作図面とグリッド(&P)"));
+    addCommands(datum, {"workplane.create", "workplane.set_active", "grid.edit",
+        "grid.move_origin"});
+
+    QMenu* shape = menuBar()->addMenu(QStringLiteral("形(&M)"));
+    addCommands(shape, {"surface.create", "guide.create", "guide.revolve",
+        "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
+        "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",
+        "guide.clear", "part.extrude", "part.thicken", "part.thickness_placement",
+        "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",
+        "part.boolean_add", "part.boolean_cut", "derived.freeze"});
+
+    QMenu* fabrication = menuBar()->addMenu(QStringLiteral("製作(&B)"));
+    addCommands(fabrication, {"fabrication.create", "fabrication.assign_role",
+        "fabrication.assign_relief_cut", "fabrication.preview_update",
+        "fabrication.create_pattern", "fabrication.set_assembly",
+        "fabrication.set_method", "fabrication.merge_parts", "fabrication.split_part",
+        "fabrication.set_unfold_base", "fabrication.freeze_output",
+        "fabrication.freeze_state", "fabrication.set_connection_scope"});
+
+    QMenu* output = menuBar()->addMenu(QStringLiteral("書き出し(&X)"));
+    addCommands(output, {"export.validate", "export.stl", "export.step", "export.svg",
+        "export.dxf", "export.pdf_1to1"});
+
+    QMenu* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
+    addCommands(view, {"view.fit_all", "view.align_selection", "view.align_selection_back",
+        "view.align_workplane", "view.hide_selected", "view.show_all", "view.stage_all",
+        "view.stage_no_grid", "view.stage_no_construction", "view.stage_selection_only",
+        "view.display_settings", "measure.open"});
+
+    QMenu* viewMenu = view->addMenu(QStringLiteral("視点(&C)"));
     const std::array<ViewDirection, 7> directions{ViewDirection::Top,
         ViewDirection::Bottom, ViewDirection::Front, ViewDirection::Back,
         ViewDirection::Left, ViewDirection::Right, ViewDirection::Isometric};
@@ -391,13 +396,14 @@ void V2MainWindow::BuildMenus()
             });
     }
 
-    QMenu* themeMenu = menuBar()->addMenu(QStringLiteral("見た目(&T)"));
+    QMenu* themeMenu = view->addMenu(QStringLiteral("見た目(&T)"));
     themeMenu->addAction(QStringLiteral("通常"), this,
         [this] { ApplyTheme(UiTheme::Normal); });
     themeMenu->addAction(QStringLiteral("Windows 95 風"), this,
         [this] { ApplyTheme(UiTheme::Windows95); });
-    themeMenu->addSeparator();
-    themeMenu->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
+
+    QMenu* help = menuBar()->addMenu(QStringLiteral("ヘルプ(&H)"));
+    addCommands(help, {"help.copy_diagnostics"});
 }
 
 void V2MainWindow::SetMode(UiMode mode)
@@ -1438,6 +1444,10 @@ void V2MainWindow::ApplyTheme(UiTheme theme)
     } else {
         QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
         QApplication::setPalette(QPalette());
+        // Windows 95 風で設定したビットマップ向けフォントを残さない。
+        // スタイルだけ戻しても QApplication のフォントは自動では戻らず、
+        // 通常表示のメニューまで狭く・ぎざぎざに見えていた。
+        QApplication::setFont(QFontDatabase::systemFont(QFontDatabase::GeneralFont));
         Win95Style::RestoreApplicationStyleSheets();
         viewport_->SetPalette(ViewportPalette::Dark());
     }

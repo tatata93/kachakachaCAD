@@ -41,6 +41,9 @@ void Note(const char* what);
 //! 道具・画面・視点・書き出し・ファイルのケース。
 [[nodiscard]] std::vector<SelfTestCase> BasicCases();
 
+//! 上段メニューの文字幅・重なり・マウス操作のケース。
+[[nodiscard]] std::vector<SelfTestCase> MenuCases();
+
 //! V1同等の操作系のケース。
 [[nodiscard]] std::vector<SelfTestCase> InputCases();
 

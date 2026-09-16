@@ -204,6 +204,10 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
     guideTable_ = table;
     RefreshGuideTable();
     RefreshPartEdges();
+    // 文書と核には面が入っていても、表示用の形状一覧を更新しなければ
+    // 確定後の面は見えず、画面からも拾えない。プレビュー線を消す前に作った
+    // 面を通常の表示・選択経路へ載せる。
+    RefreshShapeViews();
     RefreshEntityList();
     RefreshCommandVisibility();
     SetStatus(QStringLiteral(

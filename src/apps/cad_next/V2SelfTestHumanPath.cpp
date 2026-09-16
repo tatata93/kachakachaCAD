@@ -94,6 +94,42 @@ using kachakacha::v2::domain::EntityKind;
     return false;
 }
 
+//! 画面に出ている形状ガイドの中央を押す。IDを試験から選択へ直接入れない。
+[[nodiscard]] bool ClickOnAnyGuideSurface(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    for (const auto& shape : viewport.ShapeViews()) {
+        if (!shape.surface || shape.mesh.Empty()) {
+            continue;
+        }
+        const auto center = kachakacha::v2::geometry::Vector3{
+            (shape.mesh.minimum.x + shape.mesh.maximum.x) * 0.5,
+            (shape.mesh.minimum.y + shape.mesh.maximum.y) * 0.5,
+            (shape.mesh.minimum.z + shape.mesh.maximum.z) * 0.5};
+        const auto screen = viewport.Mapping().Project(center);
+        if (!screen.has_value()) {
+            continue;
+        }
+        if (!Explain("形状ガイドの塗りに当たり判定がある",
+                viewport.PickShapeAt(QPointF(screen->x, screen->y)).has_value())) {
+            continue;
+        }
+        viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+        // fabrication.create は「部品か形状ガイドを1つ」で条件を満たすため、
+        // tool-first ではクリックの通知中にそのまま実行される。実行後の選択だけを
+        // 見ると、正しく拾って完了した経路まで失敗扱いになる。
+        if (window.FabricationModelCount() > 0) {
+            return true;
+        }
+        for (const auto& id : viewport.Selection().entityIds) {
+            if (id == shape.entityId) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //! HP-EX-01。実際に拾って押し出し、棚と下見が見えて、確定で立体になる。
 [[nodiscard]] bool CaseHumanPathExtrudeProfileOnly(V2MainWindow& window)
 {
@@ -835,6 +871,64 @@ struct OutputCounts {
             && window.ToolFooterTextJa().isEmpty());
 }
 
+//! HP-FAB-01。面を画面から拾って近似し、70%曲げからワイヤーを作る。
+[[nodiscard]] bool CaseHumanPathSurfaceToFabricationWire(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("手で矩形を引ける", DrawRectangleByHand(window))
+        || !Explain("境界を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier))) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    if (!Explain("面の下見が見える", window.SurfacePreviewShown())
+        || !Explain("Enterで面を確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("形状ガイドができる",
+            CountOfKind(window, EntityKind::GuideSurface) == 1)) {
+        return false;
+    }
+
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    viewport.FitToDocument();
+    // 空所を押して前工程の境界選択を外す。選択をIDで注入しない。
+    viewport.SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    window.RunCommand("fabrication.create");
+    if (!Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))) {
+        return false;
+    }
+    // pending command が選択時に実行済みなら二重実行しない。
+    if (window.FabricationModelCount() == 0) {
+        window.RunCommand("fabrication.create");
+    }
+    if (!Explain("製作モデルができる", window.FabricationModelCount() == 1)
+        || !Explain("製作の棚が見えている", window.ShelfShown(Shelf::Fabrication))) {
+        return false;
+    }
+
+    auto& dock = window.FabricationDock();
+    dock.SetStageIndex(1);
+    if (!Explain("曲げ確認の工程が見える", dock.StageIndex() == 1)) {
+        return false;
+    }
+    dock.SetAssemblyPercent(70.0);
+    dock.PressApplyAssembly();
+    if (!Explain((std::string("70%が欄と形へ反映される(実際 ")
+                     + std::to_string(dock.AssemblyPercent()) + "%)").c_str(),
+            std::abs(dock.AssemblyPercent() - 70.0) < 1.0e-6)) {
+        return false;
+    }
+
+    const int wiresBefore = CountVisibleOfKind(window, EntityKind::Wire);
+    window.RunCommand("fabrication.freeze_state");
+    if (!Explain("70%の状態からワイヤーが増える",
+            CountVisibleOfKind(window, EntityKind::Wire) > wiresBefore)) {
+        return false;
+    }
+    return Explain("生成後も元の近似モデルが残る",
+        window.FabricationModelCount() == 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -863,6 +957,8 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
         {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
             CaseHumanPathSelectionIsVisible},
+        {"HP-FAB-01 面を拾い70%曲げからワイヤーを作る",
+            CaseHumanPathSurfaceToFabricationWire},
     };
 }
 

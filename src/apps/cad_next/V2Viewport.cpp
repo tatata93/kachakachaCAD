@@ -8,6 +8,7 @@
 #include "kachakacha/geometry/Units.h"
 
 #include <QColor>
+#include <QEvent>
 #include <QFocusEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -1316,6 +1317,36 @@ void V2Viewport::keyReleaseEvent(QKeyEvent* event)
     QWidget::keyReleaseEvent(event);
 }
 
+bool V2Viewport::event(QEvent* event)
+{
+    if (cursorPanel_.active && event->type() == QEvent::ShortcutOverride) {
+        auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_Delete || keyEvent->key() == Qt::Key_Backspace) {
+            event->accept();
+            return true;
+        }
+    }
+    return QWidget::event(event);
+}
+
+bool V2Viewport::EditCursorFieldForKey(int key)
+{
+    if (!cursorPanel_.active || (key != Qt::Key_Backspace && key != Qt::Key_Delete)) {
+        return false;
+    }
+    const std::size_t at = cursorPanel_.focusedIndex;
+    if (at < cursorPanel_.states.size()) {
+        QString edited = QString::fromStdString(cursorPanel_.states[at].text);
+        if (key == Qt::Key_Delete) {
+            edited.clear();
+        } else if (!edited.isEmpty()) {
+            edited.chop(1);
+        }
+        (void)TypeIntoCursorField(edited);
+    }
+    return true;
+}
+
 void V2Viewport::keyPressEvent(QKeyEvent* event)
 {
     // S で吸着を止め、Shift で水平・垂直へ寄せる。
@@ -1378,6 +1409,7 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
         }
         return;
     }
+    if (EditCursorFieldForKey(event->key())) { event->accept(); return; }
     if (cursorPanel_.active && !event->text().isEmpty()) {
         const std::size_t at = cursorPanel_.focusedIndex;
         const QString grown = QString::fromStdString(cursorPanel_.states[at].text)

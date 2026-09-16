@@ -139,6 +139,22 @@ KACHA_V2_TEST(availability, 開いた線は閉じた輪郭ではない)
         "1本では交点に点は作れない");
 }
 
+KACHA_V2_TEST(availability, 5つの別ワイヤーが一周つながれば押し出せる)
+{
+    Bench bench;
+    const Vector3 points[]{{0, 0, 0}, {10, 0, 0}, {14, 8, 0}, {7, 14, 0}, {-2, 8, 0}};
+    for (int index = 0; index < 5; ++index) {
+        const EntityId id = bench.AddEntity(EntityKind::Wire);
+        bench.AddCurve(id, points[index], points[(index + 1) % 5]);
+        bench.selection.entityIds.push_back(id);
+    }
+    const auto facts = bench.Facts();
+    Require(facts.wires == 5, "別々のワイヤーは5つ");
+    Require(facts.closedProfiles == 1, "全体を1つの閉じた輪郭として数える");
+    Require(SelectionSatisfies(SelectionPredicate::ClosedProfilesOrSolidFace, facts),
+        "押し出しが入口で止められない");
+}
+
 KACHA_V2_TEST(availability, 離れた2本は鎖2つになる)
 {
     // 分割や接線接続は鎖2つを要る。1つのワイヤーは1つの鎖として数える。

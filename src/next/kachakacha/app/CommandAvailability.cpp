@@ -120,6 +120,7 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
     facts.patterns = external.patterns;
     facts.selectedGuideRows = external.selectedGuideRows;
     facts.guideRows = external.guideRows;
+    std::vector<geometry::CurveSegment> selectedWireSegments;
 
     // 立体の面そのものを選んでいる数。物体の並び(entityIds)には出てこないので、
     // 押した順の並び(ordered)から数える。
@@ -187,6 +188,7 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
             segments.reserve(inputs.size());
             for (const auto& input : inputs) {
                 segments.push_back(input.segment);
+                selectedWireSegments.push_back(input.segment);
             }
             if (geometry::SegmentsFormClosedLoop(segments, tolerance)) {
                 ++facts.closedProfiles;
@@ -199,6 +201,13 @@ SelectionFacts BuildSelectionFacts(const SelectionSet& selection,
         if (!entity->createdBy.IsNil()) {
             ++facts.derivedEntities;
         }
+    }
+    // 1本ずつ別の Wire として描いた輪郭も、全体が一周つながっていれば
+    // 1つの閉じた輪郭である。コマンド入口だけが個別 Wire の閉鎖を要求すると、
+    // 面生成では使える同じ5本を押し出しボタンだけが拒否してしまう。
+    if (facts.closedProfiles == 0 && facts.wires > 1
+        && geometry::SegmentsFormClosedLoop(selectedWireSegments, tolerance)) {
+        facts.closedProfiles = 1;
     }
     facts.groups = static_cast<int>(groups.size());
     return facts;

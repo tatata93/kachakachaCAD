@@ -81,9 +81,10 @@ void V2MainWindow::BeginExtrudePreview()
     std::vector<kachakacha::v2::geometry::CurveSegment> curves;
     if (facePushPull_ && !faceProfileLoops_.empty()) {
         curves = faceProfileLoops_.front();
-    } else {
-        curves = kachakacha::v2::app::SelectedCurves(viewport_->Selection(),
-            session_->Scene());
+    } else if (!extrudeSnapshot_->profiles.empty()) {
+        // Snapshot は選んだ複数線を1つの論理輪郭へ並べ直している。
+        // 生の選択順を読み直すと、下見だけが線を飛び回り確定形状と食い違う。
+        curves = extrudeSnapshot_->profiles.front().segments;
     }
     if (curves.empty()) {
         return;
@@ -336,6 +337,10 @@ void V2MainWindow::ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan
             profiles += QStringLiteral("、");
         }
         profiles += nameOf(id);
+    }
+    if (!plan.profileIsFace && plan.profiles.size() > 1) {
+        profiles = QStringLiteral("%1本の線（1つの閉じた輪郭）")
+                       .arg(static_cast<int>(plan.profiles.size()));
     }
     extrudeDock_->ShowPlan(plan, target, profiles);
     // 棚に、いま効いている向きの決め方を映す。**見えているものが本当に効く。**

@@ -31,11 +31,13 @@
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/domain/Feature.h"
+#include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/modeling/ToolController.h"
 
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -75,6 +77,49 @@ using kachakacha::v2::domain::EntityKind;
     viewport.SetSnapSuppressed(false);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
     return CountOfKind(window, EntityKind::Wire) >= 1;
+}
+
+//! 5本の別々の直線で、閉じた輪郭を描く。Rectangle 1個ではないことが本題。
+[[nodiscard]] bool DrawFiveWireLoopByHand(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetViewCenter(kachakacha::v2::geometry::Vector3{});
+    viewport.SetVisibleWidthMm(200.0);
+    const std::vector<QPointF> points{{viewport.width() * 0.30, viewport.height() * 0.32},
+        {viewport.width() * 0.62, viewport.height() * 0.32},
+        {viewport.width() * 0.70, viewport.height() * 0.50},
+        {viewport.width() * 0.60, viewport.height() * 0.70},
+        {viewport.width() * 0.30, viewport.height() * 0.70}};
+    viewport.SetSnapSuppressed(true);
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+        viewport.ClickAt(points[index]);
+        viewport.HoverAt(points[(index + 1) % points.size()]);
+        viewport.ClickAt(points[(index + 1) % points.size()]);
+    }
+    viewport.SetSnapSuppressed(false);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    return CountOfKind(window, EntityKind::Wire) == 5;
+}
+
+[[nodiscard]] bool SelectAllVisibleWiresByHand(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    std::vector<kachakacha::v2::base::EntityId> picked;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (std::find(picked.begin(), picked.end(), curve.entityId) != picked.end()) {
+            continue;
+        }
+        const auto screen = viewport.Mapping().Project(curve.segment.Evaluate(0.5));
+        if (!screen.has_value()) {
+            continue;
+        }
+        viewport.SelectAt(QPointF(screen->x, screen->y),
+            picked.empty() ? Qt::NoModifier : Qt::ControlModifier);
+        picked.push_back(curve.entityId);
+    }
+    return viewport.Selection().entityIds.size() == picked.size() && picked.size() == 5;
 }
 
 //! 画面のどこを押せば、その線を拾えるか。**拾う道をそのまま使う。**
@@ -723,6 +768,55 @@ struct OutputCounts {
     return true;
 }
 
+[[nodiscard]] bool CaseHumanPathFiveWiresBecomeOneProfile(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("5本の別ワイヤーで閉じた輪郭を描ける",
+            DrawFiveWireLoopByHand(window))) {
+        return false;
+    }
+    if (!Explain("5本を画面から複数選択できる", SelectAllVisibleWiresByHand(window))) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    if (!Explain("5本を平面の輪郭として自動判定する",
+            window.SurfaceInput().method
+                    == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary
+                && window.SurfacePreviewShown())) {
+        return false;
+    }
+    if (!Explain("棚に5本を1つの閉じた輪郭と表示する",
+            window.SurfaceDock().SlotTextJa(
+                kachakacha::v2::modeling::ChainRole::BoundarySide)
+                .contains(QStringLiteral("1つの閉じた輪郭")))) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    if (!Explain("面作成をやめた後も5本を選び直せる",
+            SelectAllVisibleWiresByHand(window))) {
+        return false;
+    }
+    window.SetMode(kachakacha::v2::app::UiMode::Part);
+    const auto selectedCurves = kachakacha::v2::app::SelectedCurves(
+        window.Viewport().Selection(), window.Session().Scene());
+    if (!Explain((std::string("部品モードでも5本が閉路のまま残る(曲線 ")
+                     + std::to_string(selectedCurves.size()) + "本)").c_str(),
+            kachakacha::v2::geometry::SegmentsFormClosedLoop(selectedCurves,
+                window.Session().GetDocument().Snapshot().settings.tolerance))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    if (!Explain((std::string("同じ5本を1つの輪郭として押し出し下見できる(選択 ")
+                     + std::to_string(window.Viewport().Selection().entityIds.size())
+                     + "本、帯は " + window.StatusText().toStdString() + ")").c_str(),
+            window.Viewport().ExtrudeHandleShown())) {
+        return false;
+    }
+    window.RunCommand("part.extrude");
+    return Explain("5本の輪郭から立体を確定できる",
+        CountOfKind(window, EntityKind::Part) == 1);
+}
+
 //! いま画面に出ている立体の、上下の広がり(mm)。押せたかどうかを高さで見る。
 [[nodiscard]] double SolidHeightMm(V2MainWindow& window)
 {
@@ -954,6 +1048,8 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-SF-03 Esc で何も作らずやめる", CaseHumanPathSurfaceCancel},
         {"HP-SF-04 作り方を変えても入れたものが消えない",
             CaseHumanPathSurfaceMethodKeepsInput},
+        {"HP-SF-05 5本の別ワイヤーを1輪郭として面と押し出しに使える",
+            CaseHumanPathFiveWiresBecomeOneProfile},
         {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
         {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
             CaseHumanPathSelectionIsVisible},

@@ -726,25 +726,23 @@ struct SampledChain {
 {
     const std::vector<std::size_t> sides = IndicesWithRole(request, ChainRole::BoundarySide);
     std::vector<Diagnostic> errors;
+    std::size_t edgeCount = 0;
     for (std::size_t index = 0; index < request.chains.size(); ++index) {
         if (request.chains[index].role != ChainRole::BoundarySide) {
             errors.push_back(MakeError(kBadInput, "境界の辺以外が混ざっています。",
                 ChainLabel(request.chains[index])));
+        } else {
+            edgeCount += request.chains[index].segments.size();
         }
     }
-    if (sides.size() < 3) {
+    if (edgeCount < 3) {
         errors.push_back(MakeError(kBadInput, "境界の辺が足りません。",
-            "3辺または4辺が必要です。実際 " + std::to_string(sides.size()) + " 辺。"));
-    } else if (sides.size() > 4) {
-        // 勝手に三角分割しない(§6.7)。分ける案を示して断る。
-        errors.push_back(MakeError(kBadInput, "5辺以上の境界は、このまま面にできません。",
-            std::to_string(sides.size())
-                + " 辺あります。3辺か4辺へ分けるか、曲線網(GordonNetwork)を使ってください。"));
+            "閉じるには3辺以上が必要です。実際 " + std::to_string(edgeCount) + " 辺。"));
     }
     if (!request.tangentContinuity.empty()
         && request.tangentContinuity.size() != sides.size()) {
         errors.push_back(MakeError(kBadInput, "辺の数と、連続条件の数が合いません。",
-            std::to_string(sides.size()) + " 辺 / "
+            std::to_string(sides.size()) + " 境界鎖 / "
                 + std::to_string(request.tangentContinuity.size()) + " 個の条件。"));
     }
     if (!errors.empty()) {
@@ -777,8 +775,12 @@ struct SampledChain {
                 "残り " + std::to_string(remaining.size()) + " 辺が輪に入りませんでした。"));
         }
     }
+    // SampleAll removes the duplicate closing point from a declared closed chain.
+    // Its sampled tail therefore need not equal its sampled head even though the
+    // underlying ordered curve segments form a closed wire.
+    const bool singleClosedChain = sides.size() == 1 && request.chains[sides.front()].closed;
     const double closingGap = (tail - sampled[sides.front()].points.front()).Length();
-    if (closingGap > joinTolerance) {
+    if (!singleClosedChain && closingGap > joinTolerance) {
         return Result<GuideSurfaceAnalysis>::Failure(MakeError(kNotConnected,
             "境界が閉じていません。",
             "最後の隙間 " + std::to_string(closingGap) + " mm(許容 "

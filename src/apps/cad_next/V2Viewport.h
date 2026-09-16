@@ -598,6 +598,7 @@ public:
     [[nodiscard]] std::string LastViewMessage() const { return viewMessage_; }
 
 protected:
+    bool event(QEvent* event) override;
     void paintEvent(QPaintEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
@@ -614,6 +615,7 @@ protected:
     bool focusNextPrevChild(bool next) override;
 
 private:
+    bool EditCursorFieldForKey(int key);
     void RebuildMapping();
     void DrawGrid(QPainter& painter) const;
     void DrawAxes(QPainter& painter) const;

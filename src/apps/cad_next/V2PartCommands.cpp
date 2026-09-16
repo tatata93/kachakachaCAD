@@ -16,6 +16,7 @@
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/WireChain.h"
+#include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctExtrude.h"
@@ -25,6 +26,8 @@
 
 #include <QString>
 
+#include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <utility>
@@ -62,7 +65,54 @@ using kachakacha::v2::modeling::SnapCurve;
             profiles.push_back(std::move(profile));
         }
     }
-    return profiles;
+    const bool allOpen = profiles.size() > 1
+        && std::all_of(profiles.begin(), profiles.end(), [](const auto& profile) {
+               return !profile.closed;
+           });
+    if (!allOpen) {
+        return profiles;
+    }
+    std::vector<kachakacha::v2::geometry::ChainInput> inputs;
+    std::vector<kachakacha::v2::base::SegmentId> originalSegmentIds;
+    for (const SnapCurve& curve : scene.curves) {
+        if (std::find(entityIds.begin(), entityIds.end(), curve.entityId) != entityIds.end()) {
+            std::array<std::uint8_t, 16> bytes{};
+            const std::size_t number = inputs.size() + 1;
+            bytes[15] = static_cast<std::uint8_t>(number & 0xFF);
+            bytes[14] = static_cast<std::uint8_t>((number >> 8) & 0xFF);
+            inputs.push_back({kachakacha::v2::base::EntityId{},
+                kachakacha::v2::base::SegmentId(kachakacha::v2::base::Uuid(bytes)),
+                curve.segment});
+            originalSegmentIds.push_back(curve.segmentId);
+        }
+    }
+    const auto ordered = kachakacha::v2::geometry::AnalyzeChain(inputs, tolerance);
+    if (!ordered.HasValue() || !ordered.Value().order.closed) {
+        return profiles;
+    }
+    kachakacha::v2::modeling::ExtrudeProfile combined;
+    combined.sourceEntityId = entityIds.front();
+    combined.closed = true;
+    for (const auto& item : ordered.Value().order.segments) {
+        const auto found = std::find_if(inputs.begin(), inputs.end(), [&](const auto& input) {
+            return input.segmentId == item.segmentId;
+        });
+        if (found == inputs.end()) {
+            continue;
+        }
+        CurveSegment segment = found->segment;
+        if (item.reversed) {
+            const auto reversed = kachakacha::v2::geometry::ReverseCurve(segment);
+            if (!reversed.HasValue()) {
+                return profiles;
+            }
+            segment = reversed.Value();
+        }
+        combined.segments.push_back(std::move(segment));
+        const auto at = static_cast<std::size_t>(std::distance(inputs.begin(), found));
+        combined.segmentIds.push_back(originalSegmentIds[at]);
+    }
+    return {std::move(combined)};
 }
 
 } // namespace

@@ -160,7 +160,7 @@ Feature入力側のSegmentRef範囲として保存する。
 | LoftSections | open/closed断面3群以上 | 多断面を滑らかに補間 |
 | GuidedLoft | 外形ガイド2群+断面1群以上 | 両側外形を保持したロフト |
 | GordonNetwork | U方向2群以上+V方向2群以上 | 交差する曲線網を通る面 |
-| BoundaryFill | 閉じた3辺または4辺 | 非平面境界のCoons/Fill |
+| BoundaryFill | 3辺以上で閉じた輪郭 | 非平面境界のFill |
 | OffsetGuide | 既存形状ガイド+距離 | 参照用オフセット |
 
 ### 6.2 PlanarBoundary
@@ -208,7 +208,7 @@ Feature入力側のSegmentRef範囲として保存する。
 - 辺数は3または4とする。
 - 境界が非平面で面が一意でないことをUIで明示する。
 - 連続条件は辺ごとにG0またはG1を選べる。既定はG0。
-- 5辺以上は勝手に三角分割せず、分割案またはGordonNetworkを提示する。
+- 5辺以上も三角分割せず、つながった輪郭全体を1枚のFill面の境界として扱う。
 
 ### 6.8 診断
 

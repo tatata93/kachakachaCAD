@@ -19,6 +19,7 @@
 
 #include <QString>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
     kachakacha::v2::app::ExtrudeSelectionFacts facts;
     std::vector<kachakacha::v2::base::EntityId> solids;
     std::vector<kachakacha::v2::base::EntityId> profiles;
+    std::vector<kachakacha::v2::base::EntityId> wireIds;
     bool profilesAreFaces = false;
 
     const auto& selection = viewport_->Selection();
@@ -46,6 +48,7 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
             ++facts.surfaces;
             break;
         case EntityKind::Wire: {
+            wireIds.push_back(id);
             // 閉じているかどうかで意味が変わる。開いた輪郭は立体にならない。
             kachakacha::v2::app::SelectionSet one;
             one.entityIds.push_back(id);
@@ -64,6 +67,20 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
         }
         default:
             break;
+        }
+    }
+    // 1辺ずつ描いた複数ワイヤーも、全体で閉じていれば1つの輪郭である。
+    // 個々が開いているという理由だけで、押し出しを断らない。
+    if (facts.closedWires == 0 && wireIds.size() > 1) {
+        kachakacha::v2::app::SelectionSet together;
+        together.entityIds = wireIds;
+        const auto curves = kachakacha::v2::app::SelectedCurves(together, session_->Scene());
+        if (!curves.empty()
+            && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,
+                document.Snapshot().settings.tolerance)) {
+            facts.closedWires = 1;
+            facts.openWires = 0;
+            profiles = wireIds;
         }
     }
     // 面の選択(部分要素)。立体の面を押し引きするときに使う。

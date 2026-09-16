@@ -37,6 +37,7 @@ kachakacha::v2::app::SurfaceSelectionFacts V2MainWindow::SurfaceFactsNow() const
     kachakacha::v2::app::SurfaceSelectionFacts facts;
     const auto& document = session_->GetDocument();
     const auto& tolerance = document.Snapshot().settings.tolerance;
+    std::vector<kachakacha::v2::base::EntityId> wireIds;
     for (const auto& id : viewport_->Selection().entityIds) {
         const auto* entity = document.FindEntity(id);
         if (entity == nullptr) {
@@ -49,6 +50,31 @@ kachakacha::v2::app::SurfaceSelectionFacts V2MainWindow::SurfaceFactsNow() const
         if (entity->kind != EntityKind::Wire) {
             continue;
         }
+        wireIds.push_back(id);
+    }
+    // 1辺ずつ別ワイヤーで描いた輪郭も、端点が一周つながっていれば
+    // 1つの論理輪郭として読む。選択順には依存しない。
+    if (wireIds.size() > 1) {
+        kachakacha::v2::app::SelectionSet together;
+        together.entityIds = wireIds;
+        const auto curves = kachakacha::v2::app::SelectedCurves(together, session_->Scene());
+        if (!curves.empty()
+            && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves, tolerance)) {
+            std::vector<kachakacha::v2::geometry::Vector3> points;
+            for (const auto& curve : curves) {
+                for (int step = 0; step <= 8; ++step) {
+                    points.push_back(curve.Evaluate(static_cast<double>(step) / 8.0));
+                }
+            }
+            const auto plane = kachakacha::v2::geometry::FitPlane(points);
+            facts.closedWires = 1;
+            if (plane.valid && plane.maximumDeviationMm <= tolerance.modelLinearMm) {
+                facts.closedPlanarWires = 1;
+            }
+            return facts;
+        }
+    }
+    for (const auto& id : wireIds) {
         kachakacha::v2::app::SelectionSet one;
         one.entityIds.push_back(id);
         const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
@@ -70,7 +96,7 @@ kachakacha::v2::app::SurfaceSelectionFacts V2MainWindow::SurfaceFactsNow() const
             }
         }
         const auto plane = kachakacha::v2::geometry::FitPlane(points);
-        if (plane.valid) {
+        if (plane.valid && plane.maximumDeviationMm <= tolerance.modelLinearMm) {
             ++facts.closedPlanarWires;
         }
     }
@@ -317,6 +343,25 @@ V2MainWindow::SurfaceTableFromInput() const
         if (slot == ChainRole::Section) {
             // **画面に出ている順のまま渡す**(§13 の手動固定)。
             addRows(role, kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_));
+            continue;
+        }
+        if ((surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary
+                || surfaceInput_.method == GuideSurfaceMethod::BoundaryFill)
+            && slot == ChainRole::BoundarySide && surfaceInput_.boundaries.size() > 1) {
+            std::vector<kachakacha::v2::modeling::GuideTableSelection> selections;
+            for (const auto& id : surfaceInput_.boundaries) {
+                const auto selected = kachakacha::v2::app::GuideSelectionOf(
+                    session_->GetDocument(), session_->Scene(), id);
+                if (selected.has_value()) {
+                    selections.push_back(*selected);
+                }
+            }
+            const auto combined = kachakacha::v2::app::AddSelectionsAsConnectedRow(table,
+                role, selections, session_->GetDocument().Snapshot().settings.tolerance);
+            if (!combined.HasValue()) {
+                return Out::Failure(combined.Diagnostics());
+            }
+            table = combined.Value();
             continue;
         }
         addRows(role, kachakacha::v2::app::SurfaceSlotEntries(surfaceInput_, slot));

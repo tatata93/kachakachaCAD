@@ -63,8 +63,9 @@ GuideSurfaceMethod RecommendSurfaceMethod(const SurfaceSelectionFacts& facts) no
     // **閉じた同一平面の輪郭1本は平面。**
     // ここが「線を2本以上選んでください」で断られていた。
     const std::size_t wires = facts.closedWires + facts.openWires;
-    if (facts.closedPlanarWires == 1 && wires == 1) {
-        return GuideSurfaceMethod::PlanarBoundary;
+    if (facts.closedWires == 1 && wires == 1) {
+        return facts.closedPlanarWires == 1 ? GuideSurfaceMethod::PlanarBoundary
+                                            : GuideSurfaceMethod::BoundaryFill;
     }
     if (wires >= 3) {
         return GuideSurfaceMethod::LoftSections;

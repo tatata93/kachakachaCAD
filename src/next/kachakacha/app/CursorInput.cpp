@@ -161,6 +161,9 @@ Result<CursorInputPanel> SetFieldText(const CursorInputPanel& panel, std::size_t
     CursorInputPanel next = panel;
     // 全角で打っても通す。見た目を直すだけで、意味は変えない。
     next.states[index].text = geometry::NormalizeFullWidth(text);
+    // 確定済みの値も、その場で打ち直せる。文字を消したのに以前の値だけが
+    // ロックされたまま残ると、画面と作図結果が食い違う。
+    next.states[index].locked = false;
     next.states[index].error = false;
     next.states[index].messageJa.clear();
     next.focusedIndex = index;

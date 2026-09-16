@@ -36,11 +36,11 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
 [[nodiscard]] QString MethodHintJa(GuideSurfaceMethod method)
 {
     switch (method) {
-    case GuideSurfaceMethod::PlanarBoundary: return QStringLiteral("閉じた輪郭1本");
+    case GuideSurfaceMethod::PlanarBoundary: return QStringLiteral("閉じた輪郭（複数線可）");
     case GuideSurfaceMethod::RuledSections:  return QStringLiteral("断面2本");
     case GuideSurfaceMethod::LoftSections:   return QStringLiteral("断面3本以上");
     case GuideSurfaceMethod::GuidedLoft:     return QStringLiteral("断面 + ガイド");
-    case GuideSurfaceMethod::BoundaryFill:   return QStringLiteral("閉じた境界");
+    case GuideSurfaceMethod::BoundaryFill:   return QStringLiteral("非平面の閉じた輪郭（複数線可）");
     case GuideSurfaceMethod::GordonNetwork:  return QStringLiteral("U/Vネットワーク");
     case GuideSurfaceMethod::OffsetGuide:    return QStringLiteral("面を離す");
     case GuideSurfaceMethod::Revolve:        return QStringLiteral("断面を回す");
@@ -264,7 +264,18 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
                 value->setText(QStringLiteral("(選んでいません)"));
                 return;
             }
-            value->setText(QStringLiteral("%1本").arg(static_cast<int>(view.count)));
+            if (role == ChainRole::BoundarySide
+                && (state.method == GuideSurfaceMethod::PlanarBoundary
+                    || state.method == GuideSurfaceMethod::BoundaryFill)
+                && view.count > 1) {
+                value->setText(previewShown
+                        ? QStringLiteral("%1本 → 1つの閉じた輪郭")
+                              .arg(static_cast<int>(view.count))
+                        : QStringLiteral("%1本（端点のつながりを確認中）")
+                              .arg(static_cast<int>(view.count)));
+            } else {
+                value->setText(QStringLiteral("%1本").arg(static_cast<int>(view.count)));
+            }
             return;
         }
     };

@@ -751,7 +751,7 @@ KACHA_V2_TEST(guideSurface, 辺を順不同で渡しても輪にできる)
     RequireCount(result.Value().sectionOrdering.chainIndices.size(), 4, "辺の数");
 }
 
-KACHA_V2_TEST(guideSurface, 5辺は勝手に分割せず断る)
+KACHA_V2_TEST(guideSurface, 5辺以上も分割せず1枚の境界として受け入れる)
 {
     GuideSurfaceRequest request;
     request.method = GuideSurfaceMethod::BoundaryFill;
@@ -760,11 +760,25 @@ KACHA_V2_TEST(guideSurface, 5辺は勝手に分割せず断る)
         request.chains.push_back(OpenLine(ChainRole::BoundarySide, index + 1, points[index],
             points[(index + 1) % 5]));
     }
-    const auto result = AnalyzeGuideSurfaceRequest(request, Tolerance());
-    Require(!result.HasValue(), "断ること");
-    Require(result.Diagnostics().front().detailsJa.find("Gordon") != std::string::npos
-            || result.Diagnostics().front().detailsJa.find("曲線網") != std::string::npos,
-        "代わりの方法を示すこと");
+    const auto result = Accept(request, "非平面の5辺");
+    RequireCount(result.Value().sectionOrdering.chainIndices.size(), 5, "境界鎖の数");
+}
+
+KACHA_V2_TEST(guideSurface, 5線分を1本にまとめた非平面閉路も受け入れる)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    GuideChain chain;
+    chain.role = ChainRole::BoundarySide;
+    chain.index = 1;
+    chain.closed = true;
+    const Vector3 points[]{{0, 0, 0}, {10, 0, 0}, {14, 8, 2}, {7, 14, 1}, {-2, 8, 2}};
+    for (int index = 0; index < 5; ++index) {
+        chain.segments.push_back(Line(points[index], points[(index + 1) % 5]));
+    }
+    request.chains.push_back(std::move(chain));
+    const auto result = Accept(request, "1本の論理輪郭にまとめた非平面5線分");
+    RequireCount(result.Value().sectionOrdering.chainIndices.size(), 1, "論理輪郭の数");
 }
 
 KACHA_V2_TEST(guideSurface, 2辺では断る)

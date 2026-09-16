@@ -586,6 +586,20 @@ KACHA_V2_TEST(kernel_fill, ねじれた4辺でも張れて境界を通る)
     Require(built.Value().maximumDeviationMm <= 1.0e-3, "境界を通っている");
 }
 
+KACHA_V2_TEST(kernel_fill, 非平面の5辺でも分割せず1枚を張る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    const Vector3 points[]{{0, 0, 0}, {30, 0, 0}, {38, 18, 4}, {15, 30, 7}, {-5, 15, 2}};
+    for (int index = 0; index < 5; ++index) {
+        request.chains.push_back(OpenLine(ChainRole::BoundarySide, index + 1,
+            points[index], points[(index + 1) % 5]));
+    }
+    const auto built = Build(request);
+    Require(built.HasValue(), "5辺を三角分割せず面にできること");
+    Require(built.Value().maximumDeviationMm <= 1.0e-3, "5辺すべてを通ること");
+}
+
 // =====================================================================
 //  面をずらす
 // =====================================================================

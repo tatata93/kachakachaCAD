@@ -3,8 +3,11 @@
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/geometry/WireEdit.h"
+#include "kachakacha/geometry/WireChain.h"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -220,6 +223,69 @@ Result<GuideTable> AppendSelectionToRow(const GuideTable& table, std::size_t row
     return retried.HasValue() ? retried : direct;
 }
 
+Result<GuideTable> AddSelectionsAsConnectedRow(const GuideTable& table, ChainRole role,
+    const std::vector<GuideTableSelection>& selections,
+    const geometry::GeometryTolerance& tolerance)
+{
+    if (selections.empty()) {
+        return Result<GuideTable>::Failure(MakeError("UI-R004",
+            "選んだ線がありません。", "輪郭にする線を選んでください。"));
+    }
+    std::vector<geometry::ChainInput> inputs;
+    for (const GuideTableSelection& selection : selections) {
+        for (const geometry::CurveSegment& segment : selection.segments) {
+            std::array<std::uint8_t, 16> bytes{};
+            const std::size_t number = inputs.size() + 1;
+            bytes[15] = static_cast<std::uint8_t>(number & 0xFF);
+            bytes[14] = static_cast<std::uint8_t>((number >> 8) & 0xFF);
+            inputs.push_back({selection.sourceWireId,
+                base::SegmentId(base::Uuid(bytes)), segment});
+        }
+    }
+    const auto analyzed = geometry::AnalyzeChain(inputs, tolerance);
+    if (!analyzed.HasValue()) {
+        return Result<GuideTable>::Failure(analyzed.Diagnostics());
+    }
+    GuideTableSelection combined;
+    combined.sourceWireId = selections.front().sourceWireId;
+    for (const GuideTableSelection& selection : selections) {
+        if (!combined.label.empty()) {
+            combined.label += " + ";
+        }
+        combined.label += selection.label;
+    }
+    for (const geometry::OrientedSegment& ordered : analyzed.Value().order.segments) {
+        const auto found = std::find_if(inputs.begin(), inputs.end(), [&](const auto& input) {
+            return input.entityId == ordered.entityId && input.segmentId == ordered.segmentId;
+        });
+        if (found == inputs.end()) {
+            continue;
+        }
+        geometry::CurveSegment segment = found->segment;
+        if (ordered.reversed) {
+            const auto reversed = geometry::ReverseCurve(segment);
+            if (!reversed.HasValue()) {
+                return Result<GuideTable>::Failure(reversed.Diagnostics());
+            }
+            segment = reversed.Value();
+        }
+        combined.segments.push_back(std::move(segment));
+    }
+    auto added = modeling::AddSelectionAsNewRow(table, role, combined);
+    if (!added.HasValue()) {
+        return added;
+    }
+    GuideTable next = added.Value();
+    auto& row = next.rows.back();
+    row.sourceWireIds.clear();
+    row.sourceLabels.clear();
+    for (const GuideTableSelection& selection : selections) {
+        row.sourceWireIds.push_back(selection.sourceWireId);
+        row.sourceLabels.push_back(selection.label);
+    }
+    return Result<GuideTable>::Success(std::move(next));
+}
+
 std::string_view GuideSurfaceMethodLabelJa(GuideSurfaceMethod method) noexcept
 {
     switch (method) {
@@ -228,7 +294,7 @@ std::string_view GuideSurfaceMethodLabelJa(GuideSurfaceMethod method) noexcept
     case GuideSurfaceMethod::LoftSections:   return "ロフト(断面3つ以上をなめらかに通す)";
     case GuideSurfaceMethod::GuidedLoft:     return "案内付きロフト(外形U 2本と断面)";
     case GuideSurfaceMethod::GordonNetwork:  return "曲線網(外形U と外形V を通す)";
-    case GuideSurfaceMethod::BoundaryFill:   return "境界埋め(閉じた3〜4辺)";
+    case GuideSurfaceMethod::BoundaryFill:   return "境界埋め(非平面の閉じた輪郭)";
     case GuideSurfaceMethod::OffsetGuide:    return "離した面(元の面と距離)";
     case GuideSurfaceMethod::Revolve:        return "回転体(断面 1 本を軸のまわりに回す)";
     }

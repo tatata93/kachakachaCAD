@@ -26,9 +26,11 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QEvent>
 #include <QColor>
 #include <QFontDatabase>
 #include <QImage>
+#include <QKeyEvent>
 #include <QPainter>
 #include <QPointF>
 #include <QRectF>
@@ -551,6 +553,30 @@ namespace {
     }
     // Esc で消しても文書は変わらない。
     return window.Session().GetDocument().Snapshot().revision == revision;
+}
+
+[[nodiscard]] bool CaseCursorInputCanEraseMistake(V2MainWindow& window)
+{
+    if (!window.ApplyManualState(QStringLiteral("cursor-input"))) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const std::size_t at = viewport.CursorPanel().focusedIndex;
+    const std::string before = viewport.CursorPanel().states[at].text;
+    QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+    QApplication::sendEvent(&viewport, &backspace);
+    const auto& shortened = viewport.CursorPanel().states[at];
+    if (!Explain("Backspaceで末尾を1文字消せる",
+            shortened.text.size() + 1 == before.size() && !shortened.locked)) {
+        return false;
+    }
+    QKeyEvent deleteKey(QEvent::KeyPress, Qt::Key_Delete, Qt::NoModifier);
+    QApplication::sendEvent(&viewport, &deleteKey);
+    const auto& cleared = viewport.CursorPanel().states[at];
+    return Explain((std::string("Deleteで欄を空にして打ち直せる(text='")
+                       + cleared.text + "', hasValue="
+                       + (cleared.hasValue ? "true" : "false") + ")").c_str(),
+        cleared.text.empty() && !cleared.hasValue);
 }
 
 [[nodiscard]] bool CaseCursorInputStaysOnScreen(V2MainWindow& window)
@@ -1417,6 +1443,8 @@ std::vector<SelfTestCase> BasicCases()
         {"役割テーブルを編集できる", &CaseGuideTableEditsRows},
         {"数値入力が主要欄へ合い式を評価する", &CaseCursorInputFocusAndExpression},
         {"数値入力のTabとEnterとEscが効く", &CaseCursorInputTabEnterEscape},
+        {"数値入力の間違いをBackspaceとDeleteで消せる",
+            &CaseCursorInputCanEraseMistake},
         {"数値入力が画面の外へ出ない", &CaseCursorInputStaysOnScreen},
         {"作業中グループが帯と一覧に出る", &CaseActiveGroupShowsAndCollects},
         {"どちらの見た目でも配置が壊れない", &CaseThemeKeepsLayoutUsable},

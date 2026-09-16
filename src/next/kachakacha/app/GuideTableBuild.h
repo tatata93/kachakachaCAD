@@ -62,6 +62,13 @@ struct GuideTableDraft {
     const modeling::GuideTableSelection& selection,
     const geometry::GeometryTolerance& tolerance);
 
+//! 複数のワイヤーを、端点のつながりから順序と向きを決めて1本の行へまとめる。
+//! 直線を1辺ずつ描いた閉じた輪郭を、面作成で1つの外形として扱うための入口。
+[[nodiscard]] base::Result<modeling::GuideTable> AddSelectionsAsConnectedRow(
+    const modeling::GuideTable& table, modeling::ChainRole role,
+    const std::vector<modeling::GuideTableSelection>& selections,
+    const geometry::GeometryTolerance& tolerance);
+
 //! 作り方の日本語。「ロフト(断面をなめらかに通す)」など。画面の一覧に出す。
 [[nodiscard]] std::string_view GuideSurfaceMethodLabelJa(
     modeling::GuideSurfaceMethod method) noexcept;

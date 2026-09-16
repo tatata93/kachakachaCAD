@@ -373,9 +373,20 @@ using kachakacha::v2::modeling::ToolSettings;
             dock.windowTitle().contains(QStringLiteral("円弧")))) {
         return false;
     }
+    if (!Explain("現在の道具名がパネル内にも出る",
+            dock.ActiveToolText().contains(QStringLiteral("円弧")))) {
+        return false;
+    }
+    dock.SetInputModeIndex(1);
+    if (!Explain("座標で作成へ切り替えられる", dock.InputModeIndex() == 1)) {
+        return false;
+    }
 
     window.SelectTool(DrawingTool::Bezier);
     if (!Explain("ベジェでは棚がベジェを向く", dock.Tool() == DrawingTool::Bezier)) {
+        return false;
+    }
+    if (!Explain("道具を替えると画面作図へ戻る", dock.InputModeIndex() == 0)) {
         return false;
     }
     if (!Explain((std::string("見出しが円弧のままにならない(実際 ")

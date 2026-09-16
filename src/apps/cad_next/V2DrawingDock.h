@@ -25,6 +25,7 @@ class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QTabWidget;
 
 class V2DrawingDock final : public QDockWidget {
 public:
@@ -42,6 +43,9 @@ public:
     }
     //! 道具ごとの欄が1つも出ていないとき、代わりに出している使い方の一文。
     [[nodiscard]] QString HintText() const;
+    [[nodiscard]] QString ActiveToolText() const;
+    [[nodiscard]] int InputModeIndex() const;
+    void SetInputModeIndex(int index);
 
     //! いまの欄から作った道具の設定(作業平面の向きは含まない。それは場面が持つ)。
     [[nodiscard]] kachakacha::v2::modeling::ToolSettings Settings() const;
@@ -90,6 +94,8 @@ private:
     QCheckBox* wireConstruction_ = nullptr;
     QPushButton* createWire_ = nullptr;
     QLabel* message_ = nullptr;
+    QLabel* activeTool_ = nullptr;
+    QTabWidget* inputModes_ = nullptr;
     //! 道具の区画の見出し。欄が無いときは使い方の一文になる。
     QLabel* toolTitle_ = nullptr;
     QLabel* hint_ = nullptr;

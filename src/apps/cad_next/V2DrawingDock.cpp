@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QFrame>
+#include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -13,6 +14,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QString>
+#include <QTabWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -51,44 +53,72 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     body_ = new QWidget(this);
     auto* layout = new QVBoxLayout(body_);
     layout->setContentsMargins(6, 6, 6, 6);
-    layout->setSpacing(4);
+    layout->setSpacing(8);
 
-    toolTitle_ = new QLabel(QStringLiteral("道具の決め方"), body_);
-    layout->addWidget(toolTitle_);
+    activeTool_ = new QLabel(body_);
+    activeTool_->setObjectName(QStringLiteral("activeDrawingTool"));
+    QFont activeFont = activeTool_->font();
+    activeFont.setBold(true);
+    activeFont.setPointSize(activeFont.pointSize() + 2);
+    activeTool_->setFont(activeFont);
+    activeTool_->setText(QStringLiteral("使用中: 選択"));
+    layout->addWidget(activeTool_);
+
+    inputModes_ = new QTabWidget(body_);
+    inputModes_->setObjectName(QStringLiteral("drawingInputModes"));
+    inputModes_->setDocumentMode(true);
+    layout->addWidget(inputModes_, 1);
+
+    auto* interactivePage = new QWidget(inputModes_);
+    auto* interactiveLayout = new QVBoxLayout(interactivePage);
+    interactiveLayout->setContentsMargins(4, 8, 4, 4);
+    interactiveLayout->setSpacing(6);
+
+    toolTitle_ = new QLabel(QStringLiteral("設定"), interactivePage);
+    interactiveLayout->addWidget(toolTitle_);
     toolForm_ = new QFormLayout();
     toolForm_->setContentsMargins(0, 0, 0, 0);
     toolForm_->setSpacing(3);
     BuildArcRows(toolForm_);
-    layout->addLayout(toolForm_);
+    interactiveLayout->addLayout(toolForm_);
 
     // 決める欄が無い道具のときに、代わりに出す一文。
     // 空の棚を出すと「壊れた」ようにしか見えない。
-    hint_ = new QLabel(body_);
+    hint_ = new QLabel(interactivePage);
+    hint_->setObjectName(QStringLiteral("drawingNextStep"));
     hint_->setWordWrap(true);
-    layout->addWidget(hint_);
+    interactiveLayout->addWidget(hint_);
 
-    construction_ = new QCheckBox(QStringLiteral("補助線として作図"), body_);
-    layout->addWidget(construction_);
-    keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), body_);
-    layout->addWidget(keepPoints_);
+    construction_ = new QCheckBox(QStringLiteral("補助線として作図"), interactivePage);
+    interactiveLayout->addWidget(construction_);
+    keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), interactivePage);
+    interactiveLayout->addWidget(keepPoints_);
     QObject::connect(construction_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
     QObject::connect(keepPoints_, &QCheckBox::toggled, this, [this] { EmitSettings(); });
 
-    auto* wireTitle = new QLabel(QStringLiteral("数値で線を作る"), body_);
-    layout->addWidget(wireTitle);
+    interactiveLayout->addStretch(1);
+    inputModes_->addTab(interactivePage, QStringLiteral("画面で作図"));
+
+    auto* coordinatePage = new QWidget(inputModes_);
+    auto* coordinateLayout = new QVBoxLayout(coordinatePage);
+    coordinateLayout->setContentsMargins(4, 8, 4, 4);
+    coordinateLayout->setSpacing(6);
+    auto* wireTitle = new QLabel(QStringLiteral("座標と寸法を入力"), coordinatePage);
+    coordinateLayout->addWidget(wireTitle);
     wireForm_ = new QFormLayout();
     wireForm_->setContentsMargins(0, 0, 0, 0);
     wireForm_->setSpacing(3);
     BuildDirectWireRows(wireForm_);
-    layout->addLayout(wireForm_);
+    coordinateLayout->addLayout(wireForm_);
 
-    createWire_ = new QPushButton(QStringLiteral("線を作る"), body_);
+    createWire_ = new QPushButton(QStringLiteral("この座標で線を作る"), coordinatePage);
     QObject::connect(createWire_, &QPushButton::clicked, this, [this] { PressCreateWire(); });
-    layout->addWidget(createWire_);
-    message_ = new QLabel(body_);
+    coordinateLayout->addWidget(createWire_);
+    message_ = new QLabel(coordinatePage);
     message_->setWordWrap(true);
-    layout->addWidget(message_);
-    layout->addStretch(1);
+    coordinateLayout->addWidget(message_);
+    coordinateLayout->addStretch(1);
+    inputModes_->addTab(coordinatePage, QStringLiteral("座標で作成"));
     // 棚の中身は巻物にする。欄が多い棚の最小幅で右の棚全体が広がり、
     // 画面(作図の場所)が狭くなって入力列が画面の外へ寄っていた。
     auto* scroll = new QScrollArea(this);
@@ -103,13 +133,37 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
 
 void V2DrawingDock::SetTool(kachakacha::v2::modeling::DrawingTool tool)
 {
+    const bool changed = tool_ != tool;
     tool_ = tool;
+    activeTool_->setText(QStringLiteral("使用中: %1").arg(Text(
+        kachakacha::v2::modeling::DrawingToolNameJa(tool_))));
+    if (changed) {
+        inputModes_->setCurrentIndex(0);
+        message_->clear();
+    }
     ApplyToolRows();
 }
 
 QString V2DrawingDock::HintText() const
 {
     return hint_ == nullptr ? QString() : hint_->text();
+}
+
+QString V2DrawingDock::ActiveToolText() const
+{
+    return activeTool_ == nullptr ? QString() : activeTool_->text();
+}
+
+int V2DrawingDock::InputModeIndex() const
+{
+    return inputModes_ == nullptr ? -1 : inputModes_->currentIndex();
+}
+
+void V2DrawingDock::SetInputModeIndex(int index)
+{
+    if (inputModes_ != nullptr && index >= 0 && index < inputModes_->count()) {
+        inputModes_->setCurrentIndex(index);
+    }
 }
 
 //! いまの道具で意味のある欄だけを出す。決め方は core(app/DrawingShelfRows)。

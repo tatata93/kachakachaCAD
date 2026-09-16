@@ -5,10 +5,12 @@
 
 #include <QComboBox>
 #include <QDockWidget>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -170,7 +172,12 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     setObjectName(QStringLiteral("surfaceDock"));
     auto* body = new QWidget(this);
     setWidget(body);
-    auto* layout = new QVBoxLayout(body);
+    auto* rootLayout = new QVBoxLayout(body);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(6);
+
+    auto* content = new QWidget(body);
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
@@ -187,6 +194,14 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     status_ = new QLabel(body);
     status_->setWordWrap(true);
     layout->addWidget(status_);
+    layout->addStretch(1);
+
+    auto* scroll = new QScrollArea(body);
+    scroll->setObjectName(QStringLiteral("surfaceSettingsScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    rootLayout->addWidget(scroll, 1);
 
     // 下のボタン。並びは正本のとおり。
     auto* actions = new QHBoxLayout();
@@ -211,8 +226,7 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addWidget(reset_);
     actions->addWidget(confirm_);
-    layout->addLayout(actions);
-    layout->addStretch(1);
+    rootLayout->addLayout(actions);
 }
 
 void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& state,

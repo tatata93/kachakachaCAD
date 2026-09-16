@@ -9,9 +9,11 @@
 #include <QObject>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QString>
 #include <QStringList>
 #include <QVBoxLayout>
@@ -93,7 +95,12 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
 {
     setObjectName(QStringLiteral("extrudeDock"));
     body_ = new QWidget(this);
-    auto* layout = new QVBoxLayout(body_);
+    auto* rootLayout = new QVBoxLayout(body_);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(6);
+
+    auto* content = new QWidget(body_);
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
 
@@ -160,6 +167,15 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
 
     details_ = new QPushButton(QStringLiteral("詳細..."), body_);
     layout->addWidget(details_);
+    layout->addStretch(1);
+
+    auto* scroll = new QScrollArea(body_);
+    scroll->setObjectName(QStringLiteral("extrudeSettingsScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    rootLayout->addWidget(scroll, 1);
+
     // 並びは正本のとおり: キャンセル / 再プレビュー / 確定。
     auto* buttons = new QHBoxLayout();
     cancel_ = new QPushButton(QStringLiteral("キャンセル Esc"), body_);
@@ -168,8 +184,7 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     buttons->addWidget(cancel_);
     buttons->addWidget(rePreview_);
     buttons->addWidget(confirm_);
-    layout->addLayout(buttons);
-    layout->addStretch(1);
+    rootLayout->addLayout(buttons);
     setWidget(body_);
 
     ConnectRows();

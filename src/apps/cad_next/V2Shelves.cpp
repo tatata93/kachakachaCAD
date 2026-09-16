@@ -88,6 +88,9 @@ void V2MainWindow::BuildRightShelves()
     for (const auto shelf : kachakacha::v2::app::AllShelves()) {
         if (QDockWidget* source = DockForShelf(shelf); source != nullptr
             && source->widget() != nullptr) {
+            // 中身は統合パネルへ移す。空になった元Dockを表示したままにすると、
+            // Qtの初期位置(左上 0,0 / 100x30)へ全Dockが重なって文字が潰れる。
+            source->hide();
             operationHost_->AddPage(shelf, source->widget());
         }
     }

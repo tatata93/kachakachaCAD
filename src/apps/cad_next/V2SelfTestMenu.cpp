@@ -6,6 +6,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDockWidget>
 #include <QEvent>
 #include <QList>
 #include <QMenu>
@@ -14,6 +15,7 @@
 #include <QPoint>
 #include <QPointF>
 #include <QRect>
+#include <QSize>
 #include <QString>
 
 namespace kachakacha::v2::selftest {
@@ -78,12 +80,28 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool CaseDetachedSourceDocksStayHidden(V2MainWindow& window)
+{
+    QApplication::processEvents();
+    for (QDockWidget* dock : window.findChildren<QDockWidget*>()) {
+        const QRect inWindow(dock->mapTo(&window, QPoint(0, 0)), dock->size());
+        if (dock->isVisible() && inWindow.topLeft() == QPoint(0, 0)
+            && inWindow.size() == QSize(100, 30)) {
+            return Explain("統合前の空パネルが左上へ重ならない", false);
+        }
+    }
+    return Explain("統合前の空パネルが左上へ重ならない", true);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> MenuCases()
 {
-    return {{"メニュー文字が潰れずマウスで開ける",
-        &CaseMenuBarIsReadableAndMouseReachable}};
+    return {
+        {"メニュー文字が潰れずマウスで開ける",
+            &CaseMenuBarIsReadableAndMouseReachable},
+        {"統合前の空パネルを左上に残さない", &CaseDetachedSourceDocksStayHidden},
+    };
 }
 
 } // namespace kachakacha::v2::selftest

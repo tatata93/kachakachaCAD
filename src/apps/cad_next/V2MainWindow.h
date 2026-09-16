@@ -86,6 +86,7 @@ class QComboBox;
 class QDockWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
+class QWidget;
 class V2OperationPanelHost;
 
 //! 見た目。
@@ -979,6 +980,7 @@ private:
     std::unique_ptr<kachakacha::v2::app::DrawingSession> session_;
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
+    std::vector<QWidget*> drawingToolGroups_;
     class V2EntityTree* entityTree_ = nullptr;
     QLineEdit* entityFilter_ = nullptr;
     //! 左の一覧で選んだものを、3D 画面の選択にする(V1 と同じ)。

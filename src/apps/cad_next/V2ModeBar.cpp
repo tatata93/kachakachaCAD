@@ -2,6 +2,9 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QLabel>
+#include <QObject>
+#include <QSizePolicy>
 #include <QString>
 #include <QToolBar>
 
@@ -13,8 +16,67 @@ namespace {
 
 using kachakacha::v2::app::AllUiModes;
 using kachakacha::v2::app::TopBarCommandIdsForMode;
+using kachakacha::v2::app::UiMode;
+using kachakacha::v2::app::UiModeNameJa;
 
 } // namespace
+
+void V2MainWindow::BuildModeBar()
+{
+    modeBar_ = addToolBar(QStringLiteral("モード"));
+    modeBar_->setObjectName(QStringLiteral("modeBar"));
+    modeBar_->setMovable(false);
+    modeBar_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    for (const UiMode mode : AllUiModes()) {
+        QAction* action = modeBar_->addAction(
+            QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str()));
+        action->setCheckable(true);
+        action->setChecked(mode == mode_);
+        modeActions_.emplace_back(mode, action);
+        QObject::connect(action, &QAction::triggered, this,
+            [this, mode] { SetMode(mode); });
+    }
+    // モード → 正対 → 選択 → 測定 → 作図面 → まとまり → 吸着。
+    modeBar_->addSeparator();
+    for (const std::string_view id : {"view.align_workplane", "selection.activate",
+             "measure.open"}) {
+        if (QAction* action = ActionFor(id); action != nullptr) {
+            modeBar_->addAction(action);
+        }
+    }
+    modeBar_->addSeparator();
+    modeBar_->addWidget(new QLabel(QStringLiteral(" 作図面 "), modeBar_));
+    planeCombo_ = new QComboBox(modeBar_);
+    planeCombo_->setToolTip(QStringLiteral("作業中の作図面。選ぶと切り替わります。"));
+    planeCombo_->setMinimumContentsLength(10);
+    planeCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    planeCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    planeCombo_->setMaximumWidth(170);
+    modeBar_->addWidget(planeCombo_);
+    QObject::connect(planeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (refreshingPlaneCombo_ || index < 0
+            || index >= static_cast<int>(planeComboIds_.size())) {
+            return;
+        }
+        ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
+    });
+    modeBar_->addWidget(new QLabel(QStringLiteral(" まとまり "), modeBar_));
+    groupCombo_ = new QComboBox(modeBar_);
+    groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のまとまり。"));
+    groupCombo_->setMinimumContentsLength(10);
+    groupCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    groupCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    groupCombo_->setMaximumWidth(170);
+    modeBar_->addWidget(groupCombo_);
+    QObject::connect(groupCombo_, &QComboBox::currentIndexChanged, this,
+        [this](int index) { ActivateGroupByComboIndex(index); });
+    if (QAction* snap = ActionFor("snap.toggle"); snap != nullptr) {
+        snap->setCheckable(true);
+        snap->setChecked(snapEnabled_);
+        modeBar_->addAction(snap);
+    }
+    addToolBarBreak();
+}
 
 void V2MainWindow::BuildModeToolActions()
 {

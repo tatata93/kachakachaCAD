@@ -46,10 +46,12 @@
 #include <QPalette>
 #include <QPoint>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QStatusBar>
 #include <QString>
 #include <QStyleFactory>
 #include <QToolBar>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QHBoxLayout>
@@ -57,6 +59,7 @@
 #include <QWidget>
 
 #include <array>
+#include <initializer_list>
 
 using kachakacha::v2::app::CommandCatalog;
 using kachakacha::v2::app::CommandDescriptor;
@@ -397,57 +400,6 @@ void V2MainWindow::BuildMenus()
     themeMenu->addAction(QStringLiteral("終了(&X)"), this, &QWidget::close);
 }
 
-void V2MainWindow::BuildModeBar()
-{
-    modeBar_ = addToolBar(QStringLiteral("モード"));
-    modeBar_->setObjectName(QStringLiteral("modeBar"));
-    modeBar_->setMovable(false);
-    for (const UiMode mode : kachakacha::v2::app::AllUiModes()) {
-        QAction* action = modeBar_->addAction(
-            QString::fromUtf8(std::string(UiModeNameJa(mode)).c_str()));
-        action->setCheckable(true);
-        action->setChecked(mode == mode_);
-        modeActions_.emplace_back(mode, action);
-        QObject::connect(action, &QAction::triggered, this,
-            [this, mode] { SetMode(mode); });
-    }
-    // V1 の上の帯と同じ並び: モード → 正対 → 選択 → 測定 → 作図面 → まとまり → 吸着。
-    // 選択と測定はどのモードでも使う(オーナー指示)。メニューと同じ QAction を並べる。
-    modeBar_->addSeparator();
-    for (const std::string_view id : {"view.align_workplane", "selection.activate",
-             "measure.open"}) {
-        if (QAction* action = ActionFor(id); action != nullptr) {
-            modeBar_->addAction(action);
-        }
-    }
-    modeBar_->addSeparator();
-    auto* planeLabel = new QLabel(QStringLiteral(" 作図面 "), modeBar_);
-    modeBar_->addWidget(planeLabel);
-    planeCombo_ = new QComboBox(modeBar_);
-    planeCombo_->setToolTip(QStringLiteral("作業中の作図面。選ぶと切り替わります。"));
-    modeBar_->addWidget(planeCombo_);
-    QObject::connect(planeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
-        if (refreshingPlaneCombo_ || index < 0
-            || index >= static_cast<int>(planeComboIds_.size())) {
-            return;
-        }
-        ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
-    });
-    auto* groupLabel = new QLabel(QStringLiteral(" まとまり "), modeBar_);
-    modeBar_->addWidget(groupLabel);
-    groupCombo_ = new QComboBox(modeBar_);
-    groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のまとまり。"));
-    modeBar_->addWidget(groupCombo_);
-    QObject::connect(groupCombo_, &QComboBox::currentIndexChanged, this,
-        [this](int index) { ActivateGroupByComboIndex(index); });
-    if (QAction* snap = ActionFor("snap.toggle"); snap != nullptr) {
-        snap->setCheckable(true);
-        snap->setChecked(snapEnabled_);
-        modeBar_->addAction(snap);
-    }
-    addToolBarBreak();
-}
-
 void V2MainWindow::SetMode(UiMode mode)
 {
     // モードを変えても、選んでいるものも、作った形も、一切触らない。
@@ -511,6 +463,9 @@ void V2MainWindow::RefreshCommandVisibility()
     for (QAction* action : toolActions_) {
         action->setVisible(mode_ == UiMode::Drawing);
     }
+    for (QWidget* group : drawingToolGroups_) {
+        group->setVisible(mode_ == UiMode::Drawing);
+    }
     if (toolPalette_ != nullptr) {
         // 出る道具が1つも無いモードでは、道具箱ごと隠す。
         bool anyVisible = false;
@@ -539,8 +494,10 @@ void V2MainWindow::BuildToolPalette()
     toolPalette_ = addToolBar(QStringLiteral("道具"));
     toolPalette_->setObjectName(QStringLiteral("toolPalette"));
     toolPalette_->setMovable(false);
+    toolPalette_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    std::map<DrawingTool, QAction*> actions;
     for (const DrawingTool tool : kToolOrder) {
-        QAction* action = toolPalette_->addAction(ToolLabel(tool));
+        auto* action = new QAction(ToolLabel(tool), this);
         action->setCheckable(true);
         // 案内は台帳から取る。道具箱で別の文言を作らない。
         for (const ToolBinding& binding : kToolBindings) {
@@ -561,9 +518,45 @@ void V2MainWindow::BuildToolPalette()
             action->setToolTip(ToolLabel(tool));
         }
         toolActions_.push_back(action);
+        actions.emplace(tool, action);
         QObject::connect(action, &QAction::triggered, this,
             [this, tool] { SelectTool(tool); });
     }
+
+    // 一列に23個並べると、狭い画面ではツールバーがウィンドウ全体を
+    // 押し広げる。輪郭作図で頻繁に使う入口は直接置き、残りは意味別に
+    // まとめる。QAction 自体は共通なので、メニューから選んでも同じ状態へ入る。
+    for (const DrawingTool tool : {DrawingTool::Select, DrawingTool::Point,
+             DrawingTool::Line, DrawingTool::Polyline, DrawingTool::Rectangle,
+             DrawingTool::Circle, DrawingTool::Arc}) {
+        toolPalette_->addAction(actions.at(tool));
+    }
+
+    const auto addToolMenu = [this, &actions](const QString& label,
+                                 std::initializer_list<DrawingTool> tools) {
+        auto* button = new QToolButton(toolPalette_);
+        button->setText(label);
+        button->setPopupMode(QToolButton::InstantPopup);
+        auto* menu = new QMenu(button);
+        for (const DrawingTool tool : tools) {
+            menu->addAction(actions.at(tool));
+        }
+        button->setMenu(menu);
+        button->setToolTip(QStringLiteral("%1の道具を選びます").arg(label));
+        toolPalette_->addWidget(button);
+        drawingToolGroups_.push_back(button);
+    };
+    addToolMenu(QStringLiteral("曲線"),
+        {DrawingTool::Bezier, DrawingTool::Spline});
+    addToolMenu(QStringLiteral("変形"),
+        {DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror,
+            DrawingTool::Rotate});
+    addToolMenu(QStringLiteral("編集"),
+        {DrawingTool::SetGridOrigin, DrawingTool::Split, DrawingTool::Trim,
+            DrawingTool::Extend, DrawingTool::JoinEndpoints,
+            DrawingTool::TangentJoin, DrawingTool::CurvatureJoin,
+            DrawingTool::ConnectTwoPoints, DrawingTool::ChamferOrFilletPair,
+            DrawingTool::Measure});
     BuildModeToolActions();
 }
 

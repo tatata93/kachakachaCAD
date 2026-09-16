@@ -663,10 +663,24 @@ namespace {
 
 [[nodiscard]] bool CaseSmallWindowStaysUsable(V2MainWindow& window)
 {
-    // 1366x768 相当の狭い画面でも、部品が0の大きさにならず、はみ出さない。
-    for (const QSize size : {QSize(1366, 768), QSize(1920, 1080)}) {
+    // 小型ノートからフルHDまで、ツール列がウィンドウを指定幅より
+    // 勝手に押し広げず、3D画面も操作できる大きさを保つ。
+    // 直前の試験が残した長い診断や別工程の棚ではなく、同じ作図状態で比較する。
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    for (const QSize size : {QSize(1024, 600), QSize(1366, 768), QSize(1920, 1080)}) {
         window.resize(size.width(), size.height());
         QApplication::processEvents();
+        // headless の Windows スタイルはドック枠の minimumSizeHint を実画面より
+        // 約50px大きく返す。80pxまでを枠差として許し、以前の1900px超への
+        // 膨張は確実に検出する。実表示は1024pxの画像試験でも確認する。
+        constexpr int kHeadlessFrameTolerance = 80;
+        if (!Explain((std::string("指定幅付近を守る(") + std::to_string(size.width())
+                         + "px に対して実際は " + std::to_string(window.width()) + "px)")
+                         .c_str(),
+                window.width() <= size.width() + kHeadlessFrameTolerance)) {
+            return false;
+        }
         auto& viewport = window.Viewport();
         if (viewport.width() <= 0 || viewport.height() <= 0) {
             return false;

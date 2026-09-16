@@ -108,11 +108,33 @@ ExtrudePlan PlanExtrude(const ExtrudeSelectionFacts& facts,
         return plan;
     }
 
+    // 面を1枚拾っている。**その面が乗っている立体が相手である。**
+    //
+    // 面は立体の一部であって、それだけで浮いているものではない。
+    // 面の番号は、その立体の番号で持っている(profileIds がそれ)。
+    // ここを「新しい立体」にしていたので、面をつまんで引いたのに
+    // **離れた立体がもう1つ出来ていた。**押し引きのつもりで押した人には、
+    // 何が起きたのか分からない。core の app/FacePushPull.h は初めから
+    // 「外へ引けば足す、中へ押せば引く」と言っている。
+    // 読み取りのほうがそれに追いついていなかった。
+    //
+    // 「新しい部品」も操作の一覧に残す。既定を変えただけで、取り上げていない。
+    if (hasFace && !profileIds.empty()) {
+        plan.kind = ExtrudeInputKind::SolidAndFace;
+        plan.targetSolid = profileIds.front();
+        plan.profiles = profileIds;
+        plan.operations = OperationsWithSolid();
+        plan.defaultOperation = ExtrudeBooleanMode::AddToPart;
+        plan.readyToPreview = true;
+        return plan;
+    }
+
     // 立体を選んでいない。新しい立体を作る。
     plan.operations = {ExtrudeBooleanMode::NewPart};
     plan.defaultOperation = ExtrudeBooleanMode::NewPart;
     plan.profiles = profileIds;
     plan.readyToPreview = !plan.profiles.empty();
+    // ここへ来る面は、乗っている立体が分からなかったものだけである。
     plan.kind = hasFace ? ExtrudeInputKind::FaceOnly : ExtrudeInputKind::ProfileOnly;
     if (!plan.readyToPreview) {
         plan.needsJa = hasFace ? "押し出す面を選んでください。"

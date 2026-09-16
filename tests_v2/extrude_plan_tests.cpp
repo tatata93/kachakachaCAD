@@ -3,6 +3,8 @@
 #include "kachakacha/app/FacePushPull.h"
 #include "kachakacha/base/TestHarness.h"
 
+#include <algorithm>
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -82,15 +84,25 @@ KACHA_V2_TEST(extrude_plan, 立体と面は押し引きになる)
     Require(plan.defaultOperation == ExtrudeBooleanMode::AddToPart, "既定は追加");
 }
 
-KACHA_V2_TEST(extrude_plan, 面だけでも押し出せる)
+KACHA_V2_TEST(extrude_plan, 面を1枚拾ったらその立体を押し引きする)
 {
-    // B。
+    // B。**2026-09-16 に既定を変えた。**
+    // それまでは「新しい立体」だった。面をつまんで引いたのに離れた立体が
+    // もう1つ出来るので、押し引きのつもりで押した人には何が起きたのか
+    // 分からなかった(人の道の試験 HP-EX-03 が捕まえた)。
+    // 面は立体の一部である。その立体が相手になる。
     ExtrudeSelectionFacts facts;
     facts.faces = 1;
     const auto plan = PlanExtrude(facts, {}, {Ent(7)}, true);
-    Require(plan.kind == ExtrudeInputKind::FaceOnly, "面だけ");
+    Require(plan.kind == ExtrudeInputKind::SolidAndFace, "立体と面");
+    Require(plan.targetSolid == Ent(7), "面が乗っている立体が相手");
     Require(plan.readyToPreview, "下見できる");
-    Require(plan.defaultOperation == ExtrudeBooleanMode::NewPart, "新規立体");
+    Require(plan.defaultOperation == ExtrudeBooleanMode::AddToPart, "外へ引けば足す");
+    // 「新しい部品」も残っている。既定を変えただけで、取り上げていない。
+    Require(std::find(plan.operations.begin(), plan.operations.end(),
+                ExtrudeBooleanMode::NewPart)
+            != plan.operations.end(),
+        "新しい部品も選べる");
 }
 
 KACHA_V2_TEST(extrude_plan, 何も選んでいなければ次にすることを言う)

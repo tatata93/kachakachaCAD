@@ -384,6 +384,15 @@ namespace kachakacha::v2::selftest {
 {
     // 製作の棚(V1 の近似モデル画面を 1 枚に)。方式・分割軸・境界・上限は棚の欄。
     auto& dock = window.FabricationDock();
+    dock.SetStageIndex(1);
+    if (!Explain("曲げ確認の工程へ切り替えられる", dock.StageIndex() == 1)) {
+        return false;
+    }
+    dock.SetStageIndex(2);
+    if (!Explain("材料と範囲の工程へ切り替えられる", dock.StageIndex() == 2)) {
+        return false;
+    }
+    dock.SetStageIndex(0);
     dock.SetSplitAxisIndex(2);   // V 方向
     dock.SetAutomaticBoundaries(false);
     dock.SetManualBoundariesText(QStringLiteral("0.25, 0.5"));

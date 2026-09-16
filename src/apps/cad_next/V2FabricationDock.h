@@ -29,6 +29,7 @@ class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QTabWidget;
 
 class V2FabricationDock final : public QDockWidget {
 public:
@@ -96,6 +97,8 @@ public:
     [[nodiscard]] QString MessageText() const;
     //! 選んでいる近似モデルの名前など。
     void SetModelText(const QString& text);
+    [[nodiscard]] int StageIndex() const;
+    void SetStageIndex(int index);
 
     // ---- 試験から ----
     void SetManualBoundariesText(const QString& text);
@@ -112,6 +115,7 @@ private:
     void RefreshMethodRows();
 
     QLabel* model_ = nullptr;
+    QTabWidget* stages_ = nullptr;
     QComboBox* method_ = nullptr;
     QFormLayout* form_ = nullptr;
     QComboBox* splitAxis_ = nullptr;

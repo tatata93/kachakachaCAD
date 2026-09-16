@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QString>
+#include <QTabWidget>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -70,28 +71,51 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     model_->setWordWrap(true);
     layout->addWidget(model_);
 
-    layout->addWidget(BuildOptionsForm(body));
-    layout->addWidget(BuildRangeAndMaterial(body));
+    stages_ = new QTabWidget(body);
+    stages_->setObjectName(QStringLiteral("fabricationStages"));
+    stages_->setDocumentMode(true);
+    layout->addWidget(stages_, 1);
 
-    auto* buttons = new QWidget(body);
+    auto* approximationPage = new QWidget(stages_);
+    auto* approximationLayout = new QVBoxLayout(approximationPage);
+    approximationLayout->setContentsMargins(4, 8, 4, 4);
+    approximationLayout->setSpacing(4);
+    approximationLayout->addWidget(BuildOptionsForm(approximationPage));
+
+    auto* buttons = new QWidget(approximationPage);
     auto* buttonLayout = new QVBoxLayout(buttons);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(2);
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("製作モデルを作る"), "fabrication.create", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("プレビュー更新"), "fabrication.preview_update", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("境界の役割(開口 / 折り線)"), "fabrication.assign_role", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("切れ目にする(開いた線)"), "fabrication.assign_relief_cut", this));
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("接続スコープ"), "fabrication.set_connection_scope", this));
-    layout->addWidget(buttons);
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択面から製作モデルを作る"), "fabrication.create", this));
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("近似プレビューを更新"), "fabrication.preview_update", this));
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択境界を開口 / 折り線にする"), "fabrication.assign_role", this));
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択した開いた線を切れ目にする"), "fabrication.assign_relief_cut", this));
+    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("接続する部材の範囲を決める"), "fabrication.set_connection_scope", this));
+    approximationLayout->addWidget(buttons);
+    approximationLayout->addStretch(1);
+    stages_->addTab(approximationPage, QStringLiteral("1 近似モデル"));
 
-    layout->addWidget(BuildBendSection(body));
-    auto* freezeButtons = new QWidget(body);
+    auto* bendPage = new QWidget(stages_);
+    auto* bendLayout = new QVBoxLayout(bendPage);
+    bendLayout->setContentsMargins(4, 8, 4, 4);
+    bendLayout->setSpacing(4);
+    bendLayout->addWidget(BuildBendSection(bendPage));
+    auto* freezeButtons = new QWidget(bendPage);
     auto* freezeLayout = new QVBoxLayout(freezeButtons);
     freezeLayout->setContentsMargins(0, 0, 0, 0);
     freezeLayout->setSpacing(2);
-    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("現在状態を固定"), "fabrication.freeze_state", this));
-    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("型紙を作る"), "fabrication.create_pattern", this));
-    layout->addWidget(freezeButtons);
+    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("現在の曲げ状態から形を作る"), "fabrication.freeze_state", this));
+    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("展開図(型紙)を作る"), "fabrication.create_pattern", this));
+    bendLayout->addWidget(freezeButtons);
+    bendLayout->addStretch(1);
+    stages_->addTab(bendPage, QStringLiteral("2 曲げ確認"));
+
+    auto* materialPage = new QWidget(stages_);
+    auto* materialLayout = new QVBoxLayout(materialPage);
+    materialLayout->setContentsMargins(4, 8, 4, 4);
+    materialLayout->addWidget(BuildRangeAndMaterial(materialPage));
+    materialLayout->addStretch(1);
+    stages_->addTab(materialPage, QStringLiteral("3 材料・範囲"));
 
     message_ = new QLabel(body);
     message_->setWordWrap(true);
@@ -524,6 +548,18 @@ void V2FabricationDock::SetMessage(const QString& text)
 QString V2FabricationDock::MessageText() const
 {
     return message_->text();
+}
+
+int V2FabricationDock::StageIndex() const
+{
+    return stages_ == nullptr ? -1 : stages_->currentIndex();
+}
+
+void V2FabricationDock::SetStageIndex(int index)
+{
+    if (stages_ != nullptr && index >= 0 && index < stages_->count()) {
+        stages_->setCurrentIndex(index);
+    }
 }
 
 void V2FabricationDock::SetModelText(const QString& text)

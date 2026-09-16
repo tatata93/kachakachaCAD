@@ -6,6 +6,7 @@
 //! 「見やすくしただけ」のつもりが寸法を変えたことになる。
 
 #include "V2MainWindow.h"
+#include "V2OperationPanelHost.h"
 
 #include "V2SurfaceDock.h"
 
@@ -663,8 +664,7 @@ void V2MainWindow::ShowDisplayDock()
         return;
     }
     displayDock_->SetChoice(CurrentDisplayChoice(), displayStage_);
-    displayDock_->show();
-    displayDock_->raise();
+    ShowShelf(kachakacha::v2::app::Shelf::Display);
     SetStatus(QStringLiteral("表示: 右の「表示」で線の太さ・様式・色と段を決めてください。"));
 }
 
@@ -823,24 +823,26 @@ void V2MainWindow::RefreshRightShelves()
     drawingDock_->SetTool(session_->CurrentTool());
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
         extrudeShelfShown_, surfaceShelfShown_);
-    for (const Shelf shelf : kachakacha::v2::app::AllShelves()) {
-        QDockWidget* dock = DockForShelf(shelf);
-        if (dock == nullptr) {
-            continue;
-        }
-        const bool show = std::find(wanted.begin(), wanted.end(), shelf) != wanted.end();
-        dock->setVisible(show);
+    if (operationHost_ != nullptr) {
+        operationHost_->SetShelves(wanted);
     }
-    // 先頭を前に出す。2枚出すときは、後ろの1枚は札として残る。
-    if (!wanted.empty()) {
-        if (QDockWidget* front = DockForShelf(wanted.front()); front != nullptr) {
-            front->raise();
-        }
+    if (operationDock_ != nullptr) {
+        operationDock_->show();
+        operationDock_->raise();
     }
 }
 
 bool V2MainWindow::ShelfShown(kachakacha::v2::app::Shelf shelf) const
 {
-    const QDockWidget* dock = DockForShelf(shelf);
-    return dock != nullptr && dock->isVisible();
+    return operationHost_ != nullptr && operationHost_->Shows(shelf);
+}
+
+void V2MainWindow::ShowShelf(kachakacha::v2::app::Shelf shelf)
+{
+    if (operationHost_ == nullptr || operationDock_ == nullptr) {
+        return;
+    }
+    operationHost_->SetShelves({shelf});
+    operationDock_->show();
+    operationDock_->raise();
 }

@@ -433,8 +433,7 @@ void V2MainWindow::RunCreatePattern()
     // 見ないまま出すと、紙に収まっていないことに印刷してから気づく。
     if (patternDock_ != nullptr) {
         patternDock_->SetPages(patternPages_);
-        patternDock_->show();
-        patternDock_->raise();
+        ShowShelf(kachakacha::v2::app::Shelf::Pattern);
     }
     SetStatus(QStringLiteral("型紙を作る: A4 %1ページに %2枚を並べました(原寸)。")
             .arg(static_cast<int>(patternPages_.size()))

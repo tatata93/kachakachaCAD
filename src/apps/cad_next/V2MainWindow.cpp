@@ -648,7 +648,6 @@ void V2MainWindow::BuildPanels()
     QObject::connect(guideTableView_, &QTreeWidget::itemClicked, this,
         [this](QTreeWidgetItem*, int) { RefreshCommandVisibility(); });
     guideDock->setWidget(BuildGuideTableBody(guideDock));
-    addDockWidget(Qt::RightDockWidgetArea, guideDock);
     guideDock_ = guideDock;
 
     BuildRemainingPanels(treeDock);
@@ -724,8 +723,7 @@ void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
     // 棚の広さを決める。決めないと、部品モードで右が 120px まで狭まり、
     // 見出しが切れ、手順が2行しか見えなくなる。
     // 横幅を先に決めてから、縦の割り当てを決める。
-    resizeDocks({exportDock_}, {300}, Qt::Horizontal);
-    resizeDocks({guideDock_, exportDock_}, {110, 330}, Qt::Vertical);
+    resizeDocks({operationDock_}, {330}, Qt::Horizontal);
     // 左は一覧が主で、手順はその下。一覧を潰さない割り当てにする。
     resizeDocks({processDock_}, {180}, Qt::Vertical);
     resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);

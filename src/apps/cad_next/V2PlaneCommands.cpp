@@ -101,8 +101,7 @@ void V2MainWindow::RunWorkPlaneCreate()
         workPlaneDock_->SetChoice(shown);
     }
     RefreshWorkPlaneDock();
-    workPlaneDock_->show();
-    workPlaneDock_->raise();
+    ShowShelf(kachakacha::v2::app::Shelf::WorkPlane);
     SetStatus(QStringLiteral(
         "作業平面: 右の「作業平面」で作り方と数を決め、「平面を作る」を押してください。"));
 }
@@ -297,8 +296,7 @@ void V2MainWindow::ShowGridDock()
         return;
     }
     gridDock_->SetChoice(CurrentGridChoice());
-    gridDock_->show();
-    gridDock_->raise();
+    ShowShelf(kachakacha::v2::app::Shelf::Grid);
     SetStatus(QStringLiteral("グリッド: 右の「グリッド」で間隔・副点・基準・色を決めてください。"));
 }
 

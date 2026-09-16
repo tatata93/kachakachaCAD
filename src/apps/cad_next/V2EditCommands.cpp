@@ -25,16 +25,14 @@ void V2MainWindow::RunShelfCommand(std::string_view id)
     if (id == "measure.open") {
         // 選んでいるものを測って出す。何も選んでいなければ、何を選ぶかを言う。
         RefreshMeasurements();
-        measureDock_->show();
-        measureDock_->raise();
+        ShowShelf(kachakacha::v2::app::Shelf::Measure);
         SetStatus(measureDock_->SummaryText());
         return;
     }
     if (id == "edit.numeric") {
         // 選んでいるものの数値を欄に出す。何も選んでいなければ、何を選ぶかを言う。
         RefreshEditDock();
-        editDock_->show();
-        editDock_->raise();
+        ShowShelf(kachakacha::v2::app::Shelf::Edit);
         SetStatus(editDock_->SelectionText());
     }
 }

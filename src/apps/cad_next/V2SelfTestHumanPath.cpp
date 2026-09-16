@@ -48,6 +48,18 @@ namespace {
 using kachakacha::v2::app::Shelf;
 using kachakacha::v2::domain::EntityKind;
 
+[[nodiscard]] int CountVisibleOfKind(V2MainWindow& window, EntityKind kind)
+{
+    int count = 0;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == kind
+            && entity.visibility == kachakacha::v2::domain::Visibility::Visible) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 //! 上から見て矩形を1つ引く。**道具を持って画面を押す。**人と同じ道。
 [[nodiscard]] bool DrawRectangleByHand(V2MainWindow& window)
 {
@@ -754,10 +766,10 @@ struct OutputCounts {
     if (!Explain("Enter を窓が受け取る", window.HandleToolKey(Qt::Key_Return, nullptr))) {
         return false;
     }
-    if (!Explain((std::string("立体は増えない(")
-                     + std::to_string(CountOfKind(window, EntityKind::Part))
+    if (!Explain((std::string("見える立体は1つのまま(")
+                     + std::to_string(CountVisibleOfKind(window, EntityKind::Part))
                      + "個)").c_str(),
-            CountOfKind(window, EntityKind::Part) == 1)) {
+            CountVisibleOfKind(window, EntityKind::Part) == 1)) {
         return false;
     }
     const double after = SolidHeightMm(window);

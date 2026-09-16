@@ -86,6 +86,7 @@ class QComboBox;
 class QDockWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
+class V2OperationPanelHost;
 
 //! 見た目。
 enum class UiTheme {
@@ -711,7 +712,7 @@ private:
     void RefreshActiveGroupCombo();
     void ActivateGroupByComboIndex(int index);
     void BuildPanels();
-    //! 右の札(測る・作業平面・作図・数)。書き出しの棚と重ねる。
+    //! 右の「現在の操作」パネルへ、各操作の設定ページを登録する。
     void BuildRightShelves();
     //! 編集の棚・面取りの棚・製作の棚。BuildRightShelves から呼ぶ。
     void BuildEditingShelves();
@@ -1202,7 +1203,7 @@ private:
     QDockWidget* BuildEntityTreeDock();
     //! 形状ガイドの役割の表と、表を動かすボタン(表の隣に置く)。
     QWidget* BuildGuideTableBody(QWidget* parent);
-    //! 手順・書き出し・右の棚・知らせ。BuildPanels の続き。
+    //! 手順・書き出し・現在の操作パネル・知らせ。BuildPanels の続き。
     void BuildRemainingPanels(QDockWidget* treeDock);
     //! 部品の棚と型紙の下見と数の棚。BuildRightShelves の続き。
     void BuildOutputShelves();
@@ -1216,6 +1217,8 @@ public:
 private:
     //! 棚と QDockWidget の対応。無ければ nullptr。
     [[nodiscard]] QDockWidget* DockForShelf(kachakacha::v2::app::Shelf shelf) const;
+    //! 明示的に開く設定ページを、右の「現在の操作」へ出す。
+    void ShowShelf(kachakacha::v2::app::Shelf shelf);
     //! 面の上の「横」の見当。上向き(縦)はここから作る。
     [[nodiscard]] static kachakacha::v2::geometry::Vector3 FacingUAxisHint(
         const std::vector<kachakacha::v2::geometry::Vector3>& points,
@@ -1229,6 +1232,8 @@ private:
     QListWidget* diagnosticList_ = nullptr;
     QTreeWidget* guideTableView_ = nullptr;
     QDockWidget* guideDock_ = nullptr;
+    QDockWidget* operationDock_ = nullptr;
+    V2OperationPanelHost* operationHost_ = nullptr;
     QTreeWidget* processView_ = nullptr;
     V2ExportDock* exportDock_ = nullptr;
     V2MeasureDock* measureDock_ = nullptr;

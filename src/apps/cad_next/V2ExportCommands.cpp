@@ -32,7 +32,7 @@ void V2MainWindow::RunExportCommand(std::string_view id)
     if (exportDock_ == nullptr) {
         return;
     }
-    exportDock_->show();
+    ShowShelf(kachakacha::v2::app::Shelf::Export);
     if (id == "export.validate") {
         ValidateSelectedSolid();
         return;
@@ -65,7 +65,6 @@ void V2MainWindow::RunExportCommand(std::string_view id)
 void V2MainWindow::BuildExportDock()
 {
     exportDock_ = new V2ExportDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, exportDock_);
     exportDock_->SetDiagnosticSink([this](const QString& text) { AddDiagnostic(text); });
     exportDock_->SetContentMaker(
         [this](const kachakacha::v2::app::ExportRequest& request) {

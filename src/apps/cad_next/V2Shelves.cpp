@@ -1,10 +1,10 @@
-//! 右の棚を組み立てるところ(V2MainWindow の一部)。
+//! 右の「現在の操作」パネルを組み立てるところ(V2MainWindow の一部)。
 //!
-//! 棚は「いま使っている道具の設定」を出す場所である(app/ShelfLayout)。
+//! app/ShelfLayout が選んだ設定ページを、同時に一つだけ見せる。
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
-//! 動きは変えていない。
 
 #include "V2MainWindow.h"
+#include "V2OperationPanelHost.h"
 
 #include "kachakacha/app/CommandParameters.h"
 
@@ -16,12 +16,10 @@ void V2MainWindow::BuildEditingShelves()
     // 編集の棚(V1 の「選択内容の数値編集」)。選んでいるものの数値を欄で直す。
     editDock_ = new V2EditDock(this);
     editDock_->SetApplyHandler([this] { ApplySelectedEdit(); });
-    addDockWidget(Qt::RightDockWidgetArea, editDock_);
     editDock_->hide();
     // 面取りの棚(V1 の「面取り」欄)。量は数の棚と同じ値、残す側と B の切戻しはここだけ。
     cornerDock_ = new V2CornerDock(this);
     cornerDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
-    addDockWidget(Qt::RightDockWidgetArea, cornerDock_);
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
     fabricationDock_ = new V2FabricationDock(this);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
@@ -38,14 +36,12 @@ void V2MainWindow::BuildEditingShelves()
         [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
     fabricationDock_->SetMaterialHandler(
         [this](const QString& material, int layers) { ApplyMaterialToSelection(material, layers); });
-    addDockWidget(Qt::RightDockWidgetArea, fabricationDock_);
 }
 
 void V2MainWindow::BuildRightShelves()
 {
     // 測る棚。はじめは畳んでおく。使うときに「測る」で出す。
     measureDock_ = new V2MeasureDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, measureDock_);
     measureDock_->hide();
     measureDock_->SetModeChangedHandler([this] {
         viewport_->ClearMeasurePicks();
@@ -60,7 +56,6 @@ void V2MainWindow::BuildRightShelves()
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
     workPlaneDock_ = new V2WorkPlaneDock(this);
     workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
-    addDockWidget(Qt::RightDockWidgetArea, workPlaneDock_);
 
     // 作図の棚(V1 の「作図」タブ)。円弧の作り方・補助線・指定点・数値で線を作る。
     drawingDock_ = new V2DrawingDock(this);
@@ -69,44 +64,35 @@ void V2MainWindow::BuildRightShelves()
             ApplyToolSettings(settings);
         });
     drawingDock_->SetCreateWireHandler([this] { CreateWireFromDock(); });
-    addDockWidget(Qt::RightDockWidgetArea, drawingDock_);
 
     // グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。見え方だけで、文書は変えない。
     gridDock_ = new V2GridDock(this);
     gridDock_->SetApplyHandler([this](const V2GridChoice& choice) { ApplyGridChoice(choice); });
     gridDock_->SetPickOriginHandler([this] { RunCommand("grid.move_origin"); });
-    addDockWidget(Qt::RightDockWidgetArea, gridDock_);
     displayDock_ = new V2DisplayDock(this);
     displayDock_->SetApplyHandler(
         [this](const V2DisplayChoice& choice) { ApplyDisplayChoice(choice); });
     displayDock_->SetStageHandler(
         [this](kachakacha::v2::app::DisplayStage stage) { ApplyDisplayStage(stage); });
-    addDockWidget(Qt::RightDockWidgetArea, displayDock_);
 
     BuildOutputShelves();
 
     RefreshCornerDock();
     RefreshFabricationDock();
 
-    // 右側の棚を重ねて札にする。縦に並べると、1180x760 では
-    // 1枚あたりが潰れて見出しだけが並ぶ。
-    tabifyDockWidget(exportDock_, parameterDock_);
-    tabifyDockWidget(parameterDock_, measureDock_);
-    tabifyDockWidget(measureDock_, editDock_);
-    tabifyDockWidget(editDock_, cornerDock_);
-    tabifyDockWidget(cornerDock_, fabricationDock_);
-    tabifyDockWidget(fabricationDock_, workPlaneDock_);
-    tabifyDockWidget(workPlaneDock_, drawingDock_);
-    tabifyDockWidget(drawingDock_, gridDock_);
-    tabifyDockWidget(gridDock_, displayDock_);
-    // 形状ガイドの役割の表も同じ札の束へ入れる。別の段に置くと、
-    // 部品モードで右が上下に割れて、どちらも潰れる。
-    tabifyDockWidget(displayDock_, guideDock_);
-    tabifyDockWidget(guideDock_, surfaceDock_);
-
-    tabifyDockWidget(guideDock_, patternDock_);
-    tabifyDockWidget(patternDock_, partDock_);
-    tabifyDockWidget(partDock_, extrudeDock_);
+    operationDock_ = new QDockWidget(QStringLiteral("現在の操作"), this);
+    operationDock_->setObjectName(QStringLiteral("currentOperationDock"));
+    operationDock_->setFeatures(QDockWidget::NoDockWidgetFeatures);
+    operationDock_->setMinimumWidth(280);
+    operationHost_ = new V2OperationPanelHost(operationDock_);
+    for (const auto shelf : kachakacha::v2::app::AllShelves()) {
+        if (QDockWidget* source = DockForShelf(shelf); source != nullptr
+            && source->widget() != nullptr) {
+            operationHost_->AddPage(shelf, source->widget());
+        }
+    }
+    operationDock_->setWidget(operationHost_);
+    addDockWidget(Qt::RightDockWidgetArea, operationDock_);
     RefreshRightShelves();
 }
 
@@ -127,7 +113,6 @@ void V2MainWindow::BuildOutputShelves()
                     .arg(QString::fromUtf8(
                         kachakacha::v2::fabrication::ThicknessPlacementNameJa(value))));
         });
-    addDockWidget(Qt::RightDockWidgetArea, partDock_);
 
     // 押し出しの棚。押し出しの最中だけ出す(オーナー指示 2026-09-14 §7)。
     // 窓で全部決めてから作る道をやめ、右で見ながら決められるようにする。
@@ -153,7 +138,6 @@ void V2MainWindow::BuildOutputShelves()
             SetStatus(QStringLiteral("面を作る: やめました。"));
         },
         [this] { ResetSurfaceInput(); });
-    addDockWidget(Qt::RightDockWidgetArea, surfaceDock_);
 
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });
@@ -166,16 +150,13 @@ void V2MainWindow::BuildOutputShelves()
         [this] { EditExtrudeWithDialog(); });
     extrudeDock_->SetReselectHandlers([this] { ReselectExtrudeInput(true); },
         [this] { ReselectExtrudeInput(false); });
-    addDockWidget(Qt::RightDockWidgetArea, extrudeDock_);
 
     // 型紙の下見。出す前に紙の形で見る。見ないまま出すと、
     // 紙に収まっていないことに、印刷してから気づく。
     patternDock_ = new V2PatternDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, patternDock_);
 
     // 数の棚。板厚などは、変えられないと使えない。はじめから出しておく。
     parameterDock_ = new V2ParameterDock(this);
-    addDockWidget(Qt::RightDockWidgetArea, parameterDock_);
     parameterDock_->SetDiagnosticSink([this](const QString& text) {
         AddDiagnostic(text);
         SetStatus(text);
@@ -194,4 +175,3 @@ void V2MainWindow::BuildOutputShelves()
             QString::number(value, 'f', 3));
     });
 }
-

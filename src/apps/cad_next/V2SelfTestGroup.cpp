@@ -16,6 +16,7 @@
 #include "kachakacha/app/Selection.h"
 
 #include <QPointF>
+#include <QApplication>
 #include <QString>
 #include <QTreeWidgetItem>
 
@@ -191,6 +192,7 @@ using kachakacha::v2::domain::EntityKind;
     }
     // itemChanged が文書を更新して木を作り直す。以後 item は無効なので再利用しない。
     item->setCheckState(0, Qt::Unchecked);
+    QApplication::processEvents();
     if (!Explain((std::string("隠すと画面から消える(前 ") + std::to_string(before)
                      + " → 後 " + std::to_string(static_cast<int>(window.Session().Scene().curves.size())) + ")")
                      .c_str(),
@@ -210,6 +212,7 @@ using kachakacha::v2::domain::EntityKind;
     if (again != nullptr) {
         // 上と同じく、この呼び出しだけで表示状態の更新まで完了する。
         again->setCheckState(0, Qt::Checked);
+        QApplication::processEvents();
     }
     return Explain("出し直すと戻る", static_cast<int>(window.Session().Scene().curves.size()) == before);
 }

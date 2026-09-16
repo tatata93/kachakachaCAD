@@ -35,6 +35,7 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFont>
+#include <QHeaderView>
 #include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
@@ -576,11 +577,15 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
     entityTree_->setColumnCount(2);
     entityTree_->setHeaderLabels(
         {QStringLiteral("名前"), QStringLiteral("種類")});
+    entityTree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    entityTree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     // V1 と同じく、まとめて選べる。左の一覧で選んだものは 3D 画面でも選ばれる。
     entityTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     QObject::connect(entityTree_, &QTreeWidget::itemSelectionChanged, this,
         [this] { AdoptTreeSelection(); });
     // 名前を書き換えたら文書へ入れる。判断(空か、変わったか)は core にある。
+    // 行の変更を処理すると文書から木を作り直す。DirectConnection のままでは、
+    // QTreeWidgetItem::setData の途中でその行自身を削除してしまう。
     QObject::connect(entityTree_, &QTreeWidget::itemChanged, this,
         [this](QTreeWidgetItem* item, int column) {
             if (column != 0) {
@@ -598,7 +603,7 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
                 return;
             }
             RenameEntityFromItem(item);
-        });
+        }, Qt::QueuedConnection);
     // 引きずって移す(オーナー指示 §9)。木の中だけで動かす。
     // Qt に行を動かさせず、**落ちた先を聞いて文書のほうを変える。**
     // 木は文書から作り直すので、木だけ動かしても次の作り直しで元へ戻る。
@@ -628,6 +633,7 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
     treeLayout->addWidget(entityFilter_);
     treeLayout->addWidget(entityTree_, 1);
     treeDock->setWidget(treeBody);
+    treeDock->setMinimumWidth(220);
     addDockWidget(Qt::LeftDockWidgetArea, treeDock);
     return treeDock;
 }
@@ -719,14 +725,14 @@ void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
     diagnosticDock->setWidget(diagnosticList_);
     addDockWidget(Qt::BottomDockWidgetArea, diagnosticDock);
     diagnosticDock_ = diagnosticDock;
+    diagnosticDock_->hide();
 
     // 棚の広さを決める。決めないと、部品モードで右が 120px まで狭まり、
     // 見出しが切れ、手順が2行しか見えなくなる。
     // 横幅を先に決めてから、縦の割り当てを決める。
-    resizeDocks({operationDock_}, {330}, Qt::Horizontal);
+    resizeDocks({treeDock, operationDock_}, {240, 330}, Qt::Horizontal);
     // 左は一覧が主で、手順はその下。一覧を潰さない割り当てにする。
     resizeDocks({processDock_}, {180}, Qt::Vertical);
-    resizeDocks({diagnosticDock_}, {90}, Qt::Vertical);
     BuildStatusBar();
 }
 
@@ -839,6 +845,7 @@ void V2MainWindow::SetAxisShown(int axis, bool shown)
     // チェックを変えると itemChanged が走り、画面の軸が切り替わる。試験も同じ道を通す。
     axisItems_[static_cast<std::size_t>(axis)]->setCheckState(0,
         shown ? Qt::Checked : Qt::Unchecked);
+    QApplication::processEvents();
 }
 
 void V2MainWindow::RefreshProcessSteps()
@@ -1247,6 +1254,11 @@ void V2MainWindow::AddDiagnostic(const QString& codeAndText)
 {
     if (diagnosticList_) {
         diagnosticList_->addItem(codeAndText);
+    }
+    if (diagnosticDock_ != nullptr) {
+        diagnosticDock_->show();
+        diagnosticDock_->raise();
+        resizeDocks({diagnosticDock_}, {96}, Qt::Vertical);
     }
 }
 

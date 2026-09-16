@@ -7,6 +7,7 @@
 #include "V2MainWindow.h"
 
 #include "V2EntityTree.h"
+#include "V2TreeIcons.h"
 
 #include "kachakacha/app/EntityNaming.h"
 #include "kachakacha/app/NameFilter.h"
@@ -15,6 +16,7 @@
 
 #include <QLabel>
 #include <QLineEdit>
+#include <QFont>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -24,6 +26,21 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+namespace {
+
+void MarkIfActiveWorkPlane(QTreeWidgetItem* item, bool active)
+{
+    if (!active) {
+        return;
+    }
+    QFont font = item->font(0);
+    font.setBold(true);
+    item->setFont(0, font);
+    item->setToolTip(0, QStringLiteral("現在の作図面"));
+}
+
+} // namespace
 
 void V2MainWindow::RefreshEntityList()
 {
@@ -53,6 +70,7 @@ void V2MainWindow::RefreshEntityList()
             looseItem = new QTreeWidgetItem(entityTree_);
             looseItem->setText(0, QStringLiteral("(まとまりなし)"));
             looseItem->setText(1, QStringLiteral("まとまり"));
+            looseItem->setIcon(0, V2GroupTreeIcon());
             looseItem->setFlags((looseItem->flags() | Qt::ItemIsDropEnabled)
                 & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
         }
@@ -65,6 +83,7 @@ void V2MainWindow::RefreshEntityList()
     auto* originRoot = new QTreeWidgetItem(entityTree_);
     originRoot->setText(0, QStringLiteral("原点"));
     originRoot->setText(1, QStringLiteral("原点"));
+    originRoot->setIcon(0, V2OriginTreeIcon());
     originRoot->setToolTip(0, QStringLiteral(
         "初期の基準平面(top_XY / front_XZ / side_YZ)と軸。削除やまとまりへの移動はできません"));
     for (const auto& entity : snapshot.entities) {
@@ -74,6 +93,8 @@ void V2MainWindow::RefreshEntityList()
         auto* item = new QTreeWidgetItem(originRoot);
         item->setText(0, QString::fromUtf8(entity.displayName.c_str()));
         item->setText(1, QStringLiteral("作業平面"));
+        item->setIcon(0, V2EntityTreeIcon(entity.kind));
+        MarkIfActiveWorkPlane(item, entity.id == activeWorkPlaneId_);
         item->setFlags(item->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
         entityItems_.emplace_back(item, entity.id);
     }
@@ -82,6 +103,7 @@ void V2MainWindow::RefreshEntityList()
         auto* item = new QTreeWidgetItem(originRoot);
         item->setText(0, QString::fromUtf8(axisNames[axis]));
         item->setText(1, QStringLiteral("軸"));
+        item->setIcon(0, V2AxisTreeIcon(axis));
         item->setFlags((item->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsEditable
             & ~Qt::ItemIsDragEnabled);
         item->setCheckState(0, viewport_ != nullptr && viewport_->AxisVisible(axis)
@@ -103,6 +125,9 @@ void V2MainWindow::RefreshEntityList()
         entityItems_.emplace_back(item, entity.id);
         item->setText(1, QString::fromUtf8(
             std::string(kachakacha::v2::domain::EntityKindNameJa(entity.kind)).c_str()));
+        item->setIcon(0, V2EntityTreeIcon(entity.kind));
+        MarkIfActiveWorkPlane(item, entity.kind == kachakacha::v2::domain::EntityKind::WorkPlane
+            && entity.id == activeWorkPlaneId_);
     }
     entityTree_->expandAll();
     for (int column = 0; column < entityTree_->columnCount(); ++column) {
@@ -259,6 +284,12 @@ void V2MainWindow::BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGr
         made->setText(0, QString::fromStdString(
             group->displayName + (active ? " ←作業中" : "")));
         made->setText(1, QStringLiteral("まとまり"));
+        made->setIcon(0, V2GroupTreeIcon());
+        if (active) {
+            QFont font = made->font(0);
+            font.setBold(true);
+            made->setFont(0, font);
+        }
         // まとまりは名前を変えられる。引きずって別のまとまりへ移せる。
         made->setFlags(made->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled
             | Qt::ItemIsDropEnabled | Qt::ItemIsUserCheckable);

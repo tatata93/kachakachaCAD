@@ -6,6 +6,7 @@
 
 #include "V2SelfTest.h"
 
+#include "V2EntityTree.h"
 #include "V2MainWindow.h"
 #include "V2Viewport.h"
 #include "V2WorkPlaneDock.h"
@@ -16,6 +17,8 @@
 #include "kachakacha/view/ViewOrientation.h"
 
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 
 #include <cmath>
 #include <string>
@@ -43,6 +46,14 @@ void UseDock(V2MainWindow& window)
     if (!Explain((std::string("原点の子が6つ(実際は ")
                      + std::to_string(window.OriginChildCount()) + ")").c_str(),
             window.OriginChildCount() == 6)) {
+        return false;
+    }
+    QTreeWidget* tree = window.EntityTree();
+    QTreeWidgetItem* origin = tree != nullptr ? tree->topLevelItem(0) : nullptr;
+    if (!Explain("原点と子の種類アイコンが見える",
+            origin != nullptr && !origin->icon(0).isNull()
+                && origin->childCount() == 6 && !origin->child(0)->icon(0).isNull()
+                && !origin->child(3)->icon(0).isNull())) {
         return false;
     }
     const char* expected[6] = {"top_XY", "front_XZ", "side_YZ", "X軸", "Y軸", "Z軸"};

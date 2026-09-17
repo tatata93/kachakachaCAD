@@ -55,6 +55,14 @@ struct BendRadius {
 [[nodiscard]] std::optional<double> RadiusAtPercent(const BendRadius& bend,
     double percent);
 
+//! その半径になる曲げ具合(0〜100%)。`RadiusAtPercent` の逆。
+//!
+//! `p = R100 * 100 / R`。100% の半径より小さい半径は、この板ではそれ以上曲げられない
+//! (100% を超える)ので値を返さない。半径が大きいほど曲げは浅い。
+//! 棚の「組立率」と「半径」を、どちらから打っても同じことを言わせるための道。
+[[nodiscard]] std::optional<double> PercentForRadius(const BendRadius& bend,
+    double radiusMm);
+
 //! 人が半径を入れた。以後 LOCK。
 //!
 //! `percent` は **そのとき画面に出ていた曲げ具合** である。

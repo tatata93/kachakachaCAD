@@ -74,6 +74,10 @@ public:
     void SetPartNumbersText(const QString& text);
     void SetAssemblyHandler(std::function<void(double percent, const QString& parts)> handler);
     void PressApplyAssembly();
+    //! **人が欄に打ったのと同じ道。**組立率を打つと半径が、半径を打つと組立率が言い換わる。
+    //! 「当てる」「固定」を押すまで文書は触らない。SetAssemblyPercent は言い換えない(窓が映す道)。
+    void TypeAssemblyPercent(double percent);
+    void TypeRadiusMm(double radiusMm);
 
     //! 固定で作るもの。
     [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputChoice() const;
@@ -129,6 +133,11 @@ private:
     QWidget* BuildOptionsForm(QWidget* body);
     QWidget* BuildRangeAndMaterial(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
+    //! 部材の編集(分ける・1つにする・切れ目・展開の基準)。曲げの段と同じ棚に置く。
+    QWidget* BuildPartEditSection(QWidget* body);
+    //! 組立率を打ったら半径を、半径を打ったら組立率を言い換える。当てるまで文書は触らない。
+    void SyncRadiusFromPercent();
+    void SyncPercentFromRadius();
     void Connect();
     void Emit();
     void RefreshMethodRows();
@@ -156,6 +165,10 @@ private:
     QDoubleSpinBox* radius_ = nullptr;
     QPushButton* lockRadius_ = nullptr;
     QLabel* radiusState_ = nullptr;
+    //! いま欄に映している部材の曲げ。組立率と半径を、どちらから打っても
+    //! もう片方へ言い換えるために持つ(引継ぎ 2026-09-17 の 5)。
+    kachakacha::v2::fabrication::BendRadius shownBend_;
+    bool bendShown_ = false;
     QPushButton* applyAssembly_ = nullptr;
     QLineEdit* parts_ = nullptr;
     QComboBox* freeze_ = nullptr;

@@ -70,6 +70,20 @@ std::optional<double> RadiusAtPercent(const BendRadius& bend, double percent)
     return bend.flatLengthMm / angle.Value();
 }
 
+std::optional<double> PercentForRadius(const BendRadius& bend, double radiusMm)
+{
+    if (!(radiusMm > 0.0) || !std::isfinite(radiusMm) || !(bend.radiusMm > 0.0)
+        || !std::isfinite(bend.radiusMm)) {
+        return std::nullopt;
+    }
+    // R(p) = R100 * 100 / p を p について解く。
+    const double percent = bend.radiusMm * 100.0 / radiusMm;
+    if (!PercentIsSane(percent)) {
+        return std::nullopt;   // 100% より強く曲げることになる。板の長さが足りない。
+    }
+    return percent;
+}
+
 Result<BendRadius> LockRadiusAtPercent(BendRadius bend, double radiusMm, double percent)
 {
     using Out = Result<BendRadius>;

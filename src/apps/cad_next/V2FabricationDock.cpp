@@ -104,6 +104,9 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     bendLayout->setContentsMargins(4, 8, 4, 4);
     bendLayout->setSpacing(4);
     bendLayout->addWidget(BuildBendSection(bendPage));
+    // 部材の編集は曲げと同じ段に置く(引継ぎ 2026-09-17 の 5)。
+    // 分ける・1つにする・切れ目・展開の基準は、曲げながら決めるものだからである。
+    bendLayout->addWidget(BuildPartEditSection(bendPage));
     auto* freezeButtons = new QWidget(bendPage);
     auto* freezeLayout = new QVBoxLayout(freezeButtons);
     freezeLayout->setContentsMargins(0, 0, 0, 0);
@@ -112,7 +115,7 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("展開図(型紙)を作る"), "fabrication.create_pattern", this));
     bendLayout->addWidget(freezeButtons);
     bendLayout->addStretch(1);
-    stages_->addTab(bendPage, QStringLiteral("2 曲げ確認"));
+    stages_->addTab(bendPage, QStringLiteral("2 部材の編集・曲げ確認"));
 
     auto* materialPage = new QWidget(stages_);
     auto* materialLayout = new QVBoxLayout(materialPage);
@@ -403,6 +406,56 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     return bendWidget;
 }
 
+QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
+{
+    auto* editWidget = new QWidget(body);
+    auto* layout = new QVBoxLayout(editWidget);
+    layout->setContentsMargins(0, 4, 0, 0);
+    layout->setSpacing(2);
+    layout->addWidget(new QLabel(QStringLiteral("部材の編集(「曲げる部材」の番号に当てる)"),
+        editWidget));
+    layout->addWidget(MakeRun(editWidget, QStringLiteral("部材を分ける(1度目は下見)"),
+        "fabrication.split_part", this));
+    layout->addWidget(MakeRun(editWidget, QStringLiteral("部材を1つにする(1度目は下見)"),
+        "fabrication.merge_parts", this));
+    layout->addWidget(MakeRun(editWidget, QStringLiteral("選択した開いた線を切れ目にする"),
+        "fabrication.assign_relief_cut", this));
+    layout->addWidget(MakeRun(editWidget, QStringLiteral("展開の基準にする辺"),
+        "fabrication.set_unfold_base", this));
+    return editWidget;
+}
+
+//! 組立率を打った。同じ部材の半径へ言い換える(R(p) = R100 × 100 / p)。
+void V2FabricationDock::SyncRadiusFromPercent()
+{
+    if (loading_ || !bendShown_ || radius_ == nullptr) {
+        return;
+    }
+    loading_ = true;
+    const auto shown =
+        kachakacha::v2::fabrication::RadiusAtPercent(shownBend_, assembly_->value());
+    radius_->setValue(shown.value_or(0.0));
+    radius_->setEnabled(shown.has_value());
+    loading_ = false;
+}
+
+//! 半径を打った。同じ部材の組立率へ言い換える(p = R100 × 100 / R)。
+//! この板では曲げられない半径(100% より小さい)なら、組立率は動かさない。
+void V2FabricationDock::SyncPercentFromRadius()
+{
+    if (loading_ || !bendShown_ || radius_ == nullptr) {
+        return;
+    }
+    const auto percent =
+        kachakacha::v2::fabrication::PercentForRadius(shownBend_, radius_->value());
+    if (!percent.has_value()) {
+        return;
+    }
+    loading_ = true;
+    assembly_->setValue(*percent);
+    loading_ = false;
+}
+
 void V2FabricationDock::Connect()
 {
     QObject::connect(method_, &QComboBox::currentIndexChanged, this, [this] {
@@ -414,6 +467,10 @@ void V2FabricationDock::Connect()
     QObject::connect(splitSolidFaces_, &QCheckBox::toggled, this, [this] { Emit(); });
     QObject::connect(lockRadius_, &QPushButton::clicked, this,
         [this] { PressLockRadius(); });
+    QObject::connect(assembly_, &QDoubleSpinBox::valueChanged, this,
+        [this] { SyncRadiusFromPercent(); });
+    QObject::connect(radius_, &QDoubleSpinBox::valueChanged, this,
+        [this] { SyncPercentFromRadius(); });
     QObject::connect(manual_, &QLineEdit::textChanged, this, [this] { Emit(); });
     QObject::connect(maxParts_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
     QObject::connect(minWidth_, &QDoubleSpinBox::valueChanged, this, [this] { Emit(); });
@@ -600,6 +657,18 @@ double V2FabricationDock::AssemblyPercent() const
     return assembly_->value();
 }
 
+void V2FabricationDock::TypeAssemblyPercent(double percent)
+{
+    assembly_->setValue(percent);   // valueChanged → SyncRadiusFromPercent
+}
+
+void V2FabricationDock::TypeRadiusMm(double radiusMm)
+{
+    if (radius_ != nullptr) {
+        radius_->setValue(radiusMm);   // valueChanged → SyncPercentFromRadius
+    }
+}
+
 QString V2FabricationDock::PartNumbersText() const
 {
     return parts_->text();
@@ -723,6 +792,8 @@ void V2FabricationDock::ShowRadius(const kachakacha::v2::fabrication::BendRadius
         return;
     }
     loading_ = true;
+    shownBend_ = bend;
+    bendShown_ = bend.flatLengthMm > 0.0 && bend.radiusMm > 0.0;
     const auto shown = kachakacha::v2::fabrication::RadiusAtPercent(bend, percent);
     radius_->setValue(shown.value_or(0.0));
     radius_->setEnabled(shown.has_value());
@@ -754,6 +825,7 @@ void V2FabricationDock::ShowRadiusUnavailable(const QString& whyJa)
         return;
     }
     loading_ = true;
+    bendShown_ = false;
     radius_->setValue(0.0);
     radius_->setEnabled(false);
     radiusLocked_ = false;

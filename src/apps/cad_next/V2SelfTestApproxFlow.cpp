@@ -25,7 +25,9 @@
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
@@ -420,11 +422,68 @@ using kachakacha::v2::domain::Visibility;
     return Explain("読める番号へ戻せば、また半径が出る", dock.RadiusUsable());
 }
 
+//! 引継ぎ 2026-09-17 の 5。組立率と半径は同じことの言い換えで、どちらから打ってもよい。
+//! 打っただけでは文書は変わらず、「当てる」「固定」で初めて入る。
+[[nodiscard]] bool CasePercentAndRadiusSayTheSameThing(V2MainWindow& window)
+{
+    if (!MakeSurfaceFromScratch(window)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
+    if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    auto& dock = window.FabricationDock();
+    dock.SetStageIndex(1);
+    dock.SetPartNumbersText(QStringLiteral("1"));
+    window.RefreshBendRadius();
+    if (!Explain("半径の欄が出ている", dock.RadiusUsable())) {
+        return false;
+    }
+    const double radiusAt100 = dock.RadiusMm();
+    if (!Explain("100% の半径が正の数", radiusAt100 > 0.0)) {
+        return false;
+    }
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    dock.TypeAssemblyPercent(50.0);
+    if (!Explain((std::string("50% と打つと半径が2倍になる(") + std::to_string(dock.RadiusMm())
+                     + " mm)").c_str(),
+            std::abs(dock.RadiusMm() - radiusAt100 * 2.0) < 1.0e-6)) {
+        return false;
+    }
+    dock.TypeRadiusMm(radiusAt100 * 4.0);
+    if (!Explain((std::string("半径を4倍と打つと組立率が 25% になる(")
+                     + std::to_string(dock.AssemblyPercent()) + "%)").c_str(),
+            std::abs(dock.AssemblyPercent() - 25.0) < 1.0e-6)) {
+        return false;
+    }
+    // 100% より小さい半径は、この板ではそれ以上曲げられない。組立率は動かさない。
+    dock.TypeRadiusMm(radiusAt100 * 0.5);
+    if (!Explain("曲げられない半径では組立率が動かない",
+            std::abs(dock.AssemblyPercent() - 25.0) < 1.0e-6)) {
+        return false;
+    }
+    if (!Explain("打っただけでは文書は変わらない",
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    dock.TypeAssemblyPercent(50.0);
+    dock.PressApplyAssembly();
+    return Explain("「当てる」で初めて文書に入る",
+        window.Session().GetDocument().Revision() != revision);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ApproximationFlowCases()
 {
     return {
+        {"組立率と半径はどちらから打っても同じことを言い、当てるまで文書は変わらない",
+            CasePercentAndRadiusSayTheSameThing},
         {"読めない部材番号では半径を出さず、理由を出す",
             CaseUnreadablePartNumbersShowNoRadius},
         {"何も無いところから面を作り、方式を見比べて近似できる",

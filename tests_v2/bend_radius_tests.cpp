@@ -9,6 +9,7 @@ using kachakacha::v2::fabrication::BendRadius;
 using kachakacha::v2::fabrication::DescribeBendRadiusJa;
 using kachakacha::v2::fabrication::FullSweepAngleRad;
 using kachakacha::v2::fabrication::LockRadiusAtPercent;
+using kachakacha::v2::fabrication::PercentForRadius;
 using kachakacha::v2::fabrication::RadiusAtPercent;
 using kachakacha::v2::fabrication::RefitRadius;
 using kachakacha::v2::fabrication::SweepAngleRadAt;
@@ -43,6 +44,22 @@ KACHA_V2_TEST(bend_radius, 曲げても面内長が変わらない)
         RequireNear(*radius * angle.Value(), bend.flatLengthMm, 1.0e-9,
             "弧の長さが板の長さと同じ(" + std::to_string(percent) + "%)");
     }
+}
+
+KACHA_V2_TEST(bend_radius, 半径から曲げ具合へ戻せる)
+{
+    // 棚の「組立率」と「半径」はどちらから打ってもよい(引継ぎ 2026-09-17 の 5)。
+    const BendRadius bend = Shoulder();
+    for (const double percent : {10.0, 25.0, 50.0, 75.0, 100.0}) {
+        const auto radius = RadiusAtPercent(bend, percent);
+        Require(radius.has_value(), "半径が出る");
+        const auto back = PercentForRadius(bend, *radius);
+        Require(back.has_value(), "曲げ具合へ戻る");
+        RequireNear(*back, percent, 1.0e-9, "往復して同じ曲げ具合");
+    }
+    Require(!PercentForRadius(bend, bend.radiusMm * 0.5).has_value(),
+        "100% の半径より小さい半径は、この板では曲げられない");
+    Require(!PercentForRadius(bend, 0.0).has_value(), "0 の半径は無い");
 }
 
 KACHA_V2_TEST(bend_radius, 曲げるほど半径が小さくなる)

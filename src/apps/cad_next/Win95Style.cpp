@@ -401,8 +401,12 @@ QFont Win95Style::Win95Font()
     for (const QString& candidate : candidates) {
         if (families.contains(candidate)) {
             QFont font(candidate, 9);
+            // 点の字形(PreferBitmap)は、点の大きさに合わない拡大率(125%・150%)だと
+            // 近い字形を引き伸ばして「図」「操」が塊になった(FI-005、オーナー実機)。
+            // 輪郭の字形を、なめらかにせず(NoAntialias)描くと、当時の見た目のまま
+            // どの拡大率でも字画が途切れない。
             font.setStyleStrategy(static_cast<QFont::StyleStrategy>(
-                QFont::PreferBitmap | QFont::NoAntialias));
+                QFont::PreferOutline | QFont::NoAntialias));
             return font;
         }
     }
@@ -541,11 +545,13 @@ int Win95Style::pixelMetric(
         return 6;
     case PM_ButtonDefaultIndicator:
         return 1;
-    case PM_MenuBarItemSpacing:
     case PM_MenuBarPanelWidth:
         return 0;
+    case PM_MenuBarItemSpacing:
+        // 献立の項目のあいだの空き。0 だと字が詰まって読めない(FI-005)。
+        return 4;
     case PM_MenuBarHMargin:
-        return 0;
+        return 4;
     case PM_MenuBarVMargin:
         return 1;
     case PM_MenuHMargin:
@@ -633,6 +639,7 @@ QSize Win95Style::sizeFromContents(
         size.setHeight(std::max(size.height(), 22));
     } else if (type == CT_MenuBarItem) {
         size.setHeight(std::max(size.height(), 19));
+        size.setWidth(size.width() + 8);   // 横の余白。高さだけ広げていた(FI-005)
     } else if (type == CT_MenuItem) {
         const auto* menuItem = qstyleoption_cast<const QStyleOptionMenuItem*>(option);
         if (menuItem != nullptr && menuItem->menuItemType == QStyleOptionMenuItem::Separator) {

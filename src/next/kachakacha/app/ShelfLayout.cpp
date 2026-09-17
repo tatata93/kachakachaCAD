@@ -23,6 +23,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Part:        return "部品";
     case Shelf::Extrude:    return "押し出し";
     case Shelf::Surface:    return "面を作る";
+    case Shelf::Boolean:    return "足す・引く";
     }
     return "なし";
 }
@@ -33,12 +34,13 @@ const std::vector<Shelf>& AllShelves()
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
+        Shelf::Boolean,
     };
     return all;
 }
 
 std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
-    bool surfacing)
+    bool surfacing, bool booleaning)
 {
     // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
@@ -50,6 +52,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     // 方式も役割も順序も触れない。
     if (surfacing) {
         return {Shelf::Surface, Shelf::Part};
+    }
+    // 「足す・引く」も同じ。土台・相手の欄が見えていなければ、選び直しも確定も触れない。
+    if (booleaning) {
+        return {Shelf::Boolean, Shelf::Part};
     }
     switch (tool) {
     case DrawingTool::Measure:
@@ -105,9 +111,11 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     return {Shelf::Edit};
 }
 
-Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing)
+Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing,
+    bool booleaning)
 {
-    const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding, surfacing);
+    const std::vector<Shelf> shelves =
+        ShelvesFor(mode, tool, extruding, surfacing, booleaning);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

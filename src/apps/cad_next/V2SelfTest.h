@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "kachakacha/base/Ids.h"
 #include "kachakacha/domain/Entity.h"
 
 #include <Qt>
@@ -113,6 +114,14 @@ void Note(const char* what);
 [[nodiscard]] bool ClickOnAnyCurve(V2MainWindow& window, Qt::KeyboardModifiers modifiers);
 //! 画面に見えている形状ガイドの塗りのどれかを、実際に拾う。
 [[nodiscard]] bool ClickOnAnyGuideSurface(V2MainWindow& window);
+//! 上から見て、画面の割合で指した場所に矩形を1つ引く。引いた線の番号(失敗なら Nil)。
+[[nodiscard]] kachakacha::v2::base::EntityId DrawRectangleAtByHand(V2MainWindow& window,
+    double x0, double y0, double x1, double y1);
+//! その線の上を実際に押す。
+[[nodiscard]] bool ClickOnCurveOf(V2MainWindow& window, const kachakacha::v2::base::EntityId& id);
+
+//! 足す・引くの人の道(HP-BO)。道具 → 土台 → 相手(自動遷移)→ 下見 → Enter。
+[[nodiscard]] std::vector<SelfTestCase> HumanPathBooleanCases();
 
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();

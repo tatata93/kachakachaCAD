@@ -51,7 +51,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         return false;
     }
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
-        || surfaceShelfShown_ || approxShelfShown_;
+        || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -86,6 +86,17 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
         }
         if (key == Qt::Key_Return || key == Qt::Key_Enter) {
             ConfirmApprox();
+            return true;
+        }
+    }
+    if (booleanShelfShown_) {
+        if (key == Qt::Key_Escape) {
+            EndBoolean();
+            SetStatus(QStringLiteral("足す・引く: やめました。何も作っていません。"));
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            ConfirmBoolean();
             return true;
         }
     }

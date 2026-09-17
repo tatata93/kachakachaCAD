@@ -18,7 +18,6 @@
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/document/Commands.h"
-#include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctExtrude.h"
 #include "kachakacha/kernel/OcctWireCage.h"
 #include "kachakacha/modeling/ExtrudeInput.h"
@@ -133,7 +132,8 @@ void V2MainWindow::RunPartCommand(std::string_view id)
         RunWireCage();
         return;
     }
-    RunBoolean(id == "part.boolean_cut");
+    // 足す・引くは道具から始める(V2BooleanCommands.cpp)。ここへは来ない。
+    RunBooleanTool(id == "part.boolean_cut");
 }
 
 kachakacha::v2::app::ExtrudeFacts V2MainWindow::BuildExtrudeFacts(
@@ -677,65 +677,7 @@ void V2MainWindow::RunWireCage()
             .arg(static_cast<int>(built.Value().size())));
 }
 
-void V2MainWindow::RunBoolean(bool cut)
-{
-    using kachakacha::v2::kernel::BooleanOperation;
-    using kachakacha::v2::kernel::BuildBoolean;
-
-    // 足す・引くは相手を明示して選ぶ。近い部品を勝手に選ばない(§8.4)。
-    // 選んだ順で決まる。1つ目が土台、2つ目が相手である。
-    const auto& selection = viewport_->Selection();
-    std::vector<EntityId> parts;
-    for (const auto& id : selection.entityIds) {
-        const auto* entity = session_->GetDocument().FindEntity(id);
-        if (entity != nullptr
-            && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
-            parts.push_back(id);
-        }
-    }
-    const QString label = cut ? QStringLiteral("引く") : QStringLiteral("足す");
-    if (parts.size() != 2) {
-        SetStatus(QStringLiteral("%1: 部品をちょうど2つ選んでください"
-                                 "(1つ目が土台、2つ目が相手です)。")
-                .arg(label));
-        return;
-    }
-    const auto base = partShapes_.find(parts[0].ToString());
-    const auto other = partShapes_.find(parts[1].ToString());
-    if (base == partShapes_.end() || other == partShapes_.end()) {
-        SetStatus(QStringLiteral("%1: 選んだ部品の立体がまだありません。").arg(label));
-        return;
-    }
-    const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto built = BuildBoolean(
-        cut ? BooleanOperation::Difference : BooleanOperation::Union, base->second,
-        other->second, tolerance);
-    if (!built.HasValue()) {
-        ReportDiagnostics(built.Diagnostics());
-        return;
-    }
-    kachakacha::v2::domain::BooleanDefinition definition;
-    definition.mode = cut ? 1 : 0;
-    definition.targets.push_back(parts[0]);
-    definition.tools.push_back(parts[1]);
-    // 出来た形の辺は、いまは持たない。持てるようになるまで、元の辺を使い回さない。
-    // 使い回すと、足したのに元の形が見えたままになる。
-    const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::Boolean,
-        std::move(definition), built.Value().handle, {},
-        cut ? "引く" : "足す");
-    if (madeId.IsNil()) {
-        return;
-    }
-    // 使い切った2つは隠す。消すと、作り方をたどれなくなる。
-    (void)session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
-        parts, kachakacha::v2::domain::Visibility::Hidden));
-    AdoptCurrentDocument();
-    SetStatus(QStringLiteral("%1: 体積が %2 mm3 から %3 mm3 になりました。")
-            .arg(label)
-            .arg(built.Value().previousVolumeMm3, 0, 'f', 4)
-            .arg(built.Value().volumeMm3, 0, 'f', 4));
-}
+// 足す・引く(RunBoolean)は V2BooleanCommands.cpp の道具へ移した(引継ぎ 2026-09-17 の 4)。
 
 kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     kachakacha::v2::domain::FeatureType type,

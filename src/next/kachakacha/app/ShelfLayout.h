@@ -56,6 +56,8 @@ enum class Shelf {
     //! 「面を作る」の欄(作り方・入力・断面順・状態)。
     //! UI の正本のとおり、4つの段を1枚に置く。
     Surface,
+    //! 「足す・引く」の欄(土台・相手・状態)。引継ぎ 2026-09-17 の 4。
+    Boolean,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -67,12 +69,13 @@ enum class Shelf {
 //! `Shelf::Extrude` がどの組み合わせにも現れず、`RefreshRightShelves` が
 //! **毎回その棚を隠していた**。棚に値を入れた直後に自分で隠していたので、
 //! 押し出しの欄は一度も画面に出ていなかった。
+//! `booleaning` は「足す・引くの欄を構えている最中か」。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false, bool surfacing = false);
+    bool extruding = false, bool surfacing = false, bool booleaning = false);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
 [[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false, bool surfacing = false);
+    bool extruding = false, bool surfacing = false, bool booleaning = false);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

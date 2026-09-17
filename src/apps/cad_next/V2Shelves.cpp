@@ -155,6 +155,18 @@ void V2MainWindow::BuildOutputShelves()
         },
         [this] { ResetSurfaceInput(); });
 
+    booleanDock_ = new V2BooleanDock(this);
+    booleanDock_->SetOperationHandler([this](bool cut) { ChooseBooleanOperation(cut); });
+    booleanDock_->SetActivateHandler(
+        [this](kachakacha::v2::app::BooleanSlot slot) { ActivateBooleanSlot(slot); });
+    booleanDock_->SetClearHandler(
+        [this](kachakacha::v2::app::BooleanSlot slot) { ClearBooleanSlot(slot); });
+    booleanDock_->SetActionHandlers([this] { ConfirmBoolean(); },
+        [this] {
+            EndBoolean();
+            SetStatus(QStringLiteral("足す・引く: やめました。"));
+        });
+
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });
     extrudeDock_->SetOptionHandler([this] { RefreshExtrudeFromDock(); });

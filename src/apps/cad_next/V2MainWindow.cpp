@@ -290,6 +290,8 @@ void V2MainWindow::WireViewportCallbacks()
         RefreshSurfaceForSelectionChange();
         // 近似中の素のクリックは対象へ入る(面と立体だけ)。押すたびに候補を作り直す。
         RefreshApproxForSelectionChange();
+        // 足す引く中の素のクリックは土台 → 相手の順に入る(押し直すと外れる)。
+        RefreshBooleanForSelectionChange();
         // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
         RefreshExtrudeForSelectionChange();
         RefreshExportCounts();
@@ -907,6 +909,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     // 文書が入れ替わった。構えていた道具はやめる。古い入力を新しい文書へ持ち越さない。
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
+    if (booleanShelfShown_) { EndBoolean(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
@@ -1351,13 +1354,9 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (EnterToolFor(*command)) {
         return;
     }
-    if (id == "surface.create" && !surfaceShelfShown_) {
-        ClearPendingCommand(); RunGuideCommand(id); return;
-    }
-    // 近似も道具から始める。何も選んでいなくても棚が出て、3D で対象を押せる。
-    // 構えている間の2度目は確定。構えて待つ道(ArmCommand)は通らない。
-    if (id == "fabrication.create") {
-        ClearPendingCommand(); RunFabricationCreate(); return;
+    // 面を作る・近似・足す引くは、棚を構えてから 3D で相手を選ぶ(構えて待つ道は通らない)。
+    if (BeginToolFirstCommand(id)) {
+        return;
     }
     // まだ使えない命令は、断って終わりにせず **構えて待つ**。
     // 「道具を選ぶ → 相手を選ぶ」の順で使えるようにする(オーナー指摘 2026-09-11)。

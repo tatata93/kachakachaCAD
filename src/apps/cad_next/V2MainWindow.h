@@ -27,6 +27,7 @@
 #include "V2ParameterDock.h"
 #include "V2ExtrudeDock.h"
 #include "V2SurfaceDock.h"
+#include "V2BooleanDock.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
@@ -37,6 +38,7 @@
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
 #include "kachakacha/app/ApproxInput.h"
+#include "kachakacha/app/BooleanInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
@@ -238,6 +240,13 @@ public:
     SurfaceTableFromInput() const;
     //! 「面を作る」の棚。試験から見る。
     [[nodiscard]] V2SurfaceDock& SurfaceDock() { return *surfaceDock_; }
+    [[nodiscard]] V2BooleanDock& BooleanDock() { return *booleanDock_; }
+    //! いま「足す・引く」の道具が動いているか。試験から見る。
+    [[nodiscard]] bool BooleanShelfShown() const noexcept { return booleanShelfShown_; }
+    [[nodiscard]] const kachakacha::v2::app::BooleanInputState& BooleanInput() const
+    {
+        return booleanInput_;
+    }
     //! いまの入力。試験から見る。
     [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
     {
@@ -768,6 +777,20 @@ private:
     [[nodiscard]] static bool IsFabricationCommand(std::string_view id);
     void RunFabricationCommand(std::string_view id);
     void RunFabricationCreate();
+    //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
+    [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
+    //! 「足す・引く」の道具(引継ぎ 2026-09-17 の 4、V2BooleanCommands.cpp)。
+    void RunBooleanTool(bool cut);
+    void MirrorBooleanToSelection();
+    void RefreshBooleanForSelectionChange();
+    void RefreshBooleanPreview();
+    void RefreshBooleanDock();
+    void RefreshBooleanAll();
+    void ActivateBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
+    void ClearBooleanSlot(kachakacha::v2::app::BooleanSlot slot);
+    void ChooseBooleanOperation(bool cut);
+    void EndBoolean();
+    void ConfirmBoolean();
     // ---- 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。V2ApproxCommands.cpp が持つ。
     [[nodiscard]] kachakacha::v2::domain::CreateFabricationModelDefinition
     ApproxBaseDefinition() const;
@@ -832,7 +855,6 @@ private:
     void RunPartCommand(std::string_view id);
     void RunExtrude();
     void RunWireCage();
-    void RunBoolean(bool cut);
     //! 出来た部品を文書へ足す。形は持たせず、作り方だけを持たせる。
     //! 足せたら、その部品の EntityId を返す。足せなければ空を返す。
     //! `inputs` は「何に依っているか」。空なら画面の選択を使う(旧来の呼び口)。
@@ -906,6 +928,15 @@ private:
     std::vector<kachakacha::v2::domain::CreateFabricationModelDefinition> approxDefinitions_;
     std::vector<kachakacha::v2::base::EntityId> approxMirror_;
     bool approxMirroring_ = false;
+    //! 「足す・引く」の道具。土台・相手・下見の形。確定するまで文書へは入らない。
+    bool booleanShelfShown_ = false;
+    kachakacha::v2::app::BooleanInputState booleanInput_;
+    kachakacha::v2::app::BooleanPreviewOutcome booleanOutcome_;
+    //! 下見に使った形。**確定はこれをそのまま入れる。**
+    std::optional<kachakacha::v2::modeling::KernelShapeHandle> booleanBuilt_;
+    std::vector<kachakacha::v2::base::EntityId> booleanMirror_;
+    bool booleanMirroring_ = false;
+    V2BooleanDock* booleanDock_ = nullptr;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

@@ -1144,6 +1144,8 @@ struct OutputCounts {
         window.FabricationModelCount() == 1);
 }
 
+} // namespace
+
 //! 上から見て、画面の割合で指した場所に矩形を1つ引く。引いた線の番号を返す。
 [[nodiscard]] kachakacha::v2::base::EntityId DrawRectangleAtByHand(V2MainWindow& window,
     double x0, double y0, double x1, double y1)
@@ -1190,6 +1192,8 @@ struct OutputCounts {
     }
     return false;
 }
+
+namespace {
 
 [[nodiscard]] bool Holds(const std::vector<kachakacha::v2::base::EntityId>& list,
     const kachakacha::v2::base::EntityId& id)

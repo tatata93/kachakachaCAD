@@ -203,8 +203,11 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         for (const DrawingTool tool : kAllTools) {
             for (const bool extruding : {false, true}) {
                 for (const bool surfacing : {false, true}) {
-                    for (const Shelf shelf : ShelvesFor(mode, tool, extruding, surfacing)) {
-                        reachable.insert(static_cast<int>(shelf));
+                    for (const bool booleaning : {false, true}) {
+                        for (const Shelf shelf :
+                            ShelvesFor(mode, tool, extruding, surfacing, booleaning)) {
+                            reachable.insert(static_cast<int>(shelf));
+                        }
                     }
                 }
             }
@@ -230,6 +233,22 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         "押し出しの棚は、棚の決め方そのものから出る(命令が一瞬出すのではない)");
     Require(reachable.count(static_cast<int>(Shelf::Surface)) == 1,
         "「面を作る」の棚も、棚の決め方そのものから出る");
+    Require(reachable.count(static_cast<int>(Shelf::Boolean)) == 1,
+        "「足す・引く」の棚も、棚の決め方そのものから出る");
+}
+
+KACHA_V2_TEST(shelf, 足す引くの最中はその棚が前に出る)
+{
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        const auto shelves = ShelvesFor(mode, DrawingTool::Select, false, false, true);
+        Require(!shelves.empty() && shelves.front() == Shelf::Boolean, "「足す・引く」の棚が先頭");
+        Require(FrontShelfFor(mode, DrawingTool::Select, false, false, true) == Shelf::Boolean,
+            "前に出るのもその棚");
+    }
+    Require(ShelvesFor(UiMode::Part, DrawingTool::Select, false, true, true).front()
+            == Shelf::Surface,
+        "面を作るが先(両方は起きないが、起きたときに黙って混ぜない)");
 }
 
 KACHA_V2_TEST(shelf, 面を作る最中はその棚が前に出る)

@@ -36,6 +36,7 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
+#include "kachakacha/app/ApproxInput.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
@@ -219,6 +220,17 @@ public:
     bool PickAnyCurveForShot();
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
+    //! いま近似の道具が動いているか。試験から見る。
+    [[nodiscard]] bool ApproxShelfShown() const noexcept { return approxShelfShown_; }
+    [[nodiscard]] const kachakacha::v2::app::ApproxInputState& ApproxInput() const
+    {
+        return approxInput_;
+    }
+    [[nodiscard]] const std::vector<kachakacha::v2::app::ApproxCandidateOutcome>&
+    ApproxOutcomes() const
+    {
+        return approxOutcomes_;
+    }
     //! 選んだものから分かる事実。作り方を薦めるのに使う。
     [[nodiscard]] kachakacha::v2::app::SurfaceSelectionFacts SurfaceFactsNow() const;
     //! 入力から表を組み立てる。**作る直前の1回だけ。**
@@ -473,6 +485,7 @@ public:
     //! 見え方のコマンドか。V2ViewCommands.cpp が持つ。
     [[nodiscard]] static bool IsViewCommand(std::string_view id);
     void RunViewCommand(std::string_view id);
+    void ToggleSnap();
     //! 見え方の段を当てる。段の中身は core が決める。
     void ApplyDisplayStage(kachakacha::v2::app::DisplayStage stage);
     //! 一覧で名前を書き換え始める(F2)。
@@ -755,6 +768,19 @@ private:
     [[nodiscard]] static bool IsFabricationCommand(std::string_view id);
     void RunFabricationCommand(std::string_view id);
     void RunFabricationCreate();
+    // ---- 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。V2ApproxCommands.cpp が持つ。
+    [[nodiscard]] kachakacha::v2::domain::CreateFabricationModelDefinition
+    ApproxBaseDefinition() const;
+    void EvaluateApproxCandidates();
+    void ShowApproxPreview();
+    void RefreshApproxDock();
+    void RefreshApproxAll();
+    void MirrorApproxSourcesToSelection();
+    void RefreshApproxForSelectionChange();
+    void ChooseApproxCandidate(int candidate);
+    void ClearApproxSources();
+    void EndApprox();
+    void ConfirmApprox();
     void RunCreatePattern();
     //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
     //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
@@ -793,7 +819,8 @@ private:
     [[nodiscard]] kachakacha::v2::base::EntityId CurrentFabricationModelId() const;
     //! 元になるものを、いま画面が持っている材料から集める。作るときも作り直すときも同じ。
     [[nodiscard]] std::vector<kachakacha::v2::app::FabricationSource>
-    FabricationSourcesFor(const std::vector<kachakacha::v2::base::EntityId>& ids) const;
+    FabricationSourcesFor(const std::vector<kachakacha::v2::base::EntityId>& ids,
+        bool splitSolidFaces) const;
     //! 作り方から近似モデルを作り直し、覚える。開き直しから呼ぶ。
     bool RebuildFabricationModel(const kachakacha::v2::domain::Feature& feature,
         const kachakacha::v2::base::EntityId& output);
@@ -871,6 +898,14 @@ private:
     std::vector<kachakacha::v2::base::EntityId> surfaceMirror_;
     //! 直近の検査が採用した断面の並び(元のワイヤーの番号)。BuildSurfaceFromTable が書く。
     std::vector<kachakacha::v2::base::EntityId> surfaceAdoptedSections_;
+    //! 「近似」の道具。対象・候補・結果。確定するまで文書へは入らない。
+    bool approxShelfShown_ = false;
+    kachakacha::v2::app::ApproxInputState approxInput_;
+    std::vector<kachakacha::v2::app::ApproxCandidateOutcome> approxOutcomes_;
+    std::vector<std::optional<kachakacha::v2::app::FabricationEvaluation>> approxEvaluations_;
+    std::vector<kachakacha::v2::domain::CreateFabricationModelDefinition> approxDefinitions_;
+    std::vector<kachakacha::v2::base::EntityId> approxMirror_;
+    bool approxMirroring_ = false;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

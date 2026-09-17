@@ -51,7 +51,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         return false;
     }
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
-        || surfaceShelfShown_;
+        || surfaceShelfShown_ || approxShelfShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -76,6 +76,18 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (surfaceShelfShown_) {
         return HandleSurfaceToolKey(key);
+    }
+    if (approxShelfShown_) {
+        // 近似も同じ。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。
+        if (key == Qt::Key_Escape) {
+            EndApprox();
+            SetStatus(QStringLiteral("近似: やめました。何も作っていません。"));
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            ConfirmApprox();
+            return true;
+        }
     }
     return false;
 }

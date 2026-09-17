@@ -80,13 +80,17 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     auto* approximationLayout = new QVBoxLayout(approximationPage);
     approximationLayout->setContentsMargins(4, 8, 4, 4);
     approximationLayout->setSpacing(4);
+    // 最上段に「対象と候補」。道具を押した直後から、3D で押した対象と
+    // 3通りの作り方の比べ(部材数・最大のずれ)がここに出る(引継ぎ 2026-09-17 の 3)。
+    approximationLayout->addWidget(BuildApproxInput(approximationPage));
     approximationLayout->addWidget(BuildOptionsForm(approximationPage));
 
     auto* buttons = new QWidget(approximationPage);
     auto* buttonLayout = new QVBoxLayout(buttons);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
     buttonLayout->setSpacing(2);
-    buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択面から製作モデルを作る"), "fabrication.create", this));
+    confirmApprox_ = MakeRun(buttons, QStringLiteral("製作モデルを作る(確定 Enter)"), "fabrication.create", this);
+    buttonLayout->addWidget(confirmApprox_);
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("近似プレビューを更新"), "fabrication.preview_update", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択境界を開口 / 折り線にする"), "fabrication.assign_role", this));
     buttonLayout->addWidget(MakeRun(buttons, QStringLiteral("選択した開いた線を切れ目にする"), "fabrication.assign_relief_cut", this));
@@ -129,6 +133,121 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     setWidget(scroll);
     Connect();
     RefreshMethodRows();
+}
+
+QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
+{
+    auto* box = new QWidget(body);
+    auto* layout = new QVBoxLayout(box);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(2);
+    auto* row = new QHBoxLayout();
+    row->addWidget(new QLabel(QStringLiteral("対象"), box));
+    sourcesValue_ = new QLabel(QStringLiteral("(3D で面か立体を押してください)"), box);
+    sourcesValue_->setWordWrap(true);
+    row->addWidget(sourcesValue_, 1);
+    clearSources_ = new QPushButton(QStringLiteral("解除"), box);
+    QObject::connect(clearSources_, &QPushButton::clicked, this, [this] {
+        if (!loading_ && clearSourcesHandler_) {
+            clearSourcesHandler_();
+        }
+    });
+    row->addWidget(clearSources_);
+    layout->addLayout(row);
+    layout->addWidget(new QLabel(QStringLiteral("候補(実際に作って比べます)"), box));
+    for (int index = 0; index < 3; ++index) {
+        auto* button = new QPushButton(box);
+        button->setCheckable(true);
+        QObject::connect(button, &QPushButton::clicked, this, [this, index] {
+            if (!loading_ && candidateHandler_) {
+                candidateHandler_(index);
+            }
+        });
+        candidates_.push_back(button);
+        layout->addWidget(button);
+    }
+    ShowApproxInput(QString(), {}, -1, false);
+    return box;
+}
+
+void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
+    const std::vector<QString>& candidateLinesJa, int selectedCandidate, bool canConfirm)
+{
+    loading_ = true;
+    if (sourcesValue_ != nullptr) {
+        sourcesValue_->setText(sourcesJa.isEmpty()
+                ? QStringLiteral("(3D で面か立体を押してください)")
+                : sourcesJa);
+    }
+    if (clearSources_ != nullptr) {
+        clearSources_->setEnabled(!sourcesJa.isEmpty());
+    }
+    for (std::size_t index = 0; index < candidates_.size(); ++index) {
+        QPushButton* button = candidates_[index];
+        button->setText(index < candidateLinesJa.size() ? candidateLinesJa[index]
+                                                        : QStringLiteral("—"));
+        button->setChecked(static_cast<int>(index) == selectedCandidate);
+        button->setEnabled(index < candidateLinesJa.size());
+    }
+    if (confirmApprox_ != nullptr) {
+        confirmApprox_->setEnabled(canConfirm);
+    }
+    loading_ = false;
+}
+
+void V2FabricationDock::SetCandidateHandler(std::function<void(int)> handler)
+{
+    candidateHandler_ = std::move(handler);
+}
+
+void V2FabricationDock::SetClearSourcesHandler(std::function<void()> handler)
+{
+    clearSourcesHandler_ = std::move(handler);
+}
+
+bool V2FabricationDock::ClickCandidate(int candidate)
+{
+    if (candidate < 0 || candidate >= static_cast<int>(candidates_.size())) {
+        return false;
+    }
+    QPushButton* button = candidates_[static_cast<std::size_t>(candidate)];
+    if (!button->isVisible() || !button->isEnabled()) {
+        return false;
+    }
+    button->click();
+    return true;
+}
+
+bool V2FabricationDock::ClickClearSources()
+{
+    if (clearSources_ == nullptr || !clearSources_->isVisible() || !clearSources_->isEnabled()) {
+        return false;
+    }
+    clearSources_->click();
+    return true;
+}
+
+int V2FabricationDock::SelectedCandidateShown() const
+{
+    for (std::size_t index = 0; index < candidates_.size(); ++index) {
+        if (candidates_[index]->isChecked()) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+QString V2FabricationDock::CandidateTextJa(int candidate) const
+{
+    if (candidate < 0 || candidate >= static_cast<int>(candidates_.size())) {
+        return QString();
+    }
+    return candidates_[static_cast<std::size_t>(candidate)]->text();
+}
+
+QString V2FabricationDock::SourcesTextJa() const
+{
+    return sourcesValue_ == nullptr ? QString() : sourcesValue_->text();
 }
 
 QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)

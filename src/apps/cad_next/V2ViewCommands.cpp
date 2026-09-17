@@ -49,6 +49,20 @@ bool V2MainWindow::IsViewCommand(std::string_view id)
         || id == "entity.rename";
 }
 
+void V2MainWindow::ToggleSnap()
+{
+    snapEnabled_ = !snapEnabled_;
+    if (QAction* action = ActionFor("snap.toggle"); action != nullptr) {
+        action->setChecked(snapEnabled_);
+    }
+    // 吸着は「道具として切る」と「S で一時的に止める」の2つがある。
+    // 画面がその両方をまとめて持つ。片方だけ見ると、S を離した瞬間に
+    // 切ってあったはずの吸着が戻る。
+    viewport_->SetSnapSuppressed(!snapEnabled_);
+    SetStatus(snapEnabled_ ? QStringLiteral("吸着を入れました。")
+                           : QStringLiteral("吸着を切りました(Sでも一時的に止められます)。"));
+}
+
 void V2MainWindow::RunViewCommand(std::string_view id)
 {
     if (id == "view.display_settings") {

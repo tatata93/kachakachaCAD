@@ -20,6 +20,7 @@
 #include "V2SelfTest.h"
 
 #include "V2ExtrudeDock.h"
+#include "V2FabricationDock.h"
 #include "V2MainWindow.h"
 #include "V2PartDock.h"
 #include "V2SurfaceDock.h"
@@ -64,6 +65,8 @@ using kachakacha::v2::domain::EntityKind;
     }
     return count;
 }
+
+} // namespace
 
 //! 上から見て矩形を1つ引く。**道具を持って画面を押す。**人と同じ道。
 [[nodiscard]] bool DrawRectangleByHand(V2MainWindow& window)
@@ -185,6 +188,8 @@ using kachakacha::v2::domain::EntityKind;
     }
     return false;
 }
+
+namespace {
 
 //! HP-EX-01。実際に拾って押し出し、棚と下見が見えて、確定で立体になる。
 [[nodiscard]] bool CaseHumanPathExtrudeProfileOnly(V2MainWindow& window)
@@ -1102,19 +1107,21 @@ struct OutputCounts {
     viewport.SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
     window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
     window.RunCommand("fabrication.create");
-    if (!Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))) {
+    // 道具から始める(引継ぎ 3)。押しただけでは何も作らず、棚が構える。
+    if (!Explain("近似を押すと棚が構え、まだ何も作らない",
+            window.ApproxShelfShown() && window.FabricationModelCount() == 0)
+        || !Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))) {
         return false;
     }
-    // pending command が選択時に実行済みなら二重実行しない。
-    if (window.FabricationModelCount() == 0) {
-        window.RunCommand("fabrication.create");
-    }
-    if (!Explain("製作モデルができる", window.FabricationModelCount() == 1)
+    auto& dock = window.FabricationDock();
+    // 既定の候補は棚の方式どおり(帯)。70% の曲げに帯が要るので、ここで確かめる。
+    if (!Explain("既定の候補は帯(B)", dock.SelectedCandidateShown() == 1)
+        || !Explain("Enterで確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("製作モデルができる", window.FabricationModelCount() == 1)
         || !Explain("製作の棚が見えている", window.ShelfShown(Shelf::Fabrication))) {
         return false;
     }
 
-    auto& dock = window.FabricationDock();
     dock.SetStageIndex(1);
     if (!Explain("曲げ確認の工程が見える", dock.StageIndex() == 1)) {
         return false;

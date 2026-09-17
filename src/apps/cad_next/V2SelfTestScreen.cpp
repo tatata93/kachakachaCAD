@@ -1057,7 +1057,8 @@ struct BoxSelectFixture {
     window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     window.RunCommand("fabrication.create_pattern");
     if (!Explain((std::string("型紙が下見に出る(")
                      + std::to_string(window.PatternDock().PageCount()) + " 枚)").c_str(),

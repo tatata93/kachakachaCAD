@@ -97,7 +97,8 @@ using kachakacha::v2::domain::Visibility;
 
     // 方式を切り替えて、両方の結果を見比べる。人はここで「どちらで作るか」を決める。
     viewport.SetSelection(surfaces);
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     const std::string firstWay = window.StatusText().toStdString();
     if (!Explain((std::string("1つ目の方式で近似できる(") + firstWay + ")").c_str(),
             window.FabricationModelCount() == 1)) {
@@ -111,7 +112,8 @@ using kachakacha::v2::domain::Visibility;
     }
     window.RunCommand("fabrication.set_method");
     viewport.SetSelection(surfaces);
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     const std::string secondWay = window.StatusText().toStdString();
     if (!Explain((std::string("2つ目の方式でも近似できる(") + secondWay + ")").c_str(),
             window.FabricationModelCount() == 1)) {
@@ -145,7 +147,8 @@ using kachakacha::v2::domain::Visibility;
     auto& viewport = window.Viewport();
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
         return false;
     }
@@ -202,7 +205,8 @@ using kachakacha::v2::domain::Visibility;
     auto& viewport = window.Viewport();
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
         return false;
     }
@@ -251,7 +255,8 @@ using kachakacha::v2::domain::Visibility;
         viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
             window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
     }
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
         return false;
     }
@@ -384,7 +389,8 @@ using kachakacha::v2::domain::Visibility;
     auto& viewport = window.Viewport();
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似ができる", window.FabricationModelCount() == 1)) {
         return false;
     }

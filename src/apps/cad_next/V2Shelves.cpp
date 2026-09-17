@@ -23,7 +23,17 @@ void V2MainWindow::BuildEditingShelves()
     // 製作の棚(V1 の近似モデル画面)。方式・分割・曲げ・固定・型紙を 1 枚に。
     fabricationDock_ = new V2FabricationDock(this);
     fabricationDock_->SetRunHandler([this](const char* command) { RunCommand(command); });
-    fabricationDock_->SetChoiceChangedHandler([this] { AdoptFabricationChoice(); });
+    fabricationDock_->SetChoiceChangedHandler([this] {
+        AdoptFabricationChoice();
+        // 欄が変われば、道具の最中なら候補を作り直す。欄と下見がずれたままにしない。
+        if (approxShelfShown_) {
+            RefreshApproxAll();
+        }
+    });
+    fabricationDock_->SetCandidateHandler([this](int candidate) {
+        ChooseApproxCandidate(candidate);
+    });
+    fabricationDock_->SetClearSourcesHandler([this] { ClearApproxSources(); });
     fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
         SetAssemblyPercent(percent, parts);
         // 曲げ具合と半径は同じことの言い換えである。片方を動かしたら両方を映す。

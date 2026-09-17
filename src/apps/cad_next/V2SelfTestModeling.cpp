@@ -548,7 +548,8 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain((std::string("部材になる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.StatusText().contains(QStringLiteral("枚の部材")))) {
@@ -743,7 +744,8 @@ namespace {
         return false;
     }
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     return Explain((std::string("何を選ぶか言う(") + window.StatusText().toStdString()
                        + ")").c_str(),
         window.StatusText().contains(QStringLiteral("部品か形状ガイド")));
@@ -963,7 +965,8 @@ namespace {
     window.Viewport().SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Part));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain((std::string("部材になる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.StatusText().contains(QStringLiteral("枚の部材")))) {
@@ -1265,7 +1268,8 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::GuideSurface));
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain((std::string("展開して部材になる(")
                      + window.StatusText().toStdString() + ")").c_str(),
             window.StatusText().contains(QStringLiteral("部材")))) {

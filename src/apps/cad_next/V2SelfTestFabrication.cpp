@@ -97,7 +97,8 @@ namespace kachakacha::v2::selftest {
     if (!MakeCurvedGuideSurface(window)) {
         return false;
     }
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain((std::string("近似モデルができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.FabricationModelCount() == 1)) {
@@ -141,7 +142,8 @@ namespace kachakacha::v2::selftest {
     if (!MakeCurvedGuideSurface(window)) {
         return false;
     }
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
         return false;
     }
@@ -225,7 +227,8 @@ namespace kachakacha::v2::selftest {
     if (!MakeCurvedGuideSurface(window)) {
         return false;
     }
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
         return false;
     }
@@ -317,7 +320,8 @@ namespace kachakacha::v2::selftest {
     if (!MakeCurvedGuideSurface(window)) {
         return false;
     }
-    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");   // 一度目は構えて下見
+    window.RunCommand("fabrication.create");   // 二度目で確定
     if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
         return false;
     }

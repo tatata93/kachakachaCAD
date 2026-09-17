@@ -288,6 +288,8 @@ void V2MainWindow::WireViewportCallbacks()
         // 面作成中の素のクリックは、**いまの欄**へ入る(もう一度押すと外れる)。
         // 「選んでから右棚の追加ボタンを押す」を基本操作にしない。
         RefreshSurfaceForSelectionChange();
+        // 近似中の素のクリックは対象へ入る(面と立体だけ)。押すたびに候補を作り直す。
+        RefreshApproxForSelectionChange();
         // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
         RefreshExtrudeForSelectionChange();
         RefreshExportCounts();
@@ -902,6 +904,9 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     // 原点の3面は文書の土台であって操作ではない。開いた直後に「元に戻す」で
     // 消えてしまわないよう、ここで履歴の境界にする(開く・新規と同じ扱い)。
     session_->GetDocument().MarkHistoryBoundary();
+    // 文書が入れ替わった。構えていた道具はやめる。古い入力を新しい文書へ持ち越さない。
+    if (surfaceShelfShown_) { EndSurfacePreview(); }
+    if (approxShelfShown_) { EndApprox(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));
@@ -1349,6 +1354,11 @@ void V2MainWindow::RunCommand(std::string_view id)
     if (id == "surface.create" && !surfaceShelfShown_) {
         ClearPendingCommand(); RunGuideCommand(id); return;
     }
+    // 近似も道具から始める。何も選んでいなくても棚が出て、3D で対象を押せる。
+    // 構えている間の2度目は確定。構えて待つ道(ArmCommand)は通らない。
+    if (id == "fabrication.create") {
+        ClearPendingCommand(); RunFabricationCreate(); return;
+    }
     // まだ使えない命令は、断って終わりにせず **構えて待つ**。
     // 「道具を選ぶ → 相手を選ぶ」の順で使えるようにする(オーナー指摘 2026-09-11)。
     // 選んでも直らないもの(戻せる履歴が無い等)は、ここで理由を出して終わる。
@@ -1419,16 +1429,7 @@ void V2MainWindow::RunCommand(std::string_view id)
         return;
     }
     if (id == "snap.toggle") {
-        snapEnabled_ = !snapEnabled_;
-        if (QAction* action = ActionFor("snap.toggle"); action != nullptr) {
-            action->setChecked(snapEnabled_);
-        }
-        // 吸着は「道具として切る」と「S で一時的に止める」の2つがある。
-        // 画面がその両方をまとめて持つ。片方だけ見ると、S を離した瞬間に
-        // 切ってあったはずの吸着が戻る。
-        viewport_->SetSnapSuppressed(!snapEnabled_);
-        SetStatus(snapEnabled_ ? QStringLiteral("吸着を入れました。")
-                               : QStringLiteral("吸着を切りました(Sでも一時的に止められます)。"));
+        ToggleSnap();
         return;
     }
     // まだ入っていないものは、案内を出して何もしない。

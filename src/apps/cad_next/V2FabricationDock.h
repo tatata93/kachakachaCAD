@@ -21,6 +21,7 @@
 #include <QString>
 
 #include <functional>
+#include <vector>
 
 class QCheckBox;
 class QComboBox;
@@ -34,6 +35,23 @@ class QTabWidget;
 class V2FabricationDock final : public QDockWidget {
 public:
     explicit V2FabricationDock(QWidget* parent);
+
+    // ---- 近似の入力と候補(引継ぎ 2026-09-17 の 3)。「1 近似モデル」の最上段。
+    //! 対象の名前、候補の3行、選んでいる候補、確定できるか。
+    void ShowApproxInput(const QString& sourcesJa, const std::vector<QString>& candidateLinesJa,
+        int selectedCandidate, bool canConfirm);
+    //! 候補のボタンを押した(0 = A、1 = B、2 = C)。
+    void SetCandidateHandler(std::function<void(int)> handler);
+    //! 対象の「解除」を押した。
+    void SetClearSourcesHandler(std::function<void()> handler);
+    //! **見えているボタンを実際に押す。**人の道の試験はこちら。見えていなければ偽。
+    [[nodiscard]] bool ClickCandidate(int candidate);
+    [[nodiscard]] bool ClickClearSources();
+    //! いま押された形で出ている候補。無ければ -1。
+    [[nodiscard]] int SelectedCandidateShown() const;
+    //! 候補の行に出ている言葉。試験から読む。
+    [[nodiscard]] QString CandidateTextJa(int candidate) const;
+    [[nodiscard]] QString SourcesTextJa() const;
 
     //! いまの欄(手動境界は読めなければ空で返す。読めたかは ManualBoundariesReadable で見る)。
     [[nodiscard]] kachakacha::v2::app::FabricationChoice Choice() const;
@@ -107,6 +125,7 @@ public:
     void SetSplitAxisIndex(int index);
 
 private:
+    QWidget* BuildApproxInput(QWidget* body);
     QWidget* BuildOptionsForm(QWidget* body);
     QWidget* BuildRangeAndMaterial(QWidget* body);
     QWidget* BuildBendSection(QWidget* body);
@@ -148,6 +167,13 @@ private:
     QDoubleSpinBox* layers_ = nullptr;
     QPushButton* applyMaterial_ = nullptr;
     QLabel* message_ = nullptr;
+    //! 近似の入力と候補。
+    QLabel* sourcesValue_ = nullptr;
+    QPushButton* clearSources_ = nullptr;
+    std::vector<QPushButton*> candidates_;
+    QPushButton* confirmApprox_ = nullptr;
+    std::function<void(int)> candidateHandler_;
+    std::function<void()> clearSourcesHandler_;
     std::function<void(const QString&, int)> materialHandler_;
     std::function<void()> choiceChanged_;
     std::function<void(kachakacha::v2::app::ParameterId, double)> parameterHandler_;

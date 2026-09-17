@@ -18,6 +18,8 @@
 
 #include "kachakacha/domain/Entity.h"
 
+#include <Qt>
+
 #include <vector>
 
 class V2MainWindow;
@@ -103,6 +105,17 @@ void Note(const char* what);
 //! 選ぶのは実際に拾う道(`SelectAt`)だけ。棚が **見えているか** を必ず見る。
 //! 不可視の widget を直に叩くだけの試験は、ここには置かない。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathCases();
+
+//! 人の道の下ごしらえ(V2SelfTestHumanPath.cpp が持つ)。他の人の道の試験からも使う。
+//! 上から見て矩形を1つ引く。道具を持って画面を押す。
+[[nodiscard]] bool DrawRectangleByHand(V2MainWindow& window);
+//! 画面に見えている線のどれかを、実際に拾う。
+[[nodiscard]] bool ClickOnAnyCurve(V2MainWindow& window, Qt::KeyboardModifiers modifiers);
+//! 画面に見えている形状ガイドの塗りのどれかを、実際に拾う。
+[[nodiscard]] bool ClickOnAnyGuideSurface(V2MainWindow& window);
+
+//! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
+[[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();

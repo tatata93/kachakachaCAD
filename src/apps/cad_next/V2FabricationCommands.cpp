@@ -57,7 +57,12 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         return;
     }
     if (id == "fabrication.preview_update") {
-        RunFabricationCreate();
+        // 道具が動いていれば作り直す。動いていなければ道具を始める。
+        if (approxShelfShown_) {
+            RefreshApproxAll();
+        } else {
+            RunFabricationCreate();
+        }
         return;
     }
     if (id == "fabrication.set_assembly") {
@@ -130,77 +135,12 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
     SetStatus(QStringLiteral("固定は、部品を選んでから「形」→「現在状態を固定」で行います。"));
 }
 
-void V2MainWindow::RunFabricationCreate()
-{
-    using kachakacha::v2::document::AddFeatureCommand;
-    using kachakacha::v2::domain::CreateFabricationModelDefinition;
-    using kachakacha::v2::domain::Entity;
-    using kachakacha::v2::domain::EntityKind;
-    using kachakacha::v2::domain::Feature;
-    using kachakacha::v2::domain::FeatureOutput;
-    using kachakacha::v2::domain::FeatureType;
+// RunFabricationCreate は V2ApproxCommands.cpp へ移した(道具から始める形にしたため)。
 
-    // 近似モデルは文書のものにする。これまでは画面の配列に置くだけで、
-    // 保存すると消えていた。作り方を文書に入れ、開いたら作り直す。
-    const auto& selection = viewport_->Selection();
-    const auto sources = FabricationSourcesFor(selection.entityIds);
-    if (sources.empty()) {
-        SetStatus(QStringLiteral(
-            "製作モデルを作る: 平らな1枚を持つ部品か、形状ガイドを選んでください。"));
-        return;
-    }
-    CreateFabricationModelDefinition definition;
-    for (const auto& source : sources) {
-        definition.parts.push_back(source.entityId);
-    }
-    // 製作の棚の欄(方式・分割軸・境界・上限・最小幅・再現度)を作り方へ写す。
-    kachakacha::v2::app::ApplyFabricationChoice(definition, fabricationChoice_);
-    definition.targetMaxDeviation.value = kachakacha::v2::app::ParameterValueOf(
-        parameterDock_->Values(), kachakacha::v2::app::ParameterId::MaxDeviationMm);
-    definition.targetMaxDeviation.kind = kachakacha::v2::geometry::QuantityKind::Length;
-    definition.materialThickness.value = ExtrudeDistanceMm();
-    definition.materialThickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
-    const double tolerance =
-        session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
-        FabricationMarkingsFor(definition), tolerance);
-    if (!evaluated.HasValue()) {
-        ReportDiagnostics(evaluated.Diagnostics());
-        // 断るだけで終わらせない。何枚に分ければ作れるかまで言う。
-        const QString advice = PanelAdviceTextJa(definition.parts);
-        if (!advice.isEmpty()) {
-            SetStatus(QStringLiteral("%1\n%2").arg(StatusText(), advice));
-        }
-        return;
-    }
-    Feature feature;
-    feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
-    feature.type = FeatureType::CreateFabricationModel;
-    feature.displayName = "近似モデル";
-    feature.inputEntityIds = definition.parts;
-    feature.definition = definition;
-    Entity entity;
-    entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
-    entity.kind = EntityKind::FabricationModel;
-    entity.displayName = "近似モデル";
-    entity.createdBy = feature.id;
-    feature.outputs.push_back(
-        FeatureOutput{"fabrication", entity.id, EntityKind::FabricationModel});
-    const auto added = session_->GetDocument().Run(
-        AddFeatureCommand(feature, {entity}, "製作モデルを作る"));
-    if (!added.committed) {
-        ReportDiagnostics(added.diagnostics);
-        return;
-    }
-    fabricationModels_[entity.id.ToString()] = evaluated.Value();
-    AdoptCurrentDocument();
-    RefreshFabricationView();
-    SetStatus(QStringLiteral("製作モデルを作る: %1")
-            .arg(QString::fromStdString(evaluated.Value().summaryJa)));
-}
-
+//! `splitSolidFaces` は **作り方(定義)のもの** を渡す。棚の欄ではない。
+//! 欄を見ると、開き直したときに、保存した作り方と別の部材が出来る。
 std::vector<kachakacha::v2::app::FabricationSource> V2MainWindow::FabricationSourcesFor(
-    const std::vector<kachakacha::v2::base::EntityId>& ids) const
+    const std::vector<kachakacha::v2::base::EntityId>& ids, bool splitSolidFaces) const
 {
     std::vector<kachakacha::v2::app::FabricationSource> sources;
     for (const auto& id : ids) {
@@ -220,7 +160,7 @@ std::vector<kachakacha::v2::app::FabricationSource> V2MainWindow::FabricationSou
             continue;
         }
         if (entity->kind == kachakacha::v2::domain::EntityKind::Part) {
-            if (fabricationChoice_.splitSolidFaces) {
+            if (splitSolidFaces) {
                 // 立体を面ごとに分ける。箱なら6枚の型紙になる。
                 // 面を1枚ずつ取れるようになったので、ここで初めてできる(EX-02 の副産物)。
                 AppendSolidFaceSources(id, source.name, sources);
@@ -247,7 +187,7 @@ bool V2MainWindow::RebuildFabricationModel(const kachakacha::v2::domain::Feature
     if (definition == nullptr) {
         return false;
     }
-    const auto sources = FabricationSourcesFor(definition->parts);
+    const auto sources = FabricationSourcesFor(definition->parts, definition->splitSolidFaces);
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
     const auto evaluated = kachakacha::v2::app::EvaluateFabrication(*definition, sources,
@@ -532,7 +472,7 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
         }
     }
     // 先に作れるかを確かめる。定義を書き換えてから断ると、壊れた作り方が残る。
-    const auto sources = FabricationSourcesFor(definition.parts);
+    const auto sources = FabricationSourcesFor(definition.parts, definition.splitSolidFaces);
     const auto evaluated = kachakacha::v2::app::EvaluateFabrication(definition, sources,
         FabricationMarkingsFor(definition), tolerance.interactiveJoinMm);
     if (!evaluated.HasValue()) {

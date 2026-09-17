@@ -21,6 +21,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <string>
 #include <vector>
 
 using kachakacha::v2::app::SurfaceOrdering;
@@ -42,6 +43,20 @@ namespace {
     std::vector<CurveSegment> segments;
     const Vector3 points[5] = {a, b, c, d, a};
     for (int index = 0; index < 4; ++index) {
+        const auto made = CurveSegment::MakeLine(points[index], points[index + 1]);
+        if (made.HasValue()) {
+            segments.push_back(made.Value());
+        }
+    }
+    return segments;
+}
+
+[[nodiscard]] std::vector<CurveSegment> FiveSidedProfile()
+{
+    const Vector3 points[6] = {{-45, -30, 0}, {30, -30, 0}, {48, 0, 0},
+        {30, 30, 0}, {-45, 30, 0}, {-45, -30, 0}};
+    std::vector<CurveSegment> segments;
+    for (int index = 0; index < 5; ++index) {
         const auto made = CurveSegment::MakeLine(points[index], points[index + 1]);
         if (made.HasValue()) {
             segments.push_back(made.Value());
@@ -87,6 +102,31 @@ bool V2MainWindow::DrawRectangleForShot()
 //! 押し出しの場面(01〜03)。
 bool V2MainWindow::ApplyExtrudeShotState(const QString& name)
 {
+    if (name.endsWith(QStringLiteral("region-hover"))
+        || name.endsWith(QStringLiteral("region-selected"))) {
+        int number = 1;
+        for (const auto& segment : FiveSidedProfile()) {
+            const std::string label = "輪郭線" + std::to_string(number++);
+            if (AddPlainWire({segment}, label.c_str()).IsNil()) {
+                return false;
+            }
+        }
+        AdoptCurrentDocument();
+        SetMode(kachakacha::v2::app::UiMode::Part);
+        viewport_->SetViewDirection(ViewDirection::Top);
+        viewport_->FitToDocument();
+        RunCommand("part.extrude");
+        const auto center = viewport_->Mapping().Project(Vector3{});
+        if (!center.has_value()) {
+            return false;
+        }
+        const QPointF inside(center->x, center->y);
+        viewport_->HoverAt(inside);
+        if (name.endsWith(QStringLiteral("region-selected"))) {
+            viewport_->SelectAt(inside, Qt::NoModifier);
+        }
+        return viewport_->ProfileRegionCount() == 1;
+    }
     DrawRectangleForShot();
     if (!PickAnyCurveForShot()) {
         return false;

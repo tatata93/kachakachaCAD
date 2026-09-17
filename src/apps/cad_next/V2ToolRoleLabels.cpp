@@ -8,6 +8,7 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
@@ -15,9 +16,25 @@
 
 #include <cstddef>
 #include <optional>
+#include <utility>
 #include <vector>
 
 using kachakacha::v2::geometry::Vector3;
+
+namespace {
+
+Vector3 RegionLabelPoint(const kachakacha::v2::app::ProfileRegion& region)
+{
+    Vector3 sum{};
+    std::size_t count = 0;
+    for (const auto& segment : region.outer.segments) {
+        sum = sum + segment.Evaluate(0.5);
+        ++count;
+    }
+    return count == 0 ? region.plane.origin : sum * (1.0 / static_cast<double>(count));
+}
+
+} // namespace
 
 //! その番号のものを、画面のどこに指させばよいか。
 //!
@@ -70,6 +87,24 @@ void V2MainWindow::ShowRoleLabels(
 void V2MainWindow::RefreshExtrudeRoleLabels(
     const kachakacha::v2::app::ExtrudeInputState& state)
 {
+    if (!state.profileIsFace && !state.profiles.empty()) {
+        auto withoutProfiles = state;
+        withoutProfiles.profiles.clear();
+        std::vector<V2Viewport::PlacedRoleLabel> placed;
+        for (const auto& label : kachakacha::v2::app::ExtrudeRoleLabels(withoutProfiles)) {
+            if (const auto at = PointForRoleLabel(label.entityId); at.has_value()) {
+                placed.push_back({*at, QString::fromStdString(label.text)});
+            }
+        }
+        const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
+            state.profiles, session_->GetDocument().Snapshot().settings.tolerance);
+        for (std::size_t index = 0; index < regions.size(); ++index) {
+            placed.push_back({RegionLabelPoint(regions[index]),
+                QStringLiteral("PROFILE %1").arg(static_cast<int>(index + 1))});
+        }
+        viewport_->ShowToolRoleLabels(std::move(placed));
+        return;
+    }
     ShowRoleLabels(kachakacha::v2::app::ExtrudeRoleLabels(state));
 }
 

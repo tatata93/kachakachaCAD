@@ -56,6 +56,11 @@ std::string_view SurfaceSlotNameJa(ChainRole role) noexcept
 
 GuideSurfaceMethod RecommendSurfaceMethod(const SurfaceSelectionFacts& facts) noexcept
 {
+    // 道具を先に押した直後。最も単純な「閉じた輪郭の内側を押す」入口を出す。
+    // 断面も面も無いのにロフト待ちにすると、輪郭領域の hover 自体が始まらない。
+    if (facts.guideSurfaces == 0 && facts.closedWires == 0 && facts.openWires == 0) {
+        return GuideSurfaceMethod::PlanarBoundary;
+    }
     // 形状ガイドの面を選んでいるなら、それを離す。
     if (facts.guideSurfaces >= 1 && facts.closedWires == 0 && facts.openWires == 0) {
         return GuideSurfaceMethod::OffsetGuide;

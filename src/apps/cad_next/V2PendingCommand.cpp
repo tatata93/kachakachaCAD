@@ -51,6 +51,8 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         viewport_->SetToolPickActive(true);
         // 線を1本ずつ拾わせず、閉じた線の内側を押し出し輪郭として拾う。
         viewport_->SetProfileRegionPicking(true);
+        // 入力が空でも押し出し専用棚を先に見せる。
+        ShowExtrudeShelf(PlanExtrudeFromSelection());
     } else if (id == "surface.create") {
         viewport_->SetToolPickActive(true);
         viewport_->SetProfileRegionPicking(true);
@@ -71,6 +73,9 @@ void V2MainWindow::ClearPendingCommand()
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
         viewport_->SetToolPickActive(false);
         viewport_->SetProfileRegionPicking(false);
+        extrudeShelfShown_ = false;
+        ShowToolFooter(QString());
+        RefreshRightShelves();
     } else if (pendingCommandId_ == "surface.create" && viewport_ != nullptr
         && !surfaceShelfShown_) {
         viewport_->SetToolPickActive(false);
@@ -103,6 +108,7 @@ void V2MainWindow::RefreshPendingCommand(bool confirmed)
     if (pendingCommandId_ == "part.extrude") {
         // 構えている間も、拾い方は「いま足りないもの」に合わせて動かす(§6)。
         RefreshExtrudePickSlot();
+        ShowExtrudeShelf(PlanExtrudeFromSelection());
     }
     QString reason;
     const bool satisfied = CommandEnabled(pendingCommandId_, &reason);
@@ -115,6 +121,14 @@ void V2MainWindow::RefreshPendingCommand(bool confirmed)
         return;
     }
     if (action == PendingAction::NeedsConfirm) {
+        if (pendingCommandId_ == "part.extrude") {
+            // 最初の有効な輪郭が入った時点で下見を出す。下見中も追加クリックを
+            // 受け付けるため、複数輪郭を選ぶ余地は失われない。
+            const std::string id = pendingCommandId_;
+            ClearPendingCommand();
+            RunCommand(id);
+            return;
+        }
         // そろったが、まだ足せる。数を言って待つ。
         SetStatus(QStringLiteral("%1: %2個選びました。Enter で実行、続けて選んでも構いません。")
                 .arg(label)

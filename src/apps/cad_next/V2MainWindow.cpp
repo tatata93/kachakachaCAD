@@ -285,6 +285,12 @@ void V2MainWindow::WireViewportCallbacks()
         HighlightTreeForSelection();
         // 構えている命令があれば、そろったかを見る。
         RefreshPendingCommand(false);
+        // 面作成中の素のクリックは、いまの方式が求める入力欄へそのまま入る。
+        // 「選んでから右棚の追加ボタンを押す」を基本操作にしない。
+        if (surfaceShelfShown_) {
+            AddSelectionToSurfaceSlot(
+                kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method));
+        }
         // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
         RefreshExtrudeForSelectionChange();
         RefreshExportCounts();
@@ -1342,6 +1348,9 @@ void V2MainWindow::RunCommand(std::string_view id)
     // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。
     if (EnterToolFor(*command)) {
         return;
+    }
+    if (id == "surface.create" && !surfaceShelfShown_) {
+        ClearPendingCommand(); RunGuideCommand(id); return;
     }
     // まだ使えない命令は、断って終わりにせず **構えて待つ**。
     // 「道具を選ぶ → 相手を選ぶ」の順で使えるようにする(オーナー指摘 2026-09-11)。

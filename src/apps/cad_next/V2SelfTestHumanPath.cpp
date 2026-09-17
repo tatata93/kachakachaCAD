@@ -80,17 +80,13 @@ using kachakacha::v2::domain::EntityKind;
 }
 
 //! 5本の別々の直線で、閉じた輪郭を描く。Rectangle 1個ではないことが本題。
-[[nodiscard]] bool DrawFiveWireLoopByHand(V2MainWindow& window)
+[[nodiscard]] bool DrawWireLoopByHand(V2MainWindow& window,
+    const std::vector<QPointF>& points)
 {
     auto& viewport = window.Viewport();
     viewport.SetViewDirection(ViewDirection::Top);
     viewport.SetViewCenter(kachakacha::v2::geometry::Vector3{});
     viewport.SetVisibleWidthMm(200.0);
-    const std::vector<QPointF> points{{viewport.width() * 0.30, viewport.height() * 0.32},
-        {viewport.width() * 0.62, viewport.height() * 0.32},
-        {viewport.width() * 0.70, viewport.height() * 0.50},
-        {viewport.width() * 0.60, viewport.height() * 0.70},
-        {viewport.width() * 0.30, viewport.height() * 0.70}};
     viewport.SetSnapSuppressed(true);
     for (std::size_t index = 0; index < points.size(); ++index) {
         window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
@@ -100,7 +96,19 @@ using kachakacha::v2::domain::EntityKind;
     }
     viewport.SetSnapSuppressed(false);
     window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-    return CountOfKind(window, EntityKind::Wire) == 5;
+    return true;
+}
+
+[[nodiscard]] bool DrawFiveWireLoopByHand(V2MainWindow& window)
+{
+    auto& viewport = window.Viewport();
+    const std::vector<QPointF> points{{viewport.width() * 0.30, viewport.height() * 0.32},
+        {viewport.width() * 0.62, viewport.height() * 0.32},
+        {viewport.width() * 0.70, viewport.height() * 0.50},
+        {viewport.width() * 0.60, viewport.height() * 0.70},
+        {viewport.width() * 0.30, viewport.height() * 0.70}};
+    return DrawWireLoopByHand(window, points)
+        && CountOfKind(window, EntityKind::Wire) == 5;
 }
 
 [[nodiscard]] bool SelectAllVisibleWiresByHand(V2MainWindow& window)
@@ -778,8 +786,9 @@ struct OutputCounts {
     auto& viewport = window.Viewport();
     viewport.SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
     window.RunCommand("surface.create");
-    if (!Explain("面を作るを先に構えると閉じた領域が見つかる",
-            viewport.ProfileRegionPicking() && viewport.ProfileRegionCount() == 1)) {
+    if (!Explain("面を作るを先に構えると専用棚と閉じた領域が見つかる",
+            window.ShelfShown(Shelf::Surface) && viewport.ProfileRegionPicking()
+                && viewport.ProfileRegionCount() == 1)) {
         return false;
     }
     const QPointF surfaceInside(viewport.width() * 0.5, viewport.height() * 0.5);
@@ -789,11 +798,7 @@ struct OutputCounts {
             viewport.Selection().entityIds.size() == 5)) {
         return false;
     }
-    if (!Explain("Enterで待機中の面作成を開始できる",
-            window.HandleToolKey(Qt::Key_Return, nullptr))) {
-        return false;
-    }
-    if (!Explain("5本を平面の輪郭として自動判定する",
+    if (!Explain("クリック直後に5本を平面の輪郭として下見する",
             window.SurfaceInput().method
                     == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary
                 && window.SurfacePreviewShown())) {
@@ -838,8 +843,7 @@ struct OutputCounts {
             viewport.Selection().entityIds.size() == 5)) {
         return false;
     }
-    window.RunCommand("part.extrude");
-    if (!Explain((std::string("同じ5本を1つの輪郭として押し出し下見できる(選択 ")
+    if (!Explain((std::string("クリック直後に同じ5本を1つの輪郭として下見できる(選択 ")
                      + std::to_string(window.Viewport().Selection().entityIds.size())
                      + "本、帯は " + window.StatusText().toStdString() + ")").c_str(),
             window.Viewport().ExtrudeHandleShown())) {
@@ -848,6 +852,81 @@ struct OutputCounts {
     window.RunCommand("part.extrude");
     return Explain("5本の輪郭から立体を確定できる",
         CountOfKind(window, EntityKind::Part) == 1);
+}
+
+//! PROFILE-03〜05/07。穴・複数領域・再クリック解除・開いた線を、
+//! **道具を先に構えた画面クリック**で確かめる。
+[[nodiscard]] bool CaseHumanPathProfileRegionVariants(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    auto& viewport = window.Viewport();
+    const auto point = [&viewport](double x, double y) {
+        return QPointF(viewport.width() * x, viewport.height() * y);
+    };
+    if (!DrawWireLoopByHand(window,
+            {point(0.18, 0.20), point(0.82, 0.20), point(0.82, 0.80), point(0.18, 0.80)})
+        || !DrawWireLoopByHand(window,
+            {point(0.42, 0.40), point(0.58, 0.40), point(0.58, 0.60), point(0.42, 0.60)})) {
+        return false;
+    }
+    viewport.SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
+    window.RunCommand("part.extrude");
+    if (!Explain("PROFILE-03 外周と内周を穴付きの1領域にする",
+            viewport.ProfileRegionCount() == 1)) {
+        return false;
+    }
+    viewport.SelectAt(point(0.30, 0.50), Qt::NoModifier);
+    if (!Explain("PROFILE-03 内側1クリックで外周と穴の8本を取り込む",
+            viewport.Selection().entityIds.size() == 8)) {
+        return false;
+    }
+    viewport.SelectAt(point(0.30, 0.50), Qt::NoModifier);
+    if (!Explain("PROFILE-05 選択済み領域の再クリックで解除する",
+            viewport.Selection().entityIds.empty())) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+
+    window.RunCommand("file.new");
+    if (!DrawWireLoopByHand(window,
+            {point(0.12, 0.30), point(0.40, 0.30), point(0.40, 0.70), point(0.12, 0.70)})
+        || !DrawWireLoopByHand(window,
+            {point(0.60, 0.30), point(0.88, 0.30), point(0.88, 0.70), point(0.60, 0.70)})) {
+        return false;
+    }
+    viewport.SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
+    window.RunCommand("part.extrude");
+    if (!Explain("PROFILE-04 独立した閉領域を2個見つける",
+            viewport.ProfileRegionCount() == 2)) {
+        return false;
+    }
+    viewport.SelectAt(point(0.26, 0.50), Qt::NoModifier);
+    viewport.SelectAt(point(0.74, 0.50), Qt::NoModifier);
+    if (!Explain("PROFILE-04 Ctrl無しの2クリックで2輪郭を追加する",
+            viewport.Selection().entityIds.size() == 8)) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+
+    window.RunCommand("file.new");
+    viewport.SetSnapSuppressed(true);
+    const std::vector<QPointF> open{point(0.25, 0.30), point(0.70, 0.30),
+        point(0.70, 0.70), point(0.25, 0.70)};
+    for (std::size_t index = 1; index < open.size(); ++index) {
+        window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+        viewport.ClickAt(open[index - 1]);
+        viewport.HoverAt(open[index]);
+        viewport.ClickAt(open[index]);
+    }
+    viewport.SetSnapSuppressed(false);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    viewport.SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
+    window.RunCommand("part.extrude");
+    const bool openRefused = viewport.ProfileRegionPicking()
+        && viewport.ProfileRegionCount() == 0
+        && window.StatusText().contains(QStringLiteral("閉じ"));
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return Explain("PROFILE-07 開いた線から内部領域を作らず理由を示す", openRefused);
 }
 
 //! いま画面に出ている立体の、上下の広がり(mm)。押せたかどうかを高さで見る。
@@ -911,7 +990,6 @@ struct OutputCounts {
         return false;
     }
 
-    window.RunCommand("part.extrude");
     if (!Explain((std::string("矢印が出る(帯は ")
                      + window.StatusText().toStdString() + ")").c_str(),
             viewport.ExtrudeHandleShown())) {
@@ -1083,6 +1161,8 @@ std::vector<SelfTestCase> HumanPathCases()
             CaseHumanPathSurfaceMethodKeepsInput},
         {"HP-SF-05 5本の別ワイヤーを1輪郭として面と押し出しに使える",
             CaseHumanPathFiveWiresBecomeOneProfile},
+        {"PROFILE-03〜05/07 穴・複数・解除・開いた輪郭を画面で扱える",
+            CaseHumanPathProfileRegionVariants},
         {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
         {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
             CaseHumanPathSelectionIsVisible},

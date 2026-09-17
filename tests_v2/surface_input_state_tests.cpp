@@ -64,6 +64,13 @@ KACHA_V2_TEST(surface_input, 閉じた平面輪郭1本は平面を薦める)
     Require(RecommendSurfaceMethod(facts) == GuideSurfaceMethod::PlanarBoundary, "平面");
 }
 
+KACHA_V2_TEST(surface_input, 道具を先に押した空入力は平面輪郭待ちになる)
+{
+    SurfaceSelectionFacts empty;
+    Require(RecommendSurfaceMethod(empty) == GuideSurfaceMethod::PlanarBoundary,
+        "閉じた領域を内側クリックできる入口");
+}
+
 KACHA_V2_TEST(surface_input, 本数で薦める作り方が変わる)
 {
     SurfaceSelectionFacts two;

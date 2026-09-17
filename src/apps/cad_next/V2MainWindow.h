@@ -221,6 +221,11 @@ public:
     bool ApplySurfaceShotState(const QString& name);
     bool DrawRectangleForShot();
     bool PickAnyCurveForShot();
+    //! 引継ぎ 2026-09-17 の 7(V2UiShotStatesMore.cpp)。
+    bool PickShapeCenterForShot(const kachakacha::v2::base::EntityId& id);
+    bool ApplyGuidedLoftShotState();
+    bool ApplyApproxShotState();
+    bool ApplyBooleanShotState();
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! いま近似の道具が動いているか。試験から見る。

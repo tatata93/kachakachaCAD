@@ -227,6 +227,12 @@ bool V2MainWindow::ApplyUiShotState(const QString& name)
     bool ok = false;
     if (name.startsWith(QStringLiteral("ui-extrude-"))) {
         ok = ApplyExtrudeShotState(name);
+    } else if (name == QStringLiteral("ui-guided-loft-preview")) {
+        ok = ApplyGuidedLoftShotState();
+    } else if (name == QStringLiteral("ui-approx-candidates")) {
+        ok = ApplyApproxShotState();
+    } else if (name == QStringLiteral("ui-boolean-preview")) {
+        ok = ApplyBooleanShotState();
     } else if (name.startsWith(QStringLiteral("ui-surface-"))) {
         ok = ApplySurfaceShotState(name);
     } else {

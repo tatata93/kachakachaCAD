@@ -775,10 +775,24 @@ struct OutputCounts {
             DrawFiveWireLoopByHand(window))) {
         return false;
     }
-    if (!Explain("5本を画面から複数選択できる", SelectAllVisibleWiresByHand(window))) {
+    auto& viewport = window.Viewport();
+    viewport.SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
+    window.RunCommand("surface.create");
+    if (!Explain("面を作るを先に構えると閉じた領域が見つかる",
+            viewport.ProfileRegionPicking() && viewport.ProfileRegionCount() == 1)) {
         return false;
     }
-    window.RunCommand("surface.create");
+    const QPointF surfaceInside(viewport.width() * 0.5, viewport.height() * 0.5);
+    viewport.HoverAt(surfaceInside);
+    viewport.SelectAt(surfaceInside, Qt::NoModifier);
+    if (!Explain("内側1クリックで面の境界5本を選べる",
+            viewport.Selection().entityIds.size() == 5)) {
+        return false;
+    }
+    if (!Explain("Enterで待機中の面作成を開始できる",
+            window.HandleToolKey(Qt::Key_Return, nullptr))) {
+        return false;
+    }
     if (!Explain("5本を平面の輪郭として自動判定する",
             window.SurfaceInput().method
                     == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary
@@ -803,6 +817,25 @@ struct OutputCounts {
                      + std::to_string(selectedCurves.size()) + "本)").c_str(),
             kachakacha::v2::geometry::SegmentsFormClosedLoop(selectedCurves,
                 window.Session().GetDocument().Snapshot().settings.tolerance))) {
+        return false;
+    }
+    // ここからは線を1本ずつ選ばない。空白で選択を外し、道具を先に構えて、
+    // 囲まれた内側を1回押す。これが人へ提供する正規の経路である。
+    window.Viewport().SelectAt(QPointF(4.0, 4.0), Qt::NoModifier);
+    window.RunCommand("part.extrude");
+    if (!Explain("押し出しを先に構えると閉じた領域が見つかる",
+            viewport.ProfileRegionPicking() && viewport.ProfileRegionCount() == 1)) {
+        return false;
+    }
+    const QPointF inside(viewport.width() * 0.5, viewport.height() * 0.5);
+    viewport.HoverAt(inside);
+    if (!Explain("輪郭線ではなく内側がHover対象になる",
+            viewport.HoveredProfileRegion().has_value())) {
+        return false;
+    }
+    viewport.SelectAt(inside, Qt::NoModifier);
+    if (!Explain("内側1クリックで5本すべてが入力になる",
+            viewport.Selection().entityIds.size() == 5)) {
         return false;
     }
     window.RunCommand("part.extrude");

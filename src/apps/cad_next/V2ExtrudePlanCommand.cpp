@@ -12,10 +12,10 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ExtrudePlan.h"
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/domain/Entity.h"
-#include "kachakacha/geometry/WireChain.h"
 
 #include <QString>
 
@@ -47,42 +47,27 @@ kachakacha::v2::app::ExtrudePlan V2MainWindow::PlanExtrudeFromSelection() const
         case EntityKind::GuideSurface:
             ++facts.surfaces;
             break;
-        case EntityKind::Wire: {
+        case EntityKind::Wire:
             wireIds.push_back(id);
-            // 閉じているかどうかで意味が変わる。開いた輪郭は立体にならない。
-            kachakacha::v2::app::SelectionSet one;
-            one.entityIds.push_back(id);
-            const auto curves =
-                kachakacha::v2::app::SelectedCurves(one, session_->Scene());
-            const bool closed = !curves.empty()
-                && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,
-                    document.Snapshot().settings.tolerance);
-            if (closed) {
-                ++facts.closedWires;
-                profiles.push_back(id);
-            } else {
-                ++facts.openWires;
-            }
             break;
-        }
         default:
             break;
         }
     }
-    // 1辺ずつ描いた複数ワイヤーも、全体で閉じていれば1つの輪郭である。
-    // 個々が開いているという理由だけで、押し出しを断らない。
-    if (facts.closedWires == 0 && wireIds.size() > 1) {
-        kachakacha::v2::app::SelectionSet together;
-        together.entityIds = wireIds;
-        const auto curves = kachakacha::v2::app::SelectedCurves(together, session_->Scene());
-        if (!curves.empty()
-            && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,
-                document.Snapshot().settings.tolerance)) {
-            facts.closedWires = 1;
-            facts.openWires = 0;
-            profiles = wireIds;
+    // 線の物体単位ではなく、端点接続で閉じた領域を読む。曲線の混在、5本以上、
+    // 穴、複数領域を同じ規則で扱い、開いた余分な線は輪郭へ混ぜない。
+    const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(), wireIds,
+        document.Snapshot().settings.tolerance);
+    for (const auto& region : regions) {
+        auto ids = kachakacha::v2::app::ProfileRegionEntityIds(region);
+        for (const auto& id : ids) {
+            if (std::find(profiles.begin(), profiles.end(), id) == profiles.end()) {
+                profiles.push_back(id);
+            }
         }
+        facts.closedWires += 1 + static_cast<int>(region.holes.size());
     }
+    facts.openWires = static_cast<int>(wireIds.size() - profiles.size());
     // 面の選択(部分要素)。立体の面を押し引きするときに使う。
     // いまの画面はまだ面を拾えない(拾えるのは物体まで)。拾えるようになったら
     // ここが数える。数え方を先に置いておくのは、拾う側と読む側を

@@ -36,6 +36,21 @@ struct Bench {
         Line({x1, y1, z}, {x0, y1, z});
         Line({x0, y1, z}, {x0, y0, z});
     }
+
+    base::EntityId ClosedWireRectangle(double x0, double y0, double x1, double y1)
+    {
+        const auto entity = ids.NextTyped<IdKind::Entity>();
+        const std::vector<std::pair<Vector3, Vector3>> sides{
+            {{x0, y0, 0}, {x1, y0, 0}}, {{x1, y0, 0}, {x1, y1, 0}},
+            {{x1, y1, 0}, {x0, y1, 0}}, {{x0, y1, 0}, {x0, y0, 0}}};
+        for (const auto& [from, to] : sides) {
+            const auto curve = CurveSegment::MakeLine(from, to);
+            Require(curve.HasValue(), "矩形の辺を作れる");
+            scene.curves.push_back(
+                {entity, ids.NextTyped<IdKind::Segment>(), curve.Value()});
+        }
+        return entity;
+    }
 };
 
 KACHA_V2_TEST(profile_region, five_mixed_curves_become_one_region)
@@ -82,6 +97,15 @@ KACHA_V2_TEST(profile_region, open_and_branched_curves_do_not_poison_closed_regi
     bench.Line({25, 0, 0}, {25, 5, 0});
     const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
     Require(regions.size() == 1, "開いた線や分岐があっても閉領域は残る");
+}
+
+KACHA_V2_TEST(profile_region, coincident_closed_wire_entities_stay_independent)
+{
+    Bench bench;
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    bench.ClosedWireRectangle(0, 0, 10, 10);
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 2, "端点が重なる別Wireの閉輪郭を分岐扱いしない");
 }
 
 } // namespace

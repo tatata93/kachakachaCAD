@@ -128,6 +128,22 @@ struct FlatLoop {
     int depth = 0;
 };
 
+std::optional<FlatLoop> FlattenBoundary(ProfileBoundary boundary,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const geometry::PlaneFit plane = geometry::FitPlane(boundary.sampled);
+    if (!plane.valid || plane.maximumDeviationMm > tolerance.interactiveJoinMm) {
+        return std::nullopt;
+    }
+    const geometry::PlanarFrame frame = geometry::MakeFrame(plane);
+    boundary.planar = geometry::ProjectToFrame(boundary.sampled, frame);
+    const double area = std::abs(geometry::SignedArea(boundary.planar));
+    if (area <= tolerance.modelLinearMm * tolerance.modelLinearMm) {
+        return std::nullopt;
+    }
+    return FlatLoop{std::move(boundary), plane, frame, area};
+}
+
 bool Coplanar(const FlatLoop& first, const FlatLoop& second, double toleranceMm,
     double angularTolerance)
 {
@@ -156,23 +172,46 @@ std::vector<FlatLoop> ClosedLoops(const modeling::SnapScene& scene,
         curves.push_back(curve);
     }
     std::vector<FlatLoop> loops;
-    for (const auto& component : ConnectedComponents(std::move(curves),
+    std::vector<SnapCurve> remaining;
+    std::vector<base::EntityId> entities;
+    for (const auto& curve : curves) {
+        if (!SameEntity(entities, curve.entityId)) {
+            entities.push_back(curve.entityId);
+        }
+    }
+    // 1つのWire内で閉じている輪は先に独立させる。別Wireの同じ端点へ
+    // 触れていても、それだけで分岐した1本の鎖へ潰してはいけない。
+    for (const auto& entity : entities) {
+        std::vector<SnapCurve> owned;
+        for (const auto& curve : curves) {
+            if (curve.entityId == entity) {
+                owned.push_back(curve);
+            }
+        }
+        for (auto& component : ConnectedComponents(std::move(owned),
+                 tolerance.interactiveJoinMm)) {
+            auto boundary = MakeBoundary(component, tolerance);
+            if (boundary.has_value()) {
+                auto loop = FlattenBoundary(std::move(*boundary), tolerance);
+                if (loop.has_value()) {
+                    loops.push_back(std::move(*loop));
+                    continue;
+                }
+            }
+            remaining.insert(remaining.end(), component.begin(), component.end());
+        }
+    }
+    // 各Wireだけでは開いていた鎖を、Wireをまたいでつなぐ。
+    for (const auto& component : ConnectedComponents(std::move(remaining),
              tolerance.interactiveJoinMm)) {
         auto boundary = MakeBoundary(component, tolerance);
         if (!boundary.has_value()) {
             continue;
         }
-        const geometry::PlaneFit plane = geometry::FitPlane(boundary->sampled);
-        if (!plane.valid || plane.maximumDeviationMm > tolerance.interactiveJoinMm) {
-            continue;
+        auto loop = FlattenBoundary(std::move(*boundary), tolerance);
+        if (loop.has_value()) {
+            loops.push_back(std::move(*loop));
         }
-        const geometry::PlanarFrame frame = geometry::MakeFrame(plane);
-        boundary->planar = geometry::ProjectToFrame(boundary->sampled, frame);
-        const double area = std::abs(geometry::SignedArea(boundary->planar));
-        if (area <= tolerance.modelLinearMm * tolerance.modelLinearMm) {
-            continue;
-        }
-        loops.push_back({std::move(*boundary), plane, frame, area});
     }
     return loops;
 }

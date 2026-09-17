@@ -65,6 +65,7 @@ void V2MainWindow::BeginExtrudePreview()
     if (!plan.readyToPreview) {
         return;
     }
+    viewport_->SetProfileRegionPicking(true);
     // **下見を出すときに、入力をそのまま留め置く**(オーナー指示 §9)。
     // 確定はこの写しから作る。選択を読み直さない。
     ExtrudeSnapshot snapshot;
@@ -302,6 +303,7 @@ void V2MainWindow::EndExtrudePreview()
     // 拾い方もふだんへ戻す。道具が終われば、特別な並べ替えはしない。
     viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
     viewport_->SetToolPickActive(false);
+    viewport_->SetProfileRegionPicking(false);
     // 面の押し引きは1回きりの状態である。残すと、次のふつうの押し出しが
     // 前の面の向きへ押される。
     facePushPull_ = false;
@@ -473,6 +475,7 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
     // 下見が出ている間は、まだ入力を集めている(§5)。
     // 素のクリックで、役割の違うものを足せるままにする。
     viewport_->SetToolPickActive(true);
+    viewport_->SetProfileRegionPicking(true);
 }
 
 //! 読み取った入力の片方を外して選び直す(EX-07)。

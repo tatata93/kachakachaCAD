@@ -17,6 +17,7 @@
 #include "kachakacha/app/ExtrudeDrag.h"
 #include "kachakacha/app/PointerCursor.h"
 #include "kachakacha/app/PointerGesture.h"
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/geometry/ScreenMapping.h"
 #include "kachakacha/modeling/WorkPlane.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -327,6 +328,21 @@ public:
     //! 相手の立体を押した瞬間に輪郭が消える。
     void SetToolPickActive(bool active) noexcept { toolPickActive_ = active; }
     [[nodiscard]] bool ToolPickActive() const noexcept { return toolPickActive_; }
+    //! 押し出し・平面Surfaceでは線そのものではなく、閉じた線の内側を拾う。
+    //! 領域はWireから都度作る一時状態で、Documentへ保存しない。
+    void SetProfileRegionPicking(bool active);
+    [[nodiscard]] bool ProfileRegionPicking() const noexcept
+    {
+        return profileRegionPicking_;
+    }
+    [[nodiscard]] int ProfileRegionCount() const noexcept
+    {
+        return static_cast<int>(profileRegions_.size());
+    }
+    [[nodiscard]] std::optional<std::size_t> HoveredProfileRegion() const noexcept
+    {
+        return hoveredProfileRegion_;
+    }
     //! 塗った形を画面の点で拾う。線が拾えなかったときだけ使う。
     [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> PickShapeAt(
         const QPointF& position) const;
@@ -629,6 +645,8 @@ private:
     //! 形1つ分。塗りと稜線。
     void DrawOneShape(QPainter& painter, const ShapeView& shape) const;
     void DrawDocument(QPainter& painter) const;
+    //! 閉じた輪郭の内側。線の下へ半透明で敷く。
+    void DrawProfileRegions(QPainter& painter) const;
     void DrawPreview(QPainter& painter) const;
     //! 選んだワイヤーの制御点。掴める場所を見せる。
     void DrawControlPoints(QPainter& painter) const;
@@ -740,6 +758,12 @@ private:
     void SyncHoverWithCandidate();
     //! 「選んでいるもの: n 件」を出す。クリックと献立で同じ文言にする。
     void ReportSelectionCount();
+    void RebuildProfileRegions();
+    [[nodiscard]] std::optional<std::size_t> ProfileRegionAt(
+        const QPointF& position) const;
+    [[nodiscard]] bool ProfileRegionSelected(std::size_t index) const;
+    [[nodiscard]] bool SelectionHasPart() const;
+    bool ToggleProfileRegionAt(const QPointF& position);
 
     //! 同じ場所で重なっている候補。Tab も Alt+クリックもここだけを見る。
     //! Hover / Selection / Preview とは別の状態である。混ぜない。
@@ -861,6 +885,9 @@ private:
     std::function<void()> cancelExtrude_;
     //! 道具が入力を集めている最中か。素のクリックで足すかどうかを決める。
     bool toolPickActive_ = false;
+    bool profileRegionPicking_ = false;
+    std::vector<kachakacha::v2::app::ProfileRegion> profileRegions_;
+    std::optional<std::size_t> hoveredProfileRegion_;
     kachakacha::v2::modeling::DrawingTool cursorTool_ =
         kachakacha::v2::modeling::DrawingTool::Select;
     kachakacha::v2::geometry::Vector3 center_{};

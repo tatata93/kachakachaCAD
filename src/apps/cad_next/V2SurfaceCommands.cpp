@@ -10,12 +10,12 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/SurfacePreview.h"
 #include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/geometry/CurveSampling.h"
-#include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/SurfaceDeviationLimit.h"
 
@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 using kachakacha::v2::app::SurfaceOrdering;
@@ -30,6 +31,52 @@ using kachakacha::v2::app::SurfaceSlotState;
 using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::modeling::ChainRole;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
+
+namespace {
+
+kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddRegionBoundary(
+    kachakacha::v2::modeling::GuideTable table,
+    const kachakacha::v2::app::ProfileBoundary& boundary, ChainRole role,
+    const kachakacha::v2::document::Document& document)
+{
+    using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>;
+    if (boundary.entityIds.empty() || boundary.segments.empty()) {
+        return Out::Failure(kachakacha::v2::base::MakeError("UI-R004",
+            "輪郭の線がありません。", "閉じた輪郭の内側を選んでください。"));
+    }
+    kachakacha::v2::modeling::GuideTableSelection selection;
+    selection.sourceWireId = boundary.entityIds.front();
+    selection.segments = boundary.segments;
+    std::vector<kachakacha::v2::base::EntityId> uniqueEntityIds;
+    std::unordered_set<kachakacha::v2::base::EntityId> seenEntityIds;
+    for (const auto& id : boundary.entityIds) {
+        if (!seenEntityIds.insert(id).second) {
+            continue;
+        }
+        uniqueEntityIds.push_back(id);
+        const auto* entity = document.FindEntity(id);
+        if (!selection.label.empty()) {
+            selection.label += " + ";
+        }
+        selection.label += entity != nullptr && !entity->displayName.empty()
+            ? entity->displayName : std::string("名前のない線");
+    }
+    auto added = kachakacha::v2::modeling::AddSelectionAsNewRow(table, role, selection);
+    if (!added.HasValue()) {
+        return added;
+    }
+    auto next = added.Value();
+    next.rows.back().sourceWireIds = uniqueEntityIds;
+    next.rows.back().sourceLabels.clear();
+    for (const auto& id : uniqueEntityIds) {
+        const auto* entity = document.FindEntity(id);
+        next.rows.back().sourceLabels.push_back(entity == nullptr
+                ? std::string("名前のない線") : entity->displayName);
+    }
+    return Out::Success(std::move(next));
+}
+
+} // namespace
 
 //! 選んだものから分かる事実。作り方を薦めるのに使う。
 kachakacha::v2::app::SurfaceSelectionFacts V2MainWindow::SurfaceFactsNow() const
@@ -52,54 +99,19 @@ kachakacha::v2::app::SurfaceSelectionFacts V2MainWindow::SurfaceFactsNow() const
         }
         wireIds.push_back(id);
     }
-    // 1辺ずつ別ワイヤーで描いた輪郭も、端点が一周つながっていれば
-    // 1つの論理輪郭として読む。選択順には依存しない。
-    if (wireIds.size() > 1) {
-        kachakacha::v2::app::SelectionSet together;
-        together.entityIds = wireIds;
-        const auto curves = kachakacha::v2::app::SelectedCurves(together, session_->Scene());
-        if (!curves.empty()
-            && kachakacha::v2::geometry::SegmentsFormClosedLoop(curves, tolerance)) {
-            std::vector<kachakacha::v2::geometry::Vector3> points;
-            for (const auto& curve : curves) {
-                for (int step = 0; step <= 8; ++step) {
-                    points.push_back(curve.Evaluate(static_cast<double>(step) / 8.0));
-                }
-            }
-            const auto plane = kachakacha::v2::geometry::FitPlane(points);
-            facts.closedWires = 1;
-            if (plane.valid && plane.maximumDeviationMm <= tolerance.modelLinearMm) {
-                facts.closedPlanarWires = 1;
-            }
-            return facts;
-        }
-    }
-    for (const auto& id : wireIds) {
-        kachakacha::v2::app::SelectionSet one;
-        one.entityIds.push_back(id);
-        const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
-        if (curves.empty()) {
-            continue;
-        }
-        const bool closed = kachakacha::v2::geometry::SegmentsFormClosedLoop(curves,
-            tolerance);
-        if (!closed) {
-            ++facts.openWires;
-            continue;
-        }
+    const auto regions = kachakacha::v2::app::DetectProfileRegions(
+        session_->Scene(), wireIds, tolerance);
+    std::vector<kachakacha::v2::base::EntityId> used;
+    for (const auto& region : regions) {
         ++facts.closedWires;
-        // 平面に載っているか。**閉じた同一平面の輪郭1本は平面を薦める。**
-        std::vector<kachakacha::v2::geometry::Vector3> points;
-        for (const auto& curve : curves) {
-            for (int step = 0; step <= 8; ++step) {
-                points.push_back(curve.Evaluate(static_cast<double>(step) / 8.0));
+        ++facts.closedPlanarWires;
+        for (const auto& id : kachakacha::v2::app::ProfileRegionEntityIds(region)) {
+            if (std::find(used.begin(), used.end(), id) == used.end()) {
+                used.push_back(id);
             }
         }
-        const auto plane = kachakacha::v2::geometry::FitPlane(points);
-        if (plane.valid && plane.maximumDeviationMm <= tolerance.modelLinearMm) {
-            ++facts.closedPlanarWires;
-        }
     }
+    facts.openWires = wireIds.size() - used.size();
     return facts;
 }
 
@@ -212,6 +224,9 @@ void V2MainWindow::RunSurfaceCreate()
         AddSelectionToSurfaceSlot(
             kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method));
         surfaceShelfShown_ = true;
+        viewport_->SetToolPickActive(true);
+        viewport_->SetProfileRegionPicking(
+            surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary);
         RefreshRightShelves();
         RefreshSurfacePreview();
         RefreshSurfaceRoleLabels();
@@ -231,6 +246,7 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
 {
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = true;
+    viewport_->SetProfileRegionPicking(method == GuideSurfaceMethod::PlanarBoundary);
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
@@ -291,6 +307,8 @@ void V2MainWindow::EndSurfacePreview()
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
+        viewport_->SetToolPickActive(false);
+        viewport_->SetProfileRegionPicking(false);
     }
     ShowToolFooter(QString());
     RefreshRightShelves();
@@ -307,6 +325,30 @@ V2MainWindow::SurfaceTableFromInput() const
     using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>;
     kachakacha::v2::modeling::GuideTable table;
     table.method = surfaceInput_.method;
+    if (surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary) {
+        const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
+            surfaceInput_.boundaries,
+            session_->GetDocument().Snapshot().settings.tolerance);
+        if (!regions.empty()) {
+            for (const auto& region : regions) {
+                auto added = AddRegionBoundary(std::move(table), region.outer,
+                    ChainRole::OuterBoundary, session_->GetDocument());
+                if (!added.HasValue()) {
+                    return Out::Failure(added.Diagnostics());
+                }
+                table = added.Value();
+                for (const auto& hole : region.holes) {
+                    added = AddRegionBoundary(std::move(table), hole,
+                        ChainRole::HoleBoundary, session_->GetDocument());
+                    if (!added.HasValue()) {
+                        return Out::Failure(added.Diagnostics());
+                    }
+                    table = added.Value();
+                }
+            }
+            return Out::Success(std::move(table));
+        }
+    }
     const auto addRows = [&](ChainRole role,
                              const std::vector<kachakacha::v2::base::EntityId>& ids) {
         for (const auto& id : ids) {

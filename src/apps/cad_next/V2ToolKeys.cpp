@@ -50,13 +50,26 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     if (viewport_ == nullptr) {
         return false;
     }
-    return viewport_->ExtrudeHandleShown() || surfaceShelfShown_;
+    return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
+        || surfaceShelfShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
 {
     if (viewport_ == nullptr) {
         return false;
+    }
+    if (!pendingCommandId_.empty()) {
+        if (key == Qt::Key_Escape) {
+            const QString label = PendingCommandLabel();
+            ClearPendingCommand();
+            SetStatus(label + QStringLiteral(": やめました。"));
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            ConfirmPendingCommand();
+            return true;
+        }
     }
     if (viewport_->ExtrudeHandleShown()) {
         return HandleExtrudeToolKey(key, target);

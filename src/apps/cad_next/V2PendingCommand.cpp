@@ -49,6 +49,11 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::Profile);
         // 構えている間はずっと、素のクリックで役割の違うものを足せる(§5)。
         viewport_->SetToolPickActive(true);
+        // 線を1本ずつ拾わせず、閉じた線の内側を押し出し輪郭として拾う。
+        viewport_->SetProfileRegionPicking(true);
+    } else if (id == "surface.create") {
+        viewport_->SetToolPickActive(true);
+        viewport_->SetProfileRegionPicking(true);
     }
     SetStatus(QStringLiteral("%1: %2(選ぶと続きます。Esc でやめます)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),
@@ -65,6 +70,11 @@ void V2MainWindow::ClearPendingCommand()
         && !viewport_->ExtrudeHandleShown()) {
         viewport_->SetPickSlot(kachakacha::v2::app::ExtrudeSlot::None);
         viewport_->SetToolPickActive(false);
+        viewport_->SetProfileRegionPicking(false);
+    } else if (pendingCommandId_ == "surface.create" && viewport_ != nullptr
+        && !surfaceShelfShown_) {
+        viewport_->SetToolPickActive(false);
+        viewport_->SetProfileRegionPicking(false);
     }
     pendingCommandId_.clear();
 }

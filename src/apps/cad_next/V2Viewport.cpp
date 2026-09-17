@@ -146,6 +146,7 @@ void V2Viewport::OnSceneReplaced()
     // 決めごとにする。「リングが出ているときだけ」にすると、位置や案内文だけが
     // 残る場合に前の場面のものが生き延びる。
     DiscardHoverState();
+    RebuildProfileRegions();
     update();
 }
 
@@ -1001,6 +1002,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     // 立体と面を先に塗ってから線を描く。逆にすると、線が面の下に隠れる。
     // 線はこの道具の主役なので、必ず上に出す。
     DrawShapes(painter);
+    DrawProfileRegions(painter);
     DrawDocument(painter);
     DrawGuideRows(painter);
     DrawPreview(painter);
@@ -1046,6 +1048,15 @@ void V2Viewport::HoverAt(const QPointF& position)
         }
     }
     status_ = hover_.messageJa;
+    hoveredProfileRegion_ = ProfileRegionAt(position);
+    if (!SelectionHasPart() && PickShapeAt(position).has_value()) {
+        hoveredProfileRegion_.reset();
+    }
+    if (hoveredProfileRegion_.has_value()) {
+        status_ = ProfileRegionSelected(*hoveredProfileRegion_)
+            ? "選択済みの輪郭領域です。クリックすると入力から外します。"
+            : "閉じた輪郭の内側です。クリックすると入力へ追加します。";
+    }
     if (statusCallback_) {
         statusCallback_(status_);
     }
@@ -1095,6 +1106,9 @@ void V2Viewport::PruneSelection()
 
 void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifiers)
 {
+    if (ToggleProfileRegionAt(position)) {
+        return;
+    }
     // 修飾キーの読み方は矩形選択と同じ一箇所(SelectionModeFor)から取る。
     // 二重に書くと、クリックと矩形で Ctrl の意味が食い違う。
     const auto mode = SelectionModeFor(modifiers);

@@ -27,7 +27,16 @@ using kachakacha::v2::app::SurfaceSelectionFacts;
 using kachakacha::v2::app::SurfaceSlotState;
 using kachakacha::v2::app::SurfaceSlotsFor;
 using kachakacha::v2::app::SurfaceStatusLinesJa;
+using kachakacha::v2::app::AllSurfaceEntries;
+using kachakacha::v2::app::CanActivateSurfaceSlot;
+using kachakacha::v2::app::SurfaceActiveSlotHintJa;
+using kachakacha::v2::app::SurfaceSlotHolding;
+using kachakacha::v2::app::WithActiveSlotSettled;
+using kachakacha::v2::app::WithActiveSurfaceSlot;
 using kachakacha::v2::app::WithSurfaceEntries;
+using kachakacha::v2::app::WithSurfaceEntriesToggled;
+using kachakacha::v2::app::WithSurfaceSlotCleared;
+using kachakacha::v2::app::WithoutSurfaceEntries;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::modeling::ChainRole;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
@@ -270,6 +279,82 @@ KACHA_V2_TEST(surface_input, 本数が合わないときは足りないのか多
         }
     }
     Require(said, "状態の行に理由が出る");
+}
+
+KACHA_V2_TEST(surface_input, 押したものはいまの欄へ入り再び押すと外れる)
+{
+    // 引継ぎ 2026-09-17 の 1。断面を入れたあとにガイドを入れる道が無かった。
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::GuidedLoft;
+    state.activeSlot = ChainRole::Section;
+    state = WithSurfaceEntriesToggled(state, state.activeSlot, {Id(1)});
+    state = WithSurfaceEntriesToggled(state, state.activeSlot, {Id(2)});
+    Require(state.sections.size() == 2 && state.sections[0] == Id(1), "押した順に入る");
+    // 欄を替えてから押すと、そちらへ入る。
+    state = WithActiveSurfaceSlot(state, ChainRole::GuideU);
+    Require(state.activeSlot == ChainRole::GuideU, "ガイドの欄になった");
+    state = WithSurfaceEntriesToggled(state, state.activeSlot, {Id(5)});
+    Require(state.guides.size() == 1 && state.sections.size() == 2, "ガイドへ入り断面は無事");
+    // もう一度押すと外れる。Ctrl は要らない。
+    state = WithSurfaceEntriesToggled(state, ChainRole::GuideU, {Id(5)});
+    Require(state.guides.empty(), "再び押すと外れる");
+}
+
+KACHA_V2_TEST(surface_input, 一つのものは一つの欄にしか入らない)
+{
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::GuidedLoft;
+    state = WithSurfaceEntriesToggled(state, ChainRole::Section, {Id(1)});
+    // 断面に入っている線を、ガイドの欄で押す → 断面から外れてガイドへ移る。
+    state = WithSurfaceEntriesToggled(state, ChainRole::GuideU, {Id(1)});
+    Require(state.sections.empty() && state.guides.size() == 1, "欄を移る");
+}
+
+KACHA_V2_TEST(surface_input, 解除は並びからも消す)
+{
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::LoftSections;
+    state = WithSurfaceEntries(state, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
+    state.ordering = SurfaceOrdering::ManualLock;
+    state.explicitOrder = {Id(3), Id(1), Id(2)};
+    state = WithoutSurfaceEntries(state, {Id(1)});
+    Require(state.sections.size() == 2, "断面から消える");
+    Require(state.explicitOrder.size() == 2 && state.explicitOrder[0] == Id(3),
+        "手動固定の並びからも消える。古い入力を残さない");
+    state = WithSurfaceSlotCleared(state, ChainRole::Section);
+    Require(state.sections.empty() && state.explicitOrder.empty(), "欄ごと空になる");
+}
+
+KACHA_V2_TEST(surface_input, その作り方で使わない欄は選べない)
+{
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::LoftSections;
+    state.activeSlot = ChainRole::Section;
+    Require(!CanActivateSurfaceSlot(state, ChainRole::GuideU), "ロフトにガイド欄は無い");
+    const auto same = WithActiveSurfaceSlot(state, ChainRole::GuideU);
+    Require(same.activeSlot == ChainRole::Section, "黙って変えない");
+    // 作り方を平面へ変えると、断面の欄は使えないので既定(境界)へ戻る。
+    state.method = GuideSurfaceMethod::PlanarBoundary;
+    state = WithActiveSlotSettled(state);
+    Require(state.activeSlot == ChainRole::BoundarySide, "既定の欄へ戻る");
+}
+
+KACHA_V2_TEST(surface_input, 今どこへ入るかは状態の一番上に出る)
+{
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::LoftSections;
+    state.activeSlot = ChainRole::Section;
+    state = WithSurfaceEntries(state, ChainRole::Section, {Id(1)}, false);
+    const auto hint = SurfaceActiveSlotHintJa(state);
+    Require(hint.find("断面") != std::string::npos && hint.find("2本目") != std::string::npos,
+        std::string("次が何本目かまで言う: ") + hint);
+    const auto lines = SurfaceStatusLinesJa(state, false);
+    Require(!lines.empty() && lines.front().find("次のクリック") != std::string::npos,
+        "一番上の行");
+    Require(AllSurfaceEntries(state).size() == 1, "合計は重複なし");
+    ChainRole where = ChainRole::GuideU;
+    Require(SurfaceSlotHolding(state, Id(1), where) && where == ChainRole::Section,
+        "どの欄に入っているか分かる");
 }
 
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

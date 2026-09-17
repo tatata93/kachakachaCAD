@@ -1130,8 +1130,22 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // 道具が入力を待っている間は、役割が違うものを足す(§5)。
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
-        ModeForToolPick(picked, mode)));
+        ModeForTogglePick(picked, ModeForToolPick(picked, mode))));
     ReportSelectionCount();
+}
+
+//! 面を作っている間は、押すたびに入れる/外す。置き換えない。
+kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
+    const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+    kachakacha::v2::app::SelectionMode mode) const
+{
+    using kachakacha::v2::app::SelectionMode;
+    if (!toolPickToggle_ || !picked.has_value() || mode != SelectionMode::Replace) {
+        return mode;
+    }
+    return kachakacha::v2::app::IsSelected(selection_, picked->entityId)
+        ? SelectionMode::Subtract
+        : SelectionMode::Add;
 }
 
 void V2Viewport::ReportSelectionCount()

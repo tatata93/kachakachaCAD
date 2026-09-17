@@ -125,8 +125,11 @@ void V2MainWindow::BuildOutputShelves()
         [this](kachakacha::v2::modeling::GuideSurfaceMethod method) {
             ChooseSurfaceMethod(method);
         });
-    surfaceDock_->SetAddHandler([this](kachakacha::v2::modeling::ChainRole role) {
-        AddSelectionToSurfaceSlot(role);
+    surfaceDock_->SetActivateHandler([this](kachakacha::v2::modeling::ChainRole slot) {
+        ActivateSurfaceSlot(slot);
+    });
+    surfaceDock_->SetClearHandler([this](kachakacha::v2::modeling::ChainRole slot) {
+        ClearSurfaceSlot(slot);
     });
     surfaceDock_->SetOrderingHandler(
         [this](kachakacha::v2::app::SurfaceOrdering ordering) {

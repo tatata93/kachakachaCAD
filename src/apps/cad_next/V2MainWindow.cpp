@@ -285,12 +285,9 @@ void V2MainWindow::WireViewportCallbacks()
         HighlightTreeForSelection();
         // 構えている命令があれば、そろったかを見る。
         RefreshPendingCommand(false);
-        // 面作成中の素のクリックは、いまの方式が求める入力欄へそのまま入る。
+        // 面作成中の素のクリックは、**いまの欄**へ入る(もう一度押すと外れる)。
         // 「選んでから右棚の追加ボタンを押す」を基本操作にしない。
-        if (surfaceShelfShown_) {
-            AddSelectionToSurfaceSlot(
-                kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method));
-        }
+        RefreshSurfaceForSelectionChange();
         // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
         RefreshExtrudeForSelectionChange();
         RefreshExportCounts();

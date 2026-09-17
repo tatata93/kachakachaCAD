@@ -30,16 +30,26 @@ class V2SurfaceDock final : public QDockWidget {
 public:
     explicit V2SurfaceDock(QWidget* parent);
 
+    //! 欄ごとの名前。3D で押した順。
+    struct SlotNames {
+        std::vector<QString> sections;
+        std::vector<QString> guides;
+        std::vector<QString> boundaries;
+    };
+
     //! いまの入力を映す。作り方・役割・順序・状態を一度に書き直す。
     void ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
-        const std::vector<QString>& sectionNamesJa, bool previewShown,
+        const SlotNames& names, bool previewShown,
         const QString& deviationNoteJa = QString());
 
     //! 作り方を選んだ。
     void SetMethodHandler(
         std::function<void(kachakacha::v2::modeling::GuideSurfaceMethod)> handler);
-    //! その役割へ「追加」を押した。
-    void SetAddHandler(std::function<void(kachakacha::v2::modeling::ChainRole)> handler);
+    //! その欄の「ここへ選ぶ」を押した(以後の 3D クリックはその欄へ入る)。
+    void SetActivateHandler(
+        std::function<void(kachakacha::v2::modeling::ChainRole)> handler);
+    //! その欄の「解除」を押した(欄を空にする)。
+    void SetClearHandler(std::function<void(kachakacha::v2::modeling::ChainRole)> handler);
     //! 断面順の決め方を変えた。
     void SetOrderingHandler(
         std::function<void(kachakacha::v2::app::SurfaceOrdering)> handler);
@@ -53,9 +63,15 @@ public:
     //! 見えていなければ偽を返す。不可視の widget を叩いて通したことにしない。
     [[nodiscard]] bool ClickMethodCard(kachakacha::v2::modeling::GuideSurfaceMethod method);
 
+    //! **見えている「ここへ選ぶ」「解除」を実際に押す。**人の道の試験はこちら。
+    //! 見えていなければ偽。不可視の widget を叩いて通したことにしない。
+    [[nodiscard]] bool ClickActivate(kachakacha::v2::modeling::ChainRole slot);
+    [[nodiscard]] bool ClickClear(kachakacha::v2::modeling::ChainRole slot);
+    //! いま「ここへ選ぶ」が押された形で出ている欄。無ければ Section。
+    [[nodiscard]] kachakacha::v2::modeling::ChainRole ActiveSlotShown() const;
+
     //! 試験から押す。窓を出さずに同じ道を通す。
     void PressMethod(kachakacha::v2::modeling::GuideSurfaceMethod method);
-    void PressAdd(kachakacha::v2::modeling::ChainRole role);
     void PressOrdering(kachakacha::v2::app::SurfaceOrdering ordering);
     void PressConfirm();
     void PressCancel();
@@ -83,9 +99,13 @@ private:
     QLabel* sectionValue_ = nullptr;
     QLabel* guideValue_ = nullptr;
     QLabel* boundaryValue_ = nullptr;
-    QPushButton* addSection_ = nullptr;
-    QPushButton* addGuide_ = nullptr;
-    QPushButton* addBoundary_ = nullptr;
+    //! 欄ごとの「ここへ選ぶ」(押された形 = いまの欄)と「解除」。
+    QPushButton* armSection_ = nullptr;
+    QPushButton* armGuide_ = nullptr;
+    QPushButton* armBoundary_ = nullptr;
+    QPushButton* clearSection_ = nullptr;
+    QPushButton* clearGuide_ = nullptr;
+    QPushButton* clearBoundary_ = nullptr;
     QPushButton* orderAuto_ = nullptr;
     QPushButton* orderManual_ = nullptr;
     QTreeWidget* orderList_ = nullptr;
@@ -98,7 +118,8 @@ private:
     bool loading_ = false;
 
     std::function<void(kachakacha::v2::modeling::GuideSurfaceMethod)> methodHandler_;
-    std::function<void(kachakacha::v2::modeling::ChainRole)> addHandler_;
+    std::function<void(kachakacha::v2::modeling::ChainRole)> activateHandler_;
+    std::function<void(kachakacha::v2::modeling::ChainRole)> clearHandler_;
     std::function<void(kachakacha::v2::app::SurfaceOrdering)> orderingHandler_;
     std::function<void(int, int)> moveSectionHandler_;
     std::function<void()> confirmHandler_;

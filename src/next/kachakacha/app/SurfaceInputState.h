@@ -65,6 +65,11 @@ struct SurfaceInputState {
     SurfaceOrdering ordering = SurfaceOrdering::Auto;
     //! 手動固定のときの並び。空なら `sections` の並びをそのまま使う。
     std::vector<base::EntityId> explicitOrder;
+    //! **3D の次のクリックが入る欄**(引継ぎ 2026-09-17 の 1)。
+    //! 欄の鍵は `SurfaceSlotKey` と同じ(Section / GuideU / BoundarySide / SourceSurface)。
+    //! これが無いと、断面を入れたあとにガイドを入れる道が無かった。
+    //! 常に画面に出す。「今どこへ入るのか」を人に推測させない。
+    modeling::ChainRole activeSlot = modeling::ChainRole::Section;
 
     [[nodiscard]] bool Empty() const noexcept
     {
@@ -138,6 +143,41 @@ struct SurfaceSelectionFacts {
 //! その役割へ入れる。同じものは二度入れない。
 [[nodiscard]] SurfaceInputState WithSurfaceEntries(const SurfaceInputState& state,
     modeling::ChainRole role, const std::vector<base::EntityId>& ids, bool replace);
+
+//! 3D で押したものを、いまの欄へ **入れる/外す**(引継ぎ 2026-09-17 の 1)。
+//!
+//! 入っていなければ足し、入っていれば外す。Ctrl は要らない。
+//! 押したものが別の欄に入っているときは、その欄から外して(1つのものが
+//! 2つの役割を持たない)いまの欄へ入れる。
+[[nodiscard]] SurfaceInputState WithSurfaceEntriesToggled(const SurfaceInputState& state,
+    modeling::ChainRole slot, const std::vector<base::EntityId>& ids);
+
+//! それらをどの欄からも外す(解除)。手動固定の並びからも外す。古い入力を残さない。
+[[nodiscard]] SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
+    const std::vector<base::EntityId>& ids);
+
+//! その欄を空にする。ほかの欄は触らない。
+[[nodiscard]] SurfaceInputState WithSurfaceSlotCleared(const SurfaceInputState& state,
+    modeling::ChainRole slot);
+
+//! いまの欄を変える。その作り方で使わない欄は選べない(偽を返し、変えない)。
+[[nodiscard]] bool CanActivateSurfaceSlot(const SurfaceInputState& state,
+    modeling::ChainRole slot) noexcept;
+[[nodiscard]] SurfaceInputState WithActiveSurfaceSlot(const SurfaceInputState& state,
+    modeling::ChainRole slot);
+
+//! 作り方を変えたあと、いまの欄がその作り方で使えなければ既定の欄へ戻す。
+[[nodiscard]] SurfaceInputState WithActiveSlotSettled(const SurfaceInputState& state);
+
+//! どの欄にも入っているものの合計(重複なし)。3D の選択の印をこれに合わせる。
+[[nodiscard]] std::vector<base::EntityId> AllSurfaceEntries(const SurfaceInputState& state);
+
+//! そのものが入っている欄。どこにも無ければ偽。
+[[nodiscard]] bool SurfaceSlotHolding(const SurfaceInputState& state,
+    const base::EntityId& id, modeling::ChainRole& slot) noexcept;
+
+//! 「次のクリック → 断面(2本目)」。帯と一番下の一行に出す。
+[[nodiscard]] std::string SurfaceActiveSlotHintJa(const SurfaceInputState& state);
 
 //! 実際に生成へ渡す断面の並び(§13)。
 //!

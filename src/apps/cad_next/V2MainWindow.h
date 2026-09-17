@@ -179,8 +179,17 @@ public:
     void ChooseSurfaceOrdering(kachakacha::v2::app::SurfaceOrdering ordering);
     //! 断面を1つ動かす。手動固定にする。
     void MoveSurfaceSection(int from, int to);
-    //! 選んでいるものを、その役割へ入れる。
+    //! 選んでいるものを、その役割へ入れる(道具を始めたときの取り込み)。
     void AddSelectionToSurfaceSlot(kachakacha::v2::modeling::ChainRole role);
+    // ---- 入力欄と 3D の行き来(引継ぎ 2026-09-17 の 1)。V2SurfaceSlots.cpp が持つ。
+    //! 3D の選択が変わった。差分を「いまの欄」へ入れる/外す。
+    void RefreshSurfaceForSelectionChange();
+    //! 3D の選択の印を、欄に入っているものの合計に合わせる。欄が正本。
+    void MirrorSurfaceEntriesToSelection();
+    //! 「ここへ選ぶ」。以後の 3D クリックはその欄へ入る。
+    void ActivateSurfaceSlot(kachakacha::v2::modeling::ChainRole slot);
+    //! 「解除」。その欄を空にする。
+    void ClearSurfaceSlot(kachakacha::v2::modeling::ChainRole slot);
     //! 入力を空にする。作り方は残す。
     void ResetSurfaceInput();
     //! 作る。
@@ -858,6 +867,10 @@ private:
     bool surfaceShelfShown_ = false;
     //! 「面を作る」の入力。**画面の欄と1対1。**
     kachakacha::v2::app::SurfaceInputState surfaceInput_;
+    //! 3D の選択に映した、欄の合計。差分を読むための前回の写し。
+    std::vector<kachakacha::v2::base::EntityId> surfaceMirror_;
+    //! 自分で選択を入れ替えている最中(その便りは読まない)。
+    bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。
     //! 確定のときに選び直さない。見たものと違う面が出来るのを防ぐ。
     struct SurfaceSnapshot {

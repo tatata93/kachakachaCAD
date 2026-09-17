@@ -90,26 +90,40 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
 void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
 {
     // 2. 入力。断面 / ガイド / 境界。使わない役割は「この方式では不要」と出す。
+    //
+    // 欄ごとに「ここへ選ぶ」と「解除」。**3D の次のクリックがどの欄へ入るかは、
+    // 押された形の「ここへ選ぶ」でいつも見えている**(引継ぎ 2026-09-17 の 1)。
+    // 1本ずつ外すのは 3D でもう一度押す。欄ごと空にするのが「解除」。
     layout->addWidget(new QLabel(QStringLiteral("2. 入力"), widget()));
-    const auto row = [this, layout](const QString& name, QLabel** value,
-                         QPushButton** add, ChainRole role) {
+    const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
+                         QPushButton** clear, ChainRole role) {
         auto* line = new QHBoxLayout();
         line->addWidget(new QLabel(name, widget()));
         *value = new QLabel(widget());
         (*value)->setWordWrap(true);
         line->addWidget(*value, 1);
-        *add = new QPushButton(QStringLiteral("追加"), widget());
-        QObject::connect(*add, &QPushButton::clicked, this, [this, role] {
-            if (!loading_ && addHandler_) {
-                addHandler_(role);
+        *arm = new QPushButton(QStringLiteral("ここへ選ぶ"), widget());
+        (*arm)->setCheckable(true);
+        QObject::connect(*arm, &QPushButton::clicked, this, [this, role] {
+            if (!loading_ && activateHandler_) {
+                activateHandler_(role);
             }
         });
-        line->addWidget(*add);
+        line->addWidget(*arm);
+        *clear = new QPushButton(QStringLiteral("解除"), widget());
+        QObject::connect(*clear, &QPushButton::clicked, this, [this, role] {
+            if (!loading_ && clearHandler_) {
+                clearHandler_(role);
+            }
+        });
+        line->addWidget(*clear);
         layout->addLayout(line);
     };
-    row(QStringLiteral("断面"), &sectionValue_, &addSection_, ChainRole::Section);
-    row(QStringLiteral("ガイド"), &guideValue_, &addGuide_, ChainRole::GuideU);
-    row(QStringLiteral("境界"), &boundaryValue_, &addBoundary_, ChainRole::BoundarySide);
+    row(QStringLiteral("断面"), &sectionValue_, &armSection_, &clearSection_,
+        ChainRole::Section);
+    row(QStringLiteral("ガイド"), &guideValue_, &armGuide_, &clearGuide_, ChainRole::GuideU);
+    row(QStringLiteral("境界"), &boundaryValue_, &armBoundary_, &clearBoundary_,
+        ChainRole::BoundarySide);
 }
 
 void V2SurfaceDock::BuildOrderRows(QVBoxLayout* layout)
@@ -230,9 +244,9 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
 }
 
 void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
-    const std::vector<QString>& sectionNamesJa, bool previewShown,
-    const QString& deviationNoteJa)
+    const SlotNames& names, bool previewShown, const QString& deviationNoteJa)
 {
+    const std::vector<QString>& sectionNamesJa = names.sections;
     loading_ = true;
     shown_ = state;
 
@@ -244,24 +258,39 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     state_->setText(QStringLiteral("面を作る — %1")
             .arg(Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(state.method))));
 
-    // 2. 入力。使わない役割は「この方式では不要」と出し、追加も押させない。
-    const auto fill = [&](ChainRole role, QLabel* value, QPushButton* add) {
+    // 2. 入力。使わない役割は「この方式では不要」と出し、選ぶ先にもさせない。
+    const auto joined = [](const std::vector<QString>& list) {
+        QString text;
+        for (const QString& name : list) {
+            if (!text.isEmpty()) {
+                text += QStringLiteral(", ");
+            }
+            text += name;
+        }
+        return text;
+    };
+    const auto fill = [&](ChainRole role, QLabel* value, QPushButton* arm, QPushButton* clear,
+                          const std::vector<QString>& entryNames) {
         for (const auto& view : kachakacha::v2::app::SurfaceSlotsFor(state)) {
             if (view.role != role) {
                 continue;
             }
+            arm->setChecked(state.activeSlot == role);
+            clear->setEnabled(view.count > 0);
             if (view.state == SurfaceSlotState::NotUsedByMethod) {
                 // **入っていても捨てない。**そのことも言う。
                 value->setText(view.count > 0
                         ? QStringLiteral("この方式では不要(%1本は残しています)")
                               .arg(static_cast<int>(view.count))
                         : QStringLiteral("この方式では不要"));
-                add->setEnabled(false);
+                arm->setEnabled(false);
                 return;
             }
-            add->setEnabled(true);
+            arm->setEnabled(true);
             if (view.count == 0) {
-                value->setText(QStringLiteral("(選んでいません)"));
+                value->setText(state.activeSlot == role
+                        ? QStringLiteral("(3D で押してください)")
+                        : QStringLiteral("(選んでいません)"));
                 return;
             }
             if (role == ChainRole::BoundarySide
@@ -274,14 +303,18 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
                         : QStringLiteral("%1本（端点のつながりを確認中）")
                               .arg(static_cast<int>(view.count)));
             } else {
-                value->setText(QStringLiteral("%1本").arg(static_cast<int>(view.count)));
+                // **名前を並べる。**本数だけでは、どれが入っているのか分からない。
+                value->setText(QStringLiteral("%1本: %2")
+                        .arg(static_cast<int>(view.count))
+                        .arg(joined(entryNames)));
             }
             return;
         }
     };
-    fill(ChainRole::Section, sectionValue_, addSection_);
-    fill(ChainRole::GuideU, guideValue_, addGuide_);
-    fill(ChainRole::BoundarySide, boundaryValue_, addBoundary_);
+    fill(ChainRole::Section, sectionValue_, armSection_, clearSection_, names.sections);
+    fill(ChainRole::GuideU, guideValue_, armGuide_, clearGuide_, names.guides);
+    fill(ChainRole::BoundarySide, boundaryValue_, armBoundary_, clearBoundary_,
+        names.boundaries);
 
     // 3. 断面順。**いまの生成順を番号つきで出す。**
     orderAuto_->setChecked(state.ordering == SurfaceOrdering::Auto);
@@ -315,9 +348,14 @@ void V2SurfaceDock::SetMethodHandler(std::function<void(GuideSurfaceMethod)> han
     methodHandler_ = std::move(handler);
 }
 
-void V2SurfaceDock::SetAddHandler(std::function<void(ChainRole)> handler)
+void V2SurfaceDock::SetActivateHandler(std::function<void(ChainRole)> handler)
 {
-    addHandler_ = std::move(handler);
+    activateHandler_ = std::move(handler);
+}
+
+void V2SurfaceDock::SetClearHandler(std::function<void(ChainRole)> handler)
+{
+    clearHandler_ = std::move(handler);
 }
 
 void V2SurfaceDock::SetOrderingHandler(std::function<void(SurfaceOrdering)> handler)
@@ -361,11 +399,54 @@ void V2SurfaceDock::PressMethod(GuideSurfaceMethod method)
     }
 }
 
-void V2SurfaceDock::PressAdd(ChainRole role)
+namespace {
+
+[[nodiscard]] QPushButton* ButtonFor(ChainRole slot, QPushButton* section, QPushButton* guide,
+    QPushButton* boundary)
 {
-    if (addHandler_) {
-        addHandler_(role);
+    switch (slot) {
+    case ChainRole::Section:       return section;
+    case ChainRole::GuideU:
+    case ChainRole::GuideV:        return guide;
+    case ChainRole::BoundarySide:
+    case ChainRole::OuterBoundary:
+    case ChainRole::HoleBoundary:  return boundary;
+    case ChainRole::SourceSurface: break;
     }
+    return nullptr;
+}
+
+} // namespace
+
+bool V2SurfaceDock::ClickActivate(ChainRole slot)
+{
+    QPushButton* button = ButtonFor(slot, armSection_, armGuide_, armBoundary_);
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;   // 見えていない・押せないものは押せない。
+    }
+    button->click();
+    return true;
+}
+
+bool V2SurfaceDock::ClickClear(ChainRole slot)
+{
+    QPushButton* button = ButtonFor(slot, clearSection_, clearGuide_, clearBoundary_);
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;
+    }
+    button->click();
+    return true;
+}
+
+ChainRole V2SurfaceDock::ActiveSlotShown() const
+{
+    if (armGuide_ != nullptr && armGuide_->isChecked()) {
+        return ChainRole::GuideU;
+    }
+    if (armBoundary_ != nullptr && armBoundary_->isChecked()) {
+        return ChainRole::BoundarySide;
+    }
+    return ChainRole::Section;
 }
 
 void V2SurfaceDock::PressOrdering(SurfaceOrdering ordering)

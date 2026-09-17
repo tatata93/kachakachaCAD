@@ -328,6 +328,15 @@ public:
     //! 相手の立体を押した瞬間に輪郭が消える。
     void SetToolPickActive(bool active) noexcept { toolPickActive_ = active; }
     [[nodiscard]] bool ToolPickActive() const noexcept { return toolPickActive_; }
+    //! 道具が「押すたびに入れる/外す」で入力を集めるか(面を作る)。
+    //!
+    //! 入っていないものを押せば足し、入っているものを押せば外す。**Ctrl は要らない。**
+    //! 押し出しの「役割が違えば足す」とは別の決まりである。断面は全部同じ役割
+    //! なので、置き換えにすると2本目を押した瞬間に1本目が消える。
+    //! 選択は必ず「押したものだけが増える/減る」の形で変わるので、
+    //! 窓は差分から「何を押したか」を取り違えなく読める。
+    void SetToolPickToggle(bool active) noexcept { toolPickToggle_ = active; }
+    [[nodiscard]] bool ToolPickToggle() const noexcept { return toolPickToggle_; }
     //! 押し出し・平面Surfaceでは線そのものではなく、閉じた線の内側を拾う。
     //! 領域はWireから都度作る一時状態で、Documentへ保存しない。
     void SetProfileRegionPicking(bool active);
@@ -717,6 +726,10 @@ private:
     //! 輪郭がもう入っているなら、拾った面は相手の立体を指している(§5)。
     [[nodiscard]] std::optional<kachakacha::v2::app::PickCandidate> AsSolidIfProfileTaken(
         const std::optional<kachakacha::v2::app::PickCandidate>& picked) const;
+    //! 押すたびに入れる/外す(面を作る)。ModeForToolPick の後に掛ける。
+    [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForTogglePick(
+        const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+        kachakacha::v2::app::SelectionMode mode) const;
     [[nodiscard]] kachakacha::v2::app::SelectionMode ModeForToolPick(
         const std::optional<kachakacha::v2::app::PickCandidate>& picked,
         kachakacha::v2::app::SelectionMode mode) const;
@@ -885,6 +898,8 @@ private:
     std::function<void()> cancelExtrude_;
     //! 道具が入力を集めている最中か。素のクリックで足すかどうかを決める。
     bool toolPickActive_ = false;
+    //! 押すたびに入れる/外す(面を作る)。
+    bool toolPickToggle_ = false;
     bool profileRegionPicking_ = false;
     std::vector<kachakacha::v2::app::ProfileRegion> profileRegions_;
     std::optional<std::size_t> hoveredProfileRegion_;

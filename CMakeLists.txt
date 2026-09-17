@@ -964,6 +964,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2PendingCommand.cpp
         src/apps/cad_next/V2SurfaceCommands.cpp
         src/apps/cad_next/V2SurfaceDock.cpp
+        src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ToolKeys.cpp
         src/apps/cad_next/V2ToolRoleLabels.cpp
         src/apps/cad_next/V2UiShotStates.cpp

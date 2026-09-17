@@ -73,6 +73,7 @@ KACHA_V2_TEST(tool_footer, 面を作るの一行は方式と本数を出す)
     Require(line.find("GUIDES=2") != std::string::npos, "ガイド2本");
     // **まだ文書に入っていないこと**を、ここでも言う。
     Require(line.find("Preview only") != std::string::npos, "下見だけ");
+    Require(line.find("NEXT=断面") != std::string::npos, "次のクリックがどこへ入るか");
     Require(SurfaceFooterLine(state, false).find("no preview") != std::string::npos,
         "下見が無ければ、そう言う");
 }

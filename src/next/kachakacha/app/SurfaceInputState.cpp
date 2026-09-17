@@ -137,6 +137,136 @@ SurfaceInputState WithSurfaceEntries(const SurfaceInputState& state, ChainRole r
     return next;
 }
 
+namespace {
+
+//! 欄の鍵を、入れ物へ寄せる。GuideU/GuideV は同じ入れ物、境界の3つも同じ入れ物。
+[[nodiscard]] ChainRole SlotKeyOf(ChainRole role) noexcept
+{
+    switch (role) {
+    case ChainRole::GuideU:
+    case ChainRole::GuideV:
+        return ChainRole::GuideU;
+    case ChainRole::BoundarySide:
+    case ChainRole::OuterBoundary:
+    case ChainRole::HoleBoundary:
+        return ChainRole::BoundarySide;
+    case ChainRole::Section:
+    case ChainRole::SourceSurface:
+        break;
+    }
+    return role;
+}
+
+void EraseId(std::vector<base::EntityId>& list, const base::EntityId& id)
+{
+    list.erase(std::remove(list.begin(), list.end(), id), list.end());
+}
+
+} // namespace
+
+SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
+    const std::vector<base::EntityId>& ids)
+{
+    SurfaceInputState next = state;
+    for (const base::EntityId& id : ids) {
+        EraseId(next.sections, id);
+        EraseId(next.guides, id);
+        EraseId(next.boundaries, id);
+        EraseId(next.sourceSurfaces, id);
+        // 手動固定の並びからも外す。**古い入力を残さない。**
+        EraseId(next.explicitOrder, id);
+    }
+    return next;
+}
+
+SurfaceInputState WithSurfaceEntriesToggled(const SurfaceInputState& state, ChainRole slot,
+    const std::vector<base::EntityId>& ids)
+{
+    SurfaceInputState next = state;
+    const auto& current = SurfaceSlotEntries(state, slot);
+    for (const base::EntityId& id : ids) {
+        const bool held = std::find(current.begin(), current.end(), id) != current.end();
+        if (held) {
+            next = WithoutSurfaceEntries(next, {id});   // もう入っている → 外す
+            continue;
+        }
+        // 別の欄に入っているなら、そこから外す。1つのものが2つの役割を持たない。
+        next = WithoutSurfaceEntries(next, {id});
+        next = WithSurfaceEntries(next, slot, {id}, false);
+    }
+    return next;
+}
+
+SurfaceInputState WithSurfaceSlotCleared(const SurfaceInputState& state, ChainRole slot)
+{
+    return WithoutSurfaceEntries(state, SurfaceSlotEntries(state, slot));
+}
+
+bool CanActivateSurfaceSlot(const SurfaceInputState& state, ChainRole slot) noexcept
+{
+    const ChainRole key = SlotKeyOf(slot);
+    if (key == ChainRole::SourceSurface) {
+        return state.method == GuideSurfaceMethod::OffsetGuide;
+    }
+    ChainRole role = key;
+    return RoleForSurfaceSlot(state.method, key, role);
+}
+
+SurfaceInputState WithActiveSurfaceSlot(const SurfaceInputState& state, ChainRole slot)
+{
+    if (!CanActivateSurfaceSlot(state, slot)) {
+        return state;   // その作り方では使わない欄。黙って変えない。
+    }
+    SurfaceInputState next = state;
+    next.activeSlot = SlotKeyOf(slot);
+    return next;
+}
+
+SurfaceInputState WithActiveSlotSettled(const SurfaceInputState& state)
+{
+    if (CanActivateSurfaceSlot(state, state.activeSlot)) {
+        return state;
+    }
+    SurfaceInputState next = state;
+    next.activeSlot = DefaultSurfaceIntakeSlot(state.method);
+    return next;
+}
+
+std::vector<base::EntityId> AllSurfaceEntries(const SurfaceInputState& state)
+{
+    std::vector<base::EntityId> all;
+    for (const auto* list : {&state.sections, &state.guides, &state.boundaries,
+             &state.sourceSurfaces}) {
+        for (const base::EntityId& id : *list) {
+            if (std::find(all.begin(), all.end(), id) == all.end()) {
+                all.push_back(id);
+            }
+        }
+    }
+    return all;
+}
+
+bool SurfaceSlotHolding(const SurfaceInputState& state, const base::EntityId& id,
+    ChainRole& slot) noexcept
+{
+    for (const ChainRole key : {ChainRole::Section, ChainRole::GuideU,
+             ChainRole::BoundarySide, ChainRole::SourceSurface}) {
+        const auto& list = SurfaceSlotEntries(state, key);
+        if (std::find(list.begin(), list.end(), id) != list.end()) {
+            slot = key;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string SurfaceActiveSlotHintJa(const SurfaceInputState& state)
+{
+    const std::size_t count = SurfaceSlotEntries(state, state.activeSlot).size();
+    return "次のクリック → " + std::string(SurfaceSlotNameJa(state.activeSlot)) + "("
+        + std::to_string(count + 1) + "本目)";
+}
+
 bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& role) noexcept
 {
     // 画面の欄と内部の役割は、名前が同じでも一致しない。
@@ -302,6 +432,9 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
     bool previewShown, const std::string& deviationNoteJa)
 {
     std::vector<std::string> lines;
+    // **今どこへ入るのか**を、いちばん上に出す。人に推測させない。
+    lines.push_back("▶ " + SurfaceActiveSlotHintJa(state)
+        + "。もう一度押すと外れます");
     for (const SurfaceSlotView& view : SurfaceSlotsFor(state)) {
         const std::string name(SurfaceSlotNameJa(view.role));
         switch (view.state) {

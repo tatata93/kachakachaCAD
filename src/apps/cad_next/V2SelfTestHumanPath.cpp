@@ -1134,6 +1134,178 @@ struct OutputCounts {
         window.FabricationModelCount() == 1);
 }
 
+//! 上から見て、画面の割合で指した場所に矩形を1つ引く。引いた線の番号を返す。
+[[nodiscard]] kachakacha::v2::base::EntityId DrawRectangleAtByHand(V2MainWindow& window,
+    double x0, double y0, double x1, double y1)
+{
+    auto& viewport = window.Viewport();
+    const int before = CountOfKind(window, EntityKind::Wire);
+    viewport.SetViewDirection(ViewDirection::Top);
+    viewport.SetViewCenter(kachakacha::v2::geometry::Vector3{});
+    viewport.SetVisibleWidthMm(200.0);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Rectangle);
+    viewport.SetSnapSuppressed(true);
+    viewport.ClickAt(QPointF(viewport.width() * x0, viewport.height() * y0));
+    viewport.HoverAt(QPointF(viewport.width() * x1, viewport.height() * y1));
+    viewport.ClickAt(QPointF(viewport.width() * x1, viewport.height() * y1));
+    viewport.SetSnapSuppressed(false);
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    if (CountOfKind(window, EntityKind::Wire) != before + 1) {
+        return kachakacha::v2::base::EntityId{};
+    }
+    // いちばん新しい線。
+    kachakacha::v2::base::EntityId newest;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Wire) {
+            newest = entity.id;
+        }
+    }
+    return newest;
+}
+
+//! その線の上を押す。**画面で拾う道をそのまま使う。**番号を選択へ直接入れない。
+[[nodiscard]] bool ClickOnCurveOf(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
+{
+    auto& viewport = window.Viewport();
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (curve.entityId != id) {
+            continue;
+        }
+        const auto screen = viewport.Mapping().Project(curve.segment.Evaluate(0.5));
+        if (!screen.has_value()) {
+            continue;
+        }
+        viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool Holds(const std::vector<kachakacha::v2::base::EntityId>& list,
+    const kachakacha::v2::base::EntityId& id)
+{
+    return std::find(list.begin(), list.end(), id) != list.end();
+}
+
+//! HP-SF-06。**3D のクリックがどの欄へ入るかが、いつも見えている**
+//! (引継ぎ 2026-09-17 の 1)。断面へ順に押し、再び押して外し、
+//! ガイドの欄へ替えて押し、欄ごと解除する。全部 3D の素のクリックと
+//! 見えているボタンで行う。Ctrl も番号も使わない。
+[[nodiscard]] bool CaseHumanPathSurfaceSlotsFollowClicks(V2MainWindow& window)
+{
+    using kachakacha::v2::modeling::ChainRole;
+    using kachakacha::v2::modeling::GuideSurfaceMethod;
+    window.RunCommand("file.new");
+    const auto a = DrawRectangleAtByHand(window, 0.12, 0.12, 0.38, 0.38);
+    const auto b = DrawRectangleAtByHand(window, 0.62, 0.12, 0.88, 0.38);
+    const auto c = DrawRectangleAtByHand(window, 0.12, 0.62, 0.38, 0.88);
+    if (!Explain("矩形を3つ手で引ける", !a.IsNil() && !b.IsNil() && !c.IsNil())) {
+        return false;
+    }
+    // 何も選ばずに道具を押す。
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("surface.create");
+    if (!Explain("棚が見えている", window.ShelfShown(Shelf::Surface))) {
+        return false;
+    }
+    if (!Explain("空入力は境界の欄が「ここへ選ぶ」になっている",
+            window.SurfaceDock().ActiveSlotShown() == ChainRole::BoundarySide)) {
+        return false;
+    }
+    // ロフトのカードを押すと、断面の欄が「ここへ選ぶ」に変わる。
+    if (!Explain("ロフトのカードが押せる",
+            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::LoftSections))) {
+        return false;
+    }
+    if (!Explain("ロフトでは断面の欄が「ここへ選ぶ」",
+            window.SurfaceDock().ActiveSlotShown() == ChainRole::Section)) {
+        return false;
+    }
+    // 3D で順に押す。
+    if (!Explain("線を順に押せる", ClickOnCurveOf(window, a) && ClickOnCurveOf(window, b)
+                && ClickOnCurveOf(window, c))) {
+        return false;
+    }
+    const auto& in = window.SurfaceInput();
+    if (!Explain((std::string("押した順に断面へ入る(") + std::to_string(in.sections.size())
+                     + "本)").c_str(),
+            in.sections.size() == 3 && in.sections[0] == a && in.sections[1] == b
+                && in.sections[2] == c)) {
+        return false;
+    }
+    if (!Explain("3D の印も3本", window.Viewport().Selection().entityIds.size() == 3)) {
+        return false;
+    }
+    if (!Explain((std::string("欄に名前が並ぶ(")
+                     + window.SurfaceDock().SlotTextJa(ChainRole::Section).toStdString()
+                     + ")").c_str(),
+            window.SurfaceDock().SlotTextJa(ChainRole::Section).startsWith(
+                QStringLiteral("3本")))) {
+        return false;
+    }
+    // もう一度押すと外れる。Ctrl は要らない。
+    if (!Explain("2本目をもう一度押せる", ClickOnCurveOf(window, b))) {
+        return false;
+    }
+    if (!Explain("再び押した線は断面から外れる",
+            in.sections.size() == 2 && !Holds(in.sections, b)
+                && !Holds(window.Viewport().Selection().entityIds, b))) {
+        return false;
+    }
+    // ロフトにガイドの欄は無い。押せないことも見えている。
+    if (!Explain("ロフトではガイドの「ここへ選ぶ」が押せない",
+            !window.SurfaceDock().ClickActivate(ChainRole::GuideU))) {
+        return false;
+    }
+    // 案内付きロフトへ替え、ガイドの欄へ替えてから押す。
+    if (!Explain("案内付きロフトのカードが押せる",
+            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::GuidedLoft))) {
+        return false;
+    }
+    if (!Explain("ガイドの「ここへ選ぶ」が押せる",
+            window.SurfaceDock().ClickActivate(ChainRole::GuideU))) {
+        return false;
+    }
+    if (!Explain("ガイドの欄が「ここへ選ぶ」になった",
+            window.SurfaceDock().ActiveSlotShown() == ChainRole::GuideU
+                && in.activeSlot == ChainRole::GuideU)) {
+        return false;
+    }
+    if (!Explain("線を押せる", ClickOnCurveOf(window, b))) {
+        return false;
+    }
+    if (!Explain("ガイドへ入り、断面はそのまま",
+            in.guides.size() == 1 && in.guides[0] == b && in.sections.size() == 2)) {
+        return false;
+    }
+    // 断面に入っている線をガイドの欄で押すと、断面からガイドへ移る。
+    if (!Explain("断面の線をガイドの欄で押せる", ClickOnCurveOf(window, a))) {
+        return false;
+    }
+    if (!Explain("1本は1つの欄にしか入らない",
+            in.guides.size() == 2 && in.sections.size() == 1 && in.sections[0] == c)) {
+        return false;
+    }
+    // 欄ごと解除。3D の印も消える。
+    if (!Explain("断面の「解除」が押せる", window.SurfaceDock().ClickClear(ChainRole::Section))) {
+        return false;
+    }
+    if (!Explain("断面が空になり、3D の印はガイドの2本だけ",
+            in.sections.empty() && window.Viewport().Selection().entityIds.size() == 2)) {
+        return false;
+    }
+    // 一番下の一行にも、次のクリックがどこへ入るかが出ている。
+    const auto footer = window.ToolFooterTextJa().toStdString();
+    if (!Explain((std::string("一番下の一行に NEXT= が出ている(") + footer + ")").c_str(),
+            footer.find("NEXT=ガイド") != std::string::npos)) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    return Explain("やめると 3D の印も消える",
+        window.Viewport().Selection().entityIds.empty()
+            && !window.ShelfShown(Shelf::Surface));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -1164,6 +1336,8 @@ std::vector<SelfTestCase> HumanPathCases()
         {"PROFILE-03〜05/07 穴・複数・解除・開いた輪郭を画面で扱える",
             CaseHumanPathProfileRegionVariants},
         {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
+        {"HP-SF-06 3D のクリックがどの欄へ入るかがいつも見えている",
+            CaseHumanPathSurfaceSlotsFollowClicks},
         {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
             CaseHumanPathSelectionIsVisible},
         {"HP-FAB-01 面を拾い70%曲げからワイヤーを作る",

@@ -156,12 +156,21 @@ void V2MainWindow::RefreshSurfaceDock()
         return;
     }
     const auto& document = session_->GetDocument();
-    std::vector<QString> names;
-    for (const auto& id : kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_)) {
+    const auto nameOf = [&document](const kachakacha::v2::base::EntityId& id) {
         const auto* entity = document.FindEntity(id);
-        names.push_back(entity != nullptr && !entity->displayName.empty()
-                ? QString::fromStdString(entity->displayName)
-                : QStringLiteral("名前のないもの"));
+        return entity != nullptr && !entity->displayName.empty()
+            ? QString::fromStdString(entity->displayName)
+            : QStringLiteral("名前のないもの");
+    };
+    V2SurfaceDock::SlotNames names;
+    for (const auto& id : kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_)) {
+        names.sections.push_back(nameOf(id));
+    }
+    for (const auto& id : surfaceInput_.guides) {
+        names.guides.push_back(nameOf(id));
+    }
+    for (const auto& id : surfaceInput_.boundaries) {
+        names.boundaries.push_back(nameOf(id));
     }
     // 下見に出ている面が、指定した線からどれだけ外れているか。
     // **近づけて作る面は線の上に乗っていない。**知らずに板取りへ進むと、
@@ -221,10 +230,14 @@ void V2MainWindow::RunSurfaceCreate()
             surfaceInput_.method = kachakacha::v2::app::RecommendSurfaceMethod(facts);
         }
         // 取り込み先の欄は core が決める。画面と core で2回書かない。
-        AddSelectionToSurfaceSlot(
-            kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method));
+        surfaceInput_.activeSlot =
+            kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method);
+        AddSelectionToSurfaceSlot(surfaceInput_.activeSlot);
         surfaceShelfShown_ = true;
         viewport_->SetToolPickActive(true);
+        // 以後の 3D クリックは「押すたびに入れる/外す」。欄が正本、3D はその印。
+        viewport_->SetToolPickToggle(true);
+        MirrorSurfaceEntriesToSelection();
         viewport_->SetProfileRegionPicking(
             surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary);
         RefreshRightShelves();
@@ -246,6 +259,8 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
 {
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = true;
+    // いまの欄がその作り方で使えなければ、既定の欄へ戻す。入れたものは捨てない。
+    surfaceInput_ = kachakacha::v2::app::WithActiveSlotSettled(surfaceInput_);
     viewport_->SetProfileRegionPicking(method == GuideSurfaceMethod::PlanarBoundary);
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
@@ -291,9 +306,12 @@ void V2MainWindow::ResetSurfaceInput()
 {
     const auto method = surfaceInput_.method;
     const bool chosen = surfaceInput_.methodChosenByUser;
+    const auto activeSlot = surfaceInput_.activeSlot;
     surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = chosen;
+    surfaceInput_.activeSlot = activeSlot;
+    MirrorSurfaceEntriesToSelection();   // 3D の印も消す。古い入力を残さない。
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
@@ -308,8 +326,10 @@ void V2MainWindow::EndSurfacePreview()
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
         viewport_->SetToolPickActive(false);
+        viewport_->SetToolPickToggle(false);
         viewport_->SetProfileRegionPicking(false);
     }
+    surfaceMirror_.clear();
     ShowToolFooter(QString());
     RefreshRightShelves();
 }

@@ -123,6 +123,9 @@ void Note(const char* what);
 //! 足す・引くの人の道(HP-BO)。道具 → 土台 → 相手(自動遷移)→ 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathBooleanCases();
 
+//! C面取り / R丸めの人の道(HP-CN)。道具 → A → B → 下見 → Enter。
+[[nodiscard]] std::vector<SelfTestCase> HumanPathCornerCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

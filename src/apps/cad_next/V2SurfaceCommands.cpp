@@ -377,18 +377,7 @@ V2MainWindow::SurfaceTableFromInput() const
     }
     const auto addRows = [&](ChainRole role,
                              const std::vector<kachakacha::v2::base::EntityId>& ids) {
-        for (const auto& id : ids) {
-            const auto chosen = kachakacha::v2::app::GuideSelectionOf(
-                session_->GetDocument(), session_->Scene(), id);
-            if (!chosen.has_value()) {
-                continue;
-            }
-            const auto added = kachakacha::v2::modeling::AddSelectionAsNewRow(table, role,
-                *chosen);
-            if (added.HasValue()) {
-                table = added.Value();
-            }
-        }
+        table = WithRowsAdded(std::move(table), role, ids);
     };
     if (surfaceInput_.method == GuideSurfaceMethod::OffsetGuide) {
         for (const auto& id : surfaceInput_.sourceSurfaces) {
@@ -411,6 +400,15 @@ V2MainWindow::SurfaceTableFromInput() const
         if (slot == ChainRole::Section) {
             // **画面に出ている順のまま渡す**(§13 の手動固定)。
             addRows(role, kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_));
+            continue;
+        }
+        if (surfaceInput_.method == GuideSurfaceMethod::Revolve && slot == ChainRole::GuideU) {
+            // 回転体の「軸」。表の行にはせず、軸の点と向きと角度へ直す(guide.revolve と同じ道)。
+            const auto axis = RevolveAxisFromInput();
+            if (!axis.HasValue()) {
+                return Out::Failure(axis.Diagnostics());
+            }
+            table = WithRevolveAxis(std::move(table), axis.Value());
             continue;
         }
         if ((surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary
@@ -439,6 +437,34 @@ V2MainWindow::SurfaceTableFromInput() const
             "面を作るものが入っていません。", "断面か境界を選んで「追加」を押してください。"));
     }
     return Out::Success(std::move(table));
+}
+
+//! その線たちを、その役割の行として表へ足す。取れない線は黙って飛ばす(欄の状態が言う)。
+kachakacha::v2::modeling::GuideTable V2MainWindow::WithRowsAdded(
+    kachakacha::v2::modeling::GuideTable table, ChainRole role,
+    const std::vector<kachakacha::v2::base::EntityId>& ids) const
+{
+    for (const auto& id : ids) {
+        const auto chosen = kachakacha::v2::app::GuideSelectionOf(
+            session_->GetDocument(), session_->Scene(), id);
+        if (!chosen.has_value()) {
+            continue;
+        }
+        const auto added = kachakacha::v2::modeling::AddSelectionAsNewRow(table, role, *chosen);
+        if (added.HasValue()) {
+            table = added.Value();
+        }
+    }
+    return table;
+}
+
+kachakacha::v2::modeling::GuideTable V2MainWindow::WithRevolveAxis(
+    kachakacha::v2::modeling::GuideTable table, const kachakacha::v2::app::RevolveRequest& axis)
+{
+    table.revolveAxisPoint = axis.axisPoint;
+    table.revolveAxisDirection = axis.axisDirection;
+    table.revolveAngleRad = axis.angleDeg * 3.14159265358979323846 / 180.0;
+    return table;
 }
 
 //! 確定して面を作る。**下見に出した写しをそのまま使う**(§9 と同じ決まり)。

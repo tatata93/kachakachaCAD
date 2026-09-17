@@ -49,6 +49,8 @@ public:
     void SetRunHandler(std::function<void(const char* command)> handler);
     //! 直線 A / B の欄に、選んだ線の名前を出す。
     void SetPairText(const QString& first, const QString& second);
+    //! 種類・残す側・B の切戻しを変えたときに呼ぶもの(下見を出し直す)。
+    void SetChoiceChangedHandler(std::function<void()> handler);
 
     // ---- 試験から ----
     void SetFillet(bool fillet);
@@ -80,5 +82,6 @@ private:
     QPushButton* corner_ = nullptr;
     std::function<void(double)> sizeHandler_;
     std::function<void(const char*)> runHandler_;
+    std::function<void()> choiceChangedHandler_;
     bool loading_ = false;
 };

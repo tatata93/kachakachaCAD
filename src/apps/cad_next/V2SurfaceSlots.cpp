@@ -99,6 +99,8 @@ void V2MainWindow::RefreshSurfaceForSelectionChange()
     surfaceInput_ = kachakacha::v2::app::WithoutSurfaceEntries(surfaceInput_, removed);
     surfaceInput_ = kachakacha::v2::app::WithSurfaceEntriesToggled(surfaceInput_,
         surfaceInput_.activeSlot, accepted);
+    // 回転体は断面が入ったら次は軸(自動遷移)。
+    surfaceInput_ = kachakacha::v2::app::WithSurfaceSlotAdvanced(surfaceInput_);
     MirrorSurfaceEntriesToSelection();
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
@@ -107,7 +109,7 @@ void V2MainWindow::RefreshSurfaceForSelectionChange()
         surfaceInput_.activeSlot);
     SetStatus(QStringLiteral("面を作る: %1 は %2 本。%3")
             .arg(QString::fromUtf8(std::string(kachakacha::v2::app::SurfaceSlotNameJa(
-                                       surfaceInput_.activeSlot))
+                                       surfaceInput_.method, surfaceInput_.activeSlot))
                                        .c_str()))
             .arg(static_cast<int>(slot.size()))
             .arg(QString::fromUtf8(

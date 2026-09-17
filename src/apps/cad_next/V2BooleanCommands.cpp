@@ -21,6 +21,9 @@
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/kernel/OcctBoolean.h"
 #include "kachakacha/kernel/OcctTessellate.h"
+#include "kachakacha/modeling/ToolController.h"
+
+#include "V2CornerDock.h"
 
 #include <QString>
 
@@ -67,6 +70,25 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (id == "part.boolean_add" || id == "part.boolean_cut") {
         ClearPendingCommand();
         RunBooleanTool(id == "part.boolean_cut");
+        return true;
+    }
+    // 回転体。面を作るの道具を 作り方 = 回転体 で構える(断面 → 軸 → 下見 → Enter)。
+    if (id == "guide.revolve") {
+        ClearPendingCommand();
+        RunRevolveTool();
+        return true;
+    }
+    // C面取り / R丸め。線が2本そろっていなければ、面取りの道具を持って拾うのを待つ。
+    // そろっていれば従来どおり作る(下見の Enter もここへ来る)。
+    if ((id == "wire.chamfer" || id == "wire.fillet") && !CornerPairSelected(nullptr)) {
+        ClearPendingCommand();
+        if (cornerDock_ != nullptr) {
+            cornerDock_->SetFillet(id == "wire.fillet");
+        }
+        SelectTool(kachakacha::v2::modeling::DrawingTool::ChamferOrFilletPair);
+        SetStatus(QStringLiteral("%1: 線を2本、直す順に 3D で押してください(1本目が A、2本目が B)。"
+                                 "2本そろうと下見が出ます。Enter で確定、Esc でやめます。")
+                .arg(id == "wire.fillet" ? QStringLiteral("R丸め") : QStringLiteral("C面取り")));
         return true;
     }
     return false;

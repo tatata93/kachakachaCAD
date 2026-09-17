@@ -37,6 +37,8 @@ using kachakacha::v2::app::WithSurfaceEntries;
 using kachakacha::v2::app::WithSurfaceEntriesToggled;
 using kachakacha::v2::app::WithSurfaceSlotCleared;
 using kachakacha::v2::app::WithoutSurfaceEntries;
+using kachakacha::v2::app::WithSurfaceSlotAdvanced;
+using kachakacha::v2::app::SurfaceSlotNameJa;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::modeling::ChainRole;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
@@ -375,6 +377,38 @@ KACHA_V2_TEST(surface_input, 自動のときは採用した並びを出す)
     state = WithoutSurfaceEntries(state, {Id(2)});
     Require(state.adoptedOrder.size() == 2 && state.explicitOrder.size() == 2,
         "どちらの並びからも消える");
+}
+
+KACHA_V2_TEST(surface_input_state, 回転体はガイドの欄が軸になり_断面が入ると自動で軸へ移る)
+{
+    // 引継ぎ 2026-09-17 の 6。欄は正本の3つのまま、言葉だけ「軸」にする。
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::Revolve;
+    ChainRole role = ChainRole::Section;
+    Require(RoleForSurfaceSlot(GuideSurfaceMethod::Revolve, ChainRole::GuideU, role),
+        "回転体はガイドの欄を使う(軸)");
+    Require(SurfaceSlotNameJa(GuideSurfaceMethod::Revolve, ChainRole::GuideU) == "軸",
+        "回転体ではガイドの欄は「軸」と呼ぶ");
+    Require(SurfaceSlotNameJa(GuideSurfaceMethod::LoftSections, ChainRole::GuideU) == "ガイド",
+        "ほかの作り方ではガイドのまま");
+    Require(!SurfaceReadyToBuild(state), "何も無ければ作れない");
+    state = WithSurfaceEntriesToggled(state, ChainRole::Section, {Id(1)});
+    Require(!SurfaceReadyToBuild(state), "断面だけでは作れない(軸が要る)");
+    Require(SurfaceCountProblemJa(state).find("軸") != std::string::npos, "軸が要ると言う");
+    state = WithSurfaceSlotAdvanced(state);
+    Require(state.activeSlot == ChainRole::GuideU, "断面が入ったら次のクリックは軸");
+    Require(SurfaceActiveSlotHintJa(state) == "次のクリック → 軸(1本目)", "案内も軸");
+    state = WithSurfaceEntriesToggled(state, ChainRole::GuideU, {Id(2)});
+    Require(SurfaceReadyToBuild(state), "断面1本と軸1本で作れる");
+    state = WithSurfaceEntriesToggled(state, ChainRole::Section, {Id(3)});
+    Require(!SurfaceReadyToBuild(state) && SurfaceCountProblemJa(state).find("断面1本") != std::string::npos,
+        "断面は1本だけ");
+    // ロフトでは欄を動かさない。
+    SurfaceInputState loft;
+    loft.method = GuideSurfaceMethod::LoftSections;
+    loft = WithSurfaceEntriesToggled(loft, ChainRole::Section, {Id(1)});
+    Require(WithSurfaceSlotAdvanced(loft).activeSlot == ChainRole::Section,
+        "ロフトは断面のまま(自動で動かさない)");
 }
 
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

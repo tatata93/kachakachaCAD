@@ -81,6 +81,8 @@ namespace {
     cases.insert(cases.end(), humanPathApprox.begin(), humanPathApprox.end());
     const std::vector<SelfTestCase> humanPathBoolean = HumanPathBooleanCases();
     cases.insert(cases.end(), humanPathBoolean.begin(), humanPathBoolean.end());
+    const std::vector<SelfTestCase> humanPathCorner = HumanPathCornerCases();
+    cases.insert(cases.end(), humanPathCorner.begin(), humanPathCorner.end());
     const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
     const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();

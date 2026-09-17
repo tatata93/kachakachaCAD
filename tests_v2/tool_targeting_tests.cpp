@@ -2,6 +2,7 @@
 #include "kachakacha/app/ToolTargeting.h"
 #include "kachakacha/base/TestHarness.h"
 
+using kachakacha::v2::app::ClickPicksPairMember;
 using kachakacha::v2::app::ClickPicksTarget;
 using kachakacha::v2::app::PendingAction;
 using kachakacha::v2::app::PendingCommandAction;
@@ -107,6 +108,13 @@ KACHA_V2_TEST(tool_targeting, 足せる条件は言われるまで待つ)
     Require(PendingCommandAction(SelectionPredicate::OneOrMoreWires, true, true)
             == PendingAction::RunNow,
         "「これで」と言えば走る");
+}
+
+KACHA_V2_TEST(tool_targeting, 面取りの道具は押した線を相手として拾う)
+{
+    Require(ClickPicksPairMember(DrawingTool::ChamferOrFilletPair), "面取り/丸めは線を拾う");
+    Require(!ClickPicksPairMember(DrawingTool::Line), "線を引く道具は点を置く");
+    Require(!ClickPicksPairMember(DrawingTool::Select), "選択は別の道");
 }
 
 KACHA_V2_TEST_MAIN("tool_targeting_tests")

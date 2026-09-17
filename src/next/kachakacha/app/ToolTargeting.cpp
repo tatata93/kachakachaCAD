@@ -26,6 +26,11 @@ bool ClickPicksTarget(DrawingTool tool, bool hasSelection, int pointsPlaced) noe
     return !hasSelection && pointsPlaced <= 0;
 }
 
+bool ClickPicksPairMember(DrawingTool tool) noexcept
+{
+    return tool == DrawingTool::ChamferOrFilletPair;
+}
+
 bool PredicateIsExact(SelectionPredicate predicate) noexcept
 {
     switch (predicate) {

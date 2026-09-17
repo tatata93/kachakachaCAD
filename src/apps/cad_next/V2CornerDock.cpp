@@ -109,7 +109,24 @@ V2CornerDock::V2CornerDock(QWidget* parent)
     scroll->setWidget(body);
     setWidget(scroll);
 
-    QObject::connect(kind_, &QComboBox::currentIndexChanged, this, [this] { RefreshKind(); });
+    QObject::connect(kind_, &QComboBox::currentIndexChanged, this, [this] {
+        RefreshKind();
+        if (!loading_ && choiceChangedHandler_) {
+            choiceChangedHandler_();
+        }
+    });
+    for (QComboBox* side : {firstKeep_, secondKeep_}) {
+        QObject::connect(side, &QComboBox::currentIndexChanged, this, [this] {
+            if (!loading_ && choiceChangedHandler_) {
+                choiceChangedHandler_();
+            }
+        });
+    }
+    QObject::connect(secondSetback_, &QDoubleSpinBox::valueChanged, this, [this] {
+        if (!loading_ && choiceChangedHandler_) {
+            choiceChangedHandler_();
+        }
+    });
     QObject::connect(size_, &QDoubleSpinBox::valueChanged, this, [this] { EmitSize(); });
     QObject::connect(radius_, &QDoubleSpinBox::valueChanged, this, [this] { EmitSize(); });
     QObject::connect(create_, &QPushButton::clicked, this, [this] { PressCreate(); });
@@ -180,6 +197,11 @@ void V2CornerDock::SetSizeMm(double sizeMm)
 void V2CornerDock::SetSizeHandler(std::function<void(double)> handler)
 {
     sizeHandler_ = std::move(handler);
+}
+
+void V2CornerDock::SetChoiceChangedHandler(std::function<void()> handler)
+{
+    choiceChangedHandler_ = std::move(handler);
 }
 
 void V2CornerDock::SetRunHandler(std::function<void(const char*)> handler)

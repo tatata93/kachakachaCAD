@@ -233,6 +233,20 @@ SurfaceInputState WithActiveSlotSettled(const SurfaceInputState& state)
     return next;
 }
 
+SurfaceInputState WithSurfaceSlotAdvanced(const SurfaceInputState& state)
+{
+    if (state.method != GuideSurfaceMethod::Revolve) {
+        return state;
+    }
+    SurfaceInputState next = state;
+    if (next.sections.empty()) {
+        next.activeSlot = ChainRole::Section;
+    } else if (next.guides.empty()) {
+        next.activeSlot = ChainRole::GuideU;   // 軸
+    }
+    return next;
+}
+
 std::vector<base::EntityId> AllSurfaceEntries(const SurfaceInputState& state)
 {
     std::vector<base::EntityId> all;
@@ -261,11 +275,19 @@ bool SurfaceSlotHolding(const SurfaceInputState& state, const base::EntityId& id
     return false;
 }
 
+std::string_view SurfaceSlotNameJa(GuideSurfaceMethod method, ChainRole role) noexcept
+{
+    if (method == GuideSurfaceMethod::Revolve && role == ChainRole::GuideU) {
+        return "軸";
+    }
+    return SurfaceSlotNameJa(role);
+}
+
 std::string SurfaceActiveSlotHintJa(const SurfaceInputState& state)
 {
     const std::size_t count = SurfaceSlotEntries(state, state.activeSlot).size();
-    return "次のクリック → " + std::string(SurfaceSlotNameJa(state.activeSlot)) + "("
-        + std::to_string(count + 1) + "本目)";
+    return "次のクリック → " + std::string(SurfaceSlotNameJa(state.method, state.activeSlot))
+        + "(" + std::to_string(count + 1) + "本目)";
 }
 
 bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& role) noexcept
@@ -283,6 +305,10 @@ bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& ro
     case ChainRole::GuideU:
         if (method == GuideSurfaceMethod::GordonNetwork) {
             role = ChainRole::GuideV;   // 同じく V
+            return true;
+        }
+        if (method == GuideSurfaceMethod::Revolve) {
+            role = ChainRole::GuideU;   // 回転体の「軸」。表の行にはせず、軸の点と向きへ直す
             return true;
         }
         role = ChainRole::GuideU;
@@ -390,7 +416,8 @@ bool SurfaceReadyToBuild(const SurfaceInputState& state)
     case GuideSurfaceMethod::OffsetGuide:
         return !state.sourceSurfaces.empty();
     case GuideSurfaceMethod::Revolve:
-        return !state.sections.empty();
+        // 断面1本と軸1本ちょうど。
+        return state.sections.size() == 1 && state.guides.size() == 1;
     }
     return false;
 }
@@ -429,6 +456,17 @@ std::string SurfaceCountProblemJa(const SurfaceInputState& state)
             return "曲線網は断面(U)とガイド(V)の両方が要ります";
         }
         return {};
+    case GuideSurfaceMethod::Revolve:
+        if (sections != 1) {
+            return "回転体は断面1本です(いま" + std::to_string(sections) + "本)";
+        }
+        if (state.guides.empty()) {
+            return "回転体は軸が要ります。軸の「ここへ選ぶ」を押してから、3D で軸の直線を押してください";
+        }
+        if (state.guides.size() > 1) {
+            return "回転体の軸は1本です(いま" + std::to_string(state.guides.size()) + "本)";
+        }
+        return {};
     default:
         break;
     }
@@ -443,7 +481,7 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
     lines.push_back("▶ " + SurfaceActiveSlotHintJa(state)
         + "。もう一度押すと外れます");
     for (const SurfaceSlotView& view : SurfaceSlotsFor(state)) {
-        const std::string name(SurfaceSlotNameJa(view.role));
+        const std::string name(SurfaceSlotNameJa(state.method, view.role));
         switch (view.state) {
         case SurfaceSlotState::Used:
             lines.push_back("✓ " + name + " " + std::to_string(view.count) + "本");

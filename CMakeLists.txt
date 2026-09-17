@@ -942,6 +942,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestHumanPath.cpp
         src/apps/cad_next/V2SelfTestHumanPathApprox.cpp
         src/apps/cad_next/V2SelfTestHumanPathBoolean.cpp
+        src/apps/cad_next/V2SelfTestHumanPathCorner.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
@@ -973,6 +974,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceSlots.cpp
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
+        src/apps/cad_next/V2CornerPreview.cpp
         src/apps/cad_next/V2BooleanDock.cpp
         src/apps/cad_next/V2ToolKeys.cpp
         src/apps/cad_next/V2ToolRoleLabels.cpp

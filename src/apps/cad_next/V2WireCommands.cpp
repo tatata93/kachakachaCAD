@@ -357,11 +357,9 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
     }
     if (binding->method == WireTransformMethod::Chamfer
         || binding->method == WireTransformMethod::Fillet) {
-        // 面取りの棚の欄(B の切戻し・残す側)。棚を触っていなければ対称・自動で前と同じ。
-        const V2CornerChoice choice = cornerDock_->Choice();
-        definition.secondScalarMm = choice.secondSetbackMm;
-        definition.firstKeepSide = choice.firstKeepSide;
-        definition.secondKeepSide = choice.secondKeepSide;
+        // 面取りの棚の欄(B の切戻し・残す側)。**下見と同じ定義**(V2CornerPreview.cpp)。
+        definition = CornerDefinitionFromDock();
+        definition.method = binding->method;
     }
     if (binding->method == WireTransformMethod::CornerChamfer
         || binding->method == WireTransformMethod::CornerFillet) {
@@ -392,6 +390,8 @@ void V2MainWindow::RefreshCornerDock()
         ++found;
     }
     cornerDock_->SetPairText(names[0], names[1]);
+    // 相手がそろっていれば下見。道具を持っていなければ片づける。
+    RefreshCornerPreview();
 }
 
 void V2MainWindow::MakeIntersectionPoints()

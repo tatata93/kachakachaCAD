@@ -51,7 +51,8 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         return false;
     }
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
-        || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_;
+        || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
+        || cornerPreviewShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -88,6 +89,9 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             ConfirmApprox();
             return true;
         }
+    }
+    if (cornerPreviewShown_ && HandleCornerToolKey(key)) {
+        return true;
     }
     if (booleanShelfShown_) {
         if (key == Qt::Key_Escape) {

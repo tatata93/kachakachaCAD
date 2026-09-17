@@ -98,7 +98,11 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
     const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
                          QPushButton** clear, ChainRole role) {
         auto* line = new QHBoxLayout();
-        line->addWidget(new QLabel(name, widget()));
+        auto* title = new QLabel(name, widget());
+        if (role == ChainRole::GuideU) {
+            guideName_ = title;
+        }
+        line->addWidget(title);
         *value = new QLabel(widget());
         (*value)->setWordWrap(true);
         line->addWidget(*value, 1);
@@ -243,6 +247,15 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     rootLayout->addLayout(actions);
 }
 
+//! 欄の見出し。回転体では「ガイド」が「軸」になる(欄は増やさない)。
+void V2SurfaceDock::RefreshSlotTitles(GuideSurfaceMethod method)
+{
+    if (guideName_ != nullptr) {
+        guideName_->setText(
+            Text(kachakacha::v2::app::SurfaceSlotNameJa(method, ChainRole::GuideU)));
+    }
+}
+
 void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
     const SlotNames& names, bool previewShown, const QString& deviationNoteJa)
 {
@@ -257,6 +270,7 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     }
     state_->setText(QStringLiteral("面を作る — %1")
             .arg(Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(state.method))));
+    RefreshSlotTitles(state.method);
 
     // 2. 入力。使わない役割は「この方式では不要」と出し、選ぶ先にもさせない。
     const auto joined = [](const std::vector<QString>& list) {

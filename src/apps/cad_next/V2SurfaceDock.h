@@ -100,7 +100,11 @@ private:
     QLabel* state_ = nullptr;
     std::vector<QPushButton*> methodCards_;
     QComboBox* otherMethods_ = nullptr;
+    void RefreshSlotTitles(kachakacha::v2::modeling::GuideSurfaceMethod method);
+
     QLabel* sectionValue_ = nullptr;
+    //! ガイドの欄の見出し。回転体では「軸」になる(欄は増やさず言葉だけ変える)。
+    QLabel* guideName_ = nullptr;
     QLabel* guideValue_ = nullptr;
     QLabel* boundaryValue_ = nullptr;
     //! 欄ごとの「ここへ選ぶ」(押された形 = いまの欄)と「解除」。

@@ -38,6 +38,7 @@
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
 #include "kachakacha/app/ApproxInput.h"
+#include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/BooleanInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/ToolRoleLabels.h"
@@ -454,6 +455,8 @@ public:
     [[nodiscard]] V2EditDock& EditDock() { return *editDock_; }
     //! 面取りの棚(V1 の「面取り」欄)。
     [[nodiscard]] V2CornerDock& CornerDock() { return *cornerDock_; }
+    //! 面取り/丸めの下見が出ているか。試験から見る。
+    [[nodiscard]] bool CornerPreviewShown() const noexcept { return cornerPreviewShown_; }
     //! 製作の棚(V1 の近似モデル画面を 1 枚に)。
     [[nodiscard]] V2FabricationDock& FabricationDock() { return *fabricationDock_; }
     //! 製作の棚を、選んでいる近似モデル・数の棚・方式・固定の種類に合わせる。
@@ -469,6 +472,11 @@ public:
     }
     //! 面取りの棚を選択と数の棚に合わせる(直線 A/B の名前、量)。
     void RefreshCornerDock();
+    //! 面取り/丸めの下見(V2CornerPreview.cpp、引継ぎ 2026-09-17 の 6)。
+    [[nodiscard]] kachakacha::v2::domain::TransformWireDefinition CornerDefinitionFromDock() const;
+    [[nodiscard]] bool CornerPairSelected(std::vector<kachakacha::v2::base::EntityId>* wires) const;
+    void RefreshCornerPreview();
+    [[nodiscard]] bool HandleCornerToolKey(int key);
     //! 選んでいる線を測り直して棚へ渡す。選択が変わるたびに呼ぶ。
     void RefreshMeasurements();
     //! 作図の道具へ入る。入って終わりなら true。続きがあるなら false。
@@ -664,6 +672,17 @@ public:
     void CreateGuideSurfaceFromSelection();
     //! 回転体(V1 の回転面)。1本目の線を 2本目の直線を軸に回した断面を並べ、ロフトする。
     void CreateRevolvedSurface();
+    //! 回転体を「面を作る」の道具で始める(引継ぎ 2026-09-17 の 6)。断面 → 軸 → 下見 → Enter。
+    void RunRevolveTool();
+    //! 断面(断面の欄)と軸(ガイドの欄 = 軸)から、回転体の要求を組む。下見も確定もこれ1つ。
+    [[nodiscard]] kachakacha::v2::base::Result<kachakacha::v2::app::RevolveRequest>
+    RevolveAxisFromInput() const;
+    [[nodiscard]] kachakacha::v2::modeling::GuideTable WithRowsAdded(
+        kachakacha::v2::modeling::GuideTable table, kachakacha::v2::modeling::ChainRole role,
+        const std::vector<kachakacha::v2::base::EntityId>& ids) const;
+    [[nodiscard]] static kachakacha::v2::modeling::GuideTable WithRevolveAxis(
+        kachakacha::v2::modeling::GuideTable table,
+        const kachakacha::v2::app::RevolveRequest& axis);
     //! 表 → 要求 → 検査 → kernel。作るときも開き直すときも同じ道を通す。
     //! 離した面のときは、表が指す元の面の handle を渡す。
     [[nodiscard]] std::optional<kachakacha::v2::modeling::GuideSurfaceResult>
@@ -1322,6 +1341,8 @@ private:
     V2MeasureDock* measureDock_ = nullptr;
     V2EditDock* editDock_ = nullptr;
     V2CornerDock* cornerDock_ = nullptr;
+    //! 面取り/丸めの下見を出しているか(自分が出したものだけ片づけるため)。
+    bool cornerPreviewShown_ = false;
     V2FabricationDock* fabricationDock_ = nullptr;
     kachakacha::v2::app::FabricationChoice fabricationChoice_;
     V2ParameterDock* parameterDock_ = nullptr;

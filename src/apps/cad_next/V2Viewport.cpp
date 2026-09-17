@@ -1229,6 +1229,15 @@ void V2Viewport::ClickAt(const QPointF& position)
         update();
         return;
     }
+    // 面取り/丸めの道具は点を置かない。押した線を A・B として拾う(もう一度押すと外れる)。
+    // 判断は core(ClickPicksPairMember)にある。
+    if (kachakacha::v2::app::ClickPicksPairMember(session_->CurrentTool())) {
+        const bool wasToggle = toolPickToggle_;
+        toolPickToggle_ = true;
+        SelectAt(position, Qt::NoModifier);
+        toolPickToggle_ = wasToggle;
+        return;
+    }
     // 動かす道具(移動・複製・鏡映・回転)は、相手が決まっていないと点に意味がない。
     // V2 は2点を押した **後** に「先に動かす線を選んでください」と断っていた。
     // 1回目の押しで相手を選ぶ(オーナー指摘 2026-09-11)。判断は core にある。

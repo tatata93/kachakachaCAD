@@ -1202,6 +1202,7 @@ void V2MainWindow::SelectTool(DrawingTool tool)
     RefreshGuide();
     // その道具の設定だけを右に出す。道具を選んだのに欄が出てこない、をなくす。
     RefreshRightShelves();
+    RefreshCornerPreview();   // 面取りの道具を持った/離したときに下見を出す/片づける
     viewport_->update();
 }
 

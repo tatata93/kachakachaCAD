@@ -121,6 +121,62 @@ void V2MainWindow::CreateRevolvedSurface()
             .arg(built->maximumDeviationMm, 0, 'f', 4));
 }
 
+//! 「回転体」を押した。面を作るの道具を、作り方 = 回転体 で構える。
+//! 選んであった線は、選んだ順に 断面 → 軸 へ入れる(選んでから押す道も残す)。
+//! 構えている間の2度目は確定。
+void V2MainWindow::RunRevolveTool()
+{
+    using kachakacha::v2::domain::EntityKind;
+    if (surfaceShelfShown_) {
+        ConfirmSurface();
+        return;
+    }
+    std::vector<kachakacha::v2::base::EntityId> wires;
+    for (const auto& id : viewport_->Selection().entityIds) {
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        if (entity != nullptr && entity->kind == EntityKind::Wire) {
+            wires.push_back(id);
+        }
+    }
+    surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
+    surfaceInput_.method = GuideSurfaceMethod::Revolve;
+    surfaceInput_.methodChosenByUser = true;
+    if (!wires.empty()) {
+        surfaceInput_.sections.push_back(wires[0]);
+    }
+    if (wires.size() >= 2) {
+        surfaceInput_.guides.push_back(wires[1]);   // 軸
+    }
+    // 取り込みは済ませた。RunSurfaceCreate に二重に取り込ませない。
+    viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+    RunSurfaceCreate();
+    surfaceInput_ = kachakacha::v2::app::WithSurfaceSlotAdvanced(surfaceInput_);
+    MirrorSurfaceEntriesToSelection();
+    RefreshSurfacePreview();
+    RefreshSurfaceRoleLabels();
+    RefreshSurfaceDock();
+    SetStatus(QStringLiteral("回転体\n3D で断面の線を押し、次に軸の直線を押してください。"
+                             "角度は数の棚の「回転体の角度」。Enter で確定、Esc でやめます。\n%1")
+            .arg(QString::fromUtf8(
+                kachakacha::v2::app::SurfaceActiveSlotHintJa(surfaceInput_).c_str())));
+}
+
+kachakacha::v2::base::Result<kachakacha::v2::app::RevolveRequest>
+V2MainWindow::RevolveAxisFromInput() const
+{
+    const auto curvesOf = [this](const kachakacha::v2::base::EntityId& id) {
+        kachakacha::v2::app::SelectionSet one;
+        one.entityIds.push_back(id);
+        return kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+    };
+    const auto empty = std::vector<kachakacha::v2::geometry::CurveSegment>{};
+    return kachakacha::v2::app::MakeRevolveRequest(
+        surfaceInput_.sections.empty() ? empty : curvesOf(surfaceInput_.sections.front()),
+        surfaceInput_.guides.empty() ? empty : curvesOf(surfaceInput_.guides.front()),
+        kachakacha::v2::app::ParameterValueOf(parameterDock_->Values(),
+            kachakacha::v2::app::ParameterId::RevolveAngleDeg));
+}
+
 std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildSurfaceFromTable(
     const GuideTable& table, bool report)
 {

@@ -213,7 +213,17 @@ struct SurfaceSelectionFacts {
 //! 主要6方式に入らない、残りの作り方(「その他」へ置く)。既存機能は消さない。
 [[nodiscard]] const std::vector<modeling::GuideSurfaceMethod>& OtherSurfaceMethods();
 
+//! 入れたあとに、次のクリックが入る欄を進める。
+//!
+//! 回転体は断面1本と軸1本で、断面が入ったら次は軸に決まっている。人に「ここへ選ぶ」を
+//! 押させずに進める(足す引くの 土台 → 相手 と同じ自動遷移)。他の作り方では欄を動かさない。
+[[nodiscard]] SurfaceInputState WithSurfaceSlotAdvanced(const SurfaceInputState& state);
+
 //! 役割の名前。画面の欄の見出しと同じ言葉を使う。
 [[nodiscard]] std::string_view SurfaceSlotNameJa(modeling::ChainRole role) noexcept;
+//! 作り方を踏まえた欄の名前。回転体では「ガイド」の欄が **軸** になる(引継ぎ 2026-09-17 の 6)。
+//! 欄は増やさず、正本の3欄のまま言葉だけ変える。
+[[nodiscard]] std::string_view SurfaceSlotNameJa(modeling::GuideSurfaceMethod method,
+    modeling::ChainRole role) noexcept;
 
 } // namespace kachakacha::v2::app

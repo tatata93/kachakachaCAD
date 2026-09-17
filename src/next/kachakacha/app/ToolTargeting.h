@@ -49,6 +49,12 @@ namespace kachakacha::v2::app {
 [[nodiscard]] bool ClickPicksTarget(modeling::DrawingTool tool, bool hasSelection,
     int pointsPlaced) noexcept;
 
+//! その道具は、点を置かずに **押した線を相手として拾う** か。
+//!
+//! 面取り/丸めは点を置かない。押した線が A、次に押した線が B になり、
+//! もう一度押すと外れる(引継ぎ 2026-09-17 の 6)。
+[[nodiscard]] bool ClickPicksPairMember(modeling::DrawingTool tool) noexcept;
+
 //! その条件は「ちょうど何個」と決まっているか。
 //! 決まっていれば、そろった時点で走ってよい(足す余地がない)。
 [[nodiscard]] bool PredicateIsExact(SelectionPredicate predicate) noexcept;

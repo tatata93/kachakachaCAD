@@ -5,6 +5,13 @@
 
 ## 現在
 
+**2026-09-17: 引継ぎ(docs/v2/handover-2026-09-17-ui-frontend.md)の 1〜7 を雲で入れた。**
+main d3893fa 起点の `v2-wp01` に 8 commit(dec9564 … 7038713)。雲では core 145/145、
+Qt 当て木 88 files。**Windows の build / ctest / 自己試験 / 画像はまだ**(PC の監視が
+2026-09-16 14:18 UTC で止まり、PC の HEAD は `codex/v2-ui-ux-overhaul`)。
+進捗表と PC で確かめる順は、その引継ぎ文書の末尾「進捗(Claude、2026-09-17)」。
+
+
 **レビューの通し方が変わった。** Codex に10分ごとに仕事を探させるのはやめた。
 PC が本当にビルドしてテストに通ったときだけ、PowerShell の常駐が Codex を1回起こす。
 仕組みは `docs/ai/LOCAL_REVIEW_PIPELINE.md`、Codex 側の規約は

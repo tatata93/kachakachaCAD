@@ -109,3 +109,35 @@
 - 既存V1を削除しない。
 - `MainWindow.cpp`を増やさず独立ファイルへ置く。
 - Windowsでbuild、ctest、self-testを通し、画像を目視してから完了とする。
+
+## 進捗(Claude、2026-09-17、main d3893fa 起点、雲で作成・PC 未検証)
+
+「次に実装する順序」の 1〜7 を、雲で core build / ctest 145 / Qt 当て木 88 files まで
+通した状態で入れた。**Windows の build・ctest・自己試験・画像の目視はまだ**(PC の
+監視が止まっており、PC の HEAD が `codex/v2-ui-ux-overhaul` にあるため)。
+
+| 順 | 中身 | commit | 主なファイル | 自己試験 |
+| --- | --- | --- | --- | --- |
+| 1 | Surface 入力 slot の明示状態(ここへ選ぶ / 解除 / 押し直しで外す) | 9733ba0 | app/SurfaceInputState, V2SurfaceSlots.cpp, V2SurfaceDock | HP-SF-06 |
+| 2 | Loft / Guided Loft: 採用順を常時表示、MANUAL LOCK を kernel まで | b13ddbc | modeling/GuideSurfaceInput(keepSectionOrder), GuideSurfaceTable(lockSectionOrder) | HP-SF-07 |
+| 3 | 近似の tool-first(3候補を実際に作って比べる、下見 → Enter) | 7c223b0 | app/ApproxInput, V2ApproxCommands.cpp, V2FabricationDock | HP-AP-01/02, HP-FAB-01 |
+| 4 | Boolean 専用 slot(土台 → 相手 自動遷移、札、下見、Transaction で 1 undo) | 7a5f7a0 | app/BooleanInputState, V2BooleanDock, V2BooleanCommands.cpp, Shelf::Boolean | HP-BO-01/02 |
+| 5 | 部材の編集を曲げの段へ、組立率 ⇄ 半径の言い換え(PercentForRadius) | 3b75066 | fabrication/BendRadius, V2FabricationDock | 組立率と半径… |
+| 6 | 面取り/丸め(道具 → A → B → 下見 → Enter)、回転体(断面 → 軸 自動遷移) | 1c50e3c | V2CornerPreview.cpp, app/ToolTargeting(ClickPicksPairMember), SurfaceInputState(軸) | HP-CN-01/02, HP-SF-08 |
+| 7 | 画面証拠の場面 ui-guided-loft-preview / ui-approx-candidates / ui-boolean-preview | 7038713 | V2UiShotStatesMore.cpp, pc-fix-and-build.reference.cmd 08〜10 | (撮影は PC) |
+
+道具の入口は 1 か所(`BeginToolFirstCommand`、V2BooleanCommands.cpp): 面を作る・近似・
+足す引く・回転体・面取り/丸めは、構えて待つ道(ArmCommand)を通さない。
+既存の自己試験で `fabrication.create` を 1 回押して即座に作っていたものは
+「一度目は構えて下見、二度目で確定」に直した(押し出しと同じ)。
+
+展開(型紙)は変えていない。既に 製作モデル → 型紙の下見(PatternDock) → 書き出し で
+同じ文法になっている。
+
+### PC で確かめること(順)
+
+1. `git checkout codex/ui-frontend-redesign`(= d3893fa)にしてから `to-pc.bundle` を
+   `_SAFE_MERGE.ps1` で ff 取り込み(`cloud-next`)。
+2. `_FIX_AND_BUILD.cmd`(08〜10 の撮影を足した版を同梱)で build / ctest / 自己試験。
+3. `_claudeout\ui\08_ui-guided-loft-preview.png` 〜 `10_ui-boolean-preview.png` を目視。
+4. 赤があれば `_claudeout\run.txt` の Explain の行をそのまま雲へ。

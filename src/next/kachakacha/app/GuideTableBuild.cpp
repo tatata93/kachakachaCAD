@@ -151,6 +151,7 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
     table.revolveAxisPoint = definition.revolveAxisPoint;
     table.revolveAxisDirection = definition.revolveAxisDirection;
     table.revolveAngleRad = definition.revolveAngleRad;
+    table.lockSectionOrder = definition.lockSectionOrder;
     for (std::size_t index = 0; index < definition.chains.size(); ++index) {
         const auto role = static_cast<ChainRole>(definition.roles[index]);
         auto added = AddDefinitionRow(document, scene, std::move(table), role,
@@ -171,6 +172,7 @@ CreateGuideSurfaceDefinition DefinitionFromGuideTable(const GuideTable& table)
     definition.revolveAxisPoint = table.revolveAxisPoint;
     definition.revolveAxisDirection = table.revolveAxisDirection;
     definition.revolveAngleRad = table.revolveAngleRad;
+    definition.lockSectionOrder = table.lockSectionOrder;
     for (const auto& row : table.rows) {
         definition.roles.push_back(static_cast<int>(row.role));
         domain::WireChainRef chain;

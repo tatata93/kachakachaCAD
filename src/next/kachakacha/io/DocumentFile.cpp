@@ -249,6 +249,8 @@ template<class Id>
         definition["revolveAxisPoint"] = WriteVector(guide->revolveAxisPoint);
         definition["revolveAxisDirection"] = WriteVector(guide->revolveAxisDirection);
         definition["revolveAngleRad"] = JsonValue::Number(guide->revolveAngleRad);
+        // 断面順の手動固定。古い文書には無い。読むときは偽。
+        definition["lockSectionOrder"] = JsonValue::Bool(guide->lockSectionOrder);
     } else if (const auto* extrude =
                    std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
         definition["profiles"] = WriteIdArray(extrude->profiles);

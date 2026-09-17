@@ -94,6 +94,10 @@ struct GuideSurfaceRequest {
     std::vector<GuideChain> chains;
     //! GuidedLoft: 端に断面が無いとき、仮想断面を作るか(既定は作る)。
     bool createVirtualEndSections = true;
+    //! RuledSections / LoftSections: 断面を **渡した順のまま** 使う(手動固定)。
+    //! 偽なら幾何の位置から並べ直す(自動)。既定は自動。
+    //! 真のときも、隣り合う断面が重なっていないかの検査は同じように通す。
+    bool keepSectionOrder = false;
     //! BoundaryFill: 辺ごとの連続条件。true = G1。既定は全部 G0。
     std::vector<bool> tangentContinuity;
     //! OffsetGuide: 距離。0は拒否する。
@@ -149,6 +153,11 @@ struct GuideSurfaceAnalysis {
 //! 入力を調べる。作れないと判断したら値を返さず、GEO-G0xx の診断で断る。
 [[nodiscard]] base::Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(
     const GuideSurfaceRequest& request, const GeometryTolerance& tolerance);
+
+//! 検査が採用した断面の並びを、元のワイヤーの番号で返す(画面の「断面順」に出す)。
+//! 断面を使わない作り方なら空。
+[[nodiscard]] std::vector<EntityId> AdoptedSectionSources(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis);
 
 //! 出来上がった面が、入力の鎖を許容差内で通っているかを測る。
 //! OCCT側が面を作ったあとに必ず通す(§6.4、§6.6 の偏差検査)。

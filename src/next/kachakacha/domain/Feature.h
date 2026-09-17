@@ -177,6 +177,8 @@ struct CreateGuideSurfaceDefinition {
     geometry::Vector3 revolveAxisPoint{};
     geometry::Vector3 revolveAxisDirection{0.0, 0.0, 1.0};
     double revolveAngleRad = 0.0;
+    //! 断面を chains の順のまま使う(手動固定)。古い文書には無い鍵なので、読むときは偽。
+    bool lockSectionOrder = false;
 };
 
 //! 押し出し。

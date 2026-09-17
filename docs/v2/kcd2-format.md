@@ -951,6 +951,9 @@ meet_lines coincident tangent curvature corner_chamfer corner_fillet`。
 `roles`、`offsetDistanceMm` に加えて、2026-09-11 から回転体の `revolveAxisPoint`
 `revolveAxisDirection` `revolveAngleRad`(V1 の回転面。断面 1 本を軸のまわりに回す)を持つ。
 無ければ既定(回転体でなければ使わない)。
+2026-09-17 から `lockSectionOrder`(真偽)も持つ。真なら断面を `chains` の順のまま使う
+(画面の「断面順: 手動固定」)。偽か無ければ幾何の位置から並べ直す(自動)。
+古い文書は無いので偽で読み、開いても面は変わらない。
 
 ### 19.7 §8.2 Segmentの現状
 

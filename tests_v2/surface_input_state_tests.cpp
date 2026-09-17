@@ -357,4 +357,24 @@ KACHA_V2_TEST(surface_input, 今どこへ入るかは状態の一番上に出る
         "どの欄に入っているか分かる");
 }
 
+KACHA_V2_TEST(surface_input, 自動のときは採用した並びを出す)
+{
+    // 引継ぎ 2026-09-17 の 2。押した順ではなく、検査が実際に採用した順を出す。
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::LoftSections;
+    state = WithSurfaceEntries(state, ChainRole::Section, {Id(3), Id(1), Id(2)}, false);
+    Require(SurfaceSectionOrder(state)[0] == Id(3), "採用順が無いうちは押した順");
+    state.adoptedOrder = {Id(1), Id(2), Id(3)};   // 下見を作った側が書き戻す
+    const auto shown = SurfaceSectionOrder(state);
+    Require(shown[0] == Id(1) && shown[2] == Id(3), "採用した順を出す");
+    // 手動固定へ替えると、その表示順がそのまま固定される(呼ぶ側が書く)。
+    state.explicitOrder = shown;
+    state.ordering = SurfaceOrdering::ManualLock;
+    Require(SurfaceSectionOrder(state)[0] == Id(1), "表示順がそのまま生成順");
+    // 解除は採用順からも消す。
+    state = WithoutSurfaceEntries(state, {Id(2)});
+    Require(state.adoptedOrder.size() == 2 && state.explicitOrder.size() == 2,
+        "どちらの並びからも消える");
+}
+
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

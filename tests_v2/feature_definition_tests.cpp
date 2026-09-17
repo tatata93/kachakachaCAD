@@ -134,7 +134,9 @@ KACHA_V2_TEST(feature_definition, 形状ガイドが保存して読み直せる)
     made.revolveAxisPoint = {1.0, 2.0, 3.0};
     made.revolveAxisDirection = {0.0, 1.0, 0.0};
     made.revolveAngleRad = 1.25;
+    made.lockSectionOrder = true;
     const auto back = RoundTrip(FeatureType::CreateGuideSurface, made);
+    Require(back.lockSectionOrder, "断面順の手動固定が残る(2026-09-17)");
     RequireEqual(std::to_string(back.method), std::string("2"), "作り方");
     RequireNear(back.revolveAxisPoint.z, 3.0, 1.0e-12, "回転体の軸の点");
     RequireNear(back.revolveAxisDirection.y, 1.0, 1.0e-12, "回転体の軸の向き");

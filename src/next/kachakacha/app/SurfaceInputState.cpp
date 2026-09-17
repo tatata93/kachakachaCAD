@@ -173,8 +173,9 @@ SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
         EraseId(next.guides, id);
         EraseId(next.boundaries, id);
         EraseId(next.sourceSurfaces, id);
-        // 手動固定の並びからも外す。**古い入力を残さない。**
+        // 手動固定の並びからも、採用順からも外す。**古い入力を残さない。**
         EraseId(next.explicitOrder, id);
+        EraseId(next.adoptedOrder, id);
     }
     return next;
 }
@@ -338,10 +339,14 @@ std::vector<SurfaceSlotView> SurfaceSlotsFor(const SurfaceInputState& state)
 
 std::vector<base::EntityId> SurfaceSectionOrder(const SurfaceInputState& state)
 {
-    if (state.ordering == SurfaceOrdering::ManualLock && !state.explicitOrder.empty()) {
-        // **画面の並びをそのまま生成順にする。**カーネルに並べ替えさせない。
+    const bool manual = state.ordering == SurfaceOrdering::ManualLock;
+    const std::vector<base::EntityId>& preferred =
+        manual ? state.explicitOrder : state.adoptedOrder;
+    if (!preferred.empty()) {
+        // 手動固定: **画面の並びをそのまま生成順にする。**カーネルに並べ替えさせない。
+        // 自動: 検査が採用した並びを出す。押した順ではない。
         std::vector<base::EntityId> ordered;
-        for (const base::EntityId& id : state.explicitOrder) {
+        for (const base::EntityId& id : preferred) {
             if (std::find(state.sections.begin(), state.sections.end(), id)
                 != state.sections.end()) {
                 ordered.push_back(id);
@@ -414,7 +419,9 @@ std::string SurfaceCountProblemJa(const SurfaceInputState& state)
                 + "本)";
         }
         if (state.guides.empty()) {
-            return "案内付きロフトはガイドが要ります";
+            // 断面は揃った。次にすることを、そのまま言う(断面 → ガイドの明示遷移)。
+            return "案内付きロフトはガイドが要ります。ガイドの「ここへ選ぶ」を押してから、"
+                   "3D でガイドの線を押してください";
         }
         return {};
     case GuideSurfaceMethod::GordonNetwork:

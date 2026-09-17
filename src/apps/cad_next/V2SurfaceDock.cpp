@@ -438,6 +438,28 @@ bool V2SurfaceDock::ClickClear(ChainRole slot)
     return true;
 }
 
+bool V2SurfaceDock::ClickOrdering(SurfaceOrdering ordering)
+{
+    QPushButton* button = ordering == SurfaceOrdering::ManualLock ? orderManual_ : orderAuto_;
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;
+    }
+    button->click();
+    return true;
+}
+
+bool V2SurfaceDock::ClickMoveRow(int row, bool up)
+{
+    QPushButton* button = up ? moveUp_ : moveDown_;
+    if (orderList_ == nullptr || button == nullptr || !button->isVisible()
+        || !button->isEnabled() || row < 0 || row >= orderList_->topLevelItemCount()) {
+        return false;
+    }
+    orderList_->setCurrentItem(orderList_->topLevelItem(row));
+    button->click();
+    return true;
+}
+
 ChainRole V2SurfaceDock::ActiveSlotShown() const
 {
     if (armGuide_ != nullptr && armGuide_->isChecked()) {

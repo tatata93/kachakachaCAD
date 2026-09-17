@@ -59,6 +59,9 @@ struct GuideTable {
     geometry::Vector3 revolveAxisPoint{};
     geometry::Vector3 revolveAxisDirection{0.0, 0.0, 1.0};
     double revolveAngleRad = 0.0;
+    //! 断面を表の行の順のまま使う(手動固定)。偽なら幾何の位置から並べ直す。
+    //! 画面の「3. 断面順」の手動固定がここへ来て、要求へそのまま渡る。
+    bool lockSectionOrder = false;
 };
 
 //! 選択した線の束。ボタンはこれを受け取る。

@@ -67,6 +67,10 @@ public:
     //! 見えていなければ偽。不可視の widget を叩いて通したことにしない。
     [[nodiscard]] bool ClickActivate(kachakacha::v2::modeling::ChainRole slot);
     [[nodiscard]] bool ClickClear(kachakacha::v2::modeling::ChainRole slot);
+    //! 見えている「自動 / 手動固定」を押す。
+    [[nodiscard]] bool ClickOrdering(kachakacha::v2::app::SurfaceOrdering ordering);
+    //! 断面順の行を選んでから、見えている「↑」「↓」を押す。押せなければ偽。
+    [[nodiscard]] bool ClickMoveRow(int row, bool up);
     //! いま「ここへ選ぶ」が押された形で出ている欄。無ければ Section。
     [[nodiscard]] kachakacha::v2::modeling::ChainRole ActiveSlotShown() const;
 

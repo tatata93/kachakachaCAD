@@ -24,15 +24,18 @@
 #include "V2PartDock.h"
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
+#include "V2WorkPlaneDock.h"
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/ExtrudeInputState.h"
+#include "kachakacha/app/OriginPlanes.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/domain/Feature.h"
 #include "kachakacha/geometry/WireChain.h"
 #include "kachakacha/modeling/ToolController.h"
+#include "kachakacha/modeling/WorkPlane.h"
 
 #include <QPointF>
 #include <QString>
@@ -1306,6 +1309,137 @@ struct OutputCounts {
             && !window.ShelfShown(Shelf::Surface));
 }
 
+//! 上面から `offsetMm` 離した作業平面を作って、使う状態にする(場面づくり)。
+[[nodiscard]] bool UseTopPlaneOffsetBy(V2MainWindow& window, double offsetMm)
+{
+    window.SetWorkPlaneChooser({});
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("workplane.create");
+    V2WorkPlaneDock* dock = window.WorkPlaneDock();
+    if (dock == nullptr) {
+        return false;
+    }
+    const auto top = kachakacha::v2::app::OriginPlaneId(
+        window.Session().GetDocument().Snapshot(),
+        kachakacha::v2::modeling::StandardPlaneKind::XY);
+    if (!top.has_value()) {
+        return false;
+    }
+    kachakacha::v2::app::WorkPlaneChoice choice;
+    choice.method = kachakacha::v2::modeling::WorkPlaneMethod::OffsetFromPlane;
+    choice.referencePlaneId = top;
+    choice.offsetMm = offsetMm;
+    dock->SetChoice(choice);
+    if (!dock->CanCreate()) {
+        return false;
+    }
+    dock->PressCreate();
+    return std::abs(window.Viewport().WorkPlane().origin.z - offsetMm) < 1.0e-6;
+}
+
+//! 保存される作り方に「断面順の手動固定」が残っているか。
+[[nodiscard]] bool GuideSurfaceLockedInDocument(V2MainWindow& window)
+{
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        const auto* guide =
+            std::get_if<kachakacha::v2::domain::CreateGuideSurfaceDefinition>(
+                &feature.definition);
+        if (guide != nullptr) {
+            return guide->lockSectionOrder;
+        }
+    }
+    return false;
+}
+
+//! HP-SF-07。ロフトを道具から始めて、断面を **わざと順不同に** 押す。
+//! 「3. 断面順」には押した順ではなく **採用した順** が出る。
+//! 手動固定にすると表示順がそのまま固定され、↑で入れ替えた順が
+//! そのまま生成順として確定まで届く(引継ぎ 2026-09-17 の 2)。
+[[nodiscard]] bool CaseHumanPathLoftOrderFollowsAdoption(V2MainWindow& window)
+{
+    using kachakacha::v2::app::SurfaceOrdering;
+    using kachakacha::v2::modeling::ChainRole;
+    using kachakacha::v2::modeling::GuideSurfaceMethod;
+    window.RunCommand("file.new");
+    // 高さの違う断面3つ。下から z=0, 30, 60。
+    const auto low = DrawRectangleAtByHand(window, 0.30, 0.30, 0.70, 0.70);
+    if (!Explain("下の断面を引ける", !low.IsNil())) {
+        return false;
+    }
+    if (!Explain("30mm 上の作業平面を使える", UseTopPlaneOffsetBy(window, 30.0))) {
+        return false;
+    }
+    const auto middle = DrawRectangleAtByHand(window, 0.34, 0.34, 0.66, 0.66);
+    if (!Explain("60mm 上の作業平面を使える", UseTopPlaneOffsetBy(window, 60.0))) {
+        return false;
+    }
+    const auto high = DrawRectangleAtByHand(window, 0.40, 0.40, 0.60, 0.60);
+    if (!Explain("3つの断面を引ける", !middle.IsNil() && !high.IsNil())) {
+        return false;
+    }
+    // 斜めから見る。3つの矩形を別々に押せるように。
+    auto& viewport = window.Viewport();
+    viewport.SetViewDirection(ViewDirection::Isometric);
+    viewport.FitToDocument();
+    viewport.SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("surface.create");
+    if (!Explain("ロフトのカードが押せる",
+            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::LoftSections))) {
+        return false;
+    }
+    // **わざと順不同に押す。**上 → 下 → 中。
+    if (!Explain("断面を順不同に押せる", ClickOnCurveOf(window, high)
+                && ClickOnCurveOf(window, low) && ClickOnCurveOf(window, middle))) {
+        return false;
+    }
+    const auto& in = window.SurfaceInput();
+    if (!Explain((std::string("下見が出る(帯は ") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.SurfacePreviewShown())) {
+        return false;
+    }
+    const auto shown = kachakacha::v2::app::SurfaceSectionOrder(in);
+    if (!Explain("自動では押した順ではなく採用した順(下→中→上)が出る",
+            shown.size() == 3 && shown[0] == low && shown[1] == middle && shown[2] == high
+                && in.sections[0] == high)) {
+        return false;
+    }
+    if (!Explain("棚の断面順も3行", window.SurfaceDock().SectionOrderTexts().size() == 3)) {
+        return false;
+    }
+    // 手動固定へ。表示順がそのまま固定される。
+    if (!Explain("手動固定が押せる",
+            window.SurfaceDock().ClickOrdering(SurfaceOrdering::ManualLock))) {
+        return false;
+    }
+    if (!Explain("固定した順は表示順のまま",
+            in.ordering == SurfaceOrdering::ManualLock && in.explicitOrder == shown)) {
+        return false;
+    }
+    // 3行目(上)を↑で2行目へ。生成順は 下 → 上 → 中 になる。
+    if (!Explain("↑が押せる", window.SurfaceDock().ClickMoveRow(2, true))) {
+        return false;
+    }
+    const auto locked = kachakacha::v2::app::SurfaceSectionOrder(in);
+    if (!Explain("入れ替えた順が生成順になる",
+            locked.size() == 3 && locked[0] == low && locked[1] == high
+                && locked[2] == middle)) {
+        return false;
+    }
+    // 下見はその順で作り直され、採用順も同じ(カーネルが並べ替えていない)。
+    if (!Explain("固定した順のまま下見が作られる",
+            window.SurfacePreviewShown() && in.adoptedOrder == locked)) {
+        return false;
+    }
+    if (!Explain("Enter で確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))) {
+        return false;
+    }
+    if (!Explain("面が1枚できる", CountOfKind(window, EntityKind::GuideSurface) == 1)) {
+        return false;
+    }
+    return Explain("保存される作り方に手動固定が残る", GuideSurfaceLockedInDocument(window));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathCases()
@@ -1338,6 +1472,8 @@ std::vector<SelfTestCase> HumanPathCases()
         {"HP-EX-03 立体の面を画面から拾って押す", CaseHumanPathPushAFace},
         {"HP-SF-06 3D のクリックがどの欄へ入るかがいつも見えている",
             CaseHumanPathSurfaceSlotsFollowClicks},
+        {"HP-SF-07 ロフトの断面順は採用順を出し、手動固定はそのまま生成順になる",
+            CaseHumanPathLoftOrderFollowsAdoption},
         {"HP-UI-02 選んだものが棚と 3D と一番下の行に出ている",
             CaseHumanPathSelectionIsVisible},
         {"HP-FAB-01 面を拾い70%曲げからワイヤーを作る",

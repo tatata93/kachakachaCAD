@@ -214,6 +214,9 @@ void V2MainWindow::RefreshSurfacePreview()
         return;
     }
     surfaceSnapshot_ = SurfaceSnapshot{table.Value(), *built};
+    // 採用した断面の並びを状態へ書き戻す。画面の「3. 断面順」と 3D の札は、
+    // 押した順ではなく **この順** を出す。手動固定なら渡した順がそのまま返ってくる。
+    surfaceInput_.adoptedOrder = surfaceAdoptedSections_;
     if (viewport_ != nullptr) {
         viewport_->ShowToolPreview(kachakacha::v2::app::SurfacePreviewLines(
             built->samples, built->boundary));
@@ -273,11 +276,12 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
 
 void V2MainWindow::ChooseSurfaceOrdering(SurfaceOrdering ordering)
 {
-    surfaceInput_.ordering = ordering;
     if (ordering == SurfaceOrdering::ManualLock && surfaceInput_.explicitOrder.empty()) {
-        // 手動固定にした瞬間の並びを、そのまま固定する。
-        surfaceInput_.explicitOrder = surfaceInput_.sections;
+        // 手動固定にした瞬間に **画面に出ている並び**(自動の採用順)を、そのまま固定する。
+        // 正本の注記「手動固定: この表示順をそのまま生成順として使います」。
+        surfaceInput_.explicitOrder = kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_);
     }
+    surfaceInput_.ordering = ordering;
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
@@ -345,6 +349,8 @@ V2MainWindow::SurfaceTableFromInput() const
     using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>;
     kachakacha::v2::modeling::GuideTable table;
     table.method = surfaceInput_.method;
+    // 手動固定は要求までそのまま渡す。カーネルに並べ替えさせない。
+    table.lockSectionOrder = surfaceInput_.ordering == SurfaceOrdering::ManualLock;
     if (surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary) {
         const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
             surfaceInput_.boundaries,

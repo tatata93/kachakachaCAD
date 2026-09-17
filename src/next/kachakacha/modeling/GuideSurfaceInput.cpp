@@ -459,7 +459,13 @@ struct SampledChain {
 
     GuideSurfaceAnalysis analysis;
     analysis.method = request.method;
-    analysis.sectionOrdering = OrderSections(sampled, sections);
+    if (request.keepSectionOrder) {
+        // 手動固定。**渡された順をそのまま使う。**並べ替えない。
+        // 人が画面で決めた順が、そのまま生成順になる。
+        analysis.sectionOrdering.chainIndices = sections;
+    } else {
+        analysis.sectionOrdering = OrderSections(sampled, sections);
+    }
 
     // 隣り合う断面が同じ位置なら退化。面にならない。
     const std::vector<std::size_t>& order = analysis.sectionOrdering.chainIndices;
@@ -953,6 +959,19 @@ SurfaceFitCheck CheckSurfaceFit(const GuideSurfaceRequest& request,
     }
     check.withinTolerance = check.maximumDeviationMm <= limit;
     return check;
+}
+
+std::vector<EntityId> AdoptedSectionSources(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis)
+{
+    std::vector<EntityId> sources;
+    for (const std::size_t index : analysis.sectionOrdering.chainIndices) {
+        if (index < request.chains.size()
+            && request.chains[index].role == ChainRole::Section) {
+            sources.push_back(request.chains[index].sourceEntityId);
+        }
+    }
+    return sources;
 }
 
 } // namespace kachakacha::v2::modeling

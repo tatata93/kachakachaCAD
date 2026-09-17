@@ -141,6 +141,10 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
         }
         return std::nullopt;
     }
+    // 検査が採用した断面の並びを覚える。画面の「3. 断面順」はこれを出す。
+    // 押した順ではなく、**実際に作る順**を見せる(引継ぎ 2026-09-17 の 2)。
+    surfaceAdoptedSections_ = kachakacha::v2::modeling::AdoptedSectionSources(
+        request.Value(), analysis.Value());
     // 離した面は、元の面の実体が要る。表が指す形状ガイドの handle を渡す。
     kachakacha::v2::modeling::KernelShapeHandle source;
     for (const auto& row : table.rows) {

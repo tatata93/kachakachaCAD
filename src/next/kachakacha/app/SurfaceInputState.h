@@ -65,6 +65,10 @@ struct SurfaceInputState {
     SurfaceOrdering ordering = SurfaceOrdering::Auto;
     //! 手動固定のときの並び。空なら `sections` の並びをそのまま使う。
     std::vector<base::EntityId> explicitOrder;
+    //! 自動のとき、検査が **採用した** 並び。下見を作った側が書き戻す。
+    //! 画面の「3. 断面順」は、押した順ではなくこれを出す(引継ぎ 2026-09-17 の 2)。
+    //! 空なら押した順を出す(まだ下見が無い)。
+    std::vector<base::EntityId> adoptedOrder;
     //! **3D の次のクリックが入る欄**(引継ぎ 2026-09-17 の 1)。
     //! 欄の鍵は `SurfaceSlotKey` と同じ(Section / GuideU / BoundarySide / SourceSurface)。
     //! これが無いと、断面を入れたあとにガイドを入れる道が無かった。
@@ -181,8 +185,9 @@ struct SurfaceSelectionFacts {
 
 //! 実際に生成へ渡す断面の並び(§13)。
 //!
-//! 手動固定なら画面の並びをそのまま。自動なら、並べ替えた結果を画面へ返せるように
-//! 呼ぶ側が採用順を書き戻す。**どちらでも、最終の順が画面に出る。**
+//! 手動固定なら画面の並びをそのまま。自動なら、検査が採用した並び(`adoptedOrder`)。
+//! 呼ぶ側が下見のたびに書き戻す。**どちらでも、最終の順が画面に出る。**
+//! 自動でまだ採用順が無いときは押した順。
 [[nodiscard]] std::vector<base::EntityId> SurfaceSectionOrder(
     const SurfaceInputState& state);
 

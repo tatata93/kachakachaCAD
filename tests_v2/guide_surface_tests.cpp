@@ -5,6 +5,8 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -445,6 +447,40 @@ KACHA_V2_TEST(guideSurface, 5断面を重心の並びで順序付ける)
         Require(z > previous, "zの昇順であること");
         previous = z;
     }
+}
+
+KACHA_V2_TEST(guideSurface, 手動固定なら渡した順のまま使う)
+{
+    // 画面の「断面順: 手動固定」。人が決めた順が、そのまま生成順になる。
+    // 自動なら z の昇順に並べ替えるが、固定なら並べ替えない。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::LoftSections;
+    request.keepSectionOrder = true;
+    const double heights[]{40.0, 0.0, 30.0, 10.0, 20.0};
+    for (int index = 0; index < 5; ++index) {
+        const double z = heights[index];
+        auto chain = OpenPath(ChainRole::Section, index + 1,
+            {{0, 0, z}, {10, 5 + z * 0.1, z}, {20, 0, z}});
+        std::array<std::uint8_t, 16> bytes{};
+        bytes[15] = static_cast<std::uint8_t>(index + 1);
+        chain.sourceEntityId = EntityId(kachakacha::v2::base::Uuid(bytes));
+        request.chains.push_back(chain);
+    }
+    const auto result = Accept(request, "手動固定の5断面");
+    const auto& order = result.Value().sectionOrdering.chainIndices;
+    RequireCount(order.size(), 5, "断面の数");
+    for (std::size_t at = 0; at < order.size(); ++at) {
+        Require(order[at] == at, "渡した順のまま");
+    }
+    // 採用した並びを、元のワイヤーの番号で返せる(画面の「断面順」に出す)。
+    const auto sources = kachakacha::v2::modeling::AdoptedSectionSources(request,
+        result.Value());
+    RequireCount(sources.size(), 5, "元の番号の数");
+    Require(sources.front() == request.chains.front().sourceEntityId, "1番目の元");
+    // 自動へ戻すと、同じ入力でも z の昇順になる。
+    request.keepSectionOrder = false;
+    const auto automatic = Accept(request, "自動の5断面");
+    Require(automatic.Value().sectionOrdering.chainIndices != order, "自動は並べ替える");
 }
 
 KACHA_V2_TEST(guideSurface, Segment数が違う断面でも扱える)

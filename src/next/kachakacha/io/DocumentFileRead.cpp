@@ -537,6 +537,8 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
                 loader.ReadVector(definition, "revolveAxisDirection", where);
         }
         made.revolveAngleRad = loader.NumberOr(definition, "revolveAngleRad", 0.0);
+        // 断面順の手動固定。古い文書には無いので偽で読む(開いても面は変わらない)。
+        made.lockSectionOrder = loader.BoolOr(definition, "lockSectionOrder", false);
         feature.definition = std::move(made);
         break;
     }

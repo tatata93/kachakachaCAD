@@ -394,6 +394,7 @@ Result<GuideSurfaceRequest> ToGuideSurfaceRequest(const GuideTable& table,
     request.revolveAxisPoint = table.revolveAxisPoint;
     request.revolveAxisDirection = table.revolveAxisDirection;
     request.revolveAngleRad = table.revolveAngleRad;
+    request.keepSectionOrder = table.lockSectionOrder;
     for (std::size_t index = 0; index < table.rows.size(); ++index) {
         const GuideTableRow& row = table.rows[index];
         if (row.role == ChainRole::SourceSurface) {

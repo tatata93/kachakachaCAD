@@ -869,6 +869,8 @@ private:
     kachakacha::v2::app::SurfaceInputState surfaceInput_;
     //! 3D の選択に映した、欄の合計。差分を読むための前回の写し。
     std::vector<kachakacha::v2::base::EntityId> surfaceMirror_;
+    //! 直近の検査が採用した断面の並び(元のワイヤーの番号)。BuildSurfaceFromTable が書く。
+    std::vector<kachakacha::v2::base::EntityId> surfaceAdoptedSections_;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

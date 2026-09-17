@@ -29,20 +29,38 @@ public:
     void installEventFilter(QObject*);
     void removeEventFilter(QObject*);
     virtual bool eventFilter(QObject*, QEvent*);
+    virtual bool event(QEvent*);
+    template<class T> [[nodiscard]] QList<T> findChildren() const { return QList<T>{}; }
     bool setProperty(const char*, const QVariant&);
     template<class Sender, class Signal, class Slot>
     static void connect(Sender, Signal, Slot) {}
     template<class Sender, class Signal, class Context, class Slot>
     static void connect(Sender, Signal, Context, Slot) {}
+    template<class Sender, class Signal, class Context, class Slot>
+    static void connect(Sender, Signal, Context, Slot, Qt::ConnectionType) {}
 };
 
 class QStyle;
 class QLayout;
+class QMenu;
+
+class QSizePolicy {
+public:
+    enum Policy { Fixed, Minimum, Maximum, Preferred, Expanding, MinimumExpanding, Ignored };
+};
+
+class QSignalBlocker {
+public:
+    explicit QSignalBlocker(QObject*) {}
+    ~QSignalBlocker() = default;
+};
 
 class QWidget : public QObject, public QPaintDevice {
 public:
     QWidget() = default;
     explicit QWidget(QWidget*) {}
+    void setSizePolicy(QSizePolicy::Policy, QSizePolicy::Policy);
+    [[nodiscard]] QPoint mapTo(const QWidget*, const QPoint&) const;
     [[nodiscard]] int width() const;
     [[nodiscard]] int height() const;
     [[nodiscard]] QRect rect() const;
@@ -123,6 +141,7 @@ public:
 
 class QAction : public QObject {
 public:
+    [[nodiscard]] QMenu* menu() const;
     QAction() = default;
     explicit QAction(QObject*) {}
     QAction(const QString&, QObject*) {}
@@ -169,6 +188,10 @@ public:
 
 class QMenuBar : public QWidget {
 public:
+    [[nodiscard]] QRect actionGeometry(QAction*) const;
+    [[nodiscard]] QAction* activeAction() const;
+    [[nodiscard]] QAction* actionAt(const QPoint&) const;
+    [[nodiscard]] QFontMetrics fontMetrics() const;
     QMenu* addMenu(const QString&);
     void addAction(QAction*);
     [[nodiscard]] QList<QAction*> actions() const;
@@ -198,6 +221,7 @@ public:
 
 class QLabel : public QWidget {
 public:
+    void clear();
     QLabel() = default;
     explicit QLabel(QWidget*) {}
     QLabel(const QString&, QWidget* = nullptr) {}
@@ -263,6 +287,10 @@ public:
 
 class QTreeWidgetItem {
 public:
+    void setIcon(int, const QIcon&);
+    [[nodiscard]] QIcon icon(int) const;
+    void setFont(int, const QFont&);
+    [[nodiscard]] QFont font(int) const;
     QTreeWidgetItem() = default;
     explicit QTreeWidgetItem(class QTreeWidget*) {}
     explicit QTreeWidgetItem(QTreeWidgetItem*) {}
@@ -288,8 +316,17 @@ public:
     void (*customContextMenuRequested)(const QPoint&);
 };
 
+class QHeaderView : public QWidget {
+public:
+    enum ResizeMode { Interactive, Stretch, Fixed, ResizeToContents };
+    void setSectionResizeMode(int, ResizeMode);
+    void setSectionResizeMode(ResizeMode);
+    void setStretchLastSection(bool);
+};
+
 class QTreeWidget : public QAbstractItemView {
 public:
+    [[nodiscard]] QHeaderView* header() const;
     QTreeWidget() = default;
     explicit QTreeWidget(QWidget*) {}
     void setColumnCount(int);
@@ -327,6 +364,8 @@ protected:
 
 class QDockWidget : public QWidget {
 public:
+    enum DockWidgetFeature { NoDockWidgetFeatures = 0, DockWidgetClosable = 1,
+        DockWidgetMovable = 2, DockWidgetFloatable = 4 };
     QDockWidget() = default;
     QDockWidget(const QString&, QWidget* = nullptr) {}
     void setWidget(QWidget*);
@@ -422,6 +461,10 @@ public:
 
 class QComboBox : public QWidget {
 public:
+    enum SizeAdjustPolicy { AdjustToContents, AdjustToContentsOnFirstShow, AdjustToMinimumContentsLengthWithIcon };
+    void setSizeAdjustPolicy(SizeAdjustPolicy);
+    void setMinimumContentsLength(int);
+    void setMaximumWidth(int);
     QComboBox() = default;
     explicit QComboBox(QWidget*) {}
     void addItem(const QString&);
@@ -443,6 +486,7 @@ public:
     explicit QStackedWidget(QWidget*) {}
     int addWidget(QWidget*);
     void setCurrentIndex(int);
+    void setCurrentWidget(QWidget*);
     [[nodiscard]] int currentIndex() const;
     [[nodiscard]] int count() const;
 };
@@ -509,10 +553,33 @@ public:
     void (*rejected)();
 };
 
+class QToolButton : public QAbstractButton {
+public:
+    enum ToolButtonPopupMode { DelayedPopup, MenuButtonPopup, InstantPopup };
+    QToolButton() = default;
+    explicit QToolButton(QWidget*) {}
+    void setPopupMode(ToolButtonPopupMode);
+    void setMenu(QMenu*);
+    void setToolTip(const QString&);
+};
+
 class QTabBar : public QWidget {
 public:
     enum Shape { RoundedNorth, RoundedSouth, RoundedWest, RoundedEast,
         TriangularNorth, TriangularSouth, TriangularWest, TriangularEast };
+};
+
+class QTabWidget : public QWidget {
+public:
+    QTabWidget() = default;
+    explicit QTabWidget(QWidget*) {}
+    int addTab(QWidget*, const QString&);
+    [[nodiscard]] int count() const;
+    [[nodiscard]] int currentIndex() const;
+    void setCurrentIndex(int);
+    void setDocumentMode(bool);
+    [[nodiscard]] QWidget* widget(int) const;
+    void setTabText(int, const QString&);
 };
 
 class QCoreApplication : public QObject {

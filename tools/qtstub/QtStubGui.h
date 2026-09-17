@@ -10,6 +10,8 @@ public:
     [[nodiscard]] int y() const;
     QPoint operator-(const QPoint&) const;
     QPoint operator+(const QPoint&) const;
+    bool operator==(const QPoint&) const;
+    bool operator!=(const QPoint&) const;
 };
 
 class QPointF {
@@ -28,6 +30,8 @@ public:
 
 class QSize {
 public:
+    bool operator==(const QSize&) const;
+    bool operator!=(const QSize&) const;
     QSize() = default;
     QSize(int, int) {}
     [[nodiscard]] int width() const;
@@ -44,6 +48,8 @@ class QRect {
 public:
     QRect() = default;
     QRect(int, int, int, int) {}
+    QRect(const QPoint&, const QSize&) {}
+    [[nodiscard]] QSize size() const;
     void setSize(const QSize&);
     void moveCenter(const QPoint&);
     void moveTo(int, int);
@@ -131,6 +137,8 @@ public:
 
 class QPen {
 public:
+    void setJoinStyle(Qt::PenJoinStyle);
+    void setCapStyle(Qt::PenCapStyle);
     QPen() = default;
     QPen(const QColor&) {}
     QPen(const QColor&, double) {}
@@ -190,6 +198,8 @@ public:
 
 class QPolygonF {
 public:
+    void reserve(int);
+    void push_back(const QPointF&);
     QPolygonF() = default;
     QPolygonF(std::initializer_list<QPointF>) {}
     QPolygonF& operator<<(const QPointF&);
@@ -208,6 +218,8 @@ public:
 
 class QPainterPath {
 public:
+    void addPolygon(const QPolygonF&);
+    void setFillRule(Qt::FillRule);
     QPainterPath() = default;
     void moveTo(const QPointF&);
     void lineTo(const QPointF&);
@@ -363,7 +375,7 @@ class QCloseEvent;
 class QEvent {
 public:
     enum Type { None, MouseButtonPress, MouseButtonRelease, MouseMove, KeyPress,
-        KeyRelease, Paint, Resize, FocusOut, FocusIn };
+        KeyRelease, Paint, Resize, FocusOut, FocusIn, ShortcutOverride };
     [[nodiscard]] Type type() const;
     void accept();
     void ignore();

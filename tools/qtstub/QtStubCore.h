@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // Qt がマクロにしている語。本物と同じように空へ潰す。
@@ -81,6 +82,9 @@ public:
 
 class QString {
 public:
+    QString& remove(QChar);
+    QString& remove(const QString&);
+    void chop(int);
     QString() = default;
     QString(const char*) {}
     QString(const QChar*) {}
@@ -117,6 +121,7 @@ public:
     static QString number(double, char = 'g', int = 6);
     static QString fromStdString(const std::string&);
     static QString fromUtf8(const char*, int = -1);
+    static QString fromUtf8(std::string_view);
     static QString fromLocal8Bit(const char*, int = -1);
     static QString fromLatin1(const char*, int = -1);
     QString operator+(const QString&) const;

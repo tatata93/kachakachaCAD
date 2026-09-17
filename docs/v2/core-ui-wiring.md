@@ -30,6 +30,7 @@ V2 は「幾何は core、画面は薄く」という作りにしてある。
 | `base/SourceScan.h` | ソース木の走査 | **繋がない。**試験の道具である |
 | `base/TestHarness.h` | 試験の枠組み | **繋がない。**試験の道具である |
 | `app/EvaluationQueue.h` | 重い計算を待たせずに回す仕組み | 計算が待たされるようになってから。いまは同期で足りている |
+| `app/ProfileRegion.h` | 閉じた複数ワイヤーの内側を一時的な輪郭領域として拾う | WP-14の押し出し・面作成で、ビューポートの領域ホバーとクリックへ接続する次の変更 |
 | `document/BrokenReference.h` | 参照切れの見つけ方と直し方 | 開き直しで参照が切れる場面を作ってから |
 | `fabrication/OpeningClip.h` | 部材をまたぐ開口の切り出し(3D の領域どうし) | 帯近似の窓は分割軸のパラメータで切る `BandApproximation.h` の `ClipLoopIntoBands` を通した(app/FabricationOpenings)。こちらは V2方式の平らな部材どうしをまたぐ窓を繋ぐとき |
 | `fabrication/ManualRole.h` | 役割の手動割り当て | 近似を繋ぐとき |

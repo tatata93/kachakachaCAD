@@ -570,6 +570,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/EscapeAction.cpp
     src/next/kachakacha/app/GrabToMove.cpp
     src/next/kachakacha/app/PointerGesture.cpp
+    src/next/kachakacha/app/ProfileRegion.cpp
     src/next/kachakacha/app/DrawingShelfRows.cpp
     src/next/kachakacha/app/DiagnosticReport.cpp
     src/next/kachakacha/app/ExtrudePlan.cpp
@@ -764,6 +765,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(wire_connect_tests tests_v2/wire_connect_tests.cpp)
     kachakacha_add_v2_test(wire_edit_tests tests_v2/wire_edit_tests.cpp)
     kachakacha_add_v2_test(curve_sampling_tests tests_v2/curve_sampling_tests.cpp)
+    kachakacha_add_v2_test(profile_region_tests tests_v2/profile_region_tests.cpp)
     kachakacha_add_v2_test(guide_surface_tests tests_v2/guide_surface_tests.cpp)
     kachakacha_add_v2_test(work_plane_tests tests_v2/work_plane_tests.cpp)
     kachakacha_add_v2_test(extrude_tests tests_v2/extrude_tests.cpp)

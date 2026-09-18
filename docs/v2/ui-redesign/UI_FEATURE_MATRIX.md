@@ -36,19 +36,19 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 
 | ID | MODE | CATEGORY | TOOL | METHOD_VARIANT | EXISTING_BACKEND | NEW_UI_ENTRY | PREVIEW | HUMAN_TEST | STATUS | NOTES |
 |---|---|---|---|---|---|---|---|---|---|---|
-| D-01 | 作図 | 基本作図 | 線 | 2点 | `DrawingTool::Line` | 基本作図→線、作り方「2点」 | 既存 hover | HP-DR | NOT_STARTED | |
-| D-02 | 作図 | 基本作図 | 線 | 点+長さ+角度 | `CursorInput`(長さ/角度の打ち込み) | 作り方「点+長さ+角度」= 1点目後に欄へ打つ | 既存 | HP-DR | NOT_STARTED | 欄は CursorInput を再利用 |
-| D-03 | 作図 | 基本作図 | 円 | 中心+半径 | `DrawingTool::Circle` | 作り方カード | 既存 | HP-DR | NOT_STARTED | |
-| D-04 | 作図 | 基本作図 | 円 | 3点 | **無し** | カード disabled+理由 | — | — | BLOCKED_BACKEND | `ArcBuilders` に3点円なし(3点円弧はある) |
-| D-05 | 作図 | 基本作図 | 円 | 直径指定 | `CursorInput` 直径欄(直径→半径) | 作り方「直径指定」= 中心後に直径を打つ | 既存 | HP-DR | NOT_STARTED | |
-| D-06 | 作図 | 基本作図 | 円弧 | 3点 | `ArcMode::ThreePoints` | 作り方カード | 既存 | HP-DR | NOT_STARTED | |
-| D-07 | 作図 | 基本作図 | 円弧 | 始点・終点・半径 | `ArcMode::EndpointsAndRadius` | カード | 既存 | HP-DR | NOT_STARTED | largeArc/clockwise は core が固定 false → オプション化は backend 小改修 |
-| D-08 | 作図 | 基本作図 | 円弧 | 中心・始点・終点 | **無し**(StartTangent はある) | カード disabled+理由 | — | — | BLOCKED_BACKEND | `ArcMode::StartTangent`(始点接線+半径+角)は「その他」として収容 |
-| D-09 | 作図 | 基本作図 | 矩形 / 多角形 / 点 | 2角 / — / 1点 | Rectangle, Polyline, Point | 基本作図 | 既存 | HP-DR | NOT_STARTED | 多角形 = Polyline(HTML「多角形」) |
-| D-10 | 作図 | 曲線 | ベジェ | 制御点(3次4点) | `DrawingTool::Bezier` 3次固定 | 曲線→ベジェ、次数は「3次」のみ有効 | 既存 | HP-DR | NOT_STARTED | 次数2/4・接線指定は BLOCKED_BACKEND(表示は disabled) |
+| D-01 | 作図 | 基本作図 | 線 | 2点 | `DrawingTool::Line` | 基本作図→線、作り方「2点」 | 既存 hover | HP-DR | CLOUD_TESTED | 作り方カード「2点」(core DrawingMethodCards)。HP-DM |
+| D-02 | 作図 | 基本作図 | 線 | 点+長さ+角度 | `CursorInput`(長さ/角度の打ち込み) | 作り方「点+長さ+角度」= 1点目後に欄へ打つ | 既存 | HP-DR | CLOUD_TESTED | カード「点＋長さ＋角度」= 一文で CursorInput(長さ/角度)へ導く。欄は既存 |
+| D-03 | 作図 | 基本作図 | 円 | 中心+半径 | `DrawingTool::Circle` | 作り方カード | 既存 | HP-DR | CLOUD_TESTED | カード「中心＋半径」。HP-DM-01 |
+| D-04 | 作図 | 基本作図 | 円 | 3点 | **無し** | カード disabled+理由 | — | — | BLOCKED_BACKEND | カード「3点」は押せない形 + 理由(HP-DM-01 で確認) |
+| D-05 | 作図 | 基本作図 | 円 | 直径指定 | `CursorInput` 直径欄(直径→半径) | 作り方「直径指定」= 中心後に直径を打つ | 既存 | HP-DR | CLOUD_TESTED | カード「直径指定」= 一文で CursorInput の直径欄へ導く |
+| D-06 | 作図 | 基本作図 | 円弧 | 3点 | `ArcMode::ThreePoints` | 作り方カード | 既存 | HP-DR | CLOUD_TESTED | カード「3点」→ ArcMode::ThreePoints。HP-DM-02 で円弧ができる |
+| D-07 | 作図 | 基本作図 | 円弧 | 始点・終点・半径 | `ArcMode::EndpointsAndRadius` | カード | 既存 | HP-DR | CLOUD_TESTED | カード「始点・終点・半径」→ EndpointsAndRadius。HP-DM-01 |
+| D-08 | 作図 | 基本作図 | 円弧 | 中心・始点・終点 | **無し**(StartTangent はある) | カード disabled+理由 | — | — | BLOCKED_BACKEND | カード「中心・始点・終点」は押せない形 + 理由。始点接線はその他カードで残す |
+| D-09 | 作図 | 基本作図 | 矩形 / 多角形 / 点 | 2角 / — / 1点 | Rectangle, Polyline, Point | 基本作図 | 既存 | HP-DR | CLOUD_TESTED | 矩形「2角」/ 多角形「頂点を順に」/ 点「1点」の 1 枚カード |
+| D-10 | 作図 | 曲線 | ベジェ | 制御点(3次4点) | `DrawingTool::Bezier` 3次固定 | 曲線→ベジェ、次数は「3次」のみ有効 | 既存 | HP-DR | CLOUD_TESTED | カード「制御点で作成」(3次固定)。HP-DM-03 |
 | D-11 | 作図 | 曲線 | ベジェ | 制御点を点として残す / 制御多角形を補助線に | `keepPoints`(拾った点を残す)、多角形は無し | オプション: 点=既存 keepPoints、多角形=補助線として AddPlainWire(construction) | — | HP-DR | NOT_STARTED | 多角形は UI 側で線を足す(小) |
-| D-12 | 作図 | 曲線 | スプライン | 制御点(3次 B-spline) | `DrawingTool::Spline` | 作り方「制御点」 | 既存 | HP-DR | NOT_STARTED | |
-| D-13 | 作図 | 曲線 | スプライン | 通過点 / Fit | **無し** | カード disabled+理由 | — | — | BLOCKED_BACKEND | degree/continuity/tolerance/weight/tangent も無し → 欄は disabled |
+| D-12 | 作図 | 曲線 | スプライン | 制御点(3次 B-spline) | `DrawingTool::Spline` | 作り方「制御点」 | 既存 | HP-DR | CLOUD_TESTED | カード「制御点」。HP-DM-03 |
+| D-13 | 作図 | 曲線 | スプライン | 通過点 / Fit | **無し** | カード disabled+理由 | — | — | BLOCKED_BACKEND | カード「通過点」「近似 / Fit」は押せない形 + 理由(HP-DM-03) |
 | D-14 | 作図 | 曲線 | 楕円 | — | **無し** | disabled | — | — | BLOCKED_BACKEND | |
 | D-15 | 作図 | 編集 | トリム / 延長 / 分割 / 結合 / オフセット | 既存 | `wire.trim/extend/split/join/offset` | 編集カテゴリ | 面取りと同じ下見(可能なもの) | HP-DR | NOT_STARTED | join の G1/G2 は検査のみ |
 | D-16 | 作図 | 編集 | 面取り / 丸め(線どうし) | 対称/非対称/残す側 | `wire.chamfer/fillet` + V2CornerPreview | 編集カテゴリ | あり(HP-CN) | HP-CN-01/02 | TESTED | 2026-09-17 実装 |

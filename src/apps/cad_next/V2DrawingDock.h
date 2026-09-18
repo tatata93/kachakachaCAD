@@ -8,6 +8,7 @@
 //! 値を集めるだけにする。
 
 #include "kachakacha/app/DirectWireEntry.h"
+#include "kachakacha/app/DrawingMethodCards.h"
 #include "kachakacha/app/DrawingShelfRows.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -26,6 +27,8 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QTabWidget;
+class QToolButton;
+class QHBoxLayout;
 
 class V2DrawingDock final : public QDockWidget {
 public:
@@ -69,8 +72,25 @@ public:
     //! 作れなかった理由を出す。
     void ShowMessage(const QString& text);
 
+    // ---- 作り方カード(正本の methods)。試験と場面づくりから ----
+    //! いま並んでいるカードの言葉(順に)。
+    [[nodiscard]] std::vector<QString> MethodLabels() const;
+    //! いま押されているカードの言葉。無ければ空。
+    [[nodiscard]] QString CurrentMethodLabel() const;
+    //! そのカードが押せる形か。
+    [[nodiscard]] bool MethodEnabled(const QString& labelJa) const;
+    //! そのカードのツールチップ(押せないときは理由)。
+    [[nodiscard]] QString MethodTip(const QString& labelJa) const;
+    //! **見えているカードを実際に押す。** 押せなければ偽(理由は状態欄へ)。
+    [[nodiscard]] bool ClickMethod(const QString& labelJa);
+    //! 押せないカードを押したときに呼ぶもの(理由を状態行へ出すため)。
+    void SetBlockedMethodHandler(std::function<void(const QString& reasonJa)> handler);
+
 private:
     void BuildArcRows(QFormLayout* form);
+    void RebuildMethodCards();
+    void ChooseMethod(int index);
+    [[nodiscard]] QToolButton* MethodButton(const QString& labelJa) const;
     void BuildDirectWireRows(QFormLayout* form);
     void ApplyArcVisibility();
     void ApplyToolRows();
@@ -82,7 +102,15 @@ private:
     QWidget* body_ = nullptr;
     QFormLayout* toolForm_ = nullptr;
     QFormLayout* wireForm_ = nullptr;
-    QComboBox* arcMode_ = nullptr;
+    //! 作り方カード。円弧のカードは arcMode_ を決める。
+    QLabel* methodTitle_ = nullptr;
+    QWidget* methodRow_ = nullptr;
+    QHBoxLayout* methodLayout_ = nullptr;
+    std::vector<QToolButton*> methodButtons_;
+    std::vector<kachakacha::v2::app::DrawingMethodCard> methodCards_;
+    int methodIndex_ = -1;
+    kachakacha::v2::modeling::ArcMode arcMode_ = kachakacha::v2::modeling::ArcMode::ThreePoints;
+    std::function<void(const QString&)> blockedMethodHandler_;
     QDoubleSpinBox* arcRadius_ = nullptr;
     QDoubleSpinBox* arcSweep_ = nullptr;
     QCheckBox* construction_ = nullptr;

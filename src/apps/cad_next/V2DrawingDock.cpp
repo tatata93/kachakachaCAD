@@ -15,11 +15,14 @@
 #include <QScrollArea>
 #include <QString>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <cstddef>
 #include <string>
+#include <utility>
+#include <vector>
 #include <string_view>
 
 namespace {
@@ -39,10 +42,6 @@ constexpr double kPi = 3.14159265358979323846;
 {
     return QString::fromUtf8(std::string(value).c_str());
 }
-
-//! 円弧の作り方の並び(V1 と同じ)。
-constexpr std::array<ArcMode, 3> kArcModes{ArcMode::ThreePoints, ArcMode::EndpointsAndRadius,
-    ArcMode::StartTangent};
 
 } // namespace
 
@@ -74,7 +73,23 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     interactiveLayout->setContentsMargins(4, 8, 4, 4);
     interactiveLayout->setSpacing(6);
 
-    toolTitle_ = new QLabel(QStringLiteral("設定"), interactivePage);
+    // 作り方カード(正本の methods)。作り方を先に選び、必要な欄だけを出す。
+    methodTitle_ = new QLabel(QStringLiteral("作り方"), interactivePage);
+    methodTitle_->setObjectName(QStringLiteral("drawingMethodTitle"));
+    interactiveLayout->addWidget(methodTitle_);
+    methodRow_ = new QWidget(interactivePage);
+    methodLayout_ = new QHBoxLayout(methodRow_);
+    methodLayout_->setContentsMargins(0, 0, 0, 0);
+    methodLayout_->setSpacing(4);
+    interactiveLayout->addWidget(methodRow_);
+    // 決める欄が無い道具のときに、代わりに出す一文。
+    // 空の棚を出すと「壊れた」ようにしか見えない。作り方があれば、そのカードの一文。
+    hint_ = new QLabel(interactivePage);
+    hint_->setObjectName(QStringLiteral("drawingNextStep"));
+    hint_->setWordWrap(true);
+    interactiveLayout->addWidget(hint_);
+
+    toolTitle_ = new QLabel(QStringLiteral("入力"), interactivePage);
     interactiveLayout->addWidget(toolTitle_);
     toolForm_ = new QFormLayout();
     toolForm_->setContentsMargins(0, 0, 0, 0);
@@ -82,13 +97,9 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     BuildArcRows(toolForm_);
     interactiveLayout->addLayout(toolForm_);
 
-    // 決める欄が無い道具のときに、代わりに出す一文。
-    // 空の棚を出すと「壊れた」ようにしか見えない。
-    hint_ = new QLabel(interactivePage);
-    hint_->setObjectName(QStringLiteral("drawingNextStep"));
-    hint_->setWordWrap(true);
-    interactiveLayout->addWidget(hint_);
-
+    auto* optionTitle = new QLabel(QStringLiteral("オプション"), interactivePage);
+    optionTitle->setObjectName(QStringLiteral("drawingOptionTitle"));
+    interactiveLayout->addWidget(optionTitle);
     construction_ = new QCheckBox(QStringLiteral("補助線として作図"), interactivePage);
     interactiveLayout->addWidget(construction_);
     keepPoints_ = new QCheckBox(QStringLiteral("指定した点を作図点として残す"), interactivePage);
@@ -173,7 +184,7 @@ void V2DrawingDock::ApplyToolRows()
     // 見出しに道具の名前を入れる。「作図」だけでは、どの道具の欄か読めない。
     setWindowTitle(QString::fromStdString(
         kachakacha::v2::app::DrawingShelfTitleJa(tool_)));
-    toolForm_->setRowVisible(arcMode_, rows.arc);
+    RebuildMethodCards();
     if (rows.arc) {
         // 半径と中心角は、さらに作り方で決まる。二重に決めない。
         ApplyArcVisibility();
@@ -183,21 +194,138 @@ void V2DrawingDock::ApplyToolRows()
     }
     construction_->setVisible(rows.construction);
     keepPoints_->setVisible(rows.keepPoints);
-    toolTitle_->setVisible(!rows.ToolSectionEmpty());
-    // 欄が無いときだけ、使い方の一文を出す。欄と一文を両方出すと、
-    // どちらを読めばよいのか分からなくなる。
-    hint_->setText(QString::fromUtf8(
-        std::string(kachakacha::v2::app::DrawingToolHintJa(tool_)).c_str()));
-    hint_->setVisible(rows.ToolSectionEmpty());
+    toolTitle_->setVisible(rows.arc);
+    // 一文はいつも出す。作り方があればそのカードの一文、無ければ道具の使い方。
+    if (methodIndex_ >= 0 && methodIndex_ < static_cast<int>(methodCards_.size())) {
+        hint_->setText(Text(methodCards_[static_cast<std::size_t>(methodIndex_)].hintJa));
+    } else {
+        hint_->setText(Text(kachakacha::v2::app::DrawingToolHintJa(tool_)));
+    }
+    hint_->setVisible(true);
+}
+
+//! いまの道具のカードを並べ直す。何を並べるかは core(app/DrawingMethodCards)。
+void V2DrawingDock::RebuildMethodCards()
+{
+    for (QToolButton* button : methodButtons_) {
+        methodLayout_->removeWidget(button);
+        delete button;
+    }
+    methodButtons_.clear();
+    methodCards_ = kachakacha::v2::app::DrawingMethodCardsFor(tool_);
+    ToolSettings now;
+    now.arcMode = arcMode_;
+    methodIndex_ = kachakacha::v2::app::CurrentDrawingMethodIndex(tool_, now);
+    for (std::size_t index = 0; index < methodCards_.size(); ++index) {
+        const auto& card = methodCards_[index];
+        auto* button = new QToolButton(methodRow_);
+        button->setObjectName(QStringLiteral("drawingMethodCard"));
+        button->setText(Text(card.labelJa));
+        button->setCheckable(true);
+        button->setAutoRaise(true);
+        button->setToolTip(Text(card.Blocked() ? card.blockedReasonJa : card.hintJa));
+        button->setEnabled(!card.Blocked());
+        button->setChecked(static_cast<int>(index) == methodIndex_);
+        const int at = static_cast<int>(index);
+        QObject::connect(button, &QToolButton::clicked, this, [this, at] { ChooseMethod(at); });
+        methodLayout_->addWidget(button);
+        methodButtons_.push_back(button);
+    }
+    methodRow_->setVisible(!methodCards_.empty());
+    methodTitle_->setVisible(!methodCards_.empty());
+}
+
+//! カードを押した。円弧なら作り方(ArcMode)が変わる。押せないカードは理由を言う。
+void V2DrawingDock::ChooseMethod(int index)
+{
+    if (index < 0 || index >= static_cast<int>(methodCards_.size())) {
+        return;
+    }
+    const auto& card = methodCards_[static_cast<std::size_t>(index)];
+    if (card.Blocked()) {
+        if (blockedMethodHandler_) {
+            blockedMethodHandler_(Text(card.blockedReasonJa));
+        }
+        return;
+    }
+    methodIndex_ = index;
+    for (std::size_t at = 0; at < methodButtons_.size(); ++at) {
+        methodButtons_[at]->setChecked(static_cast<int>(at) == index);
+    }
+    hint_->setText(Text(card.hintJa));
+    if (card.arcMode.has_value() && *card.arcMode != arcMode_) {
+        arcMode_ = *card.arcMode;
+        ApplyArcVisibility();
+        EmitSettings();
+    }
+}
+
+QToolButton* V2DrawingDock::MethodButton(const QString& labelJa) const
+{
+    for (QToolButton* button : methodButtons_) {
+        if (button->text() == labelJa) {
+            return button;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<QString> V2DrawingDock::MethodLabels() const
+{
+    std::vector<QString> labels;
+    for (QToolButton* button : methodButtons_) {
+        labels.push_back(button->text());
+    }
+    return labels;
+}
+
+QString V2DrawingDock::CurrentMethodLabel() const
+{
+    if (methodIndex_ < 0 || methodIndex_ >= static_cast<int>(methodButtons_.size())) {
+        return QString();
+    }
+    return methodButtons_[static_cast<std::size_t>(methodIndex_)]->text();
+}
+
+bool V2DrawingDock::MethodEnabled(const QString& labelJa) const
+{
+    QToolButton* button = MethodButton(labelJa);
+    return button != nullptr && button->isVisible() && button->isEnabled();
+}
+
+QString V2DrawingDock::MethodTip(const QString& labelJa) const
+{
+    QToolButton* button = MethodButton(labelJa);
+    return button == nullptr ? QString() : button->toolTip();
+}
+
+bool V2DrawingDock::ClickMethod(const QString& labelJa)
+{
+    QToolButton* button = MethodButton(labelJa);
+    if (button == nullptr || !button->isVisible()) {
+        return false;
+    }
+    if (!button->isEnabled()) {
+        // 押せない理由を言う(押したことにはしない)。
+        for (std::size_t index = 0; index < methodButtons_.size(); ++index) {
+            if (methodButtons_[index] == button) {
+                ChooseMethod(static_cast<int>(index));
+            }
+        }
+        return false;
+    }
+    button->click();
+    return true;
+}
+
+void V2DrawingDock::SetBlockedMethodHandler(std::function<void(const QString&)> handler)
+{
+    blockedMethodHandler_ = std::move(handler);
 }
 
 void V2DrawingDock::BuildArcRows(QFormLayout* form)
 {
-    arcMode_ = new QComboBox(body_);
-    arcMode_->addItem(QStringLiteral("3点(始点・通過点・終点)"));
-    arcMode_->addItem(QStringLiteral("両端 + 半径"));
-    arcMode_->addItem(QStringLiteral("始点 + 接線方向・半径・中心角"));
-    form->addRow(QStringLiteral("円弧の作り方"), arcMode_);
+    // 作り方(3点 / 始点・終点・半径 / 始点接線)はカードで決める。ここは値の欄だけ。
     arcRadius_ = new QDoubleSpinBox(body_);
     arcRadius_->setRange(0.001, 100000.0);
     arcRadius_->setDecimals(3);
@@ -212,10 +340,6 @@ void V2DrawingDock::BuildArcRows(QFormLayout* form)
     arcSweep_->setSuffix(QStringLiteral(" 度"));
     arcSweep_->setValue(90.0);
     form->addRow(QStringLiteral("中心角"), arcSweep_);
-    QObject::connect(arcMode_, &QComboBox::currentIndexChanged, this, [this] {
-        ApplyArcVisibility();
-        EmitSettings();
-    });
     QObject::connect(arcRadius_, &QDoubleSpinBox::valueChanged, this,
         [this] { EmitSettings(); });
     QObject::connect(arcSweep_, &QDoubleSpinBox::valueChanged, this,
@@ -275,10 +399,7 @@ void V2DrawingDock::ApplyArcVisibility()
     if (!kachakacha::v2::app::DrawingShelfRowsFor(tool_).arc) {
         return;   // 円弧の道具でないなら、この区画はそもそも出ていない。
     }
-    const int index = arcMode_->currentIndex();
-    const ArcMode mode = index >= 0 && index < static_cast<int>(kArcModes.size())
-        ? kArcModes[static_cast<std::size_t>(index)]
-        : ArcMode::ThreePoints;
+    const ArcMode mode = arcMode_;
     // 3点のときは半径も中心角も使わない。出したままにすると効くのか分からない。
     toolForm_->setRowVisible(arcRadius_, mode != ArcMode::ThreePoints);
     toolForm_->setRowVisible(arcSweep_, mode == ArcMode::StartTangent);
@@ -308,10 +429,7 @@ void V2DrawingDock::EmitSettings()
 ToolSettings V2DrawingDock::Settings() const
 {
     ToolSettings settings;
-    const int index = arcMode_->currentIndex();
-    if (index >= 0 && index < static_cast<int>(kArcModes.size())) {
-        settings.arcMode = kArcModes[static_cast<std::size_t>(index)];
-    }
+    settings.arcMode = arcMode_;
     settings.radiusMm = arcRadius_->value();
     settings.sweepAngleRad = arcSweep_->value() * kPi / 180.0;
     settings.construction = construction_->isChecked();
@@ -322,16 +440,13 @@ ToolSettings V2DrawingDock::Settings() const
 void V2DrawingDock::SetSettings(const ToolSettings& settings)
 {
     loading_ = true;
-    for (std::size_t index = 0; index < kArcModes.size(); ++index) {
-        if (kArcModes[index] == settings.arcMode) {
-            arcMode_->setCurrentIndex(static_cast<int>(index));
-        }
-    }
+    arcMode_ = settings.arcMode;
     arcRadius_->setValue(settings.radiusMm);
     arcSweep_->setValue(settings.sweepAngleRad * 180.0 / kPi);
     construction_->setChecked(settings.construction);
     keepPoints_->setChecked(settings.keepPoints);
     loading_ = false;
+    RebuildMethodCards();   // 円弧の作り方が変わったなら、押されたカードも変わる
     ApplyArcVisibility();
     EmitSettings();
 }

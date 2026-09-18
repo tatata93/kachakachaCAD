@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>kachakachaCAD v2 部品モード 詳細UI仕様</title>
+<style>
+:root{
+  --bg:#1e252d;--bg2:#252e38;--panel:#f4f5f7;--panel2:#fff;--line:#c9ced4;
+  --text:#20252b;--muted:#68727c;--accent:#2f80ed;--accent2:#0aa0a0;--sel:#dbeaff;
+  --tree:#f7f8fa;--hover:#eaf3ff;--ok:#177245;--warn:#a66a00;--danger:#b42318;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;color:var(--text);background:#dfe3e8}
+body{min-width:1280px}
+.app{height:100vh;display:grid;grid-template-rows:30px 38px 78px 1fr 28px;background:white}
+.menu,.modes,.status{display:flex;align-items:center}
+.menu{gap:18px;padding:0 12px;border-bottom:1px solid var(--line);background:#fafafa;font-size:12px}
+.brand{font-weight:700;margin-right:12px}
+.modes{gap:4px;padding:4px 8px;background:#eef1f4;border-bottom:1px solid var(--line)}
+.mode{height:29px;padding:0 14px;border:1px solid #aeb5bc;background:white;border-radius:3px}
+.mode.active{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}
+.measure-global{margin-left:auto}
+.ribbon{display:grid;grid-template-rows:30px 48px;background:#f8f9fa;border-bottom:1px solid var(--line)}
+.cats{display:flex;border-bottom:1px solid #d7dce1}
+.cat{min-width:108px;border:0;border-right:1px solid #d7dce1;background:#f8f9fa;font-weight:600;cursor:pointer}
+.cat.active{background:white;border-top:3px solid var(--accent);color:#174a8b}
+.tools{display:flex;align-items:center;gap:4px;padding:5px 8px;overflow-x:auto}
+.tool{height:36px;min-width:72px;padding:0 9px;border:1px solid transparent;background:transparent;border-radius:3px;cursor:pointer}
+.tool:hover{background:#eef5ff;border-color:#bdd7fb}
+.tool.active{background:#e7f1ff;border-color:#8cbcff;color:#174a8b;font-weight:700}
+.tool[disabled]{opacity:.35;cursor:not-allowed}
+.workspace{min-height:0;display:grid;grid-template-columns:285px minmax(640px,1fr) 385px}
+.left{background:var(--tree);border-right:1px solid var(--line);display:grid;grid-template-rows:34px 34px 1fr}
+.right{background:var(--panel);border-left:1px solid var(--line);display:grid;grid-template-rows:34px 1fr}
+.title{display:flex;align-items:center;padding:0 10px;font-weight:700;background:#edf0f3;border-bottom:1px solid var(--line)}
+.search{padding:4px 7px;border-bottom:1px solid var(--line)}
+.search input{width:100%;height:26px;border:1px solid #b8bec6;border-radius:3px;padding:0 8px}
+.explorer{overflow:auto;padding:4px 0;font-size:12px}
+.tree-row{height:24px;display:flex;align-items:center;gap:4px;padding-right:6px;cursor:pointer;white-space:nowrap}
+.tree-row:hover{background:var(--hover)}
+.tree-row.selected{background:var(--sel)}
+.tree-row .chev{width:16px;text-align:center;color:#59636d}
+.tree-row .ico{width:18px;text-align:center}
+.tree-row .name{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tree-row .eye{opacity:.15}
+.tree-row:hover .eye,.tree-row.selected .eye{opacity:1}
+.eye.off{opacity:.22!important}
+.d0{padding-left:4px}.d1{padding-left:18px}.d2{padding-left:36px}.d3{padding-left:54px}
+.context{position:absolute;display:none;z-index:20;background:white;border:1px solid #aeb5bc;border-radius:3px;box-shadow:0 5px 18px rgba(0,0,0,.2);min-width:185px;padding:4px}
+.context div{padding:6px 9px;border-radius:2px}
+.context div:hover{background:#eaf3ff}
+.view{position:relative;overflow:hidden;background:
+  repeating-linear-gradient(0deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),
+  repeating-linear-gradient(90deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),var(--bg)}
+.view svg{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;left:12px;top:12px;padding:7px 9px;background:rgba(10,16,22,.76);border:1px solid rgba(255,255,255,.16);border-radius:4px;color:#eef5fc;font-size:12px}
+.cube{position:absolute;right:14px;top:14px;width:86px;height:86px;border:1px solid rgba(255,255,255,.16);background:rgba(20,28,36,.74);color:#cfe4ff;border-radius:5px;display:grid;place-items:center;text-align:center}
+.scale{position:absolute;left:18px;bottom:18px;color:#d4dde7}
+.overlaylabel{font-size:12px;font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;fill:#f5f8fc;paint-order:stroke;stroke:#1b2430;stroke-width:3px}
+.panel{overflow:auto;padding:10px}
+.card{background:white;border:1px solid var(--line);border-radius:5px;margin-bottom:10px;overflow:hidden}
+.card h3{margin:0;padding:8px 10px;font-size:13px;background:#f3f5f7;border-bottom:1px solid var(--line)}
+.body{padding:9px 10px}
+.info{padding:8px 9px;background:#eef5ff;border-left:4px solid var(--accent);line-height:1.45;border-radius:2px}
+.warn{padding:8px 9px;background:#fff7e5;border-left:4px solid var(--warn);line-height:1.45;border-radius:2px}
+.fieldrow{display:grid;grid-template-columns:112px 1fr;gap:8px;align-items:center;padding:5px 0}
+.field{height:28px;width:100%;border:1px solid #b8c0c8;border-radius:3px;padding:0 7px;background:white}
+.check{display:flex;align-items:center;gap:7px;padding:4px 0}
+.method-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.method{min-height:38px;border:1px solid #b9c0c8;background:#fff;border-radius:4px;padding:5px 6px;cursor:pointer;font-size:12px;text-align:left}
+.method.active{border:2px solid var(--accent);padding:4px 5px;background:#f2f7ff;color:#174a8b;font-weight:700}
+.method small{display:block;font-weight:400;color:var(--muted);margin-top:2px}
+.section-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}
+.slot{display:grid;grid-template-columns:95px 1fr auto;gap:7px;align-items:center;padding:6px 0;border-bottom:1px solid #edf0f3}
+.slot:last-child{border-bottom:0}
+.slot.active .value{border-color:var(--accent);background:#f4f8ff;box-shadow:0 0 0 1px rgba(47,128,237,.2)}
+.value{min-height:29px;border:1px solid #bcc3cb;border-radius:3px;background:#fbfcfd;padding:5px 7px}
+.chip{display:inline-block;background:#eef2f6;border:1px solid #d2d8df;border-radius:3px;padding:2px 5px;margin:1px 2px 1px 0}
+.mini{height:26px;border:1px solid #aeb6bf;background:white;border-radius:3px}
+.segment{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #b8c0c8;border-radius:3px;overflow:hidden}
+.segment button{height:28px;border:0;border-right:1px solid #d7dce1;background:white}
+.segment button:last-child{border-right:0}
+.segment button.active{background:#e7f1ff;color:#174a8b;font-weight:700}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--panel) 12px);padding-top:14px}
+.actions button{height:33px;border:1px solid #aeb6bf;background:white;border-radius:3px}
+.actions .ok{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}
+.status{justify-content:space-between;gap:15px;padding:0 10px;background:#f4f6f8;border-top:1px solid var(--line);font-size:12px;color:#4f5963}
+.hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kbd{border:1px solid #aeb5bc;border-bottom-width:2px;border-radius:3px;background:white;padding:0 4px;font-size:10px}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="menu"><div class="brand">kachakachaCAD v2.0</div><div>ファイル</div><div>編集</div><div>表示</div><div>作図</div><div>部品</div><div>製作</div><div>出力</div><div>設定</div><div>ヘルプ</div></div>
+
+<div class="modes">
+<button class="mode">作図モード</button>
+<button class="mode active">部品モード</button>
+<button class="mode">製作モード</button>
+<button class="mode">出力モード</button>
+<button class="mode measure-global">測定（全モード共通）</button>
+</div>
+
+<div class="ribbon">
+<div class="cats">
+<button class="cat active" data-cat="create">作成</button>
+<button class="cat" data-cat="shape">形状編集</button>
+<button class="cat" data-cat="face">面編集</button>
+<button class="cat" data-cat="boolean">ブール演算</button>
+<button class="cat" data-cat="place">配置</button>
+</div>
+<div class="tools" id="tools"></div>
+</div>
+
+<div class="workspace">
+<aside class="left">
+<div class="title">EXPLORER — モデル</div>
+<div class="search"><input placeholder="名前・種類で絞り込み"></div>
+<div class="explorer" id="tree">
+  <div class="tree-row d0"><span class="chev">▼</span><span class="ico">▣</span><strong class="name">RailwayNoseSample</strong><span class="eye">◉</span></div>
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">◎</span><strong class="name">Origin</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">＋</span><span class="name">Origin Point</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">X Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">Y Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">Z Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">▱</span><span class="name">XY Plane</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">▱</span><span class="name">YZ Plane</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">▱</span><span class="name">XZ Plane</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">📁</span><strong class="name">Groups</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev">▼</span><span class="ico">📁</span><span class="name">前頭部</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span></span><span class="ico">⌁</span><span class="name">Profile_01</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span></span><span class="ico">▰</span><span class="name">Surface_01</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">⌁</span><strong class="name">Wires</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">╱</span><span class="name">Profile_02</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">╱</span><span class="name">Profile_03</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">▰</span><strong class="name">Surfaces</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">▰</span><span class="name">Surface_01</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">⬢</span><strong class="name">Solids</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2 selected"><span></span><span class="ico">⬢</span><span class="name">Body_01</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">⬢</span><span class="name">Body_02</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▶</span><span class="ico">◈</span><strong class="name">ApproxParts</strong><span class="eye">◉</span></div>
+</div>
+</aside>
+
+<main class="view">
+<svg viewBox="0 0 1000 760" preserveAspectRatio="none">
+<polygon points="385,260 620,300 720,410 500,385" fill="rgba(170,185,199,.48)" stroke="#eff4f8" stroke-width="2"/>
+<polygon points="385,260 385,520 500,610 500,385" fill="rgba(132,150,166,.58)" stroke="#eff4f8" stroke-width="2"/>
+<polygon points="500,385 720,410 720,585 500,610" fill="rgba(150,168,184,.62)" stroke="#eff4f8" stroke-width="2"/>
+<path d="M385 260 C490 170 615 190 720 410" fill="none" stroke="#eff4f8" stroke-width="3"/>
+<path d="M385 260 C485 225 615 250 720 410" fill="none" stroke="#95c1ff" stroke-width="2.5"/>
+<polygon points="410,300 610,330 685,405 495,382" fill="rgba(47,128,237,.20)" stroke="#5ca2ff" stroke-width="3"/>
+<text x="485" y="345" class="overlaylabel">FACE / PROFILE</text>
+
+<polygon points="370,95 720,160 720,665 370,570" fill="rgba(0,160,160,.14)" stroke="#0da4a4" stroke-width="1.5"/>
+<polygon points="270,500 520,620 840,500 600,385" fill="none" stroke="rgba(160,185,210,.30)" stroke-dasharray="7 5"/>
+
+<line x1="500" y1="385" x2="500" y2="200" stroke="#2f80ed" stroke-width="4"/>
+<polygon points="500,185 491,207 509,207" fill="#2f80ed"/>
+<rect x="520" y="210" width="100" height="28" rx="4" fill="#fff" stroke="#aeb5bc"/>
+<text x="535" y="229" font-size="13" fill="#20252b">20.0 mm</text>
+</svg>
+<div class="hud"><strong>部品モード</strong><br><span id="hudText">押し出し：Profile領域または平面Faceをクリックしてください</span></div>
+<div class="cube">Z<br>前　右<br>X　Y</div>
+<div class="scale">──── 10 mm</div>
+</main>
+
+<aside class="right">
+<div class="title">現在の操作</div>
+<div class="panel" id="panel"></div>
+</aside>
+</div>
+
+<div class="status">
+<div class="hint" id="statusText">部品モード ｜ 押し出し ｜ Profile領域または平面Faceをクリックしてください</div>
+<div>クリック:選択 ｜ ドラッグ:距離 ｜ <span class="kbd">Enter</span> 確定 ｜ <span class="kbd">Esc</span> 取消 ｜ Grid 5mm ｜ Snap ON</div>
+</div>
+</div>
+
+<div class="context" id="ctx">
+<div>選択に正対</div><div>名前変更</div><div>表示 / 非表示</div><div>グループへ移動</div><div>複製</div><div style="color:#b42318">削除</div><div>プロパティ...</div>
+</div>
+
+<script>
+const toolsets={
+ create:[
+  ['extrude','押し出し'],['revolve','回転体'],['loftsolid','ロフト立体'],['sweep','スイープ'],['thicken','厚み']
+ ],
+ shape:[
+  ['fillet','フィレット'],['chamfer','面取り'],['shell','シェル'],['splitbody','分割'],['joinbody','結合']
+ ],
+ face:[
+  ['pushpull','押し引き'],['faceoffset','面オフセット'],['facedelete','面削除'],['facereplace','面置換']
+ ],
+ boolean:[
+  ['add','足す'],['subtract','引く'],['intersect','交差']
+ ],
+ place:[
+  ['move','移動'],['rotate','回転'],['mirror','ミラー'],['copy','コピー'],['pattern','パターン']
+ ]
+};
+
+const configs={
+ extrude:{
+  title:'押し出し',hint:'閉じたProfile領域または平面Faceをクリックしてください',
+  methods:[
+    ['距離','指定距離だけ押し出す'],
+    ['面まで','指定Face / Surfaceまで延長'],
+    ['2面間','From Face と To Face の間を生成'],
+    ['すべて貫通','選択方向へ全て貫通'],
+    ['対称','基準面の両側へ同距離'],
+    ['非対称','両側を別距離で指定']
+  ],
+  body:`
+  <div class="card"><h3>1. 入力ジオメトリ</h3><div class="body">
+    <div class="fieldrow"><div>選択対象</div>
+      <select class="field">
+        <option>自動：Profile / 平面Face</option>
+        <option>Profile領域のみ</option>
+        <option>平面Faceのみ</option>
+      </select>
+    </div>
+    <div class="slot active">
+      <div>Profile / Face</div>
+      <div class="value"><span class="chip">Face_06</span> 平面FaceをProfileとして使用</div>
+      <button class="mini">選び直す</button>
+    </div>
+    <div class="section-note">
+      押し出し中は閉じた線の内側をクリックすればProfile領域、既存Solidの平面Face内部をクリックすればFace全体を入力にする。
+      Face上にWireが重なっていても、この入力待ちではProfile領域 / Faceを優先する。
+    </div>
+  </div></div>
+
+  <div class="card"><h3>2. 開始位置（From）</h3><div class="body">
+    <div class="slot">
+      <div>From</div>
+      <div class="value">選択Profile / Face の平面</div>
+      <button class="mini">変更</button>
+    </div>
+    <div class="section-note">必要なら別の平面Face・Surface・WorkPlaneを開始位置として選択できる。</div>
+  </div></div>
+
+  <div class="card"><h3>3. 範囲 / 方向</h3><div class="body">
+    <div class="fieldrow"><div>方式</div>
+      <select class="field">
+        <option>距離</option>
+        <option>面まで</option>
+        <option>2面間</option>
+        <option>すべて貫通</option>
+        <option>対称</option>
+        <option>非対称</option>
+      </select>
+    </div>
+    <div class="fieldrow"><div>距離 1</div><input class="field" value="20.000 mm"></div>
+    <div class="fieldrow"><div>距離 2</div><input class="field" value="0.000 mm"></div>
+    <div class="fieldrow"><div>方向</div>
+      <select class="field">
+        <option>Profile / Face 法線</option>
+        <option>反転</option>
+        <option>X軸</option>
+        <option>Y軸</option>
+        <option>Z軸</option>
+        <option>選択した線 / 軸</option>
+        <option>数値ベクトル</option>
+      </select>
+    </div>
+    <div class="slot">
+      <div>To</div>
+      <div class="value">未指定（「面まで」「2面間」の時に使用）</div>
+      <button class="mini">Face選択</button>
+    </div>
+    <div class="fieldrow"><div>テーパー</div><input class="field" value="0.000°"></div>
+  </div></div>
+
+  <div class="card"><h3>4. 演算</h3><div class="body">
+    <div class="segment"><button class="active">新規Solid</button><button>足す</button><button>引く</button></div>
+    <div class="slot">
+      <div>対象Solid</div>
+      <div class="value">新規Solidのため不要</div>
+      <button class="mini">選択</button>
+    </div>
+    <div class="section-note">足す / 引くを選んだ場合だけ対象Solid選択を有効化する。</div>
+  </div></div>
+
+  <div class="card"><h3>5. 出力</h3><div class="body">
+    <div class="fieldrow"><div>形状</div>
+      <select class="field">
+        <option>Solid</option>
+        <option>Surface</option>
+      </select>
+    </div>
+    <div class="fieldrow"><div>プリセット</div>
+      <select class="field">
+        <option>ソリッドのみ</option>
+        <option>ワイヤーのみ</option>
+        <option>ワイヤー + ソリッド</option>
+        <option>押し出し先ワイヤーのみ</option>
+        <option>カスタム</option>
+      </select>
+    </div>
+    <label class="check"><input type="checkbox" checked> Solid / Surface本体</label>
+    <label class="check"><input type="checkbox"> 開始側輪郭ワイヤー</label>
+    <label class="check"><input type="checkbox"> 押し出し先輪郭ワイヤー</label>
+    <label class="check"><input type="checkbox"> 側面ワイヤー</label>
+  </div></div>
+
+  <div class="card"><h3>Face直接押し出しの仕様</h3><div class="body">
+    <div class="info">
+      平面Faceをクリックした場合、そのFace境界をProfileとして取り込み、Face法線方向のPreview矢印を即表示する。<br>
+      例：押し出し → Faceクリック → 20mm → Preview → Enter。<br>
+      元Faceを含む既存Solidへ「足す / 引く」する場合は、そのSolidを既定Target候補として提示する。
+    </div>
+  </div></div>`
+ },
+ revolve:{
+  title:'回転体',hint:'まず閉じた輪郭を選択し、次に回転軸を選択します',
+  methods:[
+    ['全回転','360°の回転体'],
+    ['角度指定','任意角度で回転'],
+    ['対称回転','基準面の両側へ回転']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>輪郭</div><div class="value">▶ 閉領域内部をクリック</div><button class="mini">クリア</button></div>
+    <div class="slot"><div>回転軸</div><div class="value">未選択</div><button class="mini">選択</button></div>
+  </div></div>
+  <div class="card"><h3>設定</h3><div class="body">
+    <div class="fieldrow"><div>角度</div><input class="field" value="360.000°"></div>
+    <div class="fieldrow"><div>操作</div><select class="field"><option>新しい部品</option><option>足す</option><option>引く</option></select></div>
+  </div></div>`
+ },
+ loftsolid:{
+  title:'ロフト立体',hint:'断面を順番にクリックしてください',
+  methods:[
+    ['断面のみ','断面列からSolid生成'],
+    ['ガイド付き','断面 + ガイド線'],
+    ['中心線付き','断面 + 中心線で形状制御']
+  ],
+  body:`
+  <div class="card"><h3>断面</h3><div class="body">
+    <div class="slot active"><div>断面</div><div class="value"><span class="chip">Section 1</span><span class="chip">Section 2</span><span class="chip">Section 3</span></div><button class="mini">追加</button></div>
+    <div class="fieldrow"><div>順序</div><select class="field"><option>AUTO</option><option>MANUAL LOCK</option></select></div>
+  </div></div>
+  <div class="card"><h3>補助入力</h3><div class="body">
+    <div class="slot"><div>ガイド</div><div class="value">なし</div><button class="mini">追加</button></div>
+    <div class="slot"><div>中心線</div><div class="value">なし</div><button class="mini">選択</button></div>
+  </div></div>
+  <div class="card"><h3>結果</h3><div class="body"><div class="fieldrow"><div>操作</div><select class="field"><option>新しい部品</option><option>足す</option><option>引く</option></select></div></div></div>`
+ },
+ sweep:{
+  title:'スイープ',hint:'輪郭を選択し、続けて経路を選択してください',
+  methods:[
+    ['一定断面','輪郭形状を保って経路移動'],
+    ['ねじれ指定','経路に沿って回転'],
+    ['ガイド付き','ガイドで姿勢・尺度を補助']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>輪郭</div><div class="value">▶ Profileを選択</div><button class="mini">クリア</button></div>
+    <div class="slot"><div>経路</div><div class="value">未選択</div><button class="mini">選択</button></div>
+    <div class="slot"><div>ガイド</div><div class="value">なし</div><button class="mini">追加</button></div>
+  </div></div>
+  <div class="card"><h3>設定</h3><div class="body">
+    <div class="fieldrow"><div>姿勢</div><select class="field"><option>経路に追従</option><option>一定方向</option></select></div>
+    <div class="fieldrow"><div>ねじれ</div><input class="field" value="0.000°"></div>
+  </div></div>`
+ },
+ thicken:{
+  title:'厚み',hint:'厚みを付けるSurfaceまたはFaceを選択してください',
+  methods:[
+    ['片側・外','法線外側へ厚み'],
+    ['片側・内','法線内側へ厚み'],
+    ['中央','元面を中心に両側'],
+    ['個別方向','面ごとに方向指定']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>対象面</div><div class="value">▶ Surface / Faceを選択</div><button class="mini">クリア</button></div>
+  </div></div>
+  <div class="card"><h3>設定</h3><div class="body">
+    <div class="fieldrow"><div>厚さ</div><input class="field" value="0.500 mm"></div>
+    <div class="fieldrow"><div>方向</div><select class="field"><option>中央</option><option>外側</option><option>内側</option></select></div>
+    <div class="fieldrow"><div>結果</div><select class="field"><option>新しい部品</option><option>既存部品へ追加</option></select></div>
+  </div></div>`
+ },
+ fillet:{
+  title:'フィレット',hint:'丸めたいEdgeをクリックしてください',
+  methods:[
+    ['一定半径','全Edgeを同一R'],
+    ['可変半径','Edge上でRを変化'],
+    ['面フィレット','2面間をRで接続']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>Edge</div><div class="value">▶ Edgeを選択</div><button class="mini">追加</button></div>
+  </div></div>
+  <div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>半径</div><input class="field" value="2.000 mm"></div></div></div>`
+ },
+ chamfer:{
+  title:'面取り',hint:'面取りするEdgeをクリックしてください',
+  methods:[
+    ['距離','1距離'],
+    ['距離・距離','左右別距離'],
+    ['距離・角度','距離 + 角度']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>Edge</div><div class="value">▶ Edgeを選択</div><button class="mini">追加</button></div></div></div>
+  <div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>距離</div><input class="field" value="1.000 mm"></div><div class="fieldrow"><div>角度</div><input class="field" value="45.000°"></div></div></div>`
+ },
+ shell:{
+  title:'シェル',hint:'開口するFaceを選択してください',
+  methods:[
+    ['内側','外形を維持して内側へ肉抜き'],
+    ['外側','内形を維持して外側へ肉厚'],
+    ['中央','元面基準で両側']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>開口面</div><div class="value">▶ Faceを選択</div><button class="mini">追加</button></div></div></div>
+  <div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>肉厚</div><input class="field" value="1.000 mm"></div></div></div>`
+ },
+ pushpull:{
+  title:'押し引き',hint:'移動するFaceをクリックしてください',
+  methods:[
+    ['法線方向','Face法線に沿って移動'],
+    ['方向指定','任意方向へ移動'],
+    ['面まで','別Faceまで移動']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>Face</div><div class="value">▶ Faceを選択</div><button class="mini">クリア</button></div></div></div>
+  <div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>距離</div><input class="field" value="5.000 mm"></div><div class="fieldrow"><div>方向</div><select class="field"><option>Face法線</option><option>逆法線</option><option>指定方向</option></select></div></div></div>`
+ },
+ faceoffset:{
+  title:'面オフセット',hint:'オフセットするFaceを選択してください',
+  methods:[
+    ['一定距離','選択Faceを同距離移動'],
+    ['個別距離','Faceごとに距離指定']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>Face</div><div class="value">▶ Faceを選択</div><button class="mini">追加</button></div></div></div><div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>距離</div><input class="field" value="1.000 mm"></div></div></div>`
+ },
+ facedelete:{
+  title:'面削除',hint:'削除するFaceを選択してください',
+  methods:[
+    ['Heal','削除後に周辺面を延長して閉じる'],
+    ['開口','Faceを削除して開いた形状にする']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>Face</div><div class="value">▶ Faceを選択</div><button class="mini">追加</button></div></div></div>`
+ },
+ facereplace:{
+  title:'面置換',hint:'置換対象Faceを選び、次に置換先Surfaceを選択してください',
+  methods:[
+    ['Surfaceで置換','外部Surfaceへ置換'],
+    ['Faceで置換','別Solid Faceへ置換']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象Face</div><div class="value">▶ Faceを選択</div><button class="mini">クリア</button></div><div class="slot"><div>置換先</div><div class="value">未選択</div><button class="mini">選択</button></div></div></div>`
+ },
+ add:{
+  title:'足す',hint:'対象Solidを選び、次に追加するSolidを選択してください',
+  methods:[
+    ['結合','2つ以上のSolidをUnion'],
+    ['工具を残す','Union後もTool Solidを保持']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ Target Solid</div><button class="mini">クリア</button></div><div class="slot"><div>追加Solid</div><div class="value">未選択</div><button class="mini">追加</button></div></div></div>`
+ },
+ subtract:{
+  title:'引く',hint:'削られるSolidを選び、次に削るSolidを選択してください',
+  methods:[
+    ['差分','Target - Tool'],
+    ['工具を残す','Tool Solidを保持']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 削られるSolid</div><button class="mini">クリア</button></div><div class="slot"><div>工具</div><div class="value">未選択</div><button class="mini">追加</button></div></div></div>`
+ },
+ intersect:{
+  title:'交差',hint:'交差を取るSolidを順に選択してください',
+  methods:[
+    ['共通部分','全Solidの共通領域'],
+    ['工具を残す','元Solidを保持']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>Solid</div><div class="value">▶ Solidを2個以上選択</div><button class="mini">追加</button></div></div></div>`
+ },
+ move:{
+  title:'移動',hint:'移動する部品を選択してください',
+  methods:[
+    ['点から点','基点→移動先'],
+    ['XYZ数値','X/Y/Z移動量'],
+    ['方向＋距離','線/軸方向へ移動']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 部品を選択</div><button class="mini">追加</button></div></div></div><div class="card"><h3>移動量</h3><div class="body"><div class="fieldrow"><div>X</div><input class="field" value="0.000 mm"></div><div class="fieldrow"><div>Y</div><input class="field" value="0.000 mm"></div><div class="fieldrow"><div>Z</div><input class="field" value="0.000 mm"></div></div></div>`
+ },
+ rotate:{
+  title:'回転',hint:'回転する部品を選択し、軸を指定してください',
+  methods:[
+    ['軸＋角度','選択軸まわりに回転'],
+    ['3点','中心と方向を3点で指定']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 部品を選択</div><button class="mini">追加</button></div><div class="slot"><div>回転軸</div><div class="value">未選択</div><button class="mini">選択</button></div></div></div><div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>角度</div><input class="field" value="90.000°"></div></div></div>`
+ },
+ mirror:{
+  title:'ミラー',hint:'複製する部品を選択し、ミラー面を選択してください',
+  methods:[
+    ['コピー','元を残して鏡像を作る'],
+    ['置換','元を鏡像位置へ移す']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 部品を選択</div><button class="mini">追加</button></div><div class="slot"><div>ミラー面</div><div class="value">未選択</div><button class="mini">選択</button></div></div></div>`
+ },
+ copy:{
+  title:'コピー',hint:'コピーする部品を選択してください',
+  methods:[
+    ['1個コピー','指定位置へ1個'],
+    ['複数コピー','同一変位で複数個']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 部品を選択</div><button class="mini">追加</button></div></div></div>`
+ },
+ pattern:{
+  title:'パターン',hint:'複製する部品を選択してください',
+  methods:[
+    ['直線','方向・間隔・個数'],
+    ['円形','軸・角度・個数'],
+    ['経路','曲線に沿って配置']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ 部品を選択</div><button class="mini">追加</button></div></div></div><div class="card"><h3>設定</h3><div class="body"><div class="fieldrow"><div>個数</div><input class="field" value="4"></div><div class="fieldrow"><div>間隔</div><input class="field" value="10.000 mm"></div></div></div>`
+ }
+};
+
+function generic(id,name){
+ return {
+  title:name,hint:name+'の対象を3Dビューで選択してください',
+  methods:[['標準','既定方式']],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="info">${name}ツールの対象を3Dビューから指定します。</div></div></div>`
+ };
+}
+
+let activeCat='create',activeTool='extrude';
+const toolsEl=document.getElementById('tools');
+const panel=document.getElementById('panel');
+const hud=document.getElementById('hudText');
+const status=document.getElementById('statusText');
+
+function renderTools(){
+  toolsEl.innerHTML='';
+  toolsets[activeCat].forEach(([id,name])=>{
+    const b=document.createElement('button');
+    b.className='tool'+(id===activeTool?' active':'');
+    b.textContent=name;
+    b.onclick=()=>{activeTool=id;renderTools();renderPanel();};
+    toolsEl.appendChild(b);
+  });
+}
+function renderPanel(){
+  const name=(toolsets[activeCat].find(x=>x[0]===activeTool)||['',activeTool])[1];
+  const c=configs[activeTool]||generic(activeTool,name);
+  const methods=c.methods.map((m,i)=>`<button class="method ${i===0?'active':''}">${m[0]}<small>${m[1]}</small></button>`).join('');
+  panel.innerHTML=`
+    <div class="card"><h3>${c.title}</h3><div class="body"><div class="info">${c.hint}</div></div></div>
+    <div class="card"><h3>作り方</h3><div class="body"><div class="method-tabs">${methods}</div><div class="section-note">方式を選ぶと必要な入力・設定だけを表示。Toolごとに作り方を複数持てる。</div></div></div>
+    ${c.body}
+    <div class="card"><h3>プレビュー / 状態</h3><div class="body"><div class="info">✓ 入力変更は即Previewへ反映<br>✓ PreviewとCommitは同じ入力状態を使用</div></div></div>
+    <div class="actions"><button>キャンセル</button><button class="ok">確定</button></div>`;
+  panel.querySelectorAll('.method').forEach(b=>b.onclick=()=>{panel.querySelectorAll('.method').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+  hud.textContent=c.title+'：'+c.hint;
+  status.textContent='部品モード ｜ '+c.title+' ｜ '+c.hint;
+}
+
+document.querySelectorAll('.cat').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');activeCat=b.dataset.cat;activeTool=toolsets[activeCat][0][0];
+  renderTools();renderPanel();
+});
+
+document.querySelectorAll('.tree-row').forEach(r=>{
+  r.onclick=()=>{document.querySelectorAll('.tree-row').forEach(x=>x.classList.remove('selected'));r.classList.add('selected');status.textContent='部品モード ｜ Model Browser選択を3Dビューへ同期';};
+  r.oncontextmenu=e=>{e.preventDefault();const c=document.getElementById('ctx');c.style.display='block';c.style.left=e.pageX+'px';c.style.top=e.pageY+'px';};
+});
+document.querySelectorAll('.eye').forEach(e=>e.onclick=ev=>{ev.stopPropagation();e.classList.toggle('off');e.textContent=e.classList.contains('off')?'○':'◉';});
+document.onclick=e=>{if(!e.target.closest('.context'))document.getElementById('ctx').style.display='none';};
+
+renderTools();renderPanel();
+</script>
+</body>
+</html>

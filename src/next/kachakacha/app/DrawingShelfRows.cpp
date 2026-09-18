@@ -55,7 +55,7 @@ std::string_view DrawingToolHintJa(DrawingTool tool) noexcept
     case DrawingTool::Circle:
         return "中心と、円周の1点を押してください。";
     case DrawingTool::Arc:
-        return "右の「円弧の作り方」で決め方を選んでから押してください。";
+        return "右の「作り方」のカードで決め方を選んでから押してください。";
     case DrawingTool::Bezier:
         return "始点・制御点2つ・終点の4か所を押してください。決める欄はありません。";
     case DrawingTool::Spline:

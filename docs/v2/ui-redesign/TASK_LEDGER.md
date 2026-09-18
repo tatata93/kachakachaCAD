@@ -9,7 +9,7 @@
 |---|---|---|---|
 | S0 棚卸し | 3 HTML + repo の突き合わせ、3文書作成 | DONE(2026-09-18) | 雲: subagent 3本の inventory を MATRIX へ反映 |
 | S1 Common | core `app/Ribbon`(mode→category→tool)、`V2Ribbon`、Explorer 階層 + 個別表示 + scroll-to + 「グループ」、右ペイン1道具1枚、HUD/状態行、測定の重ね道具 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: ctest 148/148、typecheck 97 files、自己試験 HP-RB-01〜03 / HP-EX-01〜04 / HP-ST-01〜03 を追加(PC で実行) |
-| S2 Drawing-A | 基本作図/曲線の作り方カード(円/円弧/ベジェ/スプライン)、Tool 切替で panel 同期 | NOT_STARTED | |
+| S2 Drawing-A | 基本作図/曲線の作り方カード(円/円弧/ベジェ/スプライン)、Tool 切替で panel 同期 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: drawing_method_cards_tests、HP-DM-01〜03(PC で実行) |
 | S3 Drawing-B | 編集/変形/作業面(12方式 + 下見)/注記 | NOT_STARTED | |
 | S4 Drawing-C | 面作成(6主要 + その他)の新 panel、穴の明示 | NOT_STARTED | |
 | S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | NOT_STARTED | |
@@ -34,6 +34,12 @@
 - 雲: ctest 148/148(status_line_tests, explorer_model_tests, ribbon_tests を追加)、qt stub typecheck 97 files OK。
 - PC: 未実施(`_GO.cmd` → Release build → 自己試験 → 撮影 が要る)。**PC_VERIFIED ではない。**
 - 残り(S1 のうち後ろへ回したもの): 道具パネルの共通枠(C-10)は「見出し + 案内」まで。作り方/入力/オプション/確定・キャンセルの段組みは S2 以降で各 Dock を作り替えるときに。測定の重ね道具は道具の種類を戻す(打ちかけの点は残らない = ToolController の仕様)。
+
+### S2 Drawing-A — 2026-09-18(雲側完了、PC 未検証)
+- core `app/DrawingMethodCards`(道具 → カード。核に無いものは理由つき、円弧の始点接線は「その他」)。
+- `V2DrawingDock`: 円弧の作り方コンボを廃し、作り方カード(押せる/押せない + 理由)+ カードの一文 + 入力 + オプションの段組みに。カードの押下が ArcMode を決める。
+- HP-DM-01〜03(帯 → カード → 3D で円弧、スプライン/ベジェのカード)。
+- 正本の HTML と指示書を `docs/v2/ui-redesign/mocks/` に置いた(次のセッションが読めるように)。
 
 ## BLOCKED_BACKEND(必要なら別担当へ)
 

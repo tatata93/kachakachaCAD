@@ -1,0 +1,119 @@
+#include "kachakacha/app/DrawingMethodCards.h"
+
+namespace kachakacha::v2::app {
+
+using modeling::ArcMode;
+using modeling::DrawingTool;
+
+namespace {
+
+[[nodiscard]] DrawingMethodCard Card(const char* labelJa, const char* hintJa)
+{
+    DrawingMethodCard card;
+    card.labelJa = labelJa;
+    card.hintJa = hintJa;
+    return card;
+}
+
+[[nodiscard]] DrawingMethodCard ArcCard(const char* labelJa, ArcMode mode, const char* hintJa,
+    bool extra = false)
+{
+    DrawingMethodCard card = Card(labelJa, hintJa);
+    card.arcMode = mode;
+    card.extra = extra;
+    return card;
+}
+
+[[nodiscard]] DrawingMethodCard Blocked(const char* labelJa, const char* reasonJa)
+{
+    DrawingMethodCard card;
+    card.labelJa = labelJa;
+    card.blockedReasonJa = reasonJa;
+    card.hintJa = reasonJa;
+    return card;
+}
+
+} // namespace
+
+std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
+{
+    switch (tool) {
+    case DrawingTool::Line:
+        return {
+            Card("2点", "始点と終点の2か所を押してください。Shift で水平・垂直に固定します。"),
+            Card("点＋長さ＋角度",
+                "始点を押してから、カーソル横の欄に長さを打ち、Tab で角度へ移って Enter。"),
+        };
+    case DrawingTool::Circle:
+        return {
+            Card("中心＋半径", "中心を押し、次に円周の1点を押してください。半径は欄にも打てます。"),
+            Card("直径指定", "中心を押してから、カーソル横の欄を Tab で「直径」へ移して打ち、Enter。"),
+            Blocked("3点", "3点を通る円はまだ作れません(核に3点円がありません。3点の円弧はあります)。"),
+        };
+    case DrawingTool::Arc:
+        return {
+            ArcCard("3点", ArcMode::ThreePoints, "始点・通過点・終点の3か所を押してください。"),
+            ArcCard("始点・終点・半径", ArcMode::EndpointsAndRadius,
+                "始点と終点を押してください。半径は下の欄で決めます。"),
+            Blocked("中心・始点・終点", "中心から決める円弧はまだ作れません(核にその作り方がありません)。"),
+            ArcCard("始点接線・半径・中心角", ArcMode::StartTangent,
+                "始点と接線の向きを押してください。半径と中心角は下の欄で決めます。", true),
+        };
+    case DrawingTool::Bezier:
+        return {
+            Card("制御点で作成", "始点・制御点2つ・終点の4か所を押してください(3次)。"),
+        };
+    case DrawingTool::Spline:
+        return {
+            Card("制御点", "制御点を4つ以上、順に押してください。Enter で終わります。"),
+            Blocked("通過点", "点を通るスプラインはまだ作れません(核に補間がありません)。"),
+            Blocked("近似 / Fit", "点列への当てはめはまだ作れません(核に当てはめがありません)。"),
+        };
+    case DrawingTool::Rectangle:
+        return {Card("2角", "向かい合う角の2か所を押してください。Shift で正方形になります。")};
+    case DrawingTool::Polyline:
+        return {Card("頂点を順に", "点を順に押してください。右クリックか Enter で終わり、始点を押すと閉じます。")};
+    case DrawingTool::Point:
+        return {Card("1点", "作図点を置きたい場所を押してください。")};
+    case DrawingTool::Select:
+    case DrawingTool::SetGridOrigin:
+    case DrawingTool::Move:
+    case DrawingTool::Copy:
+    case DrawingTool::Mirror:
+    case DrawingTool::Rotate:
+    case DrawingTool::Split:
+    case DrawingTool::Trim:
+    case DrawingTool::Extend:
+    case DrawingTool::JoinEndpoints:
+    case DrawingTool::TangentJoin:
+    case DrawingTool::CurvatureJoin:
+    case DrawingTool::ConnectTwoPoints:
+    case DrawingTool::ChamferOrFilletPair:
+    case DrawingTool::Measure:
+        break;
+    }
+    return {};
+}
+
+int CurrentDrawingMethodIndex(DrawingTool tool, const modeling::ToolSettings& settings)
+{
+    const auto cards = DrawingMethodCardsFor(tool);
+    if (cards.empty()) {
+        return -1;
+    }
+    if (tool == DrawingTool::Arc) {
+        for (std::size_t index = 0; index < cards.size(); ++index) {
+            if (cards[index].arcMode.has_value() && *cards[index].arcMode == settings.arcMode) {
+                return static_cast<int>(index);
+            }
+        }
+    }
+    for (std::size_t index = 0; index < cards.size(); ++index) {
+        if (!cards[index].Blocked()) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+} // namespace kachakacha::v2::app

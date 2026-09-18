@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>kachakachaCAD v2 作図モード 詳細UI仕様</title>
+<style>
+:root{
+  --bg:#1e252d;--bg2:#252e38;--panel:#f4f5f7;--panel2:#fff;--line:#c9ced4;
+  --text:#20252b;--muted:#68727c;--accent:#2f80ed;--accent2:#0aa0a0;--sel:#dbeaff;
+  --tree:#f7f8fa;--hover:#eaf3ff;--ok:#177245;--warn:#a66a00;
+}
+*{box-sizing:border-box} html,body{margin:0;height:100%;font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;color:var(--text);background:#dfe3e8}
+body{min-width:1280px}.app{height:100vh;display:grid;grid-template-rows:30px 38px 74px 1fr 28px;background:white}
+.menu,.modes,.status{display:flex;align-items:center}.menu{gap:18px;padding:0 12px;border-bottom:1px solid var(--line);background:#fafafa;font-size:12px}.brand{font-weight:700;margin-right:12px}
+.modes{gap:4px;padding:4px 8px;background:#eef1f4;border-bottom:1px solid var(--line)}
+.mode{height:29px;padding:0 14px;border:1px solid #aeb5bc;background:white;border-radius:3px}.mode.active{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}.measure-global{margin-left:auto}
+.ribbon{display:grid;grid-template-rows:30px 44px;background:#f8f9fa;border-bottom:1px solid var(--line)}
+.cats{display:flex;border-bottom:1px solid #d7dce1}.cat{min-width:90px;border:0;border-right:1px solid #d7dce1;background:#f8f9fa;font-weight:600;cursor:pointer}.cat.active{background:white;border-top:3px solid var(--accent);color:#174a8b}
+.tools{display:flex;align-items:center;gap:4px;padding:4px 8px;overflow-x:auto}.tool{height:34px;min-width:64px;padding:0 9px;border:1px solid transparent;background:transparent;border-radius:3px;cursor:pointer}.tool:hover{background:#eef5ff;border-color:#bdd7fb}.tool.active{background:#e7f1ff;border-color:#8cbcff;color:#174a8b;font-weight:700}.tool[disabled]{opacity:.35;cursor:not-allowed}
+.workspace{min-height:0;display:grid;grid-template-columns:285px minmax(640px,1fr) 365px}
+.left{background:var(--tree);border-right:1px solid var(--line);display:grid;grid-template-rows:34px 34px 1fr}.right{background:var(--panel);border-left:1px solid var(--line);display:grid;grid-template-rows:34px 1fr}
+.title{display:flex;align-items:center;padding:0 10px;font-weight:700;background:#edf0f3;border-bottom:1px solid var(--line)}
+.search{padding:4px 7px;border-bottom:1px solid var(--line)}.search input{width:100%;height:26px;border:1px solid #b8bec6;border-radius:3px;padding:0 8px}
+.explorer{overflow:auto;padding:4px 0;font-size:12px}.tree-row{height:24px;display:flex;align-items:center;gap:4px;padding-right:6px;cursor:pointer;white-space:nowrap}.tree-row:hover{background:var(--hover)}.tree-row.selected{background:var(--sel)}.tree-row .chev{width:16px;text-align:center;color:#59636d}.tree-row .ico{width:18px;text-align:center}.tree-row .name{flex:1;overflow:hidden;text-overflow:ellipsis}.tree-row .eye{opacity:.15}.tree-row:hover .eye,.tree-row.selected .eye{opacity:1}.eye.off{opacity:.22!important}.d0{padding-left:4px}.d1{padding-left:18px}.d2{padding-left:36px}.d3{padding-left:54px}
+.context{position:absolute;display:none;z-index:20;background:white;border:1px solid #aeb5bc;border-radius:3px;box-shadow:0 5px 18px rgba(0,0,0,.2);min-width:180px;padding:4px}.context div{padding:6px 9px;border-radius:2px}.context div:hover{background:#eaf3ff}
+.view{position:relative;overflow:hidden;background:
+  repeating-linear-gradient(0deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),
+  repeating-linear-gradient(90deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),var(--bg)}
+.view svg{position:absolute;inset:0;width:100%;height:100%}.hud{position:absolute;left:12px;top:12px;padding:7px 9px;background:rgba(10,16,22,.76);border:1px solid rgba(255,255,255,.16);border-radius:4px;color:#eef5fc;font-size:12px}.cube{position:absolute;right:14px;top:14px;width:86px;height:86px;border:1px solid rgba(255,255,255,.16);background:rgba(20,28,36,.74);color:#cfe4ff;border-radius:5px;display:grid;place-items:center;text-align:center}.scale{position:absolute;left:18px;bottom:18px;color:#d4dde7}
+.panel{overflow:auto;padding:10px}.card{background:white;border:1px solid var(--line);border-radius:5px;margin-bottom:10px;overflow:hidden}.card h3{margin:0;padding:8px 10px;font-size:13px;background:#f3f5f7;border-bottom:1px solid var(--line)}.body{padding:9px 10px}.info{padding:8px 9px;background:#eef5ff;border-left:4px solid var(--accent);line-height:1.45;border-radius:2px}.fieldrow{display:grid;grid-template-columns:105px 1fr;gap:8px;align-items:center;padding:5px 0}.field{height:28px;width:100%;border:1px solid #b8c0c8;border-radius:3px;padding:0 7px;background:white}.check{display:flex;align-items:center;gap:7px;padding:4px 0}.method-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.method{min-height:34px;border:1px solid #b9c0c8;background:#fff;border-radius:4px;padding:5px 6px;cursor:pointer;font-size:12px}.method.active{border:2px solid var(--accent);padding:4px 5px;background:#f2f7ff;color:#174a8b;font-weight:700}.section-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--panel) 12px);padding-top:14px}.actions button{height:32px;border:1px solid #aeb6bf;background:white;border-radius:3px}.actions .ok{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}.mini{height:25px;border:1px solid #aeb6bf;background:white;border-radius:3px}
+.status{justify-content:space-between;gap:15px;padding:0 10px;background:#f4f6f8;border-top:1px solid var(--line);font-size:12px;color:#4f5963}.hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kbd{border:1px solid #aeb5bc;border-bottom-width:2px;border-radius:3px;background:white;padding:0 4px;font-size:10px}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="menu"><div class="brand">kachakachaCAD v2.0</div><div>ファイル</div><div>編集</div><div>表示</div><div>作図</div><div>部品</div><div>製作</div><div>出力</div><div>設定</div><div>ヘルプ</div></div>
+<div class="modes"><button class="mode active">作図モード</button><button class="mode">部品モード</button><button class="mode">製作モード</button><button class="mode">出力モード</button><button class="mode measure-global">測定（全モード共通）</button></div>
+<div class="ribbon">
+<div class="cats">
+<button class="cat active" data-cat="basic">基本作図</button><button class="cat" data-cat="curve">曲線</button><button class="cat" data-cat="edit">編集</button><button class="cat" data-cat="transform">変形</button><button class="cat" data-cat="plane">作業面</button><button class="cat" data-cat="surface">面作成</button><button class="cat" data-cat="note">注記</button><button class="cat" data-cat="measure">測定</button>
+</div>
+<div class="tools" id="tools"></div>
+</div>
+<div class="workspace">
+<aside class="left">
+<div class="title">EXPLORER — モデル</div>
+<div class="search"><input placeholder="名前・種類で絞り込み"></div>
+<div class="explorer" id="tree">
+  <div class="tree-row d0" data-id="project"><span class="chev">▼</span><span class="ico">▣</span><strong class="name">RailwayNoseSample</strong><span class="eye">◉</span></div>
+
+  <div class="tree-row d1" data-id="origin"><span class="chev">▼</span><span class="ico">◎</span><strong class="name">Origin</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">＋</span><span class="name">Origin Point</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">→</span><span class="name">X Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">→</span><span class="name">Y Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">→</span><span class="name">Z Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▱</span><span class="name">XY Plane</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▱</span><span class="name">YZ Plane</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▱</span><span class="name">XZ Plane</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">▱</span><strong class="name">WorkPlanes</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▱</span><span class="name">WP_001</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▱</span><span class="name">WP_002</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">📁</span><strong class="name">Groups</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev">▼</span><span class="ico">📁</span><span class="name">前頭部</span><span class="eye">◉</span></div>
+  <div class="tree-row d3 selected"><span class="chev"></span><span class="ico">╱</span><span class="name">Wire_001</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span class="chev"></span><span class="ico">⌒</span><span class="name">Arc_001</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span class="chev"></span><span class="ico">〰</span><span class="name">Spline_001</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">⌁</span><strong class="name">Wires</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">╱</span><span class="name">Wire_002</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">╱</span><span class="name">Wire_003</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">▰</span><strong class="name">Surfaces</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev"></span><span class="ico">▰</span><span class="name">Surface_001</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▶</span><span class="ico">⬢</span><strong class="name">Solids</strong><span class="eye">◉</span></div>
+  <div class="tree-row d1"><span class="chev">▶</span><span class="ico">◈</span><strong class="name">ApproxParts</strong><span class="eye">◉</span></div>
+</div>
+</aside>
+
+<main class="view">
+<svg viewBox="0 0 1000 760" preserveAspectRatio="none">
+<polygon points="400,90 735,180 735,655 400,560" fill="rgba(11,164,164,.18)" stroke="#0da4a4" stroke-width="2"/>
+<polygon points="280,500 520,610 840,500 600,385" fill="none" stroke="rgba(160,185,210,.32)" stroke-width="1.2" stroke-dasharray="7 5"/>
+<line x1="520" y1="620" x2="880" y2="500" stroke="#3b78c8"/><line x1="520" y1="620" x2="270" y2="690" stroke="#4da96d"/><line x1="520" y1="620" x2="520" y2="120" stroke="#c46c52"/>
+<path d="M335 285 C455 250 585 250 705 330" fill="none" stroke="#f2f5f8" stroke-width="3"/>
+<path d="M335 285 L335 510 M705 330 L705 540 M335 510 L705 540" fill="none" stroke="#f2f5f8" stroke-width="3"/>
+<path d="M335 510 C455 450 585 450 705 540" fill="none" stroke="#7fb4ff" stroke-width="3"/>
+<circle cx="335" cy="285" r="4" fill="#fff"/><circle cx="520" cy="270" r="4" fill="#fff"/><circle cx="705" cy="330" r="4" fill="#fff"/>
+</svg>
+<div class="hud"><strong>作図モード</strong><br><span id="hudText">円：中心をクリックしてください</span></div>
+<div class="cube">Z<br>前　右<br>X　Y</div><div class="scale">──── 10 mm</div>
+</main>
+
+<aside class="right">
+<div class="title">プロパティ / ツール</div>
+<div class="panel" id="panel"></div>
+</aside>
+</div>
+<div class="status"><div class="hint" id="statusText">作図モード ｜ 円：中心をクリックしてください</div><div>X:12.345 Y:6.789 Z:0.000 ｜ Grid 5mm ｜ Snap ON ｜ <span class="kbd">Enter</span> 確定 <span class="kbd">Esc</span> 取消</div></div>
+</div>
+
+<div class="context" id="ctx"><div>名前変更</div><div>表示 / 非表示</div><div>選択に正対</div><div>グループへ移動</div><div>複製</div><div style="color:#b42318">削除</div></div>
+
+<script>
+const toolsets={
+ basic:[['line','線'],['circle','円'],['arc','円弧'],['rect','矩形'],['poly','多角形'],['point','点']],
+ curve:[['bezier','ベジェ'],['spline','スプライン'],['ellipse','楕円']],
+ edit:[['trim','トリム'],['extend','延長'],['split','分割'],['join','結合'],['offset','オフセット']],
+ transform:[['move','移動'],['rotate','回転'],['mirror','ミラー'],['scale','スケール'],['copy','コピー']],
+ plane:[['workplane','作業面'],['faceview','選択に正対']],
+ surface:[['planar','平面'],['ruled','ルールド面'],['loft','ロフト面'],['guided','ガイド付きロフト'],['boundary','境界面'],['network','曲線網']],
+ note:[['dimension','寸法'],['text','テキスト']],
+ measure:[['distance','距離'],['angle','角度'],['radius','半径/直径'],['area','面積']]
+};
+
+const configs={
+ circle:{
+  title:'円',hint:'中心をクリックしてください',
+  methods:['中心＋半径','3点','直径指定'],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="fieldrow"><div>中心</div><div class="field">3D画面で指定</div></div>
+    <div class="fieldrow"><div>半径</div><input class="field" value="10.000 mm"></div>
+  </div></div>
+  <div class="card"><h3>オプション</h3><div class="body">
+    <label class="check"><input type="checkbox"> 補助線として作成</label>
+    <label class="check"><input type="checkbox" checked> 中心点を点として残す</label>
+    <label class="check"><input type="checkbox" checked> 作業平面に拘束</label>
+  </div></div>`
+ },
+ arc:{
+  title:'円弧',hint:'円弧の最初の入力を指定してください',
+  methods:['中心・始点・終点','3点','始点・終点・半径'],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="fieldrow"><div>中心 / 始点</div><div class="field">3D画面で指定</div></div>
+    <div class="fieldrow"><div>半径</div><input class="field" value="20.000 mm"></div>
+    <div class="fieldrow"><div>開始角</div><input class="field" value="0.000°"></div>
+    <div class="fieldrow"><div>角度</div><input class="field" value="90.000°"></div>
+  </div></div>
+  <div class="card"><h3>オプション</h3><div class="body">
+    <label class="check"><input type="checkbox"> 補助線として作成</label>
+    <label class="check"><input type="checkbox" checked> 中心点を点として残す</label>
+  </div></div>`
+ },
+ bezier:{
+  title:'ベジェ',hint:'制御点1をクリックしてください',
+  methods:['制御点で作成'],
+  body:`
+  <div class="card"><h3>制御点</h3><div class="body">
+    <div class="fieldrow"><div>次数</div><select class="field"><option>3次</option><option>2次</option><option>4次</option></select></div>
+    <div class="fieldrow"><div>点</div><div class="field">0点 — 3D画面で追加</div></div>
+    <button class="mini">選択点を制御点へ追加</button>
+  </div></div>
+  <div class="card"><h3>オプション</h3><div class="body">
+    <label class="check"><input type="checkbox" checked> 制御点を点オブジェクトとして残す</label>
+    <label class="check"><input type="checkbox"> 制御ポリゴンを補助線として残す</label>
+    <label class="check"><input type="checkbox"> 始点接線を指定</label>
+    <label class="check"><input type="checkbox"> 終点接線を指定</label>
+  </div></div>`
+ },
+ spline:{
+  title:'スプライン',hint:'曲線を定義する点をクリックしてください',
+  methods:['制御点','通過点','近似 / Fit'],
+  body:`
+  <div class="card"><h3>曲線条件</h3><div class="body">
+    <div class="fieldrow"><div>次数</div><select class="field"><option>3</option><option>2</option><option>4</option><option>5</option></select></div>
+    <div class="fieldrow"><div>連続性</div><select class="field"><option>C2</option><option>C1</option><option>C0</option></select></div>
+    <div class="fieldrow"><div>Fit許容差</div><input class="field" value="0.050 mm"></div>
+    <div class="fieldrow"><div>重み</div><input class="field" value="1.000"></div>
+  </div></div>
+  <div class="card"><h3>オプション</h3><div class="body">
+    <label class="check"><input type="checkbox" checked> 制御点を点オブジェクトとして残す</label>
+    <label class="check"><input type="checkbox"> 制御ポリゴンを補助線として残す</label>
+    <label class="check"><input type="checkbox"> 始点接線を指定</label>
+    <label class="check"><input type="checkbox"> 終点接線を指定</label>
+    <label class="check"><input type="checkbox"> 左右対称条件</label>
+  </div></div>`
+ },
+ line:{
+  title:'線',hint:'始点をクリックしてください',
+  methods:['2点','点＋長さ＋角度'],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="fieldrow"><div>始点</div><div class="field">3D画面で指定</div></div><div class="fieldrow"><div>終点</div><div class="field">3D画面で指定</div></div></div></div>
+  <div class="card"><h3>オプション</h3><div class="body"><label class="check"><input type="checkbox"> 補助線として作成</label><label class="check"><input type="checkbox"> 連続作図</label></div></div>`
+ },
+ planar:{
+  title:'平面',hint:'閉じた輪郭の内側をクリックしてください',
+  methods:['輪郭から平面'],
+  body:`<div class="card"><h3>境界</h3><div class="body"><div class="info">閉じた輪郭内部をクリックするとOuter/Holeを自動判定します。</div></div></div>`
+ },
+ loft:{
+  title:'ロフト面',hint:'断面1を選択してください',
+  methods:['AUTO順','MANUAL順'],
+  body:`<div class="card"><h3>断面</h3><div class="body"><div class="info">3D画面で断面を順にクリックしてください。</div><div class="fieldrow"><div>断面</div><div class="field">0個</div></div></div></div>`
+ },
+ guided:{
+  title:'ガイド付きロフト',hint:'断面を選択してください',
+  methods:['断面','ガイド'],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="fieldrow"><div>断面</div><div class="field">0個</div></div><div class="fieldrow"><div>ガイド</div><div class="field">0個</div></div></div></div>`
+ }
+};
+
+function generic(name){
+ return {title:name,hint:name+'の対象を選択してください',methods:['標準'],body:`<div class="card"><h3>入力</h3><div class="body"><div class="info">${name}ツールの入力を3D画面から指定します。</div></div></div>`};
+}
+
+let activeCat='basic',activeTool='circle';
+const toolsEl=document.getElementById('tools'),panel=document.getElementById('panel'),hud=document.getElementById('hudText'),status=document.getElementById('statusText');
+
+function renderTools(){
+ toolsEl.innerHTML='';
+ toolsets[activeCat].forEach(([id,name])=>{
+  const b=document.createElement('button'); b.className='tool'+(id===activeTool?' active':''); b.textContent=name;
+  b.onclick=()=>{activeTool=id;renderTools();renderPanel();}; toolsEl.appendChild(b);
+ });
+}
+function renderPanel(){
+ const c=configs[activeTool]||generic(document.querySelector('.tool.active')?.textContent||activeTool);
+ const meth=c.methods.map((m,i)=>`<button class="method ${i===0?'active':''}">${m}</button>`).join('');
+ panel.innerHTML=`
+ <div class="card"><h3>${c.title}</h3><div class="body"><div class="info">${c.hint}</div></div></div>
+ <div class="card"><h3>作り方</h3><div class="body"><div class="method-tabs">${meth}</div><div class="section-note">作成方式を先に選択。方式ごとに必要入力だけを表示する。</div></div></div>
+ ${c.body}
+ <div class="card"><h3>共通</h3><div class="body">
+   <label class="check"><input type="checkbox" checked> スナップ有効</label>
+   <label class="check"><input type="checkbox" checked> 現在の作業平面に作成</label>
+ </div></div>
+ <div class="actions"><button>キャンセル</button><button class="ok">確定</button></div>`;
+ hud.textContent=c.title+'：'+c.hint;
+ status.textContent='作図モード ｜ '+c.title+' ｜ '+c.hint;
+ panel.querySelectorAll('.method').forEach(b=>b.onclick=()=>{panel.querySelectorAll('.method').forEach(x=>x.classList.remove('active'));b.classList.add('active')});
+}
+document.querySelectorAll('.cat').forEach(b=>b.onclick=()=>{document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));b.classList.add('active');activeCat=b.dataset.cat;activeTool=toolsets[activeCat][0][0];renderTools();renderPanel();});
+document.querySelectorAll('.tree-row').forEach(r=>{
+ r.onclick=()=>{document.querySelectorAll('.tree-row').forEach(x=>x.classList.remove('selected'));r.classList.add('selected');status.textContent='作図モード ｜ Tree選択を3Dビューへ同期'};
+ r.oncontextmenu=e=>{e.preventDefault();const c=document.getElementById('ctx');c.style.display='block';c.style.left=e.pageX+'px';c.style.top=e.pageY+'px';};
+});
+document.querySelectorAll('.eye').forEach(e=>e.onclick=ev=>{ev.stopPropagation();e.classList.toggle('off');e.textContent=e.classList.contains('off')?'○':'◉';});
+document.onclick=e=>{if(!e.target.closest('.context'))document.getElementById('ctx').style.display='none'};
+renderTools();renderPanel();
+</script>
+</body>
+</html>

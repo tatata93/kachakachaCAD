@@ -135,6 +135,9 @@ void Note(const char* what);
 //! 状態行・HUD・測定の重ね道具(HP-ST)。
 [[nodiscard]] std::vector<SelfTestCase> StatusLineCases();
 
+//! 作図の作り方カード(HP-DM)。
+[[nodiscard]] std::vector<SelfTestCase> DrawingMethodCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

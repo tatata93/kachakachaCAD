@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>kachakachaCAD V2 — Extrude / Surface UI Final Mock</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#e9ecef;--panel:#f7f7f8;--line:#c7cbd1;--text:#1f2328;--muted:#68707a;--focus:#3167d5;--ok:#18794e;--warn:#9a6700;--sel:#dce8ff;--canvas:#dfe6ec}
+*{box-sizing:border-box} body{margin:0;font:13px "Segoe UI","Yu Gothic UI",Meiryo,sans-serif;color:var(--text);background:var(--bg)}
+.app{width:1440px;height:900px;margin:0 auto;border:1px solid #9aa1a9;display:grid;grid-template-rows:36px 48px 1fr 28px;background:white}
+.titlebar,.topbar,.footer{display:flex;align-items:center}.titlebar{padding:0 12px;background:#f6f7f8;border-bottom:1px solid var(--line);gap:16px}.brand{font-weight:700}.crumb,.note{color:var(--muted)}
+.topbar{gap:6px;padding:6px 8px;background:#f1f3f5;border-bottom:1px solid var(--line)}
+.toolbtn{height:34px;min-width:80px;padding:0 12px;border:1px solid #9ea5ad;background:#fff;border-radius:4px;cursor:pointer}.toolbtn.active{background:var(--sel);border-color:var(--focus);font-weight:700}
+.sep{width:1px;height:28px;background:var(--line);margin:0 4px}.workspace{display:grid;grid-template-columns:240px 1fr 360px;min-height:0}
+.left{background:#f6f7f8;border-right:1px solid var(--line)}.panel-title{height:34px;display:flex;align-items:center;padding:0 10px;font-weight:700;border-bottom:1px solid var(--line);background:#eceff2}
+.tree{padding:8px;line-height:26px}.node{padding-left:6px;border-radius:3px}.node.sel{background:var(--sel)}.indent{padding-left:20px}
+.canvas-wrap{position:relative;overflow:hidden;background:var(--canvas)}.canvas{position:absolute;inset:0;background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.15)),repeating-linear-gradient(0deg,transparent 0 39px,rgba(90,105,120,.08) 39px 40px),repeating-linear-gradient(90deg,transparent 0 39px,rgba(90,105,120,.08) 39px 40px)}
+.scene-svg{position:absolute;inset:0;width:100%;height:100%}.hud{position:absolute;left:12px;top:12px;background:rgba(255,255,255,.93);border:1px solid var(--line);border-radius:5px;padding:8px 10px}.hud .mode{font-weight:700}.viewcube{position:absolute;right:12px;top:12px;width:76px;height:76px;border:1px solid #99a2ab;background:#fff;border-radius:6px;display:grid;place-items:center;color:#58616a;font-weight:700}.axis{position:absolute;left:18px;bottom:18px;color:#58616a}
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column}.right-tabs{height:38px;display:flex;border-bottom:1px solid var(--line);background:#eceff2}.right-tabs button{flex:1;border:0;border-right:1px solid var(--line);background:transparent}.right-tabs button.active{background:#fff;font-weight:700;border-top:3px solid var(--focus)}
+.inspector{padding:10px;overflow:auto}.header-card,.section{border:1px solid var(--line);background:#fff;border-radius:6px;margin-bottom:10px}.header-card{padding:10px}.header-row{display:flex;align-items:center;justify-content:space-between}.bigtitle{font-size:18px;font-weight:700}.state{font-size:12px;padding:3px 7px;border-radius:999px;background:#eaf7ef;color:var(--ok);font-weight:700}
+.section{overflow:hidden}.section h3{margin:0;padding:8px 10px;background:#f4f5f6;border-bottom:1px solid var(--line);font-size:13px}.section-body{padding:8px 10px}
+.slot{display:grid;grid-template-columns:80px 1fr auto;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #eceff2}.slot:last-child{border-bottom:0}.slot .label,.row .k{color:var(--muted)}
+.value{min-height:30px;border:1px solid var(--line);background:#fafbfc;border-radius:4px;display:flex;align-items:center;gap:6px;padding:4px 7px}.chip{background:#eef2f7;border:1px solid #d6dce3;border-radius:4px;padding:2px 6px}.missing{border-style:dashed;color:var(--warn);background:#fffaf0}
+.slot button,.actions button{height:28px;border:1px solid #9ea5ad;background:#fff;border-radius:4px;padding:0 8px}.row{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center;padding:5px 0}.field{height:30px;border:1px solid #9ea5ad;border-radius:4px;background:#fff;padding:0 8px;width:100%}
+.segment{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #9ea5ad;border-radius:4px;overflow:hidden}.segment button{height:30px;border:0;border-right:1px solid var(--line);background:#fff}.segment button.active{background:var(--sel);font-weight:700;color:#174ea6}
+.statusbox{border-left:4px solid var(--ok);background:#eef8f2;padding:8px 10px;margin-top:8px;border-radius:3px}.actions{position:sticky;bottom:0;padding:16px 0 4px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;background:linear-gradient(transparent,#f7f7f8 12px)}.actions button{height:34px}.actions .apply{background:var(--focus);color:#fff;border-color:var(--focus);font-weight:700}
+.methods{display:grid;grid-template-columns:1fr 1fr;gap:6px}.method{border:1px solid var(--line);border-radius:5px;background:#fff;padding:8px;cursor:pointer}.method.active{border:2px solid var(--focus);padding:7px;background:#f5f8ff}.method .name{font-weight:700}.method .sub{font-size:11px;color:var(--muted);margin-top:2px}
+.order-list{border:1px solid var(--line);border-radius:4px;overflow:hidden}.order-item{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;padding:6px 7px;border-bottom:1px solid #eceff2;background:#fff}.order-item:last-child{border-bottom:0}.num{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#e8eefc;color:#174ea6;font-weight:700;font-size:11px}
+.footer{justify-content:space-between;padding:0 10px;background:#f1f3f5;border-top:1px solid var(--line);color:#535b64}kbd{background:#fff;border:1px solid #b8bec5;border-bottom-width:2px;border-radius:3px;padding:0 4px;font-size:11px}.hidden{display:none!important}.badge{font-size:11px;padding:2px 6px;border-radius:999px;background:#e4edff;color:#174ea6}
+</style></head>
+<body>
+<div class="app">
+<div class="titlebar"><div class="brand">kachakachaCAD V2</div><div class="crumb">RailwayNoseSample.kcd2</div><div style="margin-left:auto;color:#68707a">UI完成形モック — Extrude / Surface</div></div>
+<div class="topbar">
+<button class="toolbtn">選択</button><button class="toolbtn">作図</button><div class="sep"></div>
+<button class="toolbtn active" id="btnExtrude">押し出し</button><button class="toolbtn" id="btnSurface">面を作る</button>
+<div class="sep"></div><button class="toolbtn">近似</button><button class="toolbtn">展開</button><div style="margin-left:auto"></div>
+<button class="toolbtn">元に戻す</button><button class="toolbtn">やり直す</button></div>
+<div class="workspace">
+<aside class="left"><div class="panel-title">モデル</div><div class="tree">
+<div class="node">▾ RailwayNoseSample</div><div class="indent">
+<div class="node">▾ 作図面</div><div class="indent"><div class="node">XZ_000</div><div class="node">XZ_006</div><div class="node">XZ_012</div></div>
+<div class="node">▾ ワイヤー</div><div class="indent"><div class="node sel">▱ NoseProfile_01</div><div class="node">▱ NoseProfile_02</div><div class="node">▱ NoseProfile_03</div><div class="node">⌁ Guide_L</div><div class="node">⌁ Guide_R</div></div>
+<div class="node">▾ 面</div><div class="indent"><div class="node">▰ Surface001</div></div><div class="node">▾ 部品</div><div class="indent"><div class="node">⬢ Part001</div></div></div></div></aside>
+<main class="canvas-wrap"><div class="canvas"></div>
+<svg class="scene-svg" viewBox="0 0 840 788" preserveAspectRatio="none">
+<g id="sceneExtrude">
+<path d="M220,470 L430,395 L610,455 L395,535 Z" fill="#c7d3de" stroke="#5b6670" stroke-width="2"/>
+<path d="M220,470 L220,555 L395,620 L395,535 Z" fill="#adb9c5" stroke="#5b6670" stroke-width="2"/>
+<path d="M395,535 L610,455 L610,535 L395,620 Z" fill="#c8d3dc" stroke="#5b6670" stroke-width="2"/>
+<path d="M310,450 L430,407 L520,438 L397,485 Z" fill="none" stroke="#3167d5" stroke-width="4"/>
+<path d="M310,450 L310,360 M430,407 L430,317 M520,438 L520,348 M397,485 L397,395" stroke="#3167d5" stroke-width="2" stroke-dasharray="7 6"/>
+<path d="M310,360 L430,317 L520,348 L397,395 Z" fill="rgba(49,103,213,.16)" stroke="#3167d5" stroke-width="3"/>
+<line x1="420" y1="400" x2="420" y2="270" stroke="#174ea6" stroke-width="5"/><polygon points="420,250 409,275 431,275" fill="#174ea6"/>
+<rect x="442" y="280" rx="4" width="92" height="28" fill="#fff" stroke="#9ea5ad"/><text x="454" y="299" font-size="14">18.0 mm</text>
+<text x="260" y="435" font-size="13" fill="#174ea6">PROFILE</text><text x="502" y="510" font-size="13" fill="#4d5966">TARGET</text>
+</g>
+<g id="sceneSurface" class="hidden">
+<path d="M185,545 C275,465 310,410 385,380 C470,347 570,360 665,425" fill="none" stroke="#5d83d8" stroke-width="4"/>
+<path d="M185,420 C275,355 320,320 395,300 C480,278 570,300 665,355" fill="none" stroke="#5d83d8" stroke-width="4"/>
+<path d="M185,300 C280,250 335,225 405,215 C490,202 575,225 665,285" fill="none" stroke="#5d83d8" stroke-width="4"/>
+<path d="M185,545 L185,300 M665,425 L665,285" fill="none" stroke="#c27a00" stroke-width="3" stroke-dasharray="9 6"/>
+<path d="M185,545 C275,465 310,410 385,380 C470,347 570,360 665,425 L665,285 C575,225 490,202 405,215 C335,225 280,250 185,300 Z" fill="rgba(49,103,213,.12)" stroke="#3167d5" stroke-width="2"/>
+<text x="375" y="560" font-size="13" fill="#174ea6">Section 1</text><text x="380" y="395" font-size="13" fill="#174ea6">Section 2</text><text x="385" y="228" font-size="13" fill="#174ea6">Section 3</text>
+<text x="120" y="410" font-size="13" fill="#8a5900">Guide L</text><text x="680" y="350" font-size="13" fill="#8a5900">Guide R</text>
+</g></svg>
+<div class="hud"><div class="mode" id="hudMode">押し出し — プレビュー中</div><div class="note" id="hudHint">輪郭と対象を確認 → 距離をドラッグまたは数値入力 → Enterで確定</div></div><div class="viewcube">TOP<br>FRONT</div><div class="axis">X→　Y↗　Z↑</div></main>
+<aside class="right"><div class="right-tabs"><button class="active">操作</button><button>選択</button><button>情報</button></div>
+<div class="inspector" id="extrudePanel">
+<div class="header-card"><div class="header-row"><div class="bigtitle">押し出し</div><span class="state">プレビュー可能</span></div><div class="note" style="margin-top:5px">選択内容を自動解釈しました。違う場合は各入力欄の「選び直す」を押してください。</div></div>
+<div class="section"><h3>1. 入力</h3><div class="section-body">
+<div class="slot"><div class="label">対象</div><div class="value"><span class="chip">⬢ Part001</span></div><button>選び直す</button></div>
+<div class="slot"><div class="label">輪郭</div><div class="value"><span class="chip">▱ NoseProfile_01</span></div><button>選び直す</button></div>
+</div></div>
+<div class="section"><h3>2. 結果</h3><div class="section-body">
+<div class="row"><div class="k">演算</div><div class="segment"><button>新しい部品</button><button class="active">足す</button><button>引く</button></div></div>
+<div class="row"><div class="k">範囲</div><select class="field"><option>距離</option><option>ある面まで</option><option>すべて貫通</option><option>両方向</option></select></div>
+<div class="row"><div class="k">距離</div><div style="display:grid;grid-template-columns:1fr 56px;gap:6px"><input class="field" value="18.0"><div class="value" style="justify-content:center">mm</div></div></div>
+<div class="row"><div class="k">方向</div><select class="field"><option>輪郭に垂直</option><option>X軸</option><option>Y軸</option><option>Z軸</option><option>選択した線</option><option>数値指定</option></select></div>
+<div class="row"><div class="k">出力プリセット</div>
+  <select class="field" id="outputPreset">
+    <option>ソリッドのみ</option>
+    <option>ワイヤーのみ</option>
+    <option>ワイヤー + ソリッド</option>
+    <option>押し出し先ワイヤーのみ</option>
+    <option>カスタム</option>
+  </select>
+</div>
+<div class="row"><div class="k">出力</div>
+  <div style="display:grid;gap:5px">
+    <label class="value" style="cursor:pointer"><input id="outSolid" type="checkbox" checked> ソリッド / 面</label>
+    <label class="value" style="cursor:pointer"><input id="outStart" type="checkbox"> 開始側の輪郭ワイヤー</label>
+    <label class="value" style="cursor:pointer"><input id="outEnd" type="checkbox"> 押し出し先の輪郭ワイヤー</label>
+    <label class="value" style="cursor:pointer"><input id="outSide" type="checkbox"> 側面ワイヤー</label>
+  </div>
+</div>
+<div class="note" style="margin-top:6px">「ワイヤーのみ」= 開始側 + 押し出し先 + 側面。「押し出し先ワイヤーのみ」= 終端輪郭だけ。全出力OFFは不可。</div>
+</div></div>
+<div class="section"><h3>3. 状態</h3><div class="section-body"><div class="statusbox">✓ 入力は有効です<br>✓ 18.0 mm のプレビューを表示中<br>確定すると Part001 に「足す」で適用します<br>出力: ソリッド</div></div></div>
+<div class="actions"><button>キャンセル Esc</button><button>再プレビュー</button><button class="apply">確定 Enter</button></div></div>
+<div class="inspector hidden" id="surfacePanel">
+<div class="header-card"><div class="header-row"><div class="bigtitle">面を作る</div><span class="state">プレビュー可能</span></div><div class="note" style="margin-top:5px">選択内容から「ロフト」を推奨しています。方式はいつでも変更できます。</div></div>
+<div class="section"><h3>1. 作り方</h3><div class="section-body"><div class="methods">
+<div class="method" data-method="平面"><div class="name">平面</div><div class="sub">閉じた輪郭1本</div></div>
+<div class="method" data-method="ルールド"><div class="name">ルールド</div><div class="sub">断面2本</div></div>
+<div class="method active" data-method="ロフト"><div class="name">ロフト <span class="badge">推奨</span></div><div class="sub">断面3本以上</div></div>
+<div class="method" data-method="案内付きロフト"><div class="name">案内付きロフト</div><div class="sub">断面 + ガイド</div></div>
+<div class="method" data-method="境界埋め"><div class="name">境界埋め</div><div class="sub">閉じた境界</div></div>
+<div class="method" data-method="曲線網"><div class="name">曲線網</div><div class="sub">U/Vネットワーク</div></div>
+</div></div></div>
+<div class="section"><h3>2. 入力</h3><div class="section-body">
+<div class="slot"><div class="label">断面</div><div class="value"><span class="chip">Profile_01</span><span class="chip">Profile_02</span><span class="chip">Profile_03</span></div><button>追加</button></div>
+<div class="slot"><div class="label">ガイド</div><div class="value"><span class="chip">Guide_L</span><span class="chip">Guide_R</span></div><button>追加</button></div>
+<div class="slot"><div class="label">境界</div><div class="value missing">この方式では不要</div><button disabled>追加</button></div>
+</div></div>
+<div class="section"><h3>3. 断面順</h3><div class="section-body">
+<div class="row"><div class="k">順序</div><div class="segment" style="grid-template-columns:1fr 1fr"><button class="active">自動</button><button>手動固定</button></div></div>
+<div class="order-list"><div class="order-item"><span class="num">1</span><span>Profile_01</span><button>↕</button></div><div class="order-item"><span class="num">2</span><span>Profile_02</span><button>↕</button></div><div class="order-item"><span class="num">3</span><span>Profile_03</span><button>↕</button></div></div>
+<div class="note" style="margin-top:6px">自動: 幾何位置から並べます。手動固定: この表示順をそのまま生成順として使います。</div>
+</div></div>
+<div class="section"><h3>4. 状態</h3><div class="section-body"><div class="statusbox">✓ 断面 3本<br>✓ ガイド 2本<br>✓ 生成可能<br>プレビューはまだDocumentへ保存されていません</div></div></div>
+<div class="actions"><button>キャンセル Esc</button><button>入力をやり直す</button><button class="apply">確定 Enter</button></div></div>
+</aside></div>
+<div class="footer"><div id="footerText">押し出し: TARGET=Part001 / PROFILE=NoseProfile_01 / 18.0mm / Add / OUTPUT=Solid</div><div>Tab 候補切替　Ctrl 任意の複数選択　Esc 中止　Enter 確定</div></div>
+</div>
+<script>
+const bx=document.getElementById('btnExtrude'),bs=document.getElementById('btnSurface'),ep=document.getElementById('extrudePanel'),sp=document.getElementById('surfacePanel'),se=document.getElementById('sceneExtrude'),ss=document.getElementById('sceneSurface'),hm=document.getElementById('hudMode'),hh=document.getElementById('hudHint'),ft=document.getElementById('footerText');
+function mode(m){let ex=m==='e';bx.classList.toggle('active',ex);bs.classList.toggle('active',!ex);ep.classList.toggle('hidden',!ex);sp.classList.toggle('hidden',ex);se.classList.toggle('hidden',!ex);ss.classList.toggle('hidden',ex);hm.textContent=ex?'押し出し — プレビュー中':'面を作る — プレビュー中';hh.textContent=ex?'輪郭と対象を確認 → 距離をドラッグまたは数値入力 → Enterで確定':'方式と入力スロットを確認 → プレビュー確認 → Enterで確定';ft.textContent=ex?'押し出し: TARGET=Part001 / PROFILE=NoseProfile_01 / 18.0mm / Add / OUTPUT=Solid':'面を作る: METHOD=Loft / SECTIONS=3 / GUIDES=2 / Preview only'}
+bx.onclick=()=>mode('e');bs.onclick=()=>mode('s');
+document.querySelectorAll('.method').forEach(x=>x.onclick=()=>{document.querySelectorAll('.method').forEach(y=>y.classList.remove('active'));x.classList.add('active');ft.textContent='面を作る: METHOD='+x.dataset.method+' / 入力スロットを方式に応じて表示';});
+const preset=document.getElementById('outputPreset'), os=document.getElementById('outSolid'), ost=document.getElementById('outStart'), oe=document.getElementById('outEnd'), osi=document.getElementById('outSide');
+function setOutputs(name){
+  if(name==='ソリッドのみ'){os.checked=true;ost.checked=false;oe.checked=false;osi.checked=false}
+  if(name==='ワイヤーのみ'){os.checked=false;ost.checked=true;oe.checked=true;osi.checked=true}
+  if(name==='ワイヤー + ソリッド'){os.checked=true;ost.checked=true;oe.checked=true;osi.checked=true}
+  if(name==='押し出し先ワイヤーのみ'){os.checked=false;ost.checked=false;oe.checked=true;osi.checked=false}
+  if(name!=='カスタム') ft.textContent='押し出し: OUTPUT='+name;
+}
+preset.onchange=()=>setOutputs(preset.value);
+[os,ost,oe,osi].forEach(c=>c.onchange=()=>{preset.value='カスタム';ft.textContent='押し出し: OUTPUT=カスタム';});
+</script></body></html>

@@ -75,6 +75,8 @@ void V2MainWindow::BuildRightShelves()
             ApplyToolSettings(settings);
         });
     drawingDock_->SetCreateWireHandler([this] { CreateWireFromDock(); });
+    // 核に無い作り方のカードを押したら、理由を状態行へ(「押せるが何も起きない」を作らない)。
+    drawingDock_->SetBlockedMethodHandler([this](const QString& reasonJa) { SetStatus(reasonJa); });
 
     // グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。見え方だけで、文書は変えない。
     gridDock_ = new V2GridDock(this);

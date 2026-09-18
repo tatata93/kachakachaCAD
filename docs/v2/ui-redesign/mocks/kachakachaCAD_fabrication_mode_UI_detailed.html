@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>kachakachaCAD v2 製作モード 詳細UI仕様</title>
+<style>
+:root{
+  --bg:#1e252d;--panel:#f4f5f7;--line:#c9ced4;--text:#20252b;--muted:#68727c;
+  --accent:#2f80ed;--teal:#0aa0a0;--sel:#dbeaff;--tree:#f7f8fa;--hover:#eaf3ff;
+  --ok:#177245;--warn:#a66a00;--danger:#b42318;--violet:#7456d8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;color:var(--text);background:#dfe3e8}
+body{min-width:1280px}
+.app{height:100vh;display:grid;grid-template-rows:30px 38px 78px 1fr 28px;background:white}
+.menu,.modes,.status{display:flex;align-items:center}
+.menu{gap:18px;padding:0 12px;border-bottom:1px solid var(--line);background:#fafafa;font-size:12px}
+.brand{font-weight:700;margin-right:12px}
+.modes{gap:4px;padding:4px 8px;background:#eef1f4;border-bottom:1px solid var(--line)}
+.mode{height:29px;padding:0 14px;border:1px solid #aeb5bc;background:white;border-radius:3px}
+.mode.active{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}
+.measure-global{margin-left:auto}
+.ribbon{display:grid;grid-template-rows:30px 48px;background:#f8f9fa;border-bottom:1px solid var(--line)}
+.cats{display:flex;border-bottom:1px solid #d7dce1}
+.cat{min-width:118px;border:0;border-right:1px solid #d7dce1;background:#f8f9fa;font-weight:600;cursor:pointer}
+.cat.active{background:white;border-top:3px solid var(--accent);color:#174a8b}
+.tools{display:flex;align-items:center;gap:4px;padding:5px 8px;overflow-x:auto}
+.tool{height:36px;min-width:78px;padding:0 9px;border:1px solid transparent;background:transparent;border-radius:3px;cursor:pointer}
+.tool:hover{background:#eef5ff;border-color:#bdd7fb}
+.tool.active{background:#e7f1ff;border-color:#8cbcff;color:#174a8b;font-weight:700}
+.workspace{min-height:0;display:grid;grid-template-columns:300px minmax(650px,1fr) 395px}
+.left{background:var(--tree);border-right:1px solid var(--line);display:grid;grid-template-rows:34px 34px 1fr}
+.right{background:var(--panel);border-left:1px solid var(--line);display:grid;grid-template-rows:34px 1fr}
+.title{display:flex;align-items:center;padding:0 10px;font-weight:700;background:#edf0f3;border-bottom:1px solid var(--line)}
+.search{padding:4px 7px;border-bottom:1px solid var(--line)}
+.search input{width:100%;height:26px;border:1px solid #b8bec6;border-radius:3px;padding:0 8px}
+.explorer{overflow:auto;padding:4px 0;font-size:12px}
+.tree-row{height:24px;display:flex;align-items:center;gap:4px;padding-right:6px;cursor:pointer;white-space:nowrap}
+.tree-row:hover{background:var(--hover)} .tree-row.selected{background:var(--sel)}
+.tree-row .chev{width:16px;text-align:center;color:#59636d}
+.tree-row .ico{width:18px;text-align:center}
+.tree-row .name{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tree-row .eye{opacity:.15}
+.tree-row:hover .eye,.tree-row.selected .eye{opacity:1}
+.eye.off{opacity:.22!important}
+.d0{padding-left:4px}.d1{padding-left:18px}.d2{padding-left:36px}.d3{padding-left:54px}.d4{padding-left:72px}
+.context{position:absolute;display:none;z-index:20;background:white;border:1px solid #aeb5bc;border-radius:3px;box-shadow:0 5px 18px rgba(0,0,0,.2);min-width:190px;padding:4px}
+.context div{padding:6px 9px;border-radius:2px}.context div:hover{background:#eaf3ff}
+.view{position:relative;overflow:hidden;background:
+  repeating-linear-gradient(0deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),
+  repeating-linear-gradient(90deg,transparent 0 39px,rgba(150,175,200,.08) 39px 40px),var(--bg)}
+.view svg{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;left:12px;top:12px;padding:7px 9px;background:rgba(10,16,22,.78);border:1px solid rgba(255,255,255,.16);border-radius:4px;color:#eef5fc;font-size:12px}
+.cube{position:absolute;right:14px;top:14px;width:86px;height:86px;border:1px solid rgba(255,255,255,.16);background:rgba(20,28,36,.74);color:#cfe4ff;border-radius:5px;display:grid;place-items:center;text-align:center}
+.scale{position:absolute;left:18px;bottom:18px;color:#d4dde7}
+.overlaylabel{font-size:12px;font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;fill:#f5f8fc;paint-order:stroke;stroke:#1b2430;stroke-width:3px}
+.panel{overflow:auto;padding:10px}
+.card{background:white;border:1px solid var(--line);border-radius:5px;margin-bottom:10px;overflow:hidden}
+.card h3{margin:0;padding:8px 10px;font-size:13px;background:#f3f5f7;border-bottom:1px solid var(--line)}
+.body{padding:9px 10px}
+.info{padding:8px 9px;background:#eef5ff;border-left:4px solid var(--accent);line-height:1.45;border-radius:2px}
+.warn{padding:8px 9px;background:#fff7e5;border-left:4px solid var(--warn);line-height:1.45;border-radius:2px}
+.okbox{padding:8px 9px;background:#eef8f2;border-left:4px solid var(--ok);line-height:1.45;border-radius:2px}
+.fieldrow{display:grid;grid-template-columns:118px 1fr;gap:8px;align-items:center;padding:5px 0}
+.field{height:28px;width:100%;border:1px solid #b8c0c8;border-radius:3px;padding:0 7px;background:white}
+.check{display:flex;align-items:center;gap:7px;padding:4px 0}
+.method-tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.method{min-height:42px;border:1px solid #b9c0c8;background:#fff;border-radius:4px;padding:5px 6px;cursor:pointer;font-size:12px;text-align:left}
+.method.active{border:2px solid var(--accent);padding:4px 5px;background:#f2f7ff;color:#174a8b;font-weight:700}
+.method small{display:block;font-weight:400;color:var(--muted);margin-top:2px}
+.section-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:6px}
+.slot{display:grid;grid-template-columns:100px 1fr auto;gap:7px;align-items:center;padding:6px 0;border-bottom:1px solid #edf0f3}
+.slot:last-child{border-bottom:0}
+.slot.active .value{border-color:var(--accent);background:#f4f8ff;box-shadow:0 0 0 1px rgba(47,128,237,.2)}
+.value{min-height:29px;border:1px solid #bcc3cb;border-radius:3px;background:#fbfcfd;padding:5px 7px}
+.chip{display:inline-block;background:#eef2f6;border:1px solid #d2d8df;border-radius:3px;padding:2px 5px;margin:1px 2px 1px 0}
+.mini{height:26px;border:1px solid #aeb6bf;background:white;border-radius:3px}
+.segment{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #b8c0c8;border-radius:3px;overflow:hidden}
+.segment button{height:28px;border:0;border-right:1px solid #d7dce1;background:white}
+.segment button:last-child{border-right:0}
+.segment button.active{background:#e7f1ff;color:#174a8b;font-weight:700}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--panel) 12px);padding-top:14px}
+.actions button{height:33px;border:1px solid #aeb6bf;background:white;border-radius:3px}
+.actions .ok{background:var(--accent);border-color:var(--accent);color:white;font-weight:700}
+.candidates{display:grid;gap:6px}
+.candidate{border:1px solid #b9c0c8;background:white;border-radius:5px;padding:8px;cursor:pointer}
+.candidate.active{border:2px solid var(--accent);padding:7px;background:#f2f7ff}
+.candidate .head{display:flex;justify-content:space-between;font-weight:700}
+.candidate .meta{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:5px;font-size:11px;color:#59636d}
+.autolock{display:flex;gap:6px;align-items:center}
+.autolock button{height:28px;border:1px solid #aeb6bf;background:white;border-radius:3px;padding:0 10px}
+.autolock button.active{background:#e7f1ff;border-color:#8cbcff;color:#174a8b;font-weight:700}
+.sliderrow{display:grid;grid-template-columns:34px 1fr 42px;gap:8px;align-items:center}
+.sliderrow input[type=range]{width:100%}
+.presetrow{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:7px}
+.presetrow button{height:28px;border:1px solid #b8c0c8;background:white;border-radius:3px}
+.presetrow button.active{background:#e7f1ff;border-color:#8cbcff;color:#174a8b;font-weight:700}
+.status{justify-content:space-between;gap:15px;padding:0 10px;background:#f4f6f8;border-top:1px solid var(--line);font-size:12px;color:#4f5963}
+.hint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kbd{border:1px solid #aeb5bc;border-bottom-width:2px;border-radius:3px;background:white;padding:0 4px;font-size:10px}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="menu"><div class="brand">kachakachaCAD v2.0</div><div>ファイル</div><div>編集</div><div>表示</div><div>作図</div><div>部品</div><div>製作</div><div>出力</div><div>設定</div><div>ヘルプ</div></div>
+
+<div class="modes">
+<button class="mode">作図モード</button>
+<button class="mode">部品モード</button>
+<button class="mode active">製作モード</button>
+<button class="mode">出力モード</button>
+<button class="mode measure-global">測定（全モード共通）</button>
+</div>
+
+<div class="ribbon">
+<div class="cats">
+<button class="cat active" data-cat="approx">近似</button>
+<button class="cat" data-cat="edit">部材編集</button>
+<button class="cat" data-cat="bend">曲げ・展開</button>
+<button class="cat" data-cat="generate">生成</button>
+</div>
+<div class="tools" id="tools"></div>
+</div>
+
+<div class="workspace">
+<aside class="left">
+<div class="title">EXPLORER — モデル</div>
+<div class="search"><input placeholder="名前・種類で絞り込み"></div>
+<div class="explorer" id="tree">
+  <div class="tree-row d0"><span class="chev">▼</span><span class="ico">▣</span><strong class="name">RailwayNoseSample</strong><span class="eye">◉</span></div>
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">◎</span><strong class="name">Origin</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">＋</span><span class="name">Origin Point</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">X Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">Y Axis</span><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">→</span><span class="name">Z Axis</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">▰</span><strong class="name">Surfaces</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">▰</span><span class="name">NoseSurface_001</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">⬢</span><strong class="name">Solids</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span></span><span class="ico">⬢</span><span class="name">NoseBody_001</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d1"><span class="chev">▼</span><span class="ico">◈</span><strong class="name">Approximation</strong><span class="eye">◉</span></div>
+  <div class="tree-row d2"><span class="chev">▼</span><span class="ico">◈</span><span class="name">NoseFrontApprox_001</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span></span><span class="ico">◆</span><span class="name">Candidate B</span><span class="eye">◉</span></div>
+  <div class="tree-row d3"><span class="chev">▼</span><span class="ico">📁</span><span class="name">Parts</span><span class="eye">◉</span></div>
+  <div class="tree-row d4 selected"><span></span><span class="ico">◫</span><span class="name">ApproxPart_01</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">◫</span><span class="name">ApproxPart_02</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">◫</span><span class="name">ApproxPart_03</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">◫</span><span class="name">ApproxPart_04</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d3"><span class="chev">▼</span><span class="ico">✂</span><span class="name">Relief Cuts</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">✂</span><span class="name">ReliefCut_01</span><span class="eye">◉</span></div>
+
+  <div class="tree-row d3"><span class="chev">▼</span><span class="ico">⇩</span><span class="name">Generated</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">⌁</span><span class="name">FlatWire_01</span><span class="eye">◉</span></div>
+  <div class="tree-row d4"><span></span><span class="ico">▰</span><span class="name">BentSurface_01</span><span class="eye">◉</span></div>
+</div>
+</aside>
+
+<main class="view">
+<svg viewBox="0 0 1000 760" preserveAspectRatio="none">
+<polygon points="350,205 515,150 680,205 760,370 650,565 455,595 305,455"
+         fill="rgba(135,153,170,.18)" stroke="#dce6ef" stroke-width="2"/>
+<path d="M350 205 C450 145 595 150 680 205 C730 260 760 315 760 370 C730 450 690 520 650 565"
+      fill="none" stroke="#eaf1f6" stroke-width="2.5"/>
+<path d="M350 205 C390 300 375 390 305 455" fill="none" stroke="#eaf1f6" stroke-width="2.5"/>
+<path d="M515 150 C530 260 520 380 455 595" fill="none" stroke="#eaf1f6" stroke-width="2"/>
+
+<polygon points="350,205 515,150 500,350 375,365" fill="rgba(47,128,237,.24)" stroke="#5ba0ff" stroke-width="3"/>
+<polygon points="515,150 680,205 650,360 500,350" fill="rgba(12,160,160,.24)" stroke="#34c0c0" stroke-width="3"/>
+<polygon points="375,365 500,350 455,595 305,455" fill="rgba(116,86,216,.20)" stroke="#9d85ef" stroke-width="3"/>
+<polygon points="500,350 650,360 650,565 455,595" fill="rgba(225,158,40,.18)" stroke="#e6a83a" stroke-width="3"/>
+
+<text x="405" y="255" class="overlaylabel">Part 1</text>
+<text x="575" y="255" class="overlaylabel">Part 2</text>
+<text x="365" y="470" class="overlaylabel">Part 3</text>
+<text x="555" y="470" class="overlaylabel">Part 4</text>
+
+<path d="M350 205 C450 145 595 150 680 205 C730 260 760 315 760 370 C730 450 690 520 650 565 C560 610 410 620 305 455 C375 390 390 300 350 205"
+      fill="none" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="7 5"/>
+
+<polygon points="240,520 520,655 855,510 590,385" fill="none" stroke="rgba(160,185,210,.28)" stroke-dasharray="7 5"/>
+</svg>
+
+<div class="hud"><strong>製作モード</strong><br><span id="hudText">近似：元にするSurfaceまたはSolid Faceをクリックしてください</span></div>
+<div class="cube">Z<br>前　右<br>X　Y</div>
+<div class="scale">──── 10 mm</div>
+</main>
+
+<aside class="right">
+<div class="title">現在の操作</div>
+<div class="panel" id="panel"></div>
+</aside>
+</div>
+
+<div class="status">
+<div class="hint" id="statusText">製作モード ｜ 近似 ｜ 元にするSurfaceまたはSolid Faceをクリックしてください</div>
+<div>クリック:選択 ｜ <span class="kbd">Enter</span> 確定 ｜ <span class="kbd">Esc</span> 取消 ｜ Grid 5mm ｜ Snap ON</div>
+</div>
+</div>
+
+<div class="context" id="ctx">
+<div>選択に正対</div><div>名前変更</div><div>表示 / 非表示</div><div>グループへ移動</div><div>複製</div><div style="color:#b42318">削除</div><div>プロパティ...</div>
+</div>
+
+<script>
+const toolsets={
+  approx:[['approximate','近似']],
+  edit:[['partedit','近似部品編集'],['split','分割'],['merge','結合'],['relief','切れ目'],['radius','半径編集']],
+  bend:[['bendstate','曲げ状態'],['unfold','展開'],['refedge','展開基準辺'],['flip','表裏反転']],
+  generate:[['generate','現在形状を生成'],['flatwire','Flat Wire'],['outline','輪郭Wire']]
+};
+
+const configs={
+ approximate:{
+  title:'近似',hint:'元にするSurfaceまたはSolid Faceをクリックしてください',
+  methods:[
+    ['標準','部品数と誤差をバランス'],
+    ['少部品優先','部品数を最小化'],
+    ['精度優先','誤差を最小化'],
+    ['手動条件','許容誤差・方式・寸法を指定']
+  ],
+  body:`
+  <div class="card"><h3>1. 対象</h3><div class="body">
+    <div class="slot active"><div>元形状</div><div class="value"><span class="chip">NoseSurface_001</span></div><button class="mini">選び直す</button></div>
+    <div class="section-note">Surface全体、またはSolidのFaceを選択可能。複数Faceは「追加」で同一近似対象へ追加する。</div>
+  </div></div>
+
+  <div class="card"><h3>2. 近似条件</h3><div class="body">
+    <div class="fieldrow"><div>許容最大誤差</div><input class="field" value="0.200 mm"></div>
+    <div class="fieldrow"><div>最小部品幅</div><input class="field" value="2.000 mm"></div>
+    <div class="fieldrow"><div>最小部品長</div><input class="field" value="5.000 mm"></div>
+    <div class="fieldrow"><div>優先</div><select class="field"><option>バランス</option><option>部品数を減らす</option><option>精度</option><option>大きな連続部材</option></select></div>
+    <div class="fieldrow"><div>使用方式</div><select class="field"><option>自動（Plane / Cylinder / Cone / Ruled）</option><option>Planeのみ</option><option>Cylinder優先</option><option>Cone優先</option><option>Ruled優先</option></select></div>
+  </div></div>
+
+  <div class="card"><h3>3. 候補</h3><div class="body">
+    <div class="candidates">
+      <div class="candidate"><div class="head"><span>A</span><span>2部品</span></div><div class="meta"><span>最大誤差 0.48 mm</span><span>平均 0.15 mm</span><span>Plane 1</span><span>Cylinder 1</span></div></div>
+      <div class="candidate active"><div class="head"><span>B</span><span>4部品</span></div><div class="meta"><span>最大誤差 0.17 mm</span><span>平均 0.06 mm</span><span>Cylinder 2</span><span>Ruled 2</span></div></div>
+      <div class="candidate"><div class="head"><span>C</span><span>7部品</span></div><div class="meta"><span>最大誤差 0.06 mm</span><span>平均 0.02 mm</span><span>Cylinder 4</span><span>Ruled 3</span></div></div>
+    </div>
+  </div></div>
+
+  <div class="card"><h3>4. 表示</h3><div class="body">
+    <label class="check"><input type="checkbox" checked> 元Surface</label>
+    <label class="check"><input type="checkbox" checked> 近似Surface</label>
+    <label class="check"><input type="checkbox" checked> 部材境界</label>
+    <label class="check"><input type="checkbox"> 誤差ヒートマップ</label>
+    <div class="fieldrow"><div>最大誤差</div><div>0.17 mm</div></div>
+    <div class="fieldrow"><div>平均誤差</div><div>0.06 mm</div></div>
+  </div></div>`
+ },
+
+ partedit:{
+  title:'近似部品編集',hint:'編集するApproxPartをクリックしてください',
+  methods:[
+    ['パラメータ編集','半径・方向・境界を編集'],
+    ['形状確認','展開 / 目標形状を比較']
+  ],
+  body:`
+  <div class="card"><h3>対象部材</h3><div class="body">
+    <div class="slot active"><div>ApproxPart</div><div class="value"><span class="chip">ApproxPart_01</span></div><button class="mini">選び直す</button></div>
+    <div class="fieldrow"><div>方式</div><div>Cylinder</div></div>
+    <div class="fieldrow"><div>最大誤差</div><div>0.17 mm</div></div>
+  </div></div>
+
+  <div class="card"><h3>曲げ半径</h3><div class="body">
+    <div class="autolock"><button class="active">AUTO</button><input class="field" value="42.630 mm"><button>自動へ戻す</button></div>
+    <div class="section-note">値を手入力した時点で、そのパラメータはLOCKへ移行する。</div>
+  </div></div>
+
+  <div class="card"><h3>パラメータ状態</h3><div class="body">
+    <div class="fieldrow"><div>半径 R</div><div>AUTO 42.630 mm</div></div>
+    <div class="fieldrow"><div>曲げ方向</div><div>AUTO</div></div>
+    <div class="fieldrow"><div>境界</div><div>AUTO</div></div>
+  </div></div>`
+ },
+
+ split:{
+  title:'分割',hint:'分割するApproxPartを選択してください',
+  methods:[
+    ['線で分割','選択した線 / Wireで切る'],
+    ['位置指定','部材上の位置を指定'],
+    ['候補境界','CADが提示する境界候補から選択']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>対象部材</div><div class="value"><span class="chip">ApproxPart_02</span></div><button class="mini">選び直す</button></div>
+    <div class="slot"><div>分割位置</div><div class="value">▶ 3Dビューで指定</div><button class="mini">選択</button></div>
+  </div></div>
+  <div class="card"><h3>結果Preview</h3><div class="body">
+    <div class="fieldrow"><div>現在</div><div>1部材</div></div>
+    <div class="fieldrow"><div>分割後</div><div>2部材</div></div>
+    <div class="fieldrow"><div>最大誤差</div><div>0.17 → 0.11 mm</div></div>
+  </div></div>`
+ },
+
+ merge:{
+  title:'結合',hint:'結合する隣接ApproxPartを2つ選択してください',
+  methods:[
+    ['自動再近似','結合後に最適方式を再計算'],
+    ['方式維持','現在方式を優先して結合'],
+    ['手動方式','Plane / Cylinder / Cone / Ruledを指定']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>部材A</div><div class="value"><span class="chip">ApproxPart_02</span></div><button class="mini">選び直す</button></div>
+    <div class="slot"><div>部材B</div><div class="value"><span class="chip">ApproxPart_03</span></div><button class="mini">選び直す</button></div>
+  </div></div>
+  <div class="card"><h3>統合結果</h3><div class="body">
+    <div class="fieldrow"><div>方式</div><div>Cylinder</div></div>
+    <div class="fieldrow"><div>現在誤差</div><div>A:0.12 / B:0.14 mm</div></div>
+    <div class="fieldrow"><div>結合後</div><div>最大 0.31 mm</div></div>
+    <div class="warn">⚠ 部品数は減りますが、最大誤差が0.17 mm増加します。</div>
+  </div></div>`
+ },
+
+ relief:{
+  title:'切れ目',hint:'Relief Cutを入れるApproxPartを選択してください',
+  methods:[
+    ['Relief Cut','部材を分離せず切れ目だけ入れる'],
+    ['完全切断','部材境界として完全に分離']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>対象部材</div><div class="value"><span class="chip">ApproxPart_04</span></div><button class="mini">選び直す</button></div>
+    <div class="slot"><div>開始</div><div class="value">▶ 点 / Edge上位置</div><button class="mini">選択</button></div>
+    <div class="slot"><div>終了</div><div class="value">▶ 点 / Edge上位置</div><button class="mini">選択</button></div>
+  </div></div>
+  <div class="card"><h3>設定</h3><div class="body">
+    <div class="fieldrow"><div>長さ</div><input class="field" value="12.000 mm"></div>
+    <div class="fieldrow"><div>幅</div><input class="field" value="0.200 mm"></div>
+  </div></div>`
+ },
+
+ radius:{
+  title:'半径編集',hint:'半径を変更するApproxPartを選択してください',
+  methods:[
+    ['AUTO','近似結果から自動半径'],
+    ['LOCK','ユーザー指定半径を固定'],
+    ['隣接同期','隣接部材と半径を揃える']
+  ],
+  body:`
+  <div class="card"><h3>対象</h3><div class="body">
+    <div class="slot active"><div>ApproxPart</div><div class="value"><span class="chip">ApproxPart_01</span></div><button class="mini">選び直す</button></div>
+  </div></div>
+  <div class="card"><h3>曲げ半径</h3><div class="body">
+    <div class="autolock"><button class="active">AUTO</button><button>LOCK</button></div>
+    <div class="fieldrow"><div>R</div><input class="field" value="42.630 mm"></div>
+    <div class="section-note">値を変更するとLOCKへ移行。再近似してもLOCK値は上書きしない。</div>
+  </div></div>`
+ },
+
+ bendstate:{
+  title:'曲げ状態',hint:'曲げ状態を確認するApproxPartを選択してください',
+  methods:[
+    ['連続スライダ','0〜100%を連続変更'],
+    ['基準値','0/25/50/75/100%から選択'],
+    ['比較表示','Flat / Current / Targetを同時表示']
+  ],
+  body:`
+  <div class="card"><h3>対象</h3><div class="body">
+    <div class="slot active"><div>ApproxPart</div><div class="value"><span class="chip">ApproxPart_02</span></div><button class="mini">選び直す</button></div>
+  </div></div>
+
+  <div class="card"><h3>曲げ状態</h3><div class="body">
+    <div class="sliderrow"><span>0%</span><input id="bendSlider" type="range" min="0" max="100" value="42"><strong id="bendValue">42%</strong></div>
+    <div class="presetrow">
+      <button data-v="0">0</button><button data-v="25">25</button><button data-v="50">50</button><button data-v="75">75</button><button data-v="100">100</button>
+    </div>
+    <div class="section-note">0%=実際の展開状態、100%=目標形状。単純な頂点線形補間ではなく、部材モデルに沿った曲げ状態を表示。</div>
+  </div></div>
+
+  <div class="card"><h3>表示</h3><div class="body">
+    <label class="check"><input type="checkbox" checked> 現在状態</label>
+    <label class="check"><input type="checkbox"> 0% Flatを重ねる</label>
+    <label class="check"><input type="checkbox"> 100% Targetを重ねる</label>
+  </div></div>`
+ },
+
+ unfold:{
+  title:'展開',hint:'展開するApproxPartを選択してください',
+  methods:[
+    ['自動展開','CADが基準辺と向きを推定'],
+    ['基準辺指定','ユーザーが基準Edgeを選択'],
+    ['複数部材配置','複数部材を同じ平面へ配置']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>対象</div><div class="value"><span class="chip">ApproxPart_02</span></div><button class="mini">選び直す</button></div>
+    <div class="slot"><div>基準辺</div><div class="value">Edge_05</div><button class="mini">選択</button></div>
+  </div></div>
+  <div class="card"><h3>配置</h3><div class="body">
+    <div class="fieldrow"><div>展開先</div><select class="field"><option>XY平面</option><option>元位置付近</option><option>現在のWorkPlane</option><option>新しいWorkPlane</option></select></div>
+    <div class="fieldrow"><div>表裏</div><select class="field"><option>表</option><option>裏</option></select></div>
+    <div class="okbox">✓ この部材は展開可能です</div>
+  </div></div>`
+ },
+
+ refedge:{
+  title:'展開基準辺',hint:'ApproxPartを選択し、基準にするEdgeをクリックしてください',
+  methods:[
+    ['Edge指定','既存Edgeを基準'],
+    ['最長辺','CADが最長Edgeを自動選択'],
+    ['境界優先','部材境界を優先して選択']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>ApproxPart</div><div class="value">▶ 部材を選択</div><button class="mini">選択</button></div><div class="slot"><div>基準Edge</div><div class="value">▶ Edgeを選択</div><button class="mini">選択</button></div></div></div>`
+ },
+
+ flip:{
+  title:'表裏反転',hint:'反転するApproxPartまたは展開結果を選択してください',
+  methods:[
+    ['表裏反転','法線方向を反転'],
+    ['展開向き反転','Flat配置だけを反転']
+  ],
+  body:`<div class="card"><h3>対象</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ ApproxPart / Flat result</div><button class="mini">選択</button></div></div></div>`
+ },
+
+ generate:{
+  title:'現在形状を生成',hint:'任意の曲げ状態から通常Document Geometryを生成します',
+  methods:[
+    ['現在状態','現在の0〜100%状態から生成'],
+    ['Flat 0%','展開状態から生成'],
+    ['Target 100%','目標形状から生成']
+  ],
+  body:`
+  <div class="card"><h3>入力</h3><div class="body">
+    <div class="slot active"><div>対象</div><div class="value"><span class="chip">ApproxPart_02</span></div><button class="mini">選び直す</button></div>
+    <div class="fieldrow"><div>曲げ状態</div><div>42%</div></div>
+  </div></div>
+
+  <div class="card"><h3>出力</h3><div class="body">
+    <label class="check"><input type="checkbox" checked> Surface</label>
+    <label class="check"><input type="checkbox"> Face</label>
+    <label class="check"><input type="checkbox" checked> Outline Wire</label>
+    <div class="fieldrow"><div>生成先</div><select class="field"><option>新規Document Object</option><option>現在のGroup</option><option>新しいGroup</option></select></div>
+    <div class="section-note">ApproxPart自体は破壊せず、通常のDocument Geometryとして新規生成する。</div>
+  </div></div>`
+ },
+
+ flatwire:{
+  title:'Flat Wire',hint:'ApproxPartの0%展開状態から切り出し輪郭Wireを生成します',
+  methods:[
+    ['外形のみ','外周輪郭だけ生成'],
+    ['外形 + Cut','Relief Cutを含めて生成'],
+    ['全Wire','補助Wireも含めて生成']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ ApproxPartを選択</div><button class="mini">選択</button></div></div></div><div class="card"><h3>出力</h3><div class="body"><label class="check"><input type="checkbox" checked> 外周</label><label class="check"><input type="checkbox" checked> Relief Cut</label><label class="check"><input type="checkbox"> 補助Wire</label></div></div>`
+ },
+
+ outline:{
+  title:'輪郭Wire',hint:'現在の曲げ状態の輪郭Wireを生成します',
+  methods:[
+    ['現在状態','現在の曲げ状態から生成'],
+    ['Target','100%形状から生成'],
+    ['Flat','0%展開形状から生成']
+  ],
+  body:`<div class="card"><h3>入力</h3><div class="body"><div class="slot active"><div>対象</div><div class="value">▶ ApproxPartを選択</div><button class="mini">選択</button></div></div></div>`
+ }
+};
+
+function generic(id,name){
+ return {title:name,hint:name+'の対象を3Dビューで選択してください',methods:[['標準','既定方式']],body:`<div class="card"><h3>入力</h3><div class="body"><div class="info">${name}ツールの対象を3Dビューから指定します。</div></div></div>`};
+}
+
+let activeCat='approx',activeTool='approximate';
+const toolsEl=document.getElementById('tools'),panel=document.getElementById('panel'),hud=document.getElementById('hudText'),status=document.getElementById('statusText');
+
+function renderTools(){
+  toolsEl.innerHTML='';
+  toolsets[activeCat].forEach(([id,name])=>{
+    const b=document.createElement('button');
+    b.className='tool'+(id===activeTool?' active':'');
+    b.textContent=name;
+    b.onclick=()=>{activeTool=id;renderTools();renderPanel();};
+    toolsEl.appendChild(b);
+  });
+}
+function renderPanel(){
+  const name=(toolsets[activeCat].find(x=>x[0]===activeTool)||['',activeTool])[1];
+  const c=configs[activeTool]||generic(activeTool,name);
+  const methods=c.methods.map((m,i)=>`<button class="method ${i===0?'active':''}">${m[0]}<small>${m[1]}</small></button>`).join('');
+  panel.innerHTML=`
+    <div class="card"><h3>${c.title}</h3><div class="body"><div class="info">${c.hint}</div></div></div>
+    <div class="card"><h3>作り方</h3><div class="body"><div class="method-tabs">${methods}</div><div class="section-note">方式を選ぶと必要な入力・設定だけを表示する。</div></div></div>
+    ${c.body}
+    <div class="card"><h3>Preview / 状態</h3><div class="body"><div class="okbox">✓ 入力変更を即Previewへ反映<br>✓ Previewと確定は同じ入力状態を使用</div></div></div>
+    <div class="actions"><button>キャンセル</button><button class="ok">確定</button></div>`;
+  panel.querySelectorAll('.method').forEach(b=>b.onclick=()=>{panel.querySelectorAll('.method').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+  panel.querySelectorAll('.candidate').forEach(b=>b.onclick=()=>{panel.querySelectorAll('.candidate').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+  const slider=panel.querySelector('#bendSlider'), val=panel.querySelector('#bendValue');
+  if(slider && val){
+    slider.oninput=()=>val.textContent=slider.value+'%';
+    panel.querySelectorAll('.presetrow button').forEach(b=>b.onclick=()=>{slider.value=b.dataset.v;val.textContent=b.dataset.v+'%';panel.querySelectorAll('.presetrow button').forEach(x=>x.classList.remove('active'));b.classList.add('active');});
+  }
+  hud.textContent=c.title+'：'+c.hint;
+  status.textContent='製作モード ｜ '+c.title+' ｜ '+c.hint;
+}
+
+document.querySelectorAll('.cat').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');activeCat=b.dataset.cat;activeTool=toolsets[activeCat][0][0];
+  renderTools();renderPanel();
+});
+document.querySelectorAll('.tree-row').forEach(r=>{
+  r.onclick=()=>{document.querySelectorAll('.tree-row').forEach(x=>x.classList.remove('selected'));r.classList.add('selected');status.textContent='製作モード ｜ Model Browser選択を3Dビューへ同期';};
+  r.oncontextmenu=e=>{e.preventDefault();const c=document.getElementById('ctx');c.style.display='block';c.style.left=e.pageX+'px';c.style.top=e.pageY+'px';};
+});
+document.querySelectorAll('.eye').forEach(e=>e.onclick=ev=>{ev.stopPropagation();e.classList.toggle('off');e.textContent=e.classList.contains('off')?'○':'◉';});
+document.onclick=e=>{if(!e.target.closest('.context'))document.getElementById('ctx').style.display='none';};
+
+renderTools();renderPanel();
+</script>
+</body>
+</html>

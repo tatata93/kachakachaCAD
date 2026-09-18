@@ -955,6 +955,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestExplorer.cpp
         src/apps/cad_next/V2SelfTestStatusLine.cpp
         src/apps/cad_next/V2SelfTestDrawingMethods.cpp
+        src/apps/cad_next/V2SelfTestPartPanel.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp

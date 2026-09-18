@@ -12,7 +12,7 @@
 | S2 Drawing-A | 基本作図/曲線の作り方カード(円/円弧/ベジェ/スプライン)、Tool 切替で panel 同期 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: drawing_method_cards_tests、HP-DM-01〜03(PC で実行) |
 | S3 Drawing-B | 編集/変形/作業面(12方式 + 下見)/注記 | NOT_STARTED | |
 | S4 Drawing-C | 面作成(6主要 + その他)の新 panel、穴の明示 | NOT_STARTED | |
-| S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | NOT_STARTED | |
+| S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | PARTIAL(押し出し棚 = 雲側完了) / PC 未検証 | 雲: HP-PA-01/02。厚みの棚(P-10)は未 |
 | S6 Part-B | 形状編集/面編集/ブール/配置(実装済み + disabled+理由) | NOT_STARTED | |
 | S7 Fab-A | 近似(作り方4、候補カードに方式/平均誤差の扱い、表示) | NOT_STARTED | |
 | S8 Fab-B | 部材編集(3D で部材を押す、分割/結合/切れ目/半径) | NOT_STARTED | |
@@ -40,6 +40,11 @@
 - `V2DrawingDock`: 円弧の作り方コンボを廃し、作り方カード(押せる/押せない + 理由)+ カードの一文 + 入力 + オプションの段組みに。カードの押下が ArcMode を決める。
 - HP-DM-01〜03(帯 → カード → 3D で円弧、スプライン/ベジェのカード)。
 - 正本の HTML と指示書を `docs/v2/ui-redesign/mocks/` に置いた(次のセッションが読めるように)。
+
+### S5 Part-A(押し出しの棚)— 2026-09-18(雲側完了、PC 未検証)
+- `V2ExtrudeDock`: 範囲 5 通り(距離/左右対称/両方向に別々の距離/選んだ面まで/全部貫く)と方向 7 通りを棚に全部。逆側の距離・相手の面(作業平面)・向き x y z は選んだときだけ生える。開始面(From)とテーパーは押せない形 + 理由。
+- `PrepareExtrudeChoice` / `RefreshExtrudeFromDock` が棚の範囲・逆側の距離・相手・向きの数を読む(詳細の窓は残るが棚だけで全部決められる)。
+- HP-PA-01/02。回転体は帯で Blocked(作図の回転面 + 厚み へ案内)。
 
 ## BLOCKED_BACKEND(必要なら別担当へ)
 

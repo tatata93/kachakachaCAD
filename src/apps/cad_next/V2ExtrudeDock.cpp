@@ -22,17 +22,23 @@
 #include <cstddef>
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace {
 
 using kachakacha::v2::modeling::ExtrudeBooleanMode;
+using kachakacha::v2::modeling::ExtrudeDirectionMode;
+using kachakacha::v2::modeling::ExtrudeExtentMode;
 
-//! 「詳細で決めた向き」が並ぶ場所。選ばれている間だけ生える3つ目。
-constexpr int kAdvancedDirectionIndex = 2;
+[[nodiscard]] QString Text(std::string_view value)
+{
+    return QString::fromUtf8(std::string(value).c_str());
+}
 
-//! 「詳細で決めた範囲」が並ぶ場所。選ばれている間だけ生える3つ目。
-constexpr int kAdvancedExtentIndex = 2;
+constexpr const char* kFromBlockedJa =
+    "開始面(From)はまだ選べません(核に開始面の押し出しがありません)。輪郭の面から押します。";
+constexpr const char* kTaperBlockedJa = "テーパーはまだ付けられません(核に角度付き押し出しがありません)。";
 
 //! 操作の欄に並べる順。立体を選んでいるときだけ出す。
 constexpr ExtrudeBooleanMode kBooleans[] = {
@@ -90,22 +96,9 @@ void V2ExtrudeDock::BuildHeaderAndInputRows(QVBoxLayout* layout)
 
 }
 
-V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
-    : QDockWidget(QStringLiteral("押し出し"), parent)
+//! 「2. 結果」の欄(範囲・距離・方向・演算・出力)。1関数100行の門のため組み立てを分ける。
+void V2ExtrudeDock::BuildOptionRows(QVBoxLayout* layout)
 {
-    setObjectName(QStringLiteral("extrudeDock"));
-    body_ = new QWidget(this);
-    auto* rootLayout = new QVBoxLayout(body_);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
-    rootLayout->setSpacing(6);
-
-    auto* content = new QWidget(body_);
-    auto* layout = new QVBoxLayout(content);
-    layout->setContentsMargins(6, 6, 6, 6);
-    layout->setSpacing(4);
-
-    BuildHeaderAndInputRows(layout);
-
     // 2. いま変えられる主なもの。
     form_ = new QFormLayout();
     form_->setContentsMargins(0, 0, 0, 0);
@@ -116,20 +109,61 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     distance_->setSingleStep(1.0);
     distance_->setSuffix(QStringLiteral(" mm"));
     distance_->setValue(10.0);
-    form_->addRow(QStringLiteral("距離"), distance_);
 
+    // 開始面(From)。核に無いので押せない形 + 理由(指示書 P-03)。
+    fromValue_ = new QLabel(QStringLiteral("輪郭の面から(固定)"), body_);
+    fromValue_->setEnabled(false);
+    fromValue_->setToolTip(QString::fromUtf8(kFromBlockedJa));
+    form_->addRow(QStringLiteral("開始面"), fromValue_);
+
+    // 範囲は 5 通り全部をここに(P-02)。詳細の窓へ回さない。
+    extent_ = new QComboBox(body_);
+    for (const auto mode : kachakacha::v2::app::ExtrudeExtents()) {
+        extent_->addItem(Text(kachakacha::v2::app::ExtrudeExtentNameJa(mode)));
+    }
+    form_->addRow(QStringLiteral("範囲"), extent_);
+    form_->addRow(QStringLiteral("距離"), distance_);
+    secondDistance_ = new QDoubleSpinBox(body_);
+    secondDistance_->setRange(0.0, 100000.0);
+    secondDistance_->setDecimals(2);
+    secondDistance_->setSingleStep(1.0);
+    secondDistance_->setSuffix(QStringLiteral(" mm"));
+    secondDistance_->setValue(10.0);
+    form_->addRow(QStringLiteral("逆側の距離"), secondDistance_);
+    target_ = new QComboBox(body_);
+    form_->addRow(QStringLiteral("相手の面"), target_);
+
+    // 方向は 7 通り全部(P-04)。「数値で決める」は x, y, z の欄が生える。
     direction_ = new QComboBox(body_);
-    direction_->addItem(QStringLiteral("面に垂直"));
-    direction_->addItem(QStringLiteral("作業平面に垂直"));
+    for (const auto mode : kachakacha::v2::app::ExtrudeDirections()) {
+        direction_->addItem(Text(kachakacha::v2::app::ExtrudeDirectionNameJa(mode)));
+    }
     form_->addRow(QStringLiteral("方向"), direction_);
+    customRow_ = new QWidget(body_);
+    auto* customLayout = new QHBoxLayout(customRow_);
+    customLayout->setContentsMargins(0, 0, 0, 0);
+    customLayout->setSpacing(2);
+    for (QDoubleSpinBox** field : {&customX_, &customY_, &customZ_}) {
+        *field = new QDoubleSpinBox(customRow_);
+        (*field)->setRange(-100000.0, 100000.0);
+        (*field)->setDecimals(3);
+        (*field)->setSingleStep(1.0);
+        customLayout->addWidget(*field);
+    }
+    customZ_->setValue(1.0);
+    form_->addRow(QStringLiteral("向き x y z"), customRow_);
 
     reverse_ = new QPushButton(QStringLiteral("方向を反転"), body_);
     form_->addRow(QString(), reverse_);
 
-    extent_ = new QComboBox(body_);
-    extent_->addItem(QStringLiteral("片側"));
-    extent_->addItem(QStringLiteral("両側"));
-    form_->addRow(QStringLiteral("範囲"), extent_);
+    // テーパー。核に無いので押せない形 + 理由(P-07)。
+    taper_ = new QDoubleSpinBox(body_);
+    taper_->setRange(-89.0, 89.0);
+    taper_->setDecimals(1);
+    taper_->setSuffix(QStringLiteral(" 度"));
+    taper_->setEnabled(false);
+    taper_->setToolTip(QString::fromUtf8(kTaperBlockedJa));
+    form_->addRow(QStringLiteral("テーパー"), taper_);
 
     boolean_ = new QComboBox(body_);
     for (const ExtrudeBooleanMode mode : kBooleans) {
@@ -158,6 +192,26 @@ V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
     form_->addRow(QString(), outEndWire_);
     form_->addRow(QString(), outSideWires_);
     layout->addLayout(form_);
+
+}
+
+V2ExtrudeDock::V2ExtrudeDock(QWidget* parent)
+    : QDockWidget(QStringLiteral("押し出し"), parent)
+{
+    setObjectName(QStringLiteral("extrudeDock"));
+    body_ = new QWidget(this);
+    auto* rootLayout = new QVBoxLayout(body_);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(6);
+
+    auto* content = new QWidget(body_);
+    auto* layout = new QVBoxLayout(content);
+    layout->setContentsMargins(6, 6, 6, 6);
+    layout->setSpacing(4);
+
+    BuildHeaderAndInputRows(layout);
+
+    BuildOptionRows(layout);
 
     // 3. 状態と、下の3つのボタン(UI の正本「3. 状態」と actions)。
     layout->addWidget(new QLabel(QStringLiteral("3. 状態"), body_));
@@ -205,8 +259,21 @@ void V2ExtrudeDock::ConnectRows()
             optionHandler_();
         }
     };
-    QObject::connect(direction_, &QComboBox::currentIndexChanged, this, [option] { option(); });
-    QObject::connect(extent_, &QComboBox::currentIndexChanged, this, [option] { option(); });
+    QObject::connect(direction_, &QComboBox::currentIndexChanged, this, [this, option] {
+        ApplyExtentRows();
+        option();
+    });
+    QObject::connect(extent_, &QComboBox::currentIndexChanged, this, [this, option] {
+        ApplyExtentRows();
+        option();
+    });
+    QObject::connect(target_, &QComboBox::currentIndexChanged, this, [option] { option(); });
+    QObject::connect(secondDistance_, &QDoubleSpinBox::valueChanged, this,
+        [option](double) { option(); });
+    for (QDoubleSpinBox* field : {customX_, customY_, customZ_}) {
+        QObject::connect(field, &QDoubleSpinBox::valueChanged, this,
+            [option](double) { option(); });
+    }
     // 出力プリセット → 4項目。
     QObject::connect(outputPreset_, &QComboBox::currentIndexChanged, this,
         [this, option] {
@@ -334,12 +401,14 @@ void V2ExtrudeDock::ApplyRows()
     // 操作(追加・切削・新規)は、加工する立体があるときだけ意味がある。
     form_->setRowVisible(boolean_, hasTarget);
     const bool ready = plan_.readyToPreview;
-    form_->setRowVisible(distance_, ready);
     // 面をつまんで押しているときは、向きは押す面が決める。
     // 選べない欄を出すと「選んだのに効かない」ことになるので、そのときは隠す。
     form_->setRowVisible(direction_, ready && !plan_.profileIsFace);
     form_->setRowVisible(reverse_, ready);
     form_->setRowVisible(extent_, ready);
+    form_->setRowVisible(fromValue_, ready);
+    form_->setRowVisible(taper_, ready);
+    ApplyExtentRows();
     confirm_->setEnabled(ready);
     details_->setEnabled(ready);
     // 外せる物があるときだけ出す。読み取っていない物の「選び直す」を出すと、
@@ -383,51 +452,200 @@ void V2ExtrudeDock::TypeDistanceMm(double value)
 //! 出さずにいると、棚は「作業平面に垂直」と見せながら別の向きへ押すことになり、
 //! そのうえ棚の欄をひとつ触っただけで、決めた向きが黙って捨てられていた
 //! (Codex P1-EXTRUDE-R6 B2)。
-kachakacha::v2::modeling::ExtrudeDirectionMode V2ExtrudeDock::DirectionMode() const
+//! 範囲と方向に応じて、距離 / 逆側の距離 / 相手 / 向きの数 を出し入れする。
+//! 効かない欄を出したままにすると「選んだのに効かない」になる。
+void V2ExtrudeDock::ApplyExtentRows()
 {
-    if (direction_ == nullptr) {
-        return kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+    if (form_ == nullptr || distance_ == nullptr) {
+        return;
     }
-    const int index = direction_->currentIndex();
-    if (index == kAdvancedDirectionIndex && advancedDirection_.has_value()) {
-        return *advancedDirection_;
-    }
-    return index == 1 ? kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal
-                      : kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal;
+    const bool ready = plan_.readyToPreview;
+    const ExtrudeExtentMode extent = ExtentMode();
+    form_->setRowVisible(distance_, ready && kachakacha::v2::app::ExtentUsesDistance(extent));
+    form_->setRowVisible(secondDistance_,
+        ready && kachakacha::v2::app::ExtentUsesSecondDistance(extent));
+    form_->setRowVisible(target_, ready && kachakacha::v2::app::ExtentUsesTarget(extent));
+    const ExtrudeDirectionMode direction = DirectionMode();
+    form_->setRowVisible(customRow_, ready && !plan_.profileIsFace
+        && (direction == ExtrudeDirectionMode::CustomXYZ
+            || direction == ExtrudeDirectionMode::SelectedVector));
 }
 
-void V2ExtrudeDock::ChooseDirection(kachakacha::v2::modeling::ExtrudeDirectionMode mode)
+//! 棚で選んでいる向きの決め方。7 通り全部を名前で出している(P-04)。
+//! **ここを読まないと、欄は見た目だけで何も変わらない**(Codex R4 B1)。
+ExtrudeDirectionMode V2ExtrudeDock::DirectionMode() const
+{
+    const auto& modes = kachakacha::v2::app::ExtrudeDirections();
+    const int index = direction_ == nullptr ? -1 : direction_->currentIndex();
+    if (index < 0 || index >= static_cast<int>(modes.size())) {
+        return ExtrudeDirectionMode::ProfileNormal;
+    }
+    return modes[static_cast<std::size_t>(index)];
+}
+
+void V2ExtrudeDock::ChooseDirection(ExtrudeDirectionMode mode)
 {
     if (direction_ == nullptr) {
         return;
     }
     // 出し入れの途中で「人が選んだ」ことにしない。棚を映すだけである。
     const bool blocked = direction_->blockSignals(true);
-    const bool plain
-        = mode == kachakacha::v2::modeling::ExtrudeDirectionMode::ProfileNormal
-        || mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal;
-    if (plain) {
-        advancedDirection_.reset();
-        if (direction_->count() > kAdvancedDirectionIndex) {
-            direction_->removeItem(kAdvancedDirectionIndex);
+    const auto& modes = kachakacha::v2::app::ExtrudeDirections();
+    for (std::size_t index = 0; index < modes.size(); ++index) {
+        if (modes[index] == mode) {
+            direction_->setCurrentIndex(static_cast<int>(index));
         }
-        direction_->setCurrentIndex(
-            mode == kachakacha::v2::modeling::ExtrudeDirectionMode::WorkPlaneNormal ? 1
-                                                                                    : 0);
-    } else {
-        advancedDirection_ = mode;
-        const QString label
-            = QStringLiteral("詳細で決めた向き(%1)")
-                  .arg(QString::fromUtf8(std::string(
-                      kachakacha::v2::app::ExtrudeDirectionNameJa(mode)).c_str()));
-        if (direction_->count() > kAdvancedDirectionIndex) {
-            direction_->setItemText(kAdvancedDirectionIndex, label);
-        } else {
-            direction_->addItem(label);
-        }
-        direction_->setCurrentIndex(kAdvancedDirectionIndex);
     }
     direction_->blockSignals(blocked);
+    ApplyExtentRows();
+}
+
+kachakacha::v2::geometry::Vector3 V2ExtrudeDock::CustomDirection() const
+{
+    return kachakacha::v2::geometry::Vector3{customX_->value(), customY_->value(),
+        customZ_->value()};
+}
+
+void V2ExtrudeDock::SetCustomDirection(const kachakacha::v2::geometry::Vector3& direction)
+{
+    const bool was = loading_;
+    loading_ = true;
+    for (QDoubleSpinBox* field : {customX_, customY_, customZ_}) {
+        field->blockSignals(true);
+    }
+    customX_->setValue(direction.x);
+    customY_->setValue(direction.y);
+    customZ_->setValue(direction.z);
+    for (QDoubleSpinBox* field : {customX_, customY_, customZ_}) {
+        field->blockSignals(false);
+    }
+    loading_ = was;
+}
+
+//! 棚で選んでいる終端。5 通り全部を名前で出している(P-02)。
+ExtrudeExtentMode V2ExtrudeDock::ExtentMode() const
+{
+    const auto& modes = kachakacha::v2::app::ExtrudeExtents();
+    const int index = extent_ == nullptr ? -1 : extent_->currentIndex();
+    if (index < 0 || index >= static_cast<int>(modes.size())) {
+        return ExtrudeExtentMode::Distance;
+    }
+    return modes[static_cast<std::size_t>(index)];
+}
+
+void V2ExtrudeDock::ChooseExtent(ExtrudeExtentMode mode)
+{
+    if (extent_ == nullptr) {
+        return;
+    }
+    const bool blocked = extent_->blockSignals(true);
+    const auto& modes = kachakacha::v2::app::ExtrudeExtents();
+    for (std::size_t index = 0; index < modes.size(); ++index) {
+        if (modes[index] == mode) {
+            extent_->setCurrentIndex(static_cast<int>(index));
+        }
+    }
+    extent_->blockSignals(blocked);
+    ApplyExtentRows();
+}
+
+double V2ExtrudeDock::SecondDistanceMm() const
+{
+    return secondDistance_->value();
+}
+
+void V2ExtrudeDock::SetSecondDistanceMm(double value)
+{
+    const bool blocked = secondDistance_->blockSignals(true);
+    secondDistance_->setValue(value);
+    secondDistance_->blockSignals(blocked);
+}
+
+//! 相手に出せる作業平面。並びが同じなら触らない(選んでいるものを飛ばさない)。
+void V2ExtrudeDock::SetTargets(const std::vector<ExtrudeTargetChoice>& targets)
+{
+    bool same = targets.size() == targets_.size();
+    for (std::size_t index = 0; same && index < targets.size(); ++index) {
+        same = targets[index].entityId == targets_[index].entityId
+            && targets[index].labelJa == targets_[index].labelJa;
+    }
+    if (same) {
+        return;
+    }
+    const auto chosen = TargetEntityId();
+    targets_ = targets;
+    const bool blocked = target_->blockSignals(true);
+    target_->clear();
+    for (const auto& choice : targets_) {
+        target_->addItem(choice.labelJa);
+    }
+    if (targets_.empty()) {
+        target_->addItem(QStringLiteral("(作業平面がありません。先に作業面を作ってください)"));
+    }
+    target_->blockSignals(blocked);
+    ChooseTarget(chosen);
+}
+
+std::optional<kachakacha::v2::base::EntityId> V2ExtrudeDock::TargetEntityId() const
+{
+    const int index = target_ == nullptr ? -1 : target_->currentIndex();
+    if (index < 0 || index >= static_cast<int>(targets_.size())) {
+        return std::nullopt;
+    }
+    return targets_[static_cast<std::size_t>(index)].entityId;
+}
+
+void V2ExtrudeDock::ChooseTarget(const std::optional<kachakacha::v2::base::EntityId>& id)
+{
+    if (target_ == nullptr || !id.has_value()) {
+        return;
+    }
+    const bool blocked = target_->blockSignals(true);
+    for (std::size_t index = 0; index < targets_.size(); ++index) {
+        if (targets_[index].entityId == *id) {
+            target_->setCurrentIndex(static_cast<int>(index));
+        }
+    }
+    target_->blockSignals(blocked);
+}
+
+std::vector<QString> V2ExtrudeDock::ExtentLabels() const
+{
+    std::vector<QString> labels;
+    for (int index = 0; index < extent_->count(); ++index) {
+        labels.push_back(extent_->itemText(index));
+    }
+    return labels;
+}
+
+std::vector<QString> V2ExtrudeDock::DirectionLabels() const
+{
+    std::vector<QString> labels;
+    for (int index = 0; index < direction_->count(); ++index) {
+        labels.push_back(direction_->itemText(index));
+    }
+    return labels;
+}
+
+bool V2ExtrudeDock::SecondDistanceShown() const
+{
+    return secondDistance_ != nullptr && secondDistance_->isVisible();
+}
+
+bool V2ExtrudeDock::TargetRowShown() const
+{
+    return target_ != nullptr && target_->isVisible();
+}
+
+QString V2ExtrudeDock::FromBlockedReasonJa() const
+{
+    return fromValue_ == nullptr || fromValue_->isEnabled() ? QString()
+                                                            : fromValue_->toolTip();
+}
+
+QString V2ExtrudeDock::TaperBlockedReasonJa() const
+{
+    return taper_ == nullptr || taper_->isEnabled() ? QString() : taper_->toolTip();
 }
 
 kachakacha::v2::app::ExtrudeOutputs V2ExtrudeDock::Outputs() const
@@ -536,56 +754,6 @@ kachakacha::v2::modeling::ExtrudeBooleanMode V2ExtrudeDock::BooleanMode() const
 bool V2ExtrudeDock::Symmetric() const
 {
     return ExtentMode() == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance;
-}
-
-//! 棚で選んでいる終端。
-//!
-//! ふだん出ているのは「片側」と「両側」の2つ。詳細の窓で「選んだ面まで」や
-//! 「両方向に別々の距離」を決めたときは、3つ目としてその名前が出る。
-//! 出さずにいると、棚の欄をひとつ触るだけでその終端が黙って「片側」へ
-//! 戻っていた。向きで起きていたのと同じことである。
-kachakacha::v2::modeling::ExtrudeExtentMode V2ExtrudeDock::ExtentMode() const
-{
-    if (extent_ == nullptr) {
-        return kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
-    }
-    const int index = extent_->currentIndex();
-    if (index == kAdvancedExtentIndex && advancedExtent_.has_value()) {
-        return *advancedExtent_;
-    }
-    return index == 1 ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
-                      : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
-}
-
-void V2ExtrudeDock::ChooseExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode)
-{
-    if (extent_ == nullptr) {
-        return;
-    }
-    const bool blocked = extent_->blockSignals(true);
-    const bool plain = mode == kachakacha::v2::modeling::ExtrudeExtentMode::Distance
-        || mode == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance;
-    if (plain) {
-        advancedExtent_.reset();
-        if (extent_->count() > kAdvancedExtentIndex) {
-            extent_->removeItem(kAdvancedExtentIndex);
-        }
-        extent_->setCurrentIndex(
-            mode == kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance ? 1 : 0);
-    } else {
-        advancedExtent_ = mode;
-        const QString label
-            = QStringLiteral("詳細で決めた範囲(%1)")
-                  .arg(QString::fromUtf8(std::string(
-                      kachakacha::v2::app::ExtrudeExtentNameJa(mode)).c_str()));
-        if (extent_->count() > kAdvancedExtentIndex) {
-            extent_->setItemText(kAdvancedExtentIndex, label);
-        } else {
-            extent_->addItem(label);
-        }
-        extent_->setCurrentIndex(kAdvancedExtentIndex);
-    }
-    extent_->blockSignals(blocked);
 }
 
 bool V2ExtrudeDock::Reversed() const

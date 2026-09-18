@@ -11,6 +11,7 @@
 #include "V2MainWindow.h"
 
 #include "kachakacha/app/ExplorerModel.h"
+#include "kachakacha/app/ExtrudeOptions.h"
 
 #include "kachakacha/app/SurfaceJig.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -36,6 +37,7 @@ namespace {
 
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::geometry::CurveSegment;
+using kachakacha::v2::modeling::ExtrudeDirectionMode;
 using kachakacha::v2::modeling::SnapCurve;
 
 //! 選んでいるワイヤーを、押し出しの輪郭にまとめる。
@@ -266,10 +268,18 @@ std::optional<V2MainWindow::PreparedExtrudeChoice> V2MainWindow::PrepareExtrudeC
     choice.hasSelectedPart = facts.parts > 0;
     if (extrudeShelfShown_) {
         // 棚が出ているなら、そこに出ている値がそのまま作る形になる。
+        // 範囲は 5 通り、逆側の距離と相手の面も棚から(指示書 P-02)。
         choice.reversed = extrudeDock_->Reversed();
-        choice.extent = extrudeDock_->Symmetric()
-            ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
-            : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+        choice.extent = extrudeDock_->ExtentMode();
+        choice.secondDistanceMm = extrudeDock_->SecondDistanceMm();
+        if (kachakacha::v2::app::ExtentUsesTarget(choice.extent)) {
+            choice.targetEntityId = extrudeDock_->TargetEntityId();
+        }
+        if (!facePushPull_ && (choice.direction == ExtrudeDirectionMode::CustomXYZ
+                || choice.direction == ExtrudeDirectionMode::SelectedVector)) {
+            choice.customDirection = extrudeDock_->CustomDirection();
+            extrudeChoice_.customDirection = choice.customDirection;
+        }
     }
     // 既定の操作を当てるのは **入力を最初に読んだときだけ** である(R1 B4)。
     // 確定のたびに当て直すと、棚で選んだ「足す/引く/新しい部品」が

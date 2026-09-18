@@ -10,6 +10,8 @@
 //! 通るかどうかの判断は core(app/ExtrudeOptions.h)にある。
 //! この窓は、欄を出して、答えを受け取って、断り文をそのまま出すだけにする。
 
+#include "V2ExtrudeTargetChoice.h"
+
 #include "kachakacha/app/ExtrudeOptions.h"
 
 #include <QDialog>
@@ -23,12 +25,6 @@ class QFormLayout;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
-
-//! 相手に選べる作業平面。名前と id の組。
-struct ExtrudeTargetChoice {
-    kachakacha::v2::base::EntityId entityId;
-    QString labelJa;
-};
 
 class V2ExtrudeDialog final : public QDialog {
 public:

@@ -77,12 +77,12 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | ID | MODE | CATEGORY | TOOL | METHOD_VARIANT | EXISTING_BACKEND | NEW_UI_ENTRY | PREVIEW | HUMAN_TEST | STATUS | NOTES |
 |---|---|---|---|---|---|---|---|---|---|---|
 | P-01 | 部品 | 作成 | 押し出し | 入力: Profile 領域 / 平面 Face | `ProfileRegion`, `FacePushPull`, `ExtrudeInputState` | 作成→押し出し、1. 入力 | あり | HP-EX-01..03 | TESTED(既存) | |
-| P-02 | 部品 | 作成 | 押し出し | 範囲: 距離/対称/非対称(2距離)/面まで/貫通 | `ExtrudeExtentMode` 5種 | 3. 範囲/方向(全部を棚に) | あり | HP-EX | NOT_STARTED | 貫通は「引く」時のみ(core) |
-| P-03 | 部品 | 作成 | 押し出し | 2面間(From/To) | **From は無し**(startOffset 内部のみ)、To=作業面のみ | From 欄 disabled+理由、To=作業面 | — | — | BLOCKED_BACKEND(From)/ NOT_STARTED(To) | To は `ExtrudeTargetKind::Plane` |
-| P-04 | 部品 | 作成 | 押し出し | 方向 7種 + 反転 | `ExtrudeDirectionMode` | 3. 方向 combo | あり | test | NOT_STARTED | SelectedVector/CustomXYZ に xyz 欄を足す |
+| P-02 | 部品 | 作成 | 押し出し | 範囲: 距離/対称/非対称(2距離)/面まで/貫通 | `ExtrudeExtentMode` 5種 | 3. 範囲/方向(全部を棚に) | あり | HP-EX | CLOUD_TESTED | 棚の「範囲」に 5 通り。逆側の距離 / 相手の面 は範囲に応じて生える。HP-PA-01/02 |
+| P-03 | 部品 | 作成 | 押し出し | 2面間(From/To) | **From は無し**(startOffset 内部のみ)、To=作業面のみ | From 欄 disabled+理由、To=作業面 | — | — | BLOCKED_BACKEND(From) / CLOUD_TESTED(To) | 開始面は押せない形 + 理由。To は作業平面を棚の「相手の面」で選ぶ |
+| P-04 | 部品 | 作成 | 押し出し | 方向 7種 + 反転 | `ExtrudeDirectionMode` | 3. 方向 combo | あり | test | CLOUD_TESTED | 棚の「方向」に 7 通り。数値で決める/選んだ線の向き は x y z 欄が生える。HP-PA-01 |
 | P-05 | 部品 | 作成 | 押し出し | 演算 New/Add/Cut + 対象 Solid | `ExtrudeBooleanMode` | 4. 演算(segment)+ 対象 slot | あり | HP-EX | TESTED(既存) | |
 | P-06 | 部品 | 作成 | 押し出し | 出力プリセット + custom 4フラグ | `ExtrudeOutputs` | 5. 出力 | — | test | TESTED(既存) | startWire は Qt 層で合成(rebuild で消える: NOTES) |
-| P-07 | 部品 | 作成 | 押し出し | テーパー | **無し** | 欄 disabled+理由 | — | — | BLOCKED_BACKEND | |
+| P-07 | 部品 | 作成 | 押し出し | テーパー | **無し** | 欄 disabled+理由 | — | — | BLOCKED_BACKEND | テーパー欄は押せない形 + 理由(HP-PA-01) |
 | P-08 | 部品 | 作成 | 回転体(Solid) | 全回転/角度 | **Solid は無し**(面の回転体はある) | 作成→回転体 = 回転面 + 厚み の案内 | — | — | BLOCKED_BACKEND | HP-SF-08 の回転面を「部品」から呼べるようにする |
 | P-09 | 部品 | 作成 | ロフト立体 / スイープ | — | **無し**(面のみ) | disabled+理由(面作成→厚み を案内) | — | — | BLOCKED_BACKEND | |
 | P-10 | 部品 | 作成 | 厚み | 外側/中央/内側、平面まで | `part.thicken`, `thicken_to_plane`, placement | 作成→厚み(slot: 面、作り方3+平面まで) | 無し→足す | HP-PT | NOT_STARTED | per-face は BLOCKED_BACKEND |

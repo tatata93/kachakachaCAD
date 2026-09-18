@@ -40,6 +40,7 @@ namespace {
 
 using kachakacha::v2::geometry::CurveSegment;
 using kachakacha::v2::geometry::Vector3;
+using kachakacha::v2::modeling::ExtrudeDirectionMode;
 
 //! 曲線1本を折れ線にする。破線で出すだけなので、細かすぎなくてよい。
 constexpr int kSamplesPerCurve = 16;
@@ -461,6 +462,8 @@ void V2MainWindow::RefreshExtrudeStatus(const kachakacha::v2::app::ExtrudePlan& 
     }
     // 作るものが1つも無いなら確定させない。理由は上の行に出ている。
     extrudeDock_->ShowStatusLines(lines, plan.readyToPreview && state.outputs.Any());
+    // 「選んだ面まで」の相手(作業平面)は文書から。棚だけで全部決められるように。
+    extrudeDock_->SetTargets(ExtrudeTargets());
     // 3D の中にも、いまの役割を出す(§7)。棚の名前だけでは、
     // **画面のどの線がその役割なのかが分からない。**
     RefreshExtrudeRoleLabels(state);
@@ -524,13 +527,20 @@ void V2MainWindow::RefreshExtrudeFromDock()
         return;
     }
     extrudeChoice_.reversed = extrudeDock_->Reversed();
-    extrudeChoice_.extent = extrudeDock_->Symmetric()
-        ? kachakacha::v2::modeling::ExtrudeExtentMode::SymmetricDistance
-        : kachakacha::v2::modeling::ExtrudeExtentMode::Distance;
+    // 範囲は棚の 5 通りをそのまま。逆側の距離と相手の面も棚から(指示書 P-02)。
+    extrudeChoice_.extent = extrudeDock_->ExtentMode();
+    extrudeChoice_.secondDistanceMm = extrudeDock_->SecondDistanceMm();
+    if (kachakacha::v2::app::ExtentUsesTarget(extrudeChoice_.extent)) {
+        extrudeChoice_.targetEntityId = extrudeDock_->TargetEntityId();
+    }
     extrudeChoice_.booleanMode = extrudeDock_->BooleanMode();
     // 向きの欄も読む。読まないと、選んでも何も変わらない。
     if (!facePushPull_) {
         extrudeChoice_.direction = extrudeDock_->DirectionMode();
+        if (extrudeChoice_.direction == ExtrudeDirectionMode::CustomXYZ
+            || extrudeChoice_.direction == ExtrudeDirectionMode::SelectedVector) {
+            extrudeChoice_.customDirection = extrudeDock_->CustomDirection();
+        }
     }
     // 出力の欄も読む。**選んだとおりの物を作る。**
     const auto outputs = extrudeDock_->Outputs();
@@ -582,7 +592,11 @@ void V2MainWindow::ApplyExtrudeChoice(const kachakacha::v2::app::ExtrudeChoice& 
     extrudeChoice_ = choice;
     // 棚は7通りの向きと5通りの終端をすべて名前で出せる。決めたとおりを映す。
     extrudeDock_->ChooseDirection(extrudeChoice_.direction);
+    extrudeDock_->SetCustomDirection(extrudeChoice_.customDirection);
     extrudeDock_->ChooseExtent(extrudeChoice_.extent);
+    extrudeDock_->SetSecondDistanceMm(extrudeChoice_.secondDistanceMm);
+    extrudeDock_->SetTargets(ExtrudeTargets());
+    extrudeDock_->ChooseTarget(extrudeChoice_.targetEntityId);
     extrudeDock_->ChooseBoolean(extrudeChoice_.booleanMode);
     extrudeDock_->SetDistanceMm(extrudeChoice_.distanceMm);
     // 矢印と下見を作り直す。ここで初めて、画面が決めたとおりになる。

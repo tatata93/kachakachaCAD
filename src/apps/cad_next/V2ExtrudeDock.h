@@ -13,10 +13,13 @@
 //! **いまの入力で意味のない欄は出さない。**
 //! 立体を選んでいないときに「切削」を出しても、押せば断られるだけである。
 //!
-//! 細かい設定(ある面まで、2距離、出力の種類)は「詳細」の窓へ回す。
-//! 全部を右へ並べると、どれを見ればよいのか分からなくなる。
+//! 正本(part mock 2026-09-18、Inventor 風)に合わせ、範囲(距離/対称/非対称/面まで/貫通)と
+//! 方向(7通り)は **全部この棚に** 出す(指示書 P-02 / P-04)。核に無い From とテーパーは
+//! 押せない形で理由を出す(P-03 / P-07)。「詳細」の窓は残すが、棚だけで全部決められる。
 //!
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
+
+#include "V2ExtrudeTargetChoice.h"
 
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/ExtrudeOptions.h"
@@ -27,6 +30,7 @@
 
 #include <functional>
 #include <optional>
+#include <vector>
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -59,6 +63,26 @@ public:
     void ChooseExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode);
     //! 向きを反転しているか。
     [[nodiscard]] bool Reversed() const;
+    //! 「数値で決める」「選んだ線の向き」のときの向き(x, y, z)。
+    [[nodiscard]] kachakacha::v2::geometry::Vector3 CustomDirection() const;
+    void SetCustomDirection(const kachakacha::v2::geometry::Vector3& direction);
+    //! 「両方向に別々の距離」の逆側。
+    [[nodiscard]] double SecondDistanceMm() const;
+    void SetSecondDistanceMm(double value);
+    //! 「選んだ面まで」の相手に出せる作業平面。棚を出すときに文書から渡す。
+    void SetTargets(const std::vector<ExtrudeTargetChoice>& targets);
+    //! いま選んでいる相手。無ければ値を持たない。
+    [[nodiscard]] std::optional<kachakacha::v2::base::EntityId> TargetEntityId() const;
+    void ChooseTarget(const std::optional<kachakacha::v2::base::EntityId>& id);
+    //! 範囲の欄に並ぶ言葉(試験から)。
+    [[nodiscard]] std::vector<QString> ExtentLabels() const;
+    [[nodiscard]] std::vector<QString> DirectionLabels() const;
+    //! 逆側の距離 / 相手 の欄が見えているか(試験から)。
+    [[nodiscard]] bool SecondDistanceShown() const;
+    [[nodiscard]] bool TargetRowShown() const;
+    //! 核に無い欄(From / テーパー)は押せない形で、理由がツールチップに出ている。
+    [[nodiscard]] QString FromBlockedReasonJa() const;
+    [[nodiscard]] QString TaperBlockedReasonJa() const;
 
     //! 距離が打たれたときに呼ぶもの(矢印と下見を合わせる)。
     void SetDistanceHandler(std::function<void(double)> handler);
@@ -103,6 +127,8 @@ private:
     //! 4項目を触ったらプリセットの名前。
     void SyncOutputRows(bool fromPreset);
     void ApplyRows();
+    //! 範囲と方向に応じて、距離 / 逆側の距離 / 相手 / 向きの数 を出し入れする。
+    void ApplyExtentRows();
     //! 入力(加工する立体と輪郭)が同じか。
     [[nodiscard]] static bool SameInputs(const kachakacha::v2::app::ExtrudePlan& left,
         const kachakacha::v2::app::ExtrudePlan& right);
@@ -110,6 +136,8 @@ private:
     void ConnectRows();
     //! 見出しと「1. 入力」を組み立てる。
     void BuildHeaderAndInputRows(class QVBoxLayout* layout);
+    //! 「2. 結果」の欄を組み立てる。
+    void BuildOptionRows(class QVBoxLayout* layout);
 
     QWidget* body_ = nullptr;
     //! 見出しの下に出す、いまの様子(「プレビュー可能」など)。
@@ -123,13 +151,20 @@ private:
     //! 下見を作り直す。
     QPushButton* rePreview_ = nullptr;
     QDoubleSpinBox* distance_ = nullptr;
+    QDoubleSpinBox* secondDistance_ = nullptr;
+    QComboBox* target_ = nullptr;
+    std::vector<ExtrudeTargetChoice> targets_;
+    //! 核に無い From(開始面)とテーパー。押せない形で理由を出す。
+    QLabel* fromValue_ = nullptr;
+    QDoubleSpinBox* taper_ = nullptr;
     QComboBox* direction_ = nullptr;
-    //! 棚のふだんの2つでは表せない決め方。3つ目に名前で出している間だけ入る。
-    std::optional<kachakacha::v2::modeling::ExtrudeDirectionMode> advancedDirection_;
+    //! 「数値で決める」の向き(x, y, z)。
+    QWidget* customRow_ = nullptr;
+    QDoubleSpinBox* customX_ = nullptr;
+    QDoubleSpinBox* customY_ = nullptr;
+    QDoubleSpinBox* customZ_ = nullptr;
     QPushButton* reverse_ = nullptr;
     QComboBox* extent_ = nullptr;
-    //! 棚のふだんの2つでは表せない終端。3つ目に出している間だけ入る。
-    std::optional<kachakacha::v2::modeling::ExtrudeExtentMode> advancedExtent_;
     QComboBox* boolean_ = nullptr;
     //! 出力プリセット(UI の正本「2. 結果」)。
     QComboBox* outputPreset_ = nullptr;

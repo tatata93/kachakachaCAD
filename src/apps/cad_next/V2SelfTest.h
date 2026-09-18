@@ -138,6 +138,9 @@ void Note(const char* what);
 //! 作図の作り方カード(HP-DM)。
 [[nodiscard]] std::vector<SelfTestCase> DrawingMethodCases();
 
+//! 部品の押し出しの欄(HP-PA)。
+[[nodiscard]] std::vector<SelfTestCase> PartPanelCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

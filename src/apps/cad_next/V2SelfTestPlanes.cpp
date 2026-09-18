@@ -48,8 +48,7 @@ void UseDock(V2MainWindow& window)
             window.OriginChildCount() == 6)) {
         return false;
     }
-    QTreeWidget* tree = window.EntityTree();
-    QTreeWidgetItem* origin = tree != nullptr ? tree->topLevelItem(0) : nullptr;
+    QTreeWidgetItem* origin = window.ExplorerRows().empty() ? nullptr : window.ExplorerRows().front();
     if (!Explain("原点と子の種類アイコンが見える",
             origin != nullptr && !origin->icon(0).isNull()
                 && origin->childCount() == 6 && !origin->child(0)->icon(0).isNull()

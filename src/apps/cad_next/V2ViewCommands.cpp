@@ -1,7 +1,7 @@
-//! 見え方と作業中まとまりのコマンド(V2MainWindow の一部)。
+//! 見え方と作業中グループのコマンド(V2MainWindow の一部)。
 //!
 //! ここで扱うものは、どれも **形を変えない。**
-//! 正対しても、グリッドを消しても、作業中のまとまりを変えても、
+//! 正対しても、グリッドを消しても、作業中のグループを変えても、
 //! 文書の中の形は1mmも動かない。動かしてしまうと、
 //! 「見やすくしただけ」のつもりが寸法を変えたことになる。
 
@@ -234,7 +234,7 @@ void V2MainWindow::AdoptTreeSelection()
             add(id);
             continue;
         }
-        // まとまりや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
+        // グループや「原点」の見出しを選んだら、その下のもの全部へ広げる(V1 と同じ)。
         for (int child = 0; child < item->childCount(); ++child) {
             add(idOf(item->child(child)));
         }
@@ -554,7 +554,7 @@ kachakacha::v2::geometry::Vector3 V2MainWindow::FacingUAxisHint(
 
 void V2MainWindow::ActivateSelectedGroup()
 {
-    // 選んだものが入っているまとまりを、作業中にする。
+    // 選んだものが入っているグループを、作業中にする。
     // 選んでいなければ、作業中を外す。外せないと、一度入れたら抜けられない。
     const auto& snapshot = session_->GetDocument().Snapshot();
     std::optional<kachakacha::v2::base::GroupId> target;
@@ -565,7 +565,7 @@ void V2MainWindow::ActivateSelectedGroup()
         }
         if (target.has_value() && *target != *entity->groupId) {
             SetStatus(QStringLiteral(
-                "作業中グループ: まとまりが2つ以上あります。1つにしてください。"));
+                "作業中グループ: グループが2つ以上あります。1つにしてください。"));
             return;
         }
         target = entity->groupId;

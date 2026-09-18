@@ -129,6 +129,9 @@ void Note(const char* what);
 //! 2段の帯(HP-RB)。カテゴリ → 道具、押せない道具は理由つき。
 [[nodiscard]] std::vector<SelfTestCase> RibbonCases();
 
+//! 左の一覧(HP-EX)。節の並び、◉ の出し隠し、選択の同期、右クリックの献立。
+[[nodiscard]] std::vector<SelfTestCase> ExplorerCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

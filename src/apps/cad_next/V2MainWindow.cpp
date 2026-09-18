@@ -353,7 +353,7 @@ void V2MainWindow::BuildMenus()
         "wire.set_datum", "wire.clear_datum", "wire.move", "wire.copy",
         "wire.mirror", "wire.rotate", "wire.project", "wire.project_surface",
         "wire.wrap_project"});
-    QMenu* groups = edit->addMenu(QStringLiteral("まとまり(&G)"));
+    QMenu* groups = edit->addMenu(QStringLiteral("グループ(&G)"));
     addCommands(groups, {"group.set_active", "group.create", "group.dissolve",
         "group.rename"});
 
@@ -570,8 +570,12 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
                     return;
                 }
             }
-            // まとまりの行。チェックは出し隠し、文字は名前の書き換え。
+            // グループの行。チェックは出し隠し、文字は名前の書き換え。
             if (RenameOrToggleGroupFromItem(item)) {
+                return;
+            }
+            // ものの行の ◉。1つずつの出し隠し。
+            if (ToggleEntityVisibilityFromItem(item)) {
                 return;
             }
             RenameEntityFromItem(item);
@@ -583,11 +587,11 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
         [this](const std::vector<QTreeWidgetItem*>& moved, QTreeWidgetItem* onto) {
             DropTreeItemsOnto(moved, onto);
         });
-    // 右クリックは 3D 画面と同じ献立を出す。台帳のコマンドだけを並べる。
-    // 別の入口を作ると、押せるかどうかの判断も文言も二重になる。
+    // 右クリックは一覧の献立(名前変更/表示・非表示/正対/グループへ移動/複製/削除/プロパティ)。
+    // 並ぶのは台帳のコマンドだけ。別の入口を作ると、押せるかどうかの判断も文言も二重になる。
     entityTree_->setContextMenuPolicy(Qt::CustomContextMenu);
     QObject::connect(entityTree_, &QTreeWidget::customContextMenuRequested, this,
-        [this](const QPoint& at) { ShowSelectMenu(entityTree_->mapToGlobal(at)); });
+        [this](const QPoint& at) { ShowExplorerMenu(at); });
 
     // 絞り込みの欄(V1 の「名前・種類で絞り込み」)。
     // 物が増えると一覧は数十行になり、目で探すのはすぐに無理になる。
@@ -769,44 +773,15 @@ QString V2MainWindow::ActiveGroupText() const
 {
     const auto& settings = session_->GetDocument().Snapshot().settings;
     if (!settings.activeGroupId.has_value()) {
-        return QStringLiteral("まとまり: (なし)");
+        return QStringLiteral("グループ: (なし)");
     }
     for (const auto& group : session_->GetDocument().Snapshot().groups) {
         if (group.id == *settings.activeGroupId) {
-            return QStringLiteral("まとまり: %1")
+            return QStringLiteral("グループ: %1")
                 .arg(QString::fromStdString(group.displayName));
         }
     }
-    return QStringLiteral("まとまり: (なし)");
-}
-
-int V2MainWindow::GroupRowCount() const
-{
-    return entityTree_ == nullptr ? 0 : entityTree_->topLevelItemCount();
-}
-
-QString V2MainWindow::GroupRowText(int row) const
-{
-    if (entityTree_ == nullptr || row < 0 || row >= entityTree_->topLevelItemCount()) {
-        return QString();
-    }
-    return entityTree_->topLevelItem(row)->text(0);
-}
-
-int V2MainWindow::OriginChildCount() const
-{
-    if (entityTree_ == nullptr || entityTree_->topLevelItemCount() == 0) {
-        return 0;
-    }
-    return entityTree_->topLevelItem(0)->childCount();
-}
-
-QString V2MainWindow::OriginChildText(int row) const
-{
-    if (row < 0 || row >= OriginChildCount()) {
-        return QString();
-    }
-    return entityTree_->topLevelItem(0)->child(row)->text(0);
+    return QStringLiteral("グループ: (なし)");
 }
 
 void V2MainWindow::SetAxisShown(int axis, bool shown)

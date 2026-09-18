@@ -1,7 +1,7 @@
-//! 整理用のまとまり(フォルダ)の操作(オーナー指示 2026-09-14 §7〜13)。
+//! 整理用のグループ(フォルダ)の操作(オーナー指示 2026-09-14 §7〜13)。
 //!
-//! まとまりは **幾何ではない。** 入れても出しても、依存も参照も所有も変わらない。
-//! まとまりを解いても中身は消えない。
+//! グループは **幾何ではない。** 入れても出しても、依存も参照も所有も変わらない。
+//! グループを解いても中身は消えない。
 //!
 //! 引きずって落としたときも、Qt に行を動かさせず **文書のほうを変える。**
 //! 木は文書から毎回作り直すので、木だけ動かしても次の作り直しで元へ戻る。
@@ -27,7 +27,7 @@ namespace {
 
 using kachakacha::v2::base::GroupId;
 
-//! 木の行から「まとまり」を引く。まとまりの行でなければ値を返さない。
+//! 木の行から「グループ」を引く。グループの行でなければ値を返さない。
 [[nodiscard]] std::optional<GroupId> GroupOfItem(
     const std::vector<std::pair<QTreeWidgetItem*, GroupId>>& items,
     const QTreeWidgetItem* item)
@@ -60,7 +60,7 @@ void V2MainWindow::RunGroupCommand(std::string_view id)
     RenameSelectedGroup();
 }
 
-//! 選んだものをまとめる。何も選んでいなければ空のまとまりを作る。
+//! 選んだものをまとめる。何も選んでいなければ空のグループを作る。
 //!
 //! 「複数選んで右クリック → グループ化」で作れること(§9)。
 //! 独自の分かりにくい管理ダイアログを必須にしない。
@@ -71,17 +71,17 @@ void V2MainWindow::CreateGroupFromSelection()
 
     kachakacha::v2::document::Group group;
     group.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Group>();
-    // いま選んでいるまとまりの下へ入れる。入れ子はここで作れる。
+    // いま選んでいるグループの下へ入れる。入れ子はここで作れる。
     group.parentId = SelectedGroupId();
     group.displayName = NextGroupName();
     const auto id = group.id;
-    // まとまりを作るのと、中身を入れるのは、人から見れば1つの操作である。
-    // 別々に入れると、1回の取り消しで中身だけ戻り、空のまとまりが残る。
+    // グループを作るのと、中身を入れるのは、人から見れば1つの操作である。
+    // 別々に入れると、1回の取り消しで中身だけ戻り、空のグループが残る。
     const auto chosen = viewport_->Selection().entityIds;
     bool ok = true;
     {
         kachakacha::v2::document::Document::Transaction transaction(
-            session_->GetDocument(), "まとまりにする");
+            session_->GetDocument(), "グループにする");
         const auto added = session_->GetDocument().Run(AddGroupCommand(std::move(group)));
         if (!added.committed) {
             ReportDiagnostics(added.diagnostics);
@@ -98,24 +98,24 @@ void V2MainWindow::CreateGroupFromSelection()
         if (ok) {
             ok = transaction.Commit();
         }
-        // Commit していなければ、まとまりも中身の移動もまとめて無かったことになる。
+        // Commit していなければ、グループも中身の移動もまとめて無かったことになる。
     }
     AdoptCurrentDocument();
     if (!ok) {
         return;
     }
     SetStatus(chosen.empty()
-            ? QStringLiteral("まとまりを作りました。名前は F2 で変えられます。")
-            : QStringLiteral("%1個をまとまりにしました。名前は F2 で変えられます。")
+            ? QStringLiteral("グループを作りました。名前は F2 で変えられます。")
+            : QStringLiteral("%1個をグループにしました。名前は F2 で変えられます。")
                   .arg(static_cast<int>(chosen.size())));
 }
 
-//! まとまりを解く。**中身は消さない。** 親のまとまりへ戻す(§11)。
+//! グループを解く。**中身は消さない。** 親のグループへ戻す(§11)。
 void V2MainWindow::DissolveSelectedGroup()
 {
     const auto group = SelectedGroupId();
     if (!group.has_value()) {
-        SetStatus(QStringLiteral("まとまりを解く: 左の一覧でまとまりの行を選んでください。"));
+        SetStatus(QStringLiteral("グループを解く: 左の一覧でグループの行を選んでください。"));
         return;
     }
     const auto removed = session_->GetDocument().Run(
@@ -125,14 +125,14 @@ void V2MainWindow::DissolveSelectedGroup()
         return;
     }
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("まとまりを解きました。中身は残っています。"));
+    SetStatus(QStringLiteral("グループを解きました。中身は残っています。"));
 }
 
 void V2MainWindow::RenameSelectedGroup()
 {
     const auto group = SelectedGroupId();
     if (!group.has_value()) {
-        SetStatus(QStringLiteral("名前を変える: 左の一覧でまとまりの行を選んでください。"));
+        SetStatus(QStringLiteral("名前を変える: 左の一覧でグループの行を選んでください。"));
         return;
     }
     // 行をその場で書き換えるのが本筋。ここは献立から呼ばれたときの入口である。
@@ -144,7 +144,7 @@ void V2MainWindow::RenameSelectedGroup()
     }
 }
 
-//! いま左の一覧で選んでいるまとまり。選んでいなければ値を返さない。
+//! いま左の一覧で選んでいるグループ。選んでいなければ値を返さない。
 std::optional<kachakacha::v2::base::GroupId> V2MainWindow::SelectedGroupId() const
 {
     if (entityTree_ == nullptr) {
@@ -158,12 +158,12 @@ std::optional<kachakacha::v2::base::GroupId> V2MainWindow::SelectedGroupId() con
     return std::nullopt;
 }
 
-//! 次に作るまとまりの名前。同じ名前が並ばないように番号を送る。
+//! 次に作るグループの名前。同じ名前が並ばないように番号を送る。
 std::string V2MainWindow::NextGroupName() const
 {
     const auto& snapshot = session_->GetDocument().Snapshot();
     for (int number = 1; number < 1000; ++number) {
-        const std::string candidate = "まとまり" + std::to_string(number);
+        const std::string candidate = "グループ" + std::to_string(number);
         bool taken = false;
         for (const auto& group : snapshot.groups) {
             if (group.displayName == candidate) {
@@ -175,10 +175,10 @@ std::string V2MainWindow::NextGroupName() const
             return candidate;
         }
     }
-    return "まとまり";
+    return "グループ";
 }
 
-//! 木の行が書き換わった。まとまりの行なら名前か出し隠し。まとまりでなければ偽。
+//! 木の行が書き換わった。グループの行なら名前か出し隠し。グループでなければ偽。
 bool V2MainWindow::RenameOrToggleGroupFromItem(QTreeWidgetItem* item)
 {
     const auto group = GroupOfItem(groupItems_, item);
@@ -204,8 +204,8 @@ bool V2MainWindow::RenameOrToggleGroupFromItem(QTreeWidgetItem* item)
             ReportDiagnostics(done.diagnostics);
         }
         AdoptCurrentDocument();
-        SetStatus(wantVisible ? QStringLiteral("まとまりを出しました。")
-                              : QStringLiteral("まとまりを隠しました。"
+        SetStatus(wantVisible ? QStringLiteral("グループを出しました。")
+                              : QStringLiteral("グループを隠しました。"
                                                "中の1つずつの出し隠しは変えていません。"));
         return true;
     }
@@ -228,14 +228,14 @@ bool V2MainWindow::RenameOrToggleGroupFromItem(QTreeWidgetItem* item)
     return true;
 }
 
-//! 引きずって落とした。落ちた先のまとまりへ入れる。最上位へ落としたら外へ出す。
+//! 引きずって落とした。落ちた先のグループへ入れる。最上位へ落としたら外へ出す。
 void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
     QTreeWidgetItem* onto)
 {
     using kachakacha::v2::document::MoveEntitiesToGroupCommand;
     using kachakacha::v2::document::SetGroupParentCommand;
 
-    // 落ちた先。まとまりの行でなければ、その行が入っているまとまりへ入れる。
+    // 落ちた先。グループの行でなければ、その行が入っているグループへ入れる。
     std::optional<GroupId> destination = GroupOfItem(groupItems_, onto);
     if (!destination.has_value() && onto != nullptr) {
         for (const auto& entry : entityItems_) {
@@ -273,7 +273,7 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
     bool ok = true;
     {
         kachakacha::v2::document::Document::Transaction transaction(
-            session_->GetDocument(), "まとまりへ移す");
+            session_->GetDocument(), "グループへ移す");
         for (const GroupId& group : groups) {
             const auto done = session_->GetDocument().Run(
                 SetGroupParentCommand(group, destination));
@@ -301,8 +301,8 @@ void V2MainWindow::DropTreeItemsOnto(const std::vector<QTreeWidgetItem*>& moved,
         return;
     }
     SetStatus(destination.has_value()
-            ? QStringLiteral("まとまりへ移しました。中身と参照は変えていません。")
-            : QStringLiteral("まとまりの外へ出しました。中身と参照は変えていません。"));
+            ? QStringLiteral("グループへ移しました。中身と参照は変えていません。")
+            : QStringLiteral("グループの外へ出しました。中身と参照は変えていません。"));
 }
 
 QTreeWidgetItem* V2MainWindow::ItemOfEntity(const kachakacha::v2::base::EntityId& id) const

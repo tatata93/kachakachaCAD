@@ -1,8 +1,8 @@
-//! 整理用のまとまり(フォルダ)の実用試験(オーナー指示 2026-09-14 §7〜13、GR-01〜10)。
+//! 整理用のグループ(フォルダ)の実用試験(オーナー指示 2026-09-14 §7〜13、GR-01〜10)。
 //!
 //! ここで見るのは「機能が存在するか」ではなく **人が使えるか** である。
 //! 複数選んで右クリックでまとめられるか。引きずって移せるか。
-//! まとまりを解いたときに中身が消えないか。
+//! グループを解いたときに中身が消えないか。
 //!
 //! AUTOMOC を使っていないので Q_OBJECT は付けない。
 
@@ -62,7 +62,7 @@ using kachakacha::v2::domain::EntityKind;
     return made;
 }
 
-//! いまある最後のまとまり。
+//! いまある最後のグループ。
 [[nodiscard]] bool LastGroup(V2MainWindow& window, GroupId& out)
 {
     const auto& groups = window.Session().GetDocument().Snapshot().groups;
@@ -73,7 +73,7 @@ using kachakacha::v2::domain::EntityKind;
     return true;
 }
 
-//! そのまとまりの行。無ければ空。
+//! そのグループの行。無ければ空。
 [[nodiscard]] QTreeWidgetItem* ItemOfGroup(V2MainWindow& window, const GroupId& id)
 {
     for (const auto& entry : window.GroupItems()) {
@@ -101,7 +101,7 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(both);
     window.RunCommand("group.create");
     GroupId group;
-    if (!Explain("まとまりができる", LastGroup(window, group))) {
+    if (!Explain("グループができる", LastGroup(window, group))) {
         return false;
     }
     const auto inside = kachakacha::v2::app::EntitiesUnderGroup(
@@ -111,10 +111,10 @@ using kachakacha::v2::domain::EntityKind;
             inside.size() == 2)) {
         return false;
     }
-    return Explain("木にまとまりの行が出る", ItemOfGroup(window, group) != nullptr);
+    return Explain("木にグループの行が出る", ItemOfGroup(window, group) != nullptr);
 }
 
-//! GR-03 / GR-04。引きずって別のまとまりへ移す。入れ子になる。
+//! GR-03 / GR-04。引きずって別のグループへ移す。入れ子になる。
 [[nodiscard]] bool CaseGroupDragAndDrop(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -122,7 +122,7 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("線が引ける", !wire.IsNil())) {
         return false;
     }
-    // 空のまとまりを2つ作る。
+    // 空のグループを2つ作る。
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     window.RunCommand("group.create");
     GroupId outer;
@@ -151,7 +151,7 @@ using kachakacha::v2::domain::EntityKind;
             depth == 1)) {
         return false;
     }
-    // 線を内側のまとまりへ落とす。
+    // 線を内側のグループへ落とす。
     // 行は名前で探さず、窓が持っている対応表から引く。名前は変わりうる。
     QTreeWidgetItem* wireItem = window.ItemOfEntity(wire);
     if (!Explain("線の行がある", wireItem != nullptr)) {
@@ -169,7 +169,7 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("外側からも数えられる", all.size() == 1);
 }
 
-//! GR-06。まとまりを隠すと中身が画面から消える。中身の設定は書き換えない。
+//! GR-06。グループを隠すと中身が画面から消える。中身の設定は書き換えない。
 [[nodiscard]] bool CaseGroupVisibility(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -182,12 +182,12 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(one);
     window.RunCommand("group.create");
     GroupId group;
-    if (!Explain("まとまりができる", LastGroup(window, group))) {
+    if (!Explain("グループができる", LastGroup(window, group))) {
         return false;
     }
     const int before = static_cast<int>(window.Session().Scene().curves.size());
     QTreeWidgetItem* item = ItemOfGroup(window, group);
-    if (!Explain("まとまりの行がある", item != nullptr)) {
+    if (!Explain("グループの行がある", item != nullptr)) {
         return false;
     }
     // itemChanged が文書を更新して木を作り直す。以後 item は無効なので再利用しない。
@@ -217,7 +217,7 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("出し直すと戻る", static_cast<int>(window.Session().Scene().curves.size()) == before);
 }
 
-//! GR-07 / GR-08。まとまりを解いても中身は消えない。取り消しで戻る。
+//! GR-07 / GR-08。グループを解いても中身は消えない。取り消しで戻る。
 [[nodiscard]] bool CaseGroupDissolveKeepsChildren(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -230,21 +230,21 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(one);
     window.RunCommand("group.create");
     GroupId group;
-    if (!Explain("まとまりができる", LastGroup(window, group))) {
+    if (!Explain("グループができる", LastGroup(window, group))) {
         return false;
     }
     const std::size_t entitiesBefore =
         window.Session().GetDocument().Snapshot().entities.size();
-    // 木でまとまりの行を選んでから解く。
+    // 木でグループの行を選んでから解く。
     QTreeWidgetItem* item = ItemOfGroup(window, group);
-    if (!Explain("まとまりの行がある", item != nullptr)) {
+    if (!Explain("グループの行がある", item != nullptr)) {
         return false;
     }
     window.EntityTree()->clearSelection();
     item->setSelected(true);
     window.RunCommand("group.dissolve");
     const auto& after = window.Session().GetDocument().Snapshot();
-    if (!Explain((std::string("まとまりが消える(残り ")
+    if (!Explain((std::string("グループが消える(残り ")
                      + std::to_string(after.groups.size()) + ")").c_str(),
             after.groups.empty())) {
         return false;
@@ -253,11 +253,11 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     window.RunCommand("edit.undo");
-    return Explain("取り消すとまとまりが戻る",
+    return Explain("取り消すとグループが戻る",
         !window.Session().GetDocument().Snapshot().groups.empty());
 }
 
-//! GR-09。保存して開き直してもまとまりの階層が残る。
+//! GR-09。保存して開き直してもグループの階層が残る。
 [[nodiscard]] bool CaseGroupSurvivesSaveAndOpen(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -270,7 +270,7 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(one);
     window.RunCommand("group.create");
     GroupId inner;
-    if (!Explain("まとまりができる", LastGroup(window, inner))) {
+    if (!Explain("グループができる", LastGroup(window, inner))) {
         return false;
     }
     // 入れ子にする。
@@ -285,7 +285,7 @@ using kachakacha::v2::domain::EntityKind;
     }
     const std::size_t groupsBefore =
         window.Session().GetDocument().Snapshot().groups.size();
-    if (!Explain("まとまりが2つある", groupsBefore == 2)) {
+    if (!Explain("グループが2つある", groupsBefore == 2)) {
         return false;
     }
     if (!Explain("保存して開き直せる",
@@ -293,7 +293,7 @@ using kachakacha::v2::domain::EntityKind;
         return false;
     }
     const auto& after = window.Session().GetDocument().Snapshot();
-    if (!Explain((std::string("まとまりの数が残る(実際 ")
+    if (!Explain((std::string("グループの数が残る(実際 ")
                      + std::to_string(after.groups.size()) + ")").c_str(),
             after.groups.size() == groupsBefore)) {
         return false;
@@ -307,8 +307,8 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("入れ子も残る", nested);
 }
 
-//! Q1-Q5 B3。まとまりを作るのと中身を入れるのは1つの操作である。
-//! 1回の取り消しで、空のまとまりが残ってはいけない。
+//! Q1-Q5 B3。グループを作るのと中身を入れるのは1つの操作である。
+//! 1回の取り消しで、空のグループが残ってはいけない。
 [[nodiscard]] bool CaseGroupCreateIsOneUndoStep(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -326,7 +326,7 @@ using kachakacha::v2::domain::EntityKind;
     window.RunCommand("group.create");
 
     GroupId group;
-    if (!Explain("まとまりができる", LastGroup(window, group))) {
+    if (!Explain("グループができる", LastGroup(window, group))) {
         return false;
     }
     if (!Explain("中身が2つ入る",
@@ -339,21 +339,21 @@ using kachakacha::v2::domain::EntityKind;
 
     window.RunCommand("edit.undo");
     const auto& afterUndo = window.Session().GetDocument().Snapshot();
-    if (!Explain((std::string("1回の取り消しでまとまりごと戻る(まとまり ")
+    if (!Explain((std::string("1回の取り消しでグループごと戻る(グループ ")
                      + std::to_string(afterUndo.groups.size()) + " 個)").c_str(),
             afterUndo.groups.size() == groupsBefore)) {
         return false;
     }
-    // 中身だけ戻って空のまとまりが残る、が起きていないこと。
+    // 中身だけ戻って空のグループが残る、が起きていないこと。
     for (const auto& entity : afterUndo.entities) {
-        if (!Explain("線がどのまとまりにも入っていない", !entity.groupId.has_value())) {
+        if (!Explain("線がどのグループにも入っていない", !entity.groupId.has_value())) {
             return false;
         }
     }
 
     window.RunCommand("edit.redo");
     GroupId again;
-    if (!Explain("1回のやり直しでまとまりが戻る", LastGroup(window, again))) {
+    if (!Explain("1回のやり直しでグループが戻る", LastGroup(window, again))) {
         return false;
     }
     return Explain("中身も一緒に戻る",
@@ -375,7 +375,7 @@ using kachakacha::v2::domain::EntityKind;
     window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
     window.RunCommand("group.create");
     GroupId destination;
-    if (!Explain("行き先のまとまりができる", LastGroup(window, destination))) {
+    if (!Explain("行き先のグループができる", LastGroup(window, destination))) {
         return false;
     }
     QTreeWidgetItem* onto = ItemOfGroup(window, destination);
@@ -482,12 +482,12 @@ using kachakacha::v2::domain::EntityKind;
 std::vector<SelfTestCase> GroupCases()
 {
     return {
-        {"複数選んでまとまりにできる", CaseGroupFromSelection},
-        {"引きずってまとまりへ移せる", CaseGroupDragAndDrop},
-        {"まとまりごと隠しても中身の設定は変わらない", CaseGroupVisibility},
-        {"まとまりを解いても中身は消えない", CaseGroupDissolveKeepsChildren},
-        {"まとまりの階層が保存して開き直しても残る", CaseGroupSurvivesSaveAndOpen},
-        {"まとまりを作るのは1回の取り消しで戻る", CaseGroupCreateIsOneUndoStep},
+        {"複数選んでグループにできる", CaseGroupFromSelection},
+        {"引きずってグループへ移せる", CaseGroupDragAndDrop},
+        {"グループごと隠しても中身の設定は変わらない", CaseGroupVisibility},
+        {"グループを解いても中身は消えない", CaseGroupDissolveKeepsChildren},
+        {"グループの階層が保存して開き直しても残る", CaseGroupSurvivesSaveAndOpen},
+        {"グループを作るのは1回の取り消しで戻る", CaseGroupCreateIsOneUndoStep},
         {"一度に引きずった分は1回の取り消しで戻る", CaseGroupDropIsOneUndoStep},
         {"1つでも断られたら引きずった分は全部戻る",
             CaseGroupDropRollsBackWhenOneIsRefused},

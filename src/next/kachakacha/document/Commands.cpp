@@ -502,7 +502,7 @@ std::vector<Diagnostic> AddGroupCommand::Apply(DocumentSnapshot& candidate) cons
     for (const Group& group : candidate.groups) {
         if (group.id == group_.id) {
             diagnostics.push_back(MakeError(kDuplicate,
-                "同じIDのまとまりが既にあります。", group_.displayName));
+                "同じIDのグループが既にあります。", group_.displayName));
             return diagnostics;
         }
     }
@@ -513,7 +513,7 @@ std::vector<Diagnostic> AddGroupCommand::Apply(DocumentSnapshot& candidate) cons
             });
         if (!parentExists) {
             diagnostics.push_back(MakeError(kNotFound,
-                "親のまとまりが見つかりません。", group_.parentId->ToString()));
+                "親のグループが見つかりません。", group_.parentId->ToString()));
             return diagnostics;
         }
     }
@@ -535,7 +535,7 @@ std::vector<Diagnostic> MoveEntitiesToGroupCommand::Apply(DocumentSnapshot& cand
             [this](const Group& group) { return group.id == *groupId_; });
         if (!exists) {
             diagnostics.push_back(MakeError(kNotFound,
-                "移し先のまとまりが見つかりません。", groupId_->ToString()));
+                "移し先のグループが見つかりません。", groupId_->ToString()));
             return diagnostics;
         }
     }
@@ -566,12 +566,12 @@ namespace {
 
 //! candidate の中で、`maybeDescendant` が `ancestor` の子孫か。自分自身も真とする。
 //!
-//! まとまりを自分の子孫の下へ移すと輪ができる。輪ができると木を辿れなくなる。
+//! グループを自分の子孫の下へ移すと輪ができる。輪ができると木を辿れなくなる。
 [[nodiscard]] bool IsDescendantOf(const DocumentSnapshot& candidate,
     const GroupId& maybeDescendant, const GroupId& ancestor)
 {
     std::optional<GroupId> walk = maybeDescendant;
-    // まとまりの数だけ辿れば必ず終わる。壊れた文書で無限に回らないための保険。
+    // グループの数だけ辿れば必ず終わる。壊れた文書で無限に回らないための保険。
     for (std::size_t step = 0; step <= candidate.groups.size() && walk.has_value(); ++step) {
         if (*walk == ancestor) {
             return true;
@@ -600,12 +600,12 @@ std::vector<Diagnostic> RenameGroupCommand::Apply(DocumentSnapshot& candidate) c
     std::vector<Diagnostic> diagnostics;
     if (displayName_.empty()) {
         diagnostics.push_back(MakeError(kEmptyName, "名前が空です。",
-            "まとまりの名前を入れてください。"));
+            "グループの名前を入れてください。"));
         return diagnostics;
     }
     Group* group = FindGroupMutable(candidate, groupId_);
     if (group == nullptr) {
-        diagnostics.push_back(MakeError(kNotFound, "名前を変えるまとまりが見つかりません。",
+        diagnostics.push_back(MakeError(kNotFound, "名前を変えるグループが見つかりません。",
             groupId_.ToString()));
         return diagnostics;
     }
@@ -624,25 +624,25 @@ std::vector<Diagnostic> SetGroupParentCommand::Apply(DocumentSnapshot& candidate
     std::vector<Diagnostic> diagnostics;
     Group* group = FindGroupMutable(candidate, groupId_);
     if (group == nullptr) {
-        diagnostics.push_back(MakeError(kNotFound, "移すまとまりが見つかりません。",
+        diagnostics.push_back(MakeError(kNotFound, "移すグループが見つかりません。",
             groupId_.ToString()));
         return diagnostics;
     }
     if (parentId_.has_value()) {
         if (*parentId_ == groupId_) {
             diagnostics.push_back(MakeError(kNotAllowed,
-                "まとまりを自分の中へは入れられません。", {}));
+                "グループを自分の中へは入れられません。", {}));
             return diagnostics;
         }
         if (FindGroupMutable(candidate, *parentId_) == nullptr) {
-            diagnostics.push_back(MakeError(kNotFound, "移し先のまとまりが見つかりません。",
+            diagnostics.push_back(MakeError(kNotFound, "移し先のグループが見つかりません。",
                 parentId_->ToString()));
             return diagnostics;
         }
         if (IsDescendantOf(candidate, *parentId_, groupId_)) {
             diagnostics.push_back(MakeError(kNotAllowed,
-                "まとまりを自分の中のまとまりへは入れられません。",
-                "輪ができると、まとまりの木を辿れなくなります。"));
+                "グループを自分の中のグループへは入れられません。",
+                "輪ができると、グループの木を辿れなくなります。"));
             return diagnostics;
         }
     }
@@ -660,7 +660,7 @@ std::vector<Diagnostic> SetGroupVisibilityCommand::Apply(DocumentSnapshot& candi
     std::vector<Diagnostic> diagnostics;
     Group* group = FindGroupMutable(candidate, groupId_);
     if (group == nullptr) {
-        diagnostics.push_back(MakeError(kNotFound, "出し隠しするまとまりが見つかりません。",
+        diagnostics.push_back(MakeError(kNotFound, "出し隠しするグループが見つかりません。",
             groupId_.ToString()));
         return diagnostics;
     }
@@ -686,10 +686,10 @@ std::vector<Diagnostic> RemoveGroupCommand::Apply(DocumentSnapshot& candidate) c
     }
     if (!found) {
         diagnostics.push_back(MakeError(kNotFound,
-            "消すまとまりが見つかりません。", groupId_.ToString()));
+            "消すグループが見つかりません。", groupId_.ToString()));
         return diagnostics;
     }
-    // 中身は消さない。親のまとまりへ移す。
+    // 中身は消さない。親のグループへ移す。
     for (Entity& entity : candidate.entities) {
         if (entity.groupId.has_value() && *entity.groupId == groupId_) {
             entity.groupId = parent;

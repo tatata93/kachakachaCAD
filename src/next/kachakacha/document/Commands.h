@@ -178,7 +178,7 @@ private:
 class AddGroupCommand final : public DocumentCommand {
 public:
     AddGroupCommand(Group group);
-    [[nodiscard]] std::string Label() const override { return "まとまりを作る"; }
+    [[nodiscard]] std::string Label() const override { return "グループを作る"; }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
 private:
@@ -189,7 +189,7 @@ class MoveEntitiesToGroupCommand final : public DocumentCommand {
 public:
     MoveEntitiesToGroupCommand(std::vector<EntityId> entityIds,
         std::optional<GroupId> groupId);
-    [[nodiscard]] std::string Label() const override { return "まとまりへ入れる"; }
+    [[nodiscard]] std::string Label() const override { return "グループへ入れる"; }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
 private:
@@ -197,11 +197,11 @@ private:
     std::optional<GroupId> groupId_;
 };
 
-//! まとまりの名前を変える。中身には触らない。
+//! グループの名前を変える。中身には触らない。
 class RenameGroupCommand final : public DocumentCommand {
 public:
     RenameGroupCommand(GroupId groupId, std::string displayName);
-    [[nodiscard]] std::string Label() const override { return "まとまりの名前を変える"; }
+    [[nodiscard]] std::string Label() const override { return "グループの名前を変える"; }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
 private:
@@ -209,13 +209,13 @@ private:
     std::string displayName_;
 };
 
-//! まとまりを別のまとまりの下へ移す(入れ子)。中身は一緒に付いていく。
+//! グループを別のグループの下へ移す(入れ子)。中身は一緒に付いていく。
 //!
 //! 輪(自分の子孫の下へ移す)は断る。輪ができると、木を辿るときに終わらない。
 class SetGroupParentCommand final : public DocumentCommand {
 public:
     SetGroupParentCommand(GroupId groupId, std::optional<GroupId> parentId);
-    [[nodiscard]] std::string Label() const override { return "まとまりを移す"; }
+    [[nodiscard]] std::string Label() const override { return "グループを移す"; }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
 private:
@@ -223,13 +223,13 @@ private:
     std::optional<GroupId> parentId_;
 };
 
-//! まとまりごと出す/隠す。**中身の visibility は書き換えない。**
+//! グループごと出す/隠す。**中身の visibility は書き換えない。**
 class SetGroupVisibilityCommand final : public DocumentCommand {
 public:
     SetGroupVisibilityCommand(GroupId groupId, bool visible);
     [[nodiscard]] std::string Label() const override
     {
-        return visible_ ? "まとまりを出す" : "まとまりを隠す";
+        return visible_ ? "グループを出す" : "グループを隠す";
     }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
@@ -238,11 +238,11 @@ private:
     bool visible_ = true;
 };
 
-//! まとまりを消す。中の物は親のまとまりへ移す(消さない)。
+//! グループを消す。中の物は親のグループへ移す(消さない)。
 class RemoveGroupCommand final : public DocumentCommand {
 public:
     explicit RemoveGroupCommand(GroupId groupId);
-    [[nodiscard]] std::string Label() const override { return "まとまりを消す"; }
+    [[nodiscard]] std::string Label() const override { return "グループを消す"; }
     [[nodiscard]] std::vector<Diagnostic> Apply(DocumentSnapshot& candidate) const override;
 
 private:

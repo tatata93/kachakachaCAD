@@ -396,6 +396,7 @@ public:
     [[nodiscard]] QString ActiveGroupText() const;
     //! 一覧に出ているグループ行の名前。試験で見る。
     [[nodiscard]] QString GroupRowText(int row) const;
+    [[nodiscard]] std::vector<QTreeWidgetItem*> ExplorerRows() const;
     [[nodiscard]] int GroupRowCount() const;
     //! 上の帯の「まとまり」コンボ。名前ではなく GroupId で切り替える。
     [[nodiscard]] int GroupComboCount() const;
@@ -496,6 +497,16 @@ public:
     void DeleteSelected();
     //! 選択道具で右クリックしたときのメニュー。V1と同じで、ここだけ出す。
     void ShowSelectMenu(const QPoint& at);
+    //! 左の一覧の右クリック(V2ExplorerMenu.cpp)。at は一覧の座標。
+    void ShowExplorerMenu(const QPoint& at);
+    //! 一覧の献立を組むだけ。試験は exec を通さずに並びを確かめる。
+    void BuildExplorerMenu(QMenu& menu);
+    //! 「グループへ移動」の小献立。落としたのと同じ道を通す。
+    void BuildMoveToGroupMenu(QMenu& menu);
+    //! プロパティ: 右の「直す」欄を前に出す。
+    void ShowProperties();
+    //! 一覧の献立の並び(区切りを除く)。試験から読む。
+    [[nodiscard]] std::vector<QString> ExplorerMenuLabels();
     //! 候補つきの同じメニュー。選ばれた候補の番号を返す。
     //! 台帳のコマンドを選んだときと、閉じたときは値を持たない。
     //! 候補の見出しは画面が作ったものをそのまま並べる。ここでは集め直さない。
@@ -1134,7 +1145,16 @@ private:
         const kachakacha::v2::geometry::Vector3& normal,
         const kachakacha::v2::geometry::Vector3& uAxis);
     //! まとまりの行を、入れ子のまま作る。作った行を id 文字列で引けるようにする。
-    void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId);
+    void BuildGroupItems(std::map<std::string, QTreeWidgetItem*>& byGroupId,
+        QTreeWidgetItem* groupsRoot);
+    //! Model Explorer の組み立て(V2ExplorerBuild.cpp)。
+    void BuildOriginRows(QTreeWidgetItem* originRoot);
+    QTreeWidgetItem* AddEntityRow(QTreeWidgetItem* parent,
+        const kachakacha::v2::domain::Entity& entity);
+    void AddApproximationRows(QTreeWidgetItem* modelItem,
+        const kachakacha::v2::domain::Entity& entity);
+    [[nodiscard]] bool ToggleEntityVisibilityFromItem(QTreeWidgetItem* item);
+    [[nodiscard]] QString DocumentDisplayName() const;
 public:
     //! 部材の分割と統合(§32)。判断は core(`fabrication/BandPartition`)がする。
     void MergeFabricationParts();

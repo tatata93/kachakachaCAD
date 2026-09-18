@@ -97,8 +97,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `fabrication.split_part` | 部材を分ける | 同上 | 同上 | AT-FAB-005 |
 | `fabrication.set_unfold_base` | 展開の基準にする辺 | 製作モデル1つ + 棚の「曲げる部材」の番号 | Fabrication Feature 更新(`unfoldBaseRail`)。展開しても動かさない辺を決める | AT-FAB-011 |
 | `group.create` | グループ化 | 任意 | Groupを作りEntityのgroupIdを移す | AT-UIX-006 |
-| `group.dissolve` | グループを解く | まとまりの行 | Groupを消し中身は親へ | AT-UIX-006 |
-| `group.rename` | グループの名前を変える | まとまりの行 | Group displayName | AT-UIX-006 |
+| `group.dissolve` | グループを解く | グループの行 | Groupを消し中身は親へ | AT-UIX-006 |
+| `group.rename` | グループの名前を変える | グループの行 | Group displayName | AT-UIX-006 |
 | `grid.edit` | グリッド | 間隔、副点、原点 | Document settings | AT-UIX-005 |
 | `grid.move_origin` | グリッド原点を移動 | 原点handle、snap先 | Document settings | AT-UIX-005 |
 

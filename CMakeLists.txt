@@ -624,6 +624,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/SurfacePreview.cpp
     src/next/kachakacha/app/ApproxInput.cpp
     src/next/kachakacha/app/BooleanInputState.cpp
+    src/next/kachakacha/app/Ribbon.cpp
     src/next/kachakacha/app/ToolRoleLabels.cpp
     src/next/kachakacha/app/ToolFooter.cpp
     src/next/kachakacha/app/ToolKeys.cpp
@@ -807,6 +808,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(surface_preview_tests tests_v2/surface_preview_tests.cpp)
     kachakacha_add_v2_test(approx_input_tests tests_v2/approx_input_tests.cpp)
     kachakacha_add_v2_test(boolean_input_tests tests_v2/boolean_input_tests.cpp)
+    kachakacha_add_v2_test(ribbon_tests tests_v2/ribbon_tests.cpp)
     kachakacha_add_v2_test(surface_deviation_limit_tests tests_v2/surface_deviation_limit_tests.cpp)
     kachakacha_add_v2_test(tool_role_labels_tests tests_v2/tool_role_labels_tests.cpp)
     kachakacha_add_v2_test(tool_footer_tests tests_v2/tool_footer_tests.cpp)
@@ -943,6 +945,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestHumanPathApprox.cpp
         src/apps/cad_next/V2SelfTestHumanPathBoolean.cpp
         src/apps/cad_next/V2SelfTestHumanPathCorner.cpp
+        src/apps/cad_next/V2SelfTestRibbon.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
@@ -975,6 +978,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
         src/apps/cad_next/V2CornerPreview.cpp
+        src/apps/cad_next/V2Ribbon.cpp
+        src/apps/cad_next/V2RibbonCommands.cpp
         src/apps/cad_next/V2BooleanDock.cpp
         src/apps/cad_next/V2ToolKeys.cpp
         src/apps/cad_next/V2ToolRoleLabels.cpp

@@ -63,12 +63,14 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "wire.move", "wire.copy", "wire.mirror",
         "wire.rotate", "wire.project", "wire.project_surface", "wire.wrap_project", "workplane.create", "grid.edit",
         "grid.move_origin",
-    };
-    static const std::vector<std::string_view> part{
+        // 3D の面は作図モードで作る(正本 2026-09-18: 作図 = Wire / Curve / WorkPlane / 3D Surface)。
+        // 製作モードの近似の元になる。
         "surface.create",
         "guide.create", "guide.revolve", "guide.set_method", "guide.add_row", "guide.append_row",
         "guide.row_up", "guide.row_down", "guide.row_remove", "guide.row_reverse",
         "guide.build", "guide.clear",
+    };
+    static const std::vector<std::string_view> part{
         "part.extrude", "part.thicken", "part.thickness_placement", "part.thicken_to_plane",
         "part.surface_jig",
         "part.from_wire_cage",
@@ -81,7 +83,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "fabrication.create_pattern", "fabrication.set_assembly",
         "fabrication.set_method", "fabrication.freeze_output", "fabrication.merge_parts", "fabrication.split_part",
         "fabrication.set_unfold_base",
-        "fabrication.freeze_state",
+        "fabrication.freeze_state", "fabrication.freeze_flat", "fabrication.edit_part",
         "fabrication.set_connection_scope",
     };
     static const std::vector<std::string_view> output{
@@ -103,15 +105,12 @@ const std::vector<std::string_view>& TopBarCommandIdsForMode(UiMode mode)
     // 上の帯に残すのは「そこから始める」ものだけ。
     // 表の行を動かす・板厚を当てる、といったものはその欄の隣(右の棚)にある。
     static const std::vector<std::string_view> drawing{
-        "workplane.create", "grid.edit", "grid.move_origin",
+        // **面を作る入口は1つ**(オーナー指示 §10)。面は作図モードで作る(正本 2026-09-18)。
+        "surface.create", "workplane.create", "grid.edit", "grid.move_origin",
         "wire.project", "wire.project_surface", "wire.wrap_project",
-        "wire.array_linear", "wire.array_circular", "edit.numeric",
+        "wire.array_linear", "edit.numeric",
     };
     static const std::vector<std::string_view> part{
-        // **面を作る入口は1つ**(オーナー指示 §10)。
-        // 「形状ガイド / 選択を表へ / 表から面を作る」の3つを並べていたので、
-        // 人から見て別物の道が2本あるように見えていた。
-        "surface.create",
         "part.extrude", "part.thicken", "part.boolean_add", "part.boolean_cut",
     };
     static const std::vector<std::string_view> fabrication{

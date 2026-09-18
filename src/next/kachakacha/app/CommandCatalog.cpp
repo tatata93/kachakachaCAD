@@ -468,6 +468,15 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "いまの状態を固定して、独立したワイヤーや部品にします。", true,
             {"AT-FAB-011"}},
+        {"fabrication.freeze_flat", "展開状態(0%)を線にする", CommandMode::Instant, "fab_flat", "",
+            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            "いまの曲げ具合を変えずに、0%(平らに展開した状態)の輪郭を線として作ります。"
+            "近似モデルはそのまま残ります。", true,
+            {"AT-FAB-011"}},
+        {"fabrication.edit_part", "近似部品の編集", CommandMode::Modeless, "fab_edit", "",
+            SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            "近似モデルの部材の編集(分割・結合・切れ目・半径 AUTO/LOCK・曲げ状態)の棚を出します。"
+            "文書はここでは変えません。", false, {"AT-FAB-005"}},
         {"fabrication.merge_parts", "部材を1つにする", CommandMode::Instant,
             "fab_merge", "", SelectionPredicate::OneFabricationModel,
             "製作モデルを1つ選んでください。",

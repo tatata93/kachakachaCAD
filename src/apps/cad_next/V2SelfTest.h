@@ -126,6 +126,9 @@ void Note(const char* what);
 //! C面取り / R丸めの人の道(HP-CN)。道具 → A → B → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathCornerCases();
 
+//! 2段の帯(HP-RB)。カテゴリ → 道具、押せない道具は理由つき。
+[[nodiscard]] std::vector<SelfTestCase> RibbonCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

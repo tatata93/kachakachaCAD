@@ -92,6 +92,8 @@ public:
     void setVisible(bool);
     [[nodiscard]] QWidget* parentWidget() const;
     void setToolTip(const QString&);
+    [[nodiscard]] QString toolTip() const;
+    [[nodiscard]] QRect geometry() const;
     void resize(int, int);
     void resize(const QSize&);
     void show();
@@ -120,6 +122,7 @@ class QLayout : public QObject {
 public:
     void addWidget(QWidget*);
     void addWidget(QWidget*, int);
+    void removeWidget(QWidget*);
     void setContentsMargins(int, int, int, int);
     void setSpacing(int);
 };
@@ -561,6 +564,10 @@ public:
     void setPopupMode(ToolButtonPopupMode);
     void setMenu(QMenu*);
     void setToolTip(const QString&);
+    void setAutoRaise(bool);
+    void setToolButtonStyle(Qt::ToolButtonStyle);
+    void setDefaultAction(QAction*);
+    [[nodiscard]] QAction* defaultAction() const;
 };
 
 class QTabBar : public QWidget {

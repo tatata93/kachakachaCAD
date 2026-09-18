@@ -28,6 +28,7 @@
 #include "V2ExtrudeDock.h"
 #include "V2SurfaceDock.h"
 #include "V2BooleanDock.h"
+#include "V2Ribbon.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
 #include "V2Viewport.h"
@@ -373,6 +374,8 @@ public:
     [[nodiscard]] int VisibleToolCount() const;
     //! 2段目に、その台帳コマンドが道具として出ているか。
     [[nodiscard]] bool ModeToolVisible(std::string_view id) const;
+    //! 2段の帯。試験と場面づくりから押す。
+    [[nodiscard]] V2Ribbon& Ribbon() { return *ribbon_; }
 
     //! モードごとの手順(ui-workflows §9 / §10 / §11)。1本の並びとして右に出す。
     [[nodiscard]] int ProcessStepCount() const;
@@ -759,8 +762,13 @@ private:
     void BuildMenus();
     void BuildModeBar();
     void BuildToolPalette();
+    //! 2段の帯(V2RibbonCommands.cpp)。道具の QAction は tool ごとに渡す。
+    void BuildRibbon(const std::map<std::string, QAction*>& toolActionsByCommand);
+    //! 作り方つきの道具(面作成の方式 / 測定の測り方)を押した。
+    void RunRibbonVariant(const kachakacha::v2::app::RibbonTool& tool);
+    //! いまの道具・作り方を帯の印へ映す。
+    void RefreshRibbonState();
     //! 台帳 QAction を2段目のモード別道具として再利用する。
-    void BuildModeToolActions();
     //! その命令は作図の道具(kToolBindings)として既に並んでいるか。
     [[nodiscard]] static bool IsToolBoundCommand(std::string_view id);
     void RefreshCommandVisibility();
@@ -1085,7 +1093,7 @@ private:
     std::unique_ptr<kachakacha::v2::app::DrawingSession> session_;
     V2Viewport* viewport_ = nullptr;
     QToolBar* toolPalette_ = nullptr;
-    std::vector<QWidget*> drawingToolGroups_;
+    V2Ribbon* ribbon_ = nullptr;
     class V2EntityTree* entityTree_ = nullptr;
     QLineEdit* entityFilter_ = nullptr;
     //! 左の一覧で選んだものを、3D 画面の選択にする(V1 と同じ)。
@@ -1381,7 +1389,6 @@ private:
     QToolBar* modeBar_ = nullptr;
     std::vector<std::pair<kachakacha::v2::app::UiMode, QAction*>> modeActions_;
     std::vector<QAction*> toolActions_;
-    std::vector<std::pair<std::string_view, QAction*>> modeToolActions_;
     QComboBox* groupCombo_ = nullptr;
     std::vector<std::optional<kachakacha::v2::base::GroupId>> groupComboIds_;
     bool refreshingGroupCombo_ = false;

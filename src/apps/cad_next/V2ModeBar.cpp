@@ -15,7 +15,6 @@
 namespace {
 
 using kachakacha::v2::app::AllUiModes;
-using kachakacha::v2::app::TopBarCommandIdsForMode;
 using kachakacha::v2::app::UiMode;
 using kachakacha::v2::app::UiModeNameJa;
 
@@ -60,9 +59,9 @@ void V2MainWindow::BuildModeBar()
         }
         ActivateWorkPlaneById(planeComboIds_[static_cast<std::size_t>(index)]);
     });
-    modeBar_->addWidget(new QLabel(QStringLiteral(" まとまり "), modeBar_));
+    modeBar_->addWidget(new QLabel(QStringLiteral(" グループ "), modeBar_));
     groupCombo_ = new QComboBox(modeBar_);
-    groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のまとまり。"));
+    groupCombo_->setToolTip(QStringLiteral("これから作るものを入れる作業中のグループ。"));
     groupCombo_->setMinimumContentsLength(10);
     groupCombo_->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     groupCombo_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -78,29 +77,6 @@ void V2MainWindow::BuildModeBar()
     addToolBarBreak();
 }
 
-void V2MainWindow::BuildModeToolActions()
-{
-    // 2段目に並べるのは **入口になる命令だけ**(app/UiMode の TopBar...)。
-    // 部品モードには 19 個が横一列に並んでいて、名前だけの札から
-    // 何を押せばよいか読めなかった。表の行を動かす・板厚を当てる、といったものは
-    // その欄の隣(右の棚)へ移した。ここに別の一覧は持たない ── 持つと
-    // 台帳へ足した命令が出ないまま残る。作図の道具は道具として既に並ぶので除く。
-    toolPalette_->addSeparator();
-    for (const kachakacha::v2::app::UiMode mode : AllUiModes()) {
-        for (const std::string_view id : TopBarCommandIdsForMode(mode)) {
-            if (IsToolBoundCommand(id)) {
-                continue;
-            }
-            QAction* action = ActionFor(id);
-            if (action == nullptr) {
-                continue;
-            }
-            toolPalette_->addAction(action);
-            modeToolActions_.emplace_back(id, action);
-        }
-    }
-}
-
 void V2MainWindow::RefreshActiveGroupCombo()
 {
     if (groupCombo_ == nullptr) {
@@ -110,7 +86,7 @@ void V2MainWindow::RefreshActiveGroupCombo()
     refreshingGroupCombo_ = true;
     groupCombo_->clear();
     groupComboIds_.clear();
-    groupCombo_->addItem(QStringLiteral("(まとまりなし)"));
+    groupCombo_->addItem(QStringLiteral("(グループなし)"));
     groupComboIds_.push_back(std::nullopt);
     int current = snapshot.settings.activeGroupId.has_value() ? -1 : 0;
     for (const auto& group : snapshot.groups) {
@@ -131,8 +107,8 @@ void V2MainWindow::ActivateGroupByComboIndex(int index)
         return;
     }
     if (SetActiveGroup(groupComboIds_[static_cast<std::size_t>(index)])) {
-        SetStatus(index == 0 ? QStringLiteral("作業中のまとまりを外しました。")
-                             : QStringLiteral("作業中のまとまりを %1 にしました。")
+        SetStatus(index == 0 ? QStringLiteral("作業中のグループを外しました。")
+                             : QStringLiteral("作業中のグループを %1 にしました。")
                                    .arg(groupCombo_->itemText(index)));
     }
 }
@@ -160,14 +136,4 @@ void V2MainWindow::SelectGroupCombo(int index)
     if (groupCombo_ != nullptr) {
         groupCombo_->setCurrentIndex(index);
     }
-}
-
-bool V2MainWindow::ModeToolVisible(std::string_view id) const
-{
-    for (const auto& entry : modeToolActions_) {
-        if (entry.first == id) {
-            return entry.second->isVisible();
-        }
-    }
-    return false;
 }

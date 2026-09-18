@@ -753,10 +753,9 @@ namespace {
         || window.ModeToolVisible("part.extrude")) {
         return false;
     }
-    // 戻せば元に戻る。
+    // 戻せば元に戻る(帯はカテゴリごとに出すので、数の大小はモードで比べない)。
     window.SetMode(kachakacha::v2::app::UiMode::Drawing);
-    return window.VisibleToolCount() == drawing && part < drawing
-        && fabrication < drawing && output < drawing;
+    return window.VisibleToolCount() == drawing && part > 0 && fabrication > 0 && output > 0;
 }
 
 [[nodiscard]] bool CaseProcessStepsFollowMode(V2MainWindow& window)

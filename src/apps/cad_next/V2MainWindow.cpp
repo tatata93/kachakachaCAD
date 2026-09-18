@@ -374,11 +374,11 @@ void V2MainWindow::BuildMenus()
 
     QMenu* fabrication = menuBar()->addMenu(QStringLiteral("製作(&B)"));
     addCommands(fabrication, {"fabrication.create", "fabrication.assign_role",
-        "fabrication.assign_relief_cut", "fabrication.preview_update",
-        "fabrication.create_pattern", "fabrication.set_assembly",
-        "fabrication.set_method", "fabrication.merge_parts", "fabrication.split_part",
-        "fabrication.set_unfold_base", "fabrication.freeze_output",
-        "fabrication.freeze_state", "fabrication.set_connection_scope"});
+        "fabrication.assign_relief_cut", "fabrication.preview_update", "fabrication.create_pattern",
+        "fabrication.set_assembly", "fabrication.set_method", "fabrication.merge_parts",
+        "fabrication.split_part", "fabrication.set_unfold_base", "fabrication.freeze_output",
+        "fabrication.freeze_state", "fabrication.freeze_flat", "fabrication.edit_part",
+        "fabrication.set_connection_scope"});
 
     QMenu* output = menuBar()->addMenu(QStringLiteral("書き出し(&X)"));
     addCommands(output, {"export.validate", "export.stl", "export.step", "export.svg",
@@ -430,6 +430,9 @@ void V2MainWindow::SetMode(UiMode mode)
     // 構えていた命令も捨てる。別のモードへ移ったなら、その命令はもう関係ない。
     ClearPendingCommand();
     RefreshCommandVisibility();
+    if (ribbon_ != nullptr) {
+        ribbon_->ShowMode(mode);   // 帯のカテゴリと道具はモードで入れ替わる
+    }
     // 右に出す棚は「いまの道具とモード」で決まる(core の ShelfLayout)。
     // 全部出しっぱなしにすると、1枚あたりが 80px まで潰れて見出しだけが並ぶ。
     RefreshRightShelves();
@@ -476,20 +479,6 @@ void V2MainWindow::RefreshCommandVisibility()
     for (QAction* action : toolActions_) {
         action->setVisible(mode_ == UiMode::Drawing);
     }
-    for (QWidget* group : drawingToolGroups_) {
-        group->setVisible(mode_ == UiMode::Drawing);
-    }
-    if (toolPalette_ != nullptr) {
-        // 出る道具が1つも無いモードでは、道具箱ごと隠す。
-        bool anyVisible = false;
-        for (QAction* action : toolActions_) {
-            anyVisible = anyVisible || action->isVisible();
-        }
-        for (const auto& entry : modeToolActions_) {
-            anyVisible = anyVisible || entry.second->isVisible();
-        }
-        toolPalette_->setVisible(anyVisible);
-    }
 }
 
 bool V2MainWindow::IsToolBoundCommand(std::string_view id)
@@ -507,7 +496,7 @@ void V2MainWindow::BuildToolPalette()
     toolPalette_ = addToolBar(QStringLiteral("道具"));
     toolPalette_->setObjectName(QStringLiteral("toolPalette"));
     toolPalette_->setMovable(false);
-    toolPalette_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    toolPalette_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     std::map<DrawingTool, QAction*> actions;
     for (const DrawingTool tool : kToolOrder) {
         auto* action = new QAction(ToolLabel(tool), this);
@@ -536,41 +525,18 @@ void V2MainWindow::BuildToolPalette()
             [this, tool] { SelectTool(tool); });
     }
 
-    // 一列に23個並べると、狭い画面ではツールバーがウィンドウ全体を
-    // 押し広げる。輪郭作図で頻繁に使う入口は直接置き、残りは意味別に
-    // まとめる。QAction 自体は共通なので、メニューから選んでも同じ状態へ入る。
-    for (const DrawingTool tool : {DrawingTool::Select, DrawingTool::Point,
-             DrawingTool::Line, DrawingTool::Polyline, DrawingTool::Rectangle,
-             DrawingTool::Circle, DrawingTool::Arc}) {
-        toolPalette_->addAction(actions.at(tool));
+    // 2段の帯(カテゴリ → 道具)。並びは core の app/Ribbon が決める(正本 3 HTML)。
+    // 道具の QAction は近道(L / C / A …)とメニューのために窓へも足しておく。
+    std::map<std::string, QAction*> byCommand;
+    for (QAction* action : toolActions_) {
+        addAction(action);
     }
-
-    const auto addToolMenu = [this, &actions](const QString& label,
-                                 std::initializer_list<DrawingTool> tools) {
-        auto* button = new QToolButton(toolPalette_);
-        button->setText(label);
-        button->setPopupMode(QToolButton::InstantPopup);
-        auto* menu = new QMenu(button);
-        for (const DrawingTool tool : tools) {
-            menu->addAction(actions.at(tool));
+    for (const ToolBinding& binding : kToolBindings) {
+        if (const auto found = actions.find(binding.tool); found != actions.end()) {
+            byCommand.emplace(std::string(binding.commandId), found->second);
         }
-        button->setMenu(menu);
-        button->setToolTip(QStringLiteral("%1の道具を選びます").arg(label));
-        toolPalette_->addWidget(button);
-        drawingToolGroups_.push_back(button);
-    };
-    addToolMenu(QStringLiteral("曲線"),
-        {DrawingTool::Bezier, DrawingTool::Spline});
-    addToolMenu(QStringLiteral("変形"),
-        {DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror,
-            DrawingTool::Rotate});
-    addToolMenu(QStringLiteral("編集"),
-        {DrawingTool::SetGridOrigin, DrawingTool::Split, DrawingTool::Trim,
-            DrawingTool::Extend, DrawingTool::JoinEndpoints,
-            DrawingTool::TangentJoin, DrawingTool::CurvatureJoin,
-            DrawingTool::ConnectTwoPoints, DrawingTool::ChamferOrFilletPair,
-            DrawingTool::Measure});
-    BuildModeToolActions();
+    }
+    BuildRibbon(byCommand);
 }
 
 //! 左の一覧(V1 のモデルツリー)を組み立てる。
@@ -1129,12 +1095,12 @@ QString V2MainWindow::ProcessStepReason(int row) const
 
 int V2MainWindow::VisibleToolCount() const
 {
+    // 帯に見えている道具の数(押せるものだけ)。
     int count = 0;
-    for (QAction* action : toolActions_) {
-        count += action->isVisible() ? 1 : 0;
-    }
-    for (const auto& entry : modeToolActions_) {
-        count += entry.second->isVisible() ? 1 : 0;
+    if (ribbon_ != nullptr) {
+        for (const QString& label : ribbon_->ToolLabels()) {
+            count += ribbon_->ToolEnabled(label) ? 1 : 0;
+        }
     }
     return count;
 }
@@ -1203,6 +1169,13 @@ void V2MainWindow::SelectTool(DrawingTool tool)
     // その道具の設定だけを右に出す。道具を選んだのに欄が出てこない、をなくす。
     RefreshRightShelves();
     RefreshCornerPreview();   // 面取りの道具を持った/離したときに下見を出す/片づける
+    RefreshRibbonState();
+    // 近道やメニューで持った道具も、帯ではそのカテゴリが前に出る(帯と道具を食い違わせない)。
+    for (const ToolBinding& binding : kToolBindings) {
+        if (binding.tool == tool && ribbon_ != nullptr && tool != DrawingTool::Select) {
+            ribbon_->RevealCommand(binding.commandId);
+        }
+    }
     viewport_->update();
 }
 

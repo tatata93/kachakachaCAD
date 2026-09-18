@@ -151,6 +151,8 @@ parameter schemaのdiscriminatorにする。
 | `fabrication.freeze_output` | 固定で作るもの | なし | (設定のみ) | AT-FAB-011 |
 | `fabrication.set_connection_scope` | 接続スコープ | ワイヤー | Fabrication Feature更新 + CreateWire | AT-FAB-015 |
 | `fabrication.freeze_state` | 現在状態を固定 | panel、Wire種別、Part方式、板厚位置 | Wire/Part/両方 | AT-FAB-011,012,014 |
+| `fabrication.freeze_flat` | 展開状態(0%)を線にする | 製作モデル1 | Wire(0% の輪郭)。曲げ具合は変えない | AT-FAB-011 |
+| `fabrication.edit_part` | 近似部品の編集 | 製作モデル1 | (棚を出すだけ。文書は変えない) | AT-FAB-005 |
 
 `fabrication.preview_update` だけはDocumentへcommitしない。`create` または設定更新の確定時に、
 previewで使った同じDefinitionを再検証してcommitする。

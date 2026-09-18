@@ -31,6 +31,17 @@
 #include <utility>
 #include <vector>
 
+//! 「近似部品の編集」。部材の編集の棚(2 段目)を出すだけ。文書は変えない。
+void V2MainWindow::ShowPartEditShelf()
+{
+    if (fabricationDock_ != nullptr) {
+        fabricationDock_->SetStageIndex(1);
+    }
+    ShowShelf(kachakacha::v2::app::Shelf::Fabrication);
+    SetStatus(QStringLiteral("近似部品の編集: 「曲げる部材」に番号を入れ、分割・結合・切れ目・"
+                             "半径・曲げ状態を決めてください。"));
+}
+
 bool V2MainWindow::IsFabricationCommand(std::string_view id)
 {
     // 「現在状態を固定」は固定の側(V2FreezeCommands.cpp)が受ける。
@@ -99,6 +110,10 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
     }
     if (id == "fabrication.merge_parts") {
         MergeFabricationParts();
+        return;
+    }
+    if (id == "fabrication.edit_part") {
+        ShowPartEditShelf();
         return;
     }
     if (id == "fabrication.split_part") {

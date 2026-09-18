@@ -864,6 +864,8 @@ private:
         kachakacha::v2::fabrication::FreezeOutput::WiresOnly;
     //! V2 方式(曲げ状態の形が無い)の固定。型紙の線をそのまま置く。
     void FreezeFlatPanels();
+    void FreezeFlatOutline();
+    void ShowPartEditShelf();
     //! 点列を直線でつないだ線にする。
     [[nodiscard]] static std::vector<kachakacha::v2::geometry::CurveSegment> PolylineOf(
         const std::vector<kachakacha::v2::geometry::Vector3>& points);

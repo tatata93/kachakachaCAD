@@ -24,7 +24,8 @@
 
 bool V2MainWindow::IsFreezeCommand(std::string_view id)
 {
-    return id == "derived.freeze" || id == "fabrication.freeze_state";
+    return id == "derived.freeze" || id == "fabrication.freeze_state"
+        || id == "fabrication.freeze_flat";
 }
 
 void V2MainWindow::RunFreezeCommand(std::string_view id)
@@ -35,7 +36,56 @@ void V2MainWindow::RunFreezeCommand(std::string_view id)
     }
     if (id == "fabrication.freeze_state") {
         FreezeFabricationState();
+        return;
     }
+    if (id == "fabrication.freeze_flat") {
+        FreezeFlatOutline();
+    }
+}
+
+//! 「Flat Wire」。いまの曲げ具合は変えずに、0%(平らに展開した状態)の輪郭を線にする。
+//! 近似モデルは残る(正本 製作: ApproxPart自体は破壊しない)。
+void V2MainWindow::FreezeFlatOutline()
+{
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entityPointer = session_->GetDocument().FindEntity(modelId);
+    const auto* feature = entityPointer == nullptr
+        ? nullptr
+        : session_->GetDocument().FindFeature(entityPointer->createdBy);
+    const auto* definitionPointer = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    const auto evaluatedIterator = fabricationModels_.find(modelId.ToString());
+    if (definitionPointer == nullptr || evaluatedIterator == fabricationModels_.end()) {
+        SetStatus(QStringLiteral(
+            "Flat Wire: 先に「近似」で近似モデルを作ってください。"));
+        return;
+    }
+    const std::string modelName = entityPointer->displayName;
+    const kachakacha::v2::app::FabricationEvaluation evaluated = evaluatedIterator->second;
+    if (!evaluated.bandMesh.has_value()) {
+        FreezeFlatPanels();   // 面ごとの方式は型紙の線そのもの
+        return;
+    }
+    // 文書の作り方は触らず、写しを 0% にして展開の姿勢を取る。
+    kachakacha::v2::domain::CreateFabricationModelDefinition flat = *definitionPointer;
+    flat.masterPercent = 0.0;
+    flat.creaseProgress.clear();
+    flat.bandProgress.clear();
+    const auto rails = kachakacha::v2::app::FoldedRailsOf(flat, evaluated, 0.0);
+    int wires = 0;
+    for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
+        const std::string label = modelName + " 部材" + std::to_string(band / 2 + 1) + " (展開 0%)";
+        if (AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str()).IsNil()
+            || AddPlainWire(PolylineOf(rails[band + 1]), (label + " 上").c_str()).IsNil()) {
+            return;
+        }
+        wires += 2;
+    }
+    AdoptCurrentDocument();
+    SetStatus(QStringLiteral("Flat Wire: 展開状態(0%)の線を %1 本作りました。近似モデルは残っています。")
+            .arg(wires));
 }
 
 kachakacha::v2::base::EntityId V2MainWindow::AddPlainWire(

@@ -70,4 +70,28 @@ std::string_view ExplorerKindNameJa(domain::EntityKind kind) noexcept
     return "不明";
 }
 
+std::string UniqueDisplayName(const document::DocumentSnapshot& snapshot,
+    domain::EntityKind kind, const std::string& base)
+{
+    const auto taken = [&](const std::string& candidate) {
+        for (const auto& entity : snapshot.entities) {
+            if (entity.kind == kind && entity.displayName == candidate) {
+                return true;
+            }
+        }
+        return false;
+    };
+    if (!taken(base)) {
+        return base;
+    }
+    // 2 から数える。「押し出し」の次は「押し出し 2」。1 は付けない(最初のものは素の名前)。
+    for (int number = 2; number < 100000; ++number) {
+        const std::string candidate = base + " " + std::to_string(number);
+        if (!taken(candidate)) {
+            return candidate;
+        }
+    }
+    return base;
+}
+
 } // namespace kachakacha::v2::app

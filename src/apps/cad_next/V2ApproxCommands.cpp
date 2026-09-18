@@ -337,7 +337,7 @@ void V2MainWindow::ConfirmApprox()
     const std::size_t chosen =
         static_cast<std::size_t>(std::max(0, approxInput_.selectedCandidate));
     if (chosen >= approxEvaluations_.size() || !approxEvaluations_[chosen].has_value()) {
-        SetStatus(QStringLiteral("近似: まだ作れません。対象を選び、作れる候補を選んでください。"));
+        SetStatus(QStringLiteral("近似: まだ作れません。部品か形状ガイドの面を 3D で押して対象にし、作れる候補を選んでください。"));
         RefreshApproxDock();
         return;
     }

@@ -18,6 +18,7 @@
 #include "kachakacha/document/Document.h"
 #include "kachakacha/domain/Entity.h"
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -46,5 +47,12 @@ enum class ExplorerSection {
 
 //! 種類の名前(一覧の2列目)。
 [[nodiscard]] std::string_view ExplorerKindNameJa(domain::EntityKind kind) noexcept;
+
+//! 同じ名前が並ばないように番号を送る(「押し出し」「押し出し 2」「押し出し 3」…)。
+//! 同じ種類の中で見る。名前が違えば見分けられるが、同じ名前が2つ並ぶと、
+//! 足す・引くの土台と相手の欄に同じ字が出て、どちらがどちらか読めない
+//! (PC 自己試験 HP-BO-01 2026-09-18)。
+[[nodiscard]] std::string UniqueDisplayName(const document::DocumentSnapshot& snapshot,
+    domain::EntityKind kind, const std::string& base);
 
 } // namespace kachakacha::v2::app

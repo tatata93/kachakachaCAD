@@ -124,6 +124,14 @@ bool V2MainWindow::HandleCornerToolKey(int key)
         return false;
     }
     // 確定は従来の命令そのもの。下見と同じ定義(CornerDefinitionFromDock)で作る。
+    const auto revision = session_->GetDocument().Revision();
     RunCommand(cornerDock_->Choice().fillet ? "wire.fillet" : "wire.chamfer");
+    if (session_->GetDocument().Revision() != revision) {
+        // 作れたら道具を置く。A・B は縮んだ線としてまだ選ばれているので、
+        // 持ったままだと縮んだ2本を相手に下見が出直す(PC 自己試験 HP-CN-01 2026-09-18)。
+        const QString done = StatusText();
+        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+        SetStatus(done);   // 「作りました」の一言は残す
+    }
     return true;
 }

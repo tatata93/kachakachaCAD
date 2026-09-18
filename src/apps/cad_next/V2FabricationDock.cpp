@@ -177,6 +177,7 @@ void V2FabricationDock::ShowApproxInput(const QString& sourcesJa,
     const std::vector<QString>& candidateLinesJa, int selectedCandidate, bool canConfirm)
 {
     loading_ = true;
+    sourcesJa_ = sourcesJa;
     if (sourcesValue_ != nullptr) {
         sourcesValue_->setText(sourcesJa.isEmpty()
                 ? QStringLiteral("(3D で面か立体を押してください)")
@@ -248,9 +249,10 @@ QString V2FabricationDock::CandidateTextJa(int candidate) const
     return candidates_[static_cast<std::size_t>(candidate)]->text();
 }
 
+//! 対象の欄の中身。空のときの「(3D で面か立体を押してください)」は案内であって中身ではない。
 QString V2FabricationDock::SourcesTextJa() const
 {
-    return sourcesValue_ == nullptr ? QString() : sourcesValue_->text();
+    return sourcesJa_;
 }
 
 QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)

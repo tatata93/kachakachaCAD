@@ -1141,7 +1141,13 @@ kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
     kachakacha::v2::app::SelectionMode mode) const
 {
     using kachakacha::v2::app::SelectionMode;
-    if (!toolPickToggle_ || !picked.has_value() || mode != SelectionMode::Replace) {
+    // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
+    // 素の押し方は、ModeForToolPick が Add に変えていても **押し直しは外す**。
+    // 欄の印(MirrorSurfaceEntriesToSelection)は種類を持たないので、ModeForToolPick は
+    // 同じ役割かどうかを読めず Add と答える。それに従うと、もう一度押しても外れなかった
+    // (PC 自己試験 HP-SF-06 / HP-BO-01 2026-09-18)。
+    if (!toolPickToggle_ || !picked.has_value()
+        || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
         return mode;
     }
     return kachakacha::v2::app::IsSelected(selection_, picked->entityId)

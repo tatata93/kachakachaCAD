@@ -10,6 +10,8 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/ExplorerModel.h"
+
 #include "kachakacha/app/SurfaceJig.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
@@ -704,7 +706,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AddPartFeature(
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
     entity.kind = EntityKind::Part;
-    entity.displayName = labelJa;
+    // 同じ名前を並べない(「押し出し」「押し出し 2」)。欄と一覧で見分けるため。
+    entity.displayName = kachakacha::v2::app::UniqueDisplayName(
+        session_->GetDocument().Snapshot(), EntityKind::Part, labelJa);
     entity.createdBy = feature.id;
     feature.outputs.push_back(FeatureOutput{"part", entity.id, EntityKind::Part});
 

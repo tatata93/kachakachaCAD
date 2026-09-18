@@ -182,6 +182,8 @@ private:
     QLabel* message_ = nullptr;
     //! 近似の入力と候補。
     QLabel* sourcesValue_ = nullptr;
+    //! 対象の欄の中身(空なら何も入っていない。札の「押してください」は中身ではない)。
+    QString sourcesJa_;
     QPushButton* clearSources_ = nullptr;
     std::vector<QPushButton*> candidates_;
     QPushButton* confirmApprox_ = nullptr;

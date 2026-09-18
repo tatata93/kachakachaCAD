@@ -13,6 +13,8 @@
 
 #include "V2MainWindow.h"
 
+#include "kachakacha/app/ExplorerModel.h"
+
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/GuideTableBuild.h"
 #include "kachakacha/app/RevolveSurface.h"
@@ -245,7 +247,9 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
     Entity entity;
     entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
     entity.kind = EntityKind::GuideSurface;
-    entity.displayName = label;
+    // 同じ名前を並べない(「平面」「平面 2」)。欄と一覧で見分けるため。
+    entity.displayName = kachakacha::v2::app::UniqueDisplayName(
+        session_->GetDocument().Snapshot(), EntityKind::GuideSurface, label);
     entity.createdBy = feature.id;
     feature.outputs.push_back(
         FeatureOutput{"surface", entity.id, EntityKind::GuideSurface});

@@ -14,6 +14,7 @@ using kachakacha::v2::app::SectionForEntity;
 using kachakacha::v2::domain::Entity;
 using kachakacha::v2::domain::EntityKind;
 using kachakacha::v2::test::Require;
+using kachakacha::v2::test::RequireEqual;
 
 KACHA_V2_TEST(explorer, 原点が最上段で_節の並びは正本どおり)
 {
@@ -58,6 +59,26 @@ KACHA_V2_TEST(explorer, 種類とグループと作られ方で節が決まる)
     Entity frozen = wire;
     frozen.createdBy = freeze.id;
     Require(SectionForEntity(snapshot, frozen) == ExplorerSection::Generated, "固定したものは生成物");
+}
+
+KACHA_V2_TEST(explorer_model, 同じ名前には番号を送る)
+{
+    using kachakacha::v2::app::UniqueDisplayName;
+    kachakacha::v2::document::DocumentSnapshot snapshot;
+    RequireEqual(UniqueDisplayName(snapshot, EntityKind::Part, "押し出し"), std::string("押し出し"),
+        "最初は素の名前");
+    kachakacha::v2::domain::Entity part;
+    part.kind = EntityKind::Part;
+    part.displayName = "押し出し";
+    snapshot.entities.push_back(part);
+    RequireEqual(UniqueDisplayName(snapshot, EntityKind::Part, "押し出し"), std::string("押し出し 2"),
+        "2つ目は 2");
+    part.displayName = "押し出し 2";
+    snapshot.entities.push_back(part);
+    RequireEqual(UniqueDisplayName(snapshot, EntityKind::Part, "押し出し"), std::string("押し出し 3"),
+        "3つ目は 3");
+    RequireEqual(UniqueDisplayName(snapshot, EntityKind::GuideSurface, "押し出し"),
+        std::string("押し出し"), "種類が違えば数えない");
 }
 
 KACHA_V2_TEST_MAIN("explorer_model_tests")

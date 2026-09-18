@@ -14,22 +14,22 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 
 | ID | MODE | CATEGORY | TOOL | METHOD_VARIANT | EXISTING_BACKEND | NEW_UI_ENTRY | PREVIEW | HUMAN_TEST | STATUS | NOTES |
 |---|---|---|---|---|---|---|---|---|---|---|
-| C-01 | all | shell | モード行(作図/部品/製作/出力 + 測定) | — | `app/UiMode.h` AllUiModes、`V2ModeBar.cpp` | 上段 `.modes` 行、右端に「測定(全モード共通)」 | — | HP-UI | NOT_STARTED | 測定は `measure.open` 共通命令 |
-| C-02 | all | shell | 2段 Ribbon(カテゴリ→道具) | モードごとのカテゴリ表 | `TopBarCommandIdsForMode` は1段のみ | 新 core `app/Ribbon.h`(mode→categories→tools)+ `V2Ribbon`(Qt) | — | HP-UI | NOT_STARTED | 旧2段目 toolPalette_ を置き換え |
-| C-03 | all | explorer | Model Explorer 階層 | Project/Origin/WorkPlanes/Groups/Wires/Surfaces/Solids/Approximation/Generated | `V2EntityTree`(原点→まとまり→(まとまりなし)) | 種類ごとの節を core `app/ExplorerModel.h` で組む | — | HP-EX | NOT_STARTED | Origin 常に最上段(既存) |
-| C-04 | all | explorer | 個別 表示/非表示 | entity 単位のチェック | Visibility は `SetVisibilityCommand`(entity)、group は `group.visible` | 各行に ◉ チェック | — | HP-EX | NOT_STARTED | 既存はまとまり/軸だけチェック |
-| C-05 | all | explorer | 「まとまり」→「グループ」 | — | `group.*` 命令、`GroupTree` | 表示名のみ変更(命令 id は据え置き) | — | test | NOT_STARTED | 既知の退行 |
-| C-06 | all | explorer | Tree ⇄ View 双方向選択 + scroll | — | `AdoptTreeSelection`、`syncingSelection_`; scrollToItem 無し | 3D→Tree で `scrollToItem` | — | HP-EX | NOT_STARTED | |
-| C-07 | all | explorer | 右クリック(名前変更/表示/正対/グループへ/複製/削除/プロパティ) | — | 既存 ShowSelectMenu(台帳)、`edit.delete` は依存があれば断る | Tree 専用メニュー | — | HP-EX | NOT_STARTED | 複製は wire のみ(`wire.copy`)。Part 複製は BLOCKED_BACKEND |
-| C-08 | all | explorer | 削除不可の理由を人向けに | — | `V2WireCommands.cpp:629-651`(隠すへ倒す) | 「◯◯が参照しているため削除できません」 | — | test | NOT_STARTED | |
-| C-09 | all | panel | 右ペイン = 現在の道具 or 選択物のプロパティだけ | — | `V2OperationPanelHost`(ShelvesFor で複数ページ) | 1道具1ページ。2枚目ページ(Part 等)は出さない | — | HP-UI | NOT_STARTED | 既知の退行「古い右パネルが残る」 |
-| C-10 | all | panel | 道具パネルの共通構造(見出し+hint / 作り方 / 入力 / オプション / 共通 / キャンセル・確定) | — | 各 Dock ばらばら | `V2ToolPanelFrame` 共通枠 | — | HP-UI | NOT_STARTED | |
-| C-11 | all | viewport | HUD(左上: モード + hint) | — | 無し(status bar と footer のみ) | viewport に HUD 描画 | — | shot | NOT_STARTED | |
-| C-12 | all | viewport | ステータス行(モード｜道具｜hint ｜ 座標 ｜ Grid ｜ Snap ｜ Enter/Esc) | — | `statusLabel_`、`ToolKeyHintJa` | 左: 3連、右: 座標/Grid/Snap/キー | — | shot | NOT_STARTED | |
+| C-01 | all | shell | モード行(作図/部品/製作/出力 + 測定) | — | `app/UiMode.h` AllUiModes、`V2ModeBar.cpp` | 上段 `.modes` 行、右端に「測定(全モード共通)」 | — | HP-UI | CLOUD_TESTED | HP-RB-01〜03(PC 未実行) |
+| C-02 | all | shell | 2段 Ribbon(カテゴリ→道具) | モードごとのカテゴリ表 | `TopBarCommandIdsForMode` は1段のみ | 新 core `app/Ribbon.h`(mode→categories→tools)+ `V2Ribbon`(Qt) | — | HP-UI | CLOUD_TESTED | HP-RB-01〜03(PC 未実行) |
+| C-03 | all | explorer | Model Explorer 階層 | Project/Origin/WorkPlanes/Groups/Wires/Surfaces/Solids/Approximation/Generated | `V2EntityTree`(原点→まとまり→(まとまりなし)) | 種類ごとの節を core `app/ExplorerModel.h` で組む | — | HP-EX | CLOUD_TESTED | HP-EX-01(節の並び、原点先頭)。PC 未実行 |
+| C-04 | all | explorer | 個別 表示/非表示 | entity 単位のチェック | Visibility は `SetVisibilityCommand`(entity)、group は `group.visible` | 各行に ◉ チェック | — | HP-EX | CLOUD_TESTED | HP-EX-02(◉ → SetVisibilityCommand、取り消しで戻る) |
+| C-05 | all | explorer | 「まとまり」→「グループ」 | — | `group.*` 命令、`GroupTree` | 表示名のみ変更(命令 id は据え置き) | — | test | CLOUD_TESTED | 利用者に見える文言を「グループ」へ(命令 id 据え置き) |
+| C-06 | all | explorer | Tree ⇄ View 双方向選択 + scroll | — | `AdoptTreeSelection`、`syncingSelection_`; scrollToItem 無し | 3D→Tree で `scrollToItem` | — | HP-EX | CLOUD_TESTED | HP-EX-03(両方向)。3D→Tree は scrollToItem 済み |
+| C-07 | all | explorer | 右クリック(名前変更/表示/正対/グループへ/複製/削除/プロパティ) | — | 既存 ShowSelectMenu(台帳)、`edit.delete` は依存があれば断る | Tree 専用メニュー | — | HP-EX | CLOUD_TESTED | V2ExplorerMenu.cpp。HP-EX-04。複製は wire.copy のみ(Part 複製は BLOCKED_BACKEND) |
+| C-08 | all | explorer | 削除不可の理由を人向けに | — | `V2WireCommands.cpp:629-651`(隠すへ倒す) | 「◯◯が参照しているため削除できません」 | — | test | TESTED | RemoveFeatureCommand が「これを使っているものがあるので消せません。先に ◯◯ を消すか…」を出す(core 既存) |
+| C-09 | all | panel | 右ペイン = 現在の道具 or 選択物のプロパティだけ | — | `V2OperationPanelHost`(ShelvesFor で複数ページ) | 1道具1ページ。2枚目ページ(Part 等)は出さない | — | HP-UI | CLOUD_TESTED | ShelvesFor: 押し出し/面/ブールの最中は 1枚(shelf_layout_tests) |
+| C-10 | all | panel | 道具パネルの共通構造(見出し+hint / 作り方 / 入力 / オプション / 共通 / キャンセル・確定) | — | 各 Dock ばらばら | `V2ToolPanelFrame` 共通枠 | — | HP-UI | PARTIAL | 見出し + 案内(V2OperationPanelHost::SetHint)まで。段組みは各 Dock 作り替え時(S2〜) |
+| C-11 | all | viewport | HUD(左上: モード + hint) | — | 無し(status bar と footer のみ) | viewport に HUD 描画 | — | shot | CLOUD_TESTED | V2ViewportHud.cpp。HP-ST-01(左上・画面内・文言一致)。PC 撮影は未 |
+| C-12 | all | viewport | ステータス行(モード｜道具｜hint ｜ 座標 ｜ Grid ｜ Snap ｜ Enter/Esc) | — | `statusLabel_`、`ToolKeyHintJa` | 左: 3連、右: 座標/Grid/Snap/キー | — | shot | CLOUD_TESTED | V2StatusLine.cpp + core StatusLine。HP-ST-01。PC 撮影は未 |
 | C-13 | all | viewport | View cube / scale bar | — | 既存(`V2Viewport` cube、`DrawScaleBar`) | 据え置き | — | — | PC_VERIFIED(既存) | |
-| C-14 | all | measure | 距離/角度/半径/座標 | 2点/3点角/要素/選択 | `MeasurePanel.h`、`Measurement.h` | 上段「測定」+ 作図の測定カテゴリ | — | HP-ME | NOT_STARTED | |
+| C-14 | all | measure | 距離/角度/半径/座標 | 2点/3点角/要素/選択 | `MeasurePanel.h`、`Measurement.h` | 上段「測定」+ 作図の測定カテゴリ | — | HP-ME | CLOUD_TESTED | 帯の測定カテゴリ(距離/角度/半径/選択)→ measure.open + MeasureMode。HP-RB |
 | C-15 | all | measure | 面積 | — | **無し** | disabled + 理由 | — | — | BLOCKED_BACKEND | `Measurement.h` に面積なし |
-| C-16 | all | measure | 実行中の道具を捨てず一時測定→復帰 | — | Measure は道具(DrawingTool::Measure)で他道具を捨てる | 測定を「重ね道具」にする(退避/復帰) | — | HP-ME | NOT_STARTED | |
+| C-16 | all | measure | 実行中の道具を捨てず一時測定→復帰 | — | Measure は道具(DrawingTool::Measure)で他道具を捨てる | 測定を「重ね道具」にする(退避/復帰) | — | HP-ME | CLOUD_TESTED | SelectTool で戻り先を覚え、Esc は ResumeToolAfterMeasure(core)。道具の種類は戻るが打ちかけの点は残らない。HP-ST-02/03 |
 | C-17 | all | keys | Enter/Esc が viewport focus に依存しない | — | `ToolKeys.h`、`HandleToolKey` | 据え置き + 回帰試験 | — | test | TESTED | 既存 |
 
 ## 作図モード(Drawing)

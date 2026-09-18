@@ -183,6 +183,9 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
     context.hasSelection = !selection_.entityIds.empty();
     context.toolIsSelect =
         session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Select;
+    context.measuringOverRunningTool =
+        session_->CurrentTool() == kachakacha::v2::modeling::DrawingTool::Measure
+        && measureResumeAvailable_ && measureResumeAvailable_();
     const auto steps = kachakacha::v2::app::PlanEscape(context);
     for (const kachakacha::v2::app::EscapeStep step : steps) {
         switch (step) {
@@ -209,6 +212,12 @@ std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()
         case kachakacha::v2::app::EscapeStep::BackToSelectTool:
             if (backToSelect_) {
                 backToSelect_();
+            }
+            break;
+        case kachakacha::v2::app::EscapeStep::ResumeToolAfterMeasure:
+            ClearMeasurePicks();
+            if (backToSelect_) {
+                backToSelect_();   // 窓が戻り先を知っている(BackToSelectOrResume)
             }
             break;
         }
@@ -1259,6 +1268,9 @@ void V2Viewport::mouseMoveEvent(QMouseEvent* event)
         return; // キューブの上ではスナップを探さない。
     }
     HoverAt(event->position());
+    if (hoverChangedCallback_) {
+        hoverChangedCallback_();
+    }
 }
 
 void V2Viewport::mousePressEvent(QMouseEvent* event)

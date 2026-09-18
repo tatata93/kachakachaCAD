@@ -35,6 +35,12 @@ V2OperationPanelHost::V2OperationPanelHost(QWidget* parent)
     titleFont.setBold(true);
     title_->setFont(titleFont);
     layout->addWidget(title_);
+    // 見出しの直下に案内(次に何をするか)。道具の欄の共通の形(指示書 C-10)。
+    hint_ = new QLabel(this);
+    hint_->setObjectName(QStringLiteral("currentOperationHint"));
+    hint_->setWordWrap(true);
+    hint_->hide();
+    layout->addWidget(hint_);
 
     pageChoice_ = new QComboBox(this);
     pageChoice_->setObjectName(QStringLiteral("relatedOperationChoice"));
@@ -106,4 +112,15 @@ void V2OperationPanelHost::ActivateIndex(int index)
         const QSignalBlocker blocker(pageChoice_);
         pageChoice_->setCurrentIndex(index);
     }
+}
+
+void V2OperationPanelHost::SetHint(const QString& hintJa)
+{
+    hint_->setText(hintJa);
+    hint_->setVisible(!hintJa.isEmpty());
+}
+
+QString V2OperationPanelHost::HintText() const
+{
+    return hint_->text();
 }

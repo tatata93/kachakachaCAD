@@ -59,6 +59,7 @@
 #include "kachakacha/modeling/ExtrudeInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/app/ProcessSteps.h"
+#include "kachakacha/app/StatusLine.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/exporters/PatternExport.h"
 #include "kachakacha/fabrication/PatternLayout.h"
@@ -462,6 +463,8 @@ public:
     [[nodiscard]] V2MeasureDock& MeasureDock() { return *measureDock_; }
     //! 編集の棚(V1 の「選択内容の数値編集」)。
     [[nodiscard]] V2EditDock& EditDock() { return *editDock_; }
+    //! 右の「現在の操作」の入れ物。試験が見出しの案内を読む。
+    [[nodiscard]] V2OperationPanelHost& OperationHost() { return *operationHost_; }
     //! 面取りの棚(V1 の「面取り」欄)。
     [[nodiscard]] V2CornerDock& CornerDock() { return *cornerDock_; }
     //! 面取り/丸めの下見が出ているか。試験から見る。
@@ -495,6 +498,23 @@ public:
     void HideSelected();
     void ShowAllEntities();
     void DeleteSelected();
+    //! 状態行と HUD(V2StatusLine.cpp)。文言は core(app/StatusLine)。
+    [[nodiscard]] kachakacha::v2::app::StatusLineParts BuildStatusLineParts() const;
+    void OnViewportHoverChanged();
+    //! 測定の重ね道具(C-16)。持ち替える前に戻り先を覚え、Esc で戻す。
+    void RememberToolForMeasure(kachakacha::v2::modeling::DrawingTool next);
+    void BackToSelectOrResume();
+public:
+    //! 状態行と HUD をいまの状態から書き直す。試験はカーソルを動かしたあとに呼ぶ。
+    void RefreshStatusLine();
+    //! 状態行の左(モード ｜ 道具)と右(座標 ｜ Grid ｜ Snap ｜ キー)。試験から読む。
+    [[nodiscard]] QString StatusLeftText() const;
+    [[nodiscard]] QString StatusRightText() const;
+    //! 測定を重ねているときの戻り先。試験から読む。
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::DrawingTool> ToolBeforeMeasure() const noexcept
+    {
+        return toolBeforeMeasure_;
+    }
     //! 選択道具で右クリックしたときのメニュー。V1と同じで、ここだけ出す。
     void ShowSelectMenu(const QPoint& at);
     //! 左の一覧の右クリック(V2ExplorerMenu.cpp)。at は一覧の座標。
@@ -1396,6 +1416,10 @@ private:
     QLabel* statusLabel_ = nullptr;
     QLabel* toolLabel_ = nullptr;
     QLabel* groupLabel_ = nullptr;
+    //! 状態行の右側(座標 ｜ Grid ｜ Snap ｜ Enter/Esc)。
+    QLabel* cursorLabel_ = nullptr;
+    //! 測定を重ねる前に持っていた道具(C-16)。無ければ重ねていない。
+    std::optional<kachakacha::v2::modeling::DrawingTool> toolBeforeMeasure_;
     //! 一番下の一行(UI の正本の footer)。いまの道具の入力が全部並ぶ。
     QLabel* toolFooterLabel_ = nullptr;
     //! 合図の説明。**いつでも見えている。**Ctrl を知らなくても使えるように。

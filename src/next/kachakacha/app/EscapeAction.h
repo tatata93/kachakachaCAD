@@ -35,6 +35,8 @@ struct EscapeContext {
     bool hasSelection = false;
     //! いま選択道具である。
     bool toolIsSelect = false;
+    //! 測定を重ねていて、戻り先の道具がある(C-16)。Esc は選択ではなく元の道具へ戻る。
+    bool measuringOverRunningTool = false;
 };
 
 //! Esc がすること。順に実行する。
@@ -46,6 +48,7 @@ enum class EscapeStep {
     CancelDrawing,      //!< 作図の途中を捨てる
     ClearSelection,     //!< 選択を空にする
     BackToSelectTool,   //!< 選択道具へ戻る
+    ResumeToolAfterMeasure, //!< 測定を終えて、重ねる前の道具へ戻る(選択には戻らない)
 };
 
 //! いまの状況から、Esc がすることを組み立てる。

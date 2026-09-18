@@ -32,6 +32,15 @@ std::vector<EscapeStep> PlanEscape(const EscapeContext& context)
     // そのうえで、必ず「選択道具・何も選んでいない」で終わる。
     // すでにそうなっているものは足さない。足すと、帯に「解除しました」と
     // 出るのに何も変わらない、ということになる。
+    // 測定を重ねているだけなら、測ったものを片づけて元の道具へ戻る(C-16)。
+    // 選択道具まで落とすと、線を引く手を測定のたびに失う。
+    if (context.measuringOverRunningTool) {
+        if (context.hasSelection) {
+            steps.push_back(EscapeStep::ClearSelection);
+        }
+        steps.push_back(EscapeStep::ResumeToolAfterMeasure);
+        return steps;
+    }
     if (context.hasSelection) {
         steps.push_back(EscapeStep::ClearSelection);
     }
@@ -51,6 +60,9 @@ std::string_view EscapeMessageJa(const std::vector<EscapeStep>& steps)
     }
     if (Has(steps, EscapeStep::CancelPick)) {
         return "拾うのをやめました。";
+    }
+    if (Has(steps, EscapeStep::ResumeToolAfterMeasure)) {
+        return "測定を終えて、元の道具へ戻りました。";
     }
     if (Has(steps, EscapeStep::CancelDrawing) || Has(steps, EscapeStep::CloseCursorInput)) {
         return "作図をやめました。選択に戻ります。";

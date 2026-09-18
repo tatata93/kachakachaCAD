@@ -232,9 +232,11 @@ void V2MainWindow::WireViewportCallbacks()
             SetStatus(QStringLiteral("押し出し: やめました。"));
         });
     // Esc で選択道具へ戻す(V1同等)。道具は窓が持っているので、窓が引き受ける。
-    viewport_->SetBackToSelectCallback([this] {
-        SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
-    });
+    // 測定を重ねていたなら元の道具へ(C-16)。そうでなければ選択道具へ。
+    viewport_->SetBackToSelectCallback([this] { BackToSelectOrResume(); });
+    viewport_->SetMeasureResumeAvailable([this] { return toolBeforeMeasure_.has_value(); });
+    // カーソルが動いたら状態行の座標を書き直す。
+    viewport_->SetHoverChangedCallback([this] { OnViewportHoverChanged(); });
     // 移動・複製・鏡映・回転。点がそろったら、選んでいる線へ当てる。
     viewport_->SetTransformCallback(
         [this](const kachakacha::v2::modeling::TransformPlan& plan) {
@@ -726,29 +728,6 @@ QString V2MainWindow::ToolFooterTextJa() const
     return toolFooterLabel_ == nullptr ? QString() : toolFooterLabel_->text();
 }
 
-void V2MainWindow::BuildStatusBar()
-{
-    toolLabel_ = new QLabel(this);
-    groupLabel_ = new QLabel(this);
-    statusLabel_ = new QLabel(this);
-    statusBar()->addWidget(toolLabel_);
-    // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
-    statusBar()->addWidget(groupLabel_);
-    statusBar()->addWidget(statusLabel_, 1);
-    // 帯を右クリックしても診断を取れるようにする(DIAGNOSTICS_FEATURE_SPEC)。
-    // おかしいと思った瞬間に、献立を辿らずに取れるほうがよい。
-    // 辿っているあいだに状態が変わってしまうことがある。
-    statusBar()->setContextMenuPolicy(Qt::CustomContextMenu);
-    QObject::connect(statusBar(), &QWidget::customContextMenuRequested, this,
-        [this](const QPoint& at) {
-            QMenu menu(this);
-            QAction* copy = menu.addAction(QStringLiteral("診断情報をコピー"));
-            if (menu.exec(statusBar()->mapToGlobal(at)) == copy) {
-                RunCommand("help.copy_diagnostics");
-            }
-        });
-}
-
 bool V2MainWindow::SetActiveGroup(
     const std::optional<kachakacha::v2::base::GroupId>& groupId)
 {
@@ -1127,6 +1106,7 @@ QString V2MainWindow::GuideRowText(int row, int column) const
 
 void V2MainWindow::SelectTool(DrawingTool tool)
 {
+    RememberToolForMeasure(tool);   // 測定へ持ち替えるなら、いまの道具を戻り先に(C-16)
     session_->SelectTool(tool);
     // 道具を替えたら、見せているだけの案は捨てる。
     // 文書は触っていないので、捨てるだけで元どおりである。
@@ -1134,9 +1114,6 @@ void V2MainWindow::SelectTool(DrawingTool tool)
     viewport_->OnToolChanged();
     for (std::size_t index = 0; index < toolActions_.size(); ++index) {
         toolActions_[index]->setChecked(kToolOrder[index] == tool);
-    }
-    if (toolLabel_) {
-        toolLabel_->setText(QStringLiteral("道具: %1").arg(ToolLabel(tool)));
     }
     // 案内文は core が持っている。画面で作らない。
     // 道具の名前・いまの手順・次の手順・決め方・やめ方・選択数の6つを必ず出す。
@@ -1202,6 +1179,8 @@ void V2MainWindow::SetStatus(const QString& text)
     if (statusLabel_) {
         statusLabel_->setText(text);
     }
+    // 案内が変われば HUD と左右の札も同じ状態を映す(C-11 / C-12)。
+    RefreshStatusLine();
 }
 
 QString V2MainWindow::StatusText() const

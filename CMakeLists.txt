@@ -628,6 +628,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ExplorerModel.cpp
     src/next/kachakacha/app/ToolRoleLabels.cpp
     src/next/kachakacha/app/ToolFooter.cpp
+    src/next/kachakacha/app/StatusLine.cpp
     src/next/kachakacha/app/ToolKeys.cpp
     src/next/kachakacha/app/ToolTargeting.cpp
     src/next/kachakacha/app/NameFilter.cpp
@@ -802,6 +803,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(group_tree_tests tests_v2/group_tree_tests.cpp)
     kachakacha_add_v2_test(railway_nose_ho_tests tests_v2/railway_nose_ho_tests.cpp)
     kachakacha_add_v2_test(shelf_layout_tests tests_v2/shelf_layout_tests.cpp)
+    kachakacha_add_v2_test(status_line_tests tests_v2/status_line_tests.cpp)
     kachakacha_add_v2_test(tool_keys_tests tests_v2/tool_keys_tests.cpp)
     kachakacha_add_v2_test(extrude_input_state_tests tests_v2/extrude_input_state_tests.cpp)
     kachakacha_add_v2_test(extrude_preview_tests tests_v2/extrude_preview_tests.cpp)
@@ -949,6 +951,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestHumanPathCorner.cpp
         src/apps/cad_next/V2SelfTestRibbon.cpp
         src/apps/cad_next/V2SelfTestExplorer.cpp
+        src/apps/cad_next/V2SelfTestStatusLine.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
@@ -984,6 +987,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2Ribbon.cpp
         src/apps/cad_next/V2ExplorerBuild.cpp
         src/apps/cad_next/V2ExplorerMenu.cpp
+        src/apps/cad_next/V2StatusLine.cpp
+        src/apps/cad_next/V2ViewportHud.cpp
         src/apps/cad_next/V2RibbonCommands.cpp
         src/apps/cad_next/V2BooleanDock.cpp
         src/apps/cad_next/V2ToolKeys.cpp

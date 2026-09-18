@@ -87,6 +87,8 @@ namespace {
     cases.insert(cases.end(), ribbon.begin(), ribbon.end());
     const std::vector<SelfTestCase> explorer = ExplorerCases();
     cases.insert(cases.end(), explorer.begin(), explorer.end());
+    const std::vector<SelfTestCase> statusLine = StatusLineCases();
+    cases.insert(cases.end(), statusLine.begin(), statusLine.end());
     const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
     const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();

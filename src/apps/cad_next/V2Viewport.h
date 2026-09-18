@@ -34,6 +34,7 @@
 #include <QPen>
 #include <QPointF>
 #include <QRectF>
+#include <QString>
 #include <QWidget>
 
 #include <functional>
@@ -300,6 +301,8 @@ public:
     std::vector<kachakacha::v2::app::EscapeStep> PressEscape();
     //! Esc で「選択道具へ戻す」を頼む先。窓が道具を持っているので外から渡す。
     void SetBackToSelectCallback(std::function<void()> callback);
+    //! 測定を重ねていて戻り先があるか(窓が答える)。Esc の計画に使う。
+    void SetMeasureResumeAvailable(std::function<bool()> query);
 
     //! 吸着を一時的に止める(S)。押している間だけ。
     void SetSnapSuppressedByKey(bool suppressed);
@@ -395,6 +398,13 @@ public:
 
     //! 状態が変わったときに呼ばれる。案内文と診断を画面へ出すのに使う。
     void SetStatusCallback(std::function<void(const std::string&)> callback);
+    //! カーソルが動いて当たり判定が変わったときに呼ぶ(状態行の座標を書き直すため)。
+    void SetHoverChangedCallback(std::function<void()> callback);
+    //! 左上の HUD(モード › 道具、案内、測定の戻り先)。文言は窓が core から持ってくる。
+    void SetHudLines(std::vector<QString> lines);
+    [[nodiscard]] const std::vector<QString>& HudLines() const noexcept { return hudLines_; }
+    //! HUD の枠。試験が「左上にあり、画面に収まる」を見る。描いていなければ空。
+    [[nodiscard]] QRectF HudRect() const;
     //! 選択が変わったときに呼ぶ。数を数え直すのは本体窓の仕事。
     void SetSelectionChangedCallback(std::function<void()> callback);
     //! 構えている命令の「これで(Enter)」と「やめる(Esc)」。
@@ -671,6 +681,7 @@ private:
     [[nodiscard]] bool BeginExtrudeDrag(const QPointF& position);
     void DragExtrude(const QPointF& position);
     void DrawScaleBar(QPainter& painter) const;
+    void DrawHud(QPainter& painter) const;
     void DrawViewCube(QPainter& painter) const;
     //! 索引を渡して押す。ボタンと輪で拾い方が違うので、押す側は共通にする。
     bool PressViewGadgetIndex(const QPointF& position,
@@ -909,6 +920,9 @@ private:
     double visibleWidthMm_ = 200.0;
     kachakacha::v2::geometry::ScreenMapping mapping_;
     kachakacha::v2::app::HoverResult hover_;
+    std::vector<QString> hudLines_;
+    std::function<void()> hoverChangedCallback_;
+    std::function<bool()> measureResumeAvailable_;
     //! 場面の入れ替わりを聞いている綱。これを手放すと呼ばれなくなる。
     //! この画面より Session のほうが長生きするので、綱はこちらが持つ。
     kachakacha::v2::app::DrawingSession::SceneChangedConnection sceneChanged_;

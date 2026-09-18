@@ -45,17 +45,20 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
     // 見えていなければ、距離も向きも演算も確定も触れない。
+    // 右は「いまの道具の1枚だけ」(正本 3 HTML 2026-09-18、指示書 C-09)。
+    // 2枚目に部品の欄を添えていたが、押し出しの最中に板厚の欄が並ぶと
+    // どちらの距離が効くのか読めなくなる。
     if (extruding) {
-        return {Shelf::Extrude, Shelf::Part};
+        return {Shelf::Extrude};
     }
     // 「面を作る」の最中も同じ。作り方・入力・断面順・状態が見えていなければ、
     // 方式も役割も順序も触れない。
     if (surfacing) {
-        return {Shelf::Surface, Shelf::Part};
+        return {Shelf::Surface};
     }
     // 「足す・引く」も同じ。土台・相手の欄が見えていなければ、選び直しも確定も触れない。
     if (booleaning) {
-        return {Shelf::Boolean, Shelf::Part};
+        return {Shelf::Boolean};
     }
     switch (tool) {
     case DrawingTool::Measure:

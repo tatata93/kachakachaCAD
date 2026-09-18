@@ -2,6 +2,7 @@
 
 #include "kachakacha/app/ShelfLayout.h"
 
+#include <QString>
 #include <QWidget>
 
 #include <map>
@@ -21,6 +22,9 @@ public:
 
     void AddPage(kachakacha::v2::app::Shelf shelf, QWidget* page);
     void SetShelves(const std::vector<kachakacha::v2::app::Shelf>& shelves);
+    //! 見出しの下の一行(いまの案内)。空なら隠す。文言は窓が core から持ってくる。
+    void SetHint(const QString& hintJa);
+    [[nodiscard]] QString HintText() const;
 
     [[nodiscard]] bool Shows(kachakacha::v2::app::Shelf shelf) const;
     [[nodiscard]] kachakacha::v2::app::Shelf CurrentShelf() const noexcept;
@@ -29,6 +33,7 @@ private:
     void ActivateIndex(int index);
 
     QLabel* title_ = nullptr;
+    QLabel* hint_ = nullptr;
     QComboBox* pageChoice_ = nullptr;
     QStackedWidget* pages_ = nullptr;
     std::map<kachakacha::v2::app::Shelf, QWidget*> pageByShelf_;

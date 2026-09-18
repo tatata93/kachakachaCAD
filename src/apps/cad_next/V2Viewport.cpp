@@ -1015,6 +1015,7 @@ void V2Viewport::paintEvent(QPaintEvent* /*event*/)
     DrawToolRoleLabels(painter);
     DrawBoxSelect(painter);
     DrawScaleBar(painter);
+    DrawHud(painter);
     // 輪 → キューブ → ボタン の順で描く。
     // キューブを先に描くと、真横を向いた輪がキューブの上を横切って、
     // キューブが押せないように見える。押すときはキューブが勝つので、

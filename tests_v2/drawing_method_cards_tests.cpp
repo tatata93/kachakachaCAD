@@ -53,7 +53,11 @@ KACHA_V2_TEST(drawing_method_cards, どのカードにも次にすることの�
 {
     for (const DrawingTool tool : {DrawingTool::Point, DrawingTool::Line, DrawingTool::Polyline,
              DrawingTool::Rectangle, DrawingTool::Circle, DrawingTool::Arc, DrawingTool::Bezier,
-             DrawingTool::Spline}) {
+             DrawingTool::Spline,
+             // 編集・変形の道具も道具のページを持つ(指示書 D-15/D-21)。
+             DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror, DrawingTool::Rotate,
+             DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
+             DrawingTool::JoinEndpoints, DrawingTool::TangentJoin, DrawingTool::CurvatureJoin}) {
         const auto cards = DrawingMethodCardsFor(tool);
         Require(!cards.empty(), "作図の道具には1枚以上");
         for (const DrawingMethodCard& card : cards) {

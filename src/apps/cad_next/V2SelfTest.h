@@ -141,6 +141,9 @@ void Note(const char* what);
 //! 部品の押し出しの欄(HP-PA)。
 [[nodiscard]] std::vector<SelfTestCase> PartPanelCases();
 
+//! 配列(直線/円形)の棚(HP-AR、指示書 D-23)。
+[[nodiscard]] std::vector<SelfTestCase> ArrayCases();
+
 //! 生成の「作り方」カード(HP-GN、matrix F-13/F-14)。現在状態 / Flat 0% / Target 100%。
 [[nodiscard]] std::vector<SelfTestCase> GenerateCases();
 

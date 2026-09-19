@@ -90,11 +90,16 @@ KACHA_V2_TEST(shelf_layout, 線を引くときは作図の棚)
     }
 }
 
-KACHA_V2_TEST(shelf_layout, 直す道具は編集の棚)
+KACHA_V2_TEST(shelf_layout, 直す道具も作図の棚道具のページ)
 {
+    // 指示書 C-09「一道具一枚 = 道具のページ」(D-15/D-21)。
+    // 編集・変形の道具にも作り方カードと次にすることの一文がある(DrawingMethodCards)ので、
+    // 数値で直すだけの Edit 棚ではなく、ほかの作図道具と同じ Drawing 棚を前に出す。
+    // Edit 棚は「選択」道具で選んだものを直すときだけの棚として残る。
     for (const DrawingTool tool : {DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror,
-             DrawingTool::Rotate, DrawingTool::Trim, DrawingTool::Extend}) {
-        Require(FrontShelfFor(UiMode::Drawing, tool) == Shelf::Edit, "編集の棚");
+             DrawingTool::Rotate, DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
+             DrawingTool::JoinEndpoints, DrawingTool::TangentJoin, DrawingTool::CurvatureJoin}) {
+        Require(FrontShelfFor(UiMode::Drawing, tool) == Shelf::Drawing, "作図(道具)の棚");
     }
 }
 
@@ -228,6 +233,9 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         // 部品モードの2枚目から外した(指示書 C-09、I-03)。
         // guide.* コマンドが自分で ShowShelf(GuideTable) して出す。
         static_cast<int>(Shelf::GuideTable),
+        // 配列(指示書 D-23)。wire.array_linear/circular が自分で ShowShelf(Array) して出す。
+        // 押し出し等と違い、道具ではなく台帳コマンドなので ShelvesFor の組み合わせには乗らない。
+        static_cast<int>(Shelf::Array),
     };
     std::string missing;
     for (const Shelf shelf : AllShelves()) {

@@ -60,6 +60,8 @@ enum class Shelf {
     Boolean,
     //! 「厚み」の欄(入力・作り方・厚み・状態)。指示書 matrix P-10。
     Thicken,
+    //! 配列(直線/円形)の欄(指示書 D-23)。`wire.array_*` が構えている間だけ出す。
+    Array,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;

@@ -818,6 +818,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Surface:     return surfaceDock_;
     case Shelf::Boolean:     return booleanDock_;
     case Shelf::Thicken:     return thickenDock_;
+    case Shelf::Array:       return arrayDock_;
     case Shelf::None:        break;
     }
     return nullptr;

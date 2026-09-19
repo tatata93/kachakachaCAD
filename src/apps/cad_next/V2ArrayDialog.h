@@ -27,6 +27,10 @@ struct V2ArrayChoice {
     double totalAngleDeg = 360.0;
     //! 円のとき: 回す中心。軸は作業平面の法線を使う。
     kachakacha::v2::geometry::Vector3 center{};
+    //! 円の並べ方を選んでいるか(D-23、右ペインの棚 V2ArrayDock)。
+    //! 直線と円で欄が違うので、いま作り方カードのどちらを押しているかを持たせておく。
+    //! ダイアログ(V2ArrayDialog)は circular 引数を別に渡すので、ここは触らない。
+    bool circular = false;
 };
 
 class V2ArrayDialog final : public QDialog {

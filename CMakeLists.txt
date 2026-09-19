@@ -958,6 +958,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestStatusLine.cpp
         src/apps/cad_next/V2SelfTestDrawingMethods.cpp
         src/apps/cad_next/V2SelfTestPartPanel.cpp
+        src/apps/cad_next/V2SelfTestArray.cpp
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
@@ -988,6 +989,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExtrudeInteractive.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
         src/apps/cad_next/V2ArrayDialog.cpp
+        src/apps/cad_next/V2ArrayDock.cpp
+        src/apps/cad_next/V2ArrayDock.h
         src/apps/cad_next/V2PartDock.cpp
         src/apps/cad_next/V2PendingCommand.cpp
         src/apps/cad_next/V2SurfaceCommands.cpp

@@ -20,6 +20,7 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/ToolKeys.h"
 
 #include <QAbstractSpinBox>
@@ -52,7 +53,8 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     }
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
-        || thickenShelfShown_ || cornerPreviewShown_;
+        || thickenShelfShown_ || cornerPreviewShown_
+        || ShelfShown(kachakacha::v2::app::Shelf::Array);
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -106,6 +108,18 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (thickenShelfShown_) {
         return HandleThickenToolKey(key, target);
+    }
+    if (ShelfShown(kachakacha::v2::app::Shelf::Array)) {
+        // 配列の棚(D-23)。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。
+        if (key == Qt::Key_Escape) {
+            EndArray();
+            SetStatus(QStringLiteral("配列: やめました。"));
+            return true;
+        }
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            ConfirmArray();
+            return true;
+        }
     }
     return false;
 }

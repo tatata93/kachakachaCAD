@@ -93,6 +93,8 @@ namespace {
     cases.insert(cases.end(), drawingMethods.begin(), drawingMethods.end());
     const std::vector<SelfTestCase> partPanel = PartPanelCases();
     cases.insert(cases.end(), partPanel.begin(), partPanel.end());
+    const std::vector<SelfTestCase> array = ArrayCases();
+    cases.insert(cases.end(), array.begin(), array.end());
     const std::vector<SelfTestCase> generate = GenerateCases();
     cases.insert(cases.end(), generate.begin(), generate.end());
     const std::vector<SelfTestCase> unfold = UnfoldCases();

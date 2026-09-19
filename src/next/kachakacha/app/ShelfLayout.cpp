@@ -25,6 +25,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Surface:    return "面を作る";
     case Shelf::Boolean:    return "足す・引く";
     case Shelf::Thicken:    return "厚み";
+    case Shelf::Array:      return "配列";
     }
     return "なし";
 }
@@ -35,7 +36,7 @@ const std::vector<Shelf>& AllShelves()
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
-        Shelf::Boolean, Shelf::Thicken,
+        Shelf::Boolean, Shelf::Thicken, Shelf::Array,
     };
     return all;
 }
@@ -88,8 +89,6 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     case DrawingTool::JoinEndpoints:
     case DrawingTool::TangentJoin:
     case DrawingTool::CurvatureJoin:
-        // 直す道具は、選んだものの数値を見ながら使う。
-        return {Shelf::Edit};
     case DrawingTool::Point:
     case DrawingTool::Line:
     case DrawingTool::Polyline:
@@ -99,6 +98,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     case DrawingTool::Bezier:
     case DrawingTool::Spline:
     case DrawingTool::ConnectTwoPoints:
+        // 一道具一枚は「道具のページ」(指示書 C-09、D-15/D-21)。
+        // 編集・変形の道具にも作り方カードと次にすることの一文がある
+        // (DrawingMethodCards / DrawingShelfRows)。数値で直す欄(Edit)は
+        // 「選択」道具のときだけ前に出す。
         return {Shelf::Drawing};
     case DrawingTool::Select:
         break;

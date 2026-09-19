@@ -39,6 +39,7 @@
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
 #include "V2ArrayDialog.h"
+#include "V2ArrayDock.h"
 #include "kachakacha/app/ApproxInput.h"
 #include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/BooleanInputState.h"
@@ -344,10 +345,7 @@ public:
     //! 名前が並んでいるだけで形が無い、を見分けるために試験から呼ぶ。
     [[nodiscard]] bool CanExportSelectedParts();
     //! いま形を覚えている数(立体+面)。試験から、開き直しで戻ったかを見る。
-    [[nodiscard]] int KernelShapeCount() const
-    {
-        return static_cast<int>(partShapes_.size() + guideShapes_.size());
-    }
+    [[nodiscard]] int KernelShapeCount() const { return static_cast<int>(partShapes_.size() + guideShapes_.size()); }
 
     //! いま出ている案内文。
     [[nodiscard]] QString StatusText() const;
@@ -395,10 +393,7 @@ public:
     [[nodiscard]] int CurrentProcessStep() const;
     //! 手順の元になる状況。試験から動かして、手順が変わることを見る。
     void SetProcessContext(const kachakacha::v2::app::ProcessContext& context);
-    [[nodiscard]] const kachakacha::v2::app::ProcessContext& ProcessContextOf() const
-    {
-        return processContext_;
-    }
+    [[nodiscard]] const kachakacha::v2::app::ProcessContext& ProcessContextOf() const { return processContext_; }
 
     //! 作業中グループ(AT-UIX-006)。上の帯と一覧の両方に出る。
     bool SetActiveGroup(const std::optional<kachakacha::v2::base::GroupId>& groupId);
@@ -424,9 +419,7 @@ public:
     void SelectPlaneCombo(int index);
     //! いま作業中の作業平面の id。無ければ Nil。
     [[nodiscard]] const kachakacha::v2::base::EntityId& ActiveWorkPlaneId() const
-    {
-        return activeWorkPlaneId_;
-    }
+    { return activeWorkPlaneId_; }
 
     //! 書き出しの棚(AT-EXP-001)。数は手順の状況から作る。
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
@@ -446,6 +439,8 @@ public:
     //! 2つめの引数が真なら円、偽なら直線。空を返したら「やめた」。
     void SetArrayChooser(
         std::function<std::optional<V2ArrayChoice>(const V2ArrayChoice&, bool)> chooser);
+    //! 配列の棚(D-23)。arrayChooser_ が無いときはここで個数・間隔・中心・角度を聞く。
+    [[nodiscard]] V2ArrayDock& ArrayDock() { return *arrayDock_; }
     //! 作図の棚(円弧の作り方・補助線・指定点を残す・数値で線を作る)。
     [[nodiscard]] V2DrawingDock& DrawingDock() { return *drawingDock_; }
     //! グリッドの棚と表示の棚(V1 のグリッド欄・表示タブ)。
@@ -677,15 +672,10 @@ public:
     //! 直前の作り直しで作れなかったものの名前。作れていれば空。
     //! 帯はすぐ書き換わるので、試験と診断の一覧がここを読む。
     [[nodiscard]] const QString& RebuildProblems() const { return rebuildProblems_; }
-    [[nodiscard]] int FabricationModelCount() const
-    {
-        return static_cast<int>(fabricationModels_.size());
-    }
+    [[nodiscard]] int FabricationModelCount() const { return static_cast<int>(fabricationModels_.size()); }
     //! 選んでいる(または最後に作った)近似モデル。試験から曲げ状態を見るのに使う。
     [[nodiscard]] kachakacha::v2::base::EntityId CurrentFabricationModel() const
-    {
-        return CurrentFabricationModelId();
-    }
+    { return CurrentFabricationModelId(); }
     //! 押し出しで選ばせるものを出す。窓を出さない試験では差し替える。
     //! 値を返さなければ「やめた」。
     void SetExtrudeChooser(
@@ -1279,10 +1269,7 @@ public:
     [[nodiscard]] static QString DroppedValuesTextJa(
         const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま案を見せているか。試験から見る。
-    [[nodiscard]] bool PendingPartitionShown() const
-    {
-        return pendingPartition_.has_value();
-    }
+    [[nodiscard]] bool PendingPartitionShown() const { return pendingPartition_.has_value(); }
     //! 展開の基準にする辺を決める(§33)。棚の「曲げる部材」の番号で選ぶ。
     void SetUnfoldBaseRail();
     //! 帯の境目を文書へ書き、以後は自動で切り直さない(§32)。
@@ -1397,14 +1384,21 @@ private:
     void RefreshPendingCommand(bool confirmed);
     //! 構えている命令の id。空なら構えていない。
     std::string pendingCommandId_;
-    //! 配列(並べて複製する)。
+    //! 配列(並べて複製する。指示書 D-23)。試験で窓(arrayChooser_)を差し替えていなければ、
+    //! 右の棚(Shelf::Array、V2ArrayDock)を出して欄で聞く。
     [[nodiscard]] static bool IsArrayCommand(std::string_view id);
     void RunArrayCommand(std::string_view id);
     void RunLinearArray();
     void RunCircularArray();
+    //! 実際に並べる。窓の道でも棚の道でも同じ道を通す。並べられたら真。
+    bool CommitLinearArray();
+    bool CommitCircularArray();
+    void ConfirmArray();
+    void EndArray();
     std::function<std::optional<V2ArrayChoice>(const V2ArrayChoice&, bool)> arrayChooser_;
     //! 前に決めた並べ方。次に開いたときの初期値にする。打ち直しを減らす。
     V2ArrayChoice arrayChoice_;
+    V2ArrayDock* arrayDock_ = nullptr;
     //! 文字にした id から Entity を探す。核の形の表が文字の鍵を使っているため。
     [[nodiscard]] static const kachakacha::v2::domain::Entity* FindEntityByIdText(
         const kachakacha::v2::document::DocumentSnapshot& snapshot,

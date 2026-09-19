@@ -1,4 +1,7 @@
 #include "kachakacha/app/DrawingMethodCards.h"
+#include "kachakacha/app/DrawingShelfRows.h"
+
+#include <string>
 
 namespace kachakacha::v2::app {
 
@@ -12,6 +15,16 @@ namespace {
     DrawingMethodCard card;
     card.labelJa = labelJa;
     card.hintJa = hintJa;
+    return card;
+}
+
+//! 編集・変形の道具のカード。一文は道具の使い方(DrawingToolHintJa)と同じにする。
+//! 別々に書くと、カードの一文だけ直して使い方の一文を直し忘れる、が起きる。
+[[nodiscard]] DrawingMethodCard ToolCard(const char* labelJa, DrawingTool tool)
+{
+    DrawingMethodCard card;
+    card.labelJa = labelJa;
+    card.hintJa = std::string(DrawingToolHintJa(tool));
     return card;
 }
 
@@ -75,18 +88,31 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
         return {Card("頂点を順に", "点を順に押してください。右クリックか Enter で終わり、始点を押すと閉じます。")};
     case DrawingTool::Point:
         return {Card("1点", "作図点を置きたい場所を押してください。")};
+    case DrawingTool::Move:
+        // 「点＋距離＋角度」は CursorInput 側がまだ角度欄を持たない
+        // (CursorFieldsFor(Move) は distance だけ)。無い作り方をカードにすると
+        // 「押せるが何も起きない」になるので、いまは2点の1枚だけ。
+        return {ToolCard("2点", tool)};
+    case DrawingTool::Copy:
+        return {ToolCard("2点", tool)};
+    case DrawingTool::Mirror:
+        return {ToolCard("鏡の線 2点", tool)};
+    case DrawingTool::Rotate:
+        return {ToolCard("中心+2方向", tool)};
+    case DrawingTool::Split:
+        return {ToolCard("押した場所で", tool)};
+    case DrawingTool::Trim:
+        return {ToolCard("消したい側を押す", tool)};
+    case DrawingTool::Extend:
+        return {ToolCard("伸ばす端を押す", tool)};
+    case DrawingTool::JoinEndpoints:
+        return {ToolCard("端点 2 つ", tool)};
+    case DrawingTool::TangentJoin:
+        return {ToolCard("接線", tool)};
+    case DrawingTool::CurvatureJoin:
+        return {ToolCard("曲率", tool)};
     case DrawingTool::Select:
     case DrawingTool::SetGridOrigin:
-    case DrawingTool::Move:
-    case DrawingTool::Copy:
-    case DrawingTool::Mirror:
-    case DrawingTool::Rotate:
-    case DrawingTool::Split:
-    case DrawingTool::Trim:
-    case DrawingTool::Extend:
-    case DrawingTool::JoinEndpoints:
-    case DrawingTool::TangentJoin:
-    case DrawingTool::CurvatureJoin:
     case DrawingTool::ConnectTwoPoints:
     case DrawingTool::ChamferOrFilletPair:
     case DrawingTool::Measure:

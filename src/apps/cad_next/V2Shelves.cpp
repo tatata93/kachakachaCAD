@@ -48,6 +48,14 @@ void V2MainWindow::BuildEditingShelves()
         [this](kachakacha::v2::fabrication::FreezeOutput value) { freezeOutput_ = value; });
     fabricationDock_->SetMaterialHandler(
         [this](const QString& material, int layers) { ApplyMaterialToSelection(material, layers); });
+
+    // 配列の棚(指示書 D-23)。wire.array_linear/circular が構えている間だけ出す。
+    arrayDock_ = new V2ArrayDock(this);
+    arrayDock_->SetActionHandlers([this] { ConfirmArray(); },
+        [this] {
+            EndArray();
+            SetStatus(QStringLiteral("配列: やめました。"));
+        });
 }
 
 void V2MainWindow::BuildRightShelves()

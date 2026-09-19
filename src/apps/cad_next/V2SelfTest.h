@@ -129,7 +129,7 @@ void Note(const char* what);
 //! 2段の帯(HP-RB)。カテゴリ → 道具、押せない道具は理由つき。
 [[nodiscard]] std::vector<SelfTestCase> RibbonCases();
 
-//! 左の一覧(HP-EX)。節の並び、◉ の出し隠し、選択の同期、右クリックの献立。
+//! 左の一覧(HP-XP)。節の並び、◉ の出し隠し、選択の同期、右クリックの献立。
 [[nodiscard]] std::vector<SelfTestCase> ExplorerCases();
 
 //! 状態行・HUD・測定の重ね道具(HP-ST)。

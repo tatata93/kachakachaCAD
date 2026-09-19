@@ -25,7 +25,8 @@
 bool V2MainWindow::IsFreezeCommand(std::string_view id)
 {
     return id == "derived.freeze" || id == "fabrication.freeze_state"
-        || id == "fabrication.freeze_flat" || id == "fabrication.freeze_target";
+        || id == "fabrication.freeze_flat" || id == "fabrication.freeze_target"
+        || id == "fabrication.freeze_wires";
 }
 
 void V2MainWindow::RunFreezeCommand(std::string_view id)
@@ -44,6 +45,10 @@ void V2MainWindow::RunFreezeCommand(std::string_view id)
     }
     if (id == "fabrication.freeze_target") {
         FreezeTargetShape();
+        return;
+    }
+    if (id == "fabrication.freeze_wires") {
+        FreezeContourWires();
     }
 }
 
@@ -249,6 +254,59 @@ void V2MainWindow::FreezeTargetShape()
             .arg(wires)
             .arg(surfaces)
             .arg(parts));
+}
+
+//! 「輪郭を線にする」(F-14)。いまの曲げ状態の輪郭だけを線として作る。
+//! 「現在形状を生成」(freeze_state)と見た目がそっくりで、以前は同じ
+//! fabrication.freeze_state を指していた張りぼてのボタンだった。ここで
+//! 独立させ、固定で作るもの(freezeOutput_)の設定に関わらず線だけを作る
+//! (利用者が「部品のみ」を選んでいても、この道具だけは線を作る)。
+void V2MainWindow::FreezeContourWires()
+{
+    using kachakacha::v2::fabrication::FreezeOutput;
+
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entityPointer = session_->GetDocument().FindEntity(modelId);
+    const auto* feature = entityPointer == nullptr
+        ? nullptr
+        : session_->GetDocument().FindFeature(entityPointer->createdBy);
+    const auto* definitionPointer = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    const auto evaluatedIterator = fabricationModels_.find(modelId.ToString());
+    if (definitionPointer == nullptr || evaluatedIterator == fabricationModels_.end()) {
+        SetStatus(QStringLiteral(
+            "輪郭を線にする: 先に「近似」で近似モデルを作ってください。"));
+        return;
+    }
+    const std::string modelName = entityPointer->displayName;
+    const kachakacha::v2::domain::CreateFabricationModelDefinition definition =
+        *definitionPointer;
+    const kachakacha::v2::app::FabricationEvaluation evaluated = evaluatedIterator->second;
+    if (!evaluated.bandMesh.has_value()) {
+        // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
+        FreezeFlatPanels();
+        return;
+    }
+    const std::string stateName = kachakacha::v2::app::FoldStateSummaryJa(definition);
+    // 固定で作るものを線のみへ一時的に切り替える。呼び終えたら必ず元へ戻す
+    // (この道具が「固定で作るもの」の選び方そのものを書き換えてはならない)。
+    const FreezeOutput saved = freezeOutput_;
+    freezeOutput_ = FreezeOutput::WiresOnly;
+    int wires = 0;
+    int surfaces = 0;
+    int parts = 0;
+    const bool committed =
+        FreezeWithDefinition(definition, modelName, evaluated, stateName, wires, surfaces, parts);
+    freezeOutput_ = saved;
+    if (!committed) {
+        return;
+    }
+    SetStatus(QStringLiteral(
+        "輪郭を線にする(%1): 線 %2 本にしました。近似モデルはそのまま残っています。")
+            .arg(QString::fromStdString(stateName))
+            .arg(wires));
 }
 
 //! freeze_state と freeze_target の共通の道。渡す定義が違うだけで、レールから

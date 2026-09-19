@@ -153,6 +153,7 @@ parameter schemaのdiscriminatorにする。
 | `fabrication.freeze_state` | 現在状態を固定 | panel、Wire種別、Part方式、板厚位置 | Wire/Part/両方 | AT-FAB-011,012,014 |
 | `fabrication.freeze_flat` | 展開状態(0%)を線にする | 製作モデル1 | Wire(0% の輪郭)。曲げ具合は変えない | AT-FAB-011 |
 | `fabrication.freeze_target` | 目標形状(100%)を固定 | 製作モデル1 | Wire/Part/両方(100% の目標形状)。曲げ具合は変えない | AT-FAB-011 |
+| `fabrication.freeze_wires` | 輪郭を線にする | 製作モデル1 | Wire(いまの曲げ状態の輪郭)。固定で作るものの設定に関わらず線のみ | AT-FAB-011 |
 | `fabrication.edit_part` | 近似部品の編集 | 製作モデル1 | (棚を出すだけ。文書は変えない) | AT-FAB-005 |
 
 `fabrication.preview_update` だけはDocumentへcommitしない。`create` または設定更新の確定時に、

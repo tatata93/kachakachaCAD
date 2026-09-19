@@ -77,6 +77,7 @@
 #include <QStringList>
 
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -108,8 +109,7 @@ public:
     V2MainWindow();
     ~V2MainWindow() override;
 
-    //! 窓のところで Enter / Esc を受ける。焦点がどこにあっても同じように効く。
-    //! 3D を一度クリックして焦点を戻す必要を無くすため(オーナー指示 §14)。
+    //! 窓のところで Enter / Esc を受ける。焦点がどこにあっても同じように効く(3D を一度クリックして焦点を戻す必要を無くすため。オーナー指示 §14)。
     bool eventFilter(QObject* target, QEvent* event) override;
     //! いま Enter / Esc を引き受ける道具が動いているか。試験からも見る。
     [[nodiscard]] bool ToolWantsConfirmKeys() const;
@@ -518,10 +518,7 @@ public:
     [[nodiscard]] QString StatusLeftText() const;
     [[nodiscard]] QString StatusRightText() const;
     //! 測定を重ねているときの戻り先。試験から読む。
-    [[nodiscard]] std::optional<kachakacha::v2::modeling::DrawingTool> ToolBeforeMeasure() const noexcept
-    {
-        return toolBeforeMeasure_;
-    }
+    [[nodiscard]] std::optional<kachakacha::v2::modeling::DrawingTool> ToolBeforeMeasure() const noexcept { return toolBeforeMeasure_; }
     //! 選択道具で右クリックしたときのメニュー。V1と同じで、ここだけ出す。
     void ShowSelectMenu(const QPoint& at);
     //! 左の一覧の右クリック(V2ExplorerMenu.cpp)。at は一覧の座標。
@@ -594,9 +591,10 @@ public:
     void FreezeFabricationState();
     //! 「Target 100%」。いまの曲げ具合を変えずに、100%(目標の形)の状態を固定する。
     void FreezeTargetShape();
-    //! freeze_state と freeze_target が共有する道。定義が違うだけで、
-    //! レールから線・面・部品を作るところから先は同じにする(コードを2度書かない)。
-    //! 1つの取り消しで戻せるよう、ひとまとまりにする。戻り値は最後まで進んだか。
+    //! 「輪郭を線にする」(F-14)。固定で作るものの設定に関わらず線のみ。
+    void FreezeContourWires();
+    //! freeze系が共有する道。レールから線・面・部品を作る先を1本化し、
+    //! 1つの取り消しで戻せるようひとまとまりにする。戻り値は最後まで進んだか。
     [[nodiscard]] bool FreezeWithDefinition(
         const kachakacha::v2::domain::CreateFabricationModelDefinition& definition,
         const std::string& modelName,
@@ -809,7 +807,8 @@ public:
     [[nodiscard]] QString GuideRowText(int row, int column) const;
 
 private:
-    void BuildMenus();
+    void BuildMenus();   // V2Menus.cpp
+    void AddMenuCommands(QMenu* menu, std::initializer_list<std::string_view> ids);
     void BuildModeBar();
     void BuildToolPalette();
     //! 2段の帯(V2RibbonCommands.cpp)。道具の QAction は tool ごとに渡す。

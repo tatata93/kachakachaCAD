@@ -3,6 +3,8 @@
 //! 「生成」節は 現在状態 → Flat 0% → Target 100% の3枚のカードで、
 //! それぞれ fabrication.freeze_state / freeze_flat / freeze_target を通す。
 //! 押すたびに文書が変わり、1回の取り消しで戻ること(§34 の考え方どおり)。
+//! HP-GN-03 は帯の「輪郭 Wire」(fabrication.freeze_wires)。固定で作るもの
+//! (Wire/Part/両方)の設定に関わらず線だけを作ることを見る。
 
 #include "V2SelfTest.h"
 
@@ -117,6 +119,36 @@ using kachakacha::v2::domain::EntityKind;
         && Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1);
 }
 
+//! HP-GN-03。「輪郭 Wire」(fabrication.freeze_wires)は、固定で作るものが
+//! 「部品のみ」でも線だけを作る(F-14。以前は fabrication.freeze_state と
+//! 同じ中身の張りぼてボタンだった)。
+[[nodiscard]] bool CaseContourWiresIgnoreFreezeOutputSetting(V2MainWindow& window)
+{
+    using kachakacha::v2::fabrication::FreezeOutput;
+
+    if (!ArmFabricationModel(window)
+        || !SelectFabricationModelAndShowGenerateStage(window)) {
+        return false;
+    }
+    // 固定で作るものを「部品のみ」にする(既定の「線のみ」から1回切り替え)。
+    window.RunCommand("fabrication.freeze_output");
+    if (!Explain("固定で作るものが部品のみになる",
+            window.FreezeOutputInUse() == FreezeOutput::PartsOnly)) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    const int partsBefore = CountOfKind(window, EntityKind::Part);
+    window.RunCommand("fabrication.freeze_wires");
+    if (!Explain("線が増える", CountOfKind(window, EntityKind::Wire) > wiresBefore)
+        || !Explain("部品は増えない(固定で作るものが部品のみでも線だけを作る)",
+            CountOfKind(window, EntityKind::Part) == partsBefore)
+        || !Explain("固定で作るものの設定は書き換わらずに残る",
+            window.FreezeOutputInUse() == FreezeOutput::PartsOnly)) {
+        return false;
+    }
+    return Explain("近似モデルは残る(壊さない)", window.FabricationModelCount() == 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> GenerateCases()
@@ -125,6 +157,8 @@ std::vector<SelfTestCase> GenerateCases()
         {"HP-GN-01 生成の作り方カードは 現在/Flat/Target で、Target 100% は固定物を作る",
             CaseGenerateCardsListStatesAndTargetFreezes},
         {"HP-GN-02 Flat 0% は線を作り、近似モデルは残る", CaseFlatCardMakesWiresAndKeepsModel},
+        {"HP-GN-03 輪郭 Wire は固定で作るものが部品でも線だけを作る",
+            CaseContourWiresIgnoreFreezeOutputSetting},
     };
 }
 

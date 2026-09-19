@@ -73,8 +73,11 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     case DrawingTool::SetGridOrigin:
         return {Shelf::Grid};
     case DrawingTool::ChamferOrFilletPair:
-        // 面取りは量を数の棚と分け合う。量だけ別の札にあると往復になる。
-        return {Shelf::Corner, Shelf::Parameter};
+        // 面取りは面取りの棚1枚(指示書 C-09「一道具一枚」)。
+        // 量は面取りの棚が数の棚と同じ値を持ち、SetSizeHandler で数の棚へ
+        // 流している(V2Shelves.cpp)ので、量の欄をここに並べなくても
+        // CornerSizeMm() は数の棚から読み続けられる。
+        return {Shelf::Corner};
     case DrawingTool::Move:
     case DrawingTool::Copy:
     case DrawingTool::Mirror:
@@ -114,8 +117,14 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
         // 前に出す(V2GuideTableCommands.cpp)。
         return {Shelf::Part};
     case UiMode::Fabrication:
+        // まだ2枚(指示書 C-09 の残課題)。製作の棚は板厚・許すずれを
+        // SetParameterMm で数の棚へ映しているが、数の棚を単独で前に出す
+        // 命令が無い(ShowShelf(Shelf::Parameter) を呼ぶ場所が無い)ため、
+        // ここで返すのをやめると数の棚がどの組み合わせからも出せなくなる
+        // (「出せる棚は全部どこかの組み合わせで出る」試験が落ちる)。
         return {Shelf::Fabrication, Shelf::Parameter};
     case UiMode::Output:
+        // まだ2枚(指示書 C-09 の残課題、出力モードには正本のモックが無い)。
         // 出す前に型紙を見る。見ないまま出すと、紙とプラ板を無駄にしてから気づく。
         return {Shelf::Export, Shelf::Pattern};
     }

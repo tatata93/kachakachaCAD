@@ -8,7 +8,7 @@
 | Stage | 内容 | 状態 | 検証 |
 |---|---|---|---|
 | S0 棚卸し | 3 HTML + repo の突き合わせ、3文書作成 | DONE(2026-09-18) | 雲: subagent 3本の inventory を MATRIX へ反映 |
-| S1 Common | core `app/Ribbon`(mode→category→tool)、`V2Ribbon`、Explorer 階層 + 個別表示 + scroll-to + 「グループ」、右ペイン1道具1枚、HUD/状態行、測定の重ね道具 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: ctest 148/148、typecheck 97 files、自己試験 HP-RB-01〜03 / HP-EX-01〜04 / HP-ST-01〜03 を追加(PC で実行) |
+| S1 Common | core `app/Ribbon`(mode→category→tool)、`V2Ribbon`、Explorer 階層 + 個別表示 + scroll-to + 「グループ」、右ペイン1道具1枚、HUD/状態行、測定の重ね道具 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: ctest 148/148、typecheck 97 files、自己試験 HP-RB-01〜03 / HP-XP-01〜04(旧 HP-EX-01〜04。Extrude の HP-EX-01〜03 と ID 衝突していたため改名) / HP-ST-01〜03 を追加(PC で実行) |
 | S2 Drawing-A | 基本作図/曲線の作り方カード(円/円弧/ベジェ/スプライン)、Tool 切替で panel 同期 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: drawing_method_cards_tests、HP-DM-01〜03(PC で実行) |
 | S3 Drawing-B | 編集/変形/作業面(12方式 + 下見)/注記 | PARTIAL(作業面の下見 D-24 = 雲側完了) / PC 未検証 | 雲: HP-WP-01。編集/変形/注記の欄は未 |
 | S4 Drawing-C | 面作成(6主要 + その他)の新 panel、穴の明示 | NOT_STARTED | |
@@ -29,7 +29,7 @@
 
 ### S1 Common — 2026-09-18(雲側完了、PC 未検証)
 - commit `ce52688` 帯: core `app/Ribbon`(mode→category→tool、Blocked 理由つき)+ `V2Ribbon`(2段、setDefaultAction)。面作成は作図モードへ。HP-RB-01〜03。
-- commit `d3fafae` Explorer: core `app/ExplorerModel`(節と所属)、`V2ExplorerBuild.cpp`(文書 → 8節 → 原点/グループ/もの、◉ で1つずつ出し隠し = SetVisibilityCommand)、`V2ExplorerMenu.cpp`(右クリック献立は台帳の QAction のみ、グループへ移動は落とすのと同じ道)、「まとまり」→「グループ」。HP-EX-01〜04。
+- commit `d3fafae` Explorer: core `app/ExplorerModel`(節と所属)、`V2ExplorerBuild.cpp`(文書 → 8節 → 原点/グループ/もの、◉ で1つずつ出し隠し = SetVisibilityCommand)、`V2ExplorerMenu.cpp`(右クリック献立は台帳の QAction のみ、グループへ移動は落とすのと同じ道)、「まとまり」→「グループ」。HP-XP-01〜04(旧 HP-EX-01〜04。Extrude の自己試験と ID が衝突していたため改名、2026-09-19)。
 - commit `2ce29b0` 状態行/HUD/測定: core `app/StatusLine`(左右の文言と HUD)、`EscapeAction` に ResumeToolAfterMeasure、`V2StatusLine.cpp`、`V2ViewportHud.cpp`、右の欄の見出し下に案内、ShelvesFor は押し出し/面/ブールの最中 1枚だけ。HP-ST-01〜03。
 - 雲: ctest 148/148(status_line_tests, explorer_model_tests, ribbon_tests を追加)、qt stub typecheck 97 files OK。
 - PC: 未実施(`_GO.cmd` → Release build → 自己試験 → 撮影 が要る)。**PC_VERIFIED ではない。**

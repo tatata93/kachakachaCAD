@@ -134,11 +134,14 @@ KACHA_V2_TEST(shelf_layout, どのモードにも道具の設定の棚がある)
     Require(FrontShelfFor(UiMode::Output, DrawingTool::Select) == Shelf::Export, "出力");
 }
 
-KACHA_V2_TEST(shelf_layout, 面取りは量の欄も一緒に出す)
+KACHA_V2_TEST(shelf_layout, 面取りは面取りの棚1枚)
 {
+    // 一道具一枚(指示書 C-09)。量は面取りの棚が数の棚と同じ値を持ち、
+    // SetSizeHandler で数の棚へ流す(V2Shelves.cpp)ので、量だけの札を
+    // 並べて出す必要が無くなった。これは意図した契約変更である。
     const auto shelves = ShelvesFor(UiMode::Drawing, DrawingTool::ChamferOrFilletPair);
-    Require(shelves.size() == 2, "2枚");
-    Require(shelves[0] == Shelf::Corner && shelves[1] == Shelf::Parameter, "面取りと数");
+    Require(shelves.size() == 1, "1枚");
+    Require(shelves[0] == Shelf::Corner, "面取りの棚だけ");
 }
 
 KACHA_V2_TEST(shelf_layout, すべての棚に名前がある)

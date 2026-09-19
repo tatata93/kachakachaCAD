@@ -1,4 +1,4 @@
-//! Model Explorer(左の一覧)の人の道(HP-EX)。正本 3 HTML(2026-09-18)、指示書 model_explorer。
+//! Model Explorer(左の一覧)の人の道(HP-XP)。正本 3 HTML(2026-09-18)、指示書 model_explorer。
 //!
 //! 節の並び(原点が先頭)、1つずつの ◉ での出し隠し、3D ↔ 一覧の選択の同期、右クリックの献立。
 //! 見えている行を実際に触る。文書の値は core の Command を通ってしか変えない。
@@ -58,7 +58,7 @@ using kachakacha::v2::domain::Visibility;
     return entity == nullptr ? Visibility::Hidden : entity->visibility;
 }
 
-//! HP-EX-01。節は正本の並びで、原点が先頭。文書の行が根。
+//! HP-XP-01。節は正本の並びで、原点が先頭。文書の行が根。
 [[nodiscard]] bool CaseExplorerSectionsInOrder(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -83,7 +83,7 @@ using kachakacha::v2::domain::Visibility;
         && window.EntityTree()->topLevelItem(0)->text(1) == QStringLiteral("文書"));
 }
 
-//! HP-EX-02。引いた線はワイヤーの節に出て、◉ を外すと文書の visibility が Hidden になる。
+//! HP-XP-02。引いた線はワイヤーの節に出て、◉ を外すと文書の visibility が Hidden になる。
 //! 取り消しで戻る(Command を通っている証拠)。
 [[nodiscard]] bool CaseExplorerToggleVisibilityPerEntity(V2MainWindow& window)
 {
@@ -117,7 +117,7 @@ using kachakacha::v2::domain::Visibility;
     return Explain("行の ◉ も戻る", rebuilt != nullptr && rebuilt->checkState(0) == Qt::Checked);
 }
 
-//! HP-EX-03。3D で押すと一覧の行が選ばれ、一覧で選ぶと 3D でも選ばれる。
+//! HP-XP-03。3D で押すと一覧の行が選ばれ、一覧で選ぶと 3D でも選ばれる。
 [[nodiscard]] bool CaseExplorerSelectionSyncBothWays(V2MainWindow& window)
 {
     window.RunCommand("file.new");
@@ -143,7 +143,7 @@ using kachakacha::v2::domain::Visibility;
         picked.size() == 1 && picked.front() == b);
 }
 
-//! HP-EX-04。右クリックの献立は正本の順(名前変更/表示・非表示/正対/グループへ移動/複製/削除/プロパティ)。
+//! HP-XP-04。右クリックの献立は正本の順(名前変更/表示・非表示/正対/グループへ移動/複製/削除/プロパティ)。
 //! 「グループへ移動」で実際にグループへ入る(落としたのと同じ道)。
 [[nodiscard]] bool CaseExplorerContextMenuOrderAndMove(V2MainWindow& window)
 {
@@ -186,10 +186,10 @@ using kachakacha::v2::domain::Visibility;
 std::vector<SelfTestCase> ExplorerCases()
 {
     return {
-        {"HP-EX-01 一覧の節は正本の順で原点が先頭", CaseExplorerSectionsInOrder},
-        {"HP-EX-02 ◉ で1つずつ出し隠しでき、取り消しで戻る", CaseExplorerToggleVisibilityPerEntity},
-        {"HP-EX-03 3D と一覧の選択が両方向に同期する", CaseExplorerSelectionSyncBothWays},
-        {"HP-EX-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
+        {"HP-XP-01 一覧の節は正本の順で原点が先頭", CaseExplorerSectionsInOrder},
+        {"HP-XP-02 ◉ で1つずつ出し隠しでき、取り消しで戻る", CaseExplorerToggleVisibilityPerEntity},
+        {"HP-XP-03 3D と一覧の選択が両方向に同期する", CaseExplorerSelectionSyncBothWays},
+        {"HP-XP-04 右クリックの献立は正本の順で、グループへ移せる", CaseExplorerContextMenuOrderAndMove},
     };
 }
 

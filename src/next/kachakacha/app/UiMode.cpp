@@ -84,7 +84,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "fabrication.set_method", "fabrication.freeze_output", "fabrication.merge_parts", "fabrication.split_part",
         "fabrication.set_unfold_base",
         "fabrication.freeze_state", "fabrication.freeze_flat", "fabrication.freeze_target",
-        "fabrication.edit_part",
+        "fabrication.freeze_wires", "fabrication.edit_part",
         "fabrication.set_connection_scope",
     };
     static const std::vector<std::string_view> output{

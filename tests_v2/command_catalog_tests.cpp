@@ -295,10 +295,10 @@ KACHA_V2_TEST(commands, どのコマンドにもメニューの入口がある)
 {
     // 台帳へ足したのにメニューへ足し忘れる、が何度も起きた。
     // 起きても、画面を組み立てられる機械でしか気づけなかった。
-    // メニューの並びは V2MainWindow.cpp の1か所にあるので、
+    // メニューの並びは V2Menus.cpp の1か所にあるので、
     // そこに id が書いてあるかどうかを、ここで先に見る。
     const std::filesystem::path path = std::filesystem::path(KACHACAD_V2_REPO_ROOT)
-        / "src" / "apps" / "cad_next" / "V2MainWindow.cpp";
+        / "src" / "apps" / "cad_next" / "V2Menus.cpp";
     std::ifstream stream(path, std::ios::binary);
     Require(stream.good(), "画面の組み立てが読める");
     std::ostringstream buffer;
@@ -310,9 +310,8 @@ KACHA_V2_TEST(commands, どのコマンドにもメニューの入口がある)
     const std::string begin = "void V2MainWindow::BuildMenus()";
     const std::size_t from = all.find(begin);
     Require(from != std::string::npos, "メニューの並びが見つかる");
-    const std::size_t to = all.find("\nvoid V2MainWindow::SetMode", from);
-    Require(to != std::string::npos, "メニューの並びの終わりが見つかる");
-    const std::string text = all.substr(from, to - from);
+    // BuildMenus は V2Menus.cpp の最後の関数。ファイルの終わりまでが献立の並び。
+    const std::string text = all.substr(from);
 
     std::string missing;
     for (const auto& command : CommandCatalog()) {

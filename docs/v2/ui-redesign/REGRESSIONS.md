@@ -37,3 +37,10 @@ NEW のものは、この作業で `src/apps/cad_next/V2SelfTestRegressions.cpp`
 - `(cd build-core && ctest -E qt_stub)` → `100% tests passed, 0 tests failed out of 149`
 
 PC 側(実際に Qt を通す自己試験の実行)はこのセッションでは行っていない。次のセッションで PC 実行し、`PC_VERIFIED` の記録を別途残すこと。
+
+## 2026-09-19 PC 3 回目で見つかった退行(固定済み)
+
+- HP-AR-01 の窓ハング: 何が = 配列の窓 V2ArrayDialog の `exec()` を本番で据え付けていたため自己試験(offscreen)が閉じられず 900 秒でタイムアウト。なぜ = モーダル窓を本番経路に残していた。固定する試験 = HP-AR-01/02(`SetArrayChooser(nullptr)` で棚の道を通す)。
+- HP-XP-02 の use-after-free: 何が = ToggleEntityVisibilityFromItem が木の作り直し後に消えた `QTreeWidgetItem*` の `text(0)` を読んでいた。なぜ = AdoptCurrentDocument/RefreshEntityList 後もポインタを保持し続けていた。固定する試験 = HP-XP-02(名前と id を先に写してから木を作り直す)。
+- HP-SF-06(やめると 3D の印も消える): 何が = 面作成をキャンセルしても 3D 上の選択の印が残っていた。なぜ = EndSurfacePreview が選択を空にしていなかった。固定する試験 = HP-SF-06。
+- resp の絵が倍率で同じ: 何が = `resp/v2-<state>-<WxH>-<scale>.png` の倍率違いの絵がすべて同一だった。なぜ = main.cpp の撮影が devicePixelRatio を掛けずに撮っていた。固定する試験 = 撮影スクリプトの目視比較(自動試験は未追加)。

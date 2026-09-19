@@ -64,6 +64,14 @@
 - オーナー方針(09-19): **スイープなど新機能はまだ作らない。実用に耐える UI にする。** 以後は既存機能の使い勝手と PC 検証を優先。
 - 次の `_GO.cmd`(1a42d92 以降)で確かめること: 自己試験 288/288、`ui/` と `resp/`(3 サイズ × 3 倍率)の撮影。使い方は `HOWTO-実用手順.md`。
 
+### 2026-09-19 PC 検証 3 回目(4f70d62)と Stage Integration の手当て(5e4c27f)
+- 3 回目の結果(`_claudeout\ctest.txt` / `run.txt` を雲で読んだ): build OK。ctest の `v2_cad_next_smoke` が **900 秒でタイムアウト**: 自己試験が `RUN HP-AR-01` の直後で止まっていた(V2MainWindow が据え付けていた配列の窓 V2ArrayDialog の `exec()` が閉じられない)。`v2_package_zip` の自己試験(配布 exe)は HP-XP-02 の途中で落ちた(PASS/FAIL 無しで終了)。実際に FAIL と出たのは HP-SF-06(「やめると 3D の印も消える」)だけ。オーナーの貼った要約に出ていた「数値入力が画面の外へ出ない」は PASS しており、HP-AR-02 / 組立率と半径… / HP-RS-01 は HP-AR-01 で止まったため未実行。
+- 手当て(5e4c27f): (a) 配列は棚だけ(V2ArrayDialog 削除、V2ArrayChoice.h へ分離、HP-AR-01/02 は `SetArrayChooser(nullptr)` で棚の道を通す) (b) 組立状態 `fabrication.set_assembly` は窓(V2NumberDialog 削除)を出さず製作の棚 2 段目の組立率の欄へ案内(新 HP-FB-05) (c) EndSurfacePreview で 3D の選択を空にする(HP-SF-06) (d) ToggleEntityVisibilityFromItem が木の作り直し後に消えた行の `item->text(0)` を読んでいた(use-after-free)→ 名前と id を先に写す (e) V2FabricationDock / V2EditDock を 380px に収める(QFormLayout WrapLongRows + AllNonFixedFieldsGrow、基準値ボタンを別行 40px、文言短縮、xyz 欄 NoButtons、横スクロール禁止) (f) 手順の一覧(processDock)は既定で畳み、表示メニュー「手順の一覧」で出す。選んでいる数は選択から数え直す(RefreshProcessContextFromSelection) (g) 状態行と HUD は棚で進める操作(押し出し/面を作る/足す引く/厚み/近似/面取り/配列)の名前を道具名に出す(RunningOperationNameJa、新 HP-ST-04) (h) main.cpp の撮影を devicePixelRatio ぶん大きな絵に(resp の倍率違いの絵が全部同じだった)。
+- 雲の門: typecheck OK (111 files)、ctest 150/150。自己試験は 291 件になる見込み(288 + HP-FB-05 + HP-ST-04 + 既存)— PC で数える。
+- 4 回目の `_GO.cmd` は Claude が Git CMD(計算機操作)から起動した(2026-09-19 18:59 頃)。結果はこの下に追記する。
+- 古い重複 UI の棚卸し(subagent 調査): 残る要検討は `guide.create`(形状ガイド(旧))が「形」メニューに残っていること(自己試験 6 か所が場面づくりに使うので今回は残置)、`V2ChoiceDialog`(guide.set_method / guide.append_row の窓、面作成の内部実装として現役)。QDockWidget 派生の各棚は V2OperationPanelHost のページとして現役で削除対象なし。
+- 注意: V2MainWindow.h は 1499 行(上限 1500)。次に足すときは accessor を別ヘッダへ分けること。
+
 ## BLOCKED_BACKEND(必要なら別担当へ)
 
 | ID | 何が要るか | 入力 / 出力 | 既存の近い API | 無い理由 |

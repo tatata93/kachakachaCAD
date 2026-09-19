@@ -15,3 +15,6 @@
 - 進捗・完了の主張はそのセッションの tool 結果に紐づける。PC 未確認は PC_VERIFIED と書かない。
 - MainWindow.cpp を太らせない(関数 100 行・ファイル 1500 行の門)。独立ファイルへ置く。
 - PC への .cmd は Shift-JIS(cp932)+ CRLF で送る(UTF-8 だと日本語コメントが命令として実行される)。
+- 本番で QDialog::exec() を据え付けると自己試験(offscreen)は永遠に止まる。窓は差し替え口(SetXxxChooser)にだけ入れ、本番は棚へ。
+- 木(QTreeWidget)を作り直す関数(AdoptCurrentDocument/RefreshEntityList)を呼んだ後に QTreeWidgetItem* を触らない。必要な値は先に写す。
+- 380px の棚に収めるには QFormLayout::WrapLongRows + AllNonFixedFieldsGrow、横並びは 3 つまで、長い説明はツールチップへ。

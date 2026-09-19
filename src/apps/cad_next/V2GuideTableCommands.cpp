@@ -41,6 +41,10 @@ namespace {
 
 void V2MainWindow::RunGuideTableCommand(std::string_view id)
 {
+    // 右は「いまの道具の1枚だけ」になった(指示書 C-09、I-03)。
+    // 役割表は部品モードの2枚目から外したので、表を自分で使う人のために
+    // その操作のたびに棚を前へ出す。出さないと、表を触っても右に何も見えない。
+    ShowShelf(kachakacha::v2::app::Shelf::GuideTable);
     if (id == "guide.set_method") {
         SetGuideMethod();
     } else if (id == "guide.add_row") {

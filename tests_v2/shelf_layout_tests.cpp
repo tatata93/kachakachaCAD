@@ -215,13 +215,16 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
             }
         }
     }
-    // いまのところ、この2枚だけは自分の命令が `show()` + `raise()` で出している。
+    // いまのところ、この3枚だけは自分の命令が `show()` + `raise()` で出している。
     // **押し出しの棚と同じ壊れ方をする形である**(次に棚を作り直したときに消える)。
     // ここに並べてあるのは「知っていて残している」という印で、
-    // 3枚目が増えたらこの関所が鳴る。
+    // 4枚目が増えたらこの関所が鳴る。
     const std::set<int> openedByOwnCommand{
         static_cast<int>(Shelf::WorkPlane),   // workplane.create が出す
         static_cast<int>(Shelf::Display),     // view.display_settings が出す
+        // 部品モードの2枚目から外した(指示書 C-09、I-03)。
+        // guide.* コマンドが自分で ShowShelf(GuideTable) して出す。
+        static_cast<int>(Shelf::GuideTable),
     };
     std::string missing;
     for (const Shelf shelf : AllShelves()) {

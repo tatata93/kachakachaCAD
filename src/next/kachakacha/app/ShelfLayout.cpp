@@ -108,9 +108,11 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
         return {Shelf::Edit};
     case UiMode::Part:
         // 道具の設定を前に出す。V1 の部品タブに当たる(オーナー指摘 2026-09-11)。
-        // 役割の表は札として後ろに残す。表だけ出していたので、板厚も厚みの
-        // 付け方も治具のすき間も、右のどこにも無かった。
-        return {Shelf::Part, Shelf::GuideTable};
+        // 役割の表(GuideTable)はここから外した(指示書 C-09、I-03)。
+        // 右は「いまの道具の1枚だけ」なので、部品欄の後ろに表を常設すると
+        // 2枚目になってしまう。表は guide.* コマンド自身が ShowShelf で
+        // 前に出す(V2GuideTableCommands.cpp)。
+        return {Shelf::Part};
     case UiMode::Fabrication:
         return {Shelf::Fabrication, Shelf::Parameter};
     case UiMode::Output:

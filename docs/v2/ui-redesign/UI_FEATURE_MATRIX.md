@@ -122,5 +122,5 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 |---|---|---|
 | I-01 | 既知の退行 15 件の回帰試験(指示書 known_regressions) | CLOUD_TESTED(REGRESSIONS.md: 12 件は既存試験、RG-02/12/14 を追加。PC 未実行) |
 | I-02 | 1280x720 / 1920x1080 / 2560x1440 × 100/125/150% の撮影と目視 | NOT_STARTED |
-| I-03 | 旧 UI の重複(形状ガイド(旧)表、旧 toolPalette、Shelf::Part 常設)の片づけ | NOT_STARTED |
+| I-03 | 旧 UI の重複(形状ガイド(旧)表、旧 toolPalette、Shelf::Part 常設)の片づけ | CLOUD_TESTED(Part の2枚目〈GuideTable〉を廃止・guide.\* が自分でShowShelf、旧 toolPalette は既に単一のリボンのみで確認、詳細窓はV2SelfTestExtrudePromise.cppが直接使うため据え置き。PC未実行) |
 | I-04 | fresh verifier による仕様照合 | NOT_STARTED |

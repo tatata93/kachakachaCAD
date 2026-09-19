@@ -135,8 +135,13 @@ if exist "%EXE%" (
   )
   set "QT_SCALE_FACTOR="
 
+  REM 自己試験は ctest と同じ offscreen で走らせる。実画面で走らせると、実際のマウスの
+  REM 位置や画面倍率(150%)が試験の中の擬似クリックと混ざり、ctest では通る試験が落ちる
+  REM (2026-09-19: 「数値入力が画面の外へ出ない」「組立率と半径…」が直の実行だけ落ちた)。
+  set "QT_QPA_PLATFORM=offscreen"
   %RUNAPP% 600 "%EXE%" --self-test >> "%LOG%" 2>&1
   set "APP_SELFTEST_RC=!ERRORLEVEL!"
+  set "QT_QPA_PLATFORM="
   echo selftest_rc=!APP_SELFTEST_RC! >> "%LOG%"
   taskkill /F /IM kachakacha_cad_next.exe > nul 2>&1
 ) else (

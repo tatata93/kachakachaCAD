@@ -449,22 +449,28 @@ using kachakacha::v2::domain::Visibility;
         return false;
     }
     const std::uint64_t revision = window.Session().GetDocument().Revision();
+    // 欄は半径 0.01 mm・組立率 0.1% で丸めて持つ。丸めた値の 2 倍と、2 倍を丸めた値は
+    // 最後の桁で 1 だけ違うことがある(PC の実画面で 50.545 → 50.55、2 倍 101.09。
+    // offscreen では線の位置が違い、たまたま割り切れていた)。許しは最後の桁 1 つ分。
+    constexpr double kRadiusStepMm = 0.011;
+    constexpr double kPercentStep = 0.11;
     dock.TypeAssemblyPercent(50.0);
     if (!Explain((std::string("50% と打つと半径が2倍になる(") + std::to_string(dock.RadiusMm())
                      + " mm)").c_str(),
-            std::abs(dock.RadiusMm() - radiusAt100 * 2.0) < 1.0e-6)) {
+            std::abs(dock.RadiusMm() - radiusAt100 * 2.0) < kRadiusStepMm)) {
         return false;
     }
     dock.TypeRadiusMm(radiusAt100 * 4.0);
     if (!Explain((std::string("半径を4倍と打つと組立率が 25% になる(")
                      + std::to_string(dock.AssemblyPercent()) + "%)").c_str(),
-            std::abs(dock.AssemblyPercent() - 25.0) < 1.0e-6)) {
+            std::abs(dock.AssemblyPercent() - 25.0) < kPercentStep)) {
         return false;
     }
     // 100% より小さい半径は、この板ではそれ以上曲げられない。組立率は動かさない。
+    const double percentBefore = dock.AssemblyPercent();
     dock.TypeRadiusMm(radiusAt100 * 0.5);
     if (!Explain("曲げられない半径では組立率が動かない",
-            std::abs(dock.AssemblyPercent() - 25.0) < 1.0e-6)) {
+            std::abs(dock.AssemblyPercent() - percentBefore) < 1.0e-6)) {
         return false;
     }
     if (!Explain("打っただけでは文書は変わらない",

@@ -14,7 +14,7 @@
 | S4 Drawing-C | 面作成(6主要 + その他)の新 panel、穴の明示 | NOT_STARTED | |
 | S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | PARTIAL(押し出し棚 = 雲側完了) / PC 未検証 | 雲: HP-PA-01/02。厚みの棚(P-10)は未 |
 | S6 Part-B | 形状編集/面編集/ブール/配置(実装済み + disabled+理由) | NOT_STARTED | |
-| S7 Fab-A | 近似(作り方4、候補カードに方式/平均誤差の扱い、表示) | NOT_STARTED | |
+| S7 Fab-A | 近似(作り方4、候補カードに方式/平均誤差の扱い、表示) | PARTIAL(作り方カード = 雲側完了) / PC 未検証 | 雲: approx_input_tests、HP-AP-03/04。候補カードの方式/平均誤差の表示(F-03)と表示切替(F-04)は未 |
 | S8 Fab-B | 部材編集(3D で部材を押す、分割/結合/切れ目/半径) | NOT_STARTED | |
 | S9 Fab-C | 曲げ(slider/preset)/展開/生成、Explorer の Approximation 節 | NOT_STARTED | |
 | S10 Integration | 回帰試験、寸法/拡大率撮影、旧 UI 片づけ、verifier | NOT_STARTED | |
@@ -45,6 +45,10 @@
 - `V2ExtrudeDock`: 範囲 5 通り(距離/左右対称/両方向に別々の距離/選んだ面まで/全部貫く)と方向 7 通りを棚に全部。逆側の距離・相手の面(作業平面)・向き x y z は選んだときだけ生える。開始面(From)とテーパーは押せない形 + 理由。
 - `PrepareExtrudeChoice` / `RefreshExtrudeFromDock` が棚の範囲・逆側の距離・相手・向きの数を読む(詳細の窓は残るが棚だけで全部決められる)。
 - HP-PA-01/02。回転体は帯で Blocked(作図の回転面 + 厚み へ案内)。
+
+### S7 Fab-A(作り方カード)/ S9 の曲げ状態の基準値 — 2026-09-19(雲側完了、PC 未検証)
+- commit `392646e`: core `ApproxPolicy`(標準/少部品優先/精度優先/手動条件)+ `CandidateForPolicy`。`V2FabricationDock` に作り方カード 4 枚、曲げ状態のスライダと基準値 0/25/50/75/100(組立率を打って当てるのと同じ道)。近似モデルが無いときの「当てる」は理由を状態行へ。
+- HP-AP-03(作り方が既定の候補を決め、押した候補が勝つ)、HP-AP-04(基準値は組立率を打って当てる)。
 
 ## BLOCKED_BACKEND(必要なら別担当へ)
 

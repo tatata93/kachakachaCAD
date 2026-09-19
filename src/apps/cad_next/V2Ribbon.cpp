@@ -80,6 +80,9 @@ void V2Ribbon::ShowMode(UiMode mode)
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ShowCategory(at); });
         categoryLayout_->addWidget(button);
+        // 親が見えたあとに作った子は、show() を呼ぶまで(イベントループが回るまで)見えない。
+        // 試験は押した直後に isVisible を見るので、ここで出す(PC 自己試験 HP-RB 2026-09-19)。
+        button->show();
         categoryButtons_.push_back(button);
     }
     categoryLayout_->addStretch(1);
@@ -162,6 +165,7 @@ void V2Ribbon::RebuildTools()
                 button->setToolTip(Text(tool.blockedReasonJa));
             }
             toolLayout_->addWidget(button);
+            button->show();   // 上と同じ理由
             toolButtons_.push_back(entry);
         }
     }

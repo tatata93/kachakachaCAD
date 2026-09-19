@@ -803,4 +803,27 @@ KACHA_V2_TEST(selection, 名前を挙げたものだけ選択から外せる)
     Require(all.ordered.empty() && all.entityIds.empty(), "全部挙げれば空になる");
 }
 
+KACHA_V2_TEST(selection, 欄の印で選ばれている物も押し直せば外れる)
+{
+    // 欄の印(MirrorSurfaceEntriesToSelection など)は番号だけの参照で、種類も線分も無い。
+    // その物の線分を押して外すとき、SameTarget では見つからず外れなかった(HP-SF-06)。
+    SelectionSet current;
+    current.entityIds.push_back(Ent(4));
+    kachakacha::v2::app::SelectionRef mirrored;
+    mirrored.entityId = Ent(4);
+    current.ordered.push_back(mirrored);
+    PickCandidate picked;
+    picked.entityId = Ent(4);
+    picked.kind = kachakacha::v2::app::SelectionElementKind::Edge;
+    picked.segmentId = Seg(4);
+    const SelectionSet subtracted = ApplySelection(current, picked, SelectionMode::Subtract);
+    Require(subtracted.entityIds.empty(), "外すで空になる");
+    const SelectionSet toggled = ApplySelection(current, picked, SelectionMode::Toggle);
+    Require(toggled.entityIds.empty(), "Ctrl の押し直しでも空になる");
+    // 別の物を外そうとしても、何も消えない。
+    picked.entityId = Ent(5);
+    Require(ApplySelection(current, picked, SelectionMode::Subtract).entityIds.size() == 1,
+        "別の物では減らない");
+}
+
 KACHA_V2_TEST_MAIN("selection_tests")

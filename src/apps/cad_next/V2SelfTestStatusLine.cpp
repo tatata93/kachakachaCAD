@@ -31,9 +31,12 @@ using kachakacha::v2::modeling::DrawingTool;
     window.RunCommand("file.new");
     window.SetMode(UiMode::Drawing);
     window.SelectTool(DrawingTool::Line);
+    // 道具の名前は core(DrawingToolNameJa = 「直線」)のもの。帯の短い言葉(「線」)ではない。
+    const QString expectedLeft = QStringLiteral("作図 ｜ ")
+        + QString::fromUtf8(std::string(kachakacha::v2::modeling::DrawingToolNameJa(DrawingTool::Line)).c_str());
     const QString left = window.StatusLeftText();
-    if (!Explain((std::string("左は「作図 ｜ 線」(実際 ") + left.toStdString() + ")").c_str(),
-            left == QStringLiteral("作図 ｜ 線"))) {
+    if (!Explain((std::string("左は「作図 ｜ 直線」(実際 ") + left.toStdString() + ")").c_str(),
+            left == expectedLeft)) {
         return false;
     }
     QString right = window.StatusRightText();
@@ -60,8 +63,8 @@ using kachakacha::v2::modeling::DrawingTool;
     window.RunCommand("snap.toggle");
     // HUD の1行目はモード › 道具。枠は左上で、画面に収まる。
     const auto& hud = viewport.HudLines();
-    if (!Explain("HUD の1行目が「作図 › 線」",
-            !hud.empty() && hud.front() == QStringLiteral("作図 › 線"))) {
+    if (!Explain("HUD の1行目が「作図 › 直線」",
+            !hud.empty() && hud.front() == QStringLiteral("作図 › 直線"))) {
         return false;
     }
     const QRectF box = viewport.HudRect();

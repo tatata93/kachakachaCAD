@@ -229,6 +229,7 @@ void V2DrawingDock::RebuildMethodCards()
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ChooseMethod(at); });
         methodLayout_->addWidget(button);
+        button->show();   // 親が見えたあとに作った子は show() まで見えない(HP-DM)
         methodButtons_.push_back(button);
     }
     methodRow_->setVisible(!methodCards_.empty());

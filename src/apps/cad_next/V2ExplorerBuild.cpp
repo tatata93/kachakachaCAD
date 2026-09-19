@@ -142,7 +142,7 @@ void V2MainWindow::BuildOriginRows(QTreeWidgetItem* originRoot)
             continue;
         }
         QTreeWidgetItem* item = AddEntityRow(originRoot, entity);
-        item->setText(1, QStringLiteral("基準平面"));
+        item->setText(1, QStringLiteral("作業平面(基準)"));   // 「作業平面」で絞り込める字を残す
         item->setFlags(item->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
     }
     const char* axisNames[3] = {"X軸", "Y軸", "Z軸"};

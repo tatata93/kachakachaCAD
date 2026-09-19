@@ -592,11 +592,15 @@ void V2MainWindow::RunWireTransform(
     entity.createdBy = feature.id;
     feature.outputs.push_back(FeatureOutput{"wire", entity.id, EntityKind::Wire});
 
+    // 足す + 使い切った線を消す をひとまとまりに。1回の取り消しで元の 2 本へ戻る
+    // (別々だと面取りの取り消しが 3 回要った: PC 自己試験 HP-CN-01 2026-09-19)。
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+        labelJa.toStdString());
     const auto added = session_->GetDocument().Run(
         AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
     if (!added.committed) {
         ReportDiagnostics(added.diagnostics);
-        return;
+        return;   // Transaction が捨てる
     }
     std::vector<kachakacha::v2::base::EntityId> consumed = selection.entityIds;
     if (consumesFirstOnly && !consumed.empty()) {
@@ -607,6 +611,11 @@ void V2MainWindow::RunWireTransform(
         consumed.clear();   // オフセットは元の線を残す。
     }
     RemoveConsumedWires(consumed);
+    if (!transaction.Commit()) {
+        SetStatus(labelJa + QStringLiteral(": 途中で失敗したので、何も変えていません。"));
+        AdoptCurrentDocument();
+        return;
+    }
     AdoptCurrentDocument();
     if (!consumesInputs) {
         SetStatus(QStringLiteral("%1: %2本の線を写しました。元の線は残っています。")

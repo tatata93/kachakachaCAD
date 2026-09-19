@@ -393,9 +393,20 @@ SelectionSet ApplySelection(const SelectionSet& current,
     }
     const SelectionRef target = RefFromCandidate(*picked);
     std::vector<SelectionRef> refs = EffectiveRefs(current);
-    const auto found = std::find_if(refs.begin(), refs.end(), [&](const auto& ref) {
+    auto found = std::find_if(refs.begin(), refs.end(), [&](const auto& ref) {
         return SameTarget(ref, target);
     });
+    // 外す(Subtract / Toggle)ときは、同じ物が別の形(欄の印 = 番号だけの参照、別の線分)で
+    // 選ばれていても外す。欄の印には種類も線分も無いので、SameTarget では見つからず、
+    // 「もう一度押しても外れない」になっていた(PC 自己試験 HP-SF-06 / HP-AP-01 / HP-BO-01 2026-09-19)。
+    // 物全体の参照(番号だけ)だけが相手。辺や面の部分選択は SameTarget のまま(同じ線の別の辺を
+    // Ctrl で足す道を壊さない)。
+    if (found == refs.end() && (mode == SelectionMode::Subtract || mode == SelectionMode::Toggle)) {
+        found = std::find_if(refs.begin(), refs.end(), [&](const auto& ref) {
+            return ref.entityId == target.entityId && ref.kind == SelectionElementKind::Object
+                && !ref.segmentId.has_value() && !ref.subshapeKey.has_value();
+        });
+    }
     switch (mode) {
     case SelectionMode::Replace:
         return SelectionFromRefs({target});

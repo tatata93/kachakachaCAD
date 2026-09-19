@@ -142,7 +142,10 @@ void V2MainWindow::BuildOriginRows(QTreeWidgetItem* originRoot)
             continue;
         }
         QTreeWidgetItem* item = AddEntityRow(originRoot, entity);
-        item->setText(1, QStringLiteral("作業平面(基準)"));   // 「作業平面」で絞り込める字を残す
+        // 種類は「作業平面」のまま(絞り込みの字を変えない)。基準であることは説明で。
+        // 長い種類名は名前の列を潰す(PC 画面 2026-09-19 で名前が消えた)。
+        item->setText(1, QStringLiteral("作業平面"));
+        item->setToolTip(0, QStringLiteral("原点の基準平面。消せず、グループへも入りません。"));
         item->setFlags(item->flags() & ~Qt::ItemIsEditable & ~Qt::ItemIsDragEnabled);
     }
     const char* axisNames[3] = {"X軸", "Y軸", "Z軸"};

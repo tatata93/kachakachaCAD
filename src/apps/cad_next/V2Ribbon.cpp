@@ -36,12 +36,16 @@ V2Ribbon::V2Ribbon(QWidget* parent)
     categoryLayout_ = new QHBoxLayout(categoryRow_);
     categoryLayout_->setContentsMargins(4, 2, 4, 0);
     categoryLayout_->setSpacing(0);
+    // 右の余白は最初に 1 つだけ置く。並べ直すたびに足すと余白が溜まり、
+    // 帯が右へ寄っていった(PC 画面 2026-09-19)。ボタンは余白の前へ差し込む。
+    categoryLayout_->addStretch(1);
     layout->addWidget(categoryRow_);
     toolRow_ = new QWidget(this);
     toolRow_->setObjectName(QStringLiteral("ribbonTools"));
     toolLayout_ = new QHBoxLayout(toolRow_);
     toolLayout_->setContentsMargins(6, 3, 6, 3);
     toolLayout_->setSpacing(4);
+    toolLayout_->addStretch(1);   // 上と同じ
     layout->addWidget(toolRow_);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
@@ -79,13 +83,12 @@ void V2Ribbon::ShowMode(UiMode mode)
         button->setObjectName(QStringLiteral("ribbonCategory"));
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ShowCategory(at); });
-        categoryLayout_->addWidget(button);
+        categoryLayout_->insertWidget(static_cast<int>(categoryButtons_.size()), button);
         // 親が見えたあとに作った子は、show() を呼ぶまで(イベントループが回るまで)見えない。
         // 試験は押した直後に isVisible を見るので、ここで出す(PC 自己試験 HP-RB 2026-09-19)。
         button->show();
         categoryButtons_.push_back(button);
     }
-    categoryLayout_->addStretch(1);
     const auto seen = remembered_.find(mode);
     current_ = seen == remembered_.end() ? 0 : seen->second;
     if (current_ < 0 || current_ >= static_cast<int>(categories.size())) {
@@ -164,12 +167,11 @@ void V2Ribbon::RebuildTools()
             if (tool.Blocked()) {
                 button->setToolTip(Text(tool.blockedReasonJa));
             }
-            toolLayout_->addWidget(button);
+            toolLayout_->insertWidget(static_cast<int>(toolButtons_.size()), button);
             button->show();   // 上と同じ理由
             toolButtons_.push_back(entry);
         }
     }
-    toolLayout_->addStretch(1);
     SetCurrentSurfaceMethod(currentSurfaceMethod_, currentSurfaceMethod_ >= 0);
     SetCurrentMeasureMode(currentMeasureMode_, currentMeasureMode_ >= 0);
 }

@@ -130,6 +130,15 @@ class QBoxLayout : public QLayout {
 public:
     void addStretch(int = 0);
     void addLayout(QLayout*, int = 0);
+    void insertWidget(int, QWidget*, int = 0);
+};
+class QGridLayout : public QLayout {
+public:
+    QGridLayout() = default;
+    explicit QGridLayout(QWidget*) {}
+    void addWidget(QWidget*, int, int);
+    void setHorizontalSpacing(int);
+    void setVerticalSpacing(int);
 };
 class QVBoxLayout : public QBoxLayout {
 public:
@@ -336,6 +345,8 @@ public:
     [[nodiscard]] int columnCount() const;
     void setHeaderLabels(const QStringList&);
     void setRootIsDecorated(bool);
+    void setIndentation(int);
+    void setColumnHidden(int, bool);
     void addTopLevelItem(QTreeWidgetItem*);
     void clear();
     [[nodiscard]] int topLevelItemCount() const;

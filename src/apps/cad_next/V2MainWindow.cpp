@@ -459,6 +459,10 @@ QDockWidget* V2MainWindow::BuildEntityTreeDock()
         {QStringLiteral("名前"), QStringLiteral("種類")});
     entityTree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     entityTree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    // 種類の列は隠す(正本の一覧は名前と印だけ)。列の字は絞り込みと試験が読むので残す。
+    // 出しておくと、入れ子の深い行で名前の列が潰れて名前が消えた(PC 画面 2026-09-19)。
+    entityTree_->setColumnHidden(1, true);
+    entityTree_->setIndentation(14);
     // V1 と同じく、まとめて選べる。左の一覧で選んだものは 3D 画面でも選ばれる。
     entityTree_->setSelectionMode(QAbstractItemView::ExtendedSelection);
     QObject::connect(entityTree_, &QTreeWidget::itemSelectionChanged, this,
@@ -614,7 +618,7 @@ void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
     // 棚の広さを決める。決めないと、部品モードで右が 120px まで狭まり、
     // 見出しが切れ、手順が2行しか見えなくなる。
     // 横幅を先に決めてから、縦の割り当てを決める。
-    resizeDocks({treeDock, operationDock_}, {240, 330}, Qt::Horizontal);
+    resizeDocks({treeDock, operationDock_}, {240, 380}, Qt::Horizontal);
     // 左は一覧が主で、手順はその下。一覧を潰さない割り当てにする。
     resizeDocks({processDock_}, {180}, Qt::Vertical);
     BuildStatusBar();

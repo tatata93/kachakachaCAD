@@ -7,6 +7,7 @@
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -184,8 +185,10 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     layout->addLayout(row);
     // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
     layout->addWidget(new QLabel(QStringLiteral("作り方"), box));
-    auto* policyRow = new QHBoxLayout();
-    policyRow->setSpacing(2);
+    // 4 枚を 2×2 に。横 1 列だと 330px の棚で 2 枚しか見えなかった(PC 画面 2026-09-19)。
+    auto* policyRow = new QGridLayout();
+    policyRow->setHorizontalSpacing(2);
+    policyRow->setVerticalSpacing(2);
     const auto& specs = kachakacha::v2::app::ApproxPolicySpecs();
     for (std::size_t index = 0; index < specs.size(); ++index) {
         auto* button = new QPushButton(QString::fromUtf8(specs[index].labelJa.c_str()), box);
@@ -197,7 +200,7 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
                 policyHandler_(at);
             }
         });
-        policyRow->addWidget(button);
+        policyRow->addWidget(button, at / 2, at % 2);
         policies_.push_back(button);
     }
     layout->addLayout(policyRow);

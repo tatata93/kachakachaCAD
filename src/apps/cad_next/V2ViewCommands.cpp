@@ -845,6 +845,8 @@ void V2MainWindow::RefreshRightShelves()
         operationDock_->show();
         operationDock_->raise();
     }
+    // 作業平面の棚が隠れたなら、下見も片づける(D-24)。
+    RefreshWorkPlanePreview();
 }
 
 bool V2MainWindow::ShelfShown(kachakacha::v2::app::Shelf shelf) const
@@ -860,4 +862,7 @@ void V2MainWindow::ShowShelf(kachakacha::v2::app::Shelf shelf)
     operationHost_->SetShelves({shelf});
     operationDock_->show();
     operationDock_->raise();
+    // 作業平面の棚を出した直後(初期値のまま)も、隠れて他の棚に替わったときも、
+    // ここで下見の要不要を決め直す(D-24)。
+    RefreshWorkPlanePreview();
 }

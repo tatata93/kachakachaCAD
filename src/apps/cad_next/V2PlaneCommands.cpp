@@ -170,6 +170,11 @@ void V2MainWindow::CreateWorkPlaneFromChoice(const WorkPlaneChoice& choice, bool
         ApplyWorkPlane(built.Value(), entity.id);
     }
     AdoptCurrentDocument();
+    // できたので、作る前の下見はもう要らない(D-24)。
+    if (workPlanePreviewShown_) {
+        workPlanePreviewShown_ = false;
+        viewport_->HideToolPreview();
+    }
     SetStatus(activate
             ? QStringLiteral("%1 の作業平面を作って、作業中にしました。")
                   .arg(QString::fromStdString(feature.displayName))

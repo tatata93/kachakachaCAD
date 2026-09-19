@@ -93,6 +93,8 @@ namespace {
     cases.insert(cases.end(), drawingMethods.begin(), drawingMethods.end());
     const std::vector<SelfTestCase> partPanel = PartPanelCases();
     cases.insert(cases.end(), partPanel.begin(), partPanel.end());
+    const std::vector<SelfTestCase> workPlanePreview = WorkPlanePreviewCases();
+    cases.insert(cases.end(), workPlanePreview.begin(), workPlanePreview.end());
     const std::vector<SelfTestCase> promise = ExtrudePromiseCases();
     const std::vector<SelfTestCase> graph = ExtrudeGraphCases();
     const std::vector<SelfTestCase> approxFlow = ApproximationFlowCases();

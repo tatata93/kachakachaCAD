@@ -68,6 +68,8 @@ void V2MainWindow::BuildRightShelves()
     // 札の1つとして最初から置く。「作業平面を作る」を押すと前に出る。
     workPlaneDock_ = new V2WorkPlaneDock(this);
     workPlaneDock_->SetCreateHandler([this] { CreateWorkPlaneFromDock(); });
+    // 欄が変わるたびに、作る前の平面を3Dへ下見として出す(D-24)。
+    workPlaneDock_->SetChangedHandler([this] { RefreshWorkPlanePreview(); });
 
     // 作図の棚(V1 の「作図」タブ)。円弧の作り方・補助線・指定点・数値で線を作る。
     drawingDock_ = new V2DrawingDock(this);

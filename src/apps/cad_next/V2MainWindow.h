@@ -631,6 +631,8 @@ public:
     {
         return workPlaneDock_;
     }
+    //! 作業平面の下見(V2WorkPlanePreview.cpp、D-24)が出ているか。試験から見る。
+    [[nodiscard]] bool WorkPlanePreviewShown() const noexcept { return workPlanePreviewShown_; }
     //! 固定で作るものを順に切り替える(ワイヤーのみ → 部品のみ → 両方)。
     void CycleFreezeOutput();
     [[nodiscard]] kachakacha::v2::fabrication::FreezeOutput FreezeOutputInUse() const
@@ -1047,6 +1049,9 @@ private:
     void CreateWorkPlaneFromDock();
     //! 棚とコンボへ、いまの選択と文書の平面一覧を出し直す。
     void RefreshWorkPlaneDock();
+    //! 作業平面の下見を出し直す(V2WorkPlanePreview.cpp、D-24)。
+    //! 棚が見えていて、いまの欄から平面が組み立てられる間だけ出す。
+    void RefreshWorkPlanePreview();
     //! その作業平面を作業中にする(コンボ・一覧・コマンドが同じ道を通る)。
     bool ActivateWorkPlaneById(const kachakacha::v2::base::EntityId& id);
     //! 作業中の作図面に正対する(上の帯の「正対」)。
@@ -1066,6 +1071,8 @@ private:
     kachakacha::v2::modeling::StandardPlaneKind nextStandardPlane_ =
         kachakacha::v2::modeling::StandardPlaneKind::ZX;
     V2WorkPlaneDock* workPlaneDock_ = nullptr;
+    //! 作業平面の下見(40mm四方の四角)を出しているか(D-24)。
+    bool workPlanePreviewShown_ = false;
     //! いま作業中の作業平面。無ければ空。
     kachakacha::v2::base::EntityId activeWorkPlaneId_;
     //! 一覧の「原点」ノードの軸の行(X/Y/Z)。チェックで表示を切り替える。

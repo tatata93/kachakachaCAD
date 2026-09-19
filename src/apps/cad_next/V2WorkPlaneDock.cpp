@@ -146,11 +146,18 @@ V2WorkPlaneDock::V2WorkPlaneDock(QWidget* parent)
     QObject::connect(method_, &QComboBox::currentIndexChanged, this, [this] {
         ApplyVisibility();
         RefreshNeeds();
+        EmitChanged();
     });
-    QObject::connect(referencePlane_, &QComboBox::currentIndexChanged, this,
-        [this] { RefreshNeeds(); });
-    QObject::connect(secondPlane_, &QComboBox::currentIndexChanged, this,
-        [this] { RefreshNeeds(); });
+    QObject::connect(standard_, &QComboBox::currentIndexChanged, this,
+        [this] { EmitChanged(); });
+    QObject::connect(referencePlane_, &QComboBox::currentIndexChanged, this, [this] {
+        RefreshNeeds();
+        EmitChanged();
+    });
+    QObject::connect(secondPlane_, &QComboBox::currentIndexChanged, this, [this] {
+        RefreshNeeds();
+        EmitChanged();
+    });
     ApplyVisibility();
     RefreshNeeds();
 }
@@ -170,6 +177,8 @@ std::array<QDoubleSpinBox*, 3> V2WorkPlaneDock::AddVectorRow(const QString& labe
         field->setDecimals(3);
         field->setSingleStep(step);
         field->setValue(values[index]);
+        // 数を変えれば、できる平面も変わる。下見を出し直す(D-24)。
+        QObject::connect(field, &QDoubleSpinBox::valueChanged, this, [this] { EmitChanged(); });
         rowLayout->addWidget(field);
         fields[index] = field;
     }
@@ -186,6 +195,8 @@ QDoubleSpinBox* V2WorkPlaneDock::AddNumberRow(const QString& label, double minim
     field->setSingleStep(1.0);
     field->setSuffix(suffix);
     field->setValue(initial);
+    // 数を変えれば、できる平面も変わる。下見を出し直す(D-24)。
+    QObject::connect(field, &QDoubleSpinBox::valueChanged, this, [this] { EmitChanged(); });
     form_->addRow(label, field);
     return field;
 }
@@ -349,6 +360,8 @@ WorkPlaneChoice V2WorkPlaneDock::Choice() const
 
 void V2WorkPlaneDock::SetChoice(const WorkPlaneChoice& choice)
 {
+    // 欄を1つずつ書き換える間は、そのたびに下見を作り直させない。
+    loading_ = true;
     const auto& methods = WorkPlaneMethods();
     for (std::size_t index = 0; index < methods.size(); ++index) {
         if (methods[index] == choice.method) {
@@ -371,13 +384,17 @@ void V2WorkPlaneDock::SetChoice(const WorkPlaneChoice& choice)
     SelectPlane(referencePlane_, choice.referencePlaneId);
     SelectPlane(secondPlane_, choice.secondPlaneId);
     curveParameter_->setValue(choice.curveParameter);
+    loading_ = false;
     ApplyVisibility();
     RefreshNeeds();
+    EmitChanged();
 }
 
 void V2WorkPlaneDock::SetPlanes(
     const std::vector<std::pair<kachakacha::v2::base::EntityId, QString>>& planes)
 {
+    // コンボを作り直す間は下見を作り直させない(combo->clear() でも指標は動く)。
+    loading_ = true;
     // 選び直しても、前に選んでいた平面が残るなら残す。
     const auto reference = PlaneOf(referencePlane_);
     const auto second = PlaneOf(secondPlane_);
@@ -393,6 +410,7 @@ void V2WorkPlaneDock::SetPlanes(
     }
     SelectPlane(referencePlane_, reference);
     SelectPlane(secondPlane_, second);
+    loading_ = false;
     RefreshNeeds();
 }
 
@@ -410,6 +428,20 @@ bool V2WorkPlaneDock::ActivateAfterCreate() const
 void V2WorkPlaneDock::SetCreateHandler(std::function<void()> handler)
 {
     createHandler_ = std::move(handler);
+}
+
+void V2WorkPlaneDock::SetChangedHandler(std::function<void()> handler)
+{
+    changedHandler_ = std::move(handler);
+}
+
+//! 欄が変わったことを外へ知らせる。欄を作り直している最中(loading_)は黙る。
+//! 黙らないと、SetChoice が10個近い欄を書き換えるたびに下見を作り直すことになる。
+void V2WorkPlaneDock::EmitChanged()
+{
+    if (!loading_ && changedHandler_) {
+        changedHandler_();
+    }
 }
 
 void V2WorkPlaneDock::SetMethodIndex(int index)

@@ -956,6 +956,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestStatusLine.cpp
         src/apps/cad_next/V2SelfTestDrawingMethods.cpp
         src/apps/cad_next/V2SelfTestPartPanel.cpp
+        src/apps/cad_next/V2SelfTestWorkPlanePreview.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
         src/apps/cad_next/V2SelfTestPlanes.cpp
         src/apps/cad_next/V2SelfTestScreen.cpp
@@ -988,6 +989,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ApproxCommands.cpp
         src/apps/cad_next/V2BooleanCommands.cpp
         src/apps/cad_next/V2CornerPreview.cpp
+        src/apps/cad_next/V2WorkPlanePreview.cpp
         src/apps/cad_next/V2Ribbon.cpp
         src/apps/cad_next/V2ExplorerBuild.cpp
         src/apps/cad_next/V2ExplorerMenu.cpp

@@ -47,6 +47,9 @@ public:
     [[nodiscard]] bool ActivateAfterCreate() const;
     //! 「平面を作る」を押したときに呼ぶもの。
     void SetCreateHandler(std::function<void()> handler);
+    //! 欄・作り方・コンボのどれかが変わるたびに呼ぶもの(下見を出し直すため、D-24)。
+    //! SetChoice / SetPlanes で欄を作り直している最中は呼ばない。
+    void SetChangedHandler(std::function<void()> handler);
     //! 試験から呼ぶ。作り方の位置。
     void SetMethodIndex(int index);
     //! 試験から見る。いま出ている「足りるか」の一文。
@@ -96,6 +99,10 @@ private:
     QPushButton* create_ = nullptr;
     std::vector<kachakacha::v2::base::EntityId> planeIds_;
     std::function<void()> createHandler_;
+    std::function<void()> changedHandler_;
+    void EmitChanged();
     kachakacha::v2::app::WorkPlaneFacts facts_;
     bool canCreate_ = false;
+    //! SetChoice / SetPlanes で欄を作り直している最中は EmitChanged を黙らせる。
+    bool loading_ = false;
 };

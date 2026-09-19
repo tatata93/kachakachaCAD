@@ -59,7 +59,7 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | D-21 | 作図 | 変形 | 移動/回転/ミラー/コピー | 2点/3点 | `wire.move/rotate/mirror/copy` | 変形カテゴリ | 既存 | HP-DR | NOT_STARTED | |
 | D-22 | 作図 | 変形 | スケール | — | **無し** | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | D-23 | 作図 | 変形 | 配列(直線/円形) | 既存 | `wire.array_*`(ダイアログ) | 変形カテゴリ、右ペインに欄 | 無し | test | NOT_STARTED | |
-| D-24 | 作図 | 作業面 | 作業面(New) | 12方式 | `WorkPlane.h` 12 methods、`V2WorkPlaneDock` | 作業面カテゴリ→作業面、作り方=12 | 無し→平面の下見を足す | HP-WP | NOT_STARTED | |
+| D-24 | 作図 | 作業面 | 作業面(New) | 12方式 | `WorkPlane.h` 12 methods、`V2WorkPlaneDock` | 作業面カテゴリ→作業面、作り方=12 | 無し→平面の下見を足す | HP-WP | CLOUD_TESTED | 棚の欄が変わるたび 40mm 四方の下見(V2WorkPlanePreview.cpp)。作ると消える。HP-WP-01 |
 | D-25 | 作図 | 作業面 | Select / Set Current / 正対 / 表示 | — | `workplane.set_active`, `view.align_workplane`, visibility | 同カテゴリ | — | HP-WP | NOT_STARTED | Current/Selected/Other の描き分けは viewport |
 | D-26 | 作図 | 面作成 | 平面 | 閉輪郭内側クリック(外形+穴) | `PlanarBoundary` + `ProfileRegion` | 面作成→平面 | あり | HP-SF | TESTED(既存) | |
 | D-27 | 作図 | 面作成 | ルールド面 | 断面2本 | `RuledSections` | 面作成 | あり | HP-SF | TESTED(既存) | |

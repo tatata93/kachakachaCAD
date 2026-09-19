@@ -235,6 +235,12 @@ bool V2MainWindow::ApplyUiShotState(const QString& name)
         ok = ApplyBooleanShotState();
     } else if (name.startsWith(QStringLiteral("ui-surface-"))) {
         ok = ApplySurfaceShotState(name);
+    } else if (name.startsWith(QStringLiteral("ui-ribbon-"))
+        || name == QStringLiteral("ui-fab-generate")
+        || name == QStringLiteral("ui-explorer-groups")
+        || name == QStringLiteral("ui-measure-overlay")) {
+        // 指示書 I-02。撮影の5場面(V2UiShotStatesResponsive.cpp)。
+        ok = ApplyResponsiveShotState(name);
     } else {
         return false;
     }

@@ -231,6 +231,7 @@ public:
     bool ApplyGuidedLoftShotState();
     bool ApplyApproxShotState();
     bool ApplyBooleanShotState();
+    bool ApplyResponsiveShotState(const QString& name);   // 指示書 I-02(V2UiShotStatesResponsive.cpp)
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! いま近似の道具が動いているか。試験から見る。

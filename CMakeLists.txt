@@ -1011,6 +1011,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ToolRoleLabels.cpp
         src/apps/cad_next/V2UiShotStates.cpp
         src/apps/cad_next/V2UiShotStatesMore.cpp
+        src/apps/cad_next/V2UiShotStatesResponsive.cpp
+        src/apps/cad_next/V2SelfTestResponsive.cpp
         src/apps/cad_next/V2PatternDock.cpp
         src/apps/cad_next/V2ShapeViews.cpp
         src/apps/cad_next/V2Shelves.cpp

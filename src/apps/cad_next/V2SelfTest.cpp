@@ -123,6 +123,8 @@ namespace {
     cases.insert(cases.end(), fabrication.begin(), fabrication.end());
     const std::vector<SelfTestCase> partEdit = PartEditCases();
     cases.insert(cases.end(), partEdit.begin(), partEdit.end());
+    const std::vector<SelfTestCase> responsive = ResponsiveCases();
+    cases.insert(cases.end(), responsive.begin(), responsive.end());
     return cases;
 }
 

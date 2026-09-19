@@ -119,6 +119,22 @@ if exist "%EXE%" (
     echo shot_dpi_win95_%%Z=!ERRORLEVEL! >> "%LOG%"
     taskkill /F /IM kachakacha_cad_next.exe > nul 2>&1
   )
+  set "QT_SCALE_FACTOR="
+
+  REM I-02: responsive screenshots. 3 window sizes x 5 new-UI scenes x 3 scale factors.
+  if not exist "%~dp0_claudeout\resp" mkdir "%~dp0_claudeout\resp"
+  for %%Z in (1280x720 1920x1080 2560x1440) do (
+    for %%T in (ui-ribbon-drawing ui-ribbon-part-thicken ui-fab-generate ui-explorer-groups ui-measure-overlay) do (
+      for %%D in (1 1.25 1.5) do (
+        set "QT_SCALE_FACTOR=%%D"
+        %RUNAPP% 120 "%EXE%" --manual-state %%T --size %%Z --snapshot "%~dp0_claudeout\resp\v2-%%T-%%Z-%%D.png" >> "%LOG%" 2>&1
+        echo respshot_%%T_%%Z_%%D=!ERRORLEVEL! >> "%LOG%"
+        taskkill /F /IM kachakacha_cad_next.exe > nul 2>&1
+      )
+    )
+  )
+  set "QT_SCALE_FACTOR="
+
   %RUNAPP% 600 "%EXE%" --self-test >> "%LOG%" 2>&1
   set "APP_SELFTEST_RC=!ERRORLEVEL!"
   echo selftest_rc=!APP_SELFTEST_RC! >> "%LOG%"

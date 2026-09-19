@@ -162,6 +162,9 @@ void Note(const char* what);
 //! 部材の編集を 3D のクリックから当てる(HP-PE、matrix F-05/06/07)。
 [[nodiscard]] std::vector<SelfTestCase> PartEditCases();
 
+//! 撮影の5場面がすべて作れるか(HP-RS、指示書 I-02)。
+[[nodiscard]] std::vector<SelfTestCase> ResponsiveCases();
+
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();
 

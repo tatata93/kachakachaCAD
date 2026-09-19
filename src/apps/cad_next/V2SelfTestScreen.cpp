@@ -7,7 +7,7 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
-#include "V2ArrayDialog.h"
+#include "V2ArrayChoice.h"
 #include "V2ParameterDock.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"

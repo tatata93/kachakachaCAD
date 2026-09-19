@@ -988,7 +988,6 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2ExtrudeHandle.cpp
         src/apps/cad_next/V2ExtrudeInteractive.cpp
         src/apps/cad_next/V2ArrayCommands.cpp
-        src/apps/cad_next/V2ArrayDialog.cpp
         src/apps/cad_next/V2ArrayDock.cpp
         src/apps/cad_next/V2ArrayDock.h
         src/apps/cad_next/V2PartDock.cpp
@@ -1040,7 +1039,6 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2GridDock.h
         src/apps/cad_next/V2DisplayDock.cpp
         src/apps/cad_next/V2DisplayDock.h
-        src/apps/cad_next/V2NumberDialog.cpp
         src/apps/cad_next/V2ChoiceDialog.cpp
         src/apps/cad_next/V2ParameterDock.cpp
         src/apps/cad_next/V2ParameterDock.h

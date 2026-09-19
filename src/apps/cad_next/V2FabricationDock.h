@@ -156,6 +156,8 @@ public:
     void SetModelText(const QString& text);
     [[nodiscard]] int StageIndex() const;
     void SetStageIndex(int index);
+    //! 組立率の欄へ焦点を移す。メニューの「組立状態」はここへ来る(窓を出さない)。
+    void FocusAssemblyField();
 
     // ---- 試験から ----
     void SetManualBoundariesText(const QString& text);
@@ -172,6 +174,8 @@ private:
     QWidget* BuildPartEditSection(QWidget* body);
     //! 展開(F-11/F-12)の作り方カードと配置(展開先・表裏)。部材の編集のすぐ下に置く。
     QWidget* BuildUnfoldSection(QWidget* body);
+    //! 生成(固定で作るもの・作り方カード)。コンストラクタを100行以内に保つために分けた。
+    QWidget* BuildFreezeSection(QWidget* body);
     //! 組立率を打ったら半径を、半径を打ったら組立率を言い換える。当てるまで文書は触らない。
     void SyncRadiusFromPercent();
     void SyncPercentFromRadius();

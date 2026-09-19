@@ -142,6 +142,30 @@ using kachakacha::v2::modeling::DrawingTool;
     return Explain("Esc は選択へ", window.Session().CurrentTool() == DrawingTool::Select);
 }
 
+
+//! HP-ST-04。棚で進める操作(押し出し)の最中は、状態行と HUD の道具名がその操作になる。
+//! 「部品 › 選択」のままだと、何をしている最中か 3D を見ても分からない。
+[[nodiscard]] bool CaseStatusLineNamesRunningShelfOperation(V2MainWindow& window)
+{
+    if (!window.ApplyManualState(QStringLiteral("ui-extrude-profile-only"))) {
+        return Explain("押し出しの下見の場面が作れる", false);
+    }
+    const QString left = window.StatusLeftText();
+    if (!Explain((std::string("左に「押し出し」が出る(実際 ") + left.toStdString() + ")").c_str(),
+            left.contains(QStringLiteral("押し出し")))) {
+        return false;
+    }
+    const auto& hud = window.Viewport().HudLines();
+    if (!Explain("HUD の 1 行目にも「押し出し」",
+            !hud.empty() && hud.front().contains(QStringLiteral("押し出し")))) {
+        return false;
+    }
+    window.HandleToolKey(Qt::Key_Escape, nullptr);
+    const QString after = window.StatusLeftText();
+    return Explain((std::string("やめると道具名が戻る(実際 ") + after.toStdString() + ")").c_str(),
+        !after.contains(QStringLiteral("押し出し")));
+}
+
 } // namespace
 
 std::vector<SelfTestCase> StatusLineCases()
@@ -150,6 +174,8 @@ std::vector<SelfTestCase> StatusLineCases()
         {"HP-ST-01 状態行と HUD がモード・道具・吸着・座標を映す", CaseStatusLineShowsModeToolAndSnap},
         {"HP-ST-02 測定を重ねて Esc で元の道具へ戻る", CaseMeasureOverlayReturnsToRunningTool},
         {"HP-ST-03 測定の途中で道具を選び直せば戻り先を忘れる", CaseMeasureOverlayForgetsWhenToolChanged},
+        {"HP-ST-04 棚で進める操作の最中は状態行と HUD がその操作の名前を出す",
+            CaseStatusLineNamesRunningShelfOperation},
     };
 }
 

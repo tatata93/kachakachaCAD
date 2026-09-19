@@ -1,5 +1,6 @@
 #include "V2EditDock.h"
 
+#include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDockWidget>
@@ -11,6 +12,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QString>
 #include <QVBoxLayout>
@@ -84,6 +86,8 @@ V2EditDock::V2EditDock(QWidget* parent)
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    // 350px の棚では横スクロールを出さず、はみ出す分は折り返しで吸収する。
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(body);
     setWidget(scroll);
     ShowNothing(QString());
@@ -94,6 +98,9 @@ QWidget* V2EditDock::BuildPlanePage()
     auto* page = new QWidget(pages_);
     auto* form = new QFormLayout(page);
     form->setContentsMargins(0, 0, 0, 0);
+    // 350px の棚に収めるため、長い行は折り返し、伸ばせる欄は伸ばす。
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form->addRow(QStringLiteral("原点"), MakeVector3Row(page, planeOrigin_, 1.0));
     form->addRow(QStringLiteral("法線"), MakeVector3Row(page, planeNormal_, 0.1));
     form->addRow(QStringLiteral("平面内 X"), MakeVector3Row(page, planeU_, 0.1));
@@ -110,6 +117,8 @@ QWidget* V2EditDock::BuildWirePage()
     auto* metaWidget = new QWidget(page);
     auto* meta = new QFormLayout(metaWidget);
     meta->setContentsMargins(0, 0, 0, 0);
+    meta->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    meta->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     sourcePlane_ = new QComboBox(metaWidget);
     sourcePlane_->addItem(QStringLiteral("なし"));
     meta->addRow(QStringLiteral("作成元平面"), sourcePlane_);
@@ -137,6 +146,9 @@ QWidget* V2EditDock::BuildLinePanel()
     auto* panel = new QWidget(pages_);
     auto* form = new QFormLayout(panel);
     form->setContentsMargins(0, 0, 0, 0);
+    // 350px の棚に収めるため、長い行は折り返し、伸ばせる欄は伸ばす。
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form->addRow(MakeSection(panel, QStringLiteral("直線の長さと向きを置き直す")));
 
     auto* lengthRow = new QWidget(panel);
@@ -145,25 +157,41 @@ QWidget* V2EditDock::BuildLinePanel()
     relocateLength_ = new QCheckBox(QStringLiteral("置き直す"), lengthRow);
     length_ = MakeNumber(lengthRow, 1.0, 0.0);
     length_->setSuffix(QStringLiteral(" mm"));
+    length_->setMinimumWidth(0);
+    length_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     lengthLayout->addWidget(relocateLength_);
     lengthLayout->addWidget(length_);
     form->addRow(QStringLiteral("長さ"), lengthRow);
 
+    // 角度行はチェック+欄を1段目、水平/垂直ボタンを2段目に分けて横幅を詰める。
     auto* angleRow = new QWidget(panel);
-    auto* angleLayout = new QHBoxLayout(angleRow);
+    auto* angleLayout = new QVBoxLayout(angleRow);
     angleLayout->setContentsMargins(0, 0, 0, 0);
-    relocateAngle_ = new QCheckBox(QStringLiteral("置き直す"), angleRow);
-    angle_ = MakeNumber(angleRow, 1.0, -360.0);
+    angleLayout->setSpacing(2);
+    auto* angleTopRow = new QWidget(angleRow);
+    auto* angleTop = new QHBoxLayout(angleTopRow);
+    angleTop->setContentsMargins(0, 0, 0, 0);
+    relocateAngle_ = new QCheckBox(QStringLiteral("置き直す"), angleTopRow);
+    angle_ = MakeNumber(angleTopRow, 1.0, -360.0);
     angle_->setRange(-360.0, 360.0);
     angle_->setSuffix(QStringLiteral(" °"));
-    auto* horizontal = new QPushButton(QStringLiteral("水平 0°"), angleRow);
-    auto* vertical = new QPushButton(QStringLiteral("垂直 90°"), angleRow);
+    angle_->setMinimumWidth(0);
+    angle_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    angleTop->addWidget(relocateAngle_);
+    angleTop->addWidget(angle_);
+    auto* angleButtonsRow = new QWidget(angleRow);
+    auto* angleButtons = new QHBoxLayout(angleButtonsRow);
+    angleButtons->setContentsMargins(0, 0, 0, 0);
+    auto* horizontal = new QPushButton(QStringLiteral("水平 0°"), angleButtonsRow);
+    auto* vertical = new QPushButton(QStringLiteral("垂直 90°"), angleButtonsRow);
+    horizontal->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    vertical->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     QObject::connect(horizontal, &QPushButton::clicked, this, [this] { SetAngle(0.0); });
     QObject::connect(vertical, &QPushButton::clicked, this, [this] { SetAngle(90.0); });
-    angleLayout->addWidget(relocateAngle_);
-    angleLayout->addWidget(angle_);
-    angleLayout->addWidget(horizontal);
-    angleLayout->addWidget(vertical);
+    angleButtons->addWidget(horizontal);
+    angleButtons->addWidget(vertical);
+    angleLayout->addWidget(angleTopRow);
+    angleLayout->addWidget(angleButtonsRow);
     form->addRow(QStringLiteral("平面内角度"), angleRow);
     angleFrame_ = new QLabel(panel);
     angleFrame_->setWordWrap(true);
@@ -177,6 +205,8 @@ QWidget* V2EditDock::BuildArcPage()
     auto* form = new QFormLayout(page);
     arcForm_ = form;
     form->setContentsMargins(0, 0, 0, 0);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form->addRow(QStringLiteral("中心"), MakeVector3Row(page, arcCenter_, 1.0));
     form->addRow(QStringLiteral("円の X 軸"), MakeVector3Row(page, arcU_, 0.1));
     form->addRow(QStringLiteral("円の Y 軸"), MakeVector3Row(page, arcV_, 0.1));
@@ -201,6 +231,10 @@ QWidget* V2EditDock::MakeVector3Row(QWidget* parent, Vector3Fields& fields, doub
     layout->setSpacing(3);
     for (auto& field : fields) {
         field = MakeNumber(row, step);
+        // 3つ並ぶので上下ボタンを消して幅を詰める。
+        field->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        field->setMinimumWidth(0);
+        field->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         layout->addWidget(field);
     }
     return row;
@@ -232,6 +266,10 @@ void V2EditDock::EnsurePointRows(std::size_t count)
         layout->addWidget(row.label);
         for (auto& field : row.fields) {
             field = MakeNumber(row.row, 1.0);
+            // 3つ並ぶので上下ボタンを消して幅を詰める。
+            field->setButtonSymbols(QAbstractSpinBox::NoButtons);
+            field->setMinimumWidth(0);
+            field->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
             layout->addWidget(field);
         }
         pointsLayout_->addWidget(row.row);

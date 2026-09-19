@@ -1,7 +1,6 @@
 #include "V2MainWindow.h"
 
 #include "V2EntityTree.h"
-#include "V2NumberDialog.h"
 
 #include "kachakacha/app/ExportContent.h"
 #include "kachakacha/exporters/PdfWriter.h"
@@ -31,7 +30,6 @@
 #include <QApplication>
 #include <QColor>
 #include <QComboBox>
-#include <QDialog>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFont>
@@ -247,25 +245,11 @@ void V2MainWindow::WireViewportCallbacks()
     // 「見ながら決める」ができなくなる。窓は「詳細...」を押したときだけ出す。
     // 作業平面は窓ではなく右の棚(V1 の「平面を作る」タブ)で作る。
     // 12通りの作り方と数の欄を持ち、「平面を作る」で文書へ入れる。
-    // 組立率は窓で聞く。数値1つなので、押し出しのような大きな窓は要らない。
-    SetAssemblyChooser([this](double current) -> std::optional<double> {
-        V2NumberDialog dialog(QStringLiteral("組立状態"),
-            QStringLiteral("組立率(0 = 平ら、100 = 完成形)"), current, 0.0, 100.0,
-            QStringLiteral(" %"), this);
-        if (dialog.exec() != QDialog::Accepted) {
-            return std::nullopt;
-        }
-        return dialog.Value();
-    });
-    // 並べ方は窓で聞く。判断(2個以上か・多すぎないか)は core にある。
-    SetArrayChooser([this](const V2ArrayChoice& initial, bool circular)
-                        -> std::optional<V2ArrayChoice> {
-        V2ArrayDialog dialog(initial, circular, this);
-        if (dialog.exec() != QDialog::Accepted) {
-            return std::nullopt;
-        }
-        return dialog.Choice();
-    });
+    // 組立率も窓で聞かない。右の棚の組立率の欄(スライダ・基準値と同じ道)へ案内する
+    // (V2FabricationCommands.cpp の fabrication.set_assembly)。窓と棚で別々に値を持たない。
+    // 並べ方は右の棚(V2ArrayDock、指示書 D-23)で聞く。ここで窓(V2ArrayDialog)を
+    // 差し込むと棚が出ず、自己試験では窓が閉じられないまま止まる(PC 検証 2026-09-19、
+    // HP-AR-01 が 900 秒で打ち切られた)。窓は自己試験の差し替え口としてだけ残す。
     // 制御点を掴んで動かした結果。文書を変えるのは窓の役目。
     viewport_->SetControlPointCallback(
         [this](kachakacha::v2::base::EntityId entityId,
@@ -308,6 +292,7 @@ void V2MainWindow::HandleSelectionChanged()
     // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
     RefreshExtrudeForSelectionChange();
     RefreshExportCounts();
+    RefreshProcessContextFromSelection();
     RefreshMeasurements();
     RefreshEditDock();
     RefreshCornerDock();
@@ -603,6 +588,15 @@ void V2MainWindow::BuildRemainingPanels(QDockWidget* treeDock)
     addDockWidget(Qt::LeftDockWidgetArea, processDock);
     splitDockWidget(treeDock, processDock, Qt::Vertical);
     processDock_ = processDock;
+    // 正本(3 HTML 2026-09-18)の左は一覧だけ。手順は V1 の名残で、案内は状態行と HUD が
+    // 持つようになったので、はじめは畳んでおく(表示メニューから出せる)。
+    // 出したままだと 1280x720 で一覧が半分に潰れる(PC 検証 2026-09-19)。
+    processDock->hide();
+    if (viewMenu_ != nullptr) {
+        QAction* toggle = processDock->toggleViewAction();
+        toggle->setText(QStringLiteral("手順の一覧(&P)"));
+        viewMenu_->addAction(toggle);
+    }
 
     BuildExportDock();
     BuildRightShelves();
@@ -919,6 +913,24 @@ kachakacha::v2::app::SelectionFacts V2MainWindow::BuildFactsForCommands() const
         session_->GetDocument().Snapshot(), session_->Scene(),
         session_->GetDocument().Snapshot().settings.tolerance, external,
         session_->GetDocument().CanUndo(), session_->GetDocument().CanRedo());
+}
+
+//! 手順の「選んでいる数」は画面が数え直さず、選択の側から取る(RefreshExportCounts と同じ)。
+//! 数えないままだと、線を引いても「線を1本以上描いてください」が消えなかった
+//! (PC の絵 2026-09-19)。
+void V2MainWindow::RefreshProcessContextFromSelection()
+{
+    if (viewport_ == nullptr) {
+        return;
+    }
+    const auto& snapshot = session_->GetDocument().Snapshot();
+    const auto& selection = viewport_->Selection();
+    processContext_.selectedWireCount = kachakacha::v2::app::SelectedCountOfKind(selection,
+        snapshot, kachakacha::v2::domain::EntityKind::Wire);
+    processContext_.selectedPartCount = kachakacha::v2::app::SelectedCountOfKind(selection,
+        snapshot, kachakacha::v2::domain::EntityKind::Part);
+    processContext_.selectedEntityCount = static_cast<int>(selection.entityIds.size());
+    RefreshProcessSteps();
 }
 
 void V2MainWindow::SetProcessContext(const kachakacha::v2::app::ProcessContext& context)

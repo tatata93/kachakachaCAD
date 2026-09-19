@@ -849,6 +849,8 @@ void V2MainWindow::RefreshRightShelves()
     }
     // 作業平面の棚が隠れたなら、下見も片づける(D-24)。
     RefreshWorkPlanePreview();
+    // 棚が替われば、状態行と HUD の道具名(棚で進める操作の名前)も替わる。
+    RefreshStatusLine();
 }
 
 bool V2MainWindow::ShelfShown(kachakacha::v2::app::Shelf shelf) const
@@ -867,4 +869,5 @@ void V2MainWindow::ShowShelf(kachakacha::v2::app::Shelf shelf)
     // 作業平面の棚を出した直後(初期値のまま)も、隠れて他の棚に替わったときも、
     // ここで下見の要不要を決め直す(D-24)。
     RefreshWorkPlanePreview();
+    RefreshStatusLine();
 }

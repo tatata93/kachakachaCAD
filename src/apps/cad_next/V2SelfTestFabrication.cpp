@@ -12,6 +12,7 @@
 
 #include "kachakacha/app/CommandParameters.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/io/AtomicFile.h"
 
 #include <filesystem>
@@ -528,6 +529,43 @@ namespace kachakacha::v2::selftest {
             && window.StatusText().contains(QStringLiteral("2つ以上")));
 }
 
+//! HP-FB-05。メニューの「組立状態」は窓を出さず、右の棚の組立率の欄へ案内する。
+//! 打っただけでは文書は変わらず、「当てる」で初めて入る(棚と窓で別々の値を持たない)。
+[[nodiscard]] bool CaseSetAssemblyGoesToTheShelfNotADialog(V2MainWindow& window)
+{
+    using kachakacha::v2::app::Shelf;
+    if (!MakeCurvedGuideSurface(window)) {
+        return false;
+    }
+    window.RunCommand("fabrication.create");
+    window.RunCommand("fabrication.create");
+    if (!Explain("近似モデルができる", window.FabricationModelCount() == 1)) {
+        return false;
+    }
+    // 自己試験の差し替え口を外し、本番と同じ道(窓なし)を通す。
+    window.SetAssemblyChooser(nullptr);
+    const std::uint64_t revision = window.Session().GetDocument().Revision();
+    window.RunCommand("fabrication.set_assembly");
+    auto& dock = window.FabricationDock();
+    if (!Explain("製作の棚の 2 段目(曲げ)が前に出る",
+            window.ShelfShown(Shelf::Fabrication) && dock.StageIndex() == 1)) {
+        return false;
+    }
+    if (!Explain((std::string("案内が「当てる」を指す(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("当てる")))) {
+        return false;
+    }
+    if (!Explain("案内しただけでは文書は変わらない",
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    dock.TypeAssemblyPercent(50.0);
+    dock.PressApplyAssembly();
+    return Explain("棚の「当てる」で文書に入る",
+        window.Session().GetDocument().Revision() != revision);
+}
+
 std::vector<SelfTestCase> FabricationCases()
 {
     return {
@@ -536,6 +574,8 @@ std::vector<SelfTestCase> FabricationCases()
         {"製作の棚が欄を持ち数の棚と方式を映す", &CaseFabricationDockHoldsOptionsAndMirrorsParameters},
         {"近似モデルは文書に入り開き直しても戻る", &CaseFabricationModelIsInTheDocument},
         {"組立率を変えると本当に曲がる", &CaseAssemblyPercentActuallyBends},
+        {"HP-FB-05 組立状態は窓を出さず棚の欄へ案内し、当てるまで文書は変わらない",
+            &CaseSetAssemblyGoesToTheShelfNotADialog},
         {"近似の方式を切り替えられる", &CaseFabricationMethodCanBeSwitched},
         {"曲げ状態で固定すると線と面と部品になる", &CaseFreezeAtBendStateMakesWiresSurfaceAndPart},
         {"曲面へ落とした窓が帯の型紙に開く", &CaseWindowProjectedOntoCurvedSurfaceOpensInBands},

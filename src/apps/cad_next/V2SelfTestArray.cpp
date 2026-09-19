@@ -45,6 +45,8 @@ void DrawOneLine(V2MainWindow& window)
 [[nodiscard]] bool DrawAndPickOneLine(V2MainWindow& window)
 {
     window.RunCommand("file.new");
+    // 窓の差し替えが残っていれば棚の道を通らない。ここは棚の道を確かめる。
+    window.SetArrayChooser(nullptr);
     DrawOneLine(window);
     return Explain("引いた線を画面から拾える", ClickOnAnyCurve(window, Qt::NoModifier));
 }

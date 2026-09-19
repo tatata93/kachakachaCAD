@@ -14,6 +14,7 @@
 #include <QLineEdit>
 #include <QObject>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QSlider>
 #include <QScrollArea>
 #include <QString>
@@ -115,31 +116,8 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     bendLayout->addWidget(BuildUnfoldSection(bendPage));
     // 生成(正本 fabrication mock、matrix F-13/F-14)。「固定で作るもの」の欄をすぐ上に置き、
     // 3枚の「作り方」カード(現在状態 / Flat 0% / Target 100%)がその設定どおりに作る。
-    auto* freezeButtons = new QWidget(bendPage);
-    auto* freezeLayout = new QVBoxLayout(freezeButtons);
-    freezeLayout->setContentsMargins(0, 0, 0, 0);
-    freezeLayout->setSpacing(2);
-    freeze_ = new QComboBox(freezeButtons);
-    freeze_->addItem(QStringLiteral("ワイヤーのみ"));
-    freeze_->addItem(QStringLiteral("部品のみ"));
-    freeze_->addItem(QStringLiteral("両方"));
-    auto* freezeOutputRow = new QWidget(freezeButtons);
-    auto* freezeOutputLayout = new QHBoxLayout(freezeOutputRow);
-    freezeOutputLayout->setContentsMargins(0, 0, 0, 0);
-    freezeOutputLayout->addWidget(new QLabel(QStringLiteral("固定で作るもの"), freezeOutputRow));
-    freezeOutputLayout->addWidget(freeze_, 1);
-    freezeLayout->addWidget(freezeOutputRow);
-    freezeLayout->addWidget(new QLabel(QStringLiteral("生成(作り方)"), freezeButtons));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("現在状態"), "fabrication.freeze_state", this));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("Flat 0%"), "fabrication.freeze_flat", this));
-    generateCards_.push_back(
-        MakeRun(freezeButtons, QStringLiteral("Target 100%"), "fabrication.freeze_target", this));
-    for (QPushButton* card : generateCards_) {
-        freezeLayout->addWidget(card);
-    }
-    bendLayout->addWidget(freezeButtons);
+    // コンストラクタを100行以内に保つため、別関数に分けている。
+    bendLayout->addWidget(BuildFreezeSection(bendPage));
     bendLayout->addStretch(1);
     stages_->addTab(bendPage, QStringLiteral("2 部材の編集・曲げ確認"));
 
@@ -158,6 +136,9 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     auto* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    // 380px の棚に収める前提。横スクロールが出るのは中身がはみ出している合図であり、
+    // 隠すのではなく各行を折り返し・縮められるようにする(PC画面 2026-09-19)。
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(body);
     setWidget(scroll);
     Connect();
@@ -398,6 +379,9 @@ QWidget* V2FabricationDock::BuildOptionsForm(QWidget* body)
     auto* formWidget = new QWidget(body);
     form_ = new QFormLayout(formWidget);
     form_->setContentsMargins(0, 0, 0, 0);
+    // 380px の棚に収める: 長いラベルの行は折り返し、伸ばせる欄は伸ばす。
+    form_->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form_->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     method_ = new QComboBox(formWidget);
     method_->addItem(QStringLiteral("V1方式(帯へ近似し直す)"));
     method_->addItem(QStringLiteral("V2方式(面を分類して展開)"));
@@ -458,6 +442,8 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
     auto* widget = new QWidget(body);
     auto* form = new QFormLayout(widget);
     form->setContentsMargins(0, 0, 0, 0);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     const auto makeUnit = [widget](double value) {
         auto* field = new QDoubleSpinBox(widget);
         field->setRange(0.0, 1.0);
@@ -491,7 +477,9 @@ QWidget* V2FabricationDock::BuildRangeAndMaterial(QWidget* body)
     layers_ = MakeCount(widget, 1.0, 20.0);
     layers_->setValue(1.0);
     form->addRow(QStringLiteral("積層の枚数"), layers_);
-    applyMaterial_ = new QPushButton(QStringLiteral("材料と積層を選んだものに当てる"), widget);
+    // ボタン文言を短くし、詳しい説明はツールチップへ(380px の棚に収めるため)。
+    applyMaterial_ = new QPushButton(QStringLiteral("選んだものに当てる"), widget);
+    applyMaterial_->setToolTip(QStringLiteral("材料と積層の枚数を、選んでいる部材に当てます。"));
     form->addRow(applyMaterial_);
     return widget;
 }
@@ -501,6 +489,8 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     auto* bendWidget = new QWidget(body);
     auto* bend = new QFormLayout(bendWidget);
     bend->setContentsMargins(0, 0, 0, 0);
+    bend->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    bend->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     auto* assemblyRow = new QWidget(bendWidget);
     auto* assemblyLayout = new QHBoxLayout(assemblyRow);
     assemblyLayout->setContentsMargins(0, 0, 0, 0);
@@ -516,30 +506,39 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     bend->addRow(QStringLiteral("組立率"), assemblyRow);
     // 曲げ状態(正本 F-10): スライダ 0〜100 と基準値 0/25/50/75/100。
     // どちらも「組立率を打って当てる」と同じ道を通る。別の道を作らない。
+    // スライダと5個の基準値ボタンを同じ行に並べると 380px の棚からはみ出すため、
+    // スライダを1行、基準値ボタンを次の行に分ける(PC画面 2026-09-19)。
     auto* bendRow = new QWidget(bendWidget);
     auto* bendLayout = new QHBoxLayout(bendRow);
     bendLayout->setContentsMargins(0, 0, 0, 0);
-    bendLayout->setSpacing(2);
     bendSlider_ = new QSlider(Qt::Horizontal, bendRow);
     bendSlider_->setRange(0, 100);
     bendSlider_->setValue(100);
     bendSlider_->setToolTip(QStringLiteral("0% = 実際の展開、100% = 目標の形。離すと当てます。"));
     bendLayout->addWidget(bendSlider_, 1);
-    for (const int percent : {0, 25, 50, 75, 100}) {
-        auto* preset = new QPushButton(QStringLiteral("%1").arg(percent), bendRow);
-        preset->setToolTip(QStringLiteral("組立率を %1% にして当てます。").arg(percent));
-        QObject::connect(preset, &QPushButton::clicked, this, [this, percent] {
-            TypeAssemblyPercent(static_cast<double>(percent));
-            PressApplyAssembly();
-        });
-        bendLayout->addWidget(preset);
-        bendPresets_.push_back(preset);
-    }
     QObject::connect(bendSlider_, &QSlider::sliderReleased, this, [this] {
         TypeAssemblyPercent(static_cast<double>(bendSlider_->value()));
         PressApplyAssembly();
     });
     bend->addRow(QStringLiteral("曲げ状態"), bendRow);
+    auto* presetRow = new QWidget(bendWidget);
+    auto* presetLayout = new QHBoxLayout(presetRow);
+    presetLayout->setContentsMargins(0, 0, 0, 0);
+    presetLayout->setSpacing(2);
+    for (const int percent : {0, 25, 50, 75, 100}) {
+        auto* preset = new QPushButton(QStringLiteral("%1").arg(percent), presetRow);
+        preset->setToolTip(QStringLiteral("組立率を %1% にして当てます。").arg(percent));
+        // 40px 固定にして、5個並べても 380px の棚に収める。
+        preset->setFixedWidth(40);
+        preset->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        QObject::connect(preset, &QPushButton::clicked, this, [this, percent] {
+            TypeAssemblyPercent(static_cast<double>(percent));
+            PressApplyAssembly();
+        });
+        presetLayout->addWidget(preset);
+        bendPresets_.push_back(preset);
+    }
+    bend->addRow(QString(), presetRow);
     // 半径。曲げ具合と同じことの言い換えである。どちらから入れてもよい(§30)。
     auto* radiusRow = new QWidget(bendWidget);
     auto* radiusLayout = new QHBoxLayout(radiusRow);
@@ -552,9 +551,13 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     radius_->setToolTip(QStringLiteral(
         "いまの組立率での半径です。手元の丸棒や治具の径へ合わせたいときは、"
         "その値を入れて「固定」を押してください。近似をやり直しても戻りません。"));
+    // 欄自体は伸ばし、「固定」ボタンと「自動」ラベルは元の大きさのまま保つ
+    // (380px の棚で欄がゼロ幅に潰れないよう最小幅を外す)。
+    radius_->setMinimumWidth(0);
+    radius_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     lockRadius_ = new QPushButton(QStringLiteral("固定"), radiusRow);
     radiusState_ = new QLabel(QStringLiteral("自動"), radiusRow);
-    radiusLayout->addWidget(radius_);
+    radiusLayout->addWidget(radius_, 1);
     radiusLayout->addWidget(lockRadius_);
     radiusLayout->addWidget(radiusState_);
     bend->addRow(QStringLiteral("半径"), radiusRow);
@@ -565,7 +568,11 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
         "手で番号(1 から)を書いてもかまいません。"
         "挙げた部材だけが曲がります(V1 と同じ)。"
         "空にして当てると全体が動き、部材ごとの値は捨てます。"));
-    bend->addRow(QStringLiteral("対象部材(3D で押す、または番号)"), parts_);
+    // ラベルは短く「対象部材」に。詳しい使い方は欄のツールチップに既にある
+    // (380px の棚でラベルが折り返さないため、ここでは短く)。
+    auto* partsLabel = new QLabel(QStringLiteral("対象部材"), bendWidget);
+    partsLabel->setToolTip(QStringLiteral("3D で押す、または番号を書きます。"));
+    bend->addRow(partsLabel, parts_);
     partInfo_ = new QLabel(QStringLiteral("(3D で部材を押すと出ます)"), bendWidget);
     partInfo_->setWordWrap(true);
     bend->addRow(QStringLiteral("方式 / 最大誤差"), partInfo_);
@@ -582,15 +589,56 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     layout->setSpacing(2);
     layout->addWidget(new QLabel(QStringLiteral("部材の編集(「対象部材」に当てる)"),
         editWidget));
-    layout->addWidget(MakeRun(editWidget, QStringLiteral("部材を分ける(1度目は下見)"),
-        "fabrication.split_part", this));
-    layout->addWidget(MakeRun(editWidget, QStringLiteral("部材を1つにする(1度目は下見)"),
-        "fabrication.merge_parts", this));
-    layout->addWidget(MakeRun(editWidget, QStringLiteral("選択した開いた線を切れ目にする"),
-        "fabrication.assign_relief_cut", this));
-    layout->addWidget(MakeRun(editWidget, QStringLiteral("展開の基準にする辺"),
-        "fabrication.set_unfold_base", this));
+    // ボタン文言を短くし、外した説明はツールチップへ(380px の棚に収めるため)。
+    auto* splitPart = MakeRun(editWidget, QStringLiteral("部材を分ける"),
+        "fabrication.split_part", this);
+    splitPart->setToolTip(QStringLiteral("1度目は下見です。もう一度押すと実行します。"));
+    layout->addWidget(splitPart);
+    auto* mergeParts = MakeRun(editWidget, QStringLiteral("部材を1つにする"),
+        "fabrication.merge_parts", this);
+    mergeParts->setToolTip(QStringLiteral("1度目は下見です。もう一度押すと実行します。"));
+    layout->addWidget(mergeParts);
+    auto* reliefCut = MakeRun(editWidget, QStringLiteral("開いた線を切れ目に"),
+        "fabrication.assign_relief_cut", this);
+    reliefCut->setToolTip(QStringLiteral("選択した開いた線を切れ目にします。"));
+    layout->addWidget(reliefCut);
+    auto* unfoldBase = MakeRun(editWidget, QStringLiteral("展開の基準辺にする"),
+        "fabrication.set_unfold_base", this);
+    unfoldBase->setToolTip(QStringLiteral("対象部材の辺を展開の基準にします。"));
+    layout->addWidget(unfoldBase);
     return editWidget;
+}
+
+//! 生成(正本 fabrication mock、matrix F-13/F-14)。「固定で作るもの」の欄をすぐ上に置き、
+//! 3枚の「作り方」カード(現在状態 / Flat 0% / Target 100%)がその設定どおりに作る。
+//! コンストラクタから分けたのは、コンストラクタを100行以内に保つため。
+QWidget* V2FabricationDock::BuildFreezeSection(QWidget* body)
+{
+    auto* freezeButtons = new QWidget(body);
+    auto* freezeLayout = new QVBoxLayout(freezeButtons);
+    freezeLayout->setContentsMargins(0, 0, 0, 0);
+    freezeLayout->setSpacing(2);
+    freeze_ = new QComboBox(freezeButtons);
+    freeze_->addItem(QStringLiteral("ワイヤーのみ"));
+    freeze_->addItem(QStringLiteral("部品のみ"));
+    freeze_->addItem(QStringLiteral("両方"));
+    auto* freezeOutputRow = new QWidget(freezeButtons);
+    auto* freezeOutputLayout = new QHBoxLayout(freezeOutputRow);
+    freezeOutputLayout->setContentsMargins(0, 0, 0, 0);
+    freezeOutputLayout->addWidget(new QLabel(QStringLiteral("固定で作るもの"), freezeOutputRow));
+    freezeOutputLayout->addWidget(freeze_, 1);
+    freezeLayout->addWidget(freezeOutputRow);
+    freezeLayout->addWidget(new QLabel(QStringLiteral("生成(作り方)"), freezeButtons));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("現在状態"), "fabrication.freeze_state", this));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("Flat 0%"), "fabrication.freeze_flat", this));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("Target 100%"), "fabrication.freeze_target", this));
+    for (QPushButton* card : generateCards_) {
+        freezeLayout->addWidget(card);
+    }
+    return freezeButtons;
 }
 
 //! 展開(matrix F-11/F-12)。作り方(自動展開 / 基準辺指定 / 複数部材配置)を選び、
@@ -636,6 +684,9 @@ QWidget* V2FabricationDock::BuildUnfoldSection(QWidget* body)
         card->setCheckable(true);
         card->setEnabled(spec.enabled);
         card->setToolTip(spec.tipJa);
+        // 3枚を横に並べても 380px の棚に収まるよう、縮んでよいことにする。
+        card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        card->setMinimumWidth(0);
         // 「基準辺指定」を選んだときだけ、実際の使い方(対象部材欄)を一言で出す。
         const bool isBaseline = spec.label == QStringLiteral("基準辺指定");
         const QString hint = spec.tipJa;
@@ -661,6 +712,8 @@ QWidget* V2FabricationDock::BuildUnfoldSection(QWidget* body)
 
     auto* placement = new QFormLayout();
     placement->setContentsMargins(0, 0, 0, 0);
+    placement->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    placement->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     unfoldTarget_ = new QComboBox(unfoldWidget);
     unfoldTarget_->addItem(QStringLiteral("紙(A4 型紙)"));
     unfoldTarget_->addItem(QStringLiteral("XY平面"));
@@ -1033,6 +1086,15 @@ void V2FabricationDock::SetStageIndex(int index)
 {
     if (stages_ != nullptr && index >= 0 && index < stages_->count()) {
         stages_->setCurrentIndex(index);
+    }
+}
+
+//! 組立率の欄へ入力の焦点を移す(メニュー「組立状態」の行き先。窓は出さない)。
+void V2FabricationDock::FocusAssemblyField()
+{
+    if (assembly_ != nullptr) {
+        assembly_->setFocus();
+        assembly_->selectAll();
     }
 }
 

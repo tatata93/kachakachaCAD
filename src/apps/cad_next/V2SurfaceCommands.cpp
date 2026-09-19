@@ -332,6 +332,11 @@ void V2MainWindow::EndSurfacePreview()
         viewport_->SetToolPickActive(false);
         viewport_->SetToolPickToggle(false);
         viewport_->SetProfileRegionPicking(false);
+        // 欄の印(断面/ガイド/境界の線)を 3D の選択に残さない(HP-SF-06)。
+        // 残すと、やめたあとも線が光ったままで「まだ面を作っている」ように見える。
+        surfaceMirroring_ = true;
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        surfaceMirroring_ = false;
     }
     surfaceMirror_.clear();
     ShowToolFooter(QString());

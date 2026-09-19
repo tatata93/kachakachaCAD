@@ -64,6 +64,51 @@ void V2MainWindow::FocusFabricationStageFor(std::string_view id)
     }
 }
 
+//! 組立状態(fabrication.set_assembly)。窓ではなく右の棚の欄へ案内する。
+//! 自己試験の差し替え(SetAssemblyChooser)があるときだけ、その値を即座に当てる。
+void V2MainWindow::RunSetAssembly()
+{
+    // 組立率を聞いて、文書の作り方へ書く。V1 と同じで、形が実際に曲がる。
+    // これまでは 0/30/100 を順ぐりに変えるだけで、形が動かなかった。
+    const auto modelId = CurrentFabricationModelId();
+    if (modelId.IsNil()) {
+        SetStatus(QStringLiteral(
+            "組立状態: 先に「製作モデルを作る」で近似モデルを作ってください。"));
+        return;
+    }
+    double current = 100.0;
+    const auto* entity = session_->GetDocument().FindEntity(modelId);
+    const auto* feature = entity == nullptr
+        ? nullptr
+        : session_->GetDocument().FindFeature(entity->createdBy);
+    if (feature != nullptr) {
+        if (const auto* definition =
+                std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+                    &feature->definition)) {
+            current = definition->masterPercent;
+        }
+    }
+    if (!assemblyChooser_) {
+        // 本番は窓(V2NumberDialog)で聞かない。右の棚の組立率の欄(スライダ・基準値と同じ道)
+        // へ案内する。窓と棚で別々に値を持つと、開いた窓の値と棚の見た目が食い違う
+        // (古い重複 UI の片づけ 2026-09-19)。差し替え(自己試験)があるときだけ即座に当てる。
+        if (fabricationDock_ != nullptr) {
+            fabricationDock_->SetAssemblyPercent(current);
+            fabricationDock_->FocusAssemblyField();
+        }
+        SetStatus(QStringLiteral("組立状態: 右の欄に組立率(0〜100)を打って「当てる」を押してください。"
+                                 "いまは %1%。").arg(current, 0, 'f', 1));
+        return;
+    }
+    const auto answered = assemblyChooser_(current);
+    if (!answered.has_value()) {
+        SetStatus(QStringLiteral("組立状態: やめました。"));
+        return;
+    }
+    SetAssemblyPercent(*answered);
+    return;
+}
+
 void V2MainWindow::RunFabricationCommand(std::string_view id)
 {
     FocusFabricationStageFor(id);
@@ -93,35 +138,7 @@ void V2MainWindow::RunFabricationCommand(std::string_view id)
         return;
     }
     if (id == "fabrication.set_assembly") {
-        // 組立率を聞いて、文書の作り方へ書く。V1 と同じで、形が実際に曲がる。
-        // これまでは 0/30/100 を順ぐりに変えるだけで、形が動かなかった。
-        const auto modelId = CurrentFabricationModelId();
-        if (modelId.IsNil()) {
-            SetStatus(QStringLiteral(
-                "組立状態: 先に「製作モデルを作る」で近似モデルを作ってください。"));
-            return;
-        }
-        double current = 100.0;
-        const auto* entity = session_->GetDocument().FindEntity(modelId);
-        const auto* feature = entity == nullptr
-            ? nullptr
-            : session_->GetDocument().FindFeature(entity->createdBy);
-        if (feature != nullptr) {
-            if (const auto* definition =
-                    std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
-                        &feature->definition)) {
-                current = definition->masterPercent;
-            }
-        }
-        if (assemblyChooser_) {
-            const auto answered = assemblyChooser_(current);
-            if (!answered.has_value()) {
-                SetStatus(QStringLiteral("組立状態: やめました。"));
-                return;
-            }
-            current = *answered;
-        }
-        SetAssemblyPercent(current);
+        RunSetAssembly();
         return;
     }
     if (id == "fabrication.merge_parts") {

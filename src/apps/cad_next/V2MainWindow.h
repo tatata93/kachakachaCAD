@@ -38,7 +38,7 @@
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/app/DrawingSession.h"
 #include "kachakacha/base/Ids.h"
-#include "V2ArrayDialog.h"
+#include "V2ArrayChoice.h"
 #include "V2ArrayDock.h"
 #include "kachakacha/app/ApproxInput.h"
 #include "kachakacha/app/RevolveSurface.h"
@@ -425,6 +425,7 @@ public:
     [[nodiscard]] V2ExportDock& ExportDock() { return *exportDock_; }
     //! 手順の状況と文書から数を作り直して棚へ渡す。
     void RefreshExportCounts();
+    void RefreshProcessContextFromSelection();   //!< 手順の「選んでいる数」を選択から数え直す
 
     //! 数の棚。板厚や面取り量を式で打てる。
     [[nodiscard]] V2ParameterDock& ParameterDock() { return *parameterDock_; }
@@ -510,6 +511,7 @@ public:
 public:
     //! 状態行と HUD をいまの状態から書き直す。試験はカーソルを動かしたあとに呼ぶ。
     void RefreshStatusLine();
+    [[nodiscard]] std::string RunningOperationNameJa() const;   //!< 棚で進める操作の名前(HUD用)
     //! 状態行の左(モード ｜ 道具)と右(座標 ｜ Grid ｜ Snap ｜ キー)。試験から読む。
     [[nodiscard]] QString StatusLeftText() const;
     [[nodiscard]] QString StatusRightText() const;
@@ -848,6 +850,7 @@ private:
     //! 製作のコマンドか。V2FabricationCommands.cpp が持つ。
     [[nodiscard]] static bool IsFabricationCommand(std::string_view id);
     void RunFabricationCommand(std::string_view id);
+    void RunSetAssembly();
     void RunFabricationCreate();
     //! 道具に結びついた命令のうち、棚を構えてから相手を選ぶもの(V2BooleanCommands.cpp)。
     [[nodiscard]] bool BeginToolFirstCommand(std::string_view id);
@@ -1462,6 +1465,7 @@ private:
     //! 「作図モード以外でも表示」を外したときにグリッドを消す。
     void RefreshGridSuppression();
     QDockWidget* processDock_ = nullptr;
+    QMenu* viewMenu_ = nullptr;   //!< 表示メニュー(組み立て後に「手順」の出し隠しを足す)
     QDockWidget* diagnosticDock_ = nullptr;
     kachakacha::v2::app::ProcessContext processContext_;
     kachakacha::v2::modeling::GuideTable guideTable_;

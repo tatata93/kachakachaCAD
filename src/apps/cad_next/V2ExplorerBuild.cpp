@@ -284,15 +284,20 @@ bool V2MainWindow::ToggleEntityVisibilityFromItem(QTreeWidgetItem* item)
     if (wantVisible == isVisible) {
         return false;
     }
+    // 名前と id は文書を変える前に写す。AdoptCurrentDocument が木を作り直すので、
+    // そのあとの item と entityId は消えた行を指す(配布版の自己試験が HP-XP-02 で落ちた
+    // 2026-09-19 の原因)。
+    const QString name = item->text(0);
+    const kachakacha::v2::base::EntityId id = *entityId;
     const auto done = session_->GetDocument().Run(kachakacha::v2::document::SetVisibilityCommand(
-        {*entityId}, wantVisible ? kachakacha::v2::domain::Visibility::Visible
-                                 : kachakacha::v2::domain::Visibility::Hidden));
+        {id}, wantVisible ? kachakacha::v2::domain::Visibility::Visible
+                          : kachakacha::v2::domain::Visibility::Hidden));
     if (!done.committed) {
         ReportDiagnostics(done.diagnostics);
     }
     AdoptCurrentDocument();
-    SetStatus(wantVisible ? QStringLiteral("「%1」を出しました。").arg(item->text(0))
-                          : QStringLiteral("「%1」を隠しました。").arg(item->text(0)));
+    SetStatus(wantVisible ? QStringLiteral("「%1」を出しました。").arg(name)
+                          : QStringLiteral("「%1」を隠しました。").arg(name));
     return true;
 }
 

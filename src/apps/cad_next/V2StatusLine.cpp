@@ -9,6 +9,7 @@
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/StatusLine.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -71,7 +72,7 @@ StatusLineParts V2MainWindow::BuildStatusLineParts() const
     parts.mode = mode_;
     const DrawingTool tool = session_->CurrentTool();
     parts.toolJa = tool == DrawingTool::Select
-        ? std::string()
+        ? RunningOperationNameJa()
         : std::string(kachakacha::v2::modeling::DrawingToolNameJa(tool));
     parts.hintJa = statusLabel_ == nullptr ? std::string() : statusLabel_->text().toStdString();
     if (viewport_ != nullptr) {
@@ -89,6 +90,26 @@ StatusLineParts V2MainWindow::BuildStatusLineParts() const
             std::string(kachakacha::v2::modeling::DrawingToolNameJa(*toolBeforeMeasure_));
     }
     return parts;
+}
+
+//! 棚で進める操作(押し出し・面を作る・足す引く・厚み・近似・面取り・配列)の名前。
+//! これらは作図の道具(DrawingTool)ではなく「選択」のまま棚で進むので、道具名を
+//! 空のままにすると HUD と状態行が「部品 › 選択」になり、厚みの最中と分からない
+//! (PC の絵 2026-09-19)。動いていなければ空。
+std::string V2MainWindow::RunningOperationNameJa() const
+{
+    using kachakacha::v2::app::Shelf;
+    const bool running = extrudeShelfShown_ || surfaceShelfShown_ || booleanShelfShown_
+        || thickenShelfShown_ || approxShelfShown_ || cornerPreviewShown_
+        || ShelfShown(Shelf::Array);
+    if (!running || operationHost_ == nullptr) {
+        return std::string();
+    }
+    const Shelf current = operationHost_->CurrentShelf();
+    if (current == Shelf::None) {
+        return std::string();
+    }
+    return std::string(kachakacha::v2::app::ShelfNameJa(current));
 }
 
 //! 状態行の左右と HUD を、いまの状態から書き直す。

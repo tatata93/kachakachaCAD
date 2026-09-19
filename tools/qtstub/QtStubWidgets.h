@@ -84,6 +84,7 @@ public:
     void setMinimumWidth(int);
     void setMinimumHeight(int);
     void setFixedSize(int, int);
+    void setFixedWidth(int);
     void setWindowTitle(const QString&);
     [[nodiscard]] QString windowTitle() const;
     void setLayout(QLayout*);
@@ -388,6 +389,8 @@ public:
     [[nodiscard]] QWidget* widget() const;
     void setFeatures(int);
     void setAllowedAreas(Qt::DockWidgetAreas);
+    //! 表示メニューの「手順の一覧」に使う(出し隠しの QAction)。
+    [[nodiscard]] QAction* toggleViewAction() const;
 };
 
 namespace Qt {
@@ -519,8 +522,12 @@ public:
 
 class QAbstractSpinBox : public QWidget {
 public:
+    // xyz の欄は幅を詰めるため上下ボタンを消す(setButtonSymbols)。実 Qt と同じ enum 名。
+    enum ButtonSymbols { UpDownArrows, PlusMinus, NoButtons };
     void setReadOnly(bool);
     void interpretText();
+    void setButtonSymbols(ButtonSymbols);
+    void selectAll();
 };
 
 class QDoubleSpinBox : public QAbstractSpinBox {
@@ -561,12 +568,18 @@ public:
 
 class QFormLayout : public QLayout {
 public:
+    // 380px の棚で欄がはみ出さないよう、長い行は折り返し、伸ばせる欄は伸ばす
+    // (setRowWrapPolicy / setFieldGrowthPolicy)。実 Qt と同じ enum 名。
+    enum RowWrapPolicy { DontWrapRows, WrapLongRows, WrapAllRows };
+    enum FieldGrowthPolicy { FieldsStayAtSizeHint, ExpandingFieldsGrow, AllNonFixedFieldsGrow };
     QFormLayout() = default;
     explicit QFormLayout(QWidget*) {}
     void addRow(const QString&, QWidget*);
     void addRow(QWidget*, QWidget*);
     void addRow(QWidget*);
     void setRowVisible(QWidget*, bool);
+    void setRowWrapPolicy(RowWrapPolicy);
+    void setFieldGrowthPolicy(FieldGrowthPolicy);
 };
 
 class QDialogButtonBox : public QWidget {

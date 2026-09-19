@@ -39,7 +39,11 @@ namespace {
 {
     window.show();
     QApplication::processEvents();
-    QImage image(window.size() * 1, QImage::Format_ARGB32);
+    // 倍率(QT_SCALE_FACTOR)ぶん大きな絵にする。論理サイズのまま描くと 1 倍と同じ絵になり、
+    // 1.25/1.5 倍で字がどう見えるかが分からない(PC 検証 2026-09-19、resp の絵が全部同じだった)。
+    const double ratio = window.devicePixelRatioF();
+    QImage image(window.size() * ratio, QImage::Format_ARGB32);
+    image.setDevicePixelRatio(ratio);
     image.fill(Qt::white);
     window.render(&image);
     return image.save(path);

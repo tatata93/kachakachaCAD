@@ -14,7 +14,7 @@
 //! `kachakacha::v2::modeling::WorkPlaneFrame::PointAt` を呼ぶ側(V2MainWindow)が行う。
 //! ここは「欄に入っている値をそのまま返す」だけにして、作業平面を知らなくてもよいようにする。
 
-#include "V2ArrayDialog.h"
+#include "V2ArrayChoice.h"
 
 #include <QDockWidget>
 

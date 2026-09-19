@@ -96,6 +96,7 @@ void V2MainWindow::BuildMenus()
         "export.dxf", "export.pdf_1to1"});
 
     QMenu* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
+    viewMenu_ = view;
     addCommands(view, {"view.fit_all", "view.align_selection", "view.align_selection_back",
         "view.align_workplane", "view.hide_selected", "view.show_all", "view.stage_all",
         "view.stage_no_grid", "view.stage_no_construction", "view.stage_selection_only",

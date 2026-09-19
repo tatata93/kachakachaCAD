@@ -52,6 +52,15 @@ public:
     //! 候補の行に出ている言葉。試験から読む。
     [[nodiscard]] QString CandidateTextJa(int candidate) const;
     [[nodiscard]] QString SourcesTextJa() const;
+    //! 作り方(標準 / 少部品優先 / 精度優先 / 手動条件)。押した番号は ApproxPolicySpecs の並び。
+    void SetPolicyHandler(std::function<void(int)> handler);
+    void ShowPolicy(int policy);
+    [[nodiscard]] bool ClickPolicy(int policy);
+    [[nodiscard]] int SelectedPolicyShown() const;
+    [[nodiscard]] std::vector<QString> PolicyLabels() const;
+    //! 曲げ状態の基準値(0/25/50/75/100)。押すと組立率を打って当てるのと同じ道。
+    [[nodiscard]] bool ClickBendPreset(int percent);
+    [[nodiscard]] std::vector<int> BendPresets() const;
 
     //! いまの欄(手動境界は読めなければ空で返す。読めたかは ManualBoundariesReadable で見る)。
     [[nodiscard]] kachakacha::v2::app::FabricationChoice Choice() const;
@@ -186,6 +195,10 @@ private:
     QString sourcesJa_;
     QPushButton* clearSources_ = nullptr;
     std::vector<QPushButton*> candidates_;
+    std::vector<QPushButton*> policies_;
+    std::function<void(int)> policyHandler_;
+    std::vector<QPushButton*> bendPresets_;
+    class QSlider* bendSlider_ = nullptr;
     QPushButton* confirmApprox_ = nullptr;
     std::function<void(int)> candidateHandler_;
     std::function<void()> clearSourcesHandler_;

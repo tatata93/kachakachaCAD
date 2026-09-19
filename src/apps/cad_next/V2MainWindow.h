@@ -864,6 +864,8 @@ private:
     void MirrorApproxSourcesToSelection();
     void RefreshApproxForSelectionChange();
     void ChooseApproxCandidate(int candidate);
+    //! 作り方のカード(標準/少部品優先/精度優先/手動条件)。既定の候補を替える。
+    void ChooseApproxPolicy(int policy);
     void ClearApproxSources();
     void EndApprox();
     void ConfirmApprox();

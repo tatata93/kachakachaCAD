@@ -109,8 +109,9 @@ void V2MainWindow::EvaluateApproxCandidates()
         approxEvaluations_[index] = evaluated.Value();
     }
     if (!approxInput_.candidateChosenByUser) {
-        approxInput_.selectedCandidate =
-            kachakacha::v2::app::PreferredApproxCandidate(approxOutcomes_, base.method);
+        // 作り方(標準/少部品優先/精度優先/手動条件)が既定の候補を決める(指示書 F-02)。
+        approxInput_.selectedCandidate = kachakacha::v2::app::CandidateForPolicy(
+            approxInput_.policy, approxOutcomes_, base.method);
     }
 }
 
@@ -178,6 +179,7 @@ void V2MainWindow::RefreshApproxDock()
         && approxEvaluations_[chosen].has_value();
     fabricationDock_->ShowApproxInput(sources, lines,
         approxInput_.sources.empty() ? -1 : approxInput_.selectedCandidate, canConfirm);
+    fabricationDock_->ShowPolicy(static_cast<int>(approxInput_.policy));
     QString status;
     for (const std::string& line : kachakacha::v2::app::ApproxStatusLinesJa(approxInput_,
              approxOutcomes_, canConfirm)) {
@@ -293,6 +295,26 @@ void V2MainWindow::ChooseApproxCandidate(int candidate)
     approxInput_.candidateChosenByUser = true;
     ShowApproxPreview();
     RefreshApproxDock();
+}
+
+//! 作り方のカード。候補を人が押していなければ、作り方に合う候補へ既定を替えて下見し直す。
+//! 手動条件は棚の欄(方式・上限・最小幅…)で決めるので、その段を前に出す。
+void V2MainWindow::ChooseApproxPolicy(int policy)
+{
+    const auto& specs = kachakacha::v2::app::ApproxPolicySpecs();
+    if (policy < 0 || policy >= static_cast<int>(specs.size())) {
+        return;
+    }
+    approxInput_.policy = specs[static_cast<std::size_t>(policy)].policy;
+    approxInput_.candidateChosenByUser = false;
+    const int method = ApproxBaseDefinition().method;   // 棚の方式(0 = 面ごと、1 = 帯)
+    approxInput_.selectedCandidate =
+        kachakacha::v2::app::CandidateForPolicy(approxInput_.policy, approxOutcomes_, method);
+    ShowApproxPreview();
+    RefreshApproxDock();
+    SetStatus(QStringLiteral("近似: 作り方を「%1」にしました。%2")
+            .arg(QString::fromUtf8(specs[static_cast<std::size_t>(policy)].labelJa.c_str()),
+                QString::fromUtf8(specs[static_cast<std::size_t>(policy)].hintJa.c_str())));
 }
 
 //! 対象の「解除」。

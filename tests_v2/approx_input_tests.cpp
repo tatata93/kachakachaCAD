@@ -12,6 +12,9 @@ using kachakacha::v2::app::ApproxCandidateForMethod;
 using kachakacha::v2::app::ApproxCandidateLineJa;
 using kachakacha::v2::app::ApproxCandidateOutcome;
 using kachakacha::v2::app::ApproxCandidateSpecs;
+using kachakacha::v2::app::ApproxPolicy;
+using kachakacha::v2::app::ApproxPolicySpecs;
+using kachakacha::v2::app::CandidateForPolicy;
 using kachakacha::v2::app::ApproxFooterLine;
 using kachakacha::v2::app::ApproxInputState;
 using kachakacha::v2::app::ApproxStatusLinesJa;
@@ -108,6 +111,25 @@ KACHA_V2_TEST(approx_input, 押したものは入り再び押すと外れる)
     Require(footer.find("SOURCES=1") != std::string::npos
             && footer.find("CANDIDATE=B") != std::string::npos,
         std::string("一番下の一行: ") + footer);
+}
+
+KACHA_V2_TEST(approx_input, 作り方は候補の既定を決める)
+{
+    std::vector<ApproxCandidateOutcome> outcomes(3);
+    outcomes[0] = {true, true, 3, 0.0, true, ""};
+    outcomes[1] = {true, true, 4, 0.18, true, ""};
+    outcomes[2] = {true, true, 1, 0.90, false, ""};
+    Require(ApproxPolicySpecs().size() == 4, "標準 / 少部品優先 / 精度優先 / 手動条件");
+    Require(CandidateForPolicy(ApproxPolicy::Standard, outcomes, 1) == 1, "標準は棚どおり(B)");
+    Require(CandidateForPolicy(ApproxPolicy::Manual, outcomes, 0) == 0, "手動条件も棚どおり(A)");
+    Require(CandidateForPolicy(ApproxPolicy::FewerParts, outcomes, 1) == 2, "少部品優先は 1 部材の C");
+    Require(CandidateForPolicy(ApproxPolicy::Precision, outcomes, 1) == 0, "精度優先はずれ 0 の A");
+    outcomes[0].available = false;
+    Require(CandidateForPolicy(ApproxPolicy::Precision, outcomes, 1) == 1, "作れないものは飛ばす");
+    for (auto& outcome : outcomes) {
+        outcome.available = false;
+    }
+    Require(CandidateForPolicy(ApproxPolicy::FewerParts, outcomes, 1) == 1, "何も作れなければ棚の方式どおり");
 }
 
 KACHA_V2_TEST_MAIN("approx_input_tests")

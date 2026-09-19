@@ -24,6 +24,24 @@
 
 namespace kachakacha::v2::app {
 
+//! 近似の「作り方」(正本 fabrication mock 2026-09-18 の methods、指示書 F-02)。
+//! 候補 A/B/C はいつも全部作る。作り方は **どれを既定にするか** を決める。
+enum class ApproxPolicy {
+    Standard,     //!< 標準: 棚の方式どおり(作れなければ許すずれに収まる最少部材)
+    FewerParts,   //!< 少部品優先: 作れた候補のうち部材が最も少ないもの
+    Precision,    //!< 精度優先: 作れた候補のうち最大のずれが最も小さいもの
+    Manual,       //!< 手動条件: 棚の欄(方式・上限・最小幅…)で決める = 棚どおり
+};
+
+struct ApproxPolicySpec {
+    ApproxPolicy policy;
+    std::string labelJa;
+    std::string hintJa;
+};
+
+//! 作り方の並び。画面のカードと同じ順。
+[[nodiscard]] const std::vector<ApproxPolicySpec>& ApproxPolicySpecs();
+
 //! 近似の入力。画面の欄と1対1。
 struct ApproxInputState {
     //! 元になるもの(部品か形状ガイド)。押した順。
@@ -31,6 +49,8 @@ struct ApproxInputState {
     //! 見比べる候補のうち、いま選んでいるもの(0 = A、1 = B、2 = C)。
     int selectedCandidate = 1;
     bool candidateChosenByUser = false;
+    //! 作り方。候補を人が押していないとき、どれを既定にするかを決める。
+    ApproxPolicy policy = ApproxPolicy::Standard;
 };
 
 //! 候補の名前と一言。
@@ -69,6 +89,12 @@ struct ApproxCandidateOutcome {
 //! 部材が最も少ないもの。無ければ作れた最初。無ければ棚の方式どおり。
 [[nodiscard]] int PreferredApproxCandidate(const std::vector<ApproxCandidateOutcome>& outcomes,
     int baseMethod);
+
+//! 作り方に合う候補。Standard / Manual は PreferredApproxCandidate、
+//! FewerParts は作れた候補のうち部材が最少(同数なら ずれが小さい方)、
+//! Precision は作れた候補のうち最大のずれが最小。作れた候補が無ければ棚の方式どおり。
+[[nodiscard]] int CandidateForPolicy(ApproxPolicy policy,
+    const std::vector<ApproxCandidateOutcome>& outcomes, int baseMethod);
 
 //! 押したものを入れる/外す(もう一度押すと外れる)。
 [[nodiscard]] ApproxInputState WithApproxSourcesToggled(const ApproxInputState& state,

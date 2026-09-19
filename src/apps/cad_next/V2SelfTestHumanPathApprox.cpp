@@ -19,6 +19,7 @@
 #include <QString>
 
 #include <cstddef>
+#include <cmath>
 #include <string>
 #include <variant>
 #include <vector>
@@ -190,6 +191,72 @@ using kachakacha::v2::domain::EntityKind;
         && Explain("面は残る", CountOfKind(window, EntityKind::GuideSurface) == 1);
 }
 
+//! HP-AP-03。作り方のカード(標準/少部品優先/精度優先/手動条件)を押すと、既定の候補が作り方に合う
+//! ものへ替わる。候補を人が押した後は、作り方を押し直すまで勝手に替わらない。
+[[nodiscard]] bool CaseHumanPathApproxPolicyChoosesCandidate(V2MainWindow& window)
+{
+    using kachakacha::v2::app::ApproxPolicy;
+    using kachakacha::v2::app::CandidateForPolicy;
+    if (!ArmApproxOnFreshSurface(window)
+        || !Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))) {
+        return false;
+    }
+    auto& dock = window.FabricationDock();
+    const auto labels = dock.PolicyLabels();
+    if (!Explain((std::string("作り方は 4 枚(実際 ") + std::to_string(labels.size()) + ")").c_str(),
+            labels.size() == 4)
+        || !Explain("最初は標準", dock.SelectedPolicyShown() == 0)) {
+        return false;
+    }
+    const auto& outcomes = window.ApproxOutcomes();
+    const int method = static_cast<int>(window.FabricationChoice().method);   // 棚の方式
+    if (!Explain("「少部品優先」を押せる", dock.ClickPolicy(1))
+        || !Explain("押された形が少部品優先", dock.SelectedPolicyShown() == 1)
+        || !Explain("既定の候補が少部品優先に合う",
+            window.ApproxInput().selectedCandidate
+                == CandidateForPolicy(ApproxPolicy::FewerParts, outcomes, method))
+        || !Explain("状態行が作り方を言う", window.StatusText().contains(QStringLiteral("少部品優先")))) {
+        return false;
+    }
+    if (!Explain("「精度優先」を押せる", dock.ClickPolicy(2))
+        || !Explain("既定の候補が精度優先に合う",
+            window.ApproxInput().selectedCandidate
+                == CandidateForPolicy(ApproxPolicy::Precision, outcomes, method))) {
+        return false;
+    }
+    // 候補を自分で押したら、それが勝つ。
+    if (!Explain("候補 B を押せる", dock.ClickCandidate(1))
+        || !Explain("押した候補が選ばれる", window.ApproxInput().selectedCandidate == 1
+            && window.ApproxInput().candidateChosenByUser)) {
+        return false;
+    }
+    return Explain("Esc でやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))
+        && Explain("近似モデルは増えていない", window.FabricationModelCount() == 0);
+}
+
+//! HP-AP-04。曲げ状態の基準値(0/25/50/75/100)を押すと、組立率が打たれて当たる(同じ道)。
+[[nodiscard]] bool CaseHumanPathBendPresetsApplyAssembly(V2MainWindow& window)
+{
+    auto& dock = window.FabricationDock();
+    const auto presets = dock.BendPresets();
+    if (!Explain((std::string("基準値は 5 つ(実際 ") + std::to_string(presets.size()) + ")").c_str(),
+            presets.size() == 5 && presets[0] == 0 && presets[4] == 100)) {
+        return false;
+    }
+    // 近似モデルが無いときは、押しても文書は変わらない(理由が出る)。押せる形ではある。
+    window.RunCommand("file.new");
+    window.SetMode(kachakacha::v2::app::UiMode::Fabrication);
+    dock.SetStageIndex(1);
+    const auto revision = window.Session().GetDocument().Revision();
+    if (!Explain("50 を押せる", dock.ClickBendPreset(50))
+        || !Explain("組立率の欄が 50 になる", std::abs(dock.AssemblyPercent() - 50.0) < 1.0e-9)
+        || !Explain("近似モデルが無ければ文書は変わらない",
+            window.Session().GetDocument().Revision() == revision)) {
+        return false;
+    }
+    return Explain("0 を押すと 0", dock.ClickBendPreset(0) && std::abs(dock.AssemblyPercent()) < 1.0e-9);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> HumanPathApproxCases()
@@ -199,6 +266,10 @@ std::vector<SelfTestCase> HumanPathApproxCases()
             CaseHumanPathApproxSourcesFollowClicks},
         {"HP-AP-02 候補を押すと下見が変わり、Enter で同じ作り方が文書へ入る",
             CaseHumanPathApproxCandidateThenConfirm},
+        {"HP-AP-03 作り方のカードが既定の候補を決め、押した候補が勝つ",
+            CaseHumanPathApproxPolicyChoosesCandidate},
+        {"HP-AP-04 曲げ状態の基準値は組立率を打って当てる道を通る",
+            CaseHumanPathBendPresetsApplyAssembly},
     };
 }
 

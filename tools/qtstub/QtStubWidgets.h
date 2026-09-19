@@ -537,6 +537,17 @@ public:
     void (*valueChanged)(int);
 };
 
+class QSlider : public QWidget {
+public:
+    QSlider() = default;
+    explicit QSlider(Qt::Orientation, QWidget* = nullptr) {}
+    void setRange(int, int);
+    void setValue(int);
+    [[nodiscard]] int value() const;
+    void (*valueChanged)(int);
+    void (*sliderReleased)();
+};
+
 class QFormLayout : public QLayout {
 public:
     QFormLayout() = default;

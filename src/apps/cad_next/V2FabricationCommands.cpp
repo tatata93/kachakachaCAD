@@ -279,13 +279,13 @@ void V2MainWindow::SetAssemblyPercent(double percent, const QString& parts)
     const auto* entity = session_->GetDocument().FindEntity(modelId);
     const auto* feature =
         entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
-    if (feature == nullptr) {
-        return;
-    }
-    const auto* current =
-        std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
-            &feature->definition);
+    const auto* current = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
     if (current == nullptr) {
+        // 黙って何もしない、を作らない。何を選べばよいかを言う。
+        SetStatus(QStringLiteral("曲げ状態: 先に近似モデルを 3D か一覧で選んでください。"));
         return;
     }
     // 部材番号を挙げたら、その部材だけが曲がる(V1 の part_model_part_assembly)。

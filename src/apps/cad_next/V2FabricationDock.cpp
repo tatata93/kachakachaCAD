@@ -1,5 +1,7 @@
 #include "V2FabricationDock.h"
 
+#include "kachakacha/app/ApproxInput.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDockWidget>
@@ -11,6 +13,7 @@
 #include <QLineEdit>
 #include <QObject>
 #include <QPushButton>
+#include <QSlider>
 #include <QScrollArea>
 #include <QString>
 #include <QTabWidget>
@@ -157,6 +160,26 @@ QWidget* V2FabricationDock::BuildApproxInput(QWidget* body)
     });
     row->addWidget(clearSources_);
     layout->addLayout(row);
+    // 作り方(正本の methods)。候補はいつも全部作り、作り方は既定の候補を決める。
+    layout->addWidget(new QLabel(QStringLiteral("作り方"), box));
+    auto* policyRow = new QHBoxLayout();
+    policyRow->setSpacing(2);
+    const auto& specs = kachakacha::v2::app::ApproxPolicySpecs();
+    for (std::size_t index = 0; index < specs.size(); ++index) {
+        auto* button = new QPushButton(QString::fromUtf8(specs[index].labelJa.c_str()), box);
+        button->setCheckable(true);
+        button->setToolTip(QString::fromUtf8(specs[index].hintJa.c_str()));
+        const int at = static_cast<int>(index);
+        QObject::connect(button, &QPushButton::clicked, this, [this, at] {
+            if (!loading_ && policyHandler_) {
+                policyHandler_(at);
+            }
+        });
+        policyRow->addWidget(button);
+        policies_.push_back(button);
+    }
+    layout->addLayout(policyRow);
+    ShowPolicy(0);
     layout->addWidget(new QLabel(QStringLiteral("候補(実際に作って比べます)"), box));
     for (int index = 0; index < 3; ++index) {
         auto* button = new QPushButton(box);
@@ -376,6 +399,32 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     assemblyLayout->addWidget(assembly_);
     assemblyLayout->addWidget(applyAssembly_);
     bend->addRow(QStringLiteral("組立率"), assemblyRow);
+    // 曲げ状態(正本 F-10): スライダ 0〜100 と基準値 0/25/50/75/100。
+    // どちらも「組立率を打って当てる」と同じ道を通る。別の道を作らない。
+    auto* bendRow = new QWidget(bendWidget);
+    auto* bendLayout = new QHBoxLayout(bendRow);
+    bendLayout->setContentsMargins(0, 0, 0, 0);
+    bendLayout->setSpacing(2);
+    bendSlider_ = new QSlider(Qt::Horizontal, bendRow);
+    bendSlider_->setRange(0, 100);
+    bendSlider_->setValue(100);
+    bendSlider_->setToolTip(QStringLiteral("0% = 実際の展開、100% = 目標の形。離すと当てます。"));
+    bendLayout->addWidget(bendSlider_, 1);
+    for (const int percent : {0, 25, 50, 75, 100}) {
+        auto* preset = new QPushButton(QStringLiteral("%1").arg(percent), bendRow);
+        preset->setToolTip(QStringLiteral("組立率を %1% にして当てます。").arg(percent));
+        QObject::connect(preset, &QPushButton::clicked, this, [this, percent] {
+            TypeAssemblyPercent(static_cast<double>(percent));
+            PressApplyAssembly();
+        });
+        bendLayout->addWidget(preset);
+        bendPresets_.push_back(preset);
+    }
+    QObject::connect(bendSlider_, &QSlider::sliderReleased, this, [this] {
+        TypeAssemblyPercent(static_cast<double>(bendSlider_->value()));
+        PressApplyAssembly();
+    });
+    bend->addRow(QStringLiteral("曲げ状態"), bendRow);
     // 半径。曲げ具合と同じことの言い換えである。どちらから入れてもよい(§30)。
     auto* radiusRow = new QWidget(bendWidget);
     auto* radiusLayout = new QHBoxLayout(radiusRow);
@@ -651,6 +700,9 @@ void V2FabricationDock::SetAssemblyPercent(double percent)
 {
     loading_ = true;
     assembly_->setValue(percent);
+    if (bendSlider_ != nullptr) {
+        bendSlider_->setValue(static_cast<int>(percent + 0.5));
+    }
     loading_ = false;
 }
 
@@ -662,6 +714,9 @@ double V2FabricationDock::AssemblyPercent() const
 void V2FabricationDock::TypeAssemblyPercent(double percent)
 {
     assembly_->setValue(percent);   // valueChanged → SyncRadiusFromPercent
+    if (bendSlider_ != nullptr) {
+        bendSlider_->setValue(static_cast<int>(percent + 0.5));   // スライダも同じ値を指す
+    }
 }
 
 void V2FabricationDock::TypeRadiusMm(double radiusMm)
@@ -851,4 +906,65 @@ void V2FabricationDock::PressLockRadius()
         // 押すと自動と固定が入れ替わる。いま欄に出ている半径をそのまま渡す。
         radiusHandler_(RadiusMm(), !radiusLocked_);
     }
+}
+
+void V2FabricationDock::SetPolicyHandler(std::function<void(int)> handler)
+{
+    policyHandler_ = std::move(handler);
+}
+
+void V2FabricationDock::ShowPolicy(int policy)
+{
+    for (std::size_t index = 0; index < policies_.size(); ++index) {
+        policies_[index]->setChecked(static_cast<int>(index) == policy);
+    }
+}
+
+bool V2FabricationDock::ClickPolicy(int policy)
+{
+    if (policy < 0 || policy >= static_cast<int>(policies_.size())
+        || !policies_[static_cast<std::size_t>(policy)]->isVisible()) {
+        return false;
+    }
+    policies_[static_cast<std::size_t>(policy)]->click();
+    return true;
+}
+
+int V2FabricationDock::SelectedPolicyShown() const
+{
+    for (std::size_t index = 0; index < policies_.size(); ++index) {
+        if (policies_[index]->isChecked()) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+std::vector<QString> V2FabricationDock::PolicyLabels() const
+{
+    std::vector<QString> labels;
+    for (QPushButton* button : policies_) {
+        labels.push_back(button->text());
+    }
+    return labels;
+}
+
+bool V2FabricationDock::ClickBendPreset(int percent)
+{
+    for (QPushButton* button : bendPresets_) {
+        if (button->text() == QStringLiteral("%1").arg(percent) && button->isVisible()) {
+            button->click();
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<int> V2FabricationDock::BendPresets() const
+{
+    std::vector<int> values;
+    for (QPushButton* button : bendPresets_) {
+        values.push_back(button->text().toInt());
+    }
+    return values;
 }

@@ -35,6 +35,7 @@ void V2MainWindow::BuildEditingShelves()
         ChooseApproxCandidate(candidate);
     });
     fabricationDock_->SetClearSourcesHandler([this] { ClearApproxSources(); });
+    fabricationDock_->SetPolicyHandler([this](int policy) { ChooseApproxPolicy(policy); });
     fabricationDock_->SetAssemblyHandler([this](double percent, const QString& parts) {
         SetAssemblyPercent(percent, parts);
         // 曲げ具合と半径は同じことの言い換えである。片方を動かしたら両方を映す。

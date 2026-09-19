@@ -75,6 +75,48 @@ std::string ApproxCandidateLineJa(const ApproxCandidateSpec& spec,
     return line;
 }
 
+const std::vector<ApproxPolicySpec>& ApproxPolicySpecs()
+{
+    static const std::vector<ApproxPolicySpec> specs{
+        {ApproxPolicy::Standard, "標準", "部品数と誤差のつり合い(棚の方式どおり)"},
+        {ApproxPolicy::FewerParts, "少部品優先", "作れた候補のうち部材が最も少ないもの"},
+        {ApproxPolicy::Precision, "精度優先", "作れた候補のうち最大のずれが最も小さいもの"},
+        {ApproxPolicy::Manual, "手動条件", "棚の欄(方式・上限・最小幅・許すずれ)で決める"},
+    };
+    return specs;
+}
+
+int CandidateForPolicy(ApproxPolicy policy, const std::vector<ApproxCandidateOutcome>& outcomes,
+    int baseMethod)
+{
+    if (policy == ApproxPolicy::Standard || policy == ApproxPolicy::Manual) {
+        return PreferredApproxCandidate(outcomes, baseMethod);
+    }
+    int best = -1;
+    for (int index = 0; index < static_cast<int>(outcomes.size()); ++index) {
+        const auto& outcome = outcomes[static_cast<std::size_t>(index)];
+        if (!outcome.available) {
+            continue;
+        }
+        if (best < 0) {
+            best = index;
+            continue;
+        }
+        const auto& current = outcomes[static_cast<std::size_t>(best)];
+        const bool better = policy == ApproxPolicy::FewerParts
+            ? (outcome.partCount < current.partCount
+                || (outcome.partCount == current.partCount
+                    && outcome.maximumDeviationMm < current.maximumDeviationMm))
+            : (outcome.maximumDeviationMm < current.maximumDeviationMm
+                || (outcome.maximumDeviationMm == current.maximumDeviationMm
+                    && outcome.partCount < current.partCount));
+        if (better) {
+            best = index;
+        }
+    }
+    return best >= 0 ? best : ApproxCandidateForMethod(baseMethod);
+}
+
 int PreferredApproxCandidate(const std::vector<ApproxCandidateOutcome>& outcomes,
     int baseMethod)
 {

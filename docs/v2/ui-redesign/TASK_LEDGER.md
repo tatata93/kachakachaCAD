@@ -10,14 +10,14 @@
 | S0 棚卸し | 3 HTML + repo の突き合わせ、3文書作成 | DONE(2026-09-18) | 雲: subagent 3本の inventory を MATRIX へ反映 |
 | S1 Common | core `app/Ribbon`(mode→category→tool)、`V2Ribbon`、Explorer 階層 + 個別表示 + scroll-to + 「グループ」、右ペイン1道具1枚、HUD/状態行、測定の重ね道具 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: ctest 148/148、typecheck 97 files、自己試験 HP-RB-01〜03 / HP-EX-01〜04 / HP-ST-01〜03 を追加(PC で実行) |
 | S2 Drawing-A | 基本作図/曲線の作り方カード(円/円弧/ベジェ/スプライン)、Tool 切替で panel 同期 | CLOUD_DONE(2026-09-18) / PC 未検証 | 雲: drawing_method_cards_tests、HP-DM-01〜03(PC で実行) |
-| S3 Drawing-B | 編集/変形/作業面(12方式 + 下見)/注記 | NOT_STARTED | |
+| S3 Drawing-B | 編集/変形/作業面(12方式 + 下見)/注記 | PARTIAL(作業面の下見 D-24 = 雲側完了) / PC 未検証 | 雲: HP-WP-01。編集/変形/注記の欄は未 |
 | S4 Drawing-C | 面作成(6主要 + その他)の新 panel、穴の明示 | NOT_STARTED | |
-| S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | PARTIAL(押し出し棚 = 雲側完了) / PC 未検証 | 雲: HP-PA-01/02。厚みの棚(P-10)は未 |
+| S5 Part-A | 押し出し Inventor 型 panel(From/To/範囲/方向/演算/出力)、厚み、回転体案内 | CLOUD_DONE(押し出し棚 + 厚みの道具化) / PC 未検証 | 雲: HP-PA-01/02、HP-TH-01/02。回転体は帯で理由つき Blocked |
 | S6 Part-B | 形状編集/面編集/ブール/配置(実装済み + disabled+理由) | NOT_STARTED | |
 | S7 Fab-A | 近似(作り方4、候補カードに方式/平均誤差の扱い、表示) | PARTIAL(作り方カード = 雲側完了) / PC 未検証 | 雲: approx_input_tests、HP-AP-03/04。候補カードの方式/平均誤差の表示(F-03)と表示切替(F-04)は未 |
 | S8 Fab-B | 部材編集(3D で部材を押す、分割/結合/切れ目/半径) | NOT_STARTED | |
-| S9 Fab-C | 曲げ(slider/preset)/展開/生成、Explorer の Approximation 節 | NOT_STARTED | |
-| S10 Integration | 回帰試験、寸法/拡大率撮影、旧 UI 片づけ、verifier | NOT_STARTED | |
+| S9 Fab-C | 曲げ(slider/preset)/展開/生成、Explorer の Approximation 節 | PARTIAL(曲げの基準値/スライダ、生成カード = 雲側完了) / PC 未検証 | 雲: HP-AP-04、HP-GN-01/02。展開(F-11/F-12)は未 |
+| S10 Integration | 回帰試験、寸法/拡大率撮影、旧 UI 片づけ、verifier | PARTIAL(I-01 回帰試験、I-03 の一部 = 雲側完了) | 雲: REGRESSIONS.md、RG-02/12/14。撮影(I-02)と verifier(I-04)は未 |
 
 ## 単位の記録
 
@@ -49,6 +49,13 @@
 ### S7 Fab-A(作り方カード)/ S9 の曲げ状態の基準値 — 2026-09-19(雲側完了、PC 未検証)
 - commit `392646e`: core `ApproxPolicy`(標準/少部品優先/精度優先/手動条件)+ `CandidateForPolicy`。`V2FabricationDock` に作り方カード 4 枚、曲げ状態のスライダと基準値 0/25/50/75/100(組立率を打って当てるのと同じ道)。近似モデルが無いときの「当てる」は理由を状態行へ。
 - HP-AP-03(作り方が既定の候補を決め、押した候補が勝つ)、HP-AP-04(基準値は組立率を打って当てる)。
+
+### 2026-09-19 のまとめ(雲側完了、PC 未検証)
+- 0fda226 部品「厚み」を 道具 → 3D で面 → 作り方 4 枚 → 下見(kernel 空回し)→ Enter に(P-10、HP-TH-01/02)。既存試験は 1 度目 = 構え、2 度目 = 確定 に。
+- 773af56 生成の作り方カード 現在状態 / Flat 0% / Target 100%、fabrication.freeze_target、固定は 1 回の取り消し(F-13/F-14、HP-GN-01/02)。
+- d9f6945 作業面の下見(D-24、HP-WP-01)。4b3ec7c 候補の行に方式と平均「—」(F-03)。
+- 6cdbe98 既知の退行 15 件の固定表 REGRESSIONS.md、RG-02/12/14(I-01)。40e8550 部品モードの 2 枚目(形状ガイドの役割の表)を廃止(I-03 の一部)。
+- **PC ではまだ何も実行していない。** 次: `_GO.cmd` → `_claudeout\ctest.txt` の `cad_next self-test:` 行を読む。
 
 ## BLOCKED_BACKEND(必要なら別担当へ)
 

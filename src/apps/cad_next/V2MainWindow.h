@@ -922,6 +922,7 @@ private:
     void FreezeFlatPanels();
     void FreezeFlatOutline();
     void ShowPartEditShelf();
+    void FocusFabricationStageFor(std::string_view id);
     //! 点列を直線でつないだ線にする。
     [[nodiscard]] static std::vector<kachakacha::v2::geometry::CurveSegment> PolylineOf(
         const std::vector<kachakacha::v2::geometry::Vector3>& points);

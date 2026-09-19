@@ -31,6 +31,7 @@ bool V2MainWindow::IsFreezeCommand(std::string_view id)
 
 void V2MainWindow::RunFreezeCommand(std::string_view id)
 {
+    FocusFabricationStageFor(id);   // 生成は製作の棚の 2 段目
     if (id == "derived.freeze") {
         FreezeSelectedDerived();
         return;

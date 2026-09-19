@@ -49,8 +49,24 @@ bool V2MainWindow::IsFabricationCommand(std::string_view id)
     return id.rfind("fabrication.", 0) == 0 && !IsFreezeCommand(id);
 }
 
+//! 帯の道具に合わせて、製作の棚の段を前に出す。近似は 1 段目、部材の編集・曲げ・展開・生成は 2 段目。
+//! 段が切り替わらないと、帯で「分割」を押したのに 1 段目の近似の欄が出たままになる(PC 画面 2026-09-19)。
+void V2MainWindow::FocusFabricationStageFor(std::string_view id)
+{
+    if (fabricationDock_ == nullptr) {
+        return;
+    }
+    const bool approx = id == "fabrication.create" || id == "fabrication.preview_update"
+        || id == "fabrication.set_method" || id == "fabrication.set_connection_scope";
+    fabricationDock_->SetStageIndex(approx ? 0 : 1);
+    if (!approx && !ShelfShown(kachakacha::v2::app::Shelf::Fabrication)) {
+        ShowShelf(kachakacha::v2::app::Shelf::Fabrication);
+    }
+}
+
 void V2MainWindow::RunFabricationCommand(std::string_view id)
 {
+    FocusFabricationStageFor(id);
     if (id == "fabrication.create") {
         RunFabricationCreate();
         return;

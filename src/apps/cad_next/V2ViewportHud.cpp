@@ -49,7 +49,8 @@ QRectF V2Viewport::HudRect() const
     }
     const double lineHeight = static_cast<double>(metrics.height());
     const double padding = 6.0;
-    const double boxWidth = std::min(widest + padding * 2.0, static_cast<double>(width()) - 16.0);
+    // 幅は画面の半分まで。長い一言(開いたファイルの道など)で右上の視点の操作板を隠さない。
+    const double boxWidth = std::min(widest + padding * 2.0, static_cast<double>(width()) * 0.5);
     return QRectF(8.0, 8.0, boxWidth,
         lineHeight * static_cast<double>(hudLines_.size()) + padding * 2.0);
 }

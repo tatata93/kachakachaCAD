@@ -94,3 +94,9 @@ Claude-Session: https://claude.ai/code/session_01PhuCKP4297isBKknmQumJ3
 - `docs/v2/ui-redesign/mocks/`
 - `docs/v2/core-ui-wiring.md`
 - project doc `claude/報告書-2026-09-19-PC検証と実用UI.md`
+
+## 追記 2026-09-19 夜(PC 4 回目・5 回目のあと)
+- PC 4 回目(5e4c27f): 自己試験 292/293。残り HP-RS-01 を 8005c20 で手当て(面の道具をやめたら欄を空に)。5 回目(8005c20)は Claude が Git CMD から起動した(20:48 頃)。結果は `_claudeout\ctest.txt` の `cad_next self-test:` 行を読む。
+- 計算機操作の癖: `_GO.cmd` の終わりは `pause`(「続行するには何かキーを押してください」)で止まっている。次を打つ前に Enter を 1 回押して促しを消す(打った先頭の 1 文字が食われる)。計算機操作の許可は 30 分操作が無いと切れる(再度 resolve → request)。`cd /d ... && _GO.cmd` の 1 行は動かない。`cmd /c .\_GO.cmd` と打つ。
+- Fable(上位モデル)の利用上限に近い(98%、9/24 21:00 にリセット)。下位モデルで続けるときは、このファイルの手順と `TASK_LEDGER.md` の最新節だけ読めば足りるように書いてある。判断が要ることは増やさず、(1) 5 回目の結果の読み取り → (2) 落ちた試験の「期待が外れた」行から原因を 1 つずつ → (3) 門 → commit → bundle → PC、の輪を回す。
+- 1.5 倍の絵(`resp/*-1.5.png`)は 1920x1080。作図の棚の作り方カード(3 枚ごとに折り返し)と状態行の右端が切れない絵になっているかを見る。

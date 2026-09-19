@@ -95,6 +95,8 @@ namespace {
     cases.insert(cases.end(), partPanel.begin(), partPanel.end());
     const std::vector<SelfTestCase> generate = GenerateCases();
     cases.insert(cases.end(), generate.begin(), generate.end());
+    const std::vector<SelfTestCase> unfold = UnfoldCases();
+    cases.insert(cases.end(), unfold.begin(), unfold.end());
     const std::vector<SelfTestCase> thicken = ThickenCases();
     cases.insert(cases.end(), thicken.begin(), thicken.end());
     const std::vector<SelfTestCase> workPlanePreview = WorkPlanePreviewCases();

@@ -121,6 +121,22 @@ public:
     //! **見えているカードを実際に押す。**見えていなければ偽。
     [[nodiscard]] bool ClickGenerateCard(const QString& labelJa);
 
+    //! 展開(matrix F-11/F-12)の「作り方」カード: 自動展開 / 基準辺指定 / 複数部材配置。
+    //! 「複数部材配置」は無効(理由は UnfoldCardTip)。カードは選ぶだけで、
+    //! 実際に走らせるのは「展開」ボタン(PressUnfold)である。
+    [[nodiscard]] std::vector<QString> UnfoldCardLabels() const;
+    //! **見えているカードを実際に押す。**見えていない・無効なら偽。
+    [[nodiscard]] bool ClickUnfoldCard(const QString& labelJa);
+    [[nodiscard]] bool UnfoldCardEnabled(const QString& labelJa) const;
+    //! カードのそばに出す一言(有効なカードは説明、無効なカードは無い理由)。
+    [[nodiscard]] QString UnfoldCardTip(const QString& labelJa) const;
+    //! 「展開先」が紙(型紙)だけである理由。核に作業面・XY平面への展開が無いので、
+    //! 選べないことをボタンの下に常に出す(隠さない)。
+    [[nodiscard]] QString UnfoldTargetReasonJa() const;
+    //! 「展開」ボタン。いま選んでいるカードの道を、既存の PressRun で走らせる
+    //! (基準辺指定は set_unfold_base の後に create_pattern。Preview/型紙棚の挙動は変えない)。
+    void PressUnfold();
+
     //! ボタン。command は台帳の ID(fabrication.create など)。
     void SetRunHandler(std::function<void(const char* command)> handler);
     void PressRun(const char* command);
@@ -154,6 +170,8 @@ private:
     QWidget* BuildBendSection(QWidget* body);
     //! 部材の編集(分ける・1つにする・切れ目・展開の基準)。曲げの段と同じ棚に置く。
     QWidget* BuildPartEditSection(QWidget* body);
+    //! 展開(F-11/F-12)の作り方カードと配置(展開先・表裏)。部材の編集のすぐ下に置く。
+    QWidget* BuildUnfoldSection(QWidget* body);
     //! 組立率を打ったら半径を、半径を打ったら組立率を言い換える。当てるまで文書は触らない。
     void SyncRadiusFromPercent();
     void SyncPercentFromRadius();
@@ -210,6 +228,17 @@ private:
     std::vector<QPushButton*> policies_;
     //! 生成の「作り方」カード(現在状態 / Flat 0% / Target 100%)。正本 fabrication mock。
     std::vector<QPushButton*> generateCards_;
+    //! 展開の「作り方」カード(自動展開 / 基準辺指定 / 複数部材配置。matrix F-11/F-12)。
+    std::vector<QPushButton*> unfoldCards_;
+    //! 選んだカードのそばに出す一言(いまは基準辺指定のときだけ中身がある)。
+    QLabel* unfoldHint_ = nullptr;
+    //! 展開先(紙(A4型紙)だけが実際に選べる。欄ごと disabled にして並べて見せる)。
+    QComboBox* unfoldTarget_ = nullptr;
+    //! 展開先が紙だけである理由。常に見える(核に作業面への展開が無いため)。
+    QLabel* unfoldTargetReason_ = nullptr;
+    //! 表裏(核に反転が無いので disabled のまま)。
+    QComboBox* unfoldFlip_ = nullptr;
+    QPushButton* unfoldRun_ = nullptr;
     std::function<void(int)> policyHandler_;
     std::vector<QPushButton*> bendPresets_;
     class QSlider* bendSlider_ = nullptr;

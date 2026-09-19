@@ -79,4 +79,5 @@
 | F-04 | 誤差ヒートマップ | — | — | なし |
 | F-06 | 分割の位置指定 | rail parameter | `PreviewBandSplit`(中央固定) | 引数なし(小改修) |
 | F-08 | 曲面部材の切れ目 | — | — | 明示的に未実装 |
-| F-11/12 | 展開先=作業面/XY、表裏反転 | — | LayoutPattern(紙) | placement に mirror なし |
+| F-11 展開先(作業面/XY) | 展開先を XY平面/現在の作業面/新しい作業面 にする | 近似モデル + 展開先の指定 → その平面上の展開曲線 | `LayoutPattern`/`PlacePanelCurves`(紙 A4 固定) | 展開先は紙(PaperSize)固定で、平面や作業面を渡す引数がない |
+| F-12 表裏反転 | 展開した型紙を裏返す | 近似モデル(+反転の指定) → 鏡像の展開曲線 | `PlacePanelCurves`(向きは1通りのみ) | placement/LayoutPattern に mirror・反転のフラグがない |

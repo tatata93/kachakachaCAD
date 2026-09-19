@@ -110,6 +110,8 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     // 部材の編集は曲げと同じ段に置く(引継ぎ 2026-09-17 の 5)。
     // 分ける・1つにする・切れ目・展開の基準は、曲げながら決めるものだからである。
     bendLayout->addWidget(BuildPartEditSection(bendPage));
+    // 展開(matrix F-11/F-12)。部材の編集のすぐ下、生成カードのすぐ上に置く。
+    bendLayout->addWidget(BuildUnfoldSection(bendPage));
     // 生成(正本 fabrication mock、matrix F-13/F-14)。「固定で作るもの」の欄をすぐ上に置き、
     // 3枚の「作り方」カード(現在状態 / Flat 0% / Target 100%)がその設定どおりに作る。
     auto* freezeButtons = new QWidget(bendPage);
@@ -136,7 +138,6 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     for (QPushButton* card : generateCards_) {
         freezeLayout->addWidget(card);
     }
-    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("展開図(型紙)を作る"), "fabrication.create_pattern", this));
     bendLayout->addWidget(freezeButtons);
     bendLayout->addStretch(1);
     stages_->addTab(bendPage, QStringLiteral("2 部材の編集・曲げ確認"));
@@ -288,6 +289,72 @@ bool V2FabricationDock::ClickGenerateCard(const QString& labelJa)
         return true;
     }
     return false;
+}
+
+std::vector<QString> V2FabricationDock::UnfoldCardLabels() const
+{
+    std::vector<QString> labels;
+    for (const QPushButton* card : unfoldCards_) {
+        labels.push_back(card->text());
+    }
+    return labels;
+}
+
+bool V2FabricationDock::ClickUnfoldCard(const QString& labelJa)
+{
+    for (QPushButton* card : unfoldCards_) {
+        if (card->text() != labelJa) {
+            continue;
+        }
+        if (!card->isVisible() || !card->isEnabled()) {
+            return false;
+        }
+        card->click();
+        return true;
+    }
+    return false;
+}
+
+bool V2FabricationDock::UnfoldCardEnabled(const QString& labelJa) const
+{
+    for (const QPushButton* card : unfoldCards_) {
+        if (card->text() == labelJa) {
+            return card->isEnabled();
+        }
+    }
+    return false;
+}
+
+QString V2FabricationDock::UnfoldCardTip(const QString& labelJa) const
+{
+    for (const QPushButton* card : unfoldCards_) {
+        if (card->text() == labelJa) {
+            return card->toolTip();
+        }
+    }
+    return QString();
+}
+
+QString V2FabricationDock::UnfoldTargetReasonJa() const
+{
+    return unfoldTargetReason_ == nullptr ? QString() : unfoldTargetReason_->text();
+}
+
+//! いま選んでいるカードの道を、既存の PressRun(=RunFabricationCommand)で走らせる。
+//! 基準辺指定は、set_unfold_base が実際に読む「対象部材」欄の番号をそのまま使い、
+//! 続けて create_pattern を走らせる(§F-11/F-12。核に道が2つあるので2回に分ける)。
+void V2FabricationDock::PressUnfold()
+{
+    bool baselineChosen = false;
+    for (const QPushButton* card : unfoldCards_) {
+        if (card->text() == QStringLiteral("基準辺指定") && card->isChecked()) {
+            baselineChosen = true;
+        }
+    }
+    if (baselineChosen) {
+        PressRun("fabrication.set_unfold_base");
+    }
+    PressRun("fabrication.create_pattern");
 }
 
 bool V2FabricationDock::ClickClearSources()
@@ -521,6 +588,106 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     layout->addWidget(MakeRun(editWidget, QStringLiteral("展開の基準にする辺"),
         "fabrication.set_unfold_base", this));
     return editWidget;
+}
+
+//! 展開(matrix F-11/F-12)。作り方(自動展開 / 基準辺指定 / 複数部材配置)を選び、
+//! 配置(展開先・表裏)を見せ、「展開」ボタンで走らせる。
+//!
+//! **基準辺指定は 3D の線選びではない。** set_unfold_base(V2BendRadiusCommands.cpp)が
+//! 実際に読むのは「対象部材」欄の番号(3D で部材を押しても同じ欄に入る、F-05/06/07)
+//! である。無い道を見せると、線を選んでも動かないという不一致を作ってしまう。
+//!
+//! 展開先は紙(A4 型紙)しか core に無い(create_pattern が固定でそこへ置く)。
+//! 表裏の反転も核に無い。どちらも欄ごと disabled にして理由を出す(V2ExtrudeDock と同じ形)。
+QWidget* V2FabricationDock::BuildUnfoldSection(QWidget* body)
+{
+    auto* unfoldWidget = new QWidget(body);
+    auto* layout = new QVBoxLayout(unfoldWidget);
+    layout->setContentsMargins(0, 4, 0, 0);
+    layout->setSpacing(2);
+    layout->addWidget(new QLabel(QStringLiteral("展開(作り方)"), unfoldWidget));
+
+    struct CardSpec {
+        QString label;
+        QString tipJa;
+        bool enabled;
+    };
+    const CardSpec specs[3] = {
+        {QStringLiteral("自動展開"),
+            QStringLiteral("先頭の辺(既定)を基準に、そのまま型紙にします。"), true},
+        {QStringLiteral("基準辺指定"),
+            QStringLiteral(
+                "3D で部材を押すか「対象部材」欄に基準にしたい部材の番号を書いてから"
+                "『展開』を押してください(その手前の境目が基準になります)。"),
+            true},
+        {QStringLiteral("複数部材配置"),
+            QStringLiteral(
+                "複数部材の同一平面配置はまだできません"
+                "(型紙は A4 に自動配置します)。"),
+            false},
+    };
+    auto* cardsRow = new QHBoxLayout();
+    cardsRow->setSpacing(2);
+    for (const CardSpec& spec : specs) {
+        auto* card = new QPushButton(spec.label, unfoldWidget);
+        card->setCheckable(true);
+        card->setEnabled(spec.enabled);
+        card->setToolTip(spec.tipJa);
+        // 「基準辺指定」を選んだときだけ、実際の使い方(対象部材欄)を一言で出す。
+        const bool isBaseline = spec.label == QStringLiteral("基準辺指定");
+        const QString hint = spec.tipJa;
+        QObject::connect(card, &QPushButton::clicked, this, [this, card, isBaseline, hint] {
+            for (QPushButton* other : unfoldCards_) {
+                if (other != card) {
+                    other->setChecked(false);
+                }
+            }
+            card->setChecked(true);
+            if (unfoldHint_ != nullptr) {
+                unfoldHint_->setText(isBaseline ? hint : QString());
+            }
+        });
+        unfoldCards_.push_back(card);
+        cardsRow->addWidget(card);
+    }
+    layout->addLayout(cardsRow);
+    unfoldCards_.front()->setChecked(true);   // 既定は自動展開。
+    unfoldHint_ = new QLabel(unfoldWidget);
+    unfoldHint_->setWordWrap(true);
+    layout->addWidget(unfoldHint_);
+
+    auto* placement = new QFormLayout();
+    placement->setContentsMargins(0, 0, 0, 0);
+    unfoldTarget_ = new QComboBox(unfoldWidget);
+    unfoldTarget_->addItem(QStringLiteral("紙(A4 型紙)"));
+    unfoldTarget_->addItem(QStringLiteral("XY平面"));
+    unfoldTarget_->addItem(QStringLiteral("現在の作業面"));
+    unfoldTarget_->addItem(QStringLiteral("新しい作業面"));
+    unfoldTarget_->setCurrentIndex(0);
+    // 4つとも並べて見せるが、選べるのは紙だけ(核に作業面への展開が無い)。
+    // 欄ごと disabled にして、理由をそばのラベルへ常時出す(V2ExtrudeDock と同じ形)。
+    unfoldTarget_->setEnabled(false);
+    const QString targetReasonJa = QStringLiteral(
+        "展開先は紙(型紙)だけです(核に作業面・XY平面への展開がありません)。");
+    unfoldTarget_->setToolTip(targetReasonJa);
+    placement->addRow(QStringLiteral("展開先"), unfoldTarget_);
+    unfoldTargetReason_ = new QLabel(targetReasonJa, unfoldWidget);
+    unfoldTargetReason_->setWordWrap(true);
+    placement->addRow(QString(), unfoldTargetReason_);
+
+    unfoldFlip_ = new QComboBox(unfoldWidget);
+    unfoldFlip_->addItem(QStringLiteral("表"));
+    unfoldFlip_->addItem(QStringLiteral("裏"));
+    unfoldFlip_->setEnabled(false);
+    unfoldFlip_->setToolTip(
+        QStringLiteral("表裏の反転はまだできません(核に反転がありません)。"));
+    placement->addRow(QStringLiteral("表裏"), unfoldFlip_);
+    layout->addLayout(placement);
+
+    unfoldRun_ = new QPushButton(QStringLiteral("展開"), unfoldWidget);
+    QObject::connect(unfoldRun_, &QPushButton::clicked, this, [this] { PressUnfold(); });
+    layout->addWidget(unfoldRun_);
+    return unfoldWidget;
 }
 
 //! 組立率を打った。同じ部材の半径へ言い換える(R(p) = R100 × 100 / p)。

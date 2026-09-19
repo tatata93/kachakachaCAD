@@ -38,8 +38,8 @@ void V2MainWindow::ShowPartEditShelf()
         fabricationDock_->SetStageIndex(1);
     }
     ShowShelf(kachakacha::v2::app::Shelf::Fabrication);
-    SetStatus(QStringLiteral("近似部品の編集: 「曲げる部材」に番号を入れ、分割・結合・切れ目・"
-                             "半径・曲げ状態を決めてください。"));
+    SetStatus(QStringLiteral("近似部品の編集: 3D で部材を押すか「対象部材」に番号を入れ、"
+                             "分割・結合・切れ目・半径・曲げ状態を決めてください。"));
 }
 
 bool V2MainWindow::IsFabricationCommand(std::string_view id)
@@ -656,6 +656,7 @@ void V2MainWindow::RefreshFabricationDock()
     // 欄は「次に作る近似モデル」の値。選んでいる近似モデルがあれば、その方式と組立率も出す。
     fabricationDock_->SetChoice(fabricationChoice_);
     const auto modelId = CurrentFabricationModelId();
+    RefreshFabricationPartInfo(modelId);
     const auto* entity = session_->GetDocument().FindEntity(modelId);
     const auto* feature =
         entity == nullptr ? nullptr : session_->GetDocument().FindFeature(entity->createdBy);
@@ -751,6 +752,8 @@ void V2MainWindow::AppendSolidFaceSources(const kachakacha::v2::base::EntityId& 
         source.entityId = partId;
         source.name = partName + " 面" + std::to_string(face + 1);
         source.samples = sampled.Value().samples;
+        // 3D で押した面(EX-02 と同じ番号)を、あとで部材番号へ変えるために覚える。
+        source.faceIndex = face;
         sources.push_back(std::move(source));
     }
 }

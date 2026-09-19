@@ -51,6 +51,10 @@ struct FabricationSource {
     std::optional<fabrication::SurfacePatchSamples> samples;
     //! 平らな部品の「平らな1枚」の輪郭。押し出しの端の輪郭。
     std::optional<std::vector<geometry::CurveSegment>> flatBoundary;
+    //! 立体を面ごとに分けたとき(splitSolidFaces)の、元の立体での面番号。
+    //! 3D で押した面(EX-02 と同じ pickedFaceIndex)を、どの部材に当てるかを
+    //! 決めるためだけに持つ。分けていなければ値を持たない。
+    std::optional<std::size_t> faceIndex;
 };
 
 //! 開口・折り線にする線。どの部材のものかは、外周と同じ平面に載っているかで決める。
@@ -62,11 +66,25 @@ struct FabricationMarkings {
     std::vector<std::vector<geometry::CurveSegment>> reliefCuts;
 };
 
+//! panels[i] が、どの物体(のどの面)から出来たか。
+//!
+//! 3D で押したものを部材番号へ変えるためだけに持つ(F-05/06/07)。
+//! 型紙(PatternPanel)そのものは紙の上の形しか知らないので、ここに置く。
+//! 面ごとに分けていない部材は faceIndex を持たない。帯近似で1つの面から
+//! 複数の帯(部材)を作ったときは、どの帯を押したかまでは分からず、
+//! 同じ物体の最初の部材に当たる(既知の限界。オーナー指摘があれば直す)。
+struct PanelOrigin {
+    base::EntityId entityId;
+    std::optional<std::size_t> faceIndex;
+};
+
 //! 作った結果。文書には入れない。画面が覚えて、開いたら作り直す。
 struct FabricationEvaluation {
     FabricationMethod method = FabricationMethod::ClassifyFaces;
     //! 型紙に載せる部材。両方式に共通。
     std::vector<fabrication::PatternPanel> panels;
+    //! panels と同じ並び・同じ数。
+    std::vector<PanelOrigin> panelOrigins;
     //! V1 方式のとき。帯の切り方と、近似メッシュ(曲げ状態の形の元)。
     std::optional<fabrication::BandApproximationResult> bands;
     std::optional<fabrication::BandMesh> bandMesh;
@@ -74,6 +92,12 @@ struct FabricationEvaluation {
     bool reachedTolerance = true;
     std::string summaryJa;
 };
+
+//! 3D で押した物体(と、面ごとに分けたときの面番号)から、部材番号(0始まり)を探す。
+//! 見つからなければ、この近似モデルの部材ではない。
+[[nodiscard]] std::optional<std::size_t> PanelIndexForPick(
+    const FabricationEvaluation& evaluation, base::EntityId entityId,
+    std::optional<std::size_t> pickedFaceIndex) noexcept;
 
 //! 定義から帯近似の決め方を組み立てる。許容偏差は定義の targetMaxDeviation。
 [[nodiscard]] fabrication::BandApproximationOptions BandOptionsOf(

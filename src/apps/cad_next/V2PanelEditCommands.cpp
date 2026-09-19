@@ -14,6 +14,8 @@
 #include "V2FabricationDock.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/Selection.h"
+#include "kachakacha/app/ToolRoleLabels.h"
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/document/Commands.h"
@@ -34,6 +36,60 @@ std::size_t V2MainWindow::FabricationPanelCount() const
 {
     const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
     return found == fabricationModels_.end() ? 0 : found->second.panels.size();
+}
+
+//! 3D の選択が変わった。製作モードで押したものが、いまの近似モデルの部材の
+//! 元になった物体なら「対象部材」欄をその番号にする。
+//!
+//! **数え直すだけで足す・外すは作らない。** Ctrl はすでに選択そのものを
+//! 足す・外すへ変えているので(V2ViewportInput.cpp の SelectionMode)、
+//! ここは「いま選んでいるもの」を毎回そのまま番号へ数え直せば、
+//! Replace は置き換えに、Ctrl は足す・外すになる。
+void V2MainWindow::RefreshFabricationPartPickForSelectionChange()
+{
+    if (viewport_ == nullptr || fabricationDock_ == nullptr || approxShelfShown_
+        || Mode() != kachakacha::v2::app::UiMode::Fabrication) {
+        return;
+    }
+    const auto found = fabricationModels_.find(CurrentFabricationModelId().ToString());
+    if (found == fabricationModels_.end()) {
+        return;
+    }
+    const auto& evaluation = found->second;
+    std::vector<int> numbers;
+    std::vector<kachakacha::v2::app::ToolRoleLabel> labels;
+    for (const auto& ref : viewport_->Selection().ordered) {
+        const auto index = kachakacha::v2::app::PanelIndexForPick(evaluation, ref.entityId,
+            ref.pickedFaceIndex);
+        if (!index.has_value()) {
+            continue;   // このモデルの部材ではないもの(作業平面など)は黙って飛ばす。
+        }
+        const int number = static_cast<int>(*index) + 1;
+        if (std::find(numbers.begin(), numbers.end(), number) != numbers.end()) {
+            continue;   // 面ごとの部材で、同じ物体の別の面をまとめて選んだ場合など。
+        }
+        numbers.push_back(number);
+        labels.push_back(kachakacha::v2::app::ToolRoleLabel{ref.entityId,
+            "PART " + std::to_string(number)});
+    }
+    if (numbers.empty()) {
+        // 何も部材を押していない。欄は人が最後に書いた/選んだままにするが、
+        // 前に押した部材の札は消す。残すと、もう選んでいないのに札だけ残る。
+        if (viewport_ != nullptr) {
+            viewport_->HideToolRoleLabels();
+        }
+        return;
+    }
+    std::sort(numbers.begin(), numbers.end());
+    QString text;
+    for (const int number : numbers) {
+        if (!text.isEmpty()) {
+            text += QStringLiteral(", ");
+        }
+        text += QString::number(number);
+    }
+    fabricationDock_->SetPartNumbersText(text);
+    ShowRoleLabels(labels);
 }
 
 //! いまの帯の境目と、部材ごとの幅。近似がまだなら空。
@@ -467,4 +523,31 @@ bool V2MainWindow::PartNumbersUnreadable() const
 std::vector<std::size_t> V2MainWindow::SelectedPartNumbers() const
 {
     return ReadPartNumbers().numbers;
+}
+
+//! 「方式 / 最大誤差」の一言を、いま「対象部材」欄にある最初の番号で映す。
+//!
+//! **部材ごとの方式や誤差は持っていない。** FabricationEvaluation が持つのは
+//! モデル全体の1つの値だけである。分けているように見せると、無い数字を
+//! 作ったことになる。だから「(モデル全体)」と正直に添えて出す。
+void V2MainWindow::RefreshFabricationPartInfo(const kachakacha::v2::base::EntityId& modelId)
+{
+    if (fabricationDock_ == nullptr) {
+        return;
+    }
+    const auto found = fabricationModels_.find(modelId.ToString());
+    const auto selection = ReadPartNumbers();
+    if (found == fabricationModels_.end() || selection.numbers.empty()
+        || selection.numbers.front() >= found->second.panels.size()) {
+        fabricationDock_->SetPartInfoText(QStringLiteral("(3D で部材を押すと出ます)"));
+        return;
+    }
+    const auto& evaluation = found->second;
+    const QString methodJa = QString::fromUtf8(
+        std::string(kachakacha::v2::app::FabricationMethodNameJa(evaluation.method)).c_str());
+    fabricationDock_->SetPartInfoText(
+        QStringLiteral("部材 %1: %2 / 最大誤差 %3 mm(モデル全体)")
+            .arg(static_cast<int>(selection.numbers.front()) + 1)
+            .arg(methodJa)
+            .arg(evaluation.maximumDeviationMm, 0, 'f', 3));
 }

@@ -3,6 +3,7 @@
 // 作るときも開き直すときも同じ道を通すことと、V1 方式と V2 方式が同じ入力で
 // 違う答え(断る / 切る)を返すことを押さえる。
 #include "kachakacha/app/FabricationEvaluate.h"
+#include "kachakacha/base/Ids.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <cmath>
@@ -291,6 +292,61 @@ KACHA_V2_TEST(fabrication_evaluate, 曲げ状態の一文)
     definition.bandProgress = {1.0, 0.0};
     Require(FoldStateSummaryJa(definition).find("帯ごと") != std::string::npos,
         "個別指定が出る");
+}
+
+KACHA_V2_TEST(fabrication_evaluate, 3Dで押した物体から部材番号が引ける)
+{
+    // F-05/06/07: 3D で押した物体(と面番号)を、どの部材かへ変える。
+    // 立体を面ごとに分けた(splitSolidFaces)想定で、同じ物体の別の面が
+    // 別の部材になることを確かめる。
+    kachakacha::v2::base::DeterministicIdGenerator ids;
+    const auto boxId = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    const auto otherId = ids.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    const auto line = [](Vector3 a, Vector3 b) {
+        return CurveSegment::MakeLine(a, b).Value();
+    };
+    const auto square = [&](double z) {
+        return std::vector<CurveSegment>{
+            line({0, 0, z}, {50, 0, z}), line({50, 0, z}, {50, 50, z}),
+            line({50, 50, z}, {0, 50, z}), line({0, 50, z}, {0, 0, z})};
+    };
+    FabricationSource faceA;
+    faceA.entityId = boxId;
+    faceA.faceIndex = 2;
+    faceA.name = "面3";
+    faceA.flatBoundary = square(0.0);
+    FabricationSource faceB;
+    faceB.entityId = boxId;
+    faceB.faceIndex = 5;
+    faceB.name = "面6";
+    faceB.flatBoundary = square(30.0);
+    FabricationSource other;
+    other.entityId = otherId;
+    other.name = "別の物体";
+    other.flatBoundary = square(60.0);
+    const auto made = EvaluateFabrication(Definition(0), {faceA, faceB, other},
+        FabricationMarkings{}, 0.01);
+    Require(made.HasValue(), "作れる");
+    Require(made.Value().panels.size() == made.Value().panelOrigins.size(),
+        "部材と出どころは同じ数");
+    Require(made.Value().panels.size() == 3, "3枚");
+    const auto indexA = kachakacha::v2::app::PanelIndexForPick(made.Value(), boxId, 2);
+    const auto indexB = kachakacha::v2::app::PanelIndexForPick(made.Value(), boxId, 5);
+    Require(indexA.has_value() && indexB.has_value(), "両方見つかる");
+    Require(*indexA != *indexB, "面番号が違えば別の部材");
+    Require(*indexA == 0, "面3は部材1(0始まり0)");
+    Require(*indexB == 1, "面6は部材2(0始まり1)");
+    // 面ごとに分けていない物体は、面番号を渡さなくても物体だけで決まる。
+    const auto indexOther = kachakacha::v2::app::PanelIndexForPick(made.Value(), otherId,
+        std::nullopt);
+    Require(indexOther.has_value() && *indexOther == 2, "分けていない物体は物体だけで決まる");
+    // 面番号が合わなければ見つからない。取り違えを黙って許さない。
+    Require(!kachakacha::v2::app::PanelIndexForPick(made.Value(), boxId, 9).has_value(),
+        "違う面番号は見つからない");
+    // 知らない物体は見つからない。
+    Require(!kachakacha::v2::app::PanelIndexForPick(made.Value(),
+        ids.NextTyped<kachakacha::v2::base::IdKind::Entity>(), std::nullopt).has_value(),
+        "知らない物体は見つからない");
 }
 
 KACHA_V2_TEST_MAIN("fabrication_evaluate_tests")

@@ -156,6 +156,9 @@ void Note(const char* what);
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 
+//! 部材の編集を 3D のクリックから当てる(HP-PE、matrix F-05/06/07)。
+[[nodiscard]] std::vector<SelfTestCase> PartEditCases();
+
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();
 

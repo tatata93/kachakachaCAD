@@ -144,6 +144,9 @@ using fabrication::PatternPanel;
     FabricationEvaluation made;
     made.method = FabricationMethod::ClassifyFaces;
     std::vector<fabrication::PlanarPanelRequest> planar;
+    // planar は下でまとめて型紙にするので、どの物体からの依頼かを並びのまま覚えておく。
+    // 3D で押した物体を部材番号へ変えるためだけに使う(PanelIndexForPick)。
+    std::vector<PanelOrigin> planarOrigins;
     for (const FabricationSource& source : sources) {
         if (source.samples.has_value()) {
             const auto panel = fabrication::BuildCurvedPanel(source.name, *source.samples,
@@ -154,6 +157,7 @@ using fabrication::PatternPanel;
                 return Out::Failure(panel.Diagnostics());
             }
             made.panels.push_back(panel.Value().panel);
+            made.panelOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
             made.maximumDeviationMm =
                 std::max(made.maximumDeviationMm, panel.Value().distortionMm);
             continue;
@@ -163,6 +167,7 @@ using fabrication::PatternPanel;
             request.panelId = source.name;
             request.boundary = *source.flatBoundary;
             planar.push_back(std::move(request));
+            planarOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
         }
     }
     if (!planar.empty()) {
@@ -171,8 +176,12 @@ using fabrication::PatternPanel;
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
-        for (const auto& panel : panels.Value()) {
-            made.panels.push_back(panel);
+        // BuildPlanarWithMarkings は依頼と同じ数・同じ並びで返す(分けたり束ねたりしない)。
+        for (std::size_t index = 0; index < panels.Value().size(); ++index) {
+            made.panels.push_back(panels.Value()[index]);
+            made.panelOrigins.push_back(index < planarOrigins.size()
+                    ? planarOrigins[index]
+                    : PanelOrigin{});
         }
     }
     made.reachedTolerance = true;
@@ -268,12 +277,20 @@ struct BandedSource {
     FabricationEvaluation made;
     made.method = FabricationMethod::BandApproximation;
     std::vector<fabrication::PlanarPanelRequest> planar;
+    std::vector<PanelOrigin> planarOrigins;
     std::vector<BandedSource> banded;
     for (const FabricationSource& source : sources) {
         if (source.samples.has_value()) {
+            const std::size_t before = made.panels.size();
             auto approximated = ApproximateSource(definition, source, made.panels);
             if (!approximated.HasValue()) {
                 return Out::Failure(approximated.Diagnostics());
+            }
+            // 1つの面から帯(部材)が何枚できても、押した面はどれも同じ物体。
+            // どの帯を押したかまでは分からないので、最初の帯として覚える
+            // (FabricationEvaluation::PanelOrigin のコメントの通り、既知の限界)。
+            for (std::size_t index = before; index < made.panels.size(); ++index) {
+                made.panelOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
             }
             made.maximumDeviationMm = std::max(made.maximumDeviationMm,
                 approximated.Value().bands.maximumDeviationMm);
@@ -287,6 +304,7 @@ struct BandedSource {
             request.panelId = source.name;
             request.boundary = *source.flatBoundary;
             planar.push_back(std::move(request));
+            planarOrigins.push_back(PanelOrigin{source.entityId, source.faceIndex});
         }
     }
     // 開口は、帯の型紙へ切り出す(またぐ窓は、またぐ全ての帯へ)。平らな部材の分は残す。
@@ -302,8 +320,11 @@ struct BandedSource {
         if (!panels.HasValue()) {
             return Out::Failure(panels.Diagnostics());
         }
-        for (const auto& panel : panels.Value()) {
-            made.panels.push_back(panel);
+        for (std::size_t index = 0; index < panels.Value().size(); ++index) {
+            made.panels.push_back(panels.Value()[index]);
+            made.panelOrigins.push_back(index < planarOrigins.size()
+                    ? planarOrigins[index]
+                    : PanelOrigin{});
         }
     }
     // 帯メッシュは1面ぶんだけ覚える。複数の面を1つの近似モデルにするときは、
@@ -334,6 +355,27 @@ FabricationMethod FabricationMethodOf(
 {
     return definition.method == 1 ? FabricationMethod::BandApproximation
                                   : FabricationMethod::ClassifyFaces;
+}
+
+std::optional<std::size_t> PanelIndexForPick(const FabricationEvaluation& evaluation,
+    base::EntityId entityId, std::optional<std::size_t> pickedFaceIndex) noexcept
+{
+    for (std::size_t index = 0; index < evaluation.panelOrigins.size(); ++index) {
+        const PanelOrigin& origin = evaluation.panelOrigins[index];
+        if (!(origin.entityId == entityId)) {
+            continue;
+        }
+        if (origin.faceIndex.has_value()) {
+            // 立体を面ごとに分けた部材。押した面の番号が合って初めて、その部材。
+            if (pickedFaceIndex.has_value() && *origin.faceIndex == *pickedFaceIndex) {
+                return index;
+            }
+            continue;
+        }
+        // 面で分けていない部材(平らな1枚、または曲がった面をまるごと)。物体だけで決まる。
+        return index;
+    }
+    return std::nullopt;
 }
 
 fabrication::BandApproximationOptions BandOptionsOf(

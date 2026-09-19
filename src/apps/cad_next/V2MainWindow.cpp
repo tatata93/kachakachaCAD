@@ -282,35 +282,41 @@ void V2MainWindow::WireViewportCallbacks()
         });
     viewport_->SetPendingCommandCallbacks([this] { ConfirmPendingCommand(); },
         [this] { ClearPendingCommand(); });
-    viewport_->SetSelectionChangedCallback([this] {
-        // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
-        HighlightTreeForSelection();
-        // 構えている命令があれば、そろったかを見る。
-        RefreshPendingCommand(false);
-        // 面作成中の素のクリックは、**いまの欄**へ入る(もう一度押すと外れる)。
-        // 「選んでから右棚の追加ボタンを押す」を基本操作にしない。
-        RefreshSurfaceForSelectionChange();
-        // 近似中の素のクリックは対象へ入る(面と立体だけ)。押すたびに候補を作り直す。
-        RefreshApproxForSelectionChange();
-        // 足す引く中の素のクリックは土台 → 相手の順に入る(押し直すと外れる)。
-        RefreshBooleanForSelectionChange();
-        // 厚み中の素のクリックは面の欄へ入る(押し直すと外れる)。
-        RefreshThickenForSelectionChange();
-        // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
-        RefreshExtrudeForSelectionChange();
-        RefreshExportCounts();
-        RefreshMeasurements();
-        RefreshEditDock();
-        RefreshCornerDock();
-        RefreshFabricationDock();
-        RefreshPartDock();
-        // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
-        RefreshWorkPlaneDock();
-        // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
-        RefreshCommandVisibility();
-    });
+    viewport_->SetSelectionChangedCallback([this] { HandleSelectionChanged(); });
     // 操作板の「選択に正対」は、台帳のコマンドと同じ道を通す。入口を分けない。
     viewport_->SetAlignSelectionCallback([this] { RunCommand("view.align_selection"); });
+}
+
+//! 3D か左の一覧で選択が変わるたびに、関わる棚を持ち直す(WireViewportCallbacks の続き)。
+void V2MainWindow::HandleSelectionChanged()
+{
+    // 3D 画面で選んだものを、左の一覧でも光らせる(V1 と同じ。逆も同じ)。
+    HighlightTreeForSelection();
+    // 構えている命令があれば、そろったかを見る。
+    RefreshPendingCommand(false);
+    // 面作成中の素のクリックは、**いまの欄**へ入る(もう一度押すと外れる)。
+    // 「選んでから右棚の追加ボタンを押す」を基本操作にしない。
+    RefreshSurfaceForSelectionChange();
+    // 近似中の素のクリックは対象へ入る(面と立体だけ)。押すたびに候補を作り直す。
+    RefreshApproxForSelectionChange();
+    // 足す引く中の素のクリックは土台 → 相手の順に入る(押し直すと外れる)。
+    RefreshBooleanForSelectionChange();
+    // 厚み中の素のクリックは面の欄へ入る(押し直すと外れる)。
+    RefreshThickenForSelectionChange();
+    // 製作モードで部材を押したら「対象部材」欄をその番号にする(F-05/06/07)。
+    RefreshFabricationPartPickForSelectionChange();
+    // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
+    RefreshExtrudeForSelectionChange();
+    RefreshExportCounts();
+    RefreshMeasurements();
+    RefreshEditDock();
+    RefreshCornerDock();
+    RefreshFabricationDock();
+    RefreshPartDock();
+    // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
+    RefreshWorkPlaneDock();
+    // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
+    RefreshCommandVisibility();
 }
 
 V2MainWindow::~V2MainWindow() = default;

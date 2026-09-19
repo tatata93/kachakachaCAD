@@ -220,8 +220,7 @@ public:
     //! その番号のものを画面のどこで指すか。取れなければ空。
     [[nodiscard]] std::optional<kachakacha::v2::geometry::Vector3> PointForRoleLabel(
         const kachakacha::v2::base::EntityId& id) const;
-    //! 正本と見比べる場面を作る(§20)。V2UiShotStates.cpp が持つ。
-    //! 名前は `ui-extrude-*` / `ui-surface-*`。
+    //! 正本と見比べる場面を作る(§20、V2UiShotStates.cpp)。名前は `ui-extrude-*` 等。
     bool ApplyUiShotState(const QString& name);
     bool ApplyExtrudeShotState(const QString& name);
     bool ApplySurfaceShotState(const QString& name);
@@ -273,14 +272,11 @@ public:
     }
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
-    //! 押す面の縁を文書のワイヤーにして、押し出しの輪郭にする(EX-02)。
-    //! 取れなければ理由を出して偽を返す。
     //! 立体の面を1枚ずつ、近似の元にする。「立体を面ごとに分ける」を選んだとき。
     void AppendSolidFaceSources(const kachakacha::v2::base::EntityId& partId,
         const std::string& partName,
         std::vector<kachakacha::v2::app::FabricationSource>& sources) const;
-    //! 断ったときに「何枚に分ければ作れるか」を言う一文(製作近似 §5)。
-    //! 分けはしない。言うだけである。相手が無ければ空を返す。
+    //! 断ったときに「何枚に分ければ作れるか」を言う一文(製作近似 §5)。分けはしない。
     [[nodiscard]] QString PanelAdviceTextJa(
         const std::vector<kachakacha::v2::base::EntityId>& partIds) const;
     //! 押す面の縁をその場限りの輪郭として取り出す。文書は変えない。
@@ -953,6 +949,9 @@ private:
         const kachakacha::v2::base::EntityId& output);
     //! 全近似モデルの部材を fabricationPanels_ へ並べ直し、曲げ状態の姿勢を画面へ出す。
     void RefreshFabricationView();
+    //! 製作モードで押した部材を「対象部材」欄へ(F-05/06/07)。方式/最大誤差も映す。
+    void RefreshFabricationPartPickForSelectionChange();
+    void RefreshFabricationPartInfo(const kachakacha::v2::base::EntityId& modelId);
 
     //! 形のコマンドか。V2PartCommands.cpp が持つ。
     [[nodiscard]] static bool IsPartCommand(std::string_view id);
@@ -1191,6 +1190,7 @@ private:
     void HighlightTreeForSelection();
     //! 画面から窓へ戻ってくる知らせを、まとめて繋ぐ。組み立ての続き。
     void WireViewportCallbacks();
+    void HandleSelectionChanged();
     //! 「選択に正対」の相手。点と、はっきりしている面の向き。
     struct FacingTarget {
         std::vector<kachakacha::v2::geometry::Vector3> points;

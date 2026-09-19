@@ -491,9 +491,14 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
     parts_ = new QLineEdit(bendWidget);
     parts_->setPlaceholderText(QStringLiteral("空なら全部。1, 3 のように部材番号"));
     parts_->setToolTip(QStringLiteral(
-        "部材番号(1 から)を挙げると、その部材だけが曲がります(V1 と同じ)。"
+        "3D で部材を押すと、押した番号がここに入ります(Ctrl で足す・外す)。"
+        "手で番号(1 から)を書いてもかまいません。"
+        "挙げた部材だけが曲がります(V1 と同じ)。"
         "空にして当てると全体が動き、部材ごとの値は捨てます。"));
-    bend->addRow(QStringLiteral("曲げる部材"), parts_);
+    bend->addRow(QStringLiteral("対象部材(3D で押す、または番号)"), parts_);
+    partInfo_ = new QLabel(QStringLiteral("(3D で部材を押すと出ます)"), bendWidget);
+    partInfo_->setWordWrap(true);
+    bend->addRow(QStringLiteral("方式 / 最大誤差"), partInfo_);
     // 「固定で作るもの」の欄は、生成の3枚のカード(現在状態 / Flat 0% / Target 100%)の
     // すぐ上に置く(コンストラクタの freezeButtons)。ここでは作らない。
     return bendWidget;
@@ -505,7 +510,7 @@ QWidget* V2FabricationDock::BuildPartEditSection(QWidget* body)
     auto* layout = new QVBoxLayout(editWidget);
     layout->setContentsMargins(0, 4, 0, 0);
     layout->setSpacing(2);
-    layout->addWidget(new QLabel(QStringLiteral("部材の編集(「曲げる部材」の番号に当てる)"),
+    layout->addWidget(new QLabel(QStringLiteral("部材の編集(「対象部材」に当てる)"),
         editWidget));
     layout->addWidget(MakeRun(editWidget, QStringLiteral("部材を分ける(1度目は下見)"),
         "fabrication.split_part", this));
@@ -776,6 +781,18 @@ QString V2FabricationDock::PartNumbersText() const
 void V2FabricationDock::SetPartNumbersText(const QString& text)
 {
     parts_->setText(text);
+}
+
+void V2FabricationDock::SetPartInfoText(const QString& text)
+{
+    if (partInfo_ != nullptr) {
+        partInfo_->setText(text);
+    }
+}
+
+QString V2FabricationDock::PartInfoText() const
+{
+    return partInfo_ == nullptr ? QString() : partInfo_->text();
 }
 
 void V2FabricationDock::SetAssemblyHandler(

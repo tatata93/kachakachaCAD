@@ -104,9 +104,9 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | F-02 | 製作 | 近似 | 近似 | 作り方: 標準/少部品優先/精度優先/手動条件 | 候補 A/B/C(実評価)、棚の欄 | 作り方カード → 候補の並べ方/欄の既定 | あり | HP-AP | CLOUD_TESTED | 作り方カード 4 枚(core ApproxPolicy / CandidateForPolicy)。候補を人が押せばそれが勝つ。HP-AP-03 |
 | F-03 | 製作 | 近似 | 近似 | 候補: 部品数・最大誤差・平均誤差・方式 | partCount/maxDev あり。**平均誤差・方式(Plane/Cyl…)無し** | 候補カード | あり | HP-AP | CLOUD_TESTED | 候補の行に 部材数/最大/平均 —/方式(面ごと|帯)。平均誤差は BLOCKED_BACKEND のまま「—」 |
 | F-04 | 製作 | 近似 | 近似 | 表示: 元/近似/部材境界/誤差ヒートマップ | 下見(レール)、ヒートマップ無し | 4. 表示 | — | — | NOT_STARTED / ヒートマップ BLOCKED_BACKEND | |
-| F-05 | 製作 | 部材編集 | 近似部品編集(方式/誤差/半径 AUTO-LOCK) | — | `BendRadius` AUTO/LOCK、per-part 誤差は band に内在(未表示) | 部材編集→近似部品編集(ApproxPart slot) | — | HP-FB | NOT_STARTED | 部材の 3D クリック選択が要る(いまは番号欄) |
-| F-06 | 製作 | 部材編集 | 分割 | 中央 / 位置指定 / 候補境界 | `PreviewBandSplit`(中央のみ) | 分割(作り方: 中央=有効、他 disabled) | before/after あり | HP-FB | NOT_STARTED | 位置指定は backend 小改修で可(rail parameter) |
-| F-07 | 製作 | 部材編集 | 結合 | 隣接 | `PreviewBandMerge` | 結合(部材A/B slot) | before/after | HP-FB | NOT_STARTED | 方式維持/手動方式は帯方式では意味なし → 1方式 |
+| F-05 | 製作 | 部材編集 | 近似部品編集(方式/誤差/半径 AUTO-LOCK) | — | `BendRadius` AUTO/LOCK、per-part 誤差は band に内在(未表示) | 部材編集→近似部品編集(ApproxPart slot) | — | HP-FB | CLOUD_TESTED | 3D で元の面/立体の面を押すと panelOrigins(core)で部材番号へ解く。方式/最大誤差(モデル全体)を表示。per-part 誤差は無し。HP-PE-01 |
+| F-06 | 製作 | 部材編集 | 分割 | 中央 / 位置指定 / 候補境界 | `PreviewBandSplit`(中央のみ) | 分割(作り方: 中央=有効、他 disabled) | before/after あり | HP-FB | PARTIAL | 対象部材は 3D クリックで入る(HP-PE-01)。分割位置指定/候補境界は BLOCKED_BACKEND(中央のみ) |
+| F-07 | 製作 | 部材編集 | 結合 | 隣接 | `PreviewBandMerge` | 結合(部材A/B slot) | before/after | HP-FB | PARTIAL | 対象部材は 3D クリック(Ctrl で 2 つ)で入る。結合は既存 PreviewBandMerge |
 | F-08 | 製作 | 部材編集 | 切れ目 | Relief Cut(平面部材のみ) | `assign_relief_cut` | 切れ目(対象部材+線) | — | test | NOT_STARTED | 曲面部材は BLOCKED_BACKEND |
 | F-09 | 製作 | 部材編集 | 半径編集 | AUTO / LOCK / 隣接同期 | AUTO/LOCK あり | 半径編集(AUTO/LOCK) | — | test | TESTED(既存 組立率⇄半径) | 隣接同期は BLOCKED_BACKEND |
 | F-10 | 製作 | 曲げ・展開 | 曲げ状態 | スライダ 0-100 + 0/25/50/75/100 | masterPercent、bandProgress、0%=真の展開 | 曲げ状態(slider+preset) | あり(レール) | HP-FB | CLOUD_TESTED | スライダ 0〜100 + 基準値 0/25/50/75/100(組立率を打って当てる道)。HP-AP-04。比較表示(0%/100% 重ね)は未 |

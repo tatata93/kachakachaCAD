@@ -119,6 +119,8 @@ namespace {
     cases.insert(cases.end(), guide.begin(), guide.end());
     const std::vector<SelfTestCase> fabrication = FabricationCases();
     cases.insert(cases.end(), fabrication.begin(), fabrication.end());
+    const std::vector<SelfTestCase> partEdit = PartEditCases();
+    cases.insert(cases.end(), partEdit.begin(), partEdit.end());
     return cases;
 }
 

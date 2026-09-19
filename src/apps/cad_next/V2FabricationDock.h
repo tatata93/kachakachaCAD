@@ -79,8 +79,12 @@ public:
     void SetAssemblyPercent(double percent);
     [[nodiscard]] double AssemblyPercent() const;
     //! 部材番号の欄(V1 の「選んだ部材だけが曲がる」)。空なら全体。
+    //! 3D で部材を押しても書き込む(F-05/06/07)。
     [[nodiscard]] QString PartNumbersText() const;
     void SetPartNumbersText(const QString& text);
+    //! 「対象部材」の下に出す読み取り専用の一言(方式 / 最大誤差)。試験から読む。
+    void SetPartInfoText(const QString& text);
+    [[nodiscard]] QString PartInfoText() const;
     void SetAssemblyHandler(std::function<void(double percent, const QString& parts)> handler);
     void PressApplyAssembly();
     //! **人が欄に打ったのと同じ道。**組立率を打つと半径が、半径を打つと組立率が言い換わる。
@@ -186,6 +190,8 @@ private:
     bool bendShown_ = false;
     QPushButton* applyAssembly_ = nullptr;
     QLineEdit* parts_ = nullptr;
+    //! 「方式 / 最大誤差」の読み取り専用の一言。3D で押した部材が分かったときに映す。
+    QLabel* partInfo_ = nullptr;
     QComboBox* freeze_ = nullptr;
     QDoubleSpinBox* rangeUMin_ = nullptr;
     QDoubleSpinBox* rangeUMax_ = nullptr;

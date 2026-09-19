@@ -25,7 +25,7 @@
 bool V2MainWindow::IsFreezeCommand(std::string_view id)
 {
     return id == "derived.freeze" || id == "fabrication.freeze_state"
-        || id == "fabrication.freeze_flat";
+        || id == "fabrication.freeze_flat" || id == "fabrication.freeze_target";
 }
 
 void V2MainWindow::RunFreezeCommand(std::string_view id)
@@ -40,6 +40,10 @@ void V2MainWindow::RunFreezeCommand(std::string_view id)
     }
     if (id == "fabrication.freeze_flat") {
         FreezeFlatOutline();
+        return;
+    }
+    if (id == "fabrication.freeze_target") {
+        FreezeTargetShape();
     }
 }
 
@@ -157,8 +161,6 @@ void V2MainWindow::FreezeSelectedDerived()
 
 void V2MainWindow::FreezeFabricationState()
 {
-    using kachakacha::v2::fabrication::FreezeOutput;
-
     // いまの曲げ状態を、文書の普通のものにする(工程3 → 工程2 へ戻る道)。
     // 画面に出ている姿勢(FoldedRailsOf)そのものを使う。別の作り方で作り直すと、
     // 見えている形と出てくる形が食い違う ── V1 で実際に起きた(bandRails の教訓)。
@@ -189,19 +191,89 @@ void V2MainWindow::FreezeFabricationState()
         FreezeFlatPanels();
         return;
     }
-    // 持ち上げ 0 で取る。画面では帯を離して見せるが、固定するのは本当の位置。
-    const auto rails = kachakacha::v2::app::FoldedRailsOf(definition, evaluated, 0.0);
     const std::string stateName = kachakacha::v2::app::FoldStateSummaryJa(definition);
     int wires = 0;
     int surfaces = 0;
     int parts = 0;
+    if (!FreezeWithDefinition(definition, modelName, evaluated, stateName, wires, surfaces,
+            parts)) {
+        return;
+    }
+    SetStatus(QStringLiteral("現在状態を固定(%1): 線 %2 本、面 %3 枚、部品 %4 個にしました。")
+            .arg(QString::fromStdString(stateName))
+            .arg(wires)
+            .arg(surfaces)
+            .arg(parts));
+}
+
+//! 「Target 100%」。いまの曲げ具合は変えずに、100%(目標の形)の状態を固定して、
+//! 固定で作るもの(freezeOutput_)の設定どおりに線や部品にする。近似モデルは残る。
+void V2MainWindow::FreezeTargetShape()
+{
+    const auto modelId = CurrentFabricationModelId();
+    const auto* entityPointer = session_->GetDocument().FindEntity(modelId);
+    const auto* feature = entityPointer == nullptr
+        ? nullptr
+        : session_->GetDocument().FindFeature(entityPointer->createdBy);
+    const auto* definitionPointer = feature == nullptr
+        ? nullptr
+        : std::get_if<kachakacha::v2::domain::CreateFabricationModelDefinition>(
+              &feature->definition);
+    const auto evaluatedIterator = fabricationModels_.find(modelId.ToString());
+    if (definitionPointer == nullptr || evaluatedIterator == fabricationModels_.end()) {
+        SetStatus(QStringLiteral(
+            "目標形状(100%)を固定: 先に「近似」で近似モデルを作ってください。"));
+        return;
+    }
+    const std::string modelName = entityPointer->displayName;
+    // 文書の作り方は触らず、写しを 100%(目標の形)にする。FreezeFlatOutline と同じ考え。
+    kachakacha::v2::domain::CreateFabricationModelDefinition target = *definitionPointer;
+    target.masterPercent = 100.0;
+    target.creaseProgress.clear();
+    target.bandProgress.clear();
+    const kachakacha::v2::app::FabricationEvaluation evaluated = evaluatedIterator->second;
+    if (!evaluated.bandMesh.has_value()) {
+        // V2 方式(面の分類)には曲げ状態の形が無い。型紙の線をそのまま置く。
+        FreezeFlatPanels();
+        return;
+    }
+    int wires = 0;
+    int surfaces = 0;
+    int parts = 0;
+    if (!FreezeWithDefinition(target, modelName, evaluated, "目標100%", wires, surfaces, parts)) {
+        return;
+    }
+    SetStatus(QStringLiteral(
+        "目標形状(100%)を固定: 線 %1 本、面 %2 枚、部品 %3 個にしました。"
+        "近似モデルはそのまま残っています。")
+            .arg(wires)
+            .arg(surfaces)
+            .arg(parts));
+}
+
+//! freeze_state と freeze_target の共通の道。渡す定義が違うだけで、レールから
+//! 線・面・部品を作るところから先は同じにする(コードを2度書かない)。
+//! 1つの取り消しで戻せるよう、ひとまとまり(Transaction)にする。
+bool V2MainWindow::FreezeWithDefinition(
+    const kachakacha::v2::domain::CreateFabricationModelDefinition& definition,
+    const std::string& modelName, const kachakacha::v2::app::FabricationEvaluation& evaluated,
+    const std::string& stateName, int& wires, int& surfaces, int& parts)
+{
+    using kachakacha::v2::fabrication::FreezeOutput;
+    wires = 0;
+    surfaces = 0;
+    parts = 0;
+    kachakacha::v2::document::Document::Transaction transaction(
+        session_->GetDocument(), "固定(" + stateName + ")");
+    // 持ち上げ 0 で取る。画面では帯を離して見せるが、固定するのは本当の位置。
+    const auto rails = kachakacha::v2::app::FoldedRailsOf(definition, evaluated, 0.0);
     for (std::size_t band = 0; band + 1 < rails.size(); band += 2) {
         const std::string label = modelName + " 部材"
             + std::to_string(band / 2 + 1) + " (" + stateName + ")";
         const auto bottom = AddPlainWire(PolylineOf(rails[band]), (label + " 下").c_str());
         const auto top = AddPlainWire(PolylineOf(rails[band + 1]), (label + " 上").c_str());
         if (bottom.IsNil() || top.IsNil()) {
-            return;
+            return false;
         }
         wires += 2;
         if (freezeOutput_ == FreezeOutput::WiresOnly) {
@@ -212,7 +284,7 @@ void V2MainWindow::FreezeFabricationState()
         AdoptCurrentDocument();
         const auto surfaceId = CreateGuideSurfaceFromWires({bottom, top}, label + " 面");
         if (surfaceId.IsNil()) {
-            return;
+            return false;
         }
         ++surfaces;
         if (freezeOutput_ == FreezeOutput::PartsOnly || freezeOutput_ == FreezeOutput::Both) {
@@ -240,11 +312,7 @@ void V2MainWindow::FreezeFabricationState()
         }
     }
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("現在状態を固定(%1): 線 %2 本、面 %3 枚、部品 %4 個にしました。")
-            .arg(QString::fromStdString(stateName))
-            .arg(wires)
-            .arg(surfaces)
-            .arg(parts));
+    return transaction.Commit();
 }
 
 void V2MainWindow::FreezeFlatPanels()

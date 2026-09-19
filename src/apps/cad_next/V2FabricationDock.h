@@ -111,6 +111,12 @@ public:
     void SetFreezeOutputHandler(
         std::function<void(kachakacha::v2::fabrication::FreezeOutput)> handler);
 
+    //! 生成(正本 fabrication mock)の「作り方」カード: 現在状態 / Flat 0% / Target 100%。
+    //! カードに出ている言葉。試験から読む。
+    [[nodiscard]] std::vector<QString> GenerateCardLabels() const;
+    //! **見えているカードを実際に押す。**見えていなければ偽。
+    [[nodiscard]] bool ClickGenerateCard(const QString& labelJa);
+
     //! ボタン。command は台帳の ID(fabrication.create など)。
     void SetRunHandler(std::function<void(const char* command)> handler);
     void PressRun(const char* command);
@@ -196,6 +202,8 @@ private:
     QPushButton* clearSources_ = nullptr;
     std::vector<QPushButton*> candidates_;
     std::vector<QPushButton*> policies_;
+    //! 生成の「作り方」カード(現在状態 / Flat 0% / Target 100%)。正本 fabrication mock。
+    std::vector<QPushButton*> generateCards_;
     std::function<void(int)> policyHandler_;
     std::vector<QPushButton*> bendPresets_;
     class QSlider* bendSlider_ = nullptr;

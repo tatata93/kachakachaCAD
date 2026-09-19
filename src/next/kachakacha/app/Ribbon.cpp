@@ -146,6 +146,7 @@ const std::vector<RibbonCategory>& FabricationCategories()
         {"generate", "生成",
             {Tool("現在形状を生成", "fabrication.freeze_state"),
                 Tool("Flat Wire", "fabrication.freeze_flat"),
+                Tool("目標形状(100%)を固定", "fabrication.freeze_target"),
                 Tool("輪郭 Wire", "fabrication.freeze_state")}},
     };
     return categories;

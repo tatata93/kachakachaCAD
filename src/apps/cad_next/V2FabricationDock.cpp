@@ -110,11 +110,32 @@ V2FabricationDock::V2FabricationDock(QWidget* parent)
     // 部材の編集は曲げと同じ段に置く(引継ぎ 2026-09-17 の 5)。
     // 分ける・1つにする・切れ目・展開の基準は、曲げながら決めるものだからである。
     bendLayout->addWidget(BuildPartEditSection(bendPage));
+    // 生成(正本 fabrication mock、matrix F-13/F-14)。「固定で作るもの」の欄をすぐ上に置き、
+    // 3枚の「作り方」カード(現在状態 / Flat 0% / Target 100%)がその設定どおりに作る。
     auto* freezeButtons = new QWidget(bendPage);
     auto* freezeLayout = new QVBoxLayout(freezeButtons);
     freezeLayout->setContentsMargins(0, 0, 0, 0);
     freezeLayout->setSpacing(2);
-    freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("現在の曲げ状態から形を作る"), "fabrication.freeze_state", this));
+    freeze_ = new QComboBox(freezeButtons);
+    freeze_->addItem(QStringLiteral("ワイヤーのみ"));
+    freeze_->addItem(QStringLiteral("部品のみ"));
+    freeze_->addItem(QStringLiteral("両方"));
+    auto* freezeOutputRow = new QWidget(freezeButtons);
+    auto* freezeOutputLayout = new QHBoxLayout(freezeOutputRow);
+    freezeOutputLayout->setContentsMargins(0, 0, 0, 0);
+    freezeOutputLayout->addWidget(new QLabel(QStringLiteral("固定で作るもの"), freezeOutputRow));
+    freezeOutputLayout->addWidget(freeze_, 1);
+    freezeLayout->addWidget(freezeOutputRow);
+    freezeLayout->addWidget(new QLabel(QStringLiteral("生成(作り方)"), freezeButtons));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("現在状態"), "fabrication.freeze_state", this));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("Flat 0%"), "fabrication.freeze_flat", this));
+    generateCards_.push_back(
+        MakeRun(freezeButtons, QStringLiteral("Target 100%"), "fabrication.freeze_target", this));
+    for (QPushButton* card : generateCards_) {
+        freezeLayout->addWidget(card);
+    }
     freezeLayout->addWidget(MakeRun(freezeButtons, QStringLiteral("展開図(型紙)を作る"), "fabrication.create_pattern", this));
     bendLayout->addWidget(freezeButtons);
     bendLayout->addStretch(1);
@@ -243,6 +264,30 @@ bool V2FabricationDock::ClickCandidate(int candidate)
     }
     button->click();
     return true;
+}
+
+std::vector<QString> V2FabricationDock::GenerateCardLabels() const
+{
+    std::vector<QString> labels;
+    for (const QPushButton* card : generateCards_) {
+        labels.push_back(card->text());
+    }
+    return labels;
+}
+
+bool V2FabricationDock::ClickGenerateCard(const QString& labelJa)
+{
+    for (QPushButton* card : generateCards_) {
+        if (card->text() != labelJa) {
+            continue;
+        }
+        if (!card->isVisible() || !card->isEnabled()) {
+            return false;
+        }
+        card->click();
+        return true;
+    }
+    return false;
 }
 
 bool V2FabricationDock::ClickClearSources()
@@ -449,11 +494,8 @@ QWidget* V2FabricationDock::BuildBendSection(QWidget* body)
         "部材番号(1 から)を挙げると、その部材だけが曲がります(V1 と同じ)。"
         "空にして当てると全体が動き、部材ごとの値は捨てます。"));
     bend->addRow(QStringLiteral("曲げる部材"), parts_);
-    freeze_ = new QComboBox(bendWidget);
-    freeze_->addItem(QStringLiteral("ワイヤーのみ"));
-    freeze_->addItem(QStringLiteral("部品のみ"));
-    freeze_->addItem(QStringLiteral("両方"));
-    bend->addRow(QStringLiteral("固定で作るもの"), freeze_);
+    // 「固定で作るもの」の欄は、生成の3枚のカード(現在状態 / Flat 0% / Target 100%)の
+    // すぐ上に置く(コンストラクタの freezeButtons)。ここでは作らない。
     return bendWidget;
 }
 

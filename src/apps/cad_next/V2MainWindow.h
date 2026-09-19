@@ -596,6 +596,16 @@ public:
     void FreezeSelectedDerived();
     //! いまの部材を、型紙と同じ形の線にする。
     void FreezeFabricationState();
+    //! 「Target 100%」。いまの曲げ具合を変えずに、100%(目標の形)の状態を固定する。
+    void FreezeTargetShape();
+    //! freeze_state と freeze_target が共有する道。定義が違うだけで、
+    //! レールから線・面・部品を作るところから先は同じにする(コードを2度書かない)。
+    //! 1つの取り消しで戻せるよう、ひとまとまりにする。戻り値は最後まで進んだか。
+    [[nodiscard]] bool FreezeWithDefinition(
+        const kachakacha::v2::domain::CreateFabricationModelDefinition& definition,
+        const std::string& modelName,
+        const kachakacha::v2::app::FabricationEvaluation& evaluated,
+        const std::string& stateName, int& wires, int& surfaces, int& parts);
     //! 押し出しの結果を文書へ入れる。作るものは利用者が選んだとおりにする。
     //! 出来た形を文書へ足す。1つでも入らなければ偽を返す。
     //! 呼ぶ側はまとめごと無かったことにする。途中の形を残さない。

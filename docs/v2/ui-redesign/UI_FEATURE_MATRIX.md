@@ -112,8 +112,8 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | F-10 | 製作 | 曲げ・展開 | 曲げ状態 | スライダ 0-100 + 0/25/50/75/100 | masterPercent、bandProgress、0%=真の展開 | 曲げ状態(slider+preset) | あり(レール) | HP-FB | CLOUD_TESTED | スライダ 0〜100 + 基準値 0/25/50/75/100(組立率を打って当てる道)。HP-AP-04。比較表示(0%/100% 重ね)は未 |
 | F-11 | 製作 | 曲げ・展開 | 展開 | 自動 / 基準辺指定 / 複数配置 | create_pattern(A4 固定)、set_unfold_base | 展開(基準辺 slot、展開先) | PatternDock | HP-FB | NOT_STARTED | 展開先=紙のみ。作業面/XY は BLOCKED_BACKEND |
 | F-12 | 製作 | 曲げ・展開 | 展開基準辺 / 表裏反転 | — | set_unfold_base / **反転無し** | 展開基準辺 / 反転 disabled | — | test | NOT_STARTED / BLOCKED | |
-| F-13 | 製作 | 生成 | 現在形状を生成 | 現在/Flat/Target、Surface/Face/Wire | `freeze_state` + FreezeOutput | 生成(対象+曲げ状態+出力) | — | HP-FB | NOT_STARTED | ApproxPart は残る(既存) |
-| F-14 | 製作 | 生成 | Flat Wire / 輪郭 Wire | — | FreezeFlatPanels / freeze WiresOnly | 生成カテゴリ | — | test | NOT_STARTED | |
+| F-13 | 製作 | 生成 | 現在形状を生成 | 現在/Flat/Target、Surface/Face/Wire | `freeze_state`/`freeze_flat`/`freeze_target` + FreezeOutput | 生成(対象+曲げ状態+出力) | — | HP-FB | CLOUD_TESTED | 作り方カード「現在状態」「Flat 0%」「Target 100%」(fabrication.freeze_state/freeze_flat/freeze_target)。自己試験 HP-GN-01/HP-GN-02。ApproxPart は残る(既存) |
+| F-14 | 製作 | 生成 | Flat Wire / 輪郭 Wire | — | FreezeFlatPanels / freeze WiresOnly | 生成カテゴリ | — | test | CLOUD_TESTED | Flat Wire は「Flat 0%」カード(fabrication.freeze_flat)。自己試験 HP-GN-02 で線が増え近似モデルが残ることを確認 |
 | F-15 | 製作 | explorer | Approximation 単位(Candidate/Parts/Relief/Generated) | — | tree は FabricationModel 1行 | Explorer 節を足す(Parts = panels) | — | HP-EX | NOT_STARTED | Generated は derivedGroupId を設定して集める |
 
 ## 統合(Integration)

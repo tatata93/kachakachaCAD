@@ -475,6 +475,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "いまの曲げ具合を変えずに、0%(平らに展開した状態)の輪郭を線として作ります。"
             "近似モデルはそのまま残ります。", true,
             {"AT-FAB-011"}},
+        {"fabrication.freeze_target", "目標形状(100%)を固定", CommandMode::Instant, "fab_target",
+            "", SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
+            "いまの曲げ具合を変えずに、100%(目標の形)の状態を固定して、"
+            "固定で作るものの設定どおりに線や部品にします。近似モデルはそのまま残ります。", true,
+            {"AT-FAB-011"}},
         {"fabrication.edit_part", "近似部品の編集", CommandMode::Modeless, "fab_edit", "",
             SelectionPredicate::OneFabricationModel, "製作モデルを1つ選んでください。",
             "近似モデルの部材の編集(分割・結合・切れ目・半径 AUTO/LOCK・曲げ状態)の棚を出します。"

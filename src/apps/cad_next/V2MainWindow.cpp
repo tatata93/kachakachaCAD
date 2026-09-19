@@ -381,8 +381,8 @@ void V2MainWindow::BuildMenus()
         "fabrication.assign_relief_cut", "fabrication.preview_update", "fabrication.create_pattern",
         "fabrication.set_assembly", "fabrication.set_method", "fabrication.merge_parts",
         "fabrication.split_part", "fabrication.set_unfold_base", "fabrication.freeze_output",
-        "fabrication.freeze_state", "fabrication.freeze_flat", "fabrication.edit_part",
-        "fabrication.set_connection_scope"});
+        "fabrication.freeze_state", "fabrication.freeze_flat", "fabrication.freeze_target",
+        "fabrication.edit_part", "fabrication.set_connection_scope"});
 
     QMenu* output = menuBar()->addMenu(QStringLiteral("書き出し(&X)"));
     addCommands(output, {"export.validate", "export.stl", "export.step", "export.svg",

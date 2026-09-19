@@ -204,9 +204,11 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
             for (const bool extruding : {false, true}) {
                 for (const bool surfacing : {false, true}) {
                     for (const bool booleaning : {false, true}) {
-                        for (const Shelf shelf :
-                            ShelvesFor(mode, tool, extruding, surfacing, booleaning)) {
-                            reachable.insert(static_cast<int>(shelf));
+                        for (const bool thickening : {false, true}) {
+                            for (const Shelf shelf : ShelvesFor(mode, tool, extruding,
+                                     surfacing, booleaning, thickening)) {
+                                reachable.insert(static_cast<int>(shelf));
+                            }
                         }
                     }
                 }
@@ -235,6 +237,8 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         "「面を作る」の棚も、棚の決め方そのものから出る");
     Require(reachable.count(static_cast<int>(Shelf::Boolean)) == 1,
         "「足す・引く」の棚も、棚の決め方そのものから出る");
+    Require(reachable.count(static_cast<int>(Shelf::Thicken)) == 1,
+        "「厚み」の棚も、棚の決め方そのものから出る");
 }
 
 KACHA_V2_TEST(shelf, 足す引くの最中はその棚が前に出る)
@@ -265,6 +269,23 @@ KACHA_V2_TEST(shelf, 面を作る最中はその棚が前に出る)
     Require(ShelvesFor(UiMode::Part, DrawingTool::Select, true, true).front()
             == Shelf::Extrude,
         "押し出しが先");
+}
+
+KACHA_V2_TEST(shelf, 厚みの最中はその棚が前に出る)
+{
+    // 優先度は足す・引くの次(指示書 matrix P-10)。
+    for (const UiMode mode : {UiMode::Drawing, UiMode::Part, UiMode::Fabrication,
+             UiMode::Output}) {
+        const auto shelves = ShelvesFor(mode, DrawingTool::Select, false, false, false, true);
+        Require(!shelves.empty() && shelves.front() == Shelf::Thicken, "「厚み」の棚が先頭");
+        Require(FrontShelfFor(mode, DrawingTool::Select, false, false, false, true)
+                == Shelf::Thicken,
+            "前に出るのもその棚");
+    }
+    // 足す・引くが動いていれば、そちらが先。両方は起きないが、起きたときに黙って混ぜない。
+    Require(ShelvesFor(UiMode::Part, DrawingTool::Select, false, false, true, true).front()
+            == Shelf::Boolean,
+        "足す・引くが先");
 }
 
 KACHA_V2_TEST_MAIN("shelf_layout_tests")

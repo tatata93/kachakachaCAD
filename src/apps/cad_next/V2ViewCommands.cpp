@@ -817,6 +817,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Extrude:     return extrudeDock_;
     case Shelf::Surface:     return surfaceDock_;
     case Shelf::Boolean:     return booleanDock_;
+    case Shelf::Thicken:     return thickenDock_;
     case Shelf::None:        break;
     }
     return nullptr;
@@ -837,7 +838,7 @@ void V2MainWindow::RefreshRightShelves()
     // (オーナー指摘 2026-09-13)。
     drawingDock_->SetTool(session_->CurrentTool());
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
-        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_);
+        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thickenShelfShown_);
     if (operationHost_ != nullptr) {
         operationHost_->SetShelves(wanted);
     }

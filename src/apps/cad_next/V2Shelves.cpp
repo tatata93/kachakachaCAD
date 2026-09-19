@@ -173,6 +173,8 @@ void V2MainWindow::BuildOutputShelves()
             SetStatus(QStringLiteral("足す・引く: やめました。"));
         });
 
+    BuildThickenDock();
+
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });
     extrudeDock_->SetOptionHandler([this] { RefreshExtrudeFromDock(); });
@@ -199,6 +201,12 @@ void V2MainWindow::BuildOutputShelves()
         RefreshCornerDock();
         RefreshFabricationDock();
         RefreshPartDock();
+        // 板厚を数の棚から直したときも、厚みの道具の欄と下見をそろえる。
+        if (thickenShelfShown_) {
+            thickenInput_.thicknessMm = kachakacha::v2::app::ParameterValueOf(
+                parameterDock_->Values(), kachakacha::v2::app::ParameterId::ExtrudeDistance);
+            RefreshThickenAll();
+        }
     });
     fabricationDock_->SetParameterHandler(
         [this](kachakacha::v2::app::ParameterId id, double value) {
@@ -208,4 +216,25 @@ void V2MainWindow::BuildOutputShelves()
         (void)parameterDock_->Apply(kachakacha::v2::app::ParameterId::CornerSize,
             QString::number(value, 'f', 3));
     });
+}
+
+//! 「厚み」の棚(指示書 matrix P-10)。BuildOutputShelves から切り出した
+//! (1関数100行の門)。
+void V2MainWindow::BuildThickenDock()
+{
+    thickenDock_ = new V2ThickenDock(this);
+    thickenDock_->SetReselectHandler([this] { ReselectThicken(); });
+    thickenDock_->SetPlacementHandler(
+        [this](kachakacha::v2::fabrication::ThicknessPlacement value) {
+            ChooseThickenPlacement(value);
+        });
+    thickenDock_->SetToPlaneHandler([this] { ChooseThickenToPlane(); });
+    thickenDock_->SetTargetHandler(
+        [this](const kachakacha::v2::base::EntityId& id) { ChooseThickenTarget(id); });
+    thickenDock_->SetThicknessHandler([this](double value) { ApplyThickenThicknessMm(value); });
+    thickenDock_->SetActionHandlers([this] { ConfirmThicken(); },
+        [this] {
+            EndThicken();
+            SetStatus(QStringLiteral("厚み: やめました。"));
+        });
 }

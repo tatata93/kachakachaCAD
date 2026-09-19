@@ -294,6 +294,8 @@ void V2MainWindow::WireViewportCallbacks()
         RefreshApproxForSelectionChange();
         // 足す引く中の素のクリックは土台 → 相手の順に入る(押し直すと外れる)。
         RefreshBooleanForSelectionChange();
+        // 厚み中の素のクリックは面の欄へ入る(押し直すと外れる)。
+        RefreshThickenForSelectionChange();
         // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。
         RefreshExtrudeForSelectionChange();
         RefreshExportCounts();
@@ -830,6 +832,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     if (surfaceShelfShown_) { EndSurfacePreview(); }
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
+    if (thickenShelfShown_) { EndThicken(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));

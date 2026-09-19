@@ -141,6 +141,9 @@ void Note(const char* what);
 //! 部品の押し出しの欄(HP-PA)。
 [[nodiscard]] std::vector<SelfTestCase> PartPanelCases();
 
+//! 「厚み」の人の道(HP-TH、指示書 matrix P-10)。道具 → 3D で面 → 作り方 → Enter。
+[[nodiscard]] std::vector<SelfTestCase> ThickenCases();
+
 //! 作業平面の棚の下見(HP-WP、D-24)。
 [[nodiscard]] std::vector<SelfTestCase> WorkPlanePreviewCases();
 

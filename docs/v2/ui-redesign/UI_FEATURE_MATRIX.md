@@ -85,7 +85,7 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | P-07 | 部品 | 作成 | 押し出し | テーパー | **無し** | 欄 disabled+理由 | — | — | BLOCKED_BACKEND | テーパー欄は押せない形 + 理由(HP-PA-01) |
 | P-08 | 部品 | 作成 | 回転体(Solid) | 全回転/角度 | **Solid は無し**(面の回転体はある) | 作成→回転体 = 回転面 + 厚み の案内 | — | — | BLOCKED_BACKEND | HP-SF-08 の回転面を「部品」から呼べるようにする |
 | P-09 | 部品 | 作成 | ロフト立体 / スイープ | — | **無し**(面のみ) | disabled+理由(面作成→厚み を案内) | — | — | BLOCKED_BACKEND | |
-| P-10 | 部品 | 作成 | 厚み | 外側/中央/内側、平面まで | `part.thicken`, `thicken_to_plane`, placement | 作成→厚み(slot: 面、作り方3+平面まで) | 無し→足す | HP-PT | NOT_STARTED | per-face は BLOCKED_BACKEND |
+| P-10 | 部品 | 作成 | 厚み | 外側/中央/内側、平面まで | `part.thicken`, `thicken_to_plane`, placement | 作成→厚み(slot: 面、作り方3+平面まで) | 無し→足す | HP-PT | CLOUD_TESTED | 道具 → 3D で面 → 作り方(外側/中央/内側/平面まで)→ 下見(kernel の空回し)→ Enter。V2ThickenDock / ThickenInputState。HP-TH-01/02。per-face は BLOCKED_BACKEND |
 | P-11 | 部品 | 作成 | ワイヤー群から部品 / 治具 | — | `part.from_wire_cage`, `part.surface_jig` | 作成「その他」 | — | test | NOT_STARTED | HTML に無いが失わない |
 | P-12 | 部品 | 形状編集 | フィレット/面取り(Solid edge) | — | **無し**(TKFillet 未リンク) | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | P-13 | 部品 | 形状編集 | シェル / 分割 / 結合 | — | **無し**(結合=足す) | disabled+理由(結合は足すへ) | — | — | BLOCKED_BACKEND | |

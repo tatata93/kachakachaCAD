@@ -553,6 +553,7 @@ public:
     QFormLayout() = default;
     explicit QFormLayout(QWidget*) {}
     void addRow(const QString&, QWidget*);
+    void addRow(QWidget*, QWidget*);
     void addRow(QWidget*);
     void setRowVisible(QWidget*, bool);
 };

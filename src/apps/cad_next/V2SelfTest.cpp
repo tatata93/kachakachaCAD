@@ -93,6 +93,8 @@ namespace {
     cases.insert(cases.end(), drawingMethods.begin(), drawingMethods.end());
     const std::vector<SelfTestCase> partPanel = PartPanelCases();
     cases.insert(cases.end(), partPanel.begin(), partPanel.end());
+    const std::vector<SelfTestCase> thicken = ThickenCases();
+    cases.insert(cases.end(), thicken.begin(), thicken.end());
     const std::vector<SelfTestCase> workPlanePreview = WorkPlanePreviewCases();
     cases.insert(cases.end(), workPlanePreview.begin(), workPlanePreview.end());
     const std::vector<SelfTestCase> regressions = RegressionCases();

@@ -28,6 +28,7 @@
 #include "V2ExtrudeDock.h"
 #include "V2SurfaceDock.h"
 #include "V2BooleanDock.h"
+#include "V2ThickenDock.h"
 #include "V2Ribbon.h"
 #include "V2PartDock.h"
 #include "V2PatternDock.h"
@@ -41,6 +42,7 @@
 #include "kachakacha/app/ApproxInput.h"
 #include "kachakacha/app/RevolveSurface.h"
 #include "kachakacha/app/BooleanInputState.h"
+#include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
@@ -117,6 +119,8 @@ public:
     bool HandleExtrudeToolKey(int key, QObject* target);
     //! 「面を作る」の Enter / Esc。
     bool HandleSurfaceToolKey(int key);
+    //! 「厚み」の Enter / Esc。
+    bool HandleThickenToolKey(int key, QObject* target);
 
     [[nodiscard]] V2Viewport& Viewport() { return *viewport_; }
     [[nodiscard]] kachakacha::v2::app::DrawingSession& Session() { return *session_; }
@@ -254,6 +258,13 @@ public:
     [[nodiscard]] const kachakacha::v2::app::BooleanInputState& BooleanInput() const
     {
         return booleanInput_;
+    }
+    [[nodiscard]] V2ThickenDock& ThickenDock() { return *thickenDock_; }
+    //! いま「厚み」の道具が動いているか。試験から見る。
+    [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
+    [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
+    {
+        return thickenInput_;
     }
     //! いまの入力。試験から見る。
     [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
@@ -856,6 +867,20 @@ private:
     void ChooseBooleanOperation(bool cut);
     void EndBoolean();
     void ConfirmBoolean();
+    //! 「厚み」の道具(指示書 matrix P-10、V2ThickenCommands.cpp)。
+    void RunThickenTool();
+    void MirrorThickenToSelection();
+    void RefreshThickenForSelectionChange();
+    void RefreshThickenPreview();
+    void RefreshThickenDock();
+    void RefreshThickenAll();
+    void ReselectThicken();
+    void ChooseThickenPlacement(kachakacha::v2::fabrication::ThicknessPlacement value);
+    void ChooseThickenToPlane();
+    void ChooseThickenTarget(const kachakacha::v2::base::EntityId& planeId);
+    void ApplyThickenThicknessMm(double value);
+    void EndThicken();
+    void ConfirmThicken();
     // ---- 「近似」を道具から始める(引継ぎ 2026-09-17 の 3)。V2ApproxCommands.cpp が持つ。
     [[nodiscard]] kachakacha::v2::domain::CreateFabricationModelDefinition
     ApproxBaseDefinition() const;
@@ -1006,6 +1031,17 @@ private:
     std::vector<kachakacha::v2::base::EntityId> booleanMirror_;
     bool booleanMirroring_ = false;
     V2BooleanDock* booleanDock_ = nullptr;
+    //! 「厚み」の道具。面・作り方・相手の平面・下見の形。確定するまで文書へは入らない。
+    bool thickenShelfShown_ = false;
+    kachakacha::v2::app::ThickenInputState thickenInput_;
+    kachakacha::v2::app::ThickenPreviewOutcome thickenOutcome_;
+    //! 下見に使った形。**確定はこれをそのまま入れる。**
+    std::optional<kachakacha::v2::modeling::KernelShapeHandle> thickenBuilt_;
+    std::vector<kachakacha::v2::geometry::CurveSegment> thickenBuiltEdges_;
+    //! 3D の選択に映した、面の写し(空なら Nil 相当)。差分を読むための前回の写し。
+    kachakacha::v2::base::EntityId thickenMirror_;
+    bool thickenMirroring_ = false;
+    V2ThickenDock* thickenDock_ = nullptr;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。
@@ -1373,6 +1409,8 @@ private:
     void BuildRemainingPanels(QDockWidget* treeDock);
     //! 部品の棚と型紙の下見と数の棚。BuildRightShelves の続き。
     void BuildOutputShelves();
+    //! 「厚み」の棚の組み立て。BuildOutputShelves から切り出した(1関数100行の門)。
+    void BuildThickenDock();
     //! 一覧を絞り込む(V1 の「名前・種類で絞り込み」)。残すかどうかは core が決める。
     void ApplyEntityTreeFilter();
     //! 絞り込みの語を入れる(試験用)。人が打ったのと同じ道を通る。

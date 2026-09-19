@@ -58,6 +58,8 @@ enum class Shelf {
     Surface,
     //! 「足す・引く」の欄(土台・相手・状態)。引継ぎ 2026-09-17 の 4。
     Boolean,
+    //! 「厚み」の欄(入力・作り方・厚み・状態)。指示書 matrix P-10。
+    Thicken,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -70,12 +72,15 @@ enum class Shelf {
 //! **毎回その棚を隠していた**。棚に値を入れた直後に自分で隠していたので、
 //! 押し出しの欄は一度も画面に出ていなかった。
 //! `booleaning` は「足す・引くの欄を構えている最中か」。
+//! `thickening` は「厚みの欄を構えている最中か」(指示書 matrix P-10)。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false, bool surfacing = false, bool booleaning = false);
+    bool extruding = false, bool surfacing = false, bool booleaning = false,
+    bool thickening = false);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
 [[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
-    bool extruding = false, bool surfacing = false, bool booleaning = false);
+    bool extruding = false, bool surfacing = false, bool booleaning = false,
+    bool thickening = false);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

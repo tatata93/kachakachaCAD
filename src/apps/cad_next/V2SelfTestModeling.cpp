@@ -1185,6 +1185,12 @@ namespace {
     if (!Explain("面を選んだ状態で押せる", window.CommandEnabled("part.thicken", nullptr))) {
         return false;
     }
+    // 厚みは 道具 → 下見 → 確定 の文法(UI 再構築 P-10)。選んでから押すと構えて下見、2度目で確定。
+    window.RunCommand("part.thicken");
+    if (!Explain("1度目は構えて下見(まだ作らない)", window.ThickenShelfShown()
+            && CountParts(window) == partsBefore)) {
+        return false;
+    }
     window.RunCommand("part.thicken");
     if (!Explain((std::string("部品ができる(") + std::to_string(partsBefore) + " → "
                      + std::to_string(CountParts(window)) + " / "

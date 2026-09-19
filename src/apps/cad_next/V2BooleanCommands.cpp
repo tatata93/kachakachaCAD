@@ -72,6 +72,13 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
         RunBooleanTool(id == "part.boolean_cut");
         return true;
     }
+    // 厚みも道具から始める(指示書 matrix P-10)。何も選んでいなくても棚が出て、
+    // 3D で形状ガイドの面を押せる。選んでから押した道もそのまま通す(欄が先に埋まるだけ)。
+    if (id == "part.thicken") {
+        ClearPendingCommand();
+        RunThickenTool();
+        return true;
+    }
     // 回転体。面を作るの道具を 作り方 = 回転体 で構える(断面 → 軸 → 下見 → Enter)。
     if (id == "guide.revolve") {
         ClearPendingCommand();

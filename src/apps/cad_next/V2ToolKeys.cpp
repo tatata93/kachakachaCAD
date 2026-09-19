@@ -52,7 +52,7 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
     }
     return !pendingCommandId_.empty() || viewport_->ExtrudeHandleShown()
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
-        || cornerPreviewShown_;
+        || thickenShelfShown_ || cornerPreviewShown_;
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -104,7 +104,47 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
             return true;
         }
     }
+    if (thickenShelfShown_) {
+        return HandleThickenToolKey(key, target);
+    }
     return false;
+}
+
+//! 「厚み」の Enter / Esc。厚み(mm)の欄だけ、打ちかけの字を確かめる取り合いがある
+//! (押し出しと同じ決まり。値が変わっていれば下見だけ作り直し、確定は次の Enter で)。
+bool V2MainWindow::HandleThickenToolKey(int key, QObject* target)
+{
+    using kachakacha::v2::app::ToolKeyAction;
+    kachakacha::v2::app::ToolKeyContext context;
+    context.previewActive = true;
+    if (key == Qt::Key_Escape) {
+        if (kachakacha::v2::app::ActionForCancelKey(context) != ToolKeyAction::Cancel) {
+            return false;
+        }
+        EndThicken();
+        SetStatus(QStringLiteral("厚み: やめました。何も作っていません。"));
+        return true;
+    }
+    if (key != Qt::Key_Return && key != Qt::Key_Enter) {
+        return false;
+    }
+    context.inTypingField = IsTypingField(target);
+    if (context.inTypingField) {
+        // 打ちかけの字を、まず値にする。変わったかどうかは入力の厚みで見る。
+        const double before = thickenInput_.thicknessMm;
+        if (auto* spin = dynamic_cast<QAbstractSpinBox*>(target); spin != nullptr) {
+            spin->interpretText();
+        }
+        context.valueChanged = thickenInput_.thicknessMm != before;
+    }
+    if (kachakacha::v2::app::ActionForConfirmKey(context) == ToolKeyAction::CommitValueAndWait) {
+        SetStatus(QStringLiteral("厚み: %1 mm にしました。"
+                                 "下見のとおりでよければ、もう一度 Enter で確定します。")
+                .arg(thickenInput_.thicknessMm));
+        return true;
+    }
+    ConfirmThicken();
+    return true;
 }
 
 //! 「面を作る」の Enter / Esc(§12・§14)。

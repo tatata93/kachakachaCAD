@@ -88,6 +88,16 @@ void V2MainWindow::RefreshThickenForSelectionChange()
     }
     const auto& now = viewport_->Selection().entityIds;
     bool changed = false;
+    // 押した当人が分かるなら、同じ面なら外し、別の面なら入れ替える。
+    if (const auto pick = viewport_->TakeLastToolPick(); pick.has_value()) {
+        const auto* entity = session_->GetDocument().FindEntity(*pick);
+        if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
+            thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, *pick);   // 同じ面なら外れる
+            MirrorThickenToSelection();
+            RefreshThickenAll();
+            return;
+        }
+    }
     const bool stillThere = !thickenMirror_.IsNil()
         && std::find(now.begin(), now.end(), thickenMirror_) != now.end();
     if (!thickenMirror_.IsNil() && !stillThere) {
@@ -265,6 +275,10 @@ void V2MainWindow::EndThicken()
         viewport_->HideToolRoleLabels();
         viewport_->SetToolPickActive(false);
         viewport_->SetToolPickToggle(false);
+        // 欄の印を選択に残さない。残すと、次に構えたときに勝手に欄へ入る(HP-TH-02)。
+        thickenMirroring_ = true;
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        thickenMirroring_ = false;
     }
     ShowToolFooter(QString());
     RefreshRightShelves();

@@ -1043,6 +1043,26 @@ kachakacha::v2::app::PickedKind V2Viewport::PickedKindOf(
 //! 立体を選んだあとに輪郭を素でクリックしても立体は残る。
 //! 同じ役割のものは、これまでどおり置き換える(輪郭を選び直せる)。
 //! Ctrl はそのまま「任意の複数選択」として残る。
+//! 面を作っている間は、押すたびに入れる/外す。置き換えない。
+kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
+    const std::optional<kachakacha::v2::app::PickCandidate>& picked,
+    kachakacha::v2::app::SelectionMode mode) const
+{
+    using kachakacha::v2::app::SelectionMode;
+    // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
+    // 素の押し方は、ModeForToolPick が Add に変えていても **押し直しは外す**。
+    // 欄の印(MirrorSurfaceEntriesToSelection)は種類を持たないので、ModeForToolPick は
+    // 同じ役割かどうかを読めず Add と答える。それに従うと、もう一度押しても外れなかった
+    // (PC 自己試験 HP-SF-06 / HP-BO-01 2026-09-18)。
+    if (!toolPickToggle_ || !picked.has_value()
+        || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
+        return mode;
+    }
+    return kachakacha::v2::app::IsSelected(selection_, picked->entityId)
+        ? SelectionMode::Subtract
+        : SelectionMode::Add;
+}
+
 kachakacha::v2::app::SelectionMode V2Viewport::ModeForToolPick(
     const std::optional<kachakacha::v2::app::PickCandidate>& picked,
     kachakacha::v2::app::SelectionMode mode) const

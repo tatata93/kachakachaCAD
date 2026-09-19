@@ -1128,31 +1128,15 @@ void V2Viewport::SelectAt(const QPointF& position, Qt::KeyboardModifiers modifie
     // 輪郭がもう入っているなら、拾った面は **相手の立体** を指している(§5)。
     // そのまま面として受けると「面と輪郭の両方」で止まり、理由が分からない。
     picked = AsSolidIfProfileTaken(picked);
+    // 押すたび入れる/外す の最中は、押した当人を窓へ伝える(選択の差分では移し替えが読めない)。
+    lastToolPick_ = (toolPickToggle_ && picked.has_value())
+        ? std::optional<kachakacha::v2::base::EntityId>{picked->entityId}
+        : std::nullopt;
     // 道具が入力を待っている間は、役割が違うものを足す(§5)。
     // **Ctrl を知らなくても、立体と輪郭の両方を選べる。**
     SetSelection(kachakacha::v2::app::ApplySelection(selection_, picked,
         ModeForTogglePick(picked, ModeForToolPick(picked, mode))));
     ReportSelectionCount();
-}
-
-//! 面を作っている間は、押すたびに入れる/外す。置き換えない。
-kachakacha::v2::app::SelectionMode V2Viewport::ModeForTogglePick(
-    const std::optional<kachakacha::v2::app::PickCandidate>& picked,
-    kachakacha::v2::app::SelectionMode mode) const
-{
-    using kachakacha::v2::app::SelectionMode;
-    // Ctrl/Shift の入った押し方(Add/Subtract を人が決めた)はそのまま。
-    // 素の押し方は、ModeForToolPick が Add に変えていても **押し直しは外す**。
-    // 欄の印(MirrorSurfaceEntriesToSelection)は種類を持たないので、ModeForToolPick は
-    // 同じ役割かどうかを読めず Add と答える。それに従うと、もう一度押しても外れなかった
-    // (PC 自己試験 HP-SF-06 / HP-BO-01 2026-09-18)。
-    if (!toolPickToggle_ || !picked.has_value()
-        || (mode != SelectionMode::Replace && mode != SelectionMode::Add)) {
-        return mode;
-    }
-    return kachakacha::v2::app::IsSelected(selection_, picked->entityId)
-        ? SelectionMode::Subtract
-        : SelectionMode::Add;
 }
 
 void V2Viewport::ReportSelectionCount()

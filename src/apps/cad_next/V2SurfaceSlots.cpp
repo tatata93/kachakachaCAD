@@ -74,9 +74,17 @@ void V2MainWindow::RefreshSurfaceForSelectionChange()
         return;
     }
     const auto& now = viewport_->Selection().entityIds;
-    const auto added = Missing(now, surfaceMirror_);
-    const auto removed = Missing(surfaceMirror_, now);
+    auto added = Missing(now, surfaceMirror_);
+    auto removed = Missing(surfaceMirror_, now);
     const auto& document = session_->GetDocument();
+    // 押した当人が分かるなら、それを「いまの欄」へ入れる/外す/移す。
+    // 差分だけだと、断面に入っている線をガイドの欄で押しても(選択は減るだけで)移らなかった
+    // (PC 自己試験 HP-SF-06 2026-09-19)。
+    if (const auto pick = viewport_->TakeLastToolPick(); pick.has_value()) {
+        added.clear();
+        removed.clear();
+        added.push_back(*pick);
+    }
     // いまの欄に入るのは、その欄が受ける種類のものだけ。
     // 元の面の欄は形状ガイド、それ以外は線。立体などは黙って受けない。
     std::vector<EntityId> accepted;

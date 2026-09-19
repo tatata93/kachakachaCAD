@@ -338,7 +338,19 @@ public:
     //! なので、置き換えにすると2本目を押した瞬間に1本目が消える。
     //! 選択は必ず「押したものだけが増える/減る」の形で変わるので、
     //! 窓は差分から「何を押したか」を取り違えなく読める。
-    void SetToolPickToggle(bool active) noexcept { toolPickToggle_ = active; }
+    void SetToolPickToggle(bool active) noexcept
+    {
+        toolPickToggle_ = active;
+        lastToolPick_.reset();   // 前の道具の押し跡を次の道具へ持ち越さない
+    }
+    //! 押すたび入れる/外す の最中に、いま押した物(1回きり。読むと消える)。
+    //! 選択の差分だけでは「別の欄へ移す」(同じ物をもう一度押す)が読めないので、押した当人を伝える。
+    [[nodiscard]] std::optional<kachakacha::v2::base::EntityId> TakeLastToolPick() noexcept
+    {
+        const auto pick = lastToolPick_;
+        lastToolPick_.reset();
+        return pick;
+    }
     [[nodiscard]] bool ToolPickToggle() const noexcept { return toolPickToggle_; }
     //! 押し出し・平面Surfaceでは線そのものではなく、閉じた線の内側を拾う。
     //! 領域はWireから都度作る一時状態で、Documentへ保存しない。
@@ -911,6 +923,7 @@ private:
     bool toolPickActive_ = false;
     //! 押すたびに入れる/外す(面を作る)。
     bool toolPickToggle_ = false;
+    std::optional<kachakacha::v2::base::EntityId> lastToolPick_;
     bool profileRegionPicking_ = false;
     std::vector<kachakacha::v2::app::ProfileRegion> profileRegions_;
     std::optional<std::size_t> hoveredProfileRegion_;

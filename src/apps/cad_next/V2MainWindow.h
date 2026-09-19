@@ -304,11 +304,9 @@ public:
     //! 面の押し引きを、押し出しの指定(正の距離・向き・足す/引く)へ言い換える。
     //! 0mm など作れない量なら理由を出して偽を返す。
     bool ApplyFacePushPull(kachakacha::v2::app::ExtrudeChoice& choice);
-    //! 決めたひと組。**覚える形** と **カーネルへ渡す形** を分けて持つ。
-    //!
-    //! 分けないと、渡すために向きを畳んだ値がそのまま覚えられて、
-    //! 次に棚や窓を出したとき「数値で決める」に化ける。逆に覚える形だけに
-    //! すると、矢印と作る形が別々に向きを当て直すことになる。
+    //! 決めたひと組。**覚える形** と **カーネルへ渡す形** を分けて持つ。分けないと、
+    //! 渡すために向きを畳んだ値がそのまま覚えられて次に「数値で決める」に化け、
+    //! 逆に覚える形だけにすると矢印と作る形が別々に向きを当て直すことになる。
     struct PreparedExtrudeChoice {
         //! 人が選んだ決め方のまま。次の初期値になる。
         kachakacha::v2::app::ExtrudeChoice remembered;
@@ -717,8 +715,6 @@ public:
     //! 形状ガイドのコマンドか。V2GuideCommands.cpp が持つ。
     [[nodiscard]] static bool IsGuideCommand(std::string_view id);
     void RunGuideCommand(std::string_view id);
-    //! 選んだ線を断面にして面を作る(おまかせ)。
-    void CreateGuideSurfaceFromSelection();
     //! 回転体(V1 の回転面)。1本目の線を 2本目の直線を軸に回した断面を並べ、ロフトする。
     void CreateRevolvedSurface();
     //! 回転体を「面を作る」の道具で始める(引継ぎ 2026-09-17 の 6)。断面 → 軸 → 下見 → Enter。
@@ -769,7 +765,7 @@ public:
     std::function<std::optional<int>(const QString& title, const QStringList& items,
         int initial)>
         guideChoiceChooser_;
-    //! id で指した線から面を作る(固定などが呼ぶ)。作り方は guide.create と同じ。
+    //! id で指した線から面を作る(固定などが呼ぶ)。作り方は「おまかせ」(CreateGuideSurfaceFromSelection)と同じ。
     kachakacha::v2::base::EntityId CreateGuideSurfaceFromWires(
         const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label);
     //! 出来た面の handle と境界。文書ではなく画面側が覚える。
@@ -988,15 +984,9 @@ private:
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
-    //! 下見を出した瞬間の入力を、そのまま留め置いたもの(オーナー指示 §9)。
-    //!
-    //! **下見と確定は、必ずこの同じ写しから作る。**
-    //! これまでは確定のときに `PlanExtrudeFromSelection()` で選択を読み直していた。
-    //! 下見を出したあとに選択が変わると、画面に出ているものと作られるものが
-    //! 別になる。「Previewに見えていない入力でCommitしない」を守れない。
-    //!
-    //! 選択が変わったら、**この写しを作り直して下見も出し直す**。
-    //! 黙って読み直すのではなく、見えているものを合わせる。
+    //! 下見を出した瞬間の入力の写し(オーナー指示 §9)。**下見と確定は同じ写しから作る。**
+    //! 確定のときに選択を読み直すと、下見のあとに選択が変わった分だけ別の形が出来る。
+    //! 選択が変わったら写しを作り直し、下見も出し直す(黙って読み直さない)。
     struct ExtrudeSnapshot {
         kachakacha::v2::app::ExtrudePlan plan;
         std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles;
@@ -1225,6 +1215,9 @@ private:
     [[nodiscard]] bool ToggleEntityVisibilityFromItem(QTreeWidgetItem* item);
     [[nodiscard]] QString DocumentDisplayName() const;
 public:
+    //! 選んだ線を全部「断面」にして一気に面を作る(以前の `guide.create`)。人の入口は
+    //! 「面を作る」1 つに統一したので献立から外した。いまは自己試験だけが呼ぶ。
+    void CreateGuideSurfaceFromSelection();
     //! 部材の分割と統合(§32)。判断は core(`fabrication/BandPartition`)がする。
     void MergeFabricationParts();
     void SplitFabricationPart();

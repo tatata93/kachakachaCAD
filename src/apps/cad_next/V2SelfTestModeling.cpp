@@ -786,7 +786,7 @@ namespace {
     if (!Explain("閉じた矩形を引ける", DrawClosedRectangle(window))) {
         return false;
     }
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     return Explain((std::string("断面の数を言う(") + window.StatusText().toStdString()
                        + ")").c_str(),
         window.StatusText().contains(QStringLiteral("断面が2つ以上")));
@@ -1078,7 +1078,7 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Wire));
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     if (!Explain("面ができる", window.StatusText().contains(QStringLiteral("面を作りました")))) {
         return false;
     }
@@ -1172,7 +1172,7 @@ namespace {
     viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Wire));
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     if (!Explain((std::string("面ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.StatusText().contains(QStringLiteral("面を作りました")))) {
@@ -1264,7 +1264,7 @@ namespace {
             viewport.Selection().entityIds.size() == 2)) {
         return false;
     }
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     if (!Explain((std::string("面ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.StatusText().contains(QStringLiteral("面を作りました")))) {

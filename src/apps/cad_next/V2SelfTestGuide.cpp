@@ -292,7 +292,7 @@ void SelectOne(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
     start.SetSelection(kachakacha::v2::app::SelectAllOfKind(
         window.Session().GetDocument().Snapshot(),
         kachakacha::v2::domain::EntityKind::Wire));
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     if (!Explain((std::string("元の面ができる(") + window.StatusText().toStdString() + ")").c_str(),
             GuideSurfaceCount(window) == 1)) {
         return false;

@@ -79,7 +79,7 @@ namespace kachakacha::v2::selftest {
             viewport.Selection().entityIds.size() == 2)) {
         return false;
     }
-    window.RunCommand("guide.create");
+    window.CreateGuideSurfaceFromSelection();
     if (!Explain((std::string("曲がった面ができる(") + window.StatusText().toStdString()
                      + ")").c_str(),
             window.StatusText().contains(QStringLiteral("面を作りました")))) {

@@ -322,10 +322,6 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "選んだものから面を作ります。作り方は選択内容から薦めますが、"
             "右の棚でいつでも変えられます。方式を変えても入れたものは消えません。",
             true, {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-008", "AT-UIX-007"}},
-        {"guide.create", "形状ガイド(旧)", CommandMode::Dialog, "guide", "",
-            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
-            "選んだ線から形状ガイドを作ります。作れない入力は理由を出して断ります。", true,
-            {"AT-GEO-001", "AT-GEO-002", "AT-GEO-003", "AT-GEO-004", "AT-GEO-005", "AT-GEO-006", "AT-UIX-007"}},
         {"guide.revolve", "回転体", CommandMode::Instant, "guide_revolve", "",
             SelectionPredicate::TwoOrMoreWires, "断面の線と軸の直線を、この順に選んでください。",
             "1本目の線を、2本目の直線を軸に「回転体の角度」だけ回した断面を「回転体の断面の数」だけ"

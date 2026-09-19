@@ -1059,10 +1059,22 @@ struct BoxSelectFixture {
         kachakacha::v2::domain::EntityKind::Part));
     window.RunCommand("fabrication.create");   // 一度目は構えて下見
     window.RunCommand("fabrication.create");   // 二度目で確定
+    // 出力モードへ入っただけでは型紙の棚は出ない(指示書 C-09、右は1枚)。
+    window.SetMode(kachakacha::v2::app::UiMode::Output);
+    if (!Explain("出力モードの右は書き出しの1枚だけ",
+            window.ShelfShown(kachakacha::v2::app::Shelf::Export)
+                && !window.ShelfShown(kachakacha::v2::app::Shelf::Pattern))) {
+        return false;
+    }
     window.RunCommand("fabrication.create_pattern");
     if (!Explain((std::string("型紙が下見に出る(")
                      + std::to_string(window.PatternDock().PageCount()) + " 枚)").c_str(),
             window.PatternDock().PageCount() >= 1)) {
+        return false;
+    }
+    // 作ったときに、その棚が自分で前へ出る。
+    if (!Explain("型紙を作ると型紙の棚が前に出る",
+            window.ShelfShown(kachakacha::v2::app::Shelf::Pattern))) {
         return false;
     }
     if (!Explain((std::string("1枚目を見ている(")

@@ -50,10 +50,6 @@ void V2MainWindow::RunGuideCommand(std::string_view id)
         RunSurfaceCreate();
         return;
     }
-    if (id == "guide.create") {
-        CreateGuideSurfaceFromSelection();
-        return;
-    }
     if (id == "guide.revolve") {
         CreateRevolvedSurface();
         return;
@@ -286,7 +282,7 @@ kachakacha::v2::base::EntityId V2MainWindow::AdoptGuideSurface(const GuideTable&
 kachakacha::v2::base::EntityId V2MainWindow::CreateGuideSurfaceFromWires(
     const std::vector<kachakacha::v2::base::EntityId>& wireIds, const std::string& label)
 {
-    // 固定など、選択ではなく id で指した線から面を作る。作り方は guide.create と同じ。
+    // 固定など、選択ではなく id で指した線から面を作る。作り方は「おまかせ」(CreateGuideSurfaceFromSelection)と同じ。
     const GuideTableDraft made =
         AutoSectionTable(session_->GetDocument(), session_->Scene(), wireIds);
     if (!made.diagnostics.empty()) {

@@ -127,9 +127,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
         // (「出せる棚は全部どこかの組み合わせで出る」試験が落ちる)。
         return {Shelf::Fabrication, Shelf::Parameter};
     case UiMode::Output:
-        // まだ2枚(指示書 C-09 の残課題、出力モードには正本のモックが無い)。
-        // 出す前に型紙を見る。見ないまま出すと、紙とプラ板を無駄にしてから気づく。
-        return {Shelf::Export, Shelf::Pattern};
+        // 1枚(指示書 C-09)。型紙の下見は `fabrication.create_pattern` が作ったときに
+        // 自分で前へ出す(V2FabricationCommands.cpp の ShowShelf(Pattern))。
+        // 出力モードへ入っただけで型紙の空の棚を並べると、書き出しの欄が半分に潰れる。
+        return {Shelf::Export};
     }
     return {Shelf::Edit};
 }

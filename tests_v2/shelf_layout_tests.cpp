@@ -236,6 +236,9 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         // 配列(指示書 D-23)。wire.array_linear/circular が自分で ShowShelf(Array) して出す。
         // 押し出し等と違い、道具ではなく台帳コマンドなので ShelvesFor の組み合わせには乗らない。
         static_cast<int>(Shelf::Array),
+        // 型紙の下見(指示書 C-09)。fabrication.create_pattern が作ったときに
+        // 自分で ShowShelf(Pattern) して出す。出力モードへ入っただけでは出さない。
+        static_cast<int>(Shelf::Pattern),
     };
     std::string missing;
     for (const Shelf shelf : AllShelves()) {

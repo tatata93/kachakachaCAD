@@ -144,6 +144,9 @@ void Note(const char* what);
 //! 作業平面の棚の下見(HP-WP、D-24)。
 [[nodiscard]] std::vector<SelfTestCase> WorkPlanePreviewCases();
 
+//! 指示書 known_regressions(I-01)の退行のうち、他のケースが触れていなかったもの(RG-*)。
+[[nodiscard]] std::vector<SelfTestCase> RegressionCases();
+
 //! 近似の人の道(HP-AP)。道具 → 3D で対象 → 候補を比べる → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> HumanPathApproxCases();
 

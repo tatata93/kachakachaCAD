@@ -35,8 +35,12 @@ namespace {
         "ui-explorer-groups", "ui-measure-overlay"};
     for (const char* name : names) {
         window.RunCommand("file.new");
-        if (!Explain((std::string(name) + " が作れる").c_str(),
-                window.ApplyManualState(QString::fromUtf8(name)))) {
+        const bool built = window.ApplyManualState(QString::fromUtf8(name));
+        // 作れなかったときは、そのときの案内も添える。場面づくりは何段もあるので、
+        // 「作れない」だけでは PC のログからどこで止まったか読めない。
+        if (!Explain((std::string(name) + " が作れる(" + window.StatusText().toStdString()
+                         + ")").c_str(),
+                built)) {
             return false;
         }
     }

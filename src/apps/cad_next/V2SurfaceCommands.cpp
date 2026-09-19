@@ -326,6 +326,16 @@ void V2MainWindow::EndSurfacePreview()
 {
     surfaceShelfShown_ = false;
     surfaceSnapshot_.reset();
+    // 欄の中身(断面・ガイド・境界の線)は次の面へ持ち越さない。持ち越すと、次に
+    // 「面を作る」を押したとき前の面の線が黙って混ざる(別の文書なら消えた id を指す。
+    // PC 4 回目 HP-RS-01: 面を 1 枚作った後の場面で 2 枚目が作れなかった)。作り方は残す。
+    {
+        const auto method = surfaceInput_.method;
+        const bool chosen = surfaceInput_.methodChosenByUser;
+        surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
+        surfaceInput_.method = method;
+        surfaceInput_.methodChosenByUser = chosen;
+    }
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();

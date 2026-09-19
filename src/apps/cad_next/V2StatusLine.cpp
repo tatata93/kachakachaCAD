@@ -18,6 +18,7 @@
 #include <QMenu>
 #include <QObject>
 #include <QPoint>
+#include <QSizePolicy>
 #include <QStatusBar>
 #include <QString>
 #include <QWidget>
@@ -45,6 +46,9 @@ void V2MainWindow::BuildStatusBar()
     statusBar()->addWidget(toolLabel_);
     // 作業中グループは常に見えるところに置く(ui-workflows §1 の上の帯)。
     statusBar()->addWidget(groupLabel_);
+    // 案内は長いので、幅が足りないときは案内のほうが縮む(文字が切れる)。右の
+    // 座標 ｜ Grid ｜ Snap ｜ キー を押しつぶさない(PC 1.5 倍で「Enter 確定」が切れた)。
+    statusLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     statusBar()->addWidget(statusLabel_, 1);
     // 右側: 座標 ｜ Grid ｜ Snap ｜ Enter/Esc。いつでも見えている。
     cursorLabel_ = new QLabel(this);

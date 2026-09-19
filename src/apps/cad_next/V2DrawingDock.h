@@ -28,6 +28,7 @@ class QLineEdit;
 class QPushButton;
 class QTabWidget;
 class QToolButton;
+class QGridLayout;
 class QHBoxLayout;
 
 class V2DrawingDock final : public QDockWidget {
@@ -105,7 +106,7 @@ private:
     //! 作り方カード。円弧のカードは arcMode_ を決める。
     QLabel* methodTitle_ = nullptr;
     QWidget* methodRow_ = nullptr;
-    QHBoxLayout* methodLayout_ = nullptr;
+    QGridLayout* methodLayout_ = nullptr;   //!< 作り方カード(3 枚ごとに折り返す)
     std::vector<QToolButton*> methodButtons_;
     std::vector<kachakacha::v2::app::DrawingMethodCard> methodCards_;
     int methodIndex_ = -1;

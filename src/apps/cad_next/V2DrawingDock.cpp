@@ -7,6 +7,7 @@
 #include <QFormLayout>
 #include <QFrame>
 #include <QFont>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -26,6 +27,9 @@
 #include <string_view>
 
 namespace {
+
+//! 作り方カードを 1 行に並べる枚数。380px の棚に収まる数。
+constexpr int kMethodCardsPerRow = 3;
 
 using kachakacha::v2::app::DirectWireIsPlanar;
 using kachakacha::v2::app::DirectWireKind;
@@ -78,7 +82,9 @@ V2DrawingDock::V2DrawingDock(QWidget* parent)
     methodTitle_->setObjectName(QStringLiteral("drawingMethodTitle"));
     interactiveLayout->addWidget(methodTitle_);
     methodRow_ = new QWidget(interactivePage);
-    methodLayout_ = new QHBoxLayout(methodRow_);
+    // 横一列に並べると 380px の棚で 4 枚目(円弧の「始点接線・半径・中心角」)が切れて
+    // 横スクロールが出る(PC 1.5 倍 2026-09-19)。3 枚ごとに折り返す升目にする。
+    methodLayout_ = new QGridLayout(methodRow_);
     methodLayout_->setContentsMargins(0, 0, 0, 0);
     methodLayout_->setSpacing(4);
     interactiveLayout->addWidget(methodRow_);
@@ -228,7 +234,7 @@ void V2DrawingDock::RebuildMethodCards()
         button->setChecked(static_cast<int>(index) == methodIndex_);
         const int at = static_cast<int>(index);
         QObject::connect(button, &QToolButton::clicked, this, [this, at] { ChooseMethod(at); });
-        methodLayout_->addWidget(button);
+        methodLayout_->addWidget(button, at / kMethodCardsPerRow, at % kMethodCardsPerRow);
         button->show();   // 親が見えたあとに作った子は show() まで見えない(HP-DM)
         methodButtons_.push_back(button);
     }

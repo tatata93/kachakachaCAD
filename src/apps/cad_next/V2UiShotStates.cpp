@@ -14,6 +14,7 @@
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/app/UiMode.h"
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/modeling/ToolController.h"
 
@@ -224,6 +225,11 @@ bool V2MainWindow::ApplySurfaceShotState(const QString& name)
 //! 正本と見比べる場面か。名前は `ui-` で始める。
 bool V2MainWindow::ApplyUiShotState(const QString& name)
 {
+    // 場面は「開いた直後の窓」(作図モード・選択道具)から作る。前の場面が部品モードの
+    // まま残っていると、作図モードの命令(surface.create など)が受け付けられず、
+    // 同じ場面が単独では作れるのに続けて作ると作れない(PC 4 回目、HP-RS-01)。
+    SetMode(kachakacha::v2::app::UiMode::Drawing);
+    SelectTool(DrawingTool::Select);
     bool ok = false;
     if (name.startsWith(QStringLiteral("ui-extrude-"))) {
         ok = ApplyExtrudeShotState(name);

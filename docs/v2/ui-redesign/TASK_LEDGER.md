@@ -72,6 +72,11 @@
 - 古い重複 UI の棚卸し(subagent 調査): 残る要検討は `guide.create`(形状ガイド(旧))が「形」メニューに残っていること(自己試験 6 か所が場面づくりに使うので今回は残置)、`V2ChoiceDialog`(guide.set_method / guide.append_row の窓、面作成の内部実装として現役)。QDockWidget 派生の各棚は V2OperationPanelHost のページとして現役で削除対象なし。
 - 注意: V2MainWindow.h は 1499 行(上限 1500)。次に足すときは accessor を別ヘッダへ分けること。
 
+### 2026-09-19 PC 検証 4 回目(5e4c27f、Claude が Git CMD から `_GO.cmd`)
+- build OK。ctest の smoke は 111 秒で完走(ハング解消)。自己試験 **292/293**(ctest の smoke と配布 exe の両方で同じ)。落ちたのは HP-RS-01 の「ui-fab-generate が作れる」だけ。単独の撮影(`--manual-state ui-fab-generate`)は成功しており、前の場面(厚み: 面を 1 枚作った)の後に続けて作ると作れない。原因: EndSurfacePreview が欄の線(surfaceInput_ の断面など)を次の面へ持ち越していた(別の文書では消えた id を指す)。→ 手当て: 面の道具をやめるとき欄を空にする(作り方は残す)。ApplyUiShotState は毎回 作図モード・選択道具 から始める。HP-RS-01 は落ちたときの案内文を出す。
+- 絵(`resp/`): 製作の棚・編集の棚は 1280x720 で横スクロール無しに収まった。手順の一覧は畳まれた。HUD は「部品 › 厚み」。1.5 倍の絵は 1920x1080 になり(この PC は 150% 表示)、作図の棚の作り方カード 4 枚目が切れて横スクロール、状態行の右端「Enter 確定」が切れていた → 作り方カードは 3 枚ごとに折り返す升目、状態行の案内は Ignored で縮む。
+- 注意: QT_SCALE_FACTOR=1 でも絵は 1920x1080(devicePixelRatio 1.5)。この PC の表示倍率が効いており、倍率の輪(1/1.25/1.5)は実質 1.5 固定と見るべき。倍率を本当に変えて撮るなら `QT_SCALE_FACTOR` より `QT_ENABLE_HIGHDPI_SCALING=0` などの組み合わせが要る(未対応、記録のみ)。
+
 ## BLOCKED_BACKEND(必要なら別担当へ)
 
 | ID | 何が要るか | 入力 / 出力 | 既存の近い API | 無い理由 |

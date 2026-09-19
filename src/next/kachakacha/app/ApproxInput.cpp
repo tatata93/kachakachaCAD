@@ -22,9 +22,9 @@ namespace {
 const std::vector<ApproxCandidateSpec>& ApproxCandidateSpecs()
 {
     static const std::vector<ApproxCandidateSpec> specs{
-        {"A", "面ごとに展開", "伸ばさず平らにできる面だけ。棚の「面ごとに分ける」に従う"},
-        {"B", "帯で近似", "棚の分割(自動/手動)・上限・範囲のとおりに帯を切る"},
-        {"C", "帯1枚で近似", "分割しない。どれだけずれるかが分かる"},
+        {"A", "面ごとに展開", "伸ばさず平らにできる面だけ。棚の「面ごとに分ける」に従う", "面ごと"},
+        {"B", "帯で近似", "棚の分割(自動/手動)・上限・範囲のとおりに帯を切る", "帯"},
+        {"C", "帯1枚で近似", "分割しない。どれだけずれるかが分かる", "帯"},
     };
     return specs;
 }
@@ -69,6 +69,8 @@ std::string ApproxCandidateLineJa(const ApproxCandidateSpec& spec,
     }
     line += std::to_string(outcome.partCount) + "部材 / 最大 "
         + Millimetres3(outcome.maximumDeviationMm);
+    // 平均誤差は backend が持たないので必ず「—」(F-03、BLOCKED_BACKEND: 作らない)。
+    line += " / 平均 — / 方式 " + spec.methodJa;
     if (!outcome.reachedTolerance) {
         line += "(許すずれを超えています)";
     }

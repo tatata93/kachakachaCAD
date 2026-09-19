@@ -87,6 +87,11 @@ KACHA_V2_TEST(approx_input, 候補の行は部材数とずれを言う)
     const auto line = ApproxCandidateLineJa(specs[1], ok);
     Require(line.find("4部材") != std::string::npos && line.find("0.180 mm") != std::string::npos,
         std::string("部材数とずれ: ") + line);
+    Require(line.find("方式 帯") != std::string::npos, std::string("Bは帯: ") + line);
+    // 平均誤差は backend に無いので常に「—」(F-03、BLOCKED_BACKEND: 作らない)。
+    const auto lineA = ApproxCandidateLineJa(specs[0], ok);
+    Require(lineA.find("平均 —") != std::string::npos, std::string("平均は—: ") + lineA);
+    Require(lineA.find("方式 面ごと") != std::string::npos, std::string("Aは面ごと: ") + lineA);
     ApproxCandidateOutcome refused{true, false, 0, 0.0, true, "二重曲面です"};
     Require(ApproxCandidateLineJa(specs[0], refused).find("作れません: 二重曲面")
             != std::string::npos,

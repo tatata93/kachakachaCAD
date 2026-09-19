@@ -102,7 +102,7 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 |---|---|---|---|---|---|---|---|---|---|---|
 | F-01 | 製作 | 近似 | 近似 | 対象: Surface / Solid Face(複数は追加クリック) | `ApproxInput`, `FabricationSourcesFor(splitSolidFaces)` | 近似→近似、1. 対象 | あり | HP-AP-01/02 | TESTED | |
 | F-02 | 製作 | 近似 | 近似 | 作り方: 標準/少部品優先/精度優先/手動条件 | 候補 A/B/C(実評価)、棚の欄 | 作り方カード → 候補の並べ方/欄の既定 | あり | HP-AP | CLOUD_TESTED | 作り方カード 4 枚(core ApproxPolicy / CandidateForPolicy)。候補を人が押せばそれが勝つ。HP-AP-03 |
-| F-03 | 製作 | 近似 | 近似 | 候補: 部品数・最大誤差・平均誤差・方式 | partCount/maxDev あり。**平均誤差・方式(Plane/Cyl…)無し** | 候補カード | あり | HP-AP | NOT_STARTED | 平均誤差=BLOCKED_BACKEND(表示「—」)、方式=帯/面ごと で表記 |
+| F-03 | 製作 | 近似 | 近似 | 候補: 部品数・最大誤差・平均誤差・方式 | partCount/maxDev あり。**平均誤差・方式(Plane/Cyl…)無し** | 候補カード | あり | HP-AP | CLOUD_TESTED | 候補の行に 部材数/最大/平均 —/方式(面ごと|帯)。平均誤差は BLOCKED_BACKEND のまま「—」 |
 | F-04 | 製作 | 近似 | 近似 | 表示: 元/近似/部材境界/誤差ヒートマップ | 下見(レール)、ヒートマップ無し | 4. 表示 | — | — | NOT_STARTED / ヒートマップ BLOCKED_BACKEND | |
 | F-05 | 製作 | 部材編集 | 近似部品編集(方式/誤差/半径 AUTO-LOCK) | — | `BendRadius` AUTO/LOCK、per-part 誤差は band に内在(未表示) | 部材編集→近似部品編集(ApproxPart slot) | — | HP-FB | NOT_STARTED | 部材の 3D クリック選択が要る(いまは番号欄) |
 | F-06 | 製作 | 部材編集 | 分割 | 中央 / 位置指定 / 候補境界 | `PreviewBandSplit`(中央のみ) | 分割(作り方: 中央=有効、他 disabled) | before/after あり | HP-FB | NOT_STARTED | 位置指定は backend 小改修で可(rail parameter) |

@@ -58,6 +58,9 @@ struct ApproxCandidateSpec {
     std::string label;    //!< "A" "B" "C"
     std::string nameJa;
     std::string hintJa;
+    //! 表示用の方式名(「面ごと」「帯」)。平均誤差は backend に無いので出さない代わりに、
+    //! どの方式で作ったかを言う(F-03、BLOCKED_BACKEND: 平均誤差は「—」)。
+    std::string methodJa;
 };
 
 //! 候補の並び。画面のボタンと同じ順。
@@ -77,7 +80,9 @@ struct ApproxCandidateOutcome {
     std::string refusalJa;
 };
 
-//! 「A 面ごとに展開 — 3部材 / 最大 0.000 mm」。作れなければ「— 作れません: 理由」。
+//! 「A 面ごとに展開 — 3部材 / 最大 0.000 mm / 平均 — / 方式 面ごと」。
+//! 平均誤差は backend に無いので常に「—」(F-03、BLOCKED_BACKEND)。
+//! 作れなければ「— 作れません: 理由」。
 [[nodiscard]] std::string ApproxCandidateLineJa(const ApproxCandidateSpec& spec,
     const ApproxCandidateOutcome& outcome);
 

@@ -41,7 +41,7 @@
 bool V2MainWindow::IsViewCommand(std::string_view id)
 {
     return id == "view.align_selection" || id == "view.align_selection_back"
-        || id == "view.display_settings"
+        || id == "view.display_settings" || id == "view.number_settings"
         || id == "group.set_active" || id == "view.hide_selected"
         || id == "view.show_all" || id == "edit.delete"
         || id == "view.stage_all" || id == "view.stage_no_grid"

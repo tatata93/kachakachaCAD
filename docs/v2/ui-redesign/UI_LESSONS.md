@@ -18,3 +18,4 @@
 - 本番で QDialog::exec() を据え付けると自己試験(offscreen)は永遠に止まる。窓は差し替え口(SetXxxChooser)にだけ入れ、本番は棚へ。
 - 木(QTreeWidget)を作り直す関数(AdoptCurrentDocument/RefreshEntityList)を呼んだ後に QTreeWidgetItem* を触らない。必要な値は先に写す。
 - 380px の棚に収めるには QFormLayout::WrapLongRows + AllNonFixedFieldsGrow、横並びは 3 つまで、長い説明はツールチップへ。
+- 新しい命令は **5 か所**に足す: 台帳(CommandCatalog) / 振り分け(`Is*Command` の id の並び) / 献立(V2Menus.cpp) / 説明書(docs/manual.html) / モードの一覧(UiMode.cpp)。どれか 1 つ抜けると「押せるのに何も起きない」になる。抜けは自己試験「未接続のコマンドが1つも無い」が拾う(2026-09-20、view.number_settings で実際に拾えた)。

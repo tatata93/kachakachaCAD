@@ -120,7 +120,7 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 
 | ID | 内容 | STATUS |
 |---|---|---|
-| I-01 | 既知の退行 15 件の回帰試験(指示書 known_regressions) | CLOUD_TESTED(REGRESSIONS.md: 12 件は既存試験、RG-02/12/14 を追加。PC 未実行) |
-| I-02 | 1280x720 / 1920x1080 / 2560x1440 × 100/125/150% の撮影と目視 | NOT_STARTED |
-| I-03 | 旧 UI の重複(形状ガイド(旧)表、旧 toolPalette、Shelf::Part 常設)の片づけ | CLOUD_TESTED(Part の2枚目〈GuideTable〉を廃止・guide.\* が自分でShowShelf、旧 toolPalette は既に単一のリボンのみで確認、詳細窓はV2SelfTestExtrudePromise.cppが直接使うため据え置き。PC未実行) |
-| I-04 | fresh verifier による仕様照合 | NOT_STARTED |
+| I-01 | 既知の退行 15 件の回帰試験(指示書 known_regressions) | PC_VERIFIED(2026-09-20 / 36cbfb6。REGRESSIONS.md: 12 件は既存試験、RG-02/12/14 を追加。検証役の指摘で #4 の人の道が弱いこと・「人の道」と言いながら内部 setter を叩く試験があることが分かり、HP-DM-04/05/06(円・ベジェ・スプラインを実際に引く)と HP-PA-01 の combo 配線試験を足した。自己試験 296/296) |
+| I-02 | 1280x720 / 1920x1080 / 2560x1440 × 100/125/150% の撮影と目視 | PARTIAL(2026-09-20 / 36cbfb6。`_claudeout/resp` に 3 サイズ × 5 場面 × 3 倍率 = 45 枚。1280x720 の 1.5 倍と 2560x1440 を目視し、文字切れ・ボタン重なり・右ペイン欠落・一覧の潰れが無いことを確認。**未達**: 倍率は `QT_SCALE_FACTOR` で代用しており、Windows の表示倍率そのものを 100%/125% に変えた確認はしていない(検証機が 150% 固定)。2560x1440 は画面の高さで 2560x1421 に切られる) |
+| I-03 | 旧 UI の重複(形状ガイド(旧)表、旧 toolPalette、Shelf::Part 常設)の片づけ | PC_VERIFIED(2026-09-20 / 36cbfb6。窓 V2ArrayDialog と V2NumberDialog を削除、`guide.create`(形状ガイド(旧))を台帳・献立・説明書から削除、出力モードの右を 1 枚に。Part の2枚目〈GuideTable〉を廃止・guide.\* が自分でShowShelf、旧 toolPalette は既に単一のリボンのみで確認、詳細窓はV2SelfTestExtrudePromise.cppが直接使うため据え置き。PC未実行) |
+| I-04 | fresh verifier による仕様照合 | DONE(2026-09-15 の UX 監査に加え、2026-09-20 に別文脈の検証役へ統合段を点検させた。出た指摘のうち本物だったもの〈人の道の穴 3 件・押しても何も起きないカード・台帳に無い id の黙り〉は同日中に手当て。残す指摘は製作モードの 2 枚組みと Windows 表示倍率の実測、どちらも上の行に未達として書いた) |

@@ -167,6 +167,8 @@ void Note(const char* what);
 
 //! 撮影の5場面がすべて作れるか(HP-RS、指示書 I-02)。
 [[nodiscard]] std::vector<SelfTestCase> ResponsiveCases();
+//! 引いた線が打ったとおり・狙ったとおりか(V2SelfTestDrawingAccuracy.cpp、HP-AC)。
+[[nodiscard]] std::vector<SelfTestCase> DrawingAccuracyCases();
 
 //! 全ケースを動かす。落ちた数が 0 なら 0、そうでなければ 1 を返す。
 [[nodiscard]] int RunSelfTest();

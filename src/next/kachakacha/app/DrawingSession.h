@@ -128,12 +128,14 @@ public:
     //! 次の Hover まで待つと、Hover が無いまま離したときに古い吸着先が残る。
     void SetSnapSettings(SnapSettings settings);
 
-    //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束)。
+    //! 吸着したあと、点をもう一度寄せる手立て(V1の Shift の拘束と、直角スナップ)。
     //!
     //! 吸着より **後** に当てる。先に当てると、寄せた先の点へまた吸着してしまい、
     //! 水平にしたはずの線が斜めへ戻る。
-    //! 空にすれば当てない。
-    void SetPointAdjuster(std::function<geometry::Vector3(const geometry::Vector3&)> adjust)
+    //! 第2引数は「点の吸着先が見つかったか」。端点やグリッドに吸い付いているときは
+    //! そちらが正なので、寄せる側はそれを見て手を出さない。空にすれば当てない。
+    void SetPointAdjuster(
+        std::function<geometry::Vector3(const geometry::Vector3&, bool snapped)> adjust)
     {
         adjustPoint_ = std::move(adjust);
     }
@@ -216,7 +218,7 @@ private:
         std::function<void()> callback;
     };
 
-    std::function<geometry::Vector3(const geometry::Vector3&)> adjustPoint_;
+    std::function<geometry::Vector3(const geometry::Vector3&, bool)> adjustPoint_;
     std::vector<SceneListener> sceneListeners_;
 };
 

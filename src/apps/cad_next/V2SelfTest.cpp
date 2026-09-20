@@ -127,6 +127,8 @@ namespace {
     cases.insert(cases.end(), partEdit.begin(), partEdit.end());
     const std::vector<SelfTestCase> responsive = ResponsiveCases();
     cases.insert(cases.end(), responsive.begin(), responsive.end());
+    const std::vector<SelfTestCase> accuracy = DrawingAccuracyCases();
+    cases.insert(cases.end(), accuracy.begin(), accuracy.end());
     return cases;
 }
 

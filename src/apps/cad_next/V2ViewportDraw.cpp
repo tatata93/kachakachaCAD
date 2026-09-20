@@ -4,6 +4,8 @@
 
 #include "V2Viewport.h"
 
+#include "kachakacha/modeling/GridModel.h"
+
 #include "kachakacha/app/PlaneFocus.h"
 #include "kachakacha/view/ShapeShading.h"
 
@@ -54,33 +56,45 @@ void V2Viewport::DrawGrid(QPainter& painter) const
     const double majorMm = std::max(grid.majorSpacingMm, 0.001);
     // 画面で6px を下回る間隔は出さない(geometry-contract §6.3)。
     const double majorPx = majorMm * pixelsPerMm;
-    const int reach = static_cast<int>(std::ceil(visibleWidthMm_ / majorMm));
-    const int limited = std::min(reach, 400);
+    // いま画面に見えている範囲を、作業平面の UV(グリッド原点から mm)で測る。
+    // 原点を中心にした決まった大きさの塊を引いていたころは、原点から離れて拡大すると
+    // 画面の端からグリッドが消えていた(オーナー報告 2026-09-21)。
+    const auto visible = VisibleGridRangeUV();
+    if (!visible.has_value()) {
+        return;
+    }
 
     const auto drawSet = [&](double spacingMm, const QColor& color) {
         if (spacingMm * pixelsPerMm < 6.0) {
             return;
         }
+        const auto range = kachakacha::v2::modeling::GridLineRangeFor(spacingMm,
+            visible->minU, visible->maxU, visible->minV, visible->maxV);
+        if (!range.any) {
+            return;
+        }
         painter.setPen(QPen(color, 1.0));
-        const int count = std::min(limited,
-            static_cast<int>(std::ceil(visibleWidthMm_ / spacingMm)) + 2);
-        for (int index = -count; index <= count; ++index) {
-            const double offset = index * spacingMm;
-            const Vector3 a = grid.origin + grid.uDirection * offset
-                - grid.vDirection * (count * spacingMm);
-            const Vector3 b = grid.origin + grid.uDirection * offset
-                + grid.vDirection * (count * spacingMm);
-            const auto sa = ToScreen(a);
-            const auto sb = ToScreen(b);
+        // 線は見えている範囲の端から端まで。長さを決め打ちにしない。
+        const double spanVMin = static_cast<double>(range.firstV) * spacingMm;
+        const double spanVMax = static_cast<double>(range.lastV) * spacingMm;
+        const double spanUMin = static_cast<double>(range.firstU) * spacingMm;
+        const double spanUMax = static_cast<double>(range.lastU) * spacingMm;
+        for (long long index = range.firstU; index <= range.lastU; ++index) {
+            const double offset = static_cast<double>(index) * spacingMm;
+            const auto sa = ToScreen(grid.origin + grid.uDirection * offset
+                + grid.vDirection * spanVMin);
+            const auto sb = ToScreen(grid.origin + grid.uDirection * offset
+                + grid.vDirection * spanVMax);
             if (sa && sb) {
                 painter.drawLine(*sa, *sb);
             }
-            const Vector3 c = grid.origin + grid.vDirection * offset
-                - grid.uDirection * (count * spacingMm);
-            const Vector3 d = grid.origin + grid.vDirection * offset
-                + grid.uDirection * (count * spacingMm);
-            const auto sc = ToScreen(c);
-            const auto sd = ToScreen(d);
+        }
+        for (long long index = range.firstV; index <= range.lastV; ++index) {
+            const double offset = static_cast<double>(index) * spacingMm;
+            const auto sc = ToScreen(grid.origin + grid.vDirection * offset
+                + grid.uDirection * spanUMin);
+            const auto sd = ToScreen(grid.origin + grid.vDirection * offset
+                + grid.uDirection * spanUMax);
             if (sc && sd) {
                 painter.drawLine(*sc, *sd);
             }
@@ -93,6 +107,39 @@ void V2Viewport::DrawGrid(QPainter& painter) const
         }
         drawSet(majorMm, palette_.gridMajor);
     }
+}
+
+//! 画面の四隅を作業平面へ戻して、見えている範囲を UV(グリッド原点から mm)で測る。
+//! 平面を真横から見ているなど、戻せない隅があるときは値を返さない。
+std::optional<V2Viewport::GridRangeUV> V2Viewport::VisibleGridRangeUV() const
+{
+    const auto& grid = session_->Scene().grid;
+    const double w = static_cast<double>(std::max(1, width()));
+    const double h = static_cast<double>(std::max(1, height()));
+    const kachakacha::v2::geometry::ScreenPoint corners[4] = {
+        {0.0, 0.0}, {w, 0.0}, {0.0, h}, {w, h}};
+    GridRangeUV range;
+    bool first = true;
+    for (const auto& corner : corners) {
+        const auto world = mapping_.UnprojectOntoPlane(corner, grid.origin, workPlane_.normal);
+        if (!world.has_value()) {
+            return std::nullopt;
+        }
+        const Vector3 relative = *world - grid.origin;
+        const double u = Dot(relative, grid.uDirection);
+        const double v = Dot(relative, grid.vDirection);
+        if (first) {
+            range.minU = range.maxU = u;
+            range.minV = range.maxV = v;
+            first = false;
+            continue;
+        }
+        range.minU = std::min(range.minU, u);
+        range.maxU = std::max(range.maxU, u);
+        range.minV = std::min(range.minV, v);
+        range.maxV = std::max(range.maxV, v);
+    }
+    return range;
 }
 
 void V2Viewport::DrawAxes(QPainter& painter) const

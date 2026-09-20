@@ -76,6 +76,14 @@ struct CursorInputPanel {
 //! Tab / Shift+Tab。端では回り込む。
 [[nodiscard]] base::Result<CursorInputPanel> FocusNextField(const CursorInputPanel& panel,
     bool backward);
+//! Tab / Shift+Tab を人が押したとき。**いま打っている値を確かめて留めてから** 移る。
+//!
+//! ただ移ると、打った字がそのまま捨てられる。「長さを打ち、Tab で角度へ移って Enter」
+//! という案内どおりに操作しても線が引けなかったのはこれが原因である(2026-09-21 オーナー報告)。
+//! 空の欄では何も留めずに移る(欄を見て回るため)。値がおかしければ移らず、理由を返す。
+[[nodiscard]] base::Result<CursorInputPanel> LockAndFocusNextField(
+    const CursorInputPanel& panel, const geometry::Vector3& pointerDelta, bool backward);
+
 //! 欄を名前で選ぶ(右パネルから触ったとき)。
 [[nodiscard]] base::Result<CursorInputPanel> FocusField(const CursorInputPanel& panel,
     std::string_view fieldId);

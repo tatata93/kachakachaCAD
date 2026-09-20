@@ -508,4 +508,49 @@ KACHA_V2_TEST(cursor, 矩形は幅と高さで決まり向きはポインタの�
     RequireNear(committed.Value().panel.states[height].value, 25.0, 1e-9, "高さの欄も追随");
 }
 
+KACHA_V2_TEST(cursor_input, Tabは打った値を留めてから隣の欄へ移る)
+{
+    // オーナー報告 2026-09-21:「長さと角度を指定しても線が引けない」。
+    // 案内どおり 長さ → Tab → 角度 → Enter と打つと、Tab が打った長さを捨てていた。
+    const auto begun = BeginCursorInput(DrawingTool::Line, true);
+    Require(begun.HasValue(), "直線に入力列がある");
+    CursorInputPanel panel = begun.Value();
+    const std::size_t length = IndexOf(panel, "length");
+    const std::size_t angle = IndexOf(panel, "angle");
+    RequireEqual(panel.fields[panel.focusedIndex].id, "length", "主要欄は長さ");
+
+    panel = SetFieldText(panel, length, "12").Value();
+    const auto moved = LockAndFocusNextField(panel, Vector3{3.0, 1.0, 0.0}, false);
+    Require(moved.HasValue(), "Tab で移れる");
+    panel = moved.Value();
+    Require(panel.states[length].locked, "長さは留まっている(捨てられていない)");
+    RequireNear(panel.states[length].value, 12.0, 1e-9, "打った 12mm がそのまま");
+
+    // 角度の欄へ移っている。90 度を打って Enter。
+    panel.focusedIndex = angle;
+    panel = SetFieldText(panel, angle, "90").Value();
+    const auto committed = CommitFocusedField(panel, Vector3{3.0, 1.0, 0.0});
+    Require(committed.HasValue(), "角度を確定できる");
+    Require(committed.Value().readyToFinish, "長さが留まっているので形は決まる");
+    const auto solved = SolveDelta(committed.Value().panel, Vector3{3.0, 1.0, 0.0});
+    Require(solved.HasValue(), "解ける");
+    RequireNear(solved.Value().x, 0.0, 1e-9, "真上なので du は 0");
+    RequireNear(solved.Value().y, 12.0, 1e-9, "長さ 12mm がそのまま dv に出る");
+}
+
+KACHA_V2_TEST(cursor_input, 空の欄は素通りでき読めない値では移らない)
+{
+    const auto begun = BeginCursorInput(DrawingTool::Line, true);
+    CursorInputPanel panel = begun.Value();
+    const std::size_t length = IndexOf(panel, "length");
+    // 何も打っていない欄は、見て回るために素通りする。
+    const auto browsed = LockAndFocusNextField(panel, Vector3{2.0, 0.0, 0.0}, false);
+    Require(browsed.HasValue(), "空の欄からは移れる");
+    Require(!browsed.Value().states[length].locked, "空の欄は留めない");
+    // 読めない字では移らない。移ると、赤くなった欄を人が見失う。
+    panel = SetFieldText(panel, length, "12mmm").Value();
+    const auto refused = LockAndFocusNextField(panel, Vector3{2.0, 0.0, 0.0}, false);
+    Require(!refused.HasValue(), "読めない値では移らない");
+}
+
 KACHA_V2_TEST_MAIN("cursor_input_tests")

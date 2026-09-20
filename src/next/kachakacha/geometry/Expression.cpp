@@ -410,6 +410,13 @@ Result<EvaluatedValue> EvaluateExpression(std::string_view text, QuantityKind ex
     EvaluatedValue evaluated;
     evaluated.expression = original;
     evaluated.value = parsed->value;
+    // 角度の欄に単位なしで打った数は **度** である。欄の表示も度で出している
+    // (CursorInput の FieldDisplayJa)。ここで直さないと、90 と打った人が
+    // 90 ラジアン(約 5156 度)の線を引かされる(オーナー報告 2026-09-21:
+    // 「長さと角度を指定しても線が引けない」)。rad と書いたときは触らない。
+    if (expected == QuantityKind::Angle && parsed->kind == QuantityKind::Scalar) {
+        evaluated.value = ToRadians(Degrees(parsed->value)).Value();
+    }
     evaluated.kind = expected;
     return Result<EvaluatedValue>::Success(std::move(evaluated));
 }

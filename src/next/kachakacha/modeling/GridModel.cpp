@@ -135,4 +135,26 @@ Result<GridDefinition> SetGridSpacing(const GridDefinition& definition,
     return Result<GridDefinition>::Success(next);
 }
 
+GridLineRange GridLineRangeFor(double spacingMm, double minUmm, double maxUmm,
+    double minVmm, double maxVmm, long long maxLines)
+{
+    GridLineRange range;
+    if (!(spacingMm > 0.0) || maxUmm < minUmm || maxVmm < minVmm || maxLines <= 0) {
+        return range;
+    }
+    // 端で切れて見えないよう、1本ずつ外へ伸ばす。
+    range.firstU = static_cast<long long>(std::floor(minUmm / spacingMm)) - 1;
+    range.lastU = static_cast<long long>(std::ceil(maxUmm / spacingMm)) + 1;
+    range.firstV = static_cast<long long>(std::floor(minVmm / spacingMm)) - 1;
+    range.lastV = static_cast<long long>(std::ceil(maxVmm / spacingMm)) + 1;
+    const long long countU = range.lastU - range.firstU + 1;
+    const long long countV = range.lastV - range.firstV + 1;
+    if (countU > maxLines || countV > maxLines) {
+        // 画面に入りきらない本数。引くと固まるだけで、何も読み取れない。
+        return GridLineRange{};
+    }
+    range.any = true;
+    return range;
+}
+
 } // namespace kachakacha::v2::modeling

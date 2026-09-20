@@ -9,6 +9,7 @@ using kachakacha::v2::base::DeterministicIdGenerator;
 using kachakacha::v2::base::EntityId;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::EvaluateGrid;
+using kachakacha::v2::modeling::GridLineRangeFor;
 using kachakacha::v2::modeling::GridDefinition;
 using kachakacha::v2::modeling::MinorPointsPerCell;
 using kachakacha::v2::modeling::MinorPointsPerEdge;
@@ -236,6 +237,26 @@ KACHA_V2_TEST(grid, 同じ入力からは毎回同じ評価になる)
             "副点の間隔");
         Require(again.Value().minorVisible == first.Value().minorVisible, "出す出さない");
     }
+}
+
+KACHA_V2_TEST(grid, 見えている範囲のぶんだけ線を引く)
+{
+    // オーナー報告 2026-09-21:「拡大したときにグリッドが消えている箇所がある」。
+    // 原点を中心にした決まった大きさの塊を引いていたので、原点から離れた場所を
+    // 拡大すると画面の端でグリッドが切れていた。見えている範囲から番号を出す。
+    const auto near = GridLineRangeFor(1.0, -3.2, 4.7, -2.0, 2.0);
+    Require(near.any, "引く");
+    RequireEqual(std::to_string(near.firstU), std::string("-5"), "左は1本外まで");
+    RequireEqual(std::to_string(near.lastU), std::string("6"), "右も1本外まで");
+    // 原点から遠いところでも、そこに引く。
+    const auto far = GridLineRangeFor(1.0, 50.0, 60.0, -100.5, -95.0);
+    Require(far.any, "原点から離れていても引く");
+    RequireEqual(std::to_string(far.firstU), std::string("49"), "遠くの左端");
+    RequireEqual(std::to_string(far.lastU), std::string("61"), "遠くの右端");
+    RequireEqual(std::to_string(far.firstV), std::string("-102"), "縦も同じ");
+    // 本数が多すぎるときは引かない(固まるだけで読み取れない)。
+    Require(!GridLineRangeFor(0.001, -100.0, 100.0, -1.0, 1.0).any, "多すぎれば引かない");
+    Require(!GridLineRangeFor(0.0, -1.0, 1.0, -1.0, 1.0).any, "間隔 0 では引かない");
 }
 
 KACHA_V2_TEST_MAIN("grid_tests")

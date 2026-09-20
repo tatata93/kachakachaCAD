@@ -12,10 +12,29 @@
 #include "kachakacha/modeling/ToolController.h"
 #include "kachakacha/modeling/WorkPlane.h"
 
+#include <optional>
+
 namespace kachakacha::v2::modeling {
 
 //! その道具が Shift の拘束を使うか。
 [[nodiscard]] bool ToolUsesAxisConstraint(DrawingTool tool) noexcept;
+
+//! 吸着先が無いときに、向きを直角へ寄せる許し(度)。
+//!
+//! 1px も狙いを外せない画面で線を引くと、真下へ引いたつもりが -89.95 度になる。
+//! Shift を押していれば固定できるが、押していないときに 0.05 度ずれた線が
+//! 黙って文書へ入ると、面にしたときに閉じない。**点の吸着先が無いときだけ**
+//! この幅で直角へ寄せる(端点やグリッドに吸い付いているときは、そちらが正)。
+inline constexpr double kRightAngleSnapToleranceDeg = 1.5;
+
+//! その道具が直角スナップを使うか。矩形は「正方形へ」の拘束が別にあるので使わない。
+[[nodiscard]] bool ToolUsesRightAngleSnap(DrawingTool tool) noexcept;
+
+//! 基準の点から見た向きが直角(0/90/180/270 度)に近ければ、長さを変えずに直角へ寄せる。
+//! 寄せなかった(近くない・道具が使わない・長さが 0)ときは値を返さない。
+[[nodiscard]] std::optional<geometry::Vector3> SnapDirectionToRightAngle(DrawingTool tool,
+    const WorkPlaneFrame& plane, const geometry::Vector3& anchor,
+    const geometry::Vector3& point, double toleranceDeg = kRightAngleSnapToleranceDeg);
 
 //! 基準の点から見て、狙った点を拘束した位置へ寄せる。
 //!

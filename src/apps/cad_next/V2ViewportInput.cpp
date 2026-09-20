@@ -150,26 +150,42 @@ void V2Viewport::SetAxisConstraintByKey(bool constrained)
         return;
     }
     axisConstrainedByKey_ = constrained;
-    // 拘束は吸着のあとに当てる。当て方は core が決める。
-    if (constrained) {
-        session_->SetPointAdjuster([this](const kachakacha::v2::geometry::Vector3& point) {
-            return ConstrainedPoint(point);
-        });
-    } else {
-        session_->SetPointAdjuster({});
-    }
     update();
 }
 
-kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
-    const kachakacha::v2::geometry::Vector3& point) const
+//! 吸着のあとに点を寄せる(Shift の拘束と、直角スナップ)。当て方は core が決める。
+//! 据え付けは窓を作ったときの1回だけ。Shift を押した瞬間に据え付け直すと、
+//! 押す前に動かしたぶんが取りこぼされる。
+void V2Viewport::InstallPointAdjuster()
 {
-    if (!axisConstrainedByKey_ || session_->PlacedPointCount() == 0) {
+    session_->SetPointAdjuster(
+        [this](const kachakacha::v2::geometry::Vector3& point, bool snapped) {
+            return ConstrainedPoint(point, snapped);
+        });
+}
+
+kachakacha::v2::geometry::Vector3 V2Viewport::ConstrainedPoint(
+    const kachakacha::v2::geometry::Vector3& point, bool snapped) const
+{
+    if (session_->PlacedPointCount() == 0) {
         return point;
     }
     // 基準は、ポリラインとスプラインなら直前の点、それ以外は1点目。V1と同じ。
-    return kachakacha::v2::modeling::ApplyAxisConstraint(session_->CurrentTool(),
-        workPlane_, session_->ConstraintAnchor(), point);
+    const auto anchor = session_->ConstraintAnchor();
+    if (axisConstrainedByKey_) {
+        // Shift は固定。近い遠いにかかわらず水平か垂直へ倒す。
+        return kachakacha::v2::modeling::ApplyAxisConstraint(session_->CurrentTool(),
+            workPlane_, anchor, point);
+    }
+    // 点の吸着先(端点・グリッドなど)があるなら、そちらが正。向きは触らない。
+    if (snapped || snapSuppressedBySetting_ || snapSuppressedByKey_) {
+        return point;
+    }
+    // 自由な点のときだけ、ほぼ直角の向きを直角へ寄せる。
+    // 真下へ引いたつもりの -89.95 度が、黙って文書へ入るのを防ぐ。
+    const auto squared = kachakacha::v2::modeling::SnapDirectionToRightAngle(
+        session_->CurrentTool(), workPlane_, anchor, point);
+    return squared.value_or(point);
 }
 
 std::vector<kachakacha::v2::app::EscapeStep> V2Viewport::PressEscape()

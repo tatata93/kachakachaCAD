@@ -484,4 +484,26 @@ Result<CursorCommitResult> CommitFocusedField(const CursorInputPanel& panel,
     return Result<CursorCommitResult>::Success(std::move(result));
 }
 
+Result<CursorInputPanel> LockAndFocusNextField(const CursorInputPanel& panel,
+    const Vector3& pointerDelta, bool backward)
+{
+    if (!panel.active || panel.fields.empty()) {
+        return Result<CursorInputPanel>::Failure(MakeError("UI-C002",
+            "数値入力が出ていません。", "先に点を置いてください。"));
+    }
+    const std::size_t index = panel.focusedIndex;
+    const bool empty = index >= panel.states.size()
+        || (panel.states[index].text.empty() && !panel.states[index].hasValue);
+    if (empty) {
+        // 何も打っていない欄。見て回るだけなので、そのまま隣へ移る。
+        return FocusNextField(panel, backward);
+    }
+    const auto committed = CommitFocusedField(panel, pointerDelta);
+    if (!committed.HasValue()) {
+        // 値がおかしい。移らない(移ると、赤くなった欄を人が見失う)。
+        return Result<CursorInputPanel>::Failure(committed.Diagnostics());
+    }
+    return FocusNextField(committed.Value().panel, backward);
+}
+
 } // namespace kachakacha::v2::app

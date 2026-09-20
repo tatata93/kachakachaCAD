@@ -3,6 +3,7 @@
 #include "kachakacha/base/TestHarness.h"
 #include "kachakacha/geometry/Expression.h"
 
+#include <cmath>
 #include <string>
 
 using kachakacha::v2::geometry::EvaluateExpression;
@@ -178,6 +179,26 @@ KACHA_V2_TEST(expression, deeply_nested_parentheses_are_refused_not_crashed)
 KACHA_V2_TEST(expression, results_that_are_not_finite_are_refused)
 {
     RequireRefused("10^400", QuantityKind::Length, "MEA-E004");
+}
+
+KACHA_V2_TEST(expression, 角度の欄の単位なしの数は度として読む)
+{
+    // オーナー報告 2026-09-21:「長さと角度を指定しても線が引けない」。
+    // 90 と打つと 90 ラジアン(約 5156 度)になっていた。欄の表示は度なので、
+    // 打つほうも度で読む。rad と書いたときだけラジアン。
+    const auto plain = EvaluateExpression("90", QuantityKind::Angle);
+    Require(plain.HasValue(), "角度の欄に 90 と打てる");
+    RequireNear(plain.Value().value, kPi / 2.0, 1e-12, "90 は直角(ラジアンで π/2)");
+    const auto degrees = EvaluateExpression("90deg", QuantityKind::Angle);
+    Require(degrees.HasValue() && std::abs(degrees.Value().value - kPi / 2.0) < 1e-12,
+        "deg と書いても同じ");
+    const auto radians = EvaluateExpression("1.5708rad", QuantityKind::Angle);
+    Require(radians.HasValue() && std::abs(radians.Value().value - 1.5708) < 1e-12,
+        "rad と書けばラジアンのまま");
+    // 長さの欄は触らない。
+    const auto length = EvaluateExpression("90", QuantityKind::Length);
+    Require(length.HasValue() && std::abs(length.Value().value - 90.0) < 1e-12,
+        "長さの 90 は 90mm のまま");
 }
 
 KACHA_V2_TEST_MAIN("expression_tests")

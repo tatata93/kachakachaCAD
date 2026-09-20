@@ -16,6 +16,8 @@ using kachakacha::v2::app::EscapeStep;
 using kachakacha::v2::app::PlanEscape;
 using kachakacha::v2::geometry::Vector3;
 using kachakacha::v2::modeling::ApplyAxisConstraint;
+using kachakacha::v2::modeling::SnapDirectionToRightAngle;
+using kachakacha::v2::modeling::ToolUsesRightAngleSnap;
 using kachakacha::v2::modeling::DrawingTool;
 using kachakacha::v2::modeling::ToolUsesAxisConstraint;
 using kachakacha::v2::modeling::WorkPlaneFrame;
@@ -210,6 +212,37 @@ KACHA_V2_TEST(constraint, 作業平面の上で効く)
         Vector3{0.0, 10.0, 5.0}, Vector3{0.0, 70.0, 8.0});
     Require(std::abs(made.y - 70.0) < 1e-9, "平面の横方向はそのまま");
     Require(std::abs(made.z - 5.0) < 1e-9, "平面の縦方向が基準にそろう");
+}
+
+KACHA_V2_TEST(constraint, ほぼ直角の向きは直角へ寄る)
+{
+    // オーナー報告 2026-09-21:「スナップしてるのに 90 度になってない」。
+    // 真下へ引いたつもりの線が -89.95 度で文書へ入っていた。
+    const WorkPlaneFrame plane = PlaneXY();
+    const Vector3 anchor{10.0, 20.0, 0.0};
+    // -89.95 度(6mm 下、横に 0.005mm ずれ)。長さは変えずに真下へ寄せる。
+    const auto squared = SnapDirectionToRightAngle(DrawingTool::Line, plane, anchor,
+        Vector3{10.005, 14.0, 0.0});
+    Require(squared.has_value(), "ほぼ真下なら寄せる");
+    const double length = std::hypot(10.005 - 10.0, 14.0 - 20.0);
+    Require(std::abs(squared->x - 10.0) < 1e-9, "横は基準にそろう");
+    Require(std::abs(squared->y - (20.0 - length)) < 1e-9, "長さは変えない");
+
+    // 明らかに斜め(45 度)なら触らない。寄せると、狙って引いた斜めが壊れる。
+    Require(!SnapDirectionToRightAngle(DrawingTool::Line, plane, anchor,
+                 Vector3{20.0, 30.0, 0.0}).has_value(),
+        "45 度は寄せない");
+    // 許しの外(3 度)も触らない。
+    Require(!SnapDirectionToRightAngle(DrawingTool::Line, plane, anchor,
+                 Vector3{10.0 + 6.0 * 0.0524, 14.0, 0.0}).has_value(),
+        "3 度ずれていれば寄せない");
+    // 動いていないときは向きが無い。
+    Require(!SnapDirectionToRightAngle(DrawingTool::Line, plane, anchor, anchor).has_value(),
+        "長さ 0 では寄せない");
+    // 矩形は「正方形へ」の拘束が別にあるので使わない。
+    Require(!ToolUsesRightAngleSnap(DrawingTool::Rectangle), "矩形は直角スナップを使わない");
+    Require(ToolUsesRightAngleSnap(DrawingTool::Line), "直線は使う");
+    Require(ToolUsesRightAngleSnap(DrawingTool::Polyline), "折れ線も使う");
 }
 
 KACHA_V2_TEST_MAIN("input_scheme_tests")

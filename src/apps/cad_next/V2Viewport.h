@@ -841,8 +841,18 @@ private:
     //! コマンドとして吸着を切っているか。
     bool snapSuppressedBySetting_ = false;
     //! Shift の拘束を当てた点を返す。当てないときはそのまま返す。
+    //! 吸着のあとに点を寄せる。Shift は固定、押していなければ自由な点だけ直角へ寄せる。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ConstrainedPoint(
-        const kachakacha::v2::geometry::Vector3& point) const;
+        const kachakacha::v2::geometry::Vector3& point, bool snapped) const;
+    void InstallPointAdjuster();
+    //! 画面に見えている範囲(作業平面の UV、グリッド原点から mm)。グリッドを引く範囲に使う。
+    struct GridRangeUV {
+        double minU = 0.0;
+        double maxU = 0.0;
+        double minV = 0.0;
+        double maxV = 0.0;
+    };
+    [[nodiscard]] std::optional<GridRangeUV> VisibleGridRangeUV() const;
     void ApplySnapSettings();
     std::function<void()> backToSelect_;
     std::function<std::optional<int>(const QPoint&, const std::vector<QString>&)>

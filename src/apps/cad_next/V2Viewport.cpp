@@ -133,6 +133,8 @@ V2Viewport::V2Viewport(kachakacha::v2::app::DrawingSession& session, QWidget* pa
     // 綱は会員が持つ。この画面が先に消えれば綱も切れ、もう呼ばれない。
     // 素の関数を預けると、窓を閉じたあとの SetScene で消えた this を呼ぶ。
     sceneChanged_ = session_->OnSceneChanged([this] { OnSceneReplaced(); });
+    // 吸着のあとに点を寄せる手立てを据える(Shift の拘束と直角スナップ)。
+    InstallPointAdjuster();
 }
 
 //! 場面が入れ替わった。文書を開く、Undo/Redo、作業平面やグリッドの変更で通る。

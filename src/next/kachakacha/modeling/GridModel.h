@@ -36,6 +36,25 @@ struct GridDefinition {
     int subdivision = 0;
 };
 
+//! 画面に見えている範囲(作業平面の UV、グリッド原点からの mm)に対して、
+//! 引くべき線の番号(spacing の何本目か)の範囲。`any` が偽なら引かない。
+struct GridLineRange {
+    long long firstU = 0;
+    long long lastU = 0;
+    long long firstV = 0;
+    long long lastV = 0;
+    bool any = false;
+};
+
+//! 見えている範囲から、引くべき線の番号を決める。
+//!
+//! グリッドは **見えているところに** 引く。原点を中心にした決まった大きさの塊を
+//! 引いていたころは、原点から離れて拡大すると画面の端からグリッドが消えていた
+//! (オーナー報告 2026-09-21)。
+//! `maxLines` は1方向の本数の上限(安全弁)。超えるときは引かない(`any` = 偽)。
+[[nodiscard]] GridLineRange GridLineRangeFor(double spacingMm, double minUmm, double maxUmm,
+    double minVmm, double maxVmm, long long maxLines = 4000);
+
 //! 画面へ出すために評価した形。
 struct GridEvaluation {
     bool visible = false;

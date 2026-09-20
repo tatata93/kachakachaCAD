@@ -221,9 +221,19 @@ void V2Viewport::CloseCursorInput()
 
 bool V2Viewport::FocusNextCursorField(bool backward)
 {
-    const auto moved = kachakacha::v2::app::FocusNextField(cursorPanel_, backward);
+    // 打った字は捨てずに留めてから移る(core が確かめる)。
+    const auto moved = kachakacha::v2::app::LockAndFocusNextField(cursorPanel_, cursorDelta_,
+        backward);
     if (!moved.HasValue()) {
         viewMessage_ = moved.FirstSummaryJa();
+        if (cursorPanel_.focusedIndex < cursorPanel_.states.size()) {
+            cursorPanel_.states[cursorPanel_.focusedIndex].error = true;
+            cursorPanel_.states[cursorPanel_.focusedIndex].messageJa = viewMessage_;
+        }
+        if (statusCallback_) {
+            statusCallback_(viewMessage_);
+        }
+        update();
         return false;
     }
     cursorPanel_ = moved.Value();

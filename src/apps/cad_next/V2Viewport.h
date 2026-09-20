@@ -575,6 +575,8 @@ public:
     }
 
     //! カーソル連動の数値入力(AT-UIX-003)。欄立ても解き方も core が持つ。
+    //! 作り方カードが名指しした入力欄を、次に入力列を出すときに選んでおく(空なら既定)。
+    void SetPreferredCursorField(const QString& fieldId);
     [[nodiscard]] const kachakacha::v2::app::CursorInputPanel& CursorPanel() const
     {
         return cursorPanel_;
@@ -878,6 +880,8 @@ private:
     std::function<void()> alignSelectionCallback_;
     std::vector<kachakacha::v2::modeling::GuideTableRowView> guideRows_;
     kachakacha::v2::app::CursorInputPanel cursorPanel_;
+    //! 作り方カードが名指しした欄の id。入力列を出すときにここへ焦点を移す。
+    QString preferredCursorFieldId_;
     QPointF cursorPosition_;
     //! 入力列の基準(直前に置いた点)から見たポインタの位置。作業平面の u, v(mm)。
     kachakacha::v2::geometry::Vector3 cursorDelta_{};

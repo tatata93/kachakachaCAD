@@ -10,11 +10,13 @@ using modeling::DrawingTool;
 
 namespace {
 
-[[nodiscard]] DrawingMethodCard Card(const char* labelJa, const char* hintJa)
+[[nodiscard]] DrawingMethodCard Card(const char* labelJa, const char* hintJa,
+    const char* cursorFieldId = "")
 {
     DrawingMethodCard card;
     card.labelJa = labelJa;
     card.hintJa = hintJa;
+    card.cursorFieldId = cursorFieldId;
     return card;
 }
 
@@ -55,12 +57,15 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
         return {
             Card("2点", "始点と終点の2か所を押してください。Shift で水平・垂直に固定します。"),
             Card("点＋長さ＋角度",
-                "始点を押してから、カーソル横の欄に長さを打ち、Tab で角度へ移って Enter。"),
+                "始点を押してから、カーソル横の欄に長さを打ち、Tab で角度へ移って Enter。",
+                "length"),
         };
     case DrawingTool::Circle:
         return {
             Card("中心＋半径", "中心を押し、次に円周の1点を押してください。半径は欄にも打てます。"),
-            Card("直径指定", "中心を押してから、カーソル横の欄を Tab で「直径」へ移して打ち、Enter。"),
+            Card("直径指定",
+                "中心を押してから、カーソル横の「直径」の欄に打って Enter(欄はここへ移してあります)。",
+                "diameter"),
             Blocked("3点", "3点を通る円はまだ作れません(核に3点円がありません。3点の円弧はあります)。"),
         };
     case DrawingTool::Arc:

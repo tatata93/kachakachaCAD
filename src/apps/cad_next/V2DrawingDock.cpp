@@ -260,6 +260,11 @@ void V2DrawingDock::ChooseMethod(int index)
         methodButtons_[at]->setChecked(static_cast<int>(at) == index);
     }
     hint_->setText(Text(card.hintJa));
+    // カードが欄を名指ししていれば、カーソル横の入力列でその欄を選んでおく
+    // (円の「直径指定」→ 直径)。押しても何も起きないカードを作らない。
+    if (cursorFieldHandler_) {
+        cursorFieldHandler_(Text(card.cursorFieldId));
+    }
     if (card.arcMode.has_value() && *card.arcMode != arcMode_) {
         arcMode_ = *card.arcMode;
         ApplyArcVisibility();
@@ -328,6 +333,11 @@ bool V2DrawingDock::ClickMethod(const QString& labelJa)
 void V2DrawingDock::SetBlockedMethodHandler(std::function<void(const QString&)> handler)
 {
     blockedMethodHandler_ = std::move(handler);
+}
+
+void V2DrawingDock::SetCursorFieldHandler(std::function<void(const QString&)> handler)
+{
+    cursorFieldHandler_ = std::move(handler);
 }
 
 void V2DrawingDock::BuildArcRows(QFormLayout* form)

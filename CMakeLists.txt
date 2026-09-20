@@ -1006,6 +1006,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2Menus.cpp
         src/apps/cad_next/V2StatusLine.cpp
         src/apps/cad_next/V2ViewportHud.cpp
+        src/apps/cad_next/V2ViewportCursor.cpp
         src/apps/cad_next/V2RibbonCommands.cpp
         src/apps/cad_next/V2BooleanDock.cpp
         src/apps/cad_next/V2ThickenDock.cpp

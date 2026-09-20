@@ -33,6 +33,10 @@ struct DrawingMethodCard {
     std::string hintJa;
     //! 正本に無い(「その他」)。並びの後ろに出す。
     bool extra = false;
+    //! そのカードを選んだら、カーソル横の入力欄のどれに焦点を移すか(CursorInput の欄の id)。
+    //! 空なら移さない。**カードを押しても何も起きない、を作らないための欄である**
+    //! (例: 円の「直径指定」は 直径 の欄へ移す。Tab で探させない)。
+    std::string cursorFieldId;
 
     [[nodiscard]] bool Blocked() const noexcept { return !blockedReasonJa.empty(); }
 };

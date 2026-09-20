@@ -86,6 +86,8 @@ public:
     [[nodiscard]] bool ClickMethod(const QString& labelJa);
     //! 押せないカードを押したときに呼ぶもの(理由を状態行へ出すため)。
     void SetBlockedMethodHandler(std::function<void(const QString& reasonJa)> handler);
+    //! カードが名指しした入力欄(空なら既定)。画面が 3D の入力列へ伝える。
+    void SetCursorFieldHandler(std::function<void(const QString& fieldId)> handler);
 
 private:
     void BuildArcRows(QFormLayout* form);
@@ -133,4 +135,5 @@ private:
     std::function<void(const kachakacha::v2::modeling::ToolSettings&)> settingsHandler_;
     std::function<void()> createWireHandler_;
     bool loading_ = false;
+    std::function<void(const QString&)> cursorFieldHandler_;
 };

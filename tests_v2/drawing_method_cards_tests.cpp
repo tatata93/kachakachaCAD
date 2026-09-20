@@ -1,4 +1,5 @@
 // 作図の「作り方」カード(正本 3 HTML 2026-09-18、指示書 D-01〜D-14)。
+#include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/DrawingMethodCards.h"
 #include "kachakacha/base/TestHarness.h"
 
@@ -47,6 +48,24 @@ KACHA_V2_TEST(drawing_method_cards, 円弧のカードは作り方を決め既�
     Require(CurrentDrawingMethodIndex(DrawingTool::Arc, settings) == 1, "設定に当たるカード");
     Require(CurrentDrawingMethodIndex(DrawingTool::Circle, settings) == 0, "円は最初の押せるカード");
     Require(CurrentDrawingMethodIndex(DrawingTool::Select, settings) == -1, "無ければ -1");
+}
+
+KACHA_V2_TEST(drawing_method_cards, 欄を名指しするカードは実在する欄を指す)
+{
+    // 「押しても何も起きないカード」を作らないために、カードは入力欄を名指しできる。
+    // 名指しが綴り違いだと、押しても焦点が動かず、また何も起きないカードに戻ってしまう。
+    const auto circle = DrawingMethodCardsFor(DrawingTool::Circle);
+    RequireEqual(circle[1].cursorFieldId, std::string("diameter"), "直径指定は直径の欄");
+    Require(circle[0].cursorFieldId.empty(), "中心＋半径は既定の欄のまま");
+    const auto line = DrawingMethodCardsFor(DrawingTool::Line);
+    RequireEqual(line[1].cursorFieldId, std::string("length"), "点＋長さ＋角度は長さの欄");
+    // 名指しした欄が、その道具の入力列に本当にあるか。
+    const auto circleFields = kachakacha::v2::app::CursorFieldsFor(DrawingTool::Circle, true);
+    bool found = false;
+    for (const auto& field : circleFields) {
+        found = found || field.id == "diameter";
+    }
+    Require(found, "円の入力列に 直径 の欄がある");
 }
 
 KACHA_V2_TEST(drawing_method_cards, どのカードにも次にすることの一文がある)

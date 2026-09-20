@@ -149,6 +149,148 @@ using kachakacha::v2::modeling::DrawingTool;
         && Explain("一文に 4 か所", dock.HintText().contains(QStringLiteral("4か所")));
 }
 
+//! HP-DM-04。円は「中心＋半径」でも「直径指定」でも、画面の2クリックで1本できる。
+[[nodiscard]] bool CaseCircleByCenterRadiusAndDiameterCards(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    window.SetMode(UiMode::Drawing);
+    auto& ribbon = window.Ribbon();
+    auto& dock = window.DrawingDock();
+    if (!Explain("帯の「円」を押せる", ribbon.ClickTool(QStringLiteral("円")))
+        || !Explain("円の道具になる", window.Session().CurrentTool() == DrawingTool::Circle)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const auto center = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{0.0, 0.0, 0.0});
+    const auto rim = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{15.0, 0.0, 0.0});
+    if (!Explain("中心と円周上の1点が画面内", center.has_value() && rim.has_value())) {
+        return false;
+    }
+
+    // 1本目: 最初から「中心＋半径」のまま、中心と円周上の1点を押す。
+    if (!Explain("「中心＋半径」を押せる", dock.ClickMethod(QStringLiteral("中心＋半径")))) {
+        return false;
+    }
+    const int beforeFirst = WireCount(window);
+    viewport.ClickAt(QPointF(center->x, center->y));
+    viewport.ClickAt(QPointF(rim->x, rim->y));
+    if (!Explain((std::string("中心＋半径で円が1本できる(実際 ")
+                     + std::to_string(WireCount(window) - beforeFirst) + ")").c_str(),
+            WireCount(window) == beforeFirst + 1)) {
+        return false;
+    }
+
+    // 2本目: 「直径指定」を押してから、同じ2クリックで引く。
+    // 核(ToolController::Circle)はカードの種類を見ておらず、置いた2点をいつも
+    // 「中心・円周上の1点」としてしか読まない(半径=2点間の距離)。つまり
+    // 「直径指定」の一文(カーソル欄の「直径」に打つ)は、まだ2クリックの作図には
+    // つながっていない。ここでは、そのカードを選んだままでも道具が壊れず円が
+    // もう1本でき、道具が円のまま残ることだけを確かめる(2点目までの距離が
+    // 直径として解かれることまでは核が実装していないので、そこは確かめない)。
+    if (!Explain("「直径指定」を押せる", dock.ClickMethod(QStringLiteral("直径指定")))
+        || !Explain("作り方の表示が「直径指定」になる",
+            dock.CurrentMethodLabel() == QStringLiteral("直径指定"))) {
+        return false;
+    }
+    const int beforeSecond = WireCount(window);
+    viewport.ClickAt(QPointF(center->x, center->y));
+    viewport.ClickAt(QPointF(rim->x, rim->y));
+    if (!Explain((std::string("「直径指定」のカードのままでも円がもう1本できる(実際 ")
+                     + std::to_string(WireCount(window) - beforeSecond) + ")").c_str(),
+            WireCount(window) == beforeSecond + 1)) {
+        return false;
+    }
+    return Explain("2本目のあとも道具は円のまま",
+        window.Session().CurrentTool() == DrawingTool::Circle);
+}
+
+//! HP-DM-05。ベジェは制御点を4か所押すと、3次ベジェの線が1本できる。
+[[nodiscard]] bool CaseBezierFourClicksMakesOneWire(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    window.SetMode(UiMode::Drawing);
+    auto& ribbon = window.Ribbon();
+    if (!Explain("帯の「曲線」を選べる", ribbon.ClickCategory(QStringLiteral("曲線")))
+        || !Explain("「ベジェ」を押せる", ribbon.ClickTool(QStringLiteral("ベジェ")))
+        || !Explain("ベジェの道具になる",
+            window.Session().CurrentTool() == DrawingTool::Bezier)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const int before = WireCount(window);
+    const auto p1 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{-20.0, 0.0, 0.0});
+    const auto p2 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{-10.0, 15.0, 0.0});
+    const auto p3 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{10.0, -15.0, 0.0});
+    const auto p4 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{20.0, 0.0, 0.0});
+    if (!Explain("4つの制御点が画面内",
+            p1.has_value() && p2.has_value() && p3.has_value() && p4.has_value())) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(p1->x, p1->y));
+    viewport.ClickAt(QPointF(p2->x, p2->y));
+    viewport.ClickAt(QPointF(p3->x, p3->y));
+    viewport.ClickAt(QPointF(p4->x, p4->y));
+    if (!Explain((std::string("ベジェが1本できる(実際 ") + std::to_string(WireCount(window) - before)
+                     + ")").c_str(),
+            WireCount(window) == before + 1)) {
+        return false;
+    }
+    const auto& curves = window.Session().Scene().curves;
+    return Explain("できた線の種類が3次ベジェ(CurveKind::CubicBezier)",
+        !curves.empty()
+            && curves.back().segment.Kind() == kachakacha::v2::geometry::CurveKind::CubicBezier);
+}
+
+//! HP-DM-06。スプラインは制御点を4か所押し、Enterと同じ確定(右クリック相当)で1本できる。
+[[nodiscard]] bool CaseSplineFourClicksThenEnterMakesOneWire(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    window.SetMode(UiMode::Drawing);
+    auto& ribbon = window.Ribbon();
+    if (!Explain("帯の「曲線」を選べる", ribbon.ClickCategory(QStringLiteral("曲線")))
+        || !Explain("「スプライン」を押せる", ribbon.ClickTool(QStringLiteral("スプライン")))
+        || !Explain("スプラインの道具になる",
+            window.Session().CurrentTool() == DrawingTool::Spline)) {
+        return false;
+    }
+    auto& viewport = window.Viewport();
+    const int before = WireCount(window);
+    const auto p1 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{-30.0, 0.0, 0.0});
+    const auto p2 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{-10.0, 20.0, 0.0});
+    const auto p3 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{10.0, -20.0, 0.0});
+    const auto p4 = viewport.Mapping().Project(
+        kachakacha::v2::geometry::Vector3{30.0, 0.0, 0.0});
+    if (!Explain("4つの制御点が画面内",
+            p1.has_value() && p2.has_value() && p3.has_value() && p4.has_value())) {
+        return false;
+    }
+    viewport.ClickAt(QPointF(p1->x, p1->y));
+    viewport.ClickAt(QPointF(p2->x, p2->y));
+    viewport.ClickAt(QPointF(p3->x, p3->y));
+    viewport.ClickAt(QPointF(p4->x, p4->y));
+    if (!Explain("4点目まではまだ確定しない(スプラインは何点でも置ける)",
+            WireCount(window) == before)) {
+        return false;
+    }
+    // ポリライン/スプラインは置く点の数を決めないので、終わりは右クリック(=Enter)で
+    // 伝える。試験では viewport.FinishTool() が、その確定と同じ道を通る
+    // (V2SelfTestDrawing.cpp のポリライン試験 drawU() と同じ終わらせ方)。
+    viewport.FinishTool();
+    window.SelectTool(DrawingTool::Select);
+    return Explain((std::string("スプラインが1本できる(実際 ")
+                       + std::to_string(WireCount(window) - before) + ")").c_str(),
+        WireCount(window) == before + 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingMethodCases()
@@ -158,6 +300,11 @@ std::vector<SelfTestCase> DrawingMethodCases()
             CaseMethodCardsFollowToolAndChangeArcMode},
         {"HP-DM-02 3点のカードで 3 か所を押すと円弧ができる", CaseThreePointArcByCards},
         {"HP-DM-03 スプラインは制御点だけ押せ、ベジェは 1 枚", CaseSplineAndBezierCards},
+        {"HP-DM-04 円は中心＋半径と直径指定のどちらでも画面から引ける",
+            CaseCircleByCenterRadiusAndDiameterCards},
+        {"HP-DM-05 ベジェは制御点を4か所押すと1本できる", CaseBezierFourClicksMakesOneWire},
+        {"HP-DM-06 スプラインは制御点を4か所押して Enter で1本できる",
+            CaseSplineFourClicksThenEnterMakesOneWire},
     };
 }
 

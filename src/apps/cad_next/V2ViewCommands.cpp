@@ -70,6 +70,10 @@ void V2MainWindow::RunViewCommand(std::string_view id)
         ShowDisplayDock();
         return;
     }
+    if (id == "view.number_settings") {
+        ShowNumberDock();
+        return;
+    }
     if (id == "view.stage_selection_only") {
         ApplyDisplayStage(kachakacha::v2::app::DisplayStage::SelectionOnly);
         return;
@@ -670,6 +674,17 @@ void V2MainWindow::ApplyDisplaySettings(const kachakacha::v2::app::DisplaySettin
         displayDock_->SetSettings(settings, displayStage_);
     }
     viewport_->update();
+}
+
+//! 数の棚を前に出す。製作モードの2枚目として常設していたのをやめた代わりの入口
+//! (指示書 C-09、右は「いまの道具の1枚」)。
+void V2MainWindow::ShowNumberDock()
+{
+    if (parameterDock_ == nullptr) {
+        return;
+    }
+    ShowShelf(kachakacha::v2::app::Shelf::Parameter);
+    SetStatus(QStringLiteral("数の設定: 右の「数」で板厚・面取り量・型紙の余白・縮尺を決めてください。"));
 }
 
 void V2MainWindow::ShowDisplayDock()

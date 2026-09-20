@@ -44,6 +44,8 @@ const std::vector<std::string_view>& CommonCommandIds()
         "view.stage_selection_only",
         "entity.rename", "workplane.set_active", "group.set_active",
         "group.create", "group.dissolve", "group.rename", "snap.toggle",
+        // 数の設定(板厚・面取り量・型紙の余白・縮尺)はどのモードでも要る。
+        "view.number_settings",
     };
     return ids;
 }

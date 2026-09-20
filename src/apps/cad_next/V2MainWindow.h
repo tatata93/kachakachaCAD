@@ -453,6 +453,7 @@ public:
     //! 棚を前に出す。いまの場面・色を棚へ写してから出す。
     void ShowGridDock();
     void ShowDisplayDock();
+    void ShowNumberDock();   //!< 数の棚を前に出す(view.number_settings)
     //! 場面と色から棚の値を作る。
     [[nodiscard]] V2GridChoice CurrentGridChoice() const;
     [[nodiscard]] V2DisplayChoice CurrentDisplayChoice() const;

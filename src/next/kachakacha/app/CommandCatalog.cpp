@@ -117,6 +117,13 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::Always, "",
             "線の太さや色などの見え方を変えます。形は変わりません。", false,
             {"AT-UIX-010"}},
+        // 数の棚(板厚・許すずれ・型紙の余白・縮尺…)。製作モードの2枚目として常設していたが、
+        // 右は「いまの道具の1枚」なので、表示設定と同じく自分の命令で前へ出す(指示書 C-09)。
+        {"view.number_settings", "数の設定", CommandMode::Dialog, "numbers", "",
+            SelectionPredicate::Always, "",
+            "板厚・面取り量・型紙の余白・縮尺など、道具が共通で使う数を決めます。"
+            "形はここでは変わりません。", false,
+            {"AT-UIX-010"}},
         {"view.stage_all", "設計(すべて出す)", CommandMode::Instant, "stage_all", "Ctrl+1",
             SelectionPredicate::Always, "",
             "グリッドも補助線も出します(V1 の「設計」)。形は変わりません。", false,

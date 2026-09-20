@@ -239,6 +239,8 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         // 型紙の下見(指示書 C-09)。fabrication.create_pattern が作ったときに
         // 自分で ShowShelf(Pattern) して出す。出力モードへ入っただけでは出さない。
         static_cast<int>(Shelf::Pattern),
+        // 数の棚(指示書 C-09)。view.number_settings が自分で ShowShelf(Parameter) して出す。
+        static_cast<int>(Shelf::Parameter),
     };
     std::string missing;
     for (const Shelf shelf : AllShelves()) {

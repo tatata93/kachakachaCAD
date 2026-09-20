@@ -201,9 +201,41 @@ using kachakacha::v2::modeling::DrawingTool;
 
 } // namespace
 
+//! RG-09。右は「いまの道具の1枚」。製作モードでも数の棚が2枚目として並ばず、
+//! 「数の設定」を押したときだけ前に出る(指示書 C-09)。
+[[nodiscard]] bool CaseRightPaneShowsOnePageAndNumbersHaveTheirOwnDoor(V2MainWindow& window)
+{
+    using kachakacha::v2::app::Shelf;
+    window.RunCommand("file.new");
+    for (const auto mode : {kachakacha::v2::app::UiMode::Drawing,
+             kachakacha::v2::app::UiMode::Part, kachakacha::v2::app::UiMode::Fabrication,
+             kachakacha::v2::app::UiMode::Output}) {
+        window.SetMode(mode);
+        if (!Explain((std::string("そのモードで数の棚は並ばない(")
+                         + std::string(kachakacha::v2::app::UiModeNameJa(mode)) + ")").c_str(),
+                !window.ShelfShown(Shelf::Parameter))) {
+            return false;
+        }
+    }
+    window.RunCommand("view.number_settings");
+    if (!Explain("「数の設定」で数の棚が前に出る", window.ShelfShown(Shelf::Parameter))) {
+        return false;
+    }
+    if (!Explain((std::string("何をする欄かを言う(") + window.StatusText().toStdString()
+                     + ")").c_str(),
+            window.StatusText().contains(QStringLiteral("数の設定")))) {
+        return false;
+    }
+    // 道具を持ち替えれば、また「いまの道具の1枚」に戻る。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    return Explain("道具を持つと数の棚は引っ込む", !window.ShelfShown(Shelf::Parameter));
+}
+
 std::vector<SelfTestCase> RegressionCases()
 {
     return {
+        {"RG-09 右は1枚で、数の棚は「数の設定」でだけ前に出る",
+            CaseRightPaneShowsOnePageAndNumbersHaveTheirOwnDoor},
         {"RG-02 道具を先に構えても古い右の棚が残らない",
             CaseOldRightPanelDoesNotLingerAfterToolSwitch},
         {"RG-12 画面の文字に「まとまり」が残っていない", CaseNoGroupingWordInVisibleLabels},

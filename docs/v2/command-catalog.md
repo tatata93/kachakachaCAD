@@ -43,6 +43,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `view.align_selection_back` | 反対側から正対 | 同上 | camera だけ変更(裏側から) | AT-UIX-008 |
 | `view.align_workplane` | 正対 | 常時(作業中の作図面) | cameraだけ変更 | AT-UIX-008 |
 | `view.display_settings` | 表示設定 | 常時 | 表示属性だけ変更 | AT-UIX-010 |
+| `view.number_settings` | 数の設定 | 常時 | 数の棚を前に出すだけ | AT-UIX-010 |
 | `view.stage_all` | 設計(すべて出す) | なし | (表示のみ)Ctrl+1 | AT-UIX-010 |
 | `view.stage_no_grid` | グリッドを消す | なし | (表示のみ) | AT-UIX-010 |
 | `view.stage_no_construction` | 完成形(補助線も消す) | なし | (表示のみ)Ctrl+2 | AT-UIX-010 |

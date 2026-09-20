@@ -120,12 +120,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
         // 前に出す(V2GuideTableCommands.cpp)。
         return {Shelf::Part};
     case UiMode::Fabrication:
-        // まだ2枚(指示書 C-09 の残課題)。製作の棚は板厚・許すずれを
-        // SetParameterMm で数の棚へ映しているが、数の棚を単独で前に出す
-        // 命令が無い(ShowShelf(Shelf::Parameter) を呼ぶ場所が無い)ため、
-        // ここで返すのをやめると数の棚がどの組み合わせからも出せなくなる
-        // (「出せる棚は全部どこかの組み合わせで出る」試験が落ちる)。
-        return {Shelf::Fabrication, Shelf::Parameter};
+        // 1枚(指示書 C-09)。板厚・許すずれは製作の棚が SetParameterMm で数の棚へ映すので、
+        // 製作の最中に数の棚を並べる必要はない。数そのものを直したいときは
+        // 「数の設定」(view.number_settings)が自分で前へ出す。
+        return {Shelf::Fabrication};
     case UiMode::Output:
         // 1枚(指示書 C-09)。型紙の下見は `fabrication.create_pattern` が作ったときに
         // 自分で前へ出す(V2FabricationCommands.cpp の ShowShelf(Pattern))。

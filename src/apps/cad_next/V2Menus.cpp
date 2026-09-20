@@ -100,7 +100,7 @@ void V2MainWindow::BuildMenus()
     addCommands(view, {"view.fit_all", "view.align_selection", "view.align_selection_back",
         "view.align_workplane", "view.hide_selected", "view.show_all", "view.stage_all",
         "view.stage_no_grid", "view.stage_no_construction", "view.stage_selection_only",
-        "view.display_settings", "measure.open"});
+        "view.display_settings", "view.number_settings", "measure.open"});
 
     QMenu* viewMenu = view->addMenu(QStringLiteral("視点(&C)"));
     const std::array<ViewDirection, 7> directions{ViewDirection::Top,

@@ -121,18 +121,22 @@ int SnapPriorityRank(SnapKind kind) noexcept
     case SnapKind::Perpendicular:
     case SnapKind::Tangent:
         return 4;
-    case SnapKind::Extension:
     case SnapKind::ProjectedOnPlane:
-        return 5;   // 暫定。§6.1 に順位が無い(SnapEngine.h)
+        return 5;   // 平面へ落とした「点」。§6.1 に順位が無い(SnapEngine.h)
     case SnapKind::GridMajor:
     case SnapKind::GridMinor:
         return 6;
-    case SnapKind::FreeOnPlane:
+    case SnapKind::Extension:
+        // 延長線は「線」の案内で、グリッドは「点」である。点のほうを採る。
+        // グリッドの上を狙っているのに、たまたま近くの線の延長と重なっただけで
+        // 格子から外れた点が入っていた(オーナー報告 2026-09-21)。
         return 7;
-    case SnapKind::ScreenIntersection:
+    case SnapKind::FreeOnPlane:
         return 8;
+    case SnapKind::ScreenIntersection:
+        return 9;
     }
-    return 8;
+    return 9;
 }
 
 SnapTargetKey TargetKeyOf(const SnapCandidate& candidate) noexcept

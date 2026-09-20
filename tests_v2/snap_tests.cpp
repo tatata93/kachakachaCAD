@@ -851,14 +851,39 @@ KACHA_V2_TEST(snap, 順位は統合仕様の6段に従う)
     Require(stronger(SnapKind::Quadrant, SnapKind::ClosestOnCurve), "3 > 4. 最近点");
     Require(stronger(SnapKind::ClosestOnCurve, SnapKind::Perpendicular), "4 > 5. 垂足");
     Require(same(SnapKind::Perpendicular, SnapKind::Tangent), "5. 垂足と接点は同じ順位");
-    // §6.1 に無い2種の置き場所は暫定(オーナー判断待ち)。いまの実装を固定しておく。
-    Require(stronger(SnapKind::Tangent, SnapKind::Extension), "5 > 延長線(暫定)");
-    Require(same(SnapKind::Extension, SnapKind::ProjectedOnPlane), "延長線と平面へ投影(暫定)");
+    // §6.1 に無い平面へ投影の置き場所は暫定(オーナー判断待ち)。
+    Require(stronger(SnapKind::Tangent, SnapKind::ProjectedOnPlane), "5 > 平面へ投影(暫定)");
     Require(stronger(SnapKind::ProjectedOnPlane, SnapKind::GridMajor),
-        "延長線 > 6. グリッド(暫定)");
+        "平面へ投影 > 6. グリッド(暫定)");
     Require(same(SnapKind::GridMajor, SnapKind::GridMinor), "6. 主点と副点は同じ順位");
-    Require(stronger(SnapKind::GridMinor, SnapKind::FreeOnPlane), "グリッド > 自由点");
+    // 延長線はグリッドより弱い(2026-09-21 オーナー判断)。線の案内より点を採る。
+    Require(stronger(SnapKind::GridMinor, SnapKind::Extension), "グリッド > 延長線");
+    Require(stronger(SnapKind::Extension, SnapKind::FreeOnPlane), "延長線 > 自由点");
     Require(stronger(SnapKind::FreeOnPlane, SnapKind::ScreenIntersection), "画面交差は最後");
+}
+
+KACHA_V2_TEST(snap, 延長線と重なってもグリッドの点を採る)
+{
+    // オーナー報告 2026-09-21:「作図するときほかの線の延長線だとグリッドが反応しない」。
+    // 延長線は「線」の案内、グリッドは「点」。格子を狙っているのに、たまたま近くの線の
+    // 延長と重なっただけで格子から外れた点が入っていた。
+    SceneBuilder builder;
+    // y = 50 の線。その延長(x > 50)が格子の横線と重なる。
+    builder.AddLine({20, 50, 0}, {50, 50, 0});
+    builder.EnablePlane();
+    builder.EnableGrid(10.0, 0);
+    const ScreenMapping mapping = TopView();
+    // 格子の点 (70, 50) のすぐ near。延長線の候補も格子の候補も範囲に入る。
+    const auto candidates = CollectSnapCandidates(builder.scene, mapping,
+        At(mapping, {70.2, 50.2, 0.0}), {}, Tolerance());
+    Require(HasKind(candidates, SnapKind::Extension), "延長線の候補は出ている");
+    Require(HasKind(candidates, SnapKind::GridMajor), "格子の候補も出ている");
+    const auto chosen = ChooseSnap(candidates, {});
+    Require(chosen.has_value(), "どれかに吸着する");
+    RequireEqual(std::string(SnapKindLabelJa(chosen->kind)), std::string("主点"),
+        "格子の点を採る(延長線ではなく)");
+    RequireNear(chosen->position.x, 70.0, 1e-9, "格子の上に乗る");
+    RequireNear(chosen->position.y, 50.0, 1e-9, "格子の上に乗る");
 }
 
 KACHA_V2_TEST(snap, 画面だけの交差には吸着しない)

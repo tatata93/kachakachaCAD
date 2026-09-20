@@ -1156,13 +1156,7 @@ void V2Viewport::keyPressEvent(QKeyEvent* event)
     }
     if (cursorPanel_.active
         && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)) {
-        // 主要欄が決まったら、その値で次の点を置く。まだなら次の欄へ移る。
-        if (CommitCursorField()) {
-            (void)PlacePointFromCursorInput();
-        } else if (cursorPanel_.active && !cursorPanel_.states.empty()
-            && !cursorPanel_.states[cursorPanel_.focusedIndex].error) {
-            (void)FocusNextCursorField(false);
-        }
+        (void)PressEnterInCursorInput();
         return;
     }
     if (EditCursorFieldForKey(event->key())) { event->accept(); return; }

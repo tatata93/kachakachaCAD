@@ -109,10 +109,10 @@ using kachakacha::v2::modeling::DrawingTool;
     if (!Explain("角度を打てる", viewport.TypeIntoCursorField(QStringLiteral("90")))) {
         return false;
     }
-    if (!Explain("Enter で決まる", viewport.CommitCursorField())) {
+    // Enter は鍵盤と同じ道を通す(CommitCursorField だけでは点は置かれない)。
+    if (!Explain("Enter で2点目が置かれる", viewport.PressEnterInCursorInput())) {
         return false;
     }
-    viewport.FinishTool();
     window.SelectTool(DrawingTool::Select);
     if (!Explain((std::string("線が1本できる(実際 ")
                      + std::to_string(WireCount(window) - before) + " 本)").c_str(),

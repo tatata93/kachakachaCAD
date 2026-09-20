@@ -83,6 +83,24 @@ void V2Viewport::SyncCursorInputWithTool(bool placedPoint, bool committed)
     }
 }
 
+//! 入力列が出ているときの Enter。**人が押す道はここ1本**(画面の鍵盤も自己試験も通る)。
+//! 主要欄が決まったら、その値で次の点を置く。まだなら次の欄へ移る。
+bool V2Viewport::PressEnterInCursorInput()
+{
+    if (!cursorPanel_.active) {
+        return false;
+    }
+    if (CommitCursorField()) {
+        return PlacePointFromCursorInput();
+    }
+    if (cursorPanel_.active && !cursorPanel_.states.empty()
+        && cursorPanel_.focusedIndex < cursorPanel_.states.size()
+        && !cursorPanel_.states[cursorPanel_.focusedIndex].error) {
+        (void)FocusNextCursorField(false);
+    }
+    return false;
+}
+
 bool V2Viewport::PlacePointFromCursorInput()
 {
     const auto solved = kachakacha::v2::app::SolveDelta(cursorPanel_, cursorDelta_);

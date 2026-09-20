@@ -611,6 +611,8 @@ public:
     bool FocusNextCursorField(bool backward);
     //! Enter。確定できたら true。
     bool CommitCursorField();
+    //! 入力列が出ているときの Enter(鍵盤と同じ道)。点が置けたら真。
+    bool PressEnterInCursorInput();
     //! Esc。入力列を閉じる。
     void CloseCursorInput();
     //! 入力列を出す場所。画面端では左または上へ寄る。

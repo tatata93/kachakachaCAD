@@ -61,8 +61,15 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
         return false;
     }
     // 非対称(両方向に別々の距離)を選ぶと逆側の距離が生え、作る形へ届く。
-    dock.ChooseExtent(ExtrudeExtentMode::TwoDistances);
-    window.RefreshExtrudeFromDock();
+    // **人が選んだのと同じ道**(combo の signal を通す)で選ぶ。映すだけの ChooseExtent で
+    // 選んで RefreshExtrudeFromDock を手で呼ぶと、配線が切れていても気づけない。
+    if (!Explain("棚で「両方向に別々」を選べる", dock.PickExtent(ExtrudeExtentMode::TwoDistances))) {
+        return false;
+    }
+    if (!Explain("選んだだけで作る形の範囲が変わる(棚の配線が生きている)",
+            window.ExtrudeChoice().extent == ExtrudeExtentMode::TwoDistances)) {
+        return false;
+    }
     dock.SetSecondDistanceMm(3.0);
     window.RefreshExtrudeFromDock();
     if (!Explain("非対称では逆側の距離の欄が生える", dock.SecondDistanceShown())
@@ -79,7 +86,10 @@ using kachakacha::v2::modeling::ExtrudeExtentMode;
     }
     // 数値で決める向きを選ぶと x y z の欄が生え、その値が向きになる。
     dock.ChooseExtent(ExtrudeExtentMode::Distance);
-    dock.ChooseDirection(ExtrudeDirectionMode::CustomXYZ);
+    if (!Explain("棚で「数値で決める」向きを選べる",
+            dock.PickDirection(ExtrudeDirectionMode::CustomXYZ))) {
+        return false;
+    }
     dock.SetCustomDirection(kachakacha::v2::geometry::Vector3{0.0, 3.0, 4.0});
     window.RefreshExtrudeFromDock();
     const auto direction = window.ExtrudeDirectionNow();

@@ -61,6 +61,9 @@ public:
     //! 棚で選んでいる終端。詳細の窓で決めたものは3つ目に名前で出る。
     [[nodiscard]] kachakacha::v2::modeling::ExtrudeExtentMode ExtentMode() const;
     void ChooseExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode);
+    //! 人が選んだのと同じ道(combo の signal を塞がない)。自己試験はこちらを使う。
+    [[nodiscard]] bool PickDirection(kachakacha::v2::modeling::ExtrudeDirectionMode mode);
+    [[nodiscard]] bool PickExtent(kachakacha::v2::modeling::ExtrudeExtentMode mode);
     //! 向きを反転しているか。
     [[nodiscard]] bool Reversed() const;
     //! 「数値で決める」「選んだ線の向き」のときの向き(x, y, z)。

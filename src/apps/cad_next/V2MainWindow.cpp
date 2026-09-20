@@ -1198,6 +1198,10 @@ void V2MainWindow::RunCommand(std::string_view id)
 {
     const CommandDescriptor* command = FindCommand(id);
     if (command == nullptr) {
+        // 台帳に無い id を押した。黙って何も起きないのがいちばん困るので、そう言う
+        // (人には出ないはずの道。献立や帯の id を直し忘れたときに、ここで気づく)。
+        SetStatus(QStringLiteral("「%1」という操作は台帳にありません(画面と台帳が食い違っています)。")
+                .arg(QString::fromUtf8(std::string(id).c_str())));
         return;
     }
     // 道具に結びついた命令は、まず道具を構える。相手はそのあと選ぶ。

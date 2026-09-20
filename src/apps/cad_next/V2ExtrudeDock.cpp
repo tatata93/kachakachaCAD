@@ -533,6 +533,38 @@ ExtrudeExtentMode V2ExtrudeDock::ExtentMode() const
     return modes[static_cast<std::size_t>(index)];
 }
 
+//! 人が選んだのと同じ道(signal を塞がない)。**自己試験はこちらを使う。**
+//! ChooseExtent/ChooseDirection は棚を映すだけなので、combo の配線が切れても気づけない。
+bool V2ExtrudeDock::PickDirection(ExtrudeDirectionMode mode)
+{
+    if (direction_ == nullptr) {
+        return false;
+    }
+    const auto& modes = kachakacha::v2::app::ExtrudeDirections();
+    for (std::size_t index = 0; index < modes.size(); ++index) {
+        if (modes[index] == mode) {
+            direction_->setCurrentIndex(static_cast<int>(index));
+            return true;
+        }
+    }
+    return false;
+}
+
+bool V2ExtrudeDock::PickExtent(ExtrudeExtentMode mode)
+{
+    if (extent_ == nullptr) {
+        return false;
+    }
+    const auto& modes = kachakacha::v2::app::ExtrudeExtents();
+    for (std::size_t index = 0; index < modes.size(); ++index) {
+        if (modes[index] == mode) {
+            extent_->setCurrentIndex(static_cast<int>(index));
+            return true;
+        }
+    }
+    return false;
+}
+
 void V2ExtrudeDock::ChooseExtent(ExtrudeExtentMode mode)
 {
     if (extent_ == nullptr) {

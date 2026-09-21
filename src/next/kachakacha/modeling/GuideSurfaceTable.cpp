@@ -76,6 +76,7 @@ const std::vector<ChainRole>& RolesForMethod(GuideSurfaceMethod method)
     static const std::vector<ChainRole> offset = build(GuideSurfaceMethod::OffsetGuide);
     static const std::vector<ChainRole> revolve = build(GuideSurfaceMethod::Revolve);
     static const std::vector<ChainRole> fourEdge = build(GuideSurfaceMethod::FourEdgePatch);
+    static const std::vector<ChainRole> network = build(GuideSurfaceMethod::CurveNetworkExact);
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary: return planar;
     case GuideSurfaceMethod::RuledSections:  return ruled;
@@ -86,6 +87,7 @@ const std::vector<ChainRole>& RolesForMethod(GuideSurfaceMethod method)
     case GuideSurfaceMethod::OffsetGuide:    return offset;
     case GuideSurfaceMethod::Revolve:        return revolve;
     case GuideSurfaceMethod::FourEdgePatch:  return fourEdge;
+    case GuideSurfaceMethod::CurveNetworkExact: return network;
     }
     return loft;
 }
@@ -128,6 +130,15 @@ std::string ChainRoleLabelJa(GuideSurfaceMethod method, ChainRole role)
     }
     if (role == ChainRole::BoundarySide && method == GuideSurfaceMethod::FourEdgePatch) {
         return "辺";
+    }
+    if (method == GuideSurfaceMethod::GordonNetwork
+        || method == GuideSurfaceMethod::CurveNetworkExact) {
+        if (role == ChainRole::GuideU) {
+            return "U線";
+        }
+        if (role == ChainRole::GuideV) {
+            return "V線";
+        }
     }
     return ChainRoleLabelJa(role);
 }

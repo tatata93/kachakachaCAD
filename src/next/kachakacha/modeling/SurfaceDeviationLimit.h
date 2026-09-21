@@ -40,7 +40,13 @@ enum class SurfaceFidelity {
     Interpolating,
     //! 近づけるだけ。外れることが作りに含まれている。
     Approximating,
+    //! 全部の線を通る形を組み立ててから、滑らかな面(B-spline)へ写す(曲線網 Gordon)。
+    //! 写すときの誤差だけ外れる。近づける作り方よりずっと小さい許容で判定する。
+    Fitted,
 };
+
+//! 曲線網(Gordon)が外れてよい量(mm)。面へ写す誤差の上限。
+inline constexpr double kNetworkFitDeviationMm = 0.02;
 
 [[nodiscard]] SurfaceFidelity FidelityOf(GuideSurfaceMethod method) noexcept;
 

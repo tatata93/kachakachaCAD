@@ -320,6 +320,7 @@ std::string_view GuideSurfaceMethodLabelJa(GuideSurfaceMethod method) noexcept
     case GuideSurfaceMethod::OffsetGuide:    return "離した面(元の面と距離)";
     case GuideSurfaceMethod::Revolve:        return "回転体(断面を軸のまわりに回す)";
     case GuideSurfaceMethod::FourEdgePatch:  return "四辺面(4 辺で囲う 1 枚)";
+    case GuideSurfaceMethod::CurveNetworkExact: return "曲線網(Gordon: U と V を全部通す)";
     }
     return "不明";
 }
@@ -330,7 +331,8 @@ const std::vector<GuideSurfaceMethod>& GuideSurfaceMethods()
         GuideSurfaceMethod::PlanarBoundary, GuideSurfaceMethod::RuledSections,
         GuideSurfaceMethod::LoftSections, GuideSurfaceMethod::GuidedLoft,
         GuideSurfaceMethod::GordonNetwork, GuideSurfaceMethod::BoundaryFill,
-        GuideSurfaceMethod::FourEdgePatch, GuideSurfaceMethod::OffsetGuide};
+        GuideSurfaceMethod::FourEdgePatch, GuideSurfaceMethod::CurveNetworkExact,
+        GuideSurfaceMethod::OffsetGuide};
     return methods;
 }
 

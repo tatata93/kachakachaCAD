@@ -29,6 +29,8 @@ SurfaceFidelity FidelityOf(GuideSurfaceMethod method) noexcept
     case GuideSurfaceMethod::FourEdgePatch:
         // 四辺面(GeomFill_BSplineCurves)は 4 辺をそのまま面の縁にする。
         break;
+    case GuideSurfaceMethod::CurveNetworkExact:
+        return SurfaceFidelity::Fitted;
     }
     return SurfaceFidelity::Interpolating;
 }
@@ -70,6 +72,9 @@ double SurfaceDeviationLimitMm(GuideSurfaceMethod method,
     if (FidelityOf(method) == SurfaceFidelity::Interpolating) {
         return ExactLimitMm(tolerance);
     }
+    if (FidelityOf(method) == SurfaceFidelity::Fitted) {
+        return std::max(kNetworkFitDeviationMm, ExactLimitMm(tolerance));
+    }
     // 近づける作り方。後の工程(板材の曲げ近似)が許している量までとする。
     // **その量より粗い面は、後で直しようがない。**
     return std::max(kFabricationDeviationMm, ExactLimitMm(tolerance));
@@ -79,7 +84,7 @@ bool SurfaceDeviationIsWorthSaying(GuideSurfaceMethod method, double deviationMm
     const geometry::GeometryTolerance& tolerance) noexcept
 {
     return deviationMm > ExactLimitMm(tolerance)
-        && FidelityOf(method) == SurfaceFidelity::Approximating;
+        && FidelityOf(method) != SurfaceFidelity::Interpolating;
 }
 
 std::string SurfaceDeviationNoteJa(GuideSurfaceMethod method, double deviationMm,
@@ -93,6 +98,9 @@ std::string SurfaceDeviationNoteJa(GuideSurfaceMethod method, double deviationMm
     std::string value = std::to_string(micro / 1000) + "."
         + std::to_string((micro / 100) % 10) + std::to_string((micro / 10) % 10)
         + std::to_string(micro % 10);
+    if (FidelityOf(method) == SurfaceFidelity::Fitted) {
+        return "全部の線を通る形を面へ写しました。写す誤差で線から最大 " + value + " mm 外れています。";
+    }
     return "近づけて作る面です。指定した線から最大 " + value + " mm 外れています。";
 }
 
@@ -102,6 +110,9 @@ double SurfaceDeviationLimitMm(const GuideSurfaceRequest& request,
     if (FidelityOf(request) == SurfaceFidelity::Interpolating) {
         return ExactLimitMm(tolerance);
     }
+    if (FidelityOf(request) == SurfaceFidelity::Fitted) {
+        return std::max(kNetworkFitDeviationMm, ExactLimitMm(tolerance));
+    }
     return std::max(kFabricationDeviationMm, ExactLimitMm(tolerance));
 }
 
@@ -109,11 +120,13 @@ std::string SurfaceDeviationNoteJa(const GuideSurfaceRequest& request, double de
     const geometry::GeometryTolerance& tolerance)
 {
     if (!(deviationMm > ExactLimitMm(tolerance))
-        || FidelityOf(request) != SurfaceFidelity::Approximating) {
+        || FidelityOf(request) == SurfaceFidelity::Interpolating) {
         return {};
     }
-    // 言い方は作り方の名前で決める版と同じにする(近づける作り方として扱う)。
-    return SurfaceDeviationNoteJa(GuideSurfaceMethod::GuidedLoft, deviationMm, tolerance);
+    // 言い方は作り方の名前で決める版と同じにする。
+    return SurfaceDeviationNoteJa(FidelityOf(request) == SurfaceFidelity::Fitted
+            ? GuideSurfaceMethod::CurveNetworkExact : GuideSurfaceMethod::GuidedLoft,
+        deviationMm, tolerance);
 }
 
 } // namespace kachakacha::v2::modeling

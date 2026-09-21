@@ -36,7 +36,8 @@ std::vector<ToolRoleLabel> ExtrudeRoleLabels(const ExtrudeInputState& state)
 
 std::vector<ToolRoleLabel> SurfaceRoleLabels(const SurfaceInputState& state)
 {
-    const bool network = state.method == modeling::GuideSurfaceMethod::GordonNetwork;
+    const bool network = state.method == modeling::GuideSurfaceMethod::GordonNetwork
+        || state.method == modeling::GuideSurfaceMethod::CurveNetworkExact;
     std::vector<ToolRoleLabel> labels;
 
     // 断面。**画面の「3. 断面順」と同じ並び・同じ番号にする。**

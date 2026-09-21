@@ -57,6 +57,7 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     case GuideSurfaceMethod::OffsetGuide:    return QStringLiteral("面を離す(何枚でも)");
     case GuideSurfaceMethod::Revolve:        return QStringLiteral("断面を回す(何本でも)");
     case GuideSurfaceMethod::FourEdgePatch:  return QStringLiteral("4辺 + 通る線(任意)");
+    case GuideSurfaceMethod::CurveNetworkExact: return QStringLiteral("U 2本〜 × V 2本〜(全部通す)");
     }
     return QString();
 }

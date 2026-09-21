@@ -218,7 +218,8 @@ void V2MainWindow::RefreshSurfaceDock()
     // **近づけて作る面は線の上に乗っていない。**知らずに板取りへ進むと、
     // 紙とプラ板を切ってから気づくことになる。
     QString deviation;
-    QString solver;
+    // 作り方の内訳。下見が出ないときも出す(曲線網の「こちらなら作れます」など)。
+    QString solver = QString::fromStdString(surfaceSolverNote_);
     if (surfaceSnapshot_.has_value()) {
         const auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(
             surfaceSnapshot_->table, session_->GetDocument().Snapshot().settings.tolerance);
@@ -228,7 +229,6 @@ void V2MainWindow::RefreshSurfaceDock()
                   session_->GetDocument().Snapshot().settings.tolerance)
             : std::string();
         deviation = QString::fromStdString(note);
-        solver = QString::fromStdString(surfaceSolverNote_);
         if (!surfaceSnapshot_->batch.empty()) {
             solver += QStringLiteral("(%1 個に分けて、1 つずつ作ります)")
                           .arg(static_cast<int>(surfaceSnapshot_->batch.size()) + 1);

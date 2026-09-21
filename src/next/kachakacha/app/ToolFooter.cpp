@@ -37,6 +37,7 @@ namespace {
     case modeling::GuideSurfaceMethod::OffsetGuide:    return "Offset";
     case modeling::GuideSurfaceMethod::Revolve:        return "Revolve";
     case modeling::GuideSurfaceMethod::FourEdgePatch:  return "FourEdge";
+    case modeling::GuideSurfaceMethod::CurveNetworkExact: return "GordonExact";
     }
     return "Loft";
 }

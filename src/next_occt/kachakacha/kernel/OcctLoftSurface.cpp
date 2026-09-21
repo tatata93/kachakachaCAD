@@ -7,9 +7,11 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/modeling/GordonGrid.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -17,6 +19,9 @@
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
+#include <GeomLProp_SLProps.hxx>
+#include <GeomAPI_PointsToBSplineSurface.hxx>
 #include <GeomAbs_Shape.hxx>
 #include <GeomConvert.hxx>
 #include <GeomConvert_CompCurveToBSplineCurve.hxx>
@@ -26,7 +31,9 @@
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BoundedCurve.hxx>
 #include <Geom_Curve.hxx>
+#include <Geom_Surface.hxx>
 #include <NCollection_Array1.hxx>
+#include <NCollection_Array2.hxx>
 #include <Precision.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
@@ -38,12 +45,14 @@
 #include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kachakacha::v2::kernel::detail {
@@ -463,6 +472,94 @@ constexpr double kG2Limit = 0.1;
     return Out::Success(best);
 }
 
+//! 面の上の 1 点の値(法線と 1・2 階の微分)。
+struct SurfacePoint {
+    bool ok = false;
+    gp_Vec normal;
+    gp_Vec du;
+    gp_Vec dv;
+    gp_Vec duu;
+    gp_Vec duv;
+    gp_Vec dvv;
+};
+
+//! 点に一番近い面の上の点で値を取る。
+[[nodiscard]] SurfacePoint EvaluateNear(const occ::handle<Geom_Surface>& surface,
+    const gp_Pnt& point)
+{
+    SurfacePoint out;
+    if (surface.IsNull()) {
+        return out;
+    }
+    GeomAPI_ProjectPointOnSurf projection(point, surface);
+    if (!projection.IsDone() || projection.NbPoints() == 0) {
+        return out;
+    }
+    double u = 0.0;
+    double v = 0.0;
+    projection.LowerDistanceParameters(u, v);
+    GeomLProp_SLProps props(surface, u, v, 2, Precision::Confusion());
+    if (!props.IsNormalDefined()) {
+        return out;
+    }
+    out.normal = gp_Vec(props.Normal());
+    out.du = props.D1U();
+    out.dv = props.D1V();
+    out.duu = props.D2U();
+    out.duv = props.DUV();
+    out.dvv = props.D2V();
+    out.ok = true;
+    return out;
+}
+
+//! 接平面の中の向き direction の法曲率 II(d,d) / I(d,d)(1/mm)。
+[[nodiscard]] double NormalCurvature(const SurfacePoint& p, const gp_Vec& direction)
+{
+    const double e = p.du.Dot(p.du);
+    const double f = p.du.Dot(p.dv);
+    const double g = p.dv.Dot(p.dv);
+    const double det = e * g - f * f;
+    if (!(std::abs(det) > 1.0e-18)) {
+        return 0.0;
+    }
+    const double a = p.du.Dot(direction);
+    const double b = p.dv.Dot(direction);
+    const double s = (a * g - b * f) / det;
+    const double t = (b * e - a * f) / det;
+    const double first = e * s * s + 2.0 * f * s * t + g * t * t;
+    if (!(first > 1.0e-18)) {
+        return 0.0;
+    }
+    const double second = p.duu.Dot(p.normal) * s * s + 2.0 * p.duv.Dot(p.normal) * s * t
+        + p.dvv.Dot(p.normal) * t * t;
+    return second / first;
+}
+
+//! 境界の辺の上で測る点と、そこでの辺の向き。角(辺の両端)そのものは外す。
+//! 角は隣の辺でも決まる点で、そこだけの値は辺の滑らかさを表さない。
+[[nodiscard]] std::vector<std::pair<gp_Pnt, gp_Vec>> BoundarySamples(
+    const std::vector<CurveSegment>& segments)
+{
+    std::vector<std::pair<gp_Pnt, gp_Vec>> out;
+    if (segments.empty()) {
+        return out;
+    }
+    const int perSegment = std::max(3, 24 / static_cast<int>(segments.size()));
+    for (const CurveSegment& segment : segments) {
+        for (int k = 0; k < perSegment; ++k) {
+            const double t = (k + 0.5) / perSegment;
+            const Vector3 d = segment.FirstDerivative(t);
+            const double length = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+            if (!(length > 1.0e-12)) {
+                continue;
+            }
+            out.emplace_back(ToPoint(segment.Evaluate(t)),
+                gp_Vec(d.x / length, d.y / length, d.z / length));
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
@@ -494,38 +591,78 @@ Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
     const GeomAbs_Shape order =
         chain.continuity == modeling::SurfaceContinuity::G2 ? GeomAbs_G2 : GeomAbs_G1;
     for (const TopoDS_Edge& edge : use) {
-        const int index = filler.Add(edge, face.Value(), order, true);
-        checks.push_back(ContinuityCheck{index, chain.continuity, chainIndex});
+        (void)filler.Add(edge, face.Value(), order, true);
     }
+    checks.push_back(ContinuityCheck{chainIndex, chain.continuity, face.Value()});
     return Result<bool>::Success(true);
 }
 
-Result<ContinuityMeasure> MeasureContinuity(BRepOffsetAPI_MakeFilling& filler,
+Result<ContinuityMeasure> MeasureContinuity(const TopoDS_Shape& built,
     const GuideSurfaceRequest& request, const std::vector<ContinuityCheck>& checks)
 {
+    using Out = Result<ContinuityMeasure>;
     ContinuityMeasure measure;
+    if (checks.empty()) {
+        return Out::Success(measure);
+    }
+    TopoDS_Face result;
+    for (TopExp_Explorer explorer(built, TopAbs_FACE); explorer.More(); explorer.Next()) {
+        result = TopoDS::Face(explorer.Current());
+        break;
+    }
+    if (result.IsNull()) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed, "出来た面の滑らかさを測れませんでした。",
+            "面が見つかりません。"));
+    }
+    const occ::handle<Geom_Surface> resultSurface = BRep_Tool::Surface(result);
     for (const ContinuityCheck& check : checks) {
-        const double g1 = filler.G1Error(check.constraintIndex) * 180.0 / 3.14159265358979323846;
-        measure.g1ErrorDeg = std::max(measure.g1ErrorDeg, g1);
-        if (g1 > kG1LimitDeg) {
-            return Result<ContinuityMeasure>::Failure(MakeError(kSurfaceBuildFailed,
+        const occ::handle<Geom_Surface> supportSurface = BRep_Tool::Surface(check.support);
+        const auto samples = BoundarySamples(request.chains[check.chainIndex].segments);
+        std::size_t measured = 0;
+        double worstAngle = 0.0;
+        double worstCurvature = 0.0;
+        for (const auto& [point, tangent] : samples) {
+            const SurfacePoint a = EvaluateNear(resultSurface, point);
+            const SurfacePoint b = EvaluateNear(supportSurface, point);
+            if (!a.ok || !b.ok) {
+                continue;
+            }
+            ++measured;
+            const double dot = a.normal.Dot(b.normal);
+            worstAngle = std::max(worstAngle,
+                std::acos(std::min(1.0, std::abs(dot))) * 180.0 / 3.14159265358979323846);
+            // 辺を横切る向き(接平面の中で辺に直角)の法曲率。法線の向きをそろえて比べる。
+            const double across = NormalCurvature(a, a.normal.Crossed(tangent));
+            const double other = NormalCurvature(b, b.normal.Crossed(tangent));
+            worstCurvature = std::max(worstCurvature,
+                std::abs(across - (dot < 0.0 ? -other : other)));
+        }
+        if (measured * 2 < samples.size()) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
+                ChainName(request, check.chainIndex) + "の滑らかさを測れませんでした。",
+                "辺の上の点を面へ落とせませんでした(" + std::to_string(measured) + " / "
+                    + std::to_string(samples.size()) + " 点)。"));
+        }
+        measure.g1ErrorDeg = std::max(measure.g1ErrorDeg, worstAngle);
+        if (worstAngle > kG1LimitDeg) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
                 std::string(modeling::SurfaceContinuityName(check.order)) + "を指定しましたが、"
-                    + ChainName(request, check.chainIndex) + "で面が最大 " + Mm3(g1)
+                    + ChainName(request, check.chainIndex) + "で面が最大 " + Mm3(worstAngle)
                     + " 度折れています。",
                 "許容は " + Mm3(kG1LimitDeg) + " 度です。支持面とのつながり方か、ほかの辺の形を見直してください。"));
         }
-        if (check.order == modeling::SurfaceContinuity::G2) {
-            const double g2 = filler.G2Error(check.constraintIndex);
-            measure.g2Error = std::max(measure.g2Error, g2);
-            if (g2 > kG2Limit) {
-                return Result<ContinuityMeasure>::Failure(MakeError(kSurfaceBuildFailed,
-                    "G2を指定しましたが、" + ChainName(request, check.chainIndex)
-                        + "で曲率が最大 " + Mm3(g2) + " 食い違っています。",
-                    "許容は " + Mm3(kG2Limit) + " です。G1 にするか、辺の形を見直してください。"));
-            }
+        if (check.order != modeling::SurfaceContinuity::G2) {
+            continue;
+        }
+        measure.g2Error = std::max(measure.g2Error, worstCurvature);
+        if (worstCurvature > kG2Limit) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
+                "G2を指定しましたが、" + ChainName(request, check.chainIndex)
+                    + "で曲率が最大 " + Mm3(worstCurvature) + " (1/mm) 食い違っています。",
+                "許容は " + Mm3(kG2Limit) + " (1/mm) です。G1 にするか、辺の形を見直してください。"));
         }
     }
-    return Result<ContinuityMeasure>::Success(measure);
+    return Out::Success(measure);
 }
 
 namespace {
@@ -548,6 +685,11 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
                 tolerance);
             if (!curve.HasValue()) {
                 return Out::Failure(curve.Diagnostics());
+            }
+            // Coons は各方向に制御点 4 つ以上を要る(OCCT: 足りないと "invalid filling style")。
+            // 直線(1 次・2 点)や短い円弧(2 次・3 点)は 3 次へ上げる。形は変わらない。
+            if (curve.Value()->Degree() < 3) {
+                curve.Value()->IncreaseDegree(3);
             }
             curves.push_back(curve.Value());
         }
@@ -597,13 +739,53 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "4 辺と通る線から面を張れませんでした。", "通る線が 4 辺の内側にあるかを確かめてください。"));
         }
-        const auto measured = MeasureContinuity(filler, request, checks);
+        const auto measured = MeasureContinuity(filler.Shape(), request, checks);
         if (!measured.HasValue()) {
             return Out::Failure(measured.Diagnostics());
         }
         measure = measured.Value();
         return Out::Success(filler.Shape());
     }, "四辺面");
+}
+
+Result<TopoDS_Shape> BuildNetworkShape(const GuideSurfaceRequest& request,
+    const GeometryTolerance& tolerance)
+{
+    using Out = Result<TopoDS_Shape>;
+    return Guarded([&]() -> Out {
+        std::size_t lines = 0;
+        for (const auto& chain : request.chains) {
+            lines = std::max(lines, chain.index > 0 ? static_cast<std::size_t>(chain.index) : 0);
+        }
+        // 線が多いほど細かく。1 区間に 8 点、25〜97 点。
+        const std::size_t samples = std::clamp<std::size_t>(8 * (lines > 1 ? lines - 1 : 1) + 1,
+            25, 97);
+        const auto grid = modeling::BuildGordonGrid(request, tolerance, samples);
+        if (!grid.HasValue()) {
+            return Out::Failure(grid.Diagnostics());
+        }
+        const auto& g = grid.Value();
+        NCollection_Array2<gp_Pnt> points(1, static_cast<int>(g.columns), 1,
+            static_cast<int>(g.rows));
+        for (std::size_t column = 0; column < g.columns; ++column) {
+            for (std::size_t row = 0; row < g.rows; ++row) {
+                points.SetValue(static_cast<int>(column) + 1, static_cast<int>(row) + 1,
+                    ToPoint(g.At(row, column)));
+            }
+        }
+        // 写す誤差の目標は、曲線網の許容(0.02 mm)より十分小さく。
+        GeomAPI_PointsToBSplineSurface fit(points, 3, 8, GeomAbs_C2, 0.002);
+        if (!fit.IsDone() || fit.Surface().IsNull()) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed,
+                "曲線網の形を面へ写せませんでした。", "線の数を減らすか、曲線網(近似)を使ってください。"));
+        }
+        const occ::handle<Geom_Surface> surface = fit.Surface();
+        BRepBuilderAPI_MakeFace face{surface, Precision::Confusion()};
+        if (!face.IsDone()) {
+            return Out::Failure(MakeError(kSurfaceBuildFailed, "曲線網の面を作れませんでした。", {}));
+        }
+        return Out::Success(TopoDS_Shape(face.Face()));
+    }, "曲線網(Gordon)");
 }
 
 Result<TopoDS_Shape> BuildLoftShape(const GuideSurfaceRequest& request,

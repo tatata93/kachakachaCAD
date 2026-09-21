@@ -316,7 +316,7 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
         const ChainRole role = request.chains[index].role;
         if (role != ChainRole::GuideU && role != ChainRole::GuideV) {
             errors.push_back(MakeError(kBadInput, "U方向・V方向以外が混ざっています。",
-                ChainLabel(request.chains[index])));
+                ChainLabel(request.method, request.chains[index])));
         }
     }
     if (!errors.empty()) {
@@ -326,23 +326,28 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
     const double joinTolerance = std::max(tolerance.interactiveJoinMm,
         tolerance.modelLinearMm * 100.0);
     GuideSurfaceAnalysis analysis;
-    analysis.method = GuideSurfaceMethod::GordonNetwork;
+    analysis.method = request.method;   // 近似(Filling)と Gordon で同じ検査
 
     // 全U×全Vが、ちょうど1回ずつ交わること(§6.6)。
     for (const std::size_t u : uChains) {
         for (const std::size_t v : vChains) {
             const ChainCrossing crossing = FindClosestApproach(sampled[u], sampled[v]);
             if (crossing.distanceMm > joinTolerance) {
-                errors.push_back(MakeError(kCrossingMissing, "交わっていない線があります。",
-                    ChainLabel(request.chains[u]) + " と " + ChainLabel(request.chains[v])
+                errors.push_back(MakeError(kCrossingMissing,
+                    ChainLabel(request.method, request.chains[u]) + "と"
+                        + ChainLabel(request.method, request.chains[v]) + "が交わっていません。",
+                    ChainLabel(request.method, request.chains[u]) + " と " + ChainLabel(request.method, request.chains[v])
                         + " の最短距離 " + std::to_string(crossing.distanceMm)
                         + " mm(許容 " + std::to_string(joinTolerance) + " mm)。"));
                 continue;
             }
             const int approaches = CountApproaches(sampled[u], sampled[v], joinTolerance);
             if (approaches > 1) {
-                errors.push_back(MakeError(kCrossingMissing, "2回以上交わっている線があります。",
-                    ChainLabel(request.chains[u]) + " と " + ChainLabel(request.chains[v])
+                errors.push_back(MakeError(kCrossingMissing,
+                    ChainLabel(request.method, request.chains[u]) + "と"
+                        + ChainLabel(request.method, request.chains[v]) + "が "
+                        + std::to_string(approaches) + " か所で交わっています(多重交差)。",
+                    ChainLabel(request.method, request.chains[u]) + " と " + ChainLabel(request.method, request.chains[v])
                         + " が " + std::to_string(approaches) + " 箇所で交わっています。"));
                 continue;
             }
@@ -387,8 +392,8 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
         if (uOrders[at] != uOrders[0]) {
             return Result<GuideSurfaceAnalysis>::Failure(MakeError(kCrossingOrder,
                 "V方向の線と交わる順番が、U方向の線どうしで食い違っています。",
-                ChainLabel(request.chains[uChains[0]]) + " と "
-                    + ChainLabel(request.chains[uChains[at]])
+                ChainLabel(request.method, request.chains[uChains[0]]) + " と "
+                    + ChainLabel(request.method, request.chains[uChains[at]])
                     + "。網が捻れているので、このままでは面になりません。"));
         }
     }
@@ -397,11 +402,59 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
         if (vOrders[at] != vOrders[0]) {
             return Result<GuideSurfaceAnalysis>::Failure(MakeError(kCrossingOrder,
                 "U方向の線と交わる順番が、V方向の線どうしで食い違っています。",
-                ChainLabel(request.chains[vChains[0]]) + " と "
-                    + ChainLabel(request.chains[vChains[at]])));
+                ChainLabel(request.method, request.chains[vChains[0]]) + " と "
+                    + ChainLabel(request.method, request.chains[vChains[at]])));
         }
     }
     return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
+}
+
+//! 曲線網(Gordon)の追加の条件: 網の外側の線どうしが端で交わっていること。
+//! Gordon は網の外側を面の縁にして中を組み立てるので、外側の線が端で交わらないと
+//! 縁が決まらない。その網は近似(Filling)でなら作れる。
+[[nodiscard]] Result<GuideSurfaceAnalysis> AnalyzeNetworkExact(const GuideSurfaceRequest& request,
+    const GeometryTolerance& tolerance, std::vector<SampledChain>& sampled)
+{
+    auto analysis = AnalyzeGordon(request, tolerance, sampled);
+    if (!analysis.HasValue()) {
+        return analysis;
+    }
+    const double joinTolerance = JoinToleranceMm(tolerance);
+    for (const std::size_t index : IndicesWithRole(request, ChainRole::GuideU)) {
+        double lo = 1.0;
+        double hi = 0.0;
+        for (const ChainCrossing& crossing : analysis.Value().crossings) {
+            if (crossing.firstChainIndex == index) {
+                lo = std::min(lo, crossing.firstParameter);
+                hi = std::max(hi, crossing.firstParameter);
+            }
+        }
+        const double length = sampled[index].lengthMm;
+        if (lo * length > joinTolerance || (1.0 - hi) * length > joinTolerance) {
+            return Result<GuideSurfaceAnalysis>::Failure(MakeError(kNotConnected,
+                "曲線網(Gordon)は、網の外側の線どうしが端で交わっているときだけ作れます。",
+                ChainLabel(request.method, request.chains[index])
+                    + " の端が外側の V 線と交わっていません。曲線網(近似 / Filling)なら作れます。"));
+        }
+    }
+    for (const std::size_t index : IndicesWithRole(request, ChainRole::GuideV)) {
+        double lo = 1.0;
+        double hi = 0.0;
+        for (const ChainCrossing& crossing : analysis.Value().crossings) {
+            if (crossing.secondChainIndex == index) {
+                lo = std::min(lo, crossing.secondParameter);
+                hi = std::max(hi, crossing.secondParameter);
+            }
+        }
+        const double length = sampled[index].lengthMm;
+        if (lo * length > joinTolerance || (1.0 - hi) * length > joinTolerance) {
+            return Result<GuideSurfaceAnalysis>::Failure(MakeError(kNotConnected,
+                "曲線網(Gordon)は、網の外側の線どうしが端で交わっているときだけ作れます。",
+                ChainLabel(request.method, request.chains[index])
+                    + " の端が外側の U 線と交わっていません。曲線網(近似 / Filling)なら作れます。"));
+        }
+    }
+    return analysis;
 }
 
 // ---------------------------------------------------------------- BoundaryFill
@@ -424,9 +477,10 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
             edgeCount += request.chains[index].segments.size();
         }
     }
-    if (edgeCount < 3) {
-        errors.push_back(MakeError(kBadInput, "境界の辺が足りません。",
-            "閉じるには3辺以上が必要です。実際 " + std::to_string(edgeCount) + " 辺。"));
+    // 辺の本数では断らない(閉じたスプライン 1 本でも境界になる)。閉じているか・
+    // 囲む広さがあるかで断る(下)。2026-09-22 の棚卸し: 3 辺未満を一律に断っていた。
+    if (edgeCount == 0) {
+        errors.push_back(MakeError(kBadInput, "境界の辺がありません。", {}));
     }
     if (!errors.empty()) {
         return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
@@ -470,6 +524,21 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
                 + std::to_string(joinTolerance) + " mm)。"));
     }
 
+    // 行って戻るだけの輪(広さが無い)は面にならない。輪の点列が囲むベクトル面積で見る。
+    {
+        std::vector<Vector3> loop;
+        for (const std::size_t index : ring) {
+            loop.insert(loop.end(), sampled[index].points.begin(), sampled[index].points.end());
+        }
+        Vector3 area{};
+        for (std::size_t at = 0; at < loop.size(); ++at) {
+            area = area + geometry::Cross(loop[at], loop[(at + 1) % loop.size()]);
+        }
+        if (area.Length() * 0.5 <= joinTolerance * joinTolerance) {
+            return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
+                "境界が面を囲んでいません。", "辺が行って戻っているだけで、囲む広さがありません。"));
+        }
+    }
     GuideSurfaceAnalysis analysis;
     analysis.method = GuideSurfaceMethod::BoundaryFill;
     analysis.sectionOrdering.chainIndices = ring;
@@ -624,6 +693,8 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
         return AnalyzeRevolve(request, tolerance, sampled);
     case GuideSurfaceMethod::FourEdgePatch:
         return AnalyzeFourEdgePatch(request, tolerance, sampled);
+    case GuideSurfaceMethod::CurveNetworkExact:
+        return AnalyzeNetworkExact(request, tolerance, sampled);
     }
     return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
         "知らない作り方です。", {}));

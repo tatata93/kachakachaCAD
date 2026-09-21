@@ -91,6 +91,7 @@ const std::vector<RoleCardinality>& SurfaceCardinality(GuideSurfaceMethod method
     case GuideSurfaceMethod::OffsetGuide:    return offset;
     case GuideSurfaceMethod::Revolve:        return revolve;
     case GuideSurfaceMethod::FourEdgePatch:  return fourEdge;
+    case GuideSurfaceMethod::CurveNetworkExact: return gordon;
     }
     return loft;
 }
@@ -189,12 +190,50 @@ std::string SurfaceSolverNoteJa(const GuideSurfaceRequest& request,
                     : std::string());
     case GuideSurfaceMethod::GordonNetwork:
         return "曲線網(近似 / Filling): 外側の U・V を境界に、内側の線を点の拘束にして張ります";
+    case GuideSurfaceMethod::CurveNetworkExact:
+        return "曲線網(Gordon): U 線と V 線を全部通る面を網から直接組み立てます";
     case GuideSurfaceMethod::BoundaryFill:
         return rails == 0 ? std::string("外周の輪の内側を張ります")
                           : "外周の輪を境界に、通る線 " + std::to_string(rails)
                               + " 本を面が通る拘束にして張ります";
     default:
         break;
+    }
+    return {};
+}
+
+std::string NetworkAlternativeNoteJa(const GuideSurfaceRequest& request,
+    const geometry::GeometryTolerance& tolerance)
+{
+    const bool exactChosen = request.method == GuideSurfaceMethod::CurveNetworkExact;
+    if (!exactChosen && request.method != GuideSurfaceMethod::GordonNetwork) {
+        return {};
+    }
+    GuideSurfaceRequest exact = request;
+    exact.method = GuideSurfaceMethod::CurveNetworkExact;
+    GuideSurfaceRequest approximate = request;
+    approximate.method = GuideSurfaceMethod::GordonNetwork;
+    const auto exactAnalysis = AnalyzeGuideSurfaceRequest(exact, tolerance);
+    const auto approximateAnalysis = AnalyzeGuideSurfaceRequest(approximate, tolerance);
+    const auto firstReason = [](const auto& analysis) {
+        if (analysis.Diagnostics().empty()) {
+            return std::string();
+        }
+        const auto& first = analysis.Diagnostics().front();
+        return first.summaryJa + (first.detailsJa.empty() ? std::string() : "(" + first.detailsJa + ")");
+    };
+    if (exactAnalysis.HasValue() && approximateAnalysis.HasValue()) {
+        return exactChosen
+            ? "この網は曲線網(近似 / Filling)でも作れます(外側の線を縁にし、内側は点で近づける)"
+            : "この網は曲線網(Gordon)でも作れます(U 線と V 線を全部 0.02 mm 以内で通す)";
+    }
+    if (exactChosen && !exactAnalysis.HasValue() && approximateAnalysis.HasValue()) {
+        return "曲線網(Gordon)では作れません: " + firstReason(exactAnalysis)
+            + " 曲線網(近似 / Filling)なら作れます";
+    }
+    if (!exactChosen && !approximateAnalysis.HasValue() && exactAnalysis.HasValue()) {
+        return "曲線網(近似 / Filling)では作れません: " + firstReason(approximateAnalysis)
+            + " 曲線網(Gordon)なら作れます";
     }
     return {};
 }

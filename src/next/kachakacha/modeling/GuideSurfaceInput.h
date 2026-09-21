@@ -41,6 +41,9 @@ enum class GuideSurfaceMethod {
     Revolve,
     //! 四辺面(U0/U1/V0/V1 の 4 辺で囲う 1 枚)。末尾に足すのは保存の番号を保つため。
     FourEdgePatch,
+    //! 曲線網(Gordon): U 線と V 線を全部通る面を、網の形から直接組み立てる。
+    //! GordonNetwork(Filling で近づける)とは別の作り方。網の外側の線が端で交わるときだけ作れる。
+    CurveNetworkExact,
 };
 
 [[nodiscard]] constexpr std::string_view GuideSurfaceMethodName(
@@ -56,6 +59,7 @@ enum class GuideSurfaceMethod {
     case GuideSurfaceMethod::OffsetGuide:    return "offset_guide";
     case GuideSurfaceMethod::Revolve:        return "revolve";
     case GuideSurfaceMethod::FourEdgePatch:  return "four_edge_patch";
+    case GuideSurfaceMethod::CurveNetworkExact: return "curve_network_exact";
     }
     return "unknown";
 }

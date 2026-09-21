@@ -73,6 +73,12 @@ struct RoleCardinality {
 [[nodiscard]] std::string SurfaceSolverNoteJa(const GuideSurfaceRequest& request,
     const GuideSurfaceAnalysis& analysis);
 
+//! 曲線網の 2 つの作り方(近似 / Filling と Gordon)のうち、いまの網でどちらが成り立つか。
+//! 片方しか成り立たないときは成り立つ方を、両方成り立つときは違いを、一言で返す。
+//! 曲線網でない・線が足りないときは空。**成り立たない方を成り立つとは言わない。**
+[[nodiscard]] std::string NetworkAlternativeNoteJa(const GuideSurfaceRequest& request,
+    const geometry::GeometryTolerance& tolerance);
+
 //! 選んだ数だと、1 回の生成に収まらず一括(1 つずつ別に作る)になるか。
 [[nodiscard]] bool SurfaceNeedsBatch(GuideSurfaceMethod method, ChainRole role,
     std::size_t count) noexcept;

@@ -205,6 +205,9 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
     const auto analysis =
         kachakacha::v2::modeling::AnalyzeGuideSurfaceRequest(request.Value(), tolerance);
     if (!analysis.HasValue()) {
+        // 曲線網なら、成り立つ方の作り方を棚に言う(下見が出ないときこそ要る)。
+        surfaceSolverNote_ =
+            kachakacha::v2::modeling::NetworkAlternativeNoteJa(request.Value(), tolerance);
         if (report) {
             ReportDiagnostics(analysis.Diagnostics());
         }
@@ -217,6 +220,12 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
     // 作り方の内訳(ロフトならガイドの本数と使い方)。棚に言葉で出す。
     surfaceSolverNote_ = kachakacha::v2::modeling::SurfaceSolverNoteJa(request.Value(),
         analysis.Value());
+    // 曲線網は 2 つの作り方(近似 / Filling と Gordon)のどちらが成り立つかも言う。
+    const std::string alternative =
+        kachakacha::v2::modeling::NetworkAlternativeNoteJa(request.Value(), tolerance);
+    if (!alternative.empty()) {
+        surfaceSolverNote_ += "。" + alternative;
+    }
     // 離した面は、元の面の実体が要る。表が指す形状ガイドの handle を渡す。
     kachakacha::v2::modeling::KernelShapeHandle source;
     for (const auto& row : table.rows) {

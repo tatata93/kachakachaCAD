@@ -315,7 +315,7 @@ constexpr int kNetworkPointsPerChain = 9;
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "境界から面を張れませんでした。", {}));
         }
-        const auto measured = detail::MeasureContinuity(filler, request, checks);
+        const auto measured = detail::MeasureContinuity(filler.Shape(), request, checks);
         if (!measured.HasValue()) {
             return Out::Failure(measured.Diagnostics());
         }
@@ -737,6 +737,9 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         break;
     case GuideSurfaceMethod::FourEdgePatch:
         built = detail::BuildFourEdgeShape(request, analysis, tolerance, continuity);
+        break;
+    case GuideSurfaceMethod::CurveNetworkExact:
+        built = detail::BuildNetworkShape(request, tolerance);
         break;
     }
     if (!built.HasValue()) {

@@ -39,7 +39,7 @@ const std::vector<GuideSurfaceMethod>& OtherSurfaceMethods()
     // 主要6方式に入らないもの。**既存機能は消さない。**
     static const std::vector<GuideSurfaceMethod> methods{
         GuideSurfaceMethod::OffsetGuide, GuideSurfaceMethod::Revolve,
-        GuideSurfaceMethod::GuidedLoft};
+        GuideSurfaceMethod::CurveNetworkExact, GuideSurfaceMethod::GuidedLoft};
     return methods;
 }
 
@@ -311,7 +311,8 @@ std::string_view SurfaceSlotNameJa(GuideSurfaceMethod method, ChainRole role) no
     if (method == GuideSurfaceMethod::FourEdgePatch && role == ChainRole::BoundarySide) {
         return "辺";
     }
-    if (method == GuideSurfaceMethod::GordonNetwork) {
+    if (method == GuideSurfaceMethod::GordonNetwork
+        || method == GuideSurfaceMethod::CurveNetworkExact) {
         // 曲線網は「断面」の欄が U、「ガイド」の欄が V(header の UI_DEVIATION_REQUEST)。
         if (role == ChainRole::Section) {
             return "U方向の線";
@@ -336,14 +337,16 @@ bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& ro
     // ここを飛ばすと、平面(外形)も曲線網(外形U/V)も **欄から入れられない。**
     switch (slot) {
     case ChainRole::Section:
-        if (method == GuideSurfaceMethod::GordonNetwork) {
+        if (method == GuideSurfaceMethod::GordonNetwork
+            || method == GuideSurfaceMethod::CurveNetworkExact) {
             role = ChainRole::GuideU;   // U/V ネットワークの U
             return true;
         }
         role = ChainRole::Section;
         return modeling::RoleUsedByMethod(method, ChainRole::Section);
     case ChainRole::GuideU:
-        if (method == GuideSurfaceMethod::GordonNetwork) {
+        if (method == GuideSurfaceMethod::GordonNetwork
+            || method == GuideSurfaceMethod::CurveNetworkExact) {
             role = ChainRole::GuideV;   // 同じく V
             return true;
         }
@@ -610,7 +613,8 @@ bool SurfaceEntryReversed(const SurfaceInputState& state, const base::EntityId& 
 bool SurfaceSlotFlippable(GuideSurfaceMethod method, ChainRole slot) noexcept
 {
     // 向きが形に効く欄だけ。ガイド・境界・通る線は向きを問わない(検査がそろえる)。
-    if (method == GuideSurfaceMethod::GordonNetwork) {
+    if (method == GuideSurfaceMethod::GordonNetwork
+        || method == GuideSurfaceMethod::CurveNetworkExact) {
         return slot == ChainRole::Section || slot == ChainRole::GuideU;
     }
     return slot == ChainRole::Section

@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 using kachakacha::v2::geometry::CurveSegment;
@@ -277,7 +278,24 @@ namespace {
     return built.Value().handle;
 }
 
-//! 支持面の縁 y = 0 から立ち上がる境界面(反対の辺が持ち上がっている)。
+//! 3 次ベジエ 1 本の鎖。
+[[nodiscard]] GuideChain Bezier(ChainRole role, int index, std::vector<Vector3> controls)
+{
+    GuideChain chain;
+    chain.role = role;
+    chain.index = index;
+    chain.segments.push_back(CurveSegment::MakeCubicBezier(std::move(controls)).Value());
+    return chain;
+}
+
+//! 支持面の縁 y = 0 から立ち上がる境界面(反対の辺が持ち上がり、真ん中がさらに膨らむ)。
+//!
+//! 脇の 2 辺は、支持面の縁で水平に出て、そこで曲がり方も 0 の 3 次ベジエ
+//! (制御点 y = 0, 10, 20 が z = 0 に並ぶ)。直線にすると角で脇の辺そのものが
+//! 支持面から 18 度立ち上がり、辺 1 の全長で G1 は原理的に成り立たない
+//! (2026-09-22 PC: 5.1 度の折れ目が残り、正しく断られた)。円弧でも角で曲率が残り G2 が
+//! 成り立たない。反対の辺 3 は真ん中が膨らむ円弧。G0 のままだと辺 1 の真ん中で面が
+//! 支持面から折れて立ち上がるので、G1 を指定すると形が変わる。
 [[nodiscard]] GuideSurfaceRequest FillBesideSupport(
     kachakacha::v2::modeling::SurfaceContinuity order,
     kachakacha::v2::modeling::KernelShapeHandle support)
@@ -285,9 +303,12 @@ namespace {
     GuideSurfaceRequest request;
     request.method = GuideSurfaceMethod::BoundaryFill;
     request.chains.push_back(Path(ChainRole::BoundarySide, 1, {{0, 0, 0}, {40, 0, 0}}));
-    request.chains.push_back(Path(ChainRole::BoundarySide, 2, {{40, 0, 0}, {40, 30, 10}}));
-    request.chains.push_back(Path(ChainRole::BoundarySide, 3, {{40, 30, 10}, {0, 30, 10}}));
-    request.chains.push_back(Path(ChainRole::BoundarySide, 4, {{0, 30, 10}, {0, 0, 0}}));
+    request.chains.push_back(Bezier(ChainRole::BoundarySide, 2,
+        {{40, 0, 0}, {40, 10, 0}, {40, 20, 0}, {40, 30, 10}}));
+    request.chains.push_back(Arc(ChainRole::BoundarySide, 3, {40, 30, 10}, {20, 30, 16},
+        {0, 30, 10}));
+    request.chains.push_back(Bezier(ChainRole::BoundarySide, 4,
+        {{0, 30, 10}, {0, 20, 0}, {0, 10, 0}, {0, 0, 0}}));
     request.chains[0].continuity = order;
     if (support.Valid()) {
         request.chains[0].supportSurfaceId =
@@ -320,7 +341,9 @@ KACHA_V2_TEST(kernel_continuity, G2を指定すると曲率の差も測る)
     const auto support = MakeFlatSupport();
     const auto g2 = Build(FillBesideSupport(SurfaceContinuity::G2, support));
     Require(g2.HasValue(), "作れる: " + Why(g2));
-    Require(g2.Value().continuityG2Error >= 0.0, "G2 の曲率の差を測っている");
+    Require(g2.Value().continuityG2Error >= 0.0 && g2.Value().continuityG2Error <= 0.1,
+        "G2 の曲率の差を測って許容の内側(" + std::to_string(g2.Value().continuityG2Error)
+            + " /mm、折れ目 " + std::to_string(g2.Value().continuityG1ErrorDeg) + " 度)");
 }
 
 KACHA_V2_TEST(kernel_continuity, 支持面の縁に乗っていない辺のG1は断る)
@@ -352,6 +375,60 @@ KACHA_V2_TEST(kernel_continuity, 四辺面もG1を指定すると支持面に沿
     Require(built.HasValue(), "作れる: " + Why(built));
     Require(built.Value().continuityG1ErrorDeg >= 0.0 && built.Value().continuityG1ErrorDeg <= 1.5,
         "G1 を測って許容の内側");
+}
+
+namespace {
+
+[[nodiscard]] double Bowl(double x, double y)
+{
+    return x * x / 100.0 + y * y / 80.0;
+}
+
+[[nodiscard]] GuideChain OnBowl(ChainRole role, int index, Vector3 from, Vector3 to)
+{
+    std::vector<Vector3> points;
+    for (int k = 0; k <= 40; ++k) {
+        const double t = k / 40.0;
+        const double x = from.x + (to.x - from.x) * t;
+        const double y = from.y + (to.y - from.y) * t;
+        points.push_back({x, y, Bowl(x, y)});
+    }
+    return Path(role, index, points);
+}
+
+[[nodiscard]] GuideSurfaceRequest BowlNetwork(GuideSurfaceMethod method, int uCount, int vCount)
+{
+    GuideSurfaceRequest request;
+    request.method = method;
+    for (int i = 0; i < uCount; ++i) {
+        const double y = -20.0 + 40.0 * i / (uCount - 1);
+        request.chains.push_back(OnBowl(ChainRole::GuideU, i + 1, {-30.0, y, 0}, {30.0, y, 0}));
+    }
+    for (int j = 0; j < vCount; ++j) {
+        const double x = -30.0 + 60.0 * j / (vCount - 1);
+        request.chains.push_back(OnBowl(ChainRole::GuideV, j + 1, {x, -20.0, 0}, {x, 20.0, 0}));
+    }
+    return request;
+}
+
+} // namespace
+
+KACHA_V2_TEST(kernel_network, GordonはU2V2とU5V4の網を全部の線に沿って作る)
+{
+    for (const auto& [u, v] : {std::pair<int, int>{2, 2}, std::pair<int, int>{5, 4}}) {
+        const auto built = Build(BowlNetwork(GuideSurfaceMethod::CurveNetworkExact, u, v));
+        Require(built.HasValue(), "作れる(U" + std::to_string(u) + "V" + std::to_string(v) + "): "
+                + Why(built));
+        Require(built.Value().maximumDeviationMm <= 0.02,
+            "全部の線から 0.02 mm 以内(" + std::to_string(built.Value().maximumDeviationMm) + ")");
+    }
+}
+
+KACHA_V2_TEST(kernel_network, 近似の曲線網も同じ網から作れる)
+{
+    const auto built = Build(BowlNetwork(GuideSurfaceMethod::GordonNetwork, 5, 4));
+    Require(built.HasValue(), "作れる: " + Why(built));
+    Require(built.Value().maximumDeviationMm <= 0.25, "近似の許容の内側");
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

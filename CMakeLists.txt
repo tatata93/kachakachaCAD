@@ -621,6 +621,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/modeling/LoftInput.cpp
     src/next/kachakacha/modeling/FourEdgeInput.cpp
     src/next/kachakacha/modeling/SurfaceCardinality.cpp
+    src/next/kachakacha/modeling/GordonGrid.cpp
     src/next/kachakacha/modeling/SurfaceDeviationLimit.cpp
     src/next/kachakacha/app/ArrayPlan.cpp
     src/next/kachakacha/app/ExtrudeInputState.cpp
@@ -788,6 +789,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(snap_hysteresis_tests tests_v2/snap_hysteresis_tests.cpp)
     kachakacha_add_v2_test(grid_tests tests_v2/grid_tests.cpp)
     kachakacha_add_v2_test(loft_input_tests tests_v2/loft_input_tests.cpp)
+    kachakacha_add_v2_test(gordon_grid_tests tests_v2/gordon_grid_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)

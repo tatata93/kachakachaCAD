@@ -34,6 +34,16 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     return QString::fromUtf8(std::string(value).c_str());
 }
 
+//! 見えていて押せるボタンだけを押す。不可視の widget を叩いて通したことにしない。
+[[nodiscard]] bool ClickVisible(QPushButton* button)
+{
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;
+    }
+    button->click();
+    return true;
+}
+
 //! その方式の一言。正本のカードの下段に当たる。個数は個数の約束(SurfaceCardinality)と同じ。
 [[nodiscard]] QString MethodHintJa(GuideSurfaceMethod method)
 {
@@ -161,6 +171,42 @@ void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
     for (int index = 0; index < kachakacha::v2::app::kSurfaceSlotCount; ++index) {
         BuildSlotRow(layout, index);
     }
+    // 境界の辺ごとの連続条件(境界面・四辺面)。境界の一覧で選んだ行に効く。
+    auto* edge = new QHBoxLayout();
+    continuityTitle_ = new QLabel(QStringLiteral("連続"), widget());
+    edge->addWidget(continuityTitle_);
+    continuity_ = new QComboBox(widget());
+    continuity_->addItem(QStringLiteral("G0 位置"));
+    continuity_->addItem(QStringLiteral("G1 接線"));
+    continuity_->addItem(QStringLiteral("G2 曲率"));
+    continuity_->setToolTip(QStringLiteral("隣の面とのつながり方。G1/G2 は隣の面(支持面)が要ります"));
+    edge->addWidget(continuity_);
+    pickSupport_ = new QPushButton(QStringLiteral("支持面を選ぶ"), widget());
+    pickSupport_->setToolTip(QStringLiteral("押してから、3D で隣の面を押します"));
+    edge->addWidget(pickSupport_);
+    layout->addLayout(edge);
+    supportName_ = new QLabel(widget());
+    supportName_->setWordWrap(true);
+    layout->addWidget(supportName_);
+    const auto boundaryRow = [this]() {
+        const QTreeWidget* list = slots_[3].list;
+        return list == nullptr || list->currentItem() == nullptr
+            ? -1 : list->indexOfTopLevelItem(list->currentItem());
+    };
+    QObject::connect(continuity_, &QComboBox::currentIndexChanged, this,
+        [this, boundaryRow](int index) {
+            if (!loading_ && continuityHandler_ && boundaryRow() >= 0 && index >= 0) {
+                continuityHandler_(boundaryRow(),
+                    static_cast<kachakacha::v2::modeling::SurfaceContinuity>(index));
+            }
+        });
+    QObject::connect(pickSupport_, &QPushButton::clicked, this, [this, boundaryRow] {
+        if (!loading_ && pickSupportHandler_ && boundaryRow() >= 0) {
+            pickSupportHandler_(boundaryRow());
+        }
+    });
+    QObject::connect(slots_[3].list, &QTreeWidget::itemSelectionChanged, this,
+        [this] { RefreshContinuityRow(); });
     // 四辺面の張り方。四辺面のときだけ出す。
     auto* style = new QHBoxLayout();
     fourEdgeStyleTitle_ = new QLabel(QStringLiteral("張り方"), widget());
@@ -400,6 +446,8 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     for (std::size_t index = 0; index < slots_.size(); ++index) {
         FillSlotRow(slots_[index], state, *lists[index], previewShown);
     }
+    shownNames_ = names;
+    RefreshContinuityRow();
     const bool fourEdge = state.method == GuideSurfaceMethod::FourEdgePatch;
     fourEdgeStyleTitle_->setVisible(fourEdge);
     fourEdgeStyle_->setVisible(fourEdge);
@@ -457,6 +505,91 @@ void V2SurfaceDock::SetOrderingHandler(std::function<void(SurfaceOrdering)> hand
 void V2SurfaceDock::SetMoveSectionHandler(std::function<void(int, int)> handler)
 {
     moveSectionHandler_ = std::move(handler);
+}
+
+//! 連続条件の欄を、境界の一覧で選んでいる行に合わせる。
+void V2SurfaceDock::RefreshContinuityRow()
+{
+    if (continuity_ == nullptr || slots_[3].list == nullptr) {
+        return;
+    }
+    const bool takes = kachakacha::v2::app::SurfaceTakesContinuity(shown_.method);
+    const QTreeWidget* list = slots_[3].list;
+    const int row = list->currentItem() == nullptr ? -1
+                                                   : list->indexOfTopLevelItem(list->currentItem());
+    const bool usable = takes && row >= 0 && list->isVisible();
+    continuityTitle_->setVisible(takes && !shown_.boundaries.empty());
+    continuity_->setVisible(takes && !shown_.boundaries.empty());
+    pickSupport_->setVisible(takes && !shown_.boundaries.empty());
+    continuity_->setEnabled(usable);
+    pickSupport_->setEnabled(usable);
+    const bool wasLoading = loading_;
+    loading_ = true;
+    const auto rowIndex = static_cast<std::size_t>(row < 0 ? 0 : row);
+    continuity_->setCurrentIndex(usable && rowIndex < shownNames_.boundaryContinuity.size()
+            ? shownNames_.boundaryContinuity[rowIndex] : 0);
+    loading_ = wasLoading;
+    if (!takes) {
+        supportName_->setText(shown_.boundaries.empty()
+                ? QString()
+                : QStringLiteral("この作り方では縁の連続条件を指定できません(境界面・四辺面で指定できます)"));
+        return;
+    }
+    if (!usable) {
+        supportName_->setText(shown_.boundaries.empty()
+                ? QString()
+                : QStringLiteral("境界の一覧で辺を選ぶと、その辺の連続条件(G0/G1/G2)と支持面を決められます"));
+        return;
+    }
+    const QString support = rowIndex < shownNames_.boundarySupports.size()
+        ? shownNames_.boundarySupports[rowIndex] : QString();
+    supportName_->setText(!shown_.supportPickFor.IsNil()
+            ? QStringLiteral("3D で隣の面を押してください")
+            : (support.isEmpty() ? QStringLiteral("支持面: なし(G1/G2 には隣の面が要ります)")
+                                 : QStringLiteral("支持面: ") + support));
+}
+
+bool V2SurfaceDock::ChooseContinuity(int row, kachakacha::v2::modeling::SurfaceContinuity order)
+{
+    QTreeWidget* list = slots_[3].list;
+    if (list == nullptr || continuity_ == nullptr || !list->isVisible() || row < 0
+        || row >= list->topLevelItemCount()) {
+        return false;
+    }
+    list->setCurrentItem(list->topLevelItem(row));
+    RefreshContinuityRow();
+    if (!continuity_->isVisible() || !continuity_->isEnabled()) {
+        return false;
+    }
+    continuity_->setCurrentIndex(static_cast<int>(order));
+    return true;
+}
+
+bool V2SurfaceDock::ClickPickSupport(int row)
+{
+    QTreeWidget* list = slots_[3].list;
+    if (list == nullptr || !list->isVisible() || row < 0 || row >= list->topLevelItemCount()) {
+        return false;
+    }
+    list->setCurrentItem(list->topLevelItem(row));
+    RefreshContinuityRow();
+    return ClickVisible(pickSupport_);
+}
+
+QString V2SurfaceDock::ContinuityTextJa() const
+{
+    return supportName_ == nullptr ? QString() : supportName_->text();
+}
+
+void V2SurfaceDock::SetContinuityHandler(
+    std::function<void(int, kachakacha::v2::modeling::SurfaceContinuity)> handler)
+{
+    continuityHandler_ = std::move(handler);
+}
+
+void V2SurfaceDock::SetPickSupportHandler(std::function<void(int)> handler)
+{
+    pickSupportHandler_ = std::move(handler);
 }
 
 void V2SurfaceDock::SetRemoveEntryHandler(std::function<void(ChainRole, int)> handler)
@@ -520,20 +653,6 @@ const V2SurfaceDock::SlotRow* V2SurfaceDock::RowFor(ChainRole slot) const
     }
     return nullptr;
 }
-
-namespace {
-
-//! 見えていて押せるボタンだけを押す。不可視の widget を叩いて通したことにしない。
-[[nodiscard]] bool ClickVisible(QPushButton* button)
-{
-    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
-        return false;
-    }
-    button->click();
-    return true;
-}
-
-} // namespace
 
 bool V2SurfaceDock::ClickActivate(ChainRole slot)
 {

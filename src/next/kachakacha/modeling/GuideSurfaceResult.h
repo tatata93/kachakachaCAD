@@ -38,6 +38,9 @@ struct GuideSurfaceResult {
     double maximumDeviationMm = 0.0;
     double rmsDeviationMm = 0.0;
     double areaMm2 = 0.0;
+    //! G1/G2 を指定した辺で測った滑らかさ。負の値は「指定が無く、測っていない」。
+    double continuityG1ErrorDeg = -1.0;
+    double continuityG2Error = -1.0;
 };
 
 } // namespace kachakacha::v2::modeling

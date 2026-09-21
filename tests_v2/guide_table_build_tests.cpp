@@ -280,7 +280,7 @@ KACHA_V2_TEST(outer_loop, 閉じた輪が無ければ理由を言う)
     RequireEqual(split.Diagnostics().front().code, std::string("UI-R011"), "理由のコード");
 }
 
-KACHA_V2_TEST(outer_loop, 境界面の表は外周1行と通る線の行になる)
+KACHA_V2_TEST(outer_loop, 境界面の表は外周の辺ごとの行と通る線の行になる)
 {
     const Vector3 a{0, 0, 0}, b{40, 0, 0}, c{40, 40, 0}, d{0, 40, 0};
     std::vector<GuideTableSelection> selections{LineSelection(a, b, "1"),
@@ -291,8 +291,11 @@ KACHA_V2_TEST(outer_loop, 境界面の表は外周1行と通る線の行にな�
     const auto filled = kachakacha::v2::app::AddBoundaryFillRows(table, selections,
         SplitTolerance());
     Require(filled.HasValue(), "表が作れる");
-    Require(filled.Value().rows.size() == 2, "外周1行 + 通る線1行");
-    Require(filled.Value().rows[0].role == ChainRole::BoundarySide, "1行目は境界辺");
-    Require(filled.Value().rows[1].role == ChainRole::GuideU, "2行目は通る線");
+    // 外周は 1 本ずつの行(辺ごとに連続条件を持てる)、通る線は最後。
+    Require(filled.Value().rows.size() == 5, "外周4行 + 通る線1行");
+    for (std::size_t row = 0; row < 4; ++row) {
+        Require(filled.Value().rows[row].role == ChainRole::BoundarySide, "外周は境界辺");
+    }
+    Require(filled.Value().rows[4].role == ChainRole::GuideU, "最後は通る線");
 }
 

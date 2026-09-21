@@ -150,6 +150,43 @@ KACHA_V2_TEST(feature_definition, 形状ガイドが保存して読み直せる)
     RequireEqual(std::to_string(back.roles.front()), std::string("1"), "役割");
 }
 
+KACHA_V2_TEST(feature_definition, 四辺面の張り方と連続条件と支持面が保存して読み直せる)
+{
+    CreateGuideSurfaceDefinition made;
+    made.method = 8;   // FourEdgePatch
+    for (int index = 1; index <= 4; ++index) {
+        WireChainRef chain;
+        chain.segments.push_back(SegmentRef{Ent(static_cast<std::uint8_t>(index)),
+            Seg(static_cast<std::uint8_t>(index))});
+        chain.reversed = {false};
+        made.chains.push_back(chain);
+        made.roles.push_back(5);   // BoundarySide
+    }
+    made.fourEdgeStyle = 2;
+    made.continuity = {0, 2, 1, 0};
+    made.supportSurfaces = {EntityId{}, Ent(40), Ent(41), EntityId{}};
+    const auto back = RoundTrip(FeatureType::CreateGuideSurface, made);
+    RequireEqual(std::to_string(back.fourEdgeStyle), std::string("2"), "張り方");
+    Require(back.continuity == std::vector<int>({0, 2, 1, 0}), "連続条件が辺ごとに残る");
+    Require(back.supportSurfaces.size() == 4 && back.supportSurfaces[1] == Ent(40)
+            && back.supportSurfaces[2] == Ent(41) && back.supportSurfaces[0].IsNil(),
+        "支持面が辺ごとに残る(無い辺は空のまま)");
+}
+
+KACHA_V2_TEST(feature_definition, 連続条件の無い古い形状ガイドは全部G0で読める)
+{
+    CreateGuideSurfaceDefinition made;
+    made.method = 5;
+    WireChainRef chain;
+    chain.segments.push_back(SegmentRef{Ent(1), Seg(1)});
+    chain.reversed = {false};
+    made.chains.push_back(chain);
+    made.roles = {5};
+    const auto back = RoundTrip(FeatureType::CreateGuideSurface, made);
+    Require(back.continuity.empty() && back.supportSurfaces.empty() && back.fourEdgeStyle == 0,
+        "書かれていなければ全部 G0・標準(これまでと同じ意味)");
+}
+
 KACHA_V2_TEST(feature_definition, 押し出しが保存して読み直せる)
 {
     ExtrudeDefinition made;

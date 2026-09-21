@@ -5,8 +5,13 @@
 #include "kachakacha/geometry/WireEdit.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 #include "kachakacha/kernel/OcctGuideSurface.h"
+#include "kachakacha/kernel/OcctShapeCache.h"
+#include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepOffsetAPI_MakeFilling.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
@@ -30,10 +35,14 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
 #include <gp_Pnt.hxx>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -390,10 +399,142 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
     }
 }
 
+//! G1 の許容(度)と G2 の許容(曲率の差)。核の MakeFilling に渡す目標よりゆるく、
+//! 目で見て折れ目が分からない程度。超えたら「滑らかにできなかった」と言って断る。
+constexpr double kG1LimitDeg = 1.5;
+constexpr double kG2Limit = 0.1;
+
+[[nodiscard]] std::string Mm3(double value)
+{
+    char buffer[64];
+    std::snprintf(buffer, sizeof(buffer), "%.3f", value);
+    return buffer;
+}
+
+[[nodiscard]] std::string ChainName(const GuideSurfaceRequest& request, std::size_t index)
+{
+    const auto& chain = request.chains[index];
+    return modeling::ChainRoleLabelJa(request.method, chain.role) + " " + std::to_string(chain.index);
+}
+
+//! その辺が乗っている支持面の面。乗っていなければ、どれだけ離れているかを言って断る。
+[[nodiscard]] Result<TopoDS_Face> SupportFaceFor(const GuideSurfaceRequest& request,
+    std::size_t chainIndex, const GeometryTolerance& tolerance)
+{
+    using Out = Result<TopoDS_Face>;
+    const auto& chain = request.chains[chainIndex];
+    TopoDS_Shape support;
+    if (chain.supportShapeHandle == 0
+        || !LookupShape(modeling::KernelShapeHandle{chain.supportShapeHandle}, support)) {
+        return Out::Failure(MakeError(kSurfaceSourceMissing,
+            ChainName(request, chainIndex) + "の支持面の形が見つかりません。",
+            "支持面を作り直すか、選び直してください。"));
+    }
+    const std::vector<Vector3> dense = geometry::SampleChain(chain.segments,
+        std::max(tolerance.modelLinearMm * 10.0, 1.0e-4));
+    std::vector<Vector3> probes;
+    for (int step = 0; step < 7 && !dense.empty(); ++step) {
+        probes.push_back(dense[static_cast<std::size_t>(
+            step * static_cast<double>(dense.size() - 1) / 6.0 + 0.5)]);
+    }
+    TopoDS_Face best;
+    double bestWorst = std::numeric_limits<double>::infinity();
+    for (TopExp_Explorer explorer(support, TopAbs_FACE); explorer.More(); explorer.Next()) {
+        const TopoDS_Face face = TopoDS::Face(explorer.Current());
+        double worst = 0.0;
+        for (const Vector3& point : probes) {
+            const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(ToPoint(point));
+            BRepExtrema_DistShapeShape measure(vertex, face);
+            worst = std::max(worst, measure.IsDone() ? measure.Value()
+                                                     : std::numeric_limits<double>::infinity());
+        }
+        if (worst < bestWorst) {
+            bestWorst = worst;
+            best = face;
+        }
+    }
+    const double limit = std::max(tolerance.interactiveJoinMm * 2.0, 1.0e-3);
+    if (best.IsNull() || bestWorst > limit) {
+        return Out::Failure(MakeError(kSurfaceBuildFailed,
+            ChainName(request, chainIndex) + "が支持面の縁に乗っていません。",
+            "最大 " + Mm3(std::isfinite(bestWorst) ? bestWorst : 0.0) + " mm 離れています(許容 "
+                + Mm3(limit) + " mm)。G1/G2 は、隣の面の縁と同じ線に対して指定します。"));
+    }
+    return Out::Success(best);
+}
+
+} // namespace
+
+Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
+    const GuideSurfaceRequest& request, std::size_t chainIndex,
+    const std::vector<TopoDS_Edge>& edges, const GeometryTolerance& tolerance,
+    std::vector<ContinuityCheck>& checks)
+{
+    const auto& chain = request.chains[chainIndex];
+    std::vector<TopoDS_Edge> use = edges;
+    if (use.empty()) {
+        for (const CurveSegment& segment : chain.segments) {
+            auto edge = ToEdge(segment);
+            if (!edge.HasValue()) {
+                return Result<bool>::Failure(edge.Diagnostics());
+            }
+            use.push_back(edge.Value());
+        }
+    }
+    if (chain.continuity == modeling::SurfaceContinuity::G0) {
+        for (const TopoDS_Edge& edge : use) {
+            filler.Add(edge, GeomAbs_C0, true);
+        }
+        return Result<bool>::Success(true);
+    }
+    const auto face = SupportFaceFor(request, chainIndex, tolerance);
+    if (!face.HasValue()) {
+        return Result<bool>::Failure(face.Diagnostics());
+    }
+    const GeomAbs_Shape order =
+        chain.continuity == modeling::SurfaceContinuity::G2 ? GeomAbs_G2 : GeomAbs_G1;
+    for (const TopoDS_Edge& edge : use) {
+        const int index = filler.Add(edge, face.Value(), order, true);
+        checks.push_back(ContinuityCheck{index, chain.continuity, chainIndex});
+    }
+    return Result<bool>::Success(true);
+}
+
+Result<ContinuityMeasure> MeasureContinuity(BRepOffsetAPI_MakeFilling& filler,
+    const GuideSurfaceRequest& request, const std::vector<ContinuityCheck>& checks)
+{
+    ContinuityMeasure measure;
+    for (const ContinuityCheck& check : checks) {
+        const double g1 = filler.G1Error(check.constraintIndex) * 180.0 / 3.14159265358979323846;
+        measure.g1ErrorDeg = std::max(measure.g1ErrorDeg, g1);
+        if (g1 > kG1LimitDeg) {
+            return Result<ContinuityMeasure>::Failure(MakeError(kSurfaceBuildFailed,
+                std::string(modeling::SurfaceContinuityName(check.order)) + "を指定しましたが、"
+                    + ChainName(request, check.chainIndex) + "で面が最大 " + Mm3(g1)
+                    + " 度折れています。",
+                "許容は " + Mm3(kG1LimitDeg) + " 度です。支持面とのつながり方か、ほかの辺の形を見直してください。"));
+        }
+        if (check.order == modeling::SurfaceContinuity::G2) {
+            const double g2 = filler.G2Error(check.constraintIndex);
+            measure.g2Error = std::max(measure.g2Error, g2);
+            if (g2 > kG2Limit) {
+                return Result<ContinuityMeasure>::Failure(MakeError(kSurfaceBuildFailed,
+                    "G2を指定しましたが、" + ChainName(request, check.chainIndex)
+                        + "で曲率が最大 " + Mm3(g2) + " 食い違っています。",
+                    "許容は " + Mm3(kG2Limit) + " です。G1 にするか、辺の形を見直してください。"));
+            }
+        }
+    }
+    return Result<ContinuityMeasure>::Success(measure);
+}
+
+namespace {
+
 } // namespace
 
 Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
-    const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance)
+    const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
+    ContinuityMeasure& measure)
 {
     using Out = Result<TopoDS_Shape>;
     return Guarded([&]() -> Out {
@@ -422,18 +563,24 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
         if (!face.IsDone()) {
             return Out::Failure(MakeError(kSurfaceBuildFailed, "4 辺の面を作れませんでした。", {}));
         }
-        if (!plan.hasInteriorConstraints) {
+        if (!plan.refill) {
             return Out::Success(TopoDS_Shape(face.Face()));
         }
-        // 内側の通る線がある: 4 辺を境界、通る線を拘束にして、4 辺の面から張り直す。
+        // 内側の通る線か G1/G2 がある: 4 辺を境界(辺ごとの連続条件つき)、通る線を拘束にして、
+        // 4 辺の面から張り直す。
         BRepOffsetAPI_MakeFilling filler(3, 15, 3, false, 1.0e-5, Tol3d(tolerance),
             0.01, 0.1, 8, 12);
-        for (const auto& curve : curves) {
-            BRepBuilderAPI_MakeEdge edge{occ::handle<Geom_Curve>(curve)};
+        std::vector<ContinuityCheck> checks;
+        for (std::size_t k = 0; k < curves.size(); ++k) {
+            BRepBuilderAPI_MakeEdge edge{occ::handle<Geom_Curve>(curves[k])};
             if (!edge.IsDone()) {
                 return Out::Failure(MakeError(kSurfaceBuildFailed, "四辺面の辺を作れませんでした。", {}));
             }
-            filler.Add(edge.Edge(), GeomAbs_C0, true);
+            const auto added = AddBoundaryEdges(filler, request, plan.sides[k], {edge.Edge()},
+                tolerance, checks);
+            if (!added.HasValue()) {
+                return Out::Failure(added.Diagnostics());
+            }
         }
         for (std::size_t index = 0; index < request.chains.size(); ++index) {
             if (request.chains[index].role != ChainRole::GuideU) {
@@ -450,6 +597,11 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "4 辺と通る線から面を張れませんでした。", "通る線が 4 辺の内側にあるかを確かめてください。"));
         }
+        const auto measured = MeasureContinuity(filler, request, checks);
+        if (!measured.HasValue()) {
+            return Out::Failure(measured.Diagnostics());
+        }
+        measure = measured.Value();
         return Out::Success(filler.Shape());
     }, "四辺面");
 }

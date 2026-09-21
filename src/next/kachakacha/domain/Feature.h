@@ -179,6 +179,12 @@ struct CreateGuideSurfaceDefinition {
     double revolveAngleRad = 0.0;
     //! 断面を chains の順のまま使う(手動固定)。古い文書には無い鍵なので、読むときは偽。
     bool lockSectionOrder = false;
+    //! 四辺面の張り方(modeling::FourEdgeStyle の番号)。古い文書には無いので 0(標準)。
+    int fourEdgeStyle = 0;
+    //! 鎖ごとの連続条件(modeling::SurfaceContinuity の番号)と支持面。chains と同じ長さか空。
+    //! 古い文書には無い鍵なので、空で読む(全部 G0、支持面なし = これまでと同じ意味)。
+    std::vector<int> continuity;
+    std::vector<EntityId> supportSurfaces;
 };
 
 //! 押し出し。

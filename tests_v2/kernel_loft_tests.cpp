@@ -261,6 +261,99 @@ KACHA_V2_TEST(kernel_four_edge, 内側の通る線を複数本通す)
             + std::to_string(built.Value().areaMm2) + ")");
 }
 
+namespace {
+
+//! 支持面: z = 0 の平面の長方形(x 0..40, y -20..0)。境界面の辺 y = 0 はこの面の縁。
+[[nodiscard]] kachakacha::v2::modeling::KernelShapeHandle MakeFlatSupport()
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::PlanarBoundary;
+    GuideChain outer = Path(ChainRole::OuterBoundary, 1,
+        {{0, -20, 0}, {40, -20, 0}, {40, 0, 0}, {0, 0, 0}, {0, -20, 0}});
+    outer.closed = true;
+    request.chains.push_back(outer);
+    const auto built = Build(request);
+    Require(built.HasValue(), "支持面が作れる: " + Why(built));
+    return built.Value().handle;
+}
+
+//! 支持面の縁 y = 0 から立ち上がる境界面(反対の辺が持ち上がっている)。
+[[nodiscard]] GuideSurfaceRequest FillBesideSupport(
+    kachakacha::v2::modeling::SurfaceContinuity order,
+    kachakacha::v2::modeling::KernelShapeHandle support)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    request.chains.push_back(Path(ChainRole::BoundarySide, 1, {{0, 0, 0}, {40, 0, 0}}));
+    request.chains.push_back(Path(ChainRole::BoundarySide, 2, {{40, 0, 0}, {40, 30, 10}}));
+    request.chains.push_back(Path(ChainRole::BoundarySide, 3, {{40, 30, 10}, {0, 30, 10}}));
+    request.chains.push_back(Path(ChainRole::BoundarySide, 4, {{0, 30, 10}, {0, 0, 0}}));
+    request.chains[0].continuity = order;
+    if (support.Valid()) {
+        request.chains[0].supportSurfaceId =
+            kachakacha::v2::base::DeterministicIdGenerator{3}.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        request.chains[0].supportShapeHandle = support.value;
+    }
+    return request;
+}
+
+} // namespace
+
+KACHA_V2_TEST(kernel_continuity, G0とG1で支持面との境目の形が変わりG1は折れ目が小さい)
+{
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    const auto support = MakeFlatSupport();
+    const auto g0 = Build(FillBesideSupport(SurfaceContinuity::G0, {}));
+    const auto g1 = Build(FillBesideSupport(SurfaceContinuity::G1, support));
+    Require(g0.HasValue() && g1.HasValue(), "どちらも作れる: " + Why(g0) + Why(g1));
+    Require(g1.Value().continuityG1ErrorDeg >= 0.0 && g1.Value().continuityG1ErrorDeg <= 1.5,
+        "G1 の折れ目を測って許容の内側(" + std::to_string(g1.Value().continuityG1ErrorDeg) + " 度)");
+    Require(g0.Value().continuityG1ErrorDeg < 0.0, "G0 は測っていない(指定が無い)");
+    Require(std::abs(g1.Value().areaMm2 - g0.Value().areaMm2) > 1.0e-3,
+        "G1 を指定すると形が変わる(" + std::to_string(g0.Value().areaMm2) + " → "
+            + std::to_string(g1.Value().areaMm2) + ")");
+}
+
+KACHA_V2_TEST(kernel_continuity, G2を指定すると曲率の差も測る)
+{
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    const auto support = MakeFlatSupport();
+    const auto g2 = Build(FillBesideSupport(SurfaceContinuity::G2, support));
+    Require(g2.HasValue(), "作れる: " + Why(g2));
+    Require(g2.Value().continuityG2Error >= 0.0, "G2 の曲率の差を測っている");
+}
+
+KACHA_V2_TEST(kernel_continuity, 支持面の縁に乗っていない辺のG1は断る)
+{
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    const auto support = MakeFlatSupport();
+    GuideSurfaceRequest request = FillBesideSupport(SurfaceContinuity::G1, support);
+    // 辺 1 を持ち上げて支持面から離す(ほかの辺もつなぎ直す)。
+    request.chains[0] = Path(ChainRole::BoundarySide, 1, {{0, 0, 2}, {40, 0, 2}});
+    request.chains[0].continuity = SurfaceContinuity::G1;
+    request.chains[0].supportSurfaceId =
+        kachakacha::v2::base::DeterministicIdGenerator{4}.NextTyped<kachakacha::v2::base::IdKind::Entity>();
+    request.chains[0].supportShapeHandle = support.value;
+    request.chains[1] = Path(ChainRole::BoundarySide, 2, {{40, 0, 2}, {40, 30, 10}});
+    request.chains[3] = Path(ChainRole::BoundarySide, 4, {{0, 30, 10}, {0, 0, 2}});
+    const auto built = Build(request);
+    Require(!built.HasValue(), "乗っていない辺では G1 を作らない");
+    Require(Why(built).find("支持面の縁に乗っていません") != std::string::npos,
+        "乗っていないと言う: " + Why(built));
+}
+
+KACHA_V2_TEST(kernel_continuity, 四辺面もG1を指定すると支持面に沿って張り直す)
+{
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    const auto support = MakeFlatSupport();
+    GuideSurfaceRequest request = FillBesideSupport(SurfaceContinuity::G1, support);
+    request.method = GuideSurfaceMethod::FourEdgePatch;
+    const auto built = Build(request);
+    Require(built.HasValue(), "作れる: " + Why(built));
+    Require(built.Value().continuityG1ErrorDeg >= 0.0 && built.Value().continuityG1ErrorDeg <= 1.5,
+        "G1 を測って許容の内側");
+}
+
 #endif // KACHACAD_V2_WITH_OCCT
 
 KACHA_V2_TEST_MAIN("kernel_loft_tests")

@@ -44,6 +44,13 @@ enum class SurfaceSlotState {
     Optional,
 };
 
+//! 境界の辺 1 本の連続条件と支持面(境界面・四辺面)。
+struct SurfaceEdgeCondition {
+    base::EntityId wire;
+    modeling::SurfaceContinuity continuity = modeling::SurfaceContinuity::G0;
+    base::EntityId support;
+};
+
 //! 画面の1欄ぶん。
 struct SurfaceSlotView {
     modeling::ChainRole role = modeling::ChainRole::Section;
@@ -70,6 +77,10 @@ struct SurfaceInputState {
     std::vector<base::EntityId> reversed;
     //! 四辺面の張り方。
     modeling::FourEdgeStyle fourEdgeStyle = modeling::FourEdgeStyle::Coons;
+    //! 境界の辺ごとの連続条件と支持面。書いていない辺は G0・支持面なし。
+    std::vector<SurfaceEdgeCondition> edgeConditions;
+    //! 「支持面を選ぶ」を押した辺。次に 3D で押した面(形状ガイド)をこの辺の支持面にする。
+    base::EntityId supportPickFor;
     SurfaceOrdering ordering = SurfaceOrdering::Auto;
     //! 手動固定のときの並び。空なら `sections` の並びをそのまま使う。
     std::vector<base::EntityId> explicitOrder;
@@ -235,6 +246,21 @@ inline constexpr int kSurfaceSlotCount = 4;
 //! 回転体は断面1本と軸1本で、断面が入ったら次は軸に決まっている。人に「ここへ選ぶ」を
 //! 押させずに進める(足す引くの 土台 → 相手 と同じ自動遷移)。他の作り方では欄を動かさない。
 [[nodiscard]] SurfaceInputState WithSurfaceSlotAdvanced(const SurfaceInputState& state);
+
+//! 境界の辺の連続条件を変える。G0 に戻しても支持面は覚えておく(戻せるように)。
+[[nodiscard]] SurfaceInputState WithEdgeContinuity(const SurfaceInputState& state,
+    const base::EntityId& wire, modeling::SurfaceContinuity continuity);
+
+//! 境界の辺の支持面を決める。支持面の選び待ちは終わる。
+[[nodiscard]] SurfaceInputState WithEdgeSupport(const SurfaceInputState& state,
+    const base::EntityId& wire, const base::EntityId& support);
+
+//! その辺の連続条件と支持面。書いていなければ G0・支持面なし。
+[[nodiscard]] SurfaceEdgeCondition EdgeConditionOf(const SurfaceInputState& state,
+    const base::EntityId& wire);
+
+//! その作り方で辺ごとの連続条件を指定できるか(境界面・四辺面)。
+[[nodiscard]] bool SurfaceTakesContinuity(modeling::GuideSurfaceMethod method) noexcept;
 
 //! その線の「向き反転」を切り替える。入っていない線は変えない。
 [[nodiscard]] SurfaceInputState WithEntryReversedToggled(const SurfaceInputState& state,

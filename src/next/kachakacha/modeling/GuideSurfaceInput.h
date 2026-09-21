@@ -16,6 +16,7 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/geometry/GeometryTolerance.h"
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -87,6 +88,28 @@ enum class ChainRole {
     return "unknown";
 }
 
+//! 隣の面との滑らかさ(境界の辺ごと)。
+//!   G0: 位置だけ合う(辺を通る)
+//!   G1: 接線も合う(折れ目が無い)。隣の面(支持面)が要る
+//!   G2: 曲率も合う(映り込みが途切れない)。隣の面(支持面)が要る
+//! G1/G2 は「隣の面に対して」の条件なので、線だけでは成り立たない。
+//! 支持面が無いのに G1/G2 を指定したら、成り立つふりをせず断る。
+enum class SurfaceContinuity {
+    G0,
+    G1,
+    G2,
+};
+
+[[nodiscard]] constexpr std::string_view SurfaceContinuityName(SurfaceContinuity value) noexcept
+{
+    switch (value) {
+    case SurfaceContinuity::G0: return "G0";
+    case SurfaceContinuity::G1: return "G1";
+    case SurfaceContinuity::G2: return "G2";
+    }
+    return "G0";
+}
+
 //! 面の入力になる1本の鎖。順序と向きは AnalyzeChain が済ませたもの。
 struct GuideChain {
     ChainRole role = ChainRole::Section;
@@ -94,6 +117,12 @@ struct GuideChain {
     EntityId sourceEntityId;            //!< どのワイヤーから来たか(壊れた参照の判定に使う)
     std::vector<CurveSegment> segments;
     bool closed = false;
+    //! 境界の辺の連続条件(境界面・四辺面の境界辺だけ)。
+    SurfaceContinuity continuity = SurfaceContinuity::G0;
+    //! G1/G2 の相手の面(形状ガイド)。G0 なら要らない。
+    EntityId supportSurfaceId;
+    //! 支持面の実体(核の表の番号)。画面が作る直前に入れる。0 = 無い。
+    std::uint64_t supportShapeHandle = 0;
 };
 
 //! 四辺面の張り方(OCCT GeomFill_BSplineCurves の 3 方式)。
@@ -122,8 +151,6 @@ struct GuideSurfaceRequest {
     //! 偽なら幾何の位置から並べ直す(自動)。既定は自動。
     //! 真のときも、隣り合う断面が重なっていないかの検査は同じように通す。
     bool keepSectionOrder = false;
-    //! BoundaryFill: 辺ごとの連続条件。true = G1。既定は全部 G0。
-    std::vector<bool> tangentContinuity;
     //! FourEdgePatch: 張り方。
     FourEdgeStyle fourEdgeStyle = FourEdgeStyle::Coons;
     //! OffsetGuide: 距離。0は拒否する。
@@ -219,6 +246,8 @@ struct FourEdgePlan {
     std::vector<bool> reversed;
     //! 内側の通る線がある(方式として近似拘束になる)。
     bool hasInteriorConstraints = false;
+    //! 4 辺の面(Coons など)をそのまま使えず、4 辺を境界に張り直す(通る線か G1/G2 がある)。
+    bool refill = false;
 };
 
 struct GuideSurfaceAnalysis {

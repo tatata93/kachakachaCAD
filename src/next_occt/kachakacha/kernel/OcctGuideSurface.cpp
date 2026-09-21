@@ -218,31 +218,29 @@ constexpr int kNetworkPointsPerChain = 9;
 
 [[nodiscard]] Result<TopoDS_Shape> BuildFilling(const GuideSurfaceRequest& request,
     const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance,
-    bool boundaryFill)
+    bool boundaryFill, detail::ContinuityMeasure& measure)
 {
     using Out = Result<TopoDS_Shape>;
     return Guarded([&]() -> Out {
         const double tol3d = std::max(tolerance.modelLinearMm, Precision::Confusion());
-        BRepOffsetAPI_MakeFilling filler(3, 15, 2, Standard_False, 1.0e-5, tol3d,
+        BRepOffsetAPI_MakeFilling filler(3, 15, 2, false, 1.0e-5, tol3d,
             0.01, 0.1, 8, 9);
 
         bool addedBoundary = false;
+        std::vector<detail::ContinuityCheck> checks;
         if (boundaryFill) {
             std::vector<std::size_t> ring = analysis.sectionOrdering.chainIndices;
             if (ring.empty()) {
                 ring = IndicesWithRole(request, ChainRole::BoundarySide);
             }
-            for (std::size_t at = 0; at < ring.size(); ++at) {
-                const bool tangent = at < request.tangentContinuity.size()
-                    && request.tangentContinuity[at];
-                for (const auto& segment : request.chains[ring[at]].segments) {
-                    auto edge = ToEdge(segment);
-                    if (!edge.HasValue()) {
-                        return Out::Failure(edge.Diagnostics());
-                    }
-                    filler.Add(edge.Value(), tangent ? GeomAbs_G1 : GeomAbs_C0);
-                    addedBoundary = true;
+            // 辺ごとの連続条件(G0/G1/G2)。G1/G2 は支持面に対して足し、作ったあとで測る。
+            for (const std::size_t index : ring) {
+                const auto added =
+                    detail::AddBoundaryEdges(filler, request, index, {}, tolerance, checks);
+                if (!added.HasValue()) {
+                    return Out::Failure(added.Diagnostics());
                 }
+                addedBoundary = true;
             }
             // 面が必ず通る線(外周の内側に引いた線)。境界ではない拘束として足す。
             // 通ったかどうかは、作ったあとで MeasureDeviation が測って判定する。
@@ -317,6 +315,11 @@ constexpr int kNetworkPointsPerChain = 9;
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "境界から面を張れませんでした。", {}));
         }
+        const auto measured = detail::MeasureContinuity(filler, request, checks);
+        if (!measured.HasValue()) {
+            return Out::Failure(measured.Diagnostics());
+        }
+        measure = measured.Value();
         return Out::Success(filler.Shape());
     }, boundaryFill ? "境界から張る面" : "曲線網から張る面");
 }
@@ -705,6 +708,7 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
 
     Result<TopoDS_Shape> built = Result<TopoDS_Shape>::Failure(
         MakeError(kSurfaceUnsupportedMethod, "知らない作り方です。", {}));
+    detail::ContinuityMeasure continuity;
     switch (request.method) {
     case GuideSurfaceMethod::PlanarBoundary:
         built = BuildPlanar(request, analysis, tolerance);
@@ -720,10 +724,10 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
             : detail::BuildLoftShape(request, analysis, tolerance);
         break;
     case GuideSurfaceMethod::GordonNetwork:
-        built = BuildFilling(request, analysis, tolerance, false);
+        built = BuildFilling(request, analysis, tolerance, false, continuity);
         break;
     case GuideSurfaceMethod::BoundaryFill:
-        built = BuildFilling(request, analysis, tolerance, true);
+        built = BuildFilling(request, analysis, tolerance, true, continuity);
         break;
     case GuideSurfaceMethod::OffsetGuide:
         built = BuildOffset(request, sourceShape, tolerance);
@@ -732,7 +736,7 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         built = BuildRevolve(request, analysis, tolerance);
         break;
     case GuideSurfaceMethod::FourEdgePatch:
-        built = detail::BuildFourEdgeShape(request, analysis, tolerance);
+        built = detail::BuildFourEdgeShape(request, analysis, tolerance, continuity);
         break;
     }
     if (!built.HasValue()) {
@@ -773,6 +777,8 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     result.maximumDeviationMm = deviation.maximumMm;
     result.rmsDeviationMm = deviation.rmsMm;
     result.areaMm2 = AreaOf(shape);
+    result.continuityG1ErrorDeg = continuity.g1ErrorDeg;
+    result.continuityG2Error = continuity.g2Error;
 
     std::vector<Diagnostic> warnings;
     // 通ったときも、外れた量は言う。**黙って通さない。**

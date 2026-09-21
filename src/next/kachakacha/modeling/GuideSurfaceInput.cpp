@@ -48,6 +48,39 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
     return errors;
 }
 
+//! 連続条件の検査。**線だけでは成り立たない条件を、成り立つふりをしない。**
+[[nodiscard]] std::vector<Diagnostic> CheckContinuity(const GuideSurfaceRequest& request)
+{
+    std::vector<Diagnostic> errors;
+    const bool methodTakes = request.method == GuideSurfaceMethod::BoundaryFill
+        || request.method == GuideSurfaceMethod::FourEdgePatch;
+    for (const GuideChain& chain : request.chains) {
+        if (chain.continuity == SurfaceContinuity::G0) {
+            continue;
+        }
+        const std::string order(SurfaceContinuityName(chain.continuity));
+        if (!methodTakes) {
+            errors.push_back(MakeError(kBadInput,
+                "この作り方では、縁の連続条件(" + order + ")を指定できません。",
+                ChainLabel(request.method, chain) + "。連続条件は境界面と四辺面で指定できます。"));
+            continue;
+        }
+        if (chain.role != ChainRole::BoundarySide) {
+            errors.push_back(MakeError(kBadInput, "連続条件は境界の辺にだけ指定できます。",
+                ChainLabel(request.method, chain) + " は境界ではありません。"));
+            continue;
+        }
+        if (chain.supportSurfaceId.IsNil()) {
+            errors.push_back(MakeError(kBadInput,
+                order + "を指定しましたが、" + ChainLabel(request.method, chain)
+                    + "には隣接する面(支持面)がありません。",
+                order + " は隣の面に対して滑らかにする条件なので、隣の面が要ります。"
+                        "隣の面を支持面に選ぶか、G0 にしてください。"));
+        }
+    }
+    return errors;
+}
+
 // ---------------------------------------------------------------- PlanarBoundary
 
 [[nodiscard]] Result<GuideSurfaceAnalysis> AnalyzePlanar(const GuideSurfaceRequest& request,
@@ -395,12 +428,6 @@ using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
         errors.push_back(MakeError(kBadInput, "境界の辺が足りません。",
             "閉じるには3辺以上が必要です。実際 " + std::to_string(edgeCount) + " 辺。"));
     }
-    if (!request.tangentContinuity.empty()
-        && request.tangentContinuity.size() != sides.size()) {
-        errors.push_back(MakeError(kBadInput, "辺の数と、連続条件の数が合いません。",
-            std::to_string(sides.size()) + " 境界鎖 / "
-                + std::to_string(request.tangentContinuity.size()) + " 個の条件。"));
-    }
     if (!errors.empty()) {
         return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
     }
@@ -546,6 +573,12 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
     if (request.chains.empty()) {
         errors.push_back(MakeError(kBadInput, "入力がありません。", {}));
     }
+    if (!errors.empty()) {
+        return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
+    }
+
+    // 連続条件(G1/G2)は、受けられる作り方・役割・支持面があるときだけ。
+    errors = CheckContinuity(request);
     if (!errors.empty()) {
         return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
     }

@@ -241,16 +241,18 @@ Result<modeling::GuideTable> AddBoundaryFillRows(const modeling::GuideTable& tab
     if (!split.HasValue()) {
         return Out::Failure(split.Diagnostics());
     }
-    std::vector<GuideTableSelection> loop;
+    // 外周の線は 1 本ずつ別の行にする(輪をたどる順)。辺ごとに連続条件(G0/G1/G2)と
+    // 支持面を持てるようにするため。輪になっているかは検査(AnalyzeBoundaryFill)が見る。
+    (void)tolerance;
+    modeling::GuideTable next = table;
     for (const std::size_t index : split.Value().loop) {
-        loop.push_back(selections[index]);
+        const auto added = modeling::AddSelectionAsNewRow(next,
+            modeling::ChainRole::BoundarySide, selections[index]);
+        if (!added.HasValue()) {
+            return added;
+        }
+        next = added.Value();
     }
-    auto combined = AddSelectionsAsConnectedRow(table, modeling::ChainRole::BoundarySide,
-        loop, tolerance);
-    if (!combined.HasValue()) {
-        return combined;
-    }
-    modeling::GuideTable next = combined.Value();
     for (const std::size_t index : split.Value().passThrough) {
         const auto added = modeling::AddSelectionAsNewRow(next, modeling::ChainRole::GuideU,
             selections[index]);

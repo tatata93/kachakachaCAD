@@ -47,6 +47,9 @@ struct GuideTableRow {
     std::vector<CurveSegment> segments;
     //! 表の「方向」列。true なら逆。
     bool reversed = false;
+    //! 境界の辺の連続条件と、その相手の面(G1/G2 のときだけ)。
+    SurfaceContinuity continuity = SurfaceContinuity::G0;
+    EntityId supportSurfaceId;
 };
 
 //! 表そのもの。

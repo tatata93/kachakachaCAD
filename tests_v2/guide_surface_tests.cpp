@@ -890,15 +890,42 @@ KACHA_V2_TEST(guideSurface, 離れた辺を断る)
     RequireRejects(request, "GEO-G004", "1辺だけ離れている");
 }
 
-KACHA_V2_TEST(guideSurface, 連続条件の数が辺と合わなければ断る)
+KACHA_V2_TEST(guideSurface, 支持面の無いG1とG2は成り立つふりをせず断る)
+{
+    // 2026-09-22: 連続条件は辺ごとに G0/G1/G2。G1/G2 は隣の面に対する条件なので、
+    // 支持面が無ければ成り立たない。これまでの bool の並び(tangentContinuity)は、
+    // 支持面を持たずに G1 と書けてしまう形だったのでやめた。
+    for (const auto order : {kachakacha::v2::modeling::SurfaceContinuity::G1,
+             kachakacha::v2::modeling::SurfaceContinuity::G2}) {
+        GuideSurfaceRequest request;
+        request.method = GuideSurfaceMethod::BoundaryFill;
+        request.chains.push_back(OpenLine(ChainRole::BoundarySide, 1, {0, 0, 0}, {10, 0, 0}));
+        request.chains.push_back(OpenLine(ChainRole::BoundarySide, 2, {10, 0, 0}, {5, 8, 0}));
+        request.chains.push_back(OpenLine(ChainRole::BoundarySide, 3, {5, 8, 0}, {0, 0, 0}));
+        request.chains[1].continuity = order;
+        const auto result = AnalyzeGuideSurfaceRequest(request, Tolerance());
+        Require(!result.HasValue(), "支持面が無いので断る");
+        Require(result.Diagnostics().front().summaryJa.find("支持面") != std::string::npos
+                && result.Diagnostics().front().summaryJa.find(
+                       std::string(kachakacha::v2::modeling::SurfaceContinuityName(order)))
+                    != std::string::npos,
+            "どの条件で何が足りないかを言う: " + result.Diagnostics().front().summaryJa);
+
+        // 支持面を渡せば検査は通る(実際に滑らかになったかは核が作ってから測る)。
+        request.chains[1].supportSurfaceId = DeterministicIdGenerator{5}.NextTyped<IdKind::Entity>();
+        Require(AnalyzeGuideSurfaceRequest(request, Tolerance()).HasValue(), "支持面があれば通る");
+    }
+}
+
+KACHA_V2_TEST(guideSurface, 連続条件を受けない作り方ではG1を断る)
 {
     GuideSurfaceRequest request;
-    request.method = GuideSurfaceMethod::BoundaryFill;
-    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 1, {0, 0, 0}, {10, 0, 0}));
-    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 2, {10, 0, 0}, {5, 8, 0}));
-    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 3, {5, 8, 0}, {0, 0, 0}));
-    request.tangentContinuity = {true, false};
-    RequireRejects(request, "GEO-G009", "条件が2個で辺が3本");
+    request.method = GuideSurfaceMethod::LoftSections;
+    request.chains.push_back(OpenPath(ChainRole::Section, 1, {{0, 0, 0}, {20, 0, 0}}));
+    request.chains.push_back(OpenPath(ChainRole::Section, 2, {{0, 0, 10}, {20, 0, 10}}));
+    request.chains[0].continuity = kachakacha::v2::modeling::SurfaceContinuity::G1;
+    request.chains[0].supportSurfaceId = DeterministicIdGenerator{6}.NextTyped<IdKind::Entity>();
+    RequireRejects(request, "GEO-G009", "ロフトは縁の連続条件を受けない");
 }
 
 // ---------------------------------------------------------------- OffsetGuide

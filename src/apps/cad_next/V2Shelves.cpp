@@ -282,6 +282,25 @@ void V2MainWindow::BuildSurfaceDock()
             RefreshSurfaceRoleLabels();
             RefreshSurfaceDock();
         });
+    // 境界の辺ごとの連続条件と支持面(境界面・四辺面)。
+    surfaceDock_->SetContinuityHandler(
+        [this](int row, kachakacha::v2::modeling::SurfaceContinuity order) {
+            if (row < 0 || row >= static_cast<int>(surfaceInput_.boundaries.size())) {
+                return;
+            }
+            surfaceInput_ = kachakacha::v2::app::WithEdgeContinuity(surfaceInput_,
+                surfaceInput_.boundaries[static_cast<std::size_t>(row)], order);
+            RefreshSurfacePreview();
+            RefreshSurfaceDock();
+        });
+    surfaceDock_->SetPickSupportHandler([this](int row) {
+        if (row < 0 || row >= static_cast<int>(surfaceInput_.boundaries.size())) {
+            return;
+        }
+        surfaceInput_.supportPickFor = surfaceInput_.boundaries[static_cast<std::size_t>(row)];
+        RefreshSurfaceDock();
+        SetStatus(QStringLiteral("面を作る: 3D で隣の面(支持面)を押してください。"));
+    });
     surfaceDock_->SetFourEdgeStyleHandler(
         [this](kachakacha::v2::modeling::FourEdgeStyle style) {
             surfaceInput_.fourEdgeStyle = style;

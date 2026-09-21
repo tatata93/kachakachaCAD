@@ -49,10 +49,15 @@ SurfaceFidelity FidelityOf(const GuideSurfaceRequest& request) noexcept
         return has(ChainRole::GuideU) || has(ChainRole::Centerline)
             ? SurfaceFidelity::Approximating
             : SurfaceFidelity::Interpolating;
-    case GuideSurfaceMethod::FourEdgePatch:
-        // 内側の通る線があれば、4 辺の面を通る線へ寄せて張り直す(近似拘束)。
-        return has(ChainRole::GuideU) ? SurfaceFidelity::Approximating
-                                      : SurfaceFidelity::Interpolating;
+    case GuideSurfaceMethod::FourEdgePatch: {
+        // 内側の通る線か G1/G2 があれば、4 辺を境界に張り直す(近似拘束)。
+        bool continuity = false;
+        for (const GuideChain& chain : request.chains) {
+            continuity = continuity || chain.continuity != SurfaceContinuity::G0;
+        }
+        return has(ChainRole::GuideU) || continuity ? SurfaceFidelity::Approximating
+                                                    : SurfaceFidelity::Interpolating;
+    }
     default:
         break;
     }

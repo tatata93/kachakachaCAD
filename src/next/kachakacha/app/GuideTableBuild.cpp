@@ -152,6 +152,8 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
     table.revolveAxisDirection = definition.revolveAxisDirection;
     table.revolveAngleRad = definition.revolveAngleRad;
     table.lockSectionOrder = definition.lockSectionOrder;
+    table.fourEdgeStyle = static_cast<modeling::FourEdgeStyle>(
+        std::clamp(definition.fourEdgeStyle, 0, 2));
     for (std::size_t index = 0; index < definition.chains.size(); ++index) {
         const auto role = static_cast<ChainRole>(definition.roles[index]);
         auto added = AddDefinitionRow(document, scene, std::move(table), role,
@@ -160,6 +162,14 @@ Result<GuideTable> GuideTableFromDefinition(const document::Document& document,
             return added;
         }
         table = added.Value();
+        // 連続条件と支持面(古い文書には無い = G0)。
+        if (index < definition.continuity.size()) {
+            table.rows.back().continuity = static_cast<modeling::SurfaceContinuity>(
+                std::clamp(definition.continuity[index], 0, 2));
+        }
+        if (index < definition.supportSurfaces.size()) {
+            table.rows.back().supportSurfaceId = definition.supportSurfaces[index];
+        }
     }
     return Result<GuideTable>::Success(std::move(table));
 }
@@ -173,7 +183,17 @@ CreateGuideSurfaceDefinition DefinitionFromGuideTable(const GuideTable& table)
     definition.revolveAxisDirection = table.revolveAxisDirection;
     definition.revolveAngleRad = table.revolveAngleRad;
     definition.lockSectionOrder = table.lockSectionOrder;
+    definition.fourEdgeStyle = static_cast<int>(table.fourEdgeStyle);
+    bool anyContinuity = false;
     for (const auto& row : table.rows) {
+        anyContinuity = anyContinuity || row.continuity != modeling::SurfaceContinuity::G0
+            || !row.supportSurfaceId.IsNil();
+    }
+    for (const auto& row : table.rows) {
+        if (anyContinuity) {
+            definition.continuity.push_back(static_cast<int>(row.continuity));
+            definition.supportSurfaces.push_back(row.supportSurfaceId);
+        }
         definition.roles.push_back(static_cast<int>(row.role));
         domain::WireChainRef chain;
         // 逆向きの行は、元の並びで覚える。作り直しは「並べてから逆にする」ので、

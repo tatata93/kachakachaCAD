@@ -187,6 +187,15 @@ SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
         EraseId(next.sourceSurfaces, id);
         EraseId(next.centerlines, id);
         EraseId(next.reversed, id);
+        next.edgeConditions.erase(std::remove_if(next.edgeConditions.begin(),
+                                      next.edgeConditions.end(),
+                                      [&](const SurfaceEdgeCondition& item) {
+                                          return item.wire == id;
+                                      }),
+            next.edgeConditions.end());
+        if (next.supportPickFor == id) {
+            next.supportPickFor = {};
+        }
         // 手動固定の並びからも、採用順からも外す。**古い入力を残さない。**
         EraseId(next.explicitOrder, id);
         EraseId(next.adoptedOrder, id);
@@ -656,6 +665,63 @@ std::vector<SurfaceInputState> SurfaceBatchStates(const SurfaceInputState& state
         parts.push_back(std::move(part));
     }
     return parts;
+}
+
+namespace {
+
+[[nodiscard]] SurfaceEdgeCondition& ConditionSlot(SurfaceInputState& state,
+    const base::EntityId& wire)
+{
+    for (SurfaceEdgeCondition& item : state.edgeConditions) {
+        if (item.wire == wire) {
+            return item;
+        }
+    }
+    state.edgeConditions.push_back(SurfaceEdgeCondition{wire, {}, {}});
+    return state.edgeConditions.back();
+}
+
+} // namespace
+
+SurfaceInputState WithEdgeContinuity(const SurfaceInputState& state, const base::EntityId& wire,
+    modeling::SurfaceContinuity continuity)
+{
+    if (std::find(state.boundaries.begin(), state.boundaries.end(), wire)
+        == state.boundaries.end()) {
+        return state;   // 境界に入っていない線には付けない
+    }
+    SurfaceInputState next = state;
+    ConditionSlot(next, wire).continuity = continuity;
+    return next;
+}
+
+SurfaceInputState WithEdgeSupport(const SurfaceInputState& state, const base::EntityId& wire,
+    const base::EntityId& support)
+{
+    if (std::find(state.boundaries.begin(), state.boundaries.end(), wire)
+        == state.boundaries.end()) {
+        return state;
+    }
+    SurfaceInputState next = state;
+    ConditionSlot(next, wire).support = support;
+    next.supportPickFor = {};
+    return next;
+}
+
+SurfaceEdgeCondition EdgeConditionOf(const SurfaceInputState& state, const base::EntityId& wire)
+{
+    for (const SurfaceEdgeCondition& item : state.edgeConditions) {
+        if (item.wire == wire) {
+            return item;
+        }
+    }
+    return SurfaceEdgeCondition{wire, {}, {}};
+}
+
+bool SurfaceTakesContinuity(GuideSurfaceMethod method) noexcept
+{
+    return method == GuideSurfaceMethod::BoundaryFill
+        || method == GuideSurfaceMethod::FourEdgePatch;
 }
 
 } // namespace kachakacha::v2::app

@@ -157,6 +157,13 @@ Result<GuideSurfaceAnalysis> AnalyzeFourEdgePatch(const GuideSurfaceRequest& req
     analysis.sectionOrdering.chainIndices = analysis.fourEdge.sides;
     analysis.fourEdge.hasInteriorConstraints =
         !IndicesWithRole(request, ChainRole::GuideU).empty();
+    bool continuity = false;
+    for (const std::size_t index : sides) {
+        continuity = continuity || request.chains[index].continuity != SurfaceContinuity::G0;
+    }
+    // 4 辺の面(GeomFill)は隣の面との滑らかさを指定できない。G1/G2 か通る線があれば、
+    // 4 辺の面を初めの形にして、4 辺を境界に張り直す(MakeFilling)。
+    analysis.fourEdge.refill = analysis.fourEdge.hasInteriorConstraints || continuity;
     if (analysis.fourEdge.hasInteriorConstraints) {
         analysis.notes.push_back(MakeWarning("GEO-G108",
             "内側の通る線があるので、4 辺から張った面を通る線へ寄せて張り直します(近似拘束)。",

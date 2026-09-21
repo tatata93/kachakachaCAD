@@ -251,6 +251,20 @@ template<class Id>
         definition["revolveAngleRad"] = JsonValue::Number(guide->revolveAngleRad);
         // 断面順の手動固定。古い文書には無い。読むときは偽。
         definition["lockSectionOrder"] = JsonValue::Bool(guide->lockSectionOrder);
+        // 四辺面の張り方と、鎖ごとの連続条件・支持面(2026-09-22)。古い文書には無い。
+        // 使っていないときは書かない(これまでの文書と同じ中身のまま保存される)。
+        if (guide->fourEdgeStyle != 0) {
+            definition["fourEdgeStyle"] =
+                JsonValue::Number(static_cast<double>(guide->fourEdgeStyle));
+        }
+        if (!guide->continuity.empty()) {
+            JsonArray continuity;
+            for (const int order : guide->continuity) {
+                continuity.push_back(JsonValue::Number(static_cast<double>(order)));
+            }
+            definition["continuity"] = JsonValue::Array(std::move(continuity));
+            definition["supportSurfaces"] = WriteIdArray(guide->supportSurfaces);
+        }
     } else if (const auto* extrude =
                    std::get_if<domain::ExtrudeDefinition>(&feature.definition)) {
         definition["profiles"] = WriteIdArray(extrude->profiles);

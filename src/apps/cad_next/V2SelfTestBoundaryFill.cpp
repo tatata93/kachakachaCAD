@@ -114,10 +114,15 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
         return false;
     }
     const auto& rows = table.Value().rows;
-    if (!Explain((std::string("外周1行 + 通る線1行(実際 ") + std::to_string(rows.size())
-                     + " 行)").c_str(),
-            rows.size() == 2 && rows[0].role == ChainRole::BoundarySide
-                && rows[0].segments.size() == 4 && rows[1].role == ChainRole::GuideU)) {
+    int boundaries = 0;
+    int through = 0;
+    for (const auto& row : rows) {
+        boundaries += row.role == ChainRole::BoundarySide ? 1 : 0;
+        through += row.role == ChainRole::GuideU ? 1 : 0;
+    }
+    if (!Explain((std::string("外周4辺 + 通る線1本(実際 境界 ") + std::to_string(boundaries)
+                     + "・通る線 " + std::to_string(through) + ")").c_str(),
+            boundaries == 4 && through == 1)) {
         return false;
     }
     if (!Explain((std::string("下見が出る(帯は ") + window.StatusText().toStdString()

@@ -38,6 +38,9 @@ public:
         std::vector<QString> guides;
         std::vector<QString> centerlines;
         std::vector<QString> boundaries;
+        //! 境界の辺ごとの連続条件(0=G0,1=G1,2=G2)と支持面の名前。boundaries と同じ並び。
+        std::vector<int> boundaryContinuity;
+        std::vector<QString> boundarySupports;
     };
 
     //! いまの入力を映す。作り方・役割・順序・状態を一度に書き直す。
@@ -65,6 +68,11 @@ public:
     //! 一覧の 1 行を「向き反転」。
     void SetFlipEntryHandler(
         std::function<void(kachakacha::v2::modeling::ChainRole, int row)> handler);
+    //! 境界の辺(一覧の row 行)の連続条件を変えた。
+    void SetContinuityHandler(
+        std::function<void(int row, kachakacha::v2::modeling::SurfaceContinuity)> handler);
+    //! 境界の辺(一覧の row 行)の「支持面を選ぶ」を押した。
+    void SetPickSupportHandler(std::function<void(int row)> handler);
     //! 四辺面の張り方を変えた。
     void SetFourEdgeStyleHandler(
         std::function<void(kachakacha::v2::modeling::FourEdgeStyle)> handler);
@@ -83,6 +91,11 @@ public:
     //! その欄の一覧の row 行を選んでから、見えている「外す」「向き反転」を押す。
     [[nodiscard]] bool ClickRemoveEntry(kachakacha::v2::modeling::ChainRole slot, int row);
     [[nodiscard]] bool ClickFlipEntry(kachakacha::v2::modeling::ChainRole slot, int row);
+    //! 境界の一覧の row 行を選んで、見えている連続条件の欄を選ぶ / 「支持面を選ぶ」を押す。
+    [[nodiscard]] bool ChooseContinuity(int row, kachakacha::v2::modeling::SurfaceContinuity order);
+    [[nodiscard]] bool ClickPickSupport(int row);
+    //! いま連続条件の欄に出ている言葉(「支持面: 屋根」「この作り方では指定できません」など)。
+    [[nodiscard]] QString ContinuityTextJa() const;
     //! 見えている「張り方」を選ぶ(四辺面のときだけ見える)。
     [[nodiscard]] bool ChooseFourEdgeStyle(kachakacha::v2::modeling::FourEdgeStyle style);
     //! その欄の一覧に出ている行(「1  Section_A」など)。
@@ -139,6 +152,13 @@ private:
     void FillSlotRow(SlotRow& row, const kachakacha::v2::app::SurfaceInputState& state,
         const std::vector<QString>& names, bool previewShown);
     [[nodiscard]] const SlotRow* RowFor(kachakacha::v2::modeling::ChainRole slot) const;
+    //! 境界の辺ごとの連続条件(境界面・四辺面)。境界の一覧で選んだ行に効く。
+    QLabel* continuityTitle_ = nullptr;
+    QComboBox* continuity_ = nullptr;
+    QPushButton* pickSupport_ = nullptr;
+    QLabel* supportName_ = nullptr;
+    SlotNames shownNames_;
+    void RefreshContinuityRow();
     QLabel* fourEdgeStyleTitle_ = nullptr;
     QComboBox* fourEdgeStyle_ = nullptr;
     QLabel* solverNote_ = nullptr;
@@ -161,6 +181,8 @@ private:
     std::function<void(kachakacha::v2::modeling::ChainRole, int)> removeEntryHandler_;
     std::function<void(kachakacha::v2::modeling::ChainRole, int)> flipEntryHandler_;
     std::function<void(kachakacha::v2::modeling::FourEdgeStyle)> fourEdgeStyleHandler_;
+    std::function<void(int, kachakacha::v2::modeling::SurfaceContinuity)> continuityHandler_;
+    std::function<void(int)> pickSupportHandler_;
     std::function<void()> confirmHandler_;
     std::function<void()> cancelHandler_;
     std::function<void()> resetHandler_;

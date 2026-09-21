@@ -461,6 +461,8 @@ Result<GuideSurfaceRequest> ToGuideSurfaceRequest(const GuideTable& table,
         chain.closed = (row.segments.front().StartPoint() - row.segments.back().EndPoint())
                 .Length()
             <= tolerance.interactiveJoinMm;
+        chain.continuity = row.continuity;
+        chain.supportSurfaceId = row.supportSurfaceId;
         request.chains.push_back(std::move(chain));
     }
     return Result<GuideSurfaceRequest>::Success(std::move(request));

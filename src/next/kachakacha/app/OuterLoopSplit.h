@@ -41,8 +41,8 @@ inline constexpr std::size_t kOuterLoopMaximumEdges = 24;
     const std::vector<modeling::GuideTableSelection>& selections,
     const geometry::GeometryTolerance& tolerance);
 
-//! 境界面の表へ、選んだ線を入れる。外周の輪を 1 本の「境界辺」の行にまとめ、
-//! 残りは 1 本ずつ「通る線」(GuideU)の行にする。
+//! 境界面の表へ、選んだ線を入れる。外周の線は輪をたどる順に 1 本ずつ「境界辺」の行に
+//! (辺ごとに連続条件を持てる)、残りは 1 本ずつ「通る線」(GuideU)の行にする。
 [[nodiscard]] base::Result<modeling::GuideTable> AddBoundaryFillRows(
     const modeling::GuideTable& table,
     const std::vector<modeling::GuideTableSelection>& selections,

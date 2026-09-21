@@ -85,6 +85,20 @@ void V2MainWindow::RefreshSurfaceForSelectionChange()
         removed.clear();
         added.push_back(*pick);
     }
+    // 「支持面を選ぶ」の最中: 押した形状ガイドを、その辺の支持面にする(欄には入れない)。
+    if (!surfaceInput_.supportPickFor.IsNil() && added.size() == 1) {
+        const auto* entity = document.FindEntity(added.front());
+        if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::GuideSurface) {
+            surfaceInput_ = kachakacha::v2::app::WithEdgeSupport(surfaceInput_,
+                surfaceInput_.supportPickFor, added.front());
+            MirrorSurfaceEntriesToSelection();
+            RefreshSurfacePreview();
+            RefreshSurfaceDock();
+            SetStatus(QStringLiteral("面を作る: 支持面を「%1」にしました。")
+                    .arg(QString::fromStdString(entity->displayName)));
+            return;
+        }
+    }
     // いまの欄に入るのは、その欄が受ける種類のものだけ。
     // 元の面の欄は形状ガイド、それ以外は線。立体などは黙って受けない。
     std::vector<EntityId> accepted;

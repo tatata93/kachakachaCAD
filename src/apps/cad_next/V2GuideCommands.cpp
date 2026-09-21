@@ -180,7 +180,21 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
     const GuideTable& table, bool report)
 {
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
-    const auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(table, tolerance);
+    auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(table, tolerance);
+    if (request.HasValue()) {
+        // G1/G2 の支持面の実体(核の表の番号)を添える。見つからなければ 0 のまま
+        // (核が「支持面の形が見つかりません」と言って断る)。
+        auto filled = request.Value();
+        for (auto& chain : filled.chains) {
+            if (chain.supportSurfaceId.IsNil()) {
+                continue;
+            }
+            const auto found = guideShapes_.find(chain.supportSurfaceId.ToString());
+            chain.supportShapeHandle = found == guideShapes_.end() ? 0 : found->second.value;
+        }
+        request = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideSurfaceRequest>::Success(
+            std::move(filled));
+    }
     if (!request.HasValue()) {
         if (report) {
             ReportDiagnostics(request.Diagnostics());

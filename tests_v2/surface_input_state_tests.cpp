@@ -430,4 +430,58 @@ KACHA_V2_TEST(surface_input_state, 回転体はガイドの欄が軸になり_�
         "ロフトは断面のまま(自動で動かさない)");
 }
 
+KACHA_V2_TEST(surface_input, 境界の辺ごとに連続条件と支持面を持ち外すと消える)
+{
+    using kachakacha::v2::app::EdgeConditionOf;
+    using kachakacha::v2::app::SurfaceTakesContinuity;
+    using kachakacha::v2::app::WithEdgeContinuity;
+    using kachakacha::v2::app::WithEdgeSupport;
+    using kachakacha::v2::modeling::SurfaceContinuity;
+    SurfaceInputState state;
+    state.method = GuideSurfaceMethod::BoundaryFill;
+    state = WithSurfaceEntries(state, ChainRole::BoundarySide, {Id(1), Id(2), Id(3)}, false);
+    Require(SurfaceTakesContinuity(state.method), "境界面は連続条件を受ける");
+    Require(!SurfaceTakesContinuity(GuideSurfaceMethod::LoftSections), "ロフトは受けない");
+    state = WithEdgeContinuity(state, Id(2), SurfaceContinuity::G2);
+    state.supportPickFor = Id(2);
+    state = WithEdgeSupport(state, Id(2), Id(40));
+    Require(EdgeConditionOf(state, Id(2)).continuity == SurfaceContinuity::G2, "辺 2 は G2");
+    Require(EdgeConditionOf(state, Id(2)).support == Id(40), "辺 2 の支持面");
+    Require(state.supportPickFor.IsNil(), "支持面を決めたら選び待ちは終わる");
+    Require(EdgeConditionOf(state, Id(1)).continuity == SurfaceContinuity::G0, "ほかの辺は G0");
+    // 境界に入っていない線には付けない。
+    state = WithEdgeContinuity(state, Id(9), SurfaceContinuity::G1);
+    Require(EdgeConditionOf(state, Id(9)).continuity == SurfaceContinuity::G0, "入っていない線は変えない");
+    // 辺を外すと、その辺の条件も消える(古い入力を残さない)。
+    state = WithoutSurfaceEntries(state, {Id(2)});
+    Require(EdgeConditionOf(state, Id(2)).continuity == SurfaceContinuity::G0
+            && EdgeConditionOf(state, Id(2)).support.IsNil(),
+        "外した辺の条件は残らない");
+}
+
+KACHA_V2_TEST(surface_input, 一括は1つずつに分けて全部を作る)
+{
+    using kachakacha::v2::app::SurfaceBatchStates;
+    using kachakacha::v2::app::SurfaceIsBatch;
+    SurfaceInputState revolve;
+    revolve.method = GuideSurfaceMethod::Revolve;
+    revolve = WithSurfaceEntries(revolve, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
+    revolve = WithSurfaceEntries(revolve, ChainRole::GuideU, {Id(9)}, false);
+    Require(SurfaceIsBatch(revolve), "断面 3 本の回転体は一括");
+    const auto parts = SurfaceBatchStates(revolve);
+    Require(parts.size() == 3, "3 つに分かれる(どれも捨てない)");
+    for (std::size_t index = 0; index < parts.size(); ++index) {
+        Require(parts[index].sections.size() == 1 && parts[index].sections[0] == Id(
+                    static_cast<std::uint8_t>(index + 1)),
+            "断面を 1 本ずつ");
+        Require(parts[index].guides.size() == 1 && parts[index].guides[0] == Id(9),
+            "軸はどれにも同じものが入る");
+    }
+    SurfaceInputState loft;
+    loft.method = GuideSurfaceMethod::LoftSections;
+    loft = WithSurfaceEntries(loft, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
+    Require(!SurfaceIsBatch(loft) && SurfaceBatchStates(loft).size() == 1,
+        "ロフトは 1 回で全部の断面を使う(一括ではない)");
+}
+
 KACHA_V2_TEST_MAIN("surface_input_state_tests")

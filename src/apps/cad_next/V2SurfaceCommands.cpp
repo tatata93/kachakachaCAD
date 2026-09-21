@@ -90,6 +90,18 @@ kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddRegionBoun
             }
         }
     }
+    // 境界の辺ごとの連続条件と支持面(境界面・四辺面だけ)。
+    if (kachakacha::v2::app::SurfaceTakesContinuity(input.method)) {
+        for (auto& row : table.rows) {
+            if (row.role != ChainRole::BoundarySide || row.sourceWireIds.size() != 1) {
+                continue;
+            }
+            const auto condition =
+                kachakacha::v2::app::EdgeConditionOf(input, row.sourceWireIds.front());
+            row.continuity = condition.continuity;
+            row.supportSurfaceId = condition.support;
+        }
+    }
     return table;
 }
 
@@ -190,7 +202,17 @@ void V2MainWindow::RefreshSurfaceDock()
         names.centerlines.push_back(nameOf(id));
     }
     for (const auto& id : surfaceInput_.boundaries) {
-        names.boundaries.push_back(nameOf(id));
+        const auto condition = kachakacha::v2::app::EdgeConditionOf(surfaceInput_, id);
+        const bool takes = kachakacha::v2::app::SurfaceTakesContinuity(surfaceInput_.method);
+        // 辺ごとの連続条件を名前の後ろに出す(境界面・四辺面)。「境界 2  屋根.縁 G2」。
+        names.boundaries.push_back(nameOf(id)
+            + (takes ? QStringLiteral("  ") + QString::fromUtf8(std::string(
+                           kachakacha::v2::modeling::SurfaceContinuityName(condition.continuity))
+                                                                   .c_str())
+                     : QString()));
+        names.boundaryContinuity.push_back(static_cast<int>(condition.continuity));
+        names.boundarySupports.push_back(condition.support.IsNil() ? QString()
+                                                                   : nameOf(condition.support));
     }
     // 下見に出ている面が、指定した線からどれだけ外れているか。
     // **近づけて作る面は線の上に乗っていない。**知らずに板取りへ進むと、

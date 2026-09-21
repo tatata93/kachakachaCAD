@@ -374,8 +374,13 @@ void V2Viewport::DrawDocument(QPainter& painter) const
         }
         // 太さと様式は表示設定(既定は V1 と同じ: 線 2.0 実線、補助線 1.7 破線)。
         // 細い実線は高解像度の画面で点線に見えることがある。
-        const double width = plain && curve.construction ? display_.constructionWidthPx
-                                                         : SemanticWidthPx(state);
+        double width = plain && curve.construction ? display_.constructionWidthPx
+                                                   : SemanticWidthPx(state);
+        // 面を作っている最中は、欄に入った線を役割の色で出す(3D・右の棚・札で同じ色)。
+        if (const auto role = RoleColorOf(curve.entityId); role.has_value()) {
+            color = *role;
+            width = std::max(width, 3.0);
+        }
         // 基準線は一点鎖線(V1 と同じ)。補助線は補助線の様式、ほかは線の様式。
         const Qt::PenStyle style = curve.datum
             ? Qt::DashDotLine

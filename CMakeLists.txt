@@ -633,6 +633,8 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ThickenInputState.cpp
     src/next/kachakacha/app/SurfaceEditInputState.cpp
     src/next/kachakacha/app/SurfaceAnalysis.cpp
+    src/next/kachakacha/app/SurfaceRoleAssist.cpp
+    src/next/kachakacha/app/SurfaceRoleTopology.cpp
     src/next/kachakacha/app/Ribbon.cpp
     src/next/kachakacha/app/ExplorerModel.cpp
     src/next/kachakacha/app/ToolRoleLabels.cpp
@@ -798,6 +800,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(curve_fit_tests tests_v2/curve_fit_tests.cpp)
     kachakacha_add_v2_test(surface_edit_input_state_tests tests_v2/surface_edit_input_state_tests.cpp)
     kachakacha_add_v2_test(surface_analysis_tests tests_v2/surface_analysis_tests.cpp)
+    kachakacha_add_v2_test(surface_role_assist_tests tests_v2/surface_role_assist_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)
@@ -1036,6 +1039,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SurfaceEditDock.cpp
         src/apps/cad_next/V2SurfaceEditTool.cpp
         src/apps/cad_next/V2SurfaceAnalysisDock.cpp
+        src/apps/cad_next/V2SurfaceDockRoles.cpp
+        src/apps/cad_next/V2SurfaceRoles.cpp
         src/apps/cad_next/V2SurfaceAnalysisTool.cpp
         src/apps/cad_next/V2ToolKeys.cpp
         src/apps/cad_next/V2ToolRoleLabels.cpp

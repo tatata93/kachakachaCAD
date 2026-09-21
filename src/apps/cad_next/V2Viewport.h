@@ -249,9 +249,15 @@ public:
     struct PlacedRoleLabel {
         kachakacha::v2::geometry::Vector3 at;
         QString text;
+        //! 役割の色(面を作るときの色分けと同じ)。無効なら選択の色。
+        QColor color;
     };
     void ShowToolRoleLabels(std::vector<PlacedRoleLabel> labels);
     void HideToolRoleLabels();
+    //! 面を作るときの役割の色分け(ガイド = 青、断面 = 橙、境界 = 紫、通る線 = 緑)。色は core が決める。
+    //! 空にすると、ふだんの色(選択の色)に戻る。
+    void SetRoleColors(std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> colors);
+    [[nodiscard]] std::optional<QColor> RoleColorOf(const kachakacha::v2::base::EntityId& id) const;
     //! いま出ている札。試験から読む。
     [[nodiscard]] const std::vector<PlacedRoleLabel>& ToolRoleLabels() const noexcept
     {
@@ -970,6 +976,7 @@ private:
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> toolPreview_;
     //! 3D の中の役割の札。空なら何も描かない。
     std::vector<PlacedRoleLabel> toolRoleLabels_;
+    std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> roleColors_;
     std::function<void(double)> extrudeDistanceChanged_;
     std::function<void()> confirmExtrude_;
     std::function<void()> cancelExtrude_;

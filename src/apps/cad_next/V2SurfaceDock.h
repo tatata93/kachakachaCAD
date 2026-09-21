@@ -20,6 +20,7 @@
 
 #include <array>
 #include <functional>
+#include <utility>
 #include <vector>
 
 class QLabel;
@@ -41,6 +42,11 @@ public:
         //! 境界の辺ごとの連続条件(0=G0,1=G1,2=G2)と支持面の名前。boundaries と同じ並び。
         std::vector<int> boundaryContinuity;
         std::vector<QString> boundarySupports;
+        //! 行ごとの役割(一覧の行の「役割」の選び肢に出す)。names と同じ並び。
+        std::vector<kachakacha::v2::app::WireRoleChoice> sectionRoles;
+        std::vector<kachakacha::v2::app::WireRoleChoice> guideRoles;
+        std::vector<kachakacha::v2::app::WireRoleChoice> centerlineRoles;
+        std::vector<kachakacha::v2::app::WireRoleChoice> boundaryRoles;
     };
 
     //! いまの入力を映す。作り方・役割・順序・状態を一度に書き直す。
@@ -76,6 +82,21 @@ public:
     //! 四辺面の張り方を変えた。
     void SetFourEdgeStyleHandler(
         std::function<void(kachakacha::v2::modeling::FourEdgeStyle)> handler);
+    //! おまかせ(初心者の入口)の段。調べた事実・おすすめ・他の候補(名前と作れるか)。
+    //! おまかせでなければ「おまかせに戻す」を出す。
+    void ShowRoleAssist(bool autoRoles, const std::vector<QString>& linesJa,
+        const std::vector<std::pair<QString, bool>>& candidates);
+    //! 「おまかせに戻す」と「この作り方にする」(他の候補の何番目か)。
+    void SetRoleAssistHandlers(std::function<void()> resume, std::function<void(int)> useCandidate);
+    //! 一覧の 1 行の役割を選んだ(自動 / 断面 / ガイド / 境界 / 通る線 / 中心線)。
+    void SetEntryRoleHandler(std::function<void(kachakacha::v2::modeling::ChainRole, int,
+            kachakacha::v2::app::WireRoleChoice)> handler);
+    //! 試験: 見えている一覧の row 行を選び、見えている「役割」を選ぶ / ボタンを押す。
+    [[nodiscard]] bool ChooseEntryRole(kachakacha::v2::modeling::ChainRole slot, int row,
+        kachakacha::v2::app::WireRoleChoice role);
+    [[nodiscard]] bool ClickResumeAuto();
+    [[nodiscard]] bool ClickCandidate(int index);
+    [[nodiscard]] QString RoleAssistTextJa() const;
     //! 下の3つのボタン。
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel,
         std::function<void()> reset);
@@ -129,6 +150,8 @@ public:
 
 private:
     void BuildMethodCards(QVBoxLayout* layout);
+    void BuildRoleAssist(QVBoxLayout* layout);
+    void RefreshEntryRole(int index);
     void BuildSlotRows(QVBoxLayout* layout);
     void BuildOrderRows(QVBoxLayout* layout);
 
@@ -148,6 +171,7 @@ private:
         QPushButton* clear = nullptr;
         QPushButton* remove = nullptr;
         QPushButton* flip = nullptr;
+        QComboBox* role = nullptr;
     };
     std::array<SlotRow, kachakacha::v2::app::kSurfaceSlotCount> slots_{};
     void BuildSlotRow(QVBoxLayout* layout, int index);
@@ -170,6 +194,13 @@ private:
     QPushButton* moveUp_ = nullptr;
     QPushButton* moveDown_ = nullptr;
     QLabel* status_ = nullptr;
+    QLabel* assist_ = nullptr;
+    QPushButton* resume_ = nullptr;
+    std::array<QPushButton*, 5> candidates_{};
+    std::function<void()> resumeHandler_;
+    std::function<void(int)> candidateHandler_;
+    std::function<void(kachakacha::v2::modeling::ChainRole, int, kachakacha::v2::app::WireRoleChoice)>
+        entryRoleHandler_;
     QPushButton* confirm_ = nullptr;
     QPushButton* cancel_ = nullptr;
     QPushButton* reset_ = nullptr;

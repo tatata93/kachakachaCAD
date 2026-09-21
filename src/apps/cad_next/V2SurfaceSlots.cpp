@@ -20,6 +20,7 @@
 
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 
 #include <QString>
 
@@ -119,8 +120,31 @@ void V2MainWindow::RefreshSurfaceForSelectionChange()
         return;
     }
     surfaceInput_ = kachakacha::v2::app::WithoutSurfaceEntries(surfaceInput_, removed);
-    surfaceInput_ = kachakacha::v2::app::WithSurfaceEntriesToggled(surfaceInput_,
-        surfaceInput_.activeSlot, accepted);
+    if (surfaceInput_.autoRoles && !surfaceInput_.slotChosenByUser) {
+        // おまかせ: 押した線はどの欄に入っていても外れる(再クリックで解除)。入っていなければ
+        // 入れて、役割はつながりから決め直す。
+        for (const EntityId& id : accepted) {
+            ChainRole holding = ChainRole::Section;
+            surfaceInput_ = kachakacha::v2::app::SurfaceSlotHolding(surfaceInput_, id, holding)
+                ? kachakacha::v2::app::WithoutSurfaceEntries(surfaceInput_, {id})
+                : kachakacha::v2::app::WithSurfaceEntries(surfaceInput_, surfaceInput_.activeSlot,
+                      {id}, false);
+        }
+    } else {
+        surfaceInput_ = kachakacha::v2::app::WithSurfaceEntriesToggled(surfaceInput_,
+            surfaceInput_.activeSlot, accepted);
+        // おまかせの最中に人が欄を選んでから押した線は、その欄の役割に決める。
+        if (surfaceInput_.autoRoles) {
+            for (const EntityId& id : accepted) {
+                ChainRole holding = ChainRole::Section;
+                if (kachakacha::v2::app::SurfaceSlotHolding(surfaceInput_, id, holding)) {
+                    surfaceInput_ = kachakacha::v2::app::WithWireRoleChoice(surfaceInput_, id,
+                        kachakacha::v2::app::WireRoleForSlot(surfaceInput_.method, holding));
+                }
+            }
+        }
+    }
+    ReclassifySurfaceRoles();
     // 回転体は断面が入ったら次は軸(自動遷移)。
     surfaceInput_ = kachakacha::v2::app::WithSurfaceSlotAdvanced(surfaceInput_);
     MirrorSurfaceEntriesToSelection();
@@ -149,6 +173,8 @@ void V2MainWindow::ActivateSurfaceSlot(ChainRole slot)
         return;
     }
     surfaceInput_ = kachakacha::v2::app::WithActiveSurfaceSlot(surfaceInput_, slot);
+    // おまかせの最中なら、以後に押した線はこの欄の役割に決める(人の決定)。
+    surfaceInput_.slotChosenByUser = surfaceInput_.autoRoles;
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();
     SetStatus(QStringLiteral("面を作る: %1")
@@ -160,6 +186,7 @@ void V2MainWindow::ActivateSurfaceSlot(ChainRole slot)
 void V2MainWindow::ClearSurfaceSlot(ChainRole slot)
 {
     surfaceInput_ = kachakacha::v2::app::WithSurfaceSlotCleared(surfaceInput_, slot);
+    ReclassifySurfaceRoles();
     MirrorSurfaceEntriesToSelection();
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();

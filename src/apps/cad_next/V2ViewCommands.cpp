@@ -31,6 +31,7 @@
 
 #include "kachakacha/app/DisplaySettings.h"
 #include "kachakacha/app/EntityNaming.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/domain/Entity.h"
 #include "kachakacha/view/FacingPlan.h"
 #include "kachakacha/view/ViewOrientation.h"
@@ -38,6 +39,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 bool V2MainWindow::IsViewCommand(std::string_view id)
@@ -641,6 +643,24 @@ std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
     const std::vector<QString>& candidateLabels)
 {
     QMenu menu(this);
+    // 面を作っている最中に線を右クリック: その線の役割を選べる(おまかせの役割を人が直す)。
+    std::vector<std::pair<QAction*, kachakacha::v2::app::WireRoleChoice>> roleActions;
+    kachakacha::v2::base::EntityId roleTarget;
+    if (surfaceShelfShown_ && viewport_ != nullptr) {
+        const auto candidate = viewport_->CurrentCandidate();
+        const auto* entity = candidate.has_value()
+            ? session_->GetDocument().FindEntity(candidate->entityId) : nullptr;
+        if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Wire) {
+            roleTarget = candidate->entityId;
+            menu.addSection(QStringLiteral("この線の役割(面を作る)"));
+            for (const auto role : kachakacha::v2::app::WireRoleChoices()) {
+                roleActions.emplace_back(menu.addAction(QString::fromUtf8(
+                                             std::string(kachakacha::v2::app::WireRoleLabelJa(role)).c_str())),
+                    role);
+            }
+            menu.addSeparator();
+        }
+    }
     const std::vector<QAction*> candidateActions = BuildSelectMenu(menu, candidateLabels);
     if (menu.isEmpty()) {
         return std::nullopt;
@@ -648,6 +668,12 @@ std::optional<int> V2MainWindow::ShowSelectMenuWithCandidates(const QPoint& at,
     const QAction* chosen = menu.exec(at);
     if (chosen == nullptr) {
         return std::nullopt;
+    }
+    for (const auto& [action, role] : roleActions) {
+        if (action == chosen) {
+            SetSurfaceWireRole(roleTarget, role);
+            return std::nullopt;
+        }
     }
     for (std::size_t index = 0; index < candidateActions.size(); ++index) {
         if (candidateActions[index] == chosen) {

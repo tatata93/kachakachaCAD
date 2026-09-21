@@ -272,6 +272,7 @@ void V2MainWindow::BuildSurfaceDock()
                 return;
             }
             surfaceInput_ = kachakacha::v2::app::WithoutSurfaceEntries(surfaceInput_, {id});
+            ReclassifySurfaceRoles();
             MirrorSurfaceEntriesToSelection();
             RefreshSurfacePreview();
             RefreshSurfaceRoleLabels();
@@ -307,6 +308,13 @@ void V2MainWindow::BuildSurfaceDock()
         RefreshSurfaceDock();
         SetStatus(QStringLiteral("面を作る: 3D で隣の面(支持面)を押してください。"));
     });
+    // おまかせ: 一覧の行の役割(自動/断面/ガイド/境界/通る線/中心線)、他の候補、おまかせに戻す。
+    surfaceDock_->SetEntryRoleHandler([this, entryAt](kachakacha::v2::modeling::ChainRole slot,
+                                          int row, kachakacha::v2::app::WireRoleChoice role) {
+        SetSurfaceWireRole(entryAt(slot, row), role);
+    });
+    surfaceDock_->SetRoleAssistHandlers([this] { ResumeSurfaceAutoRoles(); },
+        [this](int index) { UseSurfaceCandidate(index); });
     surfaceDock_->SetFourEdgeStyleHandler(
         [this](kachakacha::v2::modeling::FourEdgeStyle style) {
             surfaceInput_.fourEdgeStyle = style;

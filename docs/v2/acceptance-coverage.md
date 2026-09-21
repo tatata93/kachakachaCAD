@@ -65,7 +65,7 @@
 | AT-SRF-009 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/curve_fit_tests.cpp(線を形を保って core の B-spline へ写す)。残り: PC 確認と人の操作の自己試験 |
 | AT-SRF-010 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/kernel_curve_round_trip_tests.cpp(B-spline が形を変えずに往復)。残り: PC 確認 |
 | AT-SRF-011 | 部分 | tests_v2/surface_analysis_tests.cpp(平面・円筒・円錐はほぼ可展、球は大きさと半径の比で二重曲率の強さが分かれる、基準の数値と断定しない一文、色の決め方、境目の段階、何枚かは共通の目盛りで一番作りにくい面で言う)+ tests_v2/kernel_surface_analysis_tests.cpp(実際の面から K・H を測る: 平面/円筒/円錐/球、境目 G2/G0/開いた縁、入力線からのずれ 0/1 mm)+ 自己試験 HP-SA-01/02(棚のボタンで切り替え、下見も塗り、下見が消えれば消える)。残り: PC 確認 |
-| AT-SRF-012 | 未 | 役割の分類と薦め(P7)はこれから |
+| AT-SRF-012 | 部分 | tests_v2/surface_role_assist_tests.cpp(ガイド 2 本 + 断面 3 本はガイド付きロフトで事実・理由・他の候補を言う、選んだ順が違っても同じ答え、平らな 4 辺は平面で四辺面も候補、平らでない 4 辺は四辺面、5 辺は四辺面を作れないと言う、輪 + 内側の線、交わらない線はルールド/ロフト、閉じた断面の真ん中の線は中心線、ガイドどうしで断面の順が逆転していれば言う、人の決めた役割はそのまま使い作れなければ理由を言う、他の候補で入れ直す、役割の色)+ 自己試験 HP-SF-13(線を押すだけで決まり、再クリックで外れ、行の役割を直し、他の候補を使い、おまかせに戻す)。残り: PC 確認 |
 | AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー)+ 治具(surface_jig_tests: 表側は外側へ、厚みが負なら裏側へ内側で、すき間 0 なら離さない。負のすき間 JIG-E001・厚み 0 JIG-E002・面の数 JIG-E003)+ 自己試験(当たり面と当て板ができて一度で戻る) |
 | AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |
 | AT-EXT-003 | 済 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出し、ワイヤー上の標本点すべてが部品の表面から modelLinearMm 以内にあることを DistanceToShapeSurface で測る。直線の輪郭と円の輪郭の両方で見る。表にない形の距離は測らずに断る) |

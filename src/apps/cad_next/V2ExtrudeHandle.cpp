@@ -152,9 +152,29 @@ void V2Viewport::DrawToolRoleLabels(QPainter& painter) const
         const QPointF at(screen->x() + 6.0, screen->y() - 6.0);
         painter.setPen(QPen(QColor(255, 255, 255, 235), 3.0));
         painter.drawText(at, label.text);
-        painter.setPen(QPen(palette_.selected, 1.0));
+        painter.setPen(QPen(label.color.isValid() ? label.color : palette_.selected, 1.0));
         painter.drawText(at, label.text);
     }
+}
+
+void V2Viewport::SetRoleColors(
+    std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> colors)
+{
+    if (colors.empty() && roleColors_.empty()) {
+        return;
+    }
+    roleColors_ = std::move(colors);
+    update();
+}
+
+std::optional<QColor> V2Viewport::RoleColorOf(const kachakacha::v2::base::EntityId& id) const
+{
+    for (const auto& [entity, color] : roleColors_) {
+        if (entity == id) {
+            return color;
+        }
+    }
+    return std::nullopt;
 }
 
 void V2Viewport::SetExtrudeDistanceCallback(std::function<void(double)> callback)

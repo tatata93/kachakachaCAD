@@ -15,6 +15,7 @@
 //! 出し、数値の基準で 3 つに分けるが、板厚・近似・許容差・部材の分け方でも変わる
 //! 診断材料として出す(K = 0 だから必ず作れる、とは言わない)。
 
+#include "kachakacha/app/Rgb.h"
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/SurfaceAnalysisData.h"
 
@@ -40,17 +41,6 @@ enum class SurfaceAnalysisMode {
 [[nodiscard]] const std::vector<SurfaceAnalysisMode>& SurfaceAnalysisModes();
 //! 面を塗り替える解析か(ゼブラ・曲率)。線を重ねるだけのものは偽。
 [[nodiscard]] bool AnalysisPaintsSurface(SurfaceAnalysisMode mode) noexcept;
-
-struct Rgb {
-    std::uint8_t r = 0;
-    std::uint8_t g = 0;
-    std::uint8_t b = 0;
-
-    [[nodiscard]] bool operator==(const Rgb& other) const noexcept
-    {
-        return r == other.r && g == other.g && b == other.b;
-    }
-};
 
 //! 青 ― 白 ― 赤。value / scale を −1〜1 に丸めて塗る(0 が白)。
 [[nodiscard]] Rgb DivergingColor(double value, double scale) noexcept;

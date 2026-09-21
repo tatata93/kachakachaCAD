@@ -1,6 +1,7 @@
 #include "V2SurfaceDock.h"
 
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
 #include <QComboBox>
@@ -157,6 +158,23 @@ void V2SurfaceDock::BuildSlotRow(QVBoxLayout* layout, int index)
         }
     });
     actions->addWidget(row.flip);
+    // 選んだ行の線の役割(おまかせで自動に決めた役割を、人が直す)。
+    row.role = new QComboBox(widget());
+    for (const auto choice : kachakacha::v2::app::WireRoleChoices()) {
+        row.role->addItem(QStringLiteral("役割: ") + Text(kachakacha::v2::app::WireRoleLabelJa(choice)));
+    }
+    row.role->setToolTip(QStringLiteral("選んだ行の線の役割。自動 = 線のつながりから決める(おまかせ)"));
+    QObject::connect(row.role, &QComboBox::currentIndexChanged, this,
+        [this, role, current](int choice) {
+            const auto& choices = kachakacha::v2::app::WireRoleChoices();
+            if (!loading_ && entryRoleHandler_ && current() >= 0 && choice >= 0
+                && choice < static_cast<int>(choices.size())) {
+                entryRoleHandler_(role, current(), choices[static_cast<std::size_t>(choice)]);
+            }
+        });
+    actions->addWidget(row.role);
+    QObject::connect(row.list, &QTreeWidget::itemSelectionChanged, this,
+        [this, index] { RefreshEntryRole(index); });
     actions->addStretch(1);
     layout->addLayout(actions);
 }
@@ -303,6 +321,7 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     layout->addWidget(state_);
 
     BuildMethodCards(layout);
+    BuildRoleAssist(layout);
     BuildSlotRows(layout);
     BuildOrderRows(layout);
 
@@ -374,6 +393,13 @@ void V2SurfaceDock::FillSlotRow(SlotRow& row,
             continue;
         }
         const bool used = view.state != SurfaceSlotState::NotUsedByMethod;
+        // 欄の見出しを役割の色にする(3D の線・札と同じ色)。
+        const auto rgb = kachakacha::v2::app::WireRoleColor(
+            kachakacha::v2::app::WireRoleForSlot(state.method, row.key));
+        row.title->setStyleSheet(used ? QStringLiteral("color: rgb(%1,%2,%3); font-weight: bold;")
+                                            .arg(rgb.r).arg(rgb.g).arg(rgb.b)
+                                      : QString());
+        row.role->setVisible(used && view.count > 0);
         row.arm->setChecked(state.activeSlot == row.key);
         row.arm->setEnabled(used);
         row.clear->setEnabled(view.count > 0);
@@ -444,10 +470,11 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     // 2. 入力。使わない役割は「この方式では不要」と出し、選ぶ先にもさせない。
     const std::vector<QString>* lists[] = {&names.sections, &names.guides, &names.centerlines,
         &names.boundaries};
+    shownNames_ = names;
     for (std::size_t index = 0; index < slots_.size(); ++index) {
         FillSlotRow(slots_[index], state, *lists[index], previewShown);
+        RefreshEntryRole(static_cast<int>(index));
     }
-    shownNames_ = names;
     RefreshContinuityRow();
     const bool fourEdge = state.method == GuideSurfaceMethod::FourEdgePatch;
     fourEdgeStyleTitle_->setVisible(fourEdge);

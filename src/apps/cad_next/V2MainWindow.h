@@ -37,6 +37,7 @@
 #include "kachakacha/app/BooleanInputState.h"
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
 #include "V2ExtrudeDialog.h"
@@ -128,9 +129,7 @@ public:
     //! 道具を選ぶ。案内文が出る。
     void SelectTool(kachakacha::v2::modeling::DrawingTool tool);
 
-    //! 出す先・開く先を尋ねる手立て。既定は Qt のファイルダイアログ。
-    //! 画面を出さずに試すときは、ここを差し替える。
-    //! 差し替えられないと、自己試験がダイアログの前で止まってしまう。
+    //! 出す先・開く先を尋ねる手立て(既定は Qt のダイアログ。自己試験は差し替えて止まらないようにする)。
     //! 空を返したら「やめた」とみなす。
     void SetPathChooser(std::function<QString(bool forSave)> chooser);
 
@@ -199,6 +198,11 @@ public:
     void ClearSurfaceSlot(kachakacha::v2::modeling::ChainRole slot);
     //! 入力を空にする。作り方は残す。
     void ResetSurfaceInput();
+    // ---- おまかせ(初心者の入口: 役割と作り方を線のつながりから決める)。V2SurfaceRoles.cpp が持つ。
+    void ReclassifySurfaceRoles();
+    void SetSurfaceWireRole(const kachakacha::v2::base::EntityId& id, kachakacha::v2::app::WireRoleChoice role);
+    void UseSurfaceCandidate(int index);
+    void ResumeSurfaceAutoRoles();
     //! 作る。
     void ConfirmSurface();
     //! なぜ作れないかを言う。断り方を1か所にまとめる。
@@ -267,11 +271,12 @@ public:
     {
         return thickenInput_;
     }
-    //! いまの入力。試験から見る。
+    //! いまの入力と、おまかせの分類。試験から見る。
     [[nodiscard]] const kachakacha::v2::app::SurfaceInputState& SurfaceInput() const
     {
         return surfaceInput_;
     }
+    [[nodiscard]] const kachakacha::v2::app::SurfaceRoleAnalysis& SurfaceRoles() const { return surfaceRoles_; }
     //! 押し出しの棚を出して、読み取りを映す。
     void ShowExtrudeShelf(const kachakacha::v2::app::ExtrudePlan& plan);
     //! 立体の面を1枚ずつ、近似の元にする。「立体を面ごとに分ける」を選んだとき。
@@ -1049,6 +1054,7 @@ private:
         std::vector<std::pair<kachakacha::v2::modeling::GuideTable, kachakacha::v2::modeling::GuideSurfaceResult>> batch;   // 一括の 2 つ目以降
     };
     std::optional<SurfaceSnapshot> surfaceSnapshot_;
+    kachakacha::v2::app::SurfaceRoleAnalysis surfaceRoles_;
     V2SurfaceDock* surfaceDock_ = nullptr;
     [[nodiscard]] std::vector<std::vector<kachakacha::v2::geometry::Vector3>>
     ExtrudePreviewLoops(double distanceMm) const;
@@ -1190,13 +1196,8 @@ private:
         int count = 0;
         //! 向きを変えない相手か(立体そのものなど)。中央と大きさだけ合わせる。
         bool keepOrientation = false;
-        //! 複数選んだときの決まり(Q1 の契約、Codex Q1-Q5 の UX 指摘)。
-        //!
-        //! **向きは、向きを持つ相手のうち最初の1つが決める。**
-        //! **収まりは、選んだもの全部が決める。**
-        //! 最後に選んだものが黙って向きを奪う、という動きは分かりにくい。
-        //! 向きの違う相手が混じっていたら、真になって帯にそう出る。
-        //! 何も言わずにどれか1つの向きになるのが、いちばん困る。
+        //! 複数選んだときの決まり(Q1 の契約): **向きは向きを持つ最初の1つ、収まりは全部**が決める。
+        //! 向きの違う相手が混じっていたら真になり、帯にそう出る(黙ってどれかの向きにしない)。
         bool mixedDirections = false;
     };
     //! 次の「選択に正対」で、わざと裏側から見るか。「反対側から正対」が立てる。
@@ -1241,10 +1242,8 @@ public:
         const kachakacha::v2::fabrication::BandValueRemap& carried);
     //! いま部材ごとに持っている値。引き継ぎの元になる。
     [[nodiscard]] kachakacha::v2::fabrication::BandValueRemap BandValuesNow() const;
-    //! 分け方を変える前に見せている案。1度目の指示で用意し、2度目で当てる。
-    //!
-    //! **1度目では文書を変えない。** 前と後を見てから決められるようにする
-    //! (Codex Q1-Q5-R3 B1)。やめる・道具を替える・別の指示を出すと消える。
+    //! 分け方を変える前に見せている案。1度目の指示で用意し(**文書は変えない**、Codex Q1-Q5-R3 B1)、
+    //! 2度目で当てる。やめる・道具を替える・別の指示を出すと消える。
     struct PendingPartition {
         QString what;
         std::vector<std::size_t> numbers;

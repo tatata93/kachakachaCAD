@@ -51,6 +51,23 @@ struct SurfaceEdgeCondition {
     base::EntityId support;
 };
 
+//! 線 1 本の役割(初心者の入口「おまかせ」で、人が線ごとに選ぶもの。プロンプト beginner_workflow)。
+//! Auto は「線のつながりから決める」。欄との対応は作り方で決まる(通る線は「ガイド」の欄に入る)。
+enum class WireRoleChoice {
+    Auto,
+    Section,
+    Guide,
+    Boundary,
+    PassThrough,
+    Centerline,
+};
+
+//! 人が決めた線の役割。自動の線は書かない。
+struct WireRoleOverride {
+    base::EntityId wire;
+    WireRoleChoice role = WireRoleChoice::Auto;
+};
+
 //! 画面の1欄ぶん。
 struct SurfaceSlotView {
     modeling::ChainRole role = modeling::ChainRole::Section;
@@ -93,6 +110,13 @@ struct SurfaceInputState {
     //! これが無いと、断面を入れたあとにガイドを入れる道が無かった。
     //! 常に画面に出す。「今どこへ入るのか」を人に推測させない。
     modeling::ChainRole activeSlot = modeling::ChainRole::Section;
+    //! おまかせ(初心者の入口): 押した線の役割と作り方を、線のつながりから決め直す
+    //! (app/SurfaceRoleAssist)。人が作り方のカードを押すと切れる(入れたものはそのまま)。
+    bool autoRoles = false;
+    //! おまかせの最中に人が「ここへ選ぶ」で欄を選んだ。以後に押した線はその欄の役割に決める。
+    bool slotChosenByUser = false;
+    //! 人が線ごとに決めた役割(右の棚・右クリック)。おまかせでも、これは変えない。
+    std::vector<WireRoleOverride> roleOverrides;
 
     [[nodiscard]] bool Empty() const noexcept
     {

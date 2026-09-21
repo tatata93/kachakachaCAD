@@ -13,9 +13,12 @@
 #include "V2SelfTest.h"
 
 #include "V2MainWindow.h"
+#include "V2SurfaceDock.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/SurfaceInputState.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/geometry/Vector3.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -24,6 +27,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -251,11 +255,117 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     return Explain("面が1枚できる", CountOfKind(window, EntityKind::GuideSurface) == 1);
 }
 
+//! HP-SF-13。おまかせ: 道具を押し、線を普通に押すだけで役割と作り方が決まる。理由と他の候補が
+//! 棚に出て、3D は役割の色になる。もう一度押すと外れる。行ごとに役割を直せ、他の候補も使える。
+[[nodiscard]] bool CaseBeginnerRoleAssist(V2MainWindow& window)
+{
+    using kachakacha::v2::app::WireRoleChoice;
+    window.RunCommand("file.new");
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    // 断面は x = 0, 30, 60 の縦線、ガイドは y = 0 と y = 20 の長手の線(断面の両端を通る)。
+    const std::vector<std::pair<Vector3, Vector3>> sections{
+        {{0, 0, 0}, {0, 20, 0}}, {{30, 0, 0}, {30, 20, 0}}, {{60, 0, 0}, {60, 20, 0}}};
+    const std::vector<std::pair<Vector3, Vector3>> rails{
+        {{0, 0, 0}, {60, 0, 0}}, {{0, 20, 0}, {60, 20, 0}}};
+    if (!Explain("線を画面で引ける", DrawAll(window, sections) == 3 && DrawAll(window, rails) == 2)) {
+        return false;
+    }
+    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
+    window.RunCommand("surface.create");
+    if (!Explain("作り方を選ばずに始めるとおまかせ", window.SurfaceInput().autoRoles)) {
+        return false;
+    }
+    // 普通に押す(Ctrl なし)。ガイドは断面の端と重ならない 1/4 の所を押す。
+    for (const auto& [from, to] : sections) {
+        if (!Explain("断面を 3D で押せる", ClickMiddleOf(window, from, to))) {
+            return false;
+        }
+    }
+    for (const auto& [from, to] : rails) {
+        if (!Explain("ガイドを 3D で押せる", ClickMiddleOf(window, from, (from + to) * 0.5))) {
+            return false;
+        }
+    }
+    const auto& in = window.SurfaceInput();
+    const QString assist = window.SurfaceDock().RoleAssistTextJa();
+    if (!Explain(("ガイド付きロフトに決まる(" + assist.toStdString() + ")").c_str(),
+            in.method == GuideSurfaceMethod::LoftSections && in.guides.size() == 2
+                && in.sections.size() == 3)
+        || !Explain("理由と他の候補が棚に出る",
+            assist.contains(QStringLiteral("おすすめ: ガイド付きロフト"))
+                && assist.contains(QStringLiteral("ガイド候補: 2本"))
+                && assist.contains(QStringLiteral("断面候補: 3本"))
+                && assist.contains(QStringLiteral("他の候補")))
+        || !Explain(("下見が出る(帯は " + window.StatusText().toStdString() + ")").c_str(),
+            window.SurfacePreviewShown())) {
+        return false;
+    }
+    const auto railColor = window.Viewport().RoleColorOf(in.guides.front());
+    const auto sectionColor = window.Viewport().RoleColorOf(in.sections.front());
+    if (!Explain("3D はガイドが青、断面が橙", railColor.has_value() && sectionColor.has_value()
+                && railColor->blue() > railColor->red() && sectionColor->red() > sectionColor->blue())) {
+        return false;
+    }
+    // もう一度押すと外れ、また押すと戻る。
+    if (!Explain("断面をもう一度押せる", ClickMiddleOf(window, sections[1].first, sections[1].second))
+        || !Explain("再クリックで外れる(残りの 4 本は輪なので平面になる)",
+            kachakacha::v2::app::AllSurfaceEntries(in).size() == 4
+                && in.method == GuideSurfaceMethod::PlanarBoundary)
+        || !Explain("もう一度押して戻せる", ClickMiddleOf(window, sections[1].first, sections[1].second))
+        || !Explain("5 本に戻る", in.sections.size() == 3 && in.guides.size() == 2)) {
+        return false;
+    }
+    // 右の棚で、ガイドの 1 行目を「断面」に直す。人の決めた役割はそのまま使う。
+    const auto rail = in.guides.front();
+    if (!Explain("行の役割を選べる",
+            window.SurfaceDock().ChooseEntryRole(ChainRole::GuideU, 0, WireRoleChoice::Section))
+        || !Explain("その線は断面になる",
+            std::find(in.sections.begin(), in.sections.end(), rail) != in.sections.end())
+        || !Explain("人が決めた印", std::any_of(window.SurfaceRoles().wires.begin(),
+                                        window.SurfaceRoles().wires.end(), [&rail](const auto& w) {
+                                            return w.id == rail && w.fixedByUser;
+                                        }))) {
+        return false;
+    }
+    const auto order = kachakacha::v2::app::SurfaceSectionOrder(in);
+    const int shownRow = static_cast<int>(std::find(order.begin(), order.end(), rail) - order.begin());
+    if (!Explain("自動に戻せる",
+            window.SurfaceDock().ChooseEntryRole(ChainRole::Section, shownRow, WireRoleChoice::Auto))
+        || !Explain("元の分け方に戻る", in.guides.size() == 2 && in.sections.size() == 3
+                && std::find(in.guides.begin(), in.guides.end(), rail) != in.guides.end())) {
+        return false;
+    }
+    // 他の候補(境界面)を使い、おまかせに戻す。
+    int fill = -1;
+    const auto& alternatives = window.SurfaceRoles().alternatives;
+    for (std::size_t index = 0; index < alternatives.size(); ++index) {
+        if (alternatives[index].method == GuideSurfaceMethod::BoundaryFill && alternatives[index].feasible) {
+            fill = static_cast<int>(index);
+        }
+    }
+    if (!Explain("境界面の候補を押せる", fill >= 0 && window.SurfaceDock().ClickCandidate(fill))
+        || !Explain("外周 4 本 + 通る線 1 本の境界面になる",
+            in.method == GuideSurfaceMethod::BoundaryFill && in.boundaries.size() == 4
+                && in.guides.size() == 1 && !in.autoRoles)
+        || !Explain("おまかせに戻せる", window.SurfaceDock().ClickResumeAuto())
+        || !Explain("ガイド付きロフトに戻る", in.autoRoles && in.method == GuideSurfaceMethod::LoftSections
+                && in.guides.size() == 2)) {
+        return false;
+    }
+    if (!Explain("Enter を窓が受け取る", window.HandleToolKey(Qt::Key_Return, nullptr))) {
+        return false;
+    }
+    return Explain(("面が1枚できる(帯は " + window.StatusText().toStdString() + ")").c_str(),
+        CountOfKind(window, EntityKind::GuideSurface) == 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> BoundaryFillCases()
 {
     return {
+        {"HP-SF-13 おまかせ: 線を押すだけで役割と作り方が決まり、理由と候補が出て、役割を直せる",
+            CaseBeginnerRoleAssist},
         {"HP-SF-10 境界面は外周と内側の線をまとめて選んでも外周を輪にし内側を通る線にする",
             CaseBoundaryFillTakesInnerLineAsPassThrough},
         {"HP-SF-11 ロフトは断面3本とガイド3本を普通のクリックで受けて全部を使う",

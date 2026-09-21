@@ -1,11 +1,13 @@
 #include "V2SurfaceAnalysisDock.h"
 
 #include <QDockWidget>
+#include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QString>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -29,7 +31,12 @@ V2SurfaceAnalysisDock::V2SurfaceAnalysisDock(QWidget* parent)
     setObjectName(QStringLiteral("surfaceAnalysisDock"));
     auto* body = new QWidget(this);
     setWidget(body);
-    auto* layout = new QVBoxLayout(body);
+    auto* rootLayout = new QVBoxLayout(body);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(6);
+    // 中身は縦に流す(ボタンの字で右の棚を横へ押し広げない。狭い画面の試験)。
+    auto* content = new QWidget(body);
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
     layout->addWidget(new QLabel(QStringLiteral("1. 見るもの"), body));
@@ -57,6 +64,12 @@ V2SurfaceAnalysisDock::V2SurfaceAnalysisDock(QWidget* parent)
     legend_->setWordWrap(true);
     layout->addWidget(legend_);
     layout->addStretch(1);
+    auto* scroll = new QScrollArea(body);
+    scroll->setObjectName(QStringLiteral("surfaceAnalysisScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    rootLayout->addWidget(scroll, 1);
     auto* actions = new QHBoxLayout();
     close_ = new QPushButton(QStringLiteral("閉じる(表示は残す)"), body);
     QObject::connect(close_, &QPushButton::clicked, this, [this] {
@@ -66,7 +79,7 @@ V2SurfaceAnalysisDock::V2SurfaceAnalysisDock(QWidget* parent)
     });
     actions->addStretch(1);
     actions->addWidget(close_);
-    layout->addLayout(actions);
+    rootLayout->addLayout(actions);
 }
 
 void V2SurfaceAnalysisDock::ShowState(SurfaceAnalysisMode mode, const QString& targetJa,

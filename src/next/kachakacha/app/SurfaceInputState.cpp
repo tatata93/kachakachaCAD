@@ -326,6 +326,10 @@ std::string_view SurfaceSlotNameJa(GuideSurfaceMethod method, ChainRole role) no
 
 std::string SurfaceActiveSlotHintJa(const SurfaceInputState& state)
 {
+    if (state.autoRoles && !state.slotChosenByUser) {
+        // おまかせ: 押した線の役割は、線のつながりから決める(欄を選べば、その欄の役割に決まる)。
+        return "次のクリック → おまかせ(断面・ガイド・境界・通る線を線のつながりから決めます)";
+    }
     const std::size_t count = SurfaceSlotEntries(state, state.activeSlot).size();
     return "次のクリック → " + std::string(SurfaceSlotNameJa(state.method, state.activeSlot))
         + "(" + std::to_string(count + 1) + "本目)";

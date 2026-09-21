@@ -82,7 +82,9 @@ std::string SurfaceFooterLine(const SurfaceInputState& state, bool previewShown)
     line += " / GUIDES=" + std::to_string(state.guides.size());
     line += " / BOUNDARIES=" + std::to_string(state.boundaries.size());
     // **次のクリックがどの欄へ入るか**も、ここに出す(引継ぎ 2026-09-17 の 1)。
-    line += " / NEXT=" + std::string(SurfaceSlotNameJa(state.method, state.activeSlot));
+    line += " / NEXT=" + (state.autoRoles && !state.slotChosenByUser
+                                 ? std::string("おまかせ")
+                                 : std::string(SurfaceSlotNameJa(state.method, state.activeSlot)));
     // **まだ文書に入っていないことを、ここでも言う。**
     line += previewShown ? " / Preview only" : " / no preview";
     return line;

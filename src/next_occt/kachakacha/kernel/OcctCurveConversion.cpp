@@ -358,9 +358,12 @@ Result<CurveSegment> FromEdge(const TopoDS_Edge& edge, double toleranceMm)
                 : 0;
             return FitToCore(curve, first, last, reversed, toleranceMm, preferred);
         }
-        // そのほかの曲線(楕円・オフセット曲線など)も、値に合わせて写す。
-        // 許容に届かなければ断る(折れ線へ落として「できた」ことにしない)。
-        return FitToCore(curve, first, last, reversed, toleranceMm, 0);
+        // そのほかの曲線(楕円・双曲線・放物線・オフセット曲線など)は core に同じ種類が無い。
+        // 折れ線や近似の B-spline へ写して「戻せた」ことにはしない。種類を言って断る。
+        // (自由曲線の B-spline・ベジェだけは、core の一様 3 次へ値を合わせて写す。)
+        return Result<CurveSegment>::Failure(MakeError(kCurveUnsupported,
+            "この種類の曲線(楕円・双曲線・放物線・オフセット曲線など)はまだ扱えません。",
+            "core に同じ種類が無いので、折れ線や近似に置き換えずに断ります。"));
     }, "曲線の取り出し");
 }
 

@@ -4,10 +4,12 @@
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QString>
 #include <QStringList>
@@ -54,13 +56,20 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     setObjectName(QStringLiteral("surfaceEditDock"));
     auto* body = new QWidget(this);
     setWidget(body);
-    auto* layout = new QVBoxLayout(body);
+    auto* rootLayout = new QVBoxLayout(body);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(6);
+    // 中身は縦に流す(長いカードの字で右の棚を横へ押し広げない。狭い画面の試験)。
+    auto* content = new QWidget(body);
+    auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
     BuildOperationCards(layout);
 
     // 2. 入力。欄の名前と入れたものを 1 行ずつ。3D で押すと入り、押し直すと外れる。
-    layout->addWidget(new QLabel(QStringLiteral("2. 入力(3D で押すと入り、押し直すと外れます)"), body));
+    auto* inputTitle = new QLabel(QStringLiteral("2. 入力(3D で押すと入り、押し直すと外れます)"), body);
+    inputTitle->setWordWrap(true);
+    layout->addWidget(inputTitle);
     entries_ = new QTreeWidget(body);
     entries_->setColumnCount(2);
     entries_->setHeaderLabels(QStringList{QStringLiteral("欄"), QStringLiteral("入れたもの")});
@@ -95,6 +104,12 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     status_->setWordWrap(true);
     layout->addWidget(status_);
     layout->addStretch(1);
+    auto* scroll = new QScrollArea(body);
+    scroll->setObjectName(QStringLiteral("surfaceEditScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidget(content);
+    rootLayout->addWidget(scroll, 1);
 
     auto* actions = new QHBoxLayout();
     cancel_ = new QPushButton(QStringLiteral("キャンセル Esc"), body);
@@ -112,7 +127,7 @@ V2SurfaceEditDock::V2SurfaceEditDock(QWidget* parent)
     actions->addWidget(cancel_);
     actions->addStretch(1);
     actions->addWidget(confirm_);
-    layout->addLayout(actions);
+    rootLayout->addLayout(actions);
 }
 
 void V2SurfaceEditDock::BuildOperationCards(QVBoxLayout* layout)

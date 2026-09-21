@@ -28,6 +28,7 @@
 #include <GeomLProp_SLProps.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_BSplineSurface.hxx>
+#include <Geom_BezierCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
 #include <Geom_TrimmedCurve.hxx>
@@ -267,6 +268,63 @@ template<class Function>
     return true;
 }
 
+//! 合わせる縁の端で、隣の縁を「角で合わせ先の面に沿って出る」縁に置き換える(G1/G2 のとき)。
+//!
+//! 隣の縁をそのまま残すと、角では面の向きが隣の縁と合わせる縁の 2 本で決まってしまい、
+//! 合わせ先の面と折れたまま動けない(角だけはどうやっても滑らかにならない)。
+//! そこで隣の縁を、角では合わせ先の面に沿う向き、反対の端では元の向きで出る 3 次の線にする。
+//! 隣の縁はそのぶん動く(元の面からの動きとして測って言う)。
+[[nodiscard]] Result<TopoDS_Edge> RelaxedSideEdge(const TopoDS_Edge& side, const gp_Pnt& corner,
+    const occ::handle<Geom_Surface>& support)
+{
+    using Out = Result<TopoDS_Edge>;
+    BRepAdaptor_Curve curve(side);
+    const double first = curve.FirstParameter();
+    const double last = curve.LastParameter();
+    gp_Pnt start;
+    gp_Pnt end;
+    gp_Vec startTangent;
+    gp_Vec endTangent;
+    curve.D1(first, start, startTangent);
+    curve.D1(last, end, endTangent);
+    const bool cornerAtStart = start.Distance(corner) <= end.Distance(corner);
+    // 角から離れる向きにそろえる。
+    gp_Vec out = cornerAtStart ? startTangent : endTangent.Reversed();
+    gp_Vec farTangent = cornerAtStart ? endTangent : startTangent.Reversed();
+    const gp_Pnt farEnd = cornerAtStart ? end : start;
+    gp_Vec normal;
+    if (!NormalNear(support, corner, normal) || !(out.Magnitude() > 1.0e-12)
+        || !(farTangent.Magnitude() > 1.0e-12) || !(normal.Magnitude() > 1.0e-12)) {
+        return Out::Failure(MakeError(kEditMatchFailed, "合わせる縁の端で、隣の縁の向きを決められませんでした。",
+            "隣の縁の形か、合わせ先の面の向きを見直してください。"));
+    }
+    normal.Normalize();
+    gp_Vec along = out - normal * out.Dot(normal);
+    if (!(along.Magnitude() > 1.0e-6 * out.Magnitude())) {
+        return Out::Failure(MakeError(kEditMatchFailed,
+            "合わせる縁の端で、隣の縁が合わせ先の面に直角に立っています。",
+            "その角は滑らかにできません。隣の縁を寝かせるか、G0 で合わせてください。"));
+    }
+    along.Normalize();
+    farTangent.Normalize();
+    const double chord = corner.Distance(farEnd);
+    if (!(chord > 1.0e-9)) {
+        return Out::Failure(MakeError(kEditMatchFailed, "隣の縁が短すぎます。", {}));
+    }
+    NCollection_Array1<gp_Pnt> poles(1, 4);
+    poles.SetValue(1, corner);
+    poles.SetValue(2, corner.Translated(along * (chord / 3.0)));
+    poles.SetValue(3, farEnd.Translated(farTangent * (-chord / 3.0)));
+    poles.SetValue(4, farEnd);
+    const occ::handle<Geom_BezierCurve> bezier = new Geom_BezierCurve(poles);
+    const occ::handle<Geom_Curve> relaxed = bezier;
+    BRepBuilderAPI_MakeEdge maker{relaxed};
+    if (!maker.IsDone()) {
+        return Out::Failure(MakeError(kEditMatchFailed, "隣の縁を作り直せませんでした。", {}));
+    }
+    return Out::Success(maker.Edge());
+}
+
 } // namespace
 
 Result<SurfaceEdgeInfo> NearestSurfaceEdge(const KernelShapeHandle& surface,
@@ -350,25 +408,50 @@ Result<SurfaceEditResult> MatchSurfaceEdge(const KernelShapeHandle& target, int 
                       "合わせるのは、まだできません)。"));
         }
         const TopoDS_Wire outer = BRepTools::OuterWire(targetFace.Value());
-        BRepOffsetAPI_MakeFilling filler(3, 15, 2, false, 1.0e-5, std::max(1.0e-4, gap * 2.0),
-            0.01, 0.1, 8, 12);
-        bool replaced = false;
+        std::vector<TopoDS_Edge> ring;
         for (BRepTools_WireExplorer explorer(outer); explorer.More(); explorer.Next()) {
-            const TopoDS_Edge& edge = explorer.Current();
-            if (edge.IsSame(moving.Value())) {
-                replaced = true;
-                if (order == SurfaceContinuity::G0) {
-                    filler.Add(goal.Value(), GeomAbs_C0, true);
-                } else {
-                    filler.Add(goal.Value(), referenceFace.Value(), OrderOf(order), true);
-                }
-            } else {
-                filler.Add(edge, GeomAbs_C0, true);
+            ring.push_back(explorer.Current());
+        }
+        std::size_t at = ring.size();
+        for (std::size_t index = 0; index < ring.size(); ++index) {
+            if (ring[index].IsSame(moving.Value())) {
+                at = index;
             }
         }
-        if (!replaced) {
+        if (at == ring.size()) {
             return Out::Failure(MakeError(kEditMatchFailed,
                 "穴の縁は、まだ合わせられません。", "面の外周の縁を選んでください。"));
+        }
+        // G1/G2 のときは、合わせる縁の両隣の縁を、角で合わせ先の面に沿って出る縁にする。
+        // 合わせる縁の端 m0/m1 に対応する、合わせ先の縁の端(向きが逆なら入れ替える)。
+        const bool straight = std::max(m0.Distance(g0), m1.Distance(g1))
+            <= std::max(m0.Distance(g1), m1.Distance(g0));
+        const occ::handle<Geom_Surface> supportSurface = BRep_Tool::Surface(referenceFace.Value());
+        std::vector<TopoDS_Edge> boundary = ring;
+        if (order != SurfaceContinuity::G0 && ring.size() >= 3) {
+            for (const std::size_t side : {(at + ring.size() - 1) % ring.size(), (at + 1) % ring.size()}) {
+                const auto [s0, s1] = EndsOf(ring[side]);
+                const double toM0 = std::min(s0.Distance(m0), s1.Distance(m0));
+                const double toM1 = std::min(s0.Distance(m1), s1.Distance(m1));
+                const gp_Pnt corner = toM0 <= toM1 ? (straight ? g0 : g1) : (straight ? g1 : g0);
+                auto relaxed = RelaxedSideEdge(ring[side], corner, supportSurface);
+                if (!relaxed.HasValue()) {
+                    return Out::Failure(relaxed.Diagnostics());
+                }
+                boundary[side] = relaxed.Value();
+            }
+        }
+        // 縁の上の拘束の点を多めに取り、繰り返しも増やす(G1 の折れ目を許容 1.5 度の内側へ)。
+        BRepOffsetAPI_MakeFilling filler(3, 30, 4, false, 1.0e-5, std::max(1.0e-4, gap * 2.0),
+            0.004, 0.05, 10, 16);
+        for (std::size_t index = 0; index < boundary.size(); ++index) {
+            if (index != at) {
+                filler.Add(boundary[index], GeomAbs_C0, true);
+            } else if (order == SurfaceContinuity::G0) {
+                filler.Add(goal.Value(), GeomAbs_C0, true);
+            } else {
+                filler.Add(goal.Value(), referenceFace.Value(), OrderOf(order), true);
+            }
         }
         // 元の面を初期形にする。核は初期形への足し分を張るので、合わせた縁から遠い
         // ところほど元の形のまま残る。
@@ -549,8 +632,9 @@ Result<SurfaceEditResult> BridgeSurfaceEdges(const KernelShapeHandle& first, int
         if (!sideA.HasValue() || !sideB.HasValue() || !initialFace.IsDone()) {
             return Out::Failure(sideA.HasValue() ? sideB.Diagnostics() : sideA.Diagnostics());
         }
-        BRepOffsetAPI_MakeFilling filler(3, 15, 2, false, 1.0e-5,
-            std::max(1.0e-4, tolerance.modelLinearMm), 0.01, 0.1, 8, 12);
+        // 縁の上の拘束の点を多めに取り、繰り返しも増やす(張りを強くしても G1 を保つ)。
+        BRepOffsetAPI_MakeFilling filler(3, 30, 4, false, 1.0e-5,
+            std::max(1.0e-4, tolerance.modelLinearMm), 0.004, 0.05, 10, 16);
         if (firstOrder == SurfaceContinuity::G0) {
             filler.Add(edgeA.Value(), GeomAbs_C0, true);
         } else {

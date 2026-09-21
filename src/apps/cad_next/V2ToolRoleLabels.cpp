@@ -10,8 +10,10 @@
 
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/app/ToolRoleLabels.h"
 
+#include <QColor>
 #include <QString>
 
 #include <cstddef>
@@ -114,8 +116,32 @@ void V2MainWindow::RefreshSurfaceRoleLabels()
     if (!surfaceShelfShown_) {
         if (viewport_ != nullptr) {
             viewport_->HideToolRoleLabels();
+            viewport_->SetRoleColors({});
         }
         return;
     }
-    ShowRoleLabels(kachakacha::v2::app::SurfaceRoleLabels(surfaceInput_));
+    if (viewport_ == nullptr) {
+        return;
+    }
+    // 役割の色分け(ガイド = 青、断面 = 橙、境界 = 紫、通る線 = 緑)。線と札を同じ色にする。
+    std::vector<std::pair<kachakacha::v2::base::EntityId, QColor>> colors;
+    for (const auto& [id, rgb] : kachakacha::v2::app::SurfaceRoleColors(surfaceInput_)) {
+        colors.emplace_back(id, QColor(rgb.r, rgb.g, rgb.b));
+    }
+    std::vector<V2Viewport::PlacedRoleLabel> placed;
+    for (const auto& label : kachakacha::v2::app::SurfaceRoleLabels(surfaceInput_)) {
+        const auto at = PointForRoleLabel(label.entityId);
+        if (!at.has_value()) {
+            continue;
+        }
+        QColor color;
+        for (const auto& [id, roleColor] : colors) {
+            if (id == label.entityId) {
+                color = roleColor;
+            }
+        }
+        placed.push_back(V2Viewport::PlacedRoleLabel{*at, QString::fromStdString(label.text), color});
+    }
+    viewport_->ShowToolRoleLabels(std::move(placed));
+    viewport_->SetRoleColors(std::move(colors));
 }

@@ -16,6 +16,7 @@
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/SurfacePreview.h"
+#include "kachakacha/app/SurfaceRoleAssist.h"
 #include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
@@ -193,16 +194,25 @@ void V2MainWindow::RefreshSurfaceDock()
             : QStringLiteral("名前のないもの");
     };
     V2SurfaceDock::SlotNames names;
+    // 行ごとの役割: おまかせなら人が決めた役割(決めていなければ自動)、そうでなければ欄の役割。
+    const auto roleOf = [this](const kachakacha::v2::base::EntityId& id) {
+        return surfaceInput_.autoRoles ? kachakacha::v2::app::WireRoleOverrideOf(surfaceInput_, id)
+                                       : kachakacha::v2::app::RoleOfEntry(surfaceInput_, id);
+    };
     for (const auto& id : kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_)) {
         names.sections.push_back(nameOf(id));
+        names.sectionRoles.push_back(roleOf(id));
     }
     for (const auto& id : surfaceInput_.guides) {
         names.guides.push_back(nameOf(id));
+        names.guideRoles.push_back(roleOf(id));
     }
     for (const auto& id : surfaceInput_.centerlines) {
         names.centerlines.push_back(nameOf(id));
+        names.centerlineRoles.push_back(roleOf(id));
     }
     for (const auto& id : surfaceInput_.boundaries) {
+        names.boundaryRoles.push_back(roleOf(id));
         const auto condition = kachakacha::v2::app::EdgeConditionOf(surfaceInput_, id);
         const bool takes = kachakacha::v2::app::SurfaceTakesContinuity(surfaceInput_.method);
         // 辺ごとの連続条件を名前の後ろに出す(境界面・四辺面)。「境界 2  屋根.縁 G2」。
@@ -245,6 +255,23 @@ void V2MainWindow::RefreshSurfaceDock()
     }
     surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value(), deviation,
         solver);
+    // おまかせの段: 調べた事実・おすすめ・他の候補(作れるかは幾何の検査で確かめてある)。
+    std::vector<QString> assist;
+    std::vector<std::pair<QString, bool>> candidates;
+    if (surfaceInput_.autoRoles) {
+        for (const std::string& line : kachakacha::v2::app::SurfaceRoleSummaryJa(surfaceRoles_)) {
+            assist.push_back(QString::fromStdString(line));
+        }
+        for (const auto& candidate : surfaceRoles_.alternatives) {
+            candidates.emplace_back(
+                QString::fromStdString(kachakacha::v2::app::SurfaceCandidateNameJa(candidate)),
+                candidate.feasible);
+        }
+    } else {
+        assist.push_back(QStringLiteral("作り方はあなたが選んでいます(おまかせは切れています)。"
+                                        "「おまかせに戻す」で、線のつながりから役割と作り方を決め直せます。"));
+    }
+    surfaceDock_->ShowRoleAssist(surfaceInput_.autoRoles, assist, candidates);
     // 一番下の一行(正本の footer)。**まだ文書に入っていないこと**も、ここで言う。
     ShowToolFooter(surfaceShelfShown_
             ? QString::fromUtf8(kachakacha::v2::app::SurfaceFooterLine(surfaceInput_,
@@ -311,6 +338,11 @@ void V2MainWindow::RunSurfaceCreate()
     if (!surfaceShelfShown_) {
         // 始めるとき。選んだものを取り込み、作り方を薦める(§11)。
         const auto facts = SurfaceFactsNow();
+        // 作り方を人が選んでいなければ、おまかせ(初心者の入口): 押した線の役割と作り方を
+        // 線のつながりから決める(V2SurfaceRoles.cpp)。作り方のカードを押すと切れる。
+        surfaceInput_.autoRoles = !surfaceInput_.methodChosenByUser;
+        surfaceInput_.slotChosenByUser = false;
+        surfaceInput_.roleOverrides.clear();
         if (!surfaceInput_.methodChosenByUser) {
             surfaceInput_.method = kachakacha::v2::app::RecommendSurfaceMethod(facts);
         }
@@ -318,6 +350,7 @@ void V2MainWindow::RunSurfaceCreate()
         surfaceInput_.activeSlot =
             kachakacha::v2::app::DefaultSurfaceIntakeSlot(surfaceInput_.method);
         AddSelectionToSurfaceSlot(surfaceInput_.activeSlot);
+        ReclassifySurfaceRoles();
         surfaceShelfShown_ = true;
         viewport_->SetToolPickActive(true);
         // 以後の 3D クリックは「押すたびに入れる/外す」。欄が正本、3D はその印。
@@ -344,6 +377,10 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
 {
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = true;
+    // 人が作り方を決めた。おまかせは切る(入れた線はそのまま。「おまかせに戻す」で戻せる)。
+    surfaceInput_.autoRoles = false;
+    surfaceInput_.slotChosenByUser = false;
+    surfaceRoles_ = kachakacha::v2::app::SurfaceRoleAnalysis{};
     // いまの欄がその作り方で使えなければ、既定の欄へ戻す。入れたものは捨てない。
     surfaceInput_ = kachakacha::v2::app::WithActiveSlotSettled(surfaceInput_);
     viewport_->SetProfileRegionPicking(method == GuideSurfaceMethod::PlanarBoundary);
@@ -393,10 +430,13 @@ void V2MainWindow::ResetSurfaceInput()
     const auto method = surfaceInput_.method;
     const bool chosen = surfaceInput_.methodChosenByUser;
     const auto activeSlot = surfaceInput_.activeSlot;
+    const bool autoRoles = surfaceInput_.autoRoles;
     surfaceInput_ = kachakacha::v2::app::SurfaceInputState{};
     surfaceInput_.method = method;
     surfaceInput_.methodChosenByUser = chosen;
     surfaceInput_.activeSlot = activeSlot;
+    surfaceInput_.autoRoles = autoRoles;   // おまかせのまま入れ直せる
+    ReclassifySurfaceRoles();
     MirrorSurfaceEntriesToSelection();   // 3D の印も消す。古い入力を残さない。
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
@@ -418,9 +458,11 @@ void V2MainWindow::EndSurfacePreview()
         surfaceInput_.method = method;
         surfaceInput_.methodChosenByUser = chosen;
     }
+    surfaceRoles_ = kachakacha::v2::app::SurfaceRoleAnalysis{};
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
+        viewport_->SetRoleColors({});
         viewport_->SetToolPickActive(false);
         viewport_->SetToolPickToggle(false);
         viewport_->SetProfileRegionPicking(false);

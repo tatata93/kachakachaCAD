@@ -20,6 +20,7 @@
 
 #include <BRepAdaptor_Surface.hxx>
 #include <TopoDS_Edge.hxx>
+#include <Geom_BSplineCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <NCollection_Array1.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>

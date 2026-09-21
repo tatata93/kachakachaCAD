@@ -101,23 +101,28 @@ KACHA_V2_TEST(surface_input, 作り方を変えても入力を捨てない)
 {
     // これが本題。方式を変える前に要らない行を自分で消さないと UI-R003 で
     // 断られていた。人は「線を入れてから方式を試す」ものである。
+    // 2026-09-22: ロフトはガイドを使う(0〜任意)。使わない作り方はルールド。
     SurfaceInputState state;
-    state.method = GuideSurfaceMethod::LoftSections;
+    state.method = GuideSurfaceMethod::RuledSections;
     state = WithSurfaceEntries(state, ChainRole::Section, {Id(1), Id(2), Id(3)}, true);
     state = WithSurfaceEntries(state, ChainRole::GuideU, {Id(4)}, true);
     Require(state.sections.size() == 3, "断面が入った");
     Require(state.guides.size() == 1, "ガイドも入った");
 
-    // ロフトはガイドを使わない。**でも消えない。**
+    // ルールドはガイドを使わない。**でも消えない。**
     Require(StateOf(state, ChainRole::Section) == SurfaceSlotState::Used, "断面は使う");
     Require(StateOf(state, ChainRole::GuideU) == SurfaceSlotState::NotUsedByMethod,
         "ガイドはこの作り方では使わない");
     Require(state.guides.size() == 1, "**入れたものは残っている**");
 
-    // 案内付きロフトへ変えると、そのまま使える。入れ直さなくてよい。
-    state.method = GuideSurfaceMethod::GuidedLoft;
+    // ロフトへ変えると、そのまま使える。入れ直さなくてよい。
+    state.method = GuideSurfaceMethod::LoftSections;
     Require(StateOf(state, ChainRole::GuideU) == SurfaceSlotState::Used, "ガイドを使う");
     Require(SurfaceReadyToBuild(state), "そのまま作れる");
+    // ガイドを外してもロフトは作れる(ガイドは任意)。
+    state = WithSurfaceSlotCleared(state, ChainRole::GuideU);
+    Require(StateOf(state, ChainRole::GuideU) == SurfaceSlotState::Optional, "ガイドは任意");
+    Require(SurfaceReadyToBuild(state), "断面だけのロフトも作れる");
 }
 
 KACHA_V2_TEST(surface_input, 足りない役割を名前で言う)
@@ -185,6 +190,11 @@ KACHA_V2_TEST(surface_input, 主要6方式とその他が重ならない)
 {
     // UI の正本「1. 作り方」は6枚。残りは消さずに「その他」へ置く。
     Require(MainSurfaceMethods().size() == 6, "6枚");
+    // 2026-09-22: 案内付きロフトはロフトへ統合し、主要の入口は四辺面に譲った。
+    Require(std::find(MainSurfaceMethods().begin(), MainSurfaceMethods().end(),
+                GuideSurfaceMethod::FourEdgePatch)
+            != MainSurfaceMethods().end(),
+        "四辺面は主要の入口");
     for (const auto method : OtherSurfaceMethods()) {
         Require(std::find(MainSurfaceMethods().begin(), MainSurfaceMethods().end(), method)
                 == MainSurfaceMethods().end(),
@@ -195,7 +205,7 @@ KACHA_V2_TEST(surface_input, 主要6方式とその他が重ならない)
         GuideSurfaceMethod::RuledSections, GuideSurfaceMethod::LoftSections,
         GuideSurfaceMethod::GuidedLoft, GuideSurfaceMethod::GordonNetwork,
         GuideSurfaceMethod::BoundaryFill, GuideSurfaceMethod::OffsetGuide,
-        GuideSurfaceMethod::Revolve};
+        GuideSurfaceMethod::Revolve, GuideSurfaceMethod::FourEdgePatch};
     for (const auto method : all) {
         const bool listed = std::find(MainSurfaceMethods().begin(),
                                 MainSurfaceMethods().end(), method)
@@ -251,36 +261,42 @@ KACHA_V2_TEST(surface_input, 欄が空なら平面も曲線網も作れない)
     gordon = WithSurfaceEntries(gordon, ChainRole::Section, {Id(1), Id(2)}, false);
     Require(!SurfaceReadyToBuild(gordon), "U だけでは作れない");
     gordon = WithSurfaceEntries(gordon, ChainRole::GuideU, {Id(3)}, false);
-    Require(SurfaceReadyToBuild(gordon), "U と V が揃えば作れる");
+    Require(!SurfaceReadyToBuild(gordon), "V が 1 本では網にならない(外側に 2 本要る)");
+    gordon = WithSurfaceEntries(gordon, ChainRole::GuideU, {Id(4)}, false);
+    Require(SurfaceReadyToBuild(gordon), "U 2 本と V 2 本が揃えば作れる");
 }
 
 KACHA_V2_TEST(surface_input, 本数が合わないときは足りないのか多いのかを言う)
 {
     // 「まだ作れません」だけでは、何を直せばよいのか分からない。
-    // ルールドに3本入れて「生成可能」と出し、押したら断る、では最悪である。
+    // 2026-09-22: ルールドは 2〜任意(3 本以上は隣り合う 2 本ずつの帯)。
+    // 足りないときを見るのは 1 本のルールドと、辺が 3 本の四辺面。
     SurfaceInputState ruled;
     ruled.method = GuideSurfaceMethod::RuledSections;
-    ruled = WithSurfaceEntries(ruled, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
-    Require(!SurfaceReadyToBuild(ruled), "3本のルールドは作れない");
+    ruled = WithSurfaceEntries(ruled, ChainRole::Section, {Id(1)}, false);
+    Require(!SurfaceReadyToBuild(ruled), "1本のルールドは作れない");
     const auto why = SurfaceCountProblemJa(ruled);
-    Require(why.find("2本") != std::string::npos, std::string("2本と言う: ") + why);
-    Require(why.find("ロフト") != std::string::npos, "ロフトへの逃げ道も言う");
+    Require(why.find("2本以上") != std::string::npos, std::string("2本以上と言う: ") + why);
 
     SurfaceInputState ok;
     ok.method = GuideSurfaceMethod::RuledSections;
-    ok = WithSurfaceEntries(ok, ChainRole::Section, {Id(1), Id(2)}, false);
-    Require(SurfaceReadyToBuild(ok), "2本なら作れる");
+    ok = WithSurfaceEntries(ok, ChainRole::Section, {Id(1), Id(2), Id(3)}, false);
+    Require(SurfaceReadyToBuild(ok), "3本のルールドは帯をつないで作れる");
     Require(SurfaceCountProblemJa(ok).empty(), "合っていれば何も言わない");
 
+    SurfaceInputState patch;
+    patch.method = GuideSurfaceMethod::FourEdgePatch;
+    patch = WithSurfaceEntries(patch, ChainRole::BoundarySide, {Id(1), Id(2), Id(3), Id(4),
+        Id(5)}, false);
+    Require(!SurfaceReadyToBuild(patch), "辺が5本の四辺面は作れない");
+    Require(SurfaceCountProblemJa(patch).find("ちょうど4本") != std::string::npos,
+        "多いときは「ちょうど4本」と言う");
+
     // 状態の行にも、その理由がそのまま出る。
-    const auto lines = SurfaceStatusLinesJa(ruled, false);
-    bool said = false;
-    for (const auto& line : lines) {
-        if (line.find("2本") != std::string::npos) {
-            said = true;
-        }
-    }
-    Require(said, "状態の行に理由が出る");
+    const auto ruledLines = SurfaceStatusLinesJa(ruled, false);
+    const bool told = std::any_of(ruledLines.begin(), ruledLines.end(),
+        [](const std::string& line) { return line.find("2本以上") != std::string::npos; });
+    Require(told, "状態の行に理由が出る(足りないとき)");
 }
 
 KACHA_V2_TEST(surface_input, 押したものはいまの欄へ入り再び押すと外れる)
@@ -330,9 +346,9 @@ KACHA_V2_TEST(surface_input, 解除は並びからも消す)
 KACHA_V2_TEST(surface_input, その作り方で使わない欄は選べない)
 {
     SurfaceInputState state;
-    state.method = GuideSurfaceMethod::LoftSections;
+    state.method = GuideSurfaceMethod::RuledSections;
     state.activeSlot = ChainRole::Section;
-    Require(!CanActivateSurfaceSlot(state, ChainRole::GuideU), "ロフトにガイド欄は無い");
+    Require(!CanActivateSurfaceSlot(state, ChainRole::GuideU), "ルールドにガイド欄は無い");
     const auto same = WithActiveSurfaceSlot(state, ChainRole::GuideU);
     Require(same.activeSlot == ChainRole::Section, "黙って変えない");
     // 作り方を平面へ変えると、断面の欄は使えないので既定(境界)へ戻る。
@@ -400,9 +416,12 @@ KACHA_V2_TEST(surface_input_state, 回転体はガイドの欄が軸になり_�
     Require(SurfaceActiveSlotHintJa(state) == "次のクリック → 軸(1本目)", "案内も軸");
     state = WithSurfaceEntriesToggled(state, ChainRole::GuideU, {Id(2)});
     Require(SurfaceReadyToBuild(state), "断面1本と軸1本で作れる");
+    // 2026-09-22: 断面は 1〜任意(断面ごとに同じ軸で 1 つずつ作る一括)。軸は 1 本。
     state = WithSurfaceEntriesToggled(state, ChainRole::Section, {Id(3)});
-    Require(!SurfaceReadyToBuild(state) && SurfaceCountProblemJa(state).find("断面1本") != std::string::npos,
-        "断面は1本だけ");
+    Require(SurfaceReadyToBuild(state), "断面2本でも作れる(1つずつ作る)");
+    state = WithSurfaceEntriesToggled(state, ChainRole::GuideU, {Id(4)});
+    Require(!SurfaceReadyToBuild(state) && SurfaceCountProblemJa(state).find("軸は1本") != std::string::npos,
+        "軸は1本だけ");
     // ロフトでは欄を動かさない。
     SurfaceInputState loft;
     loft.method = GuideSurfaceMethod::LoftSections;

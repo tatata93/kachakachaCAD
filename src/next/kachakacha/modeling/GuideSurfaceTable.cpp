@@ -1,5 +1,7 @@
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include "kachakacha/modeling/SurfaceCardinality.h"
+
 #include "kachakacha/geometry/CurveSampling.h"
 #include "kachakacha/geometry/WireEdit.h"
 
@@ -57,26 +59,35 @@ constexpr double kTwoPi = 6.283185307179586;
 
 const std::vector<ChainRole>& RolesForMethod(GuideSurfaceMethod method)
 {
-    static const std::vector<ChainRole> planar{ChainRole::OuterBoundary,
-        ChainRole::HoleBoundary};
-    static const std::vector<ChainRole> sections{ChainRole::Section};
-    static const std::vector<ChainRole> guided{ChainRole::Section, ChainRole::GuideU};
-    static const std::vector<ChainRole> gordon{ChainRole::GuideU, ChainRole::GuideV};
-    // 境界埋めの GuideU は「面が必ず通る線」(外周の内側に引いた線)。無くてもよい。
-    // 人が引いたワイヤーは面がそこを通る線である(オーナー方針 2026-09-22)。
-    static const std::vector<ChainRole> fill{ChainRole::BoundarySide, ChainRole::GuideU};
-    static const std::vector<ChainRole> offset{ChainRole::SourceSurface};
+    // 役割の一覧は個数の約束(SurfaceCardinality.h)から作る。**2 か所に書かない。**
+    static const auto build = [](GuideSurfaceMethod which) {
+        std::vector<ChainRole> roles;
+        for (const RoleCardinality& item : SurfaceCardinality(which)) {
+            roles.push_back(item.role);
+        }
+        return roles;
+    };
+    static const std::vector<ChainRole> planar = build(GuideSurfaceMethod::PlanarBoundary);
+    static const std::vector<ChainRole> ruled = build(GuideSurfaceMethod::RuledSections);
+    static const std::vector<ChainRole> loft = build(GuideSurfaceMethod::LoftSections);
+    static const std::vector<ChainRole> guided = build(GuideSurfaceMethod::GuidedLoft);
+    static const std::vector<ChainRole> gordon = build(GuideSurfaceMethod::GordonNetwork);
+    static const std::vector<ChainRole> fill = build(GuideSurfaceMethod::BoundaryFill);
+    static const std::vector<ChainRole> offset = build(GuideSurfaceMethod::OffsetGuide);
+    static const std::vector<ChainRole> revolve = build(GuideSurfaceMethod::Revolve);
+    static const std::vector<ChainRole> fourEdge = build(GuideSurfaceMethod::FourEdgePatch);
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary: return planar;
-    case GuideSurfaceMethod::RuledSections:  return sections;
-    case GuideSurfaceMethod::LoftSections:   return sections;
+    case GuideSurfaceMethod::RuledSections:  return ruled;
+    case GuideSurfaceMethod::LoftSections:   return loft;
     case GuideSurfaceMethod::GuidedLoft:     return guided;
     case GuideSurfaceMethod::GordonNetwork:  return gordon;
     case GuideSurfaceMethod::BoundaryFill:   return fill;
     case GuideSurfaceMethod::OffsetGuide:    return offset;
-    case GuideSurfaceMethod::Revolve:        return sections;
+    case GuideSurfaceMethod::Revolve:        return revolve;
+    case GuideSurfaceMethod::FourEdgePatch:  return fourEdge;
     }
-    return sections;
+    return loft;
 }
 
 bool RoleUsedByMethod(GuideSurfaceMethod method, ChainRole role)
@@ -95,8 +106,30 @@ std::string ChainRoleLabelJa(ChainRole role)
     case ChainRole::GuideV:        return "外形V";
     case ChainRole::BoundarySide:  return "境界辺";
     case ChainRole::SourceSurface: return "元の面";
+    case ChainRole::Centerline:    return "中心線";
     }
     return "不明";
+}
+
+std::string ChainRoleLabelJa(GuideSurfaceMethod method, ChainRole role)
+{
+    // 同じ役割でも、作り方で人の呼び方が違う。
+    if (role == ChainRole::GuideU) {
+        switch (method) {
+        case GuideSurfaceMethod::LoftSections:
+        case GuideSurfaceMethod::GuidedLoft:
+            return "ガイド";
+        case GuideSurfaceMethod::BoundaryFill:
+        case GuideSurfaceMethod::FourEdgePatch:
+            return "通る線";
+        default:
+            break;
+        }
+    }
+    if (role == ChainRole::BoundarySide && method == GuideSurfaceMethod::FourEdgePatch) {
+        return "辺";
+    }
+    return ChainRoleLabelJa(role);
 }
 
 bool IsBoundaryRole(ChainRole role) noexcept
@@ -190,16 +223,22 @@ std::vector<GuideTableRowView> BuildGuideTableView(const GuideTable& table,
 
 std::vector<std::string> MissingRoleGuidanceJa(const GuideTable& table)
 {
+    // 足りないかどうかは個数の約束(SurfaceCardinality.h)で決める。
+    // 「役割が 1 行も無ければ足りない」にすると、任意の役割(境界面の通る線、
+    // ロフトのガイド)が無いだけで断ってしまう(2026-09-22 に実際に起きかけた)。
     std::vector<std::string> guidance;
-    for (ChainRole role : RolesForMethod(table.method)) {
-        if (role == ChainRole::HoleBoundary) {
-            continue;   // 穴は無くてよい。
+    for (const RoleCardinality& cardinality : SurfaceCardinality(table.method)) {
+        const auto count = static_cast<std::size_t>(std::count_if(table.rows.begin(),
+            table.rows.end(),
+            [&](const GuideTableRow& row) { return row.role == cardinality.role; }));
+        if (count >= cardinality.minimum) {
+            continue;
         }
-        const bool present = std::any_of(table.rows.begin(), table.rows.end(),
-            [role](const GuideTableRow& row) { return row.role == role; });
-        if (!present) {
-            guidance.push_back(ChainRoleLabelJa(role) + "が1つも入っていません。");
-        }
+        const std::string label = ChainRoleLabelJa(table.method, cardinality.role);
+        guidance.push_back(count == 0 && cardinality.minimum == 1
+                ? label + "が1つも入っていません。"
+                : label + "が" + std::to_string(cardinality.minimum) + "つ以上必要です(いま"
+                    + std::to_string(count) + "つ)。");
     }
     return guidance;
 }
@@ -397,6 +436,7 @@ Result<GuideSurfaceRequest> ToGuideSurfaceRequest(const GuideTable& table,
     request.revolveAxisDirection = table.revolveAxisDirection;
     request.revolveAngleRad = table.revolveAngleRad;
     request.keepSectionOrder = table.lockSectionOrder;
+    request.fourEdgeStyle = table.fourEdgeStyle;
     for (std::size_t index = 0; index < table.rows.size(); ++index) {
         const GuideTableRow& row = table.rows[index];
         if (row.role == ChainRole::SourceSurface) {

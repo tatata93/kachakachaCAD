@@ -62,6 +62,8 @@ struct GuideTable {
     //! 断面を表の行の順のまま使う(手動固定)。偽なら幾何の位置から並べ直す。
     //! 画面の「3. 断面順」の手動固定がここへ来て、要求へそのまま渡る。
     bool lockSectionOrder = false;
+    //! FourEdgePatch の張り方。表から要求へそのまま渡る。
+    FourEdgeStyle fourEdgeStyle = FourEdgeStyle::Coons;
 };
 
 //! 選択した線の束。ボタンはこれを受け取る。
@@ -77,6 +79,8 @@ struct GuideTableSelection {
 
 //! 役割の日本語。表の「役割」列に出る。
 [[nodiscard]] std::string ChainRoleLabelJa(ChainRole role);
+//! 作り方ごとの呼び方(ロフトの外形U =「ガイド」、境界面の外形U =「通る線」)。
+[[nodiscard]] std::string ChainRoleLabelJa(GuideSurfaceMethod method, ChainRole role);
 
 //! 外形の側の役割か。断面の両端がここへ届いているかを「接続」列に出す。
 [[nodiscard]] bool IsBoundaryRole(ChainRole role) noexcept;

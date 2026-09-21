@@ -90,8 +90,13 @@ KACHA_V2_TEST(guide_table, 方法ごとに使う役割が決まっている)
         "案内付きは外形Uを使う");
     Require(RoleUsedByMethod(GuideSurfaceMethod::GordonNetwork, ChainRole::GuideV),
         "Gordon は外形Vを使う");
-    Require(!RoleUsedByMethod(GuideSurfaceMethod::LoftSections, ChainRole::GuideU),
-        "ロフトは外形Uを使わない");
+    // 2026-09-22: ロフトはガイド(外形U)を 0〜任意で使う。使わないのはルールド。
+    Require(RoleUsedByMethod(GuideSurfaceMethod::LoftSections, ChainRole::GuideU),
+        "ロフトはガイドを使う");
+    Require(RoleUsedByMethod(GuideSurfaceMethod::LoftSections, ChainRole::Centerline),
+        "ロフトは中心線を使う");
+    Require(!RoleUsedByMethod(GuideSurfaceMethod::RuledSections, ChainRole::GuideU),
+        "ルールドは外形Uを使わない");
 }
 
 KACHA_V2_TEST(guide_table, 役割の名前が日本語でそろっている)
@@ -110,7 +115,7 @@ KACHA_V2_TEST(guide_table, 使わない役割の行は作れない)
 {
     Ids ids;
     GuideTable table;
-    table.method = GuideSurfaceMethod::LoftSections;
+    table.method = GuideSurfaceMethod::RuledSections;
     const auto result = AddSelectionAsNewRow(table, ChainRole::GuideU,
         Selection(ids, "w1", {Line({0, 0, 0}, {10, 0, 0})}));
     Require(!result.HasValue(), "断る");
@@ -448,7 +453,7 @@ KACHA_V2_TEST(guide_table, 閉じた行は閉じていると伝える)
 KACHA_V2_TEST(guide_table, 方法を変えるとき残った行を黙って消さない)
 {
     Fixture fixture = MakeGuidedLoftFixture();
-    const auto changed = SetGuideTableMethod(fixture.table, GuideSurfaceMethod::LoftSections);
+    const auto changed = SetGuideTableMethod(fixture.table, GuideSurfaceMethod::RuledSections);
     Require(!changed.HasValue(), "断る");
     RequireEqual(FirstCode(changed.Diagnostics()), "UI-R003", "役割が残っている");
     Require(changed.Diagnostics().front().detailsJa.find("外形U") != std::string::npos,
@@ -457,10 +462,28 @@ KACHA_V2_TEST(guide_table, 方法を変えるとき残った行を黙って消�
     // 外形Uの行を消してからなら変えられる。
     GuideTable trimmed = RemoveRow(fixture.table, 0).Value();
     trimmed = RemoveRow(trimmed, 0).Value();
-    const auto ok = SetGuideTableMethod(trimmed, GuideSurfaceMethod::LoftSections);
+    const auto ok = SetGuideTableMethod(trimmed, GuideSurfaceMethod::RuledSections);
     Require(ok.HasValue(), "変えられた");
-    Require(ok.Value().method == GuideSurfaceMethod::LoftSections, "方法が変わる");
+    Require(ok.Value().method == GuideSurfaceMethod::RuledSections, "方法が変わる");
     RequireEqual(std::to_string(ok.Value().rows.size()), "2", "断面2行が残る");
+}
+
+KACHA_V2_TEST(guide_table, 通る線の無い境界面も面の要求へ変えられる)
+{
+    // 2026-09-22 に見つけた取りこぼし: 境界面の役割へ「通る線」を足したとき、
+    // 「役割が 1 行も無ければ足りない」という判定のままだったので、外周だけの
+    // 境界面が「外形Uが1つも入っていません」で断られるところだった。
+    Ids ids;
+    GuideTable table;
+    table.method = GuideSurfaceMethod::BoundaryFill;
+    table = AddSelectionAsNewRow(table, ChainRole::BoundarySide,
+        Selection(ids, "loop",
+            {Line({0, 0, 0}, {10, 0, 0}), Line({10, 0, 0}, {10, 10, 2}),
+                Line({10, 10, 2}, {0, 10, 0}), Line({0, 10, 0}, {0, 0, 0})}))
+                .Value();
+    Require(MissingRoleGuidanceJa(table).empty(), "通る線は任意なので足りなくない");
+    const auto request = ToGuideSurfaceRequest(table, Tolerance());
+    Require(request.HasValue(), "外周だけで要求になる");
 }
 
 KACHA_V2_TEST_MAIN("guide_surface_table_tests")

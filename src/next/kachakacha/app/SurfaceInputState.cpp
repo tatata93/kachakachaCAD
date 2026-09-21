@@ -1,6 +1,7 @@
 #include "kachakacha/app/SurfaceInputState.h"
 
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/SurfaceCardinality.h"
 
 #include <algorithm>
 
@@ -22,11 +23,14 @@ namespace {
 
 const std::vector<GuideSurfaceMethod>& MainSurfaceMethods()
 {
-    // UI の正本「1. 作り方」の6枚。並びも正本のとおり。
+    // UI の正本「1. 作り方」の6枚。
+    // 2026-09-22: 「案内付きロフト」は「ロフト」へ統合した(ガイド 0 本=通常のロフト、
+    // 1 本以上=ガイドで形を決める)。空いた場所へ「四辺面」を入れる。
+    // 案内付きロフトは互換のため「その他」に残す(古い文書が開ける・同じ意味で作れる)。
     static const std::vector<GuideSurfaceMethod> methods{
         GuideSurfaceMethod::PlanarBoundary, GuideSurfaceMethod::RuledSections,
-        GuideSurfaceMethod::LoftSections, GuideSurfaceMethod::GuidedLoft,
-        GuideSurfaceMethod::BoundaryFill, GuideSurfaceMethod::GordonNetwork};
+        GuideSurfaceMethod::LoftSections, GuideSurfaceMethod::BoundaryFill,
+        GuideSurfaceMethod::FourEdgePatch, GuideSurfaceMethod::GordonNetwork};
     return methods;
 }
 
@@ -34,7 +38,8 @@ const std::vector<GuideSurfaceMethod>& OtherSurfaceMethods()
 {
     // 主要6方式に入らないもの。**既存機能は消さない。**
     static const std::vector<GuideSurfaceMethod> methods{
-        GuideSurfaceMethod::OffsetGuide, GuideSurfaceMethod::Revolve};
+        GuideSurfaceMethod::OffsetGuide, GuideSurfaceMethod::Revolve,
+        GuideSurfaceMethod::GuidedLoft};
     return methods;
 }
 
@@ -50,6 +55,7 @@ std::string_view SurfaceSlotNameJa(ChainRole role) noexcept
     case ChainRole::OuterBoundary: return "外形";
     case ChainRole::HoleBoundary:  return "穴";
     case ChainRole::SourceSurface: return "元の面";
+    case ChainRole::Centerline:    return "中心線";
     }
     return "不明";
 }
@@ -97,6 +103,8 @@ const std::vector<base::EntityId>& SurfaceSlotEntries(const SurfaceInputState& s
         return state.boundaries;
     case ChainRole::SourceSurface:
         return state.sourceSurfaces;
+    case ChainRole::Centerline:
+        return state.centerlines;
     }
     return NoEntries();
 }
@@ -121,6 +129,9 @@ SurfaceInputState WithSurfaceEntries(const SurfaceInputState& state, ChainRole r
         break;
     case ChainRole::SourceSurface:
         slot = &next.sourceSurfaces;
+        break;
+    case ChainRole::Centerline:
+        slot = &next.centerlines;
         break;
     }
     if (slot == nullptr) {
@@ -152,6 +163,7 @@ namespace {
         return ChainRole::BoundarySide;
     case ChainRole::Section:
     case ChainRole::SourceSurface:
+    case ChainRole::Centerline:
         break;
     }
     return role;
@@ -173,6 +185,7 @@ SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
         EraseId(next.guides, id);
         EraseId(next.boundaries, id);
         EraseId(next.sourceSurfaces, id);
+        EraseId(next.centerlines, id);
         // 手動固定の並びからも、採用順からも外す。**古い入力を残さない。**
         EraseId(next.explicitOrder, id);
         EraseId(next.adoptedOrder, id);
@@ -250,8 +263,8 @@ SurfaceInputState WithSurfaceSlotAdvanced(const SurfaceInputState& state)
 std::vector<base::EntityId> AllSurfaceEntries(const SurfaceInputState& state)
 {
     std::vector<base::EntityId> all;
-    for (const auto* list : {&state.sections, &state.guides, &state.boundaries,
-             &state.sourceSurfaces}) {
+    for (const auto* list : {&state.sections, &state.guides, &state.centerlines,
+             &state.boundaries, &state.sourceSurfaces}) {
         for (const base::EntityId& id : *list) {
             if (std::find(all.begin(), all.end(), id) == all.end()) {
                 all.push_back(id);
@@ -265,7 +278,7 @@ bool SurfaceSlotHolding(const SurfaceInputState& state, const base::EntityId& id
     ChainRole& slot) noexcept
 {
     for (const ChainRole key : {ChainRole::Section, ChainRole::GuideU,
-             ChainRole::BoundarySide, ChainRole::SourceSurface}) {
+             ChainRole::Centerline, ChainRole::BoundarySide, ChainRole::SourceSurface}) {
         const auto& list = SurfaceSlotEntries(state, key);
         if (std::find(list.begin(), list.end(), id) != list.end()) {
             slot = key;
@@ -280,8 +293,22 @@ std::string_view SurfaceSlotNameJa(GuideSurfaceMethod method, ChainRole role) no
     if (method == GuideSurfaceMethod::Revolve && role == ChainRole::GuideU) {
         return "軸";
     }
-    if (method == GuideSurfaceMethod::BoundaryFill && role == ChainRole::GuideU) {
+    if ((method == GuideSurfaceMethod::BoundaryFill
+            || method == GuideSurfaceMethod::FourEdgePatch)
+        && role == ChainRole::GuideU) {
         return "通る線";
+    }
+    if (method == GuideSurfaceMethod::FourEdgePatch && role == ChainRole::BoundarySide) {
+        return "辺";
+    }
+    if (method == GuideSurfaceMethod::GordonNetwork) {
+        // 曲線網は「断面」の欄が U、「ガイド」の欄が V(header の UI_DEVIATION_REQUEST)。
+        if (role == ChainRole::Section) {
+            return "U方向の線";
+        }
+        if (role == ChainRole::GuideU) {
+            return "V方向の線";
+        }
     }
     return SurfaceSlotNameJa(role);
 }
@@ -323,6 +350,9 @@ bool RoleForSurfaceSlot(GuideSurfaceMethod method, ChainRole slot, ChainRole& ro
         }
         role = ChainRole::BoundarySide;
         return modeling::RoleUsedByMethod(method, ChainRole::BoundarySide);
+    case ChainRole::Centerline:
+        role = ChainRole::Centerline;
+        return modeling::RoleUsedByMethod(method, ChainRole::Centerline);
     default:
         break;
     }
@@ -334,6 +364,7 @@ ChainRole DefaultSurfaceIntakeSlot(GuideSurfaceMethod method) noexcept
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary:
     case GuideSurfaceMethod::BoundaryFill:
+    case GuideSurfaceMethod::FourEdgePatch:
         return ChainRole::BoundarySide;
     case GuideSurfaceMethod::OffsetGuide:
         return ChainRole::SourceSurface;
@@ -348,7 +379,7 @@ std::vector<SurfaceSlotView> SurfaceSlotsFor(const SurfaceInputState& state)
     // 画面に出す欄は「断面 / ガイド / 境界」の3つで固定する(UI の正本「2. 入力」)。
     // 作り方で並びが入れ替わると、どこを見ればよいのか分からなくなる。
     std::vector<SurfaceSlotView> views;
-    for (int index = 0; index < 3; ++index) {
+    for (int index = 0; index < kSurfaceSlotCount; ++index) {
         const ChainRole slot = SurfaceSlotKey(index);
         SurfaceSlotView view;
         view.role = slot;
@@ -358,8 +389,9 @@ std::vector<SurfaceSlotView> SurfaceSlotsFor(const SurfaceInputState& state)
             // **この作り方では使わない。入っていても捨てない。**
             view.state = SurfaceSlotState::NotUsedByMethod;
         } else {
-            const bool optional = state.method == GuideSurfaceMethod::BoundaryFill
-                && slot == ChainRole::GuideU;
+            // 下限 0 の役割(ロフトのガイド・中心線、境界面の通る線)は任意。
+            const auto* cardinality = modeling::SurfaceCardinalityOf(state.method, role);
+            const bool optional = cardinality != nullptr && cardinality->Optional();
             view.state = view.count > 0 ? SurfaceSlotState::Used
                 : optional              ? SurfaceSlotState::Optional
                                         : SurfaceSlotState::Missing;
@@ -395,86 +427,100 @@ std::vector<base::EntityId> SurfaceSectionOrder(const SurfaceInputState& state)
     return state.sections;
 }
 
+namespace {
+
+//! 欄ごとの個数の約束。回転体の「軸」は表の行ではない(軸の点と向きへ直す)ので、
+//! 定義上 1 本として別に持つ。ほかは SurfaceCardinality.h の表を読む。
+struct SlotCount {
+    ChainRole slot = ChainRole::Section;
+    ChainRole role = ChainRole::Section;
+    std::size_t minimum = 0;
+    std::size_t maximum = modeling::kUnlimitedCount;
+};
+
+[[nodiscard]] std::vector<SlotCount> SlotCountsFor(GuideSurfaceMethod method)
+{
+    std::vector<SlotCount> counts;
+    const ChainRole keys[] = {ChainRole::Section, ChainRole::GuideU, ChainRole::Centerline,
+        ChainRole::BoundarySide, ChainRole::SourceSurface};
+    for (const ChainRole key : keys) {
+        ChainRole role = key;
+        if (key == ChainRole::SourceSurface) {
+            if (method != GuideSurfaceMethod::OffsetGuide) {
+                continue;
+            }
+        } else if (!RoleForSurfaceSlot(method, key, role)) {
+            continue;
+        }
+        SlotCount count;
+        count.slot = key;
+        count.role = role;
+        if (method == GuideSurfaceMethod::Revolve && key == ChainRole::GuideU) {
+            count.minimum = 1;   // 軸。定義上 1 本
+            count.maximum = 1;
+        } else if (const auto* cardinality =
+                       modeling::SurfaceCardinalityOf(method, role)) {
+            count.minimum = cardinality->minimum;
+            count.maximum = cardinality->maximum;
+        }
+        counts.push_back(count);
+    }
+    return counts;
+}
+
+//! ロフトの断面の条件(役割をまたぐ)。
+[[nodiscard]] std::string LoftRuleProblemJa(const SurfaceInputState& state)
+{
+    if (state.method != GuideSurfaceMethod::LoftSections
+        && state.method != GuideSurfaceMethod::GuidedLoft) {
+        return {};
+    }
+    return modeling::LoftSectionRuleProblemJa(state.sections.size(), state.guides.size());
+}
+
+} // namespace
+
 bool SurfaceReadyToBuild(const SurfaceInputState& state)
 {
-    for (const SurfaceSlotView& view : SurfaceSlotsFor(state)) {
-        if (view.state == SurfaceSlotState::Missing) {
+    // 本数の判定は個数の約束(SurfaceCardinality.h)だけを読む。
+    // ここに「2本ちょうど」などを書くと、検査・核と食い違う(実際に食い違っていた)。
+    for (const SlotCount& count : SlotCountsFor(state.method)) {
+        const std::size_t have = SurfaceSlotEntries(state, count.slot).size();
+        if (have < count.minimum || have > count.maximum) {
             return false;
         }
     }
-    // 断面で作る方式は、本数の下限がある。
-    switch (state.method) {
-    case GuideSurfaceMethod::RuledSections:
-        // **2本ちょうど。**3本あるのに「生成可能」と出して、押したら断る、
-        // では何を直せばよいのか分からない。
-        return state.sections.size() == 2;
-    case GuideSurfaceMethod::LoftSections:
-        return state.sections.size() >= 2;
-    case GuideSurfaceMethod::GuidedLoft:
-        return state.sections.size() >= 2 && !state.guides.empty();
-    case GuideSurfaceMethod::PlanarBoundary:
-        return !state.boundaries.empty();
-    case GuideSurfaceMethod::BoundaryFill:
-        return !state.boundaries.empty();
-    case GuideSurfaceMethod::GordonNetwork:
-        // 断面 = U、ガイド = V。**両方要る**(header の UI_DEVIATION_REQUEST)。
-        return !state.sections.empty() && !state.guides.empty();
-    case GuideSurfaceMethod::OffsetGuide:
-        return !state.sourceSurfaces.empty();
-    case GuideSurfaceMethod::Revolve:
-        // 断面1本と軸1本ちょうど。
-        return state.sections.size() == 1 && state.guides.size() == 1;
-    }
-    return false;
+    return LoftRuleProblemJa(state).empty();
 }
 
 std::string SurfaceCountProblemJa(const SurfaceInputState& state)
 {
-    const std::size_t sections = state.sections.size();
-    switch (state.method) {
-    case GuideSurfaceMethod::RuledSections:
-        if (sections > 2) {
-            return "ルールドは断面2本です(いま" + std::to_string(sections)
-                + "本)。2本だけにするか、「ロフト」にしてください";
+    if (const std::string rule = LoftRuleProblemJa(state); !rule.empty()) {
+        return rule;
+    }
+    for (const SlotCount& count : SlotCountsFor(state.method)) {
+        const std::size_t have = SurfaceSlotEntries(state, count.slot).size();
+        const std::string name(SurfaceSlotNameJa(state.method, count.slot));
+        if (have >= count.minimum && have <= count.maximum) {
+            continue;
         }
-        if (sections < 2) {
-            return "ルールドは断面2本です(いま" + std::to_string(sections) + "本)";
+        if (have == 0 && count.slot != DefaultSurfaceIntakeSlot(state.method)) {
+            // 最初の欄は揃った。次にすることを、そのまま言う(欄の明示遷移)。
+            return name + "が要ります。" + name + "の「ここへ選ぶ」を押してから、3D で線を押してください";
         }
-        return {};
-    case GuideSurfaceMethod::LoftSections:
-        if (sections < 2) {
-            return "ロフトは断面2本以上です(いま" + std::to_string(sections) + "本)";
+        if (state.method == GuideSurfaceMethod::Revolve && count.slot == ChainRole::GuideU) {
+            return "回転体の軸は1本です(いま" + std::to_string(have) + "本)";
         }
-        return {};
-    case GuideSurfaceMethod::GuidedLoft:
-        if (sections < 2) {
-            return "案内付きロフトは断面2本以上です(いま" + std::to_string(sections)
-                + "本)";
+        std::string problem = have < count.minimum
+            ? name + "は" + std::to_string(count.minimum) + "本以上です(いま"
+                + std::to_string(have) + "本)"
+            : name + "は" + std::to_string(count.maximum) + "本までです(いま"
+                + std::to_string(have) + "本)";
+        if (count.minimum == count.maximum) {
+            problem = name + "はちょうど" + std::to_string(count.minimum) + "本です(いま"
+                + std::to_string(have) + "本)";
         }
-        if (state.guides.empty()) {
-            // 断面は揃った。次にすることを、そのまま言う(断面 → ガイドの明示遷移)。
-            return "案内付きロフトはガイドが要ります。ガイドの「ここへ選ぶ」を押してから、"
-                   "3D でガイドの線を押してください";
-        }
-        return {};
-    case GuideSurfaceMethod::GordonNetwork:
-        if (state.sections.empty() || state.guides.empty()) {
-            return "曲線網は断面(U)とガイド(V)の両方が要ります";
-        }
-        return {};
-    case GuideSurfaceMethod::Revolve:
-        if (sections != 1) {
-            return "回転体は断面1本です(いま" + std::to_string(sections) + "本)";
-        }
-        if (state.guides.empty()) {
-            return "回転体は軸が要ります。軸の「ここへ選ぶ」を押してから、3D で軸の直線を押してください";
-        }
-        if (state.guides.size() > 1) {
-            return "回転体の軸は1本です(いま" + std::to_string(state.guides.size()) + "本)";
-        }
-        return {};
-    default:
-        break;
+        return problem;
     }
     return {};
 }
@@ -494,6 +540,9 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
             break;
         case SurfaceSlotState::Missing:
             lines.push_back("… " + name + "を選んでください");
+            break;
+        case SurfaceSlotState::Optional:
+            lines.push_back("… " + name + "(任意。無くても作れます)");
             break;
         case SurfaceSlotState::NotUsedByMethod:
             if (view.count > 0) {

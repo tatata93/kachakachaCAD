@@ -395,15 +395,18 @@ KACHA_V2_TEST(guideSurface, 同じ位置の2断面を断る)
     RequireRejects(request, "GEO-G003", "重なった断面");
 }
 
-KACHA_V2_TEST(guideSurface, 2断面の方法に3断面を渡したら断る)
+KACHA_V2_TEST(guideSurface, ルールドは3断面以上なら隣り合う2本ずつをつなぐ)
 {
+    // 2026-09-22: 1 枚のルールド面は 2 本で決まるが、3 本以上を断る理由は無い。
+    // 1-2、2-3 の帯を順につなぐ(ThruSections の ruled がそのとおりに作る)。
     GuideSurfaceRequest request;
     request.method = GuideSurfaceMethod::RuledSections;
-    for (int index = 0; index < 3; ++index) {
+    for (int index = 0; index < 5; ++index) {
         request.chains.push_back(OpenPath(ChainRole::Section, index + 1,
             {{0, 0, index * 10.0}, {20, 0, index * 10.0}}));
     }
-    RequireRejects(request, "GEO-G009", "断面が3本");
+    const auto result = Accept(request, "断面が5本");
+    RequireCount(result.Value().sectionOrdering.chainIndices.size(), 5, "5本とも使う");
 }
 
 KACHA_V2_TEST(guideSurface, 断面が1本では断る)
@@ -514,13 +517,24 @@ KACHA_V2_TEST(guideSurface, 断面の並べ替えが決定的である)
     }
 }
 
-KACHA_V2_TEST(guideSurface, 断面が2本ではLoftにできない)
+KACHA_V2_TEST(guideSurface, 断面2本のロフトも受け入れる)
 {
+    // 2026-09-22: ロフトは断面 2〜任意(これまでの「3 本以上 1000 本まで」は都合の上限)。
     GuideSurfaceRequest request;
     request.method = GuideSurfaceMethod::LoftSections;
     request.chains.push_back(OpenPath(ChainRole::Section, 1, {{0, 0, 0}, {20, 0, 0}}));
     request.chains.push_back(OpenPath(ChainRole::Section, 2, {{0, 0, 10}, {20, 0, 10}}));
-    RequireRejects(request, "GEO-G009", "断面が2本");
+    const auto result = Accept(request, "断面が2本");
+    Require(result.Value().loft.solver == kachakacha::v2::modeling::LoftSolver::Sections,
+        "ガイドが無いので断面をなめらかに通す");
+}
+
+KACHA_V2_TEST(guideSurface, 断面が1本だけのロフトは断る)
+{
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::LoftSections;
+    request.chains.push_back(OpenPath(ChainRole::Section, 1, {{0, 0, 0}, {20, 0, 0}}));
+    RequireRejects(request, "GEO-G009", "断面が1本");
 }
 
 // ---------------------------------------------------------------- AT-GEO-004
@@ -578,20 +592,39 @@ KACHA_V2_TEST(guideSurface, ガイドから離れた断面を断る)
     }
 }
 
-KACHA_V2_TEST(guideSurface, 断面の交差順がガイドで食い違えば断る)
+KACHA_V2_TEST(guideSurface, ガイドを逆向きに引いただけなら受け入れる)
 {
+    // 2026-09-22: 線を引いた向きは形と関係が無い。ガイドの向きが逆なだけで
+    // 「順番が食い違う」と断っていたのは、人に引き直しを強いるだけだった。
     GuideSurfaceRequest request;
     request.method = GuideSurfaceMethod::GuidedLoft;
     request.chains.push_back(OpenPath(ChainRole::GuideU, 1,
         {{0, 0, 0}, {50, 0, 0}, {100, 0, 0}}));
-    // 2本目のガイドは向きが逆(x=100 から始まる)。断面の交差順が入れ替わる。
     request.chains.push_back(OpenPath(ChainRole::GuideU, 2,
         {{100, 40, 0}, {50, 40, 0}, {0, 40, 0}}));
     request.chains.push_back(OpenPath(ChainRole::Section, 1,
         {{0, 0, 0}, {0, 20, 2}, {0, 40, 0}}));
     request.chains.push_back(OpenPath(ChainRole::Section, 2,
         {{100, 0, 0}, {100, 20, 2}, {100, 40, 0}}));
-    RequireRejects(request, "GEO-G006", "ガイドの向きが逆");
+    Accept(request, "ガイドの向きが逆");
+}
+
+KACHA_V2_TEST(guideSurface, 断面の交差順がガイドで食い違えば断る)
+{
+    // 本当に食い違う形: ガイド 1 では 断面1→2→3、ガイド 2 では 断面1→3→2。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::GuidedLoft;
+    request.chains.push_back(OpenPath(ChainRole::GuideU, 1,
+        {{0, 0, 0}, {50, 0, 0}, {100, 0, 0}}));
+    request.chains.push_back(OpenPath(ChainRole::GuideU, 2,
+        {{0, 40, 0}, {50, 40, 0}, {100, 40, 0}}));
+    request.chains.push_back(OpenPath(ChainRole::Section, 1,
+        {{0, 0, 0}, {0, 20, 2}, {0, 40, 0}}));
+    request.chains.push_back(OpenPath(ChainRole::Section, 2,
+        {{50, 0, 0}, {75, 20, 2}, {100, 40, 0}}));
+    request.chains.push_back(OpenPath(ChainRole::Section, 3,
+        {{100, 0, 0}, {75, 20, 5}, {50, 40, 0}}));
+    RequireRejects(request, "GEO-G006", "断面2と3の順がガイドで逆転");
 }
 
 KACHA_V2_TEST(guideSurface, 端に断面が無ければ仮想断面を作る)
@@ -617,18 +650,28 @@ KACHA_V2_TEST(guideSurface, 仮想断面を作らない設定も効く)
     Require(result.Value().virtualSectionParameters.empty(), "作らないこと");
 }
 
-KACHA_V2_TEST(guideSurface, ガイドが2本でなければ断る)
+KACHA_V2_TEST(guideSurface, 案内付きロフトはガイドが1本も無ければ断る)
 {
-    GuideSurfaceRequest one;
-    one.method = GuideSurfaceMethod::GuidedLoft;
-    one.chains.push_back(OpenPath(ChainRole::GuideU, 1, {{0, 0, 0}, {100, 0, 0}}));
-    one.chains.push_back(OpenPath(ChainRole::Section, 1, {{0, 0, 0}, {0, 40, 0}}));
-    RequireRejects(one, "GEO-G009", "ガイド1本");
+    // 2026-09-22: 「ちょうど 2 本」はやめた(1 本も 3 本以上も作れる。LoftInput)。
+    // 互換の入口「案内付きロフト」は、ガイドが 1 本以上要ることだけを約束する。
+    GuideSurfaceRequest none;
+    none.method = GuideSurfaceMethod::GuidedLoft;
+    none.chains.push_back(OpenPath(ChainRole::Section, 1, {{0, 0, 0}, {0, 40, 0}}));
+    none.chains.push_back(OpenPath(ChainRole::Section, 2, {{100, 0, 0}, {100, 40, 0}}));
+    RequireRejects(none, "GEO-G009", "ガイド0本");
 
-    GuideSurfaceRequest three = MakeGuidedLoftFixture();
-    three.chains.push_back(OpenPath(ChainRole::GuideU, 3,
+    // どの断面とも交わらないガイドは「交わっていません」と、どれとどれかを言って断る。
+    GuideSurfaceRequest stray = MakeGuidedLoftFixture();
+    stray.chains.push_back(OpenPath(ChainRole::GuideU, 3,
         {{0, 80, 0}, {50, 80, 0}, {100, 80, 0}}));
-    RequireRejects(three, "GEO-G009", "ガイド3本");
+    const auto result = AnalyzeGuideSurfaceRequest(stray, Tolerance());
+    Require(!result.HasValue(), "交わらないガイドは断る");
+    RequireEqual(result.Diagnostics().front().code, std::string("GEO-G004"), "つながらない");
+    Require(result.Diagnostics().front().summaryJa.find("ガイド 3") != std::string::npos
+            && result.Diagnostics().front().summaryJa.find("交わっていません")
+                != std::string::npos,
+        "どのガイドがどの断面と交わらないかを言う: "
+            + result.Diagnostics().front().summaryJa);
 }
 
 KACHA_V2_TEST(guideSurface, ガイドだけで断面が無ければ断る)

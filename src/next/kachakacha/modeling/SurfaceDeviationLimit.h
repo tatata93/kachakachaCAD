@@ -44,6 +44,18 @@ enum class SurfaceFidelity {
 
 [[nodiscard]] SurfaceFidelity FidelityOf(GuideSurfaceMethod method) noexcept;
 
+//! 入力まで見たときの約束。同じロフトでも、ガイドや中心線があれば近づける作り方になり、
+//! 四辺面に内側の通る線があれば近似拘束になる。**作り方の名前だけで決めない。**
+[[nodiscard]] SurfaceFidelity FidelityOf(const GuideSurfaceRequest& request) noexcept;
+
+//! 入力まで見たときの外れてよい最大(mm)。核はこちらを使う。
+[[nodiscard]] double SurfaceDeviationLimitMm(const GuideSurfaceRequest& request,
+    const geometry::GeometryTolerance& tolerance) noexcept;
+
+//! 入力まで見たときの、外れの言い方。
+[[nodiscard]] std::string SurfaceDeviationNoteJa(const GuideSurfaceRequest& request,
+    double deviationMm, const geometry::GeometryTolerance& tolerance);
+
 //! 板材の曲げ近似が、既定で面から外れてよい量(mm)。
 //! `fabrication/BandApproximation.h` の `maximumDeviationMm` と同じ数である。
 //! 2か所に別の数を書くと、どちらが本当の基準か分からなくなる。

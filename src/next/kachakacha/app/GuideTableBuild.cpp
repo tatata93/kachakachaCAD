@@ -292,13 +292,14 @@ std::string_view GuideSurfaceMethodLabelJa(GuideSurfaceMethod method) noexcept
 {
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary: return "平面(閉じた外形と穴)";
-    case GuideSurfaceMethod::RuledSections:  return "ルールド(断面2つを直線で渡す)";
-    case GuideSurfaceMethod::LoftSections:   return "ロフト(断面3つ以上をなめらかに通す)";
-    case GuideSurfaceMethod::GuidedLoft:     return "案内付きロフト(外形U 2本と断面)";
-    case GuideSurfaceMethod::GordonNetwork:  return "曲線網(外形U と外形V を通す)";
+    case GuideSurfaceMethod::RuledSections:  return "ルールド(隣り合う断面を直線で渡す)";
+    case GuideSurfaceMethod::LoftSections:   return "ロフト(断面2つ以上 + ガイド・中心線は任意)";
+    case GuideSurfaceMethod::GuidedLoft:     return "案内付きロフト(互換: ガイド1本以上と断面)";
+    case GuideSurfaceMethod::GordonNetwork:  return "曲線網(近似 / Filling: U と V を通す)";
     case GuideSurfaceMethod::BoundaryFill:   return "境界埋め(非平面の閉じた輪郭)";
     case GuideSurfaceMethod::OffsetGuide:    return "離した面(元の面と距離)";
-    case GuideSurfaceMethod::Revolve:        return "回転体(断面 1 本を軸のまわりに回す)";
+    case GuideSurfaceMethod::Revolve:        return "回転体(断面を軸のまわりに回す)";
+    case GuideSurfaceMethod::FourEdgePatch:  return "四辺面(4 辺で囲う 1 枚)";
     }
     return "不明";
 }
@@ -309,7 +310,7 @@ const std::vector<GuideSurfaceMethod>& GuideSurfaceMethods()
         GuideSurfaceMethod::PlanarBoundary, GuideSurfaceMethod::RuledSections,
         GuideSurfaceMethod::LoftSections, GuideSurfaceMethod::GuidedLoft,
         GuideSurfaceMethod::GordonNetwork, GuideSurfaceMethod::BoundaryFill,
-        GuideSurfaceMethod::OffsetGuide};
+        GuideSurfaceMethod::FourEdgePatch, GuideSurfaceMethod::OffsetGuide};
     return methods;
 }
 

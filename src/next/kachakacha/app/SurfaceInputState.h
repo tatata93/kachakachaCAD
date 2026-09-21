@@ -64,6 +64,8 @@ struct SurfaceInputState {
     std::vector<base::EntityId> boundaries;
     //! 離した面のもと(OffsetGuide のとき)。
     std::vector<base::EntityId> sourceSurfaces;
+    //! 中心線(ロフトのとき、0〜1 本)。
+    std::vector<base::EntityId> centerlines;
     SurfaceOrdering ordering = SurfaceOrdering::Auto;
     //! 手動固定のときの並び。空なら `sections` の並びをそのまま使う。
     std::vector<base::EntityId> explicitOrder;
@@ -80,7 +82,7 @@ struct SurfaceInputState {
     [[nodiscard]] bool Empty() const noexcept
     {
         return sections.empty() && guides.empty() && boundaries.empty()
-            && sourceSurfaces.empty();
+            && sourceSurfaces.empty() && centerlines.empty();
     }
 };
 
@@ -121,11 +123,20 @@ struct SurfaceSelectionFacts {
 //!   「断面 = U、ガイド = V」として実装した。正本の
 //!   「案内付きロフト = 断面 + ガイド」と同じ読み方で、欄を増やしていない。
 //!   別の割り当てが正しければ指示をください。欄は勝手に増やしていない。
+//!
+//! 2026-09-22: ロフトの **中心線**(0〜1 本)の欄を足した。ガイドとは役割が違う
+//! (中心線は断面を運ぶ道筋で、面の上には乗らない)ので、同じ欄に混ぜない。
+inline constexpr int kSurfaceSlotCount = 4;
+
 [[nodiscard]] constexpr modeling::ChainRole SurfaceSlotKey(int index) noexcept
 {
-    return index == 0 ? modeling::ChainRole::Section
-                      : (index == 1 ? modeling::ChainRole::GuideU
-                                    : modeling::ChainRole::BoundarySide);
+    switch (index) {
+    case 0: return modeling::ChainRole::Section;
+    case 1: return modeling::ChainRole::GuideU;
+    case 2: return modeling::ChainRole::Centerline;
+    default: break;
+    }
+    return modeling::ChainRole::BoundarySide;
 }
 
 //! 画面の欄が、その作り方で受け持つ内部の役割。使わない欄なら偽を返す。

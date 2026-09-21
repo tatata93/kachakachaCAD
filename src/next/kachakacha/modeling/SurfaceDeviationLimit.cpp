@@ -26,9 +26,37 @@ SurfaceFidelity FidelityOf(GuideSurfaceMethod method) noexcept
     case GuideSurfaceMethod::LoftSections:
     case GuideSurfaceMethod::Revolve:
     case GuideSurfaceMethod::OffsetGuide:
+    case GuideSurfaceMethod::FourEdgePatch:
+        // 四辺面(GeomFill_BSplineCurves)は 4 辺をそのまま面の縁にする。
         break;
     }
     return SurfaceFidelity::Interpolating;
+}
+
+SurfaceFidelity FidelityOf(const GuideSurfaceRequest& request) noexcept
+{
+    const auto has = [&](ChainRole role) {
+        for (const GuideChain& chain : request.chains) {
+            if (chain.role == role) {
+                return true;
+            }
+        }
+        return false;
+    };
+    switch (request.method) {
+    case GuideSurfaceMethod::LoftSections:
+        // ガイドも中心線も無いロフトは断面を通す。どちらかがあれば近づける作り方。
+        return has(ChainRole::GuideU) || has(ChainRole::Centerline)
+            ? SurfaceFidelity::Approximating
+            : SurfaceFidelity::Interpolating;
+    case GuideSurfaceMethod::FourEdgePatch:
+        // 内側の通る線があれば、4 辺の面を通る線へ寄せて張り直す(近似拘束)。
+        return has(ChainRole::GuideU) ? SurfaceFidelity::Approximating
+                                      : SurfaceFidelity::Interpolating;
+    default:
+        break;
+    }
+    return FidelityOf(request.method);
 }
 
 double SurfaceDeviationLimitMm(GuideSurfaceMethod method,
@@ -61,6 +89,26 @@ std::string SurfaceDeviationNoteJa(GuideSurfaceMethod method, double deviationMm
         + std::to_string((micro / 100) % 10) + std::to_string((micro / 10) % 10)
         + std::to_string(micro % 10);
     return "近づけて作る面です。指定した線から最大 " + value + " mm 外れています。";
+}
+
+double SurfaceDeviationLimitMm(const GuideSurfaceRequest& request,
+    const geometry::GeometryTolerance& tolerance) noexcept
+{
+    if (FidelityOf(request) == SurfaceFidelity::Interpolating) {
+        return ExactLimitMm(tolerance);
+    }
+    return std::max(kFabricationDeviationMm, ExactLimitMm(tolerance));
+}
+
+std::string SurfaceDeviationNoteJa(const GuideSurfaceRequest& request, double deviationMm,
+    const geometry::GeometryTolerance& tolerance)
+{
+    if (!(deviationMm > ExactLimitMm(tolerance))
+        || FidelityOf(request) != SurfaceFidelity::Approximating) {
+        return {};
+    }
+    // 言い方は作り方の名前で決める版と同じにする(近づける作り方として扱う)。
+    return SurfaceDeviationNoteJa(GuideSurfaceMethod::GuidedLoft, deviationMm, tolerance);
 }
 
 } // namespace kachakacha::v2::modeling

@@ -17,6 +17,7 @@
 #include "kachakacha/geometry/GeometryTolerance.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace kachakacha::v2::modeling {
@@ -37,6 +38,8 @@ enum class GuideSurfaceMethod {
     OffsetGuide,
     //! 回転体(V1 の回転面)。断面 1 本を軸のまわりに回す。末尾に足すのは番号を保つため。
     Revolve,
+    //! 四辺面(U0/U1/V0/V1 の 4 辺で囲う 1 枚)。末尾に足すのは保存の番号を保つため。
+    FourEdgePatch,
 };
 
 [[nodiscard]] constexpr std::string_view GuideSurfaceMethodName(
@@ -51,6 +54,7 @@ enum class GuideSurfaceMethod {
     case GuideSurfaceMethod::BoundaryFill:   return "boundary_fill";
     case GuideSurfaceMethod::OffsetGuide:    return "offset_guide";
     case GuideSurfaceMethod::Revolve:        return "revolve";
+    case GuideSurfaceMethod::FourEdgePatch:  return "four_edge_patch";
     }
     return "unknown";
 }
@@ -64,6 +68,8 @@ enum class ChainRole {
     GuideV,
     BoundarySide,
     SourceSurface,
+    //! ロフトの中心線(断面を運ぶ道筋)。面の上には乗らない。末尾に足して番号を保つ。
+    Centerline,
 };
 
 [[nodiscard]] constexpr std::string_view ChainRoleName(ChainRole role) noexcept
@@ -76,6 +82,7 @@ enum class ChainRole {
     case ChainRole::GuideV:        return "guide_v";
     case ChainRole::BoundarySide:  return "boundary_side";
     case ChainRole::SourceSurface: return "source_surface";
+    case ChainRole::Centerline:    return "centerline";
     }
     return "unknown";
 }
@@ -89,6 +96,23 @@ struct GuideChain {
     bool closed = false;
 };
 
+//! 四辺面の張り方(OCCT GeomFill_BSplineCurves の 3 方式)。
+enum class FourEdgeStyle {
+    Coons,      //!< 4 辺を線形に混ぜる標準の張り方
+    Stretch,    //!< 平坦優先(張りを強く、ふくらみを抑える)
+    Curved,     //!< 丸み優先(辺の曲がりを内側へ多めに伝える)
+};
+
+[[nodiscard]] constexpr std::string_view FourEdgeStyleLabelJa(FourEdgeStyle style) noexcept
+{
+    switch (style) {
+    case FourEdgeStyle::Coons:   return "標準(Coons)";
+    case FourEdgeStyle::Stretch: return "平坦優先";
+    case FourEdgeStyle::Curved:  return "丸み優先";
+    }
+    return "";
+}
+
 struct GuideSurfaceRequest {
     GuideSurfaceMethod method = GuideSurfaceMethod::PlanarBoundary;
     std::vector<GuideChain> chains;
@@ -100,6 +124,8 @@ struct GuideSurfaceRequest {
     bool keepSectionOrder = false;
     //! BoundaryFill: 辺ごとの連続条件。true = G1。既定は全部 G0。
     std::vector<bool> tangentContinuity;
+    //! FourEdgePatch: 張り方。
+    FourEdgeStyle fourEdgeStyle = FourEdgeStyle::Coons;
     //! OffsetGuide: 距離。0は拒否する。
     double offsetDistanceMm = 0.0;
     //! Revolve: 軸(点と向き)と回す角度。角度は 0 より大きく 2π 以下。
@@ -135,6 +161,66 @@ struct SectionOrdering {
     Vector3 axisDirection{};                 //!< 並べる基準にした向き
 };
 
+//! ロフト(断面 2〜任意 + ガイド 0〜任意 + 中心線 0〜1)をどう作るか。
+//! 検査が入力のつながりから決める。人に方式名を覚えさせないため、画面はこれを言葉で出す。
+enum class LoftSolver {
+    //! ガイドも中心線も無い。断面をなめらかに通す(ThruSections)。断面の上に乗る。
+    Sections,
+    //! 中心線に沿って断面を運ぶ(ガイド無し)。
+    Centerline,
+    //! 外側のガイド 2 本だけ(断面の両端に 1 本ずつ)。2 本のレールで掃く。
+    //! 従来の「案内付きロフト」と同じ作り方(2 本のときの近道)。
+    TwoRailSweep,
+    //! それ以外(ガイド 1 本、3 本以上、内側のガイド、中心線とガイドの併用)。
+    //! 最初と最後の断面と両脇を境界に、残りの断面と **全部のガイド** を
+    //! 面が通る拘束にして張る。作ったあとで全部の線からの外れを測る。
+    RailFilling,
+};
+
+[[nodiscard]] constexpr std::string_view LoftSolverLabelJa(LoftSolver solver) noexcept
+{
+    switch (solver) {
+    case LoftSolver::Sections:     return "断面をなめらかに通す";
+    case LoftSolver::Centerline:   return "中心線に沿って断面を運ぶ";
+    case LoftSolver::TwoRailSweep: return "両端の2本のガイドで掃く";
+    case LoftSolver::RailFilling:  return "断面とガイドを全部通るように張る(近似)";
+    }
+    return "";
+}
+
+//! ガイドが断面のどちら側にあるか。
+enum class LoftRailSide {
+    Start,      //!< どの断面でも始点側の端に接する(外側)
+    End,        //!< どの断面でも終点側の端に接する(外側)
+    Interior,   //!< 断面の途中を通る(内側)
+};
+
+struct LoftRail {
+    std::size_t chainIndex = 0;
+    LoftRailSide side = LoftRailSide::Interior;
+    //! 最初の断面から最後の断面までの部分(RailFilling のときだけ)。曲線の種類は保つ。
+    std::vector<CurveSegment> span;
+};
+
+struct LoftPlan {
+    LoftSolver solver = LoftSolver::Sections;
+    std::vector<LoftRail> rails;
+    bool hasCenterline = false;
+    std::size_t centerlineChainIndex = 0;
+    //! 断面を逆向きに使うか。sectionOrdering.chainIndices と同じ並び。
+    std::vector<bool> reverseSections;
+};
+
+//! 四辺面の 4 辺の並び。検査が端点のつながりから決める(渡した順と向きは問わない)。
+struct FourEdgePlan {
+    //! 輪をたどる順の鎖番号。U0 → V1 → U1 → V0 の順。
+    std::vector<std::size_t> sides;
+    //! 輪をたどる向きに対して逆向きか。sides と同じ並び。
+    std::vector<bool> reversed;
+    //! 内側の通る線がある(方式として近似拘束になる)。
+    bool hasInteriorConstraints = false;
+};
+
 struct GuideSurfaceAnalysis {
     GuideSurfaceMethod method = GuideSurfaceMethod::PlanarBoundary;
     //! PlanarBoundary。非接触の外周が複数あれば、その数だけ入る。
@@ -146,6 +232,10 @@ struct GuideSurfaceAnalysis {
     std::vector<ChainCrossing> crossings;
     //! GuidedLoft で自動生成する仮想断面の位置(ガイド上の正規化弧長)。
     std::vector<double> virtualSectionParameters;
+    //! LoftSections / GuidedLoft の作り方の内訳。
+    LoftPlan loft;
+    //! FourEdgePatch の 4 辺。
+    FourEdgePlan fourEdge;
     //! 情報や警告。エラーはここではなく Result の側に出る。
     std::vector<Diagnostic> notes;
 };

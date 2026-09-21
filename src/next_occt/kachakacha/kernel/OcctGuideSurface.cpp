@@ -1,10 +1,12 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/SurfaceDeviationLimit.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <mutex>
 #include <string>
@@ -12,6 +14,7 @@
 #ifdef KACHACAD_V2_WITH_OCCT
 
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/kernel/OcctLoftSurface.h"
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
@@ -208,61 +211,6 @@ template<class Function>
         }
         return Out::Success(generator.Shape());
     }, ruled ? "直線でつなぐ面" : "なめらかにつなぐ面");
-}
-
-[[nodiscard]] Result<TopoDS_Shape> BuildGuidedLoft(const GuideSurfaceRequest& request,
-    const GuideSurfaceAnalysis& analysis, const GeometryTolerance& tolerance)
-{
-    using Out = Result<TopoDS_Shape>;
-    const std::vector<std::size_t> guides = IndicesWithRole(request, ChainRole::GuideU);
-    std::vector<std::size_t> sections = analysis.sectionOrdering.chainIndices;
-    if (sections.empty()) {
-        sections = IndicesWithRole(request, ChainRole::Section);
-    }
-    if (guides.empty()) {
-        return Out::Failure(MakeError(kSurfaceBuildFailed, "案内線がありません。", {}));
-    }
-    if (sections.size() < 2) {
-        return Out::Failure(MakeError(kSurfaceBuildFailed,
-            "断面が2つ以上必要です。", {}));
-    }
-    return Guarded([&]() -> Out {
-        auto spine = WireOf(request, guides.front(), tolerance);
-        if (!spine.HasValue()) {
-            return Out::Failure(spine.Diagnostics());
-        }
-        BRepOffsetAPI_MakePipeShell shell(spine.Value());
-        if (guides.size() >= 2) {
-            auto auxiliary = WireOf(request, guides[1], tolerance);
-            if (!auxiliary.HasValue()) {
-                return Out::Failure(auxiliary.Diagnostics());
-            }
-            shell.SetMode(auxiliary.Value(), Standard_True);
-        } else {
-            shell.SetMode(Standard_True);   // Frenet
-        }
-        for (const std::size_t index : sections) {
-            auto wire = WireOf(request, index, tolerance);
-            if (!wire.HasValue()) {
-                return Out::Failure(wire.Diagnostics());
-            }
-            // 断面はすでに正しい場所に置いてある。**動かさせない。**
-            //
-            // 「合わせ直す」(WithCorrection)を頼むと、OCCT は断面を
-            // 背骨と直角になるように回してから使う。前面中央が前へ膨らむ形の
-            // 断面は平らではないので、回されると大きくずれる。
-            // HO の前頭部で 8.4mm ずれ、出来た面が指定した線を通らなかった
-            // (GEO-G008、2026-09-14)。
-            shell.Add(wire.Value(), Standard_False, Standard_False);
-        }
-        shell.Build();
-        if (!shell.IsDone()) {
-            return Out::Failure(MakeError(kSurfaceBuildFailed,
-                "案内線に沿った面を作れませんでした。",
-                "案内線と断面の交わり方を確かめてください。"));
-        }
-        return Out::Success(shell.Shape());
-    }, "案内線に沿った面");
 }
 
 //! 曲線を点として拘束に足すときの点数。多すぎると解けなくなる。
@@ -690,6 +638,9 @@ struct Deviation {
         if (chain.segments.empty()) {
             continue;
         }
+        if (chain.role == ChainRole::Centerline) {
+            continue;   // 中心線は断面を運ぶ道筋で、面の上には乗らない(乗らなくて正しい)
+        }
         double chainWorst = 0.0;
         for (const Vector3& point : ProbePoints(chain, samplingTolerance)) {
             const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(ToPoint(point));
@@ -713,6 +664,25 @@ struct Deviation {
         deviation.rmsMm = std::sqrt(sum / static_cast<double>(count));
     }
     return deviation;
+}
+
+//! 「ガイド 5」のような呼び名(いちばん外れた線を人に言うため)。
+[[nodiscard]] std::string WorstLabel(const GuideSurfaceRequest& request, std::size_t index)
+{
+    if (index >= request.chains.size()) {
+        return "指定した線";
+    }
+    const GuideChain& chain = request.chains[index];
+    return kachakacha::v2::modeling::ChainRoleLabelJa(request.method, chain.role) + " "
+        + std::to_string(chain.index);
+}
+
+//! 「0.310」の形。
+[[nodiscard]] std::string Millimetres(double value)
+{
+    char buffer[64];
+    std::snprintf(buffer, sizeof(buffer), "%.3f", value);
+    return buffer;
 }
 
 [[nodiscard]] double AreaOf(const TopoDS_Shape& shape)
@@ -743,10 +713,11 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         built = BuildThruSections(request, analysis, tolerance, true);
         break;
     case GuideSurfaceMethod::LoftSections:
-        built = BuildThruSections(request, analysis, tolerance, false);
-        break;
     case GuideSurfaceMethod::GuidedLoft:
-        built = BuildGuidedLoft(request, analysis, tolerance);
+        // 断面 2〜任意 + ガイド 0〜任意 + 中心線 0〜1。作り方は検査が決めた(LoftSolver)。
+        built = analysis.loft.solver == modeling::LoftSolver::Sections
+            ? BuildThruSections(request, analysis, tolerance, false)
+            : detail::BuildLoftShape(request, analysis, tolerance);
         break;
     case GuideSurfaceMethod::GordonNetwork:
         built = BuildFilling(request, analysis, tolerance, false);
@@ -759,6 +730,9 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         break;
     case GuideSurfaceMethod::Revolve:
         built = BuildRevolve(request, analysis, tolerance);
+        break;
+    case GuideSurfaceMethod::FourEdgePatch:
+        built = detail::BuildFourEdgeShape(request, analysis, tolerance);
         break;
     }
     if (!built.HasValue()) {
@@ -782,14 +756,13 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         // 近づける作り方(案内付きロフト・曲線網・境界埋め)は
         // 後の板材の曲げ近似が許している量までとする。
         const double limit = kachakacha::v2::modeling::SurfaceDeviationLimitMm(
-            request.method, tolerance);
+            request, tolerance);
         if (deviation.measured && deviation.maximumMm > limit) {
             return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceMissesInput,
                 "出来た面が、指定した線を通っていません。",
-                "最大のずれ " + std::to_string(deviation.maximumMm) + " mm(許容 "
-                    + std::to_string(limit) + " mm)。"
-                    + std::to_string(deviation.worstChainIndex + 1)
-                    + " 番目の線が最も外れています。"));
+                "面は作れましたが、" + WorstLabel(request, deviation.worstChainIndex)
+                    + "から最大 " + Millimetres(deviation.maximumMm)
+                    + " mm 外れたため採用しませんでした(許容 " + Millimetres(limit) + " mm)。"));
         }
     }
 
@@ -806,7 +779,7 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     // 近づけて作る面は、指定した線の上に乗っていない。そのことを知らずに
     // 板取りへ進むと、紙とプラ板を切ってから気づくことになる。
     if (const std::string note = kachakacha::v2::modeling::SurfaceDeviationNoteJa(
-            request.method, deviation.maximumMm, tolerance);
+            request, deviation.maximumMm, tolerance);
         !note.empty()) {
         warnings.push_back(base::MakeWarning("KER-S102", note,
             "通す作り方(ロフト・ルールド)なら、線の上に乗ります。"));

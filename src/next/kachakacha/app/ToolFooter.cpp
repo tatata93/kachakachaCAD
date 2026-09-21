@@ -36,6 +36,7 @@ namespace {
     case modeling::GuideSurfaceMethod::BoundaryFill:   return "BoundaryFill";
     case modeling::GuideSurfaceMethod::OffsetGuide:    return "Offset";
     case modeling::GuideSurfaceMethod::Revolve:        return "Revolve";
+    case modeling::GuideSurfaceMethod::FourEdgePatch:  return "FourEdge";
     }
     return "Loft";
 }

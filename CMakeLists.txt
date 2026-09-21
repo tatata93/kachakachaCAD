@@ -617,6 +617,10 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/document/FeatureReevaluation.cpp
     src/next/kachakacha/modeling/GridModel.cpp
     src/next/kachakacha/modeling/GuideSurfaceTable.cpp
+    src/next/kachakacha/modeling/GuideSurfaceSampling.cpp
+    src/next/kachakacha/modeling/LoftInput.cpp
+    src/next/kachakacha/modeling/FourEdgeInput.cpp
+    src/next/kachakacha/modeling/SurfaceCardinality.cpp
     src/next/kachakacha/modeling/SurfaceDeviationLimit.cpp
     src/next/kachakacha/app/ArrayPlan.cpp
     src/next/kachakacha/app/ExtrudeInputState.cpp
@@ -698,6 +702,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/WireChain.cpp
     src/next/kachakacha/geometry/WireConnect.cpp
     src/next/kachakacha/geometry/WireEdit.cpp
+    src/next/kachakacha/geometry/ChainTrim.cpp
     src/next/kachakacha/geometry/ControlPointEdit.cpp
 )
 target_include_directories(kachakacha_v2_core PUBLIC src/next)
@@ -714,6 +719,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/KernelInfo.cpp
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
+    src/next_occt/kachakacha/kernel/OcctLoftSurface.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
@@ -781,6 +787,7 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(snap_tests tests_v2/snap_tests.cpp)
     kachakacha_add_v2_test(snap_hysteresis_tests tests_v2/snap_hysteresis_tests.cpp)
     kachakacha_add_v2_test(grid_tests tests_v2/grid_tests.cpp)
+    kachakacha_add_v2_test(loft_input_tests tests_v2/loft_input_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)
@@ -934,6 +941,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
     endfunction()
 
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)

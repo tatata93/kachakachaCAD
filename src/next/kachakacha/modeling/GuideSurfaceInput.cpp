@@ -1,5 +1,10 @@
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 
+#include "kachakacha/modeling/FourEdgeInput.h"
+#include "kachakacha/modeling/GuideSurfaceSampling.h"
+#include "kachakacha/modeling/LoftInput.h"
+#include "kachakacha/modeling/SurfaceCardinality.h"
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -15,72 +20,7 @@ using geometry::Point2;
 
 namespace {
 
-constexpr const char* kNonPlanar = "GEO-G001";
-constexpr const char* kMixedOpenClosed = "GEO-G002";
-constexpr const char* kSectionOrder = "GEO-G003";
-constexpr const char* kNotConnected = "GEO-G004";
-constexpr const char* kCrossingMissing = "GEO-G005";
-constexpr const char* kCrossingOrder = "GEO-G006";
-constexpr const char* kSelfIntersection = "GEO-G007";
-constexpr const char* kFitExceeded = "GEO-G008";
-//! 入力の数や種類がそもそも足りない。上の8つはどれも「幾何が悪い」話なので分ける。
-constexpr const char* kBadInput = "GEO-G009";
-
-//! 検査用の点列を作るときの粗さ。細かすぎると遅く、粗いと交差を見逃す。
-[[nodiscard]] double SamplingToleranceMm(const GeometryTolerance& tolerance)
-{
-    return std::max(tolerance.modelLinearMm * 10.0, 1.0e-4);
-}
-
-struct SampledChain {
-    std::size_t chainIndex = 0;
-    const GuideChain* chain = nullptr;
-    std::vector<Vector3> points;
-    std::vector<double> parameters;   //!< 正規化弧長
-    Vector3 centroid{};
-    double lengthMm = 0.0;
-};
-
-[[nodiscard]] std::vector<SampledChain> SampleAll(const GuideSurfaceRequest& request,
-    double toleranceMm)
-{
-    std::vector<SampledChain> sampled;
-    sampled.reserve(request.chains.size());
-    for (std::size_t index = 0; index < request.chains.size(); ++index) {
-        SampledChain item;
-        item.chainIndex = index;
-        item.chain = &request.chains[index];
-        item.points = geometry::SampleChain(request.chains[index].segments, toleranceMm);
-        if (request.chains[index].closed) {
-            // 閉じた鎖は最後の点が最初と同じ。多角形として扱う前に落とす。
-            geometry::RemoveClosingDuplicate(item.points, toleranceMm * 0.5);
-        }
-        item.parameters = geometry::NormalizedArcLength(item.points);
-        item.centroid = geometry::Centroid(item.points);
-        for (std::size_t at = 1; at < item.points.size(); ++at) {
-            item.lengthMm += (item.points[at] - item.points[at - 1]).Length();
-        }
-        sampled.push_back(std::move(item));
-    }
-    return sampled;
-}
-
-[[nodiscard]] std::vector<std::size_t> IndicesWithRole(const GuideSurfaceRequest& request,
-    ChainRole role)
-{
-    std::vector<std::size_t> indices;
-    for (std::size_t index = 0; index < request.chains.size(); ++index) {
-        if (request.chains[index].role == role) {
-            indices.push_back(index);
-        }
-    }
-    return indices;
-}
-
-[[nodiscard]] std::string ChainLabel(const GuideChain& chain)
-{
-    return std::string(ChainRoleName(chain.role)) + " #" + std::to_string(chain.index);
-}
+using namespace detail;   // 検査の道具(GuideSurfaceSampling.h)
 
 //! 役割ごとに index が1始まりで重複していないこと。
 [[nodiscard]] std::vector<Diagnostic> CheckIndices(const GuideSurfaceRequest& request)
@@ -260,173 +200,6 @@ struct SampledChain {
 
 // ---------------------------------------------------------------- 断面の共通検査
 
-//! 断面が全部openか全部closedかを見る。混ざっていたら GEO-G002。
-[[nodiscard]] std::vector<Diagnostic> CheckSectionOpenClosed(
-    const GuideSurfaceRequest& request, const std::vector<std::size_t>& sections)
-{
-    std::vector<Diagnostic> errors;
-    if (sections.empty()) {
-        return errors;
-    }
-    const bool first = request.chains[sections.front()].closed;
-    for (const std::size_t index : sections) {
-        if (request.chains[index].closed != first) {
-            errors.push_back(MakeError(kMixedOpenClosed,
-                "開いた断面と閉じた断面が混ざっています。",
-                ChainLabel(request.chains[sections.front()]) + " と "
-                    + ChainLabel(request.chains[index])));
-            break;
-        }
-    }
-    return errors;
-}
-
-//! 断面の重心を主成分軸へ落として並べる(§6.4)。同値ならID順。
-[[nodiscard]] SectionOrdering OrderSections(const std::vector<SampledChain>& sampled,
-    const std::vector<std::size_t>& sections)
-{
-    SectionOrdering ordering;
-    std::vector<Vector3> centroids;
-    for (const std::size_t index : sections) {
-        centroids.push_back(sampled[index].centroid);
-    }
-    // 主成分軸 = 重心の散らばりが最大になる向き。べき乗法を数回だけ回す。
-    const Vector3 mean = geometry::Centroid(centroids);
-    double xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
-    for (const Vector3& point : centroids) {
-        const Vector3 d = point - mean;
-        xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
-        yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
-    }
-    Vector3 axis{1.0, 0.0, 0.0};
-    if (centroids.size() >= 2) {
-        Vector3 current{1.0, 1.0, 1.0};
-        for (int iteration = 0; iteration < 64; ++iteration) {
-            const Vector3 next{xx * current.x + xy * current.y + xz * current.z,
-                xy * current.x + yy * current.y + yz * current.z,
-                xz * current.x + yz * current.y + zz * current.z};
-            const double length = next.Length();
-            if (!(length > 0.0)) {
-                break;
-            }
-            current = next * (1.0 / length);
-        }
-        if (current.Length() > 0.0) {
-            axis = current;
-        }
-    }
-    // 向きは決定的にする。最大成分が負なら反転する。
-    const double ax = std::abs(axis.x), ay = std::abs(axis.y), az = std::abs(axis.z);
-    const double largest = std::max({ax, ay, az});
-    if ((largest == ax && axis.x < 0.0) || (largest == ay && axis.y < 0.0)
-        || (largest == az && axis.z < 0.0)) {
-        axis = -axis;
-    }
-    ordering.axisDirection = axis;
-
-    std::vector<std::pair<double, std::size_t>> keyed;
-    for (const std::size_t index : sections) {
-        keyed.emplace_back(Dot(sampled[index].centroid - mean, axis), index);
-    }
-    std::sort(keyed.begin(), keyed.end(), [](const auto& l, const auto& r) {
-        if (l.first != r.first) {
-            return l.first < r.first;
-        }
-        return l.second < r.second;   // 同値ならID順(ここでは入力順)
-    });
-    for (const auto& item : keyed) {
-        ordering.chainIndices.push_back(item.second);
-    }
-    return ordering;
-}
-
-//! 隣り合う断面が離れているか。全域で許容差以下なら退化(§6.3)。
-[[nodiscard]] bool SectionsAreDistinct(const SampledChain& first, const SampledChain& second,
-    double toleranceMm)
-{
-    double largest = 0.0;
-    const std::size_t steps = 32;
-    for (std::size_t step = 0; step <= steps; ++step) {
-        const double t = static_cast<double>(step) / static_cast<double>(steps);
-        const Vector3 a =
-            geometry::PointAtNormalizedArcLength(first.points, first.parameters, t);
-        const Vector3 b =
-            geometry::PointAtNormalizedArcLength(second.points, second.parameters, t);
-        largest = std::max(largest, (a - b).Length());
-    }
-    return largest > toleranceMm;
-}
-
-//! open断面の向きを揃える。反転したほうが端点どうし近ければ、そちらを使う。
-//! (§6.3「ねじれが少ない向きを既定にする」)
-[[nodiscard]] bool ShouldReverseAgainst(const SampledChain& reference,
-    const SampledChain& candidate)
-{
-    if (reference.points.empty() || candidate.points.empty()) {
-        return false;
-    }
-    const double straight = (reference.points.front() - candidate.points.front()).Length()
-        + (reference.points.back() - candidate.points.back()).Length();
-    const double flipped = (reference.points.front() - candidate.points.back()).Length()
-        + (reference.points.back() - candidate.points.front()).Length();
-    return flipped < straight;
-}
-
-// ---------------------------------------------------------------- 交差の検出
-
-//! 2本の鎖が最も近づく場所。線分どうしで測る。
-//! 点どうしで測ると、点の間で交差している線を「離れている」と誤判定する。
-[[nodiscard]] ChainCrossing FindClosestApproach(const SampledChain& first,
-    const SampledChain& second)
-{
-    ChainCrossing crossing;
-    crossing.firstChainIndex = first.chainIndex;
-    crossing.secondChainIndex = second.chainIndex;
-    const geometry::PolylineApproach approach =
-        geometry::ClosestApproachBetween(first.points, second.points);
-    if (!approach.valid) {
-        crossing.distanceMm = -1.0;
-        return crossing;
-    }
-    crossing.distanceMm = approach.distanceMm;
-    crossing.firstParameter = approach.firstParameter;
-    crossing.secondParameter = approach.secondParameter;
-    crossing.position = (approach.firstPoint + approach.secondPoint) * 0.5;
-    return crossing;
-}
-
-//! 片方の鎖を辿りながら、相手までの距離が許容差の内側へ入る回数を数える。
-[[nodiscard]] int CountApproachesAlong(const std::vector<Vector3>& along,
-    const std::vector<Vector3>& across, double toleranceMm)
-{
-    int count = 0;
-    bool inside = false;
-    for (std::size_t a = 0; a + 1 < along.size(); ++a) {
-        const std::vector<Vector3> edge{along[a], along[a + 1]};
-        const geometry::PolylineApproach approach =
-            geometry::ClosestApproachBetween(edge, across);
-        const bool touching = approach.valid && approach.distanceMm <= toleranceMm;
-        if (touching && !inside) {
-            ++count;
-        }
-        inside = touching;
-    }
-    return count;
-}
-
-//! 許容差内で近づく区間がいくつあるか。2箇所以上なら「2重交差」。
-//!
-//! 片側だけを辿ると数え落とす。長い1本の線が相手を2回またぐとき、
-//! その2回が同じ区間に入ってしまい、1回に見える。
-//! 相手の側から辿れば、離れている区間が間に挟まるので2回だと分かる。
-//! そこで両方から数えて、多いほうを採る。見逃すより多めに疑うほうが安全である。
-[[nodiscard]] int CountApproaches(const SampledChain& first, const SampledChain& second,
-    double toleranceMm)
-{
-    return std::max(CountApproachesAlong(first.points, second.points, toleranceMm),
-        CountApproachesAlong(second.points, first.points, toleranceMm));
-}
-
 // ---------------------------------------------------------------- Ruled / Loft
 
 [[nodiscard]] Result<GuideSurfaceAnalysis> AnalyzeSections(const GuideSurfaceRequest& request,
@@ -486,132 +259,6 @@ struct SampledChain {
                     "断面の向きを揃え直しました。", ChainLabel(request.chains[order[at]])));
             }
         }
-    }
-    return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
-}
-
-// ---------------------------------------------------------------- GuidedLoft
-
-[[nodiscard]] Result<GuideSurfaceAnalysis> AnalyzeGuidedLoft(
-    const GuideSurfaceRequest& request, const GeometryTolerance& tolerance,
-    std::vector<SampledChain>& sampled)
-{
-    const std::vector<std::size_t> guides = IndicesWithRole(request, ChainRole::GuideU);
-    const std::vector<std::size_t> sections = IndicesWithRole(request, ChainRole::Section);
-    std::vector<Diagnostic> errors;
-    if (guides.size() != 2) {
-        errors.push_back(MakeError(kBadInput, "外形ガイドはちょうど2本必要です。",
-            "実際 " + std::to_string(guides.size()) + " 本。"));
-    }
-    if (sections.empty()) {
-        errors.push_back(MakeError(kBadInput, "断面が1本もありません。", {}));
-    }
-    for (std::size_t index = 0; index < request.chains.size(); ++index) {
-        const ChainRole role = request.chains[index].role;
-        if (role != ChainRole::GuideU && role != ChainRole::Section) {
-            errors.push_back(MakeError(kBadInput, "ガイドと断面以外が混ざっています。",
-                ChainLabel(request.chains[index])));
-        }
-    }
-    if (!errors.empty()) {
-        return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
-    }
-
-    // 各断面の両端が、それぞれのガイドへ接していること(§6.5)。
-    // Segment内部で接する場合も許す。端点どうしに限らない。
-    const double joinTolerance = std::max(tolerance.interactiveJoinMm,
-        tolerance.modelLinearMm * 100.0);
-    GuideSurfaceAnalysis analysis;
-    analysis.method = GuideSurfaceMethod::GuidedLoft;
-
-    for (const std::size_t sectionIndex : sections) {
-        const SampledChain& section = sampled[sectionIndex];
-        if (request.chains[sectionIndex].closed) {
-            errors.push_back(MakeError(kBadInput,
-                "外形ガイドを使う面では、断面は開いていなければなりません。",
-                ChainLabel(request.chains[sectionIndex])));
-            continue;
-        }
-        for (std::size_t at = 0; at < guides.size(); ++at) {
-            const SampledChain& guide = sampled[guides[at]];
-            const Vector3 end = at == 0 ? section.points.front() : section.points.back();
-            const double distance =
-                geometry::MinimumDistanceBetween(std::vector<Vector3>{end}, guide.points);
-            if (distance > joinTolerance) {
-                errors.push_back(MakeError(kNotConnected,
-                    "断面の端がガイドへつながっていません。",
-                    ChainLabel(request.chains[sectionIndex]) + " の"
-                        + (at == 0 ? "始点" : "終点") + " と "
-                        + ChainLabel(request.chains[guides[at]]) + " の距離 "
-                        + std::to_string(distance) + " mm(許容 "
-                        + std::to_string(joinTolerance) + " mm)。"));
-                continue;
-            }
-            const geometry::PolylineApproach approach =
-                geometry::ClosestApproachBetween(std::vector<Vector3>{end}, guide.points);
-            ChainCrossing crossing;
-            crossing.firstChainIndex = sectionIndex;
-            crossing.secondChainIndex = guides[at];
-            crossing.distanceMm = approach.distanceMm;
-            // 断面側は端点なので、始点なら0、終点なら1。
-            crossing.firstParameter = at == 0 ? 0.0 : 1.0;
-            crossing.secondParameter = approach.secondParameter;
-            crossing.position = approach.secondPoint;
-            analysis.crossings.push_back(crossing);
-        }
-    }
-    if (!errors.empty()) {
-        return Result<GuideSurfaceAnalysis>::Failure(std::move(errors));
-    }
-
-    // 断面がガイドを横切る順が、2本のガイドで一致していること(§6.5)。
-    // 一致しなければ、面はどこかでねじれる。
-    std::vector<std::pair<double, std::size_t>> firstOrder;
-    std::vector<std::pair<double, std::size_t>> secondOrder;
-    for (const ChainCrossing& crossing : analysis.crossings) {
-        if (crossing.secondChainIndex == guides[0]) {
-            firstOrder.emplace_back(crossing.secondParameter, crossing.firstChainIndex);
-        } else {
-            secondOrder.emplace_back(crossing.secondParameter, crossing.firstChainIndex);
-        }
-    }
-    std::sort(firstOrder.begin(), firstOrder.end());
-    std::sort(secondOrder.begin(), secondOrder.end());
-    if (firstOrder.size() != secondOrder.size()) {
-        return Result<GuideSurfaceAnalysis>::Failure(MakeError(kNotConnected,
-            "2本のガイドで、つながっている断面の数が違います。",
-            std::to_string(firstOrder.size()) + " と " + std::to_string(secondOrder.size())));
-    }
-    for (std::size_t at = 0; at < firstOrder.size(); ++at) {
-        if (firstOrder[at].second != secondOrder[at].second) {
-            return Result<GuideSurfaceAnalysis>::Failure(MakeError(kCrossingOrder,
-                "断面がガイドを横切る順番が、2本のガイドで食い違っています。",
-                "この順のままでは面がねじれます。断面の向きか対応を見直してください。"));
-        }
-    }
-
-    // 端に断面が無ければ、仮想断面を作る位置を決める(§6.5、既定は作る)。
-    if (request.createVirtualEndSections && !firstOrder.empty()) {
-        const double startGap = firstOrder.front().first;
-        const double endGap = 1.0 - firstOrder.back().first;
-        const double edgeTolerance = 1.0e-3;
-        if (startGap > edgeTolerance) {
-            analysis.virtualSectionParameters.push_back(0.0);
-        }
-        if (endGap > edgeTolerance) {
-            analysis.virtualSectionParameters.push_back(1.0);
-        }
-        if (!analysis.virtualSectionParameters.empty()) {
-            analysis.notes.push_back(MakeWarning("GEO-G104",
-                "端に断面が無いので、仮想断面を作ります。",
-                std::to_string(analysis.virtualSectionParameters.size())
-                    + " 本。設定で作らないようにもできます。"));
-        }
-    }
-
-    analysis.sectionOrdering.chainIndices.clear();
-    for (const auto& item : firstOrder) {
-        analysis.sectionOrdering.chainIndices.push_back(item.second);
     }
     return Result<GuideSurfaceAnalysis>::Success(std::move(analysis));
 }
@@ -927,11 +574,13 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
     case GuideSurfaceMethod::PlanarBoundary:
         return AnalyzePlanar(request, tolerance, sampled);
     case GuideSurfaceMethod::RuledSections:
-        return AnalyzeSections(request, tolerance, sampled, 2, 2);
+        // 1 枚のルールド面は 2 本で決まる。3 本以上は隣り合う 2 本ずつの帯を順につなぐ
+        // (ThruSections の ruled がそのとおりに作る)。上限は付けない。
+        return AnalyzeSections(request, tolerance, sampled, 2, kUnlimitedCount);
     case GuideSurfaceMethod::LoftSections:
-        return AnalyzeSections(request, tolerance, sampled, 3, 1000);
     case GuideSurfaceMethod::GuidedLoft:
-        return AnalyzeGuidedLoft(request, tolerance, sampled);
+        // 断面 2〜任意 + ガイド 0〜任意 + 中心線 0〜1(LoftInput.cpp)。
+        return AnalyzeLoft(request, tolerance, sampled);
     case GuideSurfaceMethod::GordonNetwork:
         return AnalyzeGordon(request, tolerance, sampled);
     case GuideSurfaceMethod::BoundaryFill:
@@ -940,6 +589,8 @@ Result<GuideSurfaceAnalysis> AnalyzeGuideSurfaceRequest(const GuideSurfaceReques
         return AnalyzeOffset(request, tolerance);
     case GuideSurfaceMethod::Revolve:
         return AnalyzeRevolve(request, tolerance, sampled);
+    case GuideSurfaceMethod::FourEdgePatch:
+        return AnalyzeFourEdgePatch(request, tolerance, sampled);
     }
     return Result<GuideSurfaceAnalysis>::Failure(MakeError(kBadInput,
         "知らない作り方です。", {}));

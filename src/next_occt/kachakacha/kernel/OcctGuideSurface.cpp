@@ -1,6 +1,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 
 #include "kachakacha/geometry/CurveSampling.h"
+#include "kachakacha/modeling/GuideSurfaceSampling.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/SurfaceDeviationLimit.h"
 
@@ -18,6 +19,11 @@
 #include "kachakacha/kernel/OcctShapeCache.h"
 
 #include <BRepAdaptor_Surface.hxx>
+#include <TopoDS_Edge.hxx>
+#include <Geom_Curve.hxx>
+#include <NCollection_Array1.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <GeomAPI_PointsToBSpline.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
@@ -67,6 +73,7 @@ using base::MakeError;
 using base::Result;
 using geometry::GeometryTolerance;
 using geometry::Vector3;
+using modeling::ChainCrossing;
 using modeling::ChainRole;
 using modeling::GuideChain;
 using modeling::GuideSurfaceAnalysis;
@@ -222,7 +229,11 @@ constexpr int kNetworkPointsPerChain = 9;
 {
     using Out = Result<TopoDS_Shape>;
     return Guarded([&]() -> Out {
-        const double tol3d = std::max(tolerance.modelLinearMm, Precision::Confusion());
+        // 曲線網(近似)は点で近づける作り方なので、面へ写す許容を 0.1 µm まで緩める
+        // (1e-6 mm では写しきれずに張れないことがある)。境界面はこれまでどおり。
+        const double tol3d = boundaryFill
+            ? std::max(tolerance.modelLinearMm, Precision::Confusion())
+            : std::max(tolerance.modelLinearMm, 1.0e-4);
         BRepOffsetAPI_MakeFilling filler(3, 15, 2, false, 1.0e-5, tol3d,
             0.01, 0.1, 8, 9);
 
@@ -265,31 +276,86 @@ constexpr int kNetworkPointsPerChain = 9;
                 return Out::Failure(MakeError(kSurfaceBuildFailed,
                     "U方向・V方向の線が足りません。", {}));
             }
-            const auto addAsBoundary = [&](std::size_t index) -> Result<bool> {
-                for (const auto& segment : request.chains[index].segments) {
-                    auto edge = ToEdge(segment);
-                    if (!edge.HasValue()) {
-                        return Result<bool>::Failure(edge.Diagnostics());
+            // 外側の線は「並びの端」。渡された順ではなく、交わる位置の順で決める
+            // (2026-09-22: 渡した順の最初と最後を外側にしていた)。
+            const auto crossing = [&](std::size_t u, std::size_t v) -> const ChainCrossing* {
+                for (const ChainCrossing& one : analysis.crossings) {
+                    if (one.firstChainIndex == u && one.secondChainIndex == v) {
+                        return &one;
                     }
-                    filler.Add(edge.Value(), GeomAbs_C0);
                 }
-                return Result<bool>::Success(true);
+                return nullptr;
             };
-            for (const std::size_t index :
-                {uChains.front(), uChains.back(), vChains.front(), vChains.back()}) {
-                auto added = addAsBoundary(index);
-                if (!added.HasValue()) {
-                    return Out::Failure(added.Diagnostics());
+            std::vector<std::size_t> uOrdered = uChains;
+            std::vector<std::size_t> vOrdered = vChains;
+            const auto along = [&](std::size_t u, std::size_t v, bool onV) {
+                const ChainCrossing* one = crossing(u, v);
+                return one == nullptr ? 0.0 : (onV ? one->secondParameter : one->firstParameter);
+            };
+            std::sort(uOrdered.begin(), uOrdered.end(), [&](std::size_t a, std::size_t b) {
+                return along(a, vChains.front(), true) < along(b, vChains.front(), true);
+            });
+            std::sort(vOrdered.begin(), vOrdered.end(), [&](std::size_t a, std::size_t b) {
+                return along(uChains.front(), a, false) < along(uChains.front(), b, false);
+            });
+            const std::size_t u0 = uOrdered.front();
+            const std::size_t u1 = uOrdered.back();
+            const std::size_t v0 = vOrdered.front();
+            const std::size_t v1 = vOrdered.back();
+            // 交わる位置(正規化弧長)は検査が測ったもの。同じ細かさで標本を取る。
+            const double samplingTolerance = modeling::detail::SamplingToleranceMm(tolerance);
+            // 外周の 4 隅は、U と V の交わる点(2 本の中点)。外側の線を隅から隅まで切り出し、
+            // 1 本のなめらかな辺にして境界へ入れる。折れ線の区間を 1 本ずつ入れると、
+            // 辺が何百本にもなって張れなかった(2026-09-22 PC: U5V4 の網)。
+            const auto corner = [&](std::size_t u, std::size_t v) {
+                const ChainCrossing* one = crossing(u, v);
+                return one == nullptr ? Vector3{} : one->position;
+            };
+            const auto boundaryEdge = [&](std::size_t chain, double from, double to,
+                                          const Vector3& start, const Vector3& end) -> Result<TopoDS_Edge> {
+                const std::vector<Vector3> points =
+                    geometry::SampleChain(request.chains[chain].segments, samplingTolerance);
+                const std::vector<double> parameters = geometry::NormalizedArcLength(points);
+                constexpr int kPieces = 32;
+                NCollection_Array1<gp_Pnt> array(1, kPieces + 1);
+                for (int k = 0; k <= kPieces; ++k) {
+                    const double t = from + (to - from) * k / kPieces;
+                    const Vector3 point = k == 0 ? start
+                        : k == kPieces ? end
+                                       : geometry::PointAtNormalizedArcLength(points, parameters, t);
+                    array.SetValue(k + 1, ToPoint(point));
                 }
+                GeomAPI_PointsToBSpline fit(array, 3, 8, GeomAbs_C2, samplingTolerance);
+                if (!fit.IsDone() || fit.Curve().IsNull()) {
+                    return Result<TopoDS_Edge>::Failure(MakeError(kSurfaceBuildFailed,
+                        "曲線網の外側の線を辺にできませんでした。", {}));
+                }
+                const occ::handle<Geom_Curve> curve = fit.Curve();
+                BRepBuilderAPI_MakeEdge maker{curve};
+                if (!maker.IsDone()) {
+                    return Result<TopoDS_Edge>::Failure(MakeError(kSurfaceBuildFailed,
+                        "曲線網の外側の線を辺にできませんでした。", {}));
+                }
+                return Result<TopoDS_Edge>::Success(maker.Edge());
+            };
+            const Vector3 c00 = corner(u0, v0);
+            const Vector3 c01 = corner(u0, v1);
+            const Vector3 c10 = corner(u1, v0);
+            const Vector3 c11 = corner(u1, v1);
+            const Result<TopoDS_Edge> sides[] = {
+                boundaryEdge(u0, along(u0, v0, false), along(u0, v1, false), c00, c01),
+                boundaryEdge(v1, along(u0, v1, true), along(u1, v1, true), c01, c11),
+                boundaryEdge(u1, along(u1, v1, false), along(u1, v0, false), c11, c10),
+                boundaryEdge(v0, along(u1, v0, true), along(u0, v0, true), c10, c00)};
+            for (const auto& side : sides) {
+                if (!side.HasValue()) {
+                    return Out::Failure(side.Diagnostics());
+                }
+                filler.Add(side.Value(), GeomAbs_C0);
                 addedBoundary = true;
             }
-            const double samplingTolerance = SamplingToleranceMm(tolerance);
-            const auto addAsPoints = [&](const std::vector<std::size_t>& list,
-                                         std::size_t skipFirst, std::size_t skipLast) {
-                for (std::size_t at = 0; at < list.size(); ++at) {
-                    if (at == skipFirst || at == skipLast) {
-                        continue;
-                    }
+            const auto addAsPoints = [&](const std::vector<std::size_t>& list) {
+                for (std::size_t at = 1; at + 1 < list.size(); ++at) {
                     const std::vector<Vector3> points = geometry::SampleChain(
                         request.chains[list[at]].segments, samplingTolerance);
                     if (points.size() < 2) {
@@ -304,8 +370,8 @@ constexpr int kNetworkPointsPerChain = 9;
                     }
                 }
             };
-            addAsPoints(uChains, 0, uChains.size() - 1);
-            addAsPoints(vChains, 0, vChains.size() - 1);
+            addAsPoints(uOrdered);
+            addAsPoints(vOrdered);
         }
         if (!addedBoundary) {
             return Out::Failure(MakeError(kSurfaceBuildFailed, "境界がありません。", {}));
@@ -773,13 +839,13 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         }
     }
 
-    const TopoDS_Face face = FirstFace(shape);
-    GuideSurfaceResult result;
-    result.samples = SampleFace(face);
-    result.analytic = AnalyticOf(face);
+    auto finished = detail::FinishSurfaceResult(shape, tolerance);
+    if (!finished.HasValue()) {
+        return finished;
+    }
+    GuideSurfaceResult result = finished.Value();
     result.maximumDeviationMm = deviation.maximumMm;
     result.rmsDeviationMm = deviation.rmsMm;
-    result.areaMm2 = AreaOf(shape);
     result.continuityG1ErrorDeg = continuity.g1ErrorDeg;
     result.continuityG2Error = continuity.g2Error;
 
@@ -793,6 +859,27 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
         warnings.push_back(base::MakeWarning("KER-S102", note,
             "通す作り方(ロフト・ルールド)なら、線の上に乗ります。"));
     }
+    for (const Diagnostic& warning : finished.Diagnostics()) {
+        warnings.push_back(warning);
+    }
+    return Result<GuideSurfaceResult>::Success(std::move(result), std::move(warnings));
+}
+
+namespace detail {
+
+Result<GuideSurfaceResult> FinishSurfaceResult(const TopoDS_Shape& shape,
+    const GeometryTolerance& tolerance)
+{
+    if (FaceCount(shape) == 0) {
+        return Result<GuideSurfaceResult>::Failure(MakeError(kSurfaceBuildFailed,
+            "面が1枚も出来ませんでした。", {}));
+    }
+    const TopoDS_Face face = FirstFace(shape);
+    GuideSurfaceResult result;
+    result.samples = SampleFace(face);
+    result.analytic = AnalyticOf(face);
+    result.areaMm2 = AreaOf(shape);
+    std::vector<Diagnostic> warnings;
     if (!face.IsNull()) {
         const TopoDS_Wire outer = BRepTools::OuterWire(face);
         if (!outer.IsNull()) {
@@ -815,6 +902,8 @@ Result<GuideSurfaceResult> BuildGuideSurface(const GuideSurfaceRequest& request,
     result.handle = StoreShape(shape);
     return Result<GuideSurfaceResult>::Success(std::move(result), std::move(warnings));
 }
+
+} // namespace detail
 
 #else // KACHACAD_V2_WITH_OCCT
 

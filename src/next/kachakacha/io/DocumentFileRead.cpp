@@ -645,6 +645,27 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::EditSurface: {
+        domain::EditSurfaceDefinition made;
+        made.operation = static_cast<int>(loader.NumberOr(definition, "operation", 0.0));
+        made.surfaces = ReadIdArray(loader, definition, "surfaces", where);
+        for (const double value : ReadNumberArray(loader, definition, "edgeIndices", where)) {
+            made.edgeIndices.push_back(static_cast<int>(value));
+        }
+        for (const double value : ReadNumberArray(loader, definition, "continuity", where)) {
+            made.continuity.push_back(static_cast<int>(value));
+        }
+        made.toleranceMm = loader.NumberOr(definition, "toleranceMm", 0.0);
+        made.tension = loader.NumberOr(definition, "tension", 1.0);
+        if (definition.Find("planePoint") != nullptr) {
+            made.planePoint = loader.ReadVector(definition, "planePoint", where);
+        }
+        if (definition.Find("planeNormal") != nullptr) {
+            made.planeNormal = loader.ReadVector(definition, "planeNormal", where);
+        }
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

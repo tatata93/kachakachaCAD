@@ -23,6 +23,8 @@ using domain::FeatureType;
         return ShapeRebuildKind::GuideSurface;
     case FeatureType::ThickenSurface:
         return ShapeRebuildKind::ThickenSurface;
+    case FeatureType::EditSurface:
+        return ShapeRebuildKind::EditSurface;
     case FeatureType::CreateFabricationModel:
         return ShapeRebuildKind::FabricationModel;
     default:
@@ -47,6 +49,7 @@ std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept
     case ShapeRebuildKind::GuideSurface: return "形状ガイド";
     case ShapeRebuildKind::ThickenSurface:   return "面に厚み";
     case ShapeRebuildKind::FabricationModel: return "近似モデル";
+    case ShapeRebuildKind::EditSurface:      return "面の編集";
     }
     return "不明";
 }

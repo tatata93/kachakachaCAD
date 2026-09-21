@@ -54,6 +54,18 @@
 | AT-GEO-011 | 済 | tests_v2/wire_cage_tests.cpp(欠損・重複・T字・平板) |
 | AT-GEO-012 | 済 | tests_v2/wire_cage_tests.cpp(選んだ線だけを使う) |
 | AT-GEO-013 | 済 | tests_v2/wire_cage_tests.cpp(離れた2つの箱は、面12枚の1つの候補ではなく、6面ずつの2つの立体に分かれる。余る線は無く、いくつになるかを GEO-S007 で先に知らせる) + tests_v2/kernel_wire_cage_tests.cpp(2つ同時に確定すると別々の形として2つ作られ、体積もそれぞれのもの。面の意味的キーは core が決めたものと同じ。選ばない・2度選ぶ・候補にない番号は断る) + kernel_extrude_tests.cpp(引いて分かれる場合) |
+| AT-SRF-001 | 部分 | tests_v2/loft_input_tests.cpp(交わらないガイド・断面の順の逆転を理由付きで断る、逆向きのガイドは受ける、3本目以降も使う)+ tests_v2/kernel_loft_tests.cpp(2断面0本 / 3断面1〜3本 / 5断面5本 / 3本目を持ち上げると面が変わる / 中心線。PC 819b8f2 で 7/7)。残り: 人の操作で断面・ガイドを足し外す自己試験(HP-SF-10〜12)の PC 確認 |
+| AT-SRF-002 | 部分 | tests_v2/guide_surface_tests.cpp(閉じない4辺は離れ量を言って断る、並びと向きを直す)+ tests_v2/kernel_loft_tests.cpp の kernel_four_edge(4辺・逆順・張り方の差・通る線複数)。残り: PC 確認(819b8f2 で Coons の制御点不足が見つかり 0173810 で直した) |
+| AT-SRF-003 | 部分 | tests_v2/guide_surface_tests.cpp(支持面の無い G1/G2 を断る、連続条件を受けない作り方では断る)+ tests_v2/kernel_loft_tests.cpp の kernel_continuity(G0 と G1 で形が変わり折れ目を測る、G2 の曲率の差を測る、支持面に乗らない辺は断る、四辺面も張り直す)+ tests_v2/feature_definition_tests.cpp(保存と古い文書)。残り: PC 確認 |
+| AT-SRF-004 | 部分 | tests_v2/gordon_grid_tests.cpp(格子が U 線も V 線も通る、順と向きがばらばらでも同じ、U5V4、外側が端で交わらない網は Gordon で断り近似で受ける、成り立つ方を薦める)+ tests_v2/guide_surface_tests.cpp(交差不足・多重交差・順の矛盾)+ kernel_loft_tests の kernel_network。残り: PC 確認 |
+| AT-SRF-005 | 部分 | tests_v2/surface_edit_input_state_tests.cpp(縁2本を押して決め、同じ面で縁を替え、同じ縁は外す)+ tests_v2/kernel_surface_edit_tests.cpp。残り: PC 確認と人の操作の自己試験 |
+| AT-SRF-006 | 部分 | tests_v2/surface_edit_input_state_tests.cpp + tests_v2/kernel_surface_edit_tests.cpp。残り: PC 確認と人の操作の自己試験 |
+| AT-SRF-007 | 部分 | tests_v2/surface_edit_input_state_tests.cpp(何枚でも・許容0を断る)+ tests_v2/kernel_surface_edit_tests.cpp。残り: PC 確認と人の操作の自己試験 |
+| AT-SRF-008 | 部分 | tests_v2/surface_edit_input_state_tests.cpp(対称面の選び方)+ tests_v2/kernel_surface_edit_tests.cpp。残り: PC 確認と人の操作の自己試験 |
+| AT-SRF-009 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/curve_fit_tests.cpp(線を形を保って core の B-spline へ写す)。残り: PC 確認と人の操作の自己試験 |
+| AT-SRF-010 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/kernel_curve_round_trip_tests.cpp(B-spline が形を変えずに往復)。残り: PC 確認 |
+| AT-SRF-011 | 未 | 面の解析(P6)はこれから |
+| AT-SRF-012 | 未 | 役割の分類と薦め(P7)はこれから |
 | AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー)+ 治具(surface_jig_tests: 表側は外側へ、厚みが負なら裏側へ内側で、すき間 0 なら離さない。負のすき間 JIG-E001・厚み 0 JIG-E002・面の数 JIG-E003)+ 自己試験(当たり面と当て板ができて一度で戻る) |
 | AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |
 | AT-EXT-003 | 済 | tests_v2/extrude_tests.cpp + tests_v2/kernel_extrude_tests.cpp(同じ押し出しからワイヤーと部品を取り出し、ワイヤー上の標本点すべてが部品の表面から modelLinearMm 以内にあることを DistanceToShapeSurface で測る。直線の輪郭と円の輪郭の両方で見る。表にない形の距離は測らずに断る) |

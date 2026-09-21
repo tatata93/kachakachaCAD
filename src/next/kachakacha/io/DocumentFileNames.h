@@ -86,6 +86,7 @@ inline constexpr NamedEnum<FeatureType> kFeatureTypes[]{
     {FeatureType::CreatePattern, "create_pattern"},
     {FeatureType::FreezeDerived, "freeze_derived"},
     {FeatureType::ThickenSurface, "thicken_surface"},
+    {FeatureType::EditSurface, "edit_surface"},
 };
 
 inline constexpr NamedEnum<WireTransformMethod> kTransformMethods[]{

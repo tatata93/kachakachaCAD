@@ -334,6 +334,30 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "1本目の線を、2本目の直線を軸に「回転体の角度」だけ回した断面を「回転体の断面の数」だけ"
             "並べ、その断面のロフトで形状ガイドを作ります(V1 の回転面と同じ近似)。", true,
             {"AT-GEO-003"}},
+        // 面の編集(プロンプト additional_surface_tools)。どれも道具から始め、3D で面や縁を
+        // 押して入れる。元の面は残し、新しい面(U/V 線は線)を作る。
+        {"surface.match", "面を合わせる", CommandMode::Dialog, "surface_match", "",
+            SelectionPredicate::Always, "",
+            "直す面の縁を、隣の面の縁へ G0/G1/G2 で合わせます。縁は面の縁の近くを押して選びます。"
+            "元の面は残し、合わせた新しい面を作ります。滑らかさは作ったあとで測ります。",
+            true, {"AT-SRF-005"}},
+        {"surface.bridge", "面をつなぐ", CommandMode::Dialog, "surface_bridge", "",
+            SelectionPredicate::Always, "",
+            "2 枚の面の縁のあいだを渡す面を作ります。両端の滑らかさ(G0/G1/G2)と張りの強さを選べます。",
+            true, {"AT-SRF-006"}},
+        {"surface.refit", "面を整える", CommandMode::Dialog, "surface_refit", "",
+            SelectionPredicate::Always, "",
+            "形を許容の内側に保ったまま、制御点の少ない面に作り直します。前後の最大のずれと"
+            "制御点の数を出します。許容に届かない・減らないときは作りません。",
+            true, {"AT-SRF-007"}},
+        {"surface.mirror", "対称に写す", CommandMode::Dialog, "surface_mirror", "",
+            SelectionPredicate::Always, "",
+            "面を対称面(車体の中心など)に写し、境目で面が折れていないかを測ります。何枚でも写せます。",
+            true, {"AT-SRF-008"}},
+        {"surface.iso_curves", "U/V 線を取り出す", CommandMode::Dialog, "surface_iso", "",
+            SelectionPredicate::Always, "",
+            "面の U 方向・V 方向の線を、ふつうの線として取り出します。分割線や特徴線の元にできます。",
+            true, {"AT-SRF-009"}},
         {"guide.set_method", "面の作り方", CommandMode::Dialog, "guide_method", "",
             SelectionPredicate::Always, "",
             "面の作り方を7通りから選びます。使わない役割の行が残っていれば断ります。", false,
@@ -384,8 +408,9 @@ const std::vector<CommandDescriptor>& CommandCatalog()
         {"wire.project_surface", "曲面へ投影", CommandMode::Instant, "project_surface", "",
             SelectionPredicate::WiresAndOneGuideSurface,
             "ワイヤーを1つ以上と、落とす先の形状ガイドの面を1つ選んでください。",
-            "線を、作業平面の向きに沿って形状ガイドの曲面へ落とします。曲がった面に窓を開ける元になります。",
-            true, {"AT-FAB-013"}},
+            "線を、作業平面の向きに沿って形状ガイドの曲面へ落とします。落ちた線は面の上の曲線で、"
+            "折れ線にしません(面の形が無いときだけ標本から折れ線で落とします)。曲がった面に窓を開ける元になります。",
+            true, {"AT-FAB-013", "AT-SRF-010"}},
         {"part.extrude", "押し出し", CommandMode::Dialog, "extrude", "Shift+E",
             SelectionPredicate::ClosedProfilesOrSolidFace,
             "閉じた輪郭を1つ以上、または立体の平らな面を選んでください。",

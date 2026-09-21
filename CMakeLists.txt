@@ -631,6 +631,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ApproxInput.cpp
     src/next/kachakacha/app/BooleanInputState.cpp
     src/next/kachakacha/app/ThickenInputState.cpp
+    src/next/kachakacha/app/SurfaceEditInputState.cpp
     src/next/kachakacha/app/Ribbon.cpp
     src/next/kachakacha/app/ExplorerModel.cpp
     src/next/kachakacha/app/ToolRoleLabels.cpp
@@ -704,6 +705,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/geometry/WireConnect.cpp
     src/next/kachakacha/geometry/WireEdit.cpp
     src/next/kachakacha/geometry/ChainTrim.cpp
+    src/next/kachakacha/geometry/CurveFit.cpp
     src/next/kachakacha/geometry/ControlPointEdit.cpp
 )
 target_include_directories(kachakacha_v2_core PUBLIC src/next)
@@ -721,6 +723,7 @@ add_library(kachakacha_v2_occt STATIC
     src/next_occt/kachakacha/kernel/OcctCurveConversion.cpp
     src/next_occt/kachakacha/kernel/OcctGuideSurface.cpp
     src/next_occt/kachakacha/kernel/OcctLoftSurface.cpp
+    src/next_occt/kachakacha/kernel/OcctSurfaceEdit.cpp
     src/next_occt/kachakacha/kernel/OcctExtrude.cpp
     src/next_occt/kachakacha/kernel/OcctFaceAdjacency.cpp
     src/next_occt/kachakacha/kernel/OcctFaceQuery.cpp
@@ -790,6 +793,8 @@ if(KACHACAD_BUILD_TESTS)
     kachakacha_add_v2_test(grid_tests tests_v2/grid_tests.cpp)
     kachakacha_add_v2_test(loft_input_tests tests_v2/loft_input_tests.cpp)
     kachakacha_add_v2_test(gordon_grid_tests tests_v2/gordon_grid_tests.cpp)
+    kachakacha_add_v2_test(curve_fit_tests tests_v2/curve_fit_tests.cpp)
+    kachakacha_add_v2_test(surface_edit_input_state_tests tests_v2/surface_edit_input_state_tests.cpp)
     kachakacha_add_v2_test(fabrication_tests tests_v2/fabrication_tests.cpp)
     kachakacha_add_v2_test(opening_clip_tests tests_v2/opening_clip_tests.cpp)
     kachakacha_add_v2_test(assembly_tests tests_v2/assembly_tests.cpp)
@@ -944,6 +949,7 @@ kachakacha_add_v2_test(sub_document_tests tests_v2/sub_document_tests.cpp)
 
     kachakacha_add_v2_kernel_test(kernel_surface_tests tests_v2/kernel_surface_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_loft_tests tests_v2/kernel_loft_tests.cpp)
+    kachakacha_add_v2_kernel_test(kernel_surface_edit_tests tests_v2/kernel_surface_edit_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_extrude_tests tests_v2/kernel_extrude_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_wire_cage_tests tests_v2/kernel_wire_cage_tests.cpp)
     kachakacha_add_v2_kernel_test(kernel_curve_round_trip_tests tests_v2/kernel_curve_round_trip_tests.cpp)
@@ -973,6 +979,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2SelfTestGenerate.cpp
         src/apps/cad_next/V2SelfTestUnfold.cpp
         src/apps/cad_next/V2SelfTestThicken.cpp
+        src/apps/cad_next/V2SelfTestSurfaceEdit.cpp
         src/apps/cad_next/V2SelfTestWorkPlanePreview.cpp
         src/apps/cad_next/V2SelfTestRegressions.cpp
         src/apps/cad_next/V2SelfTestFabrication.cpp
@@ -1021,6 +1028,8 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2RibbonCommands.cpp
         src/apps/cad_next/V2BooleanDock.cpp
         src/apps/cad_next/V2ThickenDock.cpp
+        src/apps/cad_next/V2SurfaceEditDock.cpp
+        src/apps/cad_next/V2SurfaceEditTool.cpp
         src/apps/cad_next/V2ToolKeys.cpp
         src/apps/cad_next/V2ToolRoleLabels.cpp
         src/apps/cad_next/V2UiShotStates.cpp

@@ -5,6 +5,7 @@
 //!   HUD:    3D の左上に「モード › 道具」と案内。測定を重ねていれば戻り先も。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 
 #include "V2OperationPanelHost.h"
 #include "V2Viewport.h"
@@ -105,7 +106,7 @@ std::string V2MainWindow::RunningOperationNameJa() const
     using kachakacha::v2::app::Shelf;
     const bool running = extrudeShelfShown_ || surfaceShelfShown_ || booleanShelfShown_
         || thickenShelfShown_ || approxShelfShown_ || cornerPreviewShown_
-        || ShelfShown(Shelf::Array);
+        || ShelfShown(Shelf::Array) || (surfaceEdit_ != nullptr && surfaceEdit_->Active());
     if (!running || operationHost_ == nullptr) {
         return std::string();
     }

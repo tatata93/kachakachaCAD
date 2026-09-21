@@ -8,6 +8,7 @@
 //! 幾何の判断は1つもしない。判断は core にある。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 
 #include "kachakacha/app/PointSources.h"
 
@@ -241,6 +242,11 @@ void V2MainWindow::ProjectSelectedWiresOntoSurface()
         if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
             surfaceId = id;
         }
+    }
+    // 面の形があれば、核で厳密に落とす(面の上の曲線。折れ線にしない)。
+    if (!inputs.empty() && !surfaceId.IsNil() && surfaceEdit_ != nullptr
+        && surfaceEdit_->ProjectSelectionExactly(surfaceId)) {
+        return;
     }
     const auto samples = guideSamples_.find(surfaceId.ToString());
     if (inputs.empty() || surfaceId.IsNil() || samples == guideSamples_.end()) {

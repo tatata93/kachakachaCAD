@@ -62,6 +62,8 @@ enum class Shelf {
     Thicken,
     //! 配列(直線/円形)の欄(指示書 D-23)。`wire.array_*` が構えている間だけ出す。
     Array,
+    //! 「面の編集」の欄(合わせる・つなぐ・整える・対称・U/V 線・面へ投影)。
+    SurfaceEdit,
 };
 
 [[nodiscard]] std::string_view ShelfNameJa(Shelf shelf) noexcept;
@@ -75,14 +77,15 @@ enum class Shelf {
 //! 押し出しの欄は一度も画面に出ていなかった。
 //! `booleaning` は「足す・引くの欄を構えている最中か」。
 //! `thickening` は「厚みの欄を構えている最中か」(指示書 matrix P-10)。
+//! `editingSurface` は「面の編集の欄を構えている最中か」(自分で出して隠される形にしない)。
 [[nodiscard]] std::vector<Shelf> ShelvesFor(UiMode mode, modeling::DrawingTool tool,
     bool extruding = false, bool surfacing = false, bool booleaning = false,
-    bool thickening = false);
+    bool thickening = false, bool editingSurface = false);
 
 //! そのうち前に出す1枚。ShelvesFor の先頭と必ず同じ。
 [[nodiscard]] Shelf FrontShelfFor(UiMode mode, modeling::DrawingTool tool,
     bool extruding = false, bool surfacing = false, bool booleaning = false,
-    bool thickening = false);
+    bool thickening = false, bool editingSurface = false);
 
 //! 決まった順に並べた全部。台帳と試験が同じ順を見る。
 [[nodiscard]] const std::vector<Shelf>& AllShelves();

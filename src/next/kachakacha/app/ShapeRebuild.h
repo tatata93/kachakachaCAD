@@ -31,6 +31,8 @@ enum class ShapeRebuildKind {
     ThickenSurface,
     //! 近似モデル。元の面や部品が作り直された後に、作り方から作り直す。
     FabricationModel,
+    //! 面の編集(合わせる・つなぐ・整える・対称)。元の面が作り直された後に作り直す。
+    EditSurface,
 };
 
 [[nodiscard]] std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept;

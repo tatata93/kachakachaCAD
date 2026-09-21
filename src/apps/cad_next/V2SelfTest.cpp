@@ -101,6 +101,8 @@ namespace {
     cases.insert(cases.end(), unfold.begin(), unfold.end());
     const std::vector<SelfTestCase> thicken = ThickenCases();
     cases.insert(cases.end(), thicken.begin(), thicken.end());
+    const std::vector<SelfTestCase> surfaceEdit = SurfaceEditCases();
+    cases.insert(cases.end(), surfaceEdit.begin(), surfaceEdit.end());
     const std::vector<SelfTestCase> workPlanePreview = WorkPlanePreviewCases();
     cases.insert(cases.end(), workPlanePreview.begin(), workPlanePreview.end());
     const std::vector<SelfTestCase> regressions = RegressionCases();

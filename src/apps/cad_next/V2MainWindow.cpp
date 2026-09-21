@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 
 #include "V2EntityTree.h"
 
@@ -287,6 +288,10 @@ void V2MainWindow::HandleSelectionChanged()
     RefreshBooleanForSelectionChange();
     // 厚み中の素のクリックは面の欄へ入る(押し直すと外れる)。
     RefreshThickenForSelectionChange();
+    // 面の編集中の素のクリックは縁・面・線の欄へ入る(押し直すと外れる)。
+    if (surfaceEdit_ != nullptr) {
+        surfaceEdit_->HandleSelectionChanged();
+    }
     // 製作モードで部材を押したら「対象部材」欄をその番号にする(F-05/06/07)。
     RefreshFabricationPartPickForSelectionChange();
     // 下見を出している最中なら、写しと下見を選択に合わせる(§9)。

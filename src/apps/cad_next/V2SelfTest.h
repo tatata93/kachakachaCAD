@@ -153,6 +153,9 @@ void Note(const char* what);
 //! 「厚み」の人の道(HP-TH、指示書 matrix P-10)。道具 → 3D で面 → 作り方 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> ThickenCases();
 
+//! 「面の編集」の人の道(HP-SE)。道具 → 3D で面・縁 → 下見 → Enter。
+[[nodiscard]] std::vector<SelfTestCase> SurfaceEditCases();
+
 //! 作業平面の棚の下見(HP-WP、D-24)。
 [[nodiscard]] std::vector<SelfTestCase> WorkPlanePreviewCases();
 

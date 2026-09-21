@@ -12,6 +12,17 @@
 #include "kachakacha/geometry/CurveSegment.h"
 #include "kachakacha/kernel/OcctCurveConversion.h"
 
+#ifdef KACHACAD_V2_WITH_OCCT
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRep_Tool.hxx>
+#include <GeomAPI_PointsToBSpline.hxx>
+#include <GeomAbs_Shape.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_Curve.hxx>
+#include <NCollection_Array1.hxx>
+#include <gp_Pnt.hxx>
+#endif
+
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -163,6 +174,62 @@ KACHA_V2_TEST(kernel_curve_round_trip, 繋がっていない並びは勝手に�
     Require(!wire.HasValue(), "断ること");
     RequireEqual(wire.Diagnostics().front().code, std::string("KER-C003"),
         "繋がっていないときの診断コード");
+}
+
+KACHA_V2_TEST(kernel_curve_round_trip, Bsplineは核へ渡しても形が変わらず同じ制御点で戻る)
+{
+    // core の B-spline は端を重ねない一様 3 次。核へは区間ごとのベジェで厳密に渡し、
+    // 戻すときは値に合わせて写す(2026-09-22 まで制御点をそのまま写していて形が変わった)。
+    const std::vector<Vector3> control{{0, 0, 0}, {10, 6, 0}, {20, -4, 3}, {30, 7, 1},
+        {40, -2, -2}, {50, 3, 0}};
+    const CurveSegment original = CurveSegment::MakeCubicBSpline(control).Value();
+    const auto edge = kachakacha::v2::kernel::ToEdge(original);
+    Require(edge.HasValue(), "辺にできる");
+    double first = 0.0;
+    double last = 0.0;
+    const occ::handle<Geom_Curve> curve = BRep_Tool::Curve(edge.Value(), first, last);
+    for (int k = 0; k <= 20; ++k) {
+        const double t = k / 20.0;
+        const gp_Pnt p = curve->Value(first + (last - first) * t);
+        const Vector3 expected = original.Evaluate(t);
+        Require(std::abs(p.X() - expected.x) + std::abs(p.Y() - expected.y)
+                    + std::abs(p.Z() - expected.z) < 1.0e-7,
+            "核の曲線が core と同じ形(t=" + std::to_string(t) + ")");
+    }
+    const auto back = kachakacha::v2::kernel::FromEdge(edge.Value(), 1.0e-6);
+    Require(back.HasValue(), "戻せる");
+    Require(back.Value().ControlPoints().size() == control.size(), "制御点の数も同じ");
+    for (std::size_t i = 0; i < control.size(); ++i) {
+        Require((back.Value().ControlPoints()[i] - control[i]).Length() < 1.0e-6,
+            "制御点が同じ(" + std::to_string(i) + ")");
+    }
+}
+
+KACHA_V2_TEST(kernel_curve_round_trip, 節点が不揃いな核のBsplineも形を保って戻る)
+{
+    NCollection_Array1<gp_Pnt> points(1, 9);
+    for (int i = 1; i <= 9; ++i) {
+        const double x = (i - 1) * (i - 1) * 1.5;   // 間隔が不揃い
+        points.SetValue(i, gp_Pnt(x, 8.0 * std::sin(x / 12.0), 0.3 * x));
+    }
+    GeomAPI_PointsToBSpline fit(points, 3, 3, GeomAbs_C2, 1.0e-6);
+    Require(fit.IsDone(), "核で B-spline を作れる");
+    BRepBuilderAPI_MakeEdge maker{occ::handle<Geom_Curve>(fit.Curve())};
+    Require(maker.IsDone(), "辺にできる");
+    const auto back = kachakacha::v2::kernel::FromEdge(maker.Edge(), 1.0e-6);
+    Require(back.HasValue(), "戻せる: "
+            + (back.HasValue() ? std::string() : back.Diagnostics().front().summaryJa));
+    const occ::handle<Geom_Curve> curve = fit.Curve();
+    const double first = curve->FirstParameter();
+    const double last = curve->LastParameter();
+    for (int k = 0; k <= 40; ++k) {
+        const double t = k / 40.0;
+        const gp_Pnt p = curve->Value(first + (last - first) * t);
+        const Vector3 got = back.Value().Evaluate(t);
+        Require(std::sqrt((p.X() - got.x) * (p.X() - got.x) + (p.Y() - got.y) * (p.Y() - got.y)
+                    + (p.Z() - got.z) * (p.Z() - got.z)) <= 1.0e-4 + 1.0e-9,
+            "形が許容以内(t=" + std::to_string(t) + ")");
+    }
 }
 
 #endif // KACHACAD_V2_WITH_OCCT

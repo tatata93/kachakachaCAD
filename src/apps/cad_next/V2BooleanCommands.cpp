@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 
 #include "V2BooleanDock.h"
 #include "V2Viewport.h"
@@ -77,6 +78,12 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (id == "part.thicken") {
         ClearPendingCommand();
         RunThickenTool();
+        return true;
+    }
+    // 面の編集も道具から始める。何も選んでいなくても棚が出て、3D で面・縁・線を押せる。
+    if (surfaceEdit_ != nullptr && surfaceEdit_->Handles(id)) {
+        ClearPendingCommand();
+        surfaceEdit_->Begin(id);
         return true;
     }
     // 回転体。面を作るの道具を 作り方 = 回転体 で構える(断面 → 軸 → 下見 → Enter)。

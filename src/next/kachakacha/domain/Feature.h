@@ -30,6 +30,8 @@ enum class FeatureType {
     FreezeDerived,
     //! 面に厚みを付けて立体にする。押し出しとは入力が違う(面であって輪郭ではない)。
     ThickenSurface,
+    //! 面の編集(合わせる・つなぐ・整える・対称)。元の面は残し、新しい面を作る。
+    EditSurface,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -48,6 +50,7 @@ enum class FeatureType {
     case FeatureType::CreatePattern:          return "CreatePattern";
     case FeatureType::FreezeDerived:          return "FreezeDerived";
     case FeatureType::ThickenSurface:         return "ThickenSurface";
+    case FeatureType::EditSurface:            return "EditSurface";
     }
     return "Unknown";
 }
@@ -187,6 +190,27 @@ struct CreateGuideSurfaceDefinition {
     std::vector<EntityId> supportSurfaces;
 };
 
+//! 面の編集(合わせる・つなぐ・整える・対称に写す)。出来るのは新しい形状ガイドの面で、
+//! **元の面は残す。** U/V 線と面へ投影は、ふつうの線(CreateWire / ProjectWire)として残す。
+struct EditSurfaceDefinition {
+    //! app::SurfaceEditOperation の番号。
+    int operation = 0;
+    //! 入力の面。合わせる: [直す面, 合わせ先]、つなぐ: [縁 A の面, 縁 B の面]、
+    //! 整える・対称: [元の面](1 枚ずつ別の Feature にする)。
+    std::vector<EntityId> surfaces;
+    //! 面ごとの縁の番号(縁を使わない作り方では空)。面の辺を辿った順で、形を作り直すまで変わらない。
+    std::vector<int> edgeIndices;
+    //! 縁ごとの滑らかさ(modeling::SurfaceContinuity の番号)。
+    std::vector<int> continuity;
+    //! 整える: 元の面からの許容(mm)。
+    double toleranceMm = 0.0;
+    //! つなぐ: 縁から出る向きの強さ。
+    double tension = 1.0;
+    //! 対称に写す: 対称面。
+    geometry::Vector3 planePoint{};
+    geometry::Vector3 planeNormal{0.0, 1.0, 0.0};
+};
+
 //! 押し出し。
 struct ExtrudeDefinition {
     std::vector<EntityId> profiles;
@@ -321,7 +345,8 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWireDefinition, TransformWireDefinition, FreezeDerivedDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
-    CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition>;
+    CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
+    EditSurfaceDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

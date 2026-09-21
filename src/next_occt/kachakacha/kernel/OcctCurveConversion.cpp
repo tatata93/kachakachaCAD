@@ -2,6 +2,7 @@
 
 #ifdef KACHACAD_V2_WITH_OCCT
 
+#include "kachakacha/geometry/CurveFit.h"
 #include "kachakacha/geometry/Units.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -138,29 +139,41 @@ Result<occ::handle<Geom_Curve>> ToGeomCurve(const CurveSegment& segment)
             return Out::Success(bezier);
         }
         case CurveKind::CubicBSpline: {
-            // core と同じ一様3次B-spline(節点は等間隔、両端は重複度4)。
-            const auto& control = segment.ControlPoints();
-            if (control.size() < 4) {
+            // core の B-spline は「節点が等間隔で端を重ねない」一様 3 次(区間ごとに
+            // 制御点 4 つ、端の制御点は通らない)。区間ごとの 3 次ベジェにすれば、同じ形を
+            // 核の B-spline で厳密に表せる。**制御点をそのまま端を重ねた B-spline へ
+            // 写すと形が変わる**(2026-09-22 まではそうしていて、core で見える線と核が
+            // 使う線が食い違っていた)。
+            const auto spans = geometry::UniformBSplineBezierSpans(segment.ControlPoints());
+            if (spans.empty()) {
                 return Out::Failure(MakeError(kCurveUnsupported,
                     "B-splineの制御点が足りません。",
-                    std::to_string(control.size()) + " 点でした。4点以上必要です。"));
+                    std::to_string(segment.ControlPoints().size()) + " 点でした。4点以上必要です。"));
             }
-            NCollection_Array1<gp_Pnt> points(1, static_cast<int>(control.size()));
-            for (std::size_t index = 0; index < control.size(); ++index) {
-                points.SetValue(static_cast<int>(index + 1), ToPoint(control[index]));
+            const int count = static_cast<int>(spans.size());
+            NCollection_Array1<gp_Pnt> points(1, 3 * count + 1);
+            points.SetValue(1, ToPoint(spans.front()[0]));
+            for (int span = 0; span < count; ++span) {
+                const auto& bezier = spans[static_cast<std::size_t>(span)];
+                points.SetValue(3 * span + 2, ToPoint(bezier[1]));
+                points.SetValue(3 * span + 3, ToPoint(bezier[2]));
+                points.SetValue(3 * span + 4, ToPoint(bezier[3]));
             }
-            const int spans = static_cast<int>(control.size()) - 3;
-            NCollection_Array1<double> knots(1, spans + 1);
-            NCollection_Array1<int> multiplicities(1, spans + 1);
-            for (int index = 1; index <= spans + 1; ++index) {
+            NCollection_Array1<double> knots(1, count + 1);
+            NCollection_Array1<int> multiplicities(1, count + 1);
+            for (int index = 1; index <= count + 1; ++index) {
                 knots.SetValue(index, static_cast<double>(index - 1));
-                multiplicities.SetValue(index, 1);
+                multiplicities.SetValue(index, 3);
             }
             multiplicities.SetValue(1, 4);
-            multiplicities.SetValue(spans + 1, 4);
-            occ::handle<Geom_Curve> spline =
+            multiplicities.SetValue(count + 1, 4);
+            occ::handle<Geom_BSplineCurve> spline =
                 new Geom_BSplineCurve(points, knots, multiplicities, 3);
-            return Out::Success(spline);
+            // 内側の節点は元が C2 なので、重なりを 1 まで外せる(形は変わらない)。
+            for (int index = 2; index <= count; ++index) {
+                (void)spline->RemoveKnot(index, 1, Precision::Confusion());
+            }
+            return Out::Success(occ::handle<Geom_Curve>(spline));
         }
         }
         return Out::Failure(MakeError(kCurveUnsupported, "知らない曲線の種類です。", {}));
@@ -234,9 +247,51 @@ Result<TopoDS_Wire> ToWire(const std::vector<CurveSegment>& segments, double tol
     }, "ワイヤーの作成");
 }
 
+namespace {
+
+//! 節点が等間隔で、両端の重なりが 4、内側が 1 の 3 次(core の一様 3 次と同じ形の空間)。
+[[nodiscard]] bool UniformClampedCubic(const occ::handle<Geom_BSplineCurve>& spline)
+{
+    if (spline->Degree() != 3 || spline->IsRational() || spline->IsPeriodic()) {
+        return false;
+    }
+    const int knots = spline->NbKnots();
+    if (knots < 2 || spline->Multiplicity(1) != 4 || spline->Multiplicity(knots) != 4) {
+        return false;
+    }
+    const double step = (spline->Knot(knots) - spline->Knot(1)) / (knots - 1);
+    for (int index = 2; index < knots; ++index) {
+        if (spline->Multiplicity(index) != 1
+            || std::abs(spline->Knot(index) - spline->Knot(1) - step * (index - 1))
+                > 1.0e-9 * std::max(1.0, std::abs(step))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! 辺の曲線を、値に合わせて core の一様 3 次 B-spline にする(両端は通す)。
+[[nodiscard]] Result<CurveSegment> FitToCore(const occ::handle<Geom_Curve>& curve, double first,
+    double last, bool reversed, double toleranceMm, std::size_t preferred)
+{
+    const auto at = [&](double t) {
+        const double u = reversed ? last - (last - first) * t : first + (last - first) * t;
+        return FromPoint(curve->Value(u));
+    };
+    // 許容は core の長さの許容(1e-6 mm)より粗く取る。表示・展開・輪郭として十分で、
+    // これより細かくすると、近似で作った面の縁(節点が不揃い)が写せなくなる。
+    const auto fit = geometry::FitUniformCubicBSpline(at, std::max(toleranceMm, 1.0e-4),
+        preferred, 512);
+    if (!fit.HasValue()) {
+        return Result<CurveSegment>::Failure(fit.Diagnostics());
+    }
+    return Result<CurveSegment>::Success(fit.Value().curve);
+}
+
+} // namespace
+
 Result<CurveSegment> FromEdge(const TopoDS_Edge& edge, double toleranceMm)
 {
-    (void)toleranceMm;
     return Guarded([&]() -> Result<CurveSegment> {
         double first = 0.0;
         double last = 0.0;
@@ -277,10 +332,8 @@ Result<CurveSegment> FromEdge(const TopoDS_Edge& edge, double toleranceMm)
         if (basis->IsKind(STANDARD_TYPE(Geom_BezierCurve))) {
             occ::handle<Geom_BezierCurve> bezier =
                 occ::handle<Geom_BezierCurve>::DownCast(basis);
-            if (bezier->Degree() != 3) {
-                return Result<CurveSegment>::Failure(MakeError(kCurveUnsupported,
-                    "3次でないベジェは扱えません。",
-                    "次数 " + std::to_string(bezier->Degree()) + "。"));
+            if (bezier->Degree() != 3 || bezier->IsRational()) {
+                return FitToCore(curve, first, last, reversed, toleranceMm, 0);
             }
             std::vector<Vector3> control;
             control.reserve(static_cast<std::size_t>(bezier->NbPoles()));
@@ -293,31 +346,21 @@ Result<CurveSegment> FromEdge(const TopoDS_Edge& edge, double toleranceMm)
             return CurveSegment::MakeCubicBezier(std::move(control));
         }
         if (basis->IsKind(STANDARD_TYPE(Geom_BSplineCurve))) {
+            // 制御点をそのまま写すと、節点の間隔や端の重なりが違って形が変わる。
+            // 値に合わせて core の一様 3 次へ写す。同じ間隔・端を重ねた 3 次
+            // (ToGeomCurve が作る形)なら、制御点の数を同じにして厳密に戻る。
             occ::handle<Geom_BSplineCurve> spline =
                 occ::handle<Geom_BSplineCurve>::DownCast(basis);
-            if (spline->Degree() != 3) {
-                return Result<CurveSegment>::Failure(MakeError(kCurveUnsupported,
-                    "3次でないB-splineは、形を保ったまま戻せません。",
-                    "次数 " + std::to_string(spline->Degree()) + "。"));
-            }
-            std::vector<Vector3> control;
-            control.reserve(static_cast<std::size_t>(spline->NbPoles()));
-            for (int index = 1; index <= spline->NbPoles(); ++index) {
-                control.push_back(FromPoint(spline->Pole(index)));
-            }
-            if (control.size() < 4) {
-                return Result<CurveSegment>::Failure(MakeError(kCurveUnsupported,
-                    "制御点が足りないB-splineです。", {}));
-            }
-            if (reversed) {
-                std::reverse(control.begin(), control.end());
-            }
-            return CurveSegment::MakeCubicBSpline(std::move(control));
+            const bool whole = std::abs(first - spline->FirstParameter()) <= 1.0e-12
+                && std::abs(last - spline->LastParameter()) <= 1.0e-12;
+            const std::size_t preferred = whole && UniformClampedCubic(spline)
+                ? static_cast<std::size_t>(spline->NbPoles())
+                : 0;
+            return FitToCore(curve, first, last, reversed, toleranceMm, preferred);
         }
-        // 折れ線へ落として「できた」ことにしない(設計の芯)。
-        return Result<CurveSegment>::Failure(MakeError(kCurveUnsupported,
-            "この種類の曲線は、形を保ったまま戻せません。",
-            "折れ線へ落として返すことはしません。"));
+        // そのほかの曲線(楕円・オフセット曲線など)も、値に合わせて写す。
+        // 許容に届かなければ断る(折れ線へ落として「できた」ことにしない)。
+        return FitToCore(curve, first, last, reversed, toleranceMm, 0);
     }, "曲線の取り出し");
 }
 

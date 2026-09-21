@@ -10,6 +10,7 @@
 #include "kachakacha/modeling/GordonGrid.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -410,8 +411,8 @@ void SnapCorners(std::vector<occ::handle<Geom_BSplineCurve>>& curves)
 
 //! G1 の許容(度)と G2 の許容(曲率の差)。核の MakeFilling に渡す目標よりゆるく、
 //! 目で見て折れ目が分からない程度。超えたら「滑らかにできなかった」と言って断る。
-constexpr double kG1LimitDeg = 1.5;
-constexpr double kG2Limit = 0.1;
+constexpr double kG1LimitDeg = kContinuityG1LimitDeg;
+constexpr double kG2Limit = kContinuityG2Limit;
 
 [[nodiscard]] std::string Mm3(double value)
 {
@@ -560,6 +561,58 @@ struct SurfacePoint {
     return out;
 }
 
+struct SampleContinuity {
+    std::size_t measured = 0;
+    double worstAngleDeg = 0.0;
+    double worstCurvature = 0.0;
+};
+
+//! 辺の上の点ごとに、2 つの面の法線の角度と、辺を横切る向きの法曲率の差を測る。
+[[nodiscard]] SampleContinuity MeasureSamples(const occ::handle<Geom_Surface>& first,
+    const occ::handle<Geom_Surface>& second,
+    const std::vector<std::pair<gp_Pnt, gp_Vec>>& samples)
+{
+    SampleContinuity out;
+    for (const auto& [point, tangent] : samples) {
+        const SurfacePoint a = EvaluateNear(first, point);
+        const SurfacePoint b = EvaluateNear(second, point);
+        if (!a.ok || !b.ok) {
+            continue;
+        }
+        ++out.measured;
+        const double dot = a.normal.Dot(b.normal);
+        out.worstAngleDeg = std::max(out.worstAngleDeg,
+            std::acos(std::min(1.0, std::abs(dot))) * 180.0 / 3.14159265358979323846);
+        // 辺を横切る向き(接平面の中で辺に直角)の法曲率。法線の向きをそろえて比べる。
+        const double across = NormalCurvature(a, a.normal.Crossed(tangent));
+        const double other = NormalCurvature(b, b.normal.Crossed(tangent));
+        out.worstCurvature = std::max(out.worstCurvature,
+            std::abs(across - (dot < 0.0 ? -other : other)));
+    }
+    return out;
+}
+
+//! 核の辺の上の点と向き(両端は外す)。
+[[nodiscard]] std::vector<std::pair<gp_Pnt, gp_Vec>> EdgeSamples(const TopoDS_Edge& edge)
+{
+    std::vector<std::pair<gp_Pnt, gp_Vec>> out;
+    BRepAdaptor_Curve curve(edge);
+    const double first = curve.FirstParameter();
+    const double last = curve.LastParameter();
+    constexpr int kCount = 24;
+    for (int k = 0; k < kCount; ++k) {
+        const double u = first + (last - first) * (k + 0.5) / kCount;
+        gp_Pnt point;
+        gp_Vec tangent;
+        curve.D1(u, point, tangent);
+        if (!(tangent.Magnitude() > 1.0e-12)) {
+            continue;
+        }
+        out.emplace_back(point, tangent.Normalized());
+    }
+    return out;
+}
+
 } // namespace
 
 Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
@@ -588,8 +641,7 @@ Result<bool> AddBoundaryEdges(BRepOffsetAPI_MakeFilling& filler,
     if (!face.HasValue()) {
         return Result<bool>::Failure(face.Diagnostics());
     }
-    const GeomAbs_Shape order =
-        chain.continuity == modeling::SurfaceContinuity::G2 ? GeomAbs_G2 : GeomAbs_G1;
+    const GeomAbs_Shape order = FillingOrder(chain.continuity);
     for (const TopoDS_Edge& edge : use) {
         (void)filler.Add(edge, face.Value(), order, true);
     }
@@ -618,25 +670,10 @@ Result<ContinuityMeasure> MeasureContinuity(const TopoDS_Shape& built,
     for (const ContinuityCheck& check : checks) {
         const occ::handle<Geom_Surface> supportSurface = BRep_Tool::Surface(check.support);
         const auto samples = BoundarySamples(request.chains[check.chainIndex].segments);
-        std::size_t measured = 0;
-        double worstAngle = 0.0;
-        double worstCurvature = 0.0;
-        for (const auto& [point, tangent] : samples) {
-            const SurfacePoint a = EvaluateNear(resultSurface, point);
-            const SurfacePoint b = EvaluateNear(supportSurface, point);
-            if (!a.ok || !b.ok) {
-                continue;
-            }
-            ++measured;
-            const double dot = a.normal.Dot(b.normal);
-            worstAngle = std::max(worstAngle,
-                std::acos(std::min(1.0, std::abs(dot))) * 180.0 / 3.14159265358979323846);
-            // 辺を横切る向き(接平面の中で辺に直角)の法曲率。法線の向きをそろえて比べる。
-            const double across = NormalCurvature(a, a.normal.Crossed(tangent));
-            const double other = NormalCurvature(b, b.normal.Crossed(tangent));
-            worstCurvature = std::max(worstCurvature,
-                std::abs(across - (dot < 0.0 ? -other : other)));
-        }
+        const SampleContinuity along = MeasureSamples(resultSurface, supportSurface, samples);
+        const std::size_t measured = along.measured;
+        const double worstAngle = along.worstAngleDeg;
+        const double worstCurvature = along.worstCurvature;
         if (measured * 2 < samples.size()) {
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 ChainName(request, check.chainIndex) + "の滑らかさを測れませんでした。",
@@ -663,6 +700,24 @@ Result<ContinuityMeasure> MeasureContinuity(const TopoDS_Shape& built,
         }
     }
     return Out::Success(measure);
+}
+
+EdgeContinuity MeasureEdgeContinuity(const TopoDS_Face& result, const TopoDS_Face& support,
+    const TopoDS_Edge& edge)
+{
+    EdgeContinuity out;
+    if (result.IsNull() || support.IsNull() || edge.IsNull()) {
+        return out;
+    }
+    const auto samples = EdgeSamples(edge);
+    const SampleContinuity along = MeasureSamples(BRep_Tool::Surface(result),
+        BRep_Tool::Surface(support), samples);
+    out.samples = samples.size();
+    out.measuredSamples = along.measured;
+    out.measured = along.measured * 2 >= samples.size() && along.measured > 0;
+    out.g1Deg = along.worstAngleDeg;
+    out.g2 = along.worstCurvature;
+    return out;
 }
 
 namespace {

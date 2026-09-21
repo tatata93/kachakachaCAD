@@ -26,6 +26,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Boolean:    return "足す・引く";
     case Shelf::Thicken:    return "厚み";
     case Shelf::Array:      return "配列";
+    case Shelf::SurfaceEdit: return "面の編集";
     }
     return "なし";
 }
@@ -36,13 +37,13 @@ const std::vector<Shelf>& AllShelves()
         Shelf::WorkPlane, Shelf::Drawing, Shelf::Edit, Shelf::Corner, Shelf::Measure,
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
-        Shelf::Boolean, Shelf::Thicken, Shelf::Array,
+        Shelf::Boolean, Shelf::Thicken, Shelf::Array, Shelf::SurfaceEdit,
     };
     return all;
 }
 
 std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
-    bool surfacing, bool booleaning, bool thickening)
+    bool surfacing, bool booleaning, bool thickening, bool editingSurface)
 {
     // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
@@ -66,6 +67,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     // 面の欄・作り方・厚みが見えていなければ、選び直しも確定も触れない。
     if (thickening) {
         return {Shelf::Thicken};
+    }
+    // 「面の編集」も同じ。縁・面・線の欄と滑らかさが見えていなければ、確定も触れない。
+    if (editingSurface) {
+        return {Shelf::SurfaceEdit};
     }
     switch (tool) {
     case DrawingTool::Measure:
@@ -134,10 +139,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
 }
 
 Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing,
-    bool booleaning, bool thickening)
+    bool booleaning, bool thickening, bool editingSurface)
 {
     const std::vector<Shelf> shelves =
-        ShelvesFor(mode, tool, extruding, surfacing, booleaning, thickening);
+        ShelvesFor(mode, tool, extruding, surfacing, booleaning, thickening, editingSurface);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

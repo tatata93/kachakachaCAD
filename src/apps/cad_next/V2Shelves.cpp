@@ -4,6 +4,7 @@
 //! V2MainWindow.cpp が 1500 行の上限に届いたので、組み立てだけをここへ移した。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 #include "V2OperationPanelHost.h"
 
 #include "kachakacha/app/CommandParameters.h"
@@ -164,6 +165,8 @@ void V2MainWindow::BuildOutputShelves()
         });
 
     BuildThickenDock();
+    // 面の編集(合わせる・つなぐ・整える・対称・U/V 線・面へ投影)。状態と棚は道具が持つ。
+    surfaceEdit_ = std::make_unique<V2SurfaceEditTool>(*this);
 
     extrudeDock_ = new V2ExtrudeDock(this);
     extrudeDock_->SetDistanceHandler([this](double value) { UpdateExtrudePreview(value); });

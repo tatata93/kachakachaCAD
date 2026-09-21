@@ -68,6 +68,9 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         // 3D の面は作図モードで作る(正本 2026-09-18: 作図 = Wire / Curve / WorkPlane / 3D Surface)。
         // 製作モードの近似の元になる。
         "surface.create",
+        // 面の編集(合わせる・つなぐ・整える・対称・U/V 線)。面を作る段と同じ作図モード。
+        "surface.match", "surface.bridge", "surface.refit", "surface.mirror",
+        "surface.iso_curves",
         "guide.revolve", "guide.set_method", "guide.add_row", "guide.append_row",
         "guide.row_up", "guide.row_down", "guide.row_remove", "guide.row_reverse",
         "guide.build", "guide.clear",

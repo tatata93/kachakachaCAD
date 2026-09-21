@@ -83,7 +83,12 @@ const std::vector<RibbonCategory>& DrawingCategories()
             {Surface("平面", kPlanar), Surface("ルールド面", kRuled), Surface("ロフト面", kLoft),
                 Surface("境界面", kBoundaryFill), Surface("四辺面", kFourEdgePatch),
                 Surface("曲線網", kGordon), Surface("離した面", kOffsetGuide, true),
-                Extra("回転面", "guide.revolve")}},
+                Extra("回転面", "guide.revolve"),
+                // 面の編集(プロンプト additional_surface_tools)。正本のカテゴリは増やさず、
+                // 面作成の後ろ(「その他」)に置く。面を作ったあとに直す・つなぐ道具。
+                Extra("面を合わせる", "surface.match"), Extra("面をつなぐ", "surface.bridge"),
+                Extra("面を整える", "surface.refit"), Extra("対称に写す", "surface.mirror"),
+                Extra("U/V 線", "surface.iso_curves")}},
         {"note", "注記",
             {Tool("寸法", "measure.open"),
                 Blocked("テキスト", "テキストの注記はまだありません(文書に文字の要素がありません)")}},

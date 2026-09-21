@@ -344,6 +344,24 @@ template<class Id>
         if (thicken->targetPlane.has_value()) {
             definition["targetPlane"] = WriteId(*thicken->targetPlane);
         }
+    } else if (const auto* edit =
+                   std::get_if<domain::EditSurfaceDefinition>(&feature.definition)) {
+        definition["operation"] = JsonValue::Number(static_cast<double>(edit->operation));
+        definition["surfaces"] = WriteIdArray(edit->surfaces);
+        JsonArray edges;
+        for (const int value : edit->edgeIndices) {
+            edges.push_back(JsonValue::Number(static_cast<double>(value)));
+        }
+        definition["edgeIndices"] = JsonValue::Array(std::move(edges));
+        JsonArray continuity;
+        for (const int value : edit->continuity) {
+            continuity.push_back(JsonValue::Number(static_cast<double>(value)));
+        }
+        definition["continuity"] = JsonValue::Array(std::move(continuity));
+        definition["toleranceMm"] = JsonValue::Number(edit->toleranceMm);
+        definition["tension"] = JsonValue::Number(edit->tension);
+        definition["planePoint"] = WriteVector(edit->planePoint);
+        definition["planeNormal"] = WriteVector(edit->planeNormal);
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

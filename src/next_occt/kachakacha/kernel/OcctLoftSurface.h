@@ -9,9 +9,11 @@
 
 #include "kachakacha/base/Diagnostic.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
+#include "kachakacha/modeling/GuideSurfaceResult.h"
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include <BRepOffsetAPI_MakeFilling.hxx>
+#include <GeomAbs_Shape.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
@@ -20,6 +22,28 @@
 #include <vector>
 
 namespace kachakacha::v2::kernel::detail {
+
+//! MakeFilling へ渡す拘束の次数。OCCT の BRepFill_Filling は GeomAbs_Shape を整数のまま
+//! 拘束の次数(0 = G0、1 = G1、2 = G2)として BRepFill_CurveConstraint へ渡す。
+//! GeomAbs_G2 は値が 3 なので "The continuity is not G0 G1 or G2" で断られる
+//! (2026-09-22 PC で確認)。次数 2 には、値が 2 の GeomAbs_C1 を渡す。
+static_assert(static_cast<int>(GeomAbs_C0) == 0 && static_cast<int>(GeomAbs_G1) == 1
+        && static_cast<int>(GeomAbs_C1) == 2,
+    "BRepFill_Filling は GeomAbs_Shape の値をそのまま拘束の次数にする");
+[[nodiscard]] inline GeomAbs_Shape FillingOrder(modeling::SurfaceContinuity order) noexcept
+{
+    switch (order) {
+    case modeling::SurfaceContinuity::G0: return GeomAbs_C0;
+    case modeling::SurfaceContinuity::G1: return GeomAbs_G1;
+    case modeling::SurfaceContinuity::G2: return GeomAbs_C1;   // 値 2 = 次数 2(上の注記)
+    }
+    return GeomAbs_C0;
+}
+
+//! G1 の許容(度)と G2 の許容(辺を横切る法曲率の差、1/mm)。核の MakeFilling に渡す
+//! 目標よりゆるく、目で見て折れ目が分からない程度。超えたら「滑らかにできなかった」と断る。
+inline constexpr double kContinuityG1LimitDeg = 1.5;
+inline constexpr double kContinuityG2Limit = 0.1;
 
 //! 境界の辺の連続条件(G1/G2)を、作ったあとで測るための控え。
 struct ContinuityCheck {
@@ -50,6 +74,27 @@ struct ContinuityMeasure {
 //! 出来た面と支持面の法線の角度(G1)と、辺を横切る向きの法曲率の差(G2)を自分で測る。
 [[nodiscard]] base::Result<ContinuityMeasure> MeasureContinuity(const TopoDS_Shape& built,
     const modeling::GuideSurfaceRequest& request, const std::vector<ContinuityCheck>& checks);
+
+//! 2 つの面が、辺の上でどれだけ滑らかにつながっているか。
+struct EdgeContinuity {
+    //! 辺の上の点の半分以上で測れたか。
+    bool measured = false;
+    std::size_t samples = 0;
+    std::size_t measuredSamples = 0;
+    //! 法線の角度の最大(度)。
+    double g1Deg = 0.0;
+    //! 辺を横切る向きの法曲率の差の最大(1/mm)。
+    double g2 = 0.0;
+};
+
+//! 出来た面と支持面(隣の面)の、辺の上の滑らかさを測る(MeasureContinuity と同じ測り方)。
+[[nodiscard]] EdgeContinuity MeasureEdgeContinuity(const TopoDS_Face& result,
+    const TopoDS_Face& support, const TopoDS_Edge& edge);
+
+//! 出来た形を面の結果にする(標本・正体・外周・面積。核の表へ入れて番号を付ける)。
+//! 面を作る道(BuildGuideSurface)と面の編集(OcctSurfaceEdit)が同じものを使う。
+[[nodiscard]] base::Result<modeling::GuideSurfaceResult> FinishSurfaceResult(
+    const TopoDS_Shape& shape, const geometry::GeometryTolerance& tolerance);
 
 //! ガイドや中心線を使うロフト(解析の LoftSolver が Sections 以外)。
 [[nodiscard]] base::Result<TopoDS_Shape> BuildLoftShape(

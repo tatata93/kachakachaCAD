@@ -277,6 +277,11 @@
           <tr data-command="grid.edit"><td>グリッド</td><td><code>grid.edit</code></td><td>主間隔と副点数。</td></tr>
           <tr data-command="grid.move_origin"><td>グリッド原点を移動</td><td><code>grid.move_origin</code></td><td>幾何点へ原点移動。</td></tr>
           <tr data-command="surface.create"><td>面を作る</td><td><code>surface.create</code></td><td>線や面から面を作る、ただ1つの入口。作り方は選んだものから薦め、右の棚で変えられる。</td></tr>
+          <tr data-command="surface.match"><td>面を合わせる</td><td><code>surface.match</code></td><td>直す面の縁を隣の面の縁へ G0/G1/G2 で合わせる。縁は面の縁の近くを押して選ぶ。元の面は残し、合わせた新しい面を作る。</td></tr>
+          <tr data-command="surface.bridge"><td>面をつなぐ</td><td><code>surface.bridge</code></td><td>2 枚の面の縁のあいだを渡す面を作る。両端の滑らかさと張りの強さを選ぶ。</td></tr>
+          <tr data-command="surface.refit"><td>面を整える</td><td><code>surface.refit</code></td><td>形を許容の内側に保ったまま制御点の少ない面に作り直す。前後の最大のずれと制御点の数を出す。</td></tr>
+          <tr data-command="surface.mirror"><td>対称に写す</td><td><code>surface.mirror</code></td><td>面を対称面(車体の中心など)に写し、境目の折れ目を測る。</td></tr>
+          <tr data-command="surface.iso_curves"><td>U/V 線を取り出す</td><td><code>surface.iso_curves</code></td><td>面の U/V 方向の線を、ふつうの線として取り出す。</td></tr>
           <tr data-command="guide.revolve"><td>回転体</td><td><code>guide.revolve</code></td><td>断面を軸まわりにロフト。</td></tr>
           <tr data-command="guide.set_method"><td>面の作り方</td><td><code>guide.set_method</code></td><td>役割表の構築方式。</td></tr>
           <tr data-command="guide.add_row"><td>選択を表へ</td><td><code>guide.add_row</code></td><td>新しい鎖の行を作る。</td></tr>

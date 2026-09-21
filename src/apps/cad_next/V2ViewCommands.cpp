@@ -6,6 +6,7 @@
 //! 「見やすくしただけ」のつもりが寸法を変えたことになる。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceEditTool.h"
 #include "V2OperationPanelHost.h"
 
 #include "V2SurfaceDock.h"
@@ -834,6 +835,7 @@ QDockWidget* V2MainWindow::DockForShelf(kachakacha::v2::app::Shelf shelf) const
     case Shelf::Boolean:     return booleanDock_;
     case Shelf::Thicken:     return thickenDock_;
     case Shelf::Array:       return arrayDock_;
+    case Shelf::SurfaceEdit: return surfaceEdit_ != nullptr ? surfaceEdit_->Dock() : nullptr;
     case Shelf::None:        break;
     }
     return nullptr;
@@ -854,7 +856,8 @@ void V2MainWindow::RefreshRightShelves()
     // (オーナー指摘 2026-09-13)。
     drawingDock_->SetTool(session_->CurrentTool());
     const auto wanted = kachakacha::v2::app::ShelvesFor(mode_, session_->CurrentTool(),
-        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thickenShelfShown_);
+        extrudeShelfShown_, surfaceShelfShown_, booleanShelfShown_, thickenShelfShown_,
+        surfaceEdit_ != nullptr && surfaceEdit_->Active());
     if (operationHost_ != nullptr) {
         operationHost_->SetShelves(wanted);
     }

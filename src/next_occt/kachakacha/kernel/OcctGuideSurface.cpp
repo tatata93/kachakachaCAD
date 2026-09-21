@@ -296,6 +296,17 @@ constexpr int kNetworkPointsPerChain = 9;
                     addedBoundary = true;
                 }
             }
+            // 面が必ず通る線(外周の内側に引いた線)。境界ではない拘束として足す。
+            // 通ったかどうかは、作ったあとで MeasureDeviation が測って判定する。
+            for (const std::size_t index : IndicesWithRole(request, ChainRole::GuideU)) {
+                for (const auto& segment : request.chains[index].segments) {
+                    auto edge = ToEdge(segment);
+                    if (!edge.HasValue()) {
+                        return Out::Failure(edge.Diagnostics());
+                    }
+                    filler.Add(edge.Value(), GeomAbs_C0, Standard_False);
+                }
+            }
         } else {
             // 曲線網。外周になる線を境界として、残りは点で拘束する。
             // OCCT に Gordon 面は無い。だから作ったあとで必ず測り、

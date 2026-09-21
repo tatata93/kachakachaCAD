@@ -280,6 +280,9 @@ std::string_view SurfaceSlotNameJa(GuideSurfaceMethod method, ChainRole role) no
     if (method == GuideSurfaceMethod::Revolve && role == ChainRole::GuideU) {
         return "軸";
     }
+    if (method == GuideSurfaceMethod::BoundaryFill && role == ChainRole::GuideU) {
+        return "通る線";
+    }
     return SurfaceSlotNameJa(role);
 }
 
@@ -355,7 +358,10 @@ std::vector<SurfaceSlotView> SurfaceSlotsFor(const SurfaceInputState& state)
             // **この作り方では使わない。入っていても捨てない。**
             view.state = SurfaceSlotState::NotUsedByMethod;
         } else {
+            const bool optional = state.method == GuideSurfaceMethod::BoundaryFill
+                && slot == ChainRole::GuideU;
             view.state = view.count > 0 ? SurfaceSlotState::Used
+                : optional              ? SurfaceSlotState::Optional
                                         : SurfaceSlotState::Missing;
         }
         views.push_back(view);

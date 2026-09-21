@@ -40,6 +40,8 @@ enum class SurfaceSlotState {
     Missing,
     //! この作り方では使わない。**入っていても捨てない。**
     NotUsedByMethod,
+    //! 使ってもよい。まだ入っていないが、無くても作れる(境界面の「通る線」)。
+    Optional,
 };
 
 //! 画面の1欄ぶん。

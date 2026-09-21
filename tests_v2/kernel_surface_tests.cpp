@@ -9,6 +9,7 @@
 
 #ifdef KACHACAD_V2_WITH_OCCT
 #include "kachakacha/kernel/OcctCurveConversion.h"
+#include "kachakacha/geometry/ArcBuilders.h"
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <Geom_Hyperbola.hxx>
@@ -598,6 +599,33 @@ KACHA_V2_TEST(kernel_fill, 非平面の5辺でも分割せず1枚を張る)
     const auto built = Build(request);
     Require(built.HasValue(), "5辺を三角分割せず面にできること");
     Require(built.Value().maximumDeviationMm <= 1.0e-3, "5辺すべてを通ること");
+}
+
+KACHA_V2_TEST(kernel_fill, 外周の内側に引いた線を面が必ず通る)
+{
+    // オーナー方針 2026-09-22:人が引いたワイヤーは、面が必ずそこを通る線である。
+    // 正方形の外周に、真ん中を上へ膨らむ円弧(20,0,0)→(20,20,8)→(20,40,0) を渡す。
+    GuideSurfaceRequest request;
+    request.method = GuideSurfaceMethod::BoundaryFill;
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 1, {0, 0, 0}, {40, 0, 0}));
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 2, {40, 0, 0}, {40, 40, 0}));
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 3, {40, 40, 0}, {0, 40, 0}));
+    request.chains.push_back(OpenLine(ChainRole::BoundarySide, 4, {0, 40, 0}, {0, 0, 0}));
+    const auto arc = kachakacha::v2::geometry::ArcThroughThreePoints({20, 0, 0},
+        {20, 20, 8}, {20, 40, 0});
+    Require(arc.HasValue(), "円弧が作れること");
+    GuideChain through;
+    through.role = ChainRole::GuideU;
+    through.index = 5;
+    through.closed = false;
+    through.segments = {arc.Value()};
+    request.chains.push_back(through);
+    const auto built = Build(request);
+    Require(built.HasValue(), "外周と通る線から面が出来ること");
+    Require(built.Value().maximumDeviationMm <= 1.0e-2,
+        "外周も内側の円弧も通っている(実際 "
+            + std::to_string(built.Value().maximumDeviationMm) + " mm)");
+    Require(built.Value().areaMm2 > 40.0 * 40.0 + 1.0, "平らではなく膨らんでいる");
 }
 
 // =====================================================================

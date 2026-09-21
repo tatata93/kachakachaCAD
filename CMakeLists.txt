@@ -598,6 +598,7 @@ add_library(kachakacha_v2_core STATIC
     src/next/kachakacha/app/ProcessSteps.cpp
     src/next/kachakacha/app/CursorInputSolve.cpp
     src/next/kachakacha/app/DirectWireEntry.cpp
+    src/next/kachakacha/app/OuterLoopSplit.cpp
     src/next/kachakacha/app/IntersectionPoints.cpp
     src/next/kachakacha/app/EntityEdit.cpp
     src/next/kachakacha/app/RevolveSurface.cpp
@@ -1017,6 +1018,7 @@ if(KACHACAD_BUILD_QT_APP AND TARGET Qt6::Widgets)
         src/apps/cad_next/V2UiShotStatesResponsive.cpp
         src/apps/cad_next/V2SelfTestResponsive.cpp
         src/apps/cad_next/V2SelfTestDrawingAccuracy.cpp
+        src/apps/cad_next/V2SelfTestBoundaryFill.cpp
         src/apps/cad_next/V2PatternDock.cpp
         src/apps/cad_next/V2ShapeViews.cpp
         src/apps/cad_next/V2Shelves.cpp

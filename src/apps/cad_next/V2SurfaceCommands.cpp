@@ -10,6 +10,7 @@
 #include "V2Viewport.h"
 
 #include "kachakacha/app/GuideTableBuild.h"
+#include "kachakacha/app/OuterLoopSplit.h"
 #include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/app/SurfaceInputState.h"
@@ -437,8 +438,12 @@ V2MainWindow::SurfaceTableFromInput() const
                     selections.push_back(*selected);
                 }
             }
-            const auto combined = kachakacha::v2::app::AddSelectionsAsConnectedRow(table,
-                role, selections, session_->GetDocument().Snapshot().settings.tolerance);
+            const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+            // 境界面は、外周の輪と面が必ず通る線へ分ける(オーナー方針 2026-09-22)。
+            const auto combined = surfaceInput_.method == GuideSurfaceMethod::BoundaryFill
+                ? kachakacha::v2::app::AddBoundaryFillRows(table, selections, tolerance)
+                : kachakacha::v2::app::AddSelectionsAsConnectedRow(table, role, selections,
+                      tolerance);
             if (!combined.HasValue()) {
                 return Out::Failure(combined.Diagnostics());
             }

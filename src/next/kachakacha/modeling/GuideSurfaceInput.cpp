@@ -734,6 +734,9 @@ struct SampledChain {
     std::vector<Diagnostic> errors;
     std::size_t edgeCount = 0;
     for (std::size_t index = 0; index < request.chains.size(); ++index) {
+        if (request.chains[index].role == ChainRole::GuideU) {
+            continue;   // 面が通るだけの線。輪には入れず、面を作るときに拘束する
+        }
         if (request.chains[index].role != ChainRole::BoundarySide) {
             errors.push_back(MakeError(kBadInput, "境界の辺以外が混ざっています。",
                 ChainLabel(request.chains[index])));

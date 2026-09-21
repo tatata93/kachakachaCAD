@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QString>
+#include <QStringList>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -274,14 +275,9 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
 
     // 2. 入力。使わない役割は「この方式では不要」と出し、選ぶ先にもさせない。
     const auto joined = [](const std::vector<QString>& list) {
-        QString text;
-        for (const QString& name : list) {
-            if (!text.isEmpty()) {
-                text += QStringLiteral(", ");
-            }
-            text += name;
-        }
-        return text;
+        QStringList parts;
+        for (const QString& name : list) { parts << name; }
+        return parts.join(QStringLiteral(", "));
     };
     const auto fill = [&](ChainRole role, QLabel* value, QPushButton* arm, QPushButton* clear,
                           const std::vector<QString>& entryNames) {
@@ -301,10 +297,11 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
                 return;
             }
             arm->setEnabled(true);
-            if (view.count == 0) {
-                value->setText(state.activeSlot == role
-                        ? QStringLiteral("(3D で押してください)")
-                        : QStringLiteral("(選んでいません)"));
+            if (view.count == 0) {   // 任意の欄(境界面の「通る線」)は無くても作れる
+                value->setText(view.state == SurfaceSlotState::Optional
+                        ? QStringLiteral("(任意) 面が必ず通る線。境界に全部入れても自動で分けます")
+                        : state.activeSlot == role ? QStringLiteral("(3D で押してください)")
+                                                   : QStringLiteral("(選んでいません)"));
                 return;
             }
             if (role == ChainRole::BoundarySide
@@ -312,8 +309,10 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
                     || state.method == GuideSurfaceMethod::BoundaryFill)
                 && view.count > 1) {
                 value->setText(previewShown
-                        ? QStringLiteral("%1本 → 1つの閉じた輪郭")
-                              .arg(static_cast<int>(view.count))
+                        ? QStringLiteral("%1本 → %2").arg(static_cast<int>(view.count)).arg(
+                              state.method == GuideSurfaceMethod::BoundaryFill
+                                  ? QStringLiteral("外周の輪と、面が通る線")
+                                  : QStringLiteral("1つの閉じた輪郭"))
                         : QStringLiteral("%1本（端点のつながりを確認中）")
                               .arg(static_cast<int>(view.count)));
             } else {

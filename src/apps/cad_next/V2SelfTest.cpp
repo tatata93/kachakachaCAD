@@ -129,6 +129,8 @@ namespace {
     cases.insert(cases.end(), responsive.begin(), responsive.end());
     const std::vector<SelfTestCase> accuracy = DrawingAccuracyCases();
     cases.insert(cases.end(), accuracy.begin(), accuracy.end());
+    const std::vector<SelfTestCase> boundaryFill = BoundaryFillCases();
+    cases.insert(cases.end(), boundaryFill.begin(), boundaryFill.end());
     return cases;
 }
 

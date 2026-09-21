@@ -62,7 +62,9 @@ const std::vector<ChainRole>& RolesForMethod(GuideSurfaceMethod method)
     static const std::vector<ChainRole> sections{ChainRole::Section};
     static const std::vector<ChainRole> guided{ChainRole::Section, ChainRole::GuideU};
     static const std::vector<ChainRole> gordon{ChainRole::GuideU, ChainRole::GuideV};
-    static const std::vector<ChainRole> fill{ChainRole::BoundarySide};
+    // 境界埋めの GuideU は「面が必ず通る線」(外周の内側に引いた線)。無くてもよい。
+    // 人が引いたワイヤーは面がそこを通る線である(オーナー方針 2026-09-22)。
+    static const std::vector<ChainRole> fill{ChainRole::BoundarySide, ChainRole::GuideU};
     static const std::vector<ChainRole> offset{ChainRole::SourceSurface};
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary: return planar;

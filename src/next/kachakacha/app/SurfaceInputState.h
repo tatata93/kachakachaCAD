@@ -66,6 +66,10 @@ struct SurfaceInputState {
     std::vector<base::EntityId> sourceSurfaces;
     //! 中心線(ロフトのとき、0〜1 本)。
     std::vector<base::EntityId> centerlines;
+    //! 人が「向き反転」を押した線。表へ入れるときに逆向きにする。
+    std::vector<base::EntityId> reversed;
+    //! 四辺面の張り方。
+    modeling::FourEdgeStyle fourEdgeStyle = modeling::FourEdgeStyle::Coons;
     SurfaceOrdering ordering = SurfaceOrdering::Auto;
     //! 手動固定のときの並び。空なら `sections` の並びをそのまま使う。
     std::vector<base::EntityId> explicitOrder;
@@ -231,6 +235,27 @@ inline constexpr int kSurfaceSlotCount = 4;
 //! 回転体は断面1本と軸1本で、断面が入ったら次は軸に決まっている。人に「ここへ選ぶ」を
 //! 押させずに進める(足す引くの 土台 → 相手 と同じ自動遷移)。他の作り方では欄を動かさない。
 [[nodiscard]] SurfaceInputState WithSurfaceSlotAdvanced(const SurfaceInputState& state);
+
+//! その線の「向き反転」を切り替える。入っていない線は変えない。
+[[nodiscard]] SurfaceInputState WithEntryReversedToggled(const SurfaceInputState& state,
+    const base::EntityId& id);
+
+//! 向きを反転してある線か。
+[[nodiscard]] bool SurfaceEntryReversed(const SurfaceInputState& state,
+    const base::EntityId& id) noexcept;
+
+//! その欄で「向き反転」を使えるか(断面、曲線網の U/V)。
+[[nodiscard]] bool SurfaceSlotFlippable(modeling::GuideSurfaceMethod method,
+    modeling::ChainRole slot) noexcept;
+
+//! 一括になるか: 1 回の生成が 1 つしか受けない役割に、2 つ以上入っている
+//! (離した面の元の面、回転体の断面)。そのときは 1 つずつ別に作る。
+[[nodiscard]] bool SurfaceIsBatch(const SurfaceInputState& state) noexcept;
+
+//! 一括のとき、1 つずつに分けた入力。一括でなければ元の 1 つだけ。
+//! **どの入力も捨てない**(分けた全部を作る)。
+[[nodiscard]] std::vector<SurfaceInputState> SurfaceBatchStates(
+    const SurfaceInputState& state);
 
 //! 役割の名前。画面の欄の見出しと同じ言葉を使う。
 [[nodiscard]] std::string_view SurfaceSlotNameJa(modeling::ChainRole role) noexcept;

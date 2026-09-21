@@ -606,7 +606,8 @@ KACHA_V2_TEST(guideSurface, ガイドを逆向きに引いただけなら受け�
         {{0, 0, 0}, {0, 20, 2}, {0, 40, 0}}));
     request.chains.push_back(OpenPath(ChainRole::Section, 2,
         {{100, 0, 0}, {100, 20, 2}, {100, 40, 0}}));
-    Accept(request, "ガイドの向きが逆");
+    const auto accepted = Accept(request, "ガイドの向きが逆");
+    Require(accepted.Value().sectionOrdering.chainIndices.size() == 2, "断面2本とも使う");
 }
 
 KACHA_V2_TEST(guideSurface, 断面の交差順がガイドで食い違えば断る)

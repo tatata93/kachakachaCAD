@@ -77,6 +77,22 @@ kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable> AddRegionBoun
     return Out::Success(std::move(next));
 }
 
+//! 人が「向き反転」を押した線は、表の行を逆向きにする(ReverseRow は向きの印も持つ)。
+[[nodiscard]] kachakacha::v2::modeling::GuideTable WithReversedRows(
+    kachakacha::v2::modeling::GuideTable table, const kachakacha::v2::app::SurfaceInputState& input)
+{
+    for (std::size_t row = 0; row < table.rows.size(); ++row) {
+        const auto& ids = table.rows[row].sourceWireIds;
+        if (ids.size() == 1 && kachakacha::v2::app::SurfaceEntryReversed(input, ids.front())) {
+            const auto flipped = kachakacha::v2::modeling::ReverseRow(table, row);
+            if (flipped.HasValue()) {
+                table = flipped.Value();
+            }
+        }
+    }
+    return table;
+}
+
 } // namespace
 
 //! 選んだものから分かる事実。作り方を薦めるのに使う。
@@ -170,6 +186,9 @@ void V2MainWindow::RefreshSurfaceDock()
     for (const auto& id : surfaceInput_.guides) {
         names.guides.push_back(nameOf(id));
     }
+    for (const auto& id : surfaceInput_.centerlines) {
+        names.centerlines.push_back(nameOf(id));
+    }
     for (const auto& id : surfaceInput_.boundaries) {
         names.boundaries.push_back(nameOf(id));
     }
@@ -177,13 +196,24 @@ void V2MainWindow::RefreshSurfaceDock()
     // **近づけて作る面は線の上に乗っていない。**知らずに板取りへ進むと、
     // 紙とプラ板を切ってから気づくことになる。
     QString deviation;
+    QString solver;
     if (surfaceSnapshot_.has_value()) {
-        const auto note = kachakacha::v2::modeling::SurfaceDeviationNoteJa(
-            surfaceInput_.method, surfaceSnapshot_->built.maximumDeviationMm,
-            session_->GetDocument().Snapshot().settings.tolerance);
+        const auto request = kachakacha::v2::modeling::ToGuideSurfaceRequest(
+            surfaceSnapshot_->table, session_->GetDocument().Snapshot().settings.tolerance);
+        const auto note = request.HasValue()
+            ? kachakacha::v2::modeling::SurfaceDeviationNoteJa(request.Value(),
+                  surfaceSnapshot_->built.maximumDeviationMm,
+                  session_->GetDocument().Snapshot().settings.tolerance)
+            : std::string();
         deviation = QString::fromStdString(note);
+        solver = QString::fromStdString(surfaceSolverNote_);
+        if (!surfaceSnapshot_->batch.empty()) {
+            solver += QStringLiteral("(%1 個に分けて、1 つずつ作ります)")
+                          .arg(static_cast<int>(surfaceSnapshot_->batch.size()) + 1);
+        }
     }
-    surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value(), deviation);
+    surfaceDock_->ShowInput(surfaceInput_, names, surfaceSnapshot_.has_value(), deviation,
+        solver);
     // 一番下の一行(正本の footer)。**まだ文書に入っていないこと**も、ここで言う。
     ShowToolFooter(surfaceShelfShown_
             ? QString::fromUtf8(kachakacha::v2::app::SurfaceFooterLine(surfaceInput_,
@@ -198,29 +228,45 @@ void V2MainWindow::RefreshSurfaceDock()
 void V2MainWindow::RefreshSurfacePreview()
 {
     surfaceSnapshot_.reset();
+    surfaceSolverNote_.clear();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
     }
     if (!surfaceShelfShown_ || !kachakacha::v2::app::SurfaceReadyToBuild(surfaceInput_)) {
         return;
     }
-    const auto table = SurfaceTableFromInput();
-    if (!table.HasValue()) {
-        return;   // まだ足りない。棚の「4. 状態」が理由を出している。
+    // 一括(離した面の元の面が複数、回転体の断面が複数)は 1 つずつに分けて全部作る。
+    // **どれか 1 つでも作れなければ、下見を出さない**(半分だけ作れたことにしない)。
+    std::optional<SurfaceSnapshot> snapshot;
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
+    for (const auto& part : kachakacha::v2::app::SurfaceBatchStates(surfaceInput_)) {
+        const auto table = SurfaceTableFromInput(part);
+        if (!table.HasValue()) {
+            return;   // まだ足りない。棚の「4. 状態」が理由を出している。
+        }
+        // ここでは断りを出さない。入れている途中はまだ作れなくて当たり前で、
+        // そのたびに赤い字を出すと、何が本当の失敗か分からなくなる。
+        const auto built = BuildSurfaceFromTable(table.Value(), false);
+        if (!built.has_value()) {
+            return;
+        }
+        const auto preview = kachakacha::v2::app::SurfacePreviewLines(built->samples,
+            built->boundary);
+        lines.insert(lines.end(), preview.begin(), preview.end());
+        if (!snapshot.has_value()) {
+            snapshot = SurfaceSnapshot{table.Value(), *built, {}};
+        } else {
+            snapshot->batch.emplace_back(table.Value(), *built);
+        }
     }
-    // ここでは断りを出さない。入れている途中はまだ作れなくて当たり前で、
-    // そのたびに赤い字を出すと、何が本当の失敗か分からなくなる。
-    const auto built = BuildSurfaceFromTable(table.Value(), false);
-    if (!built.has_value()) {
-        return;
-    }
-    surfaceSnapshot_ = SurfaceSnapshot{table.Value(), *built};
+    surfaceSnapshot_ = snapshot;
     // 採用した断面の並びを状態へ書き戻す。画面の「3. 断面順」と 3D の札は、
     // 押した順ではなく **この順** を出す。手動固定なら渡した順がそのまま返ってくる。
-    surfaceInput_.adoptedOrder = surfaceAdoptedSections_;
-    if (viewport_ != nullptr) {
-        viewport_->ShowToolPreview(kachakacha::v2::app::SurfacePreviewLines(
-            built->samples, built->boundary));
+    if (surfaceSnapshot_.has_value() && surfaceSnapshot_->batch.empty()) {
+        surfaceInput_.adoptedOrder = surfaceAdoptedSections_;
+    }
+    if (viewport_ != nullptr && surfaceSnapshot_.has_value()) {
+        viewport_->ShowToolPreview(lines);
     }
 }
 
@@ -362,14 +408,22 @@ void V2MainWindow::EndSurfacePreview()
 kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>
 V2MainWindow::SurfaceTableFromInput() const
 {
+    return SurfaceTableFromInput(surfaceInput_);
+}
+
+kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>
+V2MainWindow::SurfaceTableFromInput(
+    const kachakacha::v2::app::SurfaceInputState& input) const
+{
     using Out = kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>;
     kachakacha::v2::modeling::GuideTable table;
-    table.method = surfaceInput_.method;
+    table.method = input.method;
     // 手動固定は要求までそのまま渡す。カーネルに並べ替えさせない。
-    table.lockSectionOrder = surfaceInput_.ordering == SurfaceOrdering::ManualLock;
-    if (surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary) {
+    table.lockSectionOrder = input.ordering == SurfaceOrdering::ManualLock;
+    table.fourEdgeStyle = input.fourEdgeStyle;
+    if (input.method == GuideSurfaceMethod::PlanarBoundary) {
         const auto regions = kachakacha::v2::app::DetectProfileRegions(session_->Scene(),
-            surfaceInput_.boundaries,
+            input.boundaries,
             session_->GetDocument().Snapshot().settings.tolerance);
         if (!regions.empty()) {
             for (const auto& region : regions) {
@@ -395,8 +449,8 @@ V2MainWindow::SurfaceTableFromInput() const
                              const std::vector<kachakacha::v2::base::EntityId>& ids) {
         table = WithRowsAdded(std::move(table), role, ids);
     };
-    if (surfaceInput_.method == GuideSurfaceMethod::OffsetGuide) {
-        for (const auto& id : surfaceInput_.sourceSurfaces) {
+    if (input.method == GuideSurfaceMethod::OffsetGuide) {
+        for (const auto& id : input.sourceSurfaces) {
             const auto* entity = session_->GetDocument().FindEntity(id);
             const auto added = kachakacha::v2::modeling::AddSourceSurfaceRow(table, id,
                 entity == nullptr ? std::string("面") : entity->displayName);
@@ -407,18 +461,18 @@ V2MainWindow::SurfaceTableFromInput() const
     }
     // **画面の3つの欄を、1欄につき1回だけ表へ移す。**
     // 役割ごとに回すと、平面(外形+穴)や曲線網(U+V)で同じ線が二度入る。
-    for (int index = 0; index < 3; ++index) {
+    for (int index = 0; index < kachakacha::v2::app::kSurfaceSlotCount; ++index) {
         const ChainRole slot = kachakacha::v2::app::SurfaceSlotKey(index);
         ChainRole role = slot;
-        if (!kachakacha::v2::app::RoleForSurfaceSlot(surfaceInput_.method, slot, role)) {
+        if (!kachakacha::v2::app::RoleForSurfaceSlot(input.method, slot, role)) {
             continue;   // この作り方では使わない欄。入っていても渡さない。
         }
         if (slot == ChainRole::Section) {
             // **画面に出ている順のまま渡す**(§13 の手動固定)。
-            addRows(role, kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_));
+            addRows(role, kachakacha::v2::app::SurfaceSectionOrder(input));
             continue;
         }
-        if (surfaceInput_.method == GuideSurfaceMethod::Revolve && slot == ChainRole::GuideU) {
+        if (input.method == GuideSurfaceMethod::Revolve && slot == ChainRole::GuideU) {
             // 回転体の「軸」。表の行にはせず、軸の点と向きと角度へ直す(guide.revolve と同じ道)。
             const auto axis = RevolveAxisFromInput();
             if (!axis.HasValue()) {
@@ -427,11 +481,11 @@ V2MainWindow::SurfaceTableFromInput() const
             table = WithRevolveAxis(std::move(table), axis.Value());
             continue;
         }
-        if ((surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary
-                || surfaceInput_.method == GuideSurfaceMethod::BoundaryFill)
-            && slot == ChainRole::BoundarySide && surfaceInput_.boundaries.size() > 1) {
+        if ((input.method == GuideSurfaceMethod::PlanarBoundary
+                || input.method == GuideSurfaceMethod::BoundaryFill)
+            && slot == ChainRole::BoundarySide && input.boundaries.size() > 1) {
             std::vector<kachakacha::v2::modeling::GuideTableSelection> selections;
-            for (const auto& id : surfaceInput_.boundaries) {
+            for (const auto& id : input.boundaries) {
                 const auto selected = kachakacha::v2::app::GuideSelectionOf(
                     session_->GetDocument(), session_->Scene(), id);
                 if (selected.has_value()) {
@@ -440,7 +494,7 @@ V2MainWindow::SurfaceTableFromInput() const
             }
             const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
             // 境界面は、外周の輪と面が必ず通る線へ分ける(オーナー方針 2026-09-22)。
-            const auto combined = surfaceInput_.method == GuideSurfaceMethod::BoundaryFill
+            const auto combined = input.method == GuideSurfaceMethod::BoundaryFill
                 ? kachakacha::v2::app::AddBoundaryFillRows(table, selections, tolerance)
                 : kachakacha::v2::app::AddSelectionsAsConnectedRow(table, role, selections,
                       tolerance);
@@ -450,12 +504,13 @@ V2MainWindow::SurfaceTableFromInput() const
             table = combined.Value();
             continue;
         }
-        addRows(role, kachakacha::v2::app::SurfaceSlotEntries(surfaceInput_, slot));
+        addRows(role, kachakacha::v2::app::SurfaceSlotEntries(input, slot));
     }
     if (table.rows.empty()) {
         return Out::Failure(kachakacha::v2::base::MakeError("UI-R004",
             "面を作るものが入っていません。", "断面か境界を選んで「追加」を押してください。"));
     }
+    table = WithReversedRows(std::move(table), input);
     return Out::Success(std::move(table));
 }
 
@@ -513,7 +568,29 @@ void V2MainWindow::ConfirmSurface()
     for (const auto& id : surfaceInput_.boundaries) {
         inputs.push_back(id);
     }
-    const auto surfaceId = AdoptGuideSurface(snapshot.table, snapshot.built, inputs, "面");
+    for (const auto& id : surfaceInput_.centerlines) {
+        inputs.push_back(id);
+    }
+    // 一括は 1 回の取り消しで全部戻るようにまとめる(配列の道具と同じ)。
+    const bool batch = !snapshot.batch.empty();
+    if (batch) {
+        session_->GetDocument().BeginCompound("面を作る(一括)");
+    }
+    auto surfaceId = AdoptGuideSurface(snapshot.table, snapshot.built, inputs, "面");
+    for (const auto& [table, built] : snapshot.batch) {
+        if (surfaceId.IsNil()) {
+            break;
+        }
+        surfaceId = AdoptGuideSurface(table, built, inputs, "面");
+    }
+    if (batch) {
+        // 1 つでも作れなければ全部取り消す。半分だけ作れたことにしない。
+        if (surfaceId.IsNil()) {
+            session_->GetDocument().AbortCompound();
+        } else {
+            session_->GetDocument().EndCompound();
+        }
+    }
     if (surfaceId.IsNil()) {
         return;
     }

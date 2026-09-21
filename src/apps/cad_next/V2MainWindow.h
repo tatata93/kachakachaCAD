@@ -251,6 +251,8 @@ public:
     //! 入力から表を組み立てる。**作る直前の1回だけ。**
     [[nodiscard]] kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>
     SurfaceTableFromInput() const;
+    [[nodiscard]] kachakacha::v2::base::Result<kachakacha::v2::modeling::GuideTable>
+    SurfaceTableFromInput(const kachakacha::v2::app::SurfaceInputState& input) const;
     //! 「面を作る」の棚。試験から見る。
     [[nodiscard]] V2SurfaceDock& SurfaceDock() { return *surfaceDock_; }
     [[nodiscard]] V2BooleanDock& BooleanDock() { return *booleanDock_; }
@@ -1008,6 +1010,7 @@ private:
     std::vector<kachakacha::v2::base::EntityId> surfaceMirror_;
     //! 直近の検査が採用した断面の並び(元のワイヤーの番号)。BuildSurfaceFromTable が書く。
     std::vector<kachakacha::v2::base::EntityId> surfaceAdoptedSections_;
+    std::string surfaceSolverNote_;   // 検査が決めた作り方の内訳(棚に出す)
     //! 「近似」の道具。対象・候補・結果。確定するまで文書へは入らない。
     bool approxShelfShown_ = false;
     kachakacha::v2::app::ApproxInputState approxInput_;
@@ -1043,6 +1046,7 @@ private:
     struct SurfaceSnapshot {
         kachakacha::v2::modeling::GuideTable table;
         kachakacha::v2::modeling::GuideSurfaceResult built;
+        std::vector<std::pair<kachakacha::v2::modeling::GuideTable, kachakacha::v2::modeling::GuideSurfaceResult>> batch;   // 一括の 2 つ目以降
     };
     std::optional<SurfaceSnapshot> surfaceSnapshot_;
     V2SurfaceDock* surfaceDock_ = nullptr;
@@ -1413,6 +1417,7 @@ private:
     void BuildOutputShelves();
     //! 「厚み」の棚の組み立て。BuildOutputShelves から切り出した(1関数100行の門)。
     void BuildThickenDock();
+    void BuildSurfaceDock();
     //! 一覧を絞り込む(V1 の「名前・種類で絞り込み」)。残すかどうかは core が決める。
     void ApplyEntityTreeFilter();
     //! 絞り込みの語を入れる(試験用)。人が打ったのと同じ道を通る。

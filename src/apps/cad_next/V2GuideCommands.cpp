@@ -24,6 +24,7 @@
 #include "kachakacha/kernel/OcctGuideSurface.h"
 #include "kachakacha/modeling/GuideSurfaceInput.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
+#include "kachakacha/modeling/SurfaceCardinality.h"
 
 #include <QString>
 
@@ -199,6 +200,9 @@ std::optional<kachakacha::v2::modeling::GuideSurfaceResult> V2MainWindow::BuildS
     // 押した順ではなく、**実際に作る順**を見せる(引継ぎ 2026-09-17 の 2)。
     surfaceAdoptedSections_ = kachakacha::v2::modeling::AdoptedSectionSources(
         request.Value(), analysis.Value());
+    // 作り方の内訳(ロフトならガイドの本数と使い方)。棚に言葉で出す。
+    surfaceSolverNote_ = kachakacha::v2::modeling::SurfaceSolverNoteJa(request.Value(),
+        analysis.Value());
     // 離した面は、元の面の実体が要る。表が指す形状ガイドの handle を渡す。
     kachakacha::v2::modeling::KernelShapeHandle source;
     for (const auto& row : table.rows) {

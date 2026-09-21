@@ -26,6 +26,7 @@ namespace {
 using kachakacha::v2::app::SurfaceOrdering;
 using kachakacha::v2::app::SurfaceSlotState;
 using kachakacha::v2::modeling::ChainRole;
+using kachakacha::v2::modeling::FourEdgeStyle;
 using kachakacha::v2::modeling::GuideSurfaceMethod;
 
 [[nodiscard]] QString Text(std::string_view value)
@@ -33,18 +34,19 @@ using kachakacha::v2::modeling::GuideSurfaceMethod;
     return QString::fromUtf8(std::string(value).c_str());
 }
 
-//! その方式の一言。正本のカードの下段に当たる。
+//! その方式の一言。正本のカードの下段に当たる。個数は個数の約束(SurfaceCardinality)と同じ。
 [[nodiscard]] QString MethodHintJa(GuideSurfaceMethod method)
 {
     switch (method) {
     case GuideSurfaceMethod::PlanarBoundary: return QStringLiteral("閉じた輪郭（複数線可）");
-    case GuideSurfaceMethod::RuledSections:  return QStringLiteral("断面2本");
-    case GuideSurfaceMethod::LoftSections:   return QStringLiteral("断面3本以上");
-    case GuideSurfaceMethod::GuidedLoft:     return QStringLiteral("断面 + ガイド");
-    case GuideSurfaceMethod::BoundaryFill:   return QStringLiteral("非平面の閉じた輪郭（複数線可）");
-    case GuideSurfaceMethod::GordonNetwork:  return QStringLiteral("U/Vネットワーク");
-    case GuideSurfaceMethod::OffsetGuide:    return QStringLiteral("面を離す");
-    case GuideSurfaceMethod::Revolve:        return QStringLiteral("断面を回す");
+    case GuideSurfaceMethod::RuledSections:  return QStringLiteral("断面2本〜");
+    case GuideSurfaceMethod::LoftSections:   return QStringLiteral("断面2本〜 + ガイド・中心線(任意)");
+    case GuideSurfaceMethod::GuidedLoft:     return QStringLiteral("断面 + ガイド1本〜");
+    case GuideSurfaceMethod::BoundaryFill:   return QStringLiteral("外周の輪 + 通る線(任意)");
+    case GuideSurfaceMethod::GordonNetwork:  return QStringLiteral("U 2本〜 × V 2本〜");
+    case GuideSurfaceMethod::OffsetGuide:    return QStringLiteral("面を離す(何枚でも)");
+    case GuideSurfaceMethod::Revolve:        return QStringLiteral("断面を回す(何本でも)");
+    case GuideSurfaceMethod::FourEdgePatch:  return QStringLiteral("4辺 + 通る線(任意)");
     }
     return QString();
 }
@@ -88,47 +90,96 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
     layout->addWidget(otherMethods_);
 }
 
+void V2SurfaceDock::BuildSlotRow(QVBoxLayout* layout, int index)
+{
+    SlotRow& row = slots_[static_cast<std::size_t>(index)];
+    const ChainRole role = kachakacha::v2::app::SurfaceSlotKey(index);
+    row.key = role;
+    auto* head = new QHBoxLayout();
+    row.title = new QLabel(Text(kachakacha::v2::app::SurfaceSlotNameJa(role)), widget());
+    head->addWidget(row.title);
+    row.value = new QLabel(widget());
+    row.value->setWordWrap(true);
+    head->addWidget(row.value, 1);
+    row.arm = new QPushButton(QStringLiteral("ここへ選ぶ"), widget());
+    row.arm->setCheckable(true);
+    row.arm->setToolTip(QStringLiteral("以後の 3D のクリックがこの欄へ入ります(もう一度押すと外れます)"));
+    QObject::connect(row.arm, &QPushButton::clicked, this, [this, role] {
+        if (!loading_ && activateHandler_) {
+            activateHandler_(role);
+        }
+    });
+    head->addWidget(row.arm);
+    row.clear = new QPushButton(QStringLiteral("解除"), widget());
+    row.clear->setToolTip(QStringLiteral("この欄を空にします"));
+    QObject::connect(row.clear, &QPushButton::clicked, this, [this, role] {
+        if (!loading_ && clearHandler_) {
+            clearHandler_(role);
+        }
+    });
+    head->addWidget(row.clear);
+    layout->addLayout(head);
+    // 可変長の一覧(「ガイド1」「ガイド2」のような固定欄にしない)。
+    row.list = new QTreeWidget(widget());
+    row.list->setColumnCount(2);
+    row.list->setHeaderHidden(true);
+    row.list->setRootIsDecorated(false);
+    row.list->setMaximumHeight(110);
+    layout->addWidget(row.list);
+    auto* actions = new QHBoxLayout();
+    const auto current = [this, index] {
+        const QTreeWidget* list = slots_[static_cast<std::size_t>(index)].list;
+        return list == nullptr || list->currentItem() == nullptr
+            ? -1 : list->indexOfTopLevelItem(list->currentItem());
+    };
+    row.remove = new QPushButton(QStringLiteral("× 外す"), widget());
+    QObject::connect(row.remove, &QPushButton::clicked, this, [this, role, current] {
+        if (!loading_ && removeEntryHandler_ && current() >= 0) {
+            removeEntryHandler_(role, current());
+        }
+    });
+    actions->addWidget(row.remove);
+    row.flip = new QPushButton(QStringLiteral("向き反転"), widget());
+    QObject::connect(row.flip, &QPushButton::clicked, this, [this, role, current] {
+        if (!loading_ && flipEntryHandler_ && current() >= 0) {
+            flipEntryHandler_(role, current());
+        }
+    });
+    actions->addWidget(row.flip);
+    actions->addStretch(1);
+    layout->addLayout(actions);
+}
+
 void V2SurfaceDock::BuildSlotRows(QVBoxLayout* layout)
 {
-    // 2. 入力。断面 / ガイド / 境界。使わない役割は「この方式では不要」と出す。
+    // 2. 入力。断面 / ガイド / 中心線 / 境界。使わない役割は「この方式では不要」と出す。
     //
     // 欄ごとに「ここへ選ぶ」と「解除」。**3D の次のクリックがどの欄へ入るかは、
     // 押された形の「ここへ選ぶ」でいつも見えている**(引継ぎ 2026-09-17 の 1)。
-    // 1本ずつ外すのは 3D でもう一度押す。欄ごと空にするのが「解除」。
+    // 1本ずつ外すのは 3D でもう一度押すか、一覧の行を選んで「× 外す」。
     layout->addWidget(new QLabel(QStringLiteral("2. 入力"), widget()));
-    const auto row = [this, layout](const QString& name, QLabel** value, QPushButton** arm,
-                         QPushButton** clear, ChainRole role) {
-        auto* line = new QHBoxLayout();
-        auto* title = new QLabel(name, widget());
-        if (role == ChainRole::GuideU) {
-            guideName_ = title;
+    for (int index = 0; index < kachakacha::v2::app::kSurfaceSlotCount; ++index) {
+        BuildSlotRow(layout, index);
+    }
+    // 四辺面の張り方。四辺面のときだけ出す。
+    auto* style = new QHBoxLayout();
+    fourEdgeStyleTitle_ = new QLabel(QStringLiteral("張り方"), widget());
+    style->addWidget(fourEdgeStyleTitle_);
+    fourEdgeStyle_ = new QComboBox(widget());
+    for (const FourEdgeStyle item : {FourEdgeStyle::Coons, FourEdgeStyle::Stretch,
+             FourEdgeStyle::Curved}) {
+        fourEdgeStyle_->addItem(Text(kachakacha::v2::modeling::FourEdgeStyleLabelJa(item)));
+    }
+    QObject::connect(fourEdgeStyle_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (!loading_ && fourEdgeStyleHandler_ && index >= 0 && index <= 2) {
+            fourEdgeStyleHandler_(static_cast<FourEdgeStyle>(index));
         }
-        line->addWidget(title);
-        *value = new QLabel(widget());
-        (*value)->setWordWrap(true);
-        line->addWidget(*value, 1);
-        *arm = new QPushButton(QStringLiteral("ここへ選ぶ"), widget());
-        (*arm)->setCheckable(true);
-        QObject::connect(*arm, &QPushButton::clicked, this, [this, role] {
-            if (!loading_ && activateHandler_) {
-                activateHandler_(role);
-            }
-        });
-        line->addWidget(*arm);
-        *clear = new QPushButton(QStringLiteral("解除"), widget());
-        QObject::connect(*clear, &QPushButton::clicked, this, [this, role] {
-            if (!loading_ && clearHandler_) {
-                clearHandler_(role);
-            }
-        });
-        line->addWidget(*clear);
-        layout->addLayout(line);
-    };
-    row(QStringLiteral("断面"), &sectionValue_, &armSection_, &clearSection_,
-        ChainRole::Section);
-    row(QStringLiteral("ガイド"), &guideValue_, &armGuide_, &clearGuide_, ChainRole::GuideU);
-    row(QStringLiteral("境界"), &boundaryValue_, &armBoundary_, &clearBoundary_,
-        ChainRole::BoundarySide);
+    });
+    style->addWidget(fourEdgeStyle_, 1);
+    layout->addLayout(style);
+    solverNote_ = new QLabel(widget());
+    solverNote_->setWordWrap(true);
+    layout->addWidget(solverNote_);
 }
 
 void V2SurfaceDock::BuildOrderRows(QVBoxLayout* layout)
@@ -248,17 +299,87 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     rootLayout->addLayout(actions);
 }
 
-//! 欄の見出し。回転体では「ガイド」が「軸」になる(欄は増やさない)。
+//! 欄の見出し。作り方で言葉が変わる(回転体の「軸」、境界面の「通る線」、曲線網の U/V)。
 void V2SurfaceDock::RefreshSlotTitles(GuideSurfaceMethod method)
 {
-    if (guideName_ != nullptr) {
-        guideName_->setText(
-            Text(kachakacha::v2::app::SurfaceSlotNameJa(method, ChainRole::GuideU)));
+    for (SlotRow& row : slots_) {
+        if (row.title != nullptr) {
+            row.title->setText(Text(kachakacha::v2::app::SurfaceSlotNameJa(method, row.key)));
+        }
+    }
+}
+
+void V2SurfaceDock::FillSlotRow(SlotRow& row,
+    const kachakacha::v2::app::SurfaceInputState& state, const std::vector<QString>& names,
+    bool previewShown)
+{
+    const auto& entries = kachakacha::v2::app::SurfaceSlotEntries(state, row.key);
+    row.list->clear();
+    for (std::size_t at = 0; at < names.size(); ++at) {
+        auto* item = new QTreeWidgetItem(row.list);
+        item->setText(0, QString::number(static_cast<int>(at) + 1));
+        const bool flipped = at < entries.size()
+            && kachakacha::v2::app::SurfaceEntryReversed(state, entries[at]);
+        item->setText(1, names[at] + (flipped ? QStringLiteral("(逆向き)") : QString()));
+    }
+    for (const auto& view : kachakacha::v2::app::SurfaceSlotsFor(state)) {
+        if (view.role != row.key) {
+            continue;
+        }
+        const bool used = view.state != SurfaceSlotState::NotUsedByMethod;
+        row.arm->setChecked(state.activeSlot == row.key);
+        row.arm->setEnabled(used);
+        row.clear->setEnabled(view.count > 0);
+        row.list->setVisible(used && view.count > 0);
+        row.remove->setVisible(used && view.count > 0);
+        row.flip->setVisible(used && view.count > 0
+            && kachakacha::v2::app::SurfaceSlotFlippable(state.method, row.key));
+        if (!used) {
+            // **入っていても捨てない。**そのことも言う。
+            row.value->setText(view.count > 0
+                    ? QStringLiteral("この方式では不要(%1本は残しています)")
+                          .arg(static_cast<int>(view.count))
+                    : QStringLiteral("この方式では不要"));
+            return;
+        }
+        if (view.count == 0) {
+            row.value->setText(view.state == SurfaceSlotState::Optional
+                    ? (row.key == ChainRole::GuideU
+                              && state.method == GuideSurfaceMethod::BoundaryFill
+                          ? QStringLiteral("(任意) 面が必ず通る線。境界に全部入れても自動で分けます")
+                          : QStringLiteral("(任意) 無くても作れます"))
+                    : state.activeSlot == row.key ? QStringLiteral("(3D で押してください)")
+                                                  : QStringLiteral("(選んでいません)"));
+            return;
+        }
+        if (row.key == ChainRole::BoundarySide
+            && (state.method == GuideSurfaceMethod::PlanarBoundary
+                || state.method == GuideSurfaceMethod::BoundaryFill)
+            && view.count > 1) {
+            row.value->setText(previewShown
+                    ? QStringLiteral("%1本 → %2").arg(static_cast<int>(view.count)).arg(
+                          state.method == GuideSurfaceMethod::BoundaryFill
+                              ? QStringLiteral("外周の輪と、面が通る線")
+                              : QStringLiteral("1つの閉じた輪郭"))
+                    : QStringLiteral("%1本（端点のつながりを確認中）")
+                          .arg(static_cast<int>(view.count)));
+            return;
+        }
+        // **名前を並べる。**本数だけでは、どれが入っているのか分からない。
+        QStringList parts;
+        for (const QString& name : names) {
+            parts << name;
+        }
+        row.value->setText(QStringLiteral("%1本: %2")
+                .arg(static_cast<int>(view.count))
+                .arg(parts.join(QStringLiteral(", "))));
+        return;
     }
 }
 
 void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
-    const SlotNames& names, bool previewShown, const QString& deviationNoteJa)
+    const SlotNames& names, bool previewShown, const QString& deviationNoteJa,
+    const QString& solverNoteJa)
 {
     const std::vector<QString>& sectionNamesJa = names.sections;
     loading_ = true;
@@ -274,61 +395,18 @@ void V2SurfaceDock::ShowInput(const kachakacha::v2::app::SurfaceInputState& stat
     RefreshSlotTitles(state.method);
 
     // 2. 入力。使わない役割は「この方式では不要」と出し、選ぶ先にもさせない。
-    const auto joined = [](const std::vector<QString>& list) {
-        QStringList parts;
-        for (const QString& name : list) { parts << name; }
-        return parts.join(QStringLiteral(", "));
-    };
-    const auto fill = [&](ChainRole role, QLabel* value, QPushButton* arm, QPushButton* clear,
-                          const std::vector<QString>& entryNames) {
-        for (const auto& view : kachakacha::v2::app::SurfaceSlotsFor(state)) {
-            if (view.role != role) {
-                continue;
-            }
-            arm->setChecked(state.activeSlot == role);
-            clear->setEnabled(view.count > 0);
-            if (view.state == SurfaceSlotState::NotUsedByMethod) {
-                // **入っていても捨てない。**そのことも言う。
-                value->setText(view.count > 0
-                        ? QStringLiteral("この方式では不要(%1本は残しています)")
-                              .arg(static_cast<int>(view.count))
-                        : QStringLiteral("この方式では不要"));
-                arm->setEnabled(false);
-                return;
-            }
-            arm->setEnabled(true);
-            if (view.count == 0) {   // 任意の欄(境界面の「通る線」)は無くても作れる
-                value->setText(view.state == SurfaceSlotState::Optional
-                        ? QStringLiteral("(任意) 面が必ず通る線。境界に全部入れても自動で分けます")
-                        : state.activeSlot == role ? QStringLiteral("(3D で押してください)")
-                                                   : QStringLiteral("(選んでいません)"));
-                return;
-            }
-            if (role == ChainRole::BoundarySide
-                && (state.method == GuideSurfaceMethod::PlanarBoundary
-                    || state.method == GuideSurfaceMethod::BoundaryFill)
-                && view.count > 1) {
-                value->setText(previewShown
-                        ? QStringLiteral("%1本 → %2").arg(static_cast<int>(view.count)).arg(
-                              state.method == GuideSurfaceMethod::BoundaryFill
-                                  ? QStringLiteral("外周の輪と、面が通る線")
-                                  : QStringLiteral("1つの閉じた輪郭"))
-                        : QStringLiteral("%1本（端点のつながりを確認中）")
-                              .arg(static_cast<int>(view.count)));
-            } else {
-                // **名前を並べる。**本数だけでは、どれが入っているのか分からない。
-                value->setText(QStringLiteral("%1本: %2")
-                        .arg(static_cast<int>(view.count))
-                        .arg(joined(entryNames)));
-            }
-            return;
-        }
-    };
-    fill(ChainRole::Section, sectionValue_, armSection_, clearSection_, names.sections);
-    fill(ChainRole::GuideU, guideValue_, armGuide_, clearGuide_, names.guides);
-    fill(ChainRole::BoundarySide, boundaryValue_, armBoundary_, clearBoundary_,
-        names.boundaries);
-
+    const std::vector<QString>* lists[] = {&names.sections, &names.guides, &names.centerlines,
+        &names.boundaries};
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+        FillSlotRow(slots_[index], state, *lists[index], previewShown);
+    }
+    const bool fourEdge = state.method == GuideSurfaceMethod::FourEdgePatch;
+    fourEdgeStyleTitle_->setVisible(fourEdge);
+    fourEdgeStyle_->setVisible(fourEdge);
+    fourEdgeStyle_->setCurrentIndex(static_cast<int>(state.fourEdgeStyle));
+    solverNote_->setVisible(!solverNoteJa.isEmpty());
+    solverNote_->setText(solverNoteJa.isEmpty() ? QString()
+                                                : QStringLiteral("作り方の内訳: ") + solverNoteJa);
     // 3. 断面順。**いまの生成順を番号つきで出す。**
     orderAuto_->setChecked(state.ordering == SurfaceOrdering::Auto);
     orderManual_->setChecked(state.ordering == SurfaceOrdering::ManualLock);
@@ -381,6 +459,21 @@ void V2SurfaceDock::SetMoveSectionHandler(std::function<void(int, int)> handler)
     moveSectionHandler_ = std::move(handler);
 }
 
+void V2SurfaceDock::SetRemoveEntryHandler(std::function<void(ChainRole, int)> handler)
+{
+    removeEntryHandler_ = std::move(handler);
+}
+
+void V2SurfaceDock::SetFlipEntryHandler(std::function<void(ChainRole, int)> handler)
+{
+    flipEntryHandler_ = std::move(handler);
+}
+
+void V2SurfaceDock::SetFourEdgeStyleHandler(std::function<void(FourEdgeStyle)> handler)
+{
+    fourEdgeStyleHandler_ = std::move(handler);
+}
+
 void V2SurfaceDock::SetActionHandlers(std::function<void()> confirm,
     std::function<void()> cancel, std::function<void()> reset)
 {
@@ -412,43 +505,91 @@ void V2SurfaceDock::PressMethod(GuideSurfaceMethod method)
     }
 }
 
-namespace {
-
-[[nodiscard]] QPushButton* ButtonFor(ChainRole slot, QPushButton* section, QPushButton* guide,
-    QPushButton* boundary)
+const V2SurfaceDock::SlotRow* V2SurfaceDock::RowFor(ChainRole slot) const
 {
-    switch (slot) {
-    case ChainRole::Section:       return section;
-    case ChainRole::GuideU:
-    case ChainRole::GuideV:        return guide;
-    case ChainRole::BoundarySide:
-    case ChainRole::OuterBoundary:
-    case ChainRole::HoleBoundary:  return boundary;
-    case ChainRole::SourceSurface: break;
+    ChainRole key = slot;
+    if (slot == ChainRole::GuideV) {
+        key = ChainRole::GuideU;
+    } else if (slot == ChainRole::OuterBoundary || slot == ChainRole::HoleBoundary) {
+        key = ChainRole::BoundarySide;
+    }
+    for (const SlotRow& row : slots_) {
+        if (row.key == key) {
+            return &row;
+        }
     }
     return nullptr;
+}
+
+namespace {
+
+//! 見えていて押せるボタンだけを押す。不可視の widget を叩いて通したことにしない。
+[[nodiscard]] bool ClickVisible(QPushButton* button)
+{
+    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+        return false;
+    }
+    button->click();
+    return true;
 }
 
 } // namespace
 
 bool V2SurfaceDock::ClickActivate(ChainRole slot)
 {
-    QPushButton* button = ButtonFor(slot, armSection_, armGuide_, armBoundary_);
-    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
-        return false;   // 見えていない・押せないものは押せない。
-    }
-    button->click();
-    return true;
+    const SlotRow* row = RowFor(slot);
+    return row != nullptr && ClickVisible(row->arm);
 }
 
 bool V2SurfaceDock::ClickClear(ChainRole slot)
 {
-    QPushButton* button = ButtonFor(slot, clearSection_, clearGuide_, clearBoundary_);
-    if (button == nullptr || !button->isVisible() || !button->isEnabled()) {
+    const SlotRow* row = RowFor(slot);
+    return row != nullptr && ClickVisible(row->clear);
+}
+
+bool V2SurfaceDock::ClickRemoveEntry(ChainRole slot, int row)
+{
+    const SlotRow* found = RowFor(slot);
+    if (found == nullptr || found->list == nullptr || row < 0
+        || row >= found->list->topLevelItemCount() || !found->list->isVisible()) {
         return false;
     }
-    button->click();
+    found->list->setCurrentItem(found->list->topLevelItem(row));
+    return ClickVisible(found->remove);
+}
+
+bool V2SurfaceDock::ClickFlipEntry(ChainRole slot, int row)
+{
+    const SlotRow* found = RowFor(slot);
+    if (found == nullptr || found->list == nullptr || row < 0
+        || row >= found->list->topLevelItemCount() || !found->list->isVisible()) {
+        return false;
+    }
+    found->list->setCurrentItem(found->list->topLevelItem(row));
+    return ClickVisible(found->flip);
+}
+
+bool V2SurfaceDock::ChooseFourEdgeStyle(FourEdgeStyle style)
+{
+    if (fourEdgeStyle_ == nullptr || !fourEdgeStyle_->isVisible()) {
+        return false;
+    }
+    fourEdgeStyle_->setCurrentIndex(static_cast<int>(style));
     return true;
+}
+
+std::vector<QString> V2SurfaceDock::SlotEntryTexts(ChainRole slot) const
+{
+    std::vector<QString> texts;
+    const SlotRow* row = RowFor(slot);
+    if (row == nullptr || row->list == nullptr) {
+        return texts;
+    }
+    for (int index = 0; index < row->list->topLevelItemCount(); ++index) {
+        texts.push_back(row->list->topLevelItem(index)->text(0) + QStringLiteral("  ")
+            + row->list->topLevelItem(index)->text(1));
+    }
+    return texts;
 }
 
 bool V2SurfaceDock::ClickOrdering(SurfaceOrdering ordering)
@@ -475,11 +616,10 @@ bool V2SurfaceDock::ClickMoveRow(int row, bool up)
 
 ChainRole V2SurfaceDock::ActiveSlotShown() const
 {
-    if (armGuide_ != nullptr && armGuide_->isChecked()) {
-        return ChainRole::GuideU;
-    }
-    if (armBoundary_ != nullptr && armBoundary_->isChecked()) {
-        return ChainRole::BoundarySide;
+    for (const SlotRow& row : slots_) {
+        if (row.arm != nullptr && row.arm->isChecked()) {
+            return row.key;
+        }
     }
     return ChainRole::Section;
 }
@@ -519,20 +659,8 @@ std::vector<QString> V2SurfaceDock::SectionOrderTexts() const
 
 QString V2SurfaceDock::SlotTextJa(ChainRole role) const
 {
-    switch (role) {
-    case ChainRole::Section:
-        return sectionValue_ == nullptr ? QString() : sectionValue_->text();
-    case ChainRole::GuideU:
-    case ChainRole::GuideV:
-        return guideValue_ == nullptr ? QString() : guideValue_->text();
-    case ChainRole::BoundarySide:
-    case ChainRole::OuterBoundary:
-    case ChainRole::HoleBoundary:
-        return boundaryValue_ == nullptr ? QString() : boundaryValue_->text();
-    case ChainRole::SourceSurface:
-        break;
-    }
-    return QString();
+    const SlotRow* row = RowFor(role);
+    return row == nullptr || row->value == nullptr ? QString() : row->value->text();
 }
 
 bool V2SurfaceDock::CanConfirm() const

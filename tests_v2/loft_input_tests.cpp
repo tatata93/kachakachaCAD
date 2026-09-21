@@ -242,7 +242,8 @@ KACHA_V2_TEST(loft, 断面1本は両端のガイドで掃くときだけ作れ�
     GuideSurfaceRequest one = Grid(3, {0.0, 40.0});
     one.chains.erase(one.chains.begin(), one.chains.begin() + 2);   // 断面 3 だけ残す
     one.chains[0].index = 1;
-    Accept(one, "断面1本 + 両端のガイド2本");
+    const auto accepted = Accept(one, "断面1本 + 両端のガイド2本");
+    Require(accepted.Value().loft.solver == LoftSolver::TwoRailSweep, "両端のガイドで掃く");
 
     GuideSurfaceRequest lonely = Grid(3, {20.0});
     lonely.chains.erase(lonely.chains.begin(), lonely.chains.begin() + 2);

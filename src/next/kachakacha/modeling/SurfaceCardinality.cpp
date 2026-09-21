@@ -158,4 +158,45 @@ std::string LoftSectionRuleProblemJa(std::size_t sections, std::size_t rails)
     return "断面が 2 本以上必要です(いま 1 本)。1 本で作れるのは、断面の両端にガイドが 1 本ずつあるときだけです。";
 }
 
+std::string SurfaceSolverNoteJa(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis)
+{
+    std::size_t rails = 0;
+    std::size_t interior = 0;
+    for (const GuideChain& chain : request.chains) {
+        rails += chain.role == ChainRole::GuideU ? 1 : 0;
+    }
+    switch (request.method) {
+    case GuideSurfaceMethod::LoftSections:
+    case GuideSurfaceMethod::GuidedLoft: {
+        for (const LoftRail& rail : analysis.loft.rails) {
+            interior += rail.side == LoftRailSide::Interior ? 1 : 0;
+        }
+        std::string note(LoftSolverLabelJa(analysis.loft.solver));
+        if (rails > 0) {
+            note += "(ガイド " + std::to_string(rails) + " 本";
+            if (interior > 0) {
+                note += "、うち内側 " + std::to_string(interior) + " 本";
+            }
+            note += "。全部が形に効きます)";
+        }
+        return note;
+    }
+    case GuideSurfaceMethod::FourEdgePatch:
+        return std::string("4 辺から張る(") + std::string(FourEdgeStyleLabelJa(request.fourEdgeStyle))
+            + ")" + (analysis.fourEdge.hasInteriorConstraints
+                    ? "。通る線 " + std::to_string(rails) + " 本へ寄せて張り直します(近似拘束)"
+                    : std::string());
+    case GuideSurfaceMethod::GordonNetwork:
+        return "曲線網(近似 / Filling): 外側の U・V を境界に、内側の線を点の拘束にして張ります";
+    case GuideSurfaceMethod::BoundaryFill:
+        return rails == 0 ? std::string("外周の輪の内側を張ります")
+                          : "外周の輪を境界に、通る線 " + std::to_string(rails)
+                              + " 本を面が通る拘束にして張ります";
+    default:
+        break;
+    }
+    return {};
+}
+
 } // namespace kachakacha::v2::modeling

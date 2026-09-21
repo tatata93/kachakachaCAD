@@ -4,7 +4,8 @@
 //!
 //! 正本のとおり、4つの段を1枚に置く。
 //!   1. 作り方 … 主要6方式をカードで常時見せる。残りは「その他」へ
-//!   2. 入力   … 断面 / ガイド / 境界。使わない役割は「この方式では不要」と出す
+//!   2. 入力   … 断面 / ガイド / 中心線 / 境界。欄ごとに **可変長の一覧**(1 本ずつ外す・
+//!               向き反転)。使わない役割は「この方式では不要」と出す
 //!   3. 断面順 … 自動 / 手動固定と、いまの生成順を番号つきで
 //!   4. 状態   … 入力数・不足・生成可否・下見の様子
 //! 下に キャンセル / 入力をやり直す / 確定。
@@ -17,6 +18,7 @@
 #include <QDockWidget>
 #include <QString>
 
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -30,17 +32,19 @@ class V2SurfaceDock final : public QDockWidget {
 public:
     explicit V2SurfaceDock(QWidget* parent);
 
-    //! 欄ごとの名前。3D で押した順。
+    //! 欄ごとの名前。3D で押した順(断面は生成順)。
     struct SlotNames {
         std::vector<QString> sections;
         std::vector<QString> guides;
+        std::vector<QString> centerlines;
         std::vector<QString> boundaries;
     };
 
     //! いまの入力を映す。作り方・役割・順序・状態を一度に書き直す。
+    //! `solverNoteJa` は検査が決めた作り方の内訳(「断面とガイドを全部通るように張る」)。
     void ShowInput(const kachakacha::v2::app::SurfaceInputState& state,
         const SlotNames& names, bool previewShown,
-        const QString& deviationNoteJa = QString());
+        const QString& deviationNoteJa = QString(), const QString& solverNoteJa = QString());
 
     //! 作り方を選んだ。
     void SetMethodHandler(
@@ -55,6 +59,15 @@ public:
         std::function<void(kachakacha::v2::app::SurfaceOrdering)> handler);
     //! 断面を1つ上/下へ動かした。
     void SetMoveSectionHandler(std::function<void(int from, int to)> handler);
+    //! 一覧の 1 行を「外す」(その欄の何番目か)。
+    void SetRemoveEntryHandler(
+        std::function<void(kachakacha::v2::modeling::ChainRole, int row)> handler);
+    //! 一覧の 1 行を「向き反転」。
+    void SetFlipEntryHandler(
+        std::function<void(kachakacha::v2::modeling::ChainRole, int row)> handler);
+    //! 四辺面の張り方を変えた。
+    void SetFourEdgeStyleHandler(
+        std::function<void(kachakacha::v2::modeling::FourEdgeStyle)> handler);
     //! 下の3つのボタン。
     void SetActionHandlers(std::function<void()> confirm, std::function<void()> cancel,
         std::function<void()> reset);
@@ -67,6 +80,14 @@ public:
     //! 見えていなければ偽。不可視の widget を叩いて通したことにしない。
     [[nodiscard]] bool ClickActivate(kachakacha::v2::modeling::ChainRole slot);
     [[nodiscard]] bool ClickClear(kachakacha::v2::modeling::ChainRole slot);
+    //! その欄の一覧の row 行を選んでから、見えている「外す」「向き反転」を押す。
+    [[nodiscard]] bool ClickRemoveEntry(kachakacha::v2::modeling::ChainRole slot, int row);
+    [[nodiscard]] bool ClickFlipEntry(kachakacha::v2::modeling::ChainRole slot, int row);
+    //! 見えている「張り方」を選ぶ(四辺面のときだけ見える)。
+    [[nodiscard]] bool ChooseFourEdgeStyle(kachakacha::v2::modeling::FourEdgeStyle style);
+    //! その欄の一覧に出ている行(「1  Section_A」など)。
+    [[nodiscard]] std::vector<QString> SlotEntryTexts(
+        kachakacha::v2::modeling::ChainRole slot) const;
     //! 見えている「自動 / 手動固定」を押す。
     [[nodiscard]] bool ClickOrdering(kachakacha::v2::app::SurfaceOrdering ordering);
     //! 断面順の行を選んでから、見えている「↑」「↓」を押す。押せなければ偽。
@@ -102,18 +123,25 @@ private:
     QComboBox* otherMethods_ = nullptr;
     void RefreshSlotTitles(kachakacha::v2::modeling::GuideSurfaceMethod method);
 
-    QLabel* sectionValue_ = nullptr;
-    //! ガイドの欄の見出し。回転体では「軸」になる(欄は増やさず言葉だけ変える)。
-    QLabel* guideName_ = nullptr;
-    QLabel* guideValue_ = nullptr;
-    QLabel* boundaryValue_ = nullptr;
-    //! 欄ごとの「ここへ選ぶ」(押された形 = いまの欄)と「解除」。
-    QPushButton* armSection_ = nullptr;
-    QPushButton* armGuide_ = nullptr;
-    QPushButton* armBoundary_ = nullptr;
-    QPushButton* clearSection_ = nullptr;
-    QPushButton* clearGuide_ = nullptr;
-    QPushButton* clearBoundary_ = nullptr;
+    //! 欄 1 つぶん。欄の並びは SurfaceSlotKey(0..kSurfaceSlotCount-1)と同じ。
+    struct SlotRow {
+        kachakacha::v2::modeling::ChainRole key = kachakacha::v2::modeling::ChainRole::Section;
+        QLabel* title = nullptr;
+        QLabel* value = nullptr;
+        QTreeWidget* list = nullptr;
+        QPushButton* arm = nullptr;
+        QPushButton* clear = nullptr;
+        QPushButton* remove = nullptr;
+        QPushButton* flip = nullptr;
+    };
+    std::array<SlotRow, kachakacha::v2::app::kSurfaceSlotCount> slots_{};
+    void BuildSlotRow(QVBoxLayout* layout, int index);
+    void FillSlotRow(SlotRow& row, const kachakacha::v2::app::SurfaceInputState& state,
+        const std::vector<QString>& names, bool previewShown);
+    [[nodiscard]] const SlotRow* RowFor(kachakacha::v2::modeling::ChainRole slot) const;
+    QLabel* fourEdgeStyleTitle_ = nullptr;
+    QComboBox* fourEdgeStyle_ = nullptr;
+    QLabel* solverNote_ = nullptr;
     QPushButton* orderAuto_ = nullptr;
     QPushButton* orderManual_ = nullptr;
     QTreeWidget* orderList_ = nullptr;
@@ -130,6 +158,9 @@ private:
     std::function<void(kachakacha::v2::modeling::ChainRole)> clearHandler_;
     std::function<void(kachakacha::v2::app::SurfaceOrdering)> orderingHandler_;
     std::function<void(int, int)> moveSectionHandler_;
+    std::function<void(kachakacha::v2::modeling::ChainRole, int)> removeEntryHandler_;
+    std::function<void(kachakacha::v2::modeling::ChainRole, int)> flipEntryHandler_;
+    std::function<void(kachakacha::v2::modeling::FourEdgeStyle)> fourEdgeStyleHandler_;
     std::function<void()> confirmHandler_;
     std::function<void()> cancelHandler_;
     std::function<void()> resetHandler_;

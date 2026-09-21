@@ -8,10 +8,10 @@ namespace {
 constexpr int kPlanar = 0;
 constexpr int kRuled = 1;
 constexpr int kLoft = 2;
-constexpr int kGuidedLoft = 3;
 constexpr int kGordon = 4;
 constexpr int kBoundaryFill = 5;
 constexpr int kOffsetGuide = 6;
+constexpr int kFourEdgePatch = 8;
 // app::MeasureMode の整数値。
 constexpr int kMeasureSelection = 0;
 constexpr int kMeasureTwoPoints = 1;
@@ -78,8 +78,10 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Tool("作業中にする", "workplane.set_active"), Extra("グリッド", "grid.edit"),
                 Extra("グリッド原点", "grid.move_origin")}},
         {"surface", "面作成",
+            // 2026-09-22: 「ガイド付きロフト」は「ロフト面」へ統合(ガイド 0〜任意)。
+            // 互換の入口は面の棚の「その他」に残す。空いた場所へ「四辺面」。
             {Surface("平面", kPlanar), Surface("ルールド面", kRuled), Surface("ロフト面", kLoft),
-                Surface("ガイド付きロフト", kGuidedLoft), Surface("境界面", kBoundaryFill),
+                Surface("境界面", kBoundaryFill), Surface("四辺面", kFourEdgePatch),
                 Surface("曲線網", kGordon), Surface("離した面", kOffsetGuide, true),
                 Extra("回転面", "guide.revolve")}},
         {"note", "注記",

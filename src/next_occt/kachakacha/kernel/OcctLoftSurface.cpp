@@ -60,7 +60,7 @@ template<class Function>
     } catch (const Standard_Failure& failure) {
         return ResultType::Failure(MakeError(kSurfaceBuildFailed,
             "幾何カーネルが面を作れませんでした。",
-            std::string(what) + ": " + std::string(failure.GetMessageString())));
+            std::string(what) + ": " + std::string(failure.what())));
     } catch (const std::exception& error) {
         return ResultType::Failure(MakeError(kSurfaceBuildFailed,
             "幾何カーネルが面を作れませんでした。", std::string(what) + ": " + error.what()));
@@ -117,7 +117,7 @@ template<class Function>
 [[nodiscard]] Result<TopoDS_Shape> ThruSections(
     const std::vector<std::vector<CurveSegment>>& sections, const GeometryTolerance& tolerance)
 {
-    BRepOffsetAPI_ThruSections generator(Standard_False, Standard_False, Tol3d(tolerance));
+    BRepOffsetAPI_ThruSections generator(false, false, Tol3d(tolerance));
     for (const auto& section : sections) {
         auto wire = ToWire(section, tolerance.modelLinearMm);
         if (!wire.HasValue()) {
@@ -144,14 +144,14 @@ template<class Function>
         return Result<TopoDS_Shape>::Failure(spine.Diagnostics());
     }
     BRepOffsetAPI_MakePipeShell shell(spine.Value());
-    shell.SetMode(Standard_False);   // 修正フレネ(ねじれを抑える)
+    shell.SetMode(false);   // 修正フレネ(ねじれを抑える)
     for (const auto& section : sections) {
         auto wire = ToWire(section, tolerance.modelLinearMm);
         if (!wire.HasValue()) {
             return Result<TopoDS_Shape>::Failure(wire.Diagnostics());
         }
         // 断面はすでに正しい場所にある。動かさない・回さない(案内付きロフトと同じ理由)。
-        shell.Add(wire.Value(), Standard_False, Standard_False);
+        shell.Add(wire.Value(), false, false);
     }
     shell.Build();
     if (!shell.IsDone()) {
@@ -178,13 +178,13 @@ template<class Function>
             spine.HasValue() ? auxiliary.Diagnostics() : spine.Diagnostics());
     }
     BRepOffsetAPI_MakePipeShell shell(spine.Value());
-    shell.SetMode(auxiliary.Value(), Standard_True);
+    shell.SetMode(auxiliary.Value(), true);
     for (const std::size_t index : analysis.sectionOrdering.chainIndices) {
         auto wire = ToWire(request.chains[index].segments, tolerance.modelLinearMm);
         if (!wire.HasValue()) {
             return Result<TopoDS_Shape>::Failure(wire.Diagnostics());
         }
-        shell.Add(wire.Value(), Standard_False, Standard_False);
+        shell.Add(wire.Value(), false, false);
     }
     shell.Build();
     if (!shell.IsDone()) {
@@ -232,7 +232,7 @@ template<class Function>
         if (!edge.HasValue()) {
             return Result<bool>::Failure(edge.Diagnostics());
         }
-        filler.Add(edge.Value(), GeomAbs_C0, bound ? Standard_True : Standard_False);
+        filler.Add(edge.Value(), GeomAbs_C0, bound ? true : false);
     }
     return Result<bool>::Success(true);
 }
@@ -268,7 +268,7 @@ template<class Function>
     if (!edge.HasValue()) {
         return Result<bool>::Failure(edge.Diagnostics());
     }
-    filler.Add(edge.Value(), GeomAbs_C0, Standard_True);
+    filler.Add(edge.Value(), GeomAbs_C0, true);
     return Result<bool>::Success(true);
 }
 
@@ -279,7 +279,7 @@ template<class Function>
     const std::vector<std::vector<CurveSegment>>& sections, const GeometryTolerance& tolerance)
 {
     using Out = Result<TopoDS_Shape>;
-    BRepOffsetAPI_MakeFilling filler(3, 15, 3, Standard_False, 1.0e-5, Tol3d(tolerance), 0.01,
+    BRepOffsetAPI_MakeFilling filler(3, 15, 3, false, 1.0e-5, Tol3d(tolerance), 0.01,
         0.1, 8, 12);
     const auto check = [](const Result<bool>& added) { return added.HasValue(); };
     for (const auto& step : {AddChain(filler, sections.front(), true),
@@ -351,7 +351,7 @@ template<class Function>
         }
         GeomConvert_CompCurveToBSplineCurve concat(joined);
         if (!concat.Add(piece, std::max(tolerance.interactiveJoinMm, Tol3d(tolerance)),
-                Standard_True)) {
+                true)) {
             return Out::Failure(MakeError(kSurfaceBuildFailed,
                 "四辺面の辺の曲線をつなげませんでした。", "辺の中の線どうしが離れています。"));
         }
@@ -426,14 +426,14 @@ Result<TopoDS_Shape> BuildFourEdgeShape(const GuideSurfaceRequest& request,
             return Out::Success(TopoDS_Shape(face.Face()));
         }
         // 内側の通る線がある: 4 辺を境界、通る線を拘束にして、4 辺の面から張り直す。
-        BRepOffsetAPI_MakeFilling filler(3, 15, 3, Standard_False, 1.0e-5, Tol3d(tolerance),
+        BRepOffsetAPI_MakeFilling filler(3, 15, 3, false, 1.0e-5, Tol3d(tolerance),
             0.01, 0.1, 8, 12);
         for (const auto& curve : curves) {
-            BRepBuilderAPI_MakeEdge edge(occ::handle<Geom_Curve>(curve));
+            BRepBuilderAPI_MakeEdge edge{occ::handle<Geom_Curve>(curve)};
             if (!edge.IsDone()) {
                 return Out::Failure(MakeError(kSurfaceBuildFailed, "四辺面の辺を作れませんでした。", {}));
             }
-            filler.Add(edge.Edge(), GeomAbs_C0, Standard_True);
+            filler.Add(edge.Edge(), GeomAbs_C0, true);
         }
         for (std::size_t index = 0; index < request.chains.size(); ++index) {
             if (request.chains[index].role != ChainRole::GuideU) {

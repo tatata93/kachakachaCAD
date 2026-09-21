@@ -149,31 +149,7 @@ void V2MainWindow::BuildOutputShelves()
 
     // 押し出しの棚。押し出しの最中だけ出す(オーナー指示 2026-09-14 §7)。
     // 窓で全部決めてから作る道をやめ、右で見ながら決められるようにする。
-    // 「面を作る」の棚。作っている最中だけ出す(UI の正本)。
-    surfaceDock_ = new V2SurfaceDock(this);
-    surfaceDock_->SetMethodHandler(
-        [this](kachakacha::v2::modeling::GuideSurfaceMethod method) {
-            ChooseSurfaceMethod(method);
-        });
-    surfaceDock_->SetActivateHandler([this](kachakacha::v2::modeling::ChainRole slot) {
-        ActivateSurfaceSlot(slot);
-    });
-    surfaceDock_->SetClearHandler([this](kachakacha::v2::modeling::ChainRole slot) {
-        ClearSurfaceSlot(slot);
-    });
-    surfaceDock_->SetOrderingHandler(
-        [this](kachakacha::v2::app::SurfaceOrdering ordering) {
-            ChooseSurfaceOrdering(ordering);
-        });
-    surfaceDock_->SetMoveSectionHandler([this](int from, int to) {
-        MoveSurfaceSection(from, to);
-    });
-    surfaceDock_->SetActionHandlers([this] { ConfirmSurface(); },
-        [this] {
-            EndSurfacePreview();
-            SetStatus(QStringLiteral("面を作る: やめました。"));
-        },
-        [this] { ResetSurfaceInput(); });
+    BuildSurfaceDock();
 
     booleanDock_ = new V2BooleanDock(this);
     booleanDock_->SetOperationHandler([this](bool cut) { ChooseBooleanOperation(cut); });
@@ -251,4 +227,72 @@ void V2MainWindow::BuildThickenDock()
             EndThicken();
             SetStatus(QStringLiteral("厚み: やめました。"));
         });
+}
+
+//! 「面を作る」の棚を作って配線する(作っている最中だけ出す。UI の正本)。
+void V2MainWindow::BuildSurfaceDock()
+{
+    surfaceDock_ = new V2SurfaceDock(this);
+    surfaceDock_->SetMethodHandler(
+        [this](kachakacha::v2::modeling::GuideSurfaceMethod method) {
+            ChooseSurfaceMethod(method);
+        });
+    surfaceDock_->SetActivateHandler([this](kachakacha::v2::modeling::ChainRole slot) {
+        ActivateSurfaceSlot(slot);
+    });
+    surfaceDock_->SetClearHandler([this](kachakacha::v2::modeling::ChainRole slot) {
+        ClearSurfaceSlot(slot);
+    });
+    surfaceDock_->SetOrderingHandler(
+        [this](kachakacha::v2::app::SurfaceOrdering ordering) {
+            ChooseSurfaceOrdering(ordering);
+        });
+    surfaceDock_->SetMoveSectionHandler([this](int from, int to) {
+        MoveSurfaceSection(from, to);
+    });
+    // 一覧の 1 行を外す / 向き反転(可変長の欄。3D でもう一度押すのと同じ結果)。
+    const auto entryAt = [this](kachakacha::v2::modeling::ChainRole slot, int row) {
+        const auto& entries = slot == kachakacha::v2::modeling::ChainRole::Section
+            ? kachakacha::v2::app::SurfaceSectionOrder(surfaceInput_)
+            : kachakacha::v2::app::SurfaceSlotEntries(surfaceInput_, slot);
+        return row >= 0 && row < static_cast<int>(entries.size())
+            ? entries[static_cast<std::size_t>(row)]
+            : kachakacha::v2::base::EntityId{};
+    };
+    surfaceDock_->SetRemoveEntryHandler(
+        [this, entryAt](kachakacha::v2::modeling::ChainRole slot, int row) {
+            const auto id = entryAt(slot, row);
+            if (id.IsNil()) {
+                return;
+            }
+            surfaceInput_ = kachakacha::v2::app::WithoutSurfaceEntries(surfaceInput_, {id});
+            MirrorSurfaceEntriesToSelection();
+            RefreshSurfacePreview();
+            RefreshSurfaceRoleLabels();
+            RefreshSurfaceDock();
+        });
+    surfaceDock_->SetFlipEntryHandler(
+        [this, entryAt](kachakacha::v2::modeling::ChainRole slot, int row) {
+            const auto id = entryAt(slot, row);
+            if (id.IsNil()) {
+                return;
+            }
+            surfaceInput_ = kachakacha::v2::app::WithEntryReversedToggled(surfaceInput_, id);
+            RefreshSurfacePreview();
+            RefreshSurfaceRoleLabels();
+            RefreshSurfaceDock();
+        });
+    surfaceDock_->SetFourEdgeStyleHandler(
+        [this](kachakacha::v2::modeling::FourEdgeStyle style) {
+            surfaceInput_.fourEdgeStyle = style;
+            RefreshSurfacePreview();
+            RefreshSurfaceDock();
+        });
+    surfaceDock_->SetActionHandlers([this] { ConfirmSurface(); },
+        [this] {
+            EndSurfacePreview();
+            SetStatus(QStringLiteral("面を作る: やめました。"));
+        },
+        [this] { ResetSurfaceInput(); });
+
 }

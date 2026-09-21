@@ -1266,14 +1266,19 @@ namespace {
                 && !Holds(window.Viewport().Selection().entityIds, b))) {
         return false;
     }
-    // ロフトにガイドの欄は無い。押せないことも見えている。
-    if (!Explain("ロフトではガイドの「ここへ選ぶ」が押せない",
+    // ルールドにガイドの欄は無い。押せないことも見えている。
+    // (2026-09-22: ロフトはガイド 0〜任意を受けるようになった。使わないのはルールド。)
+    if (!Explain("ルールドのカードが押せる",
+            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::RuledSections))) {
+        return false;
+    }
+    if (!Explain("ルールドではガイドの「ここへ選ぶ」が押せない",
             !window.SurfaceDock().ClickActivate(ChainRole::GuideU))) {
         return false;
     }
-    // 案内付きロフトへ替え、ガイドの欄へ替えてから押す。
-    if (!Explain("案内付きロフトのカードが押せる",
-            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::GuidedLoft))) {
+    // ロフトへ戻し(案内付きロフトはロフトへ統合)、ガイドの欄へ替えてから押す。
+    if (!Explain("ロフトのカードが押せる",
+            window.SurfaceDock().ClickMethodCard(GuideSurfaceMethod::LoftSections))) {
         return false;
     }
     if (!Explain("ガイドの「ここへ選ぶ」が押せる",

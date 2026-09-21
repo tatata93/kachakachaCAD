@@ -54,8 +54,12 @@ std::vector<ToolRoleLabel> SurfaceRoleLabels(const SurfaceInputState& state)
         const std::size_t count = state.guides.size();
         for (std::size_t index = 0; index < count; ++index) {
             std::string text;
+            const bool passThrough = state.method == modeling::GuideSurfaceMethod::BoundaryFill
+                || state.method == modeling::GuideSurfaceMethod::FourEdgePatch;
             if (network) {
                 text = Numbered("V", index, count);
+            } else if (passThrough) {
+                text = Numbered("Through", index, count);   // 面が必ず通る線
             } else if (count == 2) {
                 text = index == 0 ? "Guide L" : "Guide R";
             } else {
@@ -65,10 +69,18 @@ std::vector<ToolRoleLabel> SurfaceRoleLabels(const SurfaceInputState& state)
         }
     }
 
+    if (RoleForSurfaceSlot(state.method, modeling::ChainRole::Centerline, role)) {
+        for (std::size_t index = 0; index < state.centerlines.size(); ++index) {
+            labels.push_back(ToolRoleLabel{state.centerlines[index],
+                Numbered("Centerline", index, state.centerlines.size())});
+        }
+    }
+
     if (RoleForSurfaceSlot(state.method, modeling::ChainRole::BoundarySide, role)) {
+        const bool fourEdge = state.method == modeling::GuideSurfaceMethod::FourEdgePatch;
         for (std::size_t index = 0; index < state.boundaries.size(); ++index) {
             labels.push_back(ToolRoleLabel{state.boundaries[index],
-                Numbered("Boundary", index, state.boundaries.size())});
+                Numbered(fourEdge ? "Edge" : "Boundary", index, state.boundaries.size())});
         }
     }
     return labels;

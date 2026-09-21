@@ -186,6 +186,7 @@ SurfaceInputState WithoutSurfaceEntries(const SurfaceInputState& state,
         EraseId(next.boundaries, id);
         EraseId(next.sourceSurfaces, id);
         EraseId(next.centerlines, id);
+        EraseId(next.reversed, id);
         // 手動固定の並びからも、採用順からも外す。**古い入力を残さない。**
         EraseId(next.explicitOrder, id);
         EraseId(next.adoptedOrder, id);
@@ -573,6 +574,88 @@ std::vector<std::string> SurfaceStatusLinesJa(const SurfaceInputState& state,
         lines.push_back("断面順: 自動(幾何の位置から並べます)");
     }
     return lines;
+}
+
+SurfaceInputState WithEntryReversedToggled(const SurfaceInputState& state,
+    const base::EntityId& id)
+{
+    const auto all = AllSurfaceEntries(state);
+    if (std::find(all.begin(), all.end(), id) == all.end()) {
+        return state;
+    }
+    SurfaceInputState next = state;
+    const auto found = std::find(next.reversed.begin(), next.reversed.end(), id);
+    if (found == next.reversed.end()) {
+        next.reversed.push_back(id);
+    } else {
+        next.reversed.erase(found);
+    }
+    return next;
+}
+
+bool SurfaceEntryReversed(const SurfaceInputState& state, const base::EntityId& id) noexcept
+{
+    return std::find(state.reversed.begin(), state.reversed.end(), id) != state.reversed.end();
+}
+
+bool SurfaceSlotFlippable(GuideSurfaceMethod method, ChainRole slot) noexcept
+{
+    // 向きが形に効く欄だけ。ガイド・境界・通る線は向きを問わない(検査がそろえる)。
+    if (method == GuideSurfaceMethod::GordonNetwork) {
+        return slot == ChainRole::Section || slot == ChainRole::GuideU;
+    }
+    return slot == ChainRole::Section
+        && (method == GuideSurfaceMethod::RuledSections
+            || method == GuideSurfaceMethod::LoftSections
+            || method == GuideSurfaceMethod::GuidedLoft);
+}
+
+namespace {
+
+//! 一括の欄(1 回の生成が 1 つしか受けない役割の欄)。無ければ偽。
+[[nodiscard]] bool BatchSlot(const SurfaceInputState& state, ChainRole& slot) noexcept
+{
+    for (const ChainRole key : {ChainRole::Section, ChainRole::SourceSurface}) {
+        ChainRole role = key;
+        if (key == ChainRole::SourceSurface) {
+            if (state.method != GuideSurfaceMethod::OffsetGuide) {
+                continue;
+            }
+        } else if (!RoleForSurfaceSlot(state.method, key, role)) {
+            continue;
+        }
+        if (modeling::SurfaceNeedsBatch(state.method, role,
+                SurfaceSlotEntries(state, key).size())) {
+            slot = key;
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool SurfaceIsBatch(const SurfaceInputState& state) noexcept
+{
+    ChainRole slot = ChainRole::Section;
+    return BatchSlot(state, slot);
+}
+
+std::vector<SurfaceInputState> SurfaceBatchStates(const SurfaceInputState& state)
+{
+    ChainRole slot = ChainRole::Section;
+    if (!BatchSlot(state, slot)) {
+        return {state};
+    }
+    std::vector<SurfaceInputState> parts;
+    for (const base::EntityId& id : SurfaceSlotEntries(state, slot)) {
+        SurfaceInputState part = state;
+        part = WithSurfaceEntries(part, slot, {id}, true);
+        part.explicitOrder.clear();
+        part.adoptedOrder.clear();
+        parts.push_back(std::move(part));
+    }
+    return parts;
 }
 
 } // namespace kachakacha::v2::app

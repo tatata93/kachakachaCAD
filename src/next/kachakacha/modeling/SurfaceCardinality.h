@@ -69,6 +69,10 @@ struct RoleCardinality {
 //! ロフトの断面の条件(役割をまたぐので表に書けない)。よければ空。
 [[nodiscard]] std::string LoftSectionRuleProblemJa(std::size_t sections, std::size_t rails);
 
+//! 検査が決めた作り方の内訳を、人に向けた一言にする(方式名を覚えさせないため)。
+[[nodiscard]] std::string SurfaceSolverNoteJa(const GuideSurfaceRequest& request,
+    const GuideSurfaceAnalysis& analysis);
+
 //! 選んだ数だと、1 回の生成に収まらず一括(1 つずつ別に作る)になるか。
 [[nodiscard]] bool SurfaceNeedsBatch(GuideSurfaceMethod method, ChainRole role,
     std::size_t count) noexcept;

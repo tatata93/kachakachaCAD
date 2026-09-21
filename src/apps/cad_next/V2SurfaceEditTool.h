@@ -58,6 +58,8 @@ public:
     {
         return outcome_;
     }
+    //! 下見に作った面の形(面の解析が下見を塗るのに使う)。
+    [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle> PreviewSurfaces() const;
 
 private:
     struct BuiltSurface {

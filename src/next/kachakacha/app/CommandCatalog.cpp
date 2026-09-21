@@ -124,6 +124,18 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "板厚・面取り量・型紙の余白・縮尺など、道具が共通で使う数を決めます。"
             "形はここでは変わりません。", false,
             {"AT-UIX-010"}},
+        // 面の解析(プロンプト surface_analysis)。どのモードでも開ける。形は変わらない。
+        {"view.surface_analysis", "面の解析", CommandMode::Dialog, "surface_analysis", "",
+            SelectionPredicate::Always, "",
+            "ゼブラ・平均曲率・ガウス曲率(可展性)・U/V 線・曲率コーム・境目の連続・入力線からのずれで"
+            "面を塗ります。選んだ面(選んでいなければ全部の面)と、面を作る・面の編集の下見を塗ります。"
+            "製作性の目安は数値の基準つきの診断材料です。形は変わりません。", false,
+            {"AT-SRF-011"}},
+        {"view.analysis_zebra", "ゼブラ", CommandMode::Instant, "zebra", "",
+            SelectionPredicate::Always, "",
+            "ゼブラ(反射の縞)を入れる・消すを切り替えます。棚は開かないので、面を作りながら"
+            "下見の縞を見られます。形は変わりません。", false,
+            {"AT-SRF-011"}},
         {"view.stage_all", "設計(すべて出す)", CommandMode::Instant, "stage_all", "Ctrl+1",
             SelectionPredicate::Always, "",
             "グリッドも補助線も出します(V1 の「設計」)。形は変わりません。", false,

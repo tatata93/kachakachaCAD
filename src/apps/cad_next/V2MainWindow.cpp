@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
 
 #include "V2EntityTree.h"
@@ -305,6 +306,10 @@ void V2MainWindow::HandleSelectionChanged()
     RefreshPartDock();
     // 作業平面の棚は「いま何を選んでいるか」で作れるかが変わる。
     RefreshWorkPlaneDock();
+    // 面の解析は選んだ面を塗る(選んでいなければ全部の面)。
+    if (surfaceAnalysis_ != nullptr) {
+        surfaceAnalysis_->Refresh();
+    }
     // 選択が変われば押せるものも変わる。押せる形を選択に付いてこさせる。
     RefreshCommandVisibility();
 }

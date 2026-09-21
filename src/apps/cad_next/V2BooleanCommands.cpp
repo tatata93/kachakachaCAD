@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
 
 #include "V2BooleanDock.h"
@@ -84,6 +85,11 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (surfaceEdit_ != nullptr && surfaceEdit_->Handles(id)) {
         ClearPendingCommand();
         surfaceEdit_->Begin(id);
+        return true;
+    }
+    // 面の解析は、いつでも開ける(面を作る・面の編集の下見を塗るので、その道具は止めない)。
+    if (surfaceAnalysis_ != nullptr && surfaceAnalysis_->Handles(id)) {
+        surfaceAnalysis_->Run(id);
         return true;
     }
     // 回転体。面を作るの道具を 作り方 = 回転体 で構える(断面 → 軸 → 下見 → Enter)。

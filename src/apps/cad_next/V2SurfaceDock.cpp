@@ -577,6 +577,11 @@ bool V2SurfaceDock::ClickPickSupport(int row)
     return ClickVisible(pickSupport_);
 }
 
+QString V2SurfaceDock::StatusTextJa() const
+{
+    return status_->text();
+}
+
 QString V2SurfaceDock::ContinuityTextJa() const
 {
     return supportName_ == nullptr ? QString() : supportName_->text();

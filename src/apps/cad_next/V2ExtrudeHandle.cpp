@@ -93,6 +93,16 @@ void V2Viewport::HideToolPreview()
 //! **出来上がりの線であって、文書の線ではない。**同じ見た目にすると取り違える。
 void V2Viewport::DrawToolPreview(QPainter& painter) const
 {
+    // 下見の面の解析(面を作る・面の編集の最中も、ゼブラや曲率を見られる)。
+    for (const AnalysisView& view : analysisViews_) {
+        if (!view.entityId.IsNil()) {
+            continue;
+        }
+        if (kachakacha::v2::app::AnalysisPaintsSurface(view.mode)) {
+            DrawAnalysisShape(painter, view);
+        }
+        DrawAnalysisLines(painter, view);
+    }
     if (toolPreview_.empty()) {
         return;
     }

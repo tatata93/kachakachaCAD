@@ -13,6 +13,7 @@
 //! 部品が10個あるだけで画面が固まる。番号で覚えるのはそのためである。
 
 #include "V2MainWindow.h"
+#include "V2SurfaceAnalysisTool.h"
 
 #include "kachakacha/app/GroupTree.h"
 
@@ -80,6 +81,10 @@ void V2MainWindow::RefreshShapeViews()
     // もう文書にない形の網は捨てる。持ち続けると、開き直すたびに増える。
     shapeMeshes_ = std::move(keep);
     viewport_->SetShapeViews(std::move(shapes));
+    // 形が変われば解析も取り直す(面を作り直すと核の番号が変わる)。
+    if (surfaceAnalysis_ != nullptr) {
+        surfaceAnalysis_->Refresh();
+    }
 }
 
 const kachakacha::v2::domain::Entity* V2MainWindow::FindEntityByIdText(

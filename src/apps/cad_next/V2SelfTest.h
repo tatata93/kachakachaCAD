@@ -156,6 +156,9 @@ void Note(const char* what);
 //! 「面の編集」の人の道(HP-SE)。道具 → 3D で面・縁 → 下見 → Enter。
 [[nodiscard]] std::vector<SelfTestCase> SurfaceEditCases();
 
+//! 「面の解析」の人の道(HP-SA)。棚のボタン → 塗り替え、下見も塗る。
+[[nodiscard]] std::vector<SelfTestCase> SurfaceAnalysisCases();
+
 //! 作業平面の棚の下見(HP-WP、D-24)。
 [[nodiscard]] std::vector<SelfTestCase> WorkPlanePreviewCases();
 

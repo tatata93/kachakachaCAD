@@ -44,6 +44,8 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `view.align_workplane` | 正対 | 常時(作業中の作図面) | cameraだけ変更 | AT-UIX-008 |
 | `view.display_settings` | 表示設定 | 常時 | 表示属性だけ変更 | AT-UIX-010 |
 | `view.number_settings` | 数の設定 | 常時 | 数の棚を前に出すだけ | AT-UIX-010 |
+| `view.surface_analysis` | 面の解析 | 常時(選んだ面、無ければ全部の面 + 面を作る・面の編集の下見) | 表示だけ(ゼブラ・曲率・U/V 線・曲率コーム・境目・ずれ、製作性の目安) | AT-SRF-011 |
+| `view.analysis_zebra` | ゼブラ | 常時 | 表示だけ(ゼブラの入り切り。棚は開かない) | AT-SRF-011 |
 | `view.stage_all` | 設計(すべて出す) | なし | (表示のみ)Ctrl+1 | AT-UIX-010 |
 | `view.stage_no_grid` | グリッドを消す | なし | (表示のみ) | AT-UIX-010 |
 | `view.stage_no_construction` | 完成形(補助線も消す) | なし | (表示のみ)Ctrl+2 | AT-UIX-010 |

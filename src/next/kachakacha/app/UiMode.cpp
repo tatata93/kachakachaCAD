@@ -46,6 +46,8 @@ const std::vector<std::string_view>& CommonCommandIds()
         "group.create", "group.dissolve", "group.rename", "snap.toggle",
         // 数の設定(板厚・面取り量・型紙の余白・縮尺)はどのモードでも要る。
         "view.number_settings",
+        // 面の解析は、面を作る(作図)・厚み(部品)・近似(製作)のどれでも見る。
+        "view.surface_analysis", "view.analysis_zebra",
     };
     return ids;
 }

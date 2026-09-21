@@ -3,6 +3,7 @@
 #include "V2SurfaceEditTool.h"
 
 #include "V2MainWindow.h"
+#include "V2SurfaceAnalysisTool.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ExplorerModel.h"
@@ -153,6 +154,9 @@ void V2SurfaceEditTool::End()
     }
     window_.ShowToolFooter(QString());
     window_.RefreshRightShelves();
+    if (window_.surfaceAnalysis_ != nullptr) {
+        window_.surfaceAnalysis_->Refresh();   // 下見の面の塗りを消す。
+    }
 }
 
 void V2SurfaceEditTool::MirrorToSelection()
@@ -240,6 +244,10 @@ void V2SurfaceEditTool::Refresh()
 {
     RefreshPreview();
     RefreshDock();
+    // 面の解析(出していれば)も下見の面を塗り直す。
+    if (window_.surfaceAnalysis_ != nullptr) {
+        window_.surfaceAnalysis_->Refresh();
+    }
 }
 
 bool V2SurfaceEditTool::HandleKey(int key)
@@ -425,6 +433,15 @@ void V2SurfaceEditTool::RefreshPreview()
     if (!lines.empty()) {
         window_.viewport_->ShowToolPreview(lines);
     }
+}
+
+std::vector<kachakacha::v2::modeling::KernelShapeHandle> V2SurfaceEditTool::PreviewSurfaces() const
+{
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> handles;
+    for (const BuiltSurface& built : surfaces_) {
+        handles.push_back(built.surface.handle);
+    }
+    return handles;
 }
 
 void V2SurfaceEditTool::RefreshDock()

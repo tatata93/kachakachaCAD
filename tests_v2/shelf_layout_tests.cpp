@@ -214,9 +214,12 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
                     for (const bool booleaning : {false, true}) {
                         for (const bool thickening : {false, true}) {
                             for (const bool editing : {false, true}) {
-                                for (const Shelf shelf : ShelvesFor(mode, tool, extruding,
-                                         surfacing, booleaning, thickening, editing)) {
-                                    reachable.insert(static_cast<int>(shelf));
+                                for (const bool analyzing : {false, true}) {
+                                    for (const Shelf shelf : ShelvesFor(mode, tool, extruding,
+                                             surfacing, booleaning, thickening, editing,
+                                             analyzing)) {
+                                        reachable.insert(static_cast<int>(shelf));
+                                    }
                                 }
                             }
                         }
@@ -262,6 +265,8 @@ KACHA_V2_TEST(shelf, 出せる棚は全部どこかの組み合わせで出る)
         "「厚み」の棚も、棚の決め方そのものから出る");
     Require(reachable.count(static_cast<int>(Shelf::SurfaceEdit)) == 1,
         "「面の編集」の棚も、棚の決め方そのものから出る");
+    Require(reachable.count(static_cast<int>(Shelf::SurfaceAnalysis)) == 1,
+        "「面の解析」の棚も、棚の決め方そのものから出る");
 }
 
 KACHA_V2_TEST(shelf, 足す引くの最中はその棚が前に出る)

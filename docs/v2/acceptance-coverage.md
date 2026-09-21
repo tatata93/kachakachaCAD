@@ -64,7 +64,7 @@
 | AT-SRF-008 | 部分 | tests_v2/surface_edit_input_state_tests.cpp(対称面の選び方)+ tests_v2/kernel_surface_edit_tests.cpp。残り: PC 確認と人の操作の自己試験 |
 | AT-SRF-009 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/curve_fit_tests.cpp(線を形を保って core の B-spline へ写す)。残り: PC 確認と人の操作の自己試験 |
 | AT-SRF-010 | 部分 | tests_v2/kernel_surface_edit_tests.cpp + tests_v2/kernel_curve_round_trip_tests.cpp(B-spline が形を変えずに往復)。残り: PC 確認 |
-| AT-SRF-011 | 未 | 面の解析(P6)はこれから |
+| AT-SRF-011 | 部分 | tests_v2/surface_analysis_tests.cpp(平面・円筒・円錐はほぼ可展、球は大きさと半径の比で二重曲率の強さが分かれる、基準の数値と断定しない一文、色の決め方、境目の段階、何枚かは共通の目盛りで一番作りにくい面で言う)+ tests_v2/kernel_surface_analysis_tests.cpp(実際の面から K・H を測る: 平面/円筒/円錐/球、境目 G2/G0/開いた縁、入力線からのずれ 0/1 mm)+ 自己試験 HP-SA-01/02(棚のボタンで切り替え、下見も塗り、下見が消えれば消える)。残り: PC 確認 |
 | AT-SRF-012 | 未 | 役割の分類と薦め(P7)はこれから |
 | AT-EXT-001 | 済 | tests_v2/extrude_tests.cpp(予測)+ tests_v2/kernel_extrude_tests.cpp(実形状の体積24000mm3・面6枚・意味的キー)+ 治具(surface_jig_tests: 表側は外側へ、厚みが負なら裏側へ内側で、すき間 0 なら離さない。負のすき間 JIG-E001・厚み 0 JIG-E002・面の数 JIG-E003)+ 自己試験(当たり面と当て板ができて一度で戻る) |
 | AT-EXT-002 | 済 | tests_v2/extrude_tests.cpp(開いた輪郭を EXT-002 で拒否。ワイヤー出力なら許す) |

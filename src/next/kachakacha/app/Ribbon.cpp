@@ -88,7 +88,9 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 // 面作成の後ろ(「その他」)に置く。面を作ったあとに直す・つなぐ道具。
                 Extra("面を合わせる", "surface.match"), Extra("面をつなぐ", "surface.bridge"),
                 Extra("面を整える", "surface.refit"), Extra("対称に写す", "surface.mirror"),
-                Extra("U/V 線", "surface.iso_curves")}},
+                Extra("U/V 線", "surface.iso_curves"),
+                // 面の解析(プロンプト surface_analysis)。作りながら見るので面作成に並べる。
+                Extra("面の解析", "view.surface_analysis"), Extra("ゼブラ", "view.analysis_zebra")}},
         {"note", "注記",
             {Tool("寸法", "measure.open"),
                 Blocked("テキスト", "テキストの注記はまだありません(文書に文字の要素がありません)")}},

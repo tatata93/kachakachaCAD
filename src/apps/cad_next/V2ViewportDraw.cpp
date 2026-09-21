@@ -653,7 +653,19 @@ void V2Viewport::DrawShapes(QPainter& painter) const
         return;
     }
     for (const ShapeView& shape : shapeViews_) {
+        // 解析で塗り替える面は、ふだんの塗りの代わりに解析の色で描く。
+        const AnalysisView* analysis = AnalysisFor(shape.entityId);
+        if (analysis != nullptr && analysis->Painted()
+            && kachakacha::v2::app::AnalysisPaintsSurface(analysis->mode)) {
+            DrawAnalysisShape(painter, *analysis);
+            continue;
+        }
         DrawOneShape(painter, shape);
+    }
+    for (const AnalysisView& view : analysisViews_) {
+        if (!view.entityId.IsNil()) {
+            DrawAnalysisLines(painter, view);
+        }
     }
 }
 

@@ -91,6 +91,7 @@ class QTreeWidgetItem;
 class QWidget;
 class V2OperationPanelHost;
 class V2SurfaceEditTool;
+class V2SurfaceAnalysisTool;
 
 //! 見た目。
 enum class UiTheme {
@@ -99,7 +100,8 @@ enum class UiTheme {
 };
 
 class V2MainWindow final : public QMainWindow {
-    friend class V2SurfaceEditTool;   // 面の編集の道具(状態と手順は向こうが持つ)
+    friend class V2SurfaceEditTool;       // 面の編集の道具(状態と手順は向こうが持つ)
+    friend class V2SurfaceAnalysisTool;   // 面の解析の道具(同じ)
 public:
     V2MainWindow();
     ~V2MainWindow() override;
@@ -258,6 +260,7 @@ public:
     }
     [[nodiscard]] V2ThickenDock& ThickenDock() { return *thickenDock_; }
     [[nodiscard]] V2SurfaceEditTool& SurfaceEdit() { return *surfaceEdit_; }
+    [[nodiscard]] V2SurfaceAnalysisTool& SurfaceAnalysis() { return *surfaceAnalysis_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
     [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
     [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
@@ -1035,6 +1038,7 @@ private:
     bool thickenMirroring_ = false;
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
+    std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     //! 下見の写し。**下見も確定も、これ1つから作る**(§9 と同じ決まり)。

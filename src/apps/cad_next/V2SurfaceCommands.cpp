@@ -5,6 +5,7 @@
 //! しかも役割表は後ろの札にあり、**いまの作り方がどこにも出ていなかった。**
 
 #include "V2MainWindow.h"
+#include "V2SurfaceAnalysisTool.h"
 
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
@@ -229,6 +230,14 @@ void V2MainWindow::RefreshSurfaceDock()
                   session_->GetDocument().Snapshot().settings.tolerance)
             : std::string();
         deviation = QString::fromStdString(note);
+        // 下見の製作性の目安(ガウス曲率から。断定しない)。解析の棚を開かなくても出す。
+        if (surfaceAnalysis_ != nullptr) {
+            const std::string developable = surfaceAnalysis_->PreviewDevelopabilityJa();
+            if (!developable.empty()) {
+                deviation += (deviation.isEmpty() ? QString() : QStringLiteral("\n"))
+                    + QString::fromStdString(developable);
+            }
+        }
         if (!surfaceSnapshot_->batch.empty()) {
             solver += QStringLiteral("(%1 個に分けて、1 つずつ作ります)")
                           .arg(static_cast<int>(surfaceSnapshot_->batch.size()) + 1);
@@ -241,6 +250,10 @@ void V2MainWindow::RefreshSurfaceDock()
             ? QString::fromUtf8(kachakacha::v2::app::SurfaceFooterLine(surfaceInput_,
                   surfaceSnapshot_.has_value()).c_str())
             : QString());
+    // 下見が変われば、面の解析(出していれば)も下見の面を塗り直す。
+    if (surfaceAnalysis_ != nullptr) {
+        surfaceAnalysis_->Refresh();
+    }
 }
 
 //! いまの入力で出来上がる面を、線で出す(§12)。**文書へは何も書かない。**
@@ -420,6 +433,9 @@ void V2MainWindow::EndSurfacePreview()
     surfaceMirror_.clear();
     ShowToolFooter(QString());
     RefreshRightShelves();
+    if (surfaceAnalysis_ != nullptr) {
+        surfaceAnalysis_->Refresh();   // 下見の面の塗りを消す。
+    }
 }
 
 //! 入力から `GuideTable` を組み立てる。**作る直前の1回だけ。**

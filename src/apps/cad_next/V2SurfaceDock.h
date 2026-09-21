@@ -96,6 +96,8 @@ public:
     [[nodiscard]] bool ClickPickSupport(int row);
     //! いま連続条件の欄に出ている言葉(「支持面: 屋根」「この作り方では指定できません」など)。
     [[nodiscard]] QString ContinuityTextJa() const;
+    //! いま「4. 状態」に出ている言葉(外れ・製作性の目安を含む)。
+    [[nodiscard]] QString StatusTextJa() const;
     //! 見えている「張り方」を選ぶ(四辺面のときだけ見える)。
     [[nodiscard]] bool ChooseFourEdgeStyle(kachakacha::v2::modeling::FourEdgeStyle style);
     //! その欄の一覧に出ている行(「1  Section_A」など)。

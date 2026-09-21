@@ -29,6 +29,8 @@
 #include "kachakacha/app/SemanticState.h"
 #include "kachakacha/modeling/GuideSurfaceTable.h"
 #include "kachakacha/modeling/ShapeMesh.h"
+#include "kachakacha/app/SurfaceAnalysis.h"
+#include "kachakacha/modeling/SurfaceAnalysisData.h"
 
 #include <QColor>
 #include <QPen>
@@ -38,6 +40,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -264,6 +267,36 @@ public:
     ToolPreview() const noexcept
     {
         return toolPreview_;
+    }
+
+    //! 面の解析の表示(プロンプト surface_analysis)。色は描くときに決める(ゼブラは見る向きで動く)。
+    struct AnalysisLine {
+        std::vector<kachakacha::v2::geometry::Vector3> points;
+        kachakacha::v2::app::Rgb color;
+        double width = 2.0;
+    };
+    struct AnalysisView {
+        //! 塗り替える形。Nil は下見の面(面を作る・面の編集の下見)。
+        kachakacha::v2::base::EntityId entityId;
+        kachakacha::v2::app::SurfaceAnalysisMode mode = kachakacha::v2::app::SurfaceAnalysisMode::None;
+        //! 標本(道具が覚えているものを分け合う。塗り直すたびに写さない)。
+        std::shared_ptr<const kachakacha::v2::modeling::SurfaceAnalysisData> data;
+        //! 奥行きの並べ替えに使う三角形(data の三角形と同じ並び)。
+        std::shared_ptr<const std::vector<kachakacha::v2::modeling::MeshTriangle>> triangles;
+        //! 曲率の塗りの目盛り(両側の端)。
+        double scale = 1.0;
+        //! 重ねる線(U/V 線・曲率コーム・境目・ずれ)。
+        std::vector<AnalysisLine> lines;
+
+        [[nodiscard]] bool Painted() const noexcept
+        {
+            return data != nullptr && triangles != nullptr && !triangles->empty();
+        }
+    };
+    void SetAnalysisViews(std::vector<AnalysisView> views);
+    [[nodiscard]] const std::vector<AnalysisView>& AnalysisViews() const noexcept
+    {
+        return analysisViews_;
     }
 
     //! 距離が変わったときに呼ぶもの。右の欄が同じ値を出すために要る。
@@ -691,6 +724,10 @@ private:
     void DrawExtrudeHandle(QPainter& painter) const;
     //! 道具の下見の線。細い破線で出す。
     void DrawToolPreview(QPainter& painter) const;
+    //! 解析で塗り替えた面と、重ねる線(V2ViewportAnalysis.cpp)。
+    void DrawAnalysisShape(QPainter& painter, const AnalysisView& view) const;
+    void DrawAnalysisLines(QPainter& painter, const AnalysisView& view) const;
+    [[nodiscard]] const AnalysisView* AnalysisFor(const kachakacha::v2::base::EntityId& id) const;
     //! 3D の中の役割の札。線の上に小さく出す。
     void DrawToolRoleLabels(QPainter& painter) const;
     //! 矢印を掴んだか。掴んだら true。
@@ -903,6 +940,7 @@ private:
     kachakacha::v2::modeling::WorkPlaneFrame workPlane_;
     std::vector<WorkPlaneView> workPlaneViews_;
     std::vector<ShapeView> shapeViews_;
+    std::vector<AnalysisView> analysisViews_;
     //! 当たり判定へ渡す網だけを並べたもの。SetShapeViews で作り直す。
     //! カーソルが動くたびに shapeViews_ から作り直すと、三角形を丸ごと写すことになる。
     std::vector<kachakacha::v2::modeling::ShapeMesh> pickMeshes_;

@@ -848,7 +848,10 @@ KACHA_V2_TEST(snap, 順位は統合仕様の6段に従う)
     Require(same(SnapKind::Midpoint, SnapKind::Center)
             && same(SnapKind::Midpoint, SnapKind::Quadrant),
         "3. 中点・中心・四分点は同じ順位");
-    Require(stronger(SnapKind::Quadrant, SnapKind::ClosestOnCurve), "3 > 4. 最近点");
+    // 線上の格子は最近点より強い(2026-09-21 オーナー報告)。最近点は距離がほぼ 0 なので
+    // 同じ順位では線の上のグリッドの点が選ばれない。
+    Require(stronger(SnapKind::Quadrant, SnapKind::GridOnCurve), "3 > 線上の格子");
+    Require(stronger(SnapKind::GridOnCurve, SnapKind::ClosestOnCurve), "線上の格子 > 4. 最近点");
     Require(stronger(SnapKind::ClosestOnCurve, SnapKind::Perpendicular), "4 > 5. 垂足");
     Require(same(SnapKind::Perpendicular, SnapKind::Tangent), "5. 垂足と接点は同じ順位");
     // §6.1 に無い平面へ投影の置き場所は暫定(オーナー判断待ち)。
@@ -884,6 +887,59 @@ KACHA_V2_TEST(snap, 延長線と重なってもグリッドの点を採る)
         "格子の点を採る(延長線ではなく)");
     RequireNear(chosen->position.x, 70.0, 1e-9, "格子の上に乗る");
     RequireNear(chosen->position.y, 50.0, 1e-9, "格子の上に乗る");
+}
+
+KACHA_V2_TEST(snap, 直線の上でもグリッドの点に吸着する)
+{
+    // オーナー報告 2026-09-21:「直線上なのに曲線上って出てる。線上のグリッドにスナップできない」。
+    // 最近点はポインタ直下に付くので距離がほぼ 0。グリッドと同じか上の順位だと、
+    // 線の上ではグリッドの点がいつまでも選ばれなかった。
+    SceneBuilder builder;
+    builder.AddLine({-100, 0, 0}, {100, 0, 0});
+    builder.EnablePlane();
+    builder.EnableGrid(10.0, 0);
+    const ScreenMapping mapping = TopView();
+    const auto candidates = CollectSnapCandidates(builder.scene, mapping,
+        At(mapping, {30.3, 0.2, 0.0}), {}, Tolerance());
+    Require(HasKind(candidates, SnapKind::ClosestOnCurve), "線上の最近点も候補に出ている");
+    const auto chosen = ChooseSnap(candidates, {});
+    Require(chosen.has_value() && chosen->kind == SnapKind::GridOnCurve,
+        "線の上の格子の点を採る");
+    RequireNear(chosen->position.x, 30.0, 1e-9, "格子の上に乗る");
+    RequireNear(chosen->position.y, 0.0, 1e-9, "線の上に乗る");
+    RequireEqual(std::string(SnapKindLabelJa(chosen->kind)), std::string("線上の格子"),
+        "何に吸着したかを言う");
+}
+
+KACHA_V2_TEST(snap, 斜めの線ではグリッドの線を横切る点に吸着する)
+{
+    SceneBuilder builder;
+    builder.AddLine({0, 0, 0}, {100, 50, 0});   // y = x / 2
+    builder.EnablePlane();
+    builder.EnableGrid(10.0, 0);
+    const ScreenMapping mapping = TopView();
+    // x = 40 の縦線を横切る点は (40, 20)。そのすぐ脇を指す。
+    const auto chosen = ChooseSnap(CollectSnapCandidates(builder.scene, mapping,
+        At(mapping, {40.3, 20.1, 0.0}), {}, Tolerance()), {});
+    Require(chosen.has_value() && chosen->kind == SnapKind::GridOnCurve, "線上の格子を採る");
+    RequireNear(chosen->position.x, 40.0, 1e-9, "縦線の上");
+    RequireNear(chosen->position.y, 20.0, 1e-9, "斜めの線の上");
+}
+
+KACHA_V2_TEST(snap, 格子から離れた線の上では最近点のまま)
+{
+    SceneBuilder builder;
+    builder.AddLine({-100, 0, 0}, {100, 0, 0});
+    builder.EnablePlane();
+    builder.EnableGrid(10.0, 0);
+    const ScreenMapping mapping = TopView();
+    const auto chosen = ChooseSnap(CollectSnapCandidates(builder.scene, mapping,
+        At(mapping, {35.0, 0.2, 0.0}), {}, Tolerance()), {});
+    Require(chosen.has_value(), "吸着する");
+    Require(chosen->kind == SnapKind::ClosestOnCurve, "格子から 50px 離れたところは最近点");
+    RequireNear(chosen->position.y, 0.0, 1e-9, "線の上に乗る");
+    RequireEqual(std::string(SnapKindLabelJa(SnapKind::ClosestOnCurve)), std::string("線上"),
+        "直線でも曲線でも「線上」と言う");
 }
 
 KACHA_V2_TEST(snap, 画面だけの交差には吸着しない)
@@ -1166,7 +1222,8 @@ KACHA_V2_TEST(snap, 全種類に日本語のラベルがある)
         SnapKind::DrawingPoint, SnapKind::Tangent, SnapKind::Perpendicular,
         SnapKind::Midpoint, SnapKind::Quadrant, SnapKind::Extension,
         SnapKind::ProjectedOnPlane, SnapKind::ClosestOnCurve, SnapKind::GridMajor,
-        SnapKind::GridMinor, SnapKind::FreeOnPlane, SnapKind::ScreenIntersection};
+        SnapKind::GridMinor, SnapKind::FreeOnPlane, SnapKind::ScreenIntersection,
+        SnapKind::GridOnCurve};
     for (const SnapKind kind : kinds) {
         Require(!SnapKindLabelJa(kind).empty(),
             "ラベルがあること: " + std::to_string(static_cast<int>(kind)));

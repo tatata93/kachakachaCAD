@@ -80,6 +80,85 @@ private:
     std::vector<SnapCandidate> candidates_;
 };
 
+//! いま使うグリッドの間隔。副点が画面で詰まりすぎるときは主点だけにする。
+struct GridStep {
+    double spacing = 0.0;
+    std::int64_t perStep = 1;   //!< 格子の番号を副点の間隔で数えるための倍率
+};
+
+[[nodiscard]] std::optional<GridStep> CurrentGridStep(const SnapScene& scene,
+    const ScreenMapping& mapping, const Vector3& onPlane, const SnapSettings& settings)
+{
+    if (!scene.grid.visible || !(scene.grid.majorSpacingMm > 0.0)) {
+        return std::nullopt;
+    }
+    const int steps = scene.grid.subdivision > 1 ? scene.grid.subdivision : 1;
+    const double minorSpacing = scene.grid.majorSpacingMm / static_cast<double>(steps);
+    const bool showMinor = steps > 1
+        && minorSpacing * mapping.PixelsPerMillimeterAt(onPlane)
+            >= settings.minimumGridSpacingPx;
+    GridStep step;
+    step.spacing = showMinor ? minorSpacing : scene.grid.majorSpacingMm;
+    step.perStep = showMinor ? 1 : steps;
+    return step;
+}
+
+//! 線上の格子(GridOnCurve)。nearPoint(線上の、ポインタにいちばん近い点)のまわりで、
+//! 線がグリッドの線を横切る点を足す。直線は解析的に、ほかの曲線は格子点が線に
+//! 乗っているときだけ足す。同じ点は同じ番号(副点の間隔で数えた u, v)になる。
+void AddGridOnCurve(Collector& collector, const SnapScene& scene, const SnapCurve& curve,
+    const Vector3& nearPoint, const GridStep& step, const GeometryTolerance& tolerance)
+{
+    const SnapGrid& grid = scene.grid;
+    const double minor = step.spacing / static_cast<double>(step.perStep);
+    const auto uvOf = [&](const Vector3& point) {
+        const Vector3 relative = point - grid.origin;
+        return std::pair<double, double>{
+            Dot(relative, grid.uDirection), Dot(relative, grid.vDirection)};
+    };
+    const auto add = [&](const Vector3& position) {
+        const auto [u, v] = uvOf(position);
+        SnapCandidate source = From(curve.entityId, curve.segmentId,
+            static_cast<std::int64_t>(std::llround(u / minor)));
+        source.latticeV = static_cast<std::int64_t>(std::llround(v / minor));
+        collector.Add(SnapKind::GridOnCurve, position, source);
+    };
+    const auto [nu, nv] = uvOf(nearPoint);
+    if (curve.segment.Kind() == CurveKind::Line) {
+        const Vector3 a = curve.segment.StartPoint();
+        const Vector3 b = curve.segment.EndPoint();
+        const auto [ua, va] = uvOf(a);
+        const auto [ub, vb] = uvOf(b);
+        const auto crossings = [&](double from, double to, double at) {
+            const double span = to - from;
+            if (std::abs(span) <= tolerance.modelLinearMm) {
+                return;   // グリッドの線と平行。重なっていても交わる点は反対向きで拾う
+            }
+            const double base = std::round(at / step.spacing);
+            for (int k = -1; k <= 1; ++k) {
+                const double t = ((base + k) * step.spacing - from) / span;
+                if (t >= -1.0e-9 && t <= 1.0 + 1.0e-9) {
+                    add(a + (b - a) * std::clamp(t, 0.0, 1.0));
+                }
+            }
+        };
+        crossings(ua, ub, nu);
+        crossings(va, vb, nv);
+        return;
+    }
+    for (int du = -1; du <= 1; ++du) {
+        for (int dv = -1; dv <= 1; ++dv) {
+            const Vector3 lattice = grid.origin
+                + grid.uDirection * ((std::round(nu / step.spacing) + du) * step.spacing)
+                + grid.vDirection * ((std::round(nv / step.spacing) + dv) * step.spacing);
+            const Vector3 onCurve = curve.segment.ClosestPoint(lattice).point;
+            if ((onCurve - lattice).Length() <= std::max(tolerance.modelLinearMm, 1.0e-6)) {
+                add(lattice);
+            }
+        }
+    }
+}
+
 } // namespace
 
 std::string_view SnapKindLabelJa(SnapKind kind) noexcept
@@ -91,7 +170,9 @@ std::string_view SnapKindLabelJa(SnapKind kind) noexcept
     case SnapKind::Midpoint:           return "中点";
     case SnapKind::Center:             return "中心";
     case SnapKind::Quadrant:           return "四半点";
-    case SnapKind::ClosestOnCurve:     return "曲線上";
+    case SnapKind::GridOnCurve:        return "線上の格子";
+    // 直線にも円にも出る。「曲線上」と出すと直線の上で首をかしげる(オーナー報告 2026-09-21)。
+    case SnapKind::ClosestOnCurve:     return "線上";
     case SnapKind::Perpendicular:      return "垂足";
     case SnapKind::Tangent:            return "接点";
     case SnapKind::Extension:          return "延長線";
@@ -116,27 +197,31 @@ int SnapPriorityRank(SnapKind kind) noexcept
     case SnapKind::Center:
     case SnapKind::Quadrant:
         return 2;
-    case SnapKind::ClosestOnCurve:
+    case SnapKind::GridOnCurve:
+        // 最近点より上。最近点はポインタ直下で距離がほぼ 0 なので、同じ順位だと
+        // 線の上のグリッドの点が選ばれない(オーナー報告 2026-09-21)。
         return 3;
+    case SnapKind::ClosestOnCurve:
+        return 4;
     case SnapKind::Perpendicular:
     case SnapKind::Tangent:
-        return 4;
+        return 5;
     case SnapKind::ProjectedOnPlane:
-        return 5;   // 平面へ落とした「点」。§6.1 に順位が無い(SnapEngine.h)
+        return 6;   // 平面へ落とした「点」。§6.1 に順位が無い(SnapEngine.h)
     case SnapKind::GridMajor:
     case SnapKind::GridMinor:
-        return 6;
+        return 7;
     case SnapKind::Extension:
         // 延長線は「線」の案内で、グリッドは「点」である。点のほうを採る。
         // グリッドの上を狙っているのに、たまたま近くの線の延長と重なっただけで
         // 格子から外れた点が入っていた(オーナー報告 2026-09-21)。
-        return 7;
-    case SnapKind::FreeOnPlane:
         return 8;
-    case SnapKind::ScreenIntersection:
+    case SnapKind::FreeOnPlane:
         return 9;
+    case SnapKind::ScreenIntersection:
+        return 10;
     }
-    return 9;
+    return 10;
 }
 
 SnapTargetKey TargetKeyOf(const SnapCandidate& candidate) noexcept
@@ -246,6 +331,13 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
             }
             collector.Add(SnapKind::ClosestOnCurve, position,
                 From(curve.entityId, curve.segmentId));
+            // 線の上のグリッドの点。作業平面の中の線だけ(グリッドは作業平面に引く)。
+            if (onWorkPlane.has_value()) {
+                if (const auto step = CurrentGridStep(scene, mapping, *onWorkPlane, settings)) {
+                    AddGridOnCurve(collector, scene, curve,
+                        curve.segment.ClosestPoint(*onWorkPlane).point, *step, tolerance);
+                }
+            }
         }
         // 延長線上(V1の Extension)。基準点ではなく、画面の位置から決める。
         if (const auto onPlane = scene.workPlane.active
@@ -329,19 +421,13 @@ std::vector<SnapCandidate> CollectSnapCandidates(const SnapScene& scene,
             }
 
             // グリッド。
-            if (scene.grid.visible && scene.grid.majorSpacingMm > 0.0) {
+            if (const auto step = CurrentGridStep(scene, mapping, *onPlane, settings)) {
                 const Vector3 relative = *onPlane - scene.grid.origin;
                 const double u = Dot(relative, scene.grid.uDirection);
                 const double v = Dot(relative, scene.grid.vDirection);
-                const int steps = scene.grid.subdivision > 1 ? scene.grid.subdivision : 1;
-                const double minorSpacing = scene.grid.majorSpacingMm
-                    / static_cast<double>(steps);
-                const double pixelsPerMm = mapping.PixelsPerMillimeterAt(*onPlane);
-                const bool showMinor = steps > 1
-                    && minorSpacing * pixelsPerMm >= settings.minimumGridSpacingPx;
-                const double spacing = showMinor ? minorSpacing : scene.grid.majorSpacingMm;
+                const double spacing = step->spacing;
                 // 格子の番号は副点の間隔で数える。副点の表示が切り替わっても同じ点は同じ番号。
-                const std::int64_t perStep = showMinor ? 1 : steps;
+                const std::int64_t perStep = step->perStep;
                 // 近くの格子点だけを見る。周囲1マスで足りる。
                 for (int du = -1; du <= 1; ++du) {
                     for (int dv = -1; dv <= 1; ++dv) {

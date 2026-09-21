@@ -2,6 +2,7 @@
 //!
 //!   HP-AC-01 ほぼ真下へ引いた線が、黙って 89.95 度にならない(直角スナップ)。
 //!   HP-AC-02 長さを打って Tab で角度へ移り、Enter で打ったとおりの線ができる。
+//!   HP-AC-03 既存の直線の上のグリッドの点へ、線の端がちょうど乗る。
 //!
 //! どちらも「画面を押す・欄へ打つ」の人の道だけを通る。値を直接入れない。
 
@@ -18,6 +19,7 @@
 #include <QString>
 
 #include <cmath>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -134,6 +136,52 @@ using kachakacha::v2::modeling::DrawingTool;
         std::abs(angleDeg - 90.0) < 1.0e-6);
 }
 
+//! 画面の上で、世界の点 world から右へ dx px ずらした位置。写せなければ nullopt。
+[[nodiscard]] std::optional<QPointF> ScreenOf(V2Viewport& viewport, const Vector3& world,
+    double dx)
+{
+    const auto screen = viewport.Mapping().Project(world);
+    if (!screen.has_value()) {
+        return std::nullopt;
+    }
+    return QPointF(screen->x + dx, screen->y);
+}
+
+//! HP-AC-03。直線の上のグリッドの点を狙うと、端がちょうどその点に乗る。
+//! 最近点が強すぎて、線の上ではグリッドへ吸い付かなかった(オーナー報告 2026-09-21)。
+[[nodiscard]] bool CaseLineEndSnapsToGridOnExistingLine(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    window.SetMode(kachakacha::v2::app::UiMode::Drawing);
+    auto& viewport = window.Viewport();
+    window.SelectTool(DrawingTool::Line);
+    const auto a = ScreenOf(viewport, Vector3{-20.0, 0.0, 0.0}, 0.0);
+    const auto b = ScreenOf(viewport, Vector3{20.0, 0.0, 0.0}, 0.0);
+    const auto c = ScreenOf(viewport, Vector3{0.0, 10.0, 0.0}, 0.0);
+    // 狙いは格子点 (10, 0)。人の手のずれとして 2px 右へ外す。
+    const auto aim = ScreenOf(viewport, Vector3{10.0, 0.0, 0.0}, 2.0);
+    if (!Explain("点を画面へ写せる", a && b && c && aim)) {
+        return false;
+    }
+    viewport.ClickAt(*a);
+    viewport.ClickAt(*b);
+    window.SelectTool(DrawingTool::Select);
+    window.SelectTool(DrawingTool::Line);
+    const int before = WireCount(window);
+    viewport.ClickAt(*c);
+    viewport.HoverAt(*aim);
+    viewport.ClickAt(*aim);
+    window.SelectTool(DrawingTool::Select);
+    if (!Explain("2本目の線ができる", WireCount(window) == before + 1)) {
+        return false;
+    }
+    const auto& segment = window.Session().Scene().curves.back().segment;
+    const Vector3 end = segment.EndPoint();
+    return Explain((std::string("端が格子点 (10, 0) に乗る(実際 ") + std::to_string(end.x)
+                       + ", " + std::to_string(end.y) + ")").c_str(),
+        std::abs(end.x - 10.0) < 1.0e-6 && std::abs(end.y) < 1.0e-6);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingAccuracyCases()
@@ -142,6 +190,8 @@ std::vector<SelfTestCase> DrawingAccuracyCases()
         {"HP-AC-01 ほぼ真下へ引いた線は真下ちょうどになる", CaseNearVerticalLineBecomesExactlyVertical},
         {"HP-AC-02 長さを打ち Tab で角度へ移って Enter で打ったとおりの線ができる",
             CaseTypedLengthAndAngleDrawTheLine},
+        {"HP-AC-03 既存の直線の上のグリッドの点へ線の端がちょうど乗る",
+            CaseLineEndSnapsToGridOnExistingLine},
     };
 }
 

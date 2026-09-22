@@ -244,6 +244,7 @@ public:
     bool ApplyApproxShotState();
     bool ApplyBooleanShotState();
     bool ApplyResponsiveShotState(const QString& name);   // 指示書 I-02(V2UiShotStatesResponsive.cpp)
+    bool ApplyToolShotState(const QString& name);   // 回転体・丸め・シェル・分割・面積(V2UiShotStatesTools.cpp)
     //! いま下見が出ているか。試験から見る。
     [[nodiscard]] bool SurfacePreviewShown() const { return surfaceSnapshot_.has_value(); }
     //! いま近似の道具が動いているか。試験から見る。

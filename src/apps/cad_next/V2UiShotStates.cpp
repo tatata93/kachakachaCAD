@@ -312,6 +312,9 @@ bool V2MainWindow::ApplyUiShotState(const QString& name)
         || name == QStringLiteral("ui-measure-overlay")) {
         // 指示書 I-02。撮影の5場面(V2UiShotStatesResponsive.cpp)。
         ok = ApplyResponsiveShotState(name);
+    } else if (name.startsWith(QStringLiteral("ui-tool-"))) {
+        // 新しく作れるようにした道具(P-08・P-12・P-13・C-15、V2UiShotStatesTools.cpp)。
+        ok = ApplyToolShotState(name);
     } else {
         return false;
     }

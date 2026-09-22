@@ -8,11 +8,14 @@
 
 #include "V2MainWindow.h"
 
+#include "V2SurfaceAnalysisDock.h"
+#include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceDock.h"
 #include "V2Viewport.h"
 
 #include "kachakacha/app/ExtrudeInputState.h"
 #include "kachakacha/app/Selection.h"
+#include "kachakacha/app/SurfaceAnalysis.h"
 #include "kachakacha/app/SurfaceInputState.h"
 #include "kachakacha/app/UiMode.h"
 #include "kachakacha/geometry/CurveSegment.h"
@@ -23,6 +26,7 @@
 #include <QString>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 using kachakacha::v2::app::SurfaceOrdering;
@@ -50,6 +54,31 @@ namespace {
         }
     }
     return segments;
+}
+
+//! はしご形(断面 3 本 + 長手のガイド 2 本)。断面はベジェの山形(高さ違い)、ガイドは断面の両端を通る。
+//! おまかせがガイド付きロフトに読む形(core の役割の試験と同じ組み方)。
+[[nodiscard]] std::vector<std::pair<std::string, std::vector<CurveSegment>>> LadderForShot()
+{
+    std::vector<std::pair<std::string, std::vector<CurveSegment>>> wires;
+    const double xs[3] = {0.0, 40.0, 80.0};
+    const double heights[3] = {12.0, 16.0, 10.0};
+    for (int index = 0; index < 3; ++index) {
+        const double lift = heights[index] / 0.75;   // 3 次ベジェの山は制御点の高さの 3/4
+        const auto arch = CurveSegment::MakeCubicBezier({Vector3{xs[index], 0.0, 0.0},
+            Vector3{xs[index], 0.0, lift}, Vector3{xs[index], 40.0, lift}, Vector3{xs[index], 40.0, 0.0}});
+        if (arch.HasValue()) {
+            wires.emplace_back("断面" + std::to_string(index + 1),
+                std::vector<CurveSegment>{arch.Value()});
+        }
+    }
+    for (const double y : {0.0, 40.0}) {
+        const auto rail = CurveSegment::MakeLine(Vector3{0.0, y, 0.0}, Vector3{80.0, y, 0.0});
+        if (rail.HasValue()) {
+            wires.emplace_back(y == 0.0 ? "ガイド1" : "ガイド2", std::vector<CurveSegment>{rail.Value()});
+        }
+    }
+    return wires;
 }
 
 [[nodiscard]] std::vector<CurveSegment> FiveSidedProfile()
@@ -174,6 +203,37 @@ bool V2MainWindow::ApplyExtrudeShotState(const QString& name)
 //! **撮るための場面づくりであり、人の道の試験ではない。**
 bool V2MainWindow::ApplySurfaceShotState(const QString& name)
 {
+    // おまかせ(auto)と面の解析(analysis): はしご形を全部選んで、作り方を選ばずに面を作るを押す。
+    if (name.endsWith(QStringLiteral("auto")) || name.endsWith(QStringLiteral("analysis"))) {
+        kachakacha::v2::app::SelectionSet all;
+        for (const auto& [label, segments] : LadderForShot()) {
+            const auto id = AddPlainWire(segments, label.c_str());
+            if (id.IsNil()) {
+                return false;
+            }
+            all.entityIds.push_back(id);
+        }
+        AdoptCurrentDocument();
+        viewport_->SetViewDirection(ViewDirection::Isometric);
+        viewport_->FitToDocument();
+        viewport_->SetSelection(all);
+        RunCommand("surface.create");
+        if (!surfaceShelfShown_ || !SurfacePreviewShown()) {
+            return false;
+        }
+        if (name.endsWith(QStringLiteral("auto"))) {
+            return surfaceInput_.autoRoles;
+        }
+        // 確定してから、面の解析(ガウス曲率)で塗る。製作性の目安が棚に出る。
+        if (!HandleToolKey(Qt::Key_Return, nullptr)) {
+            return false;
+        }
+        viewport_->SetSelection(kachakacha::v2::app::SelectionSet{});
+        RunCommand("view.surface_analysis");
+        return surfaceAnalysis_ != nullptr && surfaceAnalysis_->Dock() != nullptr
+            && surfaceAnalysis_->Dock()->ClickMode(
+                kachakacha::v2::app::SurfaceAnalysisMode::GaussianCurvature);
+    }
     if (name.endsWith(QStringLiteral("recommend"))) {
         // 閉じた同一平面の輪郭1本。正本の「選択内容から推奨しています」の場面。
         DrawRectangleForShot();

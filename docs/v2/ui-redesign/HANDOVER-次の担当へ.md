@@ -1,7 +1,23 @@
-# HANDOVER — 次の担当へ(2026-09-19)
+# HANDOVER — 次の担当へ(2026-09-19、2026-09-22 追記)
 
 この文書は、次にこの作業を無人で続けるモデル(いまより能力の低いモデルかもしれない)向け。
 読んだらまず `TASK_LEDGER.md` の一番下の単位と `REGRESSIONS.md` の一番下を見て、どこまで進んだかを確認すること。
+
+## 2026-09-22 追記: 自由曲面と入力の数
+
+- オーナーは 09-22 に指示書 `kachakachaCAD_Opus5_surface_multiselect_implementation_prompt.md`(自由曲面と任意個数入力)を
+  出した。09-19 の「新機能は作らない」はこの指示書の範囲では上書きされている(面の作り方・面の編集・面の解析・おまかせ)。
+- 進み具合は `TASK_LEDGER.md` の「自由曲面と入力の数」、各機能の状態と入力の数の表は `UI_FEATURE_MATRIX.md`
+  (D-26〜D-42、「入力の数(CARDINALITY)」)。PC で ctest・自己試験を通したものは PC_TESTED(画面の目視はまだ)。
+- 面の役割の数は `modeling/SurfaceCardinality` の 1 か所。`guides.size() == 2` のような決め打ちを足さない。
+- 核(OCCT)のコードは雲ではコンパイルされない(雲の kernel 試験は空)。include と API の誤りは PC でしか出ない。
+  足した OCCT の型は必ず `#include` する(不完全型で MSVC が落ちた)。
+- MSVC は並び(std::vector)の伸ばし方が GCC と違う。**並びへ足したあとで、足す前に取った参照・ポインタを読まない**
+  (PC だけで落ちる)。
+- PC の回し方: `git bundle create /mnt/user-data/outputs/to-pc.bundle v2-wp01 --not origin/main` → 送る →
+  `C:\Users\tak01\github\kachakachaCAD\to-pc.bundle` へ置く → Git CMD で `cmd /c .\_QUICK.cmd`(結果は
+  `_claudeout\quick_*.txt`、1 行ずつ utf-8 → cp932 で読む)。全部緑なら `_GO.cmd` が GitHub
+  (`codex/v2-wp01-build-scaffold`)へ送る。
 
 ## 目的と方針(オーナー)
 

@@ -6,9 +6,11 @@
 #include "kachakacha/document/Commands.h"
 #include "kachakacha/document/Document.h"
 #include "kachakacha/document/FeatureReevaluation.h"
+#include "kachakacha/io/DocumentFile.h"
 
 #include <cmath>
 #include <string>
+#include <string_view>
 
 using kachakacha::v2::base::Diagnostic;
 using kachakacha::v2::base::DeterministicIdGenerator;
@@ -258,6 +260,46 @@ KACHA_V2_TEST(reeval, 距離を変えると下流の形だけが動く)
     RequireEqual(after.Value().outputs[0].entityId.ToString(), keptId.ToString(),
         "IDは同じ");
     RequireNear(after.Value().outputs[0].segments[0].StartPoint().z, 25.0, 1e-9, "25mm上");
+}
+
+KACHA_V2_TEST(reeval, スケールは中心から倍率ぶん大きくし保存名はscale)
+{
+    Chain chain;
+    // 動かした線を、原点を中心に 3 倍にする(D-22)。
+    TransformWireDefinition scale;
+    scale.method = WireTransformMethod::Scale;
+    scale.pointArgument = Vector3{0, 0, 0};
+    scale.scalarArgument.value = 3.0;
+    const auto edited = chain.document.Run(UpdateFeatureDefinitionCommand(
+        chain.moved.feature.id, scale, {chain.profile.entity.id}, "スケールにする"));
+    Require(edited.committed, "変えられた");
+    const auto before = ReevaluateFeature(chain.document.Snapshot(), chain.profile.feature.id);
+    const auto after = ReevaluateFeature(chain.document.Snapshot(), chain.moved.feature.id);
+    Require(before.HasValue() && after.HasValue(), "計算できる");
+    const auto& source = before.Value().outputs[0].segments;
+    const auto& scaled = after.Value().outputs[0].segments;
+    Require(source.size() == scaled.size() && !source.empty(), "線の数は同じ");
+    for (std::size_t index = 0; index < source.size(); ++index) {
+        RequireNear(kachakacha::v2::geometry::Distance(scaled[index].StartPoint(),
+                        source[index].StartPoint() * 3.0),
+            0.0, 1e-9, "どの線も原点から 3 倍");
+    }
+    // 保存して読み直しても、スケールのまま(保存名 "scale")。
+    kachakacha::v2::io::DocumentFile file;
+    file.snapshot = chain.document.Snapshot();
+    const auto text = kachakacha::v2::io::WriteDocumentJson(file);
+    Require(text.find("\"scale\"") != std::string::npos, "保存名は scale");
+    const auto read = kachakacha::v2::io::ReadDocumentJson(text);
+    bool kept = false;
+    if (read.HasValue()) {
+        for (const auto& feature : read.Value().snapshot.features) {
+            if (const auto* transform = std::get_if<TransformWireDefinition>(&feature.definition)) {
+                kept = kept || (transform->method == WireTransformMethod::Scale
+                                   && std::abs(transform->scalarArgument.value - 3.0) < 1e-12);
+            }
+        }
+    }
+    Require(kept, "読み直してもスケールで倍率 3");
 }
 
 KACHA_V2_TEST(reeval, 上流を変えると下流の形も変わる)

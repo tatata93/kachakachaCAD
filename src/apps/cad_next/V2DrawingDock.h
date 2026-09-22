@@ -102,6 +102,9 @@ public:
     [[nodiscard]] bool ClickSnap();
     [[nodiscard]] bool ClickCancel();
     [[nodiscard]] bool ClickConfirm();
+    //! スケールの倍率の欄が打てる形で見えているか・打つ(試験から)。
+    [[nodiscard]] bool ScaleFactorShown() const;
+    [[nodiscard]] bool TypeScaleFactor(double factor);
 
 private:
     void BuildArcRows(QFormLayout* form);
@@ -131,6 +134,9 @@ private:
     //! 円・スプラインのカードが決める作り方(D-04 3点円、D-13 通過点)。
     kachakacha::v2::modeling::CircleMode circleMode_ = kachakacha::v2::modeling::CircleMode::CenterRadius;
     kachakacha::v2::modeling::SplineMode splineMode_ = kachakacha::v2::modeling::SplineMode::ControlPoints;
+    //! スケールの作り方と倍率の欄(D-22)。
+    kachakacha::v2::modeling::ScaleMode scaleMode_ = kachakacha::v2::modeling::ScaleMode::Factor;
+    QDoubleSpinBox* scaleFactor_ = nullptr;
     std::function<void(const QString&)> blockedMethodHandler_;
     QDoubleSpinBox* arcRadius_ = nullptr;
     QDoubleSpinBox* arcSweep_ = nullptr;

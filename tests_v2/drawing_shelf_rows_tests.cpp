@@ -21,7 +21,7 @@ constexpr DrawingTool kAllTools[] = {
     DrawingTool::Mirror, DrawingTool::Rotate, DrawingTool::Split, DrawingTool::Trim,
     DrawingTool::Extend, DrawingTool::JoinEndpoints, DrawingTool::TangentJoin,
     DrawingTool::CurvatureJoin, DrawingTool::Measure, DrawingTool::ConnectTwoPoints,
-    DrawingTool::ChamferOrFilletPair,
+    DrawingTool::ChamferOrFilletPair, DrawingTool::Scale,
 };
 
 } // namespace

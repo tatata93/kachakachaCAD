@@ -62,7 +62,7 @@ void V2MainWindow::BuildMenus()
         "wire.array_circular", "wire.intersection_points", "wire.center_points",
         "wire.key_points", "wire.corner_chamfer", "wire.corner_fillet",
         "wire.set_datum", "wire.clear_datum", "wire.move", "wire.copy",
-        "wire.mirror", "wire.rotate", "wire.project", "wire.project_surface",
+        "wire.mirror", "wire.rotate", "wire.scale", "wire.project", "wire.project_surface",
         "wire.wrap_project"});
     QMenu* groups = edit->addMenu(QStringLiteral("グループ(&G)"));
     addCommands(groups, {"group.set_active", "group.create", "group.dissolve",

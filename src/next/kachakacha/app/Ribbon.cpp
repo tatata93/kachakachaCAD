@@ -69,7 +69,7 @@ const std::vector<RibbonCategory>& DrawingCategories()
                 Extra("数値で直す", "edit.numeric")}},
         {"transform", "変形",
             {Tool("移動", "wire.move"), Tool("回転", "wire.rotate"), Tool("ミラー", "wire.mirror"),
-                Blocked("スケール", "スケールはまだできません(核に線の拡大縮小がありません)"),
+                Tool("スケール", "wire.scale"),
                 Tool("コピー", "wire.copy"), Extra("直線に並べる", "wire.array_linear"),
                 Extra("円に並べる", "wire.array_circular")}},
         {"plane", "作業面",

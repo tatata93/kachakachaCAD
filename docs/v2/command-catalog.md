@@ -76,6 +76,7 @@ parameterSchema / controllerFactory / operationGuide / acceptanceIds
 | `wire.copy` | コピー | ワイヤー、2点 | TransformWire | AT-WIR-006 |
 | `wire.mirror` | ミラー複製 | ワイヤー、鏡の線2点 | TransformWire | AT-WIR-006 |
 | `wire.rotate` | 回転 | ワイヤー、中心と向き2点 | TransformWire | AT-WIR-006 |
+| `wire.scale` | スケール | ワイヤー 1 以上、中心 1 点 + 倍率(棚)か、中心・基準・行き先の 3 点 | TransformWire(scale。直線・円弧・曲線は種類を保つ)。倍率が 0 以下・1 は UI-X005。部品は断る | AT-WIR-006 |
 | `wire.join` | 結合 | 線 2 本以上(何本でも。端でつながっていること) | TransformWire(1 本の並び。端が離れていれば断る) | AT-WIR-004,006 |
 | `wire.coincident` | 端点一致 | 2端点、動かす側 | TransformWire | AT-WIR-006 |
 | `wire.tangent` | 接線接続 | 2 segment端、動かす側 | TransformWire | AT-WIR-006 |

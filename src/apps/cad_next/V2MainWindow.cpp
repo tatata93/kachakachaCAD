@@ -87,7 +87,7 @@ using kachakacha::v2::modeling::WorkPlaneFrame;
 namespace {
 
 //! 道具の並び。V1の道具箱と同じ順にする(V1同等性)。
-constexpr std::array<DrawingTool, 23> kToolOrder{
+constexpr std::array<DrawingTool, 24> kToolOrder{
     DrawingTool::Select,
     DrawingTool::SetGridOrigin,
     DrawingTool::Point,
@@ -102,6 +102,7 @@ constexpr std::array<DrawingTool, 23> kToolOrder{
     DrawingTool::Copy,
     DrawingTool::Mirror,
     DrawingTool::Rotate,
+    DrawingTool::Scale,
     DrawingTool::Split,
     DrawingTool::Trim,
     DrawingTool::Extend,
@@ -120,7 +121,7 @@ struct ToolBinding {
     DrawingTool tool;
 };
 
-constexpr std::array<ToolBinding, 21> kToolBindings{{
+constexpr std::array<ToolBinding, 22> kToolBindings{{
     {"selection.activate", DrawingTool::Select},
     {"grid.move_origin", DrawingTool::SetGridOrigin},
     {"draw.point", DrawingTool::Point},
@@ -137,6 +138,7 @@ constexpr std::array<ToolBinding, 21> kToolBindings{{
     {"wire.copy", DrawingTool::Copy},
     {"wire.mirror", DrawingTool::Mirror},
     {"wire.rotate", DrawingTool::Rotate},
+    {"wire.scale", DrawingTool::Scale},
     {"measure.open", DrawingTool::Measure},
     // 部品の配置(P-18)。線と同じ道具・同じ点の置き方で、選んだ部品を動かす。
     {"part.move", DrawingTool::Move},

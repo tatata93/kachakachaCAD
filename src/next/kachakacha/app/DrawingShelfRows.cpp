@@ -20,6 +20,10 @@ DrawingShelfRows DrawingShelfRowsFor(DrawingTool tool) noexcept
         rows.construction = true;
         rows.keepPoints = true;
         break;
+    case DrawingTool::Scale:
+        // スケールだけ、倍率の欄がある(D-22)。
+        rows.scale = true;
+        break;
     case DrawingTool::Point:
     case DrawingTool::Line:
     case DrawingTool::Polyline:
@@ -91,6 +95,9 @@ std::string_view DrawingToolHintJa(DrawingTool tool) noexcept
         return "結びたい点を2つ押してください。";
     case DrawingTool::ChamferOrFilletPair:
         return "角を落とす2本を押してください。量は右の欄で決めます。";
+    case DrawingTool::Scale:
+        return "大きさを変えるものを押し、次に中心を押してください(倍率は右の欄)。"
+               "「基準の2点」なら中心・基準の点・行き先の点の3か所を押します。";
     }
     return "画面を押して進めてください。";
 }

@@ -17,6 +17,7 @@
 #include <QPointF>
 #include <QString>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -413,6 +414,79 @@ using kachakacha::v2::modeling::DrawingTool;
     return true;
 }
 
+//! いちばん新しい線の外接箱の x の幅(場面の線から)。
+[[nodiscard]] double NewestWireWidth(V2MainWindow& window)
+{
+    kachakacha::v2::base::EntityId newest;
+    for (const auto& entity : window.Session().GetDocument().Snapshot().entities) {
+        if (entity.kind == EntityKind::Wire) {
+            newest = entity.id;
+        }
+    }
+    double low = 1.0e300;
+    double high = -1.0e300;
+    for (const auto& curve : window.Session().Scene().curves) {
+        if (!(curve.entityId == newest)) {
+            continue;
+        }
+        for (int step = 0; step <= 4; ++step) {
+            const double x = curve.segment.Evaluate(step / 4.0).x;
+            low = std::min(low, x);
+            high = std::max(high, x);
+        }
+    }
+    return high - low;
+}
+
+//! HP-DM-10。スケール(D-22): 線を選び、帯の「スケール」→ 倍率 2 → 中心を押すと 2 倍になり、
+//! 1 回で戻る。「基準の2点」では中心・基準・行き先の 3 点で倍率が決まる。
+[[nodiscard]] bool CaseScaleWireByFactorAndReference(V2MainWindow& window)
+{
+    using kachakacha::v2::geometry::Vector3;
+    window.RunCommand("file.new");
+    window.SetMode(UiMode::Drawing);
+    const auto rectangle = DrawRectangleAtByHand(window, 0.45, 0.45, 0.55, 0.55);
+    const double before = rectangle.IsNil() ? 0.0 : NewestWireWidth(window);
+    if (!Explain("矩形を手で引ける", !rectangle.IsNil() && before > 1.0)
+        || !Explain("矩形を画面から拾える", ClickOnCurveOf(window, rectangle))) {
+        return false;
+    }
+    auto& ribbon = window.Ribbon();
+    auto& dock = window.DrawingDock();
+    if (!Explain("帯の「変形」を選べる", ribbon.ClickCategory(QStringLiteral("変形")))
+        || !Explain("「スケール」を押せる", ribbon.ClickTool(QStringLiteral("スケール")))
+        || !Explain("スケールの道具になる", window.Session().CurrentTool() == DrawingTool::Scale)
+        || !Explain("「倍率」のカードを押せる", dock.ClickMethod(QStringLiteral("倍率")))
+        || !Explain("倍率の欄に 2 を打てる", dock.TypeScaleFactor(2.0))
+        || !Explain("中心(矩形の真ん中)を押せる", ClickWorld(window, Vector3{0.0, 0.0, 0.0}))) {
+        return false;
+    }
+    const double doubled = NewestWireWidth(window);
+    if (!Explain((std::string("幅が 2 倍になる(") + std::to_string(before) + " → "
+                     + std::to_string(doubled) + ")").c_str(),
+            std::abs(doubled - before * 2.0) < 1.0e-3)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("1 回の取り消しで元の幅に戻る", std::abs(NewestWireWidth(window) - before) < 1.0e-3)) {
+        return false;
+    }
+    // 基準の2点: 中心 (0,0)、基準 (10,0)、行き先 (15,0) → ×1.5。
+    window.SelectTool(DrawingTool::Select);
+    if (!Explain("矩形をもう一度拾える", ClickOnCurveOf(window, rectangle))
+        || !Explain("「スケール」をもう一度押せる", ribbon.ClickTool(QStringLiteral("スケール")))
+        || !Explain("「基準の2点」を押せる", dock.ClickMethod(QStringLiteral("基準の2点")))
+        || !Explain("基準の2点では倍率の欄を出さない", !dock.ScaleFactorShown())
+        || !Explain("中心・基準・行き先を押せる", ClickWorld(window, Vector3{0.0, 0.0, 0.0})
+                && ClickWorld(window, Vector3{10.0, 0.0, 0.0}) && ClickWorld(window, Vector3{15.0, 0.0, 0.0}))) {
+        return false;
+    }
+    const double scaled = NewestWireWidth(window);
+    window.SelectTool(DrawingTool::Select);
+    return Explain((std::string("幅が 1.5 倍になる(") + std::to_string(scaled) + ")").c_str(),
+        std::abs(scaled - before * 1.5) < 1.0e-3);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> DrawingMethodCases()
@@ -430,6 +504,8 @@ std::vector<SelfTestCase> DrawingMethodCases()
         {"HP-DM-07 円の3点は3か所を押すとその3点を通る円ができる", CaseCircleThroughThreeClicks},
         {"HP-DM-08 円弧の中心・始点・終点は半径が始点で決まり左回りにできる", CaseArcFromCenterClicks},
         {"HP-DM-09 スプラインの通過点は押した点をすべて通る", CaseSplineThroughClickedPoints},
+        {"HP-DM-10 スケールは倍率でも基準の2点でも線の大きさを変え1回で戻る",
+            CaseScaleWireByFactorAndReference},
     };
 }
 

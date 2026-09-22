@@ -27,6 +27,8 @@ enum class TransformKind {
     Copy,
     Mirror,
     Rotate,
+    //! 拡大縮小(D-22)。pointArgument が中心、factor が倍率。元は残さない。
+    Scale,
 };
 
 //! 置いた点から読み取った、変換1回ぶんの中身。
@@ -38,6 +40,8 @@ struct TransformPlan {
     geometry::Vector3 pointArgument{};
     //! 回転角(ラジアン)。他の道具では 0。
     double angleRad = 0.0;
+    //! 倍率(スケール)。他の道具では 1。
+    double factor = 1.0;
     //! 元の線を残すか。複製と鏡映は残す。移動と回転は残さない。
     bool keepsSource = false;
     //! 帯に出す一文。「20.0mm 動かします」など。
@@ -47,16 +51,19 @@ struct TransformPlan {
 //! その道具が、選んだ線を変換する道具か。
 [[nodiscard]] bool ToolIsTransform(DrawingTool tool) noexcept;
 
-//! 道具に要る点の数。変換の道具でなければ 0。
+//! 道具に要る点の数。変換の道具でなければ 0。スケールは作り方で変わる(倍率 1 点 / 基準 3 点)。
 [[nodiscard]] int TransformPointCount(DrawingTool tool) noexcept;
+[[nodiscard]] int TransformPointCount(DrawingTool tool, const ToolSettings& settings) noexcept;
 
 //! 置いた点から中身を決める。決まらなければ断る。degrade しない。
 //!
 //! - 移動・複製: 2点。1点目から2点目への差が移動量。
 //! - 鏡映: 2点。その2点を通る線が鏡。面の法線は線と作業平面法線の外積。
 //! - 回転: 3点。1点目が中心、2点目が始まりの向き、3点目が終わりの向き。
+//! - スケール: 1点(中心。倍率は typedScaleFactor)か、3点(中心・基準・行き先。
+//!   倍率 = 中心から行き先の距離 / 中心から基準の距離)。倍率が 0 以下・1 のままは断る。
 [[nodiscard]] base::Result<TransformPlan> PlanTransform(DrawingTool tool,
     const std::vector<geometry::Vector3>& points, const geometry::Vector3& planeNormal,
-    const geometry::GeometryTolerance& tolerance);
+    const geometry::GeometryTolerance& tolerance, double typedScaleFactor = 1.0);
 
 } // namespace kachakacha::v2::modeling

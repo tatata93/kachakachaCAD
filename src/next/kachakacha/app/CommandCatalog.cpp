@@ -245,6 +245,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
             "中心・始まりの向き・終わりの向きの3点で、選んだ線・部品を回します。", true,
             {"AT-WIR-006"}},
+        {"wire.scale", "スケール", CommandMode::Tool, "scale", "",
+            SelectionPredicate::OneOrMoreWires, "ワイヤーを1つ以上選んでください。",
+            "中心と倍率(または中心・基準・行き先の3点)で、選んだ線の大きさを変えます。"
+            "直線・円弧・曲線は種類を保ちます(部品のスケールはまだありません)。", true,
+            {"AT-WIR-006"}},
         {"wire.join", "結合", CommandMode::Tool, "join", "",
             SelectionPredicate::TwoOrMoreWires, "つなぐ線を2つ以上選んでください。",
             "端でつながっている線を何本でも1本の並びにします(並べ替えと向きの反転はするが、"

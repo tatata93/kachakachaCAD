@@ -31,12 +31,14 @@ struct DrawingShelfRows {
     bool controlPolygon = false;
     //! 数値で線を作る。道具に関係なくいつでも使える(別の区画)。
     bool directWire = true;
+    //! スケールの倍率。スケールの道具のときだけ(作り方が「倍率」のとき打てる、D-22)。
+    bool scale = false;
 
     //! 道具に応じて変わる欄が1つも無いか。
     //! 空のまま出すと「壊れた」ように見えるので、代わりに使い方を出す。
     [[nodiscard]] bool ToolSectionEmpty() const noexcept
     {
-        return !arc && !construction && !keepPoints && !controlPolygon;
+        return !arc && !construction && !keepPoints && !controlPolygon && !scale;
     }
 };
 

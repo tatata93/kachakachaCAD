@@ -66,6 +66,7 @@ std::string_view DrawingToolNameJa(DrawingTool tool) noexcept
     case DrawingTool::Measure:             return "測定";
     case DrawingTool::ConnectTwoPoints:    return "2点を線で結ぶ";
     case DrawingTool::ChamferOrFilletPair: return "面取り/丸め";
+    case DrawingTool::Scale:               return "スケール";
     }
     return "";
 }
@@ -105,6 +106,9 @@ int ToolSession::RequiredPointCount() const
         return 2;   // 鏡の線を2点で
     case DrawingTool::Rotate:
         return 3;   // 中心、始まりの向き、終わりの向き
+    case DrawingTool::Scale:
+        // 倍率を欄で決めるなら中心 1 点、基準で決めるなら中心・基準・行き先の 3 点。
+        return settings_.scaleMode == ScaleMode::Factor ? 1 : 3;
     case DrawingTool::Bezier:
         return 4;
     case DrawingTool::Polyline:
@@ -335,6 +339,7 @@ Result<ToolOutput> ToolSession::Build(const std::vector<Vector3>& points) const
     case DrawingTool::Copy:
     case DrawingTool::Mirror:
     case DrawingTool::Rotate:
+    case DrawingTool::Scale:
         // 変換そのものは WireEdit が行う。ここでは基準の点を集めて渡す。
         // 何を意味するか(移動量・鏡の面・回す角)は TransformInput が決める。
         if (static_cast<int>(points.size()) != RequiredPointCount()) {

@@ -293,10 +293,13 @@ void V2DrawingDock::ApplyToolRows()
         toolForm_->setRowVisible(arcRadius_, false);
         toolForm_->setRowVisible(arcSweep_, false);
     }
+    // 倍率はスケールの「倍率」のときだけ(基準の2点のときは点が倍率を決める)。
+    toolForm_->setRowVisible(scaleFactor_,
+        rows.scale && scaleMode_ == kachakacha::v2::modeling::ScaleMode::Factor);
     construction_->setVisible(rows.construction);
     keepPoints_->setVisible(rows.keepPoints);
     controlPolygon_->setVisible(rows.controlPolygon);
-    toolTitle_->setVisible(rows.arc);
+    toolTitle_->setVisible(rows.arc || rows.scale);
     // 一文はいつも出す。作り方があればそのカードの一文、無ければ道具の使い方。
     if (methodIndex_ >= 0 && methodIndex_ < static_cast<int>(methodCards_.size())) {
         hint_->setText(Text(methodCards_[static_cast<std::size_t>(methodIndex_)].hintJa));
@@ -319,6 +322,7 @@ void V2DrawingDock::RebuildMethodCards()
     now.arcMode = arcMode_;
     now.circleMode = circleMode_;
     now.splineMode = splineMode_;
+    now.scaleMode = scaleMode_;
     methodIndex_ = kachakacha::v2::app::CurrentDrawingMethodIndex(tool_, now);
     for (std::size_t index = 0; index < methodCards_.size(); ++index) {
         const auto& card = methodCards_[index];
@@ -374,6 +378,12 @@ void V2DrawingDock::ChooseMethod(int index)
     }
     if (card.splineMode.has_value() && *card.splineMode != splineMode_) {
         splineMode_ = *card.splineMode;
+        EmitSettings();
+    }
+    if (card.scaleMode.has_value() && *card.scaleMode != scaleMode_) {
+        scaleMode_ = *card.scaleMode;
+        toolForm_->setRowVisible(scaleFactor_,
+            scaleMode_ == kachakacha::v2::modeling::ScaleMode::Factor);
         EmitSettings();
     }
 }
@@ -467,6 +477,17 @@ void V2DrawingDock::BuildArcRows(QFormLayout* form)
         [this] { EmitSettings(); });
     QObject::connect(arcSweep_, &QDoubleSpinBox::valueChanged, this,
         [this] { EmitSettings(); });
+    // スケールの倍率(D-22)。作り方が「倍率」のときだけ出す(基準の2点は点が決める)。
+    scaleFactor_ = new QDoubleSpinBox(body_);
+    scaleFactor_->setObjectName(QStringLiteral("drawingScaleFactor"));
+    scaleFactor_->setRange(0.001, 1000.0);
+    scaleFactor_->setDecimals(4);
+    scaleFactor_->setSingleStep(0.1);
+    scaleFactor_->setPrefix(QStringLiteral("× "));
+    scaleFactor_->setValue(2.0);
+    form->addRow(QStringLiteral("倍率"), scaleFactor_);
+    QObject::connect(scaleFactor_, &QDoubleSpinBox::valueChanged, this,
+        [this] { EmitSettings(); });
 }
 
 void V2DrawingDock::BuildDirectWireRows(QFormLayout* form)
@@ -557,6 +578,8 @@ ToolSettings V2DrawingDock::Settings() const
     settings.arcMode = arcMode_;
     settings.circleMode = circleMode_;
     settings.splineMode = splineMode_;
+    settings.scaleMode = scaleMode_;
+    settings.scaleFactor = scaleFactor_->value();
     settings.radiusMm = arcRadius_->value();
     settings.sweepAngleRad = arcSweep_->value() * kPi / 180.0;
     settings.construction = construction_->isChecked();
@@ -571,6 +594,8 @@ void V2DrawingDock::SetSettings(const ToolSettings& settings)
     arcMode_ = settings.arcMode;
     circleMode_ = settings.circleMode;
     splineMode_ = settings.splineMode;
+    scaleMode_ = settings.scaleMode;
+    scaleFactor_->setValue(settings.scaleFactor);
     arcRadius_->setValue(settings.radiusMm);
     arcSweep_->setValue(settings.sweepAngleRad * 180.0 / kPi);
     construction_->setChecked(settings.construction);
@@ -579,6 +604,8 @@ void V2DrawingDock::SetSettings(const ToolSettings& settings)
     loading_ = false;
     RebuildMethodCards();   // 円弧の作り方が変わったなら、押されたカードも変わる
     ApplyArcVisibility();
+    toolForm_->setRowVisible(scaleFactor_, kachakacha::v2::app::DrawingShelfRowsFor(tool_).scale
+            && scaleMode_ == kachakacha::v2::modeling::ScaleMode::Factor);
     EmitSettings();
 }
 
@@ -651,4 +678,18 @@ void V2DrawingDock::SetDirectWireKindIndex(int index)
 void V2DrawingDock::ShowMessage(const QString& text)
 {
     message_->setText(text);
+}
+
+bool V2DrawingDock::ScaleFactorShown() const
+{
+    return scaleFactor_ != nullptr && scaleFactor_->isVisible() && scaleFactor_->isEnabled();
+}
+
+bool V2DrawingDock::TypeScaleFactor(double factor)
+{
+    if (!ScaleFactorShown()) {
+        return false;
+    }
+    scaleFactor_->setValue(factor);
+    return true;
 }

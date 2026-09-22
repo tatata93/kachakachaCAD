@@ -23,7 +23,7 @@ KACHA_V2_TEST(tool_targeting, モードを変えたら選択道具へ戻る)
 KACHA_V2_TEST(tool_targeting, 動かす道具は相手が要る)
 {
     for (const DrawingTool tool : {DrawingTool::Move, DrawingTool::Copy,
-             DrawingTool::Mirror, DrawingTool::Rotate}) {
+             DrawingTool::Mirror, DrawingTool::Rotate, DrawingTool::Scale}) {
         Require(ToolNeedsTargetWire(tool), "相手が要る");
     }
 }

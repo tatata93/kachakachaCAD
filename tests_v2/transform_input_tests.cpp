@@ -41,12 +41,13 @@ constexpr double kPi = 3.14159265358979323846;
 
 } // namespace
 
-KACHA_V2_TEST(transform_input, 変換の道具はこの4つだけ)
+KACHA_V2_TEST(transform_input, 変換の道具はこの5つだけ)
 {
     Require(ToolIsTransform(DrawingTool::Move), "移動は変換");
     Require(ToolIsTransform(DrawingTool::Copy), "コピーは変換");
     Require(ToolIsTransform(DrawingTool::Mirror), "ミラーは変換");
     Require(ToolIsTransform(DrawingTool::Rotate), "回転は変換");
+    Require(ToolIsTransform(DrawingTool::Scale), "スケールは変換(D-22)");
     Require(!ToolIsTransform(DrawingTool::Line), "直線は変換ではない");
     Require(!ToolIsTransform(DrawingTool::Trim), "トリムは変換ではない");
     Require(TransformPointCount(DrawingTool::Move) == 2, "移動は2点");
@@ -190,6 +191,35 @@ KACHA_V2_TEST(transform_input, 数値でない点は断る)
         UpNormal(), Tolerance());
     Require(!plan.HasValue(), "断る");
     RequireEqual(FirstCode(plan), std::string("UI-G004"), "数でないと言う");
+}
+
+KACHA_V2_TEST(transform_input, スケールは中心と倍率か中心と基準の2点で決まる)
+{
+    kachakacha::v2::modeling::ToolSettings settings;
+    Require(TransformPointCount(DrawingTool::Scale, settings) == 1, "倍率で決めるなら中心の 1 点");
+    settings.scaleMode = kachakacha::v2::modeling::ScaleMode::Reference;
+    Require(TransformPointCount(DrawingTool::Scale, settings) == 3, "基準で決めるなら 3 点");
+    // 倍率で: 中心 (10,0) を 1 点、倍率 2.5。
+    const auto typed = PlanTransform(DrawingTool::Scale, {Vector3{10.0, 0.0, 0.0}}, UpNormal(),
+        Tolerance(), 2.5);
+    Require(typed.HasValue() && typed.Value().kind == TransformKind::Scale, "スケールになる");
+    Require(std::abs(typed.Value().factor - 2.5) < 1e-12 && typed.Value().pointArgument.x == 10.0,
+        "倍率と中心が入る");
+    Require(!typed.Value().keepsSource, "元は残さない(大きさを変える)");
+    // 基準の2点で: 中心 (0,0)、基準 (10,0)、行き先 (0,15) → ×1.5(向きは問わない)。
+    const auto reference = PlanTransform(DrawingTool::Scale,
+        {Vector3{0.0, 0.0, 0.0}, Vector3{10.0, 0.0, 0.0}, Vector3{0.0, 15.0, 0.0}}, UpNormal(),
+        Tolerance());
+    Require(reference.HasValue() && std::abs(reference.Value().factor - 1.5) < 1e-12,
+        "倍率 = 中心から行き先 ÷ 中心から基準");
+    // 断る: 倍率 1、0 以下、中心と重なる基準。
+    RequireEqual(FirstCode(PlanTransform(DrawingTool::Scale, {Vector3{}}, UpNormal(), Tolerance(), 1.0)),
+        std::string("UI-X005"), "倍率 1 は断る");
+    RequireEqual(FirstCode(PlanTransform(DrawingTool::Scale, {Vector3{}}, UpNormal(), Tolerance(), 0.0)),
+        std::string("UI-X005"), "倍率 0 は断る");
+    RequireEqual(FirstCode(PlanTransform(DrawingTool::Scale,
+                     {Vector3{}, Vector3{}, Vector3{5.0, 0.0, 0.0}}, UpNormal(), Tolerance())),
+        std::string("UI-X005"), "中心と重なる基準は断る");
 }
 
 KACHA_V2_TEST_MAIN("transform_input_tests")

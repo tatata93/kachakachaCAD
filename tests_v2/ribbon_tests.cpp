@@ -98,11 +98,13 @@ KACHA_V2_TEST(ribbon, 正本にあって核に無いものは理由つきで押�
             }
         }
     }
-    for (const char* label : {"楕円", "スケール", "テキスト", "面積", "フィレット", "面取り", "シェル",
+    for (const char* label : {"楕円", "テキスト", "面積", "フィレット", "面取り", "シェル",
              "分割", "面オフセット", "面削除", "面置換", "表裏反転"}) {
         Require(blocked.count(label) == 1, std::string("まだ作れないので押せない形: ") + label);
     }
-    Require(blocked.size() == 12, "押せない道具は 12 個(作れるようになったものは本物の道具へ)");
+    Require(blocked.size() == 11, "押せない道具は 11 個(作れるようになったものは本物の道具へ)");
+    const auto* scale = FindRibbonTool(UiMode::Drawing, "wire.scale");
+    Require(scale != nullptr && !scale->Blocked(), "作図の変形でスケールが押せる(D-22)");
     // 作れるようになったものは本物の命令を呼ぶ(P-08/P-09: 回転体・ロフト立体・スイープ、
     // P-17: 交差、P-18: 部品の配置)。
     for (const char* id : {"part.revolve", "part.loft_solid", "part.sweep", "part.boolean_intersect",

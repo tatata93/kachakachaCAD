@@ -283,7 +283,8 @@ ClickResult DrawingSession::Commit(const ToolOutput& output, std::string_view la
         result.commandLabel = std::string(modeling::DrawingToolNameJa(tool_));
         if (!output.transformPoints.empty()) {
             auto planned = modeling::PlanTransform(tool_, output.transformPoints,
-                scene_.workPlane.normal, document_.Snapshot().settings.tolerance);
+                scene_.workPlane.normal, document_.Snapshot().settings.tolerance,
+                toolSettings_.scaleFactor);
             if (!planned.HasValue()) {
                 result.diagnostics = planned.Diagnostics();
                 return result;

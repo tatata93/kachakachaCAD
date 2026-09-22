@@ -8,6 +8,7 @@
 //!   ベジェ:   制御点で作成
 //!   スプライン: 制御点 / 通過点 / 近似・Fit(核に無い)
 //!   移動/コピー: 2点     ミラー: 鏡の線2点     回転: 中心+2方向
+//!   スケール: 倍率(中心 1 点 + 欄) / 基準の2点(中心・基準・行き先)
 //!   分割:     押した場所で   トリム: 消したい側を押す   延長: 伸ばす端を押す
 //!   結合:     端点2つ / 接線 / 曲率(3つの道具それぞれ1枚)
 //!
@@ -33,6 +34,8 @@ struct DrawingMethodCard {
     std::optional<modeling::CircleMode> circleMode;
     //! スプラインのカードは作り方(SplineMode)を決める。
     std::optional<modeling::SplineMode> splineMode;
+    //! スケールのカードは作り方(ScaleMode)を決める(D-22)。
+    std::optional<modeling::ScaleMode> scaleMode;
     //! そのカードを選んだときの、次にすることの一文。空にはならない。
     std::string hintJa;
     //! 正本に無い(「その他」)。並びの後ろに出す。

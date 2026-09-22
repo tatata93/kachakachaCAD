@@ -109,4 +109,9 @@ struct CornerOptions {
 [[nodiscard]] base::Result<CurveSegment> MirrorCurve(const CurveSegment& curve,
     Vector3 planePoint, Vector3 planeNormal);
 
+//! 点を中心にした拡大縮小(D-22)。倍率は 0 より大きいこと。直線・円弧・曲線は種類を保つ
+//! (円弧は中心を写して半径に倍率を掛ける。折れ線へ落とさない)。
+[[nodiscard]] base::Result<CurveSegment> ScaleCurve(const CurveSegment& curve, Vector3 center,
+    double factor);
+
 } // namespace kachakacha::v2::geometry

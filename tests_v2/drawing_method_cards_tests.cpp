@@ -1,6 +1,7 @@
 // 作図の「作り方」カード(正本 3 HTML 2026-09-18、指示書 D-01〜D-14)。
 #include "kachakacha/app/CursorInput.h"
 #include "kachakacha/app/DrawingMethodCards.h"
+#include "kachakacha/app/DrawingShelfRows.h"
 #include "kachakacha/base/TestHarness.h"
 
 #include <string>
@@ -87,7 +88,7 @@ KACHA_V2_TEST(drawing_method_cards, どのカードにも次にすることの�
              DrawingTool::Spline,
              // 編集・変形の道具も道具のページを持つ(指示書 D-15/D-21)。
              DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror, DrawingTool::Rotate,
-             DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
+             DrawingTool::Scale, DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
              DrawingTool::JoinEndpoints, DrawingTool::TangentJoin, DrawingTool::CurvatureJoin}) {
         const auto cards = DrawingMethodCardsFor(tool);
         Require(!cards.empty(), "作図の道具には1枚以上");
@@ -95,6 +96,20 @@ KACHA_V2_TEST(drawing_method_cards, どのカードにも次にすることの�
             Require(!card.labelJa.empty() && !card.hintJa.empty(), "名前と一文が空でない");
         }
     }
+}
+
+KACHA_V2_TEST(drawing_method_cards, スケールは倍率と基準の2点のカードで作り方を決める)
+{
+    const auto scale = DrawingMethodCardsFor(DrawingTool::Scale);
+    Require(scale.size() == 2 && scale[0].labelJa == "倍率" && scale[1].labelJa == "基準の2点",
+        "スケールは 倍率 / 基準の2点(D-22)");
+    Require(!scale[0].Blocked() && !scale[1].Blocked(), "どちらも押せる");
+    ToolSettings settings;
+    Require(CurrentDrawingMethodIndex(DrawingTool::Scale, settings) == 0, "既定は倍率");
+    settings.scaleMode = kachakacha::v2::modeling::ScaleMode::Reference;
+    Require(CurrentDrawingMethodIndex(DrawingTool::Scale, settings) == 1, "基準の2点の設定");
+    Require(kachakacha::v2::app::DrawingShelfRowsFor(DrawingTool::Scale).scale,
+        "スケールの棚には倍率の欄がある");
 }
 
 KACHA_V2_TEST_MAIN("drawing_method_cards_tests")

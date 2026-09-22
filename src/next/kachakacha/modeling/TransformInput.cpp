@@ -37,7 +37,8 @@ using geometry::Vector3;
 bool ToolIsTransform(DrawingTool tool) noexcept
 {
     return tool == DrawingTool::Move || tool == DrawingTool::Copy
-        || tool == DrawingTool::Mirror || tool == DrawingTool::Rotate;
+        || tool == DrawingTool::Mirror || tool == DrawingTool::Rotate
+        || tool == DrawingTool::Scale;
 }
 
 int TransformPointCount(DrawingTool tool) noexcept
@@ -48,30 +49,80 @@ int TransformPointCount(DrawingTool tool) noexcept
     case DrawingTool::Mirror:
         return 2;
     case DrawingTool::Rotate:
+    case DrawingTool::Scale:   // 基準で決める作り方の点の数(倍率で決めるなら 1)
         return 3;
     default:
         return 0;
     }
 }
 
+int TransformPointCount(DrawingTool tool, const ToolSettings& settings) noexcept
+{
+    if (tool == DrawingTool::Scale && settings.scaleMode == ScaleMode::Factor) {
+        return 1;
+    }
+    return TransformPointCount(tool);
+}
+
+namespace {
+
+//! スケール(D-22)。中心 1 点 + 打った倍率か、中心・基準・行き先の 3 点。
+[[nodiscard]] Result<TransformPlan> PlanScale(const std::vector<Vector3>& points,
+    const geometry::GeometryTolerance& tolerance, double typedScaleFactor)
+{
+    double factor = typedScaleFactor;
+    if (points.size() == 3) {
+        const double reference = (points[1] - points[0]).Length();
+        const double target = (points[2] - points[0]).Length();
+        if (reference <= tolerance.modelLinearMm || target <= tolerance.modelLinearMm) {
+            return Refuse("UI-X005", "倍率が決まりません。",
+                "中心と同じ場所に点があります。中心から離れた基準の点と行き先の点を置いてください。");
+        }
+        factor = target / reference;
+    } else if (points.size() != 1) {
+        return Refuse("UI-T001", "点が足りません。",
+            "スケールは中心の 1 点(倍率は棚で)か、中心・基準・行き先の 3 点です。");
+    }
+    if (!(factor > 0.0) || !geometry::IsFinite(factor)) {
+        return Refuse("UI-X005", "倍率が決まりません。", "倍率は 0 より大きい数にしてください。");
+    }
+    if (std::abs(factor - 1.0) <= 1.0e-9) {
+        return Refuse("UI-X005", "倍率が 1 なので、大きさが変わりません。",
+            "1 と違う倍率にしてください。");
+    }
+    TransformPlan plan;
+    plan.kind = TransformKind::Scale;
+    plan.pointArgument = points[0];
+    plan.factor = factor;
+    plan.keepsSource = false;
+    plan.summaryJa = "スケール: ×" + Rounded(factor);
+    return Result<TransformPlan>::Success(std::move(plan));
+}
+
+} // namespace
+
 Result<TransformPlan> PlanTransform(DrawingTool tool, const std::vector<Vector3>& points,
-    const Vector3& planeNormal, const geometry::GeometryTolerance& tolerance)
+    const Vector3& planeNormal, const geometry::GeometryTolerance& tolerance,
+    double typedScaleFactor)
 {
     if (!ToolIsTransform(tool)) {
         return Refuse("UI-T003", "このツールは点から形を作りません。",
             std::string(DrawingToolNameJa(tool)) + " は変換の道具ではありません。");
-    }
-    const int required = TransformPointCount(tool);
-    if (static_cast<int>(points.size()) != required) {
-        return Refuse("UI-T001", "点が足りません。",
-            std::string(DrawingToolNameJa(tool)) + " には " + std::to_string(required)
-                + " 点が要ります。");
     }
     for (const Vector3& point : points) {
         if (!point.IsFinite()) {
             return Refuse("UI-G004", "原点に有限でない数が入っています。",
                 "置いた点に数値でない値が入っています。");
         }
+    }
+    if (tool == DrawingTool::Scale) {
+        return PlanScale(points, tolerance, typedScaleFactor);
+    }
+    const int required = TransformPointCount(tool);
+    if (static_cast<int>(points.size()) != required) {
+        return Refuse("UI-T001", "点が足りません。",
+            std::string(DrawingToolNameJa(tool)) + " には " + std::to_string(required)
+                + " 点が要ります。");
     }
     const Vector3 normal = Normalized(planeNormal, tolerance.numericEpsilon);
     if (normal.Length() < 0.5) {

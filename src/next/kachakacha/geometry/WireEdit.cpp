@@ -681,6 +681,39 @@ Result<CurveSegment> MirrorCurve(const CurveSegment& curve, Vector3 planePoint,
     return Result<CurveSegment>::Failure(MakeError(kNotSupported, "鏡映できません。", {}));
 }
 
+Result<CurveSegment> ScaleCurve(const CurveSegment& curve, Vector3 center, double factor)
+{
+    if (!(factor > 0.0) || !IsFinite(factor) || !center.IsFinite()) {
+        return Result<CurveSegment>::Failure(MakeError(kDegenerate,
+            "倍率は 0 より大きい数にしてください。", {}));
+    }
+    const auto move = [&](const Vector3& point) { return center + (point - center) * factor; };
+    switch (curve.Kind()) {
+    case CurveKind::Line:
+        return CurveSegment::MakeLine(move(curve.StartPoint()), move(curve.EndPoint()));
+    case CurveKind::CircularArc:
+    case CurveKind::Circle:
+        // 向きは変わらない(倍率は正)。中心を写し、半径に倍率を掛ける。
+        return curve.Kind() == CurveKind::Circle
+            ? CurveSegment::MakeCircle(move(curve.Center()), curve.Normal(),
+                  curve.ReferenceDirection(), curve.Radius() * factor)
+            : CurveSegment::MakeCircularArc(move(curve.Center()), curve.Normal(),
+                  curve.ReferenceDirection(), curve.Radius() * factor, curve.StartAngleRad(),
+                  curve.SweepAngleRad());
+    case CurveKind::CubicBezier:
+    case CurveKind::CubicBSpline: {
+        std::vector<Vector3> points = curve.ControlPoints();
+        for (Vector3& point : points) {
+            point = move(point);
+        }
+        return curve.Kind() == CurveKind::CubicBezier
+            ? CurveSegment::MakeCubicBezier(std::move(points))
+            : CurveSegment::MakeCubicBSpline(std::move(points));
+    }
+    }
+    return Result<CurveSegment>::Failure(MakeError(kNotSupported, "拡大縮小できません。", {}));
+}
+
 } // namespace kachakacha::v2::geometry
 
 namespace kachakacha::v2::geometry {

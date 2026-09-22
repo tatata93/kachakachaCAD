@@ -11,6 +11,7 @@ bool ToolNeedsTargetWire(DrawingTool tool) noexcept
     case DrawingTool::Copy:
     case DrawingTool::Mirror:
     case DrawingTool::Rotate:
+    case DrawingTool::Scale:
         return true;
     default:
         return false;

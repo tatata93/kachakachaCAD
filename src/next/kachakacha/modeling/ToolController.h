@@ -51,6 +51,8 @@ enum class DrawingTool {
     Measure,
     ConnectTwoPoints,
     ChamferOrFilletPair,
+    //! 拡大縮小(D-22)。末尾に足す(道具の並びは AllTools と帯が決める)。
+    Scale,
 };
 
 [[nodiscard]] std::string_view DrawingToolNameJa(DrawingTool tool) noexcept;
@@ -75,6 +77,14 @@ enum class CircleMode {
     ThreePoints,
 };
 
+//! スケールの作り方(D-22)。
+enum class ScaleMode {
+    //! 中心を 1 点押し、倍率は棚の欄で決める。
+    Factor,
+    //! 中心・基準の点・行き先の点の 3 点。倍率 = 中心から行き先 / 中心から基準。
+    Reference,
+};
+
 //! スプラインの作り方。
 enum class SplineMode {
     //! 押した点が制御点(4 点以上)。
@@ -87,6 +97,9 @@ struct ToolSettings {
     ArcMode arcMode = ArcMode::ThreePoints;
     CircleMode circleMode = CircleMode::CenterRadius;
     SplineMode splineMode = SplineMode::ControlPoints;
+    ScaleMode scaleMode = ScaleMode::Factor;
+    //! スケールの倍率(作り方が「倍率」のとき)。0 より大きいこと。
+    double scaleFactor = 2.0;
     //! 円弧の半径や掃引角など、数値欄で決める値。
     double radiusMm = 10.0;
     double sweepAngleRad = 1.5707963267948966;

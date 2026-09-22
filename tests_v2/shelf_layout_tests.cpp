@@ -25,7 +25,7 @@ constexpr DrawingTool kAllTools[] = {
     DrawingTool::Mirror, DrawingTool::Rotate, DrawingTool::Split, DrawingTool::Trim,
     DrawingTool::Extend, DrawingTool::JoinEndpoints, DrawingTool::TangentJoin,
     DrawingTool::CurvatureJoin, DrawingTool::Measure, DrawingTool::ConnectTwoPoints,
-    DrawingTool::ChamferOrFilletPair,
+    DrawingTool::ChamferOrFilletPair, DrawingTool::Scale,
 };
 
 constexpr UiMode kAllModes[] = {
@@ -97,8 +97,9 @@ KACHA_V2_TEST(shelf_layout, 直す道具も作図の棚道具のページ)
     // 数値で直すだけの Edit 棚ではなく、ほかの作図道具と同じ Drawing 棚を前に出す。
     // Edit 棚は「選択」道具で選んだものを直すときだけの棚として残る。
     for (const DrawingTool tool : {DrawingTool::Move, DrawingTool::Copy, DrawingTool::Mirror,
-             DrawingTool::Rotate, DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
-             DrawingTool::JoinEndpoints, DrawingTool::TangentJoin, DrawingTool::CurvatureJoin}) {
+             DrawingTool::Rotate, DrawingTool::Scale, DrawingTool::Split, DrawingTool::Trim,
+             DrawingTool::Extend, DrawingTool::JoinEndpoints, DrawingTool::TangentJoin,
+             DrawingTool::CurvatureJoin}) {
         Require(FrontShelfFor(UiMode::Drawing, tool) == Shelf::Drawing, "作図(道具)の棚");
     }
 }

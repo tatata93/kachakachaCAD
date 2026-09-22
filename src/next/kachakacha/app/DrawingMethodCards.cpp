@@ -55,6 +55,14 @@ namespace {
     return card;
 }
 
+[[nodiscard]] DrawingMethodCard ScaleCard(const char* labelJa, modeling::ScaleMode mode,
+    const char* hintJa)
+{
+    DrawingMethodCard card = Card(labelJa, hintJa);
+    card.scaleMode = mode;
+    return card;
+}
+
 [[nodiscard]] DrawingMethodCard Blocked(const char* labelJa, const char* reasonJa)
 {
     DrawingMethodCard card;
@@ -126,6 +134,13 @@ std::vector<DrawingMethodCard> DrawingMethodCardsFor(DrawingTool tool)
         return {ToolCard("鏡の線 2点", tool)};
     case DrawingTool::Rotate:
         return {ToolCard("中心+2方向", tool)};
+    case DrawingTool::Scale:
+        return {
+            ScaleCard("倍率", modeling::ScaleMode::Factor,
+                "大きさを変えるものを押し、次に中心を1か所押してください。倍率は下の欄で決めます。"),
+            ScaleCard("基準の2点", modeling::ScaleMode::Reference,
+                "中心・基準の点・行き先の点の3か所を押してください。倍率は「中心から行き先」÷「中心から基準」。"),
+        };
     case DrawingTool::Split:
         return {ToolCard("押した場所で", tool)};
     case DrawingTool::Trim:
@@ -173,6 +188,13 @@ int CurrentDrawingMethodIndex(DrawingTool tool, const modeling::ToolSettings& se
         for (std::size_t index = 0; index < cards.size(); ++index) {
             if (cards[index].splineMode.has_value()
                 && *cards[index].splineMode == settings.splineMode) {
+                return static_cast<int>(index);
+            }
+        }
+    }
+    if (tool == DrawingTool::Scale) {
+        for (std::size_t index = 0; index < cards.size(); ++index) {
+            if (cards[index].scaleMode.has_value() && *cards[index].scaleMode == settings.scaleMode) {
                 return static_cast<int>(index);
             }
         }

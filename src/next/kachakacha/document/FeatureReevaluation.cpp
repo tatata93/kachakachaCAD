@@ -272,6 +272,15 @@ namespace {
             outputs.push_back(mirrored.Value());
             break;
         }
+        case WireTransformMethod::Scale: {
+            const auto scaled = geometry::ScaleCurve(segment, definition.pointArgument,
+                definition.scalarArgument.value);
+            if (!scaled.HasValue()) {
+                return Result<std::vector<CurveSegment>>::Failure(scaled.Diagnostics());
+            }
+            outputs.push_back(scaled.Value());
+            break;
+        }
         default:
             // 相手の線が要る編集は、1本ずつでは決まらない。下でまとめて扱う。
             break;

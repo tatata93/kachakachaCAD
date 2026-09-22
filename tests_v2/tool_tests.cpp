@@ -52,7 +52,7 @@ void RequireCount(std::size_t actual, std::size_t expected, const std::string& w
     return finished;
 }
 
-//! V1の23種すべて。
+//! V1の23種すべてと、V2 で足したスケール(D-22)。
 [[nodiscard]] std::vector<DrawingTool> AllTools()
 {
     return {DrawingTool::Select, DrawingTool::SetGridOrigin, DrawingTool::Point,
@@ -62,14 +62,14 @@ void RequireCount(std::size_t actual, std::size_t expected, const std::string& w
         DrawingTool::Split, DrawingTool::Trim, DrawingTool::Extend,
         DrawingTool::JoinEndpoints, DrawingTool::TangentJoin, DrawingTool::CurvatureJoin,
         DrawingTool::Measure, DrawingTool::ConnectTwoPoints,
-        DrawingTool::ChamferOrFilletPair};
+        DrawingTool::ChamferOrFilletPair, DrawingTool::Scale};
 }
 
 } // namespace
 
-KACHA_V2_TEST(tool, V1の23種がすべてある)
+KACHA_V2_TEST(tool, V1の23種とスケールがすべてある)
 {
-    RequireCount(AllTools().size(), 23, "ツールの数");
+    RequireCount(AllTools().size(), 24, "ツールの数(V1 の 23 + スケール)");
     for (const DrawingTool tool : AllTools()) {
         Require(!DrawingToolNameJa(tool).empty(),
             "名前があること: " + std::to_string(static_cast<int>(tool)));
@@ -476,7 +476,7 @@ KACHA_V2_TEST(tool, 変換ツールは基準点を集める)
         std::size_t points;
     };
     const Case cases[]{{DrawingTool::Move, 2}, {DrawingTool::Copy, 2},
-        {DrawingTool::Mirror, 2}, {DrawingTool::Rotate, 3}};
+        {DrawingTool::Mirror, 2}, {DrawingTool::Rotate, 3}, {DrawingTool::Scale, 1}};
     for (const Case& item : cases) {
         ToolSession session(item.tool, {}, Tolerance());
         RequireCount(static_cast<std::size_t>(session.Prompt().remainingPoints),

@@ -65,7 +65,7 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "wire.array_linear", "wire.array_circular",
         "wire.set_datum", "wire.clear_datum", "edit.numeric",
         "wire.move", "wire.copy", "wire.mirror",
-        "wire.rotate", "wire.project", "wire.project_surface", "wire.wrap_project", "workplane.create", "grid.edit",
+        "wire.rotate", "wire.scale", "wire.project", "wire.project_surface", "wire.wrap_project", "workplane.create", "grid.edit",
         "grid.move_origin",
         // 3D の面は作図モードで作る(正本 2026-09-18: 作図 = Wire / Curve / WorkPlane / 3D Surface)。
         // 製作モードの近似の元になる。

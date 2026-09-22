@@ -81,6 +81,9 @@ enum class WireTransformMethod {
     //! ポリラインの角を全部落とす / 丸める(V1 の「角の加工」)。線1本の中で完結する。
     CornerChamfer,
     CornerFillet,
+    //! 点を中心にした拡大縮小(D-22)。pointArgument が中心、scalarArgument が倍率。
+    //! 末尾に足す(保存した名前は "scale"。並びの番号を変えない)。
+    Scale,
 };
 
 enum class BooleanOperation {

@@ -842,14 +842,20 @@ namespace {
     case TransformKind::Rotate:
         definition.method = WireTransformMethod::Rotate;
         break;
+    case TransformKind::Scale:
+        definition.method = WireTransformMethod::Scale;
+        break;
     }
     definition.vectorArgument = plan.vectorArgument;
     definition.pointArgument = plan.pointArgument;
-    definition.scalarArgument.value = plan.angleRad;
-    definition.scalarArgument.expression = std::to_string(plan.angleRad);
+    // スケールは倍率(単位なし)、回転は角度、ほかは長さの欄として持つ。
+    const double scalar = plan.kind == TransformKind::Scale ? plan.factor : plan.angleRad;
+    definition.scalarArgument.value = scalar;
+    definition.scalarArgument.expression = std::to_string(scalar);
     definition.scalarArgument.kind = plan.kind == TransformKind::Rotate
         ? kachakacha::v2::geometry::QuantityKind::Angle
-        : kachakacha::v2::geometry::QuantityKind::Length;
+        : plan.kind == TransformKind::Scale ? kachakacha::v2::geometry::QuantityKind::Scalar
+                                            : kachakacha::v2::geometry::QuantityKind::Length;
     return definition;
 }
 
@@ -926,6 +932,18 @@ void V2MainWindow::ApplyTransformPlan(
     // 動かすのは1本を1本のまま動かすことである。まとめて1本にしてしまうと、
     // 3本を動かしたつもりが1本になり、名前も分け方も失われる。
     // 部品も同じ道具・同じ点で動かす(P-18)。部品は元の形に同じ変換を掛けた新しい部品にする。
+    // 部品のスケールはまだ無い(核の変換は剛体だけ)。部品が混ざっていれば、線だけを変えて
+    // 成功扱いにせず、全部断る(入力を一部無視しない)。
+    if (plan.kind == kachakacha::v2::modeling::TransformKind::Scale) {
+        for (const auto& entityId : selected) {
+            const auto* entity = session_->GetDocument().FindEntity(entityId);
+            if (entity != nullptr && entity->kind == kachakacha::v2::domain::EntityKind::Part) {
+                SetStatus(QStringLiteral("%1: 部品のスケールはまだできません。線だけを選んでください。")
+                        .arg(label));
+                return;
+            }
+        }
+    }
     const auto definition = DefinitionFor(plan);
     int wires = 0;
     int parts = 0;
@@ -969,6 +987,10 @@ void V2MainWindow::ApplyTransformPlan(
                                    : QStringLiteral("線 %1 本と部品 %2 個").arg(wires).arg(parts);
     if (plan.keepsSource) {
         SetStatus(QStringLiteral("%1: %2を写しました。元は残っています。").arg(label, what));
+        return;
+    }
+    if (plan.kind == kachakacha::v2::modeling::TransformKind::Scale) {
+        SetStatus(QStringLiteral("%1: %2の大きさを変えました。").arg(label, what));
         return;
     }
     SetStatus(parts == 0 ? QStringLiteral("%1: %2を動かしました。").arg(label, what)

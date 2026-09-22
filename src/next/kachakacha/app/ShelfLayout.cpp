@@ -100,6 +100,7 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     case DrawingTool::Copy:
     case DrawingTool::Mirror:
     case DrawingTool::Rotate:
+    case DrawingTool::Scale:
     case DrawingTool::Split:
     case DrawingTool::Trim:
     case DrawingTool::Extend:

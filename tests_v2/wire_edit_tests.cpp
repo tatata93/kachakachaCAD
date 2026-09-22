@@ -19,6 +19,7 @@ using kachakacha::v2::geometry::MirrorCurve;
 using kachakacha::v2::geometry::Normalized;
 using kachakacha::v2::geometry::OffsetCurveInPlane;
 using kachakacha::v2::geometry::RotateCurve;
+using kachakacha::v2::geometry::ScaleCurve;
 using kachakacha::v2::geometry::TranslateCurve;
 using kachakacha::v2::geometry::TrimCurve;
 using kachakacha::v2::geometry::Vector3;
@@ -377,6 +378,30 @@ KACHA_V2_TEST(edit, mirroring_keeps_the_kind_and_reflects_the_points)
     RequireNear(mirrored.Value().StartPoint().y, 2.0, 1.0e-12, "y is untouched");
     RequireNear(mirrored.Value().TotalLength(1.0e-9), line.TotalLength(1.0e-9), 1.0e-9,
         "the length is unchanged");
+}
+
+KACHA_V2_TEST(edit, scaling_keeps_the_kind_and_scales_about_the_centre)
+{
+    // 直線: 中心 (1,0) から 2 倍。
+    const auto line = ScaleCurve(L({2, 0, 0}, {4, 2, 0}), {1, 0, 0}, 2.0);
+    Require(line.HasValue() && line.Value().Kind() == CurveKind::Line, "a line stays a line");
+    RequireNear(Distance(line.Value().StartPoint(), Vector3{3, 0, 0}), 0.0, 1.0e-12, "start scaled");
+    RequireNear(Distance(line.Value().EndPoint(), Vector3{7, 4, 0}), 0.0, 1.0e-12, "end scaled");
+    // 円弧: 中心を写し、半径に倍率。どの点も中心から倍率ぶん離れる。
+    const auto arc =
+        CurveSegment::MakeCircularArc({5, 0, 0}, {0, 0, 1}, {1, 0, 0}, 3.0, 0.0, 1.2).Value();
+    const auto scaled = ScaleCurve(arc, {0, 0, 0}, 0.5);
+    Require(scaled.HasValue() && scaled.Value().Kind() == CurveKind::CircularArc, "an arc stays an arc");
+    RequireNear(scaled.Value().Radius(), 1.5, 1.0e-12, "radius times the factor");
+    for (int index = 0; index <= 10; ++index) {
+        const double t = static_cast<double>(index) / 10.0;
+        const Vector3 source = arc.Evaluate(t);
+        RequireNear(Distance(scaled.Value().Evaluate(t), source * 0.5), 0.0, 1.0e-9,
+            "every point is scaled about the centre");
+    }
+    // 倍率 0 以下は断る。
+    Require(!ScaleCurve(arc, {0, 0, 0}, 0.0).HasValue(), "a zero factor is refused");
+    Require(!ScaleCurve(arc, {0, 0, 0}, -2.0).HasValue(), "a negative factor is refused");
 }
 
 KACHA_V2_TEST(edit, a_mirrored_arc_traces_the_reflected_points)

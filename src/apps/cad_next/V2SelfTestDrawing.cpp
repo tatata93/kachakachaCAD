@@ -590,6 +590,49 @@ using kachakacha::v2::modeling::ToolSettings;
         arcs == 2);
 }
 
+//! 角の加工は何本選んでも線ごとに 1 つずつ作り、1 回の元に戻すで消える。
+//! 全部を 1 本につないで加工していたので、別々のコの字が 1 本の線に化け、閉じ角も落ちていた。
+[[nodiscard]] bool CasePolylineCornersPerWire(V2MainWindow& window)
+{
+    const double pxPerMm = PrepareTopView(window);
+    auto& viewport = window.Viewport();
+    const QPointF center(viewport.width() * 0.5, viewport.height() * 0.5);
+    const auto drawUAt = [&](double dxMm) {
+        window.SelectTool(DrawingTool::Polyline);
+        viewport.ClickAt(QPointF(center.x() + (dxMm - 30.0) * pxPerMm, center.y()));
+        viewport.ClickAt(QPointF(center.x() + dxMm * pxPerMm, center.y()));
+        viewport.ClickAt(QPointF(center.x() + dxMm * pxPerMm, center.y() - 30.0 * pxPerMm));
+        viewport.ClickAt(QPointF(center.x() + (dxMm + 30.0) * pxPerMm, center.y() - 30.0 * pxPerMm));
+        viewport.FinishTool();
+        window.SelectTool(DrawingTool::Select);
+    };
+    drawUAt(-40.0);
+    drawUAt(50.0);
+    viewport.SetSelection(kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::Wire));
+    if (!Explain((std::string("コの字が 2 本(線 ") + std::to_string(viewport.Selection().entityIds.size())
+                     + " 本、区間 " + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
+            viewport.Selection().entityIds.size() == 2 && window.Session().Scene().curves.size() == 6)
+        || !Explain("面取り量を入れられる",
+            window.ParameterDock().Apply(kachakacha::v2::app::ParameterId::CornerSize,
+                QStringLiteral("4")))) {
+        return false;
+    }
+    const int wiresBefore = CountOfKind(window, EntityKind::Wire);
+    window.RunCommand("wire.corner_chamfer");
+    // 1 本につき 2 つの角が落ちて 5 区間。2 本で 10 区間、新しい線は 2 本(元は隠れる)。
+    if (!Explain((std::string("線ごとに角が落ちる(") + window.StatusText().toStdString() + "、見える区間 "
+                     + std::to_string(window.Session().Scene().curves.size()) + ")").c_str(),
+            window.Session().Scene().curves.size() == 10
+                && CountOfKind(window, EntityKind::Wire) == wiresBefore + 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の元に戻すで 2 本とも加工前へ戻る",
+        CountOfKind(window, EntityKind::Wire) == wiresBefore
+            && window.Session().Scene().curves.size() == 6);
+}
+
 [[nodiscard]] bool CaseV1KcdOpensAsDocument(V2MainWindow& window)
 {
     // V1 の受入例(railway-nose-acceptance.kcd)が「開く」で V2 の文書になる。
@@ -708,6 +751,7 @@ std::vector<SelfTestCase> DrawingCases()
         {"測定の3モードと寸法を残す", &CaseMeasureModesPickPointsAndKeepDimension},
         {"V1 の .kcd を開くと V2 の文書になる", &CaseV1KcdOpensAsDocument},
         {"角の加工でポリラインの角が落ちて丸まる", &CasePolylineCornersFromCommand},
+        {"角の加工は何本選んでも線ごとに作り1回で戻る", &CasePolylineCornersPerWire},
         {"オフセットは元を残し2線を交点まで合わせる", &CaseOffsetKeepsOriginalAndMeetLinesJoins},
         {"交点に点と基準線が効く", &CaseIntersectionPointsAndDatum},
         {"形から中心や端点に点を作れる", &CasePointsFromCurveShape},

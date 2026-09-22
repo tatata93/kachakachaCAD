@@ -1053,8 +1053,13 @@ void V2MainWindow::RunThickenSurfaceToPlane()
             "面を平面まで");
         bool ok = true;
         for (const auto& surfaceId : surfaceIds) {
+            const auto shape = guideShapes_.find(surfaceId.ToString());
+            if (shape == guideShapes_.end()) {
+                ok = false;   // 面の形が無い(作り直せていない)。全部やめる。
+                break;
+            }
             const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(
-                guideShapes_.at(surfaceId.ToString()), frame->origin, frame->normal, tolerance);
+                shape->second, frame->origin, frame->normal, tolerance);
             if (!built.HasValue()) {
                 ReportDiagnostics(built.Diagnostics());
                 ok = false;

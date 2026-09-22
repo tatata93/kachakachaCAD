@@ -476,7 +476,9 @@ KACHA_V2_TEST(documentFile, 形を持たせた線の編集と面への投影も�
     // 移動・面取り・面へ投影などは、計算した形そのもの(CreateWireDefinition)を持たせて
     // 文書へ入れる。種類(TransformWire / ProjectWire)だけで読み分けると開けなくなっていた。
     DocumentFile original = MakeSampleDocument();
-    const auto& source = std::get<CreateWireDefinition>(original.snapshot.features[2].definition);
+    // 形は先に写しておく。並びへ足すと並びが作り直され、中を指す参照は指す先を失う
+    // (MSVC は伸ばし方が違い、PC だけで壊れた形を読んで落ちた)。
+    const auto source = std::get<CreateWireDefinition>(original.snapshot.features[2].definition);
     for (const FeatureType type : {FeatureType::TransformWire, FeatureType::ProjectWire}) {
         Feature feature;
         feature.id = kachakacha::v2::base::FeatureId::Parse(

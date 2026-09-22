@@ -5,8 +5,14 @@
 `kachakachaCAD_Fable5_UI_implementation_prompt.md`。
 棚卸しは 2026-09-18 に repo(main d3893fa 起点、v2-wp01 f9e07d0)を調べた事実。
 
-STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOCKED_BACKEND / BLOCKED_HUMAN
-(TESTED = 雲の ctest + 自己試験コードあり。PC_VERIFIED = Windows で build/ctest/自己試験/画面を確認)
+STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_TESTED / PC_VERIFIED / BLOCKED_BACKEND / BLOCKED_HUMAN
+(TESTED = 雲の ctest + 自己試験コードあり。CLOUD_TESTED = 雲の ctest と Qt 当て木の型検査まで(自己試験は PC で走る)。
+PC_TESTED = Windows の build・ctest・自己試験(offscreen)で通過。画面の目視はまだ。
+PC_VERIFIED = Windows で build/ctest/自己試験/画面を確認)
+
+「実装済み」と書くのは次が全部そろったときだけ(2026-09-22 自由曲面の指示書 task_tracking):
+UI の入口がある / 人の操作で入力を入れられる / 下見がある / 確定・やめるが動く / 核が全部の入力を使う /
+元に戻す・やり直しと保存を壊さない / 対応する試験がある。
 
 列: ID | MODE | CATEGORY | TOOL | METHOD_VARIANT | EXISTING_BACKEND | NEW_UI_ENTRY | PREVIEW | HUMAN_TEST | STATUS | NOTES
 
@@ -52,22 +58,29 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | D-14 | 作図 | 曲線 | 楕円 | — | **無し** | disabled | — | — | BLOCKED_BACKEND | |
 | D-15 | 作図 | 編集 | トリム / 延長 / 分割 / 結合 / オフセット | 既存 | `wire.trim/extend/split/join/offset` | 編集カテゴリ = 道具のページ(Shelf::Drawing) | 面取りと同じ下見はまだ(可能なもの、未着手) | HP-DR | CLOUD_TESTED | 2026-09-19: `ShelvesFor` を「一道具一枚 = 道具のページ」に統一(指示書 C-09)。Trim/Extend/Move/Copy/Mirror/Rotate/JoinEndpoints/TangentJoin/CurvatureJoin は Edit 棚ではなく Drawing 棚(作り方カード+使い方の一文)を前に出す。カード: トリム「消したい側を押す」/延長「伸ばす端を押す」/分割「押した場所で」/結合3種(端点2つ/接線/曲率)。トリム・延長は既存 `wire.trim`/`wire.extend`(kToolBindings)で道具として選べる。分割・結合3種はカード/棚は用意できたが、`wire.split`/`wire.join`等はまだ即時コマンド(IsWireEditCommand)のみで、その DrawingTool 値を選ぶ入口(kToolBindings)が無い(引き続き NOT_STARTED な部分)。オフセットは DrawingTool を持たない即時コマンドのため対象外。ctest: `v2_shelf_layout_tests`(直す道具も作図の棚道具のページ)、`v2_drawing_method_cards_tests`(どのカードにも次にすることの一文がある)。join の G1/G2 は引き続き検査のみ |
 | D-16 | 作図 | 編集 | 面取り / 丸め(線どうし) | 対称/非対称/残す側 | `wire.chamfer/fillet` + V2CornerPreview | 編集カテゴリ | あり(HP-CN) | HP-CN-01/02 | TESTED | 2026-09-17 実装 |
-| D-17 | 作図 | 編集 | 角の加工(折れ線の角) | 全角 / 1頂点 | `wire.corner_*` | 面取りの作り方に収容 | — | test | NOT_STARTED | |
+| D-17 | 作図 | 編集 | 角の加工(折れ線の角) | 全角 / 1頂点 | `wire.corner_*` | 面取りの作り方に収容 | — | test | NOT_STARTED | 26f00d3: 線を何本選んでも線ごとに 1 つずつ作り、1 本でも作れなければ全部やめる、1 回の元に戻すで消える(全部を 1 本につないで閉じ角を落としていた)。 |
 | D-18 | 作図 | 編集 | 交点/中心点/主要点 を点に、基準線 set/clear | — | `wire.intersection_points` 等 | 編集カテゴリ「点を作る」「基準線」 | — | test | NOT_STARTED | |
 | D-19 | 作図 | 編集 | 投影(平面/面/巻き付け) | 3種 | `wire.project*` | 編集カテゴリ | — | test | NOT_STARTED | |
 | D-20 | 作図 | 編集 | 数値で直す(edit.numeric) | 線/折れ線/円/円弧/ベジェ/スプライン/作業面 | `V2EditDock` | 選択物プロパティ(右ペイン) | — | test | NOT_STARTED | C-09 の「Property」 |
-| D-21 | 作図 | 変形 | 移動/回転/ミラー/コピー | 2点/3点 | `wire.move/rotate/mirror/copy` | 変形カテゴリ = 道具のページ(Shelf::Drawing) | 既存(CursorInput の下見) | HP-DR | CLOUD_TESTED | 2026-09-19: D-15 と同じ変更で Move/Copy/Mirror/Rotate も Drawing 棚(作り方カード+一文)。カード: 移動「2点」(CursorFieldsFor(Move) がまだ角度欄を持たないため「点+距離+角度」は未提供)/コピー「2点」/ミラー「鏡の線 2点」/回転「中心+2方向」。`wire.move/copy/mirror/rotate` は既存の kToolBindings でそのまま道具になる。ctest は D-15 と同じ2本 |
+| D-21 | 作図 | 変形 | 移動/回転/ミラー/コピー | 2点/3点 | `wire.move/rotate/mirror/copy` | 変形カテゴリ = 道具のページ(Shelf::Drawing) | 既存(CursorInput の下見) | HP-DR | CLOUD_TESTED | 2026-09-19: D-15 と同じ変更で Move/Copy/Mirror/Rotate も Drawing 棚(作り方カード+一文)。カード: 移動「2点」(CursorFieldsFor(Move) がまだ角度欄を持たないため「点+距離+角度」は未提供)/コピー「2点」/ミラー「鏡の線 2点」/回転「中心+2方向」。`wire.move/copy/mirror/rotate` は既存の kToolBindings でそのまま道具になる。ctest は D-15 と同じ2本 26f00d3: 何本でも 1 回の元に戻すで戻る(置き換えを Transaction でまとめた)。 |
 | D-22 | 作図 | 変形 | スケール | — | **無し** | disabled+理由 | — | — | BLOCKED_BACKEND | 変更なし。核にスケール変換が無い |
 | D-23 | 作図 | 変形 | 配列(直線/円形) | 既存 | `wire.array_*`(ダイアログ → 右ペインの棚) | 変形カテゴリ、右ペインに欄(Shelf::Array、V2ArrayDock) | 無し(下見は未実装、理由は NOTES) | HP-AR | CLOUD_TESTED | 2026-09-19: `wire.array_linear`/`wire.array_circular` は、自己試験が `SetArrayChooser` を差し替えていなければ右の棚(新設 Shelf::Array)で「作り方(直線/円形)・個数・間隔+方向 or 中心+全体角度・確定/キャンセル」を聞く(V2ArrayDock)。差し替えがあれば従来どおり窓に聞いたことにする(既存自己試験 4 本は無改造で通る)。確定は既存の `PlanLinearArray`/`PlanCircularArray` + `TransformOneWire` の道をそのまま通す(CommitLinearArray/CommitCircularArray に共通化)。中心・方向は作業平面上の (u, v) で持ち、確定時に `WorkPlaneFrame::PointAt`/uAxis・vAxis で世界座標へ変換。Esc/キャンセルは棚を片付けるだけ(何も作らない)。**下見は実装していない**: 確定前に「何本、どこへ」複製されるかを線で見せるには、TransformOneWire の計算をコミットせずに複製後の形だけを取り出す道が要り、いまの TransformOneWire は文書へ Feature を足すところまでが一体になっている。棚だけを切り出す今回の範囲を超えるため見送った(既存ダイアログにも下見は無かった)。自己試験: `V2SelfTestArray.cpp` の `ArrayCases()`(HP-AR-01 棚で個数を決めて確定→本数が増え、1回の undo で戻る。HP-AR-02 Esc で何も作らず棚が引っ込む)。cloud 側は core の `v2_shelf_layout_tests`(出せる棚は全部どこかの組み合わせで出る、openedByOwnCommand に Array を追加)と qt stub 型検査まで。実機の Qt ビルド・自己試験は PC 未実行 |
 | D-24 | 作図 | 作業面 | 作業面(New) | 12方式 | `WorkPlane.h` 12 methods、`V2WorkPlaneDock` | 作業面カテゴリ→作業面、作り方=12 | 無し→平面の下見を足す | HP-WP | CLOUD_TESTED | 棚の欄が変わるたび 40mm 四方の下見(V2WorkPlanePreview.cpp)。作ると消える。HP-WP-01 |
 | D-25 | 作図 | 作業面 | Select / Set Current / 正対 / 表示 | — | `workplane.set_active`, `view.align_workplane`, visibility | 同カテゴリ | — | HP-WP | NOT_STARTED | Current/Selected/Other の描き分けは viewport |
-| D-26 | 作図 | 面作成 | 平面 | 閉輪郭内側クリック(外形+穴) | `PlanarBoundary` + `ProfileRegion` | 面作成→平面 | あり | HP-SF | TESTED(既存) | |
-| D-27 | 作図 | 面作成 | ルールド面 | 断面2本 | `RuledSections` | 面作成 | あり | HP-SF | TESTED(既存) | |
-| D-28 | 作図 | 面作成 | ロフト面 | AUTO順 / MANUAL順 | `LoftSections` + lockSectionOrder | 面作成 | あり | HP-SF-07 | TESTED | |
-| D-29 | 作図 | 面作成 | ガイド付きロフト | 断面+ガイド | `GuidedLoft` | 面作成 | あり | HP-SF-06 | TESTED | createVirtualEndSections は未露出(advanced 候補) |
-| D-30 | 作図 | 面作成 | 境界面 | boundary / G1 | `BoundaryFill`(tangentContinuity は未露出) | 面作成 | あり | HP-SF | NOT_STARTED | G1 指定は advanced に収容(backend あり) |
-| D-31 | 作図 | 面作成 | 曲線網 | U/V | `GordonNetwork`(断面=U、ガイド=V) | 面作成 | あり | HP-SF | NOT_STARTED | |
-| D-32 | 作図 | 面作成 | 離した面 / 回転面 | offset / 軸+角度 | `OffsetGuide`, `Revolve`(HP-SF-08) | 面作成「その他」へ収容 | あり | HP-SF-08 | TESTED(回転) | HTML に無いが失わない |
+| D-26 | 作図 | 面作成 | 平面 | 閉輪郭内側クリック(外形+穴)、外周は何本でも(複数の島) | `PlanarBoundary` + `ProfileRegion` | 面作成→平面(おまかせでも閉じた平らな輪は平面) | あり | HP-SF-10/13 | PC_TESTED(66d3cac) | 面を作るの道具では線の上を押すと線 1 本、線の無い内側を押したときだけ輪郭をまとめて拾う(66d3cac。押し出しは従来どおり縁でも輪郭)。外周 1〜任意・穴 0〜任意(SurfaceCardinality) |
+| D-27 | 作図 | 面作成 | ルールド面 | 断面 2〜任意(隣り合う 2 本ずつの帯をつなぐ) | `RuledSections` | 面作成 | あり | HP-SF | PC_TESTED(66d3cac) | 3 本以上は 1-2、2-3… の帯を順につなぐ(f879333) |
+| D-28 | 作図 | 面作成 | ロフト面(多レール) | 断面 1〜任意 + ガイド 0〜任意 + 中心線 0〜1、AUTO順 / MANUAL順 | `LoftSections`(LoftSolver: 通常 / 両端 2 本 / 全部を拘束 / 中心線)、`modeling/LoftInput` | 面作成→ロフト面(ガイド付きロフトはここへ統合) | あり(核で実際に作る) | HP-SF-07/11 | PC_TESTED(66d3cac) | f879333。3 本目以降のガイドも全部拘束し、作ったあと全部の線からの離れを測って超えたら捨てる。断面 1 本は両端にガイドが 1 本ずつあるときだけ。交わらないガイド・多重交差・ガイド間の断面順の逆転・並びの入れ替わりは線の名前で断る(loft_input_tests 12、kernel_loft_tests: 2断面0本 / 3断面1〜3本 / 5断面5本 / 3本目を持ち上げると面が変わる / 中心線)。欄は可変長の一覧(× で外す・向き反転・手動の並び)で素のクリックで足し外し(70cfb9c、HP-SF-11) |
+| D-29 | 作図 | 面作成 | ガイド付きロフト(互換) | 断面+ガイド 1 本以上 | `GuidedLoft`(中身はロフトと同じ) | 棚の「その他」(互換の入口) | あり | HP-SF-06 | PC_TESTED(66d3cac) | 既存の 2 レール文書は同じ意味で読める(LoftSolver = 両端 2 本) |
+| D-30 | 作図 | 面作成 | 境界面 | 外周 1 輪(線は何本でも)+ 通る線 0〜任意、辺ごとの G0/G1/G2 + 支持面 | `BoundaryFill` + `OuterLoopSplit` + `SurfaceContinuity` | 面作成→境界面、境界の一覧で辺を選ぶと G0/G1/G2・支持面 | あり | HP-SF-10 | PC_TESTED(66d3cac) | 6b604f3(通る線)、819b8f2(連続条件: 支持面の無い G1/G2・受けない作り方の G1/G2 は理由を言って断る。作ったあと法線の角度と横切る向きの法曲率の差を自分で測り、1.5 度 / 0.1 を超えたら断る) |
+| D-31 | 作図 | 面作成 | 曲線網 | U 2〜任意 × V 2〜任意。厳密(Gordon)と近似(Filling) | `GordonNetwork`(core で S=L_U+L_V−T、核は B-spline へ)、`CurveNetworkExact` | 面作成→曲線網、棚の「作り方の内訳」に成り立つ方 | あり | HP-SF | PC_TESTED(66d3cac) | 0173810。厳密は全部の線から 0.02 mm 以内でなければ採用しない。外側が端で交わらない網は厳密を断り近似を薦める。交差不足・多重交差・順の矛盾は理由つき(gordon_grid_tests、guide_surface_tests) |
+| D-32 | 作図 | 面作成 | 離した面 / 回転面 | 元の面 1〜任意 / 断面 1〜任意 + 軸 1 | `OffsetGuide`, `Revolve`(HP-SF-08) | 面作成「その他」、帯の回転体 | あり | HP-SF-08 | PC_TESTED(66d3cac、回転) / CLOUD_TESTED(818113d、選んでから押す複数断面) | 1 回の生成が 1 つしか受けない役割は一括(1 つずつ全部作り 1 回で戻る、70cfb9c)。回転体を選んでから押すと最後の直線が軸・ほかは全部断面(818113d、自己試験「回転体は選んだ断面を全部回し…」は PC 未実行) |
+| D-36 | 作図 | 面作成 | 四辺面 | 4 辺(U0/U1/V0/V1)+ 通る線 0〜任意、張り方 標準/平坦優先/丸み優先、辺ごとの G0/G1/G2 | `FourEdgePatch`(GeomFill_BSplineCurves Coons 系 + MakeFilling の張り直し) | 帯「四辺面」、棚の張り方 | あり | HP-SF-12 | PC_TESTED(66d3cac) | f879333 / 70cfb9c / 819b8f2。閉じない 4 辺は離れ量を言って断る、並び・向きは直す、直線・短い円弧は 3 次へ上げてから渡す(0173810)。5 辺は作れないと言う |
+| D-37 | 作図 | 面の編集 | 面を合わせる | 縁 → 合わせ先の縁、G0/G1/G2 | `kernel::MatchSurfaceEdge`(隣の縁を角で合わせ先の面に沿わせて張り直し、測る) | 帯「面作成」その他 → 面を合わせる(道具 → 3D で縁) | あり(核で作る) | kernel_surface_edit | PC_TESTED(66d3cac) | 5dd930f / b3853ee。端が離れた縁は断る。新しい面を作り元の面は残す |
+| D-38 | 作図 | 面の編集 | 面をつなぐ(ブリッジ) | 縁 2 本、両端 G0/G1/G2、張り | `kernel::BridgeSurfaceEdges` | 同上 → 面をつなぐ | あり | kernel_surface_edit | PC_TESTED(66d3cac) | 66d3cac: G0/G1 は面を直に組む(縁に沿う 3 次 C1 × 横切る 3 次ベジェ。縁の上の点で横切る向き = 縁から出る向き)。G2 の側があるときだけ埋め直す。張り 1.8 で 3.2 度折れていた不具合を PC で確認して直した |
+| D-39 | 作図 | 面の編集 | 整える / 対称 / U/V 線 / 面へ投影 | 面 1〜任意(投影は面 1 + 線 1〜任意) | `RefitSurface` / `MirrorSurface` / `ExtractIsoCurves` / `ProjectWiresOntoSurface` | 同上 | あり | kernel_surface_edit | PC_TESTED(66d3cac) | 何枚でも 1 回の取り消しで戻る(1 面 1 Feature `EditSurface`、保存・開き直しの作り直しあり)。解析的な面・減らない面は理由つきで断る |
+| D-40 | 作図 | 面の解析 | ゼブラ / 平均・ガウス曲率 / U/V 線 / 曲率コーム / 境目の連続 / 入力線からのずれ / 製作性の目安 | 面 1〜任意(無ければ全部)+ 面を作る・面の編集の下見 | `kernel::OcctSurfaceAnalysis` + `app/SurfaceAnalysis` | 「面の解析」の棚、`view.analysis_zebra` | 下見も塗る | HP-SA-01/02 | PC_TESTED(66d3cac) | 57bb941。可展性は ε≈\|K\|(大きさ/2)²/6 で 0.1 % 未満 = ほぼ可展・1 % 以上 = 強い二重曲率(数値の基準を出し断定しない)。平面・円筒・円錐はほぼ可展(surface_analysis_tests、kernel_surface_analysis_tests) |
+| D-41 | 作図 | 面作成 | おまかせ(初心者の入口) | 押した線の役割(断面/ガイド/境界/通る線/中心線)と作り方を決める | `app/SurfaceRoleAssist` + `SurfaceRoleTopology`(候補は AnalyzeGuideSurfaceRequest に通してから言う) | 作り方を選ばずに始めると自動。棚「おまかせ」、行ごとの「役割」、3D の右クリック | あり | HP-SF-13 | PC_TESTED(66d3cac) | b3853ee。事実・おすすめと理由・他の候補(この作り方にする)・おまかせに戻す。役割の色(ガイド青・断面橙・境界紫・通る線緑・中心線青緑)。選んだ順が違っても同じ答え。人が決めた役割はそのまま使う(surface_role_assist_tests 12) |
+| D-42 | 作図 | 面作成 | 選んだ線の一覧(Selection Set) | 欄ごとの一覧・× で外す・向き反転・並べ替え・素のクリックで足し外し | `app/SurfaceInputState`(欄が正本、3D はその印) | 右の棚の 4 欄(断面/ガイド/中心線/境界) | — | HP-SF-06/11/13 | PC_TESTED(66d3cac) | 70cfb9c。元に戻す・保存は Feature 側(一括は 1 回で戻る) |
 | D-33 | 作図 | 注記 | 寸法 | 参照寸法 | `AddReferenceDimensionCommand`(描画なし) | 注記→寸法(測定から残す) | 無し | — | NOT_STARTED | viewport 描画は backend/描画追加が要る → 段階2 |
 | D-34 | 作図 | 注記 | テキスト | — | **無し** | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | D-35 | 作図 | 測定 | 距離/角度/半径/面積 | — | C-14/C-15 | 測定カテゴリ | — | HP-ME | NOT_STARTED | |
@@ -76,7 +89,7 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 
 | ID | MODE | CATEGORY | TOOL | METHOD_VARIANT | EXISTING_BACKEND | NEW_UI_ENTRY | PREVIEW | HUMAN_TEST | STATUS | NOTES |
 |---|---|---|---|---|---|---|---|---|---|---|
-| P-01 | 部品 | 作成 | 押し出し | 入力: Profile 領域 / 平面 Face | `ProfileRegion`, `FacePushPull`, `ExtrudeInputState` | 作成→押し出し、1. 入力 | あり | HP-EX-01..03 | TESTED(既存) | |
+| P-01 | 部品 | 作成 | 押し出し | 入力: Profile 領域 / 平面 Face | `ProfileRegion`, `FacePushPull`, `ExtrudeInputState` | 作成→押し出し、1. 入力 | あり | HP-EX-01..03 | TESTED(既存) | 818113d: 離れた輪郭 N 個 → 新しい部品 N 個のとき、部品ごとに自分の輪郭(外周と穴)だけを記録する。作り直すと 2 個目以降が 1 個目の写しになっていた(古い文書・足す引くで分かれた部品は、作り直しの段取りが同じ定義の何番目かを持つ: shape_rebuild_tests)。自己試験「輪郭 2 つの押し出しは…開き直しても別の場所にある」は PC 未実行。違う平面の輪郭を別々の押し出しにするのは未(今は同じ平面を要る)。 |
 | P-02 | 部品 | 作成 | 押し出し | 範囲: 距離/対称/非対称(2距離)/面まで/貫通 | `ExtrudeExtentMode` 5種 | 3. 範囲/方向(全部を棚に) | あり | HP-EX | CLOUD_TESTED | 棚の「範囲」に 5 通り。逆側の距離 / 相手の面 は範囲に応じて生える。HP-PA-01/02 |
 | P-03 | 部品 | 作成 | 押し出し | 2面間(From/To) | **From は無し**(startOffset 内部のみ)、To=作業面のみ | From 欄 disabled+理由、To=作業面 | — | — | BLOCKED_BACKEND(From) / CLOUD_TESTED(To) | 開始面は押せない形 + 理由。To は作業平面を棚の「相手の面」で選ぶ |
 | P-04 | 部品 | 作成 | 押し出し | 方向 7種 + 反転 | `ExtrudeDirectionMode` | 3. 方向 combo | あり | test | CLOUD_TESTED | 棚の「方向」に 7 通り。数値で決める/選んだ線の向き は x y z 欄が生える。HP-PA-01 |
@@ -85,13 +98,13 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | P-07 | 部品 | 作成 | 押し出し | テーパー | **無し** | 欄 disabled+理由 | — | — | BLOCKED_BACKEND | テーパー欄は押せない形 + 理由(HP-PA-01) |
 | P-08 | 部品 | 作成 | 回転体(Solid) | 全回転/角度 | **Solid は無し**(面の回転体はある) | 作成→回転体 = 回転面 + 厚み の案内 | — | — | BLOCKED_BACKEND | HP-SF-08 の回転面を「部品」から呼べるようにする |
 | P-09 | 部品 | 作成 | ロフト立体 / スイープ | — | **無し**(面のみ) | disabled+理由(面作成→厚み を案内) | — | — | BLOCKED_BACKEND | |
-| P-10 | 部品 | 作成 | 厚み | 外側/中央/内側、平面まで | `part.thicken`, `thicken_to_plane`, placement | 作成→厚み(slot: 面、作り方3+平面まで) | 無し→足す | HP-PT | CLOUD_TESTED | 道具 → 3D で面 → 作り方(外側/中央/内側/平面まで)→ 下見(kernel の空回し)→ Enter。V2ThickenDock / ThickenInputState。HP-TH-01/02。per-face は BLOCKED_BACKEND |
-| P-11 | 部品 | 作成 | ワイヤー群から部品 / 治具 | — | `part.from_wire_cage`, `part.surface_jig` | 作成「その他」 | — | test | NOT_STARTED | HTML に無いが失わない |
+| P-10 | 部品 | 作成 | 厚み | 外側/中央/内側、平面まで。面は何枚でも | `part.thicken`, `thicken_to_plane`, placement | 作成→厚み(slot: 面 1〜任意、作り方3+平面まで) | あり(面ごと) | HP-PT | PC_TESTED(66d3cac) | 道具 → 3D で面 → 作り方(外側/中央/内側/平面まで)→ 下見(kernel の空回し)→ Enter。V2ThickenDock / ThickenInputState。HP-TH-01/02/03。26f00d3: 面を何枚でも入れ、1 枚ずつ別の部品にして 1 回の元に戻すで消える(HP-TH-03)。818113d: 面を平面まで立体に も面 1〜任意 + 平面 1(CLOUD_TESTED)。1 つの立体へ縫い合わせるのは形式の変更と縫い合わせが要るので今はしない |
+| P-11 | 部品 | 作成 | ワイヤー群から部品 / 治具 | かご: 閉シェルごとに 1 部品 / 治具: 面 1〜任意 | `part.from_wire_cage`, `part.surface_jig` | 作成「その他」 | — | test | CLOUD_TESTED(818113d) | HTML に無いが失わない。818113d: かごは先頭のシェルだけ部品にして「N 個」と言っていた → シェルごとに 1 部品(部品はそのシェルの線だけを記録、WireCageShellWires、wire_cage_tests)、1 回で戻る。治具は面ごとに当たり面 + 当て板を 1 組、JIG-E003 は 0 枚のときだけ(surface_jig_tests) |
 | P-12 | 部品 | 形状編集 | フィレット/面取り(Solid edge) | — | **無し**(TKFillet 未リンク) | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | P-13 | 部品 | 形状編集 | シェル / 分割 / 結合 | — | **無し**(結合=足す) | disabled+理由(結合は足すへ) | — | — | BLOCKED_BACKEND | |
 | P-14 | 部品 | 面編集 | 押し引き | 法線方向 | `FacePushPull`(平面のみ) | 面編集→押し引き | あり | HP-EX-03 | TESTED(既存) | |
 | P-15 | 部品 | 面編集 | 面オフセット/面削除/面置換 | — | **無し** | disabled+理由 | — | — | BLOCKED_BACKEND | |
-| P-16 | 部品 | ブール | 足す / 引く | Target→Tool slot | `BooleanInputState`, V2BooleanDock | ブール演算カテゴリ | あり | HP-BO-01/02 | TESTED | |
+| P-16 | 部品 | ブール | 足す / 引く | 土台 1 + 相手 1〜任意(順に足す/引く) | `BooleanInputState`, V2BooleanDock | ブール演算カテゴリ | あり | HP-BO-01/02 | PC_TESTED(66d3cac) | 26f00d3: 相手は何個でも(押し直すと外れる)、核は順に足す/引く、1 つでも作れなければ何も作らない。形式は前から targets[]/tools[](開き直しも全部の相手で作り直す)。選択の条件は「部品 2 つ以上」(818113d で TwoOrMoreParts) |
 | P-17 | 部品 | ブール | 交差 | — | **無し** | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | P-18 | 部品 | 配置 | 移動/回転/ミラー/コピー/パターン(Part) | — | **無し**(線のみ) | disabled+理由 | — | — | BLOCKED_BACKEND | |
 | P-19 | 部品 | 共通 | 押し出し距離 ≠ 板厚(20mm 上限が漏れない) | — | `ExtrudeLengthMm` / `ExtrudeDistance` 分離済み | 押し出し棚は ExtrudeLengthMm だけ | — | test | TESTED(既存) | 回帰試験で固定 |
@@ -107,14 +120,63 @@ STATUS: NOT_STARTED / IMPLEMENTING / CODE_COMPLETE / TESTED / PC_VERIFIED / BLOC
 | F-05 | 製作 | 部材編集 | 近似部品編集(方式/誤差/半径 AUTO-LOCK) | — | `BendRadius` AUTO/LOCK、per-part 誤差は band に内在(未表示) | 部材編集→近似部品編集(ApproxPart slot) | — | HP-FB | CLOUD_TESTED | 3D で元の面/立体の面を押すと panelOrigins(core)で部材番号へ解く。方式/最大誤差(モデル全体)を表示。per-part 誤差は無し。HP-PE-01 |
 | F-06 | 製作 | 部材編集 | 分割 | 中央 / 位置指定 / 候補境界 | `PreviewBandSplit`(中央のみ) | 分割(作り方: 中央=有効、他 disabled) | before/after あり | HP-FB | PARTIAL | 対象部材は 3D クリックで入る(HP-PE-01)。分割位置指定/候補境界は BLOCKED_BACKEND(中央のみ) |
 | F-07 | 製作 | 部材編集 | 結合 | 隣接 | `PreviewBandMerge` | 結合(部材A/B slot) | before/after | HP-FB | PARTIAL | 対象部材は 3D クリック(Ctrl で 2 つ)で入る。結合は既存 PreviewBandMerge |
-| F-08 | 製作 | 部材編集 | 切れ目 | Relief Cut(平面部材のみ) | `assign_relief_cut` | 切れ目(対象部材+線) | — | test | NOT_STARTED | 曲面部材は BLOCKED_BACKEND |
+| F-08 | 製作 | 部材編集 | 切れ目 | Relief Cut(平面部材のみ)、線 1〜任意 | `assign_relief_cut` | 切れ目(対象部材+線) | — | test | NOT_STARTED | 曲面部材は BLOCKED_BACKEND。818113d: もう役割(切れ目・開口・折り線)を持つ線は入れ直さない(2 度押すと 2 本に数えていた) |
 | F-09 | 製作 | 部材編集 | 半径編集 | AUTO / LOCK / 隣接同期 | AUTO/LOCK あり | 半径編集(AUTO/LOCK) | — | test | TESTED(既存 組立率⇄半径) | 隣接同期は BLOCKED_BACKEND |
 | F-10 | 製作 | 曲げ・展開 | 曲げ状態 | スライダ 0-100 + 0/25/50/75/100 | masterPercent、bandProgress、0%=真の展開 | 曲げ状態(slider+preset) | あり(レール) | HP-FB | CLOUD_TESTED | スライダ 0〜100 + 基準値 0/25/50/75/100(組立率を打って当てる道)。HP-AP-04。比較表示(0%/100% 重ね)は未 |
 | F-11 | 製作 | 曲げ・展開 | 展開 | 自動 / 基準辺指定 / 複数配置 | create_pattern(A4 固定)、set_unfold_base | 展開(作り方カード 自動展開/基準辺指定/複数部材配置 + 配置 展開先/表裏 + 「展開」ボタン) | PatternDock | HP-UF | CLOUD_TESTED | 自動展開は create_pattern、基準辺指定は set_unfold_base(実際に読むのは「対象部材」欄の番号。3D の線選びではない)の後に create_pattern を通す。複数部材配置は disabled(理由「複数部材の同一平面配置はまだできません」)。展開先コンボは 紙(A4型紙)/XY平面/現在の作業面/新しい作業面 の4項目を並べるが欄ごと disabled(選べるのは紙だけ)にし、理由をラベルで常時表示(UnfoldTargetReasonJa)。自己試験 HP-UF-01 |
 | F-12 | 製作 | 曲げ・展開 | 展開基準辺 / 表裏反転 | — | set_unfold_base / **反転無し** | 展開基準辺(基準辺指定カード + 対象部材欄) / 表裏 disabled | — | HP-UF | PARTIAL / BLOCKED(反転) | 展開基準辺は基準辺指定カード経由の set_unfold_base で動く(自己試験 HP-UF-01 で確認)。表裏の反転は核に道が無く、表裏コンボは常に disabled + 理由 tooltip「表裏の反転はまだできません(核に反転がありません)」 |
-| F-13 | 製作 | 生成 | 現在形状を生成 | 現在/Flat/Target、Surface/Face/Wire | `freeze_state`/`freeze_flat`/`freeze_target` + FreezeOutput | 生成(対象+曲げ状態+出力) | — | HP-FB | CLOUD_TESTED | 作り方カード「現在状態」「Flat 0%」「Target 100%」(fabrication.freeze_state/freeze_flat/freeze_target)。自己試験 HP-GN-01/HP-GN-02。ApproxPart は残る(既存) |
-| F-14 | 製作 | 生成 | Flat Wire / 輪郭 Wire | — | FreezeFlatPanels / freeze WiresOnly | 生成カテゴリ | — | test | CLOUD_TESTED | Flat Wire は「Flat 0%」カード(fabrication.freeze_flat)。自己試験 HP-GN-02 で線が増え近似モデルが残ることを確認。「輪郭 Wire」は 2026-09-19 まで `fabrication.freeze_state`(「現在形状を生成」と同じ命令)を指す張りぼてボタンだった(verifier 監査で指摘)。新設した `fabrication.freeze_wires`(「輪郭を線にする」)を指すよう直し、固定で作るもの(FreezeOutput)の設定に関わらず線だけを作ることを自己試験 HP-GN-03 で確認 |
+| F-13 | 製作 | 生成 | 現在形状を生成 | 現在/Flat/Target、Surface/Face/Wire | `freeze_state`/`freeze_flat`/`freeze_target` + FreezeOutput | 生成(対象+曲げ状態+出力) | — | HP-FB | CLOUD_TESTED | 作り方カード「現在状態」「Flat 0%」「Target 100%」(fabrication.freeze_state/freeze_flat/freeze_target)。自己試験 HP-GN-01/HP-GN-02。ApproxPart は残る(既存) 818113d: 選んだ近似モデルを全部、1 回の元に戻すで固定する(1 つ目だけだった)。面ごとの方式はその近似モデルの部材だけを線にする(全部の近似モデルの部材を置いていた)。 |
+| F-14 | 製作 | 生成 | Flat Wire / 輪郭 Wire | — | FreezeFlatPanels / freeze WiresOnly | 生成カテゴリ | — | test | CLOUD_TESTED | Flat Wire は「Flat 0%」カード(fabrication.freeze_flat)。自己試験 HP-GN-02 で線が増え近似モデルが残ることを確認。「輪郭 Wire」は 2026-09-19 まで `fabrication.freeze_state`(「現在形状を生成」と同じ命令)を指す張りぼてボタンだった(verifier 監査で指摘)。新設した `fabrication.freeze_wires`(「輪郭を線にする」)を指すよう直し、固定で作るもの(FreezeOutput)の設定に関わらず線だけを作ることを自己試験 HP-GN-03 で確認 818113d: 展開 0% は線を 1 本ずつ戻していた → 1 回の元に戻すで消える。選んだ近似モデルを全部。 |
 | F-15 | 製作 | explorer | Approximation 単位(Candidate/Parts/Relief/Generated) | — | tree は FabricationModel 1行 | Explorer 節を足す(Parts = panels) | — | HP-EX | NOT_STARTED | Generated は derivedGroupId を設定して集める |
+
+## 入力の数(CARDINALITY)
+
+2026-09-22〜23 の棚卸し(自由曲面の指示書 any_count_audit)。**数学的に決まった数でない入力は、何個でも受ける**。
+1 回の生成が 1 つしか受けない演算は、人の側では複数を選べて「1 つずつ全部作り、1 回の元に戻すで消える」(一括)。
+1 つでも作れなければ全部やめる(半分だけ作らない)。面の役割の数は `modeling/SurfaceCardinality` の 1 か所が正本で、
+画面・検査・表が同じ表を読む。状態の意味は冒頭と同じ(PC_TESTED = 66d3cac の PC で ctest・自己試験 309/309 を通過)。
+
+| 入力 | 最小 | 最大 | 決まった数である数学的な理由 | いまの核(backend)の制約 | 一括・元に戻す | 状態 | 根拠(commit / 試験) |
+|---|---|---|---|---|---|---|---|
+| 面: ロフトの断面 | 1(両端にガイドが 1 本ずつあるとき)/ ふつう 2 | 任意 | なし | 3 本目以降のガイドも全部拘束(LoftSolver)、作ったあと全部の線からの離れを測る | 1 Feature | PC_TESTED | f879333、loft_input_tests、kernel_loft_tests、HP-SF-11 |
+| 面: ロフトのガイド(レール) | 0 | 任意 | なし | 交わらない・多重交差・断面順の逆転は線の名前で断る | 同上 | PC_TESTED | 同上(3 本目を持ち上げると面が変わる = 入力を無視していない証拠) |
+| 面: 中心線 | 0 | 1 | 断面を運ぶ 1 本の道筋。2 本あると沿う先が決まらない | 中心線は面に乗らないので離れの測定から外す | — | PC_TESTED | f879333 |
+| 面: ルールドの断面 | 2 | 任意 | 1 枚のルールド面は 2 曲線で決まる → 3 本以上は隣り合う 2 本ずつの帯をつなぐ | — | 1 Feature | PC_TESTED | f879333 |
+| 面: 平面の外周 / 穴 | 1 / 0 | 任意 / 任意 | なし | 同じ平面にある外周は複数の島として 1 つの面 | 1 Feature | PC_TESTED | HP-SF-10 |
+| 面: 境界面の外周 / 通る線 | 1 輪(線は何本でも)/ 0 | 1 輪 / 任意 | 外周は 1 つの輪(穴は別の役割) | 通る線は MakeFilling の拘束、作ったあと全部の線との距離を測る | 1 Feature | PC_TESTED | 6b604f3、HP-SF-10 |
+| 面: 四辺面の辺 / 通る線 | 4 / 0 | 4 / 任意 | 四辺面は U0・U1・V0・V1 の 4 辺で囲う面(定義上 4) | Coons 系(GeomFill_BSplineCurves)+ G1/G2・通る線は張り直し | 1 Feature | PC_TESTED | f879333、819b8f2、HP-SF-12 |
+| 面: 曲線網の U / V | 2 / 2 | 任意 / 任意 | 網の外側に U・V が 2 本ずつ要る(網の最小) | 厳密(Gordon)は外側が端で交わる網だけ、ずれ 0.02 mm 以内でなければ採用しない | 1 Feature | PC_TESTED | 0173810、gordon_grid_tests(U5V4) |
+| 面: 辺ごとの連続条件 / 支持面 | 0 | 辺の数 | 1 辺に 1 つ(G0/G1/G2) | 支持面の無い G1/G2・受けない作り方は断る。作ったあと測る | — | PC_TESTED | 819b8f2 |
+| 面: 離した面の元の面 | 1 | 任意 | 1 回の生成は 1 つ | — | 一括(1 つずつ・1 回で戻る) | PC_TESTED | 70cfb9c |
+| 面: 回転体の断面 / 軸 | 1 / 1 | 任意 / 1 | 軸は定義上 1 本 | — | 一括 | PC_TESTED(道具)/ CLOUD_TESTED(選んでから押す複数断面) | 70cfb9c、818113d |
+| 面の編集: 合わせる / つなぐ の縁 | 2 / 2 | 2 / 2 | 直す縁と合わせ先の縁 / 渡す 2 本の縁(定義上 2) | — | — | PC_TESTED | 5dd930f、66d3cac、kernel_surface_edit_tests |
+| 面の編集: 整える・対称・U/V 線 の面 | 1 | 任意 | なし | 解析的な面・減らない面は断る | 一括(1 面 1 Feature、1 回で戻る) | PC_TESTED | 5dd930f |
+| 面の編集: 面へ投影 / 回り込み投影 | 面 1 + 線 1〜 / 面 2〜 + 線 1〜 | 線は任意 | 落とす先が 1 枚か、またぐ面を全部か | — | 1 回で戻る | PC_TESTED | 5dd930f |
+| 面の解析の対象 | 0(0 なら全部) | 任意 | なし | 何枚かは共通の目盛りで塗る | — | PC_TESTED | 57bb941、HP-SA-01/02 |
+| おまかせに入れる線 | 1 | 任意 | なし | 役割の読み分けは core、候補は検査に通してから言う | — | PC_TESTED | b3853ee、HP-SF-13 |
+| 押し出しの輪郭 | 1 | 任意(同じ平面) | なし | 違う平面の輪郭は今は断る(別々の押し出しにするのは未) | N 部品を 1 回で戻る。部品ごとに自分の輪郭を記録 | CLOUD_TESTED(818113d) | shape_rebuild_tests、自己試験「輪郭 2 つの押し出しは…」(PC 未) |
+| 押し出しの相手の立体 / 押す面 | 0 / 1 | 1 / 1 | 足す・引く相手は結果の持ち主 1 つ / 押し引きは面 1 枚 | — | — | TESTED(既存) | — |
+| 線の面取り・丸め(2 本の間) | 2 | 2 | 2 本の線の間の角(定義上 2) | — | — | TESTED(既存) | HP-CN-01/02 |
+| 角の加工(折れ線の角)/ オフセット | 1 | 任意 | なし | — | 線ごとに 1 つ、1 回で戻る | PC_TESTED(26f00d3 の本体)/ 自己試験は CLOUD_TESTED | 26f00d3、自己試験「角の加工は何本選んでも…」(PC 未) |
+| 立体の辺のフィレット / 面取り | — | — | (辺 1〜任意が自然) | **核に無い**(TKFillet 未リンク) | — | BLOCKED_BACKEND | P-12 |
+| シェル(面を除く) | — | — | (面 1〜任意が自然) | **核に無い**。新しい Feature と安定した面の参照が要る | — | BLOCKED_BACKEND | P-13 |
+| 厚みの面 | 1 | 任意 | なし | 1 つの立体へ縫い合わせるのは形式の変更と縫い合わせが要る(今は面ごとに 1 部品) | 一括(面ごとに 1 部品、1 回で戻る) | PC_TESTED | 26f00d3、HP-TH-03 |
+| 面を平面まで立体に | 面 1 + 平面 1 | 面は任意 / 平面 1 | 平面が 2 つあると埋める先が決まらない | — | 一括 | CLOUD_TESTED(818113d) | — |
+| 足す・引くの相手 | 1 | 任意 | なし(土台は 1: 結果の持ち主) | 順に足す・引く、1 つでも作れなければ何も作らない | 1 Feature | PC_TESTED | 26f00d3、boolean_input_tests、HP-BO |
+| 移動・複写・鏡・回転 | 1 | 任意 | なし | — | 線ごとに 1 つ、1 回で戻る | PC_TESTED(26f00d3 の本体)/ 1 回で戻る自己試験は CLOUD_TESTED | 自己試験「移動・コピー…」に元に戻す・やり直しを追加 |
+| 配列の元 | 1 | 任意(× 個数) | なし | — | 1 回で戻る | TESTED(既存) | HP-AR-01 |
+| 近似の元(面・立体の面) | 1 | 任意(1 モデル) | なし | — | 1 Feature | TESTED(既存) | HP-AP-01/02 |
+| 部材の結合 | 隣り合う 2 つ | 2 | — | 範囲の結合・K 分割は未(下見と値の持ち越しの一般化が要る、中程度) | 1 回で戻る | TESTED(既存)/ 範囲は NOT_STARTED | F-07 |
+| 部材の分割 | 1 → 2(中央) | — | — | 位置指定は核に引数が無い | 1 回で戻る | PARTIAL | F-06 |
+| 切れ目・境界の役割の線 | 1 | 任意 | なし | 曲面部材の切れ目は核に無い | 1 回で戻る。もう役割を持つ線は入れ直さない | CLOUD_TESTED(818113d) | F-08 |
+| 固定(現在状態・目標 100%・輪郭を線・展開 0%)の近似モデル | 1 | 任意(選んだ全部) | なし | — | 全部を 1 回で戻る | CLOUD_TESTED(818113d) | F-13/F-14 |
+| 派生の固定 | 1 | 任意 | なし | — | ものごとに 1 本、1 回で戻る | CLOUD_TESTED(818113d) | — |
+| かごから部品の線 | 3 | 任意 | 閉じたかごに 3 本以上 | 閉シェルごとに 1 部品(部品はそのシェルの線だけを記録) | 1 回で戻る | CLOUD_TESTED(818113d) | wire_cage_tests |
+| 治具の面 | 1 | 任意 | なし | — | 面ごとに 1 組、1 回で戻る | CLOUD_TESTED(818113d) | surface_jig_tests |
+| 書き出し(STEP/STL)・出力の検査の部品 | 1 | 任意 | なし | 検査は選んだ部品を全部 | — | CLOUD_TESTED(818113d) | — |
+| 結合(wire.join)の線 | 2 | 任意 | なし(端でつながっていること) | 並べ替え・向きの反転はするが形は変えない | — | CLOUD_TESTED(818113d) | — |
+| 端点一致・接線/曲率接続・2 線を交点まで | 2 | 2 | 2 本の線の間の関係(定義上 2) | — | — | TESTED(既存) | — |
+| いまの作業平面 | 1 | 1 | いまの作業平面は 1 つ | — | — | TESTED(既存) | — |
 
 ## 統合(Integration)
 

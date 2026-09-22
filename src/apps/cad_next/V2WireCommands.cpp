@@ -660,59 +660,68 @@ void V2MainWindow::RunWireTransformEach(
     using kachakacha::v2::domain::EntityKind;
     const std::vector<kachakacha::v2::base::EntityId> selected = viewport_->Selection().entityIds;
     auto& document = session_->GetDocument();
-    kachakacha::v2::document::Document::Transaction transaction(document, labelJa.toStdString());
     int made = 0;
-    for (const auto& id : selected) {
-        const auto* source = document.FindEntity(id);
-        kachakacha::v2::app::SelectionSet one;
-        one.entityIds.push_back(id);
-        const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
-        if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
-            continue;   // 線でないもの(点など)は直す相手にしない
+    bool failed = false;
+    bool committed = false;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(document, labelJa.toStdString());
+        for (const auto& id : selected) {
+            const auto* source = document.FindEntity(id);
+            kachakacha::v2::app::SelectionSet one;
+            one.entityIds.push_back(id);
+            const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+            if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
+                continue;   // 線でないもの(点など)は直す相手にしない
+            }
+            const auto computed = kachakacha::v2::document::EvaluateWireTransform(definition, curves);
+            if (!computed.HasValue()) {
+                ReportDiagnostics(computed.Diagnostics());
+                SetStatus(labelJa + QStringLiteral(": 「%1」を直せなかったので、どの線も変えていません。")
+                        .arg(QString::fromStdString(source->displayName)));
+                failed = true;
+                break;   // まとめごと捨てる
+            }
+            kachakacha::v2::domain::Feature feature;
+            feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+            feature.type = kachakacha::v2::domain::FeatureType::TransformWire;
+            feature.displayName = labelJa.toStdString();
+            feature.inputEntityIds = one.entityIds;
+            kachakacha::v2::domain::CreateWireDefinition wire;
+            wire.segments = computed.Value();
+            for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+                wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+            }
+            feature.definition = std::move(wire);
+            kachakacha::v2::domain::Entity entity;
+            entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+            entity.kind = EntityKind::Wire;
+            entity.displayName = source->displayName.empty() ? labelJa.toStdString() : source->displayName;
+            entity.construction = source->construction;
+            entity.groupId = source->groupId;
+            entity.createdBy = feature.id;
+            feature.outputs.push_back(
+                kachakacha::v2::domain::FeatureOutput{"wire", entity.id, EntityKind::Wire});
+            const auto added = document.Run(AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
+            if (!added.committed) {
+                ReportDiagnostics(added.diagnostics);
+                failed = true;
+                break;
+            }
+            if (consumesInputs) {
+                RemoveConsumedWires({id});
+            }
+            ++made;
         }
-        const auto computed = kachakacha::v2::document::EvaluateWireTransform(definition, curves);
-        if (!computed.HasValue()) {
-            ReportDiagnostics(computed.Diagnostics());
-            SetStatus(labelJa + QStringLiteral(": 「%1」を直せなかったので、どの線も変えていません。")
-                    .arg(QString::fromStdString(source->displayName)));
-            return;   // Transaction が捨てる
-        }
-        kachakacha::v2::domain::Feature feature;
-        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
-        feature.type = kachakacha::v2::domain::FeatureType::TransformWire;
-        feature.displayName = labelJa.toStdString();
-        feature.inputEntityIds = one.entityIds;
-        kachakacha::v2::domain::CreateWireDefinition wire;
-        wire.segments = computed.Value();
-        for (std::size_t index = 0; index < wire.segments.size(); ++index) {
-            wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
-        }
-        feature.definition = std::move(wire);
-        kachakacha::v2::domain::Entity entity;
-        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
-        entity.kind = EntityKind::Wire;
-        entity.displayName = source->displayName.empty() ? labelJa.toStdString() : source->displayName;
-        entity.construction = source->construction;
-        entity.groupId = source->groupId;
-        entity.createdBy = feature.id;
-        feature.outputs.push_back(
-            kachakacha::v2::domain::FeatureOutput{"wire", entity.id, EntityKind::Wire});
-        const auto added = document.Run(AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
-        if (!added.committed) {
-            ReportDiagnostics(added.diagnostics);
-            return;
-        }
-        if (consumesInputs) {
-            RemoveConsumedWires({id});
-        }
-        ++made;
+        committed = !failed && made > 0 && transaction.Commit();
     }
-    if (made == 0 || !transaction.Commit()) {
-        SetStatus(labelJa + QStringLiteral(": 直せる線がありませんでした。何も変えていません。"));
-        AdoptCurrentDocument();
+    // まとめが捨てられても通っても、いまの文書から画面を作り直す(途中で映した分を残さない)。
+    AdoptCurrentDocument();
+    if (!committed) {
+        if (!failed) {
+            SetStatus(labelJa + QStringLiteral(": 直せる線がありませんでした。何も変えていません。"));
+        }
         return;
     }
-    AdoptCurrentDocument();
     SetStatus(consumesInputs
             ? QStringLiteral("%1: %2 本の線をそれぞれ直しました(1 回の取り消しで戻ります)。")
                   .arg(labelJa).arg(made)

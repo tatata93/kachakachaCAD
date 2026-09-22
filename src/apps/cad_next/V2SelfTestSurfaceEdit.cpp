@@ -166,6 +166,52 @@ using kachakacha::v2::domain::EntityKind;
     return Explain("面が 1 枚増え、元の面も残る", CountOfKind(window, EntityKind::GuideSurface) == 2);
 }
 
+//! HP-SE-03。隣り合う 2 枚の面で、直す面の縁 → 合わせ先の縁を押して「面を合わせる」(G1)を
+//! 下見し、Enter で確定(新しい面が増え、元の面は残る)、1 回の取り消しで消える。
+[[nodiscard]] bool CaseSurfaceEditMatch(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    // 右の矩形は左の矩形の右の辺から始める(角に吸着して、縁の端がそろう)。
+    const EntityId leftWire = DrawRectangleAtByHand(window, 0.18, 0.35, 0.40, 0.65);
+    const EntityId rightWire = DrawRectangleAtByHand(window, 0.40, 0.35, 0.62, 0.65);
+    if (!Explain("隣り合う矩形を 2 つ引ける", !leftWire.IsNil() && !rightWire.IsNil())) {
+        return false;
+    }
+    const EntityId left = SurfaceFromRectangle(window, leftWire);
+    const EntityId right = SurfaceFromRectangle(window, rightWire);
+    if (!Explain("面が 2 枚できる", !left.IsNil() && !right.IsNil()
+                && CountOfKind(window, EntityKind::GuideSurface) == 2)) {
+        return false;
+    }
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    window.RunCommand("surface.match");
+    if (!Explain("面を合わせるを押すと棚が構える", window.ShelfShown(Shelf::SurfaceEdit)
+                && window.SurfaceEdit().Input().operation == SurfaceEditOperation::Match)) {
+        return false;
+    }
+    if (!Explain("直す面(左)を右の縁の近くで押せる", ClickSurfaceAt(window, left, 0.90, 0.5))
+        || !Explain("合わせ先(右)を左の縁の近くで押せる", ClickSurfaceAt(window, right, 0.10, 0.5))) {
+        return false;
+    }
+    const auto& input = window.SurfaceEdit().Input();
+    if (!Explain("縁が 2 本決まる", input.edges.size() == 2 && input.edges[0].edgeIndex >= 0
+                && input.edges[1].edgeIndex >= 0)
+        || !Explain("合わせ方(G1)の欄が出ている", window.SurfaceEdit().Dock()->ContinuityRowShown(false))) {
+        return false;
+    }
+    const std::string refusal = window.SurfaceEdit().Outcome().refusalJa;
+    if (!Explain(("合わせた面の下見が出る(" + refusal + ")").c_str(),
+            window.SurfaceEdit().Outcome().available && !window.Viewport().ToolPreview().empty())) {
+        return false;
+    }
+    if (!Explain("Enter で確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("面が 1 枚増え、元の面も残る", CountOfKind(window, EntityKind::GuideSurface) == 3)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで消える", CountOfKind(window, EntityKind::GuideSurface) == 2);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> SurfaceEditCases()
@@ -175,6 +221,8 @@ std::vector<SelfTestCase> SurfaceEditCases()
             CaseSurfaceEditBridge},
         {"HP-SE-02 U/V 線を取り出し、平面を整えるのは断り、対称に写すと面が増える",
             CaseSurfaceEditIsoRefitMirror},
+        {"HP-SE-03 隣り合う面の縁を押して G1 で合わせ、元の面は残り、取り消しで消える",
+            CaseSurfaceEditMatch},
     };
 }
 

@@ -380,6 +380,7 @@ namespace {
     selectAll();
     const int before = wireCount();
     const std::uint64_t revision = window.Session().GetDocument().Revision();
+    const std::size_t featuresBefore = window.Session().GetDocument().Snapshot().features.size();
     window.SelectTool(DrawingTool::Move);
     placeTwo();
     if (!Explain("移動で文書が変わる",
@@ -389,6 +390,21 @@ namespace {
     if (!Explain((std::string("移動は本数を増やさない(") + std::to_string(before)
                      + " → " + std::to_string(wireCount()) + ")").c_str(),
             wireCount() == before)) {
+        return false;
+    }
+    // 何本動かしても 1 回の元に戻すで動かす前へ戻る(1 本ずつ戻していた)。やり直しも 1 回。
+    window.RunCommand("edit.undo");
+    if (!Explain((std::string("1 回の元に戻すで動かす前へ戻る(作り方 ") + std::to_string(featuresBefore)
+                     + " → " + std::to_string(window.Session().GetDocument().Snapshot().features.size())
+                     + ")").c_str(),
+            window.Session().GetDocument().Snapshot().features.size() == featuresBefore
+                && wireCount() == before)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    if (!Explain("1 回のやり直しで動かした後へ戻る",
+            window.Session().GetDocument().Snapshot().features.size() > featuresBefore
+                && wireCount() == before)) {
         return false;
     }
 

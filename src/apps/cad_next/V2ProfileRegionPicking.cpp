@@ -76,8 +76,9 @@ void AddBoundary(QPainterPath& path, const V2Viewport& viewport,
 
 } // namespace
 
-void V2Viewport::SetProfileRegionPicking(bool active)
+void V2Viewport::SetProfileRegionPicking(bool active, bool wiresFirst)
 {
+    profileRegionWiresFirst_ = active && wiresFirst;
     if (profileRegionPicking_ == active) {
         return;
     }
@@ -105,6 +106,11 @@ void V2Viewport::RebuildProfileRegions()
 std::optional<std::size_t> V2Viewport::ProfileRegionAt(const QPointF& position) const
 {
     if (!profileRegionPicking_) {
+        return std::nullopt;
+    }
+    // 面を作る: 線の上を押したら、その線 1 本だけを入れる/外す。縁の線を押すたびに
+    // 輪郭がまとめて入ったり外れたりすると、線を 1 本ずつ選べない(おまかせで起きた)。
+    if (profileRegionWiresFirst_ && WireUnderCursor(position)) {
         return std::nullopt;
     }
     const auto ray = mapping_.RayThrough(ScreenPoint{position.x(), position.y()});
@@ -149,6 +155,14 @@ bool V2Viewport::ProfileRegionSelected(std::size_t index) const
     return !ids.empty() && std::all_of(ids.begin(), ids.end(), [this](const auto& id) {
         return IsSelected(selection_, id);
     });
+}
+
+bool V2Viewport::WireUnderCursor(const QPointF& position) const
+{
+    return !kachakacha::v2::app::CollectPickCandidates(session_->Scene(), mapping_,
+        ScreenPoint{position.x(), position.y()},
+        session_->GetDocument().Snapshot().settings.tolerance, PickFocusNow())
+                .empty();
 }
 
 bool V2Viewport::SelectionHasPart() const

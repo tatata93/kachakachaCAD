@@ -74,7 +74,8 @@ void V2MainWindow::ReclassifySurfaceRoles()
     surfaceInput_ = kachakacha::v2::app::WithClassifiedRoles(surfaceInput_, surfaceRoles_);
     if (viewport_ != nullptr) {
         viewport_->SetProfileRegionPicking(
-            surfaceInput_.method == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary);
+            surfaceInput_.method == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary,
+            true);
     }
 }
 
@@ -133,7 +134,7 @@ void V2MainWindow::UseSurfaceCandidate(int index)
     surfaceInput_ = kachakacha::v2::app::WithCandidateRoles(surfaceInput_, candidate);
     surfaceRoles_ = kachakacha::v2::app::SurfaceRoleAnalysis{};
     viewport_->SetProfileRegionPicking(
-        surfaceInput_.method == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary);
+        surfaceInput_.method == kachakacha::v2::modeling::GuideSurfaceMethod::PlanarBoundary, true);
     MirrorSurfaceEntriesToSelection();
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();

@@ -19,7 +19,6 @@
 #include <BRepTools.hxx>
 #include <BRepTools_WireExplorer.hxx>
 #include <BRep_Tool.hxx>
-#include <GeomAPI_PointsToBSpline.hxx>
 #include <GeomAPI_PointsToBSplineSurface.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomAbs_Shape.hxx>
@@ -56,6 +55,7 @@
 #include <gp_Vec.hxx>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -491,10 +491,11 @@ Result<SurfaceEditResult> MatchSurfaceEdge(const KernelShapeHandle& target, int 
 
 namespace {
 
-//! 縁の上の N+1 点と、縁から出る向き(相手の側へ)。
+//! 縁の上の N+1 点と、縁から出る向き(相手の側へ)と、点の番号あたりの縁の接線。
 struct EdgeFrame {
     std::vector<gp_Pnt> points;
     std::vector<gp_Vec> outward;
+    std::vector<gp_Vec> along;
 };
 
 [[nodiscard]] Result<EdgeFrame> FrameOf(const TopoDS_Face& face, const TopoDS_Edge& edge,
@@ -504,6 +505,7 @@ struct EdgeFrame {
     BRepAdaptor_Curve curve(edge);
     const double first = curve.FirstParameter();
     const double last = curve.LastParameter();
+    const double step = (last - first) / count * (reversed ? -1.0 : 1.0);
     const occ::handle<Geom_Surface> surface = BRep_Tool::Surface(face);
     for (int k = 0; k <= count; ++k) {
         const double t = static_cast<double>(k) / count;
@@ -518,38 +520,209 @@ struct EdgeFrame {
         }
         frame.points.push_back(point);
         frame.outward.push_back(normal.Crossed(tangent).Normalized());
+        frame.along.push_back(tangent * step);
     }
     return Result<EdgeFrame>::Success(std::move(frame));
 }
 
-[[nodiscard]] gp_Pnt Hermite(const gp_Pnt& a, const gp_Vec& da, const gp_Pnt& b, const gp_Vec& db,
-    double s)
+//! つなぐ面の 4 行(縁 A の点・縁 A から出る側の点・縁 B へ入る側の点・縁 B の点)と、
+//! 行ごとの点の番号あたりの接線。横切る向きは 3 次のベジェ(エルミート)になる。
+struct BridgeRows {
+    std::array<std::vector<gp_Pnt>, 4> points;
+    std::array<std::vector<gp_Vec>, 4> tangents;
+};
+
+//! 並んだ量の、番号あたりの変わり方(中は中央差分、端は 2 次の片側差分)。
+[[nodiscard]] gp_Vec Difference(const std::vector<gp_Vec>& values, std::size_t k)
 {
-    const double h00 = 2.0 * s * s * s - 3.0 * s * s + 1.0;
-    const double h10 = s * s * s - 2.0 * s * s + s;
-    const double h01 = -2.0 * s * s * s + 3.0 * s * s;
-    const double h11 = s * s * s - s * s;
-    return gp_Pnt(a.XYZ() * h00 + da.XYZ() * h10 + b.XYZ() * h01 + db.XYZ() * h11);
+    const std::size_t last = values.size() - 1;
+    if (last < 2) {
+        return last == 0 ? gp_Vec(0.0, 0.0, 0.0) : values[1] - values[0];
+    }
+    if (k == 0) {
+        return (values[0] * -3.0 + values[1] * 4.0 - values[2]) * 0.5;
+    }
+    if (k == last) {
+        return (values[last] * 3.0 - values[last - 1] * 4.0 + values[last - 2]) * 0.5;
+    }
+    return (values[k + 1] - values[k - 1]) * 0.5;
 }
 
-[[nodiscard]] Result<TopoDS_Edge> EdgeThroughPoints(const std::vector<gp_Pnt>& points)
+[[nodiscard]] Result<BridgeRows> BuildBridgeRows(const EdgeFrame& a, const EdgeFrame& b,
+    SurfaceContinuity firstOrder, SurfaceContinuity secondOrder, double tension)
 {
-    NCollection_Array1<gp_Pnt> array(1, static_cast<int>(points.size()));
-    for (std::size_t index = 0; index < points.size(); ++index) {
-        array.SetValue(static_cast<int>(index) + 1, points[index]);
+    BridgeRows rows;
+    std::vector<gp_Vec> leaveA;
+    std::vector<gp_Vec> enterB;
+    for (std::size_t k = 0; k < a.points.size(); ++k) {
+        const gp_Pnt& pa = a.points[k];
+        const gp_Pnt& pb = b.points[k];
+        const gp_Vec chord(pa, pb);
+        const double length = chord.Magnitude();
+        if (!(length > 1.0e-9)) {
+            return Result<BridgeRows>::Failure(MakeError(kEditBridgeFailed,
+                "2 本の縁が重なっているところがあります。", "離れた縁どうしをつないでください。"));
+        }
+        // 縁から出る向き。G0 は向きを決めない(相手へまっすぐ)。相手の側を向かせる。
+        gp_Vec da = firstOrder == SurfaceContinuity::G0 ? chord.Normalized() : a.outward[k];
+        if (da.Dot(chord) < 0.0) {
+            da.Reverse();
+        }
+        gp_Vec db = secondOrder == SurfaceContinuity::G0 ? chord.Reversed().Normalized() : b.outward[k];
+        if (db.Dot(chord) > 0.0) {
+            db.Reverse();
+        }
+        const double magnitude = tension * length;
+        leaveA.push_back(da * (magnitude / 3.0));
+        enterB.push_back(db * (magnitude / 3.0));
+        rows.points[0].push_back(pa);
+        rows.points[1].push_back(pa.Translated(leaveA.back()));
+        rows.points[2].push_back(pb.Translated(enterB.back()));
+        rows.points[3].push_back(pb);
     }
-    GeomAPI_PointsToBSpline fit(array, 3, 8, GeomAbs_C2, 1.0e-6);
-    if (!fit.IsDone() || fit.Curve().IsNull()) {
-        return Result<TopoDS_Edge>::Failure(MakeError(kEditBridgeFailed,
-            "つなぐ面の脇の縁を作れませんでした。", {}));
+    for (std::size_t k = 0; k < a.points.size(); ++k) {
+        rows.tangents[0].push_back(a.along[k]);
+        rows.tangents[1].push_back(a.along[k] + Difference(leaveA, k));
+        rows.tangents[2].push_back(b.along[k] + Difference(enterB, k));
+        rows.tangents[3].push_back(b.along[k]);
     }
-    const occ::handle<Geom_Curve> curve = fit.Curve();
+    return Result<BridgeRows>::Success(std::move(rows));
+}
+
+//! 4 行から面を直に組む。縁に沿う向きは点ごとの接線つき 3 次(節点は点ごと、C1)、
+//! 横切る向きは 3 次のベジェ。どの行も同じ節点なので 1 枚の面になり、縁の上の点では
+//! 横切る向きが縁から出る向きそのものになる(G1 を作りで満たす。埋める面に頼ると、
+//! 張りを強くしたとき縁の折れ目が許容を超えた。PC で 3.2 度)。
+[[nodiscard]] Result<TopoDS_Face> FaceFromBridgeRows(const BridgeRows& rows)
+{
+    const int stations = static_cast<int>(rows.points[0].size());
+    const int spans = stations - 1;
+    if (spans < 1) {
+        return Result<TopoDS_Face>::Failure(MakeError(kEditBridgeFailed,
+            "つなぐ面の点が足りません。", {}));
+    }
+    NCollection_Array2<gp_Pnt> poles(1, 2 * spans + 2, 1, 4);
+    for (int row = 0; row < 4; ++row) {
+        const auto& points = rows.points[static_cast<std::size_t>(row)];
+        const auto& tangents = rows.tangents[static_cast<std::size_t>(row)];
+        int at = 1;
+        for (int k = 0; k < stations; ++k) {
+            const auto index = static_cast<std::size_t>(k);
+            const gp_Vec third = tangents[index] / 3.0;
+            if (k == 0) {
+                poles.SetValue(at++, row + 1, points[index]);
+                poles.SetValue(at++, row + 1, points[index].Translated(third));
+            } else if (k == spans) {
+                poles.SetValue(at++, row + 1, points[index].Translated(third.Reversed()));
+                poles.SetValue(at++, row + 1, points[index]);
+            } else {
+                poles.SetValue(at++, row + 1, points[index].Translated(third.Reversed()));
+                poles.SetValue(at++, row + 1, points[index].Translated(third));
+            }
+        }
+    }
+    NCollection_Array1<double> uKnots(1, stations);
+    NCollection_Array1<int> uMults(1, stations);
+    for (int k = 0; k < stations; ++k) {
+        uKnots.SetValue(k + 1, static_cast<double>(k));
+        uMults.SetValue(k + 1, (k == 0 || k == spans) ? 4 : 2);
+    }
+    NCollection_Array1<double> vKnots(1, 2);
+    NCollection_Array1<int> vMults(1, 2);
+    vKnots.SetValue(1, 0.0);
+    vKnots.SetValue(2, 1.0);
+    vMults.SetValue(1, 4);
+    vMults.SetValue(2, 4);
+    const occ::handle<Geom_BSplineSurface> bspline =
+        new Geom_BSplineSurface(poles, uKnots, vKnots, uMults, vMults, 3, 3);
+    const occ::handle<Geom_Surface> surface = bspline;
+    BRepBuilderAPI_MakeFace maker{surface, Precision::Confusion()};
+    if (!maker.IsDone()) {
+        return Result<TopoDS_Face>::Failure(MakeError(kEditBridgeFailed,
+            "つなぐ面を作れませんでした。", {}));
+    }
+    return Result<TopoDS_Face>::Success(maker.Face());
+}
+
+//! 行の端(番号 0 か N)を横切る 3 次のベジェの縁。埋め直すときの脇の縁に使う。
+[[nodiscard]] Result<TopoDS_Edge> BridgeSideEdge(const BridgeRows& rows, std::size_t k)
+{
+    NCollection_Array1<gp_Pnt> poles(1, 4);
+    for (int row = 0; row < 4; ++row) {
+        poles.SetValue(row + 1, rows.points[static_cast<std::size_t>(row)][k]);
+    }
+    const occ::handle<Geom_BezierCurve> bezier = new Geom_BezierCurve(poles);
+    const occ::handle<Geom_Curve> curve = bezier;
     BRepBuilderAPI_MakeEdge maker{curve};
     if (!maker.IsDone()) {
         return Result<TopoDS_Edge>::Failure(MakeError(kEditBridgeFailed,
             "つなぐ面の脇の縁を作れませんでした。", {}));
     }
     return Result<TopoDS_Edge>::Success(maker.Edge());
+}
+
+//! 測った滑らかさ(G0 の側は測らない)。どちらかが許容を外れたら理由を返す。
+struct BridgeMeasure {
+    detail::EdgeContinuity a;
+    detail::EdgeContinuity b;
+};
+
+[[nodiscard]] Result<BridgeMeasure> MeasureBridge(const TopoDS_Face& result, const TopoDS_Face& faceA,
+    const TopoDS_Edge& edgeA, SurfaceContinuity firstOrder, const TopoDS_Face& faceB,
+    const TopoDS_Edge& edgeB, SurfaceContinuity secondOrder)
+{
+    BridgeMeasure measure;
+    if (firstOrder != SurfaceContinuity::G0) {
+        const auto checked = CheckContinuity(result, faceA, edgeA, firstOrder, "縁 A");
+        if (!checked.HasValue()) {
+            return Result<BridgeMeasure>::Failure(checked.Diagnostics());
+        }
+        measure.a = checked.Value();
+    }
+    if (secondOrder != SurfaceContinuity::G0) {
+        const auto checked = CheckContinuity(result, faceB, edgeB, secondOrder, "縁 B");
+        if (!checked.HasValue()) {
+            return Result<BridgeMeasure>::Failure(checked.Diagnostics());
+        }
+        measure.b = checked.Value();
+    }
+    return Result<BridgeMeasure>::Success(measure);
+}
+
+//! G2 の側があるとき(または直に組んだ面が許容を外れたとき)は、直に組んだ面を初期形にして
+//! 縁の条件つきで埋め直す(核の G2 は曲率まで合わせる)。
+[[nodiscard]] Result<TopoDS_Shape> RefillBridge(const TopoDS_Face& initial, const BridgeRows& rows,
+    const TopoDS_Face& faceA, const TopoDS_Edge& edgeA, SurfaceContinuity firstOrder,
+    const TopoDS_Face& faceB, const TopoDS_Edge& edgeB, SurfaceContinuity secondOrder,
+    const GeometryTolerance& tolerance)
+{
+    auto sideA = BridgeSideEdge(rows, 0);
+    auto sideB = BridgeSideEdge(rows, rows.points[0].size() - 1);
+    if (!sideA.HasValue() || !sideB.HasValue()) {
+        return Result<TopoDS_Shape>::Failure(sideA.HasValue() ? sideB.Diagnostics()
+                                                              : sideA.Diagnostics());
+    }
+    BRepOffsetAPI_MakeFilling filler(3, 30, 4, false, 1.0e-5,
+        std::max(1.0e-4, tolerance.modelLinearMm), 0.004, 0.05, 10, 16);
+    if (firstOrder == SurfaceContinuity::G0) {
+        filler.Add(edgeA, GeomAbs_C0, true);
+    } else {
+        filler.Add(edgeA, faceA, OrderOf(firstOrder), true);
+    }
+    filler.Add(sideB.Value(), GeomAbs_C0, true);
+    if (secondOrder == SurfaceContinuity::G0) {
+        filler.Add(edgeB, GeomAbs_C0, true);
+    } else {
+        filler.Add(edgeB, faceB, OrderOf(secondOrder), true);
+    }
+    filler.Add(sideA.Value(), GeomAbs_C0, true);
+    filler.LoadInitSurface(initial);
+    filler.Build();
+    if (!filler.IsDone()) {
+        return Result<TopoDS_Shape>::Failure(MakeError(kEditBridgeFailed,
+            "2 本の縁をつなぐ面を張れませんでした。", "縁どうしの向きか、張りの強さを見直してください。"));
+    }
+    return Result<TopoDS_Shape>::Success(filler.Shape());
 }
 
 } // namespace
@@ -579,100 +752,40 @@ Result<SurfaceEditResult> BridgeSurfaceEdges(const KernelShapeHandle& first, int
         const auto [b0, b1] = EndsOf(edgeB.Value());
         const bool reversed = a0.Distance(b1) + a1.Distance(b0) < a0.Distance(b0) + a1.Distance(b1);
         constexpr int kAlong = 24;
-        constexpr int kAcross = 16;
         auto frameA = FrameOf(faceA.Value(), edgeA.Value(), false, kAlong);
         auto frameB = FrameOf(faceB.Value(), edgeB.Value(), reversed, kAlong);
         if (!frameA.HasValue() || !frameB.HasValue()) {
             return Out::Failure(frameA.HasValue() ? frameB.Diagnostics() : frameA.Diagnostics());
         }
-        NCollection_Array2<gp_Pnt> grid(1, kAlong + 1, 1, kAcross + 1);
-        std::vector<gp_Pnt> sideStart;
-        std::vector<gp_Pnt> sideEnd;
-        for (int k = 0; k <= kAlong; ++k) {
-            const gp_Pnt& pa = frameA.Value().points[static_cast<std::size_t>(k)];
-            const gp_Pnt& pb = frameB.Value().points[static_cast<std::size_t>(k)];
-            const gp_Vec chord(pa, pb);
-            const double length = chord.Magnitude();
-            if (!(length > 1.0e-9)) {
-                return Out::Failure(MakeError(kEditBridgeFailed,
-                    "2 本の縁が重なっているところがあります。", "離れた縁どうしをつないでください。"));
+        const auto rows = BuildBridgeRows(frameA.Value(), frameB.Value(), firstOrder, secondOrder,
+            tension);
+        if (!rows.HasValue()) {
+            return Out::Failure(rows.Diagnostics());
+        }
+        const auto direct = FaceFromBridgeRows(rows.Value());
+        if (!direct.HasValue()) {
+            return Out::Failure(direct.Diagnostics());
+        }
+        // G0/G1 だけなら、直に組んだ面をそのまま使う(縁の上の点で G1 を作りで満たす)。
+        TopoDS_Shape built = direct.Value();
+        auto measured = MeasureBridge(direct.Value(), faceA.Value(), edgeA.Value(), firstOrder,
+            faceB.Value(), edgeB.Value(), secondOrder);
+        const bool anyG2 = firstOrder == SurfaceContinuity::G2 || secondOrder == SurfaceContinuity::G2;
+        if (anyG2 || !measured.HasValue()) {
+            auto refilled = RefillBridge(direct.Value(), rows.Value(), faceA.Value(), edgeA.Value(),
+                firstOrder, faceB.Value(), edgeB.Value(), secondOrder, tolerance);
+            if (!refilled.HasValue()) {
+                return Out::Failure(refilled.Diagnostics());
             }
-            // 縁から出る向き。G0 は向きを決めない(相手へまっすぐ)。相手の側を向かせる。
-            gp_Vec da = firstOrder == SurfaceContinuity::G0 ? chord.Normalized()
-                                                            : frameA.Value().outward[static_cast<std::size_t>(k)];
-            if (da.Dot(chord) < 0.0) {
-                da.Reverse();
-            }
-            gp_Vec db = secondOrder == SurfaceContinuity::G0 ? chord.Reversed().Normalized()
-                                                             : frameB.Value().outward[static_cast<std::size_t>(k)];
-            if (db.Dot(chord) > 0.0) {
-                db.Reverse();
-            }
-            const double magnitude = tension * length;
-            for (int j = 0; j <= kAcross; ++j) {
-                const double s = static_cast<double>(j) / kAcross;
-                const gp_Pnt point = Hermite(pa, da * magnitude, pb, db.Reversed() * magnitude, s);
-                grid.SetValue(k + 1, j + 1, point);
-                if (k == 0) {
-                    sideStart.push_back(point);
-                }
-                if (k == kAlong) {
-                    sideEnd.push_back(point);
-                }
+            built = refilled.Value();
+            measured = MeasureBridge(FirstFaceOf(built), faceA.Value(), edgeA.Value(), firstOrder,
+                faceB.Value(), edgeB.Value(), secondOrder);
+            if (!measured.HasValue()) {
+                return Out::Failure(measured.Diagnostics());
             }
         }
-        GeomAPI_PointsToBSplineSurface initial(grid, 3, 8, GeomAbs_C2, 1.0e-3);
-        if (!initial.IsDone() || initial.Surface().IsNull()) {
-            return Out::Failure(MakeError(kEditBridgeFailed, "つなぐ面の初期形を作れませんでした。", {}));
-        }
-        const occ::handle<Geom_Surface> initialSurface = initial.Surface();
-        BRepBuilderAPI_MakeFace initialFace{initialSurface, Precision::Confusion()};
-        auto sideA = EdgeThroughPoints(sideStart);
-        auto sideB = EdgeThroughPoints(sideEnd);
-        if (!sideA.HasValue() || !sideB.HasValue() || !initialFace.IsDone()) {
-            return Out::Failure(sideA.HasValue() ? sideB.Diagnostics() : sideA.Diagnostics());
-        }
-        // 縁の上の拘束の点を多めに取り、繰り返しも増やす(張りを強くしても G1 を保つ)。
-        BRepOffsetAPI_MakeFilling filler(3, 30, 4, false, 1.0e-5,
-            std::max(1.0e-4, tolerance.modelLinearMm), 0.004, 0.05, 10, 16);
-        if (firstOrder == SurfaceContinuity::G0) {
-            filler.Add(edgeA.Value(), GeomAbs_C0, true);
-        } else {
-            filler.Add(edgeA.Value(), faceA.Value(), OrderOf(firstOrder), true);
-        }
-        filler.Add(sideB.Value(), GeomAbs_C0, true);
-        if (secondOrder == SurfaceContinuity::G0) {
-            filler.Add(edgeB.Value(), GeomAbs_C0, true);
-        } else {
-            filler.Add(edgeB.Value(), faceB.Value(), OrderOf(secondOrder), true);
-        }
-        filler.Add(sideA.Value(), GeomAbs_C0, true);
-        filler.LoadInitSurface(initialFace.Face());
-        filler.Build();
-        if (!filler.IsDone()) {
-            return Out::Failure(MakeError(kEditBridgeFailed, "2 本の縁をつなぐ面を張れませんでした。",
-                "縁どうしの向きか、張りの強さを見直してください。"));
-        }
-        const TopoDS_Shape built = filler.Shape();
-        const TopoDS_Face resultFace = FirstFaceOf(built);
-        detail::EdgeContinuity measuredA;
-        detail::EdgeContinuity measuredB;
-        if (firstOrder != SurfaceContinuity::G0) {
-            const auto checked = CheckContinuity(resultFace, faceA.Value(), edgeA.Value(),
-                firstOrder, "縁 A");
-            if (!checked.HasValue()) {
-                return Out::Failure(checked.Diagnostics());
-            }
-            measuredA = checked.Value();
-        }
-        if (secondOrder != SurfaceContinuity::G0) {
-            const auto checked = CheckContinuity(resultFace, faceB.Value(), edgeB.Value(),
-                secondOrder, "縁 B");
-            if (!checked.HasValue()) {
-                return Out::Failure(checked.Diagnostics());
-            }
-            measuredB = checked.Value();
-        }
+        const auto& measuredA = measured.Value().a;
+        const auto& measuredB = measured.Value().b;
         auto finished = detail::FinishSurfaceResult(built, tolerance);
         if (!finished.HasValue()) {
             return Out::Failure(finished.Diagnostics());
@@ -681,7 +794,6 @@ Result<SurfaceEditResult> BridgeSurfaceEdges(const KernelShapeHandle& first, int
         result.surface = finished.Value();
         result.continuityG1Deg = std::max(firstOrder == SurfaceContinuity::G0 ? -1.0 : measuredA.g1Deg,
             secondOrder == SurfaceContinuity::G0 ? -1.0 : measuredB.g1Deg);
-        const bool anyG2 = firstOrder == SurfaceContinuity::G2 || secondOrder == SurfaceContinuity::G2;
         result.continuityG2 = anyG2
             ? std::max(firstOrder == SurfaceContinuity::G2 ? measuredA.g2 : 0.0,
                   secondOrder == SurfaceContinuity::G2 ? measuredB.g2 : 0.0)

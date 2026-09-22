@@ -55,7 +55,8 @@ bool V2MainWindow::ArmCommandIfUnsatisfied(std::string_view id)
         ShowExtrudeShelf(PlanExtrudeFromSelection());
     } else if (id == "surface.create") {
         viewport_->SetToolPickActive(true);
-        viewport_->SetProfileRegionPicking(true);
+        // 線の上を押せば線 1 本、線の無い内側を押せば輪郭をまとめて拾う。
+        viewport_->SetProfileRegionPicking(true, true);
     }
     SetStatus(QStringLiteral("%1: %2(選ぶと続きます。Esc でやめます)")
             .arg(QString::fromUtf8(std::string(command->labelJa).c_str()),

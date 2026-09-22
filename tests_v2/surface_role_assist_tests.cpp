@@ -101,6 +101,24 @@ KACHA_V2_TEST(role_assist, ガイド2本と断面3本はガイド付きロフト
         "他の候補(境界面)も理由つきで言う: " + text);
 }
 
+KACHA_V2_TEST(role_assist, 平らなはしご形もガイド付きロフトで外周の輪は他の候補)
+{
+    // 画面の試験(HP-SF-13)と同じ形: 断面は x = 0, 30, 60 の直線、ガイドは y = 0 と y = 20。
+    // 全部が同じ平面に載り、外側の 4 本は端どうしで輪にもなる。はしごの読み方を先にし、
+    // 輪(平面・境界面)は他の候補として言う。5 本とも役割を持つ。
+    DeterministicIdGenerator ids;
+    const std::vector<RoleWire> wires{Wire(ids, {{0, 0, 0}, {0, 20, 0}}),
+        Wire(ids, {{30, 0, 0}, {30, 20, 0}}), Wire(ids, {{60, 0, 0}, {60, 20, 0}}),
+        Wire(ids, {{0, 0, 0}, {60, 0, 0}}), Wire(ids, {{0, 20, 0}, {60, 20, 0}})};
+    const SurfaceRoleAnalysis analysis = AnalyzeSurfaceRoles(wires, {}, Tolerance());
+    const std::string text = Joined(analysis);
+    Require(analysis.recommended == GuideSurfaceMethod::LoftSections && analysis.recommendedFeasible,
+        "ガイド付きロフトを薦める: " + text);
+    Require(analysis.Count(WireRoleChoice::Guide) == 2 && analysis.Count(WireRoleChoice::Section) == 3,
+        "ガイド 2 本・断面 3 本: " + text);
+    Require(Contains(text, "他の候補:") && Contains(text, "境界面"), "境界面も候補: " + text);
+}
+
 KACHA_V2_TEST(role_assist, 選んだ順が違っても同じ役割と作り方になる)
 {
     DeterministicIdGenerator ids;

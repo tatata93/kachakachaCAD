@@ -393,7 +393,9 @@ public:
     [[nodiscard]] bool ToolPickToggle() const noexcept { return toolPickToggle_; }
     //! 押し出し・平面Surfaceでは線そのものではなく、閉じた線の内側を拾う。
     //! 領域はWireから都度作る一時状態で、Documentへ保存しない。
-    void SetProfileRegionPicking(bool active);
+    //! wiresFirst(面を作る): 線の上を押したら線を 1 本だけ拾い、線の無い内側を押したときだけ
+    //! 輪郭をまとめて拾う。押し出しは縁を押しても輪郭を拾う(従来どおり)。
+    void SetProfileRegionPicking(bool active, bool wiresFirst = false);
     [[nodiscard]] bool ProfileRegionPicking() const noexcept
     {
         return profileRegionPicking_;
@@ -845,6 +847,8 @@ private:
     [[nodiscard]] std::optional<std::size_t> ProfileRegionAt(
         const QPointF& position) const;
     [[nodiscard]] bool ProfileRegionSelected(std::size_t index) const;
+    //! カーソルの下に線か点がある(塗った形は数えない)。
+    [[nodiscard]] bool WireUnderCursor(const QPointF& position) const;
     [[nodiscard]] bool SelectionHasPart() const;
     bool ToggleProfileRegionAt(const QPointF& position);
 
@@ -986,6 +990,7 @@ private:
     bool toolPickToggle_ = false;
     std::optional<kachakacha::v2::base::EntityId> lastToolPick_;
     bool profileRegionPicking_ = false;
+    bool profileRegionWiresFirst_ = false;
     std::vector<kachakacha::v2::app::ProfileRegion> profileRegions_;
     std::optional<std::size_t> hoveredProfileRegion_;
     kachakacha::v2::modeling::DrawingTool cursorTool_ =

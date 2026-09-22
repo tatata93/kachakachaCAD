@@ -357,7 +357,7 @@ void V2MainWindow::RunSurfaceCreate()
         viewport_->SetToolPickToggle(true);
         MirrorSurfaceEntriesToSelection();
         viewport_->SetProfileRegionPicking(
-            surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary);
+            surfaceInput_.method == GuideSurfaceMethod::PlanarBoundary, true);
         RefreshRightShelves();
         RefreshSurfacePreview();
         RefreshSurfaceRoleLabels();
@@ -383,7 +383,7 @@ void V2MainWindow::ChooseSurfaceMethod(GuideSurfaceMethod method)
     surfaceRoles_ = kachakacha::v2::app::SurfaceRoleAnalysis{};
     // いまの欄がその作り方で使えなければ、既定の欄へ戻す。入れたものは捨てない。
     surfaceInput_ = kachakacha::v2::app::WithActiveSlotSettled(surfaceInput_);
-    viewport_->SetProfileRegionPicking(method == GuideSurfaceMethod::PlanarBoundary);
+    viewport_->SetProfileRegionPicking(method == GuideSurfaceMethod::PlanarBoundary, true);
     RefreshSurfacePreview();
     RefreshSurfaceRoleLabels();
     RefreshSurfaceDock();

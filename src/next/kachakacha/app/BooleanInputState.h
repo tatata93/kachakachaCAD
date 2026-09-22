@@ -29,9 +29,10 @@ enum class BooleanSlot {
 struct BooleanInputState {
     //! 偽なら足す、真なら引く。
     bool cut = false;
-    //! 空なら Nil。
+    //! 土台(1 つ。結果が土台を置き換える)。空なら Nil。
     base::EntityId target;
-    base::EntityId tool;
+    //! 相手(何個でも。順に足す・引く)。
+    std::vector<base::EntityId> tools;
     //! 「ここへ選ぶ」で明示した欄。無ければ空いている欄へ順に入る。
     std::optional<BooleanSlot> activeSlot;
 };
@@ -45,6 +46,7 @@ struct BooleanInputState {
 [[nodiscard]] BooleanSlot NextBooleanSlot(const BooleanInputState& state) noexcept;
 
 //! 3D で部品を押した。入っているものを押せば外れる。空いている(または明示した)欄へ入れる。
+//! 相手は何個でも足せる(土台が入っていれば、次の部品は相手に足される)。
 //! 入れたら明示は解ける(その欄は満たされた)。同じものを両方の欄には入れない。
 [[nodiscard]] BooleanInputState WithBooleanPick(const BooleanInputState& state,
     const base::EntityId& id);

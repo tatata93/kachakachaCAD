@@ -20,7 +20,7 @@ std::string_view SelectionPredicateNameJa(SelectionPredicate value) noexcept
     case SelectionPredicate::ClosedProfilesOrSolidFace:
         return "閉じた輪郭を1つ以上、または立体の平らな面を選んでください。";
     case SelectionPredicate::OnePart: return "部品を1つ選んでください。";
-    case SelectionPredicate::TwoParts: return "部品を2つ選んでください。";
+    case SelectionPredicate::TwoOrMoreParts: return "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。";
     case SelectionPredicate::OneDerivedEntity: return "派生したものを1つ選んでください。";
     case SelectionPredicate::OneFabricationModel: return "製作モデルを1つ選んでください。";
     case SelectionPredicate::OneFabricationPanel: return "部材を1つ選んでください。";
@@ -456,11 +456,11 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "閉じたワイヤーのかごから部品を作ります。", true,
             {"AT-GEO-010", "AT-GEO-011", "AT-GEO-012", "AT-GEO-013"}},
         {"part.boolean_add", "足す", CommandMode::Dialog, "boolean_add", "",
-            SelectionPredicate::TwoParts, "部品を2つ選んでください。",
+            SelectionPredicate::TwoOrMoreParts, "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。",
             "部品に足します。離ればなれになるなら断ります。", true,
             {"AT-EXT-007"}},
         {"part.boolean_cut", "引く", CommandMode::Dialog, "boolean_cut", "",
-            SelectionPredicate::TwoParts, "部品を2つ選んでください。",
+            SelectionPredicate::TwoOrMoreParts, "部品を2つ以上選んでください(土台 1 つと相手 1 個以上)。",
             "部品から引きます。分かれる場合は個数を先に知らせます。", true,
             {"AT-EXT-007"}},
         {"derived.freeze", "現在状態を固定", CommandMode::Instant, "freeze", "",

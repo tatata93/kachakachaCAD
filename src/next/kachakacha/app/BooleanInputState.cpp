@@ -58,8 +58,9 @@ BooleanInputState WithBooleanPick(const BooleanInputState& state, const base::En
         next.activeSlot = BooleanSlot::Target;
         return next;
     }
-    if (next.tool == id) {
-        next.tool = base::EntityId{};
+    if (const auto found = std::find(next.tools.begin(), next.tools.end(), id);
+        found != next.tools.end()) {
+        next.tools.erase(found);
         next.activeSlot = BooleanSlot::Tool;
         return next;
     }
@@ -67,7 +68,7 @@ BooleanInputState WithBooleanPick(const BooleanInputState& state, const base::En
     if (slot == BooleanSlot::Target) {
         next.target = id;
     } else {
-        next.tool = id;
+        next.tools.push_back(id);   // 相手は何個でも
     }
     next.activeSlot.reset();   // 明示した欄は満たされた。次は空いている欄へ。
     return next;
@@ -81,9 +82,7 @@ BooleanInputState WithoutBooleanEntries(const BooleanInputState& state,
         if (next.target == id) {
             next.target = base::EntityId{};
         }
-        if (next.tool == id) {
-            next.tool = base::EntityId{};
-        }
+        next.tools.erase(std::remove(next.tools.begin(), next.tools.end(), id), next.tools.end());
     }
     return next;
 }
@@ -94,7 +93,7 @@ BooleanInputState WithBooleanSlotCleared(const BooleanInputState& state, Boolean
     if (slot == BooleanSlot::Target) {
         next.target = base::EntityId{};
     } else {
-        next.tool = base::EntityId{};
+        next.tools.clear();
     }
     next.activeSlot = slot;
     return next;
@@ -113,15 +112,14 @@ std::vector<base::EntityId> BooleanEntries(const BooleanInputState& state)
     if (!state.target.IsNil()) {
         entries.push_back(state.target);
     }
-    if (!state.tool.IsNil()) {
-        entries.push_back(state.tool);
-    }
+    entries.insert(entries.end(), state.tools.begin(), state.tools.end());
     return entries;
 }
 
 bool BooleanReady(const BooleanInputState& state) noexcept
 {
-    return !state.target.IsNil() && !state.tool.IsNil() && !(state.target == state.tool);
+    return !state.target.IsNil() && !state.tools.empty()
+        && std::find(state.tools.begin(), state.tools.end(), state.target) == state.tools.end();
 }
 
 std::string BooleanHintJa(const BooleanInputState& state)
@@ -138,9 +136,13 @@ std::vector<std::string> BooleanStatusLinesJa(const BooleanInputState& state,
     std::vector<std::string> lines;
     lines.push_back("▶ " + BooleanHintJa(state));
     lines.push_back(std::string("土台: ") + (state.target.IsNil() ? "× まだ" : "✓ 入っている"));
-    lines.push_back(std::string("相手: ") + (state.tool.IsNil() ? "× まだ" : "✓ 入っている"));
+    lines.push_back(std::string("相手: ")
+        + (state.tools.empty() ? std::string("× まだ")
+                : state.tools.size() == 1 ? std::string("✓ 入っている")
+                : "✓ " + std::to_string(state.tools.size()) + " 個(順に"
+                    + std::string(BooleanOperationLabelJa(state.cut)) + ")"));
     if (!BooleanReady(state)) {
-        lines.push_back("× 部品を2つ(土台と相手)入れると下見が出ます");
+        lines.push_back("× 土台と相手(1 個以上。何個でも)を入れると下見が出ます");
         return lines;
     }
     if (!outcome.evaluated) {
@@ -163,7 +165,7 @@ std::string BooleanFooterLine(const BooleanInputState& state, const std::string&
 {
     std::string line = std::string(BooleanOperationLabelJa(state.cut)) + ": ";
     line += "TARGET=" + (state.target.IsNil() ? std::string("(なし)") : targetName);
-    line += " / TOOL=" + (state.tool.IsNil() ? std::string("(なし)") : toolName);
+    line += " / TOOL=" + (state.tools.empty() ? std::string("(なし)") : toolName);
     if (!BooleanReady(state) || state.activeSlot.has_value()) {
         line += " / NEXT=" + std::string(BooleanSlotKey(NextBooleanSlot(state)));
     }

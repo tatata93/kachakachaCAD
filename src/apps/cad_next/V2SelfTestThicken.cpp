@@ -13,6 +13,7 @@
 #include "V2ThickenDock.h"
 #include "V2Viewport.h"
 
+#include "kachakacha/app/Selection.h"
 #include "kachakacha/app/ShelfLayout.h"
 #include "kachakacha/app/ThickenInputState.h"
 #include "kachakacha/app/UiMode.h"
@@ -67,7 +68,7 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
         return false;
     }
     if (!Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))
-        || !Explain("面の欄に入る", !window.ThickenInput().surface.IsNil())
+        || !Explain("面の欄に入る", !window.ThickenInput().surfaces.empty())
         || !Explain("欄に名前が出る",
             window.ThickenDock().SurfaceTextJa() != QStringLiteral("(選んでいません)"))) {
         return false;
@@ -103,7 +104,7 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
         return false;
     }
     if (!Explain("構えてから面を画面で拾える", ClickOnAnyGuideSurface(window))
-        || !Explain("面の欄に入る", !window.ThickenInput().surface.IsNil())) {
+        || !Explain("面の欄に入る", !window.ThickenInput().surfaces.empty())) {
         return false;
     }
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))
@@ -115,13 +116,73 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
     window.RunCommand("part.thicken");
     if (!Explain("もう一度構えられる", window.ThickenShelfShown())
         || !Explain("同じ面をまた拾える", ClickOnAnyGuideSurface(window))
-        || !Explain("面の欄に入る", !window.ThickenInput().surface.IsNil())) {
+        || !Explain("面の欄に入る", !window.ThickenInput().surfaces.empty())) {
         return false;
     }
     // 押し直すと外れるので、ClickOnAnyGuideSurface は「選択に残っているか」で偽になる。
     // ここでは戻り値を見ず、欄が空になったことだけを見る。
     (void)ClickOnAnyGuideSurface(window);
-    return Explain("同じ面を押し直すと欄が空になる", window.ThickenInput().surface.IsNil());
+    return Explain("同じ面を押し直すと欄が空になる", window.ThickenInput().surfaces.empty());
+}
+
+//! その線から平面の面を作る(線を拾う → 面を作る → Enter)。
+[[nodiscard]] bool PlaneFromWire(V2MainWindow& window, const kachakacha::v2::base::EntityId& wire)
+{
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    if (!ClickOnCurveOf(window, wire)) {
+        return false;
+    }
+    window.RunCommand("surface.create");
+    return window.SurfacePreviewShown() && window.HandleToolKey(Qt::Key_Return, nullptr);
+}
+
+//! その面の塗りの真ん中を実際に押す。
+[[nodiscard]] bool ClickSurfaceMiddle(V2MainWindow& window, const kachakacha::v2::base::EntityId& id)
+{
+    auto& viewport = window.Viewport();
+    for (const auto& shape : viewport.ShapeViews()) {
+        if (shape.entityId != id || shape.mesh.Empty()) {
+            continue;
+        }
+        const auto screen = viewport.Mapping().Project((shape.mesh.minimum + shape.mesh.maximum) * 0.5);
+        if (!screen.has_value()) {
+            return false;
+        }
+        viewport.SelectAt(QPointF(screen->x, screen->y), Qt::NoModifier);
+        return true;
+    }
+    return false;
+}
+
+//! HP-TH-03。面を 2 枚押すと両方が欄に入り、Enter で部品が 2 個でき、1 回の取り消しで両方消える。
+[[nodiscard]] bool CaseHumanPathThickenManySurfaces(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    const auto left = DrawRectangleAtByHand(window, 0.15, 0.35, 0.40, 0.65);
+    const auto right = DrawRectangleAtByHand(window, 0.60, 0.35, 0.85, 0.65);
+    if (!Explain("矩形を 2 つ引ける", !left.IsNil() && !right.IsNil())
+        || !Explain("面が 2 枚できる", PlaneFromWire(window, left) && PlaneFromWire(window, right)
+                && CountOfKind(window, EntityKind::GuideSurface) == 2)) {
+        return false;
+    }
+    const auto surfaces = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), EntityKind::GuideSurface).entityIds;
+    window.Viewport().SelectAt(QPointF(2.0, 2.0), Qt::NoModifier);
+    window.SetMode(UiMode::Part);
+    window.RunCommand("part.thicken");
+    if (!Explain("厚みを押すと棚が構える", window.ThickenShelfShown())
+        || !Explain("1 枚目を押せる", ClickSurfaceMiddle(window, surfaces[0]))
+        || !Explain("2 枚目を押せる", ClickSurfaceMiddle(window, surfaces[1]))
+        || !Explain("2 枚とも欄に入る(面は 1 枚に限らない)",
+            window.ThickenInput().surfaces.size() == 2)) {
+        return false;
+    }
+    if (!Explain("Enterで確定できる", window.HandleToolKey(Qt::Key_Return, nullptr))
+        || !Explain("部品が 2 個できる", CountOfKind(window, EntityKind::Part) == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の取り消しで 2 個とも消える", CountOfKind(window, EntityKind::Part) == 0);
 }
 
 } // namespace
@@ -129,6 +190,8 @@ using kachakacha::v2::fabrication::ThicknessPlacement;
 std::vector<SelfTestCase> ThickenCases()
 {
     return {
+        {"HP-TH-03 面を 2 枚押すと両方に厚みが付き、1 回の取り消しで両方消える",
+            CaseHumanPathThickenManySurfaces},
         {"HP-TH-01 面を3Dで拾い、作り方を選んで Enter すると部品になり、取り消しで消える",
             CaseHumanPathThickenPickPlacementConfirm},
         {"HP-TH-02 Esc は何も作らずにやめられ、同じ面を押し直すと欄が空になる",

@@ -89,7 +89,7 @@ using kachakacha::v2::modeling::DrawingTool;
     }
     window.Viewport().SetViewDirection(ViewDirection::Isometric);
     window.Viewport().FitToDocument();
-    return !window.ThickenInput().surface.IsNil();
+    return !window.ThickenInput().surfaces.empty();
 }
 
 //! 03「ui-fab-generate」。近似候補までは ui-approx-candidates と同じ場面。確定して

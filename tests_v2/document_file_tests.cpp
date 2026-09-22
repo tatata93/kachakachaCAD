@@ -471,6 +471,41 @@ KACHA_V2_TEST(documentFile, ワイヤー編集の参照が往復する)
     RequireNear(after.pointArgument.x, 1.5, 1e-15, "軸上の点");
 }
 
+KACHA_V2_TEST(documentFile, 形を持たせた線の編集と面への投影も往復する)
+{
+    // 移動・面取り・面へ投影などは、計算した形そのもの(CreateWireDefinition)を持たせて
+    // 文書へ入れる。種類(TransformWire / ProjectWire)だけで読み分けると開けなくなっていた。
+    DocumentFile original = MakeSampleDocument();
+    const auto& source = std::get<CreateWireDefinition>(original.snapshot.features[2].definition);
+    for (const FeatureType type : {FeatureType::TransformWire, FeatureType::ProjectWire}) {
+        Feature feature;
+        feature.id = kachakacha::v2::base::FeatureId::Parse(
+            type == FeatureType::TransformWire ? "01900000-0000-7000-8000-00000000f001"
+                                               : "01900000-0000-7000-8000-00000000f002").value();
+        feature.type = type;
+        feature.displayName = type == FeatureType::TransformWire ? "移動" : "曲面へ投影";
+        CreateWireDefinition shape;
+        shape.segments = source.segments;
+        for (std::size_t index = 0; index < shape.segments.size(); ++index) {
+            shape.segmentIds.push_back(kachakacha::v2::base::SegmentId::Parse(
+                std::string("01900000-0000-7000-8000-0000000") + (type == FeatureType::TransformWire ? "a" : "b")
+                + std::to_string(1000 + index)).value());
+        }
+        feature.definition = shape;
+        original.snapshot.features.push_back(std::move(feature));
+    }
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "開き直せる: " + (read.HasValue() ? std::string()
+                                                        : read.Diagnostics().front().summaryJa
+                                                            + " / " + read.Diagnostics().front().detailsJa));
+    const auto& features = read.Value().snapshot.features;
+    for (std::size_t back = 1; back <= 2; ++back) {
+        const auto* shape = std::get_if<CreateWireDefinition>(&features[features.size() - back].definition);
+        Require(shape != nullptr && shape->segments.size() == source.segments.size(),
+            "形がそのまま戻る");
+    }
+}
+
 KACHA_V2_TEST(documentFile, 部品の属性が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

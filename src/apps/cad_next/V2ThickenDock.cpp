@@ -149,8 +149,8 @@ void V2ThickenDock::ShowInput(const kachakacha::v2::app::ThickenInputState& stat
     const QString& surfaceNameJa, const std::vector<QString>& statusLinesJa, bool canConfirm)
 {
     loading_ = true;
-    surfaceValue_->setText(state.surface.IsNil() ? QStringLiteral("(選んでいません)")
-                                                  : surfaceNameJa);
+    surfaceValue_->setText(state.surfaces.empty() ? QStringLiteral("(選んでいません)")
+                                                   : surfaceNameJa);
     outsideCard_->setChecked(!state.toPlane && state.placement == ThicknessPlacement::Outside);
     centeredCard_->setChecked(!state.toPlane && state.placement == ThicknessPlacement::Centered);
     insideCard_->setChecked(!state.toPlane && state.placement == ThicknessPlacement::Inside);

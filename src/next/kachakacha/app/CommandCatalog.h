@@ -45,7 +45,8 @@ enum class SelectionPredicate {
     //! 「閉じた輪郭が1つ以上」だけの条件は、これに畳んだ(使い手が居なくなったため)。
     ClosedProfilesOrSolidFace,
     OnePart,
-    TwoParts,
+    //! 部品を2つ以上。足す・引く(土台 1 つと相手 1 個以上。相手は何個でも)。
+    TwoOrMoreParts,
     OneDerivedEntity,
     OneFabricationModel,
     OneFabricationPanel,

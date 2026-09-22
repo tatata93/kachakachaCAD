@@ -137,7 +137,7 @@ void V2MainWindow::RunBooleanTool(bool cut)
     viewport_->SetToolPickToggle(true);
     MirrorBooleanToSelection();
     RefreshBooleanAll();
-    SetStatus(QStringLiteral("%1: 部品を2つ(土台と相手)、3D で順に押してください。"
+    SetStatus(QStringLiteral("%1: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。"
                              "押し直すと外れます。Enter で確定、Esc でやめます。\n%2")
             .arg(QString::fromUtf8(
                      std::string(kachakacha::v2::app::BooleanOperationLabelJa(cut)).c_str()),
@@ -199,27 +199,44 @@ void V2MainWindow::RefreshBooleanPreview()
     }
     booleanOutcome_.evaluated = true;
     const auto base = partShapes_.find(booleanInput_.target.ToString());
-    const auto other = partShapes_.find(booleanInput_.tool.ToString());
-    if (base == partShapes_.end() || other == partShapes_.end()) {
+    if (base == partShapes_.end()) {
         booleanOutcome_.refusalJa = "選んだ部品の立体がまだありません";
         return;
     }
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto built = kachakacha::v2::kernel::BuildBoolean(
-        booleanInput_.cut ? kachakacha::v2::kernel::BooleanOperation::Difference
-                          : kachakacha::v2::kernel::BooleanOperation::Union,
-        base->second, other->second, tolerance);
-    if (!built.HasValue()) {
-        booleanOutcome_.refusalJa = built.FirstSummaryJa();
-        return;
+    // 相手を順に足す・引く(何個でも)。1 つでもできなければ、何も作らない。
+    auto current = base->second;
+    double previous = -1.0;
+    for (const EntityId& tool : booleanInput_.tools) {
+        const auto other = partShapes_.find(tool.ToString());
+        if (other == partShapes_.end()) {
+            booleanOutcome_.refusalJa = "選んだ部品の立体がまだありません";
+            return;
+        }
+        const auto built = kachakacha::v2::kernel::BuildBoolean(
+            booleanInput_.cut ? kachakacha::v2::kernel::BooleanOperation::Difference
+                              : kachakacha::v2::kernel::BooleanOperation::Union,
+            current, other->second, tolerance);
+        if (!built.HasValue()) {
+            const auto* entity = session_->GetDocument().FindEntity(tool);
+            booleanOutcome_.refusalJa = (booleanInput_.tools.size() > 1 && entity != nullptr
+                                                ? entity->displayName + ": "
+                                                : std::string())
+                + built.FirstSummaryJa();
+            return;
+        }
+        if (previous < 0.0) {
+            previous = built.Value().previousVolumeMm3;
+        }
+        current = built.Value().handle;
+        booleanOutcome_.volumeMm3 = built.Value().volumeMm3;
     }
     booleanOutcome_.available = true;
-    booleanOutcome_.previousVolumeMm3 = built.Value().previousVolumeMm3;
-    booleanOutcome_.volumeMm3 = built.Value().volumeMm3;
-    booleanBuilt_ = built.Value().handle;
+    booleanOutcome_.previousVolumeMm3 = previous;
+    booleanBuilt_ = current;
     // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
-    const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle);
+    const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(current);
     if (mesh.HasValue()) {
         viewport_->ShowToolPreview(mesh.Value().edges);
     }
@@ -243,22 +260,26 @@ void V2MainWindow::RefreshBooleanDock()
              booleanOutcome_, previewShown)) {
         lines.push_back(QString::fromStdString(line));
     }
+    // 相手の名前を並べる(何個でも)。
+    std::string tools;
+    for (const EntityId& id : booleanInput_.tools) {
+        tools += (tools.empty() ? "" : " / ") + nameOf(id);
+    }
     booleanDock_->ShowInput(booleanInput_, QString::fromStdString(nameOf(booleanInput_.target)),
-        QString::fromStdString(nameOf(booleanInput_.tool)), lines,
-        booleanBuilt_.has_value());
+        QString::fromStdString(tools), lines, booleanBuilt_.has_value());
     ShowToolFooter(booleanShelfShown_
             ? QString::fromStdString(kachakacha::v2::app::BooleanFooterLine(booleanInput_,
-                  nameOf(booleanInput_.target), nameOf(booleanInput_.tool), booleanOutcome_,
-                  previewShown))
+                  nameOf(booleanInput_.target), tools, booleanOutcome_, previewShown))
             : QString());
     std::vector<kachakacha::v2::app::ToolRoleLabel> labels;
     if (!booleanInput_.target.IsNil()) {
         labels.push_back({booleanInput_.target,
             std::string(kachakacha::v2::app::BooleanSlotKey(BooleanSlot::Target))});
     }
-    if (!booleanInput_.tool.IsNil()) {
-        labels.push_back({booleanInput_.tool,
-            std::string(kachakacha::v2::app::BooleanSlotKey(BooleanSlot::Tool))});
+    for (std::size_t index = 0; index < booleanInput_.tools.size(); ++index) {
+        const std::string key(kachakacha::v2::app::BooleanSlotKey(BooleanSlot::Tool));
+        labels.push_back({booleanInput_.tools[index],
+            booleanInput_.tools.size() == 1 ? key : key + " " + std::to_string(index + 1)});
     }
     ShowRoleLabels(labels);
 }
@@ -295,7 +316,7 @@ void V2MainWindow::ChooseBooleanOperation(bool cut)
 {
     booleanInput_.cut = cut;
     RefreshBooleanAll();
-    SetStatus(QStringLiteral("%1: 部品を2つ(土台と相手)、3D で順に押してください。\n%2")
+    SetStatus(QStringLiteral("%1: 部品を2つ以上(土台 1 つと相手 1 個以上。相手は何個でも)、3D で順に押してください。\n%2")
             .arg(QString::fromUtf8(
                      std::string(kachakacha::v2::app::BooleanOperationLabelJa(cut)).c_str()),
                 QString::fromStdString(kachakacha::v2::app::BooleanHintJa(booleanInput_))));
@@ -334,8 +355,9 @@ void V2MainWindow::ConfirmBoolean()
     kachakacha::v2::domain::BooleanDefinition definition;
     definition.mode = cut ? 1 : 0;
     definition.targets.push_back(booleanInput_.target);
-    definition.tools.push_back(booleanInput_.tool);
-    const std::vector<EntityId> used{booleanInput_.target, booleanInput_.tool};
+    definition.tools = booleanInput_.tools;   // 相手は何個でも(保存の形は前から並び)
+    std::vector<EntityId> used{booleanInput_.target};
+    used.insert(used.end(), booleanInput_.tools.begin(), booleanInput_.tools.end());
     const auto outcome = booleanOutcome_;
     const auto handle = *booleanBuilt_;
     kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);

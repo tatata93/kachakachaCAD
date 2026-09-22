@@ -1,5 +1,6 @@
 #include "kachakacha/app/ThickenInputState.h"
 
+#include <algorithm>
 #include <cstdio>
 
 namespace kachakacha::v2::app {
@@ -24,27 +25,27 @@ ThickenInputState WithThickenPick(const ThickenInputState& state, const base::En
     if (id.IsNil()) {
         return next;
     }
-    // 入っているものを押せば外れる。ここは欄が1つだけなので、迷う余地がない。
-    if (next.surface == id) {
-        next.surface = base::EntityId{};
+    // 入っているものを押せば外れる。入っていなければ足す(何枚でも)。
+    const auto found = std::find(next.surfaces.begin(), next.surfaces.end(), id);
+    if (found != next.surfaces.end()) {
+        next.surfaces.erase(found);
         return next;
     }
-    next.surface = id;
+    next.surfaces.push_back(id);
     return next;
 }
 
 ThickenInputState WithoutThickenSurface(const ThickenInputState& state, const base::EntityId& id)
 {
     ThickenInputState next = state;
-    if (next.surface == id) {
-        next.surface = base::EntityId{};
-    }
+    next.surfaces.erase(std::remove(next.surfaces.begin(), next.surfaces.end(), id),
+        next.surfaces.end());
     return next;
 }
 
 bool ThickenReadyToBuild(const ThickenInputState& state) noexcept
 {
-    if (state.surface.IsNil()) {
+    if (state.surfaces.empty()) {
         return false;
     }
     if (state.toPlane) {
@@ -57,11 +58,15 @@ std::vector<std::string> ThickenStatusLinesJa(const ThickenInputState& state,
     const ThickenPreviewOutcome& outcome, bool previewShown)
 {
     std::vector<std::string> lines;
-    lines.push_back(state.surface.IsNil()
+    lines.push_back(state.surfaces.empty()
             ? "▶ 次のクリック → 面"
-            : "▶ Enter で確定(3D で押し直すと外れます)");
-    lines.push_back(std::string("面: ") + (state.surface.IsNil() ? "× まだ" : "✓ 入っている"));
-    if (state.surface.IsNil()) {
+            : "▶ Enter で確定(3D で押し直すと外れます。ほかの面を押せば足せます)");
+    lines.push_back(std::string("面: ")
+        + (state.surfaces.empty() ? std::string("× まだ")
+                : state.surfaces.size() == 1
+                ? std::string("✓ 入っている")
+                : "✓ " + std::to_string(state.surfaces.size()) + " 枚(1 枚ずつ別の部品にします)"));
+    if (state.surfaces.empty()) {
         lines.push_back("× 3D で形状ガイドの面を押してください");
         return lines;
     }
@@ -84,8 +89,9 @@ std::vector<std::string> ThickenStatusLinesJa(const ThickenInputState& state,
             + (outcome.refusalJa.empty() ? std::string("作れません") : outcome.refusalJa));
         return lines;
     }
-    lines.push_back("✓ 生成可能: 体積 " + FormatMm1(outcome.volumeMm3) + " mm3、厚み "
-        + FormatMm1(outcome.thicknessMm) + " mm");
+    lines.push_back("✓ 生成可能: "
+        + (outcome.count > 1 ? std::to_string(outcome.count) + " 個、体積の合計 " : std::string("体積 "))
+        + FormatMm1(outcome.volumeMm3) + " mm3、厚み " + FormatMm1(outcome.thicknessMm) + " mm");
     lines.push_back(previewShown ? "✓ 下見を表示中(まだ文書へ保存していません)"
                                   : "× 下見が作れませんでした");
     return lines;
@@ -95,7 +101,7 @@ std::string ThickenFooterLine(const ThickenInputState& state, const std::string&
     const std::string& planeName, const ThickenPreviewOutcome& outcome, bool previewShown)
 {
     std::string line = "厚み: ";
-    line += "SURFACE=" + (state.surface.IsNil() ? std::string("(なし)") : surfaceName);
+    line += "SURFACE=" + (state.surfaces.empty() ? std::string("(なし)") : surfaceName);
     line += " / ";
     if (state.toPlane) {
         line += "PLANE=" + (state.targetPlane.IsNil() ? std::string("(なし)") : planeName);

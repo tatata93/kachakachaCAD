@@ -47,6 +47,9 @@ struct WireEditBinding {
     bool consumesFirstOnly;
     //! 大きさ(面取り量・丸め半径・オフセット距離)が要るか。
     bool needsSize;
+    //! 線ごとに別々に直すか(オフセット・角の加工)。何本選んでも 1 本ずつ直し、1 回の取り消しで戻る。
+    //! 偽の命令(分割・結合・面取り…)は、選んだ線どうしの関係で 1 本を作る。
+    bool perWire = false;
 };
 
 constexpr WireEditBinding kWireEdits[] = {
@@ -58,10 +61,12 @@ constexpr WireEditBinding kWireEdits[] = {
     {"wire.chamfer", WireTransformMethod::Chamfer, "C面取り", true, false, true},
     {"wire.fillet", WireTransformMethod::Fillet, "R丸め", true, false, true},
     // オフセットは元の線を残す(V1 と同じ)。距離は数の棚「オフセット距離」。
-    {"wire.offset", WireTransformMethod::Offset, "オフセット", false, false, true},
+    {"wire.offset", WireTransformMethod::Offset, "オフセット", false, false, true, true},
     {"wire.meet_lines", WireTransformMethod::MeetLines, "2線を交点まで", true, false, false},
-    {"wire.corner_chamfer", WireTransformMethod::CornerChamfer, "角の加工(落とす)", true, false, true},
-    {"wire.corner_fillet", WireTransformMethod::CornerFillet, "角の加工(丸める)", true, false, true},
+    {"wire.corner_chamfer", WireTransformMethod::CornerChamfer, "角の加工(落とす)", true, false, true,
+        true},
+    {"wire.corner_fillet", WireTransformMethod::CornerFillet, "角の加工(丸める)", true, false, true,
+        true},
 };
 
 [[nodiscard]] const WireEditBinding* FindWireEdit(std::string_view id)
@@ -373,7 +378,7 @@ void V2MainWindow::RunWireEditCommand(std::string_view id)
         definition.cornerIndex = choice.onlyVertex ? choice.vertexIndex : -1;
     }
     RunWireTransform(definition, QString::fromUtf8(binding->labelJa),
-        binding->consumesFirstOnly, binding->consumesInputs);
+        binding->consumesFirstOnly, binding->consumesInputs, binding->perWire);
 }
 
 void V2MainWindow::RefreshCornerDock()
@@ -555,7 +560,7 @@ void V2MainWindow::SetSelectedDatum(bool datum)
 
 void V2MainWindow::RunWireTransform(
     const kachakacha::v2::domain::TransformWireDefinition& definition,
-    const QString& labelJa, bool consumesFirstOnly, bool consumesInputs)
+    const QString& labelJa, bool consumesFirstOnly, bool consumesInputs, bool perWire)
 {
     using kachakacha::v2::document::AddFeatureCommand;
     using kachakacha::v2::domain::Entity;
@@ -564,6 +569,10 @@ void V2MainWindow::RunWireTransform(
     using kachakacha::v2::domain::FeatureOutput;
     using kachakacha::v2::domain::FeatureType;
 
+    if (perWire && viewport_->Selection().entityIds.size() > 1) {
+        RunWireTransformEach(definition, labelJa, consumesInputs);
+        return;
+    }
     const auto& selection = viewport_->Selection();
     const auto inputs = kachakacha::v2::app::SelectedCurves(selection, session_->Scene());
     if (inputs.empty()) {
@@ -639,6 +648,76 @@ void V2MainWindow::RunWireTransform(
             .arg(labelJa)
             .arg(static_cast<int>(inputs.size()))
             .arg(static_cast<int>(computed.Value().size())));
+}
+
+//! 線ごとに別々に直す(オフセット・角の加工)。何本選んでも 1 本ずつ直し、1 回の取り消しで戻る。
+//! 1 本でも直せなければ、どれも直さない(半分だけ直したことにしない)。
+void V2MainWindow::RunWireTransformEach(
+    const kachakacha::v2::domain::TransformWireDefinition& definition, const QString& labelJa,
+    bool consumesInputs)
+{
+    using kachakacha::v2::document::AddFeatureCommand;
+    using kachakacha::v2::domain::EntityKind;
+    const std::vector<kachakacha::v2::base::EntityId> selected = viewport_->Selection().entityIds;
+    auto& document = session_->GetDocument();
+    kachakacha::v2::document::Document::Transaction transaction(document, labelJa.toStdString());
+    int made = 0;
+    for (const auto& id : selected) {
+        const auto* source = document.FindEntity(id);
+        kachakacha::v2::app::SelectionSet one;
+        one.entityIds.push_back(id);
+        const auto curves = kachakacha::v2::app::SelectedCurves(one, session_->Scene());
+        if (source == nullptr || source->kind != EntityKind::Wire || curves.empty()) {
+            continue;   // 線でないもの(点など)は直す相手にしない
+        }
+        const auto computed = kachakacha::v2::document::EvaluateWireTransform(definition, curves);
+        if (!computed.HasValue()) {
+            ReportDiagnostics(computed.Diagnostics());
+            SetStatus(labelJa + QStringLiteral(": 「%1」を直せなかったので、どの線も変えていません。")
+                    .arg(QString::fromStdString(source->displayName)));
+            return;   // Transaction が捨てる
+        }
+        kachakacha::v2::domain::Feature feature;
+        feature.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Feature>();
+        feature.type = kachakacha::v2::domain::FeatureType::TransformWire;
+        feature.displayName = labelJa.toStdString();
+        feature.inputEntityIds = one.entityIds;
+        kachakacha::v2::domain::CreateWireDefinition wire;
+        wire.segments = computed.Value();
+        for (std::size_t index = 0; index < wire.segments.size(); ++index) {
+            wire.segmentIds.push_back(ids_->NextTyped<kachakacha::v2::base::IdKind::Segment>());
+        }
+        feature.definition = std::move(wire);
+        kachakacha::v2::domain::Entity entity;
+        entity.id = ids_->NextTyped<kachakacha::v2::base::IdKind::Entity>();
+        entity.kind = EntityKind::Wire;
+        entity.displayName = source->displayName.empty() ? labelJa.toStdString() : source->displayName;
+        entity.construction = source->construction;
+        entity.groupId = source->groupId;
+        entity.createdBy = feature.id;
+        feature.outputs.push_back(
+            kachakacha::v2::domain::FeatureOutput{"wire", entity.id, EntityKind::Wire});
+        const auto added = document.Run(AddFeatureCommand(feature, {entity}, labelJa.toStdString()));
+        if (!added.committed) {
+            ReportDiagnostics(added.diagnostics);
+            return;
+        }
+        if (consumesInputs) {
+            RemoveConsumedWires({id});
+        }
+        ++made;
+    }
+    if (made == 0 || !transaction.Commit()) {
+        SetStatus(labelJa + QStringLiteral(": 直せる線がありませんでした。何も変えていません。"));
+        AdoptCurrentDocument();
+        return;
+    }
+    AdoptCurrentDocument();
+    SetStatus(consumesInputs
+            ? QStringLiteral("%1: %2 本の線をそれぞれ直しました(1 回の取り消しで戻ります)。")
+                  .arg(labelJa).arg(made)
+            : QStringLiteral("%1: %2 本の線をそれぞれ写しました。元の線は残っています。")
+                  .arg(labelJa).arg(made));
 }
 
 void V2MainWindow::RemoveConsumedWires(
@@ -824,6 +903,9 @@ void V2MainWindow::ApplyTransformPlan(
     const auto definition = DefinitionFor(plan);
     int changed = 0;
     std::vector<kachakacha::v2::base::EntityId> consumed;
+    // 何本動かしても 1 回の取り消しで戻る(足す + 元の線を消す をひとまとまりに)。
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+        plan.summaryJa);
     for (const auto& entityId : selected) {
         if (!TransformOneWire(definition, entityId, label)) {
             continue;
@@ -838,6 +920,11 @@ void V2MainWindow::ApplyTransformPlan(
         return;
     }
     RemoveConsumedWires(consumed);
+    if (!transaction.Commit()) {
+        SetStatus(label + QStringLiteral(": 途中で失敗したので、何も変えていません。"));
+        AdoptCurrentDocument();
+        return;
+    }
     AdoptCurrentDocument();
     if (plan.keepsSource) {
         SetStatus(QStringLiteral("%1: %2本を写しました。元の線は残っています。")

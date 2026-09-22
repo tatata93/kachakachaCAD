@@ -24,6 +24,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,8 +50,7 @@ void V2MainWindow::RunThickenTool()
     for (const EntityId& id : viewport_->Selection().entityIds) {
         const auto* entity = document.FindEntity(id);
         if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
-            thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, id);
-            break;   // 面は1つだけ。
+            thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, id);   // 何枚でも
         }
     }
     thickenShelfShown_ = true;
@@ -60,19 +60,19 @@ void V2MainWindow::RunThickenTool()
     MirrorThickenToSelection();
     thickenDock_->SetTargets(ExtrudeTargets());
     RefreshThickenAll();
-    SetStatus(QStringLiteral("厚み: 3D で形状ガイドの面を押してください(押し直すと外れます)。"
+    SetStatus(QStringLiteral("厚み: 3D で形状ガイドの面を押してください(何枚でも。押し直すと外れます)。"
                              "作り方を選んで、Enter で確定、Esc でやめます。"));
 }
 
 //! 3D の選択の印を、面の欄に合わせる。欄が正本。
 void V2MainWindow::MirrorThickenToSelection()
 {
-    thickenMirror_ = thickenInput_.surface;
+    thickenMirror_ = thickenInput_.surfaces;
     kachakacha::v2::app::SelectionSet mirrored;
-    if (!thickenMirror_.IsNil()) {
-        mirrored.entityIds.push_back(thickenMirror_);
+    for (const EntityId& id : thickenMirror_) {
+        mirrored.entityIds.push_back(id);
         kachakacha::v2::app::SelectionRef ref;
-        ref.entityId = thickenMirror_;
+        ref.entityId = id;
         mirrored.ordered.push_back(ref);
     }
     thickenMirroring_ = true;
@@ -80,40 +80,39 @@ void V2MainWindow::MirrorThickenToSelection()
     thickenMirroring_ = false;
 }
 
-//! 3D の選択が変わった。形状ガイドの面が足されれば欄へ、外れれば欄からも外す。
+//! 3D の選択が変わった。形状ガイドの面が足されれば欄へ、外れれば欄からも外す(何枚でも)。
 void V2MainWindow::RefreshThickenForSelectionChange()
 {
     if (!thickenShelfShown_ || thickenMirroring_ || viewport_ == nullptr) {
         return;
     }
     const auto& now = viewport_->Selection().entityIds;
-    bool changed = false;
-    // 押した当人が分かるなら、同じ面なら外し、別の面なら入れ替える。
+    // 押した当人が分かるなら、入っていれば外し、入っていなければ足す。
     if (const auto pick = viewport_->TakeLastToolPick(); pick.has_value()) {
         const auto* entity = session_->GetDocument().FindEntity(*pick);
         if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
-            thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, *pick);   // 同じ面なら外れる
+            thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, *pick);
             MirrorThickenToSelection();
             RefreshThickenAll();
             return;
         }
     }
-    const bool stillThere = !thickenMirror_.IsNil()
-        && std::find(now.begin(), now.end(), thickenMirror_) != now.end();
-    if (!thickenMirror_.IsNil() && !stillThere) {
-        thickenInput_ = kachakacha::v2::app::WithoutThickenSurface(thickenInput_, thickenMirror_);
-        changed = true;
+    bool changed = false;
+    for (const EntityId& id : thickenMirror_) {
+        if (std::find(now.begin(), now.end(), id) == now.end()) {
+            thickenInput_ = kachakacha::v2::app::WithoutThickenSurface(thickenInput_, id);
+            changed = true;
+        }
     }
     const auto& document = session_->GetDocument();
     for (const EntityId& id : now) {
-        if (!thickenMirror_.IsNil() && id == thickenMirror_) {
+        if (std::find(thickenMirror_.begin(), thickenMirror_.end(), id) != thickenMirror_.end()) {
             continue;   // すでに映しているもの。
         }
         const auto* entity = document.FindEntity(id);
         if (entity != nullptr && entity->kind == EntityKind::GuideSurface) {
             thickenInput_ = kachakacha::v2::app::WithThickenPick(thickenInput_, id);
             changed = true;
-            break;   // 面は1つだけ。
         }
     }
     MirrorThickenToSelection();   // 受けなかったもの(部品・線など)を選択に残さない。
@@ -126,54 +125,63 @@ void V2MainWindow::RefreshThickenForSelectionChange()
 void V2MainWindow::RefreshThickenPreview()
 {
     thickenOutcome_ = kachakacha::v2::app::ThickenPreviewOutcome{};
-    thickenBuilt_.reset();
+    thickenBuilt_.clear();
     thickenBuiltEdges_.clear();
+    thickenBuiltThickness_.clear();
     viewport_->HideToolPreview();
     if (!kachakacha::v2::app::ThickenReadyToBuild(thickenInput_)) {
         return;
     }
-    const auto found = guideShapes_.find(thickenInput_.surface.ToString());
-    if (found == guideShapes_.end()) {
-        thickenOutcome_.evaluated = true;
-        thickenOutcome_.refusalJa = "選んだ面の形がまだありません";
-        return;
-    }
     thickenOutcome_.evaluated = true;
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    std::optional<kachakacha::v2::modeling::WorkPlaneFrame> frame;
     if (thickenInput_.toPlane) {
-        const auto frame = WorkPlaneFrameOf(thickenInput_.targetPlane);
+        frame = WorkPlaneFrameOf(thickenInput_.targetPlane);
         if (!frame.has_value()) {
             thickenOutcome_.refusalJa = "相手の作業平面の形がまだありません";
             return;
         }
-        const auto built = kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second,
-            frame->origin, frame->normal, tolerance);
-        if (!built.HasValue()) {
-            thickenOutcome_.refusalJa = built.FirstSummaryJa();
-            return;
-        }
-        thickenOutcome_.available = true;
-        thickenOutcome_.volumeMm3 = built.Value().volumeMm3;
-        thickenOutcome_.thicknessMm = built.Value().thicknessMm;
-        thickenBuilt_ = built.Value().handle;
-        thickenBuiltEdges_ = built.Value().edges;
-    } else {
-        const auto built = kachakacha::v2::kernel::ThickenSurface(found->second,
-            thickenInput_.thicknessMm, thickenInput_.placement, tolerance);
-        if (!built.HasValue()) {
-            thickenOutcome_.refusalJa = built.FirstSummaryJa();
-            return;
-        }
-        thickenOutcome_.available = true;
-        thickenOutcome_.volumeMm3 = built.Value().volumeMm3;
-        thickenOutcome_.thicknessMm = built.Value().thicknessMm;
-        thickenBuilt_ = built.Value().handle;
-        thickenBuiltEdges_ = built.Value().edges;
     }
-    // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
-    const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(*thickenBuilt_);
-    if (mesh.HasValue()) {
-        viewport_->ShowToolPreview(mesh.Value().edges);
+    // 面ごとに実際に厚みを付ける。1 枚でも付けられなければ、どれも作らない(半分だけ
+    // 作れたことにしない)。
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> lines;
+    for (const EntityId& id : thickenInput_.surfaces) {
+        const auto found = guideShapes_.find(id.ToString());
+        const auto* entity = session_->GetDocument().FindEntity(id);
+        const std::string name = entity != nullptr ? entity->displayName : std::string("面");
+        if (found == guideShapes_.end()) {
+            thickenOutcome_.refusalJa = name + ": 面の形がまだありません";
+            thickenBuilt_.clear();
+            return;
+        }
+        const auto built = thickenInput_.toPlane
+            ? kachakacha::v2::kernel::ThickenSurfaceToPlane(found->second, frame->origin,
+                  frame->normal, tolerance)
+            : kachakacha::v2::kernel::ThickenSurface(found->second, thickenInput_.thicknessMm,
+                  thickenInput_.placement, tolerance);
+        if (!built.HasValue()) {
+            thickenOutcome_.refusalJa = (thickenInput_.surfaces.size() > 1 ? name + ": " : std::string())
+                + built.FirstSummaryJa();
+            thickenBuilt_.clear();
+            thickenBuiltEdges_.clear();
+            thickenBuiltThickness_.clear();
+            return;
+        }
+        thickenOutcome_.volumeMm3 += built.Value().volumeMm3;
+        thickenOutcome_.thicknessMm = std::max(thickenOutcome_.thicknessMm, built.Value().thicknessMm);
+        thickenBuilt_.push_back(built.Value().handle);
+        thickenBuiltEdges_.push_back(built.Value().edges);
+        thickenBuiltThickness_.push_back(built.Value().thicknessMm);
+        // 出来上がりの稜線。画面に出すのは、確定で文書へ入るその形。
+        const auto mesh = kachakacha::v2::kernel::BuildShapeMesh(built.Value().handle);
+        if (mesh.HasValue()) {
+            lines.insert(lines.end(), mesh.Value().edges.begin(), mesh.Value().edges.end());
+        }
+    }
+    thickenOutcome_.available = true;
+    thickenOutcome_.count = thickenBuilt_.size();
+    if (!lines.empty()) {
+        viewport_->ShowToolPreview(lines);
     }
 }
 
@@ -195,17 +203,26 @@ void V2MainWindow::RefreshThickenDock()
              thickenOutcome_, previewShown)) {
         lines.push_back(QString::fromStdString(line));
     }
+    // 面の名前を並べる(何枚でも)。
+    std::string names;
+    for (const EntityId& id : thickenInput_.surfaces) {
+        names += (names.empty() ? "" : " / ") + nameOf(id);
+    }
+    if (thickenInput_.surfaces.size() > 1) {
+        names += "(" + std::to_string(thickenInput_.surfaces.size()) + " 枚)";
+    }
     thickenDock_->SetTargets(ExtrudeTargets());
-    thickenDock_->ShowInput(thickenInput_, QString::fromStdString(nameOf(thickenInput_.surface)),
-        lines, thickenBuilt_.has_value());
+    thickenDock_->ShowInput(thickenInput_, QString::fromStdString(names), lines,
+        !thickenBuilt_.empty());
     ShowToolFooter(thickenShelfShown_
             ? QString::fromStdString(kachakacha::v2::app::ThickenFooterLine(thickenInput_,
-                  nameOf(thickenInput_.surface), nameOf(thickenInput_.targetPlane),
-                  thickenOutcome_, previewShown))
+                  names, nameOf(thickenInput_.targetPlane), thickenOutcome_, previewShown))
             : QString());
     std::vector<kachakacha::v2::app::ToolRoleLabel> labels;
-    if (!thickenInput_.surface.IsNil()) {
-        labels.push_back({thickenInput_.surface, std::string("SURFACE")});
+    for (std::size_t index = 0; index < thickenInput_.surfaces.size(); ++index) {
+        labels.push_back({thickenInput_.surfaces[index], thickenInput_.surfaces.size() == 1
+                ? std::string("SURFACE")
+                : "SURFACE " + std::to_string(index + 1)});
     }
     ShowRoleLabels(labels);
 }
@@ -219,7 +236,7 @@ void V2MainWindow::RefreshThickenAll()
 //! 「選び直す」。面の欄を空にし、次のクリックを待つ。
 void V2MainWindow::ReselectThicken()
 {
-    thickenInput_ = kachakacha::v2::app::WithoutThickenSurface(thickenInput_, thickenInput_.surface);
+    thickenInput_.surfaces.clear();
     MirrorThickenToSelection();
     RefreshThickenAll();
 }
@@ -266,10 +283,11 @@ void V2MainWindow::ApplyThickenThicknessMm(double value)
 void V2MainWindow::EndThicken()
 {
     thickenShelfShown_ = false;
-    thickenBuilt_.reset();
+    thickenBuilt_.clear();
     thickenBuiltEdges_.clear();
+    thickenBuiltThickness_.clear();
     thickenOutcome_ = kachakacha::v2::app::ThickenPreviewOutcome{};
-    thickenMirror_ = EntityId{};
+    thickenMirror_.clear();
     if (viewport_ != nullptr) {
         viewport_->HideToolPreview();
         viewport_->HideToolRoleLabels();
@@ -284,10 +302,10 @@ void V2MainWindow::EndThicken()
     RefreshRightShelves();
 }
 
-//! 確定。**下見に使った形をそのまま**文書へ入れる。
+//! 確定。**下見に使った形をそのまま**文書へ入れる。何枚でも 1 回の取り消しで戻る。
 void V2MainWindow::ConfirmThicken()
 {
-    if (!thickenBuilt_.has_value()) {
+    if (thickenBuilt_.empty() || thickenBuilt_.size() != thickenInput_.surfaces.size()) {
         SetStatus(QStringLiteral(
             "厚み: まだ作れません。面と作り方(平面までなら相手も)を入れてください。"));
         RefreshThickenDock();
@@ -295,27 +313,42 @@ void V2MainWindow::ConfirmThicken()
     }
     const bool toPlane = thickenInput_.toPlane;
     const char* label = toPlane ? "面を平面まで" : "面に厚み";
-    kachakacha::v2::domain::ThickenSurfaceDefinition definition;
-    definition.surface = thickenInput_.surface;
-    definition.thickness.value = thickenOutcome_.thicknessMm;
-    definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
-    if (toPlane) {
-        definition.targetPlane = thickenInput_.targetPlane;
-    } else {
-        definition.placement = static_cast<int>(thickenInput_.placement);
-    }
     const auto outcome = thickenOutcome_;
-    const auto handle = *thickenBuilt_;
+    const auto surfaces = thickenInput_.surfaces;
+    const auto built = thickenBuilt_;
     const auto edges = thickenBuiltEdges_;
-    const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
-        std::move(definition), handle, edges, label, {thickenInput_.surface});
-    if (madeId.IsNil()) {
-        return;   // まとまりは戻る(AddPartFeature が診断を出している)。
+    const auto thickness = thickenBuiltThickness_;
+    kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(), label);
+    for (std::size_t index = 0; index < surfaces.size(); ++index) {
+        kachakacha::v2::domain::ThickenSurfaceDefinition definition;
+        definition.surface = surfaces[index];
+        definition.thickness.value = thickness[index];
+        definition.thickness.kind = kachakacha::v2::geometry::QuantityKind::Length;
+        if (toPlane) {
+            definition.targetPlane = thickenInput_.targetPlane;
+        } else {
+            definition.placement = static_cast<int>(thickenInput_.placement);
+        }
+        const auto madeId = AddPartFeature(kachakacha::v2::domain::FeatureType::ThickenSurface,
+            std::move(definition), built[index], edges[index], label, {surfaces[index]});
+        if (madeId.IsNil()) {
+            return;   // まとまりごと戻る(AddPartFeature が診断を出している)。
+        }
+    }
+    if (!transaction.Commit()) {
+        SetStatus(QStringLiteral("厚み: 途中で失敗したので、何も作っていません。"));
+        AdoptCurrentDocument();
+        return;
     }
     EndThicken();
     AdoptCurrentDocument();
-    SetStatus(QStringLiteral("%1: 厚み %2 mm、体積 %3 mm3 の部品を作りました。")
-            .arg(QString::fromUtf8(label))
-            .arg(outcome.thicknessMm, 0, 'f', 3)
-            .arg(outcome.volumeMm3, 0, 'f', 3));
+    SetStatus(surfaces.size() > 1
+            ? QStringLiteral("%1: %2 枚の面から部品を %2 個作りました(体積の合計 %3 mm3)。")
+                  .arg(QString::fromUtf8(label))
+                  .arg(static_cast<int>(surfaces.size()))
+                  .arg(outcome.volumeMm3, 0, 'f', 3)
+            : QStringLiteral("%1: 厚み %2 mm、体積 %3 mm3 の部品を作りました。")
+                  .arg(QString::fromUtf8(label))
+                  .arg(outcome.thicknessMm, 0, 'f', 3)
+                  .arg(outcome.volumeMm3, 0, 'f', 3));
 }

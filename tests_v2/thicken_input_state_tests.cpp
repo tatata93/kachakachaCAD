@@ -31,27 +31,31 @@ namespace {
 KACHA_V2_TEST(thicken_input, 面を押すと入り_押し直すと外れる)
 {
     ThickenInputState state;
-    Require(state.surface.IsNil(), "最初は空");
+    Require(state.surfaces.empty(), "最初は空");
     state = WithThickenPick(state, Id(1));
-    Require(state.surface == Id(1), "面が入る");
+    Require(state.surfaces.size() == 1 && state.surfaces[0] == Id(1), "面が入る");
     state = WithThickenPick(state, Id(1));
-    Require(state.surface.IsNil(), "押し直すと外れる");
+    Require(state.surfaces.empty(), "押し直すと外れる");
     state = WithThickenPick(state, Id(1));
     state = WithThickenPick(state, Id(2));
-    Require(state.surface == Id(2), "別のものを押せば入れ替わる");
-    state = WithoutThickenSurface(state, Id(2));
-    Require(state.surface.IsNil(), "3D の選択から外れた分は欄からも消える");
+    state = WithThickenPick(state, Id(4));
+    Require(state.surfaces.size() == 3 && state.surfaces[1] == Id(2) && state.surfaces[2] == Id(4),
+        "別の面を押せば足される(何枚でも。面は 1 枚に限らない)");
+    state = WithThickenPick(state, Id(2));
+    Require(state.surfaces.size() == 2 && state.surfaces[1] == Id(4), "押し直した面だけが外れる");
+    state = WithoutThickenSurface(state, Id(4));
+    Require(state.surfaces.size() == 1 && state.surfaces[0] == Id(1),
+        "3D の選択から外れた分は欄からも消える");
     // 選択から外れたのが違うものなら、いま入っているものはそのまま。
-    state = WithThickenPick(state, Id(3));
     state = WithoutThickenSurface(state, Id(9));
-    Require(state.surface == Id(3), "関係ない外れでは消えない");
+    Require(state.surfaces.size() == 1 && state.surfaces[0] == Id(1), "関係ない外れでは消えない");
 }
 
 KACHA_V2_TEST(thicken_input, 面と厚みがそろって初めて作れる)
 {
     ThickenInputState state;
     Require(!ThickenReadyToBuild(state), "面が無ければ作れない");
-    state.surface = Id(1);
+    state.surfaces = {Id(1)};
     Require(!ThickenReadyToBuild(state), "厚みが 0 では作れない");
     state.thicknessMm = 0.5;
     Require(ThickenReadyToBuild(state), "面と正の厚みがそろえば作れる");
@@ -60,7 +64,7 @@ KACHA_V2_TEST(thicken_input, 面と厚みがそろって初めて作れる)
 KACHA_V2_TEST(thicken_input, 平面までは相手の作業平面が要る)
 {
     ThickenInputState state;
-    state.surface = Id(1);
+    state.surfaces = {Id(1)};
     state.toPlane = true;
     // 「平面まで」は厚みの数を見ない。相手の作業平面だけを見る。
     Require(!ThickenReadyToBuild(state), "相手が無ければ作れない");
@@ -76,7 +80,7 @@ KACHA_V2_TEST(thicken_input, 状態行は入力に合わせて変わる)
     Require(!lines.empty() && lines.front() == "▶ 次のクリック → 面", "先頭は案内");
     Require(lines.back().find("面を押してください") != std::string::npos, "面が無い理由");
 
-    state.surface = Id(1);
+    state.surfaces = {Id(1)};
     lines = ThickenStatusLinesJa(state, none, false);
     Require(lines.back().find("厚みは") != std::string::npos, "厚み 0 の理由");
 
@@ -96,6 +100,19 @@ KACHA_V2_TEST(thicken_input, 状態行は入力に合わせて変わる)
     Require(sawVolume, "体積が出る: " + (lines.empty() ? std::string() : lines.back()));
     Require(sawPreview, "下見の様子が出る");
 
+    // 何枚か選べば、1 枚ずつ別の部品にすることと、合計を言う。
+    state.surfaces = {Id(1), Id(2), Id(3)};
+    ok.count = 3;
+    lines = ThickenStatusLinesJa(state, ok, true);
+    bool sawMany = false;
+    bool sawTotal = false;
+    for (const auto& line : lines) {
+        sawMany = sawMany || line.find("3 枚(1 枚ずつ別の部品にします)") != std::string::npos;
+        sawTotal = sawTotal || line.find("3 個、体積の合計 123.4 mm3") != std::string::npos;
+    }
+    Require(sawMany && sawTotal, "何枚かのときは枚数と合計を言う");
+    state.surfaces = {Id(1)};
+
     ThickenPreviewOutcome refused;
     refused.evaluated = true;
     refused.refusalJa = "厚みが大きすぎます";
@@ -106,7 +123,7 @@ KACHA_V2_TEST(thicken_input, 状態行は入力に合わせて変わる)
 KACHA_V2_TEST(thicken_input, 一番下の一行は仕様どおりの形になる)
 {
     ThickenInputState state;
-    state.surface = Id(1);
+    state.surfaces = {Id(1)};
     state.thicknessMm = 2.0;
     state.placement = ThicknessPlacement::Outside;
     ThickenPreviewOutcome none;
@@ -118,7 +135,7 @@ KACHA_V2_TEST(thicken_input, 一番下の一行は仕様どおりの形になる
 KACHA_V2_TEST(thicken_input, 平面までの一行は相手の平面を出す)
 {
     ThickenInputState state;
-    state.surface = Id(1);
+    state.surfaces = {Id(1)};
     state.toPlane = true;
     state.targetPlane = Id(2);
     ThickenPreviewOutcome none;

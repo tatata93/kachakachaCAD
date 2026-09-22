@@ -169,19 +169,27 @@ bool V2MainWindow::RebuildBooleanShape(const kachakacha::v2::domain::Feature& fe
     // 材料は先に作り直してある。評価順に従っているので、ここでは必ず見つかる。
     // 見つからないなら、材料の作り直しが失敗している。黙って作らない。
     const auto base = partShapes_.find(definition->targets.front().ToString());
-    const auto other = partShapes_.find(definition->tools.front().ToString());
-    if (base == partShapes_.end() || other == partShapes_.end()) {
+    if (base == partShapes_.end()) {
         return false;
     }
     const double tolerance =
         session_->GetDocument().Snapshot().settings.tolerance.interactiveJoinMm;
-    const auto built = kachakacha::v2::kernel::BuildBoolean(
-        definition->mode == 1 ? BooleanOperation::Difference : BooleanOperation::Union,
-        base->second, other->second, tolerance);
-    if (!built.HasValue()) {
-        return false;
+    // 相手を順に足す・引く(何個でも。古い文書は相手 1 個)。
+    auto current = base->second;
+    for (const auto& tool : definition->tools) {
+        const auto other = partShapes_.find(tool.ToString());
+        if (other == partShapes_.end()) {
+            return false;
+        }
+        const auto built = kachakacha::v2::kernel::BuildBoolean(
+            definition->mode == 1 ? BooleanOperation::Difference : BooleanOperation::Union,
+            current, other->second, tolerance);
+        if (!built.HasValue()) {
+            return false;
+        }
+        current = built.Value().handle;
     }
-    partShapes_[output.ToString()] = built.Value().handle;
+    partShapes_[output.ToString()] = current;
     return true;
 }
 

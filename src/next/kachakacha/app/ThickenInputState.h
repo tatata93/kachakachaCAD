@@ -15,14 +15,15 @@
 #include "kachakacha/base/Ids.h"
 #include "kachakacha/fabrication/FabricationSettings.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 namespace kachakacha::v2::app {
 
 struct ThickenInputState {
-    //! 空なら Nil。厚みを付ける形状ガイドの面。
-    base::EntityId surface;
+    //! 厚みを付ける形状ガイドの面(何枚でも。1 枚ずつ別の部品にし、1 回の取り消しで戻る)。
+    std::vector<base::EntityId> surfaces;
     //! 作り方(外側/中央/内側)。「平面まで」を選んでいる間も値は残す
     //! (平面までをやめたら、直前の作り方へそのまま戻れるようにするため)。
     fabrication::ThicknessPlacement placement = fabrication::ThicknessPlacement::Outside;
@@ -35,7 +36,7 @@ struct ThickenInputState {
     double thicknessMm = 0.0;
 };
 
-//! 3D で形状ガイドの面を押した。入っていれば外れる。空なら入る。
+//! 3D で形状ガイドの面を押した。入っていれば外れる。入っていなければ足す(何枚でも)。
 [[nodiscard]] ThickenInputState WithThickenPick(const ThickenInputState& state,
     const base::EntityId& id);
 
@@ -52,8 +53,10 @@ struct ThickenPreviewOutcome {
     bool evaluated = false;
     bool available = false;
     double volumeMm3 = 0.0;
-    //! 実際に付いた厚み。「平面まで」のときは指定でなく計算した値。
+    //! 実際に付いた厚み。「平面まで」のときは指定でなく計算した値(何枚かなら最も厚いもの)。
     double thicknessMm = 0.0;
+    //! 作った部品の数(面の数と同じ)。
+    std::size_t count = 0;
     std::string refusalJa;
 };
 

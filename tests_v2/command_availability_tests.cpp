@@ -201,13 +201,17 @@ KACHA_V2_TEST(availability, 部品の数で分かれる)
     bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::Part));
     Require(SelectionSatisfies(SelectionPredicate::OnePart, bench.Facts()),
         "1つで足りる条件は通る");
-    Require(!SelectionSatisfies(SelectionPredicate::TwoParts, bench.Facts()),
-        "2つ要る条件は通らない");
+    Require(!SelectionSatisfies(SelectionPredicate::TwoOrMoreParts, bench.Facts()),
+        "2つ以上要る条件は通らない");
     bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::Part));
-    Require(SelectionSatisfies(SelectionPredicate::TwoParts, bench.Facts()),
+    Require(SelectionSatisfies(SelectionPredicate::TwoOrMoreParts, bench.Facts()),
         "2つで通る");
     Require(!SelectionSatisfies(SelectionPredicate::OnePart, bench.Facts()),
         "1つだけの条件は通らなくなる");
+    // 足す・引くの相手は何個でも。3つ目で押せなくなると、相手を1個ずつしか足せない。
+    bench.selection.entityIds.push_back(bench.AddEntity(EntityKind::Part));
+    Require(SelectionSatisfies(SelectionPredicate::TwoOrMoreParts, bench.Facts()),
+        "3つでも通る");
 }
 
 KACHA_V2_TEST(availability, 製作は部品からでも形状ガイドからでも始められる)
@@ -263,7 +267,7 @@ KACHA_V2_TEST(availability, 何も選んでいなければ選択に依る条件�
         SelectionPredicate::OneClosedProfile,
         SelectionPredicate::ClosedProfilesOrSolidFace,
         SelectionPredicate::OnePart,
-        SelectionPredicate::TwoParts,
+        SelectionPredicate::TwoOrMoreParts,
         SelectionPredicate::OneDerivedEntity,
         SelectionPredicate::OneFabricationModel,
         SelectionPredicate::OneFabricationPanel,
@@ -310,7 +314,7 @@ KACHA_V2_TEST(availability, 条件はどれも台帳のどれかで使われて�
         SelectionPredicate::OneClosedProfile,
         SelectionPredicate::ClosedProfilesOrSolidFace,
         SelectionPredicate::OnePart,
-        SelectionPredicate::TwoParts,
+        SelectionPredicate::TwoOrMoreParts,
         SelectionPredicate::OneDerivedEntity,
         SelectionPredicate::OneFabricationModel,
         SelectionPredicate::OneFabricationPanel,

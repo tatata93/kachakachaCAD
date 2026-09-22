@@ -38,7 +38,6 @@ bool PredicateIsExact(SelectionPredicate predicate) noexcept
     case SelectionPredicate::TwoWireChains:
     case SelectionPredicate::OneClosedProfile:
     case SelectionPredicate::OnePart:
-    case SelectionPredicate::TwoParts:
     case SelectionPredicate::OneDerivedEntity:
     case SelectionPredicate::OneFabricationModel:
     case SelectionPredicate::OneFabricationPanel:

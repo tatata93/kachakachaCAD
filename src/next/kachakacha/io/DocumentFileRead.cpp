@@ -398,6 +398,30 @@ private:
     return chain;
 }
 
+//! 形そのもの(線の並び)を持つ定義。作図の線と、形をそのまま持たせた編集の結果が使う。
+[[nodiscard]] CreateWireDefinition ReadCreateWire(Loader& loader, const JsonValue& definition,
+    const std::string& where)
+{
+    CreateWireDefinition made;
+    const JsonValue* wire = loader.ObjectAt(definition, "wire", where);
+    if (wire != nullptr) {
+        const std::string place = where + ".wire";
+        const JsonArray* segments = loader.ArrayAt(*wire, "segments", place);
+        if (segments != nullptr) {
+            for (std::size_t index = 0; index < segments->size(); ++index) {
+                auto [segment, id] = ReadSegment(loader, (*segments)[index],
+                    place + ".segments[" + std::to_string(index) + "]");
+                made.segments.push_back(std::move(segment));
+                made.segmentIds.push_back(id);
+            }
+        }
+    }
+    made.sourcePlaneId = loader.ParseOptionalId<EntityId>(
+        definition.Find("sourcePlaneId"), where + ".sourcePlaneId");
+    made.construction = loader.Bool(definition, "construction", where, false);
+    return made;
+}
+
 void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definition,
     const std::string& where)
 {
@@ -406,6 +430,14 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
     // 「必要な項目がありません」と言って読めなくすると、古い文書が開けなくなる。
     // 新しく書いたものは必ず項目を持つので、そちらは下の検査が効く。
     if (definition.Type() != JsonType::Object || definition.AsObject().empty()) {
+        return;
+    }
+    // 変形・面取り・面へ投影などの結果は、計算した形をそのまま持たせる(CreateWireDefinition)。
+    // 書くときは中身の種類で書くので、読むときも中身の形で読む。種類だけで読み分けると
+    // 「必要な項目がありません(method / targetPlaneId)」で文書が開けなくなる。
+    if ((feature.type == FeatureType::TransformWire || feature.type == FeatureType::ProjectWire)
+        && definition.Find("wire") != nullptr) {
+        feature.definition = ReadCreateWire(loader, definition, where);
         return;
     }
     switch (feature.type) {
@@ -424,27 +456,9 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
-    case FeatureType::CreateWire: {
-        CreateWireDefinition made;
-        const JsonValue* wire = loader.ObjectAt(definition, "wire", where);
-        if (wire != nullptr) {
-            const std::string place = where + ".wire";
-            const JsonArray* segments = loader.ArrayAt(*wire, "segments", place);
-            if (segments != nullptr) {
-                for (std::size_t index = 0; index < segments->size(); ++index) {
-                    auto [segment, id] = ReadSegment(loader, (*segments)[index],
-                        place + ".segments[" + std::to_string(index) + "]");
-                    made.segments.push_back(std::move(segment));
-                    made.segmentIds.push_back(id);
-                }
-            }
-        }
-        made.sourcePlaneId = loader.ParseOptionalId<EntityId>(
-            definition.Find("sourcePlaneId"), where + ".sourcePlaneId");
-        made.construction = loader.Bool(definition, "construction", where, false);
-        feature.definition = std::move(made);
+    case FeatureType::CreateWire:
+        feature.definition = ReadCreateWire(loader, definition, where);
         break;
-    }
     case FeatureType::TransformWire: {
         TransformWireDefinition made;
         made.method = loader.ParseEnum(kTransformMethods,

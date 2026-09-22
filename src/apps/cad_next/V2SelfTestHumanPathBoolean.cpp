@@ -120,7 +120,8 @@ using kachakacha::v2::domain::EntityKind;
     }
     if (!Explain("3D に TARGET の札が出る", sawTarget)
         || !Explain("相手を画面で押せる", PressPart(window, second))
-        || !Explain("相手の欄に入る", window.BooleanInput().tool == second)) {
+        || !Explain("相手の欄に入る", window.BooleanInput().tools.size() == 1
+                && window.BooleanInput().tools.front() == second)) {
         return false;
     }
     bool sawTool = false;
@@ -141,7 +142,8 @@ using kachakacha::v2::domain::EntityKind;
     // 土台をもう一度押すと外れ、土台の欄が次のクリックを待つ。
     if (!Explain("土台をもう一度押せる", PressPart(window, first))
         || !Explain("押し直すと土台だけ外れる",
-            window.BooleanInput().target.IsNil() && window.BooleanInput().tool == second)
+            window.BooleanInput().target.IsNil() && window.BooleanInput().tools.size() == 1
+                && window.BooleanInput().tools.front() == second)
         || !Explain("土台待ちへ戻る", dock.ActiveSlotShown() == BooleanSlot::Target)) {
         return false;
     }
@@ -149,7 +151,8 @@ using kachakacha::v2::domain::EntityKind;
     if (!Explain("相手の「ここへ選ぶ」を押せる", dock.ClickActivate(BooleanSlot::Tool))
         || !Explain("次のクリックは相手へ", dock.ActiveSlotShown() == BooleanSlot::Tool)
         || !Explain("別の部品を押せる", PressPart(window, first))
-        || !Explain("相手が入れ替わる", window.BooleanInput().tool == first)) {
+        || !Explain("相手に足される(相手は何個でも)", window.BooleanInput().tools.size() == 2
+                && window.BooleanInput().tools.back() == first)) {
         return false;
     }
     if (!Explain("Escでやめられる", window.HandleToolKey(Qt::Key_Escape, nullptr))) {

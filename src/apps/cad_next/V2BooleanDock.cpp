@@ -125,12 +125,12 @@ void V2BooleanDock::ShowInput(const kachakacha::v2::app::BooleanInputState& stat
     cut_->setChecked(state.cut);
     targetValue_->setText(state.target.IsNil() ? QStringLiteral("(選んでいません)")
                                                 : targetNameJa);
-    toolValue_->setText(state.tool.IsNil() ? QStringLiteral("(選んでいません)") : toolNameJa);
+    toolValue_->setText(state.tools.empty() ? QStringLiteral("(選んでいません)") : toolNameJa);
     const BooleanSlot next = kachakacha::v2::app::NextBooleanSlot(state);
     armTarget_->setChecked(next == BooleanSlot::Target);
     armTool_->setChecked(next == BooleanSlot::Tool);
     clearTarget_->setEnabled(!state.target.IsNil());
-    clearTool_->setEnabled(!state.tool.IsNil());
+    clearTool_->setEnabled(!state.tools.empty());
     QString status;
     for (const QString& line : statusLinesJa) {
         if (!status.isEmpty()) {

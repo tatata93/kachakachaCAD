@@ -533,9 +533,7 @@ public:
     void ShowProperties();
     //! 一覧の献立の並び(区切りを除く)。試験から読む。
     [[nodiscard]] std::vector<QString> ExplorerMenuLabels();
-    //! 候補つきの同じメニュー。選ばれた候補の番号を返す。
-    //! 台帳のコマンドを選んだときと、閉じたときは値を持たない。
-    //! 候補の見出しは画面が作ったものをそのまま並べる。ここでは集め直さない。
+    //! 候補つきの同じメニュー。選ばれた候補の番号を返す(台帳のコマンド・閉じたときは値なし)。
     [[nodiscard]] std::optional<int> ShowSelectMenuWithCandidates(const QPoint& at,
         const std::vector<QString>& candidateLabels);
     //! 献立を組むだけ。返すのは候補の区画へ並べた QAction(並びは見出しと同じ)。
@@ -560,7 +558,9 @@ public:
     //! 線の編集を1つ実行して Feature を足す。判断は core にある。
     void RunWireTransform(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
-        const QString& labelJa, bool consumesFirstOnly, bool consumesInputs = true);
+        const QString& labelJa, bool consumesFirstOnly, bool consumesInputs = true, bool perWire = false);
+    void RunWireTransformEach(const kachakacha::v2::domain::TransformWireDefinition& definition,
+        const QString& labelJa, bool consumesInputs);
     //! 変換を線1本へ当てて、新しいワイヤーを1本作る。作れたら true。
     [[nodiscard]] bool TransformOneWire(
         const kachakacha::v2::domain::TransformWireDefinition& definition,
@@ -602,9 +602,7 @@ public:
         const std::string& modelName,
         const kachakacha::v2::app::FabricationEvaluation& evaluated,
         const std::string& stateName, int& wires, int& surfaces, int& parts);
-    //! 押し出しの結果を文書へ入れる。作るものは利用者が選んだとおりにする。
-    //! 出来た形を文書へ足す。1つでも入らなければ偽を返す。
-    //! 呼ぶ側はまとめごと無かったことにする。途中の形を残さない。
+    //! 押し出しの結果を文書へ足す。1つでも入らなければ偽(呼ぶ側はまとめごと無かったことにする)。
     [[nodiscard]] bool AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& choice,
         const kachakacha::v2::domain::ExtrudeDefinition& definition,
         const kachakacha::v2::kernel::ExtrudeBuildResult& built,
@@ -898,8 +896,6 @@ private:
     void EndApprox();
     void ConfirmApprox();
     void RunCreatePattern();
-    //! 選んだ形状ガイドを展開して部材にする。展開できない面があれば false。
-    //! 選んだ線を、いまの部材の開口または折り線にする。線の形で決まる。
     //! 選んだ線を開口/折り線に(reliefCut=false)、または切れ目に(true)する。
     void AssignOpeningRole(bool reliefCut);
     //! 選んだ線を接続スコープにし、近似の形へ寄せた「_接続」の線を作る。
@@ -966,9 +962,7 @@ private:
         const std::vector<kachakacha::v2::base::EntityId>& inputs = {});
     //! 部品の辺を場面へ出し直す。立体そのものはまだ描かない。
     void RefreshPartEdges();
-    //! 押し出しの距離。数値入力が付くまでの既定値(プラ板0.5mm)。
-    //! 押し出しの距離(板厚)。数の棚から取る。決め打ちにすると、
-    //! プラ板を使い分けられない。
+    //! 押し出しの距離(板厚)。数の棚から取る(決め打ちにするとプラ板を使い分けられない)。
     [[nodiscard]] double ExtrudeDistanceMm() const;
     //! 出す対象の立体を集める。selectedOnly が偽なら見えているものを集める。
     [[nodiscard]] std::vector<kachakacha::v2::modeling::KernelShapeHandle> PartShapesFor(
@@ -1036,10 +1030,11 @@ private:
     kachakacha::v2::app::ThickenInputState thickenInput_;
     kachakacha::v2::app::ThickenPreviewOutcome thickenOutcome_;
     //! 下見に使った形。**確定はこれをそのまま入れる。**
-    std::optional<kachakacha::v2::modeling::KernelShapeHandle> thickenBuilt_;
-    std::vector<kachakacha::v2::geometry::CurveSegment> thickenBuiltEdges_;
+    std::vector<kachakacha::v2::modeling::KernelShapeHandle> thickenBuilt_;   // 面ごと(欄と同じ並び)
+    std::vector<std::vector<kachakacha::v2::geometry::CurveSegment>> thickenBuiltEdges_;
+    std::vector<double> thickenBuiltThickness_;
     //! 3D の選択に映した、面の写し(空なら Nil 相当)。差分を読むための前回の写し。
-    kachakacha::v2::base::EntityId thickenMirror_;
+    std::vector<kachakacha::v2::base::EntityId> thickenMirror_;
     bool thickenMirroring_ = false;
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;

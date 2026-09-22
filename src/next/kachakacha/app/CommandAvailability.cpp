@@ -44,8 +44,8 @@ bool SelectionSatisfies(SelectionPredicate predicate, const SelectionFacts& fact
         return facts.closedProfiles >= 1 || (facts.parts == 1 && facts.solidFaces >= 1);
     case SelectionPredicate::OnePart:
         return facts.parts == 1;
-    case SelectionPredicate::TwoParts:
-        return facts.parts == 2;
+    case SelectionPredicate::TwoOrMoreParts:
+        return facts.parts >= 2;
     case SelectionPredicate::OneDerivedEntity:
         return facts.derivedEntities == 1;
     case SelectionPredicate::OneFabricationModel:

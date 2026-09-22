@@ -40,12 +40,13 @@ KACHA_V2_TEST(boolean_input, 土台待ちから始まり_入れると相手待�
     Require(NextBooleanSlot(state) == BooleanSlot::Target, "最初は土台待ち");
     Require(BooleanHintJa(state) == "次のクリック → 土台", "案内は土台");
     state = WithBooleanPick(state, Id(1));
-    Require(state.target == Id(1) && state.tool.IsNil(), "土台に入る");
+    Require(state.target == Id(1) && state.tools.empty(), "土台に入る");
     Require(NextBooleanSlot(state) == BooleanSlot::Tool, "自動で相手待ちへ");
     Require(BooleanHintJa(state) == "次のクリック → 相手", "案内は相手");
     Require(!BooleanReady(state), "まだ作れない");
     state = WithBooleanPick(state, Id(2));
-    Require(state.tool == Id(2) && BooleanReady(state), "相手に入って作れる");
+    Require(state.tools.size() == 1 && state.tools[0] == Id(2) && BooleanReady(state),
+        "相手に入って作れる");
     Require(BooleanHintJa(state).find("Enter") != std::string::npos, "案内は Enter");
     Require(BooleanEntries(state).size() == 2 && BooleanEntries(state)[0] == Id(1),
         "並びは土台、相手の順");
@@ -57,13 +58,14 @@ KACHA_V2_TEST(boolean_input, 入っているものを押し直すと外れ_同�
     state = WithBooleanPick(state, Id(1));
     state = WithBooleanPick(state, Id(2));
     state = WithBooleanPick(state, Id(1));
-    Require(state.target.IsNil() && state.tool == Id(2), "土台を押し直すと土台だけ外れる");
+    Require(state.target.IsNil() && state.tools.size() == 1 && state.tools[0] == Id(2),
+        "土台を押し直すと土台だけ外れる");
     Require(NextBooleanSlot(state) == BooleanSlot::Target, "次は空いた土台へ");
     state = WithBooleanPick(state, Id(2));
-    Require(state.tool.IsNil() && state.target.IsNil(), "相手を押し直すと相手が外れる");
+    Require(state.tools.empty() && state.target.IsNil(), "相手を押し直すと相手が外れる");
     state = WithBooleanPick(state, Id(3));
     state = WithBooleanPick(state, Id(3));
-    Require(state.target.IsNil() && state.tool.IsNil(), "同じものは両方には入らず、外れる");
+    Require(state.target.IsNil() && state.tools.empty(), "同じものは両方には入らず、外れる");
 }
 
 KACHA_V2_TEST(boolean_input, ここへ選ぶと解除で選び直せる)
@@ -75,13 +77,38 @@ KACHA_V2_TEST(boolean_input, ここへ選ぶと解除で選び直せる)
     Require(NextBooleanSlot(state) == BooleanSlot::Target, "明示した欄が次");
     Require(BooleanHintJa(state) == "次のクリック → 土台", "両方入っていても案内は明示した欄");
     state = WithBooleanPick(state, Id(3));
-    Require(state.target == Id(3) && state.tool == Id(2), "土台が入れ替わる");
+    Require(state.target == Id(3) && state.tools.size() == 1 && state.tools[0] == Id(2),
+        "土台が入れ替わる");
     Require(!state.activeSlot.has_value(), "満たされたら明示は解ける");
     state = WithBooleanSlotCleared(state, BooleanSlot::Tool);
-    Require(state.tool.IsNil() && NextBooleanSlot(state) == BooleanSlot::Tool,
+    Require(state.tools.empty() && NextBooleanSlot(state) == BooleanSlot::Tool,
         "解除した欄が次のクリックを受ける");
     state = WithoutBooleanEntries(state, {Id(3)});
     Require(state.target.IsNil(), "3D の選択から外れた分は欄からも消える");
+}
+
+KACHA_V2_TEST(boolean_input, 相手は何個でも足せて押し直した分だけ外れる)
+{
+    BooleanInputState state;
+    state = WithBooleanPick(state, Id(1));
+    state = WithBooleanPick(state, Id(2));
+    state = WithBooleanPick(state, Id(3));
+    state = WithBooleanPick(state, Id(4));
+    Require(state.target == Id(1) && state.tools.size() == 3 && state.tools[2] == Id(4),
+        "土台のあとの部品は全部相手に足される(相手は 1 個に限らない)");
+    Require(BooleanReady(state) && BooleanEntries(state).size() == 4, "4 つとも使う");
+    state = WithBooleanPick(state, Id(3));
+    Require(state.tools.size() == 2 && state.tools[0] == Id(2) && state.tools[1] == Id(4),
+        "押し直した相手だけが外れる");
+    state = WithoutBooleanEntries(state, {Id(2)});
+    Require(state.tools.size() == 1 && state.tools[0] == Id(4), "3D の選択から外れた分も外れる");
+    const auto lines = BooleanStatusLinesJa(WithBooleanPick(state, Id(5)), BooleanPreviewOutcome{},
+        false);
+    bool sawCount = false;
+    for (const auto& line : lines) {
+        sawCount = sawCount || line.find("2 個") != std::string::npos;
+    }
+    Require(sawCount, "相手の数を言う");
 }
 
 KACHA_V2_TEST(boolean_input, 状態行と一番下の一行は同じことを言う)

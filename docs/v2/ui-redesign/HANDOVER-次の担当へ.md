@@ -1,4 +1,4 @@
-# HANDOVER — 次の担当へ(2026-09-19、2026-09-22 追記)
+# HANDOVER — 次の担当へ(2026-09-19、2026-09-22 追記 2 回)
 
 この文書は、次にこの作業を無人で続けるモデル(いまより能力の低いモデルかもしれない)向け。
 読んだらまず `TASK_LEDGER.md` の一番下の単位と `REGRESSIONS.md` の一番下を見て、どこまで進んだかを確認すること。
@@ -24,6 +24,32 @@
   断面とガイドの網(Gordon、`LoftSolver::RailNetwork`)で作るようにした(1405941)。
 - 閉じた断面にガイドを付けたロフトは作れない(検査が「まだ作れません」と断る)。作るなら、断面をガイドの
   交わりで開いた線に切り、ガイドの間の帯ごとに網を作って縫い合わせる作りが要る(未着手)。
+
+## 2026-09-22 追記(続き): 残りの段 — 作図・部品・測定の道具を足した
+
+- オーナーの「続けろ」で、matrix の BLOCKED_BACKEND のうち核か core で作れるものを本物にした:
+  部品の配置 P-18、回転体・ロフト立体・スイープ P-08/P-09、3点の円・中心の円弧・通過点スプライン
+  D-04/D-08/D-13、スケール D-22、辺のフィレット・面取り P-12、シェル・分割 P-13、閉じた線の面積 C-15。
+  commit と PC の結果は `TASK_LEDGER.md` の「残りの段」、各行の状態は `UI_FEATURE_MATRIX.md`。
+- **自分の棚を持つ道具**(立体を作る V2SolidTool・辺の丸め V2EdgeFinishTool・シェル分割 V2ShellSplitTool)は
+  窓の友達で、棚(Dock)と入力の状態を自分で持つ。棚の出し方は `ShelvesFor(..., ownedShelf)` と
+  `V2MainWindow::OwnedToolShelf()`、窓へのつなぎは 8 か所(V2MainWindow.h の friend と持ち物・
+  HandleSelectionChanged・AdoptDocument で End・V2Shelves で作る・DockForShelf・OwnedToolShelf・
+  V2ToolKeys・V2StatusLine・V2BooleanCommands の BeginToolFirstCommand・V2RebuildCommands の RebuildOneShape)。
+  **1 つだけ構える**(BeginToolFirstCommand の endOwnedToolsBut)。構えたまま別の道具を押すと、
+  押しが両方へ入って棚が前の道具のまま残っていた。
+- 立体の辺は **辺の真ん中の点**、面は **面の上の点**(ほかの面から 0.4 mm 離した点)で文書に残す。
+  番号は作り直しで並びが変わる。1 本・1 枚でも見つからなければ作らない(黙って残りだけ作らない)。
+- 分割は 1 回で 2 つの Feature(side ±1)。平面は「いまの作業平面 + ずらす」。平面が通らなければ KER-H005。
+- **名前を決める前に grep する。**`PartEdit` は製作の部材編集(F-05〜F-07、V2SelfTestPartEdit.cpp)で
+  既に使われていて、同じ名前のファイルを上書きしかけた(git の元から戻した)。シェル・分割は `ShellSplit`。
+- OCCT の枝は雲でコンパイルできない。`sh tools/occtstub/check.sh <file>` で **自分の C++ の誤り**だけは拾える
+  (Result に operator! は無い、など)。OCCT の API そのものは PC のビルドでしか分からない。
+- 新しい道具の絵は `cmd /c .\_SHOTS_TOOLS.cmd`(PC、_QUICK の後)で `_claudeout\ui\13〜17_ui-tool-*.png`。
+  場面は `V2UiShotStatesTools.cpp`(試験ではなく場面づくり)。
+- まだ作れないもの(押せない形 + 理由のまま): 楕円・テキスト(文書に種類が無い)、面オフセット・面削除・
+  面置換(核に道が無い)、表裏反転(製作契約 §9 が型紙の鏡映を禁じている。オーナーに要確認)、
+  押し出しの開始面 From・テーパー、平均誤差・誤差の色(近似が点ごとの外れを返さない)。
 
 ## 目的と方針(オーナー)
 

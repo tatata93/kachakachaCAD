@@ -593,7 +593,8 @@ using kachakacha::v2::domain::Visibility;
     if (!Explain("1 回の元に戻すで分ける前へ戻る", panels() == before)) {
         return false;
     }
-    // 2 枚なら位置を選べる(F-06): 部材1 を番号の小さい側から 25% の位置で分ける。
+    // 2 枚なら位置を選べる(F-06): 部材1 を番号の小さい側から 40% の位置で分ける
+    // (近似の作り方の最小幅 4mm を割らない位置。25% だと 13.9mm の部材で 3.5mm になり断られる)。
     std::vector<double> railsBefore;
     std::vector<double> widthsBefore;
     if (!Explain("帯の境目が読める", window.CurrentBandPartition(railsBefore, widthsBefore)
@@ -602,16 +603,16 @@ using kachakacha::v2::domain::Visibility;
     }
     window.FabricationDock().SetPartNumbersText(QStringLiteral("1"));
     window.FabricationDock().SetSplitPieces(2);
-    window.FabricationDock().SetSplitPercent(25);
+    window.FabricationDock().SetSplitPercent(40);
     window.RunCommand("fabrication.split_part");   // 1 度目: 見せる
-    const bool saidWhere = window.StatusText().contains(QStringLiteral("25%"));
+    const bool saidWhere = window.StatusText().contains(QStringLiteral("40%"));
     window.RunCommand("fabrication.split_part");   // 2 度目: 当てる
     std::vector<double> railsAfter;
     std::vector<double> widthsAfter;
     const bool read = window.CurrentBandPartition(railsAfter, widthsAfter);
-    const double expected = railsBefore[0] + (railsBefore[1] - railsBefore[0]) * 0.25;
+    const double expected = railsBefore[0] + (railsBefore[1] - railsBefore[0]) * 0.40;
     window.FabricationDock().SetSplitPercent(50);
-    return Explain((std::string("位置 25% で分けると、部材1 の 1/4 のところに境目が入る(帯は ")
+    return Explain((std::string("位置 40% で分けると、部材1 の 4 割のところに境目が入る(帯は ")
                        + window.StatusText().toStdString() + ")").c_str(),
         saidWhere && read && railsAfter.size() == railsBefore.size() + 1
             && std::abs(railsAfter[1] - expected) < 1.0e-9 && panels() == before + 1);

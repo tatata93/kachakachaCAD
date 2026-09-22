@@ -589,6 +589,9 @@ void V2MainWindow::AssignOpeningRole(bool reliefCut)
     fabricationModels_[modelId.ToString()] = evaluated.Value();
     patternPages_.clear();
     RefreshFabricationView();
+    // 一覧の近似モデルの下(開口・折り線・切れ目の線、F-15)を今の作り方で作り直す。
+    // 作り直さないと、入れた役割が一覧に出るのが次の操作のあとになる(自己試験で見つけた)。
+    RefreshEntityList();
     if (reliefCut) {
         SetStatus(QStringLiteral("切れ目: %1 本入れました(いま切れ目 %2)。型紙はもう一度作ってください。")
                 .arg(added)

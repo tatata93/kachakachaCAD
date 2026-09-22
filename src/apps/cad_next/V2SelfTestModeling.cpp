@@ -997,10 +997,31 @@ namespace {
                 || window.StatusText().contains(QStringLiteral("載っていません")))) {
         return false;
     }
-    // 同じ開いた線を「切れ目にする」と、切れ目として作り方に入る(V1 の plate_relief_cut)。
+    // 役割を持った線は入れ直さない(818113d)。同じ線を「切れ目にする」と、断って文書は変えない。
     viewport.SetSelection(last);
     window.RunCommand("fabrication.assign_relief_cut");
-    const bool assigned = window.StatusText().contains(QStringLiteral("切れ目"));
+    const bool foldTaken = window.StatusText().contains(QStringLiteral("折り線"))
+        || window.StatusText().contains(QStringLiteral("載っていません"));
+    if (foldTaken && !Explain((std::string("役割を持つ線は切れ目に入れ直さない(")
+                                  + window.StatusText().toStdString() + ")").c_str(),
+                         window.StatusText().contains(QStringLiteral("もう役割を持っています"))
+                             || window.StatusText().contains(QStringLiteral("載っていません")))) {
+        return false;
+    }
+    // 別の開いた線を引いて「切れ目にする」と、切れ目として作り方に入る(V1 の plate_relief_cut)。
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Line);
+    viewport.ClickAt(QPointF(viewport.width() * 0.48, viewport.height() * 0.40));
+    viewport.ClickAt(QPointF(viewport.width() * 0.52, viewport.height() * 0.46));
+    window.SelectTool(kachakacha::v2::modeling::DrawingTool::Select);
+    const auto wiresNow = kachakacha::v2::app::SelectAllOfKind(
+        window.Session().GetDocument().Snapshot(), kachakacha::v2::domain::EntityKind::Wire);
+    kachakacha::v2::app::SelectionSet second;
+    if (!wiresNow.entityIds.empty()) {
+        second.entityIds.push_back(wiresNow.entityIds.back());
+    }
+    viewport.SetSelection(second);
+    window.RunCommand("fabrication.assign_relief_cut");
+    const bool assigned = window.StatusText().contains(QStringLiteral("本入れました"));
     if (!Explain((std::string("切れ目として扱う(") + window.StatusText().toStdString()
                      + ")").c_str(),
             assigned || window.StatusText().contains(QStringLiteral("載っていません")))) {

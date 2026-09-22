@@ -164,9 +164,11 @@ public:
     void EndExtrudePreview();
     //! 出ている下見のとおりに作る。Enter から呼ぶ。
     void ConfirmExtrude();
+    //! 輪郭が違う平面にあれば、平面ごとに別の押し出しにする(1 回の元に戻すで全部消える)。1 平面なら偽。
+    [[nodiscard]] bool ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoice& choice,
+        const kachakacha::v2::app::ExtrudePlan& plan);
     //! 棚の欄が変わったので、下見を作り直す。
     void RefreshExtrudeFromDock();
-    //! 「詳細...」。細かい設定は今までの窓で決める。
     //! 「詳細...」。窓で決めて、棚と矢印と下見へ映して戻る。**作らない。**
     void EditExtrudeWithDialog();
     //! 決めたひと組を棚と矢印と下見へ映す。試験からも呼ぶ。
@@ -336,8 +338,6 @@ public:
     {
         return extrudeOutline_;
     }
-    //! 診断を貼り板へ入れる。
-
     //! 試験から呼ぶ。指定した状態を作ってから画面を描く。
     //! 状態の名前は --manual-state で渡すものと同じ。
     [[nodiscard]] bool ApplyManualState(const QString& name);
@@ -985,6 +985,10 @@ private:
     kachakacha::v2::app::ExtrudeChoice extrudeChoice_;
     //! 下見に出している輪郭(折れ線)。押し出しを始めたときに作る。
     std::vector<kachakacha::v2::geometry::Vector3> extrudeOutline_;
+    //! 下見に出す輪郭の全部(先頭は extrudeOutline_)。**見えていない輪郭で作らない**(§9)。
+    std::vector<std::vector<kachakacha::v2::geometry::Vector3>> extrudeOutlines_;
+    //! 直前の確定で出来た部品。平面ごとの足す・引くで、次の平面の相手にする。
+    std::vector<kachakacha::v2::base::EntityId> adoptedExtrudeParts_;
     //! 下見を出した瞬間の入力の写し(オーナー指示 §9)。**下見と確定は同じ写しから作る。**
     //! 確定のときに選択を読み直すと、下見のあとに選択が変わった分だけ別の形が出来る。
     //! 選択が変わったら写しを作り直し、下見も出し直す(黙って読み直さない)。
@@ -1296,7 +1300,8 @@ public:
     //! 矢印・下見・確定・保存する作り方が、みなここを通る。
     [[nodiscard]] kachakacha::v2::geometry::Vector3 ExtrudeDirectionForMode(
         kachakacha::v2::modeling::ExtrudeDirectionMode mode,
-        const kachakacha::v2::geometry::Vector3& custom) const;
+        const kachakacha::v2::geometry::Vector3& custom,
+        const std::vector<kachakacha::v2::geometry::Vector3>* outline = nullptr) const;
     //! 曲げた先の半径を測り直す。固定してあれば触らない(§31)。
     void RefreshBendRadius();
     //! いまの組立率(0〜100)。近似モデルが無ければ 100。

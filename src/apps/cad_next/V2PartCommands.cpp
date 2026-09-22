@@ -29,7 +29,9 @@
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -112,6 +114,88 @@ using kachakacha::v2::modeling::SnapCurve;
         perPart.push_back(kachakacha::v2::app::ProfileRegionEntityIds(region));
     }
     return perPart;
+}
+
+//! 決めた組と輪郭から、カーネルへ渡す頼みを作る。確定と、平面ごとの確定が同じ道を通る。
+//! カーネルには輪郭も側面も常に頼む(画面に出す辺と、型紙に要る「平らな1枚」がそこから
+//! 取れる。文書のワイヤーにするかどうかは別で、利用者が選んだとおりにする)。
+//! ソリッドを作らないなら演算そのものをしない。すると相手の立体がカーネルの中で切られる。
+[[nodiscard]] kachakacha::v2::modeling::ExtrudeRequest RequestForChoice(
+    const kachakacha::v2::app::ExtrudeChoice& choice,
+    std::vector<kachakacha::v2::modeling::ExtrudeProfile> profiles,
+    const kachakacha::v2::modeling::WorkPlaneFrame& workPlane,
+    const std::optional<kachakacha::v2::modeling::WorkPlaneFrame>& targetPlane)
+{
+    auto request = kachakacha::v2::app::ToExtrudeRequest(choice, std::move(profiles), workPlane,
+        targetPlane);
+    request.outputs.endProfileWire = true;
+    request.outputs.sideBoundaryWires = true;
+    if (!choice.makePart) {
+        request.booleanMode = kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    }
+    return request;
+}
+
+//! 開始側の輪郭ワイヤーを作るなら、押す前の輪郭を控える。
+//! **元の輪郭を作り変えるのではなく、新しい文書のワイヤーとして作る。**
+[[nodiscard]] std::vector<std::vector<CurveSegment>> StartLoopsFor(
+    const kachakacha::v2::app::ExtrudeChoice& choice,
+    const std::vector<kachakacha::v2::modeling::ExtrudeProfile>& profiles)
+{
+    std::vector<std::vector<CurveSegment>> loops;
+    if (!choice.makeStartProfileWire) {
+        return loops;
+    }
+    for (const auto& profile : profiles) {
+        if (!profile.segments.empty()) {
+            loops.push_back(profile.segments);
+        }
+    }
+    return loops;
+}
+
+//! 平面ごとの押し出しの 1 組(調べて作った形。文書へはまだ入れていない)。
+struct ExtrudePiece {
+    std::vector<EntityId> ids;
+    kachakacha::v2::app::ExtrudeChoice choice;
+    kachakacha::v2::modeling::ExtrudeAnalysis analysis;
+    kachakacha::v2::kernel::ExtrudeBuildResult built;
+    std::vector<std::vector<CurveSegment>> startLoops;
+};
+
+//! 領域の組が使う線(重なりなし、出てきた順)。
+[[nodiscard]] std::vector<EntityId> GroupEntityIds(
+    const std::vector<kachakacha::v2::app::ProfileRegion>& regions,
+    const std::vector<std::size_t>& group)
+{
+    std::vector<EntityId> ids;
+    for (const std::size_t index : group) {
+        for (const EntityId& id : kachakacha::v2::app::ProfileRegionEntityIds(regions[index])) {
+            if (std::find(ids.begin(), ids.end(), id) == ids.end()) {
+                ids.push_back(id);
+            }
+        }
+    }
+    return ids;
+}
+
+//! 下見がその平面で最初に描いた輪郭。無ければ領域の外周。輪郭に垂直の向きはこれで解く
+//! (下見の矢印と確定の向きを同じ輪郭から取る)。
+[[nodiscard]] std::vector<kachakacha::v2::geometry::Vector3> OutlineShownOn(
+    const std::vector<std::vector<kachakacha::v2::geometry::Vector3>>& shown,
+    const kachakacha::v2::app::ProfileRegion& region, double limitMm)
+{
+    const auto& plane = region.plane;
+    for (const auto& outline : shown) {
+        if (!outline.empty() && std::all_of(outline.begin(), outline.end(),
+                [&](const kachakacha::v2::geometry::Vector3& point) {
+                    return std::abs(kachakacha::v2::geometry::Dot(point - plane.origin,
+                               plane.normal)) <= limitMm;
+                })) {
+            return outline;
+        }
+    }
+    return region.outer.sampled;
 }
 
 } // namespace
@@ -406,32 +490,18 @@ void V2MainWindow::ConfirmExtrude()
     // 「選んだ線の向き」を選んでも、次に棚と窓へそのまま出る
     // (Codex P1-EXTRUDE-R5 B1、R6 B2)。
     extrudeChoice_ = preparedOrNone->remembered;
+    // 輪郭が違う平面にあるなら、平面ごとに別の押し出しにする。向きは平面ごとに解くので、
+    // 解く前の決め方を渡す。
+    if (ConfirmExtrudeByPlanes(preparedOrNone->remembered, plan)) {
+        return;
+    }
     std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
     if (choice.targetEntityId.has_value()) {
         targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
     }
-    // 開始側の輪郭を作るなら、押す前の輪郭をここで控える。
-    // **元の輪郭を作り変えるのではなく、新しい文書のワイヤーとして作る。**
-    std::vector<std::vector<CurveSegment>> startLoops;
-    if (choice.makeStartProfileWire) {
-        for (const auto& profile : profiles) {
-            if (!profile.segments.empty()) {
-                startLoops.push_back(profile.segments);
-            }
-        }
-    }
-    ExtrudeRequest request = kachakacha::v2::app::ToExtrudeRequest(choice,
-        std::move(profiles), viewport_->WorkPlane(), targetPlane);
-    // カーネルには輪郭も側面も常に頼む。画面に出す辺と、型紙に要る「平らな1枚」が
-    // そこから取れるからである。**文書のワイヤーにするかどうかは別の話** で、
-    // それは利用者が選んだとおりにする。
-    request.outputs.endProfileWire = true;
-    request.outputs.sideBoundaryWires = true;
-    // ソリッドを作らないなら、演算そのものを行わない。
-    // 行ってしまうと、相手の立体がカーネルの中で切られる。
-    if (!choice.makePart) {
-        request.booleanMode = kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
-    }
+    std::vector<std::vector<CurveSegment>> startLoops = StartLoopsFor(choice, profiles);
+    ExtrudeRequest request =
+        RequestForChoice(choice, std::move(profiles), viewport_->WorkPlane(), targetPlane);
 
     const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
     // まず調べる。通らないものは作らせない。作らせてから断ると理由を言えない。
@@ -560,6 +630,107 @@ bool V2MainWindow::CommitExtrudeAtomically(const kachakacha::v2::app::ExtrudeCho
     return transaction.Commit();
 }
 
+//! 違う平面の輪郭を、平面ごとに別の押し出しにする(入力の数: 押し出しの輪郭は何個でも)。
+//!
+//! 1 回の押し出しは 1 つの平面の輪郭だけを押す(輪郭の平面が向きと厚みを決める)。人の側は
+//! 違う平面の輪郭をまとめて選んでよい。平面ごとに調べて作り、1 回の元に戻すで全部消える。
+//! 足す・引くは、前の平面の結果を次の平面の相手にしてつなぐ。1 つでも作れなければ全部やめる。
+bool V2MainWindow::ConfirmExtrudeByPlanes(const kachakacha::v2::app::ExtrudeChoice& choice,
+    const kachakacha::v2::app::ExtrudePlan& plan)
+{
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const double limit = std::max(tolerance.modelLinearMm * 10.0, 1.0e-5);   // EXT-001 と同じ幅
+    const auto regions =
+        kachakacha::v2::app::DetectProfileRegions(session_->Scene(), plan.profiles, tolerance);
+    const auto groups = kachakacha::v2::app::GroupProfileRegionsByPlane(regions, limit);
+    if (facePushPull_ || groups.size() < 2) {
+        return false;
+    }
+    const bool boolean = choice.makePart
+        && choice.booleanMode != kachakacha::v2::modeling::ExtrudeBooleanMode::NewPart;
+    auto target = BooleanTargetShapeFor(choice, plan);
+    if (!target.has_value()) {
+        return true;   // 理由はそちらで言っている。
+    }
+    std::optional<kachakacha::v2::modeling::WorkPlaneFrame> targetPlane;
+    if (choice.targetEntityId.has_value()) {
+        targetPlane = WorkPlaneFrameOf(*choice.targetEntityId);
+    }
+    std::vector<ExtrudePiece> pieces;
+    for (const auto& group : groups) {
+        ExtrudePiece piece;
+        piece.ids = GroupEntityIds(regions, group);
+        piece.choice = choice;
+        // 輪郭に垂直は平面ごとに解く。下見がその平面で最初に描いた輪郭で解く(矢印と同じ向き)。
+        if (choice.direction == ExtrudeDirectionMode::ProfileNormal) {
+            const auto outline = OutlineShownOn(extrudeOutlines_, regions[group.front()], limit);
+            piece.choice.direction = ExtrudeDirectionMode::CustomXYZ;
+            piece.choice.customDirection =
+                ExtrudeDirectionForMode(choice.direction, choice.customDirection, &outline);
+        }
+        auto profiles = ExtrudeProfilesFor(piece.ids);
+        piece.startLoops = StartLoopsFor(piece.choice, profiles);
+        const auto request = RequestForChoice(piece.choice, std::move(profiles),
+            viewport_->WorkPlane(), targetPlane);
+        const auto analysis = kachakacha::v2::modeling::AnalyzeExtrudeRequest(request, tolerance);
+        const auto built = analysis.HasValue()
+            ? kachakacha::v2::kernel::BuildExtrude(request, analysis.Value(), tolerance, *target)
+            : kachakacha::v2::base::Result<kachakacha::v2::kernel::ExtrudeBuildResult>::Failure(
+                  analysis.Diagnostics());
+        if (!built.HasValue()) {
+            ReportDiagnostics(built.Diagnostics());
+            return true;
+        }
+        if (choice.makePart && (built.Value().parts.empty()
+                || (boolean && built.Value().parts.size() != 1))) {
+            // 足す・引くの結果が分かれると、次の平面の相手が決まらない。黙って 1 つを選ばない。
+            SetStatus(QStringLiteral("押し出し: 平面ごとに押すと、途中の形が %1 個になりました。"
+                                     "続きの平面を当てる相手が決まらないので作りません。"
+                                     "平面ごとに分けて押してください。")
+                    .arg(static_cast<int>(built.Value().parts.size())));
+            return true;
+        }
+        if (boolean) {
+            target = built.Value().parts.front().handle;   // 次の平面は、この結果を相手にする
+        }
+        piece.analysis = analysis.Value();
+        piece.built = built.Value();
+        pieces.push_back(std::move(piece));
+    }
+    // 文書へ。平面の数だけの押し出しを 1 回のまとめにする(1 回の元に戻すで全部消える)。
+    bool kept = true;
+    std::size_t parts = 0;
+    {
+        kachakacha::v2::document::Document::Transaction transaction(session_->GetDocument(),
+            "押し出し(平面ごと)");
+        EntityId previous = plan.targetSolid;
+        for (const ExtrudePiece& piece : pieces) {
+            auto piecePlan = plan;
+            piecePlan.profiles = piece.ids;
+            piecePlan.targetSolid = boolean ? previous : plan.targetSolid;
+            extrudeStartLoops_ = piece.startLoops;
+            kept = CommitExtrudeAtomically(piece.choice, piecePlan, piece.analysis, piece.built)
+                && (!boolean || !adoptedExtrudeParts_.empty());
+            if (!kept) {
+                break;
+            }
+            parts += adoptedExtrudeParts_.size();
+            previous = boolean ? adoptedExtrudeParts_.front() : previous;
+        }
+        kept = kept && transaction.Commit();
+    }
+    extrudeStartLoops_.clear();
+    AdoptCurrentDocument();
+    RebuildKernelShapes();
+    SetStatus(!kept ? QStringLiteral("押し出し: 途中で作れなかったので、押す前の状態へ戻しました。")
+            : QStringLiteral("押し出し: 違う平面の輪郭を、平面 %1 組に分けて押し出しました(%2)。"
+                             "1 回の元に戻すで全部消えます。")
+                  .arg(static_cast<int>(pieces.size()))
+                  .arg(boolean ? QStringLiteral("順に足し引き")
+                               : QStringLiteral("部品 %1 個").arg(static_cast<int>(parts))));
+    return true;
+}
+
 //! 抱えている面の縁を、押し出しの輪郭にする。文書へは入れない。
 std::vector<kachakacha::v2::modeling::ExtrudeProfile> V2MainWindow::FaceProfilesNow() const
 {
@@ -587,6 +758,7 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
     // カーネルは outputs によらず内部で立体を作るので、
     // 返ってきたからといって文書へ入れてはいけない。
     kachakacha::v2::base::EntityId partId;
+    adoptedExtrudeParts_.clear();
     const std::size_t partCount = choice.makePart ? built.parts.size() : 0;
     // 新しい部品を N 個作るなら、部品ごとに自分の輪郭だけを持たせる。全部を持たせると、
     // 開き直したときにどれがどの輪郭か分からず、1 つの輪郭を消すと全部が作り直せなくなる。
@@ -612,6 +784,7 @@ bool V2MainWindow::AdoptExtrudeResult(const kachakacha::v2::app::ExtrudeChoice& 
         if (made.IsNil()) {
             return false;   // 1つでも入らなければ、全体を無かったことにする。
         }
+        adoptedExtrudeParts_.push_back(made);
         if (index == 0) {
             partId = made;
         }

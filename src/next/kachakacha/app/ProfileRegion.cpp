@@ -324,4 +324,37 @@ std::vector<base::EntityId> ProfileRegionEntityIds(const ProfileRegion& region)
     return ids;
 }
 
+std::vector<std::vector<std::size_t>> GroupProfileRegionsByPlane(
+    const std::vector<ProfileRegion>& regions, double limitMm)
+{
+    std::vector<std::vector<std::size_t>> groups;
+    const auto onPlane = [limitMm](const ProfileRegion& owner, const ProfileRegion& other) {
+        if (!owner.plane.valid || !other.plane.valid) {
+            return false;
+        }
+        // 向き: 法線どうしがほぼ平行(裏表は問わない)。
+        if (1.0 - std::abs(Dot(owner.plane.normal, other.plane.normal)) > 1.0e-9) {
+            return false;
+        }
+        return std::all_of(other.outer.sampled.begin(), other.outer.sampled.end(),
+            [&](const Vector3& point) {
+                return std::abs(Dot(point - owner.plane.origin, owner.plane.normal)) <= limitMm;
+            });
+    };
+    for (std::size_t index = 0; index < regions.size(); ++index) {
+        bool placed = false;
+        for (auto& group : groups) {
+            if (onPlane(regions[group.front()], regions[index])) {
+                group.push_back(index);
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            groups.push_back({index});
+        }
+    }
+    return groups;
+}
+
 } // namespace kachakacha::v2::app

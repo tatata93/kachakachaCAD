@@ -3,6 +3,8 @@
 #include "kachakacha/base/TestHarness.h"
 
 #include <algorithm>
+#include <cmath>
+#include <string>
 #include <numbers>
 
 using namespace kachakacha::v2;
@@ -109,6 +111,47 @@ KACHA_V2_TEST(profile_region, coincident_closed_wire_entities_stay_independent)
 }
 
 } // namespace
+
+KACHA_V2_TEST(profile_region, regions_are_grouped_by_the_plane_they_lie_on)
+{
+    // 押し出しの輪郭が違う平面にあるとき、平面ごとに別の押し出しにする(入力の数)。
+    Bench bench;
+    bench.Rectangle(0, 0, 30, 20);            // z = 0
+    bench.Rectangle(5, 5, 10, 10);            // z = 0 の穴(同じ領域)
+    bench.Rectangle(40, 0, 50, 10);           // z = 0 の別の領域
+    bench.Rectangle(0, 0, 8, 8, 12.0);        // z = 12(平行な別の平面)
+    // x = 60 の縦の四角(向きの違う平面)
+    bench.Line({60, 0, 0}, {60, 10, 0});
+    bench.Line({60, 10, 0}, {60, 10, 8});
+    bench.Line({60, 10, 8}, {60, 0, 8});
+    bench.Line({60, 0, 8}, {60, 0, 0});
+
+    const auto regions = app::DetectProfileRegions(bench.scene, GeometryTolerance::Default());
+    Require(regions.size() == 4, "領域は 4 つ(穴は数えない)");
+    const auto groups = app::GroupProfileRegionsByPlane(regions, 1.0e-5);
+    Require(groups.size() == 3, "平面は 3 つ(z = 0 / z = 12 / x = 60): "
+            + std::to_string(groups.size()));
+    std::size_t together = 0;
+    for (const auto& group : groups) {
+        together = std::max(together, group.size());
+        const auto& owner = regions[group.front()].plane;
+        for (const std::size_t index : group) {
+            for (const Vector3& point : regions[index].outer.sampled) {
+                Require(std::abs(geometry::Dot(point - owner.origin, owner.normal)) <= 1.0e-5,
+                    "同じ組の領域は同じ平面に載る");
+            }
+        }
+    }
+    Require(together == 2, "z = 0 の 2 つの領域が 1 組になる");
+
+    // 1 つの平面だけなら 1 組。
+    Bench flat;
+    flat.Rectangle(0, 0, 10, 10);
+    flat.Rectangle(20, 0, 30, 10);
+    const auto flatGroups = app::GroupProfileRegionsByPlane(
+        app::DetectProfileRegions(flat.scene, GeometryTolerance::Default()), 1.0e-5);
+    Require(flatGroups.size() == 1 && flatGroups.front().size() == 2, "同じ平面の 2 つは 1 組");
+}
 
 int main()
 {

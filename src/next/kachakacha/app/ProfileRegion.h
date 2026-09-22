@@ -9,6 +9,7 @@
 #include "kachakacha/geometry/GeometryTolerance.h"
 #include "kachakacha/modeling/SnapEngine.h"
 
+#include <cstddef>
 #include <vector>
 
 namespace kachakacha::v2::app {
@@ -46,5 +47,12 @@ struct ProfileRegion {
 //! 外周と穴が参照するEntityを重複なしで返す。
 [[nodiscard]] std::vector<base::EntityId> ProfileRegionEntityIds(
     const ProfileRegion& region);
+
+//! 領域を、載っている平面ごとの組に分ける(押し出しの輪郭が違う平面にあるとき、
+//! 平面ごとに別の押し出しにするため)。返すのは regions の添字の組。
+//! 向きがそろい(裏表は問わない)、外周の点がどれも組の最初の領域の平面から
+//! limitMm 以内なら同じ組。組の並びは、その組の最初の領域が出てきた順。
+[[nodiscard]] std::vector<std::vector<std::size_t>> GroupProfileRegionsByPlane(
+    const std::vector<ProfileRegion>& regions, double limitMm);
 
 } // namespace kachakacha::v2::app

@@ -25,6 +25,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -479,6 +480,141 @@ using kachakacha::v2::domain::Visibility;
         CountOfKind(window, EntityKind::Part) == 2 && TwoSeparateSolids(window));
 }
 
+//! 作業平面を、上面と平行に高さ z の面へ移す(次に引く矩形はその高さに載る)。
+void LiftWorkPlaneTo(V2MainWindow& window, double z)
+{
+    kachakacha::v2::modeling::WorkPlaneFrame lifted;
+    lifted.origin = {0.0, 0.0, z};
+    lifted.normal = {0.0, 0.0, 1.0};
+    lifted.uAxis = {1.0, 0.0, 0.0};
+    lifted.vAxis = {0.0, 1.0, 0.0};
+    window.Viewport().SetWorkPlane(lifted);
+}
+
+//! 押し出しの作り方(Feature)の数。
+[[nodiscard]] int ExtrudeFeatures(V2MainWindow& window)
+{
+    int count = 0;
+    for (const auto& feature : window.Session().GetDocument().Snapshot().features) {
+        count += std::get_if<ExtrudeDefinition>(&feature.definition) != nullptr ? 1 : 0;
+    }
+    return count;
+}
+
+//! 違う平面の輪郭(z = 0 と z = 30 の矩形)をまとめて選んで押すと、平面ごとに別の押し出しになる。
+//! 下見には両方の輪郭が出て、2 個の部品が 1 回の元に戻すで消え、1 回のやり直しで戻る。
+[[nodiscard]] bool CaseProfilesOnTwoPlanesExtrudePerPlane(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("下の矩形を引ける(z = 0)", DrawClosedRectangleAt(window, 0.15, 0.35, 0.35, 0.65))) {
+        return false;
+    }
+    LiftWorkPlaneTo(window, 30.0);
+    if (!Explain("上の矩形を引ける(z = 30、2 つとも選ぶ)",
+            DrawClosedRectangleAt(window, 0.60, 0.35, 0.85, 0.65))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 下見
+    bool low = false;
+    bool high = false;
+    for (const auto& loop : window.Viewport().ExtrudeHandlePreview()) {
+        if (loop.size() < 3) {
+            continue;
+        }
+        const auto at = [&loop](double z) {
+            return std::all_of(loop.begin(), loop.end(),
+                [z](const kachakacha::v2::geometry::Vector3& point) {
+                    return std::abs(point.z - z) < 1.0e-6;
+                });
+        };
+        low = low || at(0.0);
+        high = high || at(30.0);
+    }
+    if (!Explain("下見に両方の輪郭が出ている(見えていない輪郭で作らない)", low && high)
+        || !Explain("確定する前に、平面ごとに分けて押すと言う",
+            window.StatusText().contains(QStringLiteral("平面ごとに別の押し出し")))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 確定
+    if (!Explain((std::string("平面ごとに部品が 1 個ずつ、2 個できる(実際 ")
+                     + std::to_string(CountOfKind(window, EntityKind::Part)) + ")").c_str(),
+            CountOfKind(window, EntityKind::Part) == 2)
+        || !Explain("押し出しの作り方も平面ごとに 2 つ", ExtrudeFeatures(window) == 2)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    if (!Explain("1 回の元に戻すで 2 個とも消える",
+            CountOfKind(window, EntityKind::Part) == 0 && ExtrudeFeatures(window) == 0)) {
+        return false;
+    }
+    window.RunCommand("edit.redo");
+    if (!Explain("1 回のやり直しで 2 個とも戻る", CountOfKind(window, EntityKind::Part) == 2)) {
+        return false;
+    }
+    return Explain("保存して開き直しても 2 個",
+        window.SaveAndReopen(QStringLiteral("kacha_selftest_two_planes.kcd2"))
+            && CountOfKind(window, EntityKind::Part) == 2);
+}
+
+//! 立体に、違う高さの 2 つの輪郭を「足す」でまとめて押す。前の平面の結果を次の平面の相手に
+//! つなぐので、見えている部品は最後の 1 個で、2 つ目の押し出しは 1 つ目の結果を相手に持つ。
+[[nodiscard]] bool CaseAddOnTwoPlanesChainsTheResult(V2MainWindow& window)
+{
+    window.RunCommand("file.new");
+    if (!Explain("土台の矩形を引ける", DrawClosedRectangleAt(window, 0.20, 0.30, 0.80, 0.70))) {
+        return false;
+    }
+    window.RunCommand("part.extrude");   // 下見
+    window.ExtrudeDock().TypeDistanceMm(20.0);
+    window.RunCommand("part.extrude");   // 確定
+    const EntityId box = LastOfKind(window, EntityKind::Part);
+    if (!Explain("土台の立体ができる", !box.IsNil())) {
+        return false;
+    }
+    LiftWorkPlaneTo(window, 20.0);
+    if (!DrawClosedRectangleAt(window, 0.35, 0.40, 0.50, 0.60)) {
+        return false;
+    }
+    const EntityId first = LastOfKind(window, EntityKind::Wire);
+    // 2 つ目は土台の中の高さ(z = 18)。どちらの平面を先に押しても、結果は土台とつながる。
+    LiftWorkPlaneTo(window, 18.0);
+    if (!DrawClosedRectangleAt(window, 0.45, 0.40, 0.60, 0.60)) {
+        return false;
+    }
+    const EntityId second = LastOfKind(window, EntityKind::Wire);
+    kachakacha::v2::app::SelectionSet chosen;
+    chosen.entityIds = {box, first, second};
+    window.Viewport().SetSelection(chosen);
+    window.RunCommand("part.extrude");   // 下見
+    window.ExtrudeDock().ChooseBoolean(kachakacha::v2::modeling::ExtrudeBooleanMode::AddToPart);
+    window.RefreshExtrudeFromDock();
+    window.ExtrudeDock().TypeDistanceMm(10.0);
+    window.RunCommand("part.extrude");   // 確定
+    if (!Explain((std::string("押し出しの作り方が 3 つ(土台 + 平面ごとに 2 つ、実際 ")
+                     + std::to_string(ExtrudeFeatures(window)) + ")").c_str(),
+            ExtrudeFeatures(window) == 3)
+        || !Explain((std::string("見えている部品は最後の 1 個(実際 ")
+                        + std::to_string(VisibleParts(window)) + ")").c_str(),
+            VisibleParts(window) == 1)) {
+        return false;
+    }
+    // 2 つ目の押し出しの相手は、1 つ目の押し出しの結果(土台ではない)。
+    const auto& snapshot = window.Session().GetDocument().Snapshot();
+    const Feature* last = LastExtrude(snapshot);
+    const auto* definition = last != nullptr ? std::get_if<ExtrudeDefinition>(&last->definition)
+                                             : nullptr;
+    const bool chained = definition != nullptr && !definition->targets.empty()
+        && !(definition->targets.front() == box)
+        && MakerOf(snapshot, definition->targets.front()) != FeatureId{};
+    if (!Explain("2 つ目は 1 つ目の結果を相手にする(つないで足す)", chained)) {
+        return false;
+    }
+    window.RunCommand("edit.undo");
+    return Explain("1 回の元に戻すで土台だけに戻る",
+        ExtrudeFeatures(window) == 1 && VisibleParts(window) == 1
+            && CountOfKind(window, EntityKind::Part) == 1);
+}
+
 } // namespace
 
 std::vector<SelfTestCase> ExtrudeGraphCases()
@@ -495,6 +631,10 @@ std::vector<SelfTestCase> ExtrudeGraphCases()
             CaseRefusedExtrudeLeavesNoTrace},
         {"輪郭 2 つの押し出しは部品ごとに自分の輪郭を持ち開き直しても別の場所にある",
             CaseTwoOutlinesMakeTwoPartsThatKeepTheirOwnOutline},
+        {"違う平面の輪郭は平面ごとに押し出し下見に全部出て1回で戻る",
+            CaseProfilesOnTwoPlanesExtrudePerPlane},
+        {"違う平面の輪郭の足すは前の結果を次の相手につなぎ1回で戻る",
+            CaseAddOnTwoPlanesChainsTheResult},
     };
 }
 

@@ -24,6 +24,7 @@
 #include "kachakacha/app/ToolFooter.h"
 #include "kachakacha/app/ExtrudeOptions.h"
 #include "kachakacha/app/ExtrudePlan.h"
+#include "kachakacha/app/ProfileRegion.h"
 #include "kachakacha/app/SceneBuilder.h"
 #include "kachakacha/app/Selection.h"
 #include "kachakacha/geometry/CurveSampling.h"
@@ -57,6 +58,35 @@ constexpr int kSamplesPerCurve = 16;
     return points;
 }
 
+//! 下見の輪郭ごとの押す向き。同じ平面の輪郭(穴も)は、その平面で最初の輪郭の向きにそろえる。
+//! 確定は平面ごとに 1 つの向きで押すので、穴だけ逆へ押す下見を出さない。
+template<class DirectionOf>
+[[nodiscard]] std::vector<Vector3> DirectionsPerOutline(
+    const std::vector<std::vector<Vector3>>& outlines, double limitMm, DirectionOf&& directionOf)
+{
+    std::vector<Vector3> directions;
+    std::vector<kachakacha::v2::geometry::PlaneFit> planes;
+    for (const auto& outline : outlines) {
+        const auto plane = kachakacha::v2::geometry::FitPlane(outline);
+        std::size_t same = planes.size();
+        for (std::size_t k = 0; k < planes.size() && plane.valid; ++k) {
+            const auto& other = planes[k];
+            if (other.valid
+                && 1.0 - std::abs(kachakacha::v2::geometry::Dot(plane.normal, other.normal)) <= 1.0e-9
+                && std::all_of(outline.begin(), outline.end(), [&](const Vector3& point) {
+                       return std::abs(kachakacha::v2::geometry::Dot(point - other.origin,
+                                  other.normal)) <= limitMm;
+                   })) {
+                same = k;
+                break;
+            }
+        }
+        directions.push_back(same < planes.size() ? directions[same] : directionOf(outline));
+        planes.push_back(plane);
+    }
+    return directions;
+}
+
 } // namespace
 
 void V2MainWindow::BeginExtrudePreview()
@@ -79,22 +109,27 @@ void V2MainWindow::BeginExtrudePreview()
         return;
     }
     extrudeSnapshot_ = std::move(snapshot);
+    // 下見には **写しの輪郭を全部** 出す。先頭だけ出すと、見えていない輪郭まで作る(§9)。
     // 面の押し引きは、抱えている縁を使う。文書にはまだ入れていない(R1 B2)。
-    std::vector<kachakacha::v2::geometry::CurveSegment> curves;
-    if (facePushPull_ && !faceProfileLoops_.empty()) {
-        curves = faceProfileLoops_.front();
-    } else if (!extrudeSnapshot_->profiles.empty()) {
-        // Snapshot は選んだ複数線を1つの論理輪郭へ並べ直している。
-        // 生の選択順を読み直すと、下見だけが線を飛び回り確定形状と食い違う。
-        curves = extrudeSnapshot_->profiles.front().segments;
+    // 写しは選んだ複数線を論理輪郭へ並べ直している。生の選択順を読み直すと、
+    // 下見だけが線を飛び回り確定形状と食い違う。
+    extrudeOutlines_.clear();
+    if (facePushPull_) {
+        for (const auto& loop : faceProfileLoops_) {
+            extrudeOutlines_.push_back(SampleChain(loop));
+        }
+    } else {
+        for (const auto& profile : extrudeSnapshot_->profiles) {
+            extrudeOutlines_.push_back(SampleChain(profile.segments));
+        }
     }
-    if (curves.empty()) {
+    extrudeOutlines_.erase(std::remove_if(extrudeOutlines_.begin(), extrudeOutlines_.end(),
+                               [](const auto& loop) { return loop.empty(); }),
+        extrudeOutlines_.end());
+    if (extrudeOutlines_.empty()) {
         return;
     }
-    const std::vector<Vector3> outline = SampleChain(curves);
-    if (outline.empty()) {
-        return;
-    }
+    const std::vector<Vector3> outline = extrudeOutlines_.front();
     // 矢印の根元は輪郭の重心。端に出すと、どの輪郭のものか分からない。
     Vector3 center{};
     for (const Vector3& point : outline) {
@@ -134,9 +169,22 @@ void V2MainWindow::BeginExtrudePreview()
     viewport_->SetExtrudePreviewFaces(ExtrudePreviewFaces(handle.distanceMm));
     // 右の棚に、CADが何をどう読んだかと、いま変えられるものを出す。
     ShowExtrudeShelf(plan);
-    SetStatus(QStringLiteral("押し出し\n%1\n矢印を引くか、数の棚の「押し出し距離」で"
+    // 違う平面の輪郭は平面ごとに別の押し出しになる。確定する前に言う(黙って分けない)。
+    QString planes;
+    if (!facePushPull_) {
+        const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+        const auto groups = kachakacha::v2::app::GroupProfileRegionsByPlane(
+            kachakacha::v2::app::DetectProfileRegions(session_->Scene(), plan.profiles, tolerance),
+            std::max(tolerance.modelLinearMm * 10.0, 1.0e-5));
+        if (groups.size() > 1) {
+            planes = QStringLiteral("\n輪郭は %1 つの平面にあります。平面ごとに別の押し出しにします"
+                                    "(1 回の元に戻すで全部消えます)。")
+                         .arg(static_cast<int>(groups.size()));
+        }
+    }
+    SetStatus(QStringLiteral("押し出し\n%1%2\n矢印を引くか、数の棚の「押し出し距離」で"
                              "決めてください。Enter で確定、Esc でやめます。")
-            .arg(ExtrudePlanTextJa()));
+            .arg(ExtrudePlanTextJa(), planes));
 }
 
 //! 押し出す向き。**ここだけが決める。**
@@ -181,7 +229,7 @@ Vector3 V2MainWindow::ExtrudeBaseDirectionNow() const
 //! 当てる。向きの符号を作業平面に合わせるのも、矢印が今までと同じ側を向くため。
 Vector3 V2MainWindow::ExtrudeDirectionForMode(
     kachakacha::v2::modeling::ExtrudeDirectionMode mode,
-    const Vector3& custom) const
+    const Vector3& custom, const std::vector<Vector3>* outline) const
 {
     using kachakacha::v2::modeling::ExtrudeDirectionMode;
     const Vector3 workPlaneNormal = viewport_->WorkPlane().normal;
@@ -224,7 +272,9 @@ Vector3 V2MainWindow::ExtrudeDirectionForMode(
     //
     // 作業平面の上に引いた輪郭では、この法線は作業平面の法線と同じになる。
     // 向きは作業平面の法線に合わせておく。矢印の向きが今までと変わらない。
-    const auto plane = kachakacha::v2::geometry::FitPlane(extrudeOutline_);
+    // 輪郭が違う平面にあるときは、輪郭ごとに(平面ごとの押し出し)。ふだんは下見の先頭の輪郭。
+    const auto plane =
+        kachakacha::v2::geometry::FitPlane(outline != nullptr ? *outline : extrudeOutline_);
     if (plane.valid && usable(plane.normal)) {
         Vector3 fitted = plane.normal;
         if (kachakacha::v2::geometry::Dot(fitted, workPlaneNormal) < 0.0) {
@@ -238,33 +288,50 @@ Vector3 V2MainWindow::ExtrudeDirectionForMode(
 std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewLoops(double distanceMm) const
 {
     std::vector<std::vector<Vector3>> loops;
-    if (extrudeOutline_.empty()) {
+    const auto& outlines = extrudeOutlines_.empty()
+        ? std::vector<std::vector<Vector3>>{extrudeOutline_}
+        : extrudeOutlines_;
+    if (outlines.empty() || outlines.front().empty()) {
         return loops;
     }
-    const Vector3 offset = ExtrudeDirectionNow() * distanceMm;
-    // 押し出した先の輪郭。
-    std::vector<Vector3> moved;
-    moved.reserve(extrudeOutline_.size());
-    for (const Vector3& point : extrudeOutline_) {
-        moved.push_back(point + offset);
-    }
+    // 輪郭ごとの向き。輪郭に垂直のときは平面ごとに違う(違う平面の輪郭は平面ごとに押す)。
+    const auto& tolerance = session_->GetDocument().Snapshot().settings.tolerance;
+    const auto directions = DirectionsPerOutline(outlines,
+        std::max(tolerance.modelLinearMm * 10.0, 1.0e-5), [this](const std::vector<Vector3>& outline) {
+            if (facePushPull_ || extrudeChoice_.direction != ExtrudeDirectionMode::ProfileNormal) {
+                return ExtrudeDirectionNow();
+            }
+            const Vector3 base = ExtrudeDirectionForMode(
+                extrudeChoice_.direction, extrudeChoice_.customDirection, &outline);
+            return extrudeChoice_.reversed ? base * -1.0 : base;
+        });
     // **下見は「選んだ出力」を映す**(オーナー指示)。
     // 「押し出し先ワイヤーのみ」で側面まで描くと、作られないものが見える。
     //
     // ただし元の輪郭と押し出し先の輪郭は、何を選んでいても必ず出す。
     // 出さないと、どこからどこまで押しているのかが読めない
     // (オーナー指示 §8「元輪郭 / 終端輪郭 / 方向 / 距離 が一目で区別できること」)。
-    loops.push_back(extrudeOutline_);
-    loops.push_back(moved);
-    // 側面の線。ソリッドを作るか、側面ワイヤーを頼まれたときだけ出す。
-    // 全部の点に出すと真っ黒になるので、間引いて出す。
+    // 並びは輪郭ごとに「元の輪郭・押し出した先・側面の線」(先頭の 2 本は先頭の輪郭)。
     const bool showSides = extrudeChoice_.makePart || extrudeChoice_.makeSideBoundaryWires;
-    if (!showSides) {
-        return loops;
-    }
-    const std::size_t step = std::max<std::size_t>(1, extrudeOutline_.size() / 12);
-    for (std::size_t index = 0; index < extrudeOutline_.size(); index += step) {
-        loops.push_back({extrudeOutline_[index], extrudeOutline_[index] + offset});
+    for (std::size_t k = 0; k < outlines.size(); ++k) {
+        const auto& outline = outlines[k];
+        const Vector3 offset = directions[k] * distanceMm;
+        std::vector<Vector3> moved;
+        moved.reserve(outline.size());
+        for (const Vector3& point : outline) {
+            moved.push_back(point + offset);
+        }
+        loops.push_back(outline);
+        loops.push_back(std::move(moved));
+        // 側面の線。ソリッドを作るか、側面ワイヤーを頼まれたときだけ出す。
+        // 全部の点に出すと真っ黒になるので、間引いて出す。
+        if (!showSides) {
+            continue;
+        }
+        const std::size_t step = std::max<std::size_t>(1, outline.size() / 12);
+        for (std::size_t index = 0; index < outline.size(); index += step) {
+            loops.push_back({outline[index], outline[index] + offset});
+        }
     }
     return loops;
 }
@@ -276,8 +343,29 @@ std::vector<std::vector<Vector3>> V2MainWindow::ExtrudePreviewFaces(double dista
     if (extrudeOutline_.empty() || !extrudeChoice_.makePart) {
         return {};
     }
-    return kachakacha::v2::app::ExtrudeSweptFaces(extrudeOutline_,
-        ExtrudeDirectionNow() * distanceMm);
+    // 押した先の輪郭(下見の線の 2 本目ごと)から、輪郭ごとの押し量を取り直す。
+    // 向きの決め方を 2 か所に書かない。
+    const auto loops = ExtrudePreviewLoops(distanceMm);
+    const auto& outlines = extrudeOutlines_.empty()
+        ? std::vector<std::vector<Vector3>>{extrudeOutline_}
+        : extrudeOutlines_;
+    std::vector<std::vector<Vector3>> faces;
+    std::size_t at = 0;
+    for (const auto& outline : outlines) {
+        if (at + 1 >= loops.size() || loops[at].empty() || loops[at + 1].empty()) {
+            break;
+        }
+        const Vector3 offset = loops[at + 1].front() - loops[at].front();
+        const auto swept = kachakacha::v2::app::ExtrudeSweptFaces(outline, offset);
+        faces.insert(faces.end(), swept.begin(), swept.end());
+        // 次の輪郭の元の線まで進む(元・先の 2 本のあとは、2 点だけの側面の線)。
+        // 輪郭の折れ線は 1 本の曲線でも 17 点あるので、側面の線と取り違えない。
+        at += 2;
+        while (at < loops.size() && loops[at].size() == 2) {
+            ++at;
+        }
+    }
+    return faces;
 }
 
 void V2MainWindow::UpdateExtrudePreview(double distanceMm)
@@ -299,6 +387,7 @@ void V2MainWindow::UpdateExtrudePreview(double distanceMm)
 void V2MainWindow::EndExtrudePreview()
 {
     extrudeOutline_.clear();
+    extrudeOutlines_.clear();
     // 留め置いた写しも捨てる。次の押し出しが前の入力で作られないように。
     extrudeSnapshot_.reset();
     // 拾い方もふだんへ戻す。道具が終われば、特別な並べ替えはしない。

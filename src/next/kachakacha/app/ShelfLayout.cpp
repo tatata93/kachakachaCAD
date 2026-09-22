@@ -28,6 +28,7 @@ std::string_view ShelfNameJa(Shelf shelf) noexcept
     case Shelf::Array:      return "配列";
     case Shelf::SurfaceEdit: return "面の編集";
     case Shelf::SurfaceAnalysis: return "面の解析";
+    case Shelf::Solid:      return "立体を作る";
     }
     return "なし";
 }
@@ -39,12 +40,14 @@ const std::vector<Shelf>& AllShelves()
         Shelf::GuideTable, Shelf::Fabrication, Shelf::Export, Shelf::Grid, Shelf::Display,
         Shelf::Parameter, Shelf::Pattern, Shelf::Part, Shelf::Extrude, Shelf::Surface,
         Shelf::Boolean, Shelf::Thicken, Shelf::Array, Shelf::SurfaceEdit, Shelf::SurfaceAnalysis,
+        Shelf::Solid,
     };
     return all;
 }
 
 std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
-    bool surfacing, bool booleaning, bool thickening, bool editingSurface, bool analyzing)
+    bool surfacing, bool booleaning, bool thickening, bool editingSurface, bool analyzing,
+    bool solidifying)
 {
     // 下見を出している間は、その操作の棚が前に出る。
     // **道具やモードより優先する。** いま手をつけている操作の欄が
@@ -72,6 +75,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
     // 「面の編集」も同じ。縁・面・線の欄と滑らかさが見えていなければ、確定も触れない。
     if (editingSurface) {
         return {Shelf::SurfaceEdit};
+    }
+    // 「立体を作る」も同じ。輪郭・軸・経路の欄が見えていなければ、選び直しも確定も触れない。
+    if (solidifying) {
+        return {Shelf::Solid};
     }
     // 「面の解析」は道具の棚より後ろ。道具を持てば道具の棚が前に出る(解析の表示は残る)。
     if (analyzing) {
@@ -144,10 +151,10 @@ std::vector<Shelf> ShelvesFor(UiMode mode, DrawingTool tool, bool extruding,
 }
 
 Shelf FrontShelfFor(UiMode mode, DrawingTool tool, bool extruding, bool surfacing,
-    bool booleaning, bool thickening, bool editingSurface, bool analyzing)
+    bool booleaning, bool thickening, bool editingSurface, bool analyzing, bool solidifying)
 {
     const std::vector<Shelf> shelves = ShelvesFor(mode, tool, extruding, surfacing, booleaning,
-        thickening, editingSurface, analyzing);
+        thickening, editingSurface, analyzing, solidifying);
     return shelves.empty() ? Shelf::None : shelves.front();
 }
 

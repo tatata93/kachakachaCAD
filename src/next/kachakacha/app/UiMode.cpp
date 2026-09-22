@@ -78,7 +78,8 @@ const std::vector<std::string_view>& CommandIdsForMode(UiMode mode)
         "guide.build", "guide.clear",
     };
     static const std::vector<std::string_view> part{
-        "part.extrude", "part.thicken", "part.thickness_placement", "part.thicken_to_plane",
+        "part.extrude", "part.revolve", "part.loft_solid", "part.sweep",
+        "part.thicken", "part.thickness_placement", "part.thicken_to_plane",
         "part.surface_jig",
         "part.from_wire_cage",
         "part.boolean_add",

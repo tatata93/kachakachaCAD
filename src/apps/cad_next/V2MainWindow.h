@@ -95,6 +95,7 @@ class QWidget;
 class V2OperationPanelHost;
 class V2SurfaceEditTool;
 class V2SurfaceAnalysisTool;
+class V2SolidTool;
 
 //! 見た目。
 enum class UiTheme {
@@ -105,6 +106,7 @@ enum class UiTheme {
 class V2MainWindow final : public QMainWindow {
     friend class V2SurfaceEditTool;       // 面の編集の道具(状態と手順は向こうが持つ)
     friend class V2SurfaceAnalysisTool;   // 面の解析の道具(同じ)
+    friend class V2SolidTool;             // 立体を作る(回転体・ロフト立体・スイープ。同じ)
 public:
     V2MainWindow();
     ~V2MainWindow() override;
@@ -269,6 +271,7 @@ public:
     [[nodiscard]] V2ThickenDock& ThickenDock() { return *thickenDock_; }
     [[nodiscard]] V2SurfaceEditTool& SurfaceEdit() { return *surfaceEdit_; }
     [[nodiscard]] V2SurfaceAnalysisTool& SurfaceAnalysis() { return *surfaceAnalysis_; }
+    [[nodiscard]] V2SolidTool& SolidTool() { return *solidTool_; }
     //! いま「厚み」の道具が動いているか。試験から見る。
     [[nodiscard]] bool ThickenShelfShown() const noexcept { return thickenShelfShown_; }
     [[nodiscard]] const kachakacha::v2::app::ThickenInputState& ThickenInput() const
@@ -1045,6 +1048,7 @@ private:
     V2ThickenDock* thickenDock_ = nullptr;
     std::unique_ptr<V2SurfaceEditTool> surfaceEdit_;
     std::unique_ptr<V2SurfaceAnalysisTool> surfaceAnalysis_;
+    std::unique_ptr<V2SolidTool> solidTool_;
     //! 自分で選択を入れ替えている最中(その便りは読まない)。
     bool surfaceMirroring_ = false;
     using SurfaceSnapshot = V2SurfaceSnapshot;   // 形と説明は V2MainWindowTypes.h

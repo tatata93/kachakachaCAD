@@ -94,6 +94,11 @@ std::vector<EntityId> DefinitionEntityReferences(const domain::FeatureDefinition
                 out.Add(value.surfaces);
             } else if constexpr (std::is_same_v<T, domain::TransformPartDefinition>) {
                 out.Add(value.source);
+            } else if constexpr (std::is_same_v<T, domain::CreateSolidDefinition>) {
+                out.Add(value.profiles);
+                out.Add(value.axis);
+                out.Add(value.path);
+                out.Add(value.targets);
             }
         },
         definition);

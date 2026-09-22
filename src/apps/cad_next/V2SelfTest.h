@@ -147,6 +147,12 @@ void Note(const char* what);
 //! 部品の配置(HP-PL、P-18)。移動・ミラー・パターン。
 [[nodiscard]] std::vector<SelfTestCase> PartPlaceCases();
 
+//! 立体を作る(HP-SO、P-08/P-09)。回転体・スイープ・ロフト立体・断ると足す。
+[[nodiscard]] std::vector<SelfTestCase> SolidCases();
+
+//! 上面 XY から決めた距離だけ離した作業平面を作って使う(断面を高さ違いに描くとき)。
+[[nodiscard]] bool UseTopPlaneOffsetBy(V2MainWindow& window, double offsetMm);
+
 //! 道具の棚の共通の枠(HP-PF、C-10)。節の並び・キャンセルと確定・作図の共通。
 [[nodiscard]] std::vector<SelfTestCase> PanelFrameCases();
 

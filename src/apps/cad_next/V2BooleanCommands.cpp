@@ -10,6 +10,7 @@
 //! 何がどの欄に入るかは core(app/BooleanInputState)が決める。
 
 #include "V2MainWindow.h"
+#include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -79,6 +80,13 @@ bool V2MainWindow::BeginToolFirstCommand(std::string_view id)
     if (id == "part.thicken") {
         ClearPendingCommand();
         RunThickenTool();
+        return true;
+    }
+    // 立体を作る(回転体・ロフト立体・スイープ)も道具から始める。何も選んでいなくても棚が出て、
+    // 3D で線を押すと種類で欄に入る(P-08/P-09)。構えている間の2度目は確定。
+    if (solidTool_ != nullptr && V2SolidTool::Handles(id)) {
+        ClearPendingCommand();
+        solidTool_->Begin(id);
         return true;
     }
     // 面の編集も道具から始める。何も選んでいなくても棚が出て、3D で面・縁・線を押せる。

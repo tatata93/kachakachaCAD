@@ -369,6 +369,16 @@ template<class Id>
         definition["vector"] = WriteVector(place->vectorArgument);
         definition["point"] = WriteVector(place->pointArgument);
         definition["angleRad"] = JsonValue::Number(place->angleRad);
+    } else if (const auto* solid =
+                   std::get_if<domain::CreateSolidDefinition>(&feature.definition)) {
+        definition["method"] = JsonValue::Number(static_cast<double>(solid->method));
+        definition["profiles"] = WriteIdArray(solid->profiles);
+        definition["axis"] = WriteOptionalId(solid->axis);
+        definition["path"] = WriteIdArray(solid->path);
+        definition["angleRad"] = JsonValue::Number(solid->angleRad);
+        definition["symmetric"] = JsonValue::Bool(solid->symmetric);
+        definition["booleanMode"] = JsonValue::Number(static_cast<double>(solid->booleanMode));
+        definition["targets"] = WriteIdArray(solid->targets);
     } else if (const auto* pattern =
                    std::get_if<domain::CreatePatternDefinition>(&feature.definition)) {
         definition["fabricationModels"] = WriteIdArray(pattern->fabricationModels);

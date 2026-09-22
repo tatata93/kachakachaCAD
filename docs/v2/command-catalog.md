@@ -132,6 +132,9 @@ parameter schemaのdiscriminatorにする。
 | `wire.wrap_project` | 回り込み投影 | ワイヤー1以上 + 形状ガイドの面2以上、作業平面の向き | 面ごとの区間に分けた ProjectWire を区間の数だけ(ひとまとまり)。元の線は残す。FAB-J003 / FAB-J001 | AT-FAB-006 |
 | `wire.project_surface` | 曲面へ投影 | ワイヤー1以上と形状ガイド1。作業平面の向きに沿って落とす | derived Wire(面の上の曲線。形が無いときだけ折れ線) | AT-FAB-013, AT-SRF-010 |
 | `part.extrude` | 押し出し | profile、方向、終端、出力、演算 | Part/GuideSurface/Wire/Part+Wire | AT-EXT-001から008, AT-UIX-013 |
+| `part.revolve` | 回転体(立体) | 道具から始める(0個から押せる)。閉じた輪郭 1以上(外周と穴)+ 回転軸の直線 1、作り方(全回転/角度指定/対称回転)、操作(新しい部品/足す/引く。足す・引くは相手の Part 1) | Part(CreateSolid。体積は Pappus の予測と突き合わせ、合わなければ KER-O002 で断る)。1 回で戻る | AT-SOL-001 |
+| `part.loft_solid` | ロフト立体 | 道具から始める。閉じた断面 2以上(何個でも。押した順に通す)、操作(新しい部品/足す/引く) | Part(CreateSolid)。ガイド付き・中心線付きは押せない形で理由を出す | AT-SOL-002 |
+| `part.sweep` | スイープ | 道具から始める。閉じた輪郭 1以上 + 経路の線 1以上(1 本につながる並び。輪郭の平面から始まる)、操作(新しい部品/足す/引く) | Part(CreateSolid。姿勢は経路に追従)。ねじれ指定・ガイド付きは押せない形で理由を出す | AT-SOL-003 |
 | `part.thicken` | 面に厚みを付ける | 道具から始める(0個から押せる)。3Dで形状ガイドの面を選ぶ(何枚でも)、厚み、作り方(外側/中央/内側/平面まで) | Part を面ごとに 1 つ(まとめて 1 回で戻る) | AT-EXT-001 |
 | `part.surface_jig` | 治具を作る | 形状ガイドの面1つ以上(何枚でも)、治具のすき間、治具の厚み(符号で表側/裏側) | 面ごとに当たり面(OffsetGuide、すき間 0 なら作らない)+ 当て板(ThickenSurface)を 1 組、全部をひとまとまりで。JIG-E001〜E003 | AT-EXT-001 |
 | `part.thickness_placement` | 厚みの付け方 | 常時。外側→中央→内側の順に切り替える | 次の厚み付けの付け方 | AT-EXT-001 |

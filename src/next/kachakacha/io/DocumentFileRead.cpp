@@ -693,6 +693,19 @@ void ReadDefinition(Loader& loader, Feature& feature, const JsonValue& definitio
         feature.definition = std::move(made);
         break;
     }
+    case FeatureType::CreateSolid: {
+        domain::CreateSolidDefinition made;
+        made.method = static_cast<int>(loader.NumberOr(definition, "method", 0.0));
+        made.profiles = ReadIdArray(loader, definition, "profiles", where);
+        made.axis = loader.ParseOptionalId<EntityId>(definition.Find("axis"), where + ".axis");
+        made.path = ReadIdArray(loader, definition, "path", where);
+        made.angleRad = loader.NumberOr(definition, "angleRad", 6.283185307179586);
+        made.symmetric = loader.BoolOr(definition, "symmetric", false);
+        made.booleanMode = static_cast<int>(loader.NumberOr(definition, "booleanMode", 0.0));
+        made.targets = ReadIdArray(loader, definition, "targets", where);
+        feature.definition = std::move(made);
+        break;
+    }
     case FeatureType::CreatePattern: {
         domain::CreatePatternDefinition made;
         made.fabricationModels = ReadIdArray(loader, definition, "fabricationModels", where);

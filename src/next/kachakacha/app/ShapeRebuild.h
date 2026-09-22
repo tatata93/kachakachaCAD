@@ -36,6 +36,8 @@ enum class ShapeRebuildKind {
     EditSurface,
     //! 部品の配置(移動・回転・鏡映・複製・並べる)。元の部品が作り直された後に作り直す。
     TransformPart,
+    //! 立体の作成(回転体・ロフト立体・スイープ)。輪郭のワイヤーから作り直す。
+    Solid,
 };
 
 [[nodiscard]] std::string_view ShapeRebuildKindNameJa(ShapeRebuildKind kind) noexcept;

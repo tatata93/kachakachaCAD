@@ -1325,34 +1325,6 @@ namespace {
             && !window.ShelfShown(Shelf::Surface));
 }
 
-//! 上面から `offsetMm` 離した作業平面を作って、使う状態にする(場面づくり)。
-[[nodiscard]] bool UseTopPlaneOffsetBy(V2MainWindow& window, double offsetMm)
-{
-    window.SetWorkPlaneChooser({});
-    window.Viewport().SetSelection(kachakacha::v2::app::SelectionSet{});
-    window.RunCommand("workplane.create");
-    V2WorkPlaneDock* dock = window.WorkPlaneDock();
-    if (dock == nullptr) {
-        return false;
-    }
-    const auto top = kachakacha::v2::app::OriginPlaneId(
-        window.Session().GetDocument().Snapshot(),
-        kachakacha::v2::modeling::StandardPlaneKind::XY);
-    if (!top.has_value()) {
-        return false;
-    }
-    kachakacha::v2::app::WorkPlaneChoice choice;
-    choice.method = kachakacha::v2::modeling::WorkPlaneMethod::OffsetFromPlane;
-    choice.referencePlaneId = top;
-    choice.offsetMm = offsetMm;
-    dock->SetChoice(choice);
-    if (!dock->CanCreate()) {
-        return false;
-    }
-    dock->PressCreate();
-    return std::abs(window.Viewport().WorkPlane().origin.z - offsetMm) < 1.0e-6;
-}
-
 //! 保存される作り方に「断面順の手動固定」が残っているか。
 [[nodiscard]] bool GuideSurfaceLockedInDocument(V2MainWindow& window)
 {

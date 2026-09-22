@@ -1,4 +1,5 @@
 #include "V2MainWindow.h"
+#include "V2SolidTool.h"
 #include "V2SurfaceAnalysisTool.h"
 #include "V2SurfaceEditTool.h"
 
@@ -297,6 +298,10 @@ void V2MainWindow::HandleSelectionChanged()
     // 面の編集中の素のクリックは縁・面・線の欄へ入る(押し直すと外れる)。
     if (surfaceEdit_ != nullptr) {
         surfaceEdit_->HandleSelectionChanged();
+    }
+    // 立体を作る最中の素のクリックは輪郭・軸・経路・相手の欄へ(種類で決まる。押し直すと外れる)。
+    if (solidTool_ != nullptr) {
+        solidTool_->HandleSelectionChanged();
     }
     // 製作モードで部材を押したら「対象部材」欄をその番号にする(F-05/06/07)。
     RefreshFabricationPartPickForSelectionChange();
@@ -750,6 +755,7 @@ void V2MainWindow::AdoptDocument(kachakacha::v2::document::DocumentSnapshot snap
     if (approxShelfShown_) { EndApprox(); }
     if (booleanShelfShown_) { EndBoolean(); }
     if (thickenShelfShown_) { EndThicken(); }
+    if (solidTool_ != nullptr && solidTool_->Active()) { solidTool_->End(); }
     // 線を場面へ並べ直す。見ている場所は変えない。
     session_->SetScene(kachakacha::v2::app::RebuildSceneKeepingView(session_->Scene(),
         session_->GetDocument().Snapshot(), *ids_));

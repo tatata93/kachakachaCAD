@@ -102,6 +102,8 @@ namespace {
         {"surface.refit", "面の作り直し"},
         {"part.thicken", "厚み"},
         {"part.boolean_add", "足す"},
+        {"part.revolve", "回転体"},
+        {"part.loft_solid", "ロフト立体"},
         {"wire.chamfer", "C面取り"},
         {"fabrication.create", "近似"},
     };

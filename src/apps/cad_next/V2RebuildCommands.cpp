@@ -10,6 +10,7 @@
 //! ここはその段取りに従って、作ったときと同じ道をもう一度通すだけである。
 
 #include "V2MainWindow.h"
+#include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
 #include "kachakacha/app/ShapeRebuild.h"
@@ -290,6 +291,9 @@ void V2MainWindow::RebuildKernelShapes()
             break;
         case kachakacha::v2::app::ShapeRebuildKind::TransformPart:
             ok = RebuildTransformPartShape(*feature, step.outputEntityId);
+            break;
+        case kachakacha::v2::app::ShapeRebuildKind::Solid:
+            ok = solidTool_ != nullptr && solidTool_->Rebuild(*feature, step.outputEntityId);
             break;
         }
         if (ok) {

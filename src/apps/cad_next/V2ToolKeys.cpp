@@ -17,6 +17,7 @@
 //! (オーナー指示 §9)。
 
 #include "V2MainWindow.h"
+#include "V2SolidTool.h"
 #include "V2SurfaceEditTool.h"
 
 #include "V2Viewport.h"
@@ -56,7 +57,8 @@ bool V2MainWindow::ToolWantsConfirmKeys() const
         || surfaceShelfShown_ || approxShelfShown_ || booleanShelfShown_
         || thickenShelfShown_ || cornerPreviewShown_
         || ShelfShown(kachakacha::v2::app::Shelf::Array)
-        || (surfaceEdit_ != nullptr && surfaceEdit_->Active());
+        || (surfaceEdit_ != nullptr && surfaceEdit_->Active())
+        || (solidTool_ != nullptr && solidTool_->Active());
 }
 
 bool V2MainWindow::HandleToolKey(int key, QObject* target)
@@ -113,6 +115,10 @@ bool V2MainWindow::HandleToolKey(int key, QObject* target)
     }
     if (surfaceEdit_ != nullptr && surfaceEdit_->Active()) {
         return surfaceEdit_->HandleKey(key);
+    }
+    // 立体を作る。角度の欄は打つたびに下見を作り直すので、打ちかけの取り合いは無い。
+    if (solidTool_ != nullptr && solidTool_->Active()) {
+        return solidTool_->HandleKey(key);
     }
     if (ShelfShown(kachakacha::v2::app::Shelf::Array)) {
         // 配列の棚(D-23)。打ち込む欄との取り合いは無い。Enter は確定、Esc はやめる。

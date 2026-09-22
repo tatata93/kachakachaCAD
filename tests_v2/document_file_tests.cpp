@@ -594,6 +594,40 @@ KACHA_V2_TEST(documentFile, 部品の配置の作り方が往復する)
         "鏡の面と角度が戻る");
 }
 
+KACHA_V2_TEST(documentFile, 立体の作成の作り方が往復する)
+{
+    // P-08/P-09: 回転体・ロフト立体・スイープは 1 つの種類(method が作り方を持つ)。
+    DocumentFile original = MakeSampleDocument();
+    kachakacha::v2::domain::Feature feature;
+    kachakacha::v2::base::DeterministicIdGenerator ids{5151};
+    feature.id = ids.NextTyped<kachakacha::v2::base::IdKind::Feature>();
+    feature.type = FeatureType::CreateSolid;
+    feature.displayName = "回転体";
+    kachakacha::v2::domain::CreateSolidDefinition solid;
+    solid.method = 0;
+    solid.profiles = {original.snapshot.entities[2].id};
+    solid.axis = original.snapshot.entities[1].id;
+    solid.angleRad = 1.25;
+    solid.symmetric = true;
+    solid.booleanMode = 2;
+    solid.targets = {original.snapshot.entities[0].id};
+    feature.definition = solid;
+    original.snapshot.features.push_back(feature);
+    const auto read = ReadDocumentJson(WriteDocumentJson(original));
+    Require(read.HasValue(), "読めること");
+    const kachakacha::v2::domain::CreateSolidDefinition* back = nullptr;
+    for (const auto& candidate : read.Value().snapshot.features) {
+        if (candidate.type == FeatureType::CreateSolid) {
+            back = std::get_if<kachakacha::v2::domain::CreateSolidDefinition>(&candidate.definition);
+        }
+    }
+    Require(back != nullptr, "立体の作成の作り方が戻る");
+    Require(back->method == 0 && back->profiles == solid.profiles && back->axis == solid.axis
+            && back->path.empty(), "輪郭と軸");
+    Require(back->angleRad == 1.25 && back->symmetric && back->booleanMode == 2
+            && back->targets == solid.targets, "角度・対称・足し引きの相手");
+}
+
 KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
 {
     const DocumentFile original = MakeSampleDocument();

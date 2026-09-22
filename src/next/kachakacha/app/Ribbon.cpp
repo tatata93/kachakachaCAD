@@ -106,11 +106,9 @@ const std::vector<RibbonCategory>& PartCategories()
 {
     static const std::vector<RibbonCategory> categories{
         {"create", "作成",
-            {Tool("押し出し", "part.extrude"),
-                Blocked("回転体", "立体の回転体はまだ作れません。作図モードの面作成「回転面」で面を作り、"
-                                  "「厚み」で立体にしてください"),
-                Blocked("ロフト立体", "ロフト立体はまだ作れません。面作成のロフト面を作ってから「厚み」で立体にしてください"),
-                Blocked("スイープ", "スイープはまだ作れません(核に経路に沿った立体がありません)"),
+            // 回転体・ロフト立体・スイープ(P-08/P-09)。道具から始め、棚で輪郭・軸・経路を選ぶ。
+            {Tool("押し出し", "part.extrude"), Tool("回転体", "part.revolve"),
+                Tool("ロフト立体", "part.loft_solid"), Tool("スイープ", "part.sweep"),
                 Tool("厚み", "part.thicken"), Extra("平面まで厚み", "part.thicken_to_plane"),
                 Extra("ワイヤー群から部品", "part.from_wire_cage"), Extra("治具", "part.surface_jig"),
                 Extra("現在状態を固定", "derived.freeze")}},

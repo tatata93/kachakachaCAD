@@ -80,7 +80,8 @@ void V2MainWindow::BuildMenus()
         "surface.refit", "surface.mirror", "surface.iso_curves", "guide.revolve",
         "guide.set_method", "guide.add_row", "guide.append_row", "guide.row_up",
         "guide.row_down", "guide.row_remove", "guide.row_reverse", "guide.build",
-        "guide.clear", "part.extrude", "part.thicken", "part.thickness_placement",
+        "guide.clear", "part.extrude", "part.revolve", "part.loft_solid", "part.sweep",
+        "part.thicken", "part.thickness_placement",
         "part.thicken_to_plane", "part.surface_jig", "part.from_wire_cage",
         "part.boolean_add", "part.boolean_cut", "part.boolean_intersect", "part.move", "part.copy",
         "part.mirror", "part.rotate", "part.array_linear", "part.array_circular", "derived.freeze"});

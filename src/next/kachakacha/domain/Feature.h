@@ -34,6 +34,8 @@ enum class FeatureType {
     EditSurface,
     //! 部品を動かす・回す・鏡に写す・写す・並べる(P-18、配置)。元の部品の形に変換を掛ける。
     TransformPart,
+    //! 立体を作る(回転体・ロフト立体・スイープ、P-08/P-09)。作り方は定義の method が持つ。
+    CreateSolid,
 };
 
 [[nodiscard]] constexpr std::string_view FeatureTypeName(FeatureType type) noexcept
@@ -54,6 +56,7 @@ enum class FeatureType {
     case FeatureType::ThickenSurface:         return "ThickenSurface";
     case FeatureType::EditSurface:            return "EditSurface";
     case FeatureType::TransformPart:          return "TransformPart";
+    case FeatureType::CreateSolid:            return "CreateSolid";
     }
     return "Unknown";
 }
@@ -266,6 +269,27 @@ struct TransformPartDefinition {
     double angleRad = 0.0;
 };
 
+//! 立体を作る(部品モードの「作成」: 回転体・ロフト立体・スイープ、P-08/P-09)。
+//! 作り方ごとに Feature の種類を増やさない(method が持つ)。形は持たず、開き直したら
+//! 輪郭・軸・経路のワイヤーから作り直す(押し出しと同じ)。
+struct CreateSolidDefinition {
+    //! modeling::SolidMethod と同じ並び。0 = 回転体、1 = ロフト立体、2 = スイープ。
+    int method = 0;
+    //! 輪郭(回転体・スイープ: 外周と穴)/ 断面(ロフト立体: この並びで通す)。閉じたワイヤー。
+    std::vector<EntityId> profiles;
+    //! 回転体の軸(直線のワイヤー)。
+    std::optional<EntityId> axis;
+    //! スイープの経路(ワイヤー。何本でも、1 本につながる並び)。
+    std::vector<EntityId> path;
+    //! 回転体の角度(ラジアン)と、輪郭の面を中心に両側へ回すか。
+    double angleRad = 6.283185307179586;
+    bool symmetric = false;
+    //! 0 = 新しい部品、1 = 足す、2 = 引く(押し出しの ExtrudeBooleanMode と同じ並び)。
+    int booleanMode = 0;
+    //! 足す・引くの相手の部品。
+    std::vector<EntityId> targets;
+};
+
 //! 製作モデル(近似モデル)。
 //!
 //! 近似の結果そのものは持たない。持つのは **作り方と曲げ状態** で、
@@ -364,7 +388,7 @@ using FeatureDefinition = std::variant<std::monostate, CreatePointDefinition,
     CreateWorkPlaneDefinition, ProjectWireDefinition, CreateGuideSurfaceDefinition,
     ExtrudeDefinition, CreatePartFromWireCageDefinition, BooleanDefinition,
     CreateFabricationModelDefinition, CreatePatternDefinition, ThickenSurfaceDefinition,
-    EditSurfaceDefinition, TransformPartDefinition>;
+    EditSurfaceDefinition, TransformPartDefinition, CreateSolidDefinition>;
 
 struct FeatureOutput {
     std::string key;   //!< 再計算で同じ出力を指し続けるための安定キー

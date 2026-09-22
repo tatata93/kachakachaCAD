@@ -87,6 +87,7 @@ inline constexpr NamedEnum<FeatureType> kFeatureTypes[]{
     {FeatureType::FreezeDerived, "freeze_derived"},
     {FeatureType::ThickenSurface, "thicken_surface"},
     {FeatureType::TransformPart, "transform_part"},
+    {FeatureType::CreateSolid, "create_solid"},
     {FeatureType::EditSurface, "edit_surface"},
 };
 

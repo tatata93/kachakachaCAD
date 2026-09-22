@@ -435,6 +435,25 @@ const std::vector<CommandDescriptor>& CommandCatalog()
             "輪郭を押し出します。立体の平らな面を選べば、その面をつまんで押し引きできます。"
             "出来る体積と面の数を先に出します。", true,
             {"AT-EXT-001", "AT-EXT-002", "AT-EXT-003", "AT-EXT-004", "AT-EXT-005", "AT-EXT-006", "AT-EXT-007", "AT-EXT-008"}},
+        {"part.revolve", "回転体(立体)", CommandMode::Dialog, "revolve", "",
+            SelectionPredicate::OneOrMoreWires,
+            "閉じた輪郭を1つ以上と、回転軸にする直線を選んでください。",
+            "道具から始められます。閉じた輪郭(外周と穴)と回転軸の直線を 3D で押すと、"
+            "全回転・角度指定・対称回転で回した立体を実際に作って下見に出します。"
+            "新しい部品のほか、足す・引くもできます。", true,
+            {"AT-SOL-001"}},
+        {"part.loft_solid", "ロフト立体", CommandMode::Dialog, "loft_solid", "",
+            SelectionPredicate::OneOrMoreWires,
+            "閉じた断面を2つ以上選んでください。",
+            "道具から始められます。閉じた断面を通す順に 3D で押すと(2 つ以上、何個でも)、"
+            "断面をつないだ立体を実際に作って下見に出します。", true,
+            {"AT-SOL-002"}},
+        {"part.sweep", "スイープ", CommandMode::Dialog, "sweep", "",
+            SelectionPredicate::OneOrMoreWires,
+            "閉じた輪郭を1つ以上と、経路の線を選んでください。",
+            "道具から始められます。閉じた輪郭と経路の線(何本でも。1 本につながるように)を"
+            " 3D で押すと、輪郭を経路に沿って動かした立体を実際に作って下見に出します。", true,
+            {"AT-SOL-003"}},
         {"part.thicken", "面に厚みを付ける", CommandMode::Dialog, "thicken", "",
             SelectionPredicate::OneOrMoreGuideSurfaces,
             "形状ガイドの面を1つ以上選んでください。",

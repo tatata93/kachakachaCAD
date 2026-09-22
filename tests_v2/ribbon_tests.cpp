@@ -87,15 +87,29 @@ KACHA_V2_TEST(ribbon, 既存の道具を失わない)
 
 KACHA_V2_TEST(ribbon, 正本にあって核に無いものは理由つきで押せない形)
 {
-    int blocked = 0;
+    // まだ作れない道具は、名前ごとに「押せない形」で残っていること(黙って消さない)。
+    std::set<std::string> blocked;
     for (const UiMode mode : AllUiModes()) {
         for (const auto& category : RibbonCategoriesFor(mode)) {
             for (const auto& tool : category.tools) {
-                blocked += tool.Blocked() ? 1 : 0;
+                if (tool.Blocked()) {
+                    blocked.insert(std::string(tool.labelJa));
+                }
             }
         }
     }
-    Require(blocked >= 15, "スケール・楕円・ロフト立体・フィレット・交差・部品の配置 などが断られる");
+    for (const char* label : {"楕円", "スケール", "テキスト", "面積", "フィレット", "面取り", "シェル",
+             "分割", "面オフセット", "面削除", "面置換", "表裏反転"}) {
+        Require(blocked.count(label) == 1, std::string("まだ作れないので押せない形: ") + label);
+    }
+    Require(blocked.size() == 12, "押せない道具は 12 個(作れるようになったものは本物の道具へ)");
+    // 作れるようになったものは本物の命令を呼ぶ(P-08/P-09: 回転体・ロフト立体・スイープ、
+    // P-17: 交差、P-18: 部品の配置)。
+    for (const char* id : {"part.revolve", "part.loft_solid", "part.sweep", "part.boolean_intersect",
+             "part.move", "part.rotate", "part.mirror", "part.copy"}) {
+        const auto* tool = FindRibbonTool(UiMode::Part, id);
+        Require(tool != nullptr && !tool->Blocked(), std::string("部品の帯で押せる: ") + id);
+    }
 }
 
 KACHA_V2_TEST_MAIN("ribbon_tests")

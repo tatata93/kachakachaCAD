@@ -207,6 +207,10 @@ KACHA_V2_TEST(role_assist, 交わらない線は断面で2本ならルールド3
     Require(loft.recommended == GuideSurfaceMethod::LoftSections && loft.recommendedFeasible
             && loft.Count(WireRoleChoice::Section) == 3,
         "3 本はロフト(断面 3): " + Joined(loft));
+    // ルールドは断面 2〜任意(隣り合う 2 本ずつの帯)。3 本でも作れる候補として言う。
+    const bool ruledFeasible = std::any_of(loft.alternatives.begin(), loft.alternatives.end(),
+        [](const auto& c) { return c.method == GuideSurfaceMethod::RuledSections && c.feasible; });
+    Require(ruledFeasible, "3 本でもルールドは作れる候補: " + Joined(loft));
 }
 
 KACHA_V2_TEST(role_assist, 閉じた断面の真ん中を通る線は中心線)

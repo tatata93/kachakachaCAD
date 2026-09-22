@@ -12,6 +12,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSizePolicy>
 #include <QString>
 #include <QStringList>
 #include <QTreeWidget>
@@ -70,10 +71,13 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
     // 1. 作り方。**常時見せる。**いまどの作り方なのかが、どこにも出ていなかった。
     layout->addWidget(new QLabel(QStringLiteral("1. 作り方"), widget()));
     for (const GuideSurfaceMethod method : kachakacha::v2::app::MainSurfaceMethods()) {
-        auto* card = new QPushButton(
-            Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(method))
-                + QStringLiteral("  ─  ") + MethodHintJa(method),
-            widget());
+        // 名前と入力の数を 2 行に分ける。1 行に並べると 380px の棚より広くなり、棚に横の
+        // スクロールが出て、おまかせの説明まで右で切れた(PC の絵 2026-09-22)。
+        // 横幅は棚に合わせて縮める(収まらない分は切れるので、全文はツールチップにも出す)。
+        const QString label = Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(method));
+        auto* card = new QPushButton(label + QStringLiteral("\n") + MethodHintJa(method), widget());
+        card->setToolTip(label + QStringLiteral(" ─ ") + MethodHintJa(method));
+        card->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
         card->setCheckable(true);
         QObject::connect(card, &QPushButton::clicked, this, [this, method] {
             if (!loading_ && methodHandler_) {
@@ -85,6 +89,7 @@ void V2SurfaceDock::BuildMethodCards(QVBoxLayout* layout)
     }
     // 主要6方式に入らないものは「その他」へ。**既存機能は消さない。**
     otherMethods_ = new QComboBox(widget());
+    otherMethods_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     otherMethods_->addItem(QStringLiteral("その他の作り方..."));
     for (const GuideSurfaceMethod method : kachakacha::v2::app::OtherSurfaceMethods()) {
         otherMethods_->addItem(Text(kachakacha::v2::app::GuideSurfaceMethodLabelJa(method)));
@@ -336,6 +341,8 @@ V2SurfaceDock::V2SurfaceDock(QWidget* parent)
     scroll->setObjectName(QStringLiteral("surfaceSettingsScroll"));
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    // 棚は縦にだけ流す。横に流すと、折り返す説明が棚の幅で折り返らず右で切れる。
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(content);
     rootLayout->addWidget(scroll, 1);
 

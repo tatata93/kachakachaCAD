@@ -210,9 +210,11 @@ void CheckRailOrder(const Topology& topology, const Ladder& ladder, Scenario& sc
     loft.reasonJa = sections >= 3
         ? "交わらない線が" + Count(sections) + "あります。断面として順になめらかに通します。"
         : std::string("断面がもう1本要ります(断面は2本以上)。");
-    ruled.refusalJa = "ルールドは断面2本です(いま" + Count(sections) + ")。";
     scenario.drafts.push_back(loft);
     if (sections >= 3) {
+        // ルールドは 2〜任意(1 枚は 2 曲線で決まるので、隣り合う 2 本ずつの帯を順につなぐ)。
+        ruled.reasonJa = "隣り合う2本ずつを直線で渡し、" + Count(sections - 1)
+            + "の帯を順につなぎます(帯の境目は折れます)。";
         scenario.drafts.push_back(ruled);
     }
     return scenario;

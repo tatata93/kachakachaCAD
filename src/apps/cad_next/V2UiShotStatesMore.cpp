@@ -100,7 +100,9 @@ bool V2MainWindow::ApplyGuidedLoftShotState()
     all.entityIds = sections;
     viewport_->SetSelection(all);
     RunCommand("surface.create");
-    if (!surfaceShelfShown_ || !surfaceDock_->ClickMethodCard(GuideSurfaceMethod::GuidedLoft)
+    // ガイド付きロフトはロフト面へ統合した(互換の入口は「その他」)。ロフト面のカードでガイドの欄を使う。
+    // 旧カードを押そうとして、この場面は 70cfb9c から作れていなかった(絵が古いまま残っていた)。
+    if (!surfaceShelfShown_ || !surfaceDock_->ClickMethodCard(GuideSurfaceMethod::LoftSections)
         || !surfaceDock_->ClickActivate(ChainRole::GuideU)) {
         return false;
     }

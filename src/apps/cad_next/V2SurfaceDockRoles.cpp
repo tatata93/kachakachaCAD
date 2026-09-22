@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QObject>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QString>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -40,6 +41,7 @@ void V2SurfaceDock::BuildRoleAssist(QVBoxLayout* layout)
     for (std::size_t index = 0; index < candidates_.size(); ++index) {
         auto* button = new QPushButton(widget());
         button->setToolTip(QStringLiteral("その作り方の役割で入れ直します(作り方はあなたが選んだことになります)"));
+        button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);   // 棚の幅に収める
         QObject::connect(button, &QPushButton::clicked, this, [this, index] {
             if (!loading_ && candidateHandler_) {
                 candidateHandler_(static_cast<int>(index));

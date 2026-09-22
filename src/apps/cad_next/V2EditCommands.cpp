@@ -82,6 +82,7 @@ void V2MainWindow::KeepMeasuredDimension()
         ReportDiagnostics(added.diagnostics);
         return;
     }
+    AdoptCurrentDocument();   // 残した寸法を 3D に描く(D-33)
     RefreshMeasurements();
     SetStatus(QStringLiteral("寸法「%1」を残しました(%2 %3)。")
             .arg(QString::fromStdString(dimension.Value().label))

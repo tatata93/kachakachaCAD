@@ -425,6 +425,50 @@ void V2Viewport::DrawDocument(QPainter& painter) const
     }
     DrawControlPoints(painter);
     DrawFoldPreview(painter);
+    DrawKeptDimensions(painter);
+}
+
+void V2Viewport::SetKeptDimensions(std::vector<KeptDimensionView> dimensions)
+{
+    keptDimensions_ = std::move(dimensions);
+    update();
+}
+
+void V2Viewport::DrawKeptDimensions(QPainter& painter) const
+{
+    if (keptDimensions_.empty()) {
+        return;
+    }
+    // 注記は形ではない。文字と同じ色の細い線で、測った点を結ぶ。両端に短い印を立てる。
+    QPen pen(palette_.text, 1.0);
+    painter.setBrush(Qt::NoBrush);
+    for (const KeptDimensionView& dimension : keptDimensions_) {
+        std::vector<QPointF> screen;
+        for (const auto& anchor : dimension.anchors) {
+            if (const auto point = ToScreen(anchor); point.has_value()) {
+                screen.push_back(*point);
+            }
+        }
+        if (screen.size() < 2) {
+            continue;   // 画面の外や、描く位置の無い古い寸法
+        }
+        painter.setPen(pen);
+        for (std::size_t index = 1; index < screen.size(); ++index) {
+            painter.drawLine(screen[index - 1], screen[index]);
+        }
+        const QPointF along = screen.back() - screen.front();
+        const double length = std::hypot(along.x(), along.y());
+        const QPointF across = length > 1.0e-9
+            ? QPointF(-along.y() / length * 5.0, along.x() / length * 5.0)
+            : QPointF(0.0, 5.0);
+        for (const QPointF& end : {screen.front(), screen.back()}) {
+            painter.drawLine(end - across, end + across);
+        }
+        // 名前と値は線の真ん中(角度なら頂点)に置く。
+        const QPointF label = screen.size() == 3 ? screen[1]
+                                                 : (screen.front() + screen.back()) * 0.5;
+        painter.drawText(label + QPointF(6.0, -6.0), dimension.text);
+    }
 }
 
 void V2Viewport::SetFoldPreview(

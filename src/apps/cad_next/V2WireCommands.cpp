@@ -763,6 +763,22 @@ void V2MainWindow::AdoptCurrentDocument()
     RefreshCommandVisibility();
     // 核の形を画面へ渡す。渡さないと、押し出しても面を作っても画面に何も出ない。
     RefreshShapeViews();
+    // 残した寸法(D-33)。描く位置を持つものだけ、名前と値を 3D に描く。
+    std::vector<V2Viewport::KeptDimensionView> dimensions;
+    for (const auto& dimension : session_->GetDocument().Snapshot().referenceDimensions) {
+        if (dimension.anchors.size() < 2) {
+            continue;
+        }
+        const bool angle = dimension.unit == "rad";
+        const double value = angle ? dimension.recordedValue * 180.0 / 3.14159265358979323846
+                                   : dimension.recordedValue;
+        dimensions.push_back({dimension.anchors,
+            QStringLiteral("%1 %2%3")
+                .arg(QString::fromStdString(dimension.label))
+                .arg(value, 0, 'f', angle ? 1 : 2)
+                .arg(angle ? QStringLiteral("°") : QStringLiteral(" mm"))});
+    }
+    viewport_->SetKeptDimensions(std::move(dimensions));
     viewport_->update();
 }
 

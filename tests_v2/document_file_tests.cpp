@@ -250,6 +250,7 @@ struct Maker {
     dimension.recordedValue = 123.456;
     dimension.unit = "mm";
     dimension.noteJa = "屋根の合わせに使う";
+    dimension.anchors = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
     snapshot.referenceDimensions.push_back(std::move(dimension));
 
     kachakacha::v2::io::JsonObject ui;
@@ -549,6 +550,8 @@ KACHA_V2_TEST(documentFile, 残した参照寸法が往復する)
     Require(read.HasValue(), "読めること");
     RequireCount(read.Value().snapshot.referenceDimensions.size(), 1, "寸法の数");
     const auto& dimension = read.Value().snapshot.referenceDimensions.front();
+    Require(dimension.anchors.size() == 2 && dimension.anchors[1].z == 6.0,
+        "3D に描く位置も読み戻せる");
     RequireEqual(dimension.label, std::string("側板の幅"), "名前");
     RequireEqual(dimension.kind, std::string("two_points"), "種類");
     RequireEqual(dimension.unit, std::string("mm"), "単位");

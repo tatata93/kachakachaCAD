@@ -600,6 +600,16 @@ public:
     {
         return static_cast<int>(foldPreview_.size());
     }
+    //! 残した寸法(D-33)。測った点を結ぶ線と「名前 値」を 3D に描く。文書の写し。
+    struct KeptDimensionView {
+        std::vector<kachakacha::v2::geometry::Vector3> anchors;
+        QString text;
+    };
+    void SetKeptDimensions(std::vector<KeptDimensionView> dimensions);
+    [[nodiscard]] int KeptDimensionCount() const noexcept
+    {
+        return static_cast<int>(keptDimensions_.size());
+    }
     //! 形状ガイドの役割テーブルを3Dへ出す(AT-UIX-007 の色同期)。
     //! 色は core の式が決めた値をそのまま使う。画面で作り直さない。
     //! 原点の軸(0=X 1=Y 2=Z)を出すかどうか。
@@ -728,6 +738,8 @@ private:
     void DrawControlPoints(QPainter& painter) const;
     //! 近似モデルの曲げ状態。帯のレールを折れ線で出す。
     void DrawFoldPreview(QPainter& painter) const;
+    //! 残した寸法。測った点を結ぶ細い線と、両端の短い印、名前と値。
+    void DrawKeptDimensions(QPainter& painter) const;
     void DrawSnap(QPainter& painter) const;
     void DrawExtrudeHandle(QPainter& painter) const;
     //! 道具の下見の線。細い破線で出す。
@@ -1014,6 +1026,7 @@ private:
     std::function<void()> documentChangedCallback_;
     std::function<void(const kachakacha::v2::modeling::TransformPlan&)> transform_;
     std::vector<std::vector<kachakacha::v2::geometry::Vector3>> foldPreview_;
+    std::vector<KeptDimensionView> keptDimensions_;
     //! 選んだ物を掴んでいる間の状態。掴んだ場所と、いまの場所を持つ。
     struct BodyDrag {
         bool active = false;

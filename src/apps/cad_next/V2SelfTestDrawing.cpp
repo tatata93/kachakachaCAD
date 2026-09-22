@@ -718,6 +718,10 @@ using kachakacha::v2::modeling::ToolSettings;
                     == "幅")) {
         return false;
     }
+    // D-33: 残した寸法は、測った 2 点を結ぶ線と名前・値として 3D に描かれる。
+    if (!Explain("残した寸法が 3D に描かれる", viewport.KeptDimensionCount() == 1)) {
+        return false;
+    }
     // 測定を消去 → 押した点が消えて、また点を押せと言う。
     dock.PressClear();
     if (!Explain("消去で点が消える", viewport.MeasurePicks().empty()

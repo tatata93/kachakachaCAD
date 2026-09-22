@@ -276,6 +276,12 @@ base::Result<document::ReferenceDimension> MeasureDimensionOf(const MeasureReque
     dimension.recordedValue = primary->value;
     dimension.unit = primary->unit;
     dimension.noteJa = MeasureSummaryJa(request);
+    // 3D に描く位置。押した点で測ったならその点、線を 1 本選んで測ったならその両端。
+    if (request.pickedPoints.size() >= 2) {
+        dimension.anchors = request.pickedPoints;
+    } else if (request.curves.size() == 1) {
+        dimension.anchors = {request.curves.front().StartPoint(), request.curves.front().EndPoint()};
+    }
     return Out::Success(std::move(dimension));
 }
 

@@ -266,6 +266,10 @@ KACHA_V2_TEST(measure, 寸法を残すには値と相手が要る)
     Require(std::abs(made.Value().recordedValue - 5.0) < 1e-9, "値");
     const auto unnamed = MeasureDimensionOf(request, "", id);
     Require(unnamed.HasValue() && unnamed.Value().label == "2点間", "名前が空なら測り方の名前");
+    // D-33: 3D に描く位置を持つ。押した点で測ったなら、その 2 点。
+    Require(made.Value().anchors.size() == 2 && made.Value().anchors[1].x == 3.0
+            && made.Value().anchors[1].y == 4.0,
+        "描く位置は押した 2 点");
 }
 
 KACHA_V2_TEST_MAIN("measure_panel_tests")

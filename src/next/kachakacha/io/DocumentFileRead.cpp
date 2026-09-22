@@ -995,6 +995,26 @@ Result<DocumentFile> ReadDocumentJson(std::string_view text)
                         dimension.parameters.push_back(value.AsNumber());
                     }
                 }
+                // 描く位置。古い文書には無いので、無ければ空(描かない)のまま。
+                if (const JsonValue* anchors = item.Find("anchors")) {
+                    const std::string place = where + ".anchors";
+                    if (!anchors->IsArray()) {
+                        loader.Fail(kBadValue, "寸法を描く位置が配列ではありません。", place);
+                    } else {
+                        for (const JsonValue& anchor : anchors->AsArray()) {
+                            const bool triple = anchor.IsArray() && anchor.AsArray().size() == 3
+                                && anchor.AsArray()[0].Type() == JsonType::Number
+                                && anchor.AsArray()[1].Type() == JsonType::Number
+                                && anchor.AsArray()[2].Type() == JsonType::Number;
+                            if (!triple) {
+                                loader.Fail(kBadValue, "寸法を描く位置は 3 つの数です。", place);
+                                continue;
+                            }
+                            dimension.anchors.push_back({anchor.AsArray()[0].AsNumber(),
+                                anchor.AsArray()[1].AsNumber(), anchor.AsArray()[2].AsNumber()});
+                        }
+                    }
+                }
                 snapshot.referenceDimensions.push_back(std::move(dimension));
             }
         }

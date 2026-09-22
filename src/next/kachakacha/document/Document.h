@@ -58,6 +58,9 @@ struct ReferenceDimension {
     double recordedValue = 0.0;     //!< 残した時点の値
     std::string unit;               //!< "mm" または "rad"
     std::string noteJa;             //!< 覚え書き
+    //! 3D に寸法として描く位置(測った点を押した順)。2 点以上あれば線と値を描く。
+    //! 古い文書には無い(描かないだけで、寸法そのものは読める)。
+    std::vector<geometry::Vector3> anchors;
 };
 
 struct DocumentSettings {

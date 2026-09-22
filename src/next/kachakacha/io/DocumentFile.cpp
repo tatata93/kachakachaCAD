@@ -541,6 +541,12 @@ std::string WriteDocumentJson(const DocumentFile& file)
         object["recordedValue"] = JsonValue::Number(dimension.recordedValue);
         object["unit"] = JsonValue::String(dimension.unit);
         object["note"] = JsonValue::String(dimension.noteJa);
+        JsonArray anchors;
+        for (const auto& anchor : dimension.anchors) {
+            anchors.push_back(JsonValue::Array({JsonValue::Number(anchor.x),
+                JsonValue::Number(anchor.y), JsonValue::Number(anchor.z)}));
+        }
+        object["anchors"] = JsonValue::Array(std::move(anchors));
         dimensions.push_back(JsonValue::Object(std::move(object)));
     }
     root["referenceDimensions"] = JsonValue::Array(std::move(dimensions));
